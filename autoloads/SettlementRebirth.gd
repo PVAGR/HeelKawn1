@@ -1,0 +1,194 @@
+extends Node
+## v1: Revivable settlements may receive one new pawn per [const REBIRTH_INTERVAL_TICKS] after long peace.
+## Read-only inputs; [PawnSpawner] only. Deterministic. Not saved (session-only last-rebirth keys).
+
+## Keep in sync with [constant SettlementPlanner.PLANNING_INTERVAL_TICKS] (planner throttling).
+const CHECK_INTERVAL_TICKS: int = 2000
+const REBIRTH_PEACE_TICKS: int = 30000
+const REBIRTH_INTERVAL_TICKS: int = 60000
+
+## Session-only: [code]String(center_region_key) -> int[/code] last tick we spawned a rebirth pawn.
+var _last_rebirth_tick_by_center: Dictionary = {}
+var _last_check_tick: int = -1_000_000_000
+
+
+## Run on the same cadence as [SettlementMemory] + [SettlementPlanner] (after dirty flush, same interval gating).
+func process(world: World, main: Node2D, from_memory_dirty: bool) -> void:
+	if world == null or not is_instance_valid(world) or world.data == null or main == null:
+		return
+	if not from_memory_dirty:
+		var t0: int = GameManager.tick_count
+		if t0 - _last_check_tick < CHECK_INTERVAL_TICKS:
+			return
+	_last_check_tick = GameManager.tick_count
+	var ps: PawnSpawner = main.get_node_or_null("PawnSpawner") as PawnSpawner
+	if ps == null:
+		return
+	var alive0: int = 0
+	for p in ps.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
+			alive0 += 1
+	if alive0 == 0:
+		return
+	var eligible: Array[Dictionary] = _gather_eligible_settlements()
+	if eligible.is_empty():
+		return
+	_sort_settlements_rebirth_order(eligible)
+	var now1: int = GameManager.tick_count
+	for s in eligible:
+		var ckey: int = int(s.get("center_region", -1))
+		if ckey < 0:
+			continue
+		var ck2: String = str(ckey)
+		if _last_rebirth_tick_by_center.has(ck2):
+			if (now1 - int(_last_rebirth_tick_by_center[ck2])) < REBIRTH_INTERVAL_TICKS:
+				continue
+		var cands0: Array[Vector2i] = _rebirth_tiles_in_order(world, s)
+		if cands0.is_empty():
+			continue
+		var seed0: int = now1 + ckey * 7 + 11
+		var did_spawn0: bool = false
+		for tspawn0 in cands0:
+			if ps.spawn_pawn_at(world, tspawn0, seed0):
+				did_spawn0 = true
+				break
+		if not did_spawn0:
+			continue
+		_last_rebirth_tick_by_center[ck2] = now1
+		MythMemory.register_rebirth_success(ckey)
+
+
+func _gather_eligible_settlements() -> Array[Dictionary]:
+	var out2: Array[Dictionary] = []
+	for st in SettlementMemory.settlements:
+		if st is not Dictionary:
+			continue
+		var d: Dictionary = st as Dictionary
+		if str(d.get("state", "")) != "revivable":
+			continue
+		if int(d.get("scar_max", 99)) > 1:
+			continue
+		if int(d.get("reputation_min", -99)) < -1:
+			continue
+		var reg2: Variant = d.get("regions", null)
+		if not (reg2 is PackedInt32Array):
+			continue
+		var pack2: PackedInt32Array = reg2 as PackedInt32Array
+		if pack2.is_empty():
+			continue
+		var last_pd: int = WorldMemory.get_last_pawn_death_tick_in_regions(pack2)
+		var now0: int = GameManager.tick_count
+		if last_pd >= 0 and (now0 - last_pd) < REBIRTH_PEACE_TICKS:
+			continue
+		out2.append(d)
+	return out2
+
+
+## Smallest [code]last_activity_tick[/code] (missing/invalid -> sentinel so they sort first), then [code]center_region[/code].
+func _sort_settlements_rebirth_order(arr: Array[Dictionary]) -> void:
+	arr.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var at: int = int(a.get("last_activity_tick", -1))
+		var bt: int = int(b.get("last_activity_tick", -1))
+		var an: int = at if at >= 0 else -2_000_000_000
+		var bn: int = bt if bt >= 0 else -2_000_000_000
+		if an != bn:
+			return an < bn
+		var ac: int = int(a.get("center_region", 0))
+		var bc: int = int(b.get("center_region", 0))
+		return ac < bc
+	)
+
+
+## 4-adj to BED/WALL/DOOR first, then any valid passable non-RUIN tile. Each group: Manhattan, then y*W+x.
+## Order is total [code]PawnSpawner[/code] tries; first successful spawn wins.
+func _rebirth_tiles_in_order(world: World, settlement: Dictionary) -> Array[Vector2i]:
+	var out_ar: Array[Vector2i] = []
+	var reg1: Variant = settlement.get("regions", null)
+	if not (reg1 is PackedInt32Array):
+		return out_ar
+	var regions0: PackedInt32Array = reg1 as PackedInt32Array
+	if regions0.is_empty():
+		return out_ar
+	var center_rk0: int = int(settlement.get("center_region", -1))
+	if center_rk0 < 0:
+		return out_ar
+	var cxi: int = (center_rk0 & 0xFFFF) * 16 + 8
+	var cyi: int = ((center_rk0 >> 16) & 0xFFFF) * 16 + 8
+	var center_t: Vector2i = Vector2i(cxi, cyi)
+	var in_cluster: Dictionary = {}
+	for u in range(regions0.size()):
+		in_cluster[int(regions0[u])] = true
+	var comp0: int = world.pathfinder.largest_component_id()
+	if comp0 < 0:
+		return out_ar
+	var struct_tiles0: Dictionary = {}
+	var by_linear: Dictionary = {}
+	for rk_any in regions0:
+		var rkx: int = int(rk_any)
+		var srx: int = rkx & 0xFFFF
+		var sry: int = (rkx >> 16) & 0xFFFF
+		for dy0 in 16:
+			for dx0 in 16:
+				var t0: Vector2i = Vector2i(srx * 16 + dx0, sry * 16 + dy0)
+				if not world.data.in_bounds(t0.x, t0.y):
+					continue
+				var f0: int = int(world.data.get_feature(t0.x, t0.y))
+				if f0 == int(TileFeature.Type.BED) or f0 == int(TileFeature.Type.WALL) or f0 == int(TileFeature.Type.DOOR):
+					struct_tiles0[t0] = true
+					continue
+				if not _tile_ok_base(world, t0, comp0, in_cluster):
+					continue
+				by_linear[t0.y * WorldData.WIDTH + t0.x] = t0
+	if by_linear.is_empty():
+		return out_ar
+	var preferred0: Array[Vector2i] = []
+	var rest0: Array[Vector2i] = []
+	for idx_k in by_linear:
+		var tc: Vector2i = by_linear[idx_k] as Vector2i
+		var is_nbr0: bool = false
+		for d0 in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			if struct_tiles0.has(tc + d0):
+				is_nbr0 = true
+				break
+		if is_nbr0:
+			preferred0.append(tc)
+		else:
+			rest0.append(tc)
+	_sort_tiles_toward_center(preferred0, center_t)
+	_sort_tiles_toward_center(rest0, center_t)
+	for tp in preferred0:
+		out_ar.append(tp)
+	for tr in rest0:
+		out_ar.append(tr)
+	return out_ar
+
+
+func _sort_tiles_toward_center(pts: Array[Vector2i], c: Vector2i) -> void:
+	pts.sort_custom(func(ta: Vector2i, tb: Vector2i) -> bool:
+		var ma: int = abs(ta.x - c.x) + abs(ta.y - c.y)
+		var mb: int = abs(tb.x - c.x) + abs(tb.y - c.y)
+		if ma != mb:
+			return ma < mb
+		var ia: int = ta.y * WorldData.WIDTH + ta.x
+		var ib: int = tb.y * WorldData.WIDTH + tb.x
+		return ia < ib
+	)
+
+
+func _tile_ok_base(
+		world: World, t: Vector2i, comp0: int, in_cluster: Dictionary
+) -> bool:
+	if not PawnSpawner.SPAWNABLE_BIOMES.has(world.data.get_biome(t.x, t.y)):
+		return false
+	if not world.pathfinder.is_passable(t):
+		return false
+	if int(world.data.get_feature(t.x, t.y)) == int(TileFeature.Type.RUIN):
+		return false
+	if world.pathfinder.component_of(t) != comp0:
+		return false
+	var trk0: int = WorldMemory._region_key(t.x, t.y)
+	if not in_cluster.has(trk0):
+		return false
+	if int(WorldPersistence.get_region_persistence(trk0).get("scar_level", 0)) >= 2:
+		return false
+	return true

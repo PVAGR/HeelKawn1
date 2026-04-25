@@ -1,0 +1,334 @@
+================================================================================
+HEELKAWN — REMEMBER THIS FOR THE PROJECT
+================================================================================
+
+This text file is so we always know where we left off. The AI (and you) should
+READ this at the start of a session. After every time the project is updated
+(code, scenes, or behavior), WRITE a new line in the LOG at the bottom and
+update the WHERE WE LEFT OFF section. Chat history does not carry over — this file does.
+
+What you asked for: a text, for HeelKawn, so it’s remembered, it works, you
+ always know where we left off, and it’s updated every time we change things.
+
+================================================================================
+WHAT THE PROJECT IS
+================================================================================
+
+HeelKawn — Godot 4 colony / RimWorld-style sim: map, pawns, jobs, stockpiles,
+building (bed, wall, door, zone), day/night, save (F5) / load (F8).
+
+Main: scenes/main/Main.tscn   scenes/main/Main.gd
+UI:  ColonyHUD, BuildToolbar, PawnInfoPanel
+
+================================================================================
+PROJECT MEMORY — HOW HEELKAWN REMEMBERS ITSELF
+================================================================================
+
+HeelKawn is built across many sessions, gaps, and returns.
+Chat history does not persist.
+Human memory fades.
+This file is the single source of continuity.
+
+Every meaningful session must be recorded here.
+
+This log is not for polish, marketing, or justification.
+It exists so the project can remember:
+- What decisions were made
+- Why they were made
+- What was intentionally deferred
+- What phase the project believed it was in
+
+If this file contradicts code, this file wins until explicitly updated.
+
+All future AI sessions must:
+1) Read this file first
+2) Update WHERE WE LEFT OFF
+3) Add a new LOG entry at the top of the LOG section
+
+================================================================================
+AGES — HOW TIME IS STRUCTURED IN HEELKAWN
+================================================================================
+
+HeelKawn is divided into Ages.
+
+An Age is not a level, chapter, or season.
+It is a period of relative stability where civilization, culture, and memory
+can accumulate before conditions make continuation impossible.
+
+An Age ends when systems fail faster than people can repair them.
+This may include (but is not limited to):
+- Environmental collapse
+- Knowledge fragmentation
+- Loss of social trust
+- Runaway violence
+- Resource exhaustion
+- Slow institutional decay
+
+The end of an Age is called a Cataclysm.
+
+Cataclysms are not punishments.
+They are regeneration events under pressure.
+
+When a new Age begins:
+- Most structures are lost
+- Some systems are simplified or distorted
+- A small number of high-impact remnants persist
+
+What survives an Age is determined by impact, not intent.
+This is selective persistence.
+
+Survivals may appear as:
+- Altered geography
+- Ruins and landmarks
+- Biological mutations (plants, animals)
+- Cultural customs or taboos
+- Incomplete or incorrect myths
+
+No Age fully understands the ones before it.
+History degrades into form, not explanation.
+
+================================================================================
+WHERE WE LEFT OFF  (update this when status changes)
+================================================================================
+
+Session — Ages & Time Structure (✅ COMPLETE):
+✅ Defined Ages as periods of stability rather than chapters or levels
+✅ Defined Cataclysms as systemic regeneration, not punishment
+✅ Locked selective persistence as the rule governing Age transitions
+✅ Clarified that history survives as form, not explanation
+✅ Established that no Age fully understands previous Ages
+
+Session — World Memory & Persistence (✅ COMPLETE):
+
+✅ Established HeelKawn as a civilization memory engine, not a finite game
+✅ Defined selective persistence across world resets (Asha endurance by impact)
+✅ Clarified that worlds may end via cataclysm, but history survives as form
+✅ Locked philosophy: memory survives as geography, culture, biology, and myth
+✅ Rejected full reset and full persistence as design extremes
+✅ Defined long-absence returns as canon (world changes without the player)
+✅ Established HEELKAWN.txt as authoritative project memory
+✅ Chose Aider + Ollama as primary AI workflow (no VS Code / Cursor dependency)
+
+Last updated: 2026-04-24 (stability pass)
+
+Session 6 — Pawn Visuals & Audio (🟡 IN PROGRESS):
+✅ Repaired Pawn.gd structure after combat merge corruption
+✅ Draft combat behavior reattached to tick/idle paths correctly
+✅ Added pawn movement bob animation for better readability
+✅ Added pawn health bar + mood indicator dot in-world
+✅ Added draft chevron marker over drafted pawns
+✅ Added enemy pulse + health bar visual feedback
+✅ Added resilient SFX hooks (eat, hurt, death, enemy attack/death)
+✅ SFX safely no-op when clip files are missing (no runtime break)
+✅ Added generated-tone fallback so SFX still play without .ogg assets
+✅ Removed duplicate enemy tick binding in Main (single update path)
+✅ Added procedural ambient audio layer (day/night + threat intensity)
+✅ Added combat hit feedback flash on pawns and enemies
+✅ Added pawn appearance traits: body type, hair style/color, apparel color
+✅ PawnSpawner now randomizes appearance at spawn
+✅ Pawn renderer now draws apparel ring + hair variants
+✅ Appearance fields persist through save/load
+✅ PawnInfoPanel now shows appearance summary (body + hair)
+✅ Added state glyphs on pawn (work/eat/draft) for quick visual read
+
+Session 6 remaining:
+- Add sprite-sheet pawn art pipeline (replace circle renderer when assets exist)
+- Add richer animation poses per state (work/eat/sleep/combat)
+- Add actual sound files in assets/audio and mix levels
+- Ambient layer is now procedural; optional next step is replacing with .ogg loops
+- Add weapon/combat impact effects
+- Basic impact flash is live; optional next step is particles/knockback trails
+
+Session 5 — Combat & Raiding (✓ COMPLETE):
+✅ Created Enemy.gd with three enemy types (Raider, Brigand, Warlord)
+✅ Enemy types: Varying speed, health, damage, vision range by type
+✅ Enemy pathfinding: Path toward target pawns using A* pathfinder
+✅ Enemy melee combat: Automatic attacks when in range of pawns
+✅ Created EnemySpawner.gd: Manages raid waves with difficulty scaling
+✅ Raid system: Raids spawn periodically (every 5 in-game days)
+✅ Difficulty scaling: Each raid 10% harder, more dangerous enemies
+✅ Spawn location: Enemies spawn on map edges, approach colony
+✅ Draft mode system: D key to toggle, click pawns to select for combat
+✅ Drafted pawns: Stop normal work, auto-engage nearby enemies
+✅ Combat positioning: Right-click to move drafted pawns to positions
+✅ Combat resolution: CombatResolver.gd with melee combat mechanics
+✅ Hit/miss system: 75% base hit, modified by skill and dodge
+✅ Damage calculation: Base 10 damage, scaled by health/skills
+✅ Injuries: 15% chance per hit to trigger STRESS mood event
+✅ Enemy death: Enemies drop loot (meat, wood, stone) on defeat
+✅ Pawn health reduction: Damage applies directly, triggers death checks
+✅ UI feedback: Combat messages, enemy status display
+
+Combat system mechanics:
+- Enemy accuracy bonus: +2% per skill level (capped 20-95%)
+- Enemy dodge chance: 20% base (modified by pawn rest stat)
+- Pawn combat skills: Hunting/Mining XP improves accuracy/damage
+- Damage scaling: Attacker health/rest * trait multipliers
+- Armor concept: Health provides passive damage reduction
+- Loot drops: 1-3 wood, 2-4 stone, 1-2 meat per enemy
+- Crisis cascade: Combat adds STRESS → crisis strikes possible
+- Social effects: Dead enemies don't trigger sorrow (outside colony)
+
+Draft mode workflow:
+- Enter: D key (disables work orders, enables combat)
+- Select: Click pawns to add/remove from combat group
+- Command: Right-click to path selected pawns to position
+- Exit: D key again (releases all pawns back to work)
+- Drafted pawns auto-engage enemies in 10px radius
+- Drafted pawns path toward enemies > 10px away
+
+Session 4 — Mood Events (✓ COMPLETE):
+✅ Created MoodEvent.gd with 8 emotion types
+✅ Mood events have intensity, duration, and mood delta per tick
+✅ Triggers: eating meat (joy), harvesting (contentment), hunting (triumph)
+✅ Triggers: injuries (stress), witnessing death (sorrow), crisis (despair)
+✅ Crisis cascade: Low mood + hazards lead to work strikes (DESPAIR event)
+✅ Nearby pawns witness death and trigger sorrow events (50px radius)
+✅ UI display: Active mood event and crisis level (Low/Moderate/HIGH/CRITICAL)
+✅ Mood affects work behavior: strikes at crisis level > 80%
+
+Mood event types:
+- Joy: +50 mood impact (eating meat, accomplishment)
+- Sorrow: -80 mood impact (death of colony members)
+- Stress: -40 mood impact (mining injuries)
+- Triumph: +100 mood impact (hunting animals)
+- Despair: -150 mood impact (crisis situation)
+- Contentment: +30 mood impact (normal work completion)
+- Boredom: -20 mood impact (repetitive tasks)
+- Dread: -60 mood impact (combat/danger sensing)
+
+Crisis level system:
+- Calculated from mood + despair events
+- Low: < 30% (pawns work normally)
+- Moderate: 30-60% (minor issues)
+- HIGH: 60-80% (work slowdowns)
+- CRITICAL: > 80% (pawns go on strike)
+
+Session 6 — Pawn Visuals & Audio (⏳ NEXT):
+Goals:
+- Add pawn sprite variations (hair, body style, clothes colors)
+- Animation system (walking, working, eating, sleeping, combat)
+- Sound effects (footsteps, work sounds, damage, death)
+- Visual polish (status indicator icons, mood visual effects)
+- Draft mode visual feedback (selection highlight, movement indicator)
+- Enemy sprite variations (bandit outfits, armor appearance)
+
+Session 7 — Content & Variety (Following):
+- New jobs: Cooking, crafting, animal taming
+- New buildings: Kitchen, workshop, trade post
+- New food types: Meals, prepared food, luxury food
+- Animal taming: Convert wild animals to pets, breed for work
+- New biomes: Desert, swamp, mountain cave systems
+
+Session 8 — Polish & QoL (Following):
+- Job filters and work priorities UI
+- Pawn scheduler (work shifts, time off)
+- Mini-map and map zoom/pan
+- Performance optimization (pathing cache, job batching)
+- Bug fixes and balance pass
+
+
+Session 1-8 Roadmap:
+1: ✅ Death Mechanics (starvation, exhaustion, injury, mining hazards)
+2: ✅ Traits System (20 traits, multipliers, UI display)
+3: ✅ Animal AI (rabbits, deer, flocking, breeding, hunting)
+4: ✅ Mood Events (triggers, crises, feedback UI)
+5: ✅ Combat & Raiding (enemies, draft mode, combat resolution, loot)
+6: 🔲 Pawn Visuals & Audio (sprites, animations, SFX, polish)
+7: 🔲 Content & Variety (cooking/crafting jobs, new buildings)
+8: 🔲 Polish & QoL (filters, scheduler, mini-map, perf, bugs)
+
+Open / next:
+- Scene setup required: Add EnemySpawner node to Main.tscn (AnimalSpawner may already exist)
+- Add actual .ogg files to assets/audio to activate new SFX hooks.
+- Playtest Sessions 3-6 together and tune combat/mood/visual readability.
+- Continue Session 6 (sprite variants + richer animation states).
+
+Rules:
+- Main.DesignationMode and BuildToolbar MODE_* (0-4) must match.
+- New BuildToolbar signals → connect in Main._ready().
+
+================================================================================
+SESSION RECORD TEMPLATE (COPY FOR EACH NEW SESSION)
+================================================================================
+
+Session ID:
+Date:
+Focus of Session:
+Project Phase (prototype / vertical slice / world lock / polish / other):
+
+What Was Touched:
+- (files, systems, or concepts)
+
+What Changed:
+- (concrete changes only)
+
+What Was Decided:
+- (rules, constraints, canon, architecture)
+
+What Was Explicitly NOT Done:
+- (important deferrals)
+
+Open Questions / Tensions:
+- (things not yet resolved)
+
+State at End of Session:
+- (what feels stable vs fragile)
+
+Use this template mentally for each session.
+Summarize it concisely in WHERE WE LEFT OFF and LOG.
+
+================================================================================
+LOG (newest at top)
+================================================================================
+
+The LOG records irreversible facts of development.
+If something appears here, it is assumed to have existed and influenced the
+project, even if later removed or rewritten.
+The LOG is chronological memory, not a changelog for features.
+
+2026-04-25  PawnData.gd: trait loops hardened (null skip, `tr` not `trait`);
+            match arms split one-line. No separate apply_traits: stats use
+            get_trait_mult() + Trait resource fields (health_max_mult, etc.),
+            not generic max_health/move_speed from external snippets.
+2026-04-24  Defined Ages as the core time structure of HeelKawn. Ages represent
+            periods of stability ending in cataclysms that regenerate the world
+            under pressure. Selective persistence governs what survives between
+            Ages, with history degrading into form rather than explanation.
+2026-04-24  World memory lock-in: defined HeelKawn as a civilization memory engine
+            with selective persistence across cataclysms (Asha by impact, not
+            morality). Established HEELKAWN.txt as authoritative continuity and
+            adopted Aider + Ollama workflow for AI-assisted development without
+            editor lock-in.
+2026-04-24  Parser/runtime fixes: JobManager use Pawn.get_pawn_data() / get_pawn_name_for_log()
+            (autoloads cannot parse pawn.data on class_name Pawn). Main.tscn: add AnimalSpawner
+            + EnemySpawner nodes (Main.gd referenced missing nodes). Enemy.gd: use world_to_tile
+            (tile_to_world_inv did not exist on World). Project should run without that parse error.
+2026-04-24  Session 6 audio fallback: Pawn.gd and Enemy.gd now synthesize short
+            tone SFX when res://assets/audio clips are missing.
+2026-04-24  Session 6 visual polish: added tiny action glyphs on pawns for
+            working/eating/draft states.
+2026-04-24  Session 6 audio: Main now generates procedural ambient drone with
+            day/night and raid-threat modulation.
+2026-04-24  Session 6 combat readability: pawn/enemy hit flash feedback added.
+2026-04-24  Added GIT_TROUBLESHOOTING.txt; ran gh auth setup-git so Git uses GitHub
+            login (helps when IDE push fails). If push still fails, read that file.
+2026-04-23  Session 6 Part 1: fixed Pawn merge corruption, improved pawn/enemy
+            visuals (health/mood/draft markers), and added safe SFX hooks.
+2026-04-23  Session 6 Part 2: added randomized pawn appearance variants and
+            save/load persistence (body, hair, apparel).
+2026-04-23  Session 6 Part 3: PawnInfoPanel now displays appearance metadata
+            for easier visual playtest verification.
+2026-04-24  Created GitHub repo PVAGR/HeelKawn, added origin, pushed all commits.
+2026-04-24  Single handoff file HEELKAWN.txt only; rule points here; user asked
+            for a text, read every session, update every project change.
+2026-04-24  HEELKAWN handoff + Cursor rule; BuildPreviewOverlay; toolbar save/
+            load; build button styles.
+
+================================================================================
+INSTRUCTIONS FOR THE AI
+================================================================================
+
+1) Start: read HEELKAWN.txt first when working in this repo.
+2) After you change the project: update WHERE WE LEFT OFF and add a line to LOG.
+3) Keep entries short.

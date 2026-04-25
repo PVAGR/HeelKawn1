@@ -40,7 +40,7 @@ Animals:
 
 ## PLAYER ROLE
 
-Observer / chronicler.
+Observer/chronicler.
 No required micromanagement.
 
 ## KNOWN ENGINE NOTES
@@ -57,7 +57,7 @@ No required micromanagement.
 - Autoloads do not use class_name
 - History must be explainable after the fact
 
-## NEXT INTENT
+## NEXT TARGET
 
 - Settlement revival vs permanent abandonment tuning
 - Cultural architectural styles

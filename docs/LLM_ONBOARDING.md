@@ -4,8 +4,9 @@ If you are an AI assisting with this project:
 
 ## READ THESE FIRST
 
-1. README.md
-2. docs/HEELKAWN_STATE.md
+1. docs/HEELKAWN_STATE.md
+2. HEELKAWN.txt
+3. README.md
 
 ## DO NOT:
 

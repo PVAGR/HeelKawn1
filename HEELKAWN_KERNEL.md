@@ -1,6 +1,7 @@
-# HeelKawn — kernel & memory (source of truth)
+# HeelKawn Kernel Notes (Historical)
 
-Paste relevant sections from this file into new chats so context realigns immediately.
+This document is historical reference only.
+It is superseded by docs/HEELKAWN_STATE.md, which is the authoritative project state file.
 
 ---
 

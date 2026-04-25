@@ -9,10 +9,16 @@ const KIND_PAWN_DEATH: int = 0
 const HARD_COLLAPSE_TICKS: int = 30000
 
 var settlements: Array = []
+## region_key -> state string (derived cache for O(1) regional queries)
+var _region_state: Dictionary = {}
+## region_key -> settlement center_region key (derived cache for O(1) intent joins)
+var _region_center: Dictionary = {}
 
 
 func recompute(_world: World) -> void:
 	settlements.clear()
+	_region_state.clear()
+	_region_center.clear()
 	var eligible: Array[int] = []
 	for rk_any in WorldMeaning.meaning_by_region.keys():
 		var rk: int = int(rk_any)
@@ -34,7 +40,17 @@ func recompute(_world: World) -> void:
 			continue
 		var cluster: Array[int] = _bfs_cluster(seed_value, in_eligible, visited)
 		cluster.sort()
-		settlements.append(_build_settlement_from_regions(cluster))
+		var st: Dictionary = _build_settlement_from_regions(cluster)
+		settlements.append(st)
+		var st_name: String = str(st.get("state", ""))
+		var ckr: int = int(st.get("center_region", -1))
+		var preg: Variant = st.get("regions", null)
+		if preg is PackedInt32Array:
+			var pa: PackedInt32Array = preg as PackedInt32Array
+			for i in range(pa.size()):
+				var rk2: int = int(pa[i])
+				_region_state[rk2] = st_name
+				_region_center[rk2] = ckr
 	settlements.sort_custom(func(a, b) -> bool:
 		var ap: Variant = (a as Dictionary).get("regions", null)
 		var bp: Variant = (b as Dictionary).get("regions", null)
@@ -122,7 +138,7 @@ func _settlement_state_v1(
 		return "permanently_abandoned"
 	var last_pawn: int = _max_last_pawn_death_tick_in_cluster(cluster)
 	var recovery: int = WorldPersistence.RECOVERY_TICKS
-	if scar_max <= 2 and reputation_min >= -1:
+	if scar_max <= 1 and reputation_min >= 0:
 		if last_pawn < 0 or now - last_pawn >= recovery:
 			return "revivable"
 	return "dormant"
@@ -135,6 +151,8 @@ func is_collapsed_state(state: String) -> bool:
 
 ## True if [param region_key] lies in a settlement whose current [member settlements] [code]state[/code] is collapsed.
 func is_region_in_collapsed_settlement(region_key: int) -> bool:
+	if _region_state.has(region_key):
+		return is_collapsed_state(str(_region_state[region_key]))
 	for st in settlements:
 		if st is not Dictionary:
 			continue
@@ -153,7 +171,34 @@ func is_region_in_collapsed_settlement(region_key: int) -> bool:
 
 ## Kept for backward compatibility: same as [method is_region_in_collapsed_settlement] (name predates the split state string).
 func is_region_in_permanently_abandoned_settlement(region_key: int) -> bool:
-	return is_region_in_collapsed_settlement(region_key)
+	if _region_state.has(region_key):
+		return str(_region_state[region_key]) == "permanently_abandoned"
+	for st in settlements:
+		if st is not Dictionary:
+			continue
+		var d: Dictionary = st as Dictionary
+		if str(d.get("state", "")) != "permanently_abandoned":
+			continue
+		var reg: Variant = d.get("regions", null)
+		if not (reg is PackedInt32Array):
+			continue
+		var p: PackedInt32Array = reg as PackedInt32Array
+		for j in range(p.size()):
+			if p[j] == region_key:
+				return true
+	return false
+
+
+func get_state_at_region(region_key: int) -> String:
+	if _region_state.has(region_key):
+		return str(_region_state[region_key])
+	return ""
+
+
+func get_center_region_for_region(region_key: int) -> int:
+	if _region_center.has(region_key):
+		return int(_region_center[region_key])
+	return -1
 
 
 ## Latest pawn death tick in any listed region, or -1 if none.

@@ -8,9 +8,13 @@ const BIRTH_NONE: int = -1
 const PATH_D1: float = 1.04
 const PATH_D2: float = 1.04
 const PATH_T2_OLD: float = 1.05
+const PATH_ABANDONED: float = 1.03
+const PATH_PERM_ABANDONED: float = 1.07
 
 ## Planner: manhattan is scaled by a small per-delta add for expansion sorts.
 const PLANNER_PEN: int = 5
+const PLANNER_ABANDONED_PEN: int = 4
+const PLANNER_PERM_ABANDONED_PEN: int = 9
 
 ## birth Age index at first marking (0 = current or seed era).
 var _birth: PackedInt32Array = PackedInt32Array()
@@ -138,13 +142,19 @@ func get_tile_rem_delta(x: int, y: int, w: World) -> int:
 ## Extra cost on pawn A*; stacked after scar, road, trade; does not cap scar.
 func get_remnant_path_mul(x: int, y: int, w: World) -> float:
 	var d0: int = get_tile_rem_delta(x, y, w)
-	if d0 < 1:
-		return 1.0
-	var m0: float = PATH_D1
-	if d0 >= 2:
-		m0 *= PATH_D2
-		if TradeMemory.get_route_tier_at(x, y) >= TradeMemory.TIER_ROUTE_2 and d0 >= 2:
-			m0 *= PATH_T2_OLD
+	var m0: float = 1.0
+	if d0 >= 1:
+		m0 *= PATH_D1
+		if d0 >= 2:
+			m0 *= PATH_D2
+			if TradeMemory.get_route_tier_at(x, y) >= TradeMemory.TIER_ROUTE_2:
+				m0 *= PATH_T2_OLD
+	var rk: int = WorldMemory._region_key(x, y)
+	var st: String = SettlementMemory.get_state_at_region(rk)
+	if st == "abandoned":
+		m0 *= PATH_ABANDONED
+	elif st == "permanently_abandoned":
+		m0 *= PATH_PERM_ABANDONED
 	return m0
 
 
@@ -161,4 +171,11 @@ func is_ruin_ancient_block(x: int, y: int, w: World) -> bool:
 func get_planner_penalty(t: Vector2i, w: World) -> int:
 	if w == null:
 		return 0
-	return get_tile_rem_delta(t.x, t.y, w) * PLANNER_PEN
+	var out: int = get_tile_rem_delta(t.x, t.y, w) * PLANNER_PEN
+	var rk: int = WorldMemory._region_key(t.x, t.y)
+	var st: String = SettlementMemory.get_state_at_region(rk)
+	if st == "abandoned":
+		out += PLANNER_ABANDONED_PEN
+	elif st == "permanently_abandoned":
+		out += PLANNER_PERM_ABANDONED_PEN
+	return out

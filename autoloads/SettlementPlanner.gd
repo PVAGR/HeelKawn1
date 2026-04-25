@@ -12,14 +12,14 @@ const PERIM_R_OPEN: int = 3
 const PERIM_R_DEF: int = 1
 ## Second door: OPEN waits for larger growth; DEF allows at smaller enclosed span.
 const DOOR2_MIN_SPAN_OPEN: int = 7
-const DOOR2_MIN_SPAN_DEF: int = 5
+const DOOR2_MIN_SPAN_DEF: int = 4
 ## OPEN delays village-scale wall and second door.
-const OPEN_VILLAGE_WALL_PAWNS: int = 8
-const DEF_VILLAGE_WALL_PAWNS: int = 4
-const OPEN_BED2_BEFORE_EXPAND: int = 2
+const OPEN_VILLAGE_WALL_PAWNS: int = 10
+const DEF_VILLAGE_WALL_PAWNS: int = 3
+const OPEN_BED2_BEFORE_EXPAND: int = 3
 ## OPEN: delay second door until population or many beds.
-const OPEN_DOOR2_PAWNS: int = 8
-const OPEN_DOOR2_BEDS: int = 3
+const OPEN_DOOR2_PAWNS: int = 10
+const OPEN_DOOR2_BEDS: int = 4
 const ZONE_W: int = 3
 const ZONE_H: int = 3
 ## 0=OPEN, 1=CAUTIOUS, 2=DEFENSIVE (derived only; not stored)
@@ -60,6 +60,7 @@ func _plan_one_settlement(
 ) -> void:
 	var data: WorldData = world.data
 	var center_rk: int = int(settlement.get("center_region", regions[0]))
+	var intent: int = _intent_for_settlement(center_rk)
 	var center: Vector2i = _center_tile_of_region_key(center_rk)
 	var pawns: int = int(main.call("settlement_planner_count_pawns_in_regions", regions))
 	var bed_n: int = _count_feature_in_regions(data, regions, TileFeature.Type.BED)
@@ -74,14 +75,14 @@ func _plan_one_settlement(
 			scar_m, repm, AgeMemory.get_current_age_index()
 	)
 	_plan_one_settlement_culture(
-			world, main, data, center, regions, cult, pawns, bed_n, wall_n, door_n, stage
+			world, main, data, center, regions, cult, intent, pawns, bed_n, wall_n, door_n, stage
 	)
 
 
 ## Culture branches: rule order, gates, and tile sort only (one action per run).
 func _plan_one_settlement_culture(
 		world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array,
-		cult: int, pawns: int, bed_n: int, wall_n: int, door_n: int, stage: int
+		cult: int, intent: int, pawns: int, bed_n: int, wall_n: int, door_n: int, stage: int
 ) -> void:
 	var order: Array[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 	if cult == CULTURE_OPEN:
@@ -90,10 +91,24 @@ func _plan_one_settlement_culture(
 	elif cult == CULTURE_DEFENSIVE:
 		# Wall expansion before stockpile; compact defaults.
 		order = [1, 2, 3, 5, 4, 6, 7, 8, 9, 10]
+	if intent == IntentMemory.INTENT_GROW:
+		if cult == CULTURE_OPEN:
+			order = [1, 6, 4, 5, 2, 3, 7, 8, 9, 10]
+		elif cult == CULTURE_DEFENSIVE:
+			order = [1, 2, 3, 6, 5, 4, 7, 8, 9, 10]
+		else:
+			order = [1, 6, 4, 2, 3, 5, 7, 8, 9, 10]
+	elif intent == IntentMemory.INTENT_ABANDON:
+		order = [1, 3, 7, 10, 2, 4, 5, 6, 8, 9]
 	for rid: int in order:
 		match rid:
 			1:
-				if pawns > bed_n and pawns < bed_n + 2:
+				var need_bed: bool = pawns > bed_n and pawns < bed_n + 2
+				if intent == IntentMemory.INTENT_GROW:
+					need_bed = pawns >= bed_n and pawns < bed_n + 3
+				elif intent == IntentMemory.INTENT_ABANDON:
+					need_bed = pawns > bed_n and pawns <= bed_n + 1
+				if need_bed:
 					var tbed: Vector2i = _pick_bed_tile_culture(
 							world, main, center, regions, cult
 					)
@@ -101,6 +116,8 @@ func _plan_one_settlement_culture(
 						return
 			2:
 				if bed_n > 0 and wall_n == 0:
+					if cult == CULTURE_OPEN and bed_n < 2:
+						continue
 					var tw: Vector2i = _pick_perimeter_wall_tile_culture(
 							world, main, center, regions, cult
 					)
@@ -108,18 +125,27 @@ func _plan_one_settlement_culture(
 						return
 			3:
 				if wall_n > 0 and door_n == 0:
+					if cult == CULTURE_OPEN and pawns < 3:
+						continue
 					var td: Vector2i = _pick_door_tile_culture(
 							world, main, data, center, regions, cult
 					)
 					if td.x >= 0 and bool(main.call("settlement_planner_post_door", td)):
 						return
 			4:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
 				if not _settlement_touched_by_any_zone(center, regions, data):
 					var r4: Rect2i = _zone_rect_3x3_anchored_at(center, data)
 					if r4.size.x > 0 and bool(main.call("settlement_planner_post_zone_rect", r4)):
 						return
 			5:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
 				if cult == CULTURE_OPEN and bed_n < OPEN_BED2_BEFORE_EXPAND:
+					if intent != IntentMemory.INTENT_GROW:
+						continue
+				if intent == IntentMemory.INTENT_GROW and pawns < 2:
 					continue
 				if wall_n > 0 and _wall_bbox_too_small(data, regions, VILLAGE_SPAN):
 					var texp: Vector2i = _pick_expansion_wall_tile_culture(
@@ -128,7 +154,14 @@ func _plan_one_settlement_culture(
 					if texp.x >= 0 and bool(main.call("settlement_planner_post_wall", texp)):
 						return
 			6:
-				if pawns >= bed_n + 2:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				var can_bed2: bool = pawns >= bed_n + 2
+				if intent == IntentMemory.INTENT_GROW:
+					can_bed2 = pawns >= bed_n + 1
+				if can_bed2:
+					if cult == CULTURE_DEFENSIVE and door_n == 0 and wall_n > 0:
+						continue
 					var tbed2: Vector2i = _pick_bed_tile_culture(
 							world, main, center, regions, cult
 					)
@@ -144,11 +177,15 @@ func _plan_one_settlement_culture(
 					if tdoor2.x >= 0 and bool(main.call("settlement_planner_post_door", tdoor2)):
 						return
 			8:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
 				var need_p: int = (
 						OPEN_VILLAGE_WALL_PAWNS
 						if cult == CULTURE_OPEN
 						else (DEF_VILLAGE_WALL_PAWNS if cult == CULTURE_DEFENSIVE else 6)
 				)
+				if intent == IntentMemory.INTENT_GROW:
+					need_p = maxi(2, need_p - 2)
 				if stage == 1 and pawns >= need_p:
 					var t8: Vector2i = _pick_expansion_wall_tile_culture(
 							world, main, data, center, regions, cult
@@ -156,9 +193,13 @@ func _plan_one_settlement_culture(
 					if t8.x >= 0 and bool(main.call("settlement_planner_post_wall", t8)):
 						return
 			9:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
 				var d2sp: int = _door2_min_span_culture(cult)
 				if _wall_bbox_too_small(data, regions, d2sp) or door_n >= 2:
 					continue
+				if intent == IntentMemory.INTENT_GROW and pawns >= 6:
+					d2sp = maxi(4, d2sp - 1)
 				if cult == CULTURE_OPEN and not (
 						pawns >= OPEN_DOOR2_PAWNS or bed_n >= OPEN_DOOR2_BEDS
 				):
@@ -169,12 +210,20 @@ func _plan_one_settlement_culture(
 				if t9.x >= 0 and bool(main.call("settlement_planner_post_door", t9)):
 					return
 			10:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
 				if stage >= 1:
 					var t10: Vector2i = _first_interior_bbox_wall_door(
 							world, main, data, center, regions, cult
 					)
 					if t10.x >= 0 and bool(main.call("settlement_planner_post_door", t10)):
 						return
+
+
+static func _intent_for_settlement(center_region: int) -> int:
+	if center_region < 0:
+		return IntentMemory.INTENT_HOLD
+	return int(IntentMemory.settlement_intent.get(center_region, IntentMemory.INTENT_HOLD))
 
 
 ## Deterministic, exclusive: worst survival context wins. Later Ages nudge away from [OPEN] without hard overrides.

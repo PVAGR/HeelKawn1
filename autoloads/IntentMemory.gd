@@ -55,18 +55,22 @@ func recompute(world: World) -> void:
 		age_bump = mini(0.25, 0.08 * float(aidx - _age_index_last_seen))
 		_age_index_last_seen = aidx
 	var n_sett: int = 0
-	var n_da: int = 0
+	var collapse_score: float = 0.0
 	for s_any2 in SettlementMemory.get_settlements():
 		if not (s_any2 is Dictionary):
 			continue
 		var st: Dictionary = s_any2
 		var st_name: String = str(st.get("state", ""))
 		n_sett += 1
-		if st_name == "dormant" or SettlementMemory.is_collapsed_state(st_name):
-			n_da += 1
+		if st_name == "dormant":
+			collapse_score += 1.0
+		elif st_name == "abandoned":
+			collapse_score += 1.4
+		elif st_name == "permanently_abandoned":
+			collapse_score += 1.8
 	var frac_da: float = 0.0
 	if n_sett > 0:
-		frac_da = float(n_da) / float(n_sett)
+		frac_da = collapse_score / (float(n_sett) * 1.8)
 	var trade_collapse: float = 0.0
 	if TradeMemory.count_t2_tiles() <= 0 and TradeMemory.get_last_tick_t2_existed() >= 0:
 		var dt: int = now - int(TradeMemory.get_last_tick_t2_existed())
@@ -97,6 +101,13 @@ func recompute(world: World) -> void:
 		if ck < 0:
 			continue
 		var pr: float = 0.0
+		var st_now: String = str(sd.get("state", ""))
+		if st_now == "dormant":
+			pr += 0.04
+		elif st_now == "abandoned":
+			pr += 0.08
+		elif st_now == "permanently_abandoned":
+			pr += 0.16
 		if TradeMemory.get_role(ck) == TradeMemory.ROLE_DEPENDENT:
 			pr += 0.18
 		var scmax: int = int(sd.get("scar_max", 0))
@@ -107,7 +118,7 @@ func recompute(world: World) -> void:
 		var lat: int = int(sd.get("last_activity_tick", -1))
 		if lat >= 0 and (now - lat) > 40000:
 			pr += 0.1
-		if str(sd.get("state", "")) == "revivable" and MythMemory.get_rebirth_success_count_for_center(ck) < 1:
+		if st_now == "revivable" and MythMemory.get_rebirth_success_count_for_center(ck) < 1:
 			pr += 0.05
 		var p_sum: int = 0
 		if aspn is AnimalSpawner:

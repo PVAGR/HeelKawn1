@@ -76,6 +76,7 @@ const AMBIENT_BASE_AMP: float = 0.028
 const MEANING_CAM_VEL_MAX: float = 0.22
 const MEANING_CAM_REVIV_P: float = 0.00042
 const MEANING_CAM_ABAND_P: float = 0.00036
+const MEANING_CAM_PERM_ABAND_P: float = 0.00052
 const MEANING_CAM_SCAR3_P: float = 0.0005
 const MEANING_CAM_LOSCAR_P: float = 0.00014
 const MEANING_AMBIENT_SMOOTH: float = 1.1
@@ -528,20 +529,36 @@ func _get_meaning_ambient_mood_target() -> float:
 		return 0.5
 	var rk: int = WorldMemory._region_key(t.x, t.y)
 	var m: float
-	if SettlementMemory.is_region_in_permanently_abandoned_settlement(rk):
-		m = 0.0
-	else:
-		var sv: Variant = SettlementMemory.get_settlement_at_region(rk)
-		if sv is Dictionary and str((sv as Dictionary).get("state", "")) == "revivable":
-			m = 1.0
+	var sv: Variant = SettlementMemory.get_settlement_at_region(rk)
+	var st_here: String = ""
+	var intent_here: int = IntentMemory.INTENT_HOLD
+	if sv is Dictionary:
+		st_here = str((sv as Dictionary).get("state", ""))
+		var ckr_here: int = int((sv as Dictionary).get("center_region", -1))
+		intent_here = int(IntentMemory.settlement_intent.get(ckr_here, IntentMemory.INTENT_HOLD))
+		if st_here == "permanently_abandoned":
+			m = 0.0
+		elif st_here == "abandoned":
+			m = 0.15
+		elif st_here == "revivable":
+			m = 0.92
+		elif st_here == "dormant":
+			m = 0.46
 		else:
-			var sl: int = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))
-			if sl >= 3:
-				m = 0.12
-			elif sl <= 1:
-				m = 0.72
-			else:
-				m = 0.4
+			m = 0.5
+	else:
+		var sl: int = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))
+		if sl >= 3:
+			m = 0.12
+		elif sl <= 1:
+			m = 0.72
+		else:
+			m = 0.4
+	if st_here != "permanently_abandoned":
+		if intent_here == IntentMemory.INTENT_GROW:
+			m = lerpf(m, 1.0, 0.08)
+		elif intent_here == IntentMemory.INTENT_ABANDON:
+			m = lerpf(m, 0.0, 0.12)
 	var rep: int = CulturalMemory.get_region_reputation(rk)
 	if rep <= -2:
 		m = lerpf(m, 0.1, 0.38)
@@ -564,7 +581,7 @@ func _update_camera_meaning_bias(delta: float) -> void:
 			continue
 		var d: Dictionary = s as Dictionary
 		var st: String = str(d.get("state", ""))
-		if st != "revivable" and not SettlementMemory.is_collapsed_state(st):
+		if st != "revivable" and st != "abandoned" and st != "permanently_abandoned":
 			continue
 		var ckr: int = int(d.get("center_region", -1))
 		if ckr < 0:
@@ -573,10 +590,26 @@ func _update_camera_meaning_bias(delta: float) -> void:
 		var tcy: int = ((ckr >> 16) & 0xFFFF) * 16 + 8
 		var target: Vector2 = _world.tile_to_world(Vector2i(tcx, tcy))
 		var to_t: Vector2 = target - _camera.global_position
+		var intent_s: int = int(IntentMemory.settlement_intent.get(ckr, IntentMemory.INTENT_HOLD))
 		if st == "revivable":
-			vel += to_t * MEANING_CAM_REVIV_P
+			var attract: float = MEANING_CAM_REVIV_P
+			if intent_s == IntentMemory.INTENT_GROW:
+				attract *= 1.14
+			elif intent_s == IntentMemory.INTENT_ABANDON:
+				attract *= 0.88
+			vel += to_t * attract
+		elif st == "permanently_abandoned":
+			var repel_perm: float = MEANING_CAM_PERM_ABAND_P
+			if intent_s == IntentMemory.INTENT_ABANDON:
+				repel_perm *= 1.12
+			vel -= to_t * repel_perm
 		else:
-			vel -= to_t * MEANING_CAM_ABAND_P
+			var repel_ab: float = MEANING_CAM_ABAND_P
+			if intent_s == IntentMemory.INTENT_ABANDON:
+				repel_ab *= 1.1
+			elif intent_s == IntentMemory.INTENT_GROW:
+				repel_ab *= 0.92
+			vel -= to_t * repel_ab
 	var t0: Vector2i = _world.world_to_tile(_camera.global_position)
 	if t0.x >= 0:
 		var rk0: int = WorldMemory._region_key(t0.x, t0.y)

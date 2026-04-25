@@ -16,7 +16,3 @@ Thumbs.db
 
 # Godot editor cache
 .godot/
-
-# Temp / IDE
-*.tmp
-.idea/

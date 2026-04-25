@@ -278,7 +278,37 @@ func _job_history_scar_priority_offset(j: Job) -> int:
 		_:
 			o = 0
 	o += _culture_inherited_job_offset()
+	o += _job_intent_priority_offset(j)
 	return o
+
+
+func _job_intent_priority_offset(j: Job) -> int:
+	if j == null:
+		return 0
+	var from_rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
+	var to_rk: int = WorldMemory._region_key(j.work_tile.x, j.work_tile.y)
+	var from_center: int = SettlementMemory.get_center_region_for_region(from_rk)
+	var to_center: int = SettlementMemory.get_center_region_for_region(to_rk)
+	if from_center < 0 and to_center < 0:
+		return 0
+	var from_intent: int = int(IntentMemory.settlement_intent.get(from_center, IntentMemory.INTENT_HOLD))
+	var to_intent: int = int(IntentMemory.settlement_intent.get(to_center, IntentMemory.INTENT_HOLD))
+	var from_pressure: float = float(IntentMemory.settlement_pressure.get(from_center, 0.5))
+	var to_pressure: float = float(IntentMemory.settlement_pressure.get(to_center, 0.5))
+	var delta: int = 0
+	if to_intent == IntentMemory.INTENT_GROW:
+		delta += 3
+	elif to_intent == IntentMemory.INTENT_ABANDON:
+		delta -= 4
+	if to_pressure < from_pressure:
+		delta += 1
+	elif to_pressure > from_pressure + 0.12:
+		delta -= 1
+	if from_intent == IntentMemory.INTENT_ABANDON and to_intent != IntentMemory.INTENT_ABANDON:
+		delta += 2
+	elif from_intent != IntentMemory.INTENT_ABANDON and to_intent == IntentMemory.INTENT_ABANDON:
+		delta -= 2
+	return delta
 
 
 func _culture_inherited_job_offset() -> int:
@@ -1681,8 +1711,12 @@ func _start_wander() -> void:
 		return
 	# Deterministic: minimize lived scar, then use regional [CulturalMemory] (weaker) as tiebreak.
 	var chosen: Vector2i = Vector2i(-1, -1)
+	var best_score: int = -1_000_000
 	var best_sl: int = 99
 	var best_cult: int = -100
+	var from_rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
+	var from_center: int = SettlementMemory.get_center_region_for_region(from_rk)
+	var from_p: float = float(IntentMemory.settlement_pressure.get(from_center, 0.5))
 	for offset in WANDER_OFFSETS:
 		var t: Vector2i = data.tile_pos + offset
 		if not _world.pathfinder.is_passable(t):
@@ -1690,7 +1724,22 @@ func _start_wander() -> void:
 		var s: int = _scar_level_at_tile(t)
 		var rk2: int = WorldMemory._region_key(t.x, t.y)
 		var crep: int = CulturalMemory.get_region_reputation(rk2)
-		if s < best_sl or (s == best_sl and crep > best_cult):
+		var ckr2: int = SettlementMemory.get_center_region_for_region(rk2)
+		var intent2: int = int(IntentMemory.settlement_intent.get(ckr2, IntentMemory.INTENT_HOLD))
+		var p2: float = float(IntentMemory.settlement_pressure.get(ckr2, 0.5))
+		var score: int = 0
+		if intent2 == IntentMemory.INTENT_GROW:
+			score += 7
+		elif intent2 == IntentMemory.INTENT_ABANDON:
+			score -= 8
+		if p2 < from_p:
+			score += 2
+		elif p2 > from_p + 0.12:
+			score -= 2
+		score += crep
+		score -= s * 3
+		if score > best_score or (score == best_score and (s < best_sl or (s == best_sl and crep > best_cult))):
+			best_score = score
 			best_sl = s
 			best_cult = crep
 			chosen = t

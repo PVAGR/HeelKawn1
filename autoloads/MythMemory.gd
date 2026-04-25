@@ -70,8 +70,10 @@ func recompute(_w: World) -> void:
 		var st0: String = str(d.get("state", ""))
 		var sc0: int = 0
 		sc0 += _repeated_collapse_bonus(pack0)
-		if st0 == "abandoned" or st0 == "permanently_abandoned":
+		if st0 == "abandoned":
 			sc0 += 1
+		elif st0 == "permanently_abandoned":
+			sc0 += 2
 		if st0 == "revivable" and int(_rebirth_count_by_center.get(str(ckr0), 0)) >= 1:
 			sc0 -= 1
 		sc0 = clampi(sc0, -2, 3)

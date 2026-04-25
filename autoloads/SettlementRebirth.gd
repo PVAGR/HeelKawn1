@@ -66,19 +66,11 @@ func _gather_eligible_settlements() -> Array[Dictionary]:
 		var d: Dictionary = st as Dictionary
 		if str(d.get("state", "")) != "revivable":
 			continue
-		if int(d.get("scar_max", 99)) > 1:
-			continue
-		if int(d.get("reputation_min", -99)) < -1:
-			continue
 		var reg2: Variant = d.get("regions", null)
 		if not (reg2 is PackedInt32Array):
 			continue
 		var pack2: PackedInt32Array = reg2 as PackedInt32Array
 		if pack2.is_empty():
-			continue
-		var last_pd: int = WorldMemory.get_last_pawn_death_tick_in_regions(pack2)
-		var now0: int = GameManager.tick_count
-		if last_pd >= 0 and (now0 - last_pd) < REBIRTH_PEACE_TICKS:
 			continue
 		out2.append(d)
 	return out2
@@ -87,14 +79,28 @@ func _gather_eligible_settlements() -> Array[Dictionary]:
 ## Smallest [code]last_activity_tick[/code] (missing/invalid -> sentinel so they sort first), then [code]center_region[/code].
 func _sort_settlements_rebirth_order(arr: Array[Dictionary]) -> void:
 	arr.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ac: int = int(a.get("center_region", -1))
+		var bc: int = int(b.get("center_region", -1))
+		var ap: float = float(IntentMemory.settlement_pressure.get(ac, 1.0))
+		var bp: float = float(IntentMemory.settlement_pressure.get(bc, 1.0))
+		if ap != bp:
+			return ap < bp
+		var ascar: int = int(a.get("scar_max", 99))
+		var bscar: int = int(b.get("scar_max", 99))
+		if ascar != bscar:
+			return ascar < bscar
+		var arep: int = int(a.get("reputation_min", -99))
+		var brep: int = int(b.get("reputation_min", -99))
+		if arep != brep:
+			return arep > brep
 		var at: int = int(a.get("last_activity_tick", -1))
 		var bt: int = int(b.get("last_activity_tick", -1))
 		var an: int = at if at >= 0 else -2_000_000_000
 		var bn: int = bt if bt >= 0 else -2_000_000_000
 		if an != bn:
 			return an < bn
-		var ac: int = int(a.get("center_region", 0))
-		var bc: int = int(b.get("center_region", 0))
+		ac = int(a.get("center_region", 0))
+		bc = int(b.get("center_region", 0))
 		return ac < bc
 	)
 

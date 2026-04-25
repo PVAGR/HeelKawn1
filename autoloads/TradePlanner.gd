@@ -29,16 +29,19 @@ func plan(world: World, _main: Node, from_memory_flush: bool) -> void:
 	if SettlementMemory.settlements.is_empty():
 		return
 	var settlements: Array = SettlementMemory.get_settlements()
-	settlements.sort_custom(_sort_settlements_by_center)
+	settlements.sort_custom(_sort_settlements_by_intent_then_center)
 	var used: Dictionary = {}
 	for a_any in settlements:
 		if not (a_any is Dictionary):
 			continue
 		var a: Dictionary = a_any as Dictionary
 		var a_center: int = int(a.get("center_region", -1))
+		var a_intent: int = _intent_for_center(a_center)
 		if a_center < 0 or used.has(a_center):
 			continue
 		if SettlementMemory.is_collapsed_state(str(a.get("state", ""))):
+			continue
+		if a_intent == IntentMemory.INTENT_ABANDON:
 			continue
 		if not (a.get("regions", null) is PackedInt32Array):
 			continue
@@ -73,12 +76,30 @@ func plan(world: World, _main: Node, from_memory_flush: bool) -> void:
 			break
 
 
-static func _sort_settlements_by_center(ka: Variant, kb: Variant) -> bool:
+static func _sort_settlements_by_intent_then_center(ka: Variant, kb: Variant) -> bool:
 	if not (ka is Dictionary) or not (kb is Dictionary):
 		return false
 	var ca: int = int((ka as Dictionary).get("center_region", 0x7FFFFFFF))
 	var cb: int = int((kb as Dictionary).get("center_region", 0x7FFFFFFF))
+	var ia: int = _intent_sort_rank(_intent_for_center(ca))
+	var ib: int = _intent_sort_rank(_intent_for_center(cb))
+	if ia != ib:
+		return ia < ib
 	return ca < cb
+
+
+static func _intent_sort_rank(intent: int) -> int:
+	if intent == IntentMemory.INTENT_GROW:
+		return 0
+	if intent == IntentMemory.INTENT_ABANDON:
+		return 2
+	return 1
+
+
+static func _intent_for_center(center_region: int) -> int:
+	if center_region < 0:
+		return IntentMemory.INTENT_HOLD
+	return int(IntentMemory.settlement_intent.get(center_region, IntentMemory.INTENT_HOLD))
 
 
 static func _region_set(regions: PackedInt32Array) -> Dictionary:
@@ -198,9 +219,12 @@ static func _find_best_receiver(
 			continue
 		var st_b: Dictionary = b_any as Dictionary
 		var b_center: int = int(st_b.get("center_region", -1))
+		var b_intent: int = _intent_for_center(b_center)
 		if b_center < 0 or b_center == a_center or used.has(b_center):
 			continue
 		if SettlementMemory.is_collapsed_state(str(st_b.get("state", ""))):
+			continue
+		if b_intent == IntentMemory.INTENT_ABANDON:
 			continue
 		if SettlementMemory.is_region_in_permanently_abandoned_settlement(b_center):
 			continue
@@ -219,7 +243,7 @@ static func _find_best_receiver(
 			continue
 		if not _path_trading_pair(world, from_sp, st_b, to_sp, ac):
 			continue
-		cands.append({"d": d, "c": b_center, "to_sp": to_sp})
+		cands.append({"d": d, "ir": _intent_sort_rank(b_intent), "c": b_center, "to_sp": to_sp})
 	if cands.is_empty():
 		return {}
 	cands.sort_custom(func(x: Dictionary, y: Dictionary) -> bool:
@@ -227,6 +251,10 @@ static func _find_best_receiver(
 		var dy: int = int(y.get("d", 0))
 		if dx != dy:
 			return dx < dy
+		var ix: int = int(x.get("ir", 1))
+		var iy: int = int(y.get("ir", 1))
+		if ix != iy:
+			return ix < iy
 		return int(x.get("c", 0)) < int(y.get("c", 0))
 	)
 	var first: Dictionary = cands[0]

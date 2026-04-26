@@ -5,6 +5,47 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-26 - Phase 7 deterministic history export + kernel diagnostic
+
+Date: 2026-04-26
+Agent/Model: Codex (Cursor)
+Goal: Add tick-gated diagnostic at 30000 and runtime history export string for copy/paste auditing.
+
+Changes made:
+- Updated `autoloads/WorldMemory.gd`:
+  - Added `get_history_export_string() -> String`:
+    - read-only string export, no file IO.
+    - includes tick/type/subject/cause/impact/provenance hash stub per event.
+  - Added `_provenance_hash_stub(...)` deterministic hash helper for audit tracing.
+- Added `scripts/system/KernelDiagnostic.gd`:
+  - One-shot gate at `DIAGNOSTIC_TICK = 30000`.
+  - Prints structured console report with:
+    - memory event count + append-only check status
+    - settlement state distribution
+    - wildlife totals
+    - player profession/xp lock status
+    - determinism summary (rng-event scan + tick-locked flags)
+  - Exposes `is_complete()` + `status_text()`.
+- Updated `scenes/main/Main.gd`:
+  - Instantiates `KernelDiagnostic` runtime node in `_ready()`.
+  - Added diagnostic helper getters used by reporter/HUD:
+    - `get_wildlife_snapshot_for_diagnostic()`
+    - `get_player_profession_name()`
+    - `get_player_profession_xp()`
+    - `is_kernel_diagnostic_complete()`
+- Updated `scripts/ui/ColonyHUD.gd`:
+  - Added export status line:
+    - `📜 Export: Ready at Tick 30000 | Status: [Waiting/Complete]`
+  - Appended line to regular HUD refresh output.
+
+Determinism check:
+- Diagnostic trigger is exact tick equality (`tick == 30000`) and one-shot.
+- Export is generated from in-memory append-only events only.
+- No RNG added.
+- No frame-time gated diagnostic logic added.
+
+---
+
 ## 2026-04-26 - Phase 6 deterministic skill XP + profession lock
 
 Date: 2026-04-26

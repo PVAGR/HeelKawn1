@@ -152,6 +152,7 @@ func _refresh() -> void:
 	lines.append(_pawn_line())
 	lines.append(_player_status_line())
 	lines.append(_skill_line())
+	lines.append(_export_status_line())
 	lines.append(_stockpile_line())
 	lines.append(_jobs_line())
 	lines.append(_wildlife_line())
@@ -353,6 +354,16 @@ func _skill_line() -> String:
 	var prof_name: String = d.profession_name()
 	var xp: int = d.profession_progress_xp()
 	return "👤 Pawn [%d]: Profession [%s] | XP: %d/100" % [pawn_id, prof_name, xp]
+
+
+func _export_status_line() -> String:
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node == null:
+		return "📜 Export: Ready at Tick 30000 | Status: Waiting"
+	var status: String = "Complete" if main_node.is_kernel_diagnostic_complete() else "Waiting"
+	if GameManager.tick_count >= 30000:
+		return "📜 Export: Ready at Tick 30000 | Status: %s" % status
+	return "📜 Export: Ready at Tick 30000 | Status: Waiting"
 
 
 func _sample_wildlife(current_tick: int) -> void:

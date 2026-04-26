@@ -164,3 +164,43 @@ func get_region_keys_with_animal_deaths() -> Array[int]:
 		out.append(int(rr))
 	out.sort()
 	return out
+
+
+func _provenance_hash_stub(evt: Dictionary) -> String:
+	var payload: String = "%s|%s|%s|%s|%s|%s|%s" % [
+		str(evt.get("t", 0)),
+		str(evt.get("type", "unknown")),
+		str(evt.get("pawn_id", evt.get("pid", "n/a"))),
+		str(evt.get("action", evt.get("c", evt.get("reason", "")))),
+		str(evt.get("amount", evt.get("total_xp", evt.get("sp", 0)))),
+		str(evt.get("r", "n/a")),
+		str(evt.get("s", SCHEMA)),
+	]
+	var h: int = abs(payload.hash())
+	return "h%08x" % h
+
+
+## Read-only deterministic export snapshot (no file IO).
+func get_history_export_string() -> String:
+	var out: PackedStringArray = []
+	out.append("HEELKAWN HISTORY EXPORT - KERNEL v0.7.1")
+	out.append("TICK_RANGE: 0 to %d" % GameManager.tick_count)
+	out.append("EVENT_COUNT: %d" % _events.size())
+	out.append("FORMAT: [tick] type | subject | cause | impact | provenance_hash")
+	out.append("==============================================================")
+	for evt in _events:
+		var tick: int = int(evt.get("t", 0))
+		var type_name: String = str(evt.get("type", "unknown"))
+		if type_name == "unknown":
+			var k: int = int(evt.get("k", -1))
+			if k == int(Kind.PAWN_DEATH):
+				type_name = "pawn_death"
+			elif k == int(Kind.ANIMAL_DEATH):
+				type_name = "animal_death"
+		var subject: String = str(evt.get("pawn_id", evt.get("pid", evt.get("sp", "n/a"))))
+		var cause: String = str(evt.get("cause", evt.get("action", evt.get("c", evt.get("reason", "n/a")))))
+		var impact: String = str(evt.get("impact", evt.get("amount", evt.get("total_xp", evt.get("executed", "n/a")))))
+		out.append("[T:%d] %s | SUB:%s | CAUSE:%s | IMP:%s | PROV:%s" % [
+			tick, type_name, subject, cause, impact, _provenance_hash_stub(evt),
+		])
+	return "\n".join(out)

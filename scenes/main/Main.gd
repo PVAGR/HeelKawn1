@@ -121,6 +121,7 @@ var _selected_pawn: Pawn = null
 var _player_pawn: Pawn = null
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
+var _kernel_diagnostic: KernelDiagnostic = null
 ## Pixel radius around a pawn that counts as a click hit. Pawns draw at
 ## DRAW_RADIUS=3.5; we add a generous slop so moving targets are easy to grab.
 const SELECT_PICK_RADIUS_PX: float = 7.0
@@ -237,6 +238,9 @@ func _ready() -> void:
 	_player_input.name = "PlayerInputBuffer"
 	add_child(_player_input)
 	_player_input.set_process_unhandled_input(true)
+	_kernel_diagnostic = KernelDiagnostic.new()
+	_kernel_diagnostic.name = "KernelDiagnostic"
+	add_child(_kernel_diagnostic)
 	_init_ambient_audio()
 	# React to mining progress: when a wall comes down or an ore is cleared,
 	# new ores can become reachable and we may want to queue the next tunnel.
@@ -1141,6 +1145,28 @@ func get_player_pawn_id() -> int:
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return -1
 	return int(_player_pawn.data.id)
+
+
+func get_player_profession_name() -> String:
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return "None"
+	return _player_pawn.data.profession_name()
+
+
+func get_player_profession_xp() -> int:
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return 0
+	return int(_player_pawn.data.profession_progress_xp())
+
+
+func get_wildlife_snapshot_for_diagnostic() -> Dictionary:
+	if _animal_spawner == null:
+		return {"rabbit": 0, "deer": 0, "total": 0}
+	return _animal_spawner.get_live_wildlife_snapshot()
+
+
+func is_kernel_diagnostic_complete() -> bool:
+	return _kernel_diagnostic != null and _kernel_diagnostic.is_complete()
 
 
 func _update_hover_tile(_screen_pos: Vector2) -> void:

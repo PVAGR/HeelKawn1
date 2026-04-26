@@ -140,6 +140,8 @@ const COHORT_COHESION_BIAS_WEIGHT: float = 0.12
 const COHORT_COHESION_MAX_STEP: float = 0.35
 const COHORT_RECRUITMENT_SCAN_RADIUS_TILES: int = 10
 const COHORT_RECRUITMENT_MAX_PAWNS: int = 24
+const COHORT_RECRUITMENT_MAX_SIGNALS: int = 8
+const COHORT_RECRUITMENT_CACHE_UPDATE_TICKS: int = 60
 const COHORT_RECRUITMENT_BIAS_MAX: float = 1.12
 
 # -------------------- AI state --------------------
@@ -211,6 +213,9 @@ var _last_haul_fail_log_tick: int = -HAUL_FAIL_LOG_EVERY_N_TICKS
 var _next_haul_retry_tick: int = 0
 var _next_cohort_update_tick: int = 0
 var _cohort_anchor_ref: WeakRef = null
+var _next_recruitment_cache_tick: int = 0
+var _last_recruitment_job_type: int = -2
+var _recruitment_signal_cache: Array[Dictionary] = []
 var _anim_t: float = 0.0
 var _sfx: AudioStreamPlayer2D = null
 var _hit_flash_ticks: int = 0
@@ -260,6 +265,7 @@ func _clear_cohort_state() -> void:
 	data.cohort_job_type = -1
 	data.is_cohort_anchor = false
 	_cohort_anchor_ref = null
+	_invalidate_recruitment_signal_cache()
 
 
 func _active_cohort_job_type() -> int:
@@ -404,6 +410,66 @@ func _cohort_cohesion_bias(step: float) -> Vector2:
 	return offset.normalized() * bias_mag
 
 
+func _invalidate_recruitment_signal_cache() -> void:
+	_next_recruitment_cache_tick = 0
+	_recruitment_signal_cache.clear()
+
+
+func _refresh_recruitment_signal_cache(force: bool = false) -> void:
+	if data == null:
+		return
+	var tick_now: int = GameManager.tick_count
+	if not force and tick_now < _next_recruitment_cache_tick:
+		return
+	_next_recruitment_cache_tick = tick_now + COHORT_RECRUITMENT_CACHE_UPDATE_TICKS
+	_recruitment_signal_cache.clear()
+	var radius_sq: int = COHORT_RECRUITMENT_SCAN_RADIUS_TILES * COHORT_RECRUITMENT_SCAN_RADIUS_TILES
+	var my_center: int = _cohort_settlement_center_for_tile(data.tile_pos)
+	var candidates: Array[Pawn] = []
+	for n in get_tree().get_nodes_in_group("pawns"):
+		if not (n is Pawn):
+			continue
+		var p: Pawn = n as Pawn
+		if p == null or p == self or p.data == null:
+			continue
+		if p.data.tile_pos.distance_squared_to(data.tile_pos) > radius_sq:
+			continue
+		candidates.append(p)
+	candidates.sort_custom(func(a: Pawn, b: Pawn) -> bool:
+		return int(a.data.id) < int(b.data.id)
+	)
+	var inspected: int = 0
+	var seen_keys: Dictionary = {}
+	for p in candidates:
+		if inspected >= COHORT_RECRUITMENT_MAX_PAWNS:
+			break
+		inspected += 1
+		var active_job_type: int = p._active_cohort_job_type()
+		if active_job_type < 0:
+			continue
+		if int(p.data.cohort_job_type) != active_job_type:
+			continue
+		if int(p.data.cohort_anchor_id) < 0:
+			continue
+		var p_center: int = _cohort_settlement_center_for_tile(p.data.tile_pos)
+		if my_center >= 0 and p_center >= 0 and my_center != p_center:
+			continue
+		var locus_tile: Vector2i = p.data.tile_pos
+		if p._current_job != null:
+			locus_tile = p._current_job.work_tile
+		var key: String = "%d:%d:%d:%d" % [active_job_type, p_center, locus_tile.x, locus_tile.y]
+		if seen_keys.has(key):
+			continue
+		seen_keys[key] = true
+		_recruitment_signal_cache.append({
+			"job_type": active_job_type,
+			"center": p_center,
+			"locus_tile": locus_tile,
+		})
+		if _recruitment_signal_cache.size() >= COHORT_RECRUITMENT_MAX_SIGNALS:
+			break
+
+
 func get_cohort_recruitment_bias(job: Job) -> float:
 	if data == null or job == null:
 		return 1.0
@@ -413,32 +479,17 @@ func get_cohort_recruitment_bias(job: Job) -> float:
 	if my_center >= 0 and job_center >= 0 and my_center != job_center:
 		return 1.0
 	var radius_sq: int = COHORT_RECRUITMENT_SCAN_RADIUS_TILES * COHORT_RECRUITMENT_SCAN_RADIUS_TILES
-	var candidates: Array[Pawn] = []
-	for n in get_tree().get_nodes_in_group("pawns"):
-		if not (n is Pawn):
+	for sig in _recruitment_signal_cache:
+		var sig_job: int = int(sig.get("job_type", -1))
+		if sig_job != job_type:
 			continue
-		var p: Pawn = n as Pawn
-		if p == null or p == self or p.data == null:
+		var sig_center: int = int(sig.get("center", -1))
+		if my_center >= 0 and sig_center >= 0 and my_center != sig_center:
 			continue
-		candidates.append(p)
-	candidates.sort_custom(func(a: Pawn, b: Pawn) -> bool:
-		return int(a.data.id) < int(b.data.id)
-	)
-	var inspected: int = 0
-	for p in candidates:
-		if inspected >= COHORT_RECRUITMENT_MAX_PAWNS:
-			break
-		inspected += 1
-		if p._active_cohort_job_type() != job_type:
+		var locus_tile: Vector2i = sig.get("locus_tile", Vector2i(-100000, -100000))
+		if locus_tile.x <= -99999:
 			continue
-		if int(p.data.cohort_job_type) != job_type:
-			continue
-		if int(p.data.cohort_anchor_id) < 0:
-			continue
-		var p_center: int = _cohort_settlement_center_for_tile(p.data.tile_pos)
-		if my_center >= 0 and p_center >= 0 and my_center != p_center:
-			continue
-		if p.data.tile_pos.distance_squared_to(data.tile_pos) > radius_sq and p.data.tile_pos.distance_squared_to(job.work_tile) > radius_sq:
+		if locus_tile.distance_squared_to(job.work_tile) > radius_sq:
 			continue
 		return COHORT_RECRUITMENT_BIAS_MAX
 	return 1.0
@@ -881,6 +932,11 @@ func _on_game_tick(_tick: int) -> void:
 		_hit_flash_ticks -= 1
 	_decay_needs()
 	_check_thresholds()
+	var active_job_type: int = _active_cohort_job_type()
+	if active_job_type != _last_recruitment_job_type:
+		_last_recruitment_job_type = active_job_type
+		_invalidate_recruitment_signal_cache()
+	_refresh_recruitment_signal_cache()
 	update_cohort_membership()
 	_validate_or_dissolve_cohort()
 	if draft_mode:
@@ -1315,6 +1371,8 @@ func _apply_work_hazards() -> void:
 
 func _begin_job(job: Job) -> void:
 	_current_job = job
+	_invalidate_recruitment_signal_cache()
+	_refresh_recruitment_signal_cache(true)
 	update_cohort_membership(true)
 	# Build jobs need raw materials in hand before we walk to the build site.
 	# If we don't already have the right item in sufficient quantity, bounce
@@ -1674,6 +1732,8 @@ func _unclaim_current_job() -> void:
 
 func _reset_to_idle() -> void:
 	_clear_cohort_state()
+	_last_recruitment_job_type = -2
+	_invalidate_recruitment_signal_cache()
 	_current_job = null
 	# Drop any zone handle so the GC isn't rooted on a freed node after a
 	# reroll. Each state that needs a zone re-picks one when it starts.

@@ -22,6 +22,10 @@ func _ready() -> void:
 
 func set_visible_state(is_visible: bool) -> void:
 	visible = is_visible
+	if is_visible:
+		print(
+				"[VALIDATION_HUD] Observer overlay now VISIBLE — full world panel + [HARNESS] render on next apply_snapshot."
+		)
 
 
 func is_visible_state() -> bool:
@@ -29,9 +33,15 @@ func is_visible_state() -> bool:
 
 
 func apply_snapshot(snapshot: Dictionary) -> void:
+	var full_world: String = _world_governance_block(snapshot)
 	if not visible:
+		if _world_text != null:
+			_world_text.text = (
+					"[b][HARNESS_PANEL][/b] overlay hidden — text pre-baked; toggle Observer on to view.\n"
+					+ _validation_harness_hud_line(snapshot)
+			)
 		return
-	_world_text.text = _world_governance_block(snapshot)
+	_world_text.text = full_world
 	_demo_text.text = _demo_economy_block(snapshot)
 	_conflict_text.text = _conflict_block(snapshot)
 	_kernel_text.text = _kernel_block(snapshot)

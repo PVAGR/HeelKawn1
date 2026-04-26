@@ -242,6 +242,7 @@ var _validation_harness_observability_logged: bool = false
 
 
 func _ready() -> void:
+	SettlementMemory.print_validation_smoketest_from_main()
 	GameManager.game_tick.connect(_on_game_tick)
 	GameManager.speed_changed.connect(_on_speed_changed)
 	_player_input = PlayerInputBuffer.new()
@@ -523,7 +524,7 @@ func _on_game_tick(tick: int) -> void:
 	SettlementMemory.update_settlement_intents(tick)
 	SettlementMemory.update_resource_pressures(tick)
 	SettlementMemory.update_preferred_work_fronts(tick)
-	if _observer_hud != null and _observer_hud.is_visible_state() and tick % OBSERVER_HUD_REFRESH_TICKS == 0:
+	if _observer_hud != null and tick % OBSERVER_HUD_REFRESH_TICKS == 0:
 		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
 	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % FOCUS_INSPECTOR_REFRESH_TICKS == 0:
 		_focus_inspector.apply_snapshot(_build_focus_snapshot(tick))

@@ -59,6 +59,8 @@ const STATE_TRUTH_HYSTERESIS_INTERVAL_TICKS: int = 2000
 ## Require this many ticks at the same raw target before committing (anti-flicker).
 const STATE_TRUTH_HYSTERESIS_COMMIT_TICKS: int = 4000
 ## --- Validation harness (debug builds): controlled lab sessions ---
+## Console marker proving this binary includes the smoketest wiring; bump when observability changes.
+const VALIDATION_RUNTIME_SMOKE_MARKER: String = "PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r1"
 ## One switch: suppresses economy-distorting world events (see WorldEvents), enables settlement-truth verify logs, enables coarse specialization validation logs.
 const VALIDATION_SESSION_ENABLED: bool = false
 ## Piecemeal: settlement truth [SETTLEMENT_VERIFY] without full session (still requires debug build).
@@ -81,6 +83,47 @@ var _governance_snapshot: Dictionary = {}
 var _war_command_announced: Dictionary = {}
 ## center_region -> whether battle spawn bridge fired for current war state.
 var _war_battle_spawned: Dictionary = {}
+var _validation_smoketest_autoload_printed: bool = false
+var _validation_smoketest_main_printed: bool = false
+
+
+func _ready() -> void:
+	_print_validation_smoketest("SettlementMemory.autoload")
+
+
+func _print_validation_smoketest(source: String) -> void:
+	if source.begins_with("Main"):
+		if _validation_smoketest_main_printed:
+			return
+		_validation_smoketest_main_printed = true
+	else:
+		if _validation_smoketest_autoload_printed:
+			return
+		_validation_smoketest_autoload_printed = true
+	var dbg: bool = OS.is_debug_build()
+	var session_const: bool = VALIDATION_SESSION_ENABLED
+	var clean_active: bool = WorldEvents.validation_clean_economy_events_active()
+	var truth_active: bool = validation_truth_verify_armed()
+	var spec_active: bool = validation_specialization_log_armed()
+	print(
+			(
+					"[VALIDATION_SMOKETEST] marker=%s source=%s debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
+					+ "clean_economy_armed=%s settlement_truth_verify_armed=%s specialization_log_armed=%s"
+			)
+			% [
+				VALIDATION_RUNTIME_SMOKE_MARKER,
+				source,
+				dbg,
+				session_const,
+				clean_active,
+				truth_active,
+				spec_active,
+			]
+	)
+
+
+func print_validation_smoketest_from_main() -> void:
+	_print_validation_smoketest("Main.gd")
 
 
 func recompute(_world: World) -> void:

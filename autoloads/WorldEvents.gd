@@ -11,6 +11,7 @@ const LOCUST_FOOD_DRAIN: int = 2
 var _active_event_name: String = ""
 var _active_event_until_tick: int = -1
 var _gathering_efficiency_mult: float = 1.0
+var _validation_first_event_roll_proof_logged: bool = false
 
 
 func _ready() -> void:
@@ -36,6 +37,21 @@ func _on_game_tick(tick: int) -> void:
 		_clear_temporary_event()
 	if tick <= 0 or tick % EVENT_ROLL_INTERVAL != 0:
 		return
+	if not _validation_first_event_roll_proof_logged:
+		_validation_first_event_roll_proof_logged = true
+		var sup: bool = _suppress_economy_distorting_world_events()
+		print(
+				(
+						"[VALIDATION_EVENT_ROLL_PROOF] tick=%d marker=%s clean_suppression_active=%s "
+						+ "scheduled_economy_roll_skipped=%s (proof is one-shot only)"
+				)
+				% [
+					tick,
+					SettlementMemory.VALIDATION_RUNTIME_SMOKE_MARKER,
+					sup,
+					sup,
+				]
+		)
 	if _suppress_economy_distorting_world_events():
 		return
 	var event_index: int = _deterministic_event_index(tick)

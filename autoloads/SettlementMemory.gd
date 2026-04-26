@@ -30,6 +30,10 @@ const FRONT_CLUSTER_RADIUS_TILES: int = 8
 const FRONT_INFLUENCE_RADIUS_TILES: int = 10
 const FRONT_MAX_COUNT: int = 2
 const FRONT_BIAS_MAX: float = 1.1
+const FRONT_PERSISTENCE_WINDOW_TICKS: int = 600
+const FRONT_DECAY_TICKS: int = 200
+const MIN_FRONT_SUPPORT: int = 1
+const FRONT_SUPPORT_CHECK_RADIUS_TILES: int = 8
 const INTENT_GROW: String = "GROW"
 const INTENT_HOARD: String = "HOARD"
 const INTENT_DEFEND: String = "DEFEND"
@@ -1000,19 +1004,52 @@ func _jobs_for_settlement_intent(st: Dictionary, active_jobs: Array[Job]) -> Arr
 	return out
 
 
+func _local_front_support_count(front: Dictionary, compatible_jobs: Array[Dictionary], radius_sq: int) -> int:
+	var front_tile: Vector2i = front.get("tile", Vector2i(-100000, -100000))
+	if front_tile.x <= -99999:
+		return 0
+	var front_job_type: int = int(front.get("job_type", -1))
+	var count: int = 0
+	for jd in compatible_jobs:
+		var jt: int = int(jd.get("job_type", -1))
+		if jt != front_job_type:
+			continue
+		var t: Vector2i = jd.get("tile", Vector2i.ZERO)
+		if front_tile.distance_squared_to(t) <= radius_sq:
+			count += 1
+	return count
+
+
 func update_preferred_work_fronts(tick: int) -> void:
-	if tick % FRONT_UPDATE_INTERVAL_TICKS != 0:
+	var on_cadence_tick: bool = tick % FRONT_UPDATE_INTERVAL_TICKS == 0
+	var has_intent_shift: bool = false
+	if not on_cadence_tick:
+		for st_v in settlements:
+			if not (st_v is Dictionary):
+				continue
+			var st_probe: Dictionary = st_v as Dictionary
+			var intent_probe: String = str(st_probe.get("current_intent", INTENT_GROW))
+			var last_intent_probe: String = str(st_probe.get("last_front_intent", intent_probe))
+			if intent_probe != last_intent_probe:
+				has_intent_shift = true
+				break
+	if not on_cadence_tick and not has_intent_shift:
 		return
 	var active_jobs: Array[Job] = _active_jobs_snapshot()
 	var cluster_radius_sq: int = FRONT_CLUSTER_RADIUS_TILES * FRONT_CLUSTER_RADIUS_TILES
+	var support_check_radius_sq: int = FRONT_SUPPORT_CHECK_RADIUS_TILES * FRONT_SUPPORT_CHECK_RADIUS_TILES
 	for i in range(settlements.size()):
 		if not (settlements[i] is Dictionary):
 			continue
 		var st: Dictionary = settlements[i] as Dictionary
 		var intent: String = str(st.get("current_intent", INTENT_GROW))
 		var last_intent: String = str(st.get("last_front_intent", intent))
-		if intent != last_intent:
+		var intent_changed: bool = intent != last_intent
+		if intent_changed:
 			st["preferred_fronts"] = []
+			st["last_front_intent"] = intent
+		if not on_cadence_tick and not intent_changed:
+			continue
 		var compatible_jobs: Array[Dictionary] = _jobs_for_settlement_intent(st, active_jobs)
 		if compatible_jobs.is_empty():
 			st["preferred_fronts"] = []
@@ -1050,6 +1087,12 @@ func update_preferred_work_fronts(tick: int) -> void:
 				return ac > bc
 			return int(a.get("first_job_id", 0)) < int(b.get("first_job_id", 0))
 		)
+		var existing_fronts_v: Variant = st.get("preferred_fronts", [])
+		var existing_fronts: Array = existing_fronts_v as Array if existing_fronts_v is Array else []
+		var unmatched_existing: Array[Dictionary] = []
+		for fv in existing_fronts:
+			if fv is Dictionary:
+				unmatched_existing.append((fv as Dictionary).duplicate(true))
 		var fronts: Array[Dictionary] = []
 		for c in clusters:
 			if fronts.size() >= FRONT_MAX_COUNT:
@@ -1057,11 +1100,41 @@ func update_preferred_work_fronts(tick: int) -> void:
 			var cc: int = maxi(1, int(c.get("count", 1)))
 			var fx: int = int(round(float(int(c.get("sum_x", 0))) / float(cc)))
 			var fy: int = int(round(float(int(c.get("sum_y", 0))) / float(cc)))
+			var cluster_tile: Vector2i = Vector2i(fx, fy)
+			var cluster_job_type: int = int(c.get("job_type", -1))
+			var matched_idx: int = -1
+			for ei in range(unmatched_existing.size()):
+				var ex: Dictionary = unmatched_existing[ei]
+				if int(ex.get("job_type", -1)) != cluster_job_type:
+					continue
+				var ex_tile: Vector2i = ex.get("tile", Vector2i(-100000, -100000))
+				if ex_tile.x <= -99999:
+					continue
+				if ex_tile.distance_squared_to(cluster_tile) <= cluster_radius_sq:
+					matched_idx = ei
+					break
+			var stability_ticks: int = FRONT_PERSISTENCE_WINDOW_TICKS
+			if matched_idx >= 0:
+				stability_ticks = FRONT_PERSISTENCE_WINDOW_TICKS
+				unmatched_existing.remove_at(matched_idx)
 			fronts.append({
 				"tile": Vector2i(fx, fy),
-				"job_type": int(c.get("job_type", -1)),
+				"job_type": cluster_job_type,
 				"support": cc,
+				"stability_ticks": stability_ticks,
 			})
+		for ex in unmatched_existing:
+			if fronts.size() >= FRONT_MAX_COUNT:
+				break
+			var support: int = _local_front_support_count(ex, compatible_jobs, support_check_radius_sq)
+			if support <= 0:
+				continue
+			var stability: int = int(ex.get("stability_ticks", 0)) - FRONT_DECAY_TICKS
+			if support < MIN_FRONT_SUPPORT or stability <= 0:
+				continue
+			ex["support"] = support
+			ex["stability_ticks"] = stability
+			fronts.append(ex)
 		st["preferred_fronts"] = fronts
 		st["last_front_update_tick"] = tick
 		st["last_front_intent"] = intent
@@ -1095,7 +1168,10 @@ func get_preferred_front_bias_for_job(pawn_tile: Vector2i, job: Job) -> float:
 		if ftile.x <= -99999:
 			continue
 		if ftile.distance_squared_to(job.work_tile) <= radius_sq:
-			return FRONT_BIAS_MAX
+			var stability_ticks: int = int(f.get("stability_ticks", FRONT_PERSISTENCE_WINDOW_TICKS))
+			var stability_ratio: float = clamp(float(stability_ticks) / float(maxi(1, FRONT_PERSISTENCE_WINDOW_TICKS)), 0.0, 1.0)
+			var scaled_bias: float = 1.0 + (FRONT_BIAS_MAX - 1.0) * stability_ratio
+			return clamp(scaled_bias, 1.0, FRONT_BIAS_MAX)
 	return 1.0
 
 

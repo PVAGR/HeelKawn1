@@ -5,6 +5,34 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-25 - Deterministic live wildlife HUD counters
+
+Date: 2026-04-25
+Agent/Model: Codex (Cursor)
+Goal: Add real-time wildlife trend visibility without UI spam or non-deterministic timing.
+
+Changes made:
+- Added `get_live_wildlife_snapshot()` to `scripts/pawn/AnimalSpawner.gd` (read-only rabbit/deer/total counts).
+- Added deterministic tick-sampled wildlife telemetry to `scripts/ui/ColonyHUD.gd`:
+  - `WILDLIFE_SAMPLE_EVERY_TICKS = 20`
+  - Cached current/previous snapshots and trend arrow (`^`, `v`, `->`)
+  - Added `_sample_wildlife(current_tick)` and `_wildlife_line()`
+  - Added wildlife line into `_refresh()` output.
+- Wired HUD to resolve `AnimalSpawner` through world metadata (`_world.get_meta("animal_spawner")`) set by Main.
+
+Decisions:
+- Keep sampling strictly tick-gated (no frame-time sampling) to avoid visual churn and preserve deterministic diagnostics.
+
+Next concrete step:
+- Add optional HUD mini-history (last N sampled totals) so trend direction is backed by recent sample sequence.
+
+Files touched:
+- scripts/pawn/AnimalSpawner.gd
+- scripts/ui/ColonyHUD.gd
+- docs/SESSION_LOG.md
+
+---
+
 ## 2026-04-25 - Stability tuning pass from 08203eb audit
 
 Date: 2026-04-25

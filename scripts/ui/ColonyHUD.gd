@@ -9,6 +9,7 @@ extends CanvasLayer
 ## GameManager, and job counts from JobManager (autoload).
 
 const REFRESH_EVERY_N_TICKS: int = 1
+const WILDLIFE_SAMPLE_EVERY_TICKS: int = 20
 
 const PANEL_BG: Color = Color(0.05, 0.06, 0.08, 0.78)
 const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.70)
@@ -28,8 +29,13 @@ const HOTKEY_HINTS: String = "SPACE pause · 1-4 speed · F5 save · F8 load · 
 
 var _world: World = null
 var _spawner: PawnSpawner = null
+var _animal_spawner: AnimalSpawner = null
 ## Empty string when no designation mode is active. Otherwise "Bed" / "Wall" / etc.
 var _designation_label: String = ""
+var _wildlife_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
+var _wildlife_prev_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
+var _wildlife_sample_tick: int = 0
+var _wildlife_trend_arrow: String = "->"
 
 
 func _ready() -> void:
@@ -55,6 +61,11 @@ func _ready() -> void:
 func bind(world: World, spawner: PawnSpawner) -> void:
 	_world = world
 	_spawner = spawner
+	_animal_spawner = null
+	if _world != null and _world.has_meta("animal_spawner"):
+		var m: Variant = _world.get_meta("animal_spawner")
+		if m is AnimalSpawner:
+			_animal_spawner = m as AnimalSpawner
 	_refresh()
 
 
@@ -68,6 +79,8 @@ func set_designation_mode(label: String) -> void:
 # ==================== refresh hooks ====================
 
 func _on_tick(tick: int) -> void:
+	if tick % WILDLIFE_SAMPLE_EVERY_TICKS == 0:
+		_sample_wildlife(tick)
 	if tick % REFRESH_EVERY_N_TICKS == 0:
 		_refresh()
 
@@ -121,6 +134,7 @@ func _refresh() -> void:
 	lines.append(_pawn_line())
 	lines.append(_stockpile_line())
 	lines.append(_jobs_line())
+	lines.append(_wildlife_line())
 	_label.text = "\n".join(lines)
 
 
@@ -261,6 +275,38 @@ func _jobs_line() -> String:
 	var beds_built: int = _world.bed_count() if _world != null else 0
 	return "[color=#cccccc]Jobs:[/color] [b]%d[/b] open  [b]%d[/b] claimed   F %d · M %d · TM %d · C %d · H %d · B %d · W %d · D %d   [color=#dcb478]Beds[/color] [b]%d[/b]   [color=#888888](done %d)[/color]" % [
 		s.open, s.claimed, fw, mn, mw, ch, hu, bd, bw, bo, beds_built, s.completed
+	]
+
+
+func _sample_wildlife(current_tick: int) -> void:
+	if _animal_spawner == null:
+		if _world != null and _world.has_meta("animal_spawner"):
+			var m: Variant = _world.get_meta("animal_spawner")
+			if m is AnimalSpawner:
+				_animal_spawner = m as AnimalSpawner
+	if _animal_spawner == null:
+		return
+	_wildlife_prev_snapshot = _wildlife_snapshot.duplicate(true)
+	_wildlife_snapshot = _animal_spawner.get_live_wildlife_snapshot()
+	_wildlife_sample_tick = current_tick
+	var cur_total: int = int(_wildlife_snapshot.get("total", 0))
+	var prev_total: int = int(_wildlife_prev_snapshot.get("total", 0))
+	if cur_total > prev_total:
+		_wildlife_trend_arrow = "^"
+	elif cur_total < prev_total:
+		_wildlife_trend_arrow = "v"
+	else:
+		_wildlife_trend_arrow = "->"
+
+
+func _wildlife_line() -> String:
+	if _wildlife_sample_tick == 0:
+		return "[color=#cccccc]Wildlife:[/color] scanning..."
+	var r: int = int(_wildlife_snapshot.get("rabbit", 0))
+	var d: int = int(_wildlife_snapshot.get("deer", 0))
+	var t: int = int(_wildlife_snapshot.get("total", 0))
+	return "[color=#cccccc]Wildlife:[/color] R [b]%d[/b] · D [b]%d[/b] · T [b]%d[/b]  [color=#9ecbff]%s[/color]   [color=#888888](sample @ %d)[/color]" % [
+		r, d, t, _wildlife_trend_arrow, _wildlife_sample_tick
 	]
 
 

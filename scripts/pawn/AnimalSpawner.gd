@@ -284,3 +284,15 @@ func describe() -> String:
 	var rabbits: int = get_animal_count_by_type(Animal.Type.RABBIT)
 	var deer: int = get_animal_count_by_type(Animal.Type.DEER)
 	return "Animals: %d rabbits, %d deer (total %d / %d)" % [rabbits, deer, animals.size(), MAX_ANIMALS]
+
+
+## Deterministic live wildlife snapshot for HUD sampling.
+## Read-only: no RNG, no side effects.
+func get_live_wildlife_snapshot() -> Dictionary:
+	var r_count: int = get_animal_count_by_type(Animal.Type.RABBIT)
+	var d_count: int = get_animal_count_by_type(Animal.Type.DEER)
+	return {
+		"rabbit": r_count,
+		"deer": d_count,
+		"total": r_count + d_count,
+	}

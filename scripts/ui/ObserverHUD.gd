@@ -58,13 +58,16 @@ func _apply_panel_style(panel: PanelContainer) -> void:
 
 func _world_governance_block(s: Dictionary) -> String:
 	return (
-		"[b]WORLD / TIME[/b]\n"
-		+ "Tick: %d  Day: %d\n" % [int(s.get("tick", 0)), int(s.get("day", 1))]
+		"[b]WORLD STATUS[/b]\n"
+		+ "%s\n\n" % str(s.get("world_status_summary", "WORLD STATUS: Unknown"))
+		+ "[b]WORLD / GOVERNANCE[/b]\n"
 		+ "Speed: %s  Pause: %s\n" % [str(s.get("speed", "1x")), str(s.get("paused", "No"))]
-		+ "[b]GOVERNANCE / AUTHORITY[/b]\n"
-		+ "Type: %s  Ruler: %s\n" % [str(s.get("governance_type", "Anarchy")), str(s.get("ruler_name", "None"))]
+		+ "Governance: %s  Ruler: %s\n" % [str(s.get("governance_type", "Anarchy")), str(s.get("ruler_name", "None"))]
 		+ "Council Size: %d\n" % int(s.get("council_size", 0))
-		+ "Settlement State: %s" % str(s.get("settlement_state", "Unknown"))
+		+ "Settlement: %s  [%s]" % [
+			str(s.get("settlement_state", "Unknown")),
+			str(s.get("settlement_state_label", "UNKNOWN")),
+		]
 	)
 
 
@@ -78,30 +81,37 @@ func _demo_economy_block(s: Dictionary) -> String:
 			int(s.get("wild_total", 0)),
 		]
 		+ "Jobs Open: %d  Claimed: %d\n" % [int(s.get("jobs_open", 0)), int(s.get("jobs_claimed", 0))]
-		+ "Food Pressure: %d%%  Housing: %d%%\n" % [
+		+ "Food Pressure: %d%% [%s]\n" % [
 			int(round(float(s.get("food_pressure", 0.0)) * 100.0)),
+			str(s.get("food_pressure_label", "LOW")),
+		]
+		+ "Housing Pressure: %d%% [%s]\n" % [
 			int(round(float(s.get("housing_pressure", 0.0)) * 100.0)),
+			str(s.get("housing_pressure_label", "LOW")),
 		]
 		+ "Intent: %s" % str(s.get("intent_summary", "n/a"))
 	)
 
 
 func _conflict_block(s: Dictionary) -> String:
+	var history_lines: PackedStringArray = s.get("recent_history_lines", PackedStringArray())
+	var history_text: String = "No recent high-signal events."
+	if history_lines is PackedStringArray and not history_lines.is_empty():
+		history_text = "\n".join(history_lines)
 	return (
 		"[b]CONFLICT / WAR[/b]\n"
-		+ "War State: %s\n" % str(s.get("war_state", "peace"))
+		+ "War State: %s  [%s]\n" % [str(s.get("war_state", "peace")), str(s.get("war_state_label", "PEACE"))]
 		+ "Target Settlement: %s\n" % str(s.get("war_target", "None"))
 		+ "BattleMaster: %s\n" % str(s.get("battlemaster_name", "None"))
 		+ "Active Enemies: %d\n" % int(s.get("active_enemies", 0))
-		+ "Battlefield Mode: %s" % str(s.get("battlefield_mode", "Idle"))
+		+ "Battlefield Mode: %s\n\n" % str(s.get("battlefield_mode", "Idle"))
+		+ "[b]RECENT HISTORY[/b]\n"
+		+ history_text
 	)
 
 
 func _kernel_block(s: Dictionary) -> String:
 	return (
-		"[b]KERNEL / MEMORY[/b]\n"
-		+ "[font=monospace]Determinism Lock: %s\n" % str(s.get("determinism_lock", "Pending"))
-		+ "WorldMemory Events: %d\n" % int(s.get("world_memory_events", 0))
-		+ "Kernel Phase: %s\n" % str(s.get("kernel_phase", "Waiting"))
-		+ "Next Diagnostic Tick: %d[/font]" % int(s.get("next_diag_tick", 30000))
+		"[b]SYSTEM STAMP[/b]\n"
+		+ "[font=monospace]%s[/font]" % str(s.get("footer_stamp", "Tick 0 | Day 1 | Determinism Pending"))
 	)

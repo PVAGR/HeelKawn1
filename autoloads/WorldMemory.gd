@@ -127,6 +127,35 @@ func event_count() -> int:
 	return _events.size()
 
 
+func get_recent_event_summaries(max_items: int = 3) -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	if max_items <= 0 or _events.is_empty():
+		return out
+	var start: int = maxi(0, _events.size() - max_items)
+	for i in range(_events.size() - 1, start - 1, -1):
+		var evt: Dictionary = _events[i]
+		var kind: String = str(evt.get("type", ""))
+		if kind == "":
+			var k: int = int(evt.get("k", -1))
+			if k == int(Kind.PAWN_DEATH):
+				kind = "pawn_death"
+			elif k == int(Kind.ANIMAL_DEATH):
+				kind = "animal_death"
+			elif k == int(Kind.ENEMY_DEATH):
+				kind = "enemy_death"
+			else:
+				kind = "event"
+		var line: String = "%d: %s" % [int(evt.get("t", 0)), kind.replace("_", " ")]
+		if kind == "war_battle_spawned":
+			line += " (battle spawned)"
+		elif kind == "war_proposed":
+			line += " (war proposed)"
+		elif kind == "governance_change":
+			line += " (ruler/governance changed)"
+		out.append(line)
+	return out
+
+
 ## Latest tick of an [enum Kind.ANIMAL_DEATH] in [param rk] for [param species] (Animal enum), or -1.
 func get_last_animal_death_tick_in_region(rk: int, species: int) -> int:
 	var best: int = -1

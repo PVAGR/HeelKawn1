@@ -2422,15 +2422,41 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 	var battlefield_mode: String = _observer_battlefield_mode()
 	var determinism_lock: String = "Locked" if is_kernel_diagnostic_complete() else "Pending"
 	var kernel_phase: String = "Phase 7 Complete" if is_kernel_diagnostic_complete() else "Phase 7 Waiting"
+	var food_pressure: float = float(ColonySimServices.get_food_pressure())
+	var housing_pressure: float = float(ColonySimServices.get_housing_pressure())
+	var war_state_raw: String = str(war.get("state", "peace"))
+	var settlement_state_raw: String = str(settlement_data.get("state", "unknown"))
+	var war_state_label: String = _war_state_label(war_state_raw)
+	var settlement_state_label: String = _settlement_state_label(settlement_state_raw)
+	var food_pressure_label: String = _pressure_label(food_pressure)
+	var housing_pressure_label: String = _pressure_label(housing_pressure)
+	var world_status_summary: String = _observer_world_status_summary(
+		war_state_raw,
+		settlement_state_raw,
+		food_pressure,
+		housing_pressure,
+		str(governance.get("type", "anarchy")),
+		ruler_name
+	)
+	var recent_history_lines: PackedStringArray = WorldMemory.get_recent_event_summaries(3)
+	var footer_stamp: String = "Tick %d | Day %d | Determinism %s | Events %d | %s" % [
+		tick,
+		day,
+		determinism_lock,
+		WorldMemory.event_count(),
+		kernel_phase,
+	]
 	return {
 		"tick": tick,
 		"day": day,
 		"speed": speed_text,
 		"paused": paused_text,
+		"world_status_summary": world_status_summary,
 		"governance_type": _pretty_governance_name(str(governance.get("type", "anarchy"))),
 		"ruler_name": ruler_name,
 		"council_size": council_size,
-		"settlement_state": _pretty_settlement_state(str(settlement_data.get("state", "unknown"))),
+		"settlement_state": _pretty_settlement_state(settlement_state_raw),
+		"settlement_state_label": settlement_state_label,
 		"total_pawns": _observer_total_pawns(),
 		"children_count": _observer_children_count(),
 		"wild_rabbit": int(wildlife.get("rabbit", 0)),
@@ -2438,18 +2464,23 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"wild_total": int(wildlife.get("total", 0)),
 		"jobs_open": int(jobs.get("open", 0)),
 		"jobs_claimed": int(jobs.get("claimed", 0)),
-		"food_pressure": float(ColonySimServices.get_food_pressure()),
-		"housing_pressure": float(ColonySimServices.get_housing_pressure()),
+		"food_pressure": food_pressure,
+		"food_pressure_label": food_pressure_label,
+		"housing_pressure": housing_pressure,
+		"housing_pressure_label": housing_pressure_label,
 		"intent_summary": _observer_intent_summary(),
-		"war_state": _pretty_war_state(str(war.get("state", "peace"))),
+		"war_state": _pretty_war_state(war_state_raw),
+		"war_state_label": war_state_label,
 		"war_target": _observer_war_target_label(int(war.get("target_settlement_id", -1))),
 		"battlemaster_name": battlemaster_name,
 		"active_enemies": _enemy_spawner.get_enemy_count() if _enemy_spawner != null else 0,
 		"battlefield_mode": battlefield_mode,
+		"recent_history_lines": recent_history_lines,
 		"determinism_lock": determinism_lock,
 		"world_memory_events": WorldMemory.event_count(),
 		"kernel_phase": kernel_phase,
 		"next_diag_tick": KernelDiagnostic.DIAGNOSTIC_TICK,
+		"footer_stamp": footer_stamp,
 	}
 
 
@@ -2595,6 +2626,75 @@ func _pretty_war_state(raw: String) -> String:
 			return "Truce"
 		_:
 			return "Peace"
+
+
+func _pressure_label(value: float) -> String:
+	if value < 0.25:
+		return "LOW"
+	if value < 0.55:
+		return "WATCH"
+	if value < 0.8:
+		return "HIGH"
+	return "CRITICAL"
+
+
+func _war_state_label(raw: String) -> String:
+	match raw:
+		"at_war":
+			return "AT WAR"
+		"mobilizing", "proposed":
+			return "MOBILIZING"
+		"truce":
+			return "TRUCE"
+		_:
+			return "PEACE"
+
+
+func _settlement_state_label(raw: String) -> String:
+	match raw:
+		"active":
+			return "ACTIVE"
+		"recovering", "revivable":
+			return "RECOVERING"
+		"abandoned":
+			return "ABANDONED"
+		"permanently_abandoned":
+			return "PERMANENTLY ABANDONED"
+		_:
+			return "UNKNOWN"
+
+
+func _observer_world_status_summary(
+		war_state: String,
+		settlement_state: String,
+		food_pressure: float,
+		housing_pressure: float,
+		governance_type: String,
+		ruler_name: String
+) -> String:
+	var war_label: String = _war_state_label(war_state)
+	if war_label == "AT WAR":
+		return "WORLD STATUS: War active and battle pressure elevated"
+	if war_label == "MOBILIZING":
+		return "WORLD STATUS: War mobilization underway"
+	if _pressure_label(food_pressure) == "CRITICAL":
+		return "WORLD STATUS: Severe food pressure, stability at risk"
+	if _pressure_label(housing_pressure) == "CRITICAL":
+		return "WORLD STATUS: Severe housing pressure, stability at risk"
+	var settle_label: String = _settlement_state_label(settlement_state)
+	if settle_label == "PERMANENTLY ABANDONED":
+		return "WORLD STATUS: Settlement collapse is permanent"
+	if settle_label == "ABANDONED":
+		return "WORLD STATUS: Settlement abandoned, recovery uncertain"
+	if settle_label == "RECOVERING":
+		if governance_type == "anarchy" or ruler_name == "None":
+			return "WORLD STATUS: Recovering settlement, no active ruler"
+		return "WORLD STATUS: Recovery underway under local authority"
+	if _pressure_label(food_pressure) == "HIGH" or _pressure_label(housing_pressure) == "HIGH":
+		return "WORLD STATUS: Fragile peace under rising pressure"
+	if governance_type != "anarchy" and ruler_name != "None":
+		return "WORLD STATUS: Prosperity and order"
+	return "WORLD STATUS: Fragile peace under light pressure"
 
 
 # ==================== draft mode (combat control) ====================

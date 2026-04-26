@@ -143,6 +143,10 @@ const COHORT_RECRUITMENT_MAX_PAWNS: int = 24
 const COHORT_RECRUITMENT_MAX_SIGNALS: int = 8
 const COHORT_RECRUITMENT_CACHE_UPDATE_TICKS: int = 60
 const COHORT_RECRUITMENT_BIAS_MAX: float = 1.12
+const COHORT_STABILITY_WINDOW_TICKS: int = 400
+const COHORT_LOCUS_PERSIST_RADIUS_TILES: int = 12
+const COHORT_LOCUS_PERSIST_BIAS_WEIGHT: float = 0.08
+const COHORT_LOCUS_PERSIST_MAX_STEP: float = 0.22
 
 # -------------------- AI state --------------------
 
@@ -216,6 +220,9 @@ var _cohort_anchor_ref: WeakRef = null
 var _next_recruitment_cache_tick: int = 0
 var _last_recruitment_job_type: int = -2
 var _recruitment_signal_cache: Array[Dictionary] = []
+var _cohort_stability_ticks: int = 0
+var _cohort_locus_tile: Vector2i = Vector2i(-1, -1)
+var _cohort_stability_job_type: int = -1
 var _anim_t: float = 0.0
 var _sfx: AudioStreamPlayer2D = null
 var _hit_flash_ticks: int = 0
@@ -265,6 +272,7 @@ func _clear_cohort_state() -> void:
 	data.cohort_job_type = -1
 	data.is_cohort_anchor = false
 	_cohort_anchor_ref = null
+	_clear_cohort_stability_state()
 	_invalidate_recruitment_signal_cache()
 
 
@@ -407,6 +415,66 @@ func _cohort_cohesion_bias(step: float) -> Vector2:
 	if dist_sq <= 1.0 or dist_sq > max_dist_world * max_dist_world:
 		return Vector2.ZERO
 	var bias_mag: float = minf(COHORT_COHESION_MAX_STEP, step * COHORT_COHESION_BIAS_WEIGHT)
+	return offset.normalized() * bias_mag
+
+
+func _clear_cohort_stability_state() -> void:
+	_cohort_stability_ticks = 0
+	_cohort_locus_tile = Vector2i(-1, -1)
+	_cohort_stability_job_type = -1
+
+
+func _decay_cohort_stability_window() -> void:
+	if _cohort_stability_ticks <= 0:
+		_clear_cohort_stability_state()
+		return
+	_cohort_stability_ticks = maxi(0, _cohort_stability_ticks - COHORT_UPDATE_TICKS)
+	if _cohort_stability_ticks <= 0:
+		_clear_cohort_stability_state()
+
+
+func _refresh_or_decay_cohort_stability(force: bool = false) -> void:
+	if not force and GameManager.tick_count % COHORT_UPDATE_TICKS != 0:
+		return
+	if data == null:
+		_clear_cohort_stability_state()
+		return
+	var active_job_type: int = _active_cohort_job_type()
+	if active_job_type < 0 or _current_job == null:
+		_decay_cohort_stability_window()
+		return
+	if int(data.cohort_anchor_id) < 0 or int(data.cohort_job_type) != active_job_type:
+		_decay_cohort_stability_window()
+		return
+	if not data.is_cohort_anchor:
+		var anchor: Pawn = _cohort_anchor_node()
+		if anchor == null or anchor.data == null:
+			_decay_cohort_stability_window()
+			return
+		if anchor._active_cohort_job_type() != active_job_type:
+			_decay_cohort_stability_window()
+			return
+	_cohort_locus_tile = _current_job.work_tile
+	_cohort_stability_job_type = active_job_type
+	_cohort_stability_ticks = COHORT_STABILITY_WINDOW_TICKS
+
+
+func _cohort_locus_persistence_bias(step: float) -> Vector2:
+	if data == null or data.is_cohort_anchor or _path.is_empty():
+		return Vector2.ZERO
+	if _cohort_stability_ticks <= 0 or _cohort_stability_job_type < 0:
+		return Vector2.ZERO
+	if _active_cohort_job_type() != _cohort_stability_job_type:
+		return Vector2.ZERO
+	if _cohort_locus_tile.x < 0 or _cohort_locus_tile.y < 0 or _world == null:
+		return Vector2.ZERO
+	var locus_world: Vector2 = _world.tile_to_world(_cohort_locus_tile)
+	var offset: Vector2 = locus_world - position
+	var dist_sq: float = offset.length_squared()
+	var max_dist_world: float = float(COHORT_LOCUS_PERSIST_RADIUS_TILES * World.TILE_PIXELS)
+	if dist_sq <= 1.0 or dist_sq > max_dist_world * max_dist_world:
+		return Vector2.ZERO
+	var bias_mag: float = minf(COHORT_LOCUS_PERSIST_MAX_STEP, step * COHORT_LOCUS_PERSIST_BIAS_WEIGHT)
 	return offset.normalized() * bias_mag
 
 
@@ -870,6 +938,9 @@ func _process(delta: float) -> void:
 	var cohort_bias: Vector2 = _cohort_cohesion_bias(step)
 	if cohort_bias != Vector2.ZERO:
 		position += cohort_bias
+	var persist_bias: Vector2 = _cohort_locus_persistence_bias(step)
+	if persist_bias != Vector2.ZERO:
+		position += persist_bias
 
 
 func _start_path(path: Array[Vector2i]) -> void:
@@ -936,9 +1007,11 @@ func _on_game_tick(_tick: int) -> void:
 	if active_job_type != _last_recruitment_job_type:
 		_last_recruitment_job_type = active_job_type
 		_invalidate_recruitment_signal_cache()
+		_refresh_or_decay_cohort_stability(true)
 	_refresh_recruitment_signal_cache()
 	update_cohort_membership()
 	_validate_or_dissolve_cohort()
+	_refresh_or_decay_cohort_stability()
 	if draft_mode:
 		_engage_enemies()
 	# Panic-sleep interrupt: if rest is critically low and we're not already
@@ -1374,6 +1447,7 @@ func _begin_job(job: Job) -> void:
 	_invalidate_recruitment_signal_cache()
 	_refresh_recruitment_signal_cache(true)
 	update_cohort_membership(true)
+	_refresh_or_decay_cohort_stability(true)
 	# Build jobs need raw materials in hand before we walk to the build site.
 	# If we don't already have the right item in sufficient quantity, bounce
 	# to the stockpile first.

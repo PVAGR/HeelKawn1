@@ -138,6 +138,9 @@ var _world_memory_derivative_flush_queued: bool = false
 var _last_heavy_refresh_tick: int = -1
 var _last_heavy_stack_tick: int = -1
 
+func _is_ultra_speed() -> bool:
+	return GameManager.game_speed >= 12.0
+
 # -------------------- designation (player build mode) --------------------
 ## Player build modes. NONE means clicks are ignored. Every other mode uses
 ## the same click-drag rectangle system:
@@ -349,9 +352,10 @@ func _on_game_tick(tick: int) -> void:
 		_animal_spawner.update_population_dynamics(_world)
 	_process_regrowth(tick)
 	_update_ambient_target()
-	# Post hunting jobs for live animals every 10 ticks (after world stabilization)
+	# At 12x, reduce full-animal scans to cut spike frequency.
+	var hunt_post_interval: int = 30 if _is_ultra_speed() else 10
 	if (
-			tick % 10 == 0
+			tick % hunt_post_interval == 0
 			and Main._world_stabilization_until_tick >= 0
 			and tick >= Main._world_stabilization_until_tick
 	):

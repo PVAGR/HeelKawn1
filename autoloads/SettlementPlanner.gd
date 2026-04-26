@@ -230,8 +230,8 @@ static func _intent_for_settlement(center_region: int) -> int:
 static func _derive_culture_type_v1_for_age(
 		scar_max: int, reputation_min: int, age_index: int
 ) -> int:
-	var s_eff: int = mini(3, scar_max + (age_index / 3))
-	var r_eff: int = reputation_min - (age_index / 2)
+	var s_eff: int = mini(3, scar_max + int(age_index / 3))
+	var r_eff: int = reputation_min - int(age_index / 2)
 	if s_eff == 3 or r_eff <= -2:
 		return CULTURE_DEFENSIVE
 	if s_eff == 2 or r_eff == -1:

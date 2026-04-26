@@ -5,6 +5,39 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-25 - 12x speed stutter reduction (hot-path + warning cleanup)
+
+Date: 2026-04-25
+Agent/Model: Codex (Cursor)
+Goal: Reduce freeze/stutter bursts at 12x sim speed and lower debugger warning noise.
+
+Changes made:
+- Reduced expensive live-animal hunt job scan cadence at ultra speed in `scenes/main/Main.gd`:
+  - normal speed: every 10 ticks
+  - 12x speed: every 30 ticks
+- Wrapped remaining high-frequency pawn debug logs behind `GameManager.verbose_logs()` in `scripts/pawn/Pawn.gd` (haul/deposit/failure/death/threshold/hazard and related spam points).
+- Fixed static call warning source by making `WorldMemory._region_key` instance-bound in `autoloads/WorldMemory.gd`.
+- Fixed narrowing warnings in `autoloads/SettlementPlanner.gd` by using explicit int casts for age-derived adjustments.
+
+Decisions:
+- Keep simulation behavior deterministic while reducing expensive non-critical work frequency at 12x.
+- Prioritize runtime smoothness and editor usability over verbose per-action console traces.
+
+Open questions:
+- Should we add a dedicated "performance mode" toggle that temporarily disables additional non-critical planners at 12x+?
+
+Next concrete step:
+- Profile `Main._on_game_tick` branches in a heavy population save and bucket non-essential updates across alternating tick groups.
+
+Files touched:
+- scenes/main/Main.gd
+- scripts/pawn/Pawn.gd
+- autoloads/WorldMemory.gd
+- autoloads/SettlementPlanner.gd
+- docs/SESSION_LOG.md
+
+---
+
 ## 2026-04-25 - Debug log throttling for smoother editor runtime
 
 Date: 2026-04-25

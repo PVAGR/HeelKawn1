@@ -23,7 +23,7 @@ func consume_dirty() -> bool:
 	return was_dirty
 
 
-static func _region_key(tx: int, ty: int) -> int:
+func _region_key(tx: int, ty: int) -> int:
 	var rx: int = int(tx) >> 4
 	var ry: int = int(ty) >> 4
 	return (rx & 0xFFFF) | ((ry & 0xFFFF) << 16)

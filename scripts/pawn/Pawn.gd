@@ -501,9 +501,10 @@ func sanity_check_impassable_tile() -> void:
 		return
 	if not _reported_stuck:
 		_reported_stuck = true
-		print("[Pawn] WARN: %s on impassable sim tile (%d,%d)  state=%d — forcing nudge" % [
-			data.display_name, data.tile_pos.x, data.tile_pos.y, int(_state),
-		])
+		if GameManager.verbose_logs():
+			print("[Pawn] WARN: %s on impassable sim tile (%d,%d)  state=%d - forcing nudge" % [
+				data.display_name, data.tile_pos.x, data.tile_pos.y, int(_state),
+			])
 	nudge_if_standing_on_solid()
 
 
@@ -644,8 +645,9 @@ func _force_panic_sleep() -> void:
 	# If we were already walking to a bed when panic hit, give up the
 	# reservation so other pawns can use it; we're sleeping where we stand.
 	_release_bed_if_reserved()
-	print("[Pawn] %s collapses from exhaustion  (rest=%.1f hunger=%.1f)" %
-		[data.display_name, data.rest, data.hunger])
+	if GameManager.verbose_logs():
+		print("[Pawn] %s collapses from exhaustion  (rest=%.1f hunger=%.1f)" %
+			[data.display_name, data.rest, data.hunger])
 	_begin_sleeping()
 
 
@@ -778,11 +780,12 @@ func _tick_working() -> void:
 		speed *= data.work_speed_for(skill)
 		var leveled_up: bool = data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK)
 		if leveled_up:
-			print("[Pawn] %s's %s went up to %d" % [
-				data.display_name,
-				PawnData.skill_name(skill),
-				data.get_skill_level(skill),
-			])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s's %s went up to %d" % [
+					data.display_name,
+					PawnData.skill_name(skill),
+					data.get_skill_level(skill),
+				])
 	_current_job.work_ticks_done += int(ceil(speed))
 	if _current_job.work_ticks_done >= _current_job.work_ticks_needed:
 		if _current_job.type == Job.Type.TRADE_HAUL:
@@ -821,8 +824,9 @@ func _apply_work_hazards() -> void:
 		_play_sfx("res://assets/audio/pawn_hurt.ogg", 0.9)
 		# Trigger stress mood event from injury
 		data.add_mood_event(MoodEvent.Type.STRESS, 60.0, 300)
-		print("[Pawn] %s injured while working  (damage=%.1f health=%.1f)" %
-			[data.display_name, damage, data.health])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s injured while working  (damage=%.1f health=%.1f)" %
+				[data.display_name, damage, data.health])
 
 
 # ==================== jobs (FORAGE / MINE) ====================
@@ -928,8 +932,9 @@ func _begin_fetching_material(item_type: int, qty: int) -> void:
 		item_type, qty, data.tile_pos, _world.pathfinder
 	)
 	if sp == null:
-		print("[Pawn] %s aborts build job: no reachable zone has %d %s" %
-			[data.display_name, qty, Item.name_for(item_type)])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s aborts build job: no reachable zone has %d %s" %
+				[data.display_name, qty, Item.name_for(item_type)])
 		_unclaim_current_job()
 		return
 	_target_zone = sp
@@ -989,8 +994,9 @@ func _pickup_material(item_type: int, qty: int) -> void:
 		# Partial take: put it back so we don't strand items in our hand.
 		if taken > 0:
 			sp.add_item(item_type, taken)
-		print("[Pawn] %s aborts build job: zone ran out of %s mid-fetch" %
-			[data.display_name, Item.name_for(item_type)])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s aborts build job: zone ran out of %s mid-fetch" %
+				[data.display_name, Item.name_for(item_type)])
 		_target_zone = null
 		_unclaim_current_job()
 		return
@@ -1236,12 +1242,13 @@ func _begin_haul_to_stockpile() -> void:
 	_state = State.HAULING
 	_start_path(path)
 	queue_redraw()
-	print("[Pawn] %s hauling %s -> zone %s (%d,%d), path_len=%d, from (%d,%d)" % [
-		data.display_name, Item.name_for(data.carrying),
-		Stockpile.FILTER_NAME.get(sp.filter, "?"),
-		target_tile.x, target_tile.y, path.size(),
-		data.tile_pos.x, data.tile_pos.y
-	])
+	if GameManager.verbose_logs():
+		print("[Pawn] %s hauling %s -> zone %s (%d,%d), path_len=%d, from (%d,%d)" % [
+			data.display_name, Item.name_for(data.carrying),
+			Stockpile.FILTER_NAME.get(sp.filter, "?"),
+			target_tile.x, target_tile.y, path.size(),
+			data.tile_pos.x, data.tile_pos.y
+		])
 
 
 func _log_haul_fail(reason: String) -> void:
@@ -1253,11 +1260,12 @@ func _log_haul_fail(reason: String) -> void:
 	if _world != null and _world.pathfinder != null:
 		my_comp = _world.pathfinder.component_of(data.tile_pos)
 	var zone_count: int = StockpileManager.zones().size()
-	print("[Pawn] %s haul FAIL (%s): at (%d,%d) comp=%d  carrying=%s x%d  zones=%d" % [
-		data.display_name, reason,
-		data.tile_pos.x, data.tile_pos.y, my_comp,
-		Item.name_for(data.carrying), data.carrying_qty, zone_count
-	])
+	if GameManager.verbose_logs():
+		print("[Pawn] %s haul FAIL (%s): at (%d,%d) comp=%d  carrying=%s x%d  zones=%d" % [
+			data.display_name, reason,
+			data.tile_pos.x, data.tile_pos.y, my_comp,
+			Item.name_for(data.carrying), data.carrying_qty, zone_count
+		])
 
 
 func _deposit_at_stockpile() -> void:
@@ -1291,12 +1299,13 @@ func _deposit_at_stockpile() -> void:
 	if sp != null and data.is_carrying():
 		sp.add_item(data.carrying, data.carrying_qty)
 		if not is_trade:
-			print("[Pawn] %s deposited %d %s into %s zone (zone now has %d)" % [
-				data.display_name, data.carrying_qty,
-				Item.name_for(data.carrying),
-				Stockpile.FILTER_NAME.get(sp.filter, "?"),
-				sp.count_of(data.carrying)
-			])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s deposited %d %s into %s zone (zone now has %d)" % [
+					data.display_name, data.carrying_qty,
+					Item.name_for(data.carrying),
+					Stockpile.FILTER_NAME.get(sp.filter, "?"),
+					sp.count_of(data.carrying)
+				])
 	data.clear_carry()
 	_target_zone = null
 	if is_trade and j_done != null and j_done.type == Job.Type.TRADE_HAUL:
@@ -1607,21 +1616,25 @@ func _trigger_crisis_strike() -> void:
 	# Add DESPAIR mood event
 	if not data.has_trait(Trait.Type.PESSIMIST):  # Pessimists expect this already
 		data.add_mood_event(MoodEvent.Type.DESPAIR, 75.0, 400)
-	print("[Pawn] %s is on strike due to critical morale (mood=%.1f)" % 
-		[data.display_name, data.mood])
+	if GameManager.verbose_logs():
+		print("[Pawn] %s is on strike due to critical morale (mood=%.1f)" %
+			[data.display_name, data.mood])
 
 
 func _check_death_conditions() -> void:
 	if data.hunger <= 0.0:
-		print("[Pawn] %s died of starvation  (hunger=%.1f)" % [data.display_name, data.hunger])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s died of starvation  (hunger=%.1f)" % [data.display_name, data.hunger])
 		_die("")
 		return
 	if data.rest <= 0.0:
-		print("[Pawn] %s died from exhaustion  (rest=%.1f)" % [data.display_name, data.rest])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s died from exhaustion  (rest=%.1f)" % [data.display_name, data.rest])
 		_die("")
 		return
 	if data.health <= 0.0:
-		print("[Pawn] %s died from injuries  (health=%.1f)" % [data.display_name, data.health])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s died from injuries  (health=%.1f)" % [data.display_name, data.health])
 		_die("")
 		return
 
@@ -1681,7 +1694,8 @@ func _trigger_sorrow_in_nearby_pawns() -> void:
 		var dist: float = position.distance_to(pawn.position)
 		if dist < nearby_distance:
 			pawn.data.add_mood_event(MoodEvent.Type.SORROW, 70.0, 500)
-			print("[Pawn] %s mourns %s's death" % [pawn.data.display_name, data.display_name])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s mourns %s's death" % [pawn.data.display_name, data.display_name])
 
 
 func _check_thresholds() -> void:
@@ -1694,7 +1708,8 @@ func _update_level(value: float, prev_level: int, warn_word: String, crit_word: 
 	var new_level: int = _level_for(value)
 	if new_level > prev_level:
 		var word := warn_word if new_level == 1 else crit_word
-		print("[Pawn] %s is %s  (value=%.1f)" % [data.display_name, word, value])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s is %s  (value=%.1f)" % [data.display_name, word, value])
 	return new_level
 
 

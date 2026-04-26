@@ -20,6 +20,11 @@ const PEACE_TICKS_PER_BRANCH: Dictionary = {
 const REVIVAL_SCORE_RECOVERING_MIN: int = 35
 const REVIVAL_SCORE_REVIVABLE_MIN: int = 70
 const REVIVAL_SCORE_ACTIVE_MIN: int = 88
+const INTENT_UPDATE_INTERVAL_TICKS: int = 100
+const INTENT_GROW: String = "GROW"
+const INTENT_HOARD: String = "HOARD"
+const INTENT_DEFEND: String = "DEFEND"
+const INTENT_RECOVER: String = "RECOVER"
 
 var settlements: Array = []
 ## region_key -> state string (derived cache for O(1) regional queries)
@@ -169,6 +174,8 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
 			"target_settlement_id": -1,
 			"votes": [],
 		},
+		"current_intent": INTENT_GROW,
+		"last_intent_tick": -1,
 	}
 
 
@@ -809,3 +816,71 @@ func get_war_profile_for_region(region_key: int) -> Dictionary:
 	var st: Dictionary = st_v as Dictionary
 	var ws: Dictionary = st.get("war_status", {"state": "peace", "target_settlement_id": -1, "votes": []})
 	return ws.duplicate(true)
+
+
+func update_settlement_intents(tick: int) -> void:
+	if tick % INTENT_UPDATE_INTERVAL_TICKS != 0:
+		return
+	var living_pawns: Array[Pawn] = _living_pawns()
+	for i in range(settlements.size()):
+		if not (settlements[i] is Dictionary):
+			continue
+		var st: Dictionary = settlements[i] as Dictionary
+		var settlement_pawns: Array[Pawn] = _pawns_in_settlement(st, living_pawns)
+		var local_food_pressure: float = _calculate_local_food_pressure(settlement_pawns)
+		var old_intent: String = str(st.get("current_intent", INTENT_GROW))
+		var new_intent: String = _derive_settlement_intent(st, local_food_pressure)
+		st["last_intent_tick"] = tick
+		if old_intent != new_intent:
+			st["current_intent"] = new_intent
+			WorldMemory.record_event({
+				"type": "settlement_intent_shift",
+				"settlement_id": int(st.get("center_region", -1)),
+				"old_intent": old_intent,
+				"new_intent": new_intent,
+				"tick": tick,
+				"settlement_state": str(st.get("state", "unknown")),
+				"war_state": str((st.get("war_status", {"state": "peace"}) as Dictionary).get("state", "peace")),
+				"local_food_pressure": local_food_pressure,
+				"housing_pressure": float(ColonySimServices.get_housing_pressure()),
+			})
+		settlements[i] = st
+
+
+func _derive_settlement_intent(st: Dictionary, local_food_pressure: float) -> String:
+	var settlement_state: String = str(st.get("state", ""))
+	var war_state: String = str((st.get("war_status", {"state": "peace"}) as Dictionary).get("state", "peace"))
+	var housing_pressure: float = float(ColonySimServices.get_housing_pressure())
+	if settlement_state == "recovering" or settlement_state == "revivable":
+		return INTENT_RECOVER
+	if war_state == "mobilizing" or war_state == "at_war":
+		return INTENT_DEFEND
+	if local_food_pressure >= 0.55 or housing_pressure >= 0.8:
+		return INTENT_HOARD
+	return INTENT_GROW
+
+
+func _calculate_local_food_pressure(pawns: Array[Pawn]) -> float:
+	if pawns.is_empty():
+		return 0.0
+	var hunger_sum: float = 0.0
+	var count: int = 0
+	for p in pawns:
+		if p == null or p.data == null:
+			continue
+		# PawnData.hunger is 0..100 with higher=better (less hungry),
+		# so pressure is inverse normalized hunger.
+		hunger_sum += clamp(p.data.hunger, 0.0, 100.0)
+		count += 1
+	if count <= 0:
+		return 0.0
+	var avg_hunger: float = hunger_sum / float(count)
+	return clamp(1.0 - (avg_hunger / 100.0), 0.0, 1.0)
+
+
+func get_settlement_intent_for_tile(tile_pos: Vector2i) -> String:
+	var rk: int = WorldMemory._region_key(tile_pos.x, tile_pos.y)
+	var st_v: Variant = get_settlement_at_region(rk)
+	if st_v is Dictionary:
+		return str((st_v as Dictionary).get("current_intent", INTENT_GROW))
+	return INTENT_GROW

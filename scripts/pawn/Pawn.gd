@@ -791,7 +791,10 @@ func _tick_idle() -> void:
 	# we have to sum across zones, not peek at one hardcoded pile.
 	var food_emergency: bool = StockpileManager.total_food() < STOCKPILE_FOOD_LOW_THRESHOLD
 	var priority_cb: Callable = func(j: Job) -> int:
-		return int(ColonySimServices.job_priority_stance_bias(j)) + _job_history_scar_priority_offset(j)
+		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j)) + _job_history_scar_priority_offset(j)
+		var intent_mult: float = get_settlement_intent_job_multiplier(j)
+		var intent_bonus: int = int(round((intent_mult - 1.0) * 10.0))
+		return base_bias + intent_bonus
 	var base_passes: Callable = func(j: Job) -> bool:
 		if Pawn._world_hunt_stabilization_blocks() and j.type == Job.Type.HUNT:
 			return false
@@ -852,6 +855,32 @@ func _job_matches_affinity(job_type: int, affinity_key: String) -> bool:
 			return job_type == Job.Type.TRADE_HAUL
 		_:
 			return false
+
+
+func get_settlement_intent_job_multiplier(job: Job) -> float:
+	if data == null or job == null:
+		return 1.0
+	var intent: String = SettlementMemory.get_settlement_intent_for_tile(data.tile_pos)
+	match intent:
+		SettlementMemory.INTENT_HOARD:
+			if job.type == Job.Type.FORAGE or job.type == Job.Type.HUNT or job.type == Job.Type.TRADE_HAUL:
+				return 1.2
+			if job.type == Job.Type.CHOP or job.type == Job.Type.MINE or job.type == Job.Type.MINE_WALL:
+				return 1.05
+		SettlementMemory.INTENT_DEFEND:
+			if job.type == Job.Type.HUNT:
+				return 1.2
+			if job.type == Job.Type.BUILD_WALL or job.type == Job.Type.BUILD_DOOR:
+				return 1.1
+		SettlementMemory.INTENT_RECOVER:
+			if job.type == Job.Type.BUILD_BED or job.type == Job.Type.BUILD_WALL or job.type == Job.Type.BUILD_DOOR:
+				return 1.15
+			if job.type == Job.Type.TRADE_HAUL:
+				return 1.1
+		SettlementMemory.INTENT_GROW:
+			if job.type == Job.Type.FORAGE or job.type == Job.Type.CHOP:
+				return 1.05
+	return 1.0
 
 
 func attempt_reproduction() -> bool:

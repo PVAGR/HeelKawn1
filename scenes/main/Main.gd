@@ -472,6 +472,7 @@ func _on_game_tick(tick: int) -> void:
 		_process_reproduction_tick()
 	if tick % INFLUENCE_UPDATE_INTERVAL_TICKS == 0:
 		_update_pawn_influence_tick()
+	SettlementMemory.update_settlement_intents(tick)
 	if _observer_hud != null and _observer_hud.is_visible_state() and tick % OBSERVER_HUD_REFRESH_TICKS == 0:
 		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
 	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % FOCUS_INSPECTOR_REFRESH_TICKS == 0:

@@ -1227,6 +1227,19 @@ func get_player_governance_profile() -> Dictionary:
 	}
 
 
+func get_player_war_profile() -> Dictionary:
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return {"state": "peace", "target_settlement_id": -1, "votes": []}
+	var rk: int = WorldMemory._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
+	return SettlementMemory.get_war_profile_for_region(rk)
+
+
+func get_player_military_rank() -> String:
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return "grunt"
+	return String(_player_pawn.data.military_rank)
+
+
 func get_wildlife_snapshot_for_diagnostic() -> Dictionary:
 	if _animal_spawner == null:
 		return {"rabbit": 0, "deer": 0, "total": 0}
@@ -2340,6 +2353,14 @@ func _on_enemy_tick(tick: int, spawner: EnemySpawner) -> void:
 	spawner.process_tick(_world, tick)
 	if spawner.get_enemy_count() > 0 and tick % 100 == 0 and OS.is_debug_build():
 		print("[Combat] %s" % spawner.describe())
+
+
+func trigger_war_battle_spawn(src_settlement_id: int, target_settlement_id: int, strength: float) -> bool:
+	if _enemy_spawner == null or _world == null:
+		return false
+	if _enemy_spawner.get_enemy_count() > 0:
+		return false
+	return bool(_enemy_spawner.spawn_war_forces(_world, src_settlement_id, target_settlement_id, strength))
 
 
 func _living_pawn_count() -> int:

@@ -926,6 +926,20 @@ func abdicate() -> bool:
 	return true
 
 
+func propose_war(target_settlement_id: int) -> bool:
+	if data == null or not is_current_ruler():
+		return false
+	var ok: bool = SettlementMemory.propose_war_for_pawn(int(data.id), target_settlement_id)
+	if ok:
+		WorldMemory.record_event({
+			"type": "war_proposed",
+			"pawn_id": int(data.id),
+			"target_settlement_id": int(target_settlement_id),
+			"tick": GameManager.tick_count,
+		})
+	return ok
+
+
 func pledge_loyalty(target_ruler: Pawn) -> bool:
 	if data == null or target_ruler == null or target_ruler.data == null:
 		return false

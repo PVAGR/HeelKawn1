@@ -161,6 +161,7 @@ func _refresh() -> void:
 	lines.append(_pawn_line())
 	lines.append(_player_status_line())
 	lines.append(_politics_line())
+	lines.append(_war_status_line())
 	lines.append(_skill_line())
 	lines.append(_kill_line())
 	lines.append(_export_status_line())
@@ -448,6 +449,31 @@ func _politics_line() -> String:
 	if bool(gp.get("edicts_unlocked", false)):
 		base += " | EDICTS UNLOCKED"
 	return base
+
+
+func _war_status_line() -> String:
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node == null:
+		return "⚔ WAR STATUS: Peace | RANK: Grunt"
+	var wp: Dictionary = main_node.get_player_war_profile()
+	var ws: String = String(wp.get("state", "peace")).to_lower()
+	var ws_label: String = "Peace"
+	if ws == "proposed":
+		ws_label = "Proposed (Vote Pending)"
+	elif ws == "mobilizing":
+		ws_label = "Proposed (Vote Pending)"
+	elif ws == "at_war":
+		ws_label = "Active"
+	elif ws == "truce":
+		ws_label = "Truce"
+	var rank_raw: String = String(main_node.get_player_military_rank()).to_lower()
+	var rank_label: String = rank_raw.capitalize()
+	if rank_raw == "battlemaster":
+		rank_label = "BattleMaster"
+	var out: String = "⚔ WAR STATUS: %s | RANK: %s" % [ws_label, rank_label]
+	if rank_raw == "battlemaster":
+		out += " | TACTICAL MODE: Issue Orders"
+	return out
 
 
 func _sample_wildlife(current_tick: int) -> void:

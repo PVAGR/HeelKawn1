@@ -28,12 +28,18 @@ var _region_state: Dictionary = {}
 var _region_center: Dictionary = {}
 ## center_region -> governance snapshot hash for change detection.
 var _governance_snapshot: Dictionary = {}
+## center_region -> whether at-war command announcement already fired for this war state.
+var _war_command_announced: Dictionary = {}
+## center_region -> whether battle spawn bridge fired for current war state.
+var _war_battle_spawned: Dictionary = {}
 
 
 func recompute(_world: World) -> void:
 	settlements.clear()
 	_region_state.clear()
 	_region_center.clear()
+	_war_command_announced.clear()
+	_war_battle_spawned.clear()
 	var eligible: Array[int] = []
 	for rk_any in WorldMeaning.meaning_by_region.keys():
 		var rk: int = int(rk_any)
@@ -158,6 +164,11 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
 		"peace_threshold_ticks": peace_threshold_ticks,
 		"revival_score": revival_score,
 		"state": state,
+		"war_status": {
+			"state": "peace",
+			"target_settlement_id": -1,
+			"votes": [],
+		},
 	}
 
 
@@ -456,6 +467,7 @@ func _update_governance_state() -> void:
 				"council_ids": st["council_ids"],
 				"tick": GameManager.tick_count,
 			})
+		_process_war_state(i, pawns)
 
 
 func _living_pawns() -> Array[Pawn]:
@@ -541,3 +553,259 @@ func is_pawn_current_ruler(pawn_id: int) -> bool:
 		if st is Dictionary and int((st as Dictionary).get("current_ruler_id", -1)) == pawn_id:
 			return true
 	return false
+
+
+func propose_war_for_pawn(ruler_id: int, target_settlement_id: int) -> bool:
+	var src_idx: int = -1
+	for i in range(settlements.size()):
+		if settlements[i] is Dictionary and int((settlements[i] as Dictionary).get("current_ruler_id", -1)) == ruler_id:
+			src_idx = i
+			break
+	if src_idx < 0 or target_settlement_id < 0 or target_settlement_id >= settlements.size() or src_idx == target_settlement_id:
+		return false
+	var st: Dictionary = settlements[src_idx] as Dictionary
+	var ws: Dictionary = st.get("war_status", {"state": "peace", "target_settlement_id": -1, "votes": []})
+	ws["state"] = "proposed"
+	ws["target_settlement_id"] = target_settlement_id
+	ws["votes"] = []
+	st["war_status"] = ws
+	settlements[src_idx] = st
+	_resolve_war_votes(src_idx)
+	return true
+
+
+func _process_war_state(settlement_idx: int, pawns: Array[Pawn]) -> void:
+	if settlement_idx < 0 or settlement_idx >= settlements.size() or not (settlements[settlement_idx] is Dictionary):
+		return
+	var st: Dictionary = settlements[settlement_idx] as Dictionary
+	var ws: Dictionary = st.get("war_status", {"state": "peace", "target_settlement_id": -1, "votes": []})
+	var set_pawns: Array[Pawn] = _pawns_in_settlement(st, pawns)
+	var center: int = int(st.get("center_region", -1))
+	if str(ws.get("state", "peace")) == "at_war":
+		_assign_military_hierarchy(set_pawns)
+		if center >= 0 and not bool(_war_command_announced.get(center, false)):
+			_war_command_announced[center] = true
+			print("[War] BattleMaster takes command of forces.")
+		if center >= 0 and not bool(_war_battle_spawned.get(center, false)):
+			var strength: float = get_settlement_military_score(settlement_idx)
+			if _trigger_war_battle_spawn(center, int(ws.get("target_settlement_id", -1)), strength):
+				_war_battle_spawned[center] = true
+	else:
+		if center >= 0:
+			_war_command_announced.erase(center)
+			_war_battle_spawned.erase(center)
+		for p in set_pawns:
+			if p.data != null:
+				p.data.military_rank = "grunt"
+
+
+func _resolve_war_votes(settlement_idx: int) -> void:
+	if settlement_idx < 0 or settlement_idx >= settlements.size() or not (settlements[settlement_idx] is Dictionary):
+		return
+	var st: Dictionary = settlements[settlement_idx] as Dictionary
+	var ws: Dictionary = st.get("war_status", {"state": "peace", "target_settlement_id": -1, "votes": []})
+	var pawns: Array[Pawn] = _pawns_in_settlement(st, _living_pawns())
+	if pawns.is_empty():
+		ws["state"] = "peace"
+		st["war_status"] = ws
+		settlements[settlement_idx] = st
+		return
+	var council: Array[Pawn] = _top_influence(pawns, 5)
+	var favor: int = 0
+	var against: int = 0
+	var vote_records: Array = []
+	for p in council:
+		var yes_vote: bool = _council_vote_yes(p)
+		vote_records.append({"pawn_id": int(p.data.id), "body": "council", "yes": yes_vote})
+		if yes_vote:
+			favor += 1
+		else:
+			against += 1
+	print("[War] Council Vote: %d-%d in favor. Preparing Messengers..." % [favor, against])
+	if favor < 3:
+		ws["state"] = "truce"
+		ws["votes"] = vote_records
+		st["war_status"] = ws
+		settlements[settlement_idx] = st
+		return
+	ws["state"] = "mobilizing"
+	var lords: Array[Pawn] = _top_influence_excluding(pawns, 20, council)
+	var total_weight: float = 0.0
+	var favor_weight: float = 0.0
+	for p in lords:
+		var loyalty: float = float(p.data.affinities.get("diplomacy", 0.5))
+		var kills_proxy: float = float(p.data.tracked_skill_xp("combat")) * 0.01
+		var w: float = 1.0 + loyalty + kills_proxy
+		var yes_lord: bool = _senate_vote_yes(p)
+		total_weight += w
+		if yes_lord:
+			favor_weight += w
+		vote_records.append({"pawn_id": int(p.data.id), "body": "senate", "yes": yes_lord, "weight": w})
+	var senate_passed: bool = total_weight > 0.0 and (favor_weight / total_weight) > 0.5
+	var target_idx: int = int(ws.get("target_settlement_id", -1))
+	if senate_passed and settlement_should_declare_war(settlement_idx, target_idx):
+		ws["state"] = "at_war"
+	else:
+		ws["state"] = "truce"
+	ws["votes"] = vote_records
+	st["war_status"] = ws
+	settlements[settlement_idx] = st
+	if ws["state"] == "at_war":
+		var set_pawns: Array[Pawn] = _pawns_in_settlement(st, _living_pawns())
+		_assign_military_hierarchy(set_pawns)
+		var center: int = int(st.get("center_region", -1))
+		if center >= 0 and not bool(_war_command_announced.get(center, false)):
+			_war_command_announced[center] = true
+			print("[War] BattleMaster takes command of forces.")
+		if center >= 0 and not bool(_war_battle_spawned.get(center, false)):
+			var strength: float = get_settlement_military_score(settlement_idx)
+			if _trigger_war_battle_spawn(center, int(ws.get("target_settlement_id", -1)), strength):
+				_war_battle_spawned[center] = true
+
+
+func _pawns_in_settlement(st: Dictionary, pawns: Array[Pawn]) -> Array[Pawn]:
+	var regv: Variant = st.get("regions", PackedInt32Array())
+	if not (regv is PackedInt32Array):
+		return []
+	var regs: PackedInt32Array = regv as PackedInt32Array
+	var region_set: Dictionary = {}
+	for rk in regs:
+		region_set[int(rk)] = true
+	var out: Array[Pawn] = []
+	for p in pawns:
+		if p.data == null:
+			continue
+		var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		if region_set.has(rk):
+			out.append(p)
+	return out
+
+
+func _top_influence(pawns: Array[Pawn], count: int) -> Array[Pawn]:
+	var arr: Array[Pawn] = pawns.duplicate()
+	arr.sort_custom(func(a: Pawn, b: Pawn) -> bool:
+		if a.data == null or b.data == null:
+			return false
+		if not is_equal_approx(a.data.influence, b.data.influence):
+			return a.data.influence > b.data.influence
+		return int(a.data.id) < int(b.data.id)
+	)
+	if arr.size() > count:
+		arr.resize(count)
+	return arr
+
+
+func _top_influence_excluding(pawns: Array[Pawn], count: int, excluded: Array[Pawn]) -> Array[Pawn]:
+	var blocked: Dictionary = {}
+	for p in excluded:
+		if p != null and p.data != null:
+			blocked[int(p.data.id)] = true
+	var filtered: Array[Pawn] = []
+	for p in pawns:
+		if p.data != null and not blocked.has(int(p.data.id)):
+			filtered.append(p)
+	return _top_influence(filtered, count)
+
+
+func _council_vote_yes(p: Pawn) -> bool:
+	if p == null or p.data == null:
+		return false
+	var pressure: float = float(ColonySimServices.get_food_pressure()) + float(ColonySimServices.get_housing_pressure())
+	var score: float = p.data.influence * 0.01 + float(p.data.affinities.get("combat", 0.5)) * 1.5 - pressure * 0.3
+	return score >= 1.0
+
+
+func _senate_vote_yes(p: Pawn) -> bool:
+	if p == null or p.data == null:
+		return false
+	var loyalty: float = float(p.data.affinities.get("diplomacy", 0.5))
+	var kills_proxy: float = float(p.data.tracked_skill_xp("combat")) * 0.01
+	return (loyalty + kills_proxy) >= 0.75
+
+
+func _assign_military_hierarchy(pawns: Array[Pawn]) -> void:
+	if pawns.is_empty():
+		return
+	var ranked: Array[Dictionary] = []
+	for p in pawns:
+		if p.data == null:
+			continue
+		var score: float = float(p.data.influence) + float(p.data.affinities.get("combat", 0.5)) * 100.0
+		ranked.append({"pawn": p, "score": score, "id": int(p.data.id)})
+	ranked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var sa: float = float(a.get("score", 0.0))
+		var sb: float = float(b.get("score", 0.0))
+		if not is_equal_approx(sa, sb):
+			return sa > sb
+		return int(a.get("id", 0)) < int(b.get("id", 0))
+	)
+	for i in range(ranked.size()):
+		var p: Pawn = ranked[i].pawn as Pawn
+		if p == null or p.data == null:
+			continue
+		if i == 0:
+			p.data.military_rank = "battlemaster"
+		elif i < 4:
+			p.data.military_rank = "commander"
+		elif i < 14:
+			p.data.military_rank = "captain"
+		elif i < 34:
+			p.data.military_rank = "sarj"
+		else:
+			p.data.military_rank = "grunt"
+
+
+func settlement_should_declare_war(src_idx: int, target_idx: int) -> bool:
+	if src_idx < 0 or target_idx < 0 or src_idx >= settlements.size() or target_idx >= settlements.size() or src_idx == target_idx:
+		return false
+	if not (settlements[src_idx] is Dictionary) or not (settlements[target_idx] is Dictionary):
+		return false
+	var src_st: Dictionary = settlements[src_idx] as Dictionary
+	var dst_st: Dictionary = settlements[target_idx] as Dictionary
+	var pressure: float = (
+		float(ColonySimServices.get_food_pressure())
+		+ float(ColonySimServices.get_housing_pressure())
+		+ float(ColonySimServices.get_materials_pressure())
+		+ float(ColonySimServices.get_haul_pressure())
+	) / 4.0
+	var living: Array[Pawn] = _living_pawns()
+	var src_score: float = _settlement_military_score(_pawns_in_settlement(src_st, living))
+	var dst_score: float = _settlement_military_score(_pawns_in_settlement(dst_st, living))
+	return pressure >= 0.55 and src_score > dst_score
+
+
+func _settlement_military_score(pawns: Array[Pawn]) -> float:
+	var total: float = 0.0
+	for p in pawns:
+		if p == null or p.data == null:
+			continue
+		var combat_aff: float = float(p.data.affinities.get("combat", 0.5))
+		var combat_skill: float = float(p.data.tracked_skill_xp("combat"))
+		total += float(p.data.influence) + combat_aff * 25.0 + combat_skill * 0.1
+	return total
+
+
+func get_settlement_military_score(settlement_idx: int) -> float:
+	if settlement_idx < 0 or settlement_idx >= settlements.size() or not (settlements[settlement_idx] is Dictionary):
+		return 0.0
+	var st: Dictionary = settlements[settlement_idx] as Dictionary
+	return _settlement_military_score(_pawns_in_settlement(st, _living_pawns()))
+
+
+func _trigger_war_battle_spawn(src_settlement_id: int, target_settlement_id: int, strength: float) -> bool:
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return false
+	var main_node: Node = tree.get_root().get_node_or_null("Main")
+	if main_node == null or not main_node.has_method("trigger_war_battle_spawn"):
+		return false
+	return bool(main_node.call("trigger_war_battle_spawn", src_settlement_id, target_settlement_id, strength))
+
+
+func get_war_profile_for_region(region_key: int) -> Dictionary:
+	var st_v: Variant = get_settlement_at_region(region_key)
+	if not (st_v is Dictionary):
+		return {"state": "peace", "target_settlement_id": -1, "votes": []}
+	var st: Dictionary = st_v as Dictionary
+	var ws: Dictionary = st.get("war_status", {"state": "peace", "target_settlement_id": -1, "votes": []})
+	return ws.duplicate(true)

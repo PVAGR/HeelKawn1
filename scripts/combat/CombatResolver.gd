@@ -13,6 +13,12 @@ const SKILL_DODGE_BONUS_PER_LEVEL: float = 0.02  # 2% dodge per rest level (endu
 static func resolve_attack(attacker: Node, defender: Node) -> bool:
 	if attacker == null or defender == null:
 		return false
+	if _is_anarchy_combat(attacker, defender):
+		_apply_anarchy_behavior(attacker, defender)
+		if GameManager.tick_count % 100 == 0:
+			print("[War] The field of battle is for the soldiers who spill their blood.")
+	else:
+		_maybe_issue_attack_move(attacker, defender)
 	
 	# Determine if attack hits
 	var hit_chance: float = BASE_HIT_CHANCE
@@ -135,3 +141,89 @@ static func _combat_name(actor: Node) -> String:
 		var e: Enemy = actor as Enemy
 		return e.get_species_name()
 	return actor.name
+
+
+static func _rank_value(rank_name: String) -> int:
+	match rank_name:
+		"battlemaster":
+			return 5
+		"commander":
+			return 4
+		"captain":
+			return 3
+		"sarj":
+			return 2
+		_:
+			return 1
+
+
+static func _is_anarchy_combat(attacker: Node, defender: Node) -> bool:
+	var attacker_low: bool = _pawn_below_anarchy_threshold(attacker)
+	var defender_low: bool = _pawn_below_anarchy_threshold(defender)
+	return attacker_low or defender_low
+
+
+static func _maybe_issue_attack_move(attacker: Node, defender: Node) -> void:
+	if not (attacker is Pawn):
+		return
+	var leader: Pawn = attacker as Pawn
+	if leader.data == null:
+		return
+	if _is_anarchy_combat(attacker, defender):
+		return
+	var leader_rank: String = String(leader.data.military_rank).to_lower()
+	if leader_rank == "grunt":
+		return
+	var target_pos: Vector2i = leader.data.tile_pos
+	if defender is Pawn and (defender as Pawn).data != null:
+		target_pos = (defender as Pawn).data.tile_pos
+	elif defender is Enemy:
+		target_pos = (defender as Enemy).tile_pos
+	var leader_score: int = _rank_value(leader_rank)
+	for n in leader.get_tree().get_nodes_in_group("pawns"):
+		if not (n is Pawn):
+			continue
+		var ally: Pawn = n as Pawn
+		if ally == leader or ally.data == null:
+			continue
+		if ally.position.distance_squared_to(leader.position) > 22.0 * 22.0:
+			continue
+		var ally_rank: String = String(ally.data.military_rank).to_lower()
+		if _rank_value(ally_rank) >= leader_score:
+			continue
+		if ally.has_method("draft_goto"):
+			ally.call("draft_goto", target_pos)
+
+
+static func _pawn_below_anarchy_threshold(actor: Node) -> bool:
+	if not (actor is Pawn):
+		return false
+	var p: Pawn = actor as Pawn
+	if p.data == null:
+		return false
+	if p.data.has_method("get_health_percentage"):
+		return float(p.data.get_health_percentage()) < 0.5
+	return false
+
+
+static func _apply_anarchy_behavior(attacker: Node, defender: Node) -> void:
+	var attacker_pawn: Pawn = attacker as Pawn if attacker is Pawn else null
+	if attacker_pawn == null or attacker_pawn.data == null:
+		return
+	var attacker_tile: Vector2i = attacker_pawn.data.tile_pos
+	var defender_tile: Vector2i = attacker_tile
+	if defender is Pawn and (defender as Pawn).data != null:
+		defender_tile = (defender as Pawn).data.tile_pos
+	elif defender is Enemy:
+		defender_tile = (defender as Enemy).tile_pos
+	var retreat: bool = _pawn_below_anarchy_threshold(attacker_pawn)
+	var target_tile: Vector2i = defender_tile
+	if retreat:
+		var delta: Vector2i = attacker_tile - defender_tile
+		if delta == Vector2i.ZERO:
+			delta = Vector2i(1, 0)
+		target_tile = attacker_tile + Vector2i(signi(delta.x), signi(delta.y))
+	else:
+		target_tile = defender_tile
+	if attacker_pawn.has_method("draft_goto"):
+		attacker_pawn.call("draft_goto", target_tile)

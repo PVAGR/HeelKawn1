@@ -51,6 +51,7 @@ var hunger: float = 100.0
 var rest: float = 100.0
 var mood: float = 100.0
 var health: float = 100.0
+var max_health: float = 100.0
 
 ## Single-item inventory. Type is Item.Type (NONE = empty hands).
 ## v1 pawns can only hold one kind of thing at a time; multi-slot / weight
@@ -83,6 +84,7 @@ var parent_a_id: int = -1
 var parent_b_id: int = -1
 var children_count: int = 0
 var influence: float = 0.0
+var military_rank: String = "grunt"
 
 ## Work-type allow list (RimWorld-style). If false, this pawn will not *claim*
 ## that class of open job. Eating, sleeping, and hauling are not jobs; they
@@ -107,6 +109,16 @@ func _init() -> void:
 	_next_id += 1
 	birth_tick = int(GameManager.tick_count) if "tick_count" in GameManager else 0
 	initialize_affinities(birth_tick, -1, -1)
+
+
+func get_max_health() -> float:
+	return max_health
+
+
+func get_health_percentage() -> float:
+	if max_health <= 0.0:
+		return 0.0
+	return clamp(health / max_health, 0.0, 1.0)
 
 
 # ==================== traits ====================
@@ -502,6 +514,7 @@ func to_save_dict() -> Dictionary:
 		"rest": rest,
 		"mood": mood,
 		"health": health,
+		"max_health": max_health,
 		"carrying": carrying,
 		"carrying_qty": carrying_qty,
 		"skill_xp": sx,
@@ -513,6 +526,7 @@ func to_save_dict() -> Dictionary:
 		"parent_b_id": parent_b_id,
 		"children_count": children_count,
 		"influence": influence,
+		"military_rank": military_rank,
 		"work_forage": work_forage,
 		"work_mine": work_mine,
 		"work_chop": work_chop,
@@ -547,6 +561,7 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	p.rest = float(d.get("rest", 100.0))
 	p.mood = float(d.get("mood", 100.0))
 	p.health = float(d.get("health", 100.0))
+	p.max_health = float(d.get("max_health", 100.0))
 	p.carrying = int(d.get("carrying", 0))
 	p.carrying_qty = int(d.get("carrying_qty", 0))
 	p.skill_xp = {}
@@ -579,6 +594,7 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	p.parent_b_id = int(d.get("parent_b_id", -1))
 	p.children_count = int(d.get("children_count", 0))
 	p.influence = float(d.get("influence", 0.0))
+	p.military_rank = str(d.get("military_rank", "grunt"))
 	p.work_forage = bool(d.get("work_forage", true))
 	p.work_mine = bool(d.get("work_mine", true))
 	p.work_chop = bool(d.get("work_chop", true))

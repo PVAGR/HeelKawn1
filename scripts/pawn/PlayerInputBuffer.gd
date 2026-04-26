@@ -172,6 +172,14 @@ func _execute_command(pawn: Node, command: String) -> bool:
 		if target == null:
 			return false
 		return bool(pawn.call("pledge_loyalty", target))
+	if command.begins_with("!propose_war "):
+		if not pawn.has_method("propose_war"):
+			return false
+		var parts_war: PackedStringArray = command.split(" ")
+		if parts_war.size() < 2:
+			return false
+		var target_settlement_id: int = int(parts_war[1])
+		return bool(pawn.call("propose_war", target_settlement_id))
 	return false
 
 

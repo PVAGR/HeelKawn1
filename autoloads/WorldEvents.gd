@@ -1,5 +1,8 @@
 extends Node
 
+## Suppresses only the four deterministic roll outcomes (Trade Caravan, Harvest Moon, Locust Swarm, Diplomatic Envoy). Debug build only; use with SettlementMemory.VALIDATION_SESSION_ENABLED or alone.
+const VALIDATION_CLEAN_ECONOMY_EVENTS: bool = false
+
 const EVENT_ROLL_INTERVAL: int = 1000
 const HARVEST_MOON_DURATION_TICKS: int = 200
 const HARVEST_MOON_MULT: float = 1.25
@@ -14,10 +17,26 @@ func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 
 
+func _suppress_economy_distorting_world_events() -> bool:
+	if not OS.is_debug_build():
+		return false
+	if VALIDATION_CLEAN_ECONOMY_EVENTS:
+		return true
+	return SettlementMemory.VALIDATION_SESSION_ENABLED
+
+
+func validation_clean_economy_events_active() -> bool:
+	return _suppress_economy_distorting_world_events()
+
+
 func _on_game_tick(tick: int) -> void:
 	if _active_event_until_tick >= 0 and tick >= _active_event_until_tick:
 		_clear_temporary_event()
+	if _suppress_economy_distorting_world_events() and _active_event_until_tick >= 0:
+		_clear_temporary_event()
 	if tick <= 0 or tick % EVENT_ROLL_INTERVAL != 0:
+		return
+	if _suppress_economy_distorting_world_events():
 		return
 	var event_index: int = _deterministic_event_index(tick)
 	match event_index:

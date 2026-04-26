@@ -62,6 +62,15 @@ func _world_governance_block(s: Dictionary) -> String:
 		+ "%s\n\n" % str(s.get("world_status_summary", "WORLD STATUS: Unknown"))
 		+ "[b]WORLD / GOVERNANCE[/b]\n"
 		+ "Speed: %s  Pause: %s\n" % [str(s.get("speed", "1x")), str(s.get("paused", "No"))]
+		+ (
+				"Validation lab: session=%s clean_economy_events=%s settlement_truth_verify=%s specialization_log=%s\n"
+				% [
+					"on" if bool(s.get("validation_session", false)) else "off",
+					"on" if bool(s.get("validation_clean_economy_events", false)) else "off",
+					"on" if bool(s.get("validation_settlement_truth_verify", false)) else "off",
+					"on" if bool(s.get("validation_specialization_log", false)) else "off",
+				]
+		)
 		+ "Governance (political, separate from material settlement life): %s  Ruler: %s\n"
 		% [str(s.get("governance_type", "Anarchy")), str(s.get("ruler_name", "None"))]
 		+ "Council Size: %d\n" % int(s.get("council_size", 0))

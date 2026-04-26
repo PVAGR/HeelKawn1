@@ -2729,6 +2729,7 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		ruler_name
 	)
 	var recent_history_lines: PackedStringArray = WorldMemory.get_recent_event_summaries(3)
+	var vh: Dictionary = SettlementMemory.validation_harness_flags_for_snapshot()
 	var footer_stamp: String = "Tick %d | Day %d | Determinism %s | Events %d | %s" % [
 		tick,
 		day,
@@ -2785,6 +2786,10 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"kernel_phase": kernel_phase,
 		"next_diag_tick": KernelDiagnostic.DIAGNOSTIC_TICK,
 		"footer_stamp": footer_stamp,
+		"validation_session": bool(vh.get("session", false)),
+		"validation_clean_economy_events": WorldEvents.validation_clean_economy_events_active(),
+		"validation_settlement_truth_verify": bool(vh.get("settlement_truth_verify", false)),
+		"validation_specialization_log": bool(vh.get("specialization_log", false)),
 	}
 
 

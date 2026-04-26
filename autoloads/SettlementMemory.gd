@@ -58,12 +58,19 @@ var _settlement_state_truth_hysteresis: Dictionary = {}
 const STATE_TRUTH_HYSTERESIS_INTERVAL_TICKS: int = 2000
 ## Require this many ticks at the same raw target before committing (anti-flicker).
 const STATE_TRUTH_HYSTERESIS_COMMIT_TICKS: int = 4000
-## Settlement truth verification: debug build + set true for coarse gated logs (raw/committed/heartbeat).
+## --- Validation harness (debug builds): controlled lab sessions ---
+## One switch: suppresses economy-distorting world events (see WorldEvents), enables settlement-truth verify logs, enables coarse specialization validation logs.
+const VALIDATION_SESSION_ENABLED: bool = false
+## Piecemeal: settlement truth [SETTLEMENT_VERIFY] without full session (still requires debug build).
 const SETTLEMENT_STATE_TRUTH_VERIFY_MODE: bool = false
+## Piecemeal: [SPECIALIZATION_VALIDATE] on resource-pressure cadence only (still requires debug build).
+const SPECIALIZATION_VALIDATION_LOG_ENABLED: bool = false
 ## Log a one-line summary per settlement when tick aligns (no per-frame spam).
 const SETTLEMENT_STATE_TRUTH_VERIFY_HEARTBEAT_TICKS: int = 20000
-## Legacy alias: prefer SETTLEMENT_STATE_TRUTH_VERIFY_MODE.
-const SETTLEMENT_STATE_TRUTH_DIAG_ENABLED: bool = SETTLEMENT_STATE_TRUTH_VERIFY_MODE
+## Legacy alias: mirrors settlement-truth verify gate (includes VALIDATION_SESSION_ENABLED).
+const SETTLEMENT_STATE_TRUTH_DIAG_ENABLED: bool = (
+		SETTLEMENT_STATE_TRUTH_VERIFY_MODE or VALIDATION_SESSION_ENABLED
+)
 ## region_key -> state string (derived cache for O(1) regional queries)
 var _region_state: Dictionary = {}
 ## region_key -> settlement center_region key (derived cache for O(1) intent joins)
@@ -148,7 +155,7 @@ func _prune_settlement_state_truth_hysteresis() -> void:
 			present[c] = true
 	for k in _settlement_state_truth_hysteresis.keys():
 		if not present.has(int(k)):
-			if _settlement_truth_verify_active() and OS.is_debug_build():
+			if _settlement_truth_verify_active():
 				print(
 						"[SETTLEMENT_VERIFY] tick=%d reason=hysteresis_pruned hyst_key=center_region:%d (settlement absent this recompute)"
 						% [GameManager.tick_count, int(k)]
@@ -157,7 +164,19 @@ func _prune_settlement_state_truth_hysteresis() -> void:
 
 
 func _settlement_truth_verify_active() -> bool:
-	return SETTLEMENT_STATE_TRUTH_VERIFY_MODE and OS.is_debug_build()
+	return OS.is_debug_build() and (SETTLEMENT_STATE_TRUTH_VERIFY_MODE or VALIDATION_SESSION_ENABLED)
+
+
+func _specialization_validation_log_active() -> bool:
+	return OS.is_debug_build() and (SPECIALIZATION_VALIDATION_LOG_ENABLED or VALIDATION_SESSION_ENABLED)
+
+
+func validation_harness_flags_for_snapshot() -> Dictionary:
+	return {
+		"session": OS.is_debug_build() and VALIDATION_SESSION_ENABLED,
+		"settlement_truth_verify": _settlement_truth_verify_active(),
+		"specialization_log": _specialization_validation_log_active(),
+	}
 
 
 func _settlement_truth_verify_emit(
@@ -1350,6 +1369,43 @@ func _derive_settlement_resource_pressure(st: Dictionary, active_jobs: Array[Job
 	return out
 
 
+func _emit_specialization_validation_log_if_needed(tick: int, settlement_idx: int, st: Dictionary) -> void:
+	if not _specialization_validation_log_active():
+		return
+	if str(st.get("state", "")) != "active":
+		return
+	var rp_v: Variant = st.get("resource_pressure", _default_resource_pressure())
+	var rp: Dictionary = rp_v as Dictionary if rp_v is Dictionary else _default_resource_pressure()
+	var fronts_v: Variant = st.get("preferred_fronts", [])
+	var front_count: int = 0
+	if fronts_v is Array:
+		front_count = (fronts_v as Array).size()
+	print(
+			(
+					"[SPECIALIZATION_VALIDATE] tick=%d settlement_idx=%d center_region=%d committed_state=%s "
+					+ "current_intent=%s rp_wood=%.4f rp_stone=%.4f rp_ore_proxy=%.4f rp_total_relevant_jobs=%d "
+					+ "specialization_phase=%s specialization_channel=%s specialization_candidate_channel=%s "
+					+ "specialization_confidence=%d preferred_front_count=%d note=resource_pressure_job_proxy_not_stock_scarcity"
+			)
+			% [
+				tick,
+				settlement_idx,
+				int(st.get("center_region", -1)),
+				str(st.get("state", "")),
+				str(st.get("current_intent", INTENT_GROW)),
+				float(rp.get("wood", 0.0)),
+				float(rp.get("stone", 0.0)),
+				float(rp.get("ore_proxy", 0.0)),
+				int(rp.get("total_relevant_jobs", 0)),
+				str(st.get("specialization_phase", SPECIALIZATION_PHASE_UNKNOWN)),
+				str(st.get("specialization_channel", "")),
+				str(st.get("specialization_candidate_channel", "")),
+				int(st.get("specialization_confidence", 0)),
+				front_count,
+			]
+	)
+
+
 func update_resource_pressures(tick: int) -> void:
 	if tick % RESOURCE_PRESSURE_UPDATE_INTERVAL_TICKS != 0:
 		return
@@ -1362,6 +1418,7 @@ func update_resource_pressures(tick: int) -> void:
 		st["resource_pressure"] = _derive_settlement_resource_pressure(st, active_jobs)
 		st["last_resource_pressure_tick"] = tick
 		_update_settlement_work_focus_identity(st, dt)
+		_emit_specialization_validation_log_if_needed(tick, i, st)
 		settlements[i] = st
 
 

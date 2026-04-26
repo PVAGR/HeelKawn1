@@ -1,0 +1,39 @@
+---
+description: Read docs/HEELKAWN_STATE.md then HEELKAWN.txt before working in this repo
+alwaysApply: true
+---
+
+# HeelKawn handoff
+
+- At the start of work in this repository, read in order:
+	1. docs/HEELKAWN_STATE.md
+	2. HEELKAWN.txt
+- docs/HEELKAWN_STATE.md is the single source of truth for project state.
+- HEELKAWN.txt is a short handoff and log file to preserve session continuity.
+- **Inter-AI and creator handoffs** use the standard in `docs/HEELKAWN_CONTEXT_LOG.md` (`[HEELKAWN CONTEXT LOG]`). Permanent **Canon** rows may be appended to `docs/HEELKAWN_CANON_LOG.md` only when tagged Canon.
+
+## [HEELKAWN CONTEXT LOG] — when pasting to ChatGPT / DeepSeek / Creator
+
+**Role:** There is no separate “Copilot” handoff in this project — **Cursor** is the in-repo implementer/integrator (absorbs that responsibility).  
+At the top of each copy-paste block, include:
+
+```
+[HEELKAWN CONTEXT LOG]
+
+FOR: <target: ChatGPT | DeepSeek | Cursor | Creator | ...>
+FROM: <Cursor | other AI | human name>
+ROLE OF SENDER: <Lore Authority | Brain/Soul | Coder | Integrator | Creator> (pick closest)
+PURPOSE: <one line>
+CANON STATUS: <Canon | Draft | Proposal | Question | Informational>
+DEPENDENCIES: <lore/system refs or "None">
+```
+
+Then the body (task, code paths, return request). In Cursor, **do not invent lore**; ROLE/CANON describe the **incoming** handoff, not a license to write canon without creator or Lore Authority.
+
+When the user wants parallel copies for multiple tools, emit **separate** fenced blocks, each with the same header and FOR: set to the right recipient.
+
+## [HEELKAWN SNAPSHOT] — at the top of Cursor replies (cross-AI sync)
+
+- At the start of **substantive** assistant replies in this project, include an **`[HEELKAWN SNAPSHOT]`** block (template in `docs/HEELKAWN_SNAPSHOT.md`) with: **BUILD STATUS**, **CURSOR / REPO CURRENT TASK**, **LAST CONFIRMED DECISION**, **OPEN QUESTIONS**, **IMMEDIATE NEXT ACTION**, and **UPDATED** date.
+- If nothing changed since the last message, a **short** snapshot is fine (e.g. one line: “unchanged; see `docs/HEELKAWN_SNAPSHOT.md`”) or repeat the last block.
+- The human may copy-paste the snapshot between **ChatGPT, DeepSeek, and Cursor** (and Creator) to preserve **shared** context.

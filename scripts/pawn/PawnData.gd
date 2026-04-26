@@ -12,6 +12,7 @@ enum HairStyle { NONE, SHORT, MOHAWK, BUN }
 ## Trainable proficiencies. Higher level -> faster work + more XP per tick on
 ## that skill type. Pawns earn XP only while doing the matching job.
 enum Skill { FORAGING, MINING, CHOPPING, BUILDING, HUNTING }
+enum Profession { NONE, FARMER, BUILDER, GATHERER, WARRIOR, SCHOLAR }
 
 ## Skill XP curve. Each skill tracked as raw XP; level = floor(xp / XP_PER_LEVEL).
 const XP_PER_LEVEL: float = 100.0
@@ -61,6 +62,15 @@ var carrying_qty: int = 0
 ## by working. Stored as Dictionary so save/load is trivial and so we don't
 ## have to enumerate skills here.
 var skill_xp: Dictionary = {}
+## Deterministic Phase 6 action-skill XP (string key -> int).
+var skills: Dictionary = {
+	"movement": 0,
+	"farming": 0,
+	"building": 0,
+	"gathering": 0,
+	"combat": 0,
+}
+var current_profession: int = Profession.NONE
 
 ## Work-type allow list (RimWorld-style). If false, this pawn will not *claim*
 ## that class of open job. Eating, sleeping, and hauling are not jobs; they
@@ -241,6 +251,92 @@ func work_speed_for(skill: int) -> float:
 	return 1.0 + t * (SKILL_BONUS_AT_MAX - 1.0)
 
 
+func _skill_to_profession(skill_name: String) -> int:
+	match skill_name:
+		"farming":
+			return Profession.FARMER
+		"building":
+			return Profession.BUILDER
+		"gathering":
+			return Profession.GATHERER
+		"combat":
+			return Profession.WARRIOR
+		"movement":
+			return Profession.SCHOLAR
+		_:
+			return Profession.NONE
+
+
+func _profession_primary_skill(prof: int) -> String:
+	match prof:
+		Profession.FARMER:
+			return "farming"
+		Profession.BUILDER:
+			return "building"
+		Profession.GATHERER:
+			return "gathering"
+		Profession.WARRIOR:
+			return "combat"
+		Profession.SCHOLAR:
+			return "movement"
+		_:
+			return ""
+
+
+func profession_name() -> String:
+	match current_profession:
+		Profession.FARMER:
+			return "Farmer"
+		Profession.BUILDER:
+			return "Builder"
+		Profession.GATHERER:
+			return "Gatherer"
+		Profession.WARRIOR:
+			return "Warrior"
+		Profession.SCHOLAR:
+			return "Scholar"
+		_:
+			return "None"
+
+
+func tracked_skill_xp(skill_name: String) -> int:
+	return int(skills.get(skill_name, 0))
+
+
+func profession_progress_xp() -> int:
+	var primary: String = _profession_primary_skill(current_profession)
+	if primary != "":
+		return mini(100, tracked_skill_xp(primary))
+	var best: int = 0
+	for k in skills:
+		best = maxi(best, int(skills[k]))
+	return mini(100, best)
+
+
+func gain_skill_xp(skill_name: String, amount: int) -> bool:
+	if amount <= 0:
+		return false
+	if not skills.has(skill_name):
+		return false
+	# Once locked, only the profession's primary skill can gain XP.
+	if current_profession != Profession.NONE:
+		var primary_skill: String = _profession_primary_skill(current_profession)
+		if skill_name != primary_skill:
+			return false
+	var before: int = tracked_skill_xp(skill_name)
+	var after: int = before + amount
+	var just_locked: bool = false
+	if current_profession == Profession.NONE and after >= 100:
+		after = 100
+		current_profession = _skill_to_profession(skill_name)
+		just_locked = true
+	# Keep the primary skill bounded for deterministic HUD readability.
+	if current_profession != Profession.NONE and skill_name == _profession_primary_skill(current_profession):
+		after = mini(100, after)
+	skills[skill_name] = after
+	return (after != before) or just_locked
+
+
 ## Multiplier applied to work ticks (low health and fatigue slow labour).
 ## Traits can also modify work speed.
 func effective_labor_mult() -> float:
@@ -328,6 +424,8 @@ func to_save_dict() -> Dictionary:
 		"carrying": carrying,
 		"carrying_qty": carrying_qty,
 		"skill_xp": sx,
+		"skills": skills.duplicate(true),
+		"current_profession": current_profession,
 		"work_forage": work_forage,
 		"work_mine": work_mine,
 		"work_chop": work_chop,
@@ -368,6 +466,17 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	if d.has("skill_xp") and d["skill_xp"] is Dictionary:
 		for k in d["skill_xp"]:
 			p.skill_xp[int(k)] = float(d["skill_xp"][k])
+	p.skills = {
+		"movement": 0,
+		"farming": 0,
+		"building": 0,
+		"gathering": 0,
+		"combat": 0,
+	}
+	if d.has("skills") and d["skills"] is Dictionary:
+		for sk in p.skills.keys():
+			p.skills[sk] = int(d["skills"].get(sk, 0))
+	p.current_profession = int(d.get("current_profession", Profession.NONE))
 	p.work_forage = bool(d.get("work_forage", true))
 	p.work_mine = bool(d.get("work_mine", true))
 	p.work_chop = bool(d.get("work_chop", true))

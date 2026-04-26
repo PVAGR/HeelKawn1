@@ -151,6 +151,7 @@ func _refresh() -> void:
 	lines.append(_colony_state_line())
 	lines.append(_pawn_line())
 	lines.append(_player_status_line())
+	lines.append(_skill_line())
 	lines.append(_stockpile_line())
 	lines.append(_jobs_line())
 	lines.append(_wildlife_line())
@@ -342,6 +343,16 @@ func _player_status_line() -> String:
 	return "[color=#cccccc]PLAYER PAWN:[/color] [b]%s[/b]  |  QUEUE: [b]%d[/b]  |  STATE: [b]%s[/b]" % [
 		pawn_id_text, queue_count, state
 	]
+
+
+func _skill_line() -> String:
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return "👤 Pawn [--]: Profession [None] | XP: 0/100"
+	var d: PawnData = _player_pawn.data
+	var pawn_id: int = int(d.id)
+	var prof_name: String = d.profession_name()
+	var xp: int = d.profession_progress_xp()
+	return "👤 Pawn [%d]: Profession [%s] | XP: %d/100" % [pawn_id, prof_name, xp]
 
 
 func _sample_wildlife(current_tick: int) -> void:

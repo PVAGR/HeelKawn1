@@ -5,6 +5,46 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-26 - Phase 6 deterministic skill XP + profession lock
+
+Date: 2026-04-26
+Agent/Model: Codex (Cursor)
+Goal: Add deterministic skill/profession progression driven by tick-executed player actions, with append-only skill gain logs.
+
+Changes made:
+- Updated `scripts/pawn/PawnData.gd`:
+  - Added Phase 6 skill buckets:
+    - `movement`, `farming`, `building`, `gathering`, `combat`
+  - Added profession enum + state:
+    - `NONE`, `FARMER`, `BUILDER`, `GATHERER`, `WARRIOR`, `SCHOLAR`
+  - Added deterministic XP/profession API:
+    - `gain_skill_xp(skill_name, amount)`
+    - lock profession when first tracked skill reaches `100`
+    - block XP in non-primary skills after profession lock
+    - helper methods for profession name + progress.
+  - Added save/load persistence for `skills` + `current_profession`.
+- Updated `scripts/pawn/Pawn.gd`:
+  - Added `record_skill_gain(skill, amount)` to call `PawnData.gain_skill_xp(...)`.
+  - Emits append-only `WorldMemory.record_event(...)` with:
+    - `type: skill_gain`, `pawn_id`, `skill`, `amount`, `tick`, `total_xp`, `profession`.
+- Updated `scripts/pawn/PlayerInputBuffer.gd`:
+  - On successful tick-executed movement:
+    - grants `movement +1`.
+  - On successful tick-executed interact:
+    - grants `gathering +2`.
+  - XP grants only happen after action success in tick processing.
+- Updated `scripts/ui/ColonyHUD.gd`:
+  - Added `_skill_line()` rendering:
+    - `👤 Pawn [ID]: Profession [Name] | XP: [Current]/100`
+
+Determinism check:
+- Fixed XP values only (`1`, `2` in this phase).
+- No RNG.
+- XP mutation occurs only inside tick-driven intent execution path.
+- WorldMemory skill logs are append-only events.
+
+---
+
 ## 2026-04-26 - Phase 5 visual feedback: deterministic intent marker
 
 Date: 2026-04-26

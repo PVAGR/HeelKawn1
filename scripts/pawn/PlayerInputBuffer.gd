@@ -59,6 +59,12 @@ func execute_intent(pawn: Node, intent: Dictionary) -> bool:
 			executed = bool(pawn.call("interact")) if pawn.has_method("interact") else false
 		_:
 			executed = false
+	if executed and pawn.has_method("record_skill_gain"):
+		match action_type:
+			"move_north", "move_south", "move_east", "move_west":
+				pawn.call("record_skill_gain", "movement", 1)
+			"interact":
+				pawn.call("record_skill_gain", "gathering", 2)
 	_last_action_state = action_type if executed else "blocked_%s" % action_type
 	_record_player_action(pawn, action_type, executed)
 	return executed

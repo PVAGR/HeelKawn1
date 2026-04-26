@@ -421,6 +421,21 @@ func interact() -> bool:
 	return false
 
 
+func record_skill_gain(skill: String, amount: int) -> void:
+	if data == null:
+		return
+	if data.gain_skill_xp(skill, amount):
+		WorldMemory.record_event({
+			"type": "skill_gain",
+			"pawn_id": int(data.id),
+			"skill": skill,
+			"amount": amount,
+			"tick": GameManager.tick_count,
+			"total_xp": int(data.tracked_skill_xp(skill)),
+			"profession": data.profession_name(),
+		})
+
+
 ## Called from World when a wall appears under this pawn — step off solid tiles.
 func nudge_if_standing_on_solid() -> void:
 	if _world == null or _world.pathfinder == null or data == null:

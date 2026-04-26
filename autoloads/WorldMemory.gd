@@ -59,7 +59,7 @@ func record_pawn_death(
 		"t": tick,
 		"x": tile.x,
 		"y": tile.y,
-		"r": WorldMemory._region_key(tile.x, tile.y),
+		"r": _region_key(tile.x, tile.y),
 		"pid": pawn_id,
 		"n": pawn_name,
 		"c": cause,
@@ -78,7 +78,7 @@ func record_animal_death(
 		"t": tick,
 		"x": tile.x,
 		"y": tile.y,
-		"r": WorldMemory._region_key(tile.x, tile.y),
+		"r": _region_key(tile.x, tile.y),
 		"sp": species,
 		"sn": species_name,
 	})

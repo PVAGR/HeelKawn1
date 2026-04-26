@@ -36,7 +36,7 @@ var global_stress: int = 0
 var _tick_accumulator: float = 0.0
 
 
-static func verbose_logs() -> bool:
+func verbose_logs() -> bool:
 	return VERBOSE_SIM_LOGS
 
 

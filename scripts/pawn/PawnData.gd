@@ -251,8 +251,8 @@ func work_speed_for(skill: int) -> float:
 	return 1.0 + t * (SKILL_BONUS_AT_MAX - 1.0)
 
 
-func _skill_to_profession(skill_name: String) -> int:
-	match skill_name:
+func _skill_to_profession(skill_key: String) -> int:
+	match skill_key:
 		"farming":
 			return Profession.FARMER
 		"building":
@@ -299,8 +299,8 @@ func profession_name() -> String:
 			return "None"
 
 
-func tracked_skill_xp(skill_name: String) -> int:
-	return int(skills.get(skill_name, 0))
+func tracked_skill_xp(skill_key: String) -> int:
+	return int(skills.get(skill_key, 0))
 
 
 func profession_progress_xp() -> int:
@@ -313,27 +313,27 @@ func profession_progress_xp() -> int:
 	return mini(100, best)
 
 
-func gain_skill_xp(skill_name: String, amount: int) -> bool:
+func gain_skill_xp(skill_key: String, amount: int) -> bool:
 	if amount <= 0:
 		return false
-	if not skills.has(skill_name):
+	if not skills.has(skill_key):
 		return false
 	# Once locked, only the profession's primary skill can gain XP.
 	if current_profession != Profession.NONE:
 		var primary_skill: String = _profession_primary_skill(current_profession)
-		if skill_name != primary_skill:
+		if skill_key != primary_skill:
 			return false
-	var before: int = tracked_skill_xp(skill_name)
+	var before: int = tracked_skill_xp(skill_key)
 	var after: int = before + amount
 	var just_locked: bool = false
 	if current_profession == Profession.NONE and after >= 100:
 		after = 100
-		current_profession = _skill_to_profession(skill_name)
+		current_profession = _skill_to_profession(skill_key)
 		just_locked = true
 	# Keep the primary skill bounded for deterministic HUD readability.
-	if current_profession != Profession.NONE and skill_name == _profession_primary_skill(current_profession):
+	if current_profession != Profession.NONE and skill_key == _profession_primary_skill(current_profession):
 		after = mini(100, after)
-	skills[skill_name] = after
+	skills[skill_key] = after
 	return (after != before) or just_locked
 
 

@@ -86,7 +86,6 @@ func set_player_control_refs(input_buffer: PlayerInputBuffer, player_pawn: Pawn)
 	if _player_input_buffer != null and not _player_input_buffer.intent_ready.is_connected(_on_intent_ready):
 		_player_input_buffer.intent_ready.connect(_on_intent_ready)
 	_hud_dirty = true
-	queue_redraw()
 
 
 func _on_intent_ready(_action_id: int) -> void:
@@ -167,7 +166,6 @@ func _refresh() -> void:
 	lines.append(_jobs_line())
 	lines.append(_wildlife_line())
 	_label.text = "\n".join(lines)
-	queue_redraw()
 
 
 func _draw() -> void:

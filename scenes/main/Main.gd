@@ -851,6 +851,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_toggle_observer_hud()
 		KEY_F10:
 			_toggle_focus_inspector()
+		KEY_F11:
+			if _kernel_diagnostic != null and _kernel_diagnostic.has_method("start_settlement_truth_verification"):
+				_kernel_diagnostic.call("start_settlement_truth_verification")
 		KEY_M:
 			ColonySimServices.cycle_labor_stance()
 		KEY_ESCAPE:

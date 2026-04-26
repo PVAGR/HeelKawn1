@@ -6,6 +6,11 @@ extends Node
 const CHECK_INTERVAL_TICKS: int = 2000
 const REBIRTH_PEACE_TICKS: int = 30000
 const REBIRTH_INTERVAL_TICKS: int = 60000
+const TILE_SCORE_STRUCT_NEIGHBOR: int = 85
+const TILE_SCORE_SCAR_WEIGHT: int = 40
+const TILE_SCORE_ROAD_WEIGHT: int = 120
+const TILE_SCORE_TRADE_WEIGHT: int = 90
+const TILE_SCORE_DISTANCE_WEIGHT: int = 1
 
 ## Session-only: [code]String(center_region_key) -> int[/code] last tick we spawned a rebirth pawn.
 var _last_rebirth_tick_by_center: Dictionary = {}
@@ -36,6 +41,9 @@ func process(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 	_sort_settlements_rebirth_order(eligible)
 	var now1: int = GameManager.tick_count
 	for s in eligible:
+		var gate: Dictionary = get_rebirth_eligibility(world, s)
+		if not bool(gate.get("ok", false)):
+			continue
 		var ckey: int = int(s.get("center_region", -1))
 		if ckey < 0:
 			continue
@@ -56,6 +64,41 @@ func process(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 			continue
 		_last_rebirth_tick_by_center[ck2] = now1
 		MythMemory.register_rebirth_success(ckey)
+
+
+func get_rebirth_eligibility(world: World, settlement: Dictionary) -> Dictionary:
+	var now: int = GameManager.tick_count
+	var state_now: String = str(settlement.get("state", ""))
+	if state_now != "revivable":
+		return {"ok": false, "reason": "state_not_revivable"}
+	var scar_max: int = int(settlement.get("scar_max", 0))
+	if scar_max >= 3:
+		return {"ok": false, "reason": "scar_level_gte_3"}
+	var culture_type: int = int(settlement.get("culture_type", SettlementPlanner.CULTURE_CAUTIOUS))
+	var branch_peace: int = SettlementMemory.get_peace_ticks_for_culture_branch(culture_type)
+	var peace_threshold: int = maxi(REBIRTH_PEACE_TICKS, branch_peace)
+	var last_conflict_tick: int = int(settlement.get("last_pawn_death_tick", -1))
+	var recent_conflict_ticks: int = 1_000_000_000 if last_conflict_tick < 0 else maxi(0, now - last_conflict_tick)
+	if recent_conflict_ticks < peace_threshold:
+		return {
+			"ok": false,
+			"reason": "recent_conflict_under_peace_threshold",
+			"recent_conflict_ticks": recent_conflict_ticks,
+			"peace_threshold": peace_threshold,
+		}
+	# Additional hard block: cluster currently contains scar >= 3 region.
+	var regv: Variant = settlement.get("regions", null)
+	if regv is PackedInt32Array:
+		for rk_any in regv as PackedInt32Array:
+			var rk: int = int(rk_any)
+			if int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0)) >= 3:
+				return {"ok": false, "reason": "cluster_contains_scar3"}
+	return {
+		"ok": true,
+		"reason": "eligible",
+		"recent_conflict_ticks": recent_conflict_ticks,
+		"peace_threshold": peace_threshold,
+	}
 
 
 func _gather_eligible_settlements() -> Array[Dictionary]:
@@ -147,38 +190,50 @@ func _rebirth_tiles_in_order(world: World, settlement: Dictionary) -> Array[Vect
 				by_linear[t0.y * WorldData.WIDTH + t0.x] = t0
 	if by_linear.is_empty():
 		return out_ar
-	var preferred0: Array[Vector2i] = []
-	var rest0: Array[Vector2i] = []
+	var scored: Array[Dictionary] = []
 	for idx_k in by_linear:
 		var tc: Vector2i = by_linear[idx_k] as Vector2i
-		var is_nbr0: bool = false
-		for d0 in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-			if struct_tiles0.has(tc + d0):
-				is_nbr0 = true
-				break
-		if is_nbr0:
-			preferred0.append(tc)
-		else:
-			rest0.append(tc)
-	_sort_tiles_toward_center(preferred0, center_t)
-	_sort_tiles_toward_center(rest0, center_t)
-	for tp in preferred0:
-		out_ar.append(tp)
-	for tr in rest0:
-		out_ar.append(tr)
+		scored.append({
+			"tile": tc,
+			"score": _score_rebirth_tile(world, tc, center_t, struct_tiles0),
+			"idx": int(idx_k),
+		})
+	scored.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var sa: int = int(a.get("score", 0))
+		var sb: int = int(b.get("score", 0))
+		if sa != sb:
+			return sa > sb
+		return int(a.get("idx", 0)) < int(b.get("idx", 0))
+	)
+	for rec in scored:
+		out_ar.append(rec.get("tile", Vector2i.ZERO) as Vector2i)
 	return out_ar
 
 
-func _sort_tiles_toward_center(pts: Array[Vector2i], c: Vector2i) -> void:
-	pts.sort_custom(func(ta: Vector2i, tb: Vector2i) -> bool:
-		var ma: int = abs(ta.x - c.x) + abs(ta.y - c.y)
-		var mb: int = abs(tb.x - c.x) + abs(tb.y - c.y)
-		if ma != mb:
-			return ma < mb
-		var ia: int = ta.y * WorldData.WIDTH + ta.x
-		var ib: int = tb.y * WorldData.WIDTH + tb.x
-		return ia < ib
-	)
+func _score_rebirth_tile(
+		world: World,
+		t: Vector2i,
+		center: Vector2i,
+		struct_tiles: Dictionary
+) -> int:
+	var score: int = 0
+	var trk: int = WorldMemory._region_key(t.x, t.y)
+	var scar_level: int = int(WorldPersistence.get_region_persistence(trk).get("scar_level", 0))
+	score += maxi(0, 3 - scar_level) * TILE_SCORE_SCAR_WEIGHT
+	var is_struct_neighbor: bool = false
+	for d0 in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		if struct_tiles.has(t + d0):
+			is_struct_neighbor = true
+			break
+	if is_struct_neighbor:
+		score += TILE_SCORE_STRUCT_NEIGHBOR
+	var road_mul: float = RoadMemory.get_path_weight_mul(t.x, t.y)
+	var trade_mul: float = TradeMemory.get_trade_path_weight_mul(t.x, t.y)
+	score += int(round((1.12 - road_mul) * TILE_SCORE_ROAD_WEIGHT))
+	score += int(round((1.10 - trade_mul) * TILE_SCORE_TRADE_WEIGHT))
+	var mdist: int = abs(t.x - center.x) + abs(t.y - center.y)
+	score -= mdist * TILE_SCORE_DISTANCE_WEIGHT
+	return score
 
 
 func _tile_ok_base(

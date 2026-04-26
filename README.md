@@ -9,3 +9,4 @@ HeelKawn is a deterministic Godot 4.6 world simulation.
 Kernel status: complete (memory -> meaning -> persistence -> culture).
 
 For canonical project state, read docs/HEELKAWN_STATE.md.
+For cross-LLM continuity, use docs/LLM_ONBOARDING.md and docs/SESSION_LOG.md.

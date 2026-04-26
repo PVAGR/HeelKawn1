@@ -46,3 +46,21 @@ func get_screen_center_to_world(screen_pos: Vector2) -> Vector2:
 	var viewport_size: Vector2 = get_viewport_rect().size
 	var offset_from_center: Vector2 = screen_pos - viewport_size * 0.5
 	return position + offset_from_center / zoom.x
+
+
+func reset_to_world_bounds(world: Node) -> void:
+	if world == null or not (world is World):
+		return
+	var w: World = world as World
+	var center_tile: Vector2i = Vector2i(int(WorldData.WIDTH / 2), int(WorldData.HEIGHT / 2))
+	position = w.tile_to_world(center_tile)
+	var viewport_size: Vector2 = get_viewport_rect().size
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		zoom = Vector2(1.0, 1.0)
+		return
+	var world_px_w: float = float(WorldData.WIDTH * World.TILE_PIXELS)
+	var world_px_h: float = float(WorldData.HEIGHT * World.TILE_PIXELS)
+	var fit_x: float = world_px_w / viewport_size.x
+	var fit_y: float = world_px_h / viewport_size.y
+	var fit_zoom: float = clamp(maxf(fit_x, fit_y), min_zoom, max_zoom)
+	zoom = Vector2(fit_zoom, fit_zoom)

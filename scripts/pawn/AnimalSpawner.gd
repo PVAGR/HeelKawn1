@@ -8,9 +8,9 @@ const INITIAL_DEER: int = 4
 const MAX_ANIMALS: int = 50
 
 ## Interval for [method update_population_dynamics] (not every tick).
-const POPULATION_CHECK_TICKS: int = 2000
+const POPULATION_CHECK_TICKS: int = 1000
 ## Reproduction: no [WorldMemory] animal death in (rk, sp) for this many ticks, then +1.
-const REPRO_TICKS: int = 8000
+const REPRO_TICKS: int = 4000
 ## Legacy: external / HUD; v1 uses [const POPULATION_CHECK_TICKS].
 const SPAWN_RATE_CHECK_INTERVAL: int = 100
 
@@ -73,10 +73,11 @@ func spawn_initial(world: World) -> void:
 	reset_population_derived_state()
 	_spawn_group_scan(world, int(Animal.Type.RABBIT), INITIAL_RABBITS, true)
 	_spawn_group_scan(world, int(Animal.Type.DEER), INITIAL_DEER, true)
-	print(
-			"[AnimalSpawner] Initial: %d rabbits, %d deer (deterministic, max %d)"
-			% [INITIAL_RABBITS, INITIAL_DEER, MAX_ANIMALS]
-	)
+	if GameManager.verbose_logs():
+		print(
+				"[AnimalSpawner] Initial: %d rabbits, %d deer (deterministic, max %d)"
+				% [INITIAL_RABBITS, INITIAL_DEER, MAX_ANIMALS]
+		)
 
 
 func _spawn_group_scan(world: World, species: int, need: int, initial: bool) -> void:
@@ -283,3 +284,15 @@ func describe() -> String:
 	var rabbits: int = get_animal_count_by_type(Animal.Type.RABBIT)
 	var deer: int = get_animal_count_by_type(Animal.Type.DEER)
 	return "Animals: %d rabbits, %d deer (total %d / %d)" % [rabbits, deer, animals.size(), MAX_ANIMALS]
+
+
+## Deterministic live wildlife snapshot for HUD sampling.
+## Read-only: no RNG, no side effects.
+func get_live_wildlife_snapshot() -> Dictionary:
+	var r_count: int = get_animal_count_by_type(Animal.Type.RABBIT)
+	var d_count: int = get_animal_count_by_type(Animal.Type.DEER)
+	return {
+		"rabbit": r_count,
+		"deer": d_count,
+		"total": r_count + d_count,
+	}

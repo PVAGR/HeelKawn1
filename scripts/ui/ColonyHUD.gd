@@ -9,6 +9,8 @@ extends CanvasLayer
 ## GameManager, and job counts from JobManager (autoload).
 
 const REFRESH_EVERY_N_TICKS: int = 1
+const WILDLIFE_SAMPLE_EVERY_TICKS: int = 20
+const WILDLIFE_HISTORY_SIZE: int = 8
 
 const PANEL_BG: Color = Color(0.05, 0.06, 0.08, 0.78)
 const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.70)
@@ -25,16 +27,27 @@ const HOTKEY_HINTS: String = "SPACE pause · 1-4 speed · F5 save · F8 load · 
 @onready var _panel: PanelContainer = $Panel
 @onready var _label: RichTextLabel = $Panel/Margin/VBox/Body
 @onready var _hotkeys: Label = $Panel/Margin/VBox/Hotkeys
+var _history_panel: PopupPanel = null
+var _history_text: RichTextLabel = null
 
 var _world: World = null
 var _spawner: PawnSpawner = null
+var _animal_spawner: AnimalSpawner = null
 ## Empty string when no designation mode is active. Otherwise "Bed" / "Wall" / etc.
 var _designation_label: String = ""
+var _wildlife_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
+var _wildlife_prev_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
+var _wildlife_sample_tick: int = 0
+var _wildlife_history: Array[int] = []
+var _momentum_spark: String = "........"
+var _player_input_buffer: PlayerInputBuffer = null
+var _player_pawn: Pawn = null
+var _hud_dirty: bool = true
 
 
 func _ready() -> void:
 	# Pin top-left, leave a small inset.
-	layer = 100
+	layer = 10
 	GameManager.game_tick.connect(_on_tick)
 	GameManager.speed_changed.connect(_on_speed_changed)
 	JobManager.job_posted.connect(_on_jobs_changed)
@@ -47,6 +60,7 @@ func _ready() -> void:
 	StockpileManager.zone_unregistered.connect(_on_zones_changed)
 	ColonySimServices.demand_snapshot.connect(_on_colony_demand)
 	_apply_panel_style()
+	_ensure_history_panel()
 	_hotkeys.text = HOTKEY_HINTS
 	_refresh()
 
@@ -55,37 +69,63 @@ func _ready() -> void:
 func bind(world: World, spawner: PawnSpawner) -> void:
 	_world = world
 	_spawner = spawner
+	_animal_spawner = null
+	if _world != null and _world.has_meta("animal_spawner"):
+		var m: Variant = _world.get_meta("animal_spawner")
+		if m is AnimalSpawner:
+			_animal_spawner = m as AnimalSpawner
+	_hud_dirty = true
 	_refresh()
+
+
+func set_player_control_refs(input_buffer: PlayerInputBuffer, player_pawn: Pawn) -> void:
+	if _player_input_buffer != null and _player_input_buffer.intent_ready.is_connected(_on_intent_ready):
+		_player_input_buffer.intent_ready.disconnect(_on_intent_ready)
+	_player_input_buffer = input_buffer
+	_player_pawn = player_pawn
+	if _player_input_buffer != null and not _player_input_buffer.intent_ready.is_connected(_on_intent_ready):
+		_player_input_buffer.intent_ready.connect(_on_intent_ready)
+	_hud_dirty = true
+
+
+func _on_intent_ready(_action_id: int) -> void:
+	_hud_dirty = true
 
 
 ## Called by Main whenever the player's build mode changes. Empty string =
 ## off. Anything else shows up as a colored banner above the stats lines.
 func set_designation_mode(label: String) -> void:
 	_designation_label = label
-	_refresh()
+	_hud_dirty = true
 
 
 # ==================== refresh hooks ====================
 
 func _on_tick(tick: int) -> void:
+	if tick % WILDLIFE_SAMPLE_EVERY_TICKS == 0:
+		_sample_wildlife(tick)
+		_hud_dirty = true
+	if tick % 10 != 0 and not _hud_dirty:
+		return
 	if tick % REFRESH_EVERY_N_TICKS == 0:
 		_refresh()
+		_hud_dirty = false
 
 
 func _on_speed_changed(_s: float, _p: bool) -> void:
-	_refresh()
+	_hud_dirty = true
 
 
 func _on_jobs_changed(_job: Job) -> void:
-	_refresh()
+	_hud_dirty = true
 
 
 func _on_zones_changed(_zone: Stockpile) -> void:
-	_refresh()
+	_hud_dirty = true
 
 
 func _on_colony_demand(_f: float, _h: float, _m: float, _ha: float) -> void:
-	_refresh()
+	_hud_dirty = true
 
 
 # ==================== layout / style ====================
@@ -119,9 +159,81 @@ func _refresh() -> void:
 	lines.append(_time_line())
 	lines.append(_colony_state_line())
 	lines.append(_pawn_line())
+	lines.append(_player_status_line())
+	lines.append(_politics_line())
+	lines.append(_war_status_line())
+	lines.append(_skill_line())
+	lines.append(_kill_line())
+	lines.append(_export_status_line())
 	lines.append(_stockpile_line())
 	lines.append(_jobs_line())
+	lines.append(_wildlife_line())
 	_label.text = "\n".join(lines)
+
+
+## CanvasLayer is not drawable; intent marker rendering is temporarily disabled.
+## We keep the queue/state HUD text and can re-enable visual marker through a
+## dedicated Node2D overlay child in a follow-up patch.
+
+
+func _ensure_history_panel() -> void:
+	if _history_panel != null and is_instance_valid(_history_panel):
+		return
+	_history_panel = PopupPanel.new()
+	_history_panel.name = "TileHistoryPanel"
+	_history_panel.size = Vector2i(520, 320)
+	_history_panel.visible = false
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 8)
+	margin.add_theme_constant_override("margin_right", 8)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_bottom", 8)
+	_history_panel.add_child(margin)
+	_history_text = RichTextLabel.new()
+	_history_text.name = "HistoryText"
+	_history_text.bbcode_enabled = true
+	_history_text.fit_content = false
+	_history_text.scroll_active = true
+	_history_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	margin.add_child(_history_text)
+	add_child(_history_panel)
+
+
+func show_tile_history(tile_pos: Vector2i, events: Array[Dictionary]) -> void:
+	_ensure_history_panel()
+	if _history_panel == null or _history_text == null:
+		return
+	var lines: PackedStringArray = []
+	lines.append("[b]History for Tile %s[/b]" % str(tile_pos))
+	if events.is_empty():
+		lines.append("[color=#aaaaaa]No recorded events.[/color]")
+	else:
+		for evt in events:
+			var tick: int = int(evt.get("t", 0))
+			var etype: String = str(evt.get("type", "unknown"))
+			if etype == "unknown":
+				var k: int = int(evt.get("k", -1))
+				if k == int(WorldMemory.Kind.PAWN_DEATH):
+					etype = "pawn_death"
+				elif k == int(WorldMemory.Kind.ANIMAL_DEATH):
+					etype = "animal_death"
+			var details: String = ""
+			if evt.has("action"):
+				details = "Action: %s" % str(evt.get("action", ""))
+			elif evt.has("c"):
+				details = "Cause: %s" % str(evt.get("c", ""))
+			elif evt.has("cause"):
+				details = "Cause: %s" % str(evt.get("cause", ""))
+			elif evt.has("amount"):
+				details = "Impact: %s" % str(evt.get("amount", ""))
+			lines.append("[color=yellow][Tick %04d][/color] Event: %s  %s" % [tick, etype, details])
+	_history_text.text = "\n".join(lines)
+	_history_panel.popup_centered()
+
+
+func hide_tile_history() -> void:
+	if _history_panel != null and is_instance_valid(_history_panel):
+		_history_panel.hide()
 
 
 func _time_line() -> String:
@@ -191,15 +303,20 @@ func _pawn_line() -> String:
 	var tired: int = 0
 	var sad: int = 0
 	var sleeping: int = 0
+	var children_total: int = 0
 	var n: int = 0
+	var lead: Pawn = null
 	for p in _spawner.pawns:
 		if not is_instance_valid(p) or p.data == null:
 			continue
+		if lead == null:
+			lead = p
 		n += 1
 		var d: PawnData = p.data
 		sum_h += d.hunger
 		sum_r += d.rest
 		sum_m += d.mood
+		children_total += int(d.children_count)
 		if d.hunger <= Pawn.THRESHOLD_WARN: hungry += 1
 		if d.rest   <= Pawn.THRESHOLD_WARN: tired  += 1
 		if d.mood   <= Pawn.THRESHOLD_WARN: sad    += 1
@@ -209,13 +326,22 @@ func _pawn_line() -> String:
 	var avg_h: float = sum_h / float(n)
 	var avg_r: float = sum_r / float(n)
 	var avg_m: float = sum_m / float(n)
-	return "[color=#cccccc]Pawns:[/color] [b]%d[/b]   H %s  R %s  M %s   %s%s%s%s" % [
+	var affinity_line: String = ""
+	if lead != null and lead.data != null:
+		var top_aff: String = lead.data.highest_affinity_skill()
+		var top_xp: int = lead.data.affinity_xp_for(top_aff)
+		affinity_line = "   Pawn: [b]%s[/b] | Aff: [b]%s[/b] | XP: [b]%d[/b]" % [
+			lead.data.display_name, top_aff.capitalize(), top_xp
+		]
+	return "[color=#cccccc]Pawns:[/color] [b]%d[/b] (children %d)   H %s  R %s  M %s   %s%s%s%s%s" % [
 		n,
+		children_total,
 		_color_value(avg_h), _color_value(avg_r), _color_value(avg_m),
 		_alert_chip("hungry",  hungry,   "#e57373"),
 		_alert_chip("tired",   tired,    "#ffd54f"),
 		_alert_chip("sad",     sad,      "#90caf9"),
 		_alert_chip("asleep",  sleeping, "#b39ddb"),
+		affinity_line,
 	]
 
 
@@ -262,6 +388,135 @@ func _jobs_line() -> String:
 	return "[color=#cccccc]Jobs:[/color] [b]%d[/b] open  [b]%d[/b] claimed   F %d · M %d · TM %d · C %d · H %d · B %d · W %d · D %d   [color=#dcb478]Beds[/color] [b]%d[/b]   [color=#888888](done %d)[/color]" % [
 		s.open, s.claimed, fw, mn, mw, ch, hu, bd, bw, bo, beds_built, s.completed
 	]
+
+
+func _player_status_line() -> String:
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node == null:
+		return "[color=#cccccc]PLAYER PAWN:[/color] --  |  QUEUE: [b]0[/b]  |  STATE: [b]offline[/b]"
+	var pawn_id: int = main_node.get_player_pawn_id()
+	var queue_count: int = main_node.get_player_queue_size()
+	var state: String = main_node.get_player_action_state()
+	var pawn_id_text: String = str(pawn_id) if pawn_id >= 0 else "--"
+	return "[color=#cccccc]PLAYER PAWN:[/color] [b]%s[/b]  |  QUEUE: [b]%d[/b]  |  STATE: [b]%s[/b]" % [
+		pawn_id_text, queue_count, state
+	]
+
+
+func _skill_line() -> String:
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return "👤 Pawn [--]: Profession [None] | XP: 0/100"
+	var d: PawnData = _player_pawn.data
+	var pawn_id: int = int(d.id)
+	var prof_name: String = d.profession_name()
+	var xp: int = d.profession_progress_xp()
+	return "👤 Pawn [%d]: Profession [%s] | XP: %d/100" % [pawn_id, prof_name, xp]
+
+
+func _export_status_line() -> String:
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node == null:
+		return "📜 Export: Ready at Tick 30000 | Status: Waiting"
+	var status: String = "Complete" if main_node.is_kernel_diagnostic_complete() else "Waiting"
+	if GameManager.tick_count >= 30000:
+		return "📜 Export: Ready at Tick 30000 | Status: %s" % status
+	return "📜 Export: Ready at Tick 30000 | Status: Waiting"
+
+
+func _kill_line() -> String:
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node == null:
+		return "💀 Kills: 0"
+	return "💀 Kills: %d" % int(main_node.get_kill_count())
+
+
+func _politics_line() -> String:
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node == null:
+		return "🏛 Settlement State: Anarchy | Ruler: None | Player Status: None"
+	var gp: Dictionary = main_node.get_player_governance_profile()
+	var gtype_raw: String = str(gp.get("type", "anarchy"))
+	var gtype: String = "Anarchy"
+	if gtype_raw == "monarchy":
+		gtype = "Monarchy"
+	elif gtype_raw == "council":
+		gtype = "Council"
+	var base: String = "🏛 Settlement State: %s | Ruler: %s | Player Status: %s" % [
+		gtype,
+		str(gp.get("ruler_name", "None")),
+		str(gp.get("player_status", "None")),
+	]
+	if bool(gp.get("edicts_unlocked", false)):
+		base += " | EDICTS UNLOCKED"
+	return base
+
+
+func _war_status_line() -> String:
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node == null:
+		return "⚔ WAR STATUS: Peace | RANK: Grunt"
+	var wp: Dictionary = main_node.get_player_war_profile()
+	var ws: String = String(wp.get("state", "peace")).to_lower()
+	var ws_label: String = "Peace"
+	if ws == "proposed":
+		ws_label = "Proposed (Vote Pending)"
+	elif ws == "mobilizing":
+		ws_label = "Proposed (Vote Pending)"
+	elif ws == "at_war":
+		ws_label = "Active"
+	elif ws == "truce":
+		ws_label = "Truce"
+	var rank_raw: String = String(main_node.get_player_military_rank()).to_lower()
+	var rank_label: String = rank_raw.capitalize()
+	if rank_raw == "battlemaster":
+		rank_label = "BattleMaster"
+	var out: String = "⚔ WAR STATUS: %s | RANK: %s" % [ws_label, rank_label]
+	if rank_raw == "battlemaster":
+		out += " | TACTICAL MODE: Issue Orders"
+	return out
+
+
+func _sample_wildlife(current_tick: int) -> void:
+	var spawner: AnimalSpawner = null
+	if has_meta("animal_spawner"):
+		var local_meta: Variant = get_meta("animal_spawner")
+		if local_meta is AnimalSpawner:
+			spawner = local_meta as AnimalSpawner
+	if spawner == null and _animal_spawner != null and is_instance_valid(_animal_spawner):
+		spawner = _animal_spawner
+	if spawner == null and _world != null and _world.has_meta("animal_spawner"):
+		var world_meta: Variant = _world.get_meta("animal_spawner")
+		if world_meta is AnimalSpawner:
+			spawner = world_meta as AnimalSpawner
+			_animal_spawner = spawner
+	if spawner == null:
+		return
+	_wildlife_prev_snapshot = _wildlife_snapshot.duplicate()
+	_wildlife_snapshot = spawner.get_live_wildlife_snapshot()
+	_wildlife_sample_tick = current_tick
+	_wildlife_history.append(int(_wildlife_snapshot.get("total", 0)))
+	if _wildlife_history.size() > WILDLIFE_HISTORY_SIZE:
+		_wildlife_history.pop_front()
+	_momentum_spark = ""
+	for i in range(1, _wildlife_history.size()):
+		var delta: int = _wildlife_history[i] - _wildlife_history[i - 1]
+		if delta > 0:
+			_momentum_spark += "↑"
+		elif delta < 0:
+			_momentum_spark += "↓"
+		else:
+			_momentum_spark += "→"
+	while _momentum_spark.length() < WILDLIFE_HISTORY_SIZE - 1:
+		_momentum_spark = "→" + _momentum_spark
+
+
+func _wildlife_line() -> String:
+	if _wildlife_sample_tick == 0:
+		return "🦌 Wildlife: Scanning ecosystem..."
+	var r: int = int(_wildlife_snapshot.get("rabbit", 0))
+	var d: int = int(_wildlife_snapshot.get("deer", 0))
+	var t: int = int(_wildlife_snapshot.get("total", 0))
+	return "🦌 Wildlife: R:%d D:%d T:%d [%s]" % [r, d, t, _momentum_spark]
 
 
 # ==================== formatting helpers ====================

@@ -5,22 +5,27 @@ class_name LivingWorldController
 @export var global_pressure_interval := 30.0
 
 var world_seconds := 0.0
-var pressure_timer := 0.0
+var _ticks_since_global_pressure: int = 0
 
 
 func _ready() -> void:
-	randomize()
 	# After Main._ready bootstraps world + first pawn batch, add extra pawns.
 	call_deferred("_spawn_initial_pawns")
-	set_process(true)
+	if not GameManager.game_tick.is_connected(_on_game_tick):
+		GameManager.game_tick.connect(_on_game_tick)
 
 
-func _process(delta: float) -> void:
-	world_seconds += delta
-	pressure_timer += delta
+func _exit_tree() -> void:
+	if GameManager.game_tick.is_connected(_on_game_tick):
+		GameManager.game_tick.disconnect(_on_game_tick)
 
-	if pressure_timer >= global_pressure_interval:
-		pressure_timer = 0.0
+
+func _on_game_tick(_tick: int) -> void:
+	world_seconds += GameManager.TICK_INTERVAL_SECONDS
+	_ticks_since_global_pressure += 1
+	var pressure_every_ticks: int = maxi(1, int(round(global_pressure_interval / GameManager.TICK_INTERVAL_SECONDS)))
+	if _ticks_since_global_pressure >= pressure_every_ticks:
+		_ticks_since_global_pressure = 0
 		_apply_global_pressure()
 	_apply_local_pressure()
 

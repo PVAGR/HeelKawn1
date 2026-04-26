@@ -12,6 +12,7 @@ enum HairStyle { NONE, SHORT, MOHAWK, BUN }
 ## Trainable proficiencies. Higher level -> faster work + more XP per tick on
 ## that skill type. Pawns earn XP only while doing the matching job.
 enum Skill { FORAGING, MINING, CHOPPING, BUILDING, HUNTING }
+enum Profession { NONE, FARMER, BUILDER, GATHERER, WARRIOR, SCHOLAR }
 
 ## Skill XP curve. Each skill tracked as raw XP; level = floor(xp / XP_PER_LEVEL).
 const XP_PER_LEVEL: float = 100.0
@@ -50,6 +51,7 @@ var hunger: float = 100.0
 var rest: float = 100.0
 var mood: float = 100.0
 var health: float = 100.0
+var max_health: float = 100.0
 
 ## Single-item inventory. Type is Item.Type (NONE = empty hands).
 ## v1 pawns can only hold one kind of thing at a time; multi-slot / weight
@@ -61,6 +63,31 @@ var carrying_qty: int = 0
 ## by working. Stored as Dictionary so save/load is trivial and so we don't
 ## have to enumerate skills here.
 var skill_xp: Dictionary = {}
+## Deterministic Phase 6 action-skill XP (string key -> int).
+var skills: Dictionary = {
+	"movement": 0,
+	"farming": 0,
+	"building": 0,
+	"gathering": 0,
+	"combat": 0,
+}
+var affinities: Dictionary = {
+	"combat": 0.5,
+	"farming": 0.5,
+	"building": 0.5,
+	"crafting": 0.5,
+	"diplomacy": 0.5,
+}
+var current_profession: int = Profession.NONE
+var birth_tick: int = 0
+var parent_a_id: int = -1
+var parent_b_id: int = -1
+var children_count: int = 0
+var influence: float = 0.0
+var military_rank: String = "grunt"
+var cohort_anchor_id: int = -1
+var cohort_job_type: int = -1
+var is_cohort_anchor: bool = false
 
 ## Work-type allow list (RimWorld-style). If false, this pawn will not *claim*
 ## that class of open job. Eating, sleeping, and hauling are not jobs; they
@@ -83,6 +110,18 @@ var mood_events: Array[MoodEvent] = []
 func _init() -> void:
 	id = _next_id
 	_next_id += 1
+	birth_tick = int(GameManager.tick_count) if "tick_count" in GameManager else 0
+	initialize_affinities(birth_tick, -1, -1)
+
+
+func get_max_health() -> float:
+	return max_health
+
+
+func get_health_percentage() -> float:
+	if max_health <= 0.0:
+		return 0.0
+	return clamp(health / max_health, 0.0, 1.0)
 
 
 # ==================== traits ====================
@@ -241,6 +280,159 @@ func work_speed_for(skill: int) -> float:
 	return 1.0 + t * (SKILL_BONUS_AT_MAX - 1.0)
 
 
+func _skill_to_profession(skill_key: String) -> int:
+	match skill_key:
+		"farming":
+			return Profession.FARMER
+		"building":
+			return Profession.BUILDER
+		"gathering":
+			return Profession.GATHERER
+		"combat":
+			return Profession.WARRIOR
+		"movement":
+			return Profession.SCHOLAR
+		_:
+			return Profession.NONE
+
+
+func _profession_primary_skill(prof: int) -> String:
+	match prof:
+		Profession.FARMER:
+			return "farming"
+		Profession.BUILDER:
+			return "building"
+		Profession.GATHERER:
+			return "gathering"
+		Profession.WARRIOR:
+			return "combat"
+		Profession.SCHOLAR:
+			return "movement"
+		_:
+			return ""
+
+
+func profession_name() -> String:
+	match current_profession:
+		Profession.FARMER:
+			return "Farmer"
+		Profession.BUILDER:
+			return "Builder"
+		Profession.GATHERER:
+			return "Gatherer"
+		Profession.WARRIOR:
+			return "Warrior"
+		Profession.SCHOLAR:
+			return "Scholar"
+		_:
+			return "None"
+
+
+func tracked_skill_xp(skill_key: String) -> int:
+	return int(skills.get(skill_key, 0))
+
+
+func profession_progress_xp() -> int:
+	var primary: String = _profession_primary_skill(current_profession)
+	if primary != "":
+		return tracked_skill_xp(primary)
+	var best: int = 0
+	for k in skills:
+		best = maxi(best, int(skills[k]))
+	return best
+
+
+func gain_skill_xp(skill_key: String, amount: int) -> bool:
+	if amount <= 0:
+		return false
+	if not skills.has(skill_key):
+		return false
+	# Once locked, only the profession's primary skill can gain XP.
+	if current_profession != Profession.NONE:
+		var primary_skill: String = _profession_primary_skill(current_profession)
+		if skill_key != primary_skill:
+			return false
+	var before: int = tracked_skill_xp(skill_key)
+	var after: int = before + amount
+	var just_locked: bool = false
+	if current_profession == Profession.NONE and after >= 100:
+		current_profession = _skill_to_profession(skill_key)
+		just_locked = true
+	skills[skill_key] = after
+	return (after != before) or just_locked
+
+
+func initialize_affinities(new_birth_tick: int, parent_a: int, parent_b: int) -> void:
+	birth_tick = new_birth_tick
+	parent_a_id = parent_a
+	parent_b_id = parent_b
+	affinities["combat"] = _deterministic_affinity_value(11)
+	affinities["farming"] = _deterministic_affinity_value(29)
+	affinities["building"] = _deterministic_affinity_value(47)
+	affinities["crafting"] = _deterministic_affinity_value(73)
+	affinities["diplomacy"] = _deterministic_affinity_value(97)
+
+
+func _deterministic_affinity_value(salt: int) -> float:
+	var seed: int = int(
+		(birth_tick * 1103515245 + (parent_a_id + 31) * 12345 + (parent_b_id + 17) * 2654435761 + id * 97 + salt) & 0x7FFFFFFF
+	)
+	var modv: int = seed % 1000
+	return float(modv) / 999.0
+
+
+func highest_affinity_skill() -> String:
+	var best_key: String = "farming"
+	var best_val: float = -1.0
+	for k in affinities:
+		var v: float = float(affinities[k])
+		if v > best_val or (is_equal_approx(v, best_val) and str(k) < best_key):
+			best_val = v
+			best_key = str(k)
+	return best_key
+
+
+func affinity_xp_for(affinity_key: String) -> int:
+	match affinity_key:
+		"combat":
+			return tracked_skill_xp("combat")
+		"farming":
+			return tracked_skill_xp("farming")
+		"building":
+			return tracked_skill_xp("building")
+		"crafting":
+			return tracked_skill_xp("gathering")
+		"diplomacy":
+			return tracked_skill_xp("movement")
+		_:
+			return 0
+
+
+func get_mastery_perk(skill: String) -> String:
+	var xp: int = tracked_skill_xp(skill)
+	if xp > 500:
+		return "Grandmaster"
+	if xp > 200:
+		return "Master"
+	return ""
+
+
+func total_tracked_xp() -> int:
+	var total: int = 0
+	for k in skills:
+		total += int(skills[k])
+	return total
+
+
+func calculate_influence(population: int) -> float:
+	var base_xp: float = float(total_tracked_xp())
+	var dip_bonus: float = float(affinities.get("diplomacy", 0.5)) * 2.0
+	var combat_bonus: float = float(affinities.get("combat", 0.5)) * 1.5
+	var pop_mult: float = 1.0 + maxf(0.0, float(maxi(1, population) - 1) * 0.02)
+	influence = (base_xp + dip_bonus + combat_bonus) * pop_mult
+	return influence
+
+
 ## Multiplier applied to work ticks (low health and fatigue slow labour).
 ## Traits can also modify work speed.
 func effective_labor_mult() -> float:
@@ -325,9 +517,22 @@ func to_save_dict() -> Dictionary:
 		"rest": rest,
 		"mood": mood,
 		"health": health,
+		"max_health": max_health,
 		"carrying": carrying,
 		"carrying_qty": carrying_qty,
 		"skill_xp": sx,
+		"skills": skills.duplicate(true),
+		"affinities": affinities.duplicate(true),
+		"current_profession": current_profession,
+		"birth_tick": birth_tick,
+		"parent_a_id": parent_a_id,
+		"parent_b_id": parent_b_id,
+		"children_count": children_count,
+		"influence": influence,
+		"military_rank": military_rank,
+		"cohort_anchor_id": cohort_anchor_id,
+		"cohort_job_type": cohort_job_type,
+		"is_cohort_anchor": is_cohort_anchor,
 		"work_forage": work_forage,
 		"work_mine": work_mine,
 		"work_chop": work_chop,
@@ -362,12 +567,43 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	p.rest = float(d.get("rest", 100.0))
 	p.mood = float(d.get("mood", 100.0))
 	p.health = float(d.get("health", 100.0))
+	p.max_health = float(d.get("max_health", 100.0))
 	p.carrying = int(d.get("carrying", 0))
 	p.carrying_qty = int(d.get("carrying_qty", 0))
 	p.skill_xp = {}
 	if d.has("skill_xp") and d["skill_xp"] is Dictionary:
 		for k in d["skill_xp"]:
 			p.skill_xp[int(k)] = float(d["skill_xp"][k])
+	p.skills = {
+		"movement": 0,
+		"farming": 0,
+		"building": 0,
+		"gathering": 0,
+		"combat": 0,
+	}
+	if d.has("skills") and d["skills"] is Dictionary:
+		for sk in p.skills.keys():
+			p.skills[sk] = int(d["skills"].get(sk, 0))
+	p.affinities = {
+		"combat": 0.5,
+		"farming": 0.5,
+		"building": 0.5,
+		"crafting": 0.5,
+		"diplomacy": 0.5,
+	}
+	if d.has("affinities") and d["affinities"] is Dictionary:
+		for ak in p.affinities.keys():
+			p.affinities[ak] = float(d["affinities"].get(ak, p.affinities[ak]))
+	p.current_profession = int(d.get("current_profession", Profession.NONE))
+	p.birth_tick = int(d.get("birth_tick", 0))
+	p.parent_a_id = int(d.get("parent_a_id", -1))
+	p.parent_b_id = int(d.get("parent_b_id", -1))
+	p.children_count = int(d.get("children_count", 0))
+	p.influence = float(d.get("influence", 0.0))
+	p.military_rank = str(d.get("military_rank", "grunt"))
+	p.cohort_anchor_id = int(d.get("cohort_anchor_id", -1))
+	p.cohort_job_type = int(d.get("cohort_job_type", -1))
+	p.is_cohort_anchor = bool(d.get("is_cohort_anchor", false))
 	p.work_forage = bool(d.get("work_forage", true))
 	p.work_mine = bool(d.get("work_mine", true))
 	p.work_chop = bool(d.get("work_chop", true))

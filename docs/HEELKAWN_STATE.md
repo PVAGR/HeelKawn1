@@ -32,6 +32,8 @@ Settlements:
 - Diverge culturally (open / cautious / defensive)
 - Can be abandoned or revivable
 - Revival tuning is active for moderately scarred, quiet regions
+- Deterministic Phase 4 revival curve now emits: permanently_abandoned / abandoned / recovering / revivable / active
+- Rebirth is peace-gated (tick-only) and blocked by scar>=3, recent conflict, or non-revivable state
 - Player-readable settlement meaning now distinguishes quiet / scarred / bloodied / grave regions
 - Expand walls, beds, doors, zones autonomously
 
@@ -63,3 +65,4 @@ No required micromanagement.
 
 - Cultural architectural styles
 - Player-readable meaning refinement (audio + settlement identity depth, no text overlay)
+- Wildlife HUD trend validation + Phase 4 rebirth threshold tuning passes

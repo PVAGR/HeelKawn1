@@ -5,7 +5,7 @@ extends Node2D
 
 ## Pixels of screen space per tile. The world is rendered as a 256x256 Image
 ## baked into an ImageTexture, then scaled up so each source pixel = TILE_PIXELS.
-const TILE_PIXELS: int = 8
+const TILE_PIXELS: int = 10
 
 @onready var _sprite: Sprite2D = $Sprite2D
 
@@ -72,7 +72,7 @@ func generate(world_seed: int) -> void:
 	_bed_tiles.clear()
 	_bed_occupants.clear()
 	var dt: int = Time.get_ticks_msec() - t0
-	if OS.is_debug_build():
+	if OS.is_debug_build() and GameManager.verbose_logs():
 		print(
 				"[World] Generated seed=%d  %dx%d  gen=%dms path=%dms total=%dms" %
 				[world_seed, WorldData.WIDTH, WorldData.HEIGHT, t_gen, t_path, dt]
@@ -81,7 +81,7 @@ func generate(world_seed: int) -> void:
 
 
 func _print_distribution() -> void:
-	if not OS.is_debug_build():
+	if not OS.is_debug_build() or not GameManager.verbose_logs():
 		return
 	var biome_counts: Dictionary = {}
 	for biome in Biome.Type.values():

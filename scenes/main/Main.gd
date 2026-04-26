@@ -52,6 +52,15 @@ const MAX_CHOP_JOBS: int = 60
 ## All wildlife on the main landmass is huntable; this just caps how many we
 ## actually post at once so the queue stays readable.
 const MAX_HUNT_JOBS: int = 50
+## Runtime hunt pressure controls (v1 balance):
+## - Keep some wildlife alive.
+## - Avoid flooding queue/pathing when meat stock is already healthy.
+const MAX_DYNAMIC_HUNT_JOBS_PER_PASS: int = 4
+const HUNT_JOB_PER_ANIMALS_DIVISOR: int = 6
+const HUNT_MEAT_STOCKPILE_SOFT_CAP: int = 18
+## Preserve a baseline wildlife population so hunting never hard-collapses fauna.
+const MIN_RABBIT_RESERVE: int = 16
+const MIN_DEER_RESERVE: int = 8
 ## Cap concurrent tunnels so the colony doesn't dump all its labor into rocks.
 ## When one finishes, the reactive seeder posts the next.
 const MAX_ACTIVE_MINE_WALL_JOBS: int = 4
@@ -85,27 +94,41 @@ const MEANING_AMBIENT_SMOOTH: float = 1.1
 const TRACE_REDRAW_INTERVAL_SEC: float = 1.0
 ## Generational turnover (v1): one new pawn per this many ticks if population > 0.
 const GENERATION_TICKS: int = 30000
+const REPRODUCTION_CHECK_INTERVAL_TICKS: int = 300
+const INFLUENCE_UPDATE_INTERVAL_TICKS: int = 500
+const OBSERVER_HUD_REFRESH_TICKS: int = 30
+const FOCUS_INSPECTOR_REFRESH_TICKS: int = 15
+## Deterministic rebirth cadence (tick-gated, no frame-time).
+const REBIRTH_CHECK_INTERVAL_TICKS: int = 2000
 ## Ecosystems (hunt) stay inert until this tick (world gen / reroll / load).
 const WORLD_STABILIZATION_TICKS: int = 500
 ## World-level only; Pawn/Animal read via [code]Main._world_stabilization_until_tick[/code].
 ## -1 = not initialized yet (hunt/tick guards treat as: allow hunt once bootstrapped sets a non-negative window).
 static var _world_stabilization_until_tick: int = -1
 
-@onready var _world: World = $World
-@onready var _preview_layer: Node2D = $BuildPreviewOverlay
-@onready var _pawn_spawner: PawnSpawner = $PawnSpawner
-@onready var _animal_spawner: AnimalSpawner = $AnimalSpawner
-@onready var _enemy_spawner: EnemySpawner = $EnemySpawner
-@onready var _hud: ColonyHUD = $ColonyHUD
-@onready var _toolbar: BuildToolbar = $BuildToolbar
-@onready var _info_panel: PawnInfoPanel = $PawnInfoPanel
+@onready var _world: World = $WorldViewport/World
+@onready var _preview_layer: Node2D = $WorldViewport/BuildPreviewOverlay
+@onready var _pawn_spawner: PawnSpawner = $WorldViewport/PawnSpawner
+@onready var _animal_spawner: AnimalSpawner = $WorldViewport/AnimalSpawner
+@onready var _enemy_spawner: EnemySpawner = $WorldViewport/EnemySpawner
+@onready var _hud: ColonyHUD = $UI_Viewport/ColonyHUD
+@onready var _observer_hud: ObserverHUD = $UI_Viewport/ObserverHUD
+@onready var _focus_inspector: FocusInspector = $UI_Viewport/FocusInspector
+@onready var _toolbar: BuildToolbar = $UI_Viewport/BuildToolbar
+@onready var _info_panel: PawnInfoPanel = $UI_Viewport/PawnInfoPanel
 @onready var _day_night: DayNightCycle = $DayNight
-@onready var _camera: Camera2D = $Camera
+@onready var _camera: Camera2D = $WorldViewport/Camera
 
 # -------------------- selection --------------------
 ## Currently selected pawn (right-side info panel). null = nothing selected.
 ## Click a pawn to select; click empty ground or press Esc to deselect.
 var _selected_pawn: Pawn = null
+## Deterministic local-control pawn. Defaults to current selection.
+var _player_pawn: Pawn = null
+var _player_input: PlayerInputBuffer = null
+var _player_action_state: String = "idle"
+var _kernel_diagnostic: KernelDiagnostic = null
+var _kill_count: int = 0
 ## Pixel radius around a pawn that counts as a click hit. Pawns draw at
 ## DRAW_RADIUS=3.5; we add a generous slop so moving targets are easy to grab.
 const SELECT_PICK_RADIUS_PX: float = 7.0
@@ -122,6 +145,8 @@ var _trace_redraw_timer: float = 0.0
 var _ambient_freq_target: float = 112.0
 ## 0 = dead/empty, 1 = open/living. Drives crossfade; current region at camera.
 var _meaning_ambient_mood: float = 0.5
+## Settlement style expression (derived): open -> positive, defensive -> negative.
+var _meaning_style_bias: float = 0.0
 
 ## Pending regrowth events. Each entry is a Dictionary:
 ##   { "tile": Vector2i, "feature": int (TileFeature.Type), "ready_tick": int }
@@ -135,6 +160,51 @@ var _world_memory_derivative_flush_queued: bool = false
 ## Coalesce same-tick [World] terrain / path cost refreshes (pair vs stack+ruins are separate).
 var _last_heavy_refresh_tick: int = -1
 var _last_heavy_stack_tick: int = -1
+
+func _is_ultra_speed() -> bool:
+	return GameManager.game_speed >= 12.0
+
+func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
+	if _is_ultra_speed():
+		return ultra_ticks
+	if GameManager.game_speed >= 6.0:
+		return fast_ticks
+	return normal_ticks
+
+func _should_post_more_hunt_jobs() -> bool:
+	return StockpileManager.total_count_of(Item.Type.MEAT) < HUNT_MEAT_STOCKPILE_SOFT_CAP
+
+func _dynamic_hunt_job_budget() -> int:
+	if _animal_spawner == null:
+		return 1
+	var live_animals: int = 0
+	for a in _animal_spawner.animals:
+		if a != null and is_instance_valid(a):
+			live_animals += 1
+	var budget: int = maxi(1, int(ceil(float(live_animals) / float(HUNT_JOB_PER_ANIMALS_DIVISOR))))
+	budget = mini(budget, MAX_DYNAMIC_HUNT_JOBS_PER_PASS)
+	if _is_ultra_speed():
+		budget = maxi(1, int(ceil(float(budget) * 0.5)))
+	return budget
+
+func _hunt_reserve_for_species(species: int) -> int:
+	if species == Animal.Type.DEER:
+		return MIN_DEER_RESERVE
+	return MIN_RABBIT_RESERVE
+
+func _live_wildlife_counts() -> Dictionary:
+	var out: Dictionary = {
+		int(Animal.Type.RABBIT): 0,
+		int(Animal.Type.DEER): 0,
+	}
+	if _animal_spawner == null:
+		return out
+	for a in _animal_spawner.animals:
+		if a == null or not is_instance_valid(a):
+			continue
+		var sp: int = int(a.animal_type)
+		out[sp] = int(out.get(sp, 0)) + 1
+	return out
 
 # -------------------- designation (player build mode) --------------------
 ## Player build modes. NONE means clicks are ignored. Every other mode uses
@@ -167,10 +237,21 @@ var _drag_current: Vector2i = Vector2i(-1, -1)
 const ZONE_MAX_AREA: int = 400   # 20x20 cap for stockpile zones
 const BUILD_DRAG_MAX_TILES: int = 256  # ~16x16 of walls/beds/doors at once
 
+## One-shot [VALIDATION_STATUS] / [VALIDATION_WARN] after scene boot (observability only).
+var _validation_harness_observability_logged: bool = false
+
 
 func _ready() -> void:
+	SettlementMemory.print_validation_smoketest_from_main()
 	GameManager.game_tick.connect(_on_game_tick)
 	GameManager.speed_changed.connect(_on_speed_changed)
+	_player_input = PlayerInputBuffer.new()
+	_player_input.name = "PlayerInputBuffer"
+	add_child(_player_input)
+	_player_input.set_process_unhandled_input(true)
+	_kernel_diagnostic = KernelDiagnostic.new()
+	_kernel_diagnostic.name = "KernelDiagnostic"
+	add_child(_kernel_diagnostic)
 	_init_ambient_audio()
 	# React to mining progress: when a wall comes down or an ore is cleared,
 	# new ores can become reachable and we may want to queue the next tunnel.
@@ -188,6 +269,57 @@ func _ready() -> void:
 	if OS.is_debug_build():
 		print("[Main] Scene ready. Tick interval: %.2fs" % GameManager.TICK_INTERVAL_SECONDS)
 	_bootstrap_colony()
+	if _hud != null:
+		_hud.set_player_control_refs(_player_input, _player_pawn)
+	if _observer_hud != null:
+		_observer_hud.set_visible_state(false)
+	if _focus_inspector != null:
+		_focus_inspector.set_visible_state(false)
+	call_deferred("_log_validation_harness_observability_once")
+
+
+func _log_validation_harness_observability_once() -> void:
+	if _validation_harness_observability_logged:
+		return
+	_validation_harness_observability_logged = true
+	var dbg: bool = OS.is_debug_build()
+	var session_const: bool = SettlementMemory.VALIDATION_SESSION_ENABLED
+	var clean_const: bool = WorldEvents.VALIDATION_CLEAN_ECONOMY_EVENTS
+	var clean_active: bool = WorldEvents.validation_clean_economy_events_active()
+	var truth_active: bool = SettlementMemory.validation_truth_verify_armed()
+	var spec_active: bool = SettlementMemory.validation_specialization_log_armed()
+	print(
+			(
+					"[VALIDATION_STATUS] debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
+					+ "WorldEvents_VALIDATION_CLEAN_ECONOMY_EVENTS_const=%s clean_economy_active=%s "
+					+ "settlement_truth_verify_active=%s specialization_validation_log_active=%s"
+			)
+			% [dbg, session_const, clean_const, clean_active, truth_active, spec_active]
+	)
+	if session_const and not dbg:
+		print(
+				"[VALIDATION_WARN] VALIDATION_SESSION_ENABLED is true but OS.is_debug_build() is false — harness stays DISARMED "
+				+ "(no economy-event suppression, no [SETTLEMENT_VERIFY], no [SPECIALIZATION_VALIDATE]). "
+				+ "Use editor Play or a debug export."
+		)
+	if clean_const and not dbg:
+		print(
+				"[VALIDATION_WARN] WorldEvents.VALIDATION_CLEAN_ECONOMY_EVENTS is true but not a debug build — suppression stays off."
+		)
+	if SettlementMemory.SETTLEMENT_STATE_TRUTH_VERIFY_MODE and not dbg:
+		print(
+				"[VALIDATION_WARN] SETTLEMENT_STATE_TRUTH_VERIFY_MODE is true but not a debug build — [SETTLEMENT_VERIFY] will not print."
+		)
+	if SettlementMemory.SPECIALIZATION_VALIDATION_LOG_ENABLED and not dbg:
+		print(
+				"[VALIDATION_WARN] SPECIALIZATION_VALIDATION_LOG_ENABLED is true but not a debug build — [SPECIALIZATION_VALIDATE] will not print."
+		)
+	if session_const and dbg and (not clean_active or not truth_active or not spec_active):
+		print(
+				"[VALIDATION_WARN] VALIDATION_SESSION_ENABLED in a debug build but a subsystem reports inactive "
+				+ "(clean=%s truth=%s spec=%s) — inspect harness gates if this ever appears."
+				% [clean_active, truth_active, spec_active]
+		)
 
 
 func _process(delta: float) -> void:
@@ -242,6 +374,7 @@ func _bootstrap_colony() -> void:
 		CulturalMemory.recompute(_world)
 		SettlementMemory.recompute(_world)
 		MythMemory.recompute(_world)
+		SacredMemory.sync_permanent_ruins_from_settlements()
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):
 				_world.refresh_terrain_scar_tint()
@@ -250,7 +383,6 @@ func _bootstrap_colony() -> void:
 		SettlementPlanner.plan(_world, self, true)
 		TradePlanner.plan(_world, self, true)
 		RoadMemory.flush_dirty_tiles(_world)
-		SettlementRebirth.process(_world, self, true)
 		_sync_pawn_inherited_cultural_reputation()
 	# Spawn animals and register spawner with world for breeding
 	_animal_spawner.spawn_initial(_world)
@@ -336,6 +468,12 @@ func _sync_pawn_inherited_cultural_reputation() -> void:
 
 
 func _on_game_tick(tick: int) -> void:
+	if _player_input != null:
+		if is_instance_valid(_player_pawn):
+			_player_input.process_next_tick(_player_pawn)
+			_player_action_state = _player_input.get_last_action_state()
+		else:
+			_player_action_state = "no_pawn"
 	# First tick of post-stab window: (re)post HUNT for static wildlife skipped during [member _world_stabilization_until_tick] seed; deterministic order.
 	if Main._world_stabilization_until_tick >= 0 and tick == Main._world_stabilization_until_tick:
 		_post_wildlife_hunt_jobs_after_stabilization()
@@ -346,18 +484,17 @@ func _on_game_tick(tick: int) -> void:
 		_animal_spawner.update_population_dynamics(_world)
 	_process_regrowth(tick)
 	_update_ambient_target()
-	# Post hunting jobs for live animals every 10 ticks (after world stabilization)
+	# Post dynamic hunt jobs less aggressively than harvest loops.
+	var hunt_post_interval: int = _high_speed_interval(20, 30, 45)
 	if (
-			tick % 10 == 0
+			tick % hunt_post_interval == 0
 			and Main._world_stabilization_until_tick >= 0
 			and tick >= Main._world_stabilization_until_tick
 	):
 		_post_hunting_jobs_for_animals()
 	# Enemy AI and raid spawning
 	_on_enemy_tick(tick, _enemy_spawner)
-	if tick % 100 == 0:
-		if OS.is_debug_build():
-			print("[Main] Tick %d" % tick)
+	# Suppress hot-loop tick spam; this is a major source of debug-mode stutter.
 	# Failsafe: pawns that slipped into solid tiles (rare) get nudged; log once per pawn.
 	if tick % 60 == 0 and _pawn_spawner != null:
 		for p in _pawn_spawner.pawns:
@@ -368,14 +505,29 @@ func _on_game_tick(tick: int) -> void:
 		_world_memory_derivative_flush_queued = true
 		call_deferred("_flush_world_memory_derivatives")
 	if is_instance_valid(_world):
-		SettlementPlanner.plan(_world, self, false)
-		TradePlanner.plan(_world, self, false)
-		SettlementRebirth.process(_world, self, false)
+		var planner_interval: int = _high_speed_interval(1, 2, 4)
+		if tick % planner_interval == 0:
+			SettlementPlanner.plan(_world, self, false)
+			TradePlanner.plan(_world, self, false)
+		if tick % REBIRTH_CHECK_INTERVAL_TICKS == 0:
+			SettlementMemory.recompute(_world)
+			SettlementRebirth.process(_world, self, false)
 	if int(tick) % 10000 == 0 and int(tick) > 0:
 		AgeMemory.recompute()
 		if is_instance_valid(_world):
 			IntentMemory.recompute(_world)
 	_maybe_generational_turnover()
+	if tick % REPRODUCTION_CHECK_INTERVAL_TICKS == 0:
+		_process_reproduction_tick()
+	if tick % INFLUENCE_UPDATE_INTERVAL_TICKS == 0:
+		_update_pawn_influence_tick()
+	SettlementMemory.update_settlement_intents(tick)
+	SettlementMemory.update_resource_pressures(tick)
+	SettlementMemory.update_preferred_work_fronts(tick)
+	if _observer_hud != null and tick % OBSERVER_HUD_REFRESH_TICKS == 0:
+		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
+	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % FOCUS_INSPECTOR_REFRESH_TICKS == 0:
+		_focus_inspector.apply_snapshot(_build_focus_snapshot(tick))
 	if is_instance_valid(_world):
 		call_deferred("_flush_road_memory_dirty_tiles")
 
@@ -392,8 +544,8 @@ func _flush_world_memory_derivatives() -> void:
 	WorldMeaning.recompute()
 	WorldPersistence.recompute()
 	CulturalMemory.recompute(_world)
-	SettlementMemory.recompute(_world)
 	MythMemory.recompute(_world)
+	SacredMemory.sync_permanent_ruins_from_settlements()
 	IntentMemory.recompute(_world)
 	_run_heavy_stack_refresh_once_per_tick(func() -> void:
 		if is_instance_valid(_world):
@@ -404,7 +556,6 @@ func _flush_world_memory_derivatives() -> void:
 	SettlementPlanner.plan(_world, self, true)
 	TradePlanner.plan(_world, self, true)
 	RoadMemory.flush_dirty_tiles(_world)
-	SettlementRebirth.process(_world, self, true)
 
 
 func _maybe_generational_turnover() -> void:
@@ -424,6 +575,29 @@ func _maybe_generational_turnover() -> void:
 	if sp.x < 0:
 		return
 	_pawn_spawner.spawn_generational_pawn(_world, sp, t)
+
+
+func _process_reproduction_tick() -> void:
+	if _pawn_spawner == null:
+		return
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p):
+			continue
+		if p.attempt_reproduction():
+			# Limit to one birth per check window for stability.
+			return
+
+
+func _update_pawn_influence_tick() -> void:
+	if _pawn_spawner == null:
+		return
+	var living: Array[Pawn] = []
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
+			living.append(p)
+	var population: int = living.size()
+	for p in living:
+		p.data.calculate_influence(population)
 
 
 ## Best region: max [CulturalMemory] reputation, then min [WorldPersistence] scar, then lowest region_key.
@@ -523,9 +697,11 @@ func _update_ambient_target() -> void:
 
 func _get_meaning_ambient_mood_target() -> float:
 	if not is_instance_valid(_world) or _camera == null or _world.data == null:
+		_meaning_style_bias = 0.0
 		return 0.5
 	var t: Vector2i = _world.world_to_tile(_camera.global_position)
 	if t.x < 0:
+		_meaning_style_bias = 0.0
 		return 0.5
 	var rk: int = WorldMemory._region_key(t.x, t.y)
 	var m: float
@@ -533,6 +709,7 @@ func _get_meaning_ambient_mood_target() -> float:
 	var st_here: String = ""
 	var intent_here: int = IntentMemory.INTENT_HOLD
 	if sv is Dictionary:
+		_meaning_style_bias = SettlementPlanner.get_culture_audio_bias_for_settlement(sv as Dictionary)
 		st_here = str((sv as Dictionary).get("state", ""))
 		var ckr_here: int = int((sv as Dictionary).get("center_region", -1))
 		intent_here = int(IntentMemory.settlement_intent.get(ckr_here, IntentMemory.INTENT_HOLD))
@@ -547,6 +724,7 @@ func _get_meaning_ambient_mood_target() -> float:
 		else:
 			m = 0.5
 	else:
+		_meaning_style_bias = 0.0
 		var sl: int = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))
 		if sl >= 3:
 			m = 0.12
@@ -643,8 +821,11 @@ func _update_ambient_audio(delta: float) -> void:
 	var interp: float = min(1.0, delta * 2.6)
 	_ambient_freq_current = lerpf(_ambient_freq_current, _ambient_freq_target, interp)
 	var mood: float = _meaning_ambient_mood
-	var base_layer: float = lerpf(0.82, 0.64, 1.0 - mood)
-	var otone_layer: float = lerpf(0.16, 0.34, mood)
+	var style_mix: float = clampf(_meaning_style_bias, -0.2, 0.2)
+	var base_layer: float = lerpf(0.82, 0.64, 1.0 - mood) + style_mix * -0.18
+	var otone_layer: float = lerpf(0.16, 0.34, mood) + style_mix * 0.2
+	base_layer = clampf(base_layer, 0.52, 0.9)
+	otone_layer = clampf(otone_layer, 0.1, 0.42)
 	var amp: float = AMBIENT_BASE_AMP * lerpf(0.62, 1.0, mood)
 	if GameManager.is_paused:
 		amp *= 0.45
@@ -683,6 +864,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			GameManager.set_speed_index(2)
 		KEY_4:
 			GameManager.set_speed_index(3)
+		KEY_5:
+			GameManager.set_speed_index(4)
+		KEY_6:
+			GameManager.set_speed_index(5)
 		KEY_R:
 			_reroll_world()
 		KEY_T:
@@ -712,18 +897,30 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_colony_save()
 		KEY_F8:
 			_colony_load()
+		KEY_F9:
+			_toggle_observer_hud()
+		KEY_F10:
+			_toggle_focus_inspector()
+		KEY_F11:
+			if _kernel_diagnostic != null and _kernel_diagnostic.has_method("start_settlement_truth_verification"):
+				_kernel_diagnostic.call("start_settlement_truth_verification")
 		KEY_M:
 			ColonySimServices.cycle_labor_stance()
 		KEY_ESCAPE:
 			# Esc clears either a drag-in-progress, an active build mode, or
 			# a pawn selection (in that priority order). Each extra Esc peels
 			# off the next layer.
+			if _hud != null:
+				_hud.hide_tile_history()
 			if _is_dragging:
 				_cancel_drag()
 			elif _designation_mode != DesignationMode.NONE:
 				_set_designation_mode(DesignationMode.NONE)
 			elif _selected_pawn != null:
 				_set_selected_pawn(null)
+		KEY_HOME:
+			if _camera != null and _camera.has_method("reset_to_world_bounds"):
+				_camera.call("reset_to_world_bounds", _world)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -759,6 +956,8 @@ func _unhandled_input(event: InputEvent) -> void:
 ##   - any build/zone mode: start click-drag rectangle.
 ##   - no mode: try to select the pawn under the cursor.
 func _on_left_press() -> void:
+	if _hud != null:
+		_hud.hide_tile_history()
 	_update_hover_tile(get_viewport().get_mouse_position())
 	if _designation_mode != DesignationMode.NONE:
 		if _hover_tile.x < 0:
@@ -794,22 +993,22 @@ func _on_right_press() -> void:
 		_set_designation_mode(DesignationMode.NONE)
 		get_viewport().set_input_as_handled()
 		return
-	if is_instance_valid(_selected_pawn):
-		var t: Vector2i = _world.world_to_tile(get_global_mouse_position())
-		if t.x < 0:
-			_set_selected_pawn(null)
-			get_viewport().set_input_as_handled()
-			return
-		if _tile_covered_by_any_stockpile(t) or not _world.pathfinder.is_passable(t):
-			get_viewport().set_input_as_handled()
-			return
-		_selected_pawn.draft_goto(t)
+	var t: Vector2i = _world.world_to_tile(get_global_mouse_position())
+	if t.x >= 0 and t.y >= 0:
+		inspect_tile(t)
 		get_viewport().set_input_as_handled()
 		return
 	if _selected_pawn != null:
 		_set_selected_pawn(null)
 		get_viewport().set_input_as_handled()
-	# No selection: leave the event unhandled (camera / future UI may use it).
+	# Off-map: leave unhandled (camera / future UI may use it).
+
+
+func inspect_tile(tile_pos: Vector2i) -> void:
+	if _hud == null:
+		return
+	var events: Array[Dictionary] = WorldMemory.get_events_for_tile(tile_pos)
+	_hud.show_tile_history(tile_pos, events)
 
 
 # ---------- drag-to-stamp: commit / cancel ----------
@@ -1027,6 +1226,9 @@ func _set_selected_pawn(p: Pawn) -> void:
 		_selected_pawn.is_selected = false
 		_selected_pawn.queue_redraw()
 	_selected_pawn = p
+	_player_pawn = _selected_pawn
+	if _hud != null:
+		_hud.set_player_control_refs(_player_input, _player_pawn)
 	if _selected_pawn != null:
 		_selected_pawn.is_selected = true
 		_selected_pawn.queue_redraw()
@@ -1037,6 +1239,86 @@ func _set_selected_pawn(p: Pawn) -> void:
 			print("[Main] Selection cleared")
 	if _info_panel != null:
 		_info_panel.bind_pawn(_selected_pawn)
+
+
+func get_player_queue_size() -> int:
+	if _player_input == null:
+		return 0
+	return _player_input.get_queue_size()
+
+
+func get_player_action_state() -> String:
+	return _player_action_state
+
+
+func get_player_pawn_id() -> int:
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return -1
+	return int(_player_pawn.data.id)
+
+
+func get_player_profession_name() -> String:
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return "None"
+	return _player_pawn.data.profession_name()
+
+
+func get_player_profession_xp() -> int:
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return 0
+	return int(_player_pawn.data.profession_progress_xp())
+
+
+func get_player_governance_profile() -> Dictionary:
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return {"type": "anarchy", "ruler_name": "None", "player_status": "None", "edicts_unlocked": false}
+	var rk: int = WorldMemory._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
+	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(rk)
+	var gtype: String = str(gov.get("type", "anarchy"))
+	var rid: int = int(gov.get("ruler_id", -1))
+	var ruler_name: String = "None"
+	if rid >= 0 and _pawn_spawner != null:
+		for p in _pawn_spawner.pawns:
+			if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == rid:
+				ruler_name = p.data.display_name
+				break
+	var status: String = "Rebel"
+	var pid: int = int(_player_pawn.data.id)
+	if rid < 0:
+		status = "Rebel"
+	elif rid == pid:
+		status = "Ruler"
+	else:
+		status = "Loyalist"
+	return {
+		"type": gtype,
+		"ruler_name": ruler_name,
+		"player_status": status,
+		"edicts_unlocked": status == "Ruler",
+	}
+
+
+func get_player_war_profile() -> Dictionary:
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return {"state": "peace", "target_settlement_id": -1, "votes": []}
+	var rk: int = WorldMemory._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
+	return SettlementMemory.get_war_profile_for_region(rk)
+
+
+func get_player_military_rank() -> String:
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return "grunt"
+	return String(_player_pawn.data.military_rank)
+
+
+func get_wildlife_snapshot_for_diagnostic() -> Dictionary:
+	if _animal_spawner == null:
+		return {"rabbit": 0, "deer": 0, "total": 0}
+	return _animal_spawner.get_live_wildlife_snapshot()
+
+
+func is_kernel_diagnostic_complete() -> bool:
+	return _kernel_diagnostic != null and _kernel_diagnostic.is_complete()
 
 
 func _update_hover_tile(_screen_pos: Vector2) -> void:
@@ -1281,6 +1563,8 @@ func _reroll_world() -> void:
 	JobManager.clear_all()
 	WorldMemory.clear()
 	MythMemory.clear()
+	SacredMemory.clear()
+	ChronicleLog.clear()
 	RoadMemory.clear()
 	TradeMemory.clear()
 	IntentMemory.clear()
@@ -1324,7 +1608,6 @@ func _reroll_world() -> void:
 		SettlementPlanner.plan(_world, self, true)
 		TradePlanner.plan(_world, self, true)
 		RoadMemory.flush_dirty_tiles(_world)
-		SettlementRebirth.process(_world, self, true)
 		RemnantMemory.clear()
 		RemnantMemory.seed_births_from_current_world(_world)
 
@@ -1398,15 +1681,23 @@ func _seed_jobs_from_world() -> void:
 	if (
 			Main._world_stabilization_until_tick >= 0
 			and GameManager.tick_count >= Main._world_stabilization_until_tick
+			and _should_post_more_hunt_jobs()
 	):
+		var live_seed: Dictionary = _live_wildlife_counts()
+		var hunt_cap_seed: int = mini(MAX_DYNAMIC_HUNT_JOBS_PER_PASS, _dynamic_hunt_job_budget())
 		for tile in hunt_tiles:
-			if hunt_posted >= MAX_HUNT_JOBS:
+			if hunt_posted >= hunt_cap_seed:
 				break
 			if _world.pathfinder.component_of(tile) != main_component:
 				hunt_skipped += 1
 				continue
 			var feat: int = _world.data.get_feature(tile.x, tile.y)
+			var species_seed: int = Animal.Type.DEER if feat == TileFeature.Type.DEER else Animal.Type.RABBIT
+			var live_now_seed: int = int(live_seed.get(species_seed, 0))
+			if live_now_seed <= _hunt_reserve_for_species(species_seed):
+				continue
 			JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, _hunt_ticks_for(feat))
+			live_seed[species_seed] = maxi(0, live_now_seed - 1)
 			hunt_posted += 1
 	if OS.is_debug_build():
 		print(
@@ -1430,6 +1721,8 @@ static func _hunt_ticks_for(feature: int) -> int:
 func _post_wildlife_hunt_jobs_after_stabilization() -> void:
 	if not is_instance_valid(_world) or _world.data == null:
 		return
+	if not _should_post_more_hunt_jobs():
+		return
 	var main_component: int = _world.pathfinder.largest_component_id()
 	if main_component < 0:
 		return
@@ -1446,13 +1739,20 @@ func _post_wildlife_hunt_jobs_after_stabilization() -> void:
 		return a.y * WorldData.WIDTH + a.x < b.y * WorldData.WIDTH + b.x
 	)
 	var n: int = 0
+	var live_bootstrap: Dictionary = _live_wildlife_counts()
+	var cap: int = mini(MAX_DYNAMIC_HUNT_JOBS_PER_PASS, _dynamic_hunt_job_budget())
 	for t in tiles:
-		if n >= MAX_HUNT_JOBS:
+		if n >= cap:
 			break
 		if JobManager.has_job_at(t):
 			continue
 		var feat2: int = _world.data.get_feature(t.x, t.y)
+		var species_bootstrap: int = Animal.Type.DEER if feat2 == TileFeature.Type.DEER else Animal.Type.RABBIT
+		var live_now_bootstrap: int = int(live_bootstrap.get(species_bootstrap, 0))
+		if live_now_bootstrap <= _hunt_reserve_for_species(species_bootstrap):
+			continue
 		if JobManager.post(Job.Type.HUNT, t, HUNT_PRIORITY, _hunt_ticks_for(feat2)) != null:
+			live_bootstrap[species_bootstrap] = maxi(0, live_now_bootstrap - 1)
 			n += 1
 
 
@@ -1465,9 +1765,13 @@ func _post_hunting_jobs_for_animals() -> void:
 		return
 	if _animal_spawner == null or _animal_spawner.animals.is_empty():
 		return
+	if not _should_post_more_hunt_jobs():
+		return
 
 	var main_component: int = _world.pathfinder.largest_component_id()
+	var hunt_budget: int = _dynamic_hunt_job_budget()
 	var hunt_jobs_posted: int = 0
+	var live_by_species: Dictionary = _live_wildlife_counts()
 	
 	for animal in _animal_spawner.animals:
 		if not is_instance_valid(animal) or animal == null:
@@ -1479,10 +1783,14 @@ func _post_hunting_jobs_for_animals() -> void:
 		
 		# If no job (any type) is registered for this tile, `post` can add a HUNT
 		# job; `has_job_at` matches JobManager's internal tile index (open + claimed).
-		if not JobManager.has_job_at(tile) and hunt_jobs_posted < MAX_HUNT_JOBS:
+		if not JobManager.has_job_at(tile) and hunt_jobs_posted < hunt_budget:
 			var animal_type: int = animal.animal_type
+			var live_now: int = int(live_by_species.get(animal_type, 0))
+			if live_now <= _hunt_reserve_for_species(animal_type):
+				continue
 			var work_ticks: int = HUNT_RABBIT_WORK_TICKS if animal_type == Animal.Type.RABBIT else HUNT_DEER_WORK_TICKS
 			if JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, work_ticks) != null:
+				live_by_species[animal_type] = maxi(0, live_now - 1)
 				hunt_jobs_posted += 1
 
 
@@ -1965,6 +2273,8 @@ func _build_save_dict() -> Dictionary:
 		"world_memory": WorldMemory.to_save_dict(),
 		"world_persistence": WorldPersistence.to_save_dict(),
 		"myth": MythMemory.to_save_dict(),
+		"sacred": SacredMemory.to_save_dict(),
+		"chronicle": ChronicleLog.to_save_dict(),
 		"last_generation_tick": _last_generation_tick,
 	}
 
@@ -2008,6 +2318,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 	RemnantMemory.clear()
 	IntentMemory.clear()
 	AgeMemory.clear()
+	SacredMemory.clear()
+	ChronicleLog.clear()
 	_set_designation_mode(DesignationMode.NONE)
 	_cancel_drag()
 	_set_selected_pawn(null)
@@ -2026,6 +2338,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 	_zone_next_filter = int(s.get("zone_filter", 0))
 	WorldMemory.from_save_dict(s.get("world_memory", {}))
 	MythMemory.from_save_dict(s.get("myth", {}))
+	SacredMemory.from_save_dict(s.get("sacred", {}))
+	ChronicleLog.from_save_dict(s.get("chronicle", {}))
 	WorldMeaning.recompute()
 	WorldPersistence.from_save_dict(s.get("world_persistence", {}))
 	WorldPersistence.recompute()
@@ -2046,6 +2360,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 		CulturalMemory.recompute(_world)
 		SettlementMemory.recompute(_world)
 		MythMemory.recompute(_world)
+		SacredMemory.sync_permanent_ruins_from_settlements()
 		IntentMemory.recompute(_world)
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):
@@ -2055,7 +2370,6 @@ func _apply_save_dict(s: Dictionary) -> void:
 		SettlementPlanner.plan(_world, self, true)
 		TradePlanner.plan(_world, self, true)
 		RoadMemory.flush_dirty_tiles(_world)
-		SettlementRebirth.process(_world, self, true)
 		_sync_pawn_inherited_cultural_reputation()
 		RemnantMemory.seed_births_from_current_world(_world)
 	_regrow_queue.clear()
@@ -2107,18 +2421,640 @@ func _restore_stockpiles_from_save(zones_data: Array) -> void:
 func _on_enemy_tick(tick: int, spawner: EnemySpawner) -> void:
 	if spawner == null:
 		return
-	
-	# Spawn raids at intervals
-	if tick == spawner._next_raid_tick:
-		spawner.spawn_raid(_world)
-		# Schedule next raid
-		spawner._next_raid_tick += EnemySpawner.RAID_INTERVAL_TICKS
-	
-	# Clean up dead enemies and display enemy status
-	if tick % 20 == 0:
-		spawner.cleanup_dead_enemies()
-		if spawner.get_enemy_count() > 0 and tick % 100 == 0 and OS.is_debug_build():
-			print("[Combat] %s" % spawner.describe())
+	spawner.process_tick(_world, tick)
+	if spawner.get_enemy_count() > 0 and tick % 100 == 0 and OS.is_debug_build():
+		print("[Combat] %s" % spawner.describe())
+
+
+func trigger_war_battle_spawn(src_settlement_id: int, target_settlement_id: int, strength: float) -> bool:
+	if _enemy_spawner == null or _world == null:
+		return false
+	if _enemy_spawner.get_enemy_count() > 0:
+		return false
+	return bool(_enemy_spawner.spawn_war_forces(_world, src_settlement_id, target_settlement_id, strength))
+
+
+func _living_pawn_count() -> int:
+	if _pawn_spawner == null:
+		return 0
+	var alive: int = 0
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p):
+			alive += 1
+	return alive
+
+
+func register_enemy_kill(enemy_name: String, attacker_name: String, tile: Vector2i) -> void:
+	_kill_count += 1
+	WorldMemory.record_enemy_death(GameManager.tick_count, tile, enemy_name, attacker_name, _kill_count)
+
+
+func register_pawn_death(_pawn_id: int) -> void:
+	_kill_count += 1
+
+
+func get_kill_count() -> int:
+	return _kill_count
+
+
+func _toggle_observer_hud() -> void:
+	if _observer_hud == null:
+		return
+	var next_visible: bool = not _observer_hud.is_visible_state()
+	_observer_hud.set_visible_state(next_visible)
+	if next_visible:
+		_observer_hud.apply_snapshot(_build_observer_snapshot(GameManager.tick_count))
+
+
+func _toggle_focus_inspector() -> void:
+	if _focus_inspector == null:
+		return
+	var next_visible: bool = not _focus_inspector.is_visible_state()
+	_focus_inspector.set_visible_state(next_visible)
+	if next_visible:
+		_focus_inspector.apply_snapshot(_build_focus_snapshot(GameManager.tick_count))
+
+
+func _build_focus_snapshot(tick: int) -> Dictionary:
+	var focus: Dictionary = _resolve_focus_target()
+	var focus_type: String = str(focus.get("type", "NONE"))
+	var main_lines: PackedStringArray = PackedStringArray()
+	var title: String = "FOCUS INSPECTOR"
+	if focus_type == "PAWN":
+		title = "FOCUS: PAWN"
+		main_lines = _focus_lines_for_pawn(focus)
+	elif focus_type == "SETTLEMENT":
+		title = "FOCUS: SETTLEMENT"
+		main_lines = _focus_lines_for_settlement(focus)
+	elif focus_type == "TILE":
+		title = "FOCUS: TILE"
+		main_lines = _focus_lines_for_tile(focus)
+	else:
+		main_lines = PackedStringArray([
+			"NO FOCUS",
+			"Move cursor over a pawn, settlement, or tile",
+		])
+	return {
+		"title": title,
+		"focus_type": focus_type,
+		"main_lines": main_lines,
+		"footer": "Tick %d | source: %s" % [tick, str(focus.get("source", "none"))],
+	}
+
+
+func _resolve_focus_target() -> Dictionary:
+	if _world == null:
+		return {"type": "NONE", "source": "none"}
+	var mouse_world: Vector2 = get_global_mouse_position()
+	var mouse_pawn: Pawn = _focus_pawn_under_world_pos(mouse_world)
+	if mouse_pawn != null and mouse_pawn.data != null:
+		return {"type": "PAWN", "source": "mouse_pawn", "pawn": mouse_pawn}
+	var mouse_tile: Vector2i = _world.world_to_tile(mouse_world)
+	if mouse_tile.x >= 0 and mouse_tile.y >= 0:
+		var settlement: Variant = SettlementMemory.get_settlement_at_region(WorldMemory._region_key(mouse_tile.x, mouse_tile.y))
+		if settlement is Dictionary:
+			return {"type": "SETTLEMENT", "source": "mouse_tile", "tile": mouse_tile, "settlement": settlement}
+		return {"type": "TILE", "source": "mouse_tile", "tile": mouse_tile}
+	var cam_tile: Vector2i = _world.world_to_tile(_camera.global_position) if _camera != null else Vector2i(-1, -1)
+	if cam_tile.x >= 0 and cam_tile.y >= 0:
+		return {"type": "TILE", "source": "camera_center", "tile": cam_tile}
+	return {"type": "NONE", "source": "none"}
+
+
+func _focus_pawn_under_world_pos(world_pos: Vector2) -> Pawn:
+	if _pawn_spawner == null:
+		return null
+	var best: Pawn = null
+	var best_d_sq: float = SELECT_PICK_RADIUS_PX * SELECT_PICK_RADIUS_PX
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var d_sq: float = p.global_position.distance_squared_to(world_pos)
+		if d_sq <= best_d_sq:
+			best = p
+			best_d_sq = d_sq
+	return best
+
+
+func _focus_lines_for_pawn(focus: Dictionary) -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	var p: Pawn = focus.get("pawn", null) as Pawn
+	if p == null or p.data == null:
+		return PackedStringArray(["NO FOCUS", "Move cursor over a pawn, settlement, or tile"])
+	var d: PawnData = p.data
+	var rk: int = WorldMemory._region_key(d.tile_pos.x, d.tile_pos.y)
+	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(rk)
+	var role: String = _pawn_governance_role(d, gov)
+	var war: Dictionary = SettlementMemory.get_war_profile_for_region(rk)
+	var st_v: Variant = SettlementMemory.get_settlement_at_region(rk)
+	var settlement_label: String = "Unknown"
+	if st_v is Dictionary:
+		settlement_label = _pretty_settlement_state(str((st_v as Dictionary).get("state", "unknown")))
+	var health_pct: int = int(round(d.get_health_percentage() * 100.0)) if d.has_method("get_health_percentage") else 0
+	var state_label: String = p.get_state_name() if p.has_method("get_state_name") else "Unknown"
+	var job_label: String = p.get_current_job_label() if p.has_method("get_current_job_label") else "None"
+	var local_mode: String = "Retreat" if d.has_method("get_health_percentage") and float(d.get_health_percentage()) < 0.5 else "Ordered"
+	out.append("Name: %s" % d.display_name)
+	out.append("Profession: %s | Military Rank: %s" % [d.profession_name(), String(d.military_rank).capitalize()])
+	out.append("Governance Role: %s" % role)
+	out.append("Health: %d%% | Hunger %.0f | Rest %.0f | Mood %.0f" % [health_pct, d.hunger, d.rest, d.mood])
+	out.append("Action: %s | Job: %s" % [state_label, job_label])
+	out.append("Settlement state (committed/hysteresis): %s | War: %s" % [settlement_label, _pretty_war_state(str(war.get("state", "peace")))])
+	out.append("Battlefield Posture: %s" % local_mode)
+	if p.has_method("get_runtime_cohort_observability"):
+		var cobs: Dictionary = p.call("get_runtime_cohort_observability")
+		var c_job_type: int = int(cobs.get("cohort_job_type", -1))
+		var a_job_type: int = int(cobs.get("active_job_type", -1))
+		var s_job_type: int = int(cobs.get("stability_job_type", -1))
+		var locus_tile: Vector2i = cobs.get("locus_tile", Vector2i(-1, -1))
+		out.append("Cohort: anchor=%s active=%s stored=%s is_anchor=%s" % [
+			str(cobs.get("anchor_id", -1)),
+			Job.describe_type(a_job_type) if a_job_type >= 0 else "None",
+			Job.describe_type(c_job_type) if c_job_type >= 0 else "None",
+			"Yes" if bool(cobs.get("is_anchor", false)) else "No",
+		])
+		out.append("Cohort Locus: (%d,%d) | Stability: %d ticks [%s]" % [
+			locus_tile.x,
+			locus_tile.y,
+			int(cobs.get("stability_ticks", 0)),
+			Job.describe_type(s_job_type) if s_job_type >= 0 else "None",
+		])
+	return out
+
+
+func _focus_lines_for_settlement(focus: Dictionary) -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	var tile: Vector2i = focus.get("tile", Vector2i(-1, -1))
+	var st: Dictionary = focus.get("settlement", {})
+	var center: int = int(st.get("center_region", -1))
+	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(center)
+	var war: Dictionary = SettlementMemory.get_war_profile_for_region(center)
+	out.append("Region: %d | Tile: (%d,%d)" % [center, tile.x, tile.y])
+	out.append(
+			"Settlement state (committed/hysteresis-smoothed): %s"
+			% _pretty_settlement_state(str(st.get("state", "unknown")))
+	)
+	out.append(
+			"Settlement truth raw (material audit, not smoothed): %s"
+			% str(st.get("state_truth_raw", st.get("state", "unknown")))
+	)
+	out.append(
+			(
+					"Material signals: liv=%d shelter=%s work=%d stockpile=%s (flag=designated stockpile-zone overlap only) "
+					+ "sp_zone_overlap_hits=%d | hysteresis_key=center_region:%d"
+			)
+			% [
+				int(st.get("material_signal_living", 0)),
+				"Y" if int(st.get("material_signal_shelter", 0)) != 0 else "N",
+				int(st.get("material_signal_work", 0)),
+				"Y" if int(st.get("material_signal_stockpile", 0)) != 0 else "N",
+				int(st.get("material_stockpile_overlap_hits", 0)),
+				center,
+			]
+	)
+	out.append("Governance (political identity, not material liveness): %s | Ruler: %s" % [
+		_pretty_governance_name(str(gov.get("type", "anarchy"))),
+		_pawn_name_by_id(int(gov.get("ruler_id", -1)))
+	])
+	var pop: int = _count_pawns_in_regions(st.get("regions", PackedInt32Array()))
+	out.append("Population: %d | Council Size: %d" % [pop, (gov.get("council_ids", PackedInt32Array()) as PackedInt32Array).size() if gov.get("council_ids", PackedInt32Array()) is PackedInt32Array else 0])
+	out.append("War: %s | Target: %s" % [_pretty_war_state(str(war.get("state", "peace"))), _observer_war_target_label(int(war.get("target_settlement_id", -1)))])
+	out.append("Intent: %s" % str(st.get("current_intent", SettlementMemory.INTENT_GROW)))
+	var wf_ph: String = str(st.get("specialization_phase", SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN))
+	var wf_lk: String = str(st.get("specialization_channel", ""))
+	var wf_cd: String = str(st.get("specialization_candidate_channel", ""))
+	var wf_cf: int = int(st.get("specialization_confidence", 0))
+	var wf_line: String = "Work-focus (proxy): %s" % wf_ph
+	match wf_ph:
+		SettlementMemory.SPECIALIZATION_PHASE_LOCKED:
+			wf_line += " — %s [%d%%]" % [SettlementMemory.specialization_work_focus_label(wf_lk), wf_cf]
+		SettlementMemory.SPECIALIZATION_PHASE_CANDIDATE:
+			wf_line += " — → %s [%d%%]" % [SettlementMemory.specialization_work_focus_label(wf_cd), wf_cf]
+		_:
+			wf_line += " — Unspecialized"
+	out.append(wf_line)
+	var fronts_v: Variant = st.get("preferred_fronts", [])
+	if fronts_v is Array and not (fronts_v as Array).is_empty():
+		var idx: int = 0
+		for fv in fronts_v as Array:
+			if not (fv is Dictionary):
+				continue
+			if idx >= 2:
+				break
+			var f: Dictionary = fv as Dictionary
+			var ftile: Vector2i = f.get("tile", Vector2i(-1, -1))
+			out.append("Front %d: %s @ (%d,%d) support=%d stability=%d" % [
+				idx + 1,
+				Job.describe_type(int(f.get("job_type", -1))) if int(f.get("job_type", -1)) >= 0 else "Unknown",
+				ftile.x,
+				ftile.y,
+				int(f.get("support", 0)),
+				int(f.get("stability_ticks", 0)),
+			])
+			idx += 1
+	else:
+		out.append("Fronts: none")
+	out.append("Food Pressure: %d%% | Housing Pressure: %d%%" % [
+		int(round(ColonySimServices.get_food_pressure() * 100.0)),
+		int(round(ColonySimServices.get_housing_pressure() * 100.0)),
+	])
+	return out
+
+
+func _focus_lines_for_tile(focus: Dictionary) -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	var tile: Vector2i = focus.get("tile", Vector2i(-1, -1))
+	if tile.x < 0:
+		return PackedStringArray(["NO FOCUS", "Move cursor over a pawn, settlement, or tile"])
+	var rk: int = WorldMemory._region_key(tile.x, tile.y)
+	out.append("Tile: (%d,%d) | Region: %d" % [tile.x, tile.y, rk])
+	var biome: int = _world.data.get_biome(tile.x, tile.y) if _world != null and _world.data != null else -1
+	out.append("Biome: %d | Scar: %d" % [biome, int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))])
+	var st_v: Variant = SettlementMemory.get_settlement_at_region(rk)
+	if st_v is Dictionary:
+		var st: Dictionary = st_v as Dictionary
+		var center: int = int(st.get("center_region", -1))
+		var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(center)
+		out.append(
+				"Settlement committed: %s | truth raw: %s | Governance (political): %s"
+				% [
+					_pretty_settlement_state(str(st.get("state", "unknown"))),
+					str(st.get("state_truth_raw", st.get("state", "unknown"))),
+					_pretty_governance_name(str(gov.get("type", "anarchy"))),
+				]
+		)
+	var events: Array[Dictionary] = WorldMemory.get_events_for_tile(tile)
+	if not events.is_empty():
+		var evt: Dictionary = events[events.size() - 1]
+		var etype: String = str(evt.get("type", "event"))
+		out.append("Last Event: %s @ tick %d" % [etype.replace("_", " "), int(evt.get("t", 0))])
+	return out
+
+
+func _pawn_governance_role(d: PawnData, gov: Dictionary) -> String:
+	var pid: int = int(d.id)
+	if int(gov.get("ruler_id", -1)) == pid:
+		return "Ruler"
+	var council_ids: Variant = gov.get("council_ids", PackedInt32Array())
+	if council_ids is PackedInt32Array and (council_ids as PackedInt32Array).has(pid):
+		return "Council"
+	if String(d.military_rank).to_lower() == "battlemaster":
+		return "BattleMaster"
+	return "Citizen"
+
+
+func _count_pawns_in_regions(regions_v: Variant) -> int:
+	if _pawn_spawner == null or not (regions_v is PackedInt32Array):
+		return 0
+	var wanted: Dictionary = {}
+	for rk in regions_v as PackedInt32Array:
+		wanted[int(rk)] = true
+	var n: int = 0
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		if wanted.has(rk):
+			n += 1
+	return n
+
+
+func _build_observer_snapshot(tick: int) -> Dictionary:
+	var day_len: int = DayNightCycle.TICKS_PER_DAY
+	var day: int = int(tick / float(day_len)) + 1
+	var speed_text: String = "%dx" % int(GameManager.game_speed)
+	var paused_text: String = "Yes" if GameManager.is_paused else "No"
+	var focus: Dictionary = _observer_focus_settlement()
+	var settlement_idx: int = int(focus.get("settlement_idx", -1))
+	var settlement_data: Dictionary = focus.get("settlement_data", {})
+	var governance: Dictionary = focus.get("governance", {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()})
+	var war: Dictionary = focus.get("war", {"state": "peace", "target_settlement_id": -1, "votes": []})
+	var ruler_name: String = _pawn_name_by_id(int(governance.get("ruler_id", -1)))
+	var council_ids: Variant = governance.get("council_ids", PackedInt32Array())
+	var council_size: int = council_ids.size() if council_ids is PackedInt32Array else 0
+	var battlemaster_name: String = _find_battlemaster_name(settlement_idx, settlement_data)
+	var wildlife: Dictionary = get_wildlife_snapshot_for_diagnostic()
+	var jobs: Dictionary = JobManager.stats()
+	var battlefield_mode: String = _observer_battlefield_mode()
+	var determinism_lock: String = "Locked" if is_kernel_diagnostic_complete() else "Pending"
+	var kernel_phase: String = "Phase 7 Complete" if is_kernel_diagnostic_complete() else "Phase 7 Waiting"
+	var food_pressure: float = float(ColonySimServices.get_food_pressure())
+	var housing_pressure: float = float(ColonySimServices.get_housing_pressure())
+	var resource_pressure: Dictionary = settlement_data.get("resource_pressure", {})
+	var rp_wood: float = clamp(float(resource_pressure.get("wood", 0.0)), 0.0, 1.0)
+	var rp_stone: float = clamp(float(resource_pressure.get("stone", 0.0)), 0.0, 1.0)
+	var rp_ore: float = clamp(float(resource_pressure.get("ore_proxy", 0.0)), 0.0, 1.0)
+	var wf_phase: String = str(settlement_data.get("specialization_phase", SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN))
+	var wf_locked_ch: String = str(settlement_data.get("specialization_channel", ""))
+	var wf_cand_ch: String = str(settlement_data.get("specialization_candidate_channel", ""))
+	var wf_conf: int = int(settlement_data.get("specialization_confidence", 0))
+	var wf_display: String = "Unspecialized"
+	match wf_phase:
+		SettlementMemory.SPECIALIZATION_PHASE_LOCKED:
+			wf_display = SettlementMemory.specialization_work_focus_label(wf_locked_ch)
+		SettlementMemory.SPECIALIZATION_PHASE_CANDIDATE:
+			wf_display = "→ %s (pending)" % SettlementMemory.specialization_work_focus_label(wf_cand_ch)
+		_:
+			wf_display = "Unspecialized"
+	var war_state_raw: String = str(war.get("state", "peace"))
+	var settlement_state_raw: String = str(settlement_data.get("state", "unknown"))
+	var settlement_truth_raw: String = str(settlement_data.get("state_truth_raw", settlement_state_raw))
+	var mat_liv: int = int(settlement_data.get("material_signal_living", 0))
+	var mat_sh: int = int(settlement_data.get("material_signal_shelter", 0))
+	var mat_wk: int = int(settlement_data.get("material_signal_work", 0))
+	var mat_sp: int = int(settlement_data.get("material_signal_stockpile", 0))
+	var mat_sp_zone_hits: int = int(settlement_data.get("material_stockpile_overlap_hits", 0))
+	var settlement_center_region: int = int(settlement_data.get("center_region", -1))
+	var war_state_label: String = _war_state_label(war_state_raw)
+	var settlement_state_label: String = _settlement_state_label(settlement_state_raw)
+	var food_pressure_label: String = _pressure_label(food_pressure)
+	var housing_pressure_label: String = _pressure_label(housing_pressure)
+	var world_status_summary: String = _observer_world_status_summary(
+		war_state_raw,
+		settlement_state_raw,
+		food_pressure,
+		housing_pressure,
+		str(governance.get("type", "anarchy")),
+		ruler_name
+	)
+	var recent_history_lines: PackedStringArray = WorldMemory.get_recent_event_summaries(3)
+	var vh: Dictionary = SettlementMemory.validation_harness_flags_for_snapshot()
+	var footer_stamp: String = "Tick %d | Day %d | Determinism %s | Events %d | %s" % [
+		tick,
+		day,
+		determinism_lock,
+		WorldMemory.event_count(),
+		kernel_phase,
+	]
+	return {
+		"tick": tick,
+		"day": day,
+		"speed": speed_text,
+		"paused": paused_text,
+		"world_status_summary": world_status_summary,
+		"governance_type": _pretty_governance_name(str(governance.get("type", "anarchy"))),
+		"ruler_name": ruler_name,
+		"council_size": council_size,
+		"settlement_state": _pretty_settlement_state(settlement_state_raw),
+		"settlement_state_label": settlement_state_label,
+		"settlement_state_truth_raw": settlement_truth_raw,
+		"settlement_state_committed": settlement_state_raw,
+		"settlement_hysteresis_key_center_region": settlement_center_region,
+		"settlement_material_living": mat_liv,
+		"settlement_material_shelter": mat_sh,
+		"settlement_material_work": mat_wk,
+		"settlement_material_stockpile": mat_sp,
+		"settlement_material_stockpile_zone_overlap_hits": mat_sp_zone_hits,
+		"total_pawns": _observer_total_pawns(),
+		"children_count": _observer_children_count(),
+		"wild_rabbit": int(wildlife.get("rabbit", 0)),
+		"wild_deer": int(wildlife.get("deer", 0)),
+		"wild_total": int(wildlife.get("total", 0)),
+		"jobs_open": int(jobs.get("open", 0)),
+		"jobs_claimed": int(jobs.get("claimed", 0)),
+		"food_pressure": food_pressure,
+		"food_pressure_label": food_pressure_label,
+		"housing_pressure": housing_pressure,
+		"housing_pressure_label": housing_pressure_label,
+		"resource_pressure_wood": rp_wood,
+		"resource_pressure_stone": rp_stone,
+		"resource_pressure_ore_proxy": rp_ore,
+		"work_focus_phase": wf_phase,
+		"work_focus_display": wf_display,
+		"work_focus_confidence": wf_conf,
+		"intent_summary": _observer_intent_summary(),
+		"war_state": _pretty_war_state(war_state_raw),
+		"war_state_label": war_state_label,
+		"war_target": _observer_war_target_label(int(war.get("target_settlement_id", -1))),
+		"battlemaster_name": battlemaster_name,
+		"active_enemies": _enemy_spawner.get_enemy_count() if _enemy_spawner != null else 0,
+		"battlefield_mode": battlefield_mode,
+		"recent_history_lines": recent_history_lines,
+		"determinism_lock": determinism_lock,
+		"world_memory_events": WorldMemory.event_count(),
+		"kernel_phase": kernel_phase,
+		"next_diag_tick": KernelDiagnostic.DIAGNOSTIC_TICK,
+		"footer_stamp": footer_stamp,
+		"validation_os_debug_build": OS.is_debug_build(),
+		"validation_session_const_requested": SettlementMemory.VALIDATION_SESSION_ENABLED,
+		"validation_session": bool(vh.get("session", false)),
+		"validation_clean_economy_events": WorldEvents.validation_clean_economy_events_active(),
+		"validation_settlement_truth_verify": bool(vh.get("settlement_truth_verify", false)),
+		"validation_specialization_log": bool(vh.get("specialization_log", false)),
+	}
+
+
+func _observer_focus_settlement() -> Dictionary:
+	var settlement_idx: int = -1
+	var settlement_data: Dictionary = {}
+	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		var prk: int = WorldMemory._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
+		for i in range(SettlementMemory.settlements.size()):
+			var stv: Variant = SettlementMemory.settlements[i]
+			if not (stv is Dictionary):
+				continue
+			var st: Dictionary = stv as Dictionary
+			var regs: Variant = st.get("regions", PackedInt32Array())
+			if regs is PackedInt32Array and (regs as PackedInt32Array).has(prk):
+				settlement_idx = i
+				settlement_data = st
+				break
+	if settlement_idx < 0:
+		for i in range(SettlementMemory.settlements.size()):
+			if SettlementMemory.settlements[i] is Dictionary:
+				settlement_idx = i
+				settlement_data = SettlementMemory.settlements[i] as Dictionary
+				break
+	var governance: Dictionary = {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
+	var war: Dictionary = {"state": "peace", "target_settlement_id": -1, "votes": []}
+	if settlement_idx >= 0:
+		var center: int = int(settlement_data.get("center_region", -1))
+		if center >= 0:
+			governance = SettlementMemory.get_governance_profile_for_region(center)
+			war = SettlementMemory.get_war_profile_for_region(center)
+	return {
+		"settlement_idx": settlement_idx,
+		"settlement_data": settlement_data,
+		"governance": governance,
+		"war": war,
+	}
+
+
+func _observer_total_pawns() -> int:
+	if _pawn_spawner == null:
+		return 0
+	var n: int = 0
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
+			n += 1
+	return n
+
+
+func _observer_children_count() -> int:
+	if _pawn_spawner == null:
+		return 0
+	var c: int = 0
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
+			c += int(p.data.children_count)
+	return c
+
+
+func _observer_intent_summary() -> String:
+	var grow: int = 0
+	var hold: int = 0
+	var abandon: int = 0
+	for v in IntentMemory.settlement_intent.values():
+		match int(v):
+			IntentMemory.INTENT_GROW:
+				grow += 1
+			IntentMemory.INTENT_ABANDON:
+				abandon += 1
+			_:
+				hold += 1
+	return "Grow %d | Hold %d | Abandon %d" % [grow, hold, abandon]
+
+
+func _observer_war_target_label(target_id: int) -> String:
+	return "None" if target_id < 0 else str(target_id)
+
+
+func _observer_battlefield_mode() -> String:
+	if _enemy_spawner == null or _enemy_spawner.get_enemy_count() <= 0:
+		return "Idle"
+	if _pawn_spawner != null:
+		for p in _pawn_spawner.pawns:
+			if p == null or not is_instance_valid(p) or p.data == null:
+				continue
+			if p.data.has_method("get_health_percentage") and float(p.data.get_health_percentage()) < 0.5:
+				return "Anarchy"
+	return "Ordered"
+
+
+func _pawn_name_by_id(pawn_id: int) -> String:
+	if pawn_id < 0 or _pawn_spawner == null:
+		return "None"
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
+			return p.data.display_name
+	return "None"
+
+
+func _find_battlemaster_name(settlement_idx: int, settlement_data: Dictionary) -> String:
+	if settlement_idx < 0 or _pawn_spawner == null:
+		return "None"
+	var regs: Variant = settlement_data.get("regions", PackedInt32Array())
+	if not (regs is PackedInt32Array):
+		return "None"
+	var region_set: Dictionary = {}
+	for rk in regs as PackedInt32Array:
+		region_set[int(rk)] = true
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		if String(p.data.military_rank).to_lower() != "battlemaster":
+			continue
+		var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		if region_set.has(rk):
+			return p.data.display_name
+	return "None"
+
+
+func _pretty_governance_name(raw: String) -> String:
+	match raw:
+		"monarchy":
+			return "Monarchy"
+		"council":
+			return "Council"
+		_:
+			return "Anarchy"
+
+
+func _pretty_settlement_state(raw: String) -> String:
+	return raw.replace("_", " ").capitalize()
+
+
+func _pretty_war_state(raw: String) -> String:
+	match raw:
+		"at_war":
+			return "Active"
+		"proposed":
+			return "Proposed"
+		"mobilizing":
+			return "Mobilizing"
+		"truce":
+			return "Truce"
+		_:
+			return "Peace"
+
+
+func _pressure_label(value: float) -> String:
+	if value < 0.25:
+		return "LOW"
+	if value < 0.55:
+		return "WATCH"
+	if value < 0.8:
+		return "HIGH"
+	return "CRITICAL"
+
+
+func _war_state_label(raw: String) -> String:
+	match raw:
+		"at_war":
+			return "AT WAR"
+		"mobilizing", "proposed":
+			return "MOBILIZING"
+		"truce":
+			return "TRUCE"
+		_:
+			return "PEACE"
+
+
+func _settlement_state_label(raw: String) -> String:
+	match raw:
+		"active":
+			return "ACTIVE"
+		"recovering", "revivable":
+			return "RECOVERING"
+		"abandoned":
+			return "ABANDONED"
+		"permanently_abandoned":
+			return "PERMANENTLY ABANDONED"
+		_:
+			return "UNKNOWN"
+
+
+func _observer_world_status_summary(
+		war_state: String,
+		settlement_state: String,
+		food_pressure: float,
+		housing_pressure: float,
+		governance_type: String,
+		ruler_name: String
+) -> String:
+	var war_label: String = _war_state_label(war_state)
+	if war_label == "AT WAR":
+		return "WORLD STATUS: War active and battle pressure elevated"
+	if war_label == "MOBILIZING":
+		return "WORLD STATUS: War mobilization underway"
+	if _pressure_label(food_pressure) == "CRITICAL":
+		return "WORLD STATUS: Severe food pressure, stability at risk"
+	if _pressure_label(housing_pressure) == "CRITICAL":
+		return "WORLD STATUS: Severe housing pressure, stability at risk"
+	var settle_label: String = _settlement_state_label(settlement_state)
+	if settle_label == "PERMANENTLY ABANDONED":
+		return "WORLD STATUS: Settlement collapse is permanent"
+	if settle_label == "ABANDONED":
+		return "WORLD STATUS: Settlement abandoned, recovery uncertain"
+	if settle_label == "RECOVERING":
+		if governance_type == "anarchy" or ruler_name == "None":
+			return "WORLD STATUS: Recovering settlement, no active ruler"
+		return "WORLD STATUS: Recovery underway under local authority"
+	if _pressure_label(food_pressure) == "HIGH" or _pressure_label(housing_pressure) == "HIGH":
+		return "WORLD STATUS: Fragile peace under rising pressure"
+	if governance_type != "anarchy" and ruler_name != "None":
+		return "WORLD STATUS: Prosperity and order"
+	return "WORLD STATUS: Fragile peace under light pressure"
 
 
 # ==================== draft mode (combat control) ====================

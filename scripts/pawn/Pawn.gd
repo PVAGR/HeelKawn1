@@ -125,6 +125,29 @@ const WANDER_CHANCE_PER_TICK: float = 0.08
 ## Print "retrying haul (no path)" at most once every N ticks per pawn. Keeps
 ## the log readable while still making stuck hauls obvious.
 const HAUL_FAIL_LOG_EVERY_N_TICKS: int = 300
+## If a haul target is unreachable/missing, wait a few ticks before trying again.
+const HAUL_RETRY_COOLDOWN_TICKS: int = 10
+## At high sim speeds, skip historical aversion weighting path pass to avoid
+## expensive weight toggles on every pawn path request.
+const FAST_PATHFIND_SPEED_THRESHOLD: float = 6.0
+const REPRODUCTION_COOLDOWN_TICKS: int = 6000
+const REPRODUCTION_MATE_RANGE_PX: float = 42.0
+const COHORT_UPDATE_TICKS: int = 200
+const COHORT_MATCH_RADIUS_TILES: int = 8
+const COHORT_BREAK_DISTANCE_TILES: int = 16
+const COHORT_MIN_SIZE: int = 2
+const COHORT_COHESION_BIAS_WEIGHT: float = 0.12
+const COHORT_COHESION_MAX_STEP: float = 0.35
+const COHORT_RECRUITMENT_SCAN_RADIUS_TILES: int = 10
+const COHORT_RECRUITMENT_MAX_PAWNS: int = 24
+const COHORT_RECRUITMENT_MAX_SIGNALS: int = 8
+const COHORT_RECRUITMENT_CACHE_UPDATE_TICKS: int = 60
+const COHORT_RECRUITMENT_BIAS_MAX: float = 1.12
+const COHORT_STABILITY_WINDOW_TICKS: int = 400
+const COHORT_LOCUS_PERSIST_RADIUS_TILES: int = 12
+const COHORT_LOCUS_PERSIST_BIAS_WEIGHT: float = 0.08
+const COHORT_LOCUS_PERSIST_MAX_STEP: float = 0.22
+const RESOURCE_PRESSURE_BIAS_MAX: float = 1.12
 
 # -------------------- AI state --------------------
 
@@ -184,12 +207,23 @@ var _hunger_level: int = 0
 var initial_region_reputation: int = 0
 ## Failsafe log once: pawn standing on a tile A* now marks as solid.
 var _reported_stuck: bool = false
+var _next_reproduction_tick: int = 0
+var _active_edict: String = ""
 var _rest_level: int = 0
 var _mood_level: int = 0
 
 ## Game tick at which we last logged a haul failure for this pawn, so the
 ## retry loop doesn't flood the console.
 var _last_haul_fail_log_tick: int = -HAUL_FAIL_LOG_EVERY_N_TICKS
+var _next_haul_retry_tick: int = 0
+var _next_cohort_update_tick: int = 0
+var _cohort_anchor_ref: WeakRef = null
+var _next_recruitment_cache_tick: int = 0
+var _last_recruitment_job_type: int = -2
+var _recruitment_signal_cache: Array[Dictionary] = []
+var _cohort_stability_ticks: int = 0
+var _cohort_locus_tile: Vector2i = Vector2i(-1, -1)
+var _cohort_stability_job_type: int = -1
 var _anim_t: float = 0.0
 var _sfx: AudioStreamPlayer2D = null
 var _hit_flash_ticks: int = 0
@@ -198,6 +232,336 @@ var _hit_flash_ticks: int = 0
 ## parser can fail to resolve the `data` member on class_name Pawn in autoload scripts.
 func get_pawn_data() -> PawnData:
 	return data
+
+
+func get_state_name() -> String:
+	match _state:
+		State.IDLE:
+			return "Idle"
+		State.WALKING_TO_JOB:
+			return "WalkingToJob"
+		State.WORKING:
+			return "Working"
+		State.HAULING:
+			return "Hauling"
+		State.GOING_TO_EAT:
+			return "GoingToEat"
+		State.EATING:
+			return "Eating"
+		State.GOING_TO_BED:
+			return "GoingToBed"
+		State.SLEEPING:
+			return "Sleeping"
+		State.FETCHING_MATERIAL:
+			return "FetchingMaterial"
+		State.DRAFT_WALK:
+			return "DraftWalk"
+		_:
+			return "Unknown"
+
+
+func get_current_job_label() -> String:
+	if _current_job == null:
+		return "None"
+	return Job.describe_type(_current_job.type)
+
+
+func _clear_cohort_state() -> void:
+	if data == null:
+		return
+	data.cohort_anchor_id = -1
+	data.cohort_job_type = -1
+	data.is_cohort_anchor = false
+	_cohort_anchor_ref = null
+	_clear_cohort_stability_state()
+	_invalidate_recruitment_signal_cache()
+
+
+func _active_cohort_job_type() -> int:
+	if _current_job == null:
+		return -1
+	if _state == State.WALKING_TO_JOB or _state == State.WORKING or _state == State.FETCHING_MATERIAL:
+		return int(_current_job.type)
+	return -1
+
+
+func _cohort_settlement_center_for_tile(tile: Vector2i) -> int:
+	var rk: int = WorldMemory._region_key(tile.x, tile.y)
+	return SettlementMemory.get_center_region_for_region(rk)
+
+
+func _cohort_anchor_node() -> Pawn:
+	if _cohort_anchor_ref == null:
+		return null
+	var n: Object = _cohort_anchor_ref.get_ref()
+	if n == null or not (n is Pawn):
+		return null
+	return n as Pawn
+
+
+func _job_locus_world_pos(p: Pawn) -> Variant:
+	if p == null or p.data == null or p._current_job == null or p._world == null:
+		return null
+	if p._active_cohort_job_type() < 0:
+		return null
+	return p._world.tile_to_world(p._current_job.work_tile)
+
+
+func _cohort_locus_world_pos() -> Variant:
+	var anchor: Pawn = _cohort_anchor_node()
+	# 1) Anchor's live job destination tile.
+	var anchor_locus: Variant = _job_locus_world_pos(anchor)
+	if anchor_locus is Vector2:
+		return anchor_locus
+	# 2) Own live job destination tile.
+	var own_locus: Variant = _job_locus_world_pos(self)
+	if own_locus is Vector2:
+		return own_locus
+	# 3) Anchor pawn position as last resort.
+	if anchor != null:
+		return anchor.position
+	return null
+
+
+func update_cohort_membership(force: bool = false) -> void:
+	if data == null:
+		return
+	var job_type: int = _active_cohort_job_type()
+	if job_type < 0:
+		_clear_cohort_state()
+		return
+	var tick_now: int = GameManager.tick_count
+	if not force and tick_now < _next_cohort_update_tick:
+		return
+	_next_cohort_update_tick = tick_now + COHORT_UPDATE_TICKS
+	var my_center: int = _cohort_settlement_center_for_tile(data.tile_pos)
+	var radius_sq: int = COHORT_MATCH_RADIUS_TILES * COHORT_MATCH_RADIUS_TILES
+	var members: Array[Pawn] = []
+	for n in get_tree().get_nodes_in_group("pawns"):
+		if not (n is Pawn):
+			continue
+		var p: Pawn = n as Pawn
+		if p == null or p.data == null:
+			continue
+		if p._active_cohort_job_type() != job_type:
+			continue
+		var p_center: int = p._cohort_settlement_center_for_tile(p.data.tile_pos)
+		if my_center >= 0 and p_center >= 0 and p_center != my_center:
+			continue
+		if data.tile_pos.distance_squared_to(p.data.tile_pos) > radius_sq:
+			continue
+		members.append(p)
+	if members.size() < COHORT_MIN_SIZE:
+		_clear_cohort_state()
+		return
+	var anchor: Pawn = members[0]
+	for p in members:
+		if int(p.data.id) < int(anchor.data.id):
+			anchor = p
+	data.cohort_anchor_id = int(anchor.data.id)
+	data.cohort_job_type = job_type
+	data.is_cohort_anchor = int(data.id) == int(anchor.data.id)
+	_cohort_anchor_ref = weakref(anchor)
+
+
+func _validate_or_dissolve_cohort() -> void:
+	if data == null:
+		return
+	if data.cohort_anchor_id < 0:
+		return
+	var job_type: int = _active_cohort_job_type()
+	if job_type < 0 or data.cohort_job_type != job_type:
+		_clear_cohort_state()
+		return
+	var anchor: Pawn = _cohort_anchor_node()
+	if anchor == null or anchor.data == null:
+		_clear_cohort_state()
+		return
+	if int(anchor.data.id) != int(data.cohort_anchor_id):
+		_clear_cohort_state()
+		return
+	if anchor == self:
+		data.is_cohort_anchor = true
+		return
+	if anchor._active_cohort_job_type() != job_type:
+		_clear_cohort_state()
+		return
+	var my_center: int = _cohort_settlement_center_for_tile(data.tile_pos)
+	var anchor_center: int = _cohort_settlement_center_for_tile(anchor.data.tile_pos)
+	if my_center >= 0 and anchor_center >= 0 and my_center != anchor_center:
+		_clear_cohort_state()
+		return
+	var break_sq: int = COHORT_BREAK_DISTANCE_TILES * COHORT_BREAK_DISTANCE_TILES
+	if data.tile_pos.distance_squared_to(anchor.data.tile_pos) > break_sq:
+		_clear_cohort_state()
+
+
+func _cohort_cohesion_bias(step: float) -> Vector2:
+	if data == null or data.is_cohort_anchor or _path.is_empty():
+		return Vector2.ZERO
+	if _active_cohort_job_type() < 0:
+		return Vector2.ZERO
+	var anchor: Pawn = _cohort_anchor_node()
+	if anchor == null or anchor.data == null or anchor == self:
+		return Vector2.ZERO
+	if anchor._active_cohort_job_type() != _active_cohort_job_type():
+		return Vector2.ZERO
+	var locus_v: Variant = _cohort_locus_world_pos()
+	if not (locus_v is Vector2):
+		return Vector2.ZERO
+	var locus: Vector2 = locus_v as Vector2
+	var offset: Vector2 = locus - position
+	var dist_sq: float = offset.length_squared()
+	var max_dist_world: float = float(COHORT_BREAK_DISTANCE_TILES * World.TILE_PIXELS)
+	if dist_sq <= 1.0 or dist_sq > max_dist_world * max_dist_world:
+		return Vector2.ZERO
+	var bias_mag: float = minf(COHORT_COHESION_MAX_STEP, step * COHORT_COHESION_BIAS_WEIGHT)
+	return offset.normalized() * bias_mag
+
+
+func _clear_cohort_stability_state() -> void:
+	_cohort_stability_ticks = 0
+	_cohort_locus_tile = Vector2i(-1, -1)
+	_cohort_stability_job_type = -1
+
+
+func _decay_cohort_stability_window() -> void:
+	if _cohort_stability_ticks <= 0:
+		_clear_cohort_stability_state()
+		return
+	_cohort_stability_ticks = maxi(0, _cohort_stability_ticks - COHORT_UPDATE_TICKS)
+	if _cohort_stability_ticks <= 0:
+		_clear_cohort_stability_state()
+
+
+func _refresh_or_decay_cohort_stability(force: bool = false) -> void:
+	if not force and GameManager.tick_count % COHORT_UPDATE_TICKS != 0:
+		return
+	if data == null:
+		_clear_cohort_stability_state()
+		return
+	var active_job_type: int = _active_cohort_job_type()
+	if active_job_type < 0 or _current_job == null:
+		_decay_cohort_stability_window()
+		return
+	if int(data.cohort_anchor_id) < 0 or int(data.cohort_job_type) != active_job_type:
+		_decay_cohort_stability_window()
+		return
+	if not data.is_cohort_anchor:
+		var anchor: Pawn = _cohort_anchor_node()
+		if anchor == null or anchor.data == null:
+			_decay_cohort_stability_window()
+			return
+		if anchor._active_cohort_job_type() != active_job_type:
+			_decay_cohort_stability_window()
+			return
+	_cohort_locus_tile = _current_job.work_tile
+	_cohort_stability_job_type = active_job_type
+	_cohort_stability_ticks = COHORT_STABILITY_WINDOW_TICKS
+
+
+func _cohort_locus_persistence_bias(step: float) -> Vector2:
+	if data == null or data.is_cohort_anchor or _path.is_empty():
+		return Vector2.ZERO
+	if _cohort_stability_ticks <= 0 or _cohort_stability_job_type < 0:
+		return Vector2.ZERO
+	if _active_cohort_job_type() != _cohort_stability_job_type:
+		return Vector2.ZERO
+	if _cohort_locus_tile.x < 0 or _cohort_locus_tile.y < 0 or _world == null:
+		return Vector2.ZERO
+	var locus_world: Vector2 = _world.tile_to_world(_cohort_locus_tile)
+	var offset: Vector2 = locus_world - position
+	var dist_sq: float = offset.length_squared()
+	var max_dist_world: float = float(COHORT_LOCUS_PERSIST_RADIUS_TILES * World.TILE_PIXELS)
+	if dist_sq <= 1.0 or dist_sq > max_dist_world * max_dist_world:
+		return Vector2.ZERO
+	var bias_mag: float = minf(COHORT_LOCUS_PERSIST_MAX_STEP, step * COHORT_LOCUS_PERSIST_BIAS_WEIGHT)
+	return offset.normalized() * bias_mag
+
+
+func _invalidate_recruitment_signal_cache() -> void:
+	_next_recruitment_cache_tick = 0
+	_recruitment_signal_cache.clear()
+
+
+func _refresh_recruitment_signal_cache(force: bool = false) -> void:
+	if data == null:
+		return
+	var tick_now: int = GameManager.tick_count
+	if not force and tick_now < _next_recruitment_cache_tick:
+		return
+	_next_recruitment_cache_tick = tick_now + COHORT_RECRUITMENT_CACHE_UPDATE_TICKS
+	_recruitment_signal_cache.clear()
+	var radius_sq: int = COHORT_RECRUITMENT_SCAN_RADIUS_TILES * COHORT_RECRUITMENT_SCAN_RADIUS_TILES
+	var my_center: int = _cohort_settlement_center_for_tile(data.tile_pos)
+	var candidates: Array[Pawn] = []
+	for n in get_tree().get_nodes_in_group("pawns"):
+		if not (n is Pawn):
+			continue
+		var p: Pawn = n as Pawn
+		if p == null or p == self or p.data == null:
+			continue
+		if p.data.tile_pos.distance_squared_to(data.tile_pos) > radius_sq:
+			continue
+		candidates.append(p)
+	candidates.sort_custom(func(a: Pawn, b: Pawn) -> bool:
+		return int(a.data.id) < int(b.data.id)
+	)
+	var inspected: int = 0
+	var seen_keys: Dictionary = {}
+	for p in candidates:
+		if inspected >= COHORT_RECRUITMENT_MAX_PAWNS:
+			break
+		inspected += 1
+		var active_job_type: int = p._active_cohort_job_type()
+		if active_job_type < 0:
+			continue
+		if int(p.data.cohort_job_type) != active_job_type:
+			continue
+		if int(p.data.cohort_anchor_id) < 0:
+			continue
+		var p_center: int = _cohort_settlement_center_for_tile(p.data.tile_pos)
+		if my_center >= 0 and p_center >= 0 and my_center != p_center:
+			continue
+		var locus_tile: Vector2i = p.data.tile_pos
+		if p._current_job != null:
+			locus_tile = p._current_job.work_tile
+		var key: String = "%d:%d:%d:%d" % [active_job_type, p_center, locus_tile.x, locus_tile.y]
+		if seen_keys.has(key):
+			continue
+		seen_keys[key] = true
+		_recruitment_signal_cache.append({
+			"job_type": active_job_type,
+			"center": p_center,
+			"locus_tile": locus_tile,
+		})
+		if _recruitment_signal_cache.size() >= COHORT_RECRUITMENT_MAX_SIGNALS:
+			break
+
+
+func get_cohort_recruitment_bias(job: Job) -> float:
+	if data == null or job == null:
+		return 1.0
+	var job_type: int = int(job.type)
+	var my_center: int = _cohort_settlement_center_for_tile(data.tile_pos)
+	var job_center: int = _cohort_settlement_center_for_tile(job.work_tile)
+	if my_center >= 0 and job_center >= 0 and my_center != job_center:
+		return 1.0
+	var radius_sq: int = COHORT_RECRUITMENT_SCAN_RADIUS_TILES * COHORT_RECRUITMENT_SCAN_RADIUS_TILES
+	for sig in _recruitment_signal_cache:
+		var sig_job: int = int(sig.get("job_type", -1))
+		if sig_job != job_type:
+			continue
+		var sig_center: int = int(sig.get("center", -1))
+		if my_center >= 0 and sig_center >= 0 and my_center != sig_center:
+			continue
+		var locus_tile: Vector2i = sig.get("locus_tile", Vector2i(-100000, -100000))
+		if locus_tile.x <= -99999:
+			continue
+		if locus_tile.distance_squared_to(job.work_tile) > radius_sq:
+			continue
+		return COHORT_RECRUITMENT_BIAS_MAX
+	return 1.0
 
 
 func get_pawn_name_for_log() -> String:
@@ -323,6 +687,8 @@ func _culture_inherited_job_offset() -> int:
 func _path_for_pawn(to: Vector2i) -> Array[Vector2i]:
 	if _world == null or _world.pathfinder == null or data == null:
 		return [] as Array[Vector2i]
+	if GameManager.game_speed >= FAST_PATHFIND_SPEED_THRESHOLD:
+		return _world.pathfinder.find_path(data.tile_pos, to)
 	return _world.pathfinder.find_path_pawn_historic_aversion(data.tile_pos, to)
 
 
@@ -345,6 +711,7 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	# New spawns: align fractional age with integer `age` (loads set age_years in PawnData).
 	if data != null and data.age_years < 0.0001 and data.age > 0:
 		data.age_years = float(data.age)
+	_clear_cohort_state()
 	add_to_group("pawns")
 	refresh_inherited_cultural_reputation()
 	queue_redraw()
@@ -384,6 +751,48 @@ func draft_goto(world_tile: Vector2i) -> void:
 		return
 	_start_path(path)
 	queue_redraw()
+
+
+## Tick-safe one-tile move used by deterministic player input queue.
+func move(tile_delta: Vector2i) -> bool:
+	if _world == null or data == null:
+		return false
+	var dest: Vector2i = data.tile_pos + tile_delta
+	if not _world.data.in_bounds(dest.x, dest.y):
+		return false
+	if not _world.pathfinder.is_passable(dest):
+		return false
+	draft_goto(dest)
+	return true
+
+
+## Contextual player action hook used by deterministic player input queue.
+func interact() -> bool:
+	if data == null:
+		return false
+	if data.is_carrying():
+		_begin_haul_to_stockpile()
+		return true
+	if _maybe_start_eating():
+		return true
+	if _maybe_start_sleeping():
+		return true
+	return false
+
+
+func record_skill_gain(skill: String, amount: int) -> void:
+	if data == null:
+		return
+	if data.gain_skill_xp(skill, amount):
+		WorldMemory.record_event({
+			"type": "skill_gain",
+			"pawn_id": int(data.id),
+			"skill": skill,
+			"amount": amount,
+			"tick": GameManager.tick_count,
+			"total_xp": int(data.tracked_skill_xp(skill)),
+			"profession": data.profession_name(),
+		})
 
 
 ## Called from World when a wall appears under this pawn — step off solid tiles.
@@ -501,9 +910,10 @@ func sanity_check_impassable_tile() -> void:
 		return
 	if not _reported_stuck:
 		_reported_stuck = true
-		print("[Pawn] WARN: %s on impassable sim tile (%d,%d)  state=%d — forcing nudge" % [
-			data.display_name, data.tile_pos.x, data.tile_pos.y, int(_state),
-		])
+		if GameManager.verbose_logs():
+			print("[Pawn] WARN: %s on impassable sim tile (%d,%d)  state=%d - forcing nudge" % [
+				data.display_name, data.tile_pos.x, data.tile_pos.y, int(_state),
+			])
 	nudge_if_standing_on_solid()
 
 
@@ -526,6 +936,12 @@ func _process(delta: float) -> void:
 		_advance_path()
 	else:
 		position += to_target.normalized() * step
+	var cohort_bias: Vector2 = _cohort_cohesion_bias(step)
+	if cohort_bias != Vector2.ZERO:
+		position += cohort_bias
+	var persist_bias: Vector2 = _cohort_locus_persistence_bias(step)
+	if persist_bias != Vector2.ZERO:
+		position += persist_bias
 
 
 func _start_path(path: Array[Vector2i]) -> void:
@@ -588,6 +1004,15 @@ func _on_game_tick(_tick: int) -> void:
 		_hit_flash_ticks -= 1
 	_decay_needs()
 	_check_thresholds()
+	var active_job_type: int = _active_cohort_job_type()
+	if active_job_type != _last_recruitment_job_type:
+		_last_recruitment_job_type = active_job_type
+		_invalidate_recruitment_signal_cache()
+		_refresh_or_decay_cohort_stability(true)
+	_refresh_recruitment_signal_cache()
+	update_cohort_membership()
+	_validate_or_dissolve_cohort()
+	_refresh_or_decay_cohort_stability()
 	if draft_mode:
 		_engage_enemies()
 	# Panic-sleep interrupt: if rest is critically low and we're not already
@@ -640,12 +1065,14 @@ func _force_panic_sleep() -> void:
 		_return_trade_cargo_to_source_if_any(jp)
 		JobManager.abandon(jp)
 		_current_job = null
+		_clear_cohort_state()
 	_clear_path()
 	# If we were already walking to a bed when panic hit, give up the
 	# reservation so other pawns can use it; we're sleeping where we stand.
 	_release_bed_if_reserved()
-	print("[Pawn] %s collapses from exhaustion  (rest=%.1f hunger=%.1f)" %
-		[data.display_name, data.rest, data.hunger])
+	if GameManager.verbose_logs():
+		print("[Pawn] %s collapses from exhaustion  (rest=%.1f hunger=%.1f)" %
+			[data.display_name, data.rest, data.hunger])
 	_begin_sleeping()
 
 
@@ -703,7 +1130,16 @@ func _tick_idle() -> void:
 	# we have to sum across zones, not peek at one hardcoded pile.
 	var food_emergency: bool = StockpileManager.total_food() < STOCKPILE_FOOD_LOW_THRESHOLD
 	var priority_cb: Callable = func(j: Job) -> int:
-		return int(ColonySimServices.job_priority_stance_bias(j)) + _job_history_scar_priority_offset(j)
+		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j)) + _job_history_scar_priority_offset(j)
+		var intent_mult: float = get_settlement_intent_job_multiplier(j)
+		var intent_bonus: int = int(round((intent_mult - 1.0) * 10.0))
+		var front_mult: float = get_preferred_front_bias(j)
+		var front_bonus: int = int(round((front_mult - 1.0) * 10.0))
+		var cohort_mult: float = get_cohort_recruitment_bias(j)
+		var cohort_bonus: int = int(round((cohort_mult - 1.0) * 10.0))
+		var resource_mult: float = get_resource_pressure_bias(j)
+		var resource_bonus: int = int(round((resource_mult - 1.0) * 10.0))
+		return base_bias + intent_bonus + front_bonus + cohort_bonus + resource_bonus
 	var base_passes: Callable = func(j: Job) -> bool:
 		if Pawn._world_hunt_stabilization_blocks() and j.type == Job.Type.HUNT:
 			return false
@@ -734,6 +1170,13 @@ func _tick_idle() -> void:
 		if food_job != null:
 			_begin_job(food_job)
 			return
+	var affinity_key: String = data.highest_affinity_skill() if data != null else ""
+	var affinity_passes := func(j: Job) -> bool:
+		return base_passes.call(j) and _job_matches_affinity(j.type, affinity_key)
+	var affinity_job: Job = JobManager.claim_next_for(self, affinity_passes, priority_cb)
+	if affinity_job != null:
+		_begin_job(affinity_job)
+		return
 	var job: Job = JobManager.claim_next_for(self, base_passes, priority_cb)
 	if job != null:
 		_begin_job(job)
@@ -741,6 +1184,213 @@ func _tick_idle() -> void:
 	# 6. Nothing to do: idle wander
 	if randf() < WANDER_CHANCE_PER_TICK:
 		_start_wander()
+
+
+func _job_matches_affinity(job_type: int, affinity_key: String) -> bool:
+	match affinity_key:
+		"building":
+			return job_type == Job.Type.BUILD_BED or job_type == Job.Type.BUILD_WALL or job_type == Job.Type.BUILD_DOOR
+		"farming":
+			return job_type == Job.Type.FORAGE
+		"combat":
+			return job_type == Job.Type.HUNT
+		"crafting":
+			return job_type == Job.Type.CHOP or job_type == Job.Type.MINE or job_type == Job.Type.MINE_WALL
+		"diplomacy":
+			return job_type == Job.Type.TRADE_HAUL
+		_:
+			return false
+
+
+func get_settlement_intent_job_multiplier(job: Job) -> float:
+	if data == null or job == null:
+		return 1.0
+	var intent: String = SettlementMemory.get_settlement_intent_for_tile(data.tile_pos)
+	match intent:
+		SettlementMemory.INTENT_HOARD:
+			if job.type == Job.Type.FORAGE or job.type == Job.Type.HUNT or job.type == Job.Type.TRADE_HAUL:
+				return 1.2
+			if job.type == Job.Type.CHOP or job.type == Job.Type.MINE or job.type == Job.Type.MINE_WALL:
+				return 1.05
+		SettlementMemory.INTENT_DEFEND:
+			if job.type == Job.Type.HUNT:
+				return 1.2
+			if job.type == Job.Type.BUILD_WALL or job.type == Job.Type.BUILD_DOOR:
+				return 1.1
+		SettlementMemory.INTENT_RECOVER:
+			if job.type == Job.Type.BUILD_BED or job.type == Job.Type.BUILD_WALL or job.type == Job.Type.BUILD_DOOR:
+				return 1.15
+			if job.type == Job.Type.TRADE_HAUL:
+				return 1.1
+		SettlementMemory.INTENT_GROW:
+			if job.type == Job.Type.FORAGE or job.type == Job.Type.CHOP:
+				return 1.05
+	return 1.0
+
+
+func get_preferred_front_bias(job: Job) -> float:
+	if data == null or job == null:
+		return 1.0
+	return float(SettlementMemory.get_preferred_front_bias_for_job(data.tile_pos, job))
+
+
+func get_resource_pressure_bias(job: Job) -> float:
+	if data == null or job == null:
+		return 1.0
+	var rp: Dictionary = SettlementMemory.get_resource_pressure_for_tile(data.tile_pos)
+	if rp.is_empty():
+		return 1.0
+	var wood_p: float = clamp(float(rp.get("wood", 0.0)), 0.0, 1.0)
+	var stone_p: float = clamp(float(rp.get("stone", 0.0)), 0.0, 1.0)
+	var ore_p: float = clamp(float(rp.get("ore_proxy", 0.0)), 0.0, 1.0)
+	# Safety guard: if upstream pressure is unexpectedly out of bounds, neutralize.
+	if wood_p > 0.9 or stone_p > 0.9 or ore_p > 0.9:
+		return 1.0
+	var intensity: float = 0.0
+	match int(job.type):
+		Job.Type.CHOP, Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+			intensity = wood_p
+		Job.Type.MINE_WALL:
+			intensity = stone_p
+		Job.Type.MINE:
+			intensity = ore_p
+		_:
+			return 1.0
+	var scaled: float = 1.0 + (RESOURCE_PRESSURE_BIAS_MAX - 1.0) * intensity
+	return clamp(scaled, 1.0, RESOURCE_PRESSURE_BIAS_MAX)
+
+
+func attempt_reproduction() -> bool:
+	if data == null or _world == null:
+		return false
+	var now: int = GameManager.tick_count
+	if now < _next_reproduction_tick:
+		return false
+	if data.hunger <= 80.0 or data.rest <= 80.0:
+		return false
+	var has_shelter: bool = is_in_bed()
+	if not has_shelter:
+		var bed: Vector2i = _world.find_free_bed_for(self, data.tile_pos)
+		has_shelter = bed.x >= 0
+	if not has_shelter:
+		return false
+	var mate: Pawn = _find_compatible_mate()
+	if mate == null or mate.data == null:
+		return false
+	if int(data.id) > int(mate.data.id):
+		return false
+	var main_node: Node = get_tree().get_root().get_node_or_null("Main")
+	if main_node == null:
+		return false
+	var spawner: PawnSpawner = main_node.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+	if spawner == null:
+		return false
+	var did_spawn: bool = spawner.spawn_child_pawn(_world, data.tile_pos, data, mate.data, now)
+	if did_spawn:
+		_next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
+		mate._next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
+	return did_spawn
+
+
+func _find_compatible_mate() -> Pawn:
+	var best: Pawn = null
+	var best_d2: float = INF
+	for n in get_tree().get_nodes_in_group("pawns"):
+		if n == null or not (n is Pawn):
+			continue
+		var p: Pawn = n as Pawn
+		if p == self or p.data == null:
+			continue
+		if p.data.hunger <= 80.0 or p.data.rest <= 80.0:
+			continue
+		if p._next_reproduction_tick > GameManager.tick_count:
+			continue
+		var compatible: bool = (
+			data.gender == PawnData.Gender.OTHER
+			or p.data.gender == PawnData.Gender.OTHER
+			or data.gender != p.data.gender
+		)
+		if not compatible:
+			continue
+		var d2: float = position.distance_squared_to(p.position)
+		if d2 <= REPRODUCTION_MATE_RANGE_PX * REPRODUCTION_MATE_RANGE_PX and d2 < best_d2:
+			best = p
+			best_d2 = d2
+	return best
+
+
+func is_current_ruler() -> bool:
+	if data == null:
+		return false
+	return SettlementMemory.is_pawn_current_ruler(int(data.id))
+
+
+func issue_edict(edict_key: String) -> bool:
+	if data == null or not is_current_ruler():
+		return false
+	_active_edict = edict_key
+	WorldMemory.record_event({
+		"type": "edict_issued",
+		"pawn_id": int(data.id),
+		"edict": edict_key,
+		"tick": GameManager.tick_count,
+	})
+	# Nearby settlement effect stub: influence nudges by edict type.
+	for n in get_tree().get_nodes_in_group("pawns"):
+		if not (n is Pawn):
+			continue
+		var p: Pawn = n as Pawn
+		if p == self or p.data == null:
+			continue
+		if p.position.distance_squared_to(position) > 90.0 * 90.0:
+			continue
+		match edict_key:
+			"focus_farming":
+				p.data.skills["farming"] = int(p.data.skills.get("farming", 0)) + 1
+			"draft_soldiers":
+				p.data.skills["combat"] = int(p.data.skills.get("combat", 0)) + 1
+	return true
+
+
+func abdicate() -> bool:
+	if data == null or not is_current_ruler():
+		return false
+	data.influence = 0.0
+	WorldMemory.record_event({
+		"type": "abdicate",
+		"pawn_id": int(data.id),
+		"tick": GameManager.tick_count,
+	})
+	return true
+
+
+func propose_war(target_settlement_id: int) -> bool:
+	if data == null or not is_current_ruler():
+		return false
+	var ok: bool = SettlementMemory.propose_war_for_pawn(int(data.id), target_settlement_id)
+	if ok:
+		WorldMemory.record_event({
+			"type": "war_proposed",
+			"pawn_id": int(data.id),
+			"target_settlement_id": int(target_settlement_id),
+			"tick": GameManager.tick_count,
+		})
+	return ok
+
+
+func pledge_loyalty(target_ruler: Pawn) -> bool:
+	if data == null or target_ruler == null or target_ruler.data == null:
+		return false
+	if not target_ruler.is_current_ruler():
+		return false
+	target_ruler.data.influence += 5.0
+	WorldMemory.record_event({
+		"type": "pledge_loyalty",
+		"pawn_id": int(data.id),
+		"target_ruler_id": int(target_ruler.data.id),
+		"tick": GameManager.tick_count,
+	})
+	return true
 
 
 func _tick_walking() -> void:
@@ -778,11 +1428,12 @@ func _tick_working() -> void:
 		speed *= data.work_speed_for(skill)
 		var leveled_up: bool = data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK)
 		if leveled_up:
-			print("[Pawn] %s's %s went up to %d" % [
-				data.display_name,
-				PawnData.skill_name(skill),
-				data.get_skill_level(skill),
-			])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s's %s went up to %d" % [
+					data.display_name,
+					PawnData.skill_name(skill),
+					data.get_skill_level(skill),
+				])
 	_current_job.work_ticks_done += int(ceil(speed))
 	if _current_job.work_ticks_done >= _current_job.work_ticks_needed:
 		if _current_job.type == Job.Type.TRADE_HAUL:
@@ -821,14 +1472,19 @@ func _apply_work_hazards() -> void:
 		_play_sfx("res://assets/audio/pawn_hurt.ogg", 0.9)
 		# Trigger stress mood event from injury
 		data.add_mood_event(MoodEvent.Type.STRESS, 60.0, 300)
-		print("[Pawn] %s injured while working  (damage=%.1f health=%.1f)" %
-			[data.display_name, damage, data.health])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s injured while working  (damage=%.1f health=%.1f)" %
+				[data.display_name, damage, data.health])
 
 
 # ==================== jobs (FORAGE / MINE) ====================
 
 func _begin_job(job: Job) -> void:
 	_current_job = job
+	_invalidate_recruitment_signal_cache()
+	_refresh_recruitment_signal_cache(true)
+	update_cohort_membership(true)
+	_refresh_or_decay_cohort_stability(true)
 	# Build jobs need raw materials in hand before we walk to the build site.
 	# If we don't already have the right item in sufficient quantity, bounce
 	# to the stockpile first.
@@ -928,8 +1584,9 @@ func _begin_fetching_material(item_type: int, qty: int) -> void:
 		item_type, qty, data.tile_pos, _world.pathfinder
 	)
 	if sp == null:
-		print("[Pawn] %s aborts build job: no reachable zone has %d %s" %
-			[data.display_name, qty, Item.name_for(item_type)])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s aborts build job: no reachable zone has %d %s" %
+				[data.display_name, qty, Item.name_for(item_type)])
 		_unclaim_current_job()
 		return
 	_target_zone = sp
@@ -989,8 +1646,9 @@ func _pickup_material(item_type: int, qty: int) -> void:
 		# Partial take: put it back so we don't strand items in our hand.
 		if taken > 0:
 			sp.add_item(item_type, taken)
-		print("[Pawn] %s aborts build job: zone ran out of %s mid-fetch" %
-			[data.display_name, Item.name_for(item_type)])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s aborts build job: zone ran out of %s mid-fetch" %
+				[data.display_name, Item.name_for(item_type)])
 		_target_zone = null
 		_unclaim_current_job()
 		return
@@ -1072,21 +1730,25 @@ func _complete_current_job() -> void:
 		Job.Type.FORAGE:
 			produced_type = Item.Type.BERRY
 			_world.clear_feature(job.tile.x, job.tile.y)
-			print("[Pawn] %s foraged berries @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s foraged berries @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.MINE:
 			produced_type = Item.Type.STONE
 			_world.clear_feature(job.tile.x, job.tile.y)
-			print("[Pawn] %s mined stone @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s mined stone @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.MINE_WALL:
 			produced_type = Item.Type.STONE
 			# This converts MOUNTAIN -> STONE_FLOOR and rebuilds the components
 			# map, which can cascade-unlock sealed ore veins.
 			_world.mine_out_wall(job.tile.x, job.tile.y)
-			print("[Pawn] %s mined wall @(%d,%d) -> stone floor" % [data.display_name, job.tile.x, job.tile.y])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s mined wall @(%d,%d) -> stone floor" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.CHOP:
 			produced_type = Item.Type.WOOD
 			_world.clear_feature(job.tile.x, job.tile.y)
-			print("[Pawn] %s chopped tree @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s chopped tree @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.HUNT:
 			produced_type = Item.Type.MEAT
 			# Read the species off the tile BEFORE we clear it, so we know
@@ -1102,9 +1764,10 @@ func _complete_current_job() -> void:
 						TileFeature.name_for(animal_feat),
 				)
 			_world.clear_feature(job.tile.x, job.tile.y)
-			print("[Pawn] %s hunted %s @(%d,%d) -> %d meat" % [
-				data.display_name, TileFeature.name_for(animal_feat),
-				job.tile.x, job.tile.y, produced_qty])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s hunted %s @(%d,%d) -> %d meat" % [
+					data.display_name, TileFeature.name_for(animal_feat),
+					job.tile.x, job.tile.y, produced_qty])
 		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
 			_finish_build(job)
 	# Trigger mood event based on job type
@@ -1118,6 +1781,7 @@ func _complete_current_job() -> void:
 		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
 			data.add_mood_event(MoodEvent.Type.JOY, 60.0, 220)  # Building feels productive
 	JobManager.complete(job)
+	_clear_cohort_state()
 	_current_job = null
 	_state = State.IDLE   # reset before transitioning; _begin_haul will set it
 	_clear_path()
@@ -1139,8 +1803,9 @@ func _finish_build(job: Job) -> void:
 	var item_type: int = mats.item
 	var need_qty: int = mats.qty
 	if data.carrying != item_type or data.carrying_qty < need_qty:
-		print("[Pawn] %s missing material at completion -- %s not built @(%d,%d)" %
-			[data.display_name, Job.describe_type(job.type), job.tile.x, job.tile.y])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s missing material at completion -- %s not built @(%d,%d)" %
+				[data.display_name, Job.describe_type(job.type), job.tile.x, job.tile.y])
 		return
 	data.carrying_qty -= need_qty
 	if data.carrying_qty <= 0:
@@ -1149,13 +1814,16 @@ func _finish_build(job: Job) -> void:
 		Job.Type.BUILD_BED:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.BED)
 			_world.register_bed(job.tile)
-			print("[Pawn] %s built a bed @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s built a bed @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.BUILD_WALL:
 			_world.build_wall(job.tile.x, job.tile.y)
-			print("[Pawn] %s built a wall @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s built a wall @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.BUILD_DOOR:
 			_world.build_door(job.tile.x, job.tile.y)
-			print("[Pawn] %s placed a door @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s placed a door @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 
 
 func _cancel_current_job() -> void:
@@ -1174,6 +1842,9 @@ func _unclaim_current_job() -> void:
 
 
 func _reset_to_idle() -> void:
+	_clear_cohort_state()
+	_last_recruitment_job_type = -2
+	_invalidate_recruitment_signal_cache()
 	_current_job = null
 	# Drop any zone handle so the GC isn't rooted on a freed node after a
 	# reroll. Each state that needs a zone re-picks one when it starts.
@@ -1189,6 +1860,7 @@ func release_job_if_any() -> void:
 		_return_trade_cargo_to_source_if_any(j1)
 		JobManager.cancel(j1)
 		_current_job = null
+	_clear_cohort_state()
 	# If we held a bed reservation from a previous life (world reroll), drop
 	# it. The bed itself is gone too, but releasing keeps the dict tidy.
 	_release_bed_if_reserved()
@@ -1206,6 +1878,10 @@ func _begin_haul_to_stockpile() -> void:
 	if not data.is_carrying():
 		_state = State.IDLE
 		return
+	var tick_now: int = GameManager.tick_count
+	if tick_now < _next_haul_retry_tick:
+		_state = State.IDLE
+		return
 	# Find the closest zone that accepts what we're carrying. "Accepts" also
 	# covers the seed ALL pile, so old saves / worlds without specialized
 	# zones keep working unchanged.
@@ -1216,6 +1892,7 @@ func _begin_haul_to_stockpile() -> void:
 		# No zone exists that will take this item. Hold onto it and stay idle;
 		# next tick we'll try again (maybe the player designated a zone).
 		_log_haul_fail("no accepting zone")
+		_next_haul_retry_tick = tick_now + HAUL_RETRY_COOLDOWN_TICKS
 		_state = State.IDLE
 		return
 	_target_zone = sp
@@ -1226,17 +1903,20 @@ func _begin_haul_to_stockpile() -> void:
 	var path: Array[Vector2i] = _path_for_pawn(target_tile)
 	if path.is_empty():
 		_log_haul_fail("no path")
+		_next_haul_retry_tick = tick_now + HAUL_RETRY_COOLDOWN_TICKS
 		_state = State.IDLE
 		return
+	_next_haul_retry_tick = 0
 	_state = State.HAULING
 	_start_path(path)
 	queue_redraw()
-	print("[Pawn] %s hauling %s -> zone %s (%d,%d), path_len=%d, from (%d,%d)" % [
-		data.display_name, Item.name_for(data.carrying),
-		Stockpile.FILTER_NAME.get(sp.filter, "?"),
-		target_tile.x, target_tile.y, path.size(),
-		data.tile_pos.x, data.tile_pos.y
-	])
+	if GameManager.verbose_logs():
+		print("[Pawn] %s hauling %s -> zone %s (%d,%d), path_len=%d, from (%d,%d)" % [
+			data.display_name, Item.name_for(data.carrying),
+			Stockpile.FILTER_NAME.get(sp.filter, "?"),
+			target_tile.x, target_tile.y, path.size(),
+			data.tile_pos.x, data.tile_pos.y
+		])
 
 
 func _log_haul_fail(reason: String) -> void:
@@ -1248,11 +1928,12 @@ func _log_haul_fail(reason: String) -> void:
 	if _world != null and _world.pathfinder != null:
 		my_comp = _world.pathfinder.component_of(data.tile_pos)
 	var zone_count: int = StockpileManager.zones().size()
-	print("[Pawn] %s haul FAIL (%s): at (%d,%d) comp=%d  carrying=%s x%d  zones=%d" % [
-		data.display_name, reason,
-		data.tile_pos.x, data.tile_pos.y, my_comp,
-		Item.name_for(data.carrying), data.carrying_qty, zone_count
-	])
+	if GameManager.verbose_logs():
+		print("[Pawn] %s haul FAIL (%s): at (%d,%d) comp=%d  carrying=%s x%d  zones=%d" % [
+			data.display_name, reason,
+			data.tile_pos.x, data.tile_pos.y, my_comp,
+			Item.name_for(data.carrying), data.carrying_qty, zone_count
+		])
 
 
 func _deposit_at_stockpile() -> void:
@@ -1286,12 +1967,13 @@ func _deposit_at_stockpile() -> void:
 	if sp != null and data.is_carrying():
 		sp.add_item(data.carrying, data.carrying_qty)
 		if not is_trade:
-			print("[Pawn] %s deposited %d %s into %s zone (zone now has %d)" % [
-				data.display_name, data.carrying_qty,
-				Item.name_for(data.carrying),
-				Stockpile.FILTER_NAME.get(sp.filter, "?"),
-				sp.count_of(data.carrying)
-			])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s deposited %d %s into %s zone (zone now has %d)" % [
+					data.display_name, data.carrying_qty,
+					Item.name_for(data.carrying),
+					Stockpile.FILTER_NAME.get(sp.filter, "?"),
+					sp.count_of(data.carrying)
+				])
 	data.clear_carry()
 	_target_zone = null
 	if is_trade and j_done != null and j_done.type == Job.Type.TRADE_HAUL:
@@ -1348,14 +2030,16 @@ func _begin_eating() -> void:
 
 func _finish_eating() -> void:
 	var sp: Stockpile = _target_zone
+	var food_type: int = Item.Type.NONE
+	var gain: float = 0.0
 	if sp == null or not is_instance_valid(sp):
 		sp = StockpileManager.find_food_source(data.tile_pos, _world.pathfinder)
 	if sp != null:
-		var food_type: int = sp.pick_food()
+		food_type = sp.pick_food()
 		if food_type != Item.Type.NONE:
 			var taken: int = sp.take_item(food_type, 1)
 			if taken > 0:
-				var gain: float = Item.hunger_restore(food_type)
+				gain = Item.hunger_restore(food_type)
 				data.hunger = min(100.0, data.hunger + gain)
 				data.mood = min(100.0, data.mood + MOOD_BONUS_ATE)
 				_play_sfx("res://assets/audio/pawn_eat.ogg", 1.0)
@@ -1366,9 +2050,10 @@ func _finish_eating() -> void:
 					data.add_mood_event(MoodEvent.Type.JOY, 40.0, 150)
 				# After eating, reset warning band so we don't re-log instantly.
 				_hunger_level = _level_for(data.hunger)
-				print("[Pawn] %s ate 1 %s  (+%.0f hunger -> %.1f, mood %.1f)" % [
-					data.display_name, Item.name_for(food_type), gain, data.hunger, data.mood
-				])
+	if GameManager.verbose_logs() and food_type != Item.Type.NONE and gain > 0.0:
+		print("[Pawn] %s ate 1 %s  (+%.0f hunger -> %.1f, mood %.1f)" % [
+			data.display_name, Item.name_for(food_type), gain, data.hunger, data.mood
+		])
 	_target_zone = null
 	_reset_to_idle()
 
@@ -1440,7 +2125,8 @@ func _begin_sleeping() -> void:
 	queue_redraw()
 	var on_bed: bool = _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed
 	var where: String = " in a bed" if on_bed else ""
-	print("[Pawn] %s lies down to sleep%s  (rest=%.1f)" % [data.display_name, where, data.rest])
+	if GameManager.verbose_logs():
+		print("[Pawn] %s lies down to sleep%s  (rest=%.1f)" % [data.display_name, where, data.rest])
 
 
 ## Per-tick while in SLEEPING. The actual rest restoration / hunger decay
@@ -1449,8 +2135,9 @@ func _begin_sleeping() -> void:
 func _tick_sleeping() -> void:
 	# Wake up early if we get critically hungry -- food trumps sleep.
 	if data.hunger <= HUNGER_EMERGENCY:
-		print("[Pawn] %s wakes hungry  (hunger=%.1f rest=%.1f)" %
-			[data.display_name, data.hunger, data.rest])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s wakes hungry  (hunger=%.1f rest=%.1f)" %
+				[data.display_name, data.hunger, data.rest])
 		_release_bed_if_reserved()
 		_reset_to_idle()
 		return
@@ -1493,8 +2180,9 @@ func _engage_enemies() -> void:
 	# Normal wake on rest restored.
 	if data.rest >= REST_WAKE_THRESHOLD:
 		data.mood = min(100.0, data.mood + MOOD_BONUS_WOKE_REFRESHED)
-		print("[Pawn] %s wakes refreshed  (rest=%.1f, mood %.1f)" %
-			[data.display_name, data.rest, data.mood])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s wakes refreshed  (rest=%.1f, mood %.1f)" %
+				[data.display_name, data.rest, data.mood])
 		_release_bed_if_reserved()
 		_reset_to_idle()
 		return
@@ -1523,9 +2211,10 @@ func _eat_from_hand() -> void:
 	if data.carrying_qty <= 0:
 		data.clear_carry()
 	_hunger_level = _level_for(data.hunger)
-	print("[Pawn] %s ate 1 %s FROM HAND (emergency, +%.0f hunger -> %.1f, mood %.1f)" % [
-		data.display_name, Item.name_for(food_type), gain, data.hunger, data.mood
-	])
+	if GameManager.verbose_logs():
+		print("[Pawn] %s ate 1 %s FROM HAND (emergency, +%.0f hunger -> %.1f, mood %.1f)" % [
+			data.display_name, Item.name_for(food_type), gain, data.hunger, data.mood
+		])
 	queue_redraw()
 
 
@@ -1597,21 +2286,25 @@ func _trigger_crisis_strike() -> void:
 	# Add DESPAIR mood event
 	if not data.has_trait(Trait.Type.PESSIMIST):  # Pessimists expect this already
 		data.add_mood_event(MoodEvent.Type.DESPAIR, 75.0, 400)
-	print("[Pawn] %s is on strike due to critical morale (mood=%.1f)" % 
-		[data.display_name, data.mood])
+	if GameManager.verbose_logs():
+		print("[Pawn] %s is on strike due to critical morale (mood=%.1f)" %
+			[data.display_name, data.mood])
 
 
 func _check_death_conditions() -> void:
 	if data.hunger <= 0.0:
-		print("[Pawn] %s died of starvation  (hunger=%.1f)" % [data.display_name, data.hunger])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s died of starvation  (hunger=%.1f)" % [data.display_name, data.hunger])
 		_die("")
 		return
 	if data.rest <= 0.0:
-		print("[Pawn] %s died from exhaustion  (rest=%.1f)" % [data.display_name, data.rest])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s died from exhaustion  (rest=%.1f)" % [data.display_name, data.rest])
 		_die("")
 		return
 	if data.health <= 0.0:
-		print("[Pawn] %s died from injuries  (health=%.1f)" % [data.display_name, data.health])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s died from injuries  (health=%.1f)" % [data.display_name, data.health])
 		_die("")
 		return
 
@@ -1656,6 +2349,9 @@ func _die(_p_cause: String = "") -> void:
 		WorldMemory.record_pawn_death(
 			GameManager.tick_count, data.tile_pos, data.id, data.display_name, mem_cause
 		)
+		var main_node: Node = get_tree().get_root().get_node_or_null("Main")
+		if main_node != null and main_node.has_method("register_pawn_death"):
+			main_node.call("register_pawn_death", int(data.id))
 	
 	# Remove from groups and free the node
 	remove_from_group("pawns")
@@ -1671,7 +2367,8 @@ func _trigger_sorrow_in_nearby_pawns() -> void:
 		var dist: float = position.distance_to(pawn.position)
 		if dist < nearby_distance:
 			pawn.data.add_mood_event(MoodEvent.Type.SORROW, 70.0, 500)
-			print("[Pawn] %s mourns %s's death" % [pawn.data.display_name, data.display_name])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s mourns %s's death" % [pawn.data.display_name, data.display_name])
 
 
 func _check_thresholds() -> void:
@@ -1684,7 +2381,8 @@ func _update_level(value: float, prev_level: int, warn_word: String, crit_word: 
 	var new_level: int = _level_for(value)
 	if new_level > prev_level:
 		var word := warn_word if new_level == 1 else crit_word
-		print("[Pawn] %s is %s  (value=%.1f)" % [data.display_name, word, value])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s is %s  (value=%.1f)" % [data.display_name, word, value])
 	return new_level
 
 
@@ -1937,6 +2635,18 @@ func on_hit_feedback(damage: float) -> void:
 ## Read-only accessor for the pawn's current job, may be null.
 func get_current_job() -> Job:
 	return _current_job
+
+
+func get_runtime_cohort_observability() -> Dictionary:
+	return {
+		"anchor_id": int(data.cohort_anchor_id) if data != null else -1,
+		"cohort_job_type": int(data.cohort_job_type) if data != null else -1,
+		"is_anchor": bool(data.is_cohort_anchor) if data != null else false,
+		"active_job_type": _active_cohort_job_type(),
+		"locus_tile": _cohort_locus_tile,
+		"stability_ticks": _cohort_stability_ticks,
+		"stability_job_type": _cohort_stability_job_type,
+	}
 
 
 ## Returns true if the pawn is currently asleep in a registered bed.

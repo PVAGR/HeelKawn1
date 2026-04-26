@@ -89,6 +89,14 @@ func get_housing_pressure() -> float:
 	return _housing_press
 
 
+func get_materials_pressure() -> float:
+	return _mat_press
+
+
+func get_haul_pressure() -> float:
+	return _haul_press
+
+
 func cycle_labor_stance() -> void:
 	current_labor_stance = (current_labor_stance + 1) % 4
 	if OS.is_debug_build():

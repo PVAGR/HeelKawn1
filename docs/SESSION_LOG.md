@@ -5,6 +5,46 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-26 - Phase 9 combat resolution + dynamic world events
+
+Date: 2026-04-26
+Agent/Model: Codex (Cursor)
+Goal: Prevent infinite raid loops and introduce non-combat world events with deterministic tick scheduling.
+
+Changes made:
+- Updated `scripts/combat/EnemySpawner.gd`:
+  - Added `SPAWN_INTERVAL_TICKS` and `process_tick(world, tick)` gate:
+    - raids only spawn when `tick % SPAWN_INTERVAL_TICKS == 0`.
+  - Added active battle lock:
+    - `_is_battle_active` true while enemies exist; blocks new raid spawns.
+  - Added zombie-raid fail-safe:
+    - if living pawns < 2 for `NO_TARGET_DESPAWN_TICKS`, auto `despawn_all()`.
+  - Added clear log:
+    - `[Combat] Raid cleared: No targets remaining.`
+  - Replaced random edge/type selection with deterministic tile/raid-based ordering.
+- Updated `scenes/main/Main.gd`:
+  - `_on_enemy_tick` now delegates to `spawner.process_tick(...)`.
+- Added `autoloads/WorldEvents.gd` and autoload registration in `project.godot`:
+  - Deterministic event roll every `EVENT_ROLL_INTERVAL` ticks.
+  - Event set:
+    - Trade Caravan (resource delivery),
+    - Harvest Moon (temporary gathering multiplier state),
+    - Locust Swarm (food drain),
+    - Diplomatic Envoy (alliance stub).
+  - All events recorded via `WorldMemory.record_event(...)`.
+- Updated `scripts/combat/CombatResolver.gd`:
+  - Kept enemy kill confirmation log:
+    - `[Combat] Enemy X killed by Y`
+  - Throttled per-hit combat logs to `tick % 100 == 0` for high-speed stability.
+
+Determinism/perf notes:
+- Raid spawn timing now strict modulo tick gate.
+- Battle lock prevents overlapping raid spam.
+- World events are deterministic by tick-derived index.
+- Tick-loop combat logs are throttled for 50x stability.
+
+---
+
 ## 2026-04-26 - Free camera zoom/pan + fixed-scale HUD viewport split
 
 Date: 2026-04-26

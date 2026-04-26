@@ -2279,21 +2279,9 @@ func _restore_stockpiles_from_save(zones_data: Array) -> void:
 func _on_enemy_tick(tick: int, spawner: EnemySpawner) -> void:
 	if spawner == null:
 		return
-	
-	# Spawn raids at intervals
-	if tick == spawner._next_raid_tick:
-		spawner.spawn_raid(_world)
-		# Schedule next raid
-		spawner._next_raid_tick += EnemySpawner.RAID_INTERVAL_TICKS
-	
-	# Clean up dead enemies and display enemy status
-	if tick % 20 == 0:
-		spawner.cleanup_dead_enemies()
-		if spawner.get_enemy_count() > 0 and _living_pawn_count() == 0:
-			spawner.despawn_all()
-			print("[Main] Raid cleared: No targets remaining.")
-		if spawner.get_enemy_count() > 0 and tick % 100 == 0 and OS.is_debug_build():
-			print("[Combat] %s" % spawner.describe())
+	spawner.process_tick(_world, tick)
+	if spawner.get_enemy_count() > 0 and tick % 100 == 0 and OS.is_debug_build():
+		print("[Combat] %s" % spawner.describe())
 
 
 func _living_pawn_count() -> int:

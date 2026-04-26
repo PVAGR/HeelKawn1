@@ -57,15 +57,17 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 		if pawn_defender.data.health <= 0:
 			pawn_defender._check_death_conditions()
 		
-		print("[Combat] Pawn %s took %.1f damage (health %.1f)" % 
-			[pawn_defender.data.display_name, damage, pawn_defender.data.health])
+		if GameManager.tick_count % 100 == 0:
+			print("[Combat] Pawn %s took %.1f damage (health %.1f)" %
+				[pawn_defender.data.display_name, damage, pawn_defender.data.health])
 	
 	elif defender is Enemy:
 		var enemy_defender: Enemy = defender as Enemy
 		var before_hp: float = enemy_defender.health
 		enemy_defender.take_damage(damage)
-		print("[Combat] Enemy %s took %.1f damage (health %.1f)" % 
-			[enemy_defender.get_species_name(), damage, enemy_defender.health])
+		if GameManager.tick_count % 100 == 0:
+			print("[Combat] Enemy %s took %.1f damage (health %.1f)" %
+				[enemy_defender.get_species_name(), damage, enemy_defender.health])
 		if before_hp > 0.0 and enemy_defender.health <= 0.0:
 			var attacker_name: String = _combat_name(attacker)
 			var enemy_name: String = enemy_defender.get_species_name()

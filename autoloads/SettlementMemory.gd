@@ -58,8 +58,12 @@ var _settlement_state_truth_hysteresis: Dictionary = {}
 const STATE_TRUTH_HYSTERESIS_INTERVAL_TICKS: int = 2000
 ## Require this many ticks at the same raw target before committing (anti-flicker).
 const STATE_TRUTH_HYSTERESIS_COMMIT_TICKS: int = 4000
-## Gated diagnostics: enable in debug builds when investigating false abandonment.
-const SETTLEMENT_STATE_TRUTH_DIAG_ENABLED: bool = false
+## Settlement truth verification: debug build + set true for coarse gated logs (raw/committed/heartbeat).
+const SETTLEMENT_STATE_TRUTH_VERIFY_MODE: bool = false
+## Log a one-line summary per settlement when tick aligns (no per-frame spam).
+const SETTLEMENT_STATE_TRUTH_VERIFY_HEARTBEAT_TICKS: int = 20000
+## Legacy alias: prefer SETTLEMENT_STATE_TRUTH_VERIFY_MODE.
+const SETTLEMENT_STATE_TRUTH_DIAG_ENABLED: bool = SETTLEMENT_STATE_TRUTH_VERIFY_MODE
 ## region_key -> state string (derived cache for O(1) regional queries)
 var _region_state: Dictionary = {}
 ## region_key -> settlement center_region key (derived cache for O(1) intent joins)
@@ -107,7 +111,7 @@ func recompute(_world: World) -> void:
 				st, _world, living_pawns, active_jobs, base_state
 		)
 		var center_id: int = int(st.get("center_region", -1))
-		st["state"] = _apply_settlement_state_truth_hysteresis(center_id, raw_state, base_state)
+		st["state"] = _apply_settlement_state_truth_hysteresis(center_id, raw_state, base_state, st)
 		settlements.append(st)
 		var st_name: String = str(st.get("state", ""))
 		var ckr: int = int(st.get("center_region", -1))
@@ -131,6 +135,7 @@ func recompute(_world: World) -> void:
 	)
 	_prune_settlement_state_truth_hysteresis()
 	_update_governance_state()
+	_settlement_truth_verify_post_recompute_pass()
 
 
 func _prune_settlement_state_truth_hysteresis() -> void:
@@ -143,69 +148,203 @@ func _prune_settlement_state_truth_hysteresis() -> void:
 			present[c] = true
 	for k in _settlement_state_truth_hysteresis.keys():
 		if not present.has(int(k)):
+			if _settlement_truth_verify_active() and OS.is_debug_build():
+				print(
+						"[SETTLEMENT_VERIFY] tick=%d reason=hysteresis_pruned hyst_key=center_region:%d (settlement absent this recompute)"
+						% [GameManager.tick_count, int(k)]
+				)
 			_settlement_state_truth_hysteresis.erase(k)
 
 
-func _apply_settlement_state_truth_hysteresis(center_id: int, raw_state: String, base_state: String) -> String:
+func _settlement_truth_verify_active() -> bool:
+	return SETTLEMENT_STATE_TRUTH_VERIFY_MODE and OS.is_debug_build()
+
+
+func _settlement_truth_verify_emit(
+		tick: int,
+		center_id: int,
+		base_state: String,
+		raw_state: String,
+		committed: String,
+		pending: String,
+		pend_ticks: int,
+		st: Dictionary,
+		governance_type: String,
+		reason: String
+) -> void:
+	if not _settlement_truth_verify_active():
+		return
+	var sp_hits: int = int(st.get("material_stockpile_overlap_hits", 0))
+	var sp_note: String = "stockpile=designated_zone_overlap_hits_only(not_loose_items)"
+	print(
+			(
+					"[SETTLEMENT_VERIFY] tick=%d hyst_key=center_region:%d base=%s raw=%s committed=%s pending=%s pend_ticks=%d "
+					+ "liv=%d sh=%d wk=%d sp_flag=%d sp_zone_hits=%d %s gov=%s reason=%s"
+			)
+			% [
+				tick,
+				center_id,
+				base_state,
+				raw_state,
+				committed,
+				pending,
+				pend_ticks,
+				int(st.get("material_signal_living", 0)),
+				int(st.get("material_signal_shelter", 0)),
+				int(st.get("material_signal_work", 0)),
+				int(st.get("material_signal_stockpile", 0)),
+				sp_hits,
+				sp_note,
+				governance_type,
+				reason,
+			]
+	)
+
+
+func _settlement_truth_verify_post_recompute_pass() -> void:
+	if not _settlement_truth_verify_active():
+		return
+	var tick: int = GameManager.tick_count
+	if tick % SETTLEMENT_STATE_TRUTH_VERIFY_HEARTBEAT_TICKS != 0:
+		return
+	for st_v in settlements:
+		if not (st_v is Dictionary):
+			continue
+		var st: Dictionary = st_v as Dictionary
+		var center_id: int = int(st.get("center_region", -1))
+		if center_id < 0:
+			continue
+		var e_v: Variant = _settlement_state_truth_hysteresis.get(center_id, {})
+		var e: Dictionary = {}
+		if e_v is Dictionary:
+			e = e_v as Dictionary
+		_settlement_truth_verify_emit(
+				tick,
+				center_id,
+				str(st.get("state_truth_base_logged", st.get("state_truth_raw", ""))),
+				str(st.get("state_truth_raw", "")),
+				str(st.get("state", "")),
+				str(e.get("pending", "")),
+				int(e.get("ticks", 0)),
+				st,
+				str(st.get("governance_type", "anarchy")),
+				"heartbeat"
+		)
+
+
+func _apply_settlement_state_truth_hysteresis(center_id: int, raw_state: String, base_state: String, st: Dictionary) -> String:
 	if center_id < 0:
 		return raw_state
 	var tick: int = GameManager.tick_count
 	var prev_committed: String = ""
+	var governance_placeholder: String = "n/a_pre_governance"
 	if not _settlement_state_truth_hysteresis.has(center_id):
 		_settlement_state_truth_hysteresis[center_id] = {
 			"committed": raw_state,
 			"pending": raw_state,
 			"ticks": 0,
+			"last_verify_raw": raw_state,
 		}
-		if SETTLEMENT_STATE_TRUTH_DIAG_ENABLED and OS.is_debug_build():
+		st["state_truth_base_logged"] = base_state
+		if _settlement_truth_verify_active():
 			print(
-					"[SETTLEMENT_TRUTH] tick=%d center=%d init committed=%s raw=%s base=%s"
-					% [tick, center_id, raw_state, raw_state, base_state]
+					(
+							"[SETTLEMENT_VERIFY] tick=%d reason=hysteresis_new_bucket hyst_key=center_region:%d "
+							+ "(watch for prune+recreate churn if this repeats unexpectedly)"
+					)
+					% [tick, center_id]
+			)
+			_settlement_truth_verify_emit(
+					tick,
+					center_id,
+					base_state,
+					raw_state,
+					raw_state,
+					raw_state,
+					0,
+					st,
+					governance_placeholder,
+					"init"
 			)
 		return raw_state
 	var e: Dictionary = _settlement_state_truth_hysteresis[center_id] as Dictionary
 	prev_committed = str(e.get("committed", raw_state))
-	var pending: String = str(e.get("pending", raw_state))
+	var pending_before: String = str(e.get("pending", raw_state))
+	var last_logged_raw: String = str(e.get("last_verify_raw", pending_before))
 	var acc: int = int(e.get("ticks", 0))
-	if raw_state != pending:
+	var reason: String = "steady"
+	if raw_state != pending_before:
 		e["pending"] = raw_state
 		e["ticks"] = 0
+		reason = "raw_changed_reset_pending"
 	elif raw_state != str(e.get("committed", "")):
 		acc += STATE_TRUTH_HYSTERESIS_INTERVAL_TICKS
 		e["ticks"] = acc
 		if acc >= STATE_TRUTH_HYSTERESIS_COMMIT_TICKS:
 			e["committed"] = raw_state
 			e["ticks"] = 0
+			reason = "pending_reached_commit_threshold"
+		else:
+			reason = "pending_accumulate"
 	else:
 		e["ticks"] = 0
+		reason = "raw_matches_committed_clear_pending_ticks"
 	var committed: String = str(e.get("committed", raw_state))
+	var pending_after: String = str(e.get("pending", raw_state))
+	e["last_verify_raw"] = raw_state
 	_settlement_state_truth_hysteresis[center_id] = e
-	if SETTLEMENT_STATE_TRUTH_DIAG_ENABLED and OS.is_debug_build() and committed != prev_committed:
-		print(
-				"[SETTLEMENT_TRUTH] tick=%d center=%d transition %s -> %s (raw=%s base=%s pending_ticks=%d)"
-				% [tick, center_id, prev_committed, committed, raw_state, base_state, int(e.get("ticks", 0))]
-		)
+	st["state_truth_base_logged"] = base_state
+	if _settlement_truth_verify_active():
+		var committed_changed: bool = committed != prev_committed
+		var raw_changed: bool = raw_state != last_logged_raw
+		if committed_changed or raw_changed:
+			if committed_changed:
+				reason = "committed_transition"
+			elif raw_changed:
+				reason = "raw_changed"
+			_settlement_truth_verify_emit(
+					tick,
+					center_id,
+					base_state,
+					raw_state,
+					committed,
+					pending_after,
+					int(e.get("ticks", 0)),
+					st,
+					governance_placeholder,
+					reason
+			)
 	return committed
 
 
-func _stockpile_zone_overlaps_region_set(region_set: Dictionary) -> bool:
+func _stockpile_zone_overlap_metrics(region_set: Dictionary) -> Dictionary:
+	var hits: int = 0
+	var overlaps: bool = false
+	var max_total_hits: int = 256
+	var per_zone_cap: int = 128
 	for z in StockpileManager.zones():
 		if z == null:
 			continue
 		var r: Rect2i = z.rect
-		var seen: int = 0
-		var max_scan: int = 128
+		var scanned: int = 0
 		for y in range(r.position.y, r.position.y + r.size.y):
 			for x in range(r.position.x, r.position.x + r.size.x):
-				seen += 1
-				if seen > max_scan:
+				scanned += 1
+				if scanned > per_zone_cap:
 					break
 				var rk: int = WorldMemory._region_key(x, y)
 				if region_set.has(rk):
-					return true
-			if seen > max_scan:
+					overlaps = true
+					hits += 1
+					if hits >= max_total_hits:
+						return {"overlaps": overlaps, "hits": hits}
+			if scanned > per_zone_cap:
 				break
-	return false
+	return {"overlaps": overlaps, "hits": hits}
+
+
+func _stockpile_zone_overlaps_region_set(region_set: Dictionary) -> bool:
+	return bool(_stockpile_zone_overlap_metrics(region_set).get("overlaps", false))
 
 
 func _material_activity_state_override(
@@ -225,6 +364,7 @@ func _material_activity_state_override(
 		st["material_signal_shelter"] = 0
 		st["material_signal_work"] = 0
 		st["material_signal_stockpile"] = 0
+		st["material_stockpile_overlap_hits"] = 0
 		st["state_truth_raw"] = base_state
 		return base_state
 	var living_count: int = 0
@@ -248,7 +388,9 @@ func _material_activity_state_override(
 	var bed_count: int = _count_beds_in_region_set(world, region_set)
 	var has_shelter_signal: bool = bed_count > 0 or local_bed_build_jobs > 0
 	var has_work_signal: bool = local_job_count > 0
-	var has_stockpile_signal: bool = _stockpile_zone_overlaps_region_set(region_set)
+	var sp_metrics: Dictionary = _stockpile_zone_overlap_metrics(region_set)
+	var has_stockpile_signal: bool = bool(sp_metrics.get("overlaps", false))
+	st["material_stockpile_overlap_hits"] = int(sp_metrics.get("hits", 0))
 	st["material_signal_living"] = living_count
 	st["material_signal_shelter"] = 1 if has_shelter_signal else 0
 	st["material_signal_work"] = local_job_count

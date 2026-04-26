@@ -62,19 +62,24 @@ func _world_governance_block(s: Dictionary) -> String:
 		+ "%s\n\n" % str(s.get("world_status_summary", "WORLD STATUS: Unknown"))
 		+ "[b]WORLD / GOVERNANCE[/b]\n"
 		+ "Speed: %s  Pause: %s\n" % [str(s.get("speed", "1x")), str(s.get("paused", "No"))]
-		+ "Governance: %s  Ruler: %s\n" % [str(s.get("governance_type", "Anarchy")), str(s.get("ruler_name", "None"))]
+		+ "Governance (political, separate from material settlement life): %s  Ruler: %s\n"
+		% [str(s.get("governance_type", "Anarchy")), str(s.get("ruler_name", "None"))]
 		+ "Council Size: %d\n" % int(s.get("council_size", 0))
-		+ "Settlement: %s  [%s]\n" % [
+		+ "Settlement committed (hysteresis-smoothed): %s  [%s]\n" % [
 			str(s.get("settlement_state", "Unknown")),
 			str(s.get("settlement_state_label", "UNKNOWN")),
 		]
-		+ "Settlement truth raw: %s | Mat: L=%d S=%d W=%d Sp=%d\n" % [
-			str(s.get("settlement_state_truth_raw", "unknown")),
+		+ "Settlement truth raw (instantaneous material audit): %s\n" % str(s.get("settlement_state_truth_raw", "unknown"))
+		+ "Mat: L=%d S=%d W=%d Sp=%d | Sp stockpile-zone overlap hits (bounded)=%d | hyst_key=center_region:%d\n"
+		% [
 			int(s.get("settlement_material_living", 0)),
 			int(s.get("settlement_material_shelter", 0)),
 			int(s.get("settlement_material_work", 0)),
 			int(s.get("settlement_material_stockpile", 0)),
+			int(s.get("settlement_material_stockpile_zone_overlap_hits", 0)),
+			int(s.get("settlement_hysteresis_key_center_region", -1)),
 		]
+		+ "[i]Sp=Y only if a designated stockpile zone overlaps settlement regions (not loose items on ground).[/i]\n"
 		+ "Work-focus (proxy): %s — %s  [%d%%]\n" % [
 			str(s.get("work_focus_phase", "UNKNOWN")),
 			str(s.get("work_focus_display", "Unspecialized")),

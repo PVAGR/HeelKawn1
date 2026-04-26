@@ -2510,7 +2510,7 @@ func _focus_lines_for_pawn(focus: Dictionary) -> PackedStringArray:
 	out.append("Governance Role: %s" % role)
 	out.append("Health: %d%% | Hunger %.0f | Rest %.0f | Mood %.0f" % [health_pct, d.hunger, d.rest, d.mood])
 	out.append("Action: %s | Job: %s" % [state_label, job_label])
-	out.append("Settlement State: %s | War: %s" % [settlement_label, _pretty_war_state(str(war.get("state", "peace")))])
+	out.append("Settlement state (committed/hysteresis): %s | War: %s" % [settlement_label, _pretty_war_state(str(war.get("state", "peace")))])
 	out.append("Battlefield Posture: %s" % local_mode)
 	if p.has_method("get_runtime_cohort_observability"):
 		var cobs: Dictionary = p.call("get_runtime_cohort_observability")
@@ -2541,18 +2541,29 @@ func _focus_lines_for_settlement(focus: Dictionary) -> PackedStringArray:
 	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(center)
 	var war: Dictionary = SettlementMemory.get_war_profile_for_region(center)
 	out.append("Region: %d | Tile: (%d,%d)" % [center, tile.x, tile.y])
-	out.append("Settlement State: %s" % _pretty_settlement_state(str(st.get("state", "unknown"))))
 	out.append(
-			"Material signals: liv=%d shelter=%s work=%d stockpile=%s | raw=%s"
+			"Settlement state (committed/hysteresis-smoothed): %s"
+			% _pretty_settlement_state(str(st.get("state", "unknown")))
+	)
+	out.append(
+			"Settlement truth raw (material audit, not smoothed): %s"
+			% str(st.get("state_truth_raw", st.get("state", "unknown")))
+	)
+	out.append(
+			(
+					"Material signals: liv=%d shelter=%s work=%d stockpile=%s (flag=designated stockpile-zone overlap only) "
+					+ "sp_zone_overlap_hits=%d | hysteresis_key=center_region:%d"
+			)
 			% [
 				int(st.get("material_signal_living", 0)),
 				"Y" if int(st.get("material_signal_shelter", 0)) != 0 else "N",
 				int(st.get("material_signal_work", 0)),
 				"Y" if int(st.get("material_signal_stockpile", 0)) != 0 else "N",
-				str(st.get("state_truth_raw", st.get("state", "unknown"))),
+				int(st.get("material_stockpile_overlap_hits", 0)),
+				center,
 			]
 	)
-	out.append("Governance: %s | Ruler: %s" % [
+	out.append("Governance (political identity, not material liveness): %s | Ruler: %s" % [
 		_pretty_governance_name(str(gov.get("type", "anarchy"))),
 		_pawn_name_by_id(int(gov.get("ruler_id", -1)))
 	])
@@ -2615,10 +2626,14 @@ func _focus_lines_for_tile(focus: Dictionary) -> PackedStringArray:
 		var st: Dictionary = st_v as Dictionary
 		var center: int = int(st.get("center_region", -1))
 		var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(center)
-		out.append("Settlement: %s | Governance: %s" % [
-			_pretty_settlement_state(str(st.get("state", "unknown"))),
-			_pretty_governance_name(str(gov.get("type", "anarchy")))
-		])
+		out.append(
+				"Settlement committed: %s | truth raw: %s | Governance (political): %s"
+				% [
+					_pretty_settlement_state(str(st.get("state", "unknown"))),
+					str(st.get("state_truth_raw", st.get("state", "unknown"))),
+					_pretty_governance_name(str(gov.get("type", "anarchy"))),
+				]
+		)
 	var events: Array[Dictionary] = WorldMemory.get_events_for_tile(tile)
 	if not events.is_empty():
 		var evt: Dictionary = events[events.size() - 1]
@@ -2699,6 +2714,8 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 	var mat_sh: int = int(settlement_data.get("material_signal_shelter", 0))
 	var mat_wk: int = int(settlement_data.get("material_signal_work", 0))
 	var mat_sp: int = int(settlement_data.get("material_signal_stockpile", 0))
+	var mat_sp_zone_hits: int = int(settlement_data.get("material_stockpile_overlap_hits", 0))
+	var settlement_center_region: int = int(settlement_data.get("center_region", -1))
 	var war_state_label: String = _war_state_label(war_state_raw)
 	var settlement_state_label: String = _settlement_state_label(settlement_state_raw)
 	var food_pressure_label: String = _pressure_label(food_pressure)
@@ -2731,10 +2748,13 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"settlement_state": _pretty_settlement_state(settlement_state_raw),
 		"settlement_state_label": settlement_state_label,
 		"settlement_state_truth_raw": settlement_truth_raw,
+		"settlement_state_committed": settlement_state_raw,
+		"settlement_hysteresis_key_center_region": settlement_center_region,
 		"settlement_material_living": mat_liv,
 		"settlement_material_shelter": mat_sh,
 		"settlement_material_work": mat_wk,
 		"settlement_material_stockpile": mat_sp,
+		"settlement_material_stockpile_zone_overlap_hits": mat_sp_zone_hits,
 		"total_pawns": _observer_total_pawns(),
 		"children_count": _observer_children_count(),
 		"wild_rabbit": int(wildlife.get("rabbit", 0)),

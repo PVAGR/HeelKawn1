@@ -21,6 +21,9 @@ const VERBOSE_SIM_LOGS: bool = false
 ## of ticks and causes visible stutter. Extra accumulated time stays buffered
 ## and is processed over subsequent frames.
 const MAX_TICKS_PER_FRAME: int = 6
+## Prevent runaway catch-up after a hitch. We keep sim responsive by dropping
+## excessive backlog instead of trying to replay seconds of queued ticks.
+const MAX_ACCUMULATED_TICKS: int = 12
 
 var game_speed: float = 1.0
 var is_paused: bool = false
@@ -34,7 +37,7 @@ var _tick_accumulator: float = 0.0
 
 
 static func verbose_logs() -> bool:
-	return OS.is_debug_build() and VERBOSE_SIM_LOGS
+	return VERBOSE_SIM_LOGS
 
 
 func _ready() -> void:
@@ -45,6 +48,9 @@ func _process(delta: float) -> void:
 	if is_paused:
 		return
 	_tick_accumulator += delta * game_speed
+	var max_accumulator: float = TICK_INTERVAL_SECONDS * float(MAX_ACCUMULATED_TICKS)
+	if _tick_accumulator > max_accumulator:
+		_tick_accumulator = max_accumulator
 	var ticks_this_frame: int = 0
 	while _tick_accumulator >= TICK_INTERVAL_SECONDS and ticks_this_frame < MAX_TICKS_PER_FRAME:
 		_tick_accumulator -= TICK_INTERVAL_SECONDS

@@ -5,6 +5,37 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-25 - Emergency anti-lag stabilization pass
+
+Date: 2026-04-25
+Agent/Model: Codex (Cursor)
+Goal: Stop severe hitch/freeze cycles reported during normal and high-speed runtime.
+
+Changes made:
+- Added accumulator backlog clamp in `autoloads/GameManager.gd`:
+  - New `MAX_ACCUMULATED_TICKS` cap prevents runaway catch-up storms after a hitch.
+- Added high-speed throttling for heavy planners in `scenes/main/Main.gd`:
+  - `SettlementPlanner.plan` + `TradePlanner.plan`: every 2 ticks at 6x, every 4 ticks at 12x.
+  - `SettlementRebirth.process`: every 3 ticks at 6x, every 6 ticks at 12x.
+- Tightened log gate in `autoloads/GameManager.gd` so verbose logs are only controlled by the local constant (no implicit debug-build logging).
+
+Decisions:
+- Prefer stable frame pacing over full catch-up during transient stalls.
+- Keep deterministic ordering while reducing frequency of expensive non-critical passes at fast-forward speeds.
+
+Open questions:
+- Should planner intervals become user-configurable in the debug HUD for quick tuning?
+
+Next concrete step:
+- Add per-system tick-time counters in `Main._on_game_tick` to identify the top remaining hitch source.
+
+Files touched:
+- autoloads/GameManager.gd
+- scenes/main/Main.gd
+- docs/SESSION_LOG.md
+
+---
+
 ## 2026-04-25 - Wildlife survival rebalance + hunt pressure control
 
 Date: 2026-04-25

@@ -147,6 +147,13 @@ var _last_heavy_stack_tick: int = -1
 func _is_ultra_speed() -> bool:
 	return GameManager.game_speed >= 12.0
 
+func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
+	if _is_ultra_speed():
+		return ultra_ticks
+	if GameManager.game_speed >= 6.0:
+		return fast_ticks
+	return normal_ticks
+
 func _should_post_more_hunt_jobs() -> bool:
 	return StockpileManager.total_count_of(Item.Type.MEAT) < HUNT_MEAT_STOCKPILE_SOFT_CAP
 
@@ -397,9 +404,13 @@ func _on_game_tick(tick: int) -> void:
 		_world_memory_derivative_flush_queued = true
 		call_deferred("_flush_world_memory_derivatives")
 	if is_instance_valid(_world):
-		SettlementPlanner.plan(_world, self, false)
-		TradePlanner.plan(_world, self, false)
-		SettlementRebirth.process(_world, self, false)
+		var planner_interval: int = _high_speed_interval(1, 2, 4)
+		if tick % planner_interval == 0:
+			SettlementPlanner.plan(_world, self, false)
+			TradePlanner.plan(_world, self, false)
+		var rebirth_interval: int = _high_speed_interval(1, 3, 6)
+		if tick % rebirth_interval == 0:
+			SettlementRebirth.process(_world, self, false)
 	if int(tick) % 10000 == 0 and int(tick) > 0:
 		AgeMemory.recompute()
 		if is_instance_valid(_world):

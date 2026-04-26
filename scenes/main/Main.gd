@@ -122,6 +122,8 @@ var _trace_redraw_timer: float = 0.0
 var _ambient_freq_target: float = 112.0
 ## 0 = dead/empty, 1 = open/living. Drives crossfade; current region at camera.
 var _meaning_ambient_mood: float = 0.5
+## Settlement style expression (derived): open -> positive, defensive -> negative.
+var _meaning_style_bias: float = 0.0
 
 ## Pending regrowth events. Each entry is a Dictionary:
 ##   { "tile": Vector2i, "feature": int (TileFeature.Type), "ready_tick": int }
@@ -523,9 +525,11 @@ func _update_ambient_target() -> void:
 
 func _get_meaning_ambient_mood_target() -> float:
 	if not is_instance_valid(_world) or _camera == null or _world.data == null:
+		_meaning_style_bias = 0.0
 		return 0.5
 	var t: Vector2i = _world.world_to_tile(_camera.global_position)
 	if t.x < 0:
+		_meaning_style_bias = 0.0
 		return 0.5
 	var rk: int = WorldMemory._region_key(t.x, t.y)
 	var m: float
@@ -533,6 +537,7 @@ func _get_meaning_ambient_mood_target() -> float:
 	var st_here: String = ""
 	var intent_here: int = IntentMemory.INTENT_HOLD
 	if sv is Dictionary:
+		_meaning_style_bias = SettlementPlanner.get_culture_audio_bias_for_settlement(sv as Dictionary)
 		st_here = str((sv as Dictionary).get("state", ""))
 		var ckr_here: int = int((sv as Dictionary).get("center_region", -1))
 		intent_here = int(IntentMemory.settlement_intent.get(ckr_here, IntentMemory.INTENT_HOLD))
@@ -547,6 +552,7 @@ func _get_meaning_ambient_mood_target() -> float:
 		else:
 			m = 0.5
 	else:
+		_meaning_style_bias = 0.0
 		var sl: int = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))
 		if sl >= 3:
 			m = 0.12
@@ -643,8 +649,11 @@ func _update_ambient_audio(delta: float) -> void:
 	var interp: float = min(1.0, delta * 2.6)
 	_ambient_freq_current = lerpf(_ambient_freq_current, _ambient_freq_target, interp)
 	var mood: float = _meaning_ambient_mood
-	var base_layer: float = lerpf(0.82, 0.64, 1.0 - mood)
-	var otone_layer: float = lerpf(0.16, 0.34, mood)
+	var style_mix: float = clampf(_meaning_style_bias, -0.2, 0.2)
+	var base_layer: float = lerpf(0.82, 0.64, 1.0 - mood) + style_mix * -0.18
+	var otone_layer: float = lerpf(0.16, 0.34, mood) + style_mix * 0.2
+	base_layer = clampf(base_layer, 0.52, 0.9)
+	otone_layer = clampf(otone_layer, 0.1, 0.42)
 	var amp: float = AMBIENT_BASE_AMP * lerpf(0.62, 1.0, mood)
 	if GameManager.is_paused:
 		amp *= 0.45

@@ -16,3 +16,6 @@ Thumbs.db
 
 # Godot editor cache
 .godot/
+
+# Local addon secrets
+addons/godotassistant/config.cfg

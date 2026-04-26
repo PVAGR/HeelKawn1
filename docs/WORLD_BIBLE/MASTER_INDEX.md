@@ -4,6 +4,7 @@ Use this file as the quick map of all world canon files.
 
 ## Core Lore
 
+- `GAME_VISION.md` - long-horizon product vision and design DNA
 - `TIMELINE.md` - major world eras and events
 - `REGIONS.md` - geographic and ecological identity
 - `FACTIONS.md` - organized groups and settlement identities

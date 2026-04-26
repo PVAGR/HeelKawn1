@@ -246,6 +246,35 @@ static func _derive_culture_type_v1(scar_max: int, reputation_min: int) -> int:
 	return _derive_culture_type_v1_for_age(scar_max, reputation_min, 0)
 
 
+## Public helper for other systems (ambient/camera/world expression):
+## returns one of CULTURE_OPEN / CULTURE_CAUTIOUS / CULTURE_DEFENSIVE.
+static func get_culture_type_for_settlement(settlement: Dictionary) -> int:
+	var scar_m: int = int(settlement.get("scar_max", 0))
+	var rep_m: int = int(settlement.get("reputation_min", 0))
+	return _derive_culture_type_v1_for_age(scar_m, rep_m, AgeMemory.get_current_age_index())
+
+
+## Stable string label for logs, save-compatible analytics, and non-UI world expression glue.
+static func get_culture_name_for_settlement(settlement: Dictionary) -> String:
+	var c: int = get_culture_type_for_settlement(settlement)
+	if c == CULTURE_OPEN:
+		return "open"
+	if c == CULTURE_DEFENSIVE:
+		return "defensive"
+	return "cautious"
+
+
+## Tiny audio intent nudge (no gameplay effect): open -> brighter, defensive -> heavier.
+## This remains deterministic because it is derived from deterministic memory state.
+static func get_culture_audio_bias_for_settlement(settlement: Dictionary) -> float:
+	var c: int = get_culture_type_for_settlement(settlement)
+	if c == CULTURE_OPEN:
+		return 0.08
+	if c == CULTURE_DEFENSIVE:
+		return -0.1
+	return -0.02
+
+
 static func _door2_min_span_culture(cult: int) -> int:
 	if cult == CULTURE_OPEN:
 		return DOOR2_MIN_SPAN_OPEN

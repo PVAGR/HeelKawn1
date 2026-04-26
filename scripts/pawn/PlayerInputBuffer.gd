@@ -11,6 +11,7 @@ const ACTION_MOVE_EAST: int = 4
 const ACTION_INTERACT: int = 5
 
 var _intent_queue: Array[int] = []
+var _command_queue: Array[String] = []
 var _last_action_state: String = "idle"
 
 signal intent_ready(action_id: int)
@@ -41,6 +42,11 @@ func push_intent(action_id: int) -> void:
 
 
 func process_next_tick(pawn: Node) -> bool:
+	if not _command_queue.is_empty():
+		var cmd: String = _command_queue.pop_front()
+		var did_cmd: bool = _execute_command(pawn, cmd)
+		_last_action_state = "cmd_%s" % cmd if did_cmd else "cmd_blocked"
+		return did_cmd
 	if _intent_queue.is_empty():
 		_last_action_state = "idle"
 		return false
@@ -94,7 +100,16 @@ func _record_player_action(pawn: Node, action_type: String, executed: bool) -> v
 
 
 func get_queue_size() -> int:
-	return _intent_queue.size()
+	return _intent_queue.size() + _command_queue.size()
+
+
+func enqueue_chat_command(command: String) -> void:
+	var c: String = command.strip_edges().to_lower()
+	if c == "":
+		return
+	if _command_queue.size() >= MAX_QUEUE_SIZE:
+		_command_queue.pop_front()
+	_command_queue.append(c)
 
 
 func get_last_action_state() -> String:
@@ -136,3 +151,45 @@ func _action_to_string(action_id: int) -> String:
 			return "interact"
 		_:
 			return "unknown"
+
+
+func _execute_command(pawn: Node, command: String) -> bool:
+	if pawn == null or not is_instance_valid(pawn):
+		return false
+	if command == "!abdicate":
+		return bool(pawn.call("abdicate")) if pawn.has_method("abdicate") else false
+	if command.begins_with("!edict "):
+		if not pawn.has_method("issue_edict"):
+			return false
+		var parts: PackedStringArray = command.split(" ")
+		if parts.size() < 2:
+			return false
+		return bool(pawn.call("issue_edict", parts[1]))
+	if command == "!pledge_loyalty":
+		if not pawn.has_method("pledge_loyalty"):
+			return false
+		var target: Pawn = _nearest_ruler(pawn as Pawn)
+		if target == null:
+			return false
+		return bool(pawn.call("pledge_loyalty", target))
+	return false
+
+
+func _nearest_ruler(pawn: Pawn) -> Pawn:
+	if pawn == null:
+		return null
+	var best: Pawn = null
+	var best_d2: float = INF
+	for n in pawn.get_tree().get_nodes_in_group("pawns"):
+		if not (n is Pawn):
+			continue
+		var p: Pawn = n as Pawn
+		if p.data == null:
+			continue
+		if not SettlementMemory.is_pawn_current_ruler(int(p.data.id)):
+			continue
+		var d2: float = p.position.distance_squared_to(pawn.position)
+		if d2 < best_d2:
+			best = p
+			best_d2 = d2
+	return best

@@ -5,6 +5,70 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-26 - Phase 11 emergent governance and authority
+
+Date: 2026-04-26
+Agent/Model: Codex (Cursor)
+Goal: Add organic influence-based governance (monarchy/council/anarchy) with player ruler-only edicts.
+
+Changes made:
+- Updated `scripts/pawn/PawnData.gd`:
+  - Added `influence` and deterministic influence model:
+    - base = total tracked XP
+    - bonuses = diplomacy affinity * 2 + combat affinity * 1.5
+    - multiplier scales by population
+  - Added helpers:
+    - `total_tracked_xp()`
+    - `calculate_influence(population)`
+    - `get_mastery_perk(skill)` (Master/Grandmaster tiers retained with uncapped XP).
+  - Persisted influence in save/load.
+- Updated `scenes/main/Main.gd`:
+  - Added tick-gated influence updates (`tick % 500 == 0`).
+  - Added governance profile getter for HUD:
+    - settlement state
+    - ruler name
+    - player status (Ruler/Loyalist/Rebel)
+    - edict unlock flag.
+- Updated `autoloads/SettlementMemory.gd`:
+  - Added governance detection per settlement:
+    - Monarchy = highest influence lead
+    - Council = top 3 near-tie
+    - Anarchy = evenly spread influence
+  - Stores:
+    - `governance_type`, `current_ruler_id`, `council_ids`
+  - Emits append-only `WorldMemory` event on changes:
+    - `{type: governance_change, settlement_id, new_ruler_id, governance_type}`
+  - Added query helpers:
+    - `get_governance_profile_for_region(...)`
+    - `is_pawn_current_ruler(...)`
+- Updated `scripts/pawn/Pawn.gd`:
+  - Added ruler and governance actions:
+    - `is_current_ruler()`
+    - `issue_edict("focus_farming" | "draft_soldiers")` (ruler-only)
+    - `abdicate()` (sets influence to 0)
+    - `pledge_loyalty(target_ruler)` (+influence to ruler)
+  - Reproduction and affinity systems from Phase 10 preserved.
+- Updated `scripts/pawn/PlayerInputBuffer.gd`:
+  - Added deterministic command queue for governance commands:
+    - `!edict focus_farming`
+    - `!edict draft_soldiers`
+    - `!abdicate`
+    - `!pledge_loyalty`
+  - Commands execute in tick path before movement intents.
+- Updated `scripts/ui/ColonyHUD.gd`:
+  - Added `_politics_line()`:
+    - `Settlement State: [Monarchy/Council/Anarchy]`
+    - `Ruler: [Name/None]`
+    - `Player Status: [Loyalist/Rebel/Ruler]`
+    - `EDICTS UNLOCKED` indicator for ruler.
+
+Determinism check:
+- Influence updates are tick-gated only (`% 500`).
+- Governance selection uses deterministic sort/tie rules.
+- No RNG added for governance decisions.
+
+---
+
 ## 2026-04-26 - Phase 9 combat resolution + dynamic world events
 
 Date: 2026-04-26

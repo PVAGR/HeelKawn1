@@ -26,6 +26,8 @@ var settlements: Array = []
 var _region_state: Dictionary = {}
 ## region_key -> settlement center_region key (derived cache for O(1) intent joins)
 var _region_center: Dictionary = {}
+## center_region -> governance snapshot hash for change detection.
+var _governance_snapshot: Dictionary = {}
 
 
 func recompute(_world: World) -> void:
@@ -75,6 +77,7 @@ func recompute(_world: World) -> void:
 			return false
 		return pa[0] < pb[0]
 	)
+	_update_governance_state()
 
 
 func _bfs_cluster(seed_value: int, in_eligible: Dictionary, visited: Dictionary) -> Array[int]:
@@ -422,3 +425,119 @@ func get_settlement_at_region(region_key: int) -> Variant:
 					if (reg as PackedInt32Array)[i] == region_key:
 						return (s as Dictionary).duplicate(true)
 	return null
+
+
+func _update_governance_state() -> void:
+	var pawns: Array[Pawn] = _living_pawns()
+	for i in range(settlements.size()):
+		if not (settlements[i] is Dictionary):
+			continue
+		var st: Dictionary = settlements[i]
+		var gov: Dictionary = _governance_for_settlement(st, pawns)
+		var center: int = int(st.get("center_region", -1))
+		st["governance_type"] = str(gov.get("type", "anarchy"))
+		st["current_ruler_id"] = int(gov.get("ruler_id", -1))
+		st["council_ids"] = gov.get("council_ids", PackedInt32Array())
+		settlements[i] = st
+		if center < 0:
+			continue
+		var snap: String = "%s|%d|%s" % [
+			st["governance_type"],
+			int(st["current_ruler_id"]),
+			str(st["council_ids"]),
+		]
+		if str(_governance_snapshot.get(center, "")) != snap:
+			_governance_snapshot[center] = snap
+			WorldMemory.record_event({
+				"type": "governance_change",
+				"settlement_id": center,
+				"new_ruler_id": int(st["current_ruler_id"]),
+				"governance_type": st["governance_type"],
+				"council_ids": st["council_ids"],
+				"tick": GameManager.tick_count,
+			})
+
+
+func _living_pawns() -> Array[Pawn]:
+	var out: Array[Pawn] = []
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return out
+	for n in tree.get_nodes_in_group("pawns"):
+		if n is Pawn and is_instance_valid(n):
+			out.append(n as Pawn)
+	return out
+
+
+func _governance_for_settlement(st: Dictionary, pawns: Array[Pawn]) -> Dictionary:
+	var regv: Variant = st.get("regions", PackedInt32Array())
+	if not (regv is PackedInt32Array):
+		return {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
+	var regions: PackedInt32Array = regv as PackedInt32Array
+	if regions.is_empty():
+		return {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
+	var region_set: Dictionary = {}
+	for rk in regions:
+		region_set[int(rk)] = true
+	var ranked: Array[Dictionary] = []
+	for p in pawns:
+		if p.data == null:
+			continue
+		var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		if not region_set.has(rk):
+			continue
+		ranked.append({
+			"id": int(p.data.id),
+			"influence": float(p.data.influence),
+		})
+	if ranked.is_empty():
+		return {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
+	# Influence scales with local settlement population.
+	for rec in ranked:
+		var pid: int = int((rec as Dictionary).get("id", -1))
+		for p in pawns:
+			if p.data != null and int(p.data.id) == pid:
+				(rec as Dictionary)["influence"] = p.data.calculate_influence(ranked.size())
+				break
+	ranked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ai: float = float(a.get("influence", 0.0))
+		var bi: float = float(b.get("influence", 0.0))
+		if not is_equal_approx(ai, bi):
+			return ai > bi
+		return int(a.get("id", 0)) < int(b.get("id", 0))
+	)
+	if ranked.size() >= 3:
+		var i0: float = float(ranked[0].influence)
+		var i1: float = float(ranked[1].influence)
+		var i2: float = float(ranked[2].influence)
+		if absf(i0 - i2) <= maxf(5.0, i0 * 0.05):
+			return {
+				"type": "council",
+				"ruler_id": -1,
+				"council_ids": PackedInt32Array([int(ranked[0].id), int(ranked[1].id), int(ranked[2].id)]),
+			}
+	# Even spread over all participants => anarchy.
+	var max_i: float = float(ranked[0].influence)
+	var min_i: float = float(ranked[ranked.size() - 1].influence)
+	if absf(max_i - min_i) <= maxf(3.0, max_i * 0.03):
+		return {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
+	return {"type": "monarchy", "ruler_id": int(ranked[0].id), "council_ids": PackedInt32Array()}
+
+
+func get_governance_profile_for_region(region_key: int) -> Dictionary:
+	var st_v: Variant = get_settlement_at_region(region_key)
+	if not (st_v is Dictionary):
+		return {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
+	var st: Dictionary = st_v as Dictionary
+	return {
+		"type": str(st.get("governance_type", "anarchy")),
+		"ruler_id": int(st.get("current_ruler_id", -1)),
+		"council_ids": st.get("council_ids", PackedInt32Array()),
+	}
+
+
+func is_pawn_current_ruler(pawn_id: int) -> bool:
+	for st in settlements:
+		if st is Dictionary and int((st as Dictionary).get("current_ruler_id", -1)) == pawn_id:
+			return true
+	return false

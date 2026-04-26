@@ -160,6 +160,7 @@ func _refresh() -> void:
 	lines.append(_colony_state_line())
 	lines.append(_pawn_line())
 	lines.append(_player_status_line())
+	lines.append(_politics_line())
 	lines.append(_skill_line())
 	lines.append(_kill_line())
 	lines.append(_export_status_line())
@@ -426,6 +427,27 @@ func _kill_line() -> String:
 	if main_node == null:
 		return "💀 Kills: 0"
 	return "💀 Kills: %d" % int(main_node.get_kill_count())
+
+
+func _politics_line() -> String:
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node == null:
+		return "🏛 Settlement State: Anarchy | Ruler: None | Player Status: None"
+	var gp: Dictionary = main_node.get_player_governance_profile()
+	var gtype_raw: String = str(gp.get("type", "anarchy"))
+	var gtype: String = "Anarchy"
+	if gtype_raw == "monarchy":
+		gtype = "Monarchy"
+	elif gtype_raw == "council":
+		gtype = "Council"
+	var base: String = "🏛 Settlement State: %s | Ruler: %s | Player Status: %s" % [
+		gtype,
+		str(gp.get("ruler_name", "None")),
+		str(gp.get("player_status", "None")),
+	]
+	if bool(gp.get("edicts_unlocked", false)):
+		base += " | EDICTS UNLOCKED"
+	return base
 
 
 func _sample_wildlife(current_tick: int) -> void:

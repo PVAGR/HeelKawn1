@@ -95,6 +95,7 @@ const TRACE_REDRAW_INTERVAL_SEC: float = 1.0
 ## Generational turnover (v1): one new pawn per this many ticks if population > 0.
 const GENERATION_TICKS: int = 30000
 const REPRODUCTION_CHECK_INTERVAL_TICKS: int = 300
+const INFLUENCE_UPDATE_INTERVAL_TICKS: int = 500
 ## Deterministic rebirth cadence (tick-gated, no frame-time).
 const REBIRTH_CHECK_INTERVAL_TICKS: int = 2000
 ## Ecosystems (hunt) stay inert until this tick (world gen / reroll / load).
@@ -461,6 +462,8 @@ func _on_game_tick(tick: int) -> void:
 	_maybe_generational_turnover()
 	if tick % REPRODUCTION_CHECK_INTERVAL_TICKS == 0:
 		_process_reproduction_tick()
+	if tick % INFLUENCE_UPDATE_INTERVAL_TICKS == 0:
+		_update_pawn_influence_tick()
 	if is_instance_valid(_world):
 		call_deferred("_flush_road_memory_dirty_tiles")
 
@@ -519,6 +522,18 @@ func _process_reproduction_tick() -> void:
 		if p.attempt_reproduction():
 			# Limit to one birth per check window for stability.
 			return
+
+
+func _update_pawn_influence_tick() -> void:
+	if _pawn_spawner == null:
+		return
+	var living: Array[Pawn] = []
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
+			living.append(p)
+	var population: int = living.size()
+	for p in living:
+		p.data.calculate_influence(population)
 
 
 ## Best region: max [CulturalMemory] reputation, then min [WorldPersistence] scar, then lowest region_key.
@@ -1181,6 +1196,35 @@ func get_player_profession_xp() -> int:
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return 0
 	return int(_player_pawn.data.profession_progress_xp())
+
+
+func get_player_governance_profile() -> Dictionary:
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return {"type": "anarchy", "ruler_name": "None", "player_status": "None", "edicts_unlocked": false}
+	var rk: int = WorldMemory._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
+	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(rk)
+	var gtype: String = str(gov.get("type", "anarchy"))
+	var rid: int = int(gov.get("ruler_id", -1))
+	var ruler_name: String = "None"
+	if rid >= 0 and _pawn_spawner != null:
+		for p in _pawn_spawner.pawns:
+			if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == rid:
+				ruler_name = p.data.display_name
+				break
+	var status: String = "Rebel"
+	var pid: int = int(_player_pawn.data.id)
+	if rid < 0:
+		status = "Rebel"
+	elif rid == pid:
+		status = "Ruler"
+	else:
+		status = "Loyalist"
+	return {
+		"type": gtype,
+		"ruler_name": ruler_name,
+		"player_status": status,
+		"edicts_unlocked": status == "Ruler",
+	}
 
 
 func get_wildlife_snapshot_for_diagnostic() -> Dictionary:

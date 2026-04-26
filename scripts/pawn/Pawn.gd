@@ -192,6 +192,7 @@ var initial_region_reputation: int = 0
 ## Failsafe log once: pawn standing on a tile A* now marks as solid.
 var _reported_stuck: bool = false
 var _next_reproduction_tick: int = 0
+var _active_edict: String = ""
 var _rest_level: int = 0
 var _mood_level: int = 0
 
@@ -878,6 +879,66 @@ func _find_compatible_mate() -> Pawn:
 			best = p
 			best_d2 = d2
 	return best
+
+
+func is_current_ruler() -> bool:
+	if data == null:
+		return false
+	return SettlementMemory.is_pawn_current_ruler(int(data.id))
+
+
+func issue_edict(edict_key: String) -> bool:
+	if data == null or not is_current_ruler():
+		return false
+	_active_edict = edict_key
+	WorldMemory.record_event({
+		"type": "edict_issued",
+		"pawn_id": int(data.id),
+		"edict": edict_key,
+		"tick": GameManager.tick_count,
+	})
+	# Nearby settlement effect stub: influence nudges by edict type.
+	for n in get_tree().get_nodes_in_group("pawns"):
+		if not (n is Pawn):
+			continue
+		var p: Pawn = n as Pawn
+		if p == self or p.data == null:
+			continue
+		if p.position.distance_squared_to(position) > 90.0 * 90.0:
+			continue
+		match edict_key:
+			"focus_farming":
+				p.data.skills["farming"] = int(p.data.skills.get("farming", 0)) + 1
+			"draft_soldiers":
+				p.data.skills["combat"] = int(p.data.skills.get("combat", 0)) + 1
+	return true
+
+
+func abdicate() -> bool:
+	if data == null or not is_current_ruler():
+		return false
+	data.influence = 0.0
+	WorldMemory.record_event({
+		"type": "abdicate",
+		"pawn_id": int(data.id),
+		"tick": GameManager.tick_count,
+	})
+	return true
+
+
+func pledge_loyalty(target_ruler: Pawn) -> bool:
+	if data == null or target_ruler == null or target_ruler.data == null:
+		return false
+	if not target_ruler.is_current_ruler():
+		return false
+	target_ruler.data.influence += 5.0
+	WorldMemory.record_event({
+		"type": "pledge_loyalty",
+		"pawn_id": int(data.id),
+		"target_ruler_id": int(target_ruler.data.id),
+		"tick": GameManager.tick_count,
+	})
+	return true
 
 
 func _tick_walking() -> void:

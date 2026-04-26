@@ -82,6 +82,7 @@ var birth_tick: int = 0
 var parent_a_id: int = -1
 var parent_b_id: int = -1
 var children_count: int = 0
+var influence: float = 0.0
 
 ## Work-type allow list (RimWorld-style). If false, this pawn will not *claim*
 ## that class of open job. Eating, sleeping, and hauling are not jobs; they
@@ -401,6 +402,22 @@ func get_mastery_perk(skill: String) -> String:
 	return ""
 
 
+func total_tracked_xp() -> int:
+	var total: int = 0
+	for k in skills:
+		total += int(skills[k])
+	return total
+
+
+func calculate_influence(population: int) -> float:
+	var base_xp: float = float(total_tracked_xp())
+	var dip_bonus: float = float(affinities.get("diplomacy", 0.5)) * 2.0
+	var combat_bonus: float = float(affinities.get("combat", 0.5)) * 1.5
+	var pop_mult: float = 1.0 + maxf(0.0, float(maxi(1, population) - 1) * 0.02)
+	influence = (base_xp + dip_bonus + combat_bonus) * pop_mult
+	return influence
+
+
 ## Multiplier applied to work ticks (low health and fatigue slow labour).
 ## Traits can also modify work speed.
 func effective_labor_mult() -> float:
@@ -495,6 +512,7 @@ func to_save_dict() -> Dictionary:
 		"parent_a_id": parent_a_id,
 		"parent_b_id": parent_b_id,
 		"children_count": children_count,
+		"influence": influence,
 		"work_forage": work_forage,
 		"work_mine": work_mine,
 		"work_chop": work_chop,
@@ -560,6 +578,7 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	p.parent_a_id = int(d.get("parent_a_id", -1))
 	p.parent_b_id = int(d.get("parent_b_id", -1))
 	p.children_count = int(d.get("children_count", 0))
+	p.influence = float(d.get("influence", 0.0))
 	p.work_forage = bool(d.get("work_forage", true))
 	p.work_mine = bool(d.get("work_mine", true))
 	p.work_chop = bool(d.get("work_chop", true))

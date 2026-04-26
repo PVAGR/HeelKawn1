@@ -117,6 +117,10 @@ static var _world_stabilization_until_tick: int = -1
 ## Currently selected pawn (right-side info panel). null = nothing selected.
 ## Click a pawn to select; click empty ground or press Esc to deselect.
 var _selected_pawn: Pawn = null
+## Deterministic local-control pawn. Defaults to current selection.
+var _player_pawn: Pawn = null
+var _player_input: PlayerInputBuffer = null
+var _player_action_state: String = "idle"
 ## Pixel radius around a pawn that counts as a click hit. Pawns draw at
 ## DRAW_RADIUS=3.5; we add a generous slop so moving targets are easy to grab.
 const SELECT_PICK_RADIUS_PX: float = 7.0
@@ -229,6 +233,10 @@ const BUILD_DRAG_MAX_TILES: int = 256  # ~16x16 of walls/beds/doors at once
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 	GameManager.speed_changed.connect(_on_speed_changed)
+	_player_input = PlayerInputBuffer.new()
+	_player_input.name = "PlayerInputBuffer"
+	add_child(_player_input)
+	_player_input.set_process_unhandled_input(true)
 	_init_ambient_audio()
 	# React to mining progress: when a wall comes down or an ore is cleared,
 	# new ores can become reachable and we may want to queue the next tunnel.
@@ -394,6 +402,12 @@ func _sync_pawn_inherited_cultural_reputation() -> void:
 
 
 func _on_game_tick(tick: int) -> void:
+	if _player_input != null:
+		if is_instance_valid(_player_pawn):
+			_player_input.process_next_tick(_player_pawn)
+			_player_action_state = _player_input.get_last_action_state()
+		else:
+			_player_action_state = "no_pawn"
 	# First tick of post-stab window: (re)post HUNT for static wildlife skipped during [member _world_stabilization_until_tick] seed; deterministic order.
 	if Main._world_stabilization_until_tick >= 0 and tick == Main._world_stabilization_until_tick:
 		_post_wildlife_hunt_jobs_after_stabilization()
@@ -1096,6 +1110,7 @@ func _set_selected_pawn(p: Pawn) -> void:
 		_selected_pawn.is_selected = false
 		_selected_pawn.queue_redraw()
 	_selected_pawn = p
+	_player_pawn = _selected_pawn
 	if _selected_pawn != null:
 		_selected_pawn.is_selected = true
 		_selected_pawn.queue_redraw()
@@ -1106,6 +1121,22 @@ func _set_selected_pawn(p: Pawn) -> void:
 			print("[Main] Selection cleared")
 	if _info_panel != null:
 		_info_panel.bind_pawn(_selected_pawn)
+
+
+func get_player_queue_size() -> int:
+	if _player_input == null:
+		return 0
+	return _player_input.get_queue_size()
+
+
+func get_player_action_state() -> String:
+	return _player_action_state
+
+
+func get_player_pawn_id() -> int:
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return -1
+	return int(_player_pawn.data.id)
 
 
 func _update_hover_tile(_screen_pos: Vector2) -> void:

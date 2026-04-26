@@ -36,6 +36,15 @@ func _append(e: Dictionary) -> void:
 	_events.append(e)
 
 
+## Generic deterministic event appender for non-core typed events (e.g. player input).
+func record_event(e: Dictionary) -> void:
+	var payload: Dictionary = e.duplicate(true)
+	payload["s"] = SCHEMA
+	if not payload.has("t"):
+		payload["t"] = GameManager.tick_count
+	_append(payload)
+
+
 ## Record after `data` is still valid; use primitive fields only.
 func record_pawn_death(
 		tick: int,

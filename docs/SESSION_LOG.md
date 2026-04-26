@@ -5,6 +5,41 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-26 - Phase 5 deterministic player input queue (WASD/Arrows/Space)
+
+Date: 2026-04-26
+Agent/Model: Codex (Cursor)
+Goal: Add deterministic local pawn control where keyboard input is queued and consumed on game ticks only.
+
+Changes made:
+- Added `scripts/pawn/PlayerInputBuffer.gd`:
+  - Captures WASD/Arrows/Space via `_unhandled_input`.
+  - Buffers intents in FIFO with hard cap `MAX_QUEUE_SIZE = 10` (drops oldest when full).
+  - Executes at most one intent per tick via `process_next_tick(...)`.
+  - Records every attempted action to `WorldMemory.record_event(...)` with:
+    - `type: player_action`, `action`, `pawn_id`, `tick`, `pos`, `executed`.
+- Updated `autoloads/WorldMemory.gd`:
+  - Added generic append-only `record_event(e: Dictionary)` for deterministic non-core events.
+- Updated `scripts/pawn/Pawn.gd`:
+  - Added `move(tile_delta: Vector2i) -> bool` for one-tile player step orders.
+  - Added `interact() -> bool` contextual action (haul/eat/sleep checks).
+- Updated `scenes/main/Main.gd`:
+  - Added `_player_input`, `_player_pawn`, `_player_action_state`.
+  - Instantiates `PlayerInputBuffer` in `_ready()` as attached runtime node.
+  - Consumes exactly one queued action each `_on_game_tick(...)`.
+  - Binds player-controlled pawn to current selection.
+  - Added HUD-facing getters for queue size, pawn id, and action state.
+- Updated `scripts/ui/ColonyHUD.gd`:
+  - Added line: `PLAYER PAWN: [ID] | QUEUE: [Count] | STATE: [Action]`.
+
+Determinism check:
+- No frame-time execution of player actions.
+- Input press only enqueues.
+- Action execution runs on tick clock only.
+- No RNG introduced.
+
+---
+
 ## 2026-04-25 - Phase 4 deterministic revival + peace-gated rebirth
 
 Date: 2026-04-25

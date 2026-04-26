@@ -394,6 +394,33 @@ func draft_goto(world_tile: Vector2i) -> void:
 	queue_redraw()
 
 
+## Tick-safe one-tile move used by deterministic player input queue.
+func move(tile_delta: Vector2i) -> bool:
+	if _world == null or data == null:
+		return false
+	var dest: Vector2i = data.tile_pos + tile_delta
+	if not _world.data.in_bounds(dest.x, dest.y):
+		return false
+	if not _world.pathfinder.is_passable(dest):
+		return false
+	draft_goto(dest)
+	return true
+
+
+## Contextual player action hook used by deterministic player input queue.
+func interact() -> bool:
+	if data == null:
+		return false
+	if data.is_carrying():
+		_begin_haul_to_stockpile()
+		return true
+	if _maybe_start_eating():
+		return true
+	if _maybe_start_sleeping():
+		return true
+	return false
+
+
 ## Called from World when a wall appears under this pawn — step off solid tiles.
 func nudge_if_standing_on_solid() -> void:
 	if _world == null or _world.pathfinder == null or data == null:

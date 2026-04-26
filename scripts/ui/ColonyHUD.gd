@@ -134,6 +134,7 @@ func _refresh() -> void:
 	lines.append(_time_line())
 	lines.append(_colony_state_line())
 	lines.append(_pawn_line())
+	lines.append(_player_status_line())
 	lines.append(_stockpile_line())
 	lines.append(_jobs_line())
 	lines.append(_wildlife_line())
@@ -277,6 +278,19 @@ func _jobs_line() -> String:
 	var beds_built: int = _world.bed_count() if _world != null else 0
 	return "[color=#cccccc]Jobs:[/color] [b]%d[/b] open  [b]%d[/b] claimed   F %d · M %d · TM %d · C %d · H %d · B %d · W %d · D %d   [color=#dcb478]Beds[/color] [b]%d[/b]   [color=#888888](done %d)[/color]" % [
 		s.open, s.claimed, fw, mn, mw, ch, hu, bd, bw, bo, beds_built, s.completed
+	]
+
+
+func _player_status_line() -> String:
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node == null:
+		return "[color=#cccccc]PLAYER PAWN:[/color] --  |  QUEUE: [b]0[/b]  |  STATE: [b]offline[/b]"
+	var pawn_id: int = main_node.get_player_pawn_id()
+	var queue_count: int = main_node.get_player_queue_size()
+	var state: String = main_node.get_player_action_state()
+	var pawn_id_text: String = str(pawn_id) if pawn_id >= 0 else "--"
+	return "[color=#cccccc]PLAYER PAWN:[/color] [b]%s[/b]  |  QUEUE: [b]%d[/b]  |  STATE: [b]%s[/b]" % [
+		pawn_id_text, queue_count, state
 	]
 
 

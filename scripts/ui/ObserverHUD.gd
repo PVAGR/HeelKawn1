@@ -89,6 +89,11 @@ func _demo_economy_block(s: Dictionary) -> String:
 			int(round(float(s.get("housing_pressure", 0.0)) * 100.0)),
 			str(s.get("housing_pressure_label", "LOW")),
 		]
+		+ "Resource Pressure: W %.2f | S %.2f | O %.2f\n" % [
+			float(s.get("resource_pressure_wood", 0.0)),
+			float(s.get("resource_pressure_stone", 0.0)),
+			float(s.get("resource_pressure_ore_proxy", 0.0)),
+		]
 		+ "Intent: %s" % str(s.get("intent_summary", "n/a"))
 	)
 

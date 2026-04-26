@@ -147,6 +147,7 @@ const COHORT_STABILITY_WINDOW_TICKS: int = 400
 const COHORT_LOCUS_PERSIST_RADIUS_TILES: int = 12
 const COHORT_LOCUS_PERSIST_BIAS_WEIGHT: float = 0.08
 const COHORT_LOCUS_PERSIST_MAX_STEP: float = 0.22
+const RESOURCE_PRESSURE_BIAS_MAX: float = 1.12
 
 # -------------------- AI state --------------------
 
@@ -1136,7 +1137,9 @@ func _tick_idle() -> void:
 		var front_bonus: int = int(round((front_mult - 1.0) * 10.0))
 		var cohort_mult: float = get_cohort_recruitment_bias(j)
 		var cohort_bonus: int = int(round((cohort_mult - 1.0) * 10.0))
-		return base_bias + intent_bonus + front_bonus + cohort_bonus
+		var resource_mult: float = get_resource_pressure_bias(j)
+		var resource_bonus: int = int(round((resource_mult - 1.0) * 10.0))
+		return base_bias + intent_bonus + front_bonus + cohort_bonus + resource_bonus
 	var base_passes: Callable = func(j: Job) -> bool:
 		if Pawn._world_hunt_stabilization_blocks() and j.type == Job.Type.HUNT:
 			return false
@@ -1229,6 +1232,32 @@ func get_preferred_front_bias(job: Job) -> float:
 	if data == null or job == null:
 		return 1.0
 	return float(SettlementMemory.get_preferred_front_bias_for_job(data.tile_pos, job))
+
+
+func get_resource_pressure_bias(job: Job) -> float:
+	if data == null or job == null:
+		return 1.0
+	var rp: Dictionary = SettlementMemory.get_resource_pressure_for_tile(data.tile_pos)
+	if rp.is_empty():
+		return 1.0
+	var wood_p: float = clamp(float(rp.get("wood", 0.0)), 0.0, 1.0)
+	var stone_p: float = clamp(float(rp.get("stone", 0.0)), 0.0, 1.0)
+	var ore_p: float = clamp(float(rp.get("ore_proxy", 0.0)), 0.0, 1.0)
+	# Safety guard: if upstream pressure is unexpectedly out of bounds, neutralize.
+	if wood_p > 0.9 or stone_p > 0.9 or ore_p > 0.9:
+		return 1.0
+	var intensity: float = 0.0
+	match int(job.type):
+		Job.Type.CHOP, Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+			intensity = wood_p
+		Job.Type.MINE_WALL:
+			intensity = stone_p
+		Job.Type.MINE:
+			intensity = ore_p
+		_:
+			return 1.0
+	var scaled: float = 1.0 + (RESOURCE_PRESSURE_BIAS_MAX - 1.0) * intensity
+	return clamp(scaled, 1.0, RESOURCE_PRESSURE_BIAS_MAX)
 
 
 func attempt_reproduction() -> bool:

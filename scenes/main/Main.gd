@@ -473,6 +473,7 @@ func _on_game_tick(tick: int) -> void:
 	if tick % INFLUENCE_UPDATE_INTERVAL_TICKS == 0:
 		_update_pawn_influence_tick()
 	SettlementMemory.update_settlement_intents(tick)
+	SettlementMemory.update_resource_pressures(tick)
 	SettlementMemory.update_preferred_work_fronts(tick)
 	if _observer_hud != null and _observer_hud.is_visible_state() and tick % OBSERVER_HUD_REFRESH_TICKS == 0:
 		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
@@ -2652,6 +2653,10 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 	var kernel_phase: String = "Phase 7 Complete" if is_kernel_diagnostic_complete() else "Phase 7 Waiting"
 	var food_pressure: float = float(ColonySimServices.get_food_pressure())
 	var housing_pressure: float = float(ColonySimServices.get_housing_pressure())
+	var resource_pressure: Dictionary = settlement_data.get("resource_pressure", {})
+	var rp_wood: float = clamp(float(resource_pressure.get("wood", 0.0)), 0.0, 1.0)
+	var rp_stone: float = clamp(float(resource_pressure.get("stone", 0.0)), 0.0, 1.0)
+	var rp_ore: float = clamp(float(resource_pressure.get("ore_proxy", 0.0)), 0.0, 1.0)
 	var war_state_raw: String = str(war.get("state", "peace"))
 	var settlement_state_raw: String = str(settlement_data.get("state", "unknown"))
 	var war_state_label: String = _war_state_label(war_state_raw)
@@ -2696,6 +2701,9 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"food_pressure_label": food_pressure_label,
 		"housing_pressure": housing_pressure,
 		"housing_pressure_label": housing_pressure_label,
+		"resource_pressure_wood": rp_wood,
+		"resource_pressure_stone": rp_stone,
+		"resource_pressure_ore_proxy": rp_ore,
 		"intent_summary": _observer_intent_summary(),
 		"war_state": _pretty_war_state(war_state_raw),
 		"war_state_label": war_state_label,

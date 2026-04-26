@@ -34,6 +34,8 @@ const FRONT_PERSISTENCE_WINDOW_TICKS: int = 600
 const FRONT_DECAY_TICKS: int = 200
 const MIN_FRONT_SUPPORT: int = 1
 const FRONT_SUPPORT_CHECK_RADIUS_TILES: int = 8
+const RESOURCE_PRESSURE_UPDATE_INTERVAL_TICKS: int = 500
+const RESOURCE_PRESSURE_SATURATION: float = 0.75
 const INTENT_GROW: String = "GROW"
 const INTENT_HOARD: String = "HOARD"
 const INTENT_DEFEND: String = "DEFEND"
@@ -270,6 +272,8 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
 		"preferred_fronts": [],
 		"last_front_update_tick": -1,
 		"last_front_intent": INTENT_GROW,
+		"resource_pressure": _default_resource_pressure(),
+		"last_resource_pressure_tick": -1,
 	}
 
 
@@ -1021,6 +1025,78 @@ func _active_jobs_snapshot() -> Array[Job]:
 	return out
 
 
+func _default_resource_pressure() -> Dictionary:
+	return {
+		# This is a local work-demand/focus proxy, not true stock scarcity.
+		"wood": 0.0,
+		"stone": 0.0,
+		"ore_proxy": 0.0,
+		"total_relevant_jobs": 0,
+		"source": "job_proxy",
+	}
+
+
+func _resource_bucket_for_job_type(job_type: int) -> String:
+	if job_type == Job.Type.CHOP or job_type == Job.Type.BUILD_BED or job_type == Job.Type.BUILD_WALL or job_type == Job.Type.BUILD_DOOR:
+		return "wood"
+	if job_type == Job.Type.MINE_WALL:
+		return "stone"
+	if job_type == Job.Type.MINE:
+		return "ore_proxy"
+	return ""
+
+
+func _derive_settlement_resource_pressure(st: Dictionary, active_jobs: Array[Job]) -> Dictionary:
+	var center: int = int(st.get("center_region", -1))
+	var wood_count: int = 0
+	var stone_count: int = 0
+	var ore_count: int = 0
+	var total_relevant: int = 0
+	for j in active_jobs:
+		if j == null:
+			continue
+		var job_rk: int = WorldMemory._region_key(j.work_tile.x, j.work_tile.y)
+		if int(_region_center.get(job_rk, -1)) != center:
+			continue
+		var bucket: String = _resource_bucket_for_job_type(int(j.type))
+		if bucket == "":
+			continue
+		total_relevant += 1
+		match bucket:
+			"wood":
+				wood_count += 1
+			"stone":
+				stone_count += 1
+			"ore_proxy":
+				ore_count += 1
+	var out: Dictionary = _default_resource_pressure()
+	out["total_relevant_jobs"] = total_relevant
+	if total_relevant <= 0:
+		return out
+	var denom: float = float(total_relevant)
+	out["wood"] = clamp(float(wood_count) / denom, 0.0, 1.0)
+	out["stone"] = clamp(float(stone_count) / denom, 0.0, 1.0)
+	out["ore_proxy"] = clamp(float(ore_count) / denom, 0.0, 1.0)
+	# Apply saturation damping to reduce circular job-proxy amplification.
+	out["wood"] = minf(float(out.get("wood", 0.0)), RESOURCE_PRESSURE_SATURATION)
+	out["stone"] = minf(float(out.get("stone", 0.0)), RESOURCE_PRESSURE_SATURATION)
+	out["ore_proxy"] = minf(float(out.get("ore_proxy", 0.0)), RESOURCE_PRESSURE_SATURATION)
+	return out
+
+
+func update_resource_pressures(tick: int) -> void:
+	if tick % RESOURCE_PRESSURE_UPDATE_INTERVAL_TICKS != 0:
+		return
+	var active_jobs: Array[Job] = _active_jobs_snapshot()
+	for i in range(settlements.size()):
+		if not (settlements[i] is Dictionary):
+			continue
+		var st: Dictionary = settlements[i] as Dictionary
+		st["resource_pressure"] = _derive_settlement_resource_pressure(st, active_jobs)
+		st["last_resource_pressure_tick"] = tick
+		settlements[i] = st
+
+
 func _intent_allows_front_job(intent: String, job_type: int) -> bool:
 	match intent:
 		INTENT_HOARD:
@@ -1258,3 +1334,13 @@ func get_settlement_intent_for_tile(tile_pos: Vector2i) -> String:
 	if st_v is Dictionary:
 		return str((st_v as Dictionary).get("current_intent", INTENT_GROW))
 	return INTENT_GROW
+
+
+func get_resource_pressure_for_tile(tile_pos: Vector2i) -> Dictionary:
+	var rk: int = WorldMemory._region_key(tile_pos.x, tile_pos.y)
+	var st_v: Variant = get_settlement_at_region(rk)
+	if st_v is Dictionary:
+		var rp_v: Variant = (st_v as Dictionary).get("resource_pressure", _default_resource_pressure())
+		if rp_v is Dictionary:
+			return (rp_v as Dictionary).duplicate(true)
+	return _default_resource_pressure()

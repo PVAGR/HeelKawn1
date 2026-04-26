@@ -2508,6 +2508,24 @@ func _focus_lines_for_pawn(focus: Dictionary) -> PackedStringArray:
 	out.append("Action: %s | Job: %s" % [state_label, job_label])
 	out.append("Settlement State: %s | War: %s" % [settlement_label, _pretty_war_state(str(war.get("state", "peace")))])
 	out.append("Battlefield Posture: %s" % local_mode)
+	if p.has_method("get_runtime_cohort_observability"):
+		var cobs: Dictionary = p.call("get_runtime_cohort_observability")
+		var c_job_type: int = int(cobs.get("cohort_job_type", -1))
+		var a_job_type: int = int(cobs.get("active_job_type", -1))
+		var s_job_type: int = int(cobs.get("stability_job_type", -1))
+		var locus_tile: Vector2i = cobs.get("locus_tile", Vector2i(-1, -1))
+		out.append("Cohort: anchor=%s active=%s stored=%s is_anchor=%s" % [
+			str(cobs.get("anchor_id", -1)),
+			Job.describe_type(a_job_type) if a_job_type >= 0 else "None",
+			Job.describe_type(c_job_type) if c_job_type >= 0 else "None",
+			"Yes" if bool(cobs.get("is_anchor", false)) else "No",
+		])
+		out.append("Cohort Locus: (%d,%d) | Stability: %d ticks [%s]" % [
+			locus_tile.x,
+			locus_tile.y,
+			int(cobs.get("stability_ticks", 0)),
+			Job.describe_type(s_job_type) if s_job_type >= 0 else "None",
+		])
 	return out
 
 
@@ -2527,6 +2545,28 @@ func _focus_lines_for_settlement(focus: Dictionary) -> PackedStringArray:
 	var pop: int = _count_pawns_in_regions(st.get("regions", PackedInt32Array()))
 	out.append("Population: %d | Council Size: %d" % [pop, (gov.get("council_ids", PackedInt32Array()) as PackedInt32Array).size() if gov.get("council_ids", PackedInt32Array()) is PackedInt32Array else 0])
 	out.append("War: %s | Target: %s" % [_pretty_war_state(str(war.get("state", "peace"))), _observer_war_target_label(int(war.get("target_settlement_id", -1)))])
+	out.append("Intent: %s" % str(st.get("current_intent", SettlementMemory.INTENT_GROW)))
+	var fronts_v: Variant = st.get("preferred_fronts", [])
+	if fronts_v is Array and not (fronts_v as Array).is_empty():
+		var idx: int = 0
+		for fv in fronts_v as Array:
+			if not (fv is Dictionary):
+				continue
+			if idx >= 2:
+				break
+			var f: Dictionary = fv as Dictionary
+			var ftile: Vector2i = f.get("tile", Vector2i(-1, -1))
+			out.append("Front %d: %s @ (%d,%d) support=%d stability=%d" % [
+				idx + 1,
+				Job.describe_type(int(f.get("job_type", -1))) if int(f.get("job_type", -1)) >= 0 else "Unknown",
+				ftile.x,
+				ftile.y,
+				int(f.get("support", 0)),
+				int(f.get("stability_ticks", 0)),
+			])
+			idx += 1
+	else:
+		out.append("Fronts: none")
 	out.append("Food Pressure: %d%% | Housing Pressure: %d%%" % [
 		int(round(ColonySimServices.get_food_pressure() * 100.0)),
 		int(round(ColonySimServices.get_housing_pressure() * 100.0)),

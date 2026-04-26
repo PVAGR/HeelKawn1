@@ -2608,6 +2608,18 @@ func get_current_job() -> Job:
 	return _current_job
 
 
+func get_runtime_cohort_observability() -> Dictionary:
+	return {
+		"anchor_id": int(data.cohort_anchor_id) if data != null else -1,
+		"cohort_job_type": int(data.cohort_job_type) if data != null else -1,
+		"is_anchor": bool(data.is_cohort_anchor) if data != null else false,
+		"active_job_type": _active_cohort_job_type(),
+		"locus_tile": _cohort_locus_tile,
+		"stability_ticks": _cohort_stability_ticks,
+		"stability_job_type": _cohort_stability_job_type,
+	}
+
+
 ## Returns true if the pawn is currently asleep in a registered bed.
 func is_in_bed() -> bool:
 	return _state == State.SLEEPING and _reserved_bed.x >= 0

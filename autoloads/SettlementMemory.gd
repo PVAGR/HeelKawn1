@@ -58,6 +58,8 @@ func recompute(_world: World) -> void:
 	_region_center.clear()
 	_war_command_announced.clear()
 	_war_battle_spawned.clear()
+	var living_pawns: Array[Pawn] = _living_pawns()
+	var active_jobs: Array[Job] = _active_jobs_snapshot()
 	var eligible: Array[int] = []
 	for rk_any in WorldMeaning.meaning_by_region.keys():
 		var rk: int = int(rk_any)
@@ -80,6 +82,7 @@ func recompute(_world: World) -> void:
 		var cluster: Array[int] = _bfs_cluster(seed_value, in_eligible, visited)
 		cluster.sort()
 		var st: Dictionary = _build_settlement_from_regions(cluster)
+		st["state"] = _material_activity_state_override(st, _world, living_pawns, active_jobs, str(st.get("state", "recovering")))
 		settlements.append(st)
 		var st_name: String = str(st.get("state", ""))
 		var ckr: int = int(st.get("center_region", -1))
@@ -102,6 +105,80 @@ func recompute(_world: World) -> void:
 		return pa[0] < pb[0]
 	)
 	_update_governance_state()
+
+
+func _material_activity_state_override(
+		st: Dictionary,
+		world: World,
+		living_pawns: Array[Pawn],
+		active_jobs: Array[Job],
+		base_state: String
+) -> String:
+	var region_set: Dictionary = {}
+	var regv: Variant = st.get("regions", PackedInt32Array())
+	if regv is PackedInt32Array:
+		for rk in regv as PackedInt32Array:
+			region_set[int(rk)] = true
+	if region_set.is_empty():
+		return base_state
+	var living_count: int = 0
+	for p in living_pawns:
+		if p == null or p.data == null:
+			continue
+		var prk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		if region_set.has(prk):
+			living_count += 1
+	var local_job_count: int = 0
+	var local_bed_build_jobs: int = 0
+	for j in active_jobs:
+		if j == null:
+			continue
+		var jrk: int = WorldMemory._region_key(j.work_tile.x, j.work_tile.y)
+		if not region_set.has(jrk):
+			continue
+		local_job_count += 1
+		if int(j.type) == Job.Type.BUILD_BED:
+			local_bed_build_jobs += 1
+	var bed_count: int = _count_beds_in_region_set(world, region_set)
+	var has_shelter_signal: bool = bed_count > 0 or local_bed_build_jobs > 0
+	var has_work_signal: bool = local_job_count > 0
+	var activity_score: int = 0
+	if living_count > 0:
+		activity_score += 1
+	if has_shelter_signal:
+		activity_score += 1
+	if has_work_signal:
+		activity_score += 1
+	if activity_score < 2:
+		return base_state
+	# Material activity can reactivate settlements; governance state is independent.
+	if base_state == "permanently_abandoned":
+		if living_count >= 2 and (has_shelter_signal or local_job_count >= 2):
+			return "recovering"
+		return base_state
+	if living_count >= 2 and (has_shelter_signal or local_job_count >= 2):
+		return "active"
+	if base_state == "abandoned":
+		return "recovering"
+	return base_state
+
+
+func _count_beds_in_region_set(world: World, region_set: Dictionary) -> int:
+	if world == null or world.data == null:
+		return 0
+	var beds: int = 0
+	for rk_any in region_set.keys():
+		var rk: int = int(rk_any)
+		var c: Vector2i = _coords_from_region_key(rk)
+		var min_x: int = c.x * 16
+		var min_y: int = c.y * 16
+		for y in range(min_y, min_y + 16):
+			for x in range(min_x, min_x + 16):
+				if not world.data.in_bounds(x, y):
+					continue
+				if world.data.get_feature(x, y) == TileFeature.Type.BED:
+					beds += 1
+	return beds
 
 
 func _bfs_cluster(seed_value: int, in_eligible: Dictionary, visited: Dictionary) -> Array[int]:

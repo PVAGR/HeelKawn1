@@ -5,6 +5,34 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-26 - Phase 7 session log summary generator at tick 30000
+
+Date: 2026-04-26
+Agent/Model: Codex (Cursor)
+Goal: Add copy-paste-ready kernel summary text generation for handoff workflow.
+
+Changes made:
+- Updated `scripts/system/KernelDiagnostic.gd`:
+  - Added `generate_session_log_summary() -> String`.
+  - Summary fields include:
+    - `TICK: 30000`
+    - WorldMemory event count
+    - wildlife rabbit/deer/total
+    - settlement distribution (active/revivable/recovering/abandoned/permanently abandoned)
+    - player pawn block:
+      - `No Player Pawn` fallback, or
+      - `ID / Profession / XP/100`
+  - Wired into `_on_tick(30000)` to print:
+    - `[SESSION LOG SUMMARY]`
+    - then the generated multi-line summary string.
+
+Determinism check:
+- Trigger remains exact one-shot at tick 30000.
+- Summary is read-only aggregation of deterministic state.
+- No RNG or frame-time logic added.
+
+---
+
 ## 2026-04-26 - Phase 7 deterministic history export + kernel diagnostic
 
 Date: 2026-04-26

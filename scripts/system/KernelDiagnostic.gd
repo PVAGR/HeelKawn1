@@ -18,6 +18,8 @@ func _on_tick(tick: int) -> void:
 	_ran = true
 	_completed_tick = tick
 	_print_report(tick)
+	print("[SESSION LOG SUMMARY]")
+	print(generate_session_log_summary())
 
 
 func is_complete() -> bool:
@@ -118,3 +120,33 @@ func _determinism_checks() -> Dictionary:
 		"rebirth_tick_locked": rebirth_tick_locked,
 		"status": "PASS" if (rng_events == 0 and pressure_tick_locked and rebirth_tick_locked) else "WARN",
 	}
+
+
+func generate_session_log_summary() -> String:
+	var settlements: Dictionary = _settlement_state_distribution()
+	var wildlife: Dictionary = _wildlife_snapshot()
+	var player: Dictionary = _player_state()
+	var lines: PackedStringArray = []
+	lines.append("TICK: 30000")
+	lines.append("WorldMemory Events: %d" % WorldMemory.event_count())
+	lines.append("Wildlife: Rabbit=%d Deer=%d Total=%d" % [
+		int(wildlife.get("rabbit", 0)),
+		int(wildlife.get("deer", 0)),
+		int(wildlife.get("total", 0)),
+	])
+	lines.append("Settlements: Active=%d Revivable=%d Recovering=%d Abandoned=%d Permanently Abandoned=%d" % [
+		int(settlements.get("active", 0)),
+		int(settlements.get("revivable", 0)),
+		int(settlements.get("recovering", 0)),
+		int(settlements.get("abandoned", 0)),
+		int(settlements.get("permanently_abandoned", 0)),
+	])
+	if str(player.get("pawn_id", "--")) == "--":
+		lines.append("Player Pawn: No Player Pawn")
+	else:
+		lines.append("Player Pawn: ID=%s Profession=%s XP=%d/100" % [
+			str(player.get("pawn_id", "--")),
+			str(player.get("profession", "None")),
+			int(player.get("xp", 0)),
+		])
+	return "\n".join(lines)

@@ -280,6 +280,55 @@ func spawn_from_data(d: PawnData, world: World) -> void:
 		print("[Spawn] load: %s @(%d,%d)" % [d.display_name, d.tile_pos.x, d.tile_pos.y])
 
 
+func spawn_child_pawn(
+		world: World,
+		tile: Vector2i,
+		parent_a: PawnData,
+		parent_b: PawnData,
+		birth_tick: int
+) -> bool:
+	if world == null or world.data == null or world.pathfinder == null or pawn_scene == null:
+		return false
+	if not world.data.in_bounds(tile.x, tile.y):
+		return false
+	if not SPAWNABLE_BIOMES.has(world.data.get_biome(tile.x, tile.y)):
+		return false
+	if not world.pathfinder.is_passable(tile):
+		return false
+	var main_comp: int = world.pathfinder.largest_component_id()
+	if main_comp < 0 or world.pathfinder.component_of(tile) != main_comp:
+		return false
+	for p in pawns:
+		if p != null and is_instance_valid(p) and p.data != null and p.data.tile_pos == tile:
+			return false
+	var data := PawnData.new()
+	data.display_name = _pick_name_deterministic()
+	data.age = 18
+	var seed: int = int((birth_tick + parent_a.id * 13 + parent_b.id * 17) & 0x7FFFFFFF)
+	data.gender = PawnData.Gender.MALE if seed % 2 == 0 else PawnData.Gender.FEMALE
+	data.tile_pos = tile
+	data.color = parent_a.color.lerp(parent_b.color, 0.5)
+	data.body_type = seed % 3
+	data.hair_style = int(seed / 3) % 4
+	data.hair_color = parent_a.hair_color.lerp(parent_b.hair_color, 0.5)
+	data.apparel_color = parent_a.apparel_color.lerp(parent_b.apparel_color, 0.5)
+	data.initialize_affinities(birth_tick, parent_a.id, parent_b.id)
+	for sk in parent_a.skills.keys():
+		var inherited: int = int((int(parent_a.skills[sk]) + int(parent_b.skills.get(sk, 0))) * 0.2)
+		data.skills[sk] = inherited
+	var pawn: Pawn = pawn_scene.instantiate() as Pawn
+	add_child(pawn)
+	pawn.bind(data, world.tile_to_world(tile), world)
+	pawns.append(pawn)
+	parent_a.children_count += 1
+	parent_b.children_count += 1
+	if GameManager.verbose_logs():
+		print("[Spawn] child: %s at (%d,%d) from #%d + #%d" % [
+			data.display_name, tile.x, tile.y, parent_a.id, parent_b.id,
+		])
+	return true
+
+
 ## Pick a name we haven't used yet this run.
 func _pick_name(used_tiles: Dictionary) -> String:
 	var used_names: Dictionary = {}

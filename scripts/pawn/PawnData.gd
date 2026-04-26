@@ -70,7 +70,18 @@ var skills: Dictionary = {
 	"gathering": 0,
 	"combat": 0,
 }
+var affinities: Dictionary = {
+	"combat": 0.5,
+	"farming": 0.5,
+	"building": 0.5,
+	"crafting": 0.5,
+	"diplomacy": 0.5,
+}
 var current_profession: int = Profession.NONE
+var birth_tick: int = 0
+var parent_a_id: int = -1
+var parent_b_id: int = -1
+var children_count: int = 0
 
 ## Work-type allow list (RimWorld-style). If false, this pawn will not *claim*
 ## that class of open job. Eating, sleeping, and hauling are not jobs; they
@@ -93,6 +104,8 @@ var mood_events: Array[MoodEvent] = []
 func _init() -> void:
 	id = _next_id
 	_next_id += 1
+	birth_tick = int(GameManager.tick_count) if "tick_count" in GameManager else 0
+	initialize_affinities(birth_tick, -1, -1)
 
 
 # ==================== traits ====================
@@ -306,11 +319,11 @@ func tracked_skill_xp(skill_key: String) -> int:
 func profession_progress_xp() -> int:
 	var primary: String = _profession_primary_skill(current_profession)
 	if primary != "":
-		return mini(100, tracked_skill_xp(primary))
+		return tracked_skill_xp(primary)
 	var best: int = 0
 	for k in skills:
 		best = maxi(best, int(skills[k]))
-	return mini(100, best)
+	return best
 
 
 func gain_skill_xp(skill_key: String, amount: int) -> bool:
@@ -327,14 +340,65 @@ func gain_skill_xp(skill_key: String, amount: int) -> bool:
 	var after: int = before + amount
 	var just_locked: bool = false
 	if current_profession == Profession.NONE and after >= 100:
-		after = 100
 		current_profession = _skill_to_profession(skill_key)
 		just_locked = true
-	# Keep the primary skill bounded for deterministic HUD readability.
-	if current_profession != Profession.NONE and skill_key == _profession_primary_skill(current_profession):
-		after = mini(100, after)
 	skills[skill_key] = after
 	return (after != before) or just_locked
+
+
+func initialize_affinities(new_birth_tick: int, parent_a: int, parent_b: int) -> void:
+	birth_tick = new_birth_tick
+	parent_a_id = parent_a
+	parent_b_id = parent_b
+	affinities["combat"] = _deterministic_affinity_value(11)
+	affinities["farming"] = _deterministic_affinity_value(29)
+	affinities["building"] = _deterministic_affinity_value(47)
+	affinities["crafting"] = _deterministic_affinity_value(73)
+	affinities["diplomacy"] = _deterministic_affinity_value(97)
+
+
+func _deterministic_affinity_value(salt: int) -> float:
+	var seed: int = int(
+		(birth_tick * 1103515245 + (parent_a_id + 31) * 12345 + (parent_b_id + 17) * 2654435761 + id * 97 + salt) & 0x7FFFFFFF
+	)
+	var modv: int = seed % 1000
+	return float(modv) / 999.0
+
+
+func highest_affinity_skill() -> String:
+	var best_key: String = "farming"
+	var best_val: float = -1.0
+	for k in affinities:
+		var v: float = float(affinities[k])
+		if v > best_val or (is_equal_approx(v, best_val) and str(k) < best_key):
+			best_val = v
+			best_key = str(k)
+	return best_key
+
+
+func affinity_xp_for(affinity_key: String) -> int:
+	match affinity_key:
+		"combat":
+			return tracked_skill_xp("combat")
+		"farming":
+			return tracked_skill_xp("farming")
+		"building":
+			return tracked_skill_xp("building")
+		"crafting":
+			return tracked_skill_xp("gathering")
+		"diplomacy":
+			return tracked_skill_xp("movement")
+		_:
+			return 0
+
+
+func get_mastery_perk(skill: String) -> String:
+	var xp: int = tracked_skill_xp(skill)
+	if xp > 500:
+		return "Grandmaster"
+	if xp > 200:
+		return "Master"
+	return ""
 
 
 ## Multiplier applied to work ticks (low health and fatigue slow labour).
@@ -425,7 +489,12 @@ func to_save_dict() -> Dictionary:
 		"carrying_qty": carrying_qty,
 		"skill_xp": sx,
 		"skills": skills.duplicate(true),
+		"affinities": affinities.duplicate(true),
 		"current_profession": current_profession,
+		"birth_tick": birth_tick,
+		"parent_a_id": parent_a_id,
+		"parent_b_id": parent_b_id,
+		"children_count": children_count,
 		"work_forage": work_forage,
 		"work_mine": work_mine,
 		"work_chop": work_chop,
@@ -476,7 +545,21 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	if d.has("skills") and d["skills"] is Dictionary:
 		for sk in p.skills.keys():
 			p.skills[sk] = int(d["skills"].get(sk, 0))
+	p.affinities = {
+		"combat": 0.5,
+		"farming": 0.5,
+		"building": 0.5,
+		"crafting": 0.5,
+		"diplomacy": 0.5,
+	}
+	if d.has("affinities") and d["affinities"] is Dictionary:
+		for ak in p.affinities.keys():
+			p.affinities[ak] = float(d["affinities"].get(ak, p.affinities[ak]))
 	p.current_profession = int(d.get("current_profession", Profession.NONE))
+	p.birth_tick = int(d.get("birth_tick", 0))
+	p.parent_a_id = int(d.get("parent_a_id", -1))
+	p.parent_b_id = int(d.get("parent_b_id", -1))
+	p.children_count = int(d.get("children_count", 0))
 	p.work_forage = bool(d.get("work_forage", true))
 	p.work_mine = bool(d.get("work_mine", true))
 	p.work_chop = bool(d.get("work_chop", true))

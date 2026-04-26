@@ -94,6 +94,7 @@ const MEANING_AMBIENT_SMOOTH: float = 1.1
 const TRACE_REDRAW_INTERVAL_SEC: float = 1.0
 ## Generational turnover (v1): one new pawn per this many ticks if population > 0.
 const GENERATION_TICKS: int = 30000
+const REPRODUCTION_CHECK_INTERVAL_TICKS: int = 300
 ## Deterministic rebirth cadence (tick-gated, no frame-time).
 const REBIRTH_CHECK_INTERVAL_TICKS: int = 2000
 ## Ecosystems (hunt) stay inert until this tick (world gen / reroll / load).
@@ -458,6 +459,8 @@ func _on_game_tick(tick: int) -> void:
 		if is_instance_valid(_world):
 			IntentMemory.recompute(_world)
 	_maybe_generational_turnover()
+	if tick % REPRODUCTION_CHECK_INTERVAL_TICKS == 0:
+		_process_reproduction_tick()
 	if is_instance_valid(_world):
 		call_deferred("_flush_road_memory_dirty_tiles")
 
@@ -505,6 +508,17 @@ func _maybe_generational_turnover() -> void:
 	if sp.x < 0:
 		return
 	_pawn_spawner.spawn_generational_pawn(_world, sp, t)
+
+
+func _process_reproduction_tick() -> void:
+	if _pawn_spawner == null:
+		return
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p):
+			continue
+		if p.attempt_reproduction():
+			# Limit to one birth per check window for stability.
+			return
 
 
 ## Best region: max [CulturalMemory] reputation, then min [WorldPersistence] scar, then lowest region_key.

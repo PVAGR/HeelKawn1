@@ -130,6 +130,8 @@ const HAUL_RETRY_COOLDOWN_TICKS: int = 10
 ## At high sim speeds, skip historical aversion weighting path pass to avoid
 ## expensive weight toggles on every pawn path request.
 const FAST_PATHFIND_SPEED_THRESHOLD: float = 6.0
+const REPRODUCTION_COOLDOWN_TICKS: int = 6000
+const REPRODUCTION_MATE_RANGE_PX: float = 42.0
 
 # -------------------- AI state --------------------
 
@@ -189,6 +191,7 @@ var _hunger_level: int = 0
 var initial_region_reputation: int = 0
 ## Failsafe log once: pawn standing on a tile A* now marks as solid.
 var _reported_stuck: bool = false
+var _next_reproduction_tick: int = 0
 var _rest_level: int = 0
 var _mood_level: int = 0
 
@@ -786,6 +789,13 @@ func _tick_idle() -> void:
 		if food_job != null:
 			_begin_job(food_job)
 			return
+	var affinity_key: String = data.highest_affinity_skill() if data != null else ""
+	var affinity_passes := func(j: Job) -> bool:
+		return base_passes.call(j) and _job_matches_affinity(j.type, affinity_key)
+	var affinity_job: Job = JobManager.claim_next_for(self, affinity_passes, priority_cb)
+	if affinity_job != null:
+		_begin_job(affinity_job)
+		return
 	var job: Job = JobManager.claim_next_for(self, base_passes, priority_cb)
 	if job != null:
 		_begin_job(job)
@@ -793,6 +803,81 @@ func _tick_idle() -> void:
 	# 6. Nothing to do: idle wander
 	if randf() < WANDER_CHANCE_PER_TICK:
 		_start_wander()
+
+
+func _job_matches_affinity(job_type: int, affinity_key: String) -> bool:
+	match affinity_key:
+		"building":
+			return job_type == Job.Type.BUILD_BED or job_type == Job.Type.BUILD_WALL or job_type == Job.Type.BUILD_DOOR
+		"farming":
+			return job_type == Job.Type.FORAGE
+		"combat":
+			return job_type == Job.Type.HUNT
+		"crafting":
+			return job_type == Job.Type.CHOP or job_type == Job.Type.MINE or job_type == Job.Type.MINE_WALL
+		"diplomacy":
+			return job_type == Job.Type.TRADE_HAUL
+		_:
+			return false
+
+
+func attempt_reproduction() -> bool:
+	if data == null or _world == null:
+		return false
+	var now: int = GameManager.tick_count
+	if now < _next_reproduction_tick:
+		return false
+	if data.hunger <= 80.0 or data.rest <= 80.0:
+		return false
+	var has_shelter: bool = is_in_bed()
+	if not has_shelter:
+		var bed: Vector2i = _world.find_free_bed_for(self, data.tile_pos)
+		has_shelter = bed.x >= 0
+	if not has_shelter:
+		return false
+	var mate: Pawn = _find_compatible_mate()
+	if mate == null or mate.data == null:
+		return false
+	if int(data.id) > int(mate.data.id):
+		return false
+	var main_node: Node = get_tree().get_root().get_node_or_null("Main")
+	if main_node == null:
+		return false
+	var spawner: PawnSpawner = main_node.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+	if spawner == null:
+		return false
+	var did_spawn: bool = spawner.spawn_child_pawn(_world, data.tile_pos, data, mate.data, now)
+	if did_spawn:
+		_next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
+		mate._next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
+	return did_spawn
+
+
+func _find_compatible_mate() -> Pawn:
+	var best: Pawn = null
+	var best_d2: float = INF
+	for n in get_tree().get_nodes_in_group("pawns"):
+		if n == null or not (n is Pawn):
+			continue
+		var p: Pawn = n as Pawn
+		if p == self or p.data == null:
+			continue
+		if p.data.hunger <= 80.0 or p.data.rest <= 80.0:
+			continue
+		if p._next_reproduction_tick > GameManager.tick_count:
+			continue
+		var compatible: bool = (
+			data.gender == PawnData.Gender.OTHER
+			or p.data.gender == PawnData.Gender.OTHER
+			or data.gender != p.data.gender
+		)
+		if not compatible:
+			continue
+		var d2: float = position.distance_squared_to(p.position)
+		if d2 <= REPRODUCTION_MATE_RANGE_PX * REPRODUCTION_MATE_RANGE_PX and d2 < best_d2:
+			best = p
+			best_d2 = d2
+	return best
 
 
 func _tick_walking() -> void:

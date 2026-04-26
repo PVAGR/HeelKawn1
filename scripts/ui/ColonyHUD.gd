@@ -301,15 +301,20 @@ func _pawn_line() -> String:
 	var tired: int = 0
 	var sad: int = 0
 	var sleeping: int = 0
+	var children_total: int = 0
 	var n: int = 0
+	var lead: Pawn = null
 	for p in _spawner.pawns:
 		if not is_instance_valid(p) or p.data == null:
 			continue
+		if lead == null:
+			lead = p
 		n += 1
 		var d: PawnData = p.data
 		sum_h += d.hunger
 		sum_r += d.rest
 		sum_m += d.mood
+		children_total += int(d.children_count)
 		if d.hunger <= Pawn.THRESHOLD_WARN: hungry += 1
 		if d.rest   <= Pawn.THRESHOLD_WARN: tired  += 1
 		if d.mood   <= Pawn.THRESHOLD_WARN: sad    += 1
@@ -319,13 +324,22 @@ func _pawn_line() -> String:
 	var avg_h: float = sum_h / float(n)
 	var avg_r: float = sum_r / float(n)
 	var avg_m: float = sum_m / float(n)
-	return "[color=#cccccc]Pawns:[/color] [b]%d[/b]   H %s  R %s  M %s   %s%s%s%s" % [
+	var affinity_line: String = ""
+	if lead != null and lead.data != null:
+		var top_aff: String = lead.data.highest_affinity_skill()
+		var top_xp: int = lead.data.affinity_xp_for(top_aff)
+		affinity_line = "   Pawn: [b]%s[/b] | Aff: [b]%s[/b] | XP: [b]%d[/b]" % [
+			lead.data.display_name, top_aff.capitalize(), top_xp
+		]
+	return "[color=#cccccc]Pawns:[/color] [b]%d[/b] (children %d)   H %s  R %s  M %s   %s%s%s%s%s" % [
 		n,
+		children_total,
 		_color_value(avg_h), _color_value(avg_r), _color_value(avg_m),
 		_alert_chip("hungry",  hungry,   "#e57373"),
 		_alert_chip("tired",   tired,    "#ffd54f"),
 		_alert_chip("sad",     sad,      "#90caf9"),
 		_alert_chip("asleep",  sleeping, "#b39ddb"),
+		affinity_line,
 	]
 
 

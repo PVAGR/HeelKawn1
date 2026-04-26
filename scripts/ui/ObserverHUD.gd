@@ -64,10 +64,23 @@ func _world_governance_block(s: Dictionary) -> String:
 		+ "Speed: %s  Pause: %s\n" % [str(s.get("speed", "1x")), str(s.get("paused", "No"))]
 		+ "Governance: %s  Ruler: %s\n" % [str(s.get("governance_type", "Anarchy")), str(s.get("ruler_name", "None"))]
 		+ "Council Size: %d\n" % int(s.get("council_size", 0))
-		+ "Settlement: %s  [%s]" % [
+		+ "Settlement: %s  [%s]\n" % [
 			str(s.get("settlement_state", "Unknown")),
 			str(s.get("settlement_state_label", "UNKNOWN")),
 		]
+		+ "Settlement truth raw: %s | Mat: L=%d S=%d W=%d Sp=%d\n" % [
+			str(s.get("settlement_state_truth_raw", "unknown")),
+			int(s.get("settlement_material_living", 0)),
+			int(s.get("settlement_material_shelter", 0)),
+			int(s.get("settlement_material_work", 0)),
+			int(s.get("settlement_material_stockpile", 0)),
+		]
+		+ "Work-focus (proxy): %s — %s  [%d%%]\n" % [
+			str(s.get("work_focus_phase", "UNKNOWN")),
+			str(s.get("work_focus_display", "Unspecialized")),
+			int(s.get("work_focus_confidence", 0)),
+		]
+		+ "[i]Identity from resource-pressure proxy only; not stock scarcity.[/i]"
 	)
 
 

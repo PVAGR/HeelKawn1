@@ -36,12 +36,30 @@ const MIN_FRONT_SUPPORT: int = 1
 const FRONT_SUPPORT_CHECK_RADIUS_TILES: int = 8
 const RESOURCE_PRESSURE_UPDATE_INTERVAL_TICKS: int = 500
 const RESOURCE_PRESSURE_SATURATION: float = 0.75
+## Work-focus specialization identity is derived ONLY from cached [resource_pressure]
+## (job-demand proxy). It is NOT true stock scarcity; read-only for HUD/diagnostics.
+const SPECIALIZATION_PHASE_UNKNOWN: String = "UNKNOWN"
+const SPECIALIZATION_PHASE_CANDIDATE: String = "CANDIDATE"
+const SPECIALIZATION_PHASE_LOCKED: String = "LOCKED"
+const SPECIALIZATION_ENTER_THRESHOLD: float = 0.38
+const SPECIALIZATION_EXIT_THRESHOLD: float = 0.22
+const SPECIALIZATION_MIN_MARGIN: float = 0.12
+const SPECIALIZATION_ENTER_STABILITY_TICKS: int = 2000
+const SPECIALIZATION_EXIT_STABILITY_TICKS: int = 2500
 const INTENT_GROW: String = "GROW"
 const INTENT_HOARD: String = "HOARD"
 const INTENT_DEFEND: String = "DEFEND"
 const INTENT_RECOVER: String = "RECOVER"
 
 var settlements: Array = []
+## center_region -> hysteresis for settlement [state] material truth (survives settlement dict rebuilds).
+var _settlement_state_truth_hysteresis: Dictionary = {}
+## Align with [Main.REBIRTH_CHECK_INTERVAL_TICKS]: one hysteresis step per recompute pass.
+const STATE_TRUTH_HYSTERESIS_INTERVAL_TICKS: int = 2000
+## Require this many ticks at the same raw target before committing (anti-flicker).
+const STATE_TRUTH_HYSTERESIS_COMMIT_TICKS: int = 4000
+## Gated diagnostics: enable in debug builds when investigating false abandonment.
+const SETTLEMENT_STATE_TRUTH_DIAG_ENABLED: bool = false
 ## region_key -> state string (derived cache for O(1) regional queries)
 var _region_state: Dictionary = {}
 ## region_key -> settlement center_region key (derived cache for O(1) intent joins)
@@ -84,7 +102,12 @@ func recompute(_world: World) -> void:
 		var cluster: Array[int] = _bfs_cluster(seed_value, in_eligible, visited)
 		cluster.sort()
 		var st: Dictionary = _build_settlement_from_regions(cluster)
-		st["state"] = _material_activity_state_override(st, _world, living_pawns, active_jobs, str(st.get("state", "recovering")))
+		var base_state: String = str(st.get("state", "recovering"))
+		var raw_state: String = _material_activity_state_override(
+				st, _world, living_pawns, active_jobs, base_state
+		)
+		var center_id: int = int(st.get("center_region", -1))
+		st["state"] = _apply_settlement_state_truth_hysteresis(center_id, raw_state, base_state)
 		settlements.append(st)
 		var st_name: String = str(st.get("state", ""))
 		var ckr: int = int(st.get("center_region", -1))
@@ -106,7 +129,83 @@ func recompute(_world: World) -> void:
 			return false
 		return pa[0] < pb[0]
 	)
+	_prune_settlement_state_truth_hysteresis()
 	_update_governance_state()
+
+
+func _prune_settlement_state_truth_hysteresis() -> void:
+	var present: Dictionary = {}
+	for st_v in settlements:
+		if not (st_v is Dictionary):
+			continue
+		var c: int = int((st_v as Dictionary).get("center_region", -1))
+		if c >= 0:
+			present[c] = true
+	for k in _settlement_state_truth_hysteresis.keys():
+		if not present.has(int(k)):
+			_settlement_state_truth_hysteresis.erase(k)
+
+
+func _apply_settlement_state_truth_hysteresis(center_id: int, raw_state: String, base_state: String) -> String:
+	if center_id < 0:
+		return raw_state
+	var tick: int = GameManager.tick_count
+	var prev_committed: String = ""
+	if not _settlement_state_truth_hysteresis.has(center_id):
+		_settlement_state_truth_hysteresis[center_id] = {
+			"committed": raw_state,
+			"pending": raw_state,
+			"ticks": 0,
+		}
+		if SETTLEMENT_STATE_TRUTH_DIAG_ENABLED and OS.is_debug_build():
+			print(
+					"[SETTLEMENT_TRUTH] tick=%d center=%d init committed=%s raw=%s base=%s"
+					% [tick, center_id, raw_state, raw_state, base_state]
+			)
+		return raw_state
+	var e: Dictionary = _settlement_state_truth_hysteresis[center_id] as Dictionary
+	prev_committed = str(e.get("committed", raw_state))
+	var pending: String = str(e.get("pending", raw_state))
+	var acc: int = int(e.get("ticks", 0))
+	if raw_state != pending:
+		e["pending"] = raw_state
+		e["ticks"] = 0
+	elif raw_state != str(e.get("committed", "")):
+		acc += STATE_TRUTH_HYSTERESIS_INTERVAL_TICKS
+		e["ticks"] = acc
+		if acc >= STATE_TRUTH_HYSTERESIS_COMMIT_TICKS:
+			e["committed"] = raw_state
+			e["ticks"] = 0
+	else:
+		e["ticks"] = 0
+	var committed: String = str(e.get("committed", raw_state))
+	_settlement_state_truth_hysteresis[center_id] = e
+	if SETTLEMENT_STATE_TRUTH_DIAG_ENABLED and OS.is_debug_build() and committed != prev_committed:
+		print(
+				"[SETTLEMENT_TRUTH] tick=%d center=%d transition %s -> %s (raw=%s base=%s pending_ticks=%d)"
+				% [tick, center_id, prev_committed, committed, raw_state, base_state, int(e.get("ticks", 0))]
+		)
+	return committed
+
+
+func _stockpile_zone_overlaps_region_set(region_set: Dictionary) -> bool:
+	for z in StockpileManager.zones():
+		if z == null:
+			continue
+		var r: Rect2i = z.rect
+		var seen: int = 0
+		var max_scan: int = 128
+		for y in range(r.position.y, r.position.y + r.size.y):
+			for x in range(r.position.x, r.position.x + r.size.x):
+				seen += 1
+				if seen > max_scan:
+					break
+				var rk: int = WorldMemory._region_key(x, y)
+				if region_set.has(rk):
+					return true
+			if seen > max_scan:
+				break
+	return false
 
 
 func _material_activity_state_override(
@@ -122,6 +221,11 @@ func _material_activity_state_override(
 		for rk in regv as PackedInt32Array:
 			region_set[int(rk)] = true
 	if region_set.is_empty():
+		st["material_signal_living"] = 0
+		st["material_signal_shelter"] = 0
+		st["material_signal_work"] = 0
+		st["material_signal_stockpile"] = 0
+		st["state_truth_raw"] = base_state
 		return base_state
 	var living_count: int = 0
 	for p in living_pawns:
@@ -144,25 +248,39 @@ func _material_activity_state_override(
 	var bed_count: int = _count_beds_in_region_set(world, region_set)
 	var has_shelter_signal: bool = bed_count > 0 or local_bed_build_jobs > 0
 	var has_work_signal: bool = local_job_count > 0
-	var activity_score: int = 0
-	if living_count > 0:
-		activity_score += 1
-	if has_shelter_signal:
-		activity_score += 1
-	if has_work_signal:
-		activity_score += 1
-	if activity_score < 2:
+	var has_stockpile_signal: bool = _stockpile_zone_overlaps_region_set(region_set)
+	st["material_signal_living"] = living_count
+	st["material_signal_shelter"] = 1 if has_shelter_signal else 0
+	st["material_signal_work"] = local_job_count
+	st["material_signal_stockpile"] = 1 if has_stockpile_signal else 0
+	# Material colony presence: living pawn(s) plus at least one footprint signal
+	# (shelter, local jobs, or stockpile zone overlap). Not stock counts / not scarcity truth.
+	var material_colony: bool = (
+			living_count >= 1
+			and (has_shelter_signal or has_work_signal or has_stockpile_signal)
+	)
+	if not material_colony:
+		st["state_truth_raw"] = base_state
 		return base_state
-	# Material activity can reactivate settlements; governance state is independent.
+	var raw: String = base_state
 	if base_state == "permanently_abandoned":
-		if living_count >= 2 and (has_shelter_signal or local_job_count >= 2):
-			return "recovering"
-		return base_state
-	if living_count >= 2 and (has_shelter_signal or local_job_count >= 2):
-		return "active"
-	if base_state == "abandoned":
-		return "recovering"
-	return base_state
+		if living_count >= 1 and (has_shelter_signal or has_stockpile_signal or local_job_count >= 1):
+			raw = "recovering"
+		else:
+			st["state_truth_raw"] = base_state
+			return base_state
+	elif living_count >= 1 and has_shelter_signal and (has_work_signal or has_stockpile_signal):
+		raw = "active"
+	elif living_count >= 2 and (has_shelter_signal or has_work_signal or has_stockpile_signal):
+		raw = "active"
+	elif base_state == "abandoned":
+		raw = "recovering"
+	elif base_state == "active" or base_state == "revivable":
+		raw = base_state
+	else:
+		raw = "recovering"
+	st["state_truth_raw"] = raw
+	return raw
 
 
 func _count_beds_in_region_set(world: World, region_set: Dictionary) -> int:
@@ -274,6 +392,12 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
 		"last_front_intent": INTENT_GROW,
 		"resource_pressure": _default_resource_pressure(),
 		"last_resource_pressure_tick": -1,
+		"specialization_phase": SPECIALIZATION_PHASE_UNKNOWN,
+		"specialization_channel": "",
+		"specialization_candidate_channel": "",
+		"specialization_candidate_ticks": 0,
+		"specialization_replacement_ticks": 0,
+		"specialization_confidence": 0,
 	}
 
 
@@ -1088,13 +1212,134 @@ func update_resource_pressures(tick: int) -> void:
 	if tick % RESOURCE_PRESSURE_UPDATE_INTERVAL_TICKS != 0:
 		return
 	var active_jobs: Array[Job] = _active_jobs_snapshot()
+	var dt: int = RESOURCE_PRESSURE_UPDATE_INTERVAL_TICKS
 	for i in range(settlements.size()):
 		if not (settlements[i] is Dictionary):
 			continue
 		var st: Dictionary = settlements[i] as Dictionary
 		st["resource_pressure"] = _derive_settlement_resource_pressure(st, active_jobs)
 		st["last_resource_pressure_tick"] = tick
+		_update_settlement_work_focus_identity(st, dt)
 		settlements[i] = st
+
+
+func specialization_work_focus_label(channel: String) -> String:
+	match channel:
+		"wood":
+			return "Wood work-focus"
+		"stone":
+			return "Stone work-focus"
+		"ore_proxy":
+			return "Ore work-focus"
+		_:
+			return "Unspecialized"
+
+
+func _specialization_sorted_channels(rp: Dictionary) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = [
+		{"k": "wood", "v": float(rp.get("wood", 0.0))},
+		{"k": "stone", "v": float(rp.get("stone", 0.0))},
+		{"k": "ore_proxy", "v": float(rp.get("ore_proxy", 0.0))},
+	]
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var av: float = float(a.get("v", 0.0))
+		var bv: float = float(b.get("v", 0.0))
+		if not is_equal_approx(av, bv):
+			return av > bv
+		return str(a.get("k", "")) < str(b.get("k", ""))
+	)
+	return rows
+
+
+func _specialization_candidate_valid(top_val: float, second_val: float) -> bool:
+	return top_val >= SPECIALIZATION_ENTER_THRESHOLD and (top_val - second_val) >= SPECIALIZATION_MIN_MARGIN
+
+
+func _update_settlement_work_focus_identity(st: Dictionary, dt: int) -> void:
+	var rp_v: Variant = st.get("resource_pressure", _default_resource_pressure())
+	var rp: Dictionary = rp_v as Dictionary if rp_v is Dictionary else _default_resource_pressure()
+	var rows: Array[Dictionary] = _specialization_sorted_channels(rp)
+	var top_k: String = str(rows[0].get("k", ""))
+	var top_v: float = float(rows[0].get("v", 0.0))
+	var second_v: float = float(rows[1].get("v", 0.0)) if rows.size() > 1 else 0.0
+	var phase: String = str(st.get("specialization_phase", SPECIALIZATION_PHASE_UNKNOWN))
+	var locked_ch: String = str(st.get("specialization_channel", ""))
+	var cand_ch: String = str(st.get("specialization_candidate_channel", ""))
+	var cand_ticks: int = int(st.get("specialization_candidate_ticks", 0))
+	var repl_ticks: int = int(st.get("specialization_replacement_ticks", 0))
+	var conf: int = 0
+	var valid_top: bool = _specialization_candidate_valid(top_v, second_v)
+	if valid_top:
+		conf = int(round(clampf((top_v - second_v) / 0.5, 0.0, 1.0) * 100.0))
+	match phase:
+		SPECIALIZATION_PHASE_UNKNOWN:
+			if valid_top:
+				st["specialization_phase"] = SPECIALIZATION_PHASE_CANDIDATE
+				st["specialization_candidate_channel"] = top_k
+				st["specialization_candidate_ticks"] = dt
+				st["specialization_replacement_ticks"] = 0
+				st["specialization_channel"] = ""
+				conf = mini(100, int(round(float(st["specialization_candidate_ticks"]) / float(maxi(1, SPECIALIZATION_ENTER_STABILITY_TICKS)) * 100.0)))
+			else:
+				st["specialization_candidate_channel"] = ""
+				st["specialization_candidate_ticks"] = 0
+				st["specialization_replacement_ticks"] = 0
+		SPECIALIZATION_PHASE_CANDIDATE:
+			cand_ch = str(st.get("specialization_candidate_channel", ""))
+			if not valid_top:
+				st["specialization_phase"] = SPECIALIZATION_PHASE_UNKNOWN
+				st["specialization_candidate_channel"] = ""
+				st["specialization_candidate_ticks"] = 0
+				st["specialization_replacement_ticks"] = 0
+				st["specialization_channel"] = ""
+				conf = 0
+			elif cand_ch != top_k:
+				st["specialization_candidate_channel"] = top_k
+				st["specialization_candidate_ticks"] = dt
+				st["specialization_replacement_ticks"] = 0
+				conf = mini(100, int(round(float(st["specialization_candidate_ticks"]) / float(maxi(1, SPECIALIZATION_ENTER_STABILITY_TICKS)) * 100.0)))
+			else:
+				cand_ticks = int(st.get("specialization_candidate_ticks", 0)) + dt
+				st["specialization_candidate_ticks"] = cand_ticks
+				if cand_ticks >= SPECIALIZATION_ENTER_STABILITY_TICKS:
+					st["specialization_phase"] = SPECIALIZATION_PHASE_LOCKED
+					st["specialization_channel"] = cand_ch
+					st["specialization_candidate_channel"] = ""
+					st["specialization_candidate_ticks"] = 0
+					st["specialization_replacement_ticks"] = 0
+					conf = int(round(clampf((top_v - second_v) / 0.5, 0.0, 1.0) * 100.0))
+				else:
+					conf = mini(100, int(round(float(cand_ticks) / float(maxi(1, SPECIALIZATION_ENTER_STABILITY_TICKS)) * 100.0)))
+		SPECIALIZATION_PHASE_LOCKED:
+			locked_ch = str(st.get("specialization_channel", ""))
+			var locked_v: float = float(rp.get(locked_ch, 0.0)) if locked_ch != "" else 0.0
+			if locked_ch == "" or locked_v < SPECIALIZATION_EXIT_THRESHOLD:
+				st["specialization_phase"] = SPECIALIZATION_PHASE_UNKNOWN
+				st["specialization_channel"] = ""
+				st["specialization_candidate_channel"] = ""
+				st["specialization_candidate_ticks"] = 0
+				st["specialization_replacement_ticks"] = 0
+				conf = 0
+			elif valid_top and top_k != locked_ch and (top_v - locked_v) >= SPECIALIZATION_MIN_MARGIN:
+				repl_ticks = int(st.get("specialization_replacement_ticks", 0)) + dt
+				st["specialization_replacement_ticks"] = repl_ticks
+				if repl_ticks >= SPECIALIZATION_EXIT_STABILITY_TICKS:
+					st["specialization_phase"] = SPECIALIZATION_PHASE_CANDIDATE
+					st["specialization_candidate_channel"] = top_k
+					st["specialization_candidate_ticks"] = 0
+					st["specialization_replacement_ticks"] = 0
+					st["specialization_channel"] = ""
+					conf = 0
+				else:
+					st["specialization_replacement_ticks"] = repl_ticks
+					conf = mini(100, int(round(float(repl_ticks) / float(maxi(1, SPECIALIZATION_EXIT_STABILITY_TICKS)) * 100.0)))
+			else:
+				st["specialization_replacement_ticks"] = 0
+				if valid_top and top_k == locked_ch:
+					conf = int(round(clampf((top_v - second_v) / 0.5, 0.0, 1.0) * 100.0))
+				else:
+					conf = int(round(clampf((locked_v - second_v) / 0.5, 0.0, 1.0) * 100.0)) if locked_ch != "" else 0
+	st["specialization_confidence"] = conf
 
 
 func _intent_allows_front_job(intent: String, job_type: int) -> bool:

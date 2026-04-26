@@ -2542,6 +2542,16 @@ func _focus_lines_for_settlement(focus: Dictionary) -> PackedStringArray:
 	var war: Dictionary = SettlementMemory.get_war_profile_for_region(center)
 	out.append("Region: %d | Tile: (%d,%d)" % [center, tile.x, tile.y])
 	out.append("Settlement State: %s" % _pretty_settlement_state(str(st.get("state", "unknown"))))
+	out.append(
+			"Material signals: liv=%d shelter=%s work=%d stockpile=%s | raw=%s"
+			% [
+				int(st.get("material_signal_living", 0)),
+				"Y" if int(st.get("material_signal_shelter", 0)) != 0 else "N",
+				int(st.get("material_signal_work", 0)),
+				"Y" if int(st.get("material_signal_stockpile", 0)) != 0 else "N",
+				str(st.get("state_truth_raw", st.get("state", "unknown"))),
+			]
+	)
 	out.append("Governance: %s | Ruler: %s" % [
 		_pretty_governance_name(str(gov.get("type", "anarchy"))),
 		_pawn_name_by_id(int(gov.get("ruler_id", -1)))
@@ -2550,6 +2560,19 @@ func _focus_lines_for_settlement(focus: Dictionary) -> PackedStringArray:
 	out.append("Population: %d | Council Size: %d" % [pop, (gov.get("council_ids", PackedInt32Array()) as PackedInt32Array).size() if gov.get("council_ids", PackedInt32Array()) is PackedInt32Array else 0])
 	out.append("War: %s | Target: %s" % [_pretty_war_state(str(war.get("state", "peace"))), _observer_war_target_label(int(war.get("target_settlement_id", -1)))])
 	out.append("Intent: %s" % str(st.get("current_intent", SettlementMemory.INTENT_GROW)))
+	var wf_ph: String = str(st.get("specialization_phase", SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN))
+	var wf_lk: String = str(st.get("specialization_channel", ""))
+	var wf_cd: String = str(st.get("specialization_candidate_channel", ""))
+	var wf_cf: int = int(st.get("specialization_confidence", 0))
+	var wf_line: String = "Work-focus (proxy): %s" % wf_ph
+	match wf_ph:
+		SettlementMemory.SPECIALIZATION_PHASE_LOCKED:
+			wf_line += " — %s [%d%%]" % [SettlementMemory.specialization_work_focus_label(wf_lk), wf_cf]
+		SettlementMemory.SPECIALIZATION_PHASE_CANDIDATE:
+			wf_line += " — → %s [%d%%]" % [SettlementMemory.specialization_work_focus_label(wf_cd), wf_cf]
+		_:
+			wf_line += " — Unspecialized"
+	out.append(wf_line)
 	var fronts_v: Variant = st.get("preferred_fronts", [])
 	if fronts_v is Array and not (fronts_v as Array).is_empty():
 		var idx: int = 0
@@ -2657,8 +2680,25 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 	var rp_wood: float = clamp(float(resource_pressure.get("wood", 0.0)), 0.0, 1.0)
 	var rp_stone: float = clamp(float(resource_pressure.get("stone", 0.0)), 0.0, 1.0)
 	var rp_ore: float = clamp(float(resource_pressure.get("ore_proxy", 0.0)), 0.0, 1.0)
+	var wf_phase: String = str(settlement_data.get("specialization_phase", SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN))
+	var wf_locked_ch: String = str(settlement_data.get("specialization_channel", ""))
+	var wf_cand_ch: String = str(settlement_data.get("specialization_candidate_channel", ""))
+	var wf_conf: int = int(settlement_data.get("specialization_confidence", 0))
+	var wf_display: String = "Unspecialized"
+	match wf_phase:
+		SettlementMemory.SPECIALIZATION_PHASE_LOCKED:
+			wf_display = SettlementMemory.specialization_work_focus_label(wf_locked_ch)
+		SettlementMemory.SPECIALIZATION_PHASE_CANDIDATE:
+			wf_display = "→ %s (pending)" % SettlementMemory.specialization_work_focus_label(wf_cand_ch)
+		_:
+			wf_display = "Unspecialized"
 	var war_state_raw: String = str(war.get("state", "peace"))
 	var settlement_state_raw: String = str(settlement_data.get("state", "unknown"))
+	var settlement_truth_raw: String = str(settlement_data.get("state_truth_raw", settlement_state_raw))
+	var mat_liv: int = int(settlement_data.get("material_signal_living", 0))
+	var mat_sh: int = int(settlement_data.get("material_signal_shelter", 0))
+	var mat_wk: int = int(settlement_data.get("material_signal_work", 0))
+	var mat_sp: int = int(settlement_data.get("material_signal_stockpile", 0))
 	var war_state_label: String = _war_state_label(war_state_raw)
 	var settlement_state_label: String = _settlement_state_label(settlement_state_raw)
 	var food_pressure_label: String = _pressure_label(food_pressure)
@@ -2690,6 +2730,11 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"council_size": council_size,
 		"settlement_state": _pretty_settlement_state(settlement_state_raw),
 		"settlement_state_label": settlement_state_label,
+		"settlement_state_truth_raw": settlement_truth_raw,
+		"settlement_material_living": mat_liv,
+		"settlement_material_shelter": mat_sh,
+		"settlement_material_work": mat_wk,
+		"settlement_material_stockpile": mat_sp,
 		"total_pawns": _observer_total_pawns(),
 		"children_count": _observer_children_count(),
 		"wild_rabbit": int(wildlife.get("rabbit", 0)),
@@ -2704,6 +2749,9 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"resource_pressure_wood": rp_wood,
 		"resource_pressure_stone": rp_stone,
 		"resource_pressure_ore_proxy": rp_ore,
+		"work_focus_phase": wf_phase,
+		"work_focus_display": wf_display,
+		"work_focus_confidence": wf_conf,
 		"intent_summary": _observer_intent_summary(),
 		"war_state": _pretty_war_state(war_state_raw),
 		"war_state_label": war_state_label,

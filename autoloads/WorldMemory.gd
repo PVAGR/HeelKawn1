@@ -204,3 +204,29 @@ func get_history_export_string() -> String:
 			tick, type_name, subject, cause, impact, _provenance_hash_stub(evt),
 		])
 	return "\n".join(out)
+
+
+func get_events_for_tile(target_pos: Vector2i) -> Array[Dictionary]:
+	var results: Array[Dictionary] = []
+	for evt in _events:
+		var matched: bool = false
+		# Compact typed events store x/y.
+		if evt.has("x") and evt.has("y"):
+			if int(evt.get("x", -999999)) == target_pos.x and int(evt.get("y", -999999)) == target_pos.y:
+				matched = true
+		# Generic events may store pos as Dictionary {x,y} or Vector2i.
+		elif evt.has("pos"):
+			var pv: Variant = evt.get("pos", null)
+			if pv is Dictionary:
+				var pd: Dictionary = pv as Dictionary
+				if int(pd.get("x", -999999)) == target_pos.x and int(pd.get("y", -999999)) == target_pos.y:
+					matched = true
+			elif pv is Vector2i:
+				if (pv as Vector2i) == target_pos:
+					matched = true
+		if matched:
+			results.append(evt.duplicate(true))
+	results.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("t", 0)) < int(b.get("t", 0))
+	)
+	return results

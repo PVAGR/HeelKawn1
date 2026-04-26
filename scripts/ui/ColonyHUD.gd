@@ -27,6 +27,8 @@ const HOTKEY_HINTS: String = "SPACE pause · 1-4 speed · F5 save · F8 load · 
 @onready var _panel: PanelContainer = $Panel
 @onready var _label: RichTextLabel = $Panel/Margin/VBox/Body
 @onready var _hotkeys: Label = $Panel/Margin/VBox/Hotkeys
+var _history_panel: PopupPanel = null
+var _history_text: RichTextLabel = null
 
 var _world: World = null
 var _spawner: PawnSpawner = null
@@ -57,6 +59,7 @@ func _ready() -> void:
 	StockpileManager.zone_unregistered.connect(_on_zones_changed)
 	ColonySimServices.demand_snapshot.connect(_on_colony_demand)
 	_apply_panel_style()
+	_ensure_history_panel()
 	_hotkeys.text = HOTKEY_HINTS
 	_refresh()
 
@@ -191,6 +194,66 @@ func _draw_intent_marker() -> void:
 
 func _world_to_hud_position(world_pos: Vector2) -> Vector2:
 	return get_viewport().get_canvas_transform() * world_pos
+
+
+func _ensure_history_panel() -> void:
+	if _history_panel != null and is_instance_valid(_history_panel):
+		return
+	_history_panel = PopupPanel.new()
+	_history_panel.name = "TileHistoryPanel"
+	_history_panel.size = Vector2i(520, 320)
+	_history_panel.visible = false
+	var margin: MarginContainer = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 8)
+	margin.add_theme_constant_override("margin_right", 8)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_bottom", 8)
+	_history_panel.add_child(margin)
+	_history_text = RichTextLabel.new()
+	_history_text.name = "HistoryText"
+	_history_text.bbcode_enabled = true
+	_history_text.fit_content = false
+	_history_text.scroll_active = true
+	_history_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	margin.add_child(_history_text)
+	add_child(_history_panel)
+
+
+func show_tile_history(tile_pos: Vector2i, events: Array[Dictionary]) -> void:
+	_ensure_history_panel()
+	if _history_panel == null or _history_text == null:
+		return
+	var lines: PackedStringArray = []
+	lines.append("[b]History for Tile %s[/b]" % str(tile_pos))
+	if events.is_empty():
+		lines.append("[color=#aaaaaa]No recorded events.[/color]")
+	else:
+		for evt in events:
+			var tick: int = int(evt.get("t", 0))
+			var etype: String = str(evt.get("type", "unknown"))
+			if etype == "unknown":
+				var k: int = int(evt.get("k", -1))
+				if k == int(WorldMemory.Kind.PAWN_DEATH):
+					etype = "pawn_death"
+				elif k == int(WorldMemory.Kind.ANIMAL_DEATH):
+					etype = "animal_death"
+			var details: String = ""
+			if evt.has("action"):
+				details = "Action: %s" % str(evt.get("action", ""))
+			elif evt.has("c"):
+				details = "Cause: %s" % str(evt.get("c", ""))
+			elif evt.has("cause"):
+				details = "Cause: %s" % str(evt.get("cause", ""))
+			elif evt.has("amount"):
+				details = "Impact: %s" % str(evt.get("amount", ""))
+			lines.append("[color=yellow][Tick %04d][/color] Event: %s  %s" % [tick, etype, details])
+	_history_text.text = "\n".join(lines)
+	_history_panel.popup_centered()
+
+
+func hide_tile_history() -> void:
+	if _history_panel != null and is_instance_valid(_history_panel):
+		_history_panel.hide()
 
 
 func _time_line() -> String:

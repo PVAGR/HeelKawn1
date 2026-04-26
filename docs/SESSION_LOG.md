@@ -5,6 +5,37 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-26 - Phase 8 chronicler lens (deterministic tile inspection)
+
+Date: 2026-04-26
+Agent/Model: Codex (Cursor)
+Goal: Right-click any world tile to inspect append-only local history in a UI panel.
+
+Changes made:
+- Updated `autoloads/WorldMemory.gd`:
+  - Added `get_events_for_tile(target_pos: Vector2i) -> Array[Dictionary]`.
+  - Filters deterministic event store by tile coordinates:
+    - compact events via `x/y`
+    - generic events via `pos` dictionary or `Vector2i`
+  - Returns sorted-by-tick copy for stable UI rendering.
+- Updated `scenes/main/Main.gd`:
+  - Added `inspect_tile(tile_pos: Vector2i)`.
+  - Right-click now inspects tile under cursor using world->tile conversion.
+  - Escape and left-click hide history panel for fast close workflow.
+- Updated `scripts/ui/ColonyHUD.gd`:
+  - Added runtime `TileHistoryPanel` (`PopupPanel + RichTextLabel`).
+  - Added `show_tile_history(...)` and `hide_tile_history()`.
+  - Renders event lines as:
+    - `[Tick XXXX] Event: ...` with short detail extraction.
+  - Shows only events returned for inspected tile.
+
+Determinism check:
+- Read-only query path only (no mutation in inspect flow).
+- No RNG introduced.
+- Stable tick sort for repeatable display order.
+
+---
+
 ## 2026-04-26 - Phase 7 session log summary generator at tick 30000
 
 Date: 2026-04-26

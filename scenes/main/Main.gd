@@ -807,6 +807,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			# Esc clears either a drag-in-progress, an active build mode, or
 			# a pawn selection (in that priority order). Each extra Esc peels
 			# off the next layer.
+			if _hud != null:
+				_hud.hide_tile_history()
 			if _is_dragging:
 				_cancel_drag()
 			elif _designation_mode != DesignationMode.NONE:
@@ -848,6 +850,8 @@ func _unhandled_input(event: InputEvent) -> void:
 ##   - any build/zone mode: start click-drag rectangle.
 ##   - no mode: try to select the pawn under the cursor.
 func _on_left_press() -> void:
+	if _hud != null:
+		_hud.hide_tile_history()
 	_update_hover_tile(get_viewport().get_mouse_position())
 	if _designation_mode != DesignationMode.NONE:
 		if _hover_tile.x < 0:
@@ -883,22 +887,22 @@ func _on_right_press() -> void:
 		_set_designation_mode(DesignationMode.NONE)
 		get_viewport().set_input_as_handled()
 		return
-	if is_instance_valid(_selected_pawn):
-		var t: Vector2i = _world.world_to_tile(get_global_mouse_position())
-		if t.x < 0:
-			_set_selected_pawn(null)
-			get_viewport().set_input_as_handled()
-			return
-		if _tile_covered_by_any_stockpile(t) or not _world.pathfinder.is_passable(t):
-			get_viewport().set_input_as_handled()
-			return
-		_selected_pawn.draft_goto(t)
+	var t: Vector2i = _world.world_to_tile(get_global_mouse_position())
+	if t.x >= 0 and t.y >= 0:
+		inspect_tile(t)
 		get_viewport().set_input_as_handled()
 		return
 	if _selected_pawn != null:
 		_set_selected_pawn(null)
 		get_viewport().set_input_as_handled()
-	# No selection: leave the event unhandled (camera / future UI may use it).
+	# Off-map: leave unhandled (camera / future UI may use it).
+
+
+func inspect_tile(tile_pos: Vector2i) -> void:
+	if _hud == null:
+		return
+	var events: Array[Dictionary] = WorldMemory.get_events_for_tile(tile_pos)
+	_hud.show_tile_history(tile_pos, events)
 
 
 # ---------- drag-to-stamp: commit / cancel ----------

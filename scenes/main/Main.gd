@@ -52,6 +52,12 @@ const MAX_CHOP_JOBS: int = 60
 ## All wildlife on the main landmass is huntable; this just caps how many we
 ## actually post at once so the queue stays readable.
 const MAX_HUNT_JOBS: int = 50
+## Runtime hunt pressure controls (v1 balance):
+## - Keep some wildlife alive.
+## - Avoid flooding queue/pathing when meat stock is already healthy.
+const MAX_DYNAMIC_HUNT_JOBS_PER_PASS: int = 8
+const HUNT_JOB_PER_ANIMALS_DIVISOR: int = 4
+const HUNT_MEAT_STOCKPILE_SOFT_CAP: int = 28
 ## Cap concurrent tunnels so the colony doesn't dump all its labor into rocks.
 ## When one finishes, the reactive seeder posts the next.
 const MAX_ACTIVE_MINE_WALL_JOBS: int = 4
@@ -140,6 +146,22 @@ var _last_heavy_stack_tick: int = -1
 
 func _is_ultra_speed() -> bool:
 	return GameManager.game_speed >= 12.0
+
+func _should_post_more_hunt_jobs() -> bool:
+	return StockpileManager.total_count_of(Item.Type.MEAT) < HUNT_MEAT_STOCKPILE_SOFT_CAP
+
+func _dynamic_hunt_job_budget() -> int:
+	if _animal_spawner == null:
+		return 1
+	var live_animals: int = 0
+	for a in _animal_spawner.animals:
+		if a != null and is_instance_valid(a):
+			live_animals += 1
+	var budget: int = maxi(1, int(ceil(float(live_animals) / float(HUNT_JOB_PER_ANIMALS_DIVISOR))))
+	budget = mini(budget, MAX_DYNAMIC_HUNT_JOBS_PER_PASS)
+	if _is_ultra_speed():
+		budget = maxi(1, int(ceil(float(budget) * 0.5)))
+	return budget
 
 # -------------------- designation (player build mode) --------------------
 ## Player build modes. NONE means clicks are ignored. Every other mode uses
@@ -1415,6 +1437,7 @@ func _seed_jobs_from_world() -> void:
 	if (
 			Main._world_stabilization_until_tick >= 0
 			and GameManager.tick_count >= Main._world_stabilization_until_tick
+			and _should_post_more_hunt_jobs()
 	):
 		for tile in hunt_tiles:
 			if hunt_posted >= MAX_HUNT_JOBS:
@@ -1446,6 +1469,8 @@ static func _hunt_ticks_for(feature: int) -> int:
 ## One-shot, deterministic: tiles with wildlife on main component get HUNT if none posted during stab-seed.
 func _post_wildlife_hunt_jobs_after_stabilization() -> void:
 	if not is_instance_valid(_world) or _world.data == null:
+		return
+	if not _should_post_more_hunt_jobs():
 		return
 	var main_component: int = _world.pathfinder.largest_component_id()
 	if main_component < 0:
@@ -1482,8 +1507,11 @@ func _post_hunting_jobs_for_animals() -> void:
 		return
 	if _animal_spawner == null or _animal_spawner.animals.is_empty():
 		return
+	if not _should_post_more_hunt_jobs():
+		return
 
 	var main_component: int = _world.pathfinder.largest_component_id()
+	var hunt_budget: int = _dynamic_hunt_job_budget()
 	var hunt_jobs_posted: int = 0
 	
 	for animal in _animal_spawner.animals:
@@ -1496,7 +1524,7 @@ func _post_hunting_jobs_for_animals() -> void:
 		
 		# If no job (any type) is registered for this tile, `post` can add a HUNT
 		# job; `has_job_at` matches JobManager's internal tile index (open + claimed).
-		if not JobManager.has_job_at(tile) and hunt_jobs_posted < MAX_HUNT_JOBS:
+		if not JobManager.has_job_at(tile) and hunt_jobs_posted < hunt_budget:
 			var animal_type: int = animal.animal_type
 			var work_ticks: int = HUNT_RABBIT_WORK_TICKS if animal_type == Animal.Type.RABBIT else HUNT_DEER_WORK_TICKS
 			if JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, work_ticks) != null:

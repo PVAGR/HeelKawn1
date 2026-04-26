@@ -125,6 +125,11 @@ const WANDER_CHANCE_PER_TICK: float = 0.08
 ## Print "retrying haul (no path)" at most once every N ticks per pawn. Keeps
 ## the log readable while still making stuck hauls obvious.
 const HAUL_FAIL_LOG_EVERY_N_TICKS: int = 300
+## If a haul target is unreachable/missing, wait a few ticks before trying again.
+const HAUL_RETRY_COOLDOWN_TICKS: int = 10
+## At high sim speeds, skip historical aversion weighting path pass to avoid
+## expensive weight toggles on every pawn path request.
+const FAST_PATHFIND_SPEED_THRESHOLD: float = 6.0
 
 # -------------------- AI state --------------------
 
@@ -190,6 +195,7 @@ var _mood_level: int = 0
 ## Game tick at which we last logged a haul failure for this pawn, so the
 ## retry loop doesn't flood the console.
 var _last_haul_fail_log_tick: int = -HAUL_FAIL_LOG_EVERY_N_TICKS
+var _next_haul_retry_tick: int = 0
 var _anim_t: float = 0.0
 var _sfx: AudioStreamPlayer2D = null
 var _hit_flash_ticks: int = 0
@@ -323,6 +329,8 @@ func _culture_inherited_job_offset() -> int:
 func _path_for_pawn(to: Vector2i) -> Array[Vector2i]:
 	if _world == null or _world.pathfinder == null or data == null:
 		return [] as Array[Vector2i]
+	if GameManager.game_speed >= FAST_PATHFIND_SPEED_THRESHOLD:
+		return _world.pathfinder.find_path(data.tile_pos, to)
 	return _world.pathfinder.find_path_pawn_historic_aversion(data.tile_pos, to)
 
 
@@ -1150,8 +1158,9 @@ func _finish_build(job: Job) -> void:
 	var item_type: int = mats.item
 	var need_qty: int = mats.qty
 	if data.carrying != item_type or data.carrying_qty < need_qty:
-		print("[Pawn] %s missing material at completion -- %s not built @(%d,%d)" %
-			[data.display_name, Job.describe_type(job.type), job.tile.x, job.tile.y])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s missing material at completion -- %s not built @(%d,%d)" %
+				[data.display_name, Job.describe_type(job.type), job.tile.x, job.tile.y])
 		return
 	data.carrying_qty -= need_qty
 	if data.carrying_qty <= 0:
@@ -1160,13 +1169,16 @@ func _finish_build(job: Job) -> void:
 		Job.Type.BUILD_BED:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.BED)
 			_world.register_bed(job.tile)
-			print("[Pawn] %s built a bed @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s built a bed @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.BUILD_WALL:
 			_world.build_wall(job.tile.x, job.tile.y)
-			print("[Pawn] %s built a wall @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s built a wall @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.BUILD_DOOR:
 			_world.build_door(job.tile.x, job.tile.y)
-			print("[Pawn] %s placed a door @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s placed a door @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 
 
 func _cancel_current_job() -> void:
@@ -1217,6 +1229,10 @@ func _begin_haul_to_stockpile() -> void:
 	if not data.is_carrying():
 		_state = State.IDLE
 		return
+	var tick_now: int = GameManager.tick_count
+	if tick_now < _next_haul_retry_tick:
+		_state = State.IDLE
+		return
 	# Find the closest zone that accepts what we're carrying. "Accepts" also
 	# covers the seed ALL pile, so old saves / worlds without specialized
 	# zones keep working unchanged.
@@ -1227,6 +1243,7 @@ func _begin_haul_to_stockpile() -> void:
 		# No zone exists that will take this item. Hold onto it and stay idle;
 		# next tick we'll try again (maybe the player designated a zone).
 		_log_haul_fail("no accepting zone")
+		_next_haul_retry_tick = tick_now + HAUL_RETRY_COOLDOWN_TICKS
 		_state = State.IDLE
 		return
 	_target_zone = sp
@@ -1237,8 +1254,10 @@ func _begin_haul_to_stockpile() -> void:
 	var path: Array[Vector2i] = _path_for_pawn(target_tile)
 	if path.is_empty():
 		_log_haul_fail("no path")
+		_next_haul_retry_tick = tick_now + HAUL_RETRY_COOLDOWN_TICKS
 		_state = State.IDLE
 		return
+	_next_haul_retry_tick = 0
 	_state = State.HAULING
 	_start_path(path)
 	queue_redraw()

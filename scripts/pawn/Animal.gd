@@ -12,6 +12,9 @@ const SPECIES_DATA: Dictionary = {
 		"speed": 40.0,       # pixels per second
 		"size": 4.0,         # sprite radius
 		"meat_amount": 2,
+		"hunger_decay": 0.12,
+		"forage_gain": 8.0,
+		"graze_gain": 1.2,
 		"vision_range": 60.0,
 		"breeding_cooldown": 600,  # ticks between breeding
 		"breeding_hunger_threshold": 60.0,  # must be this well-fed to breed
@@ -22,6 +25,9 @@ const SPECIES_DATA: Dictionary = {
 		"speed": 60.0,
 		"size": 6.0,
 		"meat_amount": 5,
+		"hunger_decay": 0.09,
+		"forage_gain": 9.0,
+		"graze_gain": 1.4,
 		"vision_range": 100.0,
 		"breeding_cooldown": 900,
 		"breeding_hunger_threshold": 70.0,
@@ -90,9 +96,9 @@ func _exit_tree() -> void:
 func _on_game_tick(_tick: int) -> void:
 	if _dead or _world == null:
 		return
-	
+	var spec = SPECIES_DATA[animal_type]
 	# Decay hunger
-	hunger = max(0.0, hunger - 0.5)
+	hunger = max(0.0, hunger - float(spec.get("hunger_decay", 0.1)))
 	age_ticks += 1
 	
 	# Death from starvation (unchanged timing; does not use [_die] stabilization guard)
@@ -134,14 +140,18 @@ func _wander() -> void:
 
 
 func _forage() -> void:
+	var spec = SPECIES_DATA[animal_type]
 	# Animals eat forage resources in forest/plains
 	var biome: int = _world.data.get_biome(tile_pos.x, tile_pos.y)
 	if biome == Biome.Type.FOREST or biome == Biome.Type.PLAINS:
 		# Find forage at this location
 		var forage_count: int = _world.data.forage_at(tile_pos.x, tile_pos.y)
 		if forage_count > 0:
-			hunger = min(100.0, hunger + 8.0)
+			hunger = min(100.0, hunger + float(spec.get("forage_gain", 8.0)))
 			_world.data.consume_forage(tile_pos.x, tile_pos.y, 1)
+		else:
+			# Passive grazing keeps herds alive between discrete forage nodes.
+			hunger = min(100.0, hunger + float(spec.get("graze_gain", 1.0)))
 	else:
 		# Move to find forage
 		_wander()

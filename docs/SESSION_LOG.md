@@ -5,6 +5,65 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-25 - Wildlife survival rebalance + hunt pressure control
+
+Date: 2026-04-25
+Agent/Model: Codex (Cursor)
+Goal: Stop early mass wildlife die-off and reduce freeze spikes around haul/hunt churn.
+
+Changes made:
+- Rebalanced animal hunger in `scripts/pawn/Animal.gd`:
+  - Added species-specific hunger decay (`rabbit 0.12`, `deer 0.09`) instead of a hard `0.5` per tick.
+  - Added passive grazing gain on plains/forest when no forage node is present.
+- Reduced hunt pressure in `scenes/main/Main.gd`:
+  - Added meat stock soft-cap gate before posting more hunt jobs.
+  - Added dynamic per-pass hunt budget based on live animal count (plus tighter cap at ultra speed).
+- Fixed remaining unconditional pawn build logs in `scripts/pawn/Pawn.gd` so verbose flag is consistently respected.
+
+Decisions:
+- Keep hunting active but bounded; avoid queue flooding and full-herd wipeouts.
+- Prioritize smoother fast-forward behavior while preserving deterministic simulation rules.
+
+Open questions:
+- Should we expose hunt pressure (meat soft-cap, budget divisor) as debug sliders in the HUD?
+
+Next concrete step:
+- Add debug counters for per-tick posted/cancelled HUNT jobs and failed haul-path retries to validate stability over long runs.
+
+Files touched:
+- scripts/pawn/Animal.gd
+- scenes/main/Main.gd
+- scripts/pawn/Pawn.gd
+- docs/SESSION_LOG.md
+
+---
+
+## 2026-04-25 - Haul freeze mitigation during fast-forward
+
+Date: 2026-04-25
+Agent/Model: Codex (Cursor)
+Goal: Reduce long stalls seen after haul path-selection messages (e.g. Quinn hauling Meat).
+
+Changes made:
+- Updated pawn path selection in `scripts/pawn/Pawn.gd` so high-speed simulation (`>= 6x`) uses regular pathfinding instead of per-call historic-aversion path weighting.
+- Added short haul retry cooldown in `scripts/pawn/Pawn.gd` (`HAUL_RETRY_COOLDOWN_TICKS`) so unreachable haul targets do not trigger repeated immediate re-path attempts every tick.
+
+Decisions:
+- Keep lower-speed behavior unchanged (historic aversion still active below the high-speed threshold).
+- Prioritize frame stability during fast-forward over nuanced scar-avoidance route preferences.
+
+Open questions:
+- If we still see freezes, should we move all heavy weighted path requests to a per-tick budget queue in `Main`?
+
+Next concrete step:
+- Add pathfinding timing counters (debug-only) around pawn haul/work/eat route calls to identify any remaining outlier spikes.
+
+Files touched:
+- scripts/pawn/Pawn.gd
+- docs/SESSION_LOG.md
+
+---
+
 ## 2026-04-25 - 12x speed stutter reduction (hot-path + warning cleanup)
 
 Date: 2026-04-25

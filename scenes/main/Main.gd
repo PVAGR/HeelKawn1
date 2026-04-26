@@ -237,6 +237,9 @@ var _drag_current: Vector2i = Vector2i(-1, -1)
 const ZONE_MAX_AREA: int = 400   # 20x20 cap for stockpile zones
 const BUILD_DRAG_MAX_TILES: int = 256  # ~16x16 of walls/beds/doors at once
 
+## One-shot [VALIDATION_STATUS] / [VALIDATION_WARN] after scene boot (observability only).
+var _validation_harness_observability_logged: bool = false
+
 
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
@@ -271,6 +274,51 @@ func _ready() -> void:
 		_observer_hud.set_visible_state(false)
 	if _focus_inspector != null:
 		_focus_inspector.set_visible_state(false)
+	call_deferred("_log_validation_harness_observability_once")
+
+
+func _log_validation_harness_observability_once() -> void:
+	if _validation_harness_observability_logged:
+		return
+	_validation_harness_observability_logged = true
+	var dbg: bool = OS.is_debug_build()
+	var session_const: bool = SettlementMemory.VALIDATION_SESSION_ENABLED
+	var clean_const: bool = WorldEvents.VALIDATION_CLEAN_ECONOMY_EVENTS
+	var clean_active: bool = WorldEvents.validation_clean_economy_events_active()
+	var truth_active: bool = SettlementMemory.validation_truth_verify_armed()
+	var spec_active: bool = SettlementMemory.validation_specialization_log_armed()
+	print(
+			(
+					"[VALIDATION_STATUS] debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
+					+ "WorldEvents_VALIDATION_CLEAN_ECONOMY_EVENTS_const=%s clean_economy_active=%s "
+					+ "settlement_truth_verify_active=%s specialization_validation_log_active=%s"
+			)
+			% [dbg, session_const, clean_const, clean_active, truth_active, spec_active]
+	)
+	if session_const and not dbg:
+		print(
+				"[VALIDATION_WARN] VALIDATION_SESSION_ENABLED is true but OS.is_debug_build() is false — harness stays DISARMED "
+				+ "(no economy-event suppression, no [SETTLEMENT_VERIFY], no [SPECIALIZATION_VALIDATE]). "
+				+ "Use editor Play or a debug export."
+		)
+	if clean_const and not dbg:
+		print(
+				"[VALIDATION_WARN] WorldEvents.VALIDATION_CLEAN_ECONOMY_EVENTS is true but not a debug build — suppression stays off."
+		)
+	if SettlementMemory.SETTLEMENT_STATE_TRUTH_VERIFY_MODE and not dbg:
+		print(
+				"[VALIDATION_WARN] SETTLEMENT_STATE_TRUTH_VERIFY_MODE is true but not a debug build — [SETTLEMENT_VERIFY] will not print."
+		)
+	if SettlementMemory.SPECIALIZATION_VALIDATION_LOG_ENABLED and not dbg:
+		print(
+				"[VALIDATION_WARN] SPECIALIZATION_VALIDATION_LOG_ENABLED is true but not a debug build — [SPECIALIZATION_VALIDATE] will not print."
+		)
+	if session_const and dbg and (not clean_active or not truth_active or not spec_active):
+		print(
+				"[VALIDATION_WARN] VALIDATION_SESSION_ENABLED in a debug build but a subsystem reports inactive "
+				+ "(clean=%s truth=%s spec=%s) — inspect harness gates if this ever appears."
+				% [clean_active, truth_active, spec_active]
+		)
 
 
 func _process(delta: float) -> void:
@@ -2786,6 +2834,8 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"kernel_phase": kernel_phase,
 		"next_diag_tick": KernelDiagnostic.DIAGNOSTIC_TICK,
 		"footer_stamp": footer_stamp,
+		"validation_os_debug_build": OS.is_debug_build(),
+		"validation_session_const_requested": SettlementMemory.VALIDATION_SESSION_ENABLED,
 		"validation_session": bool(vh.get("session", false)),
 		"validation_clean_economy_events": WorldEvents.validation_clean_economy_events_active(),
 		"validation_settlement_truth_verify": bool(vh.get("settlement_truth_verify", false)),

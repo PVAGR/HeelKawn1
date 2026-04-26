@@ -56,21 +56,39 @@ func _apply_panel_style(panel: PanelContainer) -> void:
 		label.add_theme_font_size_override("bold_font_size", FONT_SIZE)
 
 
+func _validation_harness_hud_line(s: Dictionary) -> String:
+	var osdb: bool = bool(s.get("validation_os_debug_build", false))
+	var sess_req: bool = bool(s.get("validation_session_const_requested", false))
+	var sess_eff: bool = bool(s.get("validation_session", false))
+	var clean: bool = bool(s.get("validation_clean_economy_events", false))
+	var truth: bool = bool(s.get("validation_settlement_truth_verify", false))
+	var spec: bool = bool(s.get("validation_specialization_log", false))
+	var warn: String = ""
+	if sess_req and not osdb:
+		warn = " [b][!] session const ON but not a debug run — harness DISARMED[/b]"
+	return (
+			"[b][HARNESS][/b] OS_debug=%s session_const=%s session_effective=%s | "
+			+ "armed: clean_economy=%s settlement_truth_verify=%s specialization_log=%s%s\n"
+			% [
+				"ON" if osdb else "off",
+				"ON" if sess_req else "off",
+				"ON" if sess_eff else "off",
+				"ON" if clean else "off",
+				"ON" if truth else "off",
+				"ON" if spec else "off",
+				warn,
+			]
+	)
+
+
 func _world_governance_block(s: Dictionary) -> String:
 	return (
 		"[b]WORLD STATUS[/b]\n"
 		+ "%s\n\n" % str(s.get("world_status_summary", "WORLD STATUS: Unknown"))
 		+ "[b]WORLD / GOVERNANCE[/b]\n"
 		+ "Speed: %s  Pause: %s\n" % [str(s.get("speed", "1x")), str(s.get("paused", "No"))]
-		+ (
-				"Validation lab: session=%s clean_economy_events=%s settlement_truth_verify=%s specialization_log=%s\n"
-				% [
-					"on" if bool(s.get("validation_session", false)) else "off",
-					"on" if bool(s.get("validation_clean_economy_events", false)) else "off",
-					"on" if bool(s.get("validation_settlement_truth_verify", false)) else "off",
-					"on" if bool(s.get("validation_specialization_log", false)) else "off",
-				]
-		)
+		+ _validation_harness_hud_line(s)
+		+ "[i]Logs: anchor continuity on center_region / hyst_key; work-focus = job-proxy, not stock scarcity.[/i]\n"
 		+ "Governance (political, separate from material settlement life): %s  Ruler: %s\n"
 		% [str(s.get("governance_type", "Anarchy")), str(s.get("ruler_name", "None"))]
 		+ "Council Size: %d\n" % int(s.get("council_size", 0))

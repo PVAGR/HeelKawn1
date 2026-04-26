@@ -174,9 +174,19 @@ func _specialization_validation_log_active() -> bool:
 func validation_harness_flags_for_snapshot() -> Dictionary:
 	return {
 		"session": OS.is_debug_build() and VALIDATION_SESSION_ENABLED,
+		"session_const_requested": VALIDATION_SESSION_ENABLED,
+		"os_debug_build": OS.is_debug_build(),
 		"settlement_truth_verify": _settlement_truth_verify_active(),
 		"specialization_log": _specialization_validation_log_active(),
 	}
+
+
+func validation_truth_verify_armed() -> bool:
+	return _settlement_truth_verify_active()
+
+
+func validation_specialization_log_armed() -> bool:
+	return _specialization_validation_log_active()
 
 
 func _settlement_truth_verify_emit(

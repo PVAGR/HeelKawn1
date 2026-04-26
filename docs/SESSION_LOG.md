@@ -5,6 +5,32 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-25 - Tick smoothing pass (frame spike guard)
+
+Date: 2026-04-25
+Agent/Model: Codex (Cursor)
+Goal: Reduce gameplay stutter when simulation runs at high speed.
+
+Changes made:
+- Added `MAX_TICKS_PER_FRAME` guard in `autoloads/GameManager.gd`.
+- Updated tick loop to process at most 6 ticks per rendered frame.
+- Kept deterministic tick order and existing speed model intact.
+
+Decisions:
+- Prefer smooth frame pacing over aggressive single-frame catch-up bursts.
+
+Open questions:
+- Should we expose max ticks/frame as a player setting in UI for low-end machines?
+
+Next concrete step:
+- Profile `Main._on_game_tick` heavy branches and add optional staggered update buckets.
+
+Files touched:
+- autoloads/GameManager.gd
+- docs/SESSION_LOG.md
+
+---
+
 ## 2026-04-25 - Safe runtime wiring for imported memory systems
 
 Date: 2026-04-25

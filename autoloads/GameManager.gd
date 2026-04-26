@@ -15,6 +15,10 @@ const TICK_INTERVAL_SECONDS: float = 0.1
 ## this rate a single _process frame can queue many sim ticks so any per-tick
 ## work (pathing, allocations) amplifies. Keep hot paths cheap.
 const SPEED_STEPS: Array[float] = [1.0, 3.0, 6.0, 12.0]
+## Hard cap to prevent "catch-up storms" where one slow frame triggers hundreds
+## of ticks and causes visible stutter. Extra accumulated time stays buffered
+## and is processed over subsequent frames.
+const MAX_TICKS_PER_FRAME: int = 6
 
 var game_speed: float = 1.0
 var is_paused: bool = false
@@ -35,10 +39,12 @@ func _process(delta: float) -> void:
 	if is_paused:
 		return
 	_tick_accumulator += delta * game_speed
-	while _tick_accumulator >= TICK_INTERVAL_SECONDS:
+	var ticks_this_frame: int = 0
+	while _tick_accumulator >= TICK_INTERVAL_SECONDS and ticks_this_frame < MAX_TICKS_PER_FRAME:
 		_tick_accumulator -= TICK_INTERVAL_SECONDS
 		tick_count += 1
 		game_tick.emit(tick_count)
+		ticks_this_frame += 1
 
 
 func set_speed(new_speed: float) -> void:

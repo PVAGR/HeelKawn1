@@ -14,7 +14,7 @@ const TICK_INTERVAL_SECONDS: float = 0.1
 ## "overnight farming" tier -- fine for running an established colony, but at
 ## this rate a single _process frame can queue many sim ticks so any per-tick
 ## work (pathing, allocations) amplifies. Keep hot paths cheap.
-const SPEED_STEPS: Array[float] = [1.0, 3.0, 6.0, 12.0]
+const SPEED_STEPS: Array[float] = [1.0, 3.0, 6.0, 12.0, 26.0, 50.0]
 ## Set true only when actively debugging pawn/animal internals.
 const VERBOSE_SIM_LOGS: bool = false
 ## Hard cap to prevent "catch-up storms" where one slow frame triggers hundreds

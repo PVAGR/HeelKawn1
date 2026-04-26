@@ -161,6 +161,7 @@ func _refresh() -> void:
 	lines.append(_pawn_line())
 	lines.append(_player_status_line())
 	lines.append(_skill_line())
+	lines.append(_kill_line())
 	lines.append(_export_status_line())
 	lines.append(_stockpile_line())
 	lines.append(_jobs_line())
@@ -404,6 +405,13 @@ func _export_status_line() -> String:
 	if GameManager.tick_count >= 30000:
 		return "📜 Export: Ready at Tick 30000 | Status: %s" % status
 	return "📜 Export: Ready at Tick 30000 | Status: Waiting"
+
+
+func _kill_line() -> String:
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node == null:
+		return "💀 Kills: 0"
+	return "💀 Kills: %d" % int(main_node.get_kill_count())
 
 
 func _sample_wildlife(current_tick: int) -> void:

@@ -122,6 +122,7 @@ var _player_pawn: Pawn = null
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
 var _kernel_diagnostic: KernelDiagnostic = null
+var _kill_count: int = 0
 ## Pixel radius around a pawn that counts as a click hit. Pawns draw at
 ## DRAW_RADIUS=3.5; we add a generous slop so moving targets are easy to grab.
 const SELECT_PICK_RADIUS_PX: float = 7.0
@@ -770,6 +771,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			GameManager.set_speed_index(2)
 		KEY_4:
 			GameManager.set_speed_index(3)
+		KEY_5:
+			GameManager.set_speed_index(4)
+		KEY_6:
+			GameManager.set_speed_index(5)
 		KEY_R:
 			_reroll_world()
 		KEY_T:
@@ -2284,8 +2289,34 @@ func _on_enemy_tick(tick: int, spawner: EnemySpawner) -> void:
 	# Clean up dead enemies and display enemy status
 	if tick % 20 == 0:
 		spawner.cleanup_dead_enemies()
+		if spawner.get_enemy_count() > 0 and _living_pawn_count() == 0:
+			spawner.despawn_all()
+			print("[Main] Raid cleared: No targets remaining.")
 		if spawner.get_enemy_count() > 0 and tick % 100 == 0 and OS.is_debug_build():
 			print("[Combat] %s" % spawner.describe())
+
+
+func _living_pawn_count() -> int:
+	if _pawn_spawner == null:
+		return 0
+	var alive: int = 0
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p):
+			alive += 1
+	return alive
+
+
+func register_enemy_kill(enemy_name: String, attacker_name: String, tile: Vector2i) -> void:
+	_kill_count += 1
+	WorldMemory.record_enemy_death(GameManager.tick_count, tile, enemy_name, attacker_name, _kill_count)
+
+
+func register_pawn_death(_pawn_id: int) -> void:
+	_kill_count += 1
+
+
+func get_kill_count() -> int:
+	return _kill_count
 
 
 # ==================== draft mode (combat control) ====================

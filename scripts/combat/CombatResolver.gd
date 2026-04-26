@@ -62,9 +62,17 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 	
 	elif defender is Enemy:
 		var enemy_defender: Enemy = defender as Enemy
+		var before_hp: float = enemy_defender.health
 		enemy_defender.take_damage(damage)
 		print("[Combat] Enemy %s took %.1f damage (health %.1f)" % 
 			[enemy_defender.get_species_name(), damage, enemy_defender.health])
+		if before_hp > 0.0 and enemy_defender.health <= 0.0:
+			var attacker_name: String = _combat_name(attacker)
+			var enemy_name: String = enemy_defender.get_species_name()
+			print("[Combat] Enemy %s killed by %s" % [enemy_name, attacker_name])
+			var main_node: Node = attacker.get_tree().get_root().get_node_or_null("Main") if attacker != null else null
+			if main_node != null and main_node.has_method("register_enemy_kill"):
+				main_node.call("register_enemy_kill", enemy_name, attacker_name, enemy_defender.tile_pos)
 	
 	return true
 
@@ -111,3 +119,17 @@ static func _get_average_skill(pawn_data: PawnData) -> float:
 		total += skill_xp
 		count += 1
 	return total / max(1, count)
+
+
+static func _combat_name(actor: Node) -> String:
+	if actor == null:
+		return "Unknown"
+	if actor is Pawn:
+		var p: Pawn = actor as Pawn
+		if p.data != null:
+			return p.data.display_name
+		return "Pawn"
+	if actor is Enemy:
+		var e: Enemy = actor as Enemy
+		return e.get_species_name()
+	return actor.name

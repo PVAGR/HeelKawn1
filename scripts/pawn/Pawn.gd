@@ -1742,6 +1742,9 @@ func _die(_p_cause: String = "") -> void:
 		WorldMemory.record_pawn_death(
 			GameManager.tick_count, data.tile_pos, data.id, data.display_name, mem_cause
 		)
+		var main_node: Node = get_tree().get_root().get_node_or_null("Main")
+		if main_node != null and main_node.has_method("register_pawn_death"):
+			main_node.call("register_pawn_death", int(data.id))
 	
 	# Remove from groups and free the node
 	remove_from_group("pawns")

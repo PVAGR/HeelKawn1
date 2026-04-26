@@ -5,7 +5,7 @@ extends Node
 const SCHEMA: int = 1
 const MAX_EVENTS: int = 5000
 
-enum Kind { PAWN_DEATH = 0, ANIMAL_DEATH = 1 }
+enum Kind { PAWN_DEATH = 0, ANIMAL_DEATH = 1, ENEMY_DEATH = 2 }
 
 var _events: Array[Dictionary] = []
 var _dirty: bool = false
@@ -81,6 +81,27 @@ func record_animal_death(
 		"r": _region_key(tile.x, tile.y),
 		"sp": species,
 		"sn": species_name,
+	})
+
+
+func record_enemy_death(
+		tick: int,
+		tile: Vector2i,
+		enemy_name: String,
+		attacker_name: String,
+		total_kills: int
+	) -> void:
+	_append({
+		"s": SCHEMA,
+		"k": int(Kind.ENEMY_DEATH),
+		"type": "enemy_death",
+		"t": tick,
+		"x": tile.x,
+		"y": tile.y,
+		"r": _region_key(tile.x, tile.y),
+		"enemy": enemy_name,
+		"attacker": attacker_name,
+		"kill_count": total_kills,
 	})
 
 

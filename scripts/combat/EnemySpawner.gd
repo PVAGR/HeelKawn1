@@ -81,6 +81,14 @@ func get_enemy_count() -> int:
 	return enemies.size()
 
 
+func despawn_all() -> void:
+	cleanup_dead_enemies()
+	for e in enemies:
+		if e != null and is_instance_valid(e):
+			e.queue_free()
+	enemies.clear()
+
+
 func describe() -> String:
 	return "Enemies: %d active / %d max (raid #%d, difficulty %.1fx)" % [
 		get_enemy_count(), MAX_ENEMIES, _raid_number, _difficulty

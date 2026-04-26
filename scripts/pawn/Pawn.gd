@@ -1132,9 +1132,11 @@ func _tick_idle() -> void:
 		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j)) + _job_history_scar_priority_offset(j)
 		var intent_mult: float = get_settlement_intent_job_multiplier(j)
 		var intent_bonus: int = int(round((intent_mult - 1.0) * 10.0))
+		var front_mult: float = get_preferred_front_bias(j)
+		var front_bonus: int = int(round((front_mult - 1.0) * 10.0))
 		var cohort_mult: float = get_cohort_recruitment_bias(j)
 		var cohort_bonus: int = int(round((cohort_mult - 1.0) * 10.0))
-		return base_bias + intent_bonus + cohort_bonus
+		return base_bias + intent_bonus + front_bonus + cohort_bonus
 	var base_passes: Callable = func(j: Job) -> bool:
 		if Pawn._world_hunt_stabilization_blocks() and j.type == Job.Type.HUNT:
 			return false
@@ -1221,6 +1223,12 @@ func get_settlement_intent_job_multiplier(job: Job) -> float:
 			if job.type == Job.Type.FORAGE or job.type == Job.Type.CHOP:
 				return 1.05
 	return 1.0
+
+
+func get_preferred_front_bias(job: Job) -> float:
+	if data == null or job == null:
+		return 1.0
+	return float(SettlementMemory.get_preferred_front_bias_for_job(data.tile_pos, job))
 
 
 func attempt_reproduction() -> bool:

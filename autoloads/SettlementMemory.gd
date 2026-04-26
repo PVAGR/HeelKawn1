@@ -25,6 +25,11 @@ const MIN_INTENT_DWELL_TICKS: int = 2000
 const CRITICAL_LOCAL_FOOD_PRESSURE: float = 0.9
 const LOCAL_HOUSING_PAWNS_PER_REGION: float = 2.0
 const LOCAL_HOUSING_PRESSURE_THRESHOLD: float = 0.8
+const FRONT_UPDATE_INTERVAL_TICKS: int = 200
+const FRONT_CLUSTER_RADIUS_TILES: int = 8
+const FRONT_INFLUENCE_RADIUS_TILES: int = 10
+const FRONT_MAX_COUNT: int = 2
+const FRONT_BIAS_MAX: float = 1.1
 const INTENT_GROW: String = "GROW"
 const INTENT_HOARD: String = "HOARD"
 const INTENT_DEFEND: String = "DEFEND"
@@ -181,6 +186,9 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
 		"current_intent": INTENT_GROW,
 		"last_intent_tick": -1,
 		"intent_lock_ticks": 0,
+		"preferred_fronts": [],
+		"last_front_update_tick": -1,
+		"last_front_intent": INTENT_GROW,
 	}
 
 
@@ -915,6 +923,180 @@ func _calculate_local_housing_pressure(st: Dictionary, pawns: Array[Pawn]) -> fl
 		return 0.0
 	var crowding_ratio: float = float(pawns.size()) / comfort_capacity
 	return clamp(crowding_ratio - 1.0, 0.0, 1.0)
+
+
+func _active_jobs_snapshot() -> Array[Job]:
+	var out: Array[Job] = []
+	var open_v: Variant = JobManager.get("_open")
+	if open_v is Array:
+		for jv in open_v as Array:
+			if jv is Job:
+				out.append(jv as Job)
+	var claimed_v: Variant = JobManager.get("_claimed")
+	if claimed_v is Array:
+		for jv in claimed_v as Array:
+			if jv is Job:
+				out.append(jv as Job)
+	return out
+
+
+func _intent_allows_front_job(intent: String, job_type: int) -> bool:
+	match intent:
+		INTENT_HOARD:
+			return (
+				job_type == Job.Type.FORAGE
+				or job_type == Job.Type.HUNT
+				or job_type == Job.Type.TRADE_HAUL
+				or job_type == Job.Type.CHOP
+			)
+		INTENT_DEFEND:
+			return (
+				job_type == Job.Type.BUILD_WALL
+				or job_type == Job.Type.BUILD_DOOR
+				or job_type == Job.Type.HUNT
+			)
+		INTENT_RECOVER:
+			return (
+				job_type == Job.Type.BUILD_BED
+				or job_type == Job.Type.BUILD_WALL
+				or job_type == Job.Type.BUILD_DOOR
+				or job_type == Job.Type.TRADE_HAUL
+				or job_type == Job.Type.FORAGE
+			)
+		_:
+			return (
+				job_type == Job.Type.CHOP
+				or job_type == Job.Type.MINE
+				or job_type == Job.Type.MINE_WALL
+				or job_type == Job.Type.BUILD_BED
+				or job_type == Job.Type.BUILD_WALL
+				or job_type == Job.Type.BUILD_DOOR
+				or job_type == Job.Type.FORAGE
+			)
+
+
+func _jobs_for_settlement_intent(st: Dictionary, active_jobs: Array[Job]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var intent: String = str(st.get("current_intent", INTENT_GROW))
+	var center: int = int(st.get("center_region", -1))
+	for j in active_jobs:
+		if j == null:
+			continue
+		if not _intent_allows_front_job(intent, int(j.type)):
+			continue
+		var job_rk: int = WorldMemory._region_key(j.work_tile.x, j.work_tile.y)
+		if int(_region_center.get(job_rk, -1)) != center:
+			continue
+		out.append({
+			"id": int(j.id),
+			"job_type": int(j.type),
+			"tile": j.work_tile,
+		})
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var aid: int = int(a.get("id", 0))
+		var bid: int = int(b.get("id", 0))
+		return aid < bid
+	)
+	return out
+
+
+func update_preferred_work_fronts(tick: int) -> void:
+	if tick % FRONT_UPDATE_INTERVAL_TICKS != 0:
+		return
+	var active_jobs: Array[Job] = _active_jobs_snapshot()
+	var cluster_radius_sq: int = FRONT_CLUSTER_RADIUS_TILES * FRONT_CLUSTER_RADIUS_TILES
+	for i in range(settlements.size()):
+		if not (settlements[i] is Dictionary):
+			continue
+		var st: Dictionary = settlements[i] as Dictionary
+		var intent: String = str(st.get("current_intent", INTENT_GROW))
+		var last_intent: String = str(st.get("last_front_intent", intent))
+		if intent != last_intent:
+			st["preferred_fronts"] = []
+		var compatible_jobs: Array[Dictionary] = _jobs_for_settlement_intent(st, active_jobs)
+		if compatible_jobs.is_empty():
+			st["preferred_fronts"] = []
+			st["last_front_update_tick"] = tick
+			st["last_front_intent"] = intent
+			settlements[i] = st
+			continue
+		var clusters: Array[Dictionary] = []
+		for jd in compatible_jobs:
+			var t: Vector2i = jd.get("tile", Vector2i.ZERO)
+			var assigned: bool = false
+			for c in clusters:
+				var cc: int = maxi(1, int(c.get("count", 1)))
+				var cx: int = int(round(float(int(c.get("sum_x", t.x))) / float(cc)))
+				var cy: int = int(round(float(int(c.get("sum_y", t.y))) / float(cc)))
+				var center_tile: Vector2i = Vector2i(cx, cy)
+				if center_tile.distance_squared_to(t) <= cluster_radius_sq:
+					c["sum_x"] = int(c.get("sum_x", 0)) + t.x
+					c["sum_y"] = int(c.get("sum_y", 0)) + t.y
+					c["count"] = int(c.get("count", 0)) + 1
+					assigned = true
+					break
+			if not assigned:
+				clusters.append({
+					"sum_x": t.x,
+					"sum_y": t.y,
+					"count": 1,
+					"job_type": int(jd.get("job_type", -1)),
+					"first_job_id": int(jd.get("id", 0)),
+				})
+		clusters.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			var ac: int = int(a.get("count", 0))
+			var bc: int = int(b.get("count", 0))
+			if ac != bc:
+				return ac > bc
+			return int(a.get("first_job_id", 0)) < int(b.get("first_job_id", 0))
+		)
+		var fronts: Array[Dictionary] = []
+		for c in clusters:
+			if fronts.size() >= FRONT_MAX_COUNT:
+				break
+			var cc: int = maxi(1, int(c.get("count", 1)))
+			var fx: int = int(round(float(int(c.get("sum_x", 0))) / float(cc)))
+			var fy: int = int(round(float(int(c.get("sum_y", 0))) / float(cc)))
+			fronts.append({
+				"tile": Vector2i(fx, fy),
+				"job_type": int(c.get("job_type", -1)),
+				"support": cc,
+			})
+		st["preferred_fronts"] = fronts
+		st["last_front_update_tick"] = tick
+		st["last_front_intent"] = intent
+		settlements[i] = st
+
+
+func get_preferred_front_bias_for_job(pawn_tile: Vector2i, job: Job) -> float:
+	if job == null:
+		return 1.0
+	var pawn_rk: int = WorldMemory._region_key(pawn_tile.x, pawn_tile.y)
+	var job_rk: int = WorldMemory._region_key(job.work_tile.x, job.work_tile.y)
+	var pawn_center: int = int(_region_center.get(pawn_rk, -1))
+	var job_center: int = int(_region_center.get(job_rk, -1))
+	if pawn_center < 0 or job_center < 0 or pawn_center != job_center:
+		return 1.0
+	var st_v: Variant = get_settlement_at_region(pawn_rk)
+	if not (st_v is Dictionary):
+		return 1.0
+	var st: Dictionary = st_v as Dictionary
+	var fronts_v: Variant = st.get("preferred_fronts", [])
+	if not (fronts_v is Array):
+		return 1.0
+	var radius_sq: int = FRONT_INFLUENCE_RADIUS_TILES * FRONT_INFLUENCE_RADIUS_TILES
+	for fv in fronts_v as Array:
+		if not (fv is Dictionary):
+			continue
+		var f: Dictionary = fv as Dictionary
+		if int(f.get("job_type", -1)) != int(job.type):
+			continue
+		var ftile: Vector2i = f.get("tile", Vector2i(-100000, -100000))
+		if ftile.x <= -99999:
+			continue
+		if ftile.distance_squared_to(job.work_tile) <= radius_sq:
+			return FRONT_BIAS_MAX
+	return 1.0
 
 
 func get_settlement_intent_for_tile(tile_pos: Vector2i) -> String:

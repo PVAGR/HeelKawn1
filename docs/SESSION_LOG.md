@@ -5,6 +5,38 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-25 - Wildlife survival hardening (anti-starvation wave)
+
+Date: 2026-04-25
+Agent/Model: Codex (Cursor)
+Goal: Stop recurring fast wildlife die-off while preserving hunt/gameplay features.
+
+Changes made:
+- Updated `scripts/pawn/Animal.gd`:
+  - Animal foraging no longer consumes colony forage nodes; wildlife now feeds without depleting itself into starvation cascades.
+- Updated `scenes/main/Main.gd`:
+  - Added `_live_wildlife_counts()` helper.
+  - Applied species reserve checks to all hunt seeding paths:
+    - `_seed_jobs_from_world`
+    - `_post_wildlife_hunt_jobs_after_stabilization`
+    - `_post_hunting_jobs_for_animals` (kept existing reserve logic, now unified via helper)
+
+Decisions:
+- Keep all core systems (hunting, regrowth, wildlife) and stabilize by balancing pressure rather than removing mechanics.
+
+Open questions:
+- Should wildlife feeding be decoupled from tile forage permanently, or reintroduced later with a separate ecosystem resource pool?
+
+Next concrete step:
+- Add runtime counters in HUD for live rabbits/deer and active hunt jobs to validate long-run stability.
+
+Files touched:
+- scripts/pawn/Animal.gd
+- scenes/main/Main.gd
+- docs/SESSION_LOG.md
+
+---
+
 ## 2026-04-25 - Wildlife QoL pass (no-feature-removal balancing)
 
 Date: 2026-04-25

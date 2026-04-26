@@ -154,7 +154,8 @@ func _forage() -> void:
 		var forage_count: int = _world.data.forage_at(tile_pos.x, tile_pos.y)
 		if forage_count > 0:
 			hunger = min(100.0, hunger + float(spec.get("forage_gain", 8.0)))
-			_world.data.consume_forage(tile_pos.x, tile_pos.y, 1)
+			# Wildlife should not permanently consume colony forage nodes; otherwise
+			# herds self-starve in waves after local depletion.
 		else:
 			# Passive grazing keeps herds alive between discrete forage nodes.
 			hunger = min(100.0, hunger + float(spec.get("graze_gain", 1.0)))

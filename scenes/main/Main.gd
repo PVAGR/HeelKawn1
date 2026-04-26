@@ -178,6 +178,20 @@ func _hunt_reserve_for_species(species: int) -> int:
 		return MIN_DEER_RESERVE
 	return MIN_RABBIT_RESERVE
 
+func _live_wildlife_counts() -> Dictionary:
+	var out: Dictionary = {
+		int(Animal.Type.RABBIT): 0,
+		int(Animal.Type.DEER): 0,
+	}
+	if _animal_spawner == null:
+		return out
+	for a in _animal_spawner.animals:
+		if a == null or not is_instance_valid(a):
+			continue
+		var sp: int = int(a.animal_type)
+		out[sp] = int(out.get(sp, 0)) + 1
+	return out
+
 # -------------------- designation (player build mode) --------------------
 ## Player build modes. NONE means clicks are ignored. Every other mode uses
 ## the same click-drag rectangle system:
@@ -1458,6 +1472,7 @@ func _seed_jobs_from_world() -> void:
 			and GameManager.tick_count >= Main._world_stabilization_until_tick
 			and _should_post_more_hunt_jobs()
 	):
+		var live_seed: Dictionary = _live_wildlife_counts()
 		var hunt_cap_seed: int = mini(MAX_DYNAMIC_HUNT_JOBS_PER_PASS, _dynamic_hunt_job_budget())
 		for tile in hunt_tiles:
 			if hunt_posted >= hunt_cap_seed:
@@ -1466,7 +1481,12 @@ func _seed_jobs_from_world() -> void:
 				hunt_skipped += 1
 				continue
 			var feat: int = _world.data.get_feature(tile.x, tile.y)
+			var species_seed: int = Animal.Type.DEER if feat == TileFeature.Type.DEER else Animal.Type.RABBIT
+			var live_now_seed: int = int(live_seed.get(species_seed, 0))
+			if live_now_seed <= _hunt_reserve_for_species(species_seed):
+				continue
 			JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, _hunt_ticks_for(feat))
+			live_seed[species_seed] = maxi(0, live_now_seed - 1)
 			hunt_posted += 1
 	if OS.is_debug_build():
 		print(
@@ -1508,6 +1528,7 @@ func _post_wildlife_hunt_jobs_after_stabilization() -> void:
 		return a.y * WorldData.WIDTH + a.x < b.y * WorldData.WIDTH + b.x
 	)
 	var n: int = 0
+	var live_bootstrap: Dictionary = _live_wildlife_counts()
 	var cap: int = mini(MAX_DYNAMIC_HUNT_JOBS_PER_PASS, _dynamic_hunt_job_budget())
 	for t in tiles:
 		if n >= cap:
@@ -1515,7 +1536,12 @@ func _post_wildlife_hunt_jobs_after_stabilization() -> void:
 		if JobManager.has_job_at(t):
 			continue
 		var feat2: int = _world.data.get_feature(t.x, t.y)
+		var species_bootstrap: int = Animal.Type.DEER if feat2 == TileFeature.Type.DEER else Animal.Type.RABBIT
+		var live_now_bootstrap: int = int(live_bootstrap.get(species_bootstrap, 0))
+		if live_now_bootstrap <= _hunt_reserve_for_species(species_bootstrap):
+			continue
 		if JobManager.post(Job.Type.HUNT, t, HUNT_PRIORITY, _hunt_ticks_for(feat2)) != null:
+			live_bootstrap[species_bootstrap] = maxi(0, live_now_bootstrap - 1)
 			n += 1
 
 
@@ -1534,15 +1560,7 @@ func _post_hunting_jobs_for_animals() -> void:
 	var main_component: int = _world.pathfinder.largest_component_id()
 	var hunt_budget: int = _dynamic_hunt_job_budget()
 	var hunt_jobs_posted: int = 0
-	var live_by_species: Dictionary = {
-		int(Animal.Type.RABBIT): 0,
-		int(Animal.Type.DEER): 0,
-	}
-	for a0 in _animal_spawner.animals:
-		if a0 == null or not is_instance_valid(a0):
-			continue
-		var sp0: int = int(a0.animal_type)
-		live_by_species[sp0] = int(live_by_species.get(sp0, 0)) + 1
+	var live_by_species: Dictionary = _live_wildlife_counts()
 	
 	for animal in _animal_spawner.animals:
 		if not is_instance_valid(animal) or animal == null:

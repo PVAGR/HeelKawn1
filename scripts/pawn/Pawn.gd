@@ -132,6 +132,15 @@ const HAUL_RETRY_COOLDOWN_TICKS: int = 10
 const FAST_PATHFIND_SPEED_THRESHOLD: float = 6.0
 const REPRODUCTION_COOLDOWN_TICKS: int = 6000
 const REPRODUCTION_MATE_RANGE_PX: float = 42.0
+const COHORT_UPDATE_TICKS: int = 200
+const COHORT_MATCH_RADIUS_TILES: int = 8
+const COHORT_BREAK_DISTANCE_TILES: int = 16
+const COHORT_MIN_SIZE: int = 2
+const COHORT_COHESION_BIAS_WEIGHT: float = 0.12
+const COHORT_COHESION_MAX_STEP: float = 0.35
+const COHORT_RECRUITMENT_SCAN_RADIUS_TILES: int = 10
+const COHORT_RECRUITMENT_MAX_PAWNS: int = 24
+const COHORT_RECRUITMENT_BIAS_MAX: float = 1.12
 
 # -------------------- AI state --------------------
 
@@ -200,6 +209,8 @@ var _mood_level: int = 0
 ## retry loop doesn't flood the console.
 var _last_haul_fail_log_tick: int = -HAUL_FAIL_LOG_EVERY_N_TICKS
 var _next_haul_retry_tick: int = 0
+var _next_cohort_update_tick: int = 0
+var _cohort_anchor_ref: WeakRef = null
 var _anim_t: float = 0.0
 var _sfx: AudioStreamPlayer2D = null
 var _hit_flash_ticks: int = 0
@@ -240,6 +251,197 @@ func get_current_job_label() -> String:
 	if _current_job == null:
 		return "None"
 	return Job.describe_type(_current_job.type)
+
+
+func _clear_cohort_state() -> void:
+	if data == null:
+		return
+	data.cohort_anchor_id = -1
+	data.cohort_job_type = -1
+	data.is_cohort_anchor = false
+	_cohort_anchor_ref = null
+
+
+func _active_cohort_job_type() -> int:
+	if _current_job == null:
+		return -1
+	if _state == State.WALKING_TO_JOB or _state == State.WORKING or _state == State.FETCHING_MATERIAL:
+		return int(_current_job.type)
+	return -1
+
+
+func _cohort_settlement_center_for_tile(tile: Vector2i) -> int:
+	var rk: int = WorldMemory._region_key(tile.x, tile.y)
+	return SettlementMemory.get_center_region_for_region(rk)
+
+
+func _cohort_anchor_node() -> Pawn:
+	if _cohort_anchor_ref == null:
+		return null
+	var n: Object = _cohort_anchor_ref.get_ref()
+	if n == null or not (n is Pawn):
+		return null
+	return n as Pawn
+
+
+func _job_locus_world_pos(p: Pawn) -> Variant:
+	if p == null or p.data == null or p._current_job == null or p._world == null:
+		return null
+	if p._active_cohort_job_type() < 0:
+		return null
+	return p._world.tile_to_world(p._current_job.work_tile)
+
+
+func _cohort_locus_world_pos() -> Variant:
+	var anchor: Pawn = _cohort_anchor_node()
+	# 1) Anchor's live job destination tile.
+	var anchor_locus: Variant = _job_locus_world_pos(anchor)
+	if anchor_locus is Vector2:
+		return anchor_locus
+	# 2) Own live job destination tile.
+	var own_locus: Variant = _job_locus_world_pos(self)
+	if own_locus is Vector2:
+		return own_locus
+	# 3) Anchor pawn position as last resort.
+	if anchor != null:
+		return anchor.position
+	return null
+
+
+func update_cohort_membership(force: bool = false) -> void:
+	if data == null:
+		return
+	var job_type: int = _active_cohort_job_type()
+	if job_type < 0:
+		_clear_cohort_state()
+		return
+	var tick_now: int = GameManager.tick_count
+	if not force and tick_now < _next_cohort_update_tick:
+		return
+	_next_cohort_update_tick = tick_now + COHORT_UPDATE_TICKS
+	var my_center: int = _cohort_settlement_center_for_tile(data.tile_pos)
+	var radius_sq: int = COHORT_MATCH_RADIUS_TILES * COHORT_MATCH_RADIUS_TILES
+	var members: Array[Pawn] = []
+	for n in get_tree().get_nodes_in_group("pawns"):
+		if not (n is Pawn):
+			continue
+		var p: Pawn = n as Pawn
+		if p == null or p.data == null:
+			continue
+		if p._active_cohort_job_type() != job_type:
+			continue
+		var p_center: int = p._cohort_settlement_center_for_tile(p.data.tile_pos)
+		if my_center >= 0 and p_center >= 0 and p_center != my_center:
+			continue
+		if data.tile_pos.distance_squared_to(p.data.tile_pos) > radius_sq:
+			continue
+		members.append(p)
+	if members.size() < COHORT_MIN_SIZE:
+		_clear_cohort_state()
+		return
+	var anchor: Pawn = members[0]
+	for p in members:
+		if int(p.data.id) < int(anchor.data.id):
+			anchor = p
+	data.cohort_anchor_id = int(anchor.data.id)
+	data.cohort_job_type = job_type
+	data.is_cohort_anchor = int(data.id) == int(anchor.data.id)
+	_cohort_anchor_ref = weakref(anchor)
+
+
+func _validate_or_dissolve_cohort() -> void:
+	if data == null:
+		return
+	if data.cohort_anchor_id < 0:
+		return
+	var job_type: int = _active_cohort_job_type()
+	if job_type < 0 or data.cohort_job_type != job_type:
+		_clear_cohort_state()
+		return
+	var anchor: Pawn = _cohort_anchor_node()
+	if anchor == null or anchor.data == null:
+		_clear_cohort_state()
+		return
+	if int(anchor.data.id) != int(data.cohort_anchor_id):
+		_clear_cohort_state()
+		return
+	if anchor == self:
+		data.is_cohort_anchor = true
+		return
+	if anchor._active_cohort_job_type() != job_type:
+		_clear_cohort_state()
+		return
+	var my_center: int = _cohort_settlement_center_for_tile(data.tile_pos)
+	var anchor_center: int = _cohort_settlement_center_for_tile(anchor.data.tile_pos)
+	if my_center >= 0 and anchor_center >= 0 and my_center != anchor_center:
+		_clear_cohort_state()
+		return
+	var break_sq: int = COHORT_BREAK_DISTANCE_TILES * COHORT_BREAK_DISTANCE_TILES
+	if data.tile_pos.distance_squared_to(anchor.data.tile_pos) > break_sq:
+		_clear_cohort_state()
+
+
+func _cohort_cohesion_bias(step: float) -> Vector2:
+	if data == null or data.is_cohort_anchor or _path.is_empty():
+		return Vector2.ZERO
+	if _active_cohort_job_type() < 0:
+		return Vector2.ZERO
+	var anchor: Pawn = _cohort_anchor_node()
+	if anchor == null or anchor.data == null or anchor == self:
+		return Vector2.ZERO
+	if anchor._active_cohort_job_type() != _active_cohort_job_type():
+		return Vector2.ZERO
+	var locus_v: Variant = _cohort_locus_world_pos()
+	if not (locus_v is Vector2):
+		return Vector2.ZERO
+	var locus: Vector2 = locus_v as Vector2
+	var offset: Vector2 = locus - position
+	var dist_sq: float = offset.length_squared()
+	var max_dist_world: float = float(COHORT_BREAK_DISTANCE_TILES * World.TILE_PIXELS)
+	if dist_sq <= 1.0 or dist_sq > max_dist_world * max_dist_world:
+		return Vector2.ZERO
+	var bias_mag: float = minf(COHORT_COHESION_MAX_STEP, step * COHORT_COHESION_BIAS_WEIGHT)
+	return offset.normalized() * bias_mag
+
+
+func get_cohort_recruitment_bias(job: Job) -> float:
+	if data == null or job == null:
+		return 1.0
+	var job_type: int = int(job.type)
+	var my_center: int = _cohort_settlement_center_for_tile(data.tile_pos)
+	var job_center: int = _cohort_settlement_center_for_tile(job.work_tile)
+	if my_center >= 0 and job_center >= 0 and my_center != job_center:
+		return 1.0
+	var radius_sq: int = COHORT_RECRUITMENT_SCAN_RADIUS_TILES * COHORT_RECRUITMENT_SCAN_RADIUS_TILES
+	var candidates: Array[Pawn] = []
+	for n in get_tree().get_nodes_in_group("pawns"):
+		if not (n is Pawn):
+			continue
+		var p: Pawn = n as Pawn
+		if p == null or p == self or p.data == null:
+			continue
+		candidates.append(p)
+	candidates.sort_custom(func(a: Pawn, b: Pawn) -> bool:
+		return int(a.data.id) < int(b.data.id)
+	)
+	var inspected: int = 0
+	for p in candidates:
+		if inspected >= COHORT_RECRUITMENT_MAX_PAWNS:
+			break
+		inspected += 1
+		if p._active_cohort_job_type() != job_type:
+			continue
+		if int(p.data.cohort_job_type) != job_type:
+			continue
+		if int(p.data.cohort_anchor_id) < 0:
+			continue
+		var p_center: int = _cohort_settlement_center_for_tile(p.data.tile_pos)
+		if my_center >= 0 and p_center >= 0 and my_center != p_center:
+			continue
+		if p.data.tile_pos.distance_squared_to(data.tile_pos) > radius_sq and p.data.tile_pos.distance_squared_to(job.work_tile) > radius_sq:
+			continue
+		return COHORT_RECRUITMENT_BIAS_MAX
+	return 1.0
 
 
 func get_pawn_name_for_log() -> String:
@@ -389,6 +591,7 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	# New spawns: align fractional age with integer `age` (loads set age_years in PawnData).
 	if data != null and data.age_years < 0.0001 and data.age > 0:
 		data.age_years = float(data.age)
+	_clear_cohort_state()
 	add_to_group("pawns")
 	refresh_inherited_cultural_reputation()
 	queue_redraw()
@@ -613,6 +816,9 @@ func _process(delta: float) -> void:
 		_advance_path()
 	else:
 		position += to_target.normalized() * step
+	var cohort_bias: Vector2 = _cohort_cohesion_bias(step)
+	if cohort_bias != Vector2.ZERO:
+		position += cohort_bias
 
 
 func _start_path(path: Array[Vector2i]) -> void:
@@ -675,6 +881,8 @@ func _on_game_tick(_tick: int) -> void:
 		_hit_flash_ticks -= 1
 	_decay_needs()
 	_check_thresholds()
+	update_cohort_membership()
+	_validate_or_dissolve_cohort()
 	if draft_mode:
 		_engage_enemies()
 	# Panic-sleep interrupt: if rest is critically low and we're not already
@@ -727,6 +935,7 @@ func _force_panic_sleep() -> void:
 		_return_trade_cargo_to_source_if_any(jp)
 		JobManager.abandon(jp)
 		_current_job = null
+		_clear_cohort_state()
 	_clear_path()
 	# If we were already walking to a bed when panic hit, give up the
 	# reservation so other pawns can use it; we're sleeping where we stand.
@@ -794,7 +1003,9 @@ func _tick_idle() -> void:
 		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j)) + _job_history_scar_priority_offset(j)
 		var intent_mult: float = get_settlement_intent_job_multiplier(j)
 		var intent_bonus: int = int(round((intent_mult - 1.0) * 10.0))
-		return base_bias + intent_bonus
+		var cohort_mult: float = get_cohort_recruitment_bias(j)
+		var cohort_bonus: int = int(round((cohort_mult - 1.0) * 10.0))
+		return base_bias + intent_bonus + cohort_bonus
 	var base_passes: Callable = func(j: Job) -> bool:
 		if Pawn._world_hunt_stabilization_blocks() and j.type == Job.Type.HUNT:
 			return false
@@ -1104,6 +1315,7 @@ func _apply_work_hazards() -> void:
 
 func _begin_job(job: Job) -> void:
 	_current_job = job
+	update_cohort_membership(true)
 	# Build jobs need raw materials in hand before we walk to the build site.
 	# If we don't already have the right item in sufficient quantity, bounce
 	# to the stockpile first.
@@ -1400,6 +1612,7 @@ func _complete_current_job() -> void:
 		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
 			data.add_mood_event(MoodEvent.Type.JOY, 60.0, 220)  # Building feels productive
 	JobManager.complete(job)
+	_clear_cohort_state()
 	_current_job = null
 	_state = State.IDLE   # reset before transitioning; _begin_haul will set it
 	_clear_path()
@@ -1460,6 +1673,7 @@ func _unclaim_current_job() -> void:
 
 
 func _reset_to_idle() -> void:
+	_clear_cohort_state()
 	_current_job = null
 	# Drop any zone handle so the GC isn't rooted on a freed node after a
 	# reroll. Each state that needs a zone re-picks one when it starts.
@@ -1475,6 +1689,7 @@ func release_job_if_any() -> void:
 		_return_trade_cargo_to_source_if_any(j1)
 		JobManager.cancel(j1)
 		_current_job = null
+	_clear_cohort_state()
 	# If we held a bed reservation from a previous life (world reroll), drop
 	# it. The bed itself is gone too, but releasing keeps the dict tidy.
 	_release_bed_if_reserved()

@@ -85,6 +85,9 @@ var parent_b_id: int = -1
 var children_count: int = 0
 var influence: float = 0.0
 var military_rank: String = "grunt"
+var cohort_anchor_id: int = -1
+var cohort_job_type: int = -1
+var is_cohort_anchor: bool = false
 
 ## Work-type allow list (RimWorld-style). If false, this pawn will not *claim*
 ## that class of open job. Eating, sleeping, and hauling are not jobs; they
@@ -527,6 +530,9 @@ func to_save_dict() -> Dictionary:
 		"children_count": children_count,
 		"influence": influence,
 		"military_rank": military_rank,
+		"cohort_anchor_id": cohort_anchor_id,
+		"cohort_job_type": cohort_job_type,
+		"is_cohort_anchor": is_cohort_anchor,
 		"work_forage": work_forage,
 		"work_mine": work_mine,
 		"work_chop": work_chop,
@@ -595,6 +601,9 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	p.children_count = int(d.get("children_count", 0))
 	p.influence = float(d.get("influence", 0.0))
 	p.military_rank = str(d.get("military_rank", "grunt"))
+	p.cohort_anchor_id = int(d.get("cohort_anchor_id", -1))
+	p.cohort_job_type = int(d.get("cohort_job_type", -1))
+	p.is_cohort_anchor = bool(d.get("is_cohort_anchor", false))
 	p.work_forage = bool(d.get("work_forage", true))
 	p.work_mine = bool(d.get("work_mine", true))
 	p.work_chop = bool(d.get("work_chop", true))

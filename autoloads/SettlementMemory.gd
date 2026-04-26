@@ -21,6 +21,10 @@ const REVIVAL_SCORE_RECOVERING_MIN: int = 35
 const REVIVAL_SCORE_REVIVABLE_MIN: int = 70
 const REVIVAL_SCORE_ACTIVE_MIN: int = 88
 const INTENT_UPDATE_INTERVAL_TICKS: int = 100
+const MIN_INTENT_DWELL_TICKS: int = 2000
+const CRITICAL_LOCAL_FOOD_PRESSURE: float = 0.9
+const LOCAL_HOUSING_PAWNS_PER_REGION: float = 2.0
+const LOCAL_HOUSING_PRESSURE_THRESHOLD: float = 0.8
 const INTENT_GROW: String = "GROW"
 const INTENT_HOARD: String = "HOARD"
 const INTENT_DEFEND: String = "DEFEND"
@@ -176,6 +180,7 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
 		},
 		"current_intent": INTENT_GROW,
 		"last_intent_tick": -1,
+		"intent_lock_ticks": 0,
 	}
 
 
@@ -828,11 +833,25 @@ func update_settlement_intents(tick: int) -> void:
 		var st: Dictionary = settlements[i] as Dictionary
 		var settlement_pawns: Array[Pawn] = _pawns_in_settlement(st, living_pawns)
 		var local_food_pressure: float = _calculate_local_food_pressure(settlement_pawns)
+		var local_housing_pressure: float = _calculate_local_housing_pressure(st, settlement_pawns)
+		var war_state: String = str((st.get("war_status", {"state": "peace"}) as Dictionary).get("state", "peace"))
+		var is_emergency: bool = local_food_pressure >= CRITICAL_LOCAL_FOOD_PRESSURE or war_state == "mobilizing" or war_state == "at_war"
+		var lock_ticks: int = int(st.get("intent_lock_ticks", 0))
+		if is_emergency and lock_ticks > 0:
+			lock_ticks = 0
+			st["intent_lock_ticks"] = 0
+		elif lock_ticks > 0:
+			lock_ticks = maxi(0, lock_ticks - INTENT_UPDATE_INTERVAL_TICKS)
+			st["intent_lock_ticks"] = lock_ticks
+			st["last_intent_tick"] = tick
+			settlements[i] = st
+			continue
 		var old_intent: String = str(st.get("current_intent", INTENT_GROW))
-		var new_intent: String = _derive_settlement_intent(st, local_food_pressure)
+		var new_intent: String = _derive_settlement_intent(st, local_food_pressure, local_housing_pressure)
 		st["last_intent_tick"] = tick
 		if old_intent != new_intent:
 			st["current_intent"] = new_intent
+			st["intent_lock_ticks"] = MIN_INTENT_DWELL_TICKS
 			WorldMemory.record_event({
 				"type": "settlement_intent_shift",
 				"settlement_id": int(st.get("center_region", -1)),
@@ -840,23 +859,25 @@ func update_settlement_intents(tick: int) -> void:
 				"new_intent": new_intent,
 				"tick": tick,
 				"settlement_state": str(st.get("state", "unknown")),
-				"war_state": str((st.get("war_status", {"state": "peace"}) as Dictionary).get("state", "peace")),
+				"war_state": war_state,
 				"local_food_pressure": local_food_pressure,
-				"housing_pressure": float(ColonySimServices.get_housing_pressure()),
+				"local_housing_pressure": local_housing_pressure,
+				"intent_lock_ticks": int(st.get("intent_lock_ticks", 0)),
 			})
 		settlements[i] = st
 
 
-func _derive_settlement_intent(st: Dictionary, local_food_pressure: float) -> String:
+func _derive_settlement_intent(st: Dictionary, local_food_pressure: float, local_housing_pressure: float) -> String:
 	var settlement_state: String = str(st.get("state", ""))
 	var war_state: String = str((st.get("war_status", {"state": "peace"}) as Dictionary).get("state", "peace"))
-	var housing_pressure: float = float(ColonySimServices.get_housing_pressure())
 	if settlement_state == "recovering" or settlement_state == "revivable":
 		return INTENT_RECOVER
 	if war_state == "mobilizing" or war_state == "at_war":
 		return INTENT_DEFEND
-	if local_food_pressure >= 0.55 or housing_pressure >= 0.8:
+	if local_food_pressure >= 0.55:
 		return INTENT_HOARD
+	if local_housing_pressure >= LOCAL_HOUSING_PRESSURE_THRESHOLD:
+		return INTENT_RECOVER
 	return INTENT_GROW
 
 
@@ -876,6 +897,24 @@ func _calculate_local_food_pressure(pawns: Array[Pawn]) -> float:
 		return 0.0
 	var avg_hunger: float = hunger_sum / float(count)
 	return clamp(1.0 - (avg_hunger / 100.0), 0.0, 1.0)
+
+
+func _calculate_local_housing_pressure(st: Dictionary, pawns: Array[Pawn]) -> float:
+	if pawns.size() < 2:
+		return 0.0
+	var regv: Variant = st.get("regions", PackedInt32Array())
+	if not (regv is PackedInt32Array):
+		return 0.0
+	var regions: PackedInt32Array = regv as PackedInt32Array
+	var region_count: int = regions.size()
+	if region_count <= 0:
+		return 0.0
+	# Coarse local crowding proxy: local population versus settlement footprint.
+	var comfort_capacity: float = float(region_count) * LOCAL_HOUSING_PAWNS_PER_REGION
+	if comfort_capacity <= 0.0:
+		return 0.0
+	var crowding_ratio: float = float(pawns.size()) / comfort_capacity
+	return clamp(crowding_ratio - 1.0, 0.0, 1.0)
 
 
 func get_settlement_intent_for_tile(tile_pos: Vector2i) -> String:

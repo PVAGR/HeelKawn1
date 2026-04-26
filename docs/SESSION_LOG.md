@@ -5,6 +5,50 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-25 - Phase 4 deterministic revival + peace-gated rebirth
+
+Date: 2026-04-25
+Agent/Model: Codex (Cursor)
+Goal: Implement deterministic settlement-state curve and peace-gated rebirth flow.
+
+Changes made:
+- `autoloads/SettlementMemory.gd`
+  - Replaced hard-threshold revival with deterministic arithmetic curve over:
+    - ticks_since_collapse
+    - scar level
+    - regional peace ticks
+    - culture branch (open/cautious/defensive)
+  - Added deterministic output states:
+    - `permanently_abandoned`, `abandoned`, `recovering`, `revivable`, `active`
+  - Added config constants:
+    - `REVIVABLE_SCAR_MAX`, `HARD_COLLAPSE_TICKS`, `PEACE_TICKS_PER_BRANCH`
+- `autoloads/SettlementRebirth.gd`
+  - Added `get_rebirth_eligibility(...) -> {ok, reason, ...}` deterministic gate.
+  - Enforced `REBIRTH_PEACE_TICKS` + branch peace threshold before spawn.
+  - Block conditions:
+    - scar >= 3
+    - recent conflict below peace threshold
+    - settlement state != `revivable`
+  - Replaced tile ordering with deterministic tile scoring favoring:
+    - low scar
+    - near road/trade paths
+    - near existing structure neighbors
+- `scenes/main/Main.gd`
+  - Added `REBIRTH_CHECK_INTERVAL_TICKS = 2000`
+  - Wired tick-gated execution (`tick % interval == 0`) for:
+    - `SettlementMemory.recompute(_world)`
+    - `SettlementRebirth.process(_world, self, false)`
+  - Removed non-gated rebirth calls from bootstrap/load/reroll/dirty flush paths.
+- `docs/HEELKAWN_STATE.md`
+  - Updated Phase 4 status bullets for deterministic revival and peace-gated rebirth.
+
+Determinism check:
+- Zero RNG added.
+- Zero `_process(delta)` introduced.
+- Tick-gated only for rebirth/revival loop.
+
+---
+
 ## 2026-04-25 - Wildlife momentum sparkline (8-sample deterministic trend)
 
 Date: 2026-04-25

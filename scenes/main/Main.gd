@@ -94,6 +94,8 @@ const MEANING_AMBIENT_SMOOTH: float = 1.1
 const TRACE_REDRAW_INTERVAL_SEC: float = 1.0
 ## Generational turnover (v1): one new pawn per this many ticks if population > 0.
 const GENERATION_TICKS: int = 30000
+## Deterministic rebirth cadence (tick-gated, no frame-time).
+const REBIRTH_CHECK_INTERVAL_TICKS: int = 2000
 ## Ecosystems (hunt) stay inert until this tick (world gen / reroll / load).
 const WORLD_STABILIZATION_TICKS: int = 500
 ## World-level only; Pawn/Animal read via [code]Main._world_stabilization_until_tick[/code].
@@ -307,7 +309,6 @@ func _bootstrap_colony() -> void:
 		SettlementPlanner.plan(_world, self, true)
 		TradePlanner.plan(_world, self, true)
 		RoadMemory.flush_dirty_tiles(_world)
-		SettlementRebirth.process(_world, self, true)
 		_sync_pawn_inherited_cultural_reputation()
 	# Spawn animals and register spawner with world for breeding
 	_animal_spawner.spawn_initial(_world)
@@ -430,8 +431,8 @@ func _on_game_tick(tick: int) -> void:
 		if tick % planner_interval == 0:
 			SettlementPlanner.plan(_world, self, false)
 			TradePlanner.plan(_world, self, false)
-		var rebirth_interval: int = _high_speed_interval(1, 3, 6)
-		if tick % rebirth_interval == 0:
+		if tick % REBIRTH_CHECK_INTERVAL_TICKS == 0:
+			SettlementMemory.recompute(_world)
 			SettlementRebirth.process(_world, self, false)
 	if int(tick) % 10000 == 0 and int(tick) > 0:
 		AgeMemory.recompute()
@@ -454,7 +455,6 @@ func _flush_world_memory_derivatives() -> void:
 	WorldMeaning.recompute()
 	WorldPersistence.recompute()
 	CulturalMemory.recompute(_world)
-	SettlementMemory.recompute(_world)
 	MythMemory.recompute(_world)
 	SacredMemory.sync_permanent_ruins_from_settlements()
 	IntentMemory.recompute(_world)
@@ -467,7 +467,6 @@ func _flush_world_memory_derivatives() -> void:
 	SettlementPlanner.plan(_world, self, true)
 	TradePlanner.plan(_world, self, true)
 	RoadMemory.flush_dirty_tiles(_world)
-	SettlementRebirth.process(_world, self, true)
 
 
 func _maybe_generational_turnover() -> void:
@@ -1396,7 +1395,6 @@ func _reroll_world() -> void:
 		SettlementPlanner.plan(_world, self, true)
 		TradePlanner.plan(_world, self, true)
 		RoadMemory.flush_dirty_tiles(_world)
-		SettlementRebirth.process(_world, self, true)
 		RemnantMemory.clear()
 		RemnantMemory.seed_births_from_current_world(_world)
 
@@ -2159,7 +2157,6 @@ func _apply_save_dict(s: Dictionary) -> void:
 		SettlementPlanner.plan(_world, self, true)
 		TradePlanner.plan(_world, self, true)
 		RoadMemory.flush_dirty_tiles(_world)
-		SettlementRebirth.process(_world, self, true)
 		_sync_pawn_inherited_cultural_reputation()
 		RemnantMemory.seed_births_from_current_world(_world)
 	_regrow_queue.clear()

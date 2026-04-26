@@ -9,7 +9,16 @@ const KIND_PAWN_DEATH: int = 0
 const HARD_COLLAPSE_TICKS: int = 30000
 ## Revival tuning: moderately scarred but quiet regions may reopen.
 const REVIVABLE_SCAR_MAX: int = 2
-const REVIVABLE_REPUTATION_MIN: int = -1
+## Deterministic peace requirements by culture branch.
+const PEACE_TICKS_PER_BRANCH: Dictionary = {
+	SettlementPlanner.CULTURE_OPEN: 18000,
+	SettlementPlanner.CULTURE_CAUTIOUS: 30000,
+	SettlementPlanner.CULTURE_DEFENSIVE: 42000,
+}
+## Deterministic score gates.
+const REVIVAL_SCORE_RECOVERING_MIN: int = 35
+const REVIVAL_SCORE_REVIVABLE_MIN: int = 70
+const REVIVAL_SCORE_ACTIVE_MIN: int = 88
 
 var settlements: Array = []
 ## region_key -> state string (derived cache for O(1) regional queries)
@@ -115,7 +124,20 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
 	if reputation_min == 999999:
 		reputation_min = 0
 	var center_rk: int = _pick_center_region(cluster)
-	var state: String = _settlement_state_v1(cluster, scar_max, reputation_min, last_activity_tick)
+	var last_pawn_death_tick: int = _max_last_pawn_death_tick_in_cluster(cluster)
+	var draft: Dictionary = {
+		"scar_max": scar_max,
+		"reputation_min": reputation_min,
+	}
+	var culture_type: int = SettlementPlanner.get_culture_type_for_settlement(draft)
+	var state: String = _settlement_state_v1(
+			scar_max, reputation_min, last_activity_tick, last_pawn_death_tick, culture_type
+	)
+	var peace_threshold_ticks: int = get_peace_ticks_for_culture_branch(culture_type)
+	var ticks_since_collapse: int = _ticks_since_or_large(last_pawn_death_tick)
+	var revival_score: int = _deterministic_revival_score(
+			ticks_since_collapse, scar_max, ticks_since_collapse, culture_type, reputation_min
+	)
 	var packed: PackedInt32Array = PackedInt32Array()
 	for rk2 in cluster:
 		packed.append(int(rk2))
@@ -126,37 +148,78 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
 		"scar_max": scar_max,
 		"reputation_min": reputation_min,
 		"last_activity_tick": last_activity_tick,
+		"last_pawn_death_tick": last_pawn_death_tick,
+		"culture_type": culture_type,
+		"culture_name": SettlementPlanner.get_culture_name_for_settlement(draft),
+		"peace_threshold_ticks": peace_threshold_ticks,
+		"revival_score": revival_score,
 		"state": state,
 	}
 
 
 func _settlement_state_v1(
-		cluster: Array, scar_max: int, reputation_min: int, last_activity_tick: int
+		scar_max: int,
+		reputation_min: int,
+		last_activity_tick: int,
+		last_pawn_death_tick: int,
+		culture_branch: int
 ) -> String:
-	# Exclusivity: hard-collapse [abandoned] / [permanently_abandoned] first, then [revivable], else [dormant].
-	var now: int = GameManager.tick_count
-	if scar_max == 3 and reputation_min <= -2 and last_activity_tick >= 0:
-		if now - last_activity_tick <= HARD_COLLAPSE_TICKS:
+	# Exclusivity:
+	# permanently_abandoned > abandoned > recovering > revivable > active.
+	var ticks_since_collapse: int = _ticks_since_or_large(last_pawn_death_tick)
+	var regional_peace_ticks: int = ticks_since_collapse
+	var peace_threshold: int = get_peace_ticks_for_culture_branch(culture_branch)
+	if scar_max >= 3:
+		if ticks_since_collapse <= HARD_COLLAPSE_TICKS:
 			return "abandoned"
 		return "permanently_abandoned"
-	var last_pawn: int = _max_last_pawn_death_tick_in_cluster(cluster)
-	var recovery: int = WorldPersistence.RECOVERY_TICKS
-	if _is_revivable_v1(scar_max, reputation_min, last_pawn, now, recovery):
-		if last_pawn < 0 or now - last_pawn >= recovery:
-			return "revivable"
-	return "dormant"
+	# Fresh moderate collapse still reads as abandoned.
+	if last_activity_tick >= 0 and _ticks_since_or_large(last_activity_tick) < int(HARD_COLLAPSE_TICKS * 0.4):
+		return "abandoned"
+	var revival_score: int = _deterministic_revival_score(
+			ticks_since_collapse, scar_max, regional_peace_ticks, culture_branch, reputation_min
+	)
+	if revival_score < REVIVAL_SCORE_RECOVERING_MIN:
+		return "abandoned"
+	if revival_score < REVIVAL_SCORE_REVIVABLE_MIN:
+		return "recovering"
+	if scar_max <= REVIVABLE_SCAR_MAX and regional_peace_ticks >= peace_threshold:
+		if revival_score >= REVIVAL_SCORE_ACTIVE_MIN and scar_max <= 1 and regional_peace_ticks >= peace_threshold * 2:
+			return "active"
+		return "revivable"
+	return "recovering"
 
 
-func _is_revivable_v1(
-		scar_max: int, reputation_min: int, last_pawn_death_tick: int, now: int, recovery: int
-) -> bool:
-	if scar_max > REVIVABLE_SCAR_MAX:
-		return false
-	if reputation_min < REVIVABLE_REPUTATION_MIN:
-		return false
-	if last_pawn_death_tick >= 0 and (now - last_pawn_death_tick) < recovery:
-		return false
-	return true
+func get_peace_ticks_for_culture_branch(culture_branch: int) -> int:
+	return int(PEACE_TICKS_PER_BRANCH.get(culture_branch, int(PEACE_TICKS_PER_BRANCH[SettlementPlanner.CULTURE_CAUTIOUS])))
+
+
+func _ticks_since_or_large(tick_value: int) -> int:
+	if tick_value < 0:
+		return 1_000_000_000
+	return maxi(0, GameManager.tick_count - tick_value)
+
+
+func _deterministic_revival_score(
+		ticks_since_collapse: int,
+		scar_level: int,
+		regional_peace_ticks: int,
+		cultural_branch: int,
+		reputation_min: int
+) -> int:
+	var peace_threshold: int = get_peace_ticks_for_culture_branch(cultural_branch)
+	var collapse_component: int = mini(100, int((float(ticks_since_collapse) / float(maxi(1, HARD_COLLAPSE_TICKS * 2))) * 100.0))
+	var peace_component: int = mini(100, int((float(regional_peace_ticks) / float(maxi(1, peace_threshold))) * 100.0))
+	var scar_penalty: int = scar_level * 25
+	var branch_bonus: int = 0
+	if cultural_branch == SettlementPlanner.CULTURE_OPEN:
+		branch_bonus = 15
+	elif cultural_branch == SettlementPlanner.CULTURE_CAUTIOUS:
+		branch_bonus = 5
+	else:
+		branch_bonus = -10
+	var rep_bonus: int = clampi(reputation_min * 5, -20, 20)
+	return clampi(int((collapse_component + peace_component) / 2) - scar_penalty + branch_bonus + rep_bonus, 0, 100)
 
 
 func get_settlement_profile(region_key: int) -> Dictionary:
@@ -164,7 +227,6 @@ func get_settlement_profile(region_key: int) -> Dictionary:
 	if settlement == null or not (settlement is Dictionary):
 		return _default_profile(region_key)
 	var d: Dictionary = settlement as Dictionary
-	var regions: PackedInt32Array = _regions_from_settlement(d)
 	var mean: Dictionary = WorldMeaning.get_region_meaning_summary(region_key)
 	var pers: Dictionary = WorldPersistence.get_region_persistence(region_key)
 	var profile: Dictionary = {
@@ -176,18 +238,18 @@ func get_settlement_profile(region_key: int) -> Dictionary:
 		"scar_max": int(d.get("scar_max", 0)),
 		"reputation_min": int(d.get("reputation_min", 0)),
 		"last_activity_tick": int(d.get("last_activity_tick", -1)),
+		"last_pawn_death_tick": int(d.get("last_pawn_death_tick", -1)),
 		"meaning_label": str(mean.get("meaning_label", "quiet")),
 		"death_density": str(mean.get("death_density", "none")),
 		"total_deaths": int(mean.get("total_deaths", 0)),
 		"scar_level": int(pers.get("scar_level", 0)),
 		"recovery_stage": int(pers.get("recovery_stage", 0)),
+		"peace_threshold_ticks": int(d.get("peace_threshold_ticks", get_peace_ticks_for_culture_branch(int(d.get("culture_type", SettlementPlanner.CULTURE_CAUTIOUS))))),
+		"revival_score": int(d.get("revival_score", 0)),
 		"revival_ready": false,
 	}
-	var last_pawn: int = _max_last_pawn_death_tick_in_regions(regions)
-	profile["revival_ready"] = _is_revivable_v1(
-			int(profile["scar_max"]), int(profile["reputation_min"]), last_pawn,
-			GameManager.tick_count, WorldPersistence.RECOVERY_TICKS
-	)
+	var state_now: String = str(profile.get("state", ""))
+	profile["revival_ready"] = state_now == "revivable"
 	return profile
 
 
@@ -201,11 +263,14 @@ func _default_profile(region_key: int) -> Dictionary:
 		"scar_max": 0,
 		"reputation_min": 0,
 		"last_activity_tick": -1,
+		"last_pawn_death_tick": -1,
 		"meaning_label": "quiet",
 		"death_density": "none",
 		"total_deaths": 0,
 		"scar_level": 0,
 		"recovery_stage": 0,
+		"peace_threshold_ticks": int(PEACE_TICKS_PER_BRANCH[SettlementPlanner.CULTURE_CAUTIOUS]),
+		"revival_score": 0,
 		"revival_ready": false,
 	}
 

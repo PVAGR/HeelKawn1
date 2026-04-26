@@ -169,8 +169,9 @@ func _apply_death() -> void:
 	var sp: Stockpile = StockpileManager.find_drop_zone(Item.Type.MEAT, tile_pos, _world.pathfinder)
 	if sp != null:
 		sp.add_item(Item.Type.MEAT, spec.meat_amount)
-		print("[Animal] %s died at (%d,%d), dropped %d meat" % 
-			[spec.name, tile_pos.x, tile_pos.y, spec.meat_amount])
+		if GameManager.verbose_logs():
+			print("[Animal] %s died at (%d,%d), dropped %d meat" %
+				[spec.name, tile_pos.x, tile_pos.y, spec.meat_amount])
 	WorldMemory.record_animal_death(
 		GameManager.tick_count, tile_pos, int(animal_type), get_species_name()
 	)

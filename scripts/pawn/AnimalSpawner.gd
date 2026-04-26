@@ -73,10 +73,11 @@ func spawn_initial(world: World) -> void:
 	reset_population_derived_state()
 	_spawn_group_scan(world, int(Animal.Type.RABBIT), INITIAL_RABBITS, true)
 	_spawn_group_scan(world, int(Animal.Type.DEER), INITIAL_DEER, true)
-	print(
-			"[AnimalSpawner] Initial: %d rabbits, %d deer (deterministic, max %d)"
-			% [INITIAL_RABBITS, INITIAL_DEER, MAX_ANIMALS]
-	)
+	if GameManager.verbose_logs():
+		print(
+				"[AnimalSpawner] Initial: %d rabbits, %d deer (deterministic, max %d)"
+				% [INITIAL_RABBITS, INITIAL_DEER, MAX_ANIMALS]
+		)
 
 
 func _spawn_group_scan(world: World, species: int, need: int, initial: bool) -> void:

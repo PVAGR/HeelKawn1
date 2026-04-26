@@ -15,6 +15,8 @@ const TICK_INTERVAL_SECONDS: float = 0.1
 ## this rate a single _process frame can queue many sim ticks so any per-tick
 ## work (pathing, allocations) amplifies. Keep hot paths cheap.
 const SPEED_STEPS: Array[float] = [1.0, 3.0, 6.0, 12.0]
+## Set true only when actively debugging pawn/animal internals.
+const VERBOSE_SIM_LOGS: bool = false
 ## Hard cap to prevent "catch-up storms" where one slow frame triggers hundreds
 ## of ticks and causes visible stutter. Extra accumulated time stays buffered
 ## and is processed over subsequent frames.
@@ -29,6 +31,10 @@ var tick_count: int = 0
 var global_stress: int = 0
 
 var _tick_accumulator: float = 0.0
+
+
+static func verbose_logs() -> bool:
+	return OS.is_debug_build() and VERBOSE_SIM_LOGS
 
 
 func _ready() -> void:

@@ -1072,21 +1072,25 @@ func _complete_current_job() -> void:
 		Job.Type.FORAGE:
 			produced_type = Item.Type.BERRY
 			_world.clear_feature(job.tile.x, job.tile.y)
-			print("[Pawn] %s foraged berries @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s foraged berries @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.MINE:
 			produced_type = Item.Type.STONE
 			_world.clear_feature(job.tile.x, job.tile.y)
-			print("[Pawn] %s mined stone @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s mined stone @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.MINE_WALL:
 			produced_type = Item.Type.STONE
 			# This converts MOUNTAIN -> STONE_FLOOR and rebuilds the components
 			# map, which can cascade-unlock sealed ore veins.
 			_world.mine_out_wall(job.tile.x, job.tile.y)
-			print("[Pawn] %s mined wall @(%d,%d) -> stone floor" % [data.display_name, job.tile.x, job.tile.y])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s mined wall @(%d,%d) -> stone floor" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.CHOP:
 			produced_type = Item.Type.WOOD
 			_world.clear_feature(job.tile.x, job.tile.y)
-			print("[Pawn] %s chopped tree @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s chopped tree @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.HUNT:
 			produced_type = Item.Type.MEAT
 			# Read the species off the tile BEFORE we clear it, so we know
@@ -1102,9 +1106,10 @@ func _complete_current_job() -> void:
 						TileFeature.name_for(animal_feat),
 				)
 			_world.clear_feature(job.tile.x, job.tile.y)
-			print("[Pawn] %s hunted %s @(%d,%d) -> %d meat" % [
-				data.display_name, TileFeature.name_for(animal_feat),
-				job.tile.x, job.tile.y, produced_qty])
+			if GameManager.verbose_logs():
+				print("[Pawn] %s hunted %s @(%d,%d) -> %d meat" % [
+					data.display_name, TileFeature.name_for(animal_feat),
+					job.tile.x, job.tile.y, produced_qty])
 		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
 			_finish_build(job)
 	# Trigger mood event based on job type
@@ -1366,9 +1371,10 @@ func _finish_eating() -> void:
 					data.add_mood_event(MoodEvent.Type.JOY, 40.0, 150)
 				# After eating, reset warning band so we don't re-log instantly.
 				_hunger_level = _level_for(data.hunger)
-				print("[Pawn] %s ate 1 %s  (+%.0f hunger -> %.1f, mood %.1f)" % [
-					data.display_name, Item.name_for(food_type), gain, data.hunger, data.mood
-				])
+	if GameManager.verbose_logs():
+		print("[Pawn] %s ate 1 %s  (+%.0f hunger -> %.1f, mood %.1f)" % [
+			data.display_name, Item.name_for(food_type), gain, data.hunger, data.mood
+		])
 	_target_zone = null
 	_reset_to_idle()
 
@@ -1440,7 +1446,8 @@ func _begin_sleeping() -> void:
 	queue_redraw()
 	var on_bed: bool = _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed
 	var where: String = " in a bed" if on_bed else ""
-	print("[Pawn] %s lies down to sleep%s  (rest=%.1f)" % [data.display_name, where, data.rest])
+	if GameManager.verbose_logs():
+		print("[Pawn] %s lies down to sleep%s  (rest=%.1f)" % [data.display_name, where, data.rest])
 
 
 ## Per-tick while in SLEEPING. The actual rest restoration / hunger decay
@@ -1449,8 +1456,9 @@ func _begin_sleeping() -> void:
 func _tick_sleeping() -> void:
 	# Wake up early if we get critically hungry -- food trumps sleep.
 	if data.hunger <= HUNGER_EMERGENCY:
-		print("[Pawn] %s wakes hungry  (hunger=%.1f rest=%.1f)" %
-			[data.display_name, data.hunger, data.rest])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s wakes hungry  (hunger=%.1f rest=%.1f)" %
+				[data.display_name, data.hunger, data.rest])
 		_release_bed_if_reserved()
 		_reset_to_idle()
 		return
@@ -1493,8 +1501,9 @@ func _engage_enemies() -> void:
 	# Normal wake on rest restored.
 	if data.rest >= REST_WAKE_THRESHOLD:
 		data.mood = min(100.0, data.mood + MOOD_BONUS_WOKE_REFRESHED)
-		print("[Pawn] %s wakes refreshed  (rest=%.1f, mood %.1f)" %
-			[data.display_name, data.rest, data.mood])
+		if GameManager.verbose_logs():
+			print("[Pawn] %s wakes refreshed  (rest=%.1f, mood %.1f)" %
+				[data.display_name, data.rest, data.mood])
 		_release_bed_if_reserved()
 		_reset_to_idle()
 		return
@@ -1523,9 +1532,10 @@ func _eat_from_hand() -> void:
 	if data.carrying_qty <= 0:
 		data.clear_carry()
 	_hunger_level = _level_for(data.hunger)
-	print("[Pawn] %s ate 1 %s FROM HAND (emergency, +%.0f hunger -> %.1f, mood %.1f)" % [
-		data.display_name, Item.name_for(food_type), gain, data.hunger, data.mood
-	])
+	if GameManager.verbose_logs():
+		print("[Pawn] %s ate 1 %s FROM HAND (emergency, +%.0f hunger -> %.1f, mood %.1f)" % [
+			data.display_name, Item.name_for(food_type), gain, data.hunger, data.mood
+		])
 	queue_redraw()
 
 

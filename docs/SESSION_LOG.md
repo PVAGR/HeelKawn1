@@ -5,6 +5,40 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-25 - Debug log throttling for smoother editor runtime
+
+Date: 2026-04-25
+Agent/Model: Codex (Cursor)
+Goal: Reduce run-time stutter caused by heavy console spam during simulation.
+
+Changes made:
+- Added global verbose logging switch in `autoloads/GameManager.gd` (`VERBOSE_SIM_LOGS`, default false).
+- Wrapped noisy hot-path logs behind `GameManager.verbose_logs()` in:
+  - `scripts/pawn/Pawn.gd`
+  - `scripts/pawn/Animal.gd`
+  - `scripts/pawn/PawnSpawner.gd`
+  - `scripts/pawn/AnimalSpawner.gd`
+
+Decisions:
+- Keep important behavior unchanged; only suppress spam logs by default.
+- Leave verbose tracing available with a single toggle.
+
+Open questions:
+- Should we expose verbose toggle via HUD/debug hotkey instead of code constant?
+
+Next concrete step:
+- Clean static-call warnings (`STATIC_CALLED_ON_INSTANCE`) to reduce editor warning load.
+
+Files touched:
+- autoloads/GameManager.gd
+- scripts/pawn/Pawn.gd
+- scripts/pawn/Animal.gd
+- scripts/pawn/PawnSpawner.gd
+- scripts/pawn/AnimalSpawner.gd
+- docs/SESSION_LOG.md
+
+---
+
 ## 2026-04-25 - Tick smoothing pass (frame spike guard)
 
 Date: 2026-04-25

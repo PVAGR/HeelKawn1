@@ -142,8 +142,9 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		pawns.append(pawn)
 		placed += 1
 
-		print("[Spawn] #%d %s  tile=(%d,%d) biome=%s" %
-			[placed, data.describe(), tile.x, tile.y, Biome.name_for(biome)])
+		if GameManager.verbose_logs():
+			print("[Spawn] #%d %s  tile=(%d,%d) biome=%s" %
+				[placed, data.describe(), tile.x, tile.y, Biome.name_for(biome)])
 
 	if placed < STARTER_COUNT:
 		if OS.is_debug_build():
@@ -191,9 +192,10 @@ func spawn_generational_pawn(
 	add_child(pawn)
 	pawn.bind(data, world.tile_to_world(tile), world)
 	pawns.append(pawn)
-	print("[Spawn] generational: %s  tile=(%d,%d) age=%d" % [
-		data.display_name, tile.x, tile.y, data.age,
-	])
+	if GameManager.verbose_logs():
+		print("[Spawn] generational: %s  tile=(%d,%d) age=%d" % [
+			data.display_name, tile.x, tile.y, data.age,
+		])
 	return true
 
 
@@ -260,7 +262,8 @@ func spawn_pawn() -> void:
 		add_child(pawnc)
 		pawnc.bind(data, world.tile_to_world(tile), world)
 		pawns.append(pawnc)
-		print("[Spawn] living: %s  tile=(%d,%d)" % [data.describe(), tile.x, tile.y])
+		if GameManager.verbose_logs():
+			print("[Spawn] living: %s  tile=(%d,%d)" % [data.describe(), tile.x, tile.y])
 		return
 	if OS.is_debug_build():
 		push_warning("[PawnSpawner] spawn_pawn: could not place a pawn")
@@ -273,7 +276,8 @@ func spawn_from_data(d: PawnData, world: World) -> void:
 	add_child(p)
 	p.bind(d, world.tile_to_world(d.tile_pos), world)
 	pawns.append(p)
-	print("[Spawn] load: %s @(%d,%d)" % [d.display_name, d.tile_pos.x, d.tile_pos.y])
+	if GameManager.verbose_logs():
+		print("[Spawn] load: %s @(%d,%d)" % [d.display_name, d.tile_pos.x, d.tile_pos.y])
 
 
 ## Pick a name we haven't used yet this run.
@@ -305,5 +309,6 @@ func _assign_random_traits(pawn_data: PawnData) -> void:
 			assigned[trait_type] = true
 			var trait_item := Trait.new(trait_type)
 			pawn_data.add_trait(trait_item)
-			print("[Spawn] trait: %s -> %s" % [pawn_data.display_name, trait_item.display_name])
+			if GameManager.verbose_logs():
+				print("[Spawn] trait: %s -> %s" % [pawn_data.display_name, trait_item.display_name])
 

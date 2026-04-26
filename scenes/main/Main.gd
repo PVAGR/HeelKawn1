@@ -97,6 +97,7 @@ const GENERATION_TICKS: int = 30000
 const REPRODUCTION_CHECK_INTERVAL_TICKS: int = 300
 const INFLUENCE_UPDATE_INTERVAL_TICKS: int = 500
 const OBSERVER_HUD_REFRESH_TICKS: int = 30
+const FOCUS_INSPECTOR_REFRESH_TICKS: int = 15
 ## Deterministic rebirth cadence (tick-gated, no frame-time).
 const REBIRTH_CHECK_INTERVAL_TICKS: int = 2000
 ## Ecosystems (hunt) stay inert until this tick (world gen / reroll / load).
@@ -112,6 +113,7 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _enemy_spawner: EnemySpawner = $WorldViewport/EnemySpawner
 @onready var _hud: ColonyHUD = $UI_Viewport/ColonyHUD
 @onready var _observer_hud: ObserverHUD = $UI_Viewport/ObserverHUD
+@onready var _focus_inspector: FocusInspector = $UI_Viewport/FocusInspector
 @onready var _toolbar: BuildToolbar = $UI_Viewport/BuildToolbar
 @onready var _info_panel: PawnInfoPanel = $UI_Viewport/PawnInfoPanel
 @onready var _day_night: DayNightCycle = $DayNight
@@ -267,6 +269,8 @@ func _ready() -> void:
 		_hud.set_player_control_refs(_player_input, _player_pawn)
 	if _observer_hud != null:
 		_observer_hud.set_visible_state(false)
+	if _focus_inspector != null:
+		_focus_inspector.set_visible_state(false)
 
 
 func _process(delta: float) -> void:
@@ -470,6 +474,8 @@ func _on_game_tick(tick: int) -> void:
 		_update_pawn_influence_tick()
 	if _observer_hud != null and _observer_hud.is_visible_state() and tick % OBSERVER_HUD_REFRESH_TICKS == 0:
 		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
+	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % FOCUS_INSPECTOR_REFRESH_TICKS == 0:
+		_focus_inspector.apply_snapshot(_build_focus_snapshot(tick))
 	if is_instance_valid(_world):
 		call_deferred("_flush_road_memory_dirty_tiles")
 
@@ -841,6 +847,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_colony_load()
 		KEY_F9:
 			_toggle_observer_hud()
+		KEY_F10:
+			_toggle_focus_inspector()
 		KEY_M:
 			ColonySimServices.cycle_labor_stance()
 		KEY_ESCAPE:
@@ -2401,6 +2409,181 @@ func _toggle_observer_hud() -> void:
 	_observer_hud.set_visible_state(next_visible)
 	if next_visible:
 		_observer_hud.apply_snapshot(_build_observer_snapshot(GameManager.tick_count))
+
+
+func _toggle_focus_inspector() -> void:
+	if _focus_inspector == null:
+		return
+	var next_visible: bool = not _focus_inspector.is_visible_state()
+	_focus_inspector.set_visible_state(next_visible)
+	if next_visible:
+		_focus_inspector.apply_snapshot(_build_focus_snapshot(GameManager.tick_count))
+
+
+func _build_focus_snapshot(tick: int) -> Dictionary:
+	var focus: Dictionary = _resolve_focus_target()
+	var focus_type: String = str(focus.get("type", "NONE"))
+	var main_lines: PackedStringArray = PackedStringArray()
+	var title: String = "FOCUS INSPECTOR"
+	if focus_type == "PAWN":
+		title = "FOCUS: PAWN"
+		main_lines = _focus_lines_for_pawn(focus)
+	elif focus_type == "SETTLEMENT":
+		title = "FOCUS: SETTLEMENT"
+		main_lines = _focus_lines_for_settlement(focus)
+	elif focus_type == "TILE":
+		title = "FOCUS: TILE"
+		main_lines = _focus_lines_for_tile(focus)
+	else:
+		main_lines = PackedStringArray([
+			"NO FOCUS",
+			"Move cursor over a pawn, settlement, or tile",
+		])
+	return {
+		"title": title,
+		"focus_type": focus_type,
+		"main_lines": main_lines,
+		"footer": "Tick %d | source: %s" % [tick, str(focus.get("source", "none"))],
+	}
+
+
+func _resolve_focus_target() -> Dictionary:
+	if _world == null:
+		return {"type": "NONE", "source": "none"}
+	var mouse_world: Vector2 = get_global_mouse_position()
+	var mouse_pawn: Pawn = _focus_pawn_under_world_pos(mouse_world)
+	if mouse_pawn != null and mouse_pawn.data != null:
+		return {"type": "PAWN", "source": "mouse_pawn", "pawn": mouse_pawn}
+	var mouse_tile: Vector2i = _world.world_to_tile(mouse_world)
+	if mouse_tile.x >= 0 and mouse_tile.y >= 0:
+		var settlement: Variant = SettlementMemory.get_settlement_at_region(WorldMemory._region_key(mouse_tile.x, mouse_tile.y))
+		if settlement is Dictionary:
+			return {"type": "SETTLEMENT", "source": "mouse_tile", "tile": mouse_tile, "settlement": settlement}
+		return {"type": "TILE", "source": "mouse_tile", "tile": mouse_tile}
+	var cam_tile: Vector2i = _world.world_to_tile(_camera.global_position) if _camera != null else Vector2i(-1, -1)
+	if cam_tile.x >= 0 and cam_tile.y >= 0:
+		return {"type": "TILE", "source": "camera_center", "tile": cam_tile}
+	return {"type": "NONE", "source": "none"}
+
+
+func _focus_pawn_under_world_pos(world_pos: Vector2) -> Pawn:
+	if _pawn_spawner == null:
+		return null
+	var best: Pawn = null
+	var best_d_sq: float = SELECT_PICK_RADIUS_PX * SELECT_PICK_RADIUS_PX
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var d_sq: float = p.global_position.distance_squared_to(world_pos)
+		if d_sq <= best_d_sq:
+			best = p
+			best_d_sq = d_sq
+	return best
+
+
+func _focus_lines_for_pawn(focus: Dictionary) -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	var p: Pawn = focus.get("pawn", null) as Pawn
+	if p == null or p.data == null:
+		return PackedStringArray(["NO FOCUS", "Move cursor over a pawn, settlement, or tile"])
+	var d: PawnData = p.data
+	var rk: int = WorldMemory._region_key(d.tile_pos.x, d.tile_pos.y)
+	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(rk)
+	var role: String = _pawn_governance_role(d, gov)
+	var war: Dictionary = SettlementMemory.get_war_profile_for_region(rk)
+	var st_v: Variant = SettlementMemory.get_settlement_at_region(rk)
+	var settlement_label: String = "Unknown"
+	if st_v is Dictionary:
+		settlement_label = _pretty_settlement_state(str((st_v as Dictionary).get("state", "unknown")))
+	var health_pct: int = int(round(d.get_health_percentage() * 100.0)) if d.has_method("get_health_percentage") else 0
+	var state_label: String = p.get_state_name() if p.has_method("get_state_name") else "Unknown"
+	var job_label: String = p.get_current_job_label() if p.has_method("get_current_job_label") else "None"
+	var local_mode: String = "Retreat" if d.has_method("get_health_percentage") and float(d.get_health_percentage()) < 0.5 else "Ordered"
+	out.append("Name: %s" % d.display_name)
+	out.append("Profession: %s | Military Rank: %s" % [d.profession_name(), String(d.military_rank).capitalize()])
+	out.append("Governance Role: %s" % role)
+	out.append("Health: %d%% | Hunger %.0f | Rest %.0f | Mood %.0f" % [health_pct, d.hunger, d.rest, d.mood])
+	out.append("Action: %s | Job: %s" % [state_label, job_label])
+	out.append("Settlement State: %s | War: %s" % [settlement_label, _pretty_war_state(str(war.get("state", "peace")))])
+	out.append("Battlefield Posture: %s" % local_mode)
+	return out
+
+
+func _focus_lines_for_settlement(focus: Dictionary) -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	var tile: Vector2i = focus.get("tile", Vector2i(-1, -1))
+	var st: Dictionary = focus.get("settlement", {})
+	var center: int = int(st.get("center_region", -1))
+	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(center)
+	var war: Dictionary = SettlementMemory.get_war_profile_for_region(center)
+	out.append("Region: %d | Tile: (%d,%d)" % [center, tile.x, tile.y])
+	out.append("Settlement State: %s" % _pretty_settlement_state(str(st.get("state", "unknown"))))
+	out.append("Governance: %s | Ruler: %s" % [
+		_pretty_governance_name(str(gov.get("type", "anarchy"))),
+		_pawn_name_by_id(int(gov.get("ruler_id", -1)))
+	])
+	var pop: int = _count_pawns_in_regions(st.get("regions", PackedInt32Array()))
+	out.append("Population: %d | Council Size: %d" % [pop, (gov.get("council_ids", PackedInt32Array()) as PackedInt32Array).size() if gov.get("council_ids", PackedInt32Array()) is PackedInt32Array else 0])
+	out.append("War: %s | Target: %s" % [_pretty_war_state(str(war.get("state", "peace"))), _observer_war_target_label(int(war.get("target_settlement_id", -1)))])
+	out.append("Food Pressure: %d%% | Housing Pressure: %d%%" % [
+		int(round(ColonySimServices.get_food_pressure() * 100.0)),
+		int(round(ColonySimServices.get_housing_pressure() * 100.0)),
+	])
+	return out
+
+
+func _focus_lines_for_tile(focus: Dictionary) -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	var tile: Vector2i = focus.get("tile", Vector2i(-1, -1))
+	if tile.x < 0:
+		return PackedStringArray(["NO FOCUS", "Move cursor over a pawn, settlement, or tile"])
+	var rk: int = WorldMemory._region_key(tile.x, tile.y)
+	out.append("Tile: (%d,%d) | Region: %d" % [tile.x, tile.y, rk])
+	var biome: int = _world.data.get_biome(tile.x, tile.y) if _world != null and _world.data != null else -1
+	out.append("Biome: %d | Scar: %d" % [biome, int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))])
+	var st_v: Variant = SettlementMemory.get_settlement_at_region(rk)
+	if st_v is Dictionary:
+		var st: Dictionary = st_v as Dictionary
+		var center: int = int(st.get("center_region", -1))
+		var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(center)
+		out.append("Settlement: %s | Governance: %s" % [
+			_pretty_settlement_state(str(st.get("state", "unknown"))),
+			_pretty_governance_name(str(gov.get("type", "anarchy")))
+		])
+	var events: Array[Dictionary] = WorldMemory.get_events_for_tile(tile)
+	if not events.is_empty():
+		var evt: Dictionary = events[events.size() - 1]
+		var etype: String = str(evt.get("type", "event"))
+		out.append("Last Event: %s @ tick %d" % [etype.replace("_", " "), int(evt.get("t", 0))])
+	return out
+
+
+func _pawn_governance_role(d: PawnData, gov: Dictionary) -> String:
+	var pid: int = int(d.id)
+	if int(gov.get("ruler_id", -1)) == pid:
+		return "Ruler"
+	var council_ids: Variant = gov.get("council_ids", PackedInt32Array())
+	if council_ids is PackedInt32Array and (council_ids as PackedInt32Array).has(pid):
+		return "Council"
+	if String(d.military_rank).to_lower() == "battlemaster":
+		return "BattleMaster"
+	return "Citizen"
+
+
+func _count_pawns_in_regions(regions_v: Variant) -> int:
+	if _pawn_spawner == null or not (regions_v is PackedInt32Array):
+		return 0
+	var wanted: Dictionary = {}
+	for rk in regions_v as PackedInt32Array:
+		wanted[int(rk)] = true
+	var n: int = 0
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		if wanted.has(rk):
+			n += 1
+	return n
 
 
 func _build_observer_snapshot(tick: int) -> Dictionary:

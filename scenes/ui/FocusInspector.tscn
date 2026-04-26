@@ -1,0 +1,55 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/FocusInspector.gd" id="1_focus"]
+
+[node name="FocusInspector" type="CanvasLayer"]
+visible = false
+script = ExtResource("1_focus")
+
+[node name="Card" type="PanelContainer" parent="."]
+offset_left = 460.0
+offset_top = 8.0
+offset_right = 820.0
+offset_bottom = 255.0
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="Card"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="Card/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Title" type="RichTextLabel" parent="Card/Margin/VBox"]
+layout_mode = 2
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+mouse_filter = 2
+text = "FOCUS INSPECTOR"
+
+[node name="Type" type="RichTextLabel" parent="Card/Margin/VBox"]
+layout_mode = 2
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+mouse_filter = 2
+text = "Type: NONE"
+
+[node name="Body" type="RichTextLabel" parent="Card/Margin/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(340, 145)
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 2
+mouse_filter = 2
+text = "NO FOCUS"
+
+[node name="Footer" type="RichTextLabel" parent="Card/Margin/VBox"]
+layout_mode = 2
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+mouse_filter = 2
+text = ""

@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3 uid="uid://heelkawn_main"]
+[gd_scene load_steps=16 format=3 uid="uid://heelkawn_main"]
 
 [ext_resource type="Script" path="res://scenes/main/Main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scenes/main/BuildPreviewOverlay.gd" id="1_preview"]
@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" path="res://scenes/pawn/Pawn.tscn" id="6_pawn"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ColonyHUD.tscn" id="7_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ObserverHUD.tscn" id="14_observer_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/FocusInspector.tscn" id="15_focus_inspector"]
 [ext_resource type="Script" path="res://scripts/ui/BuildToolbar.gd" id="8_toolbar"]
 [ext_resource type="Script" path="res://scripts/ui/PawnInfoPanel.gd" id="9_info"]
 [ext_resource type="Script" path="res://scripts/pawn/AnimalSpawner.gd" id="10_animal_spawn"]
@@ -55,6 +56,8 @@ script = ExtResource("2_cam")
 [node name="ColonyHUD" parent="UI_Viewport" instance=ExtResource("7_hud")]
 
 [node name="ObserverHUD" parent="UI_Viewport" instance=ExtResource("14_observer_hud")]
+
+[node name="FocusInspector" parent="UI_Viewport" instance=ExtResource("15_focus_inspector")]
 
 [node name="BuildToolbar" type="CanvasLayer" parent="UI_Viewport"]
 script = ExtResource("8_toolbar")

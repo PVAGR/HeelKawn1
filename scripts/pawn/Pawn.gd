@@ -210,6 +210,38 @@ func get_pawn_data() -> PawnData:
 	return data
 
 
+func get_state_name() -> String:
+	match _state:
+		State.IDLE:
+			return "Idle"
+		State.WALKING_TO_JOB:
+			return "WalkingToJob"
+		State.WORKING:
+			return "Working"
+		State.HAULING:
+			return "Hauling"
+		State.GOING_TO_EAT:
+			return "GoingToEat"
+		State.EATING:
+			return "Eating"
+		State.GOING_TO_BED:
+			return "GoingToBed"
+		State.SLEEPING:
+			return "Sleeping"
+		State.FETCHING_MATERIAL:
+			return "FetchingMaterial"
+		State.DRAFT_WALK:
+			return "DraftWalk"
+		_:
+			return "Unknown"
+
+
+func get_current_job_label() -> String:
+	if _current_job == null:
+		return "None"
+	return Job.describe_type(_current_job.type)
+
+
 func get_pawn_name_for_log() -> String:
 	if data == null:
 		return "?"

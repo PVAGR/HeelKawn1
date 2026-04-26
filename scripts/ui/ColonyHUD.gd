@@ -38,6 +38,8 @@ var _wildlife_prev_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
 var _wildlife_sample_tick: int = 0
 var _wildlife_history: Array[int] = []
 var _momentum_spark: String = "........"
+var _player_input_buffer: PlayerInputBuffer = null
+var _player_pawn: Pawn = null
 
 
 func _ready() -> void:
@@ -69,6 +71,20 @@ func bind(world: World, spawner: PawnSpawner) -> void:
 		if m is AnimalSpawner:
 			_animal_spawner = m as AnimalSpawner
 	_refresh()
+
+
+func set_player_control_refs(input_buffer: PlayerInputBuffer, player_pawn: Pawn) -> void:
+	if _player_input_buffer != null and _player_input_buffer.intent_ready.is_connected(_on_intent_ready):
+		_player_input_buffer.intent_ready.disconnect(_on_intent_ready)
+	_player_input_buffer = input_buffer
+	_player_pawn = player_pawn
+	if _player_input_buffer != null and not _player_input_buffer.intent_ready.is_connected(_on_intent_ready):
+		_player_input_buffer.intent_ready.connect(_on_intent_ready)
+	queue_redraw()
+
+
+func _on_intent_ready(_intent: Dictionary) -> void:
+	queue_redraw()
 
 
 ## Called by Main whenever the player's build mode changes. Empty string =
@@ -139,6 +155,40 @@ func _refresh() -> void:
 	lines.append(_jobs_line())
 	lines.append(_wildlife_line())
 	_label.text = "\n".join(lines)
+	queue_redraw()
+
+
+func _draw() -> void:
+	_draw_intent_marker()
+
+
+func _draw_intent_marker() -> void:
+	if _world == null or _player_input_buffer == null:
+		return
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return
+	var target_v: Variant = _player_input_buffer.get_queued_target(_player_pawn.data.tile_pos)
+	if not (target_v is Vector2i):
+		return
+	var target_tile: Vector2i = target_v as Vector2i
+	var target_world: Vector2 = _world.tile_to_world(target_tile)
+	var screen_pos: Vector2 = _world_to_hud_position(target_world)
+	var yellow_fill: Color = Color(1.0, 0.95, 0.25, 0.50)
+	var yellow_line: Color = Color(1.0, 0.95, 0.25, 0.70)
+	draw_circle(screen_pos, 4.0, yellow_fill)
+	draw_line(screen_pos + Vector2(0, -8), screen_pos, yellow_line, 2.0, true)
+	draw_polygon(
+		PackedVector2Array([
+			screen_pos + Vector2(0, -12),
+			screen_pos + Vector2(-4, -6),
+			screen_pos + Vector2(4, -6),
+		]),
+		PackedColorArray([yellow_line, yellow_line, yellow_line])
+	)
+
+
+func _world_to_hud_position(world_pos: Vector2) -> Vector2:
+	return get_viewport().get_canvas_transform() * world_pos
 
 
 func _time_line() -> String:

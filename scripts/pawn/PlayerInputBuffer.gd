@@ -88,3 +88,24 @@ func get_queue_size() -> int:
 
 func get_last_action_state() -> String:
 	return _last_action_state
+
+
+func get_queued_target(pawn_pos: Vector2i) -> Variant:
+	if _intent_queue.is_empty():
+		return null
+	var intent: Dictionary = _intent_queue[0]
+	var delta: Vector2i = Vector2i.ZERO
+	match str(intent.get("action", "")):
+		"move_north":
+			delta = Vector2i(0, -1)
+		"move_south":
+			delta = Vector2i(0, 1)
+		"move_east":
+			delta = Vector2i(1, 0)
+		"move_west":
+			delta = Vector2i(-1, 0)
+		_:
+			delta = Vector2i.ZERO
+	if delta == Vector2i.ZERO:
+		return null
+	return pawn_pos + delta

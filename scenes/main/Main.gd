@@ -254,6 +254,8 @@ func _ready() -> void:
 	if OS.is_debug_build():
 		print("[Main] Scene ready. Tick interval: %.2fs" % GameManager.TICK_INTERVAL_SECONDS)
 	_bootstrap_colony()
+	if _hud != null:
+		_hud.set_player_control_refs(_player_input, _player_pawn)
 
 
 func _process(delta: float) -> void:
@@ -1111,6 +1113,8 @@ func _set_selected_pawn(p: Pawn) -> void:
 		_selected_pawn.queue_redraw()
 	_selected_pawn = p
 	_player_pawn = _selected_pawn
+	if _hud != null:
+		_hud.set_player_control_refs(_player_input, _player_pawn)
 	if _selected_pawn != null:
 		_selected_pawn.is_selected = true
 		_selected_pawn.queue_redraw()

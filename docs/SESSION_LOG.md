@@ -5,6 +5,36 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-26 - Phase 5 visual feedback: deterministic intent marker
+
+Date: 2026-04-26
+Agent/Model: Codex (Cursor)
+Goal: Add deterministic target marker for the first queued player input action.
+
+Changes made:
+- Updated `scripts/pawn/PlayerInputBuffer.gd`:
+  - Added `get_queued_target(pawn_pos: Vector2i) -> Variant`.
+  - Peeks first queued intent and deterministically returns movement target tile (or `null`).
+- Updated `scripts/ui/ColonyHUD.gd`:
+  - Added `_draw_intent_marker()` rendered from HUD `_draw()`.
+  - Marker position derives from:
+    - current player pawn tile
+    - first queued intent delta
+  - Draw style:
+    - semi-transparent yellow circle + arrowhead/shaft
+    - no animation; purely state-based draw.
+  - Added `set_player_control_refs(...)` and signal hookup for immediate redraw on queue enqueue.
+- Updated `scenes/main/Main.gd`:
+  - HUD now receives live refs to `_player_input` and `_player_pawn`.
+  - Re-synced references on pawn selection changes.
+
+Determinism check:
+- No frame-time logic added.
+- Marker appears/disappears based only on queue state and deterministic pawn tile.
+- Queue pop on tick immediately clears marker when queue empties.
+
+---
+
 ## 2026-04-26 - Phase 5 deterministic player input queue (WASD/Arrows/Space)
 
 Date: 2026-04-26

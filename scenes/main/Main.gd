@@ -58,6 +58,9 @@ const MAX_HUNT_JOBS: int = 50
 const MAX_DYNAMIC_HUNT_JOBS_PER_PASS: int = 8
 const HUNT_JOB_PER_ANIMALS_DIVISOR: int = 4
 const HUNT_MEAT_STOCKPILE_SOFT_CAP: int = 28
+## Preserve a baseline wildlife population so hunting never hard-collapses fauna.
+const MIN_RABBIT_RESERVE: int = 10
+const MIN_DEER_RESERVE: int = 5
 ## Cap concurrent tunnels so the colony doesn't dump all its labor into rocks.
 ## When one finishes, the reactive seeder posts the next.
 const MAX_ACTIVE_MINE_WALL_JOBS: int = 4
@@ -169,6 +172,11 @@ func _dynamic_hunt_job_budget() -> int:
 	if _is_ultra_speed():
 		budget = maxi(1, int(ceil(float(budget) * 0.5)))
 	return budget
+
+func _hunt_reserve_for_species(species: int) -> int:
+	if species == Animal.Type.DEER:
+		return MIN_DEER_RESERVE
+	return MIN_RABBIT_RESERVE
 
 # -------------------- designation (player build mode) --------------------
 ## Player build modes. NONE means clicks are ignored. Every other mode uses
@@ -1450,8 +1458,9 @@ func _seed_jobs_from_world() -> void:
 			and GameManager.tick_count >= Main._world_stabilization_until_tick
 			and _should_post_more_hunt_jobs()
 	):
+		var hunt_cap_seed: int = mini(MAX_DYNAMIC_HUNT_JOBS_PER_PASS, _dynamic_hunt_job_budget())
 		for tile in hunt_tiles:
-			if hunt_posted >= MAX_HUNT_JOBS:
+			if hunt_posted >= hunt_cap_seed:
 				break
 			if _world.pathfinder.component_of(tile) != main_component:
 				hunt_skipped += 1
@@ -1499,8 +1508,9 @@ func _post_wildlife_hunt_jobs_after_stabilization() -> void:
 		return a.y * WorldData.WIDTH + a.x < b.y * WorldData.WIDTH + b.x
 	)
 	var n: int = 0
+	var cap: int = mini(MAX_DYNAMIC_HUNT_JOBS_PER_PASS, _dynamic_hunt_job_budget())
 	for t in tiles:
-		if n >= MAX_HUNT_JOBS:
+		if n >= cap:
 			break
 		if JobManager.has_job_at(t):
 			continue
@@ -1524,6 +1534,15 @@ func _post_hunting_jobs_for_animals() -> void:
 	var main_component: int = _world.pathfinder.largest_component_id()
 	var hunt_budget: int = _dynamic_hunt_job_budget()
 	var hunt_jobs_posted: int = 0
+	var live_by_species: Dictionary = {
+		int(Animal.Type.RABBIT): 0,
+		int(Animal.Type.DEER): 0,
+	}
+	for a0 in _animal_spawner.animals:
+		if a0 == null or not is_instance_valid(a0):
+			continue
+		var sp0: int = int(a0.animal_type)
+		live_by_species[sp0] = int(live_by_species.get(sp0, 0)) + 1
 	
 	for animal in _animal_spawner.animals:
 		if not is_instance_valid(animal) or animal == null:
@@ -1537,8 +1556,12 @@ func _post_hunting_jobs_for_animals() -> void:
 		# job; `has_job_at` matches JobManager's internal tile index (open + claimed).
 		if not JobManager.has_job_at(tile) and hunt_jobs_posted < hunt_budget:
 			var animal_type: int = animal.animal_type
+			var live_now: int = int(live_by_species.get(animal_type, 0))
+			if live_now <= _hunt_reserve_for_species(animal_type):
+				continue
 			var work_ticks: int = HUNT_RABBIT_WORK_TICKS if animal_type == Animal.Type.RABBIT else HUNT_DEER_WORK_TICKS
 			if JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, work_ticks) != null:
+				live_by_species[animal_type] = maxi(0, live_now - 1)
 				hunt_jobs_posted += 1
 
 

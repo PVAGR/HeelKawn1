@@ -12,9 +12,9 @@ const SPECIES_DATA: Dictionary = {
 		"speed": 40.0,       # pixels per second
 		"size": 4.0,         # sprite radius
 		"meat_amount": 2,
-		"hunger_decay": 0.12,
+		"hunger_decay": 0.06,
 		"forage_gain": 8.0,
-		"graze_gain": 1.2,
+		"graze_gain": 2.2,
 		"vision_range": 60.0,
 		"breeding_cooldown": 600,  # ticks between breeding
 		"breeding_hunger_threshold": 60.0,  # must be this well-fed to breed
@@ -25,9 +25,9 @@ const SPECIES_DATA: Dictionary = {
 		"speed": 60.0,
 		"size": 6.0,
 		"meat_amount": 5,
-		"hunger_decay": 0.09,
+		"hunger_decay": 0.05,
 		"forage_gain": 9.0,
-		"graze_gain": 1.4,
+		"graze_gain": 2.6,
 		"vision_range": 100.0,
 		"breeding_cooldown": 900,
 		"breeding_hunger_threshold": 70.0,
@@ -110,17 +110,23 @@ func _on_game_tick(_tick: int) -> void:
 	if breeding_cooldown > 0:
 		breeding_cooldown -= 1
 	
-	# Random action each tick: move, forage, breed, or idle
-	var action: int = randi() % 4
-	match action:
-		0:  # Move (45% chance)
+	# Survival-first behavior: hungry animals prioritize food instead of
+	# wandering until they starve.
+	if hunger < 45.0:
+		_forage()
+		if randf() < 0.35:
 			_wander()
-		1:  # Forage/rest (35% chance)
-			_forage()
-		2:  # Try to breed (15% chance)
-			_try_breed()
-		3:  # Idle (5% chance)
-			pass
+		return
+	# Normal behavior mix. Breeding is still deterministic in AnimalSpawner.
+	var roll: float = randf()
+	if roll < 0.45:
+		_forage()
+	elif roll < 0.85:
+		_wander()
+	elif roll < 0.95:
+		_try_breed()
+	else:
+		pass
 
 
 func _wander() -> void:

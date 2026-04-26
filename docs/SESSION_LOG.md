@@ -5,6 +5,39 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-25 - Wildlife QoL pass (no-feature-removal balancing)
+
+Date: 2026-04-25
+Agent/Model: Codex (Cursor)
+Goal: Keep hunting/animal systems intact while preventing repeated wildlife collapse.
+
+Changes made:
+- Updated `scripts/pawn/Animal.gd` for survival-first behavior:
+  - Reduced species hunger decay (rabbit/deer).
+  - Increased passive grazing gain.
+  - Added hungry-state action bias so animals prioritize foraging before wandering.
+- Updated `scenes/main/Main.gd` hunting pressure logic:
+  - Added species wildlife reserve floors (`MIN_RABBIT_RESERVE`, `MIN_DEER_RESERVE`).
+  - Added reserve-aware dynamic hunt posting for live animals.
+  - Reduced initial/one-shot wildlife hunt seeding caps to dynamic budget limits.
+
+Decisions:
+- Preserve all existing systems (hunting, regrowth, dynamic wildlife) and rebalance instead of disabling features.
+- Favor sustained ecosystem behavior over short-term meat overproduction.
+
+Open questions:
+- Should reserve floors scale with map size / colony population instead of fixed constants?
+
+Next concrete step:
+- Add simple HUD debug counters for live rabbit/deer counts and posted HUNT jobs per pass.
+
+Files touched:
+- scripts/pawn/Animal.gd
+- scenes/main/Main.gd
+- docs/SESSION_LOG.md
+
+---
+
 ## 2026-04-25 - Emergency anti-lag stabilization pass
 
 Date: 2026-04-25

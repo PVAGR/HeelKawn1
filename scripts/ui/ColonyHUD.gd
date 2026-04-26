@@ -10,6 +10,7 @@ extends CanvasLayer
 
 const REFRESH_EVERY_N_TICKS: int = 1
 const WILDLIFE_SAMPLE_EVERY_TICKS: int = 20
+const WILDLIFE_HISTORY_SIZE: int = 8
 
 const PANEL_BG: Color = Color(0.05, 0.06, 0.08, 0.78)
 const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.70)
@@ -35,7 +36,8 @@ var _designation_label: String = ""
 var _wildlife_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
 var _wildlife_prev_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
 var _wildlife_sample_tick: int = 0
-var _wildlife_trend_arrow: String = "->"
+var _wildlife_history: Array[int] = []
+var _momentum_spark: String = "........"
 
 
 func _ready() -> void:
@@ -279,35 +281,46 @@ func _jobs_line() -> String:
 
 
 func _sample_wildlife(current_tick: int) -> void:
-	if _animal_spawner == null:
-		if _world != null and _world.has_meta("animal_spawner"):
-			var m: Variant = _world.get_meta("animal_spawner")
-			if m is AnimalSpawner:
-				_animal_spawner = m as AnimalSpawner
-	if _animal_spawner == null:
+	var spawner: AnimalSpawner = null
+	if has_meta("animal_spawner"):
+		var local_meta: Variant = get_meta("animal_spawner")
+		if local_meta is AnimalSpawner:
+			spawner = local_meta as AnimalSpawner
+	if spawner == null and _animal_spawner != null and is_instance_valid(_animal_spawner):
+		spawner = _animal_spawner
+	if spawner == null and _world != null and _world.has_meta("animal_spawner"):
+		var world_meta: Variant = _world.get_meta("animal_spawner")
+		if world_meta is AnimalSpawner:
+			spawner = world_meta as AnimalSpawner
+			_animal_spawner = spawner
+	if spawner == null:
 		return
-	_wildlife_prev_snapshot = _wildlife_snapshot.duplicate(true)
-	_wildlife_snapshot = _animal_spawner.get_live_wildlife_snapshot()
+	_wildlife_prev_snapshot = _wildlife_snapshot.duplicate()
+	_wildlife_snapshot = spawner.get_live_wildlife_snapshot()
 	_wildlife_sample_tick = current_tick
-	var cur_total: int = int(_wildlife_snapshot.get("total", 0))
-	var prev_total: int = int(_wildlife_prev_snapshot.get("total", 0))
-	if cur_total > prev_total:
-		_wildlife_trend_arrow = "^"
-	elif cur_total < prev_total:
-		_wildlife_trend_arrow = "v"
-	else:
-		_wildlife_trend_arrow = "->"
+	_wildlife_history.append(int(_wildlife_snapshot.get("total", 0)))
+	if _wildlife_history.size() > WILDLIFE_HISTORY_SIZE:
+		_wildlife_history.pop_front()
+	_momentum_spark = ""
+	for i in range(1, _wildlife_history.size()):
+		var delta: int = _wildlife_history[i] - _wildlife_history[i - 1]
+		if delta > 0:
+			_momentum_spark += "↑"
+		elif delta < 0:
+			_momentum_spark += "↓"
+		else:
+			_momentum_spark += "→"
+	while _momentum_spark.length() < WILDLIFE_HISTORY_SIZE - 1:
+		_momentum_spark = "→" + _momentum_spark
 
 
 func _wildlife_line() -> String:
 	if _wildlife_sample_tick == 0:
-		return "[color=#cccccc]Wildlife:[/color] scanning..."
+		return "🦌 Wildlife: Scanning ecosystem..."
 	var r: int = int(_wildlife_snapshot.get("rabbit", 0))
 	var d: int = int(_wildlife_snapshot.get("deer", 0))
 	var t: int = int(_wildlife_snapshot.get("total", 0))
-	return "[color=#cccccc]Wildlife:[/color] R [b]%d[/b] · D [b]%d[/b] · T [b]%d[/b]  [color=#9ecbff]%s[/color]   [color=#888888](sample @ %d)[/color]" % [
-		r, d, t, _wildlife_trend_arrow, _wildlife_sample_tick
-	]
+	return "🦌 Wildlife: R:%d D:%d T:%d [%s]" % [r, d, t, _momentum_spark]
 
 
 # ==================== formatting helpers ====================

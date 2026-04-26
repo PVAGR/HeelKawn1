@@ -5,6 +5,39 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-25 - Wildlife momentum sparkline (8-sample deterministic trend)
+
+Date: 2026-04-25
+Agent/Model: Codex (Cursor)
+Goal: Replace single wildlife delta arrow with short-window deterministic momentum history.
+
+Changes made:
+- Updated `scripts/ui/ColonyHUD.gd`:
+  - Added `WILDLIFE_HISTORY_SIZE = 8`.
+  - Added bounded wildlife history buffer (`_wildlife_history`) and momentum string (`_momentum_spark`).
+  - Replaced `_sample_wildlife(current_tick)` with history-based sampling:
+    - still tick-gated by `WILDLIFE_SAMPLE_EVERY_TICKS`.
+    - computes per-sample delta arrows (`↑`, `↓`, `→`) and pads to fixed width.
+  - Updated `_wildlife_line()` to render:
+    - `🦌 Wildlife: R:x D:y T:z [spark]`
+    - initial scan line before first sample.
+- Kept deterministic behavior:
+  - No RNG usage.
+  - No frame-time dependence.
+  - Pure arithmetic over bounded tick-sampled history.
+
+Decisions:
+- Keep history in HUD layer only (diagnostic visibility) rather than persisting to save data.
+
+Next concrete step:
+- Add optional compact numeric delta suffix (`Δ+/-n`) per sample window for faster balancing decisions.
+
+Files touched:
+- scripts/ui/ColonyHUD.gd
+- docs/SESSION_LOG.md
+
+---
+
 ## 2026-04-25 - Deterministic live wildlife HUD counters
 
 Date: 2026-04-25

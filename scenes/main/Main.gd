@@ -96,6 +96,7 @@ const TRACE_REDRAW_INTERVAL_SEC: float = 1.0
 const GENERATION_TICKS: int = 30000
 const REPRODUCTION_CHECK_INTERVAL_TICKS: int = 300
 const INFLUENCE_UPDATE_INTERVAL_TICKS: int = 500
+const OBSERVER_HUD_REFRESH_TICKS: int = 30
 ## Deterministic rebirth cadence (tick-gated, no frame-time).
 const REBIRTH_CHECK_INTERVAL_TICKS: int = 2000
 ## Ecosystems (hunt) stay inert until this tick (world gen / reroll / load).
@@ -110,6 +111,7 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _animal_spawner: AnimalSpawner = $WorldViewport/AnimalSpawner
 @onready var _enemy_spawner: EnemySpawner = $WorldViewport/EnemySpawner
 @onready var _hud: ColonyHUD = $UI_Viewport/ColonyHUD
+@onready var _observer_hud: ObserverHUD = $UI_Viewport/ObserverHUD
 @onready var _toolbar: BuildToolbar = $UI_Viewport/BuildToolbar
 @onready var _info_panel: PawnInfoPanel = $UI_Viewport/PawnInfoPanel
 @onready var _day_night: DayNightCycle = $DayNight
@@ -263,6 +265,8 @@ func _ready() -> void:
 	_bootstrap_colony()
 	if _hud != null:
 		_hud.set_player_control_refs(_player_input, _player_pawn)
+	if _observer_hud != null:
+		_observer_hud.set_visible_state(false)
 
 
 func _process(delta: float) -> void:
@@ -464,6 +468,8 @@ func _on_game_tick(tick: int) -> void:
 		_process_reproduction_tick()
 	if tick % INFLUENCE_UPDATE_INTERVAL_TICKS == 0:
 		_update_pawn_influence_tick()
+	if _observer_hud != null and _observer_hud.is_visible_state() and tick % OBSERVER_HUD_REFRESH_TICKS == 0:
+		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
 	if is_instance_valid(_world):
 		call_deferred("_flush_road_memory_dirty_tiles")
 
@@ -833,6 +839,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_colony_save()
 		KEY_F8:
 			_colony_load()
+		KEY_F9:
+			_toggle_observer_hud()
 		KEY_M:
 			ColonySimServices.cycle_labor_stance()
 		KEY_ESCAPE:
@@ -2384,6 +2392,209 @@ func register_pawn_death(_pawn_id: int) -> void:
 
 func get_kill_count() -> int:
 	return _kill_count
+
+
+func _toggle_observer_hud() -> void:
+	if _observer_hud == null:
+		return
+	var next_visible: bool = not _observer_hud.is_visible_state()
+	_observer_hud.set_visible_state(next_visible)
+	if next_visible:
+		_observer_hud.apply_snapshot(_build_observer_snapshot(GameManager.tick_count))
+
+
+func _build_observer_snapshot(tick: int) -> Dictionary:
+	var day_len: int = DayNightCycle.TICKS_PER_DAY
+	var day: int = int(tick / float(day_len)) + 1
+	var speed_text: String = "%dx" % int(GameManager.game_speed)
+	var paused_text: String = "Yes" if GameManager.is_paused else "No"
+	var focus: Dictionary = _observer_focus_settlement()
+	var settlement_idx: int = int(focus.get("settlement_idx", -1))
+	var settlement_data: Dictionary = focus.get("settlement_data", {})
+	var governance: Dictionary = focus.get("governance", {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()})
+	var war: Dictionary = focus.get("war", {"state": "peace", "target_settlement_id": -1, "votes": []})
+	var ruler_name: String = _pawn_name_by_id(int(governance.get("ruler_id", -1)))
+	var council_ids: Variant = governance.get("council_ids", PackedInt32Array())
+	var council_size: int = council_ids.size() if council_ids is PackedInt32Array else 0
+	var battlemaster_name: String = _find_battlemaster_name(settlement_idx, settlement_data)
+	var wildlife: Dictionary = get_wildlife_snapshot_for_diagnostic()
+	var jobs: Dictionary = JobManager.stats()
+	var battlefield_mode: String = _observer_battlefield_mode()
+	var determinism_lock: String = "Locked" if is_kernel_diagnostic_complete() else "Pending"
+	var kernel_phase: String = "Phase 7 Complete" if is_kernel_diagnostic_complete() else "Phase 7 Waiting"
+	return {
+		"tick": tick,
+		"day": day,
+		"speed": speed_text,
+		"paused": paused_text,
+		"governance_type": _pretty_governance_name(str(governance.get("type", "anarchy"))),
+		"ruler_name": ruler_name,
+		"council_size": council_size,
+		"settlement_state": _pretty_settlement_state(str(settlement_data.get("state", "unknown"))),
+		"total_pawns": _observer_total_pawns(),
+		"children_count": _observer_children_count(),
+		"wild_rabbit": int(wildlife.get("rabbit", 0)),
+		"wild_deer": int(wildlife.get("deer", 0)),
+		"wild_total": int(wildlife.get("total", 0)),
+		"jobs_open": int(jobs.get("open", 0)),
+		"jobs_claimed": int(jobs.get("claimed", 0)),
+		"food_pressure": float(ColonySimServices.get_food_pressure()),
+		"housing_pressure": float(ColonySimServices.get_housing_pressure()),
+		"intent_summary": _observer_intent_summary(),
+		"war_state": _pretty_war_state(str(war.get("state", "peace"))),
+		"war_target": _observer_war_target_label(int(war.get("target_settlement_id", -1))),
+		"battlemaster_name": battlemaster_name,
+		"active_enemies": _enemy_spawner.get_enemy_count() if _enemy_spawner != null else 0,
+		"battlefield_mode": battlefield_mode,
+		"determinism_lock": determinism_lock,
+		"world_memory_events": WorldMemory.event_count(),
+		"kernel_phase": kernel_phase,
+		"next_diag_tick": KernelDiagnostic.DIAGNOSTIC_TICK,
+	}
+
+
+func _observer_focus_settlement() -> Dictionary:
+	var settlement_idx: int = -1
+	var settlement_data: Dictionary = {}
+	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		var prk: int = WorldMemory._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
+		for i in range(SettlementMemory.settlements.size()):
+			var stv: Variant = SettlementMemory.settlements[i]
+			if not (stv is Dictionary):
+				continue
+			var st: Dictionary = stv as Dictionary
+			var regs: Variant = st.get("regions", PackedInt32Array())
+			if regs is PackedInt32Array and (regs as PackedInt32Array).has(prk):
+				settlement_idx = i
+				settlement_data = st
+				break
+	if settlement_idx < 0:
+		for i in range(SettlementMemory.settlements.size()):
+			if SettlementMemory.settlements[i] is Dictionary:
+				settlement_idx = i
+				settlement_data = SettlementMemory.settlements[i] as Dictionary
+				break
+	var governance: Dictionary = {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
+	var war: Dictionary = {"state": "peace", "target_settlement_id": -1, "votes": []}
+	if settlement_idx >= 0:
+		var center: int = int(settlement_data.get("center_region", -1))
+		if center >= 0:
+			governance = SettlementMemory.get_governance_profile_for_region(center)
+			war = SettlementMemory.get_war_profile_for_region(center)
+	return {
+		"settlement_idx": settlement_idx,
+		"settlement_data": settlement_data,
+		"governance": governance,
+		"war": war,
+	}
+
+
+func _observer_total_pawns() -> int:
+	if _pawn_spawner == null:
+		return 0
+	var n: int = 0
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
+			n += 1
+	return n
+
+
+func _observer_children_count() -> int:
+	if _pawn_spawner == null:
+		return 0
+	var c: int = 0
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
+			c += int(p.data.children_count)
+	return c
+
+
+func _observer_intent_summary() -> String:
+	var grow: int = 0
+	var hold: int = 0
+	var abandon: int = 0
+	for v in IntentMemory.settlement_intent.values():
+		match int(v):
+			IntentMemory.INTENT_GROW:
+				grow += 1
+			IntentMemory.INTENT_ABANDON:
+				abandon += 1
+			_:
+				hold += 1
+	return "Grow %d | Hold %d | Abandon %d" % [grow, hold, abandon]
+
+
+func _observer_war_target_label(target_id: int) -> String:
+	return "None" if target_id < 0 else str(target_id)
+
+
+func _observer_battlefield_mode() -> String:
+	if _enemy_spawner == null or _enemy_spawner.get_enemy_count() <= 0:
+		return "Idle"
+	if _pawn_spawner != null:
+		for p in _pawn_spawner.pawns:
+			if p == null or not is_instance_valid(p) or p.data == null:
+				continue
+			if p.data.has_method("get_health_percentage") and float(p.data.get_health_percentage()) < 0.5:
+				return "Anarchy"
+	return "Ordered"
+
+
+func _pawn_name_by_id(pawn_id: int) -> String:
+	if pawn_id < 0 or _pawn_spawner == null:
+		return "None"
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
+			return p.data.display_name
+	return "None"
+
+
+func _find_battlemaster_name(settlement_idx: int, settlement_data: Dictionary) -> String:
+	if settlement_idx < 0 or _pawn_spawner == null:
+		return "None"
+	var regs: Variant = settlement_data.get("regions", PackedInt32Array())
+	if not (regs is PackedInt32Array):
+		return "None"
+	var region_set: Dictionary = {}
+	for rk in regs as PackedInt32Array:
+		region_set[int(rk)] = true
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		if String(p.data.military_rank).to_lower() != "battlemaster":
+			continue
+		var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		if region_set.has(rk):
+			return p.data.display_name
+	return "None"
+
+
+func _pretty_governance_name(raw: String) -> String:
+	match raw:
+		"monarchy":
+			return "Monarchy"
+		"council":
+			return "Council"
+		_:
+			return "Anarchy"
+
+
+func _pretty_settlement_state(raw: String) -> String:
+	return raw.replace("_", " ").capitalize()
+
+
+func _pretty_war_state(raw: String) -> String:
+	match raw:
+		"at_war":
+			return "Active"
+		"proposed":
+			return "Proposed"
+		"mobilizing":
+			return "Mobilizing"
+		"truce":
+			return "Truce"
+		_:
+			return "Peace"
 
 
 # ==================== draft mode (combat control) ====================

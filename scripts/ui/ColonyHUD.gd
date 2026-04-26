@@ -42,6 +42,7 @@ var _wildlife_history: Array[int] = []
 var _momentum_spark: String = "........"
 var _player_input_buffer: PlayerInputBuffer = null
 var _player_pawn: Pawn = null
+var _hud_dirty: bool = true
 
 
 func _ready() -> void:
@@ -73,6 +74,7 @@ func bind(world: World, spawner: PawnSpawner) -> void:
 		var m: Variant = _world.get_meta("animal_spawner")
 		if m is AnimalSpawner:
 			_animal_spawner = m as AnimalSpawner
+	_hud_dirty = true
 	_refresh()
 
 
@@ -83,18 +85,19 @@ func set_player_control_refs(input_buffer: PlayerInputBuffer, player_pawn: Pawn)
 	_player_pawn = player_pawn
 	if _player_input_buffer != null and not _player_input_buffer.intent_ready.is_connected(_on_intent_ready):
 		_player_input_buffer.intent_ready.connect(_on_intent_ready)
+	_hud_dirty = true
 	queue_redraw()
 
 
-func _on_intent_ready(_intent: Dictionary) -> void:
-	queue_redraw()
+func _on_intent_ready(_action_id: int) -> void:
+	_hud_dirty = true
 
 
 ## Called by Main whenever the player's build mode changes. Empty string =
 ## off. Anything else shows up as a colored banner above the stats lines.
 func set_designation_mode(label: String) -> void:
 	_designation_label = label
-	_refresh()
+	_hud_dirty = true
 
 
 # ==================== refresh hooks ====================
@@ -102,24 +105,28 @@ func set_designation_mode(label: String) -> void:
 func _on_tick(tick: int) -> void:
 	if tick % WILDLIFE_SAMPLE_EVERY_TICKS == 0:
 		_sample_wildlife(tick)
+		_hud_dirty = true
+	if tick % 10 != 0 and not _hud_dirty:
+		return
 	if tick % REFRESH_EVERY_N_TICKS == 0:
 		_refresh()
+		_hud_dirty = false
 
 
 func _on_speed_changed(_s: float, _p: bool) -> void:
-	_refresh()
+	_hud_dirty = true
 
 
 func _on_jobs_changed(_job: Job) -> void:
-	_refresh()
+	_hud_dirty = true
 
 
 func _on_zones_changed(_zone: Stockpile) -> void:
-	_refresh()
+	_hud_dirty = true
 
 
 func _on_colony_demand(_f: float, _h: float, _m: float, _ha: float) -> void:
-	_refresh()
+	_hud_dirty = true
 
 
 # ==================== layout / style ====================

@@ -3,67 +3,72 @@ class_name PlayerInputBuffer
 
 ## Deterministic FIFO queue of player intents.
 const MAX_QUEUE_SIZE: int = 10
+const ACTION_NONE: int = 0
+const ACTION_MOVE_NORTH: int = 1
+const ACTION_MOVE_SOUTH: int = 2
+const ACTION_MOVE_WEST: int = 3
+const ACTION_MOVE_EAST: int = 4
+const ACTION_INTERACT: int = 5
 
-var _intent_queue: Array[Dictionary] = []
+var _intent_queue: Array[int] = []
 var _last_action_state: String = "idle"
 
-signal intent_ready(intent: Dictionary)
+signal intent_ready(action_id: int)
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		var action_key: String = ""
+		var action_id: int = ACTION_NONE
 		if event.keycode == KEY_W or event.keycode == KEY_UP:
-			action_key = "move_north"
+			action_id = ACTION_MOVE_NORTH
 		elif event.keycode == KEY_S or event.keycode == KEY_DOWN:
-			action_key = "move_south"
+			action_id = ACTION_MOVE_SOUTH
 		elif event.keycode == KEY_A or event.keycode == KEY_LEFT:
-			action_key = "move_west"
+			action_id = ACTION_MOVE_WEST
 		elif event.keycode == KEY_D or event.keycode == KEY_RIGHT:
-			action_key = "move_east"
+			action_id = ACTION_MOVE_EAST
 		elif event.keycode == KEY_SPACE:
-			action_key = "interact"
-		if action_key != "":
-			push_intent(action_key)
+			action_id = ACTION_INTERACT
+		if action_id != ACTION_NONE:
+			push_intent(action_id)
 
 
-func push_intent(action: String) -> void:
+func push_intent(action_id: int) -> void:
 	if _intent_queue.size() >= MAX_QUEUE_SIZE:
 		_intent_queue.pop_front()
-	var intent: Dictionary = {"action": action, "queued_tick": GameManager.tick_count}
-	_intent_queue.append(intent)
-	intent_ready.emit(intent)
+	_intent_queue.append(action_id)
+	intent_ready.emit(action_id)
 
 
 func process_next_tick(pawn: Node) -> bool:
 	if _intent_queue.is_empty():
 		_last_action_state = "idle"
 		return false
-	var intent: Dictionary = _intent_queue.pop_front()
-	return execute_intent(pawn, intent)
+	var action_id: int = int(_intent_queue.pop_front())
+	return execute_intent(pawn, action_id)
 
 
-func execute_intent(pawn: Node, intent: Dictionary) -> bool:
-	var action_type: String = str(intent.get("action", ""))
+func execute_intent(pawn: Node, action_id: int) -> bool:
+	var action_type: String = _action_to_string(action_id)
 	var executed: bool = false
-	match action_type:
-		"move_north":
+	match action_id:
+		ACTION_MOVE_NORTH:
 			executed = bool(pawn.call("move", Vector2i(0, -1))) if pawn.has_method("move") else false
-		"move_south":
+		ACTION_MOVE_SOUTH:
 			executed = bool(pawn.call("move", Vector2i(0, 1))) if pawn.has_method("move") else false
-		"move_east":
+		ACTION_MOVE_EAST:
 			executed = bool(pawn.call("move", Vector2i(1, 0))) if pawn.has_method("move") else false
-		"move_west":
+		ACTION_MOVE_WEST:
 			executed = bool(pawn.call("move", Vector2i(-1, 0))) if pawn.has_method("move") else false
-		"interact":
+		ACTION_INTERACT:
 			executed = bool(pawn.call("interact")) if pawn.has_method("interact") else false
 		_:
 			executed = false
 	if executed and pawn.has_method("record_skill_gain"):
-		match action_type:
-			"move_north", "move_south", "move_east", "move_west":
+		match action_id:
+			ACTION_MOVE_NORTH, ACTION_MOVE_SOUTH, ACTION_MOVE_EAST, ACTION_MOVE_WEST:
 				pawn.call("record_skill_gain", "movement", 1)
-			"interact":
+			ACTION_INTERACT:
 				pawn.call("record_skill_gain", "gathering", 2)
 	_last_action_state = action_type if executed else "blocked_%s" % action_type
 	_record_player_action(pawn, action_type, executed)
@@ -99,19 +104,35 @@ func get_last_action_state() -> String:
 func get_queued_target(pawn_pos: Vector2i) -> Variant:
 	if _intent_queue.is_empty():
 		return null
-	var intent: Dictionary = _intent_queue[0]
+	var action_id: int = int(_intent_queue[0])
 	var delta: Vector2i = Vector2i.ZERO
-	match str(intent.get("action", "")):
-		"move_north":
+	match action_id:
+		ACTION_MOVE_NORTH:
 			delta = Vector2i(0, -1)
-		"move_south":
+		ACTION_MOVE_SOUTH:
 			delta = Vector2i(0, 1)
-		"move_east":
+		ACTION_MOVE_EAST:
 			delta = Vector2i(1, 0)
-		"move_west":
+		ACTION_MOVE_WEST:
 			delta = Vector2i(-1, 0)
 		_:
 			delta = Vector2i.ZERO
 	if delta == Vector2i.ZERO:
 		return null
 	return pawn_pos + delta
+
+
+func _action_to_string(action_id: int) -> String:
+	match action_id:
+		ACTION_MOVE_NORTH:
+			return "move_north"
+		ACTION_MOVE_SOUTH:
+			return "move_south"
+		ACTION_MOVE_EAST:
+			return "move_east"
+		ACTION_MOVE_WEST:
+			return "move_west"
+		ACTION_INTERACT:
+			return "interact"
+		_:
+			return "unknown"

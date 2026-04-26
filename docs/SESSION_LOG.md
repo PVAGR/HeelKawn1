@@ -5,6 +5,36 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-26 - 60FPS smoothness pass (HUD throttle + input queue + log silence)
+
+Date: 2026-04-26
+Agent/Model: Codex (Cursor)
+Goal: Reduce lag spikes and debug-mode stutter for high simulation speeds (20x+).
+
+Changes made:
+- Updated `scripts/ui/ColonyHUD.gd`:
+  - Kept HUD updates tick-bound and added throttling gate:
+    - `_on_tick` now refreshes at coarse cadence (`tick % 10`) unless dirty.
+  - Added dirty-flag model (`_hud_dirty`) so signal-driven updates are coalesced
+    into next tick refresh instead of immediate repeated redraw work.
+  - Retained `GameManager.game_tick` as the primary refresh driver.
+- Updated `scripts/pawn/PlayerInputBuffer.gd`:
+  - Replaced queued Dictionary payloads with lightweight integer action IDs.
+  - Reduced per-keypress allocations in hot input path.
+  - Preserved deterministic behavior and WorldMemory action logging.
+- Updated `scenes/main/Main.gd`:
+  - Removed hot-loop tick console print in `_on_game_tick`.
+- Updated `scenes/world/World.gd`:
+  - Gated world-generation debug prints and expensive distribution summary behind
+    `GameManager.verbose_logs()` in addition to debug build checks.
+
+Determinism/perf notes:
+- No simulation frame-time logic added.
+- No RNG added by this pass.
+- Reduced synchronous console overhead and HUD redraw frequency.
+
+---
+
 ## 2026-04-26 - Phase 8 chronicler lens (deterministic tile inspection)
 
 Date: 2026-04-26

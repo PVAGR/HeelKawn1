@@ -434,9 +434,7 @@ func _on_game_tick(tick: int) -> void:
 		_post_hunting_jobs_for_animals()
 	# Enemy AI and raid spawning
 	_on_enemy_tick(tick, _enemy_spawner)
-	if tick % 100 == 0:
-		if OS.is_debug_build():
-			print("[Main] Tick %d" % tick)
+	# Suppress hot-loop tick spam; this is a major source of debug-mode stutter.
 	# Failsafe: pawns that slipped into solid tiles (rare) get nudged; log once per pawn.
 	if tick % 60 == 0 and _pawn_spawner != null:
 		for p in _pawn_spawner.pawns:

@@ -47,7 +47,7 @@ var _hud_dirty: bool = true
 
 func _ready() -> void:
 	# Pin top-left, leave a small inset.
-	layer = 100
+	layer = 10
 	GameManager.game_tick.connect(_on_tick)
 	GameManager.speed_changed.connect(_on_speed_changed)
 	JobManager.job_posted.connect(_on_jobs_changed)

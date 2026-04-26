@@ -102,16 +102,16 @@ const WORLD_STABILIZATION_TICKS: int = 500
 ## -1 = not initialized yet (hunt/tick guards treat as: allow hunt once bootstrapped sets a non-negative window).
 static var _world_stabilization_until_tick: int = -1
 
-@onready var _world: World = $World
-@onready var _preview_layer: Node2D = $BuildPreviewOverlay
-@onready var _pawn_spawner: PawnSpawner = $PawnSpawner
-@onready var _animal_spawner: AnimalSpawner = $AnimalSpawner
-@onready var _enemy_spawner: EnemySpawner = $EnemySpawner
-@onready var _hud: ColonyHUD = $ColonyHUD
-@onready var _toolbar: BuildToolbar = $BuildToolbar
-@onready var _info_panel: PawnInfoPanel = $PawnInfoPanel
+@onready var _world: World = $WorldViewport/World
+@onready var _preview_layer: Node2D = $WorldViewport/BuildPreviewOverlay
+@onready var _pawn_spawner: PawnSpawner = $WorldViewport/PawnSpawner
+@onready var _animal_spawner: AnimalSpawner = $WorldViewport/AnimalSpawner
+@onready var _enemy_spawner: EnemySpawner = $WorldViewport/EnemySpawner
+@onready var _hud: ColonyHUD = $UI_Viewport/ColonyHUD
+@onready var _toolbar: BuildToolbar = $UI_Viewport/BuildToolbar
+@onready var _info_panel: PawnInfoPanel = $UI_Viewport/PawnInfoPanel
 @onready var _day_night: DayNightCycle = $DayNight
-@onready var _camera: Camera2D = $Camera
+@onready var _camera: Camera2D = $WorldViewport/Camera
 
 # -------------------- selection --------------------
 ## Currently selected pawn (right-side info panel). null = nothing selected.
@@ -813,6 +813,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				_set_designation_mode(DesignationMode.NONE)
 			elif _selected_pawn != null:
 				_set_selected_pawn(null)
+		KEY_HOME:
+			if _camera != null and _camera.has_method("reset_to_world_bounds"):
+				_camera.call("reset_to_world_bounds", _world)
 
 
 func _unhandled_input(event: InputEvent) -> void:

@@ -5,7 +5,7 @@ extends Node2D
 
 ## Pixels of screen space per tile. The world is rendered as a 256x256 Image
 ## baked into an ImageTexture, then scaled up so each source pixel = TILE_PIXELS.
-const TILE_PIXELS: int = 8
+const TILE_PIXELS: int = 10
 
 @onready var _sprite: Sprite2D = $Sprite2D
 

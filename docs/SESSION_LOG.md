@@ -5,6 +5,40 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-26 - Free camera zoom/pan + fixed-scale HUD viewport split
+
+Date: 2026-04-26
+Agent/Model: Codex (Cursor)
+Goal: Improve map visibility and camera usability while keeping HUD crisp and screen-fixed.
+
+Changes made:
+- Updated `scenes/main/Main.tscn` scene hierarchy:
+  - Added `WorldViewport` (world-space container).
+  - Moved world simulation/render nodes under `WorldViewport`:
+    - `World`, `BuildPreviewOverlay`, `WorldTrace`, `PawnSpawner`, `AnimalSpawner`, `EnemySpawner`, `LivingWorld`, `Camera`.
+  - Added `UI_Viewport` outside camera hierarchy.
+  - Moved HUD/UI nodes under `UI_Viewport`:
+    - `ColonyHUD`, `BuildToolbar`, `PawnInfoPanel`.
+- Updated `scenes/main/Main.gd`:
+  - Updated onready paths to new hierarchy.
+  - Added `Home` hotkey handler calling camera reset-to-world-fit.
+- Updated `scripts/camera/CameraController.gd`:
+  - Kept existing wheel zoom + middle-mouse panning behavior.
+  - Added `reset_to_world_bounds(world)`:
+    - centers on map
+    - computes fit zoom to show whole world in viewport
+    - clamps to camera min/max zoom.
+- Updated `scripts/ui/ColonyHUD.gd`:
+  - Kept `CanvasLayer` HUD behavior and set layer to `10` as requested.
+- Updated `scenes/world/World.gd`:
+  - Temporarily increased visual tile size (`TILE_PIXELS: 8 -> 10`) for readability.
+
+Determinism/perf notes:
+- Camera and HUD changes are presentation-only; simulation logic unchanged.
+- HUD remains fixed-size and independent of world camera zoom.
+
+---
+
 ## 2026-04-26 - 60FPS smoothness pass (HUD throttle + input queue + log silence)
 
 Date: 2026-04-26

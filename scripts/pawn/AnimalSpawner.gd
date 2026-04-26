@@ -8,9 +8,9 @@ const INITIAL_DEER: int = 4
 const MAX_ANIMALS: int = 50
 
 ## Interval for [method update_population_dynamics] (not every tick).
-const POPULATION_CHECK_TICKS: int = 2000
+const POPULATION_CHECK_TICKS: int = 1000
 ## Reproduction: no [WorldMemory] animal death in (rk, sp) for this many ticks, then +1.
-const REPRO_TICKS: int = 8000
+const REPRO_TICKS: int = 4000
 ## Legacy: external / HUD; v1 uses [const POPULATION_CHECK_TICKS].
 const SPAWN_RATE_CHECK_INTERVAL: int = 100
 

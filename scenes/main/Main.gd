@@ -55,12 +55,12 @@ const MAX_HUNT_JOBS: int = 50
 ## Runtime hunt pressure controls (v1 balance):
 ## - Keep some wildlife alive.
 ## - Avoid flooding queue/pathing when meat stock is already healthy.
-const MAX_DYNAMIC_HUNT_JOBS_PER_PASS: int = 8
-const HUNT_JOB_PER_ANIMALS_DIVISOR: int = 4
-const HUNT_MEAT_STOCKPILE_SOFT_CAP: int = 28
+const MAX_DYNAMIC_HUNT_JOBS_PER_PASS: int = 4
+const HUNT_JOB_PER_ANIMALS_DIVISOR: int = 6
+const HUNT_MEAT_STOCKPILE_SOFT_CAP: int = 18
 ## Preserve a baseline wildlife population so hunting never hard-collapses fauna.
-const MIN_RABBIT_RESERVE: int = 10
-const MIN_DEER_RESERVE: int = 5
+const MIN_RABBIT_RESERVE: int = 16
+const MIN_DEER_RESERVE: int = 8
 ## Cap concurrent tunnels so the colony doesn't dump all its labor into rocks.
 ## When one finishes, the reactive seeder posts the next.
 const MAX_ACTIVE_MINE_WALL_JOBS: int = 4
@@ -403,8 +403,8 @@ func _on_game_tick(tick: int) -> void:
 		_animal_spawner.update_population_dynamics(_world)
 	_process_regrowth(tick)
 	_update_ambient_target()
-	# At 12x, reduce full-animal scans to cut spike frequency.
-	var hunt_post_interval: int = 30 if _is_ultra_speed() else 10
+	# Post dynamic hunt jobs less aggressively than harvest loops.
+	var hunt_post_interval: int = _high_speed_interval(20, 30, 45)
 	if (
 			tick % hunt_post_interval == 0
 			and Main._world_stabilization_until_tick >= 0

@@ -5,6 +5,48 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-25 - Stability tuning pass from 08203eb audit
+
+Date: 2026-04-25
+Agent/Model: Codex (Cursor)
+Goal: Apply audit-backed ecosystem tuning and remove determinism/perf warning hotspots.
+
+Changes made:
+- Applied wildlife pressure tuning in `scenes/main/Main.gd`:
+  - `HUNT_JOB_PER_ANIMALS_DIVISOR`: `4 -> 6`
+  - `MAX_DYNAMIC_HUNT_JOBS_PER_PASS`: `8 -> 4`
+  - `HUNT_MEAT_STOCKPILE_SOFT_CAP`: `28 -> 18`
+  - `MIN_RABBIT_RESERVE`: `10 -> 16`
+  - `MIN_DEER_RESERVE`: `5 -> 8`
+  - Dynamic hunt posting cadence: `10/30` -> `20/30/45` (normal/fast/ultra).
+- Applied fauna recovery cadence tuning in `scripts/pawn/AnimalSpawner.gd`:
+  - `POPULATION_CHECK_TICKS`: `2000 -> 1000`
+  - `REPRO_TICKS`: `8000 -> 4000`
+- Applied metabolism safety tuning in `scripts/pawn/Animal.gd`:
+  - Rabbit `hunger_decay`: `0.06 -> 0.045`
+  - Deer `hunger_decay`: `0.05 -> 0.035`
+- Fixed static-call warning root in `autoloads/WorldMemory.gd` by restoring `_region_key` to `static`.
+- Made `scripts/world/LivingWorldController.gd` tick-deterministic:
+  - Removed `randomize()` and frame-based `_process` pressure timing.
+  - Switched to `GameManager.game_tick` cadence.
+
+Decisions:
+- Preserve feature set (hunting/wildlife/revival) and improve balance + determinism quality.
+- Prioritize stable long-run ecosystems and reduced warning/log overhead.
+
+Next concrete step:
+- Implement Phase 4 moderate-scar revival window in `autoloads/SettlementMemory.gd` `_settlement_state_v1`.
+
+Files touched:
+- scenes/main/Main.gd
+- scripts/pawn/AnimalSpawner.gd
+- scripts/pawn/Animal.gd
+- autoloads/WorldMemory.gd
+- scripts/world/LivingWorldController.gd
+- docs/SESSION_LOG.md
+
+---
+
 ## 2026-04-25 - Wildlife survival hardening (anti-starvation wave)
 
 Date: 2026-04-25

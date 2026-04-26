@@ -12,7 +12,7 @@ const SPECIES_DATA: Dictionary = {
 		"speed": 40.0,       # pixels per second
 		"size": 4.0,         # sprite radius
 		"meat_amount": 2,
-		"hunger_decay": 0.06,
+		"hunger_decay": 0.045,
 		"forage_gain": 8.0,
 		"graze_gain": 2.2,
 		"vision_range": 60.0,
@@ -25,7 +25,7 @@ const SPECIES_DATA: Dictionary = {
 		"speed": 60.0,
 		"size": 6.0,
 		"meat_amount": 5,
-		"hunger_decay": 0.05,
+		"hunger_decay": 0.035,
 		"forage_gain": 9.0,
 		"graze_gain": 2.6,
 		"vision_range": 100.0,

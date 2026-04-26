@@ -1423,14 +1423,16 @@ func _begin_eating() -> void:
 
 func _finish_eating() -> void:
 	var sp: Stockpile = _target_zone
+	var food_type: int = Item.Type.NONE
+	var gain: float = 0.0
 	if sp == null or not is_instance_valid(sp):
 		sp = StockpileManager.find_food_source(data.tile_pos, _world.pathfinder)
 	if sp != null:
-		var food_type: int = sp.pick_food()
+		food_type = sp.pick_food()
 		if food_type != Item.Type.NONE:
 			var taken: int = sp.take_item(food_type, 1)
 			if taken > 0:
-				var gain: float = Item.hunger_restore(food_type)
+				gain = Item.hunger_restore(food_type)
 				data.hunger = min(100.0, data.hunger + gain)
 				data.mood = min(100.0, data.mood + MOOD_BONUS_ATE)
 				_play_sfx("res://assets/audio/pawn_eat.ogg", 1.0)
@@ -1441,7 +1443,7 @@ func _finish_eating() -> void:
 					data.add_mood_event(MoodEvent.Type.JOY, 40.0, 150)
 				# After eating, reset warning band so we don't re-log instantly.
 				_hunger_level = _level_for(data.hunger)
-	if GameManager.verbose_logs():
+	if GameManager.verbose_logs() and food_type != Item.Type.NONE and gain > 0.0:
 		print("[Pawn] %s ate 1 %s  (+%.0f hunger -> %.1f, mood %.1f)" % [
 			data.display_name, Item.name_for(food_type), gain, data.hunger, data.mood
 		])

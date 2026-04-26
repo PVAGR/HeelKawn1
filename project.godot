@@ -39,6 +39,9 @@ TradeMemory="*res://autoloads/TradeMemory.gd"
 RemnantMemory="*res://autoloads/RemnantMemory.gd"
 MythMemory="*res://autoloads/MythMemory.gd"
 RoadMemory="*res://autoloads/RoadMemory.gd"
+SacredMemory="*res://autoloads/SacredMemory.gd"
+ChronicleLog="*res://autoloads/ChronicleLog.gd"
+WorldClock="*res://autoloads/WorldClock.gd"
 
 [rendering]
 

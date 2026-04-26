@@ -5,6 +5,34 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-25 - Safe runtime wiring for imported memory systems
+
+Date: 2026-04-25
+Agent/Model: Codex (Cursor)
+Goal: Activate imported systems in low-risk path so testing covers merged content.
+
+Changes made:
+- Registered new autoloads in `project.godot`: `SacredMemory`, `ChronicleLog`, `WorldClock`.
+- Wired sacred-site sync into world-derivative recompute flow in `scenes/main/Main.gd`.
+- Added `sacred` and `chronicle` persistence fields to save/load payload in `scenes/main/Main.gd`.
+- Added explicit clear/reset for sacred/chronicle state on reroll/load prep.
+
+Decisions:
+- Integrate only safe deterministic memory systems first; defer high-risk social migration managers until APIs are aligned.
+
+Open questions:
+- Should sacred-site state drive immediate visual overlays, or remain a logic-only layer for now?
+
+Next concrete step:
+- Add first ChronicleLog producers from existing deterministic events (settlement collapse/revival markers).
+
+Files touched:
+- project.godot
+- scenes/main/Main.gd
+- docs/SESSION_LOG.md
+
+---
+
 ## 2026-04-25 - Legacy project import and stabilization
 
 Date: 2026-04-25

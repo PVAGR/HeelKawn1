@@ -244,6 +244,7 @@ func _bootstrap_colony() -> void:
 		CulturalMemory.recompute(_world)
 		SettlementMemory.recompute(_world)
 		MythMemory.recompute(_world)
+		SacredMemory.sync_permanent_ruins_from_settlements()
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):
 				_world.refresh_terrain_scar_tint()
@@ -396,6 +397,7 @@ func _flush_world_memory_derivatives() -> void:
 	CulturalMemory.recompute(_world)
 	SettlementMemory.recompute(_world)
 	MythMemory.recompute(_world)
+	SacredMemory.sync_permanent_ruins_from_settlements()
 	IntentMemory.recompute(_world)
 	_run_heavy_stack_refresh_once_per_tick(func() -> void:
 		if is_instance_valid(_world):
@@ -1290,6 +1292,8 @@ func _reroll_world() -> void:
 	JobManager.clear_all()
 	WorldMemory.clear()
 	MythMemory.clear()
+	SacredMemory.clear()
+	ChronicleLog.clear()
 	RoadMemory.clear()
 	TradeMemory.clear()
 	IntentMemory.clear()
@@ -1974,6 +1978,8 @@ func _build_save_dict() -> Dictionary:
 		"world_memory": WorldMemory.to_save_dict(),
 		"world_persistence": WorldPersistence.to_save_dict(),
 		"myth": MythMemory.to_save_dict(),
+		"sacred": SacredMemory.to_save_dict(),
+		"chronicle": ChronicleLog.to_save_dict(),
 		"last_generation_tick": _last_generation_tick,
 	}
 
@@ -2017,6 +2023,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 	RemnantMemory.clear()
 	IntentMemory.clear()
 	AgeMemory.clear()
+	SacredMemory.clear()
+	ChronicleLog.clear()
 	_set_designation_mode(DesignationMode.NONE)
 	_cancel_drag()
 	_set_selected_pawn(null)
@@ -2035,6 +2043,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 	_zone_next_filter = int(s.get("zone_filter", 0))
 	WorldMemory.from_save_dict(s.get("world_memory", {}))
 	MythMemory.from_save_dict(s.get("myth", {}))
+	SacredMemory.from_save_dict(s.get("sacred", {}))
+	ChronicleLog.from_save_dict(s.get("chronicle", {}))
 	WorldMeaning.recompute()
 	WorldPersistence.from_save_dict(s.get("world_persistence", {}))
 	WorldPersistence.recompute()
@@ -2055,6 +2065,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 		CulturalMemory.recompute(_world)
 		SettlementMemory.recompute(_world)
 		MythMemory.recompute(_world)
+		SacredMemory.sync_permanent_ruins_from_settlements()
 		IntentMemory.recompute(_world)
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):

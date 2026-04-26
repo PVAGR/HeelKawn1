@@ -32,6 +32,8 @@ var _image: Image
 var _texture: ImageTexture
 ## 16x16 region_key -> "abandoned" | "permanently_abandoned" | "revivable" (Player-Readable Meaning v1). Rebuilt with terrain refresh.
 var _player_meaning_region_state: Dictionary = {}
+## 16x16 region_key -> derived label from WorldMeaning (quiet / scarred / bloodied / grave).
+var _player_meaning_region_label: Dictionary = {}
 ## 16x16 region_key -> IntentMemory intent int (derived; rebuilt with terrain refresh).
 var _player_meaning_region_intent: Dictionary = {}
 ## Off-Main autoloads: coalesce at most one end-of-idle full [refresh_terrain_scar_tint] + [refresh_pawn_historic_path_weights] per [GameManager] tick.
@@ -231,6 +233,7 @@ func _apply_scar_visual_to_color(c: Color, x: int, y: int, use_max_scar: bool) -
 
 func _rebuild_player_meaning_region_state() -> void:
 	_player_meaning_region_state.clear()
+	_player_meaning_region_label.clear()
 	_player_meaning_region_intent.clear()
 	for s in SettlementMemory.settlements:
 		if s is not Dictionary:
@@ -245,9 +248,11 @@ func _rebuild_player_meaning_region_state() -> void:
 		if not (reg1 is PackedInt32Array):
 			continue
 		var p: PackedInt32Array = reg1 as PackedInt32Array
+		var label: String = str(WorldMeaning.get_region_meaning_label(int(d.get("center_region", -1))))
 		for u in range(p.size()):
 			var rk2: int = int(p[u])
 			_player_meaning_region_state[rk2] = st
+			_player_meaning_region_label[rk2] = label
 			_player_meaning_region_intent[rk2] = intent
 
 
@@ -257,16 +262,17 @@ func _apply_player_meaning_tint(c: Color, x: int, y: int) -> Color:
 	if not _player_meaning_region_state.has(rk):
 		return c
 	var st: String = str(_player_meaning_region_state.get(rk, ""))
+	var label: String = str(_player_meaning_region_label.get(rk, "quiet"))
 	var intent: int = int(_player_meaning_region_intent.get(rk, IntentMemory.INTENT_HOLD))
 	if st == "permanently_abandoned":
 		var yv0: float = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 		var gray0: Color = Color(yv0, yv0, yv0, 1.0)
-		c = c.lerp(gray0, 0.13)
-		return c * Color(0.86, 0.89, 0.94, 1.0)
+		c = c.lerp(gray0, 0.18 if label == "grave" else 0.13)
+		return c * Color(0.84, 0.88, 0.96, 1.0)
 	if st == "abandoned":
 		var yv: float = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 		var gray: Color = Color(yv, yv, yv, 1.0)
-		c = c.lerp(gray, 0.085)
+		c = c.lerp(gray, 0.105 if label == "bloodied" else 0.085)
 		c = c * Color(0.91, 0.91, 0.89, 1.0)
 		if intent == IntentMemory.INTENT_ABANDON:
 			c = c.lerp(c * Color(0.94, 0.97, 1.03, 1.0), 0.04)
@@ -274,7 +280,7 @@ func _apply_player_meaning_tint(c: Color, x: int, y: int) -> Color:
 			c = c.lerp(c * Color(1.02, 1.03, 1.01, 1.0), 0.02)
 		return c
 	if st == "revivable":
-		c = c.lerp(c * Color(1.03, 1.04, 1.01, 1.0), 0.06)
+		c = c.lerp(c * Color(1.03, 1.05, 1.02, 1.0), 0.08 if label == "scarred" else 0.06)
 		if intent == IntentMemory.INTENT_GROW:
 			c = c.lerp(c * Color(1.03, 1.02, 0.99, 1.0), 0.03)
 		elif intent == IntentMemory.INTENT_ABANDON:

@@ -7,6 +7,9 @@ extends Node
 const KIND_PAWN_DEATH: int = 0
 ## Irreversible collapse: recent (within this window) max scar + worst rep.
 const HARD_COLLAPSE_TICKS: int = 30000
+## Revival tuning: moderately scarred but quiet regions may reopen.
+const REVIVABLE_SCAR_MAX: int = 2
+const REVIVABLE_REPUTATION_MIN: int = -1
 
 var settlements: Array = []
 ## region_key -> state string (derived cache for O(1) regional queries)
@@ -138,10 +141,103 @@ func _settlement_state_v1(
 		return "permanently_abandoned"
 	var last_pawn: int = _max_last_pawn_death_tick_in_cluster(cluster)
 	var recovery: int = WorldPersistence.RECOVERY_TICKS
-	if scar_max <= 1 and reputation_min >= 0:
+	if _is_revivable_v1(scar_max, reputation_min, last_pawn, now, recovery):
 		if last_pawn < 0 or now - last_pawn >= recovery:
 			return "revivable"
 	return "dormant"
+
+
+func _is_revivable_v1(
+		scar_max: int, reputation_min: int, last_pawn_death_tick: int, now: int, recovery: int
+) -> bool:
+	if scar_max > REVIVABLE_SCAR_MAX:
+		return false
+	if reputation_min < REVIVABLE_REPUTATION_MIN:
+		return false
+	if last_pawn_death_tick >= 0 and (now - last_pawn_death_tick) < recovery:
+		return false
+	return true
+
+
+func get_settlement_profile(region_key: int) -> Dictionary:
+	var settlement: Variant = get_settlement_at_region(region_key)
+	if settlement == null or not (settlement is Dictionary):
+		return _default_profile(region_key)
+	var d: Dictionary = settlement as Dictionary
+	var regions: PackedInt32Array = _regions_from_settlement(d)
+	var mean: Dictionary = WorldMeaning.get_region_meaning_summary(region_key)
+	var pers: Dictionary = WorldPersistence.get_region_persistence(region_key)
+	var profile: Dictionary = {
+		"region_key": region_key,
+		"center_region": int(d.get("center_region", -1)),
+		"state": str(d.get("state", "")),
+		"scar_max": int(d.get("scar_max", 0)),
+		"reputation_min": int(d.get("reputation_min", 0)),
+		"last_activity_tick": int(d.get("last_activity_tick", -1)),
+		"meaning_label": str(mean.get("meaning_label", "quiet")),
+		"death_density": str(mean.get("death_density", "none")),
+		"total_deaths": int(mean.get("total_deaths", 0)),
+		"scar_level": int(pers.get("scar_level", 0)),
+		"recovery_stage": int(pers.get("recovery_stage", 0)),
+		"revival_ready": false,
+	}
+	var last_pawn: int = _max_last_pawn_death_tick_in_regions(regions)
+	profile["revival_ready"] = _is_revivable_v1(
+			int(profile["scar_max"]), int(profile["reputation_min"]), last_pawn,
+			GameManager.tick_count, WorldPersistence.RECOVERY_TICKS
+	)
+	return profile
+
+
+func _default_profile(region_key: int) -> Dictionary:
+	return {
+		"region_key": region_key,
+		"center_region": -1,
+		"state": "",
+		"scar_max": 0,
+		"reputation_min": 0,
+		"last_activity_tick": -1,
+		"meaning_label": "quiet",
+		"death_density": "none",
+		"total_deaths": 0,
+		"scar_level": 0,
+		"recovery_stage": 0,
+		"revival_ready": false,
+	}
+
+
+func _regions_from_settlement(settlement: Dictionary) -> PackedInt32Array:
+	var reg: Variant = settlement.get("regions", null)
+	if reg is PackedInt32Array:
+		return reg as PackedInt32Array
+	return PackedInt32Array()
+
+
+func _max_last_pawn_death_tick_in_regions(regions: PackedInt32Array) -> int:
+	if regions.is_empty():
+		return -1
+	var want: Dictionary = {}
+	for rk_any in regions:
+		want[int(rk_any)] = true
+	var best: int = -1
+	var ev: Variant = WorldMemory.to_save_dict().get("events", [])
+	if not (ev is Array):
+		return best
+	for item in ev as Array:
+		if not (item is Dictionary):
+			continue
+		var e: Dictionary = item
+		if int(e.get("k", -1)) != KIND_PAWN_DEATH:
+			continue
+		if not e.has("r"):
+			continue
+		var rk: int = int(e["r"])
+		if not want.has(rk):
+			continue
+		var t: int = int(e.get("t", 0))
+		if t > best:
+			best = t
+	return best
 
 
 ## True for [abandoned] (recent hard collapse) and [permanently_abandoned] (older hard collapse).

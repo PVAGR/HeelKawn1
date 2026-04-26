@@ -195,6 +195,6 @@ func _tile_ok_base(
 	var trk0: int = WorldMemory._region_key(t.x, t.y)
 	if not in_cluster.has(trk0):
 		return false
-	if int(WorldPersistence.get_region_persistence(trk0).get("scar_level", 0)) >= 2:
+	if int(WorldPersistence.get_region_persistence(trk0).get("scar_level", 0)) >= 3:
 		return false
 	return true

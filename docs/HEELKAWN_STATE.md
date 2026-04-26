@@ -31,6 +31,8 @@ Settlements:
 - Build themselves
 - Diverge culturally (open / cautious / defensive)
 - Can be abandoned or revivable
+- Revival tuning is active for moderately scarred, quiet regions
+- Player-readable settlement meaning now distinguishes quiet / scarred / bloodied / grave regions
 - Expand walls, beds, doors, zones autonomously
 
 Animals:
@@ -59,6 +61,5 @@ No required micromanagement.
 
 ## NEXT TARGET
 
-- Settlement revival vs permanent abandonment tuning
 - Cultural architectural styles
-- Player-readable meaning (visual/audio, no text)
+- Player-readable meaning refinement (audio + settlement identity depth, no text overlay)

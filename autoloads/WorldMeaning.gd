@@ -32,6 +32,7 @@ func recompute() -> void:
 				"animal_deaths": 0,
 				"total_deaths": 0,
 				"death_density": "none",
+				"meaning_label": "quiet",
 				"last_death_tick": -1,
 			}
 		var rec: Dictionary = meaning_by_region[rk]
@@ -50,6 +51,7 @@ func recompute() -> void:
 		var tot: int = pdc + adc
 		r2["total_deaths"] = tot
 		r2["death_density"] = classify_death_density(tot)
+		r2["meaning_label"] = describe_meaning_label(tot)
 
 
 func get_region_meaning(region_key: int) -> Dictionary:
@@ -66,6 +68,29 @@ func classify_death_density(total_deaths: int) -> String:
 	if total_deaths <= 5:
 		return "medium"
 	return "high"
+
+
+func describe_meaning_label(total_deaths: int) -> String:
+	match classify_death_density(total_deaths):
+		"none":
+			return "quiet"
+		"low":
+			return "scarred"
+		"medium":
+			return "bloodied"
+		"high":
+			return "grave"
+	return "quiet"
+
+
+func get_region_meaning_label(region_key: int) -> String:
+	return str(get_region_meaning(region_key).get("meaning_label", "quiet"))
+
+
+func get_region_meaning_summary(region_key: int) -> Dictionary:
+	var out: Dictionary = get_region_meaning(region_key)
+	out["meaning_label"] = str(out.get("meaning_label", describe_meaning_label(int(out.get("total_deaths", 0)))))
+	return out
 
 
 func _default_region_entry() -> Dictionary:

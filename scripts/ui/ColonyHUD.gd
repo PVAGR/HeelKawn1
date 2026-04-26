@@ -168,37 +168,9 @@ func _refresh() -> void:
 	_label.text = "\n".join(lines)
 
 
-func _draw() -> void:
-	_draw_intent_marker()
-
-
-func _draw_intent_marker() -> void:
-	if _world == null or _player_input_buffer == null:
-		return
-	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
-		return
-	var target_v: Variant = _player_input_buffer.get_queued_target(_player_pawn.data.tile_pos)
-	if not (target_v is Vector2i):
-		return
-	var target_tile: Vector2i = target_v as Vector2i
-	var target_world: Vector2 = _world.tile_to_world(target_tile)
-	var screen_pos: Vector2 = _world_to_hud_position(target_world)
-	var yellow_fill: Color = Color(1.0, 0.95, 0.25, 0.50)
-	var yellow_line: Color = Color(1.0, 0.95, 0.25, 0.70)
-	draw_circle(screen_pos, 4.0, yellow_fill)
-	draw_line(screen_pos + Vector2(0, -8), screen_pos, yellow_line, 2.0, true)
-	draw_polygon(
-		PackedVector2Array([
-			screen_pos + Vector2(0, -12),
-			screen_pos + Vector2(-4, -6),
-			screen_pos + Vector2(4, -6),
-		]),
-		PackedColorArray([yellow_line, yellow_line, yellow_line])
-	)
-
-
-func _world_to_hud_position(world_pos: Vector2) -> Vector2:
-	return get_viewport().get_canvas_transform() * world_pos
+## CanvasLayer is not drawable; intent marker rendering is temporarily disabled.
+## We keep the queue/state HUD text and can re-enable visual marker through a
+## dedicated Node2D overlay child in a follow-up patch.
 
 
 func _ensure_history_panel() -> void:

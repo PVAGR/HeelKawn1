@@ -9,6 +9,7 @@ const KIND_PAWN_DEATH: int = 0
 const HARD_COLLAPSE_TICKS: int = 30000
 ## Revival tuning: moderately scarred but quiet regions may reopen.
 const REVIVABLE_SCAR_MAX: int = 2
+const REVIVABLE_REPUTATION_MIN: int = -1
 ## Deterministic peace requirements by culture branch.
 const PEACE_TICKS_PER_BRANCH: Dictionary = {
 	SettlementPlanner.CULTURE_OPEN: 18000,

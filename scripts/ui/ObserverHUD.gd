@@ -76,19 +76,16 @@ func _validation_harness_hud_line(s: Dictionary) -> String:
 	var warn: String = ""
 	if sess_req and not osdb:
 		warn = " [b][!] session const ON but not a debug run — harness DISARMED[/b]"
-	return (
-			"[b][HARNESS][/b] OS_debug=%s session_const=%s session_effective=%s | "
-			+ "armed: clean_economy=%s settlement_truth_verify=%s specialization_log=%s%s\n"
-			% [
-				"ON" if osdb else "off",
-				"ON" if sess_req else "off",
-				"ON" if sess_eff else "off",
-				"ON" if clean else "off",
-				"ON" if truth else "off",
-				"ON" if spec else "off",
-				warn,
-			]
-	)
+	var line_tpl: String = "[b][HARNESS][/b] OS_debug=%s session_const=%s session_effective=%s | armed: clean_economy=%s settlement_truth_verify=%s specialization_log=%s%s\n"
+	return line_tpl % [
+		"ON" if osdb else "off",
+		"ON" if sess_req else "off",
+		"ON" if sess_eff else "off",
+		"ON" if clean else "off",
+		"ON" if truth else "off",
+		"ON" if spec else "off",
+		warn,
+	]
 
 
 func _world_governance_block(s: Dictionary) -> String:
@@ -173,5 +170,5 @@ func _conflict_block(s: Dictionary) -> String:
 func _kernel_block(s: Dictionary) -> String:
 	return (
 		"[b]SYSTEM STAMP[/b]\n"
-		+ "[font=monospace]%s[/font]" % str(s.get("footer_stamp", "Tick 0 | Day 1 | Determinism Pending"))
+		+ str(s.get("footer_stamp", "Tick 0 | Day 1 | Determinism Pending"))
 	)

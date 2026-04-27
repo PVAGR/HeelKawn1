@@ -7,6 +7,8 @@ class_name ObserverLensPanel
 @onready var narrative_label: Label = $VBoxContainer/NarrativeLabel
 @onready var tags_label: Label = $VBoxContainer/TagsLabel
 @onready var status_label: Label = $VBoxContainer/StatusLabel
+const OBSERVER_LENS_SCRIPT: Script = preload("res://scripts/kernel/observer_lens.gd")
+@onready var _observer_lens: Node = OBSERVER_LENS_SCRIPT.new()
 
 var _target_zone: String = ""
 var _refresh_ticks: int = 0
@@ -33,9 +35,10 @@ func _update_display() -> void:
 		status_label.text = ""
 		return
 
-	var narrative: String = ObserverLens.get_zone_narrative(_target_zone)
+	var narrative: String = str(_observer_lens.call("get_zone_narrative", _target_zone))
 	var tags: PackedStringArray = WorldMeaning.get_zone_tags(_target_zone)
-	var focus: Array[Dictionary] = ObserverLens.get_chronicler_focus()
+	var focus_v: Variant = _observer_lens.call("get_chronicler_focus")
+	var focus: Array[Dictionary] = focus_v as Array[Dictionary] if focus_v is Array else []
 
 	var is_focus: bool = false
 	for f in focus:

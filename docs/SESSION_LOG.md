@@ -5,6 +5,53 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-26 - Phase 7 canonical validation milestone lock
+
+Date: 2026-04-26
+Agent/Model: Codex (Cursor)
+Goal: Record canonical runtime proof milestone without adding gameplay/system changes.
+
+Changes made:
+- No gameplay/system mechanics changed in this pass.
+- Reviewed temporary validation diagnostics in:
+  - `autoloads/SettlementMemory.gd`
+  - `scripts/ui/ObserverHUD.gd`
+  - `scripts/ui/observer_lens_panel.gd`
+- Classified diagnostics for post-milestone hygiene:
+  - KEEP for permanent debug validation:
+    - `[SETTLEMENT_VERIFY]` transition/heartbeat diagnostics
+    - `[SPECIALIZATION_VALIDATE]` coarse cadence diagnostics
+    - `[VALIDATION_EVENT_ROLL_PROOF]` first-roll suppression proof
+    - HUD `[HARNESS]` status line (runtime arming visibility)
+  - KEEP but guard more tightly (debug/build gating and removable marker policy):
+    - `[VALIDATION_SMOKETEST]`
+    - `[VALIDATION_STATUS]`
+    - `[CANONICAL_RUNTIME_PROOF]` and `[CANONICAL_ROOT_MISMATCH]` identity guard
+  - REMOVE after milestone commit (cleanup candidate):
+    - `ObserverHUD` hidden-overlay pre-bake banner path (`[HARNESS_PANEL]` text write when overlay hidden), if team wants stricter HUD-only-on-visible behavior.
+- Canonical runtime proof observed:
+  - runtime identity resolved to canonical repo path
+  - validation arming booleans ON
+  - clean suppression proof line ON and dirty economy events absent in validation run
+  - truth/specialization validation logs present
+  - kernel diagnostic PASS at tick 30000 with append-only and determinism PASS.
+
+Decisions:
+- Freeze validation semantics as proven for Phase 7 milestone; no speculative system tweaks in this lock pass.
+- Preserve center_region continuity interpretation and proxy-only specialization truth wording.
+
+Open questions:
+- Post-milestone cleanup choice: keep all startup identity diagnostics, or trim to a smaller permanent set after release branch cut.
+
+Next concrete step:
+- Run receiver-side commit/review pass for milestone lock, then decide cleanup scope in a separate bounded pass.
+
+Files touched:
+- docs/HEELKAWN_STATE.md
+- docs/SESSION_LOG.md
+
+---
+
 ## 2026-04-26 - Phase 11 emergent governance and authority
 
 Date: 2026-04-26

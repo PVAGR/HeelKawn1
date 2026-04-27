@@ -27,6 +27,15 @@ Anyone (human or AI) working on HeelKawn MUST read this file first.
 
 **Phase 4 — Identity & Meaning**
 
+Validation milestone (canonical runtime, 2026-04-26):
+- Phase 7 validation proof is now confirmed in canonical repo runtime.
+- Validation harness arming is proven ON in debug runs (`VALIDATION_SESSION_ENABLED` path).
+- Clean-economy suppression proof is confirmed (`VALIDATION_EVENT_ROLL_PROOF` reports skipped roll; no dirty economy event lines observed in validation run).
+- Settlement-truth verification is confirmed live (`[SETTLEMENT_VERIFY]` with hysteresis transitions and center_region continuity key).
+- Specialization validation logs are confirmed live (`[SPECIALIZATION_VALIDATE]` on coarse resource-pressure cadence).
+- Specialization identity remains explicitly proxy-derived from resource-pressure/job-demand, not stock scarcity truth.
+- Kernel diagnostic at tick 30000 reports PASS (`append_only=PASS`, determinism PASS, settlements active=1, export_ready=true).
+
 Settlements:
 - Build themselves
 - Diverge culturally (open / cautious / defensive)

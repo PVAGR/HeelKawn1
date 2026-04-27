@@ -62,7 +62,7 @@ const STATE_TRUTH_HYSTERESIS_COMMIT_TICKS: int = 4000
 ## Console marker proving this binary includes the smoketest wiring; bump when observability changes.
 const VALIDATION_RUNTIME_SMOKE_MARKER: String = "PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r1"
 ## One switch: suppresses economy-distorting world events (see WorldEvents), enables settlement-truth verify logs, enables coarse specialization validation logs.
-const VALIDATION_SESSION_ENABLED: bool = false
+const VALIDATION_SESSION_ENABLED: bool = true
 ## Piecemeal: settlement truth [SETTLEMENT_VERIFY] without full session (still requires debug build).
 const SETTLEMENT_STATE_TRUTH_VERIFY_MODE: bool = false
 ## Piecemeal: [SPECIALIZATION_VALIDATE] on resource-pressure cadence only (still requires debug build).
@@ -102,6 +102,8 @@ func _print_validation_smoketest(source: String) -> void:
 		_validation_smoketest_autoload_printed = true
 	var dbg: bool = OS.is_debug_build()
 	var session_const: bool = VALIDATION_SESSION_ENABLED
+	var project_root: String = ProjectSettings.globalize_path("res://")
+	var settlement_memory_path: String = ProjectSettings.globalize_path("res://autoloads/SettlementMemory.gd")
 	var clean_active: bool = WorldEvents.validation_clean_economy_events_active()
 	var truth_active: bool = validation_truth_verify_armed()
 	var spec_active: bool = validation_specialization_log_armed()
@@ -120,6 +122,25 @@ func _print_validation_smoketest(source: String) -> void:
 				spec_active,
 			]
 	)
+	print(
+			"[CANONICAL_RUNTIME_PROOF] project_root=%s settlement_memory_path=%s validation_const=%s clean=%s truth=%s specialization=%s"
+			% [
+				project_root,
+				settlement_memory_path,
+				session_const,
+				clean_active,
+				truth_active,
+				spec_active,
+			]
+	)
+	if dbg:
+		var canonical_root_hint: String = "C:/Users/user/Documents/GitHub/HeelKawn1"
+		var root_norm: String = project_root.replace("\\", "/")
+		if not root_norm.contains(canonical_root_hint):
+			print(
+					"[CANONICAL_ROOT_MISMATCH] EXPECTED_CONTAINS=%s ACTUAL_PROJECT_ROOT=%s ACTUAL_SETTLEMENT_MEMORY=%s"
+					% [canonical_root_hint, project_root, settlement_memory_path]
+			)
 
 
 func print_validation_smoketest_from_main() -> void:

@@ -649,6 +649,26 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 	print("fallback_bound_events=%d" % _pawn_divergence_fallback_bound_events)
 	print("first_scored_center_region=%d" % _pawn_divergence_first_scored_center_region)
 	print("scored_events_present=%s" % ("true" if _pawn_divergence_scored_events > 0 else "false"))
+	var scored_present: bool = _pawn_divergence_scored_events > 0
+	var any_bound: bool = (_pawn_divergence_native_bound_events + _pawn_divergence_fallback_bound_events) > 0
+	var health: String = "FAIL"
+	if scored_present:
+		health = "PASS"
+	elif any_bound:
+		health = "WARN"
+	print(
+		"[PAWN_DIVERGENCE_HEALTH] tick=%d result=%s any_bound=%s scored_events_present=%s "
+		+ "pre_settlement_skips=%d no_bound_center_skips=%d no_spec_skips=%d"
+		% [
+			tick,
+			health,
+			any_bound,
+			scored_present,
+			_pawn_divergence_skip_pre_settlement_context,
+			_pawn_divergence_skip_no_bound_center,
+			_pawn_divergence_skip_no_specialization_context,
+		]
+	)
 	var no_spec_centers: Array = _pawn_divergence_no_spec_by_center.keys()
 	no_spec_centers.sort()
 	for c_any in no_spec_centers:

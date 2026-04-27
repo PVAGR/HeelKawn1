@@ -5,6 +5,20 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-27 - Merge feature into main; push GitHub default branch
+
+Date: 2026-04-27
+Goal: Single default branch (`main`) carries full kernel/doc/tooling sync without manual PR.
+
+Changes made:
+- `git merge feature/world-bible-memory-baseline -X theirs` into `main` (prefer feature-side on conflicts so SimTime, planning spec, HUD/kernel sync remain intact alongside prior `origin/main` work).
+- `git push origin main` — default branch at `248c94d` on `github.com/PVAGR/HeelKawn1`.
+
+Suggested next session:
+- Open repo default branch only; optional delete/stale-branch cleanup on GitHub if desired.
+
+---
+
 ## 2026-04-27 - Cursor Master Planning Spec + continuity pass
 
 Date: 2026-04-27

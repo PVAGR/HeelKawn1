@@ -128,6 +128,21 @@ var _player_pawn: Pawn = null
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
 var _kernel_diagnostic: KernelDiagnostic = null
+## pawn_id -> last claimed job label (debug instrumentation only).
+var _pawn_divergence_last_job_by_pawn_id: Dictionary = {}
+var _pawn_divergence_total_claim_events_seen: int = 0
+var _pawn_divergence_scored_events: int = 0
+var _pawn_divergence_skip_no_bound_center: int = 0
+var _pawn_divergence_skip_no_specialization_context: int = 0
+var _pawn_divergence_aligned_total: int = 0
+var _pawn_divergence_divergent_total: int = 0
+var _pawn_divergence_neutral_total: int = 0
+## center_region -> {"scored": int, "aligned": int, "divergent": int, "neutral": int}
+var _pawn_divergence_by_center: Dictionary = {}
+var _pawn_divergence_first20_scored_lines: PackedStringArray = PackedStringArray()
+## tick -> true (summary already printed at this checkpoint).
+var _pawn_divergence_summary_emitted_ticks: Dictionary = {}
+var _pawn_divergence_exit_summary_emitted: bool = false
 var _kill_count: int = 0
 ## Pixel radius around a pawn that counts as a click hit. Pawns draw at
 ## DRAW_RADIUS=3.5; we add a generous slop so moving targets are easy to grab.
@@ -256,6 +271,7 @@ func _ready() -> void:
 	# React to mining progress: when a wall comes down or an ore is cleared,
 	# new ores can become reachable and we may want to queue the next tunnel.
 	JobManager.job_completed.connect(_on_job_completed)
+	JobManager.job_claimed.connect(_on_job_claimed)
 	# Bottom toolbar: lets the player drive everything with the mouse.
 	if _toolbar != null:
 		_toolbar.mode_requested.connect(_on_toolbar_mode_requested)
@@ -276,6 +292,10 @@ func _ready() -> void:
 	if _focus_inspector != null:
 		_focus_inspector.set_visible_state(false)
 	call_deferred("_log_validation_harness_observability_once")
+
+
+func _exit_tree() -> void:
+	_emit_pawn_divergence_summary_if_needed(GameManager.tick_count, true)
 
 
 func _log_validation_harness_observability_once() -> void:
@@ -320,6 +340,190 @@ func _log_validation_harness_observability_once() -> void:
 				+ "(clean=%s truth=%s spec=%s) — inspect harness gates if this ever appears."
 				% [clean_active, truth_active, spec_active]
 		)
+
+
+func _job_channel_for_divergence_log(job_type: int) -> String:
+	match int(job_type):
+		Job.Type.CHOP, Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+			return "wood"
+		Job.Type.MINE, Job.Type.MINE_WALL:
+			return "stone"
+		Job.Type.FORAGE, Job.Type.HUNT:
+			return "food"
+		Job.Type.TRADE_HAUL:
+			return "trade"
+		_:
+			return ""
+
+
+func _settlement_by_center_region(center_region: int) -> Dictionary:
+	if center_region < 0:
+		return {}
+	for st_any in SettlementMemory.settlements:
+		if not (st_any is Dictionary):
+			continue
+		var st: Dictionary = st_any as Dictionary
+		if int(st.get("center_region", -1)) == center_region:
+			return st
+	return {}
+
+
+func _on_job_claimed(job: Job, pawn: Pawn) -> void:
+	if not OS.is_debug_build():
+		return
+	if job == null or pawn == null or not is_instance_valid(pawn) or pawn.data == null:
+		return
+	_pawn_divergence_total_claim_events_seen += 1
+	var pawn_region: int = WorldMemory._region_key(pawn.data.tile_pos.x, pawn.data.tile_pos.y)
+	var job_region: int = WorldMemory._region_key(job.work_tile.x, job.work_tile.y)
+	var pawn_center_region: int = SettlementMemory.get_center_region_for_region(pawn_region)
+	var job_center_region: int = SettlementMemory.get_center_region_for_region(job_region)
+	var effective_center_region: int = (
+		job_center_region if job_center_region >= 0 else pawn_center_region
+	)
+	if effective_center_region < 0:
+		_pawn_divergence_skip_no_bound_center += 1
+		var skip_line_no_center: String = (
+			"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_bound_center pawn_id=%d pawn=%s pawn_region=%d job_region=%d pawn_center_region=%d job_center_region=%d center_region=%d"
+			% [
+				GameManager.tick_count,
+				int(pawn.data.id),
+				pawn.data.display_name,
+				pawn_region,
+				job_region,
+				pawn_center_region,
+				job_center_region,
+				effective_center_region,
+			]
+		)
+		print(skip_line_no_center)
+		return
+	var st: Dictionary = _settlement_by_center_region(effective_center_region)
+	var spec_phase: String = str(st.get("specialization_phase", SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN))
+	var spec_locked: String = str(st.get("specialization_channel", ""))
+	var spec_candidate: String = str(st.get("specialization_candidate_channel", ""))
+	if st.is_empty() or spec_phase == SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN:
+		_pawn_divergence_skip_no_specialization_context += 1
+		var skip_line_no_spec: String = (
+			"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_specialization_context pawn_id=%d pawn=%s pawn_center_region=%d job_center_region=%d center_region=%d spec_phase=%s"
+			% [
+				GameManager.tick_count,
+				int(pawn.data.id),
+				pawn.data.display_name,
+				pawn_center_region,
+				job_center_region,
+				effective_center_region,
+				spec_phase,
+			]
+		)
+		print(skip_line_no_spec)
+		return
+	var job_channel: String = _job_channel_for_divergence_log(job.type)
+	var alignment: String = "neutral"
+	if job_channel == spec_locked:
+		alignment = "aligned"
+	elif job_channel == "" or spec_locked == "":
+		alignment = "neutral"
+	else:
+		alignment = "divergent"
+	var pawn_id: int = int(pawn.data.id)
+	var prev_label: String = str(_pawn_divergence_last_job_by_pawn_id.get(pawn_id, "None"))
+	var next_label: String = Job.describe_type(job.type)
+	_pawn_divergence_last_job_by_pawn_id[pawn_id] = next_label
+	_pawn_divergence_scored_events += 1
+	var center_row: Dictionary = _pawn_divergence_by_center.get(
+		effective_center_region,
+		{"scored": 0, "aligned": 0, "divergent": 0, "neutral": 0}
+	)
+	center_row["scored"] = int(center_row.get("scored", 0)) + 1
+	match alignment:
+		"aligned":
+			_pawn_divergence_aligned_total += 1
+			center_row["aligned"] = int(center_row.get("aligned", 0)) + 1
+		"divergent":
+			_pawn_divergence_divergent_total += 1
+			center_row["divergent"] = int(center_row.get("divergent", 0)) + 1
+		_:
+			_pawn_divergence_neutral_total += 1
+			center_row["neutral"] = int(center_row.get("neutral", 0)) + 1
+	_pawn_divergence_by_center[effective_center_region] = center_row
+	var scored_line: String = (
+		(
+			"[PAWN_DIVERGENCE] tick=%d action=claim pawn_id=%d pawn=%s "
+			+ "pawn_center_region=%d job_center_region=%d center_region=%d "
+			+ "spec_phase=%s spec_locked=%s spec_candidate=%s "
+			+ "job_from=%s job_to=%s job_channel=%s alignment=%s"
+		)
+		% [
+			GameManager.tick_count,
+			pawn_id,
+			pawn.data.display_name,
+			pawn_center_region,
+			job_center_region,
+			effective_center_region,
+			spec_phase,
+			spec_locked,
+			spec_candidate,
+			prev_label,
+			next_label,
+			job_channel,
+			alignment,
+		]
+	)
+	print(scored_line)
+	if _pawn_divergence_first20_scored_lines.size() < 20:
+		_pawn_divergence_first20_scored_lines.append(scored_line)
+
+
+func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false) -> void:
+	if not OS.is_debug_build():
+		return
+	if not SettlementMemory.VALIDATION_SESSION_ENABLED and not force_exit:
+		return
+	if force_exit:
+		if _pawn_divergence_exit_summary_emitted:
+			return
+		_pawn_divergence_exit_summary_emitted = true
+	else:
+		if tick != 30000 and tick != 60000:
+			return
+		if _pawn_divergence_summary_emitted_ticks.has(tick):
+			return
+		_pawn_divergence_summary_emitted_ticks[tick] = true
+	print("[PAWN_DIVERGENCE_SUMMARY]")
+	print("tick=%d" % tick)
+	print("total_claim_events_seen=%d" % _pawn_divergence_total_claim_events_seen)
+	print("scored_events=%d" % _pawn_divergence_scored_events)
+	print("skip_no_bound_center=%d" % _pawn_divergence_skip_no_bound_center)
+	print("skip_no_specialization_context=%d" % _pawn_divergence_skip_no_specialization_context)
+	print("aligned_total=%d" % _pawn_divergence_aligned_total)
+	print("divergent_total=%d" % _pawn_divergence_divergent_total)
+	print("neutral_total=%d" % _pawn_divergence_neutral_total)
+	var centers: Array = _pawn_divergence_by_center.keys()
+	centers.sort()
+	for c_any in centers:
+		var c: int = int(c_any)
+		var row: Dictionary = _pawn_divergence_by_center.get(c, {})
+		print(
+			"[PAWN_DIVERGENCE_CENTER_SUMMARY] center_region=%d scored=%d aligned=%d divergent=%d neutral=%d"
+			% [
+				c,
+				int(row.get("scored", 0)),
+				int(row.get("aligned", 0)),
+				int(row.get("divergent", 0)),
+				int(row.get("neutral", 0)),
+			]
+		)
+	print("[PAWN_DIVERGENCE_FIRST20_BEGIN]")
+	for line in _pawn_divergence_first20_scored_lines:
+		print(str(line))
+	print("[PAWN_DIVERGENCE_FIRST20_END]")
+	var row_524295: Dictionary = _pawn_divergence_by_center.get(524295, {})
+	var scored_524295: int = int(row_524295.get("scored", 0))
+	print(
+		"[PAWN_DIVERGENCE_PROOF] center_region=524295 scored_events_present=%s"
+		% ("true" if scored_524295 > 0 else "false")
+	)
 
 
 func _process(delta: float) -> void:
@@ -524,6 +728,7 @@ func _on_game_tick(tick: int) -> void:
 	SettlementMemory.update_settlement_intents(tick)
 	SettlementMemory.update_resource_pressures(tick)
 	SettlementMemory.update_preferred_work_fronts(tick)
+	_emit_pawn_divergence_summary_if_needed(tick)
 	if _observer_hud != null and tick % OBSERVER_HUD_REFRESH_TICKS == 0:
 		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
 	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % FOCUS_INSPECTOR_REFRESH_TICKS == 0:

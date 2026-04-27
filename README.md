@@ -20,3 +20,7 @@ For canonical project state, read docs/HEELKAWN_STATE.md.
 For AI operating rules, read docs/LLM_ONBOARDING.md.
 For historical continuity only (not canonical state), read docs/SESSION_LOG.md.
 For live phase/next-lane direction, defer to docs/HEELKAWN_STATE.md only.
+
+Quick local run:
+- `play.bat` (normal launch)
+- `play_capture.bat` (launch + write `logs/playtest_latest.log` for easy sharing)

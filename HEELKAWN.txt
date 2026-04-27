@@ -15,6 +15,7 @@ NEXT TARGET
 
 LOG (newest first)
 
+2026-04-27  tools/: Resolve-Godot.ps1, Verify-Project.ps1, Download-GodotPortable.ps1; portable Godot 4.6.2 optional under tools/godot (gitignored). settlement_identity.gd: removed class_name (conflicted with SettlementIdentity autoload — parse fix).
 2026-04-25  Docs-only cleanup: docs/HEELKAWN_STATE.md kept as sole authoritative state file; handoff docs aligned.
 2026-04-25  PawnData.gd: trait loops hardened (null skip, tr not trait); match arms split one-line.
 2026-04-24  Ages/cataclysm framing locked: selective persistence; history degrades into form, not explanation.

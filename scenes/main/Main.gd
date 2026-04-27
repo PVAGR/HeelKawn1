@@ -716,6 +716,8 @@ func _on_game_tick(tick: int) -> void:
 		if tick % REBIRTH_CHECK_INTERVAL_TICKS == 0:
 			SettlementMemory.recompute(_world)
 			SettlementRebirth.process(_world, self, false)
+			FragmentationManager.check_and_fragment(_world, self)
+			SchismManager.check_and_schism(_world, self)
 	if int(tick) % 10000 == 0 and int(tick) > 0:
 		AgeMemory.recompute()
 		if is_instance_valid(_world):
@@ -1766,6 +1768,9 @@ func _blueprint_feature_for_mode() -> int:
 
 func _reroll_world() -> void:
 	JobManager.clear_all()
+	SettlementRegistry.clear()
+	FragmentationManager.clear()
+	SchismManager.clear()
 	WorldMemory.clear()
 	MythMemory.clear()
 	SacredMemory.clear()
@@ -2476,6 +2481,7 @@ func _build_save_dict() -> Dictionary:
 		"regrow": _save_regrow_queue(),
 		"zone_filter": _zone_next_filter,
 		"world_memory": WorldMemory.to_save_dict(),
+		"settlement_registry": SettlementRegistry.to_save_dict(),
 		"world_persistence": WorldPersistence.to_save_dict(),
 		"myth": MythMemory.to_save_dict(),
 		"sacred": SacredMemory.to_save_dict(),
@@ -2542,6 +2548,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 	_last_generation_tick = int(s.get("last_generation_tick", loaded_tick))
 	_zone_next_filter = int(s.get("zone_filter", 0))
 	WorldMemory.from_save_dict(s.get("world_memory", {}))
+	SettlementRegistry.from_save_dict(s.get("settlement_registry", {}))
 	MythMemory.from_save_dict(s.get("myth", {}))
 	SacredMemory.from_save_dict(s.get("sacred", {}))
 	ChronicleLog.from_save_dict(s.get("chronicle", {}))
@@ -2949,6 +2956,8 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 	var rp_wood: float = clamp(float(resource_pressure.get("wood", 0.0)), 0.0, 1.0)
 	var rp_stone: float = clamp(float(resource_pressure.get("stone", 0.0)), 0.0, 1.0)
 	var rp_ore: float = clamp(float(resource_pressure.get("ore_proxy", 0.0)), 0.0, 1.0)
+	var rp_food: float = clamp(float(resource_pressure.get("food", 0.0)), 0.0, 1.0)
+	var rp_trade: float = clamp(float(resource_pressure.get("trade", 0.0)), 0.0, 1.0)
 	var wf_phase: String = str(settlement_data.get("specialization_phase", SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN))
 	var wf_locked_ch: String = str(settlement_data.get("specialization_channel", ""))
 	var wf_cand_ch: String = str(settlement_data.get("specialization_candidate_channel", ""))
@@ -3024,6 +3033,8 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"resource_pressure_wood": rp_wood,
 		"resource_pressure_stone": rp_stone,
 		"resource_pressure_ore_proxy": rp_ore,
+		"resource_pressure_food": rp_food,
+		"resource_pressure_trade": rp_trade,
 		"work_focus_phase": wf_phase,
 		"work_focus_display": wf_display,
 		"work_focus_confidence": wf_conf,

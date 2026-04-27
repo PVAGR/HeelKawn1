@@ -1243,8 +1243,10 @@ func get_resource_pressure_bias(job: Job) -> float:
 	var wood_p: float = clamp(float(rp.get("wood", 0.0)), 0.0, 1.0)
 	var stone_p: float = clamp(float(rp.get("stone", 0.0)), 0.0, 1.0)
 	var ore_p: float = clamp(float(rp.get("ore_proxy", 0.0)), 0.0, 1.0)
+	var food_p: float = clamp(float(rp.get("food", 0.0)), 0.0, 1.0)
+	var trade_p: float = clamp(float(rp.get("trade", 0.0)), 0.0, 1.0)
 	# Safety guard: if upstream pressure is unexpectedly out of bounds, neutralize.
-	if wood_p > 0.9 or stone_p > 0.9 or ore_p > 0.9:
+	if wood_p > 0.9 or stone_p > 0.9 or ore_p > 0.9 or food_p > 0.9 or trade_p > 0.9:
 		return 1.0
 	var intensity: float = 0.0
 	match int(job.type):
@@ -1254,6 +1256,10 @@ func get_resource_pressure_bias(job: Job) -> float:
 			intensity = stone_p
 		Job.Type.MINE:
 			intensity = ore_p
+		Job.Type.FORAGE, Job.Type.HUNT:
+			intensity = food_p
+		Job.Type.TRADE_HAUL:
+			intensity = trade_p
 		_:
 			return 1.0
 	var scaled: float = 1.0 + (RESOURCE_PRESSURE_BIAS_MAX - 1.0) * intensity

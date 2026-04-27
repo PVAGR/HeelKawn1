@@ -1,4 +1,5 @@
 extends Node
+## Autoload singleton (must not use [class_name] — same symbol as node name hides the autoload).
 
 ## Fired when an abandoned settlement reoccupies and receives a full identity.
 signal identity_resolved(resolved_id: String, name: String, traits: PackedStringArray, lineage_parent: String)

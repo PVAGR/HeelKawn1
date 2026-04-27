@@ -60,7 +60,7 @@ const STATE_TRUTH_HYSTERESIS_INTERVAL_TICKS: int = 2000
 const STATE_TRUTH_HYSTERESIS_COMMIT_TICKS: int = 4000
 ## --- Validation harness (debug builds): controlled lab sessions ---
 ## Console marker proving this binary includes the smoketest wiring; bump when observability changes.
-const VALIDATION_RUNTIME_SMOKE_MARKER: String = "PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r1"
+const VALIDATION_RUNTIME_SMOKE_MARKER: String = "PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp"
 ## One switch: suppresses economy-distorting world events (see WorldEvents), enables settlement-truth verify logs, enables coarse specialization validation logs.
 const VALIDATION_SESSION_ENABLED: bool = false
 ## Piecemeal: settlement truth [SETTLEMENT_VERIFY] without full session (still requires debug build).
@@ -145,33 +145,53 @@ func recompute(_world: World) -> void:
 		eligible.append(rk)
 	eligible.sort()
 	if eligible.is_empty():
-		return
-	var in_eligible: Dictionary = {}
-	for e in eligible:
-		in_eligible[int(e)] = true
-	var visited: Dictionary = {}
-	for seed_value in eligible:
-		if visited.has(seed_value):
-			continue
-		var cluster: Array[int] = _bfs_cluster(seed_value, in_eligible, visited)
-		cluster.sort()
-		var st: Dictionary = _build_settlement_from_regions(cluster)
-		var base_state: String = str(st.get("state", "recovering"))
-		var raw_state: String = _material_activity_state_override(
-				st, _world, living_pawns, active_jobs, base_state
+		var bootstrap_cluster: Array = _bootstrap_cluster_from_stockpile_anchors()
+		if bootstrap_cluster.is_empty():
+			return
+		var st0: Dictionary = _build_settlement_from_regions(bootstrap_cluster)
+		var base_state0: String = str(st0.get("state", "recovering"))
+		var raw_state0: String = _material_activity_state_override(
+				st0, _world, living_pawns, active_jobs, base_state0
 		)
-		var center_id: int = int(st.get("center_region", -1))
-		st["state"] = _apply_settlement_state_truth_hysteresis(center_id, raw_state, base_state, st)
-		settlements.append(st)
-		var st_name: String = str(st.get("state", ""))
-		var ckr: int = int(st.get("center_region", -1))
-		var preg: Variant = st.get("regions", null)
-		if preg is PackedInt32Array:
-			var pa: PackedInt32Array = preg as PackedInt32Array
-			for i in range(pa.size()):
-				var rk2: int = int(pa[i])
-				_region_state[rk2] = st_name
-				_region_center[rk2] = ckr
+		var center_id0: int = int(st0.get("center_region", -1))
+		st0["state"] = _apply_settlement_state_truth_hysteresis(center_id0, raw_state0, base_state0, st0)
+		settlements.append(st0)
+		var st_name0: String = str(st0.get("state", ""))
+		var ckr0: int = int(st0.get("center_region", -1))
+		var preg0: Variant = st0.get("regions", null)
+		if preg0 is PackedInt32Array:
+			var pa0: PackedInt32Array = preg0 as PackedInt32Array
+			for i in range(pa0.size()):
+				var rk0: int = int(pa0[i])
+				_region_state[rk0] = st_name0
+				_region_center[rk0] = ckr0
+	elif not eligible.is_empty():
+		var in_eligible: Dictionary = {}
+		for e in eligible:
+			in_eligible[int(e)] = true
+		var visited: Dictionary = {}
+		for seed_value in eligible:
+			if visited.has(seed_value):
+				continue
+			var cluster: Array[int] = _bfs_cluster(seed_value, in_eligible, visited)
+			cluster.sort()
+			var st: Dictionary = _build_settlement_from_regions(cluster)
+			var base_state: String = str(st.get("state", "recovering"))
+			var raw_state: String = _material_activity_state_override(
+					st, _world, living_pawns, active_jobs, base_state
+			)
+			var center_id: int = int(st.get("center_region", -1))
+			st["state"] = _apply_settlement_state_truth_hysteresis(center_id, raw_state, base_state, st)
+			settlements.append(st)
+			var st_name: String = str(st.get("state", ""))
+			var ckr: int = int(st.get("center_region", -1))
+			var preg: Variant = st.get("regions", null)
+			if preg is PackedInt32Array:
+				var pa: PackedInt32Array = preg as PackedInt32Array
+				for i in range(pa.size()):
+					var rk2: int = int(pa[i])
+					_region_state[rk2] = st_name
+					_region_center[rk2] = ckr
 	settlements.sort_custom(func(a, b) -> bool:
 		var ap: Variant = (a as Dictionary).get("regions", null)
 		var bp: Variant = (b as Dictionary).get("regions", null)
@@ -387,6 +407,36 @@ func _apply_settlement_state_truth_hysteresis(center_id: int, raw_state: String,
 					reason
 			)
 	return committed
+
+
+## When no region yet qualifies for history-scar settlement clustering, still anchor one derived
+## settlement to registered stockpile zones so material colony activity maps [center_region] for jobs/pawns.
+func _bootstrap_cluster_from_stockpile_anchors() -> Array:
+	var seen: Dictionary = {}
+	var out: Array = []
+	var max_keys: int = 512
+	var per_zone_cap: int = 256
+	for z in StockpileManager.zones():
+		if z == null:
+			continue
+		var r: Rect2i = z.rect
+		var scanned: int = 0
+		for y in range(r.position.y, r.position.y + r.size.y):
+			for x in range(r.position.x, r.position.x + r.size.x):
+				scanned += 1
+				if scanned > per_zone_cap:
+					break
+				var rk: int = WorldMemory._region_key(x, y)
+				if not seen.has(rk):
+					seen[rk] = true
+					out.append(rk)
+				if out.size() >= max_keys:
+					out.sort()
+					return out
+			if scanned > per_zone_cap:
+				break
+	out.sort()
+	return out
 
 
 func _stockpile_zone_overlap_metrics(region_set: Dictionary) -> Dictionary:
@@ -1369,6 +1419,8 @@ func _default_resource_pressure() -> Dictionary:
 		"wood": 0.0,
 		"stone": 0.0,
 		"ore_proxy": 0.0,
+		"food": 0.0,
+		"trade": 0.0,
 		"total_relevant_jobs": 0,
 		"source": "job_proxy",
 	}
@@ -1381,6 +1433,10 @@ func _resource_bucket_for_job_type(job_type: int) -> String:
 		return "stone"
 	if job_type == Job.Type.MINE:
 		return "ore_proxy"
+	if job_type == Job.Type.FORAGE or job_type == Job.Type.HUNT:
+		return "food"
+	if job_type == Job.Type.TRADE_HAUL:
+		return "trade"
 	return ""
 
 
@@ -1389,6 +1445,8 @@ func _derive_settlement_resource_pressure(st: Dictionary, active_jobs: Array[Job
 	var wood_count: int = 0
 	var stone_count: int = 0
 	var ore_count: int = 0
+	var food_count: int = 0
+	var trade_count: int = 0
 	var total_relevant: int = 0
 	for j in active_jobs:
 		if j == null:
@@ -1407,6 +1465,10 @@ func _derive_settlement_resource_pressure(st: Dictionary, active_jobs: Array[Job
 				stone_count += 1
 			"ore_proxy":
 				ore_count += 1
+			"food":
+				food_count += 1
+			"trade":
+				trade_count += 1
 	var out: Dictionary = _default_resource_pressure()
 	out["total_relevant_jobs"] = total_relevant
 	if total_relevant <= 0:
@@ -1415,10 +1477,14 @@ func _derive_settlement_resource_pressure(st: Dictionary, active_jobs: Array[Job
 	out["wood"] = clamp(float(wood_count) / denom, 0.0, 1.0)
 	out["stone"] = clamp(float(stone_count) / denom, 0.0, 1.0)
 	out["ore_proxy"] = clamp(float(ore_count) / denom, 0.0, 1.0)
+	out["food"] = clamp(float(food_count) / denom, 0.0, 1.0)
+	out["trade"] = clamp(float(trade_count) / denom, 0.0, 1.0)
 	# Apply saturation damping to reduce circular job-proxy amplification.
 	out["wood"] = minf(float(out.get("wood", 0.0)), RESOURCE_PRESSURE_SATURATION)
 	out["stone"] = minf(float(out.get("stone", 0.0)), RESOURCE_PRESSURE_SATURATION)
 	out["ore_proxy"] = minf(float(out.get("ore_proxy", 0.0)), RESOURCE_PRESSURE_SATURATION)
+	out["food"] = minf(float(out.get("food", 0.0)), RESOURCE_PRESSURE_SATURATION)
+	out["trade"] = minf(float(out.get("trade", 0.0)), RESOURCE_PRESSURE_SATURATION)
 	return out
 
 
@@ -1436,7 +1502,7 @@ func _emit_specialization_validation_log_if_needed(tick: int, settlement_idx: in
 	print(
 			(
 					"[SPECIALIZATION_VALIDATE] tick=%d settlement_idx=%d center_region=%d committed_state=%s "
-					+ "current_intent=%s rp_wood=%.4f rp_stone=%.4f rp_ore_proxy=%.4f rp_total_relevant_jobs=%d "
+					+ "current_intent=%s rp_wood=%.4f rp_stone=%.4f rp_ore_proxy=%.4f rp_food=%.4f rp_trade=%.4f rp_total_relevant_jobs=%d "
 					+ "specialization_phase=%s specialization_channel=%s specialization_candidate_channel=%s "
 					+ "specialization_confidence=%d preferred_front_count=%d note=resource_pressure_job_proxy_not_stock_scarcity"
 			)
@@ -1449,6 +1515,8 @@ func _emit_specialization_validation_log_if_needed(tick: int, settlement_idx: in
 				float(rp.get("wood", 0.0)),
 				float(rp.get("stone", 0.0)),
 				float(rp.get("ore_proxy", 0.0)),
+				float(rp.get("food", 0.0)),
+				float(rp.get("trade", 0.0)),
 				int(rp.get("total_relevant_jobs", 0)),
 				str(st.get("specialization_phase", SPECIALIZATION_PHASE_UNKNOWN)),
 				str(st.get("specialization_channel", "")),
@@ -1483,6 +1551,10 @@ func specialization_work_focus_label(channel: String) -> String:
 			return "Stone work-focus"
 		"ore_proxy":
 			return "Ore work-focus"
+		"food":
+			return "Food work-focus"
+		"trade":
+			return "Trade work-focus"
 		_:
 			return "Unspecialized"
 
@@ -1492,6 +1564,8 @@ func _specialization_sorted_channels(rp: Dictionary) -> Array[Dictionary]:
 		{"k": "wood", "v": float(rp.get("wood", 0.0))},
 		{"k": "stone", "v": float(rp.get("stone", 0.0))},
 		{"k": "ore_proxy", "v": float(rp.get("ore_proxy", 0.0))},
+		{"k": "food", "v": float(rp.get("food", 0.0))},
+		{"k": "trade", "v": float(rp.get("trade", 0.0))},
 	]
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var av: float = float(a.get("v", 0.0))

@@ -145,7 +145,7 @@ func recompute(_world: World) -> void:
 		eligible.append(rk)
 	eligible.sort()
 	if eligible.is_empty():
-		var bootstrap_cluster: Array = _bootstrap_cluster_from_stockpile_anchors()
+		var bootstrap_cluster: Array = _bootstrap_presettlement_cluster(living_pawns)
 		if bootstrap_cluster.is_empty():
 			return
 		var st0: Dictionary = _build_settlement_from_regions(bootstrap_cluster)
@@ -410,8 +410,8 @@ func _apply_settlement_state_truth_hysteresis(center_id: int, raw_state: String,
 
 
 ## When no region yet qualifies for history-scar settlement clustering, still anchor one derived
-## settlement to registered stockpile zones so material colony activity maps [center_region] for jobs/pawns.
-func _bootstrap_cluster_from_stockpile_anchors() -> Array:
+## settlement to registered stockpile zones plus current pawn tiles (starters rarely overlap the seed pile).
+func _bootstrap_presettlement_cluster(living_pawns: Array[Pawn]) -> Array:
 	var seen: Dictionary = {}
 	var out: Array = []
 	var max_keys: int = 512
@@ -426,15 +426,25 @@ func _bootstrap_cluster_from_stockpile_anchors() -> Array:
 				scanned += 1
 				if scanned > per_zone_cap:
 					break
-				var rk: int = WorldMemory._region_key(x, y)
-				if not seen.has(rk):
-					seen[rk] = true
-					out.append(rk)
+				var rk_z: int = WorldMemory._region_key(x, y)
+				if not seen.has(rk_z):
+					seen[rk_z] = true
+					out.append(rk_z)
 				if out.size() >= max_keys:
 					out.sort()
 					return out
 			if scanned > per_zone_cap:
 				break
+	for p in living_pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var rk_p: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		if not seen.has(rk_p):
+			seen[rk_p] = true
+			out.append(rk_p)
+			if out.size() >= max_keys:
+				out.sort()
+				return out
 	out.sort()
 	return out
 

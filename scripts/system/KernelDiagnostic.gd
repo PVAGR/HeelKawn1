@@ -2,7 +2,7 @@ extends Node
 class_name KernelDiagnostic
 
 ## Deterministic Phase 7 one-shot diagnostic gate.
-const DIAGNOSTIC_TICK: int = 30000
+const DIAGNOSTIC_TICK: int = 20000
 const SETTLEMENT_VERIFY_SAMPLE_TICKS: int = 200
 const SETTLEMENT_VERIFY_WINDOWS: int = 10
 
@@ -175,7 +175,7 @@ func generate_session_log_summary() -> String:
 	var wildlife: Dictionary = _wildlife_snapshot()
 	var player: Dictionary = _player_state()
 	var lines: PackedStringArray = []
-	lines.append("TICK: 30000")
+	lines.append("TICK: %d" % DIAGNOSTIC_TICK)
 	lines.append("WorldMemory Events: %d" % WorldMemory.event_count())
 	lines.append("Wildlife: Rabbit=%d Deer=%d Total=%d" % [
 		int(wildlife.get("rabbit", 0)),

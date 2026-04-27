@@ -1,11 +1,10 @@
 ---
-description: Pointer to primary handoff rule
+description: Read docs/HEELKAWN_STATE.md then HEELKAWN.txt at start
 alwaysApply: true
 ---
 
-# HeelKawn handoff pointer
+# HeelKawn handoff read order
 
-Primary rule for this repo:
-- `rules/heelkawn-handoff.mdc`
-
-This `.cursor` copy is a pointer to avoid rule drift.
+- At the start of work in this repository, read in this order:
+	1) docs/HEELKAWN_STATE.md
+	2) HEELKAWN.txt

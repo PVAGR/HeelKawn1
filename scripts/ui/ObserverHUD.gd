@@ -76,16 +76,19 @@ func _validation_harness_hud_line(s: Dictionary) -> String:
 	var warn: String = ""
 	if sess_req and not osdb:
 		warn = " [b][!] session const ON but not a debug run — harness DISARMED[/b]"
-	var line_tpl: String = "[b][HARNESS][/b] OS_debug=%s session_const=%s session_effective=%s | armed: clean_economy=%s settlement_truth_verify=%s specialization_log=%s%s\n"
-	return line_tpl % [
-		"ON" if osdb else "off",
-		"ON" if sess_req else "off",
-		"ON" if sess_eff else "off",
-		"ON" if clean else "off",
-		"ON" if truth else "off",
-		"ON" if spec else "off",
-		warn,
-	]
+	return (
+			"[b][HARNESS][/b] OS_debug=%s session_const=%s session_effective=%s | "
+			+ "armed: clean_economy=%s settlement_truth_verify=%s specialization_log=%s%s\n"
+			% [
+				"ON" if osdb else "off",
+				"ON" if sess_req else "off",
+				"ON" if sess_eff else "off",
+				"ON" if clean else "off",
+				"ON" if truth else "off",
+				"ON" if spec else "off",
+				warn,
+			]
+	)
 
 
 func _world_governance_block(s: Dictionary) -> String:
@@ -141,36 +144,13 @@ func _demo_economy_block(s: Dictionary) -> String:
 			int(round(float(s.get("housing_pressure", 0.0)) * 100.0)),
 			str(s.get("housing_pressure_label", "LOW")),
 		]
-		+ "Resource Pressure: W %.2f | S %.2f | O %.2f\n" % [
+		+ "Resource Pressure: W %.2f | S %.2f | O %.2f | F %.2f | T %.2f\n" % [
 			float(s.get("resource_pressure_wood", 0.0)),
 			float(s.get("resource_pressure_stone", 0.0)),
 			float(s.get("resource_pressure_ore_proxy", 0.0)),
+			float(s.get("resource_pressure_food", 0.0)),
+			float(s.get("resource_pressure_trade", 0.0)),
 		]
-		+ "Resource Truth (stock): F %d | W %d | S %d | O-proxy %d | Total %d (tick=%d center=%d)\n" % [
-			int(s.get("resource_truth_stock_food", 0)),
-			int(s.get("resource_truth_stock_wood", 0)),
-			int(s.get("resource_truth_stock_stone", 0)),
-			int(s.get("resource_truth_stock_ore_proxy", 0)),
-			int(s.get("resource_truth_total_units", 0)),
-			int(s.get("resource_truth_snapshot_tick", -1)),
-			int(s.get("resource_truth_center_region", -1)),
-		]
-		+ "Resource Balance (derived): F %s | W %s | S %s | O-proxy %s (tick=%d center=%d src=%s)\n" % [
-			str(s.get("resource_balance_food", "DEFICIT")),
-			str(s.get("resource_balance_wood", "DEFICIT")),
-			str(s.get("resource_balance_stone", "DEFICIT")),
-			str(s.get("resource_balance_ore_proxy", "DEFICIT")),
-			int(s.get("resource_balance_snapshot_tick", -1)),
-			int(s.get("resource_balance_center_region", -1)),
-			str(s.get("resource_balance_source", "stock_truth_derived_first_pass")),
-		]
-		+ "Resource Balance Audit: %s (tick=%d center=%d)\n" % [
-			str(s.get("resource_balance_audit_result", "n/a")),
-			int(s.get("resource_balance_audit_snapshot_tick", -1)),
-			int(s.get("resource_balance_audit_center_region", -1)),
-		]
-		+ "[i]Balance line is derived from stock truth only; it does not drive behavior.[/i]\n"
-		+ "[i]Specialization above stays proxy/job-pressure based; stock truth is observational only.[/i]\n"
 		+ "Intent: %s" % str(s.get("intent_summary", "n/a"))
 	)
 
@@ -195,5 +175,5 @@ func _conflict_block(s: Dictionary) -> String:
 func _kernel_block(s: Dictionary) -> String:
 	return (
 		"[b]SYSTEM STAMP[/b]\n"
-		+ str(s.get("footer_stamp", "Tick 0 | Day 1 | Determinism Pending"))
+		+ "[font=monospace]%s[/font]" % str(s.get("footer_stamp", "Tick 0 | Day 1 | Determinism Pending"))
 	)

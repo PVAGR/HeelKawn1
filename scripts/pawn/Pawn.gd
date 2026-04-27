@@ -102,9 +102,6 @@ const HUNGER_DECAY_PER_TICK_SLEEPING: float = 0.05
 const BED_WOOD_COST: int = 1
 const WALL_WOOD_COST: int = 2
 const DOOR_WOOD_COST: int = 1
-## Main.gd now owns claim-point divergence logs via JobManager.job_claimed.
-## Keep pawn-local emitter disabled to avoid duplicate/ambiguous lines.
-const PAWN_DIVERGENCE_LOG_ENABLED: bool = false
 
 
 ## Map of build-job type -> (item_type, qty) needed at the build site. Anything
@@ -1246,8 +1243,10 @@ func get_resource_pressure_bias(job: Job) -> float:
 	var wood_p: float = clamp(float(rp.get("wood", 0.0)), 0.0, 1.0)
 	var stone_p: float = clamp(float(rp.get("stone", 0.0)), 0.0, 1.0)
 	var ore_p: float = clamp(float(rp.get("ore_proxy", 0.0)), 0.0, 1.0)
+	var food_p: float = clamp(float(rp.get("food", 0.0)), 0.0, 1.0)
+	var trade_p: float = clamp(float(rp.get("trade", 0.0)), 0.0, 1.0)
 	# Safety guard: if upstream pressure is unexpectedly out of bounds, neutralize.
-	if wood_p > 0.9 or stone_p > 0.9 or ore_p > 0.9:
+	if wood_p > 0.9 or stone_p > 0.9 or ore_p > 0.9 or food_p > 0.9 or trade_p > 0.9:
 		return 1.0
 	var intensity: float = 0.0
 	match int(job.type):
@@ -1257,67 +1256,14 @@ func get_resource_pressure_bias(job: Job) -> float:
 			intensity = stone_p
 		Job.Type.MINE:
 			intensity = ore_p
+		Job.Type.FORAGE, Job.Type.HUNT:
+			intensity = food_p
+		Job.Type.TRADE_HAUL:
+			intensity = trade_p
 		_:
 			return 1.0
 	var scaled: float = 1.0 + (RESOURCE_PRESSURE_BIAS_MAX - 1.0) * intensity
 	return clamp(scaled, 1.0, RESOURCE_PRESSURE_BIAS_MAX)
-
-
-func _specialization_channel_for_job_type(job_type: int) -> String:
-	match int(job_type):
-		Job.Type.CHOP, Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
-			return "wood"
-		Job.Type.MINE_WALL:
-			return "stone"
-		Job.Type.MINE:
-			return "ore_proxy"
-		_:
-			return ""
-
-
-func _emit_pawn_divergence_log_on_job_claim_switch(prev_job: Job, next_job: Job) -> void:
-	if not OS.is_debug_build() or not PAWN_DIVERGENCE_LOG_ENABLED:
-		return
-	if data == null or next_job == null:
-		return
-	var action: String = "claim" if prev_job == null else "switch"
-	var rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
-	var center_region: int = SettlementMemory.get_center_region_for_region(rk)
-	var st_v: Variant = SettlementMemory.get_settlement_at_region(rk)
-	var st: Dictionary = st_v as Dictionary if st_v is Dictionary else {}
-	var spec_phase: String = str(st.get("specialization_phase", SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN))
-	var spec_locked: String = str(st.get("specialization_channel", ""))
-	var spec_candidate: String = str(st.get("specialization_candidate_channel", ""))
-	var intended_channel: String = _specialization_channel_for_job_type(next_job.type)
-	var prev_label: String = "None" if prev_job == null else Job.describe_type(prev_job.type)
-	var next_label: String = Job.describe_type(next_job.type)
-	var alignment: String = "neutral"
-	if intended_channel != "":
-		if spec_phase == SettlementMemory.SPECIALIZATION_PHASE_LOCKED and spec_locked != "":
-			alignment = "aligned" if intended_channel == spec_locked else "divergent"
-		elif spec_phase == SettlementMemory.SPECIALIZATION_PHASE_CANDIDATE and spec_candidate != "":
-			alignment = "aligned" if intended_channel == spec_candidate else "divergent"
-	print(
-			(
-					"[PAWN_DIVERGENCE] tick=%d action=%s pawn_id=%d pawn=%s center_region=%d "
-					+ "spec_phase=%s spec_locked=%s spec_candidate=%s "
-					+ "job_from=%s job_to=%s job_channel=%s alignment=%s"
-			)
-			% [
-				GameManager.tick_count,
-				action,
-				int(data.id),
-				data.display_name,
-				center_region,
-				spec_phase,
-				spec_locked,
-				spec_candidate,
-				prev_label,
-				next_label,
-				intended_channel,
-				alignment,
-			]
-	)
 
 
 func attempt_reproduction() -> bool:
@@ -1540,9 +1486,7 @@ func _apply_work_hazards() -> void:
 # ==================== jobs (FORAGE / MINE) ====================
 
 func _begin_job(job: Job) -> void:
-	var prev_job: Job = _current_job
 	_current_job = job
-	_emit_pawn_divergence_log_on_job_claim_switch(prev_job, job)
 	_invalidate_recruitment_signal_cache()
 	_refresh_recruitment_signal_cache(true)
 	update_cohort_membership(true)

@@ -10,16 +10,18 @@ const REVIVAL_IMPACT_MIN := 5
 const REVIVAL_WINDOW_PERIOD := 400
 const EVALUATE_EVERY_TICKS := 500
 
-var _tick_counter := 0
+
+func _ready() -> void:
+	if not Engine.is_editor_hint():
+		GameManager.game_tick.connect(_on_game_tick)
 
 
-func _process(_delta: float) -> void:
+func _on_game_tick(tick: int) -> void:
 	if Engine.is_editor_hint():
 		return
-	_tick_counter += 1
-	if _tick_counter >= EVALUATE_EVERY_TICKS:
-		_tick_counter = 0
-		evaluate_abandoned_settlements()
+	if int(tick) % EVALUATE_EVERY_TICKS != 0:
+		return
+	evaluate_abandoned_settlements()
 
 
 func evaluate_abandoned_settlements() -> void:

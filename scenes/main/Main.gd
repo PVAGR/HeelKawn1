@@ -93,7 +93,7 @@ const MEANING_AMBIENT_SMOOTH: float = 1.1
 ## draw in WorldTrace._draw — not Main._draw — so they appear above the map).
 const TRACE_REDRAW_INTERVAL_SEC: float = 1.0
 ## Generational turnover (v1): one new pawn per this many ticks if population > 0.
-const GENERATION_TICKS: int = 30000
+const GENERATION_TICKS: int = 20000
 const REPRODUCTION_CHECK_INTERVAL_TICKS: int = 300
 const INFLUENCE_UPDATE_INTERVAL_TICKS: int = 500
 const OBSERVER_HUD_REFRESH_TICKS: int = 30
@@ -151,6 +151,9 @@ var _pawn_divergence_by_center: Dictionary = {}
 var _pawn_divergence_no_spec_by_center: Dictionary = {}
 ## spec_phase -> no_specialization_context skip count
 var _pawn_divergence_no_spec_by_phase: Dictionary = {}
+## settlement context source -> claim count
+var _pawn_divergence_context_source_counts: Dictionary = {}
+const PAWN_DIVERGENCE_PACKET_SCHEMA_VERSION: int = 1
 var _pawn_divergence_first20_scored_lines: PackedStringArray = PackedStringArray()
 ## tick -> true (summary already printed at this checkpoint).
 var _pawn_divergence_summary_emitted_ticks: Dictionary = {}
@@ -381,6 +384,27 @@ func _settlement_by_center_region(center_region: int) -> Dictionary:
 	return {}
 
 
+func _settlement_context_for_claim(
+	effective_center_region: int,
+	job_region: int,
+	pawn_region: int
+) -> Dictionary:
+	var st_center: Dictionary = _settlement_by_center_region(effective_center_region)
+	if not st_center.is_empty():
+		return {"settlement": st_center, "source": "center_region"}
+	var st_job_v: Variant = SettlementMemory.get_settlement_at_region(job_region)
+	if st_job_v is Dictionary:
+		var st_job: Dictionary = st_job_v as Dictionary
+		if int(st_job.get("center_region", -1)) == effective_center_region:
+			return {"settlement": st_job, "source": "job_region_membership"}
+	var st_pawn_v: Variant = SettlementMemory.get_settlement_at_region(pawn_region)
+	if st_pawn_v is Dictionary:
+		var st_pawn: Dictionary = st_pawn_v as Dictionary
+		if int(st_pawn.get("center_region", -1)) == effective_center_region:
+			return {"settlement": st_pawn, "source": "pawn_region_membership"}
+	return {"settlement": {}, "source": "none"}
+
+
 func _has_any_valid_settlement_center() -> bool:
 	for st_any in SettlementMemory.settlements:
 		if not (st_any is Dictionary):
@@ -389,6 +413,29 @@ func _has_any_valid_settlement_center() -> bool:
 		if c >= 0:
 			return true
 	return false
+
+
+func _build_pawn_divergence_center_fingerprint() -> String:
+	var centers: Array = _pawn_divergence_by_center.keys()
+	centers.sort()
+	var center_digest_parts: PackedStringArray = PackedStringArray()
+	for c_any in centers:
+		var c: int = int(c_any)
+		var row: Dictionary = _pawn_divergence_by_center.get(c, {})
+		center_digest_parts.append(
+			"%d:%d,%d,%d,%d"
+			% [
+				c,
+				int(row.get("scored", 0)),
+				int(row.get("aligned", 0)),
+				int(row.get("divergent", 0)),
+				int(row.get("neutral", 0)),
+			]
+		)
+	var center_fingerprint: String = ";".join(center_digest_parts)
+	if center_fingerprint == "":
+		center_fingerprint = "none"
+	return center_fingerprint
 
 
 func _center_region_from_fast_map(region_key: int) -> int:
@@ -525,7 +572,27 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 		_pawn_divergence_native_bound_events += 1
 	else:
 		_pawn_divergence_fallback_bound_events += 1
-	var st: Dictionary = _settlement_by_center_region(effective_center_region)
+	var st_ctx: Dictionary = _settlement_context_for_claim(
+		effective_center_region,
+		job_region,
+		pawn_region
+	)
+	var st_source: String = str(st_ctx.get("source", "none"))
+	_pawn_divergence_context_source_counts[st_source] = int(
+		_pawn_divergence_context_source_counts.get(st_source, 0)
+	) + 1
+	var st: Dictionary = st_ctx.get("settlement", {}) as Dictionary
+	if st_source != "center_region":
+		print(
+			"[PAWN_DIVERGENCE_CONTEXT_TRACE] tick=%d action=claim context_source=%s center_region=%d pawn_region=%d job_region=%d"
+			% [
+				GameManager.tick_count,
+				st_source,
+				effective_center_region,
+				pawn_region,
+				job_region,
+			]
+		)
 	var spec_phase: String = str(st.get("specialization_phase", SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN))
 	var spec_locked: String = str(st.get("specialization_channel", ""))
 	var spec_candidate: String = str(st.get("specialization_candidate_channel", ""))
@@ -541,9 +608,11 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 		var committed_state: String = str(st.get("state", ""))
 		var current_intent: String = str(st.get("current_intent", ""))
 		var skip_line_no_spec: String = (
-			"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_specialization_context pawn_id=%d pawn=%s "
-			+ "pawn_center_region=%d job_center_region=%d center_region=%d spec_phase=%s "
-			+ "settlement_found=%s committed_state=%s current_intent=%s spec_locked=%s spec_candidate=%s"
+			(
+				"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_specialization_context pawn_id=%d pawn=%s "
+				+ "pawn_center_region=%d job_center_region=%d center_region=%d spec_phase=%s "
+				+ "settlement_found=%s committed_state=%s current_intent=%s spec_locked=%s spec_candidate=%s"
+			)
 			% [
 				GameManager.tick_count,
 				int(pawn.data.id),
@@ -630,12 +699,15 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 			return
 		_pawn_divergence_exit_summary_emitted = true
 	else:
-		if tick != 30000 and tick != 60000:
+		if tick != 20000 and tick != 40000:
 			return
 		if _pawn_divergence_summary_emitted_ticks.has(tick):
 			return
 		_pawn_divergence_summary_emitted_ticks[tick] = true
+	var emit_reason: String = "exit_tree" if force_exit else ("tick_%d" % tick)
 	print("[PAWN_DIVERGENCE_SUMMARY]")
+	print("[PAWN_DIVERGENCE_SCHEMA] packet_schema_version=%d" % PAWN_DIVERGENCE_PACKET_SCHEMA_VERSION)
+	print("[PAWN_DIVERGENCE_EMIT] tick=%d reason=%s" % [tick, emit_reason])
 	print("tick=%d" % tick)
 	print("total_claim_events_seen=%d" % _pawn_divergence_total_claim_events_seen)
 	print("scored_events=%d" % _pawn_divergence_scored_events)
@@ -649,16 +721,330 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 	print("fallback_bound_events=%d" % _pawn_divergence_fallback_bound_events)
 	print("first_scored_center_region=%d" % _pawn_divergence_first_scored_center_region)
 	print("scored_events_present=%s" % ("true" if _pawn_divergence_scored_events > 0 else "false"))
+	var context_sources: Array = _pawn_divergence_context_source_counts.keys()
+	context_sources.sort()
+	for source_any in context_sources:
+		var source: String = str(source_any)
+		print(
+			"[PAWN_DIVERGENCE_CONTEXT_SUMMARY] source=%s claims=%d"
+			% [source, int(_pawn_divergence_context_source_counts.get(source, 0))]
+		)
+	var ctx_total: int = 0
+	var ctx_none: int = 0
+	var ctx_center_region: int = 0
+	var ctx_job_region_membership: int = 0
+	var ctx_pawn_region_membership: int = 0
+	var ctx_unknown: int = 0
+	for source_any in context_sources:
+		var source_name: String = str(source_any)
+		var source_count: int = int(_pawn_divergence_context_source_counts.get(source_name, 0))
+		ctx_total += source_count
+		if source_name == "none":
+			ctx_none += source_count
+		elif source_name == "center_region":
+			ctx_center_region += source_count
+		elif source_name == "job_region_membership":
+			ctx_job_region_membership += source_count
+		elif source_name == "pawn_region_membership":
+			ctx_pawn_region_membership += source_count
+		else:
+			ctx_unknown += source_count
+	var native_bound_total: int = _pawn_divergence_native_bound_events
+	var fallback_bound_total: int = _pawn_divergence_fallback_bound_events
+	var bind_total: int = native_bound_total + fallback_bound_total
+	var native_rate: float = 0.0
+	var fallback_rate: float = 0.0
+	if bind_total > 0:
+		native_rate = float(native_bound_total) / float(bind_total)
+		fallback_rate = float(fallback_bound_total) / float(bind_total)
+	var ctx_center_rate: float = 0.0
+	var ctx_job_rate: float = 0.0
+	var ctx_pawn_rate: float = 0.0
+	var ctx_none_rate: float = 0.0
+	if ctx_total > 0:
+		ctx_center_rate = float(ctx_center_region) / float(ctx_total)
+		ctx_job_rate = float(ctx_job_region_membership) / float(ctx_total)
+		ctx_pawn_rate = float(ctx_pawn_region_membership) / float(ctx_total)
+		ctx_none_rate = float(ctx_none) / float(ctx_total)
+	print(
+		(
+			"[PAWN_DIVERGENCE_BINDING_MIX] tick=%d native=%d fallback=%d native_rate=%.3f fallback_rate=%.3f "
+			+ "ctx_center_rate=%.3f ctx_job_rate=%.3f ctx_pawn_rate=%.3f ctx_none_rate=%.3f ctx_unknown=%d"
+		)
+		% [
+			tick,
+			native_bound_total,
+			fallback_bound_total,
+			native_rate,
+			fallback_rate,
+			ctx_center_rate,
+			ctx_job_rate,
+			ctx_pawn_rate,
+			ctx_none_rate,
+			ctx_unknown,
+		]
+	)
 	var scored_present: bool = _pawn_divergence_scored_events > 0
 	var any_bound: bool = (_pawn_divergence_native_bound_events + _pawn_divergence_fallback_bound_events) > 0
+	var no_spec_rate: float = 0.0
+	if _pawn_divergence_total_claim_events_seen > 0:
+		no_spec_rate = float(_pawn_divergence_skip_no_specialization_context) / float(
+			_pawn_divergence_total_claim_events_seen
+		)
+	var fallback_dominant: bool = bind_total > 0 and fallback_rate >= 0.5
+	var context_none_present: bool = ctx_none > 0
+	var high_no_spec_rate: bool = no_spec_rate >= 0.5
+	var pre_settlement_only: bool = (
+		_pawn_divergence_skip_pre_settlement_context > 0
+		and _pawn_divergence_scored_events == 0
+		and _pawn_divergence_skip_no_bound_center == 0
+	)
+	print(
+		(
+			"[PAWN_DIVERGENCE_ALERTS] tick=%d fallback_dominant=%s context_none_present=%s "
+			+ "high_no_spec_rate=%s pre_settlement_only=%s"
+		)
+		% [
+			tick,
+			"true" if fallback_dominant else "false",
+			"true" if context_none_present else "false",
+			"true" if high_no_spec_rate else "false",
+			"true" if pre_settlement_only else "false",
+		]
+	)
+	var next_action: String = "none"
+	var next_action_detail: String = "healthy_or_observe"
+	if pre_settlement_only:
+		next_action = "observe_until_settlement_forms"
+		next_action_detail = "claims_precede_valid_settlement_context"
+	elif not scored_present and any_bound:
+		next_action = "inspect_specialization_context"
+		next_action_detail = "bound_claims_exist_but_not_scored"
+	elif not scored_present:
+		next_action = "inspect_claim_time_binding_path"
+		next_action_detail = "no_scored_events_and_no_stable_bound_path"
+	elif high_no_spec_rate:
+		next_action = "audit_specialization_population_path"
+		next_action_detail = "high_no_specialization_context_rate"
+	elif context_none_present:
+		next_action = "audit_context_resolution_chain"
+		next_action_detail = "context_source_none_detected"
+	elif fallback_dominant:
+		next_action = "stabilize_fast_map_coverage"
+		next_action_detail = "fallback_path_is_dominant"
+	print(
+		"[PAWN_DIVERGENCE_NEXT_ACTION] tick=%d action=%s detail=%s"
+		% [tick, next_action, next_action_detail]
+	)
+	var binding_quality: String = "FAIL"
+	var binding_reason: String = "no_bound_or_scored_events"
+	if scored_present:
+		binding_quality = "PASS"
+		binding_reason = "scored_events_present"
+		if high_no_spec_rate:
+			binding_quality = "WARN"
+			binding_reason = "high_no_specialization_rate"
+		elif context_none_present:
+			binding_quality = "WARN"
+			binding_reason = "context_resolution_gaps"
+	print(
+		(
+			"[PAWN_DIVERGENCE_BINDING_QUALITY] tick=%d result=%s reason=%s "
+			+ "ctx_none=%d ctx_total=%d no_spec_rate=%.3f scored_events=%d"
+		)
+		% [
+			tick,
+			binding_quality,
+			binding_reason,
+			ctx_none,
+			ctx_total,
+			no_spec_rate,
+			_pawn_divergence_scored_events,
+		]
+	)
+	var scored_bucket_sum: int = (
+		_pawn_divergence_aligned_total + _pawn_divergence_divergent_total + _pawn_divergence_neutral_total
+	)
+	var skip_bucket_sum: int = (
+		_pawn_divergence_skip_pre_settlement_context
+		+ _pawn_divergence_skip_no_bound_center
+		+ _pawn_divergence_skip_no_specialization_context
+	)
+	var center_scored_sum: int = 0
+	for row_any in _pawn_divergence_by_center.values():
+		var row: Dictionary = row_any as Dictionary
+		center_scored_sum += int(row.get("scored", 0))
+	var claim_resolution_total: int = _pawn_divergence_scored_events + skip_bucket_sum
+	var invariant_ok: bool = true
+	var invariant_reason: String = "ok"
+	if scored_bucket_sum != _pawn_divergence_scored_events:
+		invariant_ok = false
+		invariant_reason = "scored_bucket_mismatch"
+	elif center_scored_sum != _pawn_divergence_scored_events:
+		invariant_ok = false
+		invariant_reason = "center_scored_mismatch"
+	elif claim_resolution_total != _pawn_divergence_total_claim_events_seen:
+		invariant_ok = false
+		invariant_reason = "claim_resolution_mismatch"
+	print(
+		(
+			"[PAWN_DIVERGENCE_INVARIANT] tick=%d pass=%s reason=%s total_claims=%d resolved_claims=%d "
+			+ "scored=%d scored_bucket_sum=%d center_scored_sum=%d skip_bucket_sum=%d"
+		)
+		% [
+			tick,
+			"true" if invariant_ok else "false",
+			invariant_reason,
+			_pawn_divergence_total_claim_events_seen,
+			claim_resolution_total,
+			_pawn_divergence_scored_events,
+			scored_bucket_sum,
+			center_scored_sum,
+			skip_bucket_sum,
+		]
+	)
+	var fingerprint: String = (
+		"t=%d|tc=%d|sc=%d|al=%d|dv=%d|nt=%d|sp=%d|nb=%d|ns=%d|bn=%d|bf=%d|cn=%d|ct=%d|q=%s|r=%s|a=%s|inv=%s"
+		% [
+			tick,
+			_pawn_divergence_total_claim_events_seen,
+			_pawn_divergence_scored_events,
+			_pawn_divergence_aligned_total,
+			_pawn_divergence_divergent_total,
+			_pawn_divergence_neutral_total,
+			_pawn_divergence_skip_pre_settlement_context,
+			_pawn_divergence_skip_no_bound_center,
+			_pawn_divergence_skip_no_specialization_context,
+			native_bound_total,
+			fallback_bound_total,
+			ctx_none,
+			ctx_total,
+			binding_quality,
+			binding_reason,
+			next_action,
+			"1" if invariant_ok else "0",
+		]
+	)
+	print("[PAWN_DIVERGENCE_FINGERPRINT] %s" % fingerprint)
+	var gate_scored_present: bool = _pawn_divergence_scored_events > 0
+	var gate_has_any_bound: bool = (_pawn_divergence_native_bound_events + _pawn_divergence_fallback_bound_events) > 0
+	var gate_no_bound_center_zero: bool = _pawn_divergence_skip_no_bound_center == 0
+	var gate_invariant_ok: bool = invariant_ok
+	var gates_pass: bool = (
+		gate_scored_present
+		and gate_has_any_bound
+		and gate_no_bound_center_zero
+		and gate_invariant_ok
+	)
+	print(
+		(
+			"[PAWN_DIVERGENCE_GATES] tick=%d pass=%s scored_present=%s has_any_bound=%s "
+			+ "no_bound_center_zero=%s invariant_ok=%s"
+		)
+		% [
+			tick,
+			"true" if gates_pass else "false",
+			"true" if gate_scored_present else "false",
+			"true" if gate_has_any_bound else "false",
+			"true" if gate_no_bound_center_zero else "false",
+			"true" if gate_invariant_ok else "false",
+		]
+	)
+	var go_no_go: String = "BLOCK"
+	var go_reason: String = "gates_failed"
+	if gates_pass:
+		go_no_go = "GO"
+		go_reason = "core_gates_passed"
+		if fallback_dominant or context_none_present or high_no_spec_rate:
+			go_no_go = "HOLD"
+			go_reason = "quality_alerts_present"
+	elif pre_settlement_only:
+		go_no_go = "HOLD"
+		go_reason = "pre_settlement_only"
+	print(
+		"[PAWN_DIVERGENCE_GO_NO_GO] tick=%d decision=%s reason=%s"
+		% [tick, go_no_go, go_reason]
+	)
+	var packet_center_fingerprint: String = _build_pawn_divergence_center_fingerprint()
+	var packet_basis: String = (
+		"s=%d|t=%d|er=%s|d=%s|dr=%s|q=%s|qr=%s|gp=%s|fd=%s|cn=%s|hn=%s|ps=%s|fp=%s|cfp=%s"
+		% [
+			PAWN_DIVERGENCE_PACKET_SCHEMA_VERSION,
+			tick,
+			emit_reason,
+			go_no_go,
+			go_reason,
+			binding_quality,
+			binding_reason,
+			"1" if gates_pass else "0",
+			"1" if fallback_dominant else "0",
+			"1" if context_none_present else "0",
+			"1" if high_no_spec_rate else "0",
+			"1" if pre_settlement_only else "0",
+			fingerprint,
+			packet_center_fingerprint,
+		]
+	)
+	var packet_id: int = packet_basis.hash()
+	print(
+		(
+			"[PAWN_DIVERGENCE_PACKET] schema=%d tick=%d emit_reason=%s packet_id=%d decision=%s decision_reason=%s quality=%s quality_reason=%s "
+			+ "gates_pass=%s alerts=fallback_dominant:%s,context_none_present:%s,high_no_spec_rate:%s,pre_settlement_only:%s "
+			+ "fingerprint=%s center_fingerprint=%s"
+		)
+		% [
+			PAWN_DIVERGENCE_PACKET_SCHEMA_VERSION,
+			tick,
+			emit_reason,
+			packet_id,
+			go_no_go,
+			go_reason,
+			binding_quality,
+			binding_reason,
+			"true" if gates_pass else "false",
+			"true" if fallback_dominant else "false",
+			"true" if context_none_present else "false",
+			"true" if high_no_spec_rate else "false",
+			"true" if pre_settlement_only else "false",
+			fingerprint,
+			packet_center_fingerprint,
+		]
+	)
+	print(
+		(
+			"[PAWN_DIVERGENCE_STATE] tick=%d total_claims=%d scored=%d aligned=%d divergent=%d neutral=%d "
+			+ "pre_settlement_skips=%d no_bound_skips=%d no_spec_skips=%d native_bound=%d fallback_bound=%d "
+			+ "ctx_total=%d ctx_none=%d quality=%s quality_reason=%s next_action=%s"
+		)
+		% [
+			tick,
+			_pawn_divergence_total_claim_events_seen,
+			_pawn_divergence_scored_events,
+			_pawn_divergence_aligned_total,
+			_pawn_divergence_divergent_total,
+			_pawn_divergence_neutral_total,
+			_pawn_divergence_skip_pre_settlement_context,
+			_pawn_divergence_skip_no_bound_center,
+			_pawn_divergence_skip_no_specialization_context,
+			native_bound_total,
+			fallback_bound_total,
+			ctx_total,
+			ctx_none,
+			binding_quality,
+			binding_reason,
+			next_action,
+		]
+	)
 	var health: String = "FAIL"
 	if scored_present:
 		health = "PASS"
 	elif any_bound:
 		health = "WARN"
 	print(
-		"[PAWN_DIVERGENCE_HEALTH] tick=%d result=%s any_bound=%s scored_events_present=%s "
-		+ "pre_settlement_skips=%d no_bound_center_skips=%d no_spec_skips=%d"
+		(
+			"[PAWN_DIVERGENCE_HEALTH] tick=%d result=%s any_bound=%s scored_events_present=%s "
+			+ "pre_settlement_skips=%d no_bound_center_skips=%d no_spec_skips=%d"
+		)
 		% [
 			tick,
 			health,
@@ -700,6 +1086,27 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 				int(row.get("neutral", 0)),
 			]
 		)
+	var center_digest_parts: PackedStringArray = PackedStringArray()
+	for c_any in centers:
+		var c: int = int(c_any)
+		var row: Dictionary = _pawn_divergence_by_center.get(c, {})
+		center_digest_parts.append(
+			"%d:%d,%d,%d,%d"
+			% [
+				c,
+				int(row.get("scored", 0)),
+				int(row.get("aligned", 0)),
+				int(row.get("divergent", 0)),
+				int(row.get("neutral", 0)),
+			]
+		)
+	var center_fingerprint: String = ";".join(center_digest_parts)
+	if center_fingerprint == "":
+		center_fingerprint = "none"
+	print(
+		"[PAWN_DIVERGENCE_CENTER_FINGERPRINT] tick=%d centers=%d digest=%s"
+		% [tick, centers.size(), center_fingerprint]
+	)
 	print("[PAWN_DIVERGENCE_FIRST20_BEGIN]")
 	for line in _pawn_divergence_first20_scored_lines:
 		print(str(line))
@@ -1354,6 +1761,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			GameManager.set_speed_index(4)
 		KEY_6:
 			GameManager.set_speed_index(5)
+		KEY_7:
+			GameManager.set_speed_index(6)
 		KEY_R:
 			_reroll_world()
 		KEY_T:
@@ -2144,6 +2553,9 @@ func _blueprint_feature_for_mode() -> int:
 
 func _reroll_world() -> void:
 	JobManager.clear_all()
+	SettlementRegistry.clear()
+	FragmentationManager.clear()
+	SchismManager.clear()
 	WorldMemory.clear()
 	MythMemory.clear()
 	SacredMemory.clear()
@@ -2856,6 +3268,7 @@ func _build_save_dict() -> Dictionary:
 		"regrow": _save_regrow_queue(),
 		"zone_filter": _zone_next_filter,
 		"world_memory": WorldMemory.to_save_dict(),
+		"settlement_registry": SettlementRegistry.to_save_dict(),
 		"world_persistence": WorldPersistence.to_save_dict(),
 		"myth": MythMemory.to_save_dict(),
 		"sacred": SacredMemory.to_save_dict(),
@@ -2922,6 +3335,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 	_last_generation_tick = int(s.get("last_generation_tick", loaded_tick))
 	_zone_next_filter = int(s.get("zone_filter", 0))
 	WorldMemory.from_save_dict(s.get("world_memory", {}))
+	SettlementRegistry.from_save_dict(s.get("settlement_registry", {}))
 	MythMemory.from_save_dict(s.get("myth", {}))
 	SacredMemory.from_save_dict(s.get("sacred", {}))
 	ChronicleLog.from_save_dict(s.get("chronicle", {}))

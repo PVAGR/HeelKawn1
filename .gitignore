@@ -19,7 +19,11 @@ Thumbs.db
 export/
 *.pck
 *.zip
-.vscode/
+.vscode/*
+!.vscode/settings.json
 
 # Local addon secrets
 addons/godotassistant/config.cfg
+
+# Portable Godot (see tools/Download-GodotPortable.ps1); do not commit engine binaries.
+/tools/godot/*.exe

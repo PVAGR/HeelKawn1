@@ -22,7 +22,7 @@ const FONT_SIZE_HOTKEYS: int = 9
 const PANEL_PAD_X: int = 6
 const PANEL_PAD_Y: int = 4
 
-const HOTKEY_HINTS: String = "SPACE pause · 1-4 speed · F5 save · F8 load · M labor stance · R reroll · T pawns · J jobs · I stockpile · B beds · W walls · O doors · Z zone · F filter · Esc cancel"
+const HOTKEY_HINTS: String = "SPACE pause · 1-7 speed · F5 save · F8 load · M labor stance · R reroll · T pawns · J jobs · I stockpile · B beds · W walls · O doors · Z zone · F filter · Esc cancel"
 
 @onready var _panel: PanelContainer = $Panel
 @onready var _label: RichTextLabel = $Panel/Margin/VBox/Body
@@ -415,12 +415,13 @@ func _skill_line() -> String:
 
 func _export_status_line() -> String:
 	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var milestone: int = Main.GENERATION_TICKS
 	if main_node == null:
-		return "📜 Export: Ready at Tick 30000 | Status: Waiting"
+		return "📜 Export: Ready at Tick %d | Status: Waiting" % milestone
 	var status: String = "Complete" if main_node.is_kernel_diagnostic_complete() else "Waiting"
-	if GameManager.tick_count >= 30000:
-		return "📜 Export: Ready at Tick 30000 | Status: %s" % status
-	return "📜 Export: Ready at Tick 30000 | Status: Waiting"
+	if GameManager.tick_count >= milestone:
+		return "📜 Export: Ready at Tick %d | Status: %s" % [milestone, status]
+	return "📜 Export: Ready at Tick %d | Status: Waiting" % milestone
 
 
 func _kill_line() -> String:

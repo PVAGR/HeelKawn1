@@ -1,5 +1,4 @@
 extends Node
-signal phase8_proof_bundle_emitted(bundle_line: String)
 ## v1: Settlement identity — 4-adjacent clusters of scarred, historically
 ## active regions. Derived only; read WorldMeaning, WorldPersistence, CulturalMemory.
 ## Does not keep references to [World] ([recompute] takes it for API symmetry with peers).
@@ -37,19 +36,6 @@ const MIN_FRONT_SUPPORT: int = 1
 const FRONT_SUPPORT_CHECK_RADIUS_TILES: int = 8
 const RESOURCE_PRESSURE_UPDATE_INTERVAL_TICKS: int = 500
 const RESOURCE_PRESSURE_SATURATION: float = 0.75
-const RESOURCE_TRUTH_UPDATE_INTERVAL_TICKS: int = RESOURCE_PRESSURE_UPDATE_INTERVAL_TICKS
-## Phase 8.2 first-pass observational stock bands (derived cache only).
-## These thresholds are fixed for auditability and do not feed behavior logic.
-const RESOURCE_BALANCE_FOOD_DEFICIT_MAX: int = 0
-const RESOURCE_BALANCE_FOOD_LOW_MAX: int = 8
-const RESOURCE_BALANCE_FOOD_STOCKED_MAX: int = 24
-const RESOURCE_BALANCE_MATERIAL_DEFICIT_MAX: int = 0
-const RESOURCE_BALANCE_MATERIAL_LOW_MAX: int = 6
-const RESOURCE_BALANCE_MATERIAL_STOCKED_MAX: int = 18
-const PHASE8_PROOF_RUNNER_AUTO_ENABLED: bool = true
-const PHASE8_PROOF_RUNNER_MAX_WAIT_TICKS: int = 30000
-## Debug-only: freeze simulation when terminal proof PASS/FAIL/INCONCLUSIVE is emitted so the result stays on-screen.
-const PHASE8_PROOF_PAUSE_ON_TERMINAL_RESULT: bool = true
 ## Work-focus specialization identity is derived ONLY from cached [resource_pressure]
 ## (job-demand proxy). It is NOT true stock scarcity; read-only for HUD/diagnostics.
 const SPECIALIZATION_PHASE_UNKNOWN: String = "UNKNOWN"
@@ -74,9 +60,9 @@ const STATE_TRUTH_HYSTERESIS_INTERVAL_TICKS: int = 2000
 const STATE_TRUTH_HYSTERESIS_COMMIT_TICKS: int = 4000
 ## --- Validation harness (debug builds): controlled lab sessions ---
 ## Console marker proving this binary includes the smoketest wiring; bump when observability changes.
-const VALIDATION_RUNTIME_SMOKE_MARKER: String = "PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r1"
+const VALIDATION_RUNTIME_SMOKE_MARKER: String = "PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp"
 ## One switch: suppresses economy-distorting world events (see WorldEvents), enables settlement-truth verify logs, enables coarse specialization validation logs.
-const VALIDATION_SESSION_ENABLED: bool = true
+const VALIDATION_SESSION_ENABLED: bool = false
 ## Piecemeal: settlement truth [SETTLEMENT_VERIFY] without full session (still requires debug build).
 const SETTLEMENT_STATE_TRUTH_VERIFY_MODE: bool = false
 ## Piecemeal: [SPECIALIZATION_VALIDATE] on resource-pressure cadence only (still requires debug build).
@@ -99,64 +85,10 @@ var _war_command_announced: Dictionary = {}
 var _war_battle_spawned: Dictionary = {}
 var _validation_smoketest_autoload_printed: bool = false
 var _validation_smoketest_main_printed: bool = false
-var _phase8_proof_latest_bundle_line: String = ""
-var _phase8_proof_preferred_center_region: int = -1
-var _phase8_proof_last_clipboard_line: String = ""
-var _phase8_proof_clipboard_unavailable_logged: bool = false
-## Throttle bundle→clipboard mirrors: avoids repeated OS clipboard errors when clipboard is locked/unreachable.
-var _phase8_proof_last_bundle_clipboard_attempt_tick: int = -5000
-var _phase8_proof_runner_state: String = "idle"
-var _phase8_proof_runner_done: bool = false
-var _phase8_proof_runner_target_center_region: int = -1
-var _phase8_proof_runner_next_tick: int = -1
-var _phase8_proof_runner_baseline: Dictionary = {}
-var _phase8_proof_runner_post_overlap: Dictionary = {}
-var _phase8_proof_runner_post_real_change: Dictionary = {}
-var _phase8_proof_runner_primary_zone: Stockpile = null
-var _phase8_proof_runner_probe_zone: Stockpile = null
-var _phase8_proof_runner_primary_zone_inventory_baseline: Dictionary = {}
-var _phase8_proof_runner_last_skip_reason: String = ""
-var _phase8_proof_runner_started_tick: int = -1
-var _phase8_proof_runner_armed_once: bool = false
-var _phase8_proof_run_id: String = ""
-var _phase8_proof_terminal_summary_emitted: bool = false
-## Final terminal summary line for this run; freezes bundle heartbeat once set (debug UX).
-var _phase8_proof_terminal_line: String = ""
 
 
 func _ready() -> void:
-	_phase8_proof_reset_session_state()
 	_print_validation_smoketest("SettlementMemory.autoload")
-
-
-func _phase8_proof_reset_session_state() -> void:
-	if not OS.is_debug_build():
-		return
-	var tree: SceneTree = get_tree()
-	if tree != null and tree.paused:
-		tree.paused = false
-	_phase8_proof_latest_bundle_line = ""
-	_phase8_proof_preferred_center_region = -1
-	_phase8_proof_last_clipboard_line = ""
-	_phase8_proof_clipboard_unavailable_logged = false
-	_phase8_proof_last_bundle_clipboard_attempt_tick = -5000
-	_phase8_proof_runner_state = "idle"
-	_phase8_proof_runner_done = false
-	_phase8_proof_runner_target_center_region = -1
-	_phase8_proof_runner_next_tick = -1
-	_phase8_proof_runner_baseline = {}
-	_phase8_proof_runner_post_overlap = {}
-	_phase8_proof_runner_post_real_change = {}
-	_phase8_proof_runner_primary_zone = null
-	_phase8_proof_runner_probe_zone = null
-	_phase8_proof_runner_primary_zone_inventory_baseline = {}
-	_phase8_proof_runner_last_skip_reason = ""
-	_phase8_proof_runner_started_tick = -1
-	_phase8_proof_runner_armed_once = false
-	_phase8_proof_terminal_summary_emitted = false
-	_phase8_proof_terminal_line = ""
-	_phase8_proof_run_id = "run_%d_%d" % [Time.get_unix_time_from_system(), Time.get_ticks_msec()]
-	print("[PHASE8_PROOF_SESSION] run_id=%s status=reset" % _phase8_proof_run_id)
 
 
 func _print_validation_smoketest(source: String) -> void:
@@ -170,8 +102,6 @@ func _print_validation_smoketest(source: String) -> void:
 		_validation_smoketest_autoload_printed = true
 	var dbg: bool = OS.is_debug_build()
 	var session_const: bool = VALIDATION_SESSION_ENABLED
-	var project_root: String = ProjectSettings.globalize_path("res://")
-	var settlement_memory_path: String = ProjectSettings.globalize_path("res://autoloads/SettlementMemory.gd")
 	var clean_active: bool = WorldEvents.validation_clean_economy_events_active()
 	var truth_active: bool = validation_truth_verify_armed()
 	var spec_active: bool = validation_specialization_log_armed()
@@ -190,25 +120,6 @@ func _print_validation_smoketest(source: String) -> void:
 				spec_active,
 			]
 	)
-	print(
-			"[CANONICAL_RUNTIME_PROOF] project_root=%s settlement_memory_path=%s validation_const=%s clean=%s truth=%s specialization=%s"
-			% [
-				project_root,
-				settlement_memory_path,
-				session_const,
-				clean_active,
-				truth_active,
-				spec_active,
-			]
-	)
-	if dbg:
-		var canonical_root_hint: String = "C:/Users/user/Documents/GitHub/HeelKawn1"
-		var root_norm: String = project_root.replace("\\", "/")
-		if not root_norm.contains(canonical_root_hint):
-			print(
-					"[CANONICAL_ROOT_MISMATCH] EXPECTED_CONTAINS=%s ACTUAL_PROJECT_ROOT=%s ACTUAL_SETTLEMENT_MEMORY=%s"
-					% [canonical_root_hint, project_root, settlement_memory_path]
-			)
 
 
 func print_validation_smoketest_from_main() -> void:
@@ -234,33 +145,53 @@ func recompute(_world: World) -> void:
 		eligible.append(rk)
 	eligible.sort()
 	if eligible.is_empty():
-		return
-	var in_eligible: Dictionary = {}
-	for e in eligible:
-		in_eligible[int(e)] = true
-	var visited: Dictionary = {}
-	for seed_value in eligible:
-		if visited.has(seed_value):
-			continue
-		var cluster: Array[int] = _bfs_cluster(seed_value, in_eligible, visited)
-		cluster.sort()
-		var st: Dictionary = _build_settlement_from_regions(cluster)
-		var base_state: String = str(st.get("state", "recovering"))
-		var raw_state: String = _material_activity_state_override(
-				st, _world, living_pawns, active_jobs, base_state
+		var bootstrap_cluster: Array = _bootstrap_presettlement_cluster(living_pawns)
+		if bootstrap_cluster.is_empty():
+			return
+		var st0: Dictionary = _build_settlement_from_regions(bootstrap_cluster)
+		var base_state0: String = str(st0.get("state", "recovering"))
+		var raw_state0: String = _material_activity_state_override(
+				st0, _world, living_pawns, active_jobs, base_state0
 		)
-		var center_id: int = int(st.get("center_region", -1))
-		st["state"] = _apply_settlement_state_truth_hysteresis(center_id, raw_state, base_state, st)
-		settlements.append(st)
-		var st_name: String = str(st.get("state", ""))
-		var ckr: int = int(st.get("center_region", -1))
-		var preg: Variant = st.get("regions", null)
-		if preg is PackedInt32Array:
-			var pa: PackedInt32Array = preg as PackedInt32Array
-			for i in range(pa.size()):
-				var rk2: int = int(pa[i])
-				_region_state[rk2] = st_name
-				_region_center[rk2] = ckr
+		var center_id0: int = int(st0.get("center_region", -1))
+		st0["state"] = _apply_settlement_state_truth_hysteresis(center_id0, raw_state0, base_state0, st0)
+		settlements.append(st0)
+		var st_name0: String = str(st0.get("state", ""))
+		var ckr0: int = int(st0.get("center_region", -1))
+		var preg0: Variant = st0.get("regions", null)
+		if preg0 is PackedInt32Array:
+			var pa0: PackedInt32Array = preg0 as PackedInt32Array
+			for i in range(pa0.size()):
+				var rk0: int = int(pa0[i])
+				_region_state[rk0] = st_name0
+				_region_center[rk0] = ckr0
+	elif not eligible.is_empty():
+		var in_eligible: Dictionary = {}
+		for e in eligible:
+			in_eligible[int(e)] = true
+		var visited: Dictionary = {}
+		for seed_value in eligible:
+			if visited.has(seed_value):
+				continue
+			var cluster: Array[int] = _bfs_cluster(seed_value, in_eligible, visited)
+			cluster.sort()
+			var st: Dictionary = _build_settlement_from_regions(cluster)
+			var base_state: String = str(st.get("state", "recovering"))
+			var raw_state: String = _material_activity_state_override(
+					st, _world, living_pawns, active_jobs, base_state
+			)
+			var center_id: int = int(st.get("center_region", -1))
+			st["state"] = _apply_settlement_state_truth_hysteresis(center_id, raw_state, base_state, st)
+			settlements.append(st)
+			var st_name: String = str(st.get("state", ""))
+			var ckr: int = int(st.get("center_region", -1))
+			var preg: Variant = st.get("regions", null)
+			if preg is PackedInt32Array:
+				var pa: PackedInt32Array = preg as PackedInt32Array
+				for i in range(pa.size()):
+					var rk2: int = int(pa[i])
+					_region_state[rk2] = st_name
+					_region_center[rk2] = ckr
 	settlements.sort_custom(func(a, b) -> bool:
 		var ap: Variant = (a as Dictionary).get("regions", null)
 		var bp: Variant = (b as Dictionary).get("regions", null)
@@ -476,6 +407,46 @@ func _apply_settlement_state_truth_hysteresis(center_id: int, raw_state: String,
 					reason
 			)
 	return committed
+
+
+## When no region yet qualifies for history-scar settlement clustering, still anchor one derived
+## settlement to registered stockpile zones plus current pawn tiles (starters rarely overlap the seed pile).
+func _bootstrap_presettlement_cluster(living_pawns: Array[Pawn]) -> Array:
+	var seen: Dictionary = {}
+	var out: Array = []
+	var max_keys: int = 512
+	var per_zone_cap: int = 256
+	for z in StockpileManager.zones():
+		if z == null:
+			continue
+		var r: Rect2i = z.rect
+		var scanned: int = 0
+		for y in range(r.position.y, r.position.y + r.size.y):
+			for x in range(r.position.x, r.position.x + r.size.x):
+				scanned += 1
+				if scanned > per_zone_cap:
+					break
+				var rk_z: int = WorldMemory._region_key(x, y)
+				if not seen.has(rk_z):
+					seen[rk_z] = true
+					out.append(rk_z)
+				if out.size() >= max_keys:
+					out.sort()
+					return out
+			if scanned > per_zone_cap:
+				break
+	for p in living_pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var rk_p: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		if not seen.has(rk_p):
+			seen[rk_p] = true
+			out.append(rk_p)
+			if out.size() >= max_keys:
+				out.sort()
+				return out
+	out.sort()
+	return out
 
 
 func _stockpile_zone_overlap_metrics(region_set: Dictionary) -> Dictionary:
@@ -695,9 +666,6 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
 		"last_front_intent": INTENT_GROW,
 		"resource_pressure": _default_resource_pressure(),
 		"last_resource_pressure_tick": -1,
-		"resource_truth": _default_resource_truth_snapshot(),
-		"last_resource_truth_tick": -1,
-		"resource_balance": _default_resource_balance_snapshot(),
 		"specialization_phase": SPECIALIZATION_PHASE_UNKNOWN,
 		"specialization_channel": "",
 		"specialization_candidate_channel": "",
@@ -971,629 +939,6 @@ func get_settlement_at_region(region_key: int) -> Variant:
 					if (reg as PackedInt32Array)[i] == region_key:
 						return (s as Dictionary).duplicate(true)
 	return null
-
-
-func _resource_truth_capture_line_for_settlement(st: Dictionary, tick: int, capture_source: String) -> String:
-	var center: int = int(st.get("center_region", -1))
-	var committed_state: String = str(st.get("state", "unknown"))
-	# Copy boundary: keep debug presentation detached from live mutable settlement dicts.
-	var rt_v: Variant = st.get("resource_truth", _default_resource_truth_snapshot())
-	var rt: Dictionary = (
-			(rt_v as Dictionary).duplicate(true)
-			if rt_v is Dictionary
-			else _default_resource_truth_snapshot().duplicate(true)
-	)
-	var spec_phase: String = str(st.get("specialization_phase", SPECIALIZATION_PHASE_UNKNOWN))
-	var spec_locked: String = str(st.get("specialization_channel", ""))
-	var spec_candidate: String = str(st.get("specialization_candidate_channel", ""))
-	return (
-			"[RESOURCE_TRUTH_CAPTURE] tick=%d source=%s hyst_key=center_region:%d center_region=%d committed_state=%s "
-			+ "stock_food=%d stock_wood=%d stock_stone=%d stock_ore_proxy=%d total_stock_units=%d "
-			+ "zones_considered=%d zones_overlapping=%d snapshot_tick=%d "
-			+ "specialization_phase=%s specialization_channel=%s specialization_candidate_channel=%s "
-			+ "note=stock_truth_observational_specialization_job_proxy"
-	) % [
-		tick,
-		capture_source,
-		center,
-		center,
-		committed_state,
-		int(rt.get("stock_food", 0)),
-		int(rt.get("stock_wood", 0)),
-		int(rt.get("stock_stone", 0)),
-		int(rt.get("stock_ore_proxy", 0)),
-		int(rt.get("total_stock_units", 0)),
-		int(rt.get("zones_considered", 0)),
-		int(rt.get("zones_overlapping", 0)),
-		int(rt.get("snapshot_tick", -1)),
-		spec_phase,
-		spec_locked,
-		spec_candidate,
-	]
-
-
-## Debug-only proof helper for Phase 8 stock-truth capture.
-## Preference order:
-## 1) exact [preferred_center_region] if provided and found
-## 2) first committed active settlement (deterministic order)
-## 3) first settlement in deterministic order (if no active settlement exists)
-func print_resource_truth_capture(preferred_center_region: int = -1, capture_source: String = "manual") -> bool:
-	if not OS.is_debug_build():
-		return false
-	var tick: int = GameManager.tick_count
-	var chosen: Dictionary = {}
-	if preferred_center_region >= 0:
-		for st_v in settlements:
-			if not (st_v is Dictionary):
-				continue
-			var st: Dictionary = st_v as Dictionary
-			if int(st.get("center_region", -1)) == preferred_center_region:
-				chosen = st
-				break
-	if chosen.is_empty():
-		for st_v in settlements:
-			if not (st_v is Dictionary):
-				continue
-			var st: Dictionary = st_v as Dictionary
-			if str(st.get("state", "")) == "active":
-				chosen = st
-				break
-	if chosen.is_empty():
-		for st_v in settlements:
-			if st_v is Dictionary:
-				chosen = st_v as Dictionary
-				break
-	if chosen.is_empty():
-		print(
-				"[RESOURCE_TRUTH_CAPTURE] tick=%d source=%s status=no_settlement_available"
-				% [tick, capture_source]
-		)
-		return false
-	print(_resource_truth_capture_line_for_settlement(chosen, tick, capture_source))
-	return true
-
-
-func set_phase8_proof_preferred_center_region(center_region: int) -> void:
-	_phase8_proof_preferred_center_region = center_region
-
-
-func get_phase8_proof_latest_bundle_line() -> String:
-	return _phase8_proof_latest_bundle_line
-
-
-func get_phase8_proof_terminal_line() -> String:
-	return _phase8_proof_terminal_line
-
-
-func _phase8_proof_debug_pause_on_terminal_result() -> void:
-	if not OS.is_debug_build() or not PHASE8_PROOF_PAUSE_ON_TERMINAL_RESULT:
-		return
-	var tree: SceneTree = get_tree()
-	if tree == null or tree.paused:
-		return
-	tree.paused = true
-	print("[PHASE8_PROOF] paused=true note=terminal_result_visibility tree_can_unpause_on_next_debug_session_reset")
-
-
-func _phase8_proof_bundle_line_for_settlement(st: Dictionary, tick: int, source: String) -> String:
-	var center: int = int(st.get("center_region", -1))
-	var committed_state: String = str(st.get("state", "unknown"))
-	# Copy boundary for debug presentation only.
-	var rt_v: Variant = st.get("resource_truth", _default_resource_truth_snapshot())
-	var rt: Dictionary = (
-			(rt_v as Dictionary).duplicate(true)
-			if rt_v is Dictionary
-			else _default_resource_truth_snapshot().duplicate(true)
-	)
-	var spec_phase: String = str(st.get("specialization_phase", SPECIALIZATION_PHASE_UNKNOWN))
-	var spec_channel: String = str(st.get("specialization_channel", ""))
-	var spec_candidate: String = str(st.get("specialization_candidate_channel", ""))
-	# Prevent misleading specialization candidate/lock context on non-active settlements.
-	if committed_state != "active":
-		spec_phase = SPECIALIZATION_PHASE_UNKNOWN
-		spec_channel = ""
-		spec_candidate = ""
-	return (
-			"[PHASE8_PROOF_BUNDLE] tick=%d source=%s hyst_key=center_region:%d center_region=%d committed_state=%s "
-			+ "stock_food=%d stock_wood=%d stock_stone=%d stock_ore_proxy=%d total_stock_units=%d "
-			+ "zones_considered=%d zones_overlapping=%d snapshot_tick=%d "
-			+ "specialization_phase=%s specialization_channel=%s specialization_candidate_channel=%s "
-			+ "note=stock_truth_observational_only_specialization_job_pressure_proxy"
-	) % [
-		tick,
-		source,
-		center,
-		center,
-		committed_state,
-		int(rt.get("stock_food", 0)),
-		int(rt.get("stock_wood", 0)),
-		int(rt.get("stock_stone", 0)),
-		int(rt.get("stock_ore_proxy", 0)),
-		int(rt.get("total_stock_units", 0)),
-		int(rt.get("zones_considered", 0)),
-		int(rt.get("zones_overlapping", 0)),
-		int(rt.get("snapshot_tick", -1)),
-		spec_phase,
-		spec_channel,
-		spec_candidate,
-	]
-
-
-func _pick_phase8_proof_bundle_settlement() -> Dictionary:
-	if _phase8_proof_preferred_center_region >= 0:
-		for st_v in settlements:
-			if not (st_v is Dictionary):
-				continue
-			var st: Dictionary = st_v as Dictionary
-			if int(st.get("center_region", -1)) == _phase8_proof_preferred_center_region:
-				return st
-	for st_v in settlements:
-		if not (st_v is Dictionary):
-			continue
-		var st: Dictionary = st_v as Dictionary
-		if str(st.get("state", "")) == "active":
-			return st
-	for st_v in settlements:
-		if st_v is Dictionary:
-			return st_v as Dictionary
-	return {}
-
-
-func _phase8_proof_try_clipboard_set(text: String) -> bool:
-	# Best-effort only. GDScript has no try/catch; OS may still log if the clipboard is locked.
-	if not OS.is_debug_build():
-		return false
-	if not DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
-		if not _phase8_proof_clipboard_unavailable_logged:
-			push_warning("[PHASE8_PROOF] clipboard_unavailable note=proof_lines_still_emit_to_console")
-			_phase8_proof_clipboard_unavailable_logged = true
-		return false
-	DisplayServer.clipboard_set(text)
-	return true
-
-
-func _emit_phase8_proof_bundle(tick: int) -> void:
-	if not OS.is_debug_build():
-		return
-	if _phase8_proof_terminal_line != "":
-		return
-	var chosen: Dictionary = _pick_phase8_proof_bundle_settlement()
-	var line: String = ""
-	if chosen.is_empty():
-		line = "[PHASE8_PROOF_BUNDLE] tick=%d source=auto status=no_settlement_available note=stock_truth_observational_only_specialization_job_pressure_proxy" % tick
-	else:
-		line = _phase8_proof_bundle_line_for_settlement(chosen, tick, "auto")
-	_phase8_proof_latest_bundle_line = line
-	print(line)
-	phase8_proof_bundle_emitted.emit(line)
-	# Throttle clipboard mirrors: bundle runs on stock-truth cadence and can spam Windows "open clipboard" errors.
-	const BUNDLE_CLIPBOARD_MIN_INTERVAL_TICKS: int = 5000
-	if line != _phase8_proof_last_clipboard_line:
-		if tick - _phase8_proof_last_bundle_clipboard_attempt_tick >= BUNDLE_CLIPBOARD_MIN_INTERVAL_TICKS:
-			_phase8_proof_last_bundle_clipboard_attempt_tick = tick
-			if _phase8_proof_try_clipboard_set(line):
-				_phase8_proof_last_clipboard_line = line
-
-
-func _phase8_proof_snapshot_from_settlement(st: Dictionary, tick: int) -> Dictionary:
-	var center: int = int(st.get("center_region", -1))
-	var committed_state: String = str(st.get("state", "unknown"))
-	var rt_v: Variant = st.get("resource_truth", _default_resource_truth_snapshot())
-	var rt: Dictionary = (
-			(rt_v as Dictionary).duplicate(true)
-			if rt_v is Dictionary
-			else _default_resource_truth_snapshot().duplicate(true)
-	)
-	return {
-		"tick": tick,
-		"hyst_key": "center_region:%d" % center,
-		"center_region": center,
-		"committed_state": committed_state,
-		"stock_food": int(rt.get("stock_food", 0)),
-		"stock_wood": int(rt.get("stock_wood", 0)),
-		"stock_stone": int(rt.get("stock_stone", 0)),
-		"stock_ore_proxy": int(rt.get("stock_ore_proxy", 0)),
-		"total_stock_units": int(rt.get("total_stock_units", 0)),
-		"zones_considered": int(rt.get("zones_considered", 0)),
-		"zones_overlapping": int(rt.get("zones_overlapping", 0)),
-		"snapshot_tick": int(rt.get("snapshot_tick", -1)),
-		"specialization_phase": str(st.get("specialization_phase", SPECIALIZATION_PHASE_UNKNOWN)),
-		"specialization_channel": str(st.get("specialization_channel", "")),
-		"specialization_candidate_channel": str(st.get("specialization_candidate_channel", "")),
-	}
-
-
-func _phase8_proof_capture_zone_inventory(zone: Stockpile) -> Dictionary:
-	var out: Dictionary = {}
-	if zone == null or not is_instance_valid(zone):
-		return out
-	var inv_v: Variant = zone.inventory
-	if inv_v is Dictionary:
-		for k in (inv_v as Dictionary).keys():
-			out[int(k)] = int((inv_v as Dictionary).get(k, 0))
-	return out
-
-
-func _phase8_proof_apply_zone_inventory(zone: Stockpile, inv: Dictionary) -> void:
-	if zone == null or not is_instance_valid(zone):
-		return
-	zone.inventory.clear()
-	for k in inv.keys():
-		zone.inventory[int(k)] = int(inv.get(k, 0))
-
-
-func _phase8_proof_stock_snapshot_from_zone(zone: Stockpile) -> Dictionary:
-	var food: int = 0
-	var wood: int = 0
-	var stone: int = 0
-	if zone != null and is_instance_valid(zone):
-		food = int(zone.count_food())
-		wood = int(zone.count_of(Item.Type.WOOD))
-		stone = int(zone.count_of(Item.Type.STONE))
-	var ore_proxy: int = stone
-	return {
-		"stock_food": food,
-		"stock_wood": wood,
-		"stock_stone": stone,
-		"stock_ore_proxy": ore_proxy,
-		"total_stock_units": food + wood + stone,
-	}
-
-
-func _phase8_proof_snapshot_from_settlement_with_stock(
-		st: Dictionary,
-		tick: int,
-		stock: Dictionary
-) -> Dictionary:
-	var snap: Dictionary = _phase8_proof_snapshot_from_settlement(st, tick)
-	snap["stock_food"] = int(stock.get("stock_food", int(snap.get("stock_food", 0))))
-	snap["stock_wood"] = int(stock.get("stock_wood", int(snap.get("stock_wood", 0))))
-	snap["stock_stone"] = int(stock.get("stock_stone", int(snap.get("stock_stone", 0))))
-	snap["stock_ore_proxy"] = int(stock.get("stock_ore_proxy", int(snap.get("stock_ore_proxy", 0))))
-	snap["total_stock_units"] = int(stock.get("total_stock_units", int(snap.get("total_stock_units", 0))))
-	return snap
-
-
-func _emit_phase8_proof_step(stage: String, snap: Dictionary) -> void:
-	print(
-			(
-					"[PHASE8_PROOF_STEP] stage=%s tick=%d hyst_key=%s center_region=%d committed_state=%s "
-					+ "stock_food=%d stock_wood=%d stock_stone=%d stock_ore_proxy=%d total_stock_units=%d "
-					+ "zones_considered=%d zones_overlapping=%d snapshot_tick=%d "
-					+ "specialization_phase=%s specialization_channel=%s specialization_candidate_channel=%s"
-			)
-			% [
-				stage,
-				int(snap.get("tick", -1)),
-				str(snap.get("hyst_key", "center_region:-1")),
-				int(snap.get("center_region", -1)),
-				str(snap.get("committed_state", "unknown")),
-				int(snap.get("stock_food", 0)),
-				int(snap.get("stock_wood", 0)),
-				int(snap.get("stock_stone", 0)),
-				int(snap.get("stock_ore_proxy", 0)),
-				int(snap.get("total_stock_units", 0)),
-				int(snap.get("zones_considered", 0)),
-				int(snap.get("zones_overlapping", 0)),
-				int(snap.get("snapshot_tick", -1)),
-				str(snap.get("specialization_phase", SPECIALIZATION_PHASE_UNKNOWN)),
-				str(snap.get("specialization_channel", "")),
-				str(snap.get("specialization_candidate_channel", "")),
-			]
-	)
-
-
-func _emit_phase8_proof_result(result: String, reason: String) -> void:
-	if _phase8_proof_terminal_summary_emitted:
-		return
-	_phase8_proof_terminal_summary_emitted = true
-	var b: Dictionary = _phase8_proof_runner_baseline
-	var o: Dictionary = _phase8_proof_runner_post_overlap
-	var r: Dictionary = _phase8_proof_runner_post_real_change
-	var line: String = (
-			"[PHASE8_PROOF_RESULT] run_id=%s result=%s reason=%s center_region=%d hyst_key=%s "
-			+ "baseline_total=%d post_overlap_total=%d post_real_total=%d "
-			+ "baseline_wood=%d post_overlap_wood=%d post_real_wood=%d "
-			+ "overlap_only_delta_total=%d overlap_only_delta_wood=%d "
-			+ "real_change_delta_total=%d real_change_delta_wood=%d "
-			+ "note=stock_truth_observational_only_specialization_job_pressure_proxy"
-	) % [
-		_phase8_proof_run_id,
-		result,
-		reason,
-		int(b.get("center_region", -1)),
-		str(b.get("hyst_key", "center_region:-1")),
-		int(b.get("total_stock_units", 0)),
-		int(o.get("total_stock_units", 0)),
-		int(r.get("total_stock_units", 0)),
-		int(b.get("stock_wood", 0)),
-		int(o.get("stock_wood", 0)),
-		int(r.get("stock_wood", 0)),
-		int(o.get("total_stock_units", 0)) - int(b.get("total_stock_units", 0)),
-		int(o.get("stock_wood", 0)) - int(b.get("stock_wood", 0)),
-		int(r.get("total_stock_units", 0)) - int(o.get("total_stock_units", 0)),
-		int(r.get("stock_wood", 0)) - int(o.get("stock_wood", 0)),
-	]
-	print(line)
-	var summary_line: String = (
-			"[PHASE8_PROOF_SUMMARY] run_id=%s result=%s reason=%s center_region=%d hyst_key=%s "
-			+ "baseline_food=%d baseline_wood=%d baseline_stone=%d baseline_ore_proxy=%d baseline_total=%d "
-			+ "post_overlap_food=%d post_overlap_wood=%d post_overlap_stone=%d post_overlap_ore_proxy=%d post_overlap_total=%d "
-			+ "post_real_food=%d post_real_wood=%d post_real_stone=%d post_real_ore_proxy=%d post_real_total=%d"
-	) % [
-		_phase8_proof_run_id,
-		result,
-		reason,
-		int(b.get("center_region", -1)),
-		str(b.get("hyst_key", "center_region:-1")),
-		int(b.get("stock_food", 0)),
-		int(b.get("stock_wood", 0)),
-		int(b.get("stock_stone", 0)),
-		int(b.get("stock_ore_proxy", 0)),
-		int(b.get("total_stock_units", 0)),
-		int(o.get("stock_food", 0)),
-		int(o.get("stock_wood", 0)),
-		int(o.get("stock_stone", 0)),
-		int(o.get("stock_ore_proxy", 0)),
-		int(o.get("total_stock_units", 0)),
-		int(r.get("stock_food", 0)),
-		int(r.get("stock_wood", 0)),
-		int(r.get("stock_stone", 0)),
-		int(r.get("stock_ore_proxy", 0)),
-		int(r.get("total_stock_units", 0)),
-	]
-	print(summary_line)
-	_phase8_proof_terminal_line = summary_line
-	_phase8_proof_latest_bundle_line = summary_line
-	phase8_proof_bundle_emitted.emit(summary_line)
-	_phase8_proof_try_clipboard_set(summary_line)
-	_phase8_proof_debug_pause_on_terminal_result()
-
-
-func _phase8_proof_find_settlement_by_center(center_region: int) -> Dictionary:
-	for st_v in settlements:
-		if not (st_v is Dictionary):
-			continue
-		var st: Dictionary = st_v as Dictionary
-		if int(st.get("center_region", -1)) == center_region:
-			return st
-	return {}
-
-
-func _phase8_proof_region_set_for_settlement(st: Dictionary) -> Dictionary:
-	var out: Dictionary = {}
-	var regv: Variant = st.get("regions", PackedInt32Array())
-	if regv is PackedInt32Array:
-		for rk in regv as PackedInt32Array:
-			out[int(rk)] = true
-	return out
-
-
-func _phase8_proof_pick_primary_zone(st: Dictionary) -> Stockpile:
-	var region_set: Dictionary = _phase8_proof_region_set_for_settlement(st)
-	if region_set.is_empty():
-		return null
-	for z in StockpileManager.zones():
-		if z == null:
-			continue
-		if _zone_overlaps_region_set(z, region_set):
-			return z
-	return null
-
-
-func _phase8_proof_ensure_probe_zone_overlap(primary_zone: Stockpile) -> bool:
-	if primary_zone == null:
-		return false
-	var main_node: Node = get_tree().get_root().get_node_or_null("Main")
-	if main_node == null:
-		return false
-	var world_node: World = main_node.get_node_or_null("WorldViewport/World") as World
-	if world_node == null:
-		return false
-	if _phase8_proof_runner_probe_zone == null or not is_instance_valid(_phase8_proof_runner_probe_zone):
-		var probe_scene: PackedScene = preload("res://scenes/stockpile/Stockpile.tscn")
-		var probe: Stockpile = probe_scene.instantiate() as Stockpile
-		if probe == null:
-			return false
-		main_node.add_child(probe)
-		probe.set_filter(Stockpile.Filter.WOOD)
-		_phase8_proof_runner_probe_zone = probe
-		StockpileManager.register(probe)
-	var overlap_rect: Rect2i = Rect2i(primary_zone.rect.position, Vector2i.ONE)
-	_phase8_proof_runner_probe_zone.set_rect_tiles(overlap_rect)
-	_phase8_proof_runner_probe_zone.position = world_node.tile_to_world(overlap_rect.position)
-	return true
-
-
-func _phase8_proof_runner_finalize_inconclusive(reason: String) -> void:
-	_phase8_proof_runner_done = true
-	_phase8_proof_runner_state = "done"
-	_emit_phase8_proof_result("INCONCLUSIVE", reason)
-	_phase8_proof_runner_cleanup("inconclusive:%s" % reason)
-
-
-func _phase8_proof_runner_cleanup(reason: String) -> void:
-	print(
-			"[PHASE8_PROOF_CLEANUP] tick=%d reason=%s target_center_region=%d"
-			% [GameManager.tick_count, reason, _phase8_proof_runner_target_center_region]
-	)
-	if _phase8_proof_runner_probe_zone != null and is_instance_valid(_phase8_proof_runner_probe_zone):
-		StockpileManager.unregister(_phase8_proof_runner_probe_zone)
-		_phase8_proof_runner_probe_zone.queue_free()
-	_phase8_proof_runner_probe_zone = null
-	_phase8_proof_runner_primary_zone = null
-	_phase8_proof_runner_primary_zone_inventory_baseline.clear()
-
-
-func _phase8_proof_runner_skip(reason: String, tick: int) -> void:
-	if _phase8_proof_runner_last_skip_reason == reason:
-		return
-	_phase8_proof_runner_last_skip_reason = reason
-	print(
-			"[PHASE8_PROOF_SKIP] tick=%d reason=%s state=%s done=%s"
-			% [tick, reason, _phase8_proof_runner_state, _phase8_proof_runner_done]
-	)
-
-
-func _phase8_proof_pick_runner_target_settlement() -> Dictionary:
-	# 1) preferred/focused center if it has an overlapping primary zone.
-	if _phase8_proof_preferred_center_region >= 0:
-		var pref: Dictionary = _phase8_proof_find_settlement_by_center(_phase8_proof_preferred_center_region)
-		if not pref.is_empty():
-			if int(pref.get("center_region", -1)) >= 0:
-				var pref_primary: Stockpile = _phase8_proof_pick_primary_zone(pref)
-				if pref_primary != null:
-					return {"settlement": pref, "primary_zone": pref_primary, "source": "preferred_focus"}
-	# 2) first active settlement with overlapping primary zone.
-	for st_v in settlements:
-		if not (st_v is Dictionary):
-			continue
-		var st: Dictionary = st_v as Dictionary
-		if int(st.get("center_region", -1)) < 0:
-			continue
-		if str(st.get("state", "")) != "active":
-			continue
-		var z: Stockpile = _phase8_proof_pick_primary_zone(st)
-		if z != null:
-			return {"settlement": st, "primary_zone": z, "source": "first_active_with_overlap"}
-	# 3) deterministic fallback: first settlement with overlapping primary zone.
-	for st_v in settlements:
-		if not (st_v is Dictionary):
-			continue
-		var st: Dictionary = st_v as Dictionary
-		if int(st.get("center_region", -1)) < 0:
-			continue
-		var z: Stockpile = _phase8_proof_pick_primary_zone(st)
-		if z != null:
-			return {"settlement": st, "primary_zone": z, "source": "first_with_overlap"}
-	return {}
-
-
-func _phase8_proof_runner_tick(tick: int) -> void:
-	if not OS.is_debug_build():
-		_phase8_proof_runner_skip("not_debug", tick)
-		return
-	if not PHASE8_PROOF_RUNNER_AUTO_ENABLED:
-		_phase8_proof_runner_skip("not_enabled", tick)
-		return
-	if _phase8_proof_runner_done:
-		_phase8_proof_runner_skip("already_done", tick)
-		return
-	if _phase8_proof_runner_started_tick < 0:
-		_phase8_proof_runner_started_tick = tick
-	_phase8_proof_runner_last_skip_reason = ""
-	if not _phase8_proof_runner_armed_once:
-		var waited: int = tick - _phase8_proof_runner_started_tick
-		if waited > PHASE8_PROOF_RUNNER_MAX_WAIT_TICKS:
-			# Pre-arm timeout is diagnostic only: do not permanently terminate the runner.
-			# Ordinary bootstrap/world evolution can produce a valid overlap target later.
-			_phase8_proof_runner_skip("retry_timeout_waiting_for_proofable_target", tick)
-			_phase8_proof_runner_started_tick = tick
-			return
-	if _phase8_proof_runner_state == "idle":
-		var target: Dictionary = _phase8_proof_pick_runner_target_settlement()
-		if target.is_empty():
-			_phase8_proof_runner_skip("defer_no_primary_zone", tick)
-			return
-		var st: Dictionary = target.get("settlement", {})
-		var primary: Stockpile = target.get("primary_zone", null) as Stockpile
-		if st.is_empty():
-			_phase8_proof_runner_skip("defer_no_settlement", tick)
-			return
-		if primary == null:
-			_phase8_proof_runner_skip("defer_no_primary_zone", tick)
-			return
-		print(
-				"[PHASE8_PROOF_ARM] tick=%d source=%s center_region=%d hyst_key=center_region:%d state=%s"
-				% [
-					tick,
-					str(target.get("source", "unknown")),
-					int(st.get("center_region", -1)),
-					int(st.get("center_region", -1)),
-					str(st.get("state", "unknown")),
-				]
-		)
-		_phase8_proof_runner_armed_once = true
-		_phase8_proof_runner_primary_zone = primary
-		_phase8_proof_runner_primary_zone_inventory_baseline = _phase8_proof_capture_zone_inventory(primary)
-		_phase8_proof_runner_target_center_region = int(st.get("center_region", -1))
-		_phase8_proof_runner_baseline = _phase8_proof_snapshot_from_settlement_with_stock(
-				st,
-				tick,
-				_phase8_proof_stock_snapshot_from_zone(_phase8_proof_runner_primary_zone)
-		)
-		_emit_phase8_proof_step("baseline", _phase8_proof_runner_baseline)
-		if not _phase8_proof_ensure_probe_zone_overlap(_phase8_proof_runner_primary_zone):
-			_phase8_proof_runner_finalize_inconclusive("could_not_prepare_overlap_probe_zone")
-			return
-		_phase8_proof_runner_state = "wait_post_overlap"
-		_phase8_proof_runner_next_tick = tick + RESOURCE_TRUTH_UPDATE_INTERVAL_TICKS
-		return
-	if tick < _phase8_proof_runner_next_tick:
-		_phase8_proof_runner_skip("wait_next_cadence", tick)
-		return
-	if _phase8_proof_runner_state == "wait_post_overlap":
-		var st_overlap: Dictionary = _phase8_proof_find_settlement_by_center(_phase8_proof_runner_target_center_region)
-		if st_overlap.is_empty():
-			_phase8_proof_runner_finalize_inconclusive("target_settlement_missing_post_overlap")
-			return
-		# Debug-only proof isolation: restore baseline primary-zone contents before overlap capture
-		# so geometry-only check cannot be contaminated by live hauling/consumption.
-		_phase8_proof_apply_zone_inventory(
-				_phase8_proof_runner_primary_zone,
-				_phase8_proof_runner_primary_zone_inventory_baseline
-		)
-		_phase8_proof_runner_post_overlap = _phase8_proof_snapshot_from_settlement_with_stock(
-				st_overlap,
-				tick,
-				_phase8_proof_stock_snapshot_from_zone(_phase8_proof_runner_primary_zone)
-		)
-		_emit_phase8_proof_step("post_overlap", _phase8_proof_runner_post_overlap)
-		if _phase8_proof_runner_primary_zone == null or not is_instance_valid(_phase8_proof_runner_primary_zone):
-			_phase8_proof_runner_finalize_inconclusive("primary_zone_missing_for_real_change")
-			return
-		# Keep real-change step explicit and singular from the same isolated baseline.
-		_phase8_proof_apply_zone_inventory(
-				_phase8_proof_runner_primary_zone,
-				_phase8_proof_runner_primary_zone_inventory_baseline
-		)
-		_phase8_proof_runner_primary_zone.add_item(Item.Type.WOOD, 1)
-		# Capture post_real immediately: deferring by RESOURCE_TRUTH_UPDATE_INTERVAL_TICKS lets live hauling/eat
-		# mutate the primary zone before snapshot (mis-read as failed isolation).
-		var st_real: Dictionary = _phase8_proof_find_settlement_by_center(_phase8_proof_runner_target_center_region)
-		if st_real.is_empty():
-			_phase8_proof_runner_finalize_inconclusive("target_settlement_missing_post_real_change")
-			return
-		_phase8_proof_runner_post_real_change = _phase8_proof_snapshot_from_settlement_with_stock(
-				st_real,
-				tick,
-				_phase8_proof_stock_snapshot_from_zone(_phase8_proof_runner_primary_zone)
-		)
-		_emit_phase8_proof_step("post_real_change", _phase8_proof_runner_post_real_change)
-		var overlap_changed_stock: bool = (
-				int(_phase8_proof_runner_post_overlap.get("stock_food", 0)) != int(_phase8_proof_runner_baseline.get("stock_food", 0))
-				or int(_phase8_proof_runner_post_overlap.get("stock_wood", 0)) != int(_phase8_proof_runner_baseline.get("stock_wood", 0))
-				or int(_phase8_proof_runner_post_overlap.get("stock_stone", 0)) != int(_phase8_proof_runner_baseline.get("stock_stone", 0))
-				or int(_phase8_proof_runner_post_overlap.get("stock_ore_proxy", 0)) != int(_phase8_proof_runner_baseline.get("stock_ore_proxy", 0))
-				or int(_phase8_proof_runner_post_overlap.get("total_stock_units", 0)) != int(_phase8_proof_runner_baseline.get("total_stock_units", 0))
-		)
-		if overlap_changed_stock:
-			_phase8_proof_runner_done = true
-			_phase8_proof_runner_state = "done"
-			_emit_phase8_proof_result("FAIL", "overlap_only_changed_stock_values")
-			_phase8_proof_runner_cleanup("fail:overlap_only_changed_stock_values")
-			return
-		var real_delta_wood: int = int(_phase8_proof_runner_post_real_change.get("stock_wood", 0)) - int(_phase8_proof_runner_post_overlap.get("stock_wood", 0))
-		var real_delta_total: int = int(_phase8_proof_runner_post_real_change.get("total_stock_units", 0)) - int(_phase8_proof_runner_post_overlap.get("total_stock_units", 0))
-		if real_delta_wood == 1 and real_delta_total == 1:
-			_phase8_proof_runner_done = true
-			_phase8_proof_runner_state = "done"
-			_emit_phase8_proof_result("PASS", "overlap_stable_real_change_single_increment")
-			_phase8_proof_runner_cleanup("pass:overlap_stable_real_change_single_increment")
-			return
-		_phase8_proof_runner_finalize_inconclusive("real_change_not_isolated_expected_plus_one")
-		return
-	_phase8_proof_runner_skip("unknown_state", tick)
 
 
 func _update_governance_state() -> void:
@@ -2084,203 +1429,11 @@ func _default_resource_pressure() -> Dictionary:
 		"wood": 0.0,
 		"stone": 0.0,
 		"ore_proxy": 0.0,
+		"food": 0.0,
+		"trade": 0.0,
 		"total_relevant_jobs": 0,
 		"source": "job_proxy",
 	}
-
-
-func _default_resource_truth_snapshot() -> Dictionary:
-	return {
-		"stock_food": 0,
-		"stock_wood": 0,
-		"stock_stone": 0,
-		# There is no distinct ore item in current runtime inventory. We expose
-		# ore-proxy using stocked stone as the closest stable proxy.
-		"stock_ore_proxy": 0,
-		"total_stock_units": 0,
-		"snapshot_tick": -1,
-		"center_region": -1,
-		"zones_considered": 0,
-		"zones_overlapping": 0,
-		"source": "designated_stockpile_inventory",
-		"ore_proxy_basis": "stone_inventory_proxy_no_distinct_ore_item",
-	}
-
-
-func _default_resource_balance_snapshot() -> Dictionary:
-	return {
-		"food_balance": "DEFICIT",
-		"wood_balance": "DEFICIT",
-		"stone_balance": "DEFICIT",
-		"ore_proxy_balance": "DEFICIT",
-		"snapshot_tick": -1,
-		"center_region": -1,
-		"source": "stock_truth_derived_first_pass",
-	}
-
-
-func _classify_stock_band(count: int, deficit_max: int, low_max: int, stocked_max: int) -> String:
-	if count <= deficit_max:
-		return "DEFICIT"
-	if count <= low_max:
-		return "LOW"
-	if count <= stocked_max:
-		return "STOCKED"
-	return "SURPLUS"
-
-
-func _derive_settlement_resource_balance_snapshot(st: Dictionary) -> Dictionary:
-	var out: Dictionary = _default_resource_balance_snapshot()
-	var rt_v: Variant = st.get("resource_truth", _default_resource_truth_snapshot())
-	var rt: Dictionary = rt_v as Dictionary if rt_v is Dictionary else _default_resource_truth_snapshot()
-	var center: int = int(rt.get("center_region", int(st.get("center_region", -1))))
-	out["center_region"] = center
-	out["snapshot_tick"] = int(rt.get("snapshot_tick", -1))
-	# Food uses a different first-pass cutoff family than material channels.
-	out["food_balance"] = _classify_stock_band(
-			int(rt.get("stock_food", 0)),
-			RESOURCE_BALANCE_FOOD_DEFICIT_MAX,
-			RESOURCE_BALANCE_FOOD_LOW_MAX,
-			RESOURCE_BALANCE_FOOD_STOCKED_MAX
-	)
-	out["wood_balance"] = _classify_stock_band(
-			int(rt.get("stock_wood", 0)),
-			RESOURCE_BALANCE_MATERIAL_DEFICIT_MAX,
-			RESOURCE_BALANCE_MATERIAL_LOW_MAX,
-			RESOURCE_BALANCE_MATERIAL_STOCKED_MAX
-	)
-	out["stone_balance"] = _classify_stock_band(
-			int(rt.get("stock_stone", 0)),
-			RESOURCE_BALANCE_MATERIAL_DEFICIT_MAX,
-			RESOURCE_BALANCE_MATERIAL_LOW_MAX,
-			RESOURCE_BALANCE_MATERIAL_STOCKED_MAX
-	)
-	# No true ore inventory exists yet; this remains ore-proxy derived from stone truth.
-	out["ore_proxy_balance"] = _classify_stock_band(
-			int(rt.get("stock_ore_proxy", 0)),
-			RESOURCE_BALANCE_MATERIAL_DEFICIT_MAX,
-			RESOURCE_BALANCE_MATERIAL_LOW_MAX,
-			RESOURCE_BALANCE_MATERIAL_STOCKED_MAX
-	)
-	return out
-
-
-func resource_balance_audit_snapshot_for_settlement(st: Dictionary) -> Dictionary:
-	var rt_v: Variant = st.get("resource_truth", _default_resource_truth_snapshot())
-	var rt: Dictionary = rt_v as Dictionary if rt_v is Dictionary else _default_resource_truth_snapshot()
-	var rb_v: Variant = st.get("resource_balance", _default_resource_balance_snapshot())
-	var rb: Dictionary = rb_v as Dictionary if rb_v is Dictionary else _default_resource_balance_snapshot()
-	var expected: Dictionary = _derive_settlement_resource_balance_snapshot(st)
-	var food_actual: String = str(rb.get("food_balance", "DEFICIT"))
-	var wood_actual: String = str(rb.get("wood_balance", "DEFICIT"))
-	var stone_actual: String = str(rb.get("stone_balance", "DEFICIT"))
-	var ore_actual: String = str(rb.get("ore_proxy_balance", "DEFICIT"))
-	var food_expected: String = str(expected.get("food_balance", "DEFICIT"))
-	var wood_expected: String = str(expected.get("wood_balance", "DEFICIT"))
-	var stone_expected: String = str(expected.get("stone_balance", "DEFICIT"))
-	var ore_expected: String = str(expected.get("ore_proxy_balance", "DEFICIT"))
-	var pass_ok: bool = (
-			food_actual == food_expected
-			and wood_actual == wood_expected
-			and stone_actual == stone_expected
-			and ore_actual == ore_expected
-	)
-	return {
-		"result": "PASS" if pass_ok else "FAIL",
-		"center_region": int(rt.get("center_region", int(st.get("center_region", -1)))),
-		"snapshot_tick": int(rt.get("snapshot_tick", -1)),
-		"food_count": int(rt.get("stock_food", 0)),
-		"wood_count": int(rt.get("stock_wood", 0)),
-		"stone_count": int(rt.get("stock_stone", 0)),
-		"ore_proxy_count": int(rt.get("stock_ore_proxy", 0)),
-		"food_expected": food_expected,
-		"wood_expected": wood_expected,
-		"stone_expected": stone_expected,
-		"ore_proxy_expected": ore_expected,
-		"food_actual": food_actual,
-		"wood_actual": wood_actual,
-		"stone_actual": stone_actual,
-		"ore_proxy_actual": ore_actual,
-	}
-
-
-func _zone_overlaps_region_set(z: Stockpile, region_set: Dictionary) -> bool:
-	if z == null:
-		return false
-	var r: Rect2i = z.rect
-	for y in range(r.position.y, r.position.y + r.size.y):
-		for x in range(r.position.x, r.position.x + r.size.x):
-			var rk: int = WorldMemory._region_key(x, y)
-			if region_set.has(rk):
-				return true
-	return false
-
-
-func _derive_settlement_resource_truth_snapshot(st: Dictionary, tick: int) -> Dictionary:
-	var out: Dictionary = _default_resource_truth_snapshot()
-	var center: int = int(st.get("center_region", -1))
-	out["center_region"] = center
-	out["snapshot_tick"] = tick
-	var regv: Variant = st.get("regions", PackedInt32Array())
-	var region_set: Dictionary = {}
-	if regv is PackedInt32Array:
-		for rk in regv as PackedInt32Array:
-			region_set[int(rk)] = true
-	if region_set.is_empty():
-		return out
-	var zones_considered: int = 0
-	var zones_overlapping: int = 0
-	var stock_food: int = 0
-	var stock_wood: int = 0
-	var stock_stone: int = 0
-	for z in StockpileManager.zones():
-		if z == null:
-			continue
-		zones_considered += 1
-		if not _zone_overlaps_region_set(z, region_set):
-			continue
-		zones_overlapping += 1
-		stock_food += int(z.count_food())
-		stock_wood += int(z.count_of(Item.Type.WOOD))
-		stock_stone += int(z.count_of(Item.Type.STONE))
-	var stock_ore_proxy: int = stock_stone
-	out["stock_food"] = stock_food
-	out["stock_wood"] = stock_wood
-	out["stock_stone"] = stock_stone
-	out["stock_ore_proxy"] = stock_ore_proxy
-	out["total_stock_units"] = stock_food + stock_wood + stock_stone
-	out["zones_considered"] = zones_considered
-	out["zones_overlapping"] = zones_overlapping
-	return out
-
-
-func _emit_resource_truth_validation_log_if_needed(tick: int, st: Dictionary) -> void:
-	if not _settlement_truth_verify_active():
-		return
-	var committed_state: String = str(st.get("state", ""))
-	if committed_state != "active" and committed_state != "recovering":
-		return
-	var rt_v: Variant = st.get("resource_truth", _default_resource_truth_snapshot())
-	var rt: Dictionary = rt_v as Dictionary if rt_v is Dictionary else _default_resource_truth_snapshot()
-	print(
-			(
-					"[RESOURCE_TRUTH] tick=%d hyst_key=center_region:%d center_region=%d committed_state=%s "
-					+ "stock_food=%d stock_wood=%d stock_stone=%d stock_ore_proxy=%d total_stock_units=%d "
-					+ "zones_overlapping=%d note=designated_stockpile_inventory_truth_not_job_proxy"
-			)
-			% [
-				tick,
-				int(st.get("center_region", -1)),
-				int(rt.get("center_region", -1)),
-				committed_state,
-				int(rt.get("stock_food", 0)),
-				int(rt.get("stock_wood", 0)),
-				int(rt.get("stock_stone", 0)),
-				int(rt.get("stock_ore_proxy", 0)),
-				int(rt.get("total_stock_units", 0)),
-				int(rt.get("zones_overlapping", 0)),
-			]
-	)
 
 
 func _resource_bucket_for_job_type(job_type: int) -> String:
@@ -2290,6 +1443,10 @@ func _resource_bucket_for_job_type(job_type: int) -> String:
 		return "stone"
 	if job_type == Job.Type.MINE:
 		return "ore_proxy"
+	if job_type == Job.Type.FORAGE or job_type == Job.Type.HUNT:
+		return "food"
+	if job_type == Job.Type.TRADE_HAUL:
+		return "trade"
 	return ""
 
 
@@ -2298,6 +1455,8 @@ func _derive_settlement_resource_pressure(st: Dictionary, active_jobs: Array[Job
 	var wood_count: int = 0
 	var stone_count: int = 0
 	var ore_count: int = 0
+	var food_count: int = 0
+	var trade_count: int = 0
 	var total_relevant: int = 0
 	for j in active_jobs:
 		if j == null:
@@ -2316,6 +1475,10 @@ func _derive_settlement_resource_pressure(st: Dictionary, active_jobs: Array[Job
 				stone_count += 1
 			"ore_proxy":
 				ore_count += 1
+			"food":
+				food_count += 1
+			"trade":
+				trade_count += 1
 	var out: Dictionary = _default_resource_pressure()
 	out["total_relevant_jobs"] = total_relevant
 	if total_relevant <= 0:
@@ -2324,10 +1487,14 @@ func _derive_settlement_resource_pressure(st: Dictionary, active_jobs: Array[Job
 	out["wood"] = clamp(float(wood_count) / denom, 0.0, 1.0)
 	out["stone"] = clamp(float(stone_count) / denom, 0.0, 1.0)
 	out["ore_proxy"] = clamp(float(ore_count) / denom, 0.0, 1.0)
+	out["food"] = clamp(float(food_count) / denom, 0.0, 1.0)
+	out["trade"] = clamp(float(trade_count) / denom, 0.0, 1.0)
 	# Apply saturation damping to reduce circular job-proxy amplification.
 	out["wood"] = minf(float(out.get("wood", 0.0)), RESOURCE_PRESSURE_SATURATION)
 	out["stone"] = minf(float(out.get("stone", 0.0)), RESOURCE_PRESSURE_SATURATION)
 	out["ore_proxy"] = minf(float(out.get("ore_proxy", 0.0)), RESOURCE_PRESSURE_SATURATION)
+	out["food"] = minf(float(out.get("food", 0.0)), RESOURCE_PRESSURE_SATURATION)
+	out["trade"] = minf(float(out.get("trade", 0.0)), RESOURCE_PRESSURE_SATURATION)
 	return out
 
 
@@ -2345,7 +1512,7 @@ func _emit_specialization_validation_log_if_needed(tick: int, settlement_idx: in
 	print(
 			(
 					"[SPECIALIZATION_VALIDATE] tick=%d settlement_idx=%d center_region=%d committed_state=%s "
-					+ "current_intent=%s rp_wood=%.4f rp_stone=%.4f rp_ore_proxy=%.4f rp_total_relevant_jobs=%d "
+					+ "current_intent=%s rp_wood=%.4f rp_stone=%.4f rp_ore_proxy=%.4f rp_food=%.4f rp_trade=%.4f rp_total_relevant_jobs=%d "
 					+ "specialization_phase=%s specialization_channel=%s specialization_candidate_channel=%s "
 					+ "specialization_confidence=%d preferred_front_count=%d note=resource_pressure_job_proxy_not_stock_scarcity"
 			)
@@ -2358,6 +1525,8 @@ func _emit_specialization_validation_log_if_needed(tick: int, settlement_idx: in
 				float(rp.get("wood", 0.0)),
 				float(rp.get("stone", 0.0)),
 				float(rp.get("ore_proxy", 0.0)),
+				float(rp.get("food", 0.0)),
+				float(rp.get("trade", 0.0)),
 				int(rp.get("total_relevant_jobs", 0)),
 				str(st.get("specialization_phase", SPECIALIZATION_PHASE_UNKNOWN)),
 				str(st.get("specialization_channel", "")),
@@ -2379,16 +1548,9 @@ func update_resource_pressures(tick: int) -> void:
 		var st: Dictionary = settlements[i] as Dictionary
 		st["resource_pressure"] = _derive_settlement_resource_pressure(st, active_jobs)
 		st["last_resource_pressure_tick"] = tick
-		if tick % RESOURCE_TRUTH_UPDATE_INTERVAL_TICKS == 0:
-			st["resource_truth"] = _derive_settlement_resource_truth_snapshot(st, tick)
-			st["last_resource_truth_tick"] = tick
-			st["resource_balance"] = _derive_settlement_resource_balance_snapshot(st)
-			_emit_resource_truth_validation_log_if_needed(tick, st)
 		_update_settlement_work_focus_identity(st, dt)
 		_emit_specialization_validation_log_if_needed(tick, i, st)
 		settlements[i] = st
-	_emit_phase8_proof_bundle(tick)
-	_phase8_proof_runner_tick(tick)
 
 
 func specialization_work_focus_label(channel: String) -> String:
@@ -2399,6 +1561,10 @@ func specialization_work_focus_label(channel: String) -> String:
 			return "Stone work-focus"
 		"ore_proxy":
 			return "Ore work-focus"
+		"food":
+			return "Food work-focus"
+		"trade":
+			return "Trade work-focus"
 		_:
 			return "Unspecialized"
 
@@ -2408,6 +1574,8 @@ func _specialization_sorted_channels(rp: Dictionary) -> Array[Dictionary]:
 		{"k": "wood", "v": float(rp.get("wood", 0.0))},
 		{"k": "stone", "v": float(rp.get("stone", 0.0))},
 		{"k": "ore_proxy", "v": float(rp.get("ore_proxy", 0.0))},
+		{"k": "food", "v": float(rp.get("food", 0.0))},
+		{"k": "trade", "v": float(rp.get("trade", 0.0))},
 	]
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var av: float = float(a.get("v", 0.0))

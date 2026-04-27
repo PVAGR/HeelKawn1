@@ -5,7 +5,13 @@ extends Node
 const SCHEMA: int = 1
 const MAX_EVENTS: int = 5000
 
-enum Kind { PAWN_DEATH = 0, ANIMAL_DEATH = 1, ENEMY_DEATH = 2 }
+enum Kind {
+	PAWN_DEATH = 0,
+	ANIMAL_DEATH = 1,
+	ENEMY_DEATH = 2,
+	SOCIAL_FRAGMENT = 3,
+	SOCIAL_SCHISM = 4,
+}
 
 var _events: Array[Dictionary] = []
 var _dirty: bool = false
@@ -105,6 +111,29 @@ func record_enemy_death(
 	})
 
 
+## Deterministic social relocation (fragment / schism); [param regions] is the source cluster pack.
+func record_social(
+		tick: int,
+		kind: int,
+		center_rk: int,
+		target_tile: Vector2i,
+		moved_count: int,
+		regions: PackedInt32Array
+	) -> void:
+	var reg_copy: PackedInt32Array = regions.duplicate()
+	_append({
+		"s": SCHEMA,
+		"k": kind,
+		"t": tick,
+		"ckr": center_rk,
+		"x": target_tile.x,
+		"y": target_tile.y,
+		"r": _region_key(target_tile.x, target_tile.y),
+		"mv": moved_count,
+		"rp": reg_copy,
+	})
+
+
 func to_save_dict() -> Dictionary:
 	return {
 		"schema": SCHEMA,
@@ -143,6 +172,10 @@ func get_recent_event_summaries(max_items: int = 3) -> PackedStringArray:
 				kind = "animal_death"
 			elif k == int(Kind.ENEMY_DEATH):
 				kind = "enemy_death"
+			elif k == int(Kind.SOCIAL_FRAGMENT):
+				kind = "social_fragment"
+			elif k == int(Kind.SOCIAL_SCHISM):
+				kind = "social_schism"
 			else:
 				kind = "event"
 		var line: String = "%d: %s" % [int(evt.get("t", 0)), kind.replace("_", " ")]
@@ -247,6 +280,10 @@ func get_history_export_string() -> String:
 				type_name = "pawn_death"
 			elif k == int(Kind.ANIMAL_DEATH):
 				type_name = "animal_death"
+			elif k == int(Kind.SOCIAL_FRAGMENT):
+				type_name = "social_fragment"
+			elif k == int(Kind.SOCIAL_SCHISM):
+				type_name = "social_schism"
 		var subject: String = str(evt.get("pawn_id", evt.get("pid", evt.get("sp", "n/a"))))
 		var cause: String = str(evt.get("cause", evt.get("action", evt.get("c", evt.get("reason", "n/a")))))
 		var impact: String = str(evt.get("impact", evt.get("amount", evt.get("total_xp", evt.get("executed", "n/a")))))
@@ -254,6 +291,58 @@ func get_history_export_string() -> String:
 			tick, type_name, subject, cause, impact, _provenance_hash_stub(evt),
 		])
 	return "\n".join(out)
+
+
+## Impact buckets for [param zone_id] (center region id as decimal string). Uses [SettlementMemory] region packs when present.
+func get_zone_aggregate(zone_id: String) -> Dictionary:
+	var empty: Dictionary = {
+		"builds": 0,
+		"monuments": 0,
+		"trade_routes": 0,
+		"death_clusters": 0,
+		"biome_exhaustion": 0,
+	}
+	if zone_id.is_empty() or not zone_id.is_valid_int():
+		return empty
+	var ckr: int = int(zone_id)
+	var want: Dictionary = {}
+	for s in SettlementMemory.settlements:
+		if s is not Dictionary:
+			continue
+		var d: Dictionary = s
+		if int(d.get("center_region", -2)) != ckr:
+			continue
+		var regv: Variant = d.get("regions", null)
+		if regv is PackedInt32Array:
+			var pack: PackedInt32Array = regv as PackedInt32Array
+			for j in range(pack.size()):
+				want[int(pack[j])] = true
+		break
+	if want.is_empty():
+		want[ckr] = true
+	var deaths: int = 0
+	var governance_events: int = 0
+	var intent_shifts: int = 0
+	for e in _events:
+		var k: int = int(e.get("k", -1))
+		if k == int(Kind.PAWN_DEATH):
+			var rr: int = int(e.get("r", -1))
+			if want.has(rr):
+				deaths += 1
+			continue
+		var typ: String = str(e.get("type", ""))
+		if typ == "governance_change" and int(e.get("settlement_id", -2)) == ckr:
+			governance_events += 1
+		elif typ == "settlement_intent_shift" and int(e.get("settlement_id", -2)) == ckr:
+			intent_shifts += 1
+	# Lightweight proxies for revival scoring (deterministic, no RNG).
+	return {
+		"builds": mini(8, governance_events / 4),
+		"monuments": mini(6, intent_shifts / 6),
+		"trade_routes": 0,
+		"death_clusters": deaths,
+		"biome_exhaustion": 0,
+	}
 
 
 func get_events_for_tile(target_pos: Vector2i) -> Array[Dictionary]:

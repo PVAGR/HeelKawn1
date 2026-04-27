@@ -136,6 +136,7 @@ var _pawn_divergence_last_job_by_pawn_id: Dictionary = {}
 var _pawn_divergence_total_claim_events_seen: int = 0
 var _pawn_divergence_scored_events: int = 0
 var _pawn_divergence_skip_no_bound_center: int = 0
+var _pawn_divergence_skip_pre_settlement_context: int = 0
 var _pawn_divergence_skip_no_specialization_context: int = 0
 var _pawn_divergence_aligned_total: int = 0
 var _pawn_divergence_divergent_total: int = 0
@@ -380,6 +381,16 @@ func _settlement_by_center_region(center_region: int) -> Dictionary:
 	return {}
 
 
+func _has_any_valid_settlement_center() -> bool:
+	for st_any in SettlementMemory.settlements:
+		if not (st_any is Dictionary):
+			continue
+		var c: int = int((st_any as Dictionary).get("center_region", -1))
+		if c >= 0:
+			return true
+	return false
+
+
 func _center_region_from_fast_map(region_key: int) -> int:
 	return SettlementMemory.get_center_region_for_region(region_key)
 
@@ -479,21 +490,36 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 		]
 	)
 	if effective_center_region < 0:
-		_pawn_divergence_skip_no_bound_center += 1
-		var skip_line_no_center: String = (
-			"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_bound_center pawn_id=%d pawn=%s pawn_region=%d job_region=%d pawn_center_region=%d job_center_region=%d center_region=%d"
-			% [
-				GameManager.tick_count,
-				int(pawn.data.id),
-				pawn.data.display_name,
-				pawn_region,
-				job_region,
-				pawn_center_region,
-				job_center_region,
-				effective_center_region,
-			]
-		)
-		print(skip_line_no_center)
+		var has_settlement_context: bool = _has_any_valid_settlement_center()
+		if has_settlement_context:
+			_pawn_divergence_skip_no_bound_center += 1
+			var skip_line_no_center: String = (
+				"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_bound_center pawn_id=%d pawn=%s pawn_region=%d job_region=%d pawn_center_region=%d job_center_region=%d center_region=%d"
+				% [
+					GameManager.tick_count,
+					int(pawn.data.id),
+					pawn.data.display_name,
+					pawn_region,
+					job_region,
+					pawn_center_region,
+					job_center_region,
+					effective_center_region,
+				]
+			)
+			print(skip_line_no_center)
+		else:
+			_pawn_divergence_skip_pre_settlement_context += 1
+			print(
+				"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=pre_settlement_context pawn_id=%d pawn=%s pawn_region=%d job_region=%d center_region=%d"
+				% [
+					GameManager.tick_count,
+					int(pawn.data.id),
+					pawn.data.display_name,
+					pawn_region,
+					job_region,
+					effective_center_region,
+				]
+			)
 		return
 	if bind_source == "fast_map":
 		_pawn_divergence_native_bound_events += 1
@@ -613,6 +639,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 	print("tick=%d" % tick)
 	print("total_claim_events_seen=%d" % _pawn_divergence_total_claim_events_seen)
 	print("scored_events=%d" % _pawn_divergence_scored_events)
+	print("skip_pre_settlement_context=%d" % _pawn_divergence_skip_pre_settlement_context)
 	print("skip_no_bound_center=%d" % _pawn_divergence_skip_no_bound_center)
 	print("skip_no_specialization_context=%d" % _pawn_divergence_skip_no_specialization_context)
 	print("aligned_total=%d" % _pawn_divergence_aligned_total)

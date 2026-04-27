@@ -122,6 +122,11 @@ var traits: Array[Trait] = []
 ## Each event has a type, intensity, and duration.
 var mood_events: Array[MoodEvent] = []
 
+## Deterministic co-presence bond: other pawn id (string key) -> rapport 0..3000.
+## Grows when NPCs spend time near each other (same path component); feeds
+## reproduction and future player social actions (gift, commend, etc.).
+var social_rapport: Dictionary = {}
+
 
 func _init() -> void:
 	id = _next_id
@@ -773,6 +778,40 @@ func describe() -> String:
 	return "#%d %s (age %d)" % [id, display_name, age]
 
 
+func add_social_rapport(peer_id: int, delta: int) -> void:
+	if peer_id < 0 or peer_id == id or delta <= 0:
+		return
+	var k: String = str(peer_id)
+	social_rapport[k] = clampi(int(social_rapport.get(k, 0)) + delta, 0, 3000)
+
+
+func get_social_rapport(peer_id: int) -> int:
+	if peer_id < 0 or peer_id == id:
+		return 0
+	return int(social_rapport.get(str(peer_id), 0))
+
+
+func top_social_rapport_peer() -> Dictionary:
+	var best_id: int = -1
+	var best_score: int = 0
+	for k in social_rapport:
+		var sc: int = int(social_rapport[k])
+		var pid: int = int(k)
+		if sc > best_score or (sc == best_score and (best_id < 0 or pid < best_id)):
+			best_score = sc
+			best_id = pid
+	return {"peer_id": best_id, "score": best_score}
+
+
+func social_status_line() -> String:
+	var t: Dictionary = top_social_rapport_peer()
+	var pid: int = int(t.get("peer_id", -1))
+	var sc: int = int(t.get("score", 0))
+	if pid < 0 or sc <= 0:
+		return "Social: no steady bonds yet (stay near another pawn to build rapport)."
+	return "Social: strongest bond toward #%d (rapport %d) — family / pairing hook." % [pid, sc]
+
+
 ## Serialize for `GameSave` (store_var). All numeric work flags included.
 func to_save_dict() -> Dictionary:
 	var sx: Dictionary = {}
@@ -824,6 +863,7 @@ func to_save_dict() -> Dictionary:
 		"work_hunt": work_hunt,
 		"work_build": work_build,
 		"trait_types": trait_types,
+		"social_rapport": social_rapport.duplicate(true),
 	}
 
 
@@ -908,6 +948,10 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	p.work_chop = bool(d.get("work_chop", true))
 	p.work_hunt = bool(d.get("work_hunt", true))
 	p.work_build = bool(d.get("work_build", true))
+	p.social_rapport = {}
+	if d.has("social_rapport") and d["social_rapport"] is Dictionary:
+		for sk in (d["social_rapport"] as Dictionary).keys():
+			p.social_rapport[str(sk)] = clampi(int((d["social_rapport"] as Dictionary)[sk]), 0, 3000)
 	# Load traits
 	if d.has("trait_types") and d["trait_types"] is Array:
 		for trait_type in d["trait_types"]:

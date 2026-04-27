@@ -130,8 +130,14 @@ const HAUL_RETRY_COOLDOWN_TICKS: int = 10
 ## At high sim speeds, skip historical aversion weighting path pass to avoid
 ## expensive weight toggles on every pawn path request.
 const FAST_PATHFIND_SPEED_THRESHOLD: float = 6.0
-const REPRODUCTION_COOLDOWN_TICKS: int = 6000
-const REPRODUCTION_MATE_RANGE_PX: float = 42.0
+const REPRODUCTION_COOLDOWN_TICKS: int = 5000
+## ~11.5 tiles at 10px/tile — cohabiting workers can still pair without pixel-perfect overlap.
+const REPRODUCTION_MATE_RANGE_PX: float = 115.0
+## Softer than general job hunger gates so pairs can raise children under colony stress.
+const REPRODUCTION_MIN_HUNGER: float = 48.0
+const REPRODUCTION_MIN_REST: float = 42.0
+## Requires [member PawnData.social_rapport] built from co-presence (Main._accumulate_social_rapport).
+const REPRODUCTION_MIN_RAPPORT: int = 72
 const COHORT_UPDATE_TICKS: int = 200
 const COHORT_MATCH_RADIUS_TILES: int = 8
 const COHORT_BREAK_DISTANCE_TILES: int = 16
@@ -1272,7 +1278,7 @@ func attempt_reproduction() -> bool:
 	var now: int = GameManager.tick_count
 	if now < _next_reproduction_tick:
 		return false
-	if data.hunger <= 80.0 or data.rest <= 80.0:
+	if data.hunger <= REPRODUCTION_MIN_HUNGER or data.rest <= REPRODUCTION_MIN_REST:
 		return false
 	var has_shelter: bool = is_in_bed()
 	if not has_shelter:
@@ -1282,6 +1288,8 @@ func attempt_reproduction() -> bool:
 		return false
 	var mate: Pawn = _find_compatible_mate()
 	if mate == null or mate.data == null:
+		return false
+	if data.get_social_rapport(int(mate.data.id)) < REPRODUCTION_MIN_RAPPORT:
 		return false
 	if int(data.id) > int(mate.data.id):
 		return false
@@ -1307,7 +1315,7 @@ func _find_compatible_mate() -> Pawn:
 		var p: Pawn = n as Pawn
 		if p == self or p.data == null:
 			continue
-		if p.data.hunger <= 80.0 or p.data.rest <= 80.0:
+		if p.data.hunger <= REPRODUCTION_MIN_HUNGER or p.data.rest <= REPRODUCTION_MIN_REST:
 			continue
 		if p._next_reproduction_tick > GameManager.tick_count:
 			continue

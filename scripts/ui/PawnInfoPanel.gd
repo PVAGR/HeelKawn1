@@ -75,6 +75,7 @@ var _mood_status_label: Label = null
 var _crisis_level_label: Label = null
 var _liking_label: Label = null
 var _coach_label: Label = null
+var _social_label: Label = null
 var _action_skills_label: Label = null
 var _portrait_cells: Array[ColorRect] = []
 
@@ -200,6 +201,11 @@ func _build_ui() -> void:
 	_coach_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_coach_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_root_vbox.add_child(_coach_label)
+
+	_root_vbox.add_child(_make_section_header("Social (NPC v1)"))
+	_social_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_social_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_root_vbox.add_child(_social_label)
 
 	_root_vbox.add_child(_make_section_header("Needs"))
 	for entry in NEED_BARS:
@@ -413,7 +419,7 @@ func _set_visible(v: bool) -> void:
 
 # ==================== refresh ====================
 
-func _on_game_tick(_tick: int) -> void:
+func _on_game_tick(tick: int) -> void:
 	if _pawn == null:
 		return
 	# If the pawn was removed (e.g. world reroll wiped it), drop the binding
@@ -421,6 +427,15 @@ func _on_game_tick(_tick: int) -> void:
 	if not is_instance_valid(_pawn):
 		_pawn = null
 		_set_visible(false)
+		return
+	var stride: int = 1
+	if GameManager.game_speed >= 50.0:
+		stride = 8
+	elif GameManager.game_speed >= 26.0:
+		stride = 4
+	elif GameManager.game_speed >= 12.0:
+		stride = 2
+	if tick % stride != 0:
 		return
 	_refresh()
 
@@ -446,6 +461,8 @@ func _refresh() -> void:
 				coach_sb += "\n"
 			coach_sb += hints[hi]
 		_coach_label.text = coach_sb
+	if _social_label != null:
+		_social_label.text = d.social_status_line()
 	if _action_skills_label != null:
 		_action_skills_label.text = (
 				"Action xp  move %d  farm %d  build %d  gather %d  combat %d"

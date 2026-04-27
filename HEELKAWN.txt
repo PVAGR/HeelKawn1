@@ -30,6 +30,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-27  Social + reproduction: PawnData.social_rapport (co-presence, same component, ~128px); Main._accumulate_social_rapport every 40 ticks; relaxed reproduction hunger/rest thresholds + REPRODUCTION_MIN_RAPPORT + wider mate range; spawn_child_pawn tries parent tile + 8 neighbors; child gets parent_a/b ids; PawnInfoPanel Social line + throttled refresh at 12x/26x/50x+; ColonyHUD coarser text refresh at 50x+.
 2026-04-27  PlayerIntentQueue + FactionRegistry + ReligionLens autoloads (v1): structured intent queue with WorldMemory echo; deterministic house stub per settlement zone_id; read-only sacred+myth overlay; save/load in Main; F10 reports 28–30 (report 28 seeds one demo OBSERVER_NOTE per session for traces).
 2026-04-27  SimVision autoload: roadmap stub + F10 debug report 27 (vision scope). Full Worldbox/CK/Bannerlord-scale systems are not implemented in one pass; future tiers must merge with deterministic kernel rules.
 2026-04-27  Character sheet depth: PawnInfoPanel header with 6×8 color “pixel” portrait from PawnData colors; subtitle (profession + job bias); deterministic progression_coach_lines() on PawnData (queue bias, top liking lanes, profession lock hint, nexus line); action-skill xp row; coach section. Same panel path works for NPC observation today and can bind to a player pawn later.

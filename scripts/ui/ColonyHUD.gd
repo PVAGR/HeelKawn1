@@ -112,7 +112,11 @@ func _on_tick(tick: int) -> void:
 		refresh_stride = 4
 	elif GameManager.game_speed >= 12.0:
 		refresh_stride = 2
-	var coarse: int = 10 if GameManager.game_speed < 12.0 else 20
+	var coarse: int = 10
+	if GameManager.game_speed >= 50.0:
+		coarse = 35
+	elif GameManager.game_speed >= 12.0:
+		coarse = 20
 	if tick % coarse != 0 and not _hud_dirty:
 		return
 	if tick % refresh_stride == 0:

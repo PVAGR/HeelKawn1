@@ -95,6 +95,8 @@ const TRACE_REDRAW_INTERVAL_SEC: float = 1.0
 ## Generational turnover (v1): one new pawn per this many ticks if population > 0.
 const GENERATION_TICKS: int = 20000
 const REPRODUCTION_CHECK_INTERVAL_TICKS: int = 300
+## Co-presence rapport for pairing / births (deterministic; same path component only).
+const SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS: int = 40
 const INFLUENCE_UPDATE_INTERVAL_TICKS: int = 500
 const OBSERVER_HUD_REFRESH_TICKS: int = 30
 const FOCUS_INSPECTOR_REFRESH_TICKS: int = 15
@@ -1453,6 +1455,8 @@ func _on_game_tick(tick: int) -> void:
 	SettlementMemory.update_settlement_intents(tick)
 	SettlementMemory.update_resource_pressures(tick)
 	SettlementMemory.update_preferred_work_fronts(tick)
+	if tick % SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS == 0:
+		_accumulate_social_rapport()
 	_emit_pawn_divergence_summary_if_needed(tick)
 	var obs_iv: int = _high_speed_interval(OBSERVER_HUD_REFRESH_TICKS, 45, 90)
 	if _observer_hud != null and tick % obs_iv == 0:
@@ -1507,6 +1511,34 @@ func _maybe_generational_turnover() -> void:
 	if sp.x < 0:
 		return
 	_pawn_spawner.spawn_generational_pawn(_world, sp, t)
+
+
+func _accumulate_social_rapport() -> void:
+	if _pawn_spawner == null or _world == null or _world.pathfinder == null:
+		return
+	const R2: float = 128.0 * 128.0
+	const GAIN: int = 14
+	var pl: Array[Pawn] = []
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
+			pl.append(p)
+	if pl.size() < 2:
+		return
+	pl.sort_custom(func(a: Pawn, b: Pawn) -> bool: return a.data.id < b.data.id)
+	for i in range(pl.size()):
+		var pa: Pawn = pl[i]
+		var da: PawnData = pa.data
+		for j in range(i + 1, pl.size()):
+			var pb: Pawn = pl[j]
+			var db: PawnData = pb.data
+			if da.hunger <= 38.0 or db.hunger <= 38.0:
+				continue
+			if _world.pathfinder.component_of(da.tile_pos) != _world.pathfinder.component_of(db.tile_pos):
+				continue
+			if pa.position.distance_squared_to(pb.position) > R2:
+				continue
+			da.add_social_rapport(int(db.id), GAIN)
+			db.add_social_rapport(int(da.id), GAIN)
 
 
 func _process_reproduction_tick() -> void:

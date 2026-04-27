@@ -298,18 +298,38 @@ func spawn_child_pawn(
 ) -> bool:
 	if world == null or world.data == null or world.pathfinder == null or pawn_scene == null:
 		return false
-	if not world.data.in_bounds(tile.x, tile.y):
-		return false
-	if not SPAWNABLE_BIOMES.has(world.data.get_biome(tile.x, tile.y)):
-		return false
-	if not world.pathfinder.is_passable(tile):
-		return false
 	var main_comp: int = world.pathfinder.largest_component_id()
-	if main_comp < 0 or world.pathfinder.component_of(tile) != main_comp:
+	if main_comp < 0:
 		return false
-	for p in pawns:
-		if p != null and is_instance_valid(p) and p.data != null and p.data.tile_pos == tile:
-			return false
+	var candidates: Array[Vector2i] = [tile]
+	var neigh: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+		Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1),
+	]
+	for d in neigh:
+		candidates.append(tile + d)
+	var spawn_tile: Vector2i = Vector2i(-1, -1)
+	for t in candidates:
+		if not world.data.in_bounds(t.x, t.y):
+			continue
+		if not SPAWNABLE_BIOMES.has(world.data.get_biome(t.x, t.y)):
+			continue
+		if not world.pathfinder.is_passable(t):
+			continue
+		if world.pathfinder.component_of(t) != main_comp:
+			continue
+		var occupied: bool = false
+		for p in pawns:
+			if p != null and is_instance_valid(p) and p.data != null and p.data.tile_pos == t:
+				occupied = true
+				break
+		if occupied:
+			continue
+		spawn_tile = t
+		break
+	if spawn_tile.x < 0:
+		return false
+	tile = spawn_tile
 	var data := PawnData.new()
 	data.display_name = _pick_name_deterministic()
 	data.age = 18
@@ -322,6 +342,8 @@ func spawn_child_pawn(
 	data.hair_color = parent_a.hair_color.lerp(parent_b.hair_color, 0.5)
 	data.apparel_color = parent_a.apparel_color.lerp(parent_b.apparel_color, 0.5)
 	data.initialize_affinities(birth_tick, parent_a.id, parent_b.id)
+	data.parent_a_id = parent_a.id
+	data.parent_b_id = parent_b.id
 	for sk in parent_a.skills.keys():
 		var inherited: int = int((int(parent_a.skills[sk]) + int(parent_b.skills.get(sk, 0))) * 0.2)
 		data.skills[sk] = inherited
@@ -369,4 +391,3 @@ func _assign_random_traits(pawn_data: PawnData) -> void:
 			pawn_data.add_trait(trait_item)
 			if GameManager.verbose_logs():
 				print("[Spawn] trait: %s -> %s" % [pawn_data.display_name, trait_item.display_name])
-

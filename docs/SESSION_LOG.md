@@ -1,6 +1,15 @@
 # HEELKAWN SESSION LOG
 
-Use this file as cross-LLM handoff memory.
+HISTORICAL CONTINUITY ONLY.
+
+This file is append-only session history and handoff continuity memory.
+
+This file is NOT the canonical live project state.
+Canonical truth lives in `docs/HEELKAWN_STATE.md`.
+
+Any phase labels or next-step notes below are historical snapshots only.
+Live phase and next target authority are in `docs/HEELKAWN_STATE.md`.
+
 Each session adds one entry at the top.
 
 ---

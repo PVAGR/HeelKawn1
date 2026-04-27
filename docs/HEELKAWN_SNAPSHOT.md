@@ -1,5 +1,12 @@
 # HeelKawn — shared context snapshot (copy-paste to any AI)
 
+HISTORICAL SNAPSHOT AID ONLY.
+
+This file is a handoff helper and may be stale.
+It is not a canonical state source.
+Canonical state lives in `docs/HEELKAWN_STATE.md`.
+Any live phase/next-target wording in this file is historical snapshot content only.
+
 **Purpose:** One screen so **ChatGPT, DeepSeek, Cursor**, and the **Creator** stay aligned when context windows reset. (No separate **Copilot** role — **Cursor** holds implementation/integration.)  
 **Update:** Revise this file (or the block Cursor emits) when build status, task, or decisions change. **Snapshot-first in substantive replies is mandatory** (see `.cursor/rules/heelkawn-handoff.mdc`).
 

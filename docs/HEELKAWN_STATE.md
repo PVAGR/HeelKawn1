@@ -1,77 +1,136 @@
 # HEELKAWN — AUTHORITATIVE PROJECT STATE
 
-This file is the single source of truth for where the project is.
+This is the only canonical live-state file for HeelKawn.
 
-Anyone (human or AI) working on HeelKawn MUST read this file first.
+Any conflicting status in `README.md`, `HEELKAWN.txt`, `docs/SESSION_LOG.md`, or snapshot files is non-authoritative.
 
-## ENGINE
+## Canonical Project Identity
 
-- Godot 4.6
-- Project parses cleanly
-- Known reload-time warnings exist (Godot 4.6 static/autoload noise)
-- Runtime is stable
+- Deterministic Godot 4.6 world simulation.
+- Player role is observer/chronicler, not commander.
+- Canonical architecture flow: `WorldMemory -> WorldMeaning -> WorldPersistence -> Culture -> Behavior`.
+- Stable truth belongs in repo files, not chat memory.
 
-## KERNEL (COMPLETE)
+## Canonical Runtime Surface (autoload map)
 
-- WorldMemory (deterministic, append-only, saved)
-- WorldMeaning (derived regional interpretation)
-- WorldPersistence (scars, ruins, abandonment)
-- Land Recovery (visual healing, ruins permanent)
-- CulturalMemory (inherited regional reputation)
-- Pawn Behavioral Response (path/job/wander bias)
-- SettlementMemory (clustered regions → places)
-- SettlementPlanner (autonomous building)
-- Animal Population Dynamics (deterministic ecology)
+Active runtime autoload systems:
+- `WorldMemory`
+- `WorldMeaning`
+- `WorldPersistence`
+- `CulturalMemory`
+- `SettlementMemory`
+- `IntentMemory`
+- `AgeMemory`
+- `SettlementPlanner`
+- `SettlementRebirth`
+- `TradePlanner`
+- `TradeMemory`
+- `RemnantMemory`
+- `MythMemory`
+- `RoadMemory`
+- `SacredMemory`
+- `ChronicleLog`
+- `WorldClock`
+- `WorldEvents`
 
-## CURRENT PHASE
+Core runtime support autoloads:
+- `GameManager`
+- `JobManager`
+- `StockpileManager`
+- `ColonySimServices`
 
-**Phase 4 — Identity & Meaning**
+## Canonical Determinism Rules (Non-Negotiable)
 
-Validation milestone (canonical runtime, 2026-04-26):
-- Phase 7 validation proof is now confirmed in canonical repo runtime.
-- Validation harness arming is proven ON in debug runs (`VALIDATION_SESSION_ENABLED` path).
-- Clean-economy suppression proof is confirmed (`VALIDATION_EVENT_ROLL_PROOF` reports skipped roll; no dirty economy event lines observed in validation run).
-- Settlement-truth verification is confirmed live (`[SETTLEMENT_VERIFY]` with hysteresis transitions and center_region continuity key).
-- Specialization validation logs are confirmed live (`[SPECIALIZATION_VALIDATE]` on coarse resource-pressure cadence).
-- Specialization identity remains explicitly proxy-derived from resource-pressure/job-demand, not stock scarcity truth.
-- Kernel diagnostic at tick 30000 reports PASS (`append_only=PASS`, determinism PASS, settlements active=1, export_ready=true).
+- No RNG in world history decisions.
+- No frame-time authority over simulation truth.
+- No per-tick unbounded O(N) recompute loops in world-critical systems.
+- Derived layers do not overwrite memory facts.
+- History must remain explainable after the fact.
+- Autoload scripts must not use `class_name`.
+
+## Current Phase / Active Lane (Locked)
+
+**Phase 8 - Resource Truth / Settlement Economy (active lane).**
+
+Historical phase labels in `docs/SESSION_LOG.md` are continuity records only and do not override this live-state lock.
+
+## Validation Milestone Lock (Canonical Runtime, 2026-04-26)
+
+- Phase 7 canonical validation proof is confirmed.
+- Validation harness arming is confirmed in debug runtime (`VALIDATION_SESSION_ENABLED` path).
+- Clean-economy event suppression proof is confirmed (`[VALIDATION_EVENT_ROLL_PROOF]` first-roll proof + suppressed contaminated event path during validation runs).
+- Settlement-truth verification is confirmed live (`[SETTLEMENT_VERIFY]` with `center_region` continuity key and hysteresis behavior).
+- Specialization validation logs are confirmed live (`[SPECIALIZATION_VALIDATE]` on coarse cadence).
+- Specialization identity remains proxy/job-pressure derived, not stock scarcity truth.
+- Phase 8 stock-truth observational layer exists in runtime (`[RESOURCE_TRUTH]` / proof bundle surfaces).
+- First runtime proof pass for stock-truth overlap safety has been achieved.
+
+Validation locks that must not change without explicit approval:
+- Proxy specialization identity contract.
+- Settlement-truth verify log semantics and continuity keying (`center_region` / hysteresis key behavior).
+- Clean validation harness behavior in debug sessions.
+- Specialization interpretation rule: proxy/job-pressure based, not stock-scarcity truth.
+
+## Settlement / Ecology Canon (Shipped Truth)
 
 Settlements:
-- Build themselves
-- Diverge culturally (open / cautious / defensive)
-- Can be abandoned or revivable
-- Revival tuning is active for moderately scarred, quiet regions
-- Deterministic Phase 4 revival curve now emits: permanently_abandoned / abandoned / recovering / revivable / active
-- Rebirth is peace-gated (tick-only) and blocked by scar>=3, recent conflict, or non-revivable state
-- Player-readable settlement meaning now distinguishes quiet / scarred / bloodied / grave regions
-- Expand walls, beds, doors, zones autonomously
+- Build autonomously.
+- Diverge culturally (`open`, `cautious`, `defensive`).
+- Use deterministic revival/abandonment states:
+  - `active`
+  - `revivable`
+  - `recovering`
+  - `abandoned`
+  - `permanently_abandoned`
+- Rebirth is peace-gated and blocked by hard conflict/scar conditions.
+- Regional meaning remains player-readable as quiet/scarred/bloodied/grave.
 
-Animals:
-- Do not die instantly on spawn
-- Reproduce, decline, recover deterministically
-- Can go locally extinct
+Ecology:
+- Wildlife is deterministic and ongoing.
+- Populations can decline, recover, and go locally extinct.
 
-## PLAYER ROLE
+## Active vs Inactive Module Clarity
 
-Observer/chronicler.
-No required micromanagement.
+Active canonical runtime is defined by `project.godot` autoloads and current `Main` wiring.
 
-## KNOWN ENGINE NOTES
+Not part of canonical autoload runtime surface (treat as non-authoritative unless explicitly promoted):
+- `autoloads/FragmentationManager.gd`
+- `autoloads/SchismManager.gd`
+- `scripts/kernel/settlement_persistence.gd`
 
-- Godot 4.6 may emit reload-time warnings for static autoload calls
-- These do not indicate logic errors
-- Do not refactor to silence them unless they break runtime
+## Canon / Historical / Exploratory Classification
 
-## DESIGN RULES (NON-NEGOTIABLE)
+### CANON
+- Observer/chronicler player role.
+- Deterministic world-history principle.
+- Memory/meaning/persistence layering and consequence model.
+- Settlement abandonment/revival/permanence model as currently shipped.
+- Trade/age/myth/remnant/road/sacred systems listed in active autoload runtime surface.
+- `center_region` is the continuity key for settlement-truth tracking and diagnostics.
 
-- No RNG in world history
-- No per-tick O(N) recompute
-- Derived systems never write to memory
-- Autoloads do not use class_name
-- History must be explainable after the fact
+### HISTORICAL REFERENCE ONLY
+- `docs/SESSION_LOG.md` (append-only continuity log).
+- `HEELKAWN.txt` (short handoff pointer file, not canonical state).
+- `HEELKAWN_KERNEL.md` (legacy kernel notes).
+- `docs/HEELKAWN_SNAPSHOT.md` (snapshot handoff aid).
 
-## NEXT TARGET
+### EXPLORATORY / NOT CANON-LOCKED
+- Long-horizon platform/community/streaming integrations and product expansion ideas.
+- Experimental notes not promoted into this file.
 
-- Cultural architectural styles
-- Player-readable meaning refinement (audio + settlement identity depth, no text overlay)
-- Wildlife HUD trend validation + Phase 4 rebirth threshold tuning passes
+## Next Target (Locked)
+
+- Cached per-settlement surplus/deficit interpretation layered on top of proven stock truth.
+
+## Determinism Scope Honesty
+
+- HeelKawn is a deterministic world-simulation project by design and validation lane.
+- Canonical validation/proof lanes above are locked and proven in debug runtime.
+- Known randomness risks still exist in other non-locked runtime subsystems and remain separate cleanup work; do not overclaim full-repo determinism completion.
+
+## Required Read Order for Humans and AIs
+
+1. `docs/HEELKAWN_STATE.md` (this file)
+2. `docs/LLM_ONBOARDING.md`
+3. `README.md`
+4. `docs/SESSION_LOG.md` (history/continuity only)

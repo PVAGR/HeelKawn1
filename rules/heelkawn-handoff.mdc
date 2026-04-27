@@ -1,5 +1,5 @@
 ---
-description: Read docs/HEELKAWN_STATE.md then HEELKAWN.txt before working in this repo
+description: Read canonical state docs first; treat handoff docs as non-canonical
 alwaysApply: true
 ---
 
@@ -7,9 +7,12 @@ alwaysApply: true
 
 - At the start of work in this repository, read in order:
 	1. docs/HEELKAWN_STATE.md
-	2. HEELKAWN.txt
+	2. docs/LLM_ONBOARDING.md
+	3. README.md
+	4. docs/SESSION_LOG.md (history only)
 - docs/HEELKAWN_STATE.md is the single source of truth for project state.
-- HEELKAWN.txt is a short handoff and log file to preserve session continuity.
+- HEELKAWN.txt is a pointer/handoff file only and is not state authority.
+- docs/SESSION_LOG.md is history/continuity only and is not canonical live state.
 - **Inter-AI and creator handoffs** use the standard in `docs/HEELKAWN_CONTEXT_LOG.md` (`[HEELKAWN CONTEXT LOG]`). Permanent **Canon** rows may be appended to `docs/HEELKAWN_CANON_LOG.md` only when tagged Canon.
 
 ## [HEELKAWN CONTEXT LOG] — when pasting to ChatGPT / DeepSeek / Creator

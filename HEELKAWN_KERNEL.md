@@ -3,6 +3,10 @@
 This document is historical reference only.
 It is superseded by docs/HEELKAWN_STATE.md, which is the authoritative project state file.
 
+DO NOT use this file as live state, active phase, or next-target authority.
+Use `docs/HEELKAWN_STATE.md` for all canonical current-state decisions.
+Any phase table or roadmap text below is retained for historical context only.
+
 ---
 
 ## Kernel type: **A — deterministic**

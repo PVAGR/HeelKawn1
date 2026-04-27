@@ -2,6 +2,11 @@
 
 Use this file as the quick map of all world canon files.
 
+Authority note:
+- Runtime/project state authority is `docs/HEELKAWN_STATE.md`.
+- This world-bible folder governs lore/canon vocabulary and world context only.
+- Session chronology is in `docs/SESSION_LOG.md` (historical continuity only).
+
 ## Core Lore
 
 - `GAME_VISION.md` - long-horizon product vision and design DNA

@@ -146,6 +146,26 @@ func _demo_economy_block(s: Dictionary) -> String:
 			float(s.get("resource_pressure_stone", 0.0)),
 			float(s.get("resource_pressure_ore_proxy", 0.0)),
 		]
+		+ "Resource Truth (stock): F %d | W %d | S %d | O-proxy %d | Total %d (tick=%d center=%d)\n" % [
+			int(s.get("resource_truth_stock_food", 0)),
+			int(s.get("resource_truth_stock_wood", 0)),
+			int(s.get("resource_truth_stock_stone", 0)),
+			int(s.get("resource_truth_stock_ore_proxy", 0)),
+			int(s.get("resource_truth_total_units", 0)),
+			int(s.get("resource_truth_snapshot_tick", -1)),
+			int(s.get("resource_truth_center_region", -1)),
+		]
+		+ "Resource Balance (derived): F %s | W %s | S %s | O-proxy %s (tick=%d center=%d src=%s)\n" % [
+			str(s.get("resource_balance_food", "DEFICIT")),
+			str(s.get("resource_balance_wood", "DEFICIT")),
+			str(s.get("resource_balance_stone", "DEFICIT")),
+			str(s.get("resource_balance_ore_proxy", "DEFICIT")),
+			int(s.get("resource_balance_snapshot_tick", -1)),
+			int(s.get("resource_balance_center_region", -1)),
+			str(s.get("resource_balance_source", "stock_truth_derived_first_pass")),
+		]
+		+ "[i]Balance line is derived from stock truth only; it does not drive behavior.[/i]\n"
+		+ "[i]Specialization above stays proxy/job-pressure based; stock truth is observational only.[/i]\n"
 		+ "Intent: %s" % str(s.get("intent_summary", "n/a"))
 	)
 

@@ -1,21 +1,14 @@
-WHERE WE LEFT OFF
+HEELKAWN HANDOFF POINTER (NON-CANONICAL)
 
-- Deterministic Godot 4.6 world sim remains stable.
-- Kernel is complete.
-- Current phase is Phase 4: Identity & Meaning.
-- Player role remains observer/chronicler.
+This file is a short pointer for humans and AIs.
+It is not a live state authority.
+Any phase/next-target language previously present here is superseded.
 
-CURRENT PHASE
+Authoritative live project state:
+- docs/HEELKAWN_STATE.md
 
-- Phase 4: Identity & Meaning
+Operating rules for AI contributors:
+- docs/LLM_ONBOARDING.md
 
-NEXT TARGET
-
-- Settlement revival vs permanent abandonment tuning.
-
-LOG (newest first)
-
-2026-04-25  Docs-only cleanup: docs/HEELKAWN_STATE.md kept as sole authoritative state file; handoff docs aligned.
-2026-04-25  PawnData.gd: trait loops hardened (null skip, tr not trait); match arms split one-line.
-2026-04-24  Ages/cataclysm framing locked: selective persistence; history degrades into form, not explanation.
-2026-04-24  World memory lock-in and continuity rules established.
+Historical continuity log (append-only):
+- docs/SESSION_LOG.md

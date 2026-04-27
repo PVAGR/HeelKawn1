@@ -128,6 +128,8 @@ var _player_pawn: Pawn = null
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
 var _kernel_diagnostic: KernelDiagnostic = null
+var _phase8_proof_overlay_layer: CanvasLayer = null
+var _phase8_proof_overlay_text: RichTextLabel = null
 var _kill_count: int = 0
 ## Pixel radius around a pawn that counts as a click hit. Pawns draw at
 ## DRAW_RADIUS=3.5; we add a generous slop so moving targets are easy to grab.
@@ -275,6 +277,7 @@ func _ready() -> void:
 		_observer_hud.set_visible_state(false)
 	if _focus_inspector != null:
 		_focus_inspector.set_visible_state(false)
+	_init_phase8_proof_overlay()
 	call_deferred("_log_validation_harness_observability_once")
 
 
@@ -369,6 +372,7 @@ func _bootstrap_colony() -> void:
 	WorldPersistence.recompute()
 	_place_stockpile(main_component)
 	_pawn_spawner.spawn_starters(_world, main_component)
+	_ensure_player_pawn_assigned()
 	if is_instance_valid(_world):
 		_world.apply_ruins_from_persistence()
 		CulturalMemory.recompute(_world)
@@ -469,6 +473,8 @@ func _sync_pawn_inherited_cultural_reputation() -> void:
 
 func _on_game_tick(tick: int) -> void:
 	if _player_input != null:
+		if not is_instance_valid(_player_pawn):
+			_ensure_player_pawn_assigned()
 		if is_instance_valid(_player_pawn):
 			_player_input.process_next_tick(_player_pawn)
 			_player_action_state = _player_input.get_last_action_state()
@@ -521,6 +527,7 @@ func _on_game_tick(tick: int) -> void:
 		_process_reproduction_tick()
 	if tick % INFLUENCE_UPDATE_INTERVAL_TICKS == 0:
 		_update_pawn_influence_tick()
+	_update_phase8_proof_bundle_preferred_center()
 	SettlementMemory.update_settlement_intents(tick)
 	SettlementMemory.update_resource_pressures(tick)
 	SettlementMemory.update_preferred_work_fronts(tick)
@@ -904,6 +911,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		KEY_F11:
 			if _kernel_diagnostic != null and _kernel_diagnostic.has_method("start_settlement_truth_verification"):
 				_kernel_diagnostic.call("start_settlement_truth_verification")
+		KEY_F12:
+			_debug_capture_resource_truth()
 		KEY_M:
 			ColonySimServices.cycle_labor_stance()
 		KEY_ESCAPE:
@@ -950,6 +959,68 @@ func _unhandled_input(event: InputEvent) -> void:
 			MOUSE_BUTTON_RIGHT:
 				if mb.pressed:
 					_on_right_press()
+
+
+func _init_phase8_proof_overlay() -> void:
+	if not OS.is_debug_build():
+		return
+	if _phase8_proof_overlay_layer != null and is_instance_valid(_phase8_proof_overlay_layer):
+		return
+	_phase8_proof_overlay_layer = CanvasLayer.new()
+	_phase8_proof_overlay_layer.name = "Phase8ProofOverlay"
+	_phase8_proof_overlay_layer.layer = 30
+	add_child(_phase8_proof_overlay_layer)
+	_phase8_proof_overlay_text = RichTextLabel.new()
+	_phase8_proof_overlay_text.name = "Phase8ProofOverlayText"
+	_phase8_proof_overlay_text.bbcode_enabled = false
+	_phase8_proof_overlay_text.fit_content = false
+	_phase8_proof_overlay_text.scroll_active = true
+	_phase8_proof_overlay_text.selection_enabled = false
+	_phase8_proof_overlay_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_phase8_proof_overlay_text.position = Vector2(8, 64)
+	_phase8_proof_overlay_text.size = Vector2(1240, 56)
+	_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 10)
+	_phase8_proof_overlay_layer.add_child(_phase8_proof_overlay_text)
+	if not SettlementMemory.phase8_proof_bundle_emitted.is_connected(_on_phase8_proof_bundle_emitted):
+		SettlementMemory.phase8_proof_bundle_emitted.connect(_on_phase8_proof_bundle_emitted)
+	var last_line: String = SettlementMemory.get_phase8_proof_latest_bundle_line()
+	if last_line == "":
+		last_line = "[PHASE8_PROOF_BUNDLE] waiting_for_first_resource_truth_tick..."
+	_phase8_proof_overlay_text.text = last_line
+
+
+func _on_phase8_proof_bundle_emitted(bundle_line: String) -> void:
+	if _phase8_proof_overlay_text == null or not is_instance_valid(_phase8_proof_overlay_text):
+		return
+	_phase8_proof_overlay_text.text = bundle_line
+
+
+func _update_phase8_proof_bundle_preferred_center() -> void:
+	var preferred_center: int = -1
+	if _selected_pawn != null and is_instance_valid(_selected_pawn) and _selected_pawn.data != null:
+		var srk: int = WorldMemory._region_key(_selected_pawn.data.tile_pos.x, _selected_pawn.data.tile_pos.y)
+		preferred_center = SettlementMemory.get_center_region_for_region(srk)
+	if preferred_center < 0:
+		var focus: Dictionary = _observer_focus_settlement()
+		var sdata: Dictionary = focus.get("settlement_data", {})
+		preferred_center = int(sdata.get("center_region", -1))
+	SettlementMemory.set_phase8_proof_preferred_center_region(preferred_center)
+
+
+func _debug_capture_resource_truth() -> void:
+	if not OS.is_debug_build():
+		return
+	var preferred_center: int = -1
+	# Prefer settlement already in focus via current selection.
+	if _selected_pawn != null and is_instance_valid(_selected_pawn) and _selected_pawn.data != null:
+		var srk: int = WorldMemory._region_key(_selected_pawn.data.tile_pos.x, _selected_pawn.data.tile_pos.y)
+		preferred_center = SettlementMemory.get_center_region_for_region(srk)
+	# Otherwise prefer observer/player focus if available.
+	if preferred_center < 0:
+		var focus: Dictionary = _observer_focus_settlement()
+		var sdata: Dictionary = focus.get("settlement_data", {})
+		preferred_center = int(sdata.get("center_region", -1))
+	SettlementMemory.print_resource_truth_capture(preferred_center, "Main.F12")
 
 
 ## Left-click press handler. Branches on the active designation mode:
@@ -1239,6 +1310,18 @@ func _set_selected_pawn(p: Pawn) -> void:
 			print("[Main] Selection cleared")
 	if _info_panel != null:
 		_info_panel.bind_pawn(_selected_pawn)
+
+
+func _ensure_player_pawn_assigned() -> void:
+	if _pawn_spawner == null:
+		return
+	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		return
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		_set_selected_pawn(p)
+		return
 
 
 func get_player_queue_size() -> int:
@@ -1596,6 +1679,7 @@ func _reroll_world() -> void:
 	# stockpile reference the first time it ticks.
 	_place_stockpile(main_component)
 	_pawn_spawner.respawn(_world, main_component)
+	_ensure_player_pawn_assigned()
 	Main._world_stabilization_until_tick = GameManager.tick_count + WORLD_STABILIZATION_TICKS
 	_seed_jobs_from_world()
 	_react_to_mining_progress()
@@ -2354,6 +2438,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 		if pd is Dictionary:
 			var pdat: PawnData = PawnData.from_save_dict(pd)
 			_pawn_spawner.spawn_from_data(pdat, _world)
+	_ensure_player_pawn_assigned()
 	_world.set_meta("animal_spawner", _animal_spawner)
 	if is_instance_valid(_world):
 		_world.apply_ruins_from_persistence()
@@ -2741,9 +2826,25 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 	var food_pressure: float = float(ColonySimServices.get_food_pressure())
 	var housing_pressure: float = float(ColonySimServices.get_housing_pressure())
 	var resource_pressure: Dictionary = settlement_data.get("resource_pressure", {})
+	var resource_truth: Dictionary = settlement_data.get("resource_truth", {})
+	var resource_balance: Dictionary = settlement_data.get("resource_balance", {})
 	var rp_wood: float = clamp(float(resource_pressure.get("wood", 0.0)), 0.0, 1.0)
 	var rp_stone: float = clamp(float(resource_pressure.get("stone", 0.0)), 0.0, 1.0)
 	var rp_ore: float = clamp(float(resource_pressure.get("ore_proxy", 0.0)), 0.0, 1.0)
+	var rt_food: int = int(resource_truth.get("stock_food", 0))
+	var rt_wood: int = int(resource_truth.get("stock_wood", 0))
+	var rt_stone: int = int(resource_truth.get("stock_stone", 0))
+	var rt_ore_proxy: int = int(resource_truth.get("stock_ore_proxy", 0))
+	var rt_total: int = int(resource_truth.get("total_stock_units", 0))
+	var rt_tick: int = int(resource_truth.get("snapshot_tick", -1))
+	var rt_center: int = int(resource_truth.get("center_region", -1))
+	var rb_food: String = str(resource_balance.get("food_balance", "DEFICIT"))
+	var rb_wood: String = str(resource_balance.get("wood_balance", "DEFICIT"))
+	var rb_stone: String = str(resource_balance.get("stone_balance", "DEFICIT"))
+	var rb_ore_proxy: String = str(resource_balance.get("ore_proxy_balance", "DEFICIT"))
+	var rb_tick: int = int(resource_balance.get("snapshot_tick", -1))
+	var rb_center: int = int(resource_balance.get("center_region", -1))
+	var rb_source: String = str(resource_balance.get("source", "stock_truth_derived_first_pass"))
 	var wf_phase: String = str(settlement_data.get("specialization_phase", SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN))
 	var wf_locked_ch: String = str(settlement_data.get("specialization_channel", ""))
 	var wf_cand_ch: String = str(settlement_data.get("specialization_candidate_channel", ""))
@@ -2819,6 +2920,20 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"resource_pressure_wood": rp_wood,
 		"resource_pressure_stone": rp_stone,
 		"resource_pressure_ore_proxy": rp_ore,
+		"resource_truth_stock_food": rt_food,
+		"resource_truth_stock_wood": rt_wood,
+		"resource_truth_stock_stone": rt_stone,
+		"resource_truth_stock_ore_proxy": rt_ore_proxy,
+		"resource_truth_total_units": rt_total,
+		"resource_truth_snapshot_tick": rt_tick,
+		"resource_truth_center_region": rt_center,
+		"resource_balance_food": rb_food,
+		"resource_balance_wood": rb_wood,
+		"resource_balance_stone": rb_stone,
+		"resource_balance_ore_proxy": rb_ore_proxy,
+		"resource_balance_snapshot_tick": rb_tick,
+		"resource_balance_center_region": rb_center,
+		"resource_balance_source": rb_source,
 		"work_focus_phase": wf_phase,
 		"work_focus_display": wf_display,
 		"work_focus_confidence": wf_conf,

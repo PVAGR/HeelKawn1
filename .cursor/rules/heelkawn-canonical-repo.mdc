@@ -1,0 +1,17 @@
+---
+description: Official HeelKawn codebase is PVAGR/HeelKawn1 only; ignore other HeelKawn-named paths for project work
+alwaysApply: true
+---
+
+# Canonical HeelKawn workspace
+
+- **Official repo:** GitHub `PVAGR/HeelKawn1`, default branch `main`.
+- **Expected workspace root on this PC:** `C:\Users\user\HeelKawn1` (same folder as `.git/` for this clone).
+
+When doing **HeelKawn simulation / docs / tooling** work:
+
+1. Assume all edits land in **this repository** unless the user explicitly attaches or names a different folder for a migration.
+2. **Do not** merge, sync, or silently edit another directory that happens to be named Heel-Kawn / HeelKawn / Chronicles — those are **out of scope** unless the user asks to import into this repo.
+3. Prefer **commit + push to `origin/main`** after coherent changes so GitHub stays the durable memory (see `docs/CANONICAL_REPOSITORY.md`).
+
+If `git remote -v` does not show `github.com/PVAGR/HeelKawn1`, warn the user before treating the folder as canonical.

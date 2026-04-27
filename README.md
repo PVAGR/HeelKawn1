@@ -1,5 +1,10 @@
 # HeelKawn
 
+**Official repository:** [github.com/PVAGR/HeelKawn1](https://github.com/PVAGR/HeelKawn1) (`main`).  
+**This PC:** work only under `C:\Users\user\HeelKawn1` for this project—do not split edits across other HeelKawn-named folders. Scope and push workflow: [`docs/CANONICAL_REPOSITORY.md`](docs/CANONICAL_REPOSITORY.md). One-command save: `powershell -File tools/Commit-PushMain.ps1 -Message "your message"`.
+
+---
+
 HeelKawn is a deterministic Godot 4.6 world simulation.
 
 - The world remembers facts and evolves without RNG in history.

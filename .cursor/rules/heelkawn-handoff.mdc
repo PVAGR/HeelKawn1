@@ -5,6 +5,7 @@ alwaysApply: true
 
 # HeelKawn handoff read order
 
+- Confirm you are in the **canonical clone** (see `docs/CANONICAL_REPOSITORY.md`). Do not apply HeelKawn changes in non-canonical folders.
 - At the start of work in this repository, read in this order:
 	1) docs/HEELKAWN_STATE.md
 	2) HEELKAWN.txt

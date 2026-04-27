@@ -5,6 +5,17 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-27 - Canonical repo policy: one folder, one GitHub remote
+
+Date: 2026-04-27
+Goal: Lock official work to `C:\Users\user\HeelKawn1` → `github.com/PVAGR/HeelKawn1`; instruct assistants to ignore other HeelKawn-named directories for project edits.
+
+Changes made:
+- Added `docs/CANONICAL_REPOSITORY.md`, `.cursor/rules/heelkawn-canonical-repo.mdc`, `tools/Commit-PushMain.ps1`.
+- README, LLM_ONBOARDING, handoff rule, WORLD_BIBLE/MASTER_INDEX updated to point at canonical scope.
+
+---
+
 ## 2026-04-27 - Merge feature into main; push GitHub default branch
 
 Date: 2026-04-27

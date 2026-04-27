@@ -4,6 +4,7 @@ Use this file as the quick map of all world canon files.
 
 ## Planning
 
+- [`../CANONICAL_REPOSITORY.md`](../CANONICAL_REPOSITORY.md) - official GitHub remote, local path, policy for other HeelKawn-named folders
 - [`../CURSOR_MASTER_PLANNING_SPEC.md`](../CURSOR_MASTER_PLANNING_SPEC.md) - canon tiers, lore/mechanics roadmap, tensions; umbrella brief for Cursor (read after `HEELKAWN_STATE.md`)
 
 ## Core Lore

@@ -102,8 +102,9 @@ const HUNGER_DECAY_PER_TICK_SLEEPING: float = 0.05
 const BED_WOOD_COST: int = 1
 const WALL_WOOD_COST: int = 2
 const DOOR_WOOD_COST: int = 1
-## Debug-only observability for job claim/switch vs specialization identity.
-const PAWN_DIVERGENCE_LOG_ENABLED: bool = true
+## Main.gd now owns claim-point divergence logs via JobManager.job_claimed.
+## Keep pawn-local emitter disabled to avoid duplicate/ambiguous lines.
+const PAWN_DIVERGENCE_LOG_ENABLED: bool = false
 
 
 ## Map of build-job type -> (item_type, qty) needed at the build site. Anything

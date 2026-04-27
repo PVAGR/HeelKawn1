@@ -131,6 +131,8 @@ var _kernel_diagnostic: KernelDiagnostic = null
 var _phase8_proof_overlay_layer: CanvasLayer = null
 var _phase8_proof_overlay_text: RichTextLabel = null
 var _resource_balance_audit_last_key: String = ""
+## pawn_id -> last claimed job label (debug instrumentation only).
+var _pawn_divergence_last_job_by_pawn_id: Dictionary = {}
 var _kill_count: int = 0
 ## Pixel radius around a pawn that counts as a click hit. Pawns draw at
 ## DRAW_RADIUS=3.5; we add a generous slop so moving targets are easy to grab.
@@ -259,6 +261,7 @@ func _ready() -> void:
 	# React to mining progress: when a wall comes down or an ore is cleared,
 	# new ores can become reachable and we may want to queue the next tunnel.
 	JobManager.job_completed.connect(_on_job_completed)
+	JobManager.job_claimed.connect(_on_job_claimed)
 	# Bottom toolbar: lets the player drive everything with the mouse.
 	if _toolbar != null:
 		_toolbar.mode_requested.connect(_on_toolbar_mode_requested)
@@ -324,6 +327,114 @@ func _log_validation_harness_observability_once() -> void:
 				+ "(clean=%s truth=%s spec=%s) — inspect harness gates if this ever appears."
 				% [clean_active, truth_active, spec_active]
 		)
+
+
+func _job_channel_for_divergence_log(job_type: int) -> String:
+	match int(job_type):
+		Job.Type.CHOP, Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+			return "wood"
+		Job.Type.MINE, Job.Type.MINE_WALL:
+			return "stone"
+		Job.Type.FORAGE, Job.Type.HUNT:
+			return "food"
+		Job.Type.TRADE_HAUL:
+			return "trade"
+		_:
+			return ""
+
+
+func _settlement_by_center_region(center_region: int) -> Dictionary:
+	if center_region < 0:
+		return {}
+	for st_any in SettlementMemory.settlements:
+		if not (st_any is Dictionary):
+			continue
+		var st: Dictionary = st_any as Dictionary
+		if int(st.get("center_region", -1)) == center_region:
+			return st
+	return {}
+
+
+func _on_job_claimed(job: Job, pawn: Pawn) -> void:
+	if not OS.is_debug_build():
+		return
+	if job == null or pawn == null or not is_instance_valid(pawn) or pawn.data == null:
+		return
+	var pawn_region: int = WorldMemory._region_key(pawn.data.tile_pos.x, pawn.data.tile_pos.y)
+	var job_region: int = WorldMemory._region_key(job.work_tile.x, job.work_tile.y)
+	var pawn_center_region: int = SettlementMemory.get_center_region_for_region(pawn_region)
+	var job_center_region: int = SettlementMemory.get_center_region_for_region(job_region)
+	var effective_center_region: int = (
+		job_center_region if job_center_region >= 0 else pawn_center_region
+	)
+	if effective_center_region < 0:
+		print(
+			"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_bound_center pawn_id=%d pawn=%s pawn_region=%d job_region=%d pawn_center_region=%d job_center_region=%d center_region=%d"
+			% [
+				GameManager.tick_count,
+				int(pawn.data.id),
+				pawn.data.display_name,
+				pawn_region,
+				job_region,
+				pawn_center_region,
+				job_center_region,
+				effective_center_region,
+			]
+		)
+		return
+	var st: Dictionary = _settlement_by_center_region(effective_center_region)
+	var spec_phase: String = str(st.get("specialization_phase", SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN))
+	var spec_locked: String = str(st.get("specialization_channel", ""))
+	var spec_candidate: String = str(st.get("specialization_candidate_channel", ""))
+	if st.is_empty() or spec_phase == SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN:
+		print(
+			"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_specialization_context pawn_id=%d pawn=%s pawn_center_region=%d job_center_region=%d center_region=%d spec_phase=%s"
+			% [
+				GameManager.tick_count,
+				int(pawn.data.id),
+				pawn.data.display_name,
+				pawn_center_region,
+				job_center_region,
+				effective_center_region,
+				spec_phase,
+			]
+		)
+		return
+	var job_channel: String = _job_channel_for_divergence_log(job.type)
+	var alignment: String = "neutral"
+	if job_channel == spec_locked:
+		alignment = "aligned"
+	elif job_channel == "" or spec_locked == "":
+		alignment = "neutral"
+	else:
+		alignment = "divergent"
+	var pawn_id: int = int(pawn.data.id)
+	var prev_label: String = str(_pawn_divergence_last_job_by_pawn_id.get(pawn_id, "None"))
+	var next_label: String = Job.describe_type(job.type)
+	_pawn_divergence_last_job_by_pawn_id[pawn_id] = next_label
+	print(
+		(
+			"[PAWN_DIVERGENCE] tick=%d action=claim pawn_id=%d pawn=%s "
+			+ "pawn_center_region=%d job_center_region=%d center_region=%d "
+			+ "spec_phase=%s spec_locked=%s spec_candidate=%s "
+			+ "job_from=%s job_to=%s job_channel=%s alignment=%s"
+		)
+		% [
+			GameManager.tick_count,
+			pawn_id,
+			pawn.data.display_name,
+			pawn_center_region,
+			job_center_region,
+			effective_center_region,
+			spec_phase,
+			spec_locked,
+			spec_candidate,
+			prev_label,
+			next_label,
+			job_channel,
+			alignment,
+		]
+	)
 
 
 func _process(delta: float) -> void:

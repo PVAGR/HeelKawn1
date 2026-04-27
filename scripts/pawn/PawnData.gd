@@ -803,13 +803,15 @@ func top_social_rapport_peer() -> Dictionary:
 	return {"peer_id": best_id, "score": best_score}
 
 
-func social_status_line() -> String:
+func social_status_line(peer_display: String = "") -> String:
 	var t: Dictionary = top_social_rapport_peer()
 	var pid: int = int(t.get("peer_id", -1))
 	var sc: int = int(t.get("score", 0))
 	if pid < 0 or sc <= 0:
 		return "Social: no steady bonds yet (stay near another pawn to build rapport)."
-	return "Social: strongest bond toward #%d (rapport %d) — family / pairing hook." % [pid, sc]
+	var trimmed: String = peer_display.strip_edges()
+	var whom: String = trimmed if not trimmed.is_empty() else "#%d" % pid
+	return "Social: strongest bond toward %s (rapport %d) — pairing / births use this track." % [whom, sc]
 
 
 ## Serialize for `GameSave` (store_var). All numeric work flags included.

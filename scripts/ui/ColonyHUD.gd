@@ -182,6 +182,7 @@ func _refresh() -> void:
 	lines.append(_wildlife_line())
 	lines.append(_settlement_revival_digest_line())
 	lines.append(_session_diag_line())
+	lines.append(_playtest_social_birth_hint_line())
 	_label.text = "\n".join(lines)
 
 
@@ -444,6 +445,14 @@ func _export_status_line() -> String:
 
 
 ## One-line snapshot for AI/debug sessions (HUD copy-paste; reduces need for console spam).
+func _playtest_social_birth_hint_line() -> String:
+	return (
+		"[color=#a5d6a7][Playtest][/color] Social: co-presence +40t builds rapport; "
+		+ "births need rapport 72+, relaxed hunger/rest, bed access. "
+		+ "F10 → \"31 · Playtest bundle\" for one paste. Prefer 1x–12x while learning."
+	)
+
+
 func _session_diag_line() -> String:
 	var d: Dictionary = GameManager.sim_diag()
 	var wc: int = WorldMemory.event_count()

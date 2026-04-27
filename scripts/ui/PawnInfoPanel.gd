@@ -462,7 +462,16 @@ func _refresh() -> void:
 			coach_sb += hints[hi]
 		_coach_label.text = coach_sb
 	if _social_label != null:
-		_social_label.text = d.social_status_line()
+		var peer_disp: String = ""
+		var tr: Dictionary = d.top_social_rapport_peer()
+		var pid: int = int(tr.get("peer_id", -1))
+		if pid >= 0:
+			var spawner: PawnSpawner = _pawn_spawner()
+			if spawner != null:
+				var peer_data: PawnData = spawner.pawn_data_for_id(pid)
+				if peer_data != null:
+					peer_disp = str(peer_data.display_name).strip_edges()
+		_social_label.text = d.social_status_line(peer_disp)
 	if _action_skills_label != null:
 		_action_skills_label.text = (
 				"Action xp  move %d  farm %d  build %d  gather %d  combat %d"

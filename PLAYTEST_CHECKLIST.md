@@ -47,3 +47,12 @@ Use this if you are tired. Just follow in order.
 
 - Run `check_godot_path.bat`
 - Send me screenshot of its output
+
+## 6) Session checklist (social / births / performance)
+
+- Run **1x–12x** for the first in-game segment; use **50x–100x** only after food and beds look stable.
+- **Colony HUD** (bottom of block): read the green **[Playtest]** line — rapport, birth gates, F10 bundle hint.
+- Select pawns: **Social (NPC v1)** shows bond strength; **Coach** shows profession path.
+- **F10** → **31 · Playtest bundle** once → copy everything between `=== ... playtest_bundle ... ===` for a single handoff paste.
+- Optional: **28–30** (intent queue, houses, religion lens) if you are debugging narrative layers.
+- **F5** save before long high-speed runs; **F8** load to recover if the colony collapses.

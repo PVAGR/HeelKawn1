@@ -38,6 +38,7 @@ const DEBUG_REPORT_ROWS: Array[Dictionary] = [
 	{"id": "player_intents", "label": "28 · PlayerIntentQueue (spec + session queue)"},
 	{"id": "factions", "label": "29 · FactionRegistry (house stub per settlement)"},
 	{"id": "religion_lens", "label": "30 · ReligionLens (read-only sacred+myth overlay)"},
+	{"id": "playtest_bundle", "label": "31 · Playtest bundle (one paste)"},
 ]
 
 var _root_panel: PanelContainer = null
@@ -77,7 +78,7 @@ func _build_ui() -> void:
 	margin.add_theme_constant_override("margin_bottom", PAD)
 	add_child(margin)
 	_root_panel = PanelContainer.new()
-	_root_panel.custom_minimum_size = Vector2(PANEL_W, 620)
+	_root_panel.custom_minimum_size = Vector2(PANEL_W, 680)
 	margin.add_child(_root_panel)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.06, 0.07, 0.1, 0.94)
@@ -90,7 +91,7 @@ func _build_ui() -> void:
 	style.content_margin_bottom = PAD
 	_root_panel.add_theme_stylebox_override("panel", style)
 	_scroll = ScrollContainer.new()
-	_scroll.custom_minimum_size = Vector2(PANEL_W - 24, 560)
+	_scroll.custom_minimum_size = Vector2(PANEL_W - 24, 620)
 	_root_panel.add_child(_scroll)
 	_vbox = VBoxContainer.new()
 	_vbox.add_theme_constant_override("separation", 5)
@@ -179,6 +180,8 @@ func _emit_report(report_id: String) -> void:
 			_report_factions()
 		"religion_lens":
 			_report_religion_lens()
+		"playtest_bundle":
+			_report_playtest_bundle()
 		_:
 			print("Unknown report_id=%s" % report_id)
 	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d END ===" % [report_id, tick])
@@ -559,6 +562,43 @@ func _report_factions() -> void:
 
 func _report_religion_lens() -> void:
 	print(ReligionLens.digest_settlements(12))
+
+
+func _report_playtest_bundle() -> void:
+	print("[PLAYTEST_BUNDLE] tick=%d" % GameManager.tick_count)
+	print("[PLAYTEST_BUNDLE] sim_diag=%s" % str(GameManager.sim_diag()))
+	print(
+			"[PLAYTEST_BUNDLE] pawns=%d settlements=%d wm_events=%d"
+			% [
+				_get_playtest_pawn_count(),
+				SettlementMemory.settlements.size(),
+				WorldMemory.event_count(),
+			]
+	)
+	print("[PLAYTEST_BUNDLE] --- PlayerIntentQueue ---")
+	print(PlayerIntentQueue.debug_summary_block())
+	print("[PLAYTEST_BUNDLE] --- FactionRegistry ---")
+	print(FactionRegistry.debug_summary_block())
+	print("[PLAYTEST_BUNDLE] --- ReligionLens (6 settlements max) ---")
+	print(ReligionLens.digest_settlements(6))
+	print(
+			"[PLAYTEST_BUNDLE] hint: run at 1x–12x first; watch Colony HUD Playtest line + pawn Social; "
+			+ "F5 save before 50x+; Esc closes F10 menu."
+	)
+
+
+func _get_playtest_pawn_count() -> int:
+	var m: Main = _main()
+	if m == null:
+		return -1
+	var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+	if ps == null:
+		return -1
+	var n: int = 0
+	for p in ps.pawns:
+		if p != null and is_instance_valid(p):
+			n += 1
+	return n
 
 
 func _report_profession_liking() -> void:

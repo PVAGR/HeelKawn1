@@ -377,6 +377,7 @@ func _bootstrap_colony() -> void:
 		_world.apply_ruins_from_persistence()
 		CulturalMemory.recompute(_world)
 		SettlementMemory.recompute(_world)
+		_ensure_validation_session_seed_stockpile_overlaps_settlement()
 		MythMemory.recompute(_world)
 		SacredMemory.sync_permanent_ruins_from_settlements()
 		_run_heavy_refresh_once_per_tick(func() -> void:
@@ -457,6 +458,93 @@ func _fit_seed_stockpile_rect(tile: Vector2i, main_component: int, w: int, h: in
 			if _world.pathfinder.component_of(t) != main_component:
 				return Rect2i(tile, Vector2i.ONE)
 	return Rect2i(Vector2i(start_x, start_y), Vector2i(w, h))
+
+
+## Validation sessions only (debug build + SettlementMemory.VALIDATION_SESSION_ENABLED):
+## Phase 8 proof requires a designated stockpile whose rect overlaps at least one tile in a
+## settlement region set. The default seed pile is centered on the map, which often shares
+## no tiles with clustered settlements — relocate the seed pile onto the main landmass near
+## an existing settlement anchor. Does not alter release builds or non-validation debug.
+func _ensure_validation_session_seed_stockpile_overlaps_settlement() -> void:
+	if not OS.is_debug_build():
+		return
+	if not SettlementMemory.VALIDATION_SESSION_ENABLED:
+		return
+	if not is_instance_valid(_world):
+		return
+	var sp: Stockpile = _world.stockpile
+	if sp == null or not is_instance_valid(sp):
+		return
+	var main_component: int = _world.pathfinder.largest_component_id()
+	if main_component < 0:
+		return
+	var st: Dictionary = _pick_validation_proof_anchor_settlement()
+	if st.is_empty():
+		print("[Main] VALIDATION_SESSION proof_anchor skipped reason=no_settlement_after_recompute")
+		return
+	var anchor: Vector2i = _validation_proof_anchor_tile_for_main_component(st, main_component)
+	if anchor.x < 0:
+		print(
+				"[Main] VALIDATION_SESSION proof_anchor skipped reason=no_passable_tile_near_settlement_regions "
+				+ "center_region=%d"
+				% int(st.get("center_region", -1))
+		)
+		return
+	var seed_rect: Rect2i = _fit_seed_stockpile_rect(anchor, main_component, 3, 3)
+	sp.set_rect_tiles(seed_rect)
+	sp.position = _world.tile_to_world(seed_rect.position)
+	print(
+			"[Main] VALIDATION_SESSION proof_anchor seed_stockpile_rect=%s size=%s settlement_center_region=%d state=%s"
+			% [
+				seed_rect.position,
+				seed_rect.size,
+				int(st.get("center_region", -1)),
+				str(st.get("state", "?")),
+			]
+	)
+
+
+func _pick_validation_proof_anchor_settlement() -> Dictionary:
+	for st_any in SettlementMemory.settlements:
+		if not (st_any is Dictionary):
+			continue
+		var st: Dictionary = st_any as Dictionary
+		if int(st.get("center_region", -1)) < 0:
+			continue
+		if str(st.get("state", "")) == "active":
+			return st
+	for st_any in SettlementMemory.settlements:
+		if not (st_any is Dictionary):
+			continue
+		var st: Dictionary = st_any as Dictionary
+		if int(st.get("center_region", -1)) < 0:
+			continue
+		var regv: Variant = st.get("regions", PackedInt32Array())
+		if regv is PackedInt32Array and not (regv as PackedInt32Array).is_empty():
+			return st
+	return {}
+
+
+func _validation_proof_anchor_tile_for_main_component(st: Dictionary, main_component: int) -> Vector2i:
+	var ordered_keys: Array[int] = []
+	var rk_center: int = int(st.get("center_region", -1))
+	if rk_center >= 0:
+		ordered_keys.append(rk_center)
+	var regv: Variant = st.get("regions", PackedInt32Array())
+	if regv is PackedInt32Array:
+		for rk_any in regv as PackedInt32Array:
+			var rk: int = int(rk_any)
+			if ordered_keys.has(rk):
+				continue
+			ordered_keys.append(rk)
+	for rk in ordered_keys:
+		var tx: int = rk & 0xFFFF
+		var ty: int = (rk >> 16) & 0xFFFF
+		var hint := Vector2i(tx, ty)
+		var near: Vector2i = _world.pathfinder.find_tile_in_component_near(main_component, hint, 64)
+		if near.x >= 0:
+			return near
+	return Vector2i(-1, -1)
 
 
 func _sync_pawn_inherited_cultural_reputation() -> void:
@@ -1699,6 +1787,7 @@ func _reroll_world() -> void:
 	# Place the stockpile BEFORE respawning pawns, so every pawn sees a valid
 	# stockpile reference the first time it ticks.
 	_place_stockpile(main_component)
+	_ensure_validation_session_seed_stockpile_overlaps_settlement()
 	_pawn_spawner.respawn(_world, main_component)
 	_ensure_player_pawn_assigned()
 	Main._world_stabilization_until_tick = GameManager.tick_count + WORLD_STABILIZATION_TICKS
@@ -2465,6 +2554,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 		_world.apply_ruins_from_persistence()
 		CulturalMemory.recompute(_world)
 		SettlementMemory.recompute(_world)
+		_ensure_validation_session_seed_stockpile_overlaps_settlement()
 		MythMemory.recompute(_world)
 		SacredMemory.sync_permanent_ruins_from_settlements()
 		IntentMemory.recompute(_world)

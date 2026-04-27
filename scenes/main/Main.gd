@@ -114,6 +114,7 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _hud: ColonyHUD = $UI_Viewport/ColonyHUD
 @onready var _observer_hud: ObserverHUD = $UI_Viewport/ObserverHUD
 @onready var _focus_inspector: FocusInspector = $UI_Viewport/FocusInspector
+@onready var _creator_debug_menu: CreatorDebugMenu = $UI_Viewport/CreatorDebugMenu
 @onready var _toolbar: BuildToolbar = $UI_Viewport/BuildToolbar
 @onready var _info_panel: PawnInfoPanel = $UI_Viewport/PawnInfoPanel
 @onready var _day_night: DayNightCycle = $DayNight
@@ -181,6 +182,8 @@ var _ambient_freq_target: float = 112.0
 var _meaning_ambient_mood: float = 0.5
 ## Settlement style expression (derived): open -> positive, defensive -> negative.
 var _meaning_style_bias: float = 0.0
+## Full-screen very low-alpha overlay (read-only mood); created in [_ensure_meaning_vignette].
+var _meaning_vignette_rect: ColorRect = null
 
 ## Pending regrowth events. Each entry is a Dictionary:
 ##   { "tile": Vector2i, "feature": int (TileFeature.Type), "ready_tick": int }
@@ -320,6 +323,7 @@ func _ready() -> void:
 	if _focus_inspector != null:
 		_focus_inspector.set_visible_state(false)
 	_init_phase8_proof_overlay()
+	_ensure_meaning_vignette()
 	call_deferred("_log_validation_harness_observability_once")
 
 
@@ -1159,6 +1163,7 @@ func _process(delta: float) -> void:
 	):
 		_camera.call("clamp_position_to_world", _world, 48.0)
 	_update_ambient_audio(delta)
+	_update_meaning_vignette()
 	_trace_redraw_timer += delta
 	if _trace_redraw_timer >= TRACE_REDRAW_INTERVAL_SEC:
 		_trace_redraw_timer = 0.0
@@ -1734,6 +1739,8 @@ func _update_camera_meaning_bias(delta: float) -> void:
 			vel += (cam0 - rcenter) * 0.00011
 		elif msc == -1:
 			vel += (rcenter - cam0) * 0.00009
+	var spd: float = clampf(float(GameManager.game_speed), 1.0, 26.0)
+	vel *= 1.0 / sqrt(spd)
 	vel = vel.limit_length(MEANING_CAM_VEL_MAX)
 	_camera.position += vel * delta
 
@@ -1747,16 +1754,16 @@ func _update_ambient_audio(delta: float) -> void:
 	var interp: float = min(1.0, delta * 2.6)
 	_ambient_freq_current = lerpf(_ambient_freq_current, _ambient_freq_target, interp)
 	var mood: float = _meaning_ambient_mood
-	var style_mix: float = clampf(_meaning_style_bias, -0.2, 0.2)
-	var base_layer: float = lerpf(0.82, 0.64, 1.0 - mood) + style_mix * -0.18
-	var otone_layer: float = lerpf(0.16, 0.34, mood) + style_mix * 0.2
-	base_layer = clampf(base_layer, 0.52, 0.9)
-	otone_layer = clampf(otone_layer, 0.1, 0.42)
-	var amp: float = AMBIENT_BASE_AMP * lerpf(0.62, 1.0, mood)
+	var style_mix: float = clampf(_meaning_style_bias, -0.28, 0.28)
+	var base_layer: float = lerpf(0.84, 0.60, 1.0 - mood) + style_mix * -0.22
+	var otone_layer: float = lerpf(0.14, 0.38, mood) + style_mix * 0.26
+	base_layer = clampf(base_layer, 0.48, 0.92)
+	otone_layer = clampf(otone_layer, 0.08, 0.44)
+	var amp: float = AMBIENT_BASE_AMP * lerpf(0.58, 1.06, mood)
 	if GameManager.is_paused:
 		amp *= 0.45
 	if _ambient_player != null:
-		_ambient_player.volume_db = lerpf(-24.0, -18.5, mood)
+		_ambient_player.volume_db = lerpf(-26.0, -17.2, mood)
 	for _i in range(frames):
 		_ambient_phase += TAU * _ambient_freq_current / float(AMBIENT_MIX_RATE)
 		if _ambient_phase > TAU:
@@ -1828,6 +1835,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		KEY_F9:
 			_toggle_observer_hud()
 		KEY_F10:
+			if _creator_debug_menu != null:
+				_creator_debug_menu.toggle_menu()
+		KEY_F6:
 			_toggle_focus_inspector()
 		KEY_F11:
 			if _kernel_diagnostic != null and _kernel_diagnostic.has_method("start_settlement_truth_verification"):
@@ -1837,6 +1847,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		KEY_M:
 			ColonySimServices.cycle_labor_stance()
 		KEY_ESCAPE:
+			if _creator_debug_menu != null and _creator_debug_menu.visible:
+				_creator_debug_menu.visible = false
+				return
 			# Esc clears either a drag-in-progress, an active build mode, or
 			# a pawn selection (in that priority order). Each extra Esc peels
 			# off the next layer.
@@ -2340,6 +2353,217 @@ func get_wildlife_snapshot_for_diagnostic() -> Dictionary:
 	if _animal_spawner == null:
 		return {"rabbit": 0, "deer": 0, "total": 0}
 	return _animal_spawner.get_live_wildlife_snapshot()
+
+
+## Display-only: camera tile region → settlement revival + rebirth gate (no writes).
+## If the camera is not over any cluster tile, falls back to the nearest settlement by center-tile distance.
+func get_camera_settlement_revival_digest() -> Dictionary:
+	var out_empty: Dictionary = {
+		"has_settlement": false,
+		"region_key": -1,
+		"camera_region_key": -1,
+		"profile_region_key": -1,
+		"digest_source": "none",
+		"state": "",
+		"revival_score": 0,
+		"peace_threshold_ticks": 0,
+		"peace_since_conflict_ticks": 0,
+		"revival_ready": false,
+		"rebirth_ok": false,
+		"rebirth_reason": "",
+	}
+	if not is_instance_valid(_world) or _camera == null or _world.data == null:
+		return out_empty
+	var cam_tile: Vector2i = _world.world_to_tile(_camera.global_position)
+	if cam_tile.x < 0:
+		out_empty["region_key"] = -2
+		out_empty["camera_region_key"] = -2
+		return out_empty
+	var cam_rk: int = WorldMemory._region_key(cam_tile.x, cam_tile.y)
+	out_empty["region_key"] = cam_rk
+	out_empty["camera_region_key"] = cam_rk
+	var d_cam: Dictionary = _revival_digest_for_cluster_region(_world, cam_rk)
+	if bool(d_cam.get("has_settlement", false)):
+		d_cam["digest_source"] = "cam"
+		d_cam["camera_region_key"] = cam_rk
+		d_cam["profile_region_key"] = cam_rk
+		return d_cam
+	var near_ckr: int = _nearest_settlement_center_region_key(cam_tile)
+	if near_ckr < 0:
+		return out_empty
+	var d_near: Dictionary = _revival_digest_for_cluster_region(_world, near_ckr)
+	d_near["digest_source"] = "nearest" if bool(d_near.get("has_settlement", false)) else "none"
+	d_near["camera_region_key"] = cam_rk
+	d_near["profile_region_key"] = near_ckr
+	d_near["region_key"] = cam_rk
+	return d_near
+
+
+func _center_tile_from_region_key(ckr: int) -> Vector2i:
+	var tcx: int = (ckr & 0xFFFF) * 16 + 8
+	var tcy: int = ((ckr >> 16) & 0xFFFF) * 16 + 8
+	return Vector2i(tcx, tcy)
+
+
+func _nearest_settlement_center_region_key(cam_tile: Vector2i) -> int:
+	var best_ckr: int = -1
+	var best_d: int = 1_000_000_000
+	for s in SettlementMemory.settlements:
+		if not (s is Dictionary):
+			continue
+		var ckr: int = int((s as Dictionary).get("center_region", -1))
+		if ckr < 0:
+			continue
+		var ct: Vector2i = _center_tile_from_region_key(ckr)
+		var manh: int = absi(cam_tile.x - ct.x) + absi(cam_tile.y - ct.y)
+		if manh < best_d:
+			best_d = manh
+			best_ckr = ckr
+	return best_ckr
+
+
+func _revival_digest_for_cluster_region(world: World, region_key: int) -> Dictionary:
+	var out1: Dictionary = {
+		"has_settlement": false,
+		"region_key": region_key,
+		"camera_region_key": region_key,
+		"profile_region_key": region_key,
+		"digest_source": "none",
+		"state": "",
+		"revival_score": 0,
+		"peace_threshold_ticks": 0,
+		"peace_since_conflict_ticks": 0,
+		"revival_ready": false,
+		"rebirth_ok": false,
+		"rebirth_reason": "",
+	}
+	var prof: Dictionary = SettlementMemory.get_settlement_profile(region_key)
+	var state_now: String = str(prof.get("state", ""))
+	if state_now == "":
+		return out1
+	out1["has_settlement"] = true
+	out1["state"] = state_now
+	out1["revival_score"] = int(prof.get("revival_score", 0))
+	out1["peace_threshold_ticks"] = int(prof.get("peace_threshold_ticks", 0))
+	var now: int = GameManager.tick_count
+	var last_d: int = int(prof.get("last_pawn_death_tick", -1))
+	var peace_ticks: int = 1_000_000_000 if last_d < 0 else maxi(0, now - last_d)
+	out1["peace_since_conflict_ticks"] = peace_ticks
+	out1["revival_ready"] = bool(prof.get("revival_ready", false))
+	var sv: Variant = SettlementMemory.get_settlement_at_region(region_key)
+	if state_now == "revivable" and sv is Dictionary:
+		var gate: Dictionary = SettlementRebirth.get_rebirth_eligibility(world, sv as Dictionary)
+		out1["rebirth_ok"] = bool(gate.get("ok", false))
+		out1["rebirth_reason"] = str(gate.get("reason", ""))
+	elif sv is not Dictionary:
+		out1["rebirth_reason"] = "no_settlement_dict"
+	return out1
+
+
+func get_camera_revival_digest_bbcode() -> String:
+	return _format_camera_revival_digest_bbcode(get_camera_settlement_revival_digest())
+
+
+func get_camera_revival_digest_plain() -> String:
+	return _format_camera_revival_digest_plain(get_camera_settlement_revival_digest())
+
+
+func _format_camera_revival_digest_plain(d: Dictionary) -> String:
+	if not bool(d.get("has_settlement", false)):
+		var rk: int = int(d.get("region_key", -1))
+		if rk == -2:
+			return "camera_revival: (no world)"
+		return "camera_revival: vacant cam_rk=%d" % int(d.get("camera_region_key", rk))
+	var src: String = str(d.get("digest_source", "cam"))
+	var cam_rk_p: int = int(d.get("camera_region_key", int(d.get("region_key", -1))))
+	var prof_rk: int = int(d.get("profile_region_key", cam_rk_p))
+	var prefix: String = "camera_revival" if src == "cam" else "camera_revival nearest"
+	var loc_note: String = "" if src == "cam" else " cam_rk=%d profile_rk=%d" % [cam_rk_p, prof_rk]
+	var pt: int = int(d.get("peace_threshold_ticks", 0))
+	var pc: int = int(d.get("peace_since_conflict_ticks", 0))
+	var pc_show: String = "inf" if pc >= 999_000_000 else str(pc)
+	var st_plain: String = str(d.get("state", ""))
+	var rs_p: int = int(d.get("revival_score", 0))
+	if st_plain == "revivable":
+		var rb: String = str(d.get("rebirth_reason", ""))
+		var rdy: String = "Y" if bool(d.get("revival_ready", false)) else "N"
+		var ok: String = "Y" if bool(d.get("rebirth_ok", false)) else "N"
+		return (
+			"%s: %s rs=%d peace=%s/%s rdy=%s rebirth_ok=%s rb=%s%s"
+			% [prefix, st_plain, rs_p, pc_show, str(pt), rdy, ok, rb, loc_note]
+		)
+	return "%s: %s rs=%d peace=%s/%s rebirth=n/a%s" % [prefix, st_plain, rs_p, pc_show, str(pt), loc_note]
+
+
+func _format_camera_revival_digest_bbcode(d: Dictionary) -> String:
+	if not bool(d.get("has_settlement", false)):
+		var rk2: int = int(d.get("region_key", -1))
+		var crk: int = int(d.get("camera_region_key", rk2))
+		if rk2 == -2:
+			return "[color=#9e9e9e]🏚 Cam settlement: (no world)[/color]"
+		return "[color=#9e9e9e]🏚 Cam vacant rk=%d[/color]" % crk
+	var src2: String = str(d.get("digest_source", "cam"))
+	var cam_rk2: int = int(d.get("camera_region_key", int(d.get("region_key", -1))))
+	var prof_rk2: int = int(d.get("profile_region_key", cam_rk2))
+	var head: String = (
+		"[color=#c9b37c]🏚 Cam:[/color]"
+		if src2 == "cam"
+		else (
+			"[color=#c9b37c]🏚 Near[/color] [color=#888](cam rk=%d · profile rk=%d)[/color]"
+			% [cam_rk2, prof_rk2]
+		)
+	)
+	var pt2: int = int(d.get("peace_threshold_ticks", 0))
+	var pc2: int = int(d.get("peace_since_conflict_ticks", 0))
+	var pc_label: String = "inf" if pc2 >= 999_000_000 else str(pc2)
+	var stc: String = str(d.get("state", ""))
+	var rs: int = int(d.get("revival_score", 0))
+	if stc == "revivable":
+		var rdy_b: bool = bool(d.get("revival_ready", false))
+		var ok_b: bool = bool(d.get("rebirth_ok", false))
+		var rb2: String = str(d.get("rebirth_reason", ""))
+		var rdy_s: String = "[color=#a5d6a7]Y[/color]" if rdy_b else "[color=#bdbdbd]N[/color]"
+		var rb_ok_s: String = (
+			"[color=#a5d6a7]%s[/color]" % rb2
+			if ok_b
+			else "[color=#ffcc80]%s[/color]" % rb2
+		)
+		return (
+			"%s [b]%s[/b]  rs:%d  peace:%s/%s  revivable:%s  rebirth:%s"
+			% [head, stc, rs, pc_label, str(pt2), rdy_s, rb_ok_s]
+		)
+	return (
+		"%s [b]%s[/b]  rs:%d  peace:%s/%s  [color=#888888](rebirth n/a)[/color]"
+		% [head, stc, rs, pc_label, str(pt2)]
+	)
+
+
+func _ensure_meaning_vignette() -> void:
+	if _meaning_vignette_rect != null and is_instance_valid(_meaning_vignette_rect):
+		return
+	var cl: CanvasLayer = CanvasLayer.new()
+	cl.name = "MeaningVignetteLayer"
+	cl.layer = 4
+	var cr: ColorRect = ColorRect.new()
+	cr.name = "MeaningVignette"
+	cr.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cr.offset_left = 0.0
+	cr.offset_top = 0.0
+	cr.offset_right = 0.0
+	cr.offset_bottom = 0.0
+	cr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cr.color = Color(0, 0, 0, 0)
+	cl.add_child(cr)
+	add_child(cl)
+	_meaning_vignette_rect = cr
+
+
+func _update_meaning_vignette() -> void:
+	if _meaning_vignette_rect == null or not is_instance_valid(_meaning_vignette_rect):
+		return
+	var mood: float = clampf(_meaning_ambient_mood, 0.0, 1.0)
+	var a: float = lerpf(0.028, 0.0, mood) + absf(_meaning_style_bias) * 0.01
+	_meaning_vignette_rect.color = Color(0, 0, 0, clampf(a, 0.0, 0.065))
 
 
 func is_kernel_diagnostic_complete() -> bool:
@@ -3755,7 +3979,9 @@ func _count_pawns_in_regions(regions_v: Variant) -> int:
 
 func _build_observer_snapshot(tick: int) -> Dictionary:
 	var day_len: int = DayNightCycle.TICKS_PER_DAY
-	var day: int = int(tick / float(day_len)) + 1
+	var day_abs: int = SimTime.calendar_absolute_visual_day(tick)
+	var day_in_year: int = SimTime.calendar_day_within_sim_year(tick)
+	var days_per_sim_year: int = SimTime.visual_days_per_sim_year()
 	var speed_text: String = "%dx" % int(GameManager.game_speed)
 	var paused_text: String = "Yes" if GameManager.is_paused else "No"
 	var focus: Dictionary = _observer_focus_settlement()
@@ -3878,16 +4104,21 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 	)
 	var recent_history_lines: PackedStringArray = WorldMemory.get_recent_event_summaries(3)
 	var vh: Dictionary = SettlementMemory.validation_harness_flags_for_snapshot()
-	var footer_stamp: String = "Tick %d | Day %d | Determinism %s | Events %d | %s" % [
+	var footer_stamp: String = "Tick %d | Y%d D%d/%d (absD%d) | Determinism %s | Events %d | %s" % [
 		tick,
-		day,
+		SimTime.sim_year_index(tick),
+		day_in_year,
+		days_per_sim_year,
+		day_abs,
 		determinism_lock,
 		WorldMemory.event_count(),
 		kernel_phase,
 	]
 	return {
 		"tick": tick,
-		"day": day,
+		"day": day_abs,
+		"calendar_day_in_year": day_in_year,
+		"calendar_days_per_sim_year": days_per_sim_year,
 		"speed": speed_text,
 		"paused": paused_text,
 		"world_status_summary": world_status_summary,
@@ -3957,6 +4188,7 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"validation_clean_economy_events": WorldEvents.validation_clean_economy_events_active(),
 		"validation_settlement_truth_verify": bool(vh.get("settlement_truth_verify", false)),
 		"validation_specialization_log": bool(vh.get("specialization_log", false)),
+		"camera_revival_digest_plain": get_camera_revival_digest_plain(),
 	}
 
 

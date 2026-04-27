@@ -220,14 +220,14 @@ func _plan_one_settlement_culture(
 						return
 
 
-func _intent_for_settlement(center_region: int) -> int:
+static func _intent_for_settlement(center_region: int) -> int:
 	if center_region < 0:
 		return IntentMemory.INTENT_HOLD
 	return int(IntentMemory.settlement_intent.get(center_region, IntentMemory.INTENT_HOLD))
 
 
 ## Deterministic, exclusive: worst survival context wins. Later Ages nudge away from [OPEN] without hard overrides.
-func _derive_culture_type_v1_for_age(
+static func _derive_culture_type_v1_for_age(
 		scar_max: int, reputation_min: int, age_index: int
 ) -> int:
 	var s_eff: int = mini(3, scar_max + int(age_index / 3))
@@ -242,7 +242,7 @@ func _derive_culture_type_v1_for_age(
 
 
 ## Back-compat: signature-only callers use age 0.
-func _derive_culture_type_v1(scar_max: int, reputation_min: int) -> int:
+static func _derive_culture_type_v1(scar_max: int, reputation_min: int) -> int:
 	return _derive_culture_type_v1_for_age(scar_max, reputation_min, 0)
 
 
@@ -320,13 +320,13 @@ func _pick_expansion_wall_tile_culture(
 	return _pick_expansion_wall_tile(world, main, data, center, regions, false)
 
 
-func _center_tile_of_region_key(rk: int) -> Vector2i:
+static func _center_tile_of_region_key(rk: int) -> Vector2i:
 	var rx: int = int(rk) & 0xFFFF
 	var ry: int = (int(rk) >> 16) & 0xFFFF
 	return Vector2i(rx * 16 + 8, ry * 16 + 8)
 
 
-func _tile_belongs_to_regions(t: Vector2i, regions: PackedInt32Array) -> bool:
+static func _tile_belongs_to_regions(t: Vector2i, regions: PackedInt32Array) -> bool:
 	var rk: int = WorldMemory._region_key(t.x, t.y)
 	for j in range(regions.size()):
 		if int(regions[j]) == rk:
@@ -334,7 +334,7 @@ func _tile_belongs_to_regions(t: Vector2i, regions: PackedInt32Array) -> bool:
 	return false
 
 
-func _count_feature_in_regions(
+static func _count_feature_in_regions(
 		data: WorldData, regions: PackedInt32Array, feature_id: int
 ) -> int:
 	var n: int = 0
@@ -353,7 +353,7 @@ func _count_feature_in_regions(
 	return n
 
 
-func _settlement_touched_by_any_zone(
+static func _settlement_touched_by_any_zone(
 		center: Vector2i, regions: PackedInt32Array, data: WorldData
 ) -> bool:
 	if _tile_covered_by_any_zone(center, data):
@@ -373,7 +373,7 @@ func _settlement_touched_by_any_zone(
 	return false
 
 
-func _tile_covered_by_any_zone(t: Vector2i, _data: WorldData) -> bool:
+static func _tile_covered_by_any_zone(t: Vector2i, _data: WorldData) -> bool:
 	for z in StockpileManager.zones():
 		if z != null and is_instance_valid(z) and z.contains_tile(t):
 			return true
@@ -381,7 +381,7 @@ func _tile_covered_by_any_zone(t: Vector2i, _data: WorldData) -> bool:
 
 
 ## Deterministic: Manhattan distance to center, then tile index (y * W + x).
-func _sort_tiles_index_order(cands: Array[Vector2i], center: Vector2i) -> void:
+static func _sort_tiles_index_order(cands: Array[Vector2i], center: Vector2i) -> void:
 	cands.sort_custom(func(a, b) -> bool:
 		var a2: Vector2i = a as Vector2i
 		var b2: Vector2i = b as Vector2i
@@ -396,7 +396,7 @@ func _sort_tiles_index_order(cands: Array[Vector2i], center: Vector2i) -> void:
 
 
 ## [RemnantMemory]: prefer sites with less prior-era "wear" (higher [tile_age_delta] = worse = sort later).
-func _sort_tiles_index_order_remnant(
+static func _sort_tiles_index_order_remnant(
 		cands: Array[Vector2i], center: Vector2i, w: World
 ) -> void:
 	if w == null or not is_instance_valid(w):
@@ -442,7 +442,7 @@ func _pick_nearest_bed_tile(
 
 
 ## Rectangular loop perimeter, inclusive, axis-aligned around [param center] with half-span [param box_r].
-func _perimeter_tiles_box(center: Vector2i, box_r: int) -> Array[Vector2i]:
+static func _perimeter_tiles_box(center: Vector2i, box_r: int) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	var r0: int = max(0, center.x - box_r)
 	var r1: int = min(WorldData.WIDTH - 1, center.x + box_r)
@@ -455,7 +455,7 @@ func _perimeter_tiles_box(center: Vector2i, box_r: int) -> Array[Vector2i]:
 	return out
 
 
-func _perim_r_for_culture(cult: int) -> int:
+static func _perim_r_for_culture(cult: int) -> int:
 	if cult == CULTURE_OPEN:
 		return PERIM_R_OPEN
 	if cult == CULTURE_DEFENSIVE:
@@ -504,7 +504,7 @@ func _collect_wall_tiles_in_regions(
 
 
 ## Deterministic map order, no culture sort; used to collect before OPEN/COMMON door ordering.
-func _collect_wall_tiles_in_regions_nosort(
+static func _collect_wall_tiles_in_regions_nosort(
 		data: WorldData, regions: PackedInt32Array
 ) -> Array[Vector2i]:
 	var out0: Array[Vector2i] = []
@@ -524,7 +524,7 @@ func _collect_wall_tiles_in_regions_nosort(
 
 
 ## All valid door sites (on walls or passable) in the settlement, deduped; caller sorts by culture.
-func _collect_viable_door_tiles(
+static func _collect_viable_door_tiles(
 		world: World, main: Node2D, _data: WorldData, center: Vector2i, regions: PackedInt32Array
 ) -> Array[Vector2i]:
 	var by_linear: Dictionary = {}
@@ -582,13 +582,13 @@ func _pick_second_door_tile_culture(
 	return _pick_door_tile_far_from_center(world, main, data, center, regions)
 
 
-func _zone_rect_3x3_anchored_at(center: Vector2i, _data: WorldData) -> Rect2i:
+static func _zone_rect_3x3_anchored_at(center: Vector2i, _data: WorldData) -> Rect2i:
 	var ax: int = clampi(center.x - 1, 0, WorldData.WIDTH - ZONE_W)
 	var ay: int = clampi(center.y - 1, 0, WorldData.HEIGHT - ZONE_H)
 	return Rect2i(Vector2i(ax, ay), Vector2i(ZONE_W, ZONE_H))
 
 
-func _collect_bed_tiles_in_regions(
+static func _collect_bed_tiles_in_regions(
 		data: WorldData, regions: PackedInt32Array
 ) -> Array[Vector2i]:
 	var outb: Array[Vector2i] = []
@@ -607,7 +607,7 @@ func _collect_bed_tiles_in_regions(
 	return outb
 
 
-func _wall_bbox_too_small(
+static func _wall_bbox_too_small(
 		data: WorldData, regions: PackedInt32Array, min_span: int
 ) -> bool:
 	var wx0: int = 1_000_000
@@ -695,7 +695,7 @@ func _pick_expansion_wall_tile(
 
 
 ## 0 = camp, 1 = village, 2 = fortified (derived only; not stored).
-func _derive_settlement_stage(
+static func _derive_settlement_stage(
 		world: World, data: WorldData, center: Vector2i, regions: PackedInt32Array,
 		bed_n: int, wall_n: int, door_n: int
 ) -> int:
@@ -710,7 +710,7 @@ func _derive_settlement_stage(
 	return 0
 
 
-func _path_bed_to_center_exists(
+static func _path_bed_to_center_exists(
 		world: World, data: WorldData, center: Vector2i, regions: PackedInt32Array
 ) -> bool:
 	var beds0: Array[Vector2i] = _collect_bed_tiles_in_regions(data, regions)
@@ -727,7 +727,7 @@ func _path_bed_to_center_exists(
 	return false
 
 
-func _sort_tiles_farthest_first(cands: Array[Vector2i], center: Vector2i) -> void:
+static func _sort_tiles_farthest_first(cands: Array[Vector2i], center: Vector2i) -> void:
 	cands.sort_custom(func(a, b) -> bool:
 		var a2: Vector2i = a as Vector2i
 		var b2: Vector2i = b as Vector2i
@@ -741,7 +741,7 @@ func _sort_tiles_farthest_first(cands: Array[Vector2i], center: Vector2i) -> voi
 	)
 
 
-func _sort_tiles_farthest_first_remnant(
+static func _sort_tiles_farthest_first_remnant(
 		cands: Array[Vector2i], center: Vector2i, w: World
 ) -> void:
 	if w == null or not is_instance_valid(w):

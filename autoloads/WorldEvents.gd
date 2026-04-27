@@ -241,3 +241,12 @@ func _clear_temporary_event() -> void:
 
 func gathering_efficiency_mult() -> float:
 	return _gathering_efficiency_mult
+
+
+func get_debug_active_event() -> Dictionary:
+	return {
+		"active_event_name": _active_event_name,
+		"active_event_until_tick": _active_event_until_tick,
+		"gathering_efficiency_mult": _gathering_efficiency_mult,
+		"last_regional_shortage_tick": _last_regional_shortage_tick,
+	}

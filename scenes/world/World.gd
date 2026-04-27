@@ -36,6 +36,8 @@ var _player_meaning_region_state: Dictionary = {}
 var _player_meaning_region_label: Dictionary = {}
 ## 16x16 region_key -> IntentMemory intent int (derived; rebuilt with terrain refresh).
 var _player_meaning_region_intent: Dictionary = {}
+## Rebuilt once per terrain raster: region_key -> culture type for built-feature tint (O(settlements), not O(tiles)).
+var _region_culture_tint_cache: Dictionary = {}
 ## Off-Main autoloads: coalesce at most one end-of-idle full [refresh_terrain_scar_tint] + [refresh_pawn_historic_path_weights] per [GameManager] tick.
 var _off_main_terrain_raster_defer_at_tick: int = -1
 
@@ -130,9 +132,23 @@ func refresh_pawn_historic_path_weights() -> void:
 
 
 func _refresh_terrain_image_pixels() -> void:
+	_rebuild_region_culture_tint_cache()
 	for y in range(WorldData.HEIGHT):
 		for x in range(WorldData.WIDTH):
 			_image.set_pixel(x, y, _tile_color(x, y))
+
+
+func _rebuild_region_culture_tint_cache() -> void:
+	_region_culture_tint_cache.clear()
+	for s in SettlementMemory.settlements:
+		if not (s is Dictionary):
+			continue
+		var d: Dictionary = s as Dictionary
+		var ct: int = SettlementPlanner.get_culture_type_for_settlement(d)
+		var regs: Variant = d.get("regions", null)
+		if regs is PackedInt32Array:
+			for rk_any in regs as PackedInt32Array:
+				_region_culture_tint_cache[int(rk_any)] = ct
 
 
 func _tile_color(x: int, y: int) -> Color:
@@ -141,6 +157,16 @@ func _tile_color(x: int, y: int) -> Color:
 	var base: Color
 	if feature != TileFeature.Type.NONE:
 		base = TileFeature.color_for(feature)
+		if (
+				feature == TileFeature.Type.WALL
+				or feature == TileFeature.Type.DOOR
+				or feature == TileFeature.Type.BED
+		):
+			var rk_ct: int = WorldMemory._region_key(x, y)
+			if _region_culture_tint_cache.has(rk_ct):
+				base = TileFeature.apply_culture_tint_to_built_color(
+						base, int(_region_culture_tint_cache[rk_ct])
+				)
 		if feature == TileFeature.Type.RUIN:
 			# Further desaturate / drain rubble; land-recovery v1: ruin tint still uses max scar, not recovery_stage.
 			var g: float = (base.r + base.g + base.b) * 0.33
@@ -301,10 +327,10 @@ func _apply_road_tint(c: Color, x: int, y: int) -> Color:
 
 ## Recurring inter-settlement trade routes from [TradeMemory] (derived; stacks on roads / scar / meaning).
 func _apply_trade_route_tint(c: Color, x: int, y: int) -> Color:
-	var route_tier: int = TradeMemory.get_route_tier_at(x, y)
-	if route_tier == TradeMemory.TIER_NONE:
+	var tr: int = TradeMemory.get_route_tier_at(x, y)
+	if tr == TradeMemory.TIER_NONE:
 		return c
-	if route_tier == TradeMemory.TIER_ROUTE_1:
+	if tr == TradeMemory.TIER_ROUTE_1:
 		return c.lerp(c * Color(1.06, 1.055, 1.04, 1.0), 0.1)
 	return c.lerp(c * Color(1.14, 1.09, 0.97, 1.0), 0.17)
 

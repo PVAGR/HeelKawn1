@@ -22,7 +22,7 @@ const FONT_SIZE_HOTKEYS: int = 9
 const PANEL_PAD_X: int = 6
 const PANEL_PAD_Y: int = 4
 
-const HOTKEY_HINTS: String = "SPACE pause · 1-7 speed · F5 save · F8 load · M labor stance · R reroll · T pawns · J jobs · I stockpile · B beds · W walls · O doors · Z zone · F filter · Esc cancel"
+const HOTKEY_HINTS: String = "SPACE pause · 1-7 speed · F5 save · F8 load · F9 observer · F10 creator debug · F6 tile focus · M labor · R reroll · T pawns · J jobs · I stockpile · B/W/O/Z build · F filter · Esc cancel"
 
 @onready var _panel: PanelContainer = $Panel
 @onready var _label: RichTextLabel = $Panel/Margin/VBox/Body
@@ -39,6 +39,8 @@ var _wildlife_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
 var _wildlife_prev_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
 var _wildlife_sample_tick: int = 0
 var _wildlife_history: Array[int] = []
+var _wildlife_min_total: int = 0
+var _wildlife_max_total: int = 0
 var _momentum_spark: String = "........"
 var _player_input_buffer: PlayerInputBuffer = null
 var _player_pawn: Pawn = null
@@ -174,6 +176,7 @@ func _refresh() -> void:
 	lines.append(_stockpile_line())
 	lines.append(_jobs_line())
 	lines.append(_wildlife_line())
+	lines.append(_settlement_revival_digest_line())
 	lines.append(_session_diag_line())
 	_label.text = "\n".join(lines)
 
@@ -246,7 +249,6 @@ func hide_tile_history() -> void:
 func _time_line() -> String:
 	var tick: int = GameManager.tick_count
 	var day_len: int = DayNightCycle.TICKS_PER_DAY
-	var day: int = int(tick / float(day_len)) + 1
 	var phase: float = float(tick % day_len) / float(day_len)
 	var phase_name: String = _phase_name(phase)
 	var speed_str: String = "PAUSED" if GameManager.is_paused else "%dx" % int(GameManager.game_speed)
@@ -254,9 +256,13 @@ func _time_line() -> String:
 	var hour: int = int(phase * 24.0) % 24
 	var year_n: int = SimTime.sim_year_index(tick)
 	var y_tick: int = SimTime.tick_within_sim_year(tick)
-	return "[b]Year %d[/b] · [b]Day %d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](y.%d)[/color]" % [
-		year_n, day, hour, phase_name, speed_str, tick, y_tick,
-	]
+	var day_in_year: int = SimTime.calendar_day_within_sim_year(tick)
+	var days_per_y: int = SimTime.visual_days_per_sim_year()
+	var abs_day: int = SimTime.calendar_absolute_visual_day(tick)
+	return (
+		"[b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#888888]absD%d[/color]   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](y.%d)[/color]"
+		% [year_n, day_in_year, days_per_y, hour, phase_name, abs_day, speed_str, tick, y_tick]
+	)
 
 
 ## Labor stance (M) + key demand metrics from `ColonySimServices`.
@@ -546,6 +552,13 @@ func _sample_wildlife(current_tick: int) -> void:
 			_momentum_spark += "→"
 	while _momentum_spark.length() < WILDLIFE_HISTORY_SIZE - 1:
 		_momentum_spark = "→" + _momentum_spark
+	if not _wildlife_history.is_empty():
+		_wildlife_min_total = int(_wildlife_history[0])
+		_wildlife_max_total = int(_wildlife_history[0])
+		for v in _wildlife_history:
+			var vi: int = int(v)
+			_wildlife_min_total = mini(_wildlife_min_total, vi)
+			_wildlife_max_total = maxi(_wildlife_max_total, vi)
 
 
 func _wildlife_line() -> String:
@@ -554,7 +567,25 @@ func _wildlife_line() -> String:
 	var r: int = int(_wildlife_snapshot.get("rabbit", 0))
 	var d: int = int(_wildlife_snapshot.get("deer", 0))
 	var t: int = int(_wildlife_snapshot.get("total", 0))
-	return "🦌 Wildlife: R:%d D:%d T:%d [%s]" % [r, d, t, _momentum_spark]
+	var pr: int = int(_wildlife_prev_snapshot.get("rabbit", r))
+	var pd: int = int(_wildlife_prev_snapshot.get("deer", d))
+	var dr: int = 0
+	var dd: int = 0
+	var dts: int = 0
+	if _wildlife_history.size() >= 2:
+		dr = r - pr
+		dd = d - pd
+		dts = t - int(_wildlife_prev_snapshot.get("total", t))
+	return "🦌 Wildlife: R:%d (%+d) D:%d (%+d) T:%d (%+d) [%s] Tmin:%d Tmax:%d" % [
+		r, dr, d, dd, t, dts, _momentum_spark, _wildlife_min_total, _wildlife_max_total,
+	]
+
+
+func _settlement_revival_digest_line() -> String:
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node == null or not main_node.has_method("get_camera_revival_digest_bbcode"):
+		return "[color=#9e9e9e]🏚 Cam settlement: (no Main)[/color]"
+	return main_node.get_camera_revival_digest_bbcode()
 
 
 # ==================== formatting helpers ====================

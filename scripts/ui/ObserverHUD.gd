@@ -133,7 +133,9 @@ func _world_governance_block(s: Dictionary) -> String:
 		+ "  ["
 		+ str(int(s.get("work_focus_confidence", 0)))
 		+ "%]\n"
-		+ "[i]Identity from resource-pressure proxy only; not stock scarcity.[/i]"
+		+ "[i]Identity from resource-pressure proxy only; not stock scarcity.[/i]\n"
+		+ "[b]Camera revival (read-only):[/b] "
+		+ str(s.get("camera_revival_digest_plain", "n/a"))
 	)
 
 

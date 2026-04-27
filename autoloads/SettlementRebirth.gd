@@ -2,7 +2,11 @@ extends Node
 ## v1: Revivable settlements may receive one new pawn per [const REBIRTH_INTERVAL_TICKS] after long peace.
 ## Read-only inputs; [PawnSpawner] only. Deterministic. Not saved (session-only last-rebirth keys).
 
-## Keep in sync with [constant SettlementPlanner.PLANNING_INTERVAL_TICKS] (planner throttling).
+# --- Playtest tuning: rebirth spawn (HUD/digest uses get_rebirth_eligibility same constants) ---
+# CHECK_INTERVAL_TICKS — align with planner/memory dirty cadence (SettlementPlanner.PLANNING_INTERVAL_TICKS).
+# REBIRTH_PEACE_TICKS — floor on “quiet since last pawn death” before spawn; actual threshold is max with branch peace.
+# REBIRTH_INTERVAL_TICKS — session cooldown per center_region between successful spawns.
+# TILE_SCORE_* — deterministic tile ordering for spawn site (structure / scar / road / trade / distance).
 const CHECK_INTERVAL_TICKS: int = 2000
 const REBIRTH_PEACE_TICKS: int = 30000
 const REBIRTH_INTERVAL_TICKS: int = 60000

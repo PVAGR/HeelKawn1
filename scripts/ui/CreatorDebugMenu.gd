@@ -1,0 +1,544 @@
+class_name CreatorDebugMenu
+extends CanvasLayer
+## F10: creator-facing debug hub. Each button prints a **copy-pasteable** block to stdout (Godot Output).
+## HeelKawn kernel stays **deterministic** (seed + rules + history); these reports help you and the AI see truth.
+
+const PANEL_W: int = 460
+const PAD: int = 10
+
+## id -> label (order = button order)
+const DEBUG_REPORT_ROWS: Array[Dictionary] = [
+	{"id": "calendar", "label": "01 · Calendar + day/night + long-run checkpoints"},
+	{"id": "sim_diag", "label": "02 · GameManager sim_diag (speed / tick caps)"},
+	{"id": "colony_sim", "label": "03 · ColonySimServices (pressures + labor stance)"},
+	{"id": "intent", "label": "04 · IntentMemory (global + per-center intents)"},
+	{"id": "age", "label": "05 · AgeMemory (epoch index + signature)"},
+	{"id": "settlements", "label": "06 · SettlementMemory (all clusters)"},
+	{"id": "registry", "label": "07 · SettlementRegistry (abandon / overlay keys)"},
+	{"id": "revival", "label": "08 · Camera / nearest revival digest"},
+	{"id": "rebirth", "label": "09 · SettlementRebirth (constants + session cooldown keys)"},
+	{"id": "wildlife", "label": "10 · Wildlife snapshot (Main path)"},
+	{"id": "jobs_stock", "label": "11 · Jobs + stockpile zones"},
+	{"id": "trade", "label": "12 · TradeMemory (T2 / routes / last T2 tick)"},
+	{"id": "world_events", "label": "13 · WorldEvents (active temp + efficiency mult)"},
+	{"id": "world_memory", "label": "14 · WorldMemory (count + last 25 events)"},
+	{"id": "history_snip", "label": "15 · WorldMemory history export (truncated)"},
+	{"id": "world_meaning", "label": "16 · WorldMeaning (region count + sample)"},
+	{"id": "world_persist", "label": "17 · WorldPersistence (scar/recovery sample)"},
+	{"id": "cultural", "label": "18 · CulturalMemory (reputation sample)"},
+	{"id": "myth", "label": "19 · MythMemory (rebirth counts + myth sample)"},
+	{"id": "road", "label": "20 · RoadMemory (summary if API exists)"},
+	{"id": "remnant", "label": "21 · RemnantMemory (tile delta probe 0,0 + 64,64)"},
+	{"id": "pawns", "label": "22 · All pawns (spawner list)"},
+	{"id": "main_world", "label": "23 · Main world (beds + spawners)"},
+	{"id": "kernel", "label": "24 · KernelDiagnostic.generate_session_log_summary"},
+	{"id": "harness", "label": "25 · Validation / harness flags"},
+	{"id": "profession_liking", "label": "26 · Pawn profession liking (lanes + job bias)"},
+	{"id": "vision_scope", "label": "27 · Vision scope (SimVision roadmap stub)"},
+]
+
+var _root_panel: PanelContainer = null
+var _scroll: ScrollContainer = null
+var _vbox: VBoxContainer = null
+
+
+func _ready() -> void:
+	layer = 25
+	visible = false
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_build_ui()
+
+
+func _input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_ESCAPE:
+			visible = false
+			get_viewport().set_input_as_handled()
+
+
+func toggle_menu() -> void:
+	visible = not visible
+
+
+func _build_ui() -> void:
+	var margin: MarginContainer = MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	margin.offset_top = 36.0
+	margin.offset_left = 10.0
+	margin.add_theme_constant_override("margin_left", PAD)
+	margin.add_theme_constant_override("margin_top", PAD)
+	margin.add_theme_constant_override("margin_right", PAD)
+	margin.add_theme_constant_override("margin_bottom", PAD)
+	add_child(margin)
+	_root_panel = PanelContainer.new()
+	_root_panel.custom_minimum_size = Vector2(PANEL_W, 620)
+	margin.add_child(_root_panel)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.06, 0.07, 0.1, 0.94)
+	style.border_color = Color(0.75, 0.65, 0.35, 0.85)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(4)
+	style.content_margin_left = PAD
+	style.content_margin_right = PAD
+	style.content_margin_top = PAD
+	style.content_margin_bottom = PAD
+	_root_panel.add_theme_stylebox_override("panel", style)
+	_scroll = ScrollContainer.new()
+	_scroll.custom_minimum_size = Vector2(PANEL_W - 24, 560)
+	_root_panel.add_child(_scroll)
+	_vbox = VBoxContainer.new()
+	_vbox.add_theme_constant_override("separation", 5)
+	_scroll.add_child(_vbox)
+	var title: Label = Label.new()
+	title.text = "HeelKawn — Creator debug (F10 · Esc · F6 tile focus)"
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_vbox.add_child(title)
+	var hint: Label = Label.new()
+	hint.text = "Deterministic sim: no RNG in world history. Copy blocks between === from Output for the AI.\nInstall extensions: open Command Palette → \"Extensions: Show Recommended Extensions\"."
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_vbox.add_child(hint)
+	for row in DEBUG_REPORT_ROWS:
+		_add_report_button(str(row.get("label", "?")), str(row.get("id", "")))
+
+
+func _add_report_button(label_text: String, report_id: String) -> void:
+	var b: Button = Button.new()
+	b.text = label_text
+	b.custom_minimum_size = Vector2(PANEL_W - 40, 26)
+	b.pressed.connect(_emit_report.bind(report_id))
+	_vbox.add_child(b)
+
+
+func _emit_report(report_id: String) -> void:
+	var tick: int = GameManager.tick_count
+	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d BEGIN ===" % [report_id, tick])
+	match report_id:
+		"calendar":
+			_report_calendar(tick)
+		"sim_diag":
+			_report_sim_diag()
+		"colony_sim":
+			_report_colony_sim()
+		"intent":
+			_report_intent()
+		"age":
+			_report_age()
+		"settlements":
+			_report_settlements()
+		"registry":
+			_report_registry()
+		"revival":
+			_report_revival()
+		"rebirth":
+			_report_rebirth_consts()
+		"wildlife":
+			_report_wildlife()
+		"jobs_stock":
+			_report_jobs_stock()
+		"trade":
+			_report_trade()
+		"world_events":
+			_report_world_events()
+		"world_memory":
+			_report_world_memory()
+		"history_snip":
+			_report_history_snip()
+		"world_meaning":
+			_report_world_meaning()
+		"world_persist":
+			_report_world_persist()
+		"cultural":
+			_report_cultural()
+		"myth":
+			_report_myth()
+		"road":
+			_report_road()
+		"remnant":
+			_report_remnant()
+		"pawns":
+			_report_pawns()
+		"main_world":
+			_report_main_world()
+		"kernel":
+			_report_kernel()
+		"harness":
+			_report_harness()
+		"profession_liking":
+			_report_profession_liking()
+		"vision_scope":
+			_report_vision_scope()
+		_:
+			print("Unknown report_id=%s" % report_id)
+	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d END ===" % [report_id, tick])
+
+
+func _main() -> Main:
+	return get_tree().root.get_node_or_null("Main") as Main
+
+
+func _print_dict_sample(title: String, d: Dictionary, max_entries: int) -> void:
+	print("%s  entries=%d" % [title, d.size()])
+	var keys: Array = d.keys()
+	keys.sort()
+	var n: int = mini(max_entries, keys.size())
+	for i in range(n):
+		var k: Variant = keys[i]
+		print("  %s => %s" % [str(k), str(d[k])])
+
+
+func _report_calendar(tick: int) -> void:
+	var dlen: int = DayNightCycle.TICKS_PER_DAY
+	var phase: float = float(tick % dlen) / float(dlen)
+	var night: bool = DayNightCycle.is_night_for_tick(tick)
+	var y: int = SimTime.sim_year_index(tick)
+	var d_in_y: int = SimTime.calendar_day_within_sim_year(tick)
+	var d_per: int = SimTime.visual_days_per_sim_year()
+	var abs_d: int = SimTime.calendar_absolute_visual_day(tick)
+	var y_tick: int = SimTime.tick_within_sim_year(tick)
+	print(
+			(
+					"tick=%d  sim_year_index=%d  tick_within_sim_year=%d\n"
+					+ "visual_day_in_year=%d/%d  absolute_visual_day=%d  TICKS_PER_VISUAL_DAY=%d  TICKS_PER_SIM_YEAR=%d\n"
+					+ "day_phase=%.4f  is_night=%s  (DayNight uses same TICKS_PER_DAY as SimTime.TICKS_PER_VISUAL_DAY)"
+			)
+			% [tick, y, y_tick, d_in_y, d_per, abs_d, SimTime.TICKS_PER_VISUAL_DAY, SimTime.TICKS_PER_SIM_YEAR, phase, night]
+	)
+	for m in SimTime.long_run_checkpoints():
+		if tick >= m:
+			print("long_run_checkpoint_reached: tick>=%d" % m)
+
+
+func _report_sim_diag() -> void:
+	print("sim_diag: %s" % str(GameManager.sim_diag()))
+
+
+func _report_colony_sim() -> void:
+	print(
+			"stance=%s food=%.3f housing=%.3f materials=%.3f haul=%.3f"
+			% [
+				ColonySimServices.get_stance_display(),
+				ColonySimServices.get_food_pressure(),
+				ColonySimServices.get_housing_pressure(),
+				ColonySimServices.get_materials_pressure(),
+				ColonySimServices.get_haul_pressure(),
+			]
+	)
+
+
+func _report_intent() -> void:
+	print("IntentMemory.global_pressure=%.4f" % IntentMemory.global_pressure)
+	_print_dict_sample("IntentMemory.settlement_pressure", IntentMemory.settlement_pressure, 24)
+	_print_dict_sample("IntentMemory.settlement_intent (0=GROW 1=HOLD 2=ABANDON)", IntentMemory.settlement_intent, 24)
+
+
+func _report_age() -> void:
+	print(
+			"AgeMemory: current_age_index=%d age_start_tick=%d tint_strength=%.4f"
+			% [AgeMemory.get_current_age_index(), AgeMemory.age_start_tick, AgeMemory.get_global_age_tint_strength()]
+	)
+	print("AgeMemory.age_signature: %s" % str(AgeMemory.age_signature))
+
+
+func _report_settlements() -> void:
+	print("settlement_count=%d" % SettlementMemory.settlements.size())
+	var i: int = 0
+	for s in SettlementMemory.settlements:
+		if not (s is Dictionary):
+			continue
+		var st: Dictionary = s as Dictionary
+		print(
+				(
+						"[%d] state=%s center=%d culture=%s scar_max=%d rev_score=%d peace_thr=%d last_death=%s intent=%s"
+						% [
+							i,
+							str(st.get("state", "")),
+							int(st.get("center_region", -1)),
+							str(st.get("culture_name", "")),
+							int(st.get("scar_max", 0)),
+							int(st.get("revival_score", 0)),
+							int(st.get("peace_threshold_ticks", 0)),
+							str(st.get("last_pawn_death_tick", -1)),
+							str(st.get("current_intent", "")),
+						]
+				)
+		)
+		i += 1
+
+
+func _report_registry() -> void:
+	print("SettlementRegistry.to_save_dict: %s" % str(SettlementRegistry.to_save_dict()))
+
+
+func _report_revival() -> void:
+	var m: Main = _main()
+	if m != null and m.has_method("get_camera_revival_digest_plain"):
+		print(str(m.call("get_camera_revival_digest_plain")))
+		if m.has_method("get_camera_settlement_revival_digest"):
+			print("digest_dict: %s" % str(m.call("get_camera_settlement_revival_digest")))
+	else:
+		print("Main not available")
+
+
+func _report_rebirth_consts() -> void:
+	print(
+			"SettlementRebirth: CHECK_INTERVAL=%d REBIRTH_PEACE=%d REBIRTH_INTERVAL=%d TILE_SCORES struct=%d scar=%d road=%d trade=%d dist=%d"
+			% [
+				SettlementRebirth.CHECK_INTERVAL_TICKS,
+				SettlementRebirth.REBIRTH_PEACE_TICKS,
+				SettlementRebirth.REBIRTH_INTERVAL_TICKS,
+				SettlementRebirth.TILE_SCORE_STRUCT_NEIGHBOR,
+				SettlementRebirth.TILE_SCORE_SCAR_WEIGHT,
+				SettlementRebirth.TILE_SCORE_ROAD_WEIGHT,
+				SettlementRebirth.TILE_SCORE_TRADE_WEIGHT,
+				SettlementRebirth.TILE_SCORE_DISTANCE_WEIGHT,
+			]
+	)
+
+
+func _report_wildlife() -> void:
+	var m: Main = _main()
+	if m != null and m.has_method("get_wildlife_snapshot_for_diagnostic"):
+		print(str(m.call("get_wildlife_snapshot_for_diagnostic")))
+	else:
+		print("Main not available")
+
+
+func _report_jobs_stock() -> void:
+	print("JobManager.stats: %s" % str(JobManager.stats()))
+	print("JobManager.open_count=%d" % JobManager.open_count())
+	print("Stockpile zones=%d" % StockpileManager.zones().size())
+	for z in StockpileManager.zones():
+		if z == null:
+			continue
+		print("  zone @%s items=%s" % [str(z.rect.position), str(z.inventory)])
+
+
+func _report_trade() -> void:
+	print(
+			"TradeMemory: count_t2_tiles=%d count_route_tiles=%d last_tick_t2_existed=%d"
+			% [TradeMemory.count_t2_tiles(), TradeMemory.count_route_tiles(), TradeMemory.get_last_tick_t2_existed()]
+	)
+
+
+func _report_world_events() -> void:
+	print("WorldEvents.get_debug_active_event: %s" % str(WorldEvents.get_debug_active_event()))
+	print("WorldEvents.gathering_efficiency_mult()=%.3f" % WorldEvents.gathering_efficiency_mult())
+	print("validation_clean_economy_events_active=%s" % str(WorldEvents.validation_clean_economy_events_active()))
+
+
+func _report_world_memory() -> void:
+	var n: int = WorldMemory.event_count()
+	print("WorldMemory.event_count=%d" % n)
+	var mem: Dictionary = WorldMemory.to_save_dict()
+	var ev: Variant = mem.get("events", [])
+	if ev is Array:
+		var arr: Array = ev as Array
+		var start: int = maxi(0, arr.size() - 25)
+		for j in range(start, arr.size()):
+			print("  event[%d]: %s" % [j, str(arr[j])])
+
+
+func _report_history_snip() -> void:
+	var s: String = WorldMemory.get_history_export_string(false)
+	var maxl: int = 12000
+	if s.length() > maxl:
+		s = s.substr(0, maxl) + "\n... [truncated at %d chars]" % maxl
+	print(s)
+
+
+func _report_world_meaning() -> void:
+	var m: Dictionary = WorldMeaning.meaning_by_region
+	print("WorldMeaning.meaning_by_region regions=%d" % m.size())
+	var keys: Array = m.keys()
+	keys.sort()
+	var cap: int = mini(18, keys.size())
+	for i in range(cap):
+		var rk: int = int(keys[i])
+		print("  rk=%d summary=%s" % [rk, str(WorldMeaning.get_region_meaning_summary(rk))])
+
+
+func _report_world_persist() -> void:
+	var pr: Dictionary = WorldPersistence.persistent_regions
+	print("WorldPersistence.persistent_regions count=%d" % pr.size())
+	var keys: Array = pr.keys()
+	keys.sort()
+	var shown: int = 0
+	for k in keys:
+		if shown >= 16:
+			break
+		var rec: Dictionary = WorldPersistence.get_region_persistence(int(k))
+		var sl: int = int(rec.get("scar_level", 0))
+		if sl >= 1 or int(rec.get("recovery_stage", 0)) > 0:
+			print("  rk=%s scar=%d recovery=%s" % [str(k), sl, str(rec.get("recovery_stage", 0))])
+			shown += 1
+
+
+func _report_cultural() -> void:
+	var rep: Dictionary = CulturalMemory.reputation_by_region
+	print("CulturalMemory.reputation_by_region count=%d" % rep.size())
+	var keys: Array = rep.keys()
+	keys.sort()
+	for i in range(mini(20, keys.size())):
+		var rk: int = int(keys[i])
+		print("  rk=%d reputation=%d" % [rk, CulturalMemory.get_region_reputation(rk)])
+
+
+func _report_myth() -> void:
+	print("MythMemory.to_save_dict: %s" % str(MythMemory.to_save_dict()))
+	var seen: Dictionary = {}
+	for s in SettlementMemory.settlements:
+		if s is not Dictionary:
+			continue
+		var c: int = int((s as Dictionary).get("center_region", -1))
+		if c < 0 or seen.has(c):
+			continue
+		seen[c] = true
+		print(
+				"  center=%d myth_state=%d rebirths=%d"
+				% [c, MythMemory.get_region_myth_state(c), MythMemory.get_rebirth_success_count_for_center(c)]
+		)
+		if seen.size() >= 16:
+			break
+
+
+func _report_road() -> void:
+	var m: Main = _main()
+	var sx: int = 127
+	var sy: int = 127
+	if m != null:
+		var w: World = m.get_node_or_null("WorldViewport/World") as World
+		if w != null and w.data != null:
+			sx = w.data.WIDTH / 2
+			sy = w.data.HEIGHT / 2
+	print(
+			"RoadMemory traversal: (127,127)=%d (64,64)=%d mid(%d,%d)=%d path_mul_mid=%.3f"
+			% [
+				RoadMemory.get_traversal(127, 127),
+				RoadMemory.get_traversal(64, 64),
+				sx,
+				sy,
+				RoadMemory.get_traversal(sx, sy),
+				RoadMemory.get_path_weight_mul(sx, sy),
+			]
+	)
+
+
+func _report_remnant() -> void:
+	var m: Main = _main()
+	if m == null:
+		print("Main missing")
+		return
+	var w: World = m.get_node_or_null("WorldViewport/World") as World
+	if w == null:
+		print("World missing")
+		return
+	print("RemnantMemory deltas: tile(0,0)=%d tile(64,64)=%d" % [
+		RemnantMemory.get_tile_rem_delta(0, 0, w),
+		RemnantMemory.get_tile_rem_delta(64, 64, w),
+	])
+
+
+func _report_pawns() -> void:
+	var m: Main = _main()
+	if m == null:
+		print("Main missing")
+		return
+	var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+	if ps == null:
+		print("PawnSpawner null")
+		return
+	print("pawn_count=%d" % ps.pawns.size())
+	for p in ps.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var d: PawnData = p.data
+		var t: Vector2i = d.tile_pos
+		var rk: int = WorldMemory._region_key(t.x, t.y)
+		var carry_s: String = "-"
+		if d.is_carrying():
+			carry_s = "%s x%d" % [Item.name_for(d.carrying), int(d.carrying_qty)]
+		print(
+				(
+						"  id=%d name=%s age=%.1f tile=%s region=%d H=%.1f R=%.1f M=%.1f state=%s prof=%s carry=%s"
+						% [
+							int(d.id),
+							d.display_name,
+							float(d.age_years),
+							str(t),
+							rk,
+							d.hunger,
+							d.rest,
+							d.mood,
+							p.get_state_name(),
+							d.profession_name(),
+							carry_s,
+						]
+				)
+		)
+
+
+func _report_main_world() -> void:
+	var m: Main = _main()
+	if m == null:
+		print("Main missing")
+		return
+	var w: World = m.get_node_or_null("WorldViewport/World") as World
+	if w != null:
+		print("World bed_count=%d" % w.bed_count())
+	var es: Node = m.get_node_or_null("WorldViewport/EnemySpawner")
+	if es != null and es.has_method("get_enemy_count"):
+		print("EnemySpawner.get_enemy_count=%s" % str(es.call("get_enemy_count")))
+	var asp: Node = m.get_node_or_null("WorldViewport/AnimalSpawner")
+	if asp != null and asp.has_method("get_live_wildlife_snapshot"):
+		print("AnimalSpawner snapshot=%s" % str(asp.call("get_live_wildlife_snapshot")))
+
+
+func _report_kernel() -> void:
+	var m0: Main = _main()
+	var kd: Node = m0.get_node_or_null("KernelDiagnostic") if m0 != null else null
+	if kd != null and kd.has_method("generate_session_log_summary"):
+		print(kd.call("generate_session_log_summary"))
+	else:
+		print("KernelDiagnostic not found")
+
+
+func _report_harness() -> void:
+	var v: Dictionary = SettlementMemory.validation_harness_flags_for_snapshot()
+	print("SettlementMemory.validation_harness_flags: %s" % str(v))
+	print("OS.is_debug_build=%s" % OS.is_debug_build())
+
+
+func _report_vision_scope() -> void:
+	var sv: Node = get_tree().root.get_node_or_null("SimVision")
+	if sv == null:
+		print("SimVision autoload missing (check project.godot).")
+		return
+	if sv.has_method("roadmap_debug_block"):
+		print(sv.call("roadmap_debug_block"))
+	else:
+		print("SimVision node has no roadmap_debug_block().")
+
+
+func _report_profession_liking() -> void:
+	var m: Main = _main()
+	if m == null:
+		print("Main missing")
+		return
+	var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+	if ps == null:
+		print("PawnSpawner null")
+		return
+	for p in ps.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var d: PawnData = p.data
+		var aff: String = "farm=%.3f combat=%.3f build=%.3f craft=%.3f diplo=%.3f" % [
+			float(d.affinities.get("farming", 0.5)),
+			float(d.affinities.get("combat", 0.5)),
+			float(d.affinities.get("building", 0.5)),
+			float(d.affinities.get("crafting", 0.5)),
+			float(d.affinities.get("diplomacy", 0.5)),
+		]
+		print("  id=%d %s  %s  %s" % [int(d.id), d.display_name, aff, d.profession_liking_digest_line()])

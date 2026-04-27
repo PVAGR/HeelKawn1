@@ -53,6 +53,16 @@ No required micromanagement.
 - These do not indicate logic errors
 - Do not refactor to silence them unless they break runtime
 
+## CANON: TAURED / DRUJ / ARK (PROMOTION LADDER)
+
+Creator decision — treat as locked intent until revised:
+
+1. **Now:** **Exploratory myth-cycle only** — Taured / DRUJ / Ark material does not constrain Godot simulation design; no requirement to implement it here.
+2. **Next:** May graduate to **parallel expression** (same deterministic kernel rules, separate game/universe lane or codebase).
+3. **Later:** May graduate to **a canonical Age inside HeelKawn** once core game and parallel track justify integration.
+
+Do not merge heroic/named-arc assumptions into kernel or WorldMemory semantics until step 3 is explicitly activated.
+
 ## DESIGN RULES (NON-NEGOTIABLE)
 
 - No RNG in world history

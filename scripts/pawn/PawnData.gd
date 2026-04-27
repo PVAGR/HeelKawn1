@@ -27,6 +27,17 @@ const SKILL_BONUS_AT_MAX: float = 2.0
 ## passes lvl 1 in ~one job cycle and reaches lvl 5 over a few in-game days.
 const XP_PER_WORK_TICK: float = 1.5
 
+## Cumulative "liking" (1..LIKING_MAX) per interest lane. Grows only from
+## deterministic work and action-skill gains — no RNG in history. Lanes mix
+## into the five job-affinity floats (birth baseline + earned blend).
+const LIKING_MIN: int = 1
+const LIKING_MAX: int = 10000
+## Extra sum above all lanes at LIKING_MIN before affinities fully follow earned mix.
+const LIKING_BLEND_DENOM: float = 20000.0
+const PROFESSION_LIKING_KEYS: Array[String] = [
+	"outdoors", "tillage", "industry", "structure", "martial", "circulation", "inquiry",
+]
+
 ## Global monotonic id. Reset when the game starts, serialized per save.
 static var _next_id: int = 1
 
@@ -78,6 +89,11 @@ var affinities: Dictionary = {
 	"crafting": 0.5,
 	"diplomacy": 0.5,
 }
+## Snapshot of `affinities` right after deterministic birth init (or first load).
+## Earned job bias lerps from this toward lane-derived weights as liking grows.
+var affinity_birth_snapshot: Dictionary = {}
+## Lane id (see PROFESSION_LIKING_KEYS) -> int in [LIKING_MIN, LIKING_MAX].
+var profession_liking: Dictionary = {}
 var current_profession: int = Profession.NONE
 var birth_tick: int = 0
 var parent_a_id: int = -1
@@ -365,7 +381,266 @@ func gain_skill_xp(skill_key: String, amount: int) -> bool:
 		current_profession = _skill_to_profession(skill_key)
 		just_locked = true
 	skills[skill_key] = after
+	add_liking_from_action_skill(skill_key, amount)
 	return (after != before) or just_locked
+
+
+func _ensure_profession_liking_defaults() -> void:
+	for k in PROFESSION_LIKING_KEYS:
+		if not profession_liking.has(k):
+			profession_liking[k] = LIKING_MIN
+			continue
+		var v: int = int(profession_liking[k])
+		profession_liking[k] = clampi(v, LIKING_MIN, LIKING_MAX)
+
+
+func profession_liking_total() -> int:
+	_ensure_profession_liking_defaults()
+	var s: int = 0
+	for k in PROFESSION_LIKING_KEYS:
+		s += int(profession_liking.get(k, LIKING_MIN))
+	return s
+
+
+func _bump_lane(lane_key: String, delta: int) -> void:
+	if delta <= 0:
+		return
+	_ensure_profession_liking_defaults()
+	var cur: int = int(profession_liking.get(lane_key, LIKING_MIN))
+	profession_liking[lane_key] = clampi(cur + delta, LIKING_MIN, LIKING_MAX)
+
+
+func _flush_liking_to_affinities() -> void:
+	recompute_affinities_from_liking()
+
+
+## Work ticks on the job queue (not trade haul — that uses completion hook).
+func add_profession_liking_for_job(job_type: int, tick_weight: int) -> void:
+	var w: int = maxi(1, tick_weight)
+	_ensure_profession_liking_defaults()
+	match job_type:
+		Job.Type.FORAGE:
+			_bump_lane("outdoors", w)
+			_bump_lane("tillage", w)
+		Job.Type.MINE:
+			_bump_lane("industry", w)
+			_bump_lane("inquiry", maxi(1, w / 4))
+		Job.Type.MINE_WALL:
+			_bump_lane("industry", w)
+			_bump_lane("inquiry", w)
+			_bump_lane("structure", maxi(1, w / 5))
+		Job.Type.CHOP:
+			_bump_lane("industry", w)
+			_bump_lane("outdoors", maxi(1, w / 3))
+		Job.Type.HUNT:
+			_bump_lane("martial", w)
+			_bump_lane("outdoors", w)
+		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+			_bump_lane("structure", w)
+		_:
+			pass
+	_flush_liking_to_affinities()
+
+
+## One completed inter-zone haul (pickup + deposit succeeded).
+func add_profession_liking_for_trade_completion() -> void:
+	_bump_lane("circulation", 12)
+	_bump_lane("inquiry", 6)
+	_flush_liking_to_affinities()
+
+
+func add_liking_from_action_skill(skill_key: String, amount: int) -> void:
+	var a: int = maxi(1, amount)
+	match skill_key:
+		"movement":
+			_bump_lane("inquiry", a)
+			_bump_lane("circulation", maxi(1, a / 2))
+		"farming":
+			_bump_lane("tillage", a)
+			_bump_lane("outdoors", maxi(1, a / 3))
+		"building":
+			_bump_lane("structure", a)
+			_bump_lane("industry", maxi(1, a / 3))
+		"gathering":
+			_bump_lane("tillage", maxi(1, a / 2))
+			_bump_lane("outdoors", a)
+		"combat":
+			_bump_lane("martial", a)
+			_bump_lane("inquiry", maxi(1, a / 4))
+		_:
+			return
+	_flush_liking_to_affinities()
+
+
+func recompute_affinities_from_liking() -> void:
+	_ensure_profession_liking_defaults()
+	if affinity_birth_snapshot.is_empty():
+		affinity_birth_snapshot = affinities.duplicate(true)
+	var outdoors: int = int(profession_liking.get("outdoors", LIKING_MIN))
+	var tillage: int = int(profession_liking.get("tillage", LIKING_MIN))
+	var industry: int = int(profession_liking.get("industry", LIKING_MIN))
+	var structure: int = int(profession_liking.get("structure", LIKING_MIN))
+	var martial: int = int(profession_liking.get("martial", LIKING_MIN))
+	var circulation: int = int(profession_liking.get("circulation", LIKING_MIN))
+	var inquiry: int = int(profession_liking.get("inquiry", LIKING_MIN))
+	# Integer scores → relative weights (cascade / web-tree style).
+	var s_farm: int = tillage * 100 + outdoors * 35
+	var s_combat: int = martial * 100 + outdoors * 12 + tillage * 2
+	var s_build: int = structure * 100 + industry * 18
+	var s_craft: int = industry * 100 + structure * 12 + inquiry * 8
+	var s_diplo: int = circulation * 100 + inquiry * 35 + tillage * 4
+	var tot: int = maxi(1, s_farm + s_combat + s_build + s_craft + s_diplo)
+	var e_farm: float = float(s_farm) / float(tot)
+	var e_combat: float = float(s_combat) / float(tot)
+	var e_build: float = float(s_build) / float(tot)
+	var e_craft: float = float(s_craft) / float(tot)
+	var e_diplo: float = float(s_diplo) / float(tot)
+	var blend_w: float = minf(0.95, float(profession_liking_total() - PROFESSION_LIKING_KEYS.size() * LIKING_MIN) / LIKING_BLEND_DENOM)
+	var b_f: float = float(affinity_birth_snapshot.get("farming", 0.5))
+	var b_c: float = float(affinity_birth_snapshot.get("combat", 0.5))
+	var b_b: float = float(affinity_birth_snapshot.get("building", 0.5))
+	var b_r: float = float(affinity_birth_snapshot.get("crafting", 0.5))
+	var b_d: float = float(affinity_birth_snapshot.get("diplomacy", 0.5))
+	affinities["farming"] = lerpf(b_f, 0.05 + 0.9 * clampf(e_farm, 0.0, 1.0), blend_w)
+	affinities["combat"] = lerpf(b_c, 0.05 + 0.9 * clampf(e_combat, 0.0, 1.0), blend_w)
+	affinities["building"] = lerpf(b_b, 0.05 + 0.9 * clampf(e_build, 0.0, 1.0), blend_w)
+	affinities["crafting"] = lerpf(b_r, 0.05 + 0.9 * clampf(e_craft, 0.0, 1.0), blend_w)
+	affinities["diplomacy"] = lerpf(b_d, 0.05 + 0.9 * clampf(e_diplo, 0.0, 1.0), blend_w)
+
+
+func profession_liking_digest_line() -> String:
+	_ensure_profession_liking_defaults()
+	var parts: PackedStringArray = PackedStringArray()
+	for k in PROFESSION_LIKING_KEYS:
+		parts.append("%s=%d" % [k.substr(0, 3), int(profession_liking.get(k, LIKING_MIN))])
+	return "Likings " + ", ".join(parts) + " → bias " + highest_affinity_skill()
+
+
+func _profession_liking_ranked() -> Array:
+	_ensure_profession_liking_defaults()
+	var arr: Array = []
+	for k in PROFESSION_LIKING_KEYS:
+		arr.append({"k": k, "v": int(profession_liking.get(k, LIKING_MIN))})
+	arr.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var va: int = int(a.get("v", 0))
+		var vb: int = int(b.get("v", 0))
+		if va != vb:
+			return va > vb
+		return String(a.get("k", "")) < String(b.get("k", ""))
+	)
+	return arr
+
+
+static func _lane_plain_name(lane_key: String) -> String:
+	match lane_key:
+		"outdoors":
+			return "open air and travel between sites"
+		"tillage":
+			return "fields, harvest, and food rhythm"
+		"industry":
+			return "stone, ore, and raw material"
+		"structure":
+			return "walls, beds, doors — shelter craft"
+		"martial":
+			return "danger, hunting, and confrontation"
+		"circulation":
+			return "convoys, stockpiles, and trade legs"
+		"inquiry":
+			return "study, routes, and reading the world"
+		_:
+			return lane_key
+
+
+static func _affinity_jobs_plain(affinity_key: String) -> String:
+	match affinity_key:
+		"farming":
+			return "forage / berry harvest"
+		"combat":
+			return "hunt / meat runs"
+		"building":
+			return "bed / wall / door builds"
+		"crafting":
+			return "mine / chop / tunnel stone"
+		"diplomacy":
+			return "trade haul between zones"
+		_:
+			return "mixed labour"
+
+
+static func _nexus_coach_line(lane_a: String, lane_b: String) -> String:
+	var x: String = lane_a if lane_a < lane_b else lane_b
+	var y: String = lane_b if lane_a < lane_b else lane_a
+	var pair: String = "%s|%s" % [x, y]
+	match pair:
+		"outdoors|tillage":
+			return "Nexus: harvest cadence — you read weather and soil together (gatherer → farmer arc)."
+		"martial|outdoors":
+			return "Nexus: ranger beat — patrol and harvest both feel like home (hunter / warden cadence)."
+		"inquiry|tillage":
+			return "Nexus: agrarian scholar — ledgers, seed cycles, and ruins in farmland (teacher / planner tone)."
+		"circulation|inquiry":
+			return "Nexus: caravan mind — routes, prices, and rumor; merchant-scribe energy."
+		"industry|structure":
+			return "Nexus: mason-architect — raw mass becomes rooms; builder who owns the quarry."
+		"martial|inquiry":
+			return "Nexus: tactician — fights teach patterns you name; officer / ritualist undertone."
+		"industry|inquiry":
+			return "Nexus: delver — stone and story in the same breath (mine-wall → lore hooks)."
+		"structure|circulation":
+			return "Nexus: quartermaster — stockpiles meet blueprints; who builds also moves goods."
+		"tillage|circulation":
+			return "Nexus: granary web — food and freight entwine; colony lifeline roles."
+		_:
+			return "Nexus: %s + %s — generalist spine; odd jobs cluster on you first." % [
+				_lane_plain_name(x), _lane_plain_name(y)]
+
+
+## Observer-facing copy: no RNG, same inputs → same lines. For future per-player HUD.
+func progression_coach_lines(max_lines: int = 5) -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	var cap: int = clampi(max_lines, 1, 8)
+	_ensure_profession_liking_defaults()
+	var hk: String = highest_affinity_skill()
+	out.append(
+			"Job queue bias: %s — %s (weight %.2f)." % [
+				_affinity_jobs_plain(hk), hk, float(affinities.get(hk, 0.5)),
+			]
+	)
+	var ranked: Array = _profession_liking_ranked()
+	if ranked.is_empty():
+		return out
+	var top: Dictionary = ranked[0]
+	out.append(
+			"Inner pull: %s (score %d)." % [_lane_plain_name(str(top.get("k", ""))), int(top.get("v", 1))]
+	)
+	if ranked.size() >= 2 and out.size() < cap:
+		var second: Dictionary = ranked[1]
+		out.append(
+				"Second thread: %s (%d)." % [_lane_plain_name(str(second.get("k", ""))), int(second.get("v", 1))]
+		)
+	if out.size() < cap:
+		if current_profession == Profession.NONE:
+			var lead: String = ""
+			var lead_xp: int = -1
+			for sk in ["farming", "building", "gathering", "combat", "movement"]:
+				var xv: int = tracked_skill_xp(sk)
+				if xv > lead_xp or (xv == lead_xp and (lead.is_empty() or sk < lead)):
+					lead_xp = xv
+					lead = sk
+			out.append(
+					"Profession: first action skill to 100 xp locks a role — closest track is `%s` (%d/100)." % [lead, lead_xp]
+			)
+		else:
+			out.append(
+					"Profession locked: %s — keep pushing `%s` for mastery perks." % [
+						profession_name(), _profession_primary_skill(current_profession),
+					]
+			)
+	if ranked.size() >= 2 and out.size() < cap:
+		out.append(_nexus_coach_line(str(ranked[0].get("k", "")), str(ranked[1].get("k", ""))))
+	while out.size() > cap:
+		out.remove_at(out.size() - 1)
+	return out
 
 
 func initialize_affinities(new_birth_tick: int, parent_a: int, parent_b: int) -> void:
@@ -377,6 +652,8 @@ func initialize_affinities(new_birth_tick: int, parent_a: int, parent_b: int) ->
 	affinities["building"] = _deterministic_affinity_value(47)
 	affinities["crafting"] = _deterministic_affinity_value(73)
 	affinities["diplomacy"] = _deterministic_affinity_value(97)
+	_ensure_profession_liking_defaults()
+	affinity_birth_snapshot = affinities.duplicate(true)
 
 
 func _deterministic_affinity_value(salt: int) -> float:
@@ -529,6 +806,8 @@ func to_save_dict() -> Dictionary:
 		"skill_xp": sx,
 		"skills": skills.duplicate(true),
 		"affinities": affinities.duplicate(true),
+		"affinity_birth_snapshot": affinity_birth_snapshot.duplicate(true),
+		"profession_liking": profession_liking.duplicate(true),
 		"current_profession": current_profession,
 		"birth_tick": birth_tick,
 		"parent_a_id": parent_a_id,
@@ -600,6 +879,20 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	if d.has("affinities") and d["affinities"] is Dictionary:
 		for ak in p.affinities.keys():
 			p.affinities[ak] = float(d["affinities"].get(ak, p.affinities[ak]))
+	p.profession_liking = {}
+	if d.has("profession_liking") and d["profession_liking"] is Dictionary:
+		for lk in PROFESSION_LIKING_KEYS:
+			if d["profession_liking"].has(lk):
+				p.profession_liking[lk] = clampi(int(d["profession_liking"][lk]), LIKING_MIN, LIKING_MAX)
+	p._ensure_profession_liking_defaults()
+	p.affinity_birth_snapshot = {}
+	if d.has("affinity_birth_snapshot") and d["affinity_birth_snapshot"] is Dictionary:
+		for ak in p.affinities.keys():
+			if d["affinity_birth_snapshot"].has(ak):
+				p.affinity_birth_snapshot[ak] = float(d["affinity_birth_snapshot"][ak])
+	if p.affinity_birth_snapshot.is_empty():
+		p.affinity_birth_snapshot = p.affinities.duplicate(true)
+	p.recompute_affinities_from_liking()
 	p.current_profession = int(d.get("current_profession", Profession.NONE))
 	p.birth_tick = int(d.get("birth_tick", 0))
 	p.parent_a_id = int(d.get("parent_a_id", -1))

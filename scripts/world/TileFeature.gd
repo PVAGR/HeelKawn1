@@ -56,3 +56,19 @@ static func color_for(f: int) -> Color:
 
 static func name_for(f: int) -> String:
 	return NAMES.get(f, "Unknown")
+
+
+## Subtle deterministic tint for built furniture (read-only render; [SettlementPlanner] branch ints).
+static func apply_culture_tint_to_built_color(base: Color, culture_type: int) -> Color:
+	const TINT: float = 0.075
+	var warm: Color = Color(1.03, 1.01, 0.96, 1.0)
+	var cool: Color = Color(0.94, 0.97, 1.04, 1.0)
+	var neut: Color = Color(1.0, 1.0, 1.0, 1.0)
+	var mul: Color = neut
+	if culture_type == SettlementPlanner.CULTURE_OPEN:
+		mul = warm
+	elif culture_type == SettlementPlanner.CULTURE_DEFENSIVE:
+		mul = cool
+	elif culture_type == SettlementPlanner.CULTURE_CAUTIOUS:
+		mul = Color(1.01, 1.0, 0.995, 1.0)
+	return base.lerp(base * mul, TINT)

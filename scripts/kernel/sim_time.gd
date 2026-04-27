@@ -18,6 +18,8 @@ const TICKS_PER_SIM_YEAR: int = 30000
 ## Single-shot kernel validation aligned with end of sim year.
 const KERNEL_DIAGNOSTIC_TICK: int = TICKS_PER_SIM_YEAR
 
+## Visual days per in-world year (30_000 / 600 = 50). Keeps HUD “Day” aligned with [DayNightCycle].
+const VISUAL_DAYS_PER_SIM_YEAR: int = TICKS_PER_SIM_YEAR / TICKS_PER_VISUAL_DAY
 
 static func sim_year_index(tick: int) -> int:
 	return int(tick / TICKS_PER_SIM_YEAR) + 1
@@ -27,9 +29,27 @@ static func tick_within_sim_year(tick: int) -> int:
 	return int(tick % TICKS_PER_SIM_YEAR)
 
 
+## 1-based day index within the current sim year (same cycle length as day/night tint).
+static func calendar_day_within_sim_year(tick: int) -> int:
+	return int((tick % TICKS_PER_SIM_YEAR) / float(TICKS_PER_VISUAL_DAY)) + 1
+
+
+## 1-based count of visual days since tick 0 (matches [DayNightCycle] “Day N begins” numbering).
+static func calendar_absolute_visual_day(tick: int) -> int:
+	return int(tick / float(TICKS_PER_VISUAL_DAY)) + 1
+
+
+static func visual_days_per_sim_year() -> int:
+	return VISUAL_DAYS_PER_SIM_YEAR
+
+
 static func divergence_milestone_ticks() -> Array[int]:
 	## Debug summaries at key long-run checkpoints (includes pre-year stress window).
-	return [20000, 30000, 40000]
+	return [20000, 30000, 40000, 100000]
+
+
+static func long_run_checkpoints() -> Array[int]:
+	return [10000, 25000, 50000, 75000, 100000, 150000, 200000]
 
 
 static func wall_seconds_at_1x_for_ticks(ticks: int) -> float:

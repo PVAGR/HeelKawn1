@@ -101,6 +101,11 @@ func _print_report(tick: int) -> void:
 		int(wildlife.get("deer", 0)),
 		int(wildlife.get("total", 0)),
 	])
+	var tr_rep: SceneTree = get_tree()
+	if tr_rep != null:
+		var main_rep: Node = tr_rep.root.get_node_or_null("Main")
+		if main_rep != null and main_rep.has_method("get_camera_revival_digest_plain"):
+			print("[KERNEL DIAGNOSTIC] %s" % str(main_rep.call("get_camera_revival_digest_plain")))
 	print("[KERNEL DIAGNOSTIC] player pawn_id=%s profession=%s xp=%d/100 locked=%s" % [
 		str(player.get("pawn_id", "--")),
 		str(player.get("profession", "None")),
@@ -175,7 +180,7 @@ func generate_session_log_summary() -> String:
 	var wildlife: Dictionary = _wildlife_snapshot()
 	var player: Dictionary = _player_state()
 	var lines: PackedStringArray = []
-	lines.append("TICK: %d" % DIAGNOSTIC_TICK)
+	lines.append("TICK_NOW: %d (kernel_export_milestone=%d)" % [GameManager.tick_count, DIAGNOSTIC_TICK])
 	lines.append("WorldMemory Events: %d" % WorldMemory.event_count())
 	lines.append("Wildlife: Rabbit=%d Deer=%d Total=%d" % [
 		int(wildlife.get("rabbit", 0)),
@@ -189,6 +194,11 @@ func generate_session_log_summary() -> String:
 		int(settlements.get("abandoned", 0)),
 		int(settlements.get("permanently_abandoned", 0)),
 	])
+	var tr: SceneTree = get_tree()
+	if tr != null:
+		var main_cam: Node = tr.root.get_node_or_null("Main")
+		if main_cam != null and main_cam.has_method("get_camera_revival_digest_plain"):
+			lines.append(str(main_cam.call("get_camera_revival_digest_plain")))
 	if str(player.get("pawn_id", "--")) == "--":
 		lines.append("Player Pawn: No Player Pawn")
 	else:

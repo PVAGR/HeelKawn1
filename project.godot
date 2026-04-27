@@ -49,6 +49,7 @@ ChronicleLog="*res://autoloads/ChronicleLog.gd"
 ObserverLens="*res://scripts/kernel/observer_lens.gd"
 WorldClock="*res://autoloads/WorldClock.gd"
 WorldEvents="*res://autoloads/WorldEvents.gd"
+SimVision="*res://autoloads/SimVision.gd"
 
 [rendering]
 

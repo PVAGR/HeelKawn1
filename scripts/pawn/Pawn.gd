@@ -1353,8 +1353,10 @@ func issue_edict(edict_key: String) -> bool:
 		match edict_key:
 			"focus_farming":
 				p.data.skills["farming"] = int(p.data.skills.get("farming", 0)) + 1
+				p.data.add_liking_from_action_skill("farming", 1)
 			"draft_soldiers":
 				p.data.skills["combat"] = int(p.data.skills.get("combat", 0)) + 1
+				p.data.add_liking_from_action_skill("combat", 1)
 	return true
 
 
@@ -1440,6 +1442,8 @@ func _tick_working() -> void:
 					PawnData.skill_name(skill),
 					data.get_skill_level(skill),
 				])
+		var w: int = maxi(1, int(ceil(speed)))
+		data.add_profession_liking_for_job(_current_job.type, w)
 	_current_job.work_ticks_done += int(ceil(speed))
 	if _current_job.work_ticks_done >= _current_job.work_ticks_needed:
 		if _current_job.type == Job.Type.TRADE_HAUL:
@@ -1972,6 +1976,8 @@ func _deposit_at_stockpile() -> void:
 			)
 	if sp != null and data.is_carrying():
 		sp.add_item(data.carrying, data.carrying_qty)
+		if is_trade:
+			data.add_profession_liking_for_trade_completion()
 		if not is_trade:
 			if GameManager.verbose_logs():
 				print("[Pawn] %s deposited %d %s into %s zone (zone now has %d)" % [

@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3 uid="uid://heelkawn_main"]
+[gd_scene load_steps=17 format=3 uid="uid://heelkawn_main"]
 
 [ext_resource type="Script" path="res://scenes/main/Main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scenes/main/BuildPreviewOverlay.gd" id="1_preview"]
@@ -16,6 +16,7 @@
 [ext_resource type="Script" path="res://scripts/combat/EnemySpawner.gd" id="11_enemy_spawn"]
 [ext_resource type="Script" path="res://scripts/world/LivingWorldController.gd" id="12_living"]
 [ext_resource type="Script" path="res://scripts/world/WorldTrace.gd" id="13_trace"]
+[ext_resource type="Script" path="res://scripts/ui/CreatorDebugMenu.gd" id="16_debug_menu"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -58,6 +59,10 @@ script = ExtResource("2_cam")
 [node name="ObserverHUD" parent="UI_Viewport" instance=ExtResource("14_observer_hud")]
 
 [node name="FocusInspector" parent="UI_Viewport" instance=ExtResource("15_focus_inspector")]
+
+[node name="CreatorDebugMenu" type="CanvasLayer" parent="UI_Viewport"]
+layer = 25
+script = ExtResource("16_debug_menu")
 
 [node name="BuildToolbar" type="CanvasLayer" parent="UI_Viewport"]
 script = ExtResource("8_toolbar")

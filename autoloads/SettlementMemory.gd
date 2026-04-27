@@ -5,18 +5,20 @@ extends Node
 ## "state" is one of: abandoned, permanently_abandoned, revivable, dormant (revival v1, not saved).
 
 const KIND_PAWN_DEATH: int = 0
-## Irreversible collapse: recent (within this window) max scar + worst rep.
+# --- Playtest tuning: revival / abandonment (single place to adjust “feel”) ---
+# HARD_COLLAPSE_TICKS — window for “recent” worst-case collapse when scoring irreversible paths.
+# REVIVABLE_SCAR_MAX — max cluster scar for revivable branch eligibility (see also SettlementRebirth scar>=3 block).
+# REVIVABLE_REPUTATION_MIN — floor rep still allowed on revivable path.
+# PEACE_TICKS_PER_BRANCH — ticks of quiet (no pawn deaths in cluster) before peace component maxes; branch flavor.
+# REVIVAL_SCORE_* — deterministic 0..100 curve gates: recovering → revivable → active (see _deterministic_revival_score).
 const HARD_COLLAPSE_TICKS: int = 30000
-## Revival tuning: moderately scarred but quiet regions may reopen.
 const REVIVABLE_SCAR_MAX: int = 2
 const REVIVABLE_REPUTATION_MIN: int = -1
-## Deterministic peace requirements by culture branch.
 const PEACE_TICKS_PER_BRANCH: Dictionary = {
 	SettlementPlanner.CULTURE_OPEN: 18000,
 	SettlementPlanner.CULTURE_CAUTIOUS: 30000,
 	SettlementPlanner.CULTURE_DEFENSIVE: 42000,
 }
-## Deterministic score gates.
 const REVIVAL_SCORE_RECOVERING_MIN: int = 35
 const REVIVAL_SCORE_REVIVABLE_MIN: int = 70
 const REVIVAL_SCORE_ACTIVE_MIN: int = 88

@@ -1,8 +1,9 @@
 class_name PawnInfoPanel
 extends CanvasLayer
 
-## Right-side info panel that shows the currently selected pawn's vitals,
-## skills and current task. Hidden when nothing is selected.
+## Right-side **character sheet** for the selected pawn (NPC today; same
+## surface can bind to a human-controlled pawn later). Chunky portrait reads
+## from [PawnData] colors; coach lines are deterministic from likings + skills.
 ##
 ## Built programmatically (no .tscn) to mirror the BuildToolbar style and so
 ## tweaks live in one place. Refreshes once per game tick instead of every
@@ -18,9 +19,11 @@ const FONT_TITLE: int = 14
 const FONT_BODY:  int = 11
 const FONT_SMALL: int = 10
 
-const PANEL_WIDTH:    float = 260.0
+const PANEL_WIDTH:    float = 292.0
 const RIGHT_INSET:    float = 8.0
 const TOP_INSET:      float = 8.0
+const PORTRAIT_COLS:  int = 6
+const PORTRAIT_ROWS:  int = 8
 
 const NEED_BARS: Array = [
 	# (label, accessor name on PawnData, color)
@@ -52,7 +55,9 @@ const WORK_CHECKS: Array = [
 # ---- nodes built once in _ready, then rebound per pawn ----
 var _panel: PanelContainer
 var _root_vbox: VBoxContainer
+var _header_row: HBoxContainer = null
 var _title_label: Label
+var _subtitle_label: Label = null
 var _state_label: Label
 var _need_bars: Dictionary = {}    # field name -> {bar: ProgressBar, label: Label}
 var _skill_lines: Dictionary = {}  # skill enum -> Label
@@ -68,6 +73,10 @@ var _lineage_label: Label = null
 var _appearance_label: Label = null
 var _mood_status_label: Label = null
 var _crisis_level_label: Label = null
+var _liking_label: Label = null
+var _coach_label: Label = null
+var _action_skills_label: Label = null
+var _portrait_cells: Array[ColorRect] = []
 
 
 func _ready() -> void:
@@ -115,9 +124,45 @@ func _build_ui() -> void:
 	_root_vbox.add_theme_constant_override("separation", 4)
 	margin.add_child(_root_vbox)
 
-	# title row
+	_header_row = HBoxContainer.new()
+	_header_row.add_theme_constant_override("separation", 8)
+	_root_vbox.add_child(_header_row)
+
+	var portrait_frame := PanelContainer.new()
+	var cell_px: int = 8
+	portrait_frame.custom_minimum_size = Vector2(PORTRAIT_COLS * cell_px + 4, PORTRAIT_ROWS * cell_px + 4)
+	var psty := StyleBoxFlat.new()
+	psty.bg_color = Color(0.02, 0.03, 0.06, 1.0)
+	psty.border_color = PANEL_BORDER
+	psty.set_border_width_all(1)
+	psty.set_corner_radius_all(2)
+	portrait_frame.add_theme_stylebox_override("panel", psty)
+	var pm := MarginContainer.new()
+	pm.add_theme_constant_override("margin_left", 2)
+	pm.add_theme_constant_override("margin_right", 2)
+	pm.add_theme_constant_override("margin_top", 2)
+	pm.add_theme_constant_override("margin_bottom", 2)
+	portrait_frame.add_child(pm)
+	var grid := GridContainer.new()
+	grid.columns = PORTRAIT_COLS
+	pm.add_child(grid)
+	for _i in range(PORTRAIT_COLS * PORTRAIT_ROWS):
+		var c := ColorRect.new()
+		c.custom_minimum_size = Vector2(cell_px, cell_px)
+		grid.add_child(c)
+		_portrait_cells.append(c)
+	_header_row.add_child(portrait_frame)
+
+	var name_col := VBoxContainer.new()
+	name_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_col.add_theme_constant_override("separation", 2)
 	_title_label = _make_label("", FONT_TITLE, TEXT_BRIGHT)
-	_root_vbox.add_child(_title_label)
+	_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_col.add_child(_title_label)
+	_subtitle_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_subtitle_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_col.add_child(_subtitle_label)
+	_header_row.add_child(name_col)
 
 	# current activity
 	_state_label = _make_label("", FONT_BODY, ACCENT)
@@ -146,6 +191,16 @@ func _build_ui() -> void:
 	_crisis_level_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_root_vbox.add_child(_crisis_level_label)
 
+	_root_vbox.add_child(_make_section_header("Work bias (liking)"))
+	_liking_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_liking_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_root_vbox.add_child(_liking_label)
+
+	_root_vbox.add_child(_make_section_header("Coach (deterministic)"))
+	_coach_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_coach_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_root_vbox.add_child(_coach_label)
+
 	_root_vbox.add_child(_make_section_header("Needs"))
 	for entry in NEED_BARS:
 		_add_need_row(entry.label, entry.field, entry.color)
@@ -160,6 +215,9 @@ func _build_ui() -> void:
 		_add_work_checkbox(String(w.field), String(w.text))
 
 	_root_vbox.add_child(_make_section_header("Misc"))
+	_action_skills_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_action_skills_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_root_vbox.add_child(_action_skills_label)
 	_carry_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_root_vbox.add_child(_carry_label)
 	_tile_label = _make_label("", FONT_SMALL, TEXT_DIM)
@@ -309,6 +367,32 @@ func _make_panel_style() -> StyleBoxFlat:
 	return style
 
 
+func _portrait_cell_color(cell_idx: int, d: PawnData) -> Color:
+	var n: int = PORTRAIT_COLS * PORTRAIT_ROWS
+	if cell_idx < 0 or cell_idx >= n:
+		return Color(0.08, 0.09, 0.11)
+	var r: int = cell_idx / PORTRAIT_COLS
+	var ccol: int = cell_idx % PORTRAIT_COLS
+	var salt: float = float((d.id * 17 + r * 3 + ccol * 5) % 9) * 0.018
+	if r < 2:
+		return d.hair_color.lightened(salt)
+	if r < 5:
+		var sk: Color = d.color
+		if ccol >= 2 and ccol <= 3 and r >= 3:
+			return sk.darkened(0.1 + salt)
+		return sk.lightened(salt * 0.45)
+	return d.apparel_color.darkened(salt * 0.7)
+
+
+func _refresh_portrait_strip(d: PawnData) -> void:
+	var i: int = 0
+	for c in _portrait_cells:
+		if not (c is ColorRect):
+			continue
+		(c as ColorRect).color = _portrait_cell_color(i, d)
+		i += 1
+
+
 func _reposition() -> void:
 	if _panel == null:
 		return
@@ -346,6 +430,33 @@ func _refresh() -> void:
 		return
 	var d: PawnData = _pawn.data
 	_title_label.text = "%s  (age %d)" % [d.display_name, d.age]
+	if _subtitle_label != null:
+		var prof: String = d.profession_name()
+		var hk: String = d.highest_affinity_skill()
+		if prof == "None":
+			_subtitle_label.text = "No locked profession · job bias: %s" % hk
+		else:
+			_subtitle_label.text = "%s · job bias: %s" % [prof, hk]
+	_refresh_portrait_strip(d)
+	if _coach_label != null:
+		var hints: PackedStringArray = d.progression_coach_lines(5)
+		var coach_sb: String = ""
+		for hi in range(hints.size()):
+			if hi > 0:
+				coach_sb += "\n"
+			coach_sb += hints[hi]
+		_coach_label.text = coach_sb
+	if _action_skills_label != null:
+		_action_skills_label.text = (
+				"Action xp  move %d  farm %d  build %d  gather %d  combat %d"
+				% [
+					int(d.skills.get("movement", 0)),
+					int(d.skills.get("farming", 0)),
+					int(d.skills.get("building", 0)),
+					int(d.skills.get("gathering", 0)),
+					int(d.skills.get("combat", 0)),
+				]
+		)
 	_state_label.text = _pawn.describe_state()
 	_traits_label.text = "Traits: %s" % d.traits_display()
 	_lineage_label.text = _lineage_block(d)
@@ -375,6 +486,9 @@ func _refresh() -> void:
 		crisis_text += "CRITICAL"
 	crisis_text += " (%.0f%%)" % (crisis * 100.0)
 	_crisis_level_label.text = crisis_text
+
+	if _liking_label != null:
+		_liking_label.text = d.profession_liking_digest_line()
 
 	for field in _need_bars:
 		var entry: Dictionary = _need_bars[field]

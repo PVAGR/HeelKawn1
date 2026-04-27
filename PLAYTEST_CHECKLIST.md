@@ -19,6 +19,7 @@ Use this if you are tired. Just follow in order.
 - Optional extra:
   - one `[PHASE8_PROOF_RESULT]`
   - one non-active `[PHASE8_PROOF_BUNDLE]`
+  - one `[PAWN_DIVERGENCE_PROOF]` line (should be dynamic center + scored_events_present=true when binding/scoring pass)
 
 ## 4) What I will return to you
 

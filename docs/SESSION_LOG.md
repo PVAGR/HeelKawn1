@@ -14,6 +14,54 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-27 - Claim-time binding regression resolved (Phase 8.5)
+
+Date: 2026-04-27
+Agent/Model: Codex (Cursor)
+Goal: Resolve claim-time center binding regression in divergence audit without changing gameplay systems.
+
+Changes made:
+- Updated `scenes/main/Main.gd` claim-time divergence audit path:
+  - Explicit center resolution order:
+    1) fast map via `SettlementMemory.get_center_region_for_region(...)`
+    2) direct membership via `SettlementMemory.get_settlement_at_region(...)`
+    3) debug-only zone-context fallback to validation anchor center
+  - Added stage trace:
+    - `[PAWN_DIVERGENCE_BIND_TRACE] ... bind_source=fast_map|direct_membership|zone_context_fallback|unbound`
+  - Added robust summary counters:
+    - `total_claim_events_seen`, `scored_events`, `skip_no_bound_center`, `skip_no_specialization_context`
+    - `native_bound_events`, `fallback_bound_events`
+    - `first_scored_center_region`, `scored_events_present`
+  - Added first-20 scored replay block and dynamic proof center reporting:
+    - `[PAWN_DIVERGENCE_PROOF] center_region=<dynamic> scored_events_present=<true|false>`
+  - Added extra skip observability for specialization-context misses:
+    - `settlement_found`, `committed_state`, `current_intent`, `spec_locked`, `spec_candidate`
+- Updated `PLAYTEST_CHECKLIST.md` with divergence proof capture guidance.
+
+Runtime proof observed:
+- Canonical runtime path confirmed:
+  - `project_root=C:/Users/user/Documents/GitHub/HeelKawn1/`
+- Claim-time binding recovery confirmed by run logs:
+  - non-negative resolved centers present
+  - scored divergence lines present
+  - summary reports `scored_events > 0`
+  - bind trace clearly distinguishes source
+- Dynamic proof line confirmed in fresh run:
+  - `[PAWN_DIVERGENCE_PROOF] center_region=524296 scored_events_present=true`
+
+Determinism/scope:
+- Instrumentation-only pass.
+- No specialization math changes.
+- No settlement transition logic changes.
+- No economy/job/pathing/colony behavior changes.
+
+Files touched:
+- scenes/main/Main.gd
+- PLAYTEST_CHECKLIST.md
+- docs/SESSION_LOG.md
+
+---
+
 ## 2026-04-26 - Phase 7 canonical validation milestone lock
 
 Date: 2026-04-26

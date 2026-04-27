@@ -146,6 +146,10 @@ var _pawn_divergence_fallback_bound_events: int = 0
 var _pawn_divergence_first_scored_center_region: int = -1
 ## center_region -> {"scored": int, "aligned": int, "divergent": int, "neutral": int}
 var _pawn_divergence_by_center: Dictionary = {}
+## center_region -> no_specialization_context skip count
+var _pawn_divergence_no_spec_by_center: Dictionary = {}
+## spec_phase -> no_specialization_context skip count
+var _pawn_divergence_no_spec_by_phase: Dictionary = {}
 var _pawn_divergence_first20_scored_lines: PackedStringArray = PackedStringArray()
 ## tick -> true (summary already printed at this checkpoint).
 var _pawn_divergence_summary_emitted_ticks: Dictionary = {}
@@ -501,8 +505,19 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 	var spec_candidate: String = str(st.get("specialization_candidate_channel", ""))
 	if st.is_empty() or spec_phase == SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN:
 		_pawn_divergence_skip_no_specialization_context += 1
+		_pawn_divergence_no_spec_by_center[effective_center_region] = int(
+			_pawn_divergence_no_spec_by_center.get(effective_center_region, 0)
+		) + 1
+		_pawn_divergence_no_spec_by_phase[spec_phase] = int(
+			_pawn_divergence_no_spec_by_phase.get(spec_phase, 0)
+		) + 1
+		var settlement_found: bool = not st.is_empty()
+		var committed_state: String = str(st.get("state", ""))
+		var current_intent: String = str(st.get("current_intent", ""))
 		var skip_line_no_spec: String = (
-			"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_specialization_context pawn_id=%d pawn=%s pawn_center_region=%d job_center_region=%d center_region=%d spec_phase=%s"
+			"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_specialization_context pawn_id=%d pawn=%s "
+			+ "pawn_center_region=%d job_center_region=%d center_region=%d spec_phase=%s "
+			+ "settlement_found=%s committed_state=%s current_intent=%s spec_locked=%s spec_candidate=%s"
 			% [
 				GameManager.tick_count,
 				int(pawn.data.id),
@@ -511,6 +526,11 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 				job_center_region,
 				effective_center_region,
 				spec_phase,
+				settlement_found,
+				committed_state,
+				current_intent,
+				spec_locked,
+				spec_candidate,
 			]
 		)
 		print(skip_line_no_spec)
@@ -602,6 +622,22 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 	print("fallback_bound_events=%d" % _pawn_divergence_fallback_bound_events)
 	print("first_scored_center_region=%d" % _pawn_divergence_first_scored_center_region)
 	print("scored_events_present=%s" % ("true" if _pawn_divergence_scored_events > 0 else "false"))
+	var no_spec_centers: Array = _pawn_divergence_no_spec_by_center.keys()
+	no_spec_centers.sort()
+	for c_any in no_spec_centers:
+		var c: int = int(c_any)
+		print(
+			"[PAWN_DIVERGENCE_NO_SPEC_SUMMARY] center_region=%d skips=%d"
+			% [c, int(_pawn_divergence_no_spec_by_center.get(c, 0))]
+		)
+	var no_spec_phases: Array = _pawn_divergence_no_spec_by_phase.keys()
+	no_spec_phases.sort()
+	for phase_any in no_spec_phases:
+		var phase: String = str(phase_any)
+		print(
+			"[PAWN_DIVERGENCE_NO_SPEC_PHASE_SUMMARY] spec_phase=%s skips=%d"
+			% [phase, int(_pawn_divergence_no_spec_by_phase.get(phase, 0))]
+		)
 	var centers: Array = _pawn_divergence_by_center.keys()
 	centers.sort()
 	for c_any in centers:

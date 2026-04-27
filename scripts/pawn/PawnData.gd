@@ -313,7 +313,13 @@ func _profession_primary_skill(prof: int) -> String:
 
 
 func profession_name() -> String:
-	match current_profession:
+	return profession_label_from_enum(int(current_profession))
+
+
+static func profession_label_from_enum(prof: int) -> String:
+	match prof:
+		Profession.NONE:
+			return "None"
 		Profession.FARMER:
 			return "Farmer"
 		Profession.BUILDER:
@@ -374,10 +380,10 @@ func initialize_affinities(new_birth_tick: int, parent_a: int, parent_b: int) ->
 
 
 func _deterministic_affinity_value(salt: int) -> float:
-	var aff_seed: int = int(
+	var seed: int = int(
 		(birth_tick * 1103515245 + (parent_a_id + 31) * 12345 + (parent_b_id + 17) * 2654435761 + id * 97 + salt) & 0x7FFFFFFF
 	)
-	var modv: int = aff_seed % 1000
+	var modv: int = seed % 1000
 	return float(modv) / 999.0
 
 

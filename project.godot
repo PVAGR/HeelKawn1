@@ -46,6 +46,7 @@ MythMemory="*res://autoloads/MythMemory.gd"
 RoadMemory="*res://autoloads/RoadMemory.gd"
 SacredMemory="*res://autoloads/SacredMemory.gd"
 ChronicleLog="*res://autoloads/ChronicleLog.gd"
+ObserverLens="*res://scripts/kernel/observer_lens.gd"
 WorldClock="*res://autoloads/WorldClock.gd"
 WorldEvents="*res://autoloads/WorldEvents.gd"
 

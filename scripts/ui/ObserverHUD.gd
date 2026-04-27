@@ -76,18 +76,27 @@ func _validation_harness_hud_line(s: Dictionary) -> String:
 	var warn: String = ""
 	if sess_req and not osdb:
 		warn = " [b][!] session const ON but not a debug run — harness DISARMED[/b]"
+	var os_s: String = "ON" if osdb else "off"
+	var sr_s: String = "ON" if sess_req else "off"
+	var se_s: String = "ON" if sess_eff else "off"
+	var cl_s: String = "ON" if clean else "off"
+	var tr_s: String = "ON" if truth else "off"
+	var sp_s: String = "ON" if spec else "off"
 	return (
-			"[b][HARNESS][/b] OS_debug=%s session_const=%s session_effective=%s | "
-			+ "armed: clean_economy=%s settlement_truth_verify=%s specialization_log=%s%s\n"
-			% [
-				"ON" if osdb else "off",
-				"ON" if sess_req else "off",
-				"ON" if sess_eff else "off",
-				"ON" if clean else "off",
-				"ON" if truth else "off",
-				"ON" if spec else "off",
-				warn,
-			]
+			"[b][HARNESS][/b] OS_debug="
+			+ os_s
+			+ " session_const="
+			+ sr_s
+			+ " session_effective="
+			+ se_s
+			+ " | armed: clean_economy="
+			+ cl_s
+			+ " settlement_truth_verify="
+			+ tr_s
+			+ " specialization_log="
+			+ sp_s
+			+ warn
+			+ "\n"
 	)
 
 
@@ -117,11 +126,13 @@ func _world_governance_block(s: Dictionary) -> String:
 			int(s.get("settlement_hysteresis_key_center_region", -1)),
 		]
 		+ "[i]Sp=Y only if a designated stockpile zone overlaps settlement regions (not loose items on ground).[/i]\n"
-		+ "Work-focus (proxy): %s — %s  [%d%%]\n" % [
-			str(s.get("work_focus_phase", "UNKNOWN")),
-			str(s.get("work_focus_display", "Unspecialized")),
-			int(s.get("work_focus_confidence", 0)),
-		]
+		+ "Work-focus (proxy): "
+		+ str(s.get("work_focus_phase", "UNKNOWN"))
+		+ " — "
+		+ str(s.get("work_focus_display", "Unspecialized"))
+		+ "  ["
+		+ str(int(s.get("work_focus_confidence", 0)))
+		+ "%]\n"
 		+ "[i]Identity from resource-pressure proxy only; not stock scarcity.[/i]"
 	)
 

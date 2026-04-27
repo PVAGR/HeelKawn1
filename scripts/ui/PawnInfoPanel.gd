@@ -18,7 +18,7 @@ const FONT_TITLE: int = 14
 const FONT_BODY:  int = 11
 const FONT_SMALL: int = 10
 
-const PANEL_WIDTH:    float = 230.0
+const PANEL_WIDTH:    float = 260.0
 const RIGHT_INSET:    float = 8.0
 const TOP_INSET:      float = 8.0
 
@@ -64,6 +64,7 @@ var _work_checkboxes: Dictionary = {}
 
 var _pawn: Pawn = null
 var _traits_label: Label = null
+var _lineage_label: Label = null
 var _appearance_label: Label = null
 var _mood_status_label: Label = null
 var _crisis_level_label: Label = null
@@ -127,6 +128,11 @@ func _build_ui() -> void:
 	_traits_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_traits_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_root_vbox.add_child(_traits_label)
+
+	_root_vbox.add_child(_make_section_header("Lineage"))
+	_lineage_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_lineage_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_root_vbox.add_child(_lineage_label)
 
 	_appearance_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_appearance_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -342,6 +348,7 @@ func _refresh() -> void:
 	_title_label.text = "%s  (age %d)" % [d.display_name, d.age]
 	_state_label.text = _pawn.describe_state()
 	_traits_label.text = "Traits: %s" % d.traits_display()
+	_lineage_label.text = _lineage_block(d)
 	_appearance_label.text = "Appearance: %s, %s" % [_body_type_label(d.body_type), _hair_style_label(d.hair_style)]
 	
 	# Mood status with active mood event
@@ -406,6 +413,94 @@ func _refresh() -> void:
 
 	# Reposition each tick because the panel can grow/shrink with carry text.
 	_reposition()
+
+
+func _pawn_spawner() -> PawnSpawner:
+	var n: Node = Engine.get_main_loop().root.find_child("PawnSpawner", true, false)
+	return n as PawnSpawner
+
+
+func _parent_line(pid: int) -> String:
+	if pid < 0:
+		return "—"
+	var spawner: PawnSpawner = _pawn_spawner()
+	if spawner != null:
+		var pd: PawnData = spawner.pawn_data_for_id(pid)
+		if pd != null:
+			var nm: String = str(pd.display_name).strip_edges()
+			if nm.is_empty():
+				nm = "#%d" % pid
+			var prof: String = pd.profession_name()
+			if prof != "None":
+				return "%s — %s" % [nm, prof]
+			return nm
+	var fact: Dictionary = WorldMemory.pawn_death_fact(pid)
+	if not fact.is_empty():
+		var nm2: String = str(fact.get("n", "")).strip_edges()
+		if nm2.is_empty():
+			nm2 = "#%d" % pid
+		var line: String = "%s (#%d, departed)" % [nm2, pid]
+		var prof_i: int = int(fact.get("prof", -1))
+		var prof_l: String = PawnData.profession_label_from_enum(prof_i)
+		if prof_i >= 0 and prof_l != "None":
+			line += " — was %s" % prof_l
+		return line
+	var fallen: String = WorldMemory.last_known_name_from_death_record(pid)
+	if not fallen.is_empty():
+		return "%s (#%d, departed)" % [fallen, pid]
+	return "#%d (record thin)" % pid
+
+
+func _parent_profession_enum(pid: int) -> int:
+	if pid < 0:
+		return -1
+	var spawner: PawnSpawner = _pawn_spawner()
+	if spawner != null:
+		var pd: PawnData = spawner.pawn_data_for_id(pid)
+		if pd != null:
+			return int(pd.current_profession)
+	var fact: Dictionary = WorldMemory.pawn_death_fact(pid)
+	if fact.is_empty():
+		return -1
+	return int(fact.get("prof", -1))
+
+
+func _profession_inheritance_note(d: PawnData) -> String:
+	if d.current_profession == PawnData.Profession.NONE:
+		return ""
+	var mine: int = int(d.current_profession)
+	for lbl in ["A", "B"]:
+		var pid: int = d.parent_a_id if lbl == "A" else d.parent_b_id
+		if pid < 0:
+			continue
+		var pprof: int = _parent_profession_enum(pid)
+		if pprof >= 0 and pprof == mine:
+			return "Profession traces to parent %s (%s)." % [lbl, d.profession_name()]
+	return ""
+
+
+func _lineage_block(d: PawnData) -> String:
+	var lines: PackedStringArray = PackedStringArray()
+	if d.parent_a_id >= 0 or d.parent_b_id >= 0:
+		lines.append("Parent A: %s" % _parent_line(d.parent_a_id))
+		lines.append("Parent B: %s" % _parent_line(d.parent_b_id))
+		if d.children_count > 0:
+			lines.append("Children recorded: %d" % int(d.children_count))
+	else:
+		lines.append("Founding generation (no recorded parents).")
+	var prof: String = d.profession_name()
+	if prof != "None":
+		lines.append("Profession: %s (progress %d)" % [prof, d.profession_progress_xp()])
+	else:
+		var prog: int = d.profession_progress_xp()
+		if prog > 0:
+			lines.append(
+				"Profession: not locked — action skills toward first lock (%d/100 on leading track)" % prog
+			)
+	var inh: String = _profession_inheritance_note(d)
+	if not inh.is_empty():
+		lines.append(inh)
+	return "\n".join(lines)
 
 
 static func _body_type_label(body_type: int) -> String:

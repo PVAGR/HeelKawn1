@@ -48,11 +48,25 @@ func get_screen_center_to_world(screen_pos: Vector2) -> Vector2:
 	return position + offset_from_center / zoom.x
 
 
+## Keep panning from drifting far outside the map (used in player-pawn mode).
+func clamp_position_to_world(world: Node2D, margin_px: float) -> void:
+	if world == null or not (world is World):
+		return
+	var w: World = world as World
+	var half_w: float = float(WorldData.WIDTH * World.TILE_PIXELS) * 0.5
+	var half_h: float = float(WorldData.HEIGHT * World.TILE_PIXELS) * 0.5
+	var o: Vector2 = world.global_position
+	var gp: Vector2 = global_position
+	gp.x = clampf(gp.x, o.x - half_w + margin_px, o.x + half_w - margin_px)
+	gp.y = clampf(gp.y, o.y - half_h + margin_px, o.y + half_h - margin_px)
+	global_position = gp
+
+
 func reset_to_world_bounds(world: Node) -> void:
 	if world == null or not (world is World):
 		return
 	var w: World = world as World
-	var center_tile: Vector2i = Vector2i(WorldData.WIDTH >> 1, WorldData.HEIGHT >> 1)
+	var center_tile: Vector2i = Vector2i(int(WorldData.WIDTH / 2), int(WorldData.HEIGHT / 2))
 	position = w.tile_to_world(center_tile)
 	var viewport_size: Vector2 = get_viewport_rect().size
 	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:

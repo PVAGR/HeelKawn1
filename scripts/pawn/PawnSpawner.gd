@@ -82,6 +82,15 @@ func remove_pawn(pawn: Pawn) -> void:
 		pawn.queue_free()
 
 
+func pawn_data_for_id(pid: int) -> PawnData:
+	if pid < 0:
+		return null
+	for p in pawns:
+		if p != null and is_instance_valid(p) and p.data != null and p.data.id == pid:
+			return p.data
+	return null
+
+
 ## Dump a needs + skills table for all pawns. Hotkeyed to T by Main.gd.
 func print_stats() -> void:
 	print("[Stats] --- pawn needs (tick %d) ---" % GameManager.tick_count)
@@ -304,12 +313,12 @@ func spawn_child_pawn(
 	var data := PawnData.new()
 	data.display_name = _pick_name_deterministic()
 	data.age = 18
-	var gen_seed: int = int((birth_tick + parent_a.id * 13 + parent_b.id * 17) & 0x7FFFFFFF)
-	data.gender = PawnData.Gender.MALE if gen_seed % 2 == 0 else PawnData.Gender.FEMALE
+	var seed: int = int((birth_tick + parent_a.id * 13 + parent_b.id * 17) & 0x7FFFFFFF)
+	data.gender = PawnData.Gender.MALE if seed % 2 == 0 else PawnData.Gender.FEMALE
 	data.tile_pos = tile
 	data.color = parent_a.color.lerp(parent_b.color, 0.5)
-	data.body_type = gen_seed % 3
-	data.hair_style = int(gen_seed / 3) % 4
+	data.body_type = seed % 3
+	data.hair_style = int(seed / 3) % 4
 	data.hair_color = parent_a.hair_color.lerp(parent_b.hair_color, 0.5)
 	data.apparel_color = parent_a.apparel_color.lerp(parent_b.apparel_color, 0.5)
 	data.initialize_affinities(birth_tick, parent_a.id, parent_b.id)
@@ -360,3 +369,4 @@ func _assign_random_traits(pawn_data: PawnData) -> void:
 			pawn_data.add_trait(trait_item)
 			if GameManager.verbose_logs():
 				print("[Spawn] trait: %s -> %s" % [pawn_data.display_name, trait_item.display_name])
+

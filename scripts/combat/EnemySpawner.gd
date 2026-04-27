@@ -82,8 +82,8 @@ func spawn_war_forces(
 		return false
 	var norm_strength: float = maxf(0.0, strength)
 	var war_size: int = clampi(2 + int(norm_strength / 60.0), 2, MAX_ENEMIES)
-	var enemy_seed: int = int((source_settlement_id * 73856093) ^ (target_settlement_id * 19349663) ^ int(norm_strength * 100.0))
-	var spawn_edge: int = abs(enemy_seed) % 4
+	var seed: int = int((source_settlement_id * 73856093) ^ (target_settlement_id * 19349663) ^ int(norm_strength * 100.0))
+	var spawn_edge: int = abs(seed) % 4
 	var spawned_count: int = _spawn_forces_internal(
 		world,
 		war_size,

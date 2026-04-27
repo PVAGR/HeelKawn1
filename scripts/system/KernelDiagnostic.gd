@@ -1,8 +1,8 @@
 extends Node
 class_name KernelDiagnostic
 
-## Deterministic Phase 7 one-shot diagnostic gate.
-const DIAGNOSTIC_TICK: int = 20000
+## Deterministic one-shot diagnostic gate (aligned with [SimTime.TICKS_PER_SIM_YEAR]).
+const DIAGNOSTIC_TICK: int = SimTime.KERNEL_DIAGNOSTIC_TICK
 const SETTLEMENT_VERIFY_SAMPLE_TICKS: int = 200
 const SETTLEMENT_VERIFY_WINDOWS: int = 10
 
@@ -113,7 +113,7 @@ func _print_report(tick: int) -> void:
 		str(determinism.get("rebirth_tick_locked", false)),
 		str(determinism.get("status", "PASS")),
 	])
-	print("[KERNEL DIAGNOSTIC] export_ready=true command=WorldMemory.get_history_export_string()")
+	print("[KERNEL DIAGNOSTIC] export_ready=true dev=WorldMemory.get_history_export_string(false) public=WorldMemory.get_history_export_string(true)")
 
 
 func _settlement_state_distribution() -> Dictionary:

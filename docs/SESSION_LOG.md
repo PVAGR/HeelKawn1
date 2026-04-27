@@ -5,6 +5,24 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-27 - Cursor Master Planning Spec + continuity pass
+
+Date: 2026-04-27
+Goal: Repo-wide discoverability for umbrella planning doc; align handoff with authoritative next targets.
+
+Changes made:
+- Added docs/CURSOR_MASTER_PLANNING_SPEC.md earlier (full plan: canon tiers T1–T4, lore/ages/factions/systems/mechanics, tension register, implementation priorities synced from HEELKAWN_STATE.md).
+- docs/WORLD_BIBLE/MASTER_INDEX.md: Planning section links to CURSOR_MASTER_PLANNING_SPEC.md.
+- docs/LLM_ONBOARDING.md: optional read after core trio for planning/lore-heavy work.
+- This session: .cursor/rules/heelkawn-handoff.mdc — optional third read when work touches lore tiers / overlay design / canon scope.
+- README.md one-liner for CURSOR_MASTER_PLANNING_SPEC.md.
+- HEELKAWN.txt NEXT TARGET block aligned with docs/HEELKAWN_STATE.md; added WHERE TO PLAN LORE/TIERS pointer.
+
+Suggested next session:
+- Implement or tune one NEXT TARGET item from docs/HEELKAWN_STATE.md (e.g. architectural style hooks or rebirth tuning), or expand WORLD_BIBLE where design decisions land.
+
+---
+
 ## 2026-04-26 - Phase 11 emergent governance and authority
 
 Date: 2026-04-26

@@ -20,7 +20,7 @@ Use this if you are tired. Just follow in order.
   - one `[PHASE8_PROOF_RESULT]`
   - one non-active `[PHASE8_PROOF_BUNDLE]`
   - one `[PAWN_DIVERGENCE_SCHEMA]` line (packet schema/version marker for parser compatibility)
-  - one `[PAWN_DIVERGENCE_EMIT]` line (emission reason: `tick_30000`, `tick_60000`, or `exit_tree`)
+  - one `[PAWN_DIVERGENCE_EMIT]` line (emission reason: `tick_20000`, `tick_40000`, or `exit_tree`)
   - one `[PAWN_DIVERGENCE_PROOF]` line (should be dynamic center + scored_events_present=true when binding/scoring pass)
   - one `[PAWN_DIVERGENCE_HEALTH]` line (quick PASS/WARN/FAIL read)
   - one `[PAWN_DIVERGENCE_BINDING_QUALITY]` line (one-glance binding quality verdict + reason)

@@ -1,6 +1,8 @@
 extends Node
 ## Autoload singleton (must not use [class_name] — same symbol as node name hides the autoload).
 
+const _ZoneTags := preload("res://scripts/kernel/world_meaning_safe.gd")
+
 ## Fired when an abandoned settlement reoccupies and receives a full identity.
 signal identity_resolved(resolved_id: String, name: String, traits: PackedStringArray, lineage_parent: String)
 
@@ -23,7 +25,7 @@ func resolve_for(settlement: Dictionary) -> Dictionary:
 	var stats: Dictionary = WorldMemory.get_zone_aggregate(zone_id)
 
 	var traits: PackedStringArray = PackedStringArray()
-	for tag in WorldMeaning.get_zone_tags(zone_id):
+	for tag in _ZoneTags.zone_tags(zone_id):
 		if tag in TRAIT_TAGS and not _traits_has_label(traits, str(TRAIT_TAGS[tag])):
 			traits.append(str(TRAIT_TAGS[tag]))
 	# From persist flags
@@ -50,17 +52,17 @@ func resolve_for(settlement: Dictionary) -> Dictionary:
 
 
 func _derive_name(zone_id: String, era: int, trait_count: int) -> String:
-	var name_seed: int = 0
+	var seed: int = 0
 	for i in range(zone_id.length()):
-		name_seed = (name_seed * 31 + zone_id.unicode_at(i)) & 0x7FFFFFFF
-	name_seed = (name_seed ^ era ^ (trait_count * 37)) & 0x7FFFFFFF
+		seed = (seed * 31 + zone_id.unicode_at(i)) & 0x7FFFFFFF
+	seed = (seed ^ era ^ (trait_count * 37)) & 0x7FFFFFFF
 	var prefixes: Array[String] = [
 		"Ash", "Stone", "Root", "Iron", "Salt", "Wind", "Marrow", "Ember"
 	]
 	var suffixes: Array[String] = [
 		"hold", "weald", "crest", "ford", "vale", "reach", "peak", "fen"
 	]
-	return "%s%s" % [prefixes[(name_seed >> 8) % 8], suffixes[(name_seed >> 4) % 8]]
+	return "%s%s" % [prefixes[(seed >> 8) % 8], suffixes[(seed >> 4) % 8]]
 
 
 static func _traits_has_label(traits: PackedStringArray, label: String) -> bool:

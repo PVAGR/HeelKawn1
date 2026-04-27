@@ -4,11 +4,9 @@ extends CanvasModulate
 ## Tints the entire canvas layer based on in-game time. Drives off
 ## GameManager.game_tick so pause and speed multipliers behave automatically.
 ##
-## NOTE ON UNITS: your brief said 1 tick ~ 1 in-game hour. A 24-tick day would
-## be 2.4 real seconds at 1x, which is way too fast to see. We decouple visual
-## day length from the tick-semantics value here: TICKS_PER_DAY controls the
-## cycle's visual period. Tune this later once pawn schedules exist.
-const TICKS_PER_DAY: int = 600   # 60s real at 1x, 10s at 6x
+## Visual day length in ticks. See [SimTime] and [code]docs/TIME_SCALE.md[/code]
+## for the canonical tick/calendar/wall-clock map.
+const TICKS_PER_DAY: int = SimTime.TICKS_PER_VISUAL_DAY
 
 ## Four key colors around the clock.
 ## Phase 0.00 = midnight, 0.25 = dawn, 0.50 = noon, 0.75 = dusk.
@@ -30,7 +28,18 @@ func _on_tick(tick: int) -> void:
 	var day: int = int(tick / float(TICKS_PER_DAY))
 	if day != _last_day:
 		_last_day = day
-		print("[DayNight] Day %d begins" % (day + 1))
+		var display_day: int = day + 1
+		if _should_log_day_rollover(display_day):
+			print("[DayNight] Day %d begins (tick %d)" % [display_day, tick])
+
+
+func _should_log_day_rollover(display_day: int) -> bool:
+	## At 26x+ each real second spans many visual days — avoid flooding stdout.
+	if GameManager.game_speed < 26.0:
+		return true
+	if not OS.is_debug_build():
+		return false
+	return display_day == 1 or (display_day % 14 == 0)
 
 
 ## After loading a save: snap visuals + day counter to `tick` without re-printing

@@ -128,9 +128,13 @@ var _player_pawn: Pawn = null
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
 var _kernel_diagnostic: KernelDiagnostic = null
+## Player authority: human handles designations, draft/intent, selection, pause/speed,
+## camera (clamped when a player pawn is assigned). SettlementPlanner, TradePlanner,
+## autonomous jobs/hunt/ecology/fragmentation remain sim-driven unless commanded.
 var _phase8_proof_overlay_layer: CanvasLayer = null
 var _phase8_proof_overlay_text: RichTextLabel = null
-var _resource_balance_audit_last_key: String = ""
+## Content signature for resource-balance console lines (never use snapshot_tick alone — it changes every refresh).
+var _resource_balance_audit_last_sig: String = ""
 ## pawn_id -> last claimed job label (debug instrumentation only).
 var _pawn_divergence_last_job_by_pawn_id: Dictionary = {}
 var _pawn_divergence_total_claim_events_seen: int = 0
@@ -200,6 +204,15 @@ func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) 
 	if GameManager.game_speed >= 6.0:
 		return fast_ticks
 	return normal_ticks
+
+
+func _pawn_divergence_detail_logs_enabled() -> bool:
+	if not OS.is_debug_build():
+		return false
+	if GameManager.game_speed >= 26.0:
+		return false
+	return true
+
 
 func _should_post_more_hunt_jobs() -> bool:
 	return StockpileManager.total_count_of(Item.Type.MEAT) < HUNT_MEAT_STOCKPILE_SOFT_CAP
@@ -514,28 +527,29 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 			bind_source = "zone_context_fallback"
 	if effective_center_region < 0:
 		bind_source = "unbound"
-	print(
-		(
-			"[PAWN_DIVERGENCE_BIND_TRACE] tick=%d action=claim bind_source=%s pawn_id=%d pawn=%s "
-			+ "pawn_region=%d job_region=%d pawn_center_fast_map=%d job_center_fast_map=%d "
-			+ "pawn_center_direct_membership=%d job_center_direct_membership=%d "
-			+ "zone_fallback_center=%d center_region=%d"
+	if _pawn_divergence_detail_logs_enabled():
+		print(
+			(
+				"[PAWN_DIVERGENCE_BIND_TRACE] tick=%d action=claim bind_source=%s pawn_id=%d pawn=%s "
+				+ "pawn_region=%d job_region=%d pawn_center_fast_map=%d job_center_fast_map=%d "
+				+ "pawn_center_direct_membership=%d job_center_direct_membership=%d "
+				+ "zone_fallback_center=%d center_region=%d"
+			)
+			% [
+				GameManager.tick_count,
+				bind_source,
+				int(pawn.data.id),
+				pawn.data.display_name,
+				pawn_region,
+				job_region,
+				pawn_center_fast_map,
+				job_center_fast_map,
+				pawn_center_direct_membership,
+				job_center_direct_membership,
+				zone_fallback_center,
+				effective_center_region,
+			]
 		)
-		% [
-			GameManager.tick_count,
-			bind_source,
-			int(pawn.data.id),
-			pawn.data.display_name,
-			pawn_region,
-			job_region,
-			pawn_center_fast_map,
-			job_center_fast_map,
-			pawn_center_direct_membership,
-			job_center_direct_membership,
-			zone_fallback_center,
-			effective_center_region,
-		]
-	)
 	if effective_center_region < 0:
 		var has_settlement_context: bool = _has_any_valid_settlement_center()
 		if has_settlement_context:
@@ -553,20 +567,22 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 					effective_center_region,
 				]
 			)
-			print(skip_line_no_center)
+			if _pawn_divergence_detail_logs_enabled():
+				print(skip_line_no_center)
 		else:
 			_pawn_divergence_skip_pre_settlement_context += 1
-			print(
-				"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=pre_settlement_context pawn_id=%d pawn=%s pawn_region=%d job_region=%d center_region=%d"
-				% [
-					GameManager.tick_count,
-					int(pawn.data.id),
-					pawn.data.display_name,
-					pawn_region,
-					job_region,
-					effective_center_region,
-				]
-			)
+			if _pawn_divergence_detail_logs_enabled():
+				print(
+					"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=pre_settlement_context pawn_id=%d pawn=%s pawn_region=%d job_region=%d center_region=%d"
+					% [
+						GameManager.tick_count,
+						int(pawn.data.id),
+						pawn.data.display_name,
+						pawn_region,
+						job_region,
+						effective_center_region,
+					]
+				)
 		return
 	if bind_source == "fast_map":
 		_pawn_divergence_native_bound_events += 1
@@ -582,7 +598,7 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 		_pawn_divergence_context_source_counts.get(st_source, 0)
 	) + 1
 	var st: Dictionary = st_ctx.get("settlement", {}) as Dictionary
-	if st_source != "center_region":
+	if st_source != "center_region" and _pawn_divergence_detail_logs_enabled():
 		print(
 			"[PAWN_DIVERGENCE_CONTEXT_TRACE] tick=%d action=claim context_source=%s center_region=%d pawn_region=%d job_region=%d"
 			% [
@@ -628,7 +644,8 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 				spec_candidate,
 			]
 		)
-		print(skip_line_no_spec)
+		if _pawn_divergence_detail_logs_enabled():
+			print(skip_line_no_spec)
 		return
 	var job_channel: String = _job_channel_for_divergence_log(job.type)
 	var alignment: String = "neutral"
@@ -684,7 +701,8 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 			alignment,
 		]
 	)
-	print(scored_line)
+	if _pawn_divergence_detail_logs_enabled():
+		print(scored_line)
 	if _pawn_divergence_first20_scored_lines.size() < 20:
 		_pawn_divergence_first20_scored_lines.append(scored_line)
 
@@ -699,7 +717,12 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 			return
 		_pawn_divergence_exit_summary_emitted = true
 	else:
-		if tick != 20000 and tick != 40000:
+		var milestone: bool = false
+		for mt in SimTime.divergence_milestone_ticks():
+			if tick == mt:
+				milestone = true
+				break
+		if not milestone:
 			return
 		if _pawn_divergence_summary_emitted_ticks.has(tick):
 			return
@@ -1127,6 +1150,14 @@ func _process(delta: float) -> void:
 		_meaning_ambient_mood, _get_meaning_ambient_mood_target(), minf(1.0, delta * MEANING_AMBIENT_SMOOTH)
 	)
 	_update_camera_meaning_bias(delta)
+	if (
+			_player_pawn != null
+			and is_instance_valid(_player_pawn)
+			and _camera != null
+			and _camera.has_method("clamp_position_to_world")
+			and is_instance_valid(_world)
+	):
+		_camera.call("clamp_position_to_world", _world, 48.0)
 	_update_ambient_audio(delta)
 	_trace_redraw_timer += delta
 	if _trace_redraw_timer >= TRACE_REDRAW_INTERVAL_SEC:
@@ -1417,9 +1448,11 @@ func _on_game_tick(tick: int) -> void:
 	SettlementMemory.update_resource_pressures(tick)
 	SettlementMemory.update_preferred_work_fronts(tick)
 	_emit_pawn_divergence_summary_if_needed(tick)
-	if _observer_hud != null and tick % OBSERVER_HUD_REFRESH_TICKS == 0:
+	var obs_iv: int = _high_speed_interval(OBSERVER_HUD_REFRESH_TICKS, 45, 90)
+	if _observer_hud != null and tick % obs_iv == 0:
 		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
-	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % FOCUS_INSPECTOR_REFRESH_TICKS == 0:
+	var focus_iv: int = _high_speed_interval(FOCUS_INSPECTOR_REFRESH_TICKS, 24, 48)
+	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % focus_iv == 0:
 		_focus_inspector.apply_snapshot(_build_focus_snapshot(tick))
 	if is_instance_valid(_world):
 		call_deferred("_flush_road_memory_dirty_tiles")
@@ -3765,9 +3798,27 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 	var rb_audit_result: String = str(rb_audit.get("result", "n/a"))
 	var rb_audit_tick: int = int(rb_audit.get("snapshot_tick", -1))
 	var rb_audit_center: int = int(rb_audit.get("center_region", -1))
-	var rb_audit_key: String = "%d:%d" % [rb_audit_center, rb_audit_tick]
-	if OS.is_debug_build() and rb_audit_tick >= 0 and rb_audit_center >= 0 and rb_audit_key != _resource_balance_audit_last_key:
-		_resource_balance_audit_last_key = rb_audit_key
+	var rb_audit_sig: String = "%d|%s|%d|%d|%d|%d|%s|%s|%s|%s" % [
+		rb_audit_center,
+		rb_audit_result,
+		int(rb_audit.get("food_count", 0)),
+		int(rb_audit.get("wood_count", 0)),
+		int(rb_audit.get("stone_count", 0)),
+		int(rb_audit.get("ore_proxy_count", 0)),
+		str(rb_audit.get("food_actual", "")),
+		str(rb_audit.get("wood_actual", "")),
+		str(rb_audit.get("stone_actual", "")),
+		str(rb_audit.get("ore_proxy_actual", "")),
+	]
+	var sig_changed: bool = rb_audit_sig != _resource_balance_audit_last_sig
+	var force_audit_line: bool = rb_audit_result != "PASS"
+	if (
+			OS.is_debug_build()
+			and rb_audit_tick >= 0
+			and rb_audit_center >= 0
+			and (sig_changed or force_audit_line)
+	):
+		_resource_balance_audit_last_sig = rb_audit_sig
 		print(
 				(
 						"[RESOURCE_BALANCE_AUDIT] tick=%d center_region=%d result=%s "

@@ -1,5 +1,7 @@
 extends Node
 
+const _ZoneTags := preload("res://scripts/kernel/world_meaning_safe.gd")
+
 ## Read-only narrative queries. Never mutates simulation state.
 
 
@@ -26,7 +28,7 @@ func _abandoned_zone_ids_for_chronicler() -> PackedStringArray:
 
 
 func get_zone_narrative(zone_id: String) -> String:
-	var tags: PackedStringArray = WorldMeaning.get_zone_tags(zone_id)
+	var tags: PackedStringArray = _ZoneTags.zone_tags(zone_id)
 	if _pack_has(tags, "ancient_ruin"):
 		return "Ancient Ruin"
 	if _pack_has(tags, "myth_origin"):
@@ -41,7 +43,7 @@ func get_zone_narrative(zone_id: String) -> String:
 func get_chronicler_focus() -> Array[Dictionary]:
 	var focus: Array[Dictionary] = []
 	for zone_id in _abandoned_zone_ids_for_chronicler():
-		var tags: PackedStringArray = WorldMeaning.get_zone_tags(zone_id)
+		var tags: PackedStringArray = _ZoneTags.zone_tags(zone_id)
 		if _pack_has(tags, "ancient_ruin") or _pack_has(tags, "echo_falls"):
 			focus.append({"zone": zone_id, "narrative": get_zone_narrative(zone_id)})
 	return focus

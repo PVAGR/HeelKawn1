@@ -1498,10 +1498,8 @@ func _phase8_proof_runner_tick(tick: int) -> void:
 				_phase8_proof_runner_primary_zone_inventory_baseline
 		)
 		_phase8_proof_runner_primary_zone.add_item(Item.Type.WOOD, 1)
-		_phase8_proof_runner_state = "wait_post_real_change"
-		_phase8_proof_runner_next_tick = tick + RESOURCE_TRUTH_UPDATE_INTERVAL_TICKS
-		return
-	if _phase8_proof_runner_state == "wait_post_real_change":
+		# Capture post_real immediately: deferring by RESOURCE_TRUTH_UPDATE_INTERVAL_TICKS lets live hauling/eat
+		# mutate the primary zone before snapshot (mis-read as failed isolation).
 		var st_real: Dictionary = _phase8_proof_find_settlement_by_center(_phase8_proof_runner_target_center_region)
 		if st_real.is_empty():
 			_phase8_proof_runner_finalize_inconclusive("target_settlement_missing_post_real_change")

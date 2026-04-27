@@ -15,11 +15,11 @@ const TEXT_DIM:     Color = Color(0.70, 0.70, 0.75)
 const TEXT_BRIGHT:  Color = Color(0.96, 0.96, 0.98)
 const ACCENT:       Color = Color8(255, 209, 102)
 
-const FONT_TITLE: int = 14
-const FONT_BODY:  int = 11
-const FONT_SMALL: int = 10
+const FONT_TITLE: int = 18
+const FONT_BODY:  int = 14
+const FONT_SMALL: int = 12
 
-const PANEL_WIDTH:    float = 292.0
+const PANEL_WIDTH:    float = 336.0
 const RIGHT_INSET:    float = 8.0
 const TOP_INSET:      float = 8.0
 const PORTRAIT_COLS:  int = 6

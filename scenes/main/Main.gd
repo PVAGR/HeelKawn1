@@ -1946,7 +1946,7 @@ func _init_phase8_proof_overlay() -> void:
 	_phase8_proof_overlay_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_phase8_proof_overlay_text.position = Vector2(8, 56)
 	_phase8_proof_overlay_text.size = Vector2(1240, 96)
-	_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 10)
+	_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 13)
 	_phase8_proof_overlay_layer.add_child(_phase8_proof_overlay_text)
 	if not SettlementMemory.phase8_proof_bundle_emitted.is_connected(_on_phase8_proof_bundle_emitted):
 		SettlementMemory.phase8_proof_bundle_emitted.connect(_on_phase8_proof_bundle_emitted)
@@ -1967,9 +1967,9 @@ func _refresh_phase8_proof_overlay_style() -> void:
 		return
 	var terminal_line: String = SettlementMemory.get_phase8_proof_terminal_line()
 	if terminal_line != "":
-		_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 13)
+		_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 16)
 	else:
-		_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 10)
+		_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 13)
 
 
 func _on_phase8_proof_bundle_emitted(bundle_line: String) -> void:

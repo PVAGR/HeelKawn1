@@ -3,7 +3,7 @@ extends CanvasLayer
 
 const PANEL_BG: Color = Color(0.05, 0.06, 0.08, 0.78)
 const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.70)
-const FONT_SIZE: int = 13
+const FONT_SIZE: int = 16
 
 @onready var _world_text: RichTextLabel = $WorldGovernancePanel/Margin/Text
 @onready var _demo_text: RichTextLabel = $DemoEconomyPanel/Margin/Text

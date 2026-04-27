@@ -15,10 +15,9 @@ const WILDLIFE_HISTORY_SIZE: int = 8
 const PANEL_BG: Color = Color(0.05, 0.06, 0.08, 0.78)
 const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.70)
 
-# Tuned to be unobtrusive: thin top-left strip, easy to read, doesn't
-# eat the world.
-const FONT_SIZE_BODY: int = 11
-const FONT_SIZE_HOTKEYS: int = 9
+# Readable on 720p+; scales with project stretch/scale.
+const FONT_SIZE_BODY: int = 16
+const FONT_SIZE_HOTKEYS: int = 12
 const PANEL_PAD_X: int = 6
 const PANEL_PAD_Y: int = 4
 

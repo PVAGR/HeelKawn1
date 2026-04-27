@@ -125,10 +125,12 @@ func _build_ui() -> void:
 	var title: Label = Label.new()
 	title.text = "HeelKawn — Creator debug (F10 · Esc · F6 tile focus)"
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title.add_theme_font_size_override("font_size", 18)
 	_vbox.add_child(title)
 	var hint: Label = Label.new()
 	hint.text = "Deterministic sim: no RNG in world history. Copy blocks between === from Output for the AI.\nInstall extensions: open Command Palette → \"Extensions: Show Recommended Extensions\"."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_font_size_override("font_size", 14)
 	_vbox.add_child(hint)
 	for row in DEBUG_REPORT_ROWS:
 		_add_report_button(str(row.get("label", "?")), str(row.get("id", "")))
@@ -137,7 +139,8 @@ func _build_ui() -> void:
 func _add_report_button(label_text: String, report_id: String) -> void:
 	var b: Button = Button.new()
 	b.text = label_text
-	b.custom_minimum_size = Vector2(PANEL_W - 40, 26)
+	b.add_theme_font_size_override("font_size", 15)
+	b.custom_minimum_size = Vector2(PANEL_W - 40, 30)
 	b.pressed.connect(_emit_report.bind(report_id))
 	_vbox.add_child(b)
 

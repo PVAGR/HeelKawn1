@@ -8,8 +8,8 @@ script = ExtResource("1_hud")
 [node name="Panel" type="PanelContainer" parent="."]
 offset_left = 8.0
 offset_top = 8.0
-offset_right = 520.0
-offset_bottom = 78.0
+offset_right = 560.0
+offset_bottom = 96.0
 mouse_filter = 2
 
 [node name="Margin" type="MarginContainer" parent="Panel"]
@@ -23,7 +23,7 @@ theme_override_constants/separation = 1
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-custom_minimum_size = Vector2(500, 52)
+custom_minimum_size = Vector2(540, 72)
 bbcode_enabled = true
 fit_content = true
 scroll_active = false

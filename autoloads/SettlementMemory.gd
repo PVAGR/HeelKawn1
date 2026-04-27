@@ -2179,14 +2179,14 @@ func resource_balance_audit_snapshot_for_settlement(st: Dictionary) -> Dictionar
 	var wood_expected: String = str(expected.get("wood_balance", "DEFICIT"))
 	var stone_expected: String = str(expected.get("stone_balance", "DEFICIT"))
 	var ore_expected: String = str(expected.get("ore_proxy_balance", "DEFICIT"))
-	var pass: bool = (
+	var pass_ok: bool = (
 			food_actual == food_expected
 			and wood_actual == wood_expected
 			and stone_actual == stone_expected
 			and ore_actual == ore_expected
 	)
 	return {
-		"result": "PASS" if pass else "FAIL",
+		"result": "PASS" if pass_ok else "FAIL",
 		"center_region": int(rt.get("center_region", int(st.get("center_region", -1)))),
 		"snapshot_tick": int(rt.get("snapshot_tick", -1)),
 		"food_count": int(rt.get("stock_food", 0)),

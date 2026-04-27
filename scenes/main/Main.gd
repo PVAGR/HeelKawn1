@@ -130,6 +130,7 @@ var _player_action_state: String = "idle"
 var _kernel_diagnostic: KernelDiagnostic = null
 var _phase8_proof_overlay_layer: CanvasLayer = null
 var _phase8_proof_overlay_text: RichTextLabel = null
+var _resource_balance_audit_last_key: String = ""
 var _kill_count: int = 0
 ## Pixel radius around a pawn that counts as a click hit. Pawns draw at
 ## DRAW_RADIUS=3.5; we add a generous slop so moving targets are easy to grab.
@@ -2956,6 +2957,37 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 	var rb_tick: int = int(resource_balance.get("snapshot_tick", -1))
 	var rb_center: int = int(resource_balance.get("center_region", -1))
 	var rb_source: String = str(resource_balance.get("source", "stock_truth_derived_first_pass"))
+	var rb_audit: Dictionary = SettlementMemory.resource_balance_audit_snapshot_for_settlement(settlement_data)
+	var rb_audit_result: String = str(rb_audit.get("result", "n/a"))
+	var rb_audit_tick: int = int(rb_audit.get("snapshot_tick", -1))
+	var rb_audit_center: int = int(rb_audit.get("center_region", -1))
+	var rb_audit_key: String = "%d:%d" % [rb_audit_center, rb_audit_tick]
+	if OS.is_debug_build() and rb_audit_tick >= 0 and rb_audit_center >= 0 and rb_audit_key != _resource_balance_audit_last_key:
+		_resource_balance_audit_last_key = rb_audit_key
+		print(
+				(
+						"[RESOURCE_BALANCE_AUDIT] tick=%d center_region=%d result=%s "
+						+ "food=%d=>%s(actual=%s) wood=%d=>%s(actual=%s) "
+						+ "stone=%d=>%s(actual=%s) ore_proxy=%d=>%s(actual=%s)"
+				)
+				% [
+					rb_audit_tick,
+					rb_audit_center,
+					rb_audit_result,
+					int(rb_audit.get("food_count", 0)),
+					str(rb_audit.get("food_expected", "DEFICIT")),
+					str(rb_audit.get("food_actual", "DEFICIT")),
+					int(rb_audit.get("wood_count", 0)),
+					str(rb_audit.get("wood_expected", "DEFICIT")),
+					str(rb_audit.get("wood_actual", "DEFICIT")),
+					int(rb_audit.get("stone_count", 0)),
+					str(rb_audit.get("stone_expected", "DEFICIT")),
+					str(rb_audit.get("stone_actual", "DEFICIT")),
+					int(rb_audit.get("ore_proxy_count", 0)),
+					str(rb_audit.get("ore_proxy_expected", "DEFICIT")),
+					str(rb_audit.get("ore_proxy_actual", "DEFICIT")),
+				]
+		)
 	var wf_phase: String = str(settlement_data.get("specialization_phase", SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN))
 	var wf_locked_ch: String = str(settlement_data.get("specialization_channel", ""))
 	var wf_cand_ch: String = str(settlement_data.get("specialization_candidate_channel", ""))
@@ -3045,6 +3077,9 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"resource_balance_snapshot_tick": rb_tick,
 		"resource_balance_center_region": rb_center,
 		"resource_balance_source": rb_source,
+		"resource_balance_audit_result": rb_audit_result,
+		"resource_balance_audit_snapshot_tick": rb_audit_tick,
+		"resource_balance_audit_center_region": rb_audit_center,
 		"work_focus_phase": wf_phase,
 		"work_focus_display": wf_display,
 		"work_focus_confidence": wf_conf,

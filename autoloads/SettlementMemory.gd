@@ -2165,6 +2165,45 @@ func _derive_settlement_resource_balance_snapshot(st: Dictionary) -> Dictionary:
 	return out
 
 
+func resource_balance_audit_snapshot_for_settlement(st: Dictionary) -> Dictionary:
+	var rt_v: Variant = st.get("resource_truth", _default_resource_truth_snapshot())
+	var rt: Dictionary = rt_v as Dictionary if rt_v is Dictionary else _default_resource_truth_snapshot()
+	var rb_v: Variant = st.get("resource_balance", _default_resource_balance_snapshot())
+	var rb: Dictionary = rb_v as Dictionary if rb_v is Dictionary else _default_resource_balance_snapshot()
+	var expected: Dictionary = _derive_settlement_resource_balance_snapshot(st)
+	var food_actual: String = str(rb.get("food_balance", "DEFICIT"))
+	var wood_actual: String = str(rb.get("wood_balance", "DEFICIT"))
+	var stone_actual: String = str(rb.get("stone_balance", "DEFICIT"))
+	var ore_actual: String = str(rb.get("ore_proxy_balance", "DEFICIT"))
+	var food_expected: String = str(expected.get("food_balance", "DEFICIT"))
+	var wood_expected: String = str(expected.get("wood_balance", "DEFICIT"))
+	var stone_expected: String = str(expected.get("stone_balance", "DEFICIT"))
+	var ore_expected: String = str(expected.get("ore_proxy_balance", "DEFICIT"))
+	var pass: bool = (
+			food_actual == food_expected
+			and wood_actual == wood_expected
+			and stone_actual == stone_expected
+			and ore_actual == ore_expected
+	)
+	return {
+		"result": "PASS" if pass else "FAIL",
+		"center_region": int(rt.get("center_region", int(st.get("center_region", -1)))),
+		"snapshot_tick": int(rt.get("snapshot_tick", -1)),
+		"food_count": int(rt.get("stock_food", 0)),
+		"wood_count": int(rt.get("stock_wood", 0)),
+		"stone_count": int(rt.get("stock_stone", 0)),
+		"ore_proxy_count": int(rt.get("stock_ore_proxy", 0)),
+		"food_expected": food_expected,
+		"wood_expected": wood_expected,
+		"stone_expected": stone_expected,
+		"ore_proxy_expected": ore_expected,
+		"food_actual": food_actual,
+		"wood_actual": wood_actual,
+		"stone_actual": stone_actual,
+		"ore_proxy_actual": ore_actual,
+	}
+
+
 func _zone_overlaps_region_set(z: Stockpile, region_set: Dictionary) -> bool:
 	if z == null:
 		return false

@@ -164,6 +164,11 @@ func _demo_economy_block(s: Dictionary) -> String:
 			int(s.get("resource_balance_center_region", -1)),
 			str(s.get("resource_balance_source", "stock_truth_derived_first_pass")),
 		]
+		+ "Resource Balance Audit: %s (tick=%d center=%d)\n" % [
+			str(s.get("resource_balance_audit_result", "n/a")),
+			int(s.get("resource_balance_audit_snapshot_tick", -1)),
+			int(s.get("resource_balance_audit_center_region", -1)),
+		]
 		+ "[i]Balance line is derived from stock truth only; it does not drive behavior.[/i]\n"
 		+ "[i]Specialization above stays proxy/job-pressure based; stock truth is observational only.[/i]\n"
 		+ "Intent: %s" % str(s.get("intent_summary", "n/a"))

@@ -15,7 +15,7 @@ func roadmap_debug_block() -> String:
 			"""SimVision (roadmap stub — not simulating yet)
 %s
 
-Shipped pillars (partial): settlements + intent + trade + cultural reputation + scars/revival + pawn jobs/liking + observer tools.
+Shipped pillars (partial): settlements + intent + trade + cultural reputation + scars/revival + pawn jobs/liking + observer tools; stubs PlayerIntentQueue, FactionRegistry, ReligionLens (F10 reports 28–30).
 
 Named future tiers (implementation TBD; each needs its own design pass vs kernel rules):
   • Player travel + shared world presence (netcode, persistence, anti-abuse)

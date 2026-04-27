@@ -35,11 +35,15 @@ const DEBUG_REPORT_ROWS: Array[Dictionary] = [
 	{"id": "harness", "label": "25 · Validation / harness flags"},
 	{"id": "profession_liking", "label": "26 · Pawn profession liking (lanes + job bias)"},
 	{"id": "vision_scope", "label": "27 · Vision scope (SimVision roadmap stub)"},
+	{"id": "player_intents", "label": "28 · PlayerIntentQueue (spec + session queue)"},
+	{"id": "factions", "label": "29 · FactionRegistry (house stub per settlement)"},
+	{"id": "religion_lens", "label": "30 · ReligionLens (read-only sacred+myth overlay)"},
 ]
 
 var _root_panel: PanelContainer = null
 var _scroll: ScrollContainer = null
 var _vbox: VBoxContainer = null
+var _demo_player_intent_seeded: bool = false
 
 
 func _ready() -> void:
@@ -169,6 +173,12 @@ func _emit_report(report_id: String) -> void:
 			_report_profession_liking()
 		"vision_scope":
 			_report_vision_scope()
+		"player_intents":
+			_report_player_intents()
+		"factions":
+			_report_factions()
+		"religion_lens":
+			_report_religion_lens()
 		_:
 			print("Unknown report_id=%s" % report_id)
 	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d END ===" % [report_id, tick])
@@ -519,6 +529,36 @@ func _report_vision_scope() -> void:
 		print(sv.call("roadmap_debug_block"))
 	else:
 		print("SimVision node has no roadmap_debug_block().")
+
+
+func _report_player_intents() -> void:
+	if not _demo_player_intent_seeded:
+		_demo_player_intent_seeded = true
+		var zid: String = ""
+		for st_any in SettlementMemory.settlements:
+			if not (st_any is Dictionary):
+				continue
+			var ckr: int = int((st_any as Dictionary).get("center_region", -1))
+			if ckr >= 0:
+				zid = str(ckr)
+				break
+		PlayerIntentQueue.submit(
+				PlayerIntentQueue.IntentKind.OBSERVER_NOTE,
+				zid,
+				-1,
+				"F10 report 28 demo intent (one-shot per session)",
+				{"report_id": "player_intents"}
+		)
+	print(PlayerIntentQueue.debug_summary_block())
+	print("WorldMemory tail: filter events type=player_intent in export (report 14/15).")
+
+
+func _report_factions() -> void:
+	print(FactionRegistry.debug_summary_block())
+
+
+func _report_religion_lens() -> void:
+	print(ReligionLens.digest_settlements(12))
 
 
 func _report_profession_liking() -> void:

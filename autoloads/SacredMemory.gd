@@ -24,6 +24,23 @@ func site_count() -> int:
 	return _sites.size()
 
 
+## Read-only sample for [ReligionLens] / F10 (sorted tile keys, cap [param max_n]).
+func list_sites_sorted(max_n: int = 64) -> Array:
+	var keys: Array = _sites.keys()
+	keys.sort()
+	var out: Array = []
+	var lim: int = mini(maxi(0, max_n), keys.size())
+	for i in range(lim):
+		var k: String = str(keys[i])
+		var d: Variant = _sites[keys[i]]
+		var row: Dictionary = {"tile_key": k, "type": "", "myth": 0.0}
+		if d is Dictionary:
+			row["type"] = str((d as Dictionary).get("type", ""))
+			row["myth"] = float((d as Dictionary).get("myth", 0.0))
+		out.append(row)
+	return out
+
+
 func is_sacred_at(x: int, y: int) -> bool:
 	return _sites.has("%d_%d" % [x, y])
 

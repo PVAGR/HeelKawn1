@@ -1213,6 +1213,7 @@ func _bootstrap_colony() -> void:
 		_ensure_validation_session_seed_stockpile_overlaps_settlement()
 		MythMemory.recompute(_world)
 		SacredMemory.sync_permanent_ruins_from_settlements()
+		FactionRegistry.sync_from_settlements()
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):
 				_world.refresh_terrain_scar_tint()
@@ -2816,6 +2817,8 @@ func _reroll_world() -> void:
 	WorldMemory.clear()
 	MythMemory.clear()
 	SacredMemory.clear()
+	PlayerIntentQueue.clear()
+	FactionRegistry.clear()
 	ChronicleLog.clear()
 	RoadMemory.clear()
 	TradeMemory.clear()
@@ -3530,6 +3533,8 @@ func _build_save_dict() -> Dictionary:
 		"myth": MythMemory.to_save_dict(),
 		"sacred": SacredMemory.to_save_dict(),
 		"chronicle": ChronicleLog.to_save_dict(),
+		"player_intent_queue": PlayerIntentQueue.to_save_dict(),
+		"faction_registry": FactionRegistry.to_save_dict(),
 		"last_generation_tick": _last_generation_tick,
 	}
 
@@ -3574,6 +3579,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 	IntentMemory.clear()
 	AgeMemory.clear()
 	SacredMemory.clear()
+	PlayerIntentQueue.clear()
+	FactionRegistry.clear()
 	ChronicleLog.clear()
 	_set_designation_mode(DesignationMode.NONE)
 	_cancel_drag()
@@ -3619,6 +3626,9 @@ func _apply_save_dict(s: Dictionary) -> void:
 		_ensure_validation_session_seed_stockpile_overlaps_settlement()
 		MythMemory.recompute(_world)
 		SacredMemory.sync_permanent_ruins_from_settlements()
+		PlayerIntentQueue.from_save_dict(s.get("player_intent_queue", {}))
+		FactionRegistry.from_save_dict(s.get("faction_registry", {}))
+		FactionRegistry.sync_from_settlements()
 		IntentMemory.recompute(_world)
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):

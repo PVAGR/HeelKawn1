@@ -50,6 +50,9 @@ ObserverLens="*res://scripts/kernel/observer_lens.gd"
 WorldClock="*res://autoloads/WorldClock.gd"
 WorldEvents="*res://autoloads/WorldEvents.gd"
 SimVision="*res://autoloads/SimVision.gd"
+PlayerIntentQueue="*res://autoloads/PlayerIntentQueue.gd"
+FactionRegistry="*res://autoloads/FactionRegistry.gd"
+ReligionLens="*res://autoloads/ReligionLens.gd"
 
 [rendering]
 

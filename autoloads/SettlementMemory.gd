@@ -116,10 +116,39 @@ var _phase8_proof_runner_primary_zone_inventory_baseline: Dictionary = {}
 var _phase8_proof_runner_last_skip_reason: String = ""
 var _phase8_proof_runner_started_tick: int = -1
 var _phase8_proof_runner_armed_once: bool = false
+var _phase8_proof_run_id: String = ""
+var _phase8_proof_terminal_summary_emitted: bool = false
 
 
 func _ready() -> void:
+	_phase8_proof_reset_session_state()
 	_print_validation_smoketest("SettlementMemory.autoload")
+
+
+func _phase8_proof_reset_session_state() -> void:
+	if not OS.is_debug_build():
+		return
+	_phase8_proof_latest_bundle_line = ""
+	_phase8_proof_preferred_center_region = -1
+	_phase8_proof_last_clipboard_line = ""
+	_phase8_proof_clipboard_unavailable_logged = false
+	_phase8_proof_last_bundle_clipboard_attempt_tick = -5000
+	_phase8_proof_runner_state = "idle"
+	_phase8_proof_runner_done = false
+	_phase8_proof_runner_target_center_region = -1
+	_phase8_proof_runner_next_tick = -1
+	_phase8_proof_runner_baseline = {}
+	_phase8_proof_runner_post_overlap = {}
+	_phase8_proof_runner_post_real_change = {}
+	_phase8_proof_runner_primary_zone = null
+	_phase8_proof_runner_probe_zone = null
+	_phase8_proof_runner_primary_zone_inventory_baseline = {}
+	_phase8_proof_runner_last_skip_reason = ""
+	_phase8_proof_runner_started_tick = -1
+	_phase8_proof_runner_armed_once = false
+	_phase8_proof_terminal_summary_emitted = false
+	_phase8_proof_run_id = "run_%d_%d" % [Time.get_unix_time_from_system(), Time.get_ticks_msec()]
+	print("[PHASE8_PROOF_SESSION] run_id=%s status=reset" % _phase8_proof_run_id)
 
 
 func _print_validation_smoketest(source: String) -> void:
@@ -1231,17 +1260,21 @@ func _emit_phase8_proof_step(stage: String, snap: Dictionary) -> void:
 
 
 func _emit_phase8_proof_result(result: String, reason: String) -> void:
+	if _phase8_proof_terminal_summary_emitted:
+		return
+	_phase8_proof_terminal_summary_emitted = true
 	var b: Dictionary = _phase8_proof_runner_baseline
 	var o: Dictionary = _phase8_proof_runner_post_overlap
 	var r: Dictionary = _phase8_proof_runner_post_real_change
 	var line: String = (
-			"[PHASE8_PROOF_RESULT] result=%s reason=%s center_region=%d hyst_key=%s "
+			"[PHASE8_PROOF_RESULT] run_id=%s result=%s reason=%s center_region=%d hyst_key=%s "
 			+ "baseline_total=%d post_overlap_total=%d post_real_total=%d "
 			+ "baseline_wood=%d post_overlap_wood=%d post_real_wood=%d "
 			+ "overlap_only_delta_total=%d overlap_only_delta_wood=%d "
 			+ "real_change_delta_total=%d real_change_delta_wood=%d "
 			+ "note=stock_truth_observational_only_specialization_job_pressure_proxy"
 	) % [
+		_phase8_proof_run_id,
 		result,
 		reason,
 		int(b.get("center_region", -1)),
@@ -1259,11 +1292,12 @@ func _emit_phase8_proof_result(result: String, reason: String) -> void:
 	]
 	print(line)
 	var summary_line: String = (
-			"[PHASE8_PROOF_SUMMARY] result=%s reason=%s center_region=%d hyst_key=%s "
+			"[PHASE8_PROOF_SUMMARY] run_id=%s result=%s reason=%s center_region=%d hyst_key=%s "
 			+ "baseline_food=%d baseline_wood=%d baseline_stone=%d baseline_ore_proxy=%d baseline_total=%d "
 			+ "post_overlap_food=%d post_overlap_wood=%d post_overlap_stone=%d post_overlap_ore_proxy=%d post_overlap_total=%d "
 			+ "post_real_food=%d post_real_wood=%d post_real_stone=%d post_real_ore_proxy=%d post_real_total=%d"
 	) % [
+		_phase8_proof_run_id,
 		result,
 		reason,
 		int(b.get("center_region", -1)),

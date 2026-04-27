@@ -1238,9 +1238,36 @@ func _emit_phase8_proof_result(result: String, reason: String) -> void:
 		int(r.get("stock_wood", 0)) - int(o.get("stock_wood", 0)),
 	]
 	print(line)
-	DisplayServer.clipboard_set(line)
-	_phase8_proof_latest_bundle_line = line
-	phase8_proof_bundle_emitted.emit(line)
+	var summary_line: String = (
+			"[PHASE8_PROOF_SUMMARY] result=%s reason=%s center_region=%d hyst_key=%s "
+			+ "baseline_food=%d baseline_wood=%d baseline_stone=%d baseline_ore_proxy=%d baseline_total=%d "
+			+ "post_overlap_food=%d post_overlap_wood=%d post_overlap_stone=%d post_overlap_ore_proxy=%d post_overlap_total=%d "
+			+ "post_real_food=%d post_real_wood=%d post_real_stone=%d post_real_ore_proxy=%d post_real_total=%d"
+	) % [
+		result,
+		reason,
+		int(b.get("center_region", -1)),
+		str(b.get("hyst_key", "center_region:-1")),
+		int(b.get("stock_food", 0)),
+		int(b.get("stock_wood", 0)),
+		int(b.get("stock_stone", 0)),
+		int(b.get("stock_ore_proxy", 0)),
+		int(b.get("total_stock_units", 0)),
+		int(o.get("stock_food", 0)),
+		int(o.get("stock_wood", 0)),
+		int(o.get("stock_stone", 0)),
+		int(o.get("stock_ore_proxy", 0)),
+		int(o.get("total_stock_units", 0)),
+		int(r.get("stock_food", 0)),
+		int(r.get("stock_wood", 0)),
+		int(r.get("stock_stone", 0)),
+		int(r.get("stock_ore_proxy", 0)),
+		int(r.get("total_stock_units", 0)),
+	]
+	print(summary_line)
+	DisplayServer.clipboard_set(summary_line)
+	_phase8_proof_latest_bundle_line = summary_line
+	phase8_proof_bundle_emitted.emit(summary_line)
 
 
 func _phase8_proof_find_settlement_by_center(center_region: int) -> Dictionary:

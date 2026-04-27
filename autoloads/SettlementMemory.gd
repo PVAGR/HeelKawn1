@@ -102,7 +102,109 @@ func get_phase8_proof_latest_bundle_line() -> String:
 
 
 func set_phase8_proof_preferred_center_region(center_region: int) -> void:
+	if _phase8_proof_preferred_center_region == center_region:
+		return
 	_phase8_proof_preferred_center_region = center_region
+	if OS.is_debug_build():
+		phase8_proof_bundle_emitted.emit(
+				"[PHASE8_PROOF_BUNDLE] preferred_center=%d tick=%d" % [center_region, GameManager.tick_count]
+		)
+
+
+func print_resource_truth_capture(preferred_center: int, source: String) -> void:
+	if not OS.is_debug_build():
+		return
+	var found: Dictionary = {}
+	for i in range(settlements.size()):
+		var sv: Variant = settlements[i]
+		if not (sv is Dictionary):
+			continue
+		var d: Dictionary = sv as Dictionary
+		if int(d.get("center_region", -1)) == preferred_center:
+			found = d
+			break
+	if found.is_empty():
+		print("[RESOURCE_TRUTH] %s center=%d note=no_settlement_match" % [source, preferred_center])
+		return
+	var rt_v: Variant = found.get("resource_truth", {})
+	var rt: Dictionary = rt_v as Dictionary if rt_v is Dictionary else {}
+	print(
+			(
+					"[RESOURCE_TRUTH] %s tick=%d center_region=%d stock_food=%d stock_wood=%d "
+					+ "stock_stone=%d stock_ore_proxy=%d total_units=%d"
+			)
+			% [
+				source,
+				GameManager.tick_count,
+				preferred_center,
+				int(rt.get("stock_food", 0)),
+				int(rt.get("stock_wood", 0)),
+				int(rt.get("stock_stone", 0)),
+				int(rt.get("stock_ore_proxy", 0)),
+				int(rt.get("total_stock_units", 0)),
+			]
+	)
+
+
+func _balance_bucket_food(units: int) -> String:
+	if units <= 0:
+		return "DEFICIT"
+	if units <= 10:
+		return "LOW"
+	return "HIGH"
+
+
+func _balance_bucket_material(units: int) -> String:
+	if units <= 0:
+		return "DEFICIT"
+	if units <= 5:
+		return "LOW"
+	return "HIGH"
+
+
+func resource_balance_audit_snapshot_for_settlement(st: Dictionary) -> Dictionary:
+	var rt: Dictionary = {}
+	var rb: Dictionary = {}
+	var rt_v: Variant = st.get("resource_truth", null)
+	if rt_v is Dictionary:
+		rt = rt_v as Dictionary
+	var rb_v: Variant = st.get("resource_balance", null)
+	if rb_v is Dictionary:
+		rb = rb_v as Dictionary
+	var center: int = int(st.get("center_region", -1))
+	var snap_tick: int = int(rb.get("snapshot_tick", rt.get("snapshot_tick", -1)))
+	if snap_tick < 0:
+		snap_tick = GameManager.tick_count
+	var fc: int = int(rt.get("stock_food", 0))
+	var wc: int = int(rt.get("stock_wood", 0))
+	var sc: int = int(rt.get("stock_stone", 0))
+	var oc: int = int(rt.get("stock_ore_proxy", 0))
+	var food_e: String = _balance_bucket_food(fc)
+	var wood_e: String = _balance_bucket_material(wc)
+	var stone_e: String = _balance_bucket_material(sc)
+	var ore_e: String = _balance_bucket_material(oc)
+	var food_a: String = str(rb.get("food_balance", food_e))
+	var wood_a: String = str(rb.get("wood_balance", wood_e))
+	var stone_a: String = str(rb.get("stone_balance", stone_e))
+	var ore_a: String = str(rb.get("ore_proxy_balance", ore_e))
+	var pass_all: bool = food_e == food_a and wood_e == wood_a and stone_e == stone_a and ore_e == ore_a
+	return {
+		"result": ("PASS" if pass_all else "FAIL"),
+		"snapshot_tick": snap_tick,
+		"center_region": center,
+		"food_count": fc,
+		"food_expected": food_e,
+		"food_actual": food_a,
+		"wood_count": wc,
+		"wood_expected": wood_e,
+		"wood_actual": wood_a,
+		"stone_count": sc,
+		"stone_expected": stone_e,
+		"stone_actual": stone_a,
+		"ore_proxy_count": oc,
+		"ore_proxy_expected": ore_e,
+		"ore_proxy_actual": ore_a,
+	}
 
 
 func _ready() -> void:

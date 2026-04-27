@@ -45,19 +45,19 @@ func merge_persistence_into_settlement(st: Dictionary) -> void:
 ## After [SettlementPersistence] changes a settlement, snapshot overlay so the next
 ## [method SettlementMemory.recompute] can reapply.
 func commit_zone_state(zone_id: String, st: Dictionary) -> void:
-	var tr: Variant = st.get("traits", [])
-	if tr is PackedStringArray:
+	var traits_raw: Variant = st.get("traits", [])
+	if traits_raw is PackedStringArray:
 		var ta: Array = []
-		for t in tr as PackedStringArray:
+		for t in traits_raw as PackedStringArray:
 			ta.append(str(t))
-		tr = ta
+		traits_raw = ta
 	_persistence_overlay[zone_id] = {
 		"state": str(st.get("state", "")),
 		"persist_flags": (st.get("persist_flags", []) as Array).duplicate() if st.has("persist_flags") else [],
 		"revival_window_open": st.get("revival_window_open", false),
 		"id": str(st.get("id", zone_id)),
 		"name": str(st.get("name", "Unnamed")),
-		"traits": (tr as Array).duplicate() if tr is Array else [],
+		"traits": (traits_raw as Array).duplicate() if traits_raw is Array else [],
 		"lineage_parent": str(st.get("lineage_parent", st.get("id", zone_id))),
 		"reoccupied_tick": int(st.get("reoccupied_tick", 0)),
 		"zone_id": str(st.get("zone_id", zone_id)),

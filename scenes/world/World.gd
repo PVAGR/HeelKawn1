@@ -301,10 +301,10 @@ func _apply_road_tint(c: Color, x: int, y: int) -> Color:
 
 ## Recurring inter-settlement trade routes from [TradeMemory] (derived; stacks on roads / scar / meaning).
 func _apply_trade_route_tint(c: Color, x: int, y: int) -> Color:
-	var tr: int = TradeMemory.get_route_tier_at(x, y)
-	if tr == TradeMemory.TIER_NONE:
+	var route_tier: int = TradeMemory.get_route_tier_at(x, y)
+	if route_tier == TradeMemory.TIER_NONE:
 		return c
-	if tr == TradeMemory.TIER_ROUTE_1:
+	if route_tier == TradeMemory.TIER_ROUTE_1:
 		return c.lerp(c * Color(1.06, 1.055, 1.04, 1.0), 0.1)
 	return c.lerp(c * Color(1.14, 1.09, 0.97, 1.0), 0.17)
 

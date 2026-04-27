@@ -68,7 +68,7 @@ func recompute() -> void:
 	_request_world_tint_refresh()
 
 
-func _all_transition_conditions(tick: int) -> bool:
+func _all_transition_conditions(_tick: int) -> bool:
 	if not _cond_pressure():
 		return false
 	if not _cond_myth_feared_dominant():

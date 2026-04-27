@@ -60,8 +60,8 @@ func _plan_one_settlement(
 ) -> void:
 	var data: WorldData = world.data
 	var center_rk: int = int(settlement.get("center_region", regions[0]))
-	var intent: int = _intent_for_settlement(center_rk)
-	var center: Vector2i = _center_tile_of_region_key(center_rk)
+	var intent: int = SettlementPlanner._intent_for_settlement(center_rk)
+	var center: Vector2i = SettlementPlanner._center_tile_of_region_key(center_rk)
 	var pawns: int = int(main.call("settlement_planner_count_pawns_in_regions", regions))
 	var bed_n: int = _count_feature_in_regions(data, regions, TileFeature.Type.BED)
 	var wall_n: int = _count_feature_in_regions(data, regions, TileFeature.Type.WALL)
@@ -71,7 +71,7 @@ func _plan_one_settlement(
 	)
 	var scar_m: int = int(settlement.get("scar_max", 0))
 	var repm: int = int(settlement.get("reputation_min", 0))
-	var cult: int = _derive_culture_type_v1_for_age(
+	var cult: int = SettlementPlanner._derive_culture_type_v1_for_age(
 			scar_m, repm, AgeMemory.get_current_age_index()
 	)
 	_plan_one_settlement_culture(
@@ -243,7 +243,7 @@ static func _derive_culture_type_v1_for_age(
 
 ## Back-compat: signature-only callers use age 0.
 static func _derive_culture_type_v1(scar_max: int, reputation_min: int) -> int:
-	return _derive_culture_type_v1_for_age(scar_max, reputation_min, 0)
+	return SettlementPlanner._derive_culture_type_v1_for_age(scar_max, reputation_min, 0)
 
 
 ## Public helper for other systems (ambient/camera/world expression):
@@ -251,12 +251,12 @@ static func _derive_culture_type_v1(scar_max: int, reputation_min: int) -> int:
 static func get_culture_type_for_settlement(settlement: Dictionary) -> int:
 	var scar_m: int = int(settlement.get("scar_max", 0))
 	var rep_m: int = int(settlement.get("reputation_min", 0))
-	return _derive_culture_type_v1_for_age(scar_m, rep_m, AgeMemory.get_current_age_index())
+	return SettlementPlanner._derive_culture_type_v1_for_age(scar_m, rep_m, AgeMemory.get_current_age_index())
 
 
 ## Stable string label for logs, save-compatible analytics, and non-UI world expression glue.
 static func get_culture_name_for_settlement(settlement: Dictionary) -> String:
-	var c: int = get_culture_type_for_settlement(settlement)
+	var c: int = SettlementPlanner.get_culture_type_for_settlement(settlement)
 	if c == CULTURE_OPEN:
 		return "open"
 	if c == CULTURE_DEFENSIVE:
@@ -267,7 +267,7 @@ static func get_culture_name_for_settlement(settlement: Dictionary) -> String:
 ## Tiny audio intent nudge (no gameplay effect): open -> brighter, defensive -> heavier.
 ## This remains deterministic because it is derived from deterministic memory state.
 static func get_culture_audio_bias_for_settlement(settlement: Dictionary) -> float:
-	var c: int = get_culture_type_for_settlement(settlement)
+	var c: int = SettlementPlanner.get_culture_type_for_settlement(settlement)
 	if c == CULTURE_OPEN:
 		return 0.08
 	if c == CULTURE_DEFENSIVE:

@@ -462,15 +462,9 @@ func _refresh() -> void:
 			coach_sb += hints[hi]
 		_coach_label.text = coach_sb
 	if _social_label != null:
-		var peer_disp: String = ""
-		var tr: Dictionary = d.top_social_rapport_peer()
-		var pid: int = int(tr.get("peer_id", -1))
-		if pid >= 0:
-			var spawner: PawnSpawner = _pawn_spawner()
-			if spawner != null:
-				var peer_data: PawnData = spawner.pawn_data_for_id(pid)
-				if peer_data != null:
-					peer_disp = str(peer_data.display_name).strip_edges()
+		var top_peer: Dictionary = d.top_social_rapport_peer()
+		var pid: int = int(top_peer.get("peer_id", -1))
+		var peer_disp: String = _peer_display_for_social(pid)
 		_social_label.text = d.social_status_line(peer_disp)
 	if _action_skills_label != null:
 		_action_skills_label.text = (
@@ -558,6 +552,28 @@ func _refresh() -> void:
 func _pawn_spawner() -> PawnSpawner:
 	var n: Node = Engine.get_main_loop().root.find_child("PawnSpawner", true, false)
 	return n as PawnSpawner
+
+
+## Live pawn name, else WorldMemory death / last-known (strongest bond can outlive the peer).
+func _peer_display_for_social(pid: int) -> String:
+	if pid < 0:
+		return ""
+	var spawner: PawnSpawner = _pawn_spawner()
+	if spawner != null:
+		var peer_data: PawnData = spawner.pawn_data_for_id(pid)
+		if peer_data != null:
+			var nm0: String = str(peer_data.display_name).strip_edges()
+			if not nm0.is_empty():
+				return nm0
+	var fact: Dictionary = WorldMemory.pawn_death_fact(pid)
+	if not fact.is_empty():
+		var nm1: String = str(fact.get("n", "")).strip_edges()
+		if not nm1.is_empty():
+			return nm1
+	var lk: String = WorldMemory.last_known_name_from_death_record(pid).strip_edges()
+	if not lk.is_empty():
+		return lk
+	return ""
 
 
 func _parent_line(pid: int) -> String:

@@ -215,7 +215,7 @@ func _rebirth_tiles_in_order(world: World, settlement: Dictionary) -> Array[Vect
 
 
 func _score_rebirth_tile(
-		world: World,
+		_world: World,
 		t: Vector2i,
 		center: Vector2i,
 		struct_tiles: Dictionary

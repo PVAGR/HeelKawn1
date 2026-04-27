@@ -30,6 +30,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-27  Display stretch: project.godot canvas_items + expand + fractional scale (fills window, no letterbox pillarboxing). CreatorDebugMenu (F10): anchored full viewport, panel + scroll + buttons resize with size_changed.
 2026-04-27  Social peer label: resolve departed bonds via WorldMemory death facts (not only live PawnSpawner). Warning hygiene: WorldMemory/SettlementPlanner static dispatch; CameraController center_tile shift; AgeMemory unused tick; SettlementRebirth unused world; PawnInfoPanel rename `tr` (no Object.tr shadow).
 2026-04-27  Playtest polish: ColonyHUD [Playtest] hint line; F10 report 31 Playtest bundle; Creator menu taller scroll; pawn Social line resolves peer name via PawnSpawner; PLAYTEST_CHECKLIST §6 session steps.
 2026-04-27  Social + reproduction: PawnData.social_rapport (co-presence, same component, ~128px); Main._accumulate_social_rapport every 40 ticks; relaxed reproduction hunger/rest thresholds + REPRODUCTION_MIN_RAPPORT + wider mate range; spawn_child_pawn tries parent tile + 8 neighbors; child gets parent_a/b ids; PawnInfoPanel Social line + throttled refresh at 12x/26x/50x+; ColonyHUD coarser text refresh at 50x+.

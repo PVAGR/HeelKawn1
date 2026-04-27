@@ -52,6 +52,8 @@ func _ready() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_ui()
+	get_viewport().size_changed.connect(_on_viewport_resized)
+	_on_viewport_resized()
 
 
 func _input(event: InputEvent) -> void:
@@ -67,11 +69,35 @@ func toggle_menu() -> void:
 	visible = not visible
 
 
+func _on_viewport_resized() -> void:
+	_fit_debug_panel_to_viewport()
+
+
+func _fit_debug_panel_to_viewport() -> void:
+	if _root_panel == null or _scroll == null or _vbox == null:
+		return
+	var vs: Vector2 = get_viewport().get_visible_rect().size
+	if vs.x < 64.0 or vs.y < 64.0:
+		return
+	# Fill nearly the whole window (margin container keeps inset); grow with resolution.
+	var w: int = maxi(PANEL_W, int(vs.x) - 28)
+	var h: int = maxi(420, int(vs.y) - 52)
+	_root_panel.custom_minimum_size = Vector2(w, h)
+	var scroll_h: int = maxi(360, h - 88)
+	_scroll.custom_minimum_size = Vector2(maxi(200, w - 28), scroll_h)
+	var btn_w: float = maxf(160.0, float(w) - 56.0)
+	for ch in _vbox.get_children():
+		if ch is Button:
+			(ch as Button).custom_minimum_size.x = btn_w
+
+
 func _build_ui() -> void:
 	var margin: MarginContainer = MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	margin.offset_top = 36.0
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.offset_left = 10.0
+	margin.offset_top = 28.0
+	margin.offset_right = -10.0
+	margin.offset_bottom = -10.0
 	margin.add_theme_constant_override("margin_left", PAD)
 	margin.add_theme_constant_override("margin_top", PAD)
 	margin.add_theme_constant_override("margin_right", PAD)

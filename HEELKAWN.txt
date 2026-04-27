@@ -21,6 +21,12 @@ WHERE TO PLAN LORE/TIERS
 
 - docs/CURSOR_MASTER_PLANNING_SPEC.md — umbrella planning brief (T1–T4 canon, tensions, overlays).
 
+OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
+
+- Local: C:\Users\user\HeelKawn1
+- Remote: https://github.com/PVAGR/HeelKawn1 (branch main)
+- Full policy: docs/CANONICAL_REPOSITORY.md
+
 LOG (newest first)
 
 2026-04-27  Crash hardening: world_meaning_safe.gd wraps get_zone_tags (stale copy / wrong folder). All call sites use preload safe wrapper. ObserverHUD work-focus line: no %d%% (avoids format errors). Pull full repo if warnings persist.

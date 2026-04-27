@@ -8,3 +8,5 @@ alwaysApply: true
 - At the start of work in this repository, read in this order:
 	1) docs/HEELKAWN_STATE.md
 	2) HEELKAWN.txt
+
+- If the task touches **lore tiers, canon branches, roadmap layers, WorldBox/stream overlay design, or umbrella-universe scope**, also read **docs/CURSOR_MASTER_PLANNING_SPEC.md** before changing design docs or arguing what “counts” as canon.

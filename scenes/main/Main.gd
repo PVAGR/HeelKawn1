@@ -93,7 +93,7 @@ const MEANING_AMBIENT_SMOOTH: float = 1.1
 ## draw in WorldTrace._draw — not Main._draw — so they appear above the map).
 const TRACE_REDRAW_INTERVAL_SEC: float = 1.0
 ## Generational turnover (v1): one new pawn per this many ticks if population > 0.
-const GENERATION_TICKS: int = 30000
+const GENERATION_TICKS: int = 20000
 const REPRODUCTION_CHECK_INTERVAL_TICKS: int = 300
 const INFLUENCE_UPDATE_INTERVAL_TICKS: int = 500
 const OBSERVER_HUD_REFRESH_TICKS: int = 30
@@ -128,17 +128,36 @@ var _player_pawn: Pawn = null
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
 var _kernel_diagnostic: KernelDiagnostic = null
+## Player authority: human handles designations, draft/intent, selection, pause/speed,
+## camera (clamped when a player pawn is assigned). SettlementPlanner, TradePlanner,
+## autonomous jobs/hunt/ecology/fragmentation remain sim-driven unless commanded.
+var _phase8_proof_overlay_layer: CanvasLayer = null
+var _phase8_proof_overlay_text: RichTextLabel = null
+## Content signature for resource-balance console lines (never use snapshot_tick alone — it changes every refresh).
+var _resource_balance_audit_last_sig: String = ""
 ## pawn_id -> last claimed job label (debug instrumentation only).
 var _pawn_divergence_last_job_by_pawn_id: Dictionary = {}
 var _pawn_divergence_total_claim_events_seen: int = 0
 var _pawn_divergence_scored_events: int = 0
 var _pawn_divergence_skip_no_bound_center: int = 0
+var _pawn_divergence_skip_pre_settlement_context: int = 0
 var _pawn_divergence_skip_no_specialization_context: int = 0
 var _pawn_divergence_aligned_total: int = 0
 var _pawn_divergence_divergent_total: int = 0
 var _pawn_divergence_neutral_total: int = 0
+## Bind provenance counters for claim-time center resolution.
+var _pawn_divergence_native_bound_events: int = 0
+var _pawn_divergence_fallback_bound_events: int = 0
+var _pawn_divergence_first_scored_center_region: int = -1
 ## center_region -> {"scored": int, "aligned": int, "divergent": int, "neutral": int}
 var _pawn_divergence_by_center: Dictionary = {}
+## center_region -> no_specialization_context skip count
+var _pawn_divergence_no_spec_by_center: Dictionary = {}
+## spec_phase -> no_specialization_context skip count
+var _pawn_divergence_no_spec_by_phase: Dictionary = {}
+## settlement context source -> claim count
+var _pawn_divergence_context_source_counts: Dictionary = {}
+const PAWN_DIVERGENCE_PACKET_SCHEMA_VERSION: int = 1
 var _pawn_divergence_first20_scored_lines: PackedStringArray = PackedStringArray()
 ## tick -> true (summary already printed at this checkpoint).
 var _pawn_divergence_summary_emitted_ticks: Dictionary = {}
@@ -185,6 +204,15 @@ func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) 
 	if GameManager.game_speed >= 6.0:
 		return fast_ticks
 	return normal_ticks
+
+
+func _pawn_divergence_detail_logs_enabled() -> bool:
+	if not OS.is_debug_build():
+		return false
+	if GameManager.game_speed >= 26.0:
+		return false
+	return true
+
 
 func _should_post_more_hunt_jobs() -> bool:
 	return StockpileManager.total_count_of(Item.Type.MEAT) < HUNT_MEAT_STOCKPILE_SOFT_CAP
@@ -291,6 +319,7 @@ func _ready() -> void:
 		_observer_hud.set_visible_state(false)
 	if _focus_inspector != null:
 		_focus_inspector.set_visible_state(false)
+	_init_phase8_proof_overlay()
 	call_deferred("_log_validation_harness_observability_once")
 
 
@@ -368,44 +397,238 @@ func _settlement_by_center_region(center_region: int) -> Dictionary:
 	return {}
 
 
+func _settlement_context_for_claim(
+	effective_center_region: int,
+	job_region: int,
+	pawn_region: int
+) -> Dictionary:
+	var st_center: Dictionary = _settlement_by_center_region(effective_center_region)
+	if not st_center.is_empty():
+		return {"settlement": st_center, "source": "center_region"}
+	var st_job_v: Variant = SettlementMemory.get_settlement_at_region(job_region)
+	if st_job_v is Dictionary:
+		var st_job: Dictionary = st_job_v as Dictionary
+		if int(st_job.get("center_region", -1)) == effective_center_region:
+			return {"settlement": st_job, "source": "job_region_membership"}
+	var st_pawn_v: Variant = SettlementMemory.get_settlement_at_region(pawn_region)
+	if st_pawn_v is Dictionary:
+		var st_pawn: Dictionary = st_pawn_v as Dictionary
+		if int(st_pawn.get("center_region", -1)) == effective_center_region:
+			return {"settlement": st_pawn, "source": "pawn_region_membership"}
+	return {"settlement": {}, "source": "none"}
+
+
+func _has_any_valid_settlement_center() -> bool:
+	for st_any in SettlementMemory.settlements:
+		if not (st_any is Dictionary):
+			continue
+		var c: int = int((st_any as Dictionary).get("center_region", -1))
+		if c >= 0:
+			return true
+	return false
+
+
+func _build_pawn_divergence_center_fingerprint() -> String:
+	var centers: Array = _pawn_divergence_by_center.keys()
+	centers.sort()
+	var center_digest_parts: PackedStringArray = PackedStringArray()
+	for c_any in centers:
+		var c: int = int(c_any)
+		var row: Dictionary = _pawn_divergence_by_center.get(c, {})
+		center_digest_parts.append(
+			"%d:%d,%d,%d,%d"
+			% [
+				c,
+				int(row.get("scored", 0)),
+				int(row.get("aligned", 0)),
+				int(row.get("divergent", 0)),
+				int(row.get("neutral", 0)),
+			]
+		)
+	var center_fingerprint: String = ";".join(center_digest_parts)
+	if center_fingerprint == "":
+		center_fingerprint = "none"
+	return center_fingerprint
+
+
+func _center_region_from_fast_map(region_key: int) -> int:
+	return SettlementMemory.get_center_region_for_region(region_key)
+
+
+func _center_region_from_direct_membership(region_key: int) -> int:
+	var st_v: Variant = SettlementMemory.get_settlement_at_region(region_key)
+	if st_v is Dictionary:
+		return int((st_v as Dictionary).get("center_region", -1))
+	return -1
+
+
+func _claim_tile_hits_any_stockpile_zone(tile: Vector2i) -> bool:
+	for z in StockpileManager.zones():
+		if z != null and is_instance_valid(z) and z.contains_tile(tile):
+			return true
+	return false
+
+
+func _claim_center_fallback_from_zone_context(
+	pawn_tile: Vector2i,
+	job_tile: Vector2i
+) -> int:
+	if not _claim_tile_hits_any_stockpile_zone(pawn_tile) and not _claim_tile_hits_any_stockpile_zone(job_tile):
+		return -1
+	var st: Dictionary = _pick_validation_proof_anchor_settlement()
+	if st.is_empty():
+		return -1
+	return int(st.get("center_region", -1))
+
+
 func _on_job_claimed(job: Job, pawn: Pawn) -> void:
+	# CLAIM-TIME BINDING VALIDATION TARGET
+	# PASS:
+	# - at least one claim resolves center_region >= 0
+	# - at least one scored [PAWN_DIVERGENCE] line appears
+	# - summary shows scored_events > 0
+	# - bind trace distinguishes native binding vs fallback binding
+	# FAIL:
+	# - claims remain overwhelmingly unbound
+	# - no scored divergence lines occur
+	# - summary ends with scored_events=0 in an active colony run
+	# Claim-time binding diagnosis:
+	# 1) First attempt is fast region->center map (SettlementMemory cache).
+	# 2) Fallback is direct settlement membership query by region.
+	# 3) Final debug-only fallback uses visible zone context + deterministic anchor center.
+	# 4) If all three fail, center stays -1 and claim is skipped as no_bound_center.
 	if not OS.is_debug_build():
 		return
 	if job == null or pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 		return
 	_pawn_divergence_total_claim_events_seen += 1
-	var pawn_region: int = WorldMemory._region_key(pawn.data.tile_pos.x, pawn.data.tile_pos.y)
+	var pawn_tile: Vector2i = pawn.data.tile_pos
+	var job_tile: Vector2i = job.work_tile
+	var pawn_region: int = WorldMemory._region_key(pawn_tile.x, pawn_tile.y)
 	var job_region: int = WorldMemory._region_key(job.work_tile.x, job.work_tile.y)
-	var pawn_center_region: int = SettlementMemory.get_center_region_for_region(pawn_region)
-	var job_center_region: int = SettlementMemory.get_center_region_for_region(job_region)
-	var effective_center_region: int = (
-		job_center_region if job_center_region >= 0 else pawn_center_region
-	)
+	var pawn_center_fast_map: int = _center_region_from_fast_map(pawn_region)
+	var job_center_fast_map: int = _center_region_from_fast_map(job_region)
+	var pawn_center_direct_membership: int = _center_region_from_direct_membership(pawn_region)
+	var job_center_direct_membership: int = _center_region_from_direct_membership(job_region)
+	var pawn_center_region: int = pawn_center_fast_map
+	var job_center_region: int = job_center_fast_map
+	var effective_center_region: int = (job_center_region if job_center_region >= 0 else pawn_center_region)
+	var bind_source: String = "fast_map"
+	var zone_fallback_center: int = -1
 	if effective_center_region < 0:
-		_pawn_divergence_skip_no_bound_center += 1
-		var skip_line_no_center: String = (
-			"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_bound_center pawn_id=%d pawn=%s pawn_region=%d job_region=%d pawn_center_region=%d job_center_region=%d center_region=%d"
+		pawn_center_region = pawn_center_direct_membership
+		job_center_region = job_center_direct_membership
+		effective_center_region = (job_center_region if job_center_region >= 0 else pawn_center_region)
+		bind_source = "direct_membership"
+	if effective_center_region < 0:
+		zone_fallback_center = _claim_center_fallback_from_zone_context(pawn_tile, job_tile)
+		if zone_fallback_center >= 0:
+			effective_center_region = zone_fallback_center
+			bind_source = "zone_context_fallback"
+	if effective_center_region < 0:
+		bind_source = "unbound"
+	if _pawn_divergence_detail_logs_enabled():
+		print(
+			(
+				"[PAWN_DIVERGENCE_BIND_TRACE] tick=%d action=claim bind_source=%s pawn_id=%d pawn=%s "
+				+ "pawn_region=%d job_region=%d pawn_center_fast_map=%d job_center_fast_map=%d "
+				+ "pawn_center_direct_membership=%d job_center_direct_membership=%d "
+				+ "zone_fallback_center=%d center_region=%d"
+			)
 			% [
 				GameManager.tick_count,
+				bind_source,
 				int(pawn.data.id),
 				pawn.data.display_name,
 				pawn_region,
 				job_region,
-				pawn_center_region,
-				job_center_region,
+				pawn_center_fast_map,
+				job_center_fast_map,
+				pawn_center_direct_membership,
+				job_center_direct_membership,
+				zone_fallback_center,
 				effective_center_region,
 			]
 		)
-		print(skip_line_no_center)
+	if effective_center_region < 0:
+		var has_settlement_context: bool = _has_any_valid_settlement_center()
+		if has_settlement_context:
+			_pawn_divergence_skip_no_bound_center += 1
+			var skip_line_no_center: String = (
+				"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_bound_center pawn_id=%d pawn=%s pawn_region=%d job_region=%d pawn_center_region=%d job_center_region=%d center_region=%d"
+				% [
+					GameManager.tick_count,
+					int(pawn.data.id),
+					pawn.data.display_name,
+					pawn_region,
+					job_region,
+					pawn_center_region,
+					job_center_region,
+					effective_center_region,
+				]
+			)
+			if _pawn_divergence_detail_logs_enabled():
+				print(skip_line_no_center)
+		else:
+			_pawn_divergence_skip_pre_settlement_context += 1
+			if _pawn_divergence_detail_logs_enabled():
+				print(
+					"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=pre_settlement_context pawn_id=%d pawn=%s pawn_region=%d job_region=%d center_region=%d"
+					% [
+						GameManager.tick_count,
+						int(pawn.data.id),
+						pawn.data.display_name,
+						pawn_region,
+						job_region,
+						effective_center_region,
+					]
+				)
 		return
-	var st: Dictionary = _settlement_by_center_region(effective_center_region)
+	if bind_source == "fast_map":
+		_pawn_divergence_native_bound_events += 1
+	else:
+		_pawn_divergence_fallback_bound_events += 1
+	var st_ctx: Dictionary = _settlement_context_for_claim(
+		effective_center_region,
+		job_region,
+		pawn_region
+	)
+	var st_source: String = str(st_ctx.get("source", "none"))
+	_pawn_divergence_context_source_counts[st_source] = int(
+		_pawn_divergence_context_source_counts.get(st_source, 0)
+	) + 1
+	var st: Dictionary = st_ctx.get("settlement", {}) as Dictionary
+	if st_source != "center_region" and _pawn_divergence_detail_logs_enabled():
+		print(
+			"[PAWN_DIVERGENCE_CONTEXT_TRACE] tick=%d action=claim context_source=%s center_region=%d pawn_region=%d job_region=%d"
+			% [
+				GameManager.tick_count,
+				st_source,
+				effective_center_region,
+				pawn_region,
+				job_region,
+			]
+		)
 	var spec_phase: String = str(st.get("specialization_phase", SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN))
 	var spec_locked: String = str(st.get("specialization_channel", ""))
 	var spec_candidate: String = str(st.get("specialization_candidate_channel", ""))
 	if st.is_empty() or spec_phase == SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN:
 		_pawn_divergence_skip_no_specialization_context += 1
+		_pawn_divergence_no_spec_by_center[effective_center_region] = int(
+			_pawn_divergence_no_spec_by_center.get(effective_center_region, 0)
+		) + 1
+		_pawn_divergence_no_spec_by_phase[spec_phase] = int(
+			_pawn_divergence_no_spec_by_phase.get(spec_phase, 0)
+		) + 1
+		var settlement_found: bool = not st.is_empty()
+		var committed_state: String = str(st.get("state", ""))
+		var current_intent: String = str(st.get("current_intent", ""))
 		var skip_line_no_spec: String = (
-			"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_specialization_context pawn_id=%d pawn=%s pawn_center_region=%d job_center_region=%d center_region=%d spec_phase=%s"
+			(
+				"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_specialization_context pawn_id=%d pawn=%s "
+				+ "pawn_center_region=%d job_center_region=%d center_region=%d spec_phase=%s "
+				+ "settlement_found=%s committed_state=%s current_intent=%s spec_locked=%s spec_candidate=%s"
+			)
 			% [
 				GameManager.tick_count,
 				int(pawn.data.id),
@@ -414,9 +637,15 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 				job_center_region,
 				effective_center_region,
 				spec_phase,
+				settlement_found,
+				committed_state,
+				current_intent,
+				spec_locked,
+				spec_candidate,
 			]
 		)
-		print(skip_line_no_spec)
+		if _pawn_divergence_detail_logs_enabled():
+			print(skip_line_no_spec)
 		return
 	var job_channel: String = _job_channel_for_divergence_log(job.type)
 	var alignment: String = "neutral"
@@ -447,6 +676,8 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 			_pawn_divergence_neutral_total += 1
 			center_row["neutral"] = int(center_row.get("neutral", 0)) + 1
 	_pawn_divergence_by_center[effective_center_region] = center_row
+	if _pawn_divergence_first_scored_center_region < 0:
+		_pawn_divergence_first_scored_center_region = effective_center_region
 	var scored_line: String = (
 		(
 			"[PAWN_DIVERGENCE] tick=%d action=claim pawn_id=%d pawn=%s "
@@ -470,7 +701,8 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 			alignment,
 		]
 	)
-	print(scored_line)
+	if _pawn_divergence_detail_logs_enabled():
+		print(scored_line)
 	if _pawn_divergence_first20_scored_lines.size() < 20:
 		_pawn_divergence_first20_scored_lines.append(scored_line)
 
@@ -485,20 +717,383 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 			return
 		_pawn_divergence_exit_summary_emitted = true
 	else:
-		if tick != 30000 and tick != 60000:
+		var milestone: bool = false
+		for mt in SimTime.divergence_milestone_ticks():
+			if tick == mt:
+				milestone = true
+				break
+		if not milestone:
 			return
 		if _pawn_divergence_summary_emitted_ticks.has(tick):
 			return
 		_pawn_divergence_summary_emitted_ticks[tick] = true
+	var emit_reason: String = "exit_tree" if force_exit else ("tick_%d" % tick)
 	print("[PAWN_DIVERGENCE_SUMMARY]")
+	print("[PAWN_DIVERGENCE_SCHEMA] packet_schema_version=%d" % PAWN_DIVERGENCE_PACKET_SCHEMA_VERSION)
+	print("[PAWN_DIVERGENCE_EMIT] tick=%d reason=%s" % [tick, emit_reason])
 	print("tick=%d" % tick)
 	print("total_claim_events_seen=%d" % _pawn_divergence_total_claim_events_seen)
 	print("scored_events=%d" % _pawn_divergence_scored_events)
+	print("skip_pre_settlement_context=%d" % _pawn_divergence_skip_pre_settlement_context)
 	print("skip_no_bound_center=%d" % _pawn_divergence_skip_no_bound_center)
 	print("skip_no_specialization_context=%d" % _pawn_divergence_skip_no_specialization_context)
 	print("aligned_total=%d" % _pawn_divergence_aligned_total)
 	print("divergent_total=%d" % _pawn_divergence_divergent_total)
 	print("neutral_total=%d" % _pawn_divergence_neutral_total)
+	print("native_bound_events=%d" % _pawn_divergence_native_bound_events)
+	print("fallback_bound_events=%d" % _pawn_divergence_fallback_bound_events)
+	print("first_scored_center_region=%d" % _pawn_divergence_first_scored_center_region)
+	print("scored_events_present=%s" % ("true" if _pawn_divergence_scored_events > 0 else "false"))
+	var context_sources: Array = _pawn_divergence_context_source_counts.keys()
+	context_sources.sort()
+	for source_any in context_sources:
+		var source: String = str(source_any)
+		print(
+			"[PAWN_DIVERGENCE_CONTEXT_SUMMARY] source=%s claims=%d"
+			% [source, int(_pawn_divergence_context_source_counts.get(source, 0))]
+		)
+	var ctx_total: int = 0
+	var ctx_none: int = 0
+	var ctx_center_region: int = 0
+	var ctx_job_region_membership: int = 0
+	var ctx_pawn_region_membership: int = 0
+	var ctx_unknown: int = 0
+	for source_any in context_sources:
+		var source_name: String = str(source_any)
+		var source_count: int = int(_pawn_divergence_context_source_counts.get(source_name, 0))
+		ctx_total += source_count
+		if source_name == "none":
+			ctx_none += source_count
+		elif source_name == "center_region":
+			ctx_center_region += source_count
+		elif source_name == "job_region_membership":
+			ctx_job_region_membership += source_count
+		elif source_name == "pawn_region_membership":
+			ctx_pawn_region_membership += source_count
+		else:
+			ctx_unknown += source_count
+	var native_bound_total: int = _pawn_divergence_native_bound_events
+	var fallback_bound_total: int = _pawn_divergence_fallback_bound_events
+	var bind_total: int = native_bound_total + fallback_bound_total
+	var native_rate: float = 0.0
+	var fallback_rate: float = 0.0
+	if bind_total > 0:
+		native_rate = float(native_bound_total) / float(bind_total)
+		fallback_rate = float(fallback_bound_total) / float(bind_total)
+	var ctx_center_rate: float = 0.0
+	var ctx_job_rate: float = 0.0
+	var ctx_pawn_rate: float = 0.0
+	var ctx_none_rate: float = 0.0
+	if ctx_total > 0:
+		ctx_center_rate = float(ctx_center_region) / float(ctx_total)
+		ctx_job_rate = float(ctx_job_region_membership) / float(ctx_total)
+		ctx_pawn_rate = float(ctx_pawn_region_membership) / float(ctx_total)
+		ctx_none_rate = float(ctx_none) / float(ctx_total)
+	print(
+		(
+			"[PAWN_DIVERGENCE_BINDING_MIX] tick=%d native=%d fallback=%d native_rate=%.3f fallback_rate=%.3f "
+			+ "ctx_center_rate=%.3f ctx_job_rate=%.3f ctx_pawn_rate=%.3f ctx_none_rate=%.3f ctx_unknown=%d"
+		)
+		% [
+			tick,
+			native_bound_total,
+			fallback_bound_total,
+			native_rate,
+			fallback_rate,
+			ctx_center_rate,
+			ctx_job_rate,
+			ctx_pawn_rate,
+			ctx_none_rate,
+			ctx_unknown,
+		]
+	)
+	var scored_present: bool = _pawn_divergence_scored_events > 0
+	var any_bound: bool = (_pawn_divergence_native_bound_events + _pawn_divergence_fallback_bound_events) > 0
+	var no_spec_rate: float = 0.0
+	if _pawn_divergence_total_claim_events_seen > 0:
+		no_spec_rate = float(_pawn_divergence_skip_no_specialization_context) / float(
+			_pawn_divergence_total_claim_events_seen
+		)
+	var fallback_dominant: bool = bind_total > 0 and fallback_rate >= 0.5
+	var context_none_present: bool = ctx_none > 0
+	var high_no_spec_rate: bool = no_spec_rate >= 0.5
+	var pre_settlement_only: bool = (
+		_pawn_divergence_skip_pre_settlement_context > 0
+		and _pawn_divergence_scored_events == 0
+		and _pawn_divergence_skip_no_bound_center == 0
+	)
+	print(
+		(
+			"[PAWN_DIVERGENCE_ALERTS] tick=%d fallback_dominant=%s context_none_present=%s "
+			+ "high_no_spec_rate=%s pre_settlement_only=%s"
+		)
+		% [
+			tick,
+			"true" if fallback_dominant else "false",
+			"true" if context_none_present else "false",
+			"true" if high_no_spec_rate else "false",
+			"true" if pre_settlement_only else "false",
+		]
+	)
+	var next_action: String = "none"
+	var next_action_detail: String = "healthy_or_observe"
+	if pre_settlement_only:
+		next_action = "observe_until_settlement_forms"
+		next_action_detail = "claims_precede_valid_settlement_context"
+	elif not scored_present and any_bound:
+		next_action = "inspect_specialization_context"
+		next_action_detail = "bound_claims_exist_but_not_scored"
+	elif not scored_present:
+		next_action = "inspect_claim_time_binding_path"
+		next_action_detail = "no_scored_events_and_no_stable_bound_path"
+	elif high_no_spec_rate:
+		next_action = "audit_specialization_population_path"
+		next_action_detail = "high_no_specialization_context_rate"
+	elif context_none_present:
+		next_action = "audit_context_resolution_chain"
+		next_action_detail = "context_source_none_detected"
+	elif fallback_dominant:
+		next_action = "stabilize_fast_map_coverage"
+		next_action_detail = "fallback_path_is_dominant"
+	print(
+		"[PAWN_DIVERGENCE_NEXT_ACTION] tick=%d action=%s detail=%s"
+		% [tick, next_action, next_action_detail]
+	)
+	var binding_quality: String = "FAIL"
+	var binding_reason: String = "no_bound_or_scored_events"
+	if scored_present:
+		binding_quality = "PASS"
+		binding_reason = "scored_events_present"
+		if high_no_spec_rate:
+			binding_quality = "WARN"
+			binding_reason = "high_no_specialization_rate"
+		elif context_none_present:
+			binding_quality = "WARN"
+			binding_reason = "context_resolution_gaps"
+	print(
+		(
+			"[PAWN_DIVERGENCE_BINDING_QUALITY] tick=%d result=%s reason=%s "
+			+ "ctx_none=%d ctx_total=%d no_spec_rate=%.3f scored_events=%d"
+		)
+		% [
+			tick,
+			binding_quality,
+			binding_reason,
+			ctx_none,
+			ctx_total,
+			no_spec_rate,
+			_pawn_divergence_scored_events,
+		]
+	)
+	var scored_bucket_sum: int = (
+		_pawn_divergence_aligned_total + _pawn_divergence_divergent_total + _pawn_divergence_neutral_total
+	)
+	var skip_bucket_sum: int = (
+		_pawn_divergence_skip_pre_settlement_context
+		+ _pawn_divergence_skip_no_bound_center
+		+ _pawn_divergence_skip_no_specialization_context
+	)
+	var center_scored_sum: int = 0
+	for row_any in _pawn_divergence_by_center.values():
+		var row: Dictionary = row_any as Dictionary
+		center_scored_sum += int(row.get("scored", 0))
+	var claim_resolution_total: int = _pawn_divergence_scored_events + skip_bucket_sum
+	var invariant_ok: bool = true
+	var invariant_reason: String = "ok"
+	if scored_bucket_sum != _pawn_divergence_scored_events:
+		invariant_ok = false
+		invariant_reason = "scored_bucket_mismatch"
+	elif center_scored_sum != _pawn_divergence_scored_events:
+		invariant_ok = false
+		invariant_reason = "center_scored_mismatch"
+	elif claim_resolution_total != _pawn_divergence_total_claim_events_seen:
+		invariant_ok = false
+		invariant_reason = "claim_resolution_mismatch"
+	print(
+		(
+			"[PAWN_DIVERGENCE_INVARIANT] tick=%d pass=%s reason=%s total_claims=%d resolved_claims=%d "
+			+ "scored=%d scored_bucket_sum=%d center_scored_sum=%d skip_bucket_sum=%d"
+		)
+		% [
+			tick,
+			"true" if invariant_ok else "false",
+			invariant_reason,
+			_pawn_divergence_total_claim_events_seen,
+			claim_resolution_total,
+			_pawn_divergence_scored_events,
+			scored_bucket_sum,
+			center_scored_sum,
+			skip_bucket_sum,
+		]
+	)
+	var fingerprint: String = (
+		"t=%d|tc=%d|sc=%d|al=%d|dv=%d|nt=%d|sp=%d|nb=%d|ns=%d|bn=%d|bf=%d|cn=%d|ct=%d|q=%s|r=%s|a=%s|inv=%s"
+		% [
+			tick,
+			_pawn_divergence_total_claim_events_seen,
+			_pawn_divergence_scored_events,
+			_pawn_divergence_aligned_total,
+			_pawn_divergence_divergent_total,
+			_pawn_divergence_neutral_total,
+			_pawn_divergence_skip_pre_settlement_context,
+			_pawn_divergence_skip_no_bound_center,
+			_pawn_divergence_skip_no_specialization_context,
+			native_bound_total,
+			fallback_bound_total,
+			ctx_none,
+			ctx_total,
+			binding_quality,
+			binding_reason,
+			next_action,
+			"1" if invariant_ok else "0",
+		]
+	)
+	print("[PAWN_DIVERGENCE_FINGERPRINT] %s" % fingerprint)
+	var gate_scored_present: bool = _pawn_divergence_scored_events > 0
+	var gate_has_any_bound: bool = (_pawn_divergence_native_bound_events + _pawn_divergence_fallback_bound_events) > 0
+	var gate_no_bound_center_zero: bool = _pawn_divergence_skip_no_bound_center == 0
+	var gate_invariant_ok: bool = invariant_ok
+	var gates_pass: bool = (
+		gate_scored_present
+		and gate_has_any_bound
+		and gate_no_bound_center_zero
+		and gate_invariant_ok
+	)
+	print(
+		(
+			"[PAWN_DIVERGENCE_GATES] tick=%d pass=%s scored_present=%s has_any_bound=%s "
+			+ "no_bound_center_zero=%s invariant_ok=%s"
+		)
+		% [
+			tick,
+			"true" if gates_pass else "false",
+			"true" if gate_scored_present else "false",
+			"true" if gate_has_any_bound else "false",
+			"true" if gate_no_bound_center_zero else "false",
+			"true" if gate_invariant_ok else "false",
+		]
+	)
+	var go_no_go: String = "BLOCK"
+	var go_reason: String = "gates_failed"
+	if gates_pass:
+		go_no_go = "GO"
+		go_reason = "core_gates_passed"
+		if fallback_dominant or context_none_present or high_no_spec_rate:
+			go_no_go = "HOLD"
+			go_reason = "quality_alerts_present"
+	elif pre_settlement_only:
+		go_no_go = "HOLD"
+		go_reason = "pre_settlement_only"
+	print(
+		"[PAWN_DIVERGENCE_GO_NO_GO] tick=%d decision=%s reason=%s"
+		% [tick, go_no_go, go_reason]
+	)
+	var packet_center_fingerprint: String = _build_pawn_divergence_center_fingerprint()
+	var packet_basis: String = (
+		"s=%d|t=%d|er=%s|d=%s|dr=%s|q=%s|qr=%s|gp=%s|fd=%s|cn=%s|hn=%s|ps=%s|fp=%s|cfp=%s"
+		% [
+			PAWN_DIVERGENCE_PACKET_SCHEMA_VERSION,
+			tick,
+			emit_reason,
+			go_no_go,
+			go_reason,
+			binding_quality,
+			binding_reason,
+			"1" if gates_pass else "0",
+			"1" if fallback_dominant else "0",
+			"1" if context_none_present else "0",
+			"1" if high_no_spec_rate else "0",
+			"1" if pre_settlement_only else "0",
+			fingerprint,
+			packet_center_fingerprint,
+		]
+	)
+	var packet_id: int = packet_basis.hash()
+	print(
+		(
+			"[PAWN_DIVERGENCE_PACKET] schema=%d tick=%d emit_reason=%s packet_id=%d decision=%s decision_reason=%s quality=%s quality_reason=%s "
+			+ "gates_pass=%s alerts=fallback_dominant:%s,context_none_present:%s,high_no_spec_rate:%s,pre_settlement_only:%s "
+			+ "fingerprint=%s center_fingerprint=%s"
+		)
+		% [
+			PAWN_DIVERGENCE_PACKET_SCHEMA_VERSION,
+			tick,
+			emit_reason,
+			packet_id,
+			go_no_go,
+			go_reason,
+			binding_quality,
+			binding_reason,
+			"true" if gates_pass else "false",
+			"true" if fallback_dominant else "false",
+			"true" if context_none_present else "false",
+			"true" if high_no_spec_rate else "false",
+			"true" if pre_settlement_only else "false",
+			fingerprint,
+			packet_center_fingerprint,
+		]
+	)
+	print(
+		(
+			"[PAWN_DIVERGENCE_STATE] tick=%d total_claims=%d scored=%d aligned=%d divergent=%d neutral=%d "
+			+ "pre_settlement_skips=%d no_bound_skips=%d no_spec_skips=%d native_bound=%d fallback_bound=%d "
+			+ "ctx_total=%d ctx_none=%d quality=%s quality_reason=%s next_action=%s"
+		)
+		% [
+			tick,
+			_pawn_divergence_total_claim_events_seen,
+			_pawn_divergence_scored_events,
+			_pawn_divergence_aligned_total,
+			_pawn_divergence_divergent_total,
+			_pawn_divergence_neutral_total,
+			_pawn_divergence_skip_pre_settlement_context,
+			_pawn_divergence_skip_no_bound_center,
+			_pawn_divergence_skip_no_specialization_context,
+			native_bound_total,
+			fallback_bound_total,
+			ctx_total,
+			ctx_none,
+			binding_quality,
+			binding_reason,
+			next_action,
+		]
+	)
+	var health: String = "FAIL"
+	if scored_present:
+		health = "PASS"
+	elif any_bound:
+		health = "WARN"
+	print(
+		(
+			"[PAWN_DIVERGENCE_HEALTH] tick=%d result=%s any_bound=%s scored_events_present=%s "
+			+ "pre_settlement_skips=%d no_bound_center_skips=%d no_spec_skips=%d"
+		)
+		% [
+			tick,
+			health,
+			any_bound,
+			scored_present,
+			_pawn_divergence_skip_pre_settlement_context,
+			_pawn_divergence_skip_no_bound_center,
+			_pawn_divergence_skip_no_specialization_context,
+		]
+	)
+	var no_spec_centers: Array = _pawn_divergence_no_spec_by_center.keys()
+	no_spec_centers.sort()
+	for c_any in no_spec_centers:
+		var c: int = int(c_any)
+		print(
+			"[PAWN_DIVERGENCE_NO_SPEC_SUMMARY] center_region=%d skips=%d"
+			% [c, int(_pawn_divergence_no_spec_by_center.get(c, 0))]
+		)
+	var no_spec_phases: Array = _pawn_divergence_no_spec_by_phase.keys()
+	no_spec_phases.sort()
+	for phase_any in no_spec_phases:
+		var phase: String = str(phase_any)
+		print(
+			"[PAWN_DIVERGENCE_NO_SPEC_PHASE_SUMMARY] spec_phase=%s skips=%d"
+			% [phase, int(_pawn_divergence_no_spec_by_phase.get(phase, 0))]
+		)
 	var centers: Array = _pawn_divergence_by_center.keys()
 	centers.sort()
 	for c_any in centers:
@@ -514,15 +1109,39 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 				int(row.get("neutral", 0)),
 			]
 		)
+	var center_digest_parts: PackedStringArray = PackedStringArray()
+	for c_any in centers:
+		var c: int = int(c_any)
+		var row: Dictionary = _pawn_divergence_by_center.get(c, {})
+		center_digest_parts.append(
+			"%d:%d,%d,%d,%d"
+			% [
+				c,
+				int(row.get("scored", 0)),
+				int(row.get("aligned", 0)),
+				int(row.get("divergent", 0)),
+				int(row.get("neutral", 0)),
+			]
+		)
+	var center_fingerprint: String = ";".join(center_digest_parts)
+	if center_fingerprint == "":
+		center_fingerprint = "none"
+	print(
+		"[PAWN_DIVERGENCE_CENTER_FINGERPRINT] tick=%d centers=%d digest=%s"
+		% [tick, centers.size(), center_fingerprint]
+	)
 	print("[PAWN_DIVERGENCE_FIRST20_BEGIN]")
 	for line in _pawn_divergence_first20_scored_lines:
 		print(str(line))
 	print("[PAWN_DIVERGENCE_FIRST20_END]")
-	var row_524295: Dictionary = _pawn_divergence_by_center.get(524295, {})
-	var scored_524295: int = int(row_524295.get("scored", 0))
+	var proof_center_region: int = _pawn_divergence_first_scored_center_region
+	if proof_center_region < 0:
+		proof_center_region = 524295
+	var proof_row: Dictionary = _pawn_divergence_by_center.get(proof_center_region, {})
+	var proof_scored: int = int(proof_row.get("scored", 0))
 	print(
-		"[PAWN_DIVERGENCE_PROOF] center_region=524295 scored_events_present=%s"
-		% ("true" if scored_524295 > 0 else "false")
+		"[PAWN_DIVERGENCE_PROOF] center_region=%d scored_events_present=%s"
+		% [proof_center_region, "true" if proof_scored > 0 else "false"]
 	)
 
 
@@ -531,6 +1150,14 @@ func _process(delta: float) -> void:
 		_meaning_ambient_mood, _get_meaning_ambient_mood_target(), minf(1.0, delta * MEANING_AMBIENT_SMOOTH)
 	)
 	_update_camera_meaning_bias(delta)
+	if (
+			_player_pawn != null
+			and is_instance_valid(_player_pawn)
+			and _camera != null
+			and _camera.has_method("clamp_position_to_world")
+			and is_instance_valid(_world)
+	):
+		_camera.call("clamp_position_to_world", _world, 48.0)
 	_update_ambient_audio(delta)
 	_trace_redraw_timer += delta
 	if _trace_redraw_timer >= TRACE_REDRAW_INTERVAL_SEC:
@@ -573,10 +1200,12 @@ func _bootstrap_colony() -> void:
 	WorldPersistence.recompute()
 	_place_stockpile(main_component)
 	_pawn_spawner.spawn_starters(_world, main_component)
+	_ensure_player_pawn_assigned()
 	if is_instance_valid(_world):
 		_world.apply_ruins_from_persistence()
 		CulturalMemory.recompute(_world)
 		SettlementMemory.recompute(_world)
+		_ensure_validation_session_seed_stockpile_overlaps_settlement()
 		MythMemory.recompute(_world)
 		SacredMemory.sync_permanent_ruins_from_settlements()
 		_run_heavy_refresh_once_per_tick(func() -> void:
@@ -659,6 +1288,93 @@ func _fit_seed_stockpile_rect(tile: Vector2i, main_component: int, w: int, h: in
 	return Rect2i(Vector2i(start_x, start_y), Vector2i(w, h))
 
 
+## Validation sessions only (debug build + SettlementMemory.VALIDATION_SESSION_ENABLED):
+## Phase 8 proof requires a designated stockpile whose rect overlaps at least one tile in a
+## settlement region set. The default seed pile is centered on the map, which often shares
+## no tiles with clustered settlements — relocate the seed pile onto the main landmass near
+## an existing settlement anchor. Does not alter release builds or non-validation debug.
+func _ensure_validation_session_seed_stockpile_overlaps_settlement() -> void:
+	if not OS.is_debug_build():
+		return
+	if not SettlementMemory.VALIDATION_SESSION_ENABLED:
+		return
+	if not is_instance_valid(_world):
+		return
+	var sp: Stockpile = _world.stockpile
+	if sp == null or not is_instance_valid(sp):
+		return
+	var main_component: int = _world.pathfinder.largest_component_id()
+	if main_component < 0:
+		return
+	var st: Dictionary = _pick_validation_proof_anchor_settlement()
+	if st.is_empty():
+		print("[Main] VALIDATION_SESSION proof_anchor skipped reason=no_settlement_after_recompute")
+		return
+	var anchor: Vector2i = _validation_proof_anchor_tile_for_main_component(st, main_component)
+	if anchor.x < 0:
+		print(
+				"[Main] VALIDATION_SESSION proof_anchor skipped reason=no_passable_tile_near_settlement_regions "
+				+ "center_region=%d"
+				% int(st.get("center_region", -1))
+		)
+		return
+	var seed_rect: Rect2i = _fit_seed_stockpile_rect(anchor, main_component, 3, 3)
+	sp.set_rect_tiles(seed_rect)
+	sp.position = _world.tile_to_world(seed_rect.position)
+	print(
+			"[Main] VALIDATION_SESSION proof_anchor seed_stockpile_rect=%s size=%s settlement_center_region=%d state=%s"
+			% [
+				seed_rect.position,
+				seed_rect.size,
+				int(st.get("center_region", -1)),
+				str(st.get("state", "?")),
+			]
+	)
+
+
+func _pick_validation_proof_anchor_settlement() -> Dictionary:
+	for st_any in SettlementMemory.settlements:
+		if not (st_any is Dictionary):
+			continue
+		var st: Dictionary = st_any as Dictionary
+		if int(st.get("center_region", -1)) < 0:
+			continue
+		if str(st.get("state", "")) == "active":
+			return st
+	for st_any in SettlementMemory.settlements:
+		if not (st_any is Dictionary):
+			continue
+		var st: Dictionary = st_any as Dictionary
+		if int(st.get("center_region", -1)) < 0:
+			continue
+		var regv: Variant = st.get("regions", PackedInt32Array())
+		if regv is PackedInt32Array and not (regv as PackedInt32Array).is_empty():
+			return st
+	return {}
+
+
+func _validation_proof_anchor_tile_for_main_component(st: Dictionary, main_component: int) -> Vector2i:
+	var ordered_keys: Array[int] = []
+	var rk_center: int = int(st.get("center_region", -1))
+	if rk_center >= 0:
+		ordered_keys.append(rk_center)
+	var regv: Variant = st.get("regions", PackedInt32Array())
+	if regv is PackedInt32Array:
+		for rk_any in regv as PackedInt32Array:
+			var rk: int = int(rk_any)
+			if ordered_keys.has(rk):
+				continue
+			ordered_keys.append(rk)
+	for rk in ordered_keys:
+		var tx: int = rk & 0xFFFF
+		var ty: int = (rk >> 16) & 0xFFFF
+		var hint := Vector2i(tx, ty)
+		var near: Vector2i = _world.pathfinder.find_tile_in_component_near(main_component, hint, 64)
+		if near.x >= 0:
+			return near
+	return Vector2i(-1, -1)
+
+
 func _sync_pawn_inherited_cultural_reputation() -> void:
 	## Re-read [CulturalMemory] into each pawn’s birth cache (e.g. after load, once
 	## [World.apply_ruins_from_persistence] has run).
@@ -673,6 +1389,8 @@ func _sync_pawn_inherited_cultural_reputation() -> void:
 
 func _on_game_tick(tick: int) -> void:
 	if _player_input != null:
+		if not is_instance_valid(_player_pawn):
+			_ensure_player_pawn_assigned()
 		if is_instance_valid(_player_pawn):
 			_player_input.process_next_tick(_player_pawn)
 			_player_action_state = _player_input.get_last_action_state()
@@ -716,8 +1434,6 @@ func _on_game_tick(tick: int) -> void:
 		if tick % REBIRTH_CHECK_INTERVAL_TICKS == 0:
 			SettlementMemory.recompute(_world)
 			SettlementRebirth.process(_world, self, false)
-			FragmentationManager.check_and_fragment(_world, self)
-			SchismManager.check_and_schism(_world, self)
 	if int(tick) % 10000 == 0 and int(tick) > 0:
 		AgeMemory.recompute()
 		if is_instance_valid(_world):
@@ -727,13 +1443,16 @@ func _on_game_tick(tick: int) -> void:
 		_process_reproduction_tick()
 	if tick % INFLUENCE_UPDATE_INTERVAL_TICKS == 0:
 		_update_pawn_influence_tick()
+	_update_phase8_proof_bundle_preferred_center()
 	SettlementMemory.update_settlement_intents(tick)
 	SettlementMemory.update_resource_pressures(tick)
 	SettlementMemory.update_preferred_work_fronts(tick)
 	_emit_pawn_divergence_summary_if_needed(tick)
-	if _observer_hud != null and tick % OBSERVER_HUD_REFRESH_TICKS == 0:
+	var obs_iv: int = _high_speed_interval(OBSERVER_HUD_REFRESH_TICKS, 45, 90)
+	if _observer_hud != null and tick % obs_iv == 0:
 		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
-	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % FOCUS_INSPECTOR_REFRESH_TICKS == 0:
+	var focus_iv: int = _high_speed_interval(FOCUS_INSPECTOR_REFRESH_TICKS, 24, 48)
+	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % focus_iv == 0:
 		_focus_inspector.apply_snapshot(_build_focus_snapshot(tick))
 	if is_instance_valid(_world):
 		call_deferred("_flush_road_memory_dirty_tiles")
@@ -1075,6 +1794,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			GameManager.set_speed_index(4)
 		KEY_6:
 			GameManager.set_speed_index(5)
+		KEY_7:
+			GameManager.set_speed_index(6)
 		KEY_R:
 			_reroll_world()
 		KEY_T:
@@ -1111,6 +1832,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		KEY_F11:
 			if _kernel_diagnostic != null and _kernel_diagnostic.has_method("start_settlement_truth_verification"):
 				_kernel_diagnostic.call("start_settlement_truth_verification")
+		KEY_F12:
+			_debug_capture_resource_truth()
 		KEY_M:
 			ColonySimServices.cycle_labor_stance()
 		KEY_ESCAPE:
@@ -1157,6 +1880,89 @@ func _unhandled_input(event: InputEvent) -> void:
 			MOUSE_BUTTON_RIGHT:
 				if mb.pressed:
 					_on_right_press()
+
+
+func _init_phase8_proof_overlay() -> void:
+	if not OS.is_debug_build():
+		return
+	if _phase8_proof_overlay_layer != null and is_instance_valid(_phase8_proof_overlay_layer):
+		return
+	_phase8_proof_overlay_layer = CanvasLayer.new()
+	_phase8_proof_overlay_layer.name = "Phase8ProofOverlay"
+	_phase8_proof_overlay_layer.layer = 30
+	add_child(_phase8_proof_overlay_layer)
+	_phase8_proof_overlay_text = RichTextLabel.new()
+	_phase8_proof_overlay_text.name = "Phase8ProofOverlayText"
+	_phase8_proof_overlay_text.bbcode_enabled = false
+	_phase8_proof_overlay_text.fit_content = false
+	_phase8_proof_overlay_text.scroll_active = true
+	_phase8_proof_overlay_text.selection_enabled = false
+	_phase8_proof_overlay_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_phase8_proof_overlay_text.position = Vector2(8, 56)
+	_phase8_proof_overlay_text.size = Vector2(1240, 96)
+	_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 10)
+	_phase8_proof_overlay_layer.add_child(_phase8_proof_overlay_text)
+	if not SettlementMemory.phase8_proof_bundle_emitted.is_connected(_on_phase8_proof_bundle_emitted):
+		SettlementMemory.phase8_proof_bundle_emitted.connect(_on_phase8_proof_bundle_emitted)
+	var terminal_line: String = SettlementMemory.get_phase8_proof_terminal_line()
+	var last_line: String = ""
+	if terminal_line != "":
+		last_line = terminal_line
+	else:
+		last_line = SettlementMemory.get_phase8_proof_latest_bundle_line()
+	if last_line == "":
+		last_line = "[PHASE8_PROOF_BUNDLE] waiting_for_first_resource_truth_tick..."
+	_phase8_proof_overlay_text.text = last_line
+	_refresh_phase8_proof_overlay_style()
+
+
+func _refresh_phase8_proof_overlay_style() -> void:
+	if _phase8_proof_overlay_text == null or not is_instance_valid(_phase8_proof_overlay_text):
+		return
+	var terminal_line: String = SettlementMemory.get_phase8_proof_terminal_line()
+	if terminal_line != "":
+		_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 13)
+	else:
+		_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 10)
+
+
+func _on_phase8_proof_bundle_emitted(bundle_line: String) -> void:
+	if _phase8_proof_overlay_text == null or not is_instance_valid(_phase8_proof_overlay_text):
+		return
+	var terminal_line: String = SettlementMemory.get_phase8_proof_terminal_line()
+	if terminal_line != "":
+		_phase8_proof_overlay_text.text = terminal_line
+	else:
+		_phase8_proof_overlay_text.text = bundle_line
+	_refresh_phase8_proof_overlay_style()
+
+
+func _update_phase8_proof_bundle_preferred_center() -> void:
+	var preferred_center: int = -1
+	if _selected_pawn != null and is_instance_valid(_selected_pawn) and _selected_pawn.data != null:
+		var srk: int = WorldMemory._region_key(_selected_pawn.data.tile_pos.x, _selected_pawn.data.tile_pos.y)
+		preferred_center = SettlementMemory.get_center_region_for_region(srk)
+	if preferred_center < 0:
+		var focus: Dictionary = _observer_focus_settlement()
+		var sdata: Dictionary = focus.get("settlement_data", {})
+		preferred_center = int(sdata.get("center_region", -1))
+	SettlementMemory.set_phase8_proof_preferred_center_region(preferred_center)
+
+
+func _debug_capture_resource_truth() -> void:
+	if not OS.is_debug_build():
+		return
+	var preferred_center: int = -1
+	# Prefer settlement already in focus via current selection.
+	if _selected_pawn != null and is_instance_valid(_selected_pawn) and _selected_pawn.data != null:
+		var srk: int = WorldMemory._region_key(_selected_pawn.data.tile_pos.x, _selected_pawn.data.tile_pos.y)
+		preferred_center = SettlementMemory.get_center_region_for_region(srk)
+	# Otherwise prefer observer/player focus if available.
+	if preferred_center < 0:
+		var focus: Dictionary = _observer_focus_settlement()
+		var sdata: Dictionary = focus.get("settlement_data", {})
+		preferred_center = int(sdata.get("center_region", -1))
+	SettlementMemory.print_resource_truth_capture(preferred_center, "Main.F12")
 
 
 ## Left-click press handler. Branches on the active designation mode:
@@ -1446,6 +2252,18 @@ func _set_selected_pawn(p: Pawn) -> void:
 			print("[Main] Selection cleared")
 	if _info_panel != null:
 		_info_panel.bind_pawn(_selected_pawn)
+
+
+func _ensure_player_pawn_assigned() -> void:
+	if _pawn_spawner == null:
+		return
+	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		return
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		_set_selected_pawn(p)
+		return
 
 
 func get_player_queue_size() -> int:
@@ -1805,7 +2623,9 @@ func _reroll_world() -> void:
 	# Place the stockpile BEFORE respawning pawns, so every pawn sees a valid
 	# stockpile reference the first time it ticks.
 	_place_stockpile(main_component)
+	_ensure_validation_session_seed_stockpile_overlaps_settlement()
 	_pawn_spawner.respawn(_world, main_component)
+	_ensure_player_pawn_assigned()
 	Main._world_stabilization_until_tick = GameManager.tick_count + WORLD_STABILIZATION_TICKS
 	_seed_jobs_from_world()
 	_react_to_mining_progress()
@@ -2566,11 +3386,13 @@ func _apply_save_dict(s: Dictionary) -> void:
 		if pd is Dictionary:
 			var pdat: PawnData = PawnData.from_save_dict(pd)
 			_pawn_spawner.spawn_from_data(pdat, _world)
+	_ensure_player_pawn_assigned()
 	_world.set_meta("animal_spawner", _animal_spawner)
 	if is_instance_valid(_world):
 		_world.apply_ruins_from_persistence()
 		CulturalMemory.recompute(_world)
 		SettlementMemory.recompute(_world)
+		_ensure_validation_session_seed_stockpile_overlaps_settlement()
 		MythMemory.recompute(_world)
 		SacredMemory.sync_permanent_ruins_from_settlements()
 		IntentMemory.recompute(_world)
@@ -2953,11 +3775,74 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 	var food_pressure: float = float(ColonySimServices.get_food_pressure())
 	var housing_pressure: float = float(ColonySimServices.get_housing_pressure())
 	var resource_pressure: Dictionary = settlement_data.get("resource_pressure", {})
+	var resource_truth: Dictionary = settlement_data.get("resource_truth", {})
+	var resource_balance: Dictionary = settlement_data.get("resource_balance", {})
 	var rp_wood: float = clamp(float(resource_pressure.get("wood", 0.0)), 0.0, 1.0)
 	var rp_stone: float = clamp(float(resource_pressure.get("stone", 0.0)), 0.0, 1.0)
 	var rp_ore: float = clamp(float(resource_pressure.get("ore_proxy", 0.0)), 0.0, 1.0)
-	var rp_food: float = clamp(float(resource_pressure.get("food", 0.0)), 0.0, 1.0)
-	var rp_trade: float = clamp(float(resource_pressure.get("trade", 0.0)), 0.0, 1.0)
+	var rt_food: int = int(resource_truth.get("stock_food", 0))
+	var rt_wood: int = int(resource_truth.get("stock_wood", 0))
+	var rt_stone: int = int(resource_truth.get("stock_stone", 0))
+	var rt_ore_proxy: int = int(resource_truth.get("stock_ore_proxy", 0))
+	var rt_total: int = int(resource_truth.get("total_stock_units", 0))
+	var rt_tick: int = int(resource_truth.get("snapshot_tick", -1))
+	var rt_center: int = int(resource_truth.get("center_region", -1))
+	var rb_food: String = str(resource_balance.get("food_balance", "DEFICIT"))
+	var rb_wood: String = str(resource_balance.get("wood_balance", "DEFICIT"))
+	var rb_stone: String = str(resource_balance.get("stone_balance", "DEFICIT"))
+	var rb_ore_proxy: String = str(resource_balance.get("ore_proxy_balance", "DEFICIT"))
+	var rb_tick: int = int(resource_balance.get("snapshot_tick", -1))
+	var rb_center: int = int(resource_balance.get("center_region", -1))
+	var rb_source: String = str(resource_balance.get("source", "stock_truth_derived_first_pass"))
+	var rb_audit: Dictionary = SettlementMemory.resource_balance_audit_snapshot_for_settlement(settlement_data)
+	var rb_audit_result: String = str(rb_audit.get("result", "n/a"))
+	var rb_audit_tick: int = int(rb_audit.get("snapshot_tick", -1))
+	var rb_audit_center: int = int(rb_audit.get("center_region", -1))
+	var rb_audit_sig: String = "%d|%s|%d|%d|%d|%d|%s|%s|%s|%s" % [
+		rb_audit_center,
+		rb_audit_result,
+		int(rb_audit.get("food_count", 0)),
+		int(rb_audit.get("wood_count", 0)),
+		int(rb_audit.get("stone_count", 0)),
+		int(rb_audit.get("ore_proxy_count", 0)),
+		str(rb_audit.get("food_actual", "")),
+		str(rb_audit.get("wood_actual", "")),
+		str(rb_audit.get("stone_actual", "")),
+		str(rb_audit.get("ore_proxy_actual", "")),
+	]
+	var sig_changed: bool = rb_audit_sig != _resource_balance_audit_last_sig
+	var force_audit_line: bool = rb_audit_result != "PASS"
+	if (
+			OS.is_debug_build()
+			and rb_audit_tick >= 0
+			and rb_audit_center >= 0
+			and (sig_changed or force_audit_line)
+	):
+		_resource_balance_audit_last_sig = rb_audit_sig
+		print(
+				(
+						"[RESOURCE_BALANCE_AUDIT] tick=%d center_region=%d result=%s "
+						+ "food=%d=>%s(actual=%s) wood=%d=>%s(actual=%s) "
+						+ "stone=%d=>%s(actual=%s) ore_proxy=%d=>%s(actual=%s)"
+				)
+				% [
+					rb_audit_tick,
+					rb_audit_center,
+					rb_audit_result,
+					int(rb_audit.get("food_count", 0)),
+					str(rb_audit.get("food_expected", "DEFICIT")),
+					str(rb_audit.get("food_actual", "DEFICIT")),
+					int(rb_audit.get("wood_count", 0)),
+					str(rb_audit.get("wood_expected", "DEFICIT")),
+					str(rb_audit.get("wood_actual", "DEFICIT")),
+					int(rb_audit.get("stone_count", 0)),
+					str(rb_audit.get("stone_expected", "DEFICIT")),
+					str(rb_audit.get("stone_actual", "DEFICIT")),
+					int(rb_audit.get("ore_proxy_count", 0)),
+					str(rb_audit.get("ore_proxy_expected", "DEFICIT")),
+					str(rb_audit.get("ore_proxy_actual", "DEFICIT")),
+				]
+		)
 	var wf_phase: String = str(settlement_data.get("specialization_phase", SettlementMemory.SPECIALIZATION_PHASE_UNKNOWN))
 	var wf_locked_ch: String = str(settlement_data.get("specialization_channel", ""))
 	var wf_cand_ch: String = str(settlement_data.get("specialization_candidate_channel", ""))
@@ -3033,8 +3918,23 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"resource_pressure_wood": rp_wood,
 		"resource_pressure_stone": rp_stone,
 		"resource_pressure_ore_proxy": rp_ore,
-		"resource_pressure_food": rp_food,
-		"resource_pressure_trade": rp_trade,
+		"resource_truth_stock_food": rt_food,
+		"resource_truth_stock_wood": rt_wood,
+		"resource_truth_stock_stone": rt_stone,
+		"resource_truth_stock_ore_proxy": rt_ore_proxy,
+		"resource_truth_total_units": rt_total,
+		"resource_truth_snapshot_tick": rt_tick,
+		"resource_truth_center_region": rt_center,
+		"resource_balance_food": rb_food,
+		"resource_balance_wood": rb_wood,
+		"resource_balance_stone": rb_stone,
+		"resource_balance_ore_proxy": rb_ore_proxy,
+		"resource_balance_snapshot_tick": rb_tick,
+		"resource_balance_center_region": rb_center,
+		"resource_balance_source": rb_source,
+		"resource_balance_audit_result": rb_audit_result,
+		"resource_balance_audit_snapshot_tick": rb_audit_tick,
+		"resource_balance_audit_center_region": rb_audit_center,
 		"work_focus_phase": wf_phase,
 		"work_focus_display": wf_display,
 		"work_focus_confidence": wf_conf,

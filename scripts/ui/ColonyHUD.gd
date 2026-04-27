@@ -22,7 +22,7 @@ const FONT_SIZE_HOTKEYS: int = 9
 const PANEL_PAD_X: int = 6
 const PANEL_PAD_Y: int = 4
 
-const HOTKEY_HINTS: String = "SPACE pause · 1-4 speed · F5 save · F8 load · M labor stance · R reroll · T pawns · J jobs · I stockpile · B beds · W walls · O doors · Z zone · F filter · Esc cancel"
+const HOTKEY_HINTS: String = "SPACE pause · 1-7 speed · F5 save · F8 load · M labor stance · R reroll · T pawns · J jobs · I stockpile · B beds · W walls · O doors · Z zone · F filter · Esc cancel"
 
 @onready var _panel: PanelContainer = $Panel
 @onready var _label: RichTextLabel = $Panel/Margin/VBox/Body
@@ -105,9 +105,15 @@ func _on_tick(tick: int) -> void:
 	if tick % WILDLIFE_SAMPLE_EVERY_TICKS == 0:
 		_sample_wildlife(tick)
 		_hud_dirty = true
-	if tick % 10 != 0 and not _hud_dirty:
+	var refresh_stride: int = REFRESH_EVERY_N_TICKS
+	if GameManager.game_speed >= 26.0:
+		refresh_stride = 4
+	elif GameManager.game_speed >= 12.0:
+		refresh_stride = 2
+	var coarse: int = 10 if GameManager.game_speed < 12.0 else 20
+	if tick % coarse != 0 and not _hud_dirty:
 		return
-	if tick % REFRESH_EVERY_N_TICKS == 0:
+	if tick % refresh_stride == 0:
 		_refresh()
 		_hud_dirty = false
 
@@ -168,6 +174,7 @@ func _refresh() -> void:
 	lines.append(_stockpile_line())
 	lines.append(_jobs_line())
 	lines.append(_wildlife_line())
+	lines.append(_session_diag_line())
 	_label.text = "\n".join(lines)
 
 
@@ -245,8 +252,10 @@ func _time_line() -> String:
 	var speed_str: String = "PAUSED" if GameManager.is_paused else "%dx" % int(GameManager.game_speed)
 	# In-game hour estimate: 24 in-game hours per visual day cycle.
 	var hour: int = int(phase * 24.0) % 24
-	return "[b]Day %d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]" % [
-		day, hour, phase_name, speed_str, tick
+	var year_n: int = SimTime.sim_year_index(tick)
+	var y_tick: int = SimTime.tick_within_sim_year(tick)
+	return "[b]Year %d[/b] · [b]Day %d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](y.%d)[/color]" % [
+		year_n, day, hour, phase_name, speed_str, tick, y_tick,
 	]
 
 
@@ -415,12 +424,41 @@ func _skill_line() -> String:
 
 func _export_status_line() -> String:
 	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var milestone: int = SimTime.KERNEL_DIAGNOSTIC_TICK
 	if main_node == null:
-		return "📜 Export: Ready at Tick 30000 | Status: Waiting"
+		return "📜 Export / kernel checkpoint: tick %d | Status: Waiting" % milestone
 	var status: String = "Complete" if main_node.is_kernel_diagnostic_complete() else "Waiting"
-	if GameManager.tick_count >= 30000:
-		return "📜 Export: Ready at Tick 30000 | Status: %s" % status
-	return "📜 Export: Ready at Tick 30000 | Status: Waiting"
+	if GameManager.tick_count >= milestone:
+		return "📜 Export / kernel checkpoint: tick %d | Status: %s" % [milestone, status]
+	return "📜 Export / kernel checkpoint: tick %d | Status: Waiting" % milestone
+
+
+## One-line snapshot for AI/debug sessions (HUD copy-paste; reduces need for console spam).
+func _session_diag_line() -> String:
+	var d: Dictionary = GameManager.sim_diag()
+	var wc: int = WorldMemory.event_count()
+	var js: Dictionary = JobManager.stats()
+	var open_j: int = int(js.get("open", 0))
+	var claimed_j: int = int(js.get("claimed", 0))
+	var settlements_n: int = SettlementMemory.settlements.size()
+	var q: float = float(d.get("queued_ticks_est", 0.0))
+	var acc_cap: int = int(d.get("max_accumulated_ticks", 16))
+	var tpf: int = int(d.get("max_ticks_per_frame", 8))
+	return (
+		"[color=#9e9e9e][Session][/color] %.0fx pend~%.1f/%dt acc=%.3fs | tf=%d ac=%d | wm_ev=%d jobs %do/%dc st=%d"
+		% [
+			float(d.get("speed", 1.0)),
+			q,
+			acc_cap,
+			float(d.get("accumulator_sec", 0.0)),
+			tpf,
+			acc_cap,
+			wc,
+			open_j,
+			claimed_j,
+			settlements_n,
+		]
+	)
 
 
 func _kill_line() -> String:

@@ -10,3 +10,4 @@ Kernel status: complete (memory -> meaning -> persistence -> culture).
 
 For canonical project state, read docs/HEELKAWN_STATE.md.
 For cross-LLM continuity, use docs/LLM_ONBOARDING.md and docs/SESSION_LOG.md.
+For tiered canon, lore vs kernel scope, and planning priorities: docs/CURSOR_MASTER_PLANNING_SPEC.md.

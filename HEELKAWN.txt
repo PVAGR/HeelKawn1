@@ -11,10 +11,21 @@ CURRENT PHASE
 
 NEXT TARGET
 
-- Settlement revival vs permanent abandonment tuning.
+- Cultural architectural styles.
+- Player-readable meaning refinement (audio + settlement identity depth, no text overlay substitute).
+- Wildlife HUD trend validation + Phase 4 rebirth threshold tuning passes.
+
+(Authoritative duplicate: docs/HEELKAWN_STATE.md NEXT TARGET.)
+
+WHERE TO PLAN LORE/TIERS
+
+- docs/CURSOR_MASTER_PLANNING_SPEC.md — umbrella planning brief (T1–T4 canon, tensions, overlays).
 
 LOG (newest first)
 
+2026-04-27  Crash hardening: world_meaning_safe.gd wraps get_zone_tags (stale copy / wrong folder). All call sites use preload safe wrapper. ObserverHUD work-focus line: no %d%% (avoids format errors). Pull full repo if warnings persist.
+2026-04-27  Death facts now store profession + parent ids (WorldMemory.record_pawn_death); pawn_death_fact(pid); lineage UI uses them for departed parents and inheritance vs dead parents. PawnData.profession_label_from_enum centralizes labels.
+2026-04-27  Long-run hygiene: WorldMeaning.get_zone_tags() implemented (settlement_persistence / settlement_identity / observer_lens crash fix). ObserverHUD harness line: removed broken printf-style format (spam errors). WorldMemory.last_known_name_from_death_record(pid). PawnSpawner.pawn_data_for_id; PawnInfoPanel Lineage section (parents, profession, inheritance note when parent alive + same locked profession).
 2026-04-27  tools/: Resolve-Godot.ps1, Verify-Project.ps1, Download-GodotPortable.ps1; portable Godot 4.6.2 optional under tools/godot (gitignored). settlement_identity.gd: removed class_name (conflicted with SettlementIdentity autoload — parse fix).
 2026-04-25  Docs-only cleanup: docs/HEELKAWN_STATE.md kept as sole authoritative state file; handoff docs aligned.
 2026-04-25  PawnData.gd: trait loops hardened (null skip, tr not trait); match arms split one-line.

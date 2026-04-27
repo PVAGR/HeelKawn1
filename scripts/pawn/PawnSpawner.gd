@@ -82,6 +82,15 @@ func remove_pawn(pawn: Pawn) -> void:
 		pawn.queue_free()
 
 
+func pawn_data_for_id(pid: int) -> PawnData:
+	if pid < 0:
+		return null
+	for p in pawns:
+		if p != null and is_instance_valid(p) and p.data != null and p.data.id == pid:
+			return p.data
+	return null
+
+
 ## Dump a needs + skills table for all pawns. Hotkeyed to T by Main.gd.
 func print_stats() -> void:
 	print("[Stats] --- pawn needs (tick %d) ---" % GameManager.tick_count)

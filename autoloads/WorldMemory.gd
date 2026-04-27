@@ -3,6 +3,8 @@ extends Node
 ## Events are plain Dictionaries for trivial save/load via Main snapshot.
 
 const SCHEMA: int = 1
+## Text/history export line format; bump when column order or provenance rules change.
+const HISTORY_EXPORT_FORMAT: String = "1.0.0"
 const MAX_EVENTS: int = 5000
 
 enum Kind {
@@ -57,9 +59,12 @@ func record_pawn_death(
 		tile: Vector2i,
 		pawn_id: int,
 		pawn_name: String,
-		cause: String
+		cause: String,
+		prof_at_death: int = -1,
+		parent_a_snapshot: int = -1,
+		parent_b_snapshot: int = -1
 	) -> void:
-	_append({
+	var e: Dictionary = {
 		"s": SCHEMA,
 		"k": int(Kind.PAWN_DEATH),
 		"t": tick,
@@ -69,7 +74,14 @@ func record_pawn_death(
 		"pid": pawn_id,
 		"n": pawn_name,
 		"c": cause,
-	})
+	}
+	if prof_at_death >= 0:
+		e["prof"] = prof_at_death
+	if parent_a_snapshot >= 0:
+		e["pa"] = parent_a_snapshot
+	if parent_b_snapshot >= 0:
+		e["pb"] = parent_b_snapshot
+	_append(e)
 
 
 func record_animal_death(
@@ -263,13 +275,29 @@ func _provenance_hash_stub(evt: Dictionary) -> String:
 	return "h%08x" % h
 
 
+func _export_subject_redacted(subject: Variant, anonymize: bool) -> String:
+	var s: String = str(subject)
+	if not anonymize:
+		return s
+	var st: String = s.strip_edges()
+	if st.is_valid_int():
+		var vi: int = int(st)
+		return "anon_%08x" % (abs(vi * 486187739) & 0xFFFFFFFF)
+	return s
+
+
 ## Read-only deterministic export snapshot (no file IO).
-func get_history_export_string() -> String:
+## Pass [code]anonymize_subjects[/code] for pvabazaar-style sharing (numeric ids hashed in SUB column).
+func get_history_export_string(anonymize_subjects: bool = false) -> String:
 	var out: PackedStringArray = []
-	out.append("HEELKAWN HISTORY EXPORT - KERNEL v0.7.1")
+	out.append("HEELKAWN_HISTORY_EXPORT v=%s schema=%d" % [HISTORY_EXPORT_FORMAT, SCHEMA])
+	out.append(
+		"EXPORT_MODE: %s" % ("public_redacted" if anonymize_subjects else "private_dev")
+	)
+	out.append("TICKS_PER_SIM_YEAR: %d" % SimTime.TICKS_PER_SIM_YEAR)
 	out.append("TICK_RANGE: 0 to %d" % GameManager.tick_count)
 	out.append("EVENT_COUNT: %d" % _events.size())
-	out.append("FORMAT: [tick] type | subject | cause | impact | provenance_hash")
+	out.append("COLUMNS: tick | type | subject | cause | impact | provenance_hash")
 	out.append("==============================================================")
 	for evt in _events:
 		var tick: int = int(evt.get("t", 0))
@@ -284,7 +312,10 @@ func get_history_export_string() -> String:
 				type_name = "social_fragment"
 			elif k == int(Kind.SOCIAL_SCHISM):
 				type_name = "social_schism"
-		var subject: String = str(evt.get("pawn_id", evt.get("pid", evt.get("sp", "n/a"))))
+		var subject: String = _export_subject_redacted(
+			evt.get("pawn_id", evt.get("pid", evt.get("sp", "n/a"))),
+			anonymize_subjects
+		)
 		var cause: String = str(evt.get("cause", evt.get("action", evt.get("c", evt.get("reason", "n/a")))))
 		var impact: String = str(evt.get("impact", evt.get("amount", evt.get("total_xp", evt.get("executed", "n/a")))))
 		out.append("[T:%d] %s | SUB:%s | CAUSE:%s | IMP:%s | PROV:%s" % [
@@ -294,6 +325,25 @@ func get_history_export_string() -> String:
 
 
 ## Impact buckets for [param zone_id] (center region id as decimal string). Uses [SettlementMemory] region packs when present.
+## Latest pawn-death event for [param pawn_id], or empty dict (newest matching record).
+func pawn_death_fact(pawn_id: int) -> Dictionary:
+	if pawn_id < 0:
+		return {}
+	for i in range(_events.size() - 1, -1, -1):
+		var e: Dictionary = _events[i]
+		if int(e.get("k", -1)) != int(Kind.PAWN_DEATH):
+			continue
+		if int(e.get("pid", -1)) != pawn_id:
+			continue
+		return e.duplicate(true)
+	return {}
+
+
+## Last recorded name for a pawn id from a pawn death fact, or empty.
+func last_known_name_from_death_record(pawn_id: int) -> String:
+	return str(pawn_death_fact(pawn_id).get("n", ""))
+
+
 func get_zone_aggregate(zone_id: String) -> Dictionary:
 	var empty: Dictionary = {
 		"builds": 0,

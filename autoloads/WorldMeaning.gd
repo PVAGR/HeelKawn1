@@ -114,3 +114,38 @@ func total_regions_with_deaths() -> int:
 		if int(rec.get("total_deaths", 0)) > 0:
 			n += 1
 	return n
+
+
+## Derived tags for a settlement zone (zone_id string is decimal center_region).
+## Deterministic facts + regional meaning only (no RNG). Used by revival, identity, observer lens.
+func get_zone_tags(zone_id: String) -> PackedStringArray:
+	var tags: PackedStringArray = PackedStringArray()
+	if zone_id.is_empty() or not zone_id.is_valid_int():
+		return tags
+	var ckr: int = int(zone_id)
+	if ckr < 0:
+		return tags
+
+	var stats: Dictionary = WorldMemory.get_zone_aggregate(zone_id)
+	var ml: String = get_region_meaning_label(ckr)
+	var deaths_proxy: int = int(stats.get("death_clusters", 0))
+	var builds_proxy: int = int(stats.get("builds", 0))
+	var monuments_proxy: int = int(stats.get("monuments", 0))
+	var bio_exh: int = int(stats.get("biome_exhaustion", 0))
+
+	# Quiet land + no exhaustion proxy → eligible for stabilization / revival framing
+	if ml == "quiet" and bio_exh == 0:
+		tags.append("stabilizing_biome")
+
+	match ml:
+		"scarred", "bloodied", "grave":
+			tags.append("echo_falls")
+
+	if ml == "grave" or deaths_proxy >= 6:
+		tags.append("ancient_ruin")
+
+	# Repeated governance / intent signal → “myth-grade” footprint (deterministic thresholds)
+	if builds_proxy >= 2 or monuments_proxy >= 2:
+		tags.append("myth_origin")
+
+	return tags

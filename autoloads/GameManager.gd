@@ -14,16 +14,16 @@ const TICK_INTERVAL_SECONDS: float = 0.1
 ## "overnight farming" tier -- fine for running an established colony, but at
 ## this rate a single _process frame can queue many sim ticks so any per-tick
 ## work (pathing, allocations) amplifies. Keep hot paths cheap.
-const SPEED_STEPS: Array[float] = [1.0, 3.0, 6.0, 12.0, 26.0, 50.0]
+const SPEED_STEPS: Array[float] = [1.0, 3.0, 6.0, 12.0, 26.0, 50.0, 100.0]
 ## Set true only when actively debugging pawn/animal internals.
 const VERBOSE_SIM_LOGS: bool = false
 ## Hard cap to prevent "catch-up storms" where one slow frame triggers hundreds
 ## of ticks and causes visible stutter. Extra accumulated time stays buffered
 ## and is processed over subsequent frames.
-const MAX_TICKS_PER_FRAME: int = 6
+const MAX_TICKS_PER_FRAME: int = 8
 ## Prevent runaway catch-up after a hitch. We keep sim responsive by dropping
 ## excessive backlog instead of trying to replay seconds of queued ticks.
-const MAX_ACCUMULATED_TICKS: int = 12
+const MAX_ACCUMULATED_TICKS: int = 16
 
 var game_speed: float = 1.0
 var is_paused: bool = false
@@ -38,6 +38,20 @@ var _tick_accumulator: float = 0.0
 
 func verbose_logs() -> bool:
 	return VERBOSE_SIM_LOGS
+
+
+## Lightweight read-only snapshot for HUD / tooling (tick backlog estimate in sim steps).
+func sim_diag() -> Dictionary:
+	var queued_ticks_est: float = _tick_accumulator / TICK_INTERVAL_SECONDS
+	return {
+		"tick_count": tick_count,
+		"speed": game_speed,
+		"paused": is_paused,
+		"max_ticks_per_frame": MAX_TICKS_PER_FRAME,
+		"max_accumulated_ticks": MAX_ACCUMULATED_TICKS,
+		"accumulator_sec": _tick_accumulator,
+		"queued_ticks_est": queued_ticks_est,
+	}
 
 
 func _ready() -> void:

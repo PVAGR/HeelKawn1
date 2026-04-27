@@ -2,6 +2,10 @@
 
 Use this file as the quick map of all world canon files.
 
+## Planning
+
+- [`../CURSOR_MASTER_PLANNING_SPEC.md`](../CURSOR_MASTER_PLANNING_SPEC.md) - canon tiers, lore/mechanics roadmap, tensions; umbrella brief for Cursor (read after `HEELKAWN_STATE.md`)
+
 ## Core Lore
 
 - `GAME_VISION.md` - long-horizon product vision and design DNA

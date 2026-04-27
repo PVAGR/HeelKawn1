@@ -1,5 +1,7 @@
 extends Node
 
+const _ZoneTags := preload("res://scripts/kernel/world_meaning_safe.gd")
+
 signal settlement_state_changed(settlement_id: String, old_state: String, new_state: String)
 
 # === Tuning (Phase 4.1) — change one lever at a time, run to ~5k ticks, read [Persistence] logs ===
@@ -42,7 +44,7 @@ func _evaluate_single_zone(zone_id: String) -> void:
 	if stats.is_empty():
 		return
 
-	var tags: PackedStringArray = WorldMeaning.get_zone_tags(zone_id)
+	var tags: PackedStringArray = _ZoneTags.zone_tags(zone_id)
 	var score: int = _compute_impact_score(stats)
 
 	var old_state: String = str(settlement.get("state", ""))

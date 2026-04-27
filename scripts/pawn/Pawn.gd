@@ -2274,8 +2274,8 @@ func _decay_needs() -> void:
 	if crisis_level > 0.8 and randf() < 0.05:  # 5% chance per tick to strike when desperate
 		_trigger_crisis_strike()
 	
-	# Sim step duration in real seconds; advance biological age in years.
-	data.age_years += GameManager.TICK_INTERVAL_SECONDS / 60.0 / 60.0 / 24.0 / 365.0
+	# One in-world year every SimTime.TICKS_PER_SIM_YEAR ticks (see docs/TIME_SCALE.md).
+	data.age_years += 1.0 / float(SimTime.TICKS_PER_SIM_YEAR)
 	if data.age_years > 70.0 and randf() < 0.00001:
 		_die("old_age")
 		return
@@ -2353,7 +2353,14 @@ func _die(_p_cause: String = "") -> void:
 			else:
 				mem_cause = "unknown"
 		WorldMemory.record_pawn_death(
-			GameManager.tick_count, data.tile_pos, data.id, data.display_name, mem_cause
+				GameManager.tick_count,
+				data.tile_pos,
+				data.id,
+				data.display_name,
+				mem_cause,
+				int(data.current_profession),
+				data.parent_a_id,
+				data.parent_b_id,
 		)
 		var main_node: Node = get_tree().get_root().get_node_or_null("Main")
 		if main_node != null and main_node.has_method("register_pawn_death"):

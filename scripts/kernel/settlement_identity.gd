@@ -1,6 +1,8 @@
 extends Node
 ## Autoload singleton (must not use [class_name] — same symbol as node name hides the autoload).
 
+const _ZoneTags := preload("res://scripts/kernel/world_meaning_safe.gd")
+
 ## Fired when an abandoned settlement reoccupies and receives a full identity.
 signal identity_resolved(resolved_id: String, name: String, traits: PackedStringArray, lineage_parent: String)
 
@@ -23,7 +25,7 @@ func resolve_for(settlement: Dictionary) -> Dictionary:
 	var stats: Dictionary = WorldMemory.get_zone_aggregate(zone_id)
 
 	var traits: PackedStringArray = PackedStringArray()
-	for tag in WorldMeaning.get_zone_tags(zone_id):
+	for tag in _ZoneTags.zone_tags(zone_id):
 		if tag in TRAIT_TAGS and not _traits_has_label(traits, str(TRAIT_TAGS[tag])):
 			traits.append(str(TRAIT_TAGS[tag]))
 	# From persist flags

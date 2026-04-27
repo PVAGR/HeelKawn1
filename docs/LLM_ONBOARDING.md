@@ -8,6 +8,8 @@ If you are an AI assisting with this project:
 2. HEELKAWN.txt
 3. README.md
 
+For planning, tiered canon, lore vs kernel scope, or roadmap-heavy work, also read **docs/CURSOR_MASTER_PLANNING_SPEC.md** after the files above.
+
 ## DO NOT:
 
 - introduce randomness

@@ -313,7 +313,13 @@ func _profession_primary_skill(prof: int) -> String:
 
 
 func profession_name() -> String:
-	match current_profession:
+	return profession_label_from_enum(int(current_profession))
+
+
+static func profession_label_from_enum(prof: int) -> String:
+	match prof:
+		Profession.NONE:
+			return "None"
 		Profession.FARMER:
 			return "Farmer"
 		Profession.BUILDER:

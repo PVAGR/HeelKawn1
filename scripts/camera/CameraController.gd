@@ -52,7 +52,7 @@ func reset_to_world_bounds(world: Node) -> void:
 	if world == null or not (world is World):
 		return
 	var w: World = world as World
-	var center_tile: Vector2i = Vector2i(int(WorldData.WIDTH / 2), int(WorldData.HEIGHT / 2))
+	var center_tile: Vector2i = Vector2i(WorldData.WIDTH >> 1, WorldData.HEIGHT >> 1)
 	position = w.tile_to_world(center_tile)
 	var viewport_size: Vector2 = get_viewport_rect().size
 	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:

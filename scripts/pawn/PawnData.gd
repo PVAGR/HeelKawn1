@@ -374,10 +374,10 @@ func initialize_affinities(new_birth_tick: int, parent_a: int, parent_b: int) ->
 
 
 func _deterministic_affinity_value(salt: int) -> float:
-	var seed: int = int(
+	var aff_seed: int = int(
 		(birth_tick * 1103515245 + (parent_a_id + 31) * 12345 + (parent_b_id + 17) * 2654435761 + id * 97 + salt) & 0x7FFFFFFF
 	)
-	var modv: int = seed % 1000
+	var modv: int = aff_seed % 1000
 	return float(modv) / 999.0
 
 

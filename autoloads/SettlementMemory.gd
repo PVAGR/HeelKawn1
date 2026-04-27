@@ -86,6 +86,24 @@ var _war_battle_spawned: Dictionary = {}
 var _validation_smoketest_autoload_printed: bool = false
 var _validation_smoketest_main_printed: bool = false
 
+## Phase 8 HUD overlay: bundle lines for proof observability ([Main] listens in debug builds).
+signal phase8_proof_bundle_emitted(bundle_line: String)
+var _phase8_proof_terminal_line: String = ""
+var _phase8_proof_latest_bundle_line: String = ""
+var _phase8_proof_preferred_center_region: int = -1
+
+
+func get_phase8_proof_terminal_line() -> String:
+	return _phase8_proof_terminal_line
+
+
+func get_phase8_proof_latest_bundle_line() -> String:
+	return _phase8_proof_latest_bundle_line
+
+
+func set_phase8_proof_preferred_center_region(center_region: int) -> void:
+	_phase8_proof_preferred_center_region = center_region
+
 
 func _ready() -> void:
 	_print_validation_smoketest("SettlementMemory.autoload")

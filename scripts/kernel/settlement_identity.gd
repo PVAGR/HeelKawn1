@@ -50,17 +50,17 @@ func resolve_for(settlement: Dictionary) -> Dictionary:
 
 
 func _derive_name(zone_id: String, era: int, trait_count: int) -> String:
-	var seed: int = 0
+	var name_seed: int = 0
 	for i in range(zone_id.length()):
-		seed = (seed * 31 + zone_id.unicode_at(i)) & 0x7FFFFFFF
-	seed = (seed ^ era ^ (trait_count * 37)) & 0x7FFFFFFF
+		name_seed = (name_seed * 31 + zone_id.unicode_at(i)) & 0x7FFFFFFF
+	name_seed = (name_seed ^ era ^ (trait_count * 37)) & 0x7FFFFFFF
 	var prefixes: Array[String] = [
 		"Ash", "Stone", "Root", "Iron", "Salt", "Wind", "Marrow", "Ember"
 	]
 	var suffixes: Array[String] = [
 		"hold", "weald", "crest", "ford", "vale", "reach", "peak", "fen"
 	]
-	return "%s%s" % [prefixes[(seed >> 8) % 8], suffixes[(seed >> 4) % 8]]
+	return "%s%s" % [prefixes[(name_seed >> 8) % 8], suffixes[(name_seed >> 4) % 8]]
 
 
 static func _traits_has_label(traits: PackedStringArray, label: String) -> bool:

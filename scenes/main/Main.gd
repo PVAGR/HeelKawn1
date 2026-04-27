@@ -218,6 +218,13 @@ func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) 
 func _pawn_divergence_detail_logs_enabled() -> bool:
 	if not OS.is_debug_build():
 		return false
+	# Per-claim lines (bind/skip/scored) can print hundreds per tick → editor/game hitching.
+	# Enable only when a harness const asks for it, not normal DEBUG playtests.
+	if not (
+			SettlementMemory.VALIDATION_SESSION_ENABLED
+			or SettlementMemory.SPECIALIZATION_VALIDATION_LOG_ENABLED
+	):
+		return false
 	if GameManager.game_speed >= 26.0:
 		return false
 	return true

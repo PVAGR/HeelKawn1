@@ -48,6 +48,8 @@ const RESOURCE_BALANCE_MATERIAL_LOW_MAX: int = 6
 const RESOURCE_BALANCE_MATERIAL_STOCKED_MAX: int = 18
 const PHASE8_PROOF_RUNNER_AUTO_ENABLED: bool = true
 const PHASE8_PROOF_RUNNER_MAX_WAIT_TICKS: int = 30000
+## Debug-only: freeze simulation when terminal proof PASS/FAIL/INCONCLUSIVE is emitted so the result stays on-screen.
+const PHASE8_PROOF_PAUSE_ON_TERMINAL_RESULT: bool = true
 ## Work-focus specialization identity is derived ONLY from cached [resource_pressure]
 ## (job-demand proxy). It is NOT true stock scarcity; read-only for HUD/diagnostics.
 const SPECIALIZATION_PHASE_UNKNOWN: String = "UNKNOWN"
@@ -118,6 +120,8 @@ var _phase8_proof_runner_started_tick: int = -1
 var _phase8_proof_runner_armed_once: bool = false
 var _phase8_proof_run_id: String = ""
 var _phase8_proof_terminal_summary_emitted: bool = false
+## Final terminal summary line for this run; freezes bundle heartbeat once set (debug UX).
+var _phase8_proof_terminal_line: String = ""
 
 
 func _ready() -> void:
@@ -128,6 +132,9 @@ func _ready() -> void:
 func _phase8_proof_reset_session_state() -> void:
 	if not OS.is_debug_build():
 		return
+	var tree: SceneTree = get_tree()
+	if tree != null and tree.paused:
+		tree.paused = false
 	_phase8_proof_latest_bundle_line = ""
 	_phase8_proof_preferred_center_region = -1
 	_phase8_proof_last_clipboard_line = ""
@@ -147,6 +154,7 @@ func _phase8_proof_reset_session_state() -> void:
 	_phase8_proof_runner_started_tick = -1
 	_phase8_proof_runner_armed_once = false
 	_phase8_proof_terminal_summary_emitted = false
+	_phase8_proof_terminal_line = ""
 	_phase8_proof_run_id = "run_%d_%d" % [Time.get_unix_time_from_system(), Time.get_ticks_msec()]
 	print("[PHASE8_PROOF_SESSION] run_id=%s status=reset" % _phase8_proof_run_id)
 
@@ -1053,6 +1061,20 @@ func get_phase8_proof_latest_bundle_line() -> String:
 	return _phase8_proof_latest_bundle_line
 
 
+func get_phase8_proof_terminal_line() -> String:
+	return _phase8_proof_terminal_line
+
+
+func _phase8_proof_debug_pause_on_terminal_result() -> void:
+	if not OS.is_debug_build() or not PHASE8_PROOF_PAUSE_ON_TERMINAL_RESULT:
+		return
+	var tree: SceneTree = get_tree()
+	if tree == null or tree.paused:
+		return
+	tree.paused = true
+	print("[PHASE8_PROOF] paused=true note=terminal_result_visibility tree_can_unpause_on_next_debug_session_reset")
+
+
 func _phase8_proof_bundle_line_for_settlement(st: Dictionary, tick: int, source: String) -> String:
 	var center: int = int(st.get("center_region", -1))
 	var committed_state: String = str(st.get("state", "unknown"))
@@ -1132,6 +1154,8 @@ func _phase8_proof_try_clipboard_set(text: String) -> bool:
 
 func _emit_phase8_proof_bundle(tick: int) -> void:
 	if not OS.is_debug_build():
+		return
+	if _phase8_proof_terminal_line != "":
 		return
 	var chosen: Dictionary = _pick_phase8_proof_bundle_settlement()
 	var line: String = ""
@@ -1319,9 +1343,11 @@ func _emit_phase8_proof_result(result: String, reason: String) -> void:
 		int(r.get("total_stock_units", 0)),
 	]
 	print(summary_line)
+	_phase8_proof_terminal_line = summary_line
 	_phase8_proof_latest_bundle_line = summary_line
 	phase8_proof_bundle_emitted.emit(summary_line)
 	_phase8_proof_try_clipboard_set(summary_line)
+	_phase8_proof_debug_pause_on_terminal_result()
 
 
 func _phase8_proof_find_settlement_by_center(center_region: int) -> Dictionary:

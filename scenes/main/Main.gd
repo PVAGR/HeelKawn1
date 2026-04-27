@@ -977,22 +977,43 @@ func _init_phase8_proof_overlay() -> void:
 	_phase8_proof_overlay_text.scroll_active = true
 	_phase8_proof_overlay_text.selection_enabled = false
 	_phase8_proof_overlay_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_phase8_proof_overlay_text.position = Vector2(8, 64)
-	_phase8_proof_overlay_text.size = Vector2(1240, 56)
+	_phase8_proof_overlay_text.position = Vector2(8, 56)
+	_phase8_proof_overlay_text.size = Vector2(1240, 96)
 	_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 10)
 	_phase8_proof_overlay_layer.add_child(_phase8_proof_overlay_text)
 	if not SettlementMemory.phase8_proof_bundle_emitted.is_connected(_on_phase8_proof_bundle_emitted):
 		SettlementMemory.phase8_proof_bundle_emitted.connect(_on_phase8_proof_bundle_emitted)
-	var last_line: String = SettlementMemory.get_phase8_proof_latest_bundle_line()
+	var terminal_line: String = SettlementMemory.get_phase8_proof_terminal_line()
+	var last_line: String = ""
+	if terminal_line != "":
+		last_line = terminal_line
+	else:
+		last_line = SettlementMemory.get_phase8_proof_latest_bundle_line()
 	if last_line == "":
 		last_line = "[PHASE8_PROOF_BUNDLE] waiting_for_first_resource_truth_tick..."
 	_phase8_proof_overlay_text.text = last_line
+	_refresh_phase8_proof_overlay_style()
+
+
+func _refresh_phase8_proof_overlay_style() -> void:
+	if _phase8_proof_overlay_text == null or not is_instance_valid(_phase8_proof_overlay_text):
+		return
+	var terminal_line: String = SettlementMemory.get_phase8_proof_terminal_line()
+	if terminal_line != "":
+		_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 13)
+	else:
+		_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 10)
 
 
 func _on_phase8_proof_bundle_emitted(bundle_line: String) -> void:
 	if _phase8_proof_overlay_text == null or not is_instance_valid(_phase8_proof_overlay_text):
 		return
-	_phase8_proof_overlay_text.text = bundle_line
+	var terminal_line: String = SettlementMemory.get_phase8_proof_terminal_line()
+	if terminal_line != "":
+		_phase8_proof_overlay_text.text = terminal_line
+	else:
+		_phase8_proof_overlay_text.text = bundle_line
+	_refresh_phase8_proof_overlay_style()
 
 
 func _update_phase8_proof_bundle_preferred_center() -> void:

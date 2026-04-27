@@ -6,39 +6,69 @@ extends CanvasLayer
 const PANEL_W: int = 460
 const PAD: int = 10
 
-## id -> label (order = button order)
-const DEBUG_REPORT_ROWS: Array[Dictionary] = [
-	{"id": "calendar", "label": "01 · Calendar + day/night + long-run checkpoints"},
-	{"id": "sim_diag", "label": "02 · GameManager sim_diag (speed / tick caps)"},
-	{"id": "colony_sim", "label": "03 · ColonySimServices (pressures + labor stance)"},
-	{"id": "intent", "label": "04 · IntentMemory (global + per-center intents)"},
-	{"id": "age", "label": "05 · AgeMemory (epoch index + signature)"},
-	{"id": "settlements", "label": "06 · SettlementMemory (all clusters)"},
-	{"id": "registry", "label": "07 · SettlementRegistry (abandon / overlay keys)"},
-	{"id": "revival", "label": "08 · Camera / nearest revival digest"},
-	{"id": "rebirth", "label": "09 · SettlementRebirth (constants + session cooldown keys)"},
-	{"id": "wildlife", "label": "10 · Wildlife snapshot (Main path)"},
-	{"id": "jobs_stock", "label": "11 · Jobs + stockpile zones"},
-	{"id": "trade", "label": "12 · TradeMemory (T2 / routes / last T2 tick)"},
-	{"id": "world_events", "label": "13 · WorldEvents (active temp + efficiency mult)"},
-	{"id": "world_memory", "label": "14 · WorldMemory (count + last 25 events)"},
-	{"id": "history_snip", "label": "15 · WorldMemory history export (truncated)"},
-	{"id": "world_meaning", "label": "16 · WorldMeaning (region count + sample)"},
-	{"id": "world_persist", "label": "17 · WorldPersistence (scar/recovery sample)"},
-	{"id": "cultural", "label": "18 · CulturalMemory (reputation sample)"},
-	{"id": "myth", "label": "19 · MythMemory (rebirth counts + myth sample)"},
-	{"id": "road", "label": "20 · RoadMemory (summary if API exists)"},
-	{"id": "remnant", "label": "21 · RemnantMemory (tile delta probe 0,0 + 64,64)"},
-	{"id": "pawns", "label": "22 · All pawns (spawner list)"},
-	{"id": "main_world", "label": "23 · Main world (beds + spawners)"},
-	{"id": "kernel", "label": "24 · KernelDiagnostic.generate_session_log_summary"},
-	{"id": "harness", "label": "25 · Validation / harness flags"},
-	{"id": "profession_liking", "label": "26 · Pawn profession liking (lanes + job bias)"},
-	{"id": "vision_scope", "label": "27 · Vision scope (SimVision roadmap stub)"},
-	{"id": "player_intents", "label": "28 · PlayerIntentQueue (spec + session queue)"},
-	{"id": "factions", "label": "29 · FactionRegistry (house stub per settlement)"},
-	{"id": "religion_lens", "label": "30 · ReligionLens (read-only sacred+myth overlay)"},
-	{"id": "playtest_bundle", "label": "31 · Playtest bundle (one paste)"},
+## Sectioned menu: importance-ish order (playtest first, stubs last).
+const DEBUG_SECTIONS: Array[Dictionary] = [
+	{
+		"heading": "Playtest / session truth",
+		"rows": [
+			{"id": "playtest_bundle", "label": "31 · Playtest bundle (one paste)"},
+			{"id": "calendar", "label": "01 · Calendar + day/night + checkpoints"},
+			{"id": "sim_diag", "label": "02 · GameManager sim_diag"},
+			{"id": "kernel", "label": "24 · KernelDiagnostic session summary"},
+			{"id": "harness", "label": "25 · Validation / harness flags"},
+			{"id": "colony_sim", "label": "03 · ColonySimServices"},
+		],
+	},
+	{
+		"heading": "Settlements · economy · jobs",
+		"rows": [
+			{"id": "settlements", "label": "06 · SettlementMemory (clusters)"},
+			{"id": "registry", "label": "07 · SettlementRegistry"},
+			{"id": "intent", "label": "04 · IntentMemory"},
+			{"id": "jobs_stock", "label": "11 · Jobs + stockpile zones"},
+			{"id": "trade", "label": "12 · TradeMemory"},
+			{"id": "world_events", "label": "13 · WorldEvents"},
+			{"id": "cultural", "label": "18 · CulturalMemory"},
+		],
+	},
+	{
+		"heading": "World · camera · revival",
+		"rows": [
+			{"id": "revival", "label": "08 · Camera / revival digest"},
+			{"id": "rebirth", "label": "09 · SettlementRebirth constants"},
+			{"id": "wildlife", "label": "10 · Wildlife snapshot"},
+			{"id": "road", "label": "20 · RoadMemory"},
+			{"id": "remnant", "label": "21 · RemnantMemory"},
+			{"id": "main_world", "label": "23 · Main world (beds + spawners)"},
+		],
+	},
+	{
+		"heading": "Memory layers (heavy dumps)",
+		"rows": [
+			{"id": "world_memory", "label": "14 · WorldMemory"},
+			{"id": "history_snip", "label": "15 · WorldMemory history export"},
+			{"id": "world_meaning", "label": "16 · WorldMeaning"},
+			{"id": "world_persist", "label": "17 · WorldPersistence"},
+			{"id": "myth", "label": "19 · MythMemory"},
+			{"id": "age", "label": "05 · AgeMemory"},
+		],
+	},
+	{
+		"heading": "Pawns · specialization",
+		"rows": [
+			{"id": "pawns", "label": "22 · All pawns"},
+			{"id": "profession_liking", "label": "26 · Profession liking"},
+		],
+	},
+	{
+		"heading": "Stubs · narrative scaffolding",
+		"rows": [
+			{"id": "vision_scope", "label": "27 · Vision scope (SimVision stub)"},
+			{"id": "player_intents", "label": "28 · PlayerIntentQueue"},
+			{"id": "factions", "label": "29 · FactionRegistry"},
+			{"id": "religion_lens", "label": "30 · ReligionLens"},
+		],
+	},
 ]
 
 var _root_panel: PanelContainer = null
@@ -123,24 +153,36 @@ func _build_ui() -> void:
 	_vbox.add_theme_constant_override("separation", 5)
 	_scroll.add_child(_vbox)
 	var title: Label = Label.new()
-	title.text = "HeelKawn — Creator debug (F10 · Esc · F6 tile focus)"
+	title.text = "HeelKawn — Creator debug (F10 · Esc)"
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_font_size_override("font_size", 15)
+	title.modulate = Color(0.95, 0.87, 0.55)
 	_vbox.add_child(title)
 	var hint: Label = Label.new()
-	hint.text = "Deterministic sim: no RNG in world history. Copy blocks between === from Output for the AI.\nInstall extensions: open Command Palette → \"Extensions: Show Recommended Extensions\"."
+	hint.text = "Sections ordered by usefulness. Deterministic kernel: copy blocks between === from Output."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.add_theme_font_size_override("font_size", 14)
+	hint.add_theme_font_size_override("font_size", 12)
 	_vbox.add_child(hint)
-	for row in DEBUG_REPORT_ROWS:
-		_add_report_button(str(row.get("label", "?")), str(row.get("id", "")))
+	for sec in DEBUG_SECTIONS:
+		var hl: Label = Label.new()
+		hl.text = str(sec.get("heading", ""))
+		hl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		hl.add_theme_font_size_override("font_size", 13)
+		hl.modulate = Color(0.55, 0.72, 0.95)
+		_vbox.add_child(hl)
+		var rows_v: Variant = sec.get("rows", [])
+		if rows_v is Array:
+			for row_any in rows_v:
+				if row_any is Dictionary:
+					var rowd: Dictionary = row_any as Dictionary
+					_add_report_button(str(rowd.get("label", "?")), str(rowd.get("id", "")))
 
 
 func _add_report_button(label_text: String, report_id: String) -> void:
 	var b: Button = Button.new()
 	b.text = label_text
-	b.add_theme_font_size_override("font_size", 15)
-	b.custom_minimum_size = Vector2(PANEL_W - 40, 30)
+	b.add_theme_font_size_override("font_size", 13)
+	b.custom_minimum_size = Vector2(PANEL_W - 40, 26)
 	b.pressed.connect(_emit_report.bind(report_id))
 	_vbox.add_child(b)
 

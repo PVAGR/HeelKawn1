@@ -30,6 +30,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-27  Observer UX: `` ` `` toggles HUD+toolbar+pawn sheet (map-only); `G` camera-follow selected pawn (middle-mouse clears); `=` / numpad + toggles verbose HUD lines. Colony HUD compact by default + lighter panel alpha. Smaller fonts + narrower pawn panel. F10 Creator debug grouped by section (playtest→stubs). Stretch scale 1.0.
 2026-04-27  Readable UI: default window 1280×720; stretch scale 1.12 + fractional; ColonyHUD/PawnInfo/Toolbar/Observer/Focus/CreatorDebug fonts bumped; ColonyHUD panel min size; Phase8 proof overlay fonts. Editor: disable Embedded Game or maximize game dock if the play window still looks letterboxed.
 2026-04-27  Display stretch: project.godot canvas_items + expand + fractional scale (fills window, no letterbox pillarboxing). CreatorDebugMenu (F10): anchored full viewport, panel + scroll + buttons resize with size_changed.
 2026-04-27  Social peer label: resolve departed bonds via WorldMemory death facts (not only live PawnSpawner). Warning hygiene: WorldMemory/SettlementPlanner static dispatch; CameraController center_tile shift; AgeMemory unused tick; SettlementRebirth unused world; PawnInfoPanel rename `tr` (no Object.tr shadow).

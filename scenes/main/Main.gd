@@ -126,6 +126,10 @@ static var _world_stabilization_until_tick: int = -1
 ## Currently selected pawn (right-side info panel). null = nothing selected.
 ## Click a pawn to select; click empty ground or press Esc to deselect.
 var _selected_pawn: Pawn = null
+## HUD + bottom toolbar + pawn sheet visibility (`` ` `` toggles for map-first play).
+var _play_chrome_visible: bool = true
+## Smooth camera lock on selected pawn (`G`). Cleared by middle-mouse pan.
+var _camera_follow_selected: bool = false
 ## Deterministic local-control pawn. Defaults to current selection.
 var _player_pawn: Pawn = null
 var _player_input: PlayerInputBuffer = null
@@ -1155,7 +1159,20 @@ func _process(delta: float) -> void:
 	_meaning_ambient_mood = lerpf(
 		_meaning_ambient_mood, _get_meaning_ambient_mood_target(), minf(1.0, delta * MEANING_AMBIENT_SMOOTH)
 	)
-	_update_camera_meaning_bias(delta)
+	if Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
+		_camera_follow_selected = false
+	if (
+			_camera_follow_selected
+			and _selected_pawn != null
+			and is_instance_valid(_selected_pawn)
+			and _camera != null
+	):
+		var tgt: Vector2 = _selected_pawn.global_position
+		_camera.global_position = _camera.global_position.lerp(
+				tgt, clampf(delta * 8.0, 0.0, 1.0)
+		)
+	else:
+		_update_camera_meaning_bias(delta)
 	if (
 			_player_pawn != null
 			and is_instance_valid(_player_pawn)
@@ -1820,6 +1837,21 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
 	match event.keycode:
+		KEY_QUOTELEFT:
+			_toggle_play_chrome()
+		KEY_G:
+			if _selected_pawn != null and is_instance_valid(_selected_pawn):
+				_camera_follow_selected = not _camera_follow_selected
+				if OS.is_debug_build():
+					print("[Main] Camera follow selection: %s" % _camera_follow_selected)
+			else:
+				_camera_follow_selected = false
+		KEY_EQUAL:
+			if _hud != null:
+				_hud.toggle_hud_verbose()
+		KEY_KP_ADD:
+			if _hud != null:
+				_hud.toggle_hud_verbose()
 		KEY_SPACE:
 			GameManager.toggle_pause()
 		KEY_1:
@@ -2298,6 +2330,26 @@ func _set_selected_pawn(p: Pawn) -> void:
 			print("[Main] Selection cleared")
 	if _info_panel != null:
 		_info_panel.bind_pawn(_selected_pawn)
+
+
+func _sync_play_chrome() -> void:
+	if _hud != null:
+		_hud.visible = _play_chrome_visible
+	if _toolbar != null:
+		_toolbar.visible = _play_chrome_visible
+	if _observer_hud != null and not _play_chrome_visible:
+		_observer_hud.visible = false
+	if _focus_inspector != null and not _play_chrome_visible:
+		_focus_inspector.visible = false
+	if _info_panel != null:
+		_info_panel.set_overlay_suppressed(not _play_chrome_visible)
+
+
+func _toggle_play_chrome() -> void:
+	_play_chrome_visible = not _play_chrome_visible
+	_sync_play_chrome()
+	if OS.is_debug_build():
+		print("[Main] Play chrome: %s" % ("on" if _play_chrome_visible else "off (map only)"))
 
 
 func _ensure_player_pawn_assigned() -> void:

@@ -61,7 +61,7 @@ window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/stretch/scale_mode="fractional"
-window/stretch/scale=1.12
+window/stretch/scale=1.0
 
 [rendering]
 

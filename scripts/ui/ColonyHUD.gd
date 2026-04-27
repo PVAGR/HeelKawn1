@@ -15,13 +15,12 @@ const WILDLIFE_HISTORY_SIZE: int = 8
 const PANEL_BG: Color = Color(0.05, 0.06, 0.08, 0.78)
 const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.70)
 
-# Readable on 720p+; scales with project stretch/scale.
-const FONT_SIZE_BODY: int = 16
-const FONT_SIZE_HOTKEYS: int = 12
+const FONT_SIZE_BODY: int = 12
+const FONT_SIZE_HOTKEYS: int = 9
 const PANEL_PAD_X: int = 6
 const PANEL_PAD_Y: int = 4
 
-const HOTKEY_HINTS: String = "SPACE pause · 1-7 speed · F5 save · F8 load · F9 observer · F10 creator debug · F6 tile focus · M labor · R reroll · T pawns · J jobs · I stockpile · B/W/O/Z build · F filter · Esc cancel"
+const HOTKEY_HINTS: String = "` map-only · G follow pawn · = full HUD · SPACE pause · 1-7 speed · F5/F8 · F9 observer · F10 debug · F6 focus · M labor · R reroll · B/W/O/Z · Esc"
 
 @onready var _panel: PanelContainer = $Panel
 @onready var _label: RichTextLabel = $Panel/Margin/VBox/Body
@@ -44,6 +43,14 @@ var _momentum_spark: String = "........"
 var _player_input_buffer: PlayerInputBuffer = null
 var _player_pawn: Pawn = null
 var _hud_dirty: bool = true
+## False = compact HUD (default). True = full detail (`=` toggles).
+var hud_verbose: bool = false
+
+
+func toggle_hud_verbose() -> void:
+	hud_verbose = not hud_verbose
+	_apply_panel_style()
+	_refresh()
 
 
 func _ready() -> void:
@@ -143,7 +150,9 @@ func _on_colony_demand(_f: float, _h: float, _m: float, _ha: float) -> void:
 
 func _apply_panel_style() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = PANEL_BG
+	var bg: Color = PANEL_BG
+	bg.a = 0.72 if hud_verbose else 0.36
+	style.bg_color = bg
 	style.border_color = PANEL_BORDER
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(3)
@@ -170,18 +179,19 @@ func _refresh() -> void:
 	lines.append(_time_line())
 	lines.append(_colony_state_line())
 	lines.append(_pawn_line())
-	lines.append(_player_status_line())
-	lines.append(_politics_line())
-	lines.append(_war_status_line())
-	lines.append(_skill_line())
-	lines.append(_kill_line())
-	lines.append(_export_status_line())
 	lines.append(_stockpile_line())
 	lines.append(_jobs_line())
 	lines.append(_wildlife_line())
-	lines.append(_settlement_revival_digest_line())
-	lines.append(_session_diag_line())
-	lines.append(_playtest_social_birth_hint_line())
+	if hud_verbose:
+		lines.append(_player_status_line())
+		lines.append(_politics_line())
+		lines.append(_war_status_line())
+		lines.append(_skill_line())
+		lines.append(_kill_line())
+		lines.append(_export_status_line())
+		lines.append(_settlement_revival_digest_line())
+		lines.append(_session_diag_line())
+		lines.append(_playtest_social_birth_hint_line())
 	_label.text = "\n".join(lines)
 
 

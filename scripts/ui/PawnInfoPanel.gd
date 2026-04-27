@@ -15,11 +15,11 @@ const TEXT_DIM:     Color = Color(0.70, 0.70, 0.75)
 const TEXT_BRIGHT:  Color = Color(0.96, 0.96, 0.98)
 const ACCENT:       Color = Color8(255, 209, 102)
 
-const FONT_TITLE: int = 18
-const FONT_BODY:  int = 14
-const FONT_SMALL: int = 12
+const FONT_TITLE: int = 13
+const FONT_BODY:  int = 11
+const FONT_SMALL: int = 10
 
-const PANEL_WIDTH:    float = 336.0
+const PANEL_WIDTH:    float = 268.0
 const RIGHT_INSET:    float = 8.0
 const TOP_INSET:      float = 8.0
 const PORTRAIT_COLS:  int = 6
@@ -68,6 +68,8 @@ var _hint_label: Label
 var _work_checkboxes: Dictionary = {}
 
 var _pawn: Pawn = null
+## When true (map-only mode), hide sheet even if a pawn is selected.
+var _overlay_suppressed: bool = false
 var _traits_label: Label = null
 var _lineage_label: Label = null
 var _appearance_label: Label = null
@@ -90,13 +92,26 @@ func _ready() -> void:
 
 # ==================== external API ====================
 
+func set_overlay_suppressed(s: bool) -> void:
+	if _overlay_suppressed == s:
+		return
+	_overlay_suppressed = s
+	if _overlay_suppressed:
+		_set_visible(false)
+	elif _pawn != null and is_instance_valid(_pawn):
+		_set_visible(true)
+
+
 ## Bind the panel to a specific pawn. Pass null to hide it.
 func bind_pawn(p: Pawn) -> void:
 	_pawn = p
 	if _pawn == null:
 		_set_visible(false)
 		return
-	_set_visible(true)
+	if _overlay_suppressed:
+		_set_visible(false)
+	else:
+		_set_visible(true)
 	_refresh()
 
 

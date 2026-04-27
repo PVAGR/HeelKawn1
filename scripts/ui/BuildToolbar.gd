@@ -45,8 +45,8 @@ const ACCENT_ZONE:  Color = Color8(255, 180, 100)  # warm "pile" amber
 const ACCENT_SAVE:  Color = Color8(100, 200, 140)  # save (disk)
 const ACCENT_LOAD:  Color = Color8(200, 160, 100)  # load / recall
 
-const FONT_SIZE_BUTTON: int = 15
-const FONT_SIZE_LABEL:  int = 12
+const FONT_SIZE_BUTTON: int = 11
+const FONT_SIZE_LABEL:  int = 9
 
 # ---- build mode entries ----
 const BUILD_ENTRIES: Array = [

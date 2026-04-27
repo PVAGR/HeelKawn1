@@ -3,7 +3,7 @@ extends CanvasLayer
 
 const PANEL_BG: Color = Color(0.05, 0.06, 0.08, 0.78)
 const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.70)
-const FONT_SIZE: int = 16
+const FONT_SIZE: int = 13
 
 @onready var _title: RichTextLabel = $Card/Margin/VBox/Title
 @onready var _type: RichTextLabel = $Card/Margin/VBox/Type

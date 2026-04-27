@@ -100,6 +100,9 @@ var _validation_smoketest_main_printed: bool = false
 var _phase8_proof_latest_bundle_line: String = ""
 var _phase8_proof_preferred_center_region: int = -1
 var _phase8_proof_last_clipboard_line: String = ""
+var _phase8_proof_clipboard_unavailable_logged: bool = false
+## Throttle bundle→clipboard mirrors: avoids repeated OS clipboard errors when clipboard is locked/unreachable.
+var _phase8_proof_last_bundle_clipboard_attempt_tick: int = -5000
 var _phase8_proof_runner_state: String = "idle"
 var _phase8_proof_runner_done: bool = false
 var _phase8_proof_runner_target_center_region: int = -1
@@ -1085,6 +1088,19 @@ func _pick_phase8_proof_bundle_settlement() -> Dictionary:
 	return {}
 
 
+func _phase8_proof_try_clipboard_set(text: String) -> bool:
+	# Best-effort only. GDScript has no try/catch; OS may still log if the clipboard is locked.
+	if not OS.is_debug_build():
+		return false
+	if not DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+		if not _phase8_proof_clipboard_unavailable_logged:
+			push_warning("[PHASE8_PROOF] clipboard_unavailable note=proof_lines_still_emit_to_console")
+			_phase8_proof_clipboard_unavailable_logged = true
+		return false
+	DisplayServer.clipboard_set(text)
+	return true
+
+
 func _emit_phase8_proof_bundle(tick: int) -> void:
 	if not OS.is_debug_build():
 		return
@@ -1095,11 +1111,15 @@ func _emit_phase8_proof_bundle(tick: int) -> void:
 	else:
 		line = _phase8_proof_bundle_line_for_settlement(chosen, tick, "auto")
 	_phase8_proof_latest_bundle_line = line
-	if line != _phase8_proof_last_clipboard_line:
-		DisplayServer.clipboard_set(line)
-		_phase8_proof_last_clipboard_line = line
 	print(line)
 	phase8_proof_bundle_emitted.emit(line)
+	# Throttle clipboard mirrors: bundle runs on stock-truth cadence and can spam Windows "open clipboard" errors.
+	const BUNDLE_CLIPBOARD_MIN_INTERVAL_TICKS: int = 5000
+	if line != _phase8_proof_last_clipboard_line:
+		if tick - _phase8_proof_last_bundle_clipboard_attempt_tick >= BUNDLE_CLIPBOARD_MIN_INTERVAL_TICKS:
+			_phase8_proof_last_bundle_clipboard_attempt_tick = tick
+			if _phase8_proof_try_clipboard_set(line):
+				_phase8_proof_last_clipboard_line = line
 
 
 func _phase8_proof_snapshot_from_settlement(st: Dictionary, tick: int) -> Dictionary:
@@ -1265,9 +1285,9 @@ func _emit_phase8_proof_result(result: String, reason: String) -> void:
 		int(r.get("total_stock_units", 0)),
 	]
 	print(summary_line)
-	DisplayServer.clipboard_set(summary_line)
 	_phase8_proof_latest_bundle_line = summary_line
 	phase8_proof_bundle_emitted.emit(summary_line)
+	_phase8_proof_try_clipboard_set(summary_line)
 
 
 func _phase8_proof_find_settlement_by_center(center_region: int) -> Dictionary:
@@ -1360,14 +1380,17 @@ func _phase8_proof_pick_runner_target_settlement() -> Dictionary:
 	if _phase8_proof_preferred_center_region >= 0:
 		var pref: Dictionary = _phase8_proof_find_settlement_by_center(_phase8_proof_preferred_center_region)
 		if not pref.is_empty():
-			var pref_primary: Stockpile = _phase8_proof_pick_primary_zone(pref)
-			if pref_primary != null:
-				return {"settlement": pref, "primary_zone": pref_primary, "source": "preferred_focus"}
+			if int(pref.get("center_region", -1)) >= 0:
+				var pref_primary: Stockpile = _phase8_proof_pick_primary_zone(pref)
+				if pref_primary != null:
+					return {"settlement": pref, "primary_zone": pref_primary, "source": "preferred_focus"}
 	# 2) first active settlement with overlapping primary zone.
 	for st_v in settlements:
 		if not (st_v is Dictionary):
 			continue
 		var st: Dictionary = st_v as Dictionary
+		if int(st.get("center_region", -1)) < 0:
+			continue
 		if str(st.get("state", "")) != "active":
 			continue
 		var z: Stockpile = _phase8_proof_pick_primary_zone(st)
@@ -1378,6 +1401,8 @@ func _phase8_proof_pick_runner_target_settlement() -> Dictionary:
 		if not (st_v is Dictionary):
 			continue
 		var st: Dictionary = st_v as Dictionary
+		if int(st.get("center_region", -1)) < 0:
+			continue
 		var z: Stockpile = _phase8_proof_pick_primary_zone(st)
 		if z != null:
 			return {"settlement": st, "primary_zone": z, "source": "first_with_overlap"}
@@ -1400,7 +1425,10 @@ func _phase8_proof_runner_tick(tick: int) -> void:
 	if not _phase8_proof_runner_armed_once:
 		var waited: int = tick - _phase8_proof_runner_started_tick
 		if waited > PHASE8_PROOF_RUNNER_MAX_WAIT_TICKS:
-			_phase8_proof_runner_finalize_inconclusive("timeout_waiting_for_proofable_target")
+			# Pre-arm timeout is diagnostic only: do not permanently terminate the runner.
+			# Ordinary bootstrap/world evolution can produce a valid overlap target later.
+			_phase8_proof_runner_skip("retry_timeout_waiting_for_proofable_target", tick)
+			_phase8_proof_runner_started_tick = tick
 			return
 	if _phase8_proof_runner_state == "idle":
 		var target: Dictionary = _phase8_proof_pick_runner_target_settlement()

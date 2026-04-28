@@ -81,6 +81,11 @@ func bind(p_enemy_type: Type, p_tile: Vector2i, p_world: World) -> void:
 func _physics_process(delta: float) -> void:
 	if _dead or _world == null:
 		return
+	
+	# Throttle physics updates to every 2 frames to reduce lag
+	if Engine.get_process_frames() % 2 != 0:
+		return
+	
 	_anim_t += delta * 5.5
 	
 	# Move along current path or toward target pawn

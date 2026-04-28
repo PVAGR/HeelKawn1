@@ -71,6 +71,10 @@ func _physics_process(delta: float) -> void:
 	if _dead or _world == null:
 		return
 	
+	# Throttle physics updates to every 2 frames to reduce lag
+	if Engine.get_process_frames() % 2 != 0:
+		return
+	
 	# Move along current path
 	if not _current_path.is_empty() and _path_index < _current_path.size():
 		var target_world: Vector2 = _world.tile_to_world(_current_path[_path_index])

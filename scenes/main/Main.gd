@@ -1825,7 +1825,7 @@ func _play_inspect_tone() -> void:
 	for i in range(samples):
 		var t: float = float(i) / float(sr)
 		var s: float = sin(2.0 * PI * freq * t) * 0.14
-		var frame = AudioFrame(Vector2(s, s))
+		var frame = AudioFrame.new(Vector2(s, s))
 		playback.push_frame(frame)
 
 func _flush_world_memory_derivatives() -> void:
@@ -2241,7 +2241,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			request_incarnation_entry()
 		Key.KEY_BACKSPACE:
 			request_spectator_return()
-		Key.KEY_RETURN:
+		Key.KEY_ENTER:
 			if _incarnation_picker != null and is_instance_valid(_incarnation_picker) and _incarnation_picker.visible:
 				_on_incarnation_entry_confirmed(int(_incarnation_picker.call("get_selected_pawn_id")))
 		Key.KEY_ESCAPE:

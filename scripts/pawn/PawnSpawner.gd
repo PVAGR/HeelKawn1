@@ -9,7 +9,7 @@ extends Node
 ## guarantees every pawn can reach the stockpile and pick up jobs on its own
 ## landmass. Otherwise falls back to any plains/forest tile.
 
-const STARTER_COUNT: int = 5
+const STARTER_COUNT: int = 20
 const MAX_PLACEMENT_ATTEMPTS: int = 2000
 
 const FIRST_NAMES: Array[String] = [

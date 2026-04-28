@@ -8,7 +8,7 @@ signal game_tick(tick_count: int)
 signal speed_changed(new_speed: float, is_paused: bool)
 
 ## Real seconds per tick at 1x speed. Optimized for smoother AI processing.
-const TICK_INTERVAL_SECONDS: float = 0.01  # Ultra-fast for smooth gameplay
+const TICK_INTERVAL_SECONDS: float = 0.005  # Extreme speed for smooth gameplay
 
 ## Allowed speed multipliers with finer granularity for smooth control.
 const SPEED_STEPS: Array[float] = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]

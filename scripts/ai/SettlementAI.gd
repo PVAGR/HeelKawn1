@@ -155,31 +155,55 @@ func _tribal_leadership_selection() -> void:
 	# Select based on age and wisdom (simplified)
 	leader_id = resident_agents[0]  # First agent as elder
 	decision_making_process = "consensus"
+	
+	# AuthoritySystem: grant civil authority to elder
+	if AuthoritySystem != null and leader_id >= 0:
+		AuthoritySystem.record_elder_recognition(leader_id)
 
 func _chieftain_selection() -> void:
 	# Hereditary or strongest warrior
 	leader_id = resident_agents[randi() % resident_agents.size()]
 	decision_making_process = "authoritarian"
+	
+	# AuthoritySystem: grant military authority to chief
+	if AuthoritySystem != null and leader_id >= 0:
+		AuthoritySystem.grant_authority(leader_id, AuthoritySystem.AuthorityContext.MILITARY, 0.3, "chieftain_selection")
 
 func _monarch_selection() -> void:
 	# Similar to chief but with more formal structure
 	leader_id = resident_agents[randi() % resident_agents.size()]
 	decision_making_process = "decrees"
+	
+	# AuthoritySystem: grant civil authority to monarch
+	if AuthoritySystem != null and leader_id >= 0:
+		AuthoritySystem.grant_authority(leader_id, AuthoritySystem.AuthorityContext.CIVIL, 0.4, "monarch_selection")
 
 func _republic_election() -> void:
 	# Most respected agent
 	leader_id = resident_agents[randi() % resident_agents.size()]
 	decision_making_process = "voting"
+	
+	# AuthoritySystem: grant civil authority through election
+	if AuthoritySystem != null and leader_id >= 0:
+		AuthoritySystem.grant_authority(leader_id, AuthoritySystem.AuthorityContext.CIVIL, 0.35, "republic_election")
 
 func _theocratic_selection() -> void:
 	# Most spiritually-influential agent
 	leader_id = resident_agents[randi() % resident_agents.size()]
 	decision_making_process = "divine_guidance"
+	
+	# AuthoritySystem: grant religious authority
+	if AuthoritySystem != null and leader_id >= 0:
+		AuthoritySystem.grant_authority(leader_id, AuthoritySystem.AuthorityContext.RELIGIOUS, 0.4, "theocratic_selection")
 
 func _technocratic_selection() -> void:
 	# Most skilled/knowledgeable agent
 	leader_id = resident_agents[randi() % resident_agents.size()]
 	decision_making_process = "expert_consensus"
+	
+	# AuthoritySystem: grant knowledge authority
+	if AuthoritySystem != null and leader_id >= 0:
+		AuthoritySystem.grant_authority(leader_id, AuthoritySystem.AuthorityContext.KNOWLEDGE, 0.35, "technocratic_selection")
 
 # === Collective Decision Making ===
 
@@ -407,6 +431,10 @@ func _process_collective_goals() -> void:
 		if goal.progress >= 1.0:
 			completed_goals.append(i)
 			historical_events.append("Completed collective goal: %s" % goal.goal_type)
+			
+			# AuthoritySystem: grant authority to leader for organizing collective effort
+			if AuthoritySystem != null and leader_id >= 0:
+				AuthoritySystem.record_organization_action(leader_id, goal.supporters)
 	
 	# Remove completed goals (in reverse order)
 	for i in range(completed_goals.size() - 1, -1, -1):

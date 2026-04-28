@@ -439,33 +439,33 @@ func _test_neural_network_processing() -> Dictionary:
 		"errors": []
 	}
 
-			if not AIAgentManager:
-			test_result.status = "failed"
-			test_result.errors.append("AIAgentManager not found")
-			return test_result
+	if not AIAgentManager:
+		test_result.status = "failed"
+		test_result.errors.append("AIAgentManager not found")
+		return test_result
 
-		# Test neural network processing
-		var test_input = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-		var output = AIAgentManager.process_neural_network(test_input)
+	# Test neural network processing
+	var test_input = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+	var output = AIAgentManager.process_neural_network(test_input)
 
-		test_result.details["input_size"] = test_input.size()
-		test_result.details["output_size"] = output.size()
-		test_result.details["processing_successful"] = true
+	test_result.details["input_size"] = test_input.size()
+	test_result.details["output_size"] = output.size()
+	test_result.details["processing_successful"] = true
 
-		# Test output validity
-		var output_valid = true
-		for value in output:
-			if not is_finite(value):
-				output_valid = false
-				break
+	# Test output validity
+	var output_valid = true
+	for value in output:
+		if not is_finite(value):
+			output_valid = false
+			break
 
-		test_result.details["output_valid"] = output_valid
+	test_result.details["output_valid"] = output_valid
 
-		if not output_valid:
-			test_result.status = "failed"
-			test_result.errors.append("Invalid neural network output")
+	if not output_valid:
+		test_result.status = "failed"
+		test_result.errors.append("Invalid neural network output")
 
-		print("[NeuralIntegrationTester] ✓ Neural network processing test passed")
+	print("[NeuralIntegrationTester] ✓ Neural network processing test passed")
 
 	return test_result
 
@@ -477,10 +477,10 @@ func _test_training_functionality() -> Dictionary:
 		"errors": []
 	}
 
-			if not AIAgentManager:
-			test_result.status = "failed"
-			test_result.errors.append("AIAgentManager not found")
-			return test_result
+	if not AIAgentManager:
+		test_result.status = "failed"
+		test_result.errors.append("AIAgentManager not found")
+		return test_result
 
 		# Test neural network training
 		var test_input = [0.1, 0.2, 0.3, 0.4]
@@ -532,10 +532,10 @@ func _test_world_ai_initialization() -> Dictionary:
 		"errors": []
 	}
 
-			if not WorldAI:
-			test_result.status = "failed"
-			test_result.errors.append("WorldAI not found")
-			return test_result
+	if not WorldAI:
+		test_result.status = "failed"
+		test_result.errors.append("WorldAI not found")
+		return test_result
 
 		# Test WorldAI properties
 		test_result.details["current_age"] = WorldAI.current_age
@@ -559,20 +559,20 @@ func _test_neural_world_matrix() -> Dictionary:
 		test_result.errors.append("Neural world matrix not found")
 		return test_result
 
-		var neural_world_matrix = WorldAI.neural_world_matrix
+	var neural_world_matrix = WorldAI.neural_world_matrix
 
-		# Test neural world matrix structure
-		var expected_components = ["world_state_neurons", "environmental_neurons", "civilization_neurons", "cultural_neurons", "economic_neurons"]
+	# Test neural world matrix structure
+	var expected_components = ["world_state_neurons", "environmental_neurons", "civilization_neurons", "cultural_neurons", "economic_neurons"]
 
-		for component in expected_components:
-			if not neural_world_matrix.has(component):
-				test_result.status = "failed"
-				test_result.errors.append("Missing component: " + component)
+	for component in expected_components:
+		if not neural_world_matrix.has(component):
+			test_result.status = "failed"
+			test_result.errors.append("Missing component: " + component)
 
-		test_result.details["components_count"] = neural_world_matrix.size()
-		test_result.details["structure_valid"] = test_result.status == "passed"
+	test_result.details["components_count"] = neural_world_matrix.size()
+	test_result.details["structure_valid"] = test_result.status == "passed"
 
-		print("[NeuralIntegrationTester] ✓ Neural world matrix test passed")
+	print("[NeuralIntegrationTester] ✓ Neural world matrix test passed")
 
 	return test_result
 
@@ -584,10 +584,10 @@ func _test_specialized_networks() -> Dictionary:
 		"errors": []
 	}
 
-			if not WorldAI:
-			test_result.status = "failed"
-			test_result.errors.append("WorldAI not found")
-			return test_result
+	if not WorldAI:
+		test_result.status = "failed"
+		test_result.errors.append("WorldAI not found")
+		return test_result
 
 		# Test specialized neural networks
 		var expected_networks = ["civilization_neural_network", "environmental_neural_network", "cultural_neural_network", "economic_neural_network"]
@@ -637,10 +637,10 @@ func _test_cultural_memory_initialization() -> Dictionary:
 		"errors": []
 	}
 
-			if not CulturalMemory:
-			test_result.status = "failed"
-			test_result.errors.append("CulturalMemory not found")
-			return test_result
+	if not CulturalMemory:
+		test_result.status = "failed"
+		test_result.errors.append("CulturalMemory not found")
+		return test_result
 
 		# Test CulturalMemory properties
 		test_result.details["reputation_by_region_count"] = CulturalMemory.reputation_by_region.size()
@@ -657,10 +657,10 @@ func _test_cultural_metrics() -> Dictionary:
 		"errors": []
 	}
 
-			if not CulturalMemory:
-			test_result.status = "failed"
-			test_result.errors.append("CulturalMemory not found")
-			return test_result
+	if not CulturalMemory:
+		test_result.status = "failed"
+		test_result.errors.append("CulturalMemory not found")
+		return test_result
 
 		# Test cultural metrics
 		var diversity_index = CulturalMemory.get_diversity_index()
@@ -711,10 +711,10 @@ func _test_religion_lens_initialization() -> Dictionary:
 		"errors": []
 	}
 
-			if not ReligionLens:
-			test_result.status = "failed"
-			test_result.errors.append("ReligionLens not found")
-			return test_result
+	if not ReligionLens:
+		test_result.status = "failed"
+		test_result.errors.append("ReligionLens not found")
+		return test_result
 
 		# Test ReligionLens properties
 		test_result.details["sacred_sites_count"] = SacredMemory.site_count() if SacredMemory else 0
@@ -731,10 +731,10 @@ func _test_religious_harmony() -> Dictionary:
 		"errors": []
 	}
 
-			if not ReligionLens:
-			test_result.status = "failed"
-			test_result.errors.append("ReligionLens not found")
-			return test_result
+	if not ReligionLens:
+		test_result.status = "failed"
+		test_result.errors.append("ReligionLens not found")
+		return test_result
 
 		# Test religious harmony calculation
 		var harmony_index = ReligionLens.get_harmony_index()
@@ -1134,10 +1134,10 @@ func _test_high_frequency_processing() -> Dictionary:
 		"errors": []
 	}
 
-			if not AIAgentManager:
-			test_result.status = "failed"
-			test_result.errors.append("AIAgentManager not found")
-			return test_result
+	if not AIAgentManager:
+		test_result.status = "failed"
+		test_result.errors.append("AIAgentManager not found")
+		return test_result
 
 		# Test high-frequency neural processing
 		var start_time = Time.get_ticks_usec()

@@ -7,10 +7,10 @@ signal game_tick(tick_count: int)
 ## Emitted whenever the speed or pause state changes. UI can listen to update icons.
 signal speed_changed(new_speed: float, is_paused: bool)
 
-## Real seconds per tick at 1x speed. Set to 1.0 so 60 ticks = 1 real minute.
-const TICK_INTERVAL_SECONDS: float = 1.0
-const MIN_TICK_INTERVAL_SECONDS: float = 0.1
-const MAX_TICK_INTERVAL_SECONDS: float = 2.0
+## Real seconds per tick at 1x speed. Kept low so the sim feels responsive.
+const TICK_INTERVAL_SECONDS: float = 0.008
+const MIN_TICK_INTERVAL_SECONDS: float = 0.008
+const MAX_TICK_INTERVAL_SECONDS: float = 0.05
 const BENCHMARK_DEFAULT_TARGET_TICK: int = 1_000_000
 const BENCHMARK_DEFAULT_SPEED: float = 16384.0
 

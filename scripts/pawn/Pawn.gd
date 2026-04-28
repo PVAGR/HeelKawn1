@@ -257,6 +257,7 @@ var _sfx: AudioStreamPlayer2D = null
 var _hit_flash_ticks: int = 0
 var _last_inspect_msg: String = ""
 var _last_inspect_tick: int = -999999
+var _initial_knowledge_granted: bool = false
 
 ## Autoloads (e.g. JobManager) should call these instead of `pawn.data` — the
 ## parser can fail to resolve the `data` member on class_name Pawn in autoload scripts.
@@ -651,9 +652,6 @@ func _ready() -> void:
 	_sfx.max_distance = 320.0
 	_sfx.volume_db = -5.0
 	add_child(_sfx)
-	
-	# KnowledgeSystem: grant initial knowledge based on profession
-	_grant_initial_knowledge()
 
 
 ## Called by PawnSpawner immediately after instantiation.
@@ -674,6 +672,9 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	data.age_years = float(data.age)
 	_clear_cohort_state()
 	add_to_group("pawns")
+	if not _initial_knowledge_granted:
+		_grant_initial_knowledge()
+		_initial_knowledge_granted = true
 	refresh_inherited_cultural_reputation()
 	_request_redraw()
 
@@ -689,6 +690,8 @@ func refresh_inherited_cultural_reputation() -> void:
 
 ## KnowledgeSystem: grant initial knowledge based on profession
 func _grant_initial_knowledge() -> void:
+	if data == null:
+		return
 	var pawn_id: int = int(data.id)
 	
 	# Basic knowledge all pawns start with

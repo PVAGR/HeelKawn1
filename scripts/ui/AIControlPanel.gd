@@ -24,6 +24,10 @@ var cultural_label: Label
 var environmental_label: Label
 var economic_label: Label
 var religious_label: Label
+var collapse_risk_bar: ProgressBar
+var trust_level_bar: ProgressBar
+var economic_stability_bar: ProgressBar
+var religious_fervor_bar: ProgressBar
 
 # AI System State
 var enhanced_ai_enabled: bool = false
@@ -54,6 +58,10 @@ func _setup_ui() -> void:
 	environmental_label = get_node_or_null("VBoxContainer/NeuralNetworkContainer/EnvironmentalLabel")
 	economic_label = get_node_or_null("VBoxContainer/NeuralNetworkContainer/EconomicLabel")
 	religious_label = get_node_or_null("VBoxContainer/NeuralNetworkContainer/ReligiousLabel")
+	collapse_risk_bar = get_node_or_null("VBoxContainer/NeuralNetworkContainer/CollapseRiskBar")
+	trust_level_bar = get_node_or_null("VBoxContainer/NeuralNetworkContainer/TrustLevelBar")
+	economic_stability_bar = get_node_or_null("VBoxContainer/NeuralNetworkContainer/EconomicStabilityBar")
+	religious_fervor_bar = get_node_or_null("VBoxContainer/NeuralNetworkContainer/ReligiousFervorBar")
 	
 	# Initialize toggle state
 	enhanced_ai_enabled = AIAgentManager.civilization_mode if AIAgentManager else false
@@ -232,6 +240,27 @@ func _update_neural_network_display() -> void:
 		var religious_fervor = summary.get("religious_fervor", 0.0)
 		var religious_influence = summary.get("religious_influence", 0.0)
 		religious_label.text = "Rel: Fervor %.2f | Influence %.2f" % [religious_fervor, religious_influence]
+	
+	# Update progress bars
+	if collapse_risk_bar:
+		collapse_risk_bar.value = summary.get("collapse_risk", 0.0) * 100
+		# Color code collapse risk
+		var risk = summary.get("collapse_risk", 0.0)
+		if risk < 0.3:
+			collapse_risk_bar.modulate = Color.GREEN
+		elif risk < 0.6:
+			collapse_risk_bar.modulate = Color.YELLOW
+		else:
+			collapse_risk_bar.modulate = Color.RED
+	
+	if trust_level_bar:
+		trust_level_bar.value = summary.get("trust_level", 0.0) * 100
+	
+	if economic_stability_bar:
+		economic_stability_bar.value = summary.get("economic_stability", 0.0) * 100
+	
+	if religious_fervor_bar:
+		religious_fervor_bar.value = summary.get("religious_fervor", 0.0) * 100
 
 func _process(_delta: float) -> void:
 	# Only update display if panel is visible and all components are ready

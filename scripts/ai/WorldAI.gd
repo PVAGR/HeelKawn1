@@ -1806,6 +1806,9 @@ func on_collapse_metric_change(settlement_id: int, metric_name: String, new_valu
 	var avg_stability = (trust + authority + knowledge + environment) / 4.0
 	world_neurons["collapse_risk"].value = 1.0 - avg_stability
 	
+	# Train neural network from this event
+	_train_neural_network_from_event("collapse_metric_change", {"metric_name": metric_name, "new_value": new_value})
+	
 	# Record event
 	WorldMemory.record_event({
 		"type": "collapse_metric_change",
@@ -1818,6 +1821,233 @@ func on_collapse_metric_change(settlement_id: int, metric_name: String, new_valu
 	
 	if GameManager.verbose_logs():
 		print("[WorldAI] Collapse metric %s changed to %.2f for settlement %d - collapse risk now %.2f" % [metric_name, new_value, settlement_id, world_neurons["collapse_risk"].value])
+
+
+func _train_neural_network_from_event(event_type: String, event_data: Dictionary) -> void:
+	# Train neural network based on event outcomes
+	# This implements reinforcement learning: adjust weights based on event success/failure
+	
+	var learning_rate = neural_world_matrix.get("learning_rate", 0.005)
+	var world_neurons = neural_world_matrix.get("world_state_neurons", {})
+	var civ_neurons = neural_world_matrix.get("civilization_neurons", {})
+	var cult_neurons = neural_world_matrix.get("cultural_neurons", {})
+	var env_neurons = neural_world_matrix.get("environmental_neurons", {})
+	var econ_neurons = neural_world_matrix.get("economic_neurons", {})
+	var rel_neurons = neural_world_matrix.get("religious_neurons", {})
+	
+	match event_type:
+		"job_completed":
+			# Job completion is positive - reinforce economic neurons
+			econ_neurons["production_efficiency"].value = min(econ_neurons["production_efficiency"].value + learning_rate * 0.5, 1.0)
+			econ_neurons["labor_specialization"].value = min(econ_neurons["labor_specialization"].value + learning_rate * 0.3, 1.0)
+		
+		"collapse_metric_change":
+			# Collapse metric changes provide feedback on stability
+			var metric_name = event_data.get("metric_name", "")
+			var new_value = event_data.get("new_value", 0.5)
+			
+			# If metric improved (increased), reinforce stability
+			if new_value > 0.5:
+				world_neurons["trust_level"].value = min(world_neurons["trust_level"].value + learning_rate * 0.2, 1.0)
+			# If metric declined, increase collapse risk awareness
+			else:
+				world_neurons["collapse_risk"].value = min(world_neurons["collapse_risk"].value + learning_rate * 0.3, 1.0)
+		
+		"sacred_site_established":
+			# Sacred site establishment is positive - reinforce religious neurons
+			rel_neurons["sacred_sites"].value = min(rel_neurons["sacred_sites"].value + learning_rate * 0.4, 1.0)
+			rel_neurons["religious_influence"].value = min(rel_neurons["religious_influence"].value + learning_rate * 0.3, 1.0)
+		
+		"ritual_performed":
+			# Ritual performance is positive - reinforce religious neurons
+			rel_neurons["ritual_complexity"].value = min(rel_neurons["ritual_complexity"].value + learning_rate * 0.2, 1.0)
+			rel_neurons["religious_fervor"].value = min(rel_neurons["religious_fervor"].value + learning_rate * 0.3, 1.0)
+		
+		"knowledge_lost":
+			# Knowledge loss is negative - increase knowledge scarcity awareness
+			cult_neurons["knowledge_scarcity"].value = min(cult_neurons["knowledge_scarcity"].value + learning_rate * 0.5, 1.0)
+			cult_neurons["teaching_activity"].value = min(cult_neurons["teaching_activity"].value + learning_rate * 0.4, 1.0)
+		
+		"authority_change":
+			# Authority changes provide feedback on governance
+			var new_level = event_data.get("new_level", 0.5)
+			if new_level > 0.5:
+				civ_neurons["civil_authority"].value = min(civ_neurons["civil_authority"].value + learning_rate * 0.2, 1.0)
+		
+		"entity_decay":
+			# Entity decay is negative - increase environmental awareness
+			env_neurons["ruin_density"].value = min(env_neurons["ruin_density"].value + learning_rate * 0.3, 1.0)
+		
+		"entity_loss":
+			# Entity loss is negative - increase historical awareness
+			env_neurons["historical_layering"].value = min(env_neurons["historical_layering"].value + learning_rate * 0.2, 1.0)
+	
+	if GameManager.verbose_logs():
+		print("[WorldAI] Neural network trained from event: %s" % event_type)
+
+
+func predict_collapse_stage(settlement_id: int) -> int:
+	# Predict collapse stage based on neural network state
+	# Returns: 0=STABLE, 1=TRUST_DECAY, 2=AUTHORITY_DECAY, 3=KNOWLEDGE_DECAY, 4=ENVIRONMENTAL_DECAY, 5=COLLAPSED
+	
+	var summary = get_neural_network_summary()
+	var collapse_risk = summary.get("collapse_risk", 0.0)
+	var trust_level = summary.get("trust_level", 1.0)
+	var civil_authority = summary.get("civil_authority", 1.0)
+	var knowledge_scarcity = summary.get("knowledge_scarcity", 0.0)
+	var resource_depletion = summary.get("resource_depletion", 0.0)
+	
+	# Calculate stage based on neural network state
+	if collapse_risk < 0.2:
+		return 0  # STABLE
+	elif trust_level < 0.6:
+		return 1  # TRUST_DECAY
+	elif civil_authority < 0.5:
+		return 2  # AUTHORITY_DECAY
+	elif knowledge_scarcity > 0.6:
+		return 3  # KNOWLEDGE_DECAY
+	elif resource_depletion > 0.7:
+		return 4  # ENVIRONMENTAL_DECAY
+	else:
+		return 5  # COLLAPSED
+
+
+func get_collapse_stage_name(stage: int) -> String:
+	match stage:
+		0: return "STABLE"
+		1: return "TRUST_DECAY"
+		2: return "AUTHORITY_DECAY"
+		3: return "KNOWLEDGE_DECAY"
+		4: return "ENVIRONMENTAL_DECAY"
+		5: return "COLLAPSED"
+		_: return "UNKNOWN"
+
+
+func rank_succession_candidates(candidate_ids: Array[int], government_type: String) -> Array[int]:
+	# Rank succession candidates based on neural network state and government type
+	# Returns sorted array of candidate IDs from highest to lowest score
+	
+	var summary = get_neural_network_summary()
+	var ranked_candidates: Array[Dictionary] = []
+	
+	for candidate_id in candidate_ids:
+		var score: float = 0.0
+		
+		# Base score from neural network state
+		match government_type:
+			"MONARCHY":
+				# Monarchies value civil authority and military authority
+				score += summary.get("civil_authority", 0.0) * 0.4
+				score += summary.get("military_authority", 0.0) * 0.3
+				score += summary.get("trust_level", 0.0) * 0.3
+			
+			"THEOCRACY":
+				# Theocracies value religious authority and spiritual authority
+				score += summary.get("religious_authority", 0.0) * 0.5
+				score += summary.get("religious_fervor", 0.0) * 0.3
+				score += summary.get("trust_level", 0.0) * 0.2
+			
+			"TECHNOCRACY":
+				# Technocracies value knowledge authority and teaching activity
+				score += summary.get("knowledge_authority", 0.0) * 0.5
+				score += summary.get("teaching_activity", 0.0) * 0.3
+				score += summary.get("production_efficiency", 0.0) * 0.2
+			
+			"REPUBLIC":
+				# Republics value civil authority and trust
+				score += summary.get("civil_authority", 0.0) * 0.4
+				score += summary.get("trust_level", 0.0) * 0.4
+				score += summary.get("teaching_activity", 0.0) * 0.2
+			
+			"TRIBAL":
+				# Tribes value military authority and trust
+				score += summary.get("military_authority", 0.0) * 0.4
+				score += summary.get("trust_level", 0.0) * 0.4
+				score += summary.get("religious_fervor", 0.0) * 0.2
+			
+			_:
+				# Default: balanced approach
+				score += summary.get("civil_authority", 0.0) * 0.25
+				score += summary.get("military_authority", 0.0) * 0.25
+				score += summary.get("religious_authority", 0.0) * 0.25
+				score += summary.get("knowledge_authority", 0.0) * 0.25
+		
+		# Add randomness to prevent deterministic outcomes
+		score += randf() * 0.1
+		
+		ranked_candidates.append({
+			"candidate_id": candidate_id,
+			"score": score
+		})
+	
+	# Sort by score descending
+	ranked_candidates.sort_custom(func(a, b): return a.score > b.score)
+	
+	# Return sorted candidate IDs
+	var sorted_ids: Array[int] = []
+	for candidate in ranked_candidates:
+		sorted_ids.append(candidate.candidate_id)
+	
+	return sorted_ids
+
+
+func calculate_diplomatic_modifier(settlement_a_id: int, settlement_b_id: int) -> float:
+	# Calculate diplomatic relationship modifier based on neural network state
+	# Returns: -1.0 (hostile) to 1.0 (friendly)
+	
+	var summary = get_neural_network_summary()
+	var modifier: float = 0.0
+	
+	# Base modifier from trust level
+	modifier += summary.get("trust_level", 0.5) * 0.3
+	
+	# Economic stability promotes trade and friendly relations
+	modifier += summary.get("economic_stability", 0.5) * 0.2
+	
+	# Religious similarity (if both have high religious fervor, they may be allies or rivals)
+	var religious_fervor = summary.get("religious_fervor", 0.0)
+	if religious_fervor > 0.6:
+		# High religious fervor can lead to both cooperation and conflict
+		# Use belief diversity to determine direction
+		var belief_diversity = summary.get("belief_diversity", 0.0)
+		if belief_diversity < 0.3:
+			modifier += 0.15  # Similar beliefs promote cooperation
+		else:
+			modifier -= 0.15  # Diverse beliefs may cause tension
+	
+	# Civil authority promotes diplomacy
+	modifier += summary.get("civil_authority", 0.5) * 0.15
+	
+	# Knowledge sharing promotes cooperation
+	modifier += summary.get("teaching_activity", 0.5) * 0.1
+	
+	# Collapse risk makes settlements more isolationist
+	var collapse_risk = summary.get("collapse_risk", 0.0)
+	if collapse_risk > 0.5:
+		modifier -= 0.2  # High collapse risk reduces diplomatic openness
+	
+	# Military authority can indicate either defensive or aggressive posture
+	var military_authority = summary.get("military_authority", 0.0)
+	if military_authority > 0.7:
+		modifier -= 0.1  # High military authority may be perceived as threatening
+	
+	return clamp(modifier, -1.0, 1.0)
+
+
+func get_diplomatic_attitude(modifier: float) -> String:
+	# Get diplomatic attitude string based on modifier
+	if modifier >= 0.7:
+		return "ALLIED"
+	elif modifier >= 0.4:
+		return "FRIENDLY"
+	elif modifier >= 0.1:
+		return "NEUTRAL"
+	elif modifier >= -0.3:
+		return "CAUTIOUS"
+	elif modifier >= -0.6:
+		return "HOSTILE"
+	else:
+		return "WAR"
 
 
 func _evolve_neural_networks() -> void:

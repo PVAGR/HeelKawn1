@@ -61,11 +61,11 @@ func _setup_ui() -> void:
 		civilization_progress.max_value = 100.0
 
 func _connect_signals() -> void:
-	if enhanced_ai_toggle:
+	if enhanced_ai_toggle and not enhanced_ai_toggle.is_connected("toggled", _on_enhanced_ai_toggled):
 		enhanced_ai_toggle.toggled.connect(_on_enhanced_ai_toggled)
-	if tick_rate_slider:
+	if tick_rate_slider and not tick_rate_slider.is_connected("value_changed", _on_tick_rate_changed):
 		tick_rate_slider.value_changed.connect(_on_tick_rate_changed)
-	if ai_potential_slider:
+	if ai_potential_slider and not ai_potential_slider.is_connected("value_changed", _on_ai_potential_changed):
 		ai_potential_slider.value_changed.connect(_on_ai_potential_changed)
 
 func _on_enhanced_ai_toggled(enabled: bool) -> void:
@@ -139,6 +139,10 @@ func _apply_ai_potential() -> void:
 	elif ai_potential_level == 10:  # Maximum AI
 		AIAgentManager.update_frequency = 3
 		AIAgentManager.max_agents = 25
+	else:
+		# Reset to default if invalid level
+		AIAgentManager.update_frequency = 15
+		AIAgentManager.max_agents = 10
 
 func _update_status() -> void:
 	var status_text: String = ""
@@ -157,13 +161,14 @@ func _update_status() -> void:
 		status_label.text = status_text
 
 func _update_display() -> void:
-	_update_status()
+	# Safe status update
+	if status_label != null:
+		_update_status()
 	
 	# Update civilization progress based on world state
-	if WorldMemory:
+	if WorldMemory and civilization_progress != null:
 		civilization_score = _calculate_civilization_score()
-		if civilization_progress:
-			civilization_progress.value = civilization_score
+		civilization_progress.value = civilization_score
 
 func _calculate_civilization_score() -> float:
 	var score: float = 0.0
@@ -187,7 +192,9 @@ func _calculate_civilization_score() -> float:
 	return clamp(score, 0.0, 100.0)
 
 func _process(_delta: float) -> void:
-	_update_display()
+	# Only update display if panel is visible and all components are ready
+	if visible and status_label != null:
+		_update_display()
 
 # === Public Interface ===
 
@@ -195,10 +202,13 @@ func toggle_panel() -> void:
 	visible = not visible
 
 func set_enhanced_ai(enabled: bool) -> void:
-	enhanced_ai_toggle.button_pressed = enabled
+	if enhanced_ai_toggle:
+		enhanced_ai_toggle.button_pressed = enabled
 
 func set_tick_rate(frequency: float) -> void:
-	tick_rate_slider.value = frequency
+	if tick_rate_slider:
+		tick_rate_slider.value = frequency
 
 func set_ai_potential(level: int) -> void:
-	ai_potential_slider.value = level
+	if ai_potential_slider:
+		ai_potential_slider.value = level

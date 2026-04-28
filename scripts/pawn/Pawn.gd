@@ -39,9 +39,9 @@ const CARRY_SIZE: Vector2 = Vector2(3.5, 3.5)
 # distances (often ~30-70 tiles to a fertile soil patch) can run a sustained
 # food/rest surplus instead of slowly starving. If the colony grows or food
 # moves further away these will need re-tuning.
-const HUNGER_DECAY_PER_TICK: float = 0.06
-const REST_DECAY_PER_TICK:   float = 0.05
-const MOOD_DECAY_PER_TICK:   float = 0.03
+const HUNGER_DECAY_PER_TICK: float = 0.03  # Reduced from 0.06 to prevent rapid starvation
+const REST_DECAY_PER_TICK:   float = 0.04  # Reduced from 0.05
+const MOOD_DECAY_PER_TICK:   float = 0.02  # Reduced from 0.03
 const THRESHOLD_WARN: float = 50.0
 const THRESHOLD_CRIT: float = 25.0
 
@@ -96,7 +96,7 @@ const REST_RECOVER_PER_TICK_SLEEP: float = 0.6
 ## standing on a bed they own. Beds make sleep ~67% faster.
 const REST_RECOVER_BED_MULTIPLIER: float = 1.67
 ## Hunger keeps decaying while asleep, but at half rate (rest body burns less).
-const HUNGER_DECAY_PER_TICK_SLEEPING: float = 0.05
+const HUNGER_DECAY_PER_TICK_SLEEPING: float = 0.025  # Reduced from 0.05
 
 # -------------------- build tuning --------------------
 
@@ -2393,12 +2393,19 @@ func _trigger_crisis_strike() -> void:
 
 
 func _check_death_conditions() -> void:
-	if data.hunger <= 0.0:
+	# Emergency food-seeking for AI agents
+	if data.hunger < 15.0 and _state != State.GOING_TO_EAT and _state != State.EATING:
+		if GameManager.verbose_logs():
+			print("[Pawn] %s seeking emergency food (hunger=%.1f)" % [data.display_name, data.hunger])
+		_emergency_seek_food()
+	
+	# More lenient death conditions
+	if data.hunger <= -5.0:  # Allow some buffer before death
 		if GameManager.verbose_logs():
 			print("[Pawn] %s died of starvation  (hunger=%.1f)" % [data.display_name, data.hunger])
 		_die("")
 		return
-	if data.rest <= 0.0:
+	if data.rest <= -5.0:  # Allow some buffer before death
 		if GameManager.verbose_logs():
 			print("[Pawn] %s died from exhaustion  (rest=%.1f)" % [data.display_name, data.rest])
 		_die("")
@@ -2408,6 +2415,22 @@ func _check_death_conditions() -> void:
 			print("[Pawn] %s died from injuries  (health=%.1f)" % [data.display_name, data.health])
 		_die("")
 		return
+
+func _emergency_seek_food() -> void:
+	# Release current job to prioritize survival
+	if _current_job != null:
+		_unclaim_current_job()
+	
+	# Look for food in stockpile - use the correct method
+	var stockpile: Stockpile = StockpileManager.find_drop_zone("food", data.tile_pos, _world.pathfinder)
+	if stockpile != null and stockpile.has_food():
+		_state = State.GOING_TO_EAT
+		if GameManager.verbose_logs():
+			print("[Pawn] %s going to stockpile for emergency food" % data.display_name)
+	else:
+		# If no stockpile found, try to find any stockpile
+		if GameManager.verbose_logs():
+			print("[Pawn] %s cannot find stockpile for emergency food" % data.display_name)
 
 
 func die(_p_cause: String) -> void:

@@ -12,6 +12,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 	{
 		"heading": "Playtest / session truth",
 		"rows": [
+			{"id": "ai_control_panel", "label": "AI · Control Panel (toggle)"},
 			{"id": "playtest_bundle", "label": "31 · Playtest bundle (one paste)"},
 			{"id": "soul_bundle", "label": "32 · Soul bundle (1–2 sim-year handoff paste)"},
 			{"id": "portable_character", "label": "33 · Portable character JSON (MMO / website handoff)"},
@@ -194,6 +195,8 @@ func _emit_report(report_id: String) -> void:
 	var tick: int = GameManager.tick_count
 	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d BEGIN ===" % [report_id, tick])
 	match report_id:
+		"ai_control_panel":
+			_toggle_ai_control_panel()
 		"calendar":
 			_report_calendar(tick)
 		"sim_diag":
@@ -734,3 +737,25 @@ func _report_profession_liking() -> void:
 			float(d.affinities.get("diplomacy", 0.5)),
 		]
 		print("  id=%d %s  %s  %s" % [int(d.id), d.display_name, aff, d.profession_liking_digest_line()])
+
+
+func _toggle_ai_control_panel() -> void:
+	var main: Node2D = _main()
+	if main == null:
+		print("Main missing - cannot toggle AI Control Panel")
+		return
+	
+	var ai_panel: Control = main.get_node_or_null("AIControlPanel")
+	if ai_panel == null:
+		print("AI Control Panel not found - creating it...")
+		# Try to create the AI Control Panel if it doesn't exist
+		var ai_panel_scene: PackedScene = preload("res://scenes/ui/AIControlPanel.tscn")
+		ai_panel = ai_panel_scene.instantiate()
+		ai_panel.name = "AIControlPanel"
+		main.add_child(ai_panel)
+		print("AI Control Panel created and added to Main")
+	else:
+		ai_panel.visible = not ai_panel.visible
+		print("AI Control Panel toggled: %s" % ("VISIBLE" if ai_panel.visible else "HIDDEN"))
+	
+	print("=== HEELKAWN_DEBUG_REPORT:ai_control_panel:tick=%d END ===" % GameManager.tick_count)

@@ -7,9 +7,9 @@ extends Node
 # REBIRTH_PEACE_TICKS — floor on “quiet since last pawn death” before spawn; actual threshold is max with branch peace.
 # REBIRTH_INTERVAL_TICKS — session cooldown per center_region between successful spawns.
 # TILE_SCORE_* — deterministic tile ordering for spawn site (structure / scar / road / trade / distance).
-const CHECK_INTERVAL_TICKS: int = 2000
-const REBIRTH_PEACE_TICKS: int = 30000
-const REBIRTH_INTERVAL_TICKS: int = 60000
+const CHECK_INTERVAL_TICKS: int = 1000
+const REBIRTH_PEACE_TICKS: int = 5000
+const REBIRTH_INTERVAL_TICKS: int = 20000
 const TILE_SCORE_STRUCT_NEIGHBOR: int = 85
 const TILE_SCORE_SCAR_WEIGHT: int = 40
 const TILE_SCORE_ROAD_WEIGHT: int = 120

@@ -620,7 +620,8 @@ func _update_technological_progress() -> void:
 func _update_civilization_development() -> void:
 	# Update civilization development metrics
 	var civ_input = _extract_civilization_input()
-	var civ_output = _forward_propagate_network(civ_input, civilization_neural_network)
+	var civ_raw_output = _forward_propagate_network(civ_input, civilization_neural_network)
+	var civ_output = _interpret_civilization_output(civ_raw_output)
 	
 	# Update civilization metrics
 	civilization_complexity = civ_output["complexity"]

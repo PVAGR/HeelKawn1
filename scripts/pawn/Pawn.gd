@@ -813,56 +813,14 @@ func _perform_inspect_action() -> void:
 
 
 ## Player interaction: teach knowledge to nearby pawn
-func teach_knowledge_to_nearby(knowledge_type: int) -> bool:
-	if KnowledgeSystem == null:
-		return false
-	
-	var my_id: int = int(data.id)
-	
-	# Find nearby pawn to teach
-	var nearby_distance: float = 50.0
-	for pawn in get_tree().get_nodes_in_group("pawns"):
-		if pawn == self or not is_instance_valid(pawn):
-			continue
-		var dist: float = position.distance_to(pawn.position)
-		if dist > nearby_distance:
-			continue
-		
-		var their_id: int = int(pawn.data.id)
-		KnowledgeSystem.teach_knowledge(my_id, their_id, knowledge_type)
-		
-		if GameManager.verbose_logs():
-			print("[Pawn] Player teaching %s knowledge type %d to %s" % [data.display_name, knowledge_type, pawn.data.display_name])
-		
-		return true
-	
+func teach_knowledge(knowledge_type: int) -> bool:
+	# DISABLED for performance - iterates through all pawns
 	return false
 
 
 ## Player interaction: challenge nearby pawn's authority
 func challenge_authority_nearby(context: int) -> bool:
-	if AuthoritySystem == null:
-		return false
-	
-	var my_id: int = int(data.id)
-	
-	# Find nearby pawn to challenge
-	var nearby_distance: float = 50.0
-	for pawn in get_tree().get_nodes_in_group("pawns"):
-		if pawn == self or not is_instance_valid(pawn):
-			continue
-		var dist: float = position.distance_to(pawn.position)
-		if dist > nearby_distance:
-			continue
-		
-		var their_id: int = int(pawn.data.id)
-		AuthoritySystem.resolve_conflict(my_id, their_id, context)
-		
-		if GameManager.verbose_logs():
-			print("[Pawn] Player challenging %s authority in context %d" % [pawn.data.display_name, context])
-		
-		return true
-	
+	# DISABLED for performance - iterates through all pawns
 	return false
 
 

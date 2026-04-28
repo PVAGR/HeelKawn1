@@ -604,6 +604,68 @@ func _update_environmental_neurons() -> void:
 	# Update persistence metrics from PersistenceSystem
 	_update_persistence_neurons(env_neurons)
 
+# === Player Interaction Functions ===
+
+func player_inspect_neuron(neuron_name: String, neuron_layer: String) -> Dictionary:
+	if not neural_world_matrix.has(neuron_layer):
+		return {"error": "Invalid layer"}
+	
+	var layer = neural_world_matrix[neuron_layer]
+	if not layer.has(neuron_name):
+		return {"error": "Invalid neuron"}
+	
+	var neuron = layer[neuron_name]
+	return {
+		"name": neuron_name,
+		"layer": neuron_layer,
+		"value": neuron.value,
+		"activation": neuron.activation,
+		"connections": neuron.connections.size()
+	}
+
+
+func player_influence_neuron(neuron_name: String, neuron_layer: String, new_value: float) -> bool:
+	if not neural_world_matrix.has(neuron_layer):
+		return false
+	
+	var layer = neural_world_matrix[neuron_layer]
+	if not layer.has(neuron_name):
+		return false
+	
+	layer[neuron_name].value = clamp(new_value, 0.0, 1.0)
+	if GameManager.verbose_logs():
+		print("[WorldAI] Player influenced neuron %s in layer %s to %.2f" % [neuron_name, neuron_layer, new_value])
+	return true
+
+
+func player_reset_neural_network() -> void:
+	_initialize_neural_world_matrix()
+	emergent_patterns.clear()
+	if GameManager.verbose_logs():
+		print("[WorldAI] Player reset neural network")
+
+
+func player_trigger_manual_pattern_detection() -> Array[Dictionary]:
+	_detect_emergent_patterns()
+	var recent_patterns: Array[Dictionary] = []
+	for i in range(emergent_patterns.size()):
+		if i >= emergent_patterns.size() - 10:
+			recent_patterns.append(emergent_patterns[i])
+	return recent_patterns
+
+
+func player_adjust_learning_rate(new_rate: float) -> void:
+	neural_evolution_rate = clamp(new_rate, 0.001, 0.1)
+	if GameManager.verbose_logs():
+		print("[WorldAI] Player adjusted learning rate to %.4f" % neural_evolution_rate)
+
+
+func player_adjust_pattern_threshold(new_threshold: float) -> void:
+	pattern_emergence_threshold = clamp(new_threshold, 0.0, 1.0)
+	if GameManager.verbose_logs():
+		print("[WorldAI] Player adjusted pattern threshold to %.2f" % pattern_emergence_threshold)
+
+
 func get_neural_network_summary() -> String:
 	var summary = "[Neural Network State]\n"
 	

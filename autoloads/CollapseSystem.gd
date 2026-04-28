@@ -158,6 +158,15 @@ func _apply_sign_impact(settlement_id: int, signs: Array) -> void:
 		update_knowledge_retention(settlement_id, knowledge_impact)
 	if environmental_impact != 0.0:
 		update_environmental_health(settlement_id, environmental_impact)
+	
+	# Record collapse signs in WorldMemory
+	if not signs.is_empty():
+		WorldMemory.record_event({
+			"type": "collapse_sign_detected",
+			"settlement_id": settlement_id,
+			"tick": GameManager.tick_count,
+			"signs": signs,
+		})
 
 # === Collapse Stage Evaluation ===
 
@@ -190,6 +199,15 @@ func _evaluate_collapse_stage() -> void:
 			metrics["stage"] = new_stage
 			_record_stage_change(settlement_id, current_stage, new_stage)
 			
+			# Record stage transition in WorldMemory
+			WorldMemory.record_event({
+				"type": "collapse_stage_transition",
+				"settlement_id": settlement_id,
+				"tick": GameManager.tick_count,
+				"from_stage": current_stage,
+				"to_stage": new_stage,
+			})
+			
 			if new_stage == CollapseStage.COLLAPSED:
 				_handle_collapse(settlement_id)
 
@@ -206,6 +224,14 @@ func _handle_collapse(settlement_id: int) -> void:
 	collapse_survivors[settlement_id] = survivors
 	
 	_record_collapse_event(settlement_id, survivors)
+	
+	# Record collapse in WorldMemory
+	WorldMemory.record_event({
+		"type": "settlement_collapse",
+		"settlement_id": settlement_id,
+		"tick": GameManager.tick_count,
+		"survivors": survivors,
+	})
 
 # === Helper Functions ===
 

@@ -1012,12 +1012,13 @@ func _process(delta: float) -> void:
 		_advance_path()
 	else:
 		position += to_target.normalized() * step
-	var cohort_bias: Vector2 = _cohort_cohesion_bias(step)
-	if cohort_bias != Vector2.ZERO:
-		position += cohort_bias
-	var persist_bias: Vector2 = _cohort_locus_persistence_bias(step)
-	if persist_bias != Vector2.ZERO:
-		position += persist_bias
+	# DISABLED cohort bias calculations for performance
+	# var cohort_bias: Vector2 = _cohort_cohesion_bias(step)
+	# if cohort_bias != Vector2.ZERO:
+	# 	position += cohort_bias
+	# var persist_bias: Vector2 = _cohort_locus_persistence_bias(step)
+	# if persist_bias != Vector2.ZERO:
+	# 	position += persist_bias
 
 
 func _start_path(path: Array[Vector2i]) -> void:

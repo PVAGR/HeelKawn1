@@ -22,6 +22,23 @@ Suggested next session:
 
 ---
 
+## 2026-04-27 - Inspect UX: tooltip + tone + observer summary
+
+Date: 2026-04-27
+Goal: Surface `F` inspect events more visibly to the player and spectator HUD.
+
+Changes made:
+
+- Observer HUD shows the latest `player_inspect` summary (pawn, center_region, meaning, tags).
+- A transient map tooltip is shown near the HUD when an inspect occurs, with tile coords and meaning.
+- A short generated inspection tone is played on inspect using `AudioStreamGenerator` (no external asset required).
+
+Suggested next session:
+
+- Tune tooltip position, styling, and audio timbre; add per-region visual cues when an inspect highlights a myth/or ruin tag.
+
+---
+
 ## 2026-04-27 - Incarnated E now performs presence
 
 Date: 2026-04-27

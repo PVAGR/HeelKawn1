@@ -213,6 +213,10 @@ var _world_memory_derivative_flush_queued: bool = false
 ## Coalesce same-tick [World] terrain / path cost refreshes (pair vs stack+ruins are separate).
 var _last_heavy_refresh_tick: int = -1
 var _last_heavy_stack_tick: int = -1
+var _last_inspect_event_tick_shown: int = -1
+var _inspect_tooltip_node: Control = null
+var _inspect_audio_player: AudioStreamPlayer = null
+var _inspect_audio_playback: AudioStreamGeneratorPlayback = null
 
 func _is_ultra_speed() -> bool:
 	return GameManager.game_speed >= 12.0
@@ -1722,6 +1726,8 @@ func _on_game_tick(tick: int) -> void:
 	var obs_iv: int = _high_speed_interval(OBSERVER_HUD_REFRESH_TICKS, 45, 90)
 	if _observer_hud != null and tick % obs_iv == 0:
 		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
+	# Handle recent player_inspect events for tooltip + audio feedback
+	_scan_recent_inspects_and_handle()
 	var focus_iv: int = _high_speed_interval(FOCUS_INSPECTOR_REFRESH_TICKS, 24, 48)
 	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % focus_iv == 0:
 		_focus_inspector.apply_snapshot(_build_focus_snapshot(tick))
@@ -1733,6 +1739,94 @@ func _flush_road_memory_dirty_tiles() -> void:
 	if is_instance_valid(_world):
 		RoadMemory.flush_dirty_tiles(_world)
 
+
+		func _scan_recent_inspects_and_handle() -> void:
+			# Find newest player_inspect event and, if unseen, show tooltip and play tone.
+			var recent_events: Array = WorldMemory.get_recent_events(48)
+			for i in range(recent_events.size() - 1, -1, -1):
+				var ev: Dictionary = recent_events[i]
+				if str(ev.get("type", "")) != "player_inspect":
+					continue
+				var ev_tick: int = int(ev.get("t", -1))
+				if ev_tick <= _last_inspect_event_tick_shown:
+					return
+				_last_inspect_event_tick_shown = ev_tick
+				var pid: int = int(ev.get("pawn_id", -1))
+				var tile_x: int = int(ev.get("tile", {}).get("x", -1))
+				var tile_y: int = int(ev.get("tile", {}).get("y", -1))
+				var msg: String = "%s | pawn:%d region:%d" % [str(ev.get("meaning_label", "")), pid, int(ev.get("center_region", -1))]
+				_show_inspect_tooltip(msg, pid, tile_x, tile_y)
+				_play_inspect_tone()
+				return
+
+
+		func _show_inspect_tooltip(msg: String, pawn_id: int, tile_x: int, tile_y: int) -> void:
+			# Remove existing tip
+			if _inspect_tooltip_node != null and is_instance_valid(_inspect_tooltip_node):
+				_inspect_tooltip_node.queue_free()
+				_inspect_tooltip_node = null
+			var ui_root: Node = get_node_or_null("UI_Viewport")
+			if ui_root == null:
+				return
+			var panel: PanelContainer = PanelContainer.new()
+			panel.name = "InspectTooltip"
+			var style: StyleBoxFlat = StyleBoxFlat.new()
+			style.bg_color = Color(0, 0, 0, 0.7)
+			style.border_color = Color(0.8, 0.7, 0.4, 0.9)
+			style.set_border_width_all(1)
+			style.set_corner_radius_all(4)
+			panel.add_theme_stylebox_override("panel", style)
+			var lbl: Label = Label.new()
+			lbl.text = msg + " (tile=%d,%d)" % [tile_x, tile_y]
+			lbl.add_theme_font_size_override("font_size", 12)
+			lbl.add_theme_color_override("font_color", Color(0.94,0.92,0.84))
+			panel.add_child(lbl)
+			ui_root.add_child(panel)
+			panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+			panel.position = Vector2(220, 40)
+			_inspect_tooltip_node = panel
+			# Auto-hide after 2.8 seconds
+			var t = get_tree().create_timer(2.8)
+			t.timeout.connect(Callable(self, "_hide_inspect_tooltip"))
+
+
+		func _hide_inspect_tooltip() -> void:
+			if _inspect_tooltip_node != null and is_instance_valid(_inspect_tooltip_node):
+				_inspect_tooltip_node.queue_free()
+			_inspect_tooltip_node = null
+
+
+		func _ensure_inspect_audio() -> void:
+			if _inspect_audio_player != null and is_instance_valid(_inspect_audio_player):
+				return
+			var gen: AudioStreamGenerator = AudioStreamGenerator.new()
+			gen.mix_rate = 44100
+			gen.buffer_length = 0.5
+			var p: AudioStreamPlayer = AudioStreamPlayer.new()
+			p.name = "InspectAudio"
+			p.stream = gen
+			add_child(p)
+			_inspect_audio_player = p
+			_inspect_audio_playback = p.get_stream_playback()
+
+
+		func _play_inspect_tone() -> void:
+			_ensure_inspect_audio()
+			if _inspect_audio_player == null or _inspect_audio_playback == null:
+				return
+			var player: AudioStreamPlayer = _inspect_audio_player
+			var gen: AudioStreamGenerator = player.stream as AudioStreamGenerator
+			var playback: AudioStreamGeneratorPlayback = _inspect_audio_playback
+			var freq: float = 660.0
+			var dur: float = 0.12
+			var sr: int = int(gen.mix_rate)
+			var samples: int = int(float(sr) * dur)
+			player.play()
+			for i in range(samples):
+				var t: float = float(i) / float(sr)
+				var s: float = sin(2.0 * PI * freq * t) * 0.14
+				var frame = AudioFrame.new(Vector2(s, s))
+				playback.push_frame(frame)
 
 func _flush_world_memory_derivatives() -> void:
 	_world_memory_derivative_flush_queued = false

@@ -1,0 +1,113 @@
+[gd_scene load_steps=3 format=3 uid="uid://bvxq8n7y4h2k"]
+
+[ext_resource type="Script" path="res://scripts/ui/AIControlPanel.gd" id="1_0x8y2"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
+bg_color = Color(0.1, 0.1, 0.15, 0.95)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.3, 0.3, 0.4, 0.8)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="AIControlPanel" type="Control"]
+layout_mode = 3
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -200.0
+offset_right = 320.0
+offset_bottom = -20.0
+grow_vertical = 0
+script = ExtResource("1_0x8y2")
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_1")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+offset_left = 10.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = -10.0
+
+[node name="Title" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "AI Matrix Control"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="EnhancedAIToggle" type="CheckBox" parent="VBoxContainer"]
+layout_mode = 2
+text = "Enhanced AI Systems"
+theme_override_font_sizes/font_size = 14
+
+[node name="TickRateContainer" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="TickRateLabel" type="Label" parent="TickRateContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Tick Rate: 20.0x"
+theme_override_font_sizes/font_size = 12
+
+[node name="TickRateSlider" type="HSlider" parent="TickRateContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 5.0
+max_value = 100.0
+step = 5.0
+value = 20.0
+
+[node name="AIPotentialContainer" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="AIPotentialLabel" type="Label" parent="AIPotentialContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "AI Potential: 5/10"
+theme_override_font_sizes/font_size = 12
+
+[node name="AIPotentialSlider" type="HSlider" parent="AIPotentialContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 1.0
+max_value = 10.0
+step = 1.0
+value = 5.0
+
+[node name="CivilizationProgress" type="ProgressBar" parent="VBoxContainer"]
+layout_mode = 2
+max_value = 100.0
+value = 0.0
+theme_override_font_sizes/font_size = 12
+
+[node name="StatusLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "Enhanced AI: INACTIVE | Base AI: 8 agents | Standard Mode"
+autowrap_mode = 3
+
+[connection signal="toggled" from="VBoxContainer/EnhancedAIToggle" to="." method="_on_enhanced_ai_toggled"]
+[connection signal="value_changed" from="VBoxContainer/TickRateContainer/TickRateSlider" to="." method="_on_tick_rate_changed"]
+[connection signal="value_changed" from="VBoxContainer/AIPotentialContainer/AIPotentialSlider" to="." method="_on_ai_potential_changed"]

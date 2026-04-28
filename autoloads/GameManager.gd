@@ -7,23 +7,21 @@ signal game_tick(tick_count: int)
 ## Emitted whenever the speed or pause state changes. UI can listen to update icons.
 signal speed_changed(new_speed: float, is_paused: bool)
 
-## Real seconds per tick at 1x speed. Your brief: 0.05s real = 1 in-game hour (faster).
-const TICK_INTERVAL_SECONDS: float = 0.05
+## Real seconds per tick at 1x speed. Optimized for smoother AI processing.
+const TICK_INTERVAL_SECONDS: float = 0.04  # Slightly faster for better responsiveness
 
-## Allowed speed multipliers. Index into this with set_speed_index(). 12x is the
-## "overnight farming" tier -- fine for running an established colony, but at
-## this rate a single _process frame can queue many sim ticks so any per-tick
-## work (pathing, allocations) amplifies. Keep hot paths cheap.
-const SPEED_STEPS: Array[float] = [1.0, 3.0, 6.0, 12.0, 26.0, 50.0, 100.0]
+## Allowed speed multipliers with finer granularity for smooth control.
+const SPEED_STEPS: Array[float] = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
 ## Set true only when actively debugging pawn/animal internals.
 const VERBOSE_SIM_LOGS: bool = false
-## Hard cap to prevent "catch-up storms" where one slow frame triggers hundreds
-## of ticks and causes visible stutter. Extra accumulated time stays buffered
-## and is processed over subsequent frames.
-const MAX_TICKS_PER_FRAME: int = 16
-## Prevent runaway catch-up after a hitch. We keep sim responsive by dropping
-## excessive backlog instead of trying to replay seconds of queued ticks.
-const MAX_ACCUMULATED_TICKS: int = 16
+## Optimized caps for enhanced AI processing
+const MAX_TICKS_PER_FRAME: int = 32  # Increased for enhanced AI systems
+const MAX_ACCUMULATED_TICKS: int = 32  # Increased for smoother catch-up
+
+## Dynamic tick rate adjustment
+var tick_interval: float = TICK_INTERVAL_SECONDS
+var adaptive_tick_rate: bool = true
+var target_fps: float = 60.0
 
 var game_speed: float = 1.0
 var is_paused: bool = false
@@ -61,16 +59,35 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if is_paused:
 		return
+	
+	# Adaptive tick rate adjustment for smoother performance
+	if adaptive_tick_rate:
+		_adjust_tick_rate(delta)
+	
 	_tick_accumulator += delta * game_speed
-	var max_accumulator: float = TICK_INTERVAL_SECONDS * float(MAX_ACCUMULATED_TICKS)
+	var max_accumulator: float = tick_interval * float(MAX_ACCUMULATED_TICKS)
 	if _tick_accumulator > max_accumulator:
 		_tick_accumulator = max_accumulator
+	
 	var ticks_this_frame: int = 0
-	while _tick_accumulator >= TICK_INTERVAL_SECONDS and ticks_this_frame < MAX_TICKS_PER_FRAME:
-		_tick_accumulator -= TICK_INTERVAL_SECONDS
+	while _tick_accumulator >= tick_interval and ticks_this_frame < MAX_TICKS_PER_FRAME:
+		_tick_accumulator -= tick_interval
 		tick_count += 1
 		game_tick.emit(tick_count)
 		ticks_this_frame += 1
+
+func _adjust_tick_rate(delta: float) -> void:
+	# Adjust tick interval based on current performance
+	var current_fps: float = 1.0 / delta if delta > 0.0 else 60.0
+	
+	if current_fps < target_fps * 0.8:  # Performance dropping
+		tick_interval = min(tick_interval * 1.1, TICK_INTERVAL_SECONDS * 2.0)
+	elif current_fps > target_fps * 1.1:  # Performance good
+		tick_interval = max(tick_interval * 0.95, TICK_INTERVAL_SECONDS * 0.5)
+
+# Public interface for dynamic tick control
+func set_tick_interval(interval: float) -> void:
+	tick_interval = clamp(interval, 0.01, 0.2)  # 100x to 5x speed
 
 
 func set_speed(new_speed: float) -> void:

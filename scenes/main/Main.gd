@@ -313,6 +313,30 @@ const BUILD_DRAG_MAX_TILES: int = 256  # ~16x16 of walls/beds/doors at once
 
 ## One-shot [VALIDATION_STATUS] / [VALIDATION_WARN] after scene boot (observability only).
 var _validation_harness_observability_logged: bool = false
+var _ai_control_panel: AIControlPanel = null
+
+func _init_ai_control_panel() -> void:
+	var ai_panel_scene: PackedScene = preload("res://scenes/ui/AIControlPanel.tscn")
+	_ai_control_panel = ai_panel_scene.instantiate()
+	_ai_control_panel.name = "AIControlPanel"
+	add_child(_ai_control_panel)
+	
+	# Connect signals
+	_ai_control_panel.enhanced_ai_toggled.connect(_on_enhanced_ai_toggled)
+	_ai_control_panel.tick_rate_changed.connect(_on_tick_rate_changed)
+	_ai_control_panel.ai_potential_changed.connect(_on_ai_potential_changed)
+	
+	# Start hidden
+	_ai_control_panel.visible = false
+
+func _on_enhanced_ai_toggled(enabled: bool) -> void:
+	print("Enhanced AI %s" % ("ENABLED" if enabled else "DISABLED"))
+
+func _on_tick_rate_changed(new_rate: float) -> void:
+	print("Tick rate changed to %.1fx" % new_rate)
+
+func _on_ai_potential_changed(level: int) -> void:
+	print("AI potential set to %d/10" % level)
 
 
 func _ready() -> void:
@@ -326,6 +350,7 @@ func _ready() -> void:
 	_kernel_diagnostic = KernelDiagnostic.new()
 	_kernel_diagnostic.name = "KernelDiagnostic"
 	add_child(_kernel_diagnostic)
+	_init_ai_control_panel()
 	_init_ambient_audio()
 	# Initialize Phase 5 Map Mode overlay
 	if _map_mode_overlay != null and _map_mode_overlay.has_method("initialize"):
@@ -2184,6 +2209,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	match event.keycode:
 		Key.KEY_QUOTELEFT:
 			_toggle_play_chrome()
+		Key.KEY_F9:
+			if _ai_control_panel:
+				_ai_control_panel.toggle_panel()
 		Key.KEY_G:
 			if _selected_pawn != null and is_instance_valid(_selected_pawn):
 				_camera_follow_selected = not _camera_follow_selected

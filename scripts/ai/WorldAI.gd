@@ -134,7 +134,9 @@ func _setup_initial_discoveries() -> void:
 		TechnologicalDiscovery.new("Basic Hunting", TechnologicalTier.STONE)
 	]
 	
-	technological_discoveries = stone_age_discoveries
+	technological_discoveries.clear()
+	for discovery in stone_age_discoveries:
+		technological_discoveries.append(discovery)
 
 # === Age Progression ===
 

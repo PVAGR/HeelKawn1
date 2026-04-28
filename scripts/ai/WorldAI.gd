@@ -542,6 +542,25 @@ func _update_environmental_neurons() -> void:
 	# Update persistence metrics from PersistenceSystem
 	_update_persistence_neurons(env_neurons)
 
+func get_pawn_obedience_weight(pawn_id: int) -> float:
+	if AuthoritySystem == null:
+		return 1.0
+	
+	var civ_neurons = neural_world_matrix["civilization_neurons"]
+	var civil_auth = civ_neurons["civil_authority"].value
+	var military_auth = civ_neurons["military_authority"].value
+	
+	# Get pawn's authority level
+	var pawn_civil = AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.CIVIL)
+	var pawn_military = AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.MILITARY)
+	
+	# Obedience weight: how much authority this pawn has relative to average
+	# Higher authority = higher obedience from others
+	var obedience_weight = (pawn_civil / (civil_auth + 0.01) + pawn_military / (military_auth + 0.01)) / 2.0
+	
+	return clamp(obedience_weight, 0.1, 2.0)
+
+
 func _update_authority_neurons(civ_neurons: Dictionary) -> void:
 	if AuthoritySystem == null:
 		return

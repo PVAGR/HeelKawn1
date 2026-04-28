@@ -501,7 +501,7 @@ func _calculate_technological_adaptation(world_state: Dictionary, system: Dictio
 	if technological_advancement > system.innovation_threshold:
 		adaptation.adaptation_type = "innovation_acceleration"
 		adaptation.adaptation_details = {
-			"innovation_rate": WorldAI.get("tech_innovation_rate", 0.0),
+			"innovation_rate": WorldAI.tech_innovation_rate if WorldAI else 0.0,
 			"diffusion_rate": system.diffusion_rate
 		}
 	
@@ -557,21 +557,21 @@ func _apply_system_adaptation(system_name: String, adaptation: Dictionary) -> vo
 
 func _apply_efficiency_improvement(details: Dictionary) -> void:
 	# Improve resource efficiency
-	if WorldAI and WorldAI.has("resource_distribution"):
+	if WorldAI and WorldAI.resource_distribution:
 		var resources = WorldAI.resource_distribution
 		for resource in resources:
 			resources[resource] *= 1.1  # 10% efficiency improvement
 
 func _apply_resource_expansion(details: Dictionary) -> void:
 	# Expand resource availability
-	if WorldAI and WorldAI.has("resource_distribution"):
+	if WorldAI and WorldAI.resource_distribution:
 		var resources = WorldAI.resource_distribution
 		for resource in resources:
 			resources[resource] *= 1.05  # 5% expansion
 
 func _apply_resilience_building(details: Dictionary) -> void:
 	# Build environmental resilience
-	if WorldAI and WorldAI.has("environmental_stability"):
+	if WorldAI:
 		WorldAI.environmental_stability *= 1.02  # 2% resilience improvement
 
 func _apply_cooperation_enhancement(details: Dictionary) -> void:
@@ -582,7 +582,7 @@ func _apply_cooperation_enhancement(details: Dictionary) -> void:
 
 func _apply_innovation_acceleration(details: Dictionary) -> void:
 	# Accelerate technological innovation
-	if WorldAI and WorldAI.has("tech_innovation_rate"):
+	if WorldAI:
 		WorldAI.tech_innovation_rate *= 1.05  # 5% innovation acceleration
 
 func _apply_cultural_synthesis(details: Dictionary) -> void:

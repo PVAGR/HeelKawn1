@@ -1,5 +1,4 @@
 extends Node
-class_name WorldAI
 ## Advanced World AI with Neural Network Matrix Integration
 ## Manages civilizational planning, technological progression, and neural network-driven world evolution
 

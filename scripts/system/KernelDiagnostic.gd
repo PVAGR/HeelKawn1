@@ -336,13 +336,13 @@ func _settlement_material_snapshot() -> Array[Dictionary]:
 		for p in pawns:
 			if p.data == null:
 				continue
-			var prk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+			var prk: int = preload("res://autoloads/WorldMemory.gd")._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 			if region_set.has(prk):
 				living += 1
 		var job_count: int = 0
 		var bed_build_jobs: int = 0
 		for j in jobs:
-			var jrk: int = WorldMemory._region_key(j.work_tile.x, j.work_tile.y)
+			var jrk: int = preload("res://autoloads/WorldMemory.gd")._region_key(j.work_tile.x, j.work_tile.y)
 			if not region_set.has(jrk):
 				continue
 			job_count += 1

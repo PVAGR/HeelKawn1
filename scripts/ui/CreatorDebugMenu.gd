@@ -546,7 +546,7 @@ func _report_pawns() -> void:
 			continue
 		var d: PawnData = p.data
 		var t: Vector2i = d.tile_pos
-		var rk: int = WorldMemory._region_key(t.x, t.y)
+		var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(t.x, t.y)
 		var carry_s: String = "-"
 		if d.is_carrying():
 			carry_s = "%s x%d" % [Item.name_for(d.carrying), int(d.carrying_qty)]
@@ -664,7 +664,7 @@ func _report_portable_character() -> void:
 	var w: World = m.get_node_or_null("WorldViewport/World") as World
 	if w != null and w.data != null:
 		wseed = int(w.data.world_seed)
-	var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 	var bundle: Dictionary = p.data.to_portable_character_export(GameManager.tick_count, wseed, rk)
 	print("=== HEELKAWN_PORTABLE_CHARACTER_JSON BEGIN ===")
 	print(JSON.stringify(bundle, "\t"))

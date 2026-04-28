@@ -750,7 +750,7 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
 		"scar_max": scar_max,
 		"reputation_min": reputation_min,
 	}
-	var culture_type: int = SettlementPlanner.get_culture_type_for_settlement(draft)
+	var culture_type: int = preload("res://autoloads/SettlementPlanner.gd").get_culture_type_for_settlement(draft)
 	var state: String = _settlement_state_v1(
 			scar_max, reputation_min, last_activity_tick, last_pawn_death_tick, culture_type
 	)
@@ -873,8 +873,8 @@ func get_settlement_profile(region_key: int) -> Dictionary:
 		"region_key": region_key,
 		"center_region": int(d.get("center_region", -1)),
 		"state": str(d.get("state", "")),
-		"culture_type": SettlementPlanner.get_culture_type_for_settlement(d),
-		"culture_name": SettlementPlanner.get_culture_name_for_settlement(d),
+		"culture_type": preload("res://autoloads/SettlementPlanner.gd").get_culture_type_for_settlement(d),
+		"culture_name": preload("res://autoloads/SettlementPlanner.gd").get_culture_name_for_settlement(d),
 		"scar_max": int(d.get("scar_max", 0)),
 		"reputation_min": int(d.get("reputation_min", 0)),
 		"last_activity_tick": int(d.get("last_activity_tick", -1)),

@@ -300,7 +300,7 @@ func _active_cohort_job_type() -> int:
 
 
 func _cohort_settlement_center_for_tile(tile: Vector2i) -> int:
-	var rk: int = WorldMemory._region_key(tile.x, tile.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(tile.x, tile.y)
 	return SettlementMemory.get_center_region_for_region(rk)
 
 
@@ -628,7 +628,7 @@ static func is_job_history_critical(job_type: int) -> bool:
 
 
 func _scar_level_at_tile(t: Vector2i) -> int:
-	var rk: int = WorldMemory._region_key(t.x, t.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(t.x, t.y)
 	return int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))
 
 
@@ -663,8 +663,8 @@ func _job_history_scar_priority_offset(j: Job) -> int:
 func _job_intent_priority_offset(j: Job) -> int:
 	if j == null:
 		return 0
-	var from_rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
-	var to_rk: int = WorldMemory._region_key(j.work_tile.x, j.work_tile.y)
+	var from_rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(data.tile_pos.x, data.tile_pos.y)
+	var to_rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(j.work_tile.x, j.work_tile.y)
 	var from_center: int = SettlementMemory.get_center_region_for_region(from_rk)
 	var to_center: int = SettlementMemory.get_center_region_for_region(to_rk)
 	if from_center < 0 and to_center < 0:
@@ -736,7 +736,7 @@ func refresh_inherited_cultural_reputation() -> void:
 	if data == null:
 		initial_region_reputation = 0
 		return
-	var rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(data.tile_pos.x, data.tile_pos.y)
 	initial_region_reputation = CulturalMemory.get_region_reputation(rk)
 
 
@@ -798,7 +798,7 @@ func interact() -> bool:
 func _perform_presence_action() -> void:
 	if data == null:
 		return
-	var rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(data.tile_pos.x, data.tile_pos.y)
 	var settlement_state: String = SettlementMemory.get_state_at_region(rk)
 	data.mood = min(100.0, data.mood + 0.75)
 	WorldMemory.record_event({
@@ -829,7 +829,7 @@ func inspect() -> bool:
 func _perform_inspect_action() -> void:
 	if data == null:
 		return
-	var rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(data.tile_pos.x, data.tile_pos.y)
 	var center_region: int = SettlementMemory.get_center_region_for_region(rk)
 	var region_key_for_meaning: int = center_region if center_region >= 0 else rk
 	var meaning_label: String = WorldMeaning.get_region_meaning_label(region_key_for_meaning)
@@ -2520,7 +2520,7 @@ func _start_wander() -> void:
 	var best_score: int = -1_000_000
 	var best_sl: int = 99
 	var best_cult: int = -100
-	var from_rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
+	var from_rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(data.tile_pos.x, data.tile_pos.y)
 	var from_center: int = SettlementMemory.get_center_region_for_region(from_rk)
 	var from_p: float = float(IntentMemory.settlement_pressure.get(from_center, 0.5))
 	for offset in WANDER_OFFSETS:
@@ -2528,7 +2528,7 @@ func _start_wander() -> void:
 		if not _world.pathfinder.is_passable(t):
 			continue
 		var s: int = _scar_level_at_tile(t)
-		var rk2: int = WorldMemory._region_key(t.x, t.y)
+		var rk2: int = preload("res://autoloads/WorldMemory.gd")._region_key(t.x, t.y)
 		var crep: int = CulturalMemory.get_region_reputation(rk2)
 		var ckr2: int = SettlementMemory.get_center_region_for_region(rk2)
 		var intent2: int = int(IntentMemory.settlement_intent.get(ckr2, IntentMemory.INTENT_HOLD))

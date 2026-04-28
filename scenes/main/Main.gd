@@ -533,8 +533,8 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 	_pawn_divergence_total_claim_events_seen += 1
 	var pawn_tile: Vector2i = pawn.data.tile_pos
 	var job_tile: Vector2i = job.work_tile
-	var pawn_region: int = WorldMemory._region_key(pawn_tile.x, pawn_tile.y)
-	var job_region: int = WorldMemory._region_key(job.work_tile.x, job.work_tile.y)
+	var pawn_region: int = preload("res://autoloads/WorldMemory.gd")._region_key(pawn_tile.x, pawn_tile.y)
+	var job_region: int = preload("res://autoloads/WorldMemory.gd")._region_key(job.work_tile.x, job.work_tile.y)
 	var pawn_center_fast_map: int = _center_region_from_fast_map(pawn_region)
 	var job_center_fast_map: int = _center_region_from_fast_map(job_region)
 	var pawn_center_direct_membership: int = _center_region_from_direct_membership(pawn_region)
@@ -1281,7 +1281,7 @@ func _incarnation_candidates_snapshot() -> Array:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		var d: PawnData = p.data
-		var rk: int = WorldMemory._region_key(d.tile_pos.x, d.tile_pos.y)
+		var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(d.tile_pos.x, d.tile_pos.y)
 		var center_region: int = SettlementMemory.get_center_region_for_region(rk)
 		var settlement_state: String = SettlementMemory.get_state_at_region(center_region if center_region >= 0 else rk)
 		var region_reputation: int = CulturalMemory.get_region_reputation(center_region if center_region >= 0 else rk)
@@ -1825,7 +1825,9 @@ func _play_inspect_tone() -> void:
 	for i in range(samples):
 		var t: float = float(i) / float(sr)
 		var s: float = sin(2.0 * PI * freq * t) * 0.14
-		var frame = AudioFrame.new(Vector2(s, s))
+		var frame = AudioFrame.new()
+	frame.left = s
+	frame.right = s
 		playback.push_frame(frame)
 
 func _flush_world_memory_derivatives() -> void:
@@ -1935,7 +1937,7 @@ func _find_generational_spawn_tile() -> Vector2i:
 		for rx in range(nrx):
 			var x0: int = rx * 16
 			var y0: int = ry * 16
-			var rk: int = WorldMemory._region_key(x0, y0)
+			var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(x0, y0)
 			var t1: Vector2i = _first_valid_gen_tile_in_block(x0, y0, comp)
 			if t1.x < 0:
 				continue
@@ -2022,7 +2024,7 @@ func _get_meaning_ambient_mood_target() -> float:
 	if t.x < 0:
 		_meaning_style_bias = 0.0
 		return 0.5
-	var rk: int = WorldMemory._region_key(t.x, t.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(t.x, t.y)
 	var m: float
 	var sv: Variant = SettlementMemory.get_settlement_at_region(rk)
 	var st_here: String = ""
@@ -2109,7 +2111,7 @@ func _update_camera_meaning_bias(delta: float) -> void:
 			vel -= to_t * repel_ab
 	var t0: Vector2i = _world.world_to_tile(_camera.global_position)
 	if t0.x >= 0:
-		var rk0: int = WorldMemory._region_key(t0.x, t0.y)
+		var rk0: int = preload("res://autoloads/WorldMemory.gd")._region_key(t0.x, t0.y)
 		var rxc: int = (rk0 & 0xFFFF) * 16 + 8
 		var ryc: int = ((rk0 >> 16) & 0xFFFF) * 16 + 8
 		var rcenter: Vector2 = _world.tile_to_world(Vector2i(rxc, ryc))
@@ -2358,7 +2360,7 @@ func _on_phase8_proof_bundle_emitted(bundle_line: String) -> void:
 func _update_phase8_proof_bundle_preferred_center() -> void:
 	var preferred_center: int = -1
 	if _selected_pawn != null and is_instance_valid(_selected_pawn) and _selected_pawn.data != null:
-		var srk: int = WorldMemory._region_key(_selected_pawn.data.tile_pos.x, _selected_pawn.data.tile_pos.y)
+		var srk: int = preload("res://autoloads/WorldMemory.gd")._region_key(_selected_pawn.data.tile_pos.x, _selected_pawn.data.tile_pos.y)
 		preferred_center = SettlementMemory.get_center_region_for_region(srk)
 	if preferred_center < 0:
 		var focus: Dictionary = _observer_focus_settlement()
@@ -2373,7 +2375,7 @@ func _debug_capture_resource_truth() -> void:
 	var preferred_center: int = -1
 	# Prefer settlement already in focus via current selection.
 	if _selected_pawn != null and is_instance_valid(_selected_pawn) and _selected_pawn.data != null:
-		var srk: int = WorldMemory._region_key(_selected_pawn.data.tile_pos.x, _selected_pawn.data.tile_pos.y)
+		var srk: int = preload("res://autoloads/WorldMemory.gd")._region_key(_selected_pawn.data.tile_pos.x, _selected_pawn.data.tile_pos.y)
 		preferred_center = SettlementMemory.get_center_region_for_region(srk)
 	# Otherwise prefer observer/player focus if available.
 	if preferred_center < 0:
@@ -2784,7 +2786,7 @@ func get_player_profession_xp() -> int:
 func get_player_governance_profile() -> Dictionary:
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return {"type": "anarchy", "ruler_name": "None", "player_status": "None", "edicts_unlocked": false}
-	var rk: int = WorldMemory._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
 	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(rk)
 	var gtype: String = str(gov.get("type", "anarchy"))
 	var rid: int = int(gov.get("ruler_id", -1))
@@ -2813,7 +2815,7 @@ func get_player_governance_profile() -> Dictionary:
 func get_player_war_profile() -> Dictionary:
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return {"state": "peace", "target_settlement_id": -1, "votes": []}
-	var rk: int = WorldMemory._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
 	return SettlementMemory.get_war_profile_for_region(rk)
 
 
@@ -2853,7 +2855,7 @@ func get_camera_settlement_revival_digest() -> Dictionary:
 		out_empty["region_key"] = -2
 		out_empty["camera_region_key"] = -2
 		return out_empty
-	var cam_rk: int = WorldMemory._region_key(cam_tile.x, cam_tile.y)
+	var cam_rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(cam_tile.x, cam_tile.y)
 	out_empty["region_key"] = cam_rk
 	out_empty["camera_region_key"] = cam_rk
 	var d_cam: Dictionary = _revival_digest_for_cluster_region(_world, cam_rk)
@@ -3856,7 +3858,7 @@ func settlement_planner_count_pawns_in_regions(regions: PackedInt32Array) -> int
 		var pd: PawnData = p.get_pawn_data() as PawnData
 		if pd == null:
 			continue
-		var rk: int = WorldMemory._region_key(pd.tile_pos.x, pd.tile_pos.y)
+		var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(pd.tile_pos.x, pd.tile_pos.y)
 		if want.has(rk):
 			n += 1
 	return n
@@ -4257,7 +4259,7 @@ func _resolve_focus_target() -> Dictionary:
 		return {"type": "PAWN", "source": "mouse_pawn", "pawn": mouse_pawn}
 	var mouse_tile: Vector2i = _world.world_to_tile(mouse_world)
 	if mouse_tile.x >= 0 and mouse_tile.y >= 0:
-		var settlement: Variant = SettlementMemory.get_settlement_at_region(WorldMemory._region_key(mouse_tile.x, mouse_tile.y))
+		var settlement: Variant = SettlementMemory.get_settlement_at_region(preload("res://autoloads/WorldMemory.gd")._region_key(mouse_tile.x, mouse_tile.y))
 		if settlement is Dictionary:
 			return {"type": "SETTLEMENT", "source": "mouse_tile", "tile": mouse_tile, "settlement": settlement}
 		return {"type": "TILE", "source": "mouse_tile", "tile": mouse_tile}
@@ -4288,7 +4290,7 @@ func _focus_lines_for_pawn(focus: Dictionary) -> PackedStringArray:
 	if p == null or p.data == null:
 		return PackedStringArray(["NO FOCUS", "Move cursor over a pawn, settlement, or tile"])
 	var d: PawnData = p.data
-	var rk: int = WorldMemory._region_key(d.tile_pos.x, d.tile_pos.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(d.tile_pos.x, d.tile_pos.y)
 	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(rk)
 	var role: String = _pawn_governance_role(d, gov)
 	var war: Dictionary = SettlementMemory.get_war_profile_for_region(rk)
@@ -4418,7 +4420,7 @@ func _focus_lines_for_tile(focus: Dictionary) -> PackedStringArray:
 	var tile: Vector2i = focus.get("tile", Vector2i(-1, -1))
 	if tile.x < 0:
 		return PackedStringArray(["NO FOCUS", "Move cursor over a pawn, settlement, or tile"])
-	var rk: int = WorldMemory._region_key(tile.x, tile.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(tile.x, tile.y)
 	out.append("Tile: (%d,%d) | Region: %d" % [tile.x, tile.y, rk])
 	var biome: int = _world.data.get_biome(tile.x, tile.y) if _world != null and _world.data != null else -1
 	out.append("Biome: %d | Scar: %d" % [biome, int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))])
@@ -4486,7 +4488,7 @@ func _count_pawns_in_regions(regions_v: Variant) -> int:
 	for p in _pawn_spawner.pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
-		var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 		if wanted.has(rk):
 			n += 1
 	return n
@@ -4730,7 +4732,7 @@ func _observer_focus_settlement() -> Dictionary:
 	var settlement_idx: int = -1
 	var settlement_data: Dictionary = {}
 	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
-		var prk: int = WorldMemory._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
+		var prk: int = preload("res://autoloads/WorldMemory.gd")._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
 		for i in range(SettlementMemory.settlements.size()):
 			var stv: Variant = SettlementMemory.settlements[i]
 			if not (stv is Dictionary):
@@ -4836,7 +4838,7 @@ func _find_battlemaster_name(settlement_idx: int, settlement_data: Dictionary) -
 			continue
 		if String(p.data.military_rank).to_lower() != "battlemaster":
 			continue
-		var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 		if region_set.has(rk):
 			return p.data.display_name
 	return "None"

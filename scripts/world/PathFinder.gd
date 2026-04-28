@@ -178,7 +178,7 @@ func refresh_pawn_historic_scar_weights(p_world: World) -> void:
 			_pawn_hist_scale[i] = 1.0
 			if _astar.is_point_solid(Vector2i(x, y)):
 				continue
-			var rk: int = WorldMemory._region_key(x, y)
+			var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(x, y)
 			var sl: int = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))
 			var w: float = 1.0
 			if sl > 0:

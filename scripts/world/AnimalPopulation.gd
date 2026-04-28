@@ -30,7 +30,7 @@ static func get_food_availability_at(world: World, tile: Vector2i) -> float:
 
 
 static func _pressure_for_animal_at(world: World, tile: Vector2i) -> float:
-	var rk: int = WorldMemory._region_key(tile.x, tile.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(tile.x, tile.y)
 	var pr: float = IntentMemory.global_pressure
 	var ckr: int = SettlementMemory.get_center_region_for_region(rk)
 	if ckr >= 0 and IntentMemory.settlement_pressure.has(ckr):

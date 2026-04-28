@@ -40,7 +40,7 @@ static func _live_count_in_region(animals_arr: Array, world: World, rk: int, spe
 		var t: Vector2i = a.tile_pos
 		if not world.data.in_bounds(t.x, t.y):
 			continue
-		if WorldMemory._region_key(t.x, t.y) == rk:
+		if preload("res://autoloads/WorldMemory.gd")._region_key(t.x, t.y) == rk:
 			n += 1
 	return n
 
@@ -53,7 +53,7 @@ static func _collect_region_keys(animals_arr: Array, world: World) -> Array[int]
 		var t: Vector2i = a.tile_pos
 		if not world.data.in_bounds(t.x, t.y):
 			continue
-		seen[WorldMemory._region_key(t.x, t.y)] = true
+		seen[preload("res://autoloads/WorldMemory.gd")._region_key(t.x, t.y)] = true
 	var out: Array[int] = []
 	for k in seen:
 		out.append(int(k))
@@ -92,7 +92,7 @@ func _spawn_group_scan(world: World, species: int, need: int, initial: bool) -> 
 			if not _is_valid_tile_for_spawn(world, t, species, initial):
 				continue
 			_spawn_node_at(t, species, world)
-			var rk0: int = WorldMemory._region_key(t.x, t.y)
+			var rk0: int = preload("res://autoloads/WorldMemory.gd")._region_key(t.x, t.y)
 			var h: String = _rsk(rk0, species)
 			_initial_placed[h] = int(_initial_placed.get(h, 0)) + 1
 			left -= 1
@@ -112,7 +112,7 @@ func _is_valid_tile_for_spawn(world: World, t: Vector2i, species: int, initial: 
 		return false
 	if not world.pathfinder.is_passable(t):
 		return false
-	var rk: int = WorldMemory._region_key(t.x, t.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(t.x, t.y)
 	if SettlementMemory.is_region_in_permanently_abandoned_settlement(rk):
 		return false
 	var sl: int = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))

@@ -256,7 +256,7 @@ static func get_culture_type_for_settlement(settlement: Dictionary) -> int:
 
 ## Stable string label for logs, save-compatible analytics, and non-UI world expression glue.
 static func get_culture_name_for_settlement(settlement: Dictionary) -> String:
-	var c: int = SettlementPlanner.get_culture_type_for_settlement(settlement)
+	var c: int = preload("res://autoloads/SettlementPlanner.gd").get_culture_type_for_settlement(settlement)
 	if c == CULTURE_OPEN:
 		return "open"
 	if c == CULTURE_DEFENSIVE:
@@ -267,7 +267,7 @@ static func get_culture_name_for_settlement(settlement: Dictionary) -> String:
 ## Tiny audio intent nudge (no gameplay effect): open -> brighter, defensive -> heavier.
 ## This remains deterministic because it is derived from deterministic memory state.
 static func get_culture_audio_bias_for_settlement(settlement: Dictionary) -> float:
-	var c: int = SettlementPlanner.get_culture_type_for_settlement(settlement)
+	var c: int = preload("res://autoloads/SettlementPlanner.gd").get_culture_type_for_settlement(settlement)
 	if c == CULTURE_OPEN:
 		return 0.08
 	if c == CULTURE_DEFENSIVE:

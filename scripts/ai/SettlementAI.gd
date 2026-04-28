@@ -104,6 +104,10 @@ func _init(id: int, name: String, pos: Vector2i):
 	location = pos
 	resource_management = ResourceManagement.new()
 	_initialize_cultural_norms()
+	
+	# CollapseSystem: initialize collapse metrics for this settlement
+	if CollapseSystem != null:
+		CollapseSystem.initialize_settlement_metrics(settlement_id)
 
 func _initialize_cultural_norms() -> void:
 	# Start with basic tribal norms
@@ -118,12 +122,21 @@ func add_resident(agent_id: int) -> void:
 		resident_agents.append(agent_id)
 		population += 1
 		_update_collective_goals()
+		
+		# CollapseSystem: population growth improves stability
+		if CollapseSystem != null:
+			CollapseSystem.update_trust_level(settlement_id, 0.02)
 
 func remove_resident(agent_id: int) -> void:
 	if resident_agents.has(agent_id):
 		resident_agents.erase(agent_id)
 		population -= 1
 		_update_leadership()
+		
+		# CollapseSystem: population loss hurts stability
+		if CollapseSystem != null:
+			CollapseSystem.update_trust_level(settlement_id, -0.05)
+			CollapseSystem.update_authority_stability(settlement_id, -0.03)
 
 func _update_leadership() -> void:
 	# Remove leader if they're no longer resident
@@ -435,6 +448,11 @@ func _process_collective_goals() -> void:
 			# AuthoritySystem: grant authority to leader for organizing collective effort
 			if AuthoritySystem != null and leader_id >= 0:
 				AuthoritySystem.record_organization_action(leader_id, goal.supporters)
+			
+			# CollapseSystem: successful collective goal improves stability
+			if CollapseSystem != null:
+				CollapseSystem.update_trust_level(settlement_id, 0.05)
+				CollapseSystem.update_authority_stability(settlement_id, 0.03)
 	
 	# Remove completed goals (in reverse order)
 	for i in range(completed_goals.size() - 1, -1, -1):

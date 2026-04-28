@@ -145,6 +145,7 @@ Pulled from [`docs/HEELKAWN_STATE.md`](HEELKAWN_STATE.md):
 - Threshold tuning for “scar vs noise,” repetition→history patterns, chronicle/player‑facing interpretation UX that never overrides facts.
 - Harden interaction bridges (commands, exports, archival pipelines).
 - Online architecture and pvabazaar.org‑class integration — see [`ONLINE_AND_PVABAZAAR.md`](ONLINE_AND_PVABAZAAR.md).
+- Human-scale progression ladder and unlock pacing — see [`HUMAN_SCALE_PROGRESSION_LADDER.md`](HUMAN_SCALE_PROGRESSION_LADDER.md).
 
 ---
 

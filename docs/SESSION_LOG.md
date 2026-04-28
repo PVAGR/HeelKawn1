@@ -5,6 +5,62 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-28 - AI resume bundle added
+
+Date: 2026-04-28
+Goal: Make the repo easier for a future AI to resume from files when chat context is gone or rate-limited.
+
+Changes made:
+- Added `docs/AI_RESUME.md` as a short, high-signal resume bundle
+- Updated `docs/LLM_ONBOARDING.md` to point to the resume bundle as the fastest re-entry path
+- Kept the durable state in repo docs so a future model can continue without chat history
+
+Suggested next session:
+- Keep `docs/AI_RESUME.md` updated whenever the project’s active benchmark baseline or next target changes
+- Prefer adding a short session-log entry after any significant sim or doc change so the handoff stays current
+
+## 2026-04-28 - Human-scale ladder spec added
+
+Date: 2026-04-28
+Goal: Formalize the layered progression the sim should follow from pawn-level survival up through family, clan, settlement, nation, and world scope.
+
+Changes made:
+- Added `docs/HUMAN_SCALE_PROGRESSION_LADDER.md` describing the pawn → family → clan → settlement → region → nation → world ladder
+- Linked the ladder from `docs/HEELKAWN_STATE.md` so it becomes part of the authoritative roadmap
+- Linked the ladder from `docs/CURSOR_MASTER_PLANNING_SPEC.md` so planning stays aligned with the same progression model
+
+Suggested next session:
+- Convert the ladder into concrete implementation checkpoints for UI, job gating, trust networks, and settlement/nation layers
+- Optionally add a small diagram or matrix showing which current systems already map to each stage
+
+## 2026-04-28 - Light-weight pawn-first job gating
+
+Date: 2026-04-28
+Goal: Keep the world lightweight by stopping giant job queues and unlocking more work only as pawns level up.
+
+Changes made:
+- Added `GameManager.lightweight_simulation_mode` and `--lightweight-sim` / `--lite-sim` support
+- Capped open jobs in `JobManager` so posting stops before the queue balloons
+- Added lightweight pawn job gates in `PawnData.allows_job_type()` so fresh pawns stick to basic survival work first
+
+Suggested next session:
+- Re-run a benchmark and watch `JobManager.open_count()` to confirm the queue stays bounded
+- If needed, tighten the thresholds or add per-settlement caps so only a small, local set of jobs exists at once
+
+## 2026-04-28 - Simulation worker mode scaffolded
+
+Date: 2026-04-28
+Goal: Add a separate headless simulation-worker launch path to strip UI/render overhead without changing sim logic.
+
+Changes made:
+- Added `GameManager.simulation_worker_mode` command-line flag parsing for `--simulation-worker` / `--sim-worker`
+- Added `Main` worker-mode gating so worker launches skip UI/audio/input setup and per-frame UI updates
+- Added `play_worker.bat` to launch the project in headless simulation-worker mode
+
+Suggested next session:
+- Re-run the headless benchmark with `--simulation-worker` enabled and compare TPS against the current baseline
+- If throughput is still too low, move the true hot loops into a native plugin or further isolate simulation state from scene nodes
+
 ## 2026-04-28 - Neural network expansion complete + documentation audit
 
 Date: 2026-04-28

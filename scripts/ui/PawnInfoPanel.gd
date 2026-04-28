@@ -464,11 +464,15 @@ func _on_game_tick(tick: int) -> void:
 		_set_visible(false)
 		return
 	var stride: int = 1
-	if GameManager.game_speed >= 50.0:
+	if GameManager.game_speed >= 1024.0:
+		stride = 32
+	elif GameManager.game_speed >= 256.0:
+		stride = 16
+	elif GameManager.game_speed >= 64.0:
 		stride = 8
-	elif GameManager.game_speed >= 26.0:
+	elif GameManager.game_speed >= 16.0:
 		stride = 4
-	elif GameManager.game_speed >= 12.0:
+	elif GameManager.game_speed >= 4.0:
 		stride = 2
 	if tick % stride != 0:
 		return

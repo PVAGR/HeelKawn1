@@ -64,6 +64,46 @@ var mood: float = 100.0
 var health: float = 100.0
 var max_health: float = 100.0
 
+## Stage 1 survival enhancements
+var stamina: float = 100.0  # Depletes with work, recovers with rest
+var body_temperature: float = 37.0  # Celsius, normal range 36-38
+var pain: float = 0.0  # 0-100, affects work efficiency and mood
+var exposure_sickness: float = 0.0  # 0-100, from prolonged cold/wet
+var hypothermia_risk: float = 0.0  # 0-100, accumulates from cold exposure
+var heat_exhaustion_risk: float = 0.0  # 0-100, accumulates from heat exposure
+
+## Injury tracking: injury_type -> severity (0-100)
+## Injury types: cut, burn, blunt, broken_bone, frostbite, heat_burn
+var injuries: Dictionary = {}
+
+## Stage 1: Job proficiency per job type (0-100)
+## Higher proficiency = faster work, better quality output
+var job_proficiency: Dictionary = {}
+
+## Stage 1: Overall level (total XP / 100)
+## Level unlocks access to more complex jobs and features
+var level: int = 1
+
+## Stage 1: Skill trees - branching paths within a profession
+## Each profession has skill branches that unlock at certain levels
+var skill_trees: Dictionary = {}
+
+## Stage 1: Mastery perks - special abilities at high levels
+## Unlocked at level 10, 15, 20 in a skill
+var mastery_perks: Array = []
+
+## Stage 1: XP decay tracking - last time a skill was used
+## Used to decay unused skills over time
+var skill_last_used: Dictionary = {}
+
+## Stage 1: Perception radius (based on level and awareness)
+## Higher level = larger perception radius
+var perception_radius: float = 50.0
+
+## Stage 1: Location memory - remembers where resources and dangers are
+## location_key -> last_seen_tick, resource_type, danger_level
+var location_memory: Dictionary = {}
+
 ## Single-item inventory. Type is Item.Type (NONE = empty hands).
 ## v1 pawns can only hold one kind of thing at a time; multi-slot / weight
 ## comes later with proper inventories.
@@ -287,7 +327,93 @@ func add_skill_xp(skill: int, amount: float) -> bool:
 	var before: int = get_skill_level(skill)
 	var trait_mult: float = get_trait_mult("skill_xp_mult")
 	skill_xp[skill] = get_skill_xp(skill) + amount * trait_mult
+	
+	# Stage 1: Track last used time for XP decay
+	skill_last_used[skill] = GameManager.tick_count if "tick_count" in GameManager else 0
+	
+	# Stage 1: Check for overall level up
+	_check_level_up()
+	
+	# Stage 1: Check for mastery perk unlocks
+	_check_mastery_perks(skill)
+	
 	return get_skill_level(skill) != before
+
+
+## Stage 1: Calculate overall level from total XP across all skills
+func _check_level_up() -> void:
+	var total_xp: float = 0.0
+	for skill in skill_xp:
+		total_xp += skill_xp[skill]
+	var new_level: int = int(total_xp / XP_PER_LEVEL) + 1
+	if new_level > level:
+		level = new_level
+		# Stage 1: Unlock skill branches at certain levels
+		_unlock_skill_branches(level)
+
+
+## Stage 1: Unlock skill branches at certain levels
+func _unlock_skill_branches(new_level: int) -> void:
+	# Level 5: Unlock basic specialization
+	if new_level == 5:
+		# TODO: Add basic skill branch unlocks
+		pass
+	# Level 10: Unlock intermediate specialization
+	elif new_level == 10:
+		# TODO: Add intermediate skill branch unlocks
+		pass
+	# Level 15: Unlock advanced specialization
+	elif new_level == 15:
+		# TODO: Add advanced skill branch unlocks
+		pass
+	# Level 20: Unlock mastery
+	elif new_level == 20:
+		# TODO: Add mastery skill branch unlocks
+		pass
+
+
+## Stage 1: Check for mastery perk unlocks at high skill levels
+func _check_mastery_perks(skill: int) -> void:
+	var skill_level: int = get_skill_level(skill)
+	
+	# Level 10: First mastery perk
+	if skill_level == 10 and not _has_mastery_perk(skill, 10):
+		_grant_mastery_perk(skill, 10)
+	# Level 15: Second mastery perk
+	elif skill_level == 15 and not _has_mastery_perk(skill, 15):
+		_grant_mastery_perk(skill, 15)
+	# Level 20: Third mastery perk
+	elif skill_level == 20 and not _has_mastery_perk(skill, 20):
+		_grant_mastery_perk(skill, 20)
+
+
+## Stage 1: Check if pawn has a specific mastery perk
+func _has_mastery_perk(skill: int, perk_level: int) -> bool:
+	var perk_key: String = "%s_mastery_%d" % [skill_name(skill), perk_level]
+	return perk_key in mastery_perks
+
+
+## Stage 1: Grant a mastery perk
+func _grant_mastery_perk(skill: int, perk_level: int) -> void:
+	var perk_key: String = "%s_mastery_%d" % [skill_name(skill), perk_level]
+	mastery_perks.append(perk_key)
+	# TODO: Apply perk effects (work speed bonus, quality bonus, etc.)
+
+
+## Stage 1: Decay unused skills over time
+## Call this periodically (e.g., once per day)
+func decay_unused_skills() -> void:
+	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	var decay_threshold: int = GameManager.TICKS_PER_DAY * 7  # 7 days without use
+	
+	for skill in skill_xp:
+		var last_used: int = skill_last_used.get(skill, 0)
+		if current_tick - last_used > decay_threshold:
+			# Decay XP slowly
+			var decay_amount: float = 1.0
+			skill_xp[skill] = max(0.0, skill_xp[skill] - decay_amount)
+			# Update last used to prevent rapid decay
+			skill_last_used[skill] = current_tick
 
 
 ## Speed multiplier to apply to per-tick work progress for `skill`. Linearly
@@ -758,6 +884,8 @@ static func skill_for_job(job_type: int) -> int:
 
 ## False if this pawn is not allowed to take `job_type` from the job queue.
 func allows_job_type(job_type: int) -> bool:
+	if GameManager != null and GameManager.has_method("is_lightweight_simulation_mode") and GameManager.is_lightweight_simulation_mode():
+		return _allows_job_type_lightweight(job_type)
 	match job_type:
 		Job.Type.FORAGE:
 			return work_forage
@@ -772,6 +900,24 @@ func allows_job_type(job_type: int) -> bool:
 		Job.Type.TRADE_HAUL:
 			return true
 	return true
+
+
+func _allows_job_type_lightweight(job_type: int) -> bool:
+	if job_type == Job.Type.FORAGE:
+		return work_forage
+	if job_type == Job.Type.CHOP:
+		return work_chop
+	if job_type == Job.Type.HUNT:
+		return work_hunt
+	if job_type == Job.Type.MINE:
+		return work_mine and profession_progress_xp() >= 100
+	if job_type == Job.Type.BUILD_BED or job_type == Job.Type.BUILD_DOOR:
+		return work_build and profession_progress_xp() >= 300
+	if job_type == Job.Type.BUILD_WALL or job_type == Job.Type.MINE_WALL:
+		return work_build and work_mine and profession_progress_xp() >= 500
+	if job_type == Job.Type.TRADE_HAUL:
+		return profession_progress_xp() >= 800
+	return false
 
 
 func describe() -> String:

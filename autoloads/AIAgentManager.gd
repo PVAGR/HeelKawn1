@@ -735,8 +735,14 @@ func _on_game_tick(tick: int) -> void:
 	if not enabled:
 		return
 	
+	var stride: int = 1
+	if GameManager.game_speed >= 26.0:
+		stride = 4
+	elif GameManager.game_speed >= 12.0:
+		stride = 2
+	
 	# Update enhanced AI systems
-	if civilization_mode:
+	if civilization_mode and tick % stride == 0:
 		if world_ai:
 			world_ai.update()
 		
@@ -745,12 +751,12 @@ func _on_game_tick(tick: int) -> void:
 			settlement.update()
 	
 	# Update agents at specified frequency
-	if tick - last_update_tick >= update_frequency:
+	if tick - last_update_tick >= update_frequency * stride:
 		_update_all_agents()
 		last_update_tick = tick
 	
 	# Spawn new agents if under limit and conditions are met
-	if tick % 600 == 0:  # Check every 600 ticks (~10 minutes at 1x speed)
+	if tick % (600 * stride) == 0:  # Check every 600 ticks at base cadence
 		_maintain_agent_population()
 
 func _spawn_initial_agents() -> void:

@@ -177,6 +177,11 @@ enum State {
 	CHALLENGE,          # challenging another pawn's authority
 	## Player-ordered move (Kenshi / RimWorld "draft" step); not a work job.
 	DRAFT_WALK,
+	## Stage 1: Small direct actions
+	GATHERING,          # picking up items from ground
+	CRAFTING,           # creating simple tools from materials
+	FLEEING,            # running from danger
+	HIDING,             # taking cover from threats
 }
 
 # -------------------- runtime --------------------
@@ -1191,23 +1196,41 @@ func _on_game_tick(_tick: int) -> void:
 		_hit_flash_ticks -= 1
 	_decay_needs()
 	_check_thresholds()
-	var active_job_type: int = _active_cohort_job_type()
-	if active_job_type != _last_recruitment_job_type:
-		_last_recruitment_job_type = active_job_type
-		_invalidate_recruitment_signal_cache()
-		_refresh_or_decay_cohort_stability(true)
-	_refresh_recruitment_signal_cache()
-	update_cohort_membership()
-	_validate_or_dissolve_cohort()
-	_refresh_or_decay_cohort_stability()
-	if draft_mode:
-		_engage_enemies()
+	var stride: int = _fast_forward_tick_stride()
+	var run_full_ai: bool = stride <= 1 or (_tick % stride == 0)
+	if run_full_ai:
+		var active_job_type: int = _active_cohort_job_type()
+		if active_job_type != _last_recruitment_job_type:
+			_last_recruitment_job_type = active_job_type
+			_invalidate_recruitment_signal_cache()
+			_refresh_or_decay_cohort_stability(true)
+		_refresh_recruitment_signal_cache()
+		update_cohort_membership()
+		_validate_or_dissolve_cohort()
+		_refresh_or_decay_cohort_stability()
+		if draft_mode:
+			_engage_enemies()
 	# Panic-sleep interrupt: if rest is critically low and we're not already
 	# resolving a true emergency (asleep, eating, or fed/in-hand), abandon
 	# what we're doing and collapse. Beats the eat/haul cycle that otherwise
 	# keeps a pawn busy until rest hits 0.
 	if _should_panic_sleep():
 		_force_panic_sleep()
+		return
+	if not run_full_ai:
+		match _state:
+			State.WORKING:
+				_tick_working()
+			State.EATING:
+				_tick_eating()
+			State.SLEEPING:
+				_tick_sleeping()
+			State.TEACHING:
+				_tick_teaching()
+			State.CHALLENGE:
+				_tick_challenge()
+			_:
+				pass
 		return
 	match _state:
 		State.IDLE:
@@ -1227,6 +1250,24 @@ func _on_game_tick(_tick: int) -> void:
 			_tick_teaching()
 		State.CHALLENGE:
 			_tick_challenge()
+
+
+func _fast_forward_tick_stride() -> int:
+	if GameManager == null:
+		return 1
+	if GameManager.game_speed >= 4096.0:
+		return 64
+	if GameManager.game_speed >= 1024.0:
+		return 32
+	if GameManager.game_speed >= 256.0:
+		return 16
+	if GameManager.game_speed >= 64.0:
+		return 8
+	if GameManager.game_speed >= 16.0:
+		return 4
+	if GameManager.game_speed >= 4.0:
+		return 2
+	return 1
 
 
 func _should_panic_sleep() -> bool:
@@ -1679,6 +1720,10 @@ func _tick_working() -> void:
 	if not _is_job_tile_still_valid(_current_job):
 		_cancel_current_job()
 		return
+	
+	# Stage 1: Calculate work efficiency based on proficiency, stamina, pain, injuries
+	var efficiency: float = _calculate_work_efficiency()
+	
 	# Skill-modulated work rate: progress per tick = work_speed_for(skill).
 	# Always at least 1 progress per tick (a fresh pawn isn't slower than the
 	# old constant-rate baseline). XP accrues only while actually working.
@@ -1686,6 +1731,8 @@ func _tick_working() -> void:
 	var speed: float = data.effective_labor_mult()
 	if skill >= 0:
 		speed *= data.work_speed_for(skill)
+		# Apply efficiency modifier
+		speed *= efficiency
 		var leveled_up: bool = data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK)
 		if leveled_up:
 			if GameManager.verbose_logs():
@@ -1696,7 +1743,7 @@ func _tick_working() -> void:
 				])
 		var w: int = maxi(1, int(ceil(speed)))
 		data.add_profession_liking_for_job(_current_job.type, w)
-	_current_job.work_ticks_done += int(ceil(speed))
+		_current_job.work_ticks_done += int(ceil(speed))
 	if _current_job.work_ticks_done >= _current_job.work_ticks_needed:
 		if _current_job.type == Job.Type.TRADE_HAUL:
 			_complete_trade_pickup()
@@ -1704,6 +1751,44 @@ func _tick_working() -> void:
 			_complete_current_job()
 	# Mining and wall-mining are hazardous. Small chance of injury each tick.
 	_apply_work_hazards()
+
+
+func _calculate_work_efficiency() -> float:
+	var efficiency: float = 1.0
+	
+	# Job proficiency bonus (0-100 proficiency -> 0.5-2.0 multiplier)
+	var job_type_str: String = Job.describe_type(_current_job.type).to_lower()
+	var proficiency: float = data.job_proficiency.get(job_type_str, 0.0)
+	var proficiency_bonus: float = 0.5 + (proficiency / 100.0) * 1.5
+	efficiency *= proficiency_bonus
+	
+	# Stamina penalty (low stamina reduces efficiency)
+	if data.stamina < 30.0:
+		efficiency *= 0.5
+	elif data.stamina < 50.0:
+		efficiency *= 0.75
+	
+	# Pain penalty (pain reduces efficiency)
+	if data.pain > 50.0:
+		efficiency *= 0.5
+	elif data.pain > 30.0:
+		efficiency *= 0.75
+	
+	# Injury penalty (severe injuries reduce efficiency)
+	var total_injury_severity: float = 0.0
+	for injury_type in data.injuries:
+		total_injury_severity += data.injuries[injury_type]
+	if total_injury_severity > 50.0:
+		efficiency *= 0.5
+	elif total_injury_severity > 30.0:
+		efficiency *= 0.75
+	
+	# Tool requirement check (placeholder - needs Item system integration)
+	# TODO: Check if pawn has required tool equipped or nearby
+	# if _current_job.required_tool != 0 and not _has_required_tool():
+	# 	efficiency *= 0.25  # Severe penalty for missing tool
+	
+	return clamp(efficiency, 0.1, 2.0)
 
 
 func _tick_eating() -> void:
@@ -2042,6 +2127,12 @@ func _complete_current_job() -> void:
 	if job != null and job.type == Job.Type.HUNT and Pawn._world_hunt_stabilization_blocks():
 		_unclaim_current_job()
 		return
+	
+	# Stage 1: Increase job proficiency for completed job
+	var job_type_str: String = Job.describe_type(job.type).to_lower()
+	var current_proficiency: float = data.job_proficiency.get(job_type_str, 0.0)
+	data.job_proficiency[job_type_str] = min(100.0, current_proficiency + 2.0)  # +2 proficiency per job
+	
 	var produced_type: int = Item.Type.NONE
 	# Most harvests yield 1; only HUNT (deer) yields more, but plumbing it as a
 	# variable keeps room for future high-yield jobs without re-plumbing again.
@@ -2656,10 +2747,22 @@ func _decay_needs() -> void:
 	# Historically used land: subtle mood drain from nearby past deaths / builds.
 	if get_tree().get_root().has_node("Main/WorldTrace"):
 		var wt: WorldTrace = get_tree().get_root().get_node("Main/WorldTrace") as WorldTrace
-		if wt != null:
-			var fat: float = wt.get_local_fatigue(global_position)
-			if fat > 0.0:
-				data.mood -= fat * 0.001
+		data.mood = max(0.0, data.mood - wt.get_mood_drain_at(data.tile_pos))
+	
+	# Stage 1: Decay stamina based on activity
+	_decay_stamina()
+	
+	# Stage 1: Check temperature exposure
+	_check_temperature()
+	
+	# Stage 1: Process injuries and pain
+	_process_injuries()
+	
+	# Stage 1: Observe nearby work (learning by observation)
+	_observe_nearby_work()
+	
+	# Stage 1: Update perception and location memory
+	_update_perception()
 	
 	# Crisis behavior: very low mood causes pawns to refuse work (strike)
 	var crisis_level: float = data.get_crisis_level()
@@ -2728,6 +2831,479 @@ func _emergency_seek_food() -> void:
 		# If no stockpile found, try to find any stockpile
 		if GameManager.verbose_logs():
 			print("[Pawn] %s cannot find stockpile for emergency food" % data.display_name)
+
+
+func _decay_stamina() -> void:
+	# Stamina depletes with work, recovers with rest
+	var stamina_decay: float = 0.0
+	var stamina_recover: float = 0.0
+	
+	if _state == State.SLEEPING:
+		stamina_recover = 2.0  # Fast recovery when sleeping
+	elif _state == State.WORKING:
+		stamina_decay = 1.5  # Moderate decay when working
+	elif _state == State.WALKING_TO_JOB or _state == State.HAULING:
+		stamina_decay = 0.8  # Light decay when moving
+	elif _state == State.IDLE:
+		stamina_recover = 0.5  # Slow recovery when idle
+	
+	# Apply trait modifiers
+	var stamina_mult: float = data.get_trait_mult("stamina_decay_mult")
+	stamina_decay *= stamina_mult
+	stamina_recover *= stamina_mult
+	
+	# Pain reduces stamina recovery
+	if data.pain > 50.0:
+		stamina_recover *= 0.5
+	
+	data.stamina = clamp(data.stamina - stamina_decay + stamina_recover, 0.0, 100.0)
+
+
+func _check_temperature() -> void:
+	if _world == null:
+		return
+	
+	# Get tile temperature from world (placeholder - needs World temperature data)
+	var ambient_temp: float = 20.0  # Default to 20°C if no temperature data
+	
+	# Adjust based on shelter (being indoors helps)
+	var has_shelter: bool = false
+	if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed:
+		has_shelter = true
+	
+	# Body temperature moves toward ambient, slower with shelter
+	var temp_change_rate: float = 0.05 if has_shelter else 0.1
+	var target_temp: float = ambient_temp
+	
+	# Fire/hearths increase local temperature (placeholder)
+	# TODO: Check for nearby hearth/fire
+	
+	data.body_temperature = lerp(data.body_temperature, target_temp, temp_change_rate)
+	
+	# Accumulate hypothermia/heat exhaustion risk
+	if data.body_temperature < 35.0:
+		data.hypothermia_risk = min(100.0, data.hypothermia_risk + 0.2)
+	elif data.body_temperature > 38.0:
+		data.heat_exhaustion_risk = min(100.0, data.heat_exhaustion_risk + 0.2)
+	else:
+		# Recover from temperature risks when in normal range
+		data.hypothermia_risk = max(0.0, data.hypothermia_risk - 0.1)
+		data.heat_exhaustion_risk = max(0.0, data.heat_exhaustion_risk - 0.1)
+	
+	# Hypothermia causes health damage
+	if data.hypothermia_risk > 80.0:
+		data.health = max(0.0, data.health - 0.1)
+		data.exposure_sickness = min(100.0, data.exposure_sickness + 0.05)
+	
+	# Heat exhaustion causes health damage
+	if data.heat_exhaustion_risk > 80.0:
+		data.health = max(0.0, data.health - 0.1)
+
+
+func _process_injuries() -> void:
+	# Pain decays slowly over time
+	data.pain = max(0.0, data.pain - 0.05)
+	
+	# Process each injury
+	var injuries_to_remove: Array = []
+	for injury_type in data.injuries:
+		var severity: float = data.injuries[injury_type]
+		
+		# Injuries heal slowly when resting
+		if _state == State.SLEEPING or _state == State.IDLE:
+			severity -= 0.02
+		else:
+			severity -= 0.005  # Very slow healing when active
+		
+		# Pain from injury
+		if severity > 30.0:
+			data.pain = min(100.0, data.pain + severity * 0.01)
+		
+		# Remove healed injuries
+		if severity <= 0.0:
+			injuries_to_remove.append(injury_type)
+		else:
+			data.injuries[injury_type] = severity
+	
+	# Remove healed injuries
+	for injury_type in injuries_to_remove:
+		data.injuries.erase(injury_type)
+	
+	# Severe injuries cause health damage
+	for injury_type in data.injuries:
+		var severity: float = data.injuries[injury_type]
+		if severity > 70.0:
+			data.health = max(0.0, data.health - 0.02)
+
+
+func _observe_nearby_work() -> void:
+	# Pawns can learn by watching others work nearby
+	# Observation radius: 50 pixels
+	var observation_radius: float = 50.0
+	
+	for pawn in get_tree().get_nodes_in_group("pawns"):
+		if pawn == self or not is_instance_valid(pawn):
+			continue
+		var dist: float = position.distance_to(pawn.position)
+		if dist > observation_radius:
+			continue
+		
+		# Only learn if the other pawn is working
+		if pawn._state != State.WORKING or pawn._current_job == null:
+			continue
+		
+		# Get the skill being used
+		var observed_skill: int = PawnData.skill_for_job(pawn._current_job.type)
+		if observed_skill < 0:
+			continue
+		
+		# Small chance to learn from observation (5% per tick)
+		if randf() < 0.05:
+			# Grant small XP from observation (0.25x normal XP)
+			data.add_skill_xp(observed_skill, PawnData.XP_PER_WORK_TICK * 0.25)
+			if GameManager.verbose_logs():
+				print("[Pawn] %s observed %s working on %s" % [
+					data.display_name,
+					pawn.data.display_name,
+					Job.describe_type(pawn._current_job.type)
+				])
+
+
+func teach_skill(target_pawn: Pawn, skill: int) -> bool:
+	# Teach a skill to another pawn
+	# Requires: teacher has skill level >= 5, target has lower skill level
+	var teacher_level: int = data.get_skill_level(skill)
+	var target_level: int = target_pawn.data.get_skill_level(skill)
+	
+	if teacher_level < 5 or target_level >= teacher_level:
+		return false
+	
+	# Grant XP to target (faster than self-learning)
+	target_pawn.data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK * 2.0)
+	
+	# Small XP bonus to teacher for teaching
+	data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK * 0.5)
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s taught %s in %s" % [
+			data.display_name,
+			target_pawn.data.display_name,
+			PawnData.skill_name(skill)
+		])
+	
+	return true
+
+
+func inherit_knowledge(parent_a_id: int, parent_b_id: int) -> void:
+	# Children inherit some knowledge from parents
+	# This is called during pawn creation
+	
+	# Find parent pawns
+	var parent_a: Pawn = null
+	var parent_b: Pawn = null
+	
+	for pawn in get_tree().get_nodes_in_group("pawns"):
+		if int(pawn.data.id) == parent_a_id:
+			parent_a = pawn
+		elif int(pawn.data.id) == parent_b_id:
+			parent_b = pawn
+	
+	# Inherit 10% of parent XP in each skill
+	if parent_a != null:
+		for skill in parent_a.data.skill_xp:
+			var inherited_xp: float = parent_a.data.skill_xp[skill] * 0.1
+			data.skill_xp[skill] = data.skill_xp.get(skill, 0.0) + inherited_xp
+	
+	if parent_b != null:
+		for skill in parent_b.data.skill_xp:
+			var inherited_xp: float = parent_b.data.skill_xp[skill] * 0.1
+			data.skill_xp[skill] = data.skill_xp.get(skill, 0.0) + inherited_xp
+	
+	# Update level based on inherited XP
+	data._check_level_up()
+
+
+func _update_perception() -> void:
+	# Update perception radius based on level
+	# Base radius 50, +10 per level, max 200
+	data.perception_radius = clamp(50.0 + float(data.level) * 10.0, 50.0, 200.0)
+	
+	# Remember resources and dangers in perception radius
+	if _world == null:
+		return
+	
+	var perception_tiles: Array = _get_tiles_in_radius(data.perception_radius)
+	
+	for tile in perception_tiles:
+		var tile_key: String = "%d,%d" % [tile.x, tile.y]
+		var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+		
+		# Check for resources
+		var feature: int = _world.data.get_feature(tile.x, tile.y)
+		var resource_type: String = ""
+		if feature == TileFeature.Type.FERTILE_SOIL:
+			resource_type = "berry"
+		elif feature == TileFeature.Type.TREE:
+			resource_type = "wood"
+		elif feature == TileFeature.Type.ORE_VEIN:
+			resource_type = "stone"
+		elif feature == TileFeature.Type.RABBIT or feature == TileFeature.Type.DEER:
+			resource_type = "meat"
+		
+		# Check for dangers
+		var danger_level: float = 0.0
+		# TODO: Check for enemies, dangerous terrain, etc.
+		
+		# Update location memory
+		if resource_type != "" or danger_level > 0.0:
+			data.location_memory[tile_key] = {
+				"last_seen": current_tick,
+				"resource_type": resource_type,
+				"danger_level": danger_level
+			}
+
+
+func _get_tiles_in_radius(radius: float) -> Array:
+	# Get all tiles within perception radius
+	var tiles: Array = []
+	var radius_tiles: int = int(radius / 16.0)  # Assuming 16 pixels per tile
+	
+	for dx in range(-radius_tiles, radius_tiles + 1):
+		for dy in range(-radius_tiles, radius_tiles + 1):
+			var tile: Vector2i = data.tile_pos + Vector2i(dx, dy)
+			if _world != null and _world.is_valid_tile(tile.x, tile.y):
+				tiles.append(tile)
+	
+	return tiles
+
+
+func assess_risk(tile: Vector2i) -> float:
+	# Assess danger level of a tile (0-100)
+	var risk: float = 0.0
+	
+	if _world == null:
+		return risk
+	
+	# Check for nearby enemies
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(enemy):
+			continue
+		var enemy_tile: Vector2i = _world.world_to_tile(enemy.position)
+		var dist: float = tile.distance_squared_to(enemy_tile)
+		if dist < 25.0:  # Within 5 tiles
+			risk += 30.0
+	
+	# Check for dangerous terrain
+	var feature: int = _world.data.get_feature(tile.x, tile.y)
+	if feature == TileFeature.Type.MOUNTAIN:
+		risk += 10.0
+	
+	# Check location memory
+	var tile_key: String = "%d,%d" % [tile.x, tile.y]
+	if tile_key in data.location_memory:
+		var memory: Dictionary = data.location_memory[tile_key]
+		risk += memory.get("danger_level", 0.0)
+	
+	return clamp(risk, 0.0, 100.0)
+
+
+func remember_resources(tile: Vector2i, resource_type: String) -> void:
+	var tile_key: String = "%d,%d" % [tile.x, tile.y]
+	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	
+	data.location_memory[tile_key] = {
+		"last_seen": current_tick,
+		"resource_type": resource_type,
+		"danger_level": 0.0
+	}
+
+
+## Stage 1: Small direct actions
+
+func gather() -> bool:
+	# Pick up items from ground at current tile
+	if _world == null:
+		return false
+	
+	# Check for items on ground (placeholder - needs ground item system)
+	# TODO: Check for dropped items on current tile
+	# For now, just return false
+	return false
+
+
+func craft_simple_tool(tool_type: int) -> bool:
+	# Create a simple tool from materials
+	# Requires: pawn has materials, has crafting skill
+	# Placeholder - needs crafting system
+	# TODO: Implement crafting
+	return false
+
+
+func flee_from_danger() -> bool:
+	# Run from nearby danger
+	# Find nearest danger and move away
+	if _world == null:
+		return false
+	
+	var nearest_danger_tile: Vector2i = Vector2i(-1, -1)
+	var nearest_danger_dist: float = INF
+	
+	# Check for nearby enemies
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(enemy):
+			continue
+		var enemy_tile: Vector2i = _world.world_to_tile(enemy.position)
+		var dist: float = data.tile_pos.distance_squared_to(enemy_tile)
+		if dist < 100.0 and dist < nearest_danger_dist:  # Within 10 tiles
+			nearest_danger_tile = enemy_tile
+			nearest_danger_dist = dist
+	
+	if nearest_danger_tile.x < 0:
+		return false  # No danger nearby
+	
+	# Calculate flee direction (away from danger)
+	var flee_dir: Vector2i = data.tile_pos - nearest_danger_tile
+	var flee_target: Vector2i = data.tile_pos + flee_dir * 3  # Move 3 tiles away
+	
+	# Check if flee target is valid
+	if not _world.pathfinder.is_passable(flee_target):
+		# Try adjacent tiles
+		for offset in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var alt_target: Vector2i = data.tile_pos + offset
+			if _world.pathfinder.is_passable(alt_target):
+				flee_target = alt_target
+				break
+	
+	if not _world.pathfinder.is_passable(flee_target):
+		return false  # Nowhere to flee
+	
+	# Start fleeing
+	var path: Array[Vector2i] = _path_for_pawn(flee_target)
+	if path.is_empty():
+		return false
+	
+	_state = State.FLEEING
+	_start_path(path)
+	queue_redraw()
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s fleeing from danger" % data.display_name)
+	
+	return true
+
+
+func hide_from_threats() -> bool:
+	# Take cover from threats
+	# Find nearby cover (walls, trees, etc.)
+	if _world == null:
+		return false
+	
+	var cover_tile: Vector2i = Vector2i(-1, -1)
+	var best_cover_score: float = -INF
+	
+	# Check nearby tiles for cover
+	var radius: int = 3
+	for dx in range(-radius, radius + 1):
+		for dy in range(-radius, radius + 1):
+			var tile: Vector2i = data.tile_pos + Vector2i(dx, dy)
+			if not _world.pathfinder.is_passable(tile):
+				continue  # Can't hide in impassable terrain
+			
+			var feature: int = _world.data.get_feature(tile.x, tile.y)
+			var cover_score: float = 0.0
+			
+			# Trees provide cover
+			if feature == TileFeature.Type.TREE:
+				cover_score += 5.0
+			# Walls provide good cover
+			# TODO: Check for nearby walls
+			
+			# Prefer closer tiles
+			var dist: float = data.tile_pos.distance_to(tile)
+			cover_score -= dist * 0.5
+			
+			if cover_score > best_cover_score:
+				best_cover_score = cover_score
+				cover_tile = tile
+	
+	if cover_tile.x < 0 or best_cover_score <= 0.0:
+		return false  # No cover nearby
+	
+	# Move to cover
+	var path: Array[Vector2i] = _path_for_pawn(cover_tile)
+	if path.is_empty():
+		return false
+	
+	_state = State.HIDING
+	_start_path(path)
+	queue_redraw()
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s hiding from threats" % data.display_name)
+	
+	return true
+
+
+func _tick_gathering() -> void:
+	# Tick while gathering items from ground
+	# Placeholder - needs ground item system
+	# For now, just return to idle
+	_state = State.IDLE
+
+
+func _tick_crafting() -> void:
+	# Tick while crafting
+	# Placeholder - needs crafting system
+	# For now, just return to idle
+	_state = State.IDLE
+
+
+func _tick_fleeing() -> void:
+	# Tick while fleeing
+	# Continue until far enough from danger or reached target
+	if _path.is_empty():
+		_state = State.IDLE
+		return
+	
+	# Check if still in danger
+	var danger_nearby: bool = false
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(enemy):
+			continue
+		var enemy_tile: Vector2i = _world.world_to_tile(enemy.position)
+		var dist: float = data.tile_pos.distance_squared_to(enemy_tile)
+		if dist < 100.0:  # Within 10 tiles
+			danger_nearby = true
+			break
+	
+	if not danger_nearby:
+		# Safe now, return to idle
+		_clear_path()
+		_state = State.IDLE
+		if GameManager.verbose_logs():
+			print("[Pawn] %s reached safety" % data.display_name)
+
+
+func _tick_hiding() -> void:
+	# Tick while hiding
+	# Stay hidden until danger passes
+	if _path.is_empty():
+		# At hiding spot, wait for danger to pass
+		var danger_nearby: bool = false
+		for enemy in get_tree().get_nodes_in_group("enemies"):
+			if not is_instance_valid(enemy):
+				continue
+			var enemy_tile: Vector2i = _world.world_to_tile(enemy.position)
+			var dist: float = data.tile_pos.distance_squared_to(enemy_tile)
+			if dist < 100.0:  # Within 10 tiles
+				danger_nearby = true
+				break
+		
+		if not danger_nearby:
+			# Safe now, return to idle
+			_state = State.IDLE
+			if GameManager.verbose_logs():
+				print("[Pawn] %s emerged from hiding" % data.display_name)
 
 
 func die(_p_cause: String) -> void:

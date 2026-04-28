@@ -26,12 +26,17 @@ var posted_count: int = 0
 var completed_count: int = 0
 var cancelled_count: int = 0
 
+const MAX_OPEN_JOBS_DEFAULT: int = 256
+const MAX_OPEN_JOBS_LIGHTWEIGHT: int = 96
+
 
 ## Create-and-post helper: returns the new Job (or null if the tile already has one).
 ## work_tile defaults to `tile`; callers that need a different standing tile
 ## (e.g. MINE on an impassable mountain) should set job.work_tile after posting.
 func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) -> Job:
 	if _jobs_by_tile.has(tile):
+		return null
+	if _open.size() >= _max_open_jobs_allowed():
 		return null
 	var job := Job.new()
 	job.id = _next_id
@@ -63,6 +68,8 @@ func post_trade_haul(
 	if _jobs_by_tile.has(work_tile):
 		return null
 	if trade_from == null or trade_to == null or batch <= 0 or item == 0:
+		return null
+	if _open.size() >= _max_open_jobs_allowed():
 		return null
 	var job: Job = Job.new()
 	job.id = _next_id
@@ -232,6 +239,12 @@ func stats() -> Dictionary:
 		"completed":  completed_count,
 		"cancelled":  cancelled_count,
 	}
+
+
+func _max_open_jobs_allowed() -> int:
+	if GameManager != null and GameManager.has_method("is_lightweight_simulation_mode") and GameManager.is_lightweight_simulation_mode():
+		return MAX_OPEN_JOBS_LIGHTWEIGHT
+	return MAX_OPEN_JOBS_DEFAULT
 
 
 ## Dump the queue state + first N open jobs. Hotkeyed to J in Main.gd.

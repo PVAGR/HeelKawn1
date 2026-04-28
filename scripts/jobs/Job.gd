@@ -52,6 +52,10 @@ var trade_to: Stockpile = null
 var trade_item: int = 0
 var trade_batch: int = 0
 
+## Stage 1: Tool requirement for this job (Item.Type.NONE = no tool required)
+## Pawns must have the required tool equipped or nearby to perform the job
+var required_tool: int = 0
+
 
 static func describe_type(t: int) -> String:
 	match t:

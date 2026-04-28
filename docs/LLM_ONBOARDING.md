@@ -9,6 +9,7 @@ If you are an AI assisting with this project:
 3. HEELKAWN.txt
 4. README.md
 5. docs/CANONICAL_REPOSITORY.md — **which folder and remote are authoritative** (ignore other HeelKawn paths unless migrating here)
+6. docs/AI_RESUME.md — fastest re-entry point when context is small or rate-limited
 
 For planning, tiered canon, lore vs kernel scope, or roadmap-heavy work, also read **docs/CURSOR_MASTER_PLANNING_SPEC.md** after the files above.
 
@@ -63,6 +64,7 @@ If you are unsure, do nothing and ask.
    - why it changed
    - what to do next
 5. If a model context is full or credits run out, continue from `docs/SESSION_LOG.md` instead of rebuilding context from memory.
+6. If you need the shortest possible resume path, read `docs/AI_RESUME.md` and then `docs/SESSION_LOG.md`.
 
 ## CANON SAFETY RULE
 

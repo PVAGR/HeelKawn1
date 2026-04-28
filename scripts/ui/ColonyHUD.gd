@@ -8,7 +8,7 @@ extends CanvasLayer
 ## Reads pawn list from PawnSpawner, stockpile from World, time + speed from
 ## GameManager, and job counts from JobManager (autoload).
 
-const REFRESH_EVERY_N_TICKS: int = 1
+const REFRESH_EVERY_N_TICKS: int = 2
 const WILDLIFE_SAMPLE_EVERY_TICKS: int = 20
 const WILDLIFE_HISTORY_SIZE: int = 8
 
@@ -42,6 +42,7 @@ var _wildlife_max_total: int = 0
 var _momentum_spark: String = "........"
 var _player_input_buffer: PlayerInputBuffer = null
 var _player_pawn: Pawn = null
+var _selected_pawn: Pawn = null  # Stage 1: Currently selected pawn for inspection
 var _hud_dirty: bool = true
 ## False = compact HUD (default). True = full detail (`=` toggles).
 var hud_verbose: bool = false
@@ -114,15 +115,22 @@ func _on_tick(tick: int) -> void:
 		_sample_wildlife(tick)
 		_hud_dirty = true
 	var refresh_stride: int = REFRESH_EVERY_N_TICKS
-	if GameManager.game_speed >= 26.0:
+	var coarse: int = 12
+	if GameManager.game_speed >= 1024.0:
+		refresh_stride = 32
+		coarse = 128
+	elif GameManager.game_speed >= 256.0:
+		refresh_stride = 16
+		coarse = 64
+	elif GameManager.game_speed >= 64.0:
+		refresh_stride = 8
+		coarse = 32
+	elif GameManager.game_speed >= 16.0:
 		refresh_stride = 4
-	elif GameManager.game_speed >= 12.0:
+		coarse = 16
+	elif GameManager.game_speed >= 4.0:
 		refresh_stride = 2
-	var coarse: int = 10
-	if GameManager.game_speed >= 50.0:
-		coarse = 35
-	elif GameManager.game_speed >= 12.0:
-		coarse = 20
+		coarse = 8
 	if tick % coarse != 0 and not _hud_dirty:
 		return
 	if tick % refresh_stride == 0:
@@ -181,6 +189,9 @@ func _refresh() -> void:
 	lines.append(_pawn_line())
 	lines.append(_stockpile_line())
 	lines.append(_jobs_line())
+	# Stage 1: Add pawn inspector when a pawn is selected
+	if _selected_pawn != null:
+		lines.append(_pawn_inspector_line())
 	lines.append(_wildlife_line())
 	if hud_verbose:
 		lines.append(_player_status_line())
@@ -266,12 +277,77 @@ func hide_tile_history() -> void:
 		_history_panel.hide()
 
 
+## Stage 1: Set the currently selected pawn for inspection
+func set_selected_pawn(pawn: Pawn) -> void:
+	_selected_pawn = pawn
+	_hud_dirty = true
+	_refresh()
+
+
+## Stage 1: Pawn inspector line - shows detailed stats for selected pawn
+func _pawn_inspector_line() -> String:
+	if _selected_pawn == null or not is_instance_valid(_selected_pawn):
+		return ""
+	
+	var pd: PawnData = _selected_pawn.data
+	if pd == null:
+		return ""
+	
+	# Build detailed pawn info
+	var lines: Array = []
+	lines.append("[color=#aaddff]=== Pawn Inspector: %s ===[/color]" % pd.display_name)
+	lines.append("[color=#cccccc]Level:[/color] [b]%d[/b]  [color=#cccccc]Age:[/color] [b]%d[/b]  [color=#cccccc]Profession:[/color] [b]%s[/b]" % [
+		pd.level, pd.age, PawnData.Profession.keys()[pd.current_profession]
+	])
+	
+	# Needs
+	lines.append("[color=#cccccc]Needs:[/color] Hunger [b]%.1f[/b]  Rest [b]%.1f[/b]  Mood [b]%.1f[/b]  Health [b]%.1f[/b]" % [
+		pd.hunger, pd.rest, pd.mood, pd.health
+	])
+	
+	# Stage 1 survival stats
+	lines.append("[color=#cccccc]Survival:[/color] Stamina [b]%.1f[/b]  Temp [b]%.1f°C[/b]  Pain [b]%.1f[/b]" % [
+		pd.stamina, pd.body_temperature, pd.pain
+	])
+	
+	# Skills
+	var skill_info: Array = []
+	for skill_key in pd.skills:
+		var skill_level: int = pd.get_skill_level(PawnData.Skill.get(skill_key))
+		if skill_level > 0:
+			skill_info.append("%s:%d" % [skill_key, skill_level])
+	if skill_info.size() > 0:
+		lines.append("[color=#cccccc]Skills:[/color] [b]%s[/b]" % "  ".join(skill_info))
+	
+	# Job proficiency
+	var prof_info: Array = []
+	for job_type in pd.job_proficiency:
+		var prof: float = pd.job_proficiency[job_type]
+		if prof > 0:
+			prof_info.append("%s:%.0f" % [job_type, prof])
+	if prof_info.size() > 0:
+		lines.append("[color=#cccccc]Proficiency:[/color] [b]%s[/b]" % "  ".join(prof_info))
+	
+	# Location memory
+	var memory_count: int = pd.location_memory.size()
+	lines.append("[color=#cccccc]Memory:[/color] [b]%d[/b] locations  [color=#cccccc]Perception:[/color] [b]%.0fpx[/b]" % [
+		memory_count, pd.perception_radius
+	])
+	
+	return "\n".join(lines)
+
+
 func _time_line() -> String:
 	var tick: int = GameManager.tick_count
 	var day_len: int = DayNightCycle.TICKS_PER_DAY
 	var phase: float = float(tick % day_len) / float(day_len)
 	var phase_name: String = _phase_name(phase)
 	var speed_str: String = "PAUSED" if GameManager.is_paused else "%dx" % int(GameManager.game_speed)
+	
+	# Stage 1: Use new time scale display
+	var sim_time: Dictionary = GameManager.get_simulation_time()
+	var sim_time_str: String = GameManager.get_simulation_time_string()
+	
 	# In-game hour estimate: 24 in-game hours per visual day cycle.
 	var hour: int = int(phase * 24.0) % 24
 	var year_n: int = SimTime.sim_year_index(tick)
@@ -279,9 +355,10 @@ func _time_line() -> String:
 	var day_in_year: int = SimTime.calendar_day_within_sim_year(tick)
 	var days_per_y: int = SimTime.visual_days_per_sim_year()
 	var abs_day: int = SimTime.calendar_absolute_visual_day(tick)
+	
 	return (
-		"[b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#888888]absD%d[/color]   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](y.%d)[/color]"
-		% [year_n, day_in_year, days_per_y, hour, phase_name, abs_day, speed_str, tick, y_tick]
+		"[b]%s[/b] · [b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#888888]absD%d[/color]   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](y.%d)[/color]"
+		% [sim_time_str, year_n, day_in_year, days_per_y, hour, phase_name, abs_day, speed_str, tick, y_tick]
 	)
 
 

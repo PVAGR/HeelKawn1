@@ -222,6 +222,10 @@ var _inspect_audio_playback: AudioStreamGeneratorPlayback = null
 func _is_ultra_speed() -> bool:
 	return GameManager.game_speed >= 12.0
 
+
+func _is_simulation_worker_mode() -> bool:
+	return GameManager != null and GameManager.simulation_worker_mode
+
 func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
 	if _is_ultra_speed():
 		return ultra_ticks
@@ -340,45 +344,97 @@ func _on_ai_potential_changed(level: int) -> void:
 
 
 func _ready() -> void:
-	SettlementMemory.print_validation_smoketest_from_main()
+	var simulation_worker: bool = _is_simulation_worker_mode()
+	if not simulation_worker:
+		SettlementMemory.print_validation_smoketest_from_main()
 	GameManager.game_tick.connect(_on_game_tick)
 	GameManager.speed_changed.connect(_on_speed_changed)
-	_player_input = PlayerInputBuffer.new()
-	_player_input.name = "PlayerInputBuffer"
-	add_child(_player_input)
-	_player_input.set_process_unhandled_input(true)
-	_kernel_diagnostic = KernelDiagnostic.new()
-	_kernel_diagnostic.name = "KernelDiagnostic"
-	add_child(_kernel_diagnostic)
-	_init_ai_control_panel()
-	_init_ambient_audio()
-	# Initialize Phase 5 Map Mode overlay
-	if _map_mode_overlay != null and _map_mode_overlay.has_method("initialize"):
-		_map_mode_overlay.call("initialize", _world, _camera)
-	# React to mining progress: when a wall comes down or an ore is cleared,
-	# new ores can become reachable and we may want to queue the next tunnel.
-	JobManager.job_completed.connect(_on_job_completed)
-	JobManager.job_claimed.connect(_on_job_claimed)
-	# Bottom toolbar: time, save/load, appearance (no manual structure stamping).
-	if _toolbar != null:
-		_toolbar.speed_index_requested.connect(GameManager.set_speed_index)
-		_toolbar.pause_toggled.connect(GameManager.toggle_pause)
-		_toolbar.save_requested.connect(_colony_save)
-		_toolbar.load_requested.connect(_colony_load)
-		_toolbar.appearance_edit_requested.connect(_toggle_avatar_panel)
-	call_deferred("_ensure_avatar_panel")
+	if not simulation_worker:
+		_player_input = PlayerInputBuffer.new()
+		_player_input.name = "PlayerInputBuffer"
+		add_child(_player_input)
+		_player_input.set_process_unhandled_input(true)
+		_kernel_diagnostic = KernelDiagnostic.new()
+		_kernel_diagnostic.name = "KernelDiagnostic"
+		add_child(_kernel_diagnostic)
+		_init_ai_control_panel()
+		_init_ambient_audio()
+		# Initialize Phase 5 Map Mode overlay
+		if _map_mode_overlay != null and _map_mode_overlay.has_method("initialize"):
+			_map_mode_overlay.call("initialize", _world, _camera)
+		# React to mining progress: when a wall comes down or an ore is cleared,
+		# new ores can become reachable and we may want to queue the next tunnel.
+		JobManager.job_completed.connect(_on_job_completed)
+		JobManager.job_claimed.connect(_on_job_claimed)
+		# Bottom toolbar: time, save/load, appearance (no manual structure stamping).
+		if _toolbar != null:
+			_toolbar.speed_index_requested.connect(GameManager.set_speed_index)
+			_toolbar.pause_toggled.connect(GameManager.toggle_pause)
+			_toolbar.save_requested.connect(_colony_save)
+			_toolbar.load_requested.connect(_colony_load)
+			_toolbar.appearance_edit_requested.connect(_toggle_avatar_panel)
+		call_deferred("_ensure_avatar_panel")
 	if OS.is_debug_build():
 		print("[Main] Scene ready. Tick interval: %.2fs" % GameManager.TICK_INTERVAL_SECONDS)
 	_bootstrap_colony()
-	if _hud != null:
-		_hud.set_player_control_refs(_player_input, _player_pawn)
-	if _observer_hud != null:
-		_observer_hud.set_visible_state(false)
-	if _focus_inspector != null:
-		_focus_inspector.set_visible_state(false)
-	_init_phase8_proof_overlay()
-	_ensure_meaning_vignette()
+	if not simulation_worker:
+		if _hud != null:
+			_hud.set_player_control_refs(_player_input, _player_pawn)
+		if _observer_hud != null:
+			_observer_hud.set_visible_state(false)
+		if _focus_inspector != null:
+			_focus_inspector.set_visible_state(false)
+		_init_phase8_proof_overlay()
+		_ensure_meaning_vignette()
+	else:
+		_disconnect_worker_ui_signal_receivers()
+		_configure_simulation_worker_mode()
 	call_deferred("_log_validation_harness_observability_once")
+
+
+func _configure_simulation_worker_mode() -> void:
+	if not _is_simulation_worker_mode():
+		return
+	_play_chrome_visible = false
+	var muted_nodes: Array[Node] = [_hud, _observer_hud, _focus_inspector, _toolbar, _info_panel, _map_mode_overlay, _creator_debug_menu]
+	for node in muted_nodes:
+		if node != null and is_instance_valid(node):
+			node.process_mode = Node.PROCESS_MODE_DISABLED
+			if node is CanvasItem:
+				(node as CanvasItem).visible = false
+
+
+func _disconnect_worker_ui_signal_receivers() -> void:
+	if not _is_simulation_worker_mode():
+		return
+	var muted_prefixes: PackedStringArray = ["/root/Main/UI_Viewport", "/root/Main/CreatorDebugMenu", "/root/Main/MapModeOverlay"]
+	for signal_name in ["game_tick", "speed_changed"]:
+		var connection_list: Array = GameManager.get_signal_connection_list(signal_name)
+		for connection_any in connection_list:
+			if not (connection_any is Dictionary):
+				continue
+			var connection: Dictionary = connection_any as Dictionary
+			var callable_variant: Variant = connection.get("callable", null)
+			if not (callable_variant is Callable):
+				continue
+			var callable: Callable = callable_variant as Callable
+			if not callable.is_valid():
+				continue
+			var target: Object = callable.get_object()
+			if not (target is Node):
+				continue
+			var target_node: Node = target as Node
+			var target_path: String = str(target_node.get_path())
+			var should_disconnect: bool = false
+			for prefix in muted_prefixes:
+				if target_path.begins_with(prefix):
+					should_disconnect = true
+					break
+			if not should_disconnect:
+				continue
+			if GameManager.is_connected(signal_name, callable):
+				GameManager.disconnect(signal_name, callable)
+			target_node.queue_free()
 
 
 func _exit_tree() -> void:
@@ -1204,6 +1260,8 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 
 
 func _process(delta: float) -> void:
+	if _is_simulation_worker_mode():
+		return
 	_meaning_ambient_mood = lerpf(
 		_meaning_ambient_mood, _get_meaning_ambient_mood_target(), minf(1.0, delta * MEANING_AMBIENT_SMOOTH)
 	)
@@ -1690,6 +1748,8 @@ func _sync_pawn_inherited_cultural_reputation() -> void:
 
 
 func _on_game_tick(tick: int) -> void:
+	if _is_simulation_worker_mode() and GameManager != null and GameManager.is_tick_benchmark_enabled():
+		return
 	if _player_input != null:
 		if not is_instance_valid(_player_pawn):
 			_ensure_player_pawn_assigned()
@@ -1752,6 +1812,8 @@ func _on_game_tick(tick: int) -> void:
 	if tick % SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS == 0:
 		_accumulate_social_rapport()
 	_emit_pawn_divergence_summary_if_needed(tick)
+	if _is_simulation_worker_mode():
+		return
 	var obs_iv: int = _high_speed_interval(OBSERVER_HUD_REFRESH_TICKS, 45, 90)
 	if _observer_hud != null and tick % obs_iv == 0:
 		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))

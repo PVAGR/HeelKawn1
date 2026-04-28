@@ -173,6 +173,7 @@ enum State {
 	SLEEPING,           # restoring rest in place; wakes on full rest or starvation
 	FETCHING_MATERIAL,  # build job claimed; walking to stockpile to grab inputs
 	GOING_TO_BED,       # tired, walking toward a reserved bed
+	TEACHING,           # teaching knowledge to nearby pawn
 	## Player-ordered move (Kenshi / RimWorld "draft" step); not a work job.
 	DRAFT_WALK,
 }
@@ -199,6 +200,11 @@ var _target_world_pos: Vector2 = Vector2.ZERO
 
 ## Ticks remaining in the EATING state.
 var _eat_ticks_left: int = 0
+
+## Teaching state variables
+var _teaching_target: Pawn = null
+var _teaching_ticks_left: int = 0
+var _teaching_knowledge_type: int = -1
 
 ## Bed currently reserved by this pawn (Vector2i(-1,-1) = none). Set when we
 ## start walking to a bed, cleared on wake or panic-abort. World holds the
@@ -1137,6 +1143,8 @@ func _on_game_tick(_tick: int) -> void:
 			_tick_eating()
 		State.SLEEPING:
 			_tick_sleeping()
+		State.TEACHING:
+			_tick_teaching()
 
 
 func _should_panic_sleep() -> bool:
@@ -1195,8 +1203,9 @@ func _tick_idle() -> void:
 	#   2. Holding a non-food item          -> haul to stockpile
 	#   3. Hungry + food in stockpile       -> go eat
 	#   4. Tired (no food emergency)        -> sleep on the spot
-	#   5. Open job available               -> claim and walk to it
-	#   6. Nothing                          -> small chance to wander
+	#   5. Can teach nearby pawn           -> teach knowledge
+	#   6. Open job available               -> claim and walk to it
+	#   7. Nothing                          -> small chance to wander
 
 	# 1. Emergency: starving + holding food = eat it right now, no stockpile.
 	if data.hunger <= HUNGER_EMERGENCY and data.is_carrying() and Item.is_food(data.carrying):
@@ -1215,7 +1224,10 @@ func _tick_idle() -> void:
 	# 4. Tired -> sleep. Skipped if we're starving (food first, sleep when full).
 	if _maybe_start_sleeping():
 		return
-	# 5. Job queue: take the best reachable job. We additionally skip build
+	# 5. Teaching: if we have knowledge and a nearby pawn doesn't, teach them
+	if _maybe_start_teaching():
+		return
+	# 6. Job queue: take the best reachable job. We additionally skip build
 	# jobs whose required materials aren't on hand at the stockpile -- this
 	# prevents pawns from claim/abort looping when wood is empty.
 	#
@@ -1612,6 +1624,35 @@ func _tick_eating() -> void:
 	_eat_ticks_left -= 1
 	if _eat_ticks_left <= 0:
 		_finish_eating()
+
+
+func _tick_teaching() -> void:
+	_teaching_ticks_left -= 1
+	
+	# Check if target is still valid and nearby
+	if _teaching_target == null or not is_instance_valid(_teaching_target):
+		_finish_teaching()
+		return
+	
+	var dist: float = position.distance_to(_teaching_target.position)
+	if dist > 50.0:  # Teaching range
+		_finish_teaching()
+		return
+	
+	if _teaching_ticks_left <= 0:
+		# Teaching complete - transfer knowledge
+		if KnowledgeSystem != null and _teaching_knowledge_type >= 0:
+			var teacher_id: int = int(data.id)
+			var student_id: int = int(_teaching_target.data.id)
+			KnowledgeSystem.teach_knowledge(teacher_id, student_id, _teaching_knowledge_type)
+		_finish_teaching()
+
+
+func _finish_teaching() -> void:
+	_teaching_target = null
+	_teaching_ticks_left = 0
+	_teaching_knowledge_type = -1
+	_reset_to_idle()
 
 
 func _apply_work_hazards() -> void:
@@ -2254,6 +2295,47 @@ func _maybe_start_sleeping() -> bool:
 ## Find the closest free bed and reserve+walk to it. Returns false if no bed
 ## is available; the caller falls back to floor-sleep.
 func _try_walk_to_bed() -> bool:
+
+
+## Check if pawn can teach knowledge to nearby pawn
+func _maybe_start_teaching() -> bool:
+	if KnowledgeSystem == null:
+		return false
+	
+	var my_id: int = int(data.id)
+	var my_knowledge: Array[int] = KnowledgeSystem.get_knowledge_for_carrier(my_id)
+	
+	if my_knowledge.is_empty():
+		return false  # Nothing to teach
+	
+	# Find nearby pawn who lacks knowledge we have
+	var nearby_distance: float = 50.0
+	for pawn in get_tree().get_nodes_in_group("pawns"):
+		if pawn == self or not is_instance_valid(pawn):
+			continue
+		var dist: float = position.distance_to(pawn.position)
+		if dist > nearby_distance:
+			continue
+		
+		var their_id: int = int(pawn.data.id)
+		var their_knowledge: Array[int] = KnowledgeSystem.get_knowledge_for_carrier(their_id)
+		
+		# Find a knowledge type we have but they don't
+		for ktype in my_knowledge:
+			if not their_knowledge.has(ktype):
+				# Start teaching this knowledge
+				_teaching_target = pawn
+				_teaching_knowledge_type = ktype
+				_teaching_ticks_left = 10  # Teaching takes 10 ticks
+				_state = State.TEACHING
+				if GameManager.verbose_logs():
+					print("[Pawn] %s teaching %s knowledge type %d" % [data.display_name, pawn.data.display_name, ktype])
+				return true
+	
+	return false
+
+
+func _try_walk_to_bed() -> bool:
 	if _world == null:
 		return false
 	var bed: Vector2i = _world.find_free_bed_for(self, data.tile_pos)
@@ -2766,6 +2848,15 @@ func _draw() -> void:
 		draw_line(z_top, z_mid_r, z_color, 0.7, true)
 		draw_line(z_mid_r, z_mid_l, z_color, 0.7, true)
 		draw_line(z_mid_l, z_bot, z_color, 0.7, true)
+	# Teaching "T" mark: tiny blue T floating above a teaching pawn.
+	if _state == State.TEACHING:
+		var t_color := Color(0.45, 0.95, 1.0)
+		var t_top := body_origin + Vector2(0.0, -8.0)
+		var t_bottom := body_origin + Vector2(0.0, -5.0)
+		var t_left := body_origin + Vector2(-1.5, -8.0)
+		var t_right := body_origin + Vector2(1.5, -8.0)
+		draw_line(t_left, t_right, t_color, 0.7, true)
+		draw_line(t_top, t_bottom, t_color, 0.7, true)
 	# Draft marker is always visible when pawn is player-controlled.
 	if draft_mode:
 		var c0: Vector2 = body_origin + Vector2(-2.5, DRAFT_CHEVRON_Y)

@@ -1,0 +1,312 @@
+extends Node
+## HEELKAWN Knowledge System - Knowledge only exists if carried by humans.
+## Tracks discovery, apprenticeship, teaching, and forgetting of knowledge.
+
+enum KnowledgeType {
+	FIRE_KEEPING = 0,
+	FOOD_STORAGE = 1,
+	TOOL_MAKING = 2,
+	SEASON_READING = 3,
+	SICKNESS_AVOIDANCE = 4,
+	NAVIGATION = 5,
+	SHELTER_BUILDING = 6,
+	MEMORY_PRESERVATION = 7,
+	RUIN_INTERPRETATION = 8,
+	HOSPITALITY = 9,
+	WINTER_SURVIVAL = 10,
+	TEACHING = 11
+}
+
+## Knowledge carriers: pawn_id -> Array[KnowledgeType]
+var knowledge_carriers: Dictionary = {}
+
+## Knowledge transmission records: who taught whom what when
+var teaching_records: Array[Dictionary] = []
+
+## Knowledge loss records: lost knowledge events
+var lost_knowledge: Array[Dictionary] = []
+
+## Rediscovery records: knowledge rediscovered after loss
+var rediscovered_knowledge: Array[Dictionary] = []
+
+## Knowledge degradation: knowledge_type -> degradation level (0.0-1.0)
+var knowledge_degradation: Dictionary = {}
+
+func _ready() -> void:
+	GameManager.game_tick.connect(_on_game_tick)
+	_initialize_degradation()
+
+func _initialize_degradation() -> void:
+	for k in KnowledgeType.values():
+		knowledge_degradation[k] = 0.0
+
+func _on_game_tick(tick: int) -> void:
+	if tick % 1000 == 0:
+		_update_knowledge_degradation()
+
+# === Knowledge Carrier Management ===
+
+func add_knowledge_carrier(pawn_id: int, knowledge_type: KnowledgeType) -> void:
+	if not knowledge_carriers.has(pawn_id):
+		knowledge_carriers[pawn_id] = []
+	
+	var known: Array = knowledge_carriers[pawn_id]
+	if not knowledge_type in known:
+		known.append(knowledge_type)
+		_record_knowledge_acquisition(pawn_id, knowledge_type)
+
+func remove_knowledge_carrier(pawn_id: int) -> void:
+	if knowledge_carriers.has(pawn_id):
+		var known: Array = knowledge_carriers[pawn_id]
+		for knowledge_type in known:
+			_check_knowledge_loss(knowledge_type)
+		knowledge_carriers.erase(pawn_id)
+
+func has_knowledge(pawn_id: int, knowledge_type: KnowledgeType) -> bool:
+	if not knowledge_carriers.has(pawn_id):
+		return false
+	return knowledge_type in knowledge_carriers[pawn_id]
+
+func get_carrier_count(knowledge_type: KnowledgeType) -> int:
+	var count: int = 0
+	for pawn_id in knowledge_carriers:
+		if knowledge_type in knowledge_carriers[pawn_id]:
+			count += 1
+	return count
+
+# === Discovery Mechanism ===
+
+func discover_knowledge(pawn_id: int, knowledge_type: KnowledgeType, source_type: String = "observation") -> void:
+	# Pawn discovers knowledge through observation or experience
+	if not has_knowledge(pawn_id, knowledge_type):
+		add_knowledge_carrier(pawn_id, knowledge_type)
+		_record_discovery_event(pawn_id, knowledge_type, source_type)
+
+func attempt_discovery_from_observation(pawn_id: int, observer_tile: Vector2i, knowledge_type: KnowledgeType) -> bool:
+	# Check if pawn can discover knowledge by observing nearby activity
+	var nearby_carriers: Array[int] = _get_nearby_knowledge_carriers(observer_tile, knowledge_type, 10)
+	
+	if nearby_carriers.size() > 0:
+		# Discovery chance based on proximity and observation time
+		var discovery_chance: float = 0.1 * nearby_carriers.size()
+		if randf() < discovery_chance:
+			discover_knowledge(pawn_id, knowledge_type, "observation")
+			return true
+	
+	return false
+
+# === Apprenticeship System ===
+
+func start_apprenticeship(teacher_id: int, apprentice_id: int, knowledge_type: KnowledgeType) -> bool:
+	# Establish teaching relationship
+	if not has_knowledge(teacher_id, knowledge_type):
+		return false
+	
+	if not has_knowledge(apprentice_id, knowledge_type):
+		_record_apprenticeship_start(teacher_id, apprentice_id, knowledge_type)
+		return true
+	
+	return false
+
+func complete_teaching(teacher_id: int, apprentice_id: int, knowledge_type: KnowledgeType, success: bool) -> void:
+	if success:
+		add_knowledge_carrier(apprentice_id, knowledge_type)
+		_record_teaching_success(teacher_id, apprentice_id, knowledge_type)
+	else:
+		_record_teaching_failure(teacher_id, apprentice_id, knowledge_type)
+
+# === Forgetting Mechanism ===
+
+func _check_knowledge_loss(knowledge_type: KnowledgeType) -> void:
+	var carrier_count: int = get_carrier_count(knowledge_type)
+	
+	if carrier_count == 0:
+		# Knowledge is lost - no carriers remain
+		_record_knowledge_loss(knowledge_type, "no_carriers")
+	elif carrier_count <= 2:
+		# Knowledge is at risk - few carriers remain
+		_record_knowledge_risk(knowledge_type, carrier_count)
+
+func _update_knowledge_degradation() -> void:
+	# Knowledge degrades over time without practice/teaching
+	for knowledge_type in knowledge_degradation:
+		var carrier_count: int = get_carrier_count(knowledge_type)
+		var teaching_count: int = _count_recent_teaching(knowledge_type, 5000)
+		
+		# Degradation increases when few carriers and little teaching
+		if carrier_count <= 3 and teaching_count == 0:
+			knowledge_degradation[knowledge_type] = min(knowledge_degradation[knowledge_type] + 0.05, 1.0)
+		elif carrier_count > 5 or teaching_count > 0:
+			knowledge_degradation[knowledge_type] = max(knowledge_degradation[knowledge_type] - 0.02, 0.0)
+
+func rediscover_knowledge(pawn_id: int, knowledge_type: KnowledgeType, method: String = "rediscovery") -> void:
+	# Knowledge rediscovered after being lost
+	if not has_knowledge(pawn_id, knowledge_type):
+		add_knowledge_carrier(pawn_id, knowledge_type)
+		_record_rediscovery(pawn_id, knowledge_type, method)
+
+# === Helper Functions ===
+
+func _get_nearby_knowledge_carriers(tile: Vector2i, knowledge_type: KnowledgeType, radius: int) -> Array[int]:
+	var nearby: Array[int] = []
+	
+	for pawn_id in knowledge_carriers:
+		if knowledge_type in knowledge_carriers[pawn_id]:
+			# Get pawn tile position from PawnData if available
+			# This would need to be connected to the actual pawn system
+			nearby.append(pawn_id)
+	
+	return nearby
+
+func _count_recent_teaching(knowledge_type: KnowledgeType, within_ticks: int) -> int:
+	var count: int = 0
+	var current_tick: int = GameManager.tick_count
+	
+	for record in teaching_records:
+		if record.get("knowledge_type") == knowledge_type:
+			var record_tick: int = record.get("tick", 0)
+			if current_tick - record_tick <= within_ticks:
+				count += 1
+	
+	return count
+
+# === Event Recording ===
+
+func _record_knowledge_acquisition(pawn_id: int, knowledge_type: KnowledgeType) -> void:
+	var event: Dictionary = {
+		"type": "knowledge_acquisition",
+		"pawn_id": pawn_id,
+		"knowledge_type": knowledge_type,
+		"tick": GameManager.tick_count
+	}
+	WorldMemory.record_event(event)
+
+func _record_discovery_event(pawn_id: int, knowledge_type: KnowledgeType, source: String) -> void:
+	var event: Dictionary = {
+		"type": "knowledge_discovery",
+		"pawn_id": pawn_id,
+		"knowledge_type": knowledge_type,
+		"source": source,
+		"tick": GameManager.tick_count
+	}
+	WorldMemory.record_event(event)
+
+func _record_apprenticeship_start(teacher_id: int, apprentice_id: int, knowledge_type: KnowledgeType) -> void:
+	var event: Dictionary = {
+		"type": "apprenticeship_start",
+		"teacher_id": teacher_id,
+		"apprentice_id": apprentice_id,
+		"knowledge_type": knowledge_type,
+		"tick": GameManager.tick_count
+	}
+	WorldMemory.record_event(event)
+
+func _record_teaching_success(teacher_id: int, apprentice_id: int, knowledge_type: KnowledgeType) -> void:
+	var record: Dictionary = {
+		"teacher_id": teacher_id,
+		"apprentice_id": apprentice_id,
+		"knowledge_type": knowledge_type,
+		"success": true,
+		"tick": GameManager.tick_count
+	}
+	teaching_records.append(record)
+	
+	var event: Dictionary = {
+		"type": "teaching_success",
+		"teacher_id": teacher_id,
+		"apprentice_id": apprentice_id,
+		"knowledge_type": knowledge_type,
+		"tick": GameManager.tick_count
+	}
+	WorldMemory.record_event(event)
+
+func _record_teaching_failure(teacher_id: int, apprentice_id: int, knowledge_type: KnowledgeType) -> void:
+	var record: Dictionary = {
+		"teacher_id": teacher_id,
+		"apprentice_id": apprentice_id,
+		"knowledge_type": knowledge_type,
+		"success": false,
+		"tick": GameManager.tick_count
+	}
+	teaching_records.append(record)
+	
+	var event: Dictionary = {
+		"type": "teaching_failure",
+		"teacher_id": teacher_id,
+		"apprentice_id": apprentice_id,
+		"knowledge_type": knowledge_type,
+		"tick": GameManager.tick_count
+	}
+	WorldMemory.record_event(event)
+
+func _record_knowledge_loss(knowledge_type: KnowledgeType, reason: String) -> void:
+	var record: Dictionary = {
+		"knowledge_type": knowledge_type,
+		"reason": reason,
+		"tick": GameManager.tick_count
+	}
+	lost_knowledge.append(record)
+	
+	var event: Dictionary = {
+		"type": "knowledge_loss",
+		"knowledge_type": knowledge_type,
+		"reason": reason,
+		"tick": GameManager.tick_count
+	}
+	WorldMemory.record_event(event)
+
+func _record_knowledge_risk(knowledge_type: KnowledgeType, carrier_count: int) -> void:
+	var event: Dictionary = {
+		"type": "knowledge_risk",
+		"knowledge_type": knowledge_type,
+		"carrier_count": carrier_count,
+		"tick": GameManager.tick_count
+	}
+	WorldMemory.record_event(event)
+
+func _record_rediscovery(pawn_id: int, knowledge_type: KnowledgeType, method: String) -> void:
+	var record: Dictionary = {
+		"pawn_id": pawn_id,
+		"knowledge_type": knowledge_type,
+		"method": method,
+		"tick": GameManager.tick_count
+	}
+	rediscovered_knowledge.append(record)
+	
+	var event: Dictionary = {
+		"type": "knowledge_rediscovery",
+		"pawn_id": pawn_id,
+		"knowledge_type": knowledge_type,
+		"method": method,
+		"tick": GameManager.tick_count
+	}
+	WorldMemory.record_event(event)
+
+# === Public Interface ===
+
+func get_knowledge_status() -> Dictionary:
+	var status: Dictionary = {}
+	
+	for k in KnowledgeType.values():
+		status[KnowledgeType.keys()[k]] = {
+			"carriers": get_carrier_count(k),
+			"degradation": knowledge_degradation.get(k, 0.0),
+			"lost": _is_knowledge_lost(k)
+		}
+	
+	return status
+
+func _is_knowledge_lost(knowledge_type: KnowledgeType) -> bool:
+	return get_carrier_count(knowledge_type) == 0
+
+func get_pawn_knowledge(pawn_id: int) -> Array[KnowledgeType]:
+	if knowledge_carriers.has(pawn_id):
+		return knowledge_carriers[pawn_id]
+	return []
+
+func clear() -> void:
+	knowledge_carriers.clear()
+	teaching_records.clear()
+	lost_knowledge.clear()
+	rediscovered_knowledge.clear()
+	_initialize_degradation()

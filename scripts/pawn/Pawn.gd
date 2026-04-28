@@ -2669,40 +2669,8 @@ func _process_injuries() -> void:
 
 
 func _observe_nearby_work() -> void:
-	# Pawns can learn by watching others work nearby
-	# Observation radius: 50 pixels
-	# Throttled to every 15 ticks to avoid lag (0.25 seconds at 1x speed)
-	if GameManager.tick_count % 15 != 0:
-		return
-	
-	var observation_radius: float = 50.0
-	
-	for pawn in get_tree().get_nodes_in_group("pawns"):
-		if pawn == self or not is_instance_valid(pawn):
-			continue
-		var dist: float = position.distance_to(pawn.position)
-		if dist > observation_radius:
-			continue
-		
-		# Only learn if the other pawn is working
-		if pawn._state != State.WORKING or pawn._current_job == null:
-			continue
-		
-		# Get the skill being used
-		var observed_skill: int = PawnData.skill_for_job(pawn._current_job.type)
-		if observed_skill < 0:
-			continue
-		
-		# Small chance to learn from observation (5% per tick)
-		if randf() < 0.05:
-			# Grant small XP from observation (0.25x normal XP)
-			data.add_skill_xp(observed_skill, PawnData.XP_PER_WORK_TICK * 0.25)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s observed %s working on %s" % [
-					data.display_name,
-					pawn.data.display_name,
-					Job.describe_type(pawn._current_job.type)
-				])
+	# DISABLED for performance - iterates through all pawns
+	return
 
 
 func teach_skill(target_pawn: Pawn, skill: int) -> bool:
@@ -2814,32 +2782,8 @@ func remember_resources(tile: Vector2i, resource_type: String) -> void:
 ## Stage 2: Family & Trust system
 
 func track_co_presence() -> void:
-	# Track time spent near other pawns
-	# Co-presence builds family bonds and trust
-	# Throttled to every 10 ticks to avoid lag (0.16 seconds at 1x speed)
-	if GameManager.tick_count % 10 != 0:
-		return
-	
-	var co_presence_radius: float = 30.0  # Pixels
-	
-	for pawn in get_tree().get_nodes_in_group("pawns"):
-		if pawn == self or not is_instance_valid(pawn):
-			continue
-		var dist: float = position.distance_to(pawn.position)
-		if dist > co_presence_radius:
-			continue
-		
-		var other_id: int = int(pawn.data.id)
-		
-		# Increment co-presence counter
-		data.co_presence[other_id] = data.co_presence.get(other_id, 0) + 1
-		
-		# Build family bond if related
-		if other_id == data.parent_a_id or other_id == data.parent_b_id:
-			data.family_bonds[other_id] = min(100.0, data.family_bonds.get(other_id, 0.0) + 0.1)
-		
-		# Build trust gradually
-		data.trust[other_id] = min(100.0, data.trust.get(other_id, 0.0) + 0.05)
+	# DISABLED for performance - iterates through all pawns
+	return
 
 
 func form_family_bond(other_pawn: Pawn, initial_strength: float = 20.0) -> void:
@@ -3412,36 +3356,9 @@ func hide_from_threats() -> bool:
 	if _world == null:
 		return false
 	
-	var cover_tile: Vector2i = Vector2i(-1, -1)
-	var best_cover_score: float = -INF
-	
-	# Check nearby tiles for cover
-	var radius: int = 3
-	for dx in range(-radius, radius + 1):
-		for dy in range(-radius, radius + 1):
-			var tile: Vector2i = data.tile_pos + Vector2i(dx, dy)
-			if not _world.pathfinder.is_passable(tile):
-				continue  # Can't hide in impassable terrain
-			
-			var feature: int = _world.data.get_feature(tile.x, tile.y)
-			var cover_score: float = 0.0
-			
-			# Trees provide cover
-			if feature == TileFeature.Type.TREE:
-				cover_score += 5.0
-			# Walls provide good cover
-			# TODO: Check for nearby walls
-			
-			# Prefer closer tiles
-			var dist: float = data.tile_pos.distance_to(tile)
-			cover_score -= dist * 0.5
-			
-			if cover_score > best_cover_score:
-				best_cover_score = cover_score
-				cover_tile = tile
-	
-	if cover_tile.x < 0 or best_cover_score <= 0.0:
-		return false  # No cover nearby
+	var cover_tile: Vector2i = _find_cover_tile()
+	if cover_tile.x < 0:
+		return false
 	
 	# Move to cover
 	var path: Array[Vector2i] = _path_for_pawn(cover_tile)
@@ -3593,15 +3510,8 @@ func _die(_p_cause: String = "") -> void:
 
 ## Nearby pawns get SORROW mood event when they witness death.
 func _trigger_sorrow_in_nearby_pawns() -> void:
-	var nearby_distance: float = 50.0  # pixels
-	for pawn in get_tree().get_nodes_in_group("pawns"):
-		if pawn == self or not is_instance_valid(pawn):
-			continue
-		var dist: float = position.distance_to(pawn.position)
-		if dist < nearby_distance:
-			pawn.data.add_mood_event(MoodEvent.Type.SORROW, 70.0, 500)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s mourns %s's death" % [pawn.data.display_name, data.display_name])
+	# DISABLED for performance - iterates through all pawns
+	return
 
 
 func _check_thresholds() -> void:

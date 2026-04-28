@@ -173,262 +173,261 @@ func get_zone_tags(zone_id: String) -> PackedStringArray:
 # === Enhanced Meaning Derivation ===
 
 func _derive_settlement_meanings(events: Array) -> void:
-for event in events:
-if not event is Dictionary:
-continue
+	for event in events:
+		if not event is Dictionary:
+			continue
 
-var settlement_id: Variant = event.get("settlement_id")
-if settlement_id == null:
-continue
+		var settlement_id: Variant = event.get("settlement_id")
+		if settlement_id == null:
+			continue
 
-var sid: int = int(settlement_id)
-if not meaning_by_settlement.has(sid):
-meaning_by_settlement[sid] = {
-"starvation_count": 0,
-"teaching_success_count": 0,
-"teaching_failure_count": 0,
-"conflict_count": 0,
-"stability_score": 1.0,
-"meaning_label": "founding"
-}
+		var sid: int = int(settlement_id)
+		if not meaning_by_settlement.has(sid):
+			meaning_by_settlement[sid] = {
+				"starvation_count": 0,
+				"teaching_success_count": 0,
+				"teaching_failure_count": 0,
+				"conflict_count": 0,
+				"stability_score": 1.0,
+				"meaning_label": "founding"
+			}
 
-var rec: Dictionary = meaning_by_settlement[sid]
-var event_type: String = event.get("type", "")
+		var rec: Dictionary = meaning_by_settlement[sid]
+		var event_type: String = event.get("type", "")
 
-match event_type:
-"starvation":
-rec["starvation_count"] += 1
-"teaching_success":
-rec["teaching_success_count"] += 1
-"teaching_failure":
-rec["teaching_failure_count"] += 1
-"conflict_start":
-rec["conflict_count"] += 1
+		match event_type:
+			"starvation":
+				rec["starvation_count"] += 1
+			"teaching_success":
+				rec["teaching_success_count"] += 1
+			"teaching_failure":
+				rec["teaching_failure_count"] += 1
+			"conflict_start":
+				rec["conflict_count"] += 1
 
-for sid in meaning_by_settlement:
-var rec: Dictionary = meaning_by_settlement[sid]
-var starvation: int = rec["starvation_count"]
-var teaching_success: int = rec["teaching_success_count"]
-var teaching_failure: int = rec["teaching_failure_count"]
-var conflicts: int = rec["conflict_count"]
+	for sid in meaning_by_settlement:
+		var rec: Dictionary = meaning_by_settlement[sid]
+		var starvation: int = rec["starvation_count"]
+		var teaching_success: int = rec["teaching_success_count"]
+		var teaching_failure: int = rec["teaching_failure_count"]
+		var conflicts: int = rec["conflict_count"]
 
-var teaching_ratio: float = 1.0
-if teaching_success + teaching_failure > 0:
-teaching_ratio = float(teaching_success) / float(teaching_success + teaching_failure)
+		var teaching_ratio: float = 1.0
+		if teaching_success + teaching_failure > 0:
+			teaching_ratio = float(teaching_success) / float(teaching_success + teaching_failure)
 
-var stability: float = (
-teaching_ratio * 0.4 +
-(1.0 - min(conflicts / 10.0, 1.0)) * 0.3 +
-(1.0 - min(starvation / 5.0, 1.0)) * 0.3
-)
-rec["stability_score"] = stability
+		var stability: float = (
+			teaching_ratio * 0.4 +
+			(1.0 - min(conflicts / 10.0, 1.0)) * 0.3 +
+			(1.0 - min(starvation / 5.0, 1.0)) * 0.3
+		)
+		rec["stability_score"] = stability
 
-if starvation >= 3:
-rec["meaning_label"] = "famine_stricken"
-elif conflicts >= 5:
-rec["meaning_label"] = "war_torn"
-elif teaching_success >= 5:
-rec["meaning_label"] = "learned"
-elif stability > 0.8:
-rec["meaning_label"] = "stable"
-elif stability > 0.5:
-rec["meaning_label"] = "struggling"
-else:
-rec["meaning_label"] = "collapsing"
+		if starvation >= 3:
+			rec["meaning_label"] = "famine_stricken"
+		elif conflicts >= 5:
+			rec["meaning_label"] = "war_torn"
+		elif teaching_success >= 5:
+			rec["meaning_label"] = "learned"
+		elif stability > 0.8:
+			rec["meaning_label"] = "stable"
+		elif stability > 0.5:
+			rec["meaning_label"] = "struggling"
+		else:
+			rec["meaning_label"] = "collapsing"
 
 func _derive_bloodline_meanings(events: Array) -> void:
-for event in events:
-if not event is Dictionary:
-continue
+	for event in events:
+		if not event is Dictionary:
+			continue
 
-var bloodline_id: Variant = event.get("bloodline_id")
-if bloodline_id == null:
-continue
+		var bloodline_id: Variant = event.get("bloodline_id")
+		if bloodline_id == null:
+			continue
 
-var bid: int = int(bloodline_id)
-if not meaning_by_bloodline.has(bid):
-meaning_by_bloodline[bid] = {
-"death_count": 0,
-"authority_grants": 0,
-"knowledge_carriers": 0,
-"meaning_label": "obscure"
-}
+		var bid: int = int(bloodline_id)
+		if not meaning_by_bloodline.has(bid):
+			meaning_by_bloodline[bid] = {
+				"death_count": 0,
+				"authority_grants": 0,
+				"knowledge_carriers": 0,
+				"meaning_label": "obscure"
+			}
 
-var rec: Dictionary = meaning_by_bloodline[bid]
-var event_type: String = event.get("type", "")
+		var rec: Dictionary = meaning_by_bloodline[bid]
+		var event_type: String = event.get("type", "")
 
-match event_type:
-"pawn_death":
-rec["death_count"] += 1
-"authority_grant":
-rec["authority_grants"] += 1
-"knowledge_acquisition":
-rec["knowledge_carriers"] += 1
+		match event_type:
+			"pawn_death":
+				rec["death_count"] += 1
+			"authority_grant":
+				rec["authority_grants"] += 1
+			"knowledge_acquisition":
+				rec["knowledge_carriers"] += 1
 
-for bid in meaning_by_bloodline:
-var rec: Dictionary = meaning_by_bloodline[bid]
-var deaths: int = rec["death_count"]
-var authority: int = rec["authority_grants"]
-var knowledge: int = rec["knowledge_carriers"]
+	for bid in meaning_by_bloodline:
+		var rec: Dictionary = meaning_by_bloodline[bid]
+		var deaths: int = rec["death_count"]
+		var authority: int = rec["authority_grants"]
+		var knowledge: int = rec["knowledge_carriers"]
 
-if knowledge >= 3:
-rec["meaning_label"] = "keepers_of_fire"
-elif authority >= 3:
-rec["meaning_label"] = "protectors"
-elif deaths >= 5:
-rec["meaning_label"] = "fallen"
-elif deaths >= 2:
-rec["meaning_label"] = "scarred"
-elif authority >= 1:
-rec["meaning_label"] = "rising"
-else:
-rec["meaning_label"] = "obscure"
+		if knowledge >= 3:
+			rec["meaning_label"] = "keepers_of_fire"
+		elif authority >= 3:
+			rec["meaning_label"] = "protectors"
+		elif deaths >= 5:
+			rec["meaning_label"] = "fallen"
+		elif deaths >= 2:
+			rec["meaning_label"] = "scarred"
+		elif authority >= 1:
+			rec["meaning_label"] = "rising"
+		else:
+			rec["meaning_label"] = "obscure"
 
 func _derive_period_meanings(events: Array) -> void:
-var current_tick: int = GameManager.tick_count if GameManager else 0
+	var current_tick: int = GameManager.tick_count if GameManager else 0
 
-for event in events:
-if not event is Dictionary:
-continue
+	for event in events:
+		if not event is Dictionary:
+			continue
 
-var tick: int = event.get("tick", 0)
-var period: int = int(tick / 10000)
+		var tick: int = event.get("tick", 0)
+		var period: int = int(tick / 10000)
 
-if not meaning_by_period.has(period):
-meaning_by_period[period] = {
-"death_count": 0,
-"conflict_count": 0,
-"discovery_count": 0,
-"collapse_count": 0,
-"meaning_label": "quiet"
-}
+		if not meaning_by_period.has(period):
+			meaning_by_period[period] = {
+				"death_count": 0,
+				"conflict_count": 0,
+				"discovery_count": 0,
+				"collapse_count": 0,
+				"meaning_label": "quiet"
+			}
 
-var rec: Dictionary = meaning_by_period[period]
-var event_type: String = event.get("type", "")
+		var rec: Dictionary = meaning_by_period[period]
+		var event_type: String = event.get("type", "")
 
-match event_type:
-"pawn_death", "animal_death":
-rec["death_count"] += 1
-"conflict_start":
-rec["conflict_count"] += 1
-"knowledge_discovery":
-rec["discovery_count"] += 1
-"settlement_collapse":
-rec["collapse_count"] += 1
+		match event_type:
+			"pawn_death", "animal_death":
+				rec["death_count"] += 1
+			"conflict_start":
+				rec["conflict_count"] += 1
+			"knowledge_discovery":
+				rec["discovery_count"] += 1
+			"settlement_collapse":
+				rec["collapse_count"] += 1
 
-for period in meaning_by_period:
-var rec: Dictionary = meaning_by_period[period]
-var deaths: int = rec["death_count"]
-var conflicts: int = rec["conflict_count"]
-var discoveries: int = rec["discovery_count"]
-var collapses: int = rec["collapse_count"]
+	for period in meaning_by_period:
+		var rec: Dictionary = meaning_by_period[period]
+		var deaths: int = rec["death_count"]
+		var conflicts: int = rec["conflict_count"]
+		var discoveries: int = rec["discovery_count"]
+		var collapses: int = rec["collapse_count"]
 
-if collapses >= 1:
-rec["meaning_label"] = "age_of_ruin"
-elif conflicts >= 5:
-rec["meaning_label"] = "age_of_war"
-elif discoveries >= 3:
-rec["meaning_label"] = "age_of_wonder"
-elif deaths >= 10:
-rec["meaning_label"] = "age_of_sorrow"
-elif conflicts >= 2:
-rec["meaning_label"] = "age_of_strife"
-elif discoveries >= 1:
-rec["meaning_label"] = "age_of_learning"
-else:
-rec["meaning_label"] = "quiet_age"
+		if collapses >= 1:
+			rec["meaning_label"] = "age_of_ruin"
+		elif conflicts >= 5:
+			rec["meaning_label"] = "age_of_war"
+		elif discoveries >= 3:
+			rec["meaning_label"] = "age_of_wonder"
+		elif deaths >= 10:
+			rec["meaning_label"] = "age_of_sorrow"
+		elif conflicts >= 2:
+			rec["meaning_label"] = "age_of_strife"
+		elif discoveries >= 1:
+			rec["meaning_label"] = "age_of_discovery"
+		else:
+			rec["meaning_label"] = "quiet_age"
 
 func get_settlement_meaning(settlement_id: int) -> Dictionary:
-if meaning_by_settlement.has(settlement_id):
-return meaning_by_settlement[settlement_id].duplicate(true)
-return {
-"starvation_count": 0,
-"teaching_success_count": 0,
-"teaching_failure_count": 0,
-"conflict_count": 0,
-"stability_score": 1.0,
-"meaning_label": "founding"
-}
+	if meaning_by_settlement.has(settlement_id):
+		return meaning_by_settlement[settlement_id].duplicate(true)
+	return {
+		"starvation_count": 0,
+		"teaching_success_count": 0,
+		"teaching_failure_count": 0,
+		"conflict_count": 0,
+		"stability_score": 1.0,
+		"meaning_label": "founding"
+	}
 
 func get_bloodline_meaning(bloodline_id: int) -> Dictionary:
-if meaning_by_bloodline.has(bloodline_id):
-return meaning_by_bloodline[bloodline_id].duplicate(true)
-return {
-"death_count": 0,
-"authority_grants": 0,
-"knowledge_carriers": 0,
-"meaning_label": "obscure"
-}
+	if meaning_by_bloodline.has(bloodline_id):
+		return meaning_by_bloodline[bloodline_id].duplicate(true)
+	return {
+		"death_count": 0,
+		"authority_grants": 0,
+		"knowledge_carriers": 0,
+		"meaning_label": "obscure"
+	}
 
 func get_period_meaning(period: int) -> Dictionary:
-if meaning_by_period.has(period):
-return meaning_by_period[period].duplicate(true)
-return {
-"death_count": 0,
-"conflict_count": 0,
-"discovery_count": 0,
-"collapse_count": 0,
-"meaning_label": "quiet"
-}
+	if meaning_by_period.has(period):
+		return meaning_by_period[period].duplicate(true)
+	return {
+		"death_count": 0,
+		"conflict_count": 0,
+		"discovery_count": 0,
+		"collapse_count": 0,
+		"meaning_label": "quiet_age"
+	}
 
 func get_current_period_meaning() -> Dictionary:
-var current_tick: int = GameManager.tick_count if GameManager else 0
-var period: int = int(current_tick / 10000)
-return get_period_meaning(period)
-
+	var current_tick: int = GameManager.tick_count if GameManager else 0
+	var period: int = int(current_tick / 10000)
+	return get_period_meaning(period)
 func describe_region_meaning(region_key: int) -> String:
-var meaning: Dictionary = get_region_meaning(region_key)
-var death_density: String = meaning.get("death_density", "none")
+	var meaning: Dictionary = get_region_meaning(region_key)
+	var death_density: String = meaning.get("death_density", "none")
 
-match death_density:
-"none":
-return "This land has known peace."
-"low":
-return "This valley bears the scars of loss."
-"medium":
-return "This ground has drunk deep of blood."
-"high":
-return "This region is a grave of forgotten dead."
-_:
-return "This land is quiet."
+	match death_density:
+		"none":
+			return "This land has known peace."
+		"low":
+			return "This valley bears the scars of loss."
+		"medium":
+			return "This ground has drunk deep of blood."
+		"high":
+			return "This region is a grave of forgotten dead."
+		_:
+			return "This land is quiet."
 
 func describe_settlement_meaning(settlement_id: int) -> String:
-var meaning: Dictionary = get_settlement_meaning(settlement_id)
-var label: String = meaning.get("meaning_label", "founding")
+	var meaning: Dictionary = get_settlement_meaning(settlement_id)
+	var label: String = meaning.get("meaning_label", "founding")
 
-match label:
-"stable":
-return "This settlement endures through the strength of its teachers."
-"learned":
-return "This settlement is remembered for preserving knowledge."
-"struggling":
-return "This settlement fights to hold against the encroaching dark."
-"collapsing":
-return "This settlement is failing, its foundations crumbling."
-"famine_stricken":
-return "This settlement has known the hollow ache of hunger."
-"war_torn":
-return "This settlement bears the wounds of endless conflict."
-_:
-return "This settlement is young, its story yet unwritten."
+	match label:
+		"stable":
+			return "This settlement endures through the strength of its teachers."
+		"learned":
+			return "This settlement is remembered for preserving knowledge."
+		"struggling":
+			return "This settlement fights to hold against the encroaching dark."
+		"collapsing":
+			return "This settlement is failing, its foundations crumbling."
+		"famine_stricken":
+			return "This settlement has known the hollow ache of hunger."
+		"war_torn":
+			return "This settlement bears the wounds of endless conflict."
+		_:
+			return "This settlement is young, its story yet unwritten."
 
 func describe_bloodline_meaning(bloodline_id: int) -> String:
-var meaning: Dictionary = get_bloodline_meaning(bloodline_id)
-var label: String = meaning.get("meaning_label", "obscure")
+	var meaning: Dictionary = get_bloodline_meaning(bloodline_id)
+	var label: String = meaning.get("meaning_label", "obscure")
 
-match label:
-"keepers_of_fire":
-return "This bloodline is remembered for carrying the flame."
-"protectors":
-return "This bloodline is known for standing between the weak and the dark."
-"fallen":
-return "This bloodline has been broken by time and tragedy."
-"scarred":
-return "This bloodline bears the marks of old wounds."
-"rising":
-return "This bloodline is ascending through courage and service."
-_:
-return "This bloodline lives in quiet obscurity."
+	match label:
+		"keepers_of_fire":
+			return "This bloodline is remembered for carrying the flame."
+		"protectors":
+			return "This bloodline is known for standing between the weak and the dark."
+		"fallen":
+			return "This bloodline has been broken by time and tragedy."
+		"scarred":
+			return "This bloodline bears the marks of old wounds."
+		"rising":
+			return "This bloodline is ascending through courage and service."
+		_:
+			return "This bloodline lives in quiet obscurity."
 
 
 # === Public Query Functions ===

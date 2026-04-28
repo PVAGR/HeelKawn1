@@ -2,6 +2,15 @@ extends Node
 ## Advanced World AI with Neural Network Matrix Integration
 ## Manages civilizational planning, technological progression, and neural network-driven world evolution
 
+# Autoload references
+@onready var CollapseSystem = get_node_or_null("/root/CollapseSystem")
+@onready var PersistenceSystem = get_node_or_null("/root/PersistenceSystem")
+@onready var AuthoritySystem = get_node_or_null("/root/AuthoritySystem")
+@onready var KnowledgeSystem = get_node_or_null("/root/KnowledgeSystem")
+@onready var WorldMeaning = get_node_or_null("/root/WorldMeaning")
+@onready var WorldMemory = get_node_or_null("/root/WorldMemory")
+@onready var GameManager = get_node_or_null("/root/GameManager")
+
 enum WorldAge {
 	PRIMAL = 0,        # Pre-human, natural world
 	DAWN = 1,          # First humans, basic survival

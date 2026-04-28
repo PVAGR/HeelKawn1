@@ -894,6 +894,9 @@ func _perform_inspect_action() -> void:
 
 
 func record_skill_gain(skill: String, amount: int) -> void:
+	# Record skill gain for future tracking
+	if GameManager.verbose_logs():
+		print("[Pawn] %s gained %d skill in %s" % [data.display_name, amount, skill])
 
 
 ## Player interaction: teach knowledge to nearby pawn

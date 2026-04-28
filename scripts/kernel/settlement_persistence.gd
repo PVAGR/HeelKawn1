@@ -2,6 +2,10 @@ extends Node
 
 const _ZoneTags := preload("res://scripts/kernel/world_meaning_safe.gd")
 
+# Autoload references
+@onready var PersistenceSystem = get_node_or_null("/root/PersistenceSystem")
+@onready var GameManager = get_node_or_null("/root/GameManager")
+
 signal settlement_state_changed(settlement_id: String, old_state: String, new_state: String)
 
 # === Tuning (Phase 4.1) — change one lever at a time, run to ~5k ticks, read [Persistence] logs ===

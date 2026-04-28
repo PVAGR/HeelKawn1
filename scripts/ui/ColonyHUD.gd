@@ -610,6 +610,10 @@ func _wildlife_line() -> String:
 
 
 func _settlement_revival_digest_line() -> String:
+	var main_node: Node2D = get_tree().get_root().get_node_or_null("Main") as Node2D
+	if main_node == null or not main_node.has_method("get_camera_revival_digest_bbcode"):
+		return "[color=#9e9e9e]🏚 Cam settlement: (no Main)[/color]"
+	return main_node.get_camera_revival_digest_bbcode()
 
 
 func _knowledge_system_line() -> String:

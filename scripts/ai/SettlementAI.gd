@@ -2,6 +2,16 @@ extends RefCounted
 class_name SettlementAI
 ## Community-level AI for managing collective decision-making, cultural evolution, and settlement development
 
+# Autoload references (accessed via Engine.get_singleton or get_node)
+var CollapseSystem = null
+var AuthoritySystem = null
+var GameManager = null
+
+func _init():
+	CollapseSystem = get_node_or_null("/root/CollapseSystem")
+	AuthoritySystem = get_node_or_null("/root/AuthoritySystem")
+	GameManager = get_node_or_null("/root/GameManager")
+
 enum GovernmentType {
 	TRIBAL = 0,        # Hunter-gatherer bands, consensus decisions
 	CHIEFDOM = 1,      # Hereditary leadership, early hierarchy

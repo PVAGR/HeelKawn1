@@ -64,6 +64,7 @@ var _skill_lines: Dictionary = {}  # skill enum -> Label
 var _carry_label: Label
 var _tile_label: Label
 var _hint_label: Label
+var _inspect_msg_label: Label = null
 ## field name (e.g. "work_mine") -> CheckBox, kept in sync from PawnData.
 var _work_checkboxes: Dictionary = {}
 
@@ -261,6 +262,11 @@ func _build_ui() -> void:
 	_hint_label = _make_label("[Esc] deselect", FONT_SMALL, Color(0.55, 0.55, 0.60))
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_root_vbox.add_child(_hint_label)
+
+	# ephemeral inspect message
+	_inspect_msg_label = _make_label("", FONT_SMALL, Color(0.82, 0.82, 0.6))
+	_inspect_msg_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_root_vbox.add_child(_inspect_msg_label)
 
 	call_deferred("_reposition")
 
@@ -518,6 +524,17 @@ func _refresh() -> void:
 	
 	# Mood status with active mood event
 	var active_mood_event: MoodEvent = d.get_active_mood_event()
+
+	# Show ephemeral inspect message if recent
+	if _inspect_msg_label != null:
+		var msg: String = ""
+		if _pawn != null and is_instance_valid(_pawn) and _pawn.has_method("_last_inspect_tick"):
+			# Direct field access
+			var last_tick: int = int(_pawn._last_inspect_tick)
+			var age: int = GameManager.tick_count - last_tick
+			if age >= 0 and age < 200 and str(_pawn._last_inspect_msg) != "":
+				msg = str(_pawn._last_inspect_msg)
+		_inspect_msg_label.text = msg
 	if active_mood_event != null:
 		_mood_status_label.text = "Mood: %s (%d event: %s)" % [
 			d.mood_state_display(),

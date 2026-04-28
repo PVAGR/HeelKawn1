@@ -239,6 +239,8 @@ var _cohort_stability_job_type: int = -1
 var _anim_t: float = 0.0
 var _sfx: AudioStreamPlayer2D = null
 var _hit_flash_ticks: int = 0
+var _last_inspect_msg: String = ""
+var _last_inspect_tick: int = -999999
 
 ## Autoloads (e.g. JobManager) should call these instead of `pawn.data` — the
 ## parser can fail to resolve the `data` member on class_name Pawn in autoload scripts.
@@ -845,6 +847,9 @@ func _perform_inspect_action() -> void:
 	})
 	if GameManager.verbose_logs():
 		print("[Pawn] %s inspects region=%d meaning=%s tags=%s" % [data.display_name, region_key_for_meaning, meaning_label, str(tags)])
+	# Record ephemeral inspect message for immediate HUD feedback
+	_last_inspect_msg = "%s — %s" % [meaning_label, (", ".join(tags) if tags.size() > 0 else "no notable tags")]
+	_last_inspect_tick = GameManager.tick_count
 	queue_redraw()
 
 

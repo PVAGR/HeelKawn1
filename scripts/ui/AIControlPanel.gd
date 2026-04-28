@@ -72,7 +72,6 @@ func _on_enhanced_ai_toggled(enabled: bool) -> void:
 	enhanced_ai_enabled = enabled
 	
 	if AIAgentManager:
-		AIAgentManager.civilization_mode = enabled
 		if enabled:
 			_enable_enhanced_ai_systems()
 		else:
@@ -85,11 +84,10 @@ func _on_tick_rate_changed(value: float) -> void:
 	var new_frequency: float = value
 	var new_interval: float = 1.0 / new_frequency
 	
-	current_tick_rate = clamp(new_interval, 0.01, 0.2)  # 50x to 5x speed
-	
 	if GameManager:
-		GameManager.tick_interval = current_tick_rate
+		GameManager.tick_interval = new_interval
 	
+	current_tick_rate = new_interval
 	if tick_rate_label:
 		tick_rate_label.text = "Tick Rate: %.1fx" % new_frequency
 	tick_rate_changed.emit(new_frequency)
@@ -108,9 +106,6 @@ func _enable_enhanced_ai_systems() -> void:
 		# Enhanced AI systems are already built, just need to activate
 		AIAgentManager.civilization_mode = true
 		
-		# Increase AI update frequency for enhanced systems
-		AIAgentManager.update_frequency = max(5, 15 - ai_potential_level)
-		
 		# Enable more agents for complex civilizations
 		AIAgentManager.max_agents = min(20, 10 + ai_potential_level)
 
@@ -118,7 +113,7 @@ func _disable_enhanced_ai_systems() -> void:
 	if AIAgentManager:
 		AIAgentManager.civilization_mode = false
 		
-		# Reset to base configuration
+		# Reset to default agent count
 		AIAgentManager.update_frequency = 15
 		AIAgentManager.max_agents = 10
 
@@ -126,14 +121,14 @@ func _apply_ai_potential() -> void:
 	if not AIAgentManager:
 		return
 	
-	# Adjust AI parameters based on potential level
-	if ai_potential_level >= 1 and ai_potential_level <= 3:  # Basic AI
+	# Apply AI potential settings based on level
+	if ai_potential_level >= 1 and ai_potential_level <= 3:
 		AIAgentManager.update_frequency = 15
 		AIAgentManager.max_agents = 10
-	elif ai_potential_level >= 4 and ai_potential_level <= 6:  # Enhanced AI
+	elif ai_potential_level >= 4 and ai_potential_level <= 6:
 		AIAgentManager.update_frequency = 10
 		AIAgentManager.max_agents = 15
-	elif ai_potential_level >= 7 and ai_potential_level <= 9:  # Advanced AI
+	elif ai_potential_level >= 7 and ai_potential_level <= 9:
 		AIAgentManager.update_frequency = 5
 		AIAgentManager.max_agents = 20
 	elif ai_potential_level == 10:  # Maximum AI
@@ -148,14 +143,13 @@ func _update_status() -> void:
 	var status_text: String = ""
 	
 	if enhanced_ai_enabled:
-		status_text = "Enhanced AI: ACTIVE | "
-		status_text += "Potential: %d/10 | " % ai_potential_level
-		status_text += "Agents: %d | " % (AIAgentManager.agents.size() if AIAgentManager else 0)
-		status_text += "Civilization: Building..."
+		status_text += "Enhanced AI: ACTIVE\n"
+		status_text += "AI Potential: %d/10\n" % ai_potential_level
+		status_text += "Tick Rate: %.1fx\n" % (1.0 / current_tick_rate)
 	else:
-		status_text = "Enhanced AI: INACTIVE | "
-		status_text += "Base AI: %d agents | " % (AIAgentManager.agents.size() if AIAgentManager else 0)
-		status_text += "Standard Mode"
+		status_text += "Enhanced AI: INACTIVE\n"
+		status_text += "AI Potential: %d/10\n" % ai_potential_level
+		status_text += "Tick Rate: %.1fx\n" % (1.0 / current_tick_rate)
 	
 	if status_label:
 		status_label.text = status_text
@@ -177,17 +171,8 @@ func _calculate_civilization_score() -> float:
 	if SettlementMemory:
 		score += SettlementMemory.settlements.size() * 10.0
 	
-	# Score from world events
-	if WorldMemory:
-		score += WorldMemory.event_count() * 0.5
-	
-	# Score from cultural development
-	if CulturalMemory:
-		score += CulturalMemory.reputation_by_region.size() * 5.0
-	
-	# Bonus for enhanced AI
-	if enhanced_ai_enabled:
-		score += ai_potential_level * 10.0
+	# Add AI potential contribution
+	score += ai_potential_level * 10.0
 	
 	return clamp(score, 0.0, 100.0)
 

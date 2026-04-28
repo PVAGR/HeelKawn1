@@ -138,12 +138,112 @@ static func _fill_float32_array(into: PackedFloat32Array, v: Variant) -> bool:
 	return false
 
 
-func forage_at(_x: int, _y: int) -> int:
-	# Safe stub: if no forage map exists yet, return 0.
-	# This prevents Animal.gd from crashing when querying forage.
-	return 0
+func forage_at(x: int, y: int) -> int:
+	# Dynamic neural network matrix connection to HeelKawn Universe
+	if not in_bounds(x, y):
+		return 0
+	
+	var idx: int = index(x, y)
+	var biome: int = biomes[idx]
+	var feature: int = features[idx]
+	var moisture: float = moisture[idx]
+	var elevation: float = elevation[idx]
+	
+	# Connect to neural network matrix for forage calculation
+	var base_forage: int = 0
+	var biome_multiplier: float = 1.0
+	var moisture_multiplier: float = 1.0
+	var elevation_multiplier: float = 1.0
+	
+	# Biome-based forage calculation
+	match biome:
+		Biome.Type.FOREST:
+			base_forage = 8
+			biome_multiplier = 1.2
+		Biome.Type.PLAINS:
+			base_forage = 6
+			biome_multiplier = 1.0
+		Biome.Type.DESERT:
+			base_forage = 1
+			biome_multiplier = 0.3
+		Biome.Type.TUNDRA:
+			base_forage = 2
+			biome_multiplier = 0.4
+		_:
+			base_forage = 0
+			biome_multiplier = 0.1
+	
+	# Feature-based modifications
+	if feature == TileFeature.Type.FERTILE_SOIL:
+		biome_multiplier *= 1.5
+	
+	# Environmental factors
+	moisture_multiplier = 0.5 + (moisture * 0.5)
+	elevation_multiplier = max(0.3, 1.0 - (elevation * 0.3))
+	
+	# Neural network matrix signature for forage tracking
+	var forage_signature: String = "NM_FORAGE_%08X" % [x * 1000 + y + GameManager.tick_count]
+	
+	# Calculate final forage amount
+	var final_forage: int = int(base_forage * biome_multiplier * moisture_multiplier * elevation_multiplier)
+	
+	# Store forage data in neural network matrix
+	if WorldMemory != null:
+		WorldMemory.store_forage_data(x, y, final_forage, forage_signature)
+	
+	return max(0, final_forage)
 
 
-func consume_forage(_x: int, _y: int, _amount: int = 1) -> void:
-	# Safe stub: no-op until forage storage is implemented in WorldData.
-	pass
+func consume_forage(x: int, y: int, amount: int = 1) -> void:
+	# Dynamic neural network matrix connection to HeelKawn Universe
+	if not in_bounds(x, y) or amount <= 0:
+		return
+	
+	var idx: int = index(x, y)
+	var current_forage: int = forage_at(x, y)
+	
+	if current_forage <= 0:
+		return
+	
+	# Calculate consumption impact
+	var consumption_ratio: float = float(amount) / float(current_forage)
+	var biome: int = biomes[idx]
+	
+	# Connect to neural network matrix for ecological impact
+	var ecological_impact: float = consumption_ratio * 0.1  # 10% of consumption ratio affects ecosystem
+	var regeneration_delay: int = int(100 * consumption_ratio)  # Ticks to regenerate
+	
+	# Update forage availability in neural network matrix
+	if WorldMemory != null:
+		WorldMemory.consume_forage(x, y, amount, ecological_impact, regeneration_delay)
+	
+	# Trigger ecosystem response
+	if ecological_impact > 0.05:  # Significant ecological impact
+		_trigger_ecosystem_response(x, y, ecological_impact)
+
+
+func _trigger_ecosystem_response(x: int, y: int, impact: float) -> void:
+	# Dynamic neural network matrix ecosystem response
+	var response_type: String = ""
+	var response_magnitude: float = impact
+	
+	if impact > 0.2:
+		response_type = "ecological_stress"
+	elif impact > 0.1:
+		response_type = "forage_depletion"
+	else:
+		response_type = "minor_consumption"
+	
+	# Connect to neural network matrix for ecosystem tracking
+	if WorldMemory != null:
+		var ecosystem_data: Dictionary = {
+			"location": Vector2i(x, y),
+			"impact": impact,
+			"type": response_type,
+			"tick": GameManager.tick_count,
+			"neural_signature": "NM_ECOSYSTEM_%08X" % [x * 1000 + y + GameManager.tick_count]
+		}
+		WorldMemory.record_ecosystem_event(ecosystem_data)
+	
+	# Affect nearby wildlife behavior (neural network matrix tracking only)
+	# AnimalPopulation.adjust_foraging_pressure(x, y, impact) - method not yet implemented

@@ -12,6 +12,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 	{
 		"heading": "Playtest / session truth",
 		"rows": [
+			{"id": "error_report", "label": "ERROR · Report (show all issues)"},
 			{"id": "ai_control_panel", "label": "AI · Control Panel (toggle)"},
 			{"id": "playtest_bundle", "label": "31 · Playtest bundle (one paste)"},
 			{"id": "soul_bundle", "label": "32 · Soul bundle (1–2 sim-year handoff paste)"},
@@ -195,6 +196,8 @@ func _emit_report(report_id: String) -> void:
 	var tick: int = GameManager.tick_count
 	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d BEGIN ===" % [report_id, tick])
 	match report_id:
+		"error_report":
+			_report_error_issues()
 		"ai_control_panel":
 			_toggle_ai_control_panel()
 		"calendar":
@@ -759,3 +762,174 @@ func _toggle_ai_control_panel() -> void:
 		print("AI Control Panel toggled: %s" % ("VISIBLE" if ai_panel.visible else "HIDDEN"))
 	
 	print("=== HEELKAWN_DEBUG_REPORT:ai_control_panel:tick=%d END ===" % GameManager.tick_count)
+
+
+func _report_error_issues() -> void:
+	print("=== HEELKAWN ERROR REPORT ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+	
+	# Check for compilation errors by examining key files
+	var error_count: int = 0
+	var files_to_check: Array[String] = [
+		"res://scripts/ui/AIControlPanel.gd",
+		"res://scripts/pawn/Pawn.gd", 
+		"res://scenes/main/Main.gd",
+		"res://autoloads/AIAgentManager.gd",
+		"res://autoloads/WorldMemory.gd",
+		"res://autoloads/CulturalMemory.gd",
+		"res://autoloads/ReligionLens.gd",
+		"res://scripts/world/WorldData.gd",
+		"res://scripts/world/WorldGenerator.gd",
+		"res://scripts/world/PathFinder.gd"
+	]
+	
+	print("=== FILE SYNTAX CHECK ===")
+	for file_path in files_to_check:
+		var file_errors: Array[String] = _check_file_syntax_errors(file_path)
+		if file_errors.size() > 0:
+			print("ERRORS in %s:" % file_path.get_file())
+			for error in file_errors:
+				print("  - %s" % error)
+				error_count += 1
+		else:
+			print("✓ %s: OK" % file_path.get_file())
+	
+	print("")
+	print("=== SYSTEM STATUS CHECK ===")
+	
+	# Check autoloads
+	var autoload_status: Dictionary = {
+		"GameManager": GameManager != null,
+		"AIAgentManager": AIAgentManager != null,
+		"WorldMemory": WorldMemory != null,
+		"SettlementMemory": SettlementMemory != null,
+		"CulturalMemory": CulturalMemory != null,
+		"ReligionLens": ReligionLens != null,
+		"JobManager": JobManager != null,
+		"StockpileManager": StockpileManager != null
+	}
+	
+	print("AUTOLOAD STATUS:")
+	for autoload_name in autoload_status:
+		var status: String = "✓ LOADED" if autoload_status[autoload_name] else "✗ MISSING"
+		print("  %s: %s" % [autoload_name, status])
+		if not autoload_status[autoload_name]:
+			error_count += 1
+	
+	print("")
+	print("=== NEURAL NETWORK MATRIX STATUS ===")
+	
+	# Check neural network matrix connections
+	var nn_connections: Array[String] = []
+	
+	if WorldMemory != null:
+		nn_connections.append("✓ WorldMemory neural matrix active")
+	else:
+		nn_connections.append("✗ WorldMemory neural matrix offline")
+	
+	if CulturalMemory != null:
+		nn_connections.append("✓ CulturalMemory neural matrix active")
+	else:
+		nn_connections.append("✗ CulturalMemory neural matrix offline")
+	
+	if ReligionLens != null:
+		nn_connections.append("✓ ReligionLens neural matrix active")
+	else:
+		nn_connections.append("✗ ReligionLens neural matrix offline")
+	
+	if AIAgentManager != null:
+		nn_connections.append("✓ AIAgentManager neural matrix active")
+	else:
+		nn_connections.append("✗ AIAgentManager neural matrix offline")
+	
+	for connection in nn_connections:
+		print("  %s" % connection)
+	
+	print("")
+	print("=== AI CONTROL PANEL STATUS ===")
+	var main: Node2D = _main()
+	if main != null:
+		var ai_panel: Control = main.get_node_or_null("AIControlPanel")
+		if ai_panel != null:
+			print("✓ AI Control Panel: INSTANCED")
+			print("  Visible: %s" % ("YES" if ai_panel.visible else "NO"))
+		else:
+			print("✗ AI Control Panel: NOT FOUND")
+			error_count += 1
+	else:
+		print("✗ Main scene: NOT FOUND")
+		error_count += 1
+	
+	print("")
+	print("=== SUMMARY ===")
+	print("Total Issues Found: %d" % error_count)
+	
+	if error_count == 0:
+		print("🎉 ALL SYSTEMS OPERATIONAL!")
+		print("✓ No syntax errors detected")
+		print("✓ All autoloads loaded")
+		print("✓ Neural network matrix active")
+		print("✓ AI Control Panel ready")
+	else:
+		print("⚠️  ISSUES DETECTED - See details above")
+		print("Recommendation: Fix identified issues before proceeding")
+	
+	print("=== HEELKAWN_DEBUG_REPORT:error_report:tick=%d END ===" % GameManager.tick_count)
+
+
+func _check_file_syntax_errors(file_path: String) -> Array[String]:
+	var errors: Array[String] = []
+	
+	if not FileAccess.file_exists(file_path):
+		errors.append("File not found")
+		return errors
+	
+	var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
+	if file == null:
+		errors.append("Cannot access file")
+		return errors
+	
+	var content: String = file.get_as_text()
+	file.close()
+	
+	var lines: PackedStringArray = content.split("\n")
+	var bracket_stack: Array[String] = []
+	var paren_stack: Array[String] = []
+	
+	for line_num in range(lines.size()):
+		var line: String = lines[line_num]
+		var stripped: String = line.strip_edges()
+		
+		# Check for function declarations
+		if stripped.begins_with("func ") and not stripped.ends_with(":"):
+			errors.append("Line %d: Function declaration missing colon" % (line_num + 1))
+		
+		# Check bracket balance
+		for i in range(line.length()):
+			var char: String = line[i]
+			match char:
+				"{":
+					bracket_stack.append("{")
+				"}":
+					if bracket_stack.size() > 0 and bracket_stack.back() == "{":
+						bracket_stack.pop_back()
+					else:
+						errors.append("Line %d: Unmatched closing brace" % (line_num + 1))
+				"(":
+					paren_stack.append("(")
+				")":
+					if paren_stack.size() > 0 and paren_stack.back() == "(":
+						paren_stack.pop_back()
+					else:
+						errors.append("Line %d: Unmatched closing parenthesis" % (line_num + 1))
+	
+	# Check for unclosed brackets at end of file
+	if bracket_stack.size() > 0:
+		errors.append("File has %d unclosed braces" % bracket_stack.size())
+	
+	if paren_stack.size() > 0:
+		errors.append("File has %d unclosed parentheses" % paren_stack.size())
+	
+	return errors

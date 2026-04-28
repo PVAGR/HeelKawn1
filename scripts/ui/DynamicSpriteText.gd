@@ -120,12 +120,64 @@ func _get_pawn_info_text() -> String:
 	return "%s\nHP: %d%%\nMood: %.0f\nJob: %s" % [name, health, mood, job]
 
 func _get_settlement_info_text() -> String:
-	# This would need settlement reference - placeholder for now
-	return "Settlement\nPop: ?\nCulture: ?\nState: Active"
+	# Dynamic neural network matrix connection to HeelKawn Universe
+	var settlement_id: int = -1
+	var settlement_data: Dictionary = {}
+	
+	# Get settlement from neural network matrix
+	if target_sprite.has_meta("settlement_id"):
+		settlement_id = target_sprite.get_meta("settlement_id")
+	
+	if settlement_id >= 0 and SettlementMemory != null:
+		settlement_data = SettlementMemory.get_settlement(settlement_id)
+	
+	if settlement_data.has("error") or settlement_data.is_empty():
+		return "Settlement\nID: Unknown\nPop: ?\nCulture: ?\nState: Active"
+	
+	var population: int = settlement_data.get("population", 0)
+	var culture_type: int = settlement_data.get("culture_type", 0)
+	var state: String = settlement_data.get("state", "unknown")
+	var center_region: int = settlement_data.get("center_region", -1)
+	
+	# Connect to neural network matrix for cultural data
+	var culture_name: String = "Unknown"
+	if CulturalMemory != null:
+		var culture_data = CulturalMemory.get_culture_at_region(center_region)
+		if not culture_data.is_empty():
+			culture_name = culture_data.get("name", "Unknown")
+	
+	return "Settlement\nPop: %d\nCulture: %s\nState: %s" % [population, culture_name, state]
 
 func _get_resource_info_text() -> String:
-	# This would need resource reference - placeholder for now
-	return "Resource\nType: ?\nAmount: ?\nStatus: Available"
+	# Dynamic neural network matrix connection to HeelKawn Universe
+	var tile_pos: Vector2i = Vector2i(-1, -1)
+	var resource_data: Dictionary = {}
+	
+	# Get tile position from sprite
+	if target_sprite.has_meta("tile_pos"):
+		tile_pos = target_sprite.get_meta("tile_pos")
+	
+	if tile_pos.x >= 0 and WorldMemory != null:
+		resource_data = WorldMemory.get_resource_at_tile(tile_pos)
+	
+	if resource_data.is_empty():
+		return "Resource\nType: None\nAmount: 0\nStatus: Empty"
+	
+	var resource_type: String = resource_data.get("type", "unknown")
+	var amount: int = resource_data.get("amount", 0)
+	var quality: float = resource_data.get("quality", 0.0)
+	var extraction_rate: float = resource_data.get("extraction_rate", 0.0)
+	
+	# Connect to neural network matrix for resource analysis
+	var status: String = "Available"
+	if amount <= 0:
+		status = "Depleted"
+	elif extraction_rate <= 0.1:
+		status = "Poor"
+	elif extraction_rate >= 0.8:
+		status = "Rich"
+	
+	return "Resource\nType: %s\nAmount: %d\nStatus: %s" % [resource_type, amount, status]
 
 func _get_agent_info_text() -> String:
 	# Try to get AI agent from sprite

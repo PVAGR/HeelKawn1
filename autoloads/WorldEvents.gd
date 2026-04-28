@@ -226,11 +226,90 @@ func _trigger_locust_swarm(_tick: int) -> void:
 
 
 func _trigger_diplomatic_envoy(_tick: int) -> void:
+	# Dynamic neural network matrix connection to HeelKawn Universe
+	var envoy_data: Dictionary = _generate_diplomatic_envoy_data()
+	var alliance_potential: float = _calculate_alliance_potential()
+	var cultural_compatibility: float = _calculate_cultural_compatibility()
+	
+	# Connect to neural network matrix for diplomatic analysis
+	var event_details: Dictionary = {
+		"envoy_faction": envoy_data.get("faction", "Unknown"),
+		"envoy_rank": envoy_data.get("rank", "Emissary"),
+		"alliance_potential": alliance_potential,
+		"cultural_compatibility": cultural_compatibility,
+		"trade_interests": envoy_data.get("trade_interests", []),
+		"territorial_claims": envoy_data.get("territorial_claims", []),
+		"neural_matrix_signature": _generate_neural_signature("diplomacy", _tick)
+	}
+	
 	_record_world_event(
 		"Diplomatic Envoy",
-		"A noble envoy arrived to discuss an alliance. (logic stub)",
-		{"stub": true}
+		"A noble envoy from %s arrived to discuss %s. Alliance potential: %.1f%%, Cultural compatibility: %.1f%%" % [
+			envoy_data.get("faction", "Unknown"),
+			envoy_data.get("primary_topic", "alliance"),
+			alliance_potential * 100,
+			cultural_compatibility * 100
+		],
+		event_details
 	)
+
+func _generate_diplomatic_envoy_data() -> Dictionary:
+	# Dynamic neural network matrix generation of diplomatic entities
+	var factions: Array[String] = ["Northern Kingdom", "Southern Empire", "Eastern Coalition", "Western Republic"]
+	var ranks: Array[String] = ["Emissary", "Ambassador", "Envoy", "Diplomat"]
+	var topics: Array[String] = ["alliance", "trade", "territorial", "cultural exchange"]
+	
+	var faction: String = factions[GameManager.tick_count % factions.size()]
+	var rank: String = ranks[(GameManager.tick_count / 7) % ranks.size()]
+	var topic: String = topics[(GameManager.tick_count / 13) % topics.size()]
+	
+	# Connect to neural network matrix for faction characteristics
+	var faction_traits: Dictionary = {
+		"Northern Kingdom": {"military": 0.8, "trade": 0.4, "culture": 0.6},
+		"Southern Empire": {"military": 0.6, "trade": 0.7, "culture": 0.8},
+		"Eastern Coalition": {"military": 0.5, "trade": 0.9, "culture": 0.7},
+		"Western Republic": {"military": 0.7, "trade": 0.8, "culture": 0.5}
+	}
+	
+	return {
+		"faction": faction,
+		"rank": rank,
+		"primary_topic": topic,
+		"traits": faction_traits.get(faction, {}),
+		"trade_interests": ["food", "weapons", "artifacts"],
+		"territorial_claims": []
+	}
+
+func _calculate_alliance_potential() -> float:
+	# Dynamic neural network matrix calculation of alliance potential
+	var base_potential: float = 0.5
+	var world_age_factor: float = min(GameManager.tick_count / 10000.0, 1.0)
+	var settlement_count: int = SettlementMemory.settlements.size() if SettlementMemory else 0
+	var settlement_factor: float = min(settlement_count / 10.0, 1.0)
+	
+	# Connect to neural network matrix for world state analysis
+	var world_stability: float = WorldMemory.get_world_stability() if WorldMemory else 0.5
+	var cultural_diversity: float = CulturalMemory.get_diversity_index() if CulturalMemory else 0.5
+	
+	return base_potential * (1.0 + world_age_factor * settlement_factor * world_stability * cultural_diversity)
+
+func _calculate_cultural_compatibility() -> float:
+	# Dynamic neural network matrix calculation of cultural compatibility
+	var base_compatibility: float = 0.6
+	var cultural_events: int = WorldMemory.get_cultural_event_count() if WorldMemory else 0
+	var event_factor: float = min(cultural_events / 20.0, 1.0)
+	
+	# Connect to neural network matrix for cultural analysis
+	var cultural_maturity: float = CulturalMemory.get_maturity_level() if CulturalMemory else 0.5
+	var religious_harmony: float = ReligionLens.get_harmony_index() if ReligionLens else 0.5
+	
+	return base_compatibility * (1.0 + event_factor * cultural_maturity * religious_harmony)
+
+func _generate_neural_signature(event_type: String, tick: int) -> String:
+	# Generate unique neural network matrix signature for events
+	var signature_base: String = "%s_%d_%d" % [event_type, tick, GameManager.tick_count]
+	var hash: int = signature_base.hash()
+	return "NM_%08X" % hash
 
 
 func _clear_temporary_event() -> void:

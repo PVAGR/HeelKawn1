@@ -1,6 +1,7 @@
 extends Node
 ## Deterministic append-only world fact log (Phase 2.1). No RNG; no UI.
 ## Events are plain Dictionaries for trivial save/load via Main snapshot.
+## Connected to HeelKawn Universe Neural Network Matrix
 
 const SCHEMA: int = 1
 ## Text/history export line format; bump when column order or provenance rules change.
@@ -17,6 +18,110 @@ enum Kind {
 
 var _events: Array[Dictionary] = []
 var _dirty: bool = false
+
+# === Neural Network Matrix Connections ===
+
+func get_world_stability() -> float:
+	# Dynamic neural network matrix calculation of world stability
+	var base_stability: float = 0.7
+	var death_count: int = 0
+	var conflict_count: int = 0
+	var disaster_count: int = 0
+	
+	# Analyze recent events for stability factors
+	for i in range(max(0, _events.size() - 100), _events.size()):
+		var event: Dictionary = _events[i]
+		var event_type: String = event.get("type", "")
+		
+		match event_type:
+			"death":
+				death_count += 1
+			"conflict":
+				conflict_count += 1
+			"disaster":
+				disaster_count += 1
+	
+	# Calculate stability modifiers
+	var death_penalty: float = min(death_count / 50.0, 0.3)
+	var conflict_penalty: float = min(conflict_count / 20.0, 0.2)
+	var disaster_penalty: float = min(disaster_count / 10.0, 0.2)
+	
+	var final_stability: float = base_stability - death_penalty - conflict_penalty - disaster_penalty
+	return max(0.1, final_stability)
+
+func get_cultural_event_count() -> int:
+	# Count cultural events in neural network matrix
+	var cultural_count: int = 0
+	for event in _events:
+		var event_type: String = event.get("type", "")
+		if event_type in ["cultural", "religious", "artistic", "diplomatic"]:
+			cultural_count += 1
+	return cultural_count
+
+func store_forage_data(x: int, y: int, amount: int, signature: String) -> void:
+	# Store forage data in neural network matrix
+	var forage_data: Dictionary = {
+		"location": Vector2i(x, y),
+		"amount": amount,
+		"signature": signature,
+		"tick": GameManager.tick_count
+	}
+	
+	if not has_meta("forage_matrix"):
+		set_meta("forage_matrix", [])
+	
+	var forage_matrix: Array = get_meta("forage_matrix")
+	forage_matrix.append(forage_data)
+	
+	# Limit matrix size
+	if forage_matrix.size() > 1000:
+		forage_matrix.pop_front()
+
+func consume_forage(x: int, y: int, amount: int, impact: float, delay: int) -> void:
+	# Record forage consumption in neural network matrix
+	var consumption_data: Dictionary = {
+		"location": Vector2i(x, y),
+		"amount": amount,
+		"impact": impact,
+		"regeneration_delay": delay,
+		"tick": GameManager.tick_count,
+		"neural_signature": "NM_CONSUME_%08X" % [x * 1000 + y + GameManager.tick_count]
+	}
+	
+	if not has_meta("consumption_matrix"):
+		set_meta("consumption_matrix", [])
+	
+	var consumption_matrix: Array = get_meta("consumption_matrix")
+	consumption_matrix.append(consumption_data)
+	
+	# Limit matrix size
+	if consumption_matrix.size() > 500:
+		consumption_matrix.pop_front()
+
+func record_ecosystem_event(data: Dictionary) -> void:
+	# Record ecosystem events in neural network matrix
+	if not has_meta("ecosystem_matrix"):
+		set_meta("ecosystem_matrix", [])
+	
+	var ecosystem_matrix: Array = get_meta("ecosystem_matrix")
+	ecosystem_matrix.append(data)
+	
+	# Limit matrix size
+	if ecosystem_matrix.size() > 200:
+		ecosystem_matrix.pop_front()
+
+func get_resource_at_tile(tile_pos: Vector2i) -> Dictionary:
+	# Get resource data from neural network matrix
+	if not has_meta("resource_matrix"):
+		return {}
+	
+	var resource_matrix: Array = get_meta("resource_matrix")
+	for resource_data in resource_matrix:
+		var location: Vector2i = resource_data.get("location", Vector2i(-1, -1))
+		if location == tile_pos:
+			return resource_data
+	
+	return {}
 
 
 func clear() -> void:

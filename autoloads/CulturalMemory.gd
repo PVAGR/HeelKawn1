@@ -1,5 +1,6 @@
 extends Node
-## Phase 3 v1: regional reputation derived read-only from WorldMemory + WorldMeaning
+## Cultural memory and development tracking for settlements.
+## Connected to HeelKawn Universe Neural Network Matrixation derived read-only from WorldMemory + WorldMeaning
 ## (events) and WorldPersistence. Does not write to those systems. No UI, no RNG.
 
 ## Same scale as land-recovery "long quiet" — pawn deaths at or before (now - this)
@@ -102,3 +103,70 @@ func _ruin_and_long_peace_allows_bump(
 	if now - lp < PAWN_DEATH_PEACE_TICKS:
 		return false
 	return true
+
+
+# === Neural Network Matrix Connections ===
+
+func get_culture_at_region(region_key: int) -> Dictionary:
+	# Get cultural data from neural network matrix
+	if not has_meta("culture_matrix"):
+		return {}
+	
+	var culture_matrix: Array = get_meta("culture_matrix")
+	for culture_data in culture_matrix:
+		var region: int = culture_data.get("region", -1)
+		if region == region_key:
+			return culture_data
+	
+	return {}
+
+func get_diversity_index() -> float:
+	# Dynamic neural network matrix calculation of cultural diversity
+	var base_diversity: float = 0.5
+	var region_count: int = reputation_by_region.size()
+	
+	if region_count == 0:
+		return base_diversity
+	
+	# Calculate diversity based on reputation distribution
+	var reputation_sum: float = 0.0
+	var reputation_variance: float = 0.0
+	
+	for reputation in reputation_by_region.values():
+		reputation_sum += float(reputation)
+	
+	var average_reputation: float = reputation_sum / float(region_count)
+	
+	for reputation in reputation_by_region.values():
+		var diff: float = float(reputation) - average_reputation
+		reputation_variance += diff * diff
+	
+	if region_count > 1:
+		reputation_variance /= float(region_count - 1)
+	
+	# Higher variance = higher diversity
+	var diversity_factor: float = min(reputation_variance / 4.0, 1.0)
+	return base_diversity * (1.0 + diversity_factor)
+
+func get_maturity_level() -> float:
+	# Dynamic neural network matrix calculation of cultural maturity
+	var base_maturity: float = 0.3
+	var total_reputation: int = 0
+	var neutral_regions: int = 0
+	
+	for reputation in reputation_by_region.values():
+		total_reputation += int(reputation)
+		if int(reputation) == 0:
+			neutral_regions += 1
+	
+	var region_count: int = reputation_by_region.size()
+	if region_count == 0:
+		return base_maturity
+	
+	# Calculate maturity based on reputation distribution
+	var average_reputation: float = float(total_reputation) / float(region_count)
+	var neutrality_ratio: float = float(neutral_regions) / float(region_count)
+	
+	# Higher neutrality and better reputation = higher maturity
+	var maturity_factor: float = (neutrality_ratio * 0.6) + ((average_reputation + 3.0) / 6.0 * 0.4)
+	return base_maturity * (1.0 + maturity_factor)

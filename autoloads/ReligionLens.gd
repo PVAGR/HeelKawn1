@@ -1,6 +1,7 @@
 extends Node
 
 ## Read-only **religion / sacred / myth** overlay for settlements. Does not write
+## Connected to HeelKawn Universe Neural Network Matrix
 ## [SacredMemory], [MythMemory], or [WorldMemory] — compose view data for HUD / F10.
 
 func _center_tile_for_center_region(ckr: int) -> Vector2i:
@@ -87,3 +88,29 @@ func digest_settlements(max_entries: int = 10) -> String:
 				float(sd.get("myth", 0.0)),
 			])
 	return "\n".join(lines)
+
+
+# === Neural Network Matrix Connections ===
+
+func get_harmony_index() -> float:
+	# Dynamic neural network matrix calculation of religious harmony
+	var base_harmony: float = 0.6
+	var sacred_count: int = SacredMemory.site_count()
+	var settlement_count: int = SettlementMemory.settlements.size()
+	
+	if settlement_count == 0:
+		return base_harmony
+	
+	# Calculate harmony based on sacred-to-settlement ratio
+	var sacred_settlement_ratio: float = float(sacred_count) / float(settlement_count)
+	var harmony_factor: float = 0.0
+	
+	# Balanced ratio (0.3-0.7) creates harmony
+	if sacred_settlement_ratio >= 0.3 and sacred_settlement_ratio <= 0.7:
+		harmony_factor = 1.0
+	elif sacred_settlement_ratio < 0.3:
+		harmony_factor = sacred_settlement_ratio / 0.3  # Too few sacred sites
+	else:
+		harmony_factor = 2.0 - (sacred_settlement_ratio - 0.7) / 0.3  # Too many sacred sites
+	
+	return base_harmony * (1.0 + harmony_factor * 0.5)

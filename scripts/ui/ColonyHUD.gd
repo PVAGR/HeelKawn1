@@ -192,6 +192,9 @@ func _refresh() -> void:
 	# Stage 1: Add pawn inspector when a pawn is selected
 	if _selected_pawn != null:
 		lines.append(_pawn_inspector_line())
+	# Stage 9: Add world observer info in verbose mode
+	if hud_verbose:
+		lines.append(_world_observer_line())
 	lines.append(_wildlife_line())
 	if hud_verbose:
 		lines.append(_player_status_line())
@@ -333,6 +336,41 @@ func _pawn_inspector_line() -> String:
 	lines.append("[color=#cccccc]Memory:[/color] [b]%d[/b] locations  [color=#cccccc]Perception:[/color] [b]%.0fpx[/b]" % [
 		memory_count, pd.perception_radius
 	])
+	
+	return "\n".join(lines)
+
+
+## Stage 9: World observer line - shows world-level statistics
+func _world_observer_line() -> String:
+	var lines: Array = []
+	lines.append("[color=#aaddff]=== World Observer ===[/color]")
+	
+	# Count pawns by stage progression
+	var pawn_count: int = 0
+	var avg_level: float = 0.0
+	var total_clan_members: int = 0
+	var total_settlement_members: int = 0
+	
+	for pawn in get_tree().get_nodes_in_group("pawns"):
+		if not is_instance_valid(pawn):
+			continue
+		pawn_count += 1
+		avg_level += pawn.data.level
+		if pawn.data.clan_id != -1:
+			total_clan_members += 1
+		if pawn.data.settlement_id != -1:
+			total_settlement_members += 1
+	
+	if pawn_count > 0:
+		avg_level /= float(pawn_count)
+	
+	lines.append("[color=#cccccc]Pawns:[/color] [b]%d[/b]  [color=#cccccc]Avg Level:[/color] [b]%.1f[/b]" % [pawn_count, avg_level])
+	lines.append("[color=#cccccc]Clan Members:[/color] [b]%d[/b]  [color=#cccccc]Settlement Members:[/color] [b]%d[/b]" % [total_clan_members, total_settlement_members])
+	
+	# World time
+	var tick: int = GameManager.tick_count
+	var days_passed: float = float(tick) / float(GameManager.TICKS_PER_DAY)
+	lines.append("[color=#cccccc]World Time:[/color] [b]%.1f[/b] days  [color=#cccccc]Tick:[/color] [b]%d[/b]" % [days_passed, tick])
 	
 	return "\n".join(lines)
 

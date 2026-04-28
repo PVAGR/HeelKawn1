@@ -2764,6 +2764,21 @@ func _decay_needs() -> void:
 	# Stage 1: Update perception and location memory
 	_update_perception()
 	
+	# Stage 2: Track co-presence with nearby pawns
+	track_co_presence()
+	
+	# Stage 3: Track clan labor contributions
+	if _state == State.WORKING and _current_job != null:
+		var job_type_str: String = Job.describe_type(_current_job.type).to_lower()
+		contribute_to_clan_labor(job_type_str)
+		
+		# Stage 4: Track settlement contributions
+		if data.settlement_id != -1:
+			if _current_job.type == Job.Type.FORAGE or _current_job.type == Job.Type.HUNT:
+				record_food_production(1)
+			elif _current_job.type == Job.Type.BUILD_BED or _current_job.type == Job.Type.BUILD_WALL or _current_job.type == Job.Type.BUILD_DOOR:
+				record_building_construction()
+	
 	# Crisis behavior: very low mood causes pawns to refuse work (strike)
 	var crisis_level: float = data.get_crisis_level()
 	if crisis_level > 0.8 and randf() < 0.05:  # 5% chance per tick to strike when desperate
@@ -3116,6 +3131,523 @@ func remember_resources(tile: Vector2i, resource_type: String) -> void:
 		"resource_type": resource_type,
 		"danger_level": 0.0
 	}
+
+
+## Stage 2: Family & Trust system
+
+func track_co_presence() -> void:
+	# Track time spent near other pawns
+	# Co-presence builds family bonds and trust
+	var co_presence_radius: float = 30.0  # Pixels
+	
+	for pawn in get_tree().get_nodes_in_group("pawns"):
+		if pawn == self or not is_instance_valid(pawn):
+			continue
+		var dist: float = position.distance_to(pawn.position)
+		if dist > co_presence_radius:
+			continue
+		
+		var other_id: int = int(pawn.data.id)
+		
+		# Increment co-presence counter
+		data.co_presence[other_id] = data.co_presence.get(other_id, 0) + 1
+		
+		# Build family bond if related
+		if other_id == data.parent_a_id or other_id == data.parent_b_id:
+			data.family_bonds[other_id] = min(100.0, data.family_bonds.get(other_id, 0.0) + 0.1)
+		
+		# Build trust gradually
+		data.trust[other_id] = min(100.0, data.trust.get(other_id, 0.0) + 0.05)
+
+
+func form_family_bond(other_pawn: Pawn, initial_strength: float = 20.0) -> void:
+	# Form a family bond with another pawn
+	var other_id: int = int(other_pawn.data.id)
+	data.family_bonds[other_id] = clamp(initial_strength, 0.0, 100.0)
+	other_pawn.data.family_bonds[int(data.id)] = clamp(initial_strength, 0.0, 100.0)
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s formed family bond with %s (strength %.1f)" % [
+			data.display_name, other_pawn.data.display_name, initial_strength
+		])
+
+
+func marry(spouse: Pawn) -> void:
+	# Marry another pawn
+	if data.spouse_id != -1:
+		return  # Already married
+	
+	var spouse_id: int = int(spouse.data.id)
+	data.spouse_id = spouse_id
+	spouse.data.spouse_id = int(data.id)
+	
+	# Form strong family bond
+	form_family_bond(spouse, 80.0)
+	
+	# Set high trust
+	data.trust[spouse_id] = 90.0
+	spouse.data.trust[int(data.id)] = 90.0
+	
+	# Create household if neither has one
+	if data.household_id == -1 and spouse.data.household_id == -1:
+		var new_household_id: int = _create_household()
+		data.household_id = new_household_id
+		spouse.data.household_id = new_household_id
+	elif data.household_id != -1:
+		spouse.data.household_id = data.household_id
+	elif spouse.data.household_id != -1:
+		data.household_id = spouse.data.household_id
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s married %s (household %d)" % [
+			data.display_name, spouse.data.display_name, data.household_id
+		])
+
+
+func have_child(partner: Pawn) -> int:
+	# Have a child with partner
+	# Returns the new child's pawn ID
+	if data.spouse_id != int(partner.data.id):
+		return -1  # Not married to this partner
+	
+	# This would typically be called by a reproduction system
+	# For now, just return -1 as placeholder
+	# TODO: Implement actual child creation
+	return -1
+
+
+func _create_household() -> int:
+	# Create a new household
+	# Placeholder - needs HouseholdSystem
+	# For now, return a random ID
+	return randi() % 10000
+
+
+func join_household(household_id: int) -> void:
+	# Join an existing household
+	data.household_id = household_id
+	if GameManager.verbose_logs():
+		print("[Pawn] %s joined household %d" % [data.display_name, household_id])
+
+
+func leave_household() -> void:
+	# Leave current household
+	var old_household: int = data.household_id
+	data.household_id = -1
+	
+	# Reduce family bonds with former household members
+	for other_id in data.family_bonds:
+		# Check if other pawn is in same household
+		# Placeholder - needs HouseholdSystem to check
+		pass
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s left household %d" % [data.display_name, old_household])
+
+
+func get_household_stability() -> float:
+	# Calculate household stability (0-100)
+	# Based on family bonds, trust, and co-presence
+	if data.household_id == -1:
+		return 0.0
+	
+	var stability: float = 0.0
+	var household_members: int = 0
+	
+	# Sum family bonds with household members
+	for other_id in data.family_bonds:
+		var bond_strength: float = data.family_bonds[other_id]
+		stability += bond_strength
+		household_members += 1
+	
+	# Sum trust with household members
+	for other_id in data.trust:
+		var trust_level: float = data.trust[other_id]
+		stability += trust_level * 0.5
+	
+	if household_members > 0:
+		stability /= float(household_members)
+	
+	return clamp(stability, 0.0, 100.0)
+
+
+## Stage 3: Clan & Household Network
+
+func join_clan(clan_id: int) -> void:
+	# Join a clan
+	data.clan_id = clan_id
+	if GameManager.verbose_logs():
+		print("[Pawn] %s joined clan %d" % [data.display_name, clan_id])
+
+
+func leave_clan() -> void:
+	# Leave current clan
+	var old_clan: int = data.clan_id
+	data.clan_id = -1
+	data.clan_influence = 0.0
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s left clan %d" % [data.display_name, old_clan])
+
+
+func contribute_to_clan_labor(job_type: String) -> void:
+	# Record labor contribution to clan
+	data.labor_contributions[job_type] = data.labor_contributions.get(job_type, 0) + 1
+	
+	# Increase clan influence slightly
+	data.clan_influence = min(100.0, data.clan_influence + 0.5)
+	
+	# Increase personal reputation
+	data.reputation_score = min(100.0, data.reputation_score + 0.2)
+
+
+func gain_reputation(amount: float, source_clan_id: int = -1) -> void:
+	# Gain reputation with a clan or generally
+	data.reputation_score = min(100.0, data.reputation_score + amount)
+	
+	if source_clan_id != -1:
+		data.clan_reputation[source_clan_id] = min(100.0, data.clan_reputation.get(source_clan_id, 50.0) + amount)
+
+
+func lose_reputation(amount: float, source_clan_id: int = -1) -> void:
+	# Lose reputation with a clan or generally
+	data.reputation_score = max(0.0, data.reputation_score - amount)
+	
+	if source_clan_id != -1:
+		data.clan_reputation[source_clan_id] = max(0.0, data.clan_reputation.get(source_clan_id, 50.0) - amount)
+
+
+func set_leadership_role(role: int) -> void:
+	# Set leadership role (0=NONE, 1=ELDER, 2=CHIEF, 3=WARRIOR_LEADER)
+	data.leadership_role = role
+	
+	if GameManager.verbose_logs():
+		var role_name: String = "NONE"
+		match role:
+			1: role_name = "ELDER"
+			2: role_name = "CHIEF"
+			3: role_name = "WARRIOR_LEADER"
+		print("[Pawn] %s became %s of clan %d" % [data.display_name, role_name, data.clan_id])
+
+
+func challenge_for_leadership(target_leader: Pawn) -> void:
+	# Challenge another pawn for leadership
+	# Placeholder - needs AuthoritySystem integration
+	# TODO: Implement leadership challenge mechanics
+	pass
+
+
+def get_clan_influence() -> float:
+	return data.clan_influence
+
+
+def get_total_labor_contributions() -> int:
+	var total: int = 0
+	for job_type in data.labor_contributions:
+		total += data.labor_contributions[job_type]
+	return total
+
+
+## Stage 4: Settlement/Homestead
+
+func join_settlement(settlement_id: int) -> void:
+	# Join a settlement
+	data.settlement_id = settlement_id
+	if GameManager.verbose_logs():
+		print("[Pawn] %s joined settlement %d" % [data.display_name, settlement_id])
+
+
+func leave_settlement() -> void:
+	# Leave current settlement
+	var old_settlement: int = data.settlement_id
+	data.settlement_id = -1
+	
+	# Lose homestead if owned
+	if data.homestead_tile != Vector2i(-1, -1):
+		data.owned_properties.erase(data.homestead_tile)
+		data.homestead_tile = Vector2i(-1, -1)
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s left settlement %d" % [data.display_name, old_settlement])
+
+
+func establish_homestead(tile: Vector2i) -> bool:
+	# Establish a homestead at the given tile
+	if _world == null:
+		return false
+	if not _world.pathfinder.is_passable(tile):
+		return false
+	
+	data.homestead_tile = tile
+	data.owned_properties[tile] = "homestead"
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s established homestead at %s" % [data.display_name, str(tile)])
+	
+	return true
+
+
+def record_food_production(amount: int) -> void:
+	# Record food production contribution
+	data.food_produced += amount
+
+
+def record_building_construction() -> void:
+	# Record building construction contribution
+	data.buildings_constructed += 1
+
+
+def establish_trade_relationship(target_settlement_id: int, initial_volume: int = 10) -> void:
+	# Establish a trade relationship with another settlement
+	data.trade_relationships[target_settlement_id] = initial_volume
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s established trade with settlement %d (volume %d)" % [
+			data.display_name, target_settlement_id, initial_volume
+		])
+
+
+def set_settlement_role(role: int) -> void:
+	# Set settlement role (0=NONE, 1=FARMER, 2=BUILDER, 3=MERCHANT, 4=GUARD)
+	data.settlement_role = role
+	
+	if GameManager.verbose_logs():
+		var role_name: String = "NONE"
+		match role:
+			1: role_name = "FARMER"
+			2: role_name = "BUILDER"
+			3: role_name = "MERCHANT"
+			4: role_name = "GUARD"
+		print("[Pawn] %s became %s of settlement %d" % [data.display_name, role_name, data.settlement_id])
+
+
+def own_property(tile: Vector2i, property_type: String) -> void:
+	# Own a property at a tile
+	data.owned_properties[tile] = property_type
+
+
+def get_total_trade_volume() -> int:
+	var total: int = 0
+	for settlement_id in data.trade_relationships:
+		total += data.trade_relationships[settlement_id]
+	return total
+
+
+## Stage 5: Region/Local Polity
+
+func join_region(region_id: int) -> void:
+	# Join a region
+	data.region_id = region_id
+	if GameManager.verbose_logs():
+		print("[Pawn] %s joined region %d" % [data.display_name, region_id])
+
+
+func leave_region() -> void:
+	# Leave current region
+	var old_region: int = data.region_id
+	data.region_id = -1
+	data.citizenship_status = 0
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s left region %d" % [data.display_name, old_region])
+
+
+func build_road(tile: Vector2i) -> bool:
+	# Build a road at the given tile
+	if _world == null:
+		return false
+	if not _world.pathfinder.is_passable(tile):
+		return false
+	
+	data.roads_built += 1
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s built road at %s" % [data.display_name, str(tile)])
+	
+	return true
+
+
+def learn_custom(custom_name: String, familiarity: float = 20.0) -> void:
+	# Learn a regional custom or tradition
+	data.known_customs[custom_name] = min(100.0, data.known_customs.get(custom_name, 0.0) + familiarity)
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s learned custom '%s' (familiarity %.1f)" % [
+			data.display_name, custom_name, data.known_customs[custom_name]
+		])
+
+
+def set_citizenship_status(status: int) -> void:
+	# Set citizenship status (0=NONE, 1=RESIDENT, 2=CITIZEN, 3=ELDER)
+	data.citizenship_status = status
+	
+	if GameManager.verbose_logs():
+		var status_name: String = "NONE"
+		match status:
+			1: status_name = "RESIDENT"
+			2: status_name = "CITIZEN"
+			3: status_name = "ELDER"
+		print("[Pawn] %s became %s of region %d" % [data.display_name, status_name, data.region_id])
+
+
+def pay_taxes(amount: int) -> void:
+	# Pay regional taxes
+	data.taxes_paid += amount
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s paid %d in taxes to region %d" % [
+			data.display_name, amount, data.region_id
+		])
+
+
+def update_regional_safety(safety_delta: float) -> void:
+	# Update regional safety rating
+	data.regional_safety = clamp(data.regional_safety + safety_delta, 0.0, 100.0)
+
+
+## Stage 6: Nation/Country
+
+func join_nation(nation_id: int) -> void:
+	# Join a nation
+	data.nation_id = nation_id
+	if GameManager.verbose_logs():
+		print("[Pawn] %s joined nation %d" % [data.display_name, nation_id])
+
+
+func leave_nation() -> void:
+	# Leave current nation
+	var old_nation: int = data.nation_id
+	data.nation_id = -1
+	data.national_citizenship = 0
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s left nation %d" % [data.display_name, old_nation])
+
+
+def comply_with_law(law_id: int, compliance_level: float = 100.0) -> void:
+	# Record compliance with a law
+	data.law_compliance[law_id] = clamp(compliance_level, 0.0, 100.0)
+
+
+def violate_law(law_id: int) -> void:
+	# Record violation of a law
+	data.law_compliance[law_id] = max(0.0, data.law_compliance.get(law_id, 100.0) - 50.0)
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s violated law %d" % [data.display_name, law_id])
+
+
+def adopt_culture(culture_name: String, affinity: float = 50.0) -> void:
+	# Adopt a cultural identity
+	data.cultural_affinity[culture_name] = clamp(affinity, 0.0, 100.0)
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s adopted culture '%s' (affinity %.1f)" % [
+			data.display_name, culture_name, affinity
+		])
+
+
+def serve_in_military(years: int = 1) -> void:
+	# Serve in the military
+	data.military_service_years += years
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s served %d years in military (total %d)" % [
+			data.display_name, years, data.military_service_years
+		])
+
+
+def set_military_rank(rank: int) -> void:
+	# Set military rank (0=NONE, 1=SOLDIER, 2=SERGEANT, 3=OFFICER, 4=GENERAL)
+	data.military_rank = rank
+	
+	if GameManager.verbose_logs():
+		var rank_name: String = "NONE"
+		match rank:
+			1: rank_name = "SOLDIER"
+			2: rank_name = "SERGEANT"
+			3: rank_name = "OFFICER"
+			4: rank_name = "GENERAL"
+		print("[Pawn] %s became %s of nation %d" % [data.display_name, rank_name, data.nation_id])
+
+
+def establish_diplomatic_relation(target_nation_id: int, standing: float = 50.0) -> void:
+	# Establish diplomatic standing with another nation
+	data.diplomatic_standing[target_nation_id] = clamp(standing, 0.0, 100.0)
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s established diplomatic relation with nation %d (standing %.1f)" % [
+			data.display_name, target_nation_id, standing
+		])
+
+
+def set_national_citizenship(citizenship: int) -> void:
+	# Set national citizenship (0=NONE, 1=SUBJECT, 2=CITIZEN, 3=NOBLE)
+	data.national_citizenship = citizenship
+	
+	if GameManager.verbose_logs():
+		var citizenship_name: String = "NONE"
+		match citizenship:
+			1: citizenship_name = "SUBJECT"
+			2: citizenship_name = "CITIZEN"
+			3: citizenship_name = "NOBLE"
+		print("[Pawn] %s became %s of nation %d" % [data.display_name, citizenship_name, data.nation_id])
+
+
+## Stage 7: World systems
+
+func spread_influence_to_region(region_id: int, influence_amount: float = 5.0) -> void:
+	# Spread influence to another region
+	data.cross_region_influence[region_id] = min(100.0, data.cross_region_influence.get(region_id, 0.0) + influence_amount)
+	
+	# Increase legacy score
+	data.legacy_score += influence_amount * 0.1
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s spread influence to region %d (influence %.1f)" % [
+			data.display_name, region_id, data.cross_region_influence[region_id]
+		])
+
+
+def adapt_to_climate(climate_type: String, adaptation_amount: float = 10.0) -> void:
+	# Adapt to a climate type
+	data.climate_adaptation[climate_type] = min(100.0, data.climate_adaptation.get(climate_type, 0.0) + adaptation_amount)
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s adapted to climate '%s' (adaptation %.1f)" % [
+			data.display_name, climate_type, data.climate_adaptation[climate_type]
+		])
+
+
+def learn_myth(myth_name: String, belief: float = 30.0) -> void:
+	# Learn about a myth or legend
+	data.myth_knowledge[myth_name] = clamp(belief, 0.0, 100.0)
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s learned myth '%s' (belief %.1f)" % [
+			data.display_name, myth_name, belief
+		])
+
+
+def witness_world_event(event_id: int, impact: float = 10.0) -> void:
+	# Record witnessing a world event
+	data.world_events_witnessed[event_id] = impact
+	
+	# Increase legacy score based on event impact
+	data.legacy_score += impact * 0.2
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s witnessed world event %d (impact %.1f, legacy %.1f)" % [
+			data.display_name, event_id, impact, data.legacy_score
+		])
+
+
+def increase_legacy(amount: float) -> void:
+	# Directly increase legacy score
+	data.legacy_score += amount
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s legacy increased to %.1f" % [data.display_name, data.legacy_score])
 
 
 ## Stage 1: Small direct actions

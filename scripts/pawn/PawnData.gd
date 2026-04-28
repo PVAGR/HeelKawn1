@@ -104,6 +104,92 @@ var perception_radius: float = 50.0
 ## location_key -> last_seen_tick, resource_type, danger_level
 var location_memory: Dictionary = {}
 
+## Stage 2: Family & Trust system
+## Family bonds: other_pawn_id -> bond_strength (0-100)
+var family_bonds: Dictionary = {}
+## Co-presence tracking: other_pawn_id -> ticks_spent_together
+var co_presence: Dictionary = {}
+## Household ID (-1 if not in a household)
+var household_id: int = -1
+## Trust with other pawns: other_pawn_id -> trust_level (0-100)
+var trust: Dictionary = {}
+## Spouse ID (-1 if unmarried)
+var spouse_id: int = -1
+## Children IDs
+var children_ids: Array[int] = []
+
+## Stage 3: Clan & Household Network
+## Clan ID (-1 if not in a clan)
+var clan_id: int = -1
+## Reputation with other clans: clan_id -> reputation (0-100)
+var clan_reputation: Dictionary = {}
+## Personal reputation: reputation_score (0-100)
+var reputation_score: float = 50.0
+## Leadership role: NONE, ELDER, CHIEF, WARRIOR_LEADER
+var leadership_role: int = 0
+## Shared labor contributions: job_type -> contribution_count
+var labor_contributions: Dictionary = {}
+## Clan influence: influence_score (0-100)
+var clan_influence: float = 0.0
+
+## Stage 4: Settlement/Homestead
+## Settlement ID (-1 if not in a settlement)
+var settlement_id: int = -1
+## Homestead tile location (-1 if no homestead)
+var homestead_tile: Vector2i = Vector2i(-1, -1)
+## Food production contribution: total_food_produced
+var food_produced: int = 0
+## Building contribution: total_buildings_constructed
+var buildings_constructed: int = 0
+## Trade relationships: settlement_id -> trade_volume
+var trade_relationships: Dictionary = {}
+## Settlement role: NONE, FARMER, BUILDER, MERCHANT, GUARD
+var settlement_role: int = 0
+## Property ownership: tile -> property_type
+var owned_properties: Dictionary = {}
+
+## Stage 5: Region/Local Polity
+## Region ID (-1 if not in a region)
+var region_id: int = -1
+## Road construction contributions: tiles_paved
+var roads_built: int = 0
+## Regional safety rating (0-100)
+var regional_safety: float = 50.0
+## Customs/traditions known: custom_name -> familiarity (0-100)
+var known_customs: Dictionary = {}
+## Regional citizenship status: NONE, RESIDENT, CITIZEN, ELDER
+var citizenship_status: int = 0
+## Regional taxes paid
+var taxes_paid: int = 0
+
+## Stage 6: Nation/Country
+## Nation ID (-1 if not in a nation)
+var nation_id: int = -1
+## Law compliance: law_id -> compliance_level (0-100)
+var law_compliance: Dictionary = {}
+## Cultural identity: culture_name -> affinity (0-100)
+var cultural_affinity: Dictionary = {}
+## Military service: served_years
+var military_service_years: int = 0
+## Military rank: NONE, SOLDIER, SERGEANT, OFFICER, GENERAL
+var military_rank: int = 0
+## Diplomatic standing with other nations: nation_id -> standing (0-100)
+var diplomatic_standing: Dictionary = {}
+## National citizenship: NONE, SUBJECT, CITIZEN, NOBLE
+var national_citizenship: int = 0
+
+## Stage 7: World systems
+## Cross-region influence: region_id -> influence (0-100)
+var cross_region_influence: Dictionary = {}
+## Climate adaptation: climate_type -> adaptation (0-100)
+var climate_adaptation: Dictionary = {}
+## Mythological knowledge: myth_name -> belief (0-100)
+var myth_knowledge: Dictionary = {}
+## World events witnessed: event_id -> impact
+var world_events_witnessed: Dictionary = {}
+## Legacy score: how much the pawn has influenced the world
+var legacy_score: float = 0.0
+
 ## Single-item inventory. Type is Item.Type (NONE = empty hands).
 ## v1 pawns can only hold one kind of thing at a time; multi-slot / weight
 ## comes later with proper inventories.

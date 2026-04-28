@@ -626,6 +626,43 @@ func _update_civilization_development() -> void:
 	civilization_complexity = civ_output["complexity"]
 	social_development = civ_output["social_development"]
 	cultural_advancement = civ_output["cultural_advancement"]
+	
+	# Advance WorldAge based on actual game progress
+	_advance_world_age()
+
+func _advance_world_age() -> void:
+	# Get actual game metrics from SettlementMemory
+	var settlements = SettlementMemory.get_settlements()
+	var active_settlement_count = 0
+	for s in settlements:
+		if s.get("state", "") == "active":
+			active_settlement_count += 1
+	
+	var living_pawns = SettlementMemory._living_pawns()
+	var total_pawns = living_pawns.size()
+	
+	# Progression thresholds for each age
+	var age_thresholds = {
+		WorldAge.PRIMAL: {"pawns": 0, "settlements": 0, "tech": TechnologicalTier.STONE},
+		WorldAge.DAWN: {"pawns": 5, "settlements": 1, "tech": TechnologicalTier.STONE},
+		WorldAge.TRIBAL: {"pawns": 15, "settlements": 2, "tech": TechnologicalTier.COPPER},
+		WorldAge.CIVILIZED: {"pawns": 30, "settlements": 3, "tech": TechnologicalTier.BRONZE},
+		WorldAge.CLASSICAL: {"pawns": 50, "settlements": 5, "tech": TechnologicalTier.IRON},
+		WorldAge.MEDIEVAL: {"pawns": 80, "settlements": 7, "tech": TechnologicalTier.STEEL},
+		WorldAge.RENAISSANCE: {"pawns": 120, "settlements": 10, "tech": TechnologicalTier.GUNPOWDER},
+		WorldAge.INDUSTRIAL: {"pawns": 200, "settlements": 15, "tech": TechnologicalTier.STEAM},
+		WorldAge.MODERN: {"pawns": 300, "settlements": 20, "tech": TechnologicalTier.ELECTRICITY},
+		WorldAge.FUTURE: {"pawns": 500, "settlements": 30, "tech": TechnologicalTier.QUANTUM}
+	}
+	
+	# Check if we can advance to next age
+	var next_age = min(current_age + 1, WorldAge.FUTURE)
+	var threshold = age_thresholds[next_age]
+	
+	if total_pawns >= threshold["pawns"] and active_settlement_count >= threshold["settlements"] and technological_tier >= threshold["tech"]:
+		current_age = next_age
+		print("[WorldAI] Civilization advanced to age: %s" % WorldAge.keys()[current_age])
+		major_turning_points.append("Advanced to %s age" % WorldAge.keys()[current_age])
 
 # === Missing Calculation Functions ===
 

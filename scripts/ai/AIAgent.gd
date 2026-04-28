@@ -115,11 +115,19 @@ func update() -> void:
 func _update_memory() -> void:
 	if controlled_pawn_id == -1:
 		# Spectator mode - observe camera view
-		var obs: Dictionary = ObservationAPI.observe_camera_view()
+		var obs: Dictionary = {}
+		if ObservationAPI != null:
+			obs = ObservationAPI.observe_camera_view()
+		else:
+			obs = {"error": "ObservationAPI not available"}
 		memory.add_observation(GameManager.tick_count, obs)
 	else:
 		# Incarnated mode - observe controlled pawn
-		var obs: Dictionary = ObservationAPI.observe_pawn(controlled_pawn_id)
+		var obs: Dictionary = {}
+		if ObservationAPI != null:
+			obs = ObservationAPI.observe_pawn(controlled_pawn_id)
+		else:
+			obs = {"error": "ObservationAPI not available"}
 		if not obs.has("error"):
 			memory.add_observation(GameManager.tick_count, obs)
 
@@ -178,13 +186,20 @@ func _generate_goals() -> void:
 
 func _generate_spectator_goals() -> void:
 	# Spectator goals: find interesting pawns to observe, monitor settlements
-	var obs: Dictionary = ObservationAPI.observe_camera_view()
+	var obs: Dictionary = {}
+	if ObservationAPI != null:
+		obs = ObservationAPI.observe_camera_view()
+	else:
+		obs = {"error": "ObservationAPI not available"}
+	
 	if obs.has("error"):
 		return
 	
 	# Goal: Find pawn to incarnate
 	if randf() < 0.1:  # 10% chance per decision cycle
-		var candidates: Array = ObservationAPI.observe_pawns_in_region(obs.get("camera_region_key", 0))
+		var candidates: Array = []
+		if ObservationAPI != null:
+			candidates = ObservationAPI.observe_pawns_in_region(obs.get("camera_region_key", 0))
 		if not candidates.is_empty():
 			var target: Dictionary = candidates[randi() % candidates.size()]
 			current_goals.append(Goal.new(

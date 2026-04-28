@@ -16,14 +16,14 @@ var last_update_tick: int = 0
 var enabled: bool = true
 var show_agent_overlays: bool = true
 
-# Enhanced AI systems (temporarily disabled for type resolution)
+# Enhanced AI systems (temporarily disabled for stable testing)
 # var WorldAIClass = preload("res://scripts/ai/WorldAI.gd")
 # var SettlementAIClass = preload("res://scripts/ai/SettlementAI.gd")
 # var CivilizationAgentClass = preload("res://scripts/ai/CivilizationAgent.gd")
 
 # var world_ai: WorldAI
 # var settlement_ai_system: Dictionary = {}  # settlement_id -> SettlementAI
-var civilization_mode: bool = false  # Temporarily disabled
+var civilization_mode: bool = false  # Enhanced AI systems disabled for testing
 
 # Agent spawning configuration
 var strategic_agent_count: int = 2
@@ -33,7 +33,7 @@ var reactive_agent_count: int = 2
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 	
-	# Initialize enhanced AI systems (temporarily disabled)
+	# Initialize enhanced AI systems (disabled for testing)
 	if civilization_mode:
 		pass
 		# world_ai = WorldAIClass.new()
@@ -45,7 +45,7 @@ func _on_game_tick(tick: int) -> void:
 	if not enabled:
 		return
 	
-	# Update enhanced AI systems (temporarily disabled)
+	# Update enhanced AI systems (disabled for testing)
 	if civilization_mode:
 		pass
 		# if world_ai:
@@ -111,29 +111,9 @@ func _create_agent_text_overlay(agent_id: int) -> void:
 	pass
 
 func _try_incarnate_agent(agent: RefCounted) -> void:
-	# Get available pawn candidates
-	var candidates: Array = ObservationAPI.observe_pawns_in_region(0)  # All regions
-	if candidates.is_empty():
-		return
-	
-	# Filter for pawns that aren't already controlled
-	var available_candidates: Array = []
-	for candidate in candidates:
-		var pawn_id: int = candidate.get("pawn_id", -1)
-		if pawn_id >= 0 and not _is_pawn_controlled(pawn_id):
-			available_candidates.append(candidate)
-	
-	if available_candidates.is_empty():
-		return
-	
-	# Select candidate based on agent type
-	var selected: Dictionary = _select_pawn_for_agent(agent, available_candidates)
-	if selected.is_empty():
-		return
-	
-	var pawn_id: int = selected.get("pawn_id", -1)
-	if pawn_id >= 0:
-		agent.set_controlled_pawn(pawn_id)
+	# Temporarily disabled incarnation system to prevent crashes
+	# TODO: Fix ObservationAPI initialization and re-enable
+	pass
 
 func _select_pawn_for_agent(agent: AIAgent, candidates: Array) -> Dictionary:
 	match agent.agent_type:

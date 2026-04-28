@@ -174,9 +174,11 @@ func _advance_to_next_age() -> void:
 	
 	# Record age transition
 	var age_name: String = WorldAge.keys()[current_age]
+	major_turning_points.append("Beginning of %s Age" % age_name)
+	
+	# Record in existing WorldMemory
 	var event: WorldEvent = WorldEvent.new("Age Transition", "World entered %s Age" % age_name, 8)
 	world_events.append(event)
-	major_turning_points.append("Beginning of %s Age" % age_name)
 	
 	# Update technological tier based on age
 	_update_tech_tier_for_age()

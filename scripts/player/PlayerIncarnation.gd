@@ -49,16 +49,16 @@ class PlayerInfluence extends RefCounted:
 				reputation_score += 10.0
 	
 	func _is_legendary_action(action: String) -> bool:
-	var legendary_actions = [
-		"discovered_fire",
-		"invented_writing",
-		"founded_city",
-		"ended_war",
-		"created_art_masterpiece",
-		"achieved_enlightenment"
-	]
-	
-	return action in legendary_actions
+		var legendary_actions_list = [
+			"discovered_fire",
+			"invented_writing",
+			"founded_city",
+			"ended_war",
+			"created_art_masterpiece",
+			"achieved_enlightenment"
+		]
+		
+		return action in legendary_actions_list
 
 # Incarnation properties
 var current_incarnation: IncarnationRecord = null
@@ -96,7 +96,7 @@ func start_incarnation(player_id: String, npc_id: int, mode: IncarnationMode = I
 	# Create incarnation record
 	var current_tick: int = GameManager.tick_count
 	current_incarnation = IncarnationRecord.new(player_id, npc_id, current_tick)
-	current_incarnation_mode = mode
+	incarnation_mode = mode
 	current_duration = 0
 	
 	# Get player influence data
@@ -225,14 +225,14 @@ func guide_decision(guidance: String) -> bool:
 	return success
 
 func _execute_npc_action(npc_id: int, action_type: String, target_data: Dictionary) -> bool:
-	# Execute action through CommandAPI
-	var command_data: Dictionary = {
-		"action": action_type,
-		"pawn_id": npc_id,
-		"target": target_data
-	}
+	# Create command for AI to execute
+	var command: CommandAPI.Command = CommandAPI.Command.new(
+		CommandAPI.CommandType.PERFORM_PRESENCE,  # Default action type
+		npc_id,
+		target_data
+	)
 	
-	var result: Dictionary = CommandAPI.execute_command(command_data)
+	var result: Dictionary = CommandAPI.execute_command(command)
 	return not result.has("error")
 
 func _teach_ai_agent(agent_id: int, skill_name: String) -> bool:

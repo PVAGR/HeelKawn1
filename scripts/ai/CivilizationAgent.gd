@@ -46,7 +46,7 @@ class Skill extends RefCounted:
 	func _get_exp_for_next_level() -> float:
 		return pow(1.1, level) * 100.0
 
-class CulturalMemory extends Memory:
+class AgentCulturalMemory extends Memory:
 	var traditions: Array[String] = []
 	var beliefs: Array[String] = []
 	var language_elements: Dictionary = {}  # word -> meaning
@@ -70,7 +70,7 @@ class PersonalityEvolution:
 	var trauma_responses: Array[String] = []
 	var aspiration_drives: Dictionary = {}  # goal_type -> drive_strength
 	
-	func evolve_from_experience(memory: CulturalMemory, recent_events: Array) -> void:
+	func evolve_from_experience(memory: AgentCulturalMemory, recent_events: Array) -> void:
 		# Personality changes based on significant experiences
 		for event in recent_events:
 			_analyze_event_impact(event)
@@ -87,7 +87,7 @@ class PersonalityEvolution:
 # Enhanced properties
 var civilization_era: CivilizationEra = CivilizationEra.PREHISTORIC
 var skills: Dictionary = {}  # SkillCategory -> Skill
-var cultural_memory: CulturalMemory
+var cultural_memory: AgentCulturalMemory
 var personality_evolution: PersonalityEvolution
 var teaching_cooldown: int = 0
 var innovation_points: float = 0.0
@@ -100,7 +100,7 @@ var innovation_tendency: float = 0.1
 
 func _init(id: int, type: AgentType = AgentType.TACTICAL):
 	super(id, type)
-	cultural_memory = CulturalMemory.new()
+	cultural_memory = AgentCulturalMemory.new()
 	personality_evolution = PersonalityEvolution.new()
 	_initialize_skills()
 	_initialize_personality_traits()
@@ -123,6 +123,10 @@ func _initialize_personality_traits() -> void:
 	}
 
 # === Enhanced Goal Generation ===
+
+func _add_goal(goal_type: String, priority: GoalPriority, target_data: Dictionary = {}) -> void:
+	var goal: Goal = Goal.new(goal_type, priority, target_data)
+	current_goals.append(goal)
 
 func _generate_goals() -> void:
 	# Generate era-appropriate goals
@@ -243,7 +247,7 @@ func innovate_discovery(category: SkillCategory) -> bool:
 		innovation_points -= 10.0
 		skills[category].level = min(100, skills[category].level + 5)
 		
-		# Record innovation
+		# Record innovation in existing WorldMemory
 		var discovery: String = "Innovation in %s: %s" % [SkillCategory.keys()[category], _generate_discovery_name()]
 		cultural_memory.add_historical_event(discovery)
 		cultural_influence += 5.0
@@ -334,7 +338,7 @@ func _get_era_requirements() -> Dictionary:
 func _advance_to_next_era() -> void:
 	civilization_era = CivilizationEra.values()[civilization_era + 1]
 	
-	# Record era advancement
+	# Record era advancement in cultural memory
 	var era_name: String = CivilizationEra.keys()[civilization_era]
 	cultural_memory.add_historical_event("Entered %s Era" % era_name)
 	cultural_influence += 20.0
@@ -407,5 +411,5 @@ func _get_skills_summary() -> Dictionary:
 func can_teach(category: SkillCategory) -> bool:
 	return skills[category].level >= 50 and skills[category].teaching_ability > 1.0
 
-func get_cultural_memory() -> CulturalMemory:
+func get_cultural_memory() -> AgentCulturalMemory:
 	return cultural_memory

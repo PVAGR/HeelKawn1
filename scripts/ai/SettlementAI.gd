@@ -301,15 +301,19 @@ func _advance_technology() -> void:
 
 func _update_government_type() -> void:
 	# Government evolves with population and complexity
+	var previous_government: int = government_type
+	
 	if population > 50 and government_type == GovernmentType.TRIBAL:
 		government_type = GovernmentType.CHIEFDOM
-		historical_events.append("Adopted chieftain system")
+		historical_events.append("Government evolved from %s to %s" % [GovernmentType.keys()[previous_government], GovernmentType.keys()[government_type]])
 	elif population > 100 and government_type == GovernmentType.CHIEFDOM:
+		previous_government = government_type
 		government_type = GovernmentType.MONARCHY
-		historical_events.append("Established monarchy")
+		historical_events.append("Government evolved from %s to %s" % [GovernmentType.keys()[previous_government], GovernmentType.keys()[government_type]])
 	elif population > 200 and government_type == GovernmentType.MONARCHY:
+		previous_government = government_type
 		government_type = GovernmentType.REPUBLIC
-		historical_events.append("Became republic")
+		historical_events.append("Government evolved from %s to %s" % [GovernmentType.keys()[previous_government], GovernmentType.keys()[government_type]])
 
 # === Economic Management ===
 
@@ -369,6 +373,22 @@ func update_diplomatic_relations(event: String, other_settlement_id: int, impact
 		resource_management.trade_partners.erase(other_settlement_id)
 
 # === Main Update Loop ===
+
+func _update_collective_goals() -> void:
+	# Process collective goals and remove completed ones
+	var completed_goals: Array[int] = []
+	
+	for i in range(collective_goals.size()):
+		var goal: CollectiveGoal = collective_goals[i]
+		goal.progress += 0.01  # Simple progress simulation
+		
+		if goal.progress >= 1.0:
+			completed_goals.append(i)
+			historical_events.append("Completed collective goal: %s" % goal.goal_type)
+	
+	# Remove completed goals (in reverse order)
+	for i in range(completed_goals.size() - 1, -1, -1):
+		collective_goals.remove_at(completed_goals[i])
 
 func update() -> void:
 	evolve_culture()

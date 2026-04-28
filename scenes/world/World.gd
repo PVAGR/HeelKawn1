@@ -162,7 +162,7 @@ func _tile_color(x: int, y: int) -> Color:
 				or feature == TileFeature.Type.DOOR
 				or feature == TileFeature.Type.BED
 		):
-			var rk_ct: int = preload("res://autoloads/WorldMemory.gd")._region_key(x, y)
+			var rk_ct: int = WorldMemory._region_key(x, y)
 			if _region_culture_tint_cache.has(rk_ct):
 				base = TileFeature.apply_culture_tint_to_built_color(
 						base, int(_region_culture_tint_cache[rk_ct])
@@ -227,7 +227,7 @@ func _apply_age_tint(c: Color) -> Color:
 ## Land uses `recovery_stage` (0..scar_level); ruins use `scar_level` so they never "heal" visually in v1.
 ## Does not change biome or walkability; visual only.
 func _apply_scar_visual_to_color(c: Color, x: int, y: int, use_max_scar: bool) -> Color:
-	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(x, y)
+	var rk: int = WorldMemory._region_key(x, y)
 	var p: Dictionary = WorldPersistence.get_region_persistence(rk)
 	var sl: int = int(p.get("scar_level", 0))
 	var tier: int
@@ -284,7 +284,7 @@ func _rebuild_player_meaning_region_state() -> void:
 
 ## Stacks on scar; deterministic per 16x16 region (settlement state only).
 func _apply_player_meaning_tint(c: Color, x: int, y: int) -> Color:
-	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(x, y)
+	var rk: int = WorldMemory._region_key(x, y)
 	if not _player_meaning_region_state.has(rk):
 		return c
 	var st: String = str(_player_meaning_region_state.get(rk, ""))
@@ -386,7 +386,7 @@ func apply_ruins_from_persistence() -> void:
 		if p.data == null:
 			continue
 		var tp: Vector2i = p.data.tile_pos
-		var rpk: int = preload("res://autoloads/WorldMemory.gd")._region_key(tp.x, tp.y)
+		var rpk: int = WorldMemory._region_key(tp.x, tp.y)
 		region_has_pawn[rpk] = true
 	var any_change: bool = false
 	for y in range(WorldData.HEIGHT):
@@ -394,7 +394,7 @@ func apply_ruins_from_persistence() -> void:
 			var f: int = data.get_feature(x, y)
 			if f != TileFeature.Type.BED and f != TileFeature.Type.WALL and f != TileFeature.Type.DOOR:
 				continue
-			var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(x, y)
+			var rk: int = WorldMemory._region_key(x, y)
 			if int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0)) < 2:
 				continue
 			if region_has_pawn.has(rk):

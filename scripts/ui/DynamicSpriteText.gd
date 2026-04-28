@@ -1,4 +1,5 @@
 extends Node2D
+class_name DynamicSpriteText
 ## Dynamic Sprite Text System - Similar to AI matrix for dynamic world information
 ## Provides real-time text overlays on sprites with customizable content
 

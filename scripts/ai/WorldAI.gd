@@ -116,6 +116,14 @@ var tech_innovation_rate: float = 0.01  # Base rate of technological discovery
 var cultural_evolution_rate: float = 0.02  # Base rate of cultural change
 var environmental_stability: float = 0.8  # How stable the environment is
 
+# Civilization development metrics
+var civilization_complexity: float = 0.1  # Complexity of civilization (0.0-1.0)
+var social_development: float = 0.1  # Social development level (0.0-1.0)
+var cultural_advancement: float = 0.1  # Cultural advancement level (0.0-1.0)
+
+# Additional neural networks
+var technological_neural_network: Dictionary = {}  # Technological AI
+
 func _init():
 	_initialize_world_state()
 	_setup_initial_discoveries()
@@ -863,6 +871,34 @@ func _update_economic_neurons() -> void:
 	econ_neurons.wealth_accumulation.value = _calculate_wealth_accumulation()
 	econ_neurons.economic_stability.value = _calculate_economic_stability()
 
+func _update_neural_interconnections() -> void:
+	# Update interconnections between neural networks based on current state
+	var interconnections = neural_world_matrix.interconnections
+	
+	# Calculate connection strengths based on system correlations
+	var civ_env_strength = civilization_complexity * environmental_stability
+	var civ_cult_strength = civilization_complexity * cultural_advancement
+	var civ_econ_strength = civilization_complexity * _calculate_economic_stability()
+	var env_cult_strength = environmental_stability * cultural_advancement
+	var cult_econ_strength = cultural_advancement * _calculate_economic_stability()
+	
+	# Update or create interconnections
+	interconnections["civ_to_env"] = {"strength": civ_env_strength, "type": "influence"}
+	interconnections["civ_to_cult"] = {"strength": civ_cult_strength, "type": "development"}
+	interconnections["civ_to_econ"] = {"strength": civ_econ_strength, "type": "resource"}
+	interconnections["env_to_cult"] = {"strength": env_cult_strength, "type": "adaptation"}
+	interconnections["cult_to_econ"] = {"strength": cult_econ_strength, "type": "trade"}
+	
+	# Remove weak connections
+	var connections_to_remove = []
+	for connection_id in interconnections:
+		var connection = interconnections[connection_id]
+		if connection.strength < 0.01:
+			connections_to_remove.append(connection_id)
+	
+	for connection_id in connections_to_remove:
+		interconnections.erase(connection_id)
+
 func _process_neural_activations() -> void:
 	# Process all neural networks through activation functions
 	var all_networks = [
@@ -891,31 +927,31 @@ func _process_neural_networks() -> void:
 
 func _process_civilization_network() -> void:
 	var input_data = _extract_civilization_input()
-	var output = _forward_propagate_network(civilization_neural_network, input_data)
+	var output = _forward_propagate_network(input_data, civilization_neural_network)
 	_interpret_civilization_output(output)
 
 func _process_environmental_network() -> void:
 	var input_data = _extract_environmental_input()
-	var output = _forward_propagate_network(environmental_neural_network, input_data)
+	var output = _forward_propagate_network(input_data, environmental_neural_network)
 	_interpret_environmental_output(output)
 
 func _process_cultural_network() -> void:
 	var input_data = _extract_cultural_input()
-	var output = _forward_propagate_network(cultural_neural_network, input_data)
+	var output = _forward_propagate_network(input_data, cultural_neural_network)
 	_interpret_cultural_output(output)
 
 func _process_economic_network() -> void:
 	var input_data = _extract_economic_input()
-	var output = _forward_propagate_network(economic_neural_network, input_data)
+	var output = _forward_propagate_network(input_data, economic_neural_network)
 	_interpret_economic_output(output)
 
 func _detect_emergent_patterns() -> void:
 	# Analyze neural network activity for emergent patterns
 	var current_state = _get_current_neural_state()
-	var pattern_score = _calculate_pattern_emergence(current_state)
+	var pattern_score = _calculate_pattern_emergence()
 	
 	if pattern_score >= pattern_emergence_threshold:
-		var new_pattern = _create_emergent_pattern(current_state, pattern_score)
+		var new_pattern = _create_emergent_pattern()
 		emergent_patterns.append(new_pattern)
 		_apply_emergent_pattern_effects(new_pattern)
 
@@ -934,7 +970,7 @@ func _adapt_neural_weights() -> void:
 	
 	for connection_id in neural_world_matrix.interconnections:
 		var connection = neural_world_matrix.interconnections[connection_id]
-		var adaptation = _calculate_weight_adaptation(connection)
+		var adaptation = _calculate_weight_adaptation()
 		connection.weight += learning_rate * adaptation
 		connection.weight = clamp(connection.weight, -1.0, 1.0)
 

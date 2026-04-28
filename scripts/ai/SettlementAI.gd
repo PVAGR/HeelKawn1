@@ -466,17 +466,42 @@ func _propose_automatic_goals() -> void:
 	var food_stock = resource_management.stockpiles.get("food", 0.0)
 	var wood_stock = resource_management.stockpiles.get("wood", 0.0)
 	
+	# WorldMeaning: get region meaning to influence goal priorities
+	var region_meaning: Dictionary = {}
+	if WorldMeaning != null:
+		var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(location.x, location.y)
+		region_meaning = WorldMeaning.get_region_meaning(rk)
+	
+	var death_density: String = region_meaning.get("death_density", "none")
+	var meaning_label: String = region_meaning.get("meaning_label", "quiet")
+	
 	# Propose food gathering if low
 	if food_stock < 10.0 and population > 5:
-		propose_collective_goal("gather_food", leader_id if leader_id >= 0 else resident_agents[0], 80)
+		var priority: int = 80
+		# Higher priority in scarred regions (survival focus)
+		if death_density in ["medium", "high"]:
+			priority = 90
+		propose_collective_goal("gather_food", leader_id if leader_id >= 0 else resident_agents[0], priority)
 	
 	# Propose shelter building if population growing
 	if population > 10 and wood_stock > 5.0:
-		propose_collective_goal("build_shelter", leader_id if leader_id >= 0 else resident_agents[0], 70)
+		var priority: int = 70
+		# Higher priority in grave regions (need protection)
+		if meaning_label == "grave":
+			priority = 85
+		propose_collective_goal("build_shelter", leader_id if leader_id >= 0 else resident_agents[0], priority)
 	
 	# Propose research if knowledge-focused
 	if development_focus == DevelopmentFocus.KNOWLEDGE and population > 15:
-		propose_collective_goal("research_technology", leader_id if leader_id >= 0 else resident_agents[0], 60)
+		var priority: int = 60
+		# Higher priority in quiet regions (stable for learning)
+		if meaning_label == "quiet":
+			priority = 75
+		propose_collective_goal("research_technology", leader_id if leader_id >= 0 else resident_agents[0], priority)
+	
+	# Propose memorial/remembering in scarred regions
+	if death_density in ["medium", "high"] and population > 5:
+		propose_collective_goal("honor_dead", leader_id if leader_id >= 0 else resident_agents[0], 65)
 
 # === Public Interface ===
 

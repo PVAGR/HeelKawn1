@@ -164,11 +164,11 @@ func _create_world_state_neurons() -> Dictionary:
 
 func _create_environmental_neurons() -> Dictionary:
 	return {
-		"temperature_stability": {"value": global_temperature, "activation": 0.0, "connections": []},
-		"sea_level_stability": {"value": sea_level, "activation": 0.0, "connections": []},
-		"biodiversity_health": {"value": biodiversity_index, "activation": 0.0, "connections": []},
-		"resource_renewability": {"value": 0.8, "activation": 0.0, "connections": []},
-		"climate_patterns": {"value": 0.5, "activation": 0.0, "connections": []},
+		"temperature_stability": {"value": 1.0, "activation": 0.0, "connections": []},
+		"sea_level_stability": {"value": 1.0, "activation": 0.0, "connections": []},
+		"biodiversity_health": {"value": 1.0, "activation": 0.0, "connections": []},
+		"resource_availability": {"value": 0.5, "activation": 0.0, "connections": []},
+		"climate_stability": {"value": 0.8, "activation": 0.0, "connections": []},
 		"ecosystem_resilience": {"value": 0.7, "activation": 0.0, "connections": []}
 	}
 
@@ -245,7 +245,7 @@ func _create_specialized_network(network_type: String, input_size: int, hidden_s
 			"output": {"size": output_size, "neurons": _create_neuron_layer(output_size)}
 		},
 		"weights": _initialize_weights(input_size, hidden_size, output_size),
-		"learning_rate": civilization_learning_rate,
+		"learning_rate": 0.01,
 		"training_history": []
 	}
 

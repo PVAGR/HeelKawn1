@@ -1264,13 +1264,17 @@ func _job_matches_affinity(job_type: int, affinity_key: String) -> bool:
 		"building":
 			return job_type == Job.Type.BUILD_BED or job_type == Job.Type.BUILD_WALL or job_type == Job.Type.BUILD_DOOR
 		"farming":
-			return job_type == Job.Type.FORAGE
+			return job_type == Job.Type.FORAGE or job_type == Job.Type.CHOP  # Chop supports farming
 		"combat":
 			return job_type == Job.Type.HUNT
 		"crafting":
 			return job_type == Job.Type.CHOP or job_type == Job.Type.MINE or job_type == Job.Type.MINE_WALL
 		"diplomacy":
 			return job_type == Job.Type.TRADE_HAUL
+		"gathering":
+			return job_type == Job.Type.FORAGE or job_type == Job.Type.CHOP or job_type == Job.Type.MINE
+		"construction":
+			return job_type == Job.Type.BUILD_BED or job_type == Job.Type.BUILD_WALL or job_type == Job.Type.BUILD_DOOR or job_type == Job.Type.MINE_WALL
 		_:
 			return false
 

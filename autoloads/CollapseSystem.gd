@@ -2,6 +2,11 @@ extends Node
 ## HEELKAWN Collapse Progression - Collapse is slow, systemic, and human.
 ## Default order: trust → authority → knowledge → environment.
 
+# Autoload references
+@onready var WorldAI = get_node_or_null("/root/WorldAI")
+@onready var WorldMemory = get_node_or_null("/root/WorldMemory")
+@onready var GameManager = get_node_or_null("/root/GameManager")
+
 enum CollapseStage {
 	STABLE = 0,
 	TRUST_DECAY = 1,
@@ -52,6 +57,7 @@ func update_trust_level(settlement_id: int, delta: float) -> void:
 	var metrics: Dictionary = collapse_metrics[settlement_id]
 	metrics["trust_level"] = clamp(metrics["trust_level"] + delta, 0.0, 1.0)
 	_record_trust_change(settlement_id, delta)
+	_notify_world_ai_collapse_metric_change(settlement_id, "trust_level", metrics["trust_level"])
 
 func update_authority_stability(settlement_id: int, delta: float) -> void:
 	if not collapse_metrics.has(settlement_id):
@@ -60,6 +66,7 @@ func update_authority_stability(settlement_id: int, delta: float) -> void:
 	var metrics: Dictionary = collapse_metrics[settlement_id]
 	metrics["authority_stability"] = clamp(metrics["authority_stability"] + delta, 0.0, 1.0)
 	_record_authority_change(settlement_id, delta)
+	_notify_world_ai_collapse_metric_change(settlement_id, "authority_stability", metrics["authority_stability"])
 
 func update_knowledge_retention(settlement_id: int, delta: float) -> void:
 	if not collapse_metrics.has(settlement_id):
@@ -68,6 +75,7 @@ func update_knowledge_retention(settlement_id: int, delta: float) -> void:
 	var metrics: Dictionary = collapse_metrics[settlement_id]
 	metrics["knowledge_retention"] = clamp(metrics["knowledge_retention"] + delta, 0.0, 1.0)
 	_record_knowledge_change(settlement_id, delta)
+	_notify_world_ai_collapse_metric_change(settlement_id, "knowledge_retention", metrics["knowledge_retention"])
 
 func update_environmental_health(settlement_id: int, delta: float) -> void:
 	if not collapse_metrics.has(settlement_id):
@@ -76,6 +84,7 @@ func update_environmental_health(settlement_id: int, delta: float) -> void:
 	var metrics: Dictionary = collapse_metrics[settlement_id]
 	metrics["environmental_health"] = clamp(metrics["environmental_health"] + delta, 0.0, 1.0)
 	_record_environmental_change(settlement_id, delta)
+	_notify_world_ai_collapse_metric_change(settlement_id, "environmental_health", metrics["environmental_health"])
 
 # === Collapse Signs Detection ===
 
@@ -490,6 +499,11 @@ func get_collapse_status() -> Dictionary:
 		}
 	
 	return status
+
+func _notify_world_ai_collapse_metric_change(settlement_id: int, metric_name: String, new_value: float) -> void:
+	# Notify WorldAI of collapse metric change to update neural network
+	if WorldAI != null and WorldAI.has_method("on_collapse_metric_change"):
+		WorldAI.on_collapse_metric_change(settlement_id, metric_name, new_value)
 
 func clear() -> void:
 	collapse_metrics.clear()

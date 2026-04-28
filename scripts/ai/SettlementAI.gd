@@ -106,6 +106,11 @@ var emergency_reason: String = ""
 var active_treaties: Array[Dictionary] = []  # treaty_id -> treaty data
 var treaty_proposals: Array[Dictionary] = []
 
+# Religious state
+var sacred_sites: Array[Vector2i] = []  # Locations of sacred sites
+var ritual_complexity: float = 0.0  # Complexity of religious rituals
+var religious_fervor: float = 0.0  # Overall religious fervor
+
 # Cultural properties
 var dominant_culture: String = ""
 var language_family: String = ""
@@ -241,8 +246,12 @@ func _technocratic_selection() -> void:
 
 # === Collective Decision Making ===
 
-func propose_collective_goal(goal_type: String, proposer_id: int, priority: int = 50) -> bool:
-	var goal: CollectiveGoal = CollectiveGoal.new(goal_type, priority)
+func propose_collective_goal(goal_type: String, proposer_id: int, base_priority: int) -> bool:
+	# Propose a collective goal with neural network-influenced priority
+	var neural_priority_modifier = _get_neural_priority_modifier(goal_type)
+	var adjusted_priority = base_priority + neural_priority_modifier
+	
+	var goal = CollectiveGoal.new(goal_type, proposer_id, adjusted_priority)
 	goal.supporters.append(proposer_id)
 	
 	# Check if goal aligns with development focus
@@ -252,8 +261,8 @@ func propose_collective_goal(goal_type: String, proposer_id: int, priority: int 
 	# Apply WorldAI settlement goal priority weight
 	if WorldAI != null and WorldAI.has_method("get_settlement_goal_priority"):
 		var goal_weight: float = WorldAI.get_settlement_goal_priority(goal_type)
-		priority = int(priority * (1.0 + goal_weight))
-		goal.priority = priority
+		adjusted_priority = int(adjusted_priority * (1.0 + goal_weight))
+		goal.priority = adjusted_priority
 	
 	# Get community support
 	var support_threshold: float = _get_support_threshold()
@@ -269,10 +278,53 @@ func propose_collective_goal(goal_type: String, proposer_id: int, priority: int 
 	# Check if goal has enough support
 	if float(current_support) / float(resident_agents.size()) >= support_threshold:
 		collective_goals.append(goal)
-		historical_events.append("Collective goal approved: %s" % goal_type)
+		historical_events.append("Collective goal approved: %s (priority: %d, neural modifier: %d)" % [goal_type, adjusted_priority, neural_priority_modifier])
 		return true
 	
 	return false
+
+
+func _get_neural_priority_modifier(goal_type: String) -> int:
+	# Get priority modifier based on neural network state
+	if WorldAI == null or not WorldAI.has_method("get_neural_network_summary"):
+		return 0
+	
+	var summary = WorldAI.get_neural_network_summary()
+	var modifier: int = 0
+	
+	match goal_type:
+		"resource_conservation":
+			# Higher priority when resource depletion is high
+			var resource_depletion = summary.get("resource_depletion", 0.0)
+			modifier = int(resource_depletion * 20)
+		"infrastructure_investment":
+			# Higher priority when economic stability is high
+			var econ_stability = summary.get("economic_stability", 0.0)
+			modifier = int(econ_stability * 15)
+		"economic_recovery":
+			# Higher priority when economic stability is low
+			var econ_stability = summary.get("economic_stability", 0.0)
+			modifier = int((1.0 - econ_stability) * 25)
+		"religious_unity":
+			# Higher priority when religious fervor is high
+			var religious_fervor = summary.get("religious_fervor", 0.0)
+			modifier = int(religious_fervor * 15)
+		"religious_integration":
+			# Higher priority when religious influence is high
+			var religious_influence = summary.get("religious_influence", 0.0)
+			modifier = int(religious_influence * 12)
+		"preserve_knowledge":
+			# Higher priority when knowledge scarcity is high
+			var knowledge_scarcity = summary.get("knowledge_scarcity", 0.0)
+			modifier = int(knowledge_scarcity * 20)
+		"build_monument":
+			# Higher priority when cultural advancement is high
+			var teaching_activity = summary.get("teaching_activity", 0.0)
+			modifier = int(teaching_activity * 10)
+		_:
+			modifier = 0
+	
+	return clamp(modifier, -10, 30)
 
 func _goal_aligns_with_focus(goal_type: String) -> bool:
 	var base_alignment: bool = false
@@ -424,20 +476,76 @@ func handle_historical_discovery_event(event_data: Dictionary) -> void:
 
 
 func handle_environmental_degradation_event(event_data: Dictionary) -> void:
-	# Respond to environmental degradation from WorldAI
-	var resource_depletion = event_data.get("resource_depletion", 0.0)
-	var ruin_density = event_data.get("ruin_density", 0.0)
+	# Respond to environmental degradation by prioritizing survival
+	emergency_mode = true
+	emergency_reason = "environmental_degradation"
 	
-	# Prioritize resource conservation
-	if development_focus != DevelopmentFocus.SURVIVAL:
-		previous_development_focus = development_focus
-		development_focus = DevelopmentFocus.SURVIVAL
+	# Shift development focus to survival
+	previous_development_focus = development_focus
+	development_focus = DevelopmentFocus.SURVIVAL
 	
 	# Propose resource conservation goals
-	propose_collective_goal("gather_food", leader_id if leader_id >= 0 else resident_agents[0], 85)
-	propose_collective_goal("build_shelter", leader_id if leader_id >= 0 else resident_agents[0], 75)
+	propose_collective_goal("resource_conservation", 0.9, "Conserve resources due to environmental stress")
 	
-	historical_events.append("Responded to environmental degradation: depletion=%.2f, ruins=%.2f" % [resource_depletion, ruin_density])
+	historical_events.append("Environmental degradation detected - shifted to survival focus")
+
+
+func handle_economic_boom_event(event_data: Dictionary) -> void:
+	# Respond to economic boom by expanding and investing
+	var production_eff = event_data.get("production_efficiency", 0.0)
+	var econ_stability = event_data.get("economic_stability", 0.0)
+	
+	# Shift development focus to expansion if not in emergency
+	if not emergency_mode:
+		development_focus = DevelopmentFocus.EXPANSION
+	
+	# Propose investment goals
+	propose_collective_goal("infrastructure_investment", 0.8, "Invest in infrastructure during economic boom")
+	
+	historical_events.append("Economic boom detected - expanding and investing")
+
+
+func handle_market_crash_event(event_data: Dictionary) -> void:
+	# Respond to market crash by entering emergency mode
+	emergency_mode = true
+	emergency_reason = "market_crash"
+	
+	# Shift development focus to survival
+	previous_development_focus = development_focus
+	development_focus = DevelopmentFocus.SURVIVAL
+	
+	# Propose economic recovery goals
+	propose_collective_goal("economic_recovery", 0.9, "Recover from market crash")
+	
+	historical_events.append("Market crash detected - entered emergency mode")
+
+
+func handle_religious_schism_event(event_data: Dictionary) -> void:
+	# Respond to religious schism by addressing division
+	var belief_diversity = event_data.get("belief_diversity", 0.0)
+	var religious_fervor = event_data.get("religious_fervor", 0.0)
+	
+	# Propose unity goals
+	propose_collective_goal("religious_unity", 0.8, "Address religious schism and promote unity")
+	
+	# Reduce religious fervor to lower tension
+	religious_fervor = max(religious_fervor - 0.1, 0.0)
+	
+	historical_events.append("Religious schism detected - promoting unity")
+
+
+func handle_religious_conversion_event(event_data: Dictionary) -> void:
+	# Respond to religious conversion by welcoming new believers
+	var religious_influence = event_data.get("religious_influence", 0.0)
+	var ritual_complexity = event_data.get("ritual_complexity", 0.0)
+	
+	# Increase religious fervor
+	religious_fervor = min(religious_fervor + 0.05, 1.0)
+	
+	# Propose integration goals
+	propose_collective_goal("religious_integration", 0.7, "Integrate new converts into community")
+	
+	historical_events.append("Religious conversion detected - welcoming new believers")
 
 
 func _trigger_emergency_leadership_selection() -> void:
@@ -550,6 +658,41 @@ func evaluate_peace_proposal(target_settlement_id: int) -> float:
 		acceptance_chance += 0.2
 	
 	return clamp(acceptance_chance, 0.0, 1.0)
+
+
+# === Religious Management ===
+
+func establish_sacred_site(location: Vector2i) -> bool:
+	# Establish a sacred site at the given location
+	if location in sacred_sites:
+		return false
+	
+	sacred_sites.append(location)
+	ritual_complexity = min(ritual_complexity + 0.1, 1.0)
+	religious_fervor = min(religious_fervor + 0.05, 1.0)
+	
+	# Notify WorldAI
+	if WorldAI != null and WorldAI.has_method("on_sacred_site_established"):
+		WorldAI.on_sacred_site_established(settlement_id, location)
+	
+	historical_events.append("Sacred site established at %s" % str(location))
+	return true
+
+
+func perform_ritual(ritual_type: String, participants: int) -> void:
+	# Perform a religious ritual
+	var fervor_increase = min(participants * 0.01, 0.1)
+	religious_fervor = min(religious_fervor + fervor_increase, 1.0)
+	
+	# Increase ritual complexity based on participant count
+	if participants > 5:
+		ritual_complexity = min(ritual_complexity + 0.02, 1.0)
+	
+	# Notify WorldAI
+	if WorldAI != null and WorldAI.has_method("on_ritual_performed"):
+		WorldAI.on_ritual_performed(settlement_id, ritual_type, participants)
+	
+	historical_events.append("Ritual %s performed with %d participants" % [ritual_type, participants])
 
 
 func _get_support_threshold() -> float:

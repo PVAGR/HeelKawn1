@@ -8,6 +8,10 @@ signal knowledge_crisis_event(event: WorldEvent)
 signal authority_vacuum_event(event: WorldEvent)
 signal historical_discovery_event(event: WorldEvent)
 signal environmental_degradation_event(event: WorldEvent)
+signal economic_boom_event(event: WorldEvent)
+signal market_crash_event(event: WorldEvent)
+signal religious_schism_event(event: WorldEvent)
+signal religious_conversion_event(event: WorldEvent)
 signal world_event_dispatched(event: WorldEvent)
 
 # Autoload references
@@ -1194,6 +1198,154 @@ func _detect_environmental_degradation_patterns() -> void:
 			print("[WorldAI] Pattern detected: %s" % pattern.description)
 
 
+func _detect_economic_boom_patterns() -> void:
+	var econ_neurons = neural_world_matrix["economic_neurons"]
+	var production_eff = econ_neurons["production_efficiency"].value
+	var econ_stability = econ_neurons["economic_stability"].value
+	
+	if production_eff > 0.7 and econ_stability > 0.6:
+		var pattern = {
+			"type": "economic_boom",
+			"description": "High production efficiency with strong economic stability",
+			"severity": "positive",
+			"tick": GameManager.tick_count
+		}
+		emergent_patterns.append(pattern)
+		WorldMemory.record_event({
+			"type": "emergent_pattern_detected",
+			"pattern_type": "economic_boom",
+			"description": pattern.description,
+			"severity": pattern.severity,
+			"tick": GameManager.tick_count
+		})
+		
+		# Dispatch economic boom event
+		var event = WorldEvent.new(
+			"economic_boom",
+			"Neural network detects economic prosperity: production is high and economy is stable",
+			5,
+			{"production_efficiency": production_eff, "economic_stability": econ_stability}
+		)
+		world_events.append(event)
+		economic_boom_event.emit(event)
+		world_event_dispatched.emit(event)
+		_broadcast_event_to_settlements(event)
+		
+		if GameManager.verbose_logs():
+			print("[WorldAI] Pattern detected: %s" % pattern.description)
+
+
+func _detect_market_crash_patterns() -> void:
+	var econ_neurons = neural_world_matrix["economic_neurons"]
+	var econ_stability = econ_neurons["economic_stability"].value
+	var wealth_accum = econ_neurons["wealth_accumulation"].value
+	
+	if econ_stability < 0.3 and wealth_accum > 0.5:
+		var pattern = {
+			"type": "market_crash",
+			"description": "Low economic stability with high wealth accumulation indicates bubble burst",
+			"severity": "high",
+			"tick": GameManager.tick_count
+		}
+		emergent_patterns.append(pattern)
+		WorldMemory.record_event({
+			"type": "emergent_pattern_detected",
+			"pattern_type": "market_crash",
+			"description": pattern.description,
+			"severity": pattern.severity,
+			"tick": GameManager.tick_count
+		})
+		
+		# Dispatch market crash event
+		var event = WorldEvent.new(
+			"market_crash",
+			"Neural network detects market collapse: economic stability is critically low despite wealth accumulation",
+			8,
+			{"economic_stability": econ_stability, "wealth_accumulation": wealth_accum}
+		)
+		world_events.append(event)
+		market_crash_event.emit(event)
+		world_event_dispatched.emit(event)
+		_broadcast_event_to_settlements(event)
+		
+		if GameManager.verbose_logs():
+			print("[WorldAI] Pattern detected: %s" % pattern.description)
+
+
+func _detect_religious_schism_patterns() -> void:
+	var rel_neurons = neural_world_matrix["religious_neurons"]
+	var belief_diversity = rel_neurons["belief_diversity"].value
+	var religious_fervor = rel_neurons["religious_fervor"].value
+	
+	if belief_diversity > 0.7 and religious_fervor > 0.6:
+		var pattern = {
+			"type": "religious_schism",
+			"description": "High belief diversity with high religious fervor indicates schism risk",
+			"severity": "medium",
+			"tick": GameManager.tick_count
+		}
+		emergent_patterns.append(pattern)
+		WorldMemory.record_event({
+			"type": "emergent_pattern_detected",
+			"pattern_type": "religious_schism",
+			"description": pattern.description,
+			"severity": pattern.severity,
+			"tick": GameManager.tick_count
+		})
+		
+		# Dispatch religious schism event
+		var event = WorldEvent.new(
+			"religious_schism",
+			"Neural network detects religious schism: diverse beliefs with high fervor create division",
+			6,
+			{"belief_diversity": belief_diversity, "religious_fervor": religious_fervor}
+		)
+		world_events.append(event)
+		religious_schism_event.emit(event)
+		world_event_dispatched.emit(event)
+		_broadcast_event_to_settlements(event)
+		
+		if GameManager.verbose_logs():
+			print("[WorldAI] Pattern detected: %s" % pattern.description)
+
+
+func _detect_religious_conversion_patterns() -> void:
+	var rel_neurons = neural_world_matrix["religious_neurons"]
+	var religious_influence = rel_neurons["religious_influence"].value
+	var ritual_complexity = rel_neurons["ritual_complexity"].value
+	
+	if religious_influence > 0.6 and ritual_complexity > 0.5:
+		var pattern = {
+			"type": "religious_conversion",
+			"description": "High religious influence with complex rituals attracts converts",
+			"severity": "positive",
+			"tick": GameManager.tick_count
+		}
+		emergent_patterns.append(pattern)
+		WorldMemory.record_event({
+			"type": "emergent_pattern_detected",
+			"pattern_type": "religious_conversion",
+			"description": pattern.description,
+			"severity": pattern.severity,
+			"tick": GameManager.tick_count
+		})
+		
+		# Dispatch religious conversion event
+		var event = WorldEvent.new(
+			"religious_conversion",
+			"Neural network detects religious conversion: strong influence and complex rituals attract new believers",
+			5,
+			{"religious_influence": religious_influence, "ritual_complexity": ritual_complexity}
+		)
+		world_events.append(event)
+		religious_conversion_event.emit(event)
+		world_event_dispatched.emit(event)
+		_broadcast_event_to_settlements(event)
+		
+		if GameManager.verbose_logs():
+			print("[WorldAI] Pattern detected: %s" % pattern.description)
+
+
 func _broadcast_event_to_settlements(event: WorldEvent) -> void:
 	# Broadcast event to all active settlements
 	for settlement_id in active_settlements:
@@ -1218,6 +1370,18 @@ func _broadcast_event_to_settlements(event: WorldEvent) -> void:
 			"environmental_degradation":
 				if settlement.has_method("handle_environmental_degradation_event"):
 					settlement.handle_environmental_degradation_event(event.event_data)
+			"economic_boom":
+				if settlement.has_method("handle_economic_boom_event"):
+					settlement.handle_economic_boom_event(event.event_data)
+			"market_crash":
+				if settlement.has_method("handle_market_crash_event"):
+					settlement.handle_market_crash_event(event.event_data)
+			"religious_schism":
+				if settlement.has_method("handle_religious_schism_event"):
+					settlement.handle_religious_schism_event(event.event_data)
+			"religious_conversion":
+				if settlement.has_method("handle_religious_conversion_event"):
+					settlement.handle_religious_conversion_event(event.event_data)
 
 
 # === Knowledge System Integration ===
@@ -1486,6 +1650,10 @@ func _detect_emergent_patterns() -> void:
 	_detect_authority_vacuum_patterns()
 	_detect_historical_saturation_patterns()
 	_detect_environmental_degradation_patterns()
+	_detect_economic_boom_patterns()
+	_detect_market_crash_patterns()
+	_detect_religious_schism_patterns()
+	_detect_religious_conversion_patterns()
 	
 	# Apply pattern persistence - detected patterns influence future neural weights
 	_apply_pattern_persistence()
@@ -1536,6 +1704,120 @@ func _apply_neuron_weight_adjustment(neuron_name: String, adjustment: float) -> 
 		if group.has(neuron_name):
 			var neuron = group[neuron_name]
 			neuron["value"] = clamp(neuron["value"] + adjustment, 0.0, 1.0)
+
+
+func on_job_completed(job_type: int, job_priority: int) -> void:
+	# Called when a job is completed - updates economic neurons
+	var econ_neurons = neural_world_matrix.get("economic_neurons", {})
+	
+	# Increase production efficiency based on job completions
+	econ_neurons["production_efficiency"].value = min(econ_neurons["production_efficiency"].value + 0.005, 1.0)
+	
+	# Increase economic stability based on high-priority job completions
+	if job_priority >= 70:
+		econ_neurons["economic_stability"].value = min(econ_neurons["economic_stability"].value + 0.01, 1.0)
+	
+	# Increase labor specialization based on job type diversity
+	econ_neurons["labor_specialization"].value = min(econ_neurons["labor_specialization"].value + 0.003, 1.0)
+	
+	# Record event
+	WorldMemory.record_event({
+		"type": "job_completed",
+		"job_type": job_type,
+		"job_priority": job_priority,
+		"tick": GameManager.tick_count
+	})
+	
+	if GameManager.verbose_logs():
+		print("[WorldAI] Job completed type %d priority %d - updating economic neurons" % [job_type, job_priority])
+
+
+func on_sacred_site_established(settlement_id: int, location: Vector2i) -> void:
+	# Called when a settlement establishes a sacred site
+	var rel_neurons = neural_world_matrix.get("religious_neurons", {})
+	
+	# Increase sacred sites neuron
+	rel_neurons["sacred_sites"].value = min(rel_neurons["sacred_sites"].value + 0.05, 1.0)
+	
+	# Increase religious influence
+	rel_neurons["religious_influence"].value = min(rel_neurons["religious_influence"].value + 0.03, 1.0)
+	
+	# Record event
+	WorldMemory.record_event({
+		"type": "sacred_site_established",
+		"settlement_id": settlement_id,
+		"location": location,
+		"tick": GameManager.tick_count
+	})
+	
+	if GameManager.verbose_logs():
+		print("[WorldAI] Sacred site established by settlement %d at %s - updating religious neurons" % [settlement_id, str(location)])
+
+
+func on_ritual_performed(settlement_id: int, ritual_type: String, participants: int) -> void:
+	# Called when a settlement performs a religious ritual
+	var rel_neurons = neural_world_matrix.get("religious_neurons", {})
+	
+	# Increase religious fervor based on participant count
+	var fervor_increase = min(participants * 0.01, 0.1)
+	rel_neurons["religious_fervor"].value = min(rel_neurons["religious_fervor"].value + fervor_increase, 1.0)
+	
+	# Increase ritual complexity based on participant count
+	if participants > 5:
+		rel_neurons["ritual_complexity"].value = min(rel_neurons["ritual_complexity"].value + 0.02, 1.0)
+	
+	# Increase spiritual authority
+	rel_neurons["spiritual_authority"].value = min(rel_neurons["spiritual_authority"].value + 0.01, 1.0)
+	
+	# Record event
+	WorldMemory.record_event({
+		"type": "ritual_performed",
+		"settlement_id": settlement_id,
+		"ritual_type": ritual_type,
+		"participants": participants,
+		"tick": GameManager.tick_count
+	})
+	
+	if GameManager.verbose_logs():
+		print("[WorldAI] Ritual %s performed by settlement %d with %d participants - updating religious neurons" % [ritual_type, settlement_id, participants])
+
+
+func on_collapse_metric_change(settlement_id: int, metric_name: String, new_value: float) -> void:
+	# Called when collapse metrics change - updates collapse risk neuron
+	var world_neurons = neural_world_matrix.get("world_state_neurons", {})
+	
+	# Update appropriate neuron based on metric name
+	match metric_name:
+		"trust_level":
+			world_neurons["trust_level"].value = new_value
+		"authority_stability":
+			world_neurons["authority_stability"].value = new_value
+		"knowledge_retention":
+			world_neurons["knowledge_retention"].value = new_value
+		"environmental_health":
+			world_neurons["environmental_health"].value = new_value
+	
+	# Update collapse risk based on average of all metrics
+	var trust = world_neurons.get("trust_level", {}).get("value", 1.0)
+	var authority = world_neurons.get("authority_stability", {}).get("value", 1.0)
+	var knowledge = world_neurons.get("knowledge_retention", {}).get("value", 1.0)
+	var environment = world_neurons.get("environmental_health", {}).get("value", 1.0)
+	
+	var avg_stability = (trust + authority + knowledge + environment) / 4.0
+	world_neurons["collapse_risk"].value = 1.0 - avg_stability
+	
+	# Record event
+	WorldMemory.record_event({
+		"type": "collapse_metric_change",
+		"settlement_id": settlement_id,
+		"metric_name": metric_name,
+		"new_value": new_value,
+		"collapse_risk": world_neurons["collapse_risk"].value,
+		"tick": GameManager.tick_count
+	})
+	
+	if GameManager.verbose_logs():
+		print("[WorldAI] Collapse metric %s changed to %.2f for settlement %d - collapse risk now %.2f" % [metric_name, new_value, settlement_id, world_neurons["collapse_risk"].value])
 
 
 func _evolve_neural_networks() -> void:

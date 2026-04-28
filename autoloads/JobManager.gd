@@ -156,6 +156,10 @@ func complete(job: Job) -> void:
 	_jobs_by_tile.erase(job.tile)
 	job.state = Job.State.COMPLETED
 	completed_count += 1
+	
+	# Notify WorldAI of job completion for economic neuron updates
+	_notify_world_ai_job_completion(job)
+	
 	job_completed.emit(job)
 	# NOTE: `BUILD_WALL` path reservation is cleared in `World.build_wall` when
 	# the feature is committed — not here (job may complete without build on edge cases).
@@ -256,6 +260,12 @@ func print_debug(max_rows: int = 10) -> void:
 
 static func _chebyshev(a: Vector2i, b: Vector2i) -> int:
 	return max(abs(a.x - b.x), abs(a.y - b.y))
+
+
+func _notify_world_ai_job_completion(job: Job) -> void:
+	# Notify WorldAI of job completion for economic neuron updates
+	if WorldAI != null and WorldAI.has_method("on_job_completed"):
+		WorldAI.on_job_completed(job.type, job.priority)
 
 
 ## `abandon` keeps the open job: construction reservations on tiles stay. Only

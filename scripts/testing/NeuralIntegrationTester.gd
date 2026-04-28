@@ -145,36 +145,36 @@ func _test_ai_agent_manager_neural_matrix() -> Dictionary:
 		test_result.errors.append("AIAgentManager not found")
 		return test_result
 
-		# Check neural matrix initialization
-		if not AIAgentManager.neural_matrix:
-			test_result.status = "failed"
-			test_result.errors.append("Neural matrix not initialized")
-			return test_result
+	# Check neural matrix initialization
+	if not AIAgentManager.neural_matrix:
+		test_result.status = "failed"
+		test_result.errors.append("Neural matrix not initialized")
+		return test_result
 
-		var neural_matrix = AIAgentManager.neural_matrix
+	var neural_matrix = AIAgentManager.neural_matrix
 
-		# Test neural matrix structure
-		test_result.details["layers_count"] = neural_matrix.layers.size()
-		test_result.details["connections_count"] = neural_matrix.connections.size()
-		test_result.details["learning_rate"] = neural_matrix.learning_rate
+	# Test neural matrix structure
+	test_result.details["layers_count"] = neural_matrix.layers.size()
+	test_result.details["connections_count"] = neural_matrix.connections.size()
+	test_result.details["learning_rate"] = neural_matrix.learning_rate
 
-		# Test neural network processing
-		var test_input = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
-		var output = AIAgentManager.process_neural_network(test_input)
-		test_result.details["neural_processing"] = "successful"
-		test_result.details["output_size"] = output.size()
+	# Test neural network processing
+	var test_input = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+	var output = AIAgentManager.process_neural_network(test_input)
+	test_result.details["neural_processing"] = "successful"
+	test_result.details["output_size"] = output.size()
 
-		# Test learning algorithms
-		if not AIAgentManager.learning_algorithms:
-			test_result.status = "failed"
-			test_result.errors.append("Learning algorithms not initialized")
-		else:
-			test_result.details["learning_algorithms_count"] = AIAgentManager.learning_algorithms.size()
+	# Test learning algorithms
+	if not AIAgentManager.learning_algorithms:
+		test_result.status = "failed"
+		test_result.errors.append("Learning algorithms not initialized")
+	else:
+		test_result.details["learning_algorithms_count"] = AIAgentManager.learning_algorithms.size()
 
-		# Test pattern recognition
-		if not AIAgentManager.pattern_recognition:
-			test_result.status = "failed"
-			test_result.errors.append("Pattern recognition not initialized")
+	# Test pattern recognition
+	if not AIAgentManager.pattern_recognition:
+		test_result.status = "failed"
+		test_result.errors.append("Pattern recognition not initialized")
 		else:
 			test_result.details["pattern_recognition_initialized"] = true
 
@@ -209,32 +209,32 @@ func _test_neural_matrix_structure() -> Dictionary:
 		test_result.errors.append("Neural matrix not available")
 		return test_result
 
-		var neural_matrix = AIAgentManager.neural_matrix
+	var neural_matrix = AIAgentManager.neural_matrix
 
-		# Test layer structure
-		var expected_layers = ["input", "hidden1", "hidden2", "output"]
-		for layer_name in expected_layers:
-			if not neural_matrix.layers.has(layer_name):
+	# Test layer structure
+	var expected_layers = ["input", "hidden1", "hidden2", "output"]
+	for layer_name in expected_layers:
+		if not neural_matrix.layers.has(layer_name):
+			test_result.status = "failed"
+			test_result.errors.append("Missing layer: " + layer_name)
+		else:
+			var layer = neural_matrix.layers[layer_name]
+			if not layer.has("size") or not layer.has("neurons"):
 				test_result.status = "failed"
-				test_result.errors.append("Missing layer: " + layer_name)
-			else:
-				var layer = neural_matrix.layers[layer_name]
-				if not layer.has("size") or not layer.has("neurons"):
-					test_result.status = "failed"
-					test_result.errors.append("Invalid layer structure: " + layer_name)
+				test_result.errors.append("Invalid layer structure: " + layer_name)
 
-		test_result.details["layer_structure_valid"] = test_result.status == "passed"
+	test_result.details["layer_structure_valid"] = test_result.status == "passed"
 
-		# Test connection structure
-		var expected_connections = ["input_to_hidden1", "hidden1_to_hidden2", "hidden2_to_output"]
-		for connection_name in expected_connections:
-			if not neural_matrix.connections.has(connection_name):
-				test_result.status = "failed"
-				test_result.errors.append("Missing connection: " + connection_name)
+	# Test connection structure
+	var expected_connections = ["input_to_hidden1", "hidden1_to_hidden2", "hidden2_to_output"]
+	for connection_name in expected_connections:
+		if not neural_matrix.connections.has(connection_name):
+			test_result.status = "failed"
+			test_result.errors.append("Missing connection: " + connection_name)
 
-		test_result.details["connection_structure_valid"] = test_result.status == "passed"
+	test_result.details["connection_structure_valid"] = test_result.status == "passed"
 
-		print("[NeuralIntegrationTester] ✓ Neural matrix structure test passed")
+	print("[NeuralIntegrationTester] ✓ Neural matrix structure test passed")
 
 	return test_result
 
@@ -251,23 +251,23 @@ func _test_learning_algorithms() -> Dictionary:
 		test_result.errors.append("Learning algorithms not available")
 		return test_result
 
-		var learning_algorithms = AIAgentManager.learning_algorithms
-		var expected_algorithms = ["backpropagation", "reinforcement_learning", "genetic_algorithm", "hebbian_learning"]
+	var learning_algorithms = AIAgentManager.learning_algorithms
+	var expected_algorithms = ["backpropagation", "reinforcement_learning", "genetic_algorithm", "hebbian_learning"]
 
-		for algorithm_name in expected_algorithms:
-			if not learning_algorithms.has(algorithm_name):
+	for algorithm_name in expected_algorithms:
+		if not learning_algorithms.has(algorithm_name):
+			test_result.status = "failed"
+			test_result.errors.append("Missing algorithm: " + algorithm_name)
+		else:
+			var algorithm = learning_algorithms[algorithm_name]
+			if not algorithm.has("enabled"):
 				test_result.status = "failed"
-				test_result.errors.append("Missing algorithm: " + algorithm_name)
-			else:
-				var algorithm = learning_algorithms[algorithm_name]
-				if not algorithm.has("enabled"):
-					test_result.status = "failed"
-					test_result.errors.append("Invalid algorithm structure: " + algorithm_name)
+				test_result.errors.append("Invalid algorithm structure: " + algorithm_name)
 
-		test_result.details["algorithms_count"] = learning_algorithms.size()
-		test_result.details["all_algorithms_present"] = test_result.status == "passed"
+	test_result.details["algorithms_count"] = learning_algorithms.size()
+	test_result.details["all_algorithms_present"] = test_result.status == "passed"
 
-		print("[NeuralIntegrationTester] ✓ Learning algorithms test passed")
+	print("[NeuralIntegrationTester] ✓ Learning algorithms test passed")
 
 	return test_result
 
@@ -482,17 +482,17 @@ func _test_training_functionality() -> Dictionary:
 		test_result.errors.append("AIAgentManager not found")
 		return test_result
 
-		# Test neural network training
-		var test_input = [0.1, 0.2, 0.3, 0.4]
-		var test_target = [0.5, 0.6, 0.7, 0.8]
+	# Test neural network training
+	var test_input = [0.1, 0.2, 0.3, 0.4]
+	var test_target = [0.5, 0.6, 0.7, 0.8]
 
-		AIAgentManager.train_neural_network(test_input, test_target)
+	AIAgentManager.train_neural_network(test_input, test_target)
 
-		test_result.details["training_successful"] = true
-		test_result.details["training_input_size"] = test_input.size()
-		test_result.details["training_target_size"] = test_target.size()
+	test_result.details["training_successful"] = true
+	test_result.details["training_input_size"] = test_input.size()
+	test_result.details["training_target_size"] = test_target.size()
 
-		print("[NeuralIntegrationTester] ✓ Training functionality test passed")
+	print("[NeuralIntegrationTester] ✓ Training functionality test passed")
 
 	return test_result
 
@@ -783,13 +783,13 @@ func _test_error_tracker_initialization() -> Dictionary:
 		"errors": []
 	}
 
-			# ErrorTracker is a class, not a singleton, so we test its functionality
-		var error_tracker = ErrorTracker.new()
+	# ErrorTracker is a class, not a singleton, so we test its functionality
+	var error_tracker = ErrorTracker.new()
 
-		test_result.details["error_tracker_created"] = true
-		test_result.details["error_categories_count"] = error_tracker.error_categories.size()
+	test_result.details["error_tracker_created"] = true
+	test_result.details["error_categories_count"] = error_tracker.error_categories.size()
 
-		print("[NeuralIntegrationTester] ✓ Error Tracker initialization test passed")
+	print("[NeuralIntegrationTester] ✓ Error Tracker initialization test passed")
 
 	return test_result
 
@@ -801,31 +801,31 @@ func _test_neural_error_prediction() -> Dictionary:
 		"errors": []
 	}
 
-			# Test neural error prediction functionality
-		var error_tracker = ErrorTracker.new()
+	# Test neural error prediction functionality
+	var error_tracker = ErrorTracker.new()
 
-		var test_system_state = {
-			"file_complexity": 0.5,
-			"recent_errors": 2,
-			"code_changes": 5,
-			"system_load": 0.3,
-			"memory_usage": 200,
-			"tick_frequency": 25,
-			"neural_activity": 0.7,
-			"performance_degradation": 0.1,
-			"resource_pressure": 0.2,
-			"neural_stress": 0.3,
-			"connection_health": 0.8,
-			"synaptic_efficiency": 0.9,
-			"prediction_confidence": 0.7
-		}
+	var test_system_state = {
+		"file_complexity": 0.5,
+		"recent_errors": 2,
+		"code_changes": 5,
+		"system_load": 0.3,
+		"memory_usage": 200,
+		"tick_frequency": 25,
+		"neural_activity": 0.7,
+		"performance_degradation": 0.1,
+		"resource_pressure": 0.2,
+		"neural_stress": 0.3,
+		"connection_health": 0.8,
+		"synaptic_efficiency": 0.9,
+		"prediction_confidence": 0.7
+	}
 
-		var predictions = error_tracker.predict_errors(test_system_state)
+	var predictions = error_tracker.predict_errors(test_system_state)
 
-		test_result.details["prediction_successful"] = true
-		test_result.details["predictions_count"] = predictions.size()
+	test_result.details["prediction_successful"] = true
+	test_result.details["predictions_count"] = predictions.size()
 
-		print("[NeuralIntegrationTester] ✓ Neural error prediction test passed")
+	print("[NeuralIntegrationTester] ✓ Neural error prediction test passed")
 
 	return test_result
 
@@ -862,13 +862,13 @@ func _test_neural_optimizer_initialization() -> Dictionary:
 		"errors": []
 	}
 
-			# NeuralOptimizer is a class, not a singleton, so we test its functionality
-		var neural_optimizer = NeuralOptimizer.new()
+	# NeuralOptimizer is a class, not a singleton, so we test its functionality
+	var neural_optimizer = NeuralOptimizer.new()
 
-		test_result.details["neural_optimizer_created"] = true
-		test_result.details["optimization_strategies_count"] = neural_optimizer.optimization_strategies.size()
+	test_result.details["neural_optimizer_created"] = true
+	test_result.details["optimization_strategies_count"] = neural_optimizer.optimization_strategies.size()
 
-		print("[NeuralIntegrationTester] ✓ Neural Optimizer initialization test passed")
+	print("[NeuralIntegrationTester] ✓ Neural Optimizer initialization test passed")
 
 	return test_result
 
@@ -880,20 +880,20 @@ func _test_optimization_strategies() -> Dictionary:
 		"errors": []
 	}
 
-			var neural_optimizer = NeuralOptimizer.new()
+	var neural_optimizer = NeuralOptimizer.new()
 
-		# Test optimization strategies
-		var expected_strategies = ["connection_pruning", "weight_quantization", "network_compression", "dynamic_batching", "memory_optimization"]
+	# Test optimization strategies
+	var expected_strategies = ["connection_pruning", "weight_quantization", "network_compression", "dynamic_batching", "memory_optimization"]
 
-		for strategy_name in expected_strategies:
-			if not neural_optimizer.optimization_strategies.has(strategy_name):
-				test_result.status = "failed"
-				test_result.errors.append("Missing strategy: " + strategy_name)
+	for strategy_name in expected_strategies:
+		if not neural_optimizer.optimization_strategies.has(strategy_name):
+			test_result.status = "failed"
+			test_result.errors.append("Missing strategy: " + strategy_name)
 
-		test_result.details["strategies_count"] = neural_optimizer.optimization_strategies.size()
-		test_result.details["all_strategies_present"] = test_result.status == "passed"
+	test_result.details["strategies_count"] = neural_optimizer.optimization_strategies.size()
+	test_result.details["all_strategies_present"] = test_result.status == "passed"
 
-		print("[NeuralIntegrationTester] ✓ Optimization strategies test passed")
+	print("[NeuralIntegrationTester] ✓ Optimization strategies test passed")
 
 	return test_result
 

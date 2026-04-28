@@ -2,6 +2,13 @@ extends Node
 ## Advanced World AI with Neural Network Matrix Integration
 ## Manages civilizational planning, technological progression, and neural network-driven world evolution
 
+# Event dispatch signals
+signal collapse_warning_event(event: WorldEvent)
+signal knowledge_crisis_event(event: WorldEvent)
+signal authority_vacuum_event(event: WorldEvent)
+signal historical_discovery_event(event: WorldEvent)
+signal world_event_dispatched(event: WorldEvent)
+
 # Autoload references
 @onready var CollapseSystem = get_node_or_null("/root/CollapseSystem")
 @onready var PersistenceSystem = get_node_or_null("/root/PersistenceSystem")
@@ -43,15 +50,17 @@ class WorldEvent extends RefCounted:
 	var impact_level: int  # 1-10, how world-changing
 	var affected_regions: Array[Vector2i] = []
 	var participant_settlements: Array[int] = []
+	var event_data: Dictionary = {}  # Additional event-specific data
 	var tick_occurred: int
 	var historical_significance: float = 0.0
 	var aftermath_effects: Array[String] = []
 	
-	func _init(type: String, desc: String, impact: int = 1):
+	func _init(type: String, desc: String, impact: int = 1, data: Dictionary = {}):
 		event_type = type
 		description = desc
 		impact_level = impact
-		tick_occurred = GameManager.tick_count
+		event_data = data
+		tick_occurred = GameManager.tick_count if GameManager else 0
 
 class TechnologicalDiscovery extends RefCounted:
 	var discovery_name: String
@@ -1007,6 +1016,19 @@ func _detect_collapse_warning_patterns() -> void:
 			"severity": pattern.severity,
 			"tick": GameManager.tick_count
 		})
+		
+		# Dispatch collapse warning event
+		var event = WorldEvent.new(
+			"collapse_warning",
+			"Neural network detects imminent collapse risk: trust is low while collapse risk is high",
+			8,
+			{"collapse_risk": collapse_risk, "trust_level": trust_level}
+		)
+		world_events.append(event)
+		collapse_warning_event.emit(event)
+		world_event_dispatched.emit(event)
+		_broadcast_event_to_settlements(event)
+		
 		if GameManager.verbose_logs():
 			print("[WorldAI] Pattern detected: %s" % pattern.description)
 
@@ -1024,6 +1046,26 @@ func _detect_knowledge_crisis_patterns() -> void:
 			"tick": GameManager.tick_count
 		}
 		emergent_patterns.append(pattern)
+		WorldMemory.record_event({
+			"type": "emergent_pattern_detected",
+			"pattern_type": "knowledge_crisis",
+			"description": pattern.description,
+			"severity": pattern.severity,
+			"tick": GameManager.tick_count
+		})
+		
+		# Dispatch knowledge crisis event
+		var event = WorldEvent.new(
+			"knowledge_crisis",
+			"Neural network detects critical knowledge loss: knowledge is scarce and teaching activity is low",
+			6,
+			{"knowledge_scarcity": knowledge_scarcity, "teaching_activity": teaching_activity}
+		)
+		world_events.append(event)
+		knowledge_crisis_event.emit(event)
+		world_event_dispatched.emit(event)
+		_broadcast_event_to_settlements(event)
+		
 		if GameManager.verbose_logs():
 			print("[WorldAI] Pattern detected: %s" % pattern.description)
 
@@ -1048,6 +1090,19 @@ func _detect_authority_vacuum_patterns() -> void:
 			"severity": pattern.severity,
 			"tick": GameManager.tick_count
 		})
+		
+		# Dispatch authority vacuum event
+		var event = WorldEvent.new(
+			"authority_vacuum",
+			"Neural network detects authority breakdown: both civil and military authority are critically low",
+			7,
+			{"civil_authority": civil_auth, "military_authority": military_auth}
+		)
+		world_events.append(event)
+		authority_vacuum_event.emit(event)
+		world_event_dispatched.emit(event)
+		_broadcast_event_to_settlements(event)
+		
 		if GameManager.verbose_logs():
 			print("[WorldAI] Pattern detected: %s" % pattern.description)
 
@@ -1065,8 +1120,51 @@ func _detect_historical_saturation_patterns() -> void:
 			"tick": GameManager.tick_count
 		}
 		emergent_patterns.append(pattern)
+		WorldMemory.record_event({
+			"type": "emergent_pattern_detected",
+			"pattern_type": "historical_saturation",
+			"description": pattern.description,
+			"severity": pattern.severity,
+			"tick": GameManager.tick_count
+		})
+		
+		# Dispatch historical discovery event
+		var event = WorldEvent.new(
+			"historical_discovery",
+			"Neural network identifies significant historical pattern: dense ruins with deep historical layering",
+			5,
+			{"historical_layering": historical_layering, "ruin_density": ruin_density}
+		)
+		world_events.append(event)
+		historical_discovery_event.emit(event)
+		world_event_dispatched.emit(event)
+		_broadcast_event_to_settlements(event)
+		
 		if GameManager.verbose_logs():
 			print("[WorldAI] Pattern detected: %s" % pattern.description)
+
+
+func _broadcast_event_to_settlements(event: WorldEvent) -> void:
+	# Broadcast event to all active settlements
+	for settlement_id in active_settlements:
+		var settlement = active_settlements[settlement_id]
+		if settlement == null:
+			continue
+		
+		# Call appropriate event handler based on event type
+		match event.event_type:
+			"collapse_warning":
+				if settlement.has_method("handle_collapse_warning_event"):
+					settlement.handle_collapse_warning_event(event.event_data)
+			"knowledge_crisis":
+				if settlement.has_method("handle_knowledge_crisis_event"):
+					settlement.handle_knowledge_crisis_event(event.event_data)
+			"authority_vacuum":
+				if settlement.has_method("handle_authority_vacuum_event"):
+					settlement.handle_authority_vacuum_event(event.event_data)
+			"historical_discovery":
+				if settlement.has_method("handle_historical_discovery_event"):
+					settlement.handle_historical_discovery_event(event.event_data)
 
 
 func _detect_emergent_patterns() -> void:

@@ -353,6 +353,85 @@ func exit_emergency_mode(reason: String) -> void:
 	historical_events.append("Emergency mode deactivated: %s" % reason)
 
 
+# === WorldAI Event Handlers ===
+
+func handle_collapse_warning_event(event_data: Dictionary) -> void:
+	# Respond to collapse warning from WorldAI
+	var collapse_risk = event_data.get("collapse_risk", 0.0)
+	var trust_level = event_data.get("trust_level", 0.0)
+	
+	# Enter emergency mode if not already
+	if not emergency_mode:
+		enter_emergency_mode("world_collapse_warning")
+	
+	# Propose defensive goals
+	propose_collective_goal("defend_settlement", leader_id if leader_id >= 0 else resident_agents[0], 90)
+	propose_collective_goal("gather_food", leader_id if leader_id >= 0 else resident_agents[0], 85)
+	
+	historical_events.append("Responded to collapse warning: risk=%.2f, trust=%.2f" % [collapse_risk, trust_level])
+
+
+func handle_knowledge_crisis_event(event_data: Dictionary) -> void:
+	# Respond to knowledge crisis from WorldAI
+	var knowledge_scarcity = event_data.get("knowledge_scarcity", 0.0)
+	var teaching_activity = event_data.get("teaching_activity", 0.0)
+	
+	# Prioritize knowledge preservation
+	if development_focus != DevelopmentFocus.KNOWLEDGE:
+		previous_development_focus = development_focus
+		development_focus = DevelopmentFocus.KNOWLEDGE
+	
+	# Propose knowledge goals
+	propose_collective_goal("preserve_knowledge", leader_id if leader_id >= 0 else resident_agents[0], 80)
+	propose_collective_goal("build_library", leader_id if leader_id >= 0 else resident_agents[0], 75)
+	
+	historical_events.append("Responded to knowledge crisis: scarcity=%.2f, teaching=%.2f" % [knowledge_scarcity, teaching_activity])
+
+
+func handle_authority_vacuum_event(event_data: Dictionary) -> void:
+	# Respond to authority vacuum from WorldAI
+	var civil_auth = event_data.get("civil_authority", 0.0)
+	var military_auth = event_data.get("military_authority", 0.0)
+	
+	# Trigger leadership selection to fill vacuum
+	if AuthoritySystem != null:
+		_trigger_emergency_leadership_selection()
+	
+	# Propose stability goals
+	propose_collective_goal("defend_settlement", leader_id if leader_id >= 0 else resident_agents[0], 85)
+	
+	historical_events.append("Responded to authority vacuum: civil=%.2f, military=%.2f" % [civil_auth, military_auth])
+
+
+func handle_historical_discovery_event(event_data: Dictionary) -> void:
+	# Respond to historical discovery from WorldAI
+	var historical_layering = event_data.get("historical_layering", 0.0)
+	var ruin_density = event_data.get("ruin_density", 0.0)
+	
+	# Propose memorial or exploration goals
+	if development_focus == DevelopmentFocus.ARTISTIC:
+		propose_collective_goal("build_monument", leader_id if leader_id >= 0 else resident_agents[0], 70)
+	elif development_focus == DevelopmentFocus.KNOWLEDGE:
+		propose_collective_goal("preserve_knowledge", leader_id if leader_id >= 0 else resident_agents[0], 70)
+	else:
+		propose_collective_goal("explore_territory", leader_id if leader_id >= 0 else resident_agents[0], 65)
+	
+	historical_events.append("Responded to historical discovery: layering=%.2f, ruins=%.2f" % [historical_layering, ruin_density])
+
+
+func _trigger_emergency_leadership_selection() -> void:
+	# Select new leader based on government type
+	match government_type:
+		GovernmentType.MONARCHY:
+			_monarchic_selection()
+		GovernmentType.THEOCRACY:
+			_theocratic_selection()
+		GovernmentType.TECHNOCRACY:
+			_technocratic_selection()
+		_:
+			_tribal_selection()
+
+
 func _get_support_threshold() -> float:
 	match government_type:
 		GovernmentType.TRIBAL:

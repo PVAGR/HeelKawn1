@@ -2954,6 +2954,10 @@ func _process_injuries() -> void:
 func _observe_nearby_work() -> void:
 	# Pawns can learn by watching others work nearby
 	# Observation radius: 50 pixels
+	# Throttled to every 15 ticks to avoid lag (0.25 seconds at 1x speed)
+	if GameManager.tick_count % 15 != 0:
+		return
+	
 	var observation_radius: float = 50.0
 	
 	for pawn in get_tree().get_nodes_in_group("pawns"):

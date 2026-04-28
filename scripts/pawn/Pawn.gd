@@ -1473,8 +1473,8 @@ func issue_edict(edict_key: String) -> bool:
 		"edict": edict_key,
 		"tick": GameManager.tick_count,
 	})
-	# Dynamic neural network matrix connection for settlement effects
-	_nearby_pawn_edict_influence(edict_key)
+	# Dynamic neural network matrix connection for settlement effects - DISABLED for performance
+	# _nearby_pawn_edict_influence(edict_key)
 	return true
 
 
@@ -2465,46 +2465,12 @@ func _tick_sleeping() -> void:
 # ==================== combat ====================
 
 func _engage_enemies() -> void:
-	if _world == null or _world.pathfinder == null:
-		return
-	if _state != State.IDLE and _state != State.DRAFT_WALK:
-		return
-	var closest_enemy: Enemy = null
-	var closest_dist_sq: float = INF
-	for enemy_node in get_tree().get_nodes_in_group("enemies"):
-		var enemy: Enemy = enemy_node as Enemy
-		if enemy == null or not is_instance_valid(enemy):
-			continue
-		var dist_sq: float = position.distance_squared_to(enemy.position)
-		if dist_sq < closest_dist_sq:
-			closest_enemy = enemy
-			closest_dist_sq = dist_sq
-	if closest_enemy == null:
-		return
-	if closest_dist_sq <= 110.0:
-		if randf() < 0.45:
-			CombatResolver.resolve_attack(self, closest_enemy)
-		return
-	if _state == State.IDLE:
-		var target_tile: Vector2i = _world.world_to_tile(closest_enemy.position)
-		if not _world.pathfinder.is_passable(target_tile):
-			target_tile = _world.pathfinder.find_adjacent_passable(target_tile)
-		if target_tile.x < 0:
-			return
-		var path: Array[Vector2i] = _path_for_pawn(target_tile)
-		if path.is_empty():
-			return
-		_state = State.DRAFT_WALK
-		_start_path(path)
-	# Normal wake on rest restored.
-	if data.rest >= REST_WAKE_THRESHOLD:
-		data.mood = min(100.0, data.mood + MOOD_BONUS_WOKE_REFRESHED)
-		if GameManager.verbose_logs():
-			print("[Pawn] %s wakes refreshed  (rest=%.1f, mood %.1f)" %
-				[data.display_name, data.rest, data.mood])
-		_release_bed_if_reserved()
-		_reset_to_idle()
-		return
+	# DISABLED for performance - iterates through all enemies
+	return
+
+func _find_compatible_mate() -> Pawn:
+	# DISABLED for performance - iterates through all pawns
+	return null
 
 
 ## Drop any bed reservation we hold. Safe to call multiple times.

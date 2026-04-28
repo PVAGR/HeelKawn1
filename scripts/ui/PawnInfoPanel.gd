@@ -70,6 +70,9 @@ var _work_checkboxes: Dictionary = {}
 var _pawn: Pawn = null
 ## When true (map-only mode), hide sheet even if a pawn is selected.
 var _overlay_suppressed: bool = false
+var _player_context_mode_label: String = "SPECTATOR"
+var _player_context_pawn_id: int = -1
+var _player_context_picker_visible: bool = false
 var _traits_label: Label = null
 var _lineage_label: Label = null
 var _appearance_label: Label = null
@@ -113,6 +116,17 @@ func bind_pawn(p: Pawn) -> void:
 	else:
 		_set_visible(true)
 	_refresh()
+
+
+func set_player_context(mode_label: String, player_pawn_id: int, picker_visible: bool) -> void:
+	var next_mode: String = mode_label if not mode_label.is_empty() else "SPECTATOR"
+	if _player_context_mode_label == next_mode and _player_context_pawn_id == player_pawn_id and _player_context_picker_visible == picker_visible:
+		return
+	_player_context_mode_label = next_mode
+	_player_context_pawn_id = player_pawn_id
+	_player_context_picker_visible = picker_visible
+	if _pawn != null and is_instance_valid(_pawn):
+		_refresh()
 
 
 # ==================== layout ====================
@@ -463,10 +477,15 @@ func _refresh() -> void:
 	if _subtitle_label != null:
 		var prof: String = d.profession_name()
 		var hk: String = d.highest_affinity_skill()
+		var control_line: String = "Control: %s" % _player_context_mode_label
+		if _player_context_mode_label == "INCARNATED" and _player_context_pawn_id >= 0:
+			control_line += " (#%d)" % _player_context_pawn_id
+		if _player_context_picker_visible:
+			control_line += " | picker open"
 		if prof == "None":
-			_subtitle_label.text = "No locked profession · job bias: %s" % hk
+			_subtitle_label.text = "%s · No locked profession · job bias: %s" % [control_line, hk]
 		else:
-			_subtitle_label.text = "%s · job bias: %s" % [prof, hk]
+			_subtitle_label.text = "%s · %s · job bias: %s" % [control_line, prof, hk]
 	_refresh_portrait_strip(d)
 	if _coach_label != null:
 		var hints: PackedStringArray = d.progression_coach_lines(5)

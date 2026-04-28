@@ -14,6 +14,10 @@ enum IntentKind {
 	REQUEST_SETTLEMENT_FOCUS = 3,
 	## Reserved for tooling (F10, tests); must stay deterministic.
 	DEBUG_TOOL = 4,
+	## Request to open the future incarnation entry flow.
+	REQUEST_INCARNATION_ENTRY = 5,
+	## Request to return from incarnation back to spectator state.
+	REQUEST_SPECTATOR_RETURN = 6,
 }
 
 const MAX_QUEUE: int = 512
@@ -84,8 +88,20 @@ static func intent_kind_name(kind: int) -> String:
 			return "REQUEST_SETTLEMENT_FOCUS"
 		IntentKind.DEBUG_TOOL:
 			return "DEBUG_TOOL"
+		IntentKind.REQUEST_INCARNATION_ENTRY:
+			return "REQUEST_INCARNATION_ENTRY"
+		IntentKind.REQUEST_SPECTATOR_RETURN:
+			return "REQUEST_SPECTATOR_RETURN"
 		_:
 			return "NONE"
+
+
+func request_incarnation_entry(note: String = "", payload: Dictionary = {}) -> bool:
+	return submit(IntentKind.REQUEST_INCARNATION_ENTRY, "", -1, note, payload)
+
+
+func request_spectator_return(note: String = "", payload: Dictionary = {}) -> bool:
+	return submit(IntentKind.REQUEST_SPECTATOR_RETURN, "", -1, note, payload)
 
 
 func queue_size() -> int:
@@ -116,4 +132,5 @@ func debug_summary_block() -> String:
 		)
 	if _queue.is_empty():
 		lines.append("  (empty) Example: PlayerIntentQueue.submit(PlayerIntentQueue.IntentKind.OBSERVER_NOTE, \"\", -1, \"session note\", {})")
+	lines.append("  Incarnation helpers: request_incarnation_entry() request_spectator_return()")
 	return "\n".join(lines)

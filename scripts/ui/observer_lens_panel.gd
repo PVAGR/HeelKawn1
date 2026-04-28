@@ -1,8 +1,6 @@
 extends PanelContainer
 class_name ObserverLensPanel
 
-const _ZoneTags := preload("res://scripts/kernel/world_meaning_safe.gd")
-
 # Read-only HUD panel. Never mutates world state.
 # Attach to a PanelContainer or MarginContainer in ColonyHUD.
 
@@ -35,15 +33,11 @@ func _update_display() -> void:
 		status_label.text = ""
 		return
 
-	var narrative: String = ObserverLens.get_zone_narrative(_target_zone)
-	var tags: PackedStringArray = _ZoneTags.zone_tags(_target_zone)
-	var focus: Array[Dictionary] = ObserverLens.get_chronicler_focus()
-
-	var is_focus: bool = false
-	for f in focus:
-		if str(f.get("zone", "")) == _target_zone:
-			is_focus = true
-			break
+	var snapshot: Dictionary = ObserverLens.get_zone_snapshot(_target_zone)
+	var narrative: String = str(snapshot.get("narrative", "Unmarked"))
+	var tags_v: Variant = snapshot.get("tags", PackedStringArray())
+	var tags: PackedStringArray = tags_v as PackedStringArray if tags_v is PackedStringArray else PackedStringArray()
+	var is_focus: bool = bool(snapshot.get("is_focus", false))
 
 	var tags_text: String = "None"
 	if tags.size() > 0:

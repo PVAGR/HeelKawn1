@@ -6,6 +6,7 @@ class_name Main
 ## previous, so order here matters.
 
 const STOCKPILE_SCENE: PackedScene = preload("res://scenes/stockpile/Stockpile.tscn")
+const INCARNATION_PICKER_SCRIPT: Script = preload("res://scripts/ui/IncarnationPicker.gd")
 
 ## Tuning for initial job generation.
 const FORAGE_WORK_TICKS: int = 20
@@ -135,9 +136,15 @@ var _play_chrome_visible: bool = true
 var _camera_follow_selected: bool = false
 ## Deterministic local-control pawn. Defaults to current selection.
 var _player_pawn: Pawn = null
+enum PlayerMode {
+	SPECTATOR = 0,
+	INCARNATED = 1,
+}
+var _player_mode: int = PlayerMode.SPECTATOR
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
 var _avatar_panel: Node = null
+var _incarnation_picker: Node = null
 var _kernel_diagnostic: KernelDiagnostic = null
 ## Player authority: pawn-local intents (WASD+E), cosmetic edit, draft/edicts when ruler,
 ## selection, pause/speed, camera. Structures/zones: planner + jobs only (no human stamp).
@@ -1229,6 +1236,207 @@ func _toggle_avatar_panel() -> void:
 		print("[Main] Sprite panel: select a pawn first (click on map)")
 
 
+func _ensure_incarnation_picker() -> void:
+	if _incarnation_picker != null and is_instance_valid(_incarnation_picker):
+		return
+	var ui_vp: Node = get_node_or_null("UI_Viewport")
+	_incarnation_picker = INCARNATION_PICKER_SCRIPT.new()
+	_incarnation_picker.name = "IncarnationPicker"
+	if _incarnation_picker.has_signal("entry_confirmed"):
+		_incarnation_picker.connect("entry_confirmed", Callable(self, "_on_incarnation_entry_confirmed"))
+	if _incarnation_picker.has_signal("closed"):
+		_incarnation_picker.connect("closed", Callable(self, "_on_incarnation_picker_closed"))
+	if ui_vp != null:
+		ui_vp.add_child(_incarnation_picker)
+	else:
+		add_child(_incarnation_picker)
+
+
+func _toggle_incarnation_picker() -> void:
+	_ensure_incarnation_picker()
+	if _incarnation_picker == null:
+		return
+	if _incarnation_picker.visible:
+		_incarnation_picker.call("close_picker")
+		_sync_player_context_ui()
+		return
+	var candidates: Array = _incarnation_candidates_snapshot()
+	if candidates.is_empty():
+		if OS.is_debug_build():
+			print("[Main] Incarnation picker: no eligible living pawns")
+		return
+	_incarnation_picker.call("open_with_candidates", candidates, get_player_mode_label())
+	_sync_player_context_ui()
+
+
+func _incarnation_candidates_snapshot() -> Array:
+	var out: Array = []
+	if _pawn_spawner == null:
+		return out
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var d: PawnData = p.data
+		var rk: int = WorldMemory._region_key(d.tile_pos.x, d.tile_pos.y)
+		var center_region: int = SettlementMemory.get_center_region_for_region(rk)
+		var settlement_state: String = SettlementMemory.get_state_at_region(center_region if center_region >= 0 else rk)
+		var region_reputation: int = CulturalMemory.get_region_reputation(center_region if center_region >= 0 else rk)
+		var state_name: String = p.get_state_name() if p.has_method("get_state_name") else "Unknown"
+		var current_job: String = p.get_current_job_label() if p.has_method("get_current_job_label") else "None"
+		var age_value: int = int(d.age)
+		var life_stage: String = "child"
+		if age_value >= 60:
+			life_stage = "elder"
+		elif age_value >= 18:
+			life_stage = "adult"
+		elif age_value >= 13:
+			life_stage = "teen"
+		var region_label: int = center_region if center_region >= 0 else rk
+		var priority_score: int = _incarnation_candidate_priority(d, life_stage, settlement_state, region_reputation)
+		out.append({
+			"pawn_id": int(d.id),
+			"name": d.display_name,
+			"age": age_value,
+			"life_stage": life_stage,
+			"region": region_label,
+			"settlement_state": settlement_state,
+			"region_reputation": region_reputation,
+			"profession": d.profession_name(),
+			"role": current_job,
+			"state": state_name,
+			"hunger": float(d.hunger),
+			"rest": float(d.rest),
+			"mood": float(d.mood),
+			"priority_score": priority_score,
+			"priority_reason": _incarnation_candidate_reason(life_stage, settlement_state, region_reputation, int(d.children_count), int(d.parent_a_id), int(d.parent_b_id), int(d.current_profession)),
+		})
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ascore: int = int(a.get("priority_score", 0))
+		var bscore: int = int(b.get("priority_score", 0))
+		if ascore != bscore:
+			return ascore > bscore
+		var aid: int = int(a.get("pawn_id", -1))
+		var bid: int = int(b.get("pawn_id", -1))
+		if aid == bid:
+			return false
+		return aid < bid
+	)
+	return out
+
+
+func _incarnation_candidate_priority(d: PawnData, life_stage: String, settlement_state: String, region_reputation: int) -> int:
+	var score: int = 0
+	match life_stage:
+		"elder":
+			score += 35
+		"adult":
+			score += 50
+		"teen":
+			score += 28
+		_:
+			score += 12
+	match settlement_state:
+		"active":
+			score += 40
+		"revivable":
+			score += 32
+		"recovering":
+			score += 18
+		"dormant":
+			score += 8
+		"abandoned":
+			score -= 12
+		"permanently_abandoned":
+			score -= 24
+		_:
+			score += 0
+	score += clampi(region_reputation, -3, 3) * 8
+	if int(d.current_profession) != PawnData.Profession.NONE:
+		score += 6
+	if int(d.children_count) > 0:
+		score += 6
+	if int(d.parent_a_id) >= 0 or int(d.parent_b_id) >= 0:
+		score += 4
+	return score
+
+
+func _incarnation_candidate_reason(life_stage: String, settlement_state: String, region_reputation: int, children_count: int, parent_a_id: int, parent_b_id: int, profession: int) -> String:
+	var parts: PackedStringArray = PackedStringArray()
+	parts.append(life_stage)
+	if not settlement_state.is_empty():
+		parts.append(settlement_state)
+	var rep: String = "rep %+d" % region_reputation
+	parts.append(rep)
+	if profession != PawnData.Profession.NONE:
+		parts.append("profession-tied")
+	if children_count > 0:
+		parts.append("has-children")
+	if parent_a_id >= 0 or parent_b_id >= 0:
+		parts.append("lineage-bound")
+	return ", ".join(parts)
+
+
+func _on_incarnation_entry_confirmed(pawn_id: int) -> void:
+	if pawn_id < 0:
+		request_spectator_return("picker_cancel")
+		return
+	var pawn: Pawn = _find_pawn_by_id(pawn_id)
+	if pawn == null:
+		if OS.is_debug_build():
+			print("[Main] Incarnation picker: pawn %d not found" % pawn_id)
+		return
+	_set_selected_pawn(pawn)
+	_camera_follow_selected = true
+	_set_player_mode(PlayerMode.INCARNATED)
+	PlayerIntentQueue.request_incarnation_entry("picker_confirm", {"pawn_id": pawn_id})
+	if _incarnation_picker != null and is_instance_valid(_incarnation_picker):
+		_incarnation_picker.call("close_picker")
+
+
+func _on_incarnation_picker_closed() -> void:
+	_sync_player_context_ui()
+
+
+func _sync_player_context_ui() -> void:
+	if _info_panel != null and is_instance_valid(_info_panel) and _info_panel.has_method("set_player_context"):
+		_info_panel.call("set_player_context", get_player_mode_label(), get_player_pawn_id(), _incarnation_picker != null and is_instance_valid(_incarnation_picker) and _incarnation_picker.visible)
+
+
+func _set_player_mode(mode: int) -> void:
+	if _player_mode == mode:
+		return
+	_player_mode = mode
+	_sync_player_context_ui()
+	if OS.is_debug_build():
+		print("[Main] Player mode: %s" % get_player_mode_label())
+
+
+func get_player_mode_label() -> String:
+	match _player_mode:
+		PlayerMode.INCARNATED:
+			return "INCARNATED"
+		_:
+			return "SPECTATOR"
+
+
+func is_player_incarnated() -> bool:
+	return _player_mode == PlayerMode.INCARNATED
+
+
+func request_incarnation_entry(note: String = "manual_entry", payload: Dictionary = {}) -> bool:
+	_toggle_incarnation_picker()
+	return _incarnation_picker != null and is_instance_valid(_incarnation_picker) and bool(_incarnation_picker.visible)
+
+
+func request_spectator_return(note: String = "manual_return", payload: Dictionary = {}) -> bool:
+	var ok: bool = PlayerIntentQueue.request_spectator_return(note, payload)
+	if _incarnation_picker != null and is_instance_valid(_incarnation_picker):
+		_incarnation_picker.call("close_picker")
+	_set_selected_pawn(null)
+	_set_player_mode(PlayerMode.SPECTATOR)
+	return ok
+
+
 func _run_heavy_refresh_once_per_tick(cb: Callable) -> void:
 	if GameManager.tick_count == _last_heavy_refresh_tick:
 		return
@@ -1258,6 +1466,8 @@ func _bootstrap_colony() -> void:
 	WorldPersistence.recompute()
 	_place_stockpile(main_component)
 	_pawn_spawner.spawn_starters(_world, main_component)
+	_set_selected_pawn(null)
+	_set_player_mode(PlayerMode.SPECTATOR)
 	_ensure_player_pawn_assigned()
 	if is_instance_valid(_world):
 		_world.apply_ruins_from_persistence()
@@ -1933,9 +2143,23 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_debug_capture_resource_truth()
 		KEY_M:
 			ColonySimServices.cycle_labor_stance()
+		KEY_P:
+			request_incarnation_entry()
+		KEY_BACKSPACE:
+			request_spectator_return()
+		KEY_RETURN:
+			if _incarnation_picker != null and is_instance_valid(_incarnation_picker) and _incarnation_picker.visible:
+				_on_incarnation_entry_confirmed(int(_incarnation_picker.call("get_selected_pawn_id")))
 		KEY_ESCAPE:
 			if _creator_debug_menu != null and _creator_debug_menu.visible:
 				_creator_debug_menu.visible = false
+				return
+			if _incarnation_picker != null and is_instance_valid(_incarnation_picker) and _incarnation_picker.visible:
+				_incarnation_picker.call("close_picker")
+				return
+			if _player_mode == PlayerMode.INCARNATED:
+				if OS.is_debug_build():
+					print("[Main] Esc ignored while incarnated; use Backspace to return to spectator")
 				return
 			# Esc clears either a drag-in-progress, an active build mode, or
 			# a pawn selection (in that priority order). Each extra Esc peels
@@ -2337,6 +2561,10 @@ func _handle_select_click_at(world_pos: Vector2) -> void:
 
 
 func _set_selected_pawn(p: Pawn) -> void:
+	if _player_mode == PlayerMode.INCARNATED and p != null and _player_pawn != null and p != _player_pawn:
+		if OS.is_debug_build():
+			print("[Main] Incarnation locked to pawn #%d; ignore selection of #%d" % [get_player_pawn_id(), int(p.data.id) if p.data != null else -1])
+		return
 	if _selected_pawn == p:
 		return
 	if _selected_pawn != null and is_instance_valid(_selected_pawn):
@@ -2344,6 +2572,10 @@ func _set_selected_pawn(p: Pawn) -> void:
 		_selected_pawn.queue_redraw()
 	_selected_pawn = p
 	_player_pawn = _selected_pawn
+	_set_player_mode(PlayerMode.INCARNATED if _selected_pawn != null else PlayerMode.SPECTATOR)
+	if _player_mode == PlayerMode.INCARNATED and _selected_pawn != null:
+		_camera_follow_selected = true
+	_sync_player_context_ui()
 	if _hud != null:
 		_hud.set_player_control_refs(_player_input, _player_pawn)
 	if _selected_pawn != null:
@@ -2378,8 +2610,10 @@ func _toggle_play_chrome() -> void:
 		print("[Main] Play chrome: %s" % ("on" if _play_chrome_visible else "off (map only)"))
 
 
-func _ensure_player_pawn_assigned() -> void:
+func _ensure_player_pawn_assigned(force: bool = false) -> void:
 	if _pawn_spawner == null:
+		return
+	if not force and _player_mode != PlayerMode.INCARNATED:
 		return
 	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
 		return
@@ -2388,6 +2622,35 @@ func _ensure_player_pawn_assigned() -> void:
 			continue
 		_set_selected_pawn(p)
 		return
+
+
+func _find_pawn_by_id(pawn_id: int) -> Pawn:
+	if _pawn_spawner == null or pawn_id < 0:
+		return null
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
+			return p
+	return null
+
+
+func _restore_player_state(player_mode_value: int, player_pawn_id: int) -> void:
+	if player_mode_value == PlayerMode.SPECTATOR:
+		_set_selected_pawn(null)
+		_set_player_mode(PlayerMode.SPECTATOR)
+		return
+	var restored: Pawn = _find_pawn_by_id(player_pawn_id)
+	if restored != null:
+		_set_selected_pawn(restored)
+		_camera_follow_selected = true
+		_set_player_mode(PlayerMode.INCARNATED)
+		return
+	_ensure_player_pawn_assigned(true)
+	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		_camera_follow_selected = true
+		_set_player_mode(PlayerMode.INCARNATED)
+	else:
+		_set_selected_pawn(null)
+		_set_player_mode(PlayerMode.SPECTATOR)
 
 
 func get_player_queue_size() -> int:
@@ -3638,6 +3901,8 @@ func _build_save_dict() -> Dictionary:
 		"tick": GameManager.tick_count,
 		"game_speed": GameManager.game_speed,
 		"is_paused": GameManager.is_paused,
+		"player_mode": _player_mode,
+		"player_pawn_id": get_player_pawn_id(),
 		"world": _world.data.to_save_dict(),
 		"zones": _save_stockpiles_to_array(),
 		"pawns": pawns_s,
@@ -3701,12 +3966,15 @@ func _apply_save_dict(s: Dictionary) -> void:
 	_set_designation_mode(DesignationMode.NONE)
 	_cancel_drag()
 	_set_selected_pawn(null)
+	_set_player_mode(PlayerMode.SPECTATOR)
 	_regrow_queue.clear()
 	_tear_down_all_zones()
 	_pawn_spawner.clear_pawns()
 
 	_world.load_world_data(wdata as WorldData)
 	var loaded_tick: int = int(s.get("tick", 0))
+	var saved_player_mode: int = int(s.get("player_mode", PlayerMode.INCARNATED))
+	var saved_player_pawn_id: int = int(s.get("player_pawn_id", -1))
 	GameManager.set_state_from_load(
 		loaded_tick,
 		float(s.get("game_speed", 1.0)),
@@ -3733,7 +4001,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 		if pd is Dictionary:
 			var pdat: PawnData = PawnData.from_save_dict(pd)
 			_pawn_spawner.spawn_from_data(pdat, _world)
-	_ensure_player_pawn_assigned()
+	_restore_player_state(saved_player_mode, saved_player_pawn_id)
 	_world.set_meta("animal_spawner", _animal_spawner)
 	if is_instance_valid(_world):
 		_world.apply_ruins_from_persistence()
@@ -4274,6 +4542,9 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"calendar_days_per_sim_year": days_per_sim_year,
 		"speed": speed_text,
 		"paused": paused_text,
+		"player_mode": get_player_mode_label(),
+		"player_pawn_id": get_player_pawn_id(),
+		"incarnation_picker_visible": _incarnation_picker != null and is_instance_valid(_incarnation_picker) and _incarnation_picker.visible,
 		"world_status_summary": world_status_summary,
 		"governance_type": _pretty_governance_name(str(governance.get("type", "anarchy"))),
 		"ruler_name": ruler_name,

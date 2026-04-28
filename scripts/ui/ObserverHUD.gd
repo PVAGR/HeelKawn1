@@ -106,6 +106,7 @@ func _world_governance_block(s: Dictionary) -> String:
 		+ "%s\n\n" % str(s.get("world_status_summary", "WORLD STATUS: Unknown"))
 		+ "[b]WORLD / GOVERNANCE[/b]\n"
 		+ "Speed: %s  Pause: %s\n" % [str(s.get("speed", "1x")), str(s.get("paused", "No"))]
+		+ "Player Mode: %s  Pawn: %s\n" % [str(s.get("player_mode", "SPECTATOR")), str(s.get("player_pawn_id", -1))]
 		+ _validation_harness_hud_line(s)
 		+ "[i]Logs: anchor continuity on center_region / hyst_key; work-focus = job-proxy, not stock scarcity.[/i]\n"
 		+ "Governance (political, separate from material settlement life): %s  Ruler: %s\n"

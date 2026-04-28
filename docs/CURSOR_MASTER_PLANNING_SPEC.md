@@ -174,6 +174,7 @@ Known tensions in the broader corpus—**resolved by scope**, not by pretending 
 | Document | Role |
 |----------|------|
 | [`HEELKAWN_STATE.md`](HEELKAWN_STATE.md) | Authoritative code/project state |
+| [`HEELKAWN_STANDALONE_MASTER_PLAN.md`](HEELKAWN_STANDALONE_MASTER_PLAN.md) | Standalone spectator/incarnation build order and feature master plan |
 | [`WORLD_BIBLE/GAME_VISION.md`](WORLD_BIBLE/GAME_VISION.md) | Product DNA and inspiration blend |
 | [`WORLD_BIBLE/MASTER_INDEX.md`](WORLD_BIBLE/MASTER_INDEX.md) | Lore file map |
 | [`HEELKAWN_CANON_LOG.md`](HEELKAWN_CANON_LOG.md) | Formal canon entries only |

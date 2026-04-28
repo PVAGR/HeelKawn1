@@ -77,3 +77,4 @@ Do not merge heroic/named-arc assumptions into kernel or WorldMemory semantics u
 - Player-readable meaning refinement (audio + settlement identity depth, no text overlay)
 - Wildlife HUD trend validation + Phase 4 rebirth threshold tuning passes
 - Grand-strategy map/UI bridge + NPC–player parity: see `docs/HEELKAWN_SIM_MATRIX.md` (CK3 routing, observation/command API order)
+- Standalone spectator/incarnation build order and full feature plan: `docs/HEELKAWN_STANDALONE_MASTER_PLAN.md`

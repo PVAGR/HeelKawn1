@@ -49,6 +49,24 @@ func get_chronicler_focus() -> Array[Dictionary]:
 	return focus
 
 
+## Shared read-only snapshot for observer UI and future incarnation tooling.
+func get_zone_snapshot(zone_id: String) -> Dictionary:
+	var tags: PackedStringArray = _ZoneTags.zone_tags(zone_id)
+	var narrative: String = get_zone_narrative(zone_id)
+	var focus: Array[Dictionary] = get_chronicler_focus()
+	var is_focus: bool = false
+	for f in focus:
+		if str(f.get("zone", "")) == zone_id:
+			is_focus = true
+			break
+	return {
+		"zone": zone_id,
+		"narrative": narrative,
+		"tags": tags,
+		"is_focus": is_focus,
+	}
+
+
 static func _pack_has(p: PackedStringArray, tag: String) -> bool:
 	for i in range(p.size()):
 		if str(p[i]) == tag:

@@ -789,7 +789,28 @@ func interact() -> bool:
 		return true
 	if _maybe_start_sleeping():
 		return true
-	return false
+	_perform_presence_action()
+	return true
+
+
+func _perform_presence_action() -> void:
+	if data == null:
+		return
+	var rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
+	var settlement_state: String = SettlementMemory.get_state_at_region(rk)
+	data.mood = min(100.0, data.mood + 0.75)
+	WorldMemory.record_event({
+		"type": "player_presence",
+		"pawn_id": int(data.id),
+		"tick": GameManager.tick_count,
+		"region": rk,
+		"settlement_state": settlement_state,
+		"tile": {"x": data.tile_pos.x, "y": data.tile_pos.y},
+		"mood": int(round(data.mood)),
+	})
+	if GameManager.verbose_logs():
+		print("[Pawn] %s grounds themselves at region=%d state=%s (mood=%.1f)" % [data.display_name, rk, settlement_state, data.mood])
+	queue_redraw()
 
 
 func record_skill_gain(skill: String, amount: int) -> void:

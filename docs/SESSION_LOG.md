@@ -5,6 +5,89 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-27 - Incarnated E now performs presence
+
+Date: 2026-04-27
+Goal: Give incarnation one immediate body-specific action beyond movement.
+
+Changes made:
+
+- `E` now performs a logged presence action when the pawn is not already hauling, eating, or sleeping.
+- The action bumps mood slightly and writes a `player_presence` WorldMemory event with the pawn's current tile and settlement context.
+
+Suggested next session:
+
+- Add a second embodied affordance, such as looking around / inspecting the tile, so the incarnated loop gains a richer local verb set.
+
+---
+
+## 2026-04-27 - Incarnation control locked to the embodied pawn
+
+Date: 2026-04-27
+Goal: Prevent accidental disembodiment once the player has entered a pawn.
+
+Changes made:
+
+- Selection clicks now ignore other pawns while incarnated, so control stays on the confirmed body.
+- The camera auto-follows the embodied pawn during incarnation.
+- `Esc` no longer clears the incarnated pawn; `Backspace` remains the explicit return-to-spectator path.
+
+Suggested next session:
+
+- Add one first-pass embodied interaction beyond movement, such as a pawn-local action or context readout, so incarnation does something distinct immediately after entry.
+
+---
+
+## 2026-04-27 - Incarnation picker UI wired into Main
+
+Date: 2026-04-27
+Goal: Turn the spectator-to-incarnation loop into an explicit player-facing UI path.
+
+Changes made:
+
+- Added `scripts/ui/IncarnationPicker.gd` as a modal CanvasLayer that lists living pawn candidates and confirms a chosen incarnation target.
+- `scenes/main/Main.gd` now opens the picker from `P`, closes it on escape/return paths, restores spectator mode cleanly, and logs the chosen pawn into `PlayerIntentQueue` on confirmation.
+- The observer snapshot now exposes picker visibility so debug HUDs can see when incarnation selection is active.
+
+Suggested next session:
+
+- Populate the picker with richer eligibility rules or region/life-context filters, then start routing a first-pass embodied HUD state from the confirmed pawn.
+
+---
+
+## 2026-04-27 - Standalone spectator/incarnation master plan published
+
+Date: 2026-04-27
+Goal: Make the full standalone build order and feature list visible inside the repo for humans and other AIs.
+
+Changes made:
+
+- Added `docs/HEELKAWN_STANDALONE_MASTER_PLAN.md` with the ordered product, fantasy, pillar, feature, v1, v2+, and production-stage spec.
+- README now points directly to the standalone master plan.
+- `docs/CURSOR_MASTER_PLANNING_SPEC.md` related documents list now includes the standalone master plan.
+
+Suggested next session:
+
+- Use the master plan to drive the next code slice: incarnation entry UI, candidate selection, or world-history playback depending on implementation priority.
+
+---
+
+## 2026-04-27 - Incarnation picker ranked by settlement context
+
+Date: 2026-04-27
+Goal: Make incarnation selection feel intentional rather than a flat living-pawn list.
+
+Changes made:
+
+- Ranked candidates by life stage, settlement state, region reputation, lineage, and current profession.
+- The picker now explains that ranking in its subtitle and shows the score/reason on each row.
+
+Suggested next session:
+
+- If the loop feels right, route one first-pass embodied HUD or control behavior from the confirmed pawn so incarnation changes more than just selection state.
+
+---
+
 ## 2026-04-27 - Canonical repo policy: one folder, one GitHub remote
 
 Date: 2026-04-27

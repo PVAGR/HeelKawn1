@@ -178,7 +178,11 @@ func _create_civilization_neurons() -> Dictionary:
 		"trade_networks": {"value": 0.0, "activation": 0.0, "connections": []},
 		"military_organization": {"value": 0.0, "activation": 0.0, "connections": []},
 		"educational_systems": {"value": 0.0, "activation": 0.0, "connections": []},
-		"infrastructure_development": {"value": 0.0, "activation": 0.0, "connections": []}
+		"infrastructure_development": {"value": 0.0, "activation": 0.0, "connections": []},
+		"civil_authority": {"value": 0.0, "activation": 0.0, "connections": []},
+		"military_authority": {"value": 0.0, "activation": 0.0, "connections": []},
+		"religious_authority": {"value": 0.0, "activation": 0.0, "connections": []},
+		"knowledge_authority": {"value": 0.0, "activation": 0.0, "connections": []}
 	}
 
 func _create_cultural_neurons() -> Dictionary:
@@ -460,6 +464,37 @@ func _update_environmental_neurons() -> void:
 	env_neurons["climate_stability"].value = environmental_stability
 	env_neurons["ecosystem_resilience"].value = _calculate_ecosystem_resilience()
 
+func _update_authority_neurons(civ_neurons: Dictionary) -> void:
+	if AuthoritySystem == null:
+		return
+	
+	# Get average authority levels across all pawns
+	var total_civil: float = 0.0
+	var total_military: float = 0.0
+	var total_religious: float = 0.0
+	var total_knowledge: float = 0.0
+	var pawn_count: int = 0
+	
+	# Get all pawns in the world
+	var pawns = get_tree().get_nodes_in_group("pawns")
+	for pawn in pawns:
+		if not is_instance_valid(pawn) or pawn.data == null:
+			continue
+		var pawn_id: int = int(pawn.data.id)
+		
+		total_civil += AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.CIVIL)
+		total_military += AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.MILITARY)
+		total_religious += AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.RELIGIOUS)
+		total_knowledge += AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.KNOWLEDGE)
+		pawn_count += 1
+	
+	if pawn_count > 0:
+		civ_neurons["civil_authority"].value = total_civil / float(pawn_count)
+		civ_neurons["military_authority"].value = total_military / float(pawn_count)
+		civ_neurons["religious_authority"].value = total_religious / float(pawn_count)
+		civ_neurons["knowledge_authority"].value = total_knowledge / float(pawn_count)
+
+
 func _update_civilization_neurons() -> void:
 	var civ_neurons = neural_world_matrix["civilization_neurons"]
 	
@@ -470,6 +505,9 @@ func _update_civilization_neurons() -> void:
 	civ_neurons["military_organization"].value = _calculate_military_organization()
 	civ_neurons["educational_systems"].value = _calculate_educational_development()
 	civ_neurons["infrastructure_development"].value = _calculate_infrastructure_level()
+	
+	# Update authority metrics from AuthoritySystem
+	_update_authority_neurons(civ_neurons)
 
 func _update_cultural_neurons() -> void:
 	var cult_neurons = neural_world_matrix["cultural_neurons"]

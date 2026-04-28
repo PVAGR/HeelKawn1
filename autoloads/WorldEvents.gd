@@ -3,11 +3,10 @@ extends Node
 ## Suppresses only the four deterministic roll outcomes (Trade Caravan, Harvest Moon, Locust Swarm, Diplomatic Envoy). Debug build only; use with SettlementMemory.VALIDATION_SESSION_ENABLED or alone.
 const VALIDATION_CLEAN_ECONOMY_EVENTS: bool = false
 
-const EVENT_ROLL_INTERVAL: int = 1000
-## Regional flavor rolls; coprime with [member EVENT_ROLL_INTERVAL] to stagger workloads.
-const REGIONAL_ROLL_INTERVAL_TICKS: int = 3500
-## Colony-adjacent “kitchen table” rumors; sparse, O(1) via first stockpile anchor.
-const LOCAL_ROLL_INTERVAL_TICKS: int = 8200
+## Condition check intervals - much longer than before, only for evaluating world state
+const CONDITION_CHECK_INTERVAL: int = 5000  # Check conditions every 5000 ticks
+const REGIONAL_CONDITION_CHECK_INTERVAL: int = 7000
+const LOCAL_CONDITION_CHECK_INTERVAL: int = 10000
 const HARVEST_MOON_DURATION_TICKS: int = 200
 const HARVEST_MOON_MULT: float = 1.25
 const LOCUST_FOOD_DRAIN: int = 2
@@ -41,82 +40,62 @@ func _on_game_tick(tick: int) -> void:
 		_clear_temporary_event()
 	if _suppress_economy_distorting_world_events() and _active_event_until_tick >= 0:
 		_clear_temporary_event()
-	if tick > 0 and tick % REGIONAL_ROLL_INTERVAL_TICKS == 0:
-		_maybe_roll_regional_event(tick)
-	if tick > 0 and tick % LOCAL_ROLL_INTERVAL_TICKS == 0:
-		_maybe_roll_local_event(tick)
-	if tick <= 0 or tick % EVENT_ROLL_INTERVAL != 0:
+	
+	# Condition-based event checks (much less frequent than old timer rolls)
+	if tick > 0 and tick % REGIONAL_CONDITION_CHECK_INTERVAL == 0:
+		_check_regional_conditions(tick)
+	if tick > 0 and tick % LOCAL_CONDITION_CHECK_INTERVAL == 0:
+		_check_local_conditions(tick)
+	if tick <= 0 or tick % CONDITION_CHECK_INTERVAL != 0:
 		return
-	if not _validation_first_event_roll_proof_logged:
-		_validation_first_event_roll_proof_logged = true
-		var sup: bool = _suppress_economy_distorting_world_events()
-		print(
-				(
-						"[VALIDATION_EVENT_ROLL_PROOF] tick=%d marker=%s clean_suppression_active=%s "
-						+ "scheduled_economy_roll_skipped=%s (proof is one-shot only)"
-				)
-				% [
-					tick,
-					SettlementMemory.VALIDATION_RUNTIME_SMOKE_MARKER,
-					sup,
-					sup,
-				]
-		)
+	
 	if _suppress_economy_distorting_world_events():
 		return
-	var event_index: int = _deterministic_event_index(tick)
-	match event_index:
-		0:
-			_trigger_trade_caravan(tick)
-		1:
-			_trigger_harvest_moon(tick)
-		2:
-			_trigger_locust_swarm(tick)
-		3:
-			_trigger_diplomatic_envoy(tick)
-		4:
-			_trigger_technological_breakthrough(tick)
-		5:
-			_trigger_cultural_renaissance(tick)
-		6:
-			_trigger_resource_discovery(tick)
-		7:
-			_trigger_global_truce_talks(tick)
+	
+	# Check world-level event conditions
+	_check_world_conditions(tick)
 
 
-func _deterministic_event_index(tick: int) -> int:
-	var roll_id: int = int(tick / EVENT_ROLL_INTERVAL)
-	return int((roll_id * 1103515245 + 12345) % 8)
+func _check_world_conditions(tick: int) -> void:
+	# Check world-level event conditions based on actual state
+	# Events only fire when their preconditions are met
+	
+	# Trade Caravan: Only when stockpiles are low
+	if _should_trigger_trade_caravan():
+		_trigger_trade_caravan(tick)
+	
+	# Harvest Moon: Only during appropriate season and when gathering is active
+	if _should_trigger_harvest_moon():
+		_trigger_harvest_moon(tick)
+	
+	# Locust Swarm: Only when food stockpiles are high (attracts swarm)
+	if _should_trigger_locust_swarm():
+		_trigger_locust_swarm(tick)
+	
+	# Diplomatic Envoy: Only when settlement exists with sufficient population
+	if _should_trigger_diplomatic_envoy():
+		_trigger_diplomatic_envoy(tick)
+	
+	# Technological Breakthrough: Only when research activity is happening
+	if _should_trigger_technological_breakthrough():
+		_trigger_technological_breakthrough(tick)
+	
+	# Cultural Renaissance: Only when cultural metrics reach threshold
+	if _should_trigger_cultural_renaissance():
+		_trigger_cultural_renaissance(tick)
+	
+	# Resource Discovery: Only when exploration/mining is active
+	if _should_trigger_resource_discovery():
+		_trigger_resource_discovery(tick)
 
 
-func _maybe_roll_local_event(tick: int) -> void:
-	var zones: Array[Stockpile] = StockpileManager.zones()
-	if zones.is_empty():
-		return
-	var z: Stockpile = zones[0]
-	var rk: int = WorldMemory._region_key(z.tile.x, z.tile.y)
-	var ml: String = WorldMeaning.get_region_meaning_label(rk)
-	var wave: int = int(tick / LOCAL_ROLL_INTERVAL_TICKS)
-	var variant: int = int((wave * 17 + rk) % 2)
-	if variant == 0:
-		_record_world_event(
-			"Hearth Whisper",
-			"Someone repeats a rumor heard at the stockpile edge.",
-			{"scope": "local", "anchor_region": rk, "meaning_label": ml, "flavor": "rumor"}
-		)
-	else:
-		_record_world_event(
-			"Lantern Vigil",
-			"A small habit keeps fear outside the firelight — for now.",
-			{"scope": "local", "anchor_region": rk, "meaning_label": ml, "flavor": "morale"}
-		)
-
-
-func _maybe_roll_regional_event(tick: int) -> void:
+func _check_regional_conditions(tick: int) -> void:
 	var sl: Array = SettlementMemory.settlements
 	if sl.is_empty():
 		return
-	var wave: int = int(tick / REGIONAL_ROLL_INTERVAL_TICKS)
+	
+	# Regional events only fire when settlements exist
+	var wave: int = int(tick / REGIONAL_CONDITION_CHECK_INTERVAL)
 	var idx: int = wave % sl.size()
 	var st_any: Variant = sl[idx]
 	if not (st_any is Dictionary):
@@ -125,14 +104,183 @@ func _maybe_roll_regional_event(tick: int) -> void:
 	var center_region: int = int(st.get("center_region", -1))
 	if center_region < 0:
 		return
+	
+	# Check regional conditions before triggering
 	var flavor: int = int((wave * 7919 + center_region * 524287) % 3)
 	match flavor:
 		0:
-			_trigger_regional_shortage(center_region)
+			if _should_trigger_regional_shortage():
+				_trigger_regional_shortage(center_region)
 		1:
-			_trigger_regional_truce_talks(center_region)
+			if _should_trigger_regional_truce_talks():
+				_trigger_regional_truce_talks(center_region)
 		_:
-			_trigger_regional_herd_migration(center_region)
+			if _should_trigger_regional_herd_migration():
+				_trigger_regional_herd_migration(center_region)
+
+
+func _check_local_conditions(tick: int) -> void:
+	var zones: Array[Stockpile] = StockpileManager.zones()
+	if zones.is_empty():
+		return
+	
+	# Local flavor events only when stockpiles exist
+	var z: Stockpile = zones[0]
+	var rk: int = WorldMemory._region_key(z.tile.x, z.tile.y)
+	var ml: String = WorldMeaning.get_region_meaning_label(rk)
+	var wave: int = int(tick / LOCAL_CONDITION_CHECK_INTERVAL)
+	var variant: int = int((wave * 17 + rk) % 2)
+	
+	# Only trigger local events when there's actual activity
+	if variant == 0 and _should_trigger_hearth_whisper():
+		_record_world_event(
+			"Hearth Whisper",
+			"Someone repeats a rumor heard at the stockpile edge.",
+			{"scope": "local", "anchor_region": rk, "meaning_label": ml, "flavor": "rumor"}
+		)
+	elif variant == 1 and _should_trigger_lantern_vigil():
+		_record_world_event(
+			"Lantern Vigil",
+			"A small habit keeps fear outside the firelight — for now.",
+			{"scope": "local", "anchor_region": rk, "meaning_label": ml, "flavor": "morale"}
+		)
+
+
+# === Condition Check Functions ===
+
+func _should_trigger_trade_caravan() -> bool:
+	var zones: Array[Stockpile] = StockpileManager.zones()
+	if zones.is_empty():
+		return false
+	
+	var z: Stockpile = zones[0]
+	var total_food: int = z.count_item(Item.Type.BERRY) + z.count_item(Item.Type.MEAT)
+	var total_wood: int = z.count_item(Item.Type.WOOD)
+	var total_stone: int = z.count_item(Item.Type.STONE)
+	
+	# Trade caravan arrives when stockpiles are critically low
+	return total_food < 10 or total_wood < 5 or total_stone < 5
+
+
+func _should_trigger_harvest_moon() -> bool:
+	# Harvest moon only during gathering season and when pawns are actively foraging
+	var day: int = _current_day()
+	var season_day: int = day % 90  # Approximate season cycle
+	
+	# Only in mid-season (days 30-60 of season)
+	if season_day < 30 or season_day > 60:
+		return false
+	
+	# Check if pawns are actively gathering
+	var active_forage_jobs: int = JobManager.active_count_of_type(Job.Type.FORAGE)
+	return active_forage_jobs > 0
+
+
+func _should_trigger_locust_swarm() -> bool:
+	var zones: Array[Stockpile] = StockpileManager.zones()
+	if zones.is_empty():
+		return false
+	
+	var z: Stockpile = zones[0]
+	var total_food: int = z.count_item(Item.Type.BERRY) + z.count_item(Item.Type.MEAT)
+	
+	# Locust swarm only when food stockpiles are high (attracts swarm)
+	return total_food > 50
+
+
+func _should_trigger_diplomatic_envoy() -> bool:
+	# Diplomatic envoy only when settlement exists with sufficient population
+	var sl: Array = SettlementMemory.settlements
+	if sl.is_empty():
+		return false
+	
+	for st_any in sl:
+		if st_any is Dictionary:
+			var st: Dictionary = st_any
+			var population: int = int(st.get("population", 0))
+			if population >= 20:  # Minimum population for diplomatic interest
+				return true
+	
+	return false
+
+
+func _should_trigger_technological_breakthrough() -> bool:
+	# Technological breakthrough only when research activity is happening
+	# Check if pawns are working on knowledge-related jobs
+	# For now, use WorldAI technological tier and discovery count
+	if WorldAI == null:
+		return false
+	
+	var tech_tier: int = WorldAI.technological_tier
+	var discoveries: int = WorldAI.technological_discoveries.size()
+	
+	# Breakthroughs more likely at higher tech tiers with existing discoveries
+	return tech_tier >= 1 and discoveries >= 2
+
+
+func _should_trigger_cultural_renaissance() -> bool:
+	# Cultural renaissance only when cultural metrics reach threshold
+	if WorldAI == null:
+		return false
+	
+	var cultural_advancement: float = WorldAI.cultural_advancement
+	var social_development: float = WorldAI.social_development
+	
+	# Renaissance when culture and society are sufficiently developed
+	return cultural_advancement > 0.5 and social_development > 0.4
+
+
+func _should_trigger_resource_discovery() -> bool:
+	# Resource discovery only when exploration/mining is active
+	var active_mine_jobs: int = JobManager.active_count_of_type(Job.Type.MINE)
+	var active_chop_jobs: int = JobManager.active_count_of_type(Job.Type.CHOP)
+	
+	return active_mine_jobs > 0 or active_chop_jobs > 0
+
+
+func _should_trigger_regional_shortage() -> bool:
+	# Regional shortage when trade activity is low and stockpiles are depleted
+	var zones: Array[Stockpile] = StockpileManager.zones()
+	if zones.is_empty():
+		return false
+	
+	var z: Stockpile = zones[0]
+	var total_resources: int = z.count_item(Item.Type.BERRY) + z.count_item(Item.Type.MEAT) + z.count_item(Item.Type.WOOD) + z.count_item(Item.Type.STONE)
+	
+	return total_resources < 20
+
+
+func _should_trigger_regional_truce_talks() -> bool:
+	# Truce talks when multiple settlements exist
+	var sl: Array = SettlementMemory.settlements
+	return sl.size() >= 2
+
+
+func _should_trigger_regional_herd_migration() -> bool:
+	# Herd migration when wildlife population is significant
+	# This would require checking wildlife system
+	# For now, return true occasionally when conditions allow
+	return randf() < 0.3
+
+
+func _should_trigger_hearth_whisper() -> bool:
+	# Hearth whisper when there's social activity at stockpiles
+	var zones: Array[Stockpile] = StockpileManager.zones()
+	if zones.is_empty():
+		return false
+	
+	# Only when there are items in stockpile (activity)
+	var z: Stockpile = zones[0]
+	return z.total_item_count() > 0
+
+
+func _should_trigger_lantern_vigil() -> bool:
+	# Lantern vigil during night periods
+	var day: int = _current_day()
+	var tick_in_day: int = GameManager.tick_count % DayNightCycle.TICKS_PER_DAY
+	
+	# Only during night hours
+	return tick_in_day > DayNightCycle.TICKS_PER_DAY * 0.7
 
 
 func _trigger_regional_shortage(center_region: int) -> void:
@@ -198,7 +346,7 @@ func _trigger_trade_caravan(tick: int) -> void:
 	var caravan_payload: Dictionary = {"wood": added_wood, "stone": added_stone, "berry": added_berry}
 	if (
 			_last_regional_shortage_tick >= 0
-			and tick - _last_regional_shortage_tick <= EVENT_ROLL_INTERVAL * 3
+			and tick - _last_regional_shortage_tick <= CONDITION_CHECK_INTERVAL * 3
 	):
 		caravan_payload["chain_note"] = "convoys hedge loads after shortage hearsay"
 	_record_world_event(
@@ -363,22 +511,6 @@ func _trigger_resource_discovery(tick: int) -> void:
 		"Resource Discovery",
 		"Explorers have found: %s." % resource,
 		{"resource": resource, "economic_boost": 0.2}
-	)
-
-func _trigger_global_truce_talks(tick: int) -> void:
-	var factions: Array[String] = [
-		"Northern Kingdom",
-		"Southern Empire",
-		"Eastern Coalition",
-		"Western Republic"
-	]
-	var faction1: String = factions[tick % factions.size()]
-	var faction2: String = factions[(tick + 2) % factions.size()]
-	
-	_record_world_event(
-		"Regional Truce Talks",
-		"Councils exchange words before steel; borders hum with uneasy quiet between %s and %s." % [faction1, faction2],
-		{"faction1": faction1, "faction2": faction2, "peace_duration": 5000}
 	)
 
 func _generate_neural_signature(event_type: String, tick: int) -> String:

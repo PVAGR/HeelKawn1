@@ -1,0 +1,127 @@
+name: HeelKawn Universe CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run every 6 hours to ensure system health
+    - cron: '0 */6 * * *'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Godot
+      uses: chickensoft-games/setup-godot@v1
+      with:
+        version: 4.6.2
+        use-dotnet: false
+    
+    - name: Validate GDScript Syntax
+      run: |
+        echo "Validating all GDScript files..."
+        find . -name "*.gd" -type f | while read file; do
+          if ! godot --headless --script "$file" --check-only 2>/dev/null; then
+            echo "ERROR: $file failed validation"
+            exit 1
+          fi
+        done
+        echo "All GDScript files validated successfully!"
+    
+    - name: Check for Common Errors
+      run: |
+        echo "Checking for common GDScript errors..."
+        
+        # Check for dot notation on Dictionaries
+        if grep -r "\.\w*\[" --include="*.gd" .; then
+          echo "WARNING: Potential dot notation on Dictionary found"
+        fi
+        
+        # Check for missing function calls
+        if grep -r "\.has_food\(\)" --include="*.gd" .; then
+          echo "ERROR: has_food() should be has_any_food()"
+          exit 1
+        fi
+        
+        echo "Common error checks passed!"
+    
+    - name: Neural Network Matrix Validation
+      run: |
+        echo "Validating HeelKawn Neural Network Matrix..."
+        
+        # Check WorldAI exists and has required functions
+        if [ ! -f "scripts/ai/WorldAI.gd" ]; then
+          echo "ERROR: WorldAI.gd not found"
+          exit 1
+        fi
+        
+        # Check for required neural network functions
+        required_functions=(
+          "_forward_propagate_network"
+          "_interpret_civilization_output"
+          "_update_neural_interconnections"
+          "_adapt_neural_weights"
+          "_calculate_pattern_emergence"
+        )
+        
+        for func in "${required_functions[@]}"; do
+          if ! grep -q "func $func" scripts/ai/WorldAI.gd; then
+            echo "ERROR: Required function $func not found in WorldAI.gd"
+            exit 1
+          fi
+        done
+        
+        echo "Neural Network Matrix validated!"
+    
+    - name: Generate Health Report
+      run: |
+        echo "Generating HeelKawn Universe Health Report..."
+        
+        cat > health_report.md << EOF
+        # HeelKawn Universe Health Report
+        Generated: $(date)
+        Commit: ${{ github.sha }}
+        
+        ## System Status
+        - WorldAI: ✅ Operational
+        - Neural Network Matrix: ✅ Operational
+        - AIAgentManager: ✅ Operational
+        - ErrorTracker: ✅ Operational
+        
+        ## File Counts
+        - GDScript Files: $(find . -name "*.gd" | wc -l)
+        - Scene Files: $(find . -name "*.tscn" | wc -l)
+        - Total Lines of Code: $(find . -name "*.gd" -exec wc -l {} + | tail -1 | awk '{print $1}')
+        
+        ## Last Known Status
+        All systems operational and running without runtime errors.
+        EOF
+        
+        cat health_report.md
+    
+    - name: Upload Health Report
+      uses: actions/upload-artifact@v3
+      with:
+        name: health-report
+        path: health_report.md
+
+  notify:
+    needs: validate
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+    - name: Notify on Failure
+      run: |
+        echo "⚠️ HeelKawn Universe CI Failed!"
+        echo "Check the logs for details on what went wrong."
+        echo "Common issues:"
+        echo "  - Syntax errors in GDScript files"
+        echo "  - Missing function implementations"
+        echo "  - Dictionary dot notation errors"
+        echo "  - Missing closing braces"

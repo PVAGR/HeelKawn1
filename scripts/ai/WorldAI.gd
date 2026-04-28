@@ -960,6 +960,661 @@ func _cleanup_old_events() -> void:
 	if world_events.size() > 1000:
 		world_events = world_events.slice(-1000)
 
+# === Missing Update Functions ===
+
+func _update_environmental_conditions() -> void:
+	# Update environmental conditions based on neural network processing
+	var environmental_input = _extract_environmental_input()
+	var neural_output = _forward_propagate_network(environmental_input, environmental_neural_network)
+	var interpreted_output = _interpret_environmental_output(neural_output)
+	
+	# Apply environmental changes
+	environmental_stability = interpreted_output.stability
+	biodiversity_index = interpreted_output.biodiversity
+	global_temperature = interpreted_output.temperature
+	sea_level = interpreted_output.sea_level
+
+func _process_climate_patterns() -> void:
+	# Process climate patterns using neural networks
+	var climate_data = {
+		"temperature": global_temperature,
+		"sea_level": sea_level,
+		"biodiversity": biodiversity_index,
+		"stability": environmental_stability
+	}
+	
+	# Detect climate patterns
+	if climate_data.temperature > 1.2:
+		_trigger_climate_event("warming_period", "Global warming period detected")
+	elif climate_data.temperature < 0.8:
+		_trigger_climate_event("cooling_period", "Global cooling period detected")
+	
+	if climate_data.sea_level > 1.1:
+		_trigger_climate_event("sea_level_rise", "Sea level rising")
+	elif climate_data.sea_level < 0.9:
+		_trigger_climate_event("sea_level_fall", "Sea level falling")
+
+func _check_for_world_events() -> void:
+	# Check for potential world events based on current conditions
+	var event_probability = _calculate_event_probability()
+	
+	if randf() < event_probability:
+		_generate_world_event()
+
+func _update_technological_progress() -> void:
+	# Update technological progress based on neural network analysis
+	var tech_input = _extract_technological_input()
+	var tech_output = _forward_propagate_network(tech_input, technological_neural_network)
+	
+	# Check for new discoveries
+	if randf() < tech_output.discovery_probability:
+		_generate_technological_discovery()
+	
+	# Update technological tier
+	if technological_discoveries.size() > get_tier_discoveries_required(technological_tier + 1):
+		technological_tier = min(technological_tier + 1, TechnologicalTier.QUANTUM)
+
+func _update_civilization_development() -> void:
+	# Update civilization development metrics
+	var civ_input = _extract_civilization_input()
+	var civ_output = _forward_propagate_network(civ_input, civilization_neural_network)
+	
+	# Update civilization metrics
+	civilization_complexity = civ_output.complexity
+	social_development = civ_output.social_development
+	cultural_advancement = civ_output.cultural_advancement
+
+# === Missing Calculation Functions ===
+
+func _calculate_resource_renewability() -> float:
+	var renewability = 0.0
+	
+	# Calculate based on environmental factors
+	renewability += biodiversity_index * 0.3
+	renewability += environmental_stability * 0.4
+	renewability += (1.0 - abs(global_temperature - 1.0)) * 0.3
+	
+	return clamp(renewability, 0.0, 1.0)
+
+func _calculate_climate_stability() -> float:
+	var stability = 0.0
+	
+	# Calculate based on temperature and sea level variance
+	stability += (1.0 - abs(global_temperature - 1.0)) * 0.5
+	stability += (1.0 - abs(sea_level - 1.0)) * 0.3
+	stability += biodiversity_index * 0.2
+	
+	return clamp(stability, 0.0, 1.0)
+
+func _calculate_ecosystem_resilience() -> float:
+	var resilience = 0.0
+	
+	# Calculate based on biodiversity and environmental health
+	resilience += biodiversity_index * 0.4
+	resilience += environmental_stability * 0.3
+	resilience += _calculate_resource_renewability() * 0.3
+	
+	return clamp(resilience, 0.0, 1.0)
+
+func _calculate_trade_network_complexity() -> float:
+	var complexity = 0.0
+	
+	# Calculate based on settlements and technological level
+	complexity += float(active_settlements.size()) / 20.0 * 0.4
+	complexity += float(technological_tier) / 10.0 * 0.3
+	complexity += civilization_complexity * 0.3
+	
+	return clamp(complexity, 0.0, 1.0)
+
+func _calculate_military_organization() -> float:
+	var organization = 0.0
+	
+	# Calculate based on civilization development
+	organization += civilization_complexity * 0.4
+	organization += float(technological_tier) / 10.0 * 0.3
+	organization += social_development * 0.3
+	
+	return clamp(organization, 0.0, 1.0)
+
+func _calculate_educational_development() -> float:
+	var education = 0.0
+	
+	# Calculate based on technological and cultural advancement
+	education += float(technological_tier) / 10.0 * 0.4
+	education += cultural_advancement * 0.3
+	education += civilization_complexity * 0.3
+	
+	return clamp(education, 0.0, 1.0)
+
+func _calculate_infrastructure_level() -> float:
+	var infrastructure = 0.0
+	
+	# Calculate based on population and technology
+	infrastructure += float(world_population) / 1000.0 * 0.3
+	infrastructure += float(technological_tier) / 10.0 * 0.4
+	infrastructure += civilization_complexity * 0.3
+	
+	return clamp(infrastructure, 0.0, 1.0)
+
+func _calculate_artistic_expression() -> float:
+	var art = 0.0
+	
+	# Calculate based on cultural development
+	art += cultural_advancement * 0.5
+	art += social_development * 0.3
+	art += civilization_complexity * 0.2
+	
+	return clamp(art, 0.0, 1.0)
+
+func _calculate_religious_complexity() -> float:
+	var religion = 0.0
+	
+	# Calculate based on cultural and social development
+	religion += cultural_advancement * 0.4
+	religion += social_development * 0.3
+	religion += civilization_complexity * 0.3
+	
+	return clamp(religion, 0.0, 1.0)
+
+func _calculate_philosophical_development() -> float:
+	var philosophy = 0.0
+	
+	# Calculate based on educational and cultural development
+	philosophy += _calculate_educational_development() * 0.4
+	philosophy += cultural_advancement * 0.3
+	philosophy += social_development * 0.3
+	
+	return clamp(philosophy, 0.0, 1.0)
+
+func _calculate_social_norm_complexity() -> float:
+	var norms = 0.0
+	
+	# Calculate based on social and cultural development
+	norms += social_development * 0.4
+	norms += cultural_advancement * 0.3
+	norms += civilization_complexity * 0.3
+	
+	return clamp(norms, 0.0, 1.0)
+
+func _calculate_language_complexity() -> float:
+	var language = 0.0
+	
+	# Calculate based on cultural and social development
+	language += cultural_advancement * 0.4
+	language += social_development * 0.3
+	language += civilization_complexity * 0.3
+	
+	return clamp(language, 0.0, 1.0)
+
+func _calculate_cultural_exchange_rate() -> float:
+	var exchange = 0.0
+	
+	# Calculate based on trade network and cultural development
+	exchange += _calculate_trade_network_complexity() * 0.4
+	exchange += cultural_advancement * 0.3
+	exchange += float(active_settlements.size()) / 20.0 * 0.3
+	
+	return clamp(exchange, 0.0, 1.0)
+
+func _calculate_production_efficiency() -> float:
+	var efficiency = 0.0
+	
+	# Calculate based on technology and infrastructure
+	efficiency += float(technological_tier) / 10.0 * 0.4
+	efficiency += _calculate_infrastructure_level() * 0.3
+	efficiency += civilization_complexity * 0.3
+	
+	return clamp(efficiency, 0.0, 1.0)
+
+func _calculate_resource_distribution_efficiency() -> float:
+	var distribution = 0.0
+	
+	# Calculate based on trade network and infrastructure
+	distribution += _calculate_trade_network_complexity() * 0.4
+	distribution += _calculate_infrastructure_level() * 0.3
+	distribution += civilization_complexity * 0.3
+	
+	return clamp(distribution, 0.0, 1.0)
+
+func _calculate_market_complexity() -> float:
+	var market = 0.0
+	
+	# Calculate based on trade and economic development
+	market += _calculate_trade_network_complexity() * 0.4
+	market += civilization_complexity * 0.3
+	market += float(active_settlements.size()) / 20.0 * 0.3
+	
+	return clamp(market, 0.0, 1.0)
+
+func _calculate_labor_specialization() -> float:
+	var specialization = 0.0
+	
+	# Calculate based on technological and educational development
+	specialization += float(technological_tier) / 10.0 * 0.4
+	specialization += _calculate_educational_development() * 0.3
+	specialization += civilization_complexity * 0.3
+	
+	return clamp(specialization, 0.0, 1.0)
+
+func _calculate_wealth_accumulation() -> float:
+	var wealth = 0.0
+	
+	# Calculate based on production and trade
+	wealth += _calculate_production_efficiency() * 0.3
+	wealth += _calculate_trade_network_complexity() * 0.4
+	wealth += _calculate_market_complexity() * 0.3
+	
+	return clamp(wealth, 0.0, 1.0)
+
+func _calculate_economic_stability() -> float:
+	var stability = 0.0
+	
+	# Calculate based on multiple economic factors
+	stability += _calculate_production_efficiency() * 0.2
+	stability += _calculate_resource_distribution_efficiency() * 0.2
+	stability += (1.0 - abs(_calculate_market_complexity() - 0.5)) * 0.2
+	stability += civilization_complexity * 0.2
+	stability += environmental_stability * 0.2
+	
+	return clamp(stability, 0.0, 1.0)
+
+# === Missing Neural Network Functions ===
+
+func _extract_civilization_input() -> Array[float]:
+	var input: Array[float] = []
+	
+	# Extract civilization-related inputs
+	input.append(float(world_population) / 1000.0)
+	input.append(float(technological_tier) / 10.0)
+	input.append(civilization_complexity)
+	input.append(social_development)
+	input.append(cultural_advancement)
+	input.append(float(active_settlements.size()) / 20.0)
+	input.append(_calculate_trade_network_complexity())
+	input.append(_calculate_infrastructure_level())
+	input.append(_calculate_educational_development())
+	input.append(_calculate_military_organization())
+	
+	# Pad to match input layer size
+	while input.size() < 64:
+		input.append(0.0)
+	
+	return input
+
+func _extract_environmental_input() -> Array[float]:
+	var input: Array[float] = []
+	
+	# Extract environmental-related inputs
+	input.append(global_temperature)
+	input.append(sea_level)
+	input.append(biodiversity_index)
+	input.append(environmental_stability)
+	input.append(_calculate_resource_renewability())
+	input.append(_calculate_climate_stability())
+	input.append(_calculate_ecosystem_resilience())
+	input.append(resource_distribution.get("food", 0.0))
+	input.append(resource_distribution.get("water", 0.0))
+	input.append(resource_distribution.get("wood", 0.0))
+	
+	# Pad to match input layer size
+	while input.size() < 64:
+		input.append(0.0)
+	
+	return input
+
+func _extract_cultural_input() -> Array[float]:
+	var input: Array[float] = []
+	
+	# Extract cultural-related inputs
+	input.append(cultural_advancement)
+	input.append(_calculate_artistic_expression())
+	input.append(_calculate_religious_complexity())
+	input.append(_calculate_philosophical_development())
+	input.append(_calculate_social_norm_complexity())
+	input.append(_calculate_language_complexity())
+	input.append(_calculate_cultural_exchange_rate())
+	input.append(social_development)
+	input.append(civilization_complexity)
+	input.append(_calculate_educational_development())
+	
+	# Pad to match input layer size
+	while input.size() < 64:
+		input.append(0.0)
+	
+	return input
+
+func _extract_economic_input() -> Array[float]:
+	var input: Array[float] = []
+	
+	# Extract economic-related inputs
+	input.append(_calculate_production_efficiency())
+	input.append(_calculate_resource_distribution_efficiency())
+	input.append(_calculate_market_complexity())
+	input.append(_calculate_labor_specialization())
+	input.append(_calculate_wealth_accumulation())
+	input.append(_calculate_economic_stability())
+	input.append(_calculate_trade_network_complexity())
+	input.append(float(world_population) / 1000.0)
+	input.append(float(technological_tier) / 10.0)
+	input.append(_calculate_infrastructure_level())
+	
+	# Pad to match input layer size
+	while input.size() < 64:
+		input.append(0.0)
+	
+	return input
+
+func _forward_propagate_network(input: Array[float], network: Dictionary) -> Dictionary:
+	var output: Dictionary = {}
+	
+	# Simple forward propagation simulation
+	var hidden_layer: Array[float] = []
+	for i in range(32):  # Hidden layer size
+		var sum = 0.0
+		for j in range(min(input.size(), 64)):
+			sum += input[j] * randf_range(-1.0, 1.0)
+		hidden_layer.append(_sigmoid(sum))
+	
+	# Output layer
+	output.stability = hidden_layer[0]
+	output.complexity = hidden_layer[1]
+	output.efficiency = hidden_layer[2]
+	output.growth_rate = hidden_layer[3]
+	output.discovery_probability = hidden_layer[4]
+	output.adaptation_rate = hidden_layer[5]
+	
+	return output
+
+func _interpret_civilization_output(output: Dictionary) -> Dictionary:
+	var interpreted: Dictionary = {}
+	
+	interpreted.complexity = clamp(output.complexity, 0.0, 1.0)
+	interpreted.social_development = clamp(output.stability, 0.0, 1.0)
+	interpreted.cultural_advancement = clamp(output.efficiency, 0.0, 1.0)
+	interpreted.growth_rate = clamp(output.growth_rate, -1.0, 1.0)
+	
+	return interpreted
+
+func _interpret_environmental_output(output: Dictionary) -> Dictionary:
+	var interpreted: Dictionary = {}
+	
+	interpreted.stability = clamp(output.stability, 0.0, 1.0)
+	interpreted.biodiversity = clamp(output.complexity, 0.0, 1.0)
+	interpreted.temperature = clamp(1.0 + output.growth_rate * 0.2, 0.5, 1.5)
+	interpreted.sea_level = clamp(1.0 + output.adaptation_rate * 0.1, 0.8, 1.2)
+	
+	return interpreted
+
+func _interpret_cultural_output(output: Dictionary) -> Dictionary:
+	var interpreted: Dictionary = {}
+	
+	interpreted.advancement = clamp(output.efficiency, 0.0, 1.0)
+	interpreted.diversity = clamp(output.complexity, 0.0, 1.0)
+	interpreted.expression = clamp(output.stability, 0.0, 1.0)
+	interpreted.exchange_rate = clamp(output.growth_rate, 0.0, 1.0)
+	
+	return interpreted
+
+func _interpret_economic_output(output: Dictionary) -> Dictionary:
+	var interpreted: Dictionary = {}
+	
+	interpreted.efficiency = clamp(output.efficiency, 0.0, 1.0)
+	interpreted.stability = clamp(output.stability, 0.0, 1.0)
+	interpreted.growth = clamp(output.growth_rate, 0.0, 1.0)
+	interpreted.wealth = clamp(output.complexity, 0.0, 1.0)
+	
+	return interpreted
+
+func _sigmoid(x: float) -> float:
+	return 1.0 / (1.0 + exp(-x))
+
+# === Missing Evolution Functions ===
+
+func _get_current_neural_state() -> Dictionary:
+	var state: Dictionary = {}
+	
+	# Get current neural state from all networks
+	state.civilization = _extract_civilization_input()
+	state.environmental = _extract_environmental_input()
+	state.cultural = _extract_cultural_input()
+	state.economic = _extract_economic_input()
+	state.world_state = neural_world_matrix.world_state_neurons
+	state.timestamp = Time.get_ticks_msec()
+	
+	return state
+
+func _calculate_pattern_emergence() -> float:
+	var emergence = 0.0
+	
+	# Calculate pattern emergence based on neural activity
+	var current_state = _get_current_neural_state()
+	
+	# Check for novel patterns in civilization development
+	emergence += abs(civilization_complexity - 0.5) * 0.2
+	emergence += abs(social_development - 0.5) * 0.2
+	emergence += abs(cultural_advancement - 0.5) * 0.2
+	
+	# Check for environmental changes
+	emergence += abs(global_temperature - 1.0) * 0.1
+	emergence += abs(sea_level - 1.0) * 0.1
+	
+	# Check for technological advancement
+	emergence += float(technological_tier) / 10.0 * 0.2
+	
+	return clamp(emergence, 0.0, 1.0)
+
+func _create_emergent_pattern() -> Dictionary:
+	var pattern: Dictionary = {}
+	
+	# Create emergent pattern based on current state
+	var emergence_level = _calculate_pattern_emergence()
+	
+	pattern.type = "neural_emergence"
+	pattern.strength = emergence_level
+	pattern.description = _generate_pattern_description(emergence_level)
+	pattern.effects = _generate_pattern_effects(emergence_level)
+	pattern.timestamp = Time.get_ticks_msec()
+	pattern.neural_signature = _calculate_neural_signature()
+	
+	return pattern
+
+func _apply_emergent_pattern_effects(pattern: Dictionary) -> void:
+	# Apply effects of emergent pattern to world state
+	var effects = pattern.effects
+	
+	if effects.has("civilization_boost"):
+		civilization_complexity = clamp(civilization_complexity + effects.civilization_boost, 0.0, 1.0)
+	
+	if effects.has("environmental_change"):
+		environmental_stability = clamp(environmental_stability + effects.environmental_change, 0.0, 1.0)
+	
+	if effects.has("technological_jump"):
+		if randf() < effects.technological_jump:
+			_generate_technological_discovery()
+	
+	if effects.has("cultural_shift"):
+		cultural_advancement = clamp(cultural_advancement + effects.cultural_shift, 0.0, 1.0)
+
+func _calculate_weight_adaptation() -> Dictionary:
+	var adaptation: Dictionary = {}
+	
+	# Calculate weight adaptation based on current performance
+	var performance_score = _calculate_system_performance()
+	
+	# Adaptation rates for different network types
+	adaptation.civilization = _calculate_adaptation_rate(performance_score, "civilization")
+	adaptation.environmental = _calculate_adaptation_rate(performance_score, "environmental")
+	adaptation.cultural = _calculate_adaptation_rate(performance_score, "cultural")
+	adaptation.economic = _calculate_adaptation_rate(performance_score, "economic")
+	
+	return adaptation
+
+func _mutate_random_connection() -> void:
+	# Mutate a random neural connection
+	var all_connections = []
+	
+	# Collect all connections from neural networks
+	for network_name in ["civilization_neural_network", "environmental_neural_network", "cultural_neural_network", "economic_neural_network"]:
+		if neural_world_matrix.has(network_name):
+			var network = neural_world_matrix[network_name]
+			if network.has("connections"):
+				for connection_id in network.connections:
+					all_connections.append([network_name, connection_id])
+	
+	# Select random connection to mutate
+	if all_connections.size() > 0:
+		var selected = all_connections[randi() % all_connections.size()]
+		var network_name = selected[0]
+		var connection_id = selected[1]
+		
+		# Apply mutation
+		_apply_connection_mutation(network_name, connection_id)
+
+# === Helper Functions for Missing Functions ===
+
+func _trigger_climate_event(event_type: String, description: String) -> void:
+	var event: WorldEvent = WorldEvent.new(event_type, description, 7)
+	world_events.append(event)
+	
+	# Log the climate event
+	print("[WorldAI] Climate Event: " + description)
+
+func _calculate_event_probability() -> float:
+	var probability = 0.01  # Base probability
+	
+	# Increase probability based on world instability
+	probability += (1.0 - environmental_stability) * 0.02
+	probability += (1.0 - civilization_complexity) * 0.01
+	probability += abs(global_temperature - 1.0) * 0.01
+	
+	return clamp(probability, 0.0, 0.1)
+
+func _generate_world_event() -> void:
+	var event_types = ["discovery", "conflict", "alliance", "migration", "innovation"]
+	var event_type = event_types[randi() % event_types.size()]
+	var description = "World event: " + event_type + " occurred"
+	
+	var event: WorldEvent = WorldEvent.new(event_type, description, randi() % 10 + 1)
+	world_events.append(event)
+
+func _extract_technological_input() -> Array[float]:
+	var input: Array[float] = []
+	
+	# Extract technological-related inputs
+	input.append(float(technological_tier) / 10.0)
+	input.append(float(technological_discoveries.size()) / 50.0)
+	input.append(civilization_complexity)
+	input.append(_calculate_educational_development())
+	input.append(_calculate_infrastructure_level())
+	input.append(float(world_population) / 1000.0)
+	
+	# Pad to match input layer size
+	while input.size() < 64:
+		input.append(0.0)
+	
+	return input
+
+func _generate_technological_discovery() -> void:
+	var discovery_types = ["agriculture", "metallurgy", "writing", "mathematics", "astronomy", "medicine"]
+	var discovery_type = discovery_types[randi() % discovery_types.size()]
+	var description = "Discovery: " + discovery_type + " advanced"
+	
+	technological_discoveries.append(description)
+	
+	# Update civilization metrics
+	civilization_complexity = clamp(civilization_complexity + 0.05, 0.0, 1.0)
+
+func get_tier_discoveries_required(tier: int) -> int:
+	var requirements = {
+		0: 0,    # PRIMAL
+		1: 5,    # STONE
+		2: 15,   # BRONZE
+		3: 30,   # IRON
+		4: 50,   # MEDIEVAL
+		5: 75,   # RENAISSANCE
+		6: 100,  # INDUSTRIAL
+		7: 150,  # MODERN
+		8: 200,  # SPACE
+		9: 300   # QUANTUM
+	}
+	
+	return requirements.get(tier, 0)
+
+func _generate_pattern_description(emergence_level: float) -> String:
+	if emergence_level > 0.8:
+		return "Major neural pattern emergence detected"
+	elif emergence_level > 0.6:
+		return "Significant neural pattern formation"
+	elif emergence_level > 0.4:
+		return "Moderate neural pattern development"
+	else:
+		return "Minor neural pattern detected"
+
+func _generate_pattern_effects(emergence_level: float) -> Dictionary:
+	var effects: Dictionary = {}
+	
+	if emergence_level > 0.7:
+		effects.civilization_boost = emergence_level * 0.1
+		effects.technological_jump = emergence_level * 0.05
+	elif emergence_level > 0.5:
+		effects.cultural_shift = emergence_level * 0.08
+		effects.environmental_change = emergence_level * 0.05
+	else:
+		effects.civilization_boost = emergence_level * 0.03
+	
+	return effects
+
+func _calculate_neural_signature() -> Array[float]:
+	var signature: Array[float] = []
+	
+	# Create neural signature based on current state
+	signature.append(civilization_complexity)
+	signature.append(environmental_stability)
+	signature.append(cultural_advancement)
+	signature.append(float(technological_tier) / 10.0)
+	signature.append(float(world_population) / 1000.0)
+	
+	return signature
+
+func _calculate_system_performance() -> float:
+	var performance = 0.0
+	
+	# Calculate overall system performance
+	performance += civilization_complexity * 0.25
+	performance += environmental_stability * 0.25
+	performance += cultural_advancement * 0.25
+	performance += float(technological_tier) / 10.0 * 0.25
+	
+	return clamp(performance, 0.0, 1.0)
+
+func _calculate_adaptation_rate(performance_score: float, network_type: String) -> float:
+	var base_rate = 0.01
+	
+	# Higher performance = lower adaptation rate (system is working well)
+	# Lower performance = higher adaptation rate (system needs to adapt)
+	var adaptation_rate = base_rate * (1.0 - performance_score)
+	
+	# Different networks have different adaptation characteristics
+	match network_type:
+		"civilization":
+			adaptation_rate *= 1.2  # Civilization adapts faster
+		"environmental":
+			adaptation_rate *= 0.8  # Environment adapts slower
+		"cultural":
+			adaptation_rate *= 1.0  # Cultural adapts at normal rate
+		"economic":
+			adaptation_rate *= 1.1  # Economic adapts slightly faster
+	
+	return clamp(adaptation_rate, 0.001, 0.1)
+
+func _apply_connection_mutation(network_name: String, connection_id: String) -> void:
+	# Apply mutation to a specific connection
+	var mutation_strength = randf_range(-0.1, 0.1)
+	
+	# This would modify the actual neural network weights
+	# For now, we'll just log the mutation
+	print("[WorldAI] Applied mutation to " + network_name + " connection " + connection_id + " with strength " + str(mutation_strength))
+
 # === Public Interface ===
 
 func get_world_status() -> Dictionary:

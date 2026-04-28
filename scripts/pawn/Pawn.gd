@@ -2767,6 +2767,10 @@ func _decay_needs() -> void:
 	# Stage 2: Track co-presence with nearby pawns
 	track_co_presence()
 	
+	# Stage 1: Decay unused skills (throttled to once per day)
+	if GameManager.tick_count % GameManager.TICKS_PER_DAY == 0:
+		data.decay_unused_skills()
+	
 	# Stage 3: Track clan labor contributions
 	if _state == State.WORKING and _current_job != null:
 		var job_type_str: String = Job.describe_type(_current_job.type).to_lower()

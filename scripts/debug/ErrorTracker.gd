@@ -542,3 +542,16 @@ func debug_check_current_files() -> void:
 func debug_clear_all_errors() -> void:
 	active_errors.clear()
 	print("[ErrorTracker] All errors cleared")
+
+
+func _verify_prediction_accuracy() -> float:
+	# Verify prediction accuracy
+	if error_patterns.size() == 0:
+		return 0.0
+	
+	var correct = 0
+	for pattern in error_patterns:
+		if pattern.has("correct") and pattern["correct"]:
+			correct += 1
+	
+	return float(correct) / float(error_patterns.size())

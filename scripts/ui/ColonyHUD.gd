@@ -114,23 +114,24 @@ func _on_tick(tick: int) -> void:
 	if tick % WILDLIFE_SAMPLE_EVERY_TICKS == 0:
 		_sample_wildlife(tick)
 		_hud_dirty = true
-	var refresh_stride: int = REFRESH_EVERY_N_TICKS
-	var coarse: int = 12
+	# Increased refresh stride to reduce HUD update frequency
+	var refresh_stride: int = 60  # Always refresh every 60 ticks (1 second at 1x)
+	var coarse: int = 120  # Skip even more at high speeds
 	if GameManager.game_speed >= 1024.0:
-		refresh_stride = 32
-		coarse = 128
+		refresh_stride = 120
+		coarse = 240
 	elif GameManager.game_speed >= 256.0:
-		refresh_stride = 16
-		coarse = 64
+		refresh_stride = 90
+		coarse = 180
 	elif GameManager.game_speed >= 64.0:
-		refresh_stride = 8
-		coarse = 32
+		refresh_stride = 60
+		coarse = 120
 	elif GameManager.game_speed >= 16.0:
-		refresh_stride = 4
-		coarse = 16
+		refresh_stride = 45
+		coarse = 90
 	elif GameManager.game_speed >= 4.0:
-		refresh_stride = 2
-		coarse = 8
+		refresh_stride = 30
+		coarse = 60
 	if tick % coarse != 0 and not _hud_dirty:
 		return
 	if tick % refresh_stride == 0:

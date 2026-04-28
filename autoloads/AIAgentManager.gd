@@ -19,7 +19,7 @@ var enabled: bool = true
 var show_agent_overlays: bool = true
 
 # Advanced Neural Network Matrix Systems
-var world_ai: WorldAI
+var world_ai: Node
 var settlement_ai_system: Dictionary = {}  # settlement_id -> SettlementAI
 var civilization_mode: bool = true  # Enabled for advanced neural network matrix
 
@@ -53,7 +53,7 @@ func _ready() -> void:
 	
 	# Initialize enhanced AI systems
 	if civilization_mode:
-		world_ai = WorldAI.new()
+		world_ai = WorldAI  # Reference to autoload singleton
 		_initialize_settlement_system()
 	
 	_spawn_initial_agents()

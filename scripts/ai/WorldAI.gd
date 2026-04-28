@@ -192,7 +192,10 @@ func _create_cultural_neurons() -> Dictionary:
 		"philosophical_thought": {"value": 0.0, "activation": 0.0, "connections": []},
 		"social_norms": {"value": 0.0, "activation": 0.0, "connections": []},
 		"language_complexity": {"value": 0.0, "activation": 0.0, "connections": []},
-		"cultural_exchange": {"value": 0.0, "activation": 0.0, "connections": []}
+		"cultural_exchange": {"value": 0.0, "activation": 0.0, "connections": []},
+		"knowledge_distribution": {"value": 0.0, "activation": 0.0, "connections": []},
+		"knowledge_scarcity": {"value": 0.0, "activation": 0.0, "connections": []},
+		"teaching_activity": {"value": 0.0, "activation": 0.0, "connections": []}
 	}
 
 func _create_economic_neurons() -> Dictionary:
@@ -509,6 +512,27 @@ func _update_civilization_neurons() -> void:
 	# Update authority metrics from AuthoritySystem
 	_update_authority_neurons(civ_neurons)
 
+func _update_knowledge_neurons(cult_neurons: Dictionary) -> void:
+	if KnowledgeSystem == null:
+		return
+	
+	# Get knowledge distribution metrics
+	var carrier_count: int = KnowledgeSystem.get_carrier_count()
+	var total_knowledge: int = KnowledgeSystem.get_total_knowledge_count()
+	var pawns = get_tree().get_nodes_in_group("pawns")
+	var pawn_count: int = pawns.size()
+	
+	if pawn_count > 0:
+		# Knowledge distribution: ratio of carriers to total pawns
+		cult_neurons["knowledge_distribution"].value = float(carrier_count) / float(pawn_count)
+		
+		# Knowledge scarcity: inverse of distribution (higher = more scarce)
+		cult_neurons["knowledge_scarcity"].value = 1.0 - cult_neurons["knowledge_distribution"].value
+		
+		# Teaching activity: based on knowledge scarcity (higher scarcity = more teaching needed)
+		cult_neurons["teaching_activity"].value = cult_neurons["knowledge_scarcity"].value
+
+
 func _update_cultural_neurons() -> void:
 	var cult_neurons = neural_world_matrix["cultural_neurons"]
 	
@@ -519,6 +543,9 @@ func _update_cultural_neurons() -> void:
 	cult_neurons["social_norms"].value = _calculate_social_norm_complexity()
 	cult_neurons["language_complexity"].value = _calculate_language_complexity()
 	cult_neurons["cultural_exchange"].value = _calculate_cultural_exchange_rate()
+	
+	# Update knowledge metrics from KnowledgeSystem
+	_update_knowledge_neurons(cult_neurons)
 
 func _update_economic_neurons() -> void:
 	var econ_neurons = neural_world_matrix["economic_neurons"]

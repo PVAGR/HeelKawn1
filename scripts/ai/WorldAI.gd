@@ -103,15 +103,15 @@ var cultural_neural_network: Dictionary = {}  # Cultural AI
 var economic_neural_network: Dictionary = {}  # Economic AI
 
 # Neural Network Evolution Parameters
-var neural_evolution_rate: float = 0.001  # Rate of neural network evolution
-var pattern_emergence_threshold: float = 0.8  # Threshold for emergent patterns
-var civilization_learning_rate: float = 0.01  # Learning rate for civilization AI
-var environmental_adaptation_rate: float = 0.005  # Environmental adaptation rate
+var neural_evolution_rate: float = 0.005  # Rate of neural network evolution (increased for faster learning)
+var pattern_emergence_threshold: float = 0.7  # Threshold for emergent patterns (lowered for more frequent patterns)
+var civilization_learning_rate: float = 0.02  # Learning rate for civilization AI (increased)
+var environmental_adaptation_rate: float = 0.01  # Environmental adaptation rate (increased)
 
 # Progression parameters
 var age_progression_threshold: float = 0.0  # 0.0-1.0, when to advance to next age
-var tech_innovation_rate: float = 0.01  # Base rate of technological discovery
-var cultural_evolution_rate: float = 0.02  # Base rate of cultural change
+var tech_innovation_rate: float = 0.03  # Base rate of technological discovery (increased)
+var cultural_evolution_rate: float = 0.04  # Base rate of cultural change (increased)
 var environmental_stability: float = 0.8  # How stable the environment is
 
 # Civilization development metrics
@@ -222,6 +222,7 @@ func _initialize_neural_networks() -> void:
 	environmental_neural_network = _create_specialized_network("environmental", 24, 12, 6)
 	cultural_neural_network = _create_specialized_network("cultural", 28, 14, 7)
 	economic_neural_network = _create_specialized_network("economic", 20, 10, 5)
+	technological_neural_network = _create_specialized_network("technological", 16, 8, 4)
 	
 	print("[WorldAI] Specialized neural networks initialized")
 
@@ -252,12 +253,16 @@ func _create_neuron_layer(size: int) -> Array[Dictionary]:
 func _initialize_weights(input_size: int, hidden_size: int, output_size: int) -> Dictionary:
 	var weights: Dictionary = {}
 	
+	# Xavier/Glorot initialization for better convergence
+	var input_scale = sqrt(2.0 / float(input_size))
+	var hidden_scale = sqrt(2.0 / float(hidden_size))
+	
 	# Input to hidden weights
 	weights["input_hidden"] = []
 	for i in range(input_size):
 		var neuron_weights: Array[float] = []
 		for j in range(hidden_size):
-			neuron_weights.append(randf_range(-0.5, 0.5))
+			neuron_weights.append(randf_range(-input_scale, input_scale))
 		weights["input_hidden"].append(neuron_weights)
 	
 	# Hidden to output weights
@@ -265,7 +270,7 @@ func _initialize_weights(input_size: int, hidden_size: int, output_size: int) ->
 	for i in range(hidden_size):
 		var neuron_weights: Array[float] = []
 		for j in range(output_size):
-			neuron_weights.append(randf_range(-0.5, 0.5))
+			neuron_weights.append(randf_range(-hidden_scale, hidden_scale))
 		weights["hidden_output"].append(neuron_weights)
 	
 	return weights
@@ -486,6 +491,7 @@ func _process_neural_networks() -> void:
 	_process_environmental_network()
 	_process_cultural_network()
 	_process_economic_network()
+	_process_technological_network()
 
 func _process_civilization_network() -> void:
 	var input_data = _extract_civilization_input()
@@ -506,6 +512,11 @@ func _process_economic_network() -> void:
 	var input_data = _extract_economic_input()
 	var output = _forward_propagate_network(input_data, economic_neural_network)
 	_interpret_economic_output(output)
+
+func _process_technological_network() -> void:
+	var input_data = _extract_technological_input()
+	var output = _forward_propagate_network(input_data, technological_neural_network)
+	_interpret_technological_output(output)
 
 func _detect_emergent_patterns() -> void:
 	# Analyze neural network activity for emergent patterns
@@ -1003,6 +1014,15 @@ func _interpret_economic_output(output: Dictionary) -> Dictionary:
 	interpreted["production_rate"] = clamp(output["complexity"], 0.0, 1.0)
 	interpreted["market_activity"] = clamp(output["stability"], 0.0, 1.0)
 	interpreted["trade_volume"] = clamp(output["efficiency"], 0.0, 1.0)
+	
+	return interpreted
+
+func _interpret_technological_output(output: Dictionary) -> Dictionary:
+	var interpreted: Dictionary = {}
+	
+	interpreted["innovation_rate"] = clamp(output["discovery_probability"], 0.0, 1.0)
+	interpreted["research_efficiency"] = clamp(output["efficiency"], 0.0, 1.0)
+	interpreted["tech_adoption"] = clamp(output["growth_rate"], 0.0, 1.0)
 	
 	return interpreted
 

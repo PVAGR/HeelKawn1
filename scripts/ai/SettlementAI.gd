@@ -102,6 +102,10 @@ var historical_events: Array[String] = []
 var emergency_mode: bool = false
 var emergency_reason: String = ""
 
+# Diplomatic state
+var active_treaties: Array[Dictionary] = []  # treaty_id -> treaty data
+var treaty_proposals: Array[Dictionary] = []
+
 # Cultural properties
 var dominant_culture: String = ""
 var language_family: String = ""
@@ -419,6 +423,23 @@ func handle_historical_discovery_event(event_data: Dictionary) -> void:
 	historical_events.append("Responded to historical discovery: layering=%.2f, ruins=%.2f" % [historical_layering, ruin_density])
 
 
+func handle_environmental_degradation_event(event_data: Dictionary) -> void:
+	# Respond to environmental degradation from WorldAI
+	var resource_depletion = event_data.get("resource_depletion", 0.0)
+	var ruin_density = event_data.get("ruin_density", 0.0)
+	
+	# Prioritize resource conservation
+	if development_focus != DevelopmentFocus.SURVIVAL:
+		previous_development_focus = development_focus
+		development_focus = DevelopmentFocus.SURVIVAL
+	
+	# Propose resource conservation goals
+	propose_collective_goal("gather_food", leader_id if leader_id >= 0 else resident_agents[0], 85)
+	propose_collective_goal("build_shelter", leader_id if leader_id >= 0 else resident_agents[0], 75)
+	
+	historical_events.append("Responded to environmental degradation: depletion=%.2f, ruins=%.2f" % [resource_depletion, ruin_density])
+
+
 func _trigger_emergency_leadership_selection() -> void:
 	# Select new leader based on government type
 	match government_type:
@@ -430,6 +451,105 @@ func _trigger_emergency_leadership_selection() -> void:
 			_technocratic_selection()
 		_:
 			_tribal_selection()
+
+
+# === Peace Treaty Negotiation ===
+
+func propose_peace_treaty(target_settlement_id: int, terms: Dictionary) -> bool:
+	# Propose peace treaty to another settlement
+	if target_settlement_id == settlement_id:
+		return false
+	
+	var proposal = {
+		"proposer_id": settlement_id,
+		"target_id": target_settlement_id,
+		"terms": terms,
+		"tick": GameManager.tick_count if GameManager else 0,
+		"status": "pending"
+	}
+	
+	treaty_proposals.append(proposal)
+	historical_events.append("Peace treaty proposed to settlement %d" % target_settlement_id)
+	
+	return true
+
+
+func accept_peace_treaty(proposal_index: int) -> bool:
+	if proposal_index < 0 or proposal_index >= treaty_proposals.size():
+		return false
+	
+	var proposal = treaty_proposals[proposal_index]
+	if proposal.get("target_id") != settlement_id:
+		return false
+	
+	# Create active treaty
+	var treaty = {
+		"treaty_id": GameManager.tick_count if GameManager else 0,
+		"parties": [proposal["proposer_id"], proposal["target_id"]],
+		"terms": proposal["terms"],
+		"start_tick": GameManager.tick_count if GameManager else 0,
+		"duration": proposal["terms"].get("duration", 5000),
+		"status": "active"
+	}
+	
+	active_treaties.append(treaty)
+	treaty_proposals.remove_at(proposal_index)
+	
+	# Improve diplomatic relations
+	var other_settlement = proposal["proposer_id"]
+	diplomatic_relations[other_settlement] = diplomatic_relations.get(other_settlement, 0.0) + 0.3
+	
+	historical_events.append("Peace treaty accepted with settlement %d" % other_settlement)
+	return true
+
+
+func reject_peace_treaty(proposal_index: int) -> bool:
+	if proposal_index < 0 or proposal_index >= treaty_proposals.size():
+		return false
+	
+	var proposal = treaty_proposals[proposal_index]
+	if proposal.get("target_id") != settlement_id:
+		return false
+	
+	treaty_proposals.remove_at(proposal_index)
+	
+	# Worsen diplomatic relations
+	var other_settlement = proposal["proposer_id"]
+	diplomatic_relations[other_settlement] = diplomatic_relations.get(other_settlement, 0.0) - 0.1
+	
+	historical_events.append("Peace treaty rejected from settlement %d" % other_settlement)
+	return true
+
+
+func check_treaty_expiry() -> void:
+	var current_tick = GameManager.tick_count if GameManager else 0
+	var i = active_treaties.size() - 1
+	
+	while i >= 0:
+		var treaty = active_treaties[i]
+		var age = current_tick - treaty.get("start_tick", 0)
+		
+		if age >= treaty.get("duration", 5000):
+			# Treaty expired
+			active_treaties.remove_at(i)
+			historical_events.append("Peace treaty with settlement %d expired" % treaty["parties"][0] if treaty["parties"][0] != settlement_id else treaty["parties"][1])
+		
+		i -= 1
+
+
+func evaluate_peace_proposal(target_settlement_id: int) -> float:
+	# Evaluate whether to accept a peace proposal (0.0-1.0)
+	var relationship = diplomatic_relations.get(target_settlement_id, 0.0)
+	var military_strength = population * 0.1  # Simple proxy
+	
+	# Higher relationship = more likely to accept
+	var acceptance_chance = relationship * 0.5 + 0.3
+	
+	# If in emergency mode, more likely to accept peace
+	if emergency_mode:
+		acceptance_chance += 0.2
+	
+	return clamp(acceptance_chance, 0.0, 1.0)
 
 
 func _get_support_threshold() -> float:

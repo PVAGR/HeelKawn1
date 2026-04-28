@@ -2,6 +2,11 @@ extends Node
 ## HEELKAWN Knowledge System - Knowledge only exists if carried by humans.
 ## Tracks discovery, apprenticeship, teaching, and forgetting of knowledge.
 
+# Autoload references
+@onready var WorldAI = get_node_or_null("/root/WorldAI")
+@onready var WorldMemory = get_node_or_null("/root/WorldMemory")
+@onready var GameManager = get_node_or_null("/root/GameManager")
+
 enum KnowledgeType {
 	FIRE_KEEPING = 0,
 	FOOD_STORAGE = 1,
@@ -123,9 +128,11 @@ func _check_knowledge_loss(knowledge_type: KnowledgeType) -> void:
 	if carrier_count == 0:
 		# Knowledge is lost - no carriers remain
 		_record_knowledge_loss(knowledge_type, "no_carriers")
+		_notify_world_ai_knowledge_loss(knowledge_type)
 	elif carrier_count <= 2:
 		# Knowledge is at risk - few carriers remain
 		_record_knowledge_risk(knowledge_type, carrier_count)
+		_notify_world_ai_knowledge_risk(knowledge_type, carrier_count)
 
 func _update_knowledge_degradation() -> void:
 	# Knowledge degrades over time without practice/teaching
@@ -169,6 +176,16 @@ func _count_recent_teaching(knowledge_type: KnowledgeType, within_ticks: int) ->
 				count += 1
 	
 	return count
+
+func _notify_world_ai_knowledge_loss(knowledge_type: KnowledgeType) -> void:
+	# Notify WorldAI of knowledge loss to update neural network
+	if WorldAI != null and WorldAI.has_method("on_knowledge_lost"):
+		WorldAI.on_knowledge_lost(knowledge_type)
+
+func _notify_world_ai_knowledge_risk(knowledge_type: KnowledgeType, carrier_count: int) -> void:
+	# Notify WorldAI of knowledge risk to update neural network
+	if WorldAI != null and WorldAI.has_method("on_knowledge_at_risk"):
+		WorldAI.on_knowledge_at_risk(knowledge_type, carrier_count)
 
 # === Event Recording ===
 

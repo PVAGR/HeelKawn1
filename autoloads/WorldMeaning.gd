@@ -350,6 +350,79 @@ func get_settlement_meaning(settlement_id: int) -> Dictionary:
 		"meaning_label": "founding"
 	}
 
+# === Bloodline Meaning Integration ===
+
+func record_pawn_death(pawn_id: int, bloodline_id: int) -> void:
+	# Record pawn death for bloodline meaning derivation
+	if not meaning_by_bloodline.has(bloodline_id):
+		meaning_by_bloodline[bloodline_id] = {
+			"death_count": 0,
+			"authority_grants": 0,
+			"knowledge_carriers": 0,
+			"meaning_label": "obscure"
+		}
+	
+	meaning_by_bloodline[bloodline_id]["death_count"] += 1
+	
+	# Trigger meaning re-evaluation
+	_update_bloodline_meaning(bloodline_id)
+
+
+func record_authority_grant(pawn_id: int, bloodline_id: int) -> void:
+	# Record authority grant for bloodline meaning derivation
+	if not meaning_by_bloodline.has(bloodline_id):
+		meaning_by_bloodline[bloodline_id] = {
+			"death_count": 0,
+			"authority_grants": 0,
+			"knowledge_carriers": 0,
+			"meaning_label": "obscure"
+		}
+	
+	meaning_by_bloodline[bloodline_id]["authority_grants"] += 1
+	
+	# Trigger meaning re-evaluation
+	_update_bloodline_meaning(bloodline_id)
+
+
+func record_knowledge_carrier(pawn_id: int, bloodline_id: int) -> void:
+	# Record knowledge carrier for bloodline meaning derivation
+	if not meaning_by_bloodline.has(bloodline_id):
+		meaning_by_bloodline[bloodline_id] = {
+			"death_count": 0,
+			"authority_grants": 0,
+			"knowledge_carriers": 0,
+			"meaning_label": "obscure"
+		}
+	
+	meaning_by_bloodline[bloodline_id]["knowledge_carriers"] += 1
+	
+	# Trigger meaning re-evaluation
+	_update_bloodline_meaning(bloodline_id)
+
+
+func _update_bloodline_meaning(bloodline_id: int) -> void:
+	if not meaning_by_bloodline.has(bloodline_id):
+		return
+	
+	var rec: Dictionary = meaning_by_bloodline[bloodline_id]
+	var deaths: int = rec["death_count"]
+	var authority: int = rec["authority_grants"]
+	var knowledge: int = rec["knowledge_carriers"]
+	
+	if knowledge >= 3:
+		rec["meaning_label"] = "keepers_of_fire"
+	elif authority >= 3:
+		rec["meaning_label"] = "protectors"
+	elif deaths >= 5:
+		rec["meaning_label"] = "fallen"
+	elif deaths >= 2:
+		rec["meaning_label"] = "scarred"
+	elif authority >= 1:
+		rec["meaning_label"] = "rising"
+	else:
+		rec["meaning_label"] = "obscure"
+
+
 func get_bloodline_meaning(bloodline_id: int) -> Dictionary:
 	if meaning_by_bloodline.has(bloodline_id):
 		return meaning_by_bloodline[bloodline_id].duplicate(true)

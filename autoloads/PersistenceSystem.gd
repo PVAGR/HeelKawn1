@@ -2,6 +2,11 @@ extends Node
 ## HEELKAWN Persistence Rules - Persistence must be earned by impact, repetition, witness, teaching, and material survival.
 ## Tracks what survives over time: ruins, graves, scars, roads, customs, names, bloodlines.
 
+# Autoload references
+@onready var WorldAI = get_node_or_null("/root/WorldAI")
+@onready var WorldMemory = get_node_or_null("/root/WorldMemory")
+@onready var GameManager = get_node_or_null("/root/GameManager")
+
 enum EntityType {
 	RUIN = 0,
 	GRAVE_FIELD = 1,
@@ -191,7 +196,12 @@ func _apply_persistence_decay() -> void:
 			decay_rate = 0.05
 		
 		# Material condition decays faster
+		var old_condition = entity["material_condition"]
 		entity["material_condition"] = max(entity["material_condition"] - decay_rate * 0.5, 0.0)
+		
+		# Notify WorldAI of significant decay
+		if old_condition > 0.5 and entity["material_condition"] <= 0.5:
+			_notify_world_ai_entity_decay(entity_id, entity["type"], entity["material_condition"])
 		
 		# Witness count decays slowly (people forget)
 		if time_since_visit > 30000:
@@ -211,7 +221,9 @@ func _remove_lost_entities() -> void:
 			lost_entities.append(entity_id)
 	
 	for entity_id in lost_entities:
+		var entity = persistent_entities.get(entity_id, {})
 		_record_entity_loss(entity_id, persistence_scores[entity_id])
+		_notify_world_ai_entity_loss(entity_id, entity.get("type", -1))
 		persistent_entities.erase(entity_id)
 		persistence_scores.erase(entity_id)
 
@@ -313,6 +325,16 @@ func get_entity_count_by_type(entity_type: EntityType) -> int:
 		if entity.get("entity_type") == entity_type:
 			count += 1
 	return count
+
+func _notify_world_ai_entity_decay(entity_id: int, entity_type: int, condition: float) -> void:
+	# Notify WorldAI of entity decay to update neural network
+	if WorldAI != null and WorldAI.has_method("on_entity_decay"):
+		WorldAI.on_entity_decay(entity_id, entity_type, condition)
+
+func _notify_world_ai_entity_loss(entity_id: int, entity_type: int) -> void:
+	# Notify WorldAI of entity loss to update neural network
+	if WorldAI != null and WorldAI.has_method("on_entity_loss"):
+		WorldAI.on_entity_loss(entity_id, entity_type)
 
 func _record_entity_loss(entity_id: int, final_score: float) -> void:
 	var event: Dictionary = {

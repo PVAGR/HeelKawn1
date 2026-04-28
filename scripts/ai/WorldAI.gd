@@ -7,6 +7,7 @@ signal collapse_warning_event(event: WorldEvent)
 signal knowledge_crisis_event(event: WorldEvent)
 signal authority_vacuum_event(event: WorldEvent)
 signal historical_discovery_event(event: WorldEvent)
+signal environmental_degradation_event(event: WorldEvent)
 signal world_event_dispatched(event: WorldEvent)
 
 # Autoload references
@@ -1144,6 +1145,43 @@ func _detect_historical_saturation_patterns() -> void:
 			print("[WorldAI] Pattern detected: %s" % pattern.description)
 
 
+func _detect_environmental_degradation_patterns() -> void:
+	var env_neurons = neural_world_matrix["environmental_neurons"]
+	var resource_depletion = env_neurons["resource_depletion"].value
+	var ruin_density = env_neurons["ruin_density"].value
+	
+	if resource_depletion > 0.6 and ruin_density > 0.4:
+		var pattern = {
+			"type": "environmental_degradation",
+			"description": "High resource depletion with significant ruin density",
+			"severity": "medium",
+			"tick": GameManager.tick_count
+		}
+		emergent_patterns.append(pattern)
+		WorldMemory.record_event({
+			"type": "emergent_pattern_detected",
+			"pattern_type": "environmental_degradation",
+			"description": pattern.description,
+			"severity": pattern.severity,
+			"tick": GameManager.tick_count
+		})
+		
+		# Dispatch environmental degradation event
+		var event = WorldEvent.new(
+			"environmental_degradation",
+			"Neural network detects environmental stress: resources are depleted and ruins are spreading",
+			6,
+			{"resource_depletion": resource_depletion, "ruin_density": ruin_density}
+		)
+		world_events.append(event)
+		environmental_degradation_event.emit(event)
+		world_event_dispatched.emit(event)
+		_broadcast_event_to_settlements(event)
+		
+		if GameManager.verbose_logs():
+			print("[WorldAI] Pattern detected: %s" % pattern.description)
+
+
 func _broadcast_event_to_settlements(event: WorldEvent) -> void:
 	# Broadcast event to all active settlements
 	for settlement_id in active_settlements:
@@ -1165,6 +1203,92 @@ func _broadcast_event_to_settlements(event: WorldEvent) -> void:
 			"historical_discovery":
 				if settlement.has_method("handle_historical_discovery_event"):
 					settlement.handle_historical_discovery_event(event.event_data)
+			"environmental_degradation":
+				if settlement.has_method("handle_environmental_degradation_event"):
+					settlement.handle_environmental_degradation_event(event.event_data)
+
+
+# === Knowledge System Integration ===
+
+func on_knowledge_lost(knowledge_type: int) -> void:
+	# Called when a knowledge type is completely lost (no carriers remain)
+	var cult_neurons = neural_world_matrix["cultural_neurons"]
+	
+	# Increase knowledge scarcity neuron
+	cult_neurons["knowledge_scarcity"].value = min(cult_neurons["knowledge_scarcity"].value + 0.15, 1.0)
+	
+	# Decrease teaching activity neuron
+	cult_neurons["teaching_activity"].value = max(cult_neurons["teaching_activity"].value - 0.1, 0.0)
+	
+	# Record event
+	WorldMemory.record_event({
+		"type": "knowledge_lost",
+		"knowledge_type": knowledge_type,
+		"tick": GameManager.tick_count
+	})
+	
+	if GameManager.verbose_logs():
+		print("[WorldAI] Knowledge type %d lost - updating neural network" % knowledge_type)
+
+
+func on_knowledge_at_risk(knowledge_type: int, carrier_count: int) -> void:
+	# Called when a knowledge type has few carriers (at risk of loss)
+	var cult_neurons = neural_world_matrix["cultural_neurons"]
+	
+	# Slightly increase knowledge scarcity neuron
+	cult_neurons["knowledge_scarcity"].value = min(cult_neurons["knowledge_scarcity"].value + 0.05, 1.0)
+	
+	# Record event
+	WorldMemory.record_event({
+		"type": "knowledge_at_risk",
+		"knowledge_type": knowledge_type,
+		"carrier_count": carrier_count,
+		"tick": GameManager.tick_count
+	})
+	
+	if GameManager.verbose_logs():
+		print("[WorldAI] Knowledge type %d at risk (carriers: %d) - updating neural network" % [knowledge_type, carrier_count])
+
+
+func on_entity_decay(entity_id: int, entity_type: int, condition: float) -> void:
+	# Called when an entity's material condition decays significantly
+	var env_neurons = neural_world_matrix["environmental_neurons"]
+	
+	# Increase ruin density if entity is a ruin or grave
+	if entity_type in [0, 1]:  # RUIN or GRAVE_FIELD
+		env_neurons["ruin_density"].value = min(env_neurons["ruin_density"].value + 0.02, 1.0)
+	
+	# Record event
+	WorldMemory.record_event({
+		"type": "entity_decay",
+		"entity_id": entity_id,
+		"entity_type": entity_type,
+		"condition": condition,
+		"tick": GameManager.tick_count
+	})
+	
+	if GameManager.verbose_logs():
+		print("[WorldAI] Entity %d decayed to condition %.2f - updating neural network" % [entity_id, condition])
+
+
+func on_entity_loss(entity_id: int, entity_type: int) -> void:
+	# Called when an entity is completely lost (removed from world)
+	var env_neurons = neural_world_matrix["environmental_neurons"]
+	
+	# Decrease ruin density if entity was a ruin or grave
+	if entity_type in [0, 1]:  # RUIN or GRAVE_FIELD
+		env_neurons["ruin_density"].value = max(env_neurons["ruin_density"].value - 0.03, 0.0)
+	
+	# Record event
+	WorldMemory.record_event({
+		"type": "entity_loss",
+		"entity_id": entity_id,
+		"entity_type": entity_type,
+		"tick": GameManager.tick_count
+	})
+	
+	if GameManager.verbose_logs():
+		print("[WorldAI] Entity %d lost - updating neural network" % entity_id)
 
 
 func _detect_emergent_patterns() -> void:
@@ -1177,6 +1301,7 @@ func _detect_emergent_patterns() -> void:
 	_detect_knowledge_crisis_patterns()
 	_detect_authority_vacuum_patterns()
 	_detect_historical_saturation_patterns()
+	_detect_environmental_degradation_patterns()
 	
 	if pattern_score >= pattern_emergence_threshold:
 		var new_pattern = _create_emergent_pattern()

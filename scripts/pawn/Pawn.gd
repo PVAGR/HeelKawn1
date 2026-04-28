@@ -894,6 +894,83 @@ func _perform_inspect_action() -> void:
 
 
 func record_skill_gain(skill: String, amount: int) -> void:
+
+
+## Player interaction: teach knowledge to nearby pawn
+func teach_knowledge_to_nearby(knowledge_type: int) -> bool:
+	if KnowledgeSystem == null:
+		return false
+	
+	var my_id: int = int(data.id)
+	
+	# Find nearby pawn to teach
+	var nearby_distance: float = 50.0
+	for pawn in get_tree().get_nodes_in_group("pawns"):
+		if pawn == self or not is_instance_valid(pawn):
+			continue
+		var dist: float = position.distance_to(pawn.position)
+		if dist > nearby_distance:
+			continue
+		
+		var their_id: int = int(pawn.data.id)
+		KnowledgeSystem.teach_knowledge(my_id, their_id, knowledge_type)
+		
+		if GameManager.verbose_logs():
+			print("[Pawn] Player teaching %s knowledge type %d to %s" % [data.display_name, knowledge_type, pawn.data.display_name])
+		
+		return true
+	
+	return false
+
+
+## Player interaction: challenge nearby pawn's authority
+func challenge_authority_nearby(context: int) -> bool:
+	if AuthoritySystem == null:
+		return false
+	
+	var my_id: int = int(data.id)
+	
+	# Find nearby pawn to challenge
+	var nearby_distance: float = 50.0
+	for pawn in get_tree().get_nodes_in_group("pawns"):
+		if pawn == self or not is_instance_valid(pawn):
+			continue
+		var dist: float = position.distance_to(pawn.position)
+		if dist > nearby_distance:
+			continue
+		
+		var their_id: int = int(pawn.data.id)
+		AuthoritySystem.resolve_conflict(my_id, their_id, context)
+		
+		if GameManager.verbose_logs():
+			print("[Pawn] Player challenging %s authority in context %d" % [pawn.data.display_name, context])
+		
+		return true
+	
+	return false
+
+
+## Player interaction: visit persistent entity at current location
+func visit_persistent_entity() -> bool:
+	if PersistenceSystem == null:
+		return false
+	
+	# Find persistent entity at current tile
+	var entities: Array = PersistenceSystem.get_entities_at_tile(data.tile_pos)
+	
+	if entities.is_empty():
+		return false
+	
+	for entity_id in entities:
+		PersistenceSystem.record_visitation(entity_id, int(data.id))
+		
+		if GameManager.verbose_logs():
+			print("[Pawn] Player visiting persistent entity %d at %s" % [entity_id, str(data.tile_pos)])
+	
+	return true
+
+
+func record_skill_gain(skill: String, amount: int) -> void:
 	if data == null:
 		return
 	if data.gain_skill_xp(skill, amount):

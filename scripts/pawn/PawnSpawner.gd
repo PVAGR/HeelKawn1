@@ -55,6 +55,10 @@ var _rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
 	_rng.randomize()
+	if pawn_scene == null:
+		print("[ERROR] PawnSpawner: pawn_scene is null - check Main.tscn configuration")
+	else:
+		print("[INFO] PawnSpawner: pawn_scene loaded successfully: ", pawn_scene.resource_path)
 
 
 ## Free existing pawns (releasing any claimed jobs) and spawn a fresh set.
@@ -145,7 +149,7 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		# Assign 0-2 random traits to this pawn
 		_assign_random_traits(data)
 
-		var pawn: Pawn = pawn_scene.instantiate()
+		var pawn: Pawn = pawn_scene.instantiate() as Pawn
 		add_child(pawn)
 		pawn.bind(data, world.tile_to_world(tile), world)
 		pawns.append(pawn)
@@ -267,7 +271,7 @@ func spawn_pawn() -> void:
 		data.hair_color = HAIR_COLORS[_rng.randi_range(0, HAIR_COLORS.size() - 1)]
 		data.apparel_color = APPAREL_COLORS[_rng.randi_range(0, APPAREL_COLORS.size() - 1)]
 		_assign_random_traits(data)
-		var pawnc: Pawn = pawn_scene.instantiate()
+		var pawnc: Pawn = pawn_scene.instantiate() as Pawn
 		add_child(pawnc)
 		pawnc.bind(data, world.tile_to_world(tile), world)
 		pawns.append(pawnc)
@@ -281,7 +285,7 @@ func spawn_pawn() -> void:
 ## Reconstruct one pawn from `PawnData` (e.g. after `PawnData.from_save_dict`). Does
 ## not check component — caller must ensure the tile is passable.
 func spawn_from_data(d: PawnData, world: World) -> void:
-	var p: Pawn = pawn_scene.instantiate()
+	var p: Pawn = pawn_scene.instantiate() as Pawn
 	add_child(p)
 	p.bind(d, world.tile_to_world(d.tile_pos), world)
 	pawns.append(p)

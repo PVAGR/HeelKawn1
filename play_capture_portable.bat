@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 
 cd /d "%~dp0"
 
-set "GODOT_EXE=%~dp0tools\godot\Godot_v4.6.2-stable_win64.exe"
+set "GODOT_EXE=tools\godot\Godot_v4.6.2-stable_win64.exe"
 if not exist "%GODOT_EXE%" (
   echo [ERROR] Portable Godot not found at %GODOT_EXE%
   echo [INFO] Run: powershell -ExecutionPolicy Bypass -File tools\Download-GodotPortable.ps1

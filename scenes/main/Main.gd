@@ -1740,93 +1740,93 @@ func _flush_road_memory_dirty_tiles() -> void:
 		RoadMemory.flush_dirty_tiles(_world)
 
 
-		func _scan_recent_inspects_and_handle() -> void:
-			# Find newest player_inspect event and, if unseen, show tooltip and play tone.
-			var recent_events: Array = WorldMemory.get_recent_events(48)
-			for i in range(recent_events.size() - 1, -1, -1):
-				var ev: Dictionary = recent_events[i]
-				if str(ev.get("type", "")) != "player_inspect":
-					continue
-				var ev_tick: int = int(ev.get("t", -1))
-				if ev_tick <= _last_inspect_event_tick_shown:
-					return
-				_last_inspect_event_tick_shown = ev_tick
-				var pid: int = int(ev.get("pawn_id", -1))
-				var tile_x: int = int(ev.get("tile", {}).get("x", -1))
-				var tile_y: int = int(ev.get("tile", {}).get("y", -1))
-				var msg: String = "%s | pawn:%d region:%d" % [str(ev.get("meaning_label", "")), pid, int(ev.get("center_region", -1))]
-				_show_inspect_tooltip(msg, pid, tile_x, tile_y)
-				_play_inspect_tone()
-				return
+func _scan_recent_inspects_and_handle() -> void:
+	# Find newest player_inspect event and, if unseen, show tooltip and play tone.
+	var recent_events: Array = WorldMemory.get_recent_events(48)
+	for i in range(recent_events.size() - 1, -1, -1):
+		var ev: Dictionary = recent_events[i]
+		if str(ev.get("type", "")) != "player_inspect":
+			continue
+		var ev_tick: int = int(ev.get("t", -1))
+		if ev_tick <= _last_inspect_event_tick_shown:
+			return
+		_last_inspect_event_tick_shown = ev_tick
+		var pid: int = int(ev.get("pawn_id", -1))
+		var tile_x: int = int(ev.get("tile", {}).get("x", -1))
+		var tile_y: int = int(ev.get("tile", {}).get("y", -1))
+		var msg: String = "%s | pawn:%d region:%d" % [str(ev.get("meaning_label", "")), pid, int(ev.get("center_region", -1))]
+		_show_inspect_tooltip(msg, pid, tile_x, tile_y)
+		_play_inspect_tone()
+		return
 
 
-		func _show_inspect_tooltip(msg: String, pawn_id: int, tile_x: int, tile_y: int) -> void:
-			# Remove existing tip
-			if _inspect_tooltip_node != null and is_instance_valid(_inspect_tooltip_node):
-				_inspect_tooltip_node.queue_free()
-				_inspect_tooltip_node = null
-			var ui_root: Node = get_node_or_null("UI_Viewport")
-			if ui_root == null:
-				return
-			var panel: PanelContainer = PanelContainer.new()
-			panel.name = "InspectTooltip"
-			var style: StyleBoxFlat = StyleBoxFlat.new()
-			style.bg_color = Color(0, 0, 0, 0.7)
-			style.border_color = Color(0.8, 0.7, 0.4, 0.9)
-			style.set_border_width_all(1)
-			style.set_corner_radius_all(4)
-			panel.add_theme_stylebox_override("panel", style)
-			var lbl: Label = Label.new()
-			lbl.text = msg + " (tile=%d,%d)" % [tile_x, tile_y]
-			lbl.add_theme_font_size_override("font_size", 12)
-			lbl.add_theme_color_override("font_color", Color(0.94,0.92,0.84))
-			panel.add_child(lbl)
-			ui_root.add_child(panel)
-			panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-			panel.position = Vector2(220, 40)
-			_inspect_tooltip_node = panel
-			# Auto-hide after 2.8 seconds
-			var t = get_tree().create_timer(2.8)
-			t.timeout.connect(Callable(self, "_hide_inspect_tooltip"))
+func _show_inspect_tooltip(msg: String, pawn_id: int, tile_x: int, tile_y: int) -> void:
+	# Remove existing tip
+	if _inspect_tooltip_node != null and is_instance_valid(_inspect_tooltip_node):
+		_inspect_tooltip_node.queue_free()
+		_inspect_tooltip_node = null
+	var ui_root: Node = get_node_or_null("UI_Viewport")
+	if ui_root == null:
+		return
+	var panel: PanelContainer = PanelContainer.new()
+	panel.name = "InspectTooltip"
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.7)
+	style.border_color = Color(0.8, 0.7, 0.4, 0.9)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	panel.add_theme_stylebox_override("panel", style)
+	var lbl: Label = Label.new()
+	lbl.text = msg + " (tile=%d,%d)" % [tile_x, tile_y]
+	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.add_theme_color_override("font_color", Color(0.94,0.92,0.84))
+	panel.add_child(lbl)
+	ui_root.add_child(panel)
+	panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	panel.position = Vector2(220, 40)
+	_inspect_tooltip_node = panel
+	# Auto-hide after 2.8 seconds
+	var t = get_tree().create_timer(2.8)
+	t.timeout.connect(Callable(self, "_hide_inspect_tooltip"))
 
 
-		func _hide_inspect_tooltip() -> void:
-			if _inspect_tooltip_node != null and is_instance_valid(_inspect_tooltip_node):
-				_inspect_tooltip_node.queue_free()
-			_inspect_tooltip_node = null
+func _hide_inspect_tooltip() -> void:
+	if _inspect_tooltip_node != null and is_instance_valid(_inspect_tooltip_node):
+		_inspect_tooltip_node.queue_free()
+	_inspect_tooltip_node = null
 
 
-		func _ensure_inspect_audio() -> void:
-			if _inspect_audio_player != null and is_instance_valid(_inspect_audio_player):
-				return
-			var gen: AudioStreamGenerator = AudioStreamGenerator.new()
-			gen.mix_rate = 44100
-			gen.buffer_length = 0.5
-			var p: AudioStreamPlayer = AudioStreamPlayer.new()
-			p.name = "InspectAudio"
-			p.stream = gen
-			add_child(p)
-			_inspect_audio_player = p
-			_inspect_audio_playback = p.get_stream_playback()
+func _ensure_inspect_audio() -> void:
+	if _inspect_audio_player != null and is_instance_valid(_inspect_audio_player):
+		return
+	var gen: AudioStreamGenerator = AudioStreamGenerator.new()
+	gen.mix_rate = 44100
+	gen.buffer_length = 0.5
+	var p: AudioStreamPlayer = AudioStreamPlayer.new()
+	p.name = "InspectAudio"
+	p.stream = gen
+	add_child(p)
+	_inspect_audio_player = p
+	_inspect_audio_playback = p.get_stream_playback()
 
 
-		func _play_inspect_tone() -> void:
-			_ensure_inspect_audio()
-			if _inspect_audio_player == null or _inspect_audio_playback == null:
-				return
-			var player: AudioStreamPlayer = _inspect_audio_player
-			var gen: AudioStreamGenerator = player.stream as AudioStreamGenerator
-			var playback: AudioStreamGeneratorPlayback = _inspect_audio_playback
-			var freq: float = 660.0
-			var dur: float = 0.12
-			var sr: int = int(gen.mix_rate)
-			var samples: int = int(float(sr) * dur)
-			player.play()
-			for i in range(samples):
-				var t: float = float(i) / float(sr)
-				var s: float = sin(2.0 * PI * freq * t) * 0.14
-				var frame = AudioFrame.new(Vector2(s, s))
-				playback.push_frame(frame)
+func _play_inspect_tone() -> void:
+	_ensure_inspect_audio()
+	if _inspect_audio_player == null or _inspect_audio_playback == null:
+		return
+	var player: AudioStreamPlayer = _inspect_audio_player
+	var gen: AudioStreamGenerator = player.stream as AudioStreamGenerator
+	var playback: AudioStreamGeneratorPlayback = _inspect_audio_playback
+	var freq: float = 660.0
+	var dur: float = 0.12
+	var sr: int = int(gen.mix_rate)
+	var samples: int = int(float(sr) * dur)
+	player.play()
+	for i in range(samples):
+		var t: float = float(i) / float(sr)
+		var s: float = sin(2.0 * PI * freq * t) * 0.14
+		var frame = AudioFrame(Vector2(s, s))
+		playback.push_frame(frame)
 
 func _flush_world_memory_derivatives() -> void:
 	_world_memory_derivative_flush_queued = false
@@ -2175,76 +2175,76 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
 	match event.keycode:
-		KEY_QUOTELEFT:
+		Key.KEY_QUOTELEFT:
 			_toggle_play_chrome()
-		KEY_G:
+		Key.KEY_G:
 			if _selected_pawn != null and is_instance_valid(_selected_pawn):
 				_camera_follow_selected = not _camera_follow_selected
 				if OS.is_debug_build():
 					print("[Main] Camera follow selection: %s" % _camera_follow_selected)
 			else:
 				_camera_follow_selected = false
-		KEY_EQUAL:
+		Key.KEY_EQUAL:
 			if _hud != null:
 				_hud.toggle_hud_verbose()
-		KEY_KP_ADD:
+		Key.KEY_KP_ADD:
 			if _hud != null:
 				_hud.toggle_hud_verbose()
-		KEY_SPACE:
+		Key.KEY_SPACE:
 			GameManager.toggle_pause()
-		KEY_1:
+		Key.KEY_1:
 			GameManager.set_speed_index(0)
-		KEY_2:
+		Key.KEY_2:
 			GameManager.set_speed_index(1)
-		KEY_3:
+		Key.KEY_3:
 			GameManager.set_speed_index(2)
-		KEY_4:
+		Key.KEY_4:
 			GameManager.set_speed_index(3)
-		KEY_5:
+		Key.KEY_5:
 			GameManager.set_speed_index(4)
-		KEY_6:
+		Key.KEY_6:
 			GameManager.set_speed_index(5)
-		KEY_7:
+		Key.KEY_7:
 			GameManager.set_speed_index(6)
-		KEY_R:
+		Key.KEY_R:
 			if OS.is_debug_build():
 				_reroll_world()
-		KEY_K:
+		Key.KEY_K:
 			_toggle_avatar_panel()
-		KEY_T:
+		Key.KEY_T:
 			_pawn_spawner.print_stats()
-		KEY_J:
+		Key.KEY_J:
 			JobManager.print_debug()
-		KEY_I:
+		Key.KEY_I:
 			_print_stockpile()
-		KEY_D:
+		Key.KEY_D:
 			_toggle_draft_mode()
-		KEY_F5:
+		Key.KEY_F5:
 			_colony_save()
-		KEY_F8:
+		Key.KEY_F8:
 			_colony_load()
-		KEY_F9:
+		Key.KEY_F9:
 			_toggle_observer_hud()
-		KEY_F10:
+		Key.KEY_F10:
 			if _creator_debug_menu != null:
 				_creator_debug_menu.toggle_menu()
-		KEY_F6:
+		Key.KEY_F6:
 			_toggle_focus_inspector()
-		KEY_F11:
+		Key.KEY_F11:
 			if _kernel_diagnostic != null and _kernel_diagnostic.has_method("start_settlement_truth_verification"):
 				_kernel_diagnostic.call("start_settlement_truth_verification")
-		KEY_F12:
+		Key.KEY_F12:
 			_debug_capture_resource_truth()
-		KEY_M:
+		Key.KEY_M:
 			ColonySimServices.cycle_labor_stance()
-		KEY_P:
+		Key.KEY_P:
 			request_incarnation_entry()
-		KEY_BACKSPACE:
+		Key.KEY_BACKSPACE:
 			request_spectator_return()
-		KEY_RETURN:
+		Key.KEY_RETURN:
 			if _incarnation_picker != null and is_instance_valid(_incarnation_picker) and _incarnation_picker.visible:
 				_on_incarnation_entry_confirmed(int(_incarnation_picker.call("get_selected_pawn_id")))
-		KEY_ESCAPE:
+		Key.KEY_ESCAPE:
 			if _creator_debug_menu != null and _creator_debug_menu.visible:
 				_creator_debug_menu.visible = false
 				return
@@ -2266,7 +2266,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				_set_designation_mode(DesignationMode.NONE)
 			elif _selected_pawn != null:
 				_set_selected_pawn(null)
-		KEY_HOME:
+		Key.KEY_HOME:
 			if _camera != null and _camera.has_method("reset_to_world_bounds"):
 				_camera.call("reset_to_world_bounds", _world)
 

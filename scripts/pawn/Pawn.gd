@@ -2456,7 +2456,7 @@ func _emergency_seek_food() -> void:
 	
 	# Look for food in stockpile - use the correct method
 	var stockpile: Stockpile = StockpileManager.find_drop_zone(Item.Type.BERRY, data.tile_pos, _world.pathfinder)
-	if stockpile != null and stockpile.has_food():
+	if stockpile != null and stockpile.has_any_food():
 		_state = State.GOING_TO_EAT
 		if GameManager.verbose_logs():
 			print("[Pawn] %s going to stockpile for emergency food" % data.display_name)

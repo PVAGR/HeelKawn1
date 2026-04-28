@@ -542,6 +542,18 @@ func _update_environmental_neurons() -> void:
 	# Update persistence metrics from PersistenceSystem
 	_update_persistence_neurons(env_neurons)
 
+func get_teaching_priority_weight() -> float:
+	var cult_neurons = neural_world_matrix["cultural_neurons"]
+	var knowledge_scarcity = cult_neurons["knowledge_scarcity"].value
+	var teaching_activity = cult_neurons["teaching_activity"].value
+	
+	# Teaching priority: higher when knowledge is scarce
+	# Returns a weight that can be used to prioritize teaching jobs
+	var priority = knowledge_scarcity * 2.0 + teaching_activity
+	
+	return clamp(priority, 0.0, 2.0)
+
+
 func get_pawn_obedience_weight(pawn_id: int) -> float:
 	if AuthoritySystem == null:
 		return 1.0

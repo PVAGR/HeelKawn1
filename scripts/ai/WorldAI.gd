@@ -331,6 +331,7 @@ func update() -> void:
 	_update_neural_world_matrix()
 	_process_climate_patterns()
 	_check_for_world_events()
+	_generate_neural_network_events()
 	_update_technological_progress()
 	_update_civilization_development()
 	
@@ -1056,6 +1057,63 @@ func _process_climate_patterns() -> void:
 		_trigger_climate_event("sea_level_rise", "Sea level rising")
 	elif climate_data.sea_level < 0.9:
 		_trigger_climate_event("sea_level_fall", "Sea level falling")
+
+func _generate_neural_network_events() -> void:
+	var world_neurons = neural_world_matrix["world_state_neurons"]
+	var civ_neurons = neural_world_matrix["civilization_neurons"]
+	var cult_neurons = neural_world_matrix["cultural_neurons"]
+	var env_neurons = neural_world_matrix["environmental_neurons"]
+	
+	# Generate events based on neural network state
+	var collapse_risk = world_neurons["collapse_risk"].value
+	var knowledge_scarcity = cult_neurons["knowledge_scarcity"].value
+	var authority_stability = civ_neurons["authority_stability"].value
+	var historical_layering = env_neurons["historical_layering"].value
+	
+	# Generate collapse warning event
+	if collapse_risk > 0.8:
+		var event = WorldEvent.new(
+			"collapse_warning",
+			"Neural network detects imminent collapse risk",
+			8
+		)
+		world_events.append(event)
+		if GameManager.verbose_logs():
+			print("[WorldAI] Generated event: collapse_warning")
+	
+	# Generate knowledge crisis event
+	if knowledge_scarcity > 0.8:
+		var event = WorldEvent.new(
+			"knowledge_crisis",
+			"Neural network detects critical knowledge loss",
+			6
+		)
+		world_events.append(event)
+		if GameManager.verbose_logs():
+			print("[WorldAI] Generated event: knowledge_crisis")
+	
+	# Generate authority crisis event
+	if authority_stability < 0.3:
+		var event = WorldEvent.new(
+			"authority_crisis",
+			"Neural network detects authority breakdown",
+			7
+		)
+		world_events.append(event)
+		if GameManager.verbose_logs():
+			print("[WorldAI] Generated event: authority_crisis")
+	
+	# Generate historical discovery event
+	if historical_layering > 0.8:
+		var event = WorldEvent.new(
+			"historical_discovery",
+			"Neural network identifies significant historical pattern",
+			5
+		)
+		world_events.append(event)
+		if GameManager.verbose_logs():
+			print("[WorldAI] Generated event: historical_discovery")
+
 
 func _check_for_world_events() -> void:
 	# Check for potential world events based on current conditions

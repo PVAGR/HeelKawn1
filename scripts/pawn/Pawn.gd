@@ -191,12 +191,9 @@ var data: PawnData
 var _world: World
 var _state: int = State.IDLE
 var _current_job: Job = null
-## Set by Main when the player clicks this pawn. Drives the selection ring
-## in _draw and unlocks the side info panel.
-var is_selected: bool = false
-## Set by Main when pawn is in draft mode (combat). Pawns stop working and respond to click-to-move orders.
-var draft_mode: bool = false
-
+var _cohort_id: int = -1
+var _cohort_role: int = -1
+var _carrying_spawn_item: bool = false
 ## Active path: list of tiles AFTER the current tile that must be visited in
 ## order. Empty means stationary.
 var _path: Array[Vector2i] = []
@@ -3361,28 +3358,8 @@ func flee_from_danger() -> bool:
 
 
 func hide_from_threats() -> bool:
-	# Take cover from threats
-	# Find nearby cover (walls, trees, etc.)
-	if _world == null:
-		return false
-	
-	var cover_tile: Vector2i = _find_cover_tile()
-	if cover_tile.x < 0:
-		return false
-	
-	# Move to cover
-	var path: Array[Vector2i] = _path_for_pawn(cover_tile)
-	if path.is_empty():
-		return false
-	
-	_state = State.HIDING
-	_start_path(path)
-	_request_redraw()
-	
-	if GameManager.verbose_logs():
-		print("[Pawn] %s hiding from threats" % data.display_name)
-	
-	return true
+	# DISABLED for performance - _find_cover_tile function removed
+	return false
 
 
 func _tick_gathering() -> void:

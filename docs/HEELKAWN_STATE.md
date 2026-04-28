@@ -73,6 +73,7 @@ Do not merge heroic/named-arc assumptions into kernel or WorldMemory semantics u
 
 ## NEXT TARGET
 
+- Infinite architecture blueprint and implementation order: [docs/HEELKAWN_INFINITE_ARCHITECTURE.md](HEELKAWN_INFINITE_ARCHITECTURE.md)
 - Cultural architectural styles
 - Player-readable meaning refinement (audio + settlement identity depth, no text overlay)
 - Wildlife HUD trend validation + Phase 4 rebirth threshold tuning passes

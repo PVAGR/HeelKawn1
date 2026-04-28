@@ -4257,30 +4257,7 @@ func _toggle_focus_inspector() -> void:
 
 
 func _build_focus_snapshot(tick: int) -> Dictionary:
-	var focus: Dictionary = _resolve_focus_target()
-	var focus_type: String = str(focus.get("type", "NONE"))
-	var main_lines: PackedStringArray = PackedStringArray()
-	var title: String = "FOCUS INSPECTOR"
-	if focus_type == "PAWN":
-		title = "FOCUS: PAWN"
-		main_lines = _focus_lines_for_pawn(focus)
-	elif focus_type == "SETTLEMENT":
-		title = "FOCUS: SETTLEMENT"
-		main_lines = _focus_lines_for_settlement(focus)
-	elif focus_type == "TILE":
-		title = "FOCUS: TILE"
-		main_lines = _focus_lines_for_tile(focus)
-	else:
-		main_lines = PackedStringArray([
-			"NO FOCUS",
-			"Move cursor over a pawn, settlement, or tile",
-		])
-	return {
-		"title": title,
-		"focus_type": focus_type,
-		"main_lines": main_lines,
-		"footer": "Tick %d | source: %s" % [tick, str(focus.get("source", "none"))],
-	}
+	return ObservationAPI.build_focus_snapshot_from_focus(_resolve_focus_target(), tick)
 
 
 func _resolve_focus_target() -> Dictionary:

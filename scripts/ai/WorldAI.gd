@@ -337,6 +337,9 @@ func update() -> void:
 	# Check collapse risk and trigger emergency behaviors
 	_check_collapse_emergency()
 	
+	# Learn from recent game events
+	_learn_from_game_events()
+	
 	# Process neural network evolution
 	_update_neural_interconnections()
 	_process_neural_activations()
@@ -372,6 +375,64 @@ func _trigger_settlement_emergency_responses(collapse_risk: float) -> void:
 			# Moderate collapse risk - warning mode
 			if settlement_ai.has_method("trigger_emergency_mode"):
 				settlement_ai.trigger_emergency_mode("moderate_collapse_risk")
+
+
+func _learn_from_game_events() -> void:
+	if WorldMemory == null:
+		return
+	
+	# Get recent events from WorldMemory
+	var events: Array = WorldMemory.to_save_dict().get("events", [])
+	var current_tick: int = GameManager.tick_count
+	var recent_events: Array = []
+	
+	# Get events from last 1000 ticks
+	for event in events:
+		if event.get("tick", 0) > current_tick - 1000:
+			recent_events.append(event)
+	
+	# Learn from each event type
+	for event in recent_events:
+		var event_type: String = str(event.get("type", ""))
+		_learn_from_event_type(event_type, event)
+
+
+func _learn_from_event_type(event_type: String, event: Dictionary) -> void:
+	var world_neurons = neural_world_matrix["world_state_neurons"]
+	var civ_neurons = neural_world_matrix["civilization_neurons"]
+	var cult_neurons = neural_world_matrix["cultural_neurons"]
+	var env_neurons = neural_world_matrix["environmental_neurons"]
+	
+	match event_type:
+		"teaching_success":
+			# Teaching success strengthens knowledge retention neuron
+			cult_neurons["knowledge_retention"].value = clamp(cult_neurons["knowledge_retention"].value + 0.01, 0.0, 1.0)
+		"teaching_failure":
+			# Teaching failure weakens knowledge retention neuron
+			cult_neurons["knowledge_retention"].value = clamp(cult_neurons["knowledge_retention"].value - 0.005, 0.0, 1.0)
+		"settlement_collapse":
+			# Collapse increases collapse risk neuron
+			world_neurons["collapse_risk"].value = clamp(world_neurons["collapse_risk"].value + 0.05, 0.0, 1.0)
+		"collapse_stage_transition":
+			# Stage transition adjusts collapse risk based on direction
+			var to_stage = event.get("to_stage", 0)
+			if to_stage > 0:
+				world_neurons["collapse_risk"].value = clamp(world_neurons["collapse_risk"].value + 0.02, 0.0, 1.0)
+		"knowledge_loss":
+			# Knowledge loss increases knowledge scarcity
+			cult_neurons["knowledge_scarcity"].value = clamp(cult_neurons["knowledge_scarcity"].value + 0.01, 0.0, 1.0)
+		"authority_succession":
+			# Succession affects authority stability
+			civ_neurons["authority_stability"].value = clamp(civ_neurons["authority_stability"].value + 0.01, 0.0, 1.0)
+		"organization_action":
+			# Successful organization strengthens governance
+			civ_neurons["governance_complexity"].value = clamp(civ_neurons["governance_complexity"].value + 0.005, 0.0, 1.0)
+		"pawn_death":
+			# Death affects trust and social complexity
+			world_neurons["trust_level"].value = clamp(world_neurons["trust_level"].value - 0.005, 0.0, 1.0)
+		"entity_visitation":
+			# Visitation strengthens historical layering
+			env_neurons["historical_layering"].value = clamp(env_neurons["historical_layering"].value + 0.002, 0.0, 1.0)
 
 
 func _check_collapse_emergency() -> void:

@@ -410,24 +410,24 @@ func _test_ai_agent_manager_initialization() -> Dictionary:
 		"errors": []
 	}
 
-			if not AIAgentManager:
-			test_result.status = "failed"
-			test_result.errors.append("AIAgentManager not found")
-			return test_result
+	if not AIAgentManager:
+		test_result.status = "failed"
+		test_result.errors.append("AIAgentManager not found")
+		return test_result
 
-		# Test civilization mode
-		test_result.details["civilization_mode"] = AIAgentManager.civilization_mode
+	# Test civilization mode
+	test_result.details["civilization_mode"] = AIAgentManager.civilization_mode
 
-		# Test max agents
-		test_result.details["max_agents"] = AIAgentManager.max_agents
+	# Test max agents
+	test_result.details["max_agents"] = AIAgentManager.max_agents
 
-		# Test update frequency
-		test_result.details["update_frequency"] = AIAgentManager.update_frequency
+	# Test update frequency
+	test_result.details["update_frequency"] = AIAgentManager.update_frequency
 
-		# Test enabled status
-		test_result.details["enabled"] = AIAgentManager.enabled
+	# Test enabled status
+	test_result.details["enabled"] = AIAgentManager.enabled
 
-		print("[NeuralIntegrationTester] ✓ AI Agent Manager initialization test passed")
+	print("[NeuralIntegrationTester] ✓ AI Agent Manager initialization test passed")
 
 	return test_result
 

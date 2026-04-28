@@ -2771,17 +2771,15 @@ func _decay_needs() -> void:
 	# if GameManager.tick_count % GameManager.TICKS_PER_DAY == 0:
 	# 	data.decay_unused_skills()
 	
-	# Stage 3: Track clan labor contributions
-	if _state == State.WORKING and _current_job != null:
-		var job_type_str: String = Job.describe_type(_current_job.type).to_lower()
-		contribute_to_clan_labor(job_type_str)
-		
-		# Stage 4: Track settlement contributions
-		if data.settlement_id != -1:
-			if _current_job.type == Job.Type.FORAGE or _current_job.type == Job.Type.HUNT:
-				record_food_production(1)
-			elif _current_job.type == Job.Type.BUILD_BED or _current_job.type == Job.Type.BUILD_WALL or _current_job.type == Job.Type.BUILD_DOOR:
-				record_building_construction()
+	# Stage 3-4: Track clan/settlement contributions - DISABLED for performance
+	# if _state == State.WORKING and _current_job != null:
+	# 	var job_type_str: String = Job.describe_type(_current_job.type).to_lower()
+	# 	contribute_to_clan_labor(job_type_str)
+	# 	if data.settlement_id != -1:
+	# 		if _current_job.type == Job.Type.FORAGE or _current_job.type == Job.Type.HUNT:
+	# 			record_food_production(1)
+	# 		elif _current_job.type == Job.Type.BUILD_BED or _current_job.type == Job.Type.BUILD_WALL or _current_job.type == Job.Type.BUILD_DOOR:
+	# 			record_building_construction()
 	
 	# Crisis behavior: very low mood causes pawns to refuse work (strike)
 	var crisis_level: float = data.get_crisis_level()

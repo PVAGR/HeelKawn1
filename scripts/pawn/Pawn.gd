@@ -2330,79 +2330,13 @@ func _maybe_start_sleeping() -> bool:
 
 ## Check if pawn can teach knowledge to nearby pawn
 func _maybe_start_teaching() -> bool:
-	if KnowledgeSystem == null:
-		return false
-	
-	var my_id: int = int(data.id)
-	var my_knowledge = KnowledgeSystem.get_pawn_knowledge(my_id)
-	
-	if my_knowledge.is_empty():
-		return false  # Nothing to teach
-	
-	# Find nearby pawn who lacks knowledge we have
-	var nearby_distance: float = 50.0
-	for pawn in get_tree().get_nodes_in_group("pawns"):
-		if pawn == self or not is_instance_valid(pawn):
-			continue
-		var dist: float = position.distance_to(pawn.position)
-		if dist > nearby_distance:
-			continue
-		
-		var their_id: int = int(pawn.data.id)
-		var their_knowledge = KnowledgeSystem.get_pawn_knowledge(their_id)
-		
-		# Find a knowledge type we have but they don't
-		for ktype in my_knowledge:
-			if not their_knowledge.has(ktype):
-				# Start teaching this knowledge
-				_teaching_target = pawn
-				_teaching_knowledge_type = ktype
-				_teaching_ticks_left = 10  # Teaching takes 10 ticks
-				_state = State.TEACHING
-				if GameManager.verbose_logs():
-					print("[Pawn] %s teaching %s knowledge type %d" % [data.display_name, pawn.data.display_name, ktype])
-				return true
-	
+	# DISABLED for performance - iterates through all pawns
 	return false
 
 
 ## Check if pawn can challenge nearby pawn's authority
 func _maybe_start_challenge() -> bool:
-	if AuthoritySystem == null:
-		return false
-	
-	var my_id: int = int(data.id)
-	
-	# Find nearby pawn with higher authority in some context
-	var nearby_distance: float = 50.0
-	for pawn in get_tree().get_nodes_in_group("pawns"):
-		if pawn == self or not is_instance_valid(pawn):
-			continue
-		var dist: float = position.distance_to(pawn.position)
-		if dist > nearby_distance:
-			continue
-		
-		var their_id: int = int(pawn.data.id)
-		
-		# Check each authority context
-		for context in [AuthoritySystem.AuthorityContext.CIVIL, AuthoritySystem.AuthorityContext.MILITARY, AuthoritySystem.AuthorityContext.RELIGIOUS, AuthoritySystem.AuthorityContext.KNOWLEDGE]:
-			var my_auth: float = AuthoritySystem.get_authority_level(my_id, context)
-			var their_auth: float = AuthoritySystem.get_authority_level(their_id, context)
-			
-			# Challenge if they have significantly more authority (0.2 difference)
-			# and we're not already in conflict with them
-			if their_auth > my_auth + 0.2:
-				var is_in_conflict: bool = AuthoritySystem.get_conflict_state(my_id, their_id) != AuthoritySystem.ConflictState.NONE
-				if not is_in_conflict:
-					# Start challenge
-					_challenge_target = pawn
-					_challenge_context = context
-					_challenge_ticks_left = 8  # Challenge takes 8 ticks
-					_state = State.CHALLENGE
-					if GameManager.verbose_logs():
-						print("[Pawn] %s challenging %s authority in context %d" % [data.display_name, pawn.data.display_name, context])
-					return true
-	
+	# DISABLED for performance - iterates through all pawns
 	return false
 
 
@@ -2812,33 +2746,11 @@ func teach_skill(target_pawn: Pawn, skill: int) -> bool:
 	return true
 
 
-func inherit_knowledge(parent_a_id: int, parent_b_id: int) -> void:
+func _inherit_knowledge_from_parents(parent_a_id: int, parent_b_id: int) -> void:
+	# DISABLED for performance - iterates through all pawns
 	# Children inherit some knowledge from parents
 	# This is called during pawn creation
-	
-	# Find parent pawns
-	var parent_a: Pawn = null
-	var parent_b: Pawn = null
-	
-	for pawn in get_tree().get_nodes_in_group("pawns"):
-		if int(pawn.data.id) == parent_a_id:
-			parent_a = pawn
-		elif int(pawn.data.id) == parent_b_id:
-			parent_b = pawn
-	
-	# Inherit 10% of parent XP in each skill
-	if parent_a != null:
-		for skill in parent_a.data.skill_xp:
-			var inherited_xp: float = parent_a.data.skill_xp[skill] * 0.1
-			data.skill_xp[skill] = data.skill_xp.get(skill, 0.0) + inherited_xp
-	
-	if parent_b != null:
-		for skill in parent_b.data.skill_xp:
-			var inherited_xp: float = parent_b.data.skill_xp[skill] * 0.1
-			data.skill_xp[skill] = data.skill_xp.get(skill, 0.0) + inherited_xp
-	
-	# Update level based on inherited XP
-	data._check_level_up()
+	return
 
 
 func _update_perception() -> void:
@@ -2900,34 +2812,8 @@ func _get_tiles_in_radius(radius: float) -> Array:
 
 
 func assess_risk(tile: Vector2i) -> float:
-	# Assess danger level of a tile (0-100)
-	var risk: float = 0.0
-	
-	if _world == null:
-		return risk
-	
-	# Check for nearby enemies
-	for enemy in get_tree().get_nodes_in_group("enemies"):
-		if not is_instance_valid(enemy):
-			continue
-		var enemy_tile: Vector2i = _world.world_to_tile(enemy.position)
-		var dist: float = tile.distance_squared_to(enemy_tile)
-		if dist < 25.0:  # Within 5 tiles
-			risk += 30.0
-	
-	# Check for dangerous terrain
-	var feature: int = _world.data.get_feature(tile.x, tile.y)
-	# Note: MOUNTAIN not in TileFeature.Type, checking for impassable features instead
-	if feature == TileFeature.Type.WALL:
-		risk += 10.0
-	
-	# Check location memory
-	var tile_key: String = "%d,%d" % [tile.x, tile.y]
-	if tile_key in data.location_memory:
-		var memory: Dictionary = data.location_memory[tile_key]
-		risk += memory.get("danger_level", 0.0)
-	
-	return clamp(risk, 0.0, 100.0)
+	# DISABLED for performance - iterates through all enemies
+	return 0.0
 
 
 func remember_resources(tile: Vector2i, resource_type: String) -> void:

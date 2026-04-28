@@ -81,7 +81,7 @@ func _on_game_tick(tick: int) -> void:
 		6:
 			_trigger_resource_discovery(tick)
 		7:
-			_trigger_regional_truce_talks(tick)
+			_trigger_global_truce_talks(tick)
 
 
 func _deterministic_event_index(tick: int) -> int:
@@ -365,7 +365,7 @@ func _trigger_resource_discovery(tick: int) -> void:
 		{"resource": resource, "economic_boost": 0.2}
 	)
 
-func _trigger_regional_truce_talks(tick: int) -> void:
+func _trigger_global_truce_talks(tick: int) -> void:
 	var factions: Array[String] = [
 		"Northern Kingdom",
 		"Southern Empire",

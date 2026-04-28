@@ -1829,7 +1829,7 @@ func _play_inspect_tone() -> void:
 	for i in range(samples):
 		var t: float = float(i) / float(sr)
 		var s: float = sin(2.0 * PI * freq * t) * 0.14
-		var frame = AudioFrame.new()
+		var frame = gen.get_frame()
 		frame.left = s
 		frame.right = s
 		playback.push_frame(frame)

@@ -1,0 +1,28 @@
+[gd_scene load_steps=3 format=3 uid="uid://map_mode_overlay"]
+
+[ext_resource type="Script" path="res://scripts/ui/MapModeOverlay.gd" id="1_map_overlay"]
+
+[node name="MapModeOverlay" type="Node"]
+script = ExtResource("1_map_overlay")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = -100.0
+offset_right = 200.0
+offset_bottom = -10.0
+
+[node name="ModeButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Mode: Regions (TAB)"
+
+[node name="ToggleButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "Hide Map (M)"
+
+[node name="InfoLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Regions: Shows 16x16 region boundaries"
+autowrap_mode = 3

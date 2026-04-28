@@ -120,6 +120,7 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _hud: ColonyHUD = $UI_Viewport/ColonyHUD
 @onready var _observer_hud: ObserverHUD = $UI_Viewport/ObserverHUD
 @onready var _focus_inspector: FocusInspector = $UI_Viewport/FocusInspector
+@onready var _map_mode_overlay: Node = $MapModeOverlay
 @onready var _creator_debug_menu: CreatorDebugMenu = $UI_Viewport/CreatorDebugMenu
 @onready var _toolbar: BuildToolbar = $UI_Viewport/BuildToolbar
 @onready var _info_panel: PawnInfoPanel = $UI_Viewport/PawnInfoPanel
@@ -326,6 +327,9 @@ func _ready() -> void:
 	_kernel_diagnostic.name = "KernelDiagnostic"
 	add_child(_kernel_diagnostic)
 	_init_ambient_audio()
+	# Initialize Phase 5 Map Mode overlay
+	if _map_mode_overlay != null and _map_mode_overlay.has_method("initialize"):
+		_map_mode_overlay.call("initialize", _world, _camera)
 	# React to mining progress: when a wall comes down or an ore is cleared,
 	# new ores can become reachable and we may want to queue the next tunnel.
 	JobManager.job_completed.connect(_on_job_completed)
@@ -1826,9 +1830,10 @@ func _play_inspect_tone() -> void:
 		var t: float = float(i) / float(sr)
 		var s: float = sin(2.0 * PI * freq * t) * 0.14
 		var frame = AudioFrame.new()
-	frame.left = s
-	frame.right = s
+		frame.left = s
+		frame.right = s
 		playback.push_frame(frame)
+
 
 func _flush_world_memory_derivatives() -> void:
 	_world_memory_derivative_flush_queued = false

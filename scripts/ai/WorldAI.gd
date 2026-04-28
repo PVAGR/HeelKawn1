@@ -158,7 +158,9 @@ func _create_world_state_neurons() -> Dictionary:
 		"trust_level": {"value": 1.0, "activation": 0.0, "connections": []},
 		"authority_stability": {"value": 1.0, "activation": 0.0, "connections": []},
 		"knowledge_retention": {"value": 1.0, "activation": 0.0, "connections": []},
-		"collapse_risk": {"value": 0.0, "activation": 0.0, "connections": []}
+		"collapse_risk": {"value": 0.0, "activation": 0.0, "connections": []},
+		"regional_meaning_density": {"value": 0.0, "activation": 0.0, "connections": []},
+		"settlement_meaning_depth": {"value": 0.0, "activation": 0.0, "connections": []}
 	}
 
 func _create_environmental_neurons() -> Dictionary:
@@ -390,6 +392,25 @@ func _trigger_emergency_mode(emergency_type: String) -> void:
 				print("[WorldAI] LOW COLLAPSE RISK - Alert mode activated")
 
 
+func _update_world_meaning_neurons(world_neurons: Dictionary) -> void:
+	if WorldMeaning == null:
+		return
+	
+	# Get world meaning metrics
+	var region_count: int = WorldMeaning.get_tracked_region_count()
+	var settlement_count: int = WorldMeaning.get_tracked_settlement_count()
+	
+	# Regional meaning density: regions with meaning / total possible regions
+	world_neurons["regional_meaning_density"].value = float(region_count) / 100.0
+	
+	# Settlement meaning depth: settlements with meaning / active settlements
+	var active_settlement_count: int = active_settlements.size()
+	if active_settlement_count > 0:
+		world_neurons["settlement_meaning_depth"].value = float(settlement_count) / float(active_settlement_count)
+	else:
+		world_neurons["settlement_meaning_depth"].value = 0.0
+
+
 func _update_collapse_neurons(world_neurons: Dictionary) -> void:
 	if CollapseSystem == null:
 		return
@@ -430,6 +451,9 @@ func _update_world_state_neurons() -> void:
 	
 	# Update collapse metrics from CollapseSystem
 	_update_collapse_neurons(world_neurons)
+	
+	# Update world meaning metrics from WorldMeaning
+	_update_world_meaning_neurons(world_neurons)
 	
 	# Update environmental health
 	world_neurons["environmental_health"].value = biodiversity_index * environmental_stability

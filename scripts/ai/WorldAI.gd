@@ -542,6 +542,33 @@ func _update_environmental_neurons() -> void:
 	# Update persistence metrics from PersistenceSystem
 	_update_persistence_neurons(env_neurons)
 
+func get_expansion_priority_weight(expansion_type: String) -> float:
+	var env_neurons = neural_world_matrix["environmental_neurons"]
+	var ruin_density = env_neurons["ruin_density"].value
+	var grave_density = env_neurons["grave_density"].value
+	var historical_layering = env_neurons["historical_layering"].value
+	
+	# Expansion priority based on persistence (ruins, graves, history)
+	match expansion_type:
+		"ruin_exploration":
+			# Prioritize exploring areas with high ruin density
+			return ruin_density * 2.0 + historical_layering
+		"grave_respect":
+			# Prioritize respecting areas with high grave density
+			return grave_density * 2.0
+		"historical_preservation":
+			# Prioritize preserving areas with high historical layering
+			return historical_layering * 2.0
+		"new_settlement":
+			# Prioritize new settlements in areas with low historical layering (clean slate)
+			return (1.0 - historical_layering) * 2.0
+		"rebuilding":
+			# Prioritize rebuilding near ruins
+			return ruin_density * 2.5
+		_:
+			return 1.0
+
+
 func get_settlement_goal_priority(goal_type: String) -> float:
 	var world_neurons = neural_world_matrix["world_state_neurons"]
 	var regional_density = world_neurons["regional_meaning_density"].value

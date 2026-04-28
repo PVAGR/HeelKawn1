@@ -640,6 +640,12 @@ func _path_for_pawn(to: Vector2i) -> Array[Vector2i]:
 	return _world.pathfinder.find_path_pawn_historic_aversion(data.tile_pos, to)
 
 
+func _request_redraw() -> void:
+	# Throttle redraws to every 3 ticks to reduce rendering overhead
+	if GameManager.tick_count % 3 == 0:
+		queue_redraw()
+
+
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 	_sfx = AudioStreamPlayer2D.new()
@@ -648,8 +654,7 @@ func _ready() -> void:
 	add_child(_sfx)
 	
 	# KnowledgeSystem: grant initial knowledge based on profession
-	if KnowledgeSystem != null and data != null:
-		_grant_initial_knowledge()
+	_grant_initial_knowledge()
 
 
 ## Called by PawnSpawner immediately after instantiation.
@@ -660,14 +665,18 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	_state = State.IDLE
 	_clear_path()
 	_reserved_bed = Vector2i(-1, -1)
-	# New spawns: align fractional age with integer `age` (loads set age_years in PawnData).
-	if data != null and data.age_years < 0.0001 and data.age > 0:
-		data.age_years = float(data.age)
+	_target_zone = null
+	_cohort_id = -1
+	_cohort_role = -1
+	_last_recruitment_job_type = -1
+	_next_reproduction_tick = GameManager.tick_count + randi_range(1000, 5000)
+	_carrying_spawn_item = false
+	# Load saved age as years for display
+	data.age_years = float(data.age)
 	_clear_cohort_state()
 	add_to_group("pawns")
 	refresh_inherited_cultural_reputation()
-	_grant_initial_knowledge()
-	queue_redraw()
+	_request_redraw()
 
 
 ## Re-read the spawn tile’s [CulturalMemory] entry (e.g. after load once ruins are applied). Does not run every tick.
@@ -718,15 +727,15 @@ func draft_goto(world_tile: Vector2i) -> void:
 	_state = State.DRAFT_WALK
 	if data.tile_pos == world_tile:
 		_state = State.IDLE
-		queue_redraw()
+		_request_redraw()
 		return
 	var path: Array[Vector2i] = _path_for_pawn(world_tile)
 	if path.is_empty():
 		_state = State.IDLE
-		queue_redraw()
+		_request_redraw()
 		return
 	_start_path(path)
-	queue_redraw()
+	_request_redraw()
 
 
 ## Tick-safe one-tile move used by deterministic player input queue.
@@ -774,7 +783,7 @@ func _perform_presence_action() -> void:
 	})
 	if GameManager.verbose_logs():
 		print("[Pawn] %s grounds themselves at region=%d state=%s (mood=%.1f)" % [data.display_name, rk, settlement_state, data.mood])
-	queue_redraw()
+	_request_redraw()
 
 
 ## Player-local inspect action: records a local inspection event and returns true if performed.
@@ -812,7 +821,7 @@ func _perform_inspect_action() -> void:
 	# Record ephemeral inspect message for immediate HUD feedback
 	_last_inspect_msg = "%s — %s" % [meaning_label, (", ".join(tags) if tags.size() > 0 else "no notable tags")]
 	_last_inspect_tick = GameManager.tick_count
-	queue_redraw()
+	_request_redraw()
 
 
 ## Player interaction: teach knowledge to nearby pawn
@@ -887,7 +896,7 @@ func nudge_if_standing_on_solid() -> void:
 	position = _world.tile_to_world(dest)
 	_target_tile = dest
 	_target_world_pos = position
-	queue_redraw()
+	_request_redraw()
 
 
 ## Evict a pawn standing *on* `stand_tile` to any adjacent walkable cell (used
@@ -918,7 +927,7 @@ func evict_to_neighbor_of_tile(stand_tile: Vector2i) -> void:
 	position = _world.tile_to_world(dest)
 	_target_tile = dest
 	_target_world_pos = position
-	queue_redraw()
+	_request_redraw()
 
 
 ## World/navigation: tiles changed (walls, doors, mining). Re-nudge, then
@@ -1043,11 +1052,11 @@ func _on_path_complete() -> void:
 	match _state:
 		State.DRAFT_WALK:
 			_state = State.IDLE
-			queue_redraw()
+			_request_redraw()
 		State.WALKING_TO_JOB:
 			if _current_job != null and data.tile_pos == _current_job.work_tile:
 				_state = State.WORKING
-				queue_redraw()
+				_request_redraw()
 			else:
 				_unclaim_current_job()
 		State.HAULING:
@@ -1728,7 +1737,7 @@ func _walk_to_work_tile(job: Job) -> void:
 	if data.tile_pos == job.work_tile:
 		_clear_path()
 		_state = State.WORKING
-		queue_redraw()
+		_request_redraw()
 		return
 	var path: Array[Vector2i] = _path_for_pawn(job.work_tile)
 	if path.is_empty():
@@ -1736,7 +1745,7 @@ func _walk_to_work_tile(job: Job) -> void:
 		return
 	_state = State.WALKING_TO_JOB
 	_start_path(path)
-	queue_redraw()
+	_request_redraw()
 
 
 func _return_trade_cargo_to_source_if_any(j: Job) -> void:
@@ -1774,7 +1783,7 @@ func _complete_trade_pickup() -> void:
 	data.carrying = job.trade_item
 	data.carrying_qty = taken
 	_begin_haul_to_forced_zone(to_sp)
-	queue_redraw()
+	_request_redraw()
 
 
 func _begin_haul_to_forced_zone(sp: Stockpile) -> void:
@@ -1794,7 +1803,7 @@ func _begin_haul_to_forced_zone(sp: Stockpile) -> void:
 		return
 	_state = State.HAULING
 	_start_path(path2)
-	queue_redraw()
+	_request_redraw()
 
 
 # ==================== material fetch (build jobs) ====================
@@ -1823,7 +1832,7 @@ func _begin_fetching_material(item_type: int, qty: int) -> void:
 		return
 	_state = State.FETCHING_MATERIAL
 	_start_path(path)
-	queue_redraw()
+	_request_redraw()
 
 
 ## Called when the FETCHING_MATERIAL walk completes. Take the materials out
@@ -1882,7 +1891,7 @@ func _pickup_material(item_type: int, qty: int) -> void:
 		data.carrying = item_type
 		data.carrying_qty = taken
 	_target_zone = null
-	queue_redraw()
+	_request_redraw()
 	if _current_job != null:
 		_walk_to_work_tile(_current_job)
 	else:
@@ -2014,7 +2023,7 @@ func _complete_current_job() -> void:
 	_current_job = null
 	_state = State.IDLE   # reset before transitioning; _begin_haul will set it
 	_clear_path()
-	queue_redraw()
+	_request_redraw()
 	# Harvest jobs put a fresh item in the pawn's hands -- haul it to the stockpile.
 	# Build jobs don't produce anything haulable.
 	if produced_type != Item.Type.NONE:
@@ -2080,7 +2089,7 @@ func _reset_to_idle() -> void:
 	_target_zone = null
 	_state = State.IDLE
 	_clear_path()
-	queue_redraw()
+	_request_redraw()
 
 
 func release_job_if_any() -> void:
@@ -2138,7 +2147,7 @@ func _begin_haul_to_stockpile() -> void:
 	_next_haul_retry_tick = 0
 	_state = State.HAULING
 	_start_path(path)
-	queue_redraw()
+	_request_redraw()
 	if GameManager.verbose_logs():
 		print("[Pawn] %s hauling %s -> zone %s (%d,%d), path_len=%d, from (%d,%d)" % [
 			data.display_name, Item.name_for(data.carrying),
@@ -2212,7 +2221,7 @@ func _deposit_at_stockpile() -> void:
 	_current_job = null
 	_state = State.IDLE
 	_clear_path()
-	queue_redraw()
+	_request_redraw()
 
 
 # ==================== eating ====================
@@ -2241,7 +2250,7 @@ func _begin_going_to_eat(sp: Stockpile) -> void:
 		return
 	_state = State.GOING_TO_EAT
 	_start_path(path)
-	queue_redraw()
+	_request_redraw()
 
 
 func _begin_eating() -> void:
@@ -2256,7 +2265,7 @@ func _begin_eating() -> void:
 	_target_zone = sp
 	_state = State.EATING
 	_eat_ticks_left = EAT_TICKS
-	queue_redraw()
+	_request_redraw()
 
 
 func _finish_eating() -> void:
@@ -2348,7 +2357,7 @@ func _try_walk_to_bed() -> bool:
 		return false
 	_state = State.GOING_TO_BED
 	_start_path(path)
-	queue_redraw()
+	_request_redraw()
 	return true
 
 
@@ -2363,7 +2372,7 @@ func _arrive_at_bed() -> void:
 func _begin_sleeping() -> void:
 	_state = State.SLEEPING
 	_clear_path()
-	queue_redraw()
+	_request_redraw()
 	var on_bed: bool = _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed
 	var where: String = " in a bed" if on_bed else ""
 	if GameManager.verbose_logs():
@@ -2418,7 +2427,7 @@ func _eat_from_hand() -> void:
 		print("[Pawn] %s ate 1 %s FROM HAND (emergency, +%.0f hunger -> %.1f, mood %.1f)" % [
 			data.display_name, Item.name_for(food_type), gain, data.hunger, data.mood
 		])
-	queue_redraw()
+	_request_redraw()
 
 
 # ==================== needs ====================
@@ -3342,7 +3351,7 @@ func flee_from_danger() -> bool:
 	
 	_state = State.FLEEING
 	_start_path(path)
-	queue_redraw()
+	_request_redraw()
 	
 	if GameManager.verbose_logs():
 		print("[Pawn] %s fleeing from danger" % data.display_name)
@@ -3367,7 +3376,7 @@ func hide_from_threats() -> bool:
 	
 	_state = State.HIDING
 	_start_path(path)
-	queue_redraw()
+	_request_redraw()
 	
 	if GameManager.verbose_logs():
 		print("[Pawn] %s hiding from threats" % data.display_name)

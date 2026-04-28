@@ -111,27 +111,29 @@ func set_designation_mode(label: String) -> void:
 # ==================== refresh hooks ====================
 
 func _on_tick(tick: int) -> void:
-	if tick % WILDLIFE_SAMPLE_EVERY_TICKS == 0:
-		_sample_wildlife(tick)
-		_hud_dirty = true
-	# Increased refresh stride to reduce HUD update frequency
-	var refresh_stride: int = 60  # Always refresh every 60 ticks (1 second at 1x)
-	var coarse: int = 120  # Skip even more at high speeds
+	# DISABLED wildlife sampling for performance
+	# if tick % WILDLIFE_SAMPLE_EVERY_TICKS == 0:
+	# 	_sample_wildlife(tick)
+	# 	_hud_dirty = true
+	
+	# Aggressively increased refresh stride to reduce HUD update frequency
+	var refresh_stride: int = 120  # Refresh every 120 ticks (2 seconds at 1x)
+	var coarse: int = 240  # Skip even more at high speeds
 	if GameManager.game_speed >= 1024.0:
+		refresh_stride = 240
+		coarse = 480
+	elif GameManager.game_speed >= 256.0:
+		refresh_stride = 180
+		coarse = 360
+	elif GameManager.game_speed >= 64.0:
 		refresh_stride = 120
 		coarse = 240
-	elif GameManager.game_speed >= 256.0:
+	elif GameManager.game_speed >= 16.0:
 		refresh_stride = 90
 		coarse = 180
-	elif GameManager.game_speed >= 64.0:
+	elif GameManager.game_speed >= 4.0:
 		refresh_stride = 60
 		coarse = 120
-	elif GameManager.game_speed >= 16.0:
-		refresh_stride = 45
-		coarse = 90
-	elif GameManager.game_speed >= 4.0:
-		refresh_stride = 30
-		coarse = 60
 	if tick % coarse != 0 and not _hud_dirty:
 		return
 	if tick % refresh_stride == 0:

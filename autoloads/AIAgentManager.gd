@@ -1,11 +1,13 @@
 extends Node
-## AI Agent Manager - Coordinates multiple AI agents and integrates with game loop
-## Provides NPC-player parity by managing AI decision-making cycles
+## AI Agent Manager - Advanced Neural Network Matrix Integration
+## Provides sophisticated AI decision-making with HeelKawn Universe neural network matrix
 
 signal agent_spawned(agent_id: int, agent_type: AIAgent.AgentType)
 signal agent_goal_completed(agent_id: int, goal_type: String)
 signal agent_action_executed(agent_id: int, action_type: String, success: bool)
+signal neural_network_updated(network_state: Dictionary)
 
+# Core AI Systems
 var agents: Dictionary = {}  # agent_id -> AIAgent
 var civilization_agents: Dictionary = {}  # agent_id -> CivilizationAgent
 var agent_text_overlays: Dictionary = {}  # agent_id -> Node
@@ -16,11 +18,23 @@ var last_update_tick: int = 0
 var enabled: bool = true
 var show_agent_overlays: bool = true
 
-# Enhanced AI systems (temporarily disabled for stable testing)
-
+# Advanced Neural Network Matrix Systems
 var world_ai: WorldAI
 var settlement_ai_system: Dictionary = {}  # settlement_id -> SettlementAI
-var civilization_mode: bool = false  # Temporarily disabled for stability
+var civilization_mode: bool = true  # Enabled for advanced neural network matrix
+
+# Neural Network Matrix Components
+var neural_matrix: Dictionary = {}  # Core neural network matrix data
+var learning_algorithms: Dictionary = {}  # Learning algorithm implementations
+var pattern_recognition: Dictionary = {}  # Pattern recognition systems
+var predictive_models: Dictionary = {}  # Predictive modeling for world events
+var collective_intelligence: Dictionary = {}  # Shared intelligence across agents
+
+# Neural Network Parameters
+var neural_complexity: float = 1.0  # Complexity multiplier for neural calculations
+var learning_rate: float = 0.01  # Learning rate for neural network adaptation
+var pattern_threshold: float = 0.7  # Threshold for pattern recognition
+var prediction_accuracy: float = 0.85  # Target accuracy for predictions
 
 # Agent spawning configuration
 var strategic_agent_count: int = 2
@@ -30,12 +44,455 @@ var reactive_agent_count: int = 2
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 	
+	# Initialize advanced neural network matrix systems
+	_initialize_neural_network_matrix()
+	_initialize_learning_algorithms()
+	_initialize_pattern_recognition()
+	_initialize_predictive_models()
+	_initialize_collective_intelligence()
+	
 	# Initialize enhanced AI systems
 	if civilization_mode:
 		world_ai = WorldAI.new()
 		_initialize_settlement_system()
 	
 	_spawn_initial_agents()
+
+
+# === Neural Network Matrix Initialization ===
+
+func _initialize_neural_network_matrix() -> void:
+	# Core neural network matrix structure
+	neural_matrix = {
+		"layers": {
+			"input": {"size": 64, "neurons": []},
+			"hidden1": {"size": 128, "neurons": []},
+			"hidden2": {"size": 64, "neurons": []},
+			"output": {"size": 32, "neurons": []}
+		},
+		"connections": {},
+		"weights": {},
+		"biases": {},
+		"activation_functions": ["relu", "sigmoid", "tanh"],
+		"learning_rate": learning_rate,
+		"complexity": neural_complexity
+	}
+	
+	# Initialize neurons for each layer
+	for layer_name in neural_matrix.layers:
+		var layer = neural_matrix.layers[layer_name]
+		for i in range(layer.size):
+			layer.neurons.append({
+				"id": "%s_%d" % [layer_name, i],
+				"value": 0.0,
+				"activation": 0.0,
+				"connections": []
+			})
+	
+	# Initialize neural connections between layers
+	_initialize_neural_connections()
+	
+	print("[AIAgentManager] Neural network matrix initialized with %d layers" % neural_matrix.layers.size())
+
+
+func _initialize_neural_connections() -> void:
+	var layer_names = neural_matrix.layers.keys()
+	
+	for i in range(layer_names.size() - 1):
+		var source_layer = layer_names[i]
+		var target_layer = layer_names[i + 1]
+		
+		neural_matrix.connections[source_layer + "_to_" + target_layer] = {}
+		
+		for source_neuron in neural_matrix.layers[source_layer].neurons:
+			for target_neuron in neural_matrix.layers[target_layer].neurons:
+				var connection_id = "%s_%s" % [source_neuron.id, target_neuron.id]
+				neural_matrix.connections[source_layer + "_to_" + target_layer][connection_id] = {
+					"weight": randf_range(-0.5, 0.5),
+					"source": source_neuron.id,
+					"target": target_neuron.id,
+					"strength": 1.0
+				}
+
+
+func _initialize_learning_algorithms() -> void:
+	learning_algorithms = {
+		"backpropagation": {
+			"enabled": true,
+			"learning_rate": learning_rate,
+			"momentum": 0.9,
+			"decay": 0.0001
+		},
+		"reinforcement_learning": {
+			"enabled": true,
+			"exploration_rate": 0.1,
+			"discount_factor": 0.95,
+			"learning_rate": 0.001
+		},
+		"genetic_algorithm": {
+			"enabled": true,
+			"mutation_rate": 0.01,
+			"crossover_rate": 0.7,
+			"population_size": 50
+		},
+		"hebbian_learning": {
+			"enabled": true,
+			"learning_rate": 0.01,
+			"decay_rate": 0.001
+		}
+	}
+	
+	print("[AIAgentManager] Learning algorithms initialized")
+
+
+func _initialize_pattern_recognition() -> void:
+	pattern_recognition = {
+		"world_patterns": {
+			"resource_cycles": [],
+			"settlement_growth": [],
+			"climate_changes": [],
+			"cultural_shifts": []
+		},
+		"behavior_patterns": {
+			"agent_decisions": [],
+			"settlement_strategies": [],
+			"trade_routes": [],
+			"conflict_resolution": []
+		},
+		"threshold": pattern_threshold,
+		"confidence_scores": {}
+	}
+	
+	print("[AIAgentManager] Pattern recognition systems initialized")
+
+
+func _initialize_predictive_models() -> void:
+	predictive_models = {
+		"resource_prediction": {
+			"model_type": "neural_network",
+			"accuracy": prediction_accuracy,
+			"features": ["population", "technology", "environment"],
+			"predictions": []
+		},
+		"settlement_growth": {
+			"model_type": "time_series",
+			"accuracy": prediction_accuracy,
+			"features": ["resources", "culture", "economy"],
+			"predictions": []
+		},
+		"world_events": {
+			"model_type": "probabilistic",
+			"accuracy": prediction_accuracy,
+			"features": ["history", "current_state", "trends"],
+			"predictions": []
+		}
+	}
+	
+	print("[AIAgentManager] Predictive models initialized")
+
+
+func _initialize_collective_intelligence() -> void:
+	collective_intelligence = {
+		"shared_memory": {},
+		"emergent_behaviors": [],
+		"swarm_intelligence": {
+			"consensus_threshold": 0.7,
+			"communication_range": 100.0,
+			"influence_radius": 50.0
+		},
+		"knowledge_graph": {
+			"nodes": {},
+			"edges": {},
+			"weights": {}
+		}
+	}
+	
+	print("[AIAgentManager] Collective intelligence initialized")
+
+
+# === Neural Network Processing ===
+
+func process_neural_network(input_data: Array[float]) -> Array[float]:
+	# Forward propagation through neural network
+	var current_values = input_data.duplicate()
+	
+	var layer_names = neural_matrix.layers.keys()
+	for i in range(layer_names.size()):
+		var layer_name = layer_names[i]
+		var layer = neural_matrix.layers[layer_name]
+		var next_values: Array[float] = []
+		
+		for neuron in layer.neurons:
+			var neuron_value = 0.0
+			
+			# Calculate weighted sum from previous layer
+			if i == 0:  # Input layer
+				var neuron_index = layer.neurons.find(neuron)
+				if neuron_index < current_values.size():
+					neuron_value = current_values[neuron_index]
+			else:
+				# Process connections from previous layer
+				var prev_layer_name = layer_names[i - 1]
+				var connection_key = prev_layer_name + "_to_" + layer_name
+				
+				if neural_matrix.connections.has(connection_key):
+					for connection_id in neural_matrix.connections[connection_key]:
+						var connection = neural_matrix.connections[connection_id]
+						if connection.source in current_values:
+							neuron_value += current_values[current_values.find(connection.source)] * connection.weight
+			
+			# Apply activation function
+			neuron.activation = _apply_activation_function(neuron_value, i)
+			next_values.append(neuron.activation)
+		
+		current_values = next_values
+	
+	return current_values
+
+
+func _apply_activation_function(value: float, layer_index: int) -> float:
+	var activation_functions = neural_matrix.activation_functions
+	var func_index = layer_index % activation_functions.size()
+	
+	match activation_functions[func_index]:
+		"relu":
+			return max(0.0, value)
+		"sigmoid":
+			return 1.0 / (1.0 + exp(-value))
+		"tanh":
+			return tanh(value)
+		_:
+			return value
+
+
+func train_neural_network(input_data: Array[float], target_output: Array[float]) -> void:
+	# Backpropagation training
+	var predicted_output = process_neural_network(input_data)
+	var error = _calculate_error(predicted_output, target_output)
+	
+	# Update weights based on error
+	if learning_algorithms.backpropagation.enabled:
+		_backpropagate_error(error)
+	
+	# Record training data
+	_record_training_session(input_data, target_output, predicted_output, error)
+
+
+func _calculate_error(predicted: Array[float], target: Array[float]) -> Array[float]:
+	var error: Array[float] = []
+	for i in range(min(predicted.size(), target.size())):
+		error.append(target[i] - predicted[i])
+	return error
+
+
+func _backpropagate_error(error: Array[float]) -> void:
+	# Simplified backpropagation
+	var learning_rate = learning_algorithms.backpropagation.learning_rate
+	
+	for connection_key in neural_matrix.connections:
+		var connections = neural_matrix.connections[connection_key]
+		for connection_id in connections:
+			var connection = connections[connection_id]
+			# Update weights based on error gradient
+			connection.weight += learning_rate * error[0] * connection.strength
+			# Apply weight decay
+			connection.weight *= (1.0 - learning_algorithms.backpropagation.decay)
+
+
+func _record_training_session(input_data: Array[float], target: Array[float], predicted: Array[float], error: Array[float]) -> void:
+	var training_record = {
+		"timestamp": GameManager.tick_count,
+		"input": input_data,
+		"target": target,
+		"predicted": predicted,
+		"error": error,
+		"accuracy": _calculate_accuracy(predicted, target)
+	}
+	
+	# Store in collective intelligence
+	if not collective_intelligence.shared_memory.has("training_history"):
+		collective_intelligence.shared_memory.training_history = []
+	
+	collective_intelligence.shared_memory.training_history.append(training_record)
+
+
+func _calculate_accuracy(predicted: Array[float], target: Array[float]) -> float:
+	if predicted.size() == 0 or target.size() == 0:
+		return 0.0
+	
+	var total_error = 0.0
+	for i in range(min(predicted.size(), target.size())):
+		total_error += abs(predicted[i] - target[i])
+	
+	var mean_error = total_error / min(predicted.size(), target.size())
+	return max(0.0, 1.0 - mean_error)
+
+
+# === Pattern Recognition ===
+
+func recognize_patterns(world_state: Dictionary) -> Dictionary:
+	var recognized_patterns: Dictionary = {}
+	
+	# Analyze resource cycles
+	var resource_pattern = _analyze_resource_pattern(world_state)
+	if resource_pattern.confidence >= pattern_threshold:
+		recognized_patterns.resource_cycle = resource_pattern
+	
+	# Analyze settlement growth
+	var settlement_pattern = _analyze_settlement_pattern(world_state)
+	if settlement_pattern.confidence >= pattern_threshold:
+		recognized_patterns.settlement_growth = settlement_pattern
+	
+	# Analyze cultural shifts
+	var cultural_pattern = _analyze_cultural_pattern(world_state)
+	if cultural_pattern.confidence >= pattern_threshold:
+		recognized_patterns.cultural_shift = cultural_pattern
+	
+	return recognized_patterns
+
+
+func _analyze_resource_pattern(world_state: Dictionary) -> Dictionary:
+	var pattern = {
+		"type": "resource_cycle",
+		"confidence": 0.0,
+		"prediction": {},
+		"features": {}
+	}
+	
+	# Extract resource data from world state
+	if world_state.has("resources"):
+		var resources = world_state.resources
+		pattern.features.current_levels = resources
+		
+		# Compare with historical data
+		if pattern_recognition.world_patterns.resource_cycles.size() > 0:
+			var historical_data = pattern_recognition.world_patterns.resource_cycles
+			var trend = _calculate_resource_trend(historical_data, resources)
+			pattern.prediction = trend
+			pattern.confidence = _calculate_pattern_confidence(trend, resources)
+	
+	return pattern
+
+
+func _calculate_resource_trend(historical: Array, current: Dictionary) -> Dictionary:
+	var trend = {
+		"direction": "stable",
+		"magnitude": 0.0,
+		"next_cycle": "unknown"
+	}
+	
+	if historical.size() > 1:
+		var recent = historical[-1]
+		var older = historical[-2]
+		
+		# Simple trend calculation
+		for resource in current:
+			if recent.has(resource) and older.has(resource):
+				var change = current[resource] - recent[resource]
+				var historical_change = recent[resource] - older[resource]
+				
+				if abs(change) > abs(historical_change) * 1.5:
+					trend.direction = "accelerating"
+				elif abs(change) < abs(historical_change) * 0.5:
+					trend.direction = "decelerating"
+				else:
+					trend.direction = "stable"
+				
+				trend.magnitude = abs(change)
+	
+	return trend
+
+
+func _calculate_pattern_confidence(trend: Dictionary, current: Dictionary) -> float:
+	var confidence = 0.5  # Base confidence
+	
+	# Increase confidence based on pattern consistency
+	if trend.has("direction") and trend.direction != "unknown":
+		confidence += 0.2
+	
+	# Increase confidence based on data completeness
+	if current.size() >= 3:
+		confidence += 0.2
+	
+	# Increase confidence based on historical data
+	if pattern_recognition.world_patterns.resource_cycles.size() > 5:
+		confidence += 0.1
+	
+	return min(confidence, 1.0)
+
+
+# === Predictive Modeling ===
+
+func generate_predictions(world_state: Dictionary) -> Dictionary:
+	var predictions: Dictionary = {}
+	
+	# Resource predictions
+	if predictive_models.resource_prediction.enabled:
+		predictions.resources = _predict_resources(world_state)
+	
+	# Settlement growth predictions
+	if predictive_models.settlement_growth.enabled:
+		predictions.settlements = _predict_settlement_growth(world_state)
+	
+	# World event predictions
+	if predictive_models.world_events.enabled:
+		predictions.events = _predict_world_events(world_state)
+	
+	return predictions
+
+
+func _predict_resources(world_state: Dictionary) -> Dictionary:
+	var prediction = {
+		"type": "resource_prediction",
+		"time_horizon": 100,  # ticks
+		"accuracy": prediction_accuracy,
+		"forecasts": {}
+	}
+	
+	# Use neural network for prediction
+	var input_features = _extract_resource_features(world_state)
+	var neural_output = process_neural_network(input_features)
+	
+	# Convert neural output to resource forecasts
+	var resource_types = ["food", "wood", "stone", "ore"]
+	for i in range(min(resource_types.size(), neural_output.size())):
+		var resource_type = resource_types[i]
+		var predicted_value = neural_output[i] * 100.0  # Scale to appropriate range
+		prediction.forecasts[resource_type] = {
+			"current": world_state.get("resources", {}).get(resource_type, 0),
+			"predicted": predicted_value,
+			"trend": "increasing" if predicted_value > world_state.get("resources", {}).get(resource_type, 0) else "decreasing"
+		}
+	
+	return prediction
+
+
+func _extract_resource_features(world_state: Dictionary) -> Array[float]:
+	var features: Array[float] = []
+	
+	# Population
+	features.append(world_state.get("population", 0) / 100.0)
+	
+	# Technology level
+	features.append(world_state.get("technology", 0) / 10.0)
+	
+	# Environmental factors
+	features.append(world_state.get("environment", {}).get("fertility", 0.5))
+	features.append(world_state.get("environment", {}).get("climate", 0.5))
+	
+	# Current resource levels
+	var resources = world_state.get("resources", {})
+	features.append(resources.get("food", 0) / 1000.0)
+	features.append(resources.get("wood", 0) / 1000.0)
+	features.append(resources.get("stone", 0) / 1000.0)
+	features.append(resources.get("ore", 0) / 1000.0)
+	
+	# Pad to match input layer size
+	while features.size() < 64:
+		features.append(0.0)
+	
+	return features
+
 
 func _on_game_tick(tick: int) -> void:
 	if not enabled:

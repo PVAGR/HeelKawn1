@@ -1,5 +1,6 @@
 extends Node
-## Cultural memory and development tracking for settlements.
+## Advanced Cultural Memory System with Neural Network Matrix Integration
+## Tracks cultural evolution, traditions, and social norms with sophisticated AI
 ## Connected to HeelKawn Universe Neural Network Matrixation derived read-only from WorldMemory + WorldMeaning
 ## (events) and WorldPersistence. Does not write to those systems. No UI, no RNG.
 

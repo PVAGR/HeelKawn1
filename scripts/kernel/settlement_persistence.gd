@@ -91,6 +91,18 @@ func _evaluate_single_zone(zone_id: String) -> void:
 				flags.append("ruin")
 			settlement["persist_flags"] = flags
 			SettlementRegistry.commit_zone_state(zone_id, settlement)
+			
+			# PersistenceSystem: create persistent ruin entity
+			if PersistenceSystem != null:
+				var center: Vector2i = SettlementRegistry.get_zone_center(zone_id)
+				var entity_id: int = PersistenceSystem.create_persistent_entity(
+					PersistenceSystem.EntityType.RUIN,
+					center,
+					str(settlement.get("name", "Unnamed Ruin")),
+					0.7
+				)
+				# Record visitation (the settlement itself was "visited" by its residents)
+				PersistenceSystem.record_visitation(entity_id, -1)
 
 
 func _compute_impact_score(stats: Dictionary) -> int:

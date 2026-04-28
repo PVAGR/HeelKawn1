@@ -2552,6 +2552,17 @@ func _die(_p_cause: String = "") -> void:
 		# KnowledgeSystem: remove knowledge carrier when pawn dies
 		if KnowledgeSystem != null:
 			KnowledgeSystem.remove_knowledge_carrier(int(data.id))
+		
+		# PersistenceSystem: create grave entity
+		if PersistenceSystem != null:
+			var entity_id: int = PersistenceSystem.create_persistent_entity(
+				PersistenceSystem.EntityType.GRAVE_FIELD,
+				data.tile_pos,
+				"%s's grave" % data.display_name,
+				0.4
+			)
+			# Record visitation (the deceased's location is visited by mourners)
+			PersistenceSystem.record_visitation(entity_id, int(data.id))
 	
 	# Remove from groups and free the node
 	remove_from_group("pawns")

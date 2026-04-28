@@ -525,16 +525,22 @@ func _refresh() -> void:
 	# Mood status with active mood event
 	var active_mood_event: MoodEvent = d.get_active_mood_event()
 
-	# Show ephemeral inspect message if recent
+	# Show ephemeral inspect message if recent, with fade-out
 	if _inspect_msg_label != null:
 		var msg: String = ""
-		if _pawn != null and is_instance_valid(_pawn) and _pawn.has_method("_last_inspect_tick"):
-			# Direct field access
+		var alpha: float = 0.0
+		if _pawn != null and is_instance_valid(_pawn):
 			var last_tick: int = int(_pawn._last_inspect_tick)
 			var age: int = GameManager.tick_count - last_tick
-			if age >= 0 and age < 200 and str(_pawn._last_inspect_msg) != "":
+			var max_age: int = 200
+			if age >= 0 and age < max_age and str(_pawn._last_inspect_msg) != "":
 				msg = str(_pawn._last_inspect_msg)
+				alpha = clamp(1.0 - float(age) / float(max_age), 0.0, 1.0)
+			else:
+				msg = ""
 		_inspect_msg_label.text = msg
+		# apply fade via modulate alpha so text color remains themed
+		_inspect_msg_label.modulate = Color(1, 1, 1, alpha)
 	if active_mood_event != null:
 		_mood_status_label.text = "Mood: %s (%d event: %s)" % [
 			d.mood_state_display(),

@@ -9,6 +9,7 @@ const ACTION_MOVE_SOUTH: int = 2
 const ACTION_MOVE_WEST: int = 3
 const ACTION_MOVE_EAST: int = 4
 const ACTION_INTERACT: int = 5
+const ACTION_INSPECT: int = 6
 
 var _intent_queue: Array[int] = []
 var _command_queue: Array[String] = []
@@ -31,6 +32,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_E:
 			# Space is reserved globally for pause; NPC parity uses the same move/interact verbs.
 			action_id = ACTION_INTERACT
+		elif event.keycode == KEY_F:
+			# Quick local inspect / look action
+			action_id = ACTION_INSPECT
 		if action_id != ACTION_NONE:
 			push_intent(action_id)
 
@@ -69,6 +73,8 @@ func execute_intent(pawn: Node, action_id: int) -> bool:
 			executed = bool(pawn.call("move", Vector2i(-1, 0))) if pawn.has_method("move") else false
 		ACTION_INTERACT:
 			executed = bool(pawn.call("interact")) if pawn.has_method("interact") else false
+		ACTION_INSPECT:
+			executed = bool(pawn.call("inspect")) if pawn.has_method("inspect") else false
 		_:
 			executed = false
 	if executed and pawn.has_method("record_skill_gain"):
@@ -77,6 +83,8 @@ func execute_intent(pawn: Node, action_id: int) -> bool:
 				pawn.call("record_skill_gain", "movement", 1)
 			ACTION_INTERACT:
 				pawn.call("record_skill_gain", "gathering", 2)
+			ACTION_INSPECT:
+				pawn.call("record_skill_gain", "observation", 2)
 	_last_action_state = action_type if executed else "blocked_%s" % action_type
 	_record_player_action(pawn, action_type, executed)
 	return executed

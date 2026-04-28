@@ -813,6 +813,41 @@ func _perform_presence_action() -> void:
 	queue_redraw()
 
 
+## Player-local inspect action: records a local inspection event and returns true if performed.
+func inspect() -> bool:
+	if data == null:
+		return false
+	# Do not inspect while busy hauling/eating/sleeping
+	if _state == State.HAULING or _state == State.EATING or _state == State.SLEEPING:
+		return false
+	_perform_inspect_action()
+	return true
+
+
+func _perform_inspect_action() -> void:
+	if data == null:
+		return
+	var rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
+	var center_region: int = SettlementMemory.get_center_region_for_region(rk)
+	var region_key_for_meaning: int = center_region if center_region >= 0 else rk
+	var meaning_label: String = WorldMeaning.get_region_meaning_label(region_key_for_meaning)
+	var zone_id: String = str(region_key_for_meaning)
+	var tags: PackedStringArray = WorldMeaning.get_zone_tags(zone_id)
+	WorldMemory.record_event({
+		"type": "player_inspect",
+		"pawn_id": int(data.id),
+		"tick": GameManager.tick_count,
+		"region": rk,
+		"center_region": region_key_for_meaning,
+		"meaning_label": meaning_label,
+		"tags": tags,
+		"tile": {"x": data.tile_pos.x, "y": data.tile_pos.y},
+	})
+	if GameManager.verbose_logs():
+		print("[Pawn] %s inspects region=%d meaning=%s tags=%s" % [data.display_name, region_key_for_meaning, meaning_label, str(tags)])
+	queue_redraw()
+
+
 func record_skill_gain(skill: String, amount: int) -> void:
 	if data == null:
 		return

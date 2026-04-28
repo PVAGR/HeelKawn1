@@ -5,6 +5,23 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-27 - Incarnated F now inspects local context
+
+Date: 2026-04-27
+Goal: Add a second embodied affordance to give incarnation a local read verb.
+
+Changes made:
+
+- Mapped `F` to a new `inspect` action in `PlayerInputBuffer` and `PlayerIntentQueue` flow.
+- Implemented `Pawn.inspect()` which records a `player_inspect` WorldMemory event containing region, center_region, WorldMeaning label, and derived zone tags.
+- Skill gain: `observation` XP is granted when inspecting.
+
+Suggested next session:
+
+- Surface an incarnated-local HUD cue for inspected tags (e.g., small tooltip or log line) so inspection has immediate feedback beyond the fact log.
+
+---
+
 ## 2026-04-27 - Incarnated E now performs presence
 
 Date: 2026-04-27

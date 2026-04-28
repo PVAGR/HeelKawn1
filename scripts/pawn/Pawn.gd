@@ -3110,7 +3110,8 @@ func assess_risk(tile: Vector2i) -> float:
 	
 	# Check for dangerous terrain
 	var feature: int = _world.data.get_feature(tile.x, tile.y)
-	if feature == TileFeature.Type.MOUNTAIN:
+	# Note: MOUNTAIN not in TileFeature.Type, checking for impassable features instead
+	if feature == TileFeature.Type.WALL:
 		risk += 10.0
 	
 	# Check location memory

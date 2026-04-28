@@ -1100,7 +1100,7 @@ func to_portable_character_export(export_tick: int, world_seed: int, origin_regi
 		"profession_liking": profession_liking.duplicate(true),
 		"social_rapport_top": _social_rapport_top_for_export(24),
 		"trait_types": trait_types,
-		"military_rank": military_rank,
+		"military_rank": military_rank_legacy,  # Use legacy string for export compatibility
 		"influence": influence,
 	}
 
@@ -1146,7 +1146,8 @@ func to_save_dict() -> Dictionary:
 		"parent_b_id": parent_b_id,
 		"children_count": children_count,
 		"influence": influence,
-		"military_rank": military_rank,
+		"military_rank": military_rank_legacy,  # Use legacy string for save compatibility
+		"military_rank_int": military_rank,  # Stage 6 int-based rank
 		"cohort_anchor_id": cohort_anchor_id,
 		"cohort_job_type": cohort_job_type,
 		"is_cohort_anchor": is_cohort_anchor,
@@ -1232,7 +1233,8 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	p.parent_b_id = int(d.get("parent_b_id", -1))
 	p.children_count = int(d.get("children_count", 0))
 	p.influence = float(d.get("influence", 0.0))
-	p.military_rank = str(d.get("military_rank", "grunt"))
+	p.military_rank_legacy = str(d.get("military_rank_legacy", "grunt"))
+	p.military_rank = int(d.get("military_rank_int", 0))
 	p.cohort_anchor_id = int(d.get("cohort_anchor_id", -1))
 	p.cohort_job_type = int(d.get("cohort_job_type", -1))
 	p.is_cohort_anchor = bool(d.get("is_cohort_anchor", false))

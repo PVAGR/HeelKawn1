@@ -197,7 +197,7 @@ static func _build_pawn_observation(pawn: Pawn) -> Dictionary:
 		"rest": d.rest,
 		"mood": d.mood,
 		"profession": d.profession_name(),
-		"military_rank": String(d.military_rank).capitalize(),
+		"military_rank": str(d.military_rank_legacy).capitalize(),
 		"state": state_label,
 		"current_job": job_label,
 		"tile_pos": {"x": d.tile_pos.x, "y": d.tile_pos.y},

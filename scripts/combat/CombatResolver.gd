@@ -171,7 +171,7 @@ static func _maybe_issue_attack_move(attacker: Node, defender: Node) -> void:
 		return
 	if _is_anarchy_combat(attacker, defender):
 		return
-	var leader_rank: String = String(leader.data.military_rank).to_lower()
+	var leader_rank: String = str(leader.data.military_rank_legacy).to_lower()
 	if leader_rank == "grunt":
 		return
 	var target_pos: Vector2i = leader.data.tile_pos
@@ -188,7 +188,7 @@ static func _maybe_issue_attack_move(attacker: Node, defender: Node) -> void:
 			continue
 		if ally.position.distance_squared_to(leader.position) > 22.0 * 22.0:
 			continue
-		var ally_rank: String = String(ally.data.military_rank).to_lower()
+		var ally_rank: String = str(ally.data.military_rank_legacy).to_lower()
 		if _rank_value(ally_rank) >= leader_score:
 			continue
 		if ally.has_method("draft_goto"):

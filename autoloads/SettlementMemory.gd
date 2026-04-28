@@ -1221,7 +1221,7 @@ func _process_war_state(settlement_idx: int, pawns: Array[Pawn]) -> void:
 			_war_battle_spawned.erase(center)
 		for p in set_pawns:
 			if p.data != null:
-				p.data.military_rank = "grunt"
+				p.data.military_rank_legacy = "grunt"
 
 
 func _resolve_war_votes(settlement_idx: int) -> void:
@@ -1369,15 +1369,15 @@ func _assign_military_hierarchy(pawns: Array[Pawn]) -> void:
 		if p == null or p.data == null:
 			continue
 		if i == 0:
-			p.data.military_rank = "battlemaster"
+			p.data.military_rank_legacy = "battlemaster"
 		elif i < 4:
-			p.data.military_rank = "commander"
+			p.data.military_rank_legacy = "commander"
 		elif i < 14:
-			p.data.military_rank = "captain"
+			p.data.military_rank_legacy = "captain"
 		elif i < 34:
-			p.data.military_rank = "sarj"
+			p.data.military_rank_legacy = "sarj"
 		else:
-			p.data.military_rank = "grunt"
+			p.data.military_rank_legacy = "grunt"
 
 
 func settlement_should_declare_war(src_idx: int, target_idx: int) -> bool:

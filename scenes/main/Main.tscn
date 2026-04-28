@@ -18,6 +18,7 @@
 [ext_resource type="Script" path="res://scripts/world/WorldTrace.gd" id="13_trace"]
 [ext_resource type="Script" path="res://scripts/ui/CreatorDebugMenu.gd" id="16_debug_menu"]
 [ext_resource type="PackedScene" path="res://scenes/ui/MapModeOverlay.tscn" id="17_map_overlay"]
+[ext_resource type="PackedScene" path="res://scenes/ui/AIAgentDebugPanel.tscn" id="18_ai_debug_panel"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -62,6 +63,8 @@ script = ExtResource("2_cam")
 [node name="FocusInspector" parent="UI_Viewport" instance=ExtResource("15_focus_inspector")]
 
 [node name="MapModeOverlay" parent="." instance=ExtResource("17_map_overlay")]
+
+[node name="AIAgentDebugPanel" parent="." instance=ExtResource("18_ai_debug_panel")]
 
 [node name="CreatorDebugMenu" type="Control" parent="."]
 layout_mode = 3

@@ -156,10 +156,10 @@ func _initialize_adaptation_weights() -> Dictionary:
 	weights["hidden_to_output"] = _create_weight_matrix(8, 6)
 	return weights
 
-func _create_weight_matrix(rows: int, cols: int) -> Array[Array[float]]:
-	var matrix: Array[Array[float]] = []
+func _create_weight_matrix(rows: int, cols: int) -> Array:
+	var matrix: Array = []
 	for i in range(rows):
-		var row: Array[float] = []
+		var row: Array = []
 		for j in range(cols):
 			row.append(randf_range(-0.3, 0.3))
 		matrix.append(row)

@@ -387,7 +387,8 @@ func _clear_unused_neural_data() -> void:
 
 func _force_garbage_collection() -> void:
 	# Force garbage collection
-	gc.collect()
+	@static_unload
+	pass
 
 
 # === Performance Monitoring ===
@@ -395,7 +396,7 @@ func _force_garbage_collection() -> void:
 func _update_performance_metrics() -> void:
 	# Update performance metrics
 	var current_fps = Engine.get_frames_per_second()
-	var memory_usage = OS.get_static_memory_usage_by_type()[OS.MEMORY_TYPE_STATIC] / (1024 * 1024)  # MB
+	var memory_usage = OS.get_static_memory_usage_by_type().get(OS.MEMORY_TYPE_STATIC, 0) / (1024 * 1024)  # MB
 	
 	performance_metrics.fps = current_fps
 	performance_metrics.memory_usage = memory_usage

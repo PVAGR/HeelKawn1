@@ -421,6 +421,114 @@ func _calculate_pattern_confidence(trend: Dictionary, current: Dictionary) -> fl
 	return min(confidence, 1.0)
 
 
+func _analyze_settlement_pattern(world_state: Dictionary) -> Dictionary:
+	var pattern = {
+		"type": "settlement_growth",
+		"confidence": 0.0,
+		"prediction": {},
+		"features": {}
+	}
+	
+	# Extract settlement data from world state
+	if world_state.has("settlements"):
+		var settlements = world_state.settlements
+		pattern.features.current_settlements = settlements
+		
+		# Compare with historical data
+		if pattern_recognition.behavior_patterns.settlement_strategies.size() > 0:
+			var historical_data = pattern_recognition.behavior_patterns.settlement_strategies
+			var trend = _calculate_settlement_trend(historical_data, settlements)
+			pattern.prediction = trend
+			pattern.confidence = _calculate_pattern_confidence(trend, settlements)
+	
+	return pattern
+
+
+func _analyze_cultural_pattern(world_state: Dictionary) -> Dictionary:
+	var pattern = {
+		"type": "cultural_shift",
+		"confidence": 0.0,
+		"prediction": {},
+		"features": {}
+	}
+	
+	# Extract cultural data from world state
+	if world_state.has("culture"):
+		var culture = world_state.culture
+		pattern.features.current_culture = culture
+		
+		# Compare with historical data
+		if pattern_recognition.world_patterns.cultural_shifts.size() > 0:
+			var historical_data = pattern_recognition.world_patterns.cultural_shifts
+			var trend = _calculate_cultural_trend(historical_data, culture)
+			pattern.prediction = trend
+			pattern.confidence = _calculate_pattern_confidence(trend, culture)
+	
+	return pattern
+
+
+func _calculate_settlement_trend(historical: Array, current: Dictionary) -> Dictionary:
+	var trend = {
+		"direction": "stable",
+		"growth_rate": 0.0,
+		"next_phase": "unknown"
+	}
+	
+	if historical.size() > 1:
+		var recent = historical[-1]
+		var older = historical[-2]
+		
+		# Simple settlement growth trend calculation
+		var current_count = current.get("count", 0)
+		var recent_count = recent.get("count", 0)
+		var older_count = older.get("count", 0)
+		
+		var current_change = current_count - recent_count
+		var historical_change = recent_count - older_count
+		
+		if current_change > historical_change * 1.5:
+			trend.direction = "accelerating_growth"
+		elif current_change < historical_change * 0.5:
+			trend.direction = "decelerating_growth"
+		else:
+			trend.direction = "stable_growth"
+		
+		trend.growth_rate = current_change
+	
+	return trend
+
+
+func _calculate_cultural_trend(historical: Array, current: Dictionary) -> Dictionary:
+	var trend = {
+		"direction": "stable",
+		"diversity_change": 0.0,
+		"next_shift": "unknown"
+	}
+	
+	if historical.size() > 1:
+		var recent = historical[-1]
+		var older = historical[-2]
+		
+		# Simple cultural trend calculation
+		var current_diversity = current.get("diversity", 0.0)
+		var recent_diversity = recent.get("diversity", 0.0)
+		var older_diversity = older.get("diversity", 0.0)
+		
+		var current_change = current_diversity - recent_diversity
+		var historical_change = recent_diversity - older_diversity
+		
+		if abs(current_change) > abs(historical_change) * 1.5:
+			trend.direction = "rapid_shift"
+		elif abs(current_change) < abs(historical_change) * 0.5:
+			trend.direction = "stabilizing"
+		else:
+			trend.direction = "gradual_shift"
+		
+		trend.diversity_change = current_change
+	
+	return trend
+
+
 # === Predictive Modeling ===
 
 func generate_predictions(world_state: Dictionary) -> Dictionary:
@@ -486,6 +594,116 @@ func _extract_resource_features(world_state: Dictionary) -> Array[float]:
 	features.append(resources.get("wood", 0) / 1000.0)
 	features.append(resources.get("stone", 0) / 1000.0)
 	features.append(resources.get("ore", 0) / 1000.0)
+	
+	# Pad to match input layer size
+	while features.size() < 64:
+		features.append(0.0)
+	
+	return features
+
+
+func _predict_settlement_growth(world_state: Dictionary) -> Dictionary:
+	var prediction = {
+		"type": "settlement_growth",
+		"time_horizon": 200,  # ticks
+		"accuracy": prediction_accuracy,
+		"forecasts": {}
+	}
+	
+	# Use neural network for prediction
+	var input_features = _extract_settlement_features(world_state)
+	var neural_output = process_neural_network(input_features)
+	
+	# Convert neural output to settlement forecasts
+	var settlement_metrics = ["new_settlements", "population_growth", "expansion_rate", "prosperity_index"]
+	for i in range(min(settlement_metrics.size(), neural_output.size())):
+		var metric = settlement_metrics[i]
+		var predicted_value = neural_output[i] * 10.0  # Scale to appropriate range
+		prediction.forecasts[metric] = {
+			"current": world_state.get("settlements", {}).get(metric, 0),
+			"predicted": predicted_value,
+			"trend": "increasing" if predicted_value > world_state.get("settlements", {}).get(metric, 0) else "decreasing"
+		}
+	
+	return prediction
+
+
+func _predict_world_events(world_state: Dictionary) -> Dictionary:
+	var prediction = {
+		"type": "world_events",
+		"time_horizon": 300,  # ticks
+		"accuracy": prediction_accuracy,
+		"forecasts": {}
+	}
+	
+	# Use neural network for prediction
+	var input_features = _extract_event_features(world_state)
+	var neural_output = process_neural_network(input_features)
+	
+	# Convert neural output to event forecasts
+	var event_types = ["natural_disaster", "technological_breakthrough", "cultural_shift", "resource_discovery", "conflict_escalation"]
+	for i in range(min(event_types.size(), neural_output.size())):
+		var event_type = event_types[i]
+		var probability = neural_output[i]
+		prediction.forecasts[event_type] = {
+			"probability": probability,
+			"urgency": "high" if probability > 0.8 else "medium" if probability > 0.5 else "low",
+			"estimated_time": int(300 * (1.0 - probability))  # Sooner if more probable
+		}
+	
+	return prediction
+
+
+func _extract_settlement_features(world_state: Dictionary) -> Array[float]:
+	var features: Array[float] = []
+	
+	# Population and settlement data
+	features.append(world_state.get("population", 0) / 100.0)
+	features.append(world_state.get("settlement_count", 0) / 20.0)
+	
+	# Economic factors
+	features.append(world_state.get("prosperity", 0.0))
+	features.append(world_state.get("trade_activity", 0.0))
+	
+	# Environmental factors
+	features.append(world_state.get("environment", {}).get("fertility", 0.5))
+	features.append(world_state.get("environment", {}).get("resources", 0.5))
+	
+	# Social factors
+	features.append(world_state.get("social_stability", 0.5))
+	features.append(world_state.get("cultural_development", 0.0))
+	
+	# Technology and infrastructure
+	features.append(world_state.get("technology_level", 0) / 10.0)
+	features.append(world_state.get("infrastructure", 0.0))
+	
+	# Pad to match input layer size
+	while features.size() < 64:
+		features.append(0.0)
+	
+	return features
+
+
+func _extract_event_features(world_state: Dictionary) -> Array[float]:
+	var features: Array[float] = []
+	
+	# World state factors
+	features.append(world_state.get("population", 0) / 100.0)
+	features.append(world_state.get("technology_level", 0) / 10.0)
+	features.append(world_state.get("social_stability", 0.5))
+	features.append(world_state.get("resource_pressure", 0.0))
+	
+	# Environmental factors
+	features.append(world_state.get("environment", {}).get("stability", 0.5))
+	features.append(world_state.get("climate_stress", 0.0))
+	
+	# Historical factors
+	features.append(world_state.get("recent_events", 0) / 10.0)
+	features.append(world_state.get("conflict_level", 0.0))
+	
+	# Cultural factors
+	features.append(world_state.get("cultural_tension", 0.0))
+	features.append(world_state.get("innovation_rate", 0.0))
 	
 	# Pad to match input layer size
 	while features.size() < 64:

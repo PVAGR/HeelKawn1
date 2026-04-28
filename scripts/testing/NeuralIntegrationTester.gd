@@ -139,12 +139,11 @@ func _test_ai_agent_manager_neural_matrix() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		# Check if AIAgentManager exists
-		if not AIAgentManager:
-			test_result.status = "failed"
-			test_result.errors.append("AIAgentManager not found")
-			return test_result
+	# Check if AIAgentManager exists
+	if not AIAgentManager:
+		test_result.status = "failed"
+		test_result.errors.append("AIAgentManager not found")
+		return test_result
 		
 		# Check neural matrix initialization
 		if not AIAgentManager.neural_matrix:
@@ -194,11 +193,6 @@ func _test_ai_agent_manager_neural_matrix() -> Dictionary:
 			test_result.details["collective_intelligence_initialized"] = true
 		
 		print("[NeuralIntegrationTester] ✓ AIAgentManager neural matrix test passed")
-		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ AIAgentManager neural matrix test failed: " + str(e))
 	
 	return test_result
 
@@ -210,11 +204,10 @@ func _test_neural_matrix_structure() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not AIAgentManager or not AIAgentManager.neural_matrix:
-			test_result.status = "failed"
-			test_result.errors.append("Neural matrix not available")
-			return test_result
+	if not AIAgentManager or not AIAgentManager.neural_matrix:
+		test_result.status = "failed"
+		test_result.errors.append("Neural matrix not available")
+		return test_result
 		
 		var neural_matrix = AIAgentManager.neural_matrix
 		
@@ -242,11 +235,6 @@ func _test_neural_matrix_structure() -> Dictionary:
 		test_result.details["connection_structure_valid"] = test_result.status == "passed"
 		
 		print("[NeuralIntegrationTester] ✓ Neural matrix structure test passed")
-		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Neural matrix structure test failed: " + str(e))
 	
 	return test_result
 
@@ -258,11 +246,10 @@ func _test_learning_algorithms() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not AIAgentManager or not AIAgentManager.learning_algorithms:
-			test_result.status = "failed"
-			test_result.errors.append("Learning algorithms not available")
-			return test_result
+	if not AIAgentManager or not AIAgentManager.learning_algorithms:
+		test_result.status = "failed"
+		test_result.errors.append("Learning algorithms not available")
+		return test_result
 		
 		var learning_algorithms = AIAgentManager.learning_algorithms
 		var expected_algorithms = ["backpropagation", "reinforcement_learning", "genetic_algorithm", "hebbian_learning"]
@@ -281,11 +268,6 @@ func _test_learning_algorithms() -> Dictionary:
 		test_result.details["all_algorithms_present"] = test_result.status == "passed"
 		
 		print("[NeuralIntegrationTester] ✓ Learning algorithms test passed")
-		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Learning algorithms test failed: " + str(e))
 	
 	return test_result
 
@@ -297,11 +279,10 @@ func _test_pattern_recognition() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not AIAgentManager or not AIAgentManager.pattern_recognition:
-			test_result.status = "failed"
-			test_result.errors.append("Pattern recognition not available")
-			return test_result
+	if not AIAgentManager or not AIAgentManager.pattern_recognition:
+		test_result.status = "failed"
+		test_result.errors.append("Pattern recognition not available")
+		return test_result
 		
 		var pattern_recognition = AIAgentManager.pattern_recognition
 		
@@ -323,11 +304,6 @@ func _test_pattern_recognition() -> Dictionary:
 		test_result.details["recognized_patterns_count"] = recognized_patterns.size()
 		
 		print("[NeuralIntegrationTester] ✓ Pattern recognition test passed")
-		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Pattern recognition test failed: " + str(e))
 	
 	return test_result
 
@@ -339,11 +315,10 @@ func _test_predictive_models() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not AIAgentManager or not AIAgentManager.predictive_models:
-			test_result.status = "failed"
-			test_result.errors.append("Predictive models not available")
-			return test_result
+	if not AIAgentManager or not AIAgentManager.predictive_models:
+		test_result.status = "failed"
+		test_result.errors.append("Predictive models not available")
+		return test_result
 		
 		var predictive_models = AIAgentManager.predictive_models
 		var expected_models = ["resource_prediction", "settlement_growth", "world_events"]
@@ -367,16 +342,9 @@ func _test_predictive_models() -> Dictionary:
 		}
 		
 		var predictions = AIAgentManager.generate_predictions(test_world_state)
-		test_result.details["prediction_functional"] = true
-		test_result.details["predictions_count"] = predictions.size()
 		
 		print("[NeuralIntegrationTester] ✓ Predictive models test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Predictive models test failed: " + str(e))
-	
 	return test_result
 
 func _test_collective_intelligence() -> Dictionary:
@@ -387,11 +355,10 @@ func _test_collective_intelligence() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not AIAgentManager or not AIAgentManager.collective_intelligence:
-			test_result.status = "failed"
-			test_result.errors.append("Collective intelligence not available")
-			return test_result
+	if not AIAgentManager or not AIAgentManager.collective_intelligence:
+		test_result.status = "failed"
+		test_result.errors.append("Collective intelligence not available")
+		return test_result
 		
 		var collective_intelligence = AIAgentManager.collective_intelligence
 		
@@ -401,16 +368,10 @@ func _test_collective_intelligence() -> Dictionary:
 			test_result.errors.append("Invalid collective intelligence structure")
 		
 		test_result.details["shared_memory_initialized"] = collective_intelligence.has("shared_memory")
-		test_result.details["swarm_intelligence_initialized"] = collective_intelligence.has("swarm_intelligence")
 		test_result.details["knowledge_graph_initialized"] = collective_intelligence.has("knowledge_graph")
 		
 		print("[NeuralIntegrationTester] ✓ Collective intelligence test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Collective intelligence test failed: " + str(e))
-	
 	return test_result
 
 # === AI Agent Manager Integration Testing ===
@@ -449,8 +410,7 @@ func _test_ai_agent_manager_initialization() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not AIAgentManager:
+			if not AIAgentManager:
 			test_result.status = "failed"
 			test_result.errors.append("AIAgentManager not found")
 			return test_result
@@ -469,11 +429,6 @@ func _test_ai_agent_manager_initialization() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ AI Agent Manager initialization test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ AI Agent Manager initialization test failed: " + str(e))
-	
 	return test_result
 
 func _test_neural_network_processing() -> Dictionary:
@@ -484,8 +439,7 @@ func _test_neural_network_processing() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not AIAgentManager:
+			if not AIAgentManager:
 			test_result.status = "failed"
 			test_result.errors.append("AIAgentManager not found")
 			return test_result
@@ -513,11 +467,6 @@ func _test_neural_network_processing() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Neural network processing test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Neural network processing test failed: " + str(e))
-	
 	return test_result
 
 func _test_training_functionality() -> Dictionary:
@@ -528,8 +477,7 @@ func _test_training_functionality() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not AIAgentManager:
+			if not AIAgentManager:
 			test_result.status = "failed"
 			test_result.errors.append("AIAgentManager not found")
 			return test_result
@@ -546,11 +494,6 @@ func _test_training_functionality() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Training functionality test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Training functionality test failed: " + str(e))
-	
 	return test_result
 
 # === World AI Integration Testing ===
@@ -589,8 +532,7 @@ func _test_world_ai_initialization() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not WorldAI:
+			if not WorldAI:
 			test_result.status = "failed"
 			test_result.errors.append("WorldAI not found")
 			return test_result
@@ -602,11 +544,6 @@ func _test_world_ai_initialization() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ World AI initialization test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ World AI initialization test failed: " + str(e))
-	
 	return test_result
 
 func _test_neural_world_matrix() -> Dictionary:
@@ -617,11 +554,10 @@ func _test_neural_world_matrix() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not WorldAI or not WorldAI.neural_world_matrix:
-			test_result.status = "failed"
-			test_result.errors.append("Neural world matrix not found")
-			return test_result
+	if not WorldAI or not WorldAI.neural_world_matrix:
+		test_result.status = "failed"
+		test_result.errors.append("Neural world matrix not found")
+		return test_result
 		
 		var neural_world_matrix = WorldAI.neural_world_matrix
 		
@@ -638,11 +574,6 @@ func _test_neural_world_matrix() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Neural world matrix test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Neural world matrix test failed: " + str(e))
-	
 	return test_result
 
 func _test_specialized_networks() -> Dictionary:
@@ -653,8 +584,7 @@ func _test_specialized_networks() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not WorldAI:
+			if not WorldAI:
 			test_result.status = "failed"
 			test_result.errors.append("WorldAI not found")
 			return test_result
@@ -672,11 +602,6 @@ func _test_specialized_networks() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Specialized networks test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Specialized networks test failed: " + str(e))
-	
 	return test_result
 
 # === Cultural Memory Integration Testing ===
@@ -712,8 +637,7 @@ func _test_cultural_memory_initialization() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not CulturalMemory:
+			if not CulturalMemory:
 			test_result.status = "failed"
 			test_result.errors.append("CulturalMemory not found")
 			return test_result
@@ -723,11 +647,6 @@ func _test_cultural_memory_initialization() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Cultural Memory initialization test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Cultural Memory initialization test failed: " + str(e))
-	
 	return test_result
 
 func _test_cultural_metrics() -> Dictionary:
@@ -738,8 +657,7 @@ func _test_cultural_metrics() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not CulturalMemory:
+			if not CulturalMemory:
 			test_result.status = "failed"
 			test_result.errors.append("CulturalMemory not found")
 			return test_result
@@ -758,11 +676,6 @@ func _test_cultural_metrics() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Cultural metrics test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Cultural metrics test failed: " + str(e))
-	
 	return test_result
 
 # === Religious Systems Integration Testing ===
@@ -798,8 +711,7 @@ func _test_religion_lens_initialization() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not ReligionLens:
+			if not ReligionLens:
 			test_result.status = "failed"
 			test_result.errors.append("ReligionLens not found")
 			return test_result
@@ -809,11 +721,6 @@ func _test_religion_lens_initialization() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Religion Lens initialization test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Religion Lens initialization test failed: " + str(e))
-	
 	return test_result
 
 func _test_religious_harmony() -> Dictionary:
@@ -824,8 +731,7 @@ func _test_religious_harmony() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not ReligionLens:
+			if not ReligionLens:
 			test_result.status = "failed"
 			test_result.errors.append("ReligionLens not found")
 			return test_result
@@ -842,11 +748,6 @@ func _test_religious_harmony() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Religious harmony test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Religious harmony test failed: " + str(e))
-	
 	return test_result
 
 # === Error Tracking Integration Testing ===
@@ -882,8 +783,7 @@ func _test_error_tracker_initialization() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		# ErrorTracker is a class, not a singleton, so we test its functionality
+			# ErrorTracker is a class, not a singleton, so we test its functionality
 		var error_tracker = ErrorTracker.new()
 		
 		test_result.details["error_tracker_created"] = true
@@ -891,11 +791,6 @@ func _test_error_tracker_initialization() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Error Tracker initialization test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Error Tracker initialization test failed: " + str(e))
-	
 	return test_result
 
 func _test_neural_error_prediction() -> Dictionary:
@@ -906,8 +801,7 @@ func _test_neural_error_prediction() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		# Test neural error prediction functionality
+			# Test neural error prediction functionality
 		var error_tracker = ErrorTracker.new()
 		
 		var test_system_state = {
@@ -933,11 +827,6 @@ func _test_neural_error_prediction() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Neural error prediction test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Neural error prediction test failed: " + str(e))
-	
 	return test_result
 
 # === Performance Optimization Testing ===
@@ -973,8 +862,7 @@ func _test_neural_optimizer_initialization() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		# NeuralOptimizer is a class, not a singleton, so we test its functionality
+			# NeuralOptimizer is a class, not a singleton, so we test its functionality
 		var neural_optimizer = NeuralOptimizer.new()
 		
 		test_result.details["neural_optimizer_created"] = true
@@ -982,11 +870,6 @@ func _test_neural_optimizer_initialization() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Neural Optimizer initialization test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Neural Optimizer initialization test failed: " + str(e))
-	
 	return test_result
 
 func _test_optimization_strategies() -> Dictionary:
@@ -997,8 +880,7 @@ func _test_optimization_strategies() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		var neural_optimizer = NeuralOptimizer.new()
+			var neural_optimizer = NeuralOptimizer.new()
 		
 		# Test optimization strategies
 		var expected_strategies = ["connection_pruning", "weight_quantization", "network_compression", "dynamic_batching", "memory_optimization"]
@@ -1013,11 +895,6 @@ func _test_optimization_strategies() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Optimization strategies test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Optimization strategies test failed: " + str(e))
-	
 	return test_result
 
 # === World Evolution Integration Testing ===
@@ -1053,8 +930,7 @@ func _test_world_evolution_initialization() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		# WorldEvolution is a class, not a singleton, so we test its functionality
+			# WorldEvolution is a class, not a singleton, so we test its functionality
 		var world_evolution = WorldEvolution.new()
 		
 		test_result.details["world_evolution_created"] = true
@@ -1062,11 +938,6 @@ func _test_world_evolution_initialization() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ World Evolution initialization test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ World Evolution initialization test failed: " + str(e))
-	
 	return test_result
 
 func _test_evolution_engine() -> Dictionary:
@@ -1077,8 +948,7 @@ func _test_evolution_engine() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		var world_evolution = WorldEvolution.new()
+			var world_evolution = WorldEvolution.new()
 		
 		# Test evolution engine
 		var evolution_status = world_evolution.get_evolution_status()
@@ -1089,11 +959,6 @@ func _test_evolution_engine() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Evolution engine test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Evolution engine test failed: " + str(e))
-	
 	return test_result
 
 # === Cross-System Integration Testing ===
@@ -1132,8 +997,7 @@ func _test_matrix_connectivity() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		# Test connectivity between neural network matrices
+			# Test connectivity between neural network matrices
 		var connectivity_score = 0.0
 		var total_connections = 0
 		
@@ -1163,11 +1027,6 @@ func _test_matrix_connectivity() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Matrix connectivity test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Matrix connectivity test failed: " + str(e))
-	
 	return test_result
 
 func _test_data_flow() -> Dictionary:
@@ -1178,8 +1037,7 @@ func _test_data_flow() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		# Test data flow between systems
+			# Test data flow between systems
 		var data_flow_score = 0.0
 		var data_paths_tested = 0
 		
@@ -1209,11 +1067,6 @@ func _test_data_flow() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Data flow test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Data flow test failed: " + str(e))
-	
 	return test_result
 
 func _test_system_synchronization() -> Dictionary:
@@ -1224,8 +1077,7 @@ func _test_system_synchronization() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		# Test system synchronization
+			# Test system synchronization
 		var sync_score = 0.0
 		var sync_tests = 0
 		
@@ -1244,11 +1096,6 @@ func _test_system_synchronization() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ System synchronization test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ System synchronization test failed: " + str(e))
-	
 	return test_result
 
 # === Stress Testing ===
@@ -1287,8 +1134,7 @@ func _test_high_frequency_processing() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		if not AIAgentManager:
+			if not AIAgentManager:
 			test_result.status = "failed"
 			test_result.errors.append("AIAgentManager not found")
 			return test_result
@@ -1319,11 +1165,6 @@ func _test_high_frequency_processing() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ High-frequency processing test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ High-frequency processing test failed: " + str(e))
-	
 	return test_result
 
 func _test_memory_stress() -> Dictionary:
@@ -1334,8 +1175,7 @@ func _test_memory_stress() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		# Test memory stress
+			# Test memory stress
 		var initial_memory = OS.get_static_memory_usage_by_type()[OS.MEMORY_TYPE_STATIC]
 		
 		# Create multiple neural network instances
@@ -1362,11 +1202,6 @@ func _test_memory_stress() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Memory stress test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Memory stress test failed: " + str(e))
-	
 	return test_result
 
 func _test_concurrent_operations() -> Dictionary:
@@ -1377,8 +1212,7 @@ func _test_concurrent_operations() -> Dictionary:
 		"errors": []
 	}
 	
-	try:
-		# Test concurrent operations
+			# Test concurrent operations
 		var concurrent_operations = 5
 		var operations_completed = 0
 		
@@ -1401,11 +1235,6 @@ func _test_concurrent_operations() -> Dictionary:
 		
 		print("[NeuralIntegrationTester] ✓ Concurrent operations test passed")
 		
-	except Exception as e:
-		test_result.status = "failed"
-		test_result.errors.append("Exception: " + str(e))
-		print("[NeuralIntegrationTester] ✗ Concurrent operations test failed: " + str(e))
-	
 	return test_result
 
 # === Test Result Calculation ===

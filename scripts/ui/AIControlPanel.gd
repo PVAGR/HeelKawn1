@@ -22,6 +22,8 @@ var world_state_label: Label
 var civilization_label: Label
 var cultural_label: Label
 var environmental_label: Label
+var economic_label: Label
+var religious_label: Label
 
 # AI System State
 var enhanced_ai_enabled: bool = false
@@ -50,6 +52,8 @@ func _setup_ui() -> void:
 	civilization_label = get_node_or_null("VBoxContainer/NeuralNetworkContainer/CivilizationLabel")
 	cultural_label = get_node_or_null("VBoxContainer/NeuralNetworkContainer/CulturalLabel")
 	environmental_label = get_node_or_null("VBoxContainer/NeuralNetworkContainer/EnvironmentalLabel")
+	economic_label = get_node_or_null("VBoxContainer/NeuralNetworkContainer/EconomicLabel")
+	religious_label = get_node_or_null("VBoxContainer/NeuralNetworkContainer/ReligiousLabel")
 	
 	# Initialize toggle state
 	enhanced_ai_enabled = AIAgentManager.civilization_mode if AIAgentManager else false
@@ -218,6 +222,16 @@ func _update_neural_network_display() -> void:
 		var ruin_density = summary.get("ruin_density", 0.0)
 		var resource_depletion = summary.get("resource_depletion", 0.0)
 		environmental_label.text = "Env: Ruins %.2f | Depletion %.2f" % [ruin_density, resource_depletion]
+	
+	if economic_label:
+		var production_eff = summary.get("production_efficiency", 0.0)
+		var econ_stability = summary.get("economic_stability", 0.0)
+		economic_label.text = "Econ: Production %.2f | Stability %.2f" % [production_eff, econ_stability]
+	
+	if religious_label:
+		var religious_fervor = summary.get("religious_fervor", 0.0)
+		var religious_influence = summary.get("religious_influence", 0.0)
+		religious_label.text = "Rel: Fervor %.2f | Influence %.2f" % [religious_fervor, religious_influence]
 
 func _process(_delta: float) -> void:
 	# Only update display if panel is visible and all components are ready

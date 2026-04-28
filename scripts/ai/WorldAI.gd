@@ -157,6 +157,7 @@ func _initialize_neural_world_matrix() -> void:
 		"civilization_neurons": _create_civilization_neurons(),
 		"cultural_neurons": _create_cultural_neurons(),
 		"economic_neurons": _create_economic_neurons(),
+		"religious_neurons": _create_religious_neurons(),
 		"interconnections": _create_neural_interconnections(),
 		"learning_rate": neural_evolution_rate,
 		"evolution_cycles": 0
@@ -232,13 +233,24 @@ func _create_economic_neurons() -> Dictionary:
 		"economic_stability": {"value": 0.0, "activation": 0.0, "connections": []}
 	}
 
+func _create_religious_neurons() -> Dictionary:
+	return {
+		"religious_fervor": {"value": 0.0, "activation": 0.0, "connections": []},
+		"ritual_complexity": {"value": 0.0, "activation": 0.0, "connections": []},
+		"spiritual_authority": {"value": 0.0, "activation": 0.0, "connections": []},
+		"belief_diversity": {"value": 0.0, "activation": 0.0, "connections": []},
+		"sacred_sites": {"value": 0.0, "activation": 0.0, "connections": []},
+		"religious_influence": {"value": 0.0, "activation": 0.0, "connections": []}
+	}
+
 func _create_neural_interconnections() -> Dictionary:
 	var interconnections: Dictionary = {}
 	
 	# Create basic interconnections between neural domains
 	var connection_types = [
-		"civ_to_env", "civ_to_cult", "civ_to_econ",
-		"env_to_cult", "cult_to_econ", "env_to_econ"
+		"civ_to_env", "civ_to_cult", "civ_to_econ", "civ_to_rel",
+		"env_to_cult", "cult_to_econ", "env_to_econ", "cult_to_rel",
+		"econ_to_rel", "rel_to_cult", "rel_to_civ"
 	]
 	
 	for connection_type in connection_types:
@@ -1351,6 +1363,16 @@ func get_neural_network_summary() -> Dictionary:
 	summary["resource_depletion"] = env_neurons.get("resource_depletion", {}).get("value", 0.0)
 	summary["historical_layering"] = env_neurons.get("historical_layering", {}).get("value", 0.0)
 	
+	# Economic neurons
+	var econ_neurons = neural_world_matrix.get("economic_neurons", {})
+	summary["production_efficiency"] = econ_neurons.get("production_efficiency", {}).get("value", 0.0)
+	summary["economic_stability"] = econ_neurons.get("economic_stability", {}).get("value", 0.0)
+	
+	# Religious neurons
+	var rel_neurons = neural_world_matrix.get("religious_neurons", {})
+	summary["religious_fervor"] = rel_neurons.get("religious_fervor", {}).get("value", 0.0)
+	summary["religious_influence"] = rel_neurons.get("religious_influence", {}).get("value", 0.0)
+	
 	return summary
 
 
@@ -1363,6 +1385,8 @@ func save_neural_network_state() -> Dictionary:
 		"civilization_neurons": _serialize_neuron_group(neural_world_matrix.get("civilization_neurons", {})),
 		"cultural_neurons": _serialize_neuron_group(neural_world_matrix.get("cultural_neurons", {})),
 		"environmental_neurons": _serialize_neuron_group(neural_world_matrix.get("environmental_neurons", {})),
+		"economic_neurons": _serialize_neuron_group(neural_world_matrix.get("economic_neurons", {})),
+		"religious_neurons": _serialize_neuron_group(neural_world_matrix.get("religious_neurons", {})),
 		"evolution_cycles": neural_world_matrix.get("evolution_cycles", 0),
 		"emergent_patterns": emergent_patterns.duplicate(true),
 		"world_events": _serialize_world_events()
@@ -1384,6 +1408,12 @@ func load_neural_network_state(save_data: Dictionary) -> void:
 	
 	if save_data.has("environmental_neurons"):
 		_deserialize_neuron_group(neural_world_matrix["environmental_neurons"], save_data["environmental_neurons"])
+	
+	if save_data.has("economic_neurons"):
+		_deserialize_neuron_group(neural_world_matrix["economic_neurons"], save_data["economic_neurons"])
+	
+	if save_data.has("religious_neurons"):
+		_deserialize_neuron_group(neural_world_matrix["religious_neurons"], save_data["religious_neurons"])
 	
 	if save_data.has("evolution_cycles"):
 		neural_world_matrix["evolution_cycles"] = save_data["evolution_cycles"]
@@ -1457,10 +1487,56 @@ func _detect_emergent_patterns() -> void:
 	_detect_historical_saturation_patterns()
 	_detect_environmental_degradation_patterns()
 	
+	# Apply pattern persistence - detected patterns influence future neural weights
+	_apply_pattern_persistence()
+	
 	if pattern_score >= pattern_emergence_threshold:
 		var new_pattern = _create_emergent_pattern()
 		emergent_patterns.append(new_pattern)
 		_apply_emergent_pattern_effects(new_pattern)
+
+func _apply_pattern_persistence() -> void:
+	# Apply detected patterns to influence future neural weights
+	# Patterns that occur frequently become "hardwired" into the neural network
+	var pattern_weights: Dictionary = {
+		"collapse_warning": {"collapse_risk": 0.02, "trust_level": -0.01},
+		"knowledge_crisis": {"knowledge_scarcity": 0.02, "teaching_activity": -0.01},
+		"authority_vacuum": {"civil_authority": -0.01, "military_authority": -0.01},
+		"historical_discovery": {"historical_layering": 0.01, "ruin_density": 0.01},
+		"environmental_degradation": {"resource_depletion": 0.02, "ruin_density": 0.01}
+	}
+	
+	# Count pattern occurrences
+	var pattern_counts: Dictionary = {}
+	for pattern in emergent_patterns:
+		var pattern_type = pattern.get("type", "")
+		pattern_counts[pattern_type] = pattern_counts.get(pattern_type, 0) + 1
+	
+	# Apply weight adjustments based on pattern frequency
+	for pattern_type in pattern_counts:
+		var count = pattern_counts[pattern_type]
+		if count >= 3:  # Only apply if pattern has occurred at least 3 times
+			var weight_adjustments = pattern_weights.get(pattern_type, {})
+			var influence_strength = min(count * 0.005, 0.05)  # Cap at 5% influence
+			
+			for neuron_name in weight_adjustments:
+				var adjustment = weight_adjustments[neuron_name] * influence_strength
+				_apply_neuron_weight_adjustment(neuron_name, adjustment)
+	
+	if GameManager.verbose_logs() and pattern_counts.size() > 0:
+		print("[WorldAI] Applied pattern persistence for %d pattern types" % pattern_counts.size())
+
+
+func _apply_neuron_weight_adjustment(neuron_name: String, adjustment: float) -> void:
+	# Apply weight adjustment to specific neuron across all neuron groups
+	var neuron_groups = ["world_state_neurons", "civilization_neurons", "cultural_neurons", "environmental_neurons", "economic_neurons", "religious_neurons"]
+	
+	for group_name in neuron_groups:
+		var group = neural_world_matrix.get(group_name, {})
+		if group.has(neuron_name):
+			var neuron = group[neuron_name]
+			neuron["value"] = clamp(neuron["value"] + adjustment, 0.0, 1.0)
+
 
 func _evolve_neural_networks() -> void:
 	# Evolve neural networks based on experience

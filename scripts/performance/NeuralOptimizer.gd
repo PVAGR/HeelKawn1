@@ -386,8 +386,8 @@ func _clear_unused_neural_data() -> void:
 
 
 func _force_garbage_collection() -> void:
-	# Force garbage collection
-	@static_unload
+	# Force garbage collection - OS static unload not available in GDScript
+	# Use standard garbage collection
 	pass
 
 
@@ -396,16 +396,16 @@ func _force_garbage_collection() -> void:
 func _update_performance_metrics() -> void:
 	# Update performance metrics
 	var current_fps = Engine.get_frames_per_second()
-	var memory_usage = OS.get_static_memory_usage_by_type().get(OS.MEMORY_TYPE_STATIC, 0) / (1024 * 1024)  # MB
+	var memory_usage = OS.get_static_memory_usage() / (1024 * 1024)  # MB
 	
-	performance_metrics.fps = current_fps
-	performance_metrics.memory_usage = memory_usage
+	performance_metrics["fps"] = current_fps
+	performance_metrics["memory_usage"] = memory_usage
 	
 	# Calculate neural computation time (simplified)
-	performance_metrics.neural_computation_time = _measure_neural_computation_time()
+	performance_metrics["neural_computation_time"] = _measure_neural_computation_time()
 	
 	# Calculate optimization score
-	performance_metrics.optimization_score = _calculate_optimization_score()
+	performance_metrics["optimization_score"] = _calculate_optimization_score()
 	
 	# Emit metrics update signal
 	performance_metrics_updated.emit(performance_metrics)
@@ -428,11 +428,11 @@ func _calculate_optimization_score() -> float:
 	var score = 1.0
 	
 	# Factor in FPS performance
-	var fps_ratio = performance_metrics.fps / target_fps
+	var fps_ratio = performance_metrics["fps"] / target_fps
 	score *= min(fps_ratio, 1.0)
 	
 	# Factor in memory usage
-	var memory_ratio = 1.0 - (performance_metrics.memory_usage / 1000.0)  # 1000 MB as reference
+	var memory_ratio = 1.0 - (performance_metrics["memory_usage"] / 1000.0)  # 1000 MB as reference
 	score *= max(memory_ratio, 0.5)
 	
 	# Factor in neural complexity
@@ -449,7 +449,7 @@ func get_optimization_report() -> Dictionary:
 		"current_metrics": performance_metrics,
 		"optimization_history": optimization_history.slice(-10),  # Last 10 optimizations
 		"active_strategies": _get_active_strategies(),
-		"optimization_score": performance_metrics.optimization_score
+		"optimization_score": performance_metrics["optimization_score"]
 	}
 
 

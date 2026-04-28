@@ -106,10 +106,10 @@ func _initialize_error_weights() -> Dictionary:
 	return weights
 
 
-func _create_error_weight_matrix(rows: int, cols: int) -> Array[Array[float]]:
-	var matrix: Array[Array[float]] = []
+func _create_error_weight_matrix(rows: int, cols: int) -> Array:
+	var matrix: Array = []
 	for i in range(rows):
-		var row: Array[float] = []
+		var row: Array = []
 		for j in range(cols):
 			row.append(randf_range(-0.3, 0.3))
 		matrix.append(row)

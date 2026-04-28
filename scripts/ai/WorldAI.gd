@@ -1,4 +1,4 @@
-extends RefCounted
+extends Node
 class_name WorldAI
 ## Advanced World AI with Neural Network Matrix Integration
 ## Manages civilizational planning, technological progression, and neural network-driven world evolution
@@ -123,7 +123,7 @@ var cultural_advancement: float = 0.1  # Cultural advancement level (0.0-1.0)
 # Additional neural networks
 var technological_neural_network: Dictionary = {}  # Technological AI
 
-func _init():
+func _ready():
 	_initialize_world_state()
 	_setup_initial_discoveries()
 	_initialize_neural_world_matrix()

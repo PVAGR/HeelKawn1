@@ -58,6 +58,9 @@ func _refresh_demands() -> void:
 ## 0 = enough beds (or no pawns); 1 = many pawns share few beds. Uses `World` bed
 ## list vs pawns in group `pawns` (rough macro signal, not per-night scheduling).
 func _refresh_housing_pressure() -> void:
+	# Throttle to every 60 ticks to avoid lag
+	if GameManager.tick_count % 60 != 0:
+		return
 	var scene_tree: SceneTree = get_tree()
 	if scene_tree == null:
 		_housing_press = 0.0

@@ -1096,6 +1096,9 @@ func _update_governance_state() -> void:
 
 
 func _living_pawns() -> Array[Pawn]:
+	# Throttle to every 30 ticks to avoid lag
+	if GameManager.tick_count % 30 != 0:
+		return []  # Return empty to skip this update cycle
 	var out: Array[Pawn] = []
 	var tree: SceneTree = get_tree()
 	if tree == null:

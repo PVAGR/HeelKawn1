@@ -42,6 +42,9 @@ func clear() -> void:
 func recompute(world: World) -> void:
 	if world == null or not is_instance_valid(world) or world.data == null:
 		return
+	# Throttle to every 60 ticks to avoid lag
+	if GameManager.tick_count % 60 != 0:
+		return
 	var now: int = GameManager.tick_count
 	var pawns_alive: int = 0
 	var tree0: SceneTree = get_tree()

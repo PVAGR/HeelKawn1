@@ -2758,18 +2758,18 @@ func _decay_needs() -> void:
 	# Stage 1: Process injuries and pain
 	_process_injuries()
 	
-	# Stage 1: Observe nearby work (learning by observation)
-	_observe_nearby_work()
+	# Stage 1: Observe nearby work (learning by observation) - DISABLED for performance
+	# _observe_nearby_work()
 	
-	# Stage 1: Update perception and location memory
-	_update_perception()
+	# Stage 1: Update perception and location memory - DISABLED for performance
+	# _update_perception()
 	
-	# Stage 2: Track co-presence with nearby pawns
-	track_co_presence()
+	# Stage 2: Track co-presence with nearby pawns - DISABLED for performance
+	# track_co_presence()
 	
-	# Stage 1: Decay unused skills (throttled to once per day)
-	if GameManager.tick_count % GameManager.TICKS_PER_DAY == 0:
-		data.decay_unused_skills()
+	# Stage 1: Decay unused skills (throttled to once per day) - DISABLED for performance
+	# if GameManager.tick_count % GameManager.TICKS_PER_DAY == 0:
+	# 	data.decay_unused_skills()
 	
 	# Stage 3: Track clan labor contributions
 	if _state == State.WORKING and _current_job != null:

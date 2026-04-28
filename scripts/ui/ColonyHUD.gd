@@ -192,9 +192,9 @@ func _refresh() -> void:
 	# Stage 1: Add pawn inspector when a pawn is selected
 	if _selected_pawn != null:
 		lines.append(_pawn_inspector_line())
-	# Stage 9: Add world observer info in verbose mode
-	if hud_verbose:
-		lines.append(_world_observer_line())
+	# Stage 9: World observer disabled due to performance issues
+	# if hud_verbose:
+	# 	lines.append(_world_observer_line())
 	lines.append(_wildlife_line())
 	if hud_verbose:
 		lines.append(_player_status_line())

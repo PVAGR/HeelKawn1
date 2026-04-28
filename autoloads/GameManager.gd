@@ -7,8 +7,8 @@ signal game_tick(tick_count: int)
 ## Emitted whenever the speed or pause state changes. UI can listen to update icons.
 signal speed_changed(new_speed: float, is_paused: bool)
 
-## Real seconds per tick at 1x speed. Your brief: 0.1s real = 1 in-game hour.
-const TICK_INTERVAL_SECONDS: float = 0.1
+## Real seconds per tick at 1x speed. Your brief: 0.05s real = 1 in-game hour (faster).
+const TICK_INTERVAL_SECONDS: float = 0.05
 
 ## Allowed speed multipliers. Index into this with set_speed_index(). 12x is the
 ## "overnight farming" tier -- fine for running an established colony, but at
@@ -20,7 +20,7 @@ const VERBOSE_SIM_LOGS: bool = false
 ## Hard cap to prevent "catch-up storms" where one slow frame triggers hundreds
 ## of ticks and causes visible stutter. Extra accumulated time stays buffered
 ## and is processed over subsequent frames.
-const MAX_TICKS_PER_FRAME: int = 8
+const MAX_TICKS_PER_FRAME: int = 16
 ## Prevent runaway catch-up after a hitch. We keep sim responsive by dropping
 ## excessive backlog instead of trying to replay seconds of queued ticks.
 const MAX_ACCUMULATED_TICKS: int = 16

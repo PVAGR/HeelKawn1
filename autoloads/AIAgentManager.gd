@@ -7,11 +7,13 @@ signal agent_goal_completed(agent_id: int, goal_type: String)
 signal agent_action_executed(agent_id: int, action_type: String, success: bool)
 
 var agents: Dictionary = {}  # agent_id -> AIAgent
+var agent_text_overlays: Dictionary = {}  # agent_id -> Node
 var next_agent_id: int = 1000  # Start AI agent IDs at 1000 to avoid conflicts
 var max_agents: int = 10
-var update_frequency: int = 30  # Update agents every N ticks
+var update_frequency: int = 15  # Update agents every N ticks (faster)
 var last_update_tick: int = 0
 var enabled: bool = true
+var show_agent_overlays: bool = true
 
 # Agent spawning configuration
 var strategic_agent_count: int = 2
@@ -64,8 +66,17 @@ func _spawn_agent(agent_type: int) -> int:
 	# Try to incarnate the agent if there are available pawns
 	_try_incarnate_agent(agent)
 	
+	# Text overlay system temporarily disabled for performance testing
+	# if show_agent_overlays:
+	#	_create_agent_text_overlay(agent_id)
+	
 	agent_spawned.emit(agent_id, agent_type)
 	return agent_id
+
+func _create_agent_text_overlay(agent_id: int) -> void:
+	# Simplified text overlay system - disabled for now to avoid type issues
+	# Will be implemented in a future update
+	pass
 
 func _try_incarnate_agent(agent: RefCounted) -> void:
 	# Get available pawn candidates
@@ -199,6 +210,13 @@ func _maintain_agent_population() -> void:
 	
 	# Remove dead agents
 	for agent_id in agents_to_remove:
+		# Clean up text overlay
+		if agent_text_overlays.has(agent_id):
+			var overlay: Node = agent_text_overlays[agent_id]
+			if overlay != null:
+				overlay.queue_free()
+			agent_text_overlays.erase(agent_id)
+		
 		agents.erase(agent_id)
 	
 	# Spawn new agents if under population
@@ -312,3 +330,14 @@ func add_agent_goal(agent_id: int, goal_type: String, priority: AIAgent.GoalPrio
 	var goal: AIAgent.Goal = AIAgent.Goal.new(goal_type, priority, target_data)
 	agent.add_goal(goal)
 	return true
+
+func set_agent_overlays_enabled(enabled: bool) -> void:
+	show_agent_overlays = enabled
+	
+	# Toggle existing overlays
+	for overlay in agent_text_overlays.values():
+		if overlay != null:
+			overlay.set_enabled(enabled)
+
+func get_agent_text_overlay(agent_id: int) -> Node:
+	return agent_text_overlays.get(agent_id, null)

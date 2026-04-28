@@ -3653,122 +3653,33 @@ func _draw() -> void:
 	var body_color: Color = data.color
 	if _state == State.SLEEPING:
 		body_color = data.color.darkened(0.25)
-	if PROCEDURAL_PIXEL_PAWN:
-		_draw_procedural_pixel_figure(body_origin, body_radius)
-	else:
-		draw_circle(body_origin, body_radius, body_color)
-		# Apparel ring gives each pawn a readable outfit color.
-		draw_arc(body_origin, body_radius - 0.9, PI * 0.12, PI * 0.88, 16, data.apparel_color, 1.0, true)
-		# Hair style overlays near the top of the head.
-		_draw_hair(body_origin, body_radius)
-	if is_selected:
-		# Bright yellow ring sits just outside the body and the busy outline so
-		# it reads even when the pawn is mid-task.
-		var sel_color := Color(1.0, 0.92, 0.18)
-		draw_arc(
-			body_origin,
-			body_radius + 3.5,
-			0.0,
-			TAU,
-			28,
-			sel_color,
-			1.4,
-			true
-		)
-	# Outline color/width communicates state.
-	var busy: bool = (
-		_state == State.WORKING
-		or _state == State.EATING
-		or _state == State.DRAFT_WALK
-	)
+	
+	# Simplified rendering for performance - just draw circle and outline
+	draw_circle(body_origin, body_radius, body_color)
+	
+	# Outline color communicates state (simplified)
 	var outline_c: Color = Color.BLACK
 	if _state == State.WORKING:
 		outline_c = Color.WHITE
 	elif _state == State.EATING:
-		outline_c = Color(0.2, 0.9, 0.2)  # green
-	elif _state == State.GOING_TO_EAT:
-		outline_c = Color(1.0, 0.85, 0.2)  # amber
+		outline_c = Color(0.2, 0.9, 0.2)
 	elif _state == State.SLEEPING:
-		outline_c = Color(0.49, 0.30, 0.81)  # purple
-	elif _state == State.GOING_TO_BED:
-		outline_c = Color(0.78, 0.66, 1.0)  # light purple
-	elif _state == State.FETCHING_MATERIAL:
-		outline_c = Color(0.95, 0.65, 0.35)  # warm orange -- "carrying back"
+		outline_c = Color(0.49, 0.30, 0.81)
 	elif _state == State.DRAFT_WALK:
-		outline_c = Color(0.45, 0.95, 1.0)  # bright cyan
-	var outline_w: float = OUTLINE_WIDTH_BUSY if busy else OUTLINE_WIDTH
-	draw_arc(body_origin, body_radius, 0.0, TAU, 20, outline_c, outline_w, true)
-	# Sleep "Z" mark: tiny purple zig-zag floating above a sleeping pawn.
-	if _state == State.SLEEPING:
-		var z_color := Color(0.78, 0.66, 1.0)
-		var z_top := body_origin + Vector2(2.0, -8.0)
-		var z_mid_r := body_origin + Vector2(5.0, -8.0)
-		var z_mid_l := body_origin + Vector2(2.0, -5.0)
-		var z_bot := body_origin + Vector2(5.0, -5.0)
-		draw_line(z_top, z_mid_r, z_color, 0.7, true)
-		draw_line(z_mid_r, z_mid_l, z_color, 0.7, true)
-		draw_line(z_mid_l, z_bot, z_color, 0.7, true)
-	# Teaching "T" mark: tiny blue T floating above a teaching pawn.
-	if _state == State.TEACHING:
-		var t_color := Color(0.45, 0.95, 1.0)
-		var t_top := body_origin + Vector2(0.0, -8.0)
-		var t_bottom := body_origin + Vector2(0.0, -5.0)
-		var t_left := body_origin + Vector2(-1.5, -8.0)
-		var t_right := body_origin + Vector2(1.5, -8.0)
-		draw_line(t_left, t_right, t_color, 0.7, true)
-		draw_line(t_top, t_bottom, t_color, 0.7, true)
-	# Challenge "X" mark: tiny red X floating above a challenging pawn.
-	if _state == State.CHALLENGE:
-		var c_color := Color(1.0, 0.35, 0.25)
-		var c_tl := body_origin + Vector2(-1.5, -8.0)
-		var c_tr := body_origin + Vector2(1.5, -8.0)
-		var c_bl := body_origin + Vector2(-1.5, -5.0)
-		var c_br := body_origin + Vector2(1.5, -5.0)
-		draw_line(c_tl, c_br, c_color, 0.7, true)
-		draw_line(c_tr, c_bl, c_color, 0.7, true)
-	# Draft marker is always visible when pawn is player-controlled.
+		outline_c = Color(0.45, 0.95, 1.0)
+	draw_arc(body_origin, body_radius, 0.0, TAU, 20, outline_c, OUTLINE_WIDTH, true)
+	
+	# Selection ring only
+	if is_selected:
+		var sel_color := Color(1.0, 0.92, 0.18)
+		draw_arc(body_origin, body_radius + 3.5, 0.0, TAU, 28, sel_color, 1.4, true)
+	
+	# Draft marker only
 	if draft_mode:
 		var c0: Vector2 = body_origin + Vector2(-2.5, DRAFT_CHEVRON_Y)
 		var c1: Vector2 = body_origin + Vector2(0.0, DRAFT_CHEVRON_Y - 2.0)
 		var c2: Vector2 = body_origin + Vector2(2.5, DRAFT_CHEVRON_Y)
 		draw_polyline([c0, c1, c2], Color(1.0, 0.35, 0.25), 1.0, true)
-	# Health bar under the pawn for quick survivability read.
-	var hp_ratio: float = clamp(data.health / 100.0, 0.0, 1.0)
-	var hb_bg := Rect2(
-		body_origin + Vector2(-HEALTH_BAR_W * 0.5, HEALTH_BAR_Y),
-		Vector2(HEALTH_BAR_W, HEALTH_BAR_H)
-	)
-	draw_rect(hb_bg, Color(0, 0, 0, 0.65), true)
-	if hp_ratio > 0.0:
-		draw_rect(Rect2(hb_bg.position, Vector2(HEALTH_BAR_W * hp_ratio, HEALTH_BAR_H)), Color(0.25, 0.95, 0.35), true)
-	# Mood dot above head: green/gold/red for stable/strained/crisis.
-	var mood_dot: Color = Color(0.25, 0.9, 0.35)
-	if data.mood < 50.0:
-		mood_dot = Color(1.0, 0.78, 0.2)
-	if data.mood < 25.0:
-		mood_dot = Color(1.0, 0.25, 0.2)
-	draw_circle(body_origin + Vector2(0.0, MOOD_DOT_Y), 0.85, mood_dot)
-	# Action glyphs: tiny symbols to read activity without opening UI.
-	var glyph_pos: Vector2 = body_origin + Vector2(0.0, -6.5)
-	if _state == State.WORKING:
-		draw_line(glyph_pos + Vector2(-1.2, -0.6), glyph_pos + Vector2(1.2, 1.0), Color(1.0, 1.0, 1.0), 0.9, true)
-		draw_line(glyph_pos + Vector2(1.2, -0.6), glyph_pos + Vector2(-1.2, 1.0), Color(1.0, 1.0, 1.0), 0.9, true)
-	elif _state == State.EATING:
-		draw_circle(glyph_pos, 0.9, Color(0.3, 1.0, 0.35))
-	elif _state == State.DRAFT_WALK:
-		draw_arc(glyph_pos, 1.5, PI * 0.2, PI * 1.8, 10, Color(0.45, 0.95, 1.0), 0.8, true)
-	if _hit_flash_ticks > 0:
-		var a: float = 0.18 + 0.08 * float(_hit_flash_ticks)
-		draw_circle(body_origin, body_radius + 0.7, Color(1.0, 0.2, 0.2, min(0.75, a)))
-	# Carry indicator: small colored swatch above the head.
-	if data.is_carrying():
-		var c: Color = Item.color_for(data.carrying)
-		var rect := Rect2(
-			body_origin + CARRY_OFFSET - CARRY_SIZE * 0.5,
-			CARRY_SIZE
-		)
-		draw_rect(rect, c, true)
-		draw_rect(rect, Color.BLACK, false, 0.6)
 
 
 func _body_radius() -> float:

@@ -8,15 +8,15 @@ signal game_tick(tick_count: int)
 signal speed_changed(new_speed: float, is_paused: bool)
 
 ## Real seconds per tick at 1x speed. Optimized for smoother AI processing.
-const TICK_INTERVAL_SECONDS: float = 0.04  # Slightly faster for better responsiveness
+const TICK_INTERVAL_SECONDS: float = 0.02  # Much faster for smoother gameplay
 
 ## Allowed speed multipliers with finer granularity for smooth control.
 const SPEED_STEPS: Array[float] = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
 ## Set true only when actively debugging pawn/animal internals.
 const VERBOSE_SIM_LOGS: bool = false
 ## Optimized caps for enhanced AI processing
-const MAX_TICKS_PER_FRAME: int = 32  # Increased for enhanced AI systems
-const MAX_ACCUMULATED_TICKS: int = 32  # Increased for smoother catch-up
+const MAX_TICKS_PER_FRAME: int = 64  # Increased for faster catch-up
+const MAX_ACCUMULATED_TICKS: int = 64  # Increased for smoother catch-up
 
 ## Dynamic tick rate adjustment
 var tick_interval: float = TICK_INTERVAL_SECONDS

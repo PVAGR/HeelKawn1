@@ -154,7 +154,11 @@ func _create_world_state_neurons() -> Dictionary:
 		"resource_abundance": {"value": 0.0, "activation": 0.0, "connections": []},
 		"conflict_level": {"value": 0.0, "activation": 0.0, "connections": []},
 		"innovation_rate": {"value": 0.0, "activation": 0.0, "connections": []},
-		"cultural_diversity": {"value": 0.0, "activation": 0.0, "connections": []}
+		"cultural_diversity": {"value": 0.0, "activation": 0.0, "connections": []},
+		"trust_level": {"value": 1.0, "activation": 0.0, "connections": []},
+		"authority_stability": {"value": 1.0, "activation": 0.0, "connections": []},
+		"knowledge_retention": {"value": 1.0, "activation": 0.0, "connections": []},
+		"collapse_risk": {"value": 0.0, "activation": 0.0, "connections": []}
 	}
 
 func _create_environmental_neurons() -> Dictionary:
@@ -318,6 +322,9 @@ func update() -> void:
 	_update_technological_progress()
 	_update_civilization_development()
 	
+	# Check collapse risk and trigger emergency behaviors
+	_check_collapse_emergency()
+	
 	# Process neural network evolution
 	_update_neural_interconnections()
 	_process_neural_activations()
@@ -338,6 +345,73 @@ func _update_neural_world_matrix() -> void:
 	# Update interconnections
 	_update_neural_interconnections()
 
+func _check_collapse_emergency() -> void:
+	if CollapseSystem == null:
+		return
+	
+	var world_neurons = neural_world_matrix["world_state_neurons"]
+	var collapse_risk = world_neurons["collapse_risk"].value
+	
+	# Trigger emergency behaviors based on collapse risk thresholds
+	if collapse_risk > 0.7:
+		# High collapse risk - emergency mode
+		_trigger_emergency_mode("high_collapse_risk")
+	elif collapse_risk > 0.5:
+		# Moderate collapse risk - warning mode
+		_trigger_emergency_mode("moderate_collapse_risk")
+	elif collapse_risk > 0.3:
+		# Low collapse risk - alert mode
+		_trigger_emergency_mode("low_collapse_risk")
+
+
+func _trigger_emergency_mode(emergency_type: String) -> void:
+	match emergency_type:
+		"high_collapse_risk":
+			# Prioritize survival over development
+			neural_evolution_rate *= 0.5  # Slow down evolution to focus on stability
+			environmental_stability *= 0.9  # Environmental degradation accelerates
+			if GameManager.verbose_logs():
+				print("[WorldAI] HIGH COLLAPSE RISK - Emergency mode activated")
+		"moderate_collapse_risk":
+			# Balance survival and development
+			neural_evolution_rate *= 0.8
+			if GameManager.verbose_logs():
+				print("[WorldAI] MODERATE COLLAPSE RISK - Warning mode activated")
+		"low_collapse_risk":
+			# Monitor and prepare
+			if GameManager.verbose_logs():
+				print("[WorldAI] LOW COLLAPSE RISK - Alert mode activated")
+
+
+func _update_collapse_neurons(world_neurons: Dictionary) -> void:
+	if CollapseSystem == null:
+		return
+	
+	# Get average collapse metrics across all settlements
+	var total_trust: float = 0.0
+	var total_authority: float = 0.0
+	var total_knowledge: float = 0.0
+	var total_environmental: float = 0.0
+	var settlement_count: int = 0
+	
+	for settlement_id in CollapseSystem.collapse_metrics:
+		var metrics: Dictionary = CollapseSystem.collapse_metrics[settlement_id]
+		total_trust += metrics.get("trust_level", 1.0)
+		total_authority += metrics.get("authority_stability", 1.0)
+		total_knowledge += metrics.get("knowledge_retention", 1.0)
+		total_environmental += metrics.get("environmental_health", 1.0)
+		settlement_count += 1
+	
+	if settlement_count > 0:
+		world_neurons["trust_level"].value = total_trust / float(settlement_count)
+		world_neurons["authority_stability"].value = total_authority / float(settlement_count)
+		world_neurons["knowledge_retention"].value = total_knowledge / float(settlement_count)
+		
+		# Calculate overall collapse risk (inverse of average health)
+		var avg_health: float = (total_trust + total_authority + total_knowledge + total_environmental) / (4.0 * float(settlement_count))
+		world_neurons["collapse_risk"].value = 1.0 - avg_health
+
+
 func _update_world_state_neurons() -> void:
 	var world_neurons = neural_world_matrix["world_state_neurons"]
 	
@@ -346,6 +420,9 @@ func _update_world_state_neurons() -> void:
 	
 	# Update technological progress
 	world_neurons["technological_progress"].value = float(technological_tier) / 10.0
+	
+	# Update collapse metrics from CollapseSystem
+	_update_collapse_neurons(world_neurons)
 	
 	# Update environmental health
 	world_neurons["environmental_health"].value = biodiversity_index * environmental_stability

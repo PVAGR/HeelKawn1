@@ -1291,6 +1291,160 @@ func on_entity_loss(entity_id: int, entity_type: int) -> void:
 		print("[WorldAI] Entity %d lost - updating neural network" % entity_id)
 
 
+func on_authority_change(pawn_id: int, context: int, new_level: float) -> void:
+	# Called when authority level changes for a pawn
+	var civ_neurons = neural_world_matrix["civilization_neurons"]
+	
+	# Update appropriate authority neuron based on context
+	match context:
+		0:  # MILITARY
+			civ_neurons["military_authority"].value = _update_authority_average(civ_neurons["military_authority"].value, new_level)
+		1:  # CIVIL
+			civ_neurons["civil_authority"].value = _update_authority_average(civ_neurons["civil_authority"].value, new_level)
+		2:  # RELIGIOUS
+			civ_neurons["religious_authority"].value = _update_authority_average(civ_neurons["religious_authority"].value, new_level)
+		3:  # KNOWLEDGE
+			civ_neurons["knowledge_authority"].value = _update_authority_average(civ_neurons["knowledge_authority"].value, new_level)
+	
+	# Record event
+	WorldMemory.record_event({
+		"type": "authority_change",
+		"pawn_id": pawn_id,
+		"context": context,
+		"new_level": new_level,
+		"tick": GameManager.tick_count
+	})
+	
+	if GameManager.verbose_logs():
+		print("[WorldAI] Authority changed for pawn %d context %d to %.2f - updating neural network" % [pawn_id, context, new_level])
+
+
+func _update_authority_average(current_avg: float, new_value: float) -> float:
+	# Smoothly update authority average (exponential moving average)
+	return current_avg * 0.95 + new_value * 0.05
+
+
+func get_neural_network_summary() -> Dictionary:
+	# Return a summary of neural network state for UI display
+	var summary: Dictionary = {}
+	
+	# World state neurons
+	var world_neurons = neural_world_matrix.get("world_state_neurons", {})
+	summary["collapse_risk"] = world_neurons.get("collapse_risk", {}).get("value", 0.0)
+	summary["trust_level"] = world_neurons.get("trust_level", {}).get("value", 0.0)
+	
+	# Civilization neurons
+	var civ_neurons = neural_world_matrix.get("civilization_neurons", {})
+	summary["civil_authority"] = civ_neurons.get("civil_authority", {}).get("value", 0.0)
+	summary["military_authority"] = civ_neurons.get("military_authority", {}).get("value", 0.0)
+	summary["religious_authority"] = civ_neurons.get("religious_authority", {}).get("value", 0.0)
+	summary["knowledge_authority"] = civ_neurons.get("knowledge_authority", {}).get("value", 0.0)
+	
+	# Cultural neurons
+	var cult_neurons = neural_world_matrix.get("cultural_neurons", {})
+	summary["knowledge_scarcity"] = cult_neurons.get("knowledge_scarcity", {}).get("value", 0.0)
+	summary["teaching_activity"] = cult_neurons.get("teaching_activity", {}).get("value", 0.0)
+	
+	# Environmental neurons
+	var env_neurons = neural_world_matrix.get("environmental_neurons", {})
+	summary["ruin_density"] = env_neurons.get("ruin_density", {}).get("value", 0.0)
+	summary["resource_depletion"] = env_neurons.get("resource_depletion", {}).get("value", 0.0)
+	summary["historical_layering"] = env_neurons.get("historical_layering", {}).get("value", 0.0)
+	
+	return summary
+
+
+# === Neural Network Persistence ===
+
+func save_neural_network_state() -> Dictionary:
+	# Serialize neural network state for saving
+	var save_data: Dictionary = {
+		"world_state_neurons": _serialize_neuron_group(neural_world_matrix.get("world_state_neurons", {})),
+		"civilization_neurons": _serialize_neuron_group(neural_world_matrix.get("civilization_neurons", {})),
+		"cultural_neurons": _serialize_neuron_group(neural_world_matrix.get("cultural_neurons", {})),
+		"environmental_neurons": _serialize_neuron_group(neural_world_matrix.get("environmental_neurons", {})),
+		"evolution_cycles": neural_world_matrix.get("evolution_cycles", 0),
+		"emergent_patterns": emergent_patterns.duplicate(true),
+		"world_events": _serialize_world_events()
+	}
+	
+	return save_data
+
+
+func load_neural_network_state(save_data: Dictionary) -> void:
+	# Deserialize neural network state from save data
+	if save_data.has("world_state_neurons"):
+		_deserialize_neuron_group(neural_world_matrix["world_state_neurons"], save_data["world_state_neurons"])
+	
+	if save_data.has("civilization_neurons"):
+		_deserialize_neuron_group(neural_world_matrix["civilization_neurons"], save_data["civilization_neurons"])
+	
+	if save_data.has("cultural_neurons"):
+		_deserialize_neuron_group(neural_world_matrix["cultural_neurons"], save_data["cultural_neurons"])
+	
+	if save_data.has("environmental_neurons"):
+		_deserialize_neuron_group(neural_world_matrix["environmental_neurons"], save_data["environmental_neurons"])
+	
+	if save_data.has("evolution_cycles"):
+		neural_world_matrix["evolution_cycles"] = save_data["evolution_cycles"]
+	
+	if save_data.has("emergent_patterns"):
+		emergent_patterns = save_data["emergent_patterns"]
+	
+	if save_data.has("world_events"):
+		_deserialize_world_events(save_data["world_events"])
+	
+	if GameManager.verbose_logs():
+		print("[WorldAI] Neural network state loaded from save data")
+
+
+func _serialize_neuron_group(neurons: Dictionary) -> Dictionary:
+	var serialized: Dictionary = {}
+	for neuron_name in neurons:
+		var neuron = neurons[neuron_name]
+		serialized[neuron_name] = {
+			"value": neuron.get("value", 0.0),
+			"activation": neuron.get("activation", 0.0),
+			"decay_rate": neuron.get("decay_rate", 0.01)
+		}
+	return serialized
+
+
+func _deserialize_neuron_group(neurons: Dictionary, serialized: Dictionary) -> void:
+	for neuron_name in serialized:
+		if neurons.has(neuron_name):
+			var data = serialized[neuron_name]
+			neurons[neuron_name]["value"] = data.get("value", 0.0)
+			neurons[neuron_name]["activation"] = data.get("activation", 0.0)
+			neurons[neuron_name]["decay_rate"] = data.get("decay_rate", 0.01)
+
+
+func _serialize_world_events() -> Array:
+	var serialized: Array = []
+	for event in world_events:
+		serialized.append({
+			"event_type": event.event_type,
+			"description": event.description,
+			"impact_level": event.impact_level,
+			"event_data": event.event_data,
+			"tick_occurred": event.tick_occurred
+		})
+	return serialized
+
+
+func _deserialize_world_events(serialized: Array) -> void:
+	world_events.clear()
+	for event_data in serialized:
+		var event = WorldEvent.new(
+			event_data.get("event_type", ""),
+			event_data.get("description", ""),
+			event_data.get("impact_level", 1),
+			event_data.get("event_data", {})
+		)
+		event.tick_occurred = event_data.get("tick_occurred", 0)
+		world_events.append(event)
+
+
 func _detect_emergent_patterns() -> void:
 	# Analyze neural network activity for emergent patterns
 	var current_state = _get_current_neural_state()

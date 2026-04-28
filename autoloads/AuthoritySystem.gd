@@ -2,6 +2,11 @@ extends Node
 ## HEELKAWN Authority/Conflict System - Authority is temporary and must emerge socially.
 ## Tracks authority emergence, conflict relationships, and resolution.
 
+# Autoload references
+@onready var WorldAI = get_node_or_null("/root/WorldAI")
+@onready var WorldMemory = get_node_or_null("/root/WorldMemory")
+@onready var GameManager = get_node_or_null("/root/GameManager")
+
 enum AuthorityContext {
 	MILITARY = 0,
 	CIVIL = 1,
@@ -64,6 +69,7 @@ func grant_authority(pawn_id: int, context: AuthorityContext, amount: float, sou
 	authority_sources[pawn_id].append(source_record)
 	
 	_record_authority_grant(pawn_id, context, amount, source)
+	_notify_world_ai_authority_change(pawn_id, context, contexts[context])
 
 func record_defense_action(defender_id: int, protected_id: int) -> void:
 	# Defender gains military authority for protecting others
@@ -431,6 +437,11 @@ func get_conflict_status() -> Dictionary:
 		}
 	
 	return status
+
+func _notify_world_ai_authority_change(pawn_id: int, context: AuthorityContext, new_level: float) -> void:
+	# Notify WorldAI of authority change to update neural network
+	if WorldAI != null and WorldAI.has_method("on_authority_change"):
+		WorldAI.on_authority_change(pawn_id, context, new_level)
 
 func clear() -> void:
 	authority_levels.clear()

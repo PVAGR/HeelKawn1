@@ -16,6 +16,13 @@ var ai_potential_label: Label
 var civilization_progress: ProgressBar
 var status_label: Label
 
+# Neural Network Visualization UI
+var neural_network_container: VBoxContainer
+var world_state_label: Label
+var civilization_label: Label
+var cultural_label: Label
+var environmental_label: Label
+
 # AI System State
 var enhanced_ai_enabled: bool = false
 var current_tick_rate: float = 0.05
@@ -36,6 +43,13 @@ func _setup_ui() -> void:
 	ai_potential_label = get_node_or_null("VBoxContainer/AIPotentialContainer/AIPotentialLabel")
 	civilization_progress = get_node_or_null("VBoxContainer/CivilizationProgress")
 	status_label = get_node_or_null("VBoxContainer/StatusLabel")
+	
+	# Neural network visualization UI
+	neural_network_container = get_node_or_null("VBoxContainer/NeuralNetworkContainer")
+	world_state_label = get_node_or_null("VBoxContainer/NeuralNetworkContainer/WorldStateLabel")
+	civilization_label = get_node_or_null("VBoxContainer/NeuralNetworkContainer/CivilizationLabel")
+	cultural_label = get_node_or_null("VBoxContainer/NeuralNetworkContainer/CulturalLabel")
+	environmental_label = get_node_or_null("VBoxContainer/NeuralNetworkContainer/EnvironmentalLabel")
 	
 	# Initialize toggle state
 	enhanced_ai_enabled = AIAgentManager.civilization_mode if AIAgentManager else false
@@ -163,6 +177,9 @@ func _update_display() -> void:
 	if WorldMemory and civilization_progress != null:
 		civilization_score = _calculate_civilization_score()
 		civilization_progress.value = civilization_score
+	
+	# Update neural network visualization
+	_update_neural_network_display()
 
 func _calculate_civilization_score() -> float:
 	var score: float = 0.0
@@ -175,6 +192,32 @@ func _calculate_civilization_score() -> float:
 	score += ai_potential_level * 10.0
 	
 	return clamp(score, 0.0, 100.0)
+
+func _update_neural_network_display() -> void:
+	if not WorldAI:
+		return
+	
+	var summary = WorldAI.get_neural_network_summary() if WorldAI.has_method("get_neural_network_summary") else {}
+	
+	if world_state_label:
+		var collapse_risk = summary.get("collapse_risk", 0.0)
+		var trust_level = summary.get("trust_level", 0.0)
+		world_state_label.text = "World: Collapse %.2f | Trust %.2f" % [collapse_risk, trust_level]
+	
+	if civilization_label:
+		var civil_auth = summary.get("civil_authority", 0.0)
+		var military_auth = summary.get("military_authority", 0.0)
+		civilization_label.text = "Civ: Civil %.2f | Military %.2f" % [civil_auth, military_auth]
+	
+	if cultural_label:
+		var knowledge_scarcity = summary.get("knowledge_scarcity", 0.0)
+		var teaching_activity = summary.get("teaching_activity", 0.0)
+		cultural_label.text = "Culture: Knowledge %.2f | Teaching %.2f" % [knowledge_scarcity, teaching_activity]
+	
+	if environmental_label:
+		var ruin_density = summary.get("ruin_density", 0.0)
+		var resource_depletion = summary.get("resource_depletion", 0.0)
+		environmental_label.text = "Env: Ruins %.2f | Depletion %.2f" % [ruin_density, resource_depletion]
 
 func _process(_delta: float) -> void:
 	# Only update display if panel is visible and all components are ready

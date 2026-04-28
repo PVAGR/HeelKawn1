@@ -542,6 +542,32 @@ func _update_environmental_neurons() -> void:
 	# Update persistence metrics from PersistenceSystem
 	_update_persistence_neurons(env_neurons)
 
+func get_settlement_goal_priority(goal_type: String) -> float:
+	var world_neurons = neural_world_matrix["world_state_neurons"]
+	var regional_density = world_neurons["regional_meaning_density"].value
+	var settlement_depth = world_neurons["settlement_meaning_depth"].value
+	
+	# Goal priority based on world meaning
+	match goal_type:
+		"knowledge":
+			# Knowledge goals prioritized in regions with deep meaning
+			return settlement_depth * 2.0 + regional_density
+		"exploration":
+			# Exploration prioritized in regions with low meaning density
+			return (1.0 - regional_density) * 2.0
+		"building":
+			# Building prioritized in areas with moderate meaning
+			return settlement_depth * 1.5
+		"defense":
+			# Defense prioritized when meaning is threatened (low depth)
+			return (1.0 - settlement_depth) * 1.5
+		"trade":
+			# Trade prioritized in regions with high meaning density
+			return regional_density * 2.0
+		_:
+			return 1.0
+
+
 func get_teaching_priority_weight() -> float:
 	var cult_neurons = neural_world_matrix["cultural_neurons"]
 	var knowledge_scarcity = cult_neurons["knowledge_scarcity"].value

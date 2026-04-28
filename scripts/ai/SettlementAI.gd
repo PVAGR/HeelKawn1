@@ -5,11 +5,13 @@ class_name SettlementAI
 # Autoload references (accessed via Engine.get_singleton or get_node)
 var CollapseSystem = null
 var AuthoritySystem = null
+var WorldAI = null
 var GameManager = null
 
 func _init():
 	CollapseSystem = get_node_or_null("/root/CollapseSystem")
 	AuthoritySystem = get_node_or_null("/root/AuthoritySystem")
+	WorldAI = get_node_or_null("/root/WorldAI")
 	GameManager = get_node_or_null("/root/GameManager")
 
 enum GovernmentType {
@@ -89,11 +91,16 @@ var population: int = 0
 var resident_agents: Array[int] = []  # Agent IDs
 var government_type: GovernmentType = GovernmentType.TRIBAL
 var development_focus: DevelopmentFocus = DevelopmentFocus.SURVIVAL
+var previous_development_focus: DevelopmentFocus = DevelopmentFocus.SURVIVAL
 var collective_goals: Array[CollectiveGoal] = []
 var cultural_norms: Array[CulturalNorm] = []
 var resource_management: ResourceManagement
 var diplomatic_relations: Dictionary = {}  # settlement_id -> relationship_score
 var historical_events: Array[String] = []
+
+# Emergency state
+var emergency_mode: bool = false
+var emergency_reason: String = ""
 
 # Cultural properties
 var dominant_culture: String = ""
@@ -238,6 +245,12 @@ func propose_collective_goal(goal_type: String, proposer_id: int, priority: int 
 	if not _goal_aligns_with_focus(goal_type):
 		return false
 	
+	# Apply WorldAI settlement goal priority weight
+	if WorldAI != null and WorldAI.has_method("get_settlement_goal_priority"):
+		var goal_weight: float = WorldAI.get_settlement_goal_priority(goal_type)
+		priority = int(priority * (1.0 + goal_weight))
+		goal.priority = priority
+	
 	# Get community support
 	var support_threshold: float = _get_support_threshold()
 	var current_support: int = 1  # Proponent
@@ -258,23 +271,87 @@ func propose_collective_goal(goal_type: String, proposer_id: int, priority: int 
 	return false
 
 func _goal_aligns_with_focus(goal_type: String) -> bool:
+	var base_alignment: bool = false
+	
 	match development_focus:
 		DevelopmentFocus.SURVIVAL:
-			return goal_type in ["gather_food", "build_shelter", "defend_settlement"]
+			base_alignment = goal_type in ["gather_food", "build_shelter", "defend_settlement"]
 		DevelopmentFocus.EXPANSION:
-			return goal_type in ["explore_territory", "found_colony", "build_road"]
+			base_alignment = goal_type in ["explore_territory", "found_colony", "build_road"]
 		DevelopmentFocus.TRADE:
-			return goal_type in ["establish_trade_route", "build_market", "produce_goods"]
+			base_alignment = goal_type in ["establish_trade_route", "build_market", "produce_goods"]
 		DevelopmentFocus.KNOWLEDGE:
-			return goal_type in ["build_library", "research_technology", "preserve_knowledge"]
+			base_alignment = goal_type in ["build_library", "research_technology", "preserve_knowledge"]
 		DevelopmentFocus.MILITARY:
-			return goal_type in ["train_warriors", "build_fortifications", "conquer_territory"]
+			base_alignment = goal_type in ["train_warriors", "build_fortifications", "conquer_territory"]
 		DevelopmentFocus.ARTISTIC:
-			return goal_type in ["create_art", "hold_festival", "build_monument"]
+			base_alignment = goal_type in ["create_art", "hold_festival", "build_monument"]
 		DevelopmentFocus.BALANCED:
-			return true  # Accept all goals
+			base_alignment = true  # Accept all goals
 		_:
-			return false
+			base_alignment = false
+	
+	# Apply WorldAI expansion priority for expansion-related goals
+	if base_alignment and goal_type in ["explore_territory", "found_colony", "build_road"]:
+		if WorldAI != null and WorldAI.has_method("get_expansion_priority_weight"):
+			var expansion_weight: float = WorldAI.get_expansion_priority_weight(goal_type)
+			# If expansion priority is low, require higher base alignment
+			if expansion_weight < 0.3:
+				return development_focus == DevelopmentFocus.EXPANSION
+	
+	return base_alignment
+
+# === Emergency Response ===
+
+func check_emergency_status() -> void:
+	if WorldAI == null or not WorldAI.has_method("get_neural_network_summary"):
+		return
+	
+	# Check collapse risk from WorldAI
+	var world_neurons = WorldAI.neural_world_matrix.get("world_state_neurons", {})
+	var collapse_risk = world_neurons.get("collapse_risk", {}).get("value", 0.0)
+	
+	# Trigger emergency mode if collapse risk is high
+	if collapse_risk > 0.7 and not emergency_mode:
+		enter_emergency_mode("high_collapse_risk")
+	elif collapse_risk < 0.4 and emergency_mode:
+		exit_emergency_mode("collapse_risk_lowered")
+
+
+func enter_emergency_mode(reason: String) -> void:
+	emergency_mode = true
+	emergency_reason = reason
+	
+	# Save previous development focus
+	previous_development_focus = development_focus
+	
+	# Prioritize survival goals
+	development_focus = DevelopmentFocus.SURVIVAL
+	
+	# Cancel non-essential goals
+	var essential_goals = ["gather_food", "build_shelter", "defend_settlement"]
+	var i = collective_goals.size() - 1
+	while i >= 0:
+		if not collective_goals[i].type in essential_goals:
+			collective_goals.remove_at(i)
+		i -= 1
+	
+	# Propose emergency goals
+	propose_collective_goal("gather_food", leader_id if leader_id >= 0 else resident_agents[0], 95)
+	propose_collective_goal("defend_settlement", leader_id if leader_id >= 0 else resident_agents[0], 90)
+	
+	historical_events.append("Emergency mode activated: %s" % reason)
+
+
+func exit_emergency_mode(reason: String) -> void:
+	emergency_mode = false
+	emergency_reason = ""
+	
+	# Restore previous development focus
+	development_focus = previous_development_focus
+	
+	historical_events.append("Emergency mode deactivated: %s" % reason)
+
 
 func _get_support_threshold() -> float:
 	match government_type:
@@ -507,6 +584,12 @@ func _propose_automatic_goals() -> void:
 		# Higher priority in quiet regions (stable for learning)
 		if meaning_label == "quiet":
 			priority = 75
+		
+		# Apply WorldAI teaching priority weight
+		if WorldAI != null and WorldAI.has_method("get_teaching_priority_weight"):
+			var teaching_weight: float = WorldAI.get_teaching_priority_weight()
+			priority = int(priority * (1.0 + teaching_weight))
+		
 		propose_collective_goal("research_technology", leader_id if leader_id >= 0 else resident_agents[0], priority)
 	
 	# Propose memorial/remembering in scarred regions

@@ -4,6 +4,9 @@ extends Node
 ## can claim the best-fitting one. Kept deliberately simple (O(N) scans) while
 ## the total job count is small (<= ~1000). Swap to a heap once we need to.
 
+# Autoload references
+@onready var WorldAI = get_node_or_null("/root/WorldAI")
+
 signal job_posted(job: Job)
 signal job_claimed(job: Job, pawn: Pawn)
 signal job_completed(job: Job)
@@ -84,6 +87,7 @@ func post_trade_haul(
 ## Return the best open job for this pawn, or null. "Best" = highest priority
 ## (plus optional `priority_bonus` offset), then Chebyshev distance. `filter`
 ## rejects ineligible jobs; `priority_bonus` can bias toward colony labor stance.
+## Also applies WorldAI pawn obedience weight to influence job selection.
 func claim_next_for(
 		pawn: Pawn, filter: Callable = Callable(), priority_bonus: Callable = Callable()
 	) -> Job:
@@ -91,6 +95,12 @@ func claim_next_for(
 	if _open.is_empty() or pawn == null or pd == null:
 		return null
 	var pawn_tile: Vector2i = pd.tile_pos
+	
+	# Get pawn obedience weight from WorldAI (affects job compliance)
+	var obedience_weight: float = 1.0
+	if WorldAI != null and WorldAI.has_method("get_pawn_obedience_weight"):
+		obedience_weight = WorldAI.get_pawn_obedience_weight(pawn)
+	
 	var best_idx: int = -1
 	var best_eff: int = -0x7FFFFFFF
 	var best_dist: int = 0x7FFFFFFF
@@ -101,7 +111,13 @@ func claim_next_for(
 		var bonus: int = 0
 		if priority_bonus.is_valid():
 			bonus = int(priority_bonus.call(j))
-		var eff: int = j.priority + bonus
+		
+		# Apply obedience weight to priority (lower obedience = higher priority needed to accept)
+		var adjusted_priority: int = j.priority
+		if obedience_weight < 0.5:
+			adjusted_priority = int(j.priority / obedience_weight)
+		
+		var eff: int = adjusted_priority + bonus
 		var d: int = _chebyshev(pawn_tile, j.work_tile)
 		if eff > best_eff or (eff == best_eff and d < best_dist):
 			best_idx = i

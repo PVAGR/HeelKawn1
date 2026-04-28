@@ -209,20 +209,19 @@ func _create_economic_neurons() -> Dictionary:
 func _create_neural_interconnections() -> Dictionary:
 	var interconnections: Dictionary = {}
 	
-	# Connect world state to all other networks
-	var world_neurons = neural_world_matrix.world_state_neurons.keys()
-	var all_networks = ["environmental_neurons", "civilization_neurons", "cultural_neurons", "economic_neurons"]
+	# Create basic interconnections between neural domains
+	var connection_types = [
+		"civ_to_env", "civ_to_cult", "civ_to_econ",
+		"env_to_cult", "cult_to_econ", "env_to_econ"
+	]
 	
-	for world_neuron in world_neurons:
-		for network in all_networks:
-			var network_neurons = neural_world_matrix[network].keys()
-			for network_neuron in network_neurons:
-				var connection_id = "%s_to_%s" % [world_neuron, network_neuron]
-				interconnections[connection_id] = {
-					"weight": randf_range(-0.3, 0.3),
-					"strength": 1.0,
-					"plasticity": 0.01
-				}
+	for connection_type in connection_types:
+		interconnections[connection_type] = {
+			"weight": randf_range(-0.3, 0.3),
+			"strength": 1.0,
+			"plasticity": 0.01,
+			"type": "basic"
+		}
 	
 	return interconnections
 
@@ -873,6 +872,9 @@ func _update_economic_neurons() -> void:
 
 func _update_neural_interconnections() -> void:
 	# Update interconnections between neural networks based on current state
+	if not neural_world_matrix.has("interconnections"):
+		neural_world_matrix.interconnections = {}
+	
 	var interconnections = neural_world_matrix.interconnections
 	
 	# Calculate connection strengths based on system correlations
@@ -882,18 +884,37 @@ func _update_neural_interconnections() -> void:
 	var env_cult_strength = environmental_stability * cultural_advancement
 	var cult_econ_strength = cultural_advancement * _calculate_economic_stability()
 	
-	# Update or create interconnections
-	interconnections["civ_to_env"] = {"strength": civ_env_strength, "type": "influence"}
-	interconnections["civ_to_cult"] = {"strength": civ_cult_strength, "type": "development"}
-	interconnections["civ_to_econ"] = {"strength": civ_econ_strength, "type": "resource"}
-	interconnections["env_to_cult"] = {"strength": env_cult_strength, "type": "adaptation"}
-	interconnections["cult_to_econ"] = {"strength": cult_econ_strength, "type": "trade"}
+	# Update or create interconnections with proper structure
+	if interconnections.has("civ_to_env"):
+		interconnections.civ_to_env.strength = civ_env_strength
+	else:
+		interconnections.civ_to_env = {"strength": civ_env_strength, "weight": 0.5, "type": "influence"}
+	
+	if interconnections.has("civ_to_cult"):
+		interconnections.civ_to_cult.strength = civ_cult_strength
+	else:
+		interconnections.civ_to_cult = {"strength": civ_cult_strength, "weight": 0.5, "type": "development"}
+	
+	if interconnections.has("civ_to_econ"):
+		interconnections.civ_to_econ.strength = civ_econ_strength
+	else:
+		interconnections.civ_to_econ = {"strength": civ_econ_strength, "weight": 0.5, "type": "resource"}
+	
+	if interconnections.has("env_to_cult"):
+		interconnections.env_to_cult.strength = env_cult_strength
+	else:
+		interconnections.env_to_cult = {"strength": env_cult_strength, "weight": 0.5, "type": "adaptation"}
+	
+	if interconnections.has("cult_to_econ"):
+		interconnections.cult_to_econ.strength = cult_econ_strength
+	else:
+		interconnections.cult_to_econ = {"strength": cult_econ_strength, "weight": 0.5, "type": "trade"}
 	
 	# Remove weak connections
 	var connections_to_remove = []
 	for connection_id in interconnections:
 		var connection = interconnections[connection_id]
-		if connection.strength < 0.01:
+		if connection.has("strength") and connection.strength < 0.01:
 			connections_to_remove.append(connection_id)
 	
 	for connection_id in connections_to_remove:
@@ -966,10 +987,19 @@ func _evolve_neural_networks() -> void:
 
 func _adapt_neural_weights() -> void:
 	# Adapt weights based on performance feedback
+	if not neural_world_matrix.has("learning_rate"):
+		neural_world_matrix.learning_rate = neural_evolution_rate
+	
 	var learning_rate = neural_world_matrix.learning_rate
+	
+	if not neural_world_matrix.has("interconnections"):
+		return
 	
 	for connection_id in neural_world_matrix.interconnections:
 		var connection = neural_world_matrix.interconnections[connection_id]
+		if not connection.has("weight"):
+			connection.weight = 0.5
+		
 		var adaptation = _calculate_weight_adaptation()
 		connection.weight += learning_rate * adaptation
 		connection.weight = clamp(connection.weight, -1.0, 1.0)

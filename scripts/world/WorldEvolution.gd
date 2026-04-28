@@ -318,15 +318,16 @@ func _get_current_world_state() -> Dictionary:
 		var resources = WorldMemory.get_resource_summary()
 		var total_depletion = 0.0
 		for resource in resources:
-			total_depletion += (1.0 - resources[resource])
+			if resources.has(resource):
+				total_depletion += (1.0 - resources[resource])
 		state.resource_depletion = total_depletion / float(resources.size())
 	
 	# Get environmental stress
-	if WorldAI and WorldAI.neural_world_matrix:
-		var env_neurons = WorldAI.neural_world_matrix.environmental_neurons
+	if WorldAI and WorldAI.neural_world_matrix.has("environmental_neurons"):
+		var env_neurons = WorldAI.neural_world_matrix["environmental_neurons"]
 		var stress_sum = 0.0
 		for neuron_name in env_neurons:
-			stress_sum += 1.0 - env_neurons[neuron_name].activation
+			stress_sum += 1.0 - env_neurons[neuron_name]["activation"]
 		state.environmental_stress = stress_sum / float(env_neurons.size())
 	
 	# Get social complexity
@@ -500,7 +501,7 @@ func _calculate_technological_adaptation(world_state: Dictionary, system: Dictio
 	if technological_advancement > system.innovation_threshold:
 		adaptation.adaptation_type = "innovation_acceleration"
 		adaptation.adaptation_details = {
-			"innovation_rate": system.innovation_threshold,
+			"innovation_rate": WorldAI.get("tech_innovation_rate", 0.0),
 			"diffusion_rate": system.diffusion_rate
 		}
 	
@@ -556,21 +557,21 @@ func _apply_system_adaptation(system_name: String, adaptation: Dictionary) -> vo
 
 func _apply_efficiency_improvement(details: Dictionary) -> void:
 	# Improve resource efficiency
-	if WorldAI:
+	if WorldAI and WorldAI.has("resource_distribution"):
 		var resources = WorldAI.resource_distribution
 		for resource in resources:
 			resources[resource] *= 1.1  # 10% efficiency improvement
 
 func _apply_resource_expansion(details: Dictionary) -> void:
 	# Expand resource availability
-	if WorldAI:
+	if WorldAI and WorldAI.has("resource_distribution"):
 		var resources = WorldAI.resource_distribution
 		for resource in resources:
 			resources[resource] *= 1.05  # 5% expansion
 
 func _apply_resilience_building(details: Dictionary) -> void:
 	# Build environmental resilience
-	if WorldAI:
+	if WorldAI and WorldAI.has("environmental_stability"):
 		WorldAI.environmental_stability *= 1.02  # 2% resilience improvement
 
 func _apply_cooperation_enhancement(details: Dictionary) -> void:
@@ -581,7 +582,7 @@ func _apply_cooperation_enhancement(details: Dictionary) -> void:
 
 func _apply_innovation_acceleration(details: Dictionary) -> void:
 	# Accelerate technological innovation
-	if WorldAI:
+	if WorldAI and WorldAI.has("tech_innovation_rate"):
 		WorldAI.tech_innovation_rate *= 1.05  # 5% innovation acceleration
 
 func _apply_cultural_synthesis(details: Dictionary) -> void:

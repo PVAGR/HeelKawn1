@@ -1479,50 +1479,8 @@ func issue_edict(edict_key: String) -> bool:
 
 
 func _nearby_pawn_edict_influence(edict_key: String) -> void:
-	# Dynamic neural network matrix connection for settlement edict influence
-	var influence_radius: float = 90.0
-	var affected_pawns: Array[Pawn] = []
-	
-	for n in get_tree().get_nodes_in_group("pawns"):
-		if not (n is Pawn):
-			continue
-		var p: Pawn = n as Pawn
-		if p == self or p.data == null:
-			continue
-		if p.position.distance_squared_to(position) > influence_radius * influence_radius:
-			continue
-		affected_pawns.append(p)
-	
-	# Apply neural network matrix influence based on edict type
-	for p in affected_pawns:
-		var influence_strength: float = 1.0 - (p.position.distance_to(position) / influence_radius)
-		var neural_signature: String = "NM_EDICT_%08X" % [int(data.id) * 1000 + int(p.data.id) + GameManager.tick_count]
-		
-		match edict_key:
-			"focus_farming":
-				p.data.skills["farming"] = int(p.data.skills.get("farming", 0)) + int(influence_strength * 2)
-				p.data.add_liking_from_action_skill("farming", influence_strength)
-			"draft_soldiers":
-				p.data.skills["combat"] = int(p.data.skills.get("combat", 0)) + int(influence_strength * 2)
-				p.data.add_liking_from_action_skill("combat", influence_strength)
-			"promote_crafting":
-				p.data.skills["crafting"] = int(p.data.skills.get("crafting", 0)) + int(influence_strength * 2)
-				p.data.add_liking_from_action_skill("crafting", influence_strength)
-			"encourage_trade":
-				p.data.skills["diplomacy"] = int(p.data.skills.get("diplomacy", 0)) + int(influence_strength * 2)
-				p.data.add_liking_from_action_skill("diplomacy", influence_strength)
-		
-		# Record neural network matrix influence
-		if WorldMemory != null:
-			WorldMemory.record_event({
-				"type": "edict_influence",
-				"ruler_id": int(data.id),
-				"affected_pawn_id": int(p.data.id),
-				"edict": edict_key,
-				"influence_strength": influence_strength,
-				"neural_signature": neural_signature,
-				"tick": GameManager.tick_count
-			})
+	# DISABLED for performance - iterates through all pawns
+	return
 
 
 func abdicate() -> bool:

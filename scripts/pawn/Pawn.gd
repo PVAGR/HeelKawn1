@@ -174,6 +174,7 @@ enum State {
 	FETCHING_MATERIAL,  # build job claimed; walking to stockpile to grab inputs
 	GOING_TO_BED,       # tired, walking toward a reserved bed
 	TEACHING,           # teaching knowledge to nearby pawn
+	CHALLENGE,          # challenging another pawn's authority
 	## Player-ordered move (Kenshi / RimWorld "draft" step); not a work job.
 	DRAFT_WALK,
 }
@@ -205,6 +206,11 @@ var _eat_ticks_left: int = 0
 var _teaching_target: Pawn = null
 var _teaching_ticks_left: int = 0
 var _teaching_knowledge_type: int = -1
+
+## Challenge state variables
+var _challenge_target: Pawn = null
+var _challenge_ticks_left: int = 0
+var _challenge_context: int = -1
 
 ## Bed currently reserved by this pawn (Vector2i(-1,-1) = none). Set when we
 ## start walking to a bed, cleared on wake or panic-abort. World holds the
@@ -1145,6 +1151,8 @@ func _on_game_tick(_tick: int) -> void:
 			_tick_sleeping()
 		State.TEACHING:
 			_tick_teaching()
+		State.CHALLENGE:
+			_tick_challenge()
 
 
 func _should_panic_sleep() -> bool:
@@ -1204,8 +1212,9 @@ func _tick_idle() -> void:
 	#   3. Hungry + food in stockpile       -> go eat
 	#   4. Tired (no food emergency)        -> sleep on the spot
 	#   5. Can teach nearby pawn           -> teach knowledge
-	#   6. Open job available               -> claim and walk to it
-	#   7. Nothing                          -> small chance to wander
+	#   6. Can challenge authority          -> challenge nearby pawn
+	#   7. Open job available               -> claim and walk to it
+	#   8. Nothing                          -> small chance to wander
 
 	# 1. Emergency: starving + holding food = eat it right now, no stockpile.
 	if data.hunger <= HUNGER_EMERGENCY and data.is_carrying() and Item.is_food(data.carrying):
@@ -1227,7 +1236,10 @@ func _tick_idle() -> void:
 	# 5. Teaching: if we have knowledge and a nearby pawn doesn't, teach them
 	if _maybe_start_teaching():
 		return
-	# 6. Job queue: take the best reachable job. We additionally skip build
+	# 6. Challenge: if we have low authority and a nearby pawn has high authority, challenge them
+	if _maybe_start_challenge():
+		return
+	# 7. Job queue: take the best reachable job. We additionally skip build
 	# jobs whose required materials aren't on hand at the stockpile -- this
 	# prevents pawns from claim/abort looping when wood is empty.
 	#
@@ -1652,6 +1664,35 @@ func _finish_teaching() -> void:
 	_teaching_target = null
 	_teaching_ticks_left = 0
 	_teaching_knowledge_type = -1
+	_reset_to_idle()
+
+
+func _tick_challenge() -> void:
+	_challenge_ticks_left -= 1
+	
+	# Check if target is still valid and nearby
+	if _challenge_target == null or not is_instance_valid(_challenge_target):
+		_finish_challenge()
+		return
+	
+	var dist: float = position.distance_to(_challenge_target.position)
+	if dist > 50.0:  # Challenge range
+		_finish_challenge()
+		return
+	
+	if _challenge_ticks_left <= 0:
+		# Challenge complete - resolve through AuthoritySystem
+		if AuthoritySystem != null and _challenge_context >= 0:
+			var challenger_id: int = int(data.id)
+			var defender_id: int = int(_challenge_target.data.id)
+			AuthoritySystem.resolve_conflict(challenger_id, defender_id, _challenge_context)
+		_finish_challenge()
+
+
+func _finish_challenge() -> void:
+	_challenge_target = null
+	_challenge_ticks_left = 0
+	_challenge_context = -1
 	_reset_to_idle()
 
 
@@ -2335,6 +2376,46 @@ func _maybe_start_teaching() -> bool:
 	return false
 
 
+## Check if pawn can challenge nearby pawn's authority
+func _maybe_start_challenge() -> bool:
+	if AuthoritySystem == null:
+		return false
+	
+	var my_id: int = int(data.id)
+	
+	# Find nearby pawn with higher authority in some context
+	var nearby_distance: float = 50.0
+	for pawn in get_tree().get_nodes_in_group("pawns"):
+		if pawn == self or not is_instance_valid(pawn):
+			continue
+		var dist: float = position.distance_to(pawn.position)
+		if dist > nearby_distance:
+			continue
+		
+		var their_id: int = int(pawn.data.id)
+		
+		# Check each authority context
+		for context in [AuthoritySystem.AuthorityContext.CIVIL, AuthoritySystem.AuthorityContext.MILITARY, AuthoritySystem.AuthorityContext.RELIGIOUS, AuthoritySystem.AuthorityContext.KNOWLEDGE]:
+			var my_auth: float = AuthoritySystem.get_authority_level(my_id, context)
+			var their_auth: float = AuthoritySystem.get_authority_level(their_id, context)
+			
+			# Challenge if they have significantly more authority (0.2 difference)
+			# and we're not already in conflict with them
+			if their_auth > my_auth + 0.2:
+				var is_in_conflict: bool = AuthoritySystem.get_conflict_state(my_id, their_id) != AuthoritySystem.ConflictState.NONE
+				if not is_in_conflict:
+					# Start challenge
+					_challenge_target = pawn
+					_challenge_context = context
+					_challenge_ticks_left = 8  # Challenge takes 8 ticks
+					_state = State.CHALLENGE
+					if GameManager.verbose_logs():
+						print("[Pawn] %s challenging %s authority in context %d" % [data.display_name, pawn.data.display_name, context])
+					return true
+	
+	return false
+
+
 func _try_walk_to_bed() -> bool:
 	if _world == null:
 		return false
@@ -2857,6 +2938,15 @@ func _draw() -> void:
 		var t_right := body_origin + Vector2(1.5, -8.0)
 		draw_line(t_left, t_right, t_color, 0.7, true)
 		draw_line(t_top, t_bottom, t_color, 0.7, true)
+	# Challenge "X" mark: tiny red X floating above a challenging pawn.
+	if _state == State.CHALLENGE:
+		var c_color := Color(1.0, 0.35, 0.25)
+		var c_tl := body_origin + Vector2(-1.5, -8.0)
+		var c_tr := body_origin + Vector2(1.5, -8.0)
+		var c_bl := body_origin + Vector2(-1.5, -5.0)
+		var c_br := body_origin + Vector2(1.5, -5.0)
+		draw_line(c_tl, c_br, c_color, 0.7, true)
+		draw_line(c_tr, c_bl, c_color, 0.7, true)
 	# Draft marker is always visible when pawn is player-controlled.
 	if draft_mode:
 		var c0: Vector2 = body_origin + Vector2(-2.5, DRAFT_CHEVRON_Y)

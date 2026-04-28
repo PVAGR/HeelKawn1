@@ -2735,28 +2735,29 @@ func _decay_needs() -> void:
 	# Mood: net loss when needs aren't met, net gain when they are.
 	# Passive contentment outpaces decay, so a pawn whose hunger AND rest are
 	# both comfortable will recover happiness on their own.
-	# Mood events also contribute their own delta.
-	data.process_mood_events()
-	var mood_event_impact: float = data.get_mood_event_impact()
+	# Mood events also contribute their own delta - DISABLED for performance
+	# data.process_mood_events()
+	# var mood_event_impact: float = data.get_mood_event_impact()
+	var mood_event_impact: float = 0.0
 	
 	if data.hunger >= MOOD_CONTENT_FLOOR and data.rest >= MOOD_CONTENT_FLOOR:
 		data.mood = min(100.0, data.mood + MOOD_GAIN_PER_TICK_CONTENT - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact)
 	else:
 		data.mood = max(0.0, data.mood - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact)
 	
-	# Historically used land: subtle mood drain from nearby past deaths / builds.
-	if get_tree().get_root().has_node("Main/WorldTrace"):
-		var wt: WorldTrace = get_tree().get_root().get_node("Main/WorldTrace") as WorldTrace
-		data.mood = max(0.0, data.mood - wt.get_mood_drain_at(data.tile_pos))
+	# Historically used land: subtle mood drain from nearby past deaths / builds - DISABLED for performance
+	# if get_tree().get_root().has_node("Main/WorldTrace"):
+	# 	var wt: WorldTrace = get_tree().get_root().get_node("Main/WorldTrace") as WorldTrace
+	# 	data.mood = max(0.0, data.mood - wt.get_mood_drain_at(data.tile_pos))
 	
-	# Stage 1: Decay stamina based on activity
-	_decay_stamina()
+	# Stage 1: Decay stamina based on activity - DISABLED for performance
+	# _decay_stamina()
 	
-	# Stage 1: Check temperature exposure
-	_check_temperature()
+	# Stage 1: Check temperature exposure - DISABLED for performance
+	# _check_temperature()
 	
-	# Stage 1: Process injuries and pain
-	_process_injuries()
+	# Stage 1: Process injuries and pain - DISABLED for performance
+	# _process_injuries()
 	
 	# Stage 1: Observe nearby work (learning by observation) - DISABLED for performance
 	# _observe_nearby_work()

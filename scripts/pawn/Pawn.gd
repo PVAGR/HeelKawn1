@@ -767,15 +767,15 @@ func _grant_initial_knowledge() -> void:
 	
 	# Profession-specific knowledge
 	match int(data.current_profession):
-		Profession.Type.FARMER:
+		PawnData.Profession.FARMER:
 			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.SEASON_READING)
 			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.FIRE_KEEPING)
-		Profession.Type.BUILDER:
+		PawnData.Profession.BUILDER:
 			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.SHELTER_BUILDING)
 			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.TOOL_MAKING)
-		Profession.Type.MINER:
+		PawnData.Profession.GATHERER:
 			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.TOOL_MAKING)
-		Profession.Type.HUNTER:
+		PawnData.Profession.WARRIOR:
 			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.NAVIGATION)
 			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.SICKNESS_AVOIDANCE)
 
@@ -2407,18 +2407,13 @@ func _maybe_start_sleeping() -> bool:
 	return true
 
 
-## Find the closest free bed and reserve+walk to it. Returns false if no bed
-## is available; the caller falls back to floor-sleep.
-func _try_walk_to_bed() -> bool:
-
-
 ## Check if pawn can teach knowledge to nearby pawn
 func _maybe_start_teaching() -> bool:
 	if KnowledgeSystem == null:
 		return false
 	
 	var my_id: int = int(data.id)
-	var my_knowledge: Array[int] = KnowledgeSystem.get_knowledge_for_carrier(my_id)
+	var my_knowledge = KnowledgeSystem.get_pawn_knowledge(my_id)
 	
 	if my_knowledge.is_empty():
 		return false  # Nothing to teach
@@ -2433,7 +2428,7 @@ func _maybe_start_teaching() -> bool:
 			continue
 		
 		var their_id: int = int(pawn.data.id)
-		var their_knowledge: Array[int] = KnowledgeSystem.get_knowledge_for_carrier(their_id)
+		var their_knowledge = KnowledgeSystem.get_pawn_knowledge(their_id)
 		
 		# Find a knowledge type we have but they don't
 		for ktype in my_knowledge:

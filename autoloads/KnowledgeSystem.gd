@@ -281,7 +281,7 @@ func get_total_carrier_count() -> int:
 func get_total_knowledge_count() -> int:
 	var total: int = 0
 	for carrier_id in knowledge_carriers:
-		var knowledge: Array[int] = knowledge_carriers[carrier_id]
+		var knowledge: Array = knowledge_carriers[carrier_id]
 		total += knowledge.size()
 	return total
 
@@ -329,7 +329,7 @@ func get_knowledge_status() -> Dictionary:
 func _is_knowledge_lost(knowledge_type: KnowledgeType) -> bool:
 	return get_carrier_count(knowledge_type) == 0
 
-func get_pawn_knowledge(pawn_id: int) -> Array[KnowledgeType]:
+func get_pawn_knowledge(pawn_id: int) -> Array:
 	if knowledge_carriers.has(pawn_id):
 		return knowledge_carriers[pawn_id]
 	return []

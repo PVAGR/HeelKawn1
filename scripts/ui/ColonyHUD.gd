@@ -619,7 +619,7 @@ func _settlement_revival_digest_line() -> String:
 func _knowledge_system_line() -> String:
 	if KnowledgeSystem == null:
 		return "📚 Knowledge: (system unavailable)"
-	var carriers: int = KnowledgeSystem.get_carrier_count()
+	var carriers: int = KnowledgeSystem.get_total_carrier_count()
 	var knowledge_count: int = KnowledgeSystem.get_total_knowledge_count()
 	return "📚 Knowledge: [b]%d[/b] carriers · [b]%d[/b] knowledge types tracked" % [carriers, knowledge_count]
 
@@ -680,21 +680,6 @@ func _neural_network_line() -> String:
 		risk_color = "[color=#ff0000]"  # red
 	
 	return "🧠 Neural: %sCollapse: %.2f[/color] · Trust: %.2f · Patterns: %d" % [risk_color, collapse_risk, trust_level, patterns]
-
-
-func _world_meaning_line() -> String:
-	if WorldMeaning == null:
-		return "🌍 WorldMeaning: (system unavailable)"
-	var regions: int = WorldMeaning.get_tracked_region_count()
-	var settlements: int = WorldMeaning.get_tracked_settlement_count()
-	return "🌍 WorldMeaning: [b]%d[/b] regions · [b]%d[/b] settlements interpreted" % [regions, settlements]
-
-
-func _settlement_revival_digest_line() -> String:
-	var main_node: Node2D = get_tree().get_root().get_node_or_null("Main") as Node2D
-	if main_node == null or not main_node.has_method("get_camera_revival_digest_bbcode"):
-		return "[color=#9e9e9e]🏚 Cam settlement: (no Main)[/color]"
-	return main_node.get_camera_revival_digest_bbcode()
 
 
 # ==================== formatting helpers ====================

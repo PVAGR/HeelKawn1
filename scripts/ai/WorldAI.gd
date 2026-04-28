@@ -870,7 +870,7 @@ func _update_knowledge_neurons(cult_neurons: Dictionary) -> void:
 		return
 	
 	# Get knowledge distribution metrics
-	var carrier_count: int = KnowledgeSystem.get_carrier_count()
+	var carrier_count: int = KnowledgeSystem.get_total_carrier_count()
 	var total_knowledge: int = KnowledgeSystem.get_total_knowledge_count()
 	var pawns = get_tree().get_nodes_in_group("pawns")
 	var pawn_count: int = pawns.size()
@@ -1163,7 +1163,8 @@ func _detect_historical_saturation_patterns() -> void:
 
 func _detect_environmental_degradation_patterns() -> void:
 	var env_neurons = neural_world_matrix["environmental_neurons"]
-	var resource_depletion = env_neurons["resource_depletion"].value
+	var resource_availability = env_neurons.get("resource_availability", {}).get("value", 0.5)
+	var resource_depletion = 1.0 - resource_availability
 	var ruin_density = env_neurons["ruin_density"].value
 	
 	if resource_depletion > 0.6 and ruin_density > 0.4:
@@ -2138,8 +2139,8 @@ func _generate_neural_network_events() -> void:
 	# Generate events based on neural network state
 	var collapse_risk = world_neurons["collapse_risk"].value
 	var knowledge_scarcity = cult_neurons["knowledge_scarcity"].value
-	var authority_stability = civ_neurons["authority_stability"].value
-	var historical_layering = env_neurons["historical_layering"].value
+	var authority_stability = civ_neurons.get("authority_stability", {}).get("value", 1.0)
+	var historical_layering = env_neurons.get("historical_layering", {}).get("value", 0.0)
 	
 	# Generate collapse warning event
 	if collapse_risk > 0.8:

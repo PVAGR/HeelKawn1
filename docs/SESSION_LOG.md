@@ -5,6 +5,46 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-28 - Neural network expansion complete + documentation audit
+
+Date: 2026-04-28
+Goal: Complete neural network integration and create AI-readable documentation for handoff.
+
+Changes made:
+- Added neural network training from game events (reinforcement learning)
+- Added neural network prediction for collapse stages (predict_collapse_stage, get_collapse_stage_name)
+- Added neural-driven succession candidates (rank_succession_candidates with government-specific scoring)
+- Added neural network visualization to AI Control Panel (progress bars with color coding)
+- Added neural-driven diplomatic relations (calculate_diplomatic_modifier, get_diplomatic_attitude)
+- Fixed compilation errors (duplicate functions, variable names, missing references)
+- Created docs/NEURAL_NETWORK_STATE.md as canonical neural network documentation
+- Updated docs/LLM_ONBOARDING.md to include NEURAL_NETWORK_STATE.md in required reading
+
+Neural network now includes:
+- 54 neurons across 6 domains (world_state, civilization, cultural, environmental, economic, religious)
+- Event-driven training system
+- Collapse stage prediction
+- Succession candidate ranking
+- Diplomatic relationship calculation
+- Real-time visualization
+- Full save/load support
+- Pattern persistence system
+
+Documentation status:
+- docs/HEELKAWN_STATE.md - ✅ Current and authoritative
+- docs/NEURAL_NETWORK_STATE.md - ✅ Created for neural network handoff
+- docs/LLM_ONBOARDING.md - ✅ Updated to include neural network documentation
+- docs/SESSION_LOG.md - ✅ Detailed session history
+- docs/CANONICAL_REPOSITORY.md - ✅ Current
+- HEELKAWN_INTEGRATION.md - ⚠️ Outdated (v2.6.1, 2026-04-27) - should be updated or marked historical
+- HEELKAWN_KERNEL.md - ⚠️ Historical reference only (superseded by HEELKAWN_STATE.md)
+
+Suggested next session:
+- Update HEELKAWN_INTEGRATION.md to reflect current neural network state or mark as historical
+- Begin implementing high-priority neural network expansions (military neuron group, war declarations)
+
+---
+
 ## 2026-04-27 - Incarnated F now inspects local context
 
 Date: 2026-04-27

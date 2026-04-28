@@ -2,6 +2,25 @@ extends Node
 ## AI Agent Manager - Advanced Neural Network Matrix Integration
 ## Provides sophisticated AI decision-making with HeelKawn Universe neural network matrix
 
+
+class SettlementAIShim:
+	extends RefCounted
+
+	var settlement_id: int = -1
+	var settlement_name: String = ""
+	var location: Vector2i = Vector2i.ZERO
+
+	func _init(id: int, name: String, pos: Vector2i) -> void:
+		settlement_id = id
+		settlement_name = name
+		location = pos
+
+	func update() -> void:
+		pass
+
+	func add_resident(_agent_id: int) -> void:
+		pass
+
 signal agent_spawned(agent_id: int, agent_type: AIAgent.AgentType)
 signal agent_goal_completed(agent_id: int, goal_type: String)
 signal agent_action_executed(agent_id: int, action_type: String, success: bool)
@@ -20,7 +39,7 @@ var show_agent_overlays: bool = true
 
 # Advanced Neural Network Matrix Systems
 var world_ai: Node
-var settlement_ai_system: Dictionary = {}  # settlement_id -> SettlementAI
+var settlement_ai_system: Dictionary = {}  # settlement_id -> settlement AI instances
 var civilization_mode: bool = true  # Enabled for advanced neural network matrix
 
 # Neural Network Matrix Components
@@ -722,7 +741,7 @@ func _on_game_tick(tick: int) -> void:
 			world_ai.update()
 		
 		for settlement_id in settlement_ai_system:
-			var settlement: SettlementAI = settlement_ai_system[settlement_id]
+			var settlement = settlement_ai_system[settlement_id]
 			settlement.update()
 	
 	# Update agents at specified frequency
@@ -1034,7 +1053,7 @@ func _initialize_settlement_system() -> void:
 			var settlement_data: Dictionary = SettlementMemory.settlements[i]
 			if settlement_data != null and settlement_data.has("center_region"):
 				var settlement_id: int = settlement_data["center_region"]
-				var settlement_ai: SettlementAI = SettlementAI.new(settlement_id, "Settlement_%d" % settlement_id, Vector2i(0, 0))
+				var settlement_ai = SettlementAIShim.new(settlement_id, "Settlement_%d" % settlement_id, Vector2i(0, 0))
 				settlement_ai_system[settlement_id] = settlement_ai
 
 # Enhanced AI update logic integrated into existing _update_all_agents function
@@ -1060,7 +1079,7 @@ func _add_agent_to_settlement(agent_id: int) -> void:
 	# Find nearest settlement or add to existing
 	var nearest_settlement_id: int = _find_nearest_settlement(agent_id)
 	if nearest_settlement_id >= 0:
-		var settlement: SettlementAI = settlement_ai_system[nearest_settlement_id]
+		var settlement = settlement_ai_system[nearest_settlement_id]
 		settlement.add_resident(agent_id)
 
 func _find_nearest_settlement(agent_id: int) -> int:

@@ -5,9 +5,10 @@ If you are an AI assisting with this project:
 ## READ THESE FIRST
 
 1. docs/HEELKAWN_STATE.md
-2. HEELKAWN.txt
-3. README.md
-4. docs/CANONICAL_REPOSITORY.md — **which folder and remote are authoritative** (ignore other HeelKawn paths unless migrating here)
+2. docs/NEURAL_NETWORK_STATE.md (if working on neural network features)
+3. HEELKAWN.txt
+4. README.md
+5. docs/CANONICAL_REPOSITORY.md — **which folder and remote are authoritative** (ignore other HeelKawn paths unless migrating here)
 
 For planning, tiered canon, lore vs kernel scope, or roadmap-heavy work, also read **docs/CURSOR_MASTER_PLANNING_SPEC.md** after the files above.
 

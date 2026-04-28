@@ -99,7 +99,7 @@ func claim_next_for(
 	# Get pawn obedience weight from WorldAI (affects job compliance)
 	var obedience_weight: float = 1.0
 	if WorldAI != null and WorldAI.has_method("get_pawn_obedience_weight"):
-		obedience_weight = WorldAI.get_pawn_obedience_weight(pawn)
+		obedience_weight = WorldAI.get_pawn_obedience_weight(int(pd.id))
 	
 	var best_idx: int = -1
 	var best_eff: int = -0x7FFFFFFF

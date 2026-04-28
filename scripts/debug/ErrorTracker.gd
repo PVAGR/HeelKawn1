@@ -544,14 +544,19 @@ func debug_clear_all_errors() -> void:
 	print("[ErrorTracker] All errors cleared")
 
 
-func _verify_prediction_accuracy() -> float:
+func _verify_prediction_accuracy(pattern: Dictionary = {}) -> float:
 	# Verify prediction accuracy
+	# If specific pattern provided, check that one
+	if not pattern.is_empty():
+		return 1.0 if (pattern.has("correct") and pattern["correct"]) else 0.0
+	
+	# Otherwise check all patterns
 	if error_patterns.size() == 0:
 		return 0.0
 	
 	var correct = 0
-	for pattern in error_patterns:
-		if pattern.has("correct") and pattern["correct"]:
+	for p in error_patterns:
+		if p.has("correct") and p["correct"]:
 			correct += 1
 	
 	return float(correct) / float(error_patterns.size())

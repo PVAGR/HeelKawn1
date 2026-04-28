@@ -303,14 +303,14 @@ func _update_government_type() -> void:
 	# Government evolves with population and complexity
 	var previous_government: int = government_type
 	
-	if population > 50 and government_type == GovernmentType.TRIBAL:
+	if population > 30 and government_type == GovernmentType.TRIBAL:
 		government_type = GovernmentType.CHIEFDOM
 		historical_events.append("Government evolved from %s to %s" % [GovernmentType.keys()[previous_government], GovernmentType.keys()[government_type]])
-	elif population > 100 and government_type == GovernmentType.CHIEFDOM:
+	elif population > 60 and government_type == GovernmentType.CHIEFDOM:
 		previous_government = government_type
 		government_type = GovernmentType.MONARCHY
 		historical_events.append("Government evolved from %s to %s" % [GovernmentType.keys()[previous_government], GovernmentType.keys()[government_type]])
-	elif population > 200 and government_type == GovernmentType.MONARCHY:
+	elif population > 120 and government_type == GovernmentType.MONARCHY:
 		previous_government = government_type
 		government_type = GovernmentType.REPUBLIC
 		historical_events.append("Government evolved from %s to %s" % [GovernmentType.keys()[previous_government], GovernmentType.keys()[government_type]])
@@ -395,6 +395,7 @@ func update() -> void:
 	manage_economy()
 	_process_collective_goals()
 	_update_leadership()
+	_propose_automatic_goals()
 
 func _process_collective_goals() -> void:
 	var completed_goals: Array[int] = []
@@ -410,6 +411,26 @@ func _process_collective_goals() -> void:
 	# Remove completed goals (in reverse order)
 	for i in range(completed_goals.size() - 1, -1, -1):
 		collective_goals.remove_at(completed_goals[i])
+
+func _propose_automatic_goals() -> void:
+	# Automatically propose goals based on settlement needs
+	if collective_goals.size() >= 5:
+		return  # Limit active goals
+	
+	var food_stock = resource_management.stockpiles.get("food", 0.0)
+	var wood_stock = resource_management.stockpiles.get("wood", 0.0)
+	
+	# Propose food gathering if low
+	if food_stock < 10.0 and population > 5:
+		propose_collective_goal("gather_food", leader_id if leader_id >= 0 else resident_agents[0], 80)
+	
+	# Propose shelter building if population growing
+	if population > 10 and wood_stock > 5.0:
+		propose_collective_goal("build_shelter", leader_id if leader_id >= 0 else resident_agents[0], 70)
+	
+	# Propose research if knowledge-focused
+	if development_focus == DevelopmentFocus.KNOWLEDGE and population > 15:
+		propose_collective_goal("research_technology", leader_id if leader_id >= 0 else resident_agents[0], 60)
 
 # === Public Interface ===
 
@@ -464,7 +485,7 @@ func _get_norms_summary() -> Array:
 	return summary
 
 func can_accept_new_residents() -> bool:
-	return population < 100  # Population limit
+	return population < 200  # Increased population limit
 
 func get_cultural_influence() -> float:
 	var influence: float = 0.0

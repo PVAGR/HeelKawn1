@@ -74,11 +74,19 @@ func _on_game_tick(tick: int) -> void:
 			_trigger_locust_swarm(tick)
 		3:
 			_trigger_diplomatic_envoy(tick)
+		4:
+			_trigger_technological_breakthrough(tick)
+		5:
+			_trigger_cultural_renaissance(tick)
+		6:
+			_trigger_resource_discovery(tick)
+		7:
+			_trigger_regional_truce_talks(tick)
 
 
 func _deterministic_event_index(tick: int) -> int:
 	var roll_id: int = int(tick / EVENT_ROLL_INTERVAL)
-	return int((roll_id * 1103515245 + 12345) % 4)
+	return int((roll_id * 1103515245 + 12345) % 8)
 
 
 func _maybe_roll_local_event(tick: int) -> void:
@@ -304,6 +312,74 @@ func _calculate_cultural_compatibility() -> float:
 	var religious_harmony: float = ReligionLens.get_harmony_index() if ReligionLens else 0.5
 	
 	return base_compatibility * (1.0 + event_factor * cultural_maturity * religious_harmony)
+
+func _trigger_technological_breakthrough(tick: int) -> void:
+	var discoveries: Array[String] = [
+		"Improved irrigation techniques",
+		"Advanced metallurgy discovered",
+		"New architectural methods",
+		"Enhanced agricultural tools",
+		"Medical knowledge advancement"
+	]
+	var discovery: String = discoveries[tick % discoveries.size()]
+	
+	# Connect to WorldAI for technological progression
+	if WorldAI:
+		WorldAI.technological_tier = min(WorldAI.technological_tier + 1, WorldAI.TechnologicalTier.QUANTUM)
+	
+	_record_world_event(
+		"Technological Breakthrough",
+		"Scholars have made a breakthrough: %s." % discovery,
+		{"discovery": discovery, "tech_tier": WorldAI.technological_tier if WorldAI else 0}
+	)
+
+func _trigger_cultural_renaissance(tick: int) -> void:
+	var arts: Array[String] = [
+		"Painting and sculpture flourish",
+		"Music and poetry spread",
+		"Philosophy gains prominence",
+		"Theater becomes popular",
+		"Architecture reaches new heights"
+	]
+	var art_form: String = arts[tick % arts.size()]
+	
+	_record_world_event(
+		"Cultural Renaissance",
+		"A period of artistic and intellectual growth: %s." % art_form,
+		{"art_form": art_form, "cultural_bonus": 0.15}
+	)
+
+func _trigger_resource_discovery(tick: int) -> void:
+	var resources: Array[String] = [
+		"Rich iron ore vein found",
+		"Gold deposits discovered",
+		"Rare gemstones unearthed",
+		"Fertile land expansion",
+		"Fresh water spring located"
+	]
+	var resource: String = resources[tick % resources.size()]
+	
+	_record_world_event(
+		"Resource Discovery",
+		"Explorers have found: %s." % resource,
+		{"resource": resource, "economic_boost": 0.2}
+	)
+
+func _trigger_regional_truce_talks(tick: int) -> void:
+	var factions: Array[String] = [
+		"Northern Kingdom",
+		"Southern Empire",
+		"Eastern Coalition",
+		"Western Republic"
+	]
+	var faction1: String = factions[tick % factions.size()]
+	var faction2: String = factions[(tick + 2) % factions.size()]
+	
+	_record_world_event(
+		"Regional Truce Talks",
+		"Councils exchange words before steel; borders hum with uneasy quiet between %s and %s." % [faction1, faction2],
+		{"faction1": faction1, "faction2": faction2, "peace_duration": 5000}
+	)
 
 func _generate_neural_signature(event_type: String, tick: int) -> String:
 	# Generate unique neural network matrix signature for events

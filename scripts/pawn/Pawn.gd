@@ -194,6 +194,8 @@ var _current_job: Job = null
 var _cohort_id: int = -1
 var _cohort_role: int = -1
 var _carrying_spawn_item: bool = false
+var draft_mode: bool = false
+var is_selected: bool = false
 ## Active path: list of tiles AFTER the current tile that must be visited in
 ## order. Empty means stationary.
 var _path: Array[Vector2i] = []

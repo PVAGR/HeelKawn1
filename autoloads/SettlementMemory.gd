@@ -22,7 +22,7 @@ const PEACE_TICKS_PER_BRANCH: Dictionary = {
 const REVIVAL_SCORE_RECOVERING_MIN: int = 35
 const REVIVAL_SCORE_REVIVABLE_MIN: int = 70
 const REVIVAL_SCORE_ACTIVE_MIN: int = 88
-const INTENT_UPDATE_INTERVAL_TICKS: int = 100
+const INTENT_UPDATE_INTERVAL_TICKS: int = 500
 const MIN_INTENT_DWELL_TICKS: int = 2000
 const CRITICAL_LOCAL_FOOD_PRESSURE: float = 0.9
 const LOCAL_HOUSING_PAWNS_PER_REGION: float = 2.0
@@ -36,7 +36,7 @@ const FRONT_PERSISTENCE_WINDOW_TICKS: int = 600
 const FRONT_DECAY_TICKS: int = 200
 const MIN_FRONT_SUPPORT: int = 1
 const FRONT_SUPPORT_CHECK_RADIUS_TILES: int = 8
-const RESOURCE_PRESSURE_UPDATE_INTERVAL_TICKS: int = 500
+const RESOURCE_PRESSURE_UPDATE_INTERVAL_TICKS: int = 1000
 const RESOURCE_PRESSURE_SATURATION: float = 0.75
 ## Work-focus specialization identity is derived ONLY from cached [resource_pressure]
 ## (job-demand proxy). It is NOT true stock scarcity; read-only for HUD/diagnostics.

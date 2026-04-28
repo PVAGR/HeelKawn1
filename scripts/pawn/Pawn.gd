@@ -632,6 +632,9 @@ func _culture_inherited_job_offset() -> int:
 func _path_for_pawn(to: Vector2i) -> Array[Vector2i]:
 	if _world == null or _world.pathfinder == null or data == null:
 		return [] as Array[Vector2i]
+	# Throttle pathfinding to every 3 ticks to reduce lag
+	if GameManager.tick_count % 3 != 0:
+		return [] as Array[Vector2i]
 	if GameManager.game_speed >= FAST_PATHFIND_SPEED_THRESHOLD:
 		return _world.pathfinder.find_path(data.tile_pos, to)
 	return _world.pathfinder.find_path_pawn_historic_aversion(data.tile_pos, to)

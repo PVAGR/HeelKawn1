@@ -115,7 +115,7 @@ func _on_game_tick(_tick: int) -> void:
 		attack_cooldown -= 1
 	
 	# Look for target pawn
-	_find_target_pawn()
+	_select_target()
 	
 	# If we have a target, attack or move toward it
 	if _target_pawn != null and is_instance_valid(_target_pawn):

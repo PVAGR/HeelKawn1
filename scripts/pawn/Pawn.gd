@@ -1076,7 +1076,7 @@ func _on_game_tick(_tick: int) -> void:
 			_last_recruitment_job_type = active_job_type
 			_invalidate_recruitment_signal_cache()
 			_refresh_or_decay_cohort_stability(true)
-		_refresh_recruitment_signal_cache()
+		# _refresh_recruitment_signal_cache() - DISABLED for performance
 		update_cohort_membership()
 		_validate_or_dissolve_cohort()
 		_refresh_or_decay_cohort_stability()
@@ -1693,7 +1693,7 @@ func _apply_work_hazards() -> void:
 func _begin_job(job: Job) -> void:
 	_current_job = job
 	_invalidate_recruitment_signal_cache()
-	_refresh_recruitment_signal_cache(true)
+	# _refresh_recruitment_signal_cache(true) - DISABLED for performance
 	update_cohort_membership(true)
 	_refresh_or_decay_cohort_stability(true)
 	# Build jobs need raw materials in hand before we walk to the build site.

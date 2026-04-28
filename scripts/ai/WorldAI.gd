@@ -357,6 +357,23 @@ func _update_neural_world_matrix() -> void:
 	# Update interconnections
 	_update_neural_interconnections()
 
+func _trigger_settlement_emergency_responses(collapse_risk: float) -> void:
+	# Trigger emergency responses in settlements based on collapse risk
+	for settlement_id in active_settlements:
+		var settlement_ai = active_settlements[settlement_id]
+		if settlement_ai == null or not is_instance_valid(settlement_ai):
+			continue
+		
+		if collapse_risk > 0.7:
+			# High collapse risk - emergency mode
+			if settlement_ai.has_method("trigger_emergency_mode"):
+				settlement_ai.trigger_emergency_mode("high_collapse_risk")
+		elif collapse_risk > 0.5:
+			# Moderate collapse risk - warning mode
+			if settlement_ai.has_method("trigger_emergency_mode"):
+				settlement_ai.trigger_emergency_mode("moderate_collapse_risk")
+
+
 func _check_collapse_emergency() -> void:
 	if CollapseSystem == null:
 		return
@@ -374,6 +391,9 @@ func _check_collapse_emergency() -> void:
 	elif collapse_risk > 0.3:
 		# Low collapse risk - alert mode
 		_trigger_emergency_mode("low_collapse_risk")
+	
+	# Trigger settlement-level emergency responses
+	_trigger_settlement_emergency_responses(collapse_risk)
 
 
 func _trigger_emergency_mode(emergency_type: String) -> void:

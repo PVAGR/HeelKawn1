@@ -604,6 +604,41 @@ func _update_environmental_neurons() -> void:
 	# Update persistence metrics from PersistenceSystem
 	_update_persistence_neurons(env_neurons)
 
+func get_neural_network_summary() -> String:
+	var summary = "[Neural Network State]\n"
+	
+	var world_neurons = neural_world_matrix["world_state_neurons"]
+	var civ_neurons = neural_world_matrix["civilization_neurons"]
+	var cult_neurons = neural_world_matrix["cultural_neurons"]
+	var env_neurons = neural_world_matrix["environmental_neurons"]
+	
+	summary += "World State:\n"
+	summary += "  Collapse Risk: %.2f\n" % world_neurons["collapse_risk"].value
+	summary += "  Trust Level: %.2f\n" % world_neurons["trust_level"].value
+	summary += "  Authority Stability: %.2f\n" % world_neurons["authority_stability"].value
+	summary += "  Knowledge Retention: %.2f\n" % world_neurons["knowledge_retention"].value
+	
+	summary += "Civilization:\n"
+	summary += "  Civil Authority: %.2f\n" % civ_neurons["civil_authority"].value
+	summary += "  Military Authority: %.2f\n" % civ_neurons["military_authority"].value
+	summary += "  Religious Authority: %.2f\n" % civ_neurons["religious_authority"].value
+	summary += "  Knowledge Authority: %.2f\n" % civ_neurons["knowledge_authority"].value
+	
+	summary += "Culture:\n"
+	summary += "  Knowledge Distribution: %.2f\n" % cult_neurons["knowledge_distribution"].value
+	summary += "  Knowledge Scarcity: %.2f\n" % cult_neurons["knowledge_scarcity"].value
+	summary += "  Teaching Activity: %.2f\n" % cult_neurons["teaching_activity"].value
+	
+	summary += "Environment:\n"
+	summary += "  Ruin Density: %.2f\n" % env_neurons["ruin_density"].value
+	summary += "  Grave Density: %.2f\n" % env_neurons["grave_density"].value
+	summary += "  Historical Layering: %.2f\n" % env_neurons["historical_layering"].value
+	
+	summary += "Emergent Patterns: %d detected\n" % emergent_patterns.size()
+	
+	return summary
+
+
 func get_expansion_priority_weight(expansion_type: String) -> float:
 	var env_neurons = neural_world_matrix["environmental_neurons"]
 	var ruin_density = env_neurons["ruin_density"].value

@@ -195,6 +195,7 @@ func _refresh() -> void:
 		lines.append(_collapse_system_line())
 		lines.append(_persistence_system_line())
 		lines.append(_world_meaning_line())
+		lines.append(_neural_network_line())
 		lines.append(_session_diag_line())
 		lines.append(_playtest_social_birth_hint_line())
 	_label.text = "\n".join(lines)
@@ -642,6 +643,33 @@ func _persistence_system_line() -> String:
 	var ruins: int = PersistenceSystem.get_entity_count_by_type(PersistenceSystem.EntityType.RUIN)
 	var graves: int = PersistenceSystem.get_entity_count_by_type(PersistenceSystem.EntityType.GRAVE_FIELD)
 	return "🗺 Persistence: [b]%d[/b] entities · [b]%d[/b] ruins · [b]%d[/b] graves" % [entities, ruins, graves]
+
+
+func _world_meaning_line() -> String:
+
+
+func _neural_network_line() -> String:
+	if WorldAI == null:
+		return "🧠 Neural: (system unavailable)"
+	
+	var world_neurons = WorldAI.neural_world_matrix.get("world_state_neurons", {})
+	if world_neurons.is_empty():
+		return "🧠 Neural: (no data)"
+	
+	var collapse_risk = world_neurons.get("collapse_risk", {}).get("value", 0.0)
+	var trust_level = world_neurons.get("trust_level", {}).get("value", 1.0)
+	var patterns = WorldAI.emergent_patterns.size()
+	
+	# Color code based on collapse risk
+	var risk_color = "[color=#00ff00]"  # green
+	if collapse_risk > 0.3:
+		risk_color = "[color=#ffff00]"  # yellow
+	if collapse_risk > 0.6:
+		risk_color = "[color=#ff9900]"  # orange
+	if collapse_risk > 0.8:
+		risk_color = "[color=#ff0000]"  # red
+	
+	return "🧠 Neural: %sCollapse: %.2f[/color] · Trust: %.2f · Patterns: %d" % [risk_color, collapse_risk, trust_level, patterns]
 
 
 func _world_meaning_line() -> String:

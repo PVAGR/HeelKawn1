@@ -880,10 +880,98 @@ func _process_technological_network() -> void:
 	var output = _forward_propagate_network(input_data, technological_neural_network)
 	_interpret_technological_output(output)
 
+func _detect_collapse_warning_patterns() -> void:
+	var world_neurons = neural_world_matrix["world_state_neurons"]
+	var collapse_risk = world_neurons["collapse_risk"].value
+	var trust_level = world_neurons["trust_level"].value
+	
+	if collapse_risk > 0.6 and trust_level < 0.4:
+		var pattern = {
+			"type": "collapse_warning",
+			"description": "High collapse risk with low trust",
+			"severity": "high",
+			"tick": GameManager.tick_count
+		}
+		emergent_patterns.append(pattern)
+		WorldMemory.record_event({
+			"type": "emergent_pattern_detected",
+			"pattern_type": "collapse_warning",
+			"description": pattern.description,
+			"severity": pattern.severity,
+			"tick": GameManager.tick_count
+		})
+		if GameManager.verbose_logs():
+			print("[WorldAI] Pattern detected: %s" % pattern.description)
+
+
+func _detect_knowledge_crisis_patterns() -> void:
+	var cult_neurons = neural_world_matrix["cultural_neurons"]
+	var knowledge_scarcity = cult_neurons["knowledge_scarcity"].value
+	var teaching_activity = cult_neurons["teaching_activity"].value
+	
+	if knowledge_scarcity > 0.7 and teaching_activity < 0.3:
+		var pattern = {
+			"type": "knowledge_crisis",
+			"description": "High knowledge scarcity with low teaching activity",
+			"severity": "medium",
+			"tick": GameManager.tick_count
+		}
+		emergent_patterns.append(pattern)
+		if GameManager.verbose_logs():
+			print("[WorldAI] Pattern detected: %s" % pattern.description)
+
+
+func _detect_authority_vacuum_patterns() -> void:
+	var civ_neurons = neural_world_matrix["civilization_neurons"]
+	var civil_auth = civ_neurons["civil_authority"].value
+	var military_auth = civ_neurons["military_authority"].value
+	
+	if civil_auth < 0.3 and military_auth < 0.3:
+		var pattern = {
+			"type": "authority_vacuum",
+			"description": "Low authority across all contexts",
+			"severity": "high",
+			"tick": GameManager.tick_count
+		}
+		emergent_patterns.append(pattern)
+		WorldMemory.record_event({
+			"type": "emergent_pattern_detected",
+			"pattern_type": "authority_vacuum",
+			"description": pattern.description,
+			"severity": pattern.severity,
+			"tick": GameManager.tick_count
+		})
+		if GameManager.verbose_logs():
+			print("[WorldAI] Pattern detected: %s" % pattern.description)
+
+
+func _detect_historical_saturation_patterns() -> void:
+	var env_neurons = neural_world_matrix["environmental_neurons"]
+	var historical_layering = env_neurons["historical_layering"].value
+	var ruin_density = env_neurons["ruin_density"].value
+	
+	if historical_layering > 0.7 and ruin_density > 0.5:
+		var pattern = {
+			"type": "historical_saturation",
+			"description": "High historical layering with dense ruins",
+			"severity": "low",
+			"tick": GameManager.tick_count
+		}
+		emergent_patterns.append(pattern)
+		if GameManager.verbose_logs():
+			print("[WorldAI] Pattern detected: %s" % pattern.description)
+
+
 func _detect_emergent_patterns() -> void:
 	# Analyze neural network activity for emergent patterns
 	var current_state = _get_current_neural_state()
 	var pattern_score = _calculate_pattern_emergence()
+	
+	# Detect specific patterns based on neuron combinations
+	_detect_collapse_warning_patterns()
+	_detect_knowledge_crisis_patterns()
+	_detect_authority_vacuum_patterns()
+	_detect_historical_saturation_patterns()
 	
 	if pattern_score >= pattern_emergence_threshold:
 		var new_pattern = _create_emergent_pattern()

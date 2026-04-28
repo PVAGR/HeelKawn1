@@ -170,7 +170,10 @@ func _create_environmental_neurons() -> Dictionary:
 		"biodiversity_health": {"value": 1.0, "activation": 0.0, "connections": []},
 		"resource_availability": {"value": 0.5, "activation": 0.0, "connections": []},
 		"climate_stability": {"value": 0.8, "activation": 0.0, "connections": []},
-		"ecosystem_resilience": {"value": 0.7, "activation": 0.0, "connections": []}
+		"ecosystem_resilience": {"value": 0.7, "activation": 0.0, "connections": []},
+		"ruin_density": {"value": 0.0, "activation": 0.0, "connections": []},
+		"grave_density": {"value": 0.0, "activation": 0.0, "connections": []},
+		"historical_layering": {"value": 0.0, "activation": 0.0, "connections": []}
 	}
 
 func _create_civilization_neurons() -> Dictionary:
@@ -480,6 +483,31 @@ func _update_world_state_neurons() -> void:
 	# Update cultural diversity
 	world_neurons["cultural_diversity"].value = total_cultural_influence / 100.0
 
+func _update_persistence_neurons(env_neurons: Dictionary) -> void:
+	if PersistenceSystem == null:
+		return
+	
+	# Get persistence metrics
+	var total_entities: int = PersistenceSystem.get_entity_count()
+	var ruin_count: int = PersistenceSystem.get_entity_count_by_type(PersistenceSystem.EntityType.RUIN)
+	var grave_count: int = PersistenceSystem.get_entity_count_by_type(PersistenceSystem.EntityType.GRAVE_FIELD)
+	
+	# Ruin density: ruins per settlement
+	var settlement_count: int = active_settlements.size()
+	if settlement_count > 0:
+		env_neurons["ruin_density"].value = float(ruin_count) / float(settlement_count)
+		env_neurons["grave_density"].value = float(grave_count) / float(settlement_count)
+	else:
+		env_neurons["ruin_density"].value = 0.0
+		env_neurons["grave_density"].value = 0.0
+	
+	# Historical layering: total entities per 1000 population
+	if world_population > 0:
+		env_neurons["historical_layering"].value = float(total_entities) / (float(world_population) / 1000.0)
+	else:
+		env_neurons["historical_layering"].value = 0.0
+
+
 func _update_environmental_neurons() -> void:
 	var env_neurons = neural_world_matrix["environmental_neurons"]
 	
@@ -490,6 +518,9 @@ func _update_environmental_neurons() -> void:
 	env_neurons["resource_availability"].value = _calculate_resource_renewability()
 	env_neurons["climate_stability"].value = environmental_stability
 	env_neurons["ecosystem_resilience"].value = _calculate_ecosystem_resilience()
+	
+	# Update persistence metrics from PersistenceSystem
+	_update_persistence_neurons(env_neurons)
 
 func _update_authority_neurons(civ_neurons: Dictionary) -> void:
 	if AuthoritySystem == null:

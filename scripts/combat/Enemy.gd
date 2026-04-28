@@ -135,7 +135,11 @@ func _on_game_tick(_tick: int) -> void:
 			_wander()
 
 
-func _find_target_pawn() -> void:
+func _select_target() -> void:
+	# Throttle to every 30 ticks to avoid lag
+	if GameManager.tick_count % 30 != 0:
+		return
+	
 	var spec = SPECIES_DATA[enemy_type]
 	var range_sq: float = spec.vision_range * spec.vision_range
 	

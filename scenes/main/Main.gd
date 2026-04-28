@@ -4458,6 +4458,21 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		str(rb_audit.get("ore_proxy_actual", "")),
 	]
 	var sig_changed: bool = rb_audit_sig != _resource_balance_audit_last_sig
+
+	# Recent player_inspect summary (for observer HUD)
+	var last_inspect_summary: String = "None"
+	var recent_events: Array = WorldMemory.get_recent_events(32)
+	for i in range(recent_events.size() - 1, -1, -1):
+		var ev: Dictionary = recent_events[i]
+		if str(ev.get("type", "")) == "player_inspect":
+			last_inspect_summary = "%s | pawn:%d region:%d meaning:%s tags:%s" % [
+				str(ev.get("type", "player_inspect")),
+				int(ev.get("pawn_id", -1)),
+				int(ev.get("center_region", -1)),
+				str(ev.get("meaning_label", "")),
+				str(ev.get("tags", PackedStringArray())),
+			]
+			break
 	var force_audit_line: bool = rb_audit_result != "PASS"
 	if (
 			OS.is_debug_build()
@@ -4545,6 +4560,7 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"player_mode": get_player_mode_label(),
 		"player_pawn_id": get_player_pawn_id(),
 		"incarnation_picker_visible": _incarnation_picker != null and is_instance_valid(_incarnation_picker) and _incarnation_picker.visible,
+		"last_player_inspect": last_inspect_summary,
 		"world_status_summary": world_status_summary,
 		"governance_type": _pretty_governance_name(str(governance.get("type", "anarchy"))),
 		"ruler_name": ruler_name,

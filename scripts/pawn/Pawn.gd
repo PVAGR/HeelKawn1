@@ -712,6 +712,10 @@ func _ready() -> void:
 	_sfx.max_distance = 320.0
 	_sfx.volume_db = -5.0
 	add_child(_sfx)
+	
+	# KnowledgeSystem: grant initial knowledge based on profession
+	if KnowledgeSystem != null and data != null:
+		_grant_initial_knowledge()
 
 
 ## Called by PawnSpawner immediately after instantiation.
@@ -728,6 +732,7 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	_clear_cohort_state()
 	add_to_group("pawns")
 	refresh_inherited_cultural_reputation()
+	_grant_initial_knowledge()
 	queue_redraw()
 
 
@@ -738,6 +743,29 @@ func refresh_inherited_cultural_reputation() -> void:
 		return
 	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(data.tile_pos.x, data.tile_pos.y)
 	initial_region_reputation = CulturalMemory.get_region_reputation(rk)
+
+
+## KnowledgeSystem: grant initial knowledge based on profession
+func _grant_initial_knowledge() -> void:
+	var pawn_id: int = int(data.id)
+	
+	# Basic knowledge all pawns start with
+	KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.FOOD_STORAGE)
+	KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.NAVIGATION)
+	
+	# Profession-specific knowledge
+	match int(data.current_profession):
+		Profession.Type.FARMER:
+			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.SEASON_READING)
+			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.FIRE_KEEPING)
+		Profession.Type.BUILDER:
+			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.SHELTER_BUILDING)
+			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.TOOL_MAKING)
+		Profession.Type.MINER:
+			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.TOOL_MAKING)
+		Profession.Type.HUNTER:
+			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.NAVIGATION)
+			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.SICKNESS_AVOIDANCE)
 
 
 ## Player-ordered direct move. Cancels a claimed work job, drops bed/zone
@@ -2520,6 +2548,10 @@ func _die(_p_cause: String = "") -> void:
 		var main_node: Node = get_tree().get_root().get_node_or_null("Main")
 		if main_node != null and main_node.has_method("register_pawn_death"):
 			main_node.call("register_pawn_death", int(data.id))
+		
+		# KnowledgeSystem: remove knowledge carrier when pawn dies
+		if KnowledgeSystem != null:
+			KnowledgeSystem.remove_knowledge_carrier(int(data.id))
 	
 	# Remove from groups and free the node
 	remove_from_group("pawns")

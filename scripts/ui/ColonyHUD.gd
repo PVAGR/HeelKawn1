@@ -341,31 +341,51 @@ func _pawn_inspector_line() -> String:
 
 
 ## Stage 9: World observer line - shows world-level statistics
+## Cached to avoid lag from iterating all pawns every frame
+var _world_observer_cache: Dictionary = {}
+var _world_observer_cache_tick: int = -1
+
 func _world_observer_line() -> String:
+	var current_tick: int = GameManager.tick_count
+	
+	# Update cache every 60 ticks (1 second at 1x speed) to avoid lag
+	if current_tick - _world_observer_cache_tick > 60 or _world_observer_cache_tick == -1:
+		var pawn_count: int = 0
+		var avg_level: float = 0.0
+		var total_clan_members: int = 0
+		var total_settlement_members: int = 0
+		
+		for pawn in get_tree().get_nodes_in_group("pawns"):
+			if not is_instance_valid(pawn):
+				continue
+			pawn_count += 1
+			avg_level += pawn.data.level
+			if pawn.data.clan_id != -1:
+				total_clan_members += 1
+			if pawn.data.settlement_id != -1:
+				total_settlement_members += 1
+		
+		if pawn_count > 0:
+			avg_level /= float(pawn_count)
+		
+		_world_observer_cache = {
+			"pawn_count": pawn_count,
+			"avg_level": avg_level,
+			"total_clan_members": total_clan_members,
+			"total_settlement_members": total_settlement_members,
+			"tick": current_tick,
+		}
+		_world_observer_cache_tick = current_tick
+	
 	var lines: Array = []
 	lines.append("[color=#aaddff]=== World Observer ===[/color]")
 	
-	# Count pawns by stage progression
-	var pawn_count: int = 0
-	var avg_level: float = 0.0
-	var total_clan_members: int = 0
-	var total_settlement_members: int = 0
-	
-	for pawn in get_tree().get_nodes_in_group("pawns"):
-		if not is_instance_valid(pawn):
-			continue
-		pawn_count += 1
-		avg_level += pawn.data.level
-		if pawn.data.clan_id != -1:
-			total_clan_members += 1
-		if pawn.data.settlement_id != -1:
-			total_settlement_members += 1
-	
-	if pawn_count > 0:
-		avg_level /= float(pawn_count)
-	
-	lines.append("[color=#cccccc]Pawns:[/color] [b]%d[/b]  [color=#cccccc]Avg Level:[/color] [b]%.1f[/b]" % [pawn_count, avg_level])
-	lines.append("[color=#cccccc]Clan Members:[/color] [b]%d[/b]  [color=#cccccc]Settlement Members:[/color] [b]%d[/b]" % [total_clan_members, total_settlement_members])
+	lines.append("[color=#cccccc]Pawns:[/color] [b]%d[/b]  [color=#cccccc]Avg Level:[/color] [b]%.1f[/b]" % [
+		_world_observer_cache["pawn_count"], _world_observer_cache["avg_level"]
+	])
+	lines.append("[color=#cccccc]Clan Members:[/color] [b]%d[/b]  [color=#cccccc]Settlement Members:[/color] [b]%d[/b]" % [
+		_world_observer_cache["total_clan_members"], _world_observer_cache["total_settlement_members"]
+	])
 	
 	# World time
 	var tick: int = GameManager.tick_count

@@ -701,7 +701,7 @@ func player_adjust_pattern_threshold(new_threshold: float) -> void:
 		print("[WorldAI] Player adjusted pattern threshold to %.2f" % pattern_emergence_threshold)
 
 
-func get_neural_network_summary() -> String:
+func get_neural_network_summary_string() -> String:
 	var summary = "[Neural Network State]\n"
 	
 	var world_neurons = neural_world_matrix["world_state_neurons"]

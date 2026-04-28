@@ -506,7 +506,7 @@ func describe_bloodline_meaning(bloodline_id: int) -> String:
 # === Public Query Functions ===
 
 func get_tracked_region_count() -> int:
-	return region_meanings.size()
+	return meaning_by_region.size()
 
 func get_tracked_settlement_count() -> int:
-	return settlement_meanings.size()
+	return meaning_by_settlement.size()

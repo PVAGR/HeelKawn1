@@ -650,6 +650,12 @@ func _persistence_system_line() -> String:
 
 
 func _world_meaning_line() -> String:
+	if WorldMeaning == null:
+		return "📖 Meaning: (system unavailable)"
+	
+	var regions = WorldMeaning.get_tracked_region_count()
+	var settlements = WorldMeaning.get_tracked_settlement_count()
+	return "📖 Meaning: [b]%d[/b] regions · [b]%d[/b] settlements" % [regions, settlements]
 
 
 func _neural_network_line() -> String:

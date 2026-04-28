@@ -302,9 +302,9 @@ func _record_succession(from_id: int, to_id: int, context: AuthorityContext, amo
 
 func get_active_conflict_count() -> int:
 	var count: int = 0
-	for key in conflict_relationships:
-		var state: ConflictState = conflict_relationships[key]
-		if state != ConflictState.NONE:
+	for key in conflicts:
+		var conflict_data = conflicts[key]
+		if conflict_data is Dictionary and conflict_data.get("active", false):
 			count += 1
 	return count / 2  # Each conflict counted twice (A-B and B-A)
 

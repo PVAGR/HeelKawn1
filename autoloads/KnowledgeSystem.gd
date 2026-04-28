@@ -275,7 +275,7 @@ func _record_knowledge_loss(knowledge_type: KnowledgeType, reason: String) -> vo
 
 # === Public Query Functions ===
 
-func get_carrier_count() -> int:
+func get_total_carrier_count() -> int:
 	return knowledge_carriers.size()
 
 func get_total_knowledge_count() -> int:

@@ -6,6 +6,7 @@ extends Node
 @onready var WorldAI = get_node_or_null("/root/WorldAI")
 @onready var WorldMemory = get_node_or_null("/root/WorldMemory")
 @onready var GameManager = get_node_or_null("/root/GameManager")
+@onready var KnowledgeSystem = get_node_or_null("/root/KnowledgeSystem")
 
 enum CollapseStage {
 	STABLE = 0,

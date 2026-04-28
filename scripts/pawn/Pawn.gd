@@ -1429,32 +1429,8 @@ func _reproduction_mate_range_px() -> float:
 
 
 func _find_compatible_mate() -> Pawn:
-	var mate_r: float = _reproduction_mate_range_px()
-	var mate_r2: float = mate_r * mate_r
-	var best: Pawn = null
-	var best_d2: float = INF
-	for n in get_tree().get_nodes_in_group("pawns"):
-		if n == null or not (n is Pawn):
-			continue
-		var p: Pawn = n as Pawn
-		if p == self or p.data == null:
-			continue
-		if p.data.hunger <= REPRODUCTION_MIN_HUNGER or p.data.rest <= REPRODUCTION_MIN_REST:
-			continue
-		if p._next_reproduction_tick > GameManager.tick_count:
-			continue
-		var compatible: bool = (
-			data.gender == PawnData.Gender.OTHER
-			or p.data.gender == PawnData.Gender.OTHER
-			or data.gender != p.data.gender
-		)
-		if not compatible:
-			continue
-		var d2: float = position.distance_squared_to(p.position)
-		if d2 <= mate_r2 and d2 < best_d2:
-			best = p
-			best_d2 = d2
-	return best
+	# DISABLED for performance - iterates through all pawns
+	return null
 
 
 func is_current_ruler() -> bool:
@@ -2401,10 +2377,6 @@ func _tick_sleeping() -> void:
 func _engage_enemies() -> void:
 	# DISABLED for performance - iterates through all enemies
 	return
-
-func _find_compatible_mate() -> Pawn:
-	# DISABLED for performance - iterates through all pawns
-	return null
 
 
 ## Drop any bed reservation we hold. Safe to call multiple times.

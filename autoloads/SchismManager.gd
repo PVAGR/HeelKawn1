@@ -47,7 +47,7 @@ func _sync_hold_timers() -> void:
 				_hold_since[ckr1] = -1_000_000_000
 
 
-func check_and_schism(world: World, main: Main) -> void:
+func check_and_schism(world: World, main: Node2D) -> void:
 	if world == null or not is_instance_valid(world) or world.data == null or main == null:
 		return
 	if not main.has_method("society_relocate_pawns_count"):

@@ -17,7 +17,7 @@ func clear() -> void:
 	_last_fragment_tick.clear()
 
 
-func check_and_fragment(world: World, main: Main) -> void:
+func check_and_fragment(world: World, main: Node2D) -> void:
 	if world == null or not is_instance_valid(world) or world.data == null or main == null:
 		return
 	if not main.has_method("society_relocate_pawns_count"):

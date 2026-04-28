@@ -420,7 +420,7 @@ func _jobs_line() -> String:
 
 
 func _player_status_line() -> String:
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Node2D = get_tree().get_root().get_node_or_null("Main") as Node2D
 	if main_node == null:
 		return "[color=#cccccc]PLAYER PAWN:[/color] --  |  QUEUE: [b]0[/b]  |  STATE: [b]offline[/b]"
 	var pawn_id: int = main_node.get_player_pawn_id()
@@ -443,7 +443,7 @@ func _skill_line() -> String:
 
 
 func _export_status_line() -> String:
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Node2D = get_tree().get_root().get_node_or_null("Main") as Node2D
 	var milestone: int = SimTime.KERNEL_DIAGNOSTIC_TICK
 	if main_node == null:
 		return "📜 Export / kernel checkpoint: tick %d | Status: Waiting" % milestone
@@ -490,14 +490,14 @@ func _session_diag_line() -> String:
 
 
 func _kill_line() -> String:
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Node2D = get_tree().get_root().get_node_or_null("Main") as Node2D
 	if main_node == null:
 		return "💀 Kills: 0"
 	return "💀 Kills: %d" % int(main_node.get_kill_count())
 
 
 func _politics_line() -> String:
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Node2D = get_tree().get_root().get_node_or_null("Main") as Node2D
 	if main_node == null:
 		return "🏛 Settlement State: Anarchy | Ruler: None | Player Status: None"
 	var gp: Dictionary = main_node.get_player_governance_profile()
@@ -518,7 +518,7 @@ func _politics_line() -> String:
 
 
 func _war_status_line() -> String:
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Node2D = get_tree().get_root().get_node_or_null("Main") as Node2D
 	if main_node == null:
 		return "⚔ WAR STATUS: Peace | RANK: Grunt"
 	var wp: Dictionary = main_node.get_player_war_profile()
@@ -604,7 +604,7 @@ func _wildlife_line() -> String:
 
 
 func _settlement_revival_digest_line() -> String:
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Node2D = get_tree().get_root().get_node_or_null("Main") as Node2D
 	if main_node == null or not main_node.has_method("get_camera_revival_digest_bbcode"):
 		return "[color=#9e9e9e]🏚 Cam settlement: (no Main)[/color]"
 	return main_node.get_camera_revival_digest_bbcode()

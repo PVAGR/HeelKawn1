@@ -265,8 +265,8 @@ func _emit_report(report_id: String) -> void:
 	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d END ===" % [report_id, tick])
 
 
-func _main() -> Main:
-	return get_tree().root.get_node_or_null("Main") as Main
+func _main() -> Node2D:
+	return get_tree().root.get_node_or_null("Main") as Node2D
 
 
 func _print_dict_sample(title: String, d: Dictionary, max_entries: int) -> void:
@@ -363,7 +363,7 @@ func _report_registry() -> void:
 
 
 func _report_revival() -> void:
-	var m: Main = _main()
+	var m: Node2D = _main()
 	if m != null and m.has_method("get_camera_revival_digest_plain"):
 		print(str(m.call("get_camera_revival_digest_plain")))
 		if m.has_method("get_camera_settlement_revival_digest"):
@@ -389,7 +389,7 @@ func _report_rebirth_consts() -> void:
 
 
 func _report_wildlife() -> void:
-	var m: Main = _main()
+	var m: Node2D = _main()
 	if m != null and m.has_method("get_wildlife_snapshot_for_diagnostic"):
 		print(str(m.call("get_wildlife_snapshot_for_diagnostic")))
 	else:
@@ -495,7 +495,7 @@ func _report_myth() -> void:
 
 
 func _report_road() -> void:
-	var m: Main = _main()
+	var m: Node2D = _main()
 	var sx: int = 127
 	var sy: int = 127
 	if m != null:
@@ -517,7 +517,7 @@ func _report_road() -> void:
 
 
 func _report_remnant() -> void:
-	var m: Main = _main()
+	var m: Node2D = _main()
 	if m == null:
 		print("Main missing")
 		return
@@ -532,7 +532,7 @@ func _report_remnant() -> void:
 
 
 func _report_pawns() -> void:
-	var m: Main = _main()
+	var m: Node2D = _main()
 	if m == null:
 		print("Main missing")
 		return
@@ -571,7 +571,7 @@ func _report_pawns() -> void:
 
 
 func _report_main_world() -> void:
-	var m: Main = _main()
+	var m: Node2D = _main()
 	if m == null:
 		print("Main missing")
 		return
@@ -587,7 +587,7 @@ func _report_main_world() -> void:
 
 
 func _report_kernel() -> void:
-	var m0: Main = _main()
+	var m0: Node2D = _main()
 	var kd: Node = m0.get_node_or_null("KernelDiagnostic") if m0 != null else null
 	if kd != null and kd.has_method("generate_session_log_summary"):
 		print(kd.call("generate_session_log_summary"))
@@ -643,14 +643,14 @@ func _report_religion_lens() -> void:
 
 
 func _report_soul_bundle() -> void:
-	var m: Main = _main()
+	var m: Node2D = _main()
 	var pack: Object = (_SOUL_EXPORT as Script).new()
 	if pack != null and pack.has_method("print_bundle"):
 		pack.call("print_bundle", m)
 
 
 func _report_portable_character() -> void:
-	var m: Main = _main()
+	var m: Node2D = _main()
 	if m == null:
 		print("[PORTABLE_CHARACTER] Main missing")
 		return
@@ -700,7 +700,7 @@ func _report_playtest_bundle() -> void:
 
 
 func _get_playtest_pawn_count() -> int:
-	var m: Main = _main()
+	var m: Node2D = _main()
 	if m == null:
 		return -1
 	var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
@@ -714,7 +714,7 @@ func _get_playtest_pawn_count() -> int:
 
 
 func _report_profession_liking() -> void:
-	var m: Main = _main()
+	var m: Node2D = _main()
 	if m == null:
 		print("Main missing")
 		return

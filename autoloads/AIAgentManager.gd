@@ -7,6 +7,7 @@ signal agent_goal_completed(agent_id: int, goal_type: String)
 signal agent_action_executed(agent_id: int, action_type: String, success: bool)
 
 var agents: Dictionary = {}  # agent_id -> AIAgent
+var civilization_agents: Dictionary = {}  # agent_id -> CivilizationAgent
 var agent_text_overlays: Dictionary = {}  # agent_id -> Node
 var next_agent_id: int = 1000  # Start AI agent IDs at 1000 to avoid conflicts
 var max_agents: int = 10
@@ -15,6 +16,15 @@ var last_update_tick: int = 0
 var enabled: bool = true
 var show_agent_overlays: bool = true
 
+# Enhanced AI systems (temporarily disabled for type resolution)
+# var WorldAIClass = preload("res://scripts/ai/WorldAI.gd")
+# var SettlementAIClass = preload("res://scripts/ai/SettlementAI.gd")
+# var CivilizationAgentClass = preload("res://scripts/ai/CivilizationAgent.gd")
+
+# var world_ai: WorldAI
+# var settlement_ai_system: Dictionary = {}  # settlement_id -> SettlementAI
+var civilization_mode: bool = false  # Temporarily disabled
+
 # Agent spawning configuration
 var strategic_agent_count: int = 2
 var tactical_agent_count: int = 4
@@ -22,11 +32,28 @@ var reactive_agent_count: int = 2
 
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
+	
+	# Initialize enhanced AI systems (temporarily disabled)
+	if civilization_mode:
+		pass
+		# world_ai = WorldAIClass.new()
+		# _initialize_settlement_system()
+	
 	_spawn_initial_agents()
 
 func _on_game_tick(tick: int) -> void:
 	if not enabled:
 		return
+	
+	# Update enhanced AI systems (temporarily disabled)
+	if civilization_mode:
+		pass
+		# if world_ai:
+		#	world_ai.update()
+		# 
+		# for settlement_id in settlement_ai_system:
+		#	var settlement: SettlementAI = settlement_ai_system[settlement_id]
+		#	settlement.update()
 	
 	# Update agents at specified frequency
 	if tick - last_update_tick >= update_frequency:
@@ -52,7 +79,7 @@ func _spawn_initial_agents() -> void:
 	for i in range(reactive_agent_count):
 		_spawn_agent(AIAgentClass.AgentType.REACTIVE)
 
-func _spawn_agent(agent_type: int) -> int:
+func _spawn_agent(agent_type: AIAgent.AgentType) -> int:
 	if agents.size() >= max_agents:
 		return -1
 	
@@ -61,14 +88,19 @@ func _spawn_agent(agent_type: int) -> int:
 	
 	var AIAgentClass = preload("res://scripts/ai/AIAgent.gd")
 	var agent: AIAgent = AIAgentClass.new(agent_id, agent_type)
+	
+	# if civilization_mode:
+	#	agent = CivilizationAgentClass.new(agent_id, agent_type)
+	#	civilization_agents[agent_id] = agent
+	
 	agents[agent_id] = agent
 	
 	# Try to incarnate the agent if there are available pawns
 	_try_incarnate_agent(agent)
 	
-	# Text overlay system temporarily disabled for performance testing
-	# if show_agent_overlays:
-	#	_create_agent_text_overlay(agent_id)
+	# Add to settlement if civilization mode
+	# if civilization_mode and agent.controlled_pawn_id >= 0:
+	#	_add_agent_to_settlement(agent_id)
 	
 	agent_spawned.emit(agent_id, agent_type)
 	return agent_id
@@ -341,3 +373,31 @@ func set_agent_overlays_enabled(enabled: bool) -> void:
 
 func get_agent_text_overlay(agent_id: int) -> Node:
 	return agent_text_overlays.get(agent_id, null)
+
+# === Enhanced AI System Methods (Temporarily Disabled) ===
+
+# func _initialize_settlement_system() -> void:
+#	# Create initial settlement if none exist
+#	if settlement_ai_system.size() == 0:
+#		_create_initial_settlement()
+
+# func _create_initial_settlement() -> void:
+#	var initial_settlement: SettlementAI = SettlementAIClass.new(1, "First Settlement", Vector2i(127, 127))
+#	settlement_ai_system[1] = initial_settlement
+#	
+#	if world_ai:
+#		world_ai.register_settlement(initial_settlement)
+
+# func _add_agent_to_settlement(agent_id: int) -> void:
+#	# Find nearest settlement or add to existing
+#	var nearest_settlement_id: int = _find_nearest_settlement(agent_id)
+#	if nearest_settlement_id >= 0:
+#		var settlement: SettlementAI = settlement_ai_system[nearest_settlement_id]
+#		settlement.add_resident(agent_id)
+
+# func _find_nearest_settlement(agent_id: int) -> int:
+#	# Simple implementation - return first settlement
+#	# In full implementation, would calculate distances
+#	for settlement_id in settlement_ai_system:
+#		return settlement_id
+#	return -1

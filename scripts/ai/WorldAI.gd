@@ -293,11 +293,11 @@ func _initialize_world_state() -> void:
 func _setup_initial_discoveries() -> void:
 	# Set up discoveries that can be made in the Stone Age
 	var stone_age_discoveries = [
-		TechnologicalDiscovery.new("Fire", TechnologicalTier.STONE),
-		TechnologicalDiscovery.new("Stone Tools", TechnologicalTier.STONE),
-		TechnologicalDiscovery.new("Simple Shelters", TechnologicalTier.STONE),
-		TechnologicalDiscovery.new("Oral Language", TechnologicalTier.STONE),
-		TechnologicalDiscovery.new("Basic Hunting", TechnologicalTier.STONE)
+		TechnologicalDiscovery.new("Fire", TechnologicalTier.STONE, "The ability to create and control fire"),
+		TechnologicalDiscovery.new("Stone Tools", TechnologicalTier.STONE, "Basic tools made from stone"),
+		TechnologicalDiscovery.new("Simple Shelters", TechnologicalTier.STONE, "Basic construction techniques for shelter"),
+		TechnologicalDiscovery.new("Oral Language", TechnologicalTier.STONE, "Development of spoken communication"),
+		TechnologicalDiscovery.new("Basic Hunting", TechnologicalTier.STONE, "Fundamental hunting and gathering techniques")
 	]
 	
 	technological_discoveries.clear()
@@ -1208,7 +1208,7 @@ func get_world_status() -> Dictionary:
 	status.environmental_stability = environmental_stability
 	status.active_settlements = active_settlements.size()
 	status.technological_discoveries = technological_discoveries.size()
-	world_events = world_events.size()
+	status.world_events = world_events.size()
 	
 	return status
 

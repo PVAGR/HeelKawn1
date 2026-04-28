@@ -20,7 +20,7 @@ const FONT_SIZE_HOTKEYS: int = 9
 const PANEL_PAD_X: int = 6
 const PANEL_PAD_Y: int = 4
 
-const HOTKEY_HINTS: String = "` map-only · G follow pawn · = full HUD · SPACE pause · 1-7 speed · F5/F8 · F9 observer · F10 debug · F6 focus · M labor · R reroll · B/W/O/Z · Esc"
+const HOTKEY_HINTS: String = "` map-only · G follow · = full HUD · SPACE pause · 1-7 speed · WASD move · E interact · K sprite · F5/F8 · F9 observer · F10 · F6 focus · M labor · Esc · R reroll (debug)"
 
 @onready var _panel: PanelContainer = $Panel
 @onready var _label: RichTextLabel = $Panel/Margin/VBox/Body
@@ -457,7 +457,7 @@ func _export_status_line() -> String:
 func _playtest_social_birth_hint_line() -> String:
 	return (
 		"[color=#a5d6a7][Playtest][/color] Social: co-presence +40t builds rapport; "
-		+ "births need rapport 72+, relaxed hunger/rest, bed access. "
+		+ "births need rapport 72+, relaxed hunger/rest, bed access (or nomad pairing if world bed_count=0, wider range). "
 		+ "F10 → \"31 · Playtest bundle\" for one paste. Prefer 1x–12x while learning."
 	)
 

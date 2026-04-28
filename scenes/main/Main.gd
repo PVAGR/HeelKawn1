@@ -1,7 +1,7 @@
 extends Node2D
 class_name Main
 
-## Top-level scene controller. Owns input hotkeys and the startup/reroll
+## Top-level scene controller. Owns input hotkeys and the startup / reroll (debug R)
 ## sequence: world -> stockpile -> pawns -> jobs. Each step depends on the
 ## previous, so order here matters.
 
@@ -104,6 +104,9 @@ const FOCUS_INSPECTOR_REFRESH_TICKS: int = 15
 const REBIRTH_CHECK_INTERVAL_TICKS: int = 2000
 ## Ecosystems (hunt) stay inert until this tick (world gen / reroll / load).
 const WORLD_STABILIZATION_TICKS: int = 500
+## Player does not architect the colony: no manual walls/beds/doors/stockpile zones.
+## Construction remains `SettlementPlanner` + pawn job claims (NPC-equivalent sim path).
+const PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES: bool = false
 ## World-level only; Pawn/Animal read via [code]Main._world_stabilization_until_tick[/code].
 ## -1 = not initialized yet (hunt/tick guards treat as: allow hunt once bootstrapped sets a non-negative window).
 static var _world_stabilization_until_tick: int = -1
@@ -134,10 +137,10 @@ var _camera_follow_selected: bool = false
 var _player_pawn: Pawn = null
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
+var _avatar_panel: Node = null
 var _kernel_diagnostic: KernelDiagnostic = null
-## Player authority: human handles designations, draft/intent, selection, pause/speed,
-## camera (clamped when a player pawn is assigned). SettlementPlanner, TradePlanner,
-## autonomous jobs/hunt/ecology/fragmentation remain sim-driven unless commanded.
+## Player authority: pawn-local intents (WASD+E), cosmetic edit, draft/edicts when ruler,
+## selection, pause/speed, camera. Structures/zones: planner + jobs only (no human stamp).
 var _phase8_proof_overlay_layer: CanvasLayer = null
 var _phase8_proof_overlay_text: RichTextLabel = null
 ## Content signature for resource-balance console lines (never use snapshot_tick alone — it changes every refresh).
@@ -316,16 +319,14 @@ func _ready() -> void:
 	# new ores can become reachable and we may want to queue the next tunnel.
 	JobManager.job_completed.connect(_on_job_completed)
 	JobManager.job_claimed.connect(_on_job_claimed)
-	# Bottom toolbar: lets the player drive everything with the mouse.
+	# Bottom toolbar: time, save/load, appearance (no manual structure stamping).
 	if _toolbar != null:
-		_toolbar.mode_requested.connect(_on_toolbar_mode_requested)
 		_toolbar.speed_index_requested.connect(GameManager.set_speed_index)
 		_toolbar.pause_toggled.connect(GameManager.toggle_pause)
-		_toolbar.reroll_requested.connect(_reroll_world)
-		_toolbar.zone_filter_cycle_requested.connect(_cycle_zone_filter)
 		_toolbar.save_requested.connect(_colony_save)
 		_toolbar.load_requested.connect(_colony_load)
-		_push_zone_filter_label_to_toolbar()
+		_toolbar.appearance_edit_requested.connect(_toggle_avatar_panel)
+	call_deferred("_ensure_avatar_panel")
 	if OS.is_debug_build():
 		print("[Main] Scene ready. Tick interval: %.2fs" % GameManager.TICK_INTERVAL_SECONDS)
 	_bootstrap_colony()
@@ -1197,9 +1198,35 @@ func _process(delta: float) -> void:
 			$WorldTrace.queue_redraw()
 
 
-func _on_toolbar_mode_requested(mode: int) -> void:
-	# Toolbar mode ints match Main.DesignationMode by construction.
-	_set_designation_mode(mode)
+func _ensure_avatar_panel() -> void:
+	if _avatar_panel != null and is_instance_valid(_avatar_panel):
+		return
+	var scr: Script = load("res://scripts/ui/PlayerAvatarPanel.gd") as Script
+	if scr == null:
+		return
+	_avatar_panel = scr.new() as Node
+	_avatar_panel.name = "PlayerAvatarPanel"
+	var ui_vp: Node = get_node_or_null("UI_Viewport")
+	if ui_vp != null:
+		ui_vp.add_child(_avatar_panel)
+	else:
+		add_child(_avatar_panel)
+
+
+func _toggle_avatar_panel() -> void:
+	_ensure_avatar_panel()
+	if _avatar_panel == null:
+		return
+	if _avatar_panel.visible:
+		_avatar_panel.close_panel()
+		return
+	var target: Pawn = _player_pawn
+	if target == null or not is_instance_valid(target):
+		target = _selected_pawn
+	if target != null and is_instance_valid(target) and target.data != null:
+		_avatar_panel.open_for_pawn(target)
+	elif OS.is_debug_build():
+		print("[Main] Sprite panel: select a pawn first (click on map)")
 
 
 func _run_heavy_refresh_once_per_tick(cb: Callable) -> void:
@@ -1876,7 +1903,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		KEY_7:
 			GameManager.set_speed_index(6)
 		KEY_R:
-			_reroll_world()
+			if OS.is_debug_build():
+				_reroll_world()
+		KEY_K:
+			_toggle_avatar_panel()
 		KEY_T:
 			_pawn_spawner.print_stats()
 		KEY_J:
@@ -1885,21 +1915,6 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_print_stockpile()
 		KEY_D:
 			_toggle_draft_mode()
-		KEY_B:
-			# Shift+B is the legacy "stamp 5 beds near the stockpile" shortcut,
-			# kept for quick demos. Plain B enters bed-designation mode.
-			if event.shift_pressed:
-				_designate_beds_near_stockpile()
-			else:
-				_toggle_designation_mode(DesignationMode.BUILD_BED)
-		KEY_W:
-			_toggle_designation_mode(DesignationMode.BUILD_WALL)
-		KEY_O:
-			_toggle_designation_mode(DesignationMode.BUILD_DOOR)
-		KEY_Z:
-			_toggle_designation_mode(DesignationMode.DESIGNATE_ZONE)
-		KEY_F:
-			_cycle_zone_filter()
 		KEY_F5:
 			_colony_save()
 		KEY_F8:
@@ -2255,6 +2270,8 @@ func _tear_down_all_zones() -> void:
 
 
 func _toggle_designation_mode(mode: int) -> void:
+	if not PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES:
+		return
 	if _designation_mode == mode:
 		_set_designation_mode(DesignationMode.NONE)
 	else:
@@ -2262,6 +2279,8 @@ func _toggle_designation_mode(mode: int) -> void:
 
 
 func _set_designation_mode(mode: int) -> void:
+	if not PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES:
+		mode = DesignationMode.NONE
 	if _designation_mode == mode:
 		return
 	# Switching modes mid-drag is ambiguous (is the drag for the old mode or
@@ -2385,6 +2404,12 @@ func get_player_pawn_id() -> int:
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return -1
 	return int(_player_pawn.data.id)
+
+
+func get_player_pawn() -> Pawn:
+	if _player_pawn != null and is_instance_valid(_player_pawn):
+		return _player_pawn
+	return null
 
 
 func get_player_profession_name() -> String:
@@ -3938,6 +3963,11 @@ func _focus_lines_for_pawn(focus: Dictionary) -> PackedStringArray:
 			int(cobs.get("stability_ticks", 0)),
 			Job.describe_type(s_job_type) if s_job_type >= 0 else "None",
 		])
+	var house_center: int = rk
+	var st_for_house: Variant = SettlementMemory.get_settlement_at_region(rk)
+	if st_for_house is Dictionary:
+		house_center = int((st_for_house as Dictionary).get("center_region", rk))
+	_focus_append_house_stub_lines(out, house_center)
 	return out
 
 
@@ -4017,6 +4047,7 @@ func _focus_lines_for_settlement(focus: Dictionary) -> PackedStringArray:
 		int(round(ColonySimServices.get_food_pressure() * 100.0)),
 		int(round(ColonySimServices.get_housing_pressure() * 100.0)),
 	])
+	_focus_append_house_stub_lines(out, center)
 	return out
 
 
@@ -4042,12 +4073,33 @@ func _focus_lines_for_tile(focus: Dictionary) -> PackedStringArray:
 					_pretty_governance_name(str(gov.get("type", "anarchy"))),
 				]
 		)
+		_focus_append_house_stub_lines(out, int(st.get("center_region", -1)))
 	var events: Array[Dictionary] = WorldMemory.get_events_for_tile(tile)
 	if not events.is_empty():
 		var evt: Dictionary = events[events.size() - 1]
 		var etype: String = str(evt.get("type", "event"))
 		out.append("Last Event: %s @ tick %d" % [etype.replace("_", " "), int(evt.get("t", 0))])
 	return out
+
+
+## FactionRegistry v1: deterministic house stub for settlement zone (CK3-style readout hook).
+func _focus_append_house_stub_lines(out: PackedStringArray, center_region: int) -> void:
+	if center_region < 0:
+		return
+	FactionRegistry.sync_from_settlements()
+	var house: Dictionary = FactionRegistry.get_house_for_zone(str(center_region))
+	if house.is_empty():
+		out.append("Faction / house (stub): (none for this zone yet)")
+		return
+	var disp: String = str(house.get("house_display", house.get("house_id", "")))
+	var hid: String = str(house.get("house_id", ""))
+	var rgb_v: Variant = house.get("banner_rgb", [])
+	var rgb_s: String = "n/a"
+	if rgb_v is Array:
+		var rgb: Array = rgb_v as Array
+		if rgb.size() >= 3:
+			rgb_s = "%.2f,%.2f,%.2f" % [float(rgb[0]), float(rgb[1]), float(rgb[2])]
+	out.append("Faction / house (stub): %s [%s] | banner %s" % [disp, hid, rgb_s])
 
 
 func _pawn_governance_role(d: PawnData, gov: Dictionary) -> String:

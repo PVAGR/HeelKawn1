@@ -5,6 +5,7 @@ extends CanvasLayer
 
 const PANEL_W: int = 460
 const PAD: int = 10
+const _SOUL_EXPORT := preload("res://scripts/kernel/heelkawn_soul_export.gd")
 
 ## Sectioned menu: importance-ish order (playtest first, stubs last).
 const DEBUG_SECTIONS: Array[Dictionary] = [
@@ -12,6 +13,8 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 		"heading": "Playtest / session truth",
 		"rows": [
 			{"id": "playtest_bundle", "label": "31 · Playtest bundle (one paste)"},
+			{"id": "soul_bundle", "label": "32 · Soul bundle (1–2 sim-year handoff paste)"},
+			{"id": "portable_character", "label": "33 · Portable character JSON (MMO / website handoff)"},
 			{"id": "calendar", "label": "01 · Calendar + day/night + checkpoints"},
 			{"id": "sim_diag", "label": "02 · GameManager sim_diag"},
 			{"id": "kernel", "label": "24 · KernelDiagnostic session summary"},
@@ -253,6 +256,10 @@ func _emit_report(report_id: String) -> void:
 			_report_religion_lens()
 		"playtest_bundle":
 			_report_playtest_bundle()
+		"soul_bundle":
+			_report_soul_bundle()
+		"portable_character":
+			_report_portable_character()
 		_:
 			print("Unknown report_id=%s" % report_id)
 	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d END ===" % [report_id, tick])
@@ -635,6 +642,39 @@ func _report_religion_lens() -> void:
 	print(ReligionLens.digest_settlements(12))
 
 
+func _report_soul_bundle() -> void:
+	var m: Main = _main()
+	var pack: Object = (_SOUL_EXPORT as Script).new()
+	if pack != null and pack.has_method("print_bundle"):
+		pack.call("print_bundle", m)
+
+
+func _report_portable_character() -> void:
+	var m: Main = _main()
+	if m == null:
+		print("[PORTABLE_CHARACTER] Main missing")
+		return
+	var p: Pawn = m.get_player_pawn()
+	if p == null or p.data == null:
+		print(
+				"[PORTABLE_CHARACTER] No pawn — select one on the map (selection = player pawn for export)."
+		)
+		return
+	var wseed: int = 0
+	var w: World = m.get_node_or_null("WorldViewport/World") as World
+	if w != null and w.data != null:
+		wseed = int(w.data.world_seed)
+	var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+	var bundle: Dictionary = p.data.to_portable_character_export(GameManager.tick_count, wseed, rk)
+	print("=== HEELKAWN_PORTABLE_CHARACTER_JSON BEGIN ===")
+	print(JSON.stringify(bundle, "\t"))
+	print("=== HEELKAWN_PORTABLE_CHARACTER_JSON END ===")
+	print(
+			"[PORTABLE_CHARACTER] hint: paste between BEGIN/END; future MMO/website importers target schema=%s"
+			% PawnData.PORTABLE_CHARACTER_SCHEMA
+	)
+
+
 func _report_playtest_bundle() -> void:
 	print("[PLAYTEST_BUNDLE] tick=%d" % GameManager.tick_count)
 	print("[PLAYTEST_BUNDLE] sim_diag=%s" % str(GameManager.sim_diag()))
@@ -654,6 +694,7 @@ func _report_playtest_bundle() -> void:
 	print(ReligionLens.digest_settlements(6))
 	print(
 			"[PLAYTEST_BUNDLE] hint: run at 1x–12x first; watch Colony HUD Playtest line + pawn Social; "
+			+ "after ~1–2 sim years use F10 → 32 Soul bundle; for one pawn JSON handoff (MMO/site) use F10 → 33; "
 			+ "F5 save before 50x+; Esc closes F10 menu."
 	)
 

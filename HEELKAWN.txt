@@ -30,6 +30,12 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-27  Portable character: `PawnData.to_portable_character_export` + F10 **33 · Portable character JSON**; `Main.get_player_pawn()`; matrix §11 + JSON `2026-04-27f` (MMO/PVA handoff schema `heelkawn_character_portable/v1`).
+2026-04-27  Matrix §10 release tiers: Tier A = shippable standalone + PVA wrap; Tier B = maybe LAN/hot-seat; Tier C = online/OpenClaw on later product; JSON `matrix_version` → 2026-04-27e.
+2026-04-27  Matrix §9 north star: pvabazaar.org distribution intent + future web/OpenClaw bridge (non-normative); JSON `matrix_version` → 2026-04-27d.
+2026-04-27  Long-session: F10 → **32 · Soul bundle** (`heelkawn_soul_export.gd`) one-paste handoff; `WorldMemory.get_recent_events`; pawns use **procedural pixel figure** (`Pawn.PROCEDURAL_PIXEL_PAWN`); matrix §8 + JSON bump `2026-04-27c`.
+2026-04-27  Play: removed player wall/bed/door/zone stamping (`PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES=false`); BuildToolbar = time + save/load + Sprite [K]; `PlayerAvatarPanel` edits pawn colors/body/hair like NPC `PawnData`; WASD + **E** interact (Space=pause only); world reroll **R** debug-only.
+2026-04-27  Design: docs/HEELKAWN_SIM_MATRIX.md — CK3-style map/UI bridge, actor + sensory matrix, kernel rules for AI; Focus Inspector (settlement/tile/pawn) shows FactionRegistry house stub line.
 2026-04-27  Performance: PAWN_DIVERGENCE per-claim console lines disabled unless SettlementMemory.VALIDATION_SESSION_ENABLED or SPECIALIZATION_VALIDATION_LOG_ENABLED (stops stdout/editor stalls from hundreds of bind/skip lines per tick during normal DEBUG play).
 2026-04-27  Observer UX: `` ` `` toggles HUD+toolbar+pawn sheet (map-only); `G` camera-follow selected pawn (middle-mouse clears); `=` / numpad + toggles verbose HUD lines. Colony HUD compact by default + lighter panel alpha. Smaller fonts + narrower pawn panel. F10 Creator debug grouped by section (playtest→stubs). Stretch scale 1.0.
 2026-04-27  Readable UI: default window 1280×720; stretch scale 1.12 + fractional; ColonyHUD/PawnInfo/Toolbar/Observer/Focus/CreatorDebug fonts bumped; ColonyHUD panel min size; Phase8 proof overlay fonts. Editor: disable Embedded Game or maximize game dock if the play window still looks letterboxed.

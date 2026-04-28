@@ -18,6 +18,9 @@ extends Node2D
 ## Radius of the pawn circle in world units. Kept <= TILE_PIXELS (8) so a
 ## pawn doesn't visually spill into neighboring tiles as it walks.
 const DRAW_RADIUS: float = 3.5
+## Tiny deterministic pixel figure (skin / hair / apparel from `PawnData`) — reads as a “sprite”
+## before bespoke art ships; NPCs and player use the same path.
+const PROCEDURAL_PIXEL_PAWN: bool = true
 const OUTLINE_WIDTH: float = 1.0
 const OUTLINE_WIDTH_BUSY: float = 1.75
 const HEALTH_BAR_W: float = 8.0
@@ -133,6 +136,9 @@ const FAST_PATHFIND_SPEED_THRESHOLD: float = 6.0
 const REPRODUCTION_COOLDOWN_TICKS: int = 5000
 ## ~11.5 tiles at 10px/tile — cohabiting workers can still pair without pixel-perfect overlap.
 const REPRODUCTION_MATE_RANGE_PX: float = 115.0
+## When there are no bed tiles on the map, widen pairing distance so abandoned/collapse
+## play can still repopulate (same path component + rapport gates still apply).
+const REPRODUCTION_MATE_RANGE_NO_BEDS_MIN_TILES: float = 22.0
 ## Softer than general job hunger gates so pairs can raise children under colony stress.
 const REPRODUCTION_MIN_HUNGER: float = 48.0
 const REPRODUCTION_MIN_REST: float = 42.0
@@ -1284,6 +1290,9 @@ func attempt_reproduction() -> bool:
 	if not has_shelter:
 		var bed: Vector2i = _world.find_free_bed_for(self, data.tile_pos)
 		has_shelter = bed.x >= 0
+	if not has_shelter and _world.bed_count() <= 0:
+		# No furniture anywhere — allow "ground" pairing instead of hard-blocking births.
+		has_shelter = true
 	if not has_shelter:
 		return false
 	var mate: Pawn = _find_compatible_mate()
@@ -1306,7 +1315,18 @@ func attempt_reproduction() -> bool:
 	return did_spawn
 
 
+func _reproduction_mate_range_px() -> float:
+	if _world == null:
+		return REPRODUCTION_MATE_RANGE_PX
+	var r: float = REPRODUCTION_MATE_RANGE_PX
+	if _world.bed_count() <= 0:
+		r = maxf(r, float(World.TILE_PIXELS) * REPRODUCTION_MATE_RANGE_NO_BEDS_MIN_TILES)
+	return r
+
+
 func _find_compatible_mate() -> Pawn:
+	var mate_r: float = _reproduction_mate_range_px()
+	var mate_r2: float = mate_r * mate_r
 	var best: Pawn = null
 	var best_d2: float = INF
 	for n in get_tree().get_nodes_in_group("pawns"):
@@ -1327,7 +1347,7 @@ func _find_compatible_mate() -> Pawn:
 		if not compatible:
 			continue
 		var d2: float = position.distance_squared_to(p.position)
-		if d2 <= REPRODUCTION_MATE_RANGE_PX * REPRODUCTION_MATE_RANGE_PX and d2 < best_d2:
+		if d2 <= mate_r2 and d2 < best_d2:
 			best = p
 			best_d2 = d2
 	return best
@@ -2476,6 +2496,45 @@ func _start_wander() -> void:
 
 # ==================== render ====================
 
+func _pixel_sprite_mask() -> Array:
+	# 7-wide grid: 0 empty, 1 skin, 2 hair, 3 apparel (same semantic as circle layers).
+	return [
+		[0, 2, 2, 2, 2, 2, 0],
+		[0, 2, 1, 1, 1, 2, 0],
+		[0, 1, 1, 1, 1, 1, 0],
+		[0, 3, 3, 3, 3, 3, 0],
+		[0, 3, 1, 3, 1, 3, 0],
+		[0, 3, 3, 3, 3, 3, 0],
+		[0, 0, 3, 0, 3, 0, 0],
+		[0, 0, 3, 0, 3, 0, 0],
+	]
+
+
+func _draw_procedural_pixel_figure(origin: Vector2, body_radius: float) -> void:
+	var px: float = clampf(body_radius * 0.42, 0.55, 0.95)
+	var c_skin: Color = data.color
+	var c_hair: Color = data.hair_color
+	var c_app: Color = data.apparel_color
+	if _state == State.SLEEPING:
+		c_skin = c_skin.darkened(0.25)
+		c_hair = c_hair.darkened(0.2)
+		c_app = c_app.darkened(0.15)
+	var mask: Array = _pixel_sprite_mask()
+	var rows: int = mask.size()
+	var cols: int = (mask[0] as Array).size()
+	for y in range(rows):
+		var row: Array = mask[y] as Array
+		for x in range(row.size()):
+			var t: int = int(row[x])
+			if t == 0:
+				continue
+			var col: Color = c_skin if t == 1 else (c_hair if t == 2 else c_app)
+			var ox: float = (float(x) - float(cols) * 0.5 + 0.5) * px
+			var oy: float = (float(y) - float(rows) * 0.5 + 0.5) * px
+			var p: Vector2 = origin + Vector2(ox, oy)
+			draw_rect(Rect2(p, Vector2(px * 0.9, px * 0.9)), col, true)
+
+
 func _draw() -> void:
 	if data == null:
 		return
@@ -2488,11 +2547,14 @@ func _draw() -> void:
 	var body_color: Color = data.color
 	if _state == State.SLEEPING:
 		body_color = data.color.darkened(0.25)
-	draw_circle(body_origin, body_radius, body_color)
-	# Apparel ring gives each pawn a readable outfit color.
-	draw_arc(body_origin, body_radius - 0.9, PI * 0.12, PI * 0.88, 16, data.apparel_color, 1.0, true)
-	# Hair style overlays near the top of the head.
-	_draw_hair(body_origin, body_radius)
+	if PROCEDURAL_PIXEL_PAWN:
+		_draw_procedural_pixel_figure(body_origin, body_radius)
+	else:
+		draw_circle(body_origin, body_radius, body_color)
+		# Apparel ring gives each pawn a readable outfit color.
+		draw_arc(body_origin, body_radius - 0.9, PI * 0.12, PI * 0.88, 16, data.apparel_color, 1.0, true)
+		# Hair style overlays near the top of the head.
+		_draw_hair(body_origin, body_radius)
 	if is_selected:
 		# Bright yellow ring sits just outside the body and the busy outline so
 		# it reads even when the pawn is mid-task.

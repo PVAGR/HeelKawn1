@@ -1,15 +1,8 @@
 class_name BuildToolbar
 extends CanvasLayer
 
-## Bottom-of-screen control bar so the player can play with the mouse instead
-## of memorizing a wall of hotkeys. Two clusters:
-##   - game speed: pause / 1x / 3x / 6x
-##   - build mode: bed / wall / door / cancel
-## Hotkeys still work; the toolbar just mirrors their state.
-
-## Emitted when the player picks a build mode (including "0 = none/cancel").
-## Main listens and routes through its own _set_designation_mode.
-signal mode_requested(mode: int)
+## Bottom bar: time + save/load + appearance. Player does **not** stamp walls
+## or zones here — autonomous planner + pawn jobs own construction.
 
 ## Emitted when the player clicks a speed button. Index into SPEED_STEPS.
 signal speed_index_requested(idx: int)
@@ -17,13 +10,8 @@ signal speed_index_requested(idx: int)
 ## Emitted when the player clicks pause. Main routes to GameManager.toggle_pause.
 signal pause_toggled()
 
-## Emitted when the player clicks the reroll button. Confirms via Main.
-signal reroll_requested()
-
-## Emitted when the player clicks the "Filter: X" cycle button. Main keeps
-## the authoritative filter state (so keyboard F and button click agree) and
-## pushes the new label back via set_zone_filter_label().
-signal zone_filter_cycle_requested()
+## Open cosmetic editor for the selected pawn (same PawnData fields as NPCs).
+signal appearance_edit_requested()
 
 ## Persist colony (F5) / restore last save (F8). Mirrors keyboard shortcuts.
 signal save_requested()
@@ -39,31 +27,17 @@ const MODE_ZONE: int = 4
 
 const PANEL_BG:     Color = Color(0.05, 0.06, 0.08, 0.88)
 const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.65)
-const ACCENT_BUILD: Color = Color8(255, 209, 102)  # warm amber for build cluster
 const ACCENT_TIME:  Color = Color8(120, 200, 255)  # cool blue for time cluster
-const ACCENT_ZONE:  Color = Color8(255, 180, 100)  # warm "pile" amber
 const ACCENT_SAVE:  Color = Color8(100, 200, 140)  # save (disk)
 const ACCENT_LOAD:  Color = Color8(200, 160, 100)  # load / recall
+const ACCENT_YOU:  Color = Color8(200, 140, 220)
 
 const FONT_SIZE_BUTTON: int = 11
 const FONT_SIZE_LABEL:  int = 9
 
-# ---- build mode entries ----
-const BUILD_ENTRIES: Array = [
-	{"label": "Bed",  "mode": MODE_BED,  "hotkey": "B", "swatch": Color8(220, 180, 120)},
-	{"label": "Wall", "mode": MODE_WALL, "hotkey": "W", "swatch": Color8( 90,  60,  35)},
-	{"label": "Door", "mode": MODE_DOOR, "hotkey": "O", "swatch": Color8(160, 100,  45)},
-	{"label": "Zone", "mode": MODE_ZONE, "hotkey": "Z", "swatch": Color8(240, 200,  90)},
-]
-
-
 var _panel: PanelContainer = null
-var _build_buttons: Dictionary = {}   # mode -> Button
-var _cancel_button: Button = null
 var _speed_buttons: Array = []        # parallel to GameManager.SPEED_STEPS
 var _pause_button: Button = null
-var _reroll_button: Button = null
-var _filter_button: Button = null     # "Filter: All" cycle button for new zones
 
 var _active_mode: int = MODE_NONE
 
@@ -104,13 +78,9 @@ func _build_ui() -> void:
 
 	_build_speed_cluster(row)
 	row.add_child(_make_separator())
-	_build_build_cluster(row)
-	row.add_child(_make_separator())
 	_build_save_load_cluster(row)
 	row.add_child(_make_separator())
-	_reroll_button = _make_button("Reroll [R]", ACCENT_BUILD)
-	_reroll_button.pressed.connect(func(): reroll_requested.emit())
-	row.add_child(_reroll_button)
+	_build_appearance_cluster(row)
 
 	_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	# Defer position so layout settles and we can read the actual minimum size.
@@ -134,27 +104,12 @@ func _build_speed_cluster(row: HBoxContainer) -> void:
 		row.add_child(btn)
 
 
-func _build_build_cluster(row: HBoxContainer) -> void:
-	var label := _make_cluster_label("Build")
+func _build_appearance_cluster(row: HBoxContainer) -> void:
+	var label := _make_cluster_label("You")
 	row.add_child(label)
-	_build_buttons.clear()
-	for entry in BUILD_ENTRIES:
-		var btn := _make_button("%s [%s]" % [entry.label, entry.hotkey], entry.swatch)
-		_apply_build_tool_style(btn, entry.swatch)
-		btn.toggle_mode = true
-		btn.pressed.connect(_on_build_pressed.bind(entry.mode))
-		_build_buttons[entry.mode] = btn
-		row.add_child(btn)
-	# Filter cycle button: shows what filter the next zone will get. Clickable
-	# or press F to cycle. Disabled when not in Zone mode.
-	_filter_button = _make_button("Filter: All [F]", ACCENT_ZONE)
-	_filter_button.pressed.connect(func(): zone_filter_cycle_requested.emit())
-	_filter_button.disabled = true
-	row.add_child(_filter_button)
-	_cancel_button = _make_button("Cancel [Esc]", Color8(180, 180, 180))
-	_cancel_button.disabled = true
-	_cancel_button.pressed.connect(func(): mode_requested.emit(MODE_NONE))
-	row.add_child(_cancel_button)
+	var btn := _make_button("Sprite [K]", ACCENT_YOU)
+	btn.pressed.connect(func(): appearance_edit_requested.emit())
+	row.add_child(btn)
 
 
 func _build_save_load_cluster(row: HBoxContainer) -> void:
@@ -168,39 +123,6 @@ func _build_save_load_cluster(row: HBoxContainer) -> void:
 	_apply_persist_button_style(load_btn, ACCENT_LOAD)
 	load_btn.pressed.connect(func(): load_requested.emit())
 	row.add_child(load_btn)
-
-
-## Background + border so the active Bed/Wall/Door/Zone is as obvious as the speed row.
-func _apply_build_tool_style(btn: Button, swatch: Color) -> void:
-	var off := StyleBoxFlat.new()
-	off.bg_color = Color(0.10, 0.11, 0.15, 0.88)
-	off.set_border_width_all(1)
-	off.border_color = Color(0.32, 0.33, 0.38, 0.55)
-	off.set_corner_radius_all(3)
-	var on := StyleBoxFlat.new()
-	on.bg_color = Color(
-		swatch.r * 0.22 + 0.04,
-		swatch.g * 0.22 + 0.04,
-		swatch.b * 0.22 + 0.04,
-		0.95
-	)
-	on.set_border_width_all(2)
-	on.border_color = swatch
-	on.set_corner_radius_all(3)
-	var hover := StyleBoxFlat.new()
-	hover.bg_color = off.bg_color.lerp(swatch, 0.18)
-	hover.set_border_width_all(1)
-	hover.border_color = swatch.lerp(Color.WHITE, 0.3)
-	hover.set_corner_radius_all(3)
-	btn.add_theme_stylebox_override("normal", off)
-	btn.add_theme_stylebox_override("hover", hover)
-	btn.add_theme_stylebox_override("pressed", on)
-	btn.add_theme_stylebox_override("hover_pressed", on)
-	btn.add_theme_stylebox_override("focus", off)
-	btn.add_theme_color_override("font_color", Color(0.9, 0.91, 0.94))
-	btn.add_theme_color_override("font_pressed_color", Color.WHITE)
-	btn.add_theme_color_override("font_hover_color", Color.WHITE)
-	btn.add_theme_color_override("font_hover_pressed_color", Color.WHITE)
 
 
 func _apply_persist_button_style(btn: Button, accent: Color) -> void:
@@ -278,38 +200,22 @@ func _recenter() -> void:
 
 # ==================== signals out ====================
 
-func _on_build_pressed(mode: int) -> void:
-	# Toggle: clicking the active build mode cancels.
-	if mode == _active_mode:
-		mode_requested.emit(MODE_NONE)
-	else:
-		mode_requested.emit(mode)
-
-
 func _on_speed_pressed(idx: int) -> void:
 	speed_index_requested.emit(idx)
 
 
 # ==================== external sync ====================
 
-## Called by Main whenever the build mode changes (key press, mouse, reroll).
+## Legacy hook: build modes removed from shipped play — always NONE.
 func set_active_mode(mode: int) -> void:
-	_active_mode = mode
-	for m in _build_buttons:
-		_build_buttons[m].set_pressed_no_signal(m == mode)
-	if _cancel_button != null:
-		_cancel_button.disabled = (mode == MODE_NONE)
-	# Only relevant while the player is placing zones -- otherwise the label
-	# is just decoration, so dim it to show it's currently inert.
-	if _filter_button != null:
-		_filter_button.disabled = (mode != MODE_ZONE)
+	_active_mode = MODE_NONE
+	if mode != MODE_NONE:
+		pass
 
 
-## Called by Main when the player cycles filters (keyboard F or toolbar click).
-## Passing the human label keeps Main the source of truth for the filter enum.
-func set_zone_filter_label(label_text: String) -> void:
-	if _filter_button != null:
-		_filter_button.text = "Filter: %s [F]" % label_text
+## No-op: Main still cycles zone filter state for internal consistency; UI removed.
+func set_zone_filter_label(_label_text: String) -> void:
+	pass
 
 
 func _on_speed_changed(speed: float, paused: bool) -> void:

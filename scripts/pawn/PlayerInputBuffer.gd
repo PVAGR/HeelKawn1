@@ -28,7 +28,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			action_id = ACTION_MOVE_WEST
 		elif event.keycode == KEY_D or event.keycode == KEY_RIGHT:
 			action_id = ACTION_MOVE_EAST
-		elif event.keycode == KEY_SPACE:
+		elif event.keycode == KEY_E:
+			# Space is reserved globally for pause; NPC parity uses the same move/interact verbs.
 			action_id = ACTION_INTERACT
 		if action_id != ACTION_NONE:
 			push_intent(action_id)

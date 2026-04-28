@@ -814,6 +814,65 @@ func social_status_line(peer_display: String = "") -> String:
 	return "Social: strongest bond toward %s (rapport %d) — pairing / births use this track." % [whom, sc]
 
 
+## Versioned **portable character** payload for a future online game / PVA Bazaar tooling.
+## Intentionally smaller than [method to_save_dict]: no tile bind, no job runtime; includes
+## identity, look, earned bias, and top social edges. Bump [member PORTABLE_CHARACTER_SCHEMA] when fields change.
+const PORTABLE_CHARACTER_SCHEMA: String = "heelkawn_character_portable/v1"
+
+
+func _social_rapport_top_for_export(max_entries: int) -> Dictionary:
+	var pairs: Array[Dictionary] = []
+	for k in social_rapport:
+		pairs.append({"id": int(k), "v": int(social_rapport[k])})
+	pairs.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["v"]) > int(b["v"]))
+	var out: Dictionary = {}
+	var n: int = mini(max_entries, pairs.size())
+	for i in range(n):
+		out[str(pairs[i]["id"])] = pairs[i]["v"]
+	return out
+
+
+func to_portable_character_export(export_tick: int, world_seed: int, origin_region_key: int) -> Dictionary:
+	var sx: Dictionary = {}
+	for k in skill_xp:
+		sx[str(k)] = skill_xp[k]
+	var trait_types: Array = []
+	for trait_item in traits:
+		if trait_item == null:
+			continue
+		trait_types.append(trait_item.trait_type)
+	return {
+		"schema": PORTABLE_CHARACTER_SCHEMA,
+		"source_game": "HeelKawn1_standalone",
+		"export_tick": export_tick,
+		"world_seed": world_seed,
+		"origin_region_key": origin_region_key,
+		"legacy_standalone_pawn_id": id,
+		"display_name": display_name,
+		"gender": gender,
+		"age_years": age_years,
+		"color": [color.r, color.g, color.b, color.a],
+		"body_type": body_type,
+		"hair_style": hair_style,
+		"hair_color": [hair_color.r, hair_color.g, hair_color.b, hair_color.a],
+		"apparel_color": [apparel_color.r, apparel_color.g, apparel_color.b, apparel_color.a],
+		"birth_tick": birth_tick,
+		"parent_a_id": parent_a_id,
+		"parent_b_id": parent_b_id,
+		"children_count": children_count,
+		"current_profession": current_profession,
+		"skills": skills.duplicate(true),
+		"skill_xp": sx,
+		"affinities": affinities.duplicate(true),
+		"affinity_birth_snapshot": affinity_birth_snapshot.duplicate(true),
+		"profession_liking": profession_liking.duplicate(true),
+		"social_rapport_top": _social_rapport_top_for_export(24),
+		"trait_types": trait_types,
+		"military_rank": military_rank,
+		"influence": influence,
+	}
+
+
 ## Serialize for `GameSave` (store_var). All numeric work flags included.
 func to_save_dict() -> Dictionary:
 	var sx: Dictionary = {}

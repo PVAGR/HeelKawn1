@@ -168,6 +168,18 @@ func event_count() -> int:
 	return _events.size()
 
 
+## Last `count` events in append order (oldest first, newest last). Read-only; for soul-bundle / AI handoff.
+func get_recent_events(count: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if count <= 0:
+		return out
+	var n: int = mini(count, _events.size())
+	var start: int = _events.size() - n
+	for i in range(start, _events.size()):
+		out.append((_events[i] as Dictionary).duplicate(true))
+	return out
+
+
 func get_recent_event_summaries(max_items: int = 3) -> PackedStringArray:
 	var out: PackedStringArray = PackedStringArray()
 	if max_items <= 0 or _events.is_empty():

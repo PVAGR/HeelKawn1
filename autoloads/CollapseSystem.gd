@@ -447,6 +447,21 @@ func _record_collapse_event(settlement_id: int, survivors: Dictionary) -> void:
 	}
 	WorldMemory.record_event(event)
 
+
+# === Public Query Functions ===
+
+func get_tracked_settlement_count() -> int:
+	return collapse_metrics.size()
+
+func get_collapsed_settlement_count() -> int:
+	var count: int = 0
+	for settlement_id in collapse_metrics:
+		var metrics: Dictionary = collapse_metrics[settlement_id]
+		var stage: CollapseStage = metrics.get("stage", CollapseStage.STABLE)
+		if stage == CollapseStage.COLLAPSED:
+			count += 1
+	return count
+
 # === Public Interface ===
 
 func get_collapse_stage(settlement_id: int) -> CollapseStage:

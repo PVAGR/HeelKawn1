@@ -300,6 +300,20 @@ func _record_material_repair(entity_id: int, repair: float) -> void:
 	}
 	WorldMemory.record_event(event)
 
+
+# === Public Query Functions ===
+
+func get_entity_count() -> int:
+	return persistent_entities.size()
+
+func get_entity_count_by_type(entity_type: EntityType) -> int:
+	var count: int = 0
+	for entity_id in persistent_entities:
+		var entity: Dictionary = persistent_entities[entity_id]
+		if entity.get("entity_type") == entity_type:
+			count += 1
+	return count
+
 func _record_entity_loss(entity_id: int, final_score: float) -> void:
 	var event: Dictionary = {
 		"type": "entity_loss",

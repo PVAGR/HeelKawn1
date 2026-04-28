@@ -291,6 +291,20 @@ func _record_succession(from_id: int, to_id: int, context: AuthorityContext, amo
 	}
 	WorldMemory.record_event(event)
 
+
+# === Public Query Functions ===
+
+func get_active_conflict_count() -> int:
+	var count: int = 0
+	for key in conflict_relationships:
+		var state: ConflictState = conflict_relationships[key]
+		if state != ConflictState.NONE:
+			count += 1
+	return count / 2  # Each conflict counted twice (A-B and B-A)
+
+func get_active_treaty_count() -> int:
+	return peace_treaties.size()
+
 func _record_conflict_start(pawn_id_a: int, pawn_id_b: int, conflict_type: ConflictType, intensity: float) -> void:
 	var record: Dictionary = {
 		"pawn_id_a": pawn_id_a,

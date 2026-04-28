@@ -255,6 +255,19 @@ func _record_knowledge_loss(knowledge_type: KnowledgeType, reason: String) -> vo
 	}
 	WorldMemory.record_event(event)
 
+
+# === Public Query Functions ===
+
+func get_carrier_count() -> int:
+	return knowledge_carriers.size()
+
+func get_total_knowledge_count() -> int:
+	var total: int = 0
+	for carrier_id in knowledge_carriers:
+		var knowledge: Array[int] = knowledge_carriers[carrier_id]
+		total += knowledge.size()
+	return total
+
 func _record_knowledge_risk(knowledge_type: KnowledgeType, carrier_count: int) -> void:
 	var event: Dictionary = {
 		"type": "knowledge_risk",

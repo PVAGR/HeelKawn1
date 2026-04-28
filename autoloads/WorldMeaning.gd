@@ -429,3 +429,12 @@ return "This bloodline bears the marks of old wounds."
 return "This bloodline is ascending through courage and service."
 _:
 return "This bloodline lives in quiet obscurity."
+
+
+# === Public Query Functions ===
+
+func get_tracked_region_count() -> int:
+	return region_meanings.size()
+
+func get_tracked_settlement_count() -> int:
+	return settlement_meanings.size()

@@ -190,6 +190,11 @@ func _refresh() -> void:
 		lines.append(_kill_line())
 		lines.append(_export_status_line())
 		lines.append(_settlement_revival_digest_line())
+		lines.append(_knowledge_system_line())
+		lines.append(_authority_system_line())
+		lines.append(_collapse_system_line())
+		lines.append(_persistence_system_line())
+		lines.append(_world_meaning_line())
 		lines.append(_session_diag_line())
 		lines.append(_playtest_social_birth_hint_line())
 	_label.text = "\n".join(lines)
@@ -601,6 +606,50 @@ func _wildlife_line() -> String:
 	return "🦌 Wildlife: R:%d (%+d) D:%d (%+d) T:%d (%+d) [%s] Tmin:%d Tmax:%d" % [
 		r, dr, d, dd, t, dts, _momentum_spark, _wildlife_min_total, _wildlife_max_total,
 	]
+
+
+func _settlement_revival_digest_line() -> String:
+
+
+func _knowledge_system_line() -> String:
+	if KnowledgeSystem == null:
+		return "📚 Knowledge: (system unavailable)"
+	var carriers: int = KnowledgeSystem.get_carrier_count()
+	var knowledge_count: int = KnowledgeSystem.get_total_knowledge_count()
+	return "📚 Knowledge: [b]%d[/b] carriers · [b]%d[/b] knowledge types tracked" % [carriers, knowledge_count]
+
+
+func _authority_system_line() -> String:
+	if AuthoritySystem == null:
+		return "👑 Authority: (system unavailable)"
+	var conflicts: int = AuthoritySystem.get_active_conflict_count()
+	var treaties: int = AuthoritySystem.get_active_treaty_count()
+	return "👑 Authority: [b]%d[/b] active conflicts · [b]%d[/b] peace treaties" % [conflicts, treaties]
+
+
+func _collapse_system_line() -> String:
+	if CollapseSystem == null:
+		return "🏚 Collapse: (system unavailable)"
+	var settlements: int = CollapseSystem.get_tracked_settlement_count()
+	var collapsed: int = CollapseSystem.get_collapsed_settlement_count()
+	return "🏚 Collapse: [b]%d[/b] settlements tracked · [b]%d[/b] collapsed" % [settlements, collapsed]
+
+
+func _persistence_system_line() -> String:
+	if PersistenceSystem == null:
+		return "🗺 Persistence: (system unavailable)"
+	var entities: int = PersistenceSystem.get_entity_count()
+	var ruins: int = PersistenceSystem.get_entity_count_by_type(PersistenceSystem.EntityType.RUIN)
+	var graves: int = PersistenceSystem.get_entity_count_by_type(PersistenceSystem.EntityType.GRAVE_FIELD)
+	return "🗺 Persistence: [b]%d[/b] entities · [b]%d[/b] ruins · [b]%d[/b] graves" % [entities, ruins, graves]
+
+
+func _world_meaning_line() -> String:
+	if WorldMeaning == null:
+		return "🌍 WorldMeaning: (system unavailable)"
+	var regions: int = WorldMeaning.get_tracked_region_count()
+	var settlements: int = WorldMeaning.get_tracked_settlement_count()
+	return "🌍 WorldMeaning: [b]%d[/b] regions · [b]%d[/b] settlements interpreted" % [regions, settlements]
 
 
 func _settlement_revival_digest_line() -> String:

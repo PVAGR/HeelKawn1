@@ -24,6 +24,9 @@ func _ready() -> void:
 
 
 func _on_tick(tick: int) -> void:
+	# Throttle day/night cycle updates to every 3 ticks to reduce lag
+	if tick % 3 != 0:
+		return
 	_apply_for_tick(tick)
 	var day: int = int(tick / float(TICKS_PER_DAY))
 	if day != _last_day:

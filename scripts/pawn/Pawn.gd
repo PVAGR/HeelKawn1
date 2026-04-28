@@ -3043,6 +3043,10 @@ func _update_perception() -> void:
 	# Base radius 50, +10 per level, max 200
 	data.perception_radius = clamp(50.0 + float(data.level) * 10.0, 50.0, 200.0)
 	
+	# Throttled to every 20 ticks to avoid lag (0.33 seconds at 1x speed)
+	if GameManager.tick_count % 20 != 0:
+		return
+	
 	# Remember resources and dangers in perception radius
 	if _world == null:
 		return
@@ -3139,6 +3143,10 @@ func remember_resources(tile: Vector2i, resource_type: String) -> void:
 func track_co_presence() -> void:
 	# Track time spent near other pawns
 	# Co-presence builds family bonds and trust
+	# Throttled to every 10 ticks to avoid lag (0.16 seconds at 1x speed)
+	if GameManager.tick_count % 10 != 0:
+		return
+	
 	var co_presence_radius: float = 30.0  # Pixels
 	
 	for pawn in get_tree().get_nodes_in_group("pawns"):

@@ -254,20 +254,20 @@ func _initialize_weights(input_size: int, hidden_size: int, output_size: int) ->
 	var weights: Dictionary = {}
 	
 	# Input to hidden weights
-	weights.input_hidden = []
+	weights["input_hidden"] = []
 	for i in range(input_size):
 		var neuron_weights: Array[float] = []
 		for j in range(hidden_size):
 			neuron_weights.append(randf_range(-0.5, 0.5))
-		weights.input_hidden.append(neuron_weights)
+		weights["input_hidden"].append(neuron_weights)
 	
 	# Hidden to output weights
-	weights.hidden_output = []
+	weights["hidden_output"] = []
 	for i in range(hidden_size):
 		var neuron_weights: Array[float] = []
 		for j in range(output_size):
 			neuron_weights.append(randf_range(-0.5, 0.5))
-		weights.hidden_output.append(neuron_weights)
+		weights["hidden_output"].append(neuron_weights)
 	
 	return weights
 
@@ -335,89 +335,89 @@ func _update_neural_world_matrix() -> void:
 	_update_neural_interconnections()
 
 func _update_world_state_neurons() -> void:
-	var world_neurons = neural_world_matrix.world_state_neurons
+	var world_neurons = neural_world_matrix["world_state_neurons"]
 	
 	# Update population density
-	world_neurons.population_density.value = float(world_population) / 1000.0
+	world_neurons["population_density"].value = float(world_population) / 1000.0
 	
 	# Update technological progress
-	world_neurons.technological_progress.value = float(technological_tier) / 10.0
+	world_neurons["technological_progress"].value = float(technological_tier) / 10.0
 	
 	# Update environmental health
-	world_neurons.environmental_health.value = biodiversity_index * environmental_stability
+	world_neurons["environmental_health"].value = biodiversity_index * environmental_stability
 	
 	# Update social complexity
-	world_neurons.social_complexity.value = float(active_settlements.size()) / 20.0
+	world_neurons["social_complexity"].value = float(active_settlements.size()) / 20.0
 	
 	# Update resource abundance
 	var total_resources = 0.0
 	for resource in resource_distribution:
 		total_resources += resource_distribution[resource]
-	world_neurons.resource_abundance.value = total_resources / float(resource_distribution.size())
+	world_neurons["resource_abundance"].value = total_resources / float(resource_distribution.size())
 	
 	# Update conflict level
 	var conflict_score = 0.0
 	for event in world_events:
 		if event.event_type == "war" or event.event_type == "conflict":
 			conflict_score += float(event.impact_level) / 10.0
-	world_neurons.conflict_level.value = conflict_score / float(max(world_events.size(), 1))
+	world_neurons["conflict_level"].value = conflict_score / float(max(world_events.size(), 1))
 	
 	# Update innovation rate
-	world_neurons.innovation_rate.value = tech_innovation_rate * float(technological_discoveries.size()) / 10.0
+	world_neurons["innovation_rate"].value = tech_innovation_rate * float(technological_discoveries.size()) / 10.0
 	
 	# Update cultural diversity
-	world_neurons.cultural_diversity.value = total_cultural_influence / 100.0
+	world_neurons["cultural_diversity"].value = total_cultural_influence / 100.0
 
 func _update_environmental_neurons() -> void:
-	var env_neurons = neural_world_matrix.environmental_neurons
+	var env_neurons = neural_world_matrix["environmental_neurons"]
 	
 	# Update environmental metrics
-	env_neurons.temperature_stability.value = _calculate_climate_stability()
-	env_neurons.sea_level_stability.value = _calculate_ecosystem_resilience()
-	env_neurons.biodiversity_health.value = biodiversity_index
-	env_neurons.resource_availability.value = _calculate_resource_renewability()
-	env_neurons.climate_stability.value = environmental_stability
-	env_neurons.ecosystem_resilience.value = _calculate_ecosystem_resilience()
+	env_neurons["temperature_stability"].value = _calculate_climate_stability()
+	env_neurons["sea_level_stability"].value = _calculate_ecosystem_resilience()
+	env_neurons["biodiversity_health"].value = biodiversity_index
+	env_neurons["resource_availability"].value = _calculate_resource_renewability()
+	env_neurons["climate_stability"].value = environmental_stability
+	env_neurons["ecosystem_resilience"].value = _calculate_ecosystem_resilience()
 
 func _update_civilization_neurons() -> void:
-	var civ_neurons = neural_world_matrix.civilization_neurons
+	var civ_neurons = neural_world_matrix["civilization_neurons"]
 	
 	# Update civilization metrics
-	civ_neurons.urbanization.value = float(active_settlements.size()) / 50.0
-	civ_neurons.governance_complexity.value = civilization_complexity
-	civ_neurons.trade_networks.value = _calculate_trade_network_complexity()
-	civ_neurons.military_organization.value = _calculate_military_organization()
-	civ_neurons.educational_systems.value = _calculate_educational_development()
-	civ_neurons.infrastructure_development.value = _calculate_infrastructure_level()
+	civ_neurons["urbanization"].value = float(active_settlements.size()) / 50.0
+	civ_neurons["governance_complexity"].value = civilization_complexity
+	civ_neurons["trade_networks"].value = _calculate_trade_network_complexity()
+	civ_neurons["military_organization"].value = _calculate_military_organization()
+	civ_neurons["educational_systems"].value = _calculate_educational_development()
+	civ_neurons["infrastructure_development"].value = _calculate_infrastructure_level()
 
 func _update_cultural_neurons() -> void:
-	var cult_neurons = neural_world_matrix.cultural_neurons
+	var cult_neurons = neural_world_matrix["cultural_neurons"]
 	
 	# Update cultural metrics
-	cult_neurons.artistic_expression.value = _calculate_artistic_expression()
-	cult_neurons.religious_systems.value = _calculate_religious_complexity()
-	cult_neurons.philosophical_thought.value = _calculate_philosophical_development()
-	cult_neurons.social_norms.value = _calculate_social_norm_complexity()
-	cult_neurons.language_complexity.value = _calculate_language_complexity()
-	cult_neurons.cultural_exchange.value = _calculate_cultural_exchange_rate()
+	cult_neurons["artistic_expression"].value = _calculate_artistic_expression()
+	cult_neurons["religious_systems"].value = _calculate_religious_complexity()
+	cult_neurons["philosophical_thought"].value = _calculate_philosophical_development()
+	cult_neurons["social_norms"].value = _calculate_social_norm_complexity()
+	cult_neurons["language_complexity"].value = _calculate_language_complexity()
+	cult_neurons["cultural_exchange"].value = _calculate_cultural_exchange_rate()
 
 func _update_economic_neurons() -> void:
-	var econ_neurons = neural_world_matrix.economic_neurons
+	var econ_neurons = neural_world_matrix["economic_neurons"]
 	
 	# Update economic metrics
-	econ_neurons.production_efficiency.value = _calculate_production_efficiency()
-	econ_neurons.resource_distribution.value = _calculate_resource_distribution_efficiency()
-	econ_neurons.market_complexity.value = _calculate_market_complexity()
-	econ_neurons.labor_specialization.value = _calculate_labor_specialization()
-	econ_neurons.wealth_accumulation.value = _calculate_wealth_accumulation()
-	econ_neurons.economic_stability.value = _calculate_economic_stability()
+	econ_neurons["production_efficiency"].value = _calculate_production_efficiency()
+	econ_neurons["resource_distribution"].value = _calculate_resource_distribution_efficiency()
+	econ_neurons["market_complexity"].value = _calculate_market_complexity()
+	econ_neurons["labor_specialization"].value = _calculate_labor_specialization()
+	econ_neurons["wealth_accumulation"].value = _calculate_wealth_accumulation()
+	econ_neurons["economic_stability"].value = _calculate_economic_stability()
 
 func _update_neural_interconnections() -> void:
 	# Update interconnections between neural networks based on current state
 	if not neural_world_matrix.has("interconnections"):
-		neural_world_matrix.interconnections = {}
+		neural_world_matrix["interconnections"] = {}
 	
-	var interconnections = neural_world_matrix.interconnections
+	var interconnections = neural_world_matrix["interconnections"]
 	
 	# Calculate connection strengths based on system correlations
 	var civ_env_strength = civilization_complexity * environmental_stability
@@ -428,35 +428,35 @@ func _update_neural_interconnections() -> void:
 	
 	# Update or create interconnections with proper structure
 	if interconnections.has("civ_to_env"):
-		interconnections.civ_to_env.strength = civ_env_strength
+		interconnections["civ_to_env"]["strength"] = civ_env_strength
 	else:
-		interconnections.civ_to_env = {"strength": civ_env_strength, "weight": 0.5, "type": "influence"}
+		interconnections["civ_to_env"] = {"strength": civ_env_strength, "weight": 0.5, "type": "influence"}
 	
 	if interconnections.has("civ_to_cult"):
-		interconnections.civ_to_cult.strength = civ_cult_strength
+		interconnections["civ_to_cult"]["strength"] = civ_cult_strength
 	else:
-		interconnections.civ_to_cult = {"strength": civ_cult_strength, "weight": 0.5, "type": "development"}
+		interconnections["civ_to_cult"] = {"strength": civ_cult_strength, "weight": 0.5, "type": "development"}
 	
 	if interconnections.has("civ_to_econ"):
-		interconnections.civ_to_econ.strength = civ_econ_strength
+		interconnections["civ_to_econ"]["strength"] = civ_econ_strength
 	else:
-		interconnections.civ_to_econ = {"strength": civ_econ_strength, "weight": 0.5, "type": "resource"}
+		interconnections["civ_to_econ"] = {"strength": civ_econ_strength, "weight": 0.5, "type": "resource"}
 	
 	if interconnections.has("env_to_cult"):
-		interconnections.env_to_cult.strength = env_cult_strength
+		interconnections["env_to_cult"]["strength"] = env_cult_strength
 	else:
-		interconnections.env_to_cult = {"strength": env_cult_strength, "weight": 0.5, "type": "adaptation"}
+		interconnections["env_to_cult"] = {"strength": env_cult_strength, "weight": 0.5, "type": "adaptation"}
 	
 	if interconnections.has("cult_to_econ"):
-		interconnections.cult_to_econ.strength = cult_econ_strength
+		interconnections["cult_to_econ"]["strength"] = cult_econ_strength
 	else:
-		interconnections.cult_to_econ = {"strength": cult_econ_strength, "weight": 0.5, "type": "trade"}
+		interconnections["cult_to_econ"] = {"strength": cult_econ_strength, "weight": 0.5, "type": "trade"}
 	
 	# Remove weak connections
 	var connections_to_remove = []
 	for connection_id in interconnections:
 		var connection = interconnections[connection_id]
-		if connection.has("strength") and connection.strength < 0.01:
+		if connection.has("strength") and connection["strength"] < 0.01:
 			connections_to_remove.append(connection_id)
 	
 	for connection_id in connections_to_remove:
@@ -465,17 +465,17 @@ func _update_neural_interconnections() -> void:
 func _process_neural_activations() -> void:
 	# Process all neural networks through activation functions
 	var all_networks = [
-		neural_world_matrix.world_state_neurons,
-		neural_world_matrix.environmental_neurons,
-		neural_world_matrix.civilization_neurons,
-		neural_world_matrix.cultural_neurons,
-		neural_world_matrix.economic_neurons
+		neural_world_matrix["world_state_neurons"],
+		neural_world_matrix["environmental_neurons"],
+		neural_world_matrix["civilization_neurons"],
+		neural_world_matrix["cultural_neurons"],
+		neural_world_matrix["economic_neurons"]
 	]
 	
 	for network in all_networks:
 		for neuron_name in network:
 			var neuron = network[neuron_name]
-			neuron.activation = _apply_neural_activation(neuron.value)
+			neuron["activation"] = _apply_neural_activation(neuron["value"])
 
 func _apply_neural_activation(value: float) -> float:
 	# Use sigmoid activation function for neural processing
@@ -520,7 +520,7 @@ func _detect_emergent_patterns() -> void:
 
 func _evolve_neural_networks() -> void:
 	# Evolve neural networks based on experience
-	neural_world_matrix.evolution_cycles += 1
+	neural_world_matrix["evolution_cycles"] += 1
 	
 	# Apply learning and adaptation
 	_adapt_neural_weights()
@@ -530,21 +530,21 @@ func _evolve_neural_networks() -> void:
 func _adapt_neural_weights() -> void:
 	# Adapt weights based on performance feedback
 	if not neural_world_matrix.has("learning_rate"):
-		neural_world_matrix.learning_rate = neural_evolution_rate
+		neural_world_matrix["learning_rate"] = neural_evolution_rate
 	
-	var learning_rate = neural_world_matrix.learning_rate
+	var learning_rate = neural_world_matrix["learning_rate"]
 	
 	if not neural_world_matrix.has("interconnections"):
 		return
 	
-	for connection_id in neural_world_matrix.interconnections:
-		var connection = neural_world_matrix.interconnections[connection_id]
+	for connection_id in neural_world_matrix["interconnections"]:
+		var connection = neural_world_matrix["interconnections"][connection_id]
 		if not connection.has("weight"):
-			connection.weight = 0.5
+			connection["weight"] = 0.5
 		
 		var adaptation = _calculate_weight_adaptation()
-		connection.weight += learning_rate * adaptation
-		connection.weight = clamp(connection.weight, -1.0, 1.0)
+		connection["weight"] += learning_rate * adaptation
+		connection["weight"] = clamp(connection["weight"], -1.0, 1.0)
 
 func _mutate_neural_structures() -> void:
 	# Occasionally mutate neural structures for evolution
@@ -555,13 +555,13 @@ func _prune_weak_connections() -> void:
 	# Remove very weak connections to improve efficiency
 	var connections_to_remove = []
 	
-	for connection_id in neural_world_matrix.interconnections:
-		var connection = neural_world_matrix.interconnections[connection_id]
-		if abs(connection.weight) < 0.01:
+	for connection_id in neural_world_matrix["interconnections"]:
+		var connection = neural_world_matrix["interconnections"][connection_id]
+		if abs(connection["weight"]) < 0.01:
 			connections_to_remove.append(connection_id)
 	
 	for connection_id in connections_to_remove:
-		neural_world_matrix.interconnections.erase(connection_id)
+		neural_world_matrix["interconnections"].erase(connection_id)
 
 # === Missing Update Functions ===
 
@@ -572,10 +572,10 @@ func _update_environmental_conditions() -> void:
 	var interpreted_output = _interpret_environmental_output(neural_output)
 	
 	# Apply environmental changes
-	environmental_stability = interpreted_output.stability
-	biodiversity_index = interpreted_output.biodiversity
-	global_temperature = interpreted_output.temperature
-	sea_level = interpreted_output.sea_level
+	environmental_stability = interpreted_output["stability"]
+	biodiversity_index = interpreted_output["biodiversity"]
+	global_temperature = interpreted_output["temperature"]
+	sea_level = interpreted_output["sea_level"]
 
 func _process_climate_patterns() -> void:
 	# Process climate patterns using neural networks
@@ -610,7 +610,7 @@ func _update_technological_progress() -> void:
 	var tech_output = _forward_propagate_network(tech_input, technological_neural_network)
 	
 	# Check for new discoveries
-	if randf() < tech_output.discovery_probability:
+	if randf() < tech_output["discovery_probability"]:
 		_generate_technological_discovery()
 	
 	# Update technological tier
@@ -623,9 +623,9 @@ func _update_civilization_development() -> void:
 	var civ_output = _forward_propagate_network(civ_input, civilization_neural_network)
 	
 	# Update civilization metrics
-	civilization_complexity = civ_output.complexity
-	social_development = civ_output.social_development
-	cultural_advancement = civ_output.cultural_advancement
+	civilization_complexity = civ_output["complexity"]
+	social_development = civ_output["social_development"]
+	cultural_advancement = civ_output["cultural_advancement"]
 
 # === Missing Calculation Functions ===
 
@@ -923,49 +923,49 @@ func _forward_propagate_network(input: Array[float], network: Dictionary) -> Dic
 		hidden_layer.append(_sigmoid(sum))
 	
 	# Output layer
-	output.stability = hidden_layer[0]
-	output.complexity = hidden_layer[1]
-	output.efficiency = hidden_layer[2]
-	output.growth_rate = hidden_layer[3]
-	output.discovery_probability = hidden_layer[4]
-	output.adaptation_rate = hidden_layer[5]
+	output["stability"] = hidden_layer[0]
+	output["complexity"] = hidden_layer[1]
+	output["efficiency"] = hidden_layer[2]
+	output["growth_rate"] = hidden_layer[3]
+	output["discovery_probability"] = hidden_layer[4]
+	output["adaptation_rate"] = hidden_layer[5]
 	
 	return output
 
 func _interpret_civilization_output(output: Dictionary) -> Dictionary:
 	var interpreted: Dictionary = {}
 	
-	interpreted.complexity = clamp(output.complexity, 0.0, 1.0)
-	interpreted.social_development = clamp(output.stability, 0.0, 1.0)
-	interpreted.cultural_advancement = clamp(output.efficiency, 0.0, 1.0)
+	interpreted["complexity"] = clamp(output["complexity"], 0.0, 1.0)
+	interpreted["social_development"] = clamp(output["stability"], 0.0, 1.0)
+	interpreted["cultural_advancement"] = clamp(output["efficiency"], 0.0, 1.0)
 	
 	return interpreted
 
 func _interpret_environmental_output(output: Dictionary) -> Dictionary:
 	var interpreted: Dictionary = {}
 	
-	interpreted.stability = clamp(output.stability, 0.0, 1.0)
-	interpreted.biodiversity = clamp(output.complexity, 0.0, 1.0)
-	interpreted.temperature = clamp(output.efficiency, 0.5, 1.5)
-	interpreted.sea_level = clamp(output.growth_rate, 0.5, 1.5)
+	interpreted["stability"] = clamp(output["stability"], 0.0, 1.0)
+	interpreted["biodiversity"] = clamp(output["complexity"], 0.0, 1.0)
+	interpreted["temperature"] = clamp(output["efficiency"], 0.5, 1.5)
+	interpreted["sea_level"] = clamp(output["growth_rate"], 0.5, 1.5)
 	
 	return interpreted
 
 func _interpret_cultural_output(output: Dictionary) -> Dictionary:
 	var interpreted: Dictionary = {}
 	
-	interpreted.artistic_level = clamp(output.complexity, 0.0, 1.0)
-	interpreted.religious_influence = clamp(output.stability, 0.0, 1.0)
-	interpreted.philosophical_depth = clamp(output.efficiency, 0.0, 1.0)
+	interpreted["artistic_level"] = clamp(output["complexity"], 0.0, 1.0)
+	interpreted["religious_influence"] = clamp(output["stability"], 0.0, 1.0)
+	interpreted["philosophical_depth"] = clamp(output["efficiency"], 0.0, 1.0)
 	
 	return interpreted
 
 func _interpret_economic_output(output: Dictionary) -> Dictionary:
 	var interpreted: Dictionary = {}
 	
-	interpreted.production_rate = clamp(output.complexity, 0.0, 1.0)
-	interpreted.market_activity = clamp(output.stability, 0.0, 1.0)
-	interpreted.trade_volume = clamp(output.efficiency, 0.0, 1.0)
+	interpreted["production_rate"] = clamp(output["complexity"], 0.0, 1.0)
+	interpreted["market_activity"] = clamp(output["stability"], 0.0, 1.0)
+	interpreted["trade_volume"] = clamp(output["efficiency"], 0.0, 1.0)
 	
 	return interpreted
 
@@ -977,12 +977,12 @@ func _sigmoid(x: float) -> float:
 func _get_current_neural_state() -> Dictionary:
 	var state: Dictionary = {}
 	
-	state.civilization_complexity = civilization_complexity
-	state.social_development = social_development
-	state.cultural_advancement = cultural_advancement
-	state.environmental_stability = environmental_stability
-	state.technological_tier = technological_tier
-	state.world_population = world_population
+	state["civilization_complexity"] = civilization_complexity
+	state["social_development"] = social_development
+	state["cultural_advancement"] = cultural_advancement
+	state["environmental_stability"] = environmental_stability
+	state["technological_tier"] = technological_tier
+	state["world_population"] = world_population
 	
 	return state
 
@@ -999,19 +999,20 @@ func _calculate_pattern_emergence() -> float:
 
 func _create_emergent_pattern() -> Dictionary:
 	var pattern: Dictionary = {}
+	var pattern_type = _generate_pattern_type()
 	
-	pattern.type = _generate_pattern_type()
-	pattern.description = _generate_pattern_description(pattern.type)
-	pattern.effects = _generate_pattern_effects(pattern.type)
-	pattern.neural_signature = _generate_neural_signature()
-	pattern.strength = _calculate_pattern_emergence()
-	pattern.timestamp = GameManager.tick_count
+	pattern["type"] = pattern_type
+	pattern["description"] = _generate_pattern_description(pattern_type)
+	pattern["effects"] = _generate_pattern_effects(pattern_type)
+	pattern["neural_signature"] = _generate_neural_signature()
+	pattern["strength"] = _calculate_pattern_emergence()
+	pattern["timestamp"] = GameManager.tick_count
 	
 	return pattern
 
 func _apply_emergent_pattern_effects(pattern: Dictionary) -> void:
 	# Apply pattern effects to world state
-	for effect in pattern.effects:
+	for effect in pattern["effects"]:
 		_apply_pattern_effect(effect)
 
 func _calculate_weight_adaptation() -> float:
@@ -1025,14 +1026,14 @@ func _calculate_weight_adaptation() -> float:
 
 func _mutate_random_connection() -> void:
 	var connections = []
-	for connection_id in neural_world_matrix.interconnections:
+	for connection_id in neural_world_matrix["interconnections"]:
 		connections.append(connection_id)
 	
 	if connections.size() > 0:
 		var random_connection = connections[randi() % connections.size()]
-		var connection = neural_world_matrix.interconnections[random_connection]
-		connection.weight += randf_range(-0.1, 0.1)
-		connection.weight = clamp(connection.weight, -1.0, 1.0)
+		var connection = neural_world_matrix["interconnections"][random_connection]
+		connection["weight"] += randf_range(-0.1, 0.1)
+		connection["weight"] = clamp(connection["weight"], -1.0, 1.0)
 
 # === Helper Functions ===
 
@@ -1215,10 +1216,10 @@ func get_world_status() -> Dictionary:
 func get_neural_network_status() -> Dictionary:
 	var status: Dictionary = {}
 	
-	status.neural_world_matrix_size = neural_world_matrix.size()
-	status.emergent_patterns_count = emergent_patterns.size()
-	status.evolution_cycles = neural_world_matrix.evolution_cycles
-	status.interconnections_count = neural_world_matrix.interconnections.size()
+	status["neural_world_matrix_size"] = neural_world_matrix.size()
+	status["emergent_patterns_count"] = emergent_patterns.size()
+	status["evolution_cycles"] = neural_world_matrix["evolution_cycles"]
+	status["interconnections_count"] = neural_world_matrix["interconnections"].size()
 	
 	return status
 

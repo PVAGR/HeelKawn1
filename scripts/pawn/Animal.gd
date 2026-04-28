@@ -96,6 +96,11 @@ func _exit_tree() -> void:
 func _on_game_tick(_tick: int) -> void:
 	if _dead or _world == null:
 		return
+	
+	# Throttle animal AI to every 3 ticks to reduce lag
+	if GameManager.tick_count % 3 != 0:
+		return
+	
 	var spec = SPECIES_DATA[animal_type]
 	# Decay hunger
 	hunger = max(0.0, hunger - float(spec.get("hunger_decay", 0.1)))

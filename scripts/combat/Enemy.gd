@@ -110,6 +110,10 @@ func _on_game_tick(_tick: int) -> void:
 	if _hit_flash_ticks > 0:
 		_hit_flash_ticks -= 1
 	
+	# Throttle enemy AI to every 2 ticks to reduce lag
+	if GameManager.tick_count % 2 != 0:
+		return
+	
 	age_ticks += 1
 	if attack_cooldown > 0:
 		attack_cooldown -= 1
@@ -125,10 +129,11 @@ func _on_game_tick(_tick: int) -> void:
 		if dist_to_target < spec.size * 3 + 8:  # Melee range
 			_attack_pawn(_target_pawn)
 		else:
-			# Path to target
-			var target_tile: Vector2i = _world.world_to_tile(_target_pawn.position)
-			_current_path = _world.pathfinder.find_path(tile_pos, target_tile)
-			_path_index = 0
+			# Path to target - throttle to every 5 ticks
+			if GameManager.tick_count % 5 == 0:
+				var target_tile: Vector2i = _world.world_to_tile(_target_pawn.position)
+				_current_path = _world.pathfinder.find_path(tile_pos, target_tile)
+				_path_index = 0
 	else:
 		# Random wander
 		if randf() < 0.05:

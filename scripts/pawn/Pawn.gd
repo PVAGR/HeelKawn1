@@ -1066,20 +1066,19 @@ func _on_game_tick(_tick: int) -> void:
 		return
 	if _hit_flash_ticks > 0:
 		_hit_flash_ticks -= 1
-	_decay_needs()
-	_check_thresholds()
+	
+	# Throttle needs decay to every 5 ticks to reduce lag
+	if GameManager.tick_count % 5 == 0:
+		_decay_needs()
+		_check_thresholds()
+	
 	var stride: int = _fast_forward_tick_stride()
 	var run_full_ai: bool = stride <= 1 or (_tick % stride == 0)
 	if run_full_ai:
-		var active_job_type: int = _active_cohort_job_type()
-		if active_job_type != _last_recruitment_job_type:
-			_last_recruitment_job_type = active_job_type
-			_invalidate_recruitment_signal_cache()
-			_refresh_or_decay_cohort_stability(true)
-		# _refresh_recruitment_signal_cache() - DISABLED for performance
-		update_cohort_membership()
-		_validate_or_dissolve_cohort()
-		_refresh_or_decay_cohort_stability()
+		# DISABLED all cohort system calls for performance
+		# update_cohort_membership()
+		# _validate_or_dissolve_cohort()
+		# _refresh_or_decay_cohort_stability()
 		if draft_mode:
 			_engage_enemies()
 	# Panic-sleep interrupt: if rest is critically low and we're not already
@@ -1234,6 +1233,11 @@ func _tick_idle() -> void:
 	# *one* preferential pass restricted to FORAGE jobs, then fall back to the
 	# normal filter if no forage is available. Stops the colony from happily
 	# mining stone while everyone starves.
+	
+	# Throttle job selection to every 3 ticks to reduce lag
+	if GameManager.tick_count % 3 != 0:
+		return
+	
 	var my_component: int = _world.pathfinder.component_of(data.tile_pos)
 	# Treat the whole pantry (berries + meat + any future food) as one number
 	# summed across every registered zone. Counting only berries was fine
@@ -1241,17 +1245,21 @@ func _tick_idle() -> void:
 	# looked like it was starving. And with Phase-10 multi-zone stockpiles
 	# we have to sum across zones, not peek at one hardcoded pile.
 	var food_emergency: bool = StockpileManager.total_food() < STOCKPILE_FOOD_LOW_THRESHOLD
+	
+	# Simplified priority calculation for performance
 	var priority_cb: Callable = func(j: Job) -> int:
 		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j)) + _job_history_scar_priority_offset(j)
-		var intent_mult: float = get_settlement_intent_job_multiplier(j)
-		var intent_bonus: int = int(round((intent_mult - 1.0) * 10.0))
-		var front_mult: float = get_preferred_front_bias(j)
-		var front_bonus: int = int(round((front_mult - 1.0) * 10.0))
-		var cohort_mult: float = get_cohort_recruitment_bias(j)
-		var cohort_bonus: int = int(round((cohort_mult - 1.0) * 10.0))
-		var resource_mult: float = get_resource_pressure_bias(j)
-		var resource_bonus: int = int(round((resource_mult - 1.0) * 10.0))
-		return base_bias + intent_bonus + front_bonus + cohort_bonus + resource_bonus
+		# DISABLED expensive bias calculations for performance
+		# var intent_mult: float = get_settlement_intent_job_multiplier(j)
+		# var intent_bonus: int = int(round((intent_mult - 1.0) * 10.0))
+		# var front_mult: float = get_preferred_front_bias(j)
+		# var front_bonus: int = int(round((front_mult - 1.0) * 10.0))
+		# var cohort_mult: float = get_cohort_recruitment_bias(j)
+		# var cohort_bonus: int = int(round((cohort_mult - 1.0) * 10.0))
+		# var resource_mult: float = get_resource_pressure_bias(j)
+		# var resource_bonus: int = int(round((resource_mult - 1.0) * 10.0))
+		# return base_bias + intent_bonus + front_bonus + cohort_bonus + resource_bonus
+		return base_bias
 	var base_passes: Callable = func(j: Job) -> bool:
 		if Pawn._world_hunt_stabilization_blocks() and j.type == Job.Type.HUNT:
 			return false
@@ -1692,10 +1700,11 @@ func _apply_work_hazards() -> void:
 
 func _begin_job(job: Job) -> void:
 	_current_job = job
-	_invalidate_recruitment_signal_cache()
-	# _refresh_recruitment_signal_cache(true) - DISABLED for performance
-	update_cohort_membership(true)
-	_refresh_or_decay_cohort_stability(true)
+	# DISABLED all cohort system calls for performance
+	# _invalidate_recruitment_signal_cache()
+	# _refresh_recruitment_signal_cache(true)
+	# update_cohort_membership(true)
+	# _refresh_or_decay_cohort_stability(true)
 	# Build jobs need raw materials in hand before we walk to the build site.
 	# If we don't already have the right item in sufficient quantity, bounce
 	# to the stockpile first.

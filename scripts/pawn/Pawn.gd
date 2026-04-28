@@ -3337,11 +3337,11 @@ func challenge_for_leadership(target_leader: Pawn) -> void:
 	pass
 
 
-def get_clan_influence() -> float:
+func get_clan_influence() -> float:
 	return data.clan_influence
 
 
-def get_total_labor_contributions() -> int:
+func get_total_labor_contributions() -> int:
 	var total: int = 0
 	for job_type in data.labor_contributions:
 		total += data.labor_contributions[job_type]
@@ -3387,17 +3387,17 @@ func establish_homestead(tile: Vector2i) -> bool:
 	return true
 
 
-def record_food_production(amount: int) -> void:
+func record_food_production(amount: int) -> void:
 	# Record food production contribution
 	data.food_produced += amount
 
 
-def record_building_construction() -> void:
+func record_building_construction() -> void:
 	# Record building construction contribution
 	data.buildings_constructed += 1
 
 
-def establish_trade_relationship(target_settlement_id: int, initial_volume: int = 10) -> void:
+func establish_trade_relationship(target_settlement_id: int, initial_volume: int = 10) -> void:
 	# Establish a trade relationship with another settlement
 	data.trade_relationships[target_settlement_id] = initial_volume
 	
@@ -3407,7 +3407,7 @@ def establish_trade_relationship(target_settlement_id: int, initial_volume: int 
 		])
 
 
-def set_settlement_role(role: int) -> void:
+func set_settlement_role(role: int) -> void:
 	# Set settlement role (0=NONE, 1=FARMER, 2=BUILDER, 3=MERCHANT, 4=GUARD)
 	data.settlement_role = role
 	
@@ -3421,12 +3421,12 @@ def set_settlement_role(role: int) -> void:
 		print("[Pawn] %s became %s of settlement %d" % [data.display_name, role_name, data.settlement_id])
 
 
-def own_property(tile: Vector2i, property_type: String) -> void:
+func own_property(tile: Vector2i, property_type: String) -> void:
 	# Own a property at a tile
 	data.owned_properties[tile] = property_type
 
 
-def get_total_trade_volume() -> int:
+func get_total_trade_volume() -> int:
 	var total: int = 0
 	for settlement_id in data.trade_relationships:
 		total += data.trade_relationships[settlement_id]
@@ -3467,7 +3467,7 @@ func build_road(tile: Vector2i) -> bool:
 	return true
 
 
-def learn_custom(custom_name: String, familiarity: float = 20.0) -> void:
+func learn_custom(custom_name: String, familiarity: float = 20.0) -> void:
 	# Learn a regional custom or tradition
 	data.known_customs[custom_name] = min(100.0, data.known_customs.get(custom_name, 0.0) + familiarity)
 	
@@ -3477,7 +3477,7 @@ def learn_custom(custom_name: String, familiarity: float = 20.0) -> void:
 		])
 
 
-def set_citizenship_status(status: int) -> void:
+func set_citizenship_status(status: int) -> void:
 	# Set citizenship status (0=NONE, 1=RESIDENT, 2=CITIZEN, 3=ELDER)
 	data.citizenship_status = status
 	
@@ -3490,7 +3490,7 @@ def set_citizenship_status(status: int) -> void:
 		print("[Pawn] %s became %s of region %d" % [data.display_name, status_name, data.region_id])
 
 
-def pay_taxes(amount: int) -> void:
+func pay_taxes(amount: int) -> void:
 	# Pay regional taxes
 	data.taxes_paid += amount
 	
@@ -3500,7 +3500,7 @@ def pay_taxes(amount: int) -> void:
 		])
 
 
-def update_regional_safety(safety_delta: float) -> void:
+func update_regional_safety(safety_delta: float) -> void:
 	# Update regional safety rating
 	data.regional_safety = clamp(data.regional_safety + safety_delta, 0.0, 100.0)
 
@@ -3524,12 +3524,12 @@ func leave_nation() -> void:
 		print("[Pawn] %s left nation %d" % [data.display_name, old_nation])
 
 
-def comply_with_law(law_id: int, compliance_level: float = 100.0) -> void:
+func comply_with_law(law_id: int, compliance_level: float = 100.0) -> void:
 	# Record compliance with a law
 	data.law_compliance[law_id] = clamp(compliance_level, 0.0, 100.0)
 
 
-def violate_law(law_id: int) -> void:
+func violate_law(law_id: int) -> void:
 	# Record violation of a law
 	data.law_compliance[law_id] = max(0.0, data.law_compliance.get(law_id, 100.0) - 50.0)
 	
@@ -3537,7 +3537,7 @@ def violate_law(law_id: int) -> void:
 		print("[Pawn] %s violated law %d" % [data.display_name, law_id])
 
 
-def adopt_culture(culture_name: String, affinity: float = 50.0) -> void:
+func adopt_culture(culture_name: String, affinity: float = 50.0) -> void:
 	# Adopt a cultural identity
 	data.cultural_affinity[culture_name] = clamp(affinity, 0.0, 100.0)
 	
@@ -3547,7 +3547,7 @@ def adopt_culture(culture_name: String, affinity: float = 50.0) -> void:
 		])
 
 
-def serve_in_military(years: int = 1) -> void:
+func serve_in_military(years: int = 1) -> void:
 	# Serve in the military
 	data.military_service_years += years
 	
@@ -3557,7 +3557,7 @@ def serve_in_military(years: int = 1) -> void:
 		])
 
 
-def set_military_rank(rank: int) -> void:
+func set_military_rank(rank: int) -> void:
 	# Set military rank (0=NONE, 1=SOLDIER, 2=SERGEANT, 3=OFFICER, 4=GENERAL)
 	data.military_rank = rank
 	
@@ -3571,7 +3571,7 @@ def set_military_rank(rank: int) -> void:
 		print("[Pawn] %s became %s of nation %d" % [data.display_name, rank_name, data.nation_id])
 
 
-def establish_diplomatic_relation(target_nation_id: int, standing: float = 50.0) -> void:
+func establish_diplomatic_relation(target_nation_id: int, standing: float = 50.0) -> void:
 	# Establish diplomatic standing with another nation
 	data.diplomatic_standing[target_nation_id] = clamp(standing, 0.0, 100.0)
 	
@@ -3581,7 +3581,7 @@ def establish_diplomatic_relation(target_nation_id: int, standing: float = 50.0)
 		])
 
 
-def set_national_citizenship(citizenship: int) -> void:
+func set_national_citizenship(citizenship: int) -> void:
 	# Set national citizenship (0=NONE, 1=SUBJECT, 2=CITIZEN, 3=NOBLE)
 	data.national_citizenship = citizenship
 	
@@ -3609,7 +3609,7 @@ func spread_influence_to_region(region_id: int, influence_amount: float = 5.0) -
 		])
 
 
-def adapt_to_climate(climate_type: String, adaptation_amount: float = 10.0) -> void:
+func adapt_to_climate(climate_type: String, adaptation_amount: float = 10.0) -> void:
 	# Adapt to a climate type
 	data.climate_adaptation[climate_type] = min(100.0, data.climate_adaptation.get(climate_type, 0.0) + adaptation_amount)
 	
@@ -3619,7 +3619,7 @@ def adapt_to_climate(climate_type: String, adaptation_amount: float = 10.0) -> v
 		])
 
 
-def learn_myth(myth_name: String, belief: float = 30.0) -> void:
+func learn_myth(myth_name: String, belief: float = 30.0) -> void:
 	# Learn about a myth or legend
 	data.myth_knowledge[myth_name] = clamp(belief, 0.0, 100.0)
 	
@@ -3629,7 +3629,7 @@ def learn_myth(myth_name: String, belief: float = 30.0) -> void:
 		])
 
 
-def witness_world_event(event_id: int, impact: float = 10.0) -> void:
+func witness_world_event(event_id: int, impact: float = 10.0) -> void:
 	# Record witnessing a world event
 	data.world_events_witnessed[event_id] = impact
 	
@@ -3642,7 +3642,7 @@ def witness_world_event(event_id: int, impact: float = 10.0) -> void:
 		])
 
 
-def increase_legacy(amount: float) -> void:
+func increase_legacy(amount: float) -> void:
 	# Directly increase legacy score
 	data.legacy_score += amount
 	

@@ -232,10 +232,10 @@ static func import_pawn_from_file(file_path: String, target_pawn: Pawn) -> bool:
 
 
 ## Export all pawns to a directory
-static func export_all_pawns(directory: String) -> int:
+static func export_all_pawns(directory: String, tree: Node) -> int:
 	var exported_count: int = 0
 	
-	for pawn in get_tree().get_nodes_in_group("pawns"):
+	for pawn in tree.get_nodes_in_group("pawns"):
 		if not is_instance_valid(pawn):
 			continue
 		

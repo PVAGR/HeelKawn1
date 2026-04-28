@@ -355,44 +355,8 @@ func _cohort_locus_world_pos() -> Variant:
 
 
 func update_cohort_membership(force: bool = false) -> void:
-	if data == null:
-		return
-	var job_type: int = _active_cohort_job_type()
-	if job_type < 0:
-		_clear_cohort_state()
-		return
-	var tick_now: int = GameManager.tick_count
-	if not force and tick_now < _next_cohort_update_tick:
-		return
-	_next_cohort_update_tick = tick_now + COHORT_UPDATE_TICKS
-	var my_center: int = _cohort_settlement_center_for_tile(data.tile_pos)
-	var radius_sq: int = COHORT_MATCH_RADIUS_TILES * COHORT_MATCH_RADIUS_TILES
-	var members: Array[Pawn] = []
-	for n in get_tree().get_nodes_in_group("pawns"):
-		if not (n is Pawn):
-			continue
-		var p: Pawn = n as Pawn
-		if p == null or p.data == null:
-			continue
-		if p._active_cohort_job_type() != job_type:
-			continue
-		var p_center: int = p._cohort_settlement_center_for_tile(p.data.tile_pos)
-		if my_center >= 0 and p_center >= 0 and p_center != my_center:
-			continue
-		if data.tile_pos.distance_squared_to(p.data.tile_pos) > radius_sq:
-			continue
-		members.append(p)
-	if members.size() < COHORT_MIN_SIZE:
-		_clear_cohort_state()
-		return
-	var anchor: Pawn = members[0]
-	for p in members:
-		if int(p.data.id) < int(anchor.data.id):
-			anchor = p
-	data.cohort_anchor_id = int(anchor.data.id)
-	data.cohort_job_type = job_type
-	data.is_cohort_anchor = int(data.id) == int(anchor.data.id)
-	_cohort_anchor_ref = weakref(anchor)
+	# DISABLED for performance - cohort system iterates through all pawns
+	return
 
 
 func _validate_or_dissolve_cohort() -> void:
@@ -515,59 +479,9 @@ func _invalidate_recruitment_signal_cache() -> void:
 	_recruitment_signal_cache.clear()
 
 
-func _refresh_recruitment_signal_cache(force: bool = false) -> void:
-	if data == null:
-		return
-	var tick_now: int = GameManager.tick_count
-	if not force and tick_now < _next_recruitment_cache_tick:
-		return
-	_next_recruitment_cache_tick = tick_now + COHORT_RECRUITMENT_CACHE_UPDATE_TICKS
-	_recruitment_signal_cache.clear()
-	var radius_sq: int = COHORT_RECRUITMENT_SCAN_RADIUS_TILES * COHORT_RECRUITMENT_SCAN_RADIUS_TILES
-	var my_center: int = _cohort_settlement_center_for_tile(data.tile_pos)
-	var candidates: Array[Pawn] = []
-	for n in get_tree().get_nodes_in_group("pawns"):
-		if not (n is Pawn):
-			continue
-		var p: Pawn = n as Pawn
-		if p == null or p == self or p.data == null:
-			continue
-		if p.data.tile_pos.distance_squared_to(data.tile_pos) > radius_sq:
-			continue
-		candidates.append(p)
-	candidates.sort_custom(func(a: Pawn, b: Pawn) -> bool:
-		return int(a.data.id) < int(b.data.id)
-	)
-	var inspected: int = 0
-	var seen_keys: Dictionary = {}
-	for p in candidates:
-		if inspected >= COHORT_RECRUITMENT_MAX_PAWNS:
-			break
-		inspected += 1
-		var active_job_type: int = p._active_cohort_job_type()
-		if active_job_type < 0:
-			continue
-		if int(p.data.cohort_job_type) != active_job_type:
-			continue
-		if int(p.data.cohort_anchor_id) < 0:
-			continue
-		var p_center: int = _cohort_settlement_center_for_tile(p.data.tile_pos)
-		if my_center >= 0 and p_center >= 0 and my_center != p_center:
-			continue
-		var locus_tile: Vector2i = p.data.tile_pos
-		if p._current_job != null:
-			locus_tile = p._current_job.work_tile
-		var key: String = "%d:%d:%d:%d" % [active_job_type, p_center, locus_tile.x, locus_tile.y]
-		if seen_keys.has(key):
-			continue
-		seen_keys[key] = true
-		_recruitment_signal_cache.append({
-			"job_type": active_job_type,
-			"center": p_center,
-			"locus_tile": locus_tile,
-		})
-		if _recruitment_signal_cache.size() >= COHORT_RECRUITMENT_MAX_SIGNALS:
-			break
+func _update_recruitment_cache(force: bool = false) -> void:
+	# DISABLED for performance - iterates through all pawns
+	return
 
 
 func get_cohort_recruitment_bias(job: Job) -> float:

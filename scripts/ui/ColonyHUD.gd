@@ -174,8 +174,11 @@ func _refresh() -> void:
 			_designation_label)
 	if SIMPLE_READABLE_HUD:
 		lines.append(_time_line())
+		lines.append(_world_pulse_line())
+		lines.append(_history_totals_line())
 		lines.append(_colony_state_line())
 		lines.append(_settlement_identity_line())
+		lines.append(_stockpile_simple_line())
 		lines.append(_pawn_line_simple())
 		lines.append(_jobs_line_simple())
 		lines.append(_wildlife_line())
@@ -281,9 +284,16 @@ func _time_line() -> String:
 	var y_tick: int = SimTime.tick_within_sim_year(tick)
 	var day_in_year: int = SimTime.visual_day_within_sim_year(tick)
 	var days_per_y: int = SimTime.visual_days_per_sim_year()
-	return "[b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](σ+%d)[/color]" % [
+	var base: String = "[b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](σ+%d)[/color]" % [
 		year_n, day_in_year, days_per_y, hour, phase_name, speed_str, tick, y_tick,
 	]
+	if GameManager.game_speed >= 26.0 and not GameManager.is_paused:
+		var d: Dictionary = GameManager.sim_diag()
+		var q: float = float(d.get("queued_ticks_est", 0.0))
+		var cap: int = int(d.get("max_ticks_per_frame", 6))
+		if q >= 3.0:
+			base += "   [color=#ffab91]Δ~%.0f tf%d[/color]" % [q, cap]
+	return base
 
 
 ## Labor stance (M) + key demand metrics from `ColonySimServices`.
@@ -296,6 +306,64 @@ func _colony_state_line() -> String:
 		int(round(fp * 100.0)), _demand_tier(fp),
 		int(round(hp * 100.0)), _demand_tier(hp),
 	]
+
+
+## High-level world snapshot (places, memory log size, work queue).
+func _world_pulse_line() -> String:
+	var settlements_n: int = SettlementMemory.settlements.size()
+	var facts: int = WorldMemory.event_count()
+	var js: Dictionary = JobManager.stats()
+	var open_j: int = int(js.get("open", 0))
+	var claimed_j: int = int(js.get("claimed", 0))
+	return "[color=#aed581]World:[/color] [b]%d[/b] settlements · chronicle [b]%d[/b] facts · work [b]%d[/b] open · [b]%d[/b] claimed" % [
+		settlements_n,
+		facts,
+		open_j,
+		claimed_j,
+	]
+
+
+## Lifetime totals from the append-only chronicle (what kind of story this world is building).
+func _history_totals_line() -> String:
+	var c: Dictionary = WorldMemory.get_event_type_counts()
+	var births: int = int(c.get("birth", 0)) + int(c.get("pawn_birth", 0))
+	var deaths: int = int(c.get("pawn_death", 0))
+	var builds: int = int(c.get("structure_built", 0)) + int(c.get("cooperative_build", 0))
+	var meet: int = int(c.get("social_meeting", 0))
+	var know: int = int(c.get("knowledge_discovery", 0)) + int(c.get("knowledge_rediscovery", 0))
+	return "[color=#9fa8da]Story:[/color] births [b]%d[/b] · deaths [b]%d[/b] · builds [b]%d[/b] · meets [b]%d[/b] · knowledge [b]%d[/b]" % [
+		births,
+		deaths,
+		builds,
+		meet,
+		know,
+	]
+
+
+## Short stockpile strip so readable mode still shows material reality.
+func _stockpile_simple_line() -> String:
+	var zones: Array[Stockpile] = StockpileManager.zones()
+	if zones.is_empty():
+		return "[color=#ce93d8]Supplies:[/color] [i]no stockpiles[/i]"
+	var totals: Dictionary = {}
+	for z in zones:
+		for t in z.inventory:
+			totals[t] = totals.get(t, 0) + z.inventory[t]
+	var rows: Array[Dictionary] = []
+	for t in Item.Type.values():
+		if t == Item.Type.NONE:
+			continue
+		var qty: int = int(totals.get(t, 0))
+		if qty > 0:
+			rows.append({"t": t, "q": qty})
+	if rows.is_empty():
+		return "[color=#ce93d8]Supplies:[/color] [i]empty[/i]"
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["q"]) > int(b["q"]))
+	var parts: Array[String] = []
+	for i in range(mini(5, rows.size())):
+		var row: Dictionary = rows[i]
+		parts.append("%s×%d" % [Item.name_for(row["t"]), int(row["q"])])
+	return "[color=#ce93d8]Supplies:[/color] %s" % " · ".join(parts)
 
 
 ## In-universe identity strip driven by backend settlement/memory systems.
@@ -714,7 +782,7 @@ func _narrative_rail_line() -> String:
 		return "📜 Chronicle: world is quiet"
 	var entries: PackedStringArray = PackedStringArray()
 	for i in range(ev.size() - 1, -1, -1):
-		if entries.size() >= 3:
+		if entries.size() >= 5:
 			break
 		var e_any: Variant = ev[i]
 		if not (e_any is Dictionary):
@@ -778,8 +846,13 @@ func _narrative_line_for_event(typ: String, e: Dictionary) -> String:
 			return "%s died" % nm
 		"animal_death":
 			return "wildlife was culled"
+		"job_completed":
+			# Too noisy for the rail; totals live in Story / Work lines.
+			return ""
 		_:
-			# Keep rail clean from low-signal sim churn.
+			# Surface rarer settlement / world events without spamming routine jobs.
+			if typ.begins_with("settlement") or typ.contains("abandon") or typ.contains("revival") or typ.contains("rebirth"):
+				return typ.replace("_", " ")
 			return ""
 
 

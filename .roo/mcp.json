@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upwelling-ai/context7-mcp-server"
+      ],
+      "description": "Context7 MCP Server - Free semantic code navigation and documentation lookup for Godot, GDScript, and project context"
+    }
+  }
+}

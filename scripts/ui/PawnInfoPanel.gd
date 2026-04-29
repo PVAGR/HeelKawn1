@@ -82,6 +82,7 @@ var _crisis_level_label: Label = null
 var _liking_label: Label = null
 var _coach_label: Label = null
 var _social_label: Label = null
+var _identity_label: Label = null
 var _action_skills_label: Label = null
 var _portrait_cells: Array[ColorRect] = []
 
@@ -236,6 +237,11 @@ func _build_ui() -> void:
 	_social_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_social_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_root_vbox.add_child(_social_label)
+
+	_root_vbox.add_child(_make_section_header("HeelKawn identity"))
+	_identity_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_identity_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_root_vbox.add_child(_identity_label)
 
 	_root_vbox.add_child(_make_section_header("Needs"))
 	for entry in NEED_BARS:
@@ -510,6 +516,8 @@ func _refresh() -> void:
 		var pid: int = int(top_peer.get("peer_id", -1))
 		var peer_disp: String = _peer_display_for_social(pid)
 		_social_label.text = d.social_status_line(peer_disp)
+	if _identity_label != null:
+		_identity_label.text = _build_identity_strip(d)
 	if _action_skills_label != null:
 		_action_skills_label.text = (
 				"Action xp  move %d  farm %d  build %d  gather %d  combat %d"
@@ -718,6 +726,39 @@ func _lineage_block(d: PawnData) -> String:
 	if not inh.is_empty():
 		lines.append(inh)
 	return "\n".join(lines)
+
+
+func _build_identity_strip(d: PawnData) -> String:
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(d.tile_pos.x, d.tile_pos.y)
+	var meaning_label: String = str(WorldMeaning.get_region_meaning_label(rk)).replace("_", " ")
+	var rep: int = int(CulturalMemory.get_region_reputation(rk))
+	var rep_word: String = "neutral"
+	if rep <= -3:
+		rep_word = "dreaded"
+	elif rep <= -2:
+		rep_word = "feared"
+	elif rep == -1:
+		rep_word = "scarred"
+	elif rep >= 1:
+		rep_word = "respected"
+	var profile: Dictionary = SettlementMemory.get_settlement_profile(rk)
+	var st_state: String = str(profile.get("state", "wild")).replace("_", " ")
+	var culture_name: String = str(profile.get("culture_name", "cautious")).replace("_", " ")
+	var rev_score: int = int(profile.get("revival_score", 0))
+	var center: int = int(profile.get("center_region", -1))
+	var st_any: Variant = SettlementMemory.get_settlement_at_region(rk)
+	var intent: String = "none"
+	if st_any is Dictionary:
+		intent = str((st_any as Dictionary).get("current_intent", "none")).to_lower()
+	var war: Dictionary = SettlementMemory.get_war_profile_for_region(rk)
+	var war_state: String = str(war.get("state", "peace")).replace("_", " ")
+	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(rk)
+	var gov_type: String = str(gov.get("type", "anarchy")).replace("_", " ")
+	return (
+		"Region #%d · meaning: %s · reputation: %s (%d)\n"
+		+ "Settlement: %s · culture: %s · intent: %s · revival %d\n"
+		+ "Order: %s · governance: %s · center: %d"
+	) % [rk, meaning_label, rep_word, rep, st_state, culture_name, intent, rev_score, war_state, gov_type, center]
 
 
 static func _body_type_label(body_type: int) -> String:

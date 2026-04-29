@@ -98,6 +98,8 @@ const GENERATION_TICKS: int = 20000
 const REPRODUCTION_CHECK_INTERVAL_TICKS: int = 300
 ## Co-presence rapport for pairing / births (deterministic; same path component only).
 const SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS: int = 40
+const SOCIAL_MEETING_EVENT_COOLDOWN_TICKS: int = 400
+const SOCIAL_RAPPORT_MILESTONES: Array[int] = [56, 140, 280, 560]
 const INFLUENCE_UPDATE_INTERVAL_TICKS: int = 500
 const OBSERVER_HUD_REFRESH_TICKS: int = 30
 const FOCUS_INSPECTOR_REFRESH_TICKS: int = 15
@@ -231,6 +233,10 @@ var _last_inspect_event_tick_shown: int = -1
 var _inspect_tooltip_node: Control = null
 var _inspect_audio_player: AudioStreamPlayer = null
 var _inspect_audio_playback: AudioStreamGeneratorPlayback = null
+## pair key ("low-high") -> last tick a social_meeting event was logged.
+var _social_meeting_last_tick_by_pair: Dictionary = {}
+## pair key ("low-high") -> highest rapport milestone already logged.
+var _social_rapport_milestone_by_pair: Dictionary = {}
 
 func _is_ultra_speed() -> bool:
 	return GameManager.game_speed >= 12.0
@@ -2036,6 +2042,59 @@ func _accumulate_social_rapport() -> void:
 				continue
 			da.add_social_rapport(int(db.id), GAIN)
 			db.add_social_rapport(int(da.id), GAIN)
+			_record_social_pair_events(da, db)
+
+
+func _social_pair_key(a_id: int, b_id: int) -> String:
+	var lo: int = mini(a_id, b_id)
+	var hi: int = maxi(a_id, b_id)
+	return "%d-%d" % [lo, hi]
+
+
+func _record_social_pair_events(a: PawnData, b: PawnData) -> void:
+	var a_id: int = int(a.id)
+	var b_id: int = int(b.id)
+	var key: String = _social_pair_key(a_id, b_id)
+	var now: int = GameManager.tick_count
+	var last_tick: int = int(_social_meeting_last_tick_by_pair.get(key, -1))
+	var rapport: int = mini(
+		int(a.get_social_rapport(b_id)),
+		int(b.get_social_rapport(a_id))
+	)
+	var meet_should_log: bool = last_tick < 0 or now - last_tick >= SOCIAL_MEETING_EVENT_COOLDOWN_TICKS
+	if meet_should_log:
+		_social_meeting_last_tick_by_pair[key] = now
+		WorldMemory.record_event({
+			"type": "social_meeting",
+			"tick": now,
+			"a": a_id,
+			"b": b_id,
+			"a_name": a.display_name,
+			"b_name": b.display_name,
+			"rapport": rapport,
+			"region": preload("res://autoloads/WorldMemory.gd")._region_key(a.tile_pos.x, a.tile_pos.y),
+			"tile": {"x": a.tile_pos.x, "y": a.tile_pos.y},
+		})
+	var previous_milestone: int = int(_social_rapport_milestone_by_pair.get(key, 0))
+	for m in SOCIAL_RAPPORT_MILESTONES:
+		var milestone: int = int(m)
+		if milestone <= previous_milestone:
+			continue
+		if rapport < milestone:
+			continue
+		_social_rapport_milestone_by_pair[key] = milestone
+		WorldMemory.record_event({
+			"type": "social_bond_milestone",
+			"tick": now,
+			"a": a_id,
+			"b": b_id,
+			"a_name": a.display_name,
+			"b_name": b.display_name,
+			"rapport": rapport,
+			"milestone": milestone,
+			"region": preload("res://autoloads/WorldMemory.gd")._region_key(a.tile_pos.x, a.tile_pos.y),
+			"tile": {"x": a.tile_pos.x, "y": a.tile_pos.y},
+		})
 
 
 func _process_reproduction_tick() -> void:
@@ -3695,12 +3754,47 @@ static func _regrow_ticks_for(feature: int) -> int:
 func _on_job_completed(job: Job) -> void:
 	if job == null:
 		return
+	var now_tick: int = GameManager.tick_count
+	var worker_id: int = -1
+	var worker_name: String = ""
+	if job.assigned_pawn != null and is_instance_valid(job.assigned_pawn) and job.assigned_pawn.data != null:
+		worker_id = int(job.assigned_pawn.data.id)
+		worker_name = String(job.assigned_pawn.data.display_name)
+	var nearby_workers: int = 0
+	if _pawn_spawner != null:
+		for p in _pawn_spawner.pawns:
+			if p == null or not is_instance_valid(p) or p.data == null:
+				continue
+			if job.tile.distance_to(p.data.tile_pos) <= 2.5:
+				nearby_workers += 1
+	WorldMemory.record_event({
+		"type": "job_completed",
+		"tick": now_tick,
+		"job_type": int(job.type),
+		"job_priority": int(job.priority),
+		"worker_id": worker_id,
+		"worker_name": worker_name,
+		"nearby_workers": nearby_workers,
+		"region": preload("res://autoloads/WorldMemory.gd")._region_key(job.tile.x, job.tile.y),
+		"tile": {"x": job.tile.x, "y": job.tile.y},
+		"s": WorldMemory.SCHEMA,
+	})
 	match job.type:
 		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
 			if has_node("WorldTrace") and _world != null:
 				var wt: WorldTrace = $WorldTrace as WorldTrace
 				if wt != null:
 					wt.record_trace(_world.tile_to_world(job.tile), "build")
+			WorldMemory.record_event({
+				"type": "structure_built",
+				"tick": now_tick,
+				"job_type": int(job.type),
+				"worker_id": worker_id,
+				"worker_name": worker_name,
+				"nearby_workers": nearby_workers,
+				"region": preload("res://autoloads/WorldMemory.gd")._region_key(job.tile.x, job.tile.y),
+				"tile": {"x": job.tile.x, "y": job.tile.y},
+			})
 		Job.Type.MINE, Job.Type.MINE_WALL:
 			_mining_react_pending = true
 		Job.Type.FORAGE:

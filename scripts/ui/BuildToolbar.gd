@@ -10,6 +10,16 @@ signal speed_index_requested(idx: int)
 ## Emitted when the player clicks pause. Main routes to GameManager.toggle_pause.
 signal pause_toggled()
 
+## Legacy compatibility signal: older Main wiring still connects this even
+## though build stamping is disabled in the current toolbar layout.
+signal mode_requested(mode: int)
+
+## Legacy compatibility signal: retained so Main can connect safely.
+signal reroll_requested()
+
+## Legacy compatibility signal: retained so Main can connect safely.
+signal zone_filter_cycle_requested()
+
 ## Open cosmetic editor for the selected pawn (same PawnData fields as NPCs).
 signal appearance_edit_requested()
 

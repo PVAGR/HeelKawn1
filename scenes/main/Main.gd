@@ -1,11 +1,12 @@
 extends Node2D
 class_name Main
 
-## Top-level scene controller. Owns input hotkeys and the startup/reroll
+## Top-level scene controller. Owns input hotkeys and the startup / reroll (debug R)
 ## sequence: world -> stockpile -> pawns -> jobs. Each step depends on the
 ## previous, so order here matters.
 
 const STOCKPILE_SCENE: PackedScene = preload("res://scenes/stockpile/Stockpile.tscn")
+const INCARNATION_PICKER_SCRIPT: Script = preload("res://scripts/ui/IncarnationPicker.gd")
 
 ## Tuning for initial job generation.
 const FORAGE_WORK_TICKS: int = 20
@@ -95,6 +96,8 @@ const TRACE_REDRAW_INTERVAL_SEC: float = 1.0
 ## Generational turnover (v1): one new pawn per this many ticks if population > 0.
 const GENERATION_TICKS: int = 20000
 const REPRODUCTION_CHECK_INTERVAL_TICKS: int = 300
+## Co-presence rapport for pairing / births (deterministic; same path component only).
+const SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS: int = 40
 const INFLUENCE_UPDATE_INTERVAL_TICKS: int = 500
 const OBSERVER_HUD_REFRESH_TICKS: int = 30
 const FOCUS_INSPECTOR_REFRESH_TICKS: int = 15
@@ -102,6 +105,9 @@ const FOCUS_INSPECTOR_REFRESH_TICKS: int = 15
 const REBIRTH_CHECK_INTERVAL_TICKS: int = 2000
 ## Ecosystems (hunt) stay inert until this tick (world gen / reroll / load).
 const WORLD_STABILIZATION_TICKS: int = 500
+## Player does not architect the colony: no manual walls/beds/doors/stockpile zones.
+## Construction remains `SettlementPlanner` + pawn job claims (NPC-equivalent sim path).
+const PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES: bool = false
 ## World-level only; Pawn/Animal read via [code]Main._world_stabilization_until_tick[/code].
 ## -1 = not initialized yet (hunt/tick guards treat as: allow hunt once bootstrapped sets a non-negative window).
 static var _world_stabilization_until_tick: int = -1
@@ -114,6 +120,8 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _hud: ColonyHUD = $UI_Viewport/ColonyHUD
 @onready var _observer_hud: ObserverHUD = $UI_Viewport/ObserverHUD
 @onready var _focus_inspector: FocusInspector = $UI_Viewport/FocusInspector
+@onready var _map_mode_overlay: Node = $MapModeOverlay
+@onready var _creator_debug_menu: CreatorDebugMenu = $CreatorDebugMenu
 @onready var _toolbar: BuildToolbar = $UI_Viewport/BuildToolbar
 @onready var _info_panel: PawnInfoPanel = $UI_Viewport/PawnInfoPanel
 @onready var _day_night: DayNightCycle = $DayNight
@@ -123,14 +131,24 @@ static var _world_stabilization_until_tick: int = -1
 ## Currently selected pawn (right-side info panel). null = nothing selected.
 ## Click a pawn to select; click empty ground or press Esc to deselect.
 var _selected_pawn: Pawn = null
+## HUD + bottom toolbar + pawn sheet visibility (`` ` `` toggles for map-first play).
+var _play_chrome_visible: bool = true
+## Smooth camera lock on selected pawn (`G`). Cleared by middle-mouse pan.
+var _camera_follow_selected: bool = false
 ## Deterministic local-control pawn. Defaults to current selection.
 var _player_pawn: Pawn = null
+enum PlayerMode {
+	SPECTATOR = 0,
+	INCARNATED = 1,
+}
+var _player_mode: int = PlayerMode.SPECTATOR
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
+var _avatar_panel: Node = null
+var _incarnation_picker: Node = null
 var _kernel_diagnostic: KernelDiagnostic = null
-## Player authority: human handles designations, draft/intent, selection, pause/speed,
-## camera (clamped when a player pawn is assigned). SettlementPlanner, TradePlanner,
-## autonomous jobs/hunt/ecology/fragmentation remain sim-driven unless commanded.
+## Player authority: pawn-local intents (WASD+E), cosmetic edit, draft/edicts when ruler,
+## selection, pause/speed, camera. Structures/zones: planner + jobs only (no human stamp).
 var _phase8_proof_overlay_layer: CanvasLayer = null
 var _phase8_proof_overlay_text: RichTextLabel = null
 ## Content signature for resource-balance console lines (never use snapshot_tick alone — it changes every refresh).
@@ -181,6 +199,8 @@ var _ambient_freq_target: float = 112.0
 var _meaning_ambient_mood: float = 0.5
 ## Settlement style expression (derived): open -> positive, defensive -> negative.
 var _meaning_style_bias: float = 0.0
+## Full-screen very low-alpha overlay (read-only mood); created in [_ensure_meaning_vignette].
+var _meaning_vignette_rect: ColorRect = null
 
 ## Pending regrowth events. Each entry is a Dictionary:
 ##   { "tile": Vector2i, "feature": int (TileFeature.Type), "ready_tick": int }
@@ -194,27 +214,42 @@ var _world_memory_derivative_flush_queued: bool = false
 ## Coalesce same-tick [World] terrain / path cost refreshes (pair vs stack+ruins are separate).
 var _last_heavy_refresh_tick: int = -1
 var _last_heavy_stack_tick: int = -1
+## Mining-reactive ore reseed is expensive (full-grid scan). Queue and process
+## on cadence instead of per-completion to avoid long frame stalls.
+var _mining_react_pending: bool = false
+var _last_mining_react_tick: int = -1
+const MINING_REACT_MIN_INTERVAL_TICKS: int = 120
+var _last_inspect_event_tick_shown: int = -1
+var _inspect_tooltip_node: Control = null
+var _inspect_audio_player: AudioStreamPlayer = null
+var _inspect_audio_playback: AudioStreamGeneratorPlayback = null
 
 func _is_ultra_speed() -> bool:
 	return GameManager.game_speed >= 12.0
 
+
+func _is_simulation_worker_mode() -> bool:
+	if GameManager == null:
+		return false
+	return GameManager.get("simulation_worker_mode") == true
+
 func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
-	var speed: float = GameManager.game_speed
-	if speed >= 100.0:
-		return maxi(ultra_ticks, ultra_ticks * 4)
-	if speed >= 50.0:
-		return maxi(ultra_ticks, ultra_ticks * 3)
-	if speed >= 26.0:
-		return maxi(ultra_ticks, ultra_ticks * 2)
 	if _is_ultra_speed():
 		return ultra_ticks
-	if speed >= 6.0:
+	if GameManager.game_speed >= 6.0:
 		return fast_ticks
 	return normal_ticks
 
 
 func _pawn_divergence_detail_logs_enabled() -> bool:
 	if not OS.is_debug_build():
+		return false
+	# Per-claim lines (bind/skip/scored) can print hundreds per tick → editor/game hitching.
+	# Enable only when a harness const asks for it, not normal DEBUG playtests.
+	if not (
+			SettlementMemory.VALIDATION_SESSION_ENABLED
+			or SettlementMemory.SPECIALIZATION_VALIDATION_LOG_ENABLED
+	):
 		return false
 	if GameManager.game_speed >= 26.0:
 		return false
@@ -289,57 +324,127 @@ const BUILD_DRAG_MAX_TILES: int = 256  # ~16x16 of walls/beds/doors at once
 
 ## One-shot [VALIDATION_STATUS] / [VALIDATION_WARN] after scene boot (observability only).
 var _validation_harness_observability_logged: bool = false
+var _ai_control_panel: AIControlPanel = null
+const ENABLE_AI_CONTROL_PANEL: bool = false
+
+func _init_ai_control_panel() -> void:
+	if not ENABLE_AI_CONTROL_PANEL:
+		return
+	var ai_panel_scene: PackedScene = preload("res://scenes/ui/AIControlPanel.tscn")
+	_ai_control_panel = ai_panel_scene.instantiate()
+	_ai_control_panel.name = "AIControlPanel"
+	add_child(_ai_control_panel)
+	
+	# Connect signals
+	_ai_control_panel.enhanced_ai_toggled.connect(_on_enhanced_ai_toggled)
+	_ai_control_panel.tick_rate_changed.connect(_on_tick_rate_changed)
+	_ai_control_panel.ai_potential_changed.connect(_on_ai_potential_changed)
+	
+	# Start hidden
+	_ai_control_panel.visible = false
+
+func _on_enhanced_ai_toggled(enabled: bool) -> void:
+	print("Enhanced AI %s" % ("ENABLED" if enabled else "DISABLED"))
+
+func _on_tick_rate_changed(new_rate: float) -> void:
+	print("Tick rate changed to %.1fx" % new_rate)
+
+func _on_ai_potential_changed(level: int) -> void:
+	print("AI potential set to %d/10" % level)
 
 
 func _ready() -> void:
-	SettlementMemory.print_validation_smoketest_from_main()
+	var simulation_worker: bool = _is_simulation_worker_mode()
+	if not simulation_worker:
+		SettlementMemory.print_validation_smoketest_from_main()
 	GameManager.game_tick.connect(_on_game_tick)
 	GameManager.speed_changed.connect(_on_speed_changed)
-	_player_input = PlayerInputBuffer.new()
-	_player_input.name = "PlayerInputBuffer"
-	add_child(_player_input)
-	_player_input.set_process_unhandled_input(true)
-	_kernel_diagnostic = KernelDiagnostic.new()
-	_kernel_diagnostic.name = "KernelDiagnostic"
-	add_child(_kernel_diagnostic)
-	_init_ambient_audio()
-	# React to mining progress: when a wall comes down or an ore is cleared,
-	# new ores can become reachable and we may want to queue the next tunnel.
-	JobManager.job_completed.connect(_on_job_completed)
-	JobManager.job_claimed.connect(_on_job_claimed)
-	# Bottom toolbar: lets the player drive everything with the mouse.
-	if _toolbar != null:
-		_toolbar.mode_requested.connect(_on_toolbar_mode_requested)
-		_toolbar.speed_index_requested.connect(GameManager.set_speed_index)
-		_toolbar.pause_toggled.connect(GameManager.toggle_pause)
-		_toolbar.reroll_requested.connect(_reroll_world)
-		_toolbar.zone_filter_cycle_requested.connect(_cycle_zone_filter)
-		_toolbar.save_requested.connect(_colony_save)
-		_toolbar.load_requested.connect(_colony_load)
-		_push_zone_filter_label_to_toolbar()
+	if not simulation_worker:
+		_player_input = PlayerInputBuffer.new()
+		_player_input.name = "PlayerInputBuffer"
+		add_child(_player_input)
+		_player_input.set_process_unhandled_input(true)
+		_kernel_diagnostic = KernelDiagnostic.new()
+		_kernel_diagnostic.name = "KernelDiagnostic"
+		add_child(_kernel_diagnostic)
+		_init_ai_control_panel()
+		_init_ambient_audio()
+		# Initialize Phase 5 Map Mode overlay
+		if _map_mode_overlay != null and _map_mode_overlay.has_method("initialize"):
+			_map_mode_overlay.call("initialize", _world, _camera)
+		# React to mining progress: when a wall comes down or an ore is cleared,
+		# new ores can become reachable and we may want to queue the next tunnel.
+		JobManager.job_completed.connect(_on_job_completed)
+		JobManager.job_claimed.connect(_on_job_claimed)
+		# Bottom toolbar: time, save/load, appearance (no manual structure stamping).
+		if _toolbar != null:
+			_toolbar.speed_index_requested.connect(GameManager.set_speed_index)
+			_toolbar.pause_toggled.connect(GameManager.toggle_pause)
+			_toolbar.save_requested.connect(_colony_save)
+			_toolbar.load_requested.connect(_colony_load)
+			_toolbar.appearance_edit_requested.connect(_toggle_avatar_panel)
+		call_deferred("_ensure_avatar_panel")
 	if OS.is_debug_build():
-		print("[Main] Scene ready. Tick interval: %.2fs (SimTime match: %s)" % [
-			GameManager.TICK_INTERVAL_SECONDS,
-			GameManager.TICK_INTERVAL_SECONDS == SimTime.TICK_INTERVAL_SECONDS,
-		])
-		print(
-				"[Main] Calendar: %d ticks/visual-day · %d ticks/sim-year · %d visual-days/year · kernel checkpoint tick %d"
-				% [
-					SimTime.TICKS_PER_VISUAL_DAY,
-					SimTime.TICKS_PER_SIM_YEAR,
-					SimTime.visual_days_per_sim_year(),
-					SimTime.KERNEL_DIAGNOSTIC_TICK,
-				]
-		)
+		print("[Main] Scene ready. Tick interval: %.2fs" % GameManager.TICK_INTERVAL_SECONDS)
 	_bootstrap_colony()
-	if _hud != null:
-		_hud.set_player_control_refs(_player_input, _player_pawn)
-	if _observer_hud != null:
-		_observer_hud.set_visible_state(false)
-	if _focus_inspector != null:
-		_focus_inspector.set_visible_state(false)
-	_init_phase8_proof_overlay()
+	if not simulation_worker:
+		if _hud != null:
+			_hud.set_player_control_refs(_player_input, _player_pawn)
+		if _observer_hud != null:
+			_observer_hud.set_visible_state(false)
+		if _focus_inspector != null:
+			_focus_inspector.set_visible_state(false)
+		_init_phase8_proof_overlay()
+		_ensure_meaning_vignette()
+	else:
+		_disconnect_worker_ui_signal_receivers()
+		_configure_simulation_worker_mode()
 	call_deferred("_log_validation_harness_observability_once")
+
+
+func _configure_simulation_worker_mode() -> void:
+	if not _is_simulation_worker_mode():
+		return
+	_play_chrome_visible = false
+	var muted_nodes: Array[Node] = [_hud, _observer_hud, _focus_inspector, _toolbar, _info_panel, _map_mode_overlay, _creator_debug_menu]
+	for node in muted_nodes:
+		if node != null and is_instance_valid(node):
+			node.process_mode = Node.PROCESS_MODE_DISABLED
+			if node is CanvasItem:
+				(node as CanvasItem).visible = false
+
+
+func _disconnect_worker_ui_signal_receivers() -> void:
+	if not _is_simulation_worker_mode():
+		return
+	var muted_prefixes: PackedStringArray = ["/root/Main/UI_Viewport", "/root/Main/CreatorDebugMenu", "/root/Main/MapModeOverlay"]
+	for signal_name in ["game_tick", "speed_changed"]:
+		var connection_list: Array = GameManager.get_signal_connection_list(signal_name)
+		for connection_any in connection_list:
+			if not (connection_any is Dictionary):
+				continue
+			var connection: Dictionary = connection_any as Dictionary
+			var callable_variant: Variant = connection.get("callable", null)
+			if not (callable_variant is Callable):
+				continue
+			var callable: Callable = callable_variant as Callable
+			if not callable.is_valid():
+				continue
+			var target: Object = callable.get_object()
+			if not (target is Node):
+				continue
+			var target_node: Node = target as Node
+			var target_path: String = str(target_node.get_path())
+			var should_disconnect: bool = false
+			for prefix in muted_prefixes:
+				if target_path.begins_with(prefix):
+					should_disconnect = true
+					break
+			if not should_disconnect:
+				continue
+			if GameManager.is_connected(signal_name, callable):
+				GameManager.disconnect(signal_name, callable)
+			target_node.queue_free()
 
 
 func _exit_tree() -> void:
@@ -523,8 +628,8 @@ func _on_job_claimed(job: Job, pawn: Pawn) -> void:
 	_pawn_divergence_total_claim_events_seen += 1
 	var pawn_tile: Vector2i = pawn.data.tile_pos
 	var job_tile: Vector2i = job.work_tile
-	var pawn_region: int = WorldMemory._region_key(pawn_tile.x, pawn_tile.y)
-	var job_region: int = WorldMemory._region_key(job.work_tile.x, job.work_tile.y)
+	var pawn_region: int = preload("res://autoloads/WorldMemory.gd")._region_key(pawn_tile.x, pawn_tile.y)
+	var job_region: int = preload("res://autoloads/WorldMemory.gd")._region_key(job.work_tile.x, job.work_tile.y)
 	var pawn_center_fast_map: int = _center_region_from_fast_map(pawn_region)
 	var job_center_fast_map: int = _center_region_from_fast_map(job_region)
 	var pawn_center_direct_membership: int = _center_region_from_direct_membership(pawn_region)
@@ -1165,10 +1270,25 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 
 
 func _process(delta: float) -> void:
+	if _is_simulation_worker_mode():
+		return
 	_meaning_ambient_mood = lerpf(
 		_meaning_ambient_mood, _get_meaning_ambient_mood_target(), minf(1.0, delta * MEANING_AMBIENT_SMOOTH)
 	)
-	_update_camera_meaning_bias(delta)
+	if Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
+		_camera_follow_selected = false
+	if (
+			_camera_follow_selected
+			and _selected_pawn != null
+			and is_instance_valid(_selected_pawn)
+			and _camera != null
+	):
+		var tgt: Vector2 = _selected_pawn.global_position
+		_camera.global_position = _camera.global_position.lerp(
+				tgt, clampf(delta * 8.0, 0.0, 1.0)
+		)
+	else:
+		_update_camera_meaning_bias(delta)
 	if (
 			_player_pawn != null
 			and is_instance_valid(_player_pawn)
@@ -1178,6 +1298,7 @@ func _process(delta: float) -> void:
 	):
 		_camera.call("clamp_position_to_world", _world, 48.0)
 	_update_ambient_audio(delta)
+	_update_meaning_vignette()
 	_trace_redraw_timer += delta
 	if _trace_redraw_timer >= TRACE_REDRAW_INTERVAL_SEC:
 		_trace_redraw_timer = 0.0
@@ -1185,9 +1306,236 @@ func _process(delta: float) -> void:
 			$WorldTrace.queue_redraw()
 
 
-func _on_toolbar_mode_requested(mode: int) -> void:
-	# Toolbar mode ints match Main.DesignationMode by construction.
-	_set_designation_mode(mode)
+func _ensure_avatar_panel() -> void:
+	if _avatar_panel != null and is_instance_valid(_avatar_panel):
+		return
+	var scr: Script = load("res://scripts/ui/PlayerAvatarPanel.gd") as Script
+	if scr == null:
+		return
+	_avatar_panel = scr.new() as Node
+	_avatar_panel.name = "PlayerAvatarPanel"
+	var ui_vp: Node = get_node_or_null("UI_Viewport")
+	if ui_vp != null:
+		ui_vp.add_child(_avatar_panel)
+	else:
+		add_child(_avatar_panel)
+
+
+func _toggle_avatar_panel() -> void:
+	_ensure_avatar_panel()
+	if _avatar_panel == null:
+		return
+	if _avatar_panel.visible:
+		_avatar_panel.close_panel()
+		return
+	var target: Pawn = _player_pawn
+	if target == null or not is_instance_valid(target):
+		target = _selected_pawn
+	if target != null and is_instance_valid(target) and target.data != null:
+		_avatar_panel.open_for_pawn(target)
+	elif OS.is_debug_build():
+		print("[Main] Sprite panel: select a pawn first (click on map)")
+
+
+func _ensure_incarnation_picker() -> void:
+	if _incarnation_picker != null and is_instance_valid(_incarnation_picker):
+		return
+	var ui_vp: Node = get_node_or_null("UI_Viewport")
+	_incarnation_picker = INCARNATION_PICKER_SCRIPT.new()
+	_incarnation_picker.name = "IncarnationPicker"
+	if _incarnation_picker.has_signal("entry_confirmed"):
+		_incarnation_picker.connect("entry_confirmed", Callable(self, "_on_incarnation_entry_confirmed"))
+	if _incarnation_picker.has_signal("closed"):
+		_incarnation_picker.connect("closed", Callable(self, "_on_incarnation_picker_closed"))
+	if ui_vp != null:
+		ui_vp.add_child(_incarnation_picker)
+	else:
+		add_child(_incarnation_picker)
+
+
+func _toggle_incarnation_picker() -> void:
+	_ensure_incarnation_picker()
+	if _incarnation_picker == null:
+		return
+	if _incarnation_picker.visible:
+		_incarnation_picker.call("close_picker")
+		_sync_player_context_ui()
+		return
+	var candidates: Array = _incarnation_candidates_snapshot()
+	if candidates.is_empty():
+		if OS.is_debug_build():
+			print("[Main] Incarnation picker: no eligible living pawns")
+		return
+	_incarnation_picker.call("open_with_candidates", candidates, get_player_mode_label())
+	_sync_player_context_ui()
+
+
+func _incarnation_candidates_snapshot() -> Array:
+	var out: Array = []
+	if _pawn_spawner == null:
+		return out
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var d: PawnData = p.data
+		var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(d.tile_pos.x, d.tile_pos.y)
+		var center_region: int = SettlementMemory.get_center_region_for_region(rk)
+		var settlement_state: String = SettlementMemory.get_state_at_region(center_region if center_region >= 0 else rk)
+		var region_reputation: int = CulturalMemory.get_region_reputation(center_region if center_region >= 0 else rk)
+		var state_name: String = p.get_state_name() if p.has_method("get_state_name") else "Unknown"
+		var current_job: String = p.get_current_job_label() if p.has_method("get_current_job_label") else "None"
+		var age_value: int = int(d.age)
+		var life_stage: String = "child"
+		if age_value >= 60:
+			life_stage = "elder"
+		elif age_value >= 18:
+			life_stage = "adult"
+		elif age_value >= 13:
+			life_stage = "teen"
+		var region_label: int = center_region if center_region >= 0 else rk
+		var priority_score: int = _incarnation_candidate_priority(d, life_stage, settlement_state, region_reputation)
+		out.append({
+			"pawn_id": int(d.id),
+			"name": d.display_name,
+			"age": age_value,
+			"life_stage": life_stage,
+			"region": region_label,
+			"settlement_state": settlement_state,
+			"region_reputation": region_reputation,
+			"profession": d.profession_name(),
+			"role": current_job,
+			"state": state_name,
+			"hunger": float(d.hunger),
+			"rest": float(d.rest),
+			"mood": float(d.mood),
+			"priority_score": priority_score,
+			"priority_reason": _incarnation_candidate_reason(life_stage, settlement_state, region_reputation, int(d.children_count), int(d.parent_a_id), int(d.parent_b_id), int(d.current_profession)),
+		})
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ascore: int = int(a.get("priority_score", 0))
+		var bscore: int = int(b.get("priority_score", 0))
+		if ascore != bscore:
+			return ascore > bscore
+		var aid: int = int(a.get("pawn_id", -1))
+		var bid: int = int(b.get("pawn_id", -1))
+		if aid == bid:
+			return false
+		return aid < bid
+	)
+	return out
+
+
+func _incarnation_candidate_priority(d: PawnData, life_stage: String, settlement_state: String, region_reputation: int) -> int:
+	var score: int = 0
+	match life_stage:
+		"elder":
+			score += 35
+		"adult":
+			score += 50
+		"teen":
+			score += 28
+		_:
+			score += 12
+	match settlement_state:
+		"active":
+			score += 40
+		"revivable":
+			score += 32
+		"recovering":
+			score += 18
+		"dormant":
+			score += 8
+		"abandoned":
+			score -= 12
+		"permanently_abandoned":
+			score -= 24
+		_:
+			score += 0
+	score += clampi(region_reputation, -3, 3) * 8
+	if int(d.current_profession) != PawnData.Profession.NONE:
+		score += 6
+	if int(d.children_count) > 0:
+		score += 6
+	if int(d.parent_a_id) >= 0 or int(d.parent_b_id) >= 0:
+		score += 4
+	return score
+
+
+func _incarnation_candidate_reason(life_stage: String, settlement_state: String, region_reputation: int, children_count: int, parent_a_id: int, parent_b_id: int, profession: int) -> String:
+	var parts: PackedStringArray = PackedStringArray()
+	parts.append(life_stage)
+	if not settlement_state.is_empty():
+		parts.append(settlement_state)
+	var rep: String = "rep %+d" % region_reputation
+	parts.append(rep)
+	if profession != PawnData.Profession.NONE:
+		parts.append("profession-tied")
+	if children_count > 0:
+		parts.append("has-children")
+	if parent_a_id >= 0 or parent_b_id >= 0:
+		parts.append("lineage-bound")
+	return ", ".join(parts)
+
+
+func _on_incarnation_entry_confirmed(pawn_id: int) -> void:
+	if pawn_id < 0:
+		request_spectator_return("picker_cancel")
+		return
+	var pawn: Pawn = _find_pawn_by_id(pawn_id)
+	if pawn == null:
+		if OS.is_debug_build():
+			print("[Main] Incarnation picker: pawn %d not found" % pawn_id)
+		return
+	_set_selected_pawn(pawn)
+	_camera_follow_selected = true
+	_set_player_mode(PlayerMode.INCARNATED)
+	PlayerIntentQueue.request_incarnation_entry("picker_confirm", {"pawn_id": pawn_id})
+	if _incarnation_picker != null and is_instance_valid(_incarnation_picker):
+		_incarnation_picker.call("close_picker")
+
+
+func _on_incarnation_picker_closed() -> void:
+	_sync_player_context_ui()
+
+
+func _sync_player_context_ui() -> void:
+	if _info_panel != null and is_instance_valid(_info_panel) and _info_panel.has_method("set_player_context"):
+		_info_panel.call("set_player_context", get_player_mode_label(), get_player_pawn_id(), _incarnation_picker != null and is_instance_valid(_incarnation_picker) and _incarnation_picker.visible)
+
+
+func _set_player_mode(mode: int) -> void:
+	if _player_mode == mode:
+		return
+	_player_mode = mode
+	_sync_player_context_ui()
+	if OS.is_debug_build():
+		print("[Main] Player mode: %s" % get_player_mode_label())
+
+
+func get_player_mode_label() -> String:
+	match _player_mode:
+		PlayerMode.INCARNATED:
+			return "INCARNATED"
+		_:
+			return "SPECTATOR"
+
+
+func is_player_incarnated() -> bool:
+	return _player_mode == PlayerMode.INCARNATED
+
+
+func request_incarnation_entry(note: String = "manual_entry", payload: Dictionary = {}) -> bool:
+	_toggle_incarnation_picker()
+	return _incarnation_picker != null and is_instance_valid(_incarnation_picker) and bool(_incarnation_picker.visible)
+
+
+func request_spectator_return(note: String = "manual_return", payload: Dictionary = {}) -> bool:
+	var ok: bool = PlayerIntentQueue.request_spectator_return(note, payload)
+	if _incarnation_picker != null and is_instance_valid(_incarnation_picker):
+		_incarnation_picker.call("close_picker")
+	_set_selected_pawn(null)
+	_set_player_mode(PlayerMode.SPECTATOR)
+	return ok
 
 
 func _run_heavy_refresh_once_per_tick(cb: Callable) -> void:
@@ -1219,6 +1567,8 @@ func _bootstrap_colony() -> void:
 	WorldPersistence.recompute()
 	_place_stockpile(main_component)
 	_pawn_spawner.spawn_starters(_world, main_component)
+	_set_selected_pawn(null)
+	_set_player_mode(PlayerMode.SPECTATOR)
 	_ensure_player_pawn_assigned()
 	if is_instance_valid(_world):
 		_world.apply_ruins_from_persistence()
@@ -1227,6 +1577,7 @@ func _bootstrap_colony() -> void:
 		_ensure_validation_session_seed_stockpile_overlaps_settlement()
 		MythMemory.recompute(_world)
 		SacredMemory.sync_permanent_ruins_from_settlements()
+		FactionRegistry.sync_from_settlements()
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):
 				_world.refresh_terrain_scar_tint()
@@ -1407,6 +1758,8 @@ func _sync_pawn_inherited_cultural_reputation() -> void:
 
 
 func _on_game_tick(tick: int) -> void:
+	if _is_simulation_worker_mode() and GameManager != null and GameManager.is_tick_benchmark_enabled():
+		return
 	if _player_input != null:
 		if not is_instance_valid(_player_pawn):
 			_ensure_player_pawn_assigned()
@@ -1423,12 +1776,8 @@ func _on_game_tick(tick: int) -> void:
 			and int(tick) % AnimalSpawner.POPULATION_CHECK_TICKS == 0
 	):
 		_animal_spawner.update_population_dynamics(_world)
-	var regrowth_interval: int = _high_speed_interval(1, 2, 4)
-	if tick % regrowth_interval == 0:
-		_process_regrowth(tick)
-	var ambient_interval: int = _high_speed_interval(1, 2, 4)
-	if tick % ambient_interval == 0:
-		_update_ambient_target()
+	_process_regrowth(tick)
+	_update_ambient_target()
 	# Post dynamic hunt jobs less aggressively than harvest loops.
 	var hunt_post_interval: int = _high_speed_interval(20, 30, 45)
 	if (
@@ -1447,12 +1796,12 @@ func _on_game_tick(tick: int) -> void:
 				p.sanity_check_impassable_tile()
 	# WorldMemory-derived recompute: defer once so Pawn/Animal (connected after Main) can record first.
 	if is_instance_valid(_world) and not _world_memory_derivative_flush_queued:
-		var derivative_flush_interval: int = _high_speed_interval(4, 8, 12)
-		if tick % derivative_flush_interval == 0:
-			_world_memory_derivative_flush_queued = true
-			call_deferred("_flush_world_memory_derivatives")
+		_world_memory_derivative_flush_queued = true
+		call_deferred("_flush_world_memory_derivatives")
 	if is_instance_valid(_world):
-		var planner_interval: int = _high_speed_interval(4, 8, 12)
+		# Planning every tick at 1x causes severe frame-time spikes in large worlds.
+		# Keep planning frequent, but not per-tick.
+		var planner_interval: int = _high_speed_interval(8, 12, 20)
 		if tick % planner_interval == 0:
 			SettlementPlanner.plan(_world, self, false)
 			TradePlanner.plan(_world, self, false)
@@ -1463,6 +1812,10 @@ func _on_game_tick(tick: int) -> void:
 		AgeMemory.recompute()
 		if is_instance_valid(_world):
 			IntentMemory.recompute(_world)
+	if _mining_react_pending and (tick - _last_mining_react_tick) >= MINING_REACT_MIN_INTERVAL_TICKS:
+		_react_to_mining_progress()
+		_last_mining_react_tick = tick
+		_mining_react_pending = false
 	_maybe_generational_turnover()
 	if tick % REPRODUCTION_CHECK_INTERVAL_TICKS == 0:
 		_process_reproduction_tick()
@@ -1472,22 +1825,117 @@ func _on_game_tick(tick: int) -> void:
 	SettlementMemory.update_settlement_intents(tick)
 	SettlementMemory.update_resource_pressures(tick)
 	SettlementMemory.update_preferred_work_fronts(tick)
+	if tick % SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS == 0:
+		_accumulate_social_rapport()
 	_emit_pawn_divergence_summary_if_needed(tick)
+	if _is_simulation_worker_mode():
+		return
 	var obs_iv: int = _high_speed_interval(OBSERVER_HUD_REFRESH_TICKS, 45, 90)
 	if _observer_hud != null and tick % obs_iv == 0:
 		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
+	# Handle recent player_inspect events for tooltip + audio feedback
+	_scan_recent_inspects_and_handle()
 	var focus_iv: int = _high_speed_interval(FOCUS_INSPECTOR_REFRESH_TICKS, 24, 48)
 	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % focus_iv == 0:
 		_focus_inspector.apply_snapshot(_build_focus_snapshot(tick))
 	if is_instance_valid(_world):
-		var road_flush_interval: int = _high_speed_interval(2, 4, 8)
-		if tick % road_flush_interval == 0:
-			call_deferred("_flush_road_memory_dirty_tiles")
+		call_deferred("_flush_road_memory_dirty_tiles")
 
 
 func _flush_road_memory_dirty_tiles() -> void:
 	if is_instance_valid(_world):
 		RoadMemory.flush_dirty_tiles(_world)
+
+
+func _scan_recent_inspects_and_handle() -> void:
+	# Find newest player_inspect event and, if unseen, show tooltip and play tone.
+	var recent_events: Array = WorldMemory.get_recent_events(48)
+	for i in range(recent_events.size() - 1, -1, -1):
+		var ev: Dictionary = recent_events[i]
+		if str(ev.get("type", "")) != "player_inspect":
+			continue
+		var ev_tick: int = int(ev.get("t", -1))
+		if ev_tick <= _last_inspect_event_tick_shown:
+			return
+		_last_inspect_event_tick_shown = ev_tick
+		var pid: int = int(ev.get("pawn_id", -1))
+		var tile_x: int = int(ev.get("tile", {}).get("x", -1))
+		var tile_y: int = int(ev.get("tile", {}).get("y", -1))
+		var msg: String = "%s | pawn:%d region:%d" % [str(ev.get("meaning_label", "")), pid, int(ev.get("center_region", -1))]
+		_show_inspect_tooltip(msg, pid, tile_x, tile_y)
+		_play_inspect_tone()
+		return
+
+
+func _show_inspect_tooltip(msg: String, pawn_id: int, tile_x: int, tile_y: int) -> void:
+	# Remove existing tip
+	if _inspect_tooltip_node != null and is_instance_valid(_inspect_tooltip_node):
+		_inspect_tooltip_node.queue_free()
+		_inspect_tooltip_node = null
+	var ui_root: Node = get_node_or_null("UI_Viewport")
+	if ui_root == null:
+		return
+	var panel: PanelContainer = PanelContainer.new()
+	panel.name = "InspectTooltip"
+	var style: StyleBoxFlat = StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.7)
+	style.border_color = Color(0.8, 0.7, 0.4, 0.9)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	panel.add_theme_stylebox_override("panel", style)
+	var lbl: Label = Label.new()
+	lbl.text = msg + " (tile=%d,%d)" % [tile_x, tile_y]
+	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.add_theme_color_override("font_color", Color(0.94,0.92,0.84))
+	panel.add_child(lbl)
+	ui_root.add_child(panel)
+	panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	panel.position = Vector2(220, 40)
+	_inspect_tooltip_node = panel
+	# Auto-hide after 2.8 seconds
+	var t = get_tree().create_timer(2.8)
+	t.timeout.connect(Callable(self, "_hide_inspect_tooltip"))
+
+
+func _hide_inspect_tooltip() -> void:
+	if _inspect_tooltip_node != null and is_instance_valid(_inspect_tooltip_node):
+		_inspect_tooltip_node.queue_free()
+	_inspect_tooltip_node = null
+
+
+func _ensure_inspect_audio() -> void:
+	if _inspect_audio_player != null and is_instance_valid(_inspect_audio_player):
+		return
+	var gen: AudioStreamGenerator = AudioStreamGenerator.new()
+	gen.mix_rate = 44100
+	gen.buffer_length = 0.5
+	var p: AudioStreamPlayer = AudioStreamPlayer.new()
+	p.name = "InspectAudio"
+	p.stream = gen
+	add_child(p)
+	_inspect_audio_player = p
+	_inspect_audio_playback = p.get_stream_playback()
+
+
+func _play_inspect_tone() -> void:
+	_ensure_inspect_audio()
+	if _inspect_audio_player == null or _inspect_audio_playback == null:
+		return
+	var player: AudioStreamPlayer = _inspect_audio_player
+	var gen: AudioStreamGenerator = player.stream as AudioStreamGenerator
+	var playback: AudioStreamGeneratorPlayback = _inspect_audio_playback
+	var freq: float = 660.0
+	var dur: float = 0.12
+	var sr: int = int(gen.mix_rate)
+	var samples: int = int(float(sr) * dur)
+	player.play()
+	for i in range(samples):
+		var t: float = float(i) / float(sr)
+		var s: float = sin(2.0 * PI * freq * t) * 0.14
+		var frame = gen.get_frame()
+		frame.left = s
+		frame.right = s
+		playback.push_frame(frame)
 
 
 func _flush_world_memory_derivatives() -> void:
@@ -1506,10 +1954,8 @@ func _flush_world_memory_derivatives() -> void:
 			_world.apply_ruins_from_persistence()
 			_world.refresh_pawn_historic_path_weights()
 	)
-	var heavy_planner_interval: int = _high_speed_interval(4, 8, 12)
-	if GameManager.tick_count % heavy_planner_interval == 0:
-		SettlementPlanner.plan(_world, self, true)
-		TradePlanner.plan(_world, self, true)
+	SettlementPlanner.plan(_world, self, true)
+	TradePlanner.plan(_world, self, true)
 	RoadMemory.flush_dirty_tiles(_world)
 
 
@@ -1530,6 +1976,34 @@ func _maybe_generational_turnover() -> void:
 	if sp.x < 0:
 		return
 	_pawn_spawner.spawn_generational_pawn(_world, sp, t)
+
+
+func _accumulate_social_rapport() -> void:
+	if _pawn_spawner == null or _world == null or _world.pathfinder == null:
+		return
+	const R2: float = 128.0 * 128.0
+	const GAIN: int = 14
+	var pl: Array[Pawn] = []
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
+			pl.append(p)
+	if pl.size() < 2:
+		return
+	pl.sort_custom(func(a: Pawn, b: Pawn) -> bool: return a.data.id < b.data.id)
+	for i in range(pl.size()):
+		var pa: Pawn = pl[i]
+		var da: PawnData = pa.data
+		for j in range(i + 1, pl.size()):
+			var pb: Pawn = pl[j]
+			var db: PawnData = pb.data
+			if da.hunger <= 38.0 or db.hunger <= 38.0:
+				continue
+			if _world.pathfinder.component_of(da.tile_pos) != _world.pathfinder.component_of(db.tile_pos):
+				continue
+			if pa.position.distance_squared_to(pb.position) > R2:
+				continue
+			da.add_social_rapport(int(db.id), GAIN)
+			db.add_social_rapport(int(da.id), GAIN)
 
 
 func _process_reproduction_tick() -> void:
@@ -1571,7 +2045,7 @@ func _find_generational_spawn_tile() -> Vector2i:
 		for rx in range(nrx):
 			var x0: int = rx * 16
 			var y0: int = ry * 16
-			var rk: int = WorldMemory._region_key(x0, y0)
+			var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(x0, y0)
 			var t1: Vector2i = _first_valid_gen_tile_in_block(x0, y0, comp)
 			if t1.x < 0:
 				continue
@@ -1658,7 +2132,7 @@ func _get_meaning_ambient_mood_target() -> float:
 	if t.x < 0:
 		_meaning_style_bias = 0.0
 		return 0.5
-	var rk: int = WorldMemory._region_key(t.x, t.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(t.x, t.y)
 	var m: float
 	var sv: Variant = SettlementMemory.get_settlement_at_region(rk)
 	var st_here: String = ""
@@ -1745,7 +2219,7 @@ func _update_camera_meaning_bias(delta: float) -> void:
 			vel -= to_t * repel_ab
 	var t0: Vector2i = _world.world_to_tile(_camera.global_position)
 	if t0.x >= 0:
-		var rk0: int = WorldMemory._region_key(t0.x, t0.y)
+		var rk0: int = preload("res://autoloads/WorldMemory.gd")._region_key(t0.x, t0.y)
 		var rxc: int = (rk0 & 0xFFFF) * 16 + 8
 		var ryc: int = ((rk0 >> 16) & 0xFFFF) * 16 + 8
 		var rcenter: Vector2 = _world.tile_to_world(Vector2i(rxc, ryc))
@@ -1763,6 +2237,8 @@ func _update_camera_meaning_bias(delta: float) -> void:
 			vel += (cam0 - rcenter) * 0.00011
 		elif msc == -1:
 			vel += (rcenter - cam0) * 0.00009
+	var spd: float = clampf(float(GameManager.game_speed), 1.0, 26.0)
+	vel *= 1.0 / sqrt(spd)
 	vel = vel.limit_length(MEANING_CAM_VEL_MAX)
 	_camera.position += vel * delta
 
@@ -1776,16 +2252,16 @@ func _update_ambient_audio(delta: float) -> void:
 	var interp: float = min(1.0, delta * 2.6)
 	_ambient_freq_current = lerpf(_ambient_freq_current, _ambient_freq_target, interp)
 	var mood: float = _meaning_ambient_mood
-	var style_mix: float = clampf(_meaning_style_bias, -0.2, 0.2)
-	var base_layer: float = lerpf(0.82, 0.64, 1.0 - mood) + style_mix * -0.18
-	var otone_layer: float = lerpf(0.16, 0.34, mood) + style_mix * 0.2
-	base_layer = clampf(base_layer, 0.52, 0.9)
-	otone_layer = clampf(otone_layer, 0.1, 0.42)
-	var amp: float = AMBIENT_BASE_AMP * lerpf(0.62, 1.0, mood)
+	var style_mix: float = clampf(_meaning_style_bias, -0.28, 0.28)
+	var base_layer: float = lerpf(0.84, 0.60, 1.0 - mood) + style_mix * -0.22
+	var otone_layer: float = lerpf(0.14, 0.38, mood) + style_mix * 0.26
+	base_layer = clampf(base_layer, 0.48, 0.92)
+	otone_layer = clampf(otone_layer, 0.08, 0.44)
+	var amp: float = AMBIENT_BASE_AMP * lerpf(0.58, 1.06, mood)
 	if GameManager.is_paused:
 		amp *= 0.45
 	if _ambient_player != null:
-		_ambient_player.volume_db = lerpf(-24.0, -18.5, mood)
+		_ambient_player.volume_db = lerpf(-26.0, -17.2, mood)
 	for _i in range(frames):
 		_ambient_phase += TAU * _ambient_freq_current / float(AMBIENT_MIX_RATE)
 		if _ambient_phase > TAU:
@@ -1809,63 +2285,89 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
 	match event.keycode:
-		KEY_SPACE:
-			GameManager.toggle_pause()
-		KEY_1:
-			GameManager.set_speed_index(0)
-		KEY_2:
-			GameManager.set_speed_index(1)
-		KEY_3:
-			GameManager.set_speed_index(2)
-		KEY_4:
-			GameManager.set_speed_index(3)
-		KEY_5:
-			GameManager.set_speed_index(4)
-		KEY_6:
-			GameManager.set_speed_index(5)
-		KEY_7:
-			GameManager.set_speed_index(6)
-		KEY_R:
-			_reroll_world()
-		KEY_T:
-			_pawn_spawner.print_stats()
-		KEY_J:
-			JobManager.print_debug()
-		KEY_I:
-			_print_stockpile()
-		KEY_D:
-			_toggle_draft_mode()
-		KEY_B:
-			# Shift+B is the legacy "stamp 5 beds near the stockpile" shortcut,
-			# kept for quick demos. Plain B enters bed-designation mode.
-			if event.shift_pressed:
-				_designate_beds_near_stockpile()
+		Key.KEY_QUOTELEFT:
+			_toggle_play_chrome()
+		Key.KEY_F9:
+			if _ai_control_panel:
+				_ai_control_panel.toggle_panel()
+		Key.KEY_G:
+			if _selected_pawn != null and is_instance_valid(_selected_pawn):
+				_camera_follow_selected = not _camera_follow_selected
+				if OS.is_debug_build():
+					print("[Main] Camera follow selection: %s" % _camera_follow_selected)
 			else:
-				_toggle_designation_mode(DesignationMode.BUILD_BED)
-		KEY_W:
-			_toggle_designation_mode(DesignationMode.BUILD_WALL)
-		KEY_O:
-			_toggle_designation_mode(DesignationMode.BUILD_DOOR)
-		KEY_Z:
-			_toggle_designation_mode(DesignationMode.DESIGNATE_ZONE)
-		KEY_F:
-			_cycle_zone_filter()
-		KEY_F5:
+				_camera_follow_selected = false
+		Key.KEY_EQUAL:
+			if _hud != null:
+				_hud.toggle_hud_verbose()
+		Key.KEY_KP_ADD:
+			if _hud != null:
+				_hud.toggle_hud_verbose()
+		Key.KEY_SPACE:
+			GameManager.toggle_pause()
+		Key.KEY_1:
+			GameManager.set_speed_index(0)
+		Key.KEY_2:
+			GameManager.set_speed_index(1)
+		Key.KEY_3:
+			GameManager.set_speed_index(2)
+		Key.KEY_4:
+			GameManager.set_speed_index(3)
+		Key.KEY_5:
+			GameManager.set_speed_index(4)
+		Key.KEY_6:
+			GameManager.set_speed_index(5)
+		Key.KEY_7:
+			GameManager.set_speed_index(6)
+		Key.KEY_R:
+			if OS.is_debug_build():
+				_reroll_world()
+		Key.KEY_K:
+			_toggle_avatar_panel()
+		Key.KEY_T:
+			_pawn_spawner.print_stats()
+		Key.KEY_J:
+			JobManager.print_debug()
+		Key.KEY_I:
+			_print_stockpile()
+		Key.KEY_D:
+			_toggle_draft_mode()
+		Key.KEY_F5:
 			_colony_save()
-		KEY_F8:
+		Key.KEY_F8:
 			_colony_load()
-		KEY_F9:
+		Key.KEY_F9:
 			_toggle_observer_hud()
-		KEY_F10:
+		Key.KEY_F10:
+			if _creator_debug_menu != null:
+				_creator_debug_menu.toggle_menu()
+		Key.KEY_F6:
 			_toggle_focus_inspector()
-		KEY_F11:
+		Key.KEY_F11:
 			if _kernel_diagnostic != null and _kernel_diagnostic.has_method("start_settlement_truth_verification"):
 				_kernel_diagnostic.call("start_settlement_truth_verification")
-		KEY_F12:
+		Key.KEY_F12:
 			_debug_capture_resource_truth()
-		KEY_M:
+		Key.KEY_M:
 			ColonySimServices.cycle_labor_stance()
-		KEY_ESCAPE:
+		Key.KEY_P:
+			request_incarnation_entry()
+		Key.KEY_BACKSPACE:
+			request_spectator_return()
+		Key.KEY_ENTER:
+			if _incarnation_picker != null and is_instance_valid(_incarnation_picker) and _incarnation_picker.visible:
+				_on_incarnation_entry_confirmed(int(_incarnation_picker.call("get_selected_pawn_id")))
+		Key.KEY_ESCAPE:
+			if _creator_debug_menu != null and _creator_debug_menu.visible:
+				_creator_debug_menu.visible = false
+				return
+			if _incarnation_picker != null and is_instance_valid(_incarnation_picker) and _incarnation_picker.visible:
+				_incarnation_picker.call("close_picker")
+				return
+			if _player_mode == PlayerMode.INCARNATED:
+				if OS.is_debug_build():
+					print("[Main] Esc ignored while incarnated; use Backspace to return to spectator")
+				return
 			# Esc clears either a drag-in-progress, an active build mode, or
 			# a pawn selection (in that priority order). Each extra Esc peels
 			# off the next layer.
@@ -1877,7 +2379,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				_set_designation_mode(DesignationMode.NONE)
 			elif _selected_pawn != null:
 				_set_selected_pawn(null)
-		KEY_HOME:
+		Key.KEY_HOME:
 			if _camera != null and _camera.has_method("reset_to_world_bounds"):
 				_camera.call("reset_to_world_bounds", _world)
 
@@ -1929,7 +2431,7 @@ func _init_phase8_proof_overlay() -> void:
 	_phase8_proof_overlay_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_phase8_proof_overlay_text.position = Vector2(8, 56)
 	_phase8_proof_overlay_text.size = Vector2(1240, 96)
-	_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 10)
+	_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 13)
 	_phase8_proof_overlay_layer.add_child(_phase8_proof_overlay_text)
 	if not SettlementMemory.phase8_proof_bundle_emitted.is_connected(_on_phase8_proof_bundle_emitted):
 		SettlementMemory.phase8_proof_bundle_emitted.connect(_on_phase8_proof_bundle_emitted)
@@ -1950,9 +2452,9 @@ func _refresh_phase8_proof_overlay_style() -> void:
 		return
 	var terminal_line: String = SettlementMemory.get_phase8_proof_terminal_line()
 	if terminal_line != "":
-		_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 13)
+		_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 16)
 	else:
-		_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 10)
+		_phase8_proof_overlay_text.add_theme_font_size_override("normal_font_size", 13)
 
 
 func _on_phase8_proof_bundle_emitted(bundle_line: String) -> void:
@@ -1969,7 +2471,7 @@ func _on_phase8_proof_bundle_emitted(bundle_line: String) -> void:
 func _update_phase8_proof_bundle_preferred_center() -> void:
 	var preferred_center: int = -1
 	if _selected_pawn != null and is_instance_valid(_selected_pawn) and _selected_pawn.data != null:
-		var srk: int = WorldMemory._region_key(_selected_pawn.data.tile_pos.x, _selected_pawn.data.tile_pos.y)
+		var srk: int = preload("res://autoloads/WorldMemory.gd")._region_key(_selected_pawn.data.tile_pos.x, _selected_pawn.data.tile_pos.y)
 		preferred_center = SettlementMemory.get_center_region_for_region(srk)
 	if preferred_center < 0:
 		var focus: Dictionary = _observer_focus_settlement()
@@ -1984,7 +2486,7 @@ func _debug_capture_resource_truth() -> void:
 	var preferred_center: int = -1
 	# Prefer settlement already in focus via current selection.
 	if _selected_pawn != null and is_instance_valid(_selected_pawn) and _selected_pawn.data != null:
-		var srk: int = WorldMemory._region_key(_selected_pawn.data.tile_pos.x, _selected_pawn.data.tile_pos.y)
+		var srk: int = preload("res://autoloads/WorldMemory.gd")._region_key(_selected_pawn.data.tile_pos.x, _selected_pawn.data.tile_pos.y)
 		preferred_center = SettlementMemory.get_center_region_for_region(srk)
 	# Otherwise prefer observer/player focus if available.
 	if preferred_center < 0:
@@ -2199,6 +2701,8 @@ func _tear_down_all_zones() -> void:
 
 
 func _toggle_designation_mode(mode: int) -> void:
+	if not PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES:
+		return
 	if _designation_mode == mode:
 		_set_designation_mode(DesignationMode.NONE)
 	else:
@@ -2206,6 +2710,8 @@ func _toggle_designation_mode(mode: int) -> void:
 
 
 func _set_designation_mode(mode: int) -> void:
+	if not PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES:
+		mode = DesignationMode.NONE
 	if _designation_mode == mode:
 		return
 	# Switching modes mid-drag is ambiguous (is the drag for the old mode or
@@ -2262,6 +2768,10 @@ func _handle_select_click_at(world_pos: Vector2) -> void:
 
 
 func _set_selected_pawn(p: Pawn) -> void:
+	if _player_mode == PlayerMode.INCARNATED and p != null and _player_pawn != null and p != _player_pawn:
+		if OS.is_debug_build():
+			print("[Main] Incarnation locked to pawn #%d; ignore selection of #%d" % [get_player_pawn_id(), int(p.data.id) if p.data != null else -1])
+		return
 	if _selected_pawn == p:
 		return
 	if _selected_pawn != null and is_instance_valid(_selected_pawn):
@@ -2269,6 +2779,10 @@ func _set_selected_pawn(p: Pawn) -> void:
 		_selected_pawn.queue_redraw()
 	_selected_pawn = p
 	_player_pawn = _selected_pawn
+	_set_player_mode(PlayerMode.INCARNATED if _selected_pawn != null else PlayerMode.SPECTATOR)
+	if _player_mode == PlayerMode.INCARNATED and _selected_pawn != null:
+		_camera_follow_selected = true
+	_sync_player_context_ui()
 	if _hud != null:
 		_hud.set_player_control_refs(_player_input, _player_pawn)
 	if _selected_pawn != null:
@@ -2283,8 +2797,30 @@ func _set_selected_pawn(p: Pawn) -> void:
 		_info_panel.bind_pawn(_selected_pawn)
 
 
-func _ensure_player_pawn_assigned() -> void:
+func _sync_play_chrome() -> void:
+	if _hud != null:
+		_hud.visible = _play_chrome_visible
+	if _toolbar != null:
+		_toolbar.visible = _play_chrome_visible
+	if _observer_hud != null and not _play_chrome_visible:
+		_observer_hud.visible = false
+	if _focus_inspector != null and not _play_chrome_visible:
+		_focus_inspector.visible = false
+	if _info_panel != null:
+		_info_panel.set_overlay_suppressed(not _play_chrome_visible)
+
+
+func _toggle_play_chrome() -> void:
+	_play_chrome_visible = not _play_chrome_visible
+	_sync_play_chrome()
+	if OS.is_debug_build():
+		print("[Main] Play chrome: %s" % ("on" if _play_chrome_visible else "off (map only)"))
+
+
+func _ensure_player_pawn_assigned(force: bool = false) -> void:
 	if _pawn_spawner == null:
+		return
+	if not force and _player_mode != PlayerMode.INCARNATED:
 		return
 	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
 		return
@@ -2293,6 +2829,35 @@ func _ensure_player_pawn_assigned() -> void:
 			continue
 		_set_selected_pawn(p)
 		return
+
+
+func _find_pawn_by_id(pawn_id: int) -> Pawn:
+	if _pawn_spawner == null or pawn_id < 0:
+		return null
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
+			return p
+	return null
+
+
+func _restore_player_state(player_mode_value: int, player_pawn_id: int) -> void:
+	if player_mode_value == PlayerMode.SPECTATOR:
+		_set_selected_pawn(null)
+		_set_player_mode(PlayerMode.SPECTATOR)
+		return
+	var restored: Pawn = _find_pawn_by_id(player_pawn_id)
+	if restored != null:
+		_set_selected_pawn(restored)
+		_camera_follow_selected = true
+		_set_player_mode(PlayerMode.INCARNATED)
+		return
+	_ensure_player_pawn_assigned(true)
+	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		_camera_follow_selected = true
+		_set_player_mode(PlayerMode.INCARNATED)
+	else:
+		_set_selected_pawn(null)
+		_set_player_mode(PlayerMode.SPECTATOR)
 
 
 func get_player_queue_size() -> int:
@@ -2311,6 +2876,12 @@ func get_player_pawn_id() -> int:
 	return int(_player_pawn.data.id)
 
 
+func get_player_pawn() -> Pawn:
+	if _player_pawn != null and is_instance_valid(_player_pawn):
+		return _player_pawn
+	return null
+
+
 func get_player_profession_name() -> String:
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return "None"
@@ -2326,7 +2897,7 @@ func get_player_profession_xp() -> int:
 func get_player_governance_profile() -> Dictionary:
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return {"type": "anarchy", "ruler_name": "None", "player_status": "None", "edicts_unlocked": false}
-	var rk: int = WorldMemory._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
 	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(rk)
 	var gtype: String = str(gov.get("type", "anarchy"))
 	var rid: int = int(gov.get("ruler_id", -1))
@@ -2355,20 +2926,231 @@ func get_player_governance_profile() -> Dictionary:
 func get_player_war_profile() -> Dictionary:
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return {"state": "peace", "target_settlement_id": -1, "votes": []}
-	var rk: int = WorldMemory._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
 	return SettlementMemory.get_war_profile_for_region(rk)
 
 
 func get_player_military_rank() -> String:
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return "grunt"
-	return str(_player_pawn.data.military_rank)
+	return str(_player_pawn.data.military_rank_legacy)
 
 
 func get_wildlife_snapshot_for_diagnostic() -> Dictionary:
 	if _animal_spawner == null:
 		return {"rabbit": 0, "deer": 0, "total": 0}
 	return _animal_spawner.get_live_wildlife_snapshot()
+
+
+## Display-only: camera tile region → settlement revival + rebirth gate (no writes).
+## If the camera is not over any cluster tile, falls back to the nearest settlement by center-tile distance.
+func get_camera_settlement_revival_digest() -> Dictionary:
+	var out_empty: Dictionary = {
+		"has_settlement": false,
+		"region_key": -1,
+		"camera_region_key": -1,
+		"profile_region_key": -1,
+		"digest_source": "none",
+		"state": "",
+		"revival_score": 0,
+		"peace_threshold_ticks": 0,
+		"peace_since_conflict_ticks": 0,
+		"revival_ready": false,
+		"rebirth_ok": false,
+		"rebirth_reason": "",
+	}
+	if not is_instance_valid(_world) or _camera == null or _world.data == null:
+		return out_empty
+	var cam_tile: Vector2i = _world.world_to_tile(_camera.global_position)
+	if cam_tile.x < 0:
+		out_empty["region_key"] = -2
+		out_empty["camera_region_key"] = -2
+		return out_empty
+	var cam_rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(cam_tile.x, cam_tile.y)
+	out_empty["region_key"] = cam_rk
+	out_empty["camera_region_key"] = cam_rk
+	var d_cam: Dictionary = _revival_digest_for_cluster_region(_world, cam_rk)
+	if bool(d_cam.get("has_settlement", false)):
+		d_cam["digest_source"] = "cam"
+		d_cam["camera_region_key"] = cam_rk
+		d_cam["profile_region_key"] = cam_rk
+		return d_cam
+	var near_ckr: int = _nearest_settlement_center_region_key(cam_tile)
+	if near_ckr < 0:
+		return out_empty
+	var d_near: Dictionary = _revival_digest_for_cluster_region(_world, near_ckr)
+	d_near["digest_source"] = "nearest" if bool(d_near.get("has_settlement", false)) else "none"
+	d_near["camera_region_key"] = cam_rk
+	d_near["profile_region_key"] = near_ckr
+	d_near["region_key"] = cam_rk
+	return d_near
+
+
+func _center_tile_from_region_key(ckr: int) -> Vector2i:
+	var tcx: int = (ckr & 0xFFFF) * 16 + 8
+	var tcy: int = ((ckr >> 16) & 0xFFFF) * 16 + 8
+	return Vector2i(tcx, tcy)
+
+
+func _nearest_settlement_center_region_key(cam_tile: Vector2i) -> int:
+	var best_ckr: int = -1
+	var best_d: int = 1_000_000_000
+	for s in SettlementMemory.settlements:
+		if not (s is Dictionary):
+			continue
+		var ckr: int = int((s as Dictionary).get("center_region", -1))
+		if ckr < 0:
+			continue
+		var ct: Vector2i = _center_tile_from_region_key(ckr)
+		var manh: int = absi(cam_tile.x - ct.x) + absi(cam_tile.y - ct.y)
+		if manh < best_d:
+			best_d = manh
+			best_ckr = ckr
+	return best_ckr
+
+
+func _revival_digest_for_cluster_region(world: World, region_key: int) -> Dictionary:
+	var out1: Dictionary = {
+		"has_settlement": false,
+		"region_key": region_key,
+		"camera_region_key": region_key,
+		"profile_region_key": region_key,
+		"digest_source": "none",
+		"state": "",
+		"revival_score": 0,
+		"peace_threshold_ticks": 0,
+		"peace_since_conflict_ticks": 0,
+		"revival_ready": false,
+		"rebirth_ok": false,
+		"rebirth_reason": "",
+	}
+	var prof: Dictionary = SettlementMemory.get_settlement_profile(region_key)
+	var state_now: String = str(prof.get("state", ""))
+	if state_now == "":
+		return out1
+	out1["has_settlement"] = true
+	out1["state"] = state_now
+	out1["revival_score"] = int(prof.get("revival_score", 0))
+	out1["peace_threshold_ticks"] = int(prof.get("peace_threshold_ticks", 0))
+	var now: int = GameManager.tick_count
+	var last_d: int = int(prof.get("last_pawn_death_tick", -1))
+	var peace_ticks: int = 1_000_000_000 if last_d < 0 else maxi(0, now - last_d)
+	out1["peace_since_conflict_ticks"] = peace_ticks
+	out1["revival_ready"] = bool(prof.get("revival_ready", false))
+	var sv: Variant = SettlementMemory.get_settlement_at_region(region_key)
+	if state_now == "revivable" and sv is Dictionary:
+		var gate: Dictionary = SettlementRebirth.get_rebirth_eligibility(world, sv as Dictionary)
+		out1["rebirth_ok"] = bool(gate.get("ok", false))
+		out1["rebirth_reason"] = str(gate.get("reason", ""))
+	elif sv is not Dictionary:
+		out1["rebirth_reason"] = "no_settlement_dict"
+	return out1
+
+
+func get_camera_revival_digest_bbcode() -> String:
+	return _format_camera_revival_digest_bbcode(get_camera_settlement_revival_digest())
+
+
+func get_camera_revival_digest_plain() -> String:
+	return _format_camera_revival_digest_plain(get_camera_settlement_revival_digest())
+
+
+func _format_camera_revival_digest_plain(d: Dictionary) -> String:
+	if not bool(d.get("has_settlement", false)):
+		var rk: int = int(d.get("region_key", -1))
+		if rk == -2:
+			return "camera_revival: (no world)"
+		return "camera_revival: vacant cam_rk=%d" % int(d.get("camera_region_key", rk))
+	var src: String = str(d.get("digest_source", "cam"))
+	var cam_rk_p: int = int(d.get("camera_region_key", int(d.get("region_key", -1))))
+	var prof_rk: int = int(d.get("profile_region_key", cam_rk_p))
+	var prefix: String = "camera_revival" if src == "cam" else "camera_revival nearest"
+	var loc_note: String = "" if src == "cam" else " cam_rk=%d profile_rk=%d" % [cam_rk_p, prof_rk]
+	var pt: int = int(d.get("peace_threshold_ticks", 0))
+	var pc: int = int(d.get("peace_since_conflict_ticks", 0))
+	var pc_show: String = "inf" if pc >= 999_000_000 else str(pc)
+	var st_plain: String = str(d.get("state", ""))
+	var rs_p: int = int(d.get("revival_score", 0))
+	if st_plain == "revivable":
+		var rb: String = str(d.get("rebirth_reason", ""))
+		var rdy: String = "Y" if bool(d.get("revival_ready", false)) else "N"
+		var ok: String = "Y" if bool(d.get("rebirth_ok", false)) else "N"
+		return (
+			"%s: %s rs=%d peace=%s/%s rdy=%s rebirth_ok=%s rb=%s%s"
+			% [prefix, st_plain, rs_p, pc_show, str(pt), rdy, ok, rb, loc_note]
+		)
+	return "%s: %s rs=%d peace=%s/%s rebirth=n/a%s" % [prefix, st_plain, rs_p, pc_show, str(pt), loc_note]
+
+
+func _format_camera_revival_digest_bbcode(d: Dictionary) -> String:
+	if not bool(d.get("has_settlement", false)):
+		var rk2: int = int(d.get("region_key", -1))
+		var crk: int = int(d.get("camera_region_key", rk2))
+		if rk2 == -2:
+			return "[color=#9e9e9e]🏚 Cam settlement: (no world)[/color]"
+		return "[color=#9e9e9e]🏚 Cam vacant rk=%d[/color]" % crk
+	var src2: String = str(d.get("digest_source", "cam"))
+	var cam_rk2: int = int(d.get("camera_region_key", int(d.get("region_key", -1))))
+	var prof_rk2: int = int(d.get("profile_region_key", cam_rk2))
+	var head: String = (
+		"[color=#c9b37c]🏚 Cam:[/color]"
+		if src2 == "cam"
+		else (
+			"[color=#c9b37c]🏚 Near[/color] [color=#888](cam rk=%d · profile rk=%d)[/color]"
+			% [cam_rk2, prof_rk2]
+		)
+	)
+	var pt2: int = int(d.get("peace_threshold_ticks", 0))
+	var pc2: int = int(d.get("peace_since_conflict_ticks", 0))
+	var pc_label: String = "inf" if pc2 >= 999_000_000 else str(pc2)
+	var stc: String = str(d.get("state", ""))
+	var rs: int = int(d.get("revival_score", 0))
+	if stc == "revivable":
+		var rdy_b: bool = bool(d.get("revival_ready", false))
+		var ok_b: bool = bool(d.get("rebirth_ok", false))
+		var rb2: String = str(d.get("rebirth_reason", ""))
+		var rdy_s: String = "[color=#a5d6a7]Y[/color]" if rdy_b else "[color=#bdbdbd]N[/color]"
+		var rb_ok_s: String = (
+			"[color=#a5d6a7]%s[/color]" % rb2
+			if ok_b
+			else "[color=#ffcc80]%s[/color]" % rb2
+		)
+		return (
+			"%s [b]%s[/b]  rs:%d  peace:%s/%s  revivable:%s  rebirth:%s"
+			% [head, stc, rs, pc_label, str(pt2), rdy_s, rb_ok_s]
+		)
+	return (
+		"%s [b]%s[/b]  rs:%d  peace:%s/%s  [color=#888888](rebirth n/a)[/color]"
+		% [head, stc, rs, pc_label, str(pt2)]
+	)
+
+
+func _ensure_meaning_vignette() -> void:
+	if _meaning_vignette_rect != null and is_instance_valid(_meaning_vignette_rect):
+		return
+	var cl: CanvasLayer = CanvasLayer.new()
+	cl.name = "MeaningVignetteLayer"
+	cl.layer = 4
+	var cr: ColorRect = ColorRect.new()
+	cr.name = "MeaningVignette"
+	cr.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cr.offset_left = 0.0
+	cr.offset_top = 0.0
+	cr.offset_right = 0.0
+	cr.offset_bottom = 0.0
+	cr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cr.color = Color(0, 0, 0, 0)
+	cl.add_child(cr)
+	add_child(cl)
+	_meaning_vignette_rect = cr
+
+
+func _update_meaning_vignette() -> void:
+	if _meaning_vignette_rect == null or not is_instance_valid(_meaning_vignette_rect):
+		return
+	var mood: float = clampf(_meaning_ambient_mood, 0.0, 1.0)
+	var a: float = lerpf(0.028, 0.0, mood) + absf(_meaning_style_bias) * 0.01
+	_meaning_vignette_rect.color = Color(0, 0, 0, clampf(a, 0.0, 0.065))
 
 
 func is_kernel_diagnostic_complete() -> bool:
@@ -2621,6 +3403,8 @@ func _reroll_world() -> void:
 	WorldMemory.clear()
 	MythMemory.clear()
 	SacredMemory.clear()
+	PlayerIntentQueue.clear()
+	FactionRegistry.clear()
 	ChronicleLog.clear()
 	RoadMemory.clear()
 	TradeMemory.clear()
@@ -2873,7 +3657,7 @@ func _on_job_completed(job: Job) -> void:
 				if wt != null:
 					wt.record_trace(_world.tile_to_world(job.tile), "build")
 		Job.Type.MINE, Job.Type.MINE_WALL:
-			_react_to_mining_progress()
+			_mining_react_pending = true
 		Job.Type.FORAGE:
 			_queue_regrowth(job.tile, TileFeature.Type.FERTILE_SOIL, FORAGE_REGROW_TICKS)
 		Job.Type.CHOP:
@@ -3185,7 +3969,7 @@ func settlement_planner_count_pawns_in_regions(regions: PackedInt32Array) -> int
 		var pd: PawnData = p.get_pawn_data() as PawnData
 		if pd == null:
 			continue
-		var rk: int = WorldMemory._region_key(pd.tile_pos.x, pd.tile_pos.y)
+		var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(pd.tile_pos.x, pd.tile_pos.y)
 		if want.has(rk):
 			n += 1
 	return n
@@ -3324,6 +4108,8 @@ func _build_save_dict() -> Dictionary:
 		"tick": GameManager.tick_count,
 		"game_speed": GameManager.game_speed,
 		"is_paused": GameManager.is_paused,
+		"player_mode": _player_mode,
+		"player_pawn_id": get_player_pawn_id(),
 		"world": _world.data.to_save_dict(),
 		"zones": _save_stockpiles_to_array(),
 		"pawns": pawns_s,
@@ -3335,6 +4121,8 @@ func _build_save_dict() -> Dictionary:
 		"myth": MythMemory.to_save_dict(),
 		"sacred": SacredMemory.to_save_dict(),
 		"chronicle": ChronicleLog.to_save_dict(),
+		"player_intent_queue": PlayerIntentQueue.to_save_dict(),
+		"faction_registry": FactionRegistry.to_save_dict(),
 		"last_generation_tick": _last_generation_tick,
 	}
 
@@ -3379,16 +4167,21 @@ func _apply_save_dict(s: Dictionary) -> void:
 	IntentMemory.clear()
 	AgeMemory.clear()
 	SacredMemory.clear()
+	PlayerIntentQueue.clear()
+	FactionRegistry.clear()
 	ChronicleLog.clear()
 	_set_designation_mode(DesignationMode.NONE)
 	_cancel_drag()
 	_set_selected_pawn(null)
+	_set_player_mode(PlayerMode.SPECTATOR)
 	_regrow_queue.clear()
 	_tear_down_all_zones()
 	_pawn_spawner.clear_pawns()
 
 	_world.load_world_data(wdata as WorldData)
 	var loaded_tick: int = int(s.get("tick", 0))
+	var saved_player_mode: int = int(s.get("player_mode", PlayerMode.INCARNATED))
+	var saved_player_pawn_id: int = int(s.get("player_pawn_id", -1))
 	GameManager.set_state_from_load(
 		loaded_tick,
 		float(s.get("game_speed", 1.0)),
@@ -3415,7 +4208,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 		if pd is Dictionary:
 			var pdat: PawnData = PawnData.from_save_dict(pd)
 			_pawn_spawner.spawn_from_data(pdat, _world)
-	_ensure_player_pawn_assigned()
+	_restore_player_state(saved_player_mode, saved_player_pawn_id)
 	_world.set_meta("animal_spawner", _animal_spawner)
 	if is_instance_valid(_world):
 		_world.apply_ruins_from_persistence()
@@ -3424,6 +4217,9 @@ func _apply_save_dict(s: Dictionary) -> void:
 		_ensure_validation_session_seed_stockpile_overlaps_settlement()
 		MythMemory.recompute(_world)
 		SacredMemory.sync_permanent_ruins_from_settlements()
+		PlayerIntentQueue.from_save_dict(s.get("player_intent_queue", {}))
+		FactionRegistry.from_save_dict(s.get("faction_registry", {}))
+		FactionRegistry.sync_from_settlements()
 		IntentMemory.recompute(_world)
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):
@@ -3539,30 +4335,7 @@ func _toggle_focus_inspector() -> void:
 
 
 func _build_focus_snapshot(tick: int) -> Dictionary:
-	var focus: Dictionary = _resolve_focus_target()
-	var focus_type: String = str(focus.get("type", "NONE"))
-	var main_lines: PackedStringArray = PackedStringArray()
-	var title: String = "FOCUS INSPECTOR"
-	if focus_type == "PAWN":
-		title = "FOCUS: PAWN"
-		main_lines = _focus_lines_for_pawn(focus)
-	elif focus_type == "SETTLEMENT":
-		title = "FOCUS: SETTLEMENT"
-		main_lines = _focus_lines_for_settlement(focus)
-	elif focus_type == "TILE":
-		title = "FOCUS: TILE"
-		main_lines = _focus_lines_for_tile(focus)
-	else:
-		main_lines = PackedStringArray([
-			"NO FOCUS",
-			"Move cursor over a pawn, settlement, or tile",
-		])
-	return {
-		"title": title,
-		"focus_type": focus_type,
-		"main_lines": main_lines,
-		"footer": "Tick %d | source: %s" % [tick, str(focus.get("source", "none"))],
-	}
+	return ObservationAPI.build_focus_snapshot_from_focus(_resolve_focus_target(), tick)
 
 
 func _resolve_focus_target() -> Dictionary:
@@ -3574,7 +4347,7 @@ func _resolve_focus_target() -> Dictionary:
 		return {"type": "PAWN", "source": "mouse_pawn", "pawn": mouse_pawn}
 	var mouse_tile: Vector2i = _world.world_to_tile(mouse_world)
 	if mouse_tile.x >= 0 and mouse_tile.y >= 0:
-		var settlement: Variant = SettlementMemory.get_settlement_at_region(WorldMemory._region_key(mouse_tile.x, mouse_tile.y))
+		var settlement: Variant = SettlementMemory.get_settlement_at_region(preload("res://autoloads/WorldMemory.gd")._region_key(mouse_tile.x, mouse_tile.y))
 		if settlement is Dictionary:
 			return {"type": "SETTLEMENT", "source": "mouse_tile", "tile": mouse_tile, "settlement": settlement}
 		return {"type": "TILE", "source": "mouse_tile", "tile": mouse_tile}
@@ -3605,7 +4378,7 @@ func _focus_lines_for_pawn(focus: Dictionary) -> PackedStringArray:
 	if p == null or p.data == null:
 		return PackedStringArray(["NO FOCUS", "Move cursor over a pawn, settlement, or tile"])
 	var d: PawnData = p.data
-	var rk: int = WorldMemory._region_key(d.tile_pos.x, d.tile_pos.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(d.tile_pos.x, d.tile_pos.y)
 	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(rk)
 	var role: String = _pawn_governance_role(d, gov)
 	var war: Dictionary = SettlementMemory.get_war_profile_for_region(rk)
@@ -3618,7 +4391,7 @@ func _focus_lines_for_pawn(focus: Dictionary) -> PackedStringArray:
 	var job_label: String = p.get_current_job_label() if p.has_method("get_current_job_label") else "None"
 	var local_mode: String = "Retreat" if d.has_method("get_health_percentage") and float(d.get_health_percentage()) < 0.5 else "Ordered"
 	out.append("Name: %s" % d.display_name)
-	out.append("Profession: %s | Military Rank: %s" % [d.profession_name(), str(d.military_rank).capitalize()])
+	out.append("Profession: %s | Military Rank: %s" % [d.profession_name(), str(d.military_rank_legacy).capitalize()])
 	out.append("Governance Role: %s" % role)
 	out.append("Health: %d%% | Hunger %.0f | Rest %.0f | Mood %.0f" % [health_pct, d.hunger, d.rest, d.mood])
 	out.append("Action: %s | Job: %s" % [state_label, job_label])
@@ -3642,6 +4415,11 @@ func _focus_lines_for_pawn(focus: Dictionary) -> PackedStringArray:
 			int(cobs.get("stability_ticks", 0)),
 			Job.describe_type(s_job_type) if s_job_type >= 0 else "None",
 		])
+	var house_center: int = rk
+	var st_for_house: Variant = SettlementMemory.get_settlement_at_region(rk)
+	if st_for_house is Dictionary:
+		house_center = int((st_for_house as Dictionary).get("center_region", rk))
+	_focus_append_house_stub_lines(out, house_center)
 	return out
 
 
@@ -3721,6 +4499,7 @@ func _focus_lines_for_settlement(focus: Dictionary) -> PackedStringArray:
 		int(round(ColonySimServices.get_food_pressure() * 100.0)),
 		int(round(ColonySimServices.get_housing_pressure() * 100.0)),
 	])
+	_focus_append_house_stub_lines(out, center)
 	return out
 
 
@@ -3729,7 +4508,7 @@ func _focus_lines_for_tile(focus: Dictionary) -> PackedStringArray:
 	var tile: Vector2i = focus.get("tile", Vector2i(-1, -1))
 	if tile.x < 0:
 		return PackedStringArray(["NO FOCUS", "Move cursor over a pawn, settlement, or tile"])
-	var rk: int = WorldMemory._region_key(tile.x, tile.y)
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(tile.x, tile.y)
 	out.append("Tile: (%d,%d) | Region: %d" % [tile.x, tile.y, rk])
 	var biome: int = _world.data.get_biome(tile.x, tile.y) if _world != null and _world.data != null else -1
 	out.append("Biome: %d | Scar: %d" % [biome, int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))])
@@ -3746,12 +4525,33 @@ func _focus_lines_for_tile(focus: Dictionary) -> PackedStringArray:
 					_pretty_governance_name(str(gov.get("type", "anarchy"))),
 				]
 		)
+		_focus_append_house_stub_lines(out, int(st.get("center_region", -1)))
 	var events: Array[Dictionary] = WorldMemory.get_events_for_tile(tile)
 	if not events.is_empty():
 		var evt: Dictionary = events[events.size() - 1]
 		var etype: String = str(evt.get("type", "event"))
 		out.append("Last Event: %s @ tick %d" % [etype.replace("_", " "), int(evt.get("t", 0))])
 	return out
+
+
+## FactionRegistry v1: deterministic house stub for settlement zone (CK3-style readout hook).
+func _focus_append_house_stub_lines(out: PackedStringArray, center_region: int) -> void:
+	if center_region < 0:
+		return
+	FactionRegistry.sync_from_settlements()
+	var house: Dictionary = FactionRegistry.get_house_for_zone(str(center_region))
+	if house.is_empty():
+		out.append("Faction / house (stub): (none for this zone yet)")
+		return
+	var disp: String = str(house.get("house_display", house.get("house_id", "")))
+	var hid: String = str(house.get("house_id", ""))
+	var rgb_v: Variant = house.get("banner_rgb", [])
+	var rgb_s: String = "n/a"
+	if rgb_v is Array:
+		var rgb: Array = rgb_v as Array
+		if rgb.size() >= 3:
+			rgb_s = "%.2f,%.2f,%.2f" % [float(rgb[0]), float(rgb[1]), float(rgb[2])]
+	out.append("Faction / house (stub): %s [%s] | banner %s" % [disp, hid, rgb_s])
 
 
 func _pawn_governance_role(d: PawnData, gov: Dictionary) -> String:
@@ -3761,7 +4561,7 @@ func _pawn_governance_role(d: PawnData, gov: Dictionary) -> String:
 	var council_ids: Variant = gov.get("council_ids", PackedInt32Array())
 	if council_ids is PackedInt32Array and (council_ids as PackedInt32Array).has(pid):
 		return "Council"
-	if str(d.military_rank).to_lower() == "battlemaster":
+	if str(d.military_rank_legacy).to_lower() == "battlemaster":
 		return "BattleMaster"
 	return "Citizen"
 
@@ -3776,7 +4576,7 @@ func _count_pawns_in_regions(regions_v: Variant) -> int:
 	for p in _pawn_spawner.pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
-		var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 		if wanted.has(rk):
 			n += 1
 	return n
@@ -3784,7 +4584,9 @@ func _count_pawns_in_regions(regions_v: Variant) -> int:
 
 func _build_observer_snapshot(tick: int) -> Dictionary:
 	var day_len: int = DayNightCycle.TICKS_PER_DAY
-	var day: int = int(tick / float(day_len)) + 1
+	var day_abs: int = SimTime.calendar_absolute_visual_day(tick)
+	var day_in_year: int = SimTime.calendar_day_within_sim_year(tick)
+	var days_per_sim_year: int = SimTime.visual_days_per_sim_year()
 	var speed_text: String = "%dx" % int(GameManager.game_speed)
 	var paused_text: String = "Yes" if GameManager.is_paused else "No"
 	var focus: Dictionary = _observer_focus_settlement()
@@ -3840,6 +4642,21 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		str(rb_audit.get("ore_proxy_actual", "")),
 	]
 	var sig_changed: bool = rb_audit_sig != _resource_balance_audit_last_sig
+
+	# Recent player_inspect summary (for observer HUD)
+	var last_inspect_summary: String = "None"
+	var recent_events: Array = WorldMemory.get_recent_events(32)
+	for i in range(recent_events.size() - 1, -1, -1):
+		var ev: Dictionary = recent_events[i]
+		if str(ev.get("type", "")) == "player_inspect":
+			last_inspect_summary = "%s | pawn:%d region:%d meaning:%s tags:%s" % [
+				str(ev.get("type", "player_inspect")),
+				int(ev.get("pawn_id", -1)),
+				int(ev.get("center_region", -1)),
+				str(ev.get("meaning_label", "")),
+				str(ev.get("tags", PackedStringArray())),
+			]
+			break
 	var force_audit_line: bool = rb_audit_result != "PASS"
 	if (
 			OS.is_debug_build()
@@ -3907,18 +4724,27 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 	)
 	var recent_history_lines: PackedStringArray = WorldMemory.get_recent_event_summaries(3)
 	var vh: Dictionary = SettlementMemory.validation_harness_flags_for_snapshot()
-	var footer_stamp: String = "Tick %d | Day %d | Determinism %s | Events %d | %s" % [
+	var footer_stamp: String = "Tick %d | Y%d D%d/%d (absD%d) | Determinism %s | Events %d | %s" % [
 		tick,
-		day,
+		SimTime.sim_year_index(tick),
+		day_in_year,
+		days_per_sim_year,
+		day_abs,
 		determinism_lock,
 		WorldMemory.event_count(),
 		kernel_phase,
 	]
 	return {
 		"tick": tick,
-		"day": day,
+		"day": day_abs,
+		"calendar_day_in_year": day_in_year,
+		"calendar_days_per_sim_year": days_per_sim_year,
 		"speed": speed_text,
 		"paused": paused_text,
+		"player_mode": get_player_mode_label(),
+		"player_pawn_id": get_player_pawn_id(),
+		"incarnation_picker_visible": _incarnation_picker != null and is_instance_valid(_incarnation_picker) and _incarnation_picker.visible,
+		"last_player_inspect": last_inspect_summary,
 		"world_status_summary": world_status_summary,
 		"governance_type": _pretty_governance_name(str(governance.get("type", "anarchy"))),
 		"ruler_name": ruler_name,
@@ -3986,6 +4812,7 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"validation_clean_economy_events": WorldEvents.validation_clean_economy_events_active(),
 		"validation_settlement_truth_verify": bool(vh.get("settlement_truth_verify", false)),
 		"validation_specialization_log": bool(vh.get("specialization_log", false)),
+		"camera_revival_digest_plain": get_camera_revival_digest_plain(),
 	}
 
 
@@ -3993,7 +4820,7 @@ func _observer_focus_settlement() -> Dictionary:
 	var settlement_idx: int = -1
 	var settlement_data: Dictionary = {}
 	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
-		var prk: int = WorldMemory._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
+		var prk: int = preload("res://autoloads/WorldMemory.gd")._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
 		for i in range(SettlementMemory.settlements.size()):
 			var stv: Variant = SettlementMemory.settlements[i]
 			if not (stv is Dictionary):
@@ -4097,9 +4924,9 @@ func _find_battlemaster_name(settlement_idx: int, settlement_data: Dictionary) -
 	for p in _pawn_spawner.pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
-		if str(p.data.military_rank).to_lower() != "battlemaster":
+		if str(p.data.military_rank_legacy).to_lower() != "battlemaster":
 			continue
-		var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 		if region_set.has(rk):
 			return p.data.display_name
 	return "None"

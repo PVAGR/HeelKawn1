@@ -34,13 +34,13 @@ var next_agent_id: int = 1000  # Start AI agent IDs at 1000 to avoid conflicts
 var max_agents: int = 10
 var update_frequency: int = 10  # Update agents every N ticks (balanced for performance)
 var last_update_tick: int = 0
-var enabled: bool = true
+var enabled: bool = false
 var show_agent_overlays: bool = true
 
 # Advanced Neural Network Matrix Systems
 var world_ai: Node
 var settlement_ai_system: Dictionary = {}  # settlement_id -> settlement AI instances
-var civilization_mode: bool = true  # Enabled for advanced neural network matrix
+var civilization_mode: bool = false  # Disabled by default for runtime stability
 
 # Neural Network Matrix Components
 var neural_matrix: Dictionary = {}  # Core neural network matrix data
@@ -62,6 +62,10 @@ var reactive_agent_count: int = 2
 
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
+	if not enabled:
+		if OS.is_debug_build():
+			print("[AIAgentManager] Disabled (set enabled=true to opt in).")
+		return
 	
 	# Initialize advanced neural network matrix systems
 	_initialize_neural_network_matrix()

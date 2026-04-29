@@ -69,7 +69,7 @@ func _setup_ui() -> void:
 		enhanced_ai_toggle.button_pressed = enhanced_ai_enabled
 	
 	# Initialize tick rate
-	current_tick_rate = GameManager.tick_interval if GameManager else 0.05
+	current_tick_rate = float(GameManager.get("TICK_INTERVAL_SECONDS")) if GameManager else 0.1
 	if tick_rate_slider:
 		tick_rate_slider.value = 1.0 / current_tick_rate  # Convert to frequency
 	if tick_rate_label:
@@ -111,7 +111,8 @@ func _on_tick_rate_changed(value: float) -> void:
 	var new_interval: float = 1.0 / new_frequency
 	
 	if GameManager:
-		GameManager.tick_interval = new_interval
+		if GameManager.has_method("set_tick_interval_seconds"):
+			GameManager.call("set_tick_interval_seconds", new_interval)
 	
 	current_tick_rate = new_interval
 	if tick_rate_label:

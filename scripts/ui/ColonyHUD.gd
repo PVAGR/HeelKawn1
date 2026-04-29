@@ -669,6 +669,8 @@ func _narrative_rail_line() -> String:
 
 
 func _narrative_line_for_event(typ: String, e: Dictionary) -> String:
+	if bool(e.get("first_of_type", false)):
+		return "first: %s" % typ.replace("_", " ")
 	match typ:
 		"governance_change":
 			var g: String = str(e.get("governance_type", "anarchy")).replace("_", " ")

@@ -18,6 +18,8 @@ enum Kind {
 
 var _events: Array[Dictionary] = []
 var _dirty: bool = false
+## event_type -> first tick observed in this session/save timeline.
+var _first_event_tick_by_type: Dictionary = {}
 
 # === Neural Network Matrix Connections ===
 
@@ -126,6 +128,7 @@ func get_resource_at_tile(tile_pos: Vector2i) -> Dictionary:
 
 func clear() -> void:
 	_events.clear()
+	_first_event_tick_by_type.clear()
 	_dirty = false
 
 
@@ -151,11 +154,81 @@ func _append(e: Dictionary) -> void:
 
 ## Generic deterministic event appender for non-core typed events (e.g. player input).
 func record_event(e: Dictionary) -> void:
+	var payload: Dictionary = _normalize_event_payload(e)
+	_append(payload)
+
+
+func _normalize_event_payload(e: Dictionary) -> Dictionary:
 	var payload: Dictionary = e.duplicate(true)
 	payload["s"] = SCHEMA
 	if not payload.has("t"):
 		payload["t"] = GameManager.tick_count
-	_append(payload)
+	var typ: String = _canonical_event_type(payload)
+	payload["type"] = typ
+	var sev: int = _severity_for_type(typ)
+	payload["severity"] = sev
+	var rr: int = _region_from_event_payload(payload)
+	if rr >= 0:
+		payload["r"] = rr
+	var first_tick: int = int(payload.get("t", 0))
+	if not _first_event_tick_by_type.has(typ):
+		_first_event_tick_by_type[typ] = first_tick
+		payload["first_of_type"] = true
+	return payload
+
+
+func _canonical_event_type(payload: Dictionary) -> String:
+	var typ: String = str(payload.get("type", "")).strip_edges()
+	if not typ.is_empty():
+		return typ
+	var k: int = int(payload.get("k", -1))
+	match k:
+		int(Kind.PAWN_DEATH):
+			return "pawn_death"
+		int(Kind.ANIMAL_DEATH):
+			return "animal_death"
+		int(Kind.ENEMY_DEATH):
+			return "enemy_death"
+		int(Kind.SOCIAL_FRAGMENT):
+			return "social_fragment"
+		int(Kind.SOCIAL_SCHISM):
+			return "social_schism"
+	return "event"
+
+
+func _severity_for_type(typ: String) -> int:
+	match typ:
+		"pawn_death", "knowledge_loss", "social_schism":
+			return 3
+		"enemy_death", "war_proposed", "war_battle_spawned", "governance_change", "birth", "pawn_birth":
+			return 2
+		"social_bond_milestone", "social_meeting", "structure_built", "job_completed", "knowledge_discovery", "knowledge_rediscovery", "teaching_success", "settlement_intent_shift":
+			return 1
+		_:
+			return 0
+
+
+func _region_from_event_payload(payload: Dictionary) -> int:
+	if payload.has("r"):
+		return int(payload.get("r", -1))
+	if payload.has("region"):
+		return int(payload.get("region", -1))
+	if payload.has("x") and payload.has("y"):
+		return _region_key(int(payload.get("x", -1)), int(payload.get("y", -1)))
+	var tile_v: Variant = payload.get("tile", null)
+	if tile_v is Dictionary:
+		var td: Dictionary = tile_v as Dictionary
+		if td.has("x") and td.has("y"):
+			return _region_key(int(td.get("x", -1)), int(td.get("y", -1)))
+	var pos_v: Variant = payload.get("pos", null)
+	if pos_v is Dictionary:
+		var pd: Dictionary = pos_v as Dictionary
+		if pd.has("x") and pd.has("y"):
+			return _region_key(int(pd.get("x", -1)), int(pd.get("y", -1)))
+	elif pos_v is Vector2i:
+		var p: Vector2i = pos_v as Vector2i
+		return _region_key(p.x, p.y)
+	return -1
 
 
 ## Record after `data` is still valid; use primitive fields only.
@@ -267,6 +340,16 @@ func from_save_dict(d: Variant) -> void:
 		for e in ev:
 			if e is Dictionary:
 				_events.append((e as Dictionary).duplicate(true))
+	_rebuild_first_event_index()
+
+
+func _rebuild_first_event_index() -> void:
+	_first_event_tick_by_type.clear()
+	for evt in _events:
+		var typ: String = _canonical_event_type(evt)
+		var tick: int = int(evt.get("t", 0))
+		if not _first_event_tick_by_type.has(typ):
+			_first_event_tick_by_type[typ] = tick
 
 
 func event_count() -> int:
@@ -536,3 +619,42 @@ func get_events_for_tile(target_pos: Vector2i) -> Array[Dictionary]:
 		return int(a.get("t", 0)) < int(b.get("t", 0))
 	)
 	return results
+
+
+func get_first_event_tick(event_type: String) -> int:
+	var key: String = event_type.strip_edges()
+	if key.is_empty():
+		return -1
+	return int(_first_event_tick_by_type.get(key, -1))
+
+
+## Recent events scoped to a settlement center region (optionally includes all packed settlement regions).
+func get_recent_events_for_settlement(center_region: int, max_items: int = 64, include_settlement_regions: bool = true) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if center_region < 0 or max_items <= 0:
+		return out
+	var wanted: Dictionary = {center_region: true}
+	if include_settlement_regions:
+		for s_any in SettlementMemory.settlements:
+			if s_any is not Dictionary:
+				continue
+			var st: Dictionary = s_any as Dictionary
+			if int(st.get("center_region", -1)) != center_region:
+				continue
+			var reg_v: Variant = st.get("regions", PackedInt32Array())
+			if reg_v is PackedInt32Array:
+				for rk in reg_v as PackedInt32Array:
+					wanted[int(rk)] = true
+			break
+	for i in range(_events.size() - 1, -1, -1):
+		if out.size() >= max_items:
+			break
+		var evt: Dictionary = _events[i]
+		var rk: int = _region_from_event_payload(evt)
+		if rk < 0:
+			continue
+		if not wanted.has(rk):
+			continue
+		out.append(evt.duplicate(true))
+	out.reverse()
+	return out

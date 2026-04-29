@@ -2066,6 +2066,8 @@ func _record_social_pair_events(a: PawnData, b: PawnData) -> void:
 		_social_meeting_last_tick_by_pair[key] = now
 		WorldMemory.record_event({
 			"type": "social_meeting",
+			"category": "social",
+			"severity": 2,
 			"tick": now,
 			"a": a_id,
 			"b": b_id,
@@ -2085,6 +2087,8 @@ func _record_social_pair_events(a: PawnData, b: PawnData) -> void:
 		_social_rapport_milestone_by_pair[key] = milestone
 		WorldMemory.record_event({
 			"type": "social_bond_milestone",
+			"category": "social",
+			"severity": 3,
 			"tick": now,
 			"a": a_id,
 			"b": b_id,
@@ -3769,6 +3773,8 @@ func _on_job_completed(job: Job) -> void:
 				nearby_workers += 1
 	WorldMemory.record_event({
 		"type": "job_completed",
+		"category": "labor",
+		"severity": 1,
 		"tick": now_tick,
 		"job_type": int(job.type),
 		"job_priority": int(job.priority),
@@ -3787,6 +3793,8 @@ func _on_job_completed(job: Job) -> void:
 					wt.record_trace(_world.tile_to_world(job.tile), "build")
 			WorldMemory.record_event({
 				"type": "structure_built",
+				"category": "construction",
+				"severity": 2,
 				"tick": now_tick,
 				"job_type": int(job.type),
 				"worker_id": worker_id,

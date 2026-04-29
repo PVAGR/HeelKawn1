@@ -1555,8 +1555,9 @@ func request_spectator_return(note: String = "manual_return", payload: Dictionar
 	var ok: bool = PlayerIntentQueue.request_spectator_return(note, payload)
 	if _incarnation_picker != null and is_instance_valid(_incarnation_picker):
 		_incarnation_picker.call("close_picker")
-	_player_pawn = null
 	_set_selected_pawn(null)
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		_player_pawn = _first_live_pawn()
 	_set_player_mode(PlayerMode.SPECTATOR)
 	return ok
 
@@ -1590,7 +1591,7 @@ func _bootstrap_colony() -> void:
 	WorldPersistence.recompute()
 	_place_stockpile(main_component)
 	_pawn_spawner.spawn_starters(_world, main_component)
-	_player_pawn = null
+	_player_pawn = _first_live_pawn()
 	_set_selected_pawn(null)
 	_set_player_mode(PlayerMode.SPECTATOR)
 	_ensure_player_pawn_assigned()
@@ -2893,8 +2894,11 @@ func _set_selected_pawn(p: Pawn) -> void:
 	_selected_pawn = p
 	# Observer-first: selection is inspection only. Incarnation/control remains explicit via picker.
 	if _selected_pawn != null:
+		_player_pawn = _selected_pawn
 		_camera_follow_selected = true
 	elif _player_mode != PlayerMode.INCARNATED:
+		if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+			_player_pawn = _first_live_pawn()
 		_camera_follow_selected = false
 	_sync_player_context_ui()
 	if _hud != null:
@@ -2950,6 +2954,15 @@ func _find_pawn_by_id(pawn_id: int) -> Pawn:
 		return null
 	for p in _pawn_spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
+			return p
+	return null
+
+
+func _first_live_pawn() -> Pawn:
+	if _pawn_spawner == null:
+		return null
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
 			return p
 	return null
 

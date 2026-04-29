@@ -24,7 +24,11 @@ const RIGHT_INSET:    float = 8.0
 const TOP_INSET:      float = 8.0
 ## UI refresh is state-driven (signature diff), polled on wall-clock cadence.
 ## This keeps presentation dynamic without hard-binding repaint cadence to ticks.
-const UI_POLL_INTERVAL_SEC: float = 0.20
+const UI_POLL_INTERVAL_SEC: float = 0.35
+## Settlement/governance identity is allowed to refresh on a coarse tick bucket
+## instead of every UI poll. This keeps observer mode smooth while preserving
+## living-world updates in the sheet.
+const WORLD_CONTEXT_REFRESH_TICKS: int = 30
 const PORTRAIT_COLS:  int = 6
 const PORTRAIT_ROWS:  int = 8
 
@@ -770,16 +774,10 @@ func _build_ui_signature() -> String:
 		return ""
 	var d: PawnData = _pawn.data
 	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(d.tile_pos.x, d.tile_pos.y)
-	var profile: Dictionary = SettlementMemory.get_settlement_profile(rk)
-	var st_any: Variant = SettlementMemory.get_settlement_at_region(rk)
-	var intent: String = "none"
-	if st_any is Dictionary:
-		intent = str((st_any as Dictionary).get("current_intent", "none"))
-	var war: Dictionary = SettlementMemory.get_war_profile_for_region(rk)
-	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(rk)
 	var top_peer: Dictionary = d.top_social_rapport_peer()
+	var world_context_bucket: int = int(GameManager.tick_count / max(1, WORLD_CONTEXT_REFRESH_TICKS))
 	return (
-		"%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%s"
+		"%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d"
 	) % [
 		d.id,
 		d.age,
@@ -795,18 +793,15 @@ func _build_ui_signature() -> String:
 		int(d.profession_progress_xp()),
 		str(d.carrying),
 		str(d.carrying_qty),
-		WorldMeaning.get_region_meaning_label(rk),
-		str(CulturalMemory.get_region_reputation(rk)),
-		str(profile.get("state", "")),
-		int(profile.get("revival_score", 0)),
-		int(profile.get("center_region", -1)),
-		int(profile.get("scar_max", 0)),
-		int(profile.get("peace_since_conflict_ticks", 0)),
+		rk,
+		world_context_bucket,
 		int(top_peer.get("peer_id", -1)),
 		int(top_peer.get("rapport", 0)),
-		intent,
-		str(war.get("state", "peace")),
-		str(gov.get("type", "anarchy")),
+		int(d.skills.get("combat", 0)),
+		int(d.skills.get("gathering", 0)),
+		int(d.skills.get("building", 0)),
+		int(d.skills.get("farming", 0)),
+		int(d.skills.get("movement", 0)),
 	]
 
 

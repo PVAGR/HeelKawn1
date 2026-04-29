@@ -31,6 +31,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-29  ObservationAPI: performance contract + `API_VERSION`; `observe_region` pawn_count uses `_count_pawns_in_regions` (no full per-pawn dict alloc); added `observe_region_lite` + `observe_sim_ambient` for throttled AI/overlays; Main tick comment ties FocusInspector cadence to on-demand observation rule.
 2026-04-27  Portable character: `PawnData.to_portable_character_export` + F10 **33 · Portable character JSON**; `Main.get_player_pawn()`; matrix §11 + JSON `2026-04-27f` (MMO/PVA handoff schema `heelkawn_character_portable/v1`).
 2026-04-27  Matrix §10 release tiers: Tier A = shippable standalone + PVA wrap; Tier B = maybe LAN/hot-seat; Tier C = online/OpenClaw on later product; JSON `matrix_version` → 2026-04-27e.
 2026-04-27  Matrix §9 north star: pvabazaar.org distribution intent + future web/OpenClaw bridge (non-normative); JSON `matrix_version` → 2026-04-27d.

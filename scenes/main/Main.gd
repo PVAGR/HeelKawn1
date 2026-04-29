@@ -1874,7 +1874,7 @@ func _on_game_tick(tick: int) -> void:
 	# Handle recent player_inspect events for tooltip + audio feedback
 	if tick % INSPECT_SCAN_INTERVAL_TICKS == 0:
 		_scan_recent_inspects_and_handle()
-	# FocusInspector snapshotting is another large allocation hotspot.
+	# FocusInspector snapshotting is another large allocation hotspot (see ObservationAPI — programmatic reads must stay on-demand, not per-frame).
 	var focus_iv: int = _high_speed_interval(30, 24, 48)
 	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % focus_iv == 0:
 		_focus_inspector.apply_snapshot(_build_focus_snapshot(tick))

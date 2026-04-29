@@ -1,6 +1,14 @@
 extends Node
-## Phase 5: Observation API - Programmatic access to Focus Inspector data
-## Provides the same data that human players see via mouse inspection, but for AI agents
+## Observation API — programmatic Focus Inspector / sensory snapshots for agents & tools.
+##
+## Performance contract (keeps FPS stable while “infinite” backend systems exist):
+## - Call these **on demand** (pawn acts, AI cadence, debug/F10, validation) — **never** from `_process` every frame.
+## - Heavy queries (`observe_pawns_in_region`, full pawn dicts) walk live pawns — use rarely or batch off critical path.
+## - Prefer **`observe_region_lite`** for HUD pressure / ambient AI / tick hooks.
+## - World simulation stays **tick-scheduled** in `Main` (`_high_speed_interval`, capped ticks/frame in `GameManager`); derived layers stay lazy.
+##
+## Version bump when exported dictionary keys change (agents/F10 can gate on this).
+const API_VERSION: String = "2026-04-29a"
 
 ## Get comprehensive pawn observation data (same as Focus Inspector pawn view)
 static func observe_pawn(pawn_id: int) -> Dictionary:
@@ -82,7 +90,7 @@ static func observe_at_world_position(world_pos: Vector2) -> Dictionary:
 	
 	return {"error": "No valid target at position", "world_pos": world_pos}
 
-## Get all pawns in a specific region
+## All pawns whose **current tile** maps to `region_key`. Builds a **full** observation dict per pawn — O(#pawns); use sparingly.
 static func observe_pawns_in_region(region_key: int) -> Array[Dictionary]:
 	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
 	if main == null:
@@ -126,7 +134,7 @@ static func observe_camera_view() -> Dictionary:
 	return obs
 
 
-## Get a settlement-region level observation summary.
+## Settlement-level observation plus accurate pawn **count** (single scan — does not allocate per-pawn observation dicts).
 static func observe_region(region_key: int) -> Dictionary:
 	var settlement_v: Variant = SettlementMemory.get_settlement_at_region(region_key)
 	if not (settlement_v is Dictionary):
@@ -135,8 +143,44 @@ static func observe_region(region_key: int) -> Dictionary:
 	var settlement: Dictionary = settlement_v as Dictionary
 	var obs: Dictionary = _build_settlement_observation(settlement, region_key)
 	obs["type"] = "region_observation"
-	obs["pawn_count"] = observe_pawns_in_region(region_key).size()
+	obs["api_version"] = API_VERSION
+	var regv: Variant = settlement.get("regions", PackedInt32Array())
+	obs["pawn_count"] = _count_pawns_in_regions(regv)
 	return obs
+
+
+## Cheap probe for throttled AI / overlays: identity + population + tick — **no** per-pawn payloads.
+static func observe_region_lite(region_key: int) -> Dictionary:
+	var settlement_v: Variant = SettlementMemory.get_settlement_at_region(region_key)
+	if not (settlement_v is Dictionary):
+		return {"error": "Settlement not found", "region_key": region_key}
+	var settlement: Dictionary = settlement_v as Dictionary
+	var center: int = int(settlement.get("center_region", region_key))
+	var regv: Variant = settlement.get("regions", PackedInt32Array())
+	return {
+		"type": "region_observation_lite",
+		"api_version": API_VERSION,
+		"region_key": region_key,
+		"center_region": center,
+		"state": str(settlement.get("state", "unknown")),
+		"intent": str(settlement.get("current_intent", "")),
+		"pawn_count": _count_pawns_in_regions(regv),
+		"tick": GameManager.tick_count,
+	}
+
+
+## Single-call ambient context: sim backlog + optional settlement lite for one region (for AI cadence hooks).
+static func observe_sim_ambient(region_key_for_settlement: int = -1) -> Dictionary:
+	var out: Dictionary = {
+		"type": "sim_ambient",
+		"api_version": API_VERSION,
+		"sim_diag": GameManager.sim_diag(),
+	}
+	if region_key_for_settlement >= 0:
+		var lite: Dictionary = observe_region_lite(region_key_for_settlement)
+		if not lite.has("error"):
+			out["region_lite"] = lite
+	return out
 
 
 ## Canonical focus snapshot used by Main + external tools.

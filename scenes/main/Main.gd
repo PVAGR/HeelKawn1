@@ -199,15 +199,16 @@ func _is_ultra_speed() -> bool:
 	return GameManager.game_speed >= 12.0
 
 func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
-	if GameManager.game_speed >= 100.0:
-		return maxi(ultra_ticks, ultra_ticks * 8)
-	if GameManager.game_speed >= 50.0:
+	var speed: float = GameManager.game_speed
+	if speed >= 100.0:
 		return maxi(ultra_ticks, ultra_ticks * 4)
-	if GameManager.game_speed >= 26.0:
+	if speed >= 50.0:
+		return maxi(ultra_ticks, ultra_ticks * 3)
+	if speed >= 26.0:
 		return maxi(ultra_ticks, ultra_ticks * 2)
 	if _is_ultra_speed():
 		return ultra_ticks
-	if GameManager.game_speed >= 6.0:
+	if speed >= 6.0:
 		return fast_ticks
 	return normal_ticks
 

@@ -493,6 +493,8 @@ func _refresh_stride_for_speed(speed: float) -> int:
 
 
 func _coarse_gate_for_speed(speed: float) -> int:
+	if speed >= 100.0:
+		return 45
 	if speed >= 50.0:
 		return 30
 	if speed >= 12.0:

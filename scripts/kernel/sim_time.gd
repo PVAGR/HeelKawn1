@@ -27,6 +27,17 @@ static func tick_within_sim_year(tick: int) -> int:
 	return int(tick % TICKS_PER_SIM_YEAR)
 
 
+## Visual days (day/night cycles) per full sim year — must divide evenly (30000 / 600 = 50).
+static func visual_days_per_sim_year() -> int:
+	return TICKS_PER_SIM_YEAR / TICKS_PER_VISUAL_DAY
+
+
+## 1-based index of the current visual day **within** the current sim year (1 … visual_days_per_sim_year()).
+static func visual_day_within_sim_year(tick: int) -> int:
+	var ytick: int = tick_within_sim_year(tick)
+	return int(ytick / TICKS_PER_VISUAL_DAY) + 1
+
+
 static func divergence_milestone_ticks() -> Array[int]:
 	## Debug summaries at key long-run checkpoints (includes pre-year stress window).
 	return [20000, 30000, 40000]

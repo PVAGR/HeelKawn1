@@ -2,15 +2,20 @@ class_name ColonyHUD
 extends CanvasLayer
 
 ## Always-on heads-up display rendered in screen space (CanvasLayer = doesn't
-## move with the camera). Refreshes every game tick so the numbers stay live
-## without paying for a per-frame UI update at high speeds.
+## move with the camera). Refreshes on deterministic tick cadence with
+## high-speed throttling, so numbers stay live without per-frame UI churn.
 ##
 ## Reads pawn list from PawnSpawner, stockpile from World, time + speed from
 ## GameManager, and job counts from JobManager (autoload).
 
 const REFRESH_EVERY_N_TICKS: int = 1
+const REFRESH_EVERY_N_TICKS_FAST: int = 2
+const REFRESH_EVERY_N_TICKS_ULTRA: int = 4
+const REFRESH_EVERY_N_TICKS_EXTREME: int = 6
+const REFRESH_EVERY_N_TICKS_MAX: int = 8
 const WILDLIFE_SAMPLE_EVERY_TICKS: int = 20
 const WILDLIFE_HISTORY_SIZE: int = 8
+const SHOW_REFRESH_DIAG: bool = true
 
 const PANEL_BG: Color = Color(0.05, 0.06, 0.08, 0.78)
 const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.70)
@@ -43,6 +48,9 @@ var _momentum_spark: String = "........"
 var _player_input_buffer: PlayerInputBuffer = null
 var _player_pawn: Pawn = null
 var _hud_dirty: bool = true
+var _last_refresh_stride: int = REFRESH_EVERY_N_TICKS
+var _last_coarse_gate: int = 10
+var _last_refresh_tick: int = 0
 
 
 func _ready() -> void:
@@ -105,17 +113,16 @@ func _on_tick(tick: int) -> void:
 	if tick % WILDLIFE_SAMPLE_EVERY_TICKS == 0:
 		_sample_wildlife(tick)
 		_hud_dirty = true
-	var refresh_stride: int = REFRESH_EVERY_N_TICKS
-	if GameManager.game_speed >= 26.0:
-		refresh_stride = 4
-	elif GameManager.game_speed >= 12.0:
-		refresh_stride = 2
-	var coarse: int = 10 if GameManager.game_speed < 12.0 else 20
+	var refresh_stride: int = _refresh_stride_for_speed(GameManager.game_speed)
+	var coarse: int = _coarse_gate_for_speed(GameManager.game_speed)
+	_last_refresh_stride = refresh_stride
+	_last_coarse_gate = coarse
 	if tick % coarse != 0 and not _hud_dirty:
 		return
 	if tick % refresh_stride == 0:
 		_refresh()
 		_hud_dirty = false
+		_last_refresh_tick = tick
 
 
 func _on_speed_changed(_s: float, _p: bool) -> void:
@@ -245,17 +252,18 @@ func hide_tile_history() -> void:
 
 func _time_line() -> String:
 	var tick: int = GameManager.tick_count
-	var day_len: int = DayNightCycle.TICKS_PER_DAY
-	var day: int = int(tick / float(day_len)) + 1
+	var day_len: int = SimTime.TICKS_PER_VISUAL_DAY
 	var phase: float = float(tick % day_len) / float(day_len)
 	var phase_name: String = _phase_name(phase)
 	var speed_str: String = "PAUSED" if GameManager.is_paused else "%dx" % int(GameManager.game_speed)
-	# In-game hour estimate: 24 in-game hours per visual day cycle.
+	# In-game hour estimate: 24 notional hours across one visual day cycle (see docs/TIME_SCALE.md).
 	var hour: int = int(phase * 24.0) % 24
 	var year_n: int = SimTime.sim_year_index(tick)
 	var y_tick: int = SimTime.tick_within_sim_year(tick)
-	return "[b]Year %d[/b] · [b]Day %d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](y.%d)[/color]" % [
-		year_n, day, hour, phase_name, speed_str, tick, y_tick,
+	var day_in_year: int = SimTime.visual_day_within_sim_year(tick)
+	var days_per_y: int = SimTime.visual_days_per_sim_year()
+	return "[b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](σ+%d)[/color]" % [
+		year_n, day_in_year, days_per_y, hour, phase_name, speed_str, tick, y_tick,
 	]
 
 
@@ -444,9 +452,16 @@ func _session_diag_line() -> String:
 	var q: float = float(d.get("queued_ticks_est", 0.0))
 	var acc_cap: int = int(d.get("max_accumulated_ticks", 16))
 	var tpf: int = int(d.get("max_ticks_per_frame", 8))
-	return (
-		"[color=#9e9e9e][Session][/color] %.0fx pend~%.1f/%dt acc=%.3fs | tf=%d ac=%d | wm_ev=%d jobs %do/%dc st=%d"
+	var tick_n: int = int(d.get("tick_count", 0))
+	var cal: String = "Y%d D%d/%d" % [
+		SimTime.sim_year_index(tick_n),
+		SimTime.visual_day_within_sim_year(tick_n),
+		SimTime.visual_days_per_sim_year(),
+	]
+	var base: String = (
+		"[color=#9e9e9e][Session][/color] %s | %.0fx pend~%.1f/%dt acc=%.3fs | tf=%d ac=%d | wm_ev=%d jobs %do/%dc st=%d"
 		% [
+			cal,
 			float(d.get("speed", 1.0)),
 			q,
 			acc_cap,
@@ -459,6 +474,30 @@ func _session_diag_line() -> String:
 			settlements_n,
 		]
 	)
+	if not SHOW_REFRESH_DIAG:
+		return base
+	var lag: int = max(0, tick_n - _last_refresh_tick)
+	return "%s | hud iv=%d coarse=%d lag=%dt" % [base, _last_refresh_stride, _last_coarse_gate, lag]
+
+
+func _refresh_stride_for_speed(speed: float) -> int:
+	if speed >= 100.0:
+		return REFRESH_EVERY_N_TICKS_MAX
+	if speed >= 50.0:
+		return REFRESH_EVERY_N_TICKS_EXTREME
+	if speed >= 26.0:
+		return REFRESH_EVERY_N_TICKS_ULTRA
+	if speed >= 12.0:
+		return REFRESH_EVERY_N_TICKS_FAST
+	return REFRESH_EVERY_N_TICKS
+
+
+func _coarse_gate_for_speed(speed: float) -> int:
+	if speed >= 50.0:
+		return 30
+	if speed >= 12.0:
+		return 20
+	return 10
 
 
 func _kill_line() -> String:

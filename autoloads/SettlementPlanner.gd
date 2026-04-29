@@ -227,7 +227,7 @@ func _intent_for_settlement(center_region: int) -> int:
 
 
 ## Deterministic, exclusive: worst survival context wins. Later Ages nudge away from [OPEN] without hard overrides.
-func _derive_culture_type_v1_for_age(
+static func _derive_culture_type_v1_for_age(
 		scar_max: int, reputation_min: int, age_index: int
 ) -> int:
 	var s_eff: int = mini(3, scar_max + int(age_index / 3))

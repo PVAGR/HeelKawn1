@@ -311,7 +311,19 @@ func _ready() -> void:
 		_toolbar.load_requested.connect(_colony_load)
 		_push_zone_filter_label_to_toolbar()
 	if OS.is_debug_build():
-		print("[Main] Scene ready. Tick interval: %.2fs" % GameManager.TICK_INTERVAL_SECONDS)
+		print("[Main] Scene ready. Tick interval: %.2fs (SimTime match: %s)" % [
+			GameManager.TICK_INTERVAL_SECONDS,
+			GameManager.TICK_INTERVAL_SECONDS == SimTime.TICK_INTERVAL_SECONDS,
+		])
+		print(
+				"[Main] Calendar: %d ticks/visual-day · %d ticks/sim-year · %d visual-days/year · kernel checkpoint tick %d"
+				% [
+					SimTime.TICKS_PER_VISUAL_DAY,
+					SimTime.TICKS_PER_SIM_YEAR,
+					SimTime.visual_days_per_sim_year(),
+					SimTime.KERNEL_DIAGNOSTIC_TICK,
+				]
+		)
 	_bootstrap_colony()
 	if _hud != null:
 		_hud.set_player_control_refs(_player_input, _player_pawn)

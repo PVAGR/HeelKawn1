@@ -7,7 +7,7 @@ signal game_tick(tick_count: int)
 ## Emitted whenever the speed or pause state changes. UI can listen to update icons.
 signal speed_changed(new_speed: float, is_paused: bool)
 
-## Real seconds per tick at 1x speed. Your brief: 0.1s real = 1 in-game hour.
+## Real seconds per tick at 1x. Must match [member SimTime.TICK_INTERVAL_SECONDS] (autoloads load before [class_name] resolution; keep numerically in sync).
 const TICK_INTERVAL_SECONDS: float = 0.1
 
 ## Allowed speed multipliers. Index into this with set_speed_index(). 12x is the

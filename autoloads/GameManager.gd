@@ -101,7 +101,17 @@ func _process(delta: float) -> void:
 
 
 func set_speed(new_speed: float) -> void:
-	game_speed = max(new_speed, 0.0001)
+	var clamped_speed: float = max(new_speed, 0.0001)
+	var nearest_idx: int = 0
+	var nearest_dist: float = 1.0e20
+	for i in range(SPEED_STEPS.size()):
+		var d: float = absf(SPEED_STEPS[i] - clamped_speed)
+		if d < nearest_dist:
+			nearest_dist = d
+			nearest_idx = i
+	# Snap all speed changes to explicit toolbar tiers so no hidden fractional or
+	# unintended values can leak into runtime.
+	game_speed = SPEED_STEPS[nearest_idx]
 	is_paused = false
 	speed_changed.emit(game_speed, is_paused)
 

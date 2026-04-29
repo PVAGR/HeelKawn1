@@ -2318,6 +2318,10 @@ func _on_speed_changed(speed: float, paused: bool) -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
+	# When the F10 creator menu is open, number keys are used for report labels.
+	# Ignore global gameplay hotkeys so menu interaction never changes sim speed.
+	if _creator_debug_menu != null and _creator_debug_menu.visible:
+		return
 	match event.keycode:
 		Key.KEY_QUOTELEFT:
 			_toggle_play_chrome()

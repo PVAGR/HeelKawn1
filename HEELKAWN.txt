@@ -31,6 +31,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-29  PlayerIntentQueue: dispatch_cursor + take_next_unprocessed (one intent per sim tick); Main wires CHRONICLE_PIN_ZONE + REQUEST_SETTLEMENT_FOCUS to observer routing; snapshot adds chronicler_pin_zone_id + sim_ticks_last_frame; GameManager.ticks_emitted_last_frame + sim_diag.
 2026-04-29  Canon shift: docs/HEELKAWN_STATE.md — emergence / seeded variety official; WorldRNG autoload + PawnSpawner uses world-seeded streams; World configures RNG on generate/load; SIM_MATRIX §5 aligned; WorldMeaning header softened.
 2026-04-29  ObservationAPI: performance contract + `API_VERSION`; `observe_region` pawn_count uses `_count_pawns_in_regions` (no full per-pawn dict alloc); added `observe_region_lite` + `observe_sim_ambient` for throttled AI/overlays; Main tick comment ties FocusInspector cadence to on-demand observation rule.
 2026-04-27  Portable character: `PawnData.to_portable_character_export` + F10 **33 · Portable character JSON**; `Main.get_player_pawn()`; matrix §11 + JSON `2026-04-27f` (MMO/PVA handoff schema `heelkawn_character_portable/v1`).

@@ -153,6 +153,9 @@ enum PlayerMode {
 var _player_mode: int = PlayerMode.SPECTATOR
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
+## Observer routing from [PlayerIntentQueue] (one dispatch step per sim tick).
+var _player_intent_pin_zone_id: String = ""
+var _player_intent_focus_center_region: int = -1
 var _avatar_panel: Node = null
 var _incarnation_picker: Node = null
 var _kernel_diagnostic: KernelDiagnostic = null
@@ -1565,6 +1568,38 @@ func request_spectator_return(note: String = "manual_return", payload: Dictionar
 	return ok
 
 
+func _reset_player_intent_observer_routing() -> void:
+	_player_intent_pin_zone_id = ""
+	_player_intent_focus_center_region = -1
+
+
+## Dispatches at most one queued intent per **simulation tick** (FIFO, cursor-based).
+func _process_player_intent_dispatch_tick() -> void:
+	var e: Dictionary = PlayerIntentQueue.take_next_unprocessed()
+	if e.is_empty():
+		return
+	var kind: int = int(e.get("kind", 0))
+	match kind:
+		PlayerIntentQueue.IntentKind.OBSERVER_NOTE:
+			pass
+		PlayerIntentQueue.IntentKind.REQUEST_INCARNATION_ENTRY, PlayerIntentQueue.IntentKind.REQUEST_SPECTATOR_RETURN:
+			pass
+		PlayerIntentQueue.IntentKind.CHRONICLE_PIN_ZONE:
+			var zid: String = str(e.get("zone_id", ""))
+			if not zid.is_empty():
+				_player_intent_pin_zone_id = zid
+		PlayerIntentQueue.IntentKind.REQUEST_SETTLEMENT_FOCUS:
+			var pl_var: Variant = e.get("payload", {})
+			var pl: Dictionary = pl_var as Dictionary if pl_var is Dictionary else {}
+			var cr: int = int(pl.get("center_region", pl.get("region", -1)))
+			if cr >= 0:
+				_player_intent_focus_center_region = cr
+		PlayerIntentQueue.IntentKind.DEBUG_TOOL:
+			pass
+		_:
+			pass
+
+
 func _run_heavy_refresh_once_per_tick(cb: Callable) -> void:
 	if GameManager.tick_count == _last_heavy_refresh_tick:
 		return
@@ -1788,6 +1823,7 @@ func _sync_pawn_inherited_cultural_reputation() -> void:
 func _on_game_tick(tick: int) -> void:
 	if _is_simulation_worker_mode() and GameManager != null and GameManager.is_tick_benchmark_enabled():
 		return
+	_process_player_intent_dispatch_tick()
 	if _player_input != null and _player_mode == PlayerMode.INCARNATED:
 		if not is_instance_valid(_player_pawn):
 			_ensure_player_pawn_assigned()
@@ -3534,6 +3570,7 @@ func _reroll_world() -> void:
 	MythMemory.clear()
 	SacredMemory.clear()
 	PlayerIntentQueue.clear()
+	_reset_player_intent_observer_routing()
 	FactionRegistry.clear()
 	ChronicleLog.clear()
 	RoadMemory.clear()
@@ -4405,6 +4442,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 		MythMemory.recompute(_world)
 		SacredMemory.sync_permanent_ruins_from_settlements()
 		PlayerIntentQueue.from_save_dict(s.get("player_intent_queue", {}))
+		_reset_player_intent_observer_routing()
 		FactionRegistry.from_save_dict(s.get("faction_registry", {}))
 		FactionRegistry.sync_from_settlements()
 		IntentMemory.recompute(_world)
@@ -5000,12 +5038,44 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"validation_settlement_truth_verify": bool(vh.get("settlement_truth_verify", false)),
 		"validation_specialization_log": bool(vh.get("specialization_log", false)),
 		"camera_revival_digest_plain": get_camera_revival_digest_plain(),
+		"chronicler_pin_zone_id": _player_intent_pin_zone_id,
+		"sim_ticks_last_frame": GameManager.ticks_emitted_last_frame if GameManager != null else 0,
 	}
 
 
 func _observer_focus_settlement() -> Dictionary:
 	var settlement_idx: int = -1
 	var settlement_data: Dictionary = {}
+	if _player_intent_focus_center_region >= 0:
+		var cr_focus: int = _player_intent_focus_center_region
+		_player_intent_focus_center_region = -1
+		for i in range(SettlementMemory.settlements.size()):
+			var stv_f: Variant = SettlementMemory.settlements[i]
+			if not (stv_f is Dictionary):
+				continue
+			var st_f: Dictionary = stv_f as Dictionary
+			if int(st_f.get("center_region", -1)) == cr_focus:
+				settlement_idx = i
+				settlement_data = st_f
+				break
+			var regs_f: Variant = st_f.get("regions", PackedInt32Array())
+			if regs_f is PackedInt32Array and (regs_f as PackedInt32Array).has(cr_focus):
+				settlement_idx = i
+				settlement_data = st_f
+				break
+		if settlement_idx >= 0:
+			var center_f: int = int(settlement_data.get("center_region", -1))
+			var governance_f: Dictionary = {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
+			var war_f: Dictionary = {"state": "peace", "target_settlement_id": -1, "votes": []}
+			if center_f >= 0:
+				governance_f = SettlementMemory.get_governance_profile_for_region(center_f)
+				war_f = SettlementMemory.get_war_profile_for_region(center_f)
+			return {
+				"settlement_idx": settlement_idx,
+				"settlement_data": settlement_data,
+				"governance": governance_f,
+				"war": war_f,
+			}
 	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
 		var prk: int = preload("res://autoloads/WorldMemory.gd")._region_key(_player_pawn.data.tile_pos.x, _player_pawn.data.tile_pos.y)
 		for i in range(SettlementMemory.settlements.size()):

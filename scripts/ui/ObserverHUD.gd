@@ -107,6 +107,9 @@ func _world_governance_block(s: Dictionary) -> String:
 		+ "[b]WORLD / GOVERNANCE[/b]\n"
 		+ "Speed: %s  Pause: %s\n" % [str(s.get("speed", "1x")), str(s.get("paused", "No"))]
 		+ "Player Mode: %s  Pawn: %s\n" % [str(s.get("player_mode", "SPECTATOR")), str(s.get("player_pawn_id", -1))]
+		+ "Chronicler pin (zone id): %s\n"
+		% [str(s.get("chronicler_pin_zone_id", "")) if str(s.get("chronicler_pin_zone_id", "")) != "" else "(none)"]
+		+ "Sim ticks last frame: %d\n" % int(s.get("sim_ticks_last_frame", 0))
 		+ "Last inspect: %s\n" % str(s.get("last_player_inspect", "None"))
 		+ _validation_harness_hud_line(s)
 		+ "[i]Logs: anchor continuity on center_region / hyst_key; work-focus = job-proxy, not stock scarcity.[/i]\n"

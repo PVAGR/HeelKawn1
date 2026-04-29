@@ -52,6 +52,8 @@ var _tick_benchmark_enabled: bool = false
 var global_stress: int = 0
 
 var _tick_accumulator: float = 0.0
+## How many [signal game_tick] emissions ran in the last _process frame (diagnostics).
+var ticks_emitted_last_frame: int = 0
 
 
 func verbose_logs() -> bool:
@@ -71,6 +73,7 @@ func sim_diag() -> Dictionary:
 		"max_accumulated_ticks": acc_cap,
 		"accumulator_sec": _tick_accumulator,
 		"queued_ticks_est": queued_ticks_est,
+		"ticks_emitted_last_frame": ticks_emitted_last_frame,
 	}
 
 
@@ -100,6 +103,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if is_paused:
+		ticks_emitted_last_frame = 0
 		return
 	var desired_add: float = delta * game_speed
 	var max_accumulator: float = TICK_INTERVAL_SECONDS * float(_max_accumulated_ticks_for_speed())
@@ -122,6 +126,7 @@ func _process(delta: float) -> void:
 		tick_count += 1
 		game_tick.emit(tick_count)
 		ticks_this_frame += 1
+	ticks_emitted_last_frame = ticks_this_frame
 
 
 func set_speed(new_speed: float) -> void:

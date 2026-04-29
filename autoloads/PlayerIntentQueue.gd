@@ -25,17 +25,21 @@ const MAX_QUEUE: int = 512
 ## Each entry: submit_tick, kind, zone_id, pawn_id, note, payload (Dictionary).
 var _queue: Array[Dictionary] = []
 var _submitted_total: int = 0
+## Advances as [method take_next_unprocessed] runs; entries remain in [member _queue] for history/save.
+var _dispatch_cursor: int = 0
 
 
 func clear() -> void:
 	_queue.clear()
 	_submitted_total = 0
+	_dispatch_cursor = 0
 
 
 func to_save_dict() -> Dictionary:
 	return {
 		"queue": _queue.duplicate(true),
 		"submitted_total": _submitted_total,
+		"dispatch_cursor": _dispatch_cursor,
 	}
 
 
@@ -49,6 +53,21 @@ func from_save_dict(d: Variant) -> void:
 			if item is Dictionary and _queue.size() < MAX_QUEUE:
 				_queue.append((item as Dictionary).duplicate(true))
 	_submitted_total = int((d as Dictionary).get("submitted_total", _queue.size()))
+	_dispatch_cursor = clampi(int((d as Dictionary).get("dispatch_cursor", 0)), 0, _queue.size())
+
+
+## Returns the next entry not yet passed to the sim-time dispatcher, then advances the cursor.
+## Queue entries are retained for [method snapshot_queue] / save.
+func take_next_unprocessed() -> Dictionary:
+	if _dispatch_cursor >= _queue.size():
+		return {}
+	var e: Dictionary = _queue[_dispatch_cursor].duplicate(true)
+	_dispatch_cursor += 1
+	return e
+
+
+func unprocessed_count() -> int:
+	return maxi(0, _queue.size() - _dispatch_cursor)
 
 
 ## Returns false if queue is full. On success, records a [WorldMemory] event.
@@ -115,7 +134,10 @@ func snapshot_queue() -> Array:
 func debug_summary_block() -> String:
 	var lines: PackedStringArray = PackedStringArray()
 	lines.append("PlayerIntentQueue SPEC v1")
-	lines.append("  queue_size=%d submitted_total=%d max=%d" % [_queue.size(), _submitted_total, MAX_QUEUE])
+	lines.append(
+			"  queue_size=%d unprocessed=%d submitted_total=%d max=%d"
+			% [_queue.size(), unprocessed_count(), _submitted_total, MAX_QUEUE]
+	)
 	lines.append("  IntentKind: OBSERVER_NOTE=1 CHRONICLE_PIN_ZONE=2 REQUEST_SETTLEMENT_FOCUS=3 DEBUG_TOOL=4")
 	var n: int = mini(12, _queue.size())
 	for i in range(n):

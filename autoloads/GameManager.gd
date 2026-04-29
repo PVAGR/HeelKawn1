@@ -23,6 +23,9 @@ const VERBOSE_SIM_LOGS: bool = false
 ## of ticks and causes visible stutter. Extra accumulated time stays buffered
 ## and is processed over subsequent frames.
 const MAX_TICKS_PER_FRAME: int = 6
+## At 1x we preserve "real-life cadence" feel: never run more than one
+## deterministic tick inside a single rendered frame.
+const MAX_TICKS_PER_FRAME_AT_1X: int = 1
 ## Prevent runaway catch-up after a hitch. We keep sim responsive by dropping
 ## excessive backlog instead of trying to replay seconds of queued ticks.
 const MAX_ACCUMULATED_TICKS: int = 16
@@ -51,11 +54,14 @@ func verbose_logs() -> bool:
 ## Lightweight read-only snapshot for HUD / tooling (tick backlog estimate in sim steps).
 func sim_diag() -> Dictionary:
 	var queued_ticks_est: float = _tick_accumulator / TICK_INTERVAL_SECONDS
+	var active_ticks_per_frame_cap: int = MAX_TICKS_PER_FRAME
+	if game_speed <= 1.0:
+		active_ticks_per_frame_cap = MAX_TICKS_PER_FRAME_AT_1X
 	return {
 		"tick_count": tick_count,
 		"speed": game_speed,
 		"paused": is_paused,
-		"max_ticks_per_frame": MAX_TICKS_PER_FRAME,
+		"max_ticks_per_frame": active_ticks_per_frame_cap,
 		"max_accumulated_ticks": MAX_ACCUMULATED_TICKS,
 		"accumulator_sec": _tick_accumulator,
 		"queued_ticks_est": queued_ticks_est,
@@ -83,8 +89,11 @@ func _process(delta: float) -> void:
 		elif _tick_accumulator + desired_add > max_accumulator:
 			desired_add = maxf(0.0, max_accumulator - _tick_accumulator)
 		_tick_accumulator += desired_add
+	var frame_tick_cap: int = MAX_TICKS_PER_FRAME
+	if game_speed <= 1.0:
+		frame_tick_cap = MAX_TICKS_PER_FRAME_AT_1X
 	var ticks_this_frame: int = 0
-	while _tick_accumulator >= TICK_INTERVAL_SECONDS and ticks_this_frame < MAX_TICKS_PER_FRAME:
+	while _tick_accumulator >= TICK_INTERVAL_SECONDS and ticks_this_frame < frame_tick_cap:
 		_tick_accumulator -= TICK_INTERVAL_SECONDS
 		tick_count += 1
 		game_tick.emit(tick_count)

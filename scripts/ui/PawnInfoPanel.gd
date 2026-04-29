@@ -776,8 +776,9 @@ func _build_ui_signature() -> String:
 	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(d.tile_pos.x, d.tile_pos.y)
 	var top_peer: Dictionary = d.top_social_rapport_peer()
 	var world_context_bucket: int = int(GameManager.tick_count / max(1, WORLD_CONTEXT_REFRESH_TICKS))
+	# Must match argument count exactly (23 placeholders) — mismatch spams errors every UI poll.
 	return (
-		"%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d"
+		"%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d"
 	) % [
 		d.id,
 		d.age,

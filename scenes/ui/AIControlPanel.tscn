@@ -65,13 +65,13 @@ theme_override_font_sizes/font_size = 14
 [node name="TickRateContainer" type="HBoxContainer" parent="VBoxContainer"]
 layout_mode = 2
 
-[node name="TickRateLabel" type="Label" parent="TickRateContainer"]
+[node name="TickRateLabel" type="Label" parent="VBoxContainer/TickRateContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Tick Rate: 20.0x"
 theme_override_font_sizes/font_size = 12
 
-[node name="TickRateSlider" type="HSlider" parent="TickRateContainer"]
+[node name="TickRateSlider" type="HSlider" parent="VBoxContainer/TickRateContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 5.0
@@ -82,13 +82,13 @@ value = 20.0
 [node name="AIPotentialContainer" type="HBoxContainer" parent="VBoxContainer"]
 layout_mode = 2
 
-[node name="AIPotentialLabel" type="Label" parent="AIPotentialContainer"]
+[node name="AIPotentialLabel" type="Label" parent="VBoxContainer/AIPotentialContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "AI Potential: 5/10"
 theme_override_font_sizes/font_size = 12
 
-[node name="AIPotentialSlider" type="HSlider" parent="AIPotentialContainer"]
+[node name="AIPotentialSlider" type="HSlider" parent="VBoxContainer/AIPotentialContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 min_value = 1.0

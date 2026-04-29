@@ -880,56 +880,15 @@ func _report_error_issues() -> void:
 
 
 func _check_file_syntax_errors(file_path: String) -> Array[String]:
+	## Only verify readability — never use regex/paren heuristics here. They false-positive on
+	## format strings, multiline `func`, lambdas, and comments; Godot's parser is authoritative.
 	var errors: Array[String] = []
-	
 	if not FileAccess.file_exists(file_path):
 		errors.append("File not found")
 		return errors
-	
 	var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
 	if file == null:
 		errors.append("Cannot access file")
 		return errors
-	
-	var content: String = file.get_as_text()
 	file.close()
-	
-	var lines: PackedStringArray = content.split("\n")
-	var bracket_stack: Array[String] = []
-	var paren_stack: Array[String] = []
-	
-	for line_num in range(lines.size()):
-		var line: String = lines[line_num]
-		var stripped: String = line.strip_edges()
-		
-		# Check for function declarations
-		if stripped.begins_with("func ") and not stripped.ends_with(":"):
-			errors.append("Line %d: Function declaration missing colon" % (line_num + 1))
-		
-		# Check bracket balance
-		for i in range(line.length()):
-			var char: String = line[i]
-			match char:
-				"{":
-					bracket_stack.append("{")
-				"}":
-					if bracket_stack.size() > 0 and bracket_stack.back() == "{":
-						bracket_stack.pop_back()
-					else:
-						errors.append("Line %d: Unmatched closing brace" % (line_num + 1))
-				"(":
-					paren_stack.append("(")
-				")":
-					if paren_stack.size() > 0 and paren_stack.back() == "(":
-						paren_stack.pop_back()
-					else:
-						errors.append("Line %d: Unmatched closing parenthesis" % (line_num + 1))
-	
-	# Check for unclosed brackets at end of file
-	if bracket_stack.size() > 0:
-		errors.append("File has %d unclosed braces" % bracket_stack.size())
-	
-	if paren_stack.size() > 0:
-		errors.append("File has %d unclosed parentheses" % paren_stack.size())
-	
 	return errors

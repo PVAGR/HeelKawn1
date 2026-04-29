@@ -2,25 +2,32 @@ class_name ColonyHUD
 extends CanvasLayer
 
 ## Always-on heads-up display rendered in screen space (CanvasLayer = doesn't
-## move with the camera). Refreshes every game tick so the numbers stay live
-## without paying for a per-frame UI update at high speeds.
+## move with the camera). Refreshes on deterministic tick cadence with
+## high-speed throttling, so numbers stay live without per-frame UI churn.
 ##
 ## Reads pawn list from PawnSpawner, stockpile from World, time + speed from
 ## GameManager, and job counts from JobManager (autoload).
 
-const REFRESH_EVERY_N_TICKS: int = 2
+const REFRESH_EVERY_N_TICKS: int = 1
+const REFRESH_EVERY_N_TICKS_FAST: int = 2
+const REFRESH_EVERY_N_TICKS_ULTRA: int = 4
+const REFRESH_EVERY_N_TICKS_EXTREME: int = 6
+const REFRESH_EVERY_N_TICKS_MAX: int = 8
 const WILDLIFE_SAMPLE_EVERY_TICKS: int = 20
 const WILDLIFE_HISTORY_SIZE: int = 8
+const SHOW_REFRESH_DIAG: bool = true
 
 const PANEL_BG: Color = Color(0.05, 0.06, 0.08, 0.78)
 const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.70)
 
-const FONT_SIZE_BODY: int = 12
+# Tuned to be unobtrusive: thin top-left strip, easy to read, doesn't
+# eat the world.
+const FONT_SIZE_BODY: int = 11
 const FONT_SIZE_HOTKEYS: int = 9
 const PANEL_PAD_X: int = 6
 const PANEL_PAD_Y: int = 4
 
-const HOTKEY_HINTS: String = "` map-only · G follow · = full HUD · SPACE pause · 1-7 speed · WASD move · E interact · K sprite · F5/F8 · F9 observer · F10 · F6 focus · M labor · Esc · R reroll (debug)"
+const HOTKEY_HINTS: String = "SPACE pause · 1-7 speed · F5 save · F8 load · M labor stance · R reroll · T pawns · J jobs · I stockpile · B beds · W walls · O doors · Z zone · F filter · Esc cancel"
 
 @onready var _panel: PanelContainer = $Panel
 @onready var _label: RichTextLabel = $Panel/Margin/VBox/Body
@@ -37,21 +44,13 @@ var _wildlife_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
 var _wildlife_prev_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
 var _wildlife_sample_tick: int = 0
 var _wildlife_history: Array[int] = []
-var _wildlife_min_total: int = 0
-var _wildlife_max_total: int = 0
 var _momentum_spark: String = "........"
 var _player_input_buffer: PlayerInputBuffer = null
 var _player_pawn: Pawn = null
-var _selected_pawn: Pawn = null  # Stage 1: Currently selected pawn for inspection
 var _hud_dirty: bool = true
-## False = compact HUD (default). True = full detail (`=` toggles).
-var hud_verbose: bool = false
-
-
-func toggle_hud_verbose() -> void:
-	hud_verbose = not hud_verbose
-	_apply_panel_style()
-	_refresh()
+var _last_refresh_stride: int = REFRESH_EVERY_N_TICKS
+var _last_coarse_gate: int = 10
+var _last_refresh_tick: int = 0
 
 
 func _ready() -> void:
@@ -111,34 +110,19 @@ func set_designation_mode(label: String) -> void:
 # ==================== refresh hooks ====================
 
 func _on_tick(tick: int) -> void:
-	# DISABLED wildlife sampling for performance
-	# if tick % WILDLIFE_SAMPLE_EVERY_TICKS == 0:
-	# 	_sample_wildlife(tick)
-	# 	_hud_dirty = true
-	
-	# Aggressively increased refresh stride to reduce HUD update frequency
-	var refresh_stride: int = 120  # Refresh every 120 ticks (2 seconds at 1x)
-	var coarse: int = 240  # Skip even more at high speeds
-	if GameManager.game_speed >= 1024.0:
-		refresh_stride = 240
-		coarse = 480
-	elif GameManager.game_speed >= 256.0:
-		refresh_stride = 180
-		coarse = 360
-	elif GameManager.game_speed >= 64.0:
-		refresh_stride = 120
-		coarse = 240
-	elif GameManager.game_speed >= 16.0:
-		refresh_stride = 90
-		coarse = 180
-	elif GameManager.game_speed >= 4.0:
-		refresh_stride = 60
-		coarse = 120
+	if tick % WILDLIFE_SAMPLE_EVERY_TICKS == 0:
+		_sample_wildlife(tick)
+		_hud_dirty = true
+	var refresh_stride: int = _refresh_stride_for_speed(GameManager.game_speed)
+	var coarse: int = _coarse_gate_for_speed(GameManager.game_speed)
+	_last_refresh_stride = refresh_stride
+	_last_coarse_gate = coarse
 	if tick % coarse != 0 and not _hud_dirty:
 		return
 	if tick % refresh_stride == 0:
 		_refresh()
 		_hud_dirty = false
+		_last_refresh_tick = tick
 
 
 func _on_speed_changed(_s: float, _p: bool) -> void:
@@ -161,9 +145,7 @@ func _on_colony_demand(_f: float, _h: float, _m: float, _ha: float) -> void:
 
 func _apply_panel_style() -> void:
 	var style := StyleBoxFlat.new()
-	var bg: Color = PANEL_BG
-	bg.a = 0.72 if hud_verbose else 0.36
-	style.bg_color = bg
+	style.bg_color = PANEL_BG
 	style.border_color = PANEL_BORDER
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(3)
@@ -190,31 +172,16 @@ func _refresh() -> void:
 	lines.append(_time_line())
 	lines.append(_colony_state_line())
 	lines.append(_pawn_line())
+	lines.append(_player_status_line())
+	lines.append(_politics_line())
+	lines.append(_war_status_line())
+	lines.append(_skill_line())
+	lines.append(_kill_line())
+	lines.append(_export_status_line())
 	lines.append(_stockpile_line())
 	lines.append(_jobs_line())
-	# Stage 1: Add pawn inspector when a pawn is selected
-	if _selected_pawn != null:
-		lines.append(_pawn_inspector_line())
-	# Stage 9: World observer disabled due to performance issues
-	# if hud_verbose:
-	# 	lines.append(_world_observer_line())
 	lines.append(_wildlife_line())
-	if hud_verbose:
-		lines.append(_player_status_line())
-		lines.append(_politics_line())
-		lines.append(_war_status_line())
-		lines.append(_skill_line())
-		lines.append(_kill_line())
-		lines.append(_export_status_line())
-		lines.append(_settlement_revival_digest_line())
-		lines.append(_knowledge_system_line())
-		lines.append(_authority_system_line())
-		lines.append(_collapse_system_line())
-		lines.append(_persistence_system_line())
-		lines.append(_world_meaning_line())
-		lines.append(_neural_network_line())
-		lines.append(_session_diag_line())
-		lines.append(_playtest_social_birth_hint_line())
+	lines.append(_session_diag_line())
 	_label.text = "\n".join(lines)
 
 
@@ -283,144 +250,21 @@ func hide_tile_history() -> void:
 		_history_panel.hide()
 
 
-## Stage 1: Set the currently selected pawn for inspection
-func set_selected_pawn(pawn: Pawn) -> void:
-	_selected_pawn = pawn
-	_hud_dirty = true
-	_refresh()
-
-
-## Stage 1: Pawn inspector line - shows detailed stats for selected pawn
-func _pawn_inspector_line() -> String:
-	if _selected_pawn == null or not is_instance_valid(_selected_pawn):
-		return ""
-	
-	var pd: PawnData = _selected_pawn.data
-	if pd == null:
-		return ""
-	
-	# Build detailed pawn info
-	var lines: Array = []
-	lines.append("[color=#aaddff]=== Pawn Inspector: %s ===[/color]" % pd.display_name)
-	lines.append("[color=#cccccc]Level:[/color] [b]%d[/b]  [color=#cccccc]Age:[/color] [b]%d[/b]  [color=#cccccc]Profession:[/color] [b]%s[/b]" % [
-		pd.level, pd.age, PawnData.Profession.keys()[pd.current_profession]
-	])
-	
-	# Needs
-	lines.append("[color=#cccccc]Needs:[/color] Hunger [b]%.1f[/b]  Rest [b]%.1f[/b]  Mood [b]%.1f[/b]  Health [b]%.1f[/b]" % [
-		pd.hunger, pd.rest, pd.mood, pd.health
-	])
-	
-	# Stage 1 survival stats
-	lines.append("[color=#cccccc]Survival:[/color] Stamina [b]%.1f[/b]  Temp [b]%.1f°C[/b]  Pain [b]%.1f[/b]" % [
-		pd.stamina, pd.body_temperature, pd.pain
-	])
-	
-	# Skills
-	var skill_info: Array = []
-	for skill_key in pd.skills:
-		var skill_level: int = pd.get_skill_level(PawnData.Skill.get(skill_key))
-		if skill_level > 0:
-			skill_info.append("%s:%d" % [skill_key, skill_level])
-	if skill_info.size() > 0:
-		lines.append("[color=#cccccc]Skills:[/color] [b]%s[/b]" % "  ".join(skill_info))
-	
-	# Job proficiency
-	var prof_info: Array = []
-	for job_type in pd.job_proficiency:
-		var prof: float = pd.job_proficiency[job_type]
-		if prof > 0:
-			prof_info.append("%s:%.0f" % [job_type, prof])
-	if prof_info.size() > 0:
-		lines.append("[color=#cccccc]Proficiency:[/color] [b]%s[/b]" % "  ".join(prof_info))
-	
-	# Location memory
-	var memory_count: int = pd.location_memory.size()
-	lines.append("[color=#cccccc]Memory:[/color] [b]%d[/b] locations  [color=#cccccc]Perception:[/color] [b]%.0fpx[/b]" % [
-		memory_count, pd.perception_radius
-	])
-	
-	return "\n".join(lines)
-
-
-## Stage 9: World observer line - shows world-level statistics
-## Cached to avoid lag from iterating all pawns every frame
-var _world_observer_cache: Dictionary = {}
-var _world_observer_cache_tick: int = -1
-
-func _world_observer_line() -> String:
-	var current_tick: int = GameManager.tick_count
-	
-	# Update cache every 60 ticks (1 second at 1x speed) to avoid lag
-	if current_tick - _world_observer_cache_tick > 60 or _world_observer_cache_tick == -1:
-		var pawn_count: int = 0
-		var avg_level: float = 0.0
-		var total_clan_members: int = 0
-		var total_settlement_members: int = 0
-		
-		for pawn in get_tree().get_nodes_in_group("pawns"):
-			if not is_instance_valid(pawn):
-				continue
-			pawn_count += 1
-			avg_level += pawn.data.level
-			if pawn.data.clan_id != -1:
-				total_clan_members += 1
-			if pawn.data.settlement_id != -1:
-				total_settlement_members += 1
-		
-		if pawn_count > 0:
-			avg_level /= float(pawn_count)
-		
-		_world_observer_cache = {
-			"pawn_count": pawn_count,
-			"avg_level": avg_level,
-			"total_clan_members": total_clan_members,
-			"total_settlement_members": total_settlement_members,
-			"tick": current_tick,
-		}
-		_world_observer_cache_tick = current_tick
-	
-	var lines: Array = []
-	lines.append("[color=#aaddff]=== World Observer ===[/color]")
-	
-	lines.append("[color=#cccccc]Pawns:[/color] [b]%d[/b]  [color=#cccccc]Avg Level:[/color] [b]%.1f[/b]" % [
-		_world_observer_cache["pawn_count"], _world_observer_cache["avg_level"]
-	])
-	lines.append("[color=#cccccc]Clan Members:[/color] [b]%d[/b]  [color=#cccccc]Settlement Members:[/color] [b]%d[/b]" % [
-		_world_observer_cache["total_clan_members"], _world_observer_cache["total_settlement_members"]
-	])
-	
-	# World time
-	var tick: int = GameManager.tick_count
-	var days_passed: float = float(tick) / float(GameManager.TICKS_PER_DAY)
-	lines.append("[color=#cccccc]World Time:[/color] [b]%.1f[/b] days  [color=#cccccc]Tick:[/color] [b]%d[/b]" % [days_passed, tick])
-	
-	return "\n".join(lines)
-
-
 func _time_line() -> String:
 	var tick: int = GameManager.tick_count
-	var day_len: int = DayNightCycle.TICKS_PER_DAY
+	var day_len: int = SimTime.TICKS_PER_VISUAL_DAY
 	var phase: float = float(tick % day_len) / float(day_len)
 	var phase_name: String = _phase_name(phase)
 	var speed_str: String = "PAUSED" if GameManager.is_paused else "%dx" % int(GameManager.game_speed)
-	
-	# Stage 1: Use new time scale display
-	var sim_time: Dictionary = GameManager.get_simulation_time()
-	var sim_time_str: String = GameManager.get_simulation_time_string()
-	
-	# In-game hour estimate: 24 in-game hours per visual day cycle.
+	# In-game hour estimate: 24 notional hours across one visual day cycle (see docs/TIME_SCALE.md).
 	var hour: int = int(phase * 24.0) % 24
 	var year_n: int = SimTime.sim_year_index(tick)
 	var y_tick: int = SimTime.tick_within_sim_year(tick)
-	var day_in_year: int = SimTime.calendar_day_within_sim_year(tick)
+	var day_in_year: int = SimTime.visual_day_within_sim_year(tick)
 	var days_per_y: int = SimTime.visual_days_per_sim_year()
-	var abs_day: int = SimTime.calendar_absolute_visual_day(tick)
-	
-	return (
-		"[b]%s[/b] · [b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#888888]absD%d[/color]   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](y.%d)[/color]"
-		% [sim_time_str, year_n, day_in_year, days_per_y, hour, phase_name, abs_day, speed_str, tick, y_tick]
-	)
+	return "[b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](σ+%d)[/color]" % [
+		year_n, day_in_year, days_per_y, hour, phase_name, speed_str, tick, y_tick,
+	]
 
 
 ## Labor stance (M) + key demand metrics from `ColonySimServices`.
@@ -469,9 +313,53 @@ func _prune_freed_pawns_in_spawner() -> void:
 func _pawn_line() -> String:
 	if _spawner == null:
 		return "[color=#cccccc]Pawns:[/color] (none)"
-	# Simplified pawn line to avoid iterating through all pawns every refresh
-	var n: int = _spawner.pawns.size()
-	return "[color=#cccccc]Pawns:[/color] [b]%d[/b]" % n
+	var sum_h: float = 0.0
+	var sum_r: float = 0.0
+	var sum_m: float = 0.0
+	var hungry: int = 0
+	var tired: int = 0
+	var sad: int = 0
+	var sleeping: int = 0
+	var children_total: int = 0
+	var n: int = 0
+	var lead: Pawn = null
+	for p in _spawner.pawns:
+		if not is_instance_valid(p) or p.data == null:
+			continue
+		if lead == null:
+			lead = p
+		n += 1
+		var d: PawnData = p.data
+		sum_h += d.hunger
+		sum_r += d.rest
+		sum_m += d.mood
+		children_total += int(d.children_count)
+		if d.hunger <= Pawn.THRESHOLD_WARN: hungry += 1
+		if d.rest   <= Pawn.THRESHOLD_WARN: tired  += 1
+		if d.mood   <= Pawn.THRESHOLD_WARN: sad    += 1
+		if p.get_state() == Pawn.State.SLEEPING: sleeping += 1
+	if n <= 0:
+		return "[color=#cccccc]Pawns:[/color] (none)"
+	var avg_h: float = sum_h / float(n)
+	var avg_r: float = sum_r / float(n)
+	var avg_m: float = sum_m / float(n)
+	var affinity_line: String = ""
+	if lead != null and lead.data != null:
+		var top_aff: String = lead.data.highest_affinity_skill()
+		var top_xp: int = lead.data.affinity_xp_for(top_aff)
+		affinity_line = "   Pawn: [b]%s[/b] | Aff: [b]%s[/b] | XP: [b]%d[/b]" % [
+			lead.data.display_name, top_aff.capitalize(), top_xp
+		]
+	return "[color=#cccccc]Pawns:[/color] [b]%d[/b] (children %d)   H %s  R %s  M %s   %s%s%s%s%s" % [
+		n,
+		children_total,
+		_color_value(avg_h), _color_value(avg_r), _color_value(avg_m),
+		_alert_chip("hungry",  hungry,   "#e57373"),
+		_alert_chip("tired",   tired,    "#ffd54f"),
+		_alert_chip("sad",     sad,      "#90caf9"),
+		_alert_chip("asleep",  sleeping, "#b39ddb"),
+		affinity_line,
+	]
 
 
 func _stockpile_line() -> String:
@@ -520,7 +408,7 @@ func _jobs_line() -> String:
 
 
 func _player_status_line() -> String:
-	var main_node: Node2D = get_tree().get_root().get_node_or_null("Main") as Node2D
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
 	if main_node == null:
 		return "[color=#cccccc]PLAYER PAWN:[/color] --  |  QUEUE: [b]0[/b]  |  STATE: [b]offline[/b]"
 	var pawn_id: int = main_node.get_player_pawn_id()
@@ -543,7 +431,7 @@ func _skill_line() -> String:
 
 
 func _export_status_line() -> String:
-	var main_node: Node2D = get_tree().get_root().get_node_or_null("Main") as Node2D
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
 	var milestone: int = SimTime.KERNEL_DIAGNOSTIC_TICK
 	if main_node == null:
 		return "📜 Export / kernel checkpoint: tick %d | Status: Waiting" % milestone
@@ -554,14 +442,6 @@ func _export_status_line() -> String:
 
 
 ## One-line snapshot for AI/debug sessions (HUD copy-paste; reduces need for console spam).
-func _playtest_social_birth_hint_line() -> String:
-	return (
-		"[color=#a5d6a7][Playtest][/color] Social: co-presence +40t builds rapport; "
-		+ "births need rapport 72+, relaxed hunger/rest, bed access (or nomad pairing if world bed_count=0, wider range). "
-		+ "F10 → \"31 · Playtest bundle\" for one paste. Prefer 1x–12x while learning."
-	)
-
-
 func _session_diag_line() -> String:
 	var d: Dictionary = GameManager.sim_diag()
 	var wc: int = WorldMemory.event_count()
@@ -572,9 +452,16 @@ func _session_diag_line() -> String:
 	var q: float = float(d.get("queued_ticks_est", 0.0))
 	var acc_cap: int = int(d.get("max_accumulated_ticks", 16))
 	var tpf: int = int(d.get("max_ticks_per_frame", 8))
-	return (
-		"[color=#9e9e9e][Session][/color] %.0fx pend~%.1f/%dt acc=%.3fs | tf=%d ac=%d | wm_ev=%d jobs %do/%dc st=%d"
+	var tick_n: int = int(d.get("tick_count", 0))
+	var cal: String = "Y%d D%d/%d" % [
+		SimTime.sim_year_index(tick_n),
+		SimTime.visual_day_within_sim_year(tick_n),
+		SimTime.visual_days_per_sim_year(),
+	]
+	var base: String = (
+		"[color=#9e9e9e][Session][/color] %s | %.0fx pend~%.1f/%dt acc=%.3fs | tf=%d ac=%d | wm_ev=%d jobs %do/%dc st=%d"
 		% [
+			cal,
 			float(d.get("speed", 1.0)),
 			q,
 			acc_cap,
@@ -587,17 +474,43 @@ func _session_diag_line() -> String:
 			settlements_n,
 		]
 	)
+	if not SHOW_REFRESH_DIAG:
+		return base
+	var lag: int = max(0, tick_n - _last_refresh_tick)
+	return "%s | hud iv=%d coarse=%d lag=%dt" % [base, _last_refresh_stride, _last_coarse_gate, lag]
+
+
+func _refresh_stride_for_speed(speed: float) -> int:
+	if speed >= 100.0:
+		return REFRESH_EVERY_N_TICKS_MAX
+	if speed >= 50.0:
+		return REFRESH_EVERY_N_TICKS_EXTREME
+	if speed >= 26.0:
+		return REFRESH_EVERY_N_TICKS_ULTRA
+	if speed >= 12.0:
+		return REFRESH_EVERY_N_TICKS_FAST
+	return REFRESH_EVERY_N_TICKS
+
+
+func _coarse_gate_for_speed(speed: float) -> int:
+	if speed >= 100.0:
+		return 45
+	if speed >= 50.0:
+		return 30
+	if speed >= 12.0:
+		return 20
+	return 10
 
 
 func _kill_line() -> String:
-	var main_node: Node2D = get_tree().get_root().get_node_or_null("Main") as Node2D
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
 	if main_node == null:
 		return "💀 Kills: 0"
 	return "💀 Kills: %d" % int(main_node.get_kill_count())
 
 
 func _politics_line() -> String:
-	var main_node: Node2D = get_tree().get_root().get_node_or_null("Main") as Node2D
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
 	if main_node == null:
 		return "🏛 Settlement State: Anarchy | Ruler: None | Player Status: None"
 	var gp: Dictionary = main_node.get_player_governance_profile()
@@ -618,7 +531,7 @@ func _politics_line() -> String:
 
 
 func _war_status_line() -> String:
-	var main_node: Node2D = get_tree().get_root().get_node_or_null("Main") as Node2D
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
 	if main_node == null:
 		return "⚔ WAR STATUS: Peace | RANK: Grunt"
 	var wp: Dictionary = main_node.get_player_war_profile()
@@ -674,13 +587,6 @@ func _sample_wildlife(current_tick: int) -> void:
 			_momentum_spark += "→"
 	while _momentum_spark.length() < WILDLIFE_HISTORY_SIZE - 1:
 		_momentum_spark = "→" + _momentum_spark
-	if not _wildlife_history.is_empty():
-		_wildlife_min_total = int(_wildlife_history[0])
-		_wildlife_max_total = int(_wildlife_history[0])
-		for v in _wildlife_history:
-			var vi: int = int(v)
-			_wildlife_min_total = mini(_wildlife_min_total, vi)
-			_wildlife_max_total = maxi(_wildlife_max_total, vi)
 
 
 func _wildlife_line() -> String:
@@ -689,91 +595,7 @@ func _wildlife_line() -> String:
 	var r: int = int(_wildlife_snapshot.get("rabbit", 0))
 	var d: int = int(_wildlife_snapshot.get("deer", 0))
 	var t: int = int(_wildlife_snapshot.get("total", 0))
-	var pr: int = int(_wildlife_prev_snapshot.get("rabbit", r))
-	var pd: int = int(_wildlife_prev_snapshot.get("deer", d))
-	var dr: int = 0
-	var dd: int = 0
-	var dts: int = 0
-	if _wildlife_history.size() >= 2:
-		dr = r - pr
-		dd = d - pd
-		dts = t - int(_wildlife_prev_snapshot.get("total", t))
-	return "🦌 Wildlife: R:%d (%+d) D:%d (%+d) T:%d (%+d) [%s] Tmin:%d Tmax:%d" % [
-		r, dr, d, dd, t, dts, _momentum_spark, _wildlife_min_total, _wildlife_max_total,
-	]
-
-
-func _settlement_revival_digest_line() -> String:
-	var main_node: Node2D = get_tree().get_root().get_node_or_null("Main") as Node2D
-	if main_node == null or not main_node.has_method("get_camera_revival_digest_bbcode"):
-		return "[color=#9e9e9e]🏚 Cam settlement: (no Main)[/color]"
-	return main_node.get_camera_revival_digest_bbcode()
-
-
-func _knowledge_system_line() -> String:
-	if KnowledgeSystem == null:
-		return "📚 Knowledge: (system unavailable)"
-	var carriers: int = KnowledgeSystem.get_total_carrier_count()
-	var knowledge_count: int = KnowledgeSystem.get_total_knowledge_count()
-	return "📚 Knowledge: [b]%d[/b] carriers · [b]%d[/b] knowledge types tracked" % [carriers, knowledge_count]
-
-
-func _authority_system_line() -> String:
-	if AuthoritySystem == null:
-		return "👑 Authority: (system unavailable)"
-	var conflicts: int = AuthoritySystem.get_active_conflict_count()
-	var treaties: int = AuthoritySystem.get_active_treaty_count()
-	return "👑 Authority: [b]%d[/b] active conflicts · [b]%d[/b] peace treaties" % [conflicts, treaties]
-
-
-func _collapse_system_line() -> String:
-	if CollapseSystem == null:
-		return "🏚 Collapse: (system unavailable)"
-	var settlements: int = CollapseSystem.get_tracked_settlement_count()
-	var collapsed: int = CollapseSystem.get_collapsed_settlement_count()
-	return "🏚 Collapse: [b]%d[/b] settlements tracked · [b]%d[/b] collapsed" % [settlements, collapsed]
-
-
-func _persistence_system_line() -> String:
-	if PersistenceSystem == null:
-		return "🗺 Persistence: (system unavailable)"
-	var entities: int = PersistenceSystem.get_entity_count()
-	var ruins: int = PersistenceSystem.get_entity_count_by_type(PersistenceSystem.EntityType.RUIN)
-	var graves: int = PersistenceSystem.get_entity_count_by_type(PersistenceSystem.EntityType.GRAVE_FIELD)
-	return "🗺 Persistence: [b]%d[/b] entities · [b]%d[/b] ruins · [b]%d[/b] graves" % [entities, ruins, graves]
-
-
-func _world_meaning_line() -> String:
-	if WorldMeaning == null:
-		return "📖 Meaning: (system unavailable)"
-	
-	var regions = WorldMeaning.get_tracked_region_count()
-	var settlements = WorldMeaning.get_tracked_settlement_count()
-	return "📖 Meaning: [b]%d[/b] regions · [b]%d[/b] settlements" % [regions, settlements]
-
-
-func _neural_network_line() -> String:
-	if WorldAI == null:
-		return "🧠 Neural: (system unavailable)"
-	
-	var world_neurons = WorldAI.neural_world_matrix.get("world_state_neurons", {})
-	if world_neurons.is_empty():
-		return "🧠 Neural: (no data)"
-	
-	var collapse_risk = world_neurons.get("collapse_risk", {}).get("value", 0.0)
-	var trust_level = world_neurons.get("trust_level", {}).get("value", 1.0)
-	var patterns = WorldAI.emergent_patterns.size()
-	
-	# Color code based on collapse risk
-	var risk_color = "[color=#00ff00]"  # green
-	if collapse_risk > 0.3:
-		risk_color = "[color=#ffff00]"  # yellow
-	if collapse_risk > 0.6:
-		risk_color = "[color=#ff9900]"  # orange
-	if collapse_risk > 0.8:
-		risk_color = "[color=#ff0000]"  # red
-	
-	return "🧠 Neural: %sCollapse: %.2f[/color] · Trust: %.2f · Patterns: %d" % [risk_color, collapse_risk, trust_level, patterns]
+	return "🦌 Wildlife: R:%d D:%d T:%d [%s]" % [r, d, t, _momentum_spark]
 
 
 # ==================== formatting helpers ====================

@@ -24,16 +24,16 @@ func _ready() -> void:
 
 
 func _on_tick(tick: int) -> void:
-	# Throttle day/night cycle updates to every 3 ticks to reduce lag
-	if tick % 3 != 0:
-		return
 	_apply_for_tick(tick)
 	var day: int = int(tick / float(TICKS_PER_DAY))
 	if day != _last_day:
 		_last_day = day
 		var display_day: int = day + 1
 		if _should_log_day_rollover(display_day):
-			print("[DayNight] Day %d begins (tick %d)" % [display_day, tick])
+			var yr: int = SimTime.sim_year_index(tick)
+			var din: int = SimTime.visual_day_within_sim_year(tick)
+			var dmx: int = SimTime.visual_days_per_sim_year()
+			print("[DayNight] Year %d · Day %d/%d begins (tick %d)" % [yr, din, dmx, tick])
 
 
 func _should_log_day_rollover(display_day: int) -> bool:

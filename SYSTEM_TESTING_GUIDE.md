@@ -1,6 +1,9 @@
 # HeelKawn System Testing Guide
 ## Complete Verification and Troubleshooting Instructions
 
+Observer automation for speed sweeps, timeline capture, and canon guards:
+`docs/OBSERVER_TOOLKIT.md`
+
 ### 🎯 **QUICK START - 5 Minute Verification**
 
 1. **Launch the Game**

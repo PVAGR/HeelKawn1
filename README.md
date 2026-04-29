@@ -17,3 +17,5 @@ For canonical project state, read docs/HEELKAWN_STATE.md.
 For cross-LLM continuity, use docs/LLM_ONBOARDING.md and docs/SESSION_LOG.md.
 For tiered canon, lore vs kernel scope, and planning priorities: docs/CURSOR_MASTER_PLANNING_SPEC.md.
 For the standalone spectator/incarnation build order and feature master plan: docs/HEELKAWN_STANDALONE_MASTER_PLAN.md.
+For observer automation (speed sweeps, timeline, canon guards): docs/OBSERVER_TOOLKIT.md.
+For observer-driven cleanup decisions: docs/OBSERVER_CLEANUP_LOG.md.

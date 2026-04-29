@@ -182,6 +182,9 @@ func _refresh() -> void:
 		lines.append(_pawn_line_simple())
 		lines.append(_jobs_line_simple())
 		lines.append(_wildlife_line())
+		var intent_simple: String = _player_intent_hud_line()
+		if intent_simple != "":
+			lines.append(intent_simple)
 		lines.append(_narrative_rail_line())
 	else:
 		lines.append(_time_line())
@@ -197,6 +200,9 @@ func _refresh() -> void:
 		lines.append(_stockpile_line())
 		lines.append(_jobs_line())
 		lines.append(_wildlife_line())
+		var intent_ln2: String = _player_intent_hud_line()
+		if intent_ln2 != "":
+			lines.append(intent_ln2)
 		lines.append(_narrative_rail_line())
 		lines.append(_session_diag_line())
 	var next_text: String = "\n".join(lines)
@@ -756,13 +762,49 @@ func _sample_wildlife(current_tick: int) -> void:
 		_momentum_spark = "→" + _momentum_spark
 
 
+func _wildlife_total_span() -> String:
+	## Rolling min/max of total headcount over [member _wildlife_history] (validation / trend readout).
+	if _wildlife_history.size() < 2:
+		return ""
+	var lo: int = 1_000_000_000
+	var hi: int = 0
+	for v in _wildlife_history:
+		var n: int = int(v)
+		lo = mini(lo, n)
+		hi = maxi(hi, n)
+	if lo > hi:
+		return ""
+	return "T %d…%d" % [lo, hi]
+
+
 func _wildlife_line() -> String:
 	if _wildlife_sample_tick == 0:
 		return "🦌 Wildlife: Scanning ecosystem..."
 	var r: int = int(_wildlife_snapshot.get("rabbit", 0))
 	var d: int = int(_wildlife_snapshot.get("deer", 0))
 	var t: int = int(_wildlife_snapshot.get("total", 0))
-	return "🦌 Wildlife: R:%d D:%d T:%d [%s]" % [r, d, t, _momentum_spark]
+	var span: String = _wildlife_total_span()
+	var tail: String = "[%s]" % _momentum_spark
+	if not span.is_empty():
+		tail += "  %s" % span
+	return "🦌 Wildlife: R:%d D:%d T:%d %s" % [r, d, t, tail]
+
+
+## Shown when PlayerIntentQueue has backlog or Main holds a chronicler pin.
+func _player_intent_hud_line() -> String:
+	var u: int = PlayerIntentQueue.unprocessed_count()
+	var pin: String = ""
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node != null and main_node.has_method("get_chronicler_pin_zone_id"):
+		pin = str(main_node.call("get_chronicler_pin_zone_id"))
+	if u <= 0 and pin.is_empty():
+		return ""
+	var parts: PackedStringArray = PackedStringArray()
+	if u > 0:
+		parts.append("queue %d" % u)
+	if not pin.is_empty():
+		parts.append("pin zone %s" % pin)
+	return "📌 Chronicler: %s" % " · ".join(parts)
 
 
 ## Compact high-signal narrative rail (DF/CK/RimWorld-style summary strip).

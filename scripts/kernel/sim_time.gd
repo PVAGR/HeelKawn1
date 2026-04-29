@@ -38,6 +38,21 @@ static func visual_day_within_sim_year(tick: int) -> int:
 	return int(ytick / TICKS_PER_VISUAL_DAY) + 1
 
 
+## Compatibility alias used by debug/reporting surfaces.
+static func calendar_day_within_sim_year(tick: int) -> int:
+	return visual_day_within_sim_year(tick)
+
+
+## 1-based visual-day count from simulation start.
+static func calendar_absolute_visual_day(tick: int) -> int:
+	return int(tick / TICKS_PER_VISUAL_DAY) + 1
+
+
+## Shared deterministic long-run checkpoint ticks.
+static func long_run_checkpoints() -> Array[int]:
+	return divergence_milestone_ticks()
+
+
 static func divergence_milestone_ticks() -> Array[int]:
 	## Debug summaries at key long-run checkpoints (includes pre-year stress window).
 	return [20000, 30000, 40000]

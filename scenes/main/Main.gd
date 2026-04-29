@@ -2362,7 +2362,7 @@ func get_player_war_profile() -> Dictionary:
 func get_player_military_rank() -> String:
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return "grunt"
-	return String(_player_pawn.data.military_rank)
+	return str(_player_pawn.data.military_rank)
 
 
 func get_wildlife_snapshot_for_diagnostic() -> Dictionary:
@@ -3618,7 +3618,7 @@ func _focus_lines_for_pawn(focus: Dictionary) -> PackedStringArray:
 	var job_label: String = p.get_current_job_label() if p.has_method("get_current_job_label") else "None"
 	var local_mode: String = "Retreat" if d.has_method("get_health_percentage") and float(d.get_health_percentage()) < 0.5 else "Ordered"
 	out.append("Name: %s" % d.display_name)
-	out.append("Profession: %s | Military Rank: %s" % [d.profession_name(), String(d.military_rank).capitalize()])
+	out.append("Profession: %s | Military Rank: %s" % [d.profession_name(), str(d.military_rank).capitalize()])
 	out.append("Governance Role: %s" % role)
 	out.append("Health: %d%% | Hunger %.0f | Rest %.0f | Mood %.0f" % [health_pct, d.hunger, d.rest, d.mood])
 	out.append("Action: %s | Job: %s" % [state_label, job_label])
@@ -3761,7 +3761,7 @@ func _pawn_governance_role(d: PawnData, gov: Dictionary) -> String:
 	var council_ids: Variant = gov.get("council_ids", PackedInt32Array())
 	if council_ids is PackedInt32Array and (council_ids as PackedInt32Array).has(pid):
 		return "Council"
-	if String(d.military_rank).to_lower() == "battlemaster":
+	if str(d.military_rank).to_lower() == "battlemaster":
 		return "BattleMaster"
 	return "Citizen"
 
@@ -4097,7 +4097,7 @@ func _find_battlemaster_name(settlement_idx: int, settlement_data: Dictionary) -
 	for p in _pawn_spawner.pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
-		if String(p.data.military_rank).to_lower() != "battlemaster":
+		if str(p.data.military_rank).to_lower() != "battlemaster":
 			continue
 		var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 		if region_set.has(rk):

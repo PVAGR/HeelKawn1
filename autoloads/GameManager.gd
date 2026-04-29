@@ -20,7 +20,7 @@ const VERBOSE_SIM_LOGS: bool = false
 ## Hard cap to prevent "catch-up storms" where one slow frame triggers hundreds
 ## of ticks and causes visible stutter. Extra accumulated time stays buffered
 ## and is processed over subsequent frames.
-const MAX_TICKS_PER_FRAME: int = 8
+const MAX_TICKS_PER_FRAME: int = 6
 ## Prevent runaway catch-up after a hitch. We keep sim responsive by dropping
 ## excessive backlog instead of trying to replay seconds of queued ticks.
 const MAX_ACCUMULATED_TICKS: int = 16

@@ -199,6 +199,12 @@ func _is_ultra_speed() -> bool:
 	return GameManager.game_speed >= 12.0
 
 func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
+	if GameManager.game_speed >= 100.0:
+		return maxi(ultra_ticks, ultra_ticks * 8)
+	if GameManager.game_speed >= 50.0:
+		return maxi(ultra_ticks, ultra_ticks * 4)
+	if GameManager.game_speed >= 26.0:
+		return maxi(ultra_ticks, ultra_ticks * 2)
 	if _is_ultra_speed():
 		return ultra_ticks
 	if GameManager.game_speed >= 6.0:
@@ -1416,8 +1422,12 @@ func _on_game_tick(tick: int) -> void:
 			and int(tick) % AnimalSpawner.POPULATION_CHECK_TICKS == 0
 	):
 		_animal_spawner.update_population_dynamics(_world)
-	_process_regrowth(tick)
-	_update_ambient_target()
+	var regrowth_interval: int = _high_speed_interval(1, 2, 4)
+	if tick % regrowth_interval == 0:
+		_process_regrowth(tick)
+	var ambient_interval: int = _high_speed_interval(1, 2, 4)
+	if tick % ambient_interval == 0:
+		_update_ambient_target()
 	# Post dynamic hunt jobs less aggressively than harvest loops.
 	var hunt_post_interval: int = _high_speed_interval(20, 30, 45)
 	if (
@@ -1467,7 +1477,9 @@ func _on_game_tick(tick: int) -> void:
 	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % focus_iv == 0:
 		_focus_inspector.apply_snapshot(_build_focus_snapshot(tick))
 	if is_instance_valid(_world):
-		call_deferred("_flush_road_memory_dirty_tiles")
+		var road_flush_interval: int = _high_speed_interval(1, 2, 4)
+		if tick % road_flush_interval == 0:
+			call_deferred("_flush_road_memory_dirty_tiles")
 
 
 func _flush_road_memory_dirty_tiles() -> void:

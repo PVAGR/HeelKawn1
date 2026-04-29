@@ -23,9 +23,19 @@ const VERBOSE_SIM_LOGS: bool = false
 ## of ticks and causes visible stutter. Extra accumulated time stays buffered
 ## and is processed over subsequent frames.
 const MAX_TICKS_PER_FRAME: int = 6
+## Higher tiers let extreme speeds (50x–100x) drain backlog faster per frame.
+const MAX_TICKS_PER_FRAME_FAST: int = 12
+const MAX_TICKS_PER_FRAME_ULTRA: int = 24
+const MAX_TICKS_PER_FRAME_EXTREME: int = 32
+## At 1x we preserve "real-life cadence" feel: never run more than one
+## deterministic tick inside a single rendered frame.
+const MAX_TICKS_PER_FRAME_AT_1X: int = 1
 ## Prevent runaway catch-up after a hitch. We keep sim responsive by dropping
 ## excessive backlog instead of trying to replay seconds of queued ticks.
 const MAX_ACCUMULATED_TICKS: int = 16
+## At high game speeds, allow a larger time buffer so fast-forward does not
+## stall waiting on the accumulator cap.
+const MAX_ACCUMULATED_TICKS_FAST: int = 128
 ## HeelKawn feel target prefers ordered causality over hitch masking.
 ## When false, we never discard queued sim time; ticks are processed in order.
 const DROP_BACKLOG_WHEN_OVER_CAP: bool = false
@@ -51,15 +61,37 @@ func verbose_logs() -> bool:
 ## Lightweight read-only snapshot for HUD / tooling (tick backlog estimate in sim steps).
 func sim_diag() -> Dictionary:
 	var queued_ticks_est: float = _tick_accumulator / TICK_INTERVAL_SECONDS
+	var active_ticks_per_frame_cap: int = _max_ticks_per_frame_for_speed()
+	var acc_cap: int = _max_accumulated_ticks_for_speed()
 	return {
 		"tick_count": tick_count,
 		"speed": game_speed,
 		"paused": is_paused,
-		"max_ticks_per_frame": MAX_TICKS_PER_FRAME,
-		"max_accumulated_ticks": MAX_ACCUMULATED_TICKS,
+		"max_ticks_per_frame": active_ticks_per_frame_cap,
+		"max_accumulated_ticks": acc_cap,
 		"accumulator_sec": _tick_accumulator,
 		"queued_ticks_est": queued_ticks_est,
 	}
+
+
+func _max_ticks_per_frame_for_speed() -> int:
+	if game_speed <= 1.0:
+		return MAX_TICKS_PER_FRAME_AT_1X
+	if game_speed >= 100.0:
+		return MAX_TICKS_PER_FRAME_EXTREME
+	if game_speed >= 50.0:
+		return MAX_TICKS_PER_FRAME_ULTRA
+	if game_speed >= 26.0:
+		return MAX_TICKS_PER_FRAME_FAST
+	return MAX_TICKS_PER_FRAME
+
+
+func _max_accumulated_ticks_for_speed() -> int:
+	if game_speed >= 50.0:
+		return MAX_ACCUMULATED_TICKS_FAST
+	if game_speed >= 26.0:
+		return max(MAX_ACCUMULATED_TICKS, 48)
+	return MAX_ACCUMULATED_TICKS
 
 
 func _ready() -> void:
@@ -70,7 +102,7 @@ func _process(delta: float) -> void:
 	if is_paused:
 		return
 	var desired_add: float = delta * game_speed
-	var max_accumulator: float = TICK_INTERVAL_SECONDS * float(MAX_ACCUMULATED_TICKS)
+	var max_accumulator: float = TICK_INTERVAL_SECONDS * float(_max_accumulated_ticks_for_speed())
 	if DROP_BACKLOG_WHEN_OVER_CAP:
 		_tick_accumulator += desired_add
 		if _tick_accumulator > max_accumulator:
@@ -83,8 +115,9 @@ func _process(delta: float) -> void:
 		elif _tick_accumulator + desired_add > max_accumulator:
 			desired_add = maxf(0.0, max_accumulator - _tick_accumulator)
 		_tick_accumulator += desired_add
+	var frame_tick_cap: int = _max_ticks_per_frame_for_speed()
 	var ticks_this_frame: int = 0
-	while _tick_accumulator >= TICK_INTERVAL_SECONDS and ticks_this_frame < MAX_TICKS_PER_FRAME:
+	while _tick_accumulator >= TICK_INTERVAL_SECONDS and ticks_this_frame < frame_tick_cap:
 		_tick_accumulator -= TICK_INTERVAL_SECONDS
 		tick_count += 1
 		game_tick.emit(tick_count)
@@ -92,7 +125,17 @@ func _process(delta: float) -> void:
 
 
 func set_speed(new_speed: float) -> void:
-	game_speed = max(new_speed, 0.0001)
+	var clamped_speed: float = max(new_speed, 0.0001)
+	var nearest_idx: int = 0
+	var nearest_dist: float = 1.0e20
+	for i in range(SPEED_STEPS.size()):
+		var d: float = absf(SPEED_STEPS[i] - clamped_speed)
+		if d < nearest_dist:
+			nearest_dist = d
+			nearest_idx = i
+	# Snap all speed changes to explicit toolbar tiers so no hidden fractional or
+	# unintended values can leak into runtime.
+	game_speed = SPEED_STEPS[nearest_idx]
 	is_paused = false
 	speed_changed.emit(game_speed, is_paused)
 

@@ -6,8 +6,8 @@ extends CanvasLayer
 ## from [PawnData] colors; coach lines are deterministic from likings + skills.
 ##
 ## Built programmatically (no .tscn) to mirror the BuildToolbar style and so
-## tweaks live in one place. Refreshes once per game tick instead of every
-## frame to keep the cost trivial even with lots of UI labels.
+## tweaks live in one place. Polls on a lightweight wall-clock interval and
+## repaints only when backend state signatures change.
 
 const PANEL_BG:     Color = Color(0.05, 0.06, 0.08, 0.90)
 const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.65)
@@ -22,6 +22,13 @@ const FONT_SMALL: int = 10
 const PANEL_WIDTH:    float = 268.0
 const RIGHT_INSET:    float = 8.0
 const TOP_INSET:      float = 8.0
+## UI refresh is state-driven (signature diff), polled on wall-clock cadence.
+## This keeps presentation dynamic without hard-binding repaint cadence to ticks.
+const UI_POLL_INTERVAL_SEC: float = 0.35
+## Settlement/governance identity is allowed to refresh on a coarse tick bucket
+## instead of every UI poll. This keeps observer mode smooth while preserving
+## living-world updates in the sheet.
+const WORLD_CONTEXT_REFRESH_TICKS: int = 30
 const PORTRAIT_COLS:  int = 6
 const PORTRAIT_ROWS:  int = 8
 
@@ -82,14 +89,17 @@ var _crisis_level_label: Label = null
 var _liking_label: Label = null
 var _coach_label: Label = null
 var _social_label: Label = null
+var _identity_label: Label = null
 var _action_skills_label: Label = null
 var _portrait_cells: Array[ColorRect] = []
+var _poll_accum_sec: float = 0.0
+var _last_ui_signature: String = ""
 
 
 func _ready() -> void:
 	layer = 100
 	_build_ui()
-	GameManager.game_tick.connect(_on_game_tick)
+	set_process(true)
 	get_viewport().size_changed.connect(_reposition)
 	_set_visible(false)
 
@@ -111,11 +121,14 @@ func bind_pawn(p: Pawn) -> void:
 	_pawn = p
 	if _pawn == null:
 		_set_visible(false)
+		_last_ui_signature = ""
 		return
 	if _overlay_suppressed:
 		_set_visible(false)
 	else:
 		_set_visible(true)
+	_poll_accum_sec = UI_POLL_INTERVAL_SEC
+	_last_ui_signature = ""
 	_refresh()
 
 
@@ -236,6 +249,11 @@ func _build_ui() -> void:
 	_social_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_social_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_root_vbox.add_child(_social_label)
+
+	_root_vbox.add_child(_make_section_header("HeelKawn identity"))
+	_identity_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_identity_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_root_vbox.add_child(_identity_label)
 
 	_root_vbox.add_child(_make_section_header("Needs"))
 	for entry in NEED_BARS:
@@ -454,7 +472,7 @@ func _set_visible(v: bool) -> void:
 
 # ==================== refresh ====================
 
-func _on_game_tick(tick: int) -> void:
+func _process(delta: float) -> void:
 	if _pawn == null:
 		return
 	# If the pawn was removed (e.g. world reroll wiped it), drop the binding
@@ -462,20 +480,16 @@ func _on_game_tick(tick: int) -> void:
 	if not is_instance_valid(_pawn):
 		_pawn = null
 		_set_visible(false)
+		_last_ui_signature = ""
 		return
-	var stride: int = 1
-	if GameManager.game_speed >= 1024.0:
-		stride = 32
-	elif GameManager.game_speed >= 256.0:
-		stride = 16
-	elif GameManager.game_speed >= 64.0:
-		stride = 8
-	elif GameManager.game_speed >= 16.0:
-		stride = 4
-	elif GameManager.game_speed >= 4.0:
-		stride = 2
-	if tick % stride != 0:
+	_poll_accum_sec += delta
+	if _poll_accum_sec < UI_POLL_INTERVAL_SEC:
 		return
+	_poll_accum_sec = 0.0
+	var sig: String = _build_ui_signature()
+	if sig == _last_ui_signature:
+		return
+	_last_ui_signature = sig
 	_refresh()
 
 
@@ -510,6 +524,8 @@ func _refresh() -> void:
 		var pid: int = int(top_peer.get("peer_id", -1))
 		var peer_disp: String = _peer_display_for_social(pid)
 		_social_label.text = d.social_status_line(peer_disp)
+	if _identity_label != null:
+		_identity_label.text = _build_identity_strip(d)
 	if _action_skills_label != null:
 		_action_skills_label.text = (
 				"Action xp  move %d  farm %d  build %d  gather %d  combat %d"
@@ -718,6 +734,75 @@ func _lineage_block(d: PawnData) -> String:
 	if not inh.is_empty():
 		lines.append(inh)
 	return "\n".join(lines)
+
+
+func _build_identity_strip(d: PawnData) -> String:
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(d.tile_pos.x, d.tile_pos.y)
+	var meaning_label: String = str(WorldMeaning.get_region_meaning_label(rk)).replace("_", " ")
+	var rep: int = int(CulturalMemory.get_region_reputation(rk))
+	var rep_word: String = "neutral"
+	if rep <= -3:
+		rep_word = "dreaded"
+	elif rep <= -2:
+		rep_word = "feared"
+	elif rep == -1:
+		rep_word = "scarred"
+	elif rep >= 1:
+		rep_word = "respected"
+	var profile: Dictionary = SettlementMemory.get_settlement_profile(rk)
+	var st_state: String = str(profile.get("state", "wild")).replace("_", " ")
+	var culture_name: String = str(profile.get("culture_name", "cautious")).replace("_", " ")
+	var rev_score: int = int(profile.get("revival_score", 0))
+	var center: int = int(profile.get("center_region", -1))
+	var st_any: Variant = SettlementMemory.get_settlement_at_region(rk)
+	var intent: String = "none"
+	if st_any is Dictionary:
+		intent = str((st_any as Dictionary).get("current_intent", "none")).to_lower()
+	var war: Dictionary = SettlementMemory.get_war_profile_for_region(rk)
+	var war_state: String = str(war.get("state", "peace")).replace("_", " ")
+	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(rk)
+	var gov_type: String = str(gov.get("type", "anarchy")).replace("_", " ")
+	return (
+		"Region #%d · meaning: %s · reputation: %s (%d)\n"
+		+ "Settlement: %s · culture: %s · intent: %s · revival %d\n"
+		+ "Order: %s · governance: %s · center: %d"
+	) % [rk, meaning_label, rep_word, rep, st_state, culture_name, intent, rev_score, war_state, gov_type, center]
+
+
+func _build_ui_signature() -> String:
+	if _pawn == null or not is_instance_valid(_pawn) or _pawn.data == null:
+		return ""
+	var d: PawnData = _pawn.data
+	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(d.tile_pos.x, d.tile_pos.y)
+	var top_peer: Dictionary = d.top_social_rapport_peer()
+	var world_context_bucket: int = int(GameManager.tick_count / max(1, WORLD_CONTEXT_REFRESH_TICKS))
+	return (
+		"%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d"
+	) % [
+		d.id,
+		d.age,
+		d.tile_pos.x,
+		d.tile_pos.y,
+		d.display_name,
+		_pawn.describe_state(),
+		int(round(d.hunger)),
+		int(round(d.rest)),
+		int(round(d.mood)),
+		int(round(d.health)),
+		int(d.current_profession),
+		int(d.profession_progress_xp()),
+		str(d.carrying),
+		str(d.carrying_qty),
+		rk,
+		world_context_bucket,
+		int(top_peer.get("peer_id", -1)),
+		int(top_peer.get("rapport", 0)),
+		int(d.skills.get("combat", 0)),
+		int(d.skills.get("gathering", 0)),
+		int(d.skills.get("building", 0)),
+		int(d.skills.get("farming", 0)),
+		int(d.skills.get("movement", 0)),
+	]
 
 
 static func _body_type_label(body_type: int) -> String:

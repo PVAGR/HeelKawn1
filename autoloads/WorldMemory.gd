@@ -6,7 +6,8 @@ extends Node
 const SCHEMA: int = 1
 ## Text/history export line format; bump when column order or provenance rules change.
 const HISTORY_EXPORT_FORMAT: String = "1.0.0"
-const MAX_EVENTS: int = 5000
+## Keep a long chronology by default; older entries rotate out only after this cap.
+const MAX_EVENTS: int = 50000
 
 enum Kind {
 	PAWN_DEATH = 0,
@@ -18,6 +19,12 @@ enum Kind {
 
 var _events: Array[Dictionary] = []
 var _dirty: bool = false
+## event_type -> first tick observed in this session/save timeline.
+var _first_event_tick_by_type: Dictionary = {}
+## event_type -> total retained events (O(1) counters for large timelines).
+var _event_type_counts: Dictionary = {}
+## Monotonic event id (stable cursor for paging/query surfaces).
+var _next_event_id: int = 1
 
 # === Neural Network Matrix Connections ===
 
@@ -126,6 +133,9 @@ func get_resource_at_tile(tile_pos: Vector2i) -> Dictionary:
 
 func clear() -> void:
 	_events.clear()
+	_first_event_tick_by_type.clear()
+	_event_type_counts.clear()
+	_next_event_id = 1
 	_dirty = false
 
 
@@ -145,17 +155,130 @@ static func _region_key(tx: int, ty: int) -> int:
 func _append(e: Dictionary) -> void:
 	_dirty = true
 	if _events.size() >= MAX_EVENTS:
+		var dropped: Dictionary = _events[0]
 		_events.remove_at(0)
+		_on_event_removed_from_indexes(dropped)
 	_events.append(e)
+	_on_event_added_to_indexes(e)
+
+
+func _on_event_added_to_indexes(evt: Dictionary) -> void:
+	var typ: String = _canonical_event_type(evt)
+	_event_type_counts[typ] = int(_event_type_counts.get(typ, 0)) + 1
+	var tick: int = int(evt.get("t", 0))
+	if not _first_event_tick_by_type.has(typ):
+		_first_event_tick_by_type[typ] = tick
+
+
+func _on_event_removed_from_indexes(evt: Dictionary) -> void:
+	var typ: String = _canonical_event_type(evt)
+	var next_count: int = maxi(0, int(_event_type_counts.get(typ, 1)) - 1)
+	if next_count <= 0:
+		_event_type_counts.erase(typ)
+		_first_event_tick_by_type.erase(typ)
+		return
+	_event_type_counts[typ] = next_count
+	if not _first_event_tick_by_type.has(typ):
+		return
+	var dropped_tick: int = int(evt.get("t", 0))
+	if int(_first_event_tick_by_type.get(typ, dropped_tick)) != dropped_tick:
+		return
+	_recompute_first_tick_for_type(typ)
+
+
+func _recompute_first_tick_for_type(typ: String) -> void:
+	var best: int = -1
+	for evt in _events:
+		if _canonical_event_type(evt) != typ:
+			continue
+		var tick: int = int(evt.get("t", 0))
+		if best < 0 or tick < best:
+			best = tick
+	if best < 0:
+		_first_event_tick_by_type.erase(typ)
+	else:
+		_first_event_tick_by_type[typ] = best
 
 
 ## Generic deterministic event appender for non-core typed events (e.g. player input).
 func record_event(e: Dictionary) -> void:
+	var payload: Dictionary = _normalize_event_payload(e)
+	_append(payload)
+
+
+func _normalize_event_payload(e: Dictionary) -> Dictionary:
 	var payload: Dictionary = e.duplicate(true)
+	payload["eid"] = _next_event_id
+	_next_event_id += 1
 	payload["s"] = SCHEMA
 	if not payload.has("t"):
 		payload["t"] = GameManager.tick_count
-	_append(payload)
+	var typ: String = _canonical_event_type(payload)
+	payload["type"] = typ
+	var sev: int = _severity_for_type(typ)
+	payload["severity"] = sev
+	var rr: int = _region_from_event_payload(payload)
+	if rr >= 0:
+		payload["r"] = rr
+	var first_tick: int = int(payload.get("t", 0))
+	if not _first_event_tick_by_type.has(typ):
+		_first_event_tick_by_type[typ] = first_tick
+		payload["first_of_type"] = true
+	return payload
+
+
+func _canonical_event_type(payload: Dictionary) -> String:
+	var typ: String = str(payload.get("type", "")).strip_edges()
+	if not typ.is_empty():
+		return typ
+	var k: int = int(payload.get("k", -1))
+	match k:
+		int(Kind.PAWN_DEATH):
+			return "pawn_death"
+		int(Kind.ANIMAL_DEATH):
+			return "animal_death"
+		int(Kind.ENEMY_DEATH):
+			return "enemy_death"
+		int(Kind.SOCIAL_FRAGMENT):
+			return "social_fragment"
+		int(Kind.SOCIAL_SCHISM):
+			return "social_schism"
+	return "event"
+
+
+func _severity_for_type(typ: String) -> int:
+	match typ:
+		"pawn_death", "knowledge_loss", "social_schism":
+			return 3
+		"enemy_death", "war_proposed", "war_battle_spawned", "governance_change", "birth", "pawn_birth":
+			return 2
+		"social_bond_milestone", "social_meeting", "structure_built", "job_completed", "knowledge_discovery", "knowledge_rediscovery", "teaching_success", "settlement_intent_shift":
+			return 1
+		_:
+			return 0
+
+
+func _region_from_event_payload(payload: Dictionary) -> int:
+	if payload.has("r"):
+		return int(payload.get("r", -1))
+	if payload.has("region"):
+		return int(payload.get("region", -1))
+	if payload.has("x") and payload.has("y"):
+		return _region_key(int(payload.get("x", -1)), int(payload.get("y", -1)))
+	var tile_v: Variant = payload.get("tile", null)
+	if tile_v is Dictionary:
+		var td: Dictionary = tile_v as Dictionary
+		if td.has("x") and td.has("y"):
+			return _region_key(int(td.get("x", -1)), int(td.get("y", -1)))
+	var pos_v: Variant = payload.get("pos", null)
+	if pos_v is Dictionary:
+		var pd: Dictionary = pos_v as Dictionary
+		if pd.has("x") and pd.has("y"):
+			return _region_key(int(pd.get("x", -1)), int(pd.get("y", -1)))
+	elif pos_v is Vector2i:
+		var p: Vector2i = pos_v as Vector2i
+		return _region_key(p.x, p.y)
+	return -1
 
 
 ## Record after `data` is still valid; use primitive fields only.
@@ -263,10 +386,30 @@ func from_save_dict(d: Variant) -> void:
 	if d == null or not (d is Dictionary):
 		return
 	var ev: Variant = (d as Dictionary).get("events", [])
+	var max_eid: int = 0
 	if ev is Array:
 		for e in ev:
 			if e is Dictionary:
-				_events.append((e as Dictionary).duplicate(true))
+				var copy: Dictionary = (e as Dictionary).duplicate(true)
+				if not copy.has("eid"):
+					copy["eid"] = _next_event_id
+					_next_event_id += 1
+				max_eid = maxi(max_eid, int(copy.get("eid", 0)))
+				_events.append(copy)
+	if max_eid > 0:
+		_next_event_id = max_eid + 1
+	_rebuild_first_event_index()
+
+
+func _rebuild_first_event_index() -> void:
+	_first_event_tick_by_type.clear()
+	_event_type_counts.clear()
+	for evt in _events:
+		var typ: String = _canonical_event_type(evt)
+		var tick: int = int(evt.get("t", 0))
+		_event_type_counts[typ] = int(_event_type_counts.get(typ, 0)) + 1
+		if not _first_event_tick_by_type.has(typ):
+			_first_event_tick_by_type[typ] = tick
 
 
 func event_count() -> int:
@@ -536,3 +679,117 @@ func get_events_for_tile(target_pos: Vector2i) -> Array[Dictionary]:
 		return int(a.get("t", 0)) < int(b.get("t", 0))
 	)
 	return results
+
+
+func get_first_event_tick(event_type: String) -> int:
+	var key: String = event_type.strip_edges()
+	if key.is_empty():
+		return -1
+	return int(_first_event_tick_by_type.get(key, -1))
+
+
+func get_event_type_counts() -> Dictionary:
+	return _event_type_counts.duplicate(true)
+
+
+## Recent events scoped to a settlement center region (optionally includes all packed settlement regions).
+func get_recent_events_for_settlement(center_region: int, max_items: int = 64, include_settlement_regions: bool = true) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if center_region < 0 or max_items <= 0:
+		return out
+	var wanted: Dictionary = {center_region: true}
+	if include_settlement_regions:
+		for s_any in SettlementMemory.settlements:
+			if s_any is not Dictionary:
+				continue
+			var st: Dictionary = s_any as Dictionary
+			if int(st.get("center_region", -1)) != center_region:
+				continue
+			var reg_v: Variant = st.get("regions", PackedInt32Array())
+			if reg_v is PackedInt32Array:
+				for rk in reg_v as PackedInt32Array:
+					wanted[int(rk)] = true
+			break
+	for i in range(_events.size() - 1, -1, -1):
+		if out.size() >= max_items:
+			break
+		var evt: Dictionary = _events[i]
+		var rk: int = _region_from_event_payload(evt)
+		if rk < 0:
+			continue
+		if not wanted.has(rk):
+			continue
+		out.append(evt.duplicate(true))
+	out.reverse()
+	return out
+
+
+## Cursor-like page from newest to oldest. Pass before_eid to continue pagination.
+func get_events_page_newest(max_items: int = 100, before_eid: int = -1) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if max_items <= 0:
+		return out
+	for i in range(_events.size() - 1, -1, -1):
+		if out.size() >= max_items:
+			break
+		var evt: Dictionary = _events[i]
+		var eid: int = int(evt.get("eid", 0))
+		if before_eid > 0 and eid >= before_eid:
+			continue
+		out.append(evt.duplicate(true))
+	return out
+
+
+## Recent events involving a specific pawn id. Matches direct subject keys and
+## pair/family fields where present.
+func get_recent_events_for_pawn(pawn_id: int, max_items: int = 64) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if pawn_id < 0 or max_items <= 0:
+		return out
+	for i in range(_events.size() - 1, -1, -1):
+		if out.size() >= max_items:
+			break
+		var evt: Dictionary = _events[i]
+		var hit: bool = false
+		if int(evt.get("pawn_id", -1)) == pawn_id:
+			hit = true
+		elif int(evt.get("pid", -1)) == pawn_id:
+			hit = true
+		elif int(evt.get("a", -1)) == pawn_id or int(evt.get("b", -1)) == pawn_id:
+			hit = true
+		elif int(evt.get("parent_a_id", -1)) == pawn_id or int(evt.get("parent_b_id", -1)) == pawn_id:
+			hit = true
+		if not hit:
+			continue
+		out.append(evt.duplicate(true))
+	out.reverse()
+	return out
+
+
+## Focused relationship timeline between two pawns (meetings, bond milestones,
+## and shared family records) in append order.
+func get_relationship_timeline(a_id: int, b_id: int, max_items: int = 64) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if a_id < 0 or b_id < 0 or max_items <= 0:
+		return out
+	var lo: int = mini(a_id, b_id)
+	var hi: int = maxi(a_id, b_id)
+	for i in range(_events.size() - 1, -1, -1):
+		if out.size() >= max_items:
+			break
+		var evt: Dictionary = _events[i]
+		var typ: String = _canonical_event_type(evt)
+		var include: bool = false
+		if typ == "social_meeting" or typ == "social_bond_milestone":
+			var ea: int = int(evt.get("a", -1))
+			var eb: int = int(evt.get("b", -1))
+			include = mini(ea, eb) == lo and maxi(ea, eb) == hi
+		elif typ == "birth" or typ == "pawn_birth":
+			var pa: int = int(evt.get("parent_a_id", -1))
+			var pb: int = int(evt.get("parent_b_id", -1))
+			include = mini(pa, pb) == lo and maxi(pa, pb) == hi
+		if not include:
+			continue
+		out.append(evt.duplicate(true))
+	out.reverse()
+	return out

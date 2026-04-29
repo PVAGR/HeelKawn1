@@ -98,6 +98,8 @@ const GENERATION_TICKS: int = 20000
 const REPRODUCTION_CHECK_INTERVAL_TICKS: int = 300
 ## Co-presence rapport for pairing / births (deterministic; same path component only).
 const SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS: int = 40
+const SOCIAL_MEETING_EVENT_COOLDOWN_TICKS: int = 400
+const SOCIAL_RAPPORT_MILESTONES: Array[int] = [56, 140, 280, 560]
 const INFLUENCE_UPDATE_INTERVAL_TICKS: int = 500
 const OBSERVER_HUD_REFRESH_TICKS: int = 30
 const FOCUS_INSPECTOR_REFRESH_TICKS: int = 15
@@ -108,6 +110,10 @@ const WORLD_STABILIZATION_TICKS: int = 500
 ## Player does not architect the colony: no manual walls/beds/doors/stockpile zones.
 ## Construction remains `SettlementPlanner` + pawn job claims (NPC-equivalent sim path).
 const PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES: bool = false
+## Safety: keep desktop play at 1x unless user deliberately clicks toolbar speed.
+const ALLOW_SPEED_NUMBER_HOTKEYS: bool = false
+## Keep load-in sessions predictable; speed only changes via explicit user action.
+const RESTORE_SPEED_FROM_SAVE: bool = false
 ## World-level only; Pawn/Animal read via [code]Main._world_stabilization_until_tick[/code].
 ## -1 = not initialized yet (hunt/tick guards treat as: allow hunt once bootstrapped sets a non-negative window).
 static var _world_stabilization_until_tick: int = -1
@@ -227,6 +233,10 @@ var _last_inspect_event_tick_shown: int = -1
 var _inspect_tooltip_node: Control = null
 var _inspect_audio_player: AudioStreamPlayer = null
 var _inspect_audio_playback: AudioStreamGeneratorPlayback = null
+## pair key ("low-high") -> last tick a social_meeting event was logged.
+var _social_meeting_last_tick_by_pair: Dictionary = {}
+## pair key ("low-high") -> highest rapport milestone already logged.
+var _social_rapport_milestone_by_pair: Dictionary = {}
 
 func _is_ultra_speed() -> bool:
 	return GameManager.game_speed >= 12.0
@@ -392,6 +402,8 @@ func _ready() -> void:
 		call_deferred("_ensure_avatar_panel")
 	if OS.is_debug_build():
 		print("[Main] Scene ready. Tick interval: %.2fs" % GameManager.TICK_INTERVAL_SECONDS)
+	# Start every session at 1x, unpaused. Player can change only through explicit controls.
+	GameManager.set_speed_index(0)
 	_bootstrap_colony()
 	if not simulation_worker:
 		if _hud != null:
@@ -1495,6 +1507,7 @@ func _on_incarnation_entry_confirmed(pawn_id: int) -> void:
 		if OS.is_debug_build():
 			print("[Main] Incarnation picker: pawn %d not found" % pawn_id)
 		return
+	_player_pawn = pawn
 	_set_selected_pawn(pawn)
 	_camera_follow_selected = true
 	_set_player_mode(PlayerMode.INCARNATED)
@@ -1543,6 +1556,8 @@ func request_spectator_return(note: String = "manual_return", payload: Dictionar
 	if _incarnation_picker != null and is_instance_valid(_incarnation_picker):
 		_incarnation_picker.call("close_picker")
 	_set_selected_pawn(null)
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		_player_pawn = _first_live_pawn()
 	_set_player_mode(PlayerMode.SPECTATOR)
 	return ok
 
@@ -1576,6 +1591,7 @@ func _bootstrap_colony() -> void:
 	WorldPersistence.recompute()
 	_place_stockpile(main_component)
 	_pawn_spawner.spawn_starters(_world, main_component)
+	_player_pawn = _first_live_pawn()
 	_set_selected_pawn(null)
 	_set_player_mode(PlayerMode.SPECTATOR)
 	_ensure_player_pawn_assigned()
@@ -1769,7 +1785,7 @@ func _sync_pawn_inherited_cultural_reputation() -> void:
 func _on_game_tick(tick: int) -> void:
 	if _is_simulation_worker_mode() and GameManager != null and GameManager.is_tick_benchmark_enabled():
 		return
-	if _player_input != null:
+	if _player_input != null and _player_mode == PlayerMode.INCARNATED:
 		if not is_instance_valid(_player_pawn):
 			_ensure_player_pawn_assigned()
 		if is_instance_valid(_player_pawn):
@@ -1777,6 +1793,8 @@ func _on_game_tick(tick: int) -> void:
 			_player_action_state = _player_input.get_last_action_state()
 		else:
 			_player_action_state = "no_pawn"
+	elif _player_mode != PlayerMode.INCARNATED:
+		_player_action_state = "spectator"
 	# First tick of post-stab window: (re)post HUNT for static wildlife skipped during [member _world_stabilization_until_tick] seed; deterministic order.
 	if Main._world_stabilization_until_tick >= 0 and tick == Main._world_stabilization_until_tick:
 		_post_wildlife_hunt_jobs_after_stabilization()
@@ -2030,6 +2048,63 @@ func _accumulate_social_rapport() -> void:
 				continue
 			da.add_social_rapport(int(db.id), GAIN)
 			db.add_social_rapport(int(da.id), GAIN)
+			_record_social_pair_events(da, db)
+
+
+func _social_pair_key(a_id: int, b_id: int) -> String:
+	var lo: int = mini(a_id, b_id)
+	var hi: int = maxi(a_id, b_id)
+	return "%d-%d" % [lo, hi]
+
+
+func _record_social_pair_events(a: PawnData, b: PawnData) -> void:
+	var a_id: int = int(a.id)
+	var b_id: int = int(b.id)
+	var key: String = _social_pair_key(a_id, b_id)
+	var now: int = GameManager.tick_count
+	var last_tick: int = int(_social_meeting_last_tick_by_pair.get(key, -1))
+	var rapport: int = mini(
+		int(a.get_social_rapport(b_id)),
+		int(b.get_social_rapport(a_id))
+	)
+	var meet_should_log: bool = last_tick < 0 or now - last_tick >= SOCIAL_MEETING_EVENT_COOLDOWN_TICKS
+	if meet_should_log:
+		_social_meeting_last_tick_by_pair[key] = now
+		WorldMemory.record_event({
+			"type": "social_meeting",
+			"category": "social",
+			"severity": 2,
+			"tick": now,
+			"a": a_id,
+			"b": b_id,
+			"a_name": a.display_name,
+			"b_name": b.display_name,
+			"rapport": rapport,
+			"region": preload("res://autoloads/WorldMemory.gd")._region_key(a.tile_pos.x, a.tile_pos.y),
+			"tile": {"x": a.tile_pos.x, "y": a.tile_pos.y},
+		})
+	var previous_milestone: int = int(_social_rapport_milestone_by_pair.get(key, 0))
+	for m in SOCIAL_RAPPORT_MILESTONES:
+		var milestone: int = int(m)
+		if milestone <= previous_milestone:
+			continue
+		if rapport < milestone:
+			continue
+		_social_rapport_milestone_by_pair[key] = milestone
+		WorldMemory.record_event({
+			"type": "social_bond_milestone",
+			"category": "social",
+			"severity": 3,
+			"tick": now,
+			"a": a_id,
+			"b": b_id,
+			"a_name": a.display_name,
+			"b_name": b.display_name,
+			"rapport": rapport,
+			"milestone": milestone,
+			"region": preload("res://autoloads/WorldMemory.gd")._region_key(a.tile_pos.x, a.tile_pos.y),
+			"tile": {"x": a.tile_pos.x, "y": a.tile_pos.y},
+		})
 
 
 func _process_reproduction_tick() -> void:
@@ -2312,6 +2387,10 @@ func _on_speed_changed(speed: float, paused: bool) -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
+	# When the F10 creator menu is open, number keys are used for report labels.
+	# Ignore global gameplay hotkeys so menu interaction never changes sim speed.
+	if _creator_debug_menu != null and _creator_debug_menu.visible:
+		return
 	match event.keycode:
 		Key.KEY_QUOTELEFT:
 			_toggle_play_chrome()
@@ -2334,19 +2413,26 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		Key.KEY_SPACE:
 			GameManager.toggle_pause()
 		Key.KEY_1:
-			GameManager.set_speed_index(0)
+			if ALLOW_SPEED_NUMBER_HOTKEYS:
+				GameManager.set_speed_index(0)
 		Key.KEY_2:
-			GameManager.set_speed_index(1)
+			if ALLOW_SPEED_NUMBER_HOTKEYS:
+				GameManager.set_speed_index(1)
 		Key.KEY_3:
-			GameManager.set_speed_index(2)
+			if ALLOW_SPEED_NUMBER_HOTKEYS:
+				GameManager.set_speed_index(2)
 		Key.KEY_4:
-			GameManager.set_speed_index(3)
+			if ALLOW_SPEED_NUMBER_HOTKEYS:
+				GameManager.set_speed_index(3)
 		Key.KEY_5:
-			GameManager.set_speed_index(4)
+			if ALLOW_SPEED_NUMBER_HOTKEYS:
+				GameManager.set_speed_index(4)
 		Key.KEY_6:
-			GameManager.set_speed_index(5)
+			if ALLOW_SPEED_NUMBER_HOTKEYS:
+				GameManager.set_speed_index(5)
 		Key.KEY_7:
-			GameManager.set_speed_index(6)
+			if ALLOW_SPEED_NUMBER_HOTKEYS:
+				GameManager.set_speed_index(6)
 		Key.KEY_R:
 			if OS.is_debug_build():
 				_reroll_world()
@@ -2806,10 +2892,14 @@ func _set_selected_pawn(p: Pawn) -> void:
 		_selected_pawn.is_selected = false
 		_selected_pawn.queue_redraw()
 	_selected_pawn = p
-	_player_pawn = _selected_pawn
-	_set_player_mode(PlayerMode.INCARNATED if _selected_pawn != null else PlayerMode.SPECTATOR)
-	if _player_mode == PlayerMode.INCARNATED and _selected_pawn != null:
+	# Observer-first: selection is inspection only. Incarnation/control remains explicit via picker.
+	if _selected_pawn != null:
+		_player_pawn = _selected_pawn
 		_camera_follow_selected = true
+	elif _player_mode != PlayerMode.INCARNATED:
+		if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+			_player_pawn = _first_live_pawn()
+		_camera_follow_selected = false
 	_sync_player_context_ui()
 	if _hud != null:
 		_hud.set_player_control_refs(_player_input, _player_pawn)
@@ -2864,6 +2954,15 @@ func _find_pawn_by_id(pawn_id: int) -> Pawn:
 		return null
 	for p in _pawn_spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
+			return p
+	return null
+
+
+func _first_live_pawn() -> Pawn:
+	if _pawn_spawner == null:
+		return null
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
 			return p
 	return null
 
@@ -3678,12 +3777,64 @@ static func _regrow_ticks_for(feature: int) -> int:
 func _on_job_completed(job: Job) -> void:
 	if job == null:
 		return
+	var now_tick: int = GameManager.tick_count
+	var worker_id: int = -1
+	var worker_name: String = ""
+	if job.assigned_pawn != null and is_instance_valid(job.assigned_pawn) and job.assigned_pawn.data != null:
+		worker_id = int(job.assigned_pawn.data.id)
+		worker_name = String(job.assigned_pawn.data.display_name)
+	var nearby_workers: int = 0
+	if _pawn_spawner != null:
+		for p in _pawn_spawner.pawns:
+			if p == null or not is_instance_valid(p) or p.data == null:
+				continue
+			if job.tile.distance_to(p.data.tile_pos) <= 2.5:
+				nearby_workers += 1
+	WorldMemory.record_event({
+		"type": "job_completed",
+		"category": "labor",
+		"severity": 1,
+		"tick": now_tick,
+		"job_type": int(job.type),
+		"job_priority": int(job.priority),
+		"worker_id": worker_id,
+		"worker_name": worker_name,
+		"nearby_workers": nearby_workers,
+		"region": preload("res://autoloads/WorldMemory.gd")._region_key(job.tile.x, job.tile.y),
+		"tile": {"x": job.tile.x, "y": job.tile.y},
+		"s": WorldMemory.SCHEMA,
+	})
 	match job.type:
 		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
 			if has_node("WorldTrace") and _world != null:
 				var wt: WorldTrace = $WorldTrace as WorldTrace
 				if wt != null:
 					wt.record_trace(_world.tile_to_world(job.tile), "build")
+			WorldMemory.record_event({
+				"type": "structure_built",
+				"category": "construction",
+				"severity": 2,
+				"tick": now_tick,
+				"job_type": int(job.type),
+				"worker_id": worker_id,
+				"worker_name": worker_name,
+				"nearby_workers": nearby_workers,
+				"region": preload("res://autoloads/WorldMemory.gd")._region_key(job.tile.x, job.tile.y),
+				"tile": {"x": job.tile.x, "y": job.tile.y},
+			})
+			if nearby_workers >= 2:
+				WorldMemory.record_event({
+					"type": "cooperative_build",
+					"category": "construction",
+					"severity": 2,
+					"tick": now_tick,
+					"job_type": int(job.type),
+					"worker_id": worker_id,
+					"worker_name": worker_name,
+					"nearby_workers": nearby_workers,
+					"region": preload("res://autoloads/WorldMemory.gd")._region_key(job.tile.x, job.tile.y),
+					"tile": {"x": job.tile.x, "y": job.tile.y},
+				})
 		Job.Type.MINE, Job.Type.MINE_WALL:
 			_mining_react_pending = true
 		Job.Type.FORAGE:
@@ -4210,10 +4361,15 @@ func _apply_save_dict(s: Dictionary) -> void:
 	var loaded_tick: int = int(s.get("tick", 0))
 	var saved_player_mode: int = int(s.get("player_mode", PlayerMode.INCARNATED))
 	var saved_player_pawn_id: int = int(s.get("player_pawn_id", -1))
+	var load_speed: float = 1.0
+	var load_paused: bool = false
+	if RESTORE_SPEED_FROM_SAVE:
+		load_speed = float(s.get("game_speed", 1.0))
+		load_paused = bool(s.get("is_paused", false))
 	GameManager.set_state_from_load(
 		loaded_tick,
-		float(s.get("game_speed", 1.0)),
-		bool(s.get("is_paused", false))
+		load_speed,
+		load_paused
 	)
 	_last_generation_tick = int(s.get("last_generation_tick", loaded_tick))
 	_zone_next_filter = int(s.get("zone_filter", 0))

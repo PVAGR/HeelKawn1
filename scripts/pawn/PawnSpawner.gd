@@ -205,6 +205,15 @@ func spawn_generational_pawn(
 	add_child(pawn)
 	pawn.bind(data, world.tile_to_world(tile), world)
 	pawns.append(pawn)
+	WorldMemory.record_event({
+		"type": "pawn_birth",
+		"birth_kind": "generational",
+		"tick": GameManager.tick_count,
+		"pawn_id": int(data.id),
+		"pawn_name": data.display_name,
+		"tile": {"x": tile.x, "y": tile.y},
+		"region": WorldMemory._region_key(tile.x, tile.y),
+	})
 	if GameManager.verbose_logs():
 		print("[Spawn] generational: %s  tile=(%d,%d) age=%d" % [
 			data.display_name, tile.x, tile.y, data.age,
@@ -357,6 +366,17 @@ func spawn_child_pawn(
 	pawns.append(pawn)
 	parent_a.children_count += 1
 	parent_b.children_count += 1
+	WorldMemory.record_event({
+		"type": "pawn_birth",
+		"birth_kind": "child",
+		"tick": GameManager.tick_count,
+		"pawn_id": int(data.id),
+		"pawn_name": data.display_name,
+		"parent_a_id": int(parent_a.id),
+		"parent_b_id": int(parent_b.id),
+		"tile": {"x": tile.x, "y": tile.y},
+		"region": WorldMemory._region_key(tile.x, tile.y),
+	})
 	if GameManager.verbose_logs():
 		print("[Spawn] child: %s at (%d,%d) from #%d + #%d" % [
 			data.display_name, tile.x, tile.y, parent_a.id, parent_b.id,

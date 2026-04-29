@@ -1439,6 +1439,17 @@ func attempt_reproduction() -> bool:
 	if did_spawn:
 		_next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
 		mate._next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
+		WorldMemory.record_event({
+			"type": "birth",
+			"tick": now,
+			"region": preload("res://autoloads/WorldMemory.gd")._region_key(data.tile_pos.x, data.tile_pos.y),
+			"category": "family",
+			"severity": 3,
+			"parent_a_name": str(data.display_name),
+			"parent_b_name": str(mate.data.display_name),
+			"parent_a_id": int(data.id),
+			"parent_b_id": int(mate.data.id),
+		})
 	return did_spawn
 
 

@@ -22,12 +22,14 @@ const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.70)
 
 # Tuned to be unobtrusive: thin top-left strip, easy to read, doesn't
 # eat the world.
-const FONT_SIZE_BODY: int = 11
-const FONT_SIZE_HOTKEYS: int = 9
+const FONT_SIZE_BODY: int = 14
+const FONT_SIZE_HOTKEYS: int = 12
 const PANEL_PAD_X: int = 6
 const PANEL_PAD_Y: int = 4
+## Readability mode: bigger, simpler HUD for at-a-glance play.
+const SIMPLE_READABLE_HUD: bool = true
 
-const HOTKEY_HINTS: String = "SPACE pause · 1-7 speed · F5 save · F8 load · M labor stance · R reroll · T pawns · J jobs · I stockpile · B beds · W walls · O doors · Z zone · F filter · Esc cancel"
+const HOTKEY_HINTS: String = "SPACE pause · F5 save · F8 load · K sprite · F10 reports"
 
 @onready var _panel: PanelContainer = $Panel
 @onready var _label: RichTextLabel = $Panel/Margin/VBox/Body
@@ -51,6 +53,7 @@ var _hud_dirty: bool = true
 var _last_refresh_stride: int = REFRESH_EVERY_N_TICKS
 var _last_coarse_gate: int = 10
 var _last_refresh_tick: int = 0
+var _last_render_signature: String = ""
 
 
 func _ready() -> void:
@@ -169,20 +172,39 @@ func _refresh() -> void:
 	if _designation_label != "":
 		lines.append("[bgcolor=#583a14][color=#ffe082]  BUILD MODE: %s   (click or click-drag to place · right-click / Esc to cancel)  [/color][/bgcolor]" %
 			_designation_label)
-	lines.append(_time_line())
-	lines.append(_colony_state_line())
-	lines.append(_pawn_line())
-	lines.append(_player_status_line())
-	lines.append(_politics_line())
-	lines.append(_war_status_line())
-	lines.append(_skill_line())
-	lines.append(_kill_line())
-	lines.append(_export_status_line())
-	lines.append(_stockpile_line())
-	lines.append(_jobs_line())
-	lines.append(_wildlife_line())
-	lines.append(_session_diag_line())
-	_label.text = "\n".join(lines)
+	if SIMPLE_READABLE_HUD:
+		lines.append(_time_line())
+		lines.append(_world_pulse_line())
+		lines.append(_history_totals_line())
+		lines.append(_colony_state_line())
+		lines.append(_settlement_identity_line())
+		lines.append(_stockpile_simple_line())
+		lines.append(_pawn_line_simple())
+		lines.append(_jobs_line_simple())
+		lines.append(_wildlife_line())
+		lines.append(_narrative_rail_line())
+	else:
+		lines.append(_time_line())
+		lines.append(_colony_state_line())
+		lines.append(_settlement_identity_line())
+		lines.append(_pawn_line())
+		lines.append(_player_status_line())
+		lines.append(_politics_line())
+		lines.append(_war_status_line())
+		lines.append(_skill_line())
+		lines.append(_kill_line())
+		lines.append(_export_status_line())
+		lines.append(_stockpile_line())
+		lines.append(_jobs_line())
+		lines.append(_wildlife_line())
+		lines.append(_narrative_rail_line())
+		lines.append(_session_diag_line())
+	var next_text: String = "\n".join(lines)
+	var sig: String = str(next_text.hash())
+	if sig == _last_render_signature:
+		return
+	_last_render_signature = sig
+	_label.text = next_text
 
 
 ## CanvasLayer is not drawable; intent marker rendering is temporarily disabled.
@@ -262,9 +284,16 @@ func _time_line() -> String:
 	var y_tick: int = SimTime.tick_within_sim_year(tick)
 	var day_in_year: int = SimTime.visual_day_within_sim_year(tick)
 	var days_per_y: int = SimTime.visual_days_per_sim_year()
-	return "[b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](σ+%d)[/color]" % [
+	var base: String = "[b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](σ+%d)[/color]" % [
 		year_n, day_in_year, days_per_y, hour, phase_name, speed_str, tick, y_tick,
 	]
+	if GameManager.game_speed >= 26.0 and not GameManager.is_paused:
+		var d: Dictionary = GameManager.sim_diag()
+		var q: float = float(d.get("queued_ticks_est", 0.0))
+		var cap: int = int(d.get("max_ticks_per_frame", 6))
+		if q >= 3.0:
+			base += "   [color=#ffab91]Δ~%.0f tf%d[/color]" % [q, cap]
+	return base
 
 
 ## Labor stance (M) + key demand metrics from `ColonySimServices`.
@@ -277,6 +306,106 @@ func _colony_state_line() -> String:
 		int(round(fp * 100.0)), _demand_tier(fp),
 		int(round(hp * 100.0)), _demand_tier(hp),
 	]
+
+
+## High-level world snapshot (places, memory log size, work queue).
+func _world_pulse_line() -> String:
+	var settlements_n: int = SettlementMemory.settlements.size()
+	var facts: int = WorldMemory.event_count()
+	var js: Dictionary = JobManager.stats()
+	var open_j: int = int(js.get("open", 0))
+	var claimed_j: int = int(js.get("claimed", 0))
+	return "[color=#aed581]World:[/color] [b]%d[/b] settlements · chronicle [b]%d[/b] facts · work [b]%d[/b] open · [b]%d[/b] claimed" % [
+		settlements_n,
+		facts,
+		open_j,
+		claimed_j,
+	]
+
+
+## Lifetime totals from the append-only chronicle (what kind of story this world is building).
+func _history_totals_line() -> String:
+	var c: Dictionary = WorldMemory.get_event_type_counts()
+	var births: int = int(c.get("birth", 0)) + int(c.get("pawn_birth", 0))
+	var deaths: int = int(c.get("pawn_death", 0))
+	var builds: int = int(c.get("structure_built", 0)) + int(c.get("cooperative_build", 0))
+	var meet: int = int(c.get("social_meeting", 0))
+	var know: int = int(c.get("knowledge_discovery", 0)) + int(c.get("knowledge_rediscovery", 0))
+	return "[color=#9fa8da]Story:[/color] births [b]%d[/b] · deaths [b]%d[/b] · builds [b]%d[/b] · meets [b]%d[/b] · knowledge [b]%d[/b]" % [
+		births,
+		deaths,
+		builds,
+		meet,
+		know,
+	]
+
+
+## Short stockpile strip so readable mode still shows material reality.
+func _stockpile_simple_line() -> String:
+	var zones: Array[Stockpile] = StockpileManager.zones()
+	if zones.is_empty():
+		return "[color=#ce93d8]Supplies:[/color] [i]no stockpiles[/i]"
+	var totals: Dictionary = {}
+	for z in zones:
+		for t in z.inventory:
+			totals[t] = totals.get(t, 0) + z.inventory[t]
+	var rows: Array[Dictionary] = []
+	for t in Item.Type.values():
+		if t == Item.Type.NONE:
+			continue
+		var qty: int = int(totals.get(t, 0))
+		if qty > 0:
+			rows.append({"t": t, "q": qty})
+	if rows.is_empty():
+		return "[color=#ce93d8]Supplies:[/color] [i]empty[/i]"
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["q"]) > int(b["q"]))
+	var parts: Array[String] = []
+	for i in range(mini(5, rows.size())):
+		var row: Dictionary = rows[i]
+		parts.append("%s×%d" % [Item.name_for(row["t"]), int(row["q"])])
+	return "[color=#ce93d8]Supplies:[/color] %s" % " · ".join(parts)
+
+
+## In-universe identity strip driven by backend settlement/memory systems.
+## Keeps labels short and scans quickly during play.
+func _settlement_identity_line() -> String:
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node == null:
+		return "[color=#c9b37c]Identity:[/color] world link offline"
+	var digest: Dictionary = main_node.get_camera_settlement_revival_digest()
+	var cam_rk: int = int(digest.get("camera_region_key", -1))
+	var profile_rk: int = int(digest.get("profile_region_key", cam_rk))
+	var has_settlement: bool = bool(digest.get("has_settlement", false))
+	if not has_settlement or profile_rk < 0:
+		var cam_meaning: String = str(WorldMeaning.get_region_meaning_label(cam_rk)).replace("_", " ")
+		return "[color=#c9b37c]Identity:[/color] Wilds @%d · meaning [b]%s[/b]" % [cam_rk, cam_meaning]
+	var prof: Dictionary = SettlementMemory.get_settlement_profile(profile_rk)
+	var st_any: Variant = SettlementMemory.get_settlement_at_region(profile_rk)
+	var intent: String = "none"
+	if st_any is Dictionary:
+		intent = str((st_any as Dictionary).get("current_intent", "none")).to_lower()
+	var meaning: String = str(WorldMeaning.get_region_meaning_label(profile_rk)).replace("_", " ")
+	var rep: int = int(CulturalMemory.get_region_reputation(profile_rk))
+	var rep_word: String = "neutral"
+	if rep <= -3:
+		rep_word = "dreaded"
+	elif rep <= -2:
+		rep_word = "feared"
+	elif rep == -1:
+		rep_word = "scarred"
+	elif rep >= 1:
+		rep_word = "respected"
+	var state_txt: String = str(prof.get("state", "unknown")).replace("_", " ")
+	var culture_txt: String = str(prof.get("culture_name", "cautious")).replace("_", " ")
+	var revival_score: int = int(prof.get("revival_score", 0))
+	var war: Dictionary = SettlementMemory.get_war_profile_for_region(profile_rk)
+	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(profile_rk)
+	var war_state: String = str(war.get("state", "peace")).replace("_", " ")
+	var gov_txt: String = str(gov.get("type", "anarchy")).replace("_", " ")
+	return (
+		"[color=#c9b37c]Identity:[/color] #%d  [b]%s[/b] · %s · intent %s · rev %d  "
+		+ "| meaning %s · rep %s(%d) · war %s · gov %s"
+	) % [profile_rk, state_txt, culture_txt, intent, revival_score, meaning, rep_word, rep, war_state, gov_txt]
 
 
 static func _demand_tier(p: float) -> String:
@@ -362,6 +491,33 @@ func _pawn_line() -> String:
 	]
 
 
+func _pawn_line_simple() -> String:
+	if _spawner == null:
+		return "[color=#cccccc]People:[/color] none"
+	var n: int = 0
+	var avg_h: float = 0.0
+	var avg_r: float = 0.0
+	var avg_m: float = 0.0
+	for p in _spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		n += 1
+		avg_h += p.data.hunger
+		avg_r += p.data.rest
+		avg_m += p.data.mood
+	if n <= 0:
+		return "[color=#cccccc]People:[/color] none"
+	avg_h /= float(n)
+	avg_r /= float(n)
+	avg_m /= float(n)
+	return "[color=#cccccc]People:[/color] [b]%d[/b] · hunger %s · rest %s · mood %s" % [
+		n,
+		_color_value(avg_h),
+		_color_value(avg_r),
+		_color_value(avg_m),
+	]
+
+
 func _stockpile_line() -> String:
 	var zones: Array[Stockpile] = StockpileManager.zones()
 	if zones.is_empty():
@@ -404,6 +560,17 @@ func _jobs_line() -> String:
 	var beds_built: int = _world.bed_count() if _world != null else 0
 	return "[color=#cccccc]Jobs:[/color] [b]%d[/b] open  [b]%d[/b] claimed   F %d · M %d · TM %d · C %d · H %d · B %d · W %d · D %d   [color=#dcb478]Beds[/color] [b]%d[/b]   [color=#888888](done %d)[/color]" % [
 		s.open, s.claimed, fw, mn, mw, ch, hu, bd, bw, bo, beds_built, s.completed
+	]
+
+
+func _jobs_line_simple() -> String:
+	var s: Dictionary = JobManager.stats()
+	var beds_built: int = _world.bed_count() if _world != null else 0
+	return "[color=#cccccc]Work:[/color] open [b]%d[/b] · claimed [b]%d[/b] · done [b]%d[/b] · beds [b]%d[/b]" % [
+		int(s.get("open", 0)),
+		int(s.get("claimed", 0)),
+		int(s.get("completed", 0)),
+		beds_built,
 	]
 
 
@@ -596,6 +763,97 @@ func _wildlife_line() -> String:
 	var d: int = int(_wildlife_snapshot.get("deer", 0))
 	var t: int = int(_wildlife_snapshot.get("total", 0))
 	return "🦌 Wildlife: R:%d D:%d T:%d [%s]" % [r, d, t, _momentum_spark]
+
+
+## Compact high-signal narrative rail (DF/CK/RimWorld-style summary strip).
+## Purposefully filters out spammy low-signal events (e.g. job_completed) and
+## reports only identity/meaning-relevant shifts for in-universe readability.
+func _narrative_rail_line() -> String:
+	var ev: Array = []
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node != null:
+		var digest: Dictionary = main_node.get_camera_settlement_revival_digest()
+		var profile_rk: int = int(digest.get("profile_region_key", -1))
+		if bool(digest.get("has_settlement", false)) and profile_rk >= 0:
+			ev = WorldMemory.get_recent_events_for_settlement(profile_rk, 96, true)
+	if ev.is_empty():
+		ev = WorldMemory.get_recent_events(64)
+	if ev.is_empty():
+		return "📜 Chronicle: world is quiet"
+	var entries: PackedStringArray = PackedStringArray()
+	for i in range(ev.size() - 1, -1, -1):
+		if entries.size() >= 5:
+			break
+		var e_any: Variant = ev[i]
+		if not (e_any is Dictionary):
+			continue
+		var e: Dictionary = e_any as Dictionary
+		var typ: String = str(e.get("type", ""))
+		var tick: int = int(e.get("tick", e.get("t", 0)))
+		var line: String = _narrative_line_for_event(typ, e)
+		if line.is_empty():
+			continue
+		entries.append("[t%d] %s" % [tick, line])
+	if entries.is_empty():
+		return "📜 Chronicle: no major shifts"
+	return "📜 Chronicle: %s" % "  •  ".join(entries)
+
+
+func _narrative_line_for_event(typ: String, e: Dictionary) -> String:
+	if bool(e.get("first_of_type", false)):
+		return "first: %s" % typ.replace("_", " ")
+	match typ:
+		"structure_built":
+			return "new structures were completed"
+		"birth", "pawn_birth":
+			var child_name: String = str(e.get("pawn_name", "a child")).strip_edges()
+			if child_name.is_empty():
+				child_name = "a child"
+			var pa: String = str(e.get("parent_a_name", "")).strip_edges()
+			var pb: String = str(e.get("parent_b_name", "")).strip_edges()
+			if not pa.is_empty() and not pb.is_empty():
+				return "birth: %s to %s + %s" % [child_name, pa, pb]
+			return "birth: %s" % child_name
+		"cooperative_build":
+			return "crews raised new structures together"
+		"knowledge_discovery":
+			var kt: String = str(e.get("knowledge_type", "?"))
+			return "new knowledge discovered (k=%s)" % kt
+		"knowledge_rediscovery":
+			return "lost knowledge was rediscovered"
+		"social_bond_milestone":
+			var an: String = str(e.get("a_name", "A"))
+			var bn: String = str(e.get("b_name", "B"))
+			var m: int = int(e.get("milestone", 0))
+			return "%s + %s bond deepened (%d)" % [an, bn, m]
+		"social_meeting":
+			var ma: String = str(e.get("a_name", "A"))
+			var mb: String = str(e.get("b_name", "B"))
+			return "%s met %s" % [ma, mb]
+		"governance_change":
+			var g: String = str(e.get("governance_type", "anarchy")).replace("_", " ")
+			return "governance became %s" % g
+		"settlement_intent_shift":
+			var old_i: String = str(e.get("old_intent", "unknown")).to_lower()
+			var new_i: String = str(e.get("new_intent", "unknown")).to_lower()
+			return "intent shifted %s→%s" % [old_i, new_i]
+		"player_intent":
+			return "chronicler note recorded"
+		"pawn_death":
+			var nm: String = str(e.get("n", e.get("name", "someone"))).strip_edges()
+			if nm.is_empty():
+				nm = "someone"
+			return "%s died" % nm
+		"animal_death":
+			return "wildlife was culled"
+		"job_completed":
+			# Too noisy for the rail; totals live in Story / Work lines.
+			return ""
+		_:
+			# Surface rarer settlement / world events without spamming routine jobs.
+			if typ.begins_with("settlement") or typ.contains("abandon") or typ.contains("revival") or typ.contains("rebirth"):
+				return typ.replace("_", " ")
+			return ""
 
 
 # ==================== formatting helpers ====================

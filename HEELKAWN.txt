@@ -24,7 +24,7 @@ WHERE TO PLAN LORE/TIERS
 
 OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
-- Local: C:\Users\user\HeelKawn1
+- Local: this repository root (the folder containing `.git/`)
 - Remote: https://github.com/PVAGR/HeelKawn1 (branch main)
 - Full policy: docs/CANONICAL_REPOSITORY.md
 

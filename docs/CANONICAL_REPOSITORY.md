@@ -8,7 +8,7 @@ This document fixes **where** official HeelKawn work lives so history is not spl
 |--|--|
 | **GitHub** | `https://github.com/PVAGR/HeelKawn1` |
 | **Default branch** | `main` |
-| **Clone destination (this machine)** | `C:\Users\user\HeelKawn1` |
+| **Clone destination (this machine)** | `C:\Users\user\Documents\GitHub\HeelKawn1` |
 
 Anything committed and pushed to **`main`** on that remote is the **record of record** for the Godot simulation, docs, and tooling in this project.
 

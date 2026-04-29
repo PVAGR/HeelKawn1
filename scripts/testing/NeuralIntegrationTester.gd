@@ -341,7 +341,11 @@ func _test_predictive_models() -> Dictionary:
 		"resources": {"food": 100, "wood": 50, "stone": 25, "ore": 10}
 	}
 
+<<<<<<< HEAD
 	var _predictions = AIAgentManager.generate_predictions(test_world_state)
+=======
+	var predictions = AIAgentManager.generate_predictions(test_world_state)
+>>>>>>> aad341ea (fix: correct indentation errors in NeuralIntegrationTester.gd)
 
 	print("[NeuralIntegrationTester] ✓ Predictive models test passed")
 
@@ -537,12 +541,12 @@ func _test_world_ai_initialization() -> Dictionary:
 		test_result.errors.append("WorldAI not found")
 		return test_result
 
-		# Test WorldAI properties
-		test_result.details["current_age"] = WorldAI.current_age
-		test_result.details["technological_tier"] = WorldAI.technological_tier
-		test_result.details["world_population"] = WorldAI.world_population
+	# Test WorldAI properties
+	test_result.details["current_age"] = WorldAI.current_age
+	test_result.details["technological_tier"] = WorldAI.technological_tier
+	test_result.details["world_population"] = WorldAI.world_population
 
-		print("[NeuralIntegrationTester] ✓ World AI initialization test passed")
+	print("[NeuralIntegrationTester] ✓ World AI initialization test passed")
 
 	return test_result
 
@@ -589,18 +593,18 @@ func _test_specialized_networks() -> Dictionary:
 		test_result.errors.append("WorldAI not found")
 		return test_result
 
-		# Test specialized neural networks
-		var expected_networks = ["civilization_neural_network", "environmental_neural_network", "cultural_neural_network", "economic_neural_network"]
+	# Test specialized neural networks
+	var expected_networks = ["civilization_neural_network", "environmental_neural_network", "cultural_neural_network", "economic_neural_network"]
 
-		for network_name in expected_networks:
-			if not WorldAI.get(network_name):
-				test_result.status = "failed"
-				test_result.errors.append("Missing network: " + network_name)
+	for network_name in expected_networks:
+		if not WorldAI.get(network_name):
+			test_result.status = "failed"
+			test_result.errors.append("Missing network: " + network_name)
 
-		test_result.details["specialized_networks_count"] = expected_networks.size()
-		test_result.details["all_networks_present"] = test_result.status == "passed"
+	test_result.details["specialized_networks_count"] = expected_networks.size()
+	test_result.details["all_networks_present"] = test_result.status == "passed"
 
-		print("[NeuralIntegrationTester] ✓ Specialized networks test passed")
+	print("[NeuralIntegrationTester] ✓ Specialized networks test passed")
 
 	return test_result
 
@@ -642,10 +646,10 @@ func _test_cultural_memory_initialization() -> Dictionary:
 		test_result.errors.append("CulturalMemory not found")
 		return test_result
 
-		# Test CulturalMemory properties
-		test_result.details["reputation_by_region_count"] = CulturalMemory.reputation_by_region.size()
+	# Test CulturalMemory properties
+	test_result.details["reputation_by_region_count"] = CulturalMemory.reputation_by_region.size()
 
-		print("[NeuralIntegrationTester] ✓ Cultural Memory initialization test passed")
+	print("[NeuralIntegrationTester] ✓ Cultural Memory initialization test passed")
 
 	return test_result
 
@@ -662,19 +666,19 @@ func _test_cultural_metrics() -> Dictionary:
 		test_result.errors.append("CulturalMemory not found")
 		return test_result
 
-		# Test cultural metrics
-		var diversity_index = CulturalMemory.get_diversity_index()
-		var maturity_level = CulturalMemory.get_maturity_level()
+	# Test cultural metrics
+	var diversity_index = CulturalMemory.get_diversity_index()
+	var maturity_level = CulturalMemory.get_maturity_level()
 
-		test_result.details["diversity_index"] = diversity_index
-		test_result.details["maturity_level"] = maturity_level
-		test_result.details["metrics_valid"] = is_finite(diversity_index) and is_finite(maturity_level)
+	test_result.details["diversity_index"] = diversity_index
+	test_result.details["maturity_level"] = maturity_level
+	test_result.details["metrics_valid"] = is_finite(diversity_index) and is_finite(maturity_level)
 
-		if not test_result.details.metrics_valid:
-			test_result.status = "failed"
-			test_result.errors.append("Invalid cultural metrics")
+	if not test_result.details.metrics_valid:
+		test_result.status = "failed"
+		test_result.errors.append("Invalid cultural metrics")
 
-		print("[NeuralIntegrationTester] ✓ Cultural metrics test passed")
+	print("[NeuralIntegrationTester] ✓ Cultural metrics test passed")
 
 	return test_result
 
@@ -716,11 +720,16 @@ func _test_religion_lens_initialization() -> Dictionary:
 		test_result.errors.append("ReligionLens not found")
 		return test_result
 
+<<<<<<< HEAD
 		# Test ReligionLens properties
 		var sacred_mem: Node = MemoryManager.get_sacred_memory()
 		test_result.details["sacred_sites_count"] = sacred_mem.site_count() if sacred_mem != null else 0
+=======
+	# Test ReligionLens properties
+	test_result.details["sacred_sites_count"] = SacredMemory.site_count() if SacredMemory else 0
+>>>>>>> aad341ea (fix: correct indentation errors in NeuralIntegrationTester.gd)
 
-		print("[NeuralIntegrationTester] ✓ Religion Lens initialization test passed")
+	print("[NeuralIntegrationTester] ✓ Religion Lens initialization test passed")
 
 	return test_result
 
@@ -737,17 +746,17 @@ func _test_religious_harmony() -> Dictionary:
 		test_result.errors.append("ReligionLens not found")
 		return test_result
 
-		# Test religious harmony calculation
-		var harmony_index = ReligionLens.get_harmony_index()
+	# Test religious harmony calculation
+	var harmony_index = ReligionLens.get_harmony_index()
 
-		test_result.details["harmony_index"] = harmony_index
-		test_result.details["harmony_valid"] = is_finite(harmony_index)
+	test_result.details["harmony_index"] = harmony_index
+	test_result.details["harmony_valid"] = is_finite(harmony_index)
 
-		if not test_result.details.harmony_valid:
-			test_result.status = "failed"
-			test_result.errors.append("Invalid harmony index")
+	if not test_result.details.harmony_valid:
+		test_result.status = "failed"
+		test_result.errors.append("Invalid harmony index")
 
-		print("[NeuralIntegrationTester] ✓ Religious harmony test passed")
+	print("[NeuralIntegrationTester] ✓ Religious harmony test passed")
 
 	return test_result
 
@@ -1176,11 +1185,18 @@ func _test_memory_stress() -> Dictionary:
 		"errors": []
 	}
 
+<<<<<<< HEAD
 	# Test memory stress (Godot 4: Performance monitor, not OS.get_static_memory_usage_by_type / gc)
 	var initial_memory: float = Performance.get_monitor(Performance.MEMORY_STATIC)
 
 	# Create multiple neural network instances
 	var neural_instances: Array = []
+=======
+	# Test memory stress
+	var initial_memory = OS.get_static_memory_usage_by_type()[OS.MEMORY_TYPE_STATIC]
+
+	# Create multiple neural network instances
+	var neural_instances = []
 	for i in range(10):
 		var instance = WorldEvolution.new()
 		neural_instances.append(instance)

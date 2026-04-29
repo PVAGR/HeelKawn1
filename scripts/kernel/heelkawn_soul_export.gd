@@ -36,13 +36,13 @@ func print_bundle(main: Node) -> void:
 	print("world_memory: event_count=%d" % WorldMemory.event_count())
 	if main != null and main.has_method("get_wildlife_snapshot_for_diagnostic"):
 		print("wildlife: %s" % str(main.call("get_wildlife_snapshot_for_diagnostic")))
-	print("--- world_memory_tail (newest last; max 40) ---")
-	for e in WorldMemory.get_recent_events(40):
+	print("--- world_memory_tail (newest last; max 18) ---")
+	for e in WorldMemory.get_recent_events(18):
 		print(str(e))
-	print("--- history_export_snip (private_dev, first 80 lines max) ---")
+	print("--- history_export_snip (private_dev, first 45 lines max) ---")
 	var hist: String = WorldMemory.get_history_export_string(false)
 	var hist_lines: PackedStringArray = hist.split("\n")
-	var cap: int = mini(80, hist_lines.size())
+	var cap: int = mini(45, hist_lines.size())
 	for i in range(cap):
 		print(hist_lines[i])
 	if hist_lines.size() > cap:

@@ -347,7 +347,8 @@ const BUILD_DRAG_MAX_TILES: int = 256  # ~16x16 of walls/beds/doors at once
 ## One-shot [VALIDATION_STATUS] / [VALIDATION_WARN] after scene boot (observability only).
 var _validation_harness_observability_logged: bool = false
 var _ai_control_panel: AIControlPanel = null
-const ENABLE_AI_CONTROL_PANEL: bool = false
+## Off Main for worker runs only; normal play instances hidden UI so F10 error report stays green.
+const ENABLE_AI_CONTROL_PANEL: bool = true
 
 func _init_ai_control_panel() -> void:
 	if not ENABLE_AI_CONTROL_PANEL:

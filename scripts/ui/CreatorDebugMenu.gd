@@ -770,11 +770,14 @@ func _toggle_ai_control_panel() -> void:
 	var ai_panel: Control = main.get_node_or_null("AIControlPanel")
 	if ai_panel == null:
 		print("AI Control Panel not found - creating it...")
-		# Try to create the AI Control Panel if it doesn't exist
 		var ai_panel_scene: PackedScene = preload("res://scenes/ui/AIControlPanel.tscn")
 		ai_panel = ai_panel_scene.instantiate()
 		ai_panel.name = "AIControlPanel"
 		main.add_child(ai_panel)
+		if main.has_method("_on_enhanced_ai_toggled"):
+			(ai_panel as AIControlPanel).enhanced_ai_toggled.connect(main._on_enhanced_ai_toggled)
+			(ai_panel as AIControlPanel).tick_rate_changed.connect(main._on_tick_rate_changed)
+			(ai_panel as AIControlPanel).ai_potential_changed.connect(main._on_ai_potential_changed)
 		print("AI Control Panel created and added to Main")
 	else:
 		ai_panel.visible = not ai_panel.visible
@@ -894,8 +897,7 @@ func _report_error_issues() -> void:
 	else:
 		print("⚠️  ISSUES DETECTED - See details above")
 		print("Recommendation: Fix identified issues before proceeding")
-	
-	print("=== HEELKAWN_DEBUG_REPORT:error_report:tick=%d END ===" % GameManager.tick_count)
+	# Outer _emit_report() prints the matching HEELKAWN_DEBUG_REPORT END line.
 
 
 func _check_file_syntax_errors(file_path: String) -> Array[String]:

@@ -735,6 +735,8 @@ func _narrative_line_for_event(typ: String, e: Dictionary) -> String:
 	if bool(e.get("first_of_type", false)):
 		return "first: %s" % typ.replace("_", " ")
 	match typ:
+		"structure_built":
+			return "new structures were completed"
 		"birth", "pawn_birth":
 			var child_name: String = str(e.get("pawn_name", "a child")).strip_edges()
 			if child_name.is_empty():

@@ -6,7 +6,8 @@ extends Node
 const SCHEMA: int = 1
 ## Text/history export line format; bump when column order or provenance rules change.
 const HISTORY_EXPORT_FORMAT: String = "1.0.0"
-const MAX_EVENTS: int = 5000
+## Keep a long chronology by default; older entries rotate out only after this cap.
+const MAX_EVENTS: int = 50000
 
 enum Kind {
 	PAWN_DEATH = 0,
@@ -20,6 +21,10 @@ var _events: Array[Dictionary] = []
 var _dirty: bool = false
 ## event_type -> first tick observed in this session/save timeline.
 var _first_event_tick_by_type: Dictionary = {}
+## event_type -> total retained events (O(1) counters for large timelines).
+var _event_type_counts: Dictionary = {}
+## Monotonic event id (stable cursor for paging/query surfaces).
+var _next_event_id: int = 1
 
 # === Neural Network Matrix Connections ===
 
@@ -129,6 +134,8 @@ func get_resource_at_tile(tile_pos: Vector2i) -> Dictionary:
 func clear() -> void:
 	_events.clear()
 	_first_event_tick_by_type.clear()
+	_event_type_counts.clear()
+	_next_event_id = 1
 	_dirty = false
 
 
@@ -148,8 +155,49 @@ static func _region_key(tx: int, ty: int) -> int:
 func _append(e: Dictionary) -> void:
 	_dirty = true
 	if _events.size() >= MAX_EVENTS:
+		var dropped: Dictionary = _events[0]
 		_events.remove_at(0)
+		_on_event_removed_from_indexes(dropped)
 	_events.append(e)
+	_on_event_added_to_indexes(e)
+
+
+func _on_event_added_to_indexes(evt: Dictionary) -> void:
+	var typ: String = _canonical_event_type(evt)
+	_event_type_counts[typ] = int(_event_type_counts.get(typ, 0)) + 1
+	var tick: int = int(evt.get("t", 0))
+	if not _first_event_tick_by_type.has(typ):
+		_first_event_tick_by_type[typ] = tick
+
+
+func _on_event_removed_from_indexes(evt: Dictionary) -> void:
+	var typ: String = _canonical_event_type(evt)
+	var next_count: int = maxi(0, int(_event_type_counts.get(typ, 1)) - 1)
+	if next_count <= 0:
+		_event_type_counts.erase(typ)
+		_first_event_tick_by_type.erase(typ)
+		return
+	_event_type_counts[typ] = next_count
+	if not _first_event_tick_by_type.has(typ):
+		return
+	var dropped_tick: int = int(evt.get("t", 0))
+	if int(_first_event_tick_by_type.get(typ, dropped_tick)) != dropped_tick:
+		return
+	_recompute_first_tick_for_type(typ)
+
+
+func _recompute_first_tick_for_type(typ: String) -> void:
+	var best: int = -1
+	for evt in _events:
+		if _canonical_event_type(evt) != typ:
+			continue
+		var tick: int = int(evt.get("t", 0))
+		if best < 0 or tick < best:
+			best = tick
+	if best < 0:
+		_first_event_tick_by_type.erase(typ)
+	else:
+		_first_event_tick_by_type[typ] = best
 
 
 ## Generic deterministic event appender for non-core typed events (e.g. player input).
@@ -160,6 +208,8 @@ func record_event(e: Dictionary) -> void:
 
 func _normalize_event_payload(e: Dictionary) -> Dictionary:
 	var payload: Dictionary = e.duplicate(true)
+	payload["eid"] = _next_event_id
+	_next_event_id += 1
 	payload["s"] = SCHEMA
 	if not payload.has("t"):
 		payload["t"] = GameManager.tick_count
@@ -336,18 +386,28 @@ func from_save_dict(d: Variant) -> void:
 	if d == null or not (d is Dictionary):
 		return
 	var ev: Variant = (d as Dictionary).get("events", [])
+	var max_eid: int = 0
 	if ev is Array:
 		for e in ev:
 			if e is Dictionary:
-				_events.append((e as Dictionary).duplicate(true))
+				var copy: Dictionary = (e as Dictionary).duplicate(true)
+				if not copy.has("eid"):
+					copy["eid"] = _next_event_id
+					_next_event_id += 1
+				max_eid = maxi(max_eid, int(copy.get("eid", 0)))
+				_events.append(copy)
+	if max_eid > 0:
+		_next_event_id = max_eid + 1
 	_rebuild_first_event_index()
 
 
 func _rebuild_first_event_index() -> void:
 	_first_event_tick_by_type.clear()
+	_event_type_counts.clear()
 	for evt in _events:
 		var typ: String = _canonical_event_type(evt)
 		var tick: int = int(evt.get("t", 0))
+		_event_type_counts[typ] = int(_event_type_counts.get(typ, 0)) + 1
 		if not _first_event_tick_by_type.has(typ):
 			_first_event_tick_by_type[typ] = tick
 
@@ -628,6 +688,10 @@ func get_first_event_tick(event_type: String) -> int:
 	return int(_first_event_tick_by_type.get(key, -1))
 
 
+func get_event_type_counts() -> Dictionary:
+	return _event_type_counts.duplicate(true)
+
+
 ## Recent events scoped to a settlement center region (optionally includes all packed settlement regions).
 func get_recent_events_for_settlement(center_region: int, max_items: int = 64, include_settlement_regions: bool = true) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -657,6 +721,22 @@ func get_recent_events_for_settlement(center_region: int, max_items: int = 64, i
 			continue
 		out.append(evt.duplicate(true))
 	out.reverse()
+	return out
+
+
+## Cursor-like page from newest to oldest. Pass before_eid to continue pagination.
+func get_events_page_newest(max_items: int = 100, before_eid: int = -1) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if max_items <= 0:
+		return out
+	for i in range(_events.size() - 1, -1, -1):
+		if out.size() >= max_items:
+			break
+		var evt: Dictionary = _events[i]
+		var eid: int = int(evt.get("eid", 0))
+		if before_eid > 0 and eid >= before_eid:
+			continue
+		out.append(evt.duplicate(true))
 	return out
 
 

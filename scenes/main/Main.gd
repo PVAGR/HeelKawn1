@@ -1507,6 +1507,7 @@ func _on_incarnation_entry_confirmed(pawn_id: int) -> void:
 		if OS.is_debug_build():
 			print("[Main] Incarnation picker: pawn %d not found" % pawn_id)
 		return
+	_player_pawn = pawn
 	_set_selected_pawn(pawn)
 	_camera_follow_selected = true
 	_set_player_mode(PlayerMode.INCARNATED)
@@ -1554,6 +1555,7 @@ func request_spectator_return(note: String = "manual_return", payload: Dictionar
 	var ok: bool = PlayerIntentQueue.request_spectator_return(note, payload)
 	if _incarnation_picker != null and is_instance_valid(_incarnation_picker):
 		_incarnation_picker.call("close_picker")
+	_player_pawn = null
 	_set_selected_pawn(null)
 	_set_player_mode(PlayerMode.SPECTATOR)
 	return ok
@@ -1588,6 +1590,7 @@ func _bootstrap_colony() -> void:
 	WorldPersistence.recompute()
 	_place_stockpile(main_component)
 	_pawn_spawner.spawn_starters(_world, main_component)
+	_player_pawn = null
 	_set_selected_pawn(null)
 	_set_player_mode(PlayerMode.SPECTATOR)
 	_ensure_player_pawn_assigned()
@@ -1781,7 +1784,7 @@ func _sync_pawn_inherited_cultural_reputation() -> void:
 func _on_game_tick(tick: int) -> void:
 	if _is_simulation_worker_mode() and GameManager != null and GameManager.is_tick_benchmark_enabled():
 		return
-	if _player_input != null:
+	if _player_input != null and _player_mode == PlayerMode.INCARNATED:
 		if not is_instance_valid(_player_pawn):
 			_ensure_player_pawn_assigned()
 		if is_instance_valid(_player_pawn):
@@ -1789,6 +1792,8 @@ func _on_game_tick(tick: int) -> void:
 			_player_action_state = _player_input.get_last_action_state()
 		else:
 			_player_action_state = "no_pawn"
+	elif _player_mode != PlayerMode.INCARNATED:
+		_player_action_state = "spectator"
 	# First tick of post-stab window: (re)post HUNT for static wildlife skipped during [member _world_stabilization_until_tick] seed; deterministic order.
 	if Main._world_stabilization_until_tick >= 0 and tick == Main._world_stabilization_until_tick:
 		_post_wildlife_hunt_jobs_after_stabilization()
@@ -2886,10 +2891,11 @@ func _set_selected_pawn(p: Pawn) -> void:
 		_selected_pawn.is_selected = false
 		_selected_pawn.queue_redraw()
 	_selected_pawn = p
-	_player_pawn = _selected_pawn
-	_set_player_mode(PlayerMode.INCARNATED if _selected_pawn != null else PlayerMode.SPECTATOR)
-	if _player_mode == PlayerMode.INCARNATED and _selected_pawn != null:
+	# Observer-first: selection is inspection only. Incarnation/control remains explicit via picker.
+	if _selected_pawn != null:
 		_camera_follow_selected = true
+	elif _player_mode != PlayerMode.INCARNATED:
+		_camera_follow_selected = false
 	_sync_player_context_ui()
 	if _hud != null:
 		_hud.set_player_control_refs(_player_input, _player_pawn)

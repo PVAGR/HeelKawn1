@@ -22,12 +22,14 @@ const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.70)
 
 # Tuned to be unobtrusive: thin top-left strip, easy to read, doesn't
 # eat the world.
-const FONT_SIZE_BODY: int = 11
-const FONT_SIZE_HOTKEYS: int = 9
+const FONT_SIZE_BODY: int = 14
+const FONT_SIZE_HOTKEYS: int = 12
 const PANEL_PAD_X: int = 6
 const PANEL_PAD_Y: int = 4
+## Readability mode: bigger, simpler HUD for at-a-glance play.
+const SIMPLE_READABLE_HUD: bool = true
 
-const HOTKEY_HINTS: String = "SPACE pause · 1-7 speed · F5 save · F8 load · M labor stance · R reroll · T pawns · J jobs · I stockpile · B beds · W walls · O doors · Z zone · F filter · Esc cancel"
+const HOTKEY_HINTS: String = "SPACE pause · F5 save · F8 load · K sprite · F10 reports"
 
 @onready var _panel: PanelContainer = $Panel
 @onready var _label: RichTextLabel = $Panel/Margin/VBox/Body
@@ -51,6 +53,7 @@ var _hud_dirty: bool = true
 var _last_refresh_stride: int = REFRESH_EVERY_N_TICKS
 var _last_coarse_gate: int = 10
 var _last_refresh_tick: int = 0
+var _last_render_signature: String = ""
 
 
 func _ready() -> void:
@@ -169,22 +172,36 @@ func _refresh() -> void:
 	if _designation_label != "":
 		lines.append("[bgcolor=#583a14][color=#ffe082]  BUILD MODE: %s   (click or click-drag to place · right-click / Esc to cancel)  [/color][/bgcolor]" %
 			_designation_label)
-	lines.append(_time_line())
-	lines.append(_colony_state_line())
-	lines.append(_settlement_identity_line())
-	lines.append(_pawn_line())
-	lines.append(_player_status_line())
-	lines.append(_politics_line())
-	lines.append(_war_status_line())
-	lines.append(_skill_line())
-	lines.append(_kill_line())
-	lines.append(_export_status_line())
-	lines.append(_stockpile_line())
-	lines.append(_jobs_line())
-	lines.append(_wildlife_line())
-	lines.append(_narrative_rail_line())
-	lines.append(_session_diag_line())
-	_label.text = "\n".join(lines)
+	if SIMPLE_READABLE_HUD:
+		lines.append(_time_line())
+		lines.append(_colony_state_line())
+		lines.append(_settlement_identity_line())
+		lines.append(_pawn_line_simple())
+		lines.append(_jobs_line_simple())
+		lines.append(_wildlife_line())
+		lines.append(_narrative_rail_line())
+	else:
+		lines.append(_time_line())
+		lines.append(_colony_state_line())
+		lines.append(_settlement_identity_line())
+		lines.append(_pawn_line())
+		lines.append(_player_status_line())
+		lines.append(_politics_line())
+		lines.append(_war_status_line())
+		lines.append(_skill_line())
+		lines.append(_kill_line())
+		lines.append(_export_status_line())
+		lines.append(_stockpile_line())
+		lines.append(_jobs_line())
+		lines.append(_wildlife_line())
+		lines.append(_narrative_rail_line())
+		lines.append(_session_diag_line())
+	var next_text: String = "\n".join(lines)
+	var sig: String = str(next_text.hash())
+	if sig == _last_render_signature:
+		return
+	_last_render_signature = sig
+	_label.text = next_text
 
 
 ## CanvasLayer is not drawable; intent marker rendering is temporarily disabled.
@@ -406,6 +423,33 @@ func _pawn_line() -> String:
 	]
 
 
+func _pawn_line_simple() -> String:
+	if _spawner == null:
+		return "[color=#cccccc]People:[/color] none"
+	var n: int = 0
+	var avg_h: float = 0.0
+	var avg_r: float = 0.0
+	var avg_m: float = 0.0
+	for p in _spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		n += 1
+		avg_h += p.data.hunger
+		avg_r += p.data.rest
+		avg_m += p.data.mood
+	if n <= 0:
+		return "[color=#cccccc]People:[/color] none"
+	avg_h /= float(n)
+	avg_r /= float(n)
+	avg_m /= float(n)
+	return "[color=#cccccc]People:[/color] [b]%d[/b] · hunger %s · rest %s · mood %s" % [
+		n,
+		_color_value(avg_h),
+		_color_value(avg_r),
+		_color_value(avg_m),
+	]
+
+
 func _stockpile_line() -> String:
 	var zones: Array[Stockpile] = StockpileManager.zones()
 	if zones.is_empty():
@@ -448,6 +492,17 @@ func _jobs_line() -> String:
 	var beds_built: int = _world.bed_count() if _world != null else 0
 	return "[color=#cccccc]Jobs:[/color] [b]%d[/b] open  [b]%d[/b] claimed   F %d · M %d · TM %d · C %d · H %d · B %d · W %d · D %d   [color=#dcb478]Beds[/color] [b]%d[/b]   [color=#888888](done %d)[/color]" % [
 		s.open, s.claimed, fw, mn, mw, ch, hu, bd, bw, bo, beds_built, s.completed
+	]
+
+
+func _jobs_line_simple() -> String:
+	var s: Dictionary = JobManager.stats()
+	var beds_built: int = _world.bed_count() if _world != null else 0
+	return "[color=#cccccc]Work:[/color] open [b]%d[/b] · claimed [b]%d[/b] · done [b]%d[/b] · beds [b]%d[/b]" % [
+		int(s.get("open", 0)),
+		int(s.get("claimed", 0)),
+		int(s.get("completed", 0)),
+		beds_built,
 	]
 
 

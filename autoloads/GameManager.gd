@@ -28,6 +28,9 @@ const MAX_ACCUMULATED_TICKS: int = 16
 var game_speed: float = 1.0
 var is_paused: bool = false
 var tick_count: int = 0
+## Worker mode disables play/UI-heavy codepaths for deterministic headless runs.
+var simulation_worker_mode: bool = false
+var _tick_benchmark_enabled: bool = false
 
 ## Optional macro pressure (LivingWorldController and future systems). Not tied to
 ## a single UI yet; keeps a bounded running total.
@@ -77,6 +80,18 @@ func set_speed(new_speed: float) -> void:
 	game_speed = max(new_speed, 0.0001)
 	is_paused = false
 	speed_changed.emit(game_speed, is_paused)
+
+
+func set_simulation_worker_mode(enabled: bool) -> void:
+	simulation_worker_mode = enabled
+
+
+func set_tick_benchmark_enabled(enabled: bool) -> void:
+	_tick_benchmark_enabled = enabled
+
+
+func is_tick_benchmark_enabled() -> bool:
+	return _tick_benchmark_enabled
 
 
 func set_speed_index(i: int) -> void:

@@ -143,6 +143,9 @@ var _play_chrome_visible: bool = true
 var _camera_follow_selected: bool = false
 ## Deterministic local-control pawn. Defaults to current selection.
 var _player_pawn: Pawn = null
+## Two **shipped** perspectives (CK3-style map cam, first-person, etc. are later layers).
+## - **SPECTATOR** — worldwide / chronicler / “god or developer” flyover: same sim clock, free camera, inspection, time speed, no single-body embodiment (docs/HEELKAWN_STANDALONE_MASTER_PLAN.md: Spectator state).
+## - **INCARNATED** — you are one `Pawn` in the world (same class as NPCs): embodied input, shared needs/jobs; parity target = everything an NPC can do that is implemented (ibid.: Incarnation state).
 enum PlayerMode {
 	SPECTATOR = 0,
 	INCARNATED = 1,

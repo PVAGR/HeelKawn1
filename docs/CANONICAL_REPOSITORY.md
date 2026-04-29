@@ -12,6 +12,12 @@ This document fixes **where** official HeelKawn work lives so history is not spl
 
 Anything committed and pushed to **`main`** on that remote is the **record of record** for the Godot simulation, docs, and tooling in this project.
 
+## Real-time visibility (humans + AI)
+
+- **GitHub default branch `main`** is the only branch that counts as “live” for everyone cloning fresh or watching the repo.
+- Local commits or topic branches **do not** update what others see until they are **merged into `main`** and **`git push origin main`** has completed successfully.
+- Assistants and automation should treat **`origin/main`** as the canonical tip: after coherent work, **commit** and **push to `main`** (merge first if the work lived on a feature branch). There is no substitute for a pushed `main` if you want the world to see the same code you have.
+
 ## What counts as canonical
 
 - **Yes:** The working tree at `HeelKawn1` whose `origin` remote is exactly `PVAGR/HeelKawn1.git` on GitHub (fetch/push URLs may use `https://github.com/PVAGR/HeelKawn1.git`).

@@ -26,6 +26,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 - Local: this repository root (the folder containing `.git/`)
 - Remote: https://github.com/PVAGR/HeelKawn1 (branch main)
+- When work is ready: **commit and `git push origin main`** — that is how GitHub (and everyone else) sees updates in real time; topic branches must merge to **main** first.
 - Full policy: docs/CANONICAL_REPOSITORY.md
 
 LOG (newest first)

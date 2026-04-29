@@ -691,6 +691,20 @@ func _narrative_line_for_event(typ: String, e: Dictionary) -> String:
 			return "birth: %s" % child_name
 		"cooperative_build":
 			return "crews raised new structures together"
+		"knowledge_discovery":
+			var kt: String = str(e.get("knowledge_type", "?"))
+			return "new knowledge discovered (k=%s)" % kt
+		"knowledge_rediscovery":
+			return "lost knowledge was rediscovered"
+		"social_bond_milestone":
+			var an: String = str(e.get("a_name", "A"))
+			var bn: String = str(e.get("b_name", "B"))
+			var m: int = int(e.get("milestone", 0))
+			return "%s + %s bond deepened (%d)" % [an, bn, m]
+		"social_meeting":
+			var ma: String = str(e.get("a_name", "A"))
+			var mb: String = str(e.get("b_name", "B"))
+			return "%s met %s" % [ma, mb]
 		"governance_change":
 			var g: String = str(e.get("governance_type", "anarchy")).replace("_", " ")
 			return "governance became %s" % g

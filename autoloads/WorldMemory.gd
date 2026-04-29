@@ -658,3 +658,58 @@ func get_recent_events_for_settlement(center_region: int, max_items: int = 64, i
 		out.append(evt.duplicate(true))
 	out.reverse()
 	return out
+
+
+## Recent events involving a specific pawn id. Matches direct subject keys and
+## pair/family fields where present.
+func get_recent_events_for_pawn(pawn_id: int, max_items: int = 64) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if pawn_id < 0 or max_items <= 0:
+		return out
+	for i in range(_events.size() - 1, -1, -1):
+		if out.size() >= max_items:
+			break
+		var evt: Dictionary = _events[i]
+		var hit: bool = false
+		if int(evt.get("pawn_id", -1)) == pawn_id:
+			hit = true
+		elif int(evt.get("pid", -1)) == pawn_id:
+			hit = true
+		elif int(evt.get("a", -1)) == pawn_id or int(evt.get("b", -1)) == pawn_id:
+			hit = true
+		elif int(evt.get("parent_a_id", -1)) == pawn_id or int(evt.get("parent_b_id", -1)) == pawn_id:
+			hit = true
+		if not hit:
+			continue
+		out.append(evt.duplicate(true))
+	out.reverse()
+	return out
+
+
+## Focused relationship timeline between two pawns (meetings, bond milestones,
+## and shared family records) in append order.
+func get_relationship_timeline(a_id: int, b_id: int, max_items: int = 64) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if a_id < 0 or b_id < 0 or max_items <= 0:
+		return out
+	var lo: int = mini(a_id, b_id)
+	var hi: int = maxi(a_id, b_id)
+	for i in range(_events.size() - 1, -1, -1):
+		if out.size() >= max_items:
+			break
+		var evt: Dictionary = _events[i]
+		var typ: String = _canonical_event_type(evt)
+		var include: bool = false
+		if typ == "social_meeting" or typ == "social_bond_milestone":
+			var ea: int = int(evt.get("a", -1))
+			var eb: int = int(evt.get("b", -1))
+			include = mini(ea, eb) == lo and maxi(ea, eb) == hi
+		elif typ == "birth" or typ == "pawn_birth":
+			var pa: int = int(evt.get("parent_a_id", -1))
+			var pb: int = int(evt.get("parent_b_id", -1))
+			include = mini(pa, pb) == lo and maxi(pa, pb) == hi
+		if not include:
+			continue
+		out.append(evt.duplicate(true))
+	out.reverse()
+	return out

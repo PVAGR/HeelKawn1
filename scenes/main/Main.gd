@@ -3036,6 +3036,10 @@ func get_player_action_state() -> String:
 	return _player_action_state
 
 
+func get_chronicler_pin_zone_id() -> String:
+	return _player_intent_pin_zone_id
+
+
 func get_player_pawn_id() -> int:
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return -1

@@ -8,7 +8,7 @@ extends Node
 ## - World simulation stays **tick-scheduled** in `Main` (`_high_speed_interval`, capped ticks/frame in `GameManager`); derived layers stay lazy.
 ##
 ## Version bump when exported dictionary keys change (agents/F10 can gate on this).
-const API_VERSION: String = "2026-04-29a"
+const API_VERSION: String = "2026-04-29b"
 
 ## Get comprehensive pawn observation data (same as Focus Inspector pawn view)
 static func observe_pawn(pawn_id: int) -> Dictionary:
@@ -171,10 +171,19 @@ static func observe_region_lite(region_key: int) -> Dictionary:
 
 ## Single-call ambient context: sim backlog + optional settlement lite for one region (for AI cadence hooks).
 static func observe_sim_ambient(region_key_for_settlement: int = -1) -> Dictionary:
+	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
+	var pin: String = ""
+	if main != null and main.has_method("get_chronicler_pin_zone_id"):
+		pin = str(main.call("get_chronicler_pin_zone_id"))
 	var out: Dictionary = {
 		"type": "sim_ambient",
 		"api_version": API_VERSION,
 		"sim_diag": GameManager.sim_diag(),
+		"player_intent": {
+			"chronicler_pin_zone_id": pin,
+			"queue_size": PlayerIntentQueue.queue_size(),
+			"unprocessed": PlayerIntentQueue.unprocessed_count(),
+		},
 	}
 	if region_key_for_settlement >= 0:
 		var lite: Dictionary = observe_region_lite(region_key_for_settlement)

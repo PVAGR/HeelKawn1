@@ -31,6 +31,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-29  ObservationAPI 2026-04-29b: observe_sim_ambient includes player_intent pin/queue; Main.get_chronicler_pin_zone_id(); F10 report 28 seeds demo CHRONICLE_PIN + REQUEST_SETTLEMENT_FOCUS when settlements exist.
 2026-04-29  PlayerIntentQueue: dispatch_cursor + take_next_unprocessed (one intent per sim tick); Main wires CHRONICLE_PIN_ZONE + REQUEST_SETTLEMENT_FOCUS to observer routing; snapshot adds chronicler_pin_zone_id + sim_ticks_last_frame; GameManager.ticks_emitted_last_frame + sim_diag.
 2026-04-29  Canon shift: docs/HEELKAWN_STATE.md — emergence / seeded variety official; WorldRNG autoload + PawnSpawner uses world-seeded streams; World configures RNG on generate/load; SIM_MATRIX §5 aligned; WorldMeaning header softened.
 2026-04-29  ObservationAPI: performance contract + `API_VERSION`; `observe_region` pawn_count uses `_count_pawns_in_regions` (no full per-pawn dict alloc); added `observe_region_lite` + `observe_sim_ambient` for throttled AI/overlays; Main tick comment ties FocusInspector cadence to on-demand observation rule.

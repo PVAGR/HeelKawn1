@@ -622,10 +622,11 @@ func _report_player_intents() -> void:
 	if not _demo_player_intent_seeded:
 		_demo_player_intent_seeded = true
 		var zid: String = ""
+		var ckr: int = -1
 		for st_any in SettlementMemory.settlements:
 			if not (st_any is Dictionary):
 				continue
-			var ckr: int = int((st_any as Dictionary).get("center_region", -1))
+			ckr = int((st_any as Dictionary).get("center_region", -1))
 			if ckr >= 0:
 				zid = str(ckr)
 				break
@@ -636,7 +637,25 @@ func _report_player_intents() -> void:
 				"F10 report 28 demo intent (one-shot per session)",
 				{"report_id": "player_intents"}
 		)
+		if ckr >= 0:
+			PlayerIntentQueue.submit(
+					PlayerIntentQueue.IntentKind.CHRONICLE_PIN_ZONE,
+					zid,
+					-1,
+					"F10 demo CHRONICLE_PIN_ZONE (dispatches on next sim ticks)",
+					{}
+			)
+			PlayerIntentQueue.submit(
+					PlayerIntentQueue.IntentKind.REQUEST_SETTLEMENT_FOCUS,
+					"",
+					-1,
+					"F10 demo REQUEST_SETTLEMENT_FOCUS",
+					{"center_region": ckr}
+			)
 	print(PlayerIntentQueue.debug_summary_block())
+	print(
+			"ObservationAPI.observe_sim_ambient() player_intent: use for agents; unprocessed>0 drains 1/tick in Main."
+	)
 	print("WorldMemory tail: filter events type=player_intent in export (report 14/15).")
 
 

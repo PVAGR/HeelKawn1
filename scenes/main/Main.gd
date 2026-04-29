@@ -3803,6 +3803,19 @@ func _on_job_completed(job: Job) -> void:
 				"region": preload("res://autoloads/WorldMemory.gd")._region_key(job.tile.x, job.tile.y),
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
+			if nearby_workers >= 2:
+				WorldMemory.record_event({
+					"type": "cooperative_build",
+					"category": "construction",
+					"severity": 2,
+					"tick": now_tick,
+					"job_type": int(job.type),
+					"worker_id": worker_id,
+					"worker_name": worker_name,
+					"nearby_workers": nearby_workers,
+					"region": preload("res://autoloads/WorldMemory.gd")._region_key(job.tile.x, job.tile.y),
+					"tile": {"x": job.tile.x, "y": job.tile.y},
+				})
 		Job.Type.MINE, Job.Type.MINE_WALL:
 			_mining_react_pending = true
 		Job.Type.FORAGE:

@@ -646,7 +646,15 @@ func _wildlife_line() -> String:
 ## Purposefully filters out spammy low-signal events (e.g. job_completed) and
 ## reports only identity/meaning-relevant shifts for in-universe readability.
 func _narrative_rail_line() -> String:
-	var ev: Array = WorldMemory.get_recent_events(64)
+	var ev: Array = []
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node != null:
+		var digest: Dictionary = main_node.get_camera_settlement_revival_digest()
+		var profile_rk: int = int(digest.get("profile_region_key", -1))
+		if bool(digest.get("has_settlement", false)) and profile_rk >= 0:
+			ev = WorldMemory.get_recent_events_for_settlement(profile_rk, 96, true)
+	if ev.is_empty():
+		ev = WorldMemory.get_recent_events(64)
 	if ev.is_empty():
 		return "📜 Chronicle: world is quiet"
 	var entries: PackedStringArray = PackedStringArray()
@@ -672,6 +680,17 @@ func _narrative_line_for_event(typ: String, e: Dictionary) -> String:
 	if bool(e.get("first_of_type", false)):
 		return "first: %s" % typ.replace("_", " ")
 	match typ:
+		"birth", "pawn_birth":
+			var child_name: String = str(e.get("pawn_name", "a child")).strip_edges()
+			if child_name.is_empty():
+				child_name = "a child"
+			var pa: String = str(e.get("parent_a_name", "")).strip_edges()
+			var pb: String = str(e.get("parent_b_name", "")).strip_edges()
+			if not pa.is_empty() and not pb.is_empty():
+				return "birth: %s to %s + %s" % [child_name, pa, pb]
+			return "birth: %s" % child_name
+		"cooperative_build":
+			return "crews raised new structures together"
 		"governance_change":
 			var g: String = str(e.get("governance_type", "anarchy")).replace("_", " ")
 			return "governance became %s" % g

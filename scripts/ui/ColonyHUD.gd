@@ -182,6 +182,7 @@ func _refresh() -> void:
 	lines.append(_stockpile_line())
 	lines.append(_jobs_line())
 	lines.append(_wildlife_line())
+	lines.append(_narrative_rail_line())
 	lines.append(_session_diag_line())
 	_label.text = "\n".join(lines)
 
@@ -639,6 +640,55 @@ func _wildlife_line() -> String:
 	var d: int = int(_wildlife_snapshot.get("deer", 0))
 	var t: int = int(_wildlife_snapshot.get("total", 0))
 	return "🦌 Wildlife: R:%d D:%d T:%d [%s]" % [r, d, t, _momentum_spark]
+
+
+## Compact high-signal narrative rail (DF/CK/RimWorld-style summary strip).
+## Purposefully filters out spammy low-signal events (e.g. job_completed) and
+## reports only identity/meaning-relevant shifts for in-universe readability.
+func _narrative_rail_line() -> String:
+	var ev: Array = WorldMemory.get_recent_events(64)
+	if ev.is_empty():
+		return "📜 Chronicle: world is quiet"
+	var entries: PackedStringArray = PackedStringArray()
+	for i in range(ev.size() - 1, -1, -1):
+		if entries.size() >= 3:
+			break
+		var e_any: Variant = ev[i]
+		if not (e_any is Dictionary):
+			continue
+		var e: Dictionary = e_any as Dictionary
+		var typ: String = str(e.get("type", ""))
+		var tick: int = int(e.get("tick", e.get("t", 0)))
+		var line: String = _narrative_line_for_event(typ, e)
+		if line.is_empty():
+			continue
+		entries.append("[t%d] %s" % [tick, line])
+	if entries.is_empty():
+		return "📜 Chronicle: no major shifts"
+	return "📜 Chronicle: %s" % "  •  ".join(entries)
+
+
+func _narrative_line_for_event(typ: String, e: Dictionary) -> String:
+	match typ:
+		"governance_change":
+			var g: String = str(e.get("governance_type", "anarchy")).replace("_", " ")
+			return "governance became %s" % g
+		"settlement_intent_shift":
+			var old_i: String = str(e.get("old_intent", "unknown")).to_lower()
+			var new_i: String = str(e.get("new_intent", "unknown")).to_lower()
+			return "intent shifted %s→%s" % [old_i, new_i]
+		"player_intent":
+			return "chronicler note recorded"
+		"pawn_death":
+			var nm: String = str(e.get("n", e.get("name", "someone"))).strip_edges()
+			if nm.is_empty():
+				nm = "someone"
+			return "%s died" % nm
+		"animal_death":
+			return "wildlife was culled"
+		_:
+			# Keep rail clean from low-signal sim churn.
+			return ""
 
 
 # ==================== formatting helpers ====================

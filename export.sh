@@ -18,7 +18,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   PLATFORM="macOS"
   OUTPUT_FILE="export/HeelKawn.app"
 else
-  PLATFORM="Linux/X11"
+  PLATFORM="Linux"
   OUTPUT_FILE="export/HeelKawn.x86_64"
 fi
 

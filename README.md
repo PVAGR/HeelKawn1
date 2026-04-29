@@ -1,8 +1,12 @@
 # HeelKawn
 
+**Official repository:** [github.com/PVAGR/HeelKawn1](https://github.com/PVAGR/HeelKawn1) (`main`)
+
 **A deterministic myth-simulation where worlds live without the player.**
 
 HeelKawn is a single-player offline world simulator where time flows independently, settlements rise and fall, and history accumulates whether you watch or not. Built on Godot 4.6, it implements a deterministic kernel architecture: memory → meaning → persistence → culture → behavior.
+
+For canonical repository workflow and scope rules, see [`docs/CANONICAL_REPOSITORY.md`](docs/CANONICAL_REPOSITORY.md).
 
 ## Quick Start
 
@@ -51,6 +55,9 @@ HeelKawn is a single-player offline world simulator where time flows independent
 
 - **[HEELKAWN_STATE.md](docs/HEELKAWN_STATE.md)** — Authoritative project state (read this first)
 - **[LLM_ONBOARDING.md](docs/LLM_ONBOARDING.md)** — Onboarding guide for AI assistants
+- **[SESSION_LOG.md](docs/SESSION_LOG.md)** — Cross-LLM session continuity log
+- **[CANONICAL_REPOSITORY.md](docs/CANONICAL_REPOSITORY.md)** — Repository scope and workflow rules
+- **[CURSOR_MASTER_PLANNING_SPEC.md](docs/CURSOR_MASTER_PLANNING_SPEC.md)** — Tiered canon and planning priorities
 - **[HEELKAWN_STANDALONE_MASTER_PLAN.md](docs/HEELKAWN_STANDALONE_MASTER_PLAN.md)** — Product vision and roadmap
 - **[HEELKAWN_INFINITE_ARCHITECTURE.md](docs/HEELKAWN_INFINITE_ARCHITECTURE.md)** — Architecture blueprint
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # HeelKawn - Launch with log capture (Linux/macOS)
+# Note: Uses Godot from PATH. For portable Godot equivalent, see play_capture_portable.bat
 
 cd "$(dirname "$0")" || exit 1
 

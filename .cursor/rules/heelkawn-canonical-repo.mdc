@@ -6,7 +6,7 @@ alwaysApply: true
 # Canonical HeelKawn workspace
 
 - **Official repo:** GitHub `PVAGR/HeelKawn1`, default branch `main`.
-- **Expected workspace root:** this repository root (the folder containing `.git/` for the `PVAGR/HeelKawn1` clone).
+- **Expected workspace root (this machine):** `C:\Users\user\Documents\GitHub\HeelKawn1` (the `PVAGR/HeelKawn1` clone).
 
 When doing **HeelKawn simulation / docs / tooling** work:
 

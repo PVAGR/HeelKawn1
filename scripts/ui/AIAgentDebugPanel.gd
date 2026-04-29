@@ -8,7 +8,7 @@ extends Control
 @onready var refresh_button: Button = $VBoxContainer/Controls/RefreshButton
 
 var selected_agent_id: int = -1
-var refresh_interval: float = 1.0
+var refresh_interval: float = 5.0  # Increased from 1.0 to 5.0 seconds to reduce overhead
 var time_since_refresh: float = 0.0
 
 func _ready() -> void:

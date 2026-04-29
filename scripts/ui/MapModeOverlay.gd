@@ -46,14 +46,24 @@ func _ready() -> void:
 	canvas_layer.visible = false
 	overlay_visible = false
 
+var _needs_update: bool = false
+var _update_timer: float = 0.0
+const UPDATE_INTERVAL: float = 0.5  # Update every 0.5 seconds instead of every frame
+
 func initialize(world_ref: World, camera_ref: Camera2D) -> void:
 	world = world_ref
 	camera = camera_ref
 	_update_region_colors()
 
-func _process(_delta: float) -> void:
-	if overlay_visible and world != null:
+func _process(delta: float) -> void:
+	if not overlay_visible or world == null:
+		return
+	
+	_update_timer += delta
+	if _update_timer >= UPDATE_INTERVAL or _needs_update:
 		_update_overlay()
+		_update_timer = 0.0
+		_needs_update = false
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
@@ -70,12 +80,13 @@ func _toggle_overlay() -> void:
 		toggle_button.text = "Hide Map (M)" if overlay_visible else "Show Map (M)"
 	
 	if overlay_visible and world != null:
-		_update_overlay()
+		_needs_update = true
 		_update_info_label()
 
 func _cycle_mode() -> void:
 	current_mode = (current_mode + 1) % DisplayMode.size()
 	_update_region_colors()
+	_needs_update = true
 	_update_info_label()
 	
 	if mode_button:

@@ -262,10 +262,18 @@ func _update_neural_network_display() -> void:
 	if religious_fervor_bar:
 		religious_fervor_bar.value = summary.get("religious_fervor", 0.0) * 100
 
-func _process(_delta: float) -> void:
+var _update_timer: float = 0.0
+const UPDATE_INTERVAL: float = 1.0  # Update every 1 second instead of every frame
+
+func _process(delta: float) -> void:
 	# Only update display if panel is visible and all components are ready
-	if visible and status_label != null:
+	if not visible or status_label == null:
+		return
+	
+	_update_timer += delta
+	if _update_timer >= UPDATE_INTERVAL:
 		_update_display()
+		_update_timer = 0.0
 
 # === Public Interface ===
 

@@ -1447,10 +1447,12 @@ func _on_game_tick(tick: int) -> void:
 				p.sanity_check_impassable_tile()
 	# WorldMemory-derived recompute: defer once so Pawn/Animal (connected after Main) can record first.
 	if is_instance_valid(_world) and not _world_memory_derivative_flush_queued:
-		_world_memory_derivative_flush_queued = true
-		call_deferred("_flush_world_memory_derivatives")
+		var derivative_flush_interval: int = _high_speed_interval(4, 8, 12)
+		if tick % derivative_flush_interval == 0:
+			_world_memory_derivative_flush_queued = true
+			call_deferred("_flush_world_memory_derivatives")
 	if is_instance_valid(_world):
-		var planner_interval: int = _high_speed_interval(1, 2, 4)
+		var planner_interval: int = _high_speed_interval(4, 8, 12)
 		if tick % planner_interval == 0:
 			SettlementPlanner.plan(_world, self, false)
 			TradePlanner.plan(_world, self, false)
@@ -1478,7 +1480,7 @@ func _on_game_tick(tick: int) -> void:
 	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % focus_iv == 0:
 		_focus_inspector.apply_snapshot(_build_focus_snapshot(tick))
 	if is_instance_valid(_world):
-		var road_flush_interval: int = _high_speed_interval(1, 2, 4)
+		var road_flush_interval: int = _high_speed_interval(2, 4, 8)
 		if tick % road_flush_interval == 0:
 			call_deferred("_flush_road_memory_dirty_tiles")
 
@@ -1504,8 +1506,10 @@ func _flush_world_memory_derivatives() -> void:
 			_world.apply_ruins_from_persistence()
 			_world.refresh_pawn_historic_path_weights()
 	)
-	SettlementPlanner.plan(_world, self, true)
-	TradePlanner.plan(_world, self, true)
+	var heavy_planner_interval: int = _high_speed_interval(4, 8, 12)
+	if GameManager.tick_count % heavy_planner_interval == 0:
+		SettlementPlanner.plan(_world, self, true)
+		TradePlanner.plan(_world, self, true)
 	RoadMemory.flush_dirty_tiles(_world)
 
 

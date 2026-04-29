@@ -1,6 +1,6 @@
 extends SceneTree
 
-const TICKS_PER_SAMPLE: int = 1000
+const TICKS_PER_SAMPLE: int = 120
 const STALL_TIMEOUT_MS: int = 30000
 const MAIN_SCENE_PATH: String = "res://scenes/main/Main.tscn"
 const REPORT_DIR_PATH: String = "res://logs/observer"

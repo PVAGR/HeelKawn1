@@ -5,14 +5,15 @@ extends RefCounted
 ## GameManager.TICK_INTERVAL_SECONDS must match [member TICK_INTERVAL_SECONDS].
 
 ## Wall-clock seconds per simulation tick at 1x speed.
-const TICK_INTERVAL_SECONDS: float = 0.1
+## Canon target: one tick per real second at 1x.
+const TICK_INTERVAL_SECONDS: float = 1.0
 
 ## Length of the **visual** day/night cycle in ticks (also used for "Day N" in HUD).
-## At 1x this is TICKS_PER_VISUAL_DAY * TICK_INTERVAL_SECONDS real seconds (600 * 0.1 = 60s).
+## At 1x this is TICKS_PER_VISUAL_DAY * TICK_INTERVAL_SECONDS real seconds (600 * 1.0 = 600s).
 const TICKS_PER_VISUAL_DAY: int = 600
 
 ## In-world **year** for milestones, exports, and kernel diagnostics (~30k ticks).
-## Wall time at 1x: TICKS_PER_SIM_YEAR * TICK_INTERVAL_SECONDS (30000 * 0.1 = 3000s ≈ 50 min).
+## Wall time at 1x: TICKS_PER_SIM_YEAR * TICK_INTERVAL_SECONDS (30000 * 1.0 = 30000s ≈ 8.3 hours).
 const TICKS_PER_SIM_YEAR: int = 30000
 
 ## Single-shot kernel validation aligned with end of sim year.

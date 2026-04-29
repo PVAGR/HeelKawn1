@@ -171,6 +171,7 @@ func _refresh() -> void:
 			_designation_label)
 	lines.append(_time_line())
 	lines.append(_colony_state_line())
+	lines.append(_settlement_identity_line())
 	lines.append(_pawn_line())
 	lines.append(_player_status_line())
 	lines.append(_politics_line())
@@ -277,6 +278,48 @@ func _colony_state_line() -> String:
 		int(round(fp * 100.0)), _demand_tier(fp),
 		int(round(hp * 100.0)), _demand_tier(hp),
 	]
+
+
+## In-universe identity strip driven by backend settlement/memory systems.
+## Keeps labels short and scans quickly during play.
+func _settlement_identity_line() -> String:
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node == null:
+		return "[color=#c9b37c]Identity:[/color] world link offline"
+	var digest: Dictionary = main_node.get_camera_settlement_revival_digest()
+	var cam_rk: int = int(digest.get("camera_region_key", -1))
+	var profile_rk: int = int(digest.get("profile_region_key", cam_rk))
+	var has_settlement: bool = bool(digest.get("has_settlement", false))
+	if not has_settlement or profile_rk < 0:
+		var cam_meaning: String = str(WorldMeaning.get_region_meaning_label(cam_rk)).replace("_", " ")
+		return "[color=#c9b37c]Identity:[/color] Wilds @%d · meaning [b]%s[/b]" % [cam_rk, cam_meaning]
+	var prof: Dictionary = SettlementMemory.get_settlement_profile(profile_rk)
+	var st_any: Variant = SettlementMemory.get_settlement_at_region(profile_rk)
+	var intent: String = "none"
+	if st_any is Dictionary:
+		intent = str((st_any as Dictionary).get("current_intent", "none")).to_lower()
+	var meaning: String = str(WorldMeaning.get_region_meaning_label(profile_rk)).replace("_", " ")
+	var rep: int = int(CulturalMemory.get_region_reputation(profile_rk))
+	var rep_word: String = "neutral"
+	if rep <= -3:
+		rep_word = "dreaded"
+	elif rep <= -2:
+		rep_word = "feared"
+	elif rep == -1:
+		rep_word = "scarred"
+	elif rep >= 1:
+		rep_word = "respected"
+	var state_txt: String = str(prof.get("state", "unknown")).replace("_", " ")
+	var culture_txt: String = str(prof.get("culture_name", "cautious")).replace("_", " ")
+	var revival_score: int = int(prof.get("revival_score", 0))
+	var war: Dictionary = SettlementMemory.get_war_profile_for_region(profile_rk)
+	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(profile_rk)
+	var war_state: String = str(war.get("state", "peace")).replace("_", " ")
+	var gov_txt: String = str(gov.get("type", "anarchy")).replace("_", " ")
+	return (
+		"[color=#c9b37c]Identity:[/color] #%d  [b]%s[/b] · %s · intent %s · rev %d  "
+		+ "| meaning %s · rep %s(%d) · war %s · gov %s"
+	) % [profile_rk, state_txt, culture_txt, intent, revival_score, meaning, rep_word, rep, war_state, gov_txt]
 
 
 static func _demand_tier(p: float) -> String:

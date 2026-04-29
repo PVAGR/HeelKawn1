@@ -4,6 +4,18 @@
 Observer automation for speed sweeps, timeline capture, and canon guards:
 `docs/OBSERVER_TOOLKIT.md`
 
+Quick commands:
+
+```powershell
+# Worker-mode (pure sim, best for tick/determinism checks)
+powershell -ExecutionPolicy Bypass -File "tools/Benchmark-Speeds.ps1" -BenchMode worker
+
+# Normal-mode (includes HUD/audio, closer to what players feel)
+powershell -ExecutionPolicy Bypass -File "tools/Benchmark-Speeds.ps1" -BenchMode normal
+```
+
+Note: the script exits with code `1` whenever any speed tier is marked `SLOW` in the report; this is a signal to keep iterating on performance, not necessarily a crash.
+
 ### 🎯 **QUICK START - 5 Minute Verification**
 
 1. **Launch the Game**

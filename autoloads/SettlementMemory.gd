@@ -28,6 +28,10 @@ const CRITICAL_LOCAL_FOOD_PRESSURE: float = 0.9
 const LOCAL_HOUSING_PAWNS_PER_REGION: float = 2.0
 const LOCAL_HOUSING_PRESSURE_THRESHOLD: float = 0.8
 const FRONT_UPDATE_INTERVAL_TICKS: int = 200
+## Checking whether any settlement intent changed is expensive because it scans all
+## settlements. Most ticks don't change intent (intents update on a 500-tick cadence),
+## so we only perform the scan periodically to reduce normal-mode hitching.
+const INTENT_SHIFT_SCAN_INTERVAL_TICKS: int = 25
 const FRONT_CLUSTER_RADIUS_TILES: int = 8
 const FRONT_INFLUENCE_RADIUS_TILES: int = 10
 const FRONT_MAX_COUNT: int = 2
@@ -1883,6 +1887,10 @@ func update_preferred_work_fronts(tick: int) -> void:
 	var on_cadence_tick: bool = tick % FRONT_UPDATE_INTERVAL_TICKS == 0
 	var has_intent_shift: bool = false
 	if not on_cadence_tick:
+		# Intents only shift when `update_settlement_intents` runs, so avoid
+		# scanning all settlements every tick.
+		if tick % INTENT_SHIFT_SCAN_INTERVAL_TICKS != 0:
+			return
 		for st_v in settlements:
 			if not (st_v is Dictionary):
 				continue

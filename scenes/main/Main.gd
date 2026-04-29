@@ -195,6 +195,9 @@ var _ambient_phase: float = 0.0
 var _ambient_freq_current: float = 112.0
 var _trace_redraw_timer: float = 0.0
 var _ambient_freq_target: float = 112.0
+var _ambient_audio_last_update_ms: int = 0
+const AMBIENT_AUDIO_UPDATE_INTERVAL_MS: int = 200
+const MAX_AMBIENT_AUDIO_FRAMES_PER_UPDATE: int = 64
 ## 0 = dead/empty, 1 = open/living. Drives crossfade; current region at camera.
 var _meaning_ambient_mood: float = 0.5
 ## Settlement style expression (derived): open -> positive, defensive -> negative.
@@ -219,6 +222,7 @@ var _last_heavy_stack_tick: int = -1
 var _mining_react_pending: bool = false
 var _last_mining_react_tick: int = -1
 const MINING_REACT_MIN_INTERVAL_TICKS: int = 120
+const INSPECT_SCAN_INTERVAL_TICKS: int = 30
 var _last_inspect_event_tick_shown: int = -1
 var _inspect_tooltip_node: Control = null
 var _inspect_audio_player: AudioStreamPlayer = null
@@ -236,7 +240,9 @@ func _is_simulation_worker_mode() -> bool:
 func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
 	if _is_ultra_speed():
 		return ultra_ticks
-	if GameManager.game_speed >= 6.0:
+	# Feel target: once the player presses to 3x, we must aggressively reduce
+	# expensive per-tick work to prevent rubber-band / stutter.
+	if GameManager.game_speed >= 3.0:
 		return fast_ticks
 	return normal_ticks
 
@@ -1297,7 +1303,10 @@ func _process(delta: float) -> void:
 			and is_instance_valid(_world)
 	):
 		_camera.call("clamp_position_to_world", _world, 48.0)
-	_update_ambient_audio(delta)
+	var now_ms: int = Time.get_ticks_msec()
+	if now_ms - _ambient_audio_last_update_ms >= AMBIENT_AUDIO_UPDATE_INTERVAL_MS:
+		_ambient_audio_last_update_ms = now_ms
+		_update_ambient_audio(delta)
 	_update_meaning_vignette()
 	_trace_redraw_timer += delta
 	if _trace_redraw_timer >= TRACE_REDRAW_INTERVAL_SEC:
@@ -1776,8 +1785,14 @@ func _on_game_tick(tick: int) -> void:
 			and int(tick) % AnimalSpawner.POPULATION_CHECK_TICKS == 0
 	):
 		_animal_spawner.update_population_dynamics(_world)
-	_process_regrowth(tick)
-	_update_ambient_target()
+	# Regrowth + ambient are display/maintenance layers; they should not run
+	# every sim tick in normal mode or high speeds will hitch.
+	var regrowth_interval: int = _high_speed_interval(2, 4, 8)
+	if tick % regrowth_interval == 0:
+		_process_regrowth(tick)
+	var ambient_interval: int = _high_speed_interval(2, 4, 8)
+	if tick % ambient_interval == 0:
+		_update_ambient_target()
 	# Post dynamic hunt jobs less aggressively than harvest loops.
 	var hunt_post_interval: int = _high_speed_interval(20, 30, 45)
 	if (
@@ -1796,12 +1811,16 @@ func _on_game_tick(tick: int) -> void:
 				p.sanity_check_impassable_tile()
 	# WorldMemory-derived recompute: defer once so Pawn/Animal (connected after Main) can record first.
 	if is_instance_valid(_world) and not _world_memory_derivative_flush_queued:
-		_world_memory_derivative_flush_queued = true
-		call_deferred("_flush_world_memory_derivatives")
+		# Derivative flush recomputes meaning/persistence/culture; too-frequent calls
+		# will hitch even when tick ordering is correct.
+		var derivative_flush_interval: int = _high_speed_interval(8, 12, 20)
+		if tick % derivative_flush_interval == 0:
+			_world_memory_derivative_flush_queued = true
+			call_deferred("_flush_world_memory_derivatives")
 	if is_instance_valid(_world):
 		# Planning every tick at 1x causes severe frame-time spikes in large worlds.
 		# Keep planning frequent, but not per-tick.
-		var planner_interval: int = _high_speed_interval(8, 12, 20)
+		var planner_interval: int = _high_speed_interval(12, 16, 24)
 		if tick % planner_interval == 0:
 			SettlementPlanner.plan(_world, self, false)
 			TradePlanner.plan(_world, self, false)
@@ -1830,16 +1849,21 @@ func _on_game_tick(tick: int) -> void:
 	_emit_pawn_divergence_summary_if_needed(tick)
 	if _is_simulation_worker_mode():
 		return
-	var obs_iv: int = _high_speed_interval(OBSERVER_HUD_REFRESH_TICKS, 45, 90)
+	# HUD snapshots are CPU-expensive; reduce cadence at 1x.
+	var obs_iv: int = _high_speed_interval(60, 45, 90)
 	if _observer_hud != null and tick % obs_iv == 0:
 		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
 	# Handle recent player_inspect events for tooltip + audio feedback
-	_scan_recent_inspects_and_handle()
-	var focus_iv: int = _high_speed_interval(FOCUS_INSPECTOR_REFRESH_TICKS, 24, 48)
+	if tick % INSPECT_SCAN_INTERVAL_TICKS == 0:
+		_scan_recent_inspects_and_handle()
+	# FocusInspector snapshotting is another large allocation hotspot.
+	var focus_iv: int = _high_speed_interval(30, 24, 48)
 	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % focus_iv == 0:
 		_focus_inspector.apply_snapshot(_build_focus_snapshot(tick))
 	if is_instance_valid(_world):
-		call_deferred("_flush_road_memory_dirty_tiles")
+		var road_flush_interval: int = _high_speed_interval(2, 4, 8)
+		if tick % road_flush_interval == 0:
+			call_deferred("_flush_road_memory_dirty_tiles")
 
 
 func _flush_road_memory_dirty_tiles() -> void:
@@ -1954,8 +1978,10 @@ func _flush_world_memory_derivatives() -> void:
 			_world.apply_ruins_from_persistence()
 			_world.refresh_pawn_historic_path_weights()
 	)
-	SettlementPlanner.plan(_world, self, true)
-	TradePlanner.plan(_world, self, true)
+	var heavy_planner_interval: int = _high_speed_interval(6, 10, 16)
+	if GameManager.tick_count % heavy_planner_interval == 0:
+		SettlementPlanner.plan(_world, self, true)
+		TradePlanner.plan(_world, self, true)
 	RoadMemory.flush_dirty_tiles(_world)
 
 
@@ -2249,6 +2275,8 @@ func _update_ambient_audio(delta: float) -> void:
 	var frames: int = _ambient_playback.get_frames_available()
 	if frames <= 0:
 		return
+	# Cap work per update to keep CPU bound.
+	frames = min(frames, MAX_AMBIENT_AUDIO_FRAMES_PER_UPDATE)
 	var interp: float = min(1.0, delta * 2.6)
 	_ambient_freq_current = lerpf(_ambient_freq_current, _ambient_freq_target, interp)
 	var mood: float = _meaning_ambient_mood

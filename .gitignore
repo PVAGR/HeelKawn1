@@ -13,6 +13,9 @@ Thumbs.db
 
 # Logs
 *.log
+# Observer/automation artifacts (machine-readable + human-readable reports)
+logs/
+logs/**
 
 # Godot editor cache
 .godot/

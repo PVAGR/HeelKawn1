@@ -24,6 +24,9 @@ const MAX_TICKS_PER_FRAME: int = 6
 ## Prevent runaway catch-up after a hitch. We keep sim responsive by dropping
 ## excessive backlog instead of trying to replay seconds of queued ticks.
 const MAX_ACCUMULATED_TICKS: int = 16
+## HeelKawn feel target prefers ordered causality over hitch masking.
+## When false, we never discard queued sim time; ticks are processed in order.
+const DROP_BACKLOG_WHEN_OVER_CAP: bool = false
 
 var game_speed: float = 1.0
 var is_paused: bool = false
@@ -64,10 +67,20 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if is_paused:
 		return
-	_tick_accumulator += delta * game_speed
+	var desired_add: float = delta * game_speed
 	var max_accumulator: float = TICK_INTERVAL_SECONDS * float(MAX_ACCUMULATED_TICKS)
-	if _tick_accumulator > max_accumulator:
-		_tick_accumulator = max_accumulator
+	if DROP_BACKLOG_WHEN_OVER_CAP:
+		_tick_accumulator += desired_add
+		if _tick_accumulator > max_accumulator:
+			_tick_accumulator = max_accumulator
+	else:
+		# Soft clamp: never discard already-queued sim time (no tick skipping),
+		# but also never let the backlog grow without bound (prevents rubber banding).
+		if _tick_accumulator >= max_accumulator:
+			desired_add = 0.0
+		elif _tick_accumulator + desired_add > max_accumulator:
+			desired_add = maxf(0.0, max_accumulator - _tick_accumulator)
+		_tick_accumulator += desired_add
 	var ticks_this_frame: int = 0
 	while _tick_accumulator >= TICK_INTERVAL_SECONDS and ticks_this_frame < MAX_TICKS_PER_FRAME:
 		_tick_accumulator -= TICK_INTERVAL_SECONDS

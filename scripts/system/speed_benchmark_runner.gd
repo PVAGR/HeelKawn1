@@ -27,6 +27,7 @@ var _canon_guard_results: Array[Dictionary] = []
 var _session_id: String = ""
 var _report_json_abs_path: String = ""
 var _report_md_abs_path: String = ""
+var _bench_mode: String = "worker" # "worker" or "normal"
 
 
 func _initialize() -> void:
@@ -46,7 +47,8 @@ func _initialize() -> void:
 	_job_manager = root.get_node_or_null("JobManager")
 	_session_id = _build_session_id()
 	_prepare_report_paths()
-	_gm.call("set_simulation_worker_mode", true)
+	_bench_mode = _parse_bench_mode()
+	_gm.call("set_simulation_worker_mode", _bench_mode == "worker")
 	_gm.call("set_tick_benchmark_enabled", true)
 	_speeds = Array(_gm.get("SPEED_STEPS")).duplicate()
 	_speeds.sort()
@@ -146,6 +148,22 @@ func _on_game_tick(tick: int) -> void:
 
 func _expected_seconds_for(speed: float) -> float:
 	return (float(TICKS_PER_SAMPLE) * float(_gm.get("TICK_INTERVAL_SECONDS"))) / maxf(0.001, speed)
+
+
+func _parse_bench_mode() -> String:
+	var args: PackedStringArray = OS.get_cmdline_args()
+	# Godot passes script args separately; accept both:
+	#  --bench-mode normal
+	#  --bench_mode=normal
+	for i in range(args.size()):
+		var a: String = str(args[i])
+		if a == "--bench-mode" and i + 1 < args.size():
+			return str(args[i + 1])
+		if a.begins_with("--bench-mode=") or a.begins_with("--bench_mode="):
+			var eq: int = a.find("=")
+			if eq >= 0 and eq + 1 < a.length():
+				return a.substr(eq + 1)
+	return "worker"
 
 
 func _emit_summary_and_quit() -> void:

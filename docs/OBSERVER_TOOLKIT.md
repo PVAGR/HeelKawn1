@@ -12,7 +12,18 @@ This toolkit provides a repeatable "AI observer" run that mirrors live playtest 
 From the repository root:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "tools/Benchmark-Speeds.ps1"
+powershell -ExecutionPolicy Bypass -File "tools/Benchmark-Speeds.ps1" -BenchMode worker
+```
+
+### Bench modes
+
+- `worker` (default): runs the benchmark with `GameManager.simulation_worker_mode=true` to avoid UI-heavy paths. Best for validating tick determinism + sim throughput.
+- `normal`: runs with `simulation_worker_mode=false` so you also exercise per-frame UI/audio work. Closer to what players experience, but can be slower.
+
+To run normal-mode:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "tools/Benchmark-Speeds.ps1" -BenchMode normal
 ```
 
 ## Output artifacts

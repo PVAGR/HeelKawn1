@@ -1,7 +1,7 @@
 # HeelKawn
 
 **Official repository:** [github.com/PVAGR/HeelKawn1](https://github.com/PVAGR/HeelKawn1) (`main`).  
-**This PC:** work only under `C:\Users\user\HeelKawn1` for this project—do not split edits across other HeelKawn-named folders. Scope and push workflow: [`docs/CANONICAL_REPOSITORY.md`](docs/CANONICAL_REPOSITORY.md). One-command save: `powershell -File tools/Commit-PushMain.ps1 -Message "your message"`.
+**This machine:** work only in this clone (the folder that contains this repo's `.git/`) for this project—do not split edits across other HeelKawn-named folders. Scope and push workflow: [`docs/CANONICAL_REPOSITORY.md`](docs/CANONICAL_REPOSITORY.md). One-command save: `powershell -File tools/Commit-PushMain.ps1 -Message "your message"`.
 
 ---
 

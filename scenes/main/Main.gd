@@ -108,6 +108,10 @@ const WORLD_STABILIZATION_TICKS: int = 500
 ## Player does not architect the colony: no manual walls/beds/doors/stockpile zones.
 ## Construction remains `SettlementPlanner` + pawn job claims (NPC-equivalent sim path).
 const PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES: bool = false
+## Safety: keep desktop play at 1x unless user deliberately clicks toolbar speed.
+const ALLOW_SPEED_NUMBER_HOTKEYS: bool = false
+## Keep load-in sessions predictable; speed only changes via explicit user action.
+const RESTORE_SPEED_FROM_SAVE: bool = false
 ## World-level only; Pawn/Animal read via [code]Main._world_stabilization_until_tick[/code].
 ## -1 = not initialized yet (hunt/tick guards treat as: allow hunt once bootstrapped sets a non-negative window).
 static var _world_stabilization_until_tick: int = -1
@@ -392,6 +396,8 @@ func _ready() -> void:
 		call_deferred("_ensure_avatar_panel")
 	if OS.is_debug_build():
 		print("[Main] Scene ready. Tick interval: %.2fs" % GameManager.TICK_INTERVAL_SECONDS)
+	# Start every session at 1x, unpaused. Player can change only through explicit controls.
+	GameManager.set_speed_index(0)
 	_bootstrap_colony()
 	if not simulation_worker:
 		if _hud != null:
@@ -2334,19 +2340,26 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		Key.KEY_SPACE:
 			GameManager.toggle_pause()
 		Key.KEY_1:
-			GameManager.set_speed_index(0)
+			if ALLOW_SPEED_NUMBER_HOTKEYS:
+				GameManager.set_speed_index(0)
 		Key.KEY_2:
-			GameManager.set_speed_index(1)
+			if ALLOW_SPEED_NUMBER_HOTKEYS:
+				GameManager.set_speed_index(1)
 		Key.KEY_3:
-			GameManager.set_speed_index(2)
+			if ALLOW_SPEED_NUMBER_HOTKEYS:
+				GameManager.set_speed_index(2)
 		Key.KEY_4:
-			GameManager.set_speed_index(3)
+			if ALLOW_SPEED_NUMBER_HOTKEYS:
+				GameManager.set_speed_index(3)
 		Key.KEY_5:
-			GameManager.set_speed_index(4)
+			if ALLOW_SPEED_NUMBER_HOTKEYS:
+				GameManager.set_speed_index(4)
 		Key.KEY_6:
-			GameManager.set_speed_index(5)
+			if ALLOW_SPEED_NUMBER_HOTKEYS:
+				GameManager.set_speed_index(5)
 		Key.KEY_7:
-			GameManager.set_speed_index(6)
+			if ALLOW_SPEED_NUMBER_HOTKEYS:
+				GameManager.set_speed_index(6)
 		Key.KEY_R:
 			if OS.is_debug_build():
 				_reroll_world()
@@ -4210,10 +4223,15 @@ func _apply_save_dict(s: Dictionary) -> void:
 	var loaded_tick: int = int(s.get("tick", 0))
 	var saved_player_mode: int = int(s.get("player_mode", PlayerMode.INCARNATED))
 	var saved_player_pawn_id: int = int(s.get("player_pawn_id", -1))
+	var load_speed: float = 1.0
+	var load_paused: bool = false
+	if RESTORE_SPEED_FROM_SAVE:
+		load_speed = float(s.get("game_speed", 1.0))
+		load_paused = bool(s.get("is_paused", false))
 	GameManager.set_state_from_load(
 		loaded_tick,
-		float(s.get("game_speed", 1.0)),
-		bool(s.get("is_paused", false))
+		load_speed,
+		load_paused
 	)
 	_last_generation_tick = int(s.get("last_generation_tick", loaded_tick))
 	_zone_next_filter = int(s.get("zone_filter", 0))

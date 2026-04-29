@@ -110,8 +110,8 @@ const WORLD_STABILIZATION_TICKS: int = 500
 ## Player does not architect the colony: no manual walls/beds/doors/stockpile zones.
 ## Construction remains `SettlementPlanner` + pawn job claims (NPC-equivalent sim path).
 const PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES: bool = false
-## Safety: keep desktop play at 1x unless user deliberately clicks toolbar speed.
-const ALLOW_SPEED_NUMBER_HOTKEYS: bool = false
+## Toolbar + keys 1–7 match GameManager.SPEED_STEPS (F10 creator menu still steals digit keys while open).
+const ALLOW_SPEED_NUMBER_HOTKEYS: bool = true
 ## Keep load-in sessions predictable; speed only changes via explicit user action.
 const RESTORE_SPEED_FROM_SAVE: bool = false
 ## World-level only; Pawn/Animal read via [code]Main._world_stabilization_until_tick[/code].

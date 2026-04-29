@@ -87,6 +87,8 @@ const REST_PANIC_THRESHOLD: float = 12.0
 ## what a previous tuning pass caused). Tuned to ~2 berries per pawn -- roughly
 ## one in-flight emergency snack each.
 const STOCKPILE_FOOD_LOW_THRESHOLD: int = 10
+## Added inside JobManager priority_cb only — not an exclusive job filter (see _tick_idle).
+const AFFINITY_JOB_PRIORITY_BONUS: int = 2
 ## Sleep ends and the pawn wakes once rest climbs above this.
 const REST_WAKE_THRESHOLD: float = 90.0
 ## Rest restored per tick while in SLEEPING state. ~7x the normal decay rate
@@ -1260,20 +1262,14 @@ func _tick_idle() -> void:
 	# looked like it was starving. And with Phase-10 multi-zone stockpiles
 	# we have to sum across zones, not peek at one hardcoded pile.
 	var food_emergency: bool = StockpileManager.total_food() < STOCKPILE_FOOD_LOW_THRESHOLD
-	
-	# Simplified priority calculation for performance
+	var affinity_key: String = data.highest_affinity_skill() if data != null else ""
+
+	# Simplified priority calculation for performance; affinity is a small nudge — not a separate queue pass — so build/mining jobs can compete with forage.
 	var priority_cb: Callable = func(j: Job) -> int:
 		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j)) + _job_history_scar_priority_offset(j)
+		if affinity_key != "" and _job_matches_affinity(j.type, affinity_key):
+			base_bias += AFFINITY_JOB_PRIORITY_BONUS
 		# DISABLED expensive bias calculations for performance
-		# var intent_mult: float = get_settlement_intent_job_multiplier(j)
-		# var intent_bonus: int = int(round((intent_mult - 1.0) * 10.0))
-		# var front_mult: float = get_preferred_front_bias(j)
-		# var front_bonus: int = int(round((front_mult - 1.0) * 10.0))
-		# var cohort_mult: float = get_cohort_recruitment_bias(j)
-		# var cohort_bonus: int = int(round((cohort_mult - 1.0) * 10.0))
-		# var resource_mult: float = get_resource_pressure_bias(j)
-		# var resource_bonus: int = int(round((resource_mult - 1.0) * 10.0))
-		# return base_bias + intent_bonus + front_bonus + cohort_bonus + resource_bonus
 		return base_bias
 	var base_passes: Callable = func(j: Job) -> bool:
 		if Pawn._world_hunt_stabilization_blocks() and j.type == Job.Type.HUNT:
@@ -1305,13 +1301,6 @@ func _tick_idle() -> void:
 		if food_job != null:
 			_begin_job(food_job)
 			return
-	var affinity_key: String = data.highest_affinity_skill() if data != null else ""
-	var affinity_passes := func(j: Job) -> bool:
-		return base_passes.call(j) and _job_matches_affinity(j.type, affinity_key)
-	var affinity_job: Job = JobManager.claim_next_for(self, affinity_passes, priority_cb)
-	if affinity_job != null:
-		_begin_job(affinity_job)
-		return
 	var job: Job = JobManager.claim_next_for(self, base_passes, priority_cb)
 	if job != null:
 		_begin_job(job)

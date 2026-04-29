@@ -50,11 +50,9 @@ const SPAWNABLE_BIOMES: Array[int] = [Biome.Type.PLAINS, Biome.Type.FOREST]
 @export var pawn_scene: PackedScene
 
 var pawns: Array[Pawn] = []
-var _rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
-	_rng.randomize()
 	if pawn_scene == null:
 		print("[ERROR] PawnSpawner: pawn_scene is null - check Main.tscn configuration")
 	else:
@@ -117,14 +115,15 @@ func print_stats() -> void:
 
 
 func spawn_starters(world: World, required_component_id: int = -1) -> void:
+	var rng: RandomNumberGenerator = WorldRNG.rng_for(&"starter_pawns_v1")
 	var used_tiles: Dictionary = {}
 	var placed: int = 0
 	for attempt in range(MAX_PLACEMENT_ATTEMPTS):
 		if placed >= STARTER_COUNT:
 			break
 		var tile := Vector2i(
-			_rng.randi_range(0, WorldData.WIDTH - 1),
-			_rng.randi_range(0, WorldData.HEIGHT - 1)
+			rng.randi_range(0, WorldData.WIDTH - 1),
+			rng.randi_range(0, WorldData.HEIGHT - 1),
 		)
 		if used_tiles.has(tile):
 			continue
@@ -136,18 +135,18 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		used_tiles[tile] = true
 
 		var data := PawnData.new()
-		data.display_name = _pick_name(used_tiles)
-		data.age = _rng.randi_range(18, 55)
-		data.gender = _rng.randi_range(0, 1)
+		data.display_name = _pick_name(used_tiles, rng)
+		data.age = rng.randi_range(18, 55)
+		data.gender = rng.randi_range(0, 1)
 		data.tile_pos = tile
 		data.color = PAWN_COLORS[placed % PAWN_COLORS.size()]
-		data.body_type = _rng.randi_range(PawnData.BodyType.SLIM, PawnData.BodyType.BROAD)
-		data.hair_style = _rng.randi_range(PawnData.HairStyle.NONE, PawnData.HairStyle.BUN)
-		data.hair_color = HAIR_COLORS[_rng.randi_range(0, HAIR_COLORS.size() - 1)]
-		data.apparel_color = APPAREL_COLORS[_rng.randi_range(0, APPAREL_COLORS.size() - 1)]
+		data.body_type = rng.randi_range(PawnData.BodyType.SLIM, PawnData.BodyType.BROAD)
+		data.hair_style = rng.randi_range(PawnData.HairStyle.NONE, PawnData.HairStyle.BUN)
+		data.hair_color = HAIR_COLORS[rng.randi_range(0, HAIR_COLORS.size() - 1)]
+		data.apparel_color = APPAREL_COLORS[rng.randi_range(0, APPAREL_COLORS.size() - 1)]
 		
 		# Assign 0-2 random traits to this pawn
-		_assign_random_traits(data)
+		_assign_random_traits(data, rng)
 
 		var pawn: Pawn = pawn_scene.instantiate() as Pawn
 		add_child(pawn)
@@ -243,6 +242,7 @@ func _pick_name_deterministic() -> String:
 
 
 func spawn_pawn() -> void:
+	var rng: RandomNumberGenerator = WorldRNG.rng_for(&"living_spawn_v1")
 	var main_n: Node = get_parent()
 	if main_n == null:
 		return
@@ -258,8 +258,8 @@ func spawn_pawn() -> void:
 			used_tiles[p.data.tile_pos] = true
 	for attempt in range(MAX_PLACEMENT_ATTEMPTS):
 		var tile := Vector2i(
-			_rng.randi_range(0, WorldData.WIDTH - 1),
-			_rng.randi_range(0, WorldData.HEIGHT - 1)
+			rng.randi_range(0, WorldData.WIDTH - 1),
+			rng.randi_range(0, WorldData.HEIGHT - 1)
 		)
 		if used_tiles.has(tile):
 			continue
@@ -270,16 +270,16 @@ func spawn_pawn() -> void:
 			continue
 		used_tiles[tile] = true
 		var data := PawnData.new()
-		data.display_name = _pick_name(used_tiles)
-		data.age = _rng.randi_range(18, 55)
-		data.gender = _rng.randi_range(0, 1)
+		data.display_name = _pick_name(used_tiles, rng)
+		data.age = rng.randi_range(18, 55)
+		data.gender = rng.randi_range(0, 1)
 		data.tile_pos = tile
 		data.color = PAWN_COLORS[pawns.size() % PAWN_COLORS.size()]
-		data.body_type = _rng.randi_range(PawnData.BodyType.SLIM, PawnData.BodyType.BROAD)
-		data.hair_style = _rng.randi_range(PawnData.HairStyle.NONE, PawnData.HairStyle.BUN)
-		data.hair_color = HAIR_COLORS[_rng.randi_range(0, HAIR_COLORS.size() - 1)]
-		data.apparel_color = APPAREL_COLORS[_rng.randi_range(0, APPAREL_COLORS.size() - 1)]
-		_assign_random_traits(data)
+		data.body_type = rng.randi_range(PawnData.BodyType.SLIM, PawnData.BodyType.BROAD)
+		data.hair_style = rng.randi_range(PawnData.HairStyle.NONE, PawnData.HairStyle.BUN)
+		data.hair_color = HAIR_COLORS[rng.randi_range(0, HAIR_COLORS.size() - 1)]
+		data.apparel_color = APPAREL_COLORS[rng.randi_range(0, APPAREL_COLORS.size() - 1)]
+		_assign_random_traits(data, rng)
 		var pawnc: Pawn = pawn_scene.instantiate() as Pawn
 		add_child(pawnc)
 		pawnc.bind(data, world.tile_to_world(tile), world)
@@ -385,7 +385,7 @@ func spawn_child_pawn(
 
 
 ## Pick a name we haven't used yet this run.
-func _pick_name(used_tiles: Dictionary) -> String:
+func _pick_name(used_tiles: Dictionary, rng: RandomNumberGenerator) -> String:
 	var used_names: Dictionary = {}
 	for p in pawns:
 		used_names[p.data.display_name] = true
@@ -395,19 +395,19 @@ func _pick_name(used_tiles: Dictionary) -> String:
 			available.append(n)
 	if available.is_empty():
 		return "Settler-%d" % used_tiles.size()
-	return available[_rng.randi() % available.size()]
+	return available[rng.randi() % available.size()]
 
 
 ## Assign 0-2 random traits to a pawn. Called at spawn time.
-func _assign_random_traits(pawn_data: PawnData) -> void:
-	var num_traits: int = _rng.randi_range(0, 2)  # 0, 1, or 2 traits
+func _assign_random_traits(pawn_data: PawnData, rng: RandomNumberGenerator) -> void:
+	var num_traits: int = rng.randi_range(0, 2)  # 0, 1, or 2 traits
 	var trait_types: Array = Trait.Type.values()
 	var assigned: Dictionary = {}
 	
 	for _i in range(num_traits):
 		if trait_types.is_empty():
 			break
-		var trait_type = trait_types[_rng.randi() % trait_types.size()]
+		var trait_type = trait_types[rng.randi() % trait_types.size()]
 		# Avoid duplicate traits
 		if not assigned.has(trait_type):
 			assigned[trait_type] = true

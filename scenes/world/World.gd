@@ -54,6 +54,7 @@ func _ready() -> void:
 func load_world_data(new_data: WorldData) -> void:
 	_off_main_terrain_raster_defer_at_tick = -1
 	data = new_data
+	WorldRNG.configure_from_seed(int(new_data.world_seed))
 	pathfinder.rebuild(data)
 	_render()
 	_bed_tiles.clear()
@@ -65,6 +66,7 @@ func generate(world_seed: int) -> void:
 	_off_main_terrain_raster_defer_at_tick = -1
 	var t0: int = Time.get_ticks_msec()
 	data = WorldGenerator.generate(world_seed)
+	WorldRNG.configure_from_seed(world_seed)
 	var t_gen: int = Time.get_ticks_msec() - t0
 	pathfinder.rebuild(data)
 	var t_path: int = Time.get_ticks_msec() - t0 - t_gen

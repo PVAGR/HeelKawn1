@@ -1,6 +1,6 @@
 extends Node
 ## Phase 2.2: deterministic, derived metrics from WorldMemory only.
-## No writes to memory, no world mutation, no RNG, no UI.
+## No writes to WorldMemory, no world mutation, no UI. Interpretation only (RNG allowed only for labeled non-canonical presentation tiers — default paths stay deterministic-from-facts).
 
 ## Matches WorldMemory Kind enum (keep in sync; literal ints avoid autoload class timing).
 const KIND_PAWN_DEATH: int = 0

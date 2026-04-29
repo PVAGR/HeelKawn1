@@ -13,7 +13,7 @@ Anyone (human or AI) working on HeelKawn MUST read this file first.
 
 ## KERNEL (COMPLETE)
 
-- WorldMemory (deterministic, append-only, saved)
+- WorldMemory (append-only factual history, saved)
 - WorldMeaning (derived regional interpretation)
 - WorldPersistence (scars, ruins, abandonment)
 - Land Recovery (visual healing, ruins permanent)
@@ -21,7 +21,7 @@ Anyone (human or AI) working on HeelKawn MUST read this file first.
 - Pawn Behavioral Response (path/job/wander bias)
 - SettlementMemory (clustered regions → places)
 - SettlementPlanner (autonomous building)
-- Animal Population Dynamics (deterministic ecology)
+- Animal Population Dynamics (seeded / emergent ecology)
 
 ## CURRENT PHASE
 
@@ -39,7 +39,7 @@ Settlements:
 
 Animals:
 - Do not die instantly on spawn
-- Reproduce, decline, recover deterministically
+- Reproduce, decline, recover under simulation rules (emergent outcomes per world)
 - Can go locally extinct
 
 ## PLAYER ROLE
@@ -58,18 +58,20 @@ No required micromanagement.
 Creator decision — treat as locked intent until revised:
 
 1. **Now:** **Exploratory myth-cycle only** — Taured / DRUJ / Ark material does not constrain Godot simulation design; no requirement to implement it here.
-2. **Next:** May graduate to **parallel expression** (same deterministic kernel rules, separate game/universe lane or codebase).
+2. **Next:** May graduate to **parallel expression** (same kernel *constraints*, separate game/universe lane or codebase).
 3. **Later:** May graduate to **a canonical Age inside HeelKawn** once core game and parallel track justify integration.
 
 Do not merge heroic/named-arc assumptions into kernel or WorldMemory semantics until step 3 is explicitly activated.
 
-## DESIGN RULES (NON-NEGOTIABLE)
+## DESIGN RULES (LIVING WORLD — EMERGENCE FIRST)
 
-- No RNG in world history
-- No per-tick O(N) recompute
-- Derived systems never write to memory
-- Autoloads do not use class_name
-- History must be explainable after the fact
+- **Worlds diverge.** Different seeds and stochastic rolls produce **different** histories, maps, and societies — HeelKawn is not a single replayable rail.
+- **Recorded truth.** `WorldMemory` and colony saves remain **append-only factual logs** of what happened (deaths, births, jobs, events). Rolls **produce** those facts; they do not silently erase or rewrite past entries.
+- **Seeded streams.** Subsystems use **`WorldRNG`** (`world_seed` + named streams) so emergence stays tunable and debug sessions can pin a seed when needed — prefer named streams over raw global `randf()` for new work.
+- **Derived interpretation.** Layers like `WorldMeaning` **compute labels** from facts; they may use RNG only for **non-canonical presentation** if explicitly documented — they never replace the underlying fact log.
+- **Performance discipline.** Avoid full-world **per-tick O(N)** work; keep chunking, intervals, and tick budgets (`GameManager` caps, `Main` `_high_speed_interval` patterns).
+- **Autoloads do not use `class_name`** (engine/project convention).
+- **Explainability.** After the fact, one should still trace *why* something happened via facts + seed/stream policy — not hidden magic tables.
 
 ## NEXT TARGET
 

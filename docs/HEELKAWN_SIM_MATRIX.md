@@ -58,9 +58,9 @@ Rows = **actors**; columns = **capability classes**. `R` = read-only, `W` = can 
 
 ## 5. Kernel rules AI must not violate
 
-From `HEELKAWN_STATE.md`: **no RNG in world history**, **no per-tick O(N) recompute** (design discipline), **derived layers read-only** vs append-only memory, **autoloads do not use `class_name`**.
+From `HEELKAWN_STATE.md`: **emergence / seeded rolls are allowed** (`WorldRNG` streams); **append-only factual history** stays authoritative; **no full-world per-tick O(N)** recompute; **derived interpretation** does not overwrite canonical facts; **autoloads do not use `class_name`**.
 
-Any future “boss AI” should **read** these surfaces and **submit** changes only through established writers (jobs, planner, validated intents)—not by mutating derived caches.
+Any future “boss AI” should **read** these surfaces and **submit** changes only through established writers (jobs, planner, validated intents)—not by mutating derived caches or forging history entries.
 
 ## 6. Suggested implementation order (grand map + NPC parity)
 

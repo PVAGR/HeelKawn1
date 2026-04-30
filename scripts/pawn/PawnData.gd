@@ -281,6 +281,9 @@ var social_memory: Dictionary = {}
 ## Memory decay tracking: memory_type -> last_accessed_tick
 var memory_access: Dictionary = {}
 
+## Phase 2: Per-Pawn Neural Network (hidden internal state)
+var neural_network: PawnNeuralNetwork = null
+
 ## Phase 1.3: Goal Hierarchy System (Maslow-style needs)
 ## Active goals with priorities: goal_id -> {type, priority, progress, sub_goals, deadline}
 var active_goals: Dictionary = {}
@@ -310,6 +313,7 @@ func _init() -> void:
 	birth_tick = int(GameManager.tick_count) if "tick_count" in GameManager else 0
 	initialize_affinities(birth_tick, -1, -1)
 	_initialize_personality(birth_tick, parent_a_id, parent_b_id)
+	_initialize_neural_network()
 
 
 func get_max_health() -> float:
@@ -364,6 +368,18 @@ func _get_parent_data(parent_id: int) -> PawnData:
 	# TODO: Implement proper parent data lookup from PawnManager
 	# For now, return null to trigger random personality
 	return null
+
+
+## Phase 2: Initialize neural network based on personality
+func _initialize_neural_network() -> void:
+	var personality_dict: Dictionary = {
+		"openness": openness,
+		"conscientiousness": conscientiousness,
+		"extraversion": extraversion,
+		"agreeableness": agreeableness,
+		"neuroticism": neuroticism
+	}
+	neural_network = PawnNeuralNetwork.new(personality_dict)
 
 
 ## Phase 1.1: Personality-based job preference modifier

@@ -1760,8 +1760,6 @@ func _begin_job(job: Job) -> void:
 	_current_job = job
 	# Throttled cohort system calls for performance
 	_invalidate_recruitment_signal_cache()
-	if has_method("_refresh_recruitment_signal_cache"):
-		_refresh_recruitment_signal_cache(true)
 	update_cohort_membership(true)
 	_refresh_or_decay_cohort_stability(true)
 	# Build jobs need raw materials in hand before we walk to the build site.

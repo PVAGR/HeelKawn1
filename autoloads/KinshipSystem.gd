@@ -5,8 +5,6 @@ extends Node
 # Edges: parent, child, sibling, spouse, household_member, obligation, inheritance
 # All relationships are written to and queried from RelationalGraph
 
-class_name KinshipSystem
-
 @onready var RelationalGraph = get_node_or_null("/root/RelationalGraph")
 @onready var WorldMemory = get_node_or_null("/root/WorldMemory")
 @onready var GameManager = get_node_or_null("/root/GameManager")

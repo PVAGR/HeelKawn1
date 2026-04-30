@@ -265,9 +265,9 @@ func _get_pawn_skill_level(pawn_id: int, skill_name: String) -> int:
 	
 	for p in spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
-			# Get skill level from PawnData
+			# Get skill level from PawnData affinities
 			if skill_name == "crafting":
-				return p.data.get_skill_level(Job.Type.CRAFTING)
+				return int(p.data.affinities.get("crafting", 0.5) * 100)
 			return 0
 	
 	return 0
@@ -292,9 +292,11 @@ func _grant_crafting_xp(pawn_id: int, skill_name: String, xp_amount: int) -> voi
 	
 	for p in spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
-			# Grant XP to appropriate skill
+			# Grant XP to appropriate skill affinity
 			if skill_name == "crafting":
-				p.data.add_skill_xp(Job.Type.CRAFTING, xp_amount)
+				var current_affinity: float = p.data.affinities.get("crafting", 0.5)
+				var gain: float = float(xp_amount) / 1000.0
+				p.data.affinities["crafting"] = clampf(current_affinity + gain, 0.0, 1.0)
 			break
 
 # === Query Functions ===

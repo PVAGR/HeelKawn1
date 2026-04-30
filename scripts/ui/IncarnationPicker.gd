@@ -1,4 +1,5 @@
 extends CanvasLayer
+class_name IncarnationPicker
 
 signal entry_confirmed(pawn_id: int)
 signal closed()

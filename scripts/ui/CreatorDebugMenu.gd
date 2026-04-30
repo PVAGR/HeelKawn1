@@ -14,7 +14,6 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 		"heading": "Playtest / session truth",
 		"rows": [
 			{"id": "error_report", "label": "ERROR · Report (show all issues)"},
-			{"id": "ai_control_panel", "label": "AI · Control Panel (toggle)"},
 			{"id": "playtest_bundle", "label": "31 · Playtest bundle (one paste)"},
 			{"id": "soul_bundle", "label": "32 · Soul bundle (1–2 sim-year handoff paste)"},
 			{"id": "portable_character", "label": "33 · Portable character JSON (MMO / website handoff)"},
@@ -206,8 +205,6 @@ func _emit_report(report_id: String) -> void:
 	match report_id:
 		"error_report":
 			_report_error_issues()
-		"ai_control_panel":
-			_toggle_ai_control_panel()
 		"calendar":
 			_report_calendar(tick)
 		"sim_diag":
@@ -958,34 +955,6 @@ func _report_profession_liking() -> void:
 		print("  id=%d %s  %s  %s" % [int(d.id), d.display_name, aff, d.profession_liking_digest_line()])
 
 
-func _toggle_ai_control_panel() -> void:
-	var main: Node2D = _main()
-	if main == null:
-		print("Main missing - cannot toggle AI Control Panel")
-		return
-	
-	var ui_root: Node = main.get_node_or_null("UI_Viewport")
-	var ai_panel_parent: Node = ui_root if ui_root != null else main
-	var ai_panel: Control = ai_panel_parent.get_node_or_null("AIControlPanel")
-	if ai_panel == null:
-		print("AI Control Panel not found - creating it...")
-		var ai_panel_scene: PackedScene = preload("res://scenes/ui/AIControlPanel.tscn")
-		ai_panel = ai_panel_scene.instantiate()
-		ai_panel.name = "AIControlPanel"
-		ai_panel_parent.add_child(ai_panel)
-		if main.has_method("_on_enhanced_ai_toggled"):
-			(ai_panel as AIControlPanel).enhanced_ai_toggled.connect(main._on_enhanced_ai_toggled)
-			(ai_panel as AIControlPanel).tick_rate_changed.connect(main._on_tick_rate_changed)
-			(ai_panel as AIControlPanel).ai_potential_changed.connect(main._on_ai_potential_changed)
-		print("AI Control Panel created and added to UI")
-	
-	ai_panel.visible = not ai_panel.visible
-	var ui_debug_panel: Control = ai_panel_parent.get_node_or_null("AIAgentDebugPanel")
-	if ui_debug_panel != null:
-		ui_debug_panel.visible = ai_panel.visible
-	print("AI Control Panel toggled: %s" % ("VISIBLE" if ai_panel.visible else "HIDDEN"))
-
-
 func _report_error_issues() -> void:
 	print("=== HEELKAWN ERROR REPORT ===")
 	print("Generated: %s" % Time.get_datetime_string_from_system())
@@ -1070,23 +1039,17 @@ func _report_error_issues() -> void:
 		print("  %s" % connection)
 	
 	print("")
-	print("=== AI CONTROL PANEL STATUS ===")
-	var main: Node2D = _main()
-	if main != null:
-		var ui_root: Node = main.get_node_or_null("UI_Viewport")
-		var ai_panel: Control = null
-		if ui_root != null:
-			ai_panel = ui_root.get_node_or_null("AIControlPanel")
-		if ai_panel == null:
-			ai_panel = main.get_node_or_null("AIControlPanel")
-		if ai_panel != null:
-			print("✓ AI Control Panel: INSTANCED")
-			print("  Visible: %s" % ("YES" if ai_panel.visible else "NO"))
-		else:
-			print("✗ AI Control Panel: NOT FOUND")
-			error_count += 1
+	print("=== AI RUNTIME POLICY ===")
+	if AIAgentManager != null:
+		print("✓ AI manager: ALWAYS-ON")
+		print("  enabled=%s civilization_mode=%s max_agents=%d update_frequency=%d" % [
+			str(AIAgentManager.enabled),
+			str(AIAgentManager.civilization_mode),
+			int(AIAgentManager.max_agents),
+			int(AIAgentManager.update_frequency),
+		])
 	else:
-		print("✗ Main scene: NOT FOUND")
+		print("✗ AIAgentManager: NOT FOUND")
 		error_count += 1
 	
 	print("")
@@ -1098,7 +1061,7 @@ func _report_error_issues() -> void:
 		print("✓ No syntax errors detected")
 		print("✓ All autoloads loaded")
 		print("✓ Neural network matrix active")
-		print("✓ AI Control Panel ready")
+		print("✓ AI runtime policy active")
 	else:
 		print("⚠️  ISSUES DETECTED - See details above")
 		print("Recommendation: Fix identified issues before proceeding")

@@ -364,9 +364,6 @@ const BUILD_DRAG_MAX_TILES: int = 256  # ~16x16 of walls/beds/doors at once
 
 ## One-shot [VALIDATION_STATUS] / [VALIDATION_WARN] after scene boot (observability only).
 var _validation_harness_observability_logged: bool = false
-var _ai_control_panel: AIControlPanel = null
-## Off Main for worker runs only; normal play instances hidden UI so F10 error report stays green.
-const ENABLE_AI_CONTROL_PANEL: bool = true
 ## Max settlement rows in Observer realm panel; Shift+F9 cycles 8→12→16→24.
 var _realm_crown_max_settlements: int = 8
 
@@ -383,36 +380,6 @@ func _cycle_realm_crown_max_settlements() -> void:
 		print("[Main] Realm crown list cap: %d settlements" % _realm_crown_max_settlements)
 
 
-func _init_ai_control_panel() -> void:
-	if not ENABLE_AI_CONTROL_PANEL:
-		return
-	var ai_panel_scene: PackedScene = preload("res://scenes/ui/AIControlPanel.tscn")
-	_ai_control_panel = ai_panel_scene.instantiate()
-	_ai_control_panel.name = "AIControlPanel"
-	var ui_root: Node = get_node_or_null("UI_Viewport")
-	if ui_root != null:
-		ui_root.add_child(_ai_control_panel)
-	else:
-		add_child(_ai_control_panel)
-	
-	# Connect signals
-	_ai_control_panel.enhanced_ai_toggled.connect(_on_enhanced_ai_toggled)
-	_ai_control_panel.tick_rate_changed.connect(_on_tick_rate_changed)
-	_ai_control_panel.ai_potential_changed.connect(_on_ai_potential_changed)
-	
-	# Start hidden
-	_ai_control_panel.visible = false
-
-func _on_enhanced_ai_toggled(enabled: bool) -> void:
-	print("Enhanced AI %s" % ("ENABLED" if enabled else "DISABLED"))
-
-func _on_tick_rate_changed(new_rate: float) -> void:
-	print("Tick rate changed to %.1fx" % new_rate)
-
-func _on_ai_potential_changed(level: int) -> void:
-	print("AI potential set to %d/10" % level)
-
-
 func _ready() -> void:
 	var simulation_worker: bool = _is_simulation_worker_mode()
 	if not simulation_worker:
@@ -427,7 +394,6 @@ func _ready() -> void:
 		_kernel_diagnostic = KernelDiagnostic.new()
 		_kernel_diagnostic.name = "KernelDiagnostic"
 		add_child(_kernel_diagnostic)
-		_init_ai_control_panel()
 		_init_ambient_audio()
 		# Initialize Phase 5 Map Mode overlay
 		if _map_mode_overlay != null and _map_mode_overlay.has_method("initialize"):

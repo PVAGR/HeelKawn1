@@ -31,6 +31,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-29  AI policy hardwired for play: removed F10 AI control toggle + removed `AIAgentDebugPanel` from `Main.tscn` so there is no summon/tuning UI path; `AIAgentManager` now boots always-on from tick 0 (`enabled=true`, `civilization_mode=true`, `max_agents=25`, `update_frequency=3`) for full-capability day-1 simulation.
 2026-04-29  UI discoverability pass: moved `AIAgentDebugPanel` under `UI_Viewport` (screen-space, not map-root) and default-hidden; `Main._init_ai_control_panel` now mounts AI panel in `UI_Viewport`; F10 **AI · Control Panel (toggle)** now creates/toggles `AIControlPanel` in UI root and mirrors visibility to `AIAgentDebugPanel` so AI/debug controls live in F10/bottom UI flow only.
 2026-04-29  **Smoothing pass 3:** `Main` regrowth is now speed-aware (100x/50x budgets reduced to tiny per-call chunks) and reuses one cached `largest_component_id` per pass; `Pawn` job-claim scans are phase-staggered by pawn id (not all idles claim on same tick); `CreatorDebugMenu` dedupes same-tick report spam for identical report IDs.
 2026-04-29  **Ultra-speed smoothness profile:** `GameManager._adaptive_frame_tick_cap` now enforces hard guard caps at high speeds (26x/50x/100x → 10/8/6 max ticks per render frame) in addition to per-tick-cost adaptation; `Pawn` ultra-speed AI stride raised (100x/50x/26x → 14/10/8) and idle job-claim cadence scales by speed (8/6/4 ticks) to reduce queue-scan bursts.

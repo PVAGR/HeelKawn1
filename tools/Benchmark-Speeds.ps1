@@ -2,12 +2,19 @@
 param(
     [string]$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
     [ValidateSet("worker","normal")]
-    [string]$BenchMode = "worker"
+    [string]$BenchMode = "worker",
+    [int]$TicksPerSample = 120
 )
 
 $ErrorActionPreference = "Stop"
 $godot = & (Join-Path $PSScriptRoot "Resolve-Godot.ps1") -ProjectRoot $ProjectRoot
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ([string]::IsNullOrWhiteSpace($godot)) { exit 1 }
 
-& $godot --headless --path $ProjectRoot --script "res://scripts/system/speed_benchmark_runner.gd" --bench-mode $BenchMode
+$runner = Join-Path $ProjectRoot "scripts\system\speed_benchmark_runner.gd"
+if (-not (Test-Path -LiteralPath $runner)) {
+    Write-Error "Benchmark runner not found: $runner"
+    exit 1
+}
+
+& $godot --headless --path $ProjectRoot --script $runner --bench-mode $BenchMode --ticks-per-sample $TicksPerSample
 exit $LASTEXITCODE

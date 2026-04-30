@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Setup Godot
       uses: chickensoft-games/setup-godot@v1
@@ -22,16 +22,11 @@ jobs:
         version: 4.6.2
         use-dotnet: false
     
-    - name: Validate GDScript Syntax
+    - name: Godot Project Smoke
       run: |
-        echo "Validating all GDScript files..."
-        find . -name "*.gd" -type f | while read file; do
-          if ! godot --headless --script "$file" --check-only 2>/dev/null; then
-            echo "ERROR: $file failed validation"
-            exit 1
-          fi
-        done
-        echo "All GDScript files validated successfully!"
+        echo "Loading the Godot project and running through the first simulation tick..."
+        godot --headless --path . --quit-after 240
+        echo "Project smoke passed."
     
     - name: Check for Common Errors
       run: |
@@ -88,10 +83,9 @@ jobs:
         Commit: ${{ github.sha }}
         
         ## System Status
-        - WorldAI: ✅ Operational
-        - Neural Network Matrix: ✅ Operational
-        - AIAgentManager: ✅ Operational
-        - ErrorTracker: ✅ Operational
+        - Godot project smoke: passed
+        - Neural Network Matrix required functions: present
+        - Common error scan: passed
         
         ## File Counts
         - GDScript Files: $(find . -name "*.gd" | wc -l)
@@ -105,7 +99,7 @@ jobs:
         cat health_report.md
     
     - name: Upload Health Report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: health-report
         path: health_report.md

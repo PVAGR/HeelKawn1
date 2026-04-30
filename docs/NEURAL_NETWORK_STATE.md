@@ -102,7 +102,7 @@ This document tracks the current state of the neural network matrix integration 
 ### 5. Neural-Driven Succession Candidates ✅
 - rank_succession_candidates() for leadership selection
 - Government-specific scoring: MONARCHY, THEOCRACY, TECHNOCRACY, REPUBLIC, TRIBAL
-- Adds randomness to prevent deterministic outcomes
+- Adds deterministic tie-break jitter to prevent flat outcomes without global RNG
 - Returns sorted candidate IDs from highest to lowest score
 
 ### 6. Neural Network Visualization ✅

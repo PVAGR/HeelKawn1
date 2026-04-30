@@ -15,10 +15,17 @@ From the repository root:
 powershell -ExecutionPolicy Bypass -File "tools/Benchmark-Speeds.ps1" -BenchMode worker
 ```
 
+For a quick tooling smoke instead of the full observer sweep:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "tools/Benchmark-Speeds.ps1" -BenchMode worker -TicksPerSample 2
+```
+
 ### Bench modes
 
 - `worker` (default): runs the benchmark with `GameManager.simulation_worker_mode=true` to avoid UI-heavy paths. Best for validating tick determinism + sim throughput.
 - `normal`: runs with `simulation_worker_mode=false` so you also exercise per-frame UI/audio work. Closer to what players experience, but can be slower.
+- `TicksPerSample` defaults to `120`. Lower it only for fast CI/tooling smoke checks; use the default for real performance evidence.
 
 To run normal-mode:
 

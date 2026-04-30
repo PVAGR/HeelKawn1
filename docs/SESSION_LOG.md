@@ -5,6 +5,32 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-30 - Repo health and validation repair
+
+Date: 2026-04-30
+Goal: Turn the audit findings into a stable validation/tooling pass and repair drift that made benchmark and lightweight paths unreliable.
+
+Changes made:
+- Restored `GameManager.lightweight_simulation_mode` with CLI flags (`--lightweight-sim` / `--lite-sim`) and public getters/setters so `JobManager` and `PawnData` gates actually activate.
+- Fixed observer benchmark startup: worker/lightweight flags are set before `Main` is instantiated, `Benchmark-Speeds.ps1` uses the filesystem runner path, and `-TicksPerSample` supports fast smoke runs.
+- Fixed PowerShell wrappers that could exit successfully before launching Godot because `$LASTEXITCODE` was null/stale after `Resolve-Godot.ps1`.
+- Made `Resolve-Godot.ps1` prefer the repo-pinned portable Godot before PATH for reproducible local checks.
+- Replaced brittle CI per-file script checks with a project-level Godot smoke that reaches the first simulation tick.
+- Fixed `CommandAPI` movement/job execution plumbing and added `JobManager.claim_by_id_for(...)` for validated command-bus job claims.
+- Replaced succession ranking's global RNG jitter with deterministic candidate jitter and updated neural docs.
+- Corrected the system testing guide so AI-agent expectations match the current deliberately-disabled automatic incarnation path.
+
+Validation:
+- `powershell -ExecutionPolicy Bypass -File tools\Verify-Project.ps1 -QuitAfterFrames 240` passed and reached tick 1.
+- `powershell -ExecutionPolicy Bypass -File tools\Benchmark-Speeds.ps1 -BenchMode worker -TicksPerSample 2` passed all speed tiers and wrote observer reports.
+- `powershell -ExecutionPolicy Bypass -File tools\Benchmark-Speeds.ps1 -BenchMode worker -TicksPerSample 20` passed all speed tiers with 0 failures.
+- `git diff --check` passed.
+
+Suggested next session:
+- Do a longer default worker benchmark (`-TicksPerSample 120`) and compare 50x/100x ratios after the lightweight mode fix.
+- Continue determinism cleanup by replacing raw `randf()` / `randi()` in canonical simulation paths with named `WorldRNG` streams or deterministic tie-breakers.
+- Revisit `AIAgentManager._try_incarnate_agent`; it is still deliberately disabled, so AI-player parity should be enabled only after command ownership will not steal the human incarnation state.
+
 ## 2026-04-28 - AI resume bundle added
 
 Date: 2026-04-28

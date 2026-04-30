@@ -165,6 +165,26 @@ func claim_next_for(
 	return job
 
 
+func claim_by_id_for(pawn: Pawn, job_id: int) -> Job:
+	var pd = pawn.call("get_pawn_data") if pawn != null and pawn.has_method("get_pawn_data") else null
+	if pawn == null or pd == null or job_id < 0:
+		return null
+	for i in range(_open.size()):
+		var j: Job = _open[i]
+		if int(j.id) != job_id:
+			continue
+		if pd.has_method("allows_job_type") and not pd.allows_job_type(j.type):
+			return null
+		_open.remove_at(i)
+		_claimed.append(j)
+		j.state = Job.State.CLAIMED
+		j.assigned_pawn = pawn
+		_bump_jobs_data_generation()
+		job_claimed.emit(j, pawn)
+		return j
+	return null
+
+
 ## Pawn gave up on a job (couldn't reach it, or was freed). Puts it back in
 ## the open queue so another pawn can claim. Resets work progress.
 func abandon(job: Job) -> void:

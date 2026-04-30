@@ -33,6 +33,7 @@ Note: the script exits with code `1` whenever any speed tier is marked `SLOW` in
    - Look for right-side AI Agent Debug Panel
    - Should show 8 agents (2 Strategic, 4 Tactical, 2 Reactive)
    - Enable checkbox should be checked
+   - Note: automatic AI incarnation is currently disabled in `AIAgentManager` until command ownership is separated from the human incarnation state
 
 ---
 
@@ -54,7 +55,7 @@ Note: the script exits with code `1` whenever any speed tier is marked `SLOW` in
   - AI agents should observe pawn/tile/settlement data
   - Check debug panel for agent observations
 - [ ] **CommandAPI functional**
-  - AI agents should execute move/work commands
+  - Programmatic move/work commands should validate and execute through the same command surface
   - Same validation as human players
 - [ ] **MapModeOverlay (Press M)**
   - Should show regional overlays
@@ -63,7 +64,7 @@ Note: the script exits with code `1` whenever any speed tier is marked `SLOW` in
 ### **AI Agent Framework**
 - [ ] **Agent Population**
   - 8 initial agents should spawn
-  - Agents should incarnate into available pawns
+  - Agents should remain managed without crashes; automatic pawn incarnation is currently disabled
   - Dead agents should be replaced
 - [ ] **Decision Making**
   - Agents should set goals (survival, work, social)

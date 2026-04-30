@@ -46,6 +46,8 @@ var is_paused: bool = false
 var tick_count: int = 0
 ## Worker mode disables play/UI-heavy codepaths for deterministic headless runs.
 var simulation_worker_mode: bool = false
+## Lightweight mode caps broad queues and gates advanced jobs for benchmark/dev runs.
+var lightweight_simulation_mode: bool = false
 var _tick_benchmark_enabled: bool = false
 
 ## Optional macro pressure (LivingWorldController and future systems). Not tied to
@@ -163,6 +165,18 @@ func _adaptive_frame_tick_cap(base_cap: int) -> int:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_apply_command_line_flags()
+
+
+func _apply_command_line_flags() -> void:
+	var args: PackedStringArray = OS.get_cmdline_args()
+	for raw_arg in args:
+		var arg: String = str(raw_arg)
+		match arg:
+			"--simulation-worker", "--sim-worker":
+				simulation_worker_mode = true
+			"--lightweight-sim", "--lite-sim":
+				lightweight_simulation_mode = true
 
 
 func _process(delta: float) -> void:
@@ -232,6 +246,14 @@ func set_speed(new_speed: float) -> void:
 
 func set_simulation_worker_mode(enabled: bool) -> void:
 	simulation_worker_mode = enabled
+
+
+func set_lightweight_simulation_mode(enabled: bool) -> void:
+	lightweight_simulation_mode = enabled
+
+
+func is_lightweight_simulation_mode() -> bool:
+	return lightweight_simulation_mode
 
 
 func set_tick_benchmark_enabled(enabled: bool) -> void:

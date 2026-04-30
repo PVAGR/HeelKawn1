@@ -162,7 +162,7 @@ static func _execute_move_pawn(command: Command) -> Dictionary:
 	var result: Dictionary = {"success": false, "error": "", "data": {}}
 	
 	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
-	if main == null or not main.has_method("_pawn_spawner"):
+	if main == null:
 		result.error = "Main scene not available"
 		return result
 	
@@ -191,9 +191,9 @@ static func _execute_move_pawn(command: Command) -> Dictionary:
 		result.error = "Pawn not found"
 		return result
 	
-	# Execute move using the same method as UI
-	if main.has_method("_pawn_goto_tile"):
-		main._pawn_goto_tile(target_pawn, target_tile)
+	# Execute movement through Pawn's public pathing surface.
+	if target_pawn.has_method("draft_goto"):
+		target_pawn.draft_goto(target_tile)
 		result.success = true
 		result.data = {"target_tile": {"x": target_tile.x, "y": target_tile.y}}
 	else:
@@ -205,7 +205,7 @@ static func _execute_claim_job(command: Command) -> Dictionary:
 	var result: Dictionary = {"success": false, "error": "", "data": {}}
 	
 	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
-	if main == null or not main.has_method("_pawn_spawner"):
+	if main == null:
 		result.error = "Main scene not available"
 		return result
 	
@@ -230,29 +230,18 @@ static func _execute_claim_job(command: Command) -> Dictionary:
 		result.error = "Pawn not found"
 		return result
 	
-	# Find the job
 	var job_manager = JobManager
 	if job_manager == null:
 		result.error = "JobManager not available"
 		return result
 	
-	var target_job: Job = null
-	for j in job_manager.jobs:
-		if j != null and int(j.id) == job_id:
-			target_job = j
-			break
-	
+	var target_job: Job = job_manager.claim_by_id_for(target_pawn, job_id) if job_manager.has_method("claim_by_id_for") else null
 	if target_job == null:
-		result.error = "Job not found"
+		result.error = "Job not found, already claimed, or pawn is not eligible"
 		return result
 	
-	# Execute job claim using the same method as UI
-	if main.has_method("_pawn_claim_job"):
-		main._pawn_claim_job(target_pawn, target_job)
-		result.success = true
-		result.data = {"job_id": job_id, "job_type": target_job.type}
-	else:
-		result.error = "Job claim method not available"
+	result.success = true
+	result.data = {"job_id": job_id, "job_type": target_job.type}
 	
 	return result
 
@@ -290,7 +279,7 @@ static func _execute_perform_presence(command: Command) -> Dictionary:
 	var result: Dictionary = {"success": false, "error": "", "data": {}}
 	
 	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
-	if main == null or not main.has_method("_pawn_spawner"):
+	if main == null:
 		result.error = "Main scene not available"
 		return result
 	

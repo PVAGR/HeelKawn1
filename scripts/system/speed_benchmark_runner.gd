@@ -1,6 +1,6 @@
 extends SceneTree
 
-const TICKS_PER_SAMPLE: int = 120
+const TICKS_PER_SAMPLE_DEFAULT: int = 120
 const STALL_TIMEOUT_MS: int = 30000
 const MAIN_SCENE_PATH: String = "res://scenes/main/Main.tscn"
 const REPORT_DIR_PATH: String = "res://logs/observer"
@@ -19,6 +19,7 @@ var _job_manager: Node = null
 var _last_heartbeat_bucket: int = -1
 var _sample_active: bool = false
 var _timeline: Array[Dictionary] = []
+var _ticks_per_sample: int = TICKS_PER_SAMPLE_DEFAULT
 var _last_day_within_year: int = -1
 var _last_year_index: int = -1
 var _settlement_state_cache: Dictionary = {}
@@ -31,6 +32,17 @@ var _bench_mode: String = "worker" # "worker" or "normal"
 
 
 func _initialize() -> void:
+	_bench_mode = _parse_bench_mode()
+	_ticks_per_sample = _parse_ticks_per_sample()
+	_gm = root.get_node_or_null("GameManager")
+	if _gm == null:
+		push_error("[SPEED_BENCH] GameManager autoload not found.")
+		quit(2)
+		return
+	_gm.call("set_simulation_worker_mode", _bench_mode == "worker")
+	if _gm.has_method("set_lightweight_simulation_mode"):
+		_gm.call("set_lightweight_simulation_mode", _bench_mode == "worker")
+	_gm.call("set_tick_benchmark_enabled", true)
 	var packed: PackedScene = load(MAIN_SCENE_PATH) as PackedScene
 	if packed == null:
 		push_error("[SPEED_BENCH] Failed to load main scene: %s" % MAIN_SCENE_PATH)
@@ -38,18 +50,10 @@ func _initialize() -> void:
 		return
 	var main_node: Node = packed.instantiate()
 	root.add_child(main_node)
-	_gm = root.get_node_or_null("GameManager")
-	if _gm == null:
-		push_error("[SPEED_BENCH] GameManager autoload not found.")
-		quit(2)
-		return
 	_settlement_memory = root.get_node_or_null("SettlementMemory")
 	_job_manager = root.get_node_or_null("JobManager")
 	_session_id = _build_session_id()
 	_prepare_report_paths()
-	_bench_mode = _parse_bench_mode()
-	_gm.call("set_simulation_worker_mode", _bench_mode == "worker")
-	_gm.call("set_tick_benchmark_enabled", true)
 	_speeds = Array(_gm.get("SPEED_STEPS")).duplicate()
 	_speeds.sort()
 	_gm.connect("game_tick", Callable(self, "_on_game_tick"))
@@ -96,11 +100,11 @@ func _advance_to_next_speed() -> void:
 	_last_tick_ms = _start_ms
 	_last_heartbeat_bucket = -1
 	_sample_active = true
-	print("[SPEED_BENCH] begin speed=%.1fx start_tick=%d target_ticks=%d" % [speed, _start_tick, TICKS_PER_SAMPLE])
+	print("[SPEED_BENCH] begin speed=%.1fx start_tick=%d target_ticks=%d" % [speed, _start_tick, _ticks_per_sample])
 	_timeline_event("speed_begin", {
 		"speed": speed,
 		"start_tick": _start_tick,
-		"target_ticks": TICKS_PER_SAMPLE,
+		"target_ticks": _ticks_per_sample,
 	})
 
 
@@ -116,7 +120,7 @@ func _on_game_tick(tick: int) -> void:
 	if hb_bucket != _last_heartbeat_bucket:
 		_last_heartbeat_bucket = hb_bucket
 		print("[SPEED_BENCH] heartbeat speed=%.1fx progressed_ticks=%d current_tick=%d" % [_speeds[_index], progressed, tick])
-	if progressed < TICKS_PER_SAMPLE:
+	if progressed < _ticks_per_sample:
 		return
 	var speed: float = _speeds[_index]
 	var elapsed_s: float = float(Time.get_ticks_msec() - _start_ms) / 1000.0
@@ -147,7 +151,7 @@ func _on_game_tick(tick: int) -> void:
 
 
 func _expected_seconds_for(speed: float) -> float:
-	return (float(TICKS_PER_SAMPLE) * float(_gm.get("TICK_INTERVAL_SECONDS"))) / maxf(0.001, speed)
+	return (float(_ticks_per_sample) * float(_gm.get("TICK_INTERVAL_SECONDS"))) / maxf(0.001, speed)
 
 
 func _parse_bench_mode() -> String:
@@ -164,6 +168,19 @@ func _parse_bench_mode() -> String:
 			if eq >= 0 and eq + 1 < a.length():
 				return a.substr(eq + 1)
 	return "worker"
+
+
+func _parse_ticks_per_sample() -> int:
+	var args: PackedStringArray = OS.get_cmdline_args()
+	for i in range(args.size()):
+		var a: String = str(args[i])
+		if a == "--ticks-per-sample" and i + 1 < args.size():
+			return maxi(1, int(args[i + 1]))
+		if a.begins_with("--ticks-per-sample="):
+			var eq: int = a.find("=")
+			if eq >= 0 and eq + 1 < a.length():
+				return maxi(1, int(a.substr(eq + 1)))
+	return TICKS_PER_SAMPLE_DEFAULT
 
 
 func _emit_summary_and_quit() -> void:
@@ -188,6 +205,8 @@ func _emit_summary_and_quit() -> void:
 	_write_reports(failures)
 	_gm.call("set_tick_benchmark_enabled", false)
 	_gm.call("set_simulation_worker_mode", false)
+	if _gm.has_method("set_lightweight_simulation_mode"):
+		_gm.call("set_lightweight_simulation_mode", false)
 	quit(0 if failures == 0 else 1)
 
 
@@ -294,7 +313,7 @@ func _write_reports(failures: int) -> void:
 	var report: Dictionary = {
 		"session_id": _session_id,
 		"created_unix": int(Time.get_unix_time_from_system()),
-		"ticks_per_sample": TICKS_PER_SAMPLE,
+		"ticks_per_sample": _ticks_per_sample,
 		"stall_timeout_ms": STALL_TIMEOUT_MS,
 		"pass_ratio_threshold": REPORT_PASS_RATIO,
 		"results": _results,

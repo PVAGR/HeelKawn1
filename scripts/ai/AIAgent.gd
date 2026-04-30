@@ -302,6 +302,7 @@ func _plan_incarnation(goal: Goal) -> Dictionary:
 	return {
 		"type": "incarnate",
 		"command": command,
+		"target_pawn_id": pawn_id,
 		"confidence": 0.8
 	}
 
@@ -444,7 +445,7 @@ func _execute_incarnation(action: Dictionary) -> void:
 	if command != null:
 		var result: Dictionary = CommandAPI.execute_command(command)
 		if result.get("success", false):
-			controlled_pawn_id = action.get("target_pawn_id", -1)
+			controlled_pawn_id = int(result.get("data", {}).get("pawn_id", action.get("target_pawn_id", -1)))
 
 func _execute_move(action: Dictionary) -> void:
 	var target_tile: Dictionary = action.get("target_tile", {})

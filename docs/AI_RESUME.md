@@ -15,6 +15,7 @@ Use this file when context is tight or the previous model was rate-limited.
 - The project is a deterministic Godot 4.6 simulation.
 - The newest simulation path is a headless worker mode for benchmarking and background runs.
 - The latest lightweight mode caps open jobs and pushes job access through pawn progression.
+- Tooling was repaired so `Verify-Project.ps1` really reaches tick 1 and `Benchmark-Speeds.ps1` really runs the benchmark runner through the repo-pinned Godot console executable.
 - The world progression model now explicitly layers: individual -> family -> clan -> settlement -> region -> nation -> world.
 - The repo has already been adjusted so future AI can resume from docs instead of chat history.
 

@@ -1956,6 +1956,12 @@ func get_collapse_stage_name(stage: int) -> String:
 		_: return "UNKNOWN"
 
 
+func _deterministic_succession_jitter(candidate_id: int, government_type: String) -> float:
+	var seed_text: String = "%s:%d" % [government_type, candidate_id]
+	var h: int = abs(seed_text.hash())
+	return float(h % 1000) / 10000.0
+
+
 func rank_succession_candidates(candidate_ids: Array[int], government_type: String) -> Array[int]:
 	# Rank succession candidates based on neural network state and government type
 	# Returns sorted array of candidate IDs from highest to lowest score
@@ -2005,8 +2011,8 @@ func rank_succession_candidates(candidate_ids: Array[int], government_type: Stri
 				score += summary.get("religious_authority", 0.0) * 0.25
 				score += summary.get("knowledge_authority", 0.0) * 0.25
 		
-		# Add randomness to prevent deterministic outcomes
-		score += randf() * 0.1
+		# Stable tie-breaker: variety without non-replayable global RNG.
+		score += _deterministic_succession_jitter(candidate_id, government_type)
 		
 		ranked_candidates.append({
 			"candidate_id": candidate_id,

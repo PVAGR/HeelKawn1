@@ -973,8 +973,6 @@ func _toggle_ai_control_panel() -> void:
 	else:
 		ai_panel.visible = not ai_panel.visible
 		print("AI Control Panel toggled: %s" % ("VISIBLE" if ai_panel.visible else "HIDDEN"))
-	
-	print("=== HEELKAWN_DEBUG_REPORT:ai_control_panel:tick=%d END ===" % GameManager.tick_count)
 
 
 func _report_error_issues() -> void:

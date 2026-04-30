@@ -31,6 +31,8 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-29  **Main tick diagnostics + smoothing:** `_on_game_tick` now reports `[MAIN_TICK_HOTSPOT]` (top 4 section timings at 26x+ when total tick work is heavy), and planner bursts are staggered (`SettlementPlanner` and `TradePlanner` on offset cadence) to reduce one-tick 100x hitch spikes.
+2026-04-29  **CreatorDebugMenu:** removed duplicate `ai_control_panel ... END` line emitted inside `_toggle_ai_control_panel` (report wrapper already prints END).
 2026-04-29  **ColonySimServices:** removed **speed-based** demand throttle — food/mat/haul refresh **every sim tick** again (still one cheap stockpile pass); housing stays **every 60 ticks** (macro cadence, not speed-tier skipping).
 2026-04-29  **GameManager:** measures wall time inside `game_tick` per frame; `sim_diag` adds `last_frame_game_tick_ms` + `last_frame_tick_cap_backlog`; debug builds log `[SIM_HITCH]` when listeners exceed ~25 ms/frame, `[SIM_CATCHUP]` when tick-per-frame cap leaves queued sim backlog (explains fast-forward “freezes”).
 2026-04-29  **StockpileManager** `zone_count()` + `aggregate_inventory_totals()`; **ColonyHUD** stockpile lines use one manager pass (no duplicate `zones()` walk + merge loop).

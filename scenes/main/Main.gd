@@ -238,6 +238,10 @@ var _last_heavy_stack_tick: int = -1
 ## on cadence instead of per-completion to avoid long frame stalls.
 var _mining_react_pending: bool = false
 var _last_mining_react_tick: int = -1
+## Debug-only hotspot reporter for `_on_game_tick` sections.
+var _last_tick_hotspot_log_ms: int = -1_000_000
+const MAIN_TICK_HOTSPOT_LOG_INTERVAL_MS: int = 2500
+const MAIN_TICK_HOTSPOT_MIN_TOTAL_MS: float = 8.0
 const MINING_REACT_MIN_INTERVAL_TICKS: int = 120
 const INSPECT_SCAN_INTERVAL_TICKS: int = 30
 var _last_inspect_event_tick_shown: int = -1
@@ -1844,7 +1848,10 @@ func _sync_pawn_inherited_cultural_reputation() -> void:
 func _on_game_tick(tick: int) -> void:
 	if _is_simulation_worker_mode() and GameManager != null and GameManager.is_tick_benchmark_enabled():
 		return
+	var section_us: Dictionary = {}
+	var t0: int = Time.get_ticks_usec()
 	_process_player_intent_dispatch_tick()
+	section_us["intent_dispatch"] = Time.get_ticks_usec() - t0
 	if _player_input != null and _player_mode == PlayerMode.INCARNATED:
 		if not is_instance_valid(_player_pawn):
 			_ensure_player_pawn_assigned()
@@ -1862,15 +1869,21 @@ func _on_game_tick(tick: int) -> void:
 			_animal_spawner != null
 			and int(tick) % AnimalSpawner.POPULATION_CHECK_TICKS == 0
 	):
+		t0 = Time.get_ticks_usec()
 		_animal_spawner.update_population_dynamics(_world)
+		section_us["animal_population"] = Time.get_ticks_usec() - t0
 	# Regrowth + ambient are display/maintenance layers; they should not run
 	# every sim tick in normal mode or high speeds will hitch.
 	var regrowth_interval: int = _high_speed_interval(2, 4, 8)
 	if tick % regrowth_interval == 0:
+		t0 = Time.get_ticks_usec()
 		_process_regrowth(tick)
+		section_us["regrowth"] = Time.get_ticks_usec() - t0
 	var ambient_interval: int = _high_speed_interval(2, 4, 8)
 	if tick % ambient_interval == 0:
+		t0 = Time.get_ticks_usec()
 		_update_ambient_target()
+		section_us["ambient_target"] = Time.get_ticks_usec() - t0
 	# Post dynamic hunt jobs less aggressively than harvest loops.
 	var hunt_post_interval: int = _high_speed_interval(20, 30, 45)
 	if (
@@ -1878,9 +1891,13 @@ func _on_game_tick(tick: int) -> void:
 			and Main._world_stabilization_until_tick >= 0
 			and tick >= Main._world_stabilization_until_tick
 	):
+		t0 = Time.get_ticks_usec()
 		_post_hunting_jobs_for_animals()
+		section_us["hunt_post"] = Time.get_ticks_usec() - t0
 	# Enemy AI and raid spawning
+	t0 = Time.get_ticks_usec()
 	_on_enemy_tick(tick, _enemy_spawner)
+	section_us["enemy_tick"] = Time.get_ticks_usec() - t0
 	# Suppress hot-loop tick spam; this is a major source of debug-mode stutter.
 	# Failsafe: pawns that slipped into solid tiles (rare) get nudged; log once per pawn.
 	if tick % 60 == 0 and _pawn_spawner != null:
@@ -1900,49 +1917,117 @@ func _on_game_tick(tick: int) -> void:
 		# Keep planning frequent, but not per-tick.
 		var planner_interval: int = _high_speed_interval(12, 16, 24)
 		if tick % planner_interval == 0:
+			t0 = Time.get_ticks_usec()
 			SettlementPlanner.plan(_world, self, false)
+			section_us["settlement_planner"] = Time.get_ticks_usec() - t0
+		# Spread heavy planning across adjacent ticks to reduce one-tick hitch spikes.
+		var trade_offset: int = maxi(1, planner_interval / 2)
+		if (tick + trade_offset) % planner_interval == 0:
+			t0 = Time.get_ticks_usec()
 			TradePlanner.plan(_world, self, false)
+			section_us["trade_planner"] = Time.get_ticks_usec() - t0
 		if tick % REBIRTH_CHECK_INTERVAL_TICKS == 0:
+			t0 = Time.get_ticks_usec()
 			SettlementMemory.recompute(_world)
 			SettlementRebirth.process(_world, self, false)
+			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
 	if int(tick) % 10000 == 0 and int(tick) > 0:
 		AgeMemory.recompute()
 		if is_instance_valid(_world):
 			IntentMemory.recompute(_world)
 	if _mining_react_pending and (tick - _last_mining_react_tick) >= MINING_REACT_MIN_INTERVAL_TICKS:
+		t0 = Time.get_ticks_usec()
 		_react_to_mining_progress()
+		section_us["mining_react"] = Time.get_ticks_usec() - t0
 		_last_mining_react_tick = tick
 		_mining_react_pending = false
+	t0 = Time.get_ticks_usec()
 	_maybe_generational_turnover()
+	section_us["generational_turnover"] = Time.get_ticks_usec() - t0
 	if tick % REPRODUCTION_CHECK_INTERVAL_TICKS == 0:
+		t0 = Time.get_ticks_usec()
 		_process_reproduction_tick()
+		section_us["reproduction"] = Time.get_ticks_usec() - t0
 	if tick % INFLUENCE_UPDATE_INTERVAL_TICKS == 0:
+		t0 = Time.get_ticks_usec()
 		_update_pawn_influence_tick()
+		section_us["influence"] = Time.get_ticks_usec() - t0
 	_update_phase8_proof_bundle_preferred_center()
+	t0 = Time.get_ticks_usec()
 	SettlementMemory.update_settlement_intents(tick)
+	section_us["settlement_intents"] = Time.get_ticks_usec() - t0
+	t0 = Time.get_ticks_usec()
 	SettlementMemory.update_resource_pressures(tick)
+	section_us["settlement_resource_pressure"] = Time.get_ticks_usec() - t0
+	t0 = Time.get_ticks_usec()
 	SettlementMemory.update_preferred_work_fronts(tick)
+	section_us["settlement_work_fronts"] = Time.get_ticks_usec() - t0
 	if tick % SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS == 0:
+		t0 = Time.get_ticks_usec()
 		_accumulate_social_rapport()
+		section_us["social_rapport"] = Time.get_ticks_usec() - t0
 	_emit_pawn_divergence_summary_if_needed(tick)
 	if _is_simulation_worker_mode():
+		_maybe_log_tick_hotspots(tick, section_us)
 		return
 	# HUD snapshots are CPU-expensive; reduce cadence at 1x.
 	var obs_iv: int = _high_speed_interval(60, 45, 90)
 	if _observer_hud != null and tick % obs_iv == 0:
+		t0 = Time.get_ticks_usec()
 		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
+		section_us["observer_snapshot"] = Time.get_ticks_usec() - t0
 	# Handle recent player_inspect events for tooltip + audio feedback
 	if tick % _inspect_scan_interval_for_speed() == 0:
+		t0 = Time.get_ticks_usec()
 		_scan_recent_inspects_and_handle()
+		section_us["inspect_scan"] = Time.get_ticks_usec() - t0
 	# FocusInspector snapshotting is another large allocation hotspot (see ObservationAPI — programmatic reads must stay on-demand, not per-frame).
 	var focus_iv: int = _high_speed_interval(30, 24, 48)
 	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % focus_iv == 0:
+		t0 = Time.get_ticks_usec()
 		_focus_inspector.apply_snapshot(_build_focus_snapshot(tick))
+		section_us["focus_snapshot"] = Time.get_ticks_usec() - t0
 	if is_instance_valid(_world):
 		var road_flush_interval: int = _high_speed_interval(2, 4, 8)
 		if tick % road_flush_interval == 0 and not _road_flush_deferred_pending:
 			_road_flush_deferred_pending = true
 			call_deferred("_flush_road_memory_dirty_tiles")
+	_maybe_log_tick_hotspots(tick, section_us)
+
+
+func _maybe_log_tick_hotspots(tick: int, section_us: Dictionary) -> void:
+	if not OS.is_debug_build():
+		return
+	if GameManager == null or GameManager.game_speed < 26.0:
+		return
+	var total_us: int = 0
+	for k in section_us.keys():
+		total_us += int(section_us.get(k, 0))
+	var total_ms: float = float(total_us) / 1000.0
+	if total_ms < MAIN_TICK_HOTSPOT_MIN_TOTAL_MS:
+		return
+	var now_ms: int = Time.get_ticks_msec()
+	if now_ms - _last_tick_hotspot_log_ms < MAIN_TICK_HOTSPOT_LOG_INTERVAL_MS:
+		return
+	_last_tick_hotspot_log_ms = now_ms
+	var keys: Array = section_us.keys()
+	keys.sort_custom(func(a: Variant, b: Variant) -> bool:
+		return int(section_us.get(a, 0)) > int(section_us.get(b, 0))
+	)
+	var parts: PackedStringArray = PackedStringArray()
+	var shown: int = 0
+	for k in keys:
+		var us: int = int(section_us.get(k, 0))
+		if us <= 0:
+			continue
+		parts.append("%s=%.2fms" % [str(k), float(us) / 1000.0])
+		shown += 1
+		if shown >= 4:
+			break
+	print(
+			"[MAIN_TICK_HOTSPOT] tick=%d speed=%.0fx total=%.2fms top=%s"
+			% [tick, GameManager.game_speed, total_ms, ", ".join(parts)]
+	)
 
 
 func _inspect_scan_interval_for_speed() -> int:

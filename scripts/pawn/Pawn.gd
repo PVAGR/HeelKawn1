@@ -90,6 +90,9 @@ const REST_PANIC_THRESHOLD: float = 12.0
 const STOCKPILE_FOOD_LOW_THRESHOLD: int = 10
 ## Added inside JobManager priority_cb only — not an exclusive job filter (see _tick_idle).
 const AFFINITY_JOB_PRIORITY_BONUS: int = 2
+const UTILITY_JOB_PRIORITY_BIAS_RANGE: int = 6
+const UTILITY_SCORE_NORMALIZER: float = 6.0
+const UTILITY_WANDER_THRESHOLD: float = 0.42
 ## Sleep ends and the pawn wakes once rest climbs above this.
 const REST_WAKE_THRESHOLD: float = 90.0
 ## Rest restored per tick while in SLEEPING state. ~7x the normal decay rate
@@ -163,6 +166,13 @@ const COHORT_MATCH_RADIUS_TILES: int = 8
 const COHORT_BREAK_DISTANCE_TILES: int = 16
 const COHORT_MIN_SIZE: int = 2
 const COHORT_COHESION_BIAS_WEIGHT: float = 0.12
+
+## Meaning-based behavior modifiers (Phase 4: Player-readable meaning refinement)
+## These are base values; actual multipliers come from MeaningAmbianceController
+const MEANING_SPEED_QUIET: float = 1.0
+const MEANING_SPEED_SCARRED: float = 0.9
+const MEANING_SPEED_BLOODIED: float = 0.75
+const MEANING_SPEED_GRAVE: float = 0.6
 const COHORT_COHESION_MAX_STEP: float = 0.35
 const COHORT_RECRUITMENT_SCAN_RADIUS_TILES: int = 10
 const COHORT_RECRUITMENT_MAX_PAWNS: int = 24
@@ -272,6 +282,7 @@ var _hit_flash_ticks: int = 0
 var _last_inspect_msg: String = ""
 var _last_inspect_tick: int = -999999
 var _initial_knowledge_granted: bool = false
+var _perception_scan_cursor: int = 0
 
 ## Autoloads (e.g. JobManager) should call these instead of `pawn.data` — the
 ## parser can fail to resolve the `data` member on class_name Pawn in autoload scripts.
@@ -683,6 +694,7 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	_last_recruitment_job_type = -1
 	_next_reproduction_tick = GameManager.tick_count + 1000 + WorldRNG.index_for(_pawn_stream("reproduction_delay"), 4001, _pawn_salt(3))
 	_carrying_spawn_item = false
+	_perception_scan_cursor = 0
 	# Load saved age as years for display
 	data.age_years = float(data.age)
 	_clear_cohort_state()
@@ -1097,8 +1109,9 @@ func _on_game_tick(_tick: int) -> void:
 	if _hit_flash_ticks > 0:
 		_hit_flash_ticks -= 1
 	
-	# Throttle needs decay to every 5 ticks to reduce lag
-	if GameManager.tick_count % 5 == 0:
+	# Stagger needs/threshold upkeep by pawn id so not every pawn runs this
+	# bookkeeping on the same sim tick.
+	if posmod(GameManager.tick_count + int(data.id), 5) == 0:
 		_decay_needs()
 		_check_thresholds()
 	# Sleepers only need wake checks; skip full AI branch logic to reduce
@@ -1274,13 +1287,37 @@ func _tick_idle() -> void:
 	# 4. Tired -> sleep. Skipped if we're starving (food first, sleep when full).
 	if _maybe_start_sleeping():
 		return
-	# 5. Teaching: if we have knowledge and a nearby pawn doesn't, teach them
-	if _maybe_start_teaching():
-		return
-	# 6. Challenge: if we have low authority and a nearby pawn has high authority, challenge them
-	if _maybe_start_challenge():
-		return
-	# 7. Job queue: take the best reachable job. We additionally skip build
+	var food_emergency: bool = StockpileManager.total_food() < STOCKPILE_FOOD_LOW_THRESHOLD
+	var utility_context: Dictionary = _build_idle_utility_context(food_emergency)
+	var available_idle_actions: Array = [
+		{"type": "work"},
+		{"type": "wander"},
+	]
+	if data != null:
+		available_idle_actions.append({"type": "teach"})
+	if data != null:
+		available_idle_actions.append({"type": "challenge"})
+	if food_emergency:
+		available_idle_actions.append({"type": "forage"})
+	var preferred_idle_action: String = "work"
+	if data != null:
+		var best_idle_action: Dictionary = data.choose_best_action(available_idle_actions, utility_context)
+		if not best_idle_action.is_empty() and best_idle_action.has("type"):
+			preferred_idle_action = str(best_idle_action.get("type", "work"))
+	# 5. Social cognition: choose one social action first, then fall back.
+	if preferred_idle_action == "teach":
+		if _maybe_start_teaching():
+			return
+	elif preferred_idle_action == "challenge":
+		if _maybe_start_challenge():
+			return
+	else:
+		# Keep prior behavior continuity if utility favored non-social actions.
+		if _maybe_start_teaching():
+			return
+		if _maybe_start_challenge():
+			return
+	# 6. Job queue: take the best reachable job. We additionally skip build
 	# jobs whose required materials aren't on hand at the stockpile -- this
 	# prevents pawns from claim/abort looping when wood is empty.
 	#
@@ -1296,6 +1333,11 @@ func _tick_idle() -> void:
 	if data != null:
 		claim_phase = posmod(int(data.id), claim_iv)
 	if posmod(GameManager.tick_count + claim_phase, claim_iv) != 0:
+		var early_wander_chance: float = WANDER_CHANCE_PER_TICK
+		if preferred_idle_action == "wander":
+			early_wander_chance *= 1.7
+		if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(early_wander_chance, 0.0, 0.35), _pawn_salt(11)):
+			_start_wander()
 		return
 	
 	var my_component: int = _world.pathfinder.component_of(data.tile_pos)
@@ -1304,15 +1346,20 @@ func _tick_idle() -> void:
 	# before HUNT existed; now a colony living on hunted meat would have
 	# looked like it was starving. And with Phase-10 multi-zone stockpiles
 	# we have to sum across zones, not peek at one hardcoded pile.
-	var food_emergency: bool = StockpileManager.total_food() < STOCKPILE_FOOD_LOW_THRESHOLD
 	var affinity_key: String = data.highest_affinity_skill() if data != null else ""
+	var utility_cache: Dictionary = {}
 
 	# Simplified priority calculation for performance; affinity is a small nudge — not a separate queue pass — so build/mining jobs can compete with forage.
 	var priority_cb: Callable = func(j: Job) -> int:
 		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j)) + _job_history_scar_priority_offset(j)
 		if affinity_key != "" and _job_matches_affinity(j.type, affinity_key):
 			base_bias += AFFINITY_JOB_PRIORITY_BONUS
-		# DISABLED expensive bias calculations for performance
+		var action_key: String = _utility_action_for_job(int(j.type))
+		var utility_bias: int = int(round((_utility_score_normalized(action_key, utility_context, utility_cache) - 0.5) * float(UTILITY_JOB_PRIORITY_BIAS_RANGE)))
+		base_bias += utility_bias
+		if preferred_idle_action == "forage" and (j.type == Job.Type.FORAGE or j.type == Job.Type.HUNT):
+			base_bias += 2
+		# Keep bias math cheap and deterministic on hot claim path.
 		return base_bias
 	var base_passes: Callable = func(j: Job) -> bool:
 		if Pawn._world_hunt_stabilization_blocks() and j.type == Job.Type.HUNT:
@@ -1348,9 +1395,107 @@ func _tick_idle() -> void:
 	if job != null:
 		_begin_job(job)
 		return
-	# 6. Nothing to do: idle wander
-	if WorldRNG.chance_for(_pawn_stream("idle_wander"), WANDER_CHANCE_PER_TICK, _pawn_salt(11)):
+	# 7. Nothing to do: idle wander
+	var wander_score: float = _utility_score_normalized("wander", utility_context)
+	var wander_chance: float = WANDER_CHANCE_PER_TICK * (1.0 + maxf(0.0, wander_score - UTILITY_WANDER_THRESHOLD))
+	if preferred_idle_action == "wander":
+		wander_chance *= 1.6
+	if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(wander_chance, 0.0, 0.35), _pawn_salt(11)):
 		_start_wander()
+
+
+func _build_idle_utility_context(food_emergency: bool) -> Dictionary:
+	return {
+		"is_night": DayNightCycle.is_night_for_tick(GameManager.tick_count),
+		"weather": "clear", # deterministic placeholder until weather system is live
+		"resources_available": JobManager.open_count() > 0,
+		"danger_level": _idle_danger_level(),
+		"settlement_pressure": _idle_settlement_pressure(),
+		"role_affinity": _idle_role_affinity(),
+		"memory_confidence": _idle_memory_confidence(),
+		"food_emergency": food_emergency,
+	}
+
+
+func _idle_settlement_pressure() -> float:
+	if data == null:
+		return 0.5
+	var rk: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
+	var center_region: int = SettlementMemory.get_center_region_for_region(rk)
+	if center_region < 0:
+		return 0.5
+	return clampf(float(IntentMemory.settlement_pressure.get(center_region, 0.5)), 0.0, 1.0)
+
+
+func _idle_role_affinity() -> float:
+	if data == null:
+		return 0.5
+	var affinity_key: String = data.highest_affinity_skill()
+	return clampf(float(data.affinities.get(affinity_key, 0.5)), 0.0, 1.0)
+
+
+func _idle_memory_confidence() -> float:
+	if data == null:
+		return 0.5
+	var keys: Array[String] = [
+		"action_success:work",
+		"action_success:forage",
+		"action_success:hunt",
+		"action_success:build",
+		"action_success:trade",
+	]
+	var total: float = 0.0
+	var count: int = 0
+	for key in keys:
+		var fact: Dictionary = data.recall_semantic_fact(key)
+		if fact.is_empty():
+			continue
+		total += clampf(float(fact.get("confidence", 0.5)), 0.0, 1.0)
+		count += 1
+	if count <= 0:
+		return 0.5
+	return total / float(count)
+
+
+func _idle_danger_level() -> float:
+	if data == null:
+		return 0.0
+	var scar_danger: float = clampf(float(_scar_level_at_tile(data.tile_pos)) / 3.0, 0.0, 1.0)
+	var tile_key: String = "%d,%d" % [data.tile_pos.x, data.tile_pos.y]
+	var memory_danger: float = 0.0
+	if data.location_memory.has(tile_key):
+		var mem: Dictionary = data.location_memory[tile_key]
+		memory_danger = clampf(float(mem.get("danger_level", 0.0)), 0.0, 1.0)
+	return maxf(scar_danger, memory_danger)
+
+
+func _utility_action_for_job(job_type: int) -> String:
+	match job_type:
+		Job.Type.FORAGE:
+			return "forage"
+		Job.Type.HUNT:
+			return "hunt"
+		Job.Type.CHOP:
+			return "gather"
+		Job.Type.MINE, Job.Type.MINE_WALL:
+			return "mine"
+		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+			return "build"
+		Job.Type.TRADE_HAUL:
+			return "trade"
+		_:
+			return "work"
+
+
+func _utility_score_normalized(action_type: String, context: Dictionary, cache: Dictionary = {}) -> float:
+	if data == null:
+		return 0.5
+	if cache.has(action_type):
+		return float(cache[action_type])
+	var raw_score: float = data.calculate_action_utility(action_type, context)
+	var normalized: float = clampf(raw_score / UTILITY_SCORE_NORMALIZER, 0.0, 1.0)
+	cache[action_type] = normalized
+	return normalized
 
 
 func _job_matches_affinity(job_type: int, affinity_key: String) -> bool:
@@ -2536,7 +2681,7 @@ func _decay_needs() -> void:
 	# _observe_nearby_work()
 	
 	# Stage 1: Update perception and location memory - throttled to every 20 ticks
-	if GameManager.tick_count % 20 == 0:
+	if posmod(GameManager.tick_count + int(data.id), 20) == 0:
 		_update_perception()
 	
 	# Stage 2: Track co-presence with nearby pawns - DISABLED for performance
@@ -2769,44 +2914,58 @@ func _update_perception() -> void:
 	# Update perception radius based on level
 	# Base radius 50, +10 per level, max 200
 	data.perception_radius = clamp(50.0 + float(data.level) * 10.0, 50.0, 200.0)
-	
-	# Throttled to every 20 ticks to avoid lag (0.33 seconds at 1x speed)
-	if GameManager.tick_count % 20 != 0:
+	# Remember resources and dangers in perception radius.
+	# Use an incremental deterministic scan budget to avoid large full-radius
+	# spikes from many pawns scanning on the same tick.
+	if _world == null or _world.data == null:
 		return
-	
-	# Remember resources and dangers in perception radius
-	if _world == null:
+	var radius_tiles: int = int(data.perception_radius / float(World.TILE_PIXELS))
+	if radius_tiles <= 0:
 		return
-	
-	var perception_tiles: Array = _get_tiles_in_radius(data.perception_radius)
-	
-	for tile in perception_tiles:
-		var tile_key: String = "%d,%d" % [tile.x, tile.y]
-		var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
-		
-		# Check for resources
-		var feature: int = _world.data.get_feature(tile.x, tile.y)
-		var resource_type: String = ""
-		if feature == TileFeature.Type.FERTILE_SOIL:
-			resource_type = "berry"
-		elif feature == TileFeature.Type.TREE:
-			resource_type = "wood"
-		elif feature == TileFeature.Type.ORE_VEIN:
-			resource_type = "stone"
-		elif feature == TileFeature.Type.RABBIT or feature == TileFeature.Type.DEER:
-			resource_type = "meat"
-		
-		# Check for dangers
-		var danger_level: float = 0.0
-		# TODO: Check for enemies, dangerous terrain, etc.
-		
-		# Update location memory
-		if resource_type != "" or danger_level > 0.0:
-			data.location_memory[tile_key] = {
-				"last_seen": current_tick,
-				"resource_type": resource_type,
-				"danger_level": danger_level
-			}
+	var diameter: int = radius_tiles * 2 + 1
+	var area: int = diameter * diameter
+	if area <= 0:
+		return
+	var scan_budget: int = 24
+	if GameManager != null:
+		var gs: float = GameManager.game_speed
+		if gs >= 50.0:
+			scan_budget = 8
+		elif gs >= 12.0:
+			scan_budget = 12
+		elif gs >= 6.0:
+			scan_budget = 16
+	var stride: int = maxi(1, int(ceil(float(area) / float(maxi(1, scan_budget)))))
+	var current_tick: int = GameManager.tick_count
+	var sampled: int = 0
+	var idx: int = _perception_scan_cursor
+	while sampled < scan_budget:
+		var local_x: int = (idx % diameter) - radius_tiles
+		var local_y: int = int(idx / diameter) - radius_tiles
+		var tile: Vector2i = data.tile_pos + Vector2i(local_x, local_y)
+		if _world.data.in_bounds(tile.x, tile.y):
+			var feature: int = _world.data.get_feature(tile.x, tile.y)
+			var resource_type: String = ""
+			if feature == TileFeature.Type.FERTILE_SOIL:
+				resource_type = "berry"
+			elif feature == TileFeature.Type.TREE:
+				resource_type = "wood"
+			elif feature == TileFeature.Type.ORE_VEIN:
+				resource_type = "stone"
+			elif feature == TileFeature.Type.RABBIT or feature == TileFeature.Type.DEER:
+				resource_type = "meat"
+			var danger_level: float = 0.0
+			# TODO: Check for enemies, dangerous terrain, etc.
+			if resource_type != "" or danger_level > 0.0:
+				var tile_key: String = "%d,%d" % [tile.x, tile.y]
+				data.location_memory[tile_key] = {
+					"last_seen": current_tick,
+					"resource_type": resource_type,
+					"danger_level": danger_level
+				}
+		sampled += 1
+		idx = (idx + stride) % area
+	_perception_scan_cursor = idx
 
 
 func _get_tiles_in_radius(radius: float) -> Array:

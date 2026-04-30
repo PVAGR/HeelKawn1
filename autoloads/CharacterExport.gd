@@ -66,13 +66,13 @@ func _serialize_character(pawn_data: PawnData) -> Dictionary:
 	var character: Dictionary = {}
 	
 	for field in export_fields:
-		if pawn_data.has(field):
+		if _pawn_has_property(pawn_data, field):
 			var value = pawn_data.get(field)
 			
 			# Handle special serialization for complex types
 			match field:
 				"neural_network":
-					if pawn_data.neural_network != null:
+					if pawn_data.neural_network != null and pawn_data.neural_network.has_method("to_dict"):
 						character[field] = pawn_data.neural_network.to_dict()
 					else:
 						character[field] = {}
@@ -92,6 +92,13 @@ func _serialize_character(pawn_data: PawnData) -> Dictionary:
 	}
 	
 	return character
+
+
+func _pawn_has_property(pawn_data: PawnData, field: String) -> bool:
+	for prop_data in pawn_data.get_property_list():
+		if str((prop_data as Dictionary).get("name", "")) == field:
+			return true
+	return false
 
 
 ## Compress memory for export (limit size)
@@ -308,9 +315,16 @@ func _deserialize_character(character: Dictionary) -> PawnData:
 	# Restore neural network
 	if character.has("neural_network") and not character.neural_network.is_empty():
 		var network_dict: Dictionary = character.neural_network
-		if pawn_data.neural_network == null:
-			pawn_data.neural_network = PawnNeuralNetwork.new({})
-		pawn_data.neural_network.from_dict(network_dict)
+		var restored_network: Variant = PawnData.create_neural_network({
+			"openness": pawn_data.openness,
+			"conscientiousness": pawn_data.conscientiousness,
+			"extraversion": pawn_data.extraversion,
+			"agreeableness": pawn_data.agreeableness,
+			"neuroticism": pawn_data.neuroticism,
+		})
+		if restored_network != null and restored_network.has_method("from_dict"):
+			restored_network.from_dict(network_dict)
+			pawn_data.neural_network = restored_network
 	
 	# Adapt to local world state
 	_adapt_to_local_world(pawn_data)

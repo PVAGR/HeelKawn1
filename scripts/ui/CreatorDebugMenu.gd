@@ -1034,8 +1034,13 @@ func _report_error_issues() -> void:
 	var files_to_check: Array[String] = [
 		"res://scripts/ui/AIControlPanel.gd",
 		"res://scripts/pawn/Pawn.gd", 
+		"res://scripts/pawn/PawnData.gd",
+		"res://scripts/pawn/PawnNeuralNetwork.gd",
+		"res://scripts/ai/SettlementAI.gd",
 		"res://scenes/main/Main.gd",
 		"res://autoloads/AIAgentManager.gd",
+		"res://autoloads/GeneticEvolution.gd",
+		"res://autoloads/CharacterExport.gd",
 		"res://autoloads/WorldMemory.gd",
 		"res://autoloads/CulturalMemory.gd",
 		"res://autoloads/ReligionLens.gd",
@@ -1137,15 +1142,23 @@ func _report_error_issues() -> void:
 
 
 func _check_file_syntax_errors(file_path: String) -> Array[String]:
-	## Only verify readability — never use regex/paren heuristics here. They false-positive on
-	## format strings, multiline `func`, lambdas, and comments; Godot's parser is authoritative.
 	var errors: Array[String] = []
 	if not FileAccess.file_exists(file_path):
 		errors.append("File not found")
 		return errors
-	var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
-	if file == null:
-		errors.append("Cannot access file")
+	var loaded: Resource = ResourceLoader.load(
+		file_path,
+		"Script",
+		ResourceLoader.CACHE_MODE_IGNORE
+	)
+	if loaded == null:
+		errors.append("Script load failed (parse/compile error)")
 		return errors
-	file.close()
+	if not (loaded is Script):
+		errors.append("Resource is not a Script")
+		return errors
+	var script_res: Script = loaded as Script
+	var reload_result: int = script_res.reload()
+	if reload_result != OK:
+		errors.append("Script reload failed code=%d" % reload_result)
 	return errors

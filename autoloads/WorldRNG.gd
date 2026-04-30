@@ -4,6 +4,7 @@ extends Node
 ## Heavy systems should prefer named streams instead of raw global `randf()` so behavior stays tunable.
 
 var _world_seed: int = 0
+var _compat_sequence: int = 0
 
 
 func configure_from_seed(seed: int) -> void:
@@ -40,3 +41,15 @@ func index_for(stream_name: StringName, size: int, salt: int = 0) -> int:
 	if size <= 0:
 		return -1
 	return stream_seed(stream_name, salt) % size
+
+
+## Backward-compatible integer range helper used by legacy systems.
+## Call order contributes to the salt so repeated no-salt calls still vary.
+func rangei(min_value: int, max_value: int, salt: int = 0, stream_name: StringName = &"compat:rangei") -> int:
+	var lo: int = mini(min_value, max_value)
+	var hi: int = maxi(min_value, max_value)
+	if hi <= lo:
+		return lo
+	_compat_sequence += 1
+	var raw: float = range_for(stream_name, float(lo), float(hi + 1), salt + _compat_sequence)
+	return clampi(int(floor(raw)), lo, hi)

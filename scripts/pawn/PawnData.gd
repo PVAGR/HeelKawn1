@@ -37,6 +37,7 @@ const LIKING_BLEND_DENOM: float = 20000.0
 const PROFESSION_LIKING_KEYS: Array[String] = [
 	"outdoors", "tillage", "industry", "structure", "martial", "circulation", "inquiry",
 ]
+const PAWN_NEURAL_SCRIPT_PATH: String = "res://scripts/pawn/PawnNeuralNetwork.gd"
 
 ## Global monotonic id. Reset when the game starts, serialized per save.
 static var _next_id: int = 1
@@ -282,7 +283,8 @@ var social_memory: Dictionary = {}
 var memory_access: Dictionary = {}
 
 ## Phase 2: Per-Pawn Neural Network (hidden internal state)
-var neural_network: PawnNeuralNetwork = null
+var neural_network = null
+static var _pawn_neural_script_cache: Script = null
 
 ## Phase 1.3: Goal Hierarchy System (Maslow-style needs)
 ## Active goals with priorities: goal_id -> {type, priority, progress, sub_goals, deadline}
@@ -379,7 +381,27 @@ func _initialize_neural_network() -> void:
 		"agreeableness": agreeableness,
 		"neuroticism": neuroticism
 	}
-	neural_network = PawnNeuralNetwork.new(personality_dict)
+	neural_network = PawnData.create_neural_network(personality_dict)
+
+
+static func _load_pawn_neural_script() -> Script:
+	if _pawn_neural_script_cache != null:
+		return _pawn_neural_script_cache
+	var loaded: Resource = ResourceLoader.load(
+		PAWN_NEURAL_SCRIPT_PATH,
+		"Script",
+		ResourceLoader.CACHE_MODE_IGNORE
+	)
+	if loaded is Script:
+		_pawn_neural_script_cache = loaded as Script
+	return _pawn_neural_script_cache
+
+
+static func create_neural_network(personality_dict: Dictionary = {}) -> Variant:
+	var neural_script: Script = _load_pawn_neural_script()
+	if neural_script == null:
+		return null
+	return neural_script.new(personality_dict)
 
 
 ## Phase 1.1: Personality-based job preference modifier
@@ -974,12 +996,20 @@ func calculate_action_utility(action_type: String, context: Dictionary = {}) -> 
 	# Factor 4: Environmental context
 	var environment_factor: float = _calculate_environment_factor(action_type, context)
 	utility += environment_factor * 0.8
+
+	# Factor 5: Role affinity (stable, deterministic lane preference)
+	var role_affinity_factor: float = _calculate_role_affinity_factor(action_type, context)
+	utility += role_affinity_factor * 0.7
 	
-	# Factor 5: Past outcomes (learning)
+	# Factor 6: Past outcomes (learning)
 	var learning_factor: float = _calculate_learning_factor(action_type)
 	utility += learning_factor * 0.5
+
+	# Factor 7: Memory confidence (semantic + short-horizon context signal)
+	var memory_confidence_factor: float = _calculate_memory_confidence_factor(action_type, context)
+	utility += memory_confidence_factor * 0.6
 	
-	# Factor 6: Risk assessment
+	# Factor 8: Risk assessment
 	var risk_factor: float = _calculate_risk_factor(action_type, context)
 	utility *= (1.0 - risk_factor * 0.3)  # Reduce utility for high-risk actions
 	
@@ -1039,6 +1069,33 @@ func _calculate_personality_factor(action_type: String) -> float:
 	return factor
 
 
+func _calculate_role_affinity_factor(action_type: String, context: Dictionary) -> float:
+	var affinity_key: String = _resolve_affinity_key_for_action(action_type)
+	var derived_affinity: float = 0.5
+	if affinity_key != "":
+		derived_affinity = clampf(float(affinities.get(affinity_key, 0.5)), 0.0, 1.0)
+	var context_affinity: float = derived_affinity
+	if context.has("role_affinity"):
+		context_affinity = clampf(float(context.role_affinity), 0.0, 1.0)
+	return clampf(lerpf(derived_affinity, context_affinity, 0.6), 0.0, 1.0)
+
+
+func _resolve_affinity_key_for_action(action_type: String) -> String:
+	match action_type:
+		"forage", "gather", "harvest", "farm":
+			return "farming"
+		"hunt", "fight", "challenge", "defend":
+			return "combat"
+		"build", "build_shelter", "fortify", "construct":
+			return "building"
+		"mine", "mine_wall", "craft", "refine", "work":
+			return "crafting"
+		"trade", "socialize", "talk", "teach", "help", "cooperate":
+			return "diplomacy"
+		_:
+			return ""
+
+
 ## Calculate social pressure factor for an action
 func _calculate_social_factor(action_type: String, context: Dictionary) -> float:
 	var factor: float = 0.0
@@ -1065,6 +1122,30 @@ func _calculate_social_factor(action_type: String, context: Dictionary) -> float
 	# Social obligation (debts, favors)
 	if context.has("social_obligation") and context.social_obligation:
 		factor += 0.5
+
+	# Internal rapport/trust memory: social actions become more attractive when
+	# bonds are present, while combative choices are damped by trust.
+	var rapport_total: float = 0.0
+	var rapport_n: int = 0
+	for peer_id in social_rapport:
+		rapport_total += float(social_rapport[peer_id])
+		rapport_n += 1
+	var rapport_norm: float = 0.0
+	if rapport_n > 0:
+		rapport_norm = clampf((rapport_total / float(rapport_n)) / 3000.0, 0.0, 1.0)
+	var trust_total: float = 0.0
+	var trust_n: int = 0
+	for peer_id in trust:
+		trust_total += float(trust[peer_id])
+		trust_n += 1
+	var trust_norm: float = 0.5
+	if trust_n > 0:
+		trust_norm = clampf((trust_total / float(trust_n)) / 100.0, 0.0, 1.0)
+	if action_type in ["socialize", "talk", "help", "cooperate", "trade"]:
+		factor += rapport_norm * 0.25
+		factor += trust_norm * 0.2
+	if action_type in ["fight", "challenge"]:
+		factor += (1.0 - trust_norm) * 0.2
 	
 	return clamp(factor, 0.0, 1.0)
 
@@ -1099,6 +1180,13 @@ func _calculate_environment_factor(action_type: String, context: Dictionary) -> 
 	var resources_available: bool = context.get("resources_available", true)
 	if not resources_available and action_type in ["forage", "mine", "chop"]:
 		factor = 0.1
+
+	# Settlement pressure steers labor priorities deterministically.
+	var settlement_pressure: float = clampf(float(context.get("settlement_pressure", 0.5)), 0.0, 1.0)
+	if action_type in ["work", "build", "forage", "mine", "chop", "hunt", "trade"]:
+		factor += settlement_pressure * 0.35
+	elif action_type in ["sleep", "rest", "socialize", "talk"]:
+		factor -= settlement_pressure * 0.2
 	
 	return clamp(factor, 0.0, 1.0)
 
@@ -1139,6 +1227,20 @@ func _calculate_learning_factor(action_type: String) -> float:
 	factor = success_rate * conscientiousness_modifier * openness_modifier
 	
 	return clamp(factor, 0.0, 1.0)
+
+
+func _calculate_memory_confidence_factor(action_type: String, context: Dictionary) -> float:
+	var semantic_confidence: float = 0.5
+	var fact_key: String = "action_success:" + action_type
+	var semantic_fact: Dictionary = recall_semantic_fact(fact_key)
+	if not semantic_fact.is_empty():
+		semantic_confidence = clampf(float(semantic_fact.get("confidence", 0.5)), 0.0, 1.0)
+	var context_confidence: float = semantic_confidence
+	if context.has("memory_confidence"):
+		context_confidence = clampf(float(context.memory_confidence), 0.0, 1.0)
+	var danger_level: float = clampf(float(context.get("danger_level", 0.0)), 0.0, 1.0)
+	var blended: float = lerpf(semantic_confidence, context_confidence, 0.5)
+	return clampf(blended * (1.0 - danger_level * 0.35), 0.0, 1.0)
 
 
 ## Calculate risk factor for an action
@@ -2113,6 +2215,7 @@ func to_save_dict() -> Dictionary:
 		"work_build": work_build,
 		"trait_types": trait_types,
 		"social_rapport": social_rapport.duplicate(true),
+		"neural_network": neural_network.to_dict() if neural_network != null and neural_network.has_method("to_dict") else {},
 	}
 
 
@@ -2206,6 +2309,18 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	if d.has("trait_types") and d["trait_types"] is Array:
 		for trait_type in d["trait_types"]:
 			p.traits.append(Trait.new(int(trait_type)))
+	var nn_data: Variant = d.get("neural_network", {})
+	if nn_data is Dictionary and not (nn_data as Dictionary).is_empty():
+		var restored_network: Variant = PawnData.create_neural_network({
+			"openness": p.openness,
+			"conscientiousness": p.conscientiousness,
+			"extraversion": p.extraversion,
+			"agreeableness": p.agreeableness,
+			"neuroticism": p.neuroticism,
+		})
+		if restored_network != null and restored_network.has_method("from_dict"):
+			restored_network.from_dict(nn_data)
+			p.neural_network = restored_network
 	_next_id = maxi(_next_id, p.id + 1)
 	return p
 

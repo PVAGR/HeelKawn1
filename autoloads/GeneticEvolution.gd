@@ -15,7 +15,7 @@ var current_generation: int = 0
 ## Fitness tracking
 var fitness_history: Array = []
 var best_fitness: float = 0.0
-var best_network: PawnNeuralNetwork = null
+var best_network = null
 
 func _ready() -> void:
 	_initialize_population()
@@ -26,7 +26,7 @@ func _initialize_population() -> void:
 	population.clear()
 	for i in range(population_size):
 		var personality: Dictionary = _generate_random_personality()
-		var network: PawnNeuralNetwork = PawnNeuralNetwork.new(personality)
+		var network = _new_network(personality)
 		population.append({
 			"network": network,
 			"fitness": 0.0,
@@ -96,7 +96,10 @@ func evolve() -> void:
 		else:
 			# Clone parent1 with mutation
 			var child = parent1.duplicate()
-			child.network = parent1.network.duplicate() if parent1.network has "duplicate" else _deep_copy_network(parent1.network)
+			if parent1.network != null and parent1.network.has_method("duplicate"):
+				child.network = parent1.network.duplicate()
+			else:
+				child.network = _deep_copy_network(parent1.network)
 			_mutate(child)
 			new_population.append(child)
 	
@@ -121,12 +124,18 @@ func _crossover(parent1: Dictionary, parent2: Dictionary) -> Dictionary:
 	var child_personality: Dictionary = {}
 	
 	# Blend personalities
-	for trait in parent1.personality:
-		var blend_factor: float = WorldRNG.range_for(StringName("gen:blend:%s:%d" % [trait, current_generation]), 0.0, 1.0)
-		child_personality[trait] = lerp(parent1.personality[trait], parent2.personality[trait], blend_factor)
+	var p1_personality: Dictionary = parent1.get("personality", {})
+	var p2_personality: Dictionary = parent2.get("personality", {})
+	for trait_key in p1_personality.keys():
+		var blend_factor: float = WorldRNG.range_for(StringName("gen:blend:%s:%d" % [trait_key, current_generation]), 0.0, 1.0)
+		child_personality[trait_key] = lerp(
+			float(p1_personality.get(trait_key, 0.5)),
+			float(p2_personality.get(trait_key, 0.5)),
+			blend_factor
+		)
 	
 	# Create child network with blended personality
-	var child_network: PawnNeuralNetwork = PawnNeuralNetwork.new(child_personality)
+	var child_network = _new_network(child_personality)
 	
 	# Crossover network weights
 	_crossover_weights(child_network, parent1.network, parent2.network)
@@ -140,7 +149,7 @@ func _crossover(parent1: Dictionary, parent2: Dictionary) -> Dictionary:
 
 
 ## Crossover network weights between parents
-func _crossover_weights(child: PawnNeuralNetwork, parent1: PawnNeuralNetwork, parent2: PawnNeuralNetwork) -> void:
+func _crossover_weights(child, parent1, parent2) -> void:
 	# This is a simplified crossover - in practice would need access to internal network structure
 	# For now, we'll let the child's random initialization serve as the crossover baseline
 	# The personality blending already provides genetic material
@@ -150,10 +159,12 @@ func _crossover_weights(child: PawnNeuralNetwork, parent1: PawnNeuralNetwork, pa
 ## Mutate an individual
 func _mutate(individual: Dictionary) -> void:
 	# Mutate personality
-	for trait in individual.personality:
-		if WorldRNG.range_for(StringName("gen:mut_trait:%s:%d" % [trait, current_generation]), 0.0, 1.0) < mutation_rate:
-			var mutation: float = WorldRNG.range_for(StringName("gen:mut_val:%s:%d" % [trait, current_generation]), -0.1, 0.1)
-			individual.personality[trait] = clamp(individual.personality[trait] + mutation, 0.0, 1.0)
+	var personality: Dictionary = individual.get("personality", {})
+	for trait_key in personality.keys():
+		if WorldRNG.range_for(StringName("gen:mut_trait:%s:%d" % [trait_key, current_generation]), 0.0, 1.0) < mutation_rate:
+			var mutation: float = WorldRNG.range_for(StringName("gen:mut_val:%s:%d" % [trait_key, current_generation]), -0.1, 0.1)
+			personality[trait_key] = clamp(float(personality.get(trait_key, 0.5)) + mutation, 0.0, 1.0)
+	individual["personality"] = personality
 	
 	# Mutate network topology based on success rate
 	if individual.network != null:
@@ -162,10 +173,13 @@ func _mutate(individual: Dictionary) -> void:
 
 
 ## Deep copy network (simplified)
-func _deep_copy_network(network: PawnNeuralNetwork) -> PawnNeuralNetwork:
-	var new_network: PawnNeuralNetwork = PawnNeuralNetwork.new({})
-	var network_dict: Dictionary = network.to_dict()
-	new_network.from_dict(network_dict)
+func _deep_copy_network(network):
+	var new_network = _new_network({})
+	if new_network == null or network == null:
+		return new_network
+	if network.has_method("to_dict") and new_network.has_method("from_dict"):
+		var network_dict: Dictionary = network.to_dict()
+		new_network.from_dict(network_dict)
 	return new_network
 
 
@@ -215,7 +229,7 @@ func get_fitness_stats() -> Dictionary:
 
 
 ## Inject external network into population
-func inject_network(network: PawnNeuralNetwork, personality: Dictionary, fitness: float = 0.0) -> void:
+func inject_network(network, personality: Dictionary, fitness: float = 0.0) -> void:
 	# Replace worst individual
 	if population.size() > 0:
 		population.sort_custom(func(a, b): return a.fitness > b.fitness)
@@ -241,7 +255,7 @@ func to_dict() -> Dictionary:
 	var population_data: Array = []
 	for individual in population:
 		population_data.append({
-			"network": individual.network.to_dict() if individual.network != null else {},
+			"network": _network_to_dict(individual.network),
 			"fitness": individual.fitness,
 			"generation": individual.generation,
 			"personality": individual.personality
@@ -273,9 +287,9 @@ func from_dict(data: Dictionary) -> void:
 	var population_data: Array = data.get("population", [])
 	for individual_data in population_data:
 		var personality: Dictionary = individual_data.get("personality", {})
-		var network: PawnNeuralNetwork = PawnNeuralNetwork.new(personality)
+		var network = _new_network(personality)
 		var network_dict: Dictionary = individual_data.get("network", {})
-		if not network_dict.is_empty():
+		if network != null and not network_dict.is_empty() and network.has_method("from_dict"):
 			network.from_dict(network_dict)
 		
 		population.append({
@@ -284,3 +298,13 @@ func from_dict(data: Dictionary) -> void:
 			"generation": individual_data.get("generation", 0),
 			"personality": personality
 		})
+
+
+func _new_network(personality: Dictionary) -> Variant:
+	return PawnData.create_neural_network(personality)
+
+
+func _network_to_dict(network: Variant) -> Dictionary:
+	if network == null or not network.has_method("to_dict"):
+		return {}
+	return network.to_dict()

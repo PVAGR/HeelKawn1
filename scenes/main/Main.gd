@@ -233,6 +233,9 @@ var _meaning_vignette_rect: ColorRect = null
 var _regrow_queue: Array = []
 ## Incremental cursor for `_regrow_queue` so regrowth checks stay O(budget) per tick.
 var _regrow_scan_cursor: int = 0
+## Due-tick buckets for regrowth: ready_tick -> Array[{tile, feature, ready_tick}].
+var _regrow_due_buckets: Dictionary = {}
+var _regrow_due_ticks: Array[int] = []
 ## Sim tick at which the last generational birth (or failed attempt) was processed. Serialized.
 var _last_generation_tick: int = 0
 ## Pawns/Animals run after Main on `game_tick`; one deferred pass flushes after their `WorldMemory` writes.
@@ -264,6 +267,21 @@ var _inspect_audio_playback: AudioStreamGeneratorPlayback = null
 var _mining_react_in_progress: bool = false
 var _mining_react_scan_y_cursor: int = 0
 var _mining_react_newly_minable_accum: int = 0
+## Cache tunnel frontier targets so we avoid repeated full-map tunnel target BFS.
+var _tunnel_frontier_cache: Array[Vector2i] = []
+var _tunnel_frontier_cache_cursor: int = 0
+var _tunnel_frontier_cache_component: int = -1
+var _tunnel_frontier_cache_built_tick: int = -1
+const TUNNEL_FRONTIER_CACHE_MAX_TARGETS: int = 24
+const TUNNEL_FRONTIER_CACHE_REFRESH_TICKS: int = 720
+## Hunt candidate index: deterministic sorted tile list refreshed periodically.
+var _hunt_candidate_tiles: Array[Vector2i] = []
+var _hunt_candidate_cursor: int = 0
+var _hunt_candidate_last_refresh_tick: int = -1
+var _hunt_live_counts_cache: Dictionary = {}
+var _hunt_live_total_cache: int = 0
+const HUNT_CANDIDATE_REFRESH_TICKS: int = 24
+const HUNT_CANDIDATE_SCAN_LIMIT_MIN: int = 18
 ## pair key ("low-high") -> last tick a social_meeting event was logged.
 var _social_meeting_last_tick_by_pair: Dictionary = {}
 ## pair key ("low-high") -> highest rapport milestone already logged.
@@ -340,13 +358,14 @@ func _pawn_divergence_detail_logs_enabled() -> bool:
 func _should_post_more_hunt_jobs() -> bool:
 	return StockpileManager.total_count_of(Item.Type.MEAT) < HUNT_MEAT_STOCKPILE_SOFT_CAP
 
-func _dynamic_hunt_job_budget() -> int:
-	if _animal_spawner == null:
-		return 1
-	var live_animals: int = 0
-	for a in _animal_spawner.animals:
-		if a != null and is_instance_valid(a):
-			live_animals += 1
+func _dynamic_hunt_job_budget(live_animals: int = -1) -> int:
+	if live_animals < 0:
+		if _animal_spawner == null:
+			return 1
+		live_animals = 0
+		for a in _animal_spawner.animals:
+			if a != null and is_instance_valid(a):
+				live_animals += 1
 	var budget: int = maxi(1, int(ceil(float(live_animals) / float(HUNT_JOB_PER_ANIMALS_DIVISOR))))
 	budget = mini(budget, MAX_DYNAMIC_HUNT_JOBS_PER_PASS)
 	if _is_ultra_speed():
@@ -4102,29 +4121,84 @@ func _post_hunting_jobs_for_animals() -> void:
 		return
 
 	var main_component: int = _world.pathfinder.largest_component_id()
-	var hunt_budget: int = _dynamic_hunt_job_budget()
+	_refresh_hunt_candidate_index(main_component)
+	if _hunt_candidate_tiles.is_empty():
+		return
+	var hunt_budget: int = _dynamic_hunt_job_budget(_hunt_live_total_cache)
 	var hunt_jobs_posted: int = 0
-	var live_by_species: Dictionary = _live_wildlife_counts()
-	
-	for animal in _animal_spawner.animals:
-		if not is_instance_valid(animal) or animal == null:
+	var live_by_species: Dictionary = _hunt_live_counts_cache.duplicate(true)
+	var scan_limit: int = maxi(HUNT_CANDIDATE_SCAN_LIMIT_MIN, hunt_budget * 4)
+	var scanned: int = 0
+	while (
+			hunt_jobs_posted < hunt_budget
+			and scanned < scan_limit
+			and not _hunt_candidate_tiles.is_empty()
+	):
+		if _hunt_candidate_cursor >= _hunt_candidate_tiles.size():
+			_hunt_candidate_cursor = 0
+		var tile: Vector2i = _hunt_candidate_tiles[_hunt_candidate_cursor]
+		_hunt_candidate_cursor += 1
+		scanned += 1
+		if not _world.data.in_bounds(tile.x, tile.y):
 			continue
-		
+		if _world.pathfinder.component_of(tile) != main_component:
+			continue
+		if JobManager.has_job_at(tile):
+			continue
+		var feat: int = _world.data.get_feature(tile.x, tile.y)
+		if not TileFeature.is_wildlife(feat):
+			continue
+		var species: int = Animal.Type.DEER if feat == TileFeature.Type.DEER else Animal.Type.RABBIT
+		var live_now: int = int(live_by_species.get(species, 0))
+		if live_now <= _hunt_reserve_for_species(species):
+			continue
+		var work_ticks: int = HUNT_RABBIT_WORK_TICKS if species == Animal.Type.RABBIT else HUNT_DEER_WORK_TICKS
+		if JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, work_ticks) != null:
+			hunt_jobs_posted += 1
+			live_by_species[species] = maxi(0, live_now - 1)
+
+
+func _refresh_hunt_candidate_index(main_component: int) -> void:
+	if _animal_spawner == null:
+		_hunt_candidate_tiles.clear()
+		_hunt_live_counts_cache = {}
+		_hunt_live_total_cache = 0
+		return
+	var tick_now: int = GameManager.tick_count
+	var should_refresh: bool = (
+		_hunt_candidate_tiles.is_empty()
+		or _hunt_candidate_last_refresh_tick < 0
+		or tick_now - _hunt_candidate_last_refresh_tick >= HUNT_CANDIDATE_REFRESH_TICKS
+		or _hunt_candidate_cursor >= _hunt_candidate_tiles.size()
+	)
+	if not should_refresh:
+		return
+	_hunt_candidate_tiles.clear()
+	_hunt_candidate_cursor = 0
+	_hunt_live_counts_cache = {
+		int(Animal.Type.RABBIT): 0,
+		int(Animal.Type.DEER): 0,
+	}
+	_hunt_live_total_cache = 0
+	var seen_tiles: Dictionary = {}
+	for animal in _animal_spawner.animals:
+		if animal == null or not is_instance_valid(animal):
+			continue
 		var tile: Vector2i = animal.tile_pos
 		if _world.pathfinder.component_of(tile) != main_component:
 			continue
-		
-		# If no job (any type) is registered for this tile, `post` can add a HUNT
-		# job; `has_job_at` matches JobManager's internal tile index (open + claimed).
-		if not JobManager.has_job_at(tile) and hunt_jobs_posted < hunt_budget:
-			var animal_type: int = animal.animal_type
-			var live_now: int = int(live_by_species.get(animal_type, 0))
-			if live_now <= _hunt_reserve_for_species(animal_type):
-				continue
-			var work_ticks: int = HUNT_RABBIT_WORK_TICKS if animal_type == Animal.Type.RABBIT else HUNT_DEER_WORK_TICKS
-			if JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, work_ticks) != null:
-				live_by_species[animal_type] = maxi(0, live_now - 1)
-				hunt_jobs_posted += 1
+		var species: int = int(animal.animal_type)
+		_hunt_live_counts_cache[species] = int(_hunt_live_counts_cache.get(species, 0)) + 1
+		_hunt_live_total_cache += 1
+		var tile_key: int = tile.y * WorldData.WIDTH + tile.x
+		if seen_tiles.has(tile_key):
+			continue
+		seen_tiles[tile_key] = true
+		_hunt_candidate_tiles.append(tile)
+	_hunt_candidate_tiles.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return a.y * WorldData.WIDTH + a.x < b.y * WorldData.WIDTH + b.x
+	)
+	_hunt_candidate_last_refresh_tick = tick_now
 
 
 ## Same idea for regrowth: each species respawns on its own timer.
@@ -4200,6 +4274,7 @@ func _on_job_completed(job: Job) -> void:
 				})
 		Job.Type.MINE, Job.Type.MINE_WALL:
 			_mining_react_pending = true
+			_invalidate_tunnel_frontier_cache()
 		Job.Type.FORAGE:
 			_queue_regrowth(job.tile, TileFeature.Type.FERTILE_SOIL, FORAGE_REGROW_TICKS)
 		Job.Type.CHOP:
@@ -4220,47 +4295,84 @@ func _on_job_completed(job: Job) -> void:
 # ==================== regrowth ====================
 
 func _queue_regrowth(tile: Vector2i, feature: int, delay_ticks: int) -> void:
-	_regrow_queue.append({
+	var entry: Dictionary = {
 		"tile": tile,
 		"feature": feature,
 		"ready_tick": GameManager.tick_count + delay_ticks,
-	})
+	}
+	_regrow_queue.append(entry)
+	_regrow_add_entry(entry)
 
 
 ## Walk the regrow queue and resurrect any feature whose timer has expired.
-## Uses a rolling cursor and fixed scan/restore budgets to prevent one-tick spikes.
+## Uses due-tick buckets + fixed restore budgets to prevent one-tick spikes.
 func _process_regrowth(tick: int) -> void:
-	if _regrow_queue.is_empty():
+	if _regrow_due_ticks.is_empty() and _regrow_queue.is_empty():
 		_regrow_scan_cursor = 0
 		return
-	var scan_budget: int = REGROWTH_SCAN_BUDGET_PER_TICK
 	var restore_budget: int = REGROWTH_RESTORE_BUDGET_PER_TICK
 	if GameManager != null:
 		var gs: float = GameManager.game_speed
 		if gs >= 100.0:
-			scan_budget = 8
 			restore_budget = 1
 		elif gs >= 50.0:
-			scan_budget = 20
 			restore_budget = 2
+	_regrow_rebuild_due_buckets_if_needed()
+	if _regrow_due_ticks.is_empty():
+		return
 	var main_component: int = _world.pathfinder.largest_component_id()
-	var scanned: int = 0
 	var restored: int = 0
-	while (
-			scanned < scan_budget
-			and restored < restore_budget
-			and not _regrow_queue.is_empty()
-	):
-		if _regrow_scan_cursor >= _regrow_queue.size():
-			_regrow_scan_cursor = 0
-		var entry: Dictionary = _regrow_queue[_regrow_scan_cursor]
-		if entry.ready_tick <= tick:
+	while restored < restore_budget and not _regrow_due_ticks.is_empty():
+		var due_tick: int = int(_regrow_due_ticks[0])
+		if due_tick > tick:
+			break
+		var bucket: Array = _regrow_due_buckets.get(due_tick, [])
+		_regrow_due_buckets.erase(due_tick)
+		_regrow_due_ticks.remove_at(0)
+		for entry_any in bucket:
+			if restored >= restore_budget:
+				_regrow_add_entry(entry_any as Dictionary)
+				continue
+			if entry_any is not Dictionary:
+				continue
+			var entry: Dictionary = entry_any as Dictionary
 			_restore_feature(entry.tile, entry.feature, main_component)
-			_regrow_queue.remove_at(_regrow_scan_cursor)
 			restored += 1
-		else:
-			_regrow_scan_cursor += 1
-		scanned += 1
+	if restored > 0:
+		_sync_regrow_queue_from_buckets()
+
+
+func _regrow_rebuild_due_buckets_if_needed() -> void:
+	if not _regrow_due_ticks.is_empty():
+		return
+	if _regrow_queue.is_empty():
+		return
+	_regrow_due_buckets.clear()
+	_regrow_due_ticks.clear()
+	for entry_any in _regrow_queue:
+		if entry_any is Dictionary:
+			_regrow_add_entry(entry_any as Dictionary)
+
+
+func _regrow_add_entry(entry: Dictionary) -> void:
+	var due_tick: int = int(entry.get("ready_tick", 0))
+	var bucket: Array = _regrow_due_buckets.get(due_tick, [])
+	if bucket.is_empty():
+		var insert_idx: int = 0
+		while insert_idx < _regrow_due_ticks.size() and int(_regrow_due_ticks[insert_idx]) < due_tick:
+			insert_idx += 1
+		_regrow_due_ticks.insert(insert_idx, due_tick)
+	bucket.append(entry)
+	_regrow_due_buckets[due_tick] = bucket
+
+
+func _sync_regrow_queue_from_buckets() -> void:
+	_regrow_queue.clear()
+	for due_tick in _regrow_due_ticks:
+		var bucket: Array = _regrow_due_buckets.get(int(due_tick), [])
+		for entry_any in bucket:
+			if entry_any is Dictionary:
+				_regrow_queue.append(entry_any)
 
 
 ## Re-place a feature on its original tile, then post the matching job so a
@@ -4360,7 +4472,7 @@ func _react_to_mining_progress_step() -> bool:
 	var active_walls: int = JobManager.active_count_of_type(Job.Type.MINE_WALL)
 	var posted_walls: int = 0
 	if active_walls < MAX_ACTIVE_MINE_WALL_JOBS:
-		var wall_tile: Vector2i = _find_next_tunnel_target(main_component)
+		var wall_tile: Vector2i = _find_next_tunnel_target_cached(main_component)
 		if wall_tile.x >= 0:
 			# work_tile = a passable main-component neighbor of the wall tile.
 			var work_tile: Vector2i = _find_main_component_neighbor(wall_tile, main_component)
@@ -4395,6 +4507,92 @@ func _react_to_mining_progress() -> void:
 ## main_component we know the previous (mountain) tile is the wall to mine
 ## next. Returns Vector2i(-1,-1) if there are no sealed ores or none can be
 ## tunneled to.
+func _find_next_tunnel_target_cached(main_component: int) -> Vector2i:
+	var tick_now: int = GameManager.tick_count
+	var refresh_needed: bool = (
+		_tunnel_frontier_cache.is_empty()
+		or _tunnel_frontier_cache_component != main_component
+		or _tunnel_frontier_cache_cursor >= _tunnel_frontier_cache.size()
+		or _tunnel_frontier_cache_built_tick < 0
+		or tick_now - _tunnel_frontier_cache_built_tick >= TUNNEL_FRONTIER_CACHE_REFRESH_TICKS
+	)
+	if refresh_needed:
+		_rebuild_tunnel_frontier_cache(main_component)
+	while _tunnel_frontier_cache_cursor < _tunnel_frontier_cache.size():
+		var candidate: Vector2i = _tunnel_frontier_cache[_tunnel_frontier_cache_cursor]
+		_tunnel_frontier_cache_cursor += 1
+		if JobManager.has_job_at(candidate):
+			continue
+		var biome: int = _world.data.get_biome(candidate.x, candidate.y)
+		if biome != Biome.Type.MOUNTAIN:
+			continue
+		if _find_main_component_neighbor(candidate, main_component).x < 0:
+			continue
+		return candidate
+	return Vector2i(-1, -1)
+
+
+func _rebuild_tunnel_frontier_cache(main_component: int) -> void:
+	_tunnel_frontier_cache.clear()
+	_tunnel_frontier_cache_cursor = 0
+	_tunnel_frontier_cache_component = main_component
+	_tunnel_frontier_cache_built_tick = GameManager.tick_count
+	var pf: PathFinder = _world.pathfinder
+	var width: int = WorldData.WIDTH
+	var height: int = WorldData.HEIGHT
+	var visited: PackedByteArray = PackedByteArray()
+	visited.resize(WorldData.TILE_COUNT)
+	var queue: Array[Vector2i] = []
+	for y in range(height):
+		for x in range(width):
+			var idx: int = y * width + x
+			if _world.data.features[idx] != TileFeature.Type.ORE_VEIN:
+				continue
+			var t := Vector2i(x, y)
+			if JobManager.has_job_at(t):
+				continue
+			var adj: Vector2i = pf.find_adjacent_passable(t)
+			if adj.x >= 0 and pf.component_of(adj) == main_component:
+				continue
+			queue.append(t)
+			visited[idx] = 1
+	if queue.is_empty():
+		return
+	var found: Dictionary = {}
+	var head: int = 0
+	var offsets := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	while head < queue.size() and _tunnel_frontier_cache.size() < TUNNEL_FRONTIER_CACHE_MAX_TARGETS:
+		var t: Vector2i = queue[head]
+		head += 1
+		for off in offsets:
+			var n: Vector2i = t + off
+			if n.x < 0 or n.x >= width or n.y < 0 or n.y >= height:
+				continue
+			var ni: int = n.y * width + n.x
+			if visited[ni] != 0:
+				continue
+			var nbiome: int = _world.data.biomes[ni]
+			if nbiome == Biome.Type.MOUNTAIN:
+				visited[ni] = 1
+				queue.append(n)
+				continue
+			if Biome.is_passable(nbiome) and pf.component_of(n) == main_component:
+				var key: int = t.y * width + t.x
+				if not found.has(key) and not JobManager.has_job_at(t):
+					found[key] = true
+					_tunnel_frontier_cache.append(t)
+				visited[ni] = 1
+			else:
+				visited[ni] = 1
+
+
+func _invalidate_tunnel_frontier_cache() -> void:
+	_tunnel_frontier_cache.clear()
+	_tunnel_frontier_cache_cursor = 0
+	_tunnel_frontier_cache_component = -1
+	_tunnel_frontier_cache_built_tick = -1
+
+
 func _find_next_tunnel_target(main_component: int) -> Vector2i:
 	var pf: PathFinder = _world.pathfinder
 	var width: int = WorldData.WIDTH
@@ -4729,6 +4927,7 @@ func _save_stockpiles_to_array() -> Array:
 
 func _save_regrow_queue() -> Array:
 	var out: Array = []
+	_sync_regrow_queue_from_buckets()
 	for e in _regrow_queue:
 		if e is Dictionary and e.has("tile"):
 			var te: Vector2i = e.tile
@@ -4760,6 +4959,17 @@ func _apply_save_dict(s: Dictionary) -> void:
 	_set_selected_pawn(null)
 	_set_player_mode(PlayerMode.SPECTATOR)
 	_regrow_queue.clear()
+	_regrow_due_buckets.clear()
+	_regrow_due_ticks.clear()
+	_hunt_candidate_tiles.clear()
+	_hunt_candidate_cursor = 0
+	_hunt_candidate_last_refresh_tick = -1
+	_hunt_live_counts_cache = {}
+	_hunt_live_total_cache = 0
+	_invalidate_tunnel_frontier_cache()
+	_mining_react_in_progress = false
+	_mining_react_scan_y_cursor = 0
+	_mining_react_newly_minable_accum = 0
 	_tear_down_all_zones()
 	_pawn_spawner.clear_pawns()
 
@@ -4823,13 +5033,17 @@ func _apply_save_dict(s: Dictionary) -> void:
 		_sync_pawn_inherited_cultural_reputation()
 		RemnantMemory.seed_births_from_current_world(_world)
 	_regrow_queue.clear()
+	_regrow_due_buckets.clear()
+	_regrow_due_ticks.clear()
 	for e in s.get("regrow", []):
 		if e is Dictionary:
-			_regrow_queue.append({
+			var entry: Dictionary = {
 				"tile": Vector2i(int(e.get("tile_x", 0)), int(e.get("tile_y", 0))),
 				"feature": int(e.get("feature", 0)),
 				"ready_tick": int(e.get("ready_tick", 0)),
-			})
+			}
+			_regrow_queue.append(entry)
+			_regrow_add_entry(entry)
 	Main._world_stabilization_until_tick = GameManager.tick_count + WORLD_STABILIZATION_TICKS
 	_seed_jobs_from_world()
 	_react_to_mining_progress()

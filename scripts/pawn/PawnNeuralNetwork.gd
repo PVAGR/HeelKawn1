@@ -17,6 +17,7 @@ var decay: float = 0.0001
 # Network state (hidden/obfuscated)
 var _internal_state: Dictionary = {}
 var _obfuscation_key: int = 0
+const _OBF_SCALE: float = 1000.0
 
 func _init(personality: Dictionary = {}) -> void:
 	_obfuscation_key = WorldRNG.rangei(1000000, 9999999)
@@ -271,8 +272,7 @@ func _update_weights(layer_gradients: Array[Array]) -> void:
 func _store_internal_state(output_values: Array[float]) -> void:
 	var obfuscated: Array = []
 	for value in output_values:
-		# Simple obfuscation: XOR with key and scale
-		var obf_value: float = (value * 1000.0) ^ _obfuscation_key
+		var obf_value: int = _encode_obfuscated_float(value)
 		obfuscated.append(obf_value)
 	
 	_internal_state = {
@@ -409,9 +409,10 @@ func _serialize_connections() -> Dictionary:
 		var obfuscated_conn: Dictionary = {}
 		for conn_id in connections[connection_key]:
 			var conn = connections[connection_key][conn_id]
-			var obf_weight: float = (conn.weight * 1000.0) ^ _obfuscation_key
+			var obf_weight: int = _encode_obfuscated_float(float(conn.weight))
 			obfuscated_conn[conn_id] = {
 				"weight": obf_weight,
+				"weight_encoding": "xor_i32_milli_v1",
 				"source": conn.source,
 				"target": conn.target,
 				"strength": conn.strength,
@@ -439,7 +440,7 @@ func _deserialize_connections(serialized: Dictionary) -> void:
 		
 		for conn_id in obfuscated_conn:
 			var conn = obfuscated_conn[conn_id]
-			var deobf_weight: float = (conn.weight ^ _obfuscation_key) / 1000.0
+			var deobf_weight: float = _decode_obfuscated_float(conn.get("weight", 0.0), str(conn.get("weight_encoding", "")))
 			deobfuscated_conn[conn_id] = {
 				"weight": deobf_weight,
 				"source": conn.source,
@@ -449,3 +450,21 @@ func _deserialize_connections(serialized: Dictionary) -> void:
 			}
 		
 		connections[connection_key] = deobfuscated_conn
+
+
+func _encode_obfuscated_float(value: float) -> int:
+	var scaled: int = int(round(value * _OBF_SCALE))
+	return scaled ^ _obfuscation_key
+
+
+func _decode_obfuscated_float(weight_value: Variant, encoding: String = "") -> float:
+	if encoding == "xor_i32_milli_v1":
+		return float(int(weight_value) ^ _obfuscation_key) / _OBF_SCALE
+	# Compatibility fallback: older saves may store plain float/int weights.
+	if weight_value is int:
+		return float(weight_value)
+	if weight_value is float:
+		return float(weight_value)
+	if weight_value is String and String(weight_value).is_valid_float():
+		return float(weight_value)
+	return 0.0

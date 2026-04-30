@@ -191,6 +191,14 @@ var world_events_witnessed: Dictionary = {}
 ## Legacy score: how much the pawn has influenced the world
 var legacy_score: float = 0.0
 
+## Phase 4: Historical memory for settlements
+## Maps site_id to "RUINS" or "SCAR"
+var known_historical_sites: Dictionary[int, String] = {}
+## Avoidance modifier for dangerous sites (0.0 to 1.0)
+var avoidance_modifier: float = 0.0
+## Tick timer for avoidance modifier decay
+var avoidance_tick_timer: int = 0
+
 ## Single-item inventory. Type is Item.Type (NONE = empty hands).
 ## v1 pawns can only hold one kind of thing at a time; multi-slot / weight
 ## comes later with proper inventories.
@@ -1326,6 +1334,37 @@ func get_health_percentage() -> float:
 	if max_health <= 0.0:
 		return 0.0
 	return clamp(health / max_health, 0.0, 1.0)
+
+
+## Phase 4: Update historical memory for settlements
+func update_historical_memory(site_id: int, state: String) -> void:
+	known_historical_sites[site_id] = state
+	
+	if state == "SCAR":
+		avoidance_modifier = 0.3
+		avoidance_tick_timer = 30
+	elif state == "RUINS":
+		if Profession.keys()[current_profession] == "BUILDER":
+			# Increase job priority for builders near ruins
+			pass
+	
+	if WorldMemory != null:
+		WorldMemory.record_event({
+			"type": "pawn_historical_memory_update",
+			"pawn_id": id,
+			"site_id": site_id,
+			"state": state,
+			"avoidance_modifier": avoidance_modifier,
+			"tick": GameManager.tick_count if GameManager != null else 0
+		})
+
+
+## Phase 4: Process tick for historical memory decay
+func process_tick(delta: float) -> void:
+	if avoidance_tick_timer > 0:
+		avoidance_tick_timer -= 1
+		if avoidance_tick_timer <= 0:
+			avoidance_modifier = 0.0
 
 
 # ==================== traits ====================

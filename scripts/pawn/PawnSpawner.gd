@@ -111,7 +111,7 @@ func print_stats() -> void:
 		]
 		print("[Stats]   %-18s %3d  %5.1f   %5.1f  %5.1f  %-16s  %-25s (%d,%d)" %
 			[d.display_name, d.age, d.hunger, d.rest, d.mood, carry_str,
-			 skills_str, d.tile_pos.x, d.tile_pos.y])
+			skills_str, d.tile_pos.x, d.tile_pos.y])
 
 
 func spawn_starters(world: World, required_component_id: int = -1) -> void:

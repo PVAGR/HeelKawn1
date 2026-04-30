@@ -10,6 +10,8 @@ extends Node
 @onready var GameManager = get_node_or_null("/root/GameManager")
 
 # Household data: household_id -> household info
+
+# Household data: household_id -> household info
 var household_data: Dictionary = {}
 
 # Obligation tracking: obligation_id -> obligation data

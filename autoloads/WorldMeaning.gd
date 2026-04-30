@@ -32,12 +32,12 @@ func recompute() -> void:
 	meaning_by_settlement.clear()
 	meaning_by_bloodline.clear()
 	meaning_by_period.clear()
-	
+
 	# Public snapshot; WorldMemory is not modified by this.
 	var ev: Variant = WorldMemory.to_save_dict().get("events", [])
 	if not (ev is Array):
 		return
-	
+
 	# Count pawn/animal deaths and other events per region
 	for item in ev:
 		if not item is Dictionary:
@@ -51,7 +51,7 @@ func recompute() -> void:
 		if not meaning_by_region.has(rk):
 			meaning_by_region[rk] = _default_region_entry()
 		var rec: Dictionary = meaning_by_region[rk]
-		
+
 		match k:
 			KIND_PAWN_DEATH:
 				rec["pawn_deaths"] = int(rec["pawn_deaths"]) + 1
@@ -618,3 +618,14 @@ func get_tracked_region_count() -> int:
 
 func get_tracked_settlement_count() -> int:
 	return meaning_by_settlement.size()
+
+
+# === Phase 4: Settlement Cause Analysis ===
+
+func analyze_cause(data: SettlementData) -> String:
+	if data.trauma_score >= 100.0:
+		return "War"
+	elif data.population <= 0 and data.trauma_score < 20.0:
+		return "Starvation"
+	else:
+		return "Abandonment"

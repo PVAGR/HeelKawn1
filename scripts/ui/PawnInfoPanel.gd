@@ -238,7 +238,7 @@ func _build_ui() -> void:
 
 	# TabContainer for organized sections
 	_tab_container = TabContainer.new()
-	_tab_container.tab_close_display_policy = TabContainer.CLOSE_BUTTON_DISPLAY_NEVER
+	# _tab_container.tab_close_display_policy = TabContainer.CLOSE_BUTTON_NEVER  # Disabled for Godot 4.6 compatibility
 	_tab_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_root_vbox.add_child(_tab_container)
 

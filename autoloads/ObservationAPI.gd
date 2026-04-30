@@ -17,21 +17,21 @@ static func observe_pawn(pawn_id: int) -> Dictionary:
 	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
 	if main == null:
 		return {"error": "Main scene not available"}
-	
+
 	var spawner: PawnSpawner = main.get("_pawn_spawner") as PawnSpawner
 	if spawner == null:
 		return {"error": "PawnSpawner not available"}
-	
+
 	# Find pawn by ID
 	var target_pawn: Pawn = null
 	for p in spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
 			target_pawn = p
 			break
-	
+
 	if target_pawn == null:
 		return {"error": "Pawn not found", "pawn_id": pawn_id}
-	
+
 	return _build_pawn_observation(target_pawn)
 
 ## Get comprehensive tile observation data (same as Focus Inspector tile view)
@@ -40,14 +40,14 @@ static func observe_tile(tile_x: int, tile_y: int) -> Dictionary:
 	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
 	if main == null:
 		return {"error": "Main scene not available"}
-	
+
 	var world: World = main.get("_world") as World
 	if world == null or world.data == null:
 		return {"error": "World not available"}
-	
+
 	if not world.data.in_bounds(tile_x, tile_y):
 		return {"error": "Tile out of bounds", "tile": {"x": tile_x, "y": tile_y}}
-	
+
 	return _build_tile_observation(tile, world)
 
 ## Get comprehensive settlement observation data

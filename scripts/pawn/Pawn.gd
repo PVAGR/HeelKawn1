@@ -2817,7 +2817,7 @@ func _get_tiles_in_radius(radius: float) -> Array:
 	for dx in range(-radius_tiles, radius_tiles + 1):
 		for dy in range(-radius_tiles, radius_tiles + 1):
 			var tile: Vector2i = data.tile_pos + Vector2i(dx, dy)
-			if _world != null and _world.is_valid_tile(tile.x, tile.y):
+			if _world != null and _world.data != null and _world.data.in_bounds(tile.x, tile.y):
 				tiles.append(tile)
 	
 	return tiles

@@ -66,6 +66,7 @@ CraftingSystem="*res://autoloads/CraftingSystem.gd"
 AuthoritySystem="*res://autoloads/AuthoritySystem.gd"
 CollapseSystem="*res://autoloads/CollapseSystem.gd"
 PersistenceSystem="*res://autoloads/PersistenceSystem.gd"
+GeneticEvolution="*res://autoloads/GeneticEvolution.gd"
 
 [display]
 

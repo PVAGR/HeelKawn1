@@ -178,21 +178,21 @@ func _test_ai_agent_manager_neural_matrix() -> Dictionary:
 	else:
 		test_result.details["pattern_recognition_initialized"] = true
 
-		# Test predictive models
-		if not AIAgentManager.predictive_models:
-			test_result.status = "failed"
-			test_result.errors.append("Predictive models not initialized")
-		else:
-			test_result.details["predictive_models_count"] = AIAgentManager.predictive_models.size()
+	# Test predictive models
+	if not AIAgentManager.predictive_models:
+		test_result.status = "failed"
+		test_result.errors.append("Predictive models not initialized")
+	else:
+		test_result.details["predictive_models_count"] = AIAgentManager.predictive_models.size()
 
-		# Test collective intelligence
-		if not AIAgentManager.collective_intelligence:
-			test_result.status = "failed"
-			test_result.errors.append("Collective intelligence not initialized")
-		else:
-			test_result.details["collective_intelligence_initialized"] = true
+	# Test collective intelligence
+	if not AIAgentManager.collective_intelligence:
+		test_result.status = "failed"
+		test_result.errors.append("Collective intelligence not initialized")
+	else:
+		test_result.details["collective_intelligence_initialized"] = true
 
-		print("[NeuralIntegrationTester] ✓ AIAgentManager neural matrix test passed")
+	print("[NeuralIntegrationTester] ✓ AIAgentManager neural matrix test passed")
 
 	return test_result
 

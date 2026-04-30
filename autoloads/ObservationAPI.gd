@@ -52,16 +52,15 @@ static func observe_tile(tile_x: int, tile_y: int) -> Dictionary:
 
 ## Get comprehensive settlement observation data
 static func observe_settlement(center_region: int) -> Dictionary:
-       var settlement: Variant = SettlementMemory.get_settlement_at_region(center_region)
-       if not (settlement is Dictionary):
-	       return {"error": "Settlement not found", "center_region": center_region}
-       var st: Dictionary = settlement as Dictionary
-       var obs: Dictionary = _build_settlement_observation(st, center_region)
-       # --- Extended fields ---
-       obs["cultural_style"] = WorldMeaning.get_cultural_style(center_region) if WorldMeaning.has_method("get_cultural_style") else null
-       obs["wildlife_trend"] = WorldMeaning.get_wildlife_trend(center_region) if WorldMeaning.has_method("get_wildlife_trend") else null
-       obs["rebirth_thresholds"] = st.get("rebirth_thresholds", null)
-       return obs
+	var settlement: Variant = SettlementMemory.get_settlement_at_region(center_region)
+	if not (settlement is Dictionary):
+		return {"error": "Settlement not found", "center_region": center_region}
+	var st: Dictionary = settlement as Dictionary
+	var obs: Dictionary = _build_settlement_observation(st, center_region)
+	obs["cultural_style"] = WorldMeaning.get_cultural_style(center_region) if WorldMeaning.has_method("get_cultural_style") else null
+	obs["wildlife_trend"] = WorldMeaning.get_wildlife_trend(center_region) if WorldMeaning.has_method("get_wildlife_trend") else null
+	obs["rebirth_thresholds"] = st.get("rebirth_thresholds", null)
+	return obs
 
 ## Get observation data for whatever is under the given world coordinates
 static func observe_at_world_position(world_pos: Vector2) -> Dictionary:
@@ -142,43 +141,41 @@ static func observe_camera_view() -> Dictionary:
 
 ## Settlement-level observation plus accurate pawn **count** (single scan — does not allocate per-pawn observation dicts).
 static func observe_region(region_key: int) -> Dictionary:
-       var settlement_v: Variant = SettlementMemory.get_settlement_at_region(region_key)
-       if not (settlement_v is Dictionary):
-	       return {"error": "Settlement not found", "region_key": region_key}
-       var settlement: Dictionary = settlement_v as Dictionary
-       var obs: Dictionary = _build_settlement_observation(settlement, region_key)
-       obs["type"] = "region_observation"
-       obs["api_version"] = API_VERSION
-       var regv: Variant = settlement.get("regions", PackedInt32Array())
-       obs["pawn_count"] = _count_pawns_in_regions(regv)
-       # --- Extended fields ---
-       obs["cultural_style"] = WorldMeaning.get_cultural_style(region_key) if WorldMeaning.has_method("get_cultural_style") else null
-       obs["wildlife_trend"] = WorldMeaning.get_wildlife_trend(region_key) if WorldMeaning.has_method("get_wildlife_trend") else null
-       obs["rebirth_thresholds"] = settlement.get("rebirth_thresholds", null)
-       return obs
+	var settlement_v: Variant = SettlementMemory.get_settlement_at_region(region_key)
+	if not (settlement_v is Dictionary):
+		return {"error": "Settlement not found", "region_key": region_key}
+	var settlement: Dictionary = settlement_v as Dictionary
+	var obs: Dictionary = _build_settlement_observation(settlement, region_key)
+	obs["type"] = "region_observation"
+	obs["api_version"] = API_VERSION
+	var regv: Variant = settlement.get("regions", PackedInt32Array())
+	obs["pawn_count"] = _count_pawns_in_regions(regv)
+	obs["cultural_style"] = WorldMeaning.get_cultural_style(region_key) if WorldMeaning.has_method("get_cultural_style") else null
+	obs["wildlife_trend"] = WorldMeaning.get_wildlife_trend(region_key) if WorldMeaning.has_method("get_wildlife_trend") else null
+	obs["rebirth_thresholds"] = settlement.get("rebirth_thresholds", null)
+	return obs
 
 
 ## Cheap probe for throttled AI / overlays: identity + population + tick — **no** per-pawn payloads.
 static func observe_region_lite(region_key: int) -> Dictionary:
-       var settlement_v: Variant = SettlementMemory.get_settlement_at_region(region_key)
-       if not (settlement_v is Dictionary):
-	       return {"error": "Settlement not found", "region_key": region_key}
-       var settlement: Dictionary = settlement_v as Dictionary
-       var center: int = int(settlement.get("center_region", region_key))
-       var regv: Variant = settlement.get("regions", PackedInt32Array())
-       return {
-	       "type": "region_observation_lite",
-	       "api_version": API_VERSION,
-	       "region_key": region_key,
-	       "center_region": center,
-	       "state": str(settlement.get("state", "unknown")),
-	       "intent": str(settlement.get("current_intent", "")),
-	       "pawn_count": _count_pawns_in_regions(regv),
-	       "tick": GameManager.tick_count,
-	       # --- Extended fields (summarized) ---
-	       "cultural_style": WorldMeaning.get_cultural_style(region_key) if WorldMeaning.has_method("get_cultural_style") else null,
-	       "wildlife_trend": WorldMeaning.get_wildlife_trend(region_key) if WorldMeaning.has_method("get_wildlife_trend") else null,
-       }
+	var settlement_v: Variant = SettlementMemory.get_settlement_at_region(region_key)
+	if not (settlement_v is Dictionary):
+		return {"error": "Settlement not found", "region_key": region_key}
+	var settlement: Dictionary = settlement_v as Dictionary
+	var center: int = int(settlement.get("center_region", region_key))
+	var regv: Variant = settlement.get("regions", PackedInt32Array())
+	return {
+		"type": "region_observation_lite",
+		"api_version": API_VERSION,
+		"region_key": region_key,
+		"center_region": center,
+		"state": str(settlement.get("state", "unknown")),
+		"intent": str(settlement.get("current_intent", "")),
+		"pawn_count": _count_pawns_in_regions(regv),
+		"tick": GameManager.tick_count,
+		"cultural_style": WorldMeaning.get_cultural_style(region_key) if WorldMeaning.has_method("get_cultural_style") else null,
+		"wildlife_trend": WorldMeaning.get_wildlife_trend(region_key) if WorldMeaning.has_method("get_wildlife_trend") else null,
+	}
 
 
 ## Single-call ambient context: sim backlog + optional settlement lite for one region (for AI cadence hooks).

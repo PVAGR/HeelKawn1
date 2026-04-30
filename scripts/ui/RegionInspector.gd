@@ -68,8 +68,9 @@ func _get_region_data(region_key: int) -> Dictionary:
 	}
 	
 	# Get region center from SettlementMemory
-	var center: Vector2i = SettlementMemory.get_center_region_for_region(region_key)
-	if center != Vector2i(-1, -1):
+	var center_region: int = int(SettlementMemory.get_center_region_for_region(region_key))
+	if center_region >= 0:
+		var center: Vector2i = Vector2i(center_region % WorldData.WIDTH, center_region / WorldData.WIDTH)
 		data.center = center
 		data.name = "Region (%d, %d)" % [center.x, center.y]
 	
@@ -79,8 +80,9 @@ func _get_region_data(region_key: int) -> Dictionary:
 		data.settlements = [settlement]
 	
 	# Get death/birth counts from WorldMemory (approximate using recent events)
-	var wm = preload("res://autoloads/WorldMemory.gd")
-	var recent_events: Array = wm.get_recent_events_for_settlement(region_key, 10)
+	var recent_events: Array = []
+	if WorldMemory != null and WorldMemory.has_method("get_recent_events_for_settlement"):
+		recent_events = WorldMemory.get_recent_events_for_settlement(region_key, 10)
 	var death_count: int = 0
 	var birth_count: int = 0
 	var event_list: Array = []

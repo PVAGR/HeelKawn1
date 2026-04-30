@@ -1760,7 +1760,8 @@ func _begin_job(job: Job) -> void:
 	_current_job = job
 	# Throttled cohort system calls for performance
 	_invalidate_recruitment_signal_cache()
-	_refresh_recruitment_signal_cache(true)
+	if has_method("_refresh_recruitment_signal_cache"):
+		_refresh_recruitment_signal_cache(true)
 	update_cohort_membership(true)
 	_refresh_or_decay_cohort_stability(true)
 	# Build jobs need raw materials in hand before we walk to the build site.
@@ -2505,11 +2506,10 @@ func _decay_needs() -> void:
 	# Passive contentment outpaces decay, so a pawn whose hunger AND rest are
 	# both comfortable will recover happiness on their own.
 	# Mood events also contribute their own delta - throttled to every 10 ticks
+	var mood_event_impact: float = 0.0
 	if GameManager.tick_count % 10 == 0:
 		data.process_mood_events()
-		var mood_event_impact: float = data.get_mood_event_impact()
-	else:
-		var mood_event_impact: float = 0.0
+		mood_event_impact = data.get_mood_event_impact()
 	
 	if data.hunger >= MOOD_CONTENT_FLOOR and data.rest >= MOOD_CONTENT_FLOOR:
 		data.mood = min(100.0, data.mood + MOOD_GAIN_PER_TICK_CONTENT - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact)

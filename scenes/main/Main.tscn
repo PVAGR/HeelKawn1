@@ -64,7 +64,7 @@ script = ExtResource("2_cam")
 
 [node name="MapModeOverlay" parent="." instance=ExtResource("17_map_overlay")]
 
-[node name="AIAgentDebugPanel" parent="." instance=ExtResource("18_ai_debug_panel")]
+[node name="AIAgentDebugPanel" parent="UI_Viewport" instance=ExtResource("18_ai_debug_panel")]
 
 [node name="CreatorDebugMenu" type="CanvasLayer" parent="."]
 script = ExtResource("16_debug_menu")

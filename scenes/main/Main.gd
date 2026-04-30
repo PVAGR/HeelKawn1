@@ -389,7 +389,11 @@ func _init_ai_control_panel() -> void:
 	var ai_panel_scene: PackedScene = preload("res://scenes/ui/AIControlPanel.tscn")
 	_ai_control_panel = ai_panel_scene.instantiate()
 	_ai_control_panel.name = "AIControlPanel"
-	add_child(_ai_control_panel)
+	var ui_root: Node = get_node_or_null("UI_Viewport")
+	if ui_root != null:
+		ui_root.add_child(_ai_control_panel)
+	else:
+		add_child(_ai_control_panel)
 	
 	# Connect signals
 	_ai_control_panel.enhanced_ai_toggled.connect(_on_enhanced_ai_toggled)

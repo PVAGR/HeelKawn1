@@ -964,21 +964,26 @@ func _toggle_ai_control_panel() -> void:
 		print("Main missing - cannot toggle AI Control Panel")
 		return
 	
-	var ai_panel: Control = main.get_node_or_null("AIControlPanel")
+	var ui_root: Node = main.get_node_or_null("UI_Viewport")
+	var ai_panel_parent: Node = ui_root if ui_root != null else main
+	var ai_panel: Control = ai_panel_parent.get_node_or_null("AIControlPanel")
 	if ai_panel == null:
 		print("AI Control Panel not found - creating it...")
 		var ai_panel_scene: PackedScene = preload("res://scenes/ui/AIControlPanel.tscn")
 		ai_panel = ai_panel_scene.instantiate()
 		ai_panel.name = "AIControlPanel"
-		main.add_child(ai_panel)
+		ai_panel_parent.add_child(ai_panel)
 		if main.has_method("_on_enhanced_ai_toggled"):
 			(ai_panel as AIControlPanel).enhanced_ai_toggled.connect(main._on_enhanced_ai_toggled)
 			(ai_panel as AIControlPanel).tick_rate_changed.connect(main._on_tick_rate_changed)
 			(ai_panel as AIControlPanel).ai_potential_changed.connect(main._on_ai_potential_changed)
-		print("AI Control Panel created and added to Main")
-	else:
-		ai_panel.visible = not ai_panel.visible
-		print("AI Control Panel toggled: %s" % ("VISIBLE" if ai_panel.visible else "HIDDEN"))
+		print("AI Control Panel created and added to UI")
+	
+	ai_panel.visible = not ai_panel.visible
+	var ui_debug_panel: Control = ai_panel_parent.get_node_or_null("AIAgentDebugPanel")
+	if ui_debug_panel != null:
+		ui_debug_panel.visible = ai_panel.visible
+	print("AI Control Panel toggled: %s" % ("VISIBLE" if ai_panel.visible else "HIDDEN"))
 
 
 func _report_error_issues() -> void:
@@ -1068,7 +1073,12 @@ func _report_error_issues() -> void:
 	print("=== AI CONTROL PANEL STATUS ===")
 	var main: Node2D = _main()
 	if main != null:
-		var ai_panel: Control = main.get_node_or_null("AIControlPanel")
+		var ui_root: Node = main.get_node_or_null("UI_Viewport")
+		var ai_panel: Control = null
+		if ui_root != null:
+			ai_panel = ui_root.get_node_or_null("AIControlPanel")
+		if ai_panel == null:
+			ai_panel = main.get_node_or_null("AIControlPanel")
 		if ai_panel != null:
 			print("✓ AI Control Panel: INSTANCED")
 			print("  Visible: %s" % ("YES" if ai_panel.visible else "NO"))

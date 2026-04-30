@@ -1,3 +1,15 @@
+
+# --- RelationalGraph integration: dynamic trade partner queries ---
+func get_trade_partners(center_region: int) -> Array:
+       if Engine.has_singleton("RelationalGraph"):
+	       var rg = Engine.get_singleton("RelationalGraph")
+	       var partners = []
+	       for e in rg.get_edges(center_region, "trade"):
+		       var other = e["to"] if e["from"] == center_region else e["from"]
+		       if not partners.has(other):
+			       partners.append(other)
+	       return partners
+       return []
 extends Node
 ## v1: Derived (not saved) — recurring trade pairs, soft supplier/dependent roles, route tiers on tiles.
 ## Updated on [JobManager.job_completed] for [Job.Type.TRADE_HAUL] only; no per-tick work.

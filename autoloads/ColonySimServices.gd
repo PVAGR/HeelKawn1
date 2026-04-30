@@ -32,35 +32,55 @@ func _ready() -> void:
 
 
 func _bootstrap_demands_after_scene() -> void:
-	_refresh_demands()
+	_refresh_food_mat_haul_pressures()
+	_refresh_housing_pressure()
 	demand_snapshot.emit(_food_press, _housing_press, _mat_press, _haul_press)
 
 
 func _on_tick(tick: int) -> void:
-	_refresh_demands()
+	# Housing uses scene-tree scans — keep a steady 60-tick cadence independent of
+	# food/mat/haul throttling so we never miss the tick-60 update at high speeds.
+	if tick % 60 == 0:
+		_refresh_housing_pressure()
+	if tick % _food_mat_haul_refresh_interval() == 0:
+		_refresh_food_mat_haul_pressures()
 	if tick % 30 == 0:
 		demand_snapshot.emit(_food_press, _housing_press, _mat_press, _haul_press)
 
 
+func _food_mat_haul_refresh_interval() -> int:
+	var gs: float = GameManager.game_speed
+	# Intervals 1,2,3,4 all divide 60 so housing (every 60 ticks) and stock reads stay in phase.
+	if gs >= 100.0:
+		return 4
+	if gs >= 50.0:
+		return 3
+	if gs >= 26.0:
+		return 2
+	return 1
+
+
 ## Food pressure: 0 = plenty, 1 = acute shortage (simplified: inverse of food cap).
-func _refresh_demands() -> void:
-	var food_total: int = StockpileManager.total_food()
-	_food_press = clamp(1.0 - float(food_total) / 30.0, 0.0, 1.0)
+func _refresh_all_demands_immediate() -> void:
+	_refresh_food_mat_haul_pressures()
 	_refresh_housing_pressure()
-	var wood: int = StockpileManager.total_count_of(Item.Type.WOOD)
-	var stone: int = StockpileManager.total_count_of(Item.Type.STONE)
+
+
+func _refresh_food_mat_haul_pressures() -> void:
+	var snap: Dictionary = StockpileManager.labor_pressure_stock_snapshot()
+	var food_total: int = int(snap.get("food", 0))
+	var wood: int = int(snap.get("wood", 0))
+	var stone: int = int(snap.get("stone", 0))
+	_food_press = clamp(1.0 - float(food_total) / 30.0, 0.0, 1.0)
 	_mat_press = clamp(1.0 - float(mini(wood, 24) + mini(stone, 12)) / 40.0, 0.0, 1.0)
-	# Haul: open jobs scale approximates how much the queue is backlogged.
 	var open_harvest: int = JobManager.open_count()
 	_haul_press = clamp(float(open_harvest) / 120.0, 0.0, 1.0)
 
 
 ## 0 = enough beds (or no pawns); 1 = many pawns share few beds. Uses `World` bed
 ## list vs pawns in group `pawns` (rough macro signal, not per-night scheduling).
+## Call from [_on_tick] when `tick % 60 == 0`, or from immediate refresh paths.
 func _refresh_housing_pressure() -> void:
-	# Throttle to every 60 ticks to avoid lag
-	if GameManager.tick_count % 60 != 0:
-		return
 	var scene_tree: SceneTree = get_tree()
 	if scene_tree == null:
 		_housing_press = 0.0
@@ -104,7 +124,7 @@ func cycle_labor_stance() -> void:
 	current_labor_stance = (current_labor_stance + 1) % 4
 	if OS.is_debug_build():
 		print("[Colony] Labor stance: %s" % _stance_name(current_labor_stance))
-	_refresh_demands()
+	_refresh_all_demands_immediate()
 	demand_snapshot.emit(_food_press, _housing_press, _mat_press, _haul_press)
 
 

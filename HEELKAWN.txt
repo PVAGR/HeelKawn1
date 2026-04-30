@@ -31,6 +31,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-29  **ColonySimServices:** one stockpile pass via `StockpileManager.labor_pressure_stock_snapshot()` (food + wood + stone); food/mat/haul refresh interval 2/3/4 ticks at 26x/50x/100x; housing refresh stays every **60** ticks on its own gate (scene-tree scan) so fast-forward does not skip tick-60 updates.
 2026-04-29  **StockpileManager** `zone_count()` + `aggregate_inventory_totals()`; **ColonyHUD** stockpile lines use one manager pass (no duplicate `zones()` walk + merge loop).
 2026-04-29  `const _WM` for `WorldMemory._region_key` in **CreatorDebugMenu, PawnInfoPanel, MapModeOverlay, AnimalSpawner, AnimalPopulation, PathFinder, KernelDiagnostic, SettlementAI** (repo grep: no inline `preload(WorldMemory)` left outside the const line).
 2026-04-29  `Pawn.gd` + full `Main.gd`: all `WorldMemory` `_region_key` preloads use file-level `const _WM` (no per-call `preload` in those paths).

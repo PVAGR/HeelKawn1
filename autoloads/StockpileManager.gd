@@ -62,6 +62,26 @@ func aggregate_inventory_totals() -> Dictionary:
 	return totals
 
 
+## One pass: total food (`Item.is_food`), WOOD, STONE — same as `total_food` plus two
+## `total_count_of` calls, without three separate walks over stockpile zones.
+func labor_pressure_stock_snapshot() -> Dictionary:
+	var food_total: int = 0
+	var wood: int = 0
+	var stone: int = 0
+	for z in _zones:
+		if z == null or not is_instance_valid(z):
+			continue
+		for t in z.inventory:
+			var q: int = int(z.inventory[t])
+			if Item.is_food(t):
+				food_total += q
+			elif t == Item.Type.WOOD:
+				wood += q
+			elif t == Item.Type.STONE:
+				stone += q
+	return {"food": food_total, "wood": wood, "stone": stone}
+
+
 ## Total of a specific item type across every zone. Used by the HUD + food-
 ## emergency override in Pawn.
 func total_count_of(item_type: int) -> int:

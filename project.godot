@@ -19,6 +19,7 @@ config/description="The Grand Synthesis - hybrid colony/strategy/RPG simulation.
 run/main_scene="res://scenes/main/Main.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 
+
 [autoload]
 
 GameManager="*res://autoloads/GameManager.gd"
@@ -58,6 +59,7 @@ ReligionLens="*res://autoloads/ReligionLens.gd"
 ObservationAPI="*res://autoloads/ObservationAPI.gd"
 CommandAPI="*res://autoloads/CommandAPI.gd"
 AIAgentManager="*res://autoloads/AIAgentManager.gd"
+RelationalGraph="*res://autoloads/RelationalGraph.gd"
 KnowledgeSystem="*res://autoloads/KnowledgeSystem.gd"
 AuthoritySystem="*res://autoloads/AuthoritySystem.gd"
 CollapseSystem="*res://autoloads/CollapseSystem.gd"

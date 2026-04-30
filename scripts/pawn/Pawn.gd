@@ -2502,42 +2502,49 @@ func _decay_needs() -> void:
 	# Mood: net loss when needs aren't met, net gain when they are.
 	# Passive contentment outpaces decay, so a pawn whose hunger AND rest are
 	# both comfortable will recover happiness on their own.
-	# Mood events also contribute their own delta - DISABLED for performance
-	# data.process_mood_events()
-	# var mood_event_impact: float = data.get_mood_event_impact()
-	var mood_event_impact: float = 0.0
+	# Mood events also contribute their own delta - throttled to every 10 ticks
+	if GameManager.tick_count % 10 == 0:
+		data.process_mood_events()
+		var mood_event_impact: float = data.get_mood_event_impact()
+	else:
+		var mood_event_impact: float = 0.0
 	
 	if data.hunger >= MOOD_CONTENT_FLOOR and data.rest >= MOOD_CONTENT_FLOOR:
 		data.mood = min(100.0, data.mood + MOOD_GAIN_PER_TICK_CONTENT - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact)
 	else:
 		data.mood = max(0.0, data.mood - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact)
 	
-	# Historically used land: subtle mood drain from nearby past deaths / builds - DISABLED for performance
-	# if get_tree().get_root().has_node("Main/WorldTrace"):
-	# 	var wt: WorldTrace = get_tree().get_root().get_node("Main/WorldTrace") as WorldTrace
-	# 	data.mood = max(0.0, data.mood - wt.get_mood_drain_at(data.tile_pos))
+	# Historically used land: subtle mood drain from nearby past deaths / builds - throttled to every 30 ticks
+	if GameManager.tick_count % 30 == 0:
+		if get_tree().get_root().has_node("Main/WorldTrace"):
+			var wt: WorldTrace = get_tree().get_root().get_node("Main/WorldTrace") as WorldTrace
+			data.mood = max(0.0, data.mood - wt.get_mood_drain_at(data.tile_pos))
 	
-	# Stage 1: Decay stamina based on activity - DISABLED for performance
-	# _decay_stamina()
+	# Stage 1: Decay stamina based on activity - throttled to every 5 ticks
+	if GameManager.tick_count % 5 == 0:
+		_decay_stamina()
 	
-	# Stage 1: Check temperature exposure - DISABLED for performance
-	# _check_temperature()
+	# Stage 1: Check temperature exposure - throttled to every 10 ticks
+	if GameManager.tick_count % 10 == 0:
+		_check_temperature()
 	
-	# Stage 1: Process injuries and pain - DISABLED for performance
-	# _process_injuries()
+	# Stage 1: Process injuries and pain - throttled to every 5 ticks
+	if GameManager.tick_count % 5 == 0:
+		_process_injuries()
 	
 	# Stage 1: Observe nearby work (learning by observation) - DISABLED for performance
 	# _observe_nearby_work()
 	
-	# Stage 1: Update perception and location memory - DISABLED for performance
-	# _update_perception()
+	# Stage 1: Update perception and location memory - throttled to every 20 ticks
+	if GameManager.tick_count % 20 == 0:
+		_update_perception()
 	
 	# Stage 2: Track co-presence with nearby pawns - DISABLED for performance
 	# track_co_presence()
 	
-	# Stage 1: Decay unused skills (throttled to once per day) - DISABLED for performance
-	# if GameManager.tick_count % GameManager.TICKS_PER_DAY == 0:
-	# 	data.decay_unused_skills()
+	# Stage 1: Decay unused skills (throttled to once per day)
+	if GameManager.tick_count % GameManager.TICKS_PER_DAY == 0:
+		data.decay_unused_skills()
 	
 	# Stage 3-4: Track clan/settlement contributions - DISABLED for performance
 	# if _state == State.WORKING and _current_job != null:

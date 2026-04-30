@@ -120,6 +120,20 @@ var biodiversity_index: float = 1.0  # Global biodiversity health
 # Neural Network Matrix Integration
 var neural_world_matrix: Dictionary = {}  # World-level neural network
 var emergent_patterns: Array[Dictionary] = []  # Emergent world patterns
+## Steady-state detectors (authority low, economy high, …) can stay true for thousands of ticks.
+## Gate WorldMemory + settlement broadcasts so we do not append/spam every sim tick.
+const EMERGENT_PATTERN_EMIT_COOLDOWN_TICKS: int = 600  # ~1 visual day (SimTime.TICKS_PER_VISUAL_DAY)
+var _emergent_pattern_last_emit_tick: Dictionary = {}  # pattern_type -> tick
+
+func _emergent_pattern_emit_gate(pattern_type: String) -> bool:
+	if GameManager == null:
+		return true
+	var now: int = GameManager.tick_count
+	var last: int = int(_emergent_pattern_last_emit_tick.get(pattern_type, -1000000000))
+	if now - last < EMERGENT_PATTERN_EMIT_COOLDOWN_TICKS:
+		return false
+	_emergent_pattern_last_emit_tick[pattern_type] = now
+	return true
 var civilization_neural_network: Dictionary = {}  # Civilization-level AI
 var environmental_neural_network: Dictionary = {}  # Environmental AI
 var cultural_neural_network: Dictionary = {}  # Cultural AI
@@ -1019,6 +1033,8 @@ func _detect_collapse_warning_patterns() -> void:
 	var trust_level = world_neurons["trust_level"].value
 	
 	if collapse_risk > 0.6 and trust_level < 0.4:
+		if not _emergent_pattern_emit_gate("collapse_warning"):
+			return
 		var pattern = {
 			"type": "collapse_warning",
 			"description": "High collapse risk with low trust",
@@ -1056,6 +1072,8 @@ func _detect_knowledge_crisis_patterns() -> void:
 	var teaching_activity = cult_neurons["teaching_activity"].value
 	
 	if knowledge_scarcity > 0.7 and teaching_activity < 0.3:
+		if not _emergent_pattern_emit_gate("knowledge_crisis"):
+			return
 		var pattern = {
 			"type": "knowledge_crisis",
 			"description": "High knowledge scarcity with low teaching activity",
@@ -1093,6 +1111,8 @@ func _detect_authority_vacuum_patterns() -> void:
 	var military_auth = civ_neurons["military_authority"].value
 	
 	if civil_auth < 0.3 and military_auth < 0.3:
+		if not _emergent_pattern_emit_gate("authority_vacuum"):
+			return
 		var pattern = {
 			"type": "authority_vacuum",
 			"description": "Low authority across all contexts",
@@ -1130,6 +1150,8 @@ func _detect_historical_saturation_patterns() -> void:
 	var ruin_density = env_neurons["ruin_density"].value
 	
 	if historical_layering > 0.7 and ruin_density > 0.5:
+		if not _emergent_pattern_emit_gate("historical_saturation"):
+			return
 		var pattern = {
 			"type": "historical_saturation",
 			"description": "High historical layering with dense ruins",
@@ -1168,6 +1190,8 @@ func _detect_environmental_degradation_patterns() -> void:
 	var ruin_density = env_neurons["ruin_density"].value
 	
 	if resource_depletion > 0.6 and ruin_density > 0.4:
+		if not _emergent_pattern_emit_gate("environmental_degradation"):
+			return
 		var pattern = {
 			"type": "environmental_degradation",
 			"description": "High resource depletion with significant ruin density",
@@ -1205,6 +1229,8 @@ func _detect_economic_boom_patterns() -> void:
 	var econ_stability = econ_neurons["economic_stability"].value
 	
 	if production_eff > 0.7 and econ_stability > 0.6:
+		if not _emergent_pattern_emit_gate("economic_boom"):
+			return
 		var pattern = {
 			"type": "economic_boom",
 			"description": "High production efficiency with strong economic stability",
@@ -1242,6 +1268,8 @@ func _detect_market_crash_patterns() -> void:
 	var wealth_accum = econ_neurons["wealth_accumulation"].value
 	
 	if econ_stability < 0.3 and wealth_accum > 0.5:
+		if not _emergent_pattern_emit_gate("market_crash"):
+			return
 		var pattern = {
 			"type": "market_crash",
 			"description": "Low economic stability with high wealth accumulation indicates bubble burst",
@@ -1279,6 +1307,8 @@ func _detect_religious_schism_patterns() -> void:
 	var religious_fervor = rel_neurons["religious_fervor"].value
 	
 	if belief_diversity > 0.7 and religious_fervor > 0.6:
+		if not _emergent_pattern_emit_gate("religious_schism"):
+			return
 		var pattern = {
 			"type": "religious_schism",
 			"description": "High belief diversity with high religious fervor indicates schism risk",
@@ -1316,6 +1346,8 @@ func _detect_religious_conversion_patterns() -> void:
 	var ritual_complexity = rel_neurons["ritual_complexity"].value
 	
 	if religious_influence > 0.6 and ritual_complexity > 0.5:
+		if not _emergent_pattern_emit_gate("religious_conversion"):
+			return
 		var pattern = {
 			"type": "religious_conversion",
 			"description": "High religious influence with complex rituals attracts converts",

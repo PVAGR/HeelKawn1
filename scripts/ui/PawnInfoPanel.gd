@@ -1,8 +1,8 @@
 class_name PawnInfoPanel
 extends CanvasLayer
 
-## Right-side **character sheet** for the selected pawn (NPC today; same
-## surface can bind to a human-controlled pawn later). Chunky portrait reads
+## Right-side **Heelkawnian** sheet (embodied citizen: NPC or player incarnation).
+## Same `Pawn` / `PawnData` surface for parity. Chunky portrait reads
 ## from [PawnData] colors; coach lines are deterministic from likings + skills.
 ##
 ## Built programmatically (no .tscn) to mirror the BuildToolbar style and so
@@ -250,7 +250,7 @@ func _build_ui() -> void:
 	_social_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_root_vbox.add_child(_social_label)
 
-	_root_vbox.add_child(_make_section_header("HeelKawn identity"))
+	_root_vbox.add_child(_make_section_header("Heelkawnian identity"))
 	_identity_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_identity_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_root_vbox.add_child(_identity_label)
@@ -497,7 +497,7 @@ func _refresh() -> void:
 	if _pawn == null or _pawn.data == null:
 		return
 	var d: PawnData = _pawn.data
-	_title_label.text = "%s  (age %d)" % [d.display_name, d.age]
+	_title_label.text = "Heelkawnian · %s  (age %.1f)" % [d.display_name, d.age]
 	if _subtitle_label != null:
 		var prof: String = d.profession_name()
 		var hk: String = d.highest_affinity_skill()
@@ -506,10 +506,11 @@ func _refresh() -> void:
 			control_line += " (#%d)" % _player_context_pawn_id
 		if _player_context_picker_visible:
 			control_line += " | picker open"
+		var arc_bits: String = "children %d" % int(d.children_count)
 		if prof == "None":
-			_subtitle_label.text = "%s · No locked profession · job bias: %s" % [control_line, hk]
+			_subtitle_label.text = "%s · %s · no locked profession · bias %s" % [control_line, arc_bits, hk]
 		else:
-			_subtitle_label.text = "%s · %s · job bias: %s" % [control_line, prof, hk]
+			_subtitle_label.text = "%s · %s · %s · bias %s" % [control_line, arc_bits, prof, hk]
 	_refresh_portrait_strip(d)
 	if _coach_label != null:
 		var hints: PackedStringArray = d.progression_coach_lines(5)
@@ -776,9 +777,13 @@ func _build_ui_signature() -> String:
 	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(d.tile_pos.x, d.tile_pos.y)
 	var top_peer: Dictionary = d.top_social_rapport_peer()
 	var world_context_bucket: int = int(GameManager.tick_count / max(1, WORLD_CONTEXT_REFRESH_TICKS))
-	# Must match argument count exactly (23 placeholders) — mismatch spams errors every UI poll.
+	var mood_sig: int = 0
+	var me: MoodEvent = d.get_active_mood_event()
+	if me != null:
+		mood_sig = hash(str(me.description))
+	# Must match argument count exactly — mismatch spams errors every UI poll.
 	return (
-		"%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d"
+		"%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d"
 	) % [
 		d.id,
 		d.age,
@@ -803,6 +808,10 @@ func _build_ui_signature() -> String:
 		int(d.skills.get("building", 0)),
 		int(d.skills.get("farming", 0)),
 		int(d.skills.get("movement", 0)),
+		int(d.children_count),
+		int(hash(str(d.traits_display()))),
+		int(round(d.get_crisis_level() * 100.0)),
+		mood_sig,
 	]
 
 

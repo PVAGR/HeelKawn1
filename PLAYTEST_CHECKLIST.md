@@ -56,3 +56,7 @@ Use this if you are tired. Just follow in order.
 - **F10** → **31 · Playtest bundle** once → copy everything between `=== ... playtest_bundle ... ===` for a single handoff paste.
 - Optional: **28–30** (intent queue, houses, religion lens) if you are debugging narrative layers.
 - **F5** save before long high-speed runs; **F8** load to recover if the colony collapses.
+
+## 7) AI / collaborator paste pack (every session)
+
+Use **`docs/SESSION_REPORT_FOR_AI.md`**: same three core exports each time (context line + F10 error report + F10 playtest bundle), then milestone extras only when relevant. Keeps chat readable while still showing what fired and what did not.

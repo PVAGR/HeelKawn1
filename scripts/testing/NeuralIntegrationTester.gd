@@ -175,8 +175,8 @@ func _test_ai_agent_manager_neural_matrix() -> Dictionary:
 	if not AIAgentManager.pattern_recognition:
 		test_result.status = "failed"
 		test_result.errors.append("Pattern recognition not initialized")
-		else:
-			test_result.details["pattern_recognition_initialized"] = true
+	else:
+		test_result.details["pattern_recognition_initialized"] = true
 
 		# Test predictive models
 		if not AIAgentManager.predictive_models:

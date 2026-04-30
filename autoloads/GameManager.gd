@@ -60,6 +60,8 @@ var last_frame_game_tick_usecs: int = 0
 ## True if we stopped emitting this frame only because we hit [member MAX_TICKS_PER_FRAME]
 ## (or speed-tier cap) while sim time was still owed — catch-up continues next frames.
 var last_frame_tick_cap_backlog: bool = false
+## Adaptive per-frame cap used this frame after hitch smoothing.
+var adaptive_ticks_cap_last_frame: int = 0
 var _last_slow_tick_log_msec: int = -1_000_000
 var _last_catchup_hint_log_msec: int = -1_000_000
 
@@ -84,6 +86,7 @@ func sim_diag() -> Dictionary:
 		"ticks_emitted_last_frame": ticks_emitted_last_frame,
 		"last_frame_game_tick_ms": last_frame_game_tick_usecs / 1000.0,
 		"last_frame_tick_cap_backlog": last_frame_tick_cap_backlog,
+		"adaptive_ticks_cap_last_frame": adaptive_ticks_cap_last_frame,
 	}
 
 
@@ -135,6 +138,21 @@ func _max_accumulated_ticks_for_speed() -> int:
 	return MAX_ACCUMULATED_TICKS
 
 
+func _adaptive_frame_tick_cap(base_cap: int) -> int:
+	if game_speed < 26.0:
+		return base_cap
+	if ticks_emitted_last_frame <= 0 or last_frame_game_tick_usecs <= 0:
+		return base_cap
+	var avg_tick_ms: float = (last_frame_game_tick_usecs / 1000.0) / float(maxi(1, ticks_emitted_last_frame))
+	if avg_tick_ms <= 0.0:
+		return base_cap
+	# Keep each rendered frame around this sim-listener budget.
+	var target_ms: float = 24.0
+	var allowed: int = int(floor(target_ms / avg_tick_ms))
+	allowed = maxi(1, allowed)
+	return mini(base_cap, allowed)
+
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
@@ -159,7 +177,8 @@ func _process(delta: float) -> void:
 		elif _tick_accumulator + desired_add > max_accumulator:
 			desired_add = maxf(0.0, max_accumulator - _tick_accumulator)
 		_tick_accumulator += desired_add
-	var frame_tick_cap: int = _max_ticks_per_frame_for_speed()
+	var frame_tick_cap_base: int = _max_ticks_per_frame_for_speed()
+	var frame_tick_cap: int = _adaptive_frame_tick_cap(frame_tick_cap_base)
 	var ticks_this_frame: int = 0
 	var tick_chain_usecs: int = 0
 	while _tick_accumulator >= TICK_INTERVAL_SECONDS and ticks_this_frame < frame_tick_cap:
@@ -170,6 +189,7 @@ func _process(delta: float) -> void:
 		tick_chain_usecs += Time.get_ticks_usec() - t0
 		ticks_this_frame += 1
 	ticks_emitted_last_frame = ticks_this_frame
+	adaptive_ticks_cap_last_frame = frame_tick_cap
 	last_frame_game_tick_usecs = tick_chain_usecs
 	last_frame_tick_cap_backlog = (
 			ticks_this_frame >= frame_tick_cap

@@ -31,6 +31,8 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-29  **Smoothing pass 2:** `GameManager` adds adaptive high-speed tick cap (`adaptive_ticks_cap_last_frame` in `sim_diag`) so when per-tick listener cost rises, next frames run fewer sim ticks to avoid 80–100ms render stalls; `Main` regrowth/mining budgets tightened (`REGROWTH_SCAN_BUDGET_PER_TICK=32`, `REGROWTH_RESTORE_BUDGET_PER_TICK=4`, `MINING_REACT_SCAN_ROWS_PER_STEP=6`).
+2026-04-29  Fixed parse blockers reported in runtime console: `scripts/testing/NeuralIntegrationTester.gd` malformed `else` indentation; `scripts/ai/SettlementAI.gd` duplicate top-level `_init` renamed to `_resolve_autoload_refs` and called from constructor.
 2026-04-29  **Main heavy-spike fixes (100x):** regrowth queue now uses rolling cursor + fixed scan/restore budgets (`REGROWTH_SCAN_BUDGET_PER_TICK`, `REGROWTH_RESTORE_BUDGET_PER_TICK`) to prevent one-tick regrowth bursts; mining-react is incremental (`MINING_REACT_SCAN_ROWS_PER_STEP`) with one tunnel-wall post per completed pass (no full-map + multi-BFS burst in one tick).
 2026-04-29  **Main tick diagnostics + smoothing:** `_on_game_tick` now reports `[MAIN_TICK_HOTSPOT]` (top 4 section timings at 26x+ when total tick work is heavy), and planner bursts are staggered (`SettlementPlanner` and `TradePlanner` on offset cadence) to reduce one-tick 100x hitch spikes.
 2026-04-29  **CreatorDebugMenu:** removed duplicate `ai_control_panel ... END` line emitted inside `_toggle_ai_control_panel` (report wrapper already prints END).

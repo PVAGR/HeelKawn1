@@ -10,7 +10,7 @@ var AuthoritySystem = null
 var WorldAI = null
 var GameManager = null
 
-func _init():
+func _resolve_autoload_refs() -> void:
 	CollapseSystem = get_node_or_null("/root/CollapseSystem")
 	AuthoritySystem = get_node_or_null("/root/AuthoritySystem")
 	WorldAI = get_node_or_null("/root/WorldAI")
@@ -127,6 +127,7 @@ var decision_making_process: String = "consensus"
 var leadership_approval: float = 0.5  # 0.0-1.0
 
 func _init(id: int, name: String, pos: Vector2i):
+	_resolve_autoload_refs()
 	settlement_id = id
 	settlement_name = name
 	location = pos

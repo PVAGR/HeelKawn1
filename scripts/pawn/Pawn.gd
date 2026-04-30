@@ -1147,11 +1147,11 @@ func _fast_forward_tick_stride() -> int:
 	var gs: float = GameManager.game_speed
 	## Match toolbar tiers (26 / 50 / 100): fewer expensive idle/job scans per sim tick.
 	if gs >= 100.0:
-		return 8
+		return 14
 	if gs >= 50.0:
-		return 8
+		return 10
 	if gs >= 26.0:
-		return 6
+		return 8
 	if gs >= 4096.0:
 		return 64
 	if gs >= 1024.0:
@@ -1165,6 +1165,19 @@ func _fast_forward_tick_stride() -> int:
 	if gs >= 4.0:
 		return 2
 	return 1
+
+
+func _job_claim_interval_for_speed() -> int:
+	if GameManager == null:
+		return 3
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 8
+	if gs >= 50.0:
+		return 6
+	if gs >= 26.0:
+		return 4
+	return 3
 
 
 func _should_panic_sleep() -> bool:
@@ -1260,8 +1273,10 @@ func _tick_idle() -> void:
 	# normal filter if no forage is available. Stops the colony from happily
 	# mining stone while everyone starves.
 	
-	# Throttle job selection to every 3 ticks to reduce lag
-	if GameManager.tick_count % 3 != 0:
+	# Job claiming is one of the hottest paths at ultra speed; spread claims so
+	# not every pawn rescans the full queue on the same tick burst.
+	var claim_iv: int = _job_claim_interval_for_speed()
+	if GameManager.tick_count % claim_iv != 0:
 		return
 	
 	var my_component: int = _world.pathfinder.component_of(data.tile_pos)

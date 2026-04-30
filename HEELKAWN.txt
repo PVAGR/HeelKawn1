@@ -31,6 +31,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-29  **Ultra-speed smoothness profile:** `GameManager._adaptive_frame_tick_cap` now enforces hard guard caps at high speeds (26x/50x/100x → 10/8/6 max ticks per render frame) in addition to per-tick-cost adaptation; `Pawn` ultra-speed AI stride raised (100x/50x/26x → 14/10/8) and idle job-claim cadence scales by speed (8/6/4 ticks) to reduce queue-scan bursts.
 2026-04-29  **Smoothing pass 2:** `GameManager` adds adaptive high-speed tick cap (`adaptive_ticks_cap_last_frame` in `sim_diag`) so when per-tick listener cost rises, next frames run fewer sim ticks to avoid 80–100ms render stalls; `Main` regrowth/mining budgets tightened (`REGROWTH_SCAN_BUDGET_PER_TICK=32`, `REGROWTH_RESTORE_BUDGET_PER_TICK=4`, `MINING_REACT_SCAN_ROWS_PER_STEP=6`).
 2026-04-29  Fixed parse blockers reported in runtime console: `scripts/testing/NeuralIntegrationTester.gd` malformed `else` indentation; `scripts/ai/SettlementAI.gd` duplicate top-level `_init` renamed to `_resolve_autoload_refs` and called from constructor.
 2026-04-29  **Main heavy-spike fixes (100x):** regrowth queue now uses rolling cursor + fixed scan/restore budgets (`REGROWTH_SCAN_BUDGET_PER_TICK`, `REGROWTH_RESTORE_BUDGET_PER_TICK`) to prevent one-tick regrowth bursts; mining-react is incremental (`MINING_REACT_SCAN_ROWS_PER_STEP`) with one tunnel-wall post per completed pass (no full-map + multi-BFS burst in one tick).

@@ -150,7 +150,15 @@ func _adaptive_frame_tick_cap(base_cap: int) -> int:
 	var target_ms: float = 24.0
 	var allowed: int = int(floor(target_ms / avg_tick_ms))
 	allowed = maxi(1, allowed)
-	return mini(base_cap, allowed)
+	# Hard guardrails for smoothness at ultra speeds: avoid sudden "14 ticks in one frame" bursts.
+	var speed_guard_cap: int = base_cap
+	if game_speed >= 100.0:
+		speed_guard_cap = 6
+	elif game_speed >= 50.0:
+		speed_guard_cap = 8
+	elif game_speed >= 26.0:
+		speed_guard_cap = 10
+	return mini(mini(base_cap, speed_guard_cap), allowed)
 
 
 func _ready() -> void:

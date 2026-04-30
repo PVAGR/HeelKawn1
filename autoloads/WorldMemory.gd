@@ -629,7 +629,10 @@ func get_recent_events(count: int) -> Array[Dictionary]:
 	var n: int = mini(count, _events.size())
 	var start: int = _events.size() - n
 	for i in range(start, _events.size()):
-		out.append((_events[i] as Dictionary).duplicate(true))
+		var ev_any: Variant = _events[i]
+		if not ev_any is Dictionary:
+			continue
+		out.append((ev_any as Dictionary).duplicate(true))
 	return out
 
 
@@ -639,7 +642,10 @@ func get_recent_event_summaries(max_items: int = 3) -> PackedStringArray:
 		return out
 	var start: int = maxi(0, _events.size() - max_items)
 	for i in range(_events.size() - 1, start - 1, -1):
-		var evt: Dictionary = _events[i]
+		var evt_any: Variant = _events[i]
+		if not evt_any is Dictionary:
+			continue
+		var evt: Dictionary = evt_any as Dictionary
 		var kind: String = str(evt.get("type", ""))
 		if kind == "":
 			var k: int = int(evt.get("k", -1))
@@ -939,7 +945,10 @@ func get_recent_events_for_settlement(center_region: int, max_items: int = 64, i
 	for i in range(_events.size() - 1, -1, -1):
 		if out.size() >= max_items:
 			break
-		var evt: Dictionary = _events[i]
+		var evt_any: Variant = _events[i]
+		if not evt_any is Dictionary:
+			continue
+		var evt: Dictionary = evt_any as Dictionary
 		var rk: int = _region_from_event_payload(evt)
 		if rk < 0:
 			continue
@@ -958,7 +967,10 @@ func get_events_page_newest(max_items: int = 100, before_eid: int = -1) -> Array
 	for i in range(_events.size() - 1, -1, -1):
 		if out.size() >= max_items:
 			break
-		var evt: Dictionary = _events[i]
+		var evt_any: Variant = _events[i]
+		if not evt_any is Dictionary:
+			continue
+		var evt: Dictionary = evt_any as Dictionary
 		var eid: int = int(evt.get("eid", 0))
 		if before_eid > 0 and eid >= before_eid:
 			continue
@@ -975,7 +987,10 @@ func get_recent_events_for_pawn(pawn_id: int, max_items: int = 64) -> Array[Dict
 	for i in range(_events.size() - 1, -1, -1):
 		if out.size() >= max_items:
 			break
-		var evt: Dictionary = _events[i]
+		var evt_any: Variant = _events[i]
+		if not evt_any is Dictionary:
+			continue
+		var evt: Dictionary = evt_any as Dictionary
 		var hit: bool = false
 		if int(evt.get("pawn_id", -1)) == pawn_id:
 			hit = true
@@ -1003,7 +1018,10 @@ func get_relationship_timeline(a_id: int, b_id: int, max_items: int = 64) -> Arr
 	for i in range(_events.size() - 1, -1, -1):
 		if out.size() >= max_items:
 			break
-		var evt: Dictionary = _events[i]
+		var evt_any: Variant = _events[i]
+		if not evt_any is Dictionary:
+			continue
+		var evt: Dictionary = evt_any as Dictionary
 		var typ: String = _canonical_event_type(evt)
 		var include: bool = false
 		if typ == "social_meeting" or typ == "social_bond_milestone":

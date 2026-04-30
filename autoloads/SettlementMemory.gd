@@ -100,6 +100,19 @@ var _phase8_proof_latest_bundle_line: String = ""
 var _phase8_proof_preferred_center_region: int = -1
 
 
+## [code]war_status[/code] must be a Dictionary; saves or edge merges can leave a wrong-typed value
+## and strict `var ws: Dictionary = st.get("war_status", …)` will hard-fail (tick-1 HUD path).
+func _coerce_war_status_from_settlement(st: Dictionary) -> Dictionary:
+	var raw: Variant = st.get("war_status", null)
+	if raw is Dictionary:
+		return (raw as Dictionary).duplicate(true)
+	return {"state": "peace", "target_settlement_id": -1, "votes": []}
+
+
+func _war_state_string_from_settlement(st: Dictionary) -> String:
+	return str(_coerce_war_status_from_settlement(st).get("state", "peace"))
+
+
 func get_phase8_proof_terminal_line() -> String:
 	return _phase8_proof_terminal_line
 
@@ -1199,7 +1212,7 @@ func propose_war_for_pawn(ruler_id: int, target_settlement_id: int) -> bool:
 	if src_idx < 0 or target_settlement_id < 0 or target_settlement_id >= settlements.size() or src_idx == target_settlement_id:
 		return false
 	var st: Dictionary = settlements[src_idx] as Dictionary
-	var ws: Dictionary = st.get("war_status", {"state": "peace", "target_settlement_id": -1, "votes": []})
+	var ws: Dictionary = _coerce_war_status_from_settlement(st)
 	ws["state"] = "proposed"
 	ws["target_settlement_id"] = target_settlement_id
 	ws["votes"] = []
@@ -1213,7 +1226,7 @@ func _process_war_state(settlement_idx: int, pawns: Array[Pawn]) -> void:
 	if settlement_idx < 0 or settlement_idx >= settlements.size() or not (settlements[settlement_idx] is Dictionary):
 		return
 	var st: Dictionary = settlements[settlement_idx] as Dictionary
-	var ws: Dictionary = st.get("war_status", {"state": "peace", "target_settlement_id": -1, "votes": []})
+	var ws: Dictionary = _coerce_war_status_from_settlement(st)
 	var set_pawns: Array[Pawn] = _pawns_in_settlement(st, pawns)
 	var center: int = int(st.get("center_region", -1))
 	if str(ws.get("state", "peace")) == "at_war":
@@ -1238,7 +1251,7 @@ func _resolve_war_votes(settlement_idx: int) -> void:
 	if settlement_idx < 0 or settlement_idx >= settlements.size() or not (settlements[settlement_idx] is Dictionary):
 		return
 	var st: Dictionary = settlements[settlement_idx] as Dictionary
-	var ws: Dictionary = st.get("war_status", {"state": "peace", "target_settlement_id": -1, "votes": []})
+	var ws: Dictionary = _coerce_war_status_from_settlement(st)
 	var pawns: Array[Pawn] = _pawns_in_settlement(st, _living_pawns())
 	if pawns.is_empty():
 		ws["state"] = "peace"
@@ -1442,8 +1455,7 @@ func get_war_profile_for_region(region_key: int) -> Dictionary:
 	if not (st_v is Dictionary):
 		return {"state": "peace", "target_settlement_id": -1, "votes": []}
 	var st: Dictionary = st_v as Dictionary
-	var ws: Dictionary = st.get("war_status", {"state": "peace", "target_settlement_id": -1, "votes": []})
-	return ws.duplicate(true)
+	return _coerce_war_status_from_settlement(st)
 
 
 func update_settlement_intents(tick: int) -> void:
@@ -1457,7 +1469,7 @@ func update_settlement_intents(tick: int) -> void:
 		var settlement_pawns: Array[Pawn] = _pawns_in_settlement(st, living_pawns)
 		var local_food_pressure: float = _calculate_local_food_pressure(settlement_pawns)
 		var local_housing_pressure: float = _calculate_local_housing_pressure(st, settlement_pawns)
-		var war_state: String = str((st.get("war_status", {"state": "peace"}) as Dictionary).get("state", "peace"))
+		var war_state: String = _war_state_string_from_settlement(st)
 		var is_emergency: bool = local_food_pressure >= CRITICAL_LOCAL_FOOD_PRESSURE or war_state == "mobilizing" or war_state == "at_war"
 		var lock_ticks: int = int(st.get("intent_lock_ticks", 0))
 		if is_emergency and lock_ticks > 0:
@@ -1492,7 +1504,7 @@ func update_settlement_intents(tick: int) -> void:
 
 func _derive_settlement_intent(st: Dictionary, local_food_pressure: float, local_housing_pressure: float) -> String:
 	var settlement_state: String = str(st.get("state", ""))
-	var war_state: String = str((st.get("war_status", {"state": "peace"}) as Dictionary).get("state", "peace"))
+	var war_state: String = _war_state_string_from_settlement(st)
 	if settlement_state == "recovering" or settlement_state == "revivable":
 		return INTENT_RECOVER
 	if war_state == "mobilizing" or war_state == "at_war":

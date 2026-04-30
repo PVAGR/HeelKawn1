@@ -775,13 +775,33 @@ func _wildlife_line() -> String:
 	var d: int = int(_wildlife_snapshot.get("deer", 0))
 	var t: int = int(_wildlife_snapshot.get("total", 0))
 	var span: String = _wildlife_total_span()
-	var tail: String = "[%s]" % _momentum_spark
-	if not span.is_empty():
-		tail += "  %s" % span
-	return "🦌 Wildlife: R:%d D:%d T:%d %s" % [r, d, t, tail]
+	var tail: String = ""
+	
+	# Trend validation: compute trend direction from history
+	if _wildlife_history.size() >= 3:
+		var recent_avg: float = 0.0
+		var older_avg: float = 0.0
+		var split: int = _wildlife_history.size() / 2
+		for i in range(split):
+			older_avg += float(_wildlife_history[i])
+		for i in range(split, _wildlife_history.size()):
+			recent_avg += float(_wildlife_history[i])
+		older_avg /= float(split)
+		recent_avg /= float(_wildlife_history.size() - split)
+		
+		var trend_ratio: float = recent_avg / maxi(1.0, older_avg)
+		if trend_ratio > 1.1:
+			tail = "▲"  # Growing
+		elif trend_ratio < 0.9:
+			tail = "▼"  # Declining
+		else:
+			tail = "▬"  # Stable
+	else:
+		tail = _momentum_spark
+	
+	return "🦌 Wildlife: R:%d D:%d T:%d %s %s" % [r, d, t, span, tail]
 
 
-## Shown when PlayerIntentQueue has backlog or Main holds a chronicler pin.
 func _player_intent_hud_line() -> String:
 	var u: int = PlayerIntentQueue.unprocessed_count()
 	var pin: String = ""

@@ -11,17 +11,18 @@ const KIND_PAWN_DEATH: int = 0
 # REVIVABLE_REPUTATION_MIN — floor rep still allowed on revivable path.
 # PEACE_TICKS_PER_BRANCH — ticks of quiet (no pawn deaths in cluster) before peace component maxes; branch flavor.
 # REVIVAL_SCORE_* — deterministic 0..100 curve gates: recovering → revivable → active (see _deterministic_revival_score).
+# These thresholds align with REVIVAL_CONSTRAINTS.md documentation.
 const HARD_COLLAPSE_TICKS: int = 30000
-const REVIVABLE_SCAR_MAX: int = 2
+const REVIVABLE_SCAR_MAX: int = 2  # Matches REVIVAL_CONSTRAINTS hard gate: scar level < 3
 const REVIVABLE_REPUTATION_MIN: int = -1
 const PEACE_TICKS_PER_BRANCH: Dictionary = {
-	SettlementPlanner.CULTURE_OPEN: 18000,
-	SettlementPlanner.CULTURE_CAUTIOUS: 30000,
-	SettlementPlanner.CULTURE_DEFENSIVE: 42000,
+	SettlementPlanner.CULTURE_OPEN: 18000,    # More permissive peace requirement
+	SettlementPlanner.CULTURE_CAUTIOUS: 30000,  # Standard peace requirement
+	SettlementPlanner.CULTURE_DEFENSIVE: 42000,  # Stricter peace requirement
 }
-const REVIVAL_SCORE_RECOVERING_MIN: int = 35
-const REVIVAL_SCORE_REVIVABLE_MIN: int = 70
-const REVIVAL_SCORE_ACTIVE_MIN: int = 88
+const REVIVAL_SCORE_RECOVERING_MIN: int = 35  # Minimum score to enter recovering state
+const REVIVAL_SCORE_REVIVABLE_MIN: int = 70   # Minimum score to become revivable
+const REVIVAL_SCORE_ACTIVE_MIN: int = 88     # Minimum score to become active (requires scar <= 1)
 const INTENT_UPDATE_INTERVAL_TICKS: int = 500
 const MIN_INTENT_DWELL_TICKS: int = 2000
 const CRITICAL_LOCAL_FOOD_PRESSURE: float = 0.9

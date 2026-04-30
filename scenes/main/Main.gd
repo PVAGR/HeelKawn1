@@ -110,6 +110,8 @@ const OBSERVER_HUD_REFRESH_TICKS: int = 30
 const FOCUS_INSPECTOR_REFRESH_TICKS: int = 15
 ## Deterministic rebirth cadence (tick-gated, no frame-time).
 const REBIRTH_CHECK_INTERVAL_TICKS: int = 2000
+## Offset [method AnimalSpawner.update_population_dynamics] so it does not land on the same tick as [member REBIRTH_CHECK_INTERVAL_TICKS] (both were multiples of 1000; spike [code]animal_population[/code]+[code]rebirth_recompute[/code]).
+const ANIMAL_POPULATION_PHASE_TICKS: int = 500
 ## Ecosystems (hunt) stay inert until this tick (world gen / reroll / load).
 const WORLD_STABILIZATION_TICKS: int = 500
 ## Player does not architect the colony: no manual walls/beds/doors/stockpile zones.
@@ -1849,7 +1851,7 @@ func _on_game_tick(tick: int) -> void:
 		_post_wildlife_hunt_jobs_after_stabilization()
 	if (
 			_animal_spawner != null
-			and int(tick) % AnimalSpawner.POPULATION_CHECK_TICKS == 0
+			and (int(tick) + ANIMAL_POPULATION_PHASE_TICKS) % AnimalSpawner.POPULATION_CHECK_TICKS == 0
 	):
 		t0 = Time.get_ticks_usec()
 		_animal_spawner.update_population_dynamics(_world)

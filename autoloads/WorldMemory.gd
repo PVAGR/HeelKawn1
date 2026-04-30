@@ -521,6 +521,27 @@ func get_region_keys_with_animal_deaths() -> Array[int]:
 	return out
 
 
+## One pass over [member _events] for [enum Kind.ANIMAL_DEATH] only. Key format matches [code]AnimalSpawner._rsk[/code] ([code]"rk#species"[/code]).
+## Use from hot paths (e.g. [method AnimalSpawner.update_population_dynamics]) instead of many calls to
+## [method get_animal_death_count_in_region] / [method get_last_animal_death_tick_in_region] (each O(n) over all events).
+func get_animal_death_ledger() -> Dictionary:
+	var out: Dictionary = {}
+	for e in _events:
+		if int(e.get("k", -1)) != int(Kind.ANIMAL_DEATH):
+			continue
+		var rk: int = int(e.get("r", 0))
+		var sp: int = int(e.get("sp", -1))
+		var key: String = "%d#%d" % [rk, sp]
+		var tt: int = int(e.get("t", 0))
+		if not out.has(key):
+			out[key] = {"count": 1, "last_t": tt}
+		else:
+			var rec: Dictionary = out[key]
+			rec["count"] = int(rec["count"]) + 1
+			rec["last_t"] = maxi(int(rec["last_t"]), tt)
+	return out
+
+
 func _provenance_hash_stub(evt: Dictionary) -> String:
 	var payload: String = "%s|%s|%s|%s|%s|%s|%s" % [
 		str(evt.get("t", 0)),

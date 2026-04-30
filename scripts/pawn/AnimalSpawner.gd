@@ -46,6 +46,35 @@ static func _live_count_in_region(animals_arr: Array, world: World, rk: int, spe
 	return n
 
 
+static func _ledger_death_count(ledger: Dictionary, rk: int, species: int) -> int:
+	var key: String = _rsk(rk, species)
+	if not ledger.has(key):
+		return 0
+	return int((ledger[key] as Dictionary).get("count", 0))
+
+
+static func _ledger_last_death_tick(ledger: Dictionary, rk: int, species: int) -> int:
+	var key: String = _rsk(rk, species)
+	if not ledger.has(key):
+		return -1
+	return int((ledger[key] as Dictionary).get("last_t", -1))
+
+
+## Single pass over live animals: [code]rsk -> count[/code] for [method update_population_dynamics].
+static func _live_counts_by_rsk(animals_arr: Array, world: World) -> Dictionary:
+	var out: Dictionary = {}
+	for a in animals_arr:
+		if a == null or not is_instance_valid(a):
+			continue
+		var t: Vector2i = a.tile_pos
+		if not world.data.in_bounds(t.x, t.y):
+			continue
+		var rk: int = _WM._region_key(t.x, t.y)
+		var key: String = _rsk(rk, int(a.animal_type))
+		out[key] = int(out.get(key, 0)) + 1
+	return out
+
+
 static func _collect_region_keys(animals_arr: Array, world: World) -> Array[int]:
 	var seen: Dictionary = {}
 	for a in animals_arr:
@@ -212,6 +241,8 @@ func update_population_dynamics(world: World) -> void:
 		return
 	cleanup_dead_animals()
 	var tick0: int = GameManager.tick_count
+	var death_ledger: Dictionary = WorldMemory.get_animal_death_ledger()
+	var live_by_rsk: Dictionary = _live_counts_by_rsk(animals, world)
 	var rset: Dictionary = {}
 	for rk in _collect_region_keys(animals, world):
 		rset[rk] = true
@@ -233,17 +264,28 @@ func update_population_dynamics(world: World) -> void:
 	for rk2 in all_r:
 		if SettlementMemory.is_region_in_permanently_abandoned_settlement(rk2):
 			continue
-		_process_one_region_species(world, tick0, rk2, int(Animal.Type.RABBIT))
-		_process_one_region_species(world, tick0, rk2, int(Animal.Type.DEER))
+		_process_one_region_species(
+				world, tick0, rk2, int(Animal.Type.RABBIT), death_ledger, live_by_rsk
+		)
+		_process_one_region_species(
+				world, tick0, rk2, int(Animal.Type.DEER), death_ledger, live_by_rsk
+		)
 
 
-func _process_one_region_species(world: World, tick0: int, rk2: int, sp0: int) -> void:
+func _process_one_region_species(
+		world: World,
+		tick0: int,
+		rk2: int,
+		sp0: int,
+		death_ledger: Dictionary,
+		live_by_rsk: Dictionary
+) -> void:
 	var key: String = _rsk(rk2, sp0)
-	var live: int = _live_count_in_region(animals, world, rk2, sp0)
+	var live: int = int(live_by_rsk.get(key, 0))
 	var scar: int = int(WorldPersistence.get_region_persistence(rk2).get("scar_level", 0))
-	var last_d: int = WorldMemory.get_last_animal_death_tick_in_region(rk2, sp0)
+	var last_d: int = _ledger_last_death_tick(death_ledger, rk2, sp0)
 	var ini: int = int(_initial_placed.get(key, 0))
-	var deaths: int = WorldMemory.get_animal_death_count_in_region(rk2, sp0)
+	var deaths: int = _ledger_death_count(death_ledger, rk2, sp0)
 	var had_ever: bool = (ini > 0) or (deaths > 0)
 	if live > 0:
 		if _local_extinct.get(key) == true:

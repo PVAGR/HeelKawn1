@@ -29,7 +29,7 @@ const PANEL_PAD_Y: int = 4
 ## Readability mode: bigger, simpler HUD for at-a-glance play.
 const SIMPLE_READABLE_HUD: bool = true
 
-const HOTKEY_HINTS: String = "SPACE pause · F5 save · F8 load · K sprite · F10 reports"
+const HOTKEY_HINTS: String = "SPACE pause · F5 save · F8 load · F9 realm · K sprite · F10 reports"
 
 @onready var _panel: PanelContainer = $Panel
 @onready var _label: RichTextLabel = $Panel/Margin/VBox/Body

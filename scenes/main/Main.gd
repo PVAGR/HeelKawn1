@@ -4822,32 +4822,45 @@ func _count_pawns_in_regions(regions_v: Variant) -> int:
 func _build_realm_crown_view_text(max_settlements: int = 8) -> String:
 	## Macro strip: settlements × proto-houses × myth/sacred tone (read-only facts).
 	FactionRegistry.sync_from_settlements()
-	var listed: int = 0
-	var lines: PackedStringArray = PackedStringArray()
+	var rows: Array = []
 	for st_any in SettlementMemory.settlements:
-		if listed >= max_settlements:
-			break
 		if not (st_any is Dictionary):
 			continue
 		var st: Dictionary = st_any
-		var ckr: int = int(st.get("center_region", -1))
-		if ckr < 0:
+		if int(st.get("center_region", -1)) < 0:
 			continue
+		rows.append(st)
+	rows.sort_custom(func(a: Variant, b: Variant) -> bool:
+		if not (a is Dictionary and b is Dictionary):
+			return false
+		var ad: Dictionary = a
+		var bd: Dictionary = b
+		var an: String = str(ad.get("name", "Unnamed"))
+		var bn: String = str(bd.get("name", "Unnamed"))
+		if an != bn:
+			return an < bn
+		return int(ad.get("center_region", 0)) < int(bd.get("center_region", 0))
+	)
+	var place_count: int = rows.size()
+	var listed: int = 0
+	var lines: PackedStringArray = PackedStringArray()
+	for st_row in rows:
+		if listed >= max_settlements:
+			break
+		var st: Dictionary = st_row
+		var ckr: int = int(st.get("center_region", -1))
 		var zid: String = str(ckr)
 		var nm: String = str(st.get("name", "Unnamed"))
-		if nm.length() > 24:
-			nm = nm.substr(0, 21) + "..."
+		if nm.length() > 20:
+			nm = nm.substr(0, 17) + "..."
+		var pop: int = _count_pawns_in_regions(st.get("regions", PackedInt32Array()))
 		var house: Dictionary = FactionRegistry.get_house_for_zone(zid)
 		var house_disp: String = str(house.get("house_display", "—"))
 		var rel: Dictionary = ReligionLens.describe_settlement_zone(zid)
 		var st_state: String = str(rel.get("state", ""))
 		var voice: String = str(rel.get("voice", ""))
-		lines.append("• %s — %s · %s · %s" % [nm, house_disp, st_state, voice])
+		lines.append("• %s — pop %d · %s · %s · %s" % [nm, pop, house_disp, st_state, voice])
 		listed += 1
-	var place_count: int = 0
-	for x in SettlementMemory.settlements:
-		if x is Dictionary:
-			place_count += 1
 	var houses_n: int = FactionRegistry.house_count()
 	var sac_n: int = SacredMemory.site_count() if SacredMemory != null else 0
 	var harm: float = ReligionLens.get_harmony_index() if ReligionLens != null else 0.0
@@ -4857,12 +4870,12 @@ func _build_realm_crown_view_text(max_settlements: int = 8) -> String:
 			% [place_count, houses_n, sac_n, harm]
 	)
 	if place_count == 0:
-		return head + "No settlements yet.\n"
+		return head + "No settlements yet.\n[i]F9 toggles observer / realm strip.[/i]\n"
 	var more_note: String = ""
 	if place_count > listed:
 		more_note = "[i](+%d places not listed)[/i]\n" % (place_count - listed)
 	var body: String = "\n".join(lines)
-	return head + more_note + body + "\n"
+	return head + more_note + body + "\n[i]F9 observer · refreshes with sim[/i]\n"
 
 
 func _build_observer_snapshot(tick: int) -> Dictionary:

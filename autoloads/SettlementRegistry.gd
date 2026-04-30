@@ -96,6 +96,17 @@ func _region_coords(rk: int) -> Vector2i:
 	return Vector2i(int(rk) & 0xFFFF, (int(rk) >> 16) & 0xFFFF)
 
 
+## Public: get the center tile coordinates of a zone from its zone_id (center_region as string)
+func get_zone_center(zone_id: String) -> Vector2i:
+	var zone_data: Dictionary = get_zone_data(zone_id)
+	if zone_data.is_empty():
+		return Vector2i(-1, -1)
+	var center_rk: int = int(zone_data.get("center_region", -1))
+	if center_rk < 0:
+		return Vector2i(-1, -1)
+	return _region_coords(center_rk)
+
+
 ## Count other settlements whose merged state is [i]active[/i] (dormant or revivable) within
 ## Chebyshev distance (in 16x16 [i]region[/i] cells) of [param zone_id].[br]
 ## [param radius] is in region cells (e.g. 2 = 5x5 block of region centers in Chebyshev norm).

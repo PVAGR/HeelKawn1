@@ -73,6 +73,11 @@ func get_house_for_zone(zone_id: String) -> Dictionary:
 
 func house_count() -> int:
 	sync_from_settlements()
+	return get_synced_house_count()
+
+
+## Call after [method sync_from_settlements] to avoid duplicate full scans in one frame.
+func get_synced_house_count() -> int:
 	return _house_by_zone.size()
 
 

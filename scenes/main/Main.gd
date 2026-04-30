@@ -4845,13 +4845,27 @@ func _count_pawns_in_regions(regions_v: Variant) -> int:
 	for rk in regions_v as PackedInt32Array:
 		wanted[int(rk)] = true
 	var n: int = 0
+	var wm = preload("res://autoloads/WorldMemory.gd")
 	for p in _pawn_spawner.pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
-		var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		var rk: int = wm._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 		if wanted.has(rk):
 			n += 1
 	return n
+
+
+func _pawn_counts_by_region_key() -> Dictionary:
+	var out: Dictionary = {}
+	if _pawn_spawner == null:
+		return out
+	var wm = preload("res://autoloads/WorldMemory.gd")
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var rk: int = wm._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		out[rk] = int(out.get(rk, 0)) + 1
+	return out
 
 
 func _build_realm_crown_view_text() -> String:
@@ -4880,6 +4894,7 @@ func _build_realm_crown_view_text() -> String:
 	var place_count: int = rows.size()
 	var listed: int = 0
 	var lines: PackedStringArray = PackedStringArray()
+	var pop_by_rk: Dictionary = _pawn_counts_by_region_key()
 	for st_row in rows:
 		if listed >= max_settlements:
 			break
@@ -4889,7 +4904,16 @@ func _build_realm_crown_view_text() -> String:
 		var nm: String = str(st.get("name", "Unnamed"))
 		if nm.length() > 20:
 			nm = nm.substr(0, 17) + "..."
-		var pop: int = _count_pawns_in_regions(st.get("regions", PackedInt32Array()))
+		var pop: int = 0
+		var regv: Variant = st.get("regions", PackedInt32Array())
+		if regv is PackedInt32Array:
+			var seen_rk: Dictionary = {}
+			for rk_any in regv as PackedInt32Array:
+				var rk: int = int(rk_any)
+				if seen_rk.has(rk):
+					continue
+				seen_rk[rk] = true
+				pop += int(pop_by_rk.get(rk, 0))
 		var house: Dictionary = FactionRegistry.get_house_for_zone(zid)
 		var house_disp: String = str(house.get("house_display", "—"))
 		var rel: Dictionary = ReligionLens.describe_settlement_zone(zid)
@@ -4897,7 +4921,7 @@ func _build_realm_crown_view_text() -> String:
 		var voice: String = str(rel.get("voice", ""))
 		lines.append("• %s — pop %d · %s · %s · %s" % [nm, pop, house_disp, st_state, voice])
 		listed += 1
-	var houses_n: int = FactionRegistry.house_count()
+	var houses_n: int = FactionRegistry.get_synced_house_count()
 	var sac_n: int = SacredMemory.site_count() if SacredMemory != null else 0
 	var harm: float = ReligionLens.get_harmony_index() if ReligionLens != null else 0.0
 	var total_pawns: int = _observer_total_pawns()

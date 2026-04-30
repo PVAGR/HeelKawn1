@@ -1172,7 +1172,7 @@ func _fast_forward_tick_stride() -> int:
 
 func _job_claim_interval_for_speed() -> int:
 	if GameManager == null:
-		return 3
+		return 5
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
 		return 8
@@ -1182,7 +1182,11 @@ func _job_claim_interval_for_speed() -> int:
 		return 4
 	if gs >= 12.0:
 		return 4
-	return 3
+	if gs >= 3.0:
+		return 4
+	# 1x is the common play speed; a slightly slower claim cadence cuts
+	# full-queue scans per frame while still keeping workers responsive.
+	return 5
 
 
 func _should_panic_sleep() -> bool:

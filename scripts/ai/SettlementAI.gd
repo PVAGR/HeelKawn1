@@ -10,11 +10,22 @@ var AuthoritySystem = null
 var WorldAI = null
 var GameManager = null
 
+func _autoload_or_null(path: String) -> Node:
+	var main_loop: MainLoop = Engine.get_main_loop()
+	if main_loop == null or not (main_loop is SceneTree):
+		return null
+	var tree: SceneTree = main_loop as SceneTree
+	var root: Node = tree.get_root()
+	if root == null:
+		return null
+	return root.get_node_or_null(path)
+
+
 func _resolve_autoload_refs() -> void:
-	CollapseSystem = get_node_or_null("/root/CollapseSystem")
-	AuthoritySystem = get_node_or_null("/root/AuthoritySystem")
-	WorldAI = get_node_or_null("/root/WorldAI")
-	GameManager = get_node_or_null("/root/GameManager")
+	CollapseSystem = _autoload_or_null("/root/CollapseSystem")
+	AuthoritySystem = _autoload_or_null("/root/AuthoritySystem")
+	WorldAI = _autoload_or_null("/root/WorldAI")
+	GameManager = _autoload_or_null("/root/GameManager")
 
 enum GovernmentType {
 	TRIBAL = 0,        # Hunter-gatherer bands, consensus decisions
@@ -502,7 +513,9 @@ func handle_environmental_degradation_event(event_data: Dictionary) -> void:
 	development_focus = DevelopmentFocus.SURVIVAL
 	
 	# Propose resource conservation goals
-	propose_collective_goal("resource_conservation", 0.9, "Conserve resources due to environmental stress")
+	var proposer_env: int = leader_id if leader_id >= 0 else (resident_agents[0] if not resident_agents.is_empty() else -1)
+	if proposer_env >= 0:
+		propose_collective_goal("resource_conservation", proposer_env, 90)
 	
 	historical_events.append("Environmental degradation detected - shifted to survival focus")
 
@@ -517,7 +530,9 @@ func handle_economic_boom_event(event_data: Dictionary) -> void:
 		development_focus = DevelopmentFocus.EXPANSION
 	
 	# Propose investment goals
-	propose_collective_goal("infrastructure_investment", 0.8, "Invest in infrastructure during economic boom")
+	var proposer_boom: int = leader_id if leader_id >= 0 else (resident_agents[0] if not resident_agents.is_empty() else -1)
+	if proposer_boom >= 0:
+		propose_collective_goal("infrastructure_investment", proposer_boom, 80)
 	
 	historical_events.append("Economic boom detected - expanding and investing")
 
@@ -532,7 +547,9 @@ func handle_market_crash_event(event_data: Dictionary) -> void:
 	development_focus = DevelopmentFocus.SURVIVAL
 	
 	# Propose economic recovery goals
-	propose_collective_goal("economic_recovery", 0.9, "Recover from market crash")
+	var proposer_crash: int = leader_id if leader_id >= 0 else (resident_agents[0] if not resident_agents.is_empty() else -1)
+	if proposer_crash >= 0:
+		propose_collective_goal("economic_recovery", proposer_crash, 90)
 	
 	historical_events.append("Market crash detected - entered emergency mode")
 
@@ -543,7 +560,9 @@ func handle_religious_schism_event(event_data: Dictionary) -> void:
 	var religious_fervor = event_data.get("religious_fervor", 0.0)
 	
 	# Propose unity goals
-	propose_collective_goal("religious_unity", 0.8, "Address religious schism and promote unity")
+	var proposer_schism: int = leader_id if leader_id >= 0 else (resident_agents[0] if not resident_agents.is_empty() else -1)
+	if proposer_schism >= 0:
+		propose_collective_goal("religious_unity", proposer_schism, 80)
 	
 	# Reduce religious fervor to lower tension
 	religious_fervor = max(religious_fervor - 0.1, 0.0)
@@ -560,7 +579,9 @@ func handle_religious_conversion_event(event_data: Dictionary) -> void:
 	religious_fervor = min(religious_fervor + 0.05, 1.0)
 	
 	# Propose integration goals
-	propose_collective_goal("religious_integration", 0.7, "Integrate new converts into community")
+	var proposer_convert: int = leader_id if leader_id >= 0 else (resident_agents[0] if not resident_agents.is_empty() else -1)
+	if proposer_convert >= 0:
+		propose_collective_goal("religious_integration", proposer_convert, 70)
 	
 	historical_events.append("Religious conversion detected - welcoming new believers")
 
@@ -569,13 +590,13 @@ func _trigger_emergency_leadership_selection() -> void:
 	# Select new leader based on government type
 	match government_type:
 		GovernmentType.MONARCHY:
-			_monarchic_selection()
+			_monarch_selection()
 		GovernmentType.THEOCRACY:
 			_theocratic_selection()
 		GovernmentType.TECHNOCRACY:
 			_technocratic_selection()
 		_:
-			_tribal_selection()
+			_tribal_leadership_selection()
 
 
 # === Peace Treaty Negotiation ===

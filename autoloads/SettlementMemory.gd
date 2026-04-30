@@ -799,6 +799,8 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
 		"specialization_candidate_ticks": 0,
 		"specialization_replacement_ticks": 0,
 		"specialization_confidence": 0,
+		"settlement_specialization": "",
+		"cultural_tags": [],
 	}
 
 
@@ -1688,6 +1690,38 @@ func specialization_work_focus_label(channel: String) -> String:
 			return "Unspecialized"
 
 
+func _channel_to_settlement_specialization_label(channel: String) -> String:
+	match channel:
+		"wood":
+			return "Logging"
+		"stone":
+			return "Quarry"
+		"ore_proxy":
+			return "Mining"
+		"food":
+			return "Farming"
+		"trade":
+			return "Trade"
+		_:
+			return "Unspecialized"
+
+
+func _sync_soul_society_settlement_fields(st: Dictionary) -> void:
+	var ch: String = str(st.get("specialization_channel", ""))
+	st["settlement_specialization"] = _channel_to_settlement_specialization_label(ch)
+	var tags: Array[String] = []
+	var cult: int = int(st.get("culture_type", SettlementPlanner.CULTURE_CAUTIOUS))
+	if cult == SettlementPlanner.CULTURE_DEFENSIVE:
+		tags.append("Martial")
+		tags.append("Walled")
+	elif cult == SettlementPlanner.CULTURE_OPEN:
+		tags.append("Pacifist")
+		tags.append("Mercantile")
+	else:
+		tags.append("Cautious")
+	st["cultural_tags"] = tags
+
+
 func _specialization_sorted_channels(rp: Dictionary) -> Array[Dictionary]:
 	var rows: Array[Dictionary] = [
 		{"k": "wood", "v": float(rp.get("wood", 0.0))},
@@ -1795,6 +1829,7 @@ func _update_settlement_work_focus_identity(st: Dictionary, dt: int) -> void:
 				else:
 					conf = int(round(clampf((locked_v - second_v) / 0.5, 0.0, 1.0) * 100.0)) if locked_ch != "" else 0
 	st["specialization_confidence"] = conf
+	_sync_soul_society_settlement_fields(st)
 
 
 func _intent_allows_front_job(intent: String, job_type: int) -> bool:

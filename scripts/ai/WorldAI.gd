@@ -632,7 +632,11 @@ func _update_world_state_neurons() -> void:
 	world_neurons["environmental_health"].value = biodiversity_index * environmental_stability
 	
 	# Update social complexity
-	world_neurons["social_complexity"].value = float(active_settlements.size()) / 20.0
+	var squad_boost: float = 0.0
+	var sq = get_node_or_null("/root/SquadCoordinator")
+	if sq != null:
+		squad_boost = clampf(float(sq.active_squad_count) * 0.03, 0.0, 0.15)
+	world_neurons["social_complexity"].value = float(active_settlements.size()) / 20.0 + squad_boost
 	
 	# Update resource abundance
 	var total_resources = 0.0
@@ -2381,6 +2385,7 @@ func _calculate_military_organization() -> float:
 	organization += civilization_complexity * 0.4
 	organization += float(technological_tier) / 10.0 * 0.3
 	organization += social_development * 0.3
+	organization += _soul_society_martial_settlement_pressure() * 0.25
 	
 	return clamp(organization, 0.0, 1.0)
 
@@ -2401,8 +2406,30 @@ func _calculate_infrastructure_level() -> float:
 	infrastructure += float(world_population) / 1000.0 * 0.3
 	infrastructure += float(technological_tier) / 10.0 * 0.4
 	infrastructure += civilization_complexity * 0.3
+	infrastructure += _soul_society_martial_settlement_pressure() * 0.12
 	
 	return clamp(infrastructure, 0.0, 1.0)
+
+
+func _soul_society_martial_settlement_pressure() -> float:
+	var sm = get_node_or_null("/root/SettlementMemory")
+	if sm == null or not sm.has_method("get_settlements"):
+		return 0.0
+	var arr: Array = sm.get_settlements()
+	if arr.is_empty():
+		return 0.0
+	var martial_n: int = 0
+	for st_any in arr:
+		if not (st_any is Dictionary):
+			continue
+		var st: Dictionary = st_any as Dictionary
+		var tags_v: Variant = st.get("cultural_tags", [])
+		if tags_v is Array:
+			for t in tags_v:
+				if str(t) == "Martial":
+					martial_n += 1
+					break
+	return float(martial_n) / float(arr.size())
 
 func _calculate_artistic_expression() -> float:
 	var art = 0.0
@@ -2960,6 +2987,108 @@ func _cleanup_old_events() -> void:
 	# Remove old events (in reverse order to maintain indices)
 	for i in range(events_to_remove.size() - 1, -1, -1):
 		world_events.remove_at(events_to_remove[i])
+
+func get_pawn_neural_state(pawn_id: int) -> Dictionary:
+	var sp: PawnSpawner = _resolve_pawn_spawner_for_world_ai()
+	if sp == null:
+		return {}
+	var pd: PawnData = sp.pawn_data_for_id(pawn_id)
+	if pd == null:
+		return {}
+	pd.ensure_soul_identity()
+	var inputs: Array[float] = _pawn_neural_input_vector(pd)
+	var outputs_full: Array[float] = []
+	if pd.neural_network != null and pd.neural_network.has_method("forward_propagate"):
+		outputs_full = pd.neural_network.forward_propagate(inputs)
+	if outputs_full.is_empty():
+		return {"inputs": inputs, "outputs": [], "soul_id": pd.unique_id}
+	var outs: Array = []
+	var nslice: int = mini(8, outputs_full.size())
+	for i in range(nslice):
+		outs.append(outputs_full[i])
+	_apply_soul_society_output_nudge(pd, outs)
+	return {
+		"inputs": inputs,
+		"outputs": outs,
+		"soul_id": pd.unique_id,
+		"scar_count": pd.physical_scars.size(),
+		"self_preservation_bias": _estimate_self_preservation_bias(outs),
+	}
+
+
+func _estimate_self_preservation_bias(outs: Array) -> float:
+	if outs.size() < 8:
+		return 0.0
+	return clampf(float(outs[1]) + float(outs[7]) * 0.5 - float(outs[5]) * 0.25, 0.0, 1.0)
+
+
+func _apply_soul_society_output_nudge(pd: PawnData, outs: Array) -> void:
+	if outs.size() < 8:
+		return
+	var scar_n: float = clampf(float(pd.physical_scars.size()) * 0.14, 0.0, 0.55)
+	outs[1] = clampf(float(outs[1]) + scar_n * 0.35, 0.0, 2.0)
+	outs[7] = clampf(float(outs[7]) + scar_n * 0.22, 0.0, 2.0)
+	outs[5] = clampf(float(outs[5]) - scar_n * 0.28, 0.0, 2.0)
+	outs[3] = clampf(float(outs[3]) - scar_n * 0.12, 0.0, 2.0)
+	var martial: float = _pawn_martial_settlement_context(pd)
+	if martial > 0.0:
+		outs[4] = clampf(float(outs[4]) + martial * 0.18, 0.0, 2.0)
+		outs[6] = clampf(float(outs[6]) + martial * 0.22, 0.0, 2.0)
+		outs[5] = clampf(float(outs[5]) + martial * 0.08, 0.0, 2.0)
+
+
+func _pawn_martial_settlement_context(pd: PawnData) -> float:
+	if pd.settlement_id < 0:
+		return 0.0
+	var sm: Node = get_node_or_null("/root/SettlementMemory")
+	if sm == null or not sm.has_method("get_settlements"):
+		return 0.0
+	var arr: Array = sm.get_settlements()
+	if pd.settlement_id >= arr.size():
+		return 0.0
+	var st_v: Variant = arr[pd.settlement_id]
+	if not (st_v is Dictionary):
+		return 0.0
+	var tags: Variant = (st_v as Dictionary).get("cultural_tags", [])
+	if tags is Array:
+		for t in tags:
+			if str(t) == "Martial":
+				return 1.0
+	return 0.0
+
+
+func _pawn_neural_input_vector(pd: PawnData) -> Array[float]:
+	var hunger_n: float = clampf(pd.hunger / 100.0, 0.0, 1.0)
+	var rest_n: float = clampf(pd.rest / 100.0, 0.0, 1.0)
+	var mood_n: float = clampf(pd.mood / 100.0, 0.0, 1.0)
+	var health_n: float = clampf(pd.health / maxf(1.0, pd.max_health), 0.0, 1.0)
+	var scar_n: float = clampf(float(pd.physical_scars.size()) / 5.0, 0.0, 1.0)
+	var inputs: Array[float] = [
+		hunger_n,
+		rest_n,
+		mood_n,
+		health_n,
+		float(pd.affinities.get("combat", 0.5)),
+		float(pd.affinities.get("farming", 0.5)),
+		float(pd.affinities.get("building", 0.5)),
+		float(pd.affinities.get("crafting", 0.5)),
+		float(pd.affinities.get("diplomacy", 0.5)),
+		pd.neuroticism,
+		scar_n,
+		pd.openness,
+		pd.conscientiousness,
+	]
+	while inputs.size() < 32:
+		inputs.append(0.0)
+	return inputs
+
+
+func _resolve_pawn_spawner_for_world_ai() -> PawnSpawner:
+	if get_tree() == null or get_tree().root == null:
+		return null
+	var n: Node = get_tree().root.find_child("PawnSpawner", true, false)
+	return n as PawnSpawner
+
 
 func remove_settlement(settlement_id: int) -> void:
 	if active_settlements.has(settlement_id):

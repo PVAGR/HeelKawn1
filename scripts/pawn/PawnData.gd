@@ -199,6 +199,16 @@ var avoidance_modifier: float = 0.0
 ## Tick timer for avoidance modifier decay
 var avoidance_tick_timer: int = 0
 
+## Phase 4 — Soul & Society: deterministic web identity, append-only legacy.
+var unique_id: String = ""
+var lineage_id: String = ""
+var biography: Array[String] = []
+var physical_scars: Array[String] = []
+## Settlement key (string) -> standing score for trade / entry hooks.
+var settlement_reputation: Dictionary = {}
+## When set, wander bias pulls toward this anchor pawn (social squad leader id).
+var social_squad_anchor_id: int = -1
+
 ## Single-item inventory. Type is Item.Type (NONE = empty hands).
 ## v1 pawns can only hold one kind of thing at a time; multi-slot / weight
 ## comes later with proper inventories.
@@ -1493,6 +1503,89 @@ func mood_state_display() -> String:
 		return "ECSTATIC"
 
 
+func ensure_soul_identity() -> void:
+	if unique_id.is_empty():
+		unique_id = _make_soul_uuid()
+	if biography.is_empty():
+		append_biography_line("Born")
+
+
+func _make_soul_uuid() -> String:
+	var a: int = int(WorldRNG.stream_seed(&"heelkawn:soul_uuid:a", id))
+	var b: int = int(WorldRNG.stream_seed(&"heelkawn:soul_uuid:b", id ^ (birth_tick * 1315423911 + 1)))
+	var c: int = int(WorldRNG.stream_seed(&"heelkawn:soul_uuid:c", display_name.hash() ^ id))
+	var d: int = int(WorldRNG.stream_seed(&"heelkawn:soul_uuid:d", a ^ b ^ c))
+	var lo48: int = ((d & 0xFFFFFF) << 20) ^ (c & 0xFFFFF) ^ (b & 0x3FFFF)
+	lo48 = abs(lo48) % 281474976710656
+	return "%08x-%04x-%04x-%04x-%012x" % [
+		a & 0xFFFFFFFF,
+		(b >> 16) & 0xFFFF,
+		(0x4000 | (b & 0x0FFF)) & 0xFFFF,
+		(0x8000 | ((c >> 12) & 0x3FFF)) & 0xFFFF,
+		lo48,
+	]
+
+
+func append_biography_line(line: String) -> void:
+	var t: String = str(line).strip_edges()
+	if t.is_empty():
+		return
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	biography.append("[%d] %s" % [tick, t])
+
+
+func append_physical_scar(scar: String) -> void:
+	var s: String = str(scar).strip_edges()
+	if s.is_empty():
+		return
+	if s in physical_scars:
+		return
+	physical_scars.append(s)
+	append_biography_line("Scarred: %s" % s)
+
+
+func physical_scar_labor_mult() -> float:
+	var m: float = 1.0
+	for s in physical_scars:
+		m *= _physical_scar_tag_labor_mult(str(s))
+	return clampf(m, 0.35, 1.0)
+
+
+func _physical_scar_tag_labor_mult(tag: String) -> float:
+	match tag:
+		"LameLeg":
+			return 0.85
+		"MissingArm":
+			return 0.70
+		"BlindedEye":
+			return 0.95
+		"DeepScar":
+			return 0.90
+		_:
+			return 0.92
+
+
+func physical_scar_damage_taken_mult() -> float:
+	var m: float = 1.0
+	for s in physical_scars:
+		m *= _physical_scar_tag_damage_mult(str(s))
+	return clampf(m, 1.0, 1.45)
+
+
+func _physical_scar_tag_damage_mult(tag: String) -> float:
+	match tag:
+		"MissingArm":
+			return 1.10
+		"BlindedEye":
+			return 1.05
+		"DeepScar":
+			return 1.08
+		"LameLeg":
+			return 1.0
+		_:
+			return 1.04
+
+
 # ==================== skills ====================
 
 func get_skill_xp(skill: int) -> float:
@@ -1518,8 +1611,10 @@ func add_skill_xp(skill: int, amount: float) -> bool:
 	
 	# Stage 1: Check for mastery perk unlocks
 	_check_mastery_perks(skill)
-	
-	return get_skill_level(skill) != before
+	var after: int = get_skill_level(skill)
+	if after != before:
+		append_biography_line("Learned %s (level %d)" % [skill_name(skill), after])
+	return after != before
 
 
 ## Stage 1: Calculate overall level from total XP across all skills
@@ -2036,7 +2131,7 @@ func effective_labor_mult() -> float:
 	var r: float = clamp(rest * 0.01, 0.0, 1.0)
 	var base_mult: float = max(0.2, h * 0.55 + r * 0.45)
 	var trait_mult: float = get_trait_mult("work_speed_mult")
-	return base_mult * trait_mult
+	return base_mult * trait_mult * physical_scar_labor_mult()
 
 
 static func skill_name(skill: int) -> String:
@@ -2198,6 +2293,10 @@ func to_portable_character_export(export_tick: int, world_seed: int, origin_regi
 		"trait_types": trait_types,
 		"military_rank": military_rank_legacy,  # Use legacy string for export compatibility
 		"influence": influence,
+		"soul_id": unique_id,
+		"lineage_id": lineage_id,
+		"biography_lines": biography.size(),
+		"physical_scars": physical_scars.duplicate(),
 	}
 
 
@@ -2255,6 +2354,12 @@ func to_save_dict() -> Dictionary:
 		"trait_types": trait_types,
 		"social_rapport": social_rapport.duplicate(true),
 		"neural_network": neural_network.to_dict() if neural_network != null and neural_network.has_method("to_dict") else {},
+		"unique_id": unique_id,
+		"lineage_id": lineage_id,
+		"biography": biography.duplicate(),
+		"physical_scars": physical_scars.duplicate(),
+		"settlement_reputation": settlement_reputation.duplicate(true),
+		"social_squad_anchor_id": social_squad_anchor_id,
 	}
 
 
@@ -2344,6 +2449,21 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	if d.has("social_rapport") and d["social_rapport"] is Dictionary:
 		for sk in (d["social_rapport"] as Dictionary).keys():
 			p.social_rapport[str(sk)] = clampi(int((d["social_rapport"] as Dictionary)[sk]), 0, 3000)
+	p.unique_id = str(d.get("unique_id", p.unique_id))
+	p.lineage_id = str(d.get("lineage_id", p.lineage_id))
+	p.biography = []
+	if d.has("biography") and d["biography"] is Array:
+		for line in d["biography"]:
+			p.biography.append(str(line))
+	p.physical_scars = []
+	if d.has("physical_scars") and d["physical_scars"] is Array:
+		for sc in d["physical_scars"]:
+			p.physical_scars.append(str(sc))
+	p.settlement_reputation = {}
+	if d.has("settlement_reputation") and d["settlement_reputation"] is Dictionary:
+		for rk in d["settlement_reputation"]:
+			p.settlement_reputation[str(rk)] = float(d["settlement_reputation"][rk])
+	p.social_squad_anchor_id = int(d.get("social_squad_anchor_id", -1))
 	# Load traits
 	if d.has("trait_types") and d["trait_types"] is Array:
 		for trait_type in d["trait_types"]:

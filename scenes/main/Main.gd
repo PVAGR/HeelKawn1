@@ -2026,6 +2026,8 @@ func _on_game_tick(tick: int) -> void:
 	if tick % _social_rapport_interval_for_speed() == 0:
 		t0 = Time.get_ticks_usec()
 		_accumulate_social_rapport()
+		if SquadCoordinator != null:
+			SquadCoordinator.recompute(_pawn_spawner)
 		section_us["social_rapport"] = Time.get_ticks_usec() - t0
 	_emit_pawn_divergence_summary_if_needed(tick)
 	if _is_simulation_worker_mode():

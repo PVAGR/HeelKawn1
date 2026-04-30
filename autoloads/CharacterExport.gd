@@ -31,6 +31,11 @@ func _ready() -> void:
 	pass
 
 
+## Soul & Society: web companion JSON (delegates to [HeelKawnSoulExport]).
+func export_character_data(pawn_id: String) -> Dictionary:
+	return HeelKawnSoulExport.export_character_data(pawn_id)
+
+
 ## Export a pawn character
 func export_character(pawn_data: PawnData) -> Dictionary:
 	if pawn_data == null:

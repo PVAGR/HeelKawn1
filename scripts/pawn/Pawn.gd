@@ -323,6 +323,17 @@ func get_current_job_label() -> String:
 	return Job.describe_type(_current_job.type)
 
 
+## Soul & Society: eligible to join/form an idle social squad (no work job, not drafted).
+func is_eligible_for_social_squad() -> bool:
+	if data == null or draft_mode:
+		return false
+	if _current_job != null:
+		return false
+	if _state == State.SLEEPING:
+		return false
+	return _state == State.IDLE
+
+
 func _clear_cohort_state() -> void:
 	if data == null:
 		return
@@ -705,6 +716,7 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 		_grant_initial_knowledge()
 		_initial_knowledge_granted = true
 	refresh_inherited_cultural_reputation()
+	data.ensure_soul_identity()
 	_request_redraw()
 
 
@@ -2118,6 +2130,7 @@ func _apply_work_hazards(work_ticks_simulated: int = 1) -> void:
 		var damage: float = WorldRNG.range_for(_pawn_stream("work_hazard_damage"), 3.0, 8.0, _pawn_salt(29))
 		# Traits can reduce damage taken
 		damage *= data.get_trait_mult("damage_taken_mult")
+		damage *= data.physical_scar_damage_taken_mult()
 		data.health = max(0.0, data.health - damage)
 		_play_sfx("res://assets/audio/pawn_hurt.ogg", 0.9)
 		# Trigger stress mood event from injury
@@ -2125,6 +2138,10 @@ func _apply_work_hazards(work_ticks_simulated: int = 1) -> void:
 		if GameManager.verbose_logs():
 			print("[Pawn] %s injured while working  (damage=%.1f health=%.1f)" %
 				[data.display_name, damage, data.health])
+		if damage >= 5.0:
+			var scar_pool: Array[String] = ["LameLeg", "MissingArm", "BlindedEye", "DeepScar"]
+			var pick: int = WorldRNG.index_for(_pawn_stream("work_hazard_scar"), scar_pool.size(), _pawn_salt(31))
+			data.append_physical_scar(scar_pool[pick])
 
 
 # ==================== jobs (FORAGE / MINE) ====================
@@ -3309,6 +3326,8 @@ func marry(spouse: Pawn) -> void:
 	elif spouse.data.household_id != -1:
 		data.household_id = spouse.data.household_id
 	
+	data.append_biography_line("Married %s (pawn_id=%d)" % [spouse.data.display_name, spouse_id])
+	spouse.data.append_biography_line("Married %s (pawn_id=%d)" % [data.display_name, int(data.id)])
 	if GameManager.verbose_logs():
 		print("[Pawn] %s married %s (household %d)" % [
 			data.display_name, spouse.data.display_name, data.household_id
@@ -4012,6 +4031,22 @@ const WANDER_OFFSETS: Array[Vector2i] = [
 ]
 
 
+func _squad_anchor_tile() -> Vector2i:
+	if data == null or data.social_squad_anchor_id < 0:
+		return Vector2i(-1, -1)
+	if data.social_squad_anchor_id == int(data.id):
+		return Vector2i(-1, -1)
+	var tree: SceneTree = get_tree()
+	if tree == null or tree.root == null:
+		return Vector2i(-1, -1)
+	var sp: Node = tree.root.find_child("PawnSpawner", true, false)
+	if sp != null and sp.has_method("pawn_data_for_id"):
+		var anchor: PawnData = sp.call("pawn_data_for_id", data.social_squad_anchor_id) as PawnData
+		if anchor != null:
+			return anchor.tile_pos
+	return Vector2i(-1, -1)
+
+
 func _start_wander() -> void:
 	if _world == null or _world.pathfinder == null:
 		return
@@ -4023,6 +4058,10 @@ func _start_wander() -> void:
 	var from_rk: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
 	var from_center: int = SettlementMemory.get_center_region_for_region(from_rk)
 	var from_p: float = float(IntentMemory.settlement_pressure.get(from_center, 0.5))
+	var squad_anchor: Vector2i = _squad_anchor_tile()
+	var dist_now: int = -1
+	if squad_anchor.x >= 0:
+		dist_now = absi(data.tile_pos.x - squad_anchor.x) + absi(data.tile_pos.y - squad_anchor.y)
 	for offset in WANDER_OFFSETS:
 		var t: Vector2i = data.tile_pos + offset
 		if not _world.pathfinder.is_passable(t):
@@ -4044,6 +4083,10 @@ func _start_wander() -> void:
 			score -= 2
 		score += crep
 		score -= s * 3
+		if dist_now >= 0:
+			var dist_t: int = absi(t.x - squad_anchor.x) + absi(t.y - squad_anchor.y)
+			if dist_t < dist_now:
+				score += 5
 		if score > best_score or (score == best_score and (s < best_sl or (s == best_sl and crep > best_cult))):
 			best_score = score
 			best_sl = s

@@ -192,6 +192,11 @@ func spawn_generational_pawn(
 	for p in pawns:
 		if p != null and is_instance_valid(p) and p.data != null and p.data.tile_pos == tile:
 			return false
+	var parent_data: PawnData = null
+	if parent_id >= 0:
+		parent_data = pawn_data_for_id(parent_id)
+		if parent_data != null:
+			parent_data.ensure_soul_identity()
 	var data := PawnData.new()
 	data.display_name = _pick_name_deterministic()
 	data.age = 20 + (int(tick_seed) % 5)
@@ -203,6 +208,8 @@ func spawn_generational_pawn(
 	data.hair_style = hs
 	data.hair_color = HAIR_COLORS[(int(tick_seed) + 1) % HAIR_COLORS.size()]
 	data.apparel_color = APPAREL_COLORS[(int(tick_seed) + 2) % APPAREL_COLORS.size()]
+	if parent_data != null:
+		data.lineage_id = parent_data.unique_id
 	var pawn: Pawn = pawn_scene.instantiate() as Pawn
 	add_child(pawn)
 	pawn.bind(data, world.tile_to_world(tile), world)

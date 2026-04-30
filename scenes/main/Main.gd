@@ -102,6 +102,9 @@ const REPRODUCTION_CHECK_INTERVAL_TICKS: int = 300
 const SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS: int = 40
 const SOCIAL_MEETING_EVENT_COOLDOWN_TICKS: int = 400
 const SOCIAL_RAPPORT_MILESTONES: Array[int] = [56, 140, 280, 560]
+## Cap chronicle writes per rapport pass. Co-located crowds (night at one stockpile)
+## are O(n²) pairs; unconstrained WorldMemory spam tanks frames and inflates event counts.
+const SOCIAL_WM_RECORD_BUDGET_PER_PASS: int = 48
 const INFLUENCE_UPDATE_INTERVAL_TICKS: int = 500
 const OBSERVER_HUD_REFRESH_TICKS: int = 30
 const FOCUS_INSPECTOR_REFRESH_TICKS: int = 15
@@ -2195,42 +2198,10 @@ func _maybe_generational_turnover() -> void:
 	_pawn_spawner.spawn_generational_pawn(_world, sp, t)
 
 
-func _accumulate_social_rapport() -> void:
-	if _pawn_spawner == null or _world == null or _world.pathfinder == null:
-		return
-	const R2: float = 128.0 * 128.0
-	const GAIN: int = 14
-	var pl: Array[Pawn] = []
-	for p in _pawn_spawner.pawns:
-		if p != null and is_instance_valid(p) and p.data != null:
-			pl.append(p)
-	if pl.size() < 2:
-		return
-	pl.sort_custom(func(a: Pawn, b: Pawn) -> bool: return a.data.id < b.data.id)
-	for i in range(pl.size()):
-		var pa: Pawn = pl[i]
-		var da: PawnData = pa.data
-		for j in range(i + 1, pl.size()):
-			var pb: Pawn = pl[j]
-			var db: PawnData = pb.data
-			if da.hunger <= 38.0 or db.hunger <= 38.0:
-				continue
-			if _world.pathfinder.component_of(da.tile_pos) != _world.pathfinder.component_of(db.tile_pos):
-				continue
-			if pa.position.distance_squared_to(pb.position) > R2:
-				continue
-			da.add_social_rapport(int(db.id), GAIN)
-			db.add_social_rapport(int(da.id), GAIN)
-			_record_social_pair_events(da, db)
-
-
-func _social_pair_key(a_id: int, b_id: int) -> String:
-	var lo: int = mini(a_id, b_id)
-	var hi: int = maxi(a_id, b_id)
-	return "%d-%d" % [lo, hi]
-
-
-func _record_social_pair_events(a: PawnData, b: PawnData) -> void:
+func _record_social_pair_events(a: PawnData, b: PawnData, max_events: int) -> int:
+	var used: int = 0
+	if max_events <= 0:
+		return 0
 	var a_id: int = int(a.id)
 	var b_id: int = int(b.id)
 	var key: String = _social_pair_key(a_id, b_id)
@@ -2241,7 +2212,7 @@ func _record_social_pair_events(a: PawnData, b: PawnData) -> void:
 		int(b.get_social_rapport(a_id))
 	)
 	var meet_should_log: bool = last_tick < 0 or now - last_tick >= SOCIAL_MEETING_EVENT_COOLDOWN_TICKS
-	if meet_should_log:
+	if meet_should_log and used < max_events:
 		_social_meeting_last_tick_by_pair[key] = now
 		WorldMemory.record_event({
 			"type": "social_meeting",
@@ -2256,8 +2227,11 @@ func _record_social_pair_events(a: PawnData, b: PawnData) -> void:
 			"region": _WM._region_key(a.tile_pos.x, a.tile_pos.y),
 			"tile": {"x": a.tile_pos.x, "y": a.tile_pos.y},
 		})
+		used += 1
 	var previous_milestone: int = int(_social_rapport_milestone_by_pair.get(key, 0))
 	for m in SOCIAL_RAPPORT_MILESTONES:
+		if used >= max_events:
+			break
 		var milestone: int = int(m)
 		if milestone <= previous_milestone:
 			continue
@@ -2278,6 +2252,46 @@ func _record_social_pair_events(a: PawnData, b: PawnData) -> void:
 			"region": _WM._region_key(a.tile_pos.x, a.tile_pos.y),
 			"tile": {"x": a.tile_pos.x, "y": a.tile_pos.y},
 		})
+		used += 1
+	return used
+
+
+func _social_pair_key(a_id: int, b_id: int) -> String:
+	var lo: int = mini(a_id, b_id)
+	var hi: int = maxi(a_id, b_id)
+	return "%d-%d" % [lo, hi]
+
+
+func _accumulate_social_rapport() -> void:
+	if _pawn_spawner == null or _world == null or _world.pathfinder == null:
+		return
+	const R2: float = 128.0 * 128.0
+	const GAIN: int = 14
+	var pl: Array[Pawn] = []
+	for p in _pawn_spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
+			pl.append(p)
+	if pl.size() < 2:
+		return
+	pl.sort_custom(func(a: Pawn, b: Pawn) -> bool: return a.data.id < b.data.id)
+	var wm_budget: int = SOCIAL_WM_RECORD_BUDGET_PER_PASS
+	for i in range(pl.size()):
+		var pa: Pawn = pl[i]
+		var da: PawnData = pa.data
+		for j in range(i + 1, pl.size()):
+			var pb: Pawn = pl[j]
+			var db: PawnData = pb.data
+			if da.hunger <= 38.0 or db.hunger <= 38.0:
+				continue
+			if _world.pathfinder.component_of(da.tile_pos) != _world.pathfinder.component_of(db.tile_pos):
+				continue
+			if pa.position.distance_squared_to(pb.position) > R2:
+				continue
+			da.add_social_rapport(int(db.id), GAIN)
+			db.add_social_rapport(int(da.id), GAIN)
+			if wm_budget > 0:
+				var n: int = _record_social_pair_events(da, db, wm_budget)
+				wm_budget -= n
 
 
 func _process_reproduction_tick() -> void:

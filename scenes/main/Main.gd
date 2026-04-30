@@ -349,6 +349,21 @@ var _validation_harness_observability_logged: bool = false
 var _ai_control_panel: AIControlPanel = null
 ## Off Main for worker runs only; normal play instances hidden UI so F10 error report stays green.
 const ENABLE_AI_CONTROL_PANEL: bool = true
+## Max settlement rows in Observer realm panel; Shift+F9 cycles 8→12→16→24.
+var _realm_crown_max_settlements: int = 8
+
+
+func _cycle_realm_crown_max_settlements() -> void:
+	var opts: Array = [8, 12, 16, 24]
+	var idx: int = opts.find(_realm_crown_max_settlements)
+	if idx < 0:
+		idx = 0
+	else:
+		idx = (idx + 1) % opts.size()
+	_realm_crown_max_settlements = int(opts[idx])
+	if OS.is_debug_build():
+		print("[Main] Realm crown list cap: %d settlements" % _realm_crown_max_settlements)
+
 
 func _init_ai_control_panel() -> void:
 	if not ENABLE_AI_CONTROL_PANEL:
@@ -2434,9 +2449,6 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	match event.keycode:
 		Key.KEY_QUOTELEFT:
 			_toggle_play_chrome()
-		Key.KEY_F9:
-			if _ai_control_panel:
-				_ai_control_panel.toggle_panel()
 		Key.KEY_G:
 			if _selected_pawn != null and is_instance_valid(_selected_pawn):
 				_camera_follow_selected = not _camera_follow_selected
@@ -2491,6 +2503,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		Key.KEY_F8:
 			_colony_load()
 		Key.KEY_F9:
+			if event.shift_pressed:
+				_cycle_realm_crown_max_settlements()
+				if _observer_hud != null and _observer_hud.is_visible_state():
+					_observer_hud.apply_snapshot(_build_observer_snapshot(GameManager.tick_count))
+				return
 			_toggle_observer_hud()
 		Key.KEY_F10:
 			if _creator_debug_menu != null:
@@ -4819,8 +4836,9 @@ func _count_pawns_in_regions(regions_v: Variant) -> int:
 	return n
 
 
-func _build_realm_crown_view_text(max_settlements: int = 8) -> String:
+func _build_realm_crown_view_text() -> String:
 	## Macro strip: settlements × proto-houses × myth/sacred tone (read-only facts).
+	var max_settlements: int = _realm_crown_max_settlements
 	FactionRegistry.sync_from_settlements()
 	var rows: Array = []
 	for st_any in SettlementMemory.settlements:
@@ -4864,18 +4882,29 @@ func _build_realm_crown_view_text(max_settlements: int = 8) -> String:
 	var houses_n: int = FactionRegistry.house_count()
 	var sac_n: int = SacredMemory.site_count() if SacredMemory != null else 0
 	var harm: float = ReligionLens.get_harmony_index() if ReligionLens != null else 0.0
+	var total_pawns: int = _observer_total_pawns()
 	var head: String = (
 			"[b]REALM (crown view)[/b]\n"
-			+ "Places %d · Houses %d · Sacred sites %d · Harmony %.2f\n"
-			% [place_count, houses_n, sac_n, harm]
+			+ "Places %d · Heelkawnians %d · Houses %d · Sacred sites %d · Harmony %.2f\n"
+			% [place_count, total_pawns, houses_n, sac_n, harm]
 	)
 	if place_count == 0:
-		return head + "No settlements yet.\n[i]F9 toggles observer / realm strip.[/i]\n"
+		return (
+				head
+				+ "No settlements yet.\n[i]F9 observer · Shift+F9 cycle rows (%d)[/i]\n"
+				% max_settlements
+		)
 	var more_note: String = ""
 	if place_count > listed:
 		more_note = "[i](+%d places not listed)[/i]\n" % (place_count - listed)
 	var body: String = "\n".join(lines)
-	return head + more_note + body + "\n[i]F9 observer · refreshes with sim[/i]\n"
+	return (
+			head
+			+ more_note
+			+ body
+			+ "\n[i]F9 observer · Shift+F9 rows (%d) · sim refresh[/i]\n"
+			% max_settlements
+	)
 
 
 func _build_observer_snapshot(tick: int) -> Dictionary:

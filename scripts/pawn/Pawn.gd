@@ -1143,17 +1143,25 @@ func _on_game_tick(_tick: int) -> void:
 func _fast_forward_tick_stride() -> int:
 	if GameManager == null:
 		return 1
-	if GameManager.game_speed >= 4096.0:
-		return 64
-	if GameManager.game_speed >= 1024.0:
-		return 32
-	if GameManager.game_speed >= 256.0:
-		return 16
-	if GameManager.game_speed >= 64.0:
+	var gs: float = GameManager.game_speed
+	## Match toolbar tiers (26 / 50 / 100): fewer expensive idle/job scans per sim tick.
+	if gs >= 100.0:
 		return 8
-	if GameManager.game_speed >= 16.0:
+	if gs >= 50.0:
+		return 8
+	if gs >= 26.0:
+		return 6
+	if gs >= 4096.0:
+		return 64
+	if gs >= 1024.0:
+		return 32
+	if gs >= 256.0:
+		return 16
+	if gs >= 64.0:
+		return 8
+	if gs >= 16.0:
 		return 4
-	if GameManager.game_speed >= 4.0:
+	if gs >= 4.0:
 		return 2
 	return 1
 

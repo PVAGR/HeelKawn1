@@ -22,11 +22,12 @@ const VERBOSE_SIM_LOGS: bool = false
 ## Hard cap to prevent "catch-up storms" where one slow frame triggers hundreds
 ## of ticks and causes visible stutter. Extra accumulated time stays buffered
 ## and is processed over subsequent frames.
+## Keep caps modest at 26x–100x: each tick runs full colony AI + settlement passes;
+## a catch-up frame with 32 ticks was freezing the renderer at extreme speeds.
 const MAX_TICKS_PER_FRAME: int = 6
-## Higher tiers let extreme speeds (50x–100x) drain backlog faster per frame.
-const MAX_TICKS_PER_FRAME_FAST: int = 12
-const MAX_TICKS_PER_FRAME_ULTRA: int = 24
-const MAX_TICKS_PER_FRAME_EXTREME: int = 32
+const MAX_TICKS_PER_FRAME_FAST: int = 10
+const MAX_TICKS_PER_FRAME_ULTRA: int = 14
+const MAX_TICKS_PER_FRAME_EXTREME: int = 16
 ## At 1x we preserve "real-life cadence" feel: never run more than one
 ## deterministic tick inside a single rendered frame.
 const MAX_TICKS_PER_FRAME_AT_1X: int = 1

@@ -31,6 +31,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-29  **Fast-forward perf:** GameManager lowers max sim ticks per render frame (26x/50x/100x) to reduce catch-up freezes; Pawn AI stride stronger at 26/50/100; RoadMemory flush coalesced (one deferred/frame); inspect tooltip scan rarer at 26x+.
 2026-04-29  Realm header adds **Heelkawnians** (total living pawns). **Shift+F9** cycles realm list length 8→12→16→24 (instant refresh if observer open). Fixed duplicate **F9** key match (AI panel vs observer): **F9** = observer/realm only; AI panel remains Creator/debug menu path.
 2026-04-29  Realm crown view: settlements sorted by name; each line shows **pop** (pawns in settlement regions). ColonyHUD hotkeys include **F9 realm**. Realm footer reminds F9 + tick refresh.
 2026-04-29  GAME_VISION: three-layer doctrine (DF bible / Rim surface / Syx crown view) + Rim & DF in inspiration blend. Observer HUD top-center **Realm (crown view)** panel: places/houses/sacred/harmony + settlement × house × state × myth voice lines from FactionRegistry + ReligionLens.

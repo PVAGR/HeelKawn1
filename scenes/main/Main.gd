@@ -226,6 +226,9 @@ var _regrow_queue: Array = []
 var _last_generation_tick: int = 0
 ## Pawns/Animals run after Main on `game_tick`; one deferred pass flushes after their `WorldMemory` writes.
 var _world_memory_derivative_flush_queued: bool = false
+## RoadMemory.flush can run multiple times per render frame when catch-up ticks batch;
+## coalesce to one deferred flush per frame max.
+var _road_flush_deferred_pending: bool = false
 ## Coalesce same-tick [World] terrain / path cost refreshes (pair vs stack+ruins are separate).
 var _last_heavy_refresh_tick: int = -1
 var _last_heavy_stack_tick: int = -1
@@ -1927,7 +1930,7 @@ func _on_game_tick(tick: int) -> void:
 	if _observer_hud != null and tick % obs_iv == 0:
 		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
 	# Handle recent player_inspect events for tooltip + audio feedback
-	if tick % INSPECT_SCAN_INTERVAL_TICKS == 0:
+	if tick % _inspect_scan_interval_for_speed() == 0:
 		_scan_recent_inspects_and_handle()
 	# FocusInspector snapshotting is another large allocation hotspot (see ObservationAPI — programmatic reads must stay on-demand, not per-frame).
 	var focus_iv: int = _high_speed_interval(30, 24, 48)
@@ -1935,11 +1938,26 @@ func _on_game_tick(tick: int) -> void:
 		_focus_inspector.apply_snapshot(_build_focus_snapshot(tick))
 	if is_instance_valid(_world):
 		var road_flush_interval: int = _high_speed_interval(2, 4, 8)
-		if tick % road_flush_interval == 0:
+		if tick % road_flush_interval == 0 and not _road_flush_deferred_pending:
+			_road_flush_deferred_pending = true
 			call_deferred("_flush_road_memory_dirty_tiles")
 
 
+func _inspect_scan_interval_for_speed() -> int:
+	if GameManager == null:
+		return INSPECT_SCAN_INTERVAL_TICKS
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 120
+	if gs >= 50.0:
+		return 90
+	if gs >= 26.0:
+		return 60
+	return INSPECT_SCAN_INTERVAL_TICKS
+
+
 func _flush_road_memory_dirty_tiles() -> void:
+	_road_flush_deferred_pending = false
 	if is_instance_valid(_world):
 		RoadMemory.flush_dirty_tiles(_world)
 

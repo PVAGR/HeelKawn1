@@ -208,6 +208,7 @@ func _process(delta: float) -> void:
 
 func set_speed(new_speed: float) -> void:
 	var clamped_speed: float = max(new_speed, 0.0001)
+	var prev_speed: float = game_speed
 	var nearest_idx: int = 0
 	var nearest_dist: float = 1.0e20
 	for i in range(SPEED_STEPS.size()):
@@ -218,6 +219,13 @@ func set_speed(new_speed: float) -> void:
 	# Snap all speed changes to explicit toolbar tiers so no hidden fractional or
 	# unintended values can leak into runtime.
 	game_speed = SPEED_STEPS[nearest_idx]
+	if game_speed < prev_speed:
+		# If the player drops from ultra speed (50x/100x) to a lower tier, stale
+		# queued time can stay far above the new cap and make 1x feel frozen for
+		# a long drain window. Clamp to the current tier cap on explicit slowdown.
+		var max_accumulator: float = TICK_INTERVAL_SECONDS * float(_max_accumulated_ticks_for_speed())
+		if _tick_accumulator > max_accumulator:
+			_tick_accumulator = max_accumulator
 	is_paused = false
 	speed_changed.emit(game_speed, is_paused)
 

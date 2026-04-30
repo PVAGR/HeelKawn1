@@ -132,12 +132,14 @@ func claim_next_for(
 	var best_idx: int = -1
 	var best_eff: int = -0x7FFFFFFF
 	var best_dist: int = 0x7FFFFFFF
+	var use_filter: bool = filter.is_valid()
+	var use_bonus: bool = priority_bonus.is_valid()
 	for i in range(_open.size()):
 		var j: Job = _open[i]
-		if filter.is_valid() and not filter.call(j):
+		if use_filter and not filter.call(j):
 			continue
 		var bonus: int = 0
-		if priority_bonus.is_valid():
+		if use_bonus:
 			bonus = int(priority_bonus.call(j))
 		
 		# Apply obedience weight to priority (lower obedience = higher priority needed to accept)

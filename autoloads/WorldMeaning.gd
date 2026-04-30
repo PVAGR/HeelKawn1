@@ -460,7 +460,7 @@ func get_settlement_meaning(settlement_id: int) -> Dictionary:
 
 # === Bloodline Meaning Integration ===
 
-func record_pawn_death(pawn_id: int, bloodline_id: int) -> void:
+func record_pawn_death(_pawn_id: int, bloodline_id: int) -> void:
 	# Record pawn death for bloodline meaning derivation
 	if not meaning_by_bloodline.has(bloodline_id):
 		meaning_by_bloodline[bloodline_id] = {
@@ -476,7 +476,7 @@ func record_pawn_death(pawn_id: int, bloodline_id: int) -> void:
 	_update_bloodline_meaning(bloodline_id)
 
 
-func record_authority_grant(pawn_id: int, bloodline_id: int) -> void:
+func record_authority_grant(_pawn_id: int, bloodline_id: int) -> void:
 	# Record authority grant for bloodline meaning derivation
 	if not meaning_by_bloodline.has(bloodline_id):
 		meaning_by_bloodline[bloodline_id] = {
@@ -492,7 +492,7 @@ func record_authority_grant(pawn_id: int, bloodline_id: int) -> void:
 	_update_bloodline_meaning(bloodline_id)
 
 
-func record_knowledge_carrier(pawn_id: int, bloodline_id: int) -> void:
+func record_knowledge_carrier(_pawn_id: int, bloodline_id: int) -> void:
 	# Record knowledge carrier for bloodline meaning derivation
 	if not meaning_by_bloodline.has(bloodline_id):
 		meaning_by_bloodline[bloodline_id] = {

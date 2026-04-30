@@ -3186,7 +3186,7 @@ func teach_skill(target_pawn: Pawn, skill: int) -> bool:
 	return true
 
 
-func _inherit_knowledge_from_parents(parent_a_id: int, parent_b_id: int) -> void:
+func _inherit_knowledge_from_parents(_parent_a_id: int, _parent_b_id: int) -> void:
 	# DISABLED for performance - iterates through all pawns
 	# Children inherit some knowledge from parents
 	# This is called during pawn creation
@@ -3460,7 +3460,7 @@ func set_leadership_role(role: int) -> void:
 		print("[Pawn] %s became %s of clan %d" % [data.display_name, role_name, data.clan_id])
 
 
-func challenge_for_leadership(target_leader: Pawn) -> void:
+func challenge_for_leadership(_target_leader: Pawn) -> void:
 	# Challenge another pawn for leadership
 	# Placeholder - needs AuthoritySystem integration
 	# TODO: Implement leadership challenge mechanics
@@ -3793,7 +3793,7 @@ func gather() -> bool:
 	return false
 
 
-func craft_simple_tool(tool_type: int) -> bool:
+func craft_simple_tool(_tool_type: int) -> bool:
 	# Create a simple tool from materials
 	# Requires: pawn has materials, has crafting skill
 	# Placeholder - needs crafting system

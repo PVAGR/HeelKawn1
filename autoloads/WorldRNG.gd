@@ -7,8 +7,8 @@ var _world_seed: int = 0
 var _compat_sequence: int = 0
 
 
-func configure_from_seed(seed: int) -> void:
-	_world_seed = seed
+func configure_from_seed(configured_seed: int) -> void:
+	_world_seed = configured_seed
 
 
 func current_seed() -> int:

@@ -149,8 +149,8 @@ func _apply_sign_impact(settlement_id: int, signs: Array) -> void:
 	var knowledge_impact: float = 0.0
 	var environmental_impact: float = 0.0
 	
-	for sign in signs:
-		match sign:
+	for collapse_sign in signs:
+		match collapse_sign:
 			"broken_hospitality", "fear_of_strangers", "hoarding":
 				trust_impact -= 0.1
 			"failed_teaching", "loss_of_repair_knowledge", "poor_succession":

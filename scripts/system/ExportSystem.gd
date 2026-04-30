@@ -254,7 +254,7 @@ static func export_world_seed(file_path: String) -> bool:
 	var export_data: Dictionary = {
 		"version": "1.0",
 		"export_timestamp": Time.get_unix_time_from_system(),
-		"world_seed": WorldRNG.seed if WorldRNG != null else 0,
+		"world_seed": WorldRNG.current_seed() if WorldRNG != null else 0,
 		"tick_count": GameManager.tick_count if GameManager != null else 0,
 		"game_speed": GameManager.game_speed if GameManager != null else 1.0,
 		"is_paused": GameManager.is_paused if GameManager != null else false,

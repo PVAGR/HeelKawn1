@@ -29,7 +29,7 @@ func recompute(spawner: PawnSpawner) -> void:
 			continue
 		if not seed_p.is_eligible_for_social_squad():
 			continue
-		var clique: Array[Pawn] = _greedy_clique_from_seed(seed_p, pl, claimed)
+		var clique: Array[Pawn] = _greedy_clique_from_seed_pawn(seed_p, pl, claimed)
 		if clique.size() < MIN_SQUAD_SIZE:
 			continue
 		var all_idle: bool = true
@@ -52,10 +52,10 @@ func _rapport_mutual(a: PawnData, b: PawnData) -> int:
 	return mini(av, bv)
 
 
-func _greedy_clique_from_seed(seed: Pawn, pl: Array[Pawn], claimed: Dictionary) -> Array[Pawn]:
-	var out: Array[Pawn] = [seed]
+func _greedy_clique_from_seed_pawn(clique_seed_pawn: Pawn, pl: Array[Pawn], claimed: Dictionary) -> Array[Pawn]:
+	var out: Array[Pawn] = [clique_seed_pawn]
 	for p in pl:
-		if p == seed:
+		if p == clique_seed_pawn:
 			continue
 		var pid: int = int(p.data.id)
 		if claimed.has(pid):

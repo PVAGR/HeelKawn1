@@ -161,7 +161,7 @@ func rediscover_knowledge(pawn_id: int, knowledge_type: KnowledgeType, method: S
 
 # === Helper Functions ===
 
-func _get_nearby_knowledge_carriers(tile: Vector2i, knowledge_type: KnowledgeType, radius: int) -> Array[int]:
+func _get_nearby_knowledge_carriers(_tile: Vector2i, knowledge_type: KnowledgeType, _radius: int) -> Array[int]:
 	var nearby: Array[int] = []
 	
 	for pawn_id in knowledge_carriers:

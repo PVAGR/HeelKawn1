@@ -80,6 +80,12 @@ window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[debug]
+
+gdscript/warnings/shadowed_global_identifier=1
+gdscript/warnings/unused_parameter=1
+gdscript/warnings/unused_variable=1
+
 [rendering]
 
 renderer/rendering_method="gl_compatibility"

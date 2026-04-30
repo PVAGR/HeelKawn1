@@ -44,19 +44,19 @@ func sync_from_settlements() -> void:
 
 
 func _derive_house_record(zone_id: String, settlement_name: String) -> Dictionary:
-	var seed: int = int(String(zone_id + "|" + settlement_name).hash()) & 0x7FFFFFFF
+	var house_mix: int = int(String(zone_id + "|" + settlement_name).hash()) & 0x7FFFFFFF
 	var house_roots: Array[String] = [
 		"Ash", "Rill", "Gar", "Vel", "Tor", "Kai", "Sen", "Mor", "Bryn", "Lor",
 	]
 	var house_tags: Array[String] = [
 		"kin", "thread", "mark", "well", "shard", "bloom", "hearth", "path",
 	]
-	var ri: int = seed % house_roots.size()
-	var ti: int = (seed / 7) % house_tags.size()
+	var ri: int = house_mix % house_roots.size()
+	var ti: int = (house_mix / 7) % house_tags.size()
 	var hid: String = "%s_%s" % [house_roots[ri], house_tags[ti]]
-	var r: float = float((seed >> 3) & 0xFF) / 255.0
-	var g: float = float((seed >> 11) & 0xFF) / 255.0
-	var b: float = float((seed >> 19) & 0xFF) / 255.0
+	var r: float = float((house_mix >> 3) & 0xFF) / 255.0
+	var g: float = float((house_mix >> 11) & 0xFF) / 255.0
+	var b: float = float((house_mix >> 19) & 0xFF) / 255.0
 	return {
 		"house_id": hid,
 		"house_display": "%s %s" % [house_roots[ri], house_tags[ti]],

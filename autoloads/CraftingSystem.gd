@@ -108,7 +108,7 @@ func _initialize_recipes() -> void:
 		"durability": 40,
 	}
 
-func _on_game_tick(tick: int) -> void:
+func _on_game_tick(_tick: int) -> void:
 	# Update active crafting jobs
 	var to_remove: Array[int] = []
 	for job_id in active_crafting.keys():
@@ -200,7 +200,7 @@ func start_crafting(pawn_id: int, recipe_name: String, tile_pos: Vector2i) -> in
 	
 	return job_id
 
-func _complete_crafting(job_id: int, crafting_data: Dictionary) -> void:
+func _complete_crafting(_job_id: int, crafting_data: Dictionary) -> void:
 	var pawn_id: int = crafting_data.get("pawn_id", -1)
 	var recipe_name: String = crafting_data.get("recipe_name", "")
 	
@@ -272,12 +272,12 @@ func _get_pawn_skill_level(pawn_id: int, skill_name: String) -> int:
 	
 	return 0
 
-func _get_pawn_material_count(pawn_id: int, material_type: int) -> int:
+func _get_pawn_material_count(_pawn_id: int, _material_type: int) -> int:
 	# Placeholder: would need to check pawn inventory or nearby stockpiles
 	# For now, assume materials are available
 	return 10
 
-func _consume_pawn_material(pawn_id: int, material_type: int, amount: int) -> void:
+func _consume_pawn_material(_pawn_id: int, _material_type: int, _amount: int) -> void:
 	# Placeholder: would need to actually consume from inventory
 	pass
 

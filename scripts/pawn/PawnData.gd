@@ -363,11 +363,11 @@ func _initialize_personality(birth_tick: int, parent_a: int, parent_b: int) -> v
 
 
 ## Blend two parent values with small mutation
-func _blend_with_mutation(val_a: float, val_b: float, seed: int, trait_name: String) -> float:
+func _blend_with_mutation(val_a: float, val_b: float, trait_salt: int, trait_name: String) -> float:
 	var base: float = (val_a + val_b) / 2.0
 	var mutation_strength: float = 0.15  # 15% mutation variance
 	var mutation: float = WorldRNG.range_for(
-		StringName("personality:%s:%d" % [trait_name, seed]),
+		StringName("personality:%s:%d" % [trait_name, trait_salt]),
 		-mutation_strength,
 		mutation_strength
 	)
@@ -375,12 +375,12 @@ func _blend_with_mutation(val_a: float, val_b: float, seed: int, trait_name: Str
 
 
 ## Generate random personality traits
-func _generate_random_personality(seed: int) -> void:
-	openness = WorldRNG.range_for(StringName("personality:openness:%d" % seed), 0.0, 1.0)
-	conscientiousness = WorldRNG.range_for(StringName("personality:conscientiousness:%d" % seed), 0.0, 1.0)
-	extraversion = WorldRNG.range_for(StringName("personality:extraversion:%d" % seed), 0.0, 1.0)
-	agreeableness = WorldRNG.range_for(StringName("personality:agreeableness:%d" % seed), 0.0, 1.0)
-	neuroticism = WorldRNG.range_for(StringName("personality:neuroticism:%d" % seed), 0.0, 1.0)
+func _generate_random_personality(personality_salt: int) -> void:
+	openness = WorldRNG.range_for(StringName("personality:openness:%d" % personality_salt), 0.0, 1.0)
+	conscientiousness = WorldRNG.range_for(StringName("personality:conscientiousness:%d" % personality_salt), 0.0, 1.0)
+	extraversion = WorldRNG.range_for(StringName("personality:extraversion:%d" % personality_salt), 0.0, 1.0)
+	agreeableness = WorldRNG.range_for(StringName("personality:agreeableness:%d" % personality_salt), 0.0, 1.0)
+	neuroticism = WorldRNG.range_for(StringName("personality:neuroticism:%d" % personality_salt), 0.0, 1.0)
 
 
 ## Get parent data (simplified - in full system would query from PawnManager)
@@ -2065,10 +2065,10 @@ func initialize_affinities(new_birth_tick: int, parent_a: int, parent_b: int) ->
 
 
 func _deterministic_affinity_value(salt: int) -> float:
-	var seed: int = int(
+	var affinity_mix: int = int(
 		(birth_tick * 1103515245 + (parent_a_id + 31) * 12345 + (parent_b_id + 17) * 2654435761 + id * 97 + salt) & 0x7FFFFFFF
 	)
-	var modv: int = seed % 1000
+	var modv: int = affinity_mix % 1000
 	return float(modv) / 999.0
 
 

@@ -20,6 +20,8 @@ logs/**
 # Godot editor cache
 .godot/
 export/
+!scripts/export/
+!scripts/export/**
 *.pck
 *.zip
 .vscode/*

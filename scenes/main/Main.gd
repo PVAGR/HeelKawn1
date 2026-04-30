@@ -226,13 +226,6 @@ var _meaning_style_bias: float = 0.0
 ## Full-screen very low-alpha overlay (read-only mood); created in [_ensure_meaning_vignette].
 var _meaning_vignette_rect: ColorRect = null
 
-## Pending regrowth events. Each entry is a Dictionary:
-##   { "tile": Vector2i, "feature": int (TileFeature.Type), "ready_tick": int }
-## Processed every tick; tiles whose feature slot is still NONE and biome is
-## still compatible get the feature back and a fresh job posted.
-var _regrow_queue: Array = []
-## Incremental cursor for `_regrow_queue` so regrowth checks stay O(budget) per tick.
-var _regrow_scan_cursor: int = 0
 ## Due-tick buckets for regrowth: ready_tick -> Array[{tile, feature, ready_tick}].
 var _regrow_due_buckets: Dictionary = {}
 var _regrow_due_ticks: Array[int] = []
@@ -257,7 +250,7 @@ const MAIN_TICK_HOTSPOT_MIN_TOTAL_MS: float = 8.0
 const MINING_REACT_MIN_INTERVAL_TICKS: int = 120
 const REGROWTH_SCAN_BUDGET_PER_TICK: int = 32
 const REGROWTH_RESTORE_BUDGET_PER_TICK: int = 4
-const MINING_REACT_SCAN_ROWS_PER_STEP: int = 6
+const MINING_REACT_SCAN_ROWS_PER_STEP: int = 4
 const INSPECT_SCAN_INTERVAL_TICKS: int = 30
 var _last_inspect_event_tick_shown: int = -1
 var _inspect_tooltip_node: Control = null
@@ -368,8 +361,16 @@ func _dynamic_hunt_job_budget(live_animals: int = -1) -> int:
 				live_animals += 1
 	var budget: int = maxi(1, int(ceil(float(live_animals) / float(HUNT_JOB_PER_ANIMALS_DIVISOR))))
 	budget = mini(budget, MAX_DYNAMIC_HUNT_JOBS_PER_PASS)
-	if _is_ultra_speed():
-		budget = maxi(1, int(ceil(float(budget) * 0.5)))
+	if GameManager != null:
+		var gs: float = GameManager.game_speed
+		if gs >= 100.0:
+			return 1
+		if gs >= 50.0:
+			return 1
+		if gs >= 26.0:
+			return mini(2, budget)
+		if gs >= 12.0:
+			budget = maxi(1, int(ceil(float(budget) * 0.5)))
 	return budget
 
 func _hunt_reserve_for_species(species: int) -> int:
@@ -1913,7 +1914,7 @@ func _on_game_tick(tick: int) -> void:
 		section_us["animal_population"] = Time.get_ticks_usec() - t0
 	# Regrowth + ambient are display/maintenance layers; they should not run
 	# every sim tick in normal mode or high speeds will hitch.
-	var regrowth_interval: int = _high_speed_interval(3, 5, 8)
+	var regrowth_interval: int = _high_speed_interval(6, 8, 12)
 	if tick % regrowth_interval == 0:
 		t0 = Time.get_ticks_usec()
 		_process_regrowth(tick)
@@ -1924,7 +1925,7 @@ func _on_game_tick(tick: int) -> void:
 		_update_ambient_target()
 		section_us["ambient_target"] = Time.get_ticks_usec() - t0
 	# Post dynamic hunt jobs less aggressively than harvest loops.
-	var hunt_post_interval: int = _high_speed_interval(24, 36, 54)
+	var hunt_post_interval: int = _high_speed_interval(30, 60, 120)
 	var hunt_phase_offset: int = maxi(1, hunt_post_interval / 2)
 	if (
 			(tick + hunt_phase_offset) % hunt_post_interval == 0
@@ -2109,11 +2110,11 @@ func _mining_react_scan_rows_for_speed() -> int:
 		return MINING_REACT_SCAN_ROWS_PER_STEP
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 3
+		return 2
 	if gs >= 50.0:
-		return 4
+		return 3
 	if gs >= 26.0:
-		return 5
+		return 4
 	return MINING_REACT_SCAN_ROWS_PER_STEP
 
 
@@ -4215,29 +4216,44 @@ func _on_job_completed(job: Job) -> void:
 	if job == null:
 		return
 	var now_tick: int = GameManager.tick_count
+	var job_type: int = int(job.type)
 	var worker_id: int = -1
 	var worker_name: String = ""
+	var assigned_pawn: Node = null
 	if job.assigned_pawn != null and is_instance_valid(job.assigned_pawn) and job.assigned_pawn.data != null:
+		assigned_pawn = job.assigned_pawn
 		worker_id = int(job.assigned_pawn.data.id)
 		worker_name = String(job.assigned_pawn.data.display_name)
-	var nearby_workers: int = 0
-	if _pawn_spawner != null:
+	var is_build_job: bool = (
+		job_type == Job.Type.BUILD_BED
+		or job_type == Job.Type.BUILD_WALL
+		or job_type == Job.Type.BUILD_DOOR
+	)
+	# Nearby-worker counting is only used for build/co-op lore events.
+	# Avoid full pawn scans for every labor completion.
+	var nearby_workers: int = 1 if worker_id >= 0 else 0
+	if is_build_job and _pawn_spawner != null:
 		for p in _pawn_spawner.pawns:
+			if p == assigned_pawn:
+				continue
 			if p == null or not is_instance_valid(p) or p.data == null:
 				continue
 			if job.tile.distance_to(p.data.tile_pos) <= 2.5:
 				nearby_workers += 1
+				if nearby_workers >= 2:
+					break
+	var region_key: int = _WM._region_key(job.tile.x, job.tile.y)
 	WorldMemory.record_event({
 		"type": "job_completed",
 		"category": "labor",
 		"severity": 1,
 		"tick": now_tick,
-		"job_type": int(job.type),
+		"job_type": job_type,
 		"job_priority": int(job.priority),
 		"worker_id": worker_id,
 		"worker_name": worker_name,
 		"nearby_workers": nearby_workers,
-		"region": _WM._region_key(job.tile.x, job.tile.y),
+		"region": region_key,
 		"tile": {"x": job.tile.x, "y": job.tile.y},
 		"s": WorldMemory.SCHEMA,
 	})
@@ -4252,11 +4268,11 @@ func _on_job_completed(job: Job) -> void:
 				"category": "construction",
 				"severity": 2,
 				"tick": now_tick,
-				"job_type": int(job.type),
+				"job_type": job_type,
 				"worker_id": worker_id,
 				"worker_name": worker_name,
 				"nearby_workers": nearby_workers,
-				"region": _WM._region_key(job.tile.x, job.tile.y),
+				"region": region_key,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
 			if nearby_workers >= 2:
@@ -4265,11 +4281,11 @@ func _on_job_completed(job: Job) -> void:
 					"category": "construction",
 					"severity": 2,
 					"tick": now_tick,
-					"job_type": int(job.type),
+					"job_type": job_type,
 					"worker_id": worker_id,
 					"worker_name": worker_name,
 					"nearby_workers": nearby_workers,
-					"region": _WM._region_key(job.tile.x, job.tile.y),
+					"region": region_key,
 					"tile": {"x": job.tile.x, "y": job.tile.y},
 				})
 		Job.Type.MINE, Job.Type.MINE_WALL:
@@ -4300,15 +4316,13 @@ func _queue_regrowth(tile: Vector2i, feature: int, delay_ticks: int) -> void:
 		"feature": feature,
 		"ready_tick": GameManager.tick_count + delay_ticks,
 	}
-	_regrow_queue.append(entry)
 	_regrow_add_entry(entry)
 
 
-## Walk the regrow queue and resurrect any feature whose timer has expired.
+## Walk due-tick regrowth buckets and resurrect any feature whose timer has expired.
 ## Uses due-tick buckets + fixed restore budgets to prevent one-tick spikes.
 func _process_regrowth(tick: int) -> void:
-	if _regrow_due_ticks.is_empty() and _regrow_queue.is_empty():
-		_regrow_scan_cursor = 0
+	if _regrow_due_ticks.is_empty():
 		return
 	var restore_budget: int = REGROWTH_RESTORE_BUDGET_PER_TICK
 	if GameManager != null:
@@ -4317,9 +4331,6 @@ func _process_regrowth(tick: int) -> void:
 			restore_budget = 1
 		elif gs >= 50.0:
 			restore_budget = 2
-	_regrow_rebuild_due_buckets_if_needed()
-	if _regrow_due_ticks.is_empty():
-		return
 	var main_component: int = _world.pathfinder.largest_component_id()
 	var restored: int = 0
 	while restored < restore_budget and not _regrow_due_ticks.is_empty():
@@ -4338,22 +4349,6 @@ func _process_regrowth(tick: int) -> void:
 			var entry: Dictionary = entry_any as Dictionary
 			_restore_feature(entry.tile, entry.feature, main_component)
 			restored += 1
-	if restored > 0:
-		_sync_regrow_queue_from_buckets()
-
-
-func _regrow_rebuild_due_buckets_if_needed() -> void:
-	if not _regrow_due_ticks.is_empty():
-		return
-	if _regrow_queue.is_empty():
-		return
-	_regrow_due_buckets.clear()
-	_regrow_due_ticks.clear()
-	for entry_any in _regrow_queue:
-		if entry_any is Dictionary:
-			_regrow_add_entry(entry_any as Dictionary)
-
-
 func _regrow_add_entry(entry: Dictionary) -> void:
 	var due_tick: int = int(entry.get("ready_tick", 0))
 	var bucket: Array = _regrow_due_buckets.get(due_tick, [])
@@ -4364,15 +4359,6 @@ func _regrow_add_entry(entry: Dictionary) -> void:
 		_regrow_due_ticks.insert(insert_idx, due_tick)
 	bucket.append(entry)
 	_regrow_due_buckets[due_tick] = bucket
-
-
-func _sync_regrow_queue_from_buckets() -> void:
-	_regrow_queue.clear()
-	for due_tick in _regrow_due_ticks:
-		var bucket: Array = _regrow_due_buckets.get(int(due_tick), [])
-		for entry_any in bucket:
-			if entry_any is Dictionary:
-				_regrow_queue.append(entry_any)
 
 
 ## Re-place a feature on its original tile, then post the matching job so a
@@ -4927,15 +4913,16 @@ func _save_stockpiles_to_array() -> Array:
 
 func _save_regrow_queue() -> Array:
 	var out: Array = []
-	_sync_regrow_queue_from_buckets()
-	for e in _regrow_queue:
-		if e is Dictionary and e.has("tile"):
-			var te: Vector2i = e.tile
-			out.append({
-				"tile_x": te.x, "tile_y": te.y,
-				"feature": int(e.get("feature", 0)),
-				"ready_tick": int(e.get("ready_tick", 0)),
-			})
+	for due_tick in _regrow_due_ticks:
+		var bucket: Array = _regrow_due_buckets.get(int(due_tick), [])
+		for e in bucket:
+			if e is Dictionary and e.has("tile"):
+				var te: Vector2i = e.tile
+				out.append({
+					"tile_x": te.x, "tile_y": te.y,
+					"feature": int(e.get("feature", 0)),
+					"ready_tick": int(e.get("ready_tick", 0)),
+				})
 	return out
 
 
@@ -4958,7 +4945,6 @@ func _apply_save_dict(s: Dictionary) -> void:
 	_cancel_drag()
 	_set_selected_pawn(null)
 	_set_player_mode(PlayerMode.SPECTATOR)
-	_regrow_queue.clear()
 	_regrow_due_buckets.clear()
 	_regrow_due_ticks.clear()
 	_hunt_candidate_tiles.clear()
@@ -5032,7 +5018,6 @@ func _apply_save_dict(s: Dictionary) -> void:
 		RoadMemory.flush_dirty_tiles(_world)
 		_sync_pawn_inherited_cultural_reputation()
 		RemnantMemory.seed_births_from_current_world(_world)
-	_regrow_queue.clear()
 	_regrow_due_buckets.clear()
 	_regrow_due_ticks.clear()
 	for e in s.get("regrow", []):
@@ -5042,7 +5027,6 @@ func _apply_save_dict(s: Dictionary) -> void:
 				"feature": int(e.get("feature", 0)),
 				"ready_tick": int(e.get("ready_tick", 0)),
 			}
-			_regrow_queue.append(entry)
 			_regrow_add_entry(entry)
 	Main._world_stabilization_until_tick = GameManager.tick_count + WORLD_STABILIZATION_TICKS
 	_seed_jobs_from_world()

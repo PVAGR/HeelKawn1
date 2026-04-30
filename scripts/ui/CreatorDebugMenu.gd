@@ -307,16 +307,19 @@ func _print_session_snapshot_checklist(tick_now: int) -> void:
 			"B) Screenshot — One full game view; optional: Debugger → Monitors → FPS if profiling stalls."
 	)
 	print(
-			"C) This snapshot — Use ★ 00 · One paste pack below, or press ERROR then 31 then 34 separately."
+			"C) F10 → ★ 00 · One paste pack — one button prints checklist + ERROR + 31 + 34 (CREATOR_START…END)."
 	)
-	print("D) F10 → ERROR · Report — Syntax + autoload wiring (quick health gate).")
-	print("E) F10 → 31 · Playtest bundle — sim_diag, jobs, factions, ReligionLens stub lines.")
-	print("F) F10 → 34 · Creator digest — Human-readable block + CREATOR_START … CREATOR_END.")
-	print("G) Optional — F10 → 32 Soul bundle (long chronicle); F10 → 33 one pawn JSON export.")
+	print(
+			"   After running the pack, do not click ERROR / 31 / 34 again the same tick (duplicate Output)."
+	)
+	print(
+			"D) Without the pack: press ERROR, then 31 · Playtest, then 34 · Creator digest in order."
+	)
+	print("E) Optional — F10 → 32 Soul bundle · 33 Portable character JSON (not in the pack).")
 	print("")
 	print(
-			"Paste to Cursor/AI in one message: console tail (A) + screenshot (B) + pack/digest blocks "
-			+ "(C–F). Order matters less than completeness."
+			"Paste to Cursor/AI: Godot console tail (A) + screenshot (B) + one session_snapshot_pack block (C), "
+			+ "or (A)+(B)+ separate D blocks."
 	)
 	print("")
 

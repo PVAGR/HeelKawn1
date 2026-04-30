@@ -26,6 +26,8 @@ const ZONE_H: int = 3
 const CULTURE_OPEN: int = 0
 const CULTURE_CAUTIOUS: int = 1
 const CULTURE_DEFENSIVE: int = 2
+const PLANNING_REGION_RADIUS: int = 4
+const PLANNING_REGION_HARD_CAP: int = 96
 
 var _last_plan_tick: int = -1_000_000_000
 
@@ -52,22 +54,27 @@ func plan(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 		var packed: PackedInt32Array = reg as PackedInt32Array
 		if packed.is_empty():
 			continue
-		_plan_one_settlement(world, main, d, packed)
+		var center_rk: int = int(d.get("center_region", packed[0]))
+		var planning_regions: PackedInt32Array = _select_planning_regions(center_rk, packed)
+		if planning_regions.is_empty():
+			continue
+		_plan_one_settlement(world, main, d, planning_regions)
 
 
 func _plan_one_settlement(
-		world: World, main: Node2D, settlement: Dictionary, regions: PackedInt32Array
+		world: World, main: Node2D, settlement: Dictionary, planning_regions: PackedInt32Array
 ) -> void:
 	var data: WorldData = world.data
-	var center_rk: int = int(settlement.get("center_region", regions[0]))
+	var center_rk: int = int(settlement.get("center_region", planning_regions[0]))
 	var intent: int = SettlementPlanner._intent_for_settlement(center_rk)
 	var center: Vector2i = SettlementPlanner._center_tile_of_region_key(center_rk)
-	var pawns: int = int(main.call("settlement_planner_count_pawns_in_regions", regions))
-	var bed_n: int = _count_feature_in_regions(data, regions, TileFeature.Type.BED)
-	var wall_n: int = _count_feature_in_regions(data, regions, TileFeature.Type.WALL)
-	var door_n: int = _count_feature_in_regions(data, regions, TileFeature.Type.DOOR)
+	var pawns: int = int(main.call("settlement_planner_count_pawns_in_regions", planning_regions))
+	var feature_summary: Dictionary = _scan_region_feature_summary(data, planning_regions)
+	var bed_n: int = int(feature_summary.get("bed_n", 0))
+	var wall_n: int = int(feature_summary.get("wall_n", 0))
+	var door_n: int = int(feature_summary.get("door_n", 0))
 	var stage: int = _derive_settlement_stage(
-			world, data, center, regions, bed_n, wall_n, door_n
+			world, data, center, planning_regions, bed_n, wall_n, door_n, feature_summary
 	)
 	var scar_m: int = int(settlement.get("scar_max", 0))
 	var repm: int = int(settlement.get("reputation_min", 0))
@@ -75,14 +82,15 @@ func _plan_one_settlement(
 			scar_m, repm, AgeMemory.get_current_age_index()
 	)
 	_plan_one_settlement_culture(
-			world, main, data, center, regions, cult, intent, pawns, bed_n, wall_n, door_n, stage
+			world, main, data, center, planning_regions, cult, intent, pawns, bed_n, wall_n, door_n, stage, feature_summary
 	)
 
 
 ## Culture branches: rule order, gates, and tile sort only (one action per run).
 func _plan_one_settlement_culture(
 		world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array,
-		cult: int, intent: int, pawns: int, bed_n: int, wall_n: int, door_n: int, stage: int
+		cult: int, intent: int, pawns: int, bed_n: int, wall_n: int, door_n: int, stage: int,
+		feature_summary: Dictionary
 ) -> void:
 	var order: Array[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 	if cult == CULTURE_OPEN:
@@ -147,7 +155,7 @@ func _plan_one_settlement_culture(
 						continue
 				if intent == IntentMemory.INTENT_GROW and pawns < 2:
 					continue
-				if wall_n > 0 and _wall_bbox_too_small(data, regions, VILLAGE_SPAN):
+				if wall_n > 0 and _wall_bbox_too_small(data, regions, VILLAGE_SPAN, feature_summary):
 					var texp: Vector2i = _pick_expansion_wall_tile_culture(
 							world, main, data, center, regions, cult
 					)
@@ -196,7 +204,7 @@ func _plan_one_settlement_culture(
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
 				var d2sp: int = _door2_min_span_culture(cult)
-				if _wall_bbox_too_small(data, regions, d2sp) or door_n >= 2:
+				if _wall_bbox_too_small(data, regions, d2sp, feature_summary) or door_n >= 2:
 					continue
 				if intent == IntentMemory.INTENT_GROW and pawns >= 6:
 					d2sp = maxi(4, d2sp - 1)
@@ -326,6 +334,41 @@ static func _center_tile_of_region_key(rk: int) -> Vector2i:
 	return Vector2i(rx * 16 + 8, ry * 16 + 8)
 
 
+static func _region_chebyshev_distance(rk: int, cx: int, cy: int) -> int:
+	var rx: int = rk & 0xFFFF
+	var ry: int = (rk >> 16) & 0xFFFF
+	return maxi(abs(rx - cx), abs(ry - cy))
+
+
+static func _select_planning_regions(
+		center_rk: int, regions: PackedInt32Array
+) -> PackedInt32Array:
+	var out: PackedInt32Array = PackedInt32Array()
+	if regions.is_empty():
+		return out
+	var cx: int = center_rk & 0xFFFF
+	var cy: int = (center_rk >> 16) & 0xFFFF
+	var nearby: Array[int] = []
+	var fallback: Array[int] = []
+	for j in range(regions.size()):
+		var rk: int = int(regions[j])
+		fallback.append(rk)
+		if _region_chebyshev_distance(rk, cx, cy) <= PLANNING_REGION_RADIUS:
+			nearby.append(rk)
+	var source: Array[int] = nearby if not nearby.is_empty() else fallback
+	source.sort_custom(func(a: int, b: int) -> bool:
+		var da: int = _region_chebyshev_distance(a, cx, cy)
+		var db: int = _region_chebyshev_distance(b, cx, cy)
+		if da != db:
+			return da < db
+		return a < b
+	)
+	var take_n: int = mini(PLANNING_REGION_HARD_CAP, source.size())
+	for i in range(take_n):
+		out.append(int(source[i]))
+	return out
+
+
 static func _tile_belongs_to_regions(t: Vector2i, regions: PackedInt32Array) -> bool:
 	var rk: int = WorldMemory._region_key(t.x, t.y)
 	for j in range(regions.size()):
@@ -351,6 +394,51 @@ static func _count_feature_in_regions(
 				if int(data.get_feature(x, y)) == feature_id:
 					n += 1
 	return n
+
+
+static func _scan_region_feature_summary(
+		data: WorldData, regions: PackedInt32Array
+) -> Dictionary:
+	var bed_n: int = 0
+	var wall_n: int = 0
+	var door_n: int = 0
+	var wx0: int = 1_000_000
+	var wx1: int = -1_000_000
+	var wy0: int = 1_000_000
+	var wy1: int = -1_000_000
+	var wall_any: bool = false
+	for j in range(regions.size()):
+		var rk2: int = int(regions[j])
+		var rx: int = rk2 & 0xFFFF
+		var ry: int = (rk2 >> 16) & 0xFFFF
+		for dy in 16:
+			for dx in 16:
+				var x: int = rx * 16 + dx
+				var y: int = ry * 16 + dy
+				if not data.in_bounds(x, y):
+					continue
+				var f: int = int(data.get_feature(x, y))
+				if f == TileFeature.Type.BED:
+					bed_n += 1
+				elif f == TileFeature.Type.WALL:
+					wall_n += 1
+					wall_any = true
+					wx0 = mini(wx0, x)
+					wx1 = maxi(wx1, x)
+					wy0 = mini(wy0, y)
+					wy1 = maxi(wy1, y)
+				elif f == TileFeature.Type.DOOR:
+					door_n += 1
+	return {
+		"bed_n": bed_n,
+		"wall_n": wall_n,
+		"door_n": door_n,
+		"wall_any": wall_any,
+		"wall_x0": wx0,
+		"wall_x1": wx1,
+		"wall_y0": wy0,
+		"wall_y1": wy1,
+	}
 
 
 static func _settlement_touched_by_any_zone(
@@ -608,8 +696,19 @@ static func _collect_bed_tiles_in_regions(
 
 
 static func _wall_bbox_too_small(
-		data: WorldData, regions: PackedInt32Array, min_span: int
+		data: WorldData, regions: PackedInt32Array, min_span: int, feature_summary: Dictionary = {}
 ) -> bool:
+	if not feature_summary.is_empty():
+		var any_w_cached: bool = bool(feature_summary.get("wall_any", false))
+		if not any_w_cached:
+			return false
+		var wx0_cached: int = int(feature_summary.get("wall_x0", 1_000_000))
+		var wx1_cached: int = int(feature_summary.get("wall_x1", -1_000_000))
+		var wy0_cached: int = int(feature_summary.get("wall_y0", 1_000_000))
+		var wy1_cached: int = int(feature_summary.get("wall_y1", -1_000_000))
+		var w_cached: int = wx1_cached - wx0_cached + 1
+		var h_cached: int = wy1_cached - wy0_cached + 1
+		return w_cached < min_span or h_cached < min_span
 	var wx0: int = 1_000_000
 	var wx1: int = -1_000_000
 	var wy0: int = 1_000_000
@@ -697,11 +796,11 @@ func _pick_expansion_wall_tile(
 ## 0 = camp, 1 = village, 2 = fortified (derived only; not stored).
 static func _derive_settlement_stage(
 		world: World, data: WorldData, center: Vector2i, regions: PackedInt32Array,
-		bed_n: int, wall_n: int, door_n: int
+		bed_n: int, wall_n: int, door_n: int, feature_summary: Dictionary = {}
 ) -> int:
 	if bed_n <= 0:
 		return 0
-	var span7: bool = not _wall_bbox_too_small(data, regions, VILLAGE_SPAN)
+	var span7: bool = not _wall_bbox_too_small(data, regions, VILLAGE_SPAN, feature_summary)
 	var path_ok: bool = _path_bed_to_center_exists(world, data, center, regions)
 	if bed_n > 0 and wall_n >= 6 and door_n >= 2 and span7 and path_ok:
 		return 2

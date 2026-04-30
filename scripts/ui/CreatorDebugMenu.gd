@@ -1157,8 +1157,7 @@ func _check_file_syntax_errors(file_path: String) -> Array[String]:
 	if not (loaded is Script):
 		errors.append("Resource is not a Script")
 		return errors
-	var script_res: Script = loaded as Script
-	var reload_result: int = script_res.reload()
-	if reload_result != OK:
-		errors.append("Script reload failed code=%d" % reload_result)
+	# ResourceLoader.load(..., "Script") already performs parse/compile validation.
+	# Avoid Script.reload() here: runtime instances can make reload return non-parse
+	# errors (for example code=22), which creates false positives in the report.
 	return errors

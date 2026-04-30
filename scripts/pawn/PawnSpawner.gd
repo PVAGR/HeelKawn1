@@ -115,60 +115,56 @@ func print_stats() -> void:
 
 
 func spawn_starters(world: World, required_component_id: int = -1) -> void:
-       var rng: RandomNumberGenerator = WorldRNG.rng_for(&"starter_pawns_v1")
-       var used_tiles: Dictionary = {}
-       var placed: int = 0
-       for attempt in range(MAX_PLACEMENT_ATTEMPTS):
-	       if placed >= STARTER_COUNT:
-		       break
-	       var tile := Vector2i(
-		       rng.randi_range(0, WorldData.WIDTH - 1),
-		       rng.randi_range(0, WorldData.HEIGHT - 1),
-	       )
-	       if used_tiles.has(tile):
-		       continue
-	       var biome: int = world.data.get_biome(tile.x, tile.y)
-	       if not SPAWNABLE_BIOMES.has(biome):
-		       continue
-	       if required_component_id >= 0 and world.pathfinder.component_of(tile) != required_component_id:
-		       continue
-	       used_tiles[tile] = true
+	var rng: RandomNumberGenerator = WorldRNG.rng_for(&"starter_pawns_v1")
+	var used_tiles: Dictionary = {}
+	var placed: int = 0
+	for attempt in range(MAX_PLACEMENT_ATTEMPTS):
+		if placed >= STARTER_COUNT:
+			break
+		var tile := Vector2i(
+			rng.randi_range(0, WorldData.WIDTH - 1),
+			rng.randi_range(0, WorldData.HEIGHT - 1),
+		)
+		if used_tiles.has(tile):
+			continue
+		var biome: int = world.data.get_biome(tile.x, tile.y)
+		if not SPAWNABLE_BIOMES.has(biome):
+			continue
+		if required_component_id >= 0 and world.pathfinder.component_of(tile) != required_component_id:
+			continue
+		used_tiles[tile] = true
 
-	       var data := PawnData.new()
-	       data.display_name = _pick_name(used_tiles, rng)
-	       data.age = rng.randi_range(18, 55)
-	       data.gender = rng.randi_range(0, 1)
-	       data.tile_pos = tile
-	       data.color = PAWN_COLORS[placed % PAWN_COLORS.size()]
-	       data.body_type = rng.randi_range(PawnData.BodyType.SLIM, PawnData.BodyType.BROAD)
-	       data.hair_style = rng.randi_range(PawnData.HairStyle.NONE, PawnData.HairStyle.BUN)
-	       data.hair_color = HAIR_COLORS[rng.randi_range(0, HAIR_COLORS.size() - 1)]
-	       data.apparel_color = APPAREL_COLORS[rng.randi_range(0, APPAREL_COLORS.size() - 1)]
-	       # Assign 0-2 random traits to this pawn
-	       _assign_random_traits(data, rng)
+		var data := PawnData.new()
+		data.display_name = _pick_name(used_tiles, rng)
+		data.age = rng.randi_range(18, 55)
+		data.gender = rng.randi_range(0, 1)
+		data.tile_pos = tile
+		data.color = PAWN_COLORS[placed % PAWN_COLORS.size()]
+		data.body_type = rng.randi_range(PawnData.BodyType.SLIM, PawnData.BodyType.BROAD)
+		data.hair_style = rng.randi_range(PawnData.HairStyle.NONE, PawnData.HairStyle.BUN)
+		data.hair_color = HAIR_COLORS[rng.randi_range(0, HAIR_COLORS.size() - 1)]
+		data.apparel_color = APPAREL_COLORS[rng.randi_range(0, APPAREL_COLORS.size() - 1)]
+		_assign_random_traits(data, rng)
 
-	       var pawn: Pawn = pawn_scene.instantiate() as Pawn
-	       add_child(pawn)
-	       pawn.bind(data, world.tile_to_world(tile), world)
-	       pawns.append(pawn)
-	       placed += 1
+		var pawn: Pawn = pawn_scene.instantiate() as Pawn
+		add_child(pawn)
+		pawn.bind(data, world.tile_to_world(tile), world)
+		pawns.append(pawn)
+		placed += 1
 
-	       # --- KinshipSystem integration ---
-	       if Engine.has_singleton("KinshipSystem"):
-		       var kin = Engine.get_singleton("KinshipSystem")
-		       kin.add_person(data.id, {"display_name": data.display_name, "age": data.age, "gender": data.gender})
-	       # (No household/parent for starter pawns, but can be extended here)
+		var kin: Node = get_node_or_null("/root/KinshipSystem")
+		if kin != null and kin.has_method("add_person"):
+			kin.call("add_person", data.id, {"display_name": data.display_name, "age": data.age, "gender": data.gender})
 
-	       if GameManager.verbose_logs():
-		       print("[Spawn] #%d %s  tile=(%d,%d) biome=%s" %
-			       [placed, data.describe(), tile.x, tile.y, Biome.name_for(biome)])
+		if GameManager.verbose_logs():
+			print("[Spawn] #%d %s  tile=(%d,%d) biome=%s" %
+				[placed, data.describe(), tile.x, tile.y, Biome.name_for(biome)])
 
-       if placed < STARTER_COUNT:
-	       if OS.is_debug_build():
-		       push_warning(
-				       "[PawnSpawner] Only placed %d / %d pawns (component=%d)" %
-				       [placed, STARTER_COUNT, required_component_id]
-		       )
+	if placed < STARTER_COUNT and OS.is_debug_build():
+		push_warning(
+			"[PawnSpawner] Only placed %d / %d pawns (component=%d)" %
+			[placed, STARTER_COUNT, required_component_id]
+		)
 
 
 ## Place one additional pawn (same rules as `spawn_starters`). Used by
@@ -182,57 +178,57 @@ func spawn_generational_pawn(
 	       parent_id: int = -1,
 	       household_id: int = -1
 ) -> bool:
-       if world == null or world.data == null or world.pathfinder == null or pawn_scene == null:
-	       return false
-       if not world.data.in_bounds(tile.x, tile.y):
-	       return false
-       if not SPAWNABLE_BIOMES.has(world.data.get_biome(tile.x, tile.y)):
-	       return false
-       if not world.pathfinder.is_passable(tile):
-	       return false
-       var main_comp: int = world.pathfinder.largest_component_id()
-       if main_comp < 0 or world.pathfinder.component_of(tile) != main_comp:
-	       return false
-       for p in pawns:
-	       if p != null and is_instance_valid(p) and p.data != null and p.data.tile_pos == tile:
-		       return false
-       var data := PawnData.new()
-       data.display_name = _pick_name_deterministic()
-       data.age = 20 + (int(tick_seed) % 5)
-       data.gender = PawnData.Gender.MALE if (int(tick_seed) + pawns.size()) % 2 == 0 else PawnData.Gender.FEMALE
-       data.tile_pos = tile
-       data.color = PAWN_COLORS[pawns.size() % PAWN_COLORS.size()]
-       data.body_type = (int(tick_seed) + pawns.size()) % 3
-       var hs: int = int(int(tick_seed) / 3.0) % 4
-       data.hair_style = hs
-       data.hair_color = HAIR_COLORS[(int(tick_seed) + 1) % HAIR_COLORS.size()]
-       data.apparel_color = APPAREL_COLORS[(int(tick_seed) + 2) % APPAREL_COLORS.size()]
-       var pawn: Pawn = pawn_scene.instantiate() as Pawn
-       add_child(pawn)
-       pawn.bind(data, world.tile_to_world(tile), world)
-       pawns.append(pawn)
-       WorldMemory.record_event({
-	       "type": "pawn_birth",
-	       "birth_kind": "generational",
-	       "tick": GameManager.tick_count,
-	       "pawn_id": int(data.id),
-	       "pawn_name": data.display_name,
-	       "tile": {"x": tile.x, "y": tile.y},
-	       "region": WorldMemory._region_key(tile.x, tile.y),
-       })
-       # --- KinshipSystem integration ---
-       if Engine.has_singleton("KinshipSystem"):
-	       var kin = Engine.get_singleton("KinshipSystem")
-	       kin.add_person(data.id, {"display_name": data.display_name, "age": data.age, "gender": data.gender})
-	       if parent_id != -1:
-		       kin.add_parent_child(parent_id, data.id)
-	       if household_id != -1:
-		       kin.add_household_member(data.id, household_id)
-       if GameManager.verbose_logs():
-	       print("[Spawn] generational: %s  tile=(%d,%d) age=%d" % [
-		       data.display_name, tile.x, tile.y, data.age,
-	       ])
-       return true
+	if world == null or world.data == null or world.pathfinder == null or pawn_scene == null:
+		return false
+	if not world.data.in_bounds(tile.x, tile.y):
+		return false
+	if not SPAWNABLE_BIOMES.has(world.data.get_biome(tile.x, tile.y)):
+		return false
+	if not world.pathfinder.is_passable(tile):
+		return false
+	var main_comp: int = world.pathfinder.largest_component_id()
+	if main_comp < 0 or world.pathfinder.component_of(tile) != main_comp:
+		return false
+	for p in pawns:
+		if p != null and is_instance_valid(p) and p.data != null and p.data.tile_pos == tile:
+			return false
+	var data := PawnData.new()
+	data.display_name = _pick_name_deterministic()
+	data.age = 20 + (int(tick_seed) % 5)
+	data.gender = PawnData.Gender.MALE if (int(tick_seed) + pawns.size()) % 2 == 0 else PawnData.Gender.FEMALE
+	data.tile_pos = tile
+	data.color = PAWN_COLORS[pawns.size() % PAWN_COLORS.size()]
+	data.body_type = (int(tick_seed) + pawns.size()) % 3
+	var hs: int = int(int(tick_seed) / 3.0) % 4
+	data.hair_style = hs
+	data.hair_color = HAIR_COLORS[(int(tick_seed) + 1) % HAIR_COLORS.size()]
+	data.apparel_color = APPAREL_COLORS[(int(tick_seed) + 2) % APPAREL_COLORS.size()]
+	var pawn: Pawn = pawn_scene.instantiate() as Pawn
+	add_child(pawn)
+	pawn.bind(data, world.tile_to_world(tile), world)
+	pawns.append(pawn)
+	WorldMemory.record_event({
+		"type": "pawn_birth",
+		"birth_kind": "generational",
+		"tick": GameManager.tick_count,
+		"pawn_id": int(data.id),
+		"pawn_name": data.display_name,
+		"tile": {"x": tile.x, "y": tile.y},
+		"region": WorldMemory._region_key(tile.x, tile.y),
+	})
+	var kin: Node = get_node_or_null("/root/KinshipSystem")
+	if kin != null:
+		if kin.has_method("add_person"):
+			kin.call("add_person", data.id, {"display_name": data.display_name, "age": data.age, "gender": data.gender})
+		if parent_id != -1 and kin.has_method("add_parent_child"):
+			kin.call("add_parent_child", parent_id, data.id)
+		if household_id != -1 and kin.has_method("add_household_member"):
+			kin.call("add_household_member", data.id, household_id)
+	if GameManager.verbose_logs():
+		print("[Spawn] generational: %s  tile=(%d,%d) age=%d" % [
+			data.display_name, tile.x, tile.y, data.age,
+		])
+	return true
 
 
 ## Deterministic: alias for [method spawn_generational_pawn] (Settlement Rebirth, etc.).

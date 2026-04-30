@@ -21,6 +21,11 @@ var _claimed: Array[Job] = []
 ## tile(Vector2i) -> Job. Prevents posting two jobs on the same tile.
 var _jobs_by_tile: Dictionary = {}
 
+## SettlementMemory / planners scan open+claimed often in one tick; rebuild once per mutation.
+var _jobs_data_generation: int = 0
+var _active_jobs_union_gen_built: int = -1
+var _active_jobs_union_cached: Array[Job] = []
+
 ## Lifetime counters (stats only).
 var posted_count: int = 0
 var completed_count: int = 0
@@ -28,6 +33,20 @@ var cancelled_count: int = 0
 
 const MAX_OPEN_JOBS_DEFAULT: int = 256
 const MAX_OPEN_JOBS_LIGHTWEIGHT: int = 96
+
+
+func _bump_jobs_data_generation() -> void:
+	_jobs_data_generation += 1
+
+
+## Read-only union of open + claimed jobs, reused until the queue mutates.
+func get_active_jobs_union() -> Array[Job]:
+	if _active_jobs_union_gen_built != _jobs_data_generation:
+		_active_jobs_union_gen_built = _jobs_data_generation
+		_active_jobs_union_cached.clear()
+		_active_jobs_union_cached.append_array(_open)
+		_active_jobs_union_cached.append_array(_claimed)
+	return _active_jobs_union_cached
 
 
 ## Create-and-post helper: returns the new Job (or null if the tile already has one).
@@ -50,6 +69,7 @@ func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) ->
 	_open.append(job)
 	_jobs_by_tile[tile] = job
 	posted_count += 1
+	_bump_jobs_data_generation()
 	job_posted.emit(job)
 	return job
 
@@ -87,6 +107,7 @@ func post_trade_haul(
 	_open.append(job)
 	_jobs_by_tile[work_tile] = job
 	posted_count += 1
+	_bump_jobs_data_generation()
 	job_posted.emit(job)
 	return job
 
@@ -137,6 +158,7 @@ func claim_next_for(
 	_claimed.append(job)
 	job.state = Job.State.CLAIMED
 	job.assigned_pawn = pawn
+	_bump_jobs_data_generation()
 	job_claimed.emit(job, pawn)
 	return job
 
@@ -153,6 +175,7 @@ func abandon(job: Job) -> void:
 	job.assigned_pawn = null
 	job.work_ticks_done = 0
 	_open.append(job)
+	_bump_jobs_data_generation()
 
 
 ## Mark a job finished. Removes it from the claimed list and drops its tile lock.
@@ -163,10 +186,11 @@ func complete(job: Job) -> void:
 	_jobs_by_tile.erase(job.tile)
 	job.state = Job.State.COMPLETED
 	completed_count += 1
-	
+	_bump_jobs_data_generation()
+
 	# Notify WorldAI of job completion for economic neuron updates
 	_notify_world_ai_job_completion(job)
-	
+
 	job_completed.emit(job)
 	# NOTE: `BUILD_WALL` path reservation is cleared in `World.build_wall` when
 	# the feature is committed — not here (job may complete without build on edge cases).
@@ -185,6 +209,7 @@ func cancel(job: Job) -> void:
 	job.state = Job.State.CANCELLED
 	job.assigned_pawn = null
 	cancelled_count += 1
+	_bump_jobs_data_generation()
 	job_cancelled.emit(job)
 
 
@@ -197,6 +222,7 @@ func clear_all() -> void:
 	_open.clear()
 	_claimed.clear()
 	_jobs_by_tile.clear()
+	_bump_jobs_data_generation()
 	for j in all:
 		_notify_path_reservation_released(j)
 		j.state = Job.State.CANCELLED

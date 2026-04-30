@@ -1538,18 +1538,7 @@ func _calculate_local_housing_pressure(st: Dictionary, pawns: Array[Pawn]) -> fl
 
 
 func _active_jobs_snapshot() -> Array[Job]:
-	var out: Array[Job] = []
-	var open_v: Variant = JobManager.get("_open")
-	if open_v is Array:
-		for jv in open_v as Array:
-			if jv is Job:
-				out.append(jv as Job)
-	var claimed_v: Variant = JobManager.get("_claimed")
-	if claimed_v is Array:
-		for jv in claimed_v as Array:
-			if jv is Job:
-				out.append(jv as Job)
-	return out
+	return JobManager.get_active_jobs_union()
 
 
 func _default_resource_pressure() -> Dictionary:

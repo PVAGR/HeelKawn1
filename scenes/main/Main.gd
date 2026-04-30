@@ -7,6 +7,8 @@ class_name Main
 
 const STOCKPILE_SCENE: PackedScene = preload("res://scenes/stockpile/Stockpile.tscn")
 const INCARNATION_PICKER_SCRIPT: Script = preload("res://scripts/ui/IncarnationPicker.gd")
+## Static `_region_key` helper lives on the script; reuse instead of per-call preload in hot paths.
+const _WM = preload("res://autoloads/WorldMemory.gd")
 
 ## Tuning for initial job generation.
 const FORAGE_WORK_TICKS: int = 20
@@ -4845,11 +4847,10 @@ func _count_pawns_in_regions(regions_v: Variant) -> int:
 	for rk in regions_v as PackedInt32Array:
 		wanted[int(rk)] = true
 	var n: int = 0
-	var wm = preload("res://autoloads/WorldMemory.gd")
 	for p in _pawn_spawner.pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
-		var rk: int = wm._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		var rk: int = _WM._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 		if wanted.has(rk):
 			n += 1
 	return n
@@ -4859,11 +4860,10 @@ func _pawn_counts_by_region_key() -> Dictionary:
 	var out: Dictionary = {}
 	if _pawn_spawner == null:
 		return out
-	var wm = preload("res://autoloads/WorldMemory.gd")
 	for p in _pawn_spawner.pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
-		var rk: int = wm._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		var rk: int = _WM._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 		out[rk] = int(out.get(rk, 0)) + 1
 	return out
 

@@ -1,5 +1,7 @@
 extends Node
 ## Observation API — programmatic Focus Inspector / sensory snapshots for agents & tools.
+
+const _WM = preload("res://autoloads/WorldMemory.gd")
 ##
 ## Performance contract (keeps FPS stable while “infinite” backend systems exist):
 ## - Call these **on demand** (pawn acts, AI cadence, debug/F10, validation) — **never** from `_process` every frame.
@@ -77,9 +79,9 @@ static func observe_at_world_position(world_pos: Vector2) -> Dictionary:
 	# Check for tile
 	var mouse_tile: Vector2i = world.world_to_tile(world_pos)
 	if mouse_tile.x >= 0 and mouse_tile.y >= 0:
-		var settlement: Variant = SettlementMemory.get_settlement_at_region(preload("res://autoloads/WorldMemory.gd")._region_key(mouse_tile.x, mouse_tile.y))
+		var settlement: Variant = SettlementMemory.get_settlement_at_region(_WM._region_key(mouse_tile.x, mouse_tile.y))
 		if settlement is Dictionary:
-			var obs: Dictionary = _build_settlement_observation(settlement as Dictionary, preload("res://autoloads/WorldMemory.gd")._region_key(mouse_tile.x, mouse_tile.y))
+			var obs: Dictionary = _build_settlement_observation(settlement as Dictionary, _WM._region_key(mouse_tile.x, mouse_tile.y))
 			obs["focus_type"] = "settlement"
 			obs["tile"] = {"x": mouse_tile.x, "y": mouse_tile.y}
 			return obs
@@ -104,7 +106,7 @@ static func observe_pawns_in_region(region_key: int) -> Array[Dictionary]:
 	for p in spawner.pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
-		var pawn_rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		var pawn_rk: int = _WM._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 		if pawn_rk == region_key:
 			results.append(_build_pawn_observation(p))
 	
@@ -129,7 +131,7 @@ static func observe_camera_view() -> Dictionary:
 	var obs: Dictionary = observe_at_world_position(camera.global_position)
 	obs["camera_world_pos"] = camera.global_position
 	obs["camera_tile"] = {"x": cam_tile.x, "y": cam_tile.y}
-	obs["camera_region_key"] = preload("res://autoloads/WorldMemory.gd")._region_key(cam_tile.x, cam_tile.y)
+	obs["camera_region_key"] = _WM._region_key(cam_tile.x, cam_tile.y)
 	
 	return obs
 
@@ -226,7 +228,7 @@ static func build_focus_snapshot_from_focus(focus: Dictionary, tick: int = -1) -
 
 static func _build_pawn_observation(pawn: Pawn) -> Dictionary:
 	var d: PawnData = pawn.data
-	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(d.tile_pos.x, d.tile_pos.y)
+	var rk: int = _WM._region_key(d.tile_pos.x, d.tile_pos.y)
 	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(rk)
 	var war: Dictionary = SettlementMemory.get_war_profile_for_region(rk)
 	var st_v: Variant = SettlementMemory.get_settlement_at_region(rk)
@@ -405,7 +407,7 @@ static func _focus_lines_for_tile(focus: Dictionary) -> PackedStringArray:
 	return out
 
 static func _build_tile_observation(tile: Vector2i, world: World) -> Dictionary:
-	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(tile.x, tile.y)
+	var rk: int = _WM._region_key(tile.x, tile.y)
 	var biome: int = world.data.get_biome(tile.x, tile.y)
 	var feature: int = world.data.get_feature(tile.x, tile.y)
 	
@@ -579,20 +581,20 @@ static func _pawn_name_by_id(pawn_id: int) -> String:
 static func _count_pawns_in_regions(regions_v: Variant) -> int:
 	if not (regions_v is PackedInt32Array):
 		return 0
-	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
-	if main == null:
-		return 0
-	var spawner: PawnSpawner = main.get("_pawn_spawner") as PawnSpawner
-	if spawner == null:
-		return 0
+	var main: Node = Engine.get_main_loop().current_scene
+	if main != null and main.has_method("_count_pawns_in_regions"):
+		return int(main.call("_count_pawns_in_regions", regions_v))
 	var wanted: Dictionary = {}
 	for rk in regions_v as PackedInt32Array:
 		wanted[int(rk)] = true
+	var spawner: PawnSpawner = main.get("_pawn_spawner") as PawnSpawner if main != null else null
+	if spawner == null:
+		return 0
 	var n: int = 0
 	for p in spawner.pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
-		var pawn_region: int = preload("res://autoloads/WorldMemory.gd")._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		var pawn_region: int = _WM._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 		if wanted.has(pawn_region):
 			n += 1
 	return n

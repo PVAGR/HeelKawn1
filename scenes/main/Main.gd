@@ -133,6 +133,8 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _hud: ColonyHUD = $UI_Viewport/ColonyHUD
 @onready var _observer_hud: ObserverHUD = $UI_Viewport/ObserverHUD
 @onready var _focus_inspector: FocusInspector = $UI_Viewport/FocusInspector
+@onready var _region_inspector: RegionInspector = $UI_Viewport/RegionInspector
+@onready var _timeline_controls: TimelineControls = $UI_Viewport/TimelineControls
 @onready var _map_mode_overlay: Node = $MapModeOverlay
 @onready var _creator_debug_menu: CreatorDebugMenu = $CreatorDebugMenu
 @onready var _toolbar: BuildToolbar = $UI_Viewport/BuildToolbar
@@ -2736,6 +2738,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var key: InputEventKey = event
+		if key.pressed:
+			_handle_key_input(key)
 	if event is InputEventMouseMotion:
 		_update_hover_tile(event.position)
 		# Safety net: if the toolbar / HUD swallowed the mouse-release (e.g.
@@ -2762,6 +2768,28 @@ func _unhandled_input(event: InputEvent) -> void:
 			MOUSE_BUTTON_RIGHT:
 				if mb.pressed:
 					_on_right_press()
+
+
+func _handle_key_input(key: InputEventKey) -> void:
+	match key.keycode:
+		KEY_I:
+			_toggle_region_inspector()
+		KEY_T:
+			_toggle_timeline_controls()
+
+
+func _toggle_region_inspector() -> void:
+	if _region_inspector != null:
+		_region_inspector.visible = not _region_inspector.visible
+		if _region_inspector.visible and _world != null:
+			var center_tile: Vector2i = Vector2i(WorldData.WIDTH >> 1, WorldData.HEIGHT >> 1)
+			var region_key: int = _WM._region_key(center_tile.x, center_tile.y)
+			_region_inspector.set_region(region_key)
+
+
+func _toggle_timeline_controls() -> void:
+	if _timeline_controls != null:
+		_timeline_controls.visible = not _timeline_controls.visible
 
 
 func _init_phase8_proof_overlay() -> void:

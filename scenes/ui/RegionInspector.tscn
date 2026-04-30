@@ -1,0 +1,42 @@
+[gd_scene load_steps=2 format=3 uid="uid://b8k7n3m5p2q6"]
+
+[ext_resource type="Script" path="res://scripts/ui/RegionInspector.gd" id="1_abc123"]
+
+[node name="RegionInspector" type="PanelContainer"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -320.0
+offset_bottom = 400.0
+grow_horizontal = 0
+grow_vertical = 2
+script = ExtResource("1_abc123")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 2
+offset_left = 8.0
+offset_top = 6.0
+offset_right = -8.0
+offset_bottom = -6.0
+
+[node name="TitleLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Region Inspector"
+
+[node name="RegionInfo" type="RichTextLabel" parent="VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+text = "No region selected"
+
+[node name="SettlementInfo" type="RichTextLabel" parent="VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+text = "No settlements"
+
+[node name="HistoryInfo" type="RichTextLabel" parent="VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+text = "No recent events"

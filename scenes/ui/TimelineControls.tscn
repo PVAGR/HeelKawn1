@@ -1,0 +1,42 @@
+[gd_scene load_steps=2 format=3 uid="uid://c9l8n4m6q3r7"]
+
+[ext_resource type="Script" path="res://scripts/ui/TimelineControls.gd" id="1_def456"]
+
+[node name="TimelineControls" type="HBoxContainer"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -200.0
+offset_top = -50.0
+offset_right = 200.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
+script = ExtResource("1_def456")
+
+[node name="PauseButton" type="Button" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "⏸"
+
+[node name="SpeedLabel" type="Label" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "1x"
+horizontal_alignment = 1
+
+[node name="SpeedDown" type="Button" parent="."]
+layout_mode = 2
+text = "◀"
+
+[node name="SpeedUp" type="Button" parent="."]
+layout_mode = 2
+text = "▶"
+
+[node name="TickLabel" type="Label" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Tick: 0"
+horizontal_alignment = 1

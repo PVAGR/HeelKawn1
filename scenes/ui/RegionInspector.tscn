@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://b8k7n3m5p2q6"]
+[gd_scene format=3 uid="uid://b8k7n3m5p2q6"]
 
 [ext_resource type="Script" path="res://scripts/ui/RegionInspector.gd" id="1_abc123"]
 

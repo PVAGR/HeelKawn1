@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://d0e1f2g3h4i5"]
+[gd_scene format=3 uid="uid://d0e1f2g3h4i5"]
 
 [ext_resource type="Script" path="res://scripts/ui/IncarnationPicker.gd" id="1_incarnation"]
 

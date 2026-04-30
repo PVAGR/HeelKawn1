@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://c9l8n4m6q3r7"]
+[gd_scene format=3 uid="uid://dal8n4m6q3r7"]
 
 [ext_resource type="Script" path="res://scripts/ui/TimelineControls.gd" id="1_def456"]
 

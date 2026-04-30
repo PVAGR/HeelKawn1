@@ -4819,6 +4819,52 @@ func _count_pawns_in_regions(regions_v: Variant) -> int:
 	return n
 
 
+func _build_realm_crown_view_text(max_settlements: int = 8) -> String:
+	## Macro strip: settlements × proto-houses × myth/sacred tone (read-only facts).
+	FactionRegistry.sync_from_settlements()
+	var listed: int = 0
+	var lines: PackedStringArray = PackedStringArray()
+	for st_any in SettlementMemory.settlements:
+		if listed >= max_settlements:
+			break
+		if not (st_any is Dictionary):
+			continue
+		var st: Dictionary = st_any
+		var ckr: int = int(st.get("center_region", -1))
+		if ckr < 0:
+			continue
+		var zid: String = str(ckr)
+		var nm: String = str(st.get("name", "Unnamed"))
+		if nm.length() > 24:
+			nm = nm.substr(0, 21) + "..."
+		var house: Dictionary = FactionRegistry.get_house_for_zone(zid)
+		var house_disp: String = str(house.get("house_display", "—"))
+		var rel: Dictionary = ReligionLens.describe_settlement_zone(zid)
+		var st_state: String = str(rel.get("state", ""))
+		var voice: String = str(rel.get("voice", ""))
+		lines.append("• %s — %s · %s · %s" % [nm, house_disp, st_state, voice])
+		listed += 1
+	var place_count: int = 0
+	for x in SettlementMemory.settlements:
+		if x is Dictionary:
+			place_count += 1
+	var houses_n: int = FactionRegistry.house_count()
+	var sac_n: int = SacredMemory.site_count() if SacredMemory != null else 0
+	var harm: float = ReligionLens.get_harmony_index() if ReligionLens != null else 0.0
+	var head: String = (
+			"[b]REALM (crown view)[/b]\n"
+			+ "Places %d · Houses %d · Sacred sites %d · Harmony %.2f\n"
+			% [place_count, houses_n, sac_n, harm]
+	)
+	if place_count == 0:
+		return head + "No settlements yet.\n"
+	var more_note: String = ""
+	if place_count > listed:
+		more_note = "[i](+%d places not listed)[/i]\n" % (place_count - listed)
+	var body: String = "\n".join(lines)
+	return head + more_note + body + "\n"
+
+
 func _build_observer_snapshot(tick: int) -> Dictionary:
 	var day_len: int = DayNightCycle.TICKS_PER_DAY
 	var day_abs: int = SimTime.calendar_absolute_visual_day(tick)
@@ -5052,6 +5098,7 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		"camera_revival_digest_plain": get_camera_revival_digest_plain(),
 		"chronicler_pin_zone_id": _player_intent_pin_zone_id,
 		"sim_ticks_last_frame": GameManager.ticks_emitted_last_frame if GameManager != null else 0,
+		"realm_crown_view_text": _build_realm_crown_view_text(),
 	}
 
 

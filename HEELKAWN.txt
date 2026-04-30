@@ -31,6 +31,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-29  GAME_VISION: three-layer doctrine (DF bible / Rim surface / Syx crown view) + Rim & DF in inspiration blend. Observer HUD top-center **Realm (crown view)** panel: places/houses/sacred/harmony + settlement × house × state × myth voice lines from FactionRegistry + ReligionLens.
 2026-04-29  Heelkawnian: PawnInfoPanel title/identity copy + subtitle arc (children); UI signature includes children, traits, crisis, mood so sheet repaints on evolution. docs/SESSION_REPORT_FOR_AI.md + PLAYTEST §7 = paste pack for AI.
 2026-04-29  F10 hygiene: ENABLE_AI_CONTROL_PANEL default true (panel hidden at boot); remove duplicate error_report END line; SimVision kernel note = emergence/WorldRNG; soul bundle shorter tail/history to reduce output overflow; ad-hoc AI panel connects Main signals.
 2026-04-29  ColonyHUD: wildlife line adds rolling T min…max from sample history; optional Chronicler line (intent queue + pin) when active.

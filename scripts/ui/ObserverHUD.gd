@@ -6,6 +6,7 @@ const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.70)
 const FONT_SIZE: int = 13
 
 @onready var _world_text: RichTextLabel = $WorldGovernancePanel/Margin/Text
+@onready var _realm_text: RichTextLabel = $RealmCrownPanel/Margin/Text
 @onready var _demo_text: RichTextLabel = $DemoEconomyPanel/Margin/Text
 @onready var _conflict_text: RichTextLabel = $ConflictWarPanel/Margin/Text
 @onready var _kernel_text: RichTextLabel = $KernelMemoryPanel/Margin/Text
@@ -14,6 +15,7 @@ const FONT_SIZE: int = 13
 func _ready() -> void:
 	layer = 20
 	_apply_panel_style($WorldGovernancePanel)
+	_apply_panel_style($RealmCrownPanel)
 	_apply_panel_style($DemoEconomyPanel)
 	_apply_panel_style($ConflictWarPanel)
 	_apply_panel_style($KernelMemoryPanel)
@@ -42,6 +44,7 @@ func apply_snapshot(snapshot: Dictionary) -> void:
 			)
 		return
 	_world_text.text = full_world
+	_realm_text.text = _realm_crown_block(snapshot)
 	_demo_text.text = _demo_economy_block(snapshot)
 	_conflict_text.text = _conflict_block(snapshot)
 	_kernel_text.text = _kernel_block(snapshot)
@@ -98,6 +101,10 @@ func _validation_harness_hud_line(s: Dictionary) -> String:
 			+ warn
 			+ "\n"
 	)
+
+
+func _realm_crown_block(s: Dictionary) -> String:
+	return str(s.get("realm_crown_view_text", "[i]No realm snapshot.[/i]\n"))
 
 
 func _world_governance_block(s: Dictionary) -> String:

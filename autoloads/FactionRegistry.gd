@@ -71,6 +71,11 @@ func get_house_for_zone(zone_id: String) -> Dictionary:
 	return {}
 
 
+func house_count() -> int:
+	sync_from_settlements()
+	return _house_by_zone.size()
+
+
 func debug_summary_block() -> String:
 	sync_from_settlements()
 	var lines: PackedStringArray = PackedStringArray()

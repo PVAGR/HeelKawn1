@@ -25,6 +25,25 @@ autowrap_mode = 2
 mouse_filter = 2
 text = "Observer HUD"
 
+[node name="RealmCrownPanel" type="PanelContainer" parent="."]
+offset_left = 448.0
+offset_top = 8.0
+offset_right = 832.0
+offset_bottom = 220.0
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="RealmCrownPanel"]
+layout_mode = 2
+
+[node name="Text" type="RichTextLabel" parent="RealmCrownPanel/Margin"]
+layout_mode = 2
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 2
+mouse_filter = 2
+text = "Realm crown view"
+
 [node name="DemoEconomyPanel" type="PanelContainer" parent="."]
 offset_left = 840.0
 offset_top = 8.0

@@ -163,6 +163,13 @@ const COHORT_MATCH_RADIUS_TILES: int = 8
 const COHORT_BREAK_DISTANCE_TILES: int = 16
 const COHORT_MIN_SIZE: int = 2
 const COHORT_COHESION_BIAS_WEIGHT: float = 0.12
+
+## Meaning-based behavior modifiers (Phase 4: Player-readable meaning refinement)
+## These are base values; actual multipliers come from MeaningAmbianceController
+const MEANING_SPEED_QUIET: float = 1.0
+const MEANING_SPEED_SCARRED: float = 0.9
+const MEANING_SPEED_BLOODIED: float = 0.75
+const MEANING_SPEED_GRAVE: float = 0.6
 const COHORT_COHESION_MAX_STEP: float = 0.35
 const COHORT_RECRUITMENT_SCAN_RADIUS_TILES: int = 10
 const COHORT_RECRUITMENT_MAX_PAWNS: int = 24

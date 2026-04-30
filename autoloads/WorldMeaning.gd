@@ -33,6 +33,14 @@ extends Node
 ## Matches WorldMemory Kind enum (keep in sync; literal ints avoid autoload class timing).
 const KIND_PAWN_DEATH: int = 0
 const KIND_ANIMAL_DEATH: int = 1
+const KIND_BUILDING_CONSTRUCTED: int = 5
+const KIND_BUILDING_DESTROYED: int = 6
+const KIND_FIRE_STARTED: int = 7
+const KIND_FIRE_EXTINGUISHED: int = 8
+const KIND_STARVATION_EVENT: int = 9
+const KIND_MIGRATION_STARTED: int = 10
+const KIND_MIGRATION_COMPLETED: int = 11
+const KIND_TEACHING_EVENT: int = 12
 
 ## region_key (int) -> aggregated entry Dictionary
 var meaning_by_region: Dictionary = {}
@@ -58,7 +66,7 @@ func recompute() -> void:
 	if not (ev is Array):
 		return
 	
-	# Count pawn/animal deaths and max tick per region
+	# Count pawn/animal deaths and other events per region
 	for item in ev:
 		if not item is Dictionary:
 			continue
@@ -69,19 +77,31 @@ func recompute() -> void:
 		var k: int = int(e["k"])
 		var t: int = int(e.get("t", 0))
 		if not meaning_by_region.has(rk):
-			meaning_by_region[rk] = {
-				"pawn_deaths": 0,
-				"animal_deaths": 0,
-				"total_deaths": 0,
-				"death_density": "none",
-				"meaning_label": "quiet",
-				"last_death_tick": -1,
-			}
+			meaning_by_region[rk] = _default_region_entry()
 		var rec: Dictionary = meaning_by_region[rk]
-		if k == KIND_PAWN_DEATH:
-			rec["pawn_deaths"] = int(rec["pawn_deaths"]) + 1
-		elif k == KIND_ANIMAL_DEATH:
-			rec["animal_deaths"] = int(rec["animal_deaths"]) + 1
+		
+		match k:
+			KIND_PAWN_DEATH:
+				rec["pawn_deaths"] = int(rec["pawn_deaths"]) + 1
+			KIND_ANIMAL_DEATH:
+				rec["animal_deaths"] = int(rec["animal_deaths"]) + 1
+			KIND_BUILDING_CONSTRUCTED:
+				rec["buildings_constructed"] = int(rec.get("buildings_constructed", 0)) + 1
+			KIND_BUILDING_DESTROYED:
+				rec["buildings_destroyed"] = int(rec.get("buildings_destroyed", 0)) + 1
+			KIND_FIRE_STARTED:
+				rec["fires_started"] = int(rec.get("fires_started", 0)) + 1
+			KIND_FIRE_EXTINGUISHED:
+				rec["fires_extinguished"] = int(rec.get("fires_extinguished", 0)) + 1
+			KIND_STARVATION_EVENT:
+				rec["starvation_events"] = int(rec.get("starvation_events", 0)) + 1
+			KIND_MIGRATION_STARTED:
+				rec["migrations_started"] = int(rec.get("migrations_started", 0)) + 1
+			KIND_MIGRATION_COMPLETED:
+				rec["migrations_completed"] = int(rec.get("migrations_completed", 0)) + 1
+			KIND_TEACHING_EVENT:
+				rec["teaching_events"] = int(rec.get("teaching_events", 0)) + 1
+		
 		var last: int = int(rec["last_death_tick"])
 		if t > last:
 			rec["last_death_tick"] = t
@@ -95,6 +115,7 @@ func recompute() -> void:
 		r2["total_deaths"] = tot
 		r2["death_density"] = classify_death_density(tot)
 		r2["meaning_label"] = describe_meaning_label(tot)
+		r2["tags"] = _compute_region_tags(r2)
 	
 	# Derive enhanced meanings
 	_derive_settlement_meanings(ev)
@@ -148,7 +169,68 @@ func _default_region_entry() -> Dictionary:
 		"total_deaths": 0,
 		"death_density": "none",
 		"last_death_tick": -1,
+		"buildings_constructed": 0,
+		"buildings_destroyed": 0,
+		"fires_started": 0,
+		"fires_extinguished": 0,
+		"starvation_events": 0,
+		"migrations_started": 0,
+		"migrations_completed": 0,
+		"teaching_events": 0,
+		"tags": PackedStringArray(),
 	}
+
+
+func _compute_region_tags(data: Dictionary) -> PackedStringArray:
+	var tags: PackedStringArray = []
+	
+	var buildings_built: int = int(data.get("buildings_constructed", 0))
+	var buildings_destroyed: int = int(data.get("buildings_destroyed", 0))
+	var fires_started: int = int(data.get("fires_started", 0))
+	var starvation_events: int = int(data.get("starvation_events", 0))
+	var teaching_events: int = int(data.get("teaching_events", 0))
+	var migrations_completed: int = int(data.get("migrations_completed", 0))
+	var total_deaths: int = int(data.get("total_deaths", 0))
+	
+	# Construction tags
+	if buildings_built >= 10:
+		tags.append("built_up")
+	if buildings_built >= 5:
+		tags.append("developed")
+	if buildings_destroyed > buildings_built:
+		tags.append("ruined")
+	
+	# Fire tags
+	if fires_started >= 3:
+		tags.append("fire_prone")
+	if fires_started >= 1:
+		tags.append("burned")
+	
+	# Starvation tags
+	if starvation_events >= 3:
+		tags.append("famine_stricken")
+	if starvation_events >= 1:
+		tags.append("hungry")
+	
+	# Knowledge tags
+	if teaching_events >= 5:
+		tags.append("learned")
+	if teaching_events >= 2:
+		tags.append("educated")
+	
+	# Migration tags
+	if migrations_completed >= 3:
+		tags.append("cosmopolitan")
+	if migrations_completed >= 1:
+		tags.append("welcoming")
+	
+	# Death-based tags
+	if total_deaths >= 10:
+		tags.append("graveyard")
+	if total_deaths >= 5:
+		tags.append("blood_soaked")
+	
+	return tags
 
 
 func region_count() -> int:

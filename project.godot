@@ -68,6 +68,7 @@ CollapseSystem="*res://autoloads/CollapseSystem.gd"
 PersistenceSystem="*res://autoloads/PersistenceSystem.gd"
 GeneticEvolution="*res://autoloads/GeneticEvolution.gd"
 HistoricalSimulation="*res://autoloads/HistoricalSimulation.gd"
+TechnologySystem="*res://autoloads/TechnologySystem.gd"
 
 [display]
 

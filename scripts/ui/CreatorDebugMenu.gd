@@ -11,6 +11,19 @@ const _WM = preload("res://autoloads/WorldMemory.gd")
 ## Sectioned menu: importance-ish order (playtest first, stubs last).
 const DEBUG_SECTIONS: Array[Dictionary] = [
 	{
+		"heading": "★ AI / Cursor · session snapshot (paste to assistant)",
+		"rows": [
+			{
+				"id": "session_snapshot_guide",
+				"label": "00 · Checklist only — what to capture & order (A→G)",
+			},
+			{
+				"id": "session_snapshot_pack",
+				"label": "00 · One paste pack — checklist + ERROR + Playtest (31)",
+			},
+		],
+	},
+	{
 		"heading": "Playtest / session truth",
 		"rows": [
 			{"id": "error_report", "label": "ERROR · Report (show all issues)"},
@@ -167,7 +180,7 @@ func _build_ui() -> void:
 	title.modulate = Color(0.95, 0.87, 0.55)
 	_vbox.add_child(title)
 	var hint: Label = Label.new()
-	hint.text = "Sections ordered by usefulness. Deterministic kernel: copy blocks between === from Output."
+	hint.text = "Use ★00 · checklist or one paste pack for AI handoff; copy everything between === lines (or CREATOR_START/END for digest 34)."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.add_theme_font_size_override("font_size", 12)
 	_vbox.add_child(hint)
@@ -203,6 +216,10 @@ func _emit_report(report_id: String) -> void:
 	_last_report_key = report_id
 	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d BEGIN ===" % [report_id, tick])
 	match report_id:
+		"session_snapshot_guide":
+			_report_session_snapshot_guide()
+		"session_snapshot_pack":
+			_report_session_snapshot_pack()
 		"error_report":
 			_report_error_issues()
 		"calendar":
@@ -276,6 +293,49 @@ func _emit_report(report_id: String) -> void:
 		_:
 			print("Unknown report_id=%s" % report_id)
 	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d END ===" % [report_id, tick])
+
+
+func _print_session_snapshot_checklist(tick_now: int) -> void:
+	print("")
+	print("HEELKAWN_AI_SNAPSHOT_CHECKLIST  tick=%d" % tick_now)
+	print("")
+	print(
+			"A) Godot Output — Copy lines with SIM_HITCH, SIM_CATCHUP, MAIN_TICK_HOTSPOT, VALIDATION_, "
+			+ "and any errors. Note game speed (e.g. 100x) and whether the window felt smooth."
+	)
+	print(
+			"B) Screenshot — One full game view; optional: Debugger → Monitors → FPS if profiling stalls."
+	)
+	print(
+			"C) This snapshot — Use ★ 00 · One paste pack below, or press ERROR then 31 then 34 separately."
+	)
+	print("D) F10 → ERROR · Report — Syntax + autoload wiring (quick health gate).")
+	print("E) F10 → 31 · Playtest bundle — sim_diag, jobs, factions, ReligionLens stub lines.")
+	print("F) F10 → 34 · Creator digest — Human-readable block + CREATOR_START … CREATOR_END.")
+	print("G) Optional — F10 → 32 Soul bundle (long chronicle); F10 → 33 one pawn JSON export.")
+	print("")
+	print(
+			"Paste to Cursor/AI in one message: console tail (A) + screenshot (B) + pack/digest blocks "
+			+ "(C–F). Order matters less than completeness."
+	)
+	print("")
+
+
+func _report_session_snapshot_guide() -> void:
+	_print_session_snapshot_checklist(GameManager.tick_count)
+
+
+func _report_session_snapshot_pack() -> void:
+	var t: int = GameManager.tick_count
+	_print_session_snapshot_checklist(t)
+	print(">>> Embedded blocks follow (same as pressing ERROR, then 31 · Playtest bundle).")
+	print(">>> For prose + machine digest, also run F10 → 34 · Creator digest and paste CREATOR_START…END.")
+	print("")
+	print("--- embedded: ERROR report ---")
+	_report_error_issues()
+	print("")
+	print("--- embedded: Playtest bundle (31) ---")
+	_report_playtest_bundle()
 
 
 func _main() -> Node2D:

@@ -31,6 +31,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-29  **F10 AI snapshot handoff:** `CreatorDebugMenu` top section **★ AI / Cursor · session snapshot** — button **00 · Checklist only** prints ordered steps A→G (console, screenshot, which F10 reports); **00 · One paste pack** prints checklist + embedded ERROR + Playtest bundle for a single copy-paste to assistants.
 2026-04-29  **Social chronicle budget:** `Main._accumulate_social_rapport` still applies full rapport to all in-range pairs, but `WorldMemory` `social_meeting` / `social_bond_milestone` records are capped per pass (`SOCIAL_WM_RECORD_BUDGET_PER_PASS=48`) so night stacking at one stockpile does not emit hundreds of events per rapport tick (less hitch + smaller chronicle).
 2026-04-29  **WorldEvents / Stockpile API fix:** `WorldEvents` used nonexistent `count_item` and `total_item_count` on `Stockpile` — first world-level check runs at tick **5000** (`CONDITION_CHECK_INTERVAL`), so the sim hit a hard error and looked “stuck at 5k.” Replaced with `count_of`; added `Stockpile.total_item_count()`.
 2026-04-29  **Main tick perf:** Observer realm HUD only builds/applies `_build_observer_snapshot` while `ObserverHUD` is visible (F9 still applies immediately on open); social rapport interval scales at 26x/50x/100x (60/80/120 ticks vs base 40); mining-react scans fewer map rows per step at ultra speed (5/4/3 vs 6); 100x regrowth scan budget 12→8 per tick.

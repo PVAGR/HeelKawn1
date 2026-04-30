@@ -17,6 +17,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "playtest_bundle", "label": "31 · Playtest bundle (one paste)"},
 			{"id": "soul_bundle", "label": "32 · Soul bundle (1–2 sim-year handoff paste)"},
 			{"id": "portable_character", "label": "33 · Portable character JSON (MMO / website handoff)"},
+			{"id": "creator_digest", "label": "34 · Creator session digest (plain + AI · one paste)"},
 			{"id": "calendar", "label": "01 · Calendar + day/night + checkpoints"},
 			{"id": "sim_diag", "label": "02 · GameManager sim_diag"},
 			{"id": "kernel", "label": "24 · KernelDiagnostic session summary"},
@@ -266,6 +267,8 @@ func _emit_report(report_id: String) -> void:
 			_report_soul_bundle()
 		"portable_character":
 			_report_portable_character()
+		"creator_digest":
+			_report_creator_session_digest()
 		_:
 			print("Unknown report_id=%s" % report_id)
 	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d END ===" % [report_id, tick])
@@ -698,6 +701,193 @@ func _report_portable_character() -> void:
 			"[PORTABLE_CHARACTER] hint: paste between BEGIN/END; future MMO/website importers target schema=%s"
 			% PawnData.PORTABLE_CHARACTER_SCHEMA
 	)
+
+
+func _report_creator_session_digest() -> void:
+	var tick: int = GameManager.tick_count
+	var paused_s: String = "yes — time is frozen" if GameManager.is_paused else "no — time is running"
+	var spd: float = GameManager.game_speed
+	var yr: int = SimTime.sim_year_index(tick)
+	var day_in_y: int = SimTime.calendar_day_within_sim_year(tick)
+	var days_per: int = SimTime.visual_days_per_sim_year()
+	var abs_day: int = SimTime.calendar_absolute_visual_day(tick)
+	print("")
+	print("========== HEELKAWN · CREATOR SESSION DIGEST · ONE PASTE ==========")
+	print("Paste everything from CREATOR_START through CREATOR_END to anyone helping you.")
+	print("CREATOR_START")
+	print("")
+	print("--- What you are seeing (plain words) ---")
+	print(
+			"The simulation clock is at tick %d — think of that as the film frame counter."
+			% tick
+	)
+	print(
+			"Calendar: Year %d · day %d of %d in this year · absolute day %d since start."
+			% [yr, day_in_y, days_per, abs_day]
+	)
+	print("Speed is %.1fx; pause is %s." % [spd, paused_s])
+	var main_node: Node2D = _main()
+	var wseed: int = -1
+	if main_node != null:
+		var w: World = main_node.get_node_or_null("WorldViewport/World") as World
+		if w != null and w.data != null:
+			wseed = int(w.data.world_seed)
+	if wseed >= 0:
+		print("World seed (same seed → same geography rules): %d" % wseed)
+	else:
+		print("World seed: not available from Main/World (ignore if headless).")
+	var pawn_n: int = _get_playtest_pawn_count()
+	if pawn_n >= 0:
+		print(
+				"Heelkawnians alive right now: %d — each one has needs, job prefs, and bonds like anyone in the colony."
+				% pawn_n
+		)
+	print(
+			"Recorded memories in the chronicle so far: %d events — births, talks, work, and milestones."
+			% WorldMemory.event_count()
+	)
+	var stance: String = str(ColonySimServices.get_stance_display())
+	var food_p: float = ColonySimServices.get_food_pressure()
+	var house_p: float = ColonySimServices.get_housing_pressure()
+	var mat_p: float = ColonySimServices.get_materials_pressure()
+	print(
+			"Colony mood from pressures: stance \"%s\". Food strain %.0f%% · housing strain %.0f%% · materials strain %.0f%%."
+			% [stance, food_p * 100.0, house_p * 100.0, mat_p * 100.0]
+	)
+	print(_creator_digest_pressure_sentence(food_p, house_p, mat_p))
+	var st_count: int = SettlementMemory.settlements.size()
+	print(
+			"Clusters we call settlements right now: %d (they carry culture, intent, and revival score)."
+			% st_count
+	)
+	if st_count > 0:
+		var st0: Variant = SettlementMemory.settlements[0]
+		if st0 is Dictionary:
+			var st: Dictionary = st0 as Dictionary
+			print(
+					'Largest indexed settlement snapshot — state: "%s" · culture flavor: %s · formal intent: %s.'
+					% [
+						str(st.get("state", "?")),
+						str(st.get("culture_name", "?")),
+						str(st.get("current_intent", "?")),
+					]
+			)
+	if main_node != null and main_node.has_method("get_wildlife_snapshot_for_diagnostic"):
+		var wld: Dictionary = main_node.call("get_wildlife_snapshot_for_diagnostic") as Dictionary
+		print(
+				"Animals on the map (rabbits / deer / total): %d / %d / %d"
+				% [
+					int(wld.get("rabbit", 0)),
+					int(wld.get("deer", 0)),
+					int(wld.get("total", 0)),
+				]
+		)
+	print("")
+	print("Recent story beats (newest last in log; shortened):")
+	var evs: Array = WorldMemory.get_recent_events(14)
+	var printed_lines: int = 0
+	for i in range(evs.size() - 1, -1, -1):
+		if printed_lines >= 6:
+			break
+		var ev_any: Variant = evs[i]
+		if ev_any is Dictionary:
+			var ln: String = _creator_digest_plain_event_line(ev_any as Dictionary)
+			if not ln.is_empty():
+				print(ln)
+				printed_lines += 1
+	if printed_lines == 0:
+		print("• (Quiet moment — no fresh highlights in the last few events.)")
+	print("")
+	if main_node != null and main_node.has_method("get_selected_pawn"):
+		var sp: Pawn = main_node.call("get_selected_pawn") as Pawn
+		if sp != null and is_instance_valid(sp) and sp.data != null:
+			var dd: PawnData = sp.data
+			var rk_sel: int = preload("res://autoloads/WorldMemory.gd")._region_key(dd.tile_pos.x, dd.tile_pos.y)
+			print(
+					"Your highlighted Heelkawnian on the right-hand sheet: %s — doing \"%s\" · hunger/rest snapshot %.0f / %.0f."
+					% [dd.display_name, sp.describe_state(), dd.hunger, dd.rest]
+			)
+			print("They stand on region #%d (settlements use these ids behind the scenes)." % rk_sel)
+		else:
+			print("No pawn is highlighted — click someone on the map to attach the sheet to them.")
+	if main_node != null and main_node.has_method("get_player_mode_label"):
+		print(
+				"You are in \"%s\" mode (spectator flies above; incarnation pilots one body)."
+				% str(main_node.call("get_player_mode_label"))
+		)
+	print("")
+	print("--- What machines read (compact backend truth) ---")
+	print("[creator_digest_meta] schema=2026-04-29c tick=%d world_seed=%d" % [tick, wseed])
+	print("[sim_diag] %s" % str(GameManager.sim_diag()))
+	print("[jobs] %s" % str(JobManager.stats()))
+	print("[stockpile_zones] count=%d" % StockpileManager.zones().size())
+	var zlist: Array = StockpileManager.zones()
+	if zlist.size() > 0 and zlist[0] != null and is_instance_valid(zlist[0]):
+		var z0s: Stockpile = zlist[0] as Stockpile
+		if z0s != null:
+			print("[stockpile_first_zone_items] %s" % str(z0s.inventory))
+	print("[settlements_n] %d" % SettlementMemory.settlements.size())
+	print("[intent_memory_global] %.6f" % IntentMemory.global_pressure)
+	print(PlayerIntentQueue.debug_summary_block())
+	print("[faction_registry]")
+	print(FactionRegistry.debug_summary_block())
+	print("[observation_ambient] %s" % str(ObservationAPI.observe_sim_ambient(-1)))
+	if main_node != null:
+		if main_node.has_method("get_camera_settlement_revival_digest"):
+			print(
+					"[camera_settlement_revival_digest] %s"
+					% str(main_node.call("get_camera_settlement_revival_digest"))
+			)
+		var kd: Node = main_node.get_node_or_null("KernelDiagnostic")
+		if kd != null and kd.has_method("generate_session_log_summary"):
+			var ks: String = str(kd.call("generate_session_log_summary"))
+			var short_k: String = ks
+			if short_k.length() > 900:
+				short_k = short_k.substr(0, 900) + "\n... [kernel summary truncated; use F10 · 24 for full] ..."
+			print("[kernel_summary_compact]\n%s" % short_k)
+	print("")
+	print("Hints: F10 · 31 = smaller bundle · F10 · 32 = long chronicle export · F10 · ERROR = wiring check.")
+	print("CREATOR_END")
+	print("========== END CREATOR DIGEST ==========")
+	print("")
+
+
+func _creator_digest_pressure_sentence(food_p: float, hous_p: float, mat_p: float) -> String:
+	var bits: PackedStringArray = PackedStringArray()
+	if food_p >= 0.55:
+		bits.append("food is tight — foragers and farms matter")
+	if hous_p >= 0.55:
+		bits.append("shelter is stressed — beds and space compete")
+	if mat_p >= 0.55:
+		bits.append("building materials feel scarce for projects")
+	if bits.is_empty():
+		return "Day-to-day pressures look manageable from the colony-wide gauges."
+	return "Plain read on strain: " + " · ".join(bits) + "."
+
+
+func _creator_digest_plain_event_line(ev: Dictionary) -> String:
+	var typ: String = str(ev.get("type", ""))
+	match typ:
+		"social_meeting":
+			return "• %s and %s crossed paths." % [str(ev.get("a_name", "?")), str(ev.get("b_name", "?"))]
+		"social_bond_milestone":
+			return "• %s and %s grew noticeably closer." % [str(ev.get("a_name", "?")), str(ev.get("b_name", "?"))]
+		"pawn_death_fact", "death":
+			return "• Someone died — the world remembers."
+		"birth", "child_born":
+			return "• New life joined the colony."
+		"job_completed":
+			return ""
+		"knowledge_acquisition":
+			return "• Someone picked up practical knowledge."
+		"player_inspect":
+			return ""
+		"governance_change":
+			return "• Leadership or council posture shifted."
+		_:
+			if typ.is_empty():
+				return ""
+			return "• (%s)" % typ
 
 
 func _report_playtest_bundle() -> void:

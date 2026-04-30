@@ -3053,6 +3053,13 @@ func get_player_pawn() -> Pawn:
 	return null
 
 
+## HUD selection (clicked pawn). Not necessarily the incarnation body.
+func get_selected_pawn() -> Pawn:
+	if _selected_pawn != null and is_instance_valid(_selected_pawn):
+		return _selected_pawn
+	return null
+
+
 func get_player_profession_name() -> String:
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return "None"

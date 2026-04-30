@@ -6,6 +6,10 @@ Use this **compact pack** so anyone (human or AI) can see what fired, what stall
 
 ## Always paste (every session, any length)
 
+**Prefer one block:** **F10 → `34 · Creator session digest (plain + AI · one paste)`** (`creator_digest`). Copy everything from `CREATOR_START` through `CREATOR_END`. It mixes plain-language “what the world feels like” lines with a compact backend slice (sim_diag, jobs, intents, observation ambient, revival digest, kernel snippet) so you only paste once.
+
+If you are debugging wiring only, you can still use the shorter bundle below.
+
 1. **One line of context** (you type):
    - World seed (from reroll / note), game speed you used most, about how many in-game days, anything weird you saw.
 
@@ -26,6 +30,7 @@ Use this **compact pack** so anyone (human or AI) can see what fired, what stall
 | Settlement / identity / pressure | `06 · SettlementMemory` + `04 · IntentMemory` | Intent + cluster state |
 | Economy / jobs / stock | `11 · Jobs + stockpile zones` | Open vs completed, zone truth |
 | Long arc (~1 sim year+) | `32 · Soul bundle` | Handoff paste (trimmed stdout; still heavy) |
+| Full session handoff (feel + matrix, one paste) | `34 · Creator session digest` | Plain words + backend facts in one `CREATOR_*` block |
 | One pawn for web/MMO schema | `33 · Portable character JSON` | `heelkawn_character_portable/v1` export |
 | Observer / chronicler tools | `28 · PlayerIntentQueue` | Pin/focus / queue backlog |
 

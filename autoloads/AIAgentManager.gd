@@ -59,6 +59,9 @@ var prediction_accuracy: float = 0.85  # Target accuracy for predictions
 var strategic_agent_count: int = 2
 var tactical_agent_count: int = 4
 var reactive_agent_count: int = 2
+var _agent_update_cursor: int = 0
+var _last_world_ai_update_tick: int = -1
+var _last_settlement_ai_update_tick: int = -1
 
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
@@ -744,14 +747,19 @@ func _on_game_tick(tick: int) -> void:
 	elif GameManager.game_speed >= 12.0:
 		stride = 2
 	
-	# Update enhanced AI systems
+	# Update enhanced AI systems on a cadence tuned for frame pacing.
 	if civilization_mode and tick % stride == 0:
-		if world_ai:
+		var world_ai_interval: int = _world_ai_interval_for_speed() * stride
+		if world_ai and (_last_world_ai_update_tick < 0 or tick - _last_world_ai_update_tick >= world_ai_interval):
 			world_ai.update()
-		
-		for settlement_id in settlement_ai_system:
-			var settlement = settlement_ai_system[settlement_id]
-			settlement.update()
+			_last_world_ai_update_tick = tick
+		var settlement_ai_interval: int = _settlement_ai_interval_for_speed() * stride
+		if _last_settlement_ai_update_tick < 0 or tick - _last_settlement_ai_update_tick >= settlement_ai_interval:
+			for settlement_id in settlement_ai_system:
+				var settlement = settlement_ai_system[settlement_id]
+				if settlement != null:
+					settlement.update()
+			_last_settlement_ai_update_tick = tick
 	
 	# Update agents at specified frequency
 	if tick - last_update_tick >= update_frequency * stride:
@@ -761,6 +769,66 @@ func _on_game_tick(tick: int) -> void:
 	# Spawn new agents if under limit and conditions are met
 	if tick % (600 * stride) == 0:  # Check every 600 ticks at base cadence
 		_maintain_agent_population()
+
+
+func _world_ai_interval_for_speed() -> int:
+	if GameManager == null:
+		return 3
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 24
+	if gs >= 50.0:
+		return 16
+	if gs >= 26.0:
+		return 12
+	if gs >= 12.0:
+		return 8
+	if gs >= 6.0:
+		return 6
+	if gs >= 3.0:
+		return 4
+	return 3
+
+
+func _settlement_ai_interval_for_speed() -> int:
+	if GameManager == null:
+		return 8
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 48
+	if gs >= 50.0:
+		return 32
+	if gs >= 26.0:
+		return 24
+	if gs >= 12.0:
+		return 16
+	if gs >= 6.0:
+		return 12
+	return 8
+
+
+func _agent_update_budget_for_speed(total_agents: int) -> int:
+	if total_agents <= 1:
+		return total_agents
+	if GameManager == null:
+		return total_agents
+	var gs: float = GameManager.game_speed
+	var divisor: int = 1
+	if gs >= 100.0:
+		divisor = 6
+	elif gs >= 50.0:
+		divisor = 5
+	elif gs >= 26.0:
+		divisor = 4
+	elif gs >= 12.0:
+		divisor = 3
+	elif gs >= 6.0:
+		divisor = 3
+	elif gs >= 3.0:
+		divisor = 2
+	else:
+		divisor = 2
+	return maxi(1, int(ceil(float(total_agents) / float(divisor))))
 
 func _spawn_initial_agents() -> void:
 	var AIAgentClass = preload("res://scripts/ai/AIAgent.gd")
@@ -904,14 +972,27 @@ func _is_pawn_controlled(pawn_id: int) -> bool:
 	return false
 
 func _update_all_agents() -> void:
-	for agent in agents.values():
-		if agent != null:
-			agent.update()
-			
-			# Update enhanced AI agents if civilization mode is enabled
-			if civilization_mode and civilization_agents.has(agent.agent_id):
-				var civ_agent: CivilizationAgent = civilization_agents[agent.agent_id]
+	var total: int = agents.size()
+	if total <= 0:
+		return
+	var agent_ids: Array = agents.keys()
+	agent_ids.sort()
+	var budget: int = mini(total, _agent_update_budget_for_speed(total))
+	var start: int = posmod(_agent_update_cursor, total)
+	for step in range(budget):
+		var idx: int = posmod(start + step, total)
+		var agent_id: int = int(agent_ids[idx])
+		var agent: AIAgent = agents.get(agent_id, null)
+		if agent == null:
+			continue
+		agent.update()
+		
+		# Update enhanced AI agents if civilization mode is enabled
+		if civilization_mode and civilization_agents.has(agent.agent_id):
+			var civ_agent: CivilizationAgent = civilization_agents[agent.agent_id]
+			if civ_agent != null:
 				civ_agent.update()
+	_agent_update_cursor = posmod(start + budget, total)
 
 func _maintain_agent_population() -> void:
 	# Remove dead agents

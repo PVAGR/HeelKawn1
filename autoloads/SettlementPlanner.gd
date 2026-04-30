@@ -28,8 +28,13 @@ const CULTURE_CAUTIOUS: int = 1
 const CULTURE_DEFENSIVE: int = 2
 const PLANNING_REGION_RADIUS: int = 4
 const PLANNING_REGION_HARD_CAP: int = 96
+const PLANNER_MAX_SETTLEMENTS_PER_PASS: int = 5
+const PLANNER_BED_SCAN_CAP: int = 24
+const PLANNER_BED_PATH_PROBE_CAP: int = 4
+const PLANNER_WALL_SCAN_CAP: int = 256
 
 var _last_plan_tick: int = -1_000_000_000
+var _plan_rr_cursor: int = 0
 
 
 func plan(world: World, main: Node2D, from_memory_dirty: bool) -> void:
@@ -39,10 +44,26 @@ func plan(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 		var t0: int = GameManager.tick_count
 		if t0 - _last_plan_tick < PLANNING_INTERVAL_TICKS:
 			return
+		var open_backpressure_limit: int = _planner_open_job_backpressure_limit()
+		if open_backpressure_limit > 0 and JobManager.open_count() >= open_backpressure_limit:
+			return
 	_last_plan_tick = GameManager.tick_count
 	if not main.has_method("settlement_planner_count_pawns_in_regions"):
 		return
-	for s in SettlementMemory.settlements:
+	var settlements: Array = SettlementMemory.settlements
+	var total: int = settlements.size()
+	if total <= 0:
+		return
+	var start_idx: int = _plan_rr_cursor % total
+	var max_settlements: int = _planner_pass_settlement_limit()
+	var budget_usec: int = _planner_pass_budget_usec()
+	var started_usec: int = Time.get_ticks_usec()
+	var processed: int = 0
+	var scanned: int = 0
+	while scanned < total and processed < max_settlements:
+		var idx: int = (start_idx + scanned) % total
+		scanned += 1
+		var s: Variant = settlements[idx]
 		if not (s is Dictionary):
 			continue
 		var d: Dictionary = s as Dictionary
@@ -59,6 +80,57 @@ func plan(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 		if planning_regions.is_empty():
 			continue
 		_plan_one_settlement(world, main, d, planning_regions)
+		processed += 1
+		if Time.get_ticks_usec() - started_usec >= budget_usec:
+			break
+	_plan_rr_cursor = (start_idx + scanned) % total
+
+
+static func _planner_pass_settlement_limit() -> int:
+	if GameManager == null:
+		return PLANNER_MAX_SETTLEMENTS_PER_PASS
+	var gs: float = GameManager.game_speed
+	if gs >= 50.0:
+		return 1
+	if gs >= 12.0:
+		return 2
+	if gs >= 3.0:
+		return 3
+	return PLANNER_MAX_SETTLEMENTS_PER_PASS
+
+
+static func _planner_pass_budget_usec() -> int:
+	if GameManager == null:
+		return 12_000
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 6_000
+	if gs >= 50.0:
+		return 7_000
+	if gs >= 26.0:
+		return 9_000
+	if gs >= 12.0:
+		return 12_000
+	if gs >= 3.0:
+		return 16_000
+	return 20_000
+
+
+static func _planner_open_job_backpressure_limit() -> int:
+	if GameManager == null:
+		return -1
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 80
+	if gs >= 50.0:
+		return 96
+	if gs >= 26.0:
+		return 112
+	if gs >= 12.0:
+		return 128
+	if gs >= 3.0:
+		return 160
+	return -1
 
 
 func _plan_one_settlement(
@@ -157,7 +229,7 @@ func _plan_one_settlement_culture(
 					continue
 				if wall_n > 0 and _wall_bbox_too_small(data, regions, VILLAGE_SPAN, feature_summary):
 					var texp: Vector2i = _pick_expansion_wall_tile_culture(
-							world, main, data, center, regions, cult
+							world, main, data, center, regions, cult, feature_summary
 					)
 					if texp.x >= 0 and bool(main.call("settlement_planner_post_wall", texp)):
 						return
@@ -196,7 +268,7 @@ func _plan_one_settlement_culture(
 					need_p = maxi(2, need_p - 2)
 				if stage == 1 and pawns >= need_p:
 					var t8: Vector2i = _pick_expansion_wall_tile_culture(
-							world, main, data, center, regions, cult
+							world, main, data, center, regions, cult, feature_summary
 					)
 					if t8.x >= 0 and bool(main.call("settlement_planner_post_wall", t8)):
 						return
@@ -222,7 +294,7 @@ func _plan_one_settlement_culture(
 					continue
 				if stage >= 1:
 					var t10: Vector2i = _first_interior_bbox_wall_door(
-							world, main, data, center, regions, cult
+							world, main, data, center, regions, cult, feature_summary
 					)
 					if t10.x >= 0 and bool(main.call("settlement_planner_post_door", t10)):
 						return
@@ -304,10 +376,11 @@ func _pick_farthest_bed_tile(
 		_world: World, main: Node2D, center: Vector2i, regions: PackedInt32Array
 ) -> Vector2i:
 	var cands: Array[Vector2i] = []
+	var region_lookup: Dictionary = _regions_lookup(regions)
 	for dy in range(-12, 13):
 		for dx in range(-12, 13):
 			var t := Vector2i(center.x + dx, center.y + dy)
-			if not _tile_belongs_to_regions(t, regions):
+			if not _tile_belongs_to_lookup(t, region_lookup):
 				continue
 			if not bool(main.call("settlement_planner_is_valid_bed_site", t)):
 				continue
@@ -320,12 +393,12 @@ func _pick_farthest_bed_tile(
 
 func _pick_expansion_wall_tile_culture(
 		world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array,
-		cult: int
+		cult: int, feature_summary: Dictionary = {}
 ) -> Vector2i:
 	# OPEN: sprawl; DEF/CAUTIOUS: compact (nearest) ring growth.
 	if cult == CULTURE_OPEN:
-		return _pick_expansion_wall_tile(world, main, data, center, regions, true)
-	return _pick_expansion_wall_tile(world, main, data, center, regions, false)
+		return _pick_expansion_wall_tile(world, main, data, center, regions, true, feature_summary)
+	return _pick_expansion_wall_tile(world, main, data, center, regions, false, feature_summary)
 
 
 static func _center_tile_of_region_key(rk: int) -> Vector2i:
@@ -363,10 +436,25 @@ static func _select_planning_regions(
 			return da < db
 		return a < b
 	)
-	var take_n: int = mini(PLANNING_REGION_HARD_CAP, source.size())
+	var take_n: int = mini(_planning_region_cap_for_speed(), source.size())
 	for i in range(take_n):
 		out.append(int(source[i]))
 	return out
+
+
+static func _planning_region_cap_for_speed() -> int:
+	if GameManager == null:
+		return PLANNING_REGION_HARD_CAP
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return mini(24, PLANNING_REGION_HARD_CAP)
+	if gs >= 50.0:
+		return mini(32, PLANNING_REGION_HARD_CAP)
+	if gs >= 26.0:
+		return mini(48, PLANNING_REGION_HARD_CAP)
+	if gs >= 12.0:
+		return mini(64, PLANNING_REGION_HARD_CAP)
+	return PLANNING_REGION_HARD_CAP
 
 
 static func _tile_belongs_to_regions(t: Vector2i, regions: PackedInt32Array) -> bool:
@@ -375,6 +463,17 @@ static func _tile_belongs_to_regions(t: Vector2i, regions: PackedInt32Array) -> 
 		if int(regions[j]) == rk:
 			return true
 	return false
+
+
+static func _regions_lookup(regions: PackedInt32Array) -> Dictionary:
+	var out: Dictionary = {}
+	for j in range(regions.size()):
+		out[int(regions[j])] = true
+	return out
+
+
+static func _tile_belongs_to_lookup(t: Vector2i, lookup: Dictionary) -> bool:
+	return lookup.has(WorldMemory._region_key(t.x, t.y))
 
 
 static func _count_feature_in_regions(
@@ -515,10 +614,11 @@ func _pick_nearest_bed_tile(
 		_world: World, main: Node2D, center: Vector2i, regions: PackedInt32Array
 ) -> Vector2i:
 	var cands: Array[Vector2i] = []
+	var region_lookup: Dictionary = _regions_lookup(regions)
 	for dy in range(-12, 13):
 		for dx in range(-12, 13):
 			var t := Vector2i(center.x + dx, center.y + dy)
-			if not _tile_belongs_to_regions(t, regions):
+			if not _tile_belongs_to_lookup(t, region_lookup):
 				continue
 			if not bool(main.call("settlement_planner_is_valid_bed_site", t)):
 				continue
@@ -593,7 +693,7 @@ func _collect_wall_tiles_in_regions(
 
 ## Deterministic map order, no culture sort; used to collect before OPEN/COMMON door ordering.
 static func _collect_wall_tiles_in_regions_nosort(
-		data: WorldData, regions: PackedInt32Array
+		data: WorldData, regions: PackedInt32Array, max_tiles: int = -1
 ) -> Array[Vector2i]:
 	var out0: Array[Vector2i] = []
 	for j in range(regions.size()):
@@ -608,6 +708,8 @@ static func _collect_wall_tiles_in_regions_nosort(
 					continue
 				if int(data.get_feature(x0, y0)) == TileFeature.Type.WALL:
 					out0.append(Vector2i(x0, y0))
+					if max_tiles > 0 and out0.size() >= max_tiles:
+						return out0
 	return out0
 
 
@@ -616,14 +718,15 @@ static func _collect_viable_door_tiles(
 		world: World, main: Node2D, _data: WorldData, center: Vector2i, regions: PackedInt32Array
 ) -> Array[Vector2i]:
 	var by_linear: Dictionary = {}
-	for t in _collect_wall_tiles_in_regions_nosort(world.data, regions):
+	var region_lookup: Dictionary = _regions_lookup(regions)
+	for t in _collect_wall_tiles_in_regions_nosort(world.data, regions, PLANNER_WALL_SCAN_CAP):
 		if not bool(main.call("settlement_planner_is_valid_door_site", t)):
 			continue
 		by_linear[t.y * WorldData.WIDTH + t.x] = t
 	for dy in range(-6, 7):
 		for dx in range(-6, 7):
 			var t2: Vector2i = Vector2i(center.x + dx, center.y + dy)
-			if not _tile_belongs_to_regions(t2, regions):
+			if not _tile_belongs_to_lookup(t2, region_lookup):
 				continue
 			if not bool(main.call("settlement_planner_is_valid_door_site", t2)):
 				continue
@@ -677,7 +780,7 @@ static func _zone_rect_3x3_anchored_at(center: Vector2i, _data: WorldData) -> Re
 
 
 static func _collect_bed_tiles_in_regions(
-		data: WorldData, regions: PackedInt32Array
+		data: WorldData, regions: PackedInt32Array, max_tiles: int = -1
 ) -> Array[Vector2i]:
 	var outb: Array[Vector2i] = []
 	for j in range(regions.size()):
@@ -692,6 +795,8 @@ static func _collect_bed_tiles_in_regions(
 					continue
 				if int(data.get_feature(x, y)) == TileFeature.Type.BED:
 					outb.append(Vector2i(x, y))
+					if max_tiles > 0 and outb.size() >= max_tiles:
+						return outb
 	return outb
 
 
@@ -741,36 +846,44 @@ static func _wall_bbox_too_small(
 ## If [param prefer_farthest], candidate order is far-from-center, then index (OPEN sprawl).
 func _pick_expansion_wall_tile(
 		_world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array,
-		prefer_farthest: bool = false
+		prefer_farthest: bool = false, feature_summary: Dictionary = {}
 ) -> Vector2i:
 	var wx0: int = 1_000_000
 	var wx1: int = -1_000_000
 	var wy0: int = 1_000_000
 	var wy1: int = -1_000_000
 	var any_w2: bool = false
-	for j in range(regions.size()):
-		var rk2: int = int(regions[j])
-		var rx: int = rk2 & 0xFFFF
-		var ry: int = (rk2 >> 16) & 0xFFFF
-		for dy in 16:
-			for dx in 16:
-				var x2: int = rx * 16 + dx
-				var y2: int = ry * 16 + dy
-				if not data.in_bounds(x2, y2):
-					continue
-				if int(data.get_feature(x2, y2)) != TileFeature.Type.WALL:
-					continue
-				any_w2 = true
-				wx0 = mini(wx0, x2)
-				wx1 = maxi(wx1, x2)
-				wy0 = mini(wy0, y2)
-				wy1 = maxi(wy1, y2)
+	if not feature_summary.is_empty() and bool(feature_summary.get("wall_any", false)):
+		any_w2 = true
+		wx0 = int(feature_summary.get("wall_x0", wx0))
+		wx1 = int(feature_summary.get("wall_x1", wx1))
+		wy0 = int(feature_summary.get("wall_y0", wy0))
+		wy1 = int(feature_summary.get("wall_y1", wy1))
+	if not any_w2:
+		for j in range(regions.size()):
+			var rk2: int = int(regions[j])
+			var rx: int = rk2 & 0xFFFF
+			var ry: int = (rk2 >> 16) & 0xFFFF
+			for dy in 16:
+				for dx in 16:
+					var x2: int = rx * 16 + dx
+					var y2: int = ry * 16 + dy
+					if not data.in_bounds(x2, y2):
+						continue
+					if int(data.get_feature(x2, y2)) != TileFeature.Type.WALL:
+						continue
+					any_w2 = true
+					wx0 = mini(wx0, x2)
+					wx1 = maxi(wx1, x2)
+					wy0 = mini(wy0, y2)
+					wy1 = maxi(wy1, y2)
 	if not any_w2:
 		return Vector2i(-1, -1)
 	var ex0: int = maxi(0, wx0 - 1)
 	var ex1: int = mini(WorldData.WIDTH - 1, wx1 + 1)
 	var ey0: int = maxi(0, wy0 - 1)
 	var ey1: int = mini(WorldData.HEIGHT - 1, wy1 + 1)
+	var region_lookup: Dictionary = _regions_lookup(regions)
 	var cands3: Array[Vector2i] = []
 	for y3 in range(ey0, ey1 + 1):
 		for x3 in range(ex0, ex1 + 1):
@@ -779,7 +892,7 @@ func _pick_expansion_wall_tile(
 			if int(data.get_feature(x3, y3)) == TileFeature.Type.WALL:
 				continue
 			var ts: Vector2i = Vector2i(x3, y3)
-			if not _tile_belongs_to_regions(ts, regions):
+			if not _tile_belongs_to_lookup(ts, region_lookup):
 				continue
 			if not bool(main.call("settlement_planner_is_valid_build_wall_site", ts)):
 				continue
@@ -812,17 +925,25 @@ static func _derive_settlement_stage(
 static func _path_bed_to_center_exists(
 		world: World, data: WorldData, center: Vector2i, regions: PackedInt32Array
 ) -> bool:
-	var beds0: Array[Vector2i] = _collect_bed_tiles_in_regions(data, regions)
+	var beds0: Array[Vector2i] = _collect_bed_tiles_in_regions(data, regions, PLANNER_BED_SCAN_CAP)
 	if beds0.is_empty():
 		return true
 	_sort_tiles_index_order(beds0, center)
 	var pf: PathFinder = world.pathfinder
-	for b0 in beds0:
+	if pf == null:
+		return true
+	var center_comp: int = pf.component_of(center)
+	var probes: int = mini(PLANNER_BED_PATH_PROBE_CAP, beds0.size())
+	for i in range(probes):
+		var b0: Vector2i = beds0[i]
 		if b0 == center:
 			return true
-		var pth: Array = pf.find_path(b0, center)
-		if pth.size() > 0:
+		if center_comp >= 0 and pf.component_of(b0) == center_comp:
 			return true
+		if center_comp < 0:
+			var pth: Array = pf.find_path(b0, center)
+			if pth.size() > 0:
+				return true
 	return false
 
 
@@ -868,10 +989,11 @@ func _pick_door_tile_far_from_center(
 		_world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array
 ) -> Vector2i:
 	var by_idx: Dictionary = {}
+	var region_lookup: Dictionary = _regions_lookup(regions)
 	for dy2 in range(-8, 9):
 		for dx2 in range(-8, 9):
 			var t3 := Vector2i(center.x + dx2, center.y + dy2)
-			if not _tile_belongs_to_regions(t3, regions):
+			if not _tile_belongs_to_lookup(t3, region_lookup):
 				continue
 			if int(data.get_feature(t3.x, t3.y)) == TileFeature.Type.DOOR:
 				continue
@@ -889,44 +1011,53 @@ func _pick_door_tile_far_from_center(
 
 func _first_interior_bbox_wall_door(
 		_world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array,
-		cult: int
+		cult: int, feature_summary: Dictionary = {}
 ) -> Vector2i:
 	var wx0: int = 1_000_000
 	var wx1: int = -1_000_000
 	var wy0: int = 1_000_000
 	var wy1: int = -1_000_000
 	var any_w3: bool = false
-	for j in range(regions.size()):
-		var rk2: int = int(regions[j])
-		var rx: int = rk2 & 0xFFFF
-		var ry: int = (rk2 >> 16) & 0xFFFF
-		for dy in 16:
-			for dx in 16:
-				var x4: int = rx * 16 + dx
-				var y4: int = ry * 16 + dy
-				if not data.in_bounds(x4, y4):
-					continue
-				if int(data.get_feature(x4, y4)) != TileFeature.Type.WALL:
-					continue
-				any_w3 = true
-				wx0 = mini(wx0, x4)
-				wx1 = maxi(wx1, x4)
-				wy0 = mini(wy0, y4)
-				wy1 = maxi(wy1, y4)
+	if not feature_summary.is_empty() and bool(feature_summary.get("wall_any", false)):
+		any_w3 = true
+		wx0 = int(feature_summary.get("wall_x0", wx0))
+		wx1 = int(feature_summary.get("wall_x1", wx1))
+		wy0 = int(feature_summary.get("wall_y0", wy0))
+		wy1 = int(feature_summary.get("wall_y1", wy1))
+	if not any_w3:
+		for j in range(regions.size()):
+			var rk2: int = int(regions[j])
+			var rx: int = rk2 & 0xFFFF
+			var ry: int = (rk2 >> 16) & 0xFFFF
+			for dy in 16:
+				for dx in 16:
+					var x4: int = rx * 16 + dx
+					var y4: int = ry * 16 + dy
+					if not data.in_bounds(x4, y4):
+						continue
+					if int(data.get_feature(x4, y4)) != TileFeature.Type.WALL:
+						continue
+					any_w3 = true
+					wx0 = mini(wx0, x4)
+					wx1 = maxi(wx1, x4)
+					wy0 = mini(wy0, y4)
+					wy1 = maxi(wy1, y4)
 	if not any_w3 or wx1 - wx0 < 2 or wy1 - wy0 < 2:
 		return Vector2i(-1, -1)
+	var region_lookup: Dictionary = _regions_lookup(regions)
 	var cin: Array[Vector2i] = []
 	for y5 in range(wy0 + 1, wy1):
 		for x5 in range(wx0 + 1, wx1):
 			if not data.in_bounds(x5, y5):
 				continue
-			if not _tile_belongs_to_regions(Vector2i(x5, y5), regions):
+			var t5: Vector2i = Vector2i(x5, y5)
+			if not _tile_belongs_to_lookup(t5, region_lookup):
 				continue
 			if int(data.get_feature(x5, y5)) != TileFeature.Type.WALL:
 				continue
-			if not bool(main.call("settlement_planner_is_valid_door_site", Vector2i(x5, y5))):
+			if not bool(main.call("settlement_planner_is_valid_door_site", t5)):
 				continue
-			cin.append(Vector2i(x5, y5))
+			cin.append(t5)
 	if cin.is_empty():
 		return Vector2i(-1, -1)
 	if cult == CULTURE_OPEN:

@@ -304,11 +304,11 @@ func _planner_interval_for_speed() -> int:
 		return 90
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 2160
+		return 3600
 	if gs >= 50.0:
-		return 1200
+		return 1800
 	if gs >= 26.0:
-		return 600
+		return 900
 	if gs >= 12.0:
 		return 300
 	if gs >= 3.0:
@@ -2044,7 +2044,9 @@ func _on_game_tick(tick: int) -> void:
 func _maybe_log_tick_hotspots(tick: int, section_us: Dictionary) -> void:
 	if not OS.is_debug_build():
 		return
-	if GameManager == null or GameManager.game_speed < 26.0:
+	if GameManager == null:
+		return
+	if GameManager.game_speed < 26.0:
 		return
 	var total_us: int = 0
 	for k in section_us.keys():

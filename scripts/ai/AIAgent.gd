@@ -60,6 +60,10 @@ var memory: Memory
 var current_goals: Array[Goal] = []
 var decision_frequency: int = 30  # Make decisions every N ticks
 var last_decision_tick: int = 0
+var memory_update_frequency: int = 8
+var goal_update_frequency: int = 8
+var last_memory_tick: int = -1
+var last_goal_tick: int = -1
 
 # Personality parameters (0.0 to 1.0)
 var aggressiveness: float = 0.5
@@ -72,6 +76,16 @@ func _init(id: int, type: AgentType = AgentType.TACTICAL):
 	agent_id = id
 	agent_type = type
 	memory = Memory.new()
+	match agent_type:
+		AgentType.STRATEGIC:
+			memory_update_frequency = 12
+			goal_update_frequency = 12
+		AgentType.TACTICAL:
+			memory_update_frequency = 8
+			goal_update_frequency = 8
+		AgentType.REACTIVE:
+			memory_update_frequency = 6
+			goal_update_frequency = 6
 	_generate_personality()
 
 func _agent_stream(label: String) -> StringName:
@@ -114,11 +128,13 @@ func _generate_personality() -> void:
 func update() -> void:
 	var current_tick: int = GameManager.tick_count
 	
-	# Update memory with current observation
-	_update_memory()
-	
-	# Check goal completion and update progress
-	_update_goals()
+	# Observation and goal bookkeeping are intentionally throttled.
+	if last_memory_tick < 0 or current_tick - last_memory_tick >= memory_update_frequency:
+		_update_memory()
+		last_memory_tick = current_tick
+	if last_goal_tick < 0 or current_tick - last_goal_tick >= goal_update_frequency:
+		_update_goals()
+		last_goal_tick = current_tick
 	
 	# Make decisions at specified frequency
 	if current_tick - last_decision_tick >= decision_frequency:
@@ -198,16 +214,6 @@ func _generate_goals() -> void:
 		_generate_pawn_goals()
 
 func _generate_spectator_goals() -> void:
-	# Spectator goals: find interesting pawns to observe, monitor settlements
-	var obs: Dictionary = {}
-	if ObservationAPI != null:
-		obs = ObservationAPI.observe_camera_view()
-	else:
-		obs = {"error": "ObservationAPI not available"}
-	
-	if obs.has("error"):
-		return
-	
 	# AI agents must not claim the human incarnation channel until NPC ownership is separate.
 	return
 

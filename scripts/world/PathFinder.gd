@@ -22,6 +22,7 @@ var _astar: AStarGrid2D
 ## Per-tile connected component id. -1 = impassable tile. Same non-negative
 ## value on two tiles == you can walk from one to the other.
 var _component_id: PackedInt32Array
+var _largest_component_id_cached: int = -1
 
 ## Pending BUILD_WALL jobs: treat cell as impassable so paths route around
 ## planned walls. Cleared on job complete/cancel/world regen.
@@ -253,18 +254,7 @@ func are_reachable(a: Vector2i, b: Vector2i) -> bool:
 ## continent" for placing the colony's stockpile and restricting pawn spawns
 ## to the same landmass.
 func largest_component_id() -> int:
-	var counts: Dictionary = {}
-	for id in _component_id:
-		if id < 0:
-			continue
-		counts[id] = counts.get(id, 0) + 1
-	var best_id: int = -1
-	var best_count: int = 0
-	for id in counts:
-		if counts[id] > best_count:
-			best_count = counts[id]
-			best_id = id
-	return best_id
+	return _largest_component_id_cached
 
 
 ## Find a tile belonging to `comp_id` closest to `center`. Used to place the
@@ -296,6 +286,8 @@ func _compute_components(_data: WorldData) -> void:
 	for i in range(_component_id.size()):
 		_component_id[i] = -1
 	var current_id: int = 0
+	var best_id: int = -1
+	var best_size: int = 0
 	var queue: Array[Vector2i] = []
 	for y in range(WorldData.HEIGHT):
 		for x in range(WorldData.WIDTH):
@@ -308,6 +300,7 @@ func _compute_components(_data: WorldData) -> void:
 			queue.clear()
 			queue.append(here)
 			_component_id[idx] = current_id
+			var comp_size: int = 1
 			while not queue.is_empty():
 				var t: Vector2i = queue.pop_back()
 				for offset in NEIGHBOR_OFFSETS:
@@ -331,5 +324,10 @@ func _compute_components(_data: WorldData) -> void:
 						if _astar.is_point_solid(Vector2i(t.x, ny)):
 							continue
 					_component_id[nidx] = current_id
+					comp_size += 1
 					queue.append(n)
+			if comp_size > best_size:
+				best_size = comp_size
+				best_id = current_id
 			current_id += 1
+	_largest_component_id_cached = best_id

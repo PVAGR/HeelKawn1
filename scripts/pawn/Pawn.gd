@@ -1121,7 +1121,8 @@ func _on_game_tick(_tick: int) -> void:
 		return
 	
 	var stride: int = _fast_forward_tick_stride()
-	var run_full_ai: bool = stride <= 1 or (_tick % stride == 0)
+	var ai_phase: int = int(data.id) if data != null else 0
+	var run_full_ai: bool = stride <= 1 or (posmod(_tick + ai_phase, stride) == 0)
 	if run_full_ai:
 		# Throttled cohort system calls for performance
 		if GameManager.tick_count % COHORT_UPDATE_TICKS == 0:
@@ -1187,7 +1188,8 @@ func _fast_forward_tick_stride() -> int:
 		return 4
 	if gs >= 4.0:
 		return 2
-	return 1
+	# At baseline play speed, stagger heavy think logic across adjacent ticks.
+	return 2
 
 
 func _job_claim_interval_for_speed() -> int:
@@ -1203,10 +1205,27 @@ func _job_claim_interval_for_speed() -> int:
 	if gs >= 12.0:
 		return 4
 	if gs >= 3.0:
-		return 4
+		return 5
 	# 1x is the common play speed; a slightly slower claim cadence cuts
 	# full-queue scans per frame while still keeping workers responsive.
-	return 5
+	return 6
+
+
+func _work_step_interval_for_speed() -> int:
+	if GameManager == null:
+		return 2
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 6
+	if gs >= 50.0:
+		return 4
+	if gs >= 26.0:
+		return 3
+	if gs >= 12.0:
+		return 2
+	if gs >= 3.0:
+		return 2
+	return 2
 
 
 func _should_panic_sleep() -> bool:
@@ -1723,6 +1742,11 @@ func _tick_walking() -> void:
 
 
 func _tick_working() -> void:
+	var work_step_interval: int = _work_step_interval_for_speed()
+	var tick_now: int = GameManager.tick_count if GameManager != null else 0
+	if work_step_interval > 1 and posmod(tick_now + int(data.id), work_step_interval) != 0:
+		return
+	var work_step_multiplier: int = maxi(1, work_step_interval)
 	if _current_job == null:
 		_state = State.IDLE
 		return
@@ -1745,12 +1769,14 @@ func _tick_working() -> void:
 	# Always at least 1 progress per tick (a fresh pawn isn't slower than the
 	# old constant-rate baseline). XP accrues only while actually working.
 	var skill: int = PawnData.skill_for_job(_current_job.type)
-	var speed: float = data.effective_labor_mult()
+	var speed: float = data.effective_labor_mult() * float(work_step_multiplier)
 	if skill >= 0:
 		speed *= data.work_speed_for(skill)
 		# Apply efficiency modifier
 		speed *= efficiency
-		var leveled_up: bool = data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK)
+		var leveled_up: bool = data.add_skill_xp(
+				skill, PawnData.XP_PER_WORK_TICK * float(work_step_multiplier)
+		)
 		if leveled_up:
 			if GameManager.verbose_logs():
 				print("[Pawn] %s's %s went up to %d" % [
@@ -1760,14 +1786,14 @@ func _tick_working() -> void:
 				])
 		var w: int = maxi(1, int(ceil(speed)))
 		data.add_profession_liking_for_job(_current_job.type, w)
-		_current_job.work_ticks_done += int(ceil(speed))
+		_current_job.work_ticks_done += w
 	if _current_job.work_ticks_done >= _current_job.work_ticks_needed:
 		if _current_job.type == Job.Type.TRADE_HAUL:
 			_complete_trade_pickup()
 		else:
 			_complete_current_job()
 	# Mining and wall-mining are hazardous. Small chance of injury each tick.
-	_apply_work_hazards()
+	_apply_work_hazards(work_step_multiplier)
 
 
 func _calculate_work_efficiency() -> float:
@@ -1872,7 +1898,7 @@ func _finish_challenge() -> void:
 	_reset_to_idle()
 
 
-func _apply_work_hazards() -> void:
+func _apply_work_hazards(work_ticks_simulated: int = 1) -> void:
 	if _current_job == null:
 		return
 	if _current_job.type == Job.Type.TRADE_HAUL:
@@ -1886,7 +1912,13 @@ func _apply_work_hazards() -> void:
 		hazard_chance = 0.02 * max(0.1, 1.0 - (mining_level / 20.0))
 		# Traits can modify injury chance
 		hazard_chance *= data.get_trait_mult("injury_chance_mult")
-	if hazard_chance > 0.0 and WorldRNG.chance_for(_pawn_stream("work_hazard"), hazard_chance, _pawn_salt(23)):
+	var step_ticks: int = maxi(1, work_ticks_simulated)
+	var per_step_chance: float = hazard_chance
+	if step_ticks > 1 and hazard_chance > 0.0 and hazard_chance < 1.0:
+		# Fold N Bernoulli trials into one check so expected hazard frequency is
+		# stable when work updates are batched for performance.
+		per_step_chance = 1.0 - pow(maxf(0.0, 1.0 - hazard_chance), float(step_ticks))
+	if per_step_chance > 0.0 and WorldRNG.chance_for(_pawn_stream("work_hazard"), per_step_chance, _pawn_salt(23)):
 		var damage: float = WorldRNG.range_for(_pawn_stream("work_hazard_damage"), 3.0, 8.0, _pawn_salt(29))
 		# Traits can reduce damage taken
 		damage *= data.get_trait_mult("damage_taken_mult")

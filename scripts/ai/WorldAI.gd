@@ -158,6 +158,10 @@ var cultural_advancement: float = 0.1  # Cultural advancement level (0.0-1.0)
 
 # Additional neural networks
 var technological_neural_network: Dictionary = {}  # Technological AI
+const LEARN_EVENTS_PAGE_SIZE: int = 128
+const LEARN_MAX_EVENTS_PER_UPDATE: int = 64
+const LEARN_EVENT_TICK_WINDOW: int = 1000
+var _last_learned_event_eid: int = 0
 
 func _ready():
 	_initialize_world_state()
@@ -416,8 +420,6 @@ func update() -> void:
 	_learn_from_game_events()
 	
 	# Process neural network evolution
-	_update_neural_interconnections()
-	_process_neural_activations()
 	_detect_emergent_patterns()
 	_evolve_neural_networks()
 
@@ -453,23 +455,35 @@ func _trigger_settlement_emergency_responses(collapse_risk: float) -> void:
 
 
 func _learn_from_game_events() -> void:
-	if WorldMemory == null:
+	if WorldMemory == null or GameManager == null:
 		return
 	
-	# Get recent events from WorldMemory
-	var events: Array = WorldMemory.to_save_dict().get("events", [])
-	var current_tick: int = GameManager.tick_count
-	var recent_events: Array = []
-	
-	# Get events from last 1000 ticks
-	for event in events:
-		if event.get("tick", 0) > current_tick - 1000:
-			recent_events.append(event)
-	
-	# Learn from each event type
-	for event in recent_events:
+	# Pull a bounded recent page and only process unseen events by eid.
+	var page: Array[Dictionary] = WorldMemory.get_events_page_newest(LEARN_EVENTS_PAGE_SIZE, -1)
+	if page.is_empty():
+		return
+	page.reverse()  # oldest -> newest
+	var current_tick: int = int(GameManager.tick_count)
+	var processed: int = 0
+	var newest_eid_in_page: int = 0
+	for event in page:
+		var eid: int = int(event.get("eid", 0))
+		if eid > newest_eid_in_page:
+			newest_eid_in_page = eid
+		if eid <= _last_learned_event_eid:
+			continue
+		var event_tick: int = int(event.get("tick", event.get("t", 0)))
+		if event_tick <= current_tick - LEARN_EVENT_TICK_WINDOW:
+			_last_learned_event_eid = maxi(_last_learned_event_eid, eid)
+			continue
 		var event_type: String = str(event.get("type", ""))
 		_learn_from_event_type(event_type, event)
+		_last_learned_event_eid = maxi(_last_learned_event_eid, eid)
+		processed += 1
+		if processed >= LEARN_MAX_EVENTS_PER_UPDATE:
+			break
+	if _last_learned_event_eid <= 0 and newest_eid_in_page > 0:
+		_last_learned_event_eid = newest_eid_in_page
 
 
 func _learn_from_event_type(event_type: String, event: Dictionary) -> void:

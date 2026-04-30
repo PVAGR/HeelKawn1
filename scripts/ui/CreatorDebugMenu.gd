@@ -19,7 +19,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			},
 			{
 				"id": "session_snapshot_pack",
-				"label": "00 · One paste pack — checklist + ERROR + Playtest (31)",
+				"label": "00 · One paste pack — checklist + ERROR + 31 + 34 (digest)",
 			},
 		],
 	},
@@ -328,14 +328,19 @@ func _report_session_snapshot_guide() -> void:
 func _report_session_snapshot_pack() -> void:
 	var t: int = GameManager.tick_count
 	_print_session_snapshot_checklist(t)
-	print(">>> Embedded blocks follow (same as pressing ERROR, then 31 · Playtest bundle).")
-	print(">>> For prose + machine digest, also run F10 → 34 · Creator digest and paste CREATOR_START…END.")
+	print(
+			">>> Embedded: ERROR + Playtest (31) + Creator digest (34). "
+			+ "Optional extras: F10 → 32 Soul · 33 Portable character — not included here."
+	)
 	print("")
 	print("--- embedded: ERROR report ---")
 	_report_error_issues()
 	print("")
 	print("--- embedded: Playtest bundle (31) ---")
 	_report_playtest_bundle()
+	print("")
+	print("--- embedded: Creator session digest (34) — CREATOR_START … CREATOR_END ---")
+	_report_creator_session_digest()
 
 
 func _main() -> Node2D:

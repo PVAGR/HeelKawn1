@@ -154,9 +154,9 @@ func _should_trigger_trade_caravan() -> bool:
 		return false
 	
 	var z: Stockpile = zones[0]
-	var total_food: int = z.count_item(Item.Type.BERRY) + z.count_item(Item.Type.MEAT)
-	var total_wood: int = z.count_item(Item.Type.WOOD)
-	var total_stone: int = z.count_item(Item.Type.STONE)
+	var total_food: int = z.count_of(Item.Type.BERRY) + z.count_of(Item.Type.MEAT)
+	var total_wood: int = z.count_of(Item.Type.WOOD)
+	var total_stone: int = z.count_of(Item.Type.STONE)
 	
 	# Trade caravan arrives when stockpiles are critically low
 	return total_food < 10 or total_wood < 5 or total_stone < 5
@@ -182,7 +182,7 @@ func _should_trigger_locust_swarm() -> bool:
 		return false
 	
 	var z: Stockpile = zones[0]
-	var total_food: int = z.count_item(Item.Type.BERRY) + z.count_item(Item.Type.MEAT)
+	var total_food: int = z.count_of(Item.Type.BERRY) + z.count_of(Item.Type.MEAT)
 	
 	# Locust swarm only when food stockpiles are high (attracts swarm)
 	return total_food > 50
@@ -245,7 +245,12 @@ func _should_trigger_regional_shortage() -> bool:
 		return false
 	
 	var z: Stockpile = zones[0]
-	var total_resources: int = z.count_item(Item.Type.BERRY) + z.count_item(Item.Type.MEAT) + z.count_item(Item.Type.WOOD) + z.count_item(Item.Type.STONE)
+	var total_resources: int = (
+			z.count_of(Item.Type.BERRY)
+			+ z.count_of(Item.Type.MEAT)
+			+ z.count_of(Item.Type.WOOD)
+			+ z.count_of(Item.Type.STONE)
+	)
 	
 	return total_resources < 20
 

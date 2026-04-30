@@ -133,6 +133,14 @@ func count_food() -> int:
 	return total
 
 
+## Sum of all item quantities in this zone (any types).
+func total_item_count() -> int:
+	var total: int = 0
+	for t in inventory:
+		total += int(inventory[t])
+	return total
+
+
 ## Return the item Type to eat right now (highest-stocked food), or NONE.
 func pick_food() -> int:
 	var best_type: int = Item.Type.NONE

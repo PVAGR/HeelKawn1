@@ -288,36 +288,36 @@ func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) 
 
 func _planner_interval_for_speed() -> int:
 	if GameManager == null:
-		return 24
+		return 90
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 240
+		return 2160
 	if gs >= 50.0:
-		return 120
+		return 1200
 	if gs >= 26.0:
-		return 72
+		return 600
 	if gs >= 12.0:
-		return 48
+		return 300
 	if gs >= 3.0:
-		return 32
-	return 24
+		return 120
+	return 90
 
 
 func _heavy_planner_interval_for_speed() -> int:
 	if GameManager == null:
-		return 48
+		return 180
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 360
+		return 3000
 	if gs >= 50.0:
-		return 180
+		return 1800
 	if gs >= 26.0:
-		return 96
+		return 900
 	if gs >= 12.0:
-		return 64
+		return 480
 	if gs >= 3.0:
-		return 48
-	return 48
+		return 240
+	return 180
 
 
 func _pawn_divergence_detail_logs_enabled() -> bool:

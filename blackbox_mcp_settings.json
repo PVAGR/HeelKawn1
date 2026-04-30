@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "github.com/contextstream/mcp-server": {
+      "command": "npx",
+      "args": ["--prefer-online", "-y", "@contextstream/mcp-server@latest"],
+      "env": {
+        "CONTEXTSTREAM_API_URL": "https://api.contextstream.io",
+        "CONTEXTSTREAM_API_KEY": "",
+        "CONTEXTSTREAM_TOOLSET": "complete",
+        "CONTEXTSTREAM_TRANSCRIPTS_ENABLED": "true",
+        "CONTEXTSTREAM_HOOK_TRANSCRIPTS_ENABLED": "true",
+        "CONTEXTSTREAM_SEARCH_LIMIT": "15",
+        "CONTEXTSTREAM_SEARCH_MAX_CHARS": "2400"
+      }
+    }
+  }
+}

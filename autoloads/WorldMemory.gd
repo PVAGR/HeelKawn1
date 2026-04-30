@@ -15,6 +15,14 @@ enum Kind {
 	ENEMY_DEATH = 2,
 	SOCIAL_FRAGMENT = 3,
 	SOCIAL_SCHISM = 4,
+	BUILDING_CONSTRUCTED = 5,
+	BUILDING_DESTROYED = 6,
+	FIRE_STARTED = 7,
+	FIRE_EXTINGUISHED = 8,
+	STARVATION_EVENT = 9,
+	MIGRATION_STARTED = 10,
+	MIGRATION_COMPLETED = 11,
+	TEACHING_EVENT = 12,
 }
 
 var _events: Array[Dictionary] = []
@@ -243,16 +251,32 @@ func _canonical_event_type(payload: Dictionary) -> String:
 			return "social_fragment"
 		int(Kind.SOCIAL_SCHISM):
 			return "social_schism"
+		int(Kind.BUILDING_CONSTRUCTED):
+			return "building_constructed"
+		int(Kind.BUILDING_DESTROYED):
+			return "building_destroyed"
+		int(Kind.FIRE_STARTED):
+			return "fire_started"
+		int(Kind.FIRE_EXTINGUISHED):
+			return "fire_extinguished"
+		int(Kind.STARVATION_EVENT):
+			return "starvation_event"
+		int(Kind.MIGRATION_STARTED):
+			return "migration_started"
+		int(Kind.MIGRATION_COMPLETED):
+			return "migration_completed"
+		int(Kind.TEACHING_EVENT):
+			return "teaching_event"
 	return "event"
 
 
 func _severity_for_type(typ: String) -> int:
 	match typ:
-		"pawn_death", "knowledge_loss", "social_schism":
+		"pawn_death", "knowledge_loss", "social_schism", "starvation_event", "fire_started":
 			return 3
-		"enemy_death", "war_proposed", "war_battle_spawned", "governance_change", "birth", "pawn_birth":
+		"enemy_death", "war_proposed", "war_battle_spawned", "governance_change", "birth", "pawn_birth", "building_destroyed":
 			return 2
-		"social_bond_milestone", "social_meeting", "structure_built", "job_completed", "knowledge_discovery", "knowledge_rediscovery", "teaching_success", "settlement_intent_shift":
+		"social_bond_milestone", "social_meeting", "structure_built", "job_completed", "knowledge_discovery", "knowledge_rediscovery", "teaching_success", "settlement_intent_shift", "building_constructed", "fire_extinguished", "migration_started", "migration_completed", "teaching_event":
 			return 1
 		_:
 			return 0
@@ -372,6 +396,187 @@ func record_social(
 		"mv": moved_count,
 		"rp": reg_copy,
 	})
+
+
+## Record building construction
+func record_building_constructed(
+		tick: int,
+		tile: Vector2i,
+		building_type: String,
+		builder_id: int = -1,
+		settlement_id: int = -1
+	) -> void:
+	var e: Dictionary = {
+		"s": SCHEMA,
+		"k": int(Kind.BUILDING_CONSTRUCTED),
+		"t": tick,
+		"x": tile.x,
+		"y": tile.y,
+		"r": WorldMemory._region_key(tile.x, tile.y),
+		"building_type": building_type,
+	}
+	if builder_id >= 0:
+		e["builder_id"] = builder_id
+	if settlement_id >= 0:
+		e["settlement_id"] = settlement_id
+	_append(e)
+
+
+## Record building destruction
+func record_building_destroyed(
+		tick: int,
+		tile: Vector2i,
+		building_type: String,
+		cause: String = "unknown",
+		settlement_id: int = -1
+	) -> void:
+	var e: Dictionary = {
+		"s": SCHEMA,
+		"k": int(Kind.BUILDING_DESTROYED),
+		"t": tick,
+		"x": tile.x,
+		"y": tile.y,
+		"r": WorldMemory._region_key(tile.x, tile.y),
+		"building_type": building_type,
+		"cause": cause,
+	}
+	if settlement_id >= 0:
+		e["settlement_id"] = settlement_id
+	_append(e)
+
+
+## Record fire started
+func record_fire_started(
+		tick: int,
+		tile: Vector2i,
+		cause: String = "unknown",
+		settlement_id: int = -1
+	) -> void:
+	var e: Dictionary = {
+		"s": SCHEMA,
+		"k": int(Kind.FIRE_STARTED),
+		"t": tick,
+		"x": tile.x,
+		"y": tile.y,
+		"r": WorldMemory._region_key(tile.x, tile.y),
+		"cause": cause,
+	}
+	if settlement_id >= 0:
+		e["settlement_id"] = settlement_id
+	_append(e)
+
+
+## Record fire extinguished
+func record_fire_extinguished(
+		tick: int,
+		tile: Vector2i,
+		duration_ticks: int = 0,
+		settlement_id: int = -1
+	) -> void:
+	var e: Dictionary = {
+		"s": SCHEMA,
+		"k": int(Kind.FIRE_EXTINGUISHED),
+		"t": tick,
+		"x": tile.x,
+		"y": tile.y,
+		"r": WorldMemory._region_key(tile.x, tile.y),
+		"duration": duration_ticks,
+	}
+	if settlement_id >= 0:
+		e["settlement_id"] = settlement_id
+	_append(e)
+
+
+## Record starvation event
+func record_starvation_event(
+		tick: int,
+		tile: Vector2i,
+		pawn_id: int,
+		pawn_name: String,
+		severity: String = "moderate",
+		settlement_id: int = -1
+	) -> void:
+	var e: Dictionary = {
+		"s": SCHEMA,
+		"k": int(Kind.STARVATION_EVENT),
+		"t": tick,
+		"x": tile.x,
+		"y": tile.y,
+		"r": WorldMemory._region_key(tile.x, tile.y),
+		"pawn_id": pawn_id,
+		"pawn_name": pawn_name,
+		"severity": severity,
+	}
+	if settlement_id >= 0:
+		e["settlement_id"] = settlement_id
+	_append(e)
+
+
+## Record migration started
+func record_migration_started(
+		tick: int,
+		from_region: int,
+		to_region: int,
+		migrant_count: int,
+		reason: String = "unknown"
+	) -> void:
+	_append({
+		"s": SCHEMA,
+		"k": int(Kind.MIGRATION_STARTED),
+		"t": tick,
+		"from_region": from_region,
+		"to_region": to_region,
+		"migrant_count": migrant_count,
+		"reason": reason,
+	})
+
+
+## Record migration completed
+func record_migration_completed(
+		tick: int,
+		from_region: int,
+		to_region: int,
+		migrant_count: int,
+		successful: bool = true
+	) -> void:
+	_append({
+		"s": SCHEMA,
+		"k": int(Kind.MIGRATION_COMPLETED),
+		"t": tick,
+		"from_region": from_region,
+		"to_region": to_region,
+		"migrant_count": migrant_count,
+		"successful": successful,
+	})
+
+
+## Record teaching event
+func record_teaching_event(
+		tick: int,
+		tile: Vector2i,
+		teacher_id: int,
+		teacher_name: String,
+		student_id: int,
+		student_name: String,
+		skill_taught: String,
+		settlement_id: int = -1
+	) -> void:
+	var e: Dictionary = {
+		"s": SCHEMA,
+		"k": int(Kind.TEACHING_EVENT),
+		"t": tick,
+		"x": tile.x,
+		"y": tile.y,
+		"r": WorldMemory._region_key(tile.x, tile.y),
+		"teacher_id": teacher_id,
+		"teacher_name": teacher_name,
+		"student_id": student_id,
+		"student_name": student_name,
+		"skill": skill_taught,
+	}
+	if settlement_id >= 0:
+		e["settlement_id"] = settlement_id
+	_append(e)
 
 
 func to_save_dict() -> Dictionary:

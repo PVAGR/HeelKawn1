@@ -2,10 +2,12 @@ extends Node
 ## HEELKAWN Authority/Conflict System - Authority is temporary and must emerge socially.
 ## Tracks authority emergence, conflict relationships, and resolution.
 
+
 # Autoload references
 @onready var WorldAI = get_node_or_null("/root/WorldAI")
 @onready var WorldMemory = get_node_or_null("/root/WorldMemory")
 @onready var GameManager = get_node_or_null("/root/GameManager")
+@onready var RelationalGraph = get_node_or_null("/root/RelationalGraph")
 
 enum AuthorityContext {
 	MILITARY = 0,
@@ -49,27 +51,32 @@ func _on_game_tick(tick: int) -> void:
 # === Authority Emergence ===
 
 func grant_authority(pawn_id: int, context: AuthorityContext, amount: float, source: String) -> void:
-	if not authority_levels.has(pawn_id):
-		authority_levels[pawn_id] = {}
-	
-	var contexts: Dictionary = authority_levels[pawn_id]
-	var current: float = contexts.get(context, 0.0)
-	contexts[context] = min(current + amount, 1.0)
-	
-	# Record source of authority
-	if not authority_sources.has(pawn_id):
-		authority_sources[pawn_id] = []
-	
-	var source_record: Dictionary = {
-		"context": context,
-		"source": source,
-		"amount": amount,
-		"tick": GameManager.tick_count
-	}
-	authority_sources[pawn_id].append(source_record)
-	
-	_record_authority_grant(pawn_id, context, amount, source)
-	_notify_world_ai_authority_change(pawn_id, context, contexts[context])
+       # Write to RelationalGraph
+       if RelationalGraph:
+	       var edge_data = {
+		       "context": context,
+		       "amount": amount,
+		       "source": source,
+		       "tick": GameManager.tick_count
+	       }
+	       RelationalGraph.add_edge(pawn_id, "AUTHORITY_CONTEXT_%d" % int(context), "authority", edge_data)
+       # Legacy local storage for backward compatibility
+       if not authority_levels.has(pawn_id):
+	       authority_levels[pawn_id] = {}
+       var contexts: Dictionary = authority_levels[pawn_id]
+       var current: float = contexts.get(context, 0.0)
+       contexts[context] = min(current + amount, 1.0)
+       if not authority_sources.has(pawn_id):
+	       authority_sources[pawn_id] = []
+       var source_record: Dictionary = {
+	       "context": context,
+	       "source": source,
+	       "amount": amount,
+	       "tick": GameManager.tick_count
+       }
+       authority_sources[pawn_id].append(source_record)
+       _record_authority_grant(pawn_id, context, amount, source)
+       _notify_world_ai_authority_change(pawn_id, context, contexts[context])
 
 func record_defense_action(defender_id: int, protected_id: int) -> void:
 	# Defender gains military authority for protecting others
@@ -123,16 +130,25 @@ func transfer_authority(from_id: int, to_id: int, context: AuthorityContext) -> 
 # === Conflict Systems ===
 
 func start_conflict(pawn_id_a: int, pawn_id_b: int, conflict_type: ConflictType, initial_intensity: float = 0.5) -> void:
-	var key: String = _conflict_key(pawn_id_a, pawn_id_b)
-	
-	if not conflicts.has(key):
-		conflicts[key] = {
-			"type": conflict_type,
-			"intensity": initial_intensity,
-			"start_tick": GameManager.tick_count,
-			"last_action_tick": GameManager.tick_count
-		}
-		_record_conflict_start(pawn_id_a, pawn_id_b, conflict_type, initial_intensity)
+       # Write to RelationalGraph
+       if RelationalGraph:
+	       var edge_data = {
+		       "type": conflict_type,
+		       "intensity": initial_intensity,
+		       "start_tick": GameManager.tick_count,
+		       "last_action_tick": GameManager.tick_count
+	       }
+	       RelationalGraph.add_edge(pawn_id_a, pawn_id_b, "conflict", edge_data)
+       # Legacy local storage for backward compatibility
+       var key: String = _conflict_key(pawn_id_a, pawn_id_b)
+       if not conflicts.has(key):
+	       conflicts[key] = {
+		       "type": conflict_type,
+		       "intensity": initial_intensity,
+		       "start_tick": GameManager.tick_count,
+		       "last_action_tick": GameManager.tick_count
+	       }
+	       _record_conflict_start(pawn_id_a, pawn_id_b, conflict_type, initial_intensity)
 
 func escalate_conflict(pawn_id_a: int, pawn_id_b: int, amount: float) -> void:
 	var key: String = _conflict_key(pawn_id_a, pawn_id_b)
@@ -157,12 +173,16 @@ func deescalate_conflict(pawn_id_a: int, pawn_id_b: int, amount: float) -> void:
 			_record_conflict_deescalation(pawn_id_a, pawn_id_b, amount)
 
 func end_conflict(pawn_id_a: int, pawn_id_b: int, reason: String) -> void:
-	var key: String = _conflict_key(pawn_id_a, pawn_id_b)
-	
-	if conflicts.has(key):
-		var conflict: Dictionary = conflicts[key]
-		_record_conflict_end(pawn_id_a, pawn_id_b, conflict["type"], reason)
-		conflicts.erase(key)
+       # Remove from RelationalGraph
+       if RelationalGraph:
+	       # No direct remove_edge, but can be extended for real use
+	       pass
+       # Legacy local storage for backward compatibility
+       var key: String = _conflict_key(pawn_id_a, pawn_id_b)
+       if conflicts.has(key):
+	       var conflict: Dictionary = conflicts[key]
+	       _record_conflict_end(pawn_id_a, pawn_id_b, conflict["type"], reason)
+	       conflicts.erase(key)
 
 func inherit_conflict(from_id: int, to_id: int) -> void:
 	# Inherited conflict memory - bloodline feuds
@@ -178,25 +198,31 @@ func inherit_conflict(from_id: int, to_id: int) -> void:
 # === Peace and Resolution ===
 
 func negotiate_peace(pawn_id_a: int, pawn_id_b: int, duration_ticks: int = 10000) -> bool:
-	var key: String = _conflict_key(pawn_id_a, pawn_id_b)
-	
-	if not conflicts.has(key):
-		return false
-	
-	var conflict: Dictionary = conflicts[key]
-	var treaty: Dictionary = {
-		"pawn_id_a": pawn_id_a,
-		"pawn_id_b": pawn_id_b,
-		"conflict_type": conflict["type"],
-		"start_tick": GameManager.tick_count,
-		"end_tick": GameManager.tick_count + duration_ticks
-	}
-	peace_treaties.append(treaty)
-	
-	# End conflict temporarily
-	end_conflict(pawn_id_a, pawn_id_b, "peace_treaty")
-	_record_peace_treaty(pawn_id_a, pawn_id_b, duration_ticks)
-	return true
+       # Write to RelationalGraph
+       if RelationalGraph:
+	       var edge_data = {
+		       "duration": duration_ticks,
+		       "start_tick": GameManager.tick_count,
+		       "end_tick": GameManager.tick_count + duration_ticks
+	       }
+	       RelationalGraph.add_edge(pawn_id_a, pawn_id_b, "peace_treaty", edge_data)
+       # Legacy local storage for backward compatibility
+       var key: String = _conflict_key(pawn_id_a, pawn_id_b)
+       if not conflicts.has(key):
+	       return false
+       var conflict: Dictionary = conflicts[key]
+       var treaty: Dictionary = {
+	       "pawn_id_a": pawn_id_a,
+	       "pawn_id_b": pawn_id_b,
+	       "conflict_type": conflict["type"],
+	       "start_tick": GameManager.tick_count,
+	       "end_tick": GameManager.tick_count + duration_ticks
+       }
+       peace_treaties.append(treaty)
+       # End conflict temporarily
+       end_conflict(pawn_id_a, pawn_id_b, "peace_treaty")
+       _record_peace_treaty(pawn_id_a, pawn_id_b, duration_ticks)
+       return true
 
 func check_peace_expiry() -> void:
 	var current_tick: int = GameManager.tick_count

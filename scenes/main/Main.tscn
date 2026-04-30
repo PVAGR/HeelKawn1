@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3 uid="uid://heelkawn_main"]
+[gd_scene load_steps=19 format=3 uid="uid://heelkawn_main"]
 
 [ext_resource type="Script" path="res://scenes/main/Main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scenes/main/BuildPreviewOverlay.gd" id="1_preview"]
@@ -12,6 +12,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/FocusInspector.tscn" id="15_focus_inspector"]
 [ext_resource type="PackedScene" path="res://scenes/ui/RegionInspector.tscn" id="18_region_inspector"]
 [ext_resource type="PackedScene" path="res://scenes/ui/TimelineControls.tscn" id="19_timeline_controls"]
+[ext_resource type="PackedScene" path="res://scenes/ui/IncarnationPicker.tscn" id="20_incarnation_picker"]
 [ext_resource type="Script" path="res://scripts/ui/BuildToolbar.gd" id="8_toolbar"]
 [ext_resource type="Script" path="res://scripts/ui/PawnInfoPanel.gd" id="9_info"]
 [ext_resource type="Script" path="res://scripts/pawn/AnimalSpawner.gd" id="10_animal_spawn"]
@@ -66,6 +67,8 @@ script = ExtResource("2_cam")
 [node name="RegionInspector" parent="UI_Viewport" instance=ExtResource("18_region_inspector")]
 
 [node name="TimelineControls" parent="UI_Viewport" instance=ExtResource("19_timeline_controls")]
+
+[node name="IncarnationPicker" parent="UI_Viewport" instance=ExtResource("20_incarnation_picker")]
 
 [node name="MapModeOverlay" parent="." instance=ExtResource("17_map_overlay")]
 

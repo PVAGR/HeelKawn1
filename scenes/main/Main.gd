@@ -135,6 +135,7 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _focus_inspector: FocusInspector = $UI_Viewport/FocusInspector
 @onready var _region_inspector: RegionInspector = $UI_Viewport/RegionInspector
 @onready var _timeline_controls: TimelineControls = $UI_Viewport/TimelineControls
+@onready var _incarnation_picker: IncarnationPicker = $UI_Viewport/IncarnationPicker
 @onready var _map_mode_overlay: Node = $MapModeOverlay
 @onready var _creator_debug_menu: CreatorDebugMenu = $CreatorDebugMenu
 @onready var _toolbar: BuildToolbar = $UI_Viewport/BuildToolbar
@@ -2776,6 +2777,8 @@ func _handle_key_input(key: InputEventKey) -> void:
 			_toggle_region_inspector()
 		KEY_T:
 			_toggle_timeline_controls()
+		KEY_O:
+			_open_incarnation_picker()
 
 
 func _toggle_region_inspector() -> void:
@@ -2790,6 +2793,54 @@ func _toggle_region_inspector() -> void:
 func _toggle_timeline_controls() -> void:
 	if _timeline_controls != null:
 		_timeline_controls.visible = not _timeline_controls.visible
+
+
+func _open_incarnation_picker() -> void:
+	if _incarnation_picker == null:
+		return
+	
+	# Generate candidate pawns from existing pawns
+	var candidates: Array = _generate_incarnation_candidates()
+	var mode_label: String = "SPECTATOR" if _player_mode == PlayerMode.SPECTATOR else "INCARNATED"
+	_incarnation_picker.open_with_candidates(candidates, mode_label)
+
+
+func _generate_incarnation_candidates() -> Array:
+	var candidates: Array = []
+	var pawns: Array = get_tree().get_nodes_in_group("pawns")
+	
+	for pawn in pawns:
+		if not (pawn is Pawn):
+			continue
+		if not is_instance_valid(pawn):
+			continue
+		if pawn.data == null:
+			continue
+		
+		var candidate: Dictionary = {
+			"pawn_id": int(pawn.data.id),
+			"name": str(pawn.data.display_name),
+			"age": int(pawn.data.age),
+			"region": _WM._region_key(pawn.data.tile_pos.x, pawn.data.tile_pos.y),
+			"profession": str(pawn.data.profession),
+			"state": "alive" if pawn.data.health > 0 else "dead",
+			"role": "citizen",
+			"priority_score": int(pawn.data.level * 10 + pawn.data.health),
+			"priority_reason": "level and health",
+			"hunger": pawn.data.hunger,
+			"rest": pawn.data.rest,
+			"mood": pawn.data.mood
+		}
+		
+		# Only include living pawns
+		if pawn.data.health > 0:
+			candidates.append(candidate)
+	
+	# Sort by priority score (descending)
+	candidates.sort_custom(func(a, b): return int(b.priority_score) - int(a.priority_score))
+	
+	# Return top 20 candidates
+	return candidates.slice(0, 20)
 
 
 func _init_phase8_proof_overlay() -> void:

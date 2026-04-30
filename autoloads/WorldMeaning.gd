@@ -1,31 +1,3 @@
-# --- Observation API extension: cultural style and wildlife trend ---
-# Returns a derived or placeholder value for now; extend with real logic as needed.
-func get_cultural_style(region_key: int) -> String:
-       # Example: derive from tags or meaning label
-       var tags: PackedStringArray = get_zone_tags(str(region_key))
-       if "myth_origin" in tags:
-	       return "mythic"
-       if "ancient_ruin" in tags:
-	       return "ruin"
-       if "echo_falls" in tags:
-	       return "echo"
-       # Fallback to meaning label
-       return get_region_meaning_label(region_key)
-
-func get_wildlife_trend(region_key: int) -> String:
-       # Placeholder: derive from death_density or meaning label
-       var meaning: Dictionary = get_region_meaning(region_key)
-       var density: String = meaning.get("death_density", "none")
-       match density:
-	       "none":
-		       return "stable"
-	       "low":
-		       return "declining"
-	       "medium":
-		       return "scarce"
-	       "high":
-		       return "extinct"
-       return "unknown"
 extends Node
 ## Phase 2.2: deterministic, derived metrics from WorldMemory only.
 ## No writes to WorldMemory, no world mutation, no UI. Interpretation only (RNG allowed only for labeled non-canonical presentation tiers — default paths stay deterministic-from-facts).
@@ -160,6 +132,32 @@ func get_region_meaning_summary(region_key: int) -> Dictionary:
 	var out: Dictionary = get_region_meaning(region_key)
 	out["meaning_label"] = str(out.get("meaning_label", describe_meaning_label(int(out.get("total_deaths", 0)))))
 	return out
+
+
+func get_cultural_style(region_key: int) -> String:
+	var tags: PackedStringArray = get_zone_tags(str(region_key))
+	if "myth_origin" in tags:
+		return "mythic"
+	if "ancient_ruin" in tags:
+		return "ruin"
+	if "echo_falls" in tags:
+		return "echo"
+	return get_region_meaning_label(region_key)
+
+
+func get_wildlife_trend(region_key: int) -> String:
+	var meaning: Dictionary = get_region_meaning(region_key)
+	var density: String = str(meaning.get("death_density", "none"))
+	match density:
+		"none":
+			return "stable"
+		"low":
+			return "declining"
+		"medium":
+			return "scarce"
+		"high":
+			return "extinct"
+	return "unknown"
 
 
 func _default_region_entry() -> Dictionary:

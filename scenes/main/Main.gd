@@ -167,7 +167,6 @@ var _player_action_state: String = "idle"
 var _player_intent_pin_zone_id: String = ""
 var _player_intent_focus_center_region: int = -1
 var _avatar_panel: Node = null
-var _incarnation_picker: Node = null
 var _kernel_diagnostic: KernelDiagnostic = null
 ## Player authority: pawn-local intents (WASD+E), cosmetic edit, draft/edicts when ruler,
 ## selection, pause/speed, camera. Structures/zones: planner + jobs only (no human stamp).

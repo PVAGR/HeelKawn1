@@ -1,15 +1,3 @@
-
-# --- RelationalGraph integration: dynamic trade partner queries ---
-func get_trade_partners(center_region: int) -> Array:
-       if Engine.has_singleton("RelationalGraph"):
-	       var rg = Engine.get_singleton("RelationalGraph")
-	       var partners = []
-	       for e in rg.get_edges(center_region, "trade"):
-		       var other = e["to"] if e["from"] == center_region else e["from"]
-		       if not partners.has(other):
-			       partners.append(other)
-	       return partners
-       return []
 extends Node
 ## v1: Derived (not saved) — recurring trade pairs, soft supplier/dependent roles, route tiers on tiles.
 ## Updated on [JobManager.job_completed] for [Job.Type.TRADE_HAUL] only; no per-tick work.
@@ -145,6 +133,22 @@ func update_t2_collapse_cursor() -> void:
 
 func get_last_tick_t2_existed() -> int:
 	return _last_tick_t2_existed
+
+
+func get_trade_partners(center_region: int) -> Array:
+	var rg: Node = get_node_or_null("/root/RelationalGraph")
+	if rg == null or not rg.has_method("get_edges"):
+		return []
+	var partners: Array = []
+	for e in rg.get_edges(center_region, "trade"):
+		if not (e is Dictionary):
+			continue
+		var from_id: Variant = e.get("from", -1)
+		var to_id: Variant = e.get("to", -1)
+		var other: Variant = to_id if int(from_id) == center_region else from_id
+		if not partners.has(other):
+			partners.append(other)
+	return partners
 
 
 func _on_job_completed(job: Job) -> void:

@@ -8,15 +8,13 @@ extends Node
 # - No direct world mutation; only records and queries relations
 # - Designed for extension by other systems (AI, memory, authority, etc.)
 
-class_name RelationalGraph
-
 # Node and edge storage
 var nodes := {} # id -> {"type": String, "data": Dictionary}
 var edges := [] # [{"from": id, "to": id, "type": String, "data": Dictionary}]
 
 # Add a node (returns node id)
 func add_node(node_type: String, data: Dictionary = {}):
-	var node_id = data.get("id", hash(node_type + str(OS.get_ticks_usec()) + str(randi())))
+	var node_id = data.get("id", hash(node_type + str(Time.get_ticks_usec()) + str(randi())))
 	nodes[node_id] = {"type": node_type, "data": data.duplicate(true)}
 	return node_id
 

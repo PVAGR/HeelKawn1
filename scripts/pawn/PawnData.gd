@@ -253,16 +253,955 @@ var mood_events: Array[MoodEvent] = []
 ## reproduction and future player social actions (gift, commend, etc.).
 var social_rapport: Dictionary = {}
 
+## Phase 1.1: Big Five Personality Traits (0.0-1.0)
+## Openness: creativity, curiosity, preference for variety
+var openness: float = 0.5
+## Conscientiousness: organization, diligence, self-discipline
+var conscientiousness: float = 0.5
+## Extraversion: sociability, assertiveness, positive emotions
+var extraversion: float = 0.5
+## Agreeableness: compassion, cooperativeness, trust
+var agreeableness: float = 0.5
+## Neuroticism: emotional instability, anxiety, moodiness
+var neuroticism: float = 0.5
+
+## Phase 1.2: Deep Memory System
+## Episodic memory: significant events (death, birth, discovery, combat)
+## event_id -> {type, tick, location, participants, emotional_impact, details}
+var episodic_memory: Dictionary = {}
+## Semantic memory: learned facts (locations, recipes, social relationships)
+## fact_key -> {learned_tick, confidence, source, details}
+var semantic_memory: Dictionary = {}
+## Spatial memory: map of explored areas with resource locations
+## tile_key -> {last_seen_tick, resource_type, danger_level, terrain_type}
+var spatial_memory: Dictionary = {}
+## Social memory: detailed relationships with other pawns
+## other_pawn_id -> {trust, debt, grudge, friendship, last_interaction, interaction_history}
+var social_memory: Dictionary = {}
+## Memory decay tracking: memory_type -> last_accessed_tick
+var memory_access: Dictionary = {}
+
+## Phase 1.3: Goal Hierarchy System (Maslow-style needs)
+## Active goals with priorities: goal_id -> {type, priority, progress, sub_goals, deadline}
+var active_goals: Dictionary = {}
+## Goal history: completed and abandoned goals
+var goal_history: Array = []
+## Current need satisfaction levels (0-100)
+var need_satisfaction: Dictionary = {
+	"survival": 50.0,  # Food, water, shelter, health
+	"safety": 50.0,    # Security, stability, freedom from fear
+	"belonging": 50.0, # Social connection, family, friendship
+	"esteem": 50.0,    # Respect, status, recognition
+	"self_actualization": 50.0  # Growth, creativity, purpose
+}
+## Need urgency weights (higher = more urgent)
+var need_urgency: Dictionary = {
+	"survival": 2.0,
+	"safety": 1.5,
+	"belonging": 1.0,
+	"esteem": 0.8,
+	"self_actualization": 0.5
+}
+
 
 func _init() -> void:
 	id = _next_id
 	_next_id += 1
 	birth_tick = int(GameManager.tick_count) if "tick_count" in GameManager else 0
 	initialize_affinities(birth_tick, -1, -1)
+	_initialize_personality(birth_tick, parent_a_id, parent_b_id)
 
 
 func get_max_health() -> float:
 	return max_health
+
+
+## Phase 1.1: Initialize personality traits with inheritance and mutation
+func _initialize_personality(birth_tick: int, parent_a: int, parent_b: int) -> void:
+	if parent_a >= 0 and parent_b >= 0:
+		# Inherit from parents with mutation
+		var parent_a_data: PawnData = _get_parent_data(parent_a)
+		var parent_b_data: PawnData = _get_parent_data(parent_b)
+		
+		if parent_a_data != null and parent_b_data != null:
+			# Blend parent personalities with mutation
+			openness = _blend_with_mutation(parent_a_data.openness, parent_b_data.openness, birth_tick, "openness")
+			conscientiousness = _blend_with_mutation(parent_a_data.conscientiousness, parent_b_data.conscientiousness, birth_tick, "conscientiousness")
+			extraversion = _blend_with_mutation(parent_a_data.extraversion, parent_b_data.extraversion, birth_tick, "extraversion")
+			agreeableness = _blend_with_mutation(parent_a_data.agreeableness, parent_b_data.agreeableness, birth_tick, "agreeableness")
+			neuroticism = _blend_with_mutation(parent_a_data.neuroticism, parent_b_data.neuroticism, birth_tick, "neuroticism")
+		else:
+			# Fallback to random if parent data unavailable
+			_generate_random_personality(birth_tick)
+	else:
+		# No parents: generate random personality
+		_generate_random_personality(birth_tick)
+
+
+## Blend two parent values with small mutation
+func _blend_with_mutation(val_a: float, val_b: float, seed: int, trait_name: String) -> float:
+	var base: float = (val_a + val_b) / 2.0
+	var mutation_strength: float = 0.15  # 15% mutation variance
+	var mutation: float = WorldRNG.range_for(
+		StringName("personality:%s:%d" % [trait_name, seed]),
+		-mutation_strength,
+		mutation_strength
+	)
+	return clamp(base + mutation, 0.0, 1.0)
+
+
+## Generate random personality traits
+func _generate_random_personality(seed: int) -> void:
+	openness = WorldRNG.range_for(StringName("personality:openness:%d" % seed), 0.0, 1.0)
+	conscientiousness = WorldRNG.range_for(StringName("personality:conscientiousness:%d" % seed), 0.0, 1.0)
+	extraversion = WorldRNG.range_for(StringName("personality:extraversion:%d" % seed), 0.0, 1.0)
+	agreeableness = WorldRNG.range_for(StringName("personality:agreeableness:%d" % seed), 0.0, 1.0)
+	neuroticism = WorldRNG.range_for(StringName("personality:neuroticism:%d" % seed), 0.0, 1.0)
+
+
+## Get parent data (simplified - in full system would query from PawnManager)
+func _get_parent_data(parent_id: int) -> PawnData:
+	# TODO: Implement proper parent data lookup from PawnManager
+	# For now, return null to trigger random personality
+	return null
+
+
+## Phase 1.1: Personality-based job preference modifier
+## Returns multiplier (0.5-2.0) for job preference based on personality
+func get_job_preference_modifier(job_type: String) -> float:
+	var modifier: float = 1.0
+	
+	match job_type:
+		"farming":
+			# High conscientiousness, low openness prefer farming
+			modifier *= 1.0 + (conscientiousness - 0.5) * 0.5
+			modifier *= 1.0 - (openness - 0.5) * 0.3
+		"building":
+			# High conscientiousness prefer building
+			modifier *= 1.0 + (conscientiousness - 0.5) * 0.6
+		"mining":
+			# Low neuroticism, high conscientiousness prefer mining
+			modifier *= 1.0 - (neuroticism - 0.5) * 0.4
+			modifier *= 1.0 + (conscientiousness - 0.5) * 0.4
+		"hunting":
+			# High openness, low agreeableness prefer hunting
+			modifier *= 1.0 + (openness - 0.5) * 0.5
+			modifier *= 1.0 - (agreeableness - 0.5) * 0.3
+		"crafting":
+			# High openness prefer crafting
+			modifier *= 1.0 + (openness - 0.5) * 0.6
+		"diplomacy":
+			# High extraversion, high agreeableness prefer diplomacy
+			modifier *= 1.0 + (extraversion - 0.5) * 0.5
+			modifier *= 1.0 + (agreeableness - 0.5) * 0.5
+		"combat":
+			# Low neuroticism, low agreeableness prefer combat
+			modifier *= 1.0 - (neuroticism - 0.5) * 0.4
+			modifier *= 1.0 - (agreeableness - 0.5) * 0.3
+	
+	return clamp(modifier, 0.5, 2.0)
+
+
+## Phase 1.1: Personality-based social behavior modifier
+## Returns multiplier (0.5-2.0) for social interaction propensity
+func get_social_propensity() -> float:
+	var propensity: float = 1.0
+	
+	# Extraversion increases social desire
+	propensity *= 1.0 + (extraversion - 0.5) * 0.8
+	
+	# Neuroticism decreases social desire (anxiety)
+	propensity *= 1.0 - (neuroticism - 0.5) * 0.4
+	
+	# Agreeableness increases social desire
+	propensity *= 1.0 + (agreeableness - 0.5) * 0.3
+	
+	return clamp(propensity, 0.5, 2.0)
+
+
+## Phase 1.1: Personality-based risk tolerance
+## Returns risk tolerance (0.0-1.0) based on personality
+func get_risk_tolerance() -> float:
+	var tolerance: float = 0.5
+	
+	# High openness increases risk tolerance
+	tolerance += (openness - 0.5) * 0.3
+	
+	# High neuroticism decreases risk tolerance
+	tolerance -= (neuroticism - 0.5) * 0.4
+	
+	# High conscientiousness decreases risk tolerance (cautious)
+	tolerance -= (conscientiousness - 0.5) * 0.2
+	
+	return clamp(tolerance, 0.0, 1.0)
+
+
+## Phase 1.1: Personality-based learning speed modifier
+## Returns multiplier (0.7-1.5) for learning speed based on personality
+func get_learning_speed_modifier() -> float:
+	var modifier: float = 1.0
+	
+	# High openness increases learning speed
+	modifier *= 1.0 + (openness - 0.5) * 0.4
+	
+	# High conscientiousness increases learning speed
+	modifier *= 1.0 + (conscientiousness - 0.5) * 0.3
+	
+	# High neuroticism decreases learning speed (distraction)
+	modifier *= 1.0 - (neuroticism - 0.5) * 0.2
+	
+	return clamp(modifier, 0.7, 1.5)
+
+
+## Phase 1.1: Personality-based mood stability
+## Returns mood stability (0.0-1.0) - higher = more stable
+func get_mood_stability() -> float:
+	var stability: float = 0.5
+	
+	# Low neuroticism increases stability
+	stability -= (neuroticism - 0.5) * 0.6
+	
+	# High conscientiousness increases stability
+	stability += (conscientiousness - 0.5) * 0.2
+	
+	# High agreeableness increases stability
+	stability += (agreeableness - 0.5) * 0.2
+	
+	return clamp(stability, 0.0, 1.0)
+
+
+## Phase 1.2: Record an episodic memory (significant event)
+func record_episodic_memory(event_type: String, location: Vector2i, participants: Array, emotional_impact: float, details: Dictionary = {}) -> void:
+	var event_id: String = "%s_%d_%d" % [event_type, GameManager.tick_count if "tick_count" in GameManager else 0, id]
+	episodic_memory[event_id] = {
+		"type": event_type,
+		"tick": GameManager.tick_count if "tick_count" in GameManager else 0,
+		"location": location,
+		"participants": participants,
+		"emotional_impact": emotional_impact,
+		"details": details
+	}
+	memory_access["episodic"] = GameManager.tick_count if "tick_count" in GameManager else 0
+
+
+## Phase 1.2: Recall episodic memories by type or emotional impact
+func recall_episodic_memories(event_type: String = "", min_impact: float = 0.0, limit: int = 10) -> Array:
+	var recalled: Array = []
+	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	
+	for event_id in episodic_memory:
+		var memory = episodic_memory[event_id]
+		
+		# Filter by type if specified
+		if not event_type.is_empty() and memory.get("type", "") != event_type:
+			continue
+		
+		# Filter by emotional impact
+		if memory.get("emotional_impact", 0.0) < min_impact:
+			continue
+		
+		# Calculate memory decay (older memories fade)
+		var age: int = current_tick - memory.get("tick", 0)
+		var decay_factor: float = exp(-age / 10000.0)  # Memories decay over ~10000 ticks
+		
+		# Only recall if memory is still strong enough
+		if decay_factor < 0.1:
+			continue
+		
+		recalled.append({
+			"event_id": event_id,
+			"memory": memory,
+			"decay_factor": decay_factor
+		})
+	
+	# Sort by recency and emotional impact
+	recalled.sort_custom(func(a, b): return a.memory.tick > b.memory.tick or (a.memory.tick == b.memory.tick and a.memory.emotional_impact > b.memory.emotional_impact))
+	
+	# Limit results
+	if recalled.size() > limit:
+		recalled = recalled.slice(0, limit)
+	
+	memory_access["episodic"] = current_tick
+	return recalled
+
+
+## Phase 1.2: Learn a semantic fact
+func learn_semantic_fact(fact_key: String, details: Dictionary, confidence: float = 1.0, source: String = "observation") -> void:
+	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	
+	# If fact already exists, update confidence (higher confidence wins)
+	if semantic_memory.has(fact_key):
+		var existing = semantic_memory[fact_key]
+		if confidence > existing.get("confidence", 0.0):
+			semantic_memory[fact_key] = {
+				"learned_tick": current_tick,
+				"confidence": confidence,
+				"source": source,
+				"details": details
+			}
+	else:
+		semantic_memory[fact_key] = {
+			"learned_tick": current_tick,
+			"confidence": confidence,
+			"source": source,
+			"details": details
+		}
+	
+	memory_access["semantic"] = current_tick
+
+
+## Phase 1.2: Recall semantic fact
+func recall_semantic_fact(fact_key: String) -> Dictionary:
+	if not semantic_memory.has(fact_key):
+		return {}
+	
+	var fact = semantic_memory[fact_key]
+	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	
+	# Check if fact has decayed
+	var age: int = current_tick - fact.get("learned_tick", 0)
+	var decay_factor: float = exp(-age / 20000.0)  # Semantic memories last longer
+	
+	if decay_factor < 0.1:
+		# Fact has been forgotten
+		semantic_memory.erase(fact_key)
+		return {}
+	
+	memory_access["semantic"] = current_tick
+	return fact
+
+
+## Phase 1.2: Update spatial memory for a tile
+func update_spatial_memory(tile: Vector2i, resource_type: String = "", danger_level: float = 0.0, terrain_type: String = "") -> void:
+	var tile_key: String = "%d,%d" % [tile.x, tile.y]
+	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	
+	spatial_memory[tile_key] = {
+		"last_seen_tick": current_tick,
+		"resource_type": resource_type,
+		"danger_level": danger_level,
+		"terrain_type": terrain_type
+	}
+	
+	memory_access["spatial"] = current_tick
+
+
+## Phase 1.2: Recall spatial memory for nearby tiles
+func recall_nearby_spatial_memory(center: Vector2i, radius: int) -> Dictionary:
+	var nearby: Dictionary = {}
+	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	
+	for dx in range(-radius, radius + 1):
+		for dy in range(-radius, radius + 1):
+			var tile: Vector2i = center + Vector2i(dx, dy)
+			var tile_key: String = "%d,%d" % [tile.x, tile.y]
+			
+			if spatial_memory.has(tile_key):
+				var memory = spatial_memory[tile_key]
+				var age: int = current_tick - memory.get("last_seen_tick", 0)
+				
+				# Spatial memories decay faster (geographic knowledge becomes outdated)
+				var decay_factor: float = exp(-age / 5000.0)
+				
+				if decay_factor >= 0.1:
+					nearby[tile_key] = {
+						"tile": tile,
+						"memory": memory,
+						"decay_factor": decay_factor
+					}
+	
+	memory_access["spatial"] = current_tick
+	return nearby
+
+
+## Phase 1.2: Update social memory for another pawn
+func update_social_memory(other_pawn_id: int, trust_change: float = 0.0, debt_change: float = 0.0, grudge_change: float = 0.0, friendship_change: float = 0.0, interaction_type: String = "") -> void:
+	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	
+	if not social_memory.has(other_pawn_id):
+		social_memory[other_pawn_id] = {
+			"trust": 50.0,
+			"debt": 0.0,
+			"grudge": 0.0,
+			"friendship": 0.0,
+			"last_interaction": current_tick,
+			"interaction_history": []
+		}
+	
+	var memory = social_memory[other_pawn_id]
+	
+	# Update values with clamping
+	memory.trust = clamp(memory.trust + trust_change, 0.0, 100.0)
+	memory.debt = clamp(memory.debt + debt_change, -100.0, 100.0)
+	memory.grudge = clamp(memory.grudge + grudge_change, 0.0, 100.0)
+	memory.friendship = clamp(memory.friendship + friendship_change, 0.0, 100.0)
+	memory.last_interaction = current_tick
+	
+	# Record interaction
+	if not interaction_type.is_empty():
+		memory.interaction_history.append({
+			"type": interaction_type,
+			"tick": current_tick
+		})
+		
+		# Limit interaction history to last 50 interactions
+		if memory.interaction_history.size() > 50:
+			memory.interaction_history = memory.interaction_history.slice(-50)
+	
+	memory_access["social"] = current_tick
+
+
+## Phase 1.2: Recall social memory for another pawn
+func recall_social_memory(other_pawn_id: int) -> Dictionary:
+	if not social_memory.has(other_pawn_id):
+		return {
+			"trust": 50.0,
+			"debt": 0.0,
+			"grudge": 0.0,
+			"friendship": 0.0,
+			"last_interaction": -1,
+			"interaction_history": []
+		}
+	
+	var memory = social_memory[other_pawn_id]
+	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	
+	# Decay social memories over time
+	var age: int = current_tick - memory.get("last_interaction", 0)
+	var decay_factor: float = exp(-age / 15000.0)  # Social memories last ~15000 ticks
+	
+	# Apply decay to emotional values
+	if decay_factor < 1.0:
+		memory.trust = lerp(50.0, memory.trust, decay_factor)
+		memory.grudge = lerp(0.0, memory.grudge, decay_factor)
+		memory.friendship = lerp(0.0, memory.friendship, decay_factor)
+	
+	memory_access["social"] = current_tick
+	return memory
+
+
+## Phase 1.2: Decay all memories periodically
+func decay_memories() -> void:
+	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	
+	# Decay episodic memories
+	var episodic_to_remove: Array = []
+	for event_id in episodic_memory:
+		var memory = episodic_memory[event_id]
+		var age: int = current_tick - memory.get("tick", 0)
+		if age > 20000:  # Remove very old episodic memories
+			episodic_to_remove.append(event_id)
+	
+	for event_id in episodic_to_remove:
+		episodic_memory.erase(event_id)
+	
+	# Decay semantic memories
+	var semantic_to_remove: Array = []
+	for fact_key in semantic_memory:
+		var fact = semantic_memory[fact_key]
+		var age: int = current_tick - fact.get("learned_tick", 0)
+		if age > 50000:  # Remove very old semantic memories
+			semantic_to_remove.append(fact_key)
+	
+	for fact_key in semantic_to_remove:
+		semantic_memory.erase(fact_key)
+	
+	# Decay spatial memories
+	var spatial_to_remove: Array = []
+	for tile_key in spatial_memory:
+		var memory = spatial_memory[tile_key]
+		var age: int = current_tick - memory.get("last_seen_tick", 0)
+		if age > 10000:  # Remove outdated spatial memories
+			spatial_to_remove.append(tile_key)
+	
+	for tile_key in spatial_to_remove:
+		spatial_memory.erase(tile_key)
+
+
+## Phase 1.3: Update need satisfaction based on current state
+func update_need_satisfaction() -> void:
+	# Survival: based on hunger, rest, health
+	var survival_score: float = (hunger + rest + health) / 3.0
+	need_satisfaction["survival"] = survival_score
+	
+	# Safety: based on mood, regional safety, recent threats
+	var safety_score: float = mood * 0.6 + regional_safety * 0.4
+	need_satisfaction["safety"] = safety_score
+	
+	# Belonging: based on social rapport, household status, clan membership
+	var belonging_score: float = 50.0
+	if household_id >= 0:
+		belonging_score += 20.0
+	if clan_id >= 0:
+		belonging_score += 15.0
+	# Add social rapport average
+	var total_rapport: float = 0.0
+	var rapport_count: int = 0
+	for other_id in social_rapport:
+		total_rapport += social_rapport[other_id]
+		rapport_count += 1
+	if rapport_count > 0:
+		belonging_score += (total_rapport / rapport_count / 3000.0) * 15.0
+	need_satisfaction["belonging"] = clamp(belonging_score, 0.0, 100.0)
+	
+	# Esteem: based on reputation, leadership role, skill levels
+	var esteem_score: float = reputation_score * 0.5
+	if leadership_role > 0:
+		esteem_score += 20.0
+	# Add skill level contribution
+	var total_skill_xp: float = 0.0
+	for skill in skill_xp:
+		total_skill_xp += skill_xp[skill]
+	esteem_score += (total_skill_xp / 1000.0) * 10.0
+	need_satisfaction["esteem"] = clamp(esteem_score, 0.0, 100.0)
+	
+	# Self-actualization: based on completed goals, mastery perks, legacy
+	var self_actualization_score: float = legacy_score * 0.3
+	self_actualization_score += mastery_perks.size() * 5.0
+	self_actualization_score += goal_history.size() * 2.0
+	need_satisfaction["self_actualization"] = clamp(self_actualization_score, 0.0, 100.0)
+
+
+## Phase 1.3: Get most urgent unmet need
+func get_most_urgent_need() -> String:
+	var most_urgent: String = "survival"
+	var highest_urgency: float = -1.0
+	
+	for need in need_satisfaction:
+		var satisfaction: float = need_satisfaction[need]
+		var urgency: float = need_urgency.get(need, 1.0)
+		var urgency_score: float = (100.0 - satisfaction) * urgency
+		
+		if urgency_score > highest_urgency:
+			highest_urgency = urgency_score
+			most_urgent = need
+	
+	return most_urgent
+
+
+## Phase 1.3: Add a new goal
+func add_goal(goal_type: String, priority: float = 1.0, deadline: int = -1, details: Dictionary = {}) -> String:
+	var goal_id: String = "%s_%d_%d" % [goal_type, GameManager.tick_count if "tick_count" in GameManager else 0, id]
+	active_goals[goal_id] = {
+		"type": goal_type,
+		"priority": priority,
+		"progress": 0.0,
+		"sub_goals": [],
+		"deadline": deadline,
+		"created_tick": GameManager.tick_count if "tick_count" in GameManager else 0,
+		"details": details
+	}
+	return goal_id
+
+
+## Phase 1.3: Complete a goal
+func complete_goal(goal_id: String, success: bool = true) -> void:
+	if not active_goals.has(goal_id):
+		return
+	
+	var goal = active_goals[goal_id]
+	goal_history.append({
+		"type": goal.type,
+		"success": success,
+		"completed_tick": GameManager.tick_count if "tick_count" in GameManager else 0,
+		"priority": goal.priority,
+		"details": goal.details
+	})
+	
+	active_goals.erase(goal_id)
+	
+	# Boost self-actualization on successful goal completion
+	if success:
+		need_satisfaction["self_actualization"] = clamp(need_satisfaction["self_actualization"] + 5.0, 0.0, 100.0)
+
+
+## Phase 1.3: Abandon a goal
+func abandon_goal(goal_id: String, reason: String = "") -> void:
+	if not active_goals.has(goal_id):
+		return
+	
+	var goal = active_goals[goal_id]
+	goal_history.append({
+		"type": goal.type,
+		"success": false,
+		"abandoned_tick": GameManager.tick_count if "tick_count" in GameManager else 0,
+		"priority": goal.priority,
+		"reason": reason,
+		"details": goal.details
+	})
+	
+	active_goals.erase(goal_id)
+
+
+## Phase 1.3: Update goal progress
+func update_goal_progress(goal_id: String, progress_delta: float) -> void:
+	if not active_goals.has(goal_id):
+		return
+	
+	var goal = active_goals[goal_id]
+	goal.progress = clamp(goal.progress + progress_delta, 0.0, 100.0)
+	
+	# Auto-complete if progress reaches 100%
+	if goal.progress >= 100.0:
+		complete_goal(goal_id, true)
+
+
+## Phase 1.3: Get highest priority active goal
+func get_highest_priority_goal() -> Dictionary:
+	var highest_priority: float = -1.0
+	var best_goal: Dictionary = {}
+	
+	for goal_id in active_goals:
+		var goal = active_goals[goal_id]
+		var adjusted_priority: float = goal.priority
+		
+		# Adjust priority based on deadline urgency
+		if goal.deadline > 0:
+			var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+			var ticks_remaining: int = goal.deadline - current_tick
+			if ticks_remaining < 100:
+				adjusted_priority *= 2.0  # Urgent deadline
+			elif ticks_remaining < 500:
+				adjusted_priority *= 1.5
+		
+		if adjusted_priority > highest_priority:
+			highest_priority = adjusted_priority
+			best_goal = goal
+			best_goal["goal_id"] = goal_id
+	
+	return best_goal
+
+
+## Phase 1.3: Generate goals based on unmet needs
+func generate_goals_from_needs() -> void:
+	var urgent_need: String = get_most_urgent_need()
+	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	
+	match urgent_need:
+		"survival":
+			# Generate survival goals based on lowest survival stat
+			if hunger < 40.0:
+				add_goal("find_food", 2.5, current_tick + 500, {"need": "hunger"})
+			if rest < 40.0:
+				add_goal("find_rest", 2.5, current_tick + 300, {"need": "rest"})
+			if health < 40.0:
+				add_goal("heal", 2.0, current_tick + 1000, {"need": "health"})
+		"safety":
+			# Generate safety goals
+			if regional_safety < 30.0:
+				add_goal("improve_safety", 1.5, current_tick + 2000, {"need": "safety"})
+			if mood < 30.0:
+				add_goal("improve_mood", 1.5, current_tick + 1000, {"need": "mood"})
+		"belonging":
+			# Generate belonging goals
+			if household_id < 0:
+				add_goal("join_household", 1.2, current_tick + 3000, {"need": "belonging"})
+			if clan_id < 0:
+				add_goal("join_clan", 1.0, current_tick + 5000, {"need": "belonging"})
+		"esteem":
+			# Generate esteem goals
+			if reputation_score < 40.0:
+				add_goal("build_reputation", 1.0, current_tick + 4000, {"need": "esteem"})
+			if leadership_role == 0:
+				add_goal("seek_leadership", 0.8, current_tick + 6000, {"need": "esteem"})
+		"self_actualization":
+			# Generate self-actualization goals
+			if mastery_perks.size() < 3:
+				add_goal("master_skill", 0.7, current_tick + 8000, {"need": "self_actualization"})
+			if legacy_score < 20.0:
+				add_goal("leave_legacy", 0.6, current_tick + 10000, {"need": "self_actualization"})
+
+
+## Phase 1.3: Clean up expired or completed goals
+func cleanup_goals() -> void:
+	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	var goals_to_remove: Array = []
+	
+	for goal_id in active_goals:
+		var goal = active_goals[goal_id]
+		
+		# Remove if deadline passed
+		if goal.deadline > 0 and current_tick > goal.deadline:
+			abandon_goal(goal_id, "deadline_passed")
+			goals_to_remove.append(goal_id)
+	
+	# Also remove goals that are no longer relevant
+	for goal_id in active_goals:
+		if goal_id in goals_to_remove:
+			continue
+		var goal = active_goals[goal_id]
+		
+		# If survival need is met, remove survival goals
+		if goal.type == "find_food" and hunger > 70.0:
+			complete_goal(goal_id, true)
+		elif goal.type == "find_rest" and rest > 70.0:
+			complete_goal(goal_id, true)
+
+
+## Phase 1.4: Utility-based decision making
+## Calculate utility value for a potential action
+func calculate_action_utility(action_type: String, context: Dictionary = {}) -> float:
+	var utility: float = 0.0
+	
+	# Factor 1: Need satisfaction (primary driver)
+	var need_factor: float = _calculate_need_factor(action_type)
+	utility += need_factor * 3.0
+	
+	# Factor 2: Personality alignment
+	var personality_factor: float = _calculate_personality_factor(action_type)
+	utility += personality_factor * 1.5
+	
+	# Factor 3: Social pressure
+	var social_factor: float = _calculate_social_factor(action_type, context)
+	utility += social_factor * 1.0
+	
+	# Factor 4: Environmental context
+	var environment_factor: float = _calculate_environment_factor(action_type, context)
+	utility += environment_factor * 0.8
+	
+	# Factor 5: Past outcomes (learning)
+	var learning_factor: float = _calculate_learning_factor(action_type)
+	utility += learning_factor * 0.5
+	
+	# Factor 6: Risk assessment
+	var risk_factor: float = _calculate_risk_factor(action_type, context)
+	utility *= (1.0 - risk_factor * 0.3)  # Reduce utility for high-risk actions
+	
+	return utility
+
+
+## Calculate need-based utility factor for an action
+func _calculate_need_factor(action_type: String) -> float:
+	var factor: float = 0.0
+	var urgent_need: String = get_most_urgent_need()
+	var need_satisfaction_level: float = need_satisfaction.get(urgent_need, 50.0)
+	
+	# Higher factor when need is less satisfied (more urgent)
+	var urgency: float = (100.0 - need_satisfaction_level) / 100.0
+	
+	match action_type:
+		"eat", "forage", "hunt":
+			if urgent_need == "survival" and hunger < 50.0:
+				factor = urgency * 2.0
+		"sleep", "rest":
+			if urgent_need == "survival" and rest < 50.0:
+				factor = urgency * 2.0
+		"build_shelter", "fortify":
+			if urgent_need == "safety":
+				factor = urgency * 1.5
+		"socialize", "talk":
+			if urgent_need == "belonging":
+				factor = urgency * 1.5
+		"work", "craft", "build":
+			if urgent_need == "esteem":
+				factor = urgency * 1.2
+		"explore", "discover":
+			if urgent_need == "self_actualization":
+				factor = urgency * 1.0
+	
+	return clamp(factor, 0.0, 1.0)
+
+
+## Calculate personality-based utility factor for an action
+func _calculate_personality_factor(action_type: String) -> float:
+	var factor: float = 0.5  # Base factor
+	
+	match action_type:
+		"explore", "discover", "innovate":
+			factor = openness
+		"work", "craft", "build":
+			factor = conscientiousness
+		"socialize", "talk", "trade":
+			factor = extraversion
+		"help", "cooperate", "share":
+			factor = agreeableness
+		"fight", "defend", "hunt":
+			factor = 1.0 - neuroticism  # Low neuroticism = higher utility
+		"hide", "flee":
+			factor = neuroticism  # High neuroticism = higher utility
+	
+	return factor
+
+
+## Calculate social pressure factor for an action
+func _calculate_social_factor(action_type: String, context: Dictionary) -> float:
+	var factor: float = 0.0
+	
+	# Check if other pawns are nearby doing similar actions
+	var nearby_pawns: Array = context.get("nearby_pawns", [])
+	var similar_actions: int = 0
+	
+	for pawn_data in nearby_pawns:
+		if pawn_data is Dictionary and pawn_data.has("current_action"):
+			if pawn_data.current_action == action_type:
+				similar_actions += 1
+	
+	# Social conformity: moderate utility boost for following crowd
+	if similar_actions > 0:
+		var conformity: float = agreeableness * 0.3
+		factor += conformity * min(similar_actions / 3.0, 1.0)
+	
+	# Social pressure from authority
+	if context.has("authority_present") and context.authority_present:
+		if action_type in ["work", "build", "defend"]:
+			factor += conscientiousness * 0.4
+	
+	# Social obligation (debts, favors)
+	if context.has("social_obligation") and context.social_obligation:
+		factor += 0.5
+	
+	return clamp(factor, 0.0, 1.0)
+
+
+## Calculate environmental context factor for an action
+func _calculate_environment_factor(action_type: String, context: Dictionary) -> float:
+	var factor: float = 0.5
+	
+	# Time of day
+	var is_night: bool = context.get("is_night", false)
+	match action_type:
+		"sleep", "rest":
+			factor = 1.0 if is_night else 0.3
+		"work", "build", "explore":
+			factor = 0.3 if is_night else 0.8
+	
+	# Weather conditions
+	var weather: String = context.get("weather", "clear")
+	match action_type:
+		"forage", "hunt", "explore":
+			if weather == "storm":
+				factor = 0.2
+			elif weather == "rain":
+				factor = 0.5
+		"work", "build":
+			if weather == "storm":
+				factor = 0.1
+			elif weather == "rain":
+				factor = 0.4
+	
+	# Resource availability
+	var resources_available: bool = context.get("resources_available", true)
+	if not resources_available and action_type in ["forage", "mine", "chop"]:
+		factor = 0.1
+	
+	return clamp(factor, 0.0, 1.0)
+
+
+## Calculate learning factor based on past outcomes
+func _calculate_learning_factor(action_type: String) -> float:
+	var factor: float = 0.5
+	
+	# Check episodic memory for similar past actions
+	var past_actions: Array = recall_episodic_memories(action_type, 0.3, 20)
+	
+	if past_actions.is_empty():
+		return factor  # No past experience, neutral
+	
+	var success_count: int = 0
+	var failure_count: int = 0
+	
+	for memory_data in past_actions:
+		var memory = memory_data.memory
+		var success: bool = memory.details.get("success", true)
+		if success:
+			success_count += 1
+		else:
+			failure_count += 1
+	
+	var total_attempts: int = success_count + failure_count
+	if total_attempts == 0:
+		return factor
+	
+	var success_rate: float = float(success_count) / float(total_attempts)
+	
+	# High openness reduces learning from past failures (more willing to try again)
+	var openness_modifier: float = 1.0 - (openness * 0.3)
+	
+	# High conscientiousness increases learning from past (more methodical)
+	var conscientiousness_modifier: float = 1.0 + (conscientiousness * 0.2)
+	
+	factor = success_rate * conscientiousness_modifier * openness_modifier
+	
+	return clamp(factor, 0.0, 1.0)
+
+
+## Calculate risk factor for an action
+func _calculate_risk_factor(action_type: String, context: Dictionary) -> float:
+	var risk: float = 0.0
+	
+	# Base risk by action type
+	match action_type:
+		"fight", "hunt", "explore_unknown":
+			risk = 0.7
+		"forage", "mine", "chop":
+			risk = 0.3
+		"build", "craft", "socialize":
+			risk = 0.1
+		"sleep", "rest":
+			risk = 0.2
+	
+	# Environmental danger
+	var danger_level: float = context.get("danger_level", 0.0)
+	risk += danger_level * 0.5
+	
+	# Health status
+	var health_percentage: float = get_health_percentage()
+	if health_percentage < 30.0:
+		risk += 0.3  # Higher risk when injured
+	
+	# Personality risk tolerance
+	var risk_tolerance: float = get_risk_tolerance()
+	risk *= (1.0 - risk_tolerance * 0.5)  # High risk tolerance reduces perceived risk
+	
+	return clamp(risk, 0.0, 1.0)
+
+
+## Phase 1.4: Choose best action from available options
+func choose_best_action(available_actions: Array, context: Dictionary = {}) -> Dictionary:
+	var best_action: Dictionary = {}
+	var highest_utility: float = -1.0
+	
+	for action in available_actions:
+		if action is Dictionary and action.has("type"):
+			var action_type: String = action.type
+			var utility: float = calculate_action_utility(action_type, context)
+			
+			if utility > highest_utility:
+				highest_utility = utility
+				best_action = action
+				best_action["utility"] = utility
+	
+	return best_action
+
+
+## Phase 1.4: Record action outcome for learning
+func record_action_outcome(action_type: String, success: bool, context: Dictionary = {}) -> void:
+	var emotional_impact: float = 10.0 if success else -5.0
+	
+	# Record as episodic memory
+	record_episodic_memory(
+		"action_" + action_type,
+		context.get("location", tile_pos),
+		context.get("participants", []),
+		emotional_impact,
+		{
+			"action_type": action_type,
+			"success": success,
+			"context": context
+		}
+	)
+	
+	# Update learning based on outcome
+	if success:
+		# Reinforce successful action
+		var fact_key: String = "action_success:" + action_type
+		var current_confidence: float = recall_semantic_fact(fact_key).get("confidence", 0.5)
+		learn_semantic_fact(fact_key, {"action_type": action_type}, clamp(current_confidence + 0.1, 0.0, 1.0), "experience")
+	else:
+		# Reduce confidence in failed action
+		var fact_key: String = "action_success:" + action_type
+		var current_confidence: float = recall_semantic_fact(fact_key).get("confidence", 0.5)
+		learn_semantic_fact(fact_key, {"action_type": action_type}, clamp(current_confidence - 0.15, 0.0, 1.0), "experience")
 
 
 func get_health_percentage() -> float:

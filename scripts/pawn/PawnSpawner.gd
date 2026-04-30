@@ -172,11 +172,11 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 ## One arrival without RNG: fixed young-adult age, first free name, cosmetic
 ## indices from tick_seed. Used for generational turnover (v1).
 func spawn_generational_pawn(
-	       world: World,
-	       tile: Vector2i,
-	       tick_seed: int,
-	       parent_id: int = -1,
-	       household_id: int = -1
+		   world: World,
+		   tile: Vector2i,
+		   tick_seed: int,
+		   parent_id: int = -1,
+		   household_id: int = -1
 ) -> bool:
 	if world == null or world.data == null or world.pathfinder == null or pawn_scene == null:
 		return false

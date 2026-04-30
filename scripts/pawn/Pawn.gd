@@ -2543,7 +2543,7 @@ func _decay_needs() -> void:
 	# track_co_presence()
 	
 	# Stage 1: Decay unused skills (throttled to once per day)
-	if GameManager.tick_count % GameManager.TICKS_PER_DAY == 0:
+	if GameManager.tick_count % DayNightCycle.TICKS_PER_DAY == 0:
 		data.decay_unused_skills()
 	
 	# Stage 3-4: Track clan/settlement contributions - DISABLED for performance

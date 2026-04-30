@@ -490,7 +490,7 @@ func _grant_mastery_perk(skill: int, perk_level: int) -> void:
 ## Call this periodically (e.g., once per day)
 func decay_unused_skills() -> void:
 	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
-	var decay_threshold: int = GameManager.TICKS_PER_DAY * 7  # 7 days without use
+	var decay_threshold: int = DayNightCycle.TICKS_PER_DAY * 7  # 7 days without use
 	
 	for skill in skill_xp:
 		var last_used: int = skill_last_used.get(skill, 0)

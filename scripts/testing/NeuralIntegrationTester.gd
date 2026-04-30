@@ -372,7 +372,7 @@ func _test_collective_intelligence() -> Dictionary:
 
 		print("[NeuralIntegrationTester] ✓ Collective intelligence test passed")
 
-	return test_result
+		return test_result
 
 # === AI Agent Manager Integration Testing ===
 

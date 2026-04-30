@@ -5,6 +5,60 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-30 - Queue execution (Immediate item 3)
+
+Date: 2026-04-30
+Goal: Complete region-to-faction canon bridge so identity seeds map to deterministic regional history profiles.
+
+Changes made:
+- Updated `docs/WORLD_BIBLE/REGIONS.md` with deterministic cause profiles (scar/conflict/recovery) for seed regions.
+- Added explicit faction bridge mappings in region entries linking `The Quiet Ring` -> `Open Hearth Clusters` and `Red Scar Basin` -> `Stoneward Enclaves`.
+- Updated `docs/WORLD_BIBLE/FACTIONS.md` with region archetype links plus supporting deterministic profile bullets.
+- Marked queue item 3 as complete in `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md`.
+
+Validation:
+- Confirmed each early faction now references at least one region archetype and one supporting history profile.
+- Confirmed bridge language remains fact-first/emergent and does not introduce scripted hero-arc overrides.
+
+Suggested next session:
+- Start near-term queue item 1: define canonical architecture signature set for open/cautious/defensive identity trajectories.
+
+## 2026-04-30 - Queue execution (Immediate items 1 and 2)
+
+Date: 2026-04-30
+Goal: Execute canon queue item 1 (glossary normalization) and item 2 (timeline hook trigger specs) using legacy docs as reference while preserving current authority.
+
+Changes made:
+- Expanded `docs/WORLD_BIBLE/GLOSSARY.md` with legacy-to-canon mapping entries and implementation anchors for neural/civilization/monitoring/cultural/economic/historical terms.
+- Added canon guardrails in glossary to prevent legacy terms from overriding current state authority.
+- Converted open hooks in `docs/WORLD_BIBLE/TIMELINE.md` into measurable detection conditions with explicit evidence anchors tied to `SettlementMemory`, `WorldMemory`, `WorldMeaning`, and cultural identity signals.
+- Updated `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md` status markers: items 1 and 2 completed, item 3 marked next.
+
+Validation:
+- Manual consistency check against determinism/fact-first policy in `docs/HEELKAWN_STATE.md`.
+- Verified each updated timeline hook now has both a trigger condition and evidence source.
+
+Suggested next session:
+- Execute immediate queue item 3: region-to-faction canon bridge in `REGIONS.md` and `FACTIONS.md`.
+
+## 2026-04-30 - Immediate 1 docs authority and canon queue
+
+Date: 2026-04-30
+Goal: Execute Immediate 1 from repo planning pass by unifying documentation authority, preserving legacy lore references, and creating an actionable canon/system feature queue.
+
+Changes made:
+- Clarified onboarding/coding guidance so seeded emergence (`WorldRNG`) is explicitly allowed while unseeded historical randomness remains disallowed in canonical simulation paths.
+- Marked `HEELKAWN_INTEGRATION.md` as historical/superseded reference and added explicit pointers to authoritative current-state docs.
+- Added `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md` to translate legacy universe/system ideas into ordered, phase-aligned execution steps.
+- Updated world-bible index and canon changelog to include the new queue and policy decision.
+
+Validation:
+- Manual docs consistency pass across `docs/HEELKAWN_STATE.md`, `docs/LLM_ONBOARDING.md`, `.github/copilot-instructions.md`, `HEELKAWN_KERNEL.md`, and world-bible governance files.
+
+Suggested next session:
+- Execute queue item 1 in `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md` (canon glossary normalization with implementation anchors).
+- Add first canonical architecture signature table for open/cautious/defensive settlement identity tracks.
+
 ## 2026-04-30 - Seeded simulation determinism pass
 
 Date: 2026-04-30

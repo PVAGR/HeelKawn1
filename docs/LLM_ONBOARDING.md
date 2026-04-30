@@ -15,10 +15,10 @@ For planning, tiered canon, lore vs kernel scope, or roadmap-heavy work, also re
 
 ## DO NOT:
 
-- introduce randomness
+- introduce unseeded/random historical state in canonical simulation paths
 - refactor kernel systems
 - add UI explanations
-- change determinism
+- break determinism contracts (seeded `WorldRNG` streams are allowed)
 - "simplify" systems
 
 ## ARCHITECTURE SUMMARY
@@ -34,6 +34,15 @@ Autoloads are global truth.
 Do not add class_name to autoload scripts.
 
 If you are unsure, do nothing and ask.
+
+## HISTORICAL DOCS POLICY
+
+- Older design docs can be used as **universe-history and canon-reference material**.
+- Engineering authority for what to build now still comes from:
+  1) `docs/HEELKAWN_STATE.md`
+  2) `HEELKAWN.txt`
+  3) active phase/roadmap docs under `docs/`
+- If a historical doc conflicts with current state docs, follow current state docs and record canon decisions in world-bible/canon logs.
 
 ## RECOMMENDED STACK (FREE-FOREVER FRIENDLY)
 

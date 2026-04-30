@@ -1,6 +1,16 @@
-# HeelKawn Universe - Complete Integration Guide
+# HeelKawn Universe - Complete Integration Guide (Historical Reference)
 
-## 🌌 System Overview
+> Status: Historical/superseded integration snapshot.
+>
+> Use this file as legacy universe/system context only (lore direction, older architecture intent, prior terminology).
+> For current implementation truth and active build priorities, follow:
+> - `docs/HEELKAWN_STATE.md` (authoritative state)
+> - `HEELKAWN.txt` (active chronology/changelog)
+> - current roadmap docs under `docs/`
+>
+> If statements here conflict with current docs/runtime, treat this file as non-authoritative.
+
+## 🌌 System Overview (Legacy Snapshot)
 
 HeelKawn Universe is a fully integrated neural network matrix-driven world simulation system with real-time monitoring, error tracking, and automatic health checks.
 

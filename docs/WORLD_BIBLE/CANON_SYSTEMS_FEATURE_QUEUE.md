@@ -1,0 +1,47 @@
+# CANON + SYSTEMS FEATURE QUEUE
+
+Purpose: convert old-doc universe history and legacy design language into actionable, phase-aligned implementation targets without reviving stale engineering assumptions.
+
+Authority:
+- Canon/state truth: `docs/HEELKAWN_STATE.md`
+- Active chronology and shipped changes: `HEELKAWN.txt`
+- Legacy context reference: `HEELKAWN_INTEGRATION.md` (historical only)
+
+## Immediate Queue (execute first)
+
+1. [done 2026-04-30] Canon glossary normalization pass
+   - Map legacy terms ("neural matrix", "civilization layer", "monitoring") to currently supported systems and terms in world-bible files.
+   - Update: `docs/WORLD_BIBLE/GLOSSARY.md`
+   - Exit criteria: each reused legacy term has one canonical definition and one implementation anchor.
+
+2. [done 2026-04-30] Era hooks to simulation events
+   - Turn open hooks in `TIMELINE.md` into measurable triggers based on existing facts (revival, conflict recurrence, identity divergence).
+   - Update: `docs/WORLD_BIBLE/TIMELINE.md`
+   - Exit criteria: every hook includes a detection condition tied to `WorldMemory`/settlement state.
+
+3. [done 2026-04-30] Region-to-faction canon bridge
+   - Connect `REGIONS.md` tendencies to `FACTIONS.md` identity seeds with deterministic causes (scar profile, conflict profile, recovery profile).
+   - Update: `docs/WORLD_BIBLE/REGIONS.md`, `docs/WORLD_BIBLE/FACTIONS.md`
+   - Exit criteria: each seed faction points to at least one region archetype and one supporting history profile.
+
+## Near-Term Systems Queue
+
+1. Cultural architecture signature set (Phase 4 target) ✅ DOCUMENTED
+   - Status: SPECIFIED in docs/WORLD_BIBLE/GLOSSARY.md (Architecture Signature Constants table)
+   - Implementation exists in autoloads/SettlementPlanner.gd with OPEN/CAUTIOUS/DEFENSIVE branches
+   - Exit criteria: Documented with implementation anchor — COMPLETE
+
+2. Player-readable meaning refinement packet
+   - Specify non-text-forward cues for quiet/scarred/bloodied/grave transitions (audio, ambiance, behavior density, settlement posture).
+
+3. Revival storyline constraints
+   - Document canon-safe revival boundaries so rebirth behavior remains emergent but interpretable (no heroic script overrides).
+
+## Legacy-to-Current Mapping Notes
+
+- Keep legacy integration claims as inspiration, not runtime guarantees.
+- Promote only concepts that can be expressed as:
+  - append-only facts,
+  - derived meaning,
+  - deterministic (seeded) simulation behavior.
+- Reject concepts that require hidden scripting or non-auditable state changes.

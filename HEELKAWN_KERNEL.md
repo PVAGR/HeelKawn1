@@ -7,8 +7,9 @@ It is superseded by docs/HEELKAWN_STATE.md, which is the authoritative project s
 
 ## Kernel type: **A — deterministic**
 
-- The world is a machine of cause and effect. Same conditions → same history (replayable, auditable).
+- The world is a machine of cause and effect. Same seed + same inputs/tick history → same outcomes (replayable, auditable).
 - Memory does not decay at random. History does not lie. Persistence is earned by impact.
+- Seeded emergence is valid (`WorldRNG` streams); unseeded/global randomness in canonical history paths is not.
 
 ---
 

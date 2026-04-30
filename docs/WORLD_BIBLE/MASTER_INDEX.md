@@ -15,6 +15,7 @@ Use this file as the quick map of all world canon files.
 - `FACTIONS.md` - organized groups and settlement identities
 - `CHARACTERS.md` - notable entities and chronicler-facing names
 - `GLOSSARY.md` - stable terms and meanings
+- `CANON_SYSTEMS_FEATURE_QUEUE.md` - ordered canon/system implementation queue from legacy docs to active roadmap
 
 ## Governance
 

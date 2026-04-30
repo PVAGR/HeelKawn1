@@ -8,13 +8,14 @@ Read first before suggesting or editing code:
 Project rules:
 - Preserve deterministic behavior.
 - Facts first, meaning second.
-- Do not introduce random historical state.
+- Do not introduce unseeded random historical state (use named `WorldRNG` streams where randomness is required).
 - Do not casually refactor autoload/kernel systems.
 - Prefer the smallest reversible change.
 - Inspect existing files before creating new systems.
 - Do not drift into generic survival crafting, hero fantasy, morality systems, or spectacle-first design.
 - Do not add fake convenience UI that overrides world truth.
 - Do not commit or push unless explicitly asked.
+- Treat legacy docs as historical canon reference unless they are explicitly marked authoritative.
 
 When responding:
 - Name files inspected first.

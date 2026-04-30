@@ -1858,7 +1858,7 @@ func _on_game_tick(tick: int) -> void:
 		section_us["animal_population"] = Time.get_ticks_usec() - t0
 	# Regrowth + ambient are display/maintenance layers; they should not run
 	# every sim tick in normal mode or high speeds will hitch.
-	var regrowth_interval: int = _high_speed_interval(2, 4, 8)
+	var regrowth_interval: int = _high_speed_interval(3, 5, 8)
 	if tick % regrowth_interval == 0:
 		t0 = Time.get_ticks_usec()
 		_process_regrowth(tick)
@@ -1869,9 +1869,10 @@ func _on_game_tick(tick: int) -> void:
 		_update_ambient_target()
 		section_us["ambient_target"] = Time.get_ticks_usec() - t0
 	# Post dynamic hunt jobs less aggressively than harvest loops.
-	var hunt_post_interval: int = _high_speed_interval(20, 30, 45)
+	var hunt_post_interval: int = _high_speed_interval(24, 36, 54)
+	var hunt_phase_offset: int = maxi(1, hunt_post_interval / 2)
 	if (
-			tick % hunt_post_interval == 0
+			(tick + hunt_phase_offset) % hunt_post_interval == 0
 			and Main._world_stabilization_until_tick >= 0
 			and tick >= Main._world_stabilization_until_tick
 	):
@@ -2277,15 +2278,25 @@ func _accumulate_social_rapport() -> void:
 		return
 	pl.sort_custom(func(a: Pawn, b: Pawn) -> bool: return a.data.id < b.data.id)
 	var wm_budget: int = SOCIAL_WM_RECORD_BUDGET_PER_PASS
+	var comp_by_id: Dictionary = {}
+	for p in pl:
+		comp_by_id[int(p.data.id)] = _world.pathfinder.component_of(p.data.tile_pos)
 	for i in range(pl.size()):
 		var pa: Pawn = pl[i]
 		var da: PawnData = pa.data
+		var da_id: int = int(da.id)
+		var da_comp: int = int(comp_by_id.get(da_id, -1))
+		if da_comp < 0 or pa.is_sleeping():
+			continue
 		for j in range(i + 1, pl.size()):
 			var pb: Pawn = pl[j]
 			var db: PawnData = pb.data
+			if pb.is_sleeping():
+				continue
 			if da.hunger <= 38.0 or db.hunger <= 38.0:
 				continue
-			if _world.pathfinder.component_of(da.tile_pos) != _world.pathfinder.component_of(db.tile_pos):
+			var db_comp: int = int(comp_by_id.get(int(db.id), -1))
+			if da_comp != db_comp:
 				continue
 			if pa.position.distance_squared_to(pb.position) > R2:
 				continue

@@ -1100,6 +1100,11 @@ func _on_game_tick(_tick: int) -> void:
 	if GameManager.tick_count % 5 == 0:
 		_decay_needs()
 		_check_thresholds()
+	# Sleepers only need wake checks; skip full AI branch logic to reduce
+	# per-tick overhead during overnight "everyone in bed" windows.
+	if _state == State.SLEEPING:
+		_tick_sleeping()
+		return
 	
 	var stride: int = _fast_forward_tick_stride()
 	var run_full_ai: bool = stride <= 1 or (_tick % stride == 0)
@@ -3794,6 +3799,11 @@ func get_runtime_cohort_observability() -> Dictionary:
 ## Returns true if the pawn is currently asleep in a registered bed.
 func is_in_bed() -> bool:
 	return _state == State.SLEEPING and _reserved_bed.x >= 0
+
+
+## Returns true if the pawn is currently sleeping (bed or ground).
+func is_sleeping() -> bool:
+	return _state == State.SLEEPING
 
 
 ## Human-readable summary of what the pawn is doing right now.

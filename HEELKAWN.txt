@@ -31,6 +31,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-30  **Night + harvest hitch trim:** `Pawn` now fast-paths sleeping ticks (skip full AI branch while asleep) and exposes `is_sleeping()` for cross-system gating. In `Main`, regrowth/hunt cadences were retuned and de-phased (`hunt_post` offset) to reduce same-frame maintenance spikes. `social_rapport` now precomputes path components and skips sleeping pawns, cutting O(n²) pair work/event churn during overnight bed clusters.
 2026-04-30  **1x claim-scan throttle:** `Pawn._job_claim_interval_for_speed()` now uses a slower claim cadence at low speeds (1x/normal now 5 ticks; 3x–12x now 4). This reduces repeated full job-queue scans from many idle pawns — a frequent source of 1x `SIM_HITCH` spikes.
 2026-04-30  **SettlementAI parse fix (Godot 4.6):** `SettlementAI` extends `RefCounted`, so autoload lookup now uses `Engine.get_main_loop()` + root `get_node_or_null` helper (replaces invalid direct calls). Fixed mis-typed `propose_collective_goal` calls in event handlers (now proposer id + int priority) and corrected emergency leadership dispatch to existing methods (`_monarch_selection`, `_tribal_leadership_selection`).
 2026-04-29  **Speed-down backlog clamp:** `GameManager.set_speed()` now clamps `_tick_accumulator` to the new tier’s max when speed is reduced (e.g., 100x → 1x). Prevents very large carryover backlog (`SIM_CATCHUP` ~100+ ticks) from making normal-speed play look frozen for long drain periods.

@@ -132,6 +132,8 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _enemy_spawner: EnemySpawner = $WorldViewport/EnemySpawner
 @onready var _hud: ColonyHUD = $UI_Viewport/ColonyHUD
 @onready var _observer_hud: ObserverHUD = $UI_Viewport/ObserverHUD
+@onready var _chronicle_ledger: ChronicleLedger = $UI_Viewport/ChronicleLedger
+@onready var _pawn_ai_inspector: PawnAIInspector = $UI_Viewport/PawnAIInspector
 @onready var _focus_inspector: FocusInspector = $UI_Viewport/FocusInspector
 @onready var _region_inspector: RegionInspector = $UI_Viewport/RegionInspector
 @onready var _timeline_controls: TimelineControls = $UI_Viewport/TimelineControls
@@ -247,7 +249,7 @@ var _last_mining_react_tick: int = -1
 var _last_tick_hotspot_log_ms: int = -1_000_000
 const MAIN_TICK_HOTSPOT_LOG_INTERVAL_MS: int = 2500
 const MAIN_TICK_HOTSPOT_MIN_TOTAL_MS: float = 8.0
-const MINING_REACT_MIN_INTERVAL_TICKS: int = 120
+const MINING_REACT_MIN_INTERVAL_TICKS: int = 300
 const REGROWTH_SCAN_BUDGET_PER_TICK: int = 32
 const REGROWTH_RESTORE_BUDGET_PER_TICK: int = 4
 const MINING_REACT_SCAN_ROWS_PER_STEP: int = 4
@@ -1724,6 +1726,8 @@ func _bootstrap_colony() -> void:
 	_react_to_mining_progress()
 	if _hud != null:
 		_hud.bind(_world, _pawn_spawner)
+	if _chronicle_ledger != null:
+		_chronicle_ledger.bind(_pawn_spawner)
 	_last_generation_tick = GameManager.tick_count
 	RemnantMemory.clear()
 	AgeMemory.clear()
@@ -1970,8 +1974,17 @@ func _on_game_tick(tick: int) -> void:
 		if tick % REBIRTH_CHECK_INTERVAL_TICKS == 0:
 			t0 = Time.get_ticks_usec()
 			SettlementMemory.recompute(_world)
+			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
+		# Offset SettlementRebirth.process to the next tick to spread the load
+		if (tick + REBIRTH_CHECK_INTERVAL_TICKS / 2) % REBIRTH_CHECK_INTERVAL_TICKS == 0:
+			t0 = Time.get_ticks_usec()
 			SettlementRebirth.process(_world, self, false)
 			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
+		# Phase 4 Identity: visual decay for permanently abandoned settlements (infrequent)
+		if tick % 5000 == 0:
+			t0 = Time.get_ticks_usec()
+			SettlementArchitect.process(_world, self)
+			section_us["settlement_architect"] = Time.get_ticks_usec() - t0
 	if int(tick) % 10000 == 0 and int(tick) > 0:
 		AgeMemory.recompute()
 		if is_instance_valid(_world):
@@ -1998,12 +2011,18 @@ func _on_game_tick(tick: int) -> void:
 	t0 = Time.get_ticks_usec()
 	SettlementMemory.update_settlement_intents(tick)
 	section_us["settlement_intents"] = Time.get_ticks_usec() - t0
-	t0 = Time.get_ticks_usec()
-	SettlementMemory.update_resource_pressures(tick)
-	section_us["settlement_resource_pressure"] = Time.get_ticks_usec() - t0
-	t0 = Time.get_ticks_usec()
-	SettlementMemory.update_preferred_work_fronts(tick)
-	section_us["settlement_work_fronts"] = Time.get_ticks_usec() - t0
+	# Spread settlement updates across ticks to reduce hitch spikes
+	var settlement_update_interval: int = _high_speed_interval(30, 45, 60)
+	if tick % settlement_update_interval == 0:
+		t0 = Time.get_ticks_usec()
+		SettlementMemory.update_resource_pressures(tick)
+		section_us["settlement_resource_pressure"] = Time.get_ticks_usec() - t0
+	# Offset work fronts update to spread load
+	var work_fronts_offset: int = maxi(1, settlement_update_interval / 2)
+	if (tick + work_fronts_offset) % settlement_update_interval == 0:
+		t0 = Time.get_ticks_usec()
+		SettlementMemory.update_preferred_work_fronts(tick)
+		section_us["settlement_work_fronts"] = Time.get_ticks_usec() - t0
 	if tick % _social_rapport_interval_for_speed() == 0:
 		t0 = Time.get_ticks_usec()
 		_accumulate_social_rapport()
@@ -2112,11 +2131,11 @@ func _mining_react_scan_rows_for_speed() -> int:
 		return MINING_REACT_SCAN_ROWS_PER_STEP
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 2
+		return 1
 	if gs >= 50.0:
-		return 3
+		return 2
 	if gs >= 26.0:
-		return 4
+		return 3
 	return MINING_REACT_SCAN_ROWS_PER_STEP
 
 
@@ -2836,6 +2855,10 @@ func _handle_key_input(key: InputEventKey) -> void:
 			_toggle_timeline_controls()
 		KEY_O:
 			_open_incarnation_picker()
+		KEY_L:
+			_toggle_chronicle_ledger()
+		KEY_K:
+			_toggle_pawn_ai_inspector()
 
 
 func _toggle_region_inspector() -> void:
@@ -2850,6 +2873,16 @@ func _toggle_region_inspector() -> void:
 func _toggle_timeline_controls() -> void:
 	if _timeline_controls != null:
 		_timeline_controls.visible = not _timeline_controls.visible
+
+
+func _toggle_chronicle_ledger() -> void:
+	if _chronicle_ledger != null:
+		_chronicle_ledger._toggle_visibility()
+
+
+func _toggle_pawn_ai_inspector() -> void:
+	if _pawn_ai_inspector != null:
+		_pawn_ai_inspector._toggle_visibility()
 
 
 func _open_incarnation_picker() -> void:
@@ -3265,6 +3298,8 @@ func _set_selected_pawn(p: Pawn) -> void:
 		_selected_pawn.is_selected = false
 		_selected_pawn.queue_redraw()
 	_selected_pawn = p
+	if _pawn_ai_inspector != null:
+		_pawn_ai_inspector.set_selected_pawn(_selected_pawn)
 	# Observer-first: selection is inspection only. Incarnation/control remains explicit via picker.
 	if _selected_pawn != null:
 		_player_pawn = _selected_pawn
@@ -3956,6 +3991,8 @@ func _reroll_world() -> void:
 	_react_to_mining_progress()
 	if _hud != null:
 		_hud.bind(_world, _pawn_spawner)
+	if _chronicle_ledger != null:
+		_chronicle_ledger.bind(_pawn_spawner)
 	_last_generation_tick = GameManager.tick_count
 	_world.set_meta("animal_spawner", _animal_spawner)
 	if is_instance_valid(_world):

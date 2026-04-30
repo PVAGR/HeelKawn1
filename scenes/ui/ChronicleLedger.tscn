@@ -1,0 +1,119 @@
+[gd_scene load_steps=2 format=3 uid="uid://heelkawn_chronicle_ledger"]
+
+[ext_resource type="Script" path="res://scripts/ui/ChronicleLedger.gd" id="1_ledger"]
+
+[node name="ChronicleLedger" type="CanvasLayer"]
+script = ExtResource("1_ledger")
+layer = 20
+
+[node name="Panel" type="PanelContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="VBox" type="VBoxContainer" parent="Panel/Margin"]
+layout_mode = 2
+
+[node name="Header" type="HBoxContainer" parent="Panel/Margin/VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Panel/Margin/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "Chronicle Ledger"
+horizontal_alignment = 1
+
+[node name="CloseButton" type="Button" parent="Panel/Margin/VBox/Header"]
+layout_mode = 2
+text = "Close (L)"
+
+[node name="TabContainer" type="TabContainer" parent="Panel/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Personalities" type="Control" parent="Panel/Margin/VBox/TabContainer"]
+layout_mode = 2
+
+[node name="PersonalitiesContent" type="VBoxContainer" parent="Panel/Margin/VBox/TabContainer/Personalities"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PersonalitiesScroll" type="ScrollContainer" parent="Panel/Margin/VBox/TabContainer/Personalities/PersonalitiesContent"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PersonalitiesText" type="RichTextLabel" parent="Panel/Margin/VBox/TabContainer/Personalities/PersonalitiesContent/PersonalitiesScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = true
+fit_content = true
+
+[node name="History" type="Control" parent="Panel/Margin/VBox/TabContainer"]
+layout_mode = 2
+
+[node name="HistoryContent" type="VBoxContainer" parent="Panel/Margin/VBox/TabContainer/History"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="HistoryScroll" type="ScrollContainer" parent="Panel/Margin/VBox/TabContainer/History/HistoryContent"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="HistoryText" type="RichTextLabel" parent="Panel/Margin/VBox/TabContainer/History/HistoryContent/HistoryScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = true
+fit_content = true
+
+[node name="Technology" type="Control" parent="Panel/Margin/VBox/TabContainer"]
+layout_mode = 2
+
+[node name="TechnologyContent" type="VBoxContainer" parent="Panel/Margin/VBox/TabContainer/Technology"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="TechnologyScroll" type="ScrollContainer" parent="Panel/Margin/VBox/TabContainer/Technology/TechnologyContent"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="TechnologyText" type="RichTextLabel" parent="Panel/Margin/VBox/TabContainer/Technology/TechnologyContent/TechnologyScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = true
+fit_content = true
+
+[node name="Evolution" type="Control" parent="Panel/Margin/VBox/TabContainer"]
+layout_mode = 2
+
+[node name="EvolutionContent" type="VBoxContainer" parent="Panel/Margin/VBox/TabContainer/Evolution"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="EvolutionScroll" type="ScrollContainer" parent="Panel/Margin/VBox/TabContainer/Evolution/EvolutionContent"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="EvolutionText" type="RichTextLabel" parent="Panel/Margin/VBox/TabContainer/Evolution/EvolutionContent/EvolutionScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = true
+fit_content = true

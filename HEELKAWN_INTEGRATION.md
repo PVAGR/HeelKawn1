@@ -1,9 +1,18 @@
 # HeelKawn Universe - Complete Integration Guide (Historical Reference)
 
-> Status: Historical/superseded integration snapshot.
+> **⚠️ AI AGENTS: READ AI_README.md FIRST**
+>
+> Before working on this repository, you MUST read `AI_README.md` at the repository root. It contains the canonical source of truth for:
+> - The deterministic kernel choice
+> - Current development phase (Phase 2: The Kernel)
+> - Core world laws and philosophy
+> - Implementation rules and forbidden patterns
+>
+> This file (HEELKAWN_INTEGRATION.md) is a historical/superseded integration snapshot.
 >
 > Use this file as legacy universe/system context only (lore direction, older architecture intent, prior terminology).
 > For current implementation truth and active build priorities, follow:
+> - `AI_README.md` (canonical AI instructions - READ FIRST)
 > - `docs/HEELKAWN_STATE.md` (authoritative state)
 > - `HEELKAWN.txt` (active chronology/changelog)
 > - current roadmap docs under `docs/`

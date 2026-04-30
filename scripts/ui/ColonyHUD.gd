@@ -22,10 +22,11 @@ const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.70)
 
 # Tuned to be unobtrusive: thin top-left strip, easy to read, doesn't
 # eat the world.
-const FONT_SIZE_BODY: int = 14
-const FONT_SIZE_HOTKEYS: int = 12
-const PANEL_PAD_X: int = 6
-const PANEL_PAD_Y: int = 4
+const FONT_SIZE_BODY: int = 11
+const FONT_SIZE_HOTKEYS: int = 10
+const FONT_SIZE_COMPACT: int = 9
+const PANEL_PAD_X: int = 4
+const PANEL_PAD_Y: int = 3
 ## Readability mode: bigger, simpler HUD for at-a-glance play.
 const SIMPLE_READABLE_HUD: bool = true
 
@@ -307,10 +308,10 @@ func _colony_state_line() -> String:
 	var stance: String = ColonySimServices.get_stance_display()
 	var fp: float = ColonySimServices.get_food_pressure()
 	var hp: float = ColonySimServices.get_housing_pressure()
-	return "[color=#c9b37c]Colony:[/color]  stance [b]%s[/b]  ·  food [b]%d%%[/b] %s  ·  housing [b]%d%%[/b] %s" % [
-		stance,
-		int(round(fp * 100.0)), _demand_tier(fp),
-		int(round(hp * 100.0)), _demand_tier(hp),
+	return "[color=#c9b37c]C:[/color]%s F%d%% H%d%%" % [
+		stance.substr(0, 3),
+		int(round(fp * 100.0)),
+		int(round(hp * 100.0)),
 	]
 
 
@@ -321,11 +322,13 @@ func _world_pulse_line() -> String:
 	var js: Dictionary = JobManager.stats()
 	var open_j: int = int(js.get("open", 0))
 	var claimed_j: int = int(js.get("claimed", 0))
-	return "[color=#aed581]World:[/color] [b]%d[/b] settlements · chronicle [b]%d[/b] facts · work [b]%d[/b] open · [b]%d[/b] claimed" % [
+	var done_j: int = int(js.get("completed", 0))
+	return "[color=#aed581]W:[/color]%dst %dchrk · Work: %d/%d/%d" % [
 		settlements_n,
 		facts,
 		open_j,
 		claimed_j,
+		done_j,
 	]
 
 
@@ -335,15 +338,7 @@ func _history_totals_line() -> String:
 	var births: int = int(c.get("birth", 0)) + int(c.get("pawn_birth", 0))
 	var deaths: int = int(c.get("pawn_death", 0))
 	var builds: int = int(c.get("structure_built", 0)) + int(c.get("cooperative_build", 0))
-	var meet: int = int(c.get("social_meeting", 0))
-	var know: int = int(c.get("knowledge_discovery", 0)) + int(c.get("knowledge_rediscovery", 0))
-	return "[color=#9fa8da]Story:[/color] births [b]%d[/b] · deaths [b]%d[/b] · builds [b]%d[/b] · meets [b]%d[/b] · knowledge [b]%d[/b]" % [
-		births,
-		deaths,
-		builds,
-		meet,
-		know,
-	]
+	return "[color=#9fa8da]S:[/color]B%d D%d Bd%d" % [births, deaths, builds]
 
 
 ## Short stockpile strip so readable mode still shows material reality.

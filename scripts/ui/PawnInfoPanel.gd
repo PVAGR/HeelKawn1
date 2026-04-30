@@ -16,9 +16,10 @@ const TEXT_BRIGHT:  Color = Color(0.96, 0.96, 0.98)
 const ACCENT:       Color = Color8(255, 209, 102)
 const _WM = preload("res://autoloads/WorldMemory.gd")
 
-const FONT_TITLE: int = 13
-const FONT_BODY:  int = 11
-const FONT_SMALL: int = 10
+const FONT_TITLE: int = 12
+const FONT_BODY:  int = 10
+const FONT_SMALL: int = 9
+const FONT_MONO:  int = 9
 
 const PANEL_WIDTH:    float = 268.0
 const RIGHT_INSET:    float = 8.0
@@ -75,6 +76,19 @@ var _hint_label: Label
 var _inspect_msg_label: Label = null
 ## field name (e.g. "work_mine") -> CheckBox, kept in sync from PawnData.
 var _work_checkboxes: Dictionary = {}
+## TabContainer for organized sections
+var _tab_container: TabContainer = null
+var _copy_dump_button: Button = null
+## Tab content containers
+var _tab_identity: VBoxContainer = null
+var _tab_needs: VBoxContainer = null
+var _tab_matrix: VBoxContainer = null
+var _tab_neural: VBoxContainer = null
+var _tab_social: VBoxContainer = null
+## Matrix/Neural display labels
+var _matrix_inputs_label: RichTextLabel = null
+var _neural_outputs_label: RichTextLabel = null
+var _neural_bias_label: Label = null
 
 var _pawn: Pawn = null
 ## When true (map-only mode), hide sheet even if a pawn is selected.
@@ -159,23 +173,24 @@ func _build_ui() -> void:
 	root.add_child(_panel)
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",   10)
-	margin.add_theme_constant_override("margin_right",  10)
-	margin.add_theme_constant_override("margin_top",     8)
-	margin.add_theme_constant_override("margin_bottom",  8)
+	margin.add_theme_constant_override("margin_left",   8)
+	margin.add_theme_constant_override("margin_right",  8)
+	margin.add_theme_constant_override("margin_top",     6)
+	margin.add_theme_constant_override("margin_bottom",  6)
 	_panel.add_child(margin)
 
 	_root_vbox = VBoxContainer.new()
-	_root_vbox.add_theme_constant_override("separation", 4)
+	_root_vbox.add_theme_constant_override("separation", 3)
 	margin.add_child(_root_vbox)
 
+	# Header with portrait and name
 	_header_row = HBoxContainer.new()
-	_header_row.add_theme_constant_override("separation", 8)
+	_header_row.add_theme_constant_override("separation", 6)
 	_root_vbox.add_child(_header_row)
 
 	var portrait_frame := PanelContainer.new()
-	var cell_px: int = 8
-	portrait_frame.custom_minimum_size = Vector2(PORTRAIT_COLS * cell_px + 4, PORTRAIT_ROWS * cell_px + 4)
+	var cell_px: int = 6
+	portrait_frame.custom_minimum_size = Vector2(PORTRAIT_COLS * cell_px + 3, PORTRAIT_ROWS * cell_px + 3)
 	var psty := StyleBoxFlat.new()
 	psty.bg_color = Color(0.02, 0.03, 0.06, 1.0)
 	psty.border_color = PANEL_BORDER
@@ -183,10 +198,10 @@ func _build_ui() -> void:
 	psty.set_corner_radius_all(2)
 	portrait_frame.add_theme_stylebox_override("panel", psty)
 	var pm := MarginContainer.new()
-	pm.add_theme_constant_override("margin_left", 2)
-	pm.add_theme_constant_override("margin_right", 2)
-	pm.add_theme_constant_override("margin_top", 2)
-	pm.add_theme_constant_override("margin_bottom", 2)
+	pm.add_theme_constant_override("margin_left", 1)
+	pm.add_theme_constant_override("margin_right", 1)
+	pm.add_theme_constant_override("margin_top", 1)
+	pm.add_theme_constant_override("margin_bottom", 1)
 	portrait_frame.add_child(pm)
 	var grid := GridContainer.new()
 	grid.columns = PORTRAIT_COLS
@@ -200,7 +215,7 @@ func _build_ui() -> void:
 
 	var name_col := VBoxContainer.new()
 	name_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_col.add_theme_constant_override("separation", 2)
+	name_col.add_theme_constant_override("separation", 1)
 	_title_label = _make_label("", FONT_TITLE, TEXT_BRIGHT)
 	_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_col.add_child(_title_label)
@@ -209,85 +224,211 @@ func _build_ui() -> void:
 	name_col.add_child(_subtitle_label)
 	_header_row.add_child(name_col)
 
-	# current activity
+	# Current activity (compact)
 	_state_label = _make_label("", FONT_BODY, ACCENT)
 	_state_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_root_vbox.add_child(_state_label)
 
-	# traits
-	_traits_label = _make_label("", FONT_SMALL, TEXT_DIM)
-	_traits_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_root_vbox.add_child(_traits_label)
+	# COPY DUMP button
+	_copy_dump_button = Button.new()
+	_copy_dump_button.text = "COPY DUMP"
+	_copy_dump_button.custom_minimum_size = Vector2(0, 22)
+	_copy_dump_button.pressed.connect(_on_copy_dump_pressed)
+	_root_vbox.add_child(_copy_dump_button)
 
-	_root_vbox.add_child(_make_section_header("Lineage"))
-	_lineage_label = _make_label("", FONT_SMALL, TEXT_DIM)
-	_lineage_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_root_vbox.add_child(_lineage_label)
+	# TabContainer for organized sections
+	_tab_container = TabContainer.new()
+	_tab_container.tab_close_display_policy = TabContainer.CLOSE_BUTTON_DISPLAY_NEVER
+	_tab_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_root_vbox.add_child(_tab_container)
 
-	_appearance_label = _make_label("", FONT_SMALL, TEXT_DIM)
-	_appearance_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_root_vbox.add_child(_appearance_label)
+	# Identity tab
+	_tab_identity = VBoxContainer.new()
+	_tab_identity.add_theme_constant_override("separation", 2)
+	_tab_container.add_child(_tab_identity)
+	_populate_identity_tab()
 
-	# mood status and crisis
-	_mood_status_label = _make_label("", FONT_SMALL, TEXT_DIM)
-	_mood_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_root_vbox.add_child(_mood_status_label)
-	
-	_crisis_level_label = _make_label("", FONT_SMALL, TEXT_DIM)
-	_root_vbox.add_child(_crisis_level_label)
+	# Needs tab
+	_tab_needs = VBoxContainer.new()
+	_tab_needs.add_theme_constant_override("separation", 2)
+	_tab_container.add_child(_tab_needs)
+	_populate_needs_tab()
 
-	_root_vbox.add_child(_make_section_header("Work bias (liking)"))
-	_liking_label = _make_label("", FONT_SMALL, TEXT_DIM)
-	_liking_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_root_vbox.add_child(_liking_label)
+	# Matrix Inputs tab
+	_tab_matrix = VBoxContainer.new()
+	_tab_matrix.add_theme_constant_override("separation", 2)
+	_tab_container.add_child(_tab_matrix)
+	_populate_matrix_tab()
 
-	_root_vbox.add_child(_make_section_header("Coach (deterministic)"))
-	_coach_label = _make_label("", FONT_SMALL, TEXT_DIM)
-	_coach_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_root_vbox.add_child(_coach_label)
+	# Neural Outputs tab
+	_tab_neural = VBoxContainer.new()
+	_tab_neural.add_theme_constant_override("separation", 2)
+	_tab_container.add_child(_tab_neural)
+	_populate_neural_tab()
 
-	_root_vbox.add_child(_make_section_header("Social (NPC v1)"))
-	_social_label = _make_label("", FONT_SMALL, TEXT_DIM)
-	_social_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_root_vbox.add_child(_social_label)
+	# Social tab
+	_tab_social = VBoxContainer.new()
+	_tab_social.add_theme_constant_override("separation", 2)
+	_tab_container.add_child(_tab_social)
+	_populate_social_tab()
 
-	_root_vbox.add_child(_make_section_header("Heelkawnian identity"))
-	_identity_label = _make_label("", FONT_SMALL, TEXT_DIM)
-	_identity_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_root_vbox.add_child(_identity_label)
+	# Set tab titles
+	_tab_container.set_tab_title(0, "ID")
+	_tab_container.set_tab_title(1, "Needs")
+	_tab_container.set_tab_title(2, "Matrix")
+	_tab_container.set_tab_title(3, "Neural")
+	_tab_container.set_tab_title(4, "Social")
 
-	_root_vbox.add_child(_make_section_header("Needs"))
-	for entry in NEED_BARS:
-		_add_need_row(entry.label, entry.field, entry.color)
-
-	_root_vbox.add_child(_make_section_header("Skills"))
-	for entry in SKILLS_ORDER:
-		_add_skill_row(entry.label, entry.skill)
-
-	_root_vbox.add_child(_make_section_header("Work"))
-	_root_vbox.add_child(_make_work_hint())
-	for w in WORK_CHECKS:
-		_add_work_checkbox(String(w.field), String(w.text))
-
-	_root_vbox.add_child(_make_section_header("Misc"))
-	_action_skills_label = _make_label("", FONT_SMALL, TEXT_DIM)
-	_action_skills_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_root_vbox.add_child(_action_skills_label)
-	_carry_label = _make_label("", FONT_SMALL, TEXT_DIM)
-	_root_vbox.add_child(_carry_label)
-	_tile_label = _make_label("", FONT_SMALL, TEXT_DIM)
-	_root_vbox.add_child(_tile_label)
-
+	# Footer hint
 	_hint_label = _make_label("[Esc] deselect", FONT_SMALL, Color(0.55, 0.55, 0.60))
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_root_vbox.add_child(_hint_label)
 
-	# ephemeral inspect message
-	_inspect_msg_label = _make_label("", FONT_SMALL, Color(0.82, 0.82, 0.6))
-	_inspect_msg_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_root_vbox.add_child(_inspect_msg_label)
-
 	call_deferred("_reposition")
+
+
+func _populate_identity_tab() -> void:
+	_traits_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_traits_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_identity.add_child(_traits_label)
+
+	_tab_identity.add_child(_make_section_header("Lineage"))
+	_lineage_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_lineage_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_identity.add_child(_lineage_label)
+
+	_appearance_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_appearance_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_identity.add_child(_appearance_label)
+
+	_tab_identity.add_child(_make_section_header("Work bias"))
+	_liking_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_liking_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_identity.add_child(_liking_label)
+
+	_tab_identity.add_child(_make_section_header("Coach"))
+	_coach_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_coach_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_identity.add_child(_coach_label)
+
+	_tab_identity.add_child(_make_section_header("Heelkawnian"))
+	_identity_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_identity_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_identity.add_child(_identity_label)
+
+
+func _populate_needs_tab() -> void:
+	for entry in NEED_BARS:
+		_add_need_row_to_tab(entry.label, entry.field, entry.color, _tab_needs)
+
+
+func _populate_matrix_tab() -> void:
+	_matrix_inputs_label = RichTextLabel.new()
+	_matrix_inputs_label.bbcode_enabled = true
+	_matrix_inputs_label.fit_content = true
+	_matrix_inputs_label.scroll_active = true
+	_matrix_inputs_label.custom_minimum_size = Vector2(0, 120)
+	_matrix_inputs_label.add_theme_font_size_override("normal_font_size", FONT_MONO)
+	_tab_matrix.add_child(_matrix_inputs_label)
+
+
+func _populate_neural_tab() -> void:
+	_neural_bias_label = _make_label("", FONT_BODY, ACCENT)
+	_neural_bias_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_neural.add_child(_neural_bias_label)
+
+	_neural_outputs_label = RichTextLabel.new()
+	_neural_outputs_label.bbcode_enabled = true
+	_neural_outputs_label.fit_content = true
+	_neural_outputs_label.scroll_active = true
+	_neural_outputs_label.custom_minimum_size = Vector2(0, 100)
+	_neural_outputs_label.add_theme_font_size_override("normal_font_size", FONT_MONO)
+	_tab_neural.add_child(_neural_outputs_label)
+
+
+func _populate_social_tab() -> void:
+	_social_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_social_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_social.add_child(_social_label)
+
+	_mood_status_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_mood_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_social.add_child(_mood_status_label)
+
+	_crisis_level_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_tab_social.add_child(_crisis_level_label)
+
+
+func _add_need_row_to_tab(label_text: String, field: String, color: Color, parent: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	parent.add_child(row)
+
+	var name_lbl := _make_label(label_text, FONT_SMALL, TEXT_DIM)
+	name_lbl.custom_minimum_size = Vector2(48, 0)
+	row.add_child(name_lbl)
+
+	var bar := ProgressBar.new()
+	bar.min_value = 0.0
+	bar.max_value = 100.0
+	bar.value = 100.0
+	bar.show_percentage = false
+	bar.custom_minimum_size = Vector2(0, 8)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = color
+	fill.set_corner_radius_all(2)
+	bar.add_theme_stylebox_override("fill", fill)
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0.12, 0.13, 0.16, 1.0)
+	bg.set_corner_radius_all(2)
+	bar.add_theme_stylebox_override("background", bg)
+	row.add_child(bar)
+
+	var num_lbl := _make_label("100", FONT_SMALL, TEXT_BRIGHT)
+	num_lbl.custom_minimum_size = Vector2(24, 0)
+	num_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(num_lbl)
+
+	_need_bars[field] = {"bar": bar, "label": num_lbl}
+
+
+func _on_copy_dump_pressed() -> void:
+	if _pawn == null or not is_instance_valid(_pawn) or _pawn.data == null:
+		return
+	
+	var d: PawnData = _pawn.data
+	var tick: int = GameManager.tick_count
+	
+	var dump_lines: PackedStringArray = []
+	dump_lines.append("Pawn: %s | Tick: %d" % [d.display_name, tick])
+	dump_lines.append("ID: %d | Age: %d | Profession: %s" % [d.id, d.age, d.profession_label_from_enum(d.current_profession)])
+	dump_lines.append("Needs: Hunger=%.1f Rest=%.1f Mood=%.1f Health=%.1f" % [d.hunger, d.rest, d.mood, d.health])
+	dump_lines.append("Skills: Forage=%d Mine=%d Chop=%d Build=%d Hunt=%d" % [
+		d.get_skill_level(0), d.get_skill_level(1), d.get_skill_level(2), d.get_skill_level(3), d.get_skill_level(4)
+	])
+	dump_lines.append("Affinities: combat=%.2f farming=%.2f building=%.2f crafting=%.2f diplomacy=%.2f" % [
+		d.affinities.get("combat", 0.5), d.affinities.get("farming", 0.5), d.affinities.get("building", 0.5),
+		d.affinities.get("crafting", 0.5), d.affinities.get("diplomacy", 0.5)
+	])
+	
+	# Neural state if available
+	if WorldAI != null and WorldAI.has_method("get_pawn_neural_state"):
+		var neural_state: Dictionary = WorldAI.get_pawn_neural_state(int(d.id))
+		if not neural_state.is_empty():
+			var inputs: Array = neural_state.get("inputs", [])
+			var outputs: Array = neural_state.get("outputs", [])
+			dump_lines.append("Neural: Inputs=%s Outputs=%s" % [str(inputs), str(outputs)])
+	
+	var dump_text: String = "\n".join(dump_lines)
+	DisplayServer.clipboard_set(dump_text)
+	
+	if _inspect_msg_label != null:
+		_inspect_msg_label.text = "Copied to clipboard!"
+		_inspect_msg_label.modulate = Color(0.6, 1.0, 0.6)
+		await get_tree().create_timer(2.0).timeout
+		if _inspect_msg_label != null:
+			_inspect_msg_label.text = ""
 
 
 func _add_need_row(label_text: String, field: String, color: Color) -> void:
@@ -498,131 +639,107 @@ func _refresh() -> void:
 	if _pawn == null or _pawn.data == null:
 		return
 	var d: PawnData = _pawn.data
-	_title_label.text = "Heelkawnian · %s  (age %.1f)" % [d.display_name, d.age]
+	_title_label.text = "%s (age %.1f)" % [d.display_name, d.age]
 	if _subtitle_label != null:
 		var prof: String = d.profession_name()
 		var hk: String = d.highest_affinity_skill()
-		var control_line: String = "Control: %s" % _player_context_mode_label
-		if _player_context_mode_label == "INCARNATED" and _player_context_pawn_id >= 0:
-			control_line += " (#%d)" % _player_context_pawn_id
-		if _player_context_picker_visible:
-			control_line += " | picker open"
 		var arc_bits: String = "children %d" % int(d.children_count)
 		if prof == "None":
-			_subtitle_label.text = "%s · %s · no locked profession · bias %s" % [control_line, arc_bits, hk]
+			_subtitle_label.text = "%s · no prof · bias %s" % [arc_bits, hk]
 		else:
-			_subtitle_label.text = "%s · %s · %s · bias %s" % [control_line, arc_bits, prof, hk]
-	_refresh_portrait_strip(d)
-	if _coach_label != null:
-		var hints: PackedStringArray = d.progression_coach_lines(5)
-		var coach_sb: String = ""
-		for hi in range(hints.size()):
-			if hi > 0:
-				coach_sb += "\n"
-			coach_sb += hints[hi]
-		_coach_label.text = coach_sb
-	if _social_label != null:
-		var top_peer: Dictionary = d.top_social_rapport_peer()
-		var pid: int = int(top_peer.get("peer_id", -1))
-		var peer_disp: String = _peer_display_for_social(pid)
-		_social_label.text = d.social_status_line(peer_disp)
-	if _identity_label != null:
-		_identity_label.text = _build_identity_strip(d)
-	if _action_skills_label != null:
-		_action_skills_label.text = (
-				"Action xp  move %d  farm %d  build %d  gather %d  combat %d"
-				% [
-					int(d.skills.get("movement", 0)),
-					int(d.skills.get("farming", 0)),
-					int(d.skills.get("building", 0)),
-					int(d.skills.get("gathering", 0)),
-					int(d.skills.get("combat", 0)),
-				]
-		)
+			_subtitle_label.text = "%s · %s · bias %s" % [arc_bits, prof, hk]
+		_refresh_portrait_strip(d)
+	
 	_state_label.text = _pawn.describe_state()
-	_traits_label.text = "Traits: %s" % d.traits_display()
-	_lineage_label.text = _lineage_block(d)
-	_appearance_label.text = "Appearance: %s, %s" % [_body_type_label(d.body_type), _hair_style_label(d.hair_style)]
 	
-	# Mood status with active mood event
-	var active_mood_event: MoodEvent = d.get_active_mood_event()
-
-	# Show ephemeral inspect message if recent, with fade-out
-	if _inspect_msg_label != null:
-		var msg: String = ""
-		var alpha: float = 0.0
-		if _pawn != null and is_instance_valid(_pawn):
-			var last_tick: int = int(_pawn._last_inspect_tick)
-			var age: int = GameManager.tick_count - last_tick
-			var max_age: int = 200
-			if age >= 0 and age < max_age and str(_pawn._last_inspect_msg) != "":
-				msg = str(_pawn._last_inspect_msg)
-				alpha = clamp(1.0 - float(age) / float(max_age), 0.0, 1.0)
-			else:
-				msg = ""
-		_inspect_msg_label.text = msg
-		# apply fade via modulate alpha so text color remains themed
-		_inspect_msg_label.modulate = Color(1, 1, 1, alpha)
-	if active_mood_event != null:
-		_mood_status_label.text = "Mood: %s (%d event: %s)" % [
-			d.mood_state_display(),
-			int(d.mood),
-			active_mood_event.description
-		]
-	else:
-		_mood_status_label.text = "Mood: %s (%d)" % [d.mood_state_display(), int(d.mood)]
-	
-	# Crisis level
-	var crisis: float = d.get_crisis_level()
-	var crisis_text: String = "Crisis: "
-	if crisis < 0.3:
-		crisis_text += "Low"
-	elif crisis < 0.6:
-		crisis_text += "Moderate"
-	elif crisis < 0.8:
-		crisis_text += "HIGH"
-	else:
-		crisis_text += "CRITICAL"
-	crisis_text += " (%.0f%%)" % (crisis * 100.0)
-	_crisis_level_label.text = crisis_text
-
+	# Identity tab updates
+	if _traits_label != null:
+		_traits_label.text = "Traits: %s" % d.traits_display()
+	if _lineage_label != null:
+		_lineage_label.text = _lineage_block(d)
+	if _appearance_label != null:
+		_appearance_label.text = "Appearance: %s, %s" % [_body_type_label(d.body_type), _hair_style_label(d.hair_style)]
 	if _liking_label != null:
 		_liking_label.text = d.profession_liking_digest_line()
-
+	if _coach_label != null:
+		var hints: PackedStringArray = d.progression_coach_lines(3)
+		_coach_label.text = "\n".join(hints)
+	if _identity_label != null:
+		_identity_label.text = _build_identity_strip(d)
+	
+	# Needs tab updates
 	for field in _need_bars:
 		var entry: Dictionary = _need_bars[field]
 		var v: float = float(d.get(field))
 		entry.bar.value = clampf(v, 0.0, 100.0)
 		entry.label.text = "%d" % int(round(v))
 
-	for skill in _skill_lines:
-		var lbl: Label = _skill_lines[skill]
-		var lvl: int = d.get_skill_level(skill)
-		var xp: float = d.get_skill_xp(skill)
-		var into_level: float = xp - float(lvl) * PawnData.XP_PER_LEVEL
-		lbl.text = "Lv %d  (%d/%d)" % [
-			lvl,
-			int(into_level),
-			int(PawnData.XP_PER_LEVEL),
-		]
+	# Matrix tab updates
+	if _matrix_inputs_label != null:
+		var matrix_lines: PackedStringArray = []
+		matrix_lines.append("[b]Matrix Inputs:[/b]")
+		matrix_lines.append("Hunger: %.2f" % d.hunger)
+		matrix_lines.append("Rest: %.2f" % d.rest)
+		matrix_lines.append("Mood: %.2f" % d.mood)
+		matrix_lines.append("Health: %.2f" % d.health)
+		matrix_lines.append("Affinities:")
+		for ak in ["combat", "farming", "building", "crafting", "diplomacy"]:
+			matrix_lines.append("  %s: %.2f" % [ak, d.affinities.get(ak, 0.5)])
+		_matrix_inputs_label.text = "\n".join(matrix_lines)
 
-	if d.is_carrying():
-		_carry_label.text = "Carrying: %s x%d" % [
-			Item.name_for(d.carrying),
-			d.carrying_qty,
-		]
-	else:
-		_carry_label.text = "Carrying: nothing"
+	# Neural tab updates
+	if _neural_bias_label != null:
+		var bias: String = d.highest_affinity_skill()
+		_neural_bias_label.text = "Current Bias: %s" % bias
+	
+	if _neural_outputs_label != null:
+		var neural_lines: PackedStringArray = []
+		neural_lines.append("[b]Neural Outputs:[/b]")
+		if WorldAI != null and WorldAI.has_method("get_pawn_neural_state"):
+			var neural_state: Dictionary = WorldAI.get_pawn_neural_state(int(d.id))
+			if not neural_state.is_empty():
+				var outputs: Array = neural_state.get("outputs", [])
+				for i in range(outputs.size()):
+					var out_val: float = float(outputs[i])
+					var action_name: String = _neural_output_action_name(i)
+					neural_lines.append("%s: %.3f" % [action_name, out_val])
+			else:
+				neural_lines.append("[i]No neural state available[/i]")
+		else:
+			neural_lines.append("[i]WorldAI not available[/i]")
+		_neural_outputs_label.text = "\n".join(neural_lines)
 
-	_tile_label.text = "Tile: (%d, %d)" % [d.tile_pos.x, d.tile_pos.y]
-
-	# Work toggles: reflect PawnData without re-emitting toggled (avoid feedback).
-	for w in WORK_CHECKS:
-		var f: String = String(w.field)
-		if not _work_checkboxes.has(f):
-			continue
-		var cb: CheckBox = _work_checkboxes[f]
-		cb.set_pressed_no_signal(_read_work_field(d, f))
+	# Social tab updates
+	if _social_label != null:
+		var top_peer: Dictionary = d.top_social_rapport_peer()
+		var pid: int = int(top_peer.get("peer_id", -1))
+		var peer_disp: String = _peer_display_for_social(pid)
+		_social_label.text = d.social_status_line(peer_disp)
+	
+	if _mood_status_label != null:
+		var active_mood_event: MoodEvent = d.get_active_mood_event()
+		if active_mood_event != null:
+			_mood_status_label.text = "Mood: %s (%d event: %s)" % [
+				d.mood_state_display(),
+				int(d.mood),
+				active_mood_event.description
+			]
+		else:
+			_mood_status_label.text = "Mood: %s (%d)" % [d.mood_state_display(), int(d.mood)]
+	
+	if _crisis_level_label != null:
+		var crisis: float = d.get_crisis_level()
+		var crisis_text: String = "Crisis: "
+		if crisis < 0.3:
+			crisis_text += "Low"
+		elif crisis < 0.6:
+			crisis_text += "Moderate"
+		elif crisis < 0.8:
+			crisis_text += "HIGH"
+		else:
+			crisis_text += "CRITICAL"
+		crisis_text += " (%.0f%%)" % (crisis * 100.0)
+		_crisis_level_label.text = crisis_text
 
 	# Reposition each tick because the panel can grow/shrink with carry text.
 	_reposition()
@@ -631,6 +748,19 @@ func _refresh() -> void:
 func _pawn_spawner() -> PawnSpawner:
 	var n: Node = Engine.get_main_loop().root.find_child("PawnSpawner", true, false)
 	return n as PawnSpawner
+
+
+func _neural_output_action_name(index: int) -> String:
+	match index:
+		0: return "Seek_Food"
+		1: return "Seek_Rest"
+		2: return "Seek_Social"
+		3: return "Work_Forage"
+		4: return "Work_Build"
+		5: return "Work_Mine"
+		6: return "Defend"
+		7: return "Idle"
+		_: return "Unknown"
 
 
 ## Live pawn name, else WorldMemory death / last-known (strongest bond can outlive the peer).

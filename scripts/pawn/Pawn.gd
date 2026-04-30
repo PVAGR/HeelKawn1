@@ -278,6 +278,7 @@ var _cohort_locus_tile: Vector2i = Vector2i(-1, -1)
 var _cohort_stability_job_type: int = -1
 var _anim_t: float = 0.0
 var _sfx: AudioStreamPlayer2D = null
+var _action_popup: ActionPopupLabel = null
 var _hit_flash_ticks: int = 0
 var _last_inspect_msg: String = ""
 var _last_inspect_tick: int = -999999
@@ -678,6 +679,7 @@ func _ready() -> void:
 	_sfx.max_distance = 320.0
 	_sfx.volume_db = -5.0
 	add_child(_sfx)
+	_action_popup = $ActionPopup
 
 
 ## Called by PawnSpawner immediately after instantiation.
@@ -898,6 +900,111 @@ func record_skill_gain(skill: String, amount: int) -> void:
 			"total_xp": int(data.tracked_skill_xp(skill)),
 			"profession": data.profession_name(),
 		})
+
+
+func _show_action_popup_for_job(job: Job) -> void:
+	if data == null or _action_popup == null:
+		return
+	
+	var action_name: String = Job.describe_type(job.type)
+	var personality_context: String = _get_personality_context_for_job(job)
+	var goal_context: String = _get_goal_context_for_job(job)
+	var memory_context: String = _get_memory_context_for_job(job)
+	
+	_action_popup.show_action_context(data.display_name, action_name, personality_context, goal_context, memory_context)
+
+
+func _get_personality_context_for_job(job: Job) -> String:
+	if data == null:
+		return ""
+	
+	var context: String = ""
+	
+	# Openness influences exploration
+	if data.openness > 0.7 and job.type == Job.Type.FORAGE:
+		context = "High openness drives exploration"
+	elif data.openness < 0.3 and job.type == Job.Type.FORAGE:
+		context = "Low openness prefers familiar areas"
+	
+	# Conscientiousness influences work quality
+	if data.conscientiousness > 0.7:
+		if context.is_empty():
+			context = "High conscientiousness ensures thorough work"
+		else:
+			context += ", thorough work"
+	
+	# Extraversion influences social jobs
+	if data.extraversion > 0.7 and job.type == Job.Type.BUILD_BED:
+		if context.is_empty():
+			context = "High extraversion enjoys community building"
+		else:
+			context += ", enjoys community building"
+	
+	return context
+
+
+func _get_goal_context_for_job(job: Job) -> String:
+	if data == null:
+		return ""
+	
+	var context: String = ""
+	
+	# Check which needs are driving this action
+	if data.hunger < 50.0 and job.type == Job.Type.FORAGE:
+		context = "Driven by survival need: hunger at %.0f%%" % data.hunger
+	elif data.rest < 50.0 and job.type == Job.Type.BUILD_BED:
+		context = "Driven by rest need: seeking shelter"
+	
+	# Check active goals
+	if not data.active_goals.is_empty():
+		for goal_id in data.active_goals:
+			var goal = data.active_goals[goal_id]
+			if goal.type == "survival" and job.type == Job.Type.FORAGE:
+				if context.is_empty():
+					context = "Goal: secure food supply"
+				else:
+					context += ", goal: secure food"
+			elif goal.type == "shelter" and job.type == Job.Type.BUILD_BED:
+				if context.is_empty():
+					context = "Goal: improve shelter"
+				else:
+					context += ", goal: improve shelter"
+	
+	return context
+
+
+func _get_memory_context_for_job(job: Job) -> String:
+	if data == null:
+		return ""
+	
+	var context: String = ""
+	
+	# Check spatial memory for past success at this location
+	var location_key: String = "%d,%d" % [job.work_tile.x, job.work_tile.y]
+	if data.spatial_memory.has(location_key):
+		var memory = data.spatial_memory[location_key]
+		var success_count: int = memory.get("success_count", 0)
+		if success_count > 3:
+			context = "Recalls %d past successes here" % success_count
+	
+	# Check episodic memory for similar jobs
+	if not data.episodic_memory.is_empty():
+		var memory_keys: Array = data.episodic_memory.keys()
+		var count: int = 0
+		for key in memory_keys:
+			if count >= 10:
+				break
+			var mem = data.episodic_memory[key]
+			var mem_type: String = mem.get("type", "")
+			if mem_type == "job_completed" and mem.get("job_type", -1) == job.type:
+				if context.is_empty():
+					context = "Recalls recent similar work"
+				else:
+					context += ", recalls similar work"
+				break
+			count += 1
+	
+	return context
 
 
 ## Called from World when a wall appears under this pawn — step off solid tiles.
@@ -1378,6 +1485,25 @@ func _tick_idle() -> void:
 		base_bias += utility_bias
 		if preferred_idle_action == "forage" and (j.type == Job.Type.FORAGE or j.type == Job.Type.HUNT):
 			base_bias += 2
+		
+		# Crisis priority bonus
+		var housing_pressure: float = 0.0
+		var food_pressure: float = 0.0
+		if "ColonySimServices" in get_tree():
+			housing_pressure = float(get_tree().get_node("/root/ColonySimServices").get_housing_pressure())
+			food_pressure = float(get_tree().get_node("/root/ColonySimServices").get_food_pressure())
+		
+		# Boost BUILD_BED jobs during housing crisis
+		if housing_pressure > 0.8 and j.type == Job.Type.BUILD_BED:
+			base_bias += 4
+		# Boost FORAGE/HUNT jobs during food crisis
+		if food_pressure > 0.7 and (j.type == Job.Type.FORAGE or j.type == Job.Type.HUNT):
+			base_bias += 4
+		
+		# Neural AI priority bonus from WorldAI matrix
+		var neural_bias: int = _get_neural_job_priority_bias(j.type)
+		base_bias += neural_bias
+		
 		# Keep bias math cheap and deterministic on hot claim path.
 		return base_bias
 	var base_passes: Callable = func(j: Job) -> bool:
@@ -1567,6 +1693,76 @@ func get_preferred_front_bias(job: Job) -> float:
 	if data == null or job == null:
 		return 1.0
 	return float(SettlementMemory.get_preferred_front_bias_for_job(data.tile_pos, job))
+
+
+## Get neural AI priority bias from WorldAI matrix for job selection
+## Returns an integer bias bonus based on the pawn's neural state
+func _get_neural_job_priority_bias(job_type: int) -> int:
+	if data == null:
+		return 0
+	
+	var WorldAI_node = get_node_or_null("/root/WorldAI")
+	if WorldAI_node == null or not WorldAI_node.has_method("get_pawn_neural_state"):
+		return 0
+	
+	var neural_state: Dictionary = WorldAI_node.get_pawn_neural_state(int(data.id))
+	if neural_state.is_empty():
+		return 0
+	
+	var outputs: Array = neural_state.get("outputs", [])
+	if outputs.size() < 8:
+		return 0
+	
+	# Map job types to neural output indices
+	# Outputs: [Seek_Food, Seek_Rest, Seek_Social, Work_Forage, Work_Build, Work_Mine, Defend, Idle]
+	var neural_bias: int = 0
+	
+	match job_type:
+		Job.Type.FORAGE:
+			# Combine Seek_Food (0) and Work_Forage (3)
+			neural_bias = int((outputs[0] + outputs[3]) * 6.0)
+		Job.Type.HUNT:
+			# Similar to forage but more combat-oriented
+			neural_bias = int((outputs[0] + outputs[3] + outputs[6]) * 5.0)
+		Job.Type.CHOP:
+			# Work-related
+			neural_bias = int(outputs[3] * 4.0)
+		Job.Type.MINE, Job.Type.MINE_WALL:
+			# Work_Mine (5)
+			neural_bias = int(outputs[5] * 4.0)
+		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+			# Work_Build (4)
+			neural_bias = int(outputs[4] * 5.0)
+		Job.Type.TRADE_HAUL:
+			# Social/economic
+			neural_bias = int((outputs[2] + outputs[3]) * 3.0)
+		_:
+			neural_bias = 0
+	
+	# Log unusual neural-driven decisions to WorldMemory
+	if neural_bias >= 4:
+		_log_neural_decision(job_type, neural_bias, outputs)
+	
+	return neural_bias
+
+
+## Log neural-driven decisions to WorldMemory for analysis
+func _log_neural_decision(job_type: int, bias: int, outputs: Array) -> void:
+	if WorldMemory == null:
+		return
+	
+	var job_name: String = Job.Type.keys()[job_type] if job_type >= 0 and job_type < Job.Type.size() else "Unknown"
+	
+	WorldMemory.record_event({
+		"type": "neural_decision",
+		"pawn_id": int(data.id) if data != null else -1,
+		"pawn_name": data.display_name if data != null else "Unknown",
+		"job_type": job_type,
+		"job_name": job_name,
+		"neural_bias": bias,
+		"neural_outputs": str(outputs),
+		"tick": GameManager.tick_count
+	})
 
 
 func get_resource_pressure_bias(job: Job) -> float:
@@ -2177,6 +2373,10 @@ func _complete_current_job() -> void:
 		_unclaim_current_job()
 		return
 	
+	# Show action popup for significant job completions
+	if _action_popup != null and job != null and GameManager.game_speed < 50.0:
+		_show_action_popup_for_job(job)
+	
 	# Stage 1: Increase job proficiency for completed job
 	var job_type_str: String = Job.describe_type(job.type).to_lower()
 	var current_proficiency: float = data.job_proficiency.get(job_type_str, 0.0)
@@ -2613,6 +2813,40 @@ func _tick_sleeping() -> void:
 		_release_bed_if_reserved()
 		_reset_to_idle()
 		return
+	
+	# Crisis wake-up: if housing pressure is critical, wake builders to address it.
+	# Only check periodically to avoid per-tick overhead on all sleeping pawns.
+	if posmod(GameManager.tick_count + int(data.id), 30) == 0:
+		var housing_pressure: float = 0.0
+		var food_pressure: float = 0.0
+		if "ColonySimServices" in get_tree():
+			housing_pressure = float(get_tree().get_node("/root/ColonySimServices").get_housing_pressure())
+			food_pressure = float(get_tree().get_node("/root/ColonySimServices").get_food_pressure())
+		
+		# Crisis threshold: housing > 80% or food > 70%
+		var is_housing_crisis: bool = housing_pressure > 0.8
+		var is_food_crisis: bool = food_pressure > 0.7
+		
+		if is_housing_crisis or is_food_crisis:
+			# Wake pawns with relevant affinities to address the crisis
+			var building_affinity: float = float(data.affinities.get("building", 0.5))
+			var farming_affinity: float = float(data.affinities.get("farming", 0.5))
+			
+			# Wake builders during housing crisis, gatherers during food crisis
+			var should_wake: bool = false
+			if is_housing_crisis and building_affinity > 0.6:
+				should_wake = true
+			elif is_food_crisis and farming_affinity > 0.6:
+				should_wake = true
+			
+			if should_wake:
+				if GameManager.verbose_logs():
+					var crisis_type: String = "housing" if is_housing_crisis else "food"
+					print("[Pawn] %s wakes for %s crisis (affinity=%.2f pressure=%.2f)" %
+						[data.display_name, crisis_type, building_affinity if is_housing_crisis else farming_affinity, housing_pressure if is_housing_crisis else food_pressure])
+				_release_bed_if_reserved()
+				_reset_to_idle()
+				return
 
 
 # ==================== combat ====================

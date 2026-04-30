@@ -5,6 +5,18 @@
 
 ---
 
+> **⚠️ AI AGENTS: READ AI_README.md FIRST**
+>
+> Before working on this repository, you MUST read `AI_README.md` at the repository root. It contains the canonical source of truth for:
+> - The deterministic kernel choice
+> - Current development phase (Phase 2: The Kernel)
+> - Core world laws and philosophy
+> - Implementation rules and forbidden patterns
+>
+> **All AI agents must align with AI_README.md before making any changes.**
+
+---
+
 HeelKawn is a deterministic Godot 4.6 world simulation.
 
 - The world remembers facts and evolves without RNG in history.
@@ -13,9 +25,12 @@ HeelKawn is a deterministic Godot 4.6 world simulation.
 
 Kernel status: complete (memory -> meaning -> persistence -> culture).
 
-For canonical project state, read docs/HEELKAWN_STATE.md.
-For cross-LLM continuity, use docs/LLM_ONBOARDING.md and docs/SESSION_LOG.md.
-For tiered canon, lore vs kernel scope, and planning priorities: docs/CURSOR_MASTER_PLANNING_SPEC.md.
-For the standalone spectator/incarnation build order and feature master plan: docs/HEELKAWN_STANDALONE_MASTER_PLAN.md.
-For observer automation (speed sweeps, timeline, canon guards): docs/OBSERVER_TOOLKIT.md.
-For observer-driven cleanup decisions: docs/OBSERVER_CLEANUP_LOG.md.
+**Documentation:**
+- `AI_README.md` — Canonical AI instructions and kernel rules (READ FIRST for all AI agents)
+- `docs/HEELKAWN_STATE.md` — Canonical project state
+- `docs/LLM_ONBOARDING.md` — Cross-LLM continuity
+- `docs/SESSION_LOG.md` — Session tracking
+- `docs/CURSOR_MASTER_PLANNING_SPEC.md` — Tiered canon, lore vs kernel scope, planning priorities
+- `docs/HEELKAWN_STANDALONE_MASTER_PLAN.md` — Standalone spectator/incarnation build order and feature master plan
+- `docs/OBSERVER_TOOLKIT.md` — Observer automation (speed sweeps, timeline, canon guards)
+- `docs/OBSERVER_CLEANUP_LOG.md` — Observer-driven cleanup decisions

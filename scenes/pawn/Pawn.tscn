@@ -1,7 +1,25 @@
-[gd_scene load_steps=2 format=3 uid="uid://heelkawn_pawn"]
+[gd_scene load_steps=3 format=3 uid="uid://heelkawn_pawn"]
 
 [ext_resource type="Script" path="res://scripts/pawn/Pawn.gd" id="1_pawn"]
+[ext_resource type="Script" path="res://scripts/pawn/ActionPopupLabel.gd" id="2_popup"]
 
 [node name="Pawn" type="Node2D"]
 z_index = 10
 script = ExtResource("1_pawn")
+
+[node name="ActionPopup" type="Label" parent="."]
+offset_left = -50.0
+offset_top = -20.0
+offset_right = 50.0
+offset_bottom = 0.0
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 0
+pivot_offset = Vector2(0, 0)
+script = ExtResource("2_popup")
+horizontal_alignment = 1
+vertical_alignment = 2

@@ -286,6 +286,40 @@ func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) 
 	return normal_ticks
 
 
+func _planner_interval_for_speed() -> int:
+	if GameManager == null:
+		return 24
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 240
+	if gs >= 50.0:
+		return 120
+	if gs >= 26.0:
+		return 72
+	if gs >= 12.0:
+		return 48
+	if gs >= 3.0:
+		return 32
+	return 24
+
+
+func _heavy_planner_interval_for_speed() -> int:
+	if GameManager == null:
+		return 48
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 360
+	if gs >= 50.0:
+		return 180
+	if gs >= 26.0:
+		return 96
+	if gs >= 12.0:
+		return 64
+	if gs >= 3.0:
+		return 48
+	return 48
+
+
 func _pawn_divergence_detail_logs_enabled() -> bool:
 	if not OS.is_debug_build():
 		return false
@@ -1900,13 +1934,13 @@ func _on_game_tick(tick: int) -> void:
 	if is_instance_valid(_world):
 		# Planning every tick at 1x causes severe frame-time spikes in large worlds.
 		# Keep planning frequent, but not per-tick.
-		var planner_interval: int = _high_speed_interval(12, 16, 24)
+		var planner_interval: int = _planner_interval_for_speed()
 		if tick % planner_interval == 0:
 			t0 = Time.get_ticks_usec()
 			SettlementPlanner.plan(_world, self, false)
 			section_us["settlement_planner"] = Time.get_ticks_usec() - t0
 		# Spread heavy planning across adjacent ticks to reduce one-tick hitch spikes.
-		var trade_offset: int = maxi(1, planner_interval / 2)
+		var trade_offset: int = maxi(1, planner_interval / 3)
 		if (tick + trade_offset) % planner_interval == 0:
 			t0 = Time.get_ticks_usec()
 			TradePlanner.plan(_world, self, false)
@@ -2175,9 +2209,10 @@ func _flush_world_memory_derivatives() -> void:
 			_world.apply_ruins_from_persistence()
 			_world.refresh_pawn_historic_path_weights()
 	)
-	var heavy_planner_interval: int = _high_speed_interval(6, 10, 16)
+	var heavy_planner_interval: int = _heavy_planner_interval_for_speed()
 	if GameManager.tick_count % heavy_planner_interval == 0:
 		SettlementPlanner.plan(_world, self, true)
+	if (GameManager.tick_count + maxi(1, heavy_planner_interval / 3)) % heavy_planner_interval == 0:
 		TradePlanner.plan(_world, self, true)
 	RoadMemory.flush_dirty_tiles(_world)
 

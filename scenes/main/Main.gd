@@ -2461,6 +2461,21 @@ func _update_ambient_target() -> void:
 	if _enemy_spawner != null:
 		var threat: float = float(_enemy_spawner.get_enemy_count())
 		_ambient_freq_target += min(28.0, threat * 1.8)
+	
+	# Add settlement identity depth to frequency
+	var camera_tile: Vector2i = _world.world_to_tile(_camera.global_position) if _world != null and _camera != null else Vector2i(-1, -1)
+	if camera_tile.x >= 0:
+		var region_key: int = _WM._region_key(camera_tile.x, camera_tile.y)
+		var settlement: Variant = SettlementMemory.get_settlement_at_region(region_key)
+		if settlement is Dictionary:
+			# Population density affects frequency (more people = slightly higher pitch)
+			var population: int = int(settlement.get("population", 0))
+			_ambient_freq_target += min(12.0, float(population) * 0.05)
+			
+			# Resource pressure adds tension to frequency
+			var food_pressure: float = float(settlement.get("food_pressure", 0.0))
+			if food_pressure > 0.7:
+				_ambient_freq_target += 8.0  # Tense, higher pitch when food is scarce
 
 
 func _get_meaning_ambient_mood_target() -> float:
@@ -2481,6 +2496,11 @@ func _get_meaning_ambient_mood_target() -> float:
 		st_here = str((sv as Dictionary).get("state", ""))
 		var ckr_here: int = int((sv as Dictionary).get("center_region", -1))
 		intent_here = int(IntentMemory.settlement_intent.get(ckr_here, IntentMemory.INTENT_HOLD))
+		
+		# Settlement identity depth: mood reflects settlement vitality
+		var work_focus: String = str((sv as Dictionary).get("work_focus_phase", "unknown"))
+		var specialization_score: float = float((sv as Dictionary).get("work_focus_confidence", 0.0))
+		
 		if st_here == "permanently_abandoned":
 			m = 0.0
 		elif st_here == "abandoned":
@@ -2490,7 +2510,23 @@ func _get_meaning_ambient_mood_target() -> float:
 		elif st_here == "dormant":
 			m = 0.46
 		else:
+			# Active settlement: mood reflects specialization and work focus
 			m = 0.5
+			# Higher specialization = more confident, positive mood
+			m += specialization_score * 0.3
+			# Adjust based on work focus
+			match work_focus:
+				"forage":
+					m += 0.05  # Gathering food = content
+				"build":
+					m += 0.08  # Building = purposeful
+				"defend":
+					m -= 0.1  # Defense = tense
+				"trade":
+					m += 0.12  # Trade = prosperous
+				"worship":
+					m += 0.07  # Worship = spiritual
+			m = clampf(m, 0.0, 1.0)
 	else:
 		_meaning_style_bias = 0.0
 		var sl: int = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))

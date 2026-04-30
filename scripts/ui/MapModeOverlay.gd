@@ -11,6 +11,8 @@ enum DisplayMode {
 	GOVERNANCE = 4,
 }
 
+const _WM = preload("res://autoloads/WorldMemory.gd")
+
 var current_mode: DisplayMode = DisplayMode.REGIONS
 var overlay_visible: bool = false
 var world: World = null
@@ -222,7 +224,7 @@ func _update_overlay() -> void:
 	# Draw region overlays
 	for y in range(WorldData.HEIGHT):
 		for x in range(WorldData.WIDTH):
-			var region_key: int = preload("res://autoloads/WorldMemory.gd")._region_key(x, y)
+			var region_key: int = _WM._region_key(x, y)
 			if region_colors.has(region_key):
 				overlay_image.set_pixel(x, y, region_colors[region_key])
 	

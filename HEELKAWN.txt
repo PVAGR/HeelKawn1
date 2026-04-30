@@ -31,6 +31,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-29  `const _WM` for `WorldMemory._region_key` in **CreatorDebugMenu, PawnInfoPanel, MapModeOverlay, AnimalSpawner, AnimalPopulation, PathFinder, KernelDiagnostic, SettlementAI** (repo grep: no inline `preload(WorldMemory)` left outside the const line).
 2026-04-29  `Pawn.gd` + full `Main.gd`: all `WorldMemory` `_region_key` preloads use file-level `const _WM` (no per-call `preload` in those paths).
 2026-04-29  `const _WM` for `WorldMemory.gd` static `_region_key` in Main + ObservationAPI; `ObservationAPI._count_pawns_in_regions` delegates to `Main` when present (one implementation; fallback for odd scenes).
 2026-04-29  Realm crown view: one pawn scan builds region→pop map for listed settlements; `FactionRegistry.get_synced_house_count()` after single sync (no second `sync_from_settlements`).

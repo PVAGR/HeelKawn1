@@ -15,6 +15,8 @@ const NEIGHBOR_OFFSETS: Array[Vector2i] = [
 	Vector2i( 1,  1), Vector2i(-1,  1), Vector2i( 1, -1), Vector2i(-1, -1),
 ]
 
+const _WM = preload("res://autoloads/WorldMemory.gd")
+
 var _astar: AStarGrid2D
 
 ## Per-tile connected component id. -1 = impassable tile. Same non-negative
@@ -178,7 +180,7 @@ func refresh_pawn_historic_scar_weights(p_world: World) -> void:
 			_pawn_hist_scale[i] = 1.0
 			if _astar.is_point_solid(Vector2i(x, y)):
 				continue
-			var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(x, y)
+			var rk: int = _WM._region_key(x, y)
 			var sl: int = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))
 			var w: float = 1.0
 			if sl > 0:

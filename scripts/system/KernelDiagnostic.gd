@@ -5,6 +5,7 @@ class_name KernelDiagnostic
 const DIAGNOSTIC_TICK: int = SimTime.KERNEL_DIAGNOSTIC_TICK
 const SETTLEMENT_VERIFY_SAMPLE_TICKS: int = 200
 const SETTLEMENT_VERIFY_WINDOWS: int = 10
+const _WM = preload("res://autoloads/WorldMemory.gd")
 
 var _ran: bool = false
 var _completed_tick: int = -1
@@ -336,13 +337,13 @@ func _settlement_material_snapshot() -> Array[Dictionary]:
 		for p in pawns:
 			if p.data == null:
 				continue
-			var prk: int = preload("res://autoloads/WorldMemory.gd")._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+			var prk: int = _WM._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 			if region_set.has(prk):
 				living += 1
 		var job_count: int = 0
 		var bed_build_jobs: int = 0
 		for j in jobs:
-			var jrk: int = preload("res://autoloads/WorldMemory.gd")._region_key(j.work_tile.x, j.work_tile.y)
+			var jrk: int = _WM._region_key(j.work_tile.x, j.work_tile.y)
 			if not region_set.has(jrk):
 				continue
 			job_count += 1

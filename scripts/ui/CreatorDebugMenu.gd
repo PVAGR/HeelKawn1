@@ -6,6 +6,7 @@ extends CanvasLayer
 const PANEL_W: int = 460
 const PAD: int = 10
 const _SOUL_EXPORT := preload("res://scripts/kernel/heelkawn_soul_export.gd")
+const _WM = preload("res://autoloads/WorldMemory.gd")
 
 ## Sectioned menu: importance-ish order (playtest first, stubs last).
 const DEBUG_SECTIONS: Array[Dictionary] = [
@@ -555,7 +556,7 @@ func _report_pawns() -> void:
 			continue
 		var d: PawnData = p.data
 		var t: Vector2i = d.tile_pos
-		var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(t.x, t.y)
+		var rk: int = _WM._region_key(t.x, t.y)
 		var carry_s: String = "-"
 		if d.is_carrying():
 			carry_s = "%s x%d" % [Item.name_for(d.carrying), int(d.carrying_qty)]
@@ -692,7 +693,7 @@ func _report_portable_character() -> void:
 	var w: World = m.get_node_or_null("WorldViewport/World") as World
 	if w != null and w.data != null:
 		wseed = int(w.data.world_seed)
-	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+	var rk: int = _WM._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 	var bundle: Dictionary = p.data.to_portable_character_export(GameManager.tick_count, wseed, rk)
 	print("=== HEELKAWN_PORTABLE_CHARACTER_JSON BEGIN ===")
 	print(JSON.stringify(bundle, "\t"))
@@ -802,7 +803,7 @@ func _report_creator_session_digest() -> void:
 		var sp: Pawn = main_node.call("get_selected_pawn") as Pawn
 		if sp != null and is_instance_valid(sp) and sp.data != null:
 			var dd: PawnData = sp.data
-			var rk_sel: int = preload("res://autoloads/WorldMemory.gd")._region_key(dd.tile_pos.x, dd.tile_pos.y)
+			var rk_sel: int = _WM._region_key(dd.tile_pos.x, dd.tile_pos.y)
 			print(
 					"Your highlighted Heelkawnian on the right-hand sheet: %s — doing \"%s\" · hunger/rest snapshot %.0f / %.0f."
 					% [dd.display_name, sp.describe_state(), dd.hunger, dd.rest]

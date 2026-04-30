@@ -2,6 +2,8 @@ extends RefCounted
 class_name SettlementAI
 ## Community-level AI for managing collective decision-making, cultural evolution, and settlement development
 
+const _WM = preload("res://autoloads/WorldMemory.gd")
+
 # Autoload references (accessed via Engine.get_singleton or get_node)
 var CollapseSystem = null
 var AuthoritySystem = null
@@ -898,7 +900,7 @@ func _propose_automatic_goals() -> void:
 	# WorldMeaning: get region meaning to influence goal priorities
 	var region_meaning: Dictionary = {}
 	if WorldMeaning != null:
-		var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(location.x, location.y)
+		var rk: int = _WM._region_key(location.x, location.y)
 		region_meaning = WorldMeaning.get_region_meaning(rk)
 	
 	var death_density: String = region_meaning.get("death_density", "none")

@@ -14,6 +14,7 @@ const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.65)
 const TEXT_DIM:     Color = Color(0.70, 0.70, 0.75)
 const TEXT_BRIGHT:  Color = Color(0.96, 0.96, 0.98)
 const ACCENT:       Color = Color8(255, 209, 102)
+const _WM = preload("res://autoloads/WorldMemory.gd")
 
 const FONT_TITLE: int = 13
 const FONT_BODY:  int = 11
@@ -738,7 +739,7 @@ func _lineage_block(d: PawnData) -> String:
 
 
 func _build_identity_strip(d: PawnData) -> String:
-	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(d.tile_pos.x, d.tile_pos.y)
+	var rk: int = _WM._region_key(d.tile_pos.x, d.tile_pos.y)
 	var meaning_label: String = str(WorldMeaning.get_region_meaning_label(rk)).replace("_", " ")
 	var rep: int = int(CulturalMemory.get_region_reputation(rk))
 	var rep_word: String = "neutral"
@@ -774,7 +775,7 @@ func _build_ui_signature() -> String:
 	if _pawn == null or not is_instance_valid(_pawn) or _pawn.data == null:
 		return ""
 	var d: PawnData = _pawn.data
-	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(d.tile_pos.x, d.tile_pos.y)
+	var rk: int = _WM._region_key(d.tile_pos.x, d.tile_pos.y)
 	var top_peer: Dictionary = d.top_social_rapport_peer()
 	var world_context_bucket: int = int(GameManager.tick_count / max(1, WORLD_CONTEXT_REFRESH_TICKS))
 	var mood_sig: int = 0

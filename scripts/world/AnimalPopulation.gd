@@ -3,6 +3,7 @@
 class_name AnimalPopulation
 extends Object
 
+const _WM = preload("res://autoloads/WorldMemory.gd")
 
 ## 0.0 = no usable vegetation in scan; 1.0 = all scanned tiles are forest/plains with forage signal.
 static func get_food_availability_at(world: World, tile: Vector2i) -> float:
@@ -30,7 +31,7 @@ static func get_food_availability_at(world: World, tile: Vector2i) -> float:
 
 
 static func _pressure_for_animal_at(world: World, tile: Vector2i) -> float:
-	var rk: int = preload("res://autoloads/WorldMemory.gd")._region_key(tile.x, tile.y)
+	var rk: int = _WM._region_key(tile.x, tile.y)
 	var pr: float = IntentMemory.global_pressure
 	var ckr: int = SettlementMemory.get_center_region_for_region(rk)
 	if ckr >= 0 and IntentMemory.settlement_pressure.has(ckr):

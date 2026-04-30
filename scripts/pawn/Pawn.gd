@@ -1145,22 +1145,14 @@ func _fast_forward_tick_stride() -> int:
 	if GameManager == null:
 		return 1
 	var gs: float = GameManager.game_speed
-	## Match toolbar tiers (26 / 50 / 100): fewer expensive idle/job scans per sim tick.
+	## Match toolbar tiers (12 / 26 / 50 / 100): fewer expensive idle/job scans per sim tick.
 	if gs >= 100.0:
 		return 14
 	if gs >= 50.0:
 		return 10
 	if gs >= 26.0:
 		return 8
-	if gs >= 4096.0:
-		return 64
-	if gs >= 1024.0:
-		return 32
-	if gs >= 256.0:
-		return 16
-	if gs >= 64.0:
-		return 8
-	if gs >= 16.0:
+	if gs >= 12.0:
 		return 4
 	if gs >= 4.0:
 		return 2
@@ -1176,6 +1168,8 @@ func _job_claim_interval_for_speed() -> int:
 	if gs >= 50.0:
 		return 6
 	if gs >= 26.0:
+		return 4
+	if gs >= 12.0:
 		return 4
 	return 3
 

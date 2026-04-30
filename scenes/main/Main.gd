@@ -1942,7 +1942,7 @@ func _on_game_tick(tick: int) -> void:
 	t0 = Time.get_ticks_usec()
 	SettlementMemory.update_preferred_work_fronts(tick)
 	section_us["settlement_work_fronts"] = Time.get_ticks_usec() - t0
-	if tick % SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS == 0:
+	if tick % _social_rapport_interval_for_speed() == 0:
 		t0 = Time.get_ticks_usec()
 		_accumulate_social_rapport()
 		section_us["social_rapport"] = Time.get_ticks_usec() - t0
@@ -1950,9 +1950,13 @@ func _on_game_tick(tick: int) -> void:
 	if _is_simulation_worker_mode():
 		_maybe_log_tick_hotspots(tick, section_us)
 		return
-	# HUD snapshots are CPU-expensive; reduce cadence at 1x.
+	# HUD snapshots are CPU-expensive — only when the realm/observer panel is open.
 	var obs_iv: int = _high_speed_interval(60, 45, 90)
-	if _observer_hud != null and tick % obs_iv == 0:
+	if (
+			_observer_hud != null
+			and _observer_hud.is_visible_state()
+			and tick % obs_iv == 0
+	):
 		t0 = Time.get_ticks_usec()
 		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
 		section_us["observer_snapshot"] = Time.get_ticks_usec() - t0
@@ -2021,6 +2025,35 @@ func _inspect_scan_interval_for_speed() -> int:
 	if gs >= 26.0:
 		return 60
 	return INSPECT_SCAN_INTERVAL_TICKS
+
+
+## Co-presence rapport is O(pawns²) in worst case; stretch interval at fast-forward.
+func _social_rapport_interval_for_speed() -> int:
+	if GameManager == null:
+		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 120
+	if gs >= 50.0:
+		return 80
+	if gs >= 26.0:
+		return 60
+	return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS
+
+
+## Fewer world rows per mining-react step at ultra speed = smaller per-tick spikes
+## (pass completes over more sim ticks, which is fine under catch-up).
+func _mining_react_scan_rows_for_speed() -> int:
+	if GameManager == null:
+		return MINING_REACT_SCAN_ROWS_PER_STEP
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 3
+	if gs >= 50.0:
+		return 4
+	if gs >= 26.0:
+		return 5
+	return MINING_REACT_SCAN_ROWS_PER_STEP
 
 
 func _flush_road_memory_dirty_tiles() -> void:
@@ -4029,7 +4062,7 @@ func _process_regrowth(tick: int) -> void:
 	if GameManager != null:
 		var gs: float = GameManager.game_speed
 		if gs >= 100.0:
-			scan_budget = 12
+			scan_budget = 8
 			restore_budget = 1
 		elif gs >= 50.0:
 			scan_budget = 20
@@ -4124,7 +4157,8 @@ func _react_to_mining_progress_step() -> bool:
 		_mining_react_scan_y_cursor = 0
 		_mining_react_newly_minable_accum = 0
 	var y_start: int = _mining_react_scan_y_cursor
-	var y_end: int = mini(WorldData.HEIGHT, y_start + MINING_REACT_SCAN_ROWS_PER_STEP)
+	var rows_step: int = _mining_react_scan_rows_for_speed()
+	var y_end: int = mini(WorldData.HEIGHT, y_start + rows_step)
 	for y in range(y_start, y_end):
 		for x in range(WorldData.WIDTH):
 			var f: int = _world.data.get_feature(x, y)

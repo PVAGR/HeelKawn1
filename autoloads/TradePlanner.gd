@@ -67,13 +67,24 @@ func plan(world: World, _main: Node, from_memory_flush: bool) -> void:
 			var work_tile: Vector2i = _first_passable_free_job_tile(world, from_sp)
 			if work_tile.x < 0:
 				continue
-			var j: Job = JobManager.post_trade_haul(
-					work_tile, from_sp, to_sp, R, TRADE_BATCH, 0, 3
-			)
-			if j != null:
-				used[a_center] = true
-				used[b_center] = true
-			break
+				var j: Job = JobManager.post_trade_haul(
+						work_tile, from_sp, to_sp, R, TRADE_BATCH, 0, 3
+				)
+				if j != null:
+					used[a_center] = true
+					used[b_center] = true
+					# --- RelationalGraph integration: record trade relationship ---
+					if Engine.has_singleton("RelationalGraph"):
+						var rg = Engine.get_singleton("RelationalGraph")
+						var edge_data = {
+							"item": R,
+							"batch": TRADE_BATCH,
+							"from": a_center,
+							"to": b_center,
+							"tick": GameManager.tick_count
+						}
+						rg.add_edge(a_center, b_center, "trade", edge_data)
+				break
 
 
 static func _sort_settlements_by_intent_then_center(ka: Variant, kb: Variant) -> bool:

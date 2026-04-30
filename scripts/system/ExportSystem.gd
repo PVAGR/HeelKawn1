@@ -247,3 +247,128 @@ static func export_all_pawns(directory: String, tree: Node) -> int:
 	
 	print("[ExportSystem] Exported %d pawns to %s" % [exported_count, directory])
 	return exported_count
+
+
+## Export world seed and configuration
+static func export_world_seed(file_path: String) -> bool:
+	var export_data: Dictionary = {
+		"version": "1.0",
+		"export_timestamp": Time.get_unix_time_from_system(),
+		"world_seed": WorldRNG.seed if WorldRNG != null else 0,
+		"tick_count": GameManager.tick_count if GameManager != null else 0,
+		"game_speed": GameManager.game_speed if GameManager != null else 1.0,
+		"is_paused": GameManager.is_paused if GameManager != null else false,
+	}
+	
+	var json_string: String = JSON.stringify(export_data, "\t")
+	var file: FileAccess = FileAccess.open(file_path, FileAccess.WRITE)
+	if file == null:
+		return false
+	
+	file.store_string(json_string)
+	file.close()
+	
+	print("[ExportSystem] Exported world seed to %s" % file_path)
+	return true
+
+
+## Export world chronicle (events from WorldMemory)
+static func export_chronicle(file_path: String) -> bool:
+	var export_data: Dictionary = {
+		"version": "1.0",
+		"export_timestamp": Time.get_unix_time_from_system(),
+		"tick_count": GameManager.tick_count if GameManager != null else 0,
+		"events": WorldMemory.to_save_dict().get("events", []) if WorldMemory != null else [],
+	}
+	
+	var json_string: String = JSON.stringify(export_data, "\t")
+	var file: FileAccess = FileAccess.open(file_path, FileAccess.WRITE)
+	if file == null:
+		return false
+	
+	file.store_string(json_string)
+	file.close()
+	
+	print("[ExportSystem] Exported chronicle with %d events to %s" % [export_data.events.size(), file_path])
+	return true
+
+
+## Export bloodline data from family memory
+static func export_bloodlines(file_path: String) -> bool:
+	var export_data: Dictionary = {
+		"version": "1.0",
+		"export_timestamp": Time.get_unix_time_from_system(),
+		"tick_count": GameManager.tick_count if GameManager != null else 0,
+		"families": WorldPersistence.family_memory.duplicate(true) if WorldPersistence != null else {},
+	}
+	
+	var json_string: String = JSON.stringify(export_data, "\t")
+	var file: FileAccess = FileAccess.open(file_path, FileAccess.WRITE)
+	if file == null:
+		return false
+	
+	file.store_string(json_string)
+	file.close()
+	
+	print("[ExportSystem] Exported %d bloodlines to %s" % [export_data.families.size(), file_path])
+	return true
+
+
+## Export artifacts (landmarks, ruins, road traces)
+static func export_artifacts(file_path: String) -> bool:
+	var export_data: Dictionary = {
+		"version": "1.0",
+		"export_timestamp": Time.get_unix_time_from_system(),
+		"tick_count": GameManager.tick_count if GameManager != null else 0,
+		"landmarks": WorldPersistence.named_landmarks.duplicate(true) if WorldPersistence != null else {},
+		"ruins": WorldPersistence.ruins.duplicate(true) if WorldPersistence != null else {},
+		"road_traces": WorldPersistence.road_traces.duplicate(true) if WorldPersistence != null else {},
+	}
+	
+	var json_string: String = JSON.stringify(export_data, "\t")
+	var file: FileAccess = FileAccess.open(file_path, FileAccess.WRITE)
+	if file == null:
+		return false
+	
+	file.store_string(json_string)
+	file.close()
+	
+	print("[ExportSystem] Exported artifacts to %s" % file_path)
+	return true
+
+
+## Export complete world state (all exports combined)
+static func export_complete_world(directory: String) -> bool:
+	var dir: DirAccess = DirAccess.open(directory)
+	if dir == null:
+		print("[ExportSystem] Failed to open directory: %s" % directory)
+		return false
+	
+	# Ensure directory exists
+	if not dir.dir_exists(directory):
+		dir.make_dir_recursive(directory)
+	
+	var success: bool = true
+	
+	# Export world seed
+	if not export_world_seed(directory.path_join("world_seed.json")):
+		success = false
+	
+	# Export chronicle
+	if not export_chronicle(directory.path_join("chronicle.json")):
+		success = false
+	
+	# Export bloodlines
+	if not export_bloodlines(directory.path_join("bloodlines.json")):
+		success = false
+	
+	# Export artifacts
+	if not export_artifacts(directory.path_join("artifacts.json")):
+		success = false
+	
+	if success:
+		print("[ExportSystem] Complete world export successful to %s" % directory)
+	else:
+		print("[ExportSystem] Complete world export had errors")
+	
+	return success

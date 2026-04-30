@@ -31,6 +31,7 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-04-29  **Main heavy-spike fixes (100x):** regrowth queue now uses rolling cursor + fixed scan/restore budgets (`REGROWTH_SCAN_BUDGET_PER_TICK`, `REGROWTH_RESTORE_BUDGET_PER_TICK`) to prevent one-tick regrowth bursts; mining-react is incremental (`MINING_REACT_SCAN_ROWS_PER_STEP`) with one tunnel-wall post per completed pass (no full-map + multi-BFS burst in one tick).
 2026-04-29  **Main tick diagnostics + smoothing:** `_on_game_tick` now reports `[MAIN_TICK_HOTSPOT]` (top 4 section timings at 26x+ when total tick work is heavy), and planner bursts are staggered (`SettlementPlanner` and `TradePlanner` on offset cadence) to reduce one-tick 100x hitch spikes.
 2026-04-29  **CreatorDebugMenu:** removed duplicate `ai_control_panel ... END` line emitted inside `_toggle_ai_control_panel` (report wrapper already prints END).
 2026-04-29  **ColonySimServices:** removed **speed-based** demand throttle — food/mat/haul refresh **every sim tick** again (still one cheap stockpile pass); housing stays **every 60 ticks** (macro cadence, not speed-tier skipping).

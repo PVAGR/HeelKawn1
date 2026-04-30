@@ -224,6 +224,8 @@ var _meaning_vignette_rect: ColorRect = null
 ## Processed every tick; tiles whose feature slot is still NONE and biome is
 ## still compatible get the feature back and a fresh job posted.
 var _regrow_queue: Array = []
+## Incremental cursor for `_regrow_queue` so regrowth checks stay O(budget) per tick.
+var _regrow_scan_cursor: int = 0
 ## Sim tick at which the last generational birth (or failed attempt) was processed. Serialized.
 var _last_generation_tick: int = 0
 ## Pawns/Animals run after Main on `game_tick`; one deferred pass flushes after their `WorldMemory` writes.
@@ -243,11 +245,18 @@ var _last_tick_hotspot_log_ms: int = -1_000_000
 const MAIN_TICK_HOTSPOT_LOG_INTERVAL_MS: int = 2500
 const MAIN_TICK_HOTSPOT_MIN_TOTAL_MS: float = 8.0
 const MINING_REACT_MIN_INTERVAL_TICKS: int = 120
+const REGROWTH_SCAN_BUDGET_PER_TICK: int = 64
+const REGROWTH_RESTORE_BUDGET_PER_TICK: int = 12
+const MINING_REACT_SCAN_ROWS_PER_STEP: int = 12
 const INSPECT_SCAN_INTERVAL_TICKS: int = 30
 var _last_inspect_event_tick_shown: int = -1
 var _inspect_tooltip_node: Control = null
 var _inspect_audio_player: AudioStreamPlayer = null
 var _inspect_audio_playback: AudioStreamGeneratorPlayback = null
+## Incremental mining-react state: avoid full-map scans in one tick.
+var _mining_react_in_progress: bool = false
+var _mining_react_scan_y_cursor: int = 0
+var _mining_react_newly_minable_accum: int = 0
 ## pair key ("low-high") -> last tick a social_meeting event was logged.
 var _social_meeting_last_tick_by_pair: Dictionary = {}
 ## pair key ("low-high") -> highest rapport milestone already logged.
@@ -1935,12 +1944,13 @@ func _on_game_tick(tick: int) -> void:
 		AgeMemory.recompute()
 		if is_instance_valid(_world):
 			IntentMemory.recompute(_world)
-	if _mining_react_pending and (tick - _last_mining_react_tick) >= MINING_REACT_MIN_INTERVAL_TICKS:
+	var can_run_mining_react: bool = _mining_react_in_progress or (tick - _last_mining_react_tick) >= MINING_REACT_MIN_INTERVAL_TICKS
+	if _mining_react_pending and can_run_mining_react:
 		t0 = Time.get_ticks_usec()
-		_react_to_mining_progress()
+		var mining_react_done: bool = _react_to_mining_progress_step()
 		section_us["mining_react"] = Time.get_ticks_usec() - t0
 		_last_mining_react_tick = tick
-		_mining_react_pending = false
+		_mining_react_pending = not mining_react_done
 	t0 = Time.get_ticks_usec()
 	_maybe_generational_turnover()
 	section_us["generational_turnover"] = Time.get_ticks_usec() - t0
@@ -4039,17 +4049,28 @@ func _queue_regrowth(tile: Vector2i, feature: int, delay_ticks: int) -> void:
 
 
 ## Walk the regrow queue and resurrect any feature whose timer has expired.
-## Iterating backwards so we can remove in place.
+## Uses a rolling cursor and fixed scan/restore budgets to prevent one-tick spikes.
 func _process_regrowth(tick: int) -> void:
 	if _regrow_queue.is_empty():
+		_regrow_scan_cursor = 0
 		return
-	var i: int = _regrow_queue.size() - 1
-	while i >= 0:
-		var entry: Dictionary = _regrow_queue[i]
+	var scanned: int = 0
+	var restored: int = 0
+	while (
+			scanned < REGROWTH_SCAN_BUDGET_PER_TICK
+			and restored < REGROWTH_RESTORE_BUDGET_PER_TICK
+			and not _regrow_queue.is_empty()
+	):
+		if _regrow_scan_cursor >= _regrow_queue.size():
+			_regrow_scan_cursor = 0
+		var entry: Dictionary = _regrow_queue[_regrow_scan_cursor]
 		if entry.ready_tick <= tick:
 			_restore_feature(entry.tile, entry.feature)
-			_regrow_queue.remove_at(i)
-		i -= 1
+			_regrow_queue.remove_at(_regrow_scan_cursor)
+			restored += 1
+		else:
+			_regrow_scan_cursor += 1
+		scanned += 1
 
 
 ## Re-place a feature on its original tile, then post the matching job so a
@@ -4106,15 +4127,23 @@ static func _is_biome_compatible(feature: int, biome: int) -> bool:
 ##   1. Any ORE_VEIN that is now reachable but has no job -> post a MINE job.
 ##   2. If we have headroom, post one more MINE_WALL aimed at the closest
 ##      still-sealed ore vein, so colonies autonomously dig toward resources.
-func _react_to_mining_progress() -> void:
+func _react_to_mining_progress_step() -> bool:
 	var pf: PathFinder = _world.pathfinder
 	var main_component: int = pf.largest_component_id()
 	if main_component < 0:
-		return
+		_mining_react_in_progress = false
+		_mining_react_scan_y_cursor = 0
+		_mining_react_newly_minable_accum = 0
+		return true
 
 	# 1. Newly-reachable ore -> MINE jobs.
-	var newly_minable: int = 0
-	for y in range(WorldData.HEIGHT):
+	if not _mining_react_in_progress:
+		_mining_react_in_progress = true
+		_mining_react_scan_y_cursor = 0
+		_mining_react_newly_minable_accum = 0
+	var y_start: int = _mining_react_scan_y_cursor
+	var y_end: int = mini(WorldData.HEIGHT, y_start + MINING_REACT_SCAN_ROWS_PER_STEP)
+	for y in range(y_start, y_end):
 		for x in range(WorldData.WIDTH):
 			var f: int = _world.data.get_feature(x, y)
 			if f != TileFeature.Type.ORE_VEIN:
@@ -4129,33 +4158,44 @@ func _react_to_mining_progress() -> void:
 			if job == null:
 				continue
 			job.work_tile = work_tile
-			newly_minable += 1
+			_mining_react_newly_minable_accum += 1
+	_mining_react_scan_y_cursor = y_end
+	if _mining_react_scan_y_cursor < WorldData.HEIGHT:
+		return false
 
-	# 2. Top up MINE_WALL jobs up to the cap, each aimed at a different sealed ore.
+	# 2. Top up MINE_WALL jobs up to the cap. Post at most one per step to keep
+	# BFS tunnel targeting from monopolizing the frame.
 	var active_walls: int = JobManager.active_count_of_type(Job.Type.MINE_WALL)
 	var posted_walls: int = 0
-	while active_walls < MAX_ACTIVE_MINE_WALL_JOBS:
+	if active_walls < MAX_ACTIVE_MINE_WALL_JOBS:
 		var wall_tile: Vector2i = _find_next_tunnel_target(main_component)
-		if wall_tile.x < 0:
-			break
-		# work_tile = a passable main-component neighbor of the wall tile.
-		var work_tile: Vector2i = _find_main_component_neighbor(wall_tile, main_component)
-		if work_tile.x < 0:
-			break
-		var job: Job = JobManager.post(Job.Type.MINE_WALL, wall_tile, MINE_WALL_PRIORITY, MINE_WALL_WORK_TICKS)
-		if job == null:
-			break  # tile already has a job (defensive); stop to avoid an infinite loop
-		job.work_tile = work_tile
-		active_walls += 1
-		posted_walls += 1
+		if wall_tile.x >= 0:
+			# work_tile = a passable main-component neighbor of the wall tile.
+			var work_tile: Vector2i = _find_main_component_neighbor(wall_tile, main_component)
+			if work_tile.x >= 0:
+				var job: Job = JobManager.post(Job.Type.MINE_WALL, wall_tile, MINE_WALL_PRIORITY, MINE_WALL_WORK_TICKS)
+				if job != null:
+					job.work_tile = work_tile
+					active_walls += 1
+					posted_walls = 1
 
-	if newly_minable > 0 or posted_walls > 0:
+	if _mining_react_newly_minable_accum > 0 or posted_walls > 0:
 		if OS.is_debug_build():
 			print(
 					"[Main] React: +%d MINE  +%d MINE_WALL  (active walls=%d)" % [
-						newly_minable, posted_walls, active_walls
+						_mining_react_newly_minable_accum, posted_walls, active_walls
 					]
 			)
+	_mining_react_in_progress = false
+	_mining_react_scan_y_cursor = 0
+	_mining_react_newly_minable_accum = 0
+	return true
+
+
+## Full react pass (legacy callers). Tick loop should prefer `_react_to_mining_progress_step`.
+func _react_to_mining_progress() -> void:
+	while not _react_to_mining_progress_step():
+		pass
 
 
 ## Multi-source BFS starting from every still-sealed ORE_VEIN, expanding only

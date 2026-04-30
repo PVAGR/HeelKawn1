@@ -46,6 +46,22 @@ func zones() -> Array[Stockpile]:
 	return _zones
 
 
+func zone_count() -> int:
+	return _zones.size()
+
+
+## One pass over every zone: item type → total quantity (HUD and summaries).
+## Empty dict when there are no zones or every inventory is empty.
+func aggregate_inventory_totals() -> Dictionary:
+	var totals: Dictionary = {}
+	for z in _zones:
+		if z == null or not is_instance_valid(z):
+			continue
+		for t in z.inventory:
+			totals[t] = totals.get(t, 0) + int(z.inventory[t])
+	return totals
+
+
 ## Total of a specific item type across every zone. Used by the HUD + food-
 ## emergency override in Pawn.
 func total_count_of(item_type: int) -> int:

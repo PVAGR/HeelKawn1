@@ -348,13 +348,9 @@ func _history_totals_line() -> String:
 
 ## Short stockpile strip so readable mode still shows material reality.
 func _stockpile_simple_line() -> String:
-	var zones: Array[Stockpile] = StockpileManager.zones()
-	if zones.is_empty():
+	if StockpileManager.zone_count() <= 0:
 		return "[color=#ce93d8]Supplies:[/color] [i]no stockpiles[/i]"
-	var totals: Dictionary = {}
-	for z in zones:
-		for t in z.inventory:
-			totals[t] = totals.get(t, 0) + z.inventory[t]
+	var totals: Dictionary = StockpileManager.aggregate_inventory_totals()
 	var rows: Array[Dictionary] = []
 	for t in Item.Type.values():
 		if t == Item.Type.NONE:
@@ -525,15 +521,10 @@ func _pawn_line_simple() -> String:
 
 
 func _stockpile_line() -> String:
-	var zones: Array[Stockpile] = StockpileManager.zones()
-	if zones.is_empty():
+	var zc: int = StockpileManager.zone_count()
+	if zc <= 0:
 		return "[color=#cccccc]Stockpiles:[/color] (none)"
-	# Sum item counts across every registered zone. We build a small dict of
-	# type -> qty and render a chip for each non-zero entry.
-	var totals: Dictionary = {}
-	for z in zones:
-		for t in z.inventory:
-			totals[t] = totals.get(t, 0) + z.inventory[t]
+	var totals: Dictionary = StockpileManager.aggregate_inventory_totals()
 	var parts: Array[String] = []
 	# Keep the render order stable so the HUD doesn't flicker as the dict
 	# hash ordering changes. Item.Type enum values are dense so iterating
@@ -549,7 +540,7 @@ func _stockpile_line() -> String:
 		])
 	var inv_text: String = " · ".join(parts) if not parts.is_empty() else "[color=#888888]empty[/color]"
 	return "[color=#cccccc]Stockpiles (%d zone%s):[/color] %s" % [
-		zones.size(), "" if zones.size() == 1 else "s", inv_text
+		zc, "" if zc == 1 else "s", inv_text
 	]
 
 

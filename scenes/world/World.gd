@@ -6,6 +6,7 @@ extends Node2D
 ## Pixels of screen space per tile. The world is rendered as a 256x256 Image
 ## baked into an ImageTexture, then scaled up so each source pixel = TILE_PIXELS.
 const TILE_PIXELS: int = 10
+const DEFAULT_WORLD_SEED: int = 20260429
 
 @onready var _sprite: Sprite2D = $Sprite2D
 
@@ -48,7 +49,15 @@ func _ready() -> void:
 	_sprite.scale = Vector2(TILE_PIXELS, TILE_PIXELS)
 	add_to_group("colony_world")
 	pathfinder = PathFinder.new()
-	generate(randi())
+	generate(_initial_world_seed())
+
+
+func _initial_world_seed() -> int:
+	for raw_arg in OS.get_cmdline_args():
+		var arg: String = str(raw_arg)
+		if arg.begins_with("--world-seed="):
+			return int(arg.get_slice("=", 1))
+	return DEFAULT_WORLD_SEED
 
 
 func load_world_data(new_data: WorldData) -> void:

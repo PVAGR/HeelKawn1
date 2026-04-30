@@ -8,6 +8,24 @@ const BASE_DAMAGE: float = 10.0
 const SKILL_ACCURACY_BONUS_PER_LEVEL: float = 0.02  # 2% accuracy per skill level
 const SKILL_DODGE_BONUS_PER_LEVEL: float = 0.02  # 2% dodge per rest level (endurance proxy)
 
+static func _actor_seed_part(actor: Node) -> String:
+	if actor is Pawn:
+		var pawn: Pawn = actor as Pawn
+		if pawn.data != null:
+			return "pawn:%d" % int(pawn.data.id)
+	if actor is Enemy:
+		var enemy: Enemy = actor as Enemy
+		return "enemy:%d:%d:%d" % [int(enemy.enemy_type), enemy.tile_pos.x, enemy.tile_pos.y]
+	return str(actor.name) if actor != null else "none"
+
+
+static func _combat_stream(label: String, attacker: Node, defender: Node) -> StringName:
+	return StringName("combat:%s:%s:%s" % [label, _actor_seed_part(attacker), _actor_seed_part(defender)])
+
+
+static func _combat_salt(extra: int = 0) -> int:
+	return GameManager.tick_count + extra
+
 ## Execute one attack from attacker to defender. Returns true if hit landed.
 ## Defender takes damage, loses health, may be injured.
 static func resolve_attack(attacker: Node, defender: Node) -> bool:
@@ -39,16 +57,16 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 		var _spec = Enemy.SPECIES_DATA.get(enemy.enemy_type, {})
 		var dodge_chance: float = BASE_DODGE_CHANCE
 		hit_chance *= (1.0 - dodge_chance)
-	
+
 	hit_chance = clamp(hit_chance, 0.2, 0.95)
-	
+
 	# Roll to hit
-	if randf() > hit_chance:
+	if not WorldRNG.chance_for(_combat_stream("hit", attacker, defender), hit_chance, _combat_salt(3)):
 		return false
-	
+
 	# Calculate damage
 	var damage: float = _calculate_damage(attacker, defender)
-	
+
 	# Apply damage
 	if defender is Pawn:
 		var pawn_defender: Pawn = defender as Pawn
@@ -57,7 +75,7 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 		pawn_defender.data.add_mood_event(MoodEvent.Type.STRESS, 60.0, 300)
 		
 		# Injury check: small chance to get injured
-		if randf() < 0.15:  # 15% injury chance per hit
+		if WorldRNG.chance_for(_combat_stream("injury", attacker, defender), 0.15, _combat_salt(5)):
 			pawn_defender.data.add_mood_event(MoodEvent.Type.STRESS, 40.0, 200)
 		
 		if pawn_defender.data.health <= 0:

@@ -5,6 +5,29 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-04-30 - Seeded simulation determinism pass
+
+Date: 2026-04-30
+Goal: Continue repo-wide hardening by removing raw global RNG from canonical simulation and AI paths without changing the intended probabilities.
+
+Changes made:
+- Added `WorldRNG.unit_for()`, `range_for()`, `chance_for()`, and `index_for()` helpers for named deterministic streams.
+- Replaced global RNG in core AI, neural, world-event, knowledge, settlement, civilization, pawn, animal, combat, incarnation, and world-evolution paths with seed-derived rolls.
+- Kept `PawnSpawner` and `WorldGenerator` on local `RandomNumberGenerator` instances seeded from `WorldRNG` / `world_seed`; remaining raw global RNG scan is now limited to visual addon noise plus those seeded local generators.
+- Made the initial world seed explicit (`World.DEFAULT_WORLD_SEED = 20260429`) with optional `--world-seed=...`; rerolls derive deterministic follow-up seeds from the current world stream.
+- Kept AI auto-incarnation blocked from the human player channel and marked AI-origin incarnation commands as rejected until NPC ownership is separated.
+- Fixed `WorldEvolution` initialization so its interconnection builder no longer reads `neural_evolution_engine` before the matrix exists.
+
+Validation:
+- `powershell -ExecutionPolicy Bypass -File tools\Verify-Project.ps1 -QuitAfterFrames 240` passed and reached tick 1 after final code cleanup.
+- `powershell -ExecutionPolicy Bypass -File tools\Benchmark-Speeds.ps1 -BenchMode worker -TicksPerSample 20` passed all speed tiers with 0 failures.
+- Direct Godot `--check-only` passed for `scripts\world\WorldEvolution.gd` and `scripts\debug\ErrorTracker.gd`; `IncarnationSystem.gd` still pulls pawn dependencies that are not isolated-script-check friendly.
+
+Suggested next session:
+- Replace the remaining addon visual randomness only if UI determinism matters; the canonical sim paths are now seeded or explicitly local-seeded.
+- Add a longer worker benchmark (`-TicksPerSample 120`) after any future pawn/AI behavior changes.
+- Design the separate NPC-control ownership channel before re-enabling automatic AI incarnation.
+
 ## 2026-04-30 - Repo health and validation repair
 
 Date: 2026-04-30

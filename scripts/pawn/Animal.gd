@@ -48,6 +48,13 @@ var _path_index: int = 0
 var _nearby_animals: Array[Animal] = []
 var _dead: bool = false
 
+func _animal_stream(label: String) -> StringName:
+	return StringName("animal:%d:%d:%d:%s" % [int(animal_type), tile_pos.x, tile_pos.y, label])
+
+
+func _animal_salt(extra: int = 0) -> int:
+	return GameManager.tick_count + age_ticks * 1009 + int(animal_type) * 37 + extra
+
 func _ready() -> void:
 	add_to_group("animals")
 	queue_redraw()
@@ -123,11 +130,11 @@ func _on_game_tick(_tick: int) -> void:
 	# wandering until they starve.
 	if hunger < 45.0:
 		_forage()
-		if randf() < 0.35:
+		if WorldRNG.chance_for(_animal_stream("hungry_wander"), 0.35, _animal_salt(3)):
 			_wander()
 		return
 	# Normal behavior mix. Breeding is still deterministic in AnimalSpawner.
-	var roll: float = randf()
+	var roll: float = WorldRNG.unit_for(_animal_stream("behavior_roll"), _animal_salt(5))
 	if roll < 0.45:
 		_forage()
 	elif roll < 0.85:
@@ -143,8 +150,9 @@ func _wander() -> void:
 	var spec = SPECIES_DATA[animal_type]
 	var range_tiles: int = int(spec.vision_range / 8.0)  # Convert to tile distance
 	
-	var target_x: int = tile_pos.x + randi_range(-range_tiles, range_tiles)
-	var target_y: int = tile_pos.y + randi_range(-range_tiles, range_tiles)
+	var spread: int = range_tiles * 2 + 1
+	var target_x: int = tile_pos.x + WorldRNG.index_for(_animal_stream("wander_x"), spread, _animal_salt(7)) - range_tiles
+	var target_y: int = tile_pos.y + WorldRNG.index_for(_animal_stream("wander_y"), spread, _animal_salt(11)) - range_tiles
 	target_x = clampi(target_x, 0, WorldData.WIDTH - 1)
 	target_y = clampi(target_y, 0, WorldData.HEIGHT - 1)
 	_target_tile = Vector2i(target_x, target_y)

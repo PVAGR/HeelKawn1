@@ -3751,7 +3751,7 @@ func _reroll_world() -> void:
 	# reference to a zone via _target_zone will fall back to nearest-
 	# reachable via StockpileManager on the next tick.
 	_tear_down_all_zones()
-	_world.generate(randi())
+	_world.generate(WorldRNG.stream_seed(&"manual_world_reroll", GameManager.tick_count))
 	if is_instance_valid(_world):
 		_world.apply_ruins_from_persistence()
 		CulturalMemory.recompute(_world)

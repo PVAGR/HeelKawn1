@@ -6,6 +6,9 @@ extends Node
 
 signal incarnation_chosen(pawn_data: Dictionary)
 
+@onready var GameManager = get_node_or_null("/root/GameManager")
+@onready var WorldRNG = get_node_or_null("/root/WorldRNG")
+
 ## Available regions for incarnation
 var available_regions: Array = [
 	{"id": 0, "name": "Northern Highlands", "climate": "cold", "danger": 0.3},
@@ -169,9 +172,10 @@ func apply_incarnation_to_pawn(pawn: Pawn, incarnation_data: Dictionary) -> bool
 
 ## Generate random incarnation for AI pawns
 func generate_random_incarnation() -> Dictionary:
-	var random_region: Dictionary = available_regions[randi() % available_regions.size()]
-	var random_era: Dictionary = available_eras[randi() % available_eras.size()]
-	var random_context: Dictionary = available_contexts[randi() % available_contexts.size()]
+	var salt: int = GameManager.tick_count if GameManager != null else 0
+	var random_region: Dictionary = available_regions[WorldRNG.index_for(&"incarnation:region", available_regions.size(), salt)]
+	var random_era: Dictionary = available_eras[WorldRNG.index_for(&"incarnation:era", available_eras.size(), salt + 1)]
+	var random_context: Dictionary = available_contexts[WorldRNG.index_for(&"incarnation:context", available_contexts.size(), salt + 2)]
 	
 	return {
 		"region": random_region,
@@ -180,5 +184,5 @@ func generate_random_incarnation() -> Dictionary:
 		"starting_level": random_context["starting_level"],
 		"starting_resources": random_context["starting_resources"],
 		"climate_adaptation": {random_region["climate"]: 50.0},
-		"timestamp": Time.get_unix_time_from_system(),
+		"timestamp": salt,
 	}

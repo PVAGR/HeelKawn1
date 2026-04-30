@@ -345,6 +345,9 @@ static func _execute_toggle_draft_mode(command: Command) -> Dictionary:
 
 static func _execute_request_incarnation(command: Command) -> Dictionary:
 	var result: Dictionary = {"success": false, "error": "", "data": {}}
+	if command.metadata.get("source", "") == "ai_agent":
+		result.error = "AI agent incarnation is disabled until NPC ownership is separate from the player channel"
+		return result
 	
 	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
 	if main == null:
@@ -505,6 +508,9 @@ static func _validate_toggle_draft_mode(command: Command) -> Dictionary:
 
 static func _validate_request_incarnation(command: Command) -> Dictionary:
 	var result: Dictionary = {"valid": false, "error": "", "requirements": {}}
+	if command.metadata.get("source", "") == "ai_agent":
+		result.error = "AI agent incarnation is disabled until NPC ownership is separate from the player channel"
+		return result
 	
 	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
 	if main == null:

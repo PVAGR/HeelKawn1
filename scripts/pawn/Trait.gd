@@ -147,7 +147,8 @@ func _init_from_type() -> void:
 ## Get a random trait from the pool.
 static func random() -> Trait:
 	var types: Array = Type.values()
-	var random_type: Type = types[randi() % types.size()]
+	var salt: int = GameManager.tick_count if GameManager != null else 0
+	var random_type: Type = types[WorldRNG.index_for(&"trait:random", types.size(), salt)]
 	return Trait.new(random_type)
 
 ## Get a trait by type.

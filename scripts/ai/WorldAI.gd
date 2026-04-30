@@ -165,6 +165,23 @@ func _ready():
 	_initialize_neural_world_matrix()
 	_initialize_neural_networks()
 
+func _world_stream(label: String) -> StringName:
+	return StringName("world_ai:%s" % label)
+
+func _world_salt(extra: int = 0) -> int:
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	var cycles: int = int(neural_world_matrix.get("evolution_cycles", 0)) if not neural_world_matrix.is_empty() else 0
+	return tick + cycles * 1009 + extra
+
+func _deterministic_range(label: String, min_value: float, max_value: float, salt: int = 0) -> float:
+	return WorldRNG.range_for(_world_stream(label), min_value, max_value, salt)
+
+func _deterministic_chance(label: String, probability: float, salt: int = 0) -> bool:
+	return WorldRNG.chance_for(_world_stream(label), probability, salt)
+
+func _deterministic_index(label: String, size: int, salt: int = 0) -> int:
+	return WorldRNG.index_for(_world_stream(label), size, salt)
+
 # === Neural Network Matrix Initialization ===
 
 func _initialize_neural_world_matrix() -> void:
@@ -273,7 +290,7 @@ func _create_neural_interconnections() -> Dictionary:
 	
 	for connection_type in connection_types:
 		interconnections[connection_type] = {
-			"weight": randf_range(-0.3, 0.3),
+			"weight": _deterministic_range("interconnection:%s" % connection_type, -0.3, 0.3),
 			"strength": 1.0,
 			"plasticity": 0.01,
 			"type": "basic"
@@ -295,27 +312,27 @@ func _create_specialized_network(network_type: String, input_size: int, hidden_s
 	return {
 		"type": network_type,
 		"layers": {
-			"input": {"size": input_size, "neurons": _create_neuron_layer(input_size)},
-			"hidden": {"size": hidden_size, "neurons": _create_neuron_layer(hidden_size)},
-			"output": {"size": output_size, "neurons": _create_neuron_layer(output_size)}
+			"input": {"size": input_size, "neurons": _create_neuron_layer(input_size, "%s:input" % network_type)},
+			"hidden": {"size": hidden_size, "neurons": _create_neuron_layer(hidden_size, "%s:hidden" % network_type)},
+			"output": {"size": output_size, "neurons": _create_neuron_layer(output_size, "%s:output" % network_type)}
 		},
-		"weights": _initialize_weights(input_size, hidden_size, output_size),
+		"weights": _initialize_weights(network_type, input_size, hidden_size, output_size),
 		"learning_rate": 0.01,
 		"training_history": []
 	}
 
-func _create_neuron_layer(size: int) -> Array[Dictionary]:
+func _create_neuron_layer(size: int, layer_label: String = "layer") -> Array[Dictionary]:
 	var layer: Array[Dictionary] = []
 	for i in range(size):
 		layer.append({
 			"id": "neuron_%d" % i,
 			"value": 0.0,
 			"activation": 0.0,
-			"bias": randf_range(-0.1, 0.1)
+			"bias": _deterministic_range("bias:%s:%d" % [layer_label, i], -0.1, 0.1)
 		})
 	return layer
 
-func _initialize_weights(input_size: int, hidden_size: int, output_size: int) -> Dictionary:
+func _initialize_weights(network_type: String, input_size: int, hidden_size: int, output_size: int) -> Dictionary:
 	var weights: Dictionary = {}
 	
 	# Xavier/Glorot initialization for better convergence
@@ -327,7 +344,11 @@ func _initialize_weights(input_size: int, hidden_size: int, output_size: int) ->
 	for i in range(input_size):
 		var neuron_weights: Array[float] = []
 		for j in range(hidden_size):
-			neuron_weights.append(randf_range(-input_scale, input_scale))
+			neuron_weights.append(_deterministic_range(
+				"weights:%s:input_hidden:%d:%d" % [network_type, i, j],
+				-input_scale,
+				input_scale
+			))
 		weights["input_hidden"].append(neuron_weights)
 	
 	# Hidden to output weights
@@ -335,7 +356,11 @@ func _initialize_weights(input_size: int, hidden_size: int, output_size: int) ->
 	for i in range(hidden_size):
 		var neuron_weights: Array[float] = []
 		for j in range(output_size):
-			neuron_weights.append(randf_range(-hidden_scale, hidden_scale))
+			neuron_weights.append(_deterministic_range(
+				"weights:%s:hidden_output:%d:%d" % [network_type, i, j],
+				-hidden_scale,
+				hidden_scale
+			))
 		weights["hidden_output"].append(neuron_weights)
 	
 	return weights
@@ -2113,13 +2138,13 @@ func _adapt_neural_weights() -> void:
 		if not connection.has("weight"):
 			connection["weight"] = 0.5
 		
-		var adaptation = _calculate_weight_adaptation()
+		var adaptation = _calculate_weight_adaptation(str(connection_id))
 		connection["weight"] += learning_rate * adaptation
 		connection["weight"] = clamp(connection["weight"], -1.0, 1.0)
 
 func _mutate_neural_structures() -> void:
 	# Occasionally mutate neural structures for evolution
-	if randf() < neural_evolution_rate:
+	if _deterministic_chance("mutate_neural_structures", neural_evolution_rate, _world_salt(17)):
 		_mutate_random_connection()
 
 func _prune_weak_connections() -> void:
@@ -2229,7 +2254,7 @@ func _check_for_world_events() -> void:
 	# Check for potential world events based on current conditions
 	var event_probability = _calculate_event_probability()
 	
-	if randf() < event_probability:
+	if _deterministic_chance("world_event_roll", event_probability, _world_salt(23)):
 		_generate_world_event()
 
 func _update_technological_progress() -> void:
@@ -2238,7 +2263,7 @@ func _update_technological_progress() -> void:
 	var tech_output = _forward_propagate_network(tech_input, technological_neural_network)
 	
 	# Check for new discoveries
-	if randf() < tech_output["discovery_probability"]:
+	if _deterministic_chance("tech_discovery_roll", tech_output["discovery_probability"], _world_salt(29)):
 		_generate_technological_discovery()
 	
 	# Update technological tier
@@ -2579,13 +2604,18 @@ func _extract_technological_input() -> Array[float]:
 
 func _forward_propagate_network(input: Array[float], network: Dictionary) -> Dictionary:
 	var output: Dictionary = {}
+	var network_type: String = str(network.get("type", "generic"))
 	
 	# Simple forward propagation simulation
 	var hidden_layer: Array[float] = []
 	for i in range(32):  # Hidden layer size
 		var sum = 0.0
 		for j in range(min(input.size(), 64)):
-			sum += input[j] * randf_range(-1.0, 1.0)
+			sum += input[j] * _deterministic_range(
+				"forward:%s:%d:%d" % [network_type, i, j],
+				-1.0,
+				1.0
+			)
 		hidden_layer.append(_sigmoid(sum))
 	
 	# Output layer
@@ -2690,10 +2720,10 @@ func _apply_emergent_pattern_effects(pattern: Dictionary) -> void:
 	for effect in pattern["effects"]:
 		_apply_pattern_effect(effect)
 
-func _calculate_weight_adaptation() -> float:
+func _calculate_weight_adaptation(connection_id: String = "") -> float:
 	var adaptation = 0.0
 	
-	adaptation += randf_range(-0.1, 0.1)
+	adaptation += _deterministic_range("weight_adaptation:%s" % connection_id, -0.1, 0.1, _world_salt(37))
 	adaptation += (civilization_complexity - 0.5) * 0.05
 	adaptation += (environmental_stability - 0.5) * 0.05
 	
@@ -2705,9 +2735,14 @@ func _mutate_random_connection() -> void:
 		connections.append(connection_id)
 	
 	if connections.size() > 0:
-		var random_connection = connections[randi() % connections.size()]
+		var random_connection = connections[_deterministic_index("mutate_connection_pick", connections.size(), _world_salt(41))]
 		var connection = neural_world_matrix["interconnections"][random_connection]
-		connection["weight"] += randf_range(-0.1, 0.1)
+		connection["weight"] += _deterministic_range(
+			"mutate_connection_delta:%s" % str(random_connection),
+			-0.1,
+			0.1,
+			_world_salt(43)
+		)
 		connection["weight"] = clamp(connection["weight"], -1.0, 1.0)
 
 # === Helper Functions ===
@@ -2739,9 +2774,9 @@ func _calculate_event_probability() -> float:
 
 func _generate_world_event() -> void:
 	var event_types = ["war", "peace", "discovery", "plague", "famine", "prosperity"]
-	var event_type = event_types[randi() % event_types.size()]
+	var event_type = event_types[_deterministic_index("world_event_type", event_types.size(), _world_salt(47))]
 	var description = _generate_event_description(event_type)
-	var impact = randi_range(1, 5)
+	var impact = _deterministic_index("world_event_impact", 5, _world_salt(53)) + 1
 	
 	var event = WorldEvent.new(event_type, description, impact)
 	world_events.append(event)
@@ -2751,7 +2786,7 @@ func _generate_technological_discovery() -> void:
 		"Advanced Tools", "Agriculture", "Writing", "Metallurgy", 
 		"Mathematics", "Astronomy", "Medicine", "Engineering"
 	]
-	var name = discovery_names[randi() % discovery_names.size()]
+	var name = discovery_names[_deterministic_index("tech_discovery_name", discovery_names.size(), _world_salt(59))]
 	var description = "Breakthrough in " + name
 	
 	var discovery = TechnologicalDiscovery.new(name, technological_tier, description)
@@ -2776,7 +2811,7 @@ func _generate_event_description(event_type: String) -> String:
 
 func _generate_pattern_type() -> String:
 	var types = ["cultural_shift", "technological_breakthrough", "environmental_change", "social_evolution"]
-	return types[randi() % types.size()]
+	return types[_deterministic_index("emergent_pattern_type", types.size(), _world_salt(61))]
 
 func _generate_pattern_description(pattern_type: String) -> String:
 	match pattern_type:
@@ -2813,7 +2848,7 @@ func _generate_pattern_effects(pattern_type: String) -> Array[String]:
 func _generate_neural_signature() -> Array[float]:
 	var signature: Array[float] = []
 	for i in range(16):
-		signature.append(randf_range(-1.0, 1.0))
+		signature.append(_deterministic_range("neural_signature:%d" % i, -1.0, 1.0, _world_salt(67)))
 	return signature
 
 func _apply_pattern_effect(effect: String) -> void:

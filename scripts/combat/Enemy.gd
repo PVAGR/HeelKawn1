@@ -55,6 +55,13 @@ var _anim_t: float = 0.0
 var _sfx: AudioStreamPlayer2D = null
 var _hit_flash_ticks: int = 0
 
+func _enemy_stream(label: String) -> StringName:
+	return StringName("enemy:%d:%d:%d:%s" % [int(enemy_type), tile_pos.x, tile_pos.y, label])
+
+
+func _enemy_salt(extra: int = 0) -> int:
+	return GameManager.tick_count + age_ticks * 1009 + int(enemy_type) * 37 + extra
+
 func _ready() -> void:
 	add_to_group("enemies")
 	GameManager.game_tick.connect(_on_game_tick)
@@ -141,7 +148,7 @@ func _on_game_tick(_tick: int) -> void:
 				_path_index = 0
 	else:
 		# Random wander
-		if randf() < 0.05:
+		if WorldRNG.chance_for(_enemy_stream("idle_wander"), 0.05, _enemy_salt(3)):
 			_wander()
 
 
@@ -171,21 +178,20 @@ func _select_target() -> void:
 func _attack_pawn(pawn: Pawn) -> void:
 	if attack_cooldown > 0 or pawn == null or not is_instance_valid(pawn):
 		return
-	
+
 	var spec = SPECIES_DATA[enemy_type]
 	var damage: float = spec.melee_damage
-	
-	# Apply some randomness
-	damage *= randf_range(0.8, 1.2)
-	
+
+	damage *= WorldRNG.range_for(_enemy_stream("attack_damage"), 0.8, 1.2, _enemy_salt(5))
+
 	pawn.data.health = max(0.0, pawn.data.health - damage)
 	pawn.data.add_mood_event(MoodEvent.Type.DREAD, 80.0, 400)
 	attack_cooldown = spec.attack_cooldown
-	_play_sfx("res://assets/audio/enemy_attack.ogg", randf_range(0.9, 1.05))
-	
-	print("[Enemy] %s attacked %s for %.1f damage (health %.1f)" % 
+	_play_sfx("res://assets/audio/enemy_attack.ogg", WorldRNG.range_for(_enemy_stream("attack_pitch"), 0.9, 1.05, _enemy_salt(7)))
+
+	print("[Enemy] %s attacked %s for %.1f damage (health %.1f)" %
 		[spec.name, pawn.data.display_name, damage, pawn.data.health])
-	
+
 	# If pawn dies from this hit, trigger despair cascade
 	if pawn.data.health <= 0:
 		pawn._check_death_conditions()
@@ -194,12 +200,13 @@ func _attack_pawn(pawn: Pawn) -> void:
 func _wander() -> void:
 	var spec = SPECIES_DATA[enemy_type]
 	var range_tiles: int = int(spec.vision_range / 8.0)
-	
-	var target_x: int = tile_pos.x + randi_range(-range_tiles, range_tiles)
-	var target_y: int = tile_pos.y + randi_range(-range_tiles, range_tiles)
+
+	var spread: int = range_tiles * 2 + 1
+	var target_x: int = tile_pos.x + WorldRNG.index_for(_enemy_stream("wander_x"), spread, _enemy_salt(11)) - range_tiles
+	var target_y: int = tile_pos.y + WorldRNG.index_for(_enemy_stream("wander_y"), spread, _enemy_salt(13)) - range_tiles
 	target_x = clampi(target_x, 0, WorldData.WIDTH - 1)
 	target_y = clampi(target_y, 0, WorldData.HEIGHT - 1)
-	
+
 	_current_path = _world.pathfinder.find_path(tile_pos, Vector2i(target_x, target_y))
 	_path_index = 0
 
@@ -226,16 +233,16 @@ func _drop_loot() -> void:
 	var loot_type: int = Item.Type.NONE
 	var loot_qty: int = 0
 	
-	match randi() % 3:
+	match WorldRNG.index_for(_enemy_stream("loot_type"), 3, _enemy_salt(17)):
 		0:  # Wood
 			loot_type = Item.Type.WOOD
-			loot_qty = randi_range(1, 3)
+			loot_qty = WorldRNG.index_for(_enemy_stream("loot_qty_wood"), 3, _enemy_salt(19)) + 1
 		1:  # Stone
 			loot_type = Item.Type.STONE
-			loot_qty = randi_range(2, 4)
+			loot_qty = WorldRNG.index_for(_enemy_stream("loot_qty_stone"), 3, _enemy_salt(23)) + 2
 		2:  # Food
 			loot_type = Item.Type.MEAT
-			loot_qty = randi_range(1, 2)
+			loot_qty = WorldRNG.index_for(_enemy_stream("loot_qty_meat"), 2, _enemy_salt(29)) + 1
 	
 	if loot_type != Item.Type.NONE:
 		var sp: Stockpile = StockpileManager.find_drop_zone(loot_type, tile_pos, _world.pathfinder)

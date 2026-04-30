@@ -5,6 +5,13 @@ class_name WorldEvolution
 
 signal world_evolution_event(event_data: Dictionary)
 signal emergent_behavior_detected(behavior: Dictionary)
+@onready var GameManager = get_node_or_null("/root/GameManager")
+@onready var WorldRNG = get_node_or_null("/root/WorldRNG")
+@onready var SettlementMemory = get_node_or_null("/root/SettlementMemory")
+@onready var WorldMemory = get_node_or_null("/root/WorldMemory")
+@onready var WorldAI = get_node_or_null("/root/WorldAI")
+@onready var CulturalMemory = get_node_or_null("/root/CulturalMemory")
+@onready var AIAgentManager = get_node_or_null("/root/AIAgentManager")
 var neural_evolution_engine: Dictionary = {}
 var adaptive_systems: Dictionary = {}
 var emergent_patterns: Array[Dictionary] = []
@@ -21,6 +28,14 @@ func _ready() -> void:
 	_setup_adaptive_systems()
 	print("[WorldEvolution] Dynamic world evolution system initialized")
 
+func _evolution_stream(label: String) -> StringName:
+	return StringName("world_evolution:%s" % label)
+
+func _evolution_salt(extra: int = 0) -> int:
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	var cycles: int = int(neural_evolution_engine.get("evolution_cycles", 0)) if not neural_evolution_engine.is_empty() else 0
+	return tick + cycles * 1009 + extra
+
 # === Neural Evolution Engine ===
 
 func _initialize_neural_evolution_engine() -> void:
@@ -35,12 +50,14 @@ func _initialize_neural_evolution_engine() -> void:
 	print("[WorldEvolution] Neural evolution engine initialized")
 
 func _create_evolution_matrix() -> Dictionary:
+	var world_state_neurons: Dictionary = _create_world_state_neurons()
+	var evolution_drivers: Dictionary = _create_evolution_drivers()
 	return {
-		"world_state_neurons": _create_world_state_neurons(),
-		"evolution_drivers": _create_evolution_drivers(),
+		"world_state_neurons": world_state_neurons,
+		"evolution_drivers": evolution_drivers,
 		"adaptation_neurons": _create_adaptation_neurons(),
 		"complexity_neurons": _create_complexity_neurons(),
-		"interconnections": _create_evolution_interconnections()
+		"interconnections": _create_evolution_interconnections(world_state_neurons, evolution_drivers)
 	}
 
 func _create_world_state_neurons() -> Dictionary:
@@ -79,18 +96,18 @@ func _create_complexity_neurons() -> Dictionary:
 		"environmental_complexity": {"current_level": 1.0, "growth_rate": 0.0008}
 	}
 
-func _create_evolution_interconnections() -> Dictionary:
+func _create_evolution_interconnections(world_state_neurons: Dictionary, evolution_drivers: Dictionary) -> Dictionary:
 	var connections: Dictionary = {}
 	
 	# Connect world state to evolution drivers
-	var world_states = neural_evolution_engine.evolution_matrix.world_state_neurons.keys()
-	var drivers = neural_evolution_engine.evolution_matrix.evolution_drivers.keys()
+	var world_states = world_state_neurons.keys()
+	var drivers = evolution_drivers.keys()
 	
 	for state in world_states:
 		for driver in drivers:
 			var connection_id = "%s_to_%s" % [state, driver]
 			connections[connection_id] = {
-				"weight": randf_range(-0.2, 0.2),
+				"weight": WorldRNG.range_for(_evolution_stream("connection:%s" % connection_id), -0.2, 0.2),
 				"plasticity": 0.01,
 				"strength": 1.0
 			}
@@ -120,7 +137,7 @@ func _create_adaptation_input_neurons() -> Array[Dictionary]:
 			"id": inputs[i],
 			"value": 0.0,
 			"activation": 0.0,
-			"bias": randf_range(-0.1, 0.1)
+			"bias": WorldRNG.range_for(_evolution_stream("input_bias:%s" % inputs[i]), -0.1, 0.1)
 		})
 	
 	return neurons
@@ -132,7 +149,7 @@ func _create_adaptation_hidden_neurons() -> Array[Dictionary]:
 			"id": "hidden_%d" % i,
 			"value": 0.0,
 			"activation": 0.0,
-			"bias": randf_range(-0.1, 0.1)
+			"bias": WorldRNG.range_for(_evolution_stream("hidden_bias:%d" % i), -0.1, 0.1)
 		})
 	return neurons
 
@@ -145,7 +162,7 @@ func _create_adaptation_output_neurons() -> Array[Dictionary]:
 			"id": outputs[i],
 			"value": 0.0,
 			"activation": 0.0,
-			"bias": randf_range(-0.1, 0.1)
+			"bias": WorldRNG.range_for(_evolution_stream("output_bias:%s" % outputs[i]), -0.1, 0.1)
 		})
 	
 	return neurons
@@ -161,7 +178,7 @@ func _create_weight_matrix(rows: int, cols: int) -> Array:
 	for i in range(rows):
 		var row: Array = []
 		for j in range(cols):
-			row.append(randf_range(-0.3, 0.3))
+			row.append(WorldRNG.range_for(_evolution_stream("weight:%d:%d:%d:%d" % [rows, cols, i, j]), -0.3, 0.3))
 		matrix.append(row)
 	return matrix
 
@@ -611,12 +628,14 @@ func _detect_emergent_behaviors() -> Array[Dictionary]:
 
 func _create_emergent_behavior(world_state: Dictionary, complexity_score: float) -> Dictionary:
 	var behavior: Dictionary = {
-		"id": "EMERGENT_%08X" % [randi() % 100000000],
+		"id": "EMERGENT_%08X" % [
+			WorldRNG.stream_seed(_evolution_stream("emergent_id"), _evolution_salt(int(complexity_score * 1000.0))) % 100000000
+		],
 		"type": "adaptive_pattern",
 		"complexity_score": complexity_score,
 		"world_state": world_state,
 		"behavior_pattern": _generate_behavior_pattern(world_state),
-		"emergence_time": Time.get_unix_time_from_system(),
+		"emergence_time": GameManager.tick_count,
 		"stability": 0.5,
 		"influence_radius": 50.0
 	}

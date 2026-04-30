@@ -118,6 +118,20 @@ var dominant_culture: String = ""
 var language_family: String = ""
 var religious_beliefs: Array[String] = []
 var artistic_traditions: Array[String] = []
+
+func _settlement_stream(label: String) -> StringName:
+	return StringName("settlement_ai:%d:%s" % [settlement_id, label])
+
+func _settlement_salt(extra: int = 0) -> int:
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	return tick + settlement_id * 1009 + extra
+
+func _pick_resident(label: String, extra: int = 0) -> int:
+	if resident_agents.is_empty():
+		return -1
+	var ordered: Array[int] = resident_agents.duplicate()
+	ordered.sort()
+	return ordered[WorldRNG.index_for(_settlement_stream(label), ordered.size(), _settlement_salt(extra))]
 var technological_level: int = 0  # 0-100
 
 # Leadership properties
@@ -204,7 +218,7 @@ func _tribal_leadership_selection() -> void:
 
 func _chieftain_selection() -> void:
 	# Hereditary or strongest warrior
-	leader_id = resident_agents[randi() % resident_agents.size()]
+	leader_id = _pick_resident("chieftain_selection", 1)
 	decision_making_process = "authoritarian"
 	
 	# AuthoritySystem: grant military authority to chief
@@ -213,7 +227,7 @@ func _chieftain_selection() -> void:
 
 func _monarch_selection() -> void:
 	# Similar to chief but with more formal structure
-	leader_id = resident_agents[randi() % resident_agents.size()]
+	leader_id = _pick_resident("monarch_selection", 2)
 	decision_making_process = "decrees"
 	
 	# AuthoritySystem: grant civil authority to monarch
@@ -222,7 +236,7 @@ func _monarch_selection() -> void:
 
 func _republic_election() -> void:
 	# Most respected agent
-	leader_id = resident_agents[randi() % resident_agents.size()]
+	leader_id = _pick_resident("republic_election", 3)
 	decision_making_process = "voting"
 	
 	# AuthoritySystem: grant civil authority through election
@@ -231,7 +245,7 @@ func _republic_election() -> void:
 
 func _theocratic_selection() -> void:
 	# Most spiritually-influential agent
-	leader_id = resident_agents[randi() % resident_agents.size()]
+	leader_id = _pick_resident("theocratic_selection", 4)
 	decision_making_process = "divine_guidance"
 	
 	# AuthoritySystem: grant religious authority
@@ -240,7 +254,7 @@ func _theocratic_selection() -> void:
 
 func _technocratic_selection() -> void:
 	# Most skilled/knowledgeable agent
-	leader_id = resident_agents[randi() % resident_agents.size()]
+	leader_id = _pick_resident("technocratic_selection", 5)
 	decision_making_process = "expert_consensus"
 	
 	# AuthoritySystem: grant knowledge authority
@@ -720,7 +734,11 @@ func _get_support_threshold() -> float:
 func _agent_supports_goal(agent_id: int, goal: CollectiveGoal) -> bool:
 	# Simplified support calculation
 	# In full implementation, would check agent's personality, current needs, etc.
-	return randf() < 0.6
+	return WorldRNG.chance_for(
+		_settlement_stream("goal_support:%s" % goal.goal_type),
+		0.6,
+		_settlement_salt(agent_id * 17 + goal.priority * 31)
+	)
 
 # === Cultural Evolution ===
 
@@ -748,9 +766,25 @@ func _develop_new_norms() -> void:
 			"Respect property rights"
 		]
 		
-		var norm_name: String = new_norms[randi() % new_norms.size()]
+		var available_norms: Array[String] = []
+		for candidate_norm in new_norms:
+			if not _has_cultural_norm(candidate_norm):
+				available_norms.append(candidate_norm)
+		if available_norms.is_empty():
+			return
+		var norm_name: String = available_norms[WorldRNG.index_for(
+			_settlement_stream("new_norm"),
+			available_norms.size(),
+			_settlement_salt(cultural_norms.size() * 43)
+		)]
 		var norm: CulturalNorm = CulturalNorm.new(norm_name, "Emergent cultural practice")
 		cultural_norms.append(norm)
+
+func _has_cultural_norm(norm_name: String) -> bool:
+	for norm in cultural_norms:
+		if norm != null and norm.norm_name == norm_name:
+			return true
+	return false
 
 func _advance_technology() -> void:
 	# Technology advances based on population and focus

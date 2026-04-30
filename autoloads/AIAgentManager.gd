@@ -126,7 +126,11 @@ func _initialize_neural_connections() -> void:
 			for target_neuron in neural_matrix.layers[target_layer].neurons:
 				var connection_id = "%s_%s" % [source_neuron.id, target_neuron.id]
 				neural_matrix.connections[source_layer + "_to_" + target_layer][connection_id] = {
-					"weight": randf_range(-0.5, 0.5),
+					"weight": WorldRNG.range_for(
+						StringName("ai_agent_manager:connection:%s" % connection_id),
+						-0.5,
+						0.5
+					),
 					"source": source_neuron.id,
 					"target": target_neuron.id,
 					"strength": 1.0

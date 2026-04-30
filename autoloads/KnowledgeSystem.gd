@@ -94,7 +94,14 @@ func attempt_discovery_from_observation(pawn_id: int, observer_tile: Vector2i, k
 	if nearby_carriers.size() > 0:
 		# Discovery chance based on proximity and observation time
 		var discovery_chance: float = 0.1 * nearby_carriers.size()
-		if randf() < discovery_chance:
+		var salt: int = (
+				GameManager.tick_count
+				+ pawn_id * 1009
+				+ observer_tile.x * 9176
+				+ observer_tile.y * 131
+				+ int(knowledge_type) * 37
+		)
+		if WorldRNG.chance_for(StringName("knowledge_discovery:%d" % int(knowledge_type)), discovery_chance, salt):
 			discover_knowledge(pawn_id, knowledge_type, "observation")
 			return true
 	

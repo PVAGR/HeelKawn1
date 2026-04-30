@@ -119,6 +119,17 @@ static func _materials_for_build(job_type: int) -> Dictionary:
 		Job.Type.BUILD_DOOR: return {"item": Item.Type.WOOD, "qty": DOOR_WOOD_COST}
 	return {}
 
+
+func _pawn_stream(label: String) -> StringName:
+	var pawn_id: int = int(data.id) if data != null else 0
+	return StringName("pawn:%d:%s" % [pawn_id, label])
+
+
+func _pawn_salt(extra: int = 0) -> int:
+	var pawn_id: int = int(data.id) if data != null else 0
+	var tile: Vector2i = data.tile_pos if data != null else Vector2i.ZERO
+	return GameManager.tick_count + pawn_id * 1009 + tile.x * 131 + tile.y * 17 + extra
+
 # -------------------- movement tuning --------------------
 
 # 1 tile = 8 world units, so 24 = 3 tiles/sec at 1x = 18 tiles/sec at 6x.
@@ -669,7 +680,7 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	_cohort_id = -1
 	_cohort_role = -1
 	_last_recruitment_job_type = -1
-	_next_reproduction_tick = GameManager.tick_count + randi_range(1000, 5000)
+	_next_reproduction_tick = GameManager.tick_count + 1000 + WorldRNG.index_for(_pawn_stream("reproduction_delay"), 4001, _pawn_salt(3))
 	_carrying_spawn_item = false
 	# Load saved age as years for display
 	data.age_years = float(data.age)
@@ -1327,7 +1338,7 @@ func _tick_idle() -> void:
 		_begin_job(job)
 		return
 	# 6. Nothing to do: idle wander
-	if randf() < WANDER_CHANCE_PER_TICK:
+	if WorldRNG.chance_for(_pawn_stream("idle_wander"), WANDER_CHANCE_PER_TICK, _pawn_salt(11)):
 		_start_wander()
 
 
@@ -1719,8 +1730,8 @@ func _apply_work_hazards() -> void:
 		hazard_chance = 0.02 * max(0.1, 1.0 - (mining_level / 20.0))
 		# Traits can modify injury chance
 		hazard_chance *= data.get_trait_mult("injury_chance_mult")
-	if hazard_chance > 0.0 and randf() < hazard_chance:
-		var damage: float = randf_range(3.0, 8.0)
+	if hazard_chance > 0.0 and WorldRNG.chance_for(_pawn_stream("work_hazard"), hazard_chance, _pawn_salt(23)):
+		var damage: float = WorldRNG.range_for(_pawn_stream("work_hazard_damage"), 3.0, 8.0, _pawn_salt(29))
 		# Traits can reduce damage taken
 		damage *= data.get_trait_mult("damage_taken_mult")
 		data.health = max(0.0, data.health - damage)
@@ -2531,12 +2542,12 @@ func _decay_needs() -> void:
 	
 	# Crisis behavior: very low mood causes pawns to refuse work (strike)
 	var crisis_level: float = data.get_crisis_level()
-	if crisis_level > 0.8 and randf() < 0.05:  # 5% chance per tick to strike when desperate
+	if crisis_level > 0.8 and WorldRNG.chance_for(_pawn_stream("crisis_strike"), 0.05, _pawn_salt(41)):
 		_trigger_crisis_strike()
 	
 	# One in-world year every SimTime.TICKS_PER_SIM_YEAR ticks (see docs/TIME_SCALE.md).
 	data.age_years += 1.0 / float(SimTime.TICKS_PER_SIM_YEAR)
-	if data.age_years > 70.0 and randf() < 0.00001:
+	if data.age_years > 70.0 and WorldRNG.chance_for(_pawn_stream("old_age"), 0.00001, _pawn_salt(43)):
 		_die("old_age")
 		return
 	# Death from starvation, exhaustion, or injury
@@ -2878,8 +2889,8 @@ func have_child(partner: Pawn) -> int:
 func _create_household() -> int:
 	# Create a new household
 	# Placeholder - needs HouseholdSystem
-	# For now, return a random ID
-	return randi() % 10000
+	# For now, return a deterministic placeholder ID
+	return WorldRNG.stream_seed(_pawn_stream("household_id"), _pawn_salt(53)) % 10000
 
 
 func join_household(household_id: int) -> void:

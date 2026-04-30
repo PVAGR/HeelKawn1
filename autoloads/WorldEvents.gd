@@ -265,7 +265,7 @@ func _should_trigger_regional_herd_migration() -> bool:
 	# Herd migration when wildlife population is significant
 	# This would require checking wildlife system
 	# For now, return true occasionally when conditions allow
-	return randf() < 0.3
+	return WorldRNG.chance_for(&"world_events:regional_herd_migration", 0.3, GameManager.tick_count)
 
 
 func _should_trigger_hearth_whisper() -> bool:

@@ -163,6 +163,11 @@ This document tracks the current state of the neural network matrix integration 
 
 ## Known Issues & Resolutions
 
+### Deterministic Neural Initialization (Resolved 2026-04-30)
+- `WorldAI`, `AIAgentManager`, `WorldEvolution`, and `ErrorTracker` no longer initialize neural weights/biases from global `randf_range()`.
+- Neural/event rolls now use named `WorldRNG` streams so the same world seed and tick history reproduce the same neural state.
+- `WorldEvolution` now builds interconnections from local matrix pieces instead of reading `neural_evolution_engine` before initialization completes.
+
 ### Compilation Errors (Resolved 2026-04-28)
 - Fixed WorldAI duplicate get_neural_network_summary → get_neural_network_summary_string
 - Fixed KnowledgeSystem duplicate get_carrier_count → get_total_carrier_count

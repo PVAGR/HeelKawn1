@@ -7,6 +7,8 @@ signal error_detected(error_info: Dictionary)
 signal error_resolved(error_id: String)
 signal error_predicted(prediction: Dictionary)
 
+@onready var WorldRNG = get_node_or_null("/root/WorldRNG")
+
 var active_errors: Dictionary = {}
 var error_history: Array[Dictionary] = []
 var error_categories: Dictionary = {
@@ -28,6 +30,9 @@ var error_trends: Dictionary = {}
 func _ready() -> void:
 	_initialize_neural_error_prediction()
 	print("[ErrorTracker] Advanced neural network-enhanced error tracking system initialized")
+
+func _error_stream(label: String) -> StringName:
+	return StringName("error_tracker:%s" % label)
 
 
 # === Neural Network Error Prediction ===
@@ -61,7 +66,7 @@ func _create_error_input_neurons() -> Array[Dictionary]:
 			"id": input_features[i],
 			"value": 0.0,
 			"activation": 0.0,
-			"bias": randf_range(-0.1, 0.1)
+			"bias": WorldRNG.range_for(_error_stream("input_bias:%s" % input_features[i]), -0.1, 0.1)
 		})
 	
 	return neurons
@@ -74,7 +79,7 @@ func _create_error_hidden_neurons() -> Array[Dictionary]:
 			"id": "hidden_%d" % i,
 			"value": 0.0,
 			"activation": 0.0,
-			"bias": randf_range(-0.1, 0.1)
+			"bias": WorldRNG.range_for(_error_stream("hidden_bias:%d" % i), -0.1, 0.1)
 		})
 	return neurons
 
@@ -88,7 +93,7 @@ func _create_error_output_neurons() -> Array[Dictionary]:
 			"id": error_types[i],
 			"value": 0.0,
 			"activation": 0.0,
-			"bias": randf_range(-0.1, 0.1)
+			"bias": WorldRNG.range_for(_error_stream("output_bias:%s" % error_types[i]), -0.1, 0.1)
 		})
 	
 	return neurons
@@ -111,7 +116,7 @@ func _create_error_weight_matrix(rows: int, cols: int) -> Array:
 	for i in range(rows):
 		var row: Array = []
 		for j in range(cols):
-			row.append(randf_range(-0.3, 0.3))
+			row.append(WorldRNG.range_for(_error_stream("weight:%d:%d:%d:%d" % [rows, cols, i, j]), -0.3, 0.3))
 		matrix.append(row)
 	return matrix
 

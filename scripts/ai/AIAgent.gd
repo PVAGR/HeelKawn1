@@ -74,27 +74,40 @@ func _init(id: int, type: AgentType = AgentType.TACTICAL):
 	memory = Memory.new()
 	_generate_personality()
 
+func _agent_stream(label: String) -> StringName:
+	return StringName("ai_agent:%d:%d:%s" % [agent_id, int(agent_type), label])
+
+func _decision_salt(extra: int = 0) -> int:
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	return tick + max(controlled_pawn_id, 0) * 1009 + extra
+
+func _deterministic_range(label: String, min_value: float, max_value: float, salt: int = 0) -> float:
+	return WorldRNG.range_for(_agent_stream(label), min_value, max_value, salt)
+
+func _deterministic_chance(label: String, probability: float, salt: int = 0) -> bool:
+	return WorldRNG.chance_for(_agent_stream(label), probability, salt)
+
 func _generate_personality() -> void:
 	# Generate personality based on agent type
 	match agent_type:
 		AgentType.STRATEGIC:
-			aggressiveness = randf_range(0.2, 0.6)
-			caution = randf_range(0.6, 0.9)
-			social_tendency = randf_range(0.4, 0.8)
-			exploration_drive = randf_range(0.3, 0.7)
-			self_preservation = randf_range(0.8, 1.0)
+			aggressiveness = _deterministic_range("personality:aggressiveness", 0.2, 0.6)
+			caution = _deterministic_range("personality:caution", 0.6, 0.9)
+			social_tendency = _deterministic_range("personality:social", 0.4, 0.8)
+			exploration_drive = _deterministic_range("personality:exploration", 0.3, 0.7)
+			self_preservation = _deterministic_range("personality:self_preservation", 0.8, 1.0)
 		AgentType.TACTICAL:
-			aggressiveness = randf_range(0.4, 0.8)
-			caution = randf_range(0.3, 0.7)
-			social_tendency = randf_range(0.5, 0.9)
-			exploration_drive = randf_range(0.5, 0.8)
-			self_preservation = randf_range(0.6, 0.9)
+			aggressiveness = _deterministic_range("personality:aggressiveness", 0.4, 0.8)
+			caution = _deterministic_range("personality:caution", 0.3, 0.7)
+			social_tendency = _deterministic_range("personality:social", 0.5, 0.9)
+			exploration_drive = _deterministic_range("personality:exploration", 0.5, 0.8)
+			self_preservation = _deterministic_range("personality:self_preservation", 0.6, 0.9)
 		AgentType.REACTIVE:
-			aggressiveness = randf_range(0.1, 0.5)
-			caution = randf_range(0.7, 1.0)
-			social_tendency = randf_range(0.3, 0.6)
-			exploration_drive = randf_range(0.2, 0.5)
-			self_preservation = randf_range(0.9, 1.0)
+			aggressiveness = _deterministic_range("personality:aggressiveness", 0.1, 0.5)
+			caution = _deterministic_range("personality:caution", 0.7, 1.0)
+			social_tendency = _deterministic_range("personality:social", 0.3, 0.6)
+			exploration_drive = _deterministic_range("personality:exploration", 0.2, 0.5)
+			self_preservation = _deterministic_range("personality:self_preservation", 0.9, 1.0)
 
 # === Main Agent Loop ===
 
@@ -195,19 +208,8 @@ func _generate_spectator_goals() -> void:
 	if obs.has("error"):
 		return
 	
-	# Goal: Find pawn to incarnate
-	if randf() < 0.1:  # 10% chance per decision cycle
-		var candidates: Array = []
-		if ObservationAPI != null:
-			candidates = ObservationAPI.observe_pawns_in_region(obs.get("camera_region_key", 0))
-		if not candidates.is_empty():
-			var target: Dictionary = candidates[randi() % candidates.size()]
-			current_goals.append(Goal.new(
-				"incarnate_pawn",
-				GoalPriority.MEDIUM,
-				{"pawn_id": target.get("pawn_id", -1)},
-				GameManager.tick_count + 200  # Deadline in 200 ticks
-			))
+	# AI agents must not claim the human incarnation channel until NPC ownership is separate.
+	return
 
 func _generate_pawn_goals() -> void:
 	var pawn_obs: Dictionary = ObservationAPI.observe_pawn(controlled_pawn_id)
@@ -252,14 +254,14 @@ func _generate_pawn_goals() -> void:
 		))
 	
 	# Medium priority: Social/exploration based on personality
-	elif randf() < social_tendency:
+	elif _deterministic_chance("goal:socialize", social_tendency, _decision_salt(1)):
 		current_goals.append(Goal.new(
 			"socialize",
 			GoalPriority.MEDIUM,
 			{"interaction_type": "casual"},
 			GameManager.tick_count + 150
 		))
-	elif randf() < exploration_drive:
+	elif _deterministic_chance("goal:explore", exploration_drive, _decision_salt(2)):
 		current_goals.append(Goal.new(
 			"explore",
 			GoalPriority.MEDIUM,
@@ -298,6 +300,7 @@ func _plan_incarnation(goal: Goal) -> Dictionary:
 		-1,  # Spectator actor
 		{"pawn_id": pawn_id}
 	)
+	command.metadata = {"source": "ai_agent", "agent_id": agent_id}
 	
 	return {
 		"type": "incarnate",
@@ -403,11 +406,11 @@ func _plan_exploration(goal: Goal) -> Dictionary:
 	var current_tile: Dictionary = pawn_obs.get("tile_pos", {"x": 0, "y": 0})
 	var radius: int = goal.target_data.get("radius", 10)
 	
-	# Pick random direction within radius
-	var angle: float = randf() * 2.0 * PI
-	var distance: float = randf() * radius
-	var target_x: int = current_tile.x + int(cos(angle) * distance)
-	var target_y: int = current_tile.y + int(sin(angle) * distance)
+	var salt: int = _decision_salt(radius)
+	var angle: float = _deterministic_range("explore:angle", 0.0, 2.0 * PI, salt)
+	var distance: float = _deterministic_range("explore:distance", max(1.0, float(radius) / 3.0), float(radius), salt + 1)
+	var target_x: int = clampi(current_tile.x + int(cos(angle) * distance), 0, WorldData.WIDTH - 1)
+	var target_y: int = clampi(current_tile.y + int(sin(angle) * distance), 0, WorldData.HEIGHT - 1)
 	
 	return {
 		"type": "explore_area",
@@ -422,7 +425,6 @@ func _execute_action(action: Dictionary) -> void:
 	if action.is_empty():
 		return
 	
-	var action_type: String = action.get("type", "")
 	var confidence: float = action.get("confidence", 0.0)
 	
 	# Only execute if confidence meets personality threshold
@@ -430,7 +432,7 @@ func _execute_action(action: Dictionary) -> void:
 	if confidence < threshold:
 		return
 	
-	match action.get("action", ""):
+	match action.get("action", action.get("type", "")):
 		"incarnate":
 			_execute_incarnation(action)
 		"move":

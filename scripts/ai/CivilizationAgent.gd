@@ -243,7 +243,7 @@ func innovate_discovery(category: SkillCategory) -> bool:
 	var innovation: float = personality_evolution.core_traits.get("innovation", 0.1)
 	var success_chance: float = innovation * skills[category].level * 0.01
 	
-	if randf() < success_chance:
+	if _deterministic_chance("civilization:innovate:%d" % int(category), success_chance, _decision_salt(101)):
 		innovation_points -= 10.0
 		skills[category].level = min(100, skills[category].level + 5)
 		
@@ -260,7 +260,10 @@ func _generate_discovery_name() -> String:
 	var prefixes = ["New", "Advanced", "Improved", "Revolutionary"]
 	var suffixes = ["Method", "Technique", "Tool", "System", "Process"]
 	
-	return "%s %s" % [prefixes[randi() % prefixes.size()], suffixes[randi() % suffixes.size()]]
+	var salt: int = _decision_salt(107)
+	var prefix: String = prefixes[WorldRNG.index_for(_agent_stream("civilization:discovery_prefix"), prefixes.size(), salt)]
+	var suffix: String = suffixes[WorldRNG.index_for(_agent_stream("civilization:discovery_suffix"), suffixes.size(), salt + 1)]
+	return "%s %s" % [prefix, suffix]
 
 # === Cultural Development ===
 
@@ -269,10 +272,10 @@ func develop_culture() -> void:
 	var social_tendency: float = personality_evolution.core_traits.get("social", 0.5)
 	var tradition_tendency: float = personality_evolution.core_traits.get("tradition", 0.5)
 	
-	if randf() < social_tendency * 0.1:
+	if _deterministic_chance("civilization:create_social_norm", social_tendency * 0.1, _decision_salt(113)):
 		_create_social_norm()
 	
-	if randf() < tradition_tendency * 0.05:
+	if _deterministic_chance("civilization:create_tradition", tradition_tendency * 0.05, _decision_salt(127)):
 		_create_tradition()
 
 func _create_social_norm() -> void:
@@ -284,7 +287,7 @@ func _create_social_norm() -> void:
 		"Preserve knowledge"
 	]
 	
-	var norm: String = norms[randi() % norms.size()]
+	var norm: String = norms[WorldRNG.index_for(_agent_stream("civilization:social_norm"), norms.size(), _decision_salt(131))]
 	cultural_memory.social_norms.append(norm)
 	cultural_influence += 1.0
 
@@ -297,7 +300,7 @@ func _create_tradition() -> void:
 		"Skill apprenticeship rituals"
 	]
 	
-	var tradition: String = traditions[randi() % traditions.size()]
+	var tradition: String = traditions[WorldRNG.index_for(_agent_stream("civilization:tradition"), traditions.size(), _decision_salt(137))]
 	cultural_memory.add_tradition(tradition)
 	cultural_influence += 2.0
 
@@ -357,8 +360,8 @@ func _make_decisions() -> void:
 	_practice_current_skills()
 	
 	# Attempt innovations
-	if randf() < innovation_tendency:
-		var category: SkillCategory = SkillCategory.values()[randi() % SkillCategory.size()]
+	if _deterministic_chance("civilization:attempt_innovation", innovation_tendency, _decision_salt(149)):
+		var category: SkillCategory = SkillCategory.values()[WorldRNG.index_for(_agent_stream("civilization:innovation_category"), SkillCategory.size(), _decision_salt(151))]
 		innovate_discovery(category)
 	
 	# Develop culture

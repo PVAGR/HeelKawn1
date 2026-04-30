@@ -38,26 +38,13 @@ func _bootstrap_demands_after_scene() -> void:
 
 
 func _on_tick(tick: int) -> void:
-	# Housing uses scene-tree scans — keep a steady 60-tick cadence independent of
-	# food/mat/haul throttling so we never miss the tick-60 update at high speeds.
+	# Housing: macro cadence on sim time (every 60 ticks ≈ 1 minute at 1x), not game-speed throttling.
 	if tick % 60 == 0:
 		_refresh_housing_pressure()
-	if tick % _food_mat_haul_refresh_interval() == 0:
-		_refresh_food_mat_haul_pressures()
+	# Food / materials / haul: every tick; cost is one `StockpileManager.labor_pressure_stock_snapshot` pass.
+	_refresh_food_mat_haul_pressures()
 	if tick % 30 == 0:
 		demand_snapshot.emit(_food_press, _housing_press, _mat_press, _haul_press)
-
-
-func _food_mat_haul_refresh_interval() -> int:
-	var gs: float = GameManager.game_speed
-	# Intervals 1,2,3,4 all divide 60 so housing (every 60 ticks) and stock reads stay in phase.
-	if gs >= 100.0:
-		return 4
-	if gs >= 50.0:
-		return 3
-	if gs >= 26.0:
-		return 2
-	return 1
 
 
 ## Food pressure: 0 = plenty, 1 = acute shortage (simplified: inverse of food cap).

@@ -369,8 +369,9 @@ func _cohort_locus_world_pos() -> Variant:
 
 
 func update_cohort_membership(force: bool = false) -> void:
-	# DISABLED for performance - cohort system iterates through all pawns
-	return
+	# Throttled to every 200 ticks to reduce lag (COHORT_UPDATE_TICKS)
+	if not force and GameManager.tick_count % COHORT_UPDATE_TICKS != 0:
+		return
 
 
 func _validate_or_dissolve_cohort() -> void:
@@ -1109,10 +1110,11 @@ func _on_game_tick(_tick: int) -> void:
 	var stride: int = _fast_forward_tick_stride()
 	var run_full_ai: bool = stride <= 1 or (_tick % stride == 0)
 	if run_full_ai:
-		# DISABLED all cohort system calls for performance
-		# update_cohort_membership()
-		# _validate_or_dissolve_cohort()
-		# _refresh_or_decay_cohort_stability()
+		# Throttled cohort system calls for performance
+		if GameManager.tick_count % COHORT_UPDATE_TICKS == 0:
+			update_cohort_membership()
+			_validate_or_dissolve_cohort()
+			_refresh_or_decay_cohort_stability()
 		if draft_mode:
 			_engage_enemies()
 	# Panic-sleep interrupt: if rest is critically low and we're not already
@@ -1756,11 +1758,11 @@ func _apply_work_hazards() -> void:
 
 func _begin_job(job: Job) -> void:
 	_current_job = job
-	# DISABLED all cohort system calls for performance
-	# _invalidate_recruitment_signal_cache()
-	# _refresh_recruitment_signal_cache(true)
-	# update_cohort_membership(true)
-	# _refresh_or_decay_cohort_stability(true)
+	# Throttled cohort system calls for performance
+	_invalidate_recruitment_signal_cache()
+	_refresh_recruitment_signal_cache(true)
+	update_cohort_membership(true)
+	_refresh_or_decay_cohort_stability(true)
 	# Build jobs need raw materials in hand before we walk to the build site.
 	# If we don't already have the right item in sufficient quantity, bounce
 	# to the stockpile first.

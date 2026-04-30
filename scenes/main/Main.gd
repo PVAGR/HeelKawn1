@@ -4054,18 +4054,29 @@ func _process_regrowth(tick: int) -> void:
 	if _regrow_queue.is_empty():
 		_regrow_scan_cursor = 0
 		return
+	var scan_budget: int = REGROWTH_SCAN_BUDGET_PER_TICK
+	var restore_budget: int = REGROWTH_RESTORE_BUDGET_PER_TICK
+	if GameManager != null:
+		var gs: float = GameManager.game_speed
+		if gs >= 100.0:
+			scan_budget = 12
+			restore_budget = 1
+		elif gs >= 50.0:
+			scan_budget = 20
+			restore_budget = 2
+	var main_component: int = _world.pathfinder.largest_component_id()
 	var scanned: int = 0
 	var restored: int = 0
 	while (
-			scanned < REGROWTH_SCAN_BUDGET_PER_TICK
-			and restored < REGROWTH_RESTORE_BUDGET_PER_TICK
+			scanned < scan_budget
+			and restored < restore_budget
 			and not _regrow_queue.is_empty()
 	):
 		if _regrow_scan_cursor >= _regrow_queue.size():
 			_regrow_scan_cursor = 0
 		var entry: Dictionary = _regrow_queue[_regrow_scan_cursor]
 		if entry.ready_tick <= tick:
-			_restore_feature(entry.tile, entry.feature)
+			_restore_feature(entry.tile, entry.feature, main_component)
 			_regrow_queue.remove_at(_regrow_scan_cursor)
 			restored += 1
 		else:
@@ -4076,7 +4087,7 @@ func _process_regrowth(tick: int) -> void:
 ## Re-place a feature on its original tile, then post the matching job so a
 ## pawn will harvest it again. Skips silently if the tile is no longer a
 ## valid host (something else built there, biome was mined out, etc.).
-func _restore_feature(tile: Vector2i, feature: int) -> void:
+func _restore_feature(tile: Vector2i, feature: int, main_component: int = -1) -> void:
 	if not _world.data.in_bounds(tile.x, tile.y):
 		return
 	# Tile already has something else? Drop the regrowth -- player intent
@@ -4092,7 +4103,8 @@ func _restore_feature(tile: Vector2i, feature: int) -> void:
 	if not _world.set_feature(tile.x, tile.y, feature):
 		return
 	# Repost the matching harvest job, but only if the tile is reachable.
-	var main_component: int = _world.pathfinder.largest_component_id()
+	if main_component < 0:
+		main_component = _world.pathfinder.largest_component_id()
 	if _world.pathfinder.component_of(tile) != main_component:
 		return
 	if JobManager.has_job_at(tile):

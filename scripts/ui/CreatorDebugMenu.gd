@@ -82,6 +82,8 @@ var _root_panel: PanelContainer = null
 var _scroll: ScrollContainer = null
 var _vbox: VBoxContainer = null
 var _demo_player_intent_seeded: bool = false
+var _last_report_key: String = ""
+var _last_report_tick: int = -1
 
 
 func _ready() -> void:
@@ -196,6 +198,10 @@ func _add_report_button(label_text: String, report_id: String) -> void:
 
 func _emit_report(report_id: String) -> void:
 	var tick: int = GameManager.tick_count
+	if _last_report_tick == tick and _last_report_key == report_id:
+		return
+	_last_report_tick = tick
+	_last_report_key = report_id
 	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d BEGIN ===" % [report_id, tick])
 	match report_id:
 		"error_report":

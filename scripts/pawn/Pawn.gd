@@ -1276,7 +1276,10 @@ func _tick_idle() -> void:
 	# Job claiming is one of the hottest paths at ultra speed; spread claims so
 	# not every pawn rescans the full queue on the same tick burst.
 	var claim_iv: int = _job_claim_interval_for_speed()
-	if GameManager.tick_count % claim_iv != 0:
+	var claim_phase: int = 0
+	if data != null:
+		claim_phase = posmod(int(data.id), claim_iv)
+	if posmod(GameManager.tick_count + claim_phase, claim_iv) != 0:
 		return
 	
 	var my_component: int = _world.pathfinder.component_of(data.tile_pos)

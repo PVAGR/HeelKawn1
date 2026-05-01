@@ -29,7 +29,7 @@ func open_with_candidates(candidates: Array, current_mode_label: String) -> void
 		_subtitle_label.text = (
 			"Mode: %s — same simulation clock before and after entry. "
 			+ "Pick who you steer; ranked by life stage, settlement vitality, and region. "
-			+ "F9 realm panel · F10 → 35 for LIVE vs deferred backbone."
+			+ "F9 realm panel · F10 → 35 · Backbone / first-play (LIVE vs DEFERRED)."
 		) % current_mode_label
 	_rebuild_candidate_rows(candidates)
 	_update_action_state()

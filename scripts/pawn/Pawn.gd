@@ -33,6 +33,7 @@ const DRAFT_CHEVRON_Y: float = -12.0
 const CARRY_OFFSET: Vector2 = Vector2(0.0, -6.0)
 const CARRY_SIZE: Vector2 = Vector2(3.5, 3.5)
 const _WM = preload("res://autoloads/WorldMemory.gd")
+@onready var SpatialManager = get_node_or_null("/root/SpatialManager") # ARCHITECT T006
 
 # -------------------- need decay tuning --------------------
 
@@ -796,6 +797,8 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	_reset_behavior_profile()
 	_world = world
 	position = world_pos
+	if SpatialManager != null: # ARCHITECT T006
+		SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 	_state = State.IDLE
 	_clear_path()
 	_reserved_bed = Vector2i(-1, -1)
@@ -846,6 +849,8 @@ func _exit_tree() -> void:
 	# Unregister pawn data so static registry stays accurate
 	if data != null:
 		PawnData.unregister_pawn_data(int(data.id))
+		if SpatialManager != null: # ARCHITECT T006
+			SpatialManager.unregister_entity(int(data.id))
 
 
 ## Re-read the spawn tile’s [CulturalMemory] entry (e.g. after load once ruins are applied). Does not run every tick.
@@ -1350,6 +1355,8 @@ func _process(delta: float) -> void:
 	if not data.injuries.is_empty():
 		step *= (1.0 - BodyRiskManager.get_mobility_penalty(data))
 	var to_target: Vector2 = _target_world_pos - position
+	
+	var old_tile_pos = data.tile_pos # ARCHITECT T006 - Store old position for chunk check
 	if to_target.length() <= step:
 		position = _target_world_pos
 		var from_step: Vector2i = data.tile_pos
@@ -1361,6 +1368,11 @@ func _process(delta: float) -> void:
 		_advance_path()
 	else:
 		position += to_target.normalized() * step
+
+	# ARCHITECT T006: Update SpatialManager if pawn moved to a new chunk
+	if SpatialManager != null and data != null and old_tile_pos != data.tile_pos:
+		SpatialManager.update_pawn_position(int(data.id), data.tile_pos)
+
 	# DISABLED cohort bias calculations for performance
 	# var cohort_bias: Vector2 = _cohort_cohesion_bias(step)
 	# if cohort_bias != Vector2.ZERO:
@@ -5162,6 +5174,11 @@ func _die(_p_cause: String = "") -> void:
 	# Release any held job and bed reservation
 	release_job_if_any()
 	_release_bed_if_reserved()
+	
+	# ARCHITECT T006: Unregister pawn from SpatialManager upon death
+	if SpatialManager != null and data != null:
+		SpatialManager.unregister_entity(int(data.id))
+
 	# Drop any carried items into the nearest stockpile
 	if data.is_carrying() and _world != null:
 		var sp: Stockpile = StockpileManager.find_drop_zone(data.carrying, data.tile_pos, _world.pathfinder)

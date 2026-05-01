@@ -34,6 +34,7 @@ const PLANNER_BED_PATH_PROBE_CAP: int = 4
 const PLANNER_WALL_SCAN_CAP: int = 256
 
 var _last_plan_tick: int = -1_000_000_000
+@onready var SpatialManager = get_node_or_null("/root/SpatialManager") # ARCHITECT T006
 var _plan_rr_cursor: int = 0
 
 
@@ -76,6 +77,19 @@ func plan(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 		if packed.is_empty():
 			continue
 		var center_rk: int = int(d.get("center_region", packed[0]))
+
+		# ARCHITECT T006: Skip planning for settlements in inactive spatial chunks.
+		if SpatialManager != null:
+			var center_tile: Vector2i = _center_tile_of_region_key(center_rk)
+			var chunk_coord: Vector2i = SpatialManager.tile_to_chunk(center_tile)
+			if not SpatialManager.is_chunk_active(chunk_coord):
+				# Debug for culling effectiveness.
+				# print(
+				# 	"[SettlementPlanner] Skipping planning for settlement %d "
+				# 	+ "in inactive chunk (%d,%d) at tick %d" % [d.get("id", -1), chunk_coord.x, chunk_coord.y, GameManager.tick_count]
+				# )
+				continue # Skip this settlement if its chunk is inactive.
+
 		var planning_regions: PackedInt32Array = _select_planning_regions(center_rk, packed)
 		if planning_regions.is_empty():
 			continue

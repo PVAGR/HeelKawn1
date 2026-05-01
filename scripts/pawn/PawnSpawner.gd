@@ -65,6 +65,8 @@ const SPAWNABLE_BIOMES: Array[int] = [Biome.Type.PLAINS, Biome.Type.FOREST]
 
 @export var pawn_scene: PackedScene
 
+@onready var SpatialManager = get_node_or_null("/root/SpatialManager") # ARCHITECT T006
+
 var pawns: Array[Pawn] = []
 
 
@@ -89,6 +91,8 @@ func clear_pawns() -> void:
 	for p in pawns:
 		if p != null and is_instance_valid(p):
 			p.release_job_if_any()
+			if SpatialManager != null and p.data != null: # ARCHITECT T006
+				SpatialManager.unregister_entity(int(p.data.id))
 			p.queue_free()
 	pawns.clear()
 
@@ -98,6 +102,8 @@ func remove_pawn(pawn: Pawn) -> void:
 	pawns.erase(pawn)
 	if pawn != null and is_instance_valid(pawn):
 		pawn.release_job_if_any()
+		if SpatialManager != null and pawn.data != null: # ARCHITECT T006
+			SpatialManager.unregister_entity(int(pawn.data.id))
 		pawn.queue_free()
 
 
@@ -170,6 +176,8 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		pawn.bind(data, world.tile_to_world(tile), world)
 		add_child(pawn)
 		pawns.append(pawn)
+		if SpatialManager != null: # ARCHITECT T006
+			SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 		placed += 1
 
 		var kin: Node = get_node_or_null("/root/KinshipSystem")
@@ -267,6 +275,8 @@ func spawn_generational_pawn(
 	pawn.bind(data, world.tile_to_world(tile), world)
 	add_child(pawn)
 	pawns.append(pawn)
+	if SpatialManager != null: # ARCHITECT T006
+		SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 	WorldMemory.record_event({
 		"type": "pawn_birth",
 		"birth_kind": birth_kind,
@@ -390,6 +400,8 @@ func spawn_pawn() -> void:
 		add_child(pawnc)
 		pawnc.bind(data, world.tile_to_world(tile), world)
 		pawns.append(pawnc)
+		if SpatialManager != null: # ARCHITECT T006
+			SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 		if GameManager.verbose_logs():
 			print("[Spawn] living: %s  tile=(%d,%d)" % [data.describe(), tile.x, tile.y])
 		return
@@ -404,6 +416,8 @@ func spawn_from_data(d: PawnData, world: World) -> void:
 	p.bind(d, world.tile_to_world(d.tile_pos), world)
 	add_child(p)
 	pawns.append(p)
+	if SpatialManager != null: # ARCHITECT T006
+		SpatialManager.register_entity(int(d.id), "pawn", d.tile_pos)
 	if GameManager.verbose_logs():
 		print("[Spawn] load: %s @(%d,%d)" % [d.display_name, d.tile_pos.x, d.tile_pos.y])
 
@@ -482,6 +496,8 @@ func spawn_child_pawn(
 	pawn.bind(data, world.tile_to_world(tile), world)
 	add_child(pawn)
 	pawns.append(pawn)
+	if SpatialManager != null: # ARCHITECT T006
+		SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 	parent_a.children_count += 1
 	parent_b.children_count += 1
 	var cid: int = int(data.id)

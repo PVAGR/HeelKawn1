@@ -45,7 +45,12 @@ class ChunkData:
 
 
 func _ready() -> void:
-	GameManager.game_tick.connect(_on_game_tick)
+	# ARCHITECT T006: Connect to central TickManager for updates.
+	# Retain GameManager connection for backwards compatibility / direct scene run if needed.
+	if GameManager != null:
+		GameManager.game_tick.connect(_on_game_tick)
+	if TickManager != null:
+		TickManager.tick_processed.connect(_on_game_tick)
 
 
 func _on_game_tick(_tick: int) -> void:

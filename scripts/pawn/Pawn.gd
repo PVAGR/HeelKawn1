@@ -2204,14 +2204,8 @@ func attempt_reproduction() -> bool:
 		return false
 	if int(data.id) > int(mate.data.id):
 		return false
-	var main_node: Node = get_tree().get_root().get_node_or_null("Main")
-	if main_node == null:
-		return false
-	var spawner: PawnSpawner = main_node.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
-	if spawner == null:
-		return false
-	var did_spawn: bool = spawner.spawn_child_pawn(_world, data.tile_pos, data, mate.data, now)
-	if did_spawn:
+	var child: Pawn = _spawn_child_pawn(int(data.id), int(mate.data.id))
+	if child != null:
 		_next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
 		mate._next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
 		WorldMemory.record_event({
@@ -4132,26 +4126,53 @@ func marry(spouse: Pawn) -> void:
 		])
 
 
+## Spawn a child via [PawnSpawner]; parents default to this pawn and [member PawnData.spouse_id].
+func _spawn_child_pawn(parent_pawn_id: int = -1, second_parent_id: int = -1) -> Pawn:
+	var spawner: PawnSpawner = _resolve_pawn_spawner()
+	if spawner == null or _world == null or GameManager == null or data == null:
+		return null
+	var pa_id: int = parent_pawn_id if parent_pawn_id >= 0 else int(data.id)
+	var pb_id: int = second_parent_id if second_parent_id >= 0 else int(data.spouse_id)
+	if pb_id < 0:
+		return null
+	var parent_a: PawnData = spawner.pawn_data_for_id(pa_id)
+	var parent_b: PawnData = spawner.pawn_data_for_id(pb_id)
+	if parent_a == null or parent_b == null:
+		return null
+	return spawner.spawn_child_pawn(_world, data.tile_pos, parent_a, parent_b, GameManager.tick_count)
+
+
+## Deterministic blend toward parents' current affinity map (after [method PawnData.initialize_affinities]).
+static func _inherit_affinities(
+		child_pd: PawnData, parent_a: PawnData, parent_b: PawnData, birth_tick: int
+) -> void:
+	if child_pd == null or parent_a == null or parent_b == null:
+		return
+	for k in child_pd.affinities.keys():
+		var va: float = float(parent_a.affinities.get(k, 0.5))
+		var vb: float = float(parent_b.affinities.get(k, 0.5))
+		var target: float = (va + vb) * 0.5
+		var w: float = WorldRNG.range_for(
+				StringName(
+						"pawn:inherit_affinity:%s:%d:%d:%d"
+						% [str(k), child_pd.id, birth_tick, parent_a.id + parent_b.id]
+				),
+				0.25,
+				0.55
+		)
+		child_pd.affinities[k] = clampf(lerpf(float(child_pd.affinities[k]), target, w), 0.0, 1.0)
+
+
 func have_child(partner: Pawn) -> int:
 	# Have a child with partner (same path as [method attempt_reproduction] / Main tick).
 	if partner == null or not is_instance_valid(partner) or partner.data == null or data == null:
 		return -1
 	if data.spouse_id != int(partner.data.id):
 		return -1
-	var spawner: PawnSpawner = _resolve_pawn_spawner()
-	if spawner == null or _world == null or GameManager == null:
+	var child: Pawn = _spawn_child_pawn(int(data.id), int(partner.data.id))
+	if child == null or child.data == null:
 		return -1
-	var now: int = GameManager.tick_count
-	if not spawner.spawn_child_pawn(_world, data.tile_pos, data, partner.data, now):
-		return -1
-	for p in spawner.pawns:
-		if p == null or not is_instance_valid(p) or p.data == null:
-			continue
-		if p.data.parent_a_id == int(data.id) and p.data.parent_b_id == int(partner.data.id):
-			return int(p.data.id)
-		if p.data.parent_b_id == int(data.id) and p.data.parent_a_id == int(partner.data.id):
-			return int(p.data.id)
-	return -1
+	return int(child.data.id)
 
 
 func _create_household() -> int:

@@ -414,12 +414,12 @@ func spawn_child_pawn(
 		parent_a: PawnData,
 		parent_b: PawnData,
 		birth_tick: int
-) -> bool:
+) -> Pawn:
 	if world == null or world.data == null or world.pathfinder == null or pawn_scene == null:
-		return false
+		return null
 	var main_comp: int = world.pathfinder.largest_component_id()
 	if main_comp < 0:
-		return false
+		return null
 	var candidates: Array[Vector2i] = [tile]
 	var neigh: Array[Vector2i] = [
 		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
@@ -447,11 +447,12 @@ func spawn_child_pawn(
 		spawn_tile = t
 		break
 	if spawn_tile.x < 0:
-		return false
+		return null
 	tile = spawn_tile
 	var data := PawnData.new()
 	data.display_name = _pick_name_deterministic()
-	data.age = 18
+	data.age = 0
+	data.age_years = 0.0
 	var morph_mix: int = int((birth_tick + parent_a.id * 13 + parent_b.id * 17) & 0x7FFFFFFF)
 	data.gender = PawnData.Gender.MALE if morph_mix % 2 == 0 else PawnData.Gender.FEMALE
 	data.tile_pos = tile
@@ -463,6 +464,10 @@ func spawn_child_pawn(
 	data.initialize_affinities(birth_tick, parent_a.id, parent_b.id)
 	data.parent_a_id = parent_a.id
 	data.parent_b_id = parent_b.id
+	Pawn._inherit_affinities(data, parent_a, parent_b, birth_tick)
+	data.affinity_birth_snapshot = data.affinities.duplicate(true)
+	data._initialize_personality(birth_tick, parent_a.id, parent_b.id)
+	data._initialize_neural_network()
 	var inbreeding_penalty: float = 0.0
 	var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
 	if bloodline_sys != null and bloodline_sys.has_method("get_inbreeding_penalty"):
@@ -479,6 +484,11 @@ func spawn_child_pawn(
 	pawns.append(pawn)
 	parent_a.children_count += 1
 	parent_b.children_count += 1
+	var cid: int = int(data.id)
+	if not parent_a.children_ids.has(cid):
+		parent_a.children_ids.append(cid)
+	if not parent_b.children_ids.has(cid):
+		parent_b.children_ids.append(cid)
 	WorldMemory.record_event({
 		"type": "pawn_birth",
 		"birth_kind": "child",
@@ -495,7 +505,7 @@ func spawn_child_pawn(
 		print("[Spawn] child: %s at (%d,%d) from #%d + #%d" % [
 			data.display_name, tile.x, tile.y, parent_a.id, parent_b.id,
 		])
-	return true
+	return pawn
 
 
 ## Pick a name we haven't used yet this run.

@@ -1670,9 +1670,11 @@ func _force_panic_sleep() -> void:
 	# If we were already walking to a bed when panic hit, give up the
 	# reservation so other pawns can use it; we're sleeping where we stand.
 	_release_bed_if_reserved()
-	if GameManager.verbose_logs():
-		print("[Pawn] %s collapses from exhaustion  (rest=%.1f hunger=%.1f)" %
-			[data.display_name, data.rest, data.hunger])
+	# `where` string for logs could be re-added if verbose_logs are re-enabled.
+	# var on_bed: bool = _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed
+	# var where: String = " in a bed" if on_bed else ""
+	# if GameManager.verbose_logs():
+	# 	print("[Pawn] %s lies down to sleep%s  (rest=%.1f)" % [data.display_name, where, data.rest])
 	_begin_sleeping()
 
 
@@ -2444,13 +2446,6 @@ func _tick_working() -> void:
 		var leveled_up: bool = data.add_skill_xp(
 				skill, PawnData.XP_PER_WORK_TICK * float(work_step_multiplier)
 		)
-		if leveled_up:
-			if GameManager.verbose_logs():
-				print("[Pawn] %s's %s went up to %d" % [
-					data.display_name,
-					PawnData.skill_name(skill),
-					data.get_skill_level(skill),
-				])
 		var w: int = maxi(1, int(ceil(speed)))
 		data.add_profession_liking_for_job(_current_job.type, w)
 		_current_job.work_ticks_done += w
@@ -3793,32 +3788,21 @@ func _trigger_crisis_strike() -> void:
 	# Add DESPAIR mood event
 	if not data.has_trait(Trait.Type.PESSIMIST):  # Pessimists expect this already
 		data.add_mood_event(MoodEvent.Type.DESPAIR, 75.0, 400)
-	if GameManager.verbose_logs():
-		print("[Pawn] %s is on strike due to critical morale (mood=%.1f)" %
-			[data.display_name, data.mood])
 
 
 func _check_death_conditions() -> void:
 	# Emergency food-seeking for AI agents
 	if data.hunger < 15.0 and _state != State.GOING_TO_EAT and _state != State.EATING:
-		if GameManager.verbose_logs():
-			print("[Pawn] %s seeking emergency food (hunger=%.1f)" % [data.display_name, data.hunger])
 		_emergency_seek_food()
 	
 	# More lenient death conditions
 	if data.hunger <= -5.0:  # Allow some buffer before death
-		if GameManager.verbose_logs():
-			print("[Pawn] %s died of starvation  (hunger=%.1f)" % [data.display_name, data.hunger])
 		_die("")
 		return
 	if data.rest <= -5.0:  # Allow some buffer before death
-		if GameManager.verbose_logs():
-			print("[Pawn] %s died from exhaustion  (rest=%.1f)" % [data.display_name, data.rest])
 		_die("")
 		return
 	if data.health <= 0.0:
-		if GameManager.verbose_logs():
-			print("[Pawn] %s died from injuries  (health=%.1f)" % [data.display_name, data.health])
 		_die("")
 		return
 
@@ -3831,11 +3815,8 @@ func _emergency_seek_food() -> void:
 	var stockpile: Stockpile = StockpileManager.find_food_source(data.tile_pos, pathfinder)
 	if stockpile != null:
 		_begin_going_to_eat(stockpile)
-		if GameManager.verbose_logs():
-			print("[Pawn] %s going to food source for emergency food" % data.display_name)
 	else:
-		if GameManager.verbose_logs():
-			print("[Pawn] %s cannot find food source for emergency food" % data.display_name)
+		pass # No emergency food source found.
 
 
 func _decay_stamina() -> void:

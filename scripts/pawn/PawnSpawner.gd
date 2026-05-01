@@ -541,5 +541,3 @@ func _assign_random_traits(pawn_data: PawnData, rng: RandomNumberGenerator) -> v
 			assigned[trait_type] = true
 			var trait_item := Trait.new(trait_type)
 			pawn_data.add_trait(trait_item)
-			if GameManager.verbose_logs():
-				print("[Spawn] trait: %s -> %s" % [pawn_data.display_name, trait_item.display_name])

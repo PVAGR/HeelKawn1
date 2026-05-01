@@ -1417,8 +1417,6 @@ func _process_war_state(settlement_idx: int, pawns: Array[Pawn]) -> void:
 		_assign_military_hierarchy(set_pawns)
 		if center >= 0 and not bool(_war_command_announced.get(center, false)):
 			_war_command_announced[center] = true
-			if OS.is_debug_build():
-				print("[War] BattleMaster takes command of forces.")
 		if center >= 0 and not bool(_war_battle_spawned.get(center, false)):
 			var strength: float = get_settlement_military_score(settlement_idx)
 			if _trigger_war_battle_spawn(center, int(ws.get("target_settlement_id", -1)), strength):
@@ -1454,8 +1452,6 @@ func _resolve_war_votes(settlement_idx: int) -> void:
 			favor += 1
 		else:
 			against += 1
-	if OS.is_debug_build():
-		print("[War] Council Vote: %d-%d in favor. Preparing Messengers..." % [favor, against])
 	if favor < 3:
 		ws["state"] = "truce"
 		ws["votes"] = vote_records
@@ -1490,8 +1486,6 @@ func _resolve_war_votes(settlement_idx: int) -> void:
 		var center: int = int(st.get("center_region", -1))
 		if center >= 0 and not bool(_war_command_announced.get(center, false)):
 			_war_command_announced[center] = true
-			if OS.is_debug_build():
-				print("[War] BattleMaster takes command of forces.")
 		if center >= 0 and not bool(_war_battle_spawned.get(center, false)):
 			var strength: float = get_settlement_military_score(settlement_idx)
 			if _trigger_war_battle_spawn(center, int(ws.get("target_settlement_id", -1)), strength):

@@ -40,6 +40,24 @@ This document outlines the state management strategies for the HeelKawn simulati
   - `record_cultural_event(event_id: int, culture_type: String)`: Records a cultural event.
   - `get_cultural_events(culture_type: String) -> Array`: Retrieves cultural events of a specific type.
 
+### 6. ProgressionSystem (KERNEL)
+- **Purpose**: Tracks pawn significance through impact points earned from actions (building, teaching, etc.).
+- **Phase**: Phase 4 - Identity & Meaning
+- **Signal**: `progression_changed(pawn_id: int)` - emitted when a pawn gains impact.
+- **Functions**:
+  - `record_impact(pawn_id, amount, reason)`: Add impact points to a pawn.
+  - `get_tier(pawn_id: int) -> int`: Get tier index (0-5).
+  - `get_tier_name(pawn_id: int) -> String`: Get tier name.
+  - `get_impact(pawn_id: int) -> int`: Get current impact points.
+- **Tiers**:
+  - Unknown: 0 impact
+  - Known: 10 impact
+  - Remembered: 50 impact
+  - Noticed: 200 impact
+  - Influential: 1000 impact
+  - Legendary: 5000 impact
+- **Integration**: PawnInfoPanel.gd reads live tier data; reacts to `progression_changed` signal.
+
 ## Implementation
 
 ### WorldMemory

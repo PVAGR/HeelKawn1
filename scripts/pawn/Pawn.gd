@@ -749,6 +749,7 @@ func _ready() -> void:
 	_sfx.volume_db = -5.0
 	add_child(_sfx)
 	_action_popup = $ActionPopup
+	add_to_group("tickable")
 	call_deferred("_pawn_connect_sim_tick_deferred")
 	add_to_group("tickable")
 

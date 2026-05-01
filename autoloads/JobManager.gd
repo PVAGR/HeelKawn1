@@ -13,6 +13,17 @@ func _ready() -> void:
 
 
 func _on_world_tick(tick_number: int) -> void:
+	## JobManager is primarily event-driven (job_posted, job_claimed, etc.)
+	## Add any periodic tick-based logic here (e.g., job timeouts, cleanup).
+	## Currently a no-op but registered for future tick-based features.
+	pass
+
+
+func _ready() -> void:
+	add_to_group("tickable")
+
+
+func _on_world_tick(tick_number: int) -> void:
 	# JobManager is primarily a data store; no per-tick logic required.
 	# This method satisfies the tickable interface for deterministic ordering.
 	pass

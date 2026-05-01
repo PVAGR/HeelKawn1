@@ -64,6 +64,7 @@ var _last_world_ai_update_tick: int = -1
 var _last_settlement_ai_update_tick: int = -1
 
 func _ready() -> void:
+	add_to_group("tickable")
 	GameManager.game_tick.connect(_on_game_tick)
 	last_update_tick = GameManager.tick_count
 	_last_world_ai_update_tick = GameManager.tick_count

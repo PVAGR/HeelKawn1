@@ -962,6 +962,10 @@ func update() -> void:
 	_update_leadership()
 	_propose_automatic_goals()
 
+## Called by TickManager via AIAgentManager forwarding
+func _on_world_tick(tick_number: int) -> void:
+	update()
+
 func _on_world_tick(tick_number: int) -> void:
     # Wrap SettlementAI update in tick system
     update()

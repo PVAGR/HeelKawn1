@@ -471,7 +471,7 @@ func _severity_for_type(typ: String) -> int:
 			return 3
 		"enemy_death", "war_proposed", "war_battle_spawned", "governance_change", "birth", "pawn_birth", "building_destroyed":
 			return 2
-		"social_bond_milestone", "social_meeting", "structure_built", "job_completed", "knowledge_discovery", "knowledge_rediscovery", "teaching_success", "settlement_intent_shift", "building_constructed", "fire_extinguished", "migration_started", "migration_completed", "teaching_event":
+		"social_bond_milestone", "social_meeting", "structure_built", "job_completed", "knowledge_discovery", "knowledge_rediscovery", "teaching_success", "settlement_intent_shift", "building_constructed", "fire_extinguished", "migration_started", "migration_completed", "teaching_event", "leadership_change": # ARCHITECT TASK 2: Add leadership_change to moderate severity
 			return 1
 		_:
 			return 0

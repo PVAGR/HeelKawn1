@@ -2,6 +2,10 @@ extends Node
 ## Deterministic research tree system driven by KnowledgeSystem.
 ## Tech truth lives here; KnowledgeSystem provides per-settlement research points.
 const RESEARCH_SPEND_INTERVAL_TICKS: int = 120
+## Neighbor spread / acquisition cadence (aligned with [signal GameManager.game_tick]).
+const TECH_SPREAD_INTERVAL_TICKS: int = 600
+## Chebyshev distance between [code]center_region[/code] coords (see [SettlementRegistry._region_coords]) for “neighbor” spread.
+const TECH_SPREAD_NEIGHBOR_RADIUS: int = 1
 
 const EFFECT_STONE_KNAPPING: String = "unlock_stone_knapping"
 const EFFECT_AGRICULTURE: String = "unlock_agriculture"
@@ -54,6 +58,7 @@ var research_history: Array = []
 signal research_started(settlement_id: int, tech_id: String, started_tick: int)
 signal research_progressed(settlement_id: int, tech_id: String, spent_points: int, cost: int, progress: float)
 signal research_completed(settlement_id: int, tech_id: String, cost: int)
+signal technology_learned(settlement_id: int, tech_id: String, via: String)
 
 
 func _ready() -> void:
@@ -64,6 +69,29 @@ func _ready() -> void:
 
 func _sid(settlement_id: int) -> String:
 	return str(settlement_id)
+
+
+## Region grid coords for [code]center_region[/code] keys (same encoding as [SettlementRegistry._region_coords]).
+func _region_coords_for_center(center_rk: int) -> Vector2i:
+	return Vector2i(int(center_rk) & 0xFFFF, (int(center_rk) >> 16) & 0xFFFF)
+
+
+func _chebyshev_region_distance(center_a: int, center_b: int) -> int:
+	var pa: Vector2i = _region_coords_for_center(center_a)
+	var pb: Vector2i = _region_coords_for_center(center_b)
+	var dx: int = pa.x - pb.x
+	var dy: int = pa.y - pb.y
+	if dx < 0:
+		dx = -dx
+	if dy < 0:
+		dy = -dy
+	return maxi(dx, dy)
+
+
+func _centers_are_spread_neighbors(center_a: int, center_b: int) -> bool:
+	if center_a < 0 or center_b < 0 or center_a == center_b:
+		return false
+	return _chebyshev_region_distance(center_a, center_b) <= TECH_SPREAD_NEIGHBOR_RADIUS
 
 
 func has_tech(settlement_id: int, tech_id: String) -> bool:
@@ -97,6 +125,119 @@ func get_available_research(settlement_id: int) -> Array:
 	return out
 
 
+## Register a completed tech for a settlement using [member researched_by_settlement] / [member tech_effects_by_settlement].
+## [param acquisition_via] is stored on history/events ([code]"learn"[/code], [code]"spread"[/code], etc.).
+func learn_technology(settlement_id: int, tech_id: String, acquisition_via: String = "learn") -> bool:
+	if not TECH_TREE.has(tech_id):
+		return false
+	if has_tech(settlement_id, tech_id):
+		return true
+	if not _prereqs_met(settlement_id, tech_id):
+		return false
+	var key: String = _sid(settlement_id)
+	if not researched_by_settlement.has(key):
+		researched_by_settlement[key] = []
+	(researched_by_settlement[key] as Array).append(tech_id)
+	if get_active_research(settlement_id) == tech_id:
+		active_research_by_settlement.erase(key)
+	_apply_effect(settlement_id, str((TECH_TREE[tech_id] as Dictionary).get("effect", "")))
+	var tick_now: int = GameManager.tick_count if GameManager != null else 0
+	research_history.append({
+		"settlement_id": settlement_id,
+		"tech_id": tech_id,
+		"cost": 0,
+		"tick": tick_now,
+		"via": acquisition_via,
+	})
+	WorldMemory.record_event({
+		"type": "technology_acquired",
+		"settlement_id": settlement_id,
+		"tech_id": tech_id,
+		"via": acquisition_via,
+		"tick": tick_now,
+	})
+	research_completed.emit(settlement_id, tech_id, 0)
+	technology_learned.emit(settlement_id, tech_id, acquisition_via)
+	_save_to_world_persistence()
+	return true
+
+
+## Deterministic transfer when [param from_settlement_id] has completed [param tech_id], the recipient has prereqs,
+## and a spread channel exists (see [method _spread_channel_open]).
+func share_technology(from_settlement_id: int, to_settlement_id: int, tech_id: String) -> bool:
+	if from_settlement_id == to_settlement_id:
+		return false
+	if not TECH_TREE.has(tech_id):
+		return false
+	if not has_tech(from_settlement_id, tech_id):
+		return false
+	if has_tech(to_settlement_id, tech_id):
+		return false
+	if not _prereqs_met(to_settlement_id, tech_id):
+		return false
+	if not _spread_channel_open(from_settlement_id, to_settlement_id):
+		return false
+	return learn_technology(to_settlement_id, tech_id, "spread")
+
+
+func _spread_channel_open(from_center: int, to_center: int) -> bool:
+	if _centers_are_spread_neighbors(from_center, to_center):
+		return true
+	return _has_trade_relationship(from_center, to_center)
+
+
+func _has_trade_relationship(a_center: int, b_center: int) -> bool:
+	if RelationalGraph == null:
+		return false
+	for e in RelationalGraph.get_edges(a_center, "trade"):
+		var other: Variant = e["to"] if e["from"] == a_center else e["from"]
+		if int(other) == int(b_center):
+			return true
+	return false
+
+
+func _active_spread_center_regions() -> Array:
+	var out: Array = []
+	if SettlementMemory == null:
+		return out
+	for s_any in SettlementMemory.settlements:
+		if not (s_any is Dictionary):
+			continue
+		var st: Dictionary = s_any as Dictionary
+		if SettlementMemory.is_collapsed_state(str(st.get("state", ""))):
+			continue
+		var c: int = int(st.get("center_region", -1))
+		if c < 0:
+			continue
+		out.append(c)
+	out.sort()
+	return out
+
+
+func _process_technology_spread(_tick: int) -> void:
+	var centers: Array = _active_spread_center_regions()
+	if centers.size() < 2:
+		return
+	for i in range(centers.size()):
+		var from_c: int = int(centers[i])
+		for j in range(centers.size()):
+			if i == j:
+				continue
+			var to_c: int = int(centers[j])
+			if not _spread_channel_open(from_c, to_c):
+				continue
+			var techs: Array = get_researched_techs(from_c)
+			techs.sort()
+			for tech_any in techs:
+				var tid: String = str(tech_any)
+				if has_tech(to_c, tid):
+					continue
+				if not _prereqs_met(to_c, tid):
+					continue
+				if share_technology(from_c, to_c, tid):
+					break
+
+
 ## Primary deterministic research transaction:
 ## - prereq gate
 ## - starts active research if needed
@@ -116,11 +257,12 @@ func research_tech(tech_id: String, settlement_id: int) -> bool:
 
 
 func _on_game_tick(tick: int) -> void:
-	if tick % RESEARCH_SPEND_INTERVAL_TICKS != 0:
-		return
-	for key_any in active_research_by_settlement.keys():
-		var sid: int = int(str(key_any))
-		_advance_active_research(sid)
+	if tick % RESEARCH_SPEND_INTERVAL_TICKS == 0:
+		for key_any in active_research_by_settlement.keys():
+			var sid: int = int(str(key_any))
+			_advance_active_research(sid)
+	if tick % TECH_SPREAD_INTERVAL_TICKS == 0:
+		_process_technology_spread(tick)
 
 
 func _advance_active_research(settlement_id: int) -> bool:

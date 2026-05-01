@@ -1923,7 +1923,7 @@ func _tick_idle() -> void:
 		base_bias += clampi(int(floor((_bp(5) - 0.5) * 6.0)), -2, 2)
 
 		# Keep bias math cheap and deterministic on hot claim path.
-		return base_bias
+		return AuthoritySystem.apply_authority_bonus(base_bias, int(data.id))
 	var base_passes: Callable = func(j: Job) -> bool:
 		if Pawn._world_hunt_stabilization_blocks() and j.type == Job.Type.HUNT:
 			return false

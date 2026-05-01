@@ -35,6 +35,13 @@ var authority_levels: Dictionary = {}
 ## Authority sources: how authority was earned
 var authority_sources: Dictionary = {}
 
+## Integer ledger for deterministic job-claim priority skew ([method apply_authority_bonus]).
+## Distinct from [member authority_levels] (per-context floats 0..1 from [method grant_authority]).
+var authority_points: Dictionary = {}
+
+const AUTHORITY_POINTS_PER_PRIORITY_STEP: int = 12
+const MAX_AUTHORITY_PRIORITY_BONUS: int = 10
+
 ## Conflict relationships: (pawn_id_a, pawn_id_b) -> conflict type and intensity
 var conflicts: Dictionary = {}
 
@@ -420,6 +427,32 @@ func get_authority_level(pawn_id: int, context: AuthorityContext) -> float:
 		return authority_levels[pawn_id].get(context, 0.0)
 	return 0.0
 
+
+func add_authority(pawn_id: int, amount: int, reason: String = "") -> void:
+	if pawn_id < 0 or amount <= 0:
+		return
+	var cur: int = int(authority_points.get(pawn_id, 0))
+	authority_points[pawn_id] = cur + amount
+	if reason != "" and WorldMemory != null:
+		WorldMemory.record_event({
+			"type": "authority_points_added",
+			"pawn_id": pawn_id,
+			"amount": amount,
+			"reason": reason,
+			"tick": GameManager.tick_count,
+		})
+
+
+func get_authority(pawn_id: int) -> int:
+	return int(authority_points.get(pawn_id, 0))
+
+
+## Deterministic +integer bump to effective job priority in [method JobManager.claim_next_for] scoring.
+func apply_authority_bonus(base_priority: int, pawn_id: int) -> int:
+	var ap: int = get_authority(pawn_id)
+	var bonus: int = clampi(ap / AUTHORITY_POINTS_PER_PRIORITY_STEP, 0, MAX_AUTHORITY_PRIORITY_BONUS)
+	return base_priority + bonus
+
 func get_conflict_intensity(pawn_id_a: int, pawn_id_b: int) -> float:
 	var key: String = _conflict_key(pawn_id_a, pawn_id_b)
 	if conflicts.has(key):
@@ -467,6 +500,7 @@ func _notify_world_ai_authority_change(pawn_id: int, context: AuthorityContext, 
 func clear() -> void:
 	authority_levels.clear()
 	authority_sources.clear()
+	authority_points.clear()
 	conflicts.clear()
 	conflict_history.clear()
 	peace_treaties.clear()

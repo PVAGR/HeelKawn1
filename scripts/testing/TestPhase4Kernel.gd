@@ -1,5 +1,17 @@
 extends Node
 
+func _state_label(s: SettlementData.State) -> String:
+	match s:
+		SettlementData.State.THRIVING:
+			return "THRIVING"
+		SettlementData.State.ABANDONED:
+			return "ABANDONED"
+		SettlementData.State.RUINS:
+			return "RUINS"
+		SettlementData.State.SCAR:
+			return "SCAR"
+	return "UNKNOWN"
+
 func _ready() -> void:
 	print("=== PHASE 4 KERNEL TEST START ===")
 	
@@ -30,7 +42,7 @@ func _ready() -> void:
 	if high_trauma.state == SettlementData.State.SCAR:
 		print("TEST PASSED: SCAR threshold (trauma %.1f → SCAR)" % high_trauma.trauma_score)
 	else:
-		print("TEST FAILED: SCAR threshold (expected SCAR, got %s)" % SettlementData.State.keys()[high_trauma.state])
+		print("TEST FAILED: SCAR threshold (expected SCAR, got %s)" % _state_label(high_trauma.state))
 	
 	# Verify low trauma → RUINS
 	if low_trauma.state == SettlementData.State.RUINS:
@@ -43,7 +55,7 @@ func _ready() -> void:
 		if low_trauma.state == SettlementData.State.THRIVING and low_trauma.population == 10:
 			print("TEST PASSED: RUINS revival (population %d, trauma %.1f)" % [low_trauma.population, low_trauma.trauma_score])
 		else:
-			print("TEST FAILED: RUINS revival state (expected THRIVING with 10 pop, got %s with %d pop)" % [SettlementData.State.keys()[low_trauma.state], low_trauma.population])
+			print("TEST FAILED: RUINS revival state (expected THRIVING with 10 pop, got %s with %d pop)" % [_state_label(low_trauma.state), low_trauma.population])
 	else:
 		print("TEST FAILED: RUINS revival returned false")
 	

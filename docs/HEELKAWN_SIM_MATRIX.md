@@ -64,11 +64,11 @@ Any future “boss AI” should **read** these surfaces and **submit** changes o
 
 ## 6. Suggested implementation order (grand map + NPC parity)
 
-1. **Observation API** — one function: `region_key` / `tile` / `pawn_id` → same dictionary the Focus Inspector uses (decouple from mouse).
-2. **Command API** — mirror toolbar / edicts into callable methods with shared validation (human + bot).
+1. **Observation API** — **shipped (v1).** `autoloads/ObservationAPI.gd`: `observe_pawn` / `observe_tile` / `observe_settlement` / `observe_region` / `observe_region_lite` / `observe_at_world_position` / `build_focus_snapshot_from_focus` (Focus Inspector parity; call on demand, not every frame).
+2. **Command API** — **partial.** `autoloads/CommandAPI.gd`: shared `execute_command` path for move / job / inspect / presence / incarnation / spectator return; **still missing** full toolbar+edict parity and a single bus so NPC “players” issue the same intents as the UI (`§3` NPC parity note).
 3. **Map mode** — optional **low-zoom overlay**: region polygons or tinted quads (CK3-like *readability*, not art parity).
 4. **Character bar** — pinned rulers per settlement; click jumps camera (reuse selection pipeline).
-5. **Dynasty graph** — extend `PawnData` lineage + `FactionRegistry` into a real identity graph (large pass).
+5. **Dynasty graph** — extend `PawnData` lineage + `FactionRegistry` into a real identity graph (large pass); `RelationalGraph` + `KinshipSystem` already record edges for kin/trade/authority.
 
 ## 7. Machine-readable capsule (optional, for agents)
 
@@ -76,11 +76,15 @@ Paste or load alongside this file; bump `matrix_version` when the sim changes.
 
 ```json
 {
-  "matrix_version": "2026-04-27f",
+  "matrix_version": "2026-04-30b",
   "engine": "Godot 4.6",
   "player_role": "observer_chronicler",
   "world_representation": "grid_256x256_tile_texture",
   "region_granularity": "16x16_region_key",
+  "observation_api": "autoloads/ObservationAPI.gd",
+  "observation_api_version": "2026-04-30a",
+  "command_api": "autoloads/CommandAPI.gd",
+  "command_api_note": "human_plus_AI_execute_command_partial_ui_parity_TBD",
   "primary_inspectors": ["FocusInspector", "PawnInfoPanel", "ObserverHUD", "CreatorDebugMenu_F10"],
   "faction_model": "FactionRegistry_house_stub_per_zone",
   "governance_source": "SettlementMemory_governance_profile",

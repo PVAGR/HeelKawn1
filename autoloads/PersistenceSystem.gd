@@ -27,6 +27,11 @@ enum EntityType {
 	PRACTICAL_SITE = 16
 }
 
+const PERSISTENCE_DECAY_INTERVAL_TICKS: int = 2000
+const PERSISTENCE_DECAY_PHASE_OFFSET_TICKS: int = 311
+const LOST_ENTITY_INTERVAL_TICKS: int = 5000
+const LOST_ENTITY_PHASE_OFFSET_TICKS: int = 743
+
 ## Persistent entities: entity_id -> entity data
 var persistent_entities: Dictionary = {}
 
@@ -40,9 +45,9 @@ func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 
 func _on_game_tick(tick: int) -> void:
-	if tick % 2000 == 0:
+	if GameManager.periodic_phase_due(tick, PERSISTENCE_DECAY_INTERVAL_TICKS, PERSISTENCE_DECAY_PHASE_OFFSET_TICKS):
 		_apply_persistence_decay()
-	if tick % 5000 == 0:
+	if GameManager.periodic_phase_due(tick, LOST_ENTITY_INTERVAL_TICKS, LOST_ENTITY_PHASE_OFFSET_TICKS):
 		_remove_lost_entities()
 
 # === Entity Creation ===

@@ -9,9 +9,14 @@ $godot = & (Join-Path $PSScriptRoot "Resolve-Godot.ps1") -ProjectRoot $ProjectRo
 if ([string]::IsNullOrWhiteSpace($godot)) { exit 1 }
 
 # 240 frames is still fast headless, but lets tick 1 fire so autoload/main
-# wiring is exercised instead of only importing the scene tree.
+# wiring is exercised instead of only importing the scene tree. Capture Godot
+# stderr as data: known engine/runtime warnings should not bypass the strict
+# compile gate below as PowerShell NativeCommandError records.
+$previousErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 $output = & $godot --headless --path $ProjectRoot --quit-after $QuitAfterFrames @args 2>&1
 $exitCode = $LASTEXITCODE
+$ErrorActionPreference = $previousErrorActionPreference
 
 foreach ($line in $output) {
     Write-Output $line

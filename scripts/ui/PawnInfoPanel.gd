@@ -105,6 +105,7 @@ var _liking_label: Label = null
 var _coach_label: Label = null
 var _social_label: Label = null
 var _identity_label: Label = null
+var _settlement_label: Label = null
 var _action_skills_label: Label = null
 var _portrait_cells: Array[ColorRect] = []
 var _poll_accum_sec: float = 0.0
@@ -315,6 +316,11 @@ func _populate_identity_tab() -> void:
 	_identity_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_identity_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tab_identity.add_child(_identity_label)
+
+	_tab_identity.add_child(_make_section_header("Settlement"))
+	_settlement_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_settlement_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_identity.add_child(_settlement_label)
 
 
 func _populate_needs_tab() -> void:
@@ -666,6 +672,8 @@ func _refresh() -> void:
 		_coach_label.text = "\n".join(hints)
 	if _identity_label != null:
 		_identity_label.text = _build_identity_strip(d)
+	if _settlement_label != null:
+		_settlement_label.text = _build_settlement_line(d)
 	
 	# Needs tab updates
 	for field in _need_bars:
@@ -974,6 +982,51 @@ func _build_identity_strip(d: PawnData) -> String:
 	) % [rk, meaning_label, rep_word, rep, st_state, culture_name, intent, rev_score, war_state, gov_type, center]
 
 
+func _build_settlement_line(d: PawnData) -> String:
+	var sid: int = int(d.settlement_id)
+	if sid < 0:
+		return "Unaffiliated — no settlement bond recorded."
+	var all_settlements: Array = SettlementMemory.get_settlements()
+	if sid >= all_settlements.size():
+		return "Affiliation stale — settlement #%d no longer exists." % sid
+	var st: Dictionary = all_settlements[sid] as Dictionary
+	var state: String = str(st.get("state", "unknown")).replace("_", " ")
+	var culture: String = str(st.get("culture_name", "unknown")).replace("_", " ")
+	var center_rk: int = int(st.get("center_region", -1))
+	var region_count: int = 0
+	var reg_v: Variant = st.get("regions", null)
+	if reg_v is PackedInt32Array:
+		region_count = (reg_v as PackedInt32Array).size()
+	var revival: int = int(st.get("revival_score", 0))
+	var members: int = _count_settlement_members(sid)
+	var intent: String = "none"
+	var war: Dictionary = SettlementMemory.get_war_profile_for_region(center_rk)
+	if war != null and not war.is_empty():
+		war = war
+	else:
+		war = {}
+	var war_state: String = str(war.get("state", "peace")).replace("_", " ")
+	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(center_rk)
+	var gov_type: String = str(gov.get("type", "anarchy")).replace("_", " ")
+	return (
+		"Settlement #%d · %d regions · center #%d\n"
+		+ "State: %s · culture: %s · revival: %d\n"
+		+ "Members: %d · intent: %s · war: %s\n"
+		+ "Governance: %s"
+	) % [sid, region_count, center_rk, state, culture, revival, members, intent, war_state, gov_type]
+
+
+func _count_settlement_members(settlement_idx: int) -> int:
+	var count: int = 0
+	var spawner: PawnSpawner = _pawn_spawner()
+	if spawner == null:
+		return count
+	for pd in spawner.all_pawn_data():
+		if pd is PawnData and int(pd.settlement_id) == settlement_idx:
+			count += 1
+	return count
+
+
 func _build_ui_signature() -> String:
 	if _pawn == null or not is_instance_valid(_pawn) or _pawn.data == null:
 		return ""
@@ -987,7 +1040,7 @@ func _build_ui_signature() -> String:
 		mood_sig = hash(str(me.description))
 	# Must match argument count exactly — mismatch spams errors every UI poll.
 	return (
-		"%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d"
+		"%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d"
 	) % [
 		d.id,
 		d.age,
@@ -1016,6 +1069,7 @@ func _build_ui_signature() -> String:
 		int(hash(str(d.traits_display()))),
 		int(round(d.get_crisis_level() * 100.0)),
 		mood_sig,
+		int(d.settlement_id),
 	]
 
 

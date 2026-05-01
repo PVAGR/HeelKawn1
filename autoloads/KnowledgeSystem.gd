@@ -22,6 +22,9 @@ enum KnowledgeType {
 	TEACHING = 11
 }
 
+const KNOWLEDGE_DEGRADATION_INTERVAL_TICKS: int = 1000
+const KNOWLEDGE_DEGRADATION_PHASE_OFFSET_TICKS: int = 127
+
 ## Knowledge carriers: pawn_id -> Array[KnowledgeType]
 var knowledge_carriers: Dictionary = {}
 
@@ -46,7 +49,7 @@ func _initialize_degradation() -> void:
 		knowledge_degradation[k] = 0.0
 
 func _on_game_tick(tick: int) -> void:
-	if tick % 1000 == 0:
+	if GameManager.periodic_phase_due(tick, KNOWLEDGE_DEGRADATION_INTERVAL_TICKS, KNOWLEDGE_DEGRADATION_PHASE_OFFSET_TICKS):
 		_update_knowledge_degradation()
 
 # === Knowledge Carrier Management ===

@@ -33,6 +33,12 @@ const MAX_TICKS_PER_FRAME_EXTREME: int = 16
 const MAX_TICKS_PER_FRAME_AT_1X: int = 1
 ## Prevent runaway catch-up after a hitch. We keep sim responsive by dropping
 ## excessive backlog instead of trying to replay seconds of queued ticks.
+## At 1x the game should feel like a visible clock, not a catch-up reel:
+## after a stall, run the next owed tick and discard extra real-time debt.
+const MAX_ACCUMULATED_TICKS_AT_1X: int = 1
+## 3x can tolerate a small cushion, but not the long post-hitch burst that
+## makes first-play pacing look rubber-banded.
+const MAX_ACCUMULATED_TICKS_LOW: int = 6
 const MAX_ACCUMULATED_TICKS: int = 16
 ## At high game speeds, allow a larger time buffer so fast-forward does not
 ## stall waiting on the accumulator cap.
@@ -74,6 +80,13 @@ var _last_catchup_hint_log_msec: int = -1_000_000
 var trace_game_tick_dispatch: bool = false
 ## Path / object id and method of the listener currently running (for post-mortem in the editor).
 var last_game_tick_listener_label: String = ""
+
+
+func _reset_frame_pacing_history() -> void:
+	ticks_emitted_last_frame = 0
+	last_frame_game_tick_usecs = 0
+	last_frame_tick_cap_backlog = false
+	adaptive_ticks_cap_last_frame = 0
 
 
 func set_game_tick_trace_enabled(on: bool) -> void:
@@ -145,11 +158,27 @@ func _max_ticks_per_frame_for_speed() -> int:
 
 
 func _max_accumulated_ticks_for_speed() -> int:
+	if game_speed <= 1.0:
+		return MAX_ACCUMULATED_TICKS_AT_1X
+	if game_speed <= 3.0:
+		return MAX_ACCUMULATED_TICKS_LOW
 	if game_speed >= 50.0:
 		return MAX_ACCUMULATED_TICKS_FAST
 	if game_speed >= 26.0:
 		return max(MAX_ACCUMULATED_TICKS, 48)
 	return MAX_ACCUMULATED_TICKS
+
+
+## Deterministic phase helper for maintenance systems. A positive offset runs
+## a task shortly before its old round-number boundary, spreading work while
+## preserving a fixed interval and tick-order causality.
+func periodic_phase_due(tick: int, interval: int, offset: int = 0) -> bool:
+	if tick <= 0 or interval <= 0:
+		return false
+	var shifted_tick: int = tick + offset
+	if shifted_tick < interval:
+		return false
+	return shifted_tick % interval == 0
 
 
 func _adaptive_frame_tick_cap(base_cap: int) -> int:
@@ -342,6 +371,7 @@ func set_speed(new_speed: float) -> void:
 		if _tick_accumulator > max_accumulator:
 			_tick_accumulator = max_accumulator
 	is_paused = false
+	_reset_frame_pacing_history()
 	speed_changed.emit(game_speed, is_paused)
 
 
@@ -375,6 +405,7 @@ func pause() -> void:
 	if is_paused:
 		return
 	is_paused = true
+	_reset_frame_pacing_history()
 	speed_changed.emit(game_speed, is_paused)
 
 
@@ -382,6 +413,7 @@ func resume() -> void:
 	if not is_paused:
 		return
 	is_paused = false
+	_reset_frame_pacing_history()
 	speed_changed.emit(game_speed, is_paused)
 
 
@@ -403,4 +435,5 @@ func set_state_from_load(tick: int, speed: float, paused: bool) -> void:
 	_tick_accumulator = 0.0
 	game_speed = max(speed, 0.0001)
 	is_paused = paused
+	_reset_frame_pacing_history()
 	speed_changed.emit(game_speed, is_paused)

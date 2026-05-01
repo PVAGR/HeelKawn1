@@ -7,6 +7,9 @@ const VALIDATION_CLEAN_ECONOMY_EVENTS: bool = false
 const CONDITION_CHECK_INTERVAL: int = 5000  # Check conditions every 5000 ticks
 const REGIONAL_CONDITION_CHECK_INTERVAL: int = 7000
 const LOCAL_CONDITION_CHECK_INTERVAL: int = 10000
+const CONDITION_CHECK_PHASE_OFFSET_TICKS: int = 431
+const REGIONAL_CONDITION_PHASE_OFFSET_TICKS: int = 113
+const LOCAL_CONDITION_PHASE_OFFSET_TICKS: int = 677
 const HARVEST_MOON_DURATION_TICKS: int = 200
 const HARVEST_MOON_MULT: float = 1.25
 const LOCUST_FOOD_DRAIN: int = 2
@@ -42,11 +45,11 @@ func _on_game_tick(tick: int) -> void:
 		_clear_temporary_event()
 	
 	# Condition-based event checks (much less frequent than old timer rolls)
-	if tick > 0 and tick % REGIONAL_CONDITION_CHECK_INTERVAL == 0:
+	if GameManager.periodic_phase_due(tick, REGIONAL_CONDITION_CHECK_INTERVAL, REGIONAL_CONDITION_PHASE_OFFSET_TICKS):
 		_check_regional_conditions(tick)
-	if tick > 0 and tick % LOCAL_CONDITION_CHECK_INTERVAL == 0:
+	if GameManager.periodic_phase_due(tick, LOCAL_CONDITION_CHECK_INTERVAL, LOCAL_CONDITION_PHASE_OFFSET_TICKS):
 		_check_local_conditions(tick)
-	if tick <= 0 or tick % CONDITION_CHECK_INTERVAL != 0:
+	if not GameManager.periodic_phase_due(tick, CONDITION_CHECK_INTERVAL, CONDITION_CHECK_PHASE_OFFSET_TICKS):
 		return
 	
 	if _suppress_economy_distorting_world_events():

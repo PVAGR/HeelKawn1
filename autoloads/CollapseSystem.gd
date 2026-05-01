@@ -17,6 +17,11 @@ enum CollapseStage {
 	COLLAPSED = 5
 }
 
+const COLLAPSE_METRICS_INTERVAL_TICKS: int = 5000
+const COLLAPSE_METRICS_PHASE_OFFSET_TICKS: int = 487
+const COLLAPSE_SIGNS_INTERVAL_TICKS: int = 10000
+const COLLAPSE_SIGNS_PHASE_OFFSET_TICKS: int = 977
+
 ## Collapse metrics per settlement: settlement_id -> metrics
 var collapse_metrics: Dictionary = {}
 
@@ -33,9 +38,9 @@ func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 
 func _on_game_tick(tick: int) -> void:
-	if tick % 5000 == 0:
+	if GameManager.periodic_phase_due(tick, COLLAPSE_METRICS_INTERVAL_TICKS, COLLAPSE_METRICS_PHASE_OFFSET_TICKS):
 		_update_collapse_metrics()
-	if tick % 10000 == 0:
+	if GameManager.periodic_phase_due(tick, COLLAPSE_SIGNS_INTERVAL_TICKS, COLLAPSE_SIGNS_PHASE_OFFSET_TICKS):
 		_detect_collapse_signs()
 		_evaluate_collapse_stage()
 

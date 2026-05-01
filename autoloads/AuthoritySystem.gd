@@ -24,6 +24,11 @@ enum ConflictType {
 	IDEOLOGICAL = 4
 }
 
+const AUTHORITY_DECAY_INTERVAL_TICKS: int = 2000
+const AUTHORITY_DECAY_PHASE_OFFSET_TICKS: int = 173
+const CONFLICT_INTENSITY_INTERVAL_TICKS: int = 3000
+const CONFLICT_INTENSITY_PHASE_OFFSET_TICKS: int = 467
+
 ## Authority levels: pawn_id -> context -> authority level (0.0-1.0)
 var authority_levels: Dictionary = {}
 
@@ -43,9 +48,9 @@ func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 
 func _on_game_tick(tick: int) -> void:
-	if tick % 2000 == 0:
+	if GameManager.periodic_phase_due(tick, AUTHORITY_DECAY_INTERVAL_TICKS, AUTHORITY_DECAY_PHASE_OFFSET_TICKS):
 		_decay_authority()
-	if tick % 3000 == 0:
+	if GameManager.periodic_phase_due(tick, CONFLICT_INTENSITY_INTERVAL_TICKS, CONFLICT_INTENSITY_PHASE_OFFSET_TICKS):
 		_update_conflict_intensities()
 
 # === Authority Emergence ===

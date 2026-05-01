@@ -6,6 +6,9 @@ extends Node
 @onready var WorldPersistence = get_node_or_null("/root/WorldPersistence")
 @onready var GameManager = get_node_or_null("/root/GameManager")
 
+const BLOODLINE_CLEANUP_INTERVAL_TICKS: int = 10000
+const BLOODLINE_CLEANUP_PHASE_OFFSET_TICKS: int = 1151
+
 # Bloodline data: bloodline_id -> bloodline info
 var bloodlines: Dictionary = {}
 
@@ -20,7 +23,7 @@ func _ready() -> void:
 
 func _on_game_tick(tick: int) -> void:
 	# Periodic cleanup of empty bloodlines
-	if tick % 10000 == 0:
+	if GameManager.periodic_phase_due(tick, BLOODLINE_CLEANUP_INTERVAL_TICKS, BLOODLINE_CLEANUP_PHASE_OFFSET_TICKS):
 		_cleanup_empty_bloodlines()
 
 # === Bloodline Creation ===

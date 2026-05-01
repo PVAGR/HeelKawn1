@@ -112,6 +112,10 @@ const OBSERVER_HUD_REFRESH_TICKS: int = 30
 const FOCUS_INSPECTOR_REFRESH_TICKS: int = 15
 ## Deterministic rebirth cadence (tick-gated, no frame-time).
 const REBIRTH_CHECK_INTERVAL_TICKS: int = 2000
+const SETTLEMENT_ARCHITECT_INTERVAL_TICKS: int = 5000
+const SETTLEMENT_ARCHITECT_PHASE_OFFSET_TICKS: int = 347
+const AGE_MEMORY_INTERVAL_TICKS: int = 10000
+const AGE_MEMORY_PHASE_OFFSET_TICKS: int = 719
 ## Offset [method AnimalSpawner.update_population_dynamics] so it does not land on the same tick as [member REBIRTH_CHECK_INTERVAL_TICKS] (both were multiples of 1000; spike [code]animal_population[/code]+[code]rebirth_recompute[/code]).
 const ANIMAL_POPULATION_PHASE_TICKS: int = 500
 ## Ecosystems (hunt) stay inert until this tick (world gen / reroll / load).
@@ -2018,11 +2022,11 @@ func _on_game_tick(tick: int) -> void:
 			SettlementRebirth.process(_world, self, false)
 			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
 		# Phase 4 Identity: visual decay for permanently abandoned settlements (infrequent)
-		if tick % 5000 == 0:
+		if GameManager.periodic_phase_due(tick, SETTLEMENT_ARCHITECT_INTERVAL_TICKS, SETTLEMENT_ARCHITECT_PHASE_OFFSET_TICKS):
 			t0 = Time.get_ticks_usec()
 			SettlementArchitect.process(_world, self)
 			section_us["settlement_architect"] = Time.get_ticks_usec() - t0
-	if int(tick) % 10000 == 0 and int(tick) > 0:
+	if GameManager.periodic_phase_due(int(tick), AGE_MEMORY_INTERVAL_TICKS, AGE_MEMORY_PHASE_OFFSET_TICKS):
 		AgeMemory.recompute()
 		if is_instance_valid(_world):
 			IntentMemory.recompute(_world)
@@ -4605,13 +4609,14 @@ func _react_to_mining_progress_step() -> bool:
 	var y_start: int = _mining_react_scan_y_cursor
 	var rows_step: int = _mining_react_scan_rows_for_speed()
 	var work_budget_max: int = _mining_react_budget_for_speed()
+	_mining_react_work_used = 0
 	var y_end: int = mini(WorldData.HEIGHT, y_start + rows_step)
 	for y in range(y_start, y_end):
 		for x in range(WorldData.WIDTH):
 			# Budgeting: count a cheap unit per tile checked. If we exceed
 			# the per-tick budget, pause the scan and continue next tick.
 			_mining_react_work_used += 1
-			if _mining_react_work_used >= work_budget_max:
+			if _mining_react_work_used > work_budget_max:
 				_mining_react_in_progress = true
 				_mining_react_scan_y_cursor = y
 				return false
@@ -4664,20 +4669,21 @@ func _react_to_mining_progress_step() -> bool:
 
 
 func _mining_react_budget_for_speed() -> int:
+	var row_safe_minimum: int = WorldData.WIDTH + 1
 	if GameManager == null:
-		return MINING_REACT_WORK_BUDGET_PER_TICK
+		return maxi(row_safe_minimum, MINING_REACT_WORK_BUDGET_PER_TICK)
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 256
+		return maxi(row_safe_minimum, 256)
 	if gs >= 50.0:
-		return 384
+		return maxi(row_safe_minimum, 384)
 	if gs >= 26.0:
-		return 512
+		return maxi(row_safe_minimum, 512)
 	if gs >= 12.0:
-		return 768
+		return maxi(row_safe_minimum, 768)
 	if gs >= 3.0:
-		return 1024
-	return MINING_REACT_WORK_BUDGET_PER_TICK
+		return maxi(row_safe_minimum, 1024)
+	return maxi(row_safe_minimum, MINING_REACT_WORK_BUDGET_PER_TICK)
 
 
 ## Full react pass (legacy callers). Tick loop should prefer `_react_to_mining_progress_step`.
@@ -4688,8 +4694,8 @@ func _react_to_mining_progress() -> void:
 	while not _react_to_mining_progress_step():
 		guard += 1
 		if guard >= MAX_BOOTSTRAP_MINING_REACT_LOOPS:
-			push_error(
-					"[Main] _react_to_mining_progress: bootstrap step cap (%d) — continuing on future ticks"
+			print(
+					"[Main][WARN] _react_to_mining_progress: bootstrap step cap (%d) — continuing on future ticks"
 					% MAX_BOOTSTRAP_MINING_REACT_LOOPS
 			)
 			break

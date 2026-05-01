@@ -695,14 +695,15 @@ func _log_validation_harness_observability_once() -> void:
 	var clean_active: bool = WorldEvents.validation_clean_economy_events_active()
 	var truth_active: bool = SettlementMemory.validation_truth_verify_armed()
 	var spec_active: bool = SettlementMemory.validation_specialization_log_armed()
-	print(
-			(
-					"[VALIDATION_STATUS] debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
-					+ "WorldEvents_VALIDATION_CLEAN_ECONOMY_EVENTS_const=%s clean_economy_active=%s "
-					+ "settlement_truth_verify_active=%s specialization_validation_log_active=%s"
-			)
-			% [dbg, session_const, clean_const, clean_active, truth_active, spec_active]
-	)
+	if dbg:
+		print(
+				(
+						"[VALIDATION_STATUS] debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
+						+ "WorldEvents_VALIDATION_CLEAN_ECONOMY_EVENTS_const=%s clean_economy_active=%s "
+						+ "settlement_truth_verify_active=%s specialization_validation_log_active=%s"
+				)
+				% [dbg, session_const, clean_const, clean_active, truth_active, spec_active]
+		)
 	if session_const and not dbg:
 		print(
 				"[VALIDATION_WARN] VALIDATION_SESSION_ENABLED is true but OS.is_debug_build() is false — harness stays DISARMED "

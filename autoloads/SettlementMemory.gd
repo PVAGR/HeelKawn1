@@ -258,21 +258,22 @@ func _print_validation_smoketest(source: String) -> void:
 	var clean_active: bool = WorldEvents.validation_clean_economy_events_active()
 	var truth_active: bool = validation_truth_verify_armed()
 	var spec_active: bool = validation_specialization_log_armed()
-	print(
-			(
-					"[VALIDATION_SMOKETEST] marker=%s source=%s debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
-					+ "clean_economy_armed=%s settlement_truth_verify_armed=%s specialization_log_armed=%s"
-			)
-			% [
-				VALIDATION_RUNTIME_SMOKE_MARKER,
-				source,
-				dbg,
-				session_const,
-				clean_active,
-				truth_active,
-				spec_active,
-			]
-	)
+	if dbg:
+		print(
+				(
+						"[VALIDATION_SMOKETEST] marker=%s source=%s debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
+						+ "clean_economy_armed=%s settlement_truth_verify_armed=%s specialization_log_armed=%s"
+				)
+				% [
+					VALIDATION_RUNTIME_SMOKE_MARKER,
+					source,
+					dbg,
+					session_const,
+					clean_active,
+					truth_active,
+					spec_active,
+				]
+		)
 
 
 func print_validation_smoketest_from_main() -> void:
@@ -1423,7 +1424,8 @@ func _process_war_state(settlement_idx: int, pawns: Array[Pawn]) -> void:
 		_assign_military_hierarchy(set_pawns)
 		if center >= 0 and not bool(_war_command_announced.get(center, false)):
 			_war_command_announced[center] = true
-			print("[War] BattleMaster takes command of forces.")
+			if OS.is_debug_build():
+				print("[War] BattleMaster takes command of forces.")
 		if center >= 0 and not bool(_war_battle_spawned.get(center, false)):
 			var strength: float = get_settlement_military_score(settlement_idx)
 			if _trigger_war_battle_spawn(center, int(ws.get("target_settlement_id", -1)), strength):
@@ -1459,7 +1461,8 @@ func _resolve_war_votes(settlement_idx: int) -> void:
 			favor += 1
 		else:
 			against += 1
-	print("[War] Council Vote: %d-%d in favor. Preparing Messengers..." % [favor, against])
+	if OS.is_debug_build():
+		print("[War] Council Vote: %d-%d in favor. Preparing Messengers..." % [favor, against])
 	if favor < 3:
 		ws["state"] = "truce"
 		ws["votes"] = vote_records
@@ -1494,7 +1497,8 @@ func _resolve_war_votes(settlement_idx: int) -> void:
 		var center: int = int(st.get("center_region", -1))
 		if center >= 0 and not bool(_war_command_announced.get(center, false)):
 			_war_command_announced[center] = true
-			print("[War] BattleMaster takes command of forces.")
+			if OS.is_debug_build():
+				print("[War] BattleMaster takes command of forces.")
 		if center >= 0 and not bool(_war_battle_spawned.get(center, false)):
 			var strength: float = get_settlement_military_score(settlement_idx)
 			if _trigger_war_battle_spawn(center, int(ws.get("target_settlement_id", -1)), strength):

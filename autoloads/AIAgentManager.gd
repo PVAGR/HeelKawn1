@@ -125,7 +125,8 @@ func _initialize_neural_network_matrix() -> void:
 	# Initialize neural connections between layers
 	_initialize_neural_connections()
 	
-	print("[AIAgentManager] Neural network matrix initialized with %d layers" % neural_matrix.layers.size())
+	if OS.is_debug_build():
+		print("[AIAgentManager] Neural network matrix initialized with %d layers" % neural_matrix.layers.size())
 
 
 func _initialize_neural_connections() -> void:
@@ -179,7 +180,8 @@ func _initialize_learning_algorithms() -> void:
 		}
 	}
 	
-	print("[AIAgentManager] Learning algorithms initialized")
+	if OS.is_debug_build():
+		print("[AIAgentManager] Learning algorithms initialized")
 
 
 func _initialize_pattern_recognition() -> void:
@@ -200,7 +202,8 @@ func _initialize_pattern_recognition() -> void:
 		"confidence_scores": {}
 	}
 	
-	print("[AIAgentManager] Pattern recognition systems initialized")
+	if OS.is_debug_build():
+		print("[AIAgentManager] Pattern recognition systems initialized")
 
 
 func _initialize_predictive_models() -> void:
@@ -225,7 +228,8 @@ func _initialize_predictive_models() -> void:
 		}
 	}
 	
-	print("[AIAgentManager] Predictive models initialized")
+	if OS.is_debug_build():
+		print("[AIAgentManager] Predictive models initialized")
 
 
 func _initialize_collective_intelligence() -> void:
@@ -244,7 +248,8 @@ func _initialize_collective_intelligence() -> void:
 		}
 	}
 	
-	print("[AIAgentManager] Collective intelligence initialized")
+	if OS.is_debug_build():
+		print("[AIAgentManager] Collective intelligence initialized")
 
 
 # === Neural Network Processing ===

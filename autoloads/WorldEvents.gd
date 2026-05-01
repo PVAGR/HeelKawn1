@@ -338,7 +338,8 @@ func _record_world_event(event_name: String, description: String, payload: Dicti
 	WorldMemory.record_event(rec)
 	if GameManager.game_speed >= 26.0:
 		return
-	print("[WorldEvent] Day %d: %s - %s" % [_current_day(), event_name, description])
+	if OS.is_debug_build():
+		print("[WorldEvent] Day %d: %s - %s" % [_current_day(), event_name, description])
 
 
 func _trigger_trade_caravan(tick: int) -> void:

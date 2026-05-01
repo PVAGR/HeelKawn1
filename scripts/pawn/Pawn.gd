@@ -320,6 +320,9 @@ var _neural_priority_next_refresh_tick: int = -1
 var _last_neural_decision_log_tick: int = -1000000
 var _last_inspect_msg: String = ""
 var _last_inspect_tick: int = -999999
+## One [WorldAI.build_idle_parity_context_for_pawn] snapshot per pawn per tick (NPC / player parity).
+var _parity_context_tick: int = -1
+var _parity_context: Dictionary = {}
 var _initial_knowledge_granted: bool = false
 var _perception_scan_cursor: int = 0
 var _cached_idle_action: String = "work"
@@ -780,6 +783,8 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	refresh_inherited_cultural_reputation()
 	data.ensure_soul_identity()
 	_reset_neural_priority_cache()
+	_parity_context_tick = -1
+	_parity_context.clear()
 	_request_redraw()
 
 
@@ -1827,16 +1832,37 @@ func _tick_idle() -> void:
 		_start_wander()
 
 
+func _parity_idle_context() -> Dictionary:
+	var t: int = GameManager.tick_count if GameManager != null else 0
+	if _parity_context_tick == t and not _parity_context.is_empty():
+		return _parity_context
+	_parity_context_tick = t
+	_parity_context = {}
+	if data != null and WorldAI != null and WorldAI.has_method("build_idle_parity_context_for_pawn"):
+		_parity_context = WorldAI.build_idle_parity_context_for_pawn(int(data.id))
+	return _parity_context
+
+
 func _build_idle_utility_context(food_emergency: bool) -> Dictionary:
+	var weather: String = "clear"
+	if WorldAI != null and WorldAI.has_method("get_weather_tag_for_sim"):
+		weather = WorldAI.get_weather_tag_for_sim()
+	var pc: Dictionary = _parity_idle_context()
+	var parity_utility: Dictionary = {}
+	if pc.has("utility_bias") and pc["utility_bias"] is Dictionary:
+		parity_utility = pc["utility_bias"] as Dictionary
+	if pc.has("weather"):
+		weather = str(pc["weather"])
 	return {
 		"is_night": DayNightCycle.is_night_for_tick(GameManager.tick_count),
-		"weather": "clear", # deterministic placeholder until weather system is live
+		"weather": weather,
 		"resources_available": JobManager.open_count() > 0,
 		"danger_level": _idle_danger_level(),
 		"settlement_pressure": _idle_settlement_pressure(),
 		"role_affinity": _idle_role_affinity(),
 		"memory_confidence": _idle_memory_confidence(),
 		"food_emergency": food_emergency,
+		"parity_utility": parity_utility,
 	}
 
 
@@ -2327,10 +2353,13 @@ func _calculate_work_efficiency() -> float:
 	elif total_injury_severity > 30.0:
 		efficiency *= 0.75
 	
-	# Tool requirement check (placeholder - needs Item system integration)
-	# TODO: Check if pawn has required tool equipped or nearby
-	# if _current_job.required_tool != 0 and not _has_required_tool():
-	# 	efficiency *= 0.25  # Severe penalty for missing tool
+	# Surface tools implied for v1; heavy extract without dedicated gear is slightly slower.
+	if _current_job != null:
+		var jt: int = _current_job.type
+		if jt == Job.Type.MINE or jt == Job.Type.MINE_WALL:
+			efficiency *= 0.92
+		elif jt == Job.Type.CHOP:
+			efficiency *= 0.95
 	
 	return clamp(efficiency, 0.1, 2.0)
 
@@ -3435,24 +3464,63 @@ func _decay_stamina() -> void:
 	data.stamina = clamp(data.stamina - stamina_decay + stamina_recover, 0.0, 100.0)
 
 
+func _ambient_temperature_celsius_at_tile(tile: Vector2i) -> float:
+	if _world == null or _world.data == null:
+		return 18.0
+	var bio: int = _world.data.get_biome(tile.x, tile.y)
+	var base: float = 18.0
+	match bio:
+		Biome.Type.DESERT:
+			base = 32.0
+		Biome.Type.TUNDRA:
+			base = -2.0
+		Biome.Type.FOREST:
+			base = 16.0
+		Biome.Type.PLAINS:
+			base = 18.0
+		Biome.Type.MOUNTAIN:
+			base = 8.0
+		Biome.Type.WATER:
+			base = 10.0
+		Biome.Type.STONE_FLOOR:
+			base = 14.0
+	var elev: float = _world.data.get_elevation(tile.x, tile.y)
+	base += (elev - 0.5) * 8.0
+	var moist: float = _world.data.get_moisture(tile.x, tile.y)
+	base -= (moist - 0.5) * 2.0
+	if GameManager != null and DayNightCycle.is_night_for_tick(GameManager.tick_count):
+		base -= 4.5
+	return base
+
+
+func _hearth_proxy_warmth_bonus(tile: Vector2i) -> float:
+	if _world == null or _world.data == null:
+		return 0.0
+	var bonus: float = 0.0
+	for dx in range(-2, 3):
+		for dy in range(-2, 3):
+			var t: Vector2i = tile + Vector2i(dx, dy)
+			if not _world.data.in_bounds(t.x, t.y):
+				continue
+			if int(_world.data.get_feature(t.x, t.y)) == TileFeature.Type.BED:
+				bonus = maxf(bonus, 5.5)
+	return bonus
+
+
 func _check_temperature() -> void:
-	if _world == null:
+	if _world == null or data == null:
 		return
 	
-	# Get tile temperature from world (placeholder - needs World temperature data)
-	var ambient_temp: float = 20.0  # Default to 20°C if no temperature data
-	
-	# Adjust based on shelter (being indoors helps)
+	var ambient_temp: float = _ambient_temperature_celsius_at_tile(data.tile_pos)
+	ambient_temp += _hearth_proxy_warmth_bonus(data.tile_pos)
 	var has_shelter: bool = false
 	if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed:
 		has_shelter = true
+	if has_shelter:
+		ambient_temp += 4.0
 	
-	# Body temperature moves toward ambient, slower with shelter
 	var temp_change_rate: float = 0.05 if has_shelter else 0.1
 	var target_temp: float = ambient_temp
-	
-	# Fire/hearths increase local temperature (placeholder)
-	# TODO: Check for nearby hearth/fire
 	
 	data.body_temperature = lerp(data.body_temperature, target_temp, temp_change_rate)
 	
@@ -3594,7 +3662,11 @@ func _update_perception() -> void:
 			elif feature == TileFeature.Type.RABBIT or feature == TileFeature.Type.DEER:
 				resource_type = "meat"
 			var danger_level: float = 0.0
-			# TODO: Check for enemies, dangerous terrain, etc.
+			if int(_world.data.get_biome(tile.x, tile.y)) == Biome.Type.WATER:
+				danger_level = 0.45
+			if int(feature) == TileFeature.Type.RUIN:
+				danger_level = maxf(danger_level, 0.35)
+			danger_level = maxf(danger_level, float(_scar_level_at_tile(tile)) / 4.0)
 			if resource_type != "" or danger_level > 0.0:
 				var tile_key: String = "%d,%d" % [tile.x, tile.y]
 				data.location_memory[tile_key] = {
@@ -3714,14 +3786,24 @@ func marry(spouse: Pawn) -> void:
 
 
 func have_child(partner: Pawn) -> int:
-	# Have a child with partner
-	# Returns the new child's pawn ID
+	# Have a child with partner (same path as [method attempt_reproduction] / Main tick).
+	if partner == null or not is_instance_valid(partner) or partner.data == null or data == null:
+		return -1
 	if data.spouse_id != int(partner.data.id):
-		return -1  # Not married to this partner
-	
-	# This would typically be called by a reproduction system
-	# For now, just return -1 as placeholder
-	# TODO: Implement actual child creation
+		return -1
+	var spawner: PawnSpawner = _resolve_pawn_spawner()
+	if spawner == null or _world == null or GameManager == null:
+		return -1
+	var now: int = GameManager.tick_count
+	if not spawner.spawn_child_pawn(_world, data.tile_pos, data, partner.data, now):
+		return -1
+	for p in spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		if p.data.parent_a_id == int(data.id) and p.data.parent_b_id == int(partner.data.id):
+			return int(p.data.id)
+		if p.data.parent_b_id == int(data.id) and p.data.parent_a_id == int(partner.data.id):
+			return int(p.data.id)
 	return -1
 
 

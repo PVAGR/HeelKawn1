@@ -10,6 +10,11 @@ const OUT_CLAMP_MIN: float = 0.0
 const OUT_CLAMP_MAX: float = 2.0
 ## Keep in sync with [member Pawn.FOUNDING_PERIOD_TICKS].
 const FOUNDING_PERIOD_TICKS: int = 4500
+## Twelve human-readable intent channels (8 action heads + 4 social/cognitive) for UI + parity utility.
+const HUMAN_CHANNEL_LABELS: Array[String] = [
+	"SeekFood", "SeekRest", "SeekSocial", "WorkGather", "WorkBuild", "WorkMine",
+	"FaceThreat", "IdleObserve", "SpeakBond", "HelpAlly", "Withdraw", "ScoutWonder",
+]
 
 
 func _bump(outs: Array, idx: int, delta: float) -> void:
@@ -24,10 +29,59 @@ func _bump_many(outs: Array, indices: Array, delta: float) -> void:
 		_bump(outs, int(i), delta)
 
 
-func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Array:
+func _empty_eval() -> Dictionary:
+	var hc: Array = []
+	hc.resize(12)
+	for i in 12:
+		hc[i] = 0.0
+	return {"fired": [], "human_channels": hc, "human_channel_labels": HUMAN_CHANNEL_LABELS}
+
+
+func _build_human_channels(pd: PawnData, ctx: Dictionary, outs: Array) -> Array:
+	var hc: Array = []
+	hc.resize(12)
+	for i in range(12):
+		if i < outs.size():
+			hc[i] = float(outs[i])
+		else:
+			hc[i] = 0.0
+	var danger: float = float(ctx.get("danger_level_hint", 0.0))
+	var mood: float = float(ctx.get("mood", pd.mood))
+	var extra: float = float(ctx.get("extraversion", pd.extraversion))
+	var agree: float = float(ctx.get("agreeableness", pd.agreeableness))
+	var neuro: float = float(ctx.get("neuroticism", pd.neuroticism))
+	var open: float = float(ctx.get("openness", pd.openness))
+	var combat_af: float = float(ctx.get("affinity_combat", pd.affinities.get("combat", 0.5)))
+	var founding: float = clampf(float(ctx.get("founding_blend", 0.0)), 0.0, 1.0)
+	var top_rapport: int = int(ctx.get("top_rapport_score", 0))
+	hc[8] = clampf(extra * (1.0 - mood / 100.0) * 0.55 + float(top_rapport) / 3000.0 * 0.25, 0.0, 1.0)
+	hc[9] = clampf(agree * (0.35 + float(top_rapport) / 3000.0 * 0.5), 0.0, 1.0)
+	hc[10] = clampf(neuro * danger * (1.2 - combat_af * 0.9), 0.0, 1.0)
+	hc[11] = clampf(open * (0.25 + founding * 0.55), 0.0, 1.0)
+	return hc
+
+
+func _apply_human_semantic_projection(outs: Array, hc: Array) -> void:
+	if hc.size() < 12:
+		return
+	_bump(outs, 2, float(hc[8]) * 0.12)
+	_bump(outs, 7, float(hc[8]) * 0.04)
+	_bump(outs, 2, float(hc[9]) * 0.10)
+	_bump(outs, 3, float(hc[9]) * 0.05)
+	_bump(outs, 4, float(hc[9]) * 0.04)
+	_bump(outs, 1, float(hc[10]) * 0.10)
+	_bump(outs, 7, float(hc[10]) * 0.08)
+	_bump(outs, 5, -float(hc[10]) * 0.06)
+	_bump(outs, 6, -float(hc[10]) * 0.05)
+	_bump(outs, 3, float(hc[11]) * 0.08)
+	_bump(outs, 7, float(hc[11]) * 0.07)
+	_bump(outs, 0, float(hc[11]) * 0.03)
+
+
+func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Dictionary:
 	var fired: Array = []
 	if pd == null or outs.size() < 8:
-		return fired
+		return _empty_eval()
 
 	var hunger: float = float(ctx.get("hunger", pd.hunger))
 	var rest: float = float(ctx.get("rest", pd.rest))
@@ -62,6 +116,20 @@ func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Array:
 	var work_mine: bool = bool(ctx.get("work_mine", pd.work_mine))
 	var work_build: bool = bool(ctx.get("work_build", pd.work_build))
 	var work_hunt: bool = bool(ctx.get("work_hunt", pd.work_hunt))
+	var weather_tag: String = str(ctx.get("weather_tag", "clear"))
+
+	# --- Weather (WorldAI band, drives environment utility + outdoor work) ---
+	if weather_tag == "storm":
+		_bump_many(outs, [1, 7], 0.08)
+		_bump(outs, 3, -0.07)
+		fired.append({"id": "weather_storm", "line": "IF storm band THEN shelter/rest/idle up; outdoor gather down.", "w": 0.62})
+	elif weather_tag == "rain" or weather_tag == "gusty":
+		_bump_many(outs, [1, 4], 0.05)
+		_bump(outs, 3, -0.04)
+		fired.append({"id": "weather_wet_windy", "line": "IF rain or gusty THEN favor indoor work and recovery; mild outdoor penalty.", "w": 0.48})
+	elif weather_tag == "overcast":
+		_bump(outs, 7, 0.03)
+		fired.append({"id": "weather_overcast", "line": "IF overcast THEN slight idle/explore patience.", "w": 0.22})
 
 	# --- Survival & needs (RimWorld-style gates) ---
 	if hunger <= 22.0:
@@ -214,4 +282,8 @@ func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Array:
 		fired.append({"id": "perm_no_build", "line": "IF build disabled THEN suppress Work_Build channel.", "w": 0.25})
 
 	fired.sort_custom(func(a, b): return float(a.get("w", 0.0)) > float(b.get("w", 0.0)))
-	return fired
+	var human_ch: Array = _build_human_channels(pd, ctx, outs)
+	_apply_human_semantic_projection(outs, human_ch)
+	for i in range(mini(8, outs.size())):
+		human_ch[i] = float(outs[i])
+	return {"fired": fired, "human_channels": human_ch, "human_channel_labels": HUMAN_CHANNEL_LABELS}

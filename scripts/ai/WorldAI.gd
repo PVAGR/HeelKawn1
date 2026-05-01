@@ -168,6 +168,9 @@ const LEARN_MAX_EVENTS_PER_UPDATE: int = 64
 const LEARN_EVENT_TICK_WINDOW: int = 1000
 var _last_learned_event_eid: int = 0
 var _cached_pawn_spawner: WeakRef = null
+## One full [method get_pawn_neural_state] resolve per pawn per sim tick (forward + matrix + nudge).
+var _pawn_neural_cache_tick: int = -1
+var _pawn_neural_cache: Dictionary = {}
 
 func _ready():
 	_initialize_world_state()
@@ -3017,6 +3020,12 @@ func get_pawn_neural_state(pawn_id: int) -> Dictionary:
 	var pd: PawnData = sp.pawn_data_for_id(pawn_id)
 	if pd == null:
 		return {}
+	var tick_now: int = GameManager.tick_count if GameManager != null else 0
+	if _pawn_neural_cache_tick != tick_now:
+		_pawn_neural_cache.clear()
+		_pawn_neural_cache_tick = tick_now
+	if _pawn_neural_cache.has(pawn_id):
+		return _pawn_neural_cache[pawn_id]
 	pd.ensure_soul_identity()
 	var inputs: Array[float] = _pawn_neural_input_vector(pd)
 	var outputs_full: Array[float] = []
@@ -3029,9 +3038,16 @@ func get_pawn_neural_state(pawn_id: int) -> Dictionary:
 	for i in range(nslice):
 		outs.append(outputs_full[i])
 	var rule_ctx: Dictionary = _pawn_decision_rule_context(pd)
-	var decision_rules: Array = _pawn_decision_rule_matrix().evaluate(pd, rule_ctx, outs)
+	var rule_pack: Variant = _pawn_decision_rule_matrix().evaluate(pd, rule_ctx, outs)
+	var decision_rules: Array = []
+	var human_channels: Array = []
+	if rule_pack is Dictionary:
+		decision_rules = rule_pack.get("fired", [])
+		human_channels = rule_pack.get("human_channels", [])
+	else:
+		decision_rules = rule_pack as Array
 	_apply_soul_society_output_nudge(pd, outs)
-	return {
+	var result: Dictionary = {
 		"inputs": inputs,
 		"outputs": outs,
 		"soul_id": pd.unique_id,
@@ -3039,7 +3055,11 @@ func get_pawn_neural_state(pawn_id: int) -> Dictionary:
 		"self_preservation_bias": _estimate_self_preservation_bias(outs),
 		"decision_rules": decision_rules,
 		"decision_ctx": rule_ctx,
+		"human_channels": human_channels,
+		"human_channel_labels": _PAWN_DECISION_RULES.HUMAN_CHANNEL_LABELS,
 	}
+	_pawn_neural_cache[pawn_id] = result
+	return result
 
 
 func _estimate_self_preservation_bias(outs: Array) -> float:
@@ -3061,6 +3081,61 @@ func _apply_soul_society_output_nudge(pd: PawnData, outs: Array) -> void:
 		outs[4] = clampf(float(outs[4]) + martial * 0.18, 0.0, 2.0)
 		outs[6] = clampf(float(outs[6]) + martial * 0.22, 0.0, 2.0)
 		outs[5] = clampf(float(outs[5]) + martial * 0.08, 0.0, 2.0)
+
+
+## Deterministic weather band for environment + matrix (not a full weather sim).
+func get_weather_tag_for_sim() -> String:
+	return _weather_tag_for_tick()
+
+
+func _weather_tag_for_tick() -> String:
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	var seed: int = WorldRNG.current_seed()
+	var phase: int = posmod(int(tick / 280) + seed % 97, 6)
+	var gust: float = WorldRNG.range_for(StringName("weather_gust_band"), 0.0, 1.0, tick / 180)
+	var night: bool = DayNightCycle.is_night_for_tick(tick)
+	match phase:
+		0, 1:
+			return "storm" if night and gust > 0.62 else "clear"
+		2:
+			return "overcast"
+		3, 4:
+			return "rain" if gust > 0.35 else "overcast"
+		_:
+			return "gusty"
+
+
+## Maps neural + human-intent channels to the same idle-action utilities NPCs and incarnated players use.
+func build_idle_parity_context_for_pawn(pawn_id: int) -> Dictionary:
+	var ns: Dictionary = get_pawn_neural_state(pawn_id)
+	if ns.is_empty():
+		return {}
+	var outs: Array = ns.get("outputs", [])
+	var hc: Array = ns.get("human_channels", [])
+	var dc: Dictionary = ns.get("decision_ctx", {})
+	var ub: Dictionary = {
+		"work": 0.28,
+		"wander": 0.22,
+		"teach": 0.18,
+		"challenge": 0.12,
+		"forage": 0.14,
+	}
+	if outs.size() >= 8:
+		ub["work"] += float(outs[4]) * 0.11 + float(outs[5]) * 0.11 + float(outs[3]) * 0.07
+		ub["wander"] += float(outs[7]) * 0.13 + float(outs[3]) * 0.035
+		ub["teach"] += float(outs[2]) * 0.17
+		ub["challenge"] += float(outs[6]) * 0.12
+		ub["forage"] += float(outs[0]) * 0.055 + float(outs[3]) * 0.14
+	if hc.size() >= 12:
+		ub["teach"] += float(hc[9]) * 0.14 + float(hc[8]) * 0.05
+		ub["wander"] += float(hc[11]) * 0.11
+		ub["challenge"] += float(hc[6]) * 0.06
+		ub["work"] += float(hc[4]) * 0.045 + float(hc[5]) * 0.045
+		ub["forage"] += float(hc[3]) * 0.05
+	return {
+		"utility_bias": ub,
+		"weather": str(dc.get("weather_tag", "clear")),
+	}
 
 
 func _pawn_decision_rule_context(pd: PawnData) -> Dictionary:
@@ -3089,6 +3164,8 @@ func _pawn_decision_rule_context(pd: PawnData) -> Dictionary:
 	var carrying_food: bool = false
 	if pd.is_carrying():
 		carrying_food = Item.is_food(pd.carrying)
+	var rk_ctx: int = WorldMemory._region_key(pd.tile_pos.x, pd.tile_pos.y)
+	var danger_hint: float = clampf(float(WorldPersistence.get_region_scar_level(rk_ctx)) / 3.0, 0.0, 1.0)
 	return {
 		"tick": tick,
 		"founding_blend": founding,
@@ -3109,9 +3186,12 @@ func _pawn_decision_rule_context(pd: PawnData) -> Dictionary:
 		"top_opinion_score": top_o,
 		"top_opinion_peer_id": top_op_peer,
 		"extraversion": pd.extraversion,
+		"openness": pd.openness,
 		"agreeableness": pd.agreeableness,
 		"neuroticism": pd.neuroticism,
 		"conscientiousness": pd.conscientiousness,
+		"weather_tag": _weather_tag_for_tick(),
+		"danger_level_hint": danger_hint,
 		"affinity_combat": float(pd.affinities.get("combat", 0.5)),
 		"affinity_farming": float(pd.affinities.get("farming", 0.5)),
 		"affinity_building": float(pd.affinities.get("building", 0.5)),

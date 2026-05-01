@@ -713,6 +713,23 @@ func _refresh() -> void:
 							float(dc.get("crisis_level", 0.0)),
 						]
 				)
+				matrix_lines.append(
+						"weather %s · danger hint %.2f" % [
+							str(dc.get("weather_tag", "?")),
+							float(dc.get("danger_level_hint", 0.0)),
+						]
+				)
+			var hcv: Variant = ns.get("human_channels", [])
+			var hcl_v: Variant = ns.get("human_channel_labels", [])
+			if hcv is Array and (hcv as Array).size() > 0:
+				matrix_lines.append("")
+				matrix_lines.append("[b]12 intent channels[/b] (NPC / player parity stack)")
+				var labels_arr: Array = hcl_v as Array if hcl_v is Array else []
+				for hi in range(mini((hcv as Array).size(), 12)):
+					var lab: String = "#%d" % hi
+					if hi < labels_arr.size():
+						lab = str(labels_arr[hi])
+					matrix_lines.append("  %s: %.3f" % [lab, float((hcv as Array)[hi])])
 		else:
 			matrix_lines.append("[i]WorldAI not available[/i]")
 		matrix_lines.append("")

@@ -1076,6 +1076,11 @@ func calculate_action_utility(action_type: String, context: Dictionary = {}) -> 
 	# Factor 8: Risk assessment
 	var risk_factor: float = _calculate_risk_factor(action_type, context)
 	utility *= (1.0 - risk_factor * 0.3)  # Reduce utility for high-risk actions
+
+	# Factor 9: Neural + human-intent parity (same stack for NPC and incarnated player)
+	if context.has("parity_utility") and context["parity_utility"] is Dictionary:
+		var pu: Dictionary = context["parity_utility"] as Dictionary
+		utility += float(pu.get(action_type, 0.0)) * 1.15
 	
 	return utility
 
@@ -1229,16 +1234,27 @@ func _calculate_environment_factor(action_type: String, context: Dictionary) -> 
 	# Weather conditions
 	var weather: String = context.get("weather", "clear")
 	match action_type:
-		"forage", "hunt", "explore":
+		"forage", "hunt", "explore", "wander":
 			if weather == "storm":
 				factor = 0.2
 			elif weather == "rain":
 				factor = 0.5
+			elif weather == "gusty":
+				factor = 0.55
+			elif weather == "overcast":
+				factor = 0.72
 		"work", "build":
 			if weather == "storm":
 				factor = 0.1
 			elif weather == "rain":
 				factor = 0.4
+			elif weather == "gusty":
+				factor = 0.45
+			elif weather == "overcast":
+				factor = 0.65
+		"teach", "challenge", "socialize", "talk":
+			if weather == "storm" or weather == "gusty":
+				factor = 0.55
 	
 	# Resource availability
 	var resources_available: bool = context.get("resources_available", true)

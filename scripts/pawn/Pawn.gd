@@ -1191,7 +1191,7 @@ func _process(delta: float) -> void:
 	_anim_t += delta * (0.5 + GameManager.game_speed * 0.25)
 	if _path.is_empty():
 		return
-	var step: float = WALK_SPEED_WORLD_UNITS_PER_SEC * delta * GameManager.game_speed
+	var step: float = WALK_SPEED_WORLD_UNITS_PER_SEC * delta * GameManager.game_speed * _meaning_speed_multiplier
 	var to_target: Vector2 = _target_world_pos - position
 	if to_target.length() <= step:
 		position = _target_world_pos
@@ -1314,6 +1314,8 @@ func _on_game_tick(_tick: int) -> void:
 			update_cohort_membership()
 			_validate_or_dissolve_cohort()
 			_refresh_or_decay_cohort_stability()
+		# Apply meaning-based behavior density modifiers (Phase 4)
+		_apply_meaning_behavior_modifiers()
 		if draft_mode:
 			_engage_enemies()
 		if _trace_ai_slice:
@@ -4138,6 +4140,28 @@ func _tick_fleeing() -> void:
 			print("[Pawn] %s reached safety" % data.display_name)
 
 
+## Apply meaning-based behavior density modifiers (Phase 4)
+## Reads region meaning from MeaningAmbianceController and adjusts movement speed
+func _apply_meaning_behavior_modifiers() -> void:
+	if _world == null or data == null:
+		return
+	if not is_instance_valid(MeaningAmbianceController):
+		return
+	
+	# Get region key for current position
+	var rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
+	
+	# Get movement speed multiplier from ambiance controller
+	var speed_mult: float = MeaningAmbianceController.get_movement_speed_multiplier_for_region(rk)
+	
+	# Cache the multiplier for use in movement logic
+	_meaning_speed_multiplier = speed_mult
+
+
+## Cached meaning-based speed multiplier (default 1.0)
+var _meaning_speed_multiplier: float = 1.0
+
+
 func _tick_hiding() -> void:
 	# Tick while hiding
 	# Stay hidden until danger passes
@@ -4214,6 +4238,27 @@ func _die(_p_cause: String = "") -> void:
 		# KnowledgeSystem: remove knowledge carrier when pawn dies
 		if KnowledgeSystem != null:
 			KnowledgeSystem.remove_knowledge_carrier(int(data.id))
+
+
+## Trait / Krond convenience wrappers (delegates to PawnData)
+func can_afford_trait(trait_res: Resource) -> bool:
+	if data == null or trait_res == null:
+		return false
+	var cost: float = 0.0
+	# Resource-backed TraitData uses `krond_cost`, legacy Trait uses same field name
+	if trait_res.has("krond_cost"):
+		# supports both property access and generic get
+		if trait_res.has_method("get"):
+			cost = float(trait_res.get("krond_cost"))
+		else:
+			cost = float(trait_res.krond_cost)
+	return data.can_afford_trait(cost)
+
+
+func apply_trait(trait_res: Resource) -> bool:
+	if data == null or trait_res == null:
+		return false
+	return data.apply_trait(trait_res)
 		
 		# PersistenceSystem: create grave entity
 		if PersistenceSystem != null:

@@ -12,6 +12,7 @@
   },
   "editor.tabSize": 4,
   "editor.insertSpaces": true,
-  "terminal.integrated.cwd": "${workspaceFolder}"
+  "terminal.integrated.cwd": "${workspaceFolder}",
+  "godotTools.editorPath.godot4": "c:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\tools\\godot\\Godot_v4.6.2-stable_win64.exe"
 }
 

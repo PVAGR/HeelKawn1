@@ -512,9 +512,13 @@ func _apply_settlement_state_truth_hysteresis(center_id: int, raw_state: String,
 		acc += STATE_TRUTH_HYSTERESIS_INTERVAL_TICKS
 		e["ticks"] = acc
 		if acc >= STATE_TRUTH_HYSTERESIS_COMMIT_TICKS:
+			var old_committed: String = str(e.get("committed", raw_state))
 			e["committed"] = raw_state
 			e["ticks"] = 0
 			reason = "pending_reached_commit_threshold"
+			# Trigger audio cue on committed state change
+			if old_committed != raw_state:
+				_trigger_meaning_audio_cue(center_id, old_committed, raw_state)
 		else:
 			reason = "pending_accumulate"
 	else:
@@ -2038,12 +2042,53 @@ func get_preferred_front_bias_for_job(pawn_tile: Vector2i, job: Job) -> float:
 	return 1.0
 
 
+## Trigger audio cue for settlement meaning transition
+## Maps settlement state changes to meaning labels for audio cue system
+func _trigger_meaning_audio_cue(center_id: int, old_state: String, new_state: String) -> void:
+	if not is_instance_valid(MeaningAudioCue):
+		return
+	
+	# Map settlement states to meaning labels
+	var from_label: String = _state_to_meaning_label(old_state)
+	var to_label: String = _state_to_meaning_label(new_state)
+	
+	# Only trigger if meaning label actually changed
+	if from_label == to_label:
+		return
+	
+	MeaningAudioCue.play_cue(center_id, from_label, to_label)
+
+
+## Map settlement state to meaning label for audio cues
+func _state_to_meaning_label(state: String) -> String:
+	match state:
+		"active":
+			return "quiet"
+		"revivable":
+			return "scarred"
+		"recovering":
+			return "recovering"
+		"abandoned":
+			return "bloodied"
+		"permanently_abandoned":
+			return "grave"
+	return "quiet"
+
+
 func get_settlement_intent_for_tile(tile_pos: Vector2i) -> String:
 	var rk: int = WorldMemory._region_key(tile_pos.x, tile_pos.y)
 	var st_v: Variant = get_settlement_at_region(rk)
 	if st_v is Dictionary:
 		return str((st_v as Dictionary).get("current_intent", INTENT_GROW))
 	return INTENT_GROW
+
+
+## Get settlement state for a region (Phase 4: posture visual indicators)
+## Returns empty string if region is not part of any settlement
+func get_state_for_region(region_key: int) -> String:
+	if _region_state.has(region_key):
+		return str(_region_state[region_key])
+	return ""
 
 
 func get_resource_pressure_for_tile(tile_pos: Vector2i) -> Dictionary:

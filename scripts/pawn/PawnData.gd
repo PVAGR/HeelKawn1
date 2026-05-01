@@ -267,6 +267,14 @@ var traits: Array[Trait] = []
 ## Each event has a type, intensity, and duration.
 var mood_events: Array[MoodEvent] = []
 
+# New Trait/Krond bookkeeping (per-request)
+## Active traits (Resource-based; may include legacy Trait instances)
+var active_traits: Array = []
+## Krond currency available to this pawn for purchasing traits
+var available_krond: float = 0.0
+## Cumulative Krond ever earned by this pawn (for analytics)
+var total_krond_earned: float = 0.0
+
 ## Deterministic co-presence bond: other pawn id (string key) -> rapport 0..3000.
 ## Grows when NPCs spend time near each other (same path component); feeds
 ## reproduction and future player social actions (gift, commend, etc.).
@@ -403,6 +411,36 @@ func _initialize_neural_network() -> void:
 		"neuroticism": neuroticism
 	}
 	neural_network = PawnData.create_neural_network(personality_dict)
+
+
+## Krond / Trait helpers
+func grant_krond(amount: float) -> void:
+	# Deterministic currency grant. No RNG.
+	available_krond += float(amount)
+	total_krond_earned += float(amount)
+
+func can_afford_trait(trait_cost: float) -> bool:
+	return available_krond >= float(trait_cost)
+
+func apply_trait(trait_res: Resource) -> bool:
+	if trait_res == null:
+		return false
+	var cost: float = 0.0
+	if trait_res.has_method("get") and trait_res.has("krond_cost"):
+		cost = float(trait_res.get("krond_cost"))
+	elif trait_res.has("krond_cost"):
+		cost = float(trait_res.krond_cost)
+	if cost > 0.0 and not can_afford_trait(cost):
+		return false
+	# Deduct and record
+	available_krond = maxf(0.0, available_krond - cost)
+	# Keep resource around for future effect queries
+	active_traits.append(trait_res)
+	# Backwards compatibility: if this is the legacy Trait resource, also
+	# register it in the old `traits` array so existing modifiers apply.
+	if trait_res is Trait:
+		traits.append(trait_res)
+	return true
 
 
 static func _load_pawn_neural_script() -> Script:
@@ -1634,22 +1672,111 @@ func _check_level_up() -> void:
 
 ## Stage 1: Unlock skill branches at certain levels
 func _unlock_skill_branches(new_level: int) -> void:
-	# Level 5: Unlock basic specialization
+	# Level 5: Basic specialization unlocks
 	if new_level == 5:
-		# TODO: Add basic skill branch unlocks
-		pass
-	# Level 10: Unlock intermediate specialization
+		_unlock_basic_skill_branch()
+	# Level 10: Intermediate specialization unlocks
 	elif new_level == 10:
-		# TODO: Add intermediate skill branch unlocks
-		pass
-	# Level 15: Unlock advanced specialization
+		_unlock_intermediate_skill_branch()
+	# Level 15: Advanced specialization unlocks
 	elif new_level == 15:
-		# TODO: Add advanced skill branch unlocks
-		pass
-	# Level 20: Unlock mastery
+		_unlock_advanced_skill_branch()
+	# Level 20: Mastery unlocks
 	elif new_level == 20:
-		# TODO: Add mastery skill branch unlocks
-		pass
+		_unlock_mastery_skill_branch()
+
+
+## Level 5: Basic skill branch unlocks
+func _unlock_basic_skill_branch() -> void:
+	var primary_skill: String = _profession_primary_skill(current_profession)
+	if primary_skill.is_empty():
+		return
+	# Initialize basic skill tree for profession
+	skill_trees[primary_skill + "_basic"] = {
+		"unlocked": true,
+		"level": 5,
+		"bonuses": {"work_speed_mult": 1.1},  # +10% work speed
+		"description": "Basic specialization in " + primary_skill,
+	}
+	append_biography_line("Skill branch: Basic " + primary_skill + " (level 5)")
+	print("[PawnData] %s unlocked basic %s branch" % [display_name, primary_skill])
+
+
+## Level 10: Intermediate skill branch unlocks
+func _unlock_intermediate_skill_branch() -> void:
+	var primary_skill: String = _profession_primary_skill(current_profession)
+	if primary_skill.is_empty():
+		return
+	# Add intermediate branch
+	skill_trees[primary_skill + "_intermediate"] = {
+		"unlocked": true,
+		"level": 10,
+		"bonuses": {"work_speed_mult": 1.2, "xp_mult": 1.1},
+		"description": "Intermediate specialization in " + primary_skill,
+	}
+	# Also unlock a secondary domain for cross-training
+	var secondary: String = ""
+	match primary_skill:
+		"farming": secondary = "building"
+		"building": secondary = "gathering"
+		"gathering": secondary = "farming"
+		"combat": secondary = "movement"
+		"movement": secondary = "combat"
+	if secondary != "":
+		skill_trees[secondary + "_basics"] = {
+			"unlocked": true,
+			"level": 10,
+			"bonuses": {"work_speed_mult": 1.05},
+			"description": "Foundation in " + secondary,
+		}
+	append_biography_line("Skill branch: Intermediate " + primary_skill + " (level 10)")
+	print("[PawnData] %s unlocked intermediate %s branch" % [display_name, primary_skill])
+
+
+## Level 15: Advanced skill branch unlocks
+func _unlock_advanced_skill_branch() -> void:
+	var primary_skill: String = _profession_primary_skill(current_profession)
+	if primary_skill.is_empty():
+		return
+	# Add advanced branch with significant bonuses
+	skill_trees[primary_skill + "_advanced"] = {
+		"unlocked": true,
+		"level": 15,
+		"bonuses": {"work_speed_mult": 1.3, "xp_mult": 1.15, "quality_bonus": 1.1},
+		"description": "Advanced mastery in " + primary_skill,
+	}
+	# Unlock teaching ability at level 15
+	skill_trees["teaching"] = {
+		"unlocked": true,
+		"level": 15,
+		"bonuses": {"teach_efficiency": 1.5},
+		"description": "Can teach skills to others",
+	}
+	append_biography_line("Skill branch: Advanced " + primary_skill + " (level 15)")
+	print("[PawnData] %s unlocked advanced %s branch" % [display_name, primary_skill])
+
+
+## Level 20: Mastery skill branch unlocks
+func _unlock_mastery_skill_branch() -> void:
+	var primary_skill: String = _profession_primary_skill(current_profession)
+	if primary_skill.is_empty():
+		return
+	# Add mastery branch with full bonuses
+	skill_trees[primary_skill + "_mastery"] = {
+		"unlocked": true,
+		"level": 20,
+		"bonuses": {"work_speed_mult": 1.5, "xp_mult": 1.2, "quality_bonus": 1.2, "leadership_mult": 1.3},
+		"description": "Mastery of " + primary_skill,
+	}
+	# Unlock innovation ability at mastery
+	skill_trees["innovation"] = {
+		"unlocked": true,
+		"level": 20,
+		"bonuses": {"innovation_chance": 0.15},
+		"description": "Can discover new techniques",
+	}
+	append_biography_line("Skill branch: Mastery " + primary_skill + " (level 20)")
+	print("[PawnData] %s achieved MASTERY in %s" % [display_name, primary_skill])
 
 
 ## Stage 1: Check for mastery perk unlocks at high skill levels
@@ -2313,6 +2440,21 @@ func to_save_dict() -> Dictionary:
 		if trait_item == null:
 			continue
 		trait_types.append(trait_item.trait_type)
+	# Serialize active_traits (Resource-backed). Prefer a dict representation
+	var active_traits_ser: Array = []
+	for a in active_traits:
+		if a == null:
+			continue
+		if a is Trait:
+			active_traits_ser.append({"legacy_trait_type": int(a.trait_type)})
+		elif a.has_method("to_dict"):
+			active_traits_ser.append(a.to_dict())
+		else:
+			# Fallback: store a lightweight id if present
+			if a.has("id"):
+				active_traits_ser.append({"id": str(a.get("id"))})
+			else:
+				active_traits_ser.append({})
 	return {
 		"id": id,
 		"display_name": display_name,
@@ -2363,6 +2505,9 @@ func to_save_dict() -> Dictionary:
 		"physical_scars": physical_scars.duplicate(),
 		"settlement_reputation": settlement_reputation.duplicate(true),
 		"social_squad_anchor_id": social_squad_anchor_id,
+		"available_krond": available_krond,
+		"total_krond_earned": total_krond_earned,
+		"active_traits": active_traits_ser,
 	}
 
 
@@ -2483,8 +2628,40 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 		if restored_network != null and restored_network.has_method("from_dict"):
 			restored_network.from_dict(nn_data)
 			p.neural_network = restored_network
-	_next_id = maxi(_next_id, p.id + 1)
-	return p
+		_next_id = maxi(_next_id, p.id + 1)
+		# Restore krond fields if present
+		p.available_krond = float(d.get("available_krond", 0.0))
+		p.total_krond_earned = float(d.get("total_krond_earned", 0.0))
+		# Restore simple active traits list (legacy trait types supported)
+		if d.has("active_traits") and d["active_traits"] is Array:
+			for at in d["active_traits"]:
+				# Legacy encoded trait types
+				if at is Dictionary and at.has("legacy_trait_type"):
+					var lt: int = int(at.get("legacy_trait_type", -1))
+					if lt >= 0:
+						var lt_obj: Trait = Trait.new(lt)
+						p.traits.append(lt_obj)
+						p.active_traits.append(lt_obj)
+				# Resource-backed TraitData saved via to_dict()
+				elif at is Dictionary and (at.has("id") or at.has("krond_cost") or at.has("effects")):
+					# Create TraitData from dict when possible
+					var td: TraitData = null
+					if Engine.has_singleton("ResourceLoader"):
+						# Use TraitData.new_from_dict if available
+						if TraitData != null and TraitData.has_method("new_from_dict"):
+							td = TraitData.new_from_dict(at)
+						else:
+							td = TraitData.new()
+							td.id = str(at.get("id", "")) if at.has("id") else td.id
+					else:
+						# Fallback: create minimal TraitData
+						td = TraitData.new()
+						td.id = str(at.get("id", "")) if at.has("id") else td.id
+					if td != null:
+						p.active_traits.append(td)
+				# Empty/fallback entries are ignored
+		# Note: custom/resource-backed TraitData deserialization is not implemented here.
+		return p
 
 
 func is_carrying() -> bool:

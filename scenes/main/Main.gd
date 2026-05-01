@@ -9,6 +9,7 @@ const STOCKPILE_SCENE: PackedScene = preload("res://scenes/stockpile/Stockpile.t
 const INCARNATION_PICKER_SCRIPT: Script = preload("res://scripts/ui/IncarnationPicker.gd")
 ## Static `_region_key` helper lives on the script; reuse instead of per-call preload in hot paths.
 const _WM = preload("res://autoloads/WorldMemory.gd")
+const TRAIT_SHOP_SCRIPT: Script = preload("res://scripts/ui/TraitShop.gd")
 
 ## Tuning for initial job generation.
 const FORAGE_WORK_TICKS: int = 20
@@ -142,6 +143,7 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _creator_debug_menu: CreatorDebugMenu = $CreatorDebugMenu
 @onready var _toolbar: BuildToolbar = $UI_Viewport/BuildToolbar
 @onready var _info_panel: PawnInfoPanel = $UI_Viewport/PawnInfoPanel
+@onready var _trait_shop: Control = null
 @onready var _day_night: DayNightCycle = $DayNight
 @onready var _camera: Camera2D = $WorldViewport/Camera
 
@@ -253,6 +255,7 @@ const MINING_REACT_MIN_INTERVAL_TICKS: int = 300
 const REGROWTH_SCAN_BUDGET_PER_TICK: int = 32
 const REGROWTH_RESTORE_BUDGET_PER_TICK: int = 4
 const MINING_REACT_SCAN_ROWS_PER_STEP: int = 4
+const MINING_REACT_WORK_BUDGET_PER_TICK: int = 2048
 const INSPECT_SCAN_INTERVAL_TICKS: int = 30
 var _last_inspect_event_tick_shown: int = -1
 var _inspect_tooltip_node: Control = null
@@ -262,6 +265,7 @@ var _inspect_audio_playback: AudioStreamGeneratorPlayback = null
 var _mining_react_in_progress: bool = false
 var _mining_react_scan_y_cursor: int = 0
 var _mining_react_newly_minable_accum: int = 0
+var _mining_react_work_used: int = 0
 ## Cache tunnel frontier targets so we avoid repeated full-map tunnel target BFS.
 var _tunnel_frontier_cache: Array[Vector2i] = []
 var _tunnel_frontier_cache_cursor: int = 0
@@ -2789,6 +2793,14 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				_kernel_diagnostic.call("start_settlement_truth_verification")
 		Key.KEY_F12:
 			_debug_capture_resource_truth()
+			# F7: export chronicle
+		Key.KEY_F7:
+			if OS.is_debug_build():
+				_export_chronicle()
+		# F3: debug grant Krond (25)
+		Key.KEY_F3:
+			if OS.is_debug_build():
+				_debug_grant_krond()
 		Key.KEY_M:
 			ColonySimServices.cycle_labor_stance()
 		Key.KEY_P:
@@ -2870,6 +2882,60 @@ func _handle_key_input(key: InputEventKey) -> void:
 			_toggle_chronicle_ledger()
 		KEY_K:
 			_toggle_pawn_ai_inspector()
+		KEY_U:
+			_toggle_trait_shop()
+		
+
+## Debug: export chronicle to user://exports/chronicle_<tick>.json
+func _export_chronicle() -> void:
+	if not OS.is_debug_build():
+		return
+	var tick: int = 0
+	if Engine.has_singleton("GameManager") and GameManager != null:
+		tick = GameManager.tick_count
+	var dir_path: String = "user://exports"
+	var da := DirAccess.open(dir_path)
+	if da == null:
+		DirAccess.make_dir_recursive(dir_path)
+	var file_path: String = "%s/chronicle_%d.json" % [dir_path, tick]
+	var ok: bool = false
+	if _WM != null and _WM.has_method("export_chronicle"):
+		ok = _WM.export_chronicle(file_path)
+	if OS.is_debug_build():
+		print("[Main] Chronicle export -> %s  ok=%s" % [file_path, str(ok)])
+	# notify ledger/UI if present
+	if ok and _chronicle_ledger != null:
+		_chronicle_ledger.queue_free() # force ledger refresh on next open
+
+
+func _debug_grant_krond(amount: float = 25.0) -> void:
+	if not OS.is_debug_build():
+		return
+	if _player_pawn == null or not is_instance_valid(_player_pawn):
+		print("[Main] No player pawn to grant Krond to")
+		return
+	_player_pawn.data.grant_krond(amount)
+	print("[Main] Granted %g Kr to pawn %s" % [amount, str(_player_pawn.data.id)])
+	if _hud != null:
+		_hud._refresh()
+
+
+func _toggle_trait_shop() -> void:
+	if _trait_shop != null and is_instance_valid(_trait_shop):
+		# toggle visibility
+		_trait_shop.visible = not _trait_shop.visible
+		return
+	# instantiate and attach
+	if TRAIT_SHOP_SCRIPT == null:
+		print("[Main] Trait shop script not found")
+		return
+	var shop := TRAIT_SHOP_SCRIPT.new() as Control
+	if shop == null:
+		print("[Main] Failed to instantiate TraitShop")
+		return
+	_trait_shop = shop
+	$UI_Viewport.add_child(_trait_shop)
+	_trait_shop.open_shop(_player_pawn)
 
 
 func _toggle_region_inspector() -> void:
@@ -4480,11 +4546,20 @@ func _react_to_mining_progress_step() -> bool:
 		_mining_react_in_progress = true
 		_mining_react_scan_y_cursor = 0
 		_mining_react_newly_minable_accum = 0
+		_mining_react_work_used = 0
 	var y_start: int = _mining_react_scan_y_cursor
 	var rows_step: int = _mining_react_scan_rows_for_speed()
+	var work_budget_max: int = _mining_react_budget_for_speed()
 	var y_end: int = mini(WorldData.HEIGHT, y_start + rows_step)
 	for y in range(y_start, y_end):
 		for x in range(WorldData.WIDTH):
+			# Budgeting: count a cheap unit per tile checked. If we exceed
+			# the per-tick budget, pause the scan and continue next tick.
+			_mining_react_work_used += 1
+			if _mining_react_work_used >= work_budget_max:
+				_mining_react_in_progress = true
+				_mining_react_scan_y_cursor = y
+				return false
 			var f: int = _world.data.get_feature(x, y)
 			if f != TileFeature.Type.ORE_VEIN:
 				continue
@@ -4529,7 +4604,25 @@ func _react_to_mining_progress_step() -> bool:
 	_mining_react_in_progress = false
 	_mining_react_scan_y_cursor = 0
 	_mining_react_newly_minable_accum = 0
+	_mining_react_work_used = 0
 	return true
+
+
+func _mining_react_budget_for_speed() -> int:
+	if GameManager == null:
+		return MINING_REACT_WORK_BUDGET_PER_TICK
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 256
+	if gs >= 50.0:
+		return 384
+	if gs >= 26.0:
+		return 512
+	if gs >= 12.0:
+		return 768
+	if gs >= 3.0:
+		return 1024
+	return MINING_REACT_WORK_BUDGET_PER_TICK
 
 
 ## Full react pass (legacy callers). Tick loop should prefer `_react_to_mining_progress_step`.

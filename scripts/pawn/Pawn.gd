@@ -969,8 +969,6 @@ func try_pickup_item() -> bool:
 		data.carrying = chosen_type
 		data.carrying_qty = taken
 	_request_redraw()
-	if GameManager.verbose_logs():
-		print("[Pawn] %s picked up %s x%d @(%d,%d)" % [data.display_name, Item.name_for(chosen_type), taken, tile.x, tile.y])
 	return true
 
 
@@ -988,8 +986,6 @@ func drop_item() -> bool:
 	_world.add_ground_item(tile, it, q)
 	data.clear_carry()
 	_request_redraw()
-	if GameManager.verbose_logs():
-		print("[Pawn] %s dropped %s x%d @(%d,%d)" % [data.display_name, Item.name_for(it), q, tile.x, tile.y])
 	return true
 
 
@@ -1025,8 +1021,6 @@ func _perform_presence_action() -> void:
 		"tile": {"x": data.tile_pos.x, "y": data.tile_pos.y},
 		"mood": int(round(data.mood)),
 	})
-	if GameManager.verbose_logs():
-		print("[Pawn] %s grounds themselves at region=%d state=%s (mood=%.1f)" % [data.display_name, rk, settlement_state, data.mood])
 	_request_redraw()
 
 
@@ -1060,8 +1054,6 @@ func _perform_inspect_action() -> void:
 		"tags": tags,
 		"tile": {"x": data.tile_pos.x, "y": data.tile_pos.y},
 	})
-	if GameManager.verbose_logs():
-		print("[Pawn] %s inspects region=%d meaning=%s tags=%s" % [data.display_name, region_key_for_meaning, meaning_label, str(tags)])
 	# Record ephemeral inspect message for immediate HUD feedback
 	_last_inspect_msg = "%s — %s" % [meaning_label, (", ".join(tags) if tags.size() > 0 else "no notable tags")]
 	_last_inspect_tick = GameManager.tick_count
@@ -1333,12 +1325,7 @@ func sanity_check_impassable_tile() -> void:
 		return
 	if _world.pathfinder.is_passable(data.tile_pos):
 		return
-	if not _reported_stuck:
-		_reported_stuck = true
-		if GameManager.verbose_logs():
-			print("[Pawn] WARN: %s on impassable sim tile (%d,%d)  state=%d - forcing nudge" % [
-				data.display_name, data.tile_pos.x, data.tile_pos.y, int(_state),
-			])
+	# Nudge will handle logging if needed for debug builds.
 	nudge_if_standing_on_solid()
 
 
@@ -2649,9 +2636,6 @@ func _apply_work_hazards(work_ticks_simulated: int = 1) -> void:
 			injury_type = BodyRiskManager.InjuryType.CUT  # Axe cuts
 		BodyRiskManager.apply_injury(self, injury_type, damage * 2.0, Job.describe_type(_current_job.type))
 		
-		if GameManager.verbose_logs():
-			print("[Pawn] %s injured while working  (damage=%.1f health=%.1f)" %
-				[data.display_name, damage, data.health])
 		if damage >= 5.0:
 			var scar_pool: Array[String] = ["LameLeg", "MissingArm", "BlindedEye", "DeepScar"]
 			var pick: int = WorldRNG.index_for(_pawn_stream("work_hazard_scar"), scar_pool.size(), _pawn_salt(31))
@@ -2675,12 +2659,9 @@ func _begin_job(job: Job) -> void:
 		var need_qty: int = mats.qty
 		# === Check for cultural style material override ===
 		var settlement_id: int = _current_settlement_center_region()
-		var material_family: String = "wood"
+		# material_family is not directly used by this pawn for logic, so no verbose logging here.
 		if settlement_id >= 0 and CulturalStyleManager != null:
 			item_type = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, job.type))
-			material_family = str(CulturalStyleManager.call("get_build_material_family", settlement_id))
-			if GameManager.verbose_logs():
-				print("[Culture] %s build job %s uses %s materials" % [data.display_name, Job.describe_type(job.type), material_family])
 		# === End style check ===
 		var have: int = data.carrying_qty if data.carrying == item_type else 0
 		if have < need_qty:
@@ -2774,9 +2755,6 @@ func _begin_fetching_material(item_type: int, qty: int) -> void:
 		item_type, qty, data.tile_pos, _world.pathfinder
 	)
 	if sp == null:
-		if GameManager.verbose_logs():
-			print("[Pawn] %s aborts build job: no reachable zone has %d %s" %
-				[data.display_name, qty, Item.name_for(item_type)])
 		_unclaim_current_job()
 		return
 	_target_zone = sp
@@ -2836,9 +2814,6 @@ func _pickup_material(item_type: int, qty: int) -> void:
 		# Partial take: put it back so we don't strand items in our hand.
 		if taken > 0:
 			sp.add_item(item_type, taken)
-		if GameManager.verbose_logs():
-			print("[Pawn] %s aborts build job: zone ran out of %s mid-fetch" %
-				[data.display_name, Item.name_for(item_type)])
 		_target_zone = null
 		_unclaim_current_job()
 		return
@@ -2930,25 +2905,17 @@ func _complete_current_job() -> void:
 		Job.Type.FORAGE:
 			produced_type = Item.Type.BERRY
 			_world.clear_feature(job.tile.x, job.tile.y)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s foraged berries @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.MINE:
 			produced_type = Item.Type.STONE
 			_world.clear_feature(job.tile.x, job.tile.y)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s mined stone @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.MINE_WALL:
 			produced_type = Item.Type.STONE
 			# This converts MOUNTAIN -> STONE_FLOOR and rebuilds the components
 			# map, which can cascade-unlock sealed ore veins.
 			_world.mine_out_wall(job.tile.x, job.tile.y)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s mined wall @(%d,%d) -> stone floor" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.CHOP:
 			produced_type = Item.Type.WOOD
 			_world.clear_feature(job.tile.x, job.tile.y)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s chopped tree @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.HUNT:
 			produced_type = Item.Type.MEAT
 			# Read the species off the tile BEFORE we clear it, so we know
@@ -2964,20 +2931,12 @@ func _complete_current_job() -> void:
 						TileFeature.name_for(animal_feat),
 				)
 			_world.clear_feature(job.tile.x, job.tile.y)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s hunted %s @(%d,%d) -> %d meat" % [
-					data.display_name, TileFeature.name_for(animal_feat),
-					job.tile.x, job.tile.y, produced_qty])
 		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
 			_finish_build(job)
 		Job.Type.GATHER_FLINT:
 			produced_type = Item.Type.FLINT
-			if GameManager.verbose_logs():
-				print("[Pawn] %s gathered flint @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.GATHER_STICK:
 			produced_type = Item.Type.STICK
-			if GameManager.verbose_logs():
-				print("[Pawn] %s gathered stick @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_TORCH, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR:
 			_finish_craft(job)
 			produced_type = Item.Type.NONE  # tool is equipped, not carried
@@ -2986,8 +2945,6 @@ func _complete_current_job() -> void:
 			produced_type = Item.Type.NONE
 		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.DRY_MEAT:
 			produced_type = Job.tool_job_output(job.type)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s cooked/preserved food @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.PLANT_SEEDS:
 			FoodChainManager.plant_seeds(job.tile)
 			produced_type = Item.Type.NONE
@@ -3060,14 +3017,9 @@ func _finish_build(job: Job) -> void:
 	var material_family: String = "wood"
 	if settlement_id >= 0 and CulturalStyleManager != null:
 		item_type = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, job.type))
-		material_family = str(CulturalStyleManager.call("get_build_material_family", settlement_id))
-		if GameManager.verbose_logs():
-			print("[Culture] %s building with %s materials @(%d,%d)" % [data.display_name, material_family, job.tile.x, job.tile.y])
+		# material_family is not directly used by this pawn for logic, so no verbose logging here.
 	# === End style material override ===
 	if data.carrying != item_type or data.carrying_qty < need_qty:
-		if GameManager.verbose_logs():
-			print("[Pawn] %s missing material at completion -- %s not built @(%d,%d)" %
-				[data.display_name, Job.describe_type(job.type), job.tile.x, job.tile.y])
 		return
 	data.carrying_qty -= need_qty
 	if data.carrying_qty <= 0:
@@ -3076,16 +3028,10 @@ func _finish_build(job: Job) -> void:
 		Job.Type.BUILD_BED:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.BED)
 			_world.register_bed(job.tile)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s built a bed @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.BUILD_WALL:
 			_world.build_wall(job.tile.x, job.tile.y)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s built a wall @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.BUILD_DOOR:
 			_world.build_door(job.tile.x, job.tile.y)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s placed a door @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 
 
 func _current_settlement_center_region() -> int:
@@ -3174,8 +3120,6 @@ func _finish_shelter_build(job: Job) -> void:
 			"tile": {"x": job.tile.x, "y": job.tile.y},
 		})
 		
-		if GameManager.verbose_logs():
-			print("[Pawn] %s prepared %s @(%d,%d)" % [data.display_name, Item.name_for(output_type), job.tile.x, job.tile.y])
 		return
 	
 	var mats: Dictionary = _materials_for_build(job.type)
@@ -3186,9 +3130,6 @@ func _finish_shelter_build(job: Job) -> void:
 	
 	# Check if pawn is carrying the required material
 	if data.carrying != item_type or data.carrying_qty < need_qty:
-		if GameManager.verbose_logs():
-			print("[Pawn] %s missing material -- %s not built @(%d,%d)" %
-				[data.display_name, Job.describe_type(job.type), job.tile.x, job.tile.y])
 		return
 	
 	# Consume materials
@@ -3207,8 +3148,6 @@ func _finish_shelter_build(job: Job) -> void:
 				"tick": GameManager.tick_count,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
-			if GameManager.verbose_logs():
-				print("[Pawn] %s built a fire pit @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.BUILD_STORAGE_HUT:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.STORAGE_HUT)
 			WorldMemory.record_event({
@@ -3218,8 +3157,6 @@ func _finish_shelter_build(job: Job) -> void:
 				"tick": GameManager.tick_count,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
-			if GameManager.verbose_logs():
-				print("[Pawn] %s built a storage hut @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.BUILD_MARKER_STONE:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.MARKER_STONE)
 			WorldMemory.record_event({
@@ -3229,8 +3166,6 @@ func _finish_shelter_build(job: Job) -> void:
 				"tick": GameManager.tick_count,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
-			if GameManager.verbose_logs():
-				print("[Pawn] %s carved a marker stone @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.BUILD_SHRINE:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.SHRINE)
 			WorldMemory.record_event({
@@ -3240,8 +3175,6 @@ func _finish_shelter_build(job: Job) -> void:
 				"tick": GameManager.tick_count,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
-			if GameManager.verbose_logs():
-				print("[Pawn] %s built a shrine @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 
 
 ## Consume 1 durability from the equipped tool if the job benefits from a tool.
@@ -3352,11 +3285,12 @@ func _log_haul_fail(reason: String) -> void:
 	if t - _last_haul_fail_log_tick < HAUL_FAIL_LOG_EVERY_N_TICKS:
 		return
 	_last_haul_fail_log_tick = t
-	var my_comp: int = -1
-	if _world != null and _world.pathfinder != null:
-		my_comp = _world.pathfinder.component_of(data.tile_pos)
-	var zone_count: int = StockpileManager.zones().size()
-	if GameManager.verbose_logs():
+	# For debug builds, print this information. Otherwise, remain silent.
+	if OS.is_debug_build() and GameManager.verbose_logs():
+		var my_comp: int = -1
+		if _world != null and _world.pathfinder != null:
+			my_comp = _world.pathfinder.component_of(data.tile_pos)
+		var zone_count: int = StockpileManager.zones().size()
 		print("[Pawn] %s haul FAIL (%s): at (%d,%d) comp=%d  carrying=%s x%d  zones=%d" % [
 			data.display_name, reason,
 			data.tile_pos.x, data.tile_pos.y, my_comp,
@@ -3404,14 +3338,6 @@ func _deposit_at_stockpile() -> void:
 			sp.add_item(data.carrying, data.carrying_qty)
 			if is_trade:
 				data.add_profession_liking_for_trade_completion()
-			if not is_trade:
-				if GameManager.verbose_logs():
-					print("[Pawn] %s deposited %d %s into %s zone (zone now has %d)" % [
-						data.display_name, data.carrying_qty,
-						Item.name_for(data.carrying),
-						Stockpile.FILTER_NAME.get(sp.filter, "?"),
-						sp.count_of(data.carrying)
-					])
 	data.clear_carry()
 	_target_zone = null
 	if is_trade and j_done != null and j_done.type == Job.Type.TRADE_HAUL:
@@ -3602,12 +3528,6 @@ func _record_teaching_memory_fact(student: Pawn, skill_taught: String) -> void:
 			skill_taught,
 			settlement_id
 	)
-	if GameManager.verbose_logs():
-		print("[Pawn] teaching memory fact: %s taught %s to %s" % [
-			data.display_name,
-			skill_taught,
-			student.data.display_name,
-		])
 
 
 ## Check if pawn can challenge nearby pawn's authority
@@ -3658,10 +3578,11 @@ func _begin_sleeping() -> void:
 	_state = State.SLEEPING
 	_clear_path()
 	_request_redraw()
-	var on_bed: bool = _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed
-	var where: String = " in a bed" if on_bed else ""
-	if GameManager.verbose_logs():
-		print("[Pawn] %s lies down to sleep%s  (rest=%.1f)" % [data.display_name, where, data.rest])
+	# `where` string for logs could be re-added if verbose_logs are re-enabled.
+	# var on_bed: bool = _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed
+	# var where: String = " in a bed" if on_bed else ""
+	# if GameManager.verbose_logs():
+	# 	print("[Pawn] %s lies down to sleep%s  (rest=%.1f)" % [data.display_name, where, data.rest])
 
 
 ## Per-tick while in SLEEPING. The actual rest restoration / hunger decay
@@ -3670,9 +3591,6 @@ func _begin_sleeping() -> void:
 func _tick_sleeping() -> void:
 	# Wake up early if we get critically hungry -- food trumps sleep.
 	if data.hunger <= HUNGER_EMERGENCY:
-		if GameManager.verbose_logs():
-			print("[Pawn] %s wakes hungry  (hunger=%.1f rest=%.1f)" %
-				[data.display_name, data.hunger, data.rest])
 		_release_bed_if_reserved()
 		_reset_to_idle()
 		return
@@ -3703,10 +3621,6 @@ func _tick_sleeping() -> void:
 				should_wake = true
 			
 			if should_wake:
-				if GameManager.verbose_logs():
-					var crisis_type: String = "housing" if is_housing_crisis else "food"
-					print("[Pawn] %s wakes for %s crisis (affinity=%.2f pressure=%.2f)" %
-						[data.display_name, crisis_type, building_affinity if is_housing_crisis else farming_affinity, housing_pressure if is_housing_crisis else food_pressure])
 				_release_bed_if_reserved()
 				_reset_to_idle()
 				return
@@ -3742,10 +3656,6 @@ func _eat_from_hand() -> void:
 	if data.carrying_qty <= 0:
 		data.clear_carry()
 	_hunger_level = _level_for(data.hunger)
-	if GameManager.verbose_logs():
-		print("[Pawn] %s ate 1 %s FROM HAND (emergency, +%.0f hunger -> %.1f, mood %.1f)" % [
-			data.display_name, Item.name_for(food_type), gain, data.hunger, data.mood
-		])
 	_request_redraw()
 
 
@@ -4088,13 +3998,6 @@ func teach_skill(target_pawn: Pawn, skill: int) -> bool:
 		_students_taught[student_id] = {"skill": skill, "ticks_taught": 0}
 	_students_taught[student_id]["ticks_taught"] = int(_students_taught[student_id].get("ticks_taught", 0)) + 1
 	_students_taught[student_id]["skill"] = skill
-	
-	if GameManager.verbose_logs():
-		print("[Pawn] %s taught %s in %s" % [
-			data.display_name,
-			target_pawn.data.display_name,
-			PawnData.skill_name(skill)
-		])
 	
 	return true
 
@@ -4686,9 +4589,6 @@ func _trigger_ruler_decision_event(milestone: int) -> void:
 		"region_key": rk,
 		"tick": GameManager.tick_count,
 	})
-	if GameManager.verbose_logs():
-		print("[Pawn] %s (ruler) triggered decision: %s @ milestone %d" % [
-			data.display_name, decision_type, milestone])
 
 
 ## Track region visits for wanderer path progression. Each new region
@@ -4721,9 +4621,6 @@ func _world_record_discovery_event(region_key: int, tile: Vector2i) -> void:
 		"total_regions": data.regions_visited.size(),
 		"tick": GameManager.tick_count,
 	})
-	if GameManager.verbose_logs():
-		print("[Pawn] %s discovered region %d @(%d,%d) (total=%d)" % [
-			data.display_name, region_key, tile.x, tile.y, data.regions_visited.size()])
 
 
 ## Re-evaluate life path from current contribution counts (used after
@@ -5549,8 +5446,8 @@ func describe_state() -> String:
 			return "Idle"
 		State.WALKING_TO_JOB:
 			if _current_job != null:
-				return "Heading out: %s" % _verb_for_job(_current_job.type).to_lower()
-			return "Walking"
+				return "Moving to %s" % _verb_for_job(_current_job.type).to_lower()
+			return "Moving"
 		State.WORKING:
 			if _current_job != null:
 				return _verb_for_job(_current_job.type)
@@ -5560,41 +5457,84 @@ func describe_state() -> String:
 				return "Hauling %s" % Item.name_for(data.carrying)
 			return "Hauling"
 		State.GOING_TO_EAT:
-			return "Heading to eat"
+			return "Seeking Food"
 		State.EATING:
 			return "Eating"
 		State.SLEEPING:
 			if _reserved_bed.x >= 0:
-				return "Sleeping in bed"
-			return "Sleeping on the ground"
+				return "Sleeping in Bed"
+			return "Sleeping (Ground)"
 		State.GOING_TO_BED:
-			return "Heading to bed"
+			return "Moving to Bed"
 		State.FETCHING_MATERIAL:
 			if _current_job != null:
-				return "Fetching wood for %s" % \
-					_verb_for_job(_current_job.type).to_lower()
-			return "Fetching materials"
+				return "Gathering for %s" % _verb_for_job(_current_job.type).to_lower()
+			return "Gathering Materials"
 		State.DRAFT_WALK:
-			return "Moving (direct order)"
-	return "?"
+			return "Moving (Ordered)"
+		State.TEACHING:
+			return "Teaching"
+		State.CHALLENGE:
+			return "Challenging Authority"
+		State.GATHERING:
+			return "Gathering"
+		State.CRAFTING:
+			return "Crafting"
+		State.FLEEING:
+			return "Fleeing"
+		State.HIDING:
+			return "Hiding"
+	return "Unknown State"
 
 
 static func _verb_for_job(job_type: int) -> String:
 	match job_type:
 		Job.Type.FORAGE:
-			return "Foraging berries"
+			return "Foraging"
 		Job.Type.MINE:
-			return "Mining stone"
+			return "Mining Stone"
 		Job.Type.MINE_WALL:
-			return "Tunneling"
+			return "Mining Wall"
 		Job.Type.CHOP:
-			return "Chopping wood"
+			return "Chopping Wood"
 		Job.Type.HUNT:
 			return "Hunting"
 		Job.Type.BUILD_BED:
-			return "Building bed"
+			return "Building Bed"
 		Job.Type.BUILD_WALL:
-			return "Building wall"
+			return "Building Wall"
 		Job.Type.BUILD_DOOR:
-			return "Building door"
+			return "Building Door"
+		Job.Type.GATHER_FLINT:
+			return "Gathering Flint"
+		Job.Type.GATHER_STICK:
+			return "Gathering Stick"
+		Job.Type.CRAFT_KNIFE:
+			return "Crafting Knife"
+		Job.Type.CRAFT_TORCH:
+			return "Crafting Torch"
+		Job.Type.CRAFT_PICK:
+			return "Crafting Pick"
+		Job.Type.CRAFT_SPEAR:
+			return "Crafting Spear"
+		Job.Type.BUILD_FIRE_PIT:
+			return "Building Fire Pit"
+		Job.Type.BUILD_STORAGE_HUT:
+			return "Building Storage Hut"
+		Job.Type.BUILD_MARKER_STONE:
+			return "Building Marker Stone"
+		Job.Type.BUILD_SHRINE:
+			return "Building Shrine"
+		Job.Type.COOK_MEAT:
+			return "Cooking Meat"
+		Job.Type.COOK_BERRIES:
+			return "Cooking Berries"
+		Job.Type.DRY_MEAT:
+			return "Drying Meat"
+		Job.Type.PLANT_SEEDS:
+			return "Planting Seeds"
+		Job.Type.HARVEST_CROPS:
+			return "Harvesting Crops"
+		Job.Type.TRADE_HAUL:
+			return "Trading"
 	return "Working"

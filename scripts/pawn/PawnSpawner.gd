@@ -184,10 +184,6 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		if kin != null and kin.has_method("add_person"):
 			kin.call("add_person", data.id, {"display_name": data.display_name, "age": data.age, "gender": data.gender})
 
-		if GameManager.verbose_logs():
-			print("[Spawn] #%d %s  tile=(%d,%d) biome=%s" %
-				[placed, data.describe(), tile.x, tile.y, Biome.name_for(biome)])
-
 	if placed < STARTER_COUNT and OS.is_debug_build():
 		push_warning(
 			"[PawnSpawner] Only placed %d / %d pawns (component=%d)" %
@@ -306,10 +302,6 @@ func spawn_generational_pawn(
 			kin.call("add_parent_child", parent_id, data.id)
 		if household_id != -1 and kin.has_method("add_household_member"):
 			kin.call("add_household_member", data.id, household_id)
-	if GameManager.verbose_logs():
-		print("[Spawn] generational: %s  tile=(%d,%d) age=%d" % [
-			data.display_name, tile.x, tile.y, data.age,
-		])
 	return true
 
 
@@ -402,8 +394,6 @@ func spawn_pawn() -> void:
 		pawns.append(pawnc)
 		if SpatialManager != null: # ARCHITECT T006
 			SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
-		if GameManager.verbose_logs():
-			print("[Spawn] living: %s  tile=(%d,%d)" % [data.describe(), tile.x, tile.y])
 		return
 	if OS.is_debug_build():
 		push_warning("[PawnSpawner] spawn_pawn: could not place a pawn")
@@ -418,8 +408,6 @@ func spawn_from_data(d: PawnData, world: World) -> void:
 	pawns.append(p)
 	if SpatialManager != null: # ARCHITECT T006
 		SpatialManager.register_entity(int(d.id), "pawn", d.tile_pos)
-	if GameManager.verbose_logs():
-		print("[Spawn] load: %s @(%d,%d)" % [d.display_name, d.tile_pos.x, d.tile_pos.y])
 
 
 func spawn_child_pawn(

@@ -1028,14 +1028,7 @@ func _set_settlement_ruler_and_type(settlement_id: int, new_ruler_id: int, new_g
 				"tick": GameManager.tick_count,
 			})
 
-			if GameManager.verbose_logs():
-				print("[SettlementMemory] Settlement %d governance updated: Ruler %d, Type %s." % [
-					settlement_id, new_ruler_id, new_governance_type
-				])
-			
 			return true
-	if GameManager.verbose_logs():
-		print("[SettlementMemory] Failed to update settlement %d: Not found." % settlement_id)
 	return false
 
 

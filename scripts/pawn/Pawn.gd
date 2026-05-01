@@ -2778,6 +2778,11 @@ func _complete_current_job() -> void:
 					job.tile.x, job.tile.y, produced_qty])
 		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
 			_finish_build(job)
+	var yield_skill: int = PawnData.skill_for_job(job.type)
+	if yield_skill >= 0 and produced_type != Item.Type.NONE:
+		var qmult: float = data.harvest_quality_multiplier_for_job_skill(yield_skill)
+		if qmult > 1.001:
+			produced_qty = maxi(1, int(round(float(produced_qty) * qmult)))
 	# Trigger mood event based on job type
 	match job.type:
 		Job.Type.HUNT:
@@ -3603,11 +3608,12 @@ func teach_skill(target_pawn: Pawn, skill: int) -> bool:
 	if teacher_level < 5 or target_level >= teacher_level:
 		return false
 	
-	# Grant XP to target (faster than self-learning)
-	target_pawn.data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK * 2.0)
+	# Grant XP to target (faster than self-learning); teaching branch boosts output.
+	var te: float = data.teach_efficiency_multiplier()
+	target_pawn.data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK * 2.0 * te)
 	
 	# Small XP bonus to teacher for teaching
-	data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK * 0.5)
+	data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK * 0.5 * te)
 	
 	if GameManager.verbose_logs():
 		print("[Pawn] %s taught %s in %s" % [

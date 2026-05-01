@@ -849,7 +849,7 @@ func update_need_satisfaction() -> void:
 	# Esteem: based on reputation, leadership role, skill levels
 	var esteem_score: float = reputation_score * 0.5
 	if leadership_role > 0:
-		esteem_score += 20.0
+		esteem_score += 20.0 * leadership_presence_multiplier()
 	# Add skill level contribution
 	var total_skill_xp: float = 0.0
 	for skill in skill_xp:
@@ -1663,7 +1663,9 @@ func get_skill_level(skill: int) -> int:
 func add_skill_xp(skill: int, amount: float) -> bool:
 	var before: int = get_skill_level(skill)
 	var trait_mult: float = get_trait_mult("skill_xp_mult")
-	skill_xp[skill] = get_skill_xp(skill) + amount * trait_mult
+	var cat: String = tree_skill_category_for_job_skill(skill)
+	var tree_xp: float = skill_tree_bonus_product_for_category(cat, "xp_mult")
+	skill_xp[skill] = get_skill_xp(skill) + amount * trait_mult * tree_xp
 	
 	# Stage 1: Track last used time for XP decay
 	skill_last_used[skill] = GameManager.tick_count if GameManager != null else 0
@@ -1686,9 +1688,12 @@ func _check_level_up() -> void:
 		total_xp += skill_xp[skill]
 	var new_level: int = int(total_xp / XP_PER_LEVEL) + 1
 	if new_level > level:
+		var old_level: int = level
 		level = new_level
-		# Stage 1: Unlock skill branches at certain levels
-		_unlock_skill_branches(level)
+		# Fire every milestone crossed in one XP tick (avoids skipping branches).
+		for m in [5, 10, 15, 20]:
+			if m > old_level and m <= level:
+				_unlock_skill_branches(m)
 
 
 ## Stage 1: Unlock skill branches at certain levels
@@ -1712,8 +1717,11 @@ func _unlock_basic_skill_branch() -> void:
 	var primary_skill: String = _profession_primary_skill(current_profession)
 	if primary_skill.is_empty():
 		return
+	var key: String = primary_skill + "_basic"
+	if skill_trees.has(key):
+		return
 	# Initialize basic skill tree for profession
-	skill_trees[primary_skill + "_basic"] = {
+	skill_trees[key] = {
 		"unlocked": true,
 		"level": 5,
 		"bonuses": {"work_speed_mult": 1.1},  # +10% work speed
@@ -1728,8 +1736,11 @@ func _unlock_intermediate_skill_branch() -> void:
 	var primary_skill: String = _profession_primary_skill(current_profession)
 	if primary_skill.is_empty():
 		return
+	var pkey: String = primary_skill + "_intermediate"
+	if skill_trees.has(pkey):
+		return
 	# Add intermediate branch
-	skill_trees[primary_skill + "_intermediate"] = {
+	skill_trees[pkey] = {
 		"unlocked": true,
 		"level": 10,
 		"bonuses": {"work_speed_mult": 1.2, "xp_mult": 1.1},
@@ -1744,12 +1755,14 @@ func _unlock_intermediate_skill_branch() -> void:
 		"combat": secondary = "movement"
 		"movement": secondary = "combat"
 	if secondary != "":
-		skill_trees[secondary + "_basics"] = {
-			"unlocked": true,
-			"level": 10,
-			"bonuses": {"work_speed_mult": 1.05},
-			"description": "Foundation in " + secondary,
-		}
+		var skey: String = secondary + "_basics"
+		if not skill_trees.has(skey):
+			skill_trees[skey] = {
+				"unlocked": true,
+				"level": 10,
+				"bonuses": {"work_speed_mult": 1.05},
+				"description": "Foundation in " + secondary,
+			}
 	append_biography_line("Skill branch: Intermediate " + primary_skill + " (level 10)")
 	print("[PawnData] %s unlocked intermediate %s branch" % [display_name, primary_skill])
 
@@ -1759,20 +1772,24 @@ func _unlock_advanced_skill_branch() -> void:
 	var primary_skill: String = _profession_primary_skill(current_profession)
 	if primary_skill.is_empty():
 		return
+	var akey: String = primary_skill + "_advanced"
+	if skill_trees.has(akey):
+		return
 	# Add advanced branch with significant bonuses
-	skill_trees[primary_skill + "_advanced"] = {
+	skill_trees[akey] = {
 		"unlocked": true,
 		"level": 15,
 		"bonuses": {"work_speed_mult": 1.3, "xp_mult": 1.15, "quality_bonus": 1.1},
 		"description": "Advanced mastery in " + primary_skill,
 	}
 	# Unlock teaching ability at level 15
-	skill_trees["teaching"] = {
-		"unlocked": true,
-		"level": 15,
-		"bonuses": {"teach_efficiency": 1.5},
-		"description": "Can teach skills to others",
-	}
+	if not skill_trees.has("teaching"):
+		skill_trees["teaching"] = {
+			"unlocked": true,
+			"level": 15,
+			"bonuses": {"teach_efficiency": 1.5},
+			"description": "Can teach skills to others",
+		}
 	append_biography_line("Skill branch: Advanced " + primary_skill + " (level 15)")
 	print("[PawnData] %s unlocked advanced %s branch" % [display_name, primary_skill])
 
@@ -1782,20 +1799,24 @@ func _unlock_mastery_skill_branch() -> void:
 	var primary_skill: String = _profession_primary_skill(current_profession)
 	if primary_skill.is_empty():
 		return
+	var mkey: String = primary_skill + "_mastery"
+	if skill_trees.has(mkey):
+		return
 	# Add mastery branch with full bonuses
-	skill_trees[primary_skill + "_mastery"] = {
+	skill_trees[mkey] = {
 		"unlocked": true,
 		"level": 20,
 		"bonuses": {"work_speed_mult": 1.5, "xp_mult": 1.2, "quality_bonus": 1.2, "leadership_mult": 1.3},
 		"description": "Mastery of " + primary_skill,
 	}
 	# Unlock innovation ability at mastery
-	skill_trees["innovation"] = {
-		"unlocked": true,
-		"level": 20,
-		"bonuses": {"innovation_chance": 0.15},
-		"description": "Can discover new techniques",
-	}
+	if not skill_trees.has("innovation"):
+		skill_trees["innovation"] = {
+			"unlocked": true,
+			"level": 20,
+			"bonuses": {"innovation_chance": 0.15},
+			"description": "Can discover new techniques",
+		}
 	append_biography_line("Skill branch: Mastery " + primary_skill + " (level 20)")
 	print("[PawnData] %s achieved MASTERY in %s" % [display_name, primary_skill])
 
@@ -1844,15 +1865,106 @@ func decay_unused_skills() -> void:
 			skill_last_used[skill] = current_tick
 
 
+## Maps job [enum Skill] to profession skill-tree category (keys in [member skill_trees]).
+static func tree_skill_category_for_job_skill(skill: int) -> String:
+	match skill:
+		Skill.FORAGING:
+			return "farming"
+		Skill.MINING, Skill.CHOPPING:
+			return "gathering"
+		Skill.BUILDING:
+			return "building"
+		Skill.HUNTING:
+			return "combat"
+	return ""
+
+
+func _skill_tree_branch_applies_to(branch_key: String, category: String) -> bool:
+	if category.is_empty():
+		return false
+	for suffix in ["_basic", "_intermediate", "_advanced", "_mastery"]:
+		if branch_key == category + suffix:
+			return true
+	# Cross-training unlock at level 10
+	if branch_key == category + "_basics":
+		return true
+	return false
+
+
+## Product of `bonus_key` from every unlocked branch that applies to `category`.
+## Only entries that define the key participate (missing key = no change).
+func skill_tree_bonus_product_for_category(category: String, bonus_key: String) -> float:
+	var mult: float = 1.0
+	for branch_key in skill_trees:
+		var entry: Variant = skill_trees[branch_key]
+		if entry is Dictionary and not bool((entry as Dictionary).get("unlocked", false)):
+			continue
+		if not (entry is Dictionary):
+			continue
+		if not _skill_tree_branch_applies_to(str(branch_key), category):
+			continue
+		var bonuses: Dictionary = (entry as Dictionary).get("bonuses", {}) as Dictionary
+		if bonuses.has(bonus_key):
+			mult *= float(bonuses[bonus_key])
+	return mult
+
+
+## Extra harvest quantity multiplier from advanced/mastery [code]quality_bonus[/code] nodes.
+func harvest_quality_multiplier_for_job_skill(skill: int) -> float:
+	var cat: String = tree_skill_category_for_job_skill(skill)
+	if cat.is_empty():
+		return 1.0
+	return skill_tree_bonus_product_for_category(cat, "quality_bonus")
+
+
+## Teaching branch: multiplies XP granted to students in [method Pawn.teach_skill].
+func teach_efficiency_multiplier() -> float:
+	var entry: Variant = skill_trees.get("teaching", null)
+	if entry is Dictionary and bool((entry as Dictionary).get("unlocked", false)):
+		var bonuses: Dictionary = (entry as Dictionary).get("bonuses", {}) as Dictionary
+		if bonuses.has("teach_efficiency"):
+			return maxf(0.25, float(bonuses["teach_efficiency"]))
+	return 1.0
+
+
+func leadership_presence_multiplier() -> float:
+	var mult: float = 1.0
+	for branch_key in skill_trees:
+		var entry: Variant = skill_trees[branch_key]
+		if entry is Dictionary and not bool((entry as Dictionary).get("unlocked", false)):
+			continue
+		var bonuses: Dictionary = (entry as Dictionary).get("bonuses", {}) as Dictionary
+		if bonuses.has("leadership_mult"):
+			mult *= float(bonuses["leadership_mult"])
+	return mult
+
+
+## After load: ensure milestone branches exist up to [member level] (idempotent).
+func ensure_skill_trees_through_level(max_level: int) -> void:
+	for m in [5, 10, 15, 20]:
+		if max_level >= m:
+			_unlock_skill_branches(m)
+
+
+func sync_level_from_total_skill_xp() -> void:
+	var total_xp: float = 0.0
+	for sk in skill_xp:
+		total_xp += float(skill_xp[sk])
+	level = maxi(1, int(total_xp / XP_PER_LEVEL) + 1)
+
+
 ## Speed multiplier to apply to per-tick work progress for `skill`. Linearly
 ## interpolates from 1.0 at level 0 to SKILL_BONUS_AT_MAX at SKILL_LEVEL_MAX,
 ## then plateaus.
 func work_speed_for(skill: int) -> float:
 	var lvl: int = mini(get_skill_level(skill), SKILL_LEVEL_MAX)
-	if lvl <= 0:
-		return 1.0
-	var t: float = float(lvl) / float(SKILL_LEVEL_MAX)
-	return 1.0 + t * (SKILL_BONUS_AT_MAX - 1.0)
+	var base: float = 1.0
+	if lvl > 0:
+		var t: float = float(lvl) / float(SKILL_LEVEL_MAX)
+		base = 1.0 + t * (SKILL_BONUS_AT_MAX - 1.0)
+	var cat: String = tree_skill_category_for_job_skill(skill)
+	var tree_mult: float = skill_tree_bonus_product_for_category(cat, "work_speed_mult")
+	return base * tree_mult
 
 
 func _skill_to_profession(skill_key: String) -> int:
@@ -2534,6 +2646,9 @@ func to_save_dict() -> Dictionary:
 		"carrying": carrying,
 		"carrying_qty": carrying_qty,
 		"skill_xp": sx,
+		"level": level,
+		"skill_trees": skill_trees.duplicate(true),
+		"mastery_perks": mastery_perks.duplicate(),
 		"skills": skills.duplicate(true),
 		"affinities": affinities.duplicate(true),
 		"affinity_birth_snapshot": affinity_birth_snapshot.duplicate(true),
@@ -2602,6 +2717,13 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	if d.has("skill_xp") and d["skill_xp"] is Dictionary:
 		for k in d["skill_xp"]:
 			p.skill_xp[int(k)] = float(d["skill_xp"][k])
+	p.sync_level_from_total_skill_xp()
+	var saved_level: int = int(d.get("level", p.level))
+	p.level = maxi(p.level, saved_level)
+	if d.has("skill_trees") and d["skill_trees"] is Dictionary:
+		p.skill_trees = (d["skill_trees"] as Dictionary).duplicate(true)
+	if d.has("mastery_perks") and d["mastery_perks"] is Array:
+		p.mastery_perks = (d["mastery_perks"] as Array).duplicate()
 	p.skills = {
 		"movement": 0,
 		"farming": 0,
@@ -2637,6 +2759,7 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 		p.affinity_birth_snapshot = p.affinities.duplicate(true)
 	p.recompute_affinities_from_liking()
 	p.current_profession = int(d.get("current_profession", Profession.NONE))
+	p.ensure_skill_trees_through_level(p.level)
 	p.birth_tick = int(d.get("birth_tick", 0))
 	p.parent_a_id = int(d.get("parent_a_id", -1))
 	p.parent_b_id = int(d.get("parent_b_id", -1))

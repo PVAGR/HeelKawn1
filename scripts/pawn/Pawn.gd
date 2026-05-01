@@ -798,6 +798,10 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	_parity_context_tick = -1
 	_parity_context.clear()
 	_request_redraw()
+	# Register with SpatialManager for infinite world culling
+	if SpatialManager != null and data != null:
+		var tile_pos = Vector2i(int(world_pos.x), int(world_pos.y))
+		SpatialManager.register_entity(int(data.id), tile_pos, "pawn")
 
 
 func _reset_neural_priority_cache() -> void:
@@ -812,6 +816,9 @@ func _exit_tree() -> void:
 	# Unregister pawn data so static registry stays accurate
 	if data != null:
 		PawnData.unregister_pawn_data(int(data.id))
+	# Unregister from SpatialManager
+	if SpatialManager != null and data != null:
+		SpatialManager.unregister_entity(int(data.id))
 
 
 ## Re-read the spawn tile’s [CulturalMemory] entry (e.g. after load once ruins are applied). Does not run every tick.
@@ -1138,6 +1145,9 @@ func nudge_if_standing_on_solid() -> void:
 	position = _world.tile_to_world(dest)
 	_target_tile = dest
 	_target_world_pos = position
+	# Update SpatialManager with new position
+	if SpatialManager != null and data != null:
+		SpatialManager.update_entity_position(int(data.id), dest)
 	_request_redraw()
 
 
@@ -1169,6 +1179,9 @@ func evict_to_neighbor_of_tile(stand_tile: Vector2i) -> void:
 	position = _world.tile_to_world(dest)
 	_target_tile = dest
 	_target_world_pos = position
+	# Update SpatialManager with new position
+	if SpatialManager != null and data != null:
+		SpatialManager.update_entity_position(int(data.id), dest)
 	_request_redraw()
 
 
@@ -1256,6 +1269,9 @@ func _process(delta: float) -> void:
 			RoadMemory.record_step(from_step, _target_tile, _world)
 		# Wanderer path: track region exploration.
 		_track_region_visit(_target_tile)
+		# Update SpatialManager with new position
+		if SpatialManager != null and data != null:
+			SpatialManager.update_entity_position(int(data.id), _target_tile)
 		_advance_path()
 	else:
 		position += to_target.normalized() * step
@@ -1331,6 +1347,11 @@ func _on_game_tick(_tick: int) -> void:
 		push_warning("Pawn: game_tick skipped - data not ready (path=%s)" % str(get_path()))
 		return
 	var pid: int = int(data.id)
+	
+	# SPATIAL CULLING: Skip AI tick if pawn's chunk is inactive (infinite world optimization)
+	if SpatialManager != null and not SpatialManager.should_entity_tick(pid):
+		return
+	
 	var _trace_ai_slice: bool = CrashTrap.should_trace_game_tick_dispatch(_tick)
 	if _hit_flash_ticks > 0:
 		_hit_flash_ticks -= 1
@@ -4957,6 +4978,10 @@ func _die(_p_cause: String = "") -> void:
 		# KnowledgeSystem: remove knowledge carrier when pawn dies
 		if KnowledgeSystem != null:
 			KnowledgeSystem.remove_knowledge_carrier(int(data.id))
+		
+		# SpatialManager: unregister entity from spatial grid
+		if SpatialManager != null:
+			SpatialManager.unregister_entity(int(data.id))
 
 
 ## Trait / Krond convenience wrappers (delegates to PawnData)

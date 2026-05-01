@@ -802,6 +802,18 @@ func _refresh() -> void:
 		crisis_text += " (%.0f%%)" % (crisis * 100.0)
 		_crisis_level_label.text = crisis_text
 
+	if _hint_label != null:
+		var esc: String = "[Esc] deselect"
+		if _player_context_picker_visible:
+			_hint_label.text = "Incarnation picker open · %s" % esc
+		elif _player_context_mode_label == "INCARNATED" and _player_context_pawn_id >= 0:
+			if int(d.id) == _player_context_pawn_id:
+				_hint_label.text = "You are incarnated · %s · F9 realm · F10 → 35" % esc
+			else:
+				_hint_label.text = "Inspecting (your pawn #%d) · %s" % [_player_context_pawn_id, esc]
+		else:
+			_hint_label.text = "Observer/chronicler · %s · F9 · F10 → 35" % esc
+
 	# Reposition each tick because the panel can grow/shrink with carry text.
 	_reposition()
 

@@ -274,6 +274,8 @@ var _eat_ticks_left: int = 0
 var _teaching_target: Pawn = null
 var _teaching_ticks_left: int = 0
 var _teaching_knowledge_type: int = -1
+var _last_teach_tick: int = 0
+var _teach_cooldown_ticks: int = 0  # Will be set in _ready()
 
 ## Challenge state variables
 var _challenge_target: Pawn = null
@@ -330,6 +332,7 @@ var _last_neural_decision_log_tick: int = -1000000
 var _last_inspect_msg: String = ""
 var _last_inspect_tick: int = -999999
 var _last_teaching_memory_event_tick: int = -TEACHING_MEMORY_EVENT_MIN_INTERVAL_TICKS
+var _last_body_needs_tick_applied: int = -1
 ## One [WorldAI.build_idle_parity_context_for_pawn] snapshot per pawn per tick (NPC / player parity).
 var _parity_context_tick: int = -1
 var _parity_context: Dictionary = {}
@@ -346,6 +349,18 @@ var _pawn_sim_tick_armed: bool = false
 ## parser can fail to resolve the `data` member on class_name Pawn in autoload scripts.
 func get_pawn_data() -> PawnData:
 	return data
+
+
+func apply_body_needs() -> void:
+	if data == null:
+		return
+	var tick_now: int = GameManager.tick_count if GameManager != null else -1
+	if tick_now >= 0 and _last_body_needs_tick_applied == tick_now:
+		_publish_player_body_needs_to_hud_if_incarnated()
+		return
+	_last_body_needs_tick_applied = tick_now
+	_decay_needs()
+	_publish_player_body_needs_to_hud_if_incarnated()
 
 
 func get_state_name() -> String:
@@ -791,6 +806,12 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	_perception_scan_cursor = 0
 	# Load saved age as years for display
 	data.age_years = float(data.age)
+	
+	# Initialize teaching cooldown (3 days)
+	if has_node("/root/WorldClock"):
+		var wc = get_node("/root/WorldClock")
+		if "ticks_per_day" in wc:
+			_teach_cooldown_ticks = int(wc.ticks_per_day) * 3
 	_clear_cohort_state()
 	add_to_group("pawns")
 	add_to_group("tickable")
@@ -1353,7 +1374,7 @@ func _on_world_tick(_tick: int) -> void:
 	if posmod(GameManager.tick_count + pid, 5) == 0:
 		if _trace_ai_slice:
 			CrashTrap.enter_system("pawn_tick:%d:needs" % pid)
-		_decay_needs()
+		apply_body_needs()
 		_check_thresholds()
 		if _trace_ai_slice:
 			CrashTrap.exit_system("pawn_tick:%d:needs" % pid)
@@ -3290,7 +3311,7 @@ func _deposit_at_stockpile() -> void:
 			)
 	if sp != null and data.is_carrying():
 		# If carrying a tool, auto-equip it instead of depositing
-		if Item.is_tool(data.carrying) and not data.is_equipped_tool_valid():
+		if Item.is_tool_type(data.carrying) and not data.is_equipped_tool_valid():
 			data.equip_tool(data.carrying)
 			if GameManager.verbose_logs():
 				print("[Pawn] %s equipped %s (durability=%d)" % [
@@ -3746,6 +3767,28 @@ func _decay_needs() -> void:
 		return
 	# Death from starvation, exhaustion, or injury
 	_check_death_conditions()
+
+
+func _publish_player_body_needs_to_hud_if_incarnated() -> void:
+	if data == null or get_tree() == null:
+		return
+	var root: Window = get_tree().get_root()
+	if root == null:
+		return
+	var main_node: Node = root.get_node_or_null("Main")
+	if main_node == null:
+		return
+	if not main_node.has_method("is_player_incarnated") or not main_node.has_method("get_player_pawn_id"):
+		return
+	if not bool(main_node.call("is_player_incarnated")):
+		return
+	if int(main_node.call("get_player_pawn_id")) != int(data.id):
+		return
+	var hud: Node = root.get_node_or_null("Main/UI_Viewport/ColonyHUD")
+	if hud == null:
+		hud = root.get_node_or_null("ColonyHUD")
+	if hud != null and hud.has_method("update_player_needs"):
+		hud.call("update_player_needs", data.hunger, data.rest)
 
 
 ## Crisis strike: pawn refuses to work when mood is critical.

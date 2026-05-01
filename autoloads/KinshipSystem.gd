@@ -10,9 +10,9 @@ extends Node
 @onready var GameManager = get_node_or_null("/root/GameManager")
 
 # Household data: household_id -> household info
-
-# Household data: household_id -> household info
 var household_data: Dictionary = {}
+var _households: Dictionary = {}
+var _next_household_id: int = 1
 
 # Obligation tracking: obligation_id -> obligation data
 var obligations: Dictionary = {}
@@ -26,6 +26,117 @@ func _with_person_id(person_id: int, data: Dictionary) -> Dictionary:
 	merged["id"] = person_id
 	return merged
 
+
+func _household_node_id(household_id: int) -> String:
+	return "household:%d" % household_id
+
+
+func _current_tick() -> int:
+	if GameManager != null:
+		return int(GameManager.tick_count)
+	return 0
+
+
+func _append_unique_id(out: Array, value: Variant) -> void:
+	var id: int = int(value)
+	if id < 0:
+		return
+	if not out.has(id):
+		out.append(id)
+
+
+func _same_id(left: Variant, right: Variant) -> bool:
+	if typeof(left) != typeof(right):
+		return false
+	return left == right
+
+
+func _is_household_ref(value: Variant, household_id: int) -> bool:
+	if typeof(value) == TYPE_INT:
+		return int(value) == household_id
+	if typeof(value) == TYPE_STRING:
+		return str(value) == _household_node_id(household_id)
+	return false
+
+
+func _sorted_ids(ids: Array) -> Array:
+	ids.sort()
+	return ids
+
+
+func _ensure_household_record(household_id: int, leader_pawn_id: int = -1) -> Dictionary:
+	if not _households.has(household_id):
+		_households[household_id] = {
+			"leader_id": leader_pawn_id,
+			"members": [],
+			"created_tick": _current_tick(),
+		}
+	elif leader_pawn_id >= 0 and int(_households[household_id].get("leader_id", -1)) < 0:
+		_households[household_id]["leader_id"] = leader_pawn_id
+	if not household_data.has(household_id):
+		household_data[household_id] = {"food": 0.0, "labor_contribution": 0.0}
+	return _households[household_id]
+
+
+func _add_household_member_record(household_id: int, pawn_id: int) -> bool:
+	if not _households.has(household_id):
+		return false
+	var members: Array = _households[household_id].get("members", [])
+	_append_unique_id(members, pawn_id)
+	_households[household_id]["members"] = members
+	return true
+
+
+func _has_relation(from_id, to_id, relation: String) -> bool:
+	if RelationalGraph == null:
+		return false
+	for e in RelationalGraph.edges:
+		if e.get("type", "") == relation and _same_id(e.get("from"), from_id) and _same_id(e.get("to"), to_id):
+			return true
+	return false
+
+
+func _parent_ids(person_id: int) -> Array:
+	var parents: Array = []
+	if RelationalGraph == null:
+		return parents
+	for e in RelationalGraph.edges:
+		if e.get("type", "") == "parent" and e.get("to") == person_id:
+			_append_unique_id(parents, e.get("from"))
+		elif e.get("type", "") == "child" and e.get("from") == person_id:
+			_append_unique_id(parents, e.get("to"))
+	return _sorted_ids(parents)
+
+
+func _child_ids(person_id: int) -> Array:
+	var children: Array = []
+	if RelationalGraph == null:
+		return children
+	for e in RelationalGraph.edges:
+		if e.get("type", "") == "parent" and e.get("from") == person_id:
+			_append_unique_id(children, e.get("to"))
+		elif e.get("type", "") == "child" and e.get("to") == person_id:
+			_append_unique_id(children, e.get("from"))
+	return _sorted_ids(children)
+
+
+func _spouse_ids(person_id: int) -> Array:
+	var spouses: Array = []
+	if RelationalGraph == null:
+		return spouses
+	for e in RelationalGraph.edges:
+		if e.get("type", "") == "spouse":
+			if e.get("from") == person_id:
+				_append_unique_id(spouses, e.get("to"))
+			elif e.get("to") == person_id:
+				_append_unique_id(spouses, e.get("from"))
+	return _sorted_ids(spouses)
+
+
+func _bump_next_household_id() -> void:
+	for household_id in _households.keys():
+		_next_household_id = max(_next_household_id, int(household_id) + 1)
+
 # Add a person node (if not already present)
 func add_person(person_id: int, data: Dictionary = {}):
 	if RelationalGraph:
@@ -34,12 +145,18 @@ func add_person(person_id: int, data: Dictionary = {}):
 
 # Add a household node (if not already present)
 func add_household(household_id: int, data: Dictionary = {}):
+	_ensure_household_record(household_id, int(data.get("leader_id", -1)))
+	_bump_next_household_id()
 	if RelationalGraph:
-		if not RelationalGraph.nodes.has(household_id):
-			RelationalGraph.add_node("household", _with_person_id(household_id, data))
+		var graph_id: String = _household_node_id(household_id)
+		if not RelationalGraph.nodes.has(graph_id):
+			var node_data: Dictionary = data.duplicate(true)
+			node_data["id"] = graph_id
+			node_data["household_id"] = household_id
+			RelationalGraph.add_node("household", node_data)
 
 # Add a kinship edge (parent, child, sibling, spouse, etc.)
-func add_kinship(from_id: int, to_id: int, relation: String, data: Dictionary = {}):
+func add_kinship(from_id, to_id, relation: String, data: Dictionary = {}):
 	if RelationalGraph:
 		RelationalGraph.add_edge(from_id, to_id, relation, data)
 
@@ -49,18 +166,98 @@ func get_kinship(person_id: int, relation: String = "") -> Array:
 		return RelationalGraph.get_edges(person_id, relation)
 	return []
 
+
+func create_household(leader_pawn_id: int) -> int:
+	while _households.has(_next_household_id):
+		_next_household_id += 1
+	var hhid: int = _next_household_id
+	_next_household_id += 1
+	var created_tick: int = _current_tick()
+	_households[hhid] = {
+		"leader_id": leader_pawn_id,
+		"members": [leader_pawn_id],
+		"created_tick": created_tick,
+	}
+	if not household_data.has(hhid):
+		household_data[hhid] = {"food": 0.0, "labor_contribution": 0.0}
+	add_household(hhid, {"leader_id": leader_pawn_id, "created_tick": created_tick})
+	add_household_member(leader_pawn_id, hhid)
+	return hhid
+
+
+func add_to_household(hhid: int, pawn_id: int) -> bool:
+	if not _households.has(hhid):
+		return false
+	_add_household_member_record(hhid, pawn_id)
+	add_household_member(pawn_id, hhid)
+	return true
+
+
 # Query all household members
 func get_household_members(household_id: int) -> Array:
+	var members: Array = []
+	if _households.has(household_id):
+		for member_id in _households[household_id].get("members", []):
+			_append_unique_id(members, member_id)
 	if RelationalGraph:
-		var members = []
 		for e in RelationalGraph.edges:
-			if e["type"] == "household_member" and e["to"] == household_id:
-				members.append(e["from"])
-			elif e["type"] == "household_member" and e["from"] == household_id:
-				members.append(e["to"])
+			if e["type"] == "household_member" and _is_household_ref(e["to"], household_id):
+				_append_unique_id(members, e["from"])
+			elif e["type"] == "household_member" and _is_household_ref(e["from"], household_id):
+				_append_unique_id(members, e["to"])
 			# (bidirectional for robustness)
-		return members
-	return []
+	return _sorted_ids(members)
+
+
+func get_siblings(person_id: int) -> Array:
+	var siblings: Array = []
+	if RelationalGraph == null:
+		return siblings
+	for e in RelationalGraph.edges:
+		if e.get("type", "") == "sibling":
+			if e.get("from") == person_id:
+				_append_unique_id(siblings, e.get("to"))
+			elif e.get("to") == person_id:
+				_append_unique_id(siblings, e.get("from"))
+	for parent_id in _parent_ids(person_id):
+		for child_id in _child_ids(parent_id):
+			if int(child_id) != person_id:
+				_append_unique_id(siblings, child_id)
+	return _sorted_ids(siblings)
+
+
+func get_cousins(person_id: int) -> Array:
+	var cousins: Array = []
+	var siblings: Array = get_siblings(person_id)
+	for parent_id in _parent_ids(person_id):
+		for aunt_uncle_id in get_siblings(parent_id):
+			for child_id in _child_ids(aunt_uncle_id):
+				if int(child_id) != person_id and not siblings.has(int(child_id)):
+					_append_unique_id(cousins, child_id)
+	return _sorted_ids(cousins)
+
+
+func get_extended_family(person_id: int) -> Array:
+	var family: Array = []
+	for parent_id in _parent_ids(person_id):
+		_append_unique_id(family, parent_id)
+		for grandparent_id in _parent_ids(parent_id):
+			_append_unique_id(family, grandparent_id)
+		for aunt_uncle_id in get_siblings(parent_id):
+			_append_unique_id(family, aunt_uncle_id)
+	for child_id in _child_ids(person_id):
+		_append_unique_id(family, child_id)
+		for grandchild_id in _child_ids(child_id):
+			_append_unique_id(family, grandchild_id)
+	for sibling_id in get_siblings(person_id):
+		_append_unique_id(family, sibling_id)
+	for spouse_id in _spouse_ids(person_id):
+		_append_unique_id(family, spouse_id)
+	for cousin_id in get_cousins(person_id):
+		_append_unique_id(family, cousin_id)
+	if family.has(person_id):
+		family.erase(person_id)
+	return _sorted_ids(family)
 
 # Example: add parent-child relationship
 func add_parent_child(parent_id: int, child_id: int):
@@ -79,17 +276,22 @@ func add_spouses(person_a: int, person_b: int):
 
 # Example: add household membership
 func add_household_member(person_id: int, household_id: int):
-	add_kinship(person_id, household_id, "household_member")
+	_ensure_household_record(household_id)
+	_add_household_member_record(household_id, person_id)
+	add_household(household_id)
+	var graph_id: String = _household_node_id(household_id)
+	if not _has_relation(person_id, graph_id, "household_member"):
+		add_kinship(person_id, graph_id, "household_member")
 
 
-func rebuild_from_pawn_spawner(spawner: PawnSpawner) -> void:
+func rebuild_from_pawn_spawner(spawner) -> void:
 	clear()
 	if spawner == null:
 		return
 	for pawn in spawner.pawns:
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue
-		var data: PawnData = pawn.data
+		var data = pawn.data
 		add_person(int(data.id), {"display_name": data.display_name, "age": data.age, "gender": data.gender})
 		if data.parent_a_id >= 0:
 			add_parent_child(int(data.parent_a_id), int(data.id))
@@ -106,14 +308,31 @@ func rebuild_from_pawn_spawner(spawner: PawnSpawner) -> void:
 # Clear all kinship data (for tests or resets)
 func clear() -> void:
 	household_data.clear()
+	_households.clear()
+	_next_household_id = 1
 	obligations.clear()
 	inheritance_records.clear()
 	if RelationalGraph:
-		# Clear kinship-related nodes and edges
+		var removed_node_ids: Array = []
 		for node_id in RelationalGraph.nodes.keys():
 			var node_data: Dictionary = RelationalGraph.nodes[node_id]
 			if node_data.get("type", "") in ["person", "household"]:
-				RelationalGraph.remove_node(node_id)
+				removed_node_ids.append(node_id)
+		for node_id in removed_node_ids:
+			RelationalGraph.nodes.erase(node_id)
+		var relation_types: Array = [
+			"parent", "child", "sibling", "spouse", "household_member",
+			"obligation", "inheritance",
+		]
+		for i in range(RelationalGraph.edges.size() - 1, -1, -1):
+			var edge: Dictionary = RelationalGraph.edges[i]
+			var should_remove: bool = (
+				relation_types.has(edge.get("type", ""))
+				or removed_node_ids.has(edge.get("from"))
+				or removed_node_ids.has(edge.get("to"))
+			)
+			if should_remove:
+				RelationalGraph.edges.remove_at(i)
 
 # === Household Food Storage ===
 
@@ -274,17 +493,26 @@ func get_inheritances_for_person(person_id: int) -> Array:
 func to_save_dict() -> Dictionary:
 	return {
 		"household_data": household_data.duplicate(true),
+		"households": _households.duplicate(true),
+		"next_household_id": _next_household_id,
 		"obligations": obligations.duplicate(true),
 		"inheritance_records": inheritance_records.duplicate(true),
 	}
 
 func from_save_dict(d: Dictionary) -> void:
 	household_data.clear()
+	_households.clear()
+	_next_household_id = 1
 	obligations.clear()
 	inheritance_records.clear()
 	
 	if d.has("household_data"):
 		household_data = d["household_data"].duplicate(true)
+	if d.has("households"):
+		_households = d["households"].duplicate(true)
+	if d.has("next_household_id"):
+		_next_household_id = int(d["next_household_id"])
+	_bump_next_household_id()
 	if d.has("obligations"):
 		obligations = d["obligations"].duplicate(true)
 	if d.has("inheritance_records"):

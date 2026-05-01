@@ -592,6 +592,35 @@ func _krond_line_simple() -> String:
 	return "[color=#ffd54f]Krond:[/color] [b]%d[/b]" % [kint]
 
 
+func _player_body_needs_text() -> String:
+	if not _is_player_incarnated_for_hud():
+		return ""
+	if not _has_player_needs:
+		if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+			return ""
+		_player_hunger = clampf(float(_player_pawn.data.hunger), 0.0, 100.0)
+		_player_rest = clampf(float(_player_pawn.data.rest), 0.0, 100.0)
+		_has_player_needs = true
+	return "hunger %s · rest %s" % [
+		_color_value(_player_hunger),
+		_color_value(_player_rest),
+	]
+
+
+func _player_body_needs_line_simple() -> String:
+	var needs: String = _player_body_needs_text()
+	if needs == "":
+		return ""
+	return "[color=#90caf9]Body:[/color] %s" % needs
+
+
+func _is_player_incarnated_for_hud() -> bool:
+	var main_node: Node = get_tree().get_root().get_node_or_null("Main")
+	if main_node == null or not main_node.has_method("is_player_incarnated"):
+		return false
+	return bool(main_node.call("is_player_incarnated"))
+
+
 func _stockpile_line() -> String:
 	var zc: int = StockpileManager.zone_count()
 	if zc <= 0:
@@ -651,8 +680,10 @@ func _player_status_line() -> String:
 	var queue_count: int = main_node.get_player_queue_size()
 	var state: String = main_node.get_player_action_state()
 	var pawn_id_text: String = str(pawn_id) if pawn_id >= 0 else "--"
-	return "[color=#cccccc]PLAYER PAWN:[/color] [b]%s[/b]  |  QUEUE: [b]%d[/b]  |  STATE: [b]%s[/b]" % [
-		pawn_id_text, queue_count, state
+	var body_text: String = _player_body_needs_text()
+	var body_suffix: String = "" if body_text == "" else "  |  BODY: %s" % body_text
+	return "[color=#cccccc]PLAYER PAWN:[/color] [b]%s[/b]  |  QUEUE: [b]%d[/b]  |  STATE: [b]%s[/b]%s" % [
+		pawn_id_text, queue_count, state, body_suffix
 	]
 
 

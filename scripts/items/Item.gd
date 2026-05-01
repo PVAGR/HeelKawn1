@@ -199,7 +199,7 @@ const CRAFTING_RECIPES: Dictionary = {
 }
 
 
-static func is_tool(t: int) -> bool:
+static func is_tool_type(t: int) -> bool:
 	return IS_TOOL.get(t, false)
 
 

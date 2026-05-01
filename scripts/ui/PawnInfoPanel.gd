@@ -327,7 +327,7 @@ func _populate_matrix_tab() -> void:
 	_matrix_inputs_label.bbcode_enabled = true
 	_matrix_inputs_label.fit_content = true
 	_matrix_inputs_label.scroll_active = true
-	_matrix_inputs_label.custom_minimum_size = Vector2(0, 120)
+	_matrix_inputs_label.custom_minimum_size = Vector2(0, 220)
 	_matrix_inputs_label.add_theme_font_size_override("normal_font_size", FONT_MONO)
 	_tab_matrix.add_child(_matrix_inputs_label)
 
@@ -674,15 +674,52 @@ func _refresh() -> void:
 		entry.bar.value = clampf(v, 0.0, 100.0)
 		entry.label.text = "%d" % int(round(v))
 
-	# Matrix tab updates
+	# Matrix tab updates — explicit if/then policy (see PawnDecisionRuleMatrix)
 	if _matrix_inputs_label != null:
 		var matrix_lines: PackedStringArray = []
-		matrix_lines.append("[b]Matrix Inputs:[/b]")
-		matrix_lines.append("Hunger: %.2f" % d.hunger)
-		matrix_lines.append("Rest: %.2f" % d.rest)
-		matrix_lines.append("Mood: %.2f" % d.mood)
-		matrix_lines.append("Health: %.2f" % d.health)
-		matrix_lines.append("Affinities:")
+		matrix_lines.append("[b]If / then matrix[/b] (colony + body + bonds + permissions)")
+		if WorldAI != null and WorldAI.has_method("get_pawn_neural_state"):
+			var ns: Dictionary = WorldAI.get_pawn_neural_state(int(d.id))
+			var rules_v: Variant = ns.get("decision_rules", [])
+			if rules_v is Array and (rules_v as Array).size() > 0:
+				var ri: int = 0
+				for r in (rules_v as Array):
+					if ri >= 18:
+						matrix_lines.append("…")
+						break
+					if r is Dictionary:
+						matrix_lines.append("• %s" % str((r as Dictionary).get("line", "")))
+					ri += 1
+			else:
+				matrix_lines.append("[i]No rules firing (neutral context or missing neural slice).[/i]")
+			var dctx_v: Variant = ns.get("decision_ctx", {})
+			if dctx_v is Dictionary and not (dctx_v as Dictionary).is_empty():
+				var dc: Dictionary = dctx_v as Dictionary
+				matrix_lines.append("")
+				matrix_lines.append("[b]Context snapshot[/b]")
+				matrix_lines.append(
+						"food stock %d · pressure %.2f · founding %.2f · settlement %d" % [
+							int(dc.get("food_stockpile_units", 0)),
+							float(dc.get("food_pressure", 0.0)),
+							float(dc.get("founding_blend", 0.0)),
+							int(dc.get("settlement_id", -1)),
+						]
+				)
+				matrix_lines.append(
+						"rapport %d · opinion %+d · scars %d · crisis %.2f" % [
+							int(dc.get("top_rapport_score", 0)),
+							int(dc.get("top_opinion_score", 0)),
+							int(dc.get("scar_count", 0)),
+							float(dc.get("crisis_level", 0.0)),
+						]
+				)
+		else:
+			matrix_lines.append("[i]WorldAI not available[/i]")
+		matrix_lines.append("")
+		matrix_lines.append("[b]Neural input digest[/b]")
+		matrix_lines.append(
+				"H %.0f  R %.0f  M %.0f  health %.0f" % [d.hunger, d.rest, d.mood, d.health]
+		)
 		for ak in ["combat", "farming", "building", "crafting", "diplomacy"]:
 			matrix_lines.append("  %s: %.2f" % [ak, d.affinities.get(ak, 0.5)])
 		_matrix_inputs_label.text = "\n".join(matrix_lines)
@@ -695,6 +732,7 @@ func _refresh() -> void:
 	if _neural_outputs_label != null:
 		var neural_lines: PackedStringArray = []
 		neural_lines.append("[b]Neural Outputs:[/b]")
+		neural_lines.append("[color=#8a8a95]forward → if/then matrix → scar & site nudge[/color]")
 		if WorldAI != null and WorldAI.has_method("get_pawn_neural_state"):
 			var neural_state: Dictionary = WorldAI.get_pawn_neural_state(int(d.id))
 			if not neural_state.is_empty():

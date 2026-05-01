@@ -2,6 +2,11 @@ extends Node
 ## Advanced World AI with Neural Network Matrix Integration
 ## Manages civilizational planning, technological progression, and neural network-driven world evolution
 
+const _PAWN_DECISION_RULES: Script = preload("res://scripts/ai/PawnDecisionRuleMatrix.gd")
+
+## Lazily constructed — [method _pawn_decision_rule_matrix] returns this.
+var _pawn_decision_rule_evaluator: RefCounted = null
+
 # Event dispatch signals
 signal collapse_warning_event(event: WorldEvent)
 signal knowledge_crisis_event(event: WorldEvent)
@@ -2999,6 +3004,12 @@ func _cleanup_old_events() -> void:
 	for i in range(events_to_remove.size() - 1, -1, -1):
 		world_events.remove_at(events_to_remove[i])
 
+func _pawn_decision_rule_matrix() -> RefCounted:
+	if _pawn_decision_rule_evaluator == null:
+		_pawn_decision_rule_evaluator = _PAWN_DECISION_RULES.new()
+	return _pawn_decision_rule_evaluator
+
+
 func get_pawn_neural_state(pawn_id: int) -> Dictionary:
 	var sp: PawnSpawner = _resolve_pawn_spawner_for_world_ai()
 	if sp == null:
@@ -3017,6 +3028,8 @@ func get_pawn_neural_state(pawn_id: int) -> Dictionary:
 	var nslice: int = mini(8, outputs_full.size())
 	for i in range(nslice):
 		outs.append(outputs_full[i])
+	var rule_ctx: Dictionary = _pawn_decision_rule_context(pd)
+	var decision_rules: Array = _pawn_decision_rule_matrix().evaluate(pd, rule_ctx, outs)
 	_apply_soul_society_output_nudge(pd, outs)
 	return {
 		"inputs": inputs,
@@ -3024,6 +3037,8 @@ func get_pawn_neural_state(pawn_id: int) -> Dictionary:
 		"soul_id": pd.unique_id,
 		"scar_count": pd.physical_scars.size(),
 		"self_preservation_bias": _estimate_self_preservation_bias(outs),
+		"decision_rules": decision_rules,
+		"decision_ctx": rule_ctx,
 	}
 
 
@@ -3046,6 +3061,69 @@ func _apply_soul_society_output_nudge(pd: PawnData, outs: Array) -> void:
 		outs[4] = clampf(float(outs[4]) + martial * 0.18, 0.0, 2.0)
 		outs[6] = clampf(float(outs[6]) + martial * 0.22, 0.0, 2.0)
 		outs[5] = clampf(float(outs[5]) + martial * 0.08, 0.0, 2.0)
+
+
+func _pawn_decision_rule_context(pd: PawnData) -> Dictionary:
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	var founding: float = clampf(
+			1.0 - float(tick) / float(_pawn_decision_rule_matrix().FOUNDING_PERIOD_TICKS),
+			0.0,
+			1.0,
+	)
+	var food_u: int = 999
+	if StockpileManager != null:
+		food_u = StockpileManager.total_food()
+	var food_p: float = 0.0
+	if ColonySimServices != null:
+		food_p = ColonySimServices.get_food_pressure()
+	var tr: Dictionary = pd.top_social_rapport_peer()
+	var top_r: int = int(tr.get("score", 0))
+	var top_rapport_peer: int = int(tr.get("peer_id", -1))
+	if top_rapport_peer < 0:
+		top_r = 0
+	var to_op: Dictionary = pd.top_character_opinion_peer()
+	var top_o: int = int(to_op.get("opinion", 0))
+	var top_op_peer: int = int(to_op.get("peer_id", -1))
+	if top_op_peer < 0:
+		top_o = 0
+	var carrying_food: bool = false
+	if pd.is_carrying():
+		carrying_food = Item.is_food(pd.carrying)
+	return {
+		"tick": tick,
+		"founding_blend": founding,
+		"hunger": pd.hunger,
+		"rest": pd.rest,
+		"mood": pd.mood,
+		"health": pd.health,
+		"max_health": pd.max_health,
+		"pain": pd.pain,
+		"food_stockpile_units": food_u,
+		"food_pressure": food_p,
+		"scar_count": pd.physical_scars.size(),
+		"crisis_level": pd.get_crisis_level(),
+		"children_count": pd.children_count,
+		"settlement_id": pd.settlement_id,
+		"martial_settlement": _pawn_martial_settlement_context(pd),
+		"top_rapport_score": top_r,
+		"top_opinion_score": top_o,
+		"top_opinion_peer_id": top_op_peer,
+		"extraversion": pd.extraversion,
+		"agreeableness": pd.agreeableness,
+		"neuroticism": pd.neuroticism,
+		"conscientiousness": pd.conscientiousness,
+		"affinity_combat": float(pd.affinities.get("combat", 0.5)),
+		"affinity_farming": float(pd.affinities.get("farming", 0.5)),
+		"affinity_building": float(pd.affinities.get("building", 0.5)),
+		"affinity_crafting": float(pd.affinities.get("crafting", 0.5)),
+		"affinity_diplomacy": float(pd.affinities.get("diplomacy", 0.5)),
+		"is_carrying": pd.is_carrying(),
+		"carrying_food": carrying_food,
+		"work_forage": pd.work_forage,
+		"work_mine": pd.work_mine,
+		"work_build": pd.work_build,
+		"work_hunt": pd.work_hunt,
+	}
 
 
 func _pawn_martial_settlement_context(pd: PawnData) -> float:

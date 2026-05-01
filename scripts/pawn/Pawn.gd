@@ -222,6 +222,8 @@ const COHORT_LOCUS_PERSIST_RADIUS_TILES: int = 12
 const COHORT_LOCUS_PERSIST_BIAS_WEIGHT: float = 0.08
 const COHORT_LOCUS_PERSIST_MAX_STEP: float = 0.22
 const RESOURCE_PRESSURE_BIAS_MAX: float = 1.12
+## Social mentoring can happen often; WorldMemory facts stay sparse and auditable.
+const TEACHING_MEMORY_EVENT_MIN_INTERVAL_TICKS: int = 300
 
 # -------------------- AI state --------------------
 
@@ -327,6 +329,7 @@ var _neural_priority_next_refresh_tick: int = -1
 var _last_neural_decision_log_tick: int = -1000000
 var _last_inspect_msg: String = ""
 var _last_inspect_tick: int = -999999
+var _last_teaching_memory_event_tick: int = -TEACHING_MEMORY_EVENT_MIN_INTERVAL_TICKS
 ## One [WorldAI.build_idle_parity_context_for_pawn] snapshot per pawn per tick (NPC / player parity).
 var _parity_context_tick: int = -1
 var _parity_context: Dictionary = {}
@@ -767,6 +770,8 @@ func _pawn_connect_sim_tick_deferred() -> void:
 ## Called by PawnSpawner immediately after instantiation.
 func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	data = p_data
+	# Register pawn data for global lookups (lineage, parent lookup)
+	PawnData.register_pawn_data(data)
 	_reset_behavior_profile()
 	_world = world
 	position = world_pos
@@ -804,6 +809,9 @@ func _exit_tree() -> void:
 	_pawn_sim_tick_armed = false
 	if GameManager != null and GameManager.game_tick.is_connected(_on_game_tick):
 		GameManager.game_tick.disconnect(_on_game_tick)
+	# Unregister pawn data so static registry stays accurate
+	if data != null:
+		PawnData.unregister_pawn_data(int(data.id))
 
 
 ## Re-read the spawn tile’s [CulturalMemory] entry (e.g. after load once ruins are applied). Does not run every tick.
@@ -3379,7 +3387,7 @@ func _maybe_start_teaching() -> bool:
 	var peer_xp: int = best_peer.data.tracked_skill_xp(sk)
 	if my_xp + 6 <= peer_xp:
 		return false
-	best_peer.data.gain_skill_xp(sk, 2)
+	var student_learned: bool = best_peer.data.gain_skill_xp(sk, 2)
 	data.add_social_rapport(int(best_peer.data.id), 2)
 	best_peer.data.add_social_rapport(int(data.id), 2)
 	data.mood = min(100.0, data.mood + 0.4)
@@ -3390,7 +3398,39 @@ func _maybe_start_teaching() -> bool:
 			0.55,
 			"mentoring"
 	)
+	if student_learned:
+		_record_teaching_memory_fact(best_peer, sk)
 	return true
+
+
+func _record_teaching_memory_fact(student: Pawn, skill_taught: String) -> void:
+	if WorldMemory == null or GameManager == null or data == null:
+		return
+	if student == null or not is_instance_valid(student) or student.data == null:
+		return
+	var tick: int = GameManager.tick_count
+	if tick - _last_teaching_memory_event_tick < TEACHING_MEMORY_EVENT_MIN_INTERVAL_TICKS:
+		return
+	_last_teaching_memory_event_tick = tick
+	var settlement_id: int = int(data.settlement_id)
+	if settlement_id < 0:
+		settlement_id = int(student.data.settlement_id)
+	WorldMemory.record_teaching_event(
+			tick,
+			data.tile_pos,
+			int(data.id),
+			data.display_name,
+			int(student.data.id),
+			student.data.display_name,
+			skill_taught,
+			settlement_id
+	)
+	if GameManager.verbose_logs():
+		print("[Pawn] teaching memory fact: %s taught %s to %s" % [
+			data.display_name,
+			skill_taught,
+			student.data.display_name,
+		])
 
 
 ## Check if pawn can challenge nearby pawn's authority
@@ -3678,16 +3718,15 @@ func _emergency_seek_food() -> void:
 	if _current_job != null:
 		_unclaim_current_job()
 	
-	# Look for food in stockpile - use the correct method
-	var stockpile: Stockpile = StockpileManager.find_drop_zone(Item.Type.BERRY, data.tile_pos, _world.pathfinder)
-	if stockpile != null and stockpile.has_any_food():
-		_state = State.GOING_TO_EAT
+	var pathfinder: PathFinder = _world.pathfinder if _world != null else null
+	var stockpile: Stockpile = StockpileManager.find_food_source(data.tile_pos, pathfinder)
+	if stockpile != null:
+		_begin_going_to_eat(stockpile)
 		if GameManager.verbose_logs():
-			print("[Pawn] %s going to stockpile for emergency food" % data.display_name)
+			print("[Pawn] %s going to food source for emergency food" % data.display_name)
 	else:
-		# If no stockpile found, try to find any stockpile
 		if GameManager.verbose_logs():
-			print("[Pawn] %s cannot find stockpile for emergency food" % data.display_name)
+			print("[Pawn] %s cannot find food source for emergency food" % data.display_name)
 
 
 func _decay_stamina() -> void:
@@ -3813,6 +3852,8 @@ func _observe_nearby_work() -> void:
 func teach_skill(target_pawn: Pawn, skill: int) -> bool:
 	# Teach a skill to another pawn
 	# Requires: teacher has skill level >= 5, target has lower skill level
+	if data == null or target_pawn == null or not is_instance_valid(target_pawn) or target_pawn.data == null:
+		return false
 	var teacher_level: int = data.get_skill_level(skill)
 	var target_level: int = target_pawn.data.get_skill_level(skill)
 	
@@ -3825,6 +3866,7 @@ func teach_skill(target_pawn: Pawn, skill: int) -> bool:
 	
 	# Small XP bonus to teacher for teaching
 	data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK * 0.5 * te)
+	_record_teaching_memory_fact(target_pawn, PawnData.skill_name(skill).to_lower())
 	
 	if GameManager.verbose_logs():
 		print("[Pawn] %s taught %s in %s" % [

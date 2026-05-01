@@ -421,6 +421,9 @@ func apply_ruins_from_persistence() -> void:
 			if f != TileFeature.Type.BED and f != TileFeature.Type.WALL and f != TileFeature.Type.DOOR:
 				continue
 			var rk: int = WorldMemory._region_key(x, y)
+			# Only ruinize structures in collapsed settlements.
+			if not SettlementMemory.is_region_in_collapsed_settlement(rk):
+				continue
 			if int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0)) < 2:
 				continue
 			if region_has_pawn.has(rk):

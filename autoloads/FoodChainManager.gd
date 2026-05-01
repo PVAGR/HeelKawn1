@@ -58,13 +58,14 @@ func _spoilage_check_zone(zone: Stockpile) -> void:
 		if spoilage_ticks <= 0:
 			continue  # Never spoils
 		
-		# Simplified spoilage: each tick there's a chance based on age
-		# In a full system, we'd track per-item age; here we use probabilistic decay
+		# Simplified spoilage: each checked item rolls from a named WorldRNG stream.
+		# In a full system, we'd track per-item age; this keeps decay replay-safe.
 		var spoil_chance: float = float(SPOILAGE_CHECK_INTERVAL) / float(spoilage_ticks)
 		var spoil_count: int = 0
 		
 		for i in range(count):
-			if randf() < spoil_chance:
+			var salt: int = _spoilage_roll_salt(zone, item_type, i)
+			if WorldRNG.chance_for(&"food_chain:stockpile_spoilage", spoil_chance, salt):
 				spoil_count += 1
 		
 		if spoil_count > 0:
@@ -210,3 +211,9 @@ func _get_world() -> World:
 	if nodes.is_empty():
 		return null
 	return nodes[0] as World
+
+
+func _spoilage_roll_salt(zone: Stockpile, item_type: int, item_index: int) -> int:
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	var anchor: Vector2i = zone.tile if zone != null else Vector2i.ZERO
+	return tick * 1000003 + anchor.x * 73856093 + anchor.y * 19349663 + item_type * 83492791 + item_index

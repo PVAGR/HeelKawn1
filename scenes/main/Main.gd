@@ -440,6 +440,43 @@ const BUILD_DRAG_MAX_TILES: int = 256  # ~16x16 of walls/beds/doors at once
 var _validation_harness_observability_logged: bool = false
 ## Max settlement rows in Observer realm panel; Shift+F9 cycles 8→12→16→24.
 var _realm_crown_max_settlements: int = 8
+# Per-tile job-post cooldown to reduce spam and stabilize labor pacing.
+const JOB_POST_COOLDOWN_TICKS: int = 50
+var _job_post_cooldowns: Dictionary = {}
+const PRUNE_INTERVAL_TICKS: int = 500
+var _last_prune_tick: int = -1
+var _jobs_suppressed_this_session: int = 0
+
+func _tile_job_key(tile: Vector2i) -> int:
+	return tile.y * WorldData.WIDTH + tile.x
+
+func _can_post_job_at(tile: Vector2i) -> bool:
+	if GameManager == null:
+		return true
+	var now: int = GameManager.tick_count
+	var expiry: int = int(_job_post_cooldowns.get(_tile_job_key(tile), 0))
+	return expiry <= now
+
+func _set_job_post_cooldown(tile: Vector2i) -> void:
+	if GameManager == null:
+		return
+	_job_post_cooldowns[_tile_job_key(tile)] = GameManager.tick_count + JOB_POST_COOLDOWN_TICKS
+
+func _prune_job_post_cooldowns() -> void:
+	if GameManager == null:
+		return
+	var before_size: int = _job_post_cooldowns.size()
+	var now: int = GameManager.tick_count
+	var keys_to_remove: Array = []
+	for k in _job_post_cooldowns.keys():
+		var expiry: int = int(_job_post_cooldowns.get(k, 0))
+		if expiry < now:
+			keys_to_remove.append(k)
+	for k in keys_to_remove:
+		_job_post_cooldowns.erase(k)
+	var after_size: int = _job_post_cooldowns.size()
+	if GameManager.verbose_logs():
+		print("[JobCooldown] Pruned cooldowns: before=%d after=%d" % [before_size, after_size])
 
 
 func _cycle_realm_crown_max_settlements() -> void:
@@ -1749,7 +1786,6 @@ func _bootstrap_colony() -> void:
 		FactionRegistry.sync_from_settlements()
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):
-				_world.refresh_terrain_scar_tint()
 				_world.refresh_pawn_historic_path_weights()
 		)
 		SettlementPlanner.plan(_world, self, true)
@@ -1761,7 +1797,7 @@ func _bootstrap_colony() -> void:
 	_world.set_meta("animal_spawner", _animal_spawner)
 	Main._world_stabilization_until_tick = GameManager.tick_count + WORLD_STABILIZATION_TICKS
 	_seed_jobs_from_world()
-	# Seed initial tunneling toward sealed ore.
+	# Seed initial tunneling toward sealed ore before the first logical tick.
 	_react_to_mining_progress()
 	if _hud != null:
 		_hud.bind(_world, _pawn_spawner)
@@ -1773,6 +1809,15 @@ func _bootstrap_colony() -> void:
 	if is_instance_valid(_world):
 		RemnantMemory.seed_births_from_current_world(_world)
 		IntentMemory.recompute(_world)
+	# Defer only visual refresh; causal job setup stays before the first tick.
+	call_deferred("_bootstrap_heavy_phase2")
+
+
+## Heavy bootstrap phase 2: visual-only terrain tint refresh.
+func _bootstrap_heavy_phase2() -> void:
+	if not is_instance_valid(_world):
+		return
+	_world.refresh_terrain_scar_tint()
 
 
 ## Instantiate the seed Stockpile zone at the nearest main-component tile
@@ -1983,6 +2028,17 @@ func _on_game_tick(tick: int) -> void:
 		t0 = Time.get_ticks_usec()
 		_post_hunting_jobs_for_animals()
 		section_us["hunt_post"] = Time.get_ticks_usec() - t0
+
+	# Periodic maintenance: prune old cooldown entries to bound memory.
+	if GameManager != null:
+		if _last_prune_tick < 0 or tick - _last_prune_tick >= PRUNE_INTERVAL_TICKS:
+			_prune_job_post_cooldowns()
+			_last_prune_tick = tick
+
+	# Verbose session-level telemetry: suppression summary every 1000 ticks.
+	if GameManager != null and GameManager.verbose_logs():
+		if tick % 1000 == 0:
+			print("[JobCooldown] Suppressed this session: %d" % [_jobs_suppressed_this_session])
 	# Enemy AI and raid spawning
 	t0 = Time.get_ticks_usec()
 	_on_enemy_tick(tick, _enemy_spawner)
@@ -4115,7 +4171,6 @@ func _reroll_world() -> void:
 		MythMemory.recompute(_world)
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):
-				_world.refresh_terrain_scar_tint()
 				_world.refresh_pawn_historic_path_weights()
 		)
 	var main_component: int = _world.pathfinder.largest_component_id()
@@ -4141,6 +4196,15 @@ func _reroll_world() -> void:
 		RoadMemory.flush_dirty_tiles(_world)
 		RemnantMemory.clear()
 		RemnantMemory.seed_births_from_current_world(_world)
+	# Defer only visual refresh; causal job setup stays before the next tick.
+	call_deferred("_reroll_heavy_phase2")
+
+
+## Heavy reroll phase 2: visual-only terrain tint refresh.
+func _reroll_heavy_phase2() -> void:
+	if not is_instance_valid(_world):
+		return
+	_world.refresh_terrain_scar_tint()
 
 
 ## Walk the world's feature grid and post initial jobs. Only features on the
@@ -4165,10 +4229,10 @@ func _seed_jobs_from_world() -> void:
 				chop_tiles.append(Vector2i(x, y))
 			elif TileFeature.is_wildlife(f):
 				hunt_tiles.append(Vector2i(x, y))
-	forage_tiles.shuffle()
-	mine_tiles.shuffle()
-	chop_tiles.shuffle()
-	hunt_tiles.shuffle()
+	_sort_tiles_by_seeded_order(forage_tiles, &"seed_jobs:forage")
+	_sort_tiles_by_seeded_order(mine_tiles, &"seed_jobs:mine")
+	_sort_tiles_by_seeded_order(chop_tiles, &"seed_jobs:chop")
+	_sort_tiles_by_seeded_order(hunt_tiles, &"seed_jobs:hunt")
 	var forage_posted: int = 0
 	var forage_skipped: int = 0
 	var mine_posted: int = 0
@@ -4183,8 +4247,18 @@ func _seed_jobs_from_world() -> void:
 		if _world.pathfinder.component_of(tile) != main_component:
 			forage_skipped += 1
 			continue
-		JobManager.post(Job.Type.FORAGE, tile, FORAGE_PRIORITY, FORAGE_WORK_TICKS)
-		forage_posted += 1
+		if not _can_post_job_at(tile):
+			forage_skipped += 1
+			_jobs_suppressed_this_session += 1
+			if GameManager != null and GameManager.verbose_logs():
+				var expiry_f: int = int(_job_post_cooldowns.get(_tile_job_key(tile), 0))
+				var rem_f: int = expiry_f - GameManager.tick_count
+				print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.FORAGE), tile, rem_f])
+			continue
+		var fj: Job = JobManager.post(Job.Type.FORAGE, tile, FORAGE_PRIORITY, FORAGE_WORK_TICKS)
+		if fj != null:
+			_set_job_post_cooldown(tile)
+			forage_posted += 1
 	for tile in mine_tiles:
 		if mine_posted >= MAX_MINE_JOBS:
 			break
@@ -4192,10 +4266,19 @@ func _seed_jobs_from_world() -> void:
 		if work_tile.x < 0 or _world.pathfinder.component_of(work_tile) != main_component:
 			mine_skipped += 1
 			continue
+		if not _can_post_job_at(tile):
+			mine_skipped += 1
+			_jobs_suppressed_this_session += 1
+			if GameManager != null and GameManager.verbose_logs():
+				var expiry_m: int = int(_job_post_cooldowns.get(_tile_job_key(tile), 0))
+				var rem_m: int = expiry_m - GameManager.tick_count
+				print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.MINE), tile, rem_m])
+			continue
 		var job: Job = JobManager.post(Job.Type.MINE, tile, MINE_PRIORITY, MINE_WORK_TICKS)
 		if job == null:
 			continue
 		job.work_tile = work_tile
+		_set_job_post_cooldown(tile)
 		mine_posted += 1
 	# CHOP: trees stand on passable tiles, so work_tile = the tree tile itself
 	# (forage-style). The pawn walks onto the tree to chop it.
@@ -4205,8 +4288,18 @@ func _seed_jobs_from_world() -> void:
 		if _world.pathfinder.component_of(tile) != main_component:
 			chop_skipped += 1
 			continue
-		JobManager.post(Job.Type.CHOP, tile, CHOP_PRIORITY, CHOP_WORK_TICKS)
-		chop_posted += 1
+		if _can_post_job_at(tile):
+			var cj: Job = JobManager.post(Job.Type.CHOP, tile, CHOP_PRIORITY, CHOP_WORK_TICKS)
+			if cj != null:
+				_set_job_post_cooldown(tile)
+				chop_posted += 1
+		else:
+			chop_skipped += 1
+			_jobs_suppressed_this_session += 1
+			if GameManager != null and GameManager.verbose_logs():
+				var expiry_c: int = int(_job_post_cooldowns.get(_tile_job_key(tile), 0))
+				var rem_c: int = expiry_c - GameManager.tick_count
+				print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.CHOP), tile, rem_c])
 	# HUNT: animals also stand on passable tiles -- the pawn walks onto the
 	# tile to hunt them, like CHOP. work_tile defaults to tile (Job.gd default).
 	if (
@@ -4227,9 +4320,19 @@ func _seed_jobs_from_world() -> void:
 			var live_now_seed: int = int(live_seed.get(species_seed, 0))
 			if live_now_seed <= _hunt_reserve_for_species(species_seed):
 				continue
-			JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, _hunt_ticks_for(feat))
-			live_seed[species_seed] = maxi(0, live_now_seed - 1)
-			hunt_posted += 1
+			if _can_post_job_at(tile):
+				var hj: Job = JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, _hunt_ticks_for(feat))
+				if hj != null:
+					_set_job_post_cooldown(tile)
+					live_seed[species_seed] = maxi(0, live_now_seed - 1)
+					hunt_posted += 1
+			else:
+				hunt_skipped += 1
+				_jobs_suppressed_this_session += 1
+				if GameManager != null and GameManager.verbose_logs():
+					var expiry_hs: int = int(_job_post_cooldowns.get(_tile_job_key(tile), 0))
+					var rem_hs: int = expiry_hs - GameManager.tick_count
+					print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.HUNT), tile, rem_hs])
 	if OS.is_debug_build():
 		print(
 				"[Main] Seeded jobs: %d forage, %d mine, %d chop, %d hunt  (pool: %d fertile / %d ore / %d tree / %d wildlife; skipped: F%d M%d C%d H%d off-mainland)" %
@@ -4237,6 +4340,21 @@ func _seed_jobs_from_world() -> void:
 					forage_tiles.size(), mine_tiles.size(), chop_tiles.size(), hunt_tiles.size(),
 					forage_skipped, mine_skipped, chop_skipped, hunt_skipped]
 		)
+
+
+func _sort_tiles_by_seeded_order(tiles: Array[Vector2i], stream_name: StringName) -> void:
+	tiles.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		var key_a: int = _tile_seeded_order_key(a, stream_name)
+		var key_b: int = _tile_seeded_order_key(b, stream_name)
+		if key_a == key_b:
+			return a.y * WorldData.WIDTH + a.x < b.y * WorldData.WIDTH + b.x
+		return key_a < key_b
+	)
+
+
+func _tile_seeded_order_key(tile: Vector2i, stream_name: StringName) -> int:
+	var salt: int = tile.x * 73856093 + tile.y * 19349663
+	return WorldRNG.stream_seed(stream_name, salt)
 
 
 ## Work ticks for a hunt depend on how big the prey is. Anything we don't
@@ -4282,9 +4400,18 @@ func _post_wildlife_hunt_jobs_after_stabilization() -> void:
 		var live_now_bootstrap: int = int(live_bootstrap.get(species_bootstrap, 0))
 		if live_now_bootstrap <= _hunt_reserve_for_species(species_bootstrap):
 			continue
-		if JobManager.post(Job.Type.HUNT, t, HUNT_PRIORITY, _hunt_ticks_for(feat2)) != null:
-			live_bootstrap[species_bootstrap] = maxi(0, live_now_bootstrap - 1)
-			n += 1
+		if _can_post_job_at(t):
+			var hj_boot: Job = JobManager.post(Job.Type.HUNT, t, HUNT_PRIORITY, _hunt_ticks_for(feat2))
+			if hj_boot != null:
+				_set_job_post_cooldown(t)
+				live_bootstrap[species_bootstrap] = maxi(0, live_now_bootstrap - 1)
+				n += 1
+		else:
+			_jobs_suppressed_this_session += 1
+			if GameManager != null and GameManager.verbose_logs():
+				var expiry_bs: int = int(_job_post_cooldowns.get(_tile_job_key(t), 0))
+				var rem_bs: int = expiry_bs - GameManager.tick_count
+				print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.HUNT), t, rem_bs])
 
 
 ## Post hunting jobs for live animals (called each tick to keep jobs in sync with moving animals).
@@ -4332,9 +4459,18 @@ func _post_hunting_jobs_for_animals() -> void:
 		if live_now <= _hunt_reserve_for_species(species):
 			continue
 		var work_ticks: int = HUNT_RABBIT_WORK_TICKS if species == Animal.Type.RABBIT else HUNT_DEER_WORK_TICKS
-		if JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, work_ticks) != null:
-			hunt_jobs_posted += 1
-			live_by_species[species] = maxi(0, live_now - 1)
+		if _can_post_job_at(tile):
+			var hj2: Job = JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, work_ticks)
+			if hj2 != null:
+				_set_job_post_cooldown(tile)
+				hunt_jobs_posted += 1
+				live_by_species[species] = maxi(0, live_now - 1)
+		else:
+			_jobs_suppressed_this_session += 1
+			if GameManager != null and GameManager.verbose_logs():
+				var expiry_ha: int = int(_job_post_cooldowns.get(_tile_job_key(tile), 0))
+				var rem_ha: int = expiry_ha - GameManager.tick_count
+				print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.HUNT), tile, rem_ha])
 
 
 func _refresh_hunt_candidate_index(main_component: int) -> void:
@@ -4566,16 +4702,43 @@ func _restore_feature(tile: Vector2i, feature: int, main_component: int = -1) ->
 		return
 	match feature:
 		TileFeature.Type.FERTILE_SOIL:
-			JobManager.post(Job.Type.FORAGE, tile, FORAGE_PRIORITY, FORAGE_WORK_TICKS)
+			if _can_post_job_at(tile):
+				var rfj: Job = JobManager.post(Job.Type.FORAGE, tile, FORAGE_PRIORITY, FORAGE_WORK_TICKS)
+				if rfj != null:
+					_set_job_post_cooldown(tile)
+			else:
+				_jobs_suppressed_this_session += 1
+				if GameManager != null and GameManager.verbose_logs():
+					var expiry_rgf: int = int(_job_post_cooldowns.get(_tile_job_key(tile), 0))
+					var rem_rgf: int = expiry_rgf - GameManager.tick_count
+					print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.FORAGE), tile, rem_rgf])
 		TileFeature.Type.TREE:
-			JobManager.post(Job.Type.CHOP, tile, CHOP_PRIORITY, CHOP_WORK_TICKS)
+			if _can_post_job_at(tile):
+				var rcj: Job = JobManager.post(Job.Type.CHOP, tile, CHOP_PRIORITY, CHOP_WORK_TICKS)
+				if rcj != null:
+					_set_job_post_cooldown(tile)
+			else:
+				_jobs_suppressed_this_session += 1
+				if GameManager != null and GameManager.verbose_logs():
+					var expiry_rgc: int = int(_job_post_cooldowns.get(_tile_job_key(tile), 0))
+					var rem_rgc: int = expiry_rgc - GameManager.tick_count
+					print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.CHOP), tile, rem_rgc])
 		TileFeature.Type.RABBIT, TileFeature.Type.DEER:
 			if (
 					Main._world_stabilization_until_tick >= 0
 					and GameManager.tick_count < Main._world_stabilization_until_tick
 			):
 				return
-			JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, _hunt_ticks_for(feature))
+			if _can_post_job_at(tile):
+				var rhj: Job = JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, _hunt_ticks_for(feature))
+				if rhj != null:
+					_set_job_post_cooldown(tile)
+			else:
+				_jobs_suppressed_this_session += 1
+				if GameManager != null and GameManager.verbose_logs():
+					var expiry_rgh: int = int(_job_post_cooldowns.get(_tile_job_key(tile), 0))
+					var rem_rgh: int = expiry_rgh - GameManager.tick_count
+					print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.HUNT), tile, rem_rgh])
 
 
 static func _is_biome_compatible(feature: int, biome: int) -> bool:
@@ -4632,10 +4795,18 @@ func _react_to_mining_progress_step() -> bool:
 			var work_tile: Vector2i = pf.find_adjacent_passable(ore_tile)
 			if work_tile.x < 0 or pf.component_of(work_tile) != main_component:
 				continue
+			if not _can_post_job_at(ore_tile):
+				_jobs_suppressed_this_session += 1
+				if GameManager != null and GameManager.verbose_logs():
+					var expiry_mr: int = int(_job_post_cooldowns.get(_tile_job_key(ore_tile), 0))
+					var rem_mr: int = expiry_mr - GameManager.tick_count
+					print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.MINE), ore_tile, rem_mr])
+				continue
 			var job: Job = JobManager.post(Job.Type.MINE, ore_tile, MINE_PRIORITY, MINE_WORK_TICKS)
 			if job == null:
 				continue
 			job.work_tile = work_tile
+			_set_job_post_cooldown(ore_tile)
 			_mining_react_newly_minable_accum += 1
 	_mining_react_scan_y_cursor = y_end
 	if _mining_react_scan_y_cursor < WorldData.HEIGHT:
@@ -4651,11 +4822,19 @@ func _react_to_mining_progress_step() -> bool:
 			# work_tile = a passable main-component neighbor of the wall tile.
 			var work_tile: Vector2i = _find_main_component_neighbor(wall_tile, main_component)
 			if work_tile.x >= 0:
-				var job: Job = JobManager.post(Job.Type.MINE_WALL, wall_tile, MINE_WALL_PRIORITY, MINE_WALL_WORK_TICKS)
-				if job != null:
-					job.work_tile = work_tile
-					active_walls += 1
-					posted_walls = 1
+				if _can_post_job_at(wall_tile):
+					var job: Job = JobManager.post(Job.Type.MINE_WALL, wall_tile, MINE_WALL_PRIORITY, MINE_WALL_WORK_TICKS)
+					if job != null:
+						job.work_tile = work_tile
+						_set_job_post_cooldown(wall_tile)
+						active_walls += 1
+						posted_walls = 1
+				else:
+					_jobs_suppressed_this_session += 1
+					if GameManager != null and GameManager.verbose_logs():
+						var expiry_mw: int = int(_job_post_cooldowns.get(_tile_job_key(wall_tile), 0))
+						var rem_mw: int = expiry_mw - GameManager.tick_count
+						print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.MINE_WALL), wall_tile, rem_mw])
 
 	if _mining_react_newly_minable_accum > 0 or posted_walls > 0:
 		if OS.is_debug_build():

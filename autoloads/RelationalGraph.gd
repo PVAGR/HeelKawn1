@@ -11,11 +11,12 @@ extends Node
 ## Node and edge storage
 var nodes := {} # id -> {"type": String, "data": Dictionary}
 var edges := [] # [{"from": id, "to": id, "type": String, "data": Dictionary}]
+var _next_auto_id: int = 1
 
 
 ## Add a node (returns node id)
 func add_node(node_type: String, data: Dictionary = {}) -> Variant:
-	var node_id: Variant = data.get("id", hash(node_type + str(Time.get_ticks_usec()) + str(randi())))
+	var node_id: Variant = data["id"] if data.has("id") else _allocate_auto_id(node_type)
 	nodes[node_id] = {"type": node_type, "data": data.duplicate(true)}
 	return node_id
 
@@ -58,6 +59,7 @@ func to_save_dict() -> Dictionary:
 	return {
 		"nodes": nodes.duplicate(true),
 		"edges": edges.duplicate(true),
+		"next_auto_id": _next_auto_id,
 	}
 
 
@@ -65,9 +67,21 @@ func to_save_dict() -> Dictionary:
 func from_save_dict(d: Dictionary) -> void:
 	nodes = d.get("nodes", {}).duplicate(true)
 	edges = d.get("edges", []).duplicate(true)
+	_next_auto_id = int(d.get("next_auto_id", 1))
 
 
 ## Clear all data (for tests or resets)
 func clear() -> void:
 	nodes.clear()
 	edges.clear()
+	_next_auto_id = 1
+
+
+func _allocate_auto_id(node_type: String) -> String:
+	var node_id: String = ""
+	while true:
+		node_id = "%s:auto:%d" % [node_type, _next_auto_id]
+		_next_auto_id += 1
+		if not nodes.has(node_id):
+			return node_id
+	return node_id

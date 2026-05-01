@@ -77,7 +77,8 @@ func apply_injury(pawn: Pawn, injury_type: int, severity: float, source: String 
 	if injury_type == InjuryType.CUT and new_severity > 30.0:
 		# Check if there's a healer nearby
 		var has_healer: bool = _has_healer_nearby(pawn)
-		if not has_healer and randf() < INFECTION_CHANCE_PER_TICK * 10:
+		var infection_salt: int = _infection_roll_salt(pd, type_name, new_severity, source)
+		if not has_healer and WorldRNG.chance_for(&"body_risk:cut_infection", INFECTION_CHANCE_PER_TICK * 10, infection_salt):
 			apply_injury(pawn, InjuryType.INFECTION, 20.0, "untreated_cut")
 	
 	# Update pain based on total injury severity
@@ -238,3 +239,8 @@ static func _injury_type_from_name(name: String) -> int:
 		"frostbite":    return InjuryType.FROSTBITE
 		"infection":    return InjuryType.INFECTION
 	return InjuryType.CUT
+
+
+static func _infection_roll_salt(pd: PawnData, injury_name: String, severity: float, source: String) -> int:
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	return int(pd.id) * 1000003 + tick * 9176 + int(severity * 10.0) + hash(injury_name) + hash(source)

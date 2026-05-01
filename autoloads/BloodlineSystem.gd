@@ -10,7 +10,10 @@ const BLOODLINE_CLEANUP_INTERVAL_TICKS: int = 10000
 const BLOODLINE_CLEANUP_PHASE_OFFSET_TICKS: int = 1151
 const BLOODLINE_PRIDE_PER_LIVING_MEMBER: float = 0.006
 
-# Bloodline data: bloodline_id -> bloodline info
+## Monotonic id allocator (persisted). Replaces ad-hoc tick-based ids for stable bloodline keys.
+var _next_bloodline_id: int = 1
+
+# Bloodline data: bloodline_id -> bloodline info (shared-ancestor group; founder + stats)
 var bloodlines: Dictionary = {}
 
 # Pawn to bloodline mapping: pawn_id -> bloodline_id
@@ -20,7 +23,9 @@ var pawn_to_bloodline: Dictionary = {}
 var generation_data: Dictionary = {}
 
 func _ready() -> void:
-	GameManager.game_tick.connect(_on_game_tick)
+	_refresh_next_bloodline_id()
+	if GameManager != null:
+		GameManager.game_tick.connect(_on_game_tick)
 
 func _on_game_tick(tick: int) -> void:
 	# Periodic cleanup of empty bloodlines
@@ -29,8 +34,22 @@ func _on_game_tick(tick: int) -> void:
 
 # === Bloodline Creation ===
 
+func _refresh_next_bloodline_id() -> void:
+	var max_id: int = 0
+	for k in bloodlines.keys():
+		max_id = maxi(max_id, int(k))
+	_next_bloodline_id = maxi(_next_bloodline_id, max_id + 1)
+
+
+## Compact API: new house with monotonic id; founder is first member (generation bucket 1).
+func establish_bloodline(founder_pawn_id: int) -> int:
+	return create_bloodline(founder_pawn_id, "", "")
+
+
 func create_bloodline(founder_id: int, founder_name: String = "", specialization_key: String = "") -> int:
-	var bloodline_id: int = GameManager.tick_count * 1000 + bloodlines.size()
+	_refresh_next_bloodline_id()
+	var bloodline_id: int = _next_bloodline_id
+	_next_bloodline_id += 1
 	
 	bloodlines[bloodline_id] = {
 		"bloodline_id": bloodline_id,
@@ -105,6 +124,14 @@ func get_inbreeding_penalty(parent_a_id: int, parent_b_id: int) -> float:
 	return clampf(penalty, 0.05, 0.20)
 
 # === Bloodline Membership ===
+
+## Returns false if [param blid] is unknown. Otherwise appends member (generation inferred from [code]parent_id[/code] when set).
+func add_to_bloodline(blid: int, pawn_id: int, parent_id: int = -1) -> bool:
+	if not bloodlines.has(blid):
+		return false
+	add_pawn_to_bloodline(pawn_id, blid, parent_id)
+	return true
+
 
 func add_pawn_to_bloodline(pawn_id: int, bloodline_id: int, parent_id: int = -1, genetic_traits: Array = []) -> void:
 	if not bloodlines.has(bloodline_id):
@@ -225,6 +252,11 @@ func get_generation_for_pawn(pawn_id: int) -> int:
 		if pawn_id in generation_block.get("members", []):
 			return int(generation)
 	return 1
+
+
+## Alias for [method get_generation_for_pawn] (per-member depth within the house).
+func get_generation(pawn_id: int) -> int:
+	return get_generation_for_pawn(pawn_id)
 
 
 func _update_bloodline_specialization(bloodline_id: int, specialization_key: String) -> void:
@@ -439,12 +471,14 @@ func to_save_dict() -> Dictionary:
 		"bloodlines": bloodlines.duplicate(true),
 		"pawn_to_bloodline": pawn_to_bloodline.duplicate(true),
 		"generation_data": generation_data.duplicate(true),
+		"_next_bloodline_id": _next_bloodline_id,
 	}
 
 func from_save_dict(d: Dictionary) -> void:
 	bloodlines.clear()
 	pawn_to_bloodline.clear()
 	generation_data.clear()
+	_next_bloodline_id = 1
 	
 	if d.has("bloodlines"):
 		bloodlines = d["bloodlines"].duplicate(true)
@@ -452,8 +486,12 @@ func from_save_dict(d: Dictionary) -> void:
 		pawn_to_bloodline = d["pawn_to_bloodline"].duplicate(true)
 	if d.has("generation_data"):
 		generation_data = d["generation_data"].duplicate(true)
+	if d.has("_next_bloodline_id"):
+		_next_bloodline_id = int(d["_next_bloodline_id"])
+	_refresh_next_bloodline_id()
 
 func clear() -> void:
 	bloodlines.clear()
 	pawn_to_bloodline.clear()
 	generation_data.clear()
+	_next_bloodline_id = 1

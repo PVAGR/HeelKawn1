@@ -757,16 +757,32 @@ func _ready() -> void:
 func _pawn_connect_sim_tick_deferred() -> void:
 	if not is_instance_valid(self):
 		return
-	if GameManager == null:
-		return
 	if data == null or _world == null:
-		push_warning("Pawn: deferred game_tick connect skipped — not bound (path=%s)" % str(get_path()))
+		push_warning("Pawn: deferred tick connect skipped — not bound (path=%s)" % str(get_path()))
+		return
+	# Prefer TickManager; fall back to GameManager for backward compatibility
+	var tick_manager = get_node_or_null("/root/TickManager")
+	if tick_manager != null and tick_manager.has_signal("tick_processed"):
+		if not tick_manager.tick_processed.is_connected(_on_world_tick):
+			tick_manager.tick_processed.connect(_on_world_tick)
+		_pawn_sim_tick_armed = true
+		return
+	# Fallback to GameManager
+	if GameManager == null:
 		return
 	if GameManager.game_tick.is_connected(_on_world_tick):
 		_pawn_sim_tick_armed = true
 		return
 	GameManager.game_tick.connect(_on_world_tick)
 	_pawn_sim_tick_armed = true
+			return
+	## Fallback: use GameManager for backward compatibility
+	if GameManager != null:
+		if GameManager.game_tick.is_connected(_on_world_tick):
+			_pawn_sim_tick_armed = true
+			return
+		GameManager.game_tick.connect(_on_world_tick)
+		_pawn_sim_tick_armed = true
 
 
 ## Called by PawnSpawner immediately after instantiation.
@@ -791,6 +807,7 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	data.age_years = float(data.age)
 	_clear_cohort_state()
 	add_to_group("pawns")
+	add_to_group("tickable")
 	if not _initial_knowledge_granted:
 		_grant_initial_knowledge()
 		_initial_knowledge_granted = true
@@ -809,7 +826,12 @@ func _reset_neural_priority_cache() -> void:
 
 func _exit_tree() -> void:
 	_pawn_sim_tick_armed = false
-	if GameManager != null and GameManager.game_tick.is_connected(_on_game_tick):
+	# Disconnect from TickManager if connected
+	var tick_manager = get_node_or_null("/root/TickManager")
+	if tick_manager != null and tick_manager.tick_processed.is_connected(_on_world_tick):
+		tick_manager.tick_processed.disconnect(_on_world_tick)
+	# Disconnect from GameManager if connected (backward compatibility)
+	if GameManager != null and GameManager.game_tick.is_connected(_on_world_tick):
 		GameManager.game_tick.disconnect(_on_world_tick)
 	# Unregister pawn data so static registry stays accurate
 	if data != null:
@@ -1332,6 +1354,9 @@ func _on_world_tick(_tick: int) -> void:
 	if data == null:
 		push_warning("Pawn: game_tick skipped - data not ready (path=%s)" % str(get_path()))
 		return
+	## Sync GameManager.tick_count for backward compatibility
+	if GameManager != null:
+		GameManager.tick_count = _tick
 	var pid: int = int(data.id)
 	var _trace_ai_slice: bool = CrashTrap.should_trace_game_tick_dispatch(_tick)
 	if _hit_flash_ticks > 0:

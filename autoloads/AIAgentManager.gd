@@ -65,7 +65,14 @@ var _last_settlement_ai_update_tick: int = -1
 
 func _ready() -> void:
 	add_to_group("tickable")
-	GameManager.game_tick.connect(_on_game_tick)
+	## Connect to TickManager for deterministic ticks
+	if has_node("/root/TickManager"):
+		var tick_mgr = get_node("/root/TickManager")
+		if tick_mgr != null and tick_mgr.has_signal("tick_processed"):
+			tick_mgr.tick_processed.connect(_on_world_tick)
+	## Fallback: use GameManager for backward compatibility
+	elif GameManager != null:
+		GameManager.game_tick.connect(_on_game_tick)
 	last_update_tick = GameManager.tick_count
 	_last_world_ai_update_tick = GameManager.tick_count
 	_last_settlement_ai_update_tick = GameManager.tick_count
@@ -1182,5 +1189,12 @@ func _find_nearest_settlement(agent_id: int) -> int:
 	for settlement_id in settlement_ai_system:
 		return settlement_id
 	return -1
-#		return settlement_id
+#	return settlement_id
 #	return -1
+
+## Called by TickManager - forwards tick to all SettlementAI instances
+func _on_world_tick(tick_number: int) -> void:
+	for settlement_id in settlement_ai_system:
+		var ai = settlement_ai_system[settlement_id]
+		if ai != null and ai.has_method("_on_world_tick"):
+			ai._on_world_tick(tick_number)

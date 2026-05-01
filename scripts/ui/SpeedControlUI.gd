@@ -1,80 +1,94 @@
 extends Control
-## UI for controlling simulation speed and pause state.
+
+## Speed control UI for the TickManager system.
 ## Provides buttons for Pause, 1x, 4x, 16x, 64x speed multipliers.
 
 signal speed_changed(multiplier: float)
-signal pause_toggled(is_paused: bool)
 
-var _buttons: Array[Button] = []
-var _speed_labels: PackedStringArray = ["II", "1x", "4x", "16x", "64x"]
-var _current_index: int = 1  # Start at 1x
+@onready var tick_manager = get_node_or_null("/root/TickManager")
 
 func _ready() -> void:
-	# Connect to TickManager if available
-	if TickManager != null:
-		TickManager.speed_changed.connect(_on_tick_manager_speed_changed)
-		_current_index = TickManager.get_speed_index()
-	
-	# Create the UI
-	_create_ui()
+	# Connect buttons if they exist as children
+	_setup_buttons()
 
-func _create_ui() -> void:
-	# Main container
-	var hbox: HBoxContainer = HBoxContainer.new()
-	hbox.name = "SpeedButtons"
-	add_child(hbox)
-	
-	# Pause button
-	var pause_btn: Button = Button.new()
-	pause_btn.text = "II"
-	pause_btn.pressed.connect(_on_pause_pressed)
-	pause_btn.tooltip_text = "Pause/Resume (Space)"
-	hbox.add_child(pause_btn)
-	_buttons.append(pause_btn)
-	
-	# Speed buttons
-	for i in range(1, _speed_labels.size()):
-		var btn: Button = Button.new()
-		btn.text = _speed_labels[i]
-		btn.pressed.connect(_on_speed_pressed.bind(i))
-		btn.tooltip_text = "Set speed to %s" % _speed_labels[i]
-		hbox.add_child(btn)
-		_buttons.append(btn)
-	
-	# Update button states
-	_update_button_states()
+
+func _setup_buttons() -> void:
+	if tick_manager == null:
+		push_warning("SpeedControlUI: TickManager not found as autoload")
+		return
+
+	# Look for buttons by name
+	var pause_btn = get_node_or_null("PauseButton")
+	var speed_1x_btn = get_node_or_null("Speed1xButton")
+	var speed_4x_btn = get_node_or_null("Speed4xButton")
+	var speed_16x_btn = get_node_or_null("Speed16xButton")
+	var speed_64x_btn = get_node_or_null("Speed64xButton")
+
+	if pause_btn and pause_btn is Button:
+		pause_btn.pressed.connect(_on_pause_pressed)
+
+	if speed_1x_btn and speed_1x_btn is Button:
+		speed_1x_btn.pressed.connect(_on_speed_1x_pressed)
+
+	if speed_4x_btn and speed_4x_btn is Button:
+		speed_4x_btn.pressed.connect(_on_speed_4x_pressed)
+
+	if speed_16x_btn and speed_16x_btn is Button:
+		speed_16x_btn.pressed.connect(_on_speed_16x_pressed)
+
+	if speed_64x_btn and speed_64x_btn is Button:
+		speed_64x_btn.pressed.connect(_on_speed_64x_pressed)
+
 
 func _on_pause_pressed() -> void:
-	if TickManager != null:
-		TickManager.toggle_pause()
-	else:
-		pause_toggled.emit(true)
-
-func _on_speed_pressed(index: int) -> void:
-	_current_index = index
-	if TickManager != null:
-		TickManager.set_speed_index(index)
-	else:
-		speed_changed.emit(TickManager.SPEED_PRESETS[index] if TickManager != null else 1.0)
-	_update_button_states()
-
-func _update_button_states() -> void:
-	if TickManager == null:
+	if tick_manager == null:
 		return
-	var is_paused: bool = TickManager.is_paused()
-	var speed_idx: int = TickManager.get_speed_index()
-	
-	for i in range(_buttons.size()):
-		var btn: Button = _buttons[i]
-		if i == 0:  # Pause button
-			btn.button_pressed = is_paused
-		else:
-			btn.button_pressed = (i == speed_idx and not is_paused)
+	if tick_manager.is_paused():
+		tick_manager.resume()
+	else:
+		tick_manager.pause()
 
-func _on_tick_manager_speed_changed(new_speed: float, is_paused: bool) -> void:
-	_update_button_states()
 
-func _input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.pressed and event.keycode == KEY_SPACE):
-		if TickManager != null:
-			TickManager.toggle_pause()
+func _on_speed_1x_pressed() -> void:
+	_set_speed(TickManager.SpeedPreset.SPEED_1X)
+
+
+func _on_speed_4x_pressed() -> void:
+	_set_speed(TickManager.SpeedPreset.SPEED_4X)
+
+
+func _on_speed_16x_pressed() -> void:
+	_set_speed(TickManager.SpeedPreset.SPEED_16X)
+
+
+func _on_speed_64x_pressed() -> void:
+	_set_speed(TickManager.SpeedPreset.SPEED_64X)
+
+
+func _set_speed(preset: int) -> void:
+	if tick_manager == null:
+		return
+	tick_manager.set_speed(preset)
+	speed_changed.emit(_get_multiplier_for_preset(preset))
+
+
+func _get_multiplier_for_preset(preset: int) -> float:
+	match preset:
+		TickManager.SpeedPreset.SPEED_0_5X:
+			return 0.5
+		TickManager.SpeedPreset.SPEED_1X:
+			return 1.0
+		TickManager.SpeedPreset.SPEED_4X:
+			return 4.0
+		TickManager.SpeedPreset.SPEED_16X:
+			return 16.0
+		TickManager.SpeedPreset.SPEED_64X:
+			return 64.0
+	return 1.0
+
+
+## Public method to set speed from external UI
+func set_speed_multiplier(multiplier: float) -> void:
+	if tick_manager == null:
+		return
+	tick_manager.set_speed_multiplier(multiplier)

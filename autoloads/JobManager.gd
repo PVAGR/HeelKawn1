@@ -7,31 +7,23 @@ extends Node
 # Autoload references
 @onready var WorldAI = get_node_or_null("/root/WorldAI")
 
-
-func _ready() -> void:
-	add_to_group("tickable")
-
-
-func _on_world_tick(tick_number: int) -> void:
-	## JobManager is primarily event-driven (job_posted, job_claimed, etc.)
-	## Add any periodic tick-based logic here (e.g., job timeouts, cleanup).
-	## Currently a no-op but registered for future tick-based features.
-	pass
-
-
-func _ready() -> void:
-	add_to_group("tickable")
-
-
-func _on_world_tick(tick_number: int) -> void:
-	# JobManager is primarily a data store; no per-tick logic required.
-	# This method satisfies the tickable interface for deterministic ordering.
-	pass
-
 signal job_posted(job: Job)
 signal job_claimed(job: Job, pawn: Pawn)
 signal job_completed(job: Job)
 signal job_cancelled(job: Job)
+
+
+func _ready() -> void:
+	add_to_group("tickable")
+
+
+func _on_world_tick(tick_number: int) -> void:
+	# JobManager is event-driven (job_posted, job_claimed, etc.)
+	# Add any periodic tick-based logic here if needed in the future.
+	pass
+
+
+
 
 var _next_id: int = 1
 

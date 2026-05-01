@@ -6,6 +6,7 @@ extends Node
 @onready var GameManager = get_node_or_null("/root/GameManager")
 @onready var JobManager = get_node_or_null("/root/JobManager")
 @onready var SettlementMemory = get_node_or_null("/root/SettlementMemory")
+@onready var TickManager = get_node_or_null("/root/TickManager") # FIX T009
 
 ## Chunk size in tiles (32x32 = 1024 tiles per chunk)
 const CHUNK_SIZE: int = 32

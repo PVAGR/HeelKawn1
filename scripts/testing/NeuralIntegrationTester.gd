@@ -284,26 +284,26 @@ func _test_pattern_recognition() -> Dictionary:
 		test_result.errors.append("Pattern recognition not available")
 		return test_result
 
-		var pattern_recognition = AIAgentManager.pattern_recognition
+	var pattern_recognition = AIAgentManager.pattern_recognition
 
-		# Test pattern recognition structure
-		if not pattern_recognition.has("world_patterns") or not pattern_recognition.has("behavior_patterns"):
-			test_result.status = "failed"
-			test_result.errors.append("Invalid pattern recognition structure")
+	# Test pattern recognition structure
+	if not pattern_recognition.has("world_patterns") or not pattern_recognition.has("behavior_patterns"):
+		test_result.status = "failed"
+		test_result.errors.append("Invalid pattern recognition structure")
 
-		# Test pattern recognition functionality
-		var test_world_state = {
-			"resources": {"food": 100, "wood": 50, "stone": 25, "ore": 10},
-			"population": 50,
-			"technology": 2,
-			"environment": {"fertility": 0.8, "climate": 0.7}
-		}
+	# Test pattern recognition functionality
+	var test_world_state = {
+		"resources": {"food": 100, "wood": 50, "stone": 25, "ore": 10},
+		"population": 50,
+		"technology": 2,
+		"environment": {"fertility": 0.8, "climate": 0.7}
+	}
 
-		var recognized_patterns = AIAgentManager.recognize_patterns(test_world_state)
-		test_result.details["pattern_recognition_functional"] = true
-		test_result.details["recognized_patterns_count"] = recognized_patterns.size()
+	var recognized_patterns = AIAgentManager.recognize_patterns(test_world_state)
+	test_result.details["pattern_recognition_functional"] = true
+	test_result.details["recognized_patterns_count"] = recognized_patterns.size()
 
-		print("[NeuralIntegrationTester] ✓ Pattern recognition test passed")
+	print("[NeuralIntegrationTester] ✓ Pattern recognition test passed")
 
 	return test_result
 
@@ -320,30 +320,30 @@ func _test_predictive_models() -> Dictionary:
 		test_result.errors.append("Predictive models not available")
 		return test_result
 
-		var predictive_models = AIAgentManager.predictive_models
-		var expected_models = ["resource_prediction", "settlement_growth", "world_events"]
+	var predictive_models = AIAgentManager.predictive_models
+	var expected_models = ["resource_prediction", "settlement_growth", "world_events"]
 
-		for model_name in expected_models:
-			if not predictive_models.has(model_name):
+	for model_name in expected_models:
+		if not predictive_models.has(model_name):
+			test_result.status = "failed"
+			test_result.errors.append("Missing model: " + model_name)
+		else:
+			var model = predictive_models[model_name]
+			if not model.has("model_type") or not model.has("accuracy"):
 				test_result.status = "failed"
-				test_result.errors.append("Missing model: " + model_name)
-			else:
-				var model = predictive_models[model_name]
-				if not model.has("model_type") or not model.has("accuracy"):
-					test_result.status = "failed"
-					test_result.errors.append("Invalid model structure: " + model_name)
+				test_result.errors.append("Invalid model structure: " + model_name)
 
-		# Test prediction functionality
-		var test_world_state = {
-			"population": 50,
-			"technology": 2,
-			"environment": {"fertility": 0.8, "climate": 0.7},
-			"resources": {"food": 100, "wood": 50, "stone": 25, "ore": 10}
-		}
+	# Test prediction functionality
+	var test_world_state = {
+		"population": 50,
+		"technology": 2,
+		"environment": {"fertility": 0.8, "climate": 0.7},
+		"resources": {"food": 100, "wood": 50, "stone": 25, "ore": 10}
+	}
 
-		var predictions = AIAgentManager.generate_predictions(test_world_state)
+	var _predictions = AIAgentManager.generate_predictions(test_world_state)
 
-		print("[NeuralIntegrationTester] ✓ Predictive models test passed")
+	print("[NeuralIntegrationTester] ✓ Predictive models test passed")
 
 	return test_result
 
@@ -360,19 +360,19 @@ func _test_collective_intelligence() -> Dictionary:
 		test_result.errors.append("Collective intelligence not available")
 		return test_result
 
-		var collective_intelligence = AIAgentManager.collective_intelligence
+	var collective_intelligence = AIAgentManager.collective_intelligence
 
-		# Test collective intelligence structure
-		if not collective_intelligence.has("shared_memory") or not collective_intelligence.has("swarm_intelligence"):
-			test_result.status = "failed"
-			test_result.errors.append("Invalid collective intelligence structure")
+	# Test collective intelligence structure
+	if not collective_intelligence.has("shared_memory") or not collective_intelligence.has("swarm_intelligence"):
+		test_result.status = "failed"
+		test_result.errors.append("Invalid collective intelligence structure")
 
-		test_result.details["shared_memory_initialized"] = collective_intelligence.has("shared_memory")
-		test_result.details["knowledge_graph_initialized"] = collective_intelligence.has("knowledge_graph")
+	test_result.details["shared_memory_initialized"] = collective_intelligence.has("shared_memory")
+	test_result.details["knowledge_graph_initialized"] = collective_intelligence.has("knowledge_graph")
 
-		print("[NeuralIntegrationTester] ✓ Collective intelligence test passed")
+	print("[NeuralIntegrationTester] ✓ Collective intelligence test passed")
 
-		return test_result
+	return test_result
 
 # === AI Agent Manager Integration Testing ===
 
@@ -930,13 +930,13 @@ func _test_world_evolution_initialization() -> Dictionary:
 		"errors": []
 	}
 
-			# WorldEvolution is a class, not a singleton, so we test its functionality
-		var world_evolution = WorldEvolution.new()
+	# WorldEvolution is a class, not a singleton, so we test its functionality
+	var world_evolution = WorldEvolution.new()
 
-		test_result.details["world_evolution_created"] = true
-		test_result.details["evolution_rate"] = world_evolution.evolution_rate
+	test_result.details["world_evolution_created"] = true
+	test_result.details["evolution_rate"] = world_evolution.evolution_rate
 
-		print("[NeuralIntegrationTester] ✓ World Evolution initialization test passed")
+	print("[NeuralIntegrationTester] ✓ World Evolution initialization test passed")
 
 	return test_result
 
@@ -948,16 +948,16 @@ func _test_evolution_engine() -> Dictionary:
 		"errors": []
 	}
 
-			var world_evolution = WorldEvolution.new()
+	var world_evolution = WorldEvolution.new()
 
-		# Test evolution engine
-		var evolution_status = world_evolution.get_evolution_status()
+	# Test evolution engine
+	var evolution_status = world_evolution.get_evolution_status()
 
-		test_result.details["evolution_status_retrieved"] = true
-		test_result.details["evolution_cycles"] = evolution_status.evolution_cycles
-		test_result.details["current_complexity"] = evolution_status.current_complexity
+	test_result.details["evolution_status_retrieved"] = true
+	test_result.details["evolution_cycles"] = evolution_status.evolution_cycles
+	test_result.details["current_complexity"] = evolution_status.current_complexity
 
-		print("[NeuralIntegrationTester] ✓ Evolution engine test passed")
+	print("[NeuralIntegrationTester] ✓ Evolution engine test passed")
 
 	return test_result
 
@@ -997,35 +997,35 @@ func _test_matrix_connectivity() -> Dictionary:
 		"errors": []
 	}
 
-			# Test connectivity between neural network matrices
-		var connectivity_score = 0.0
-		var total_connections = 0
+	# Test connectivity between neural network matrices
+	var connectivity_score = 0.0
+	var total_connections = 0
 
-		# Test AIAgentManager to WorldAI connectivity
-		if AIAgentManager and WorldAI:
-			connectivity_score += 0.3
-			total_connections += 1
+	# Test AIAgentManager to WorldAI connectivity
+	if AIAgentManager and WorldAI:
+		connectivity_score += 0.3
+		total_connections += 1
 
-		# Test CulturalMemory to ReligionLens connectivity
-		if CulturalMemory and ReligionLens:
-			connectivity_score += 0.3
-			total_connections += 1
+	# Test CulturalMemory to ReligionLens connectivity
+	if CulturalMemory and ReligionLens:
+		connectivity_score += 0.3
+		total_connections += 1
 
-		# Test ErrorTracker to all systems connectivity
-		if ErrorTracker:
-			connectivity_score += 0.2
-			total_connections += 1
+	# Test ErrorTracker to all systems connectivity
+	if ErrorTracker:
+		connectivity_score += 0.2
+		total_connections += 1
 
-		# Test NeuralOptimizer to all systems connectivity
-		if NeuralOptimizer:
-			connectivity_score += 0.2
-			total_connections += 1
+	# Test NeuralOptimizer to all systems connectivity
+	if NeuralOptimizer:
+		connectivity_score += 0.2
+		total_connections += 1
 
-		test_result.details["connectivity_score"] = connectivity_score
-		test_result.details["total_connections"] = total_connections
-		test_result.details["connectivity_good"] = connectivity_score >= 0.8
+	test_result.details["connectivity_score"] = connectivity_score
+	test_result.details["total_connections"] = total_connections
+	test_result.details["connectivity_good"] = connectivity_score >= 0.8
 
-		print("[NeuralIntegrationTester] ✓ Matrix connectivity test passed")
+	print("[NeuralIntegrationTester] ✓ Matrix connectivity test passed")
 
 	return test_result
 
@@ -1037,35 +1037,35 @@ func _test_data_flow() -> Dictionary:
 		"errors": []
 	}
 
-			# Test data flow between systems
-		var data_flow_score = 0.0
-		var data_paths_tested = 0
+	# Test data flow between systems
+	var data_flow_score = 0.0
+	var data_paths_tested = 0
 
-		# Test AIAgentManager to WorldAI data flow
-		if AIAgentManager and WorldAI:
-			data_flow_score += 0.25
-			data_paths_tested += 1
+	# Test AIAgentManager to WorldAI data flow
+	if AIAgentManager and WorldAI:
+		data_flow_score += 0.25
+		data_paths_tested += 1
 
-		# Test WorldAI to CulturalMemory data flow
-		if WorldAI and CulturalMemory:
-			data_flow_score += 0.25
-			data_paths_tested += 1
+	# Test WorldAI to CulturalMemory data flow
+	if WorldAI and CulturalMemory:
+		data_flow_score += 0.25
+		data_paths_tested += 1
 
-		# Test CulturalMemory to ReligionLens data flow
-		if CulturalMemory and ReligionLens:
-			data_flow_score += 0.25
-			data_paths_tested += 1
+	# Test CulturalMemory to ReligionLens data flow
+	if CulturalMemory and ReligionLens:
+		data_flow_score += 0.25
+		data_paths_tested += 1
 
-		# Test all systems to ErrorTracker data flow
-		if ErrorTracker:
-			data_flow_score += 0.25
-			data_paths_tested += 1
+	# Test all systems to ErrorTracker data flow
+	if ErrorTracker:
+		data_flow_score += 0.25
+		data_paths_tested += 1
 
-		test_result.details["data_flow_score"] = data_flow_score
-		test_result.details["data_paths_tested"] = data_paths_tested
-		test_result.details["data_flow_good"] = data_flow_score >= 0.75
+	test_result.details["data_flow_score"] = data_flow_score
+	test_result.details["data_paths_tested"] = data_paths_tested
+	test_result.details["data_flow_good"] = data_flow_score >= 0.75
 
-		print("[NeuralIntegrationTester] ✓ Data flow test passed")
+	print("[NeuralIntegrationTester] ✓ Data flow test passed")
 
 	return test_result
 
@@ -1077,24 +1077,24 @@ func _test_system_synchronization() -> Dictionary:
 		"errors": []
 	}
 
-			# Test system synchronization
-		var sync_score = 0.0
-		var sync_tests = 0
+	# Test system synchronization
+	var sync_score = 0.0
+	var sync_tests = 0
 
-		# Test tick-based synchronization
-		if GameManager:
-			sync_score += 0.5
-			sync_tests += 1
-
-		# Test event-based synchronization
+	# Test tick-based synchronization
+	if GameManager:
 		sync_score += 0.5
 		sync_tests += 1
 
-		test_result.details["sync_score"] = sync_score
-		test_result.details["sync_tests"] = sync_tests
-		test_result.details["synchronization_good"] = sync_score >= 0.8
+	# Test event-based synchronization
+	sync_score += 0.5
+	sync_tests += 1
 
-		print("[NeuralIntegrationTester] ✓ System synchronization test passed")
+	test_result.details["sync_score"] = sync_score
+	test_result.details["sync_tests"] = sync_tests
+	test_result.details["synchronization_good"] = sync_score >= 0.8
+
+	print("[NeuralIntegrationTester] ✓ System synchronization test passed")
 
 	return test_result
 
@@ -1139,31 +1139,31 @@ func _test_high_frequency_processing() -> Dictionary:
 		test_result.errors.append("AIAgentManager not found")
 		return test_result
 
-		# Test high-frequency neural processing
-		var start_time = Time.get_ticks_usec()
-		var iterations = 100
-		var test_input = [0.1, 0.2, 0.3, 0.4]
+	# Test high-frequency neural processing
+	var start_time = Time.get_ticks_usec()
+	var iterations = 100
+	var test_input = [0.1, 0.2, 0.3, 0.4]
 
-		for i in range(iterations):
-			var output = AIAgentManager.process_neural_network(test_input)
-			if output.size() == 0:
-				test_result.status = "failed"
-				test_result.errors.append("Empty output in iteration " + str(i))
-				break
-
-		var end_time = Time.get_ticks_usec()
-		var processing_time = float(end_time - start_time) / 1000.0  # milliseconds
-
-		test_result.details["iterations"] = iterations
-		test_result.details["total_processing_time"] = processing_time
-		test_result.details["average_time_per_iteration"] = processing_time / float(iterations)
-		test_result.details["performance_acceptable"] = processing_time < 1000.0  # Less than 1 second
-
-		if not test_result.details.performance_acceptable:
+	for i in range(iterations):
+		var output = AIAgentManager.process_neural_network(test_input)
+		if output.size() == 0:
 			test_result.status = "failed"
-			test_result.errors.append("Performance too slow")
+			test_result.errors.append("Empty output in iteration " + str(i))
+			break
 
-		print("[NeuralIntegrationTester] ✓ High-frequency processing test passed")
+	var end_time = Time.get_ticks_usec()
+	var processing_time = float(end_time - start_time) / 1000.0  # milliseconds
+
+	test_result.details["iterations"] = iterations
+	test_result.details["total_processing_time"] = processing_time
+	test_result.details["average_time_per_iteration"] = processing_time / float(iterations)
+	test_result.details["performance_acceptable"] = processing_time < 1000.0  # Less than 1 second
+
+	if not test_result.details.performance_acceptable:
+		test_result.status = "failed"
+		test_result.errors.append("Performance too slow")
+
+	print("[NeuralIntegrationTester] ✓ High-frequency processing test passed")
 
 	return test_result
 
@@ -1175,32 +1175,31 @@ func _test_memory_stress() -> Dictionary:
 		"errors": []
 	}
 
-			# Test memory stress
-		var initial_memory = OS.get_static_memory_usage_by_type()[OS.MEMORY_TYPE_STATIC]
+	# Test memory stress (Godot 4: Performance monitor, not OS.get_static_memory_usage_by_type / gc)
+	var initial_memory: float = Performance.get_monitor(Performance.MEMORY_STATIC)
 
-		# Create multiple neural network instances
-		var neural_instances = []
-		for i in range(10):
-			var instance = WorldEvolution.new()
-			neural_instances.append(instance)
+	# Create multiple neural network instances
+	var neural_instances: Array = []
+	for i in range(10):
+		var instance = WorldEvolution.new()
+		neural_instances.append(instance)
 
-		var peak_memory = OS.get_static_memory_usage_by_type()[OS.MEMORY_TYPE_STATIC]
-		var memory_increase = peak_memory - initial_memory
+	var peak_memory: float = Performance.get_monitor(Performance.MEMORY_STATIC)
+	var memory_increase: float = peak_memory - initial_memory
 
-		# Clean up instances
-		neural_instances.clear()
-		gc.collect()
+	# Clean up instances (no explicit GC in GDScript)
+	neural_instances.clear()
 
-		var final_memory = OS.get_static_memory_usage_by_type()[OS.MEMORY_TYPE_STATIC]
-		var memory_recovered = peak_memory - final_memory
+	var final_memory: float = Performance.get_monitor(Performance.MEMORY_STATIC)
+	var memory_recovered: float = peak_memory - final_memory
 
-		test_result.details["initial_memory_mb"] = initial_memory / (1024 * 1024)
-		test_result.details["peak_memory_mb"] = peak_memory / (1024 * 1024)
-		test_result.details["memory_increase_mb"] = memory_increase / (1024 * 1024)
-		test_result.details["memory_recovered_mb"] = memory_recovered / (1024 * 1024)
-		test_result.details["memory_management_good"] = memory_recovered > memory_increase * 0.8
+	test_result.details["initial_memory_mb"] = initial_memory / (1024 * 1024)
+	test_result.details["peak_memory_mb"] = peak_memory / (1024 * 1024)
+	test_result.details["memory_increase_mb"] = memory_increase / (1024 * 1024)
+	test_result.details["memory_recovered_mb"] = memory_recovered / (1024 * 1024)
+	test_result.details["memory_management_good"] = memory_recovered > memory_increase * 0.8
 
-		print("[NeuralIntegrationTester] ✓ Memory stress test passed")
+	print("[NeuralIntegrationTester] ✓ Memory stress test passed")
 
 	return test_result
 
@@ -1212,28 +1211,28 @@ func _test_concurrent_operations() -> Dictionary:
 		"errors": []
 	}
 
-			# Test concurrent operations
-		var concurrent_operations = 5
-		var operations_completed = 0
+	# Test concurrent operations
+	var concurrent_operations = 5
+	var operations_completed = 0
 
-		# Simulate concurrent neural network processing
-		for i in range(concurrent_operations):
-			if AIAgentManager:
-				var test_input = [0.1 * i, 0.2 * i, 0.3 * i, 0.4 * i]
-				var output = AIAgentManager.process_neural_network(test_input)
-				if output.size() > 0:
-					operations_completed += 1
+	# Simulate concurrent neural network processing
+	for i in range(concurrent_operations):
+		if AIAgentManager:
+			var test_input = [0.1 * i, 0.2 * i, 0.3 * i, 0.4 * i]
+			var output = AIAgentManager.process_neural_network(test_input)
+			if output.size() > 0:
+				operations_completed += 1
 
-		test_result.details["concurrent_operations"] = concurrent_operations
-		test_result.details["operations_completed"] = operations_completed
-		test_result.details["success_rate"] = float(operations_completed) / float(concurrent_operations)
-		test_result.details["concurrency_good"] = operations_completed == concurrent_operations
+	test_result.details["concurrent_operations"] = concurrent_operations
+	test_result.details["operations_completed"] = operations_completed
+	test_result.details["success_rate"] = float(operations_completed) / float(concurrent_operations)
+	test_result.details["concurrency_good"] = operations_completed == concurrent_operations
 
-		if operations_completed < concurrent_operations:
-			test_result.status = "failed"
-			test_result.errors.append("Not all operations completed")
+	if operations_completed < concurrent_operations:
+		test_result.status = "failed"
+		test_result.errors.append("Not all operations completed")
 
-		print("[NeuralIntegrationTester] ✓ Concurrent operations test passed")
+	print("[NeuralIntegrationTester] ✓ Concurrent operations test passed")
 
 	return test_result
 

@@ -4,7 +4,6 @@ extends Node
 ## Does not keep references to [World] ([recompute] takes it for API symmetry with peers).
 ## "state" is one of: abandoned, permanently_abandoned, revivable, dormant (revival v1, not saved).
 
-const KIND_PAWN_DEATH: int = 0
 # --- Playtest tuning: revival / abandonment (single place to adjust “feel”) ---
 # HARD_COLLAPSE_TICKS — window for “recent” worst-case collapse when scoring irreversible paths.
 # REVIVABLE_SCAR_MAX — max cluster scar for revivable branch eligibility (see also SettlementRebirth scar>=3 block).
@@ -768,7 +767,7 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
 		"scar_max": scar_max,
 		"reputation_min": reputation_min,
 	}
-	var culture_type: int = preload("res://autoloads/SettlementPlanner.gd").get_culture_type_for_settlement(draft)
+	var culture_type: int = SettlementPlanner.get_culture_type_for_settlement(draft)
 	var state: String = _settlement_state_v1(
 			scar_max, reputation_min, last_activity_tick, last_pawn_death_tick, culture_type
 	)
@@ -893,8 +892,8 @@ func get_settlement_profile(region_key: int) -> Dictionary:
 		"region_key": region_key,
 		"center_region": int(d.get("center_region", -1)),
 		"state": str(d.get("state", "")),
-		"culture_type": preload("res://autoloads/SettlementPlanner.gd").get_culture_type_for_settlement(d),
-		"culture_name": preload("res://autoloads/SettlementPlanner.gd").get_culture_name_for_settlement(d),
+		"culture_type": SettlementPlanner.get_culture_type_for_settlement(d),
+		"culture_name": SettlementPlanner.get_culture_name_for_settlement(d),
 		"scar_max": int(d.get("scar_max", 0)),
 		"reputation_min": int(d.get("reputation_min", 0)),
 		"last_activity_tick": int(d.get("last_activity_tick", -1)),
@@ -943,30 +942,7 @@ func _regions_from_settlement(settlement: Dictionary) -> PackedInt32Array:
 
 
 func _max_last_pawn_death_tick_in_regions(regions: PackedInt32Array) -> int:
-	if regions.is_empty():
-		return -1
-	var want: Dictionary = {}
-	for rk_any in regions:
-		want[int(rk_any)] = true
-	var best: int = -1
-	var ev: Variant = WorldMemory.to_save_dict().get("events", [])
-	if not (ev is Array):
-		return best
-	for item in ev as Array:
-		if not (item is Dictionary):
-			continue
-		var e: Dictionary = item
-		if int(e.get("k", -1)) != KIND_PAWN_DEATH:
-			continue
-		if not e.has("r"):
-			continue
-		var rk: int = int(e["r"])
-		if not want.has(rk):
-			continue
-		var t: int = int(e.get("t", 0))
-		if t > best:
-			best = t
-	return best
+	return WorldMemory.get_last_pawn_death_tick_in_regions(regions)
 
 
 ## True for [abandoned] (recent hard collapse) and [permanently_abandoned] (older hard collapse).
@@ -1028,27 +1004,10 @@ func get_center_region_for_region(region_key: int) -> int:
 
 ## Latest pawn death tick in any listed region, or -1 if none.
 func _max_last_pawn_death_tick_in_cluster(cluster: Array) -> int:
-	var want: Dictionary = {}
-	for rk_any in cluster:
-		want[int(rk_any)] = true
 	var best: int = -1
-	var ev: Variant = WorldMemory.to_save_dict().get("events", [])
-	if not (ev is Array):
-		return best
-	for item in ev as Array:
-		if not (item is Dictionary):
-			continue
-		var e: Dictionary = item
-		if int(e.get("k", -1)) != KIND_PAWN_DEATH:
-			continue
-		if not e.has("r"):
-			continue
-		var rk: int = int(e["r"])
-		if not want.has(rk):
-			continue
-		var t: int = int(e.get("t", 0))
-		if t > best:
-			best = t
+	for rk_any in cluster:
+		var rk: int = int(rk_any)
+		best = maxi(best, WorldMemory.get_last_pawn_death_tick_for_region(rk))
 	return best
 
 

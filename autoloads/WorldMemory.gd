@@ -31,6 +31,8 @@ var _dirty: bool = false
 var _first_event_tick_by_type: Dictionary = {}
 ## event_type -> total retained events (O(1) counters for large timelines).
 var _event_type_counts: Dictionary = {}
+## region_key -> latest pawn-death tick (hot-path settlement/rebirth query index).
+var _pawn_death_last_tick_by_region: Dictionary = {}
 ## Monotonic event id (stable cursor for paging/query surfaces).
 var _next_event_id: int = 1
 
@@ -143,6 +145,7 @@ func clear() -> void:
 	_events.clear()
 	_first_event_tick_by_type.clear()
 	_event_type_counts.clear()
+	_pawn_death_last_tick_by_region.clear()
 	_next_event_id = 1
 	_dirty = false
 
@@ -173,6 +176,8 @@ func _append(e: Dictionary) -> void:
 func _on_event_added_to_indexes(evt: Dictionary) -> void:
 	var typ: String = _canonical_event_type(evt)
 	_event_type_counts[typ] = int(_event_type_counts.get(typ, 0)) + 1
+	if typ == "pawn_death":
+		_on_pawn_death_added_to_index(evt)
 	var tick: int = int(evt.get("t", 0))
 	if not _first_event_tick_by_type.has(typ):
 		_first_event_tick_by_type[typ] = tick
@@ -180,6 +185,8 @@ func _on_event_added_to_indexes(evt: Dictionary) -> void:
 
 func _on_event_removed_from_indexes(evt: Dictionary) -> void:
 	var typ: String = _canonical_event_type(evt)
+	if typ == "pawn_death":
+		_on_pawn_death_removed_from_index(evt)
 	var next_count: int = maxi(0, int(_event_type_counts.get(typ, 1)) - 1)
 	if next_count <= 0:
 		_event_type_counts.erase(typ)
@@ -206,6 +213,41 @@ func _recompute_first_tick_for_type(typ: String) -> void:
 		_first_event_tick_by_type.erase(typ)
 	else:
 		_first_event_tick_by_type[typ] = best
+
+
+func _on_pawn_death_added_to_index(evt: Dictionary) -> void:
+	var rk: int = _region_from_event_payload(evt)
+	if rk < 0:
+		return
+	var tick: int = int(evt.get("t", -1))
+	if tick < 0:
+		return
+	if tick > int(_pawn_death_last_tick_by_region.get(rk, -1)):
+		_pawn_death_last_tick_by_region[rk] = tick
+
+
+func _on_pawn_death_removed_from_index(evt: Dictionary) -> void:
+	var rk: int = _region_from_event_payload(evt)
+	if rk < 0:
+		return
+	var removed_tick: int = int(evt.get("t", -1))
+	if removed_tick < int(_pawn_death_last_tick_by_region.get(rk, -1)):
+		return
+	_recompute_last_pawn_death_tick_for_region(rk)
+
+
+func _recompute_last_pawn_death_tick_for_region(rk: int) -> void:
+	var best: int = -1
+	for evt in _events:
+		if int(evt.get("k", -1)) != int(Kind.PAWN_DEATH):
+			continue
+		if int(evt.get("r", -1)) != rk:
+			continue
+		best = maxi(best, int(evt.get("t", -1)))
+	if best < 0:
+		_pawn_death_last_tick_by_region.erase(rk)
+	else:
+		_pawn_death_last_tick_by_region[rk] = best
 
 
 ## Generic deterministic event appender for non-core typed events (e.g. player input).
@@ -609,12 +651,15 @@ func from_save_dict(d: Variant) -> void:
 func _rebuild_first_event_index() -> void:
 	_first_event_tick_by_type.clear()
 	_event_type_counts.clear()
+	_pawn_death_last_tick_by_region.clear()
 	for evt in _events:
 		var typ: String = _canonical_event_type(evt)
 		var tick: int = int(evt.get("t", 0))
 		_event_type_counts[typ] = int(_event_type_counts.get(typ, 0)) + 1
 		if not _first_event_tick_by_type.has(typ):
 			_first_event_tick_by_type[typ] = tick
+		if typ == "pawn_death":
+			_on_pawn_death_added_to_index(evt)
 
 
 func event_count() -> int:
@@ -704,18 +749,16 @@ func get_animal_death_count_in_region(rk: int, species: int) -> int:
 func get_last_pawn_death_tick_in_regions(regions: PackedInt32Array) -> int:
 	if regions.is_empty():
 		return -1
-	var want: Dictionary = {}
-	for j in range(regions.size()):
-		want[int(regions[j])] = true
 	var best: int = -1
-	for e in _events:
-		if int(e.get("k", -1)) != int(Kind.PAWN_DEATH):
-			continue
-		var rk: int = int(e.get("r", 0))
-		if not want.has(rk):
-			continue
-		best = maxi(best, int(e.get("t", 0)))
+	for j in range(regions.size()):
+		var rk: int = int(regions[j])
+		best = maxi(best, int(_pawn_death_last_tick_by_region.get(rk, -1)))
 	return best
+
+
+## O(1) latest [enum Kind.PAWN_DEATH] tick for one region key, or -1.
+func get_last_pawn_death_tick_for_region(rk: int) -> int:
+	return int(_pawn_death_last_tick_by_region.get(rk, -1))
 
 
 ## Region keys (16x16) that have at least one animal death event, sorted ascending (deterministic).

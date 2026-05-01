@@ -15,10 +15,14 @@ const TILE_SCORE_SCAR_WEIGHT: int = 40
 const TILE_SCORE_ROAD_WEIGHT: int = 120
 const TILE_SCORE_TRADE_WEIGHT: int = 90
 const TILE_SCORE_DISTANCE_WEIGHT: int = 1
+## Rebuild scored rebirth tiles periodically (or when settlement signature changes).
+const TILE_CACHE_REFRESH_TICKS: int = 10000
 
 ## Session-only: [code]String(center_region_key) -> int[/code] last tick we spawned a rebirth pawn.
 var _last_rebirth_tick_by_center: Dictionary = {}
 var _last_check_tick: int = -1_000_000_000
+## center_region key -> {"sig": int, "built_tick": int, "tiles": Array[Vector2i]}
+var _rebirth_tiles_cache_by_center: Dictionary = {}
 
 
 ## Run on the same cadence as [SettlementMemory] + [SettlementPlanner] (after dirty flush, same interval gating).
@@ -42,6 +46,7 @@ func process(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 	var eligible: Array[Dictionary] = _gather_eligible_settlements()
 	if eligible.is_empty():
 		return
+	_prune_rebirth_tile_cache(eligible)
 	_sort_settlements_rebirth_order(eligible)
 	var now1: int = GameManager.tick_count
 	for s in eligible:
@@ -55,7 +60,7 @@ func process(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 		if _last_rebirth_tick_by_center.has(ck2):
 			if (now1 - int(_last_rebirth_tick_by_center[ck2])) < REBIRTH_INTERVAL_TICKS:
 				continue
-		var cands0: Array[Vector2i] = _rebirth_tiles_in_order(world, s)
+		var cands0: Array[Vector2i] = _rebirth_tiles_in_order_cached(world, s)
 		if cands0.is_empty():
 			continue
 		var seed0: int = now1 + ckey * 7 + 11
@@ -68,6 +73,66 @@ func process(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 			continue
 		_last_rebirth_tick_by_center[ck2] = now1
 		MythMemory.register_rebirth_success(ckey)
+
+
+func _rebirth_tiles_in_order_cached(world: World, settlement: Dictionary) -> Array[Vector2i]:
+	var center: int = int(settlement.get("center_region", -1))
+	if center < 0:
+		return []
+	var key: String = str(center)
+	var now: int = GameManager.tick_count
+	var sig: int = _rebirth_tile_cache_signature(settlement)
+	var rec_v: Variant = _rebirth_tiles_cache_by_center.get(key, null)
+	if rec_v is Dictionary:
+		var rec: Dictionary = rec_v as Dictionary
+		var rec_sig: int = int(rec.get("sig", -1))
+		var built_tick: int = int(rec.get("built_tick", -1_000_000_000))
+		if rec_sig == sig and (now - built_tick) < TILE_CACHE_REFRESH_TICKS:
+			var tiles_v: Variant = rec.get("tiles", [])
+			if tiles_v is Array:
+				var cached: Array[Vector2i] = []
+				for t_any in tiles_v as Array:
+					if t_any is Vector2i:
+						cached.append(t_any as Vector2i)
+				if not cached.is_empty():
+					return cached
+	var computed: Array[Vector2i] = _rebirth_tiles_in_order(world, settlement)
+	var store_tiles: Array = []
+	for tile in computed:
+		store_tiles.append(tile)
+	_rebirth_tiles_cache_by_center[key] = {
+		"sig": sig,
+		"built_tick": now,
+		"tiles": store_tiles,
+	}
+	return computed
+
+
+func _rebirth_tile_cache_signature(settlement: Dictionary) -> int:
+	var sig: int = 17
+	sig = sig * 31 + int(settlement.get("center_region", -1))
+	sig = sig * 31 + int(settlement.get("scar_max", 0))
+	sig = sig * 31 + int(settlement.get("revival_score", 0))
+	sig = sig * 31 + int(settlement.get("last_pawn_death_tick", -1))
+	var reg_v: Variant = settlement.get("regions", null)
+	if reg_v is PackedInt32Array:
+		var regs: PackedInt32Array = reg_v as PackedInt32Array
+		sig = sig * 31 + regs.size()
+		for rk_any in regs:
+			sig = int(((sig * 1103515245) + int(rk_any) + 12345) & 0x7FFFFFFF)
+	return sig
+
+
+func _prune_rebirth_tile_cache(eligible: Array[Dictionary]) -> void:
+	var keep: Dictionary = {}
+	for st in eligible:
+		var center: int = int(st.get("center_region", -1))
+		if center >= 0:
+			keep[str(center)] = true
+	for key_any in _rebirth_tiles_cache_by_center.keys():
+		var key: String = str(key_any)
+		if not keep.has(key):
+			_rebirth_tiles_cache_by_center.erase(key)
 
 
 func get_rebirth_eligibility(world: World, settlement: Dictionary) -> Dictionary:

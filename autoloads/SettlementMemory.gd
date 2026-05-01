@@ -1121,6 +1121,11 @@ func _governance_for_settlement(st: Dictionary, pawns: Array[Pawn]) -> Dictionar
 		for p in pawns:
 			if p.data != null and int(p.data.id) == pid:
 				(rec as Dictionary)["influence"] = p.data.calculate_influence(ranked.size())
+				# Life-path ruler bonus: pawns on ruler path gain influence boost.
+				if int(p.data.life_path) == 3:  # PawnData.LifePath.RULER
+					var lp_prog: int = int(p.data.life_path_progress)
+					var ruler_bonus: float = float(lp_prog) * 0.5  # +0.5 per progress level
+					(rec as Dictionary)["influence"] = float((rec as Dictionary)["influence"]) + ruler_bonus
 				break
 	ranked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var ai: float = float(a.get("influence", 0.0))

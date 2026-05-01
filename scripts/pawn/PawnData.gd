@@ -146,6 +146,22 @@ var buildings_constructed: int = 0
 var trade_relationships: Dictionary = {}
 ## Settlement role: NONE, FARMER, BUILDER, MERCHANT, GUARD
 var settlement_role: int = 0
+## Life-path tracks (v1): deterministic role emergence driven by settlement
+## demand pressure + repeated job-type contributions. Each pawn gravitates
+## toward the path whose jobs they perform most. Paths are advisory (not
+## hard-gating) but emit distinct WorldMemory events and feed settlement
+## role tallies used by governance / intent systems.
+enum LifePath { NONE, FARMER, SOLDIER, RULER, WANDERER }
+var life_path: int = LifePath.NONE
+## Monotonic progress counter for current life path. Increases on
+## path-aligned job completions; resets on path switch.
+var life_path_progress: int = 0
+## Lifetime total across ALL paths (used for milestone gating).
+var life_path_total: int = 0
+## Per-path contribution counts (farmer, soldier, ruler, wanderer).
+var life_path_contributions: Dictionary = {"farmer": 0, "soldier": 0, "ruler": 0, "wanderer": 0}
+## Regions this pawn has visited (region_key -> true). Feeds wanderer path.
+var regions_visited: Dictionary = {}
 ## Property ownership: tile -> property_type
 var owned_properties: Dictionary = {}
 
@@ -2694,6 +2710,11 @@ func to_save_dict() -> Dictionary:
 		"available_krond": available_krond,
 		"total_krond_earned": total_krond_earned,
 		"active_traits": active_traits_ser,
+		"life_path": life_path,
+		"life_path_progress": life_path_progress,
+		"life_path_total": life_path_total,
+		"life_path_contributions": life_path_contributions.duplicate(true),
+		"regions_visited": regions_visited.duplicate(true),
 	}
 
 
@@ -2874,6 +2895,14 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 						p.active_traits.append(td)
 				# Empty/fallback entries are ignored
 		# Note: custom/resource-backed TraitData deserialization is not implemented here.
+	# Restore life-path fields (v1)
+	p.life_path = int(d.get("life_path", 0))
+	p.life_path_progress = int(d.get("life_path_progress", 0))
+	p.life_path_total = int(d.get("life_path_total", 0))
+	if d.has("life_path_contributions") and d["life_path_contributions"] is Dictionary:
+		p.life_path_contributions = (d["life_path_contributions"] as Dictionary).duplicate(true)
+	if d.has("regions_visited") and d["regions_visited"] is Dictionary:
+		p.regions_visited = (d["regions_visited"] as Dictionary).duplicate(true)
 	# End neural network / trait restore block; always return constructed PawnData
 	return p
 

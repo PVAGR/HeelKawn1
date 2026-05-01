@@ -2799,6 +2799,8 @@ func _complete_current_job() -> void:
 	_state = State.IDLE   # reset before transitioning; _begin_haul will set it
 	_clear_path()
 	_request_redraw()
+	# Evaluate life-path contribution on every completed job.
+	_evaluate_life_path_on_job_complete(job.type)
 	# Harvest jobs put a fresh item in the pawn's hands -- haul it to the stockpile.
 	# Build jobs don't produce anything haulable.
 	if produced_type != Item.Type.NONE:
@@ -4025,6 +4027,228 @@ func set_settlement_role(role: int) -> void:
 			3: role_name = "MERCHANT"
 			4: role_name = "GUARD"
 		print("[Pawn] %s became %s of settlement %d" % [data.display_name, role_name, data.settlement_id])
+
+
+## Life-path v1: map completed job types to one of four tracks (farmer, soldier,
+## ruler, wanderer). Each completion increments the matching path counter;
+## dominant path is re-evaluated and may switch. Milestone events are recorded
+## in WorldMemory at progress thresholds (10, 25, 50, 100).
+func _evaluate_life_path_on_job_complete(job_type: int) -> void:
+	var path_key: String = _life_path_key_for_job(job_type)
+	if path_key.is_empty():
+		return
+	var contribs: Dictionary = data.life_path_contributions
+	contribs[path_key] = int(contribs.get(path_key, 0)) + 1
+	data.life_path_contributions = contribs
+	data.life_path_total += 1
+
+	# Determine dominant path.
+	var dominant: String = ""
+	var dominant_count: int = 0
+	for pk in ["farmer", "soldier", "ruler", "wanderer"]:
+		var c: int = int(contribs.get(pk, 0))
+		if c > dominant_count:
+			dominant_count = c
+			dominant = pk
+
+	if dominant.is_empty():
+		return
+
+	# Convert string key to LifePath enum.
+	var new_path: int = _life_path_enum(dominant)
+
+	# If path switched, reset per-path progress.
+	if new_path != data.life_path:
+		var old_path_name: String = _life_path_label(data.life_path)
+		data.life_path = new_path
+		data.life_path_progress = 0
+		if not old_path_name.is_empty():
+			WorldMemory.record_event({
+				"type": "life_path_switch",
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"old_path": old_path_name,
+				"new_path": _life_path_label(new_path),
+				"tick": GameManager.tick_count,
+			})
+
+	data.life_path_progress += 1
+
+	# Ruler path: direct influence gain (leadership emergence).
+	if new_path == PawnData.LifePath.RULER:
+		data.influence += 1.0
+		if GameManager.verbose_logs():
+			print("[Pawn] %s gained influence from ruler path (now %.1f)" % [data.display_name, data.influence])
+
+	# Milestone events at 10 / 25 / 50 / 100 on current path.
+	var prog: int = data.life_path_progress
+	if prog in [10, 25, 50, 100]:
+		WorldMemory.record_event({
+			"type": "life_path_milestone",
+			"pawn_id": int(data.id),
+			"pawn_name": data.display_name,
+			"path": _life_path_label(new_path),
+			"milestone": prog,
+			"total_contribs": data.life_path_total,
+			"tick": GameManager.tick_count,
+		})
+		# Ruler path milestones trigger governance events.
+		if new_path == PawnData.LifePath.RULER:
+			_trigger_ruler_decision_event(prog)
+
+
+static func _life_path_key_for_job(job_type: int) -> String:
+	match job_type:
+		Job.Type.FORAGE, Job.Type.HUNT:
+			return "farmer"
+		Job.Type.TRADE_PICKUP, Job.Type.TRADE_HAUL:
+			return "wanderer"
+		_:
+			pass
+	# MINE / MINE_WALL / BUILD_* contribute to soldier (defense through
+	# fortification) if settlement is in DEFEND state, otherwise farmer.
+	var intent: String = ""
+	var sm = SettlementMemory
+	if sm != null:
+		intent = sm.get_settlement_intent_for_tile(Vector2i.ZERO)  # coarse
+	if intent == "DEFEND":
+		match job_type:
+			Job.Type.MINE, Job.Type.MINE_WALL, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+				return "soldier"
+	# CHOP contributes to wanderer (scouting/clearing new ground).
+	if job_type == Job.Type.CHOP:
+		return "wanderer"
+	# Default: harvest/build → farmer (food & shelter foundation).
+	match job_type:
+		Job.Type.MINE, Job.Type.MINE_WALL:
+			return "farmer"
+		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+			return "soldier"
+	return ""
+
+
+static func _life_path_enum(key: String) -> int:
+	match key:
+		"farmer":    return PawnData.LifePath.FARMER
+		"soldier":  return PawnData.LifePath.SOLDIER
+		"ruler":    return PawnData.LifePath.RULER
+		"wanderer": return PawnData.LifePath.WANDERER
+	return PawnData.LifePath.NONE
+
+
+static func _life_path_label(path: int) -> String:
+	match path:
+		PawnData.LifePath.FARMER:    return "farmer"
+		PawnData.LifePath.SOLDIER:  return "soldier"
+		PawnData.LifePath.RULER:    return "ruler"
+		PawnData.LifePath.WANDERER: return "wanderer"
+	return "none"
+
+
+## Ruler path: milestone decision events that shape settlement governance.
+## At 25: propose law; at 50: propose policy shift; at 100: propose expansion.
+func _trigger_ruler_decision_event(milestone: int) -> void:
+	var decision_type: String = ""
+	match milestone:
+		25: decision_type = "law_proposal"
+		50: decision_type = "policy_shift"
+		100: decision_type = "expansion_drive"
+	if decision_type.is_empty():
+		return
+	var rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
+	WorldMemory.record_event({
+		"type": "ruler_decision",
+		"pawn_id": int(data.id),
+		"pawn_name": data.display_name,
+		"milestone": milestone,
+		"decision_type": decision_type,
+		"region_key": rk,
+		"tick": GameManager.tick_count,
+	})
+	if GameManager.verbose_logs():
+		print("[Pawn] %s (ruler) triggered decision: %s @ milestone %d" % [
+			data.display_name, decision_type, milestone])
+
+
+## Track region visits for wanderer path progression. Each new region
+## discovered grants +1 wanderer contribution and triggers a discovery event.
+func _track_region_visit(tile: Vector2i) -> void:
+	if data == null or _world == null:
+		return
+	var rk: int = WorldMemory._region_key(tile.x, tile.y)
+	var rk_str: String = str(rk)
+	if data.regions_visited.has(rk_str):
+		return
+	data.regions_visited[rk_str] = true
+	# Grant wanderer contribution for discovering a new region.
+	var contribs: Dictionary = data.life_path_contributions
+	contribs["wanderer"] = int(contribs.get("wanderer", 0)) + 1
+	data.life_path_contributions = contribs
+	data.life_path_total += 1
+	_world_record_discovery_event(rk, tile)
+	# Re-evaluate dominant path after new discovery.
+	_reevaluate_life_path_from_contributions()
+
+
+func _world_record_discovery_event(region_key: int, tile: Vector2i) -> void:
+	WorldMemory.record_event({
+		"type": "region_discovery",
+		"pawn_id": int(data.id),
+		"pawn_name": data.display_name,
+		"region_key": region_key,
+		"tile": {"x": tile.x, "y": tile.y},
+		"total_regions": data.regions_visited.size(),
+		"tick": GameManager.tick_count,
+	})
+	if GameManager.verbose_logs():
+		print("[Pawn] %s discovered region %d @(%d,%d) (total=%d)" % [
+			data.display_name, region_key, tile.x, tile.y, data.regions_visited.size()])
+
+
+## Re-evaluate life path from current contribution counts (used after
+## exploration or other non-job contributions).
+func _reevaluate_life_path_from_contributions() -> void:
+	var contribs: Dictionary = data.life_path_contributions
+	var dominant: String = ""
+	var dominant_count: int = 0
+	for pk in ["farmer", "soldier", "ruler", "wanderer"]:
+		var c: int = int(contribs.get(pk, 0))
+		if c > dominant_count:
+			dominant_count = c
+			dominant = pk
+	if dominant.is_empty():
+		return
+	var new_path: int = _life_path_enum(dominant)
+	if new_path != data.life_path:
+		var old_path_name: String = _life_path_label(data.life_path)
+		data.life_path = new_path
+		data.life_path_progress = 0
+		if not old_path_name.is_empty():
+			WorldMemory.record_event({
+				"type": "life_path_switch",
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"old_path": old_path_name,
+				"new_path": _life_path_label(new_path),
+				"tick": GameManager.tick_count,
+			})
+	data.life_path_progress += 1
+
+	# Ruler path: direct influence gain (leadership emergence).
+	if new_path == PawnData.LifePath.RULER:
+		data.influence += 1.0
+
+	var prog: int = data.life_path_progress
+	if prog in [10, 25, 50, 100]:
+		WorldMemory.record_event({
+			"type": "life_path_milestone",
+			"pawn_id": int(data.id),
+			"pawn_name": data.display_name,
+			"path": _life_path_label(new_path),
+			"milestone": prog,
+			"total_contribs": data.life_path_total,
+			"tick": GameManager.tick_count,
+		})
 
 
 func own_property(tile: Vector2i, property_type: String) -> void:

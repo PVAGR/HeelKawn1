@@ -629,3 +629,52 @@ func analyze_cause(data: SettlementData) -> String:
 		return "Starvation"
 	else:
 		return "Abandonment"
+
+
+## Aggregate realm-wide meaning snapshot for observer / crown-view panels.
+func get_world_meaning_summary() -> Dictionary:
+	var total_pawn_deaths: int = 0
+	var total_animal_deaths: int = 0
+	var quiet_regions: int = 0
+	var scarred_regions: int = 0
+	var bloodied_regions: int = 0
+	var grave_regions: int = 0
+	var scar_accum: float = 0.0
+	var region_count: int = meaning_by_region.size()
+
+	for rk in meaning_by_region:
+		var rec: Dictionary = meaning_by_region[rk]
+		var pd: int = int(rec.get("pawn_deaths", 0))
+		var ad: int = int(rec.get("animal_deaths", 0))
+		total_pawn_deaths += pd
+		total_animal_deaths += ad
+		var label: String = str(rec.get("meaning_label", "quiet"))
+		match label:
+			"quiet":
+				quiet_regions += 1
+			"scarred":
+				scarred_regions += 1
+				scar_accum += 1.0
+			"bloodied":
+				bloodied_regions += 1
+				scar_accum += 2.0
+			"grave":
+				grave_regions += 1
+				scar_accum += 3.0
+			_:
+				quiet_regions += 1
+
+	var avg_scar: float = 0.0
+	if region_count > 0:
+		avg_scar = scar_accum / float(region_count)
+
+	return {
+		"total_pawn_deaths": total_pawn_deaths,
+		"total_animal_deaths": total_animal_deaths,
+		"quiet_regions": quiet_regions,
+		"scarred_regions": scarred_regions,
+		"bloodied_regions": bloodied_regions,
+		"grave_regions": grave_regions,
+		"average_scar_level": avg_scar,
+		"region_count": region_count,
+	}

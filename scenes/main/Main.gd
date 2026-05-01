@@ -5608,6 +5608,27 @@ func _build_realm_crown_view_text() -> String:
 	var listed: int = 0
 	var lines: PackedStringArray = PackedStringArray()
 	var pop_by_rk: Dictionary = _pawn_counts_by_region_key()
+	var realm_meaning_summary: String = _build_realm_meaning_summary()
+	var total_pawns: int = _observer_total_pawns()
+	var houses_n: int = FactionRegistry.get_synced_house_count()
+	var sac_n: int = SacredMemory.site_count() if SacredMemory != null else 0
+	var harm: float = ReligionLens.get_harmony_index() if ReligionLens != null else 0.0
+	var head: String = (
+			"[b]REALM (crown view)[/b]\n"
+			+ "%s\n" % realm_meaning_summary
+			+ "Places %d · Heelkawnians %d · Houses %d · Sacred sites %d · Harmony %.2f\n"
+			% [place_count, total_pawns, houses_n, sac_n, harm]
+	)
+	if place_count == 0:
+		return (
+				head
+				+ "No settlements yet.\n[i]F9 observer · Shift+F9 cycle rows (%d)[/i]\n"
+				% max_settlements
+		)
+	var more_note: String = ""
+	if place_count > listed:
+		more_note = "[i](+%d places not listed)[/i]\n" % (place_count - listed)
+	var body: String = "\n".join(lines)
 	for st_row in rows:
 		if listed >= max_settlements:
 			break
@@ -5634,25 +5655,7 @@ func _build_realm_crown_view_text() -> String:
 		var voice: String = str(rel.get("voice", ""))
 		lines.append("• %s — pop %d · %s · %s · %s" % [nm, pop, house_disp, st_state, voice])
 		listed += 1
-	var houses_n: int = FactionRegistry.get_synced_house_count()
-	var sac_n: int = SacredMemory.site_count() if SacredMemory != null else 0
-	var harm: float = ReligionLens.get_harmony_index() if ReligionLens != null else 0.0
-	var total_pawns: int = _observer_total_pawns()
-	var head: String = (
-			"[b]REALM (crown view)[/b]\n"
-			+ "Places %d · Heelkawnians %d · Houses %d · Sacred sites %d · Harmony %.2f\n"
-			% [place_count, total_pawns, houses_n, sac_n, harm]
-	)
-	if place_count == 0:
-		return (
-				head
-				+ "No settlements yet.\n[i]F9 observer · Shift+F9 cycle rows (%d)[/i]\n"
-				% max_settlements
-		)
-	var more_note: String = ""
-	if place_count > listed:
-		more_note = "[i](+%d places not listed)[/i]\n" % (place_count - listed)
-	var body: String = "\n".join(lines)
+	body = "\n".join(lines)
 	return (
 			head
 			+ more_note
@@ -5660,6 +5663,38 @@ func _build_realm_crown_view_text() -> String:
 			+ "\n[i]F9 observer · Shift+F9 rows (%d) · sim refresh[/i]\n"
 			% max_settlements
 	)
+
+
+func _build_realm_meaning_summary() -> String:
+	var world_meaning: Dictionary = WorldMeaning.get_world_meaning_summary()
+	var total_deaths: int = int(world_meaning.get("total_pawn_deaths", 0))
+	var avg_scar: float = float(world_meaning.get("average_scar_level", 0.0))
+	var quiet_regions: int = int(world_meaning.get("quiet_regions", 0))
+	var scarred_regions: int = int(world_meaning.get("scarred_regions", 0))
+	var bloodied_regions: int = int(world_meaning.get("bloodied_regions", 0))
+	var grave_regions: int = int(world_meaning.get("grave_regions", 0))
+	var dominant_state: String = "Quiet"
+	if grave_regions > scarred_regions and grave_regions > bloodied_regions:
+		dominant_state = "Grave"
+	elif bloodied_regions > scarred_regions and bloodied_regions > quiet_regions:
+		dominant_state = "Bloodied"
+	elif scarred_regions > quiet_regions:
+		dominant_state = "Scarred"
+	var color: String
+	match dominant_state:
+		"Quiet":
+			color = "#8bc34a"
+		"Scarred":
+			color = "#ffcc80"
+		"Bloodied":
+			color = "#e57373"
+		"Grave":
+			color = "#9c27b0"
+		_:
+			color = "#cccccc"
+	return "[color=%s]Realm tone: %s[/color] · deaths %d · scar %.1f · Q%d S%d B%d G%d" % [
+		color, dominant_state, total_deaths, avg_scar, quiet_regions, scarred_regions, bloodied_regions, grave_regions
+	]
 
 
 func _build_observer_snapshot(tick: int) -> Dictionary:

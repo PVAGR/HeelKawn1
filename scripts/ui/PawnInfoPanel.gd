@@ -1021,9 +1021,10 @@ func _count_settlement_members(settlement_idx: int) -> int:
 	var spawner: PawnSpawner = _pawn_spawner()
 	if spawner == null:
 		return count
-	for pd in spawner.all_pawn_data():
-		if pd is PawnData and int(pd.settlement_id) == settlement_idx:
-			count += 1
+	for p in spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
+			if int(p.data.settlement_id) == settlement_idx:
+				count += 1
 	return count
 
 

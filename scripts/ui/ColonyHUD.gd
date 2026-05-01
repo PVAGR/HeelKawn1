@@ -183,6 +183,7 @@ func _refresh() -> void:
 		lines.append(_world_pulse_line())
 		lines.append(_history_totals_line())
 		lines.append(_colony_state_line())
+		lines.append(_settlement_status_line())
 		lines.append(_settlement_identity_line())
 		lines.append(_stockpile_simple_line())
 		lines.append(_pawn_line_simple())
@@ -196,6 +197,7 @@ func _refresh() -> void:
 	else:
 		lines.append(_time_line())
 		lines.append(_colony_state_line())
+		lines.append(_settlement_status_line())
 		lines.append(_settlement_identity_line())
 		lines.append(_pawn_line())
 		lines.append(_player_status_line())
@@ -328,6 +330,52 @@ func _colony_state_line() -> String:
 		int(round(fp * 100.0)),
 		int(round(hp * 100.0)),
 	]
+
+
+## Settlement lifecycle state with color-coded vitality indicator.
+func _settlement_status_line() -> String:
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node == null:
+		return "[color=#c9b37c]Settlement:[/color] [i]offline[/i]"
+	var digest: Dictionary = main_node.get_camera_settlement_revival_digest()
+	var profile_rk: int = int(digest.get("profile_region_key", -1))
+	if profile_rk < 0 or not bool(digest.get("has_settlement", false)):
+		return "[color=#c9b37c]Settlement:[/color] [i]none in view — wilds[/i]"
+	var prof: Dictionary = SettlementMemory.get_settlement_profile(profile_rk)
+	var state_raw: String = str(prof.get("state", "unknown"))
+	var revival: int = int(prof.get("revival_score", 0))
+	var state_color: String
+	var state_label: String
+	match state_raw:
+		"active", "thriving":
+			state_color = "#8bc34a"
+			state_label = "Active"
+		"recovering", "rebuilding":
+			state_color = "#ffcc80"
+			state_label = "Recovering"
+		"abandoned", "hollow":
+			state_color = "#9e9e9e"
+			state_label = "Abandoned"
+		"collapsed", "grave":
+			state_color = "#e57373"
+			state_label = "Collapsed"
+		"rising", "awakening":
+			state_color = "#4dd0e1"
+			state_label = "Rising"
+		_:
+			state_color = "#cccccc"
+			state_label = state_raw.capitalize()
+	var vitality: String = "[color=%s]%s[/color]" % [state_color, state_label]
+	var spark: String = "▬"
+	if revival >= 80:
+		spark = "▲▲"
+	elif revival >= 50:
+		spark = "▲"
+	elif revival <= 10:
+		spark = "▼▼"
+	elif revival <= 30:
+		spark = "▼"
+	return "[color=#c9b37c]Settlement:[/color] %s · rev %d %s" % [vitality, revival, spark]
 
 
 ## Short, truthful onboarding line; disappears after a few in-game days so veterans stay uncluttered.

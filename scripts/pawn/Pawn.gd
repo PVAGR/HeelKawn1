@@ -2353,13 +2353,22 @@ func _calculate_work_efficiency() -> float:
 	elif total_injury_severity > 30.0:
 		efficiency *= 0.75
 	
-	# Surface tools implied for v1; heavy extract without dedicated gear is slightly slower.
-	if _current_job != null:
+	# Improvised tool proxy from carried material (no separate pickaxe/axe items in v1).
+	if _current_job != null and data != null:
 		var jt: int = _current_job.type
 		if jt == Job.Type.MINE or jt == Job.Type.MINE_WALL:
-			efficiency *= 0.92
+			if data.is_carrying() and (data.carrying == Item.Type.STONE or data.carrying == Item.Type.WOOD):
+				efficiency *= 1.04
+			else:
+				efficiency *= 0.88
 		elif jt == Job.Type.CHOP:
-			efficiency *= 0.95
+			if data.is_carrying() and not Item.is_food(data.carrying):
+				if data.carrying == Item.Type.WOOD or data.carrying == Item.Type.STONE:
+					efficiency *= 1.03
+				else:
+					efficiency *= 0.90
+			else:
+				efficiency *= 0.93
 	
 	return clamp(efficiency, 0.1, 2.0)
 

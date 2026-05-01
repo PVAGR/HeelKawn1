@@ -71,6 +71,28 @@ func get_house_for_zone(zone_id: String) -> Dictionary:
 	return {}
 
 
+## Observer / focus readout: one line for the deterministic house of a settlement zone.
+func append_focus_house_lines(out: PackedStringArray, center_region: int) -> void:
+	if center_region < 0:
+		return
+	sync_from_settlements()
+	var house: Dictionary = get_house_for_zone(str(center_region))
+	if house.is_empty():
+		out.append("House: (none — no settlement synced for this zone yet)")
+		return
+	var disp: String = str(house.get("house_display", house.get("house_id", "")))
+	var hid: String = str(house.get("house_id", ""))
+	var seed_nm: String = str(house.get("seed_settlement_name", "")).strip_edges()
+	var rgb_v: Variant = house.get("banner_rgb", [])
+	var rgb_s: String = "n/a"
+	if rgb_v is Array:
+		var rgb: Array = rgb_v as Array
+		if rgb.size() >= 3:
+			rgb_s = "%.2f,%.2f,%.2f" % [float(rgb[0]), float(rgb[1]), float(rgb[2])]
+	var settlement_bit: String = (" · of %s" % seed_nm) if not seed_nm.is_empty() else ""
+	out.append("House: %s [%s]%s | banner %s" % [disp, hid, settlement_bit, rgb_s])
+
+
 func house_count() -> int:
 	sync_from_settlements()
 	return get_synced_house_count()
@@ -84,7 +106,7 @@ func get_synced_house_count() -> int:
 func debug_summary_block() -> String:
 	sync_from_settlements()
 	var lines: PackedStringArray = PackedStringArray()
-	lines.append("FactionRegistry (house stub per settlement zone)")
+	lines.append("FactionRegistry (houses keyed by settlement center_region)")
 	lines.append("  house_count=%d" % _house_by_zone.size())
 	var keys: Array = _house_by_zone.keys()
 	keys.sort()

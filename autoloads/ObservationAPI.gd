@@ -496,22 +496,7 @@ static func _pawn_governance_role(pawn_data: PawnData, gov_profile: Dictionary) 
 
 
 static func _focus_append_house_stub_lines(out: PackedStringArray, center_region: int) -> void:
-	if center_region < 0:
-		return
-	FactionRegistry.sync_from_settlements()
-	var house: Dictionary = FactionRegistry.get_house_for_zone(str(center_region))
-	if house.is_empty():
-		out.append("Faction / house (stub): (none for this zone yet)")
-		return
-	var disp: String = str(house.get("house_display", house.get("house_id", "")))
-	var hid: String = str(house.get("house_id", ""))
-	var rgb_v: Variant = house.get("banner_rgb", [])
-	var rgb_s: String = "n/a"
-	if rgb_v is Array:
-		var rgb: Array = rgb_v as Array
-		if rgb.size() >= 3:
-			rgb_s = "%.2f,%.2f,%.2f" % [float(rgb[0]), float(rgb[1]), float(rgb[2])]
-	out.append("Faction / house (stub): %s [%s] | banner %s" % [disp, hid, rgb_s])
+	FactionRegistry.append_focus_house_lines(out, center_region)
 
 
 static func _pretty_governance_name(raw: String) -> String:

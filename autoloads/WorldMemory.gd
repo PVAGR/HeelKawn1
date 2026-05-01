@@ -1246,12 +1246,22 @@ func export_world_seed(file_path: String) -> bool:
 
 
 func get_chronicle_summary() -> String:
-	var lines: PackedStringArray = []
+	var lines = []
 	lines.append("=== HEELKAWN CHRONICLE ===")
-	var cal: Dictionary = _get_calendar_data()
-	lines.append("Year %d, Day %d" % [int(cal.get("year", 1)), int(cal.get("day", 1))])
-	lines.append("Population: %d" % _get_total_pawns())
-	lines.append("Settlements: %d" % _get_settlement_count())
+	var year: int = 1
+	var day: int = 1
+	if has_node("/root/WorldClock"):
+		year = get_node("/root/WorldClock").current_year
+		day = get_node("/root/WorldClock").current_day
+	lines.append("Year %d, Day %d" % [year, day])
+	var total_pawns: int = 0
+	if "_pawns" in self and _pawns != null:
+		total_pawns = _pawns.size()
+	lines.append("Population: %d" % total_pawns)
+	if has_node("/root/SettlementMemory"):
+		var sm = get_node("/root/SettlementMemory")
+		if sm.has_method("get_settlement_count"):
+			lines.append("Settlements: %d" % sm.get_settlement_count())
 	return "\n".join(lines)
 
 

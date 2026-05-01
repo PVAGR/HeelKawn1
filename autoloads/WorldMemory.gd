@@ -1213,14 +1213,28 @@ func get_relationship_timeline(a_id: int, b_id: int, max_items: int = 64) -> Arr
 ## ============================================================
 
 func export_world_seed(file_path: String) -> bool:
+	var world_seed: int = 0
+	var wr: Node = get_node_or_null("/root/WorldRNG")
+	if wr != null and wr.has_method("current_seed"):
+		world_seed = int(wr.call("current_seed"))
+	var export_tick: int = 0
+	var gm: Node = get_node_or_null("/root/GameManager")
+	if gm != null and "tick_count" in gm:
+		export_tick = int(gm.tick_count)
+	var cal: Dictionary = _get_calendar_data()
+	var year: int = int(cal.get("year", 1))
+	var day: int = int(cal.get("day", 1))
+	var settlements: Array = _get_settlement_snapshot()
+	var total_pawns: int = _get_total_pawns()
+	var biomes: Array = _get_biomes_data()
 	var export_data := {
 		"schema": "heelkawn_v1",
-		"world_seed": _get_world_seed(),
-		"export_tick": _get_tick_count(),
-		"calendar": _get_calendar_data(),
-		"settlements": _get_settlement_snapshot(),
-		"population": {"total": _get_total_pawns()},
-		"biomes": _get_biomes_data(),
+		"world_seed": world_seed,
+		"export_tick": export_tick,
+		"calendar": {"year": year, "day": day},
+		"settlements": settlements,
+		"population": {"total": total_pawns},
+		"biomes": biomes,
 	}
 	var json := JSON.stringify(export_data, "  ")
 	var file = FileAccess.open(file_path, FileAccess.WRITE)

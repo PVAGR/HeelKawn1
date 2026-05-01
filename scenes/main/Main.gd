@@ -500,11 +500,10 @@ func _ready() -> void:
 	var simulation_worker: bool = _is_simulation_worker_mode()
 	if not simulation_worker:
 		SettlementMemory.print_validation_smoketest_from_main()
-	# Ticks are driven from [member GameManager._dispatch_game_tick] (optional per-listener trace: --game-tick-trace).
-	GameManager.game_tick.connect(_on_game_tick)
-	GameManager.speed_changed.connect(_on_speed_changed)
-	CrashTrap.validate_signal(GameManager, &"game_tick")
-	CrashTrap.validate_signal(GameManager, &"speed_changed")
+	# Connect to deterministic TickManager instead of raw GameManager tick
+	TickManager.tick_processed.connect(_on_game_tick)
+	TickManager.speed_changed.connect(_on_speed_changed)
+	TickManager.paused.connect(_on_tick_manager_paused)
 	CrashTrap.validate_autoload("SettlementMemory", "Node")
 	CrashTrap.validate_autoload("WorldAI", "Node")
 	if not simulation_worker:
@@ -525,8 +524,8 @@ func _ready() -> void:
 		JobManager.job_claimed.connect(_on_job_claimed)
 		# Bottom toolbar: time, save/load, appearance (no manual structure stamping).
 		if _toolbar != null:
-			_toolbar.speed_index_requested.connect(GameManager.set_speed_index)
-			_toolbar.pause_toggled.connect(GameManager.toggle_pause)
+			_toolbar.speed_index_requested.connect(_on_toolbar_speed_requested)
+			_toolbar.pause_toggled.connect(TickManager.toggle_pause)
 			_toolbar.save_requested.connect(_colony_save)
 			_toolbar.load_requested.connect(_colony_load)
 			_toolbar.appearance_edit_requested.connect(_toggle_avatar_panel)
@@ -534,7 +533,7 @@ func _ready() -> void:
 	if OS.is_debug_build():
 		print("[Main] Scene ready. Tick interval: %.2fs" % GameManager.TICK_INTERVAL_SECONDS)
 	# Start every session at 1x, unpaused. Player can change only through explicit controls.
-	GameManager.set_speed_index(0)
+	TickManager.set_speed(1.0)
 	_bootstrap_colony()
 	if not simulation_worker:
 		if _hud != null:
@@ -2808,13 +2807,18 @@ func _update_ambient_audio(delta: float) -> void:
 		_ambient_playback.push_frame(Vector2(s, s))
 
 
-func _on_speed_changed(speed: float, paused: bool) -> void:
+func _on_speed_changed(new_speed: float) -> void:
 	if not OS.is_debug_build():
 		return
-	if paused:
+	print("[Main] Speed: %.1fx" % new_speed)
+
+func _on_tick_manager_paused(is_paused: bool) -> void:
+	if not OS.is_debug_build():
+		return
+	if is_paused:
 		print("[Main] PAUSED")
 	else:
-		print("[Main] Speed: %.1fx" % speed)
+		print("[Main] RESUMED")
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -2843,28 +2847,28 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			if _hud != null:
 				_hud.toggle_hud_verbose()
 		Key.KEY_SPACE:
-			GameManager.toggle_pause()
+			TickManager.toggle_pause()
 		Key.KEY_1:
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
-				GameManager.set_speed_index(0)
+				TickManager.set_speed(1.0)
 		Key.KEY_2:
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
-				GameManager.set_speed_index(1)
+				TickManager.set_speed(3.0)
 		Key.KEY_3:
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
-				GameManager.set_speed_index(2)
+				TickManager.set_speed(6.0)
 		Key.KEY_4:
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
-				GameManager.set_speed_index(3)
+				TickManager.set_speed(12.0)
 		Key.KEY_5:
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
-				GameManager.set_speed_index(4)
+				TickManager.set_speed(26.0)
 		Key.KEY_6:
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
-				GameManager.set_speed_index(5)
+				TickManager.set_speed(50.0)
 		Key.KEY_7:
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
-				GameManager.set_speed_index(6)
+				TickManager.set_speed(100.0)
 		Key.KEY_R:
 			if OS.is_debug_build():
 				_reroll_world()

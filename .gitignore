@@ -1,112 +1,33 @@
 ```
-# Build artifacts
-*.import
-*.import*
-*.scn.import
-*.tres.import
-*.res.import
-*.png.import
-*.jpg.import
-*.jpeg.import
-*.tga.import
-*.bmp.import
-*.svg.import
-*.mesh.import
-*.obj.import
-*.dae.import
-*.gltf.import
-*.glb.import
-*.fbx.import
-*.blend.import
-*.wav.import
-*.ogg.import
-*.mp3.import
-*.mp4.import
-*.mov.import
-*.avi.import
-*.mkv.import
-*.pdf.import
-*.txt.import
-*.json.import
-*.yml.import
-*.yaml.import
-*.xml.import
-*.csv.import
-*.html.import
-*.css.import
-*.js.import
-*.ts.import
-*.tsx.import
-*.gd.import
-*.gdns.import
-*.gdnlib.import
-*.material.import
-*.shader.import
-*.scn~
-*.res~
-*.tres~
-*.tex~
-*.png~
-*.jpg~
-*.jpeg~
-*.tga~
-*.bmp~
-*.svg~
-*.mesh~
-*.obj~
-*.dae~
-*.gltf~
-*.glb~
-*.fbx~
-*.blend~
-*.wav~
-*.ogg~
-*.mp3~
-*.mp4~
-*.mov~
-*.avi~
-*.mkv~
-*.pdf~
-*.txt~
-*.json~
-*.yml~
-*.yaml~
-*.xml~
-*.csv~
-*.html~
-*.css~
-*.js~
-*.ts~
-*.tsx~
-*.gd~
-*.gdns~
-*.gdnlib~
-*.material~
-*.shader~
+# Backup files
+*.backup
 
 # Godot-specific
-.godot/
-*.godot
-*.import
-export_presets.cfg
 .project
+*.import
+*.remap
+export_presets.cfg
 
-# Temporary files
-*.tmp
-*.temp
-*.bak
-*.backup
+# Dependencies
+node_modules/
+venv/
+.venv/
+__pycache__/
+
+# Build artifacts
+build/
+dist/
+target/
 
 # Logs
 *.log
 
-# Dependencies
-addons/*/node_modules/
-addons/*/.venv/
-addons/*/.env
-addons/*/.git/
+# Environment
+.env
+.env.local
+*.env.*
 
-# Editor
+# Editors
 .vscode/
 .idea/
 *.swp
@@ -115,7 +36,16 @@ addons/*/.git/
 # OS
 .DS_Store
 Thumbs.db
-desktop.ini
-ehthumbs.db
-Icon?
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
 ```

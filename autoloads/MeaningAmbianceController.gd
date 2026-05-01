@@ -155,9 +155,31 @@ func get_movement_speed_multiplier_for_region(region_key: int) -> float:
 	match label:
 		"quiet": return 1.0
 		"scarred": return 0.9
-		"bloodied": return 0.75
-		"grave": return 0.6
+		"bloodied": return 0.8
+		"grave": return 0.7
 	return 1.0
+
+
+## Get clustering radius for pawns in a region (pixels)
+func get_clustering_radius_for_region(region_key: int) -> float:
+	var label: String = str(_meaning_by_region.get(region_key, "quiet"))
+	match label:
+		"quiet": return 128.0
+		"scarred": return 96.0
+		"bloodied": return 64.0
+		"grave": return 48.0
+	return 128.0
+
+
+## Get wander bias for pawns in a region (0.0-1.0, higher = more wandering)
+func get_wander_bias_for_region(region_key: int) -> float:
+	var label: String = str(_meaning_by_region.get(region_key, "quiet"))
+	match label:
+		"quiet": return 0.5
+		"scarred": return 0.3
+		"bloodied": return 0.2
+		"grave": return 0.1
+	return 0.5
 
 
 ## Get max cluster size for job gathering in a region

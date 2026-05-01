@@ -40,6 +40,8 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-05-01  **Player-readable meaning refinement complete:** Fixed compilation error (removed non-existent Job.Type.TRADE_PICKUP reference in Pawn.gd). Wired MeaningAmbianceController._tick() into Main.gd tick loop for real-time meaning state polling. Added clustering radius and wander bias methods to MeaningAmbianceController (128/96/64/48px and 0.5/0.3/0.2/0.1 for quiet/scarred/bloodied/grave). Extended Pawn._apply_meaning_behavior_modifiers to cache all three behavior density modifiers (speed, clustering, wander bias). All four cue types from PLAYER_READABLE_MEANING_SPEC.md now implemented: audio cues (MeaningAudioCue), ambiance (MeaningAmbianceController), behavior density (Pawn), and settlement posture (TileFeature).
+
 2026-05-01  **Promotion exports + chronicle summary:** `WorldMemory.build_readable_chronicle_summary()` (event-type histogram + newest tail). `ExportSystem.export_promotion_bundle()` writes `user://heelkawn_promotion_exports/export_<time>/` (rich world_seed.json, chronicle_summary.txt, chronicle.json, bloodlines.json, artifacts.json). F10 → **36** prints summary; **37** runs bundle. `PawnSpawner` joins group `pawn_spawner` so `PawnData._get_parent_data` resolves during birth.
 
 2026-04-30  **First-play orientation:** `docs/HEELKAWN_STATE.md` adds FIRST PLAYABLE (v0.1 backbone). F10 → **35 · Backbone / first-play** prints LIVE vs DEFERRED + scene counts. `TechnologySystem` diffusion peers use real settlement `center_region` list (not random IDs). `HEELKAWN.txt` points creators to F10/35 + state doc.

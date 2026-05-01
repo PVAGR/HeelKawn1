@@ -1937,6 +1937,9 @@ func _on_game_tick(tick: int) -> void:
 	var t0: int = Time.get_ticks_usec()
 	_process_player_intent_dispatch_tick()
 	section_us["intent_dispatch"] = Time.get_ticks_usec() - t0
+	# Phase 4: Update meaning ambiance controller for player-readable meaning refinement
+	if is_instance_valid(MeaningAmbianceController):
+		MeaningAmbianceController._tick()
 	if _player_input != null and _player_mode == PlayerMode.INCARNATED:
 		if not is_instance_valid(_player_pawn):
 			_ensure_player_pawn_assigned()

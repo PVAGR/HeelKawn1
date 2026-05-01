@@ -4101,7 +4101,7 @@ static func _life_path_key_for_job(job_type: int) -> String:
 	match job_type:
 		Job.Type.FORAGE, Job.Type.HUNT:
 			return "farmer"
-		Job.Type.TRADE_PICKUP, Job.Type.TRADE_HAUL:
+		Job.Type.TRADE_HAUL:
 			return "wanderer"
 		_:
 			pass
@@ -4600,7 +4600,8 @@ func _tick_fleeing() -> void:
 
 
 ## Apply meaning-based behavior density modifiers (Phase 4)
-## Reads region meaning from MeaningAmbianceController and adjusts movement speed
+## Reads region meaning from MeaningAmbianceController and adjusts movement speed,
+## clustering radius, and wander bias
 func _apply_meaning_behavior_modifiers() -> void:
 	if _world == null or data == null:
 		return
@@ -4613,12 +4614,20 @@ func _apply_meaning_behavior_modifiers() -> void:
 	# Get movement speed multiplier from ambiance controller
 	var speed_mult: float = MeaningAmbianceController.get_movement_speed_multiplier_for_region(rk)
 	
-	# Cache the multiplier for use in movement logic
+	# Get clustering radius and wander bias
+	var cluster_radius: float = MeaningAmbianceController.get_clustering_radius_for_region(rk)
+	var wander_bias: float = MeaningAmbianceController.get_wander_bias_for_region(rk)
+	
+	# Cache the values for use in movement logic
 	_meaning_speed_multiplier = speed_mult
+	_meaning_clustering_radius = cluster_radius
+	_meaning_wander_bias = wander_bias
 
 
-## Cached meaning-based speed multiplier (default 1.0)
+## Cached meaning-based behavior modifiers (defaults)
 var _meaning_speed_multiplier: float = 1.0
+var _meaning_clustering_radius: float = 128.0
+var _meaning_wander_bias: float = 0.5
 
 
 func _tick_hiding() -> void:

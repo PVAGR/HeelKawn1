@@ -24,6 +24,9 @@ var _encounter_kind: String = "none"
 var _war_source_settlement_id: int = -1
 var _war_target_settlement_id: int = -1
 var _war_strength: float = 0.0
+var _last_cleanup_tick: int = -1
+var _cached_alive_pawns: int = 0
+var _cached_pawns_tick: int = -1
 
 
 func _ready() -> void:
@@ -31,7 +34,10 @@ func _ready() -> void:
 
 
 func process_tick(world: World, tick: int) -> void:
-	cleanup_dead_enemies()
+	# Cleanup dead enemies at most once per tick (get_enemy_count also calls it).
+	if _last_cleanup_tick != tick:
+		cleanup_dead_enemies()
+		_last_cleanup_tick = tick
 	_is_battle_active = enemies.size() > 0
 	if _is_battle_active:
 		if _raid_start_tick >= 0 and (tick - _raid_start_tick) >= RAID_DURATION_TICKS:
@@ -40,9 +46,14 @@ func process_tick(world: World, tick: int) -> void:
 			if tick % 100 == 0:
 				print("[Combat] Battle cleared: timeout reached.")
 			return
-		var alive_pawns: int = get_tree().get_nodes_in_group("pawns").filter(
-			func(p: Node) -> bool: return is_instance_valid(p)
-		).size()
+		# Cache alive pawn count; refresh every 10 ticks to avoid repeated
+		# get_nodes_in_group + filter allocations on every sim tick.
+		if _cached_pawns_tick != tick / 10:
+			_cached_alive_pawns = get_tree().get_nodes_in_group("pawns").filter(
+				func(p: Node) -> bool: return is_instance_valid(p)
+			).size()
+			_cached_pawns_tick = tick / 10
+		var alive_pawns: int = _cached_alive_pawns
 		if alive_pawns < 2:
 			if _no_target_since_tick < 0:
 				_no_target_since_tick = tick

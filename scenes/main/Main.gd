@@ -278,7 +278,7 @@ var _tunnel_frontier_cache: Array[Vector2i] = []
 var _tunnel_frontier_cache_cursor: int = 0
 var _tunnel_frontier_cache_component: int = -1
 var _tunnel_frontier_cache_built_tick: int = -1
-const TUNNEL_FRONTIER_CACHE_MAX_TARGETS: int = 24
+const TUNNEL_FRONTIER_CACHE_MAX_TARGETS: int = MAX_ACTIVE_MINE_WALL_JOBS
 const TUNNEL_FRONTIER_CACHE_REFRESH_TICKS: int = 720
 ## Hunt candidate index: deterministic sorted tile list refreshed periodically.
 var _hunt_candidate_tiles: Array[Vector2i] = []
@@ -2174,9 +2174,9 @@ func _mining_react_scan_rows_for_speed() -> int:
 		return MINING_REACT_SCAN_ROWS_PER_STEP
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 1
+		return 4
 	if gs >= 50.0:
-		return 2
+		return 3
 	if gs >= 26.0:
 		return 3
 	return MINING_REACT_SCAN_ROWS_PER_STEP
@@ -4463,7 +4463,10 @@ func _on_job_completed(job: Job) -> void:
 					"region": region_key,
 					"tile": {"x": job.tile.x, "y": job.tile.y},
 				})
-		Job.Type.MINE, Job.Type.MINE_WALL:
+		Job.Type.MINE_WALL:
+			# Only mined walls change reachability. Regular ore mining clears a
+			# feature on an already-reachable tile, so waking the full mining-react
+			# scan here creates repeated tick hitches without revealing new work.
 			_mining_react_pending = true
 			_invalidate_tunnel_frontier_cache()
 		Job.Type.FORAGE:
@@ -4612,6 +4615,15 @@ func _react_to_mining_progress_step() -> bool:
 	_mining_react_work_used = 0
 	var y_end: int = mini(WorldData.HEIGHT, y_start + rows_step)
 	for y in range(y_start, y_end):
+		# Cheap pre-check: skip rows with no ore at all. Avoids expensive
+		# has_job_at / find_adjacent_passable / job-post overhead on empty rows.
+		var row_has_ore: bool = false
+		for x in range(WorldData.WIDTH):
+			if _world.data.get_feature(x, y) == TileFeature.Type.ORE_VEIN:
+				row_has_ore = true
+				break
+		if not row_has_ore:
+			continue
 		for x in range(WorldData.WIDTH):
 			# Budgeting: count a cheap unit per tile checked. If we exceed
 			# the per-tick budget, pause the scan and continue next tick.
@@ -4669,21 +4681,20 @@ func _react_to_mining_progress_step() -> bool:
 
 
 func _mining_react_budget_for_speed() -> int:
-	var row_safe_minimum: int = WorldData.WIDTH + 1
 	if GameManager == null:
-		return maxi(row_safe_minimum, MINING_REACT_WORK_BUDGET_PER_TICK)
+		return maxi(WorldData.WIDTH + 1, MINING_REACT_WORK_BUDGET_PER_TICK)
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return maxi(row_safe_minimum, 256)
+		return 2048
 	if gs >= 50.0:
-		return maxi(row_safe_minimum, 384)
+		return 1536
 	if gs >= 26.0:
-		return maxi(row_safe_minimum, 512)
+		return 1024
 	if gs >= 12.0:
-		return maxi(row_safe_minimum, 768)
+		return 768
 	if gs >= 3.0:
-		return maxi(row_safe_minimum, 1024)
-	return maxi(row_safe_minimum, MINING_REACT_WORK_BUDGET_PER_TICK)
+		return 1024
+	return maxi(WorldData.WIDTH + 1, MINING_REACT_WORK_BUDGET_PER_TICK)
 
 
 ## Full react pass (legacy callers). Tick loop should prefer `_react_to_mining_progress_step`.

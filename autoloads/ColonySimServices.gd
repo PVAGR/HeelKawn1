@@ -41,8 +41,17 @@ func _on_tick(tick: int) -> void:
 	# Housing: macro cadence on sim time (every 60 ticks ≈ 1 minute at 1x), not game-speed throttling.
 	if tick % 60 == 0:
 		_refresh_housing_pressure()
-	# Food / materials / haul: every tick; cost is one `StockpileManager.labor_pressure_stock_snapshot` pass.
-	_refresh_food_mat_haul_pressures()
+	# Food / materials / haul: throttle at high speed to reduce per-frame listener cost.
+	# At 1x/3x every tick; at 12x+ every 4 ticks; at 50x/100x every 8 ticks.
+	var refresh_interval: int = 1
+	if GameManager != null:
+		var gs: float = GameManager.game_speed
+		if gs >= 50.0:
+			refresh_interval = 8
+		elif gs >= 12.0:
+			refresh_interval = 4
+	if tick % refresh_interval == 0:
+		_refresh_food_mat_haul_pressures()
 	if tick % 30 == 0:
 		demand_snapshot.emit(_food_press, _housing_press, _mat_press, _haul_press)
 

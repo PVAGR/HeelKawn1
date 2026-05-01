@@ -40,6 +40,8 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
+2026-05-01  **Sim hitch smoothing (mining_react + per-tick listeners):** `Main._react_to_mining_progress_step` adds cheap ore-presence pre-check per row (skip empty rows entirely — no `has_job_at` / `find_adjacent_passable` / job-post overhead); `_mining_react_scan_rows_for_speed` at 100x now scans 4 rows/step (was 1); `_mining_react_budget_for_speed` at 100x raised to 2048 (was 256), 50x→1536 (was 384), 26x→1024 (was 512) so full-map scans complete well within the 300-tick minimum interval. `ColonySimServices._on_tick` throttles food/mat/haul refresh: 12x+ → every 4 ticks, 50x/100x → every 8 ticks (was every tick, 6x per frame at 100x). `EnemySpawner.process_tick` dedupes `cleanup_dead_enemies` (was called redundantly via `get_enemy_count`) and caches alive pawn count every 10 ticks (was `get_nodes_in_group` + filter every tick).
+
 2026-05-01  **Promotion exports + chronicle summary:** `WorldMemory.build_readable_chronicle_summary()` (event-type histogram + newest tail). `ExportSystem.export_promotion_bundle()` writes `user://heelkawn_promotion_exports/export_<time>/` (rich world_seed.json, chronicle_summary.txt, chronicle.json, bloodlines.json, artifacts.json). F10 → **36** prints summary; **37** runs bundle. `PawnSpawner` joins group `pawn_spawner` so `PawnData._get_parent_data` resolves during birth.
 
 2026-04-30  **First-play orientation:** `docs/HEELKAWN_STATE.md` adds FIRST PLAYABLE (v0.1 backbone). F10 → **35 · Backbone / first-play** prints LIVE vs DEFERRED + scene counts. `TechnologySystem` diffusion peers use real settlement `center_region` list (not random IDs). `HEELKAWN.txt` points creators to F10/35 + state doc.

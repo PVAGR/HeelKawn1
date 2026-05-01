@@ -2227,21 +2227,27 @@ func _ensure_inspect_audio() -> void:
 	p.stream = gen
 	add_child(p)
 	_inspect_audio_player = p
-	_inspect_audio_playback = p.get_stream_playback()
+	# Playback is only valid after play() on many platforms; refresh in _play_inspect_tone.
+	_inspect_audio_playback = null
 
 
 func _play_inspect_tone() -> void:
 	_ensure_inspect_audio()
-	if _inspect_audio_player == null or _inspect_audio_playback == null:
+	if _inspect_audio_player == null:
 		return
 	var player: AudioStreamPlayer = _inspect_audio_player
 	var gen: AudioStreamGenerator = player.stream as AudioStreamGenerator
-	var playback: AudioStreamGeneratorPlayback = _inspect_audio_playback
+	if gen == null:
+		return
 	var freq: float = 660.0
 	var dur: float = 0.12
 	var sr: int = int(gen.mix_rate)
 	var samples: int = int(float(sr) * dur)
 	player.play()
+	var playback: AudioStreamGeneratorPlayback = player.get_stream_playback() as AudioStreamGeneratorPlayback
+	if playback == null:
+		return
+	_inspect_audio_playback = playback
 	for i in range(samples):
 		var t: float = float(i) / float(sr)
 		var s: float = sin(2.0 * PI * freq * t) * 0.14
@@ -2674,6 +2680,10 @@ func _update_camera_meaning_bias(delta: float) -> void:
 
 
 func _update_ambient_audio(delta: float) -> void:
+	if _ambient_playback == null and _ambient_player != null and is_instance_valid(_ambient_player):
+		if not _ambient_player.playing:
+			_ambient_player.play()
+		_ambient_playback = _ambient_player.get_stream_playback() as AudioStreamGeneratorPlayback
 	if _ambient_playback == null:
 		return
 	var frames: int = _ambient_playback.get_frames_available()

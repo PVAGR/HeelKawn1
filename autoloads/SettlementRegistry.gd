@@ -15,6 +15,25 @@ func _zone_id_from_center(center_rk: int) -> String:
 
 
 ## Merge [member _persistence_overlay] and [member _abandoned_tick_by_zone] onto [param st] in place.
+func upsert_overlay_field(zone_id: String, key: String, value: Variant) -> void:
+	if zone_id.is_empty() or zone_id == "-1":
+		return
+	if not _persistence_overlay.has(zone_id):
+		_persistence_overlay[zone_id] = {}
+	var inner: Variant = _persistence_overlay[zone_id]
+	if inner is Dictionary:
+		(inner as Dictionary)[key] = value
+
+
+func get_overlay_field(zone_id: String, key: String) -> Variant:
+	if not _persistence_overlay.has(zone_id):
+		return null
+	var inner: Variant = _persistence_overlay[zone_id]
+	if inner is Dictionary:
+		return (inner as Dictionary).get(key)
+	return null
+
+
 func merge_persistence_into_settlement(st: Dictionary) -> void:
 	var ckr: int = int(st.get("center_region", -1))
 	var zid: String = _zone_id_from_center(ckr)

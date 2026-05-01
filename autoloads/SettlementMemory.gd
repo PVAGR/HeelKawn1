@@ -57,6 +57,20 @@ const INTENT_HOARD: String = "HOARD"
 const INTENT_DEFEND: String = "DEFEND"
 const INTENT_RECOVER: String = "RECOVER"
 
+## Policy layer on top of derived power structure ([member settlements] also stores [code]governance_type[/code]
+## as council/monarchy/anarchy from [method _governance_for_settlement]).
+enum GovernanceForm {
+	ELDER_COUNCIL,
+	MILITIA_PROTECTORS,
+	CHIEF_HOUSEHOLDS,
+	COUNCIL_RULE,
+}
+
+const GOVERNANCE_FORM_DEFAULT: GovernanceForm = GovernanceForm.ELDER_COUNCIL
+
+## center_region -> persisted governance form key string ([method governance_form_to_storage_string]).
+var _governance_form_by_center: Dictionary = {}
+
 var settlements: Array = []
 ## center_region -> hysteresis for settlement [state] material truth (survives settlement dict rebuilds).
 var _settlement_state_truth_hysteresis: Dictionary = {}
@@ -344,6 +358,7 @@ func recompute(_world: World) -> void:
 	)
 	_prune_settlement_state_truth_hysteresis()
 	_update_governance_state()
+	_apply_persisted_governance_forms()
 	_settlement_truth_verify_post_recompute_pass()
 
 
@@ -1237,15 +1252,137 @@ func _governance_for_settlement(st: Dictionary, pawns: Array[Pawn]) -> Dictionar
 	return {"type": "monarchy", "ruler_id": int(ranked[0].id), "council_ids": PackedInt32Array()}
 
 
+func governance_form_to_storage_string(form: GovernanceForm) -> String:
+	match form:
+		GovernanceForm.ELDER_COUNCIL:
+			return "elder_council"
+		GovernanceForm.MILITIA_PROTECTORS:
+			return "militia_protectors"
+		GovernanceForm.CHIEF_HOUSEHOLDS:
+			return "chief_households"
+		GovernanceForm.COUNCIL_RULE:
+			return "council_rule"
+	return "elder_council"
+
+
+func governance_form_from_storage_string(s: String) -> GovernanceForm:
+	match str(s):
+		"militia_protectors":
+			return GovernanceForm.MILITIA_PROTECTORS
+		"chief_households":
+			return GovernanceForm.CHIEF_HOUSEHOLDS
+		"council_rule":
+			return GovernanceForm.COUNCIL_RULE
+		_:
+			return GovernanceForm.ELDER_COUNCIL
+
+
+## Numeric modifiers for downstream sim (job routing, intent glue). Multipliers scale priority-like weights.
+## Ratios stay near 1.0 so defaults remain playable without tuning explosions.
+func get_governance_bonus(form: GovernanceForm) -> Dictionary:
+	match form:
+		GovernanceForm.ELDER_COUNCIL:
+			# Elder consensus: favor stabilizing food/forage and negotiated exchange over rash builds or raids.
+			return {"food": 1.08, "defense": 0.94, "build": 1.02, "production": 0.98, "trade": 1.05}
+		GovernanceForm.MILITIA_PROTECTORS:
+			# Militia-led: favor patrol/defense work (walls, hunting threats) over civilian expansion.
+			return {"food": 0.97, "defense": 1.12, "build": 1.0, "production": 0.98, "trade": 0.96}
+		GovernanceForm.CHIEF_HOUSEHOLDS:
+			# Kin-house hierarchy: favor shelter/construction and domestic order over distant trade.
+			return {"food": 1.03, "defense": 1.0, "build": 1.1, "production": 1.02, "trade": 0.94}
+		GovernanceForm.COUNCIL_RULE:
+			# Formal quorum: balanced productive labor with slight bias to civic cohesion (production/trade).
+			return {"food": 1.02, "defense": 1.02, "build": 1.02, "production": 1.04, "trade": 1.04}
+		_:
+			return {"food": 1.0, "defense": 1.0, "build": 1.0, "production": 1.0, "trade": 1.0}
+
+
+func get_governance_bonus_for_storage_string(form_key: String) -> Dictionary:
+	return get_governance_bonus(governance_form_from_storage_string(form_key))
+
+
+## settlement_id matches other settlement APIs ([method get_ruler_pawn_id]): [code]center_region[/code] id.
+func set_governance_type(settlement_id: int, form: GovernanceForm) -> void:
+	if settlement_id < 0:
+		return
+	var s: String = governance_form_to_storage_string(form)
+	_governance_form_by_center[settlement_id] = s
+	SettlementRegistry.upsert_overlay_field(str(settlement_id), "governance_form", s)
+	for i in range(settlements.size()):
+		if not (settlements[i] is Dictionary):
+			continue
+		var st: Dictionary = settlements[i] as Dictionary
+		if int(st.get("center_region", -1)) == settlement_id:
+			st["governance_form"] = s
+			settlements[i] = st
+			break
+
+
+func _apply_persisted_governance_forms() -> void:
+	for i in range(settlements.size()):
+		if not (settlements[i] is Dictionary):
+			continue
+		var st: Dictionary = settlements[i] as Dictionary
+		var c: int = int(st.get("center_region", -1))
+		if c < 0:
+			continue
+		var form_str: String = ""
+		if _governance_form_by_center.has(c):
+			form_str = str(_governance_form_by_center[c])
+		else:
+			var ov: Variant = SettlementRegistry.get_overlay_field(str(c), "governance_form")
+			if ov != null and str(ov) != "":
+				form_str = str(ov)
+				_governance_form_by_center[c] = form_str
+		if form_str.is_empty():
+			form_str = governance_form_to_storage_string(GOVERNANCE_FORM_DEFAULT)
+		st["governance_form"] = form_str
+		settlements[i] = st
+
+
+func to_save_dict() -> Dictionary:
+	var gf: Dictionary = {}
+	for k_any in _governance_form_by_center.keys():
+		gf[str(k_any)] = str(_governance_form_by_center[k_any])
+	return {"governance_forms": gf}
+
+
+func from_save_dict(d: Variant) -> void:
+	_governance_form_by_center.clear()
+	if d == null or not (d is Dictionary):
+		return
+	var gf_v: Variant = (d as Dictionary).get("governance_forms", {})
+	if not (gf_v is Dictionary):
+		return
+	for k_any in (gf_v as Dictionary).keys():
+		var ck: int = int(str(k_any))
+		var fs: String = str((gf_v as Dictionary)[k_any])
+		if ck >= 0 and not fs.is_empty():
+			_governance_form_by_center[ck] = fs
+			SettlementRegistry.upsert_overlay_field(str(ck), "governance_form", fs)
+
+
+func clear_persisted_governance_forms() -> void:
+	_governance_form_by_center.clear()
+
+
 func get_governance_profile_for_region(region_key: int) -> Dictionary:
 	var st_v: Variant = get_settlement_at_region(region_key)
 	if not (st_v is Dictionary):
-		return {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
+		return {
+			"type": "anarchy",
+			"ruler_id": -1,
+			"council_ids": PackedInt32Array(),
+			"governance_form": governance_form_to_storage_string(GOVERNANCE_FORM_DEFAULT),
+		}
 	var st: Dictionary = st_v as Dictionary
 	return {
 		"type": str(st.get("governance_type", "anarchy")),
 		"ruler_id": int(st.get("current_ruler_id", -1)),
 		"council_ids": st.get("council_ids", PackedInt32Array()),
+		"governance_form": str(
+				st.get("governance_form", governance_form_to_storage_string(GOVERNANCE_FORM_DEFAULT))
+		),
 	}
 
 

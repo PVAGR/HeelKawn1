@@ -4371,6 +4371,7 @@ func _blueprint_feature_for_mode() -> int:
 func _reroll_world() -> void:
 	JobManager.clear_all()
 	SettlementRegistry.clear()
+	SettlementMemory.clear_persisted_governance_forms()
 	FragmentationManager.clear()
 	SchismManager.clear()
 	WorldMemory.clear()
@@ -5516,6 +5517,7 @@ func _build_save_dict() -> Dictionary:
 		"world_memory": WorldMemory.to_save_dict(),
 		"bloodline_system": BloodlineSystem.to_save_dict(),
 		"settlement_registry": SettlementRegistry.to_save_dict(),
+		"settlement_memory": SettlementMemory.to_save_dict(),
 		"world_persistence": WorldPersistence.to_save_dict(),
 		"myth": MythMemory.to_save_dict(),
 		"sacred": SacredMemory.to_save_dict(),
@@ -5613,6 +5615,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 	WorldMemory.from_save_dict(s.get("world_memory", {}))
 	BloodlineSystem.from_save_dict(s.get("bloodline_system", {}))
 	SettlementRegistry.from_save_dict(s.get("settlement_registry", {}))
+	SettlementMemory.from_save_dict(s.get("settlement_memory", {}))
 	MythMemory.from_save_dict(s.get("myth", {}))
 	SacredMemory.from_save_dict(s.get("sacred", {}))
 	ChronicleLog.from_save_dict(s.get("chronicle", {}))

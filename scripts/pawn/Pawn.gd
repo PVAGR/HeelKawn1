@@ -750,6 +750,7 @@ func _ready() -> void:
 	add_child(_sfx)
 	_action_popup = $ActionPopup
 	call_deferred("_pawn_connect_sim_tick_deferred")
+	add_to_group("tickable")
 
 
 func _pawn_connect_sim_tick_deferred() -> void:
@@ -760,10 +761,10 @@ func _pawn_connect_sim_tick_deferred() -> void:
 	if data == null or _world == null:
 		push_warning("Pawn: deferred game_tick connect skipped — not bound (path=%s)" % str(get_path()))
 		return
-	if GameManager.game_tick.is_connected(_on_game_tick):
+	if GameManager.game_tick.is_connected(_on_world_tick):
 		_pawn_sim_tick_armed = true
 		return
-	GameManager.game_tick.connect(_on_game_tick)
+	GameManager.game_tick.connect(_on_world_tick)
 	_pawn_sim_tick_armed = true
 
 
@@ -808,7 +809,7 @@ func _reset_neural_priority_cache() -> void:
 func _exit_tree() -> void:
 	_pawn_sim_tick_armed = false
 	if GameManager != null and GameManager.game_tick.is_connected(_on_game_tick):
-		GameManager.game_tick.disconnect(_on_game_tick)
+		GameManager.game_tick.disconnect(_on_world_tick)
 	# Unregister pawn data so static registry stays accurate
 	if data != null:
 		PawnData.unregister_pawn_data(int(data.id))
@@ -1321,7 +1322,7 @@ func _on_path_complete() -> void:
 
 # ==================== per-tick simulation ====================
 
-func _on_game_tick(_tick: int) -> void:
+func _on_world_tick(_tick: int) -> void:
 	# Hard guard: no sim until bind + _ready + deferred connect completed.
 	if not is_instance_valid(self):
 		return
@@ -2563,9 +2564,13 @@ func _begin_job(job: Job) -> void:
 		var item_type: int = mats.item
 		var need_qty: int = mats.qty
 		# === Check for cultural style material override ===
-		var settlement_id: int = int(from_center_region) if from_center_region >= 0 else -1
+		var settlement_id: int = _current_settlement_center_region()
+		var material_family: String = "wood"
 		if settlement_id >= 0 and CulturalStyleManager != null:
 			item_type = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, job.type))
+			material_family = str(CulturalStyleManager.call("get_build_material_family", settlement_id))
+			if GameManager.verbose_logs():
+				print("[Culture] %s build job %s uses %s materials" % [data.display_name, Job.describe_type(job.type), material_family])
 		# === End style check ===
 		var have: int = data.carrying_qty if data.carrying == item_type else 0
 		if have < need_qty:
@@ -2941,11 +2946,13 @@ func _finish_build(job: Job) -> void:
 	var item_type: int = mats.item
 	var need_qty: int = mats.qty
 	# === Override material based on settlement's cultural style ===
-	var settlement_id: int = int(from_center_region) if from_center_region >= 0 else -1
+	var settlement_id: int = _current_settlement_center_region()
+	var material_family: String = "wood"
 	if settlement_id >= 0 and CulturalStyleManager != null:
 		item_type = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, job.type))
+		material_family = str(CulturalStyleManager.call("get_build_material_family", settlement_id))
 		if GameManager.verbose_logs():
-			print("[Culture] %s building with material %d (style override) @(%d,%d)" % [data.display_name, item_type, job.tile.x, job.tile.y])
+			print("[Culture] %s building with %s materials @(%d,%d)" % [data.display_name, material_family, job.tile.x, job.tile.y])
 	# === End style material override ===
 	if data.carrying != item_type or data.carrying_qty < need_qty:
 		if GameManager.verbose_logs():
@@ -2969,6 +2976,13 @@ func _finish_build(job: Job) -> void:
 			_world.build_door(job.tile.x, job.tile.y)
 			if GameManager.verbose_logs():
 				print("[Pawn] %s placed a door @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+
+
+func _current_settlement_center_region() -> int:
+	if data == null:
+		return -1
+	var region_key: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
+	return SettlementMemory.get_center_region_for_region(region_key)
 
 
 ## Complete a tool-crafting job: consume materials from stockpile, equip the tool.

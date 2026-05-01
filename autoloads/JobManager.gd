@@ -7,6 +7,16 @@ extends Node
 # Autoload references
 @onready var WorldAI = get_node_or_null("/root/WorldAI")
 
+
+func _ready() -> void:
+	add_to_group("tickable")
+
+
+func _on_world_tick(tick_number: int) -> void:
+	# JobManager is primarily a data store; no per-tick logic required.
+	# This method satisfies the tickable interface for deterministic ordering.
+	pass
+
 signal job_posted(job: Job)
 signal job_claimed(job: Job, pawn: Pawn)
 signal job_completed(job: Job)
@@ -33,6 +43,9 @@ var cancelled_count: int = 0
 
 const MAX_OPEN_JOBS_DEFAULT: int = 256
 const MAX_OPEN_JOBS_LIGHTWEIGHT: int = 96
+
+func _ready() -> void:
+    add_to_group("tickable")
 
 
 func _bump_jobs_data_generation() -> void:
@@ -345,6 +358,10 @@ func _notify_world_ai_job_completion(job: Job) -> void:
 
 ## `abandon` keeps the open job: construction reservations on tiles stay. Only
 ## a full `cancel` (no longer any job) releases them.
+func _on_world_tick(tick_number: int) -> void:
+    # JobManager is event-driven; no per-tick state changes required.
+    pass
+
 func _notify_path_reservation_released(j: Job) -> void:
 	if j == null or j.type != Job.Type.BUILD_WALL:
 		return

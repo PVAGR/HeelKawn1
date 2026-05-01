@@ -21,6 +21,7 @@ config/features=PackedStringArray("4.6", "GL Compatibility")
 
 [autoload]
 
+TickManager="*res://autoloads/TickManager.gd"
 KinshipSystem="*res://autoloads/KinshipSystem.gd"
 CrashTrap="*res://autoloads/CrashTrap.gd"
 GameManager="*res://autoloads/GameManager.gd"
@@ -34,6 +35,7 @@ CulturalMemory="*res://autoloads/CulturalMemory.gd"
 CulturalStyleManager="*res://autoloads/CulturalStyleManager.gd"
 SettlementMemory="*res://autoloads/SettlementMemory.gd"
 SettlementRegistry="*res://autoloads/SettlementRegistry.gd"
+SpatialManager="*res://autoloads/SpatialManager.gd"
 SettlementIdentity="*res://scripts/kernel/settlement_identity.gd"
 SettlementPersistence="*res://scripts/kernel/settlement_persistence.gd"
 FragmentationManager="*res://autoloads/FragmentationManager.gd"

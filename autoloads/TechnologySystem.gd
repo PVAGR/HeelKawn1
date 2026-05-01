@@ -51,6 +51,10 @@ var active_research_by_settlement: Dictionary = {}
 var tech_effects_by_settlement: Dictionary = {}
 var research_history: Array = []
 
+signal research_started(settlement_id: int, tech_id: String, started_tick: int)
+signal research_progressed(settlement_id: int, tech_id: String, spent_points: int, cost: int, progress: float)
+signal research_completed(settlement_id: int, tech_id: String, cost: int)
+
 
 func _ready() -> void:
 	if GameManager != null and GameManager.has_signal("game_tick"):
@@ -149,6 +153,8 @@ func _advance_active_research(settlement_id: int) -> bool:
 	spent += spend_now
 	st["spent_points"] = spent
 	active_research_by_settlement[key] = st
+	var progress: float = clampf(float(spent) / float(maxi(1, cost)), 0.0, 1.0)
+	research_progressed.emit(settlement_id, tech_id, spend_now, cost, progress)
 	if spent >= cost:
 		_complete_research(settlement_id, tech_id, cost)
 		return true
@@ -176,6 +182,7 @@ func _complete_research(settlement_id: int, tech_id: String, cost: int) -> void:
 		"cost": cost,
 		"tick": GameManager.tick_count if GameManager != null else 0,
 	})
+	research_completed.emit(settlement_id, tech_id, cost)
 	_save_to_world_persistence()
 
 
@@ -196,6 +203,7 @@ func set_active_research(settlement_id: int, tech_id: String) -> bool:
 		"spent_points": 0,
 		"started_tick": GameManager.tick_count if GameManager != null else 0,
 	}
+	research_started.emit(settlement_id, tech_id, int((active_research_by_settlement[key] as Dictionary).get("started_tick", 0)))
 	_save_to_world_persistence()
 	return true
 

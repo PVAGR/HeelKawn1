@@ -183,6 +183,8 @@ var _kernel_diagnostic: KernelDiagnostic = null
 ## selection, pause/speed, camera. Structures/zones: planner + jobs only (no human stamp).
 var _phase8_proof_overlay_layer: CanvasLayer = null
 var _phase8_proof_overlay_text: RichTextLabel = null
+var _spatial_profile_overlay_text: RichTextLabel = null
+var _research_particle_texture: Texture2D = null
 ## Content signature for resource-balance console lines (never use snapshot_tick alone — it changes every refresh).
 var _resource_balance_audit_last_sig: String = ""
 ## pawn_id -> last claimed job label (debug instrumentation only).
@@ -500,10 +502,12 @@ func _ready() -> void:
 	var simulation_worker: bool = _is_simulation_worker_mode()
 	if not simulation_worker:
 		SettlementMemory.print_validation_smoketest_from_main()
-	# Ticks are driven from [member GameManager._dispatch_game_tick] (optional per-listener trace: --game-tick-trace).
-	GameManager.game_tick.connect(_on_game_tick)
+	# Ticks are driven by TickManager fixed-step clock.
+	if TickManager != null and TickManager.has_signal("tick_processed"):
+		TickManager.tick_processed.connect(_on_world_tick)
 	GameManager.speed_changed.connect(_on_speed_changed)
-	CrashTrap.validate_signal(GameManager, &"game_tick")
+	if TickManager != null:
+		CrashTrap.validate_signal(TickManager, &"tick_processed")
 	CrashTrap.validate_signal(GameManager, &"speed_changed")
 	CrashTrap.validate_autoload("SettlementMemory", "Node")
 	CrashTrap.validate_autoload("WorldAI", "Node")
@@ -519,6 +523,17 @@ func _ready() -> void:
 		# Initialize Phase 5 Map Mode overlay
 		if _map_mode_overlay != null and _map_mode_overlay.has_method("initialize"):
 			_map_mode_overlay.call("initialize", _world, _camera)
+		if TechnologySystem != null:
+			if TechnologySystem.has_signal("research_started") and not TechnologySystem.research_started.is_connected(_on_research_started):
+				TechnologySystem.research_started.connect(_on_research_started)
+			# Backward/forward compatibility: some branches expose `research_progress`,
+			# others expose `research_progressed`.
+			if TechnologySystem.has_signal("research_progress") and not TechnologySystem.research_progress.is_connected(_on_research_progressed):
+				TechnologySystem.research_progress.connect(_on_research_progressed)
+			if TechnologySystem.has_signal("research_progressed") and not TechnologySystem.research_progressed.is_connected(_on_research_progressed):
+				TechnologySystem.research_progressed.connect(_on_research_progressed)
+			if TechnologySystem.has_signal("research_completed") and not TechnologySystem.research_completed.is_connected(_on_research_completed):
+				TechnologySystem.research_completed.connect(_on_research_completed)
 		# React to mining progress: when a wall comes down or an ore is cleared,
 		# new ores can become reachable and we may want to queue the next tunnel.
 		JobManager.job_completed.connect(_on_job_completed)
@@ -544,6 +559,7 @@ func _ready() -> void:
 		if _focus_inspector != null:
 			_focus_inspector.set_visible_state(false)
 		_init_phase8_proof_overlay()
+		_refresh_spatial_profile_overlay()
 		_ensure_meaning_vignette()
 		# Debug panel is loaded lazily via F12 to keep startup path minimal.
 	else:
@@ -1977,6 +1993,10 @@ func _sync_pawn_inherited_cultural_reputation() -> void:
 			p.call("refresh_inherited_cultural_reputation")
 
 
+func _on_world_tick(tick_number: int) -> void:
+	_on_game_tick(tick_number)
+
+
 func _on_game_tick(tick: int) -> void:
 	if CrashTrap.trace_enabled and tick == 1:
 		CrashTrap.log_tick_event("Main._on_game_tick", "tick=%d" % tick)
@@ -2163,6 +2183,8 @@ func _on_game_tick(tick: int) -> void:
 		if tick % road_flush_interval == 0 and not _road_flush_deferred_pending:
 			_road_flush_deferred_pending = true
 			call_deferred("_flush_road_memory_dirty_tiles")
+	if tick % 10 == 0:
+		_refresh_spatial_profile_overlay()
 	_maybe_log_tick_hotspots(tick, section_us)
 
 
@@ -3163,7 +3185,19 @@ func _init_phase8_proof_overlay() -> void:
 	if last_line == "":
 		last_line = "[PHASE8_PROOF_BUNDLE] waiting_for_first_resource_truth_tick..."
 	_phase8_proof_overlay_text.text = last_line
+	_spatial_profile_overlay_text = RichTextLabel.new()
+	_spatial_profile_overlay_text.name = "SpatialProfileOverlayText"
+	_spatial_profile_overlay_text.bbcode_enabled = false
+	_spatial_profile_overlay_text.fit_content = false
+	_spatial_profile_overlay_text.scroll_active = false
+	_spatial_profile_overlay_text.selection_enabled = false
+	_spatial_profile_overlay_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_spatial_profile_overlay_text.position = Vector2(8, 156)
+	_spatial_profile_overlay_text.size = Vector2(1240, 88)
+	_spatial_profile_overlay_text.add_theme_font_size_override("normal_font_size", 12)
+	_phase8_proof_overlay_layer.add_child(_spatial_profile_overlay_text)
 	_refresh_phase8_proof_overlay_style()
+	_refresh_spatial_profile_overlay()
 
 
 func _refresh_phase8_proof_overlay_style() -> void:
@@ -3185,6 +3219,109 @@ func _on_phase8_proof_bundle_emitted(bundle_line: String) -> void:
 	else:
 		_phase8_proof_overlay_text.text = bundle_line
 	_refresh_phase8_proof_overlay_style()
+	_refresh_spatial_profile_overlay()
+
+
+func _refresh_spatial_profile_overlay() -> void:
+	if not OS.is_debug_build():
+		return
+	if _spatial_profile_overlay_text == null or not is_instance_valid(_spatial_profile_overlay_text):
+		return
+	var spatial_stats: Dictionary = SpatialManager.get_stats() if SpatialManager != null else {}
+	var total_chunks: int = int(spatial_stats.get("total_chunks", 0))
+	var active_chunks: int = int(spatial_stats.get("active_chunks", 0))
+	var culled_entities: int = int(spatial_stats.get("culled_entities", spatial_stats.get("culled_count", 0)))
+	_spatial_profile_overlay_text.text = "Spatial: %d/%d | Culled Entities: %d" % [
+		active_chunks, total_chunks, culled_entities
+	]
+
+
+func _center_tile_from_region_key(center_region: int) -> Vector2i:
+	if center_region < 0:
+		return Vector2i(-1, -1)
+	var rx: int = center_region & 0xFFFF
+	var ry: int = (center_region >> 16) & 0xFFFF
+	if rx & 0x8000:
+		rx = -(0x10000 - rx)
+	if ry & 0x8000:
+		ry = -(0x10000 - ry)
+	return Vector2i(rx * 16 + 8, ry * 16 + 8)
+
+
+func _research_particle_color(settlement_id: int, tech_id: String, completed: bool) -> Color:
+	var alpha: float = 0.80 if completed else 0.55
+	match tech_id:
+		"stone_knapping":
+			return Color(0.58, 0.58, 0.58, alpha) # Stone = Gray
+		"agriculture":
+			return Color(0.38, 0.70, 0.38, alpha) # Agriculture = Green
+		"masonry":
+			return Color(0.46, 0.33, 0.20, alpha) # Masonry = Brown
+		"metallurgy":
+			return Color(0.86, 0.48, 0.17, alpha) # Metallurgy = Orange
+		_:
+			return Color(0.72, 0.72, 0.72, alpha)
+
+
+func _spawn_research_particles(settlement_id: int, tech_id: String, completed: bool, progress: float) -> void:
+	if _preview_layer == null or not is_instance_valid(_preview_layer):
+		return
+	var settlement_tile: Vector2i = _center_tile_from_region_key(settlement_id)
+	if settlement_tile.x < 0 or _world == null:
+		return
+	if _research_particle_texture == null:
+		var img: Image = Image.create(4, 4, false, Image.FORMAT_RGBA8)
+		img.fill(Color.WHITE)
+		_research_particle_texture = ImageTexture.create_from_image(img)
+	var particles: GPUParticles2D = GPUParticles2D.new()
+	particles.name = "ResearchBurst_%s_%d" % [tech_id, GameManager.tick_count]
+	particles.texture = _research_particle_texture
+	particles.one_shot = true
+	particles.emitting = false
+	particles.amount = 10 if completed else 6
+	particles.lifetime = 0.55 if completed else 0.35
+	particles.explosiveness = 1.0
+	particles.preprocess = 0.0
+	particles.local_coords = false
+	particles.position = _world.tile_to_world(settlement_tile)
+	particles.z_index = 20
+	var material: ParticleProcessMaterial = ParticleProcessMaterial.new()
+	material.direction = Vector3(0.0, -1.0, 0.0)
+	material.spread = 180.0
+	material.gravity = Vector3(0.0, -10.0, 0.0)
+	material.initial_velocity_min = 8.0 if completed else 5.0
+	material.initial_velocity_max = 20.0 if completed else 12.0
+	material.scale_min = 0.25
+	material.scale_max = 0.60 if completed else 0.45
+	particles.process_material = material
+	particles.modulate = _research_particle_color(settlement_id, tech_id, completed)
+	_preview_layer.add_child(particles)
+	particles.emitting = true
+	var cleanup: Timer = Timer.new()
+	cleanup.one_shot = true
+	cleanup.wait_time = 0.75 if completed else 0.50
+	cleanup.timeout.connect(func() -> void:
+		if is_instance_valid(particles):
+			particles.queue_free()
+	)
+	particles.add_child(cleanup)
+	cleanup.start()
+
+
+func _on_research_started(settlement_id: int, tech_id: String, _started_tick: int) -> void:
+	# Keep start/progress handlers connected for future ambient pulses, but do not
+	# emit particles here (completion-only burst by spec).
+	_refresh_spatial_profile_overlay()
+
+
+func _on_research_progressed(settlement_id: int, tech_id: String, _spent_points: int, _cost: int, progress: float) -> void:
+	# Completion-only visual burst; no per-progress particle spam.
+	_refresh_spatial_profile_overlay()
+
+
+func _on_research_completed(settlement_id: int, tech_id: String, _cost: int) -> void:
+	_spawn_research_particles(settlement_id, tech_id, true, 1.0)
+	_refresh_spatial_profile_overlay()
 
 
 func _update_phase8_proof_bundle_preferred_center() -> void:
@@ -3357,7 +3494,7 @@ func _commit_build_rect(rect: Rect2i) -> void:
 		if OS.is_debug_build():
 			print(
 					"[Main] Drag-stamped %s: %d placed%s" % [
-						_designation_mode_label(_designation_mode),
+						_designation_action_label(_designation_mode),
 						posted,
 						"" if skipped == 0 else ", %d skipped" % skipped
 					]
@@ -3448,7 +3585,7 @@ func _set_designation_mode(mode: int) -> void:
 		else:
 			print(
 					"[Main] Designation mode: %s  (left-click to place, right-click / Esc to cancel)" %
-					_designation_mode_label(mode)
+					_designation_action_label(mode)
 			)
 	_update_wall_path_preview()
 	_queue_designation_redraw()
@@ -3461,6 +3598,54 @@ static func _designation_mode_label(mode: int) -> String:
 		DesignationMode.BUILD_DOOR:    return "Door"
 		DesignationMode.DESIGNATE_ZONE: return "Zone"
 	return ""
+
+
+func _designation_action_label(mode: int) -> String:
+	var base_label: String = _designation_mode_label(mode)
+	if mode == DesignationMode.BUILD_WALL:
+		var suffix: String = _designation_style_suffix_for_current_focus()
+		var family_label: String = _designation_material_family_for_current_focus()
+		return "Constructing %s Wall%s" % [family_label, suffix]
+	if mode == DesignationMode.BUILD_DOOR:
+		return "Constructing %s Door%s" % [_designation_material_family_for_current_focus(), _designation_style_suffix_for_current_focus()]
+	if mode == DesignationMode.BUILD_BED:
+		return "Constructing Bed%s" % _designation_style_suffix_for_current_focus()
+	return base_label
+
+
+func _designation_style_suffix_for_current_focus() -> String:
+	if CulturalStyleManager == null:
+		return ""
+	var center_region: int = _designation_center_region_for_style()
+	if center_region < 0:
+		return ""
+	var style_label: String = str(CulturalStyleManager.call("describe_settlement_style", center_region))
+	if style_label.strip_edges().is_empty():
+		return ""
+	return " [%s Style]" % style_label
+
+
+func _designation_material_family_for_current_focus() -> String:
+	if CulturalStyleManager == null:
+		return "Wood"
+	var center_region: int = _designation_center_region_for_style()
+	if center_region < 0:
+		return "Wood"
+	var family: String = str(CulturalStyleManager.call("get_build_material_family", center_region)).to_lower()
+	match family:
+		"stone":
+			return "Stone"
+		_:
+			return "Wood"
+
+
+func _designation_center_region_for_style() -> int:
+	if _selected_pawn != null and is_instance_valid(_selected_pawn) and _selected_pawn.data != null:
+		var prk: int = _WM._region_key(_selected_pawn.data.tile_pos.x, _selected_pawn.data.tile_pos.y)
+		return SettlementMemory.get_center_region_for_region(prk)
+	var focus: Dictionary = _observer_focus_settlement()
+	var sdata: Dictionary = focus.get("settlement_data", {})
+	return int(sdata.get("center_region", -1))
 
 
 func _handle_select_click_at(world_pos: Vector2) -> void:
@@ -5701,6 +5886,15 @@ func _focus_lines_for_settlement(focus: Dictionary) -> PackedStringArray:
 		int(round(ColonySimServices.get_food_pressure() * 100.0)),
 		int(round(ColonySimServices.get_housing_pressure() * 100.0)),
 	])
+	var tradition: Dictionary = CulturalMemory.get_tradition(center)
+	var t_branch: String = str(tradition.get("preferred_tech_branch", "agriculture"))
+	var t_naming: String = str(tradition.get("naming_convention", "nordic"))
+	var taboo_v: Variant = tradition.get("taboo_jobs", [])
+	var taboo_s: String = "none"
+	if taboo_v is Array and not (taboo_v as Array).is_empty():
+		taboo_s = ", ".join(taboo_v as Array)
+	out.append("Tradition: branch=%s | naming=%s | taboo=%s" % [t_branch, t_naming, taboo_s])
+	out.append(_tradition_narrative_tooltip_line(tradition))
 	_focus_append_house_stub_lines(out, center)
 	return out
 
@@ -5727,6 +5921,8 @@ func _focus_lines_for_tile(focus: Dictionary) -> PackedStringArray:
 					_pretty_governance_name(str(gov.get("type", "anarchy"))),
 				]
 		)
+		var t_line: String = _tradition_narrative_tooltip_line(CulturalMemory.get_tradition(center))
+		out.append("Tradition narrative: %s" % t_line)
 		_focus_append_house_stub_lines(out, int(st.get("center_region", -1)))
 	var events: Array[Dictionary] = WorldMemory.get_events_for_tile(tile)
 	if not events.is_empty():
@@ -5734,6 +5930,26 @@ func _focus_lines_for_tile(focus: Dictionary) -> PackedStringArray:
 		var etype: String = str(evt.get("type", "event"))
 		out.append("Last Event: %s @ tick %d" % [etype.replace("_", " "), int(evt.get("t", 0))])
 	return out
+
+
+func _tradition_narrative_tooltip_line(tradition: Dictionary) -> String:
+	var branch: String = str(tradition.get("preferred_tech_branch", "agriculture")).to_lower()
+	var naming: String = str(tradition.get("naming_convention", "nordic")).to_lower()
+	var taboo_v: Variant = tradition.get("taboo_jobs", [])
+	var taboo_hunt: bool = false
+	if taboo_v is Array:
+		for t_any in taboo_v as Array:
+			if str(t_any).to_upper() == "HUNT":
+				taboo_hunt = true
+				break
+	var branch_line: String = "leans into patient fieldcraft and food security."
+	if branch.find("metal") >= 0:
+		branch_line = "leans into forge-minded craft and durable tools."
+	var taboo_line: String = "No major labor taboo dominates memory."
+	if taboo_hunt:
+		taboo_line = "Hunting is culturally avoided after prior bloodshed."
+	var naming_line: String = "Names preserve a %s cadence across generations." % naming
+	return "%s %s %s" % [branch_line, taboo_line, naming_line]
 
 
 ## FactionRegistry: deterministic house line for settlement zone (focus / observer readout).

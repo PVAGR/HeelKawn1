@@ -170,6 +170,19 @@ func get_build_material_for_settlement(settlement_id: int, job_type: int) -> int
 	return int(style.get("base_build_material", 0))
 
 
+## Return the human-visible material family for the style ("wood" or "stone").
+func get_build_material_family(settlement_id: int) -> String:
+	var material_type: int = get_build_material_for_settlement(settlement_id, 0)
+	if material_type == 3:
+		return "stone"
+	return "wood"
+
+
+## Return a label that is safe to show in UI/debugging.
+func get_style_family_label(settlement_id: int) -> String:
+	return get_build_material_family(settlement_id).capitalize()
+
+
 ## Get style description for display/debugging.
 func describe_settlement_style(settlement_id: int) -> String:
 	var sid: String = str(settlement_id)

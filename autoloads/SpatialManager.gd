@@ -319,6 +319,22 @@ func get_stats() -> Dictionary:
 	}
 
 
+## Performance profile for debug HUDs: emphasizes how much of the grid is still active.
+func get_performance_profile() -> Dictionary:
+	var stats: Dictionary = get_stats()
+	var total_chunks: int = int(stats.get("total_chunks", 0))
+	var active_chunks: int = int(stats.get("active_chunks", 0))
+	var dormant_chunks: int = maxi(0, total_chunks - active_chunks)
+	var active_ratio: float = 0.0
+	if total_chunks > 0:
+		active_ratio = float(active_chunks) / float(total_chunks)
+	stats["dormant_chunks"] = dormant_chunks
+	stats["active_ratio"] = active_ratio
+	stats["culled_ratio"] = 1.0 - active_ratio if total_chunks > 0 else 0.0
+	stats["wake_radius_chunks"] = WAKE_RADIUS_CHUNKS
+	return stats
+
+
 ## Clear all spatial data (e.g., on new save/load)
 func clear() -> void:
 	chunks.clear()

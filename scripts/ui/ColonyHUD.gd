@@ -15,6 +15,7 @@ const REFRESH_EVERY_N_TICKS_EXTREME: int = 6
 const REFRESH_EVERY_N_TICKS_MAX: int = 8
 const WILDLIFE_SAMPLE_EVERY_TICKS: int = 20
 const WILDLIFE_HISTORY_SIZE: int = 8
+const WILDLIFE_NEARBY_RADIUS_TILES: int = 14
 const SHOW_REFRESH_DIAG: bool = true
 
 const PANEL_BG: Color = Color(0.05, 0.06, 0.08, 0.78)
@@ -50,6 +51,7 @@ var _wildlife_prev_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
 var _wildlife_sample_tick: int = 0
 var _wildlife_history: Array[int] = []
 var _momentum_spark: String = "........"
+var _wildlife_nearby_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0, "threat_level": "low"}
 var _player_input_buffer: PlayerInputBuffer = null
 var _player_pawn = null
 var _hud_dirty: bool = true
@@ -769,6 +771,8 @@ func _sample_wildlife(current_tick: int) -> void:
 		return
 	_wildlife_prev_snapshot = _wildlife_snapshot.duplicate()
 	_wildlife_snapshot = spawner.get_live_wildlife_snapshot()
+	var probe_tile: Vector2i = _wildlife_probe_tile()
+	_wildlife_nearby_snapshot = spawner.get_nearby_wildlife_snapshot(probe_tile, WILDLIFE_NEARBY_RADIUS_TILES)
 	_wildlife_sample_tick = current_tick
 	_wildlife_history.append(int(_wildlife_snapshot.get("total", 0)))
 	if _wildlife_history.size() > WILDLIFE_HISTORY_SIZE:
@@ -832,7 +836,30 @@ func _wildlife_line() -> String:
 	else:
 		tail = _momentum_spark
 	
-	return "🦌 Wildlife: R:%d D:%d T:%d %s %s" % [r, d, t, span, tail]
+	var nr: int = int(_wildlife_nearby_snapshot.get("rabbit", 0))
+	var nd: int = int(_wildlife_nearby_snapshot.get("deer", 0))
+	var nt: int = int(_wildlife_nearby_snapshot.get("total", 0))
+	var near_dist: int = int(_wildlife_nearby_snapshot.get("nearest_any_dist", -1))
+	var near_str: String = "n/a" if near_dist < 0 else str(near_dist)
+	var threat_level: String = str(_wildlife_nearby_snapshot.get("threat_level", "low"))
+	var threat_icon: String = "!" if threat_level == "low" else "!!"
+	if threat_level == "high":
+		threat_icon = "!!!"
+	return "🦌 Wildlife: R:%d D:%d T:%d %s %s | Nearby(%dt): R:%d D:%d T:%d nearest:%s threat:%s %s" % [
+		r, d, t, span, tail,
+		WILDLIFE_NEARBY_RADIUS_TILES, nr, nd, nt, near_str, threat_level.to_upper(), threat_icon
+	]
+
+
+func _wildlife_probe_tile() -> Vector2i:
+	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		return _player_pawn.data.tile_pos
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node != null:
+		var camera: Camera2D = main_node.get_node_or_null("Camera2D") as Camera2D
+		if camera != null and _world != null:
+			return _world.world_to_tile(camera.global_position)
+	return Vector2i(WorldData.WIDTH / 2, WorldData.HEIGHT / 2)
 
 
 ## Diagnostic: breakdown of wildlife trend calculation for validation

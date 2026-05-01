@@ -2,12 +2,14 @@ extends Node
 ## Deterministic append-only world fact log (Phase 2.1). No RNG; no UI.
 ## Events are plain Dictionaries for trivial save/load via Main snapshot.
 ## Connected to HeelKawn Universe Neural Network Matrix
+## CANON SOURCE: See docs/lore/UNIVERSE_CONSTITUTION.md
 
 const SCHEMA: int = 1
 ## Text/history export line format; bump when column order or provenance rules change.
 const HISTORY_EXPORT_FORMAT: String = "1.0.0"
 ## Keep a long chronology by default; older entries rotate out only after this cap.
 const MAX_EVENTS: int = 50000
+const CONSTITUTION_PATH: String = "res://docs/lore/UNIVERSE_CONSTITUTION.md"
 
 enum Kind {
 	PAWN_DEATH = 0,
@@ -35,6 +37,19 @@ var _event_type_counts: Dictionary = {}
 var _pawn_death_last_tick_by_region: Dictionary = {}
 ## Monotonic event id (stable cursor for paging/query surfaces).
 var _next_event_id: int = 1
+var _constitution_text: String = ""
+var _constitution_loaded: bool = false
+
+
+func _ready() -> void:
+	add_to_group("tickable")
+	_load_constitution_text()
+
+
+func _on_world_tick(tick_number: int) -> void:
+	# WorldMemory is primarily a data store; no per-tick logic required.
+	# This method satisfies the tickable interface for deterministic ordering.
+	pass
 
 # === Neural Network Matrix Connections ===
 
@@ -164,6 +179,8 @@ static func _region_key(tx: int, ty: int) -> int:
 
 
 func _append(e: Dictionary) -> void:
+	if not validate_event_against_constitution(e):
+		return
 	_dirty = true
 	if _events.size() >= MAX_EVENTS:
 		var dropped: Dictionary = _events[0]
@@ -171,6 +188,53 @@ func _append(e: Dictionary) -> void:
 		_on_event_removed_from_indexes(dropped)
 	_events.append(e)
 	_on_event_added_to_indexes(e)
+
+
+func _load_constitution_text() -> void:
+	_constitution_text = ""
+	_constitution_loaded = false
+	if not FileAccess.file_exists(CONSTITUTION_PATH):
+		push_warning("[WorldMemory] Constitution file missing: %s" % CONSTITUTION_PATH)
+		return
+	var f: FileAccess = FileAccess.open(CONSTITUTION_PATH, FileAccess.READ)
+	if f == null:
+		push_warning("[WorldMemory] Failed to open constitution file: %s" % CONSTITUTION_PATH)
+		return
+	_constitution_text = f.get_as_text()
+	_constitution_loaded = not _constitution_text.strip_edges().is_empty()
+
+
+func validate_event_against_constitution(event_dict: Dictionary) -> bool:
+	var type_s: String = _canonical_event_type(event_dict).to_lower()
+	var payload: String = JSON.stringify(event_dict).to_lower()
+	var violations: Array[String] = []
+	# Deterministic Kernel gate: reject random/luck/chosen-one flavored history claims.
+	if event_dict.has("random") \
+			or event_dict.has("rng") \
+			or event_dict.has("luck") \
+			or event_dict.has("chosen_one") \
+			or payload.find("random_luck") >= 0 \
+			or payload.find("\"chosen_one\"") >= 0 \
+			or payload.find("chosen one") >= 0 \
+			or payload.find("destiny_override") >= 0 \
+			or payload.find("miracle") >= 0:
+		violations.append("Deterministic Kernel / No Chosen Ones")
+	# Type-level guard rails for direct event names.
+	if type_s.find("chosen") >= 0 or type_s.find("luck") >= 0 or type_s.find("random") >= 0:
+		violations.append("Deterministic Kernel event naming")
+	# Optional constitution-presence hint for easier diagnostics.
+	if not _constitution_loaded:
+		push_warning("[WorldMemory] Constitution not loaded; applying fallback deterministic validator.")
+	if not violations.is_empty():
+		push_warning(
+				"[WorldMemory][CanonViolation] Rejected event type=%s laws=%s payload=%s" % [
+					type_s,
+					", ".join(violations),
+					JSON.stringify(event_dict),
+				]
+		)
+		return false
+	return true
 
 
 func _on_event_added_to_indexes(evt: Dictionary) -> void:

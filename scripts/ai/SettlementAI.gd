@@ -962,6 +962,10 @@ func update() -> void:
 	_update_leadership()
 	_propose_automatic_goals()
 
+func _on_world_tick(tick_number: int) -> void:
+    # Wrap SettlementAI update in tick system
+    update()
+
 func _process_collective_goals() -> void:
 	var completed_goals: Array[int] = []
 	

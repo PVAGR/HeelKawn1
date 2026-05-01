@@ -1518,12 +1518,12 @@ func _tick_idle() -> void:
 		if preferred_idle_action == "forage" and (j.type == Job.Type.FORAGE or j.type == Job.Type.HUNT):
 			base_bias += 2
 		
-		# Crisis priority bonus
+		# Crisis priority bonus (use autoload directly; `"X" in get_tree()` is not valid GDScript and can hard-crash.)
 		var housing_pressure: float = 0.0
 		var food_pressure: float = 0.0
-		if "ColonySimServices" in get_tree():
-			housing_pressure = float(get_tree().get_node("/root/ColonySimServices").get_housing_pressure())
-			food_pressure = float(get_tree().get_node("/root/ColonySimServices").get_food_pressure())
+		if ColonySimServices != null:
+			housing_pressure = ColonySimServices.get_housing_pressure()
+			food_pressure = ColonySimServices.get_food_pressure()
 		
 		# Boost BUILD_BED jobs during housing crisis
 		if housing_pressure > 0.8 and j.type == Job.Type.BUILD_BED:
@@ -2856,9 +2856,9 @@ func _tick_sleeping() -> void:
 	if posmod(GameManager.tick_count + int(data.id), 30) == 0:
 		var housing_pressure: float = 0.0
 		var food_pressure: float = 0.0
-		if "ColonySimServices" in get_tree():
-			housing_pressure = float(get_tree().get_node("/root/ColonySimServices").get_housing_pressure())
-			food_pressure = float(get_tree().get_node("/root/ColonySimServices").get_food_pressure())
+		if ColonySimServices != null:
+			housing_pressure = ColonySimServices.get_housing_pressure()
+			food_pressure = ColonySimServices.get_food_pressure()
 		
 		# Crisis threshold: housing > 80% or food > 70%
 		var is_housing_crisis: bool = housing_pressure > 0.8

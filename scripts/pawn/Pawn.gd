@@ -131,6 +131,30 @@ func _pawn_salt(extra: int = 0) -> int:
 	var tile: Vector2i = data.tile_pos if data != null else Vector2i.ZERO
 	return GameManager.tick_count + pawn_id * 1009 + tile.x * 131 + tile.y * 17 + extra
 
+
+## Stable 0..1 facets per pawn (world_seed + id). Makes metabolism, rest habits,
+## wanderlust, and job tastes diverge so the colony does not move as one machine.
+var _behavior_profile: PackedFloat32Array = PackedFloat32Array()
+var _behavior_profile_ready: bool = false
+
+
+func _reset_behavior_profile() -> void:
+	_behavior_profile.clear()
+	_behavior_profile_ready = false
+
+
+func _bp(i: int) -> float:
+	if data == null:
+		return 0.5
+	if not _behavior_profile_ready:
+		_behavior_profile.resize(8)
+		var pid: int = int(data.id)
+		for k in range(8):
+			_behavior_profile[k] = WorldRNG.range_for(StringName("pawn_behavior_v1:%d" % pid), 0.0, 1.0, k)
+		_behavior_profile_ready = true
+	return float(_behavior_profile[clampi(i, 0, 7)])
+
+
 # -------------------- movement tuning --------------------
 
 # 1 tile = 8 world units, so 24 = 3 tiles/sec at 1x = 18 tiles/sec at 6x.
@@ -724,6 +748,7 @@ func _pawn_connect_sim_tick_deferred() -> void:
 ## Called by PawnSpawner immediately after instantiation.
 func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	data = p_data
+	_reset_behavior_profile()
 	_world = world
 	position = world_pos
 	_state = State.IDLE
@@ -1617,7 +1642,8 @@ func _tick_idle() -> void:
 	if data != null:
 		claim_phase = posmod(int(data.id), claim_iv)
 	if posmod(GameManager.tick_count + claim_phase, claim_iv) != 0:
-		var early_wander_chance: float = WANDER_CHANCE_PER_TICK
+		var wanderlust: float = lerpf(0.52, 1.68, _bp(3))
+		var early_wander_chance: float = WANDER_CHANCE_PER_TICK * wanderlust
 		if preferred_idle_action == "wander":
 			early_wander_chance *= 1.7
 		if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(early_wander_chance, 0.0, 0.35), _pawn_salt(11)):
@@ -1740,6 +1766,8 @@ func _tick_idle() -> void:
 			neural_bias = _get_neural_job_priority_bias(j.type)
 			neural_bias_cache[j.type] = neural_bias
 		base_bias += neural_bias
+		# Personal whim: same queue, slightly different ordering per pawn (still deterministic).
+		base_bias += clampi(int(floor((_bp(5) - 0.5) * 6.0)), -2, 2)
 
 		# Keep bias math cheap and deterministic on hot claim path.
 		return base_bias
@@ -1780,8 +1808,9 @@ func _tick_idle() -> void:
 		_begin_job(job)
 		return
 	# 7. Nothing to do: idle wander
+	var wanderlust2: float = lerpf(0.52, 1.68, _bp(3))
 	var wander_score: float = _utility_score_normalized("wander", utility_context)
-	var wander_chance: float = WANDER_CHANCE_PER_TICK * (1.0 + maxf(0.0, wander_score - UTILITY_WANDER_THRESHOLD))
+	var wander_chance: float = WANDER_CHANCE_PER_TICK * wanderlust2 * (1.0 + maxf(0.0, wander_score - UTILITY_WANDER_THRESHOLD))
 	if preferred_idle_action == "wander":
 		wander_chance *= 1.6
 	if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(wander_chance, 0.0, 0.35), _pawn_salt(11)):
@@ -2920,7 +2949,8 @@ func _deposit_at_stockpile() -> void:
 # ==================== eating ====================
 
 func _maybe_start_eating() -> bool:
-	if data.hunger >= HUNGER_EAT_THRESHOLD:
+	var eat_threshold: float = HUNGER_EAT_THRESHOLD + lerpf(-5.0, 5.0, _bp(6))
+	if data.hunger >= eat_threshold:
 		return false
 	if data.is_carrying():
 		# Carrying something -- finish that errand first.
@@ -3001,7 +3031,8 @@ func _finish_eating() -> void:
 func _maybe_start_sleeping() -> bool:
 	# At night the threshold is raised so well-rested pawns still go to bed
 	# when the sun goes down, giving the colony a real day/night rhythm.
-	var threshold: float = REST_SLEEP_THRESHOLD_NIGHT if DayNightCycle.is_night_for_tick(GameManager.tick_count) else REST_SLEEP_THRESHOLD
+	var base_th: float = REST_SLEEP_THRESHOLD_NIGHT if DayNightCycle.is_night_for_tick(GameManager.tick_count) else REST_SLEEP_THRESHOLD
+	var threshold: float = base_th + lerpf(-7.0, 7.0, _bp(2))
 	if data.rest > threshold:
 		return false
 	# Don't curl up while starving -- if there's any food path open we should
@@ -3223,16 +3254,18 @@ func _decay_needs() -> void:
 	var rest_mult: float = data.get_trait_mult("rest_decay_mult")
 	var mood_mult: float = data.get_trait_mult("mood_decay_mult")
 	
+	var pace_h: float = lerpf(0.86, 1.15, _bp(0))
+	var pace_r: float = lerpf(0.86, 1.15, _bp(1))
 	if _state == State.SLEEPING:
-		data.hunger = max(0.0, data.hunger - HUNGER_DECAY_PER_TICK_SLEEPING * hunger_mult)
+		data.hunger = max(0.0, data.hunger - HUNGER_DECAY_PER_TICK_SLEEPING * hunger_mult * pace_h)
 		var rate: float = REST_RECOVER_PER_TICK_SLEEP
 		if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed and \
 				_world != null and _world.is_bed_owned_by(_reserved_bed, self):
 			rate *= REST_RECOVER_BED_MULTIPLIER
 		data.rest = min(100.0, data.rest + rate)
 	else:
-		data.hunger = max(0.0, data.hunger - HUNGER_DECAY_PER_TICK * hunger_mult)
-		data.rest   = max(0.0, data.rest   - REST_DECAY_PER_TICK * rest_mult)
+		data.hunger = max(0.0, data.hunger - HUNGER_DECAY_PER_TICK * hunger_mult * pace_h)
+		data.rest   = max(0.0, data.rest   - REST_DECAY_PER_TICK * rest_mult * pace_r)
 	
 	# Mood: net loss when needs aren't met, net gain when they are.
 	# Passive contentment outpaces decay, so a pawn whose hunger AND rest are
@@ -3247,6 +3280,11 @@ func _decay_needs() -> void:
 		data.mood = min(100.0, data.mood + MOOD_GAIN_PER_TICK_CONTENT - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact)
 	else:
 		data.mood = max(0.0, data.mood - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact)
+	# Occasional uplift — same world rules, but some people notice small good moments more often.
+	if posmod(GameManager.tick_count + int(data.id) * 5, 211) == 0:
+		var flutter: float = 0.1 + _bp(4) * 0.22
+		if WorldRNG.chance_for(StringName("pawn_natural_mood:%d" % int(data.id)), flutter, GameManager.tick_count / 200):
+			data.mood = min(100.0, data.mood + lerpf(0.15, 1.1, _bp(7)))
 	
 	# Historically used land: subtle mood drain from nearby past deaths / builds - throttled to every 30 ticks
 	if GameManager.tick_count % 30 == 0:
@@ -3273,8 +3311,9 @@ func _decay_needs() -> void:
 	if posmod(GameManager.tick_count + int(data.id), 20) == 0:
 		_update_perception()
 	
-	# Stage 2: Track co-presence with nearby pawns - DISABLED for performance
-	# track_co_presence()
+	# Stage 2: Co-presence — cheap pass; rapport spikes still come from Main._accumulate_social_rapport.
+	if posmod(GameManager.tick_count + int(data.id) * 3, 37) == 0:
+		_track_co_presence_light()
 	
 	# Stage 1: Decay unused skills (throttled to once per day)
 	if GameManager.tick_count % DayNightCycle.TICKS_PER_DAY == 0:
@@ -3590,8 +3629,31 @@ func remember_resources(tile: Vector2i, resource_type: String) -> void:
 ## Stage 2: Family & Trust system
 
 func track_co_presence() -> void:
-	# DISABLED for performance - iterates through all pawns
-	return
+	_track_co_presence_light()
+
+
+func _track_co_presence_light() -> void:
+	if data == null:
+		return
+	var sp: PawnSpawner = _resolve_pawn_spawner()
+	if sp == null:
+		return
+	var seen: int = 0
+	for p in sp.pawns:
+		seen += 1
+		if seen > 22:
+			break
+		if p == null or not is_instance_valid(p) or p == self or p.data == null:
+			continue
+		if p.is_sleeping():
+			continue
+		if data.tile_pos.distance_squared_to(p.data.tile_pos) > 169:
+			continue
+		var oid: int = int(p.data.id)
+		var cur: int = int(data.co_presence.get(oid, 0)) + 1
+		if cur > 60000:
+			cur = 60000
+		data.co_presence[oid] = cur
 
 
 func form_family_bond(other_pawn: Pawn, initial_strength: float = 20.0) -> void:

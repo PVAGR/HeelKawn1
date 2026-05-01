@@ -172,6 +172,53 @@ enum PlayerMode {
 	INCARNATED = 1,
 }
 var _player_mode: int = PlayerMode.SPECTATOR
+
+## Incarnated players only "know" pawns / nearby places within this Chebyshev tile radius (spectator: worldwide).
+const INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES: int = 18
+
+
+func _tile_chebyshev_dist(a: Vector2i, b: Vector2i) -> int:
+	return maxi(absi(a.x - b.x), absi(a.y - b.y))
+
+
+## UI / observer: all pawns in spectator; only local pawns when [method is_player_incarnated].
+func get_visible_pawns() -> Array[Pawn]:
+	var out: Array[Pawn] = []
+	if _pawn_spawner == null:
+		return out
+	if not is_player_incarnated():
+		for p in _pawn_spawner.pawns:
+			if p != null and is_instance_valid(p) and p.data != null:
+				out.append(p)
+		return out
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return out
+	var my_tile: Vector2i = _player_pawn.data.tile_pos
+	var r: int = INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		if _tile_chebyshev_dist(my_tile, p.data.tile_pos) <= r:
+			out.append(p)
+	return out
+
+
+func get_visible_settlement_count() -> int:
+	if not is_player_incarnated() or _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return SettlementMemory.settlements.size()
+	var pt: Vector2i = _player_pawn.data.tile_pos
+	var r: int = INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES
+	var n: int = 0
+	for st_any in SettlementMemory.settlements:
+		if not (st_any is Dictionary):
+			continue
+		var ckr: int = int((st_any as Dictionary).get("center_region", -1))
+		if ckr < 0:
+			continue
+		var ct: Vector2i = _center_tile_from_region_key(ckr)
+		if _tile_chebyshev_dist(pt, ct) <= r:
+			n += 1
+	return n
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
 ## Observer routing from [PlayerIntentQueue] (one dispatch step per sim tick).
@@ -3832,11 +3879,13 @@ func get_player_governance_profile() -> Dictionary:
 	var gtype: String = str(gov.get("type", "anarchy"))
 	var rid: int = int(gov.get("ruler_id", -1))
 	var ruler_name: String = "None"
-	if rid >= 0 and _pawn_spawner != null:
-		for p in _pawn_spawner.pawns:
+	if rid >= 0:
+		for p in get_visible_pawns():
 			if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == rid:
 				ruler_name = p.data.display_name
 				break
+		if ruler_name == "None" and is_player_incarnated():
+			ruler_name = "Unknown"
 	var status: String = "Rebel"
 	var pid: int = int(_player_pawn.data.id)
 	if rid < 0:
@@ -3892,6 +3941,8 @@ func get_camera_settlement_revival_digest() -> Dictionary:
 	if not is_instance_valid(_world) or _camera == null or _world.data == null:
 		return out_empty
 	var cam_tile: Vector2i = _world.world_to_tile(_camera.global_position)
+	if is_player_incarnated() and _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		cam_tile = _player_pawn.data.tile_pos
 	if cam_tile.x < 0:
 		out_empty["region_key"] = -2
 		out_empty["camera_region_key"] = -2
@@ -5987,9 +6038,7 @@ func _count_pawns_in_regions(regions_v: Variant) -> int:
 
 func _pawn_counts_by_region_key() -> Dictionary:
 	var out: Dictionary = {}
-	if _pawn_spawner == null:
-		return out
-	for p in _pawn_spawner.pawns:
+	for p in get_visible_pawns():
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		var rk: int = _WM._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
@@ -6020,6 +6069,21 @@ func _build_realm_crown_view_text() -> String:
 			return an < bn
 		return int(ad.get("center_region", 0)) < int(bd.get("center_region", 0))
 	)
+	if is_player_incarnated() and _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		var pt: Vector2i = _player_pawn.data.tile_pos
+		var r_fog: int = INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES
+		var rows_f: Array = []
+		for st_row in rows:
+			if not (st_row is Dictionary):
+				continue
+			var st_f: Dictionary = st_row
+			var ckr_f: int = int(st_f.get("center_region", -1))
+			if ckr_f < 0:
+				continue
+			var ct_f: Vector2i = _center_tile_from_region_key(ckr_f)
+			if _tile_chebyshev_dist(pt, ct_f) <= r_fog:
+				rows_f.append(st_row)
+		rows = rows_f
 	var place_count: int = rows.size()
 	var listed: int = 0
 	var lines: PackedStringArray = PackedStringArray()
@@ -6361,11 +6425,32 @@ func _observer_focus_settlement() -> Dictionary:
 				settlement_data = st
 				break
 	if settlement_idx < 0:
-		for i in range(SettlementMemory.settlements.size()):
-			if SettlementMemory.settlements[i] is Dictionary:
-				settlement_idx = i
-				settlement_data = SettlementMemory.settlements[i] as Dictionary
-				break
+		if is_player_incarnated() and _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+			var pt_obs: Vector2i = _player_pawn.data.tile_pos
+			var r_obs: int = INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES
+			var best_i: int = -1
+			var best_d: int = 1_000_000_000
+			for i in range(SettlementMemory.settlements.size()):
+				if not (SettlementMemory.settlements[i] is Dictionary):
+					continue
+				var st_try: Dictionary = SettlementMemory.settlements[i] as Dictionary
+				var ckr_t: int = int(st_try.get("center_region", -1))
+				if ckr_t < 0:
+					continue
+				var ct_t: Vector2i = _center_tile_from_region_key(ckr_t)
+				var dist_t: int = _tile_chebyshev_dist(pt_obs, ct_t)
+				if dist_t <= r_obs and dist_t < best_d:
+					best_d = dist_t
+					best_i = i
+			if best_i >= 0:
+				settlement_idx = best_i
+				settlement_data = SettlementMemory.settlements[best_i] as Dictionary
+		else:
+			for i in range(SettlementMemory.settlements.size()):
+				if SettlementMemory.settlements[i] is Dictionary:
+					settlement_idx = i
+					settlement_data = SettlementMemory.settlements[i] as Dictionary
+					break
 	var governance: Dictionary = {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
 	var war: Dictionary = {"state": "peace", "target_settlement_id": -1, "votes": []}
 	if settlement_idx >= 0:
@@ -6382,20 +6467,12 @@ func _observer_focus_settlement() -> Dictionary:
 
 
 func _observer_total_pawns() -> int:
-	if _pawn_spawner == null:
-		return 0
-	var n: int = 0
-	for p in _pawn_spawner.pawns:
-		if p != null and is_instance_valid(p) and p.data != null:
-			n += 1
-	return n
+	return get_visible_pawns().size()
 
 
 func _observer_children_count() -> int:
-	if _pawn_spawner == null:
-		return 0
 	var c: int = 0
-	for p in _pawn_spawner.pawns:
+	for p in get_visible_pawns():
 		if p != null and is_instance_valid(p) and p.data != null:
 			c += int(p.data.children_count)
 	return c
@@ -6433,11 +6510,13 @@ func _observer_battlefield_mode() -> String:
 
 
 func _pawn_name_by_id(pawn_id: int) -> String:
-	if pawn_id < 0 or _pawn_spawner == null:
+	if pawn_id < 0:
 		return "None"
-	for p in _pawn_spawner.pawns:
+	for p in get_visible_pawns():
 		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
 			return p.data.display_name
+	if is_player_incarnated():
+		return "Unknown"
 	return "None"
 
 
@@ -6450,7 +6529,7 @@ func _find_battlemaster_name(settlement_idx: int, settlement_data: Dictionary) -
 	var region_set: Dictionary = {}
 	for rk in regs as PackedInt32Array:
 		region_set[int(rk)] = true
-	for p in _pawn_spawner.pawns:
+	for p in get_visible_pawns():
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		if str(p.data.military_rank_legacy).to_lower() != "battlemaster":

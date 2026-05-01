@@ -54,6 +54,9 @@ var _momentum_spark: String = "........"
 var _wildlife_nearby_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0, "threat_level": "low"}
 var _player_input_buffer: PlayerInputBuffer = null
 var _player_pawn = null
+var _has_player_needs: bool = false
+var _player_hunger: float = 100.0
+var _player_rest: float = 100.0
 var _hud_dirty: bool = true
 var _last_refresh_stride: int = REFRESH_EVERY_N_TICKS
 var _last_coarse_gate: int = 10
@@ -101,6 +104,17 @@ func set_player_control_refs(input_buffer: PlayerInputBuffer, player_pawn: Pawn)
 	_player_pawn = player_pawn
 	if _player_input_buffer != null and not _player_input_buffer.intent_ready.is_connected(_on_intent_ready):
 		_player_input_buffer.intent_ready.connect(_on_intent_ready)
+	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		update_player_needs(_player_pawn.data.hunger, _player_pawn.data.rest)
+	else:
+		_has_player_needs = false
+	_hud_dirty = true
+
+
+func update_player_needs(hunger: float, rest: float) -> void:
+	_player_hunger = clampf(hunger, 0.0, 100.0)
+	_player_rest = clampf(rest, 0.0, 100.0)
+	_has_player_needs = true
 	_hud_dirty = true
 
 
@@ -113,6 +127,19 @@ func _on_intent_ready(_action_id: int) -> void:
 func set_designation_mode(label: String) -> void:
 	_designation_label = label
 	_hud_dirty = true
+
+
+func _visible_pawns_for_hud() -> Array[Pawn]:
+	var out: Array[Pawn] = []
+	if _spawner == null:
+		return out
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node != null:
+		return main_node.get_visible_pawns()
+	for p in _spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
+			out.append(p)
+	return out
 
 
 # ==================== refresh hooks ====================
@@ -189,6 +216,9 @@ func _refresh() -> void:
 		lines.append(_stockpile_simple_line())
 		lines.append(_pawn_line_simple())
 		lines.append(_krond_line_simple())
+		var body_simple: String = _player_body_needs_line_simple()
+		if body_simple != "":
+			lines.append(body_simple)
 		lines.append(_jobs_line_simple())
 		lines.append(_wildlife_line())
 		var intent_simple: String = _player_intent_hud_line()
@@ -346,7 +376,7 @@ func _first_play_hint_line() -> String:
 
 ## High-level world snapshot (places, memory log size, work queue).
 func _world_pulse_line() -> String:
-	var settlements_n: int = SettlementMemory.settlements.size()
+	var settlements_n: int = _visible_settlement_count_for_hud()
 	var facts: int = WorldMemory.event_count()
 	var js: Dictionary = JobManager.stats()
 	var open_j: int = int(js.get("open", 0))
@@ -468,6 +498,13 @@ func _prune_freed_pawns_in_spawner() -> void:
 			list.remove_at(i)
 
 
+func _visible_settlement_count_for_hud() -> int:
+	var m: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if m != null:
+		return m.get_visible_settlement_count()
+	return SettlementMemory.settlements.size()
+
+
 func _pawn_line() -> String:
 	if _spawner == null:
 		return "[color=#cccccc]Pawns:[/color] (none)"
@@ -481,7 +518,7 @@ func _pawn_line() -> String:
 	var children_total: int = 0
 	var n: int = 0
 	var lead: Pawn = null
-	for p in _spawner.pawns:
+	for p in _visible_pawns_for_hud():
 		if not is_instance_valid(p) or p.data == null:
 			continue
 		if lead == null:
@@ -527,7 +564,7 @@ func _pawn_line_simple() -> String:
 	var avg_h: float = 0.0
 	var avg_r: float = 0.0
 	var avg_m: float = 0.0
-	for p in _spawner.pawns:
+	for p in _visible_pawns_for_hud():
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		n += 1
@@ -647,7 +684,7 @@ func _session_diag_line() -> String:
 	var js: Dictionary = JobManager.stats()
 	var open_j: int = int(js.get("open", 0))
 	var claimed_j: int = int(js.get("claimed", 0))
-	var settlements_n: int = SettlementMemory.settlements.size()
+	var settlements_n: int = _visible_settlement_count_for_hud()
 	var q: float = float(d.get("queued_ticks_est", 0.0))
 	var acc_cap: int = int(d.get("max_accumulated_ticks", 16))
 	var tpf: int = int(d.get("max_ticks_per_frame", 8))

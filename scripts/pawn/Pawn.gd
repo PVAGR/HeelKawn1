@@ -280,6 +280,10 @@ var _anim_t: float = 0.0
 var _sfx: AudioStreamPlayer2D = null
 var _action_popup: ActionPopupLabel = null
 var _hit_flash_ticks: int = 0
+## `JobManager.claim_next_for` invokes priority_cb once per open job; neural forward
+## propagation must not run hundreds of times in one claim scan (was freezing / hard-stopping).
+var _neural_priority_fetch_tick: int = -1
+var _neural_priority_outputs: Array = []
 var _last_inspect_msg: String = ""
 var _last_inspect_tick: int = -999999
 var _initial_knowledge_granted: bool = false
@@ -717,9 +721,15 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 		_initial_knowledge_granted = true
 	refresh_inherited_cultural_reputation()
 	data.ensure_soul_identity()
+	_reset_neural_priority_cache()
 	_request_redraw()
 	if GameManager != null and not GameManager.game_tick.is_connected(_on_game_tick):
 		GameManager.game_tick.connect(_on_game_tick)
+
+
+func _reset_neural_priority_cache() -> void:
+	_neural_priority_fetch_tick = -1
+	_neural_priority_outputs.clear()
 
 
 func _exit_tree() -> void:
@@ -1755,18 +1765,21 @@ func get_preferred_front_bias(job: Job) -> float:
 func _get_neural_job_priority_bias(job_type: int) -> int:
 	if data == null:
 		return 0
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	if _neural_priority_fetch_tick != tick:
+		_neural_priority_fetch_tick = tick
+		_neural_priority_outputs.clear()
+		var world_ai: Node = get_node_or_null("/root/WorldAI")
+		if world_ai != null and world_ai.has_method("get_pawn_neural_state"):
+			var neural_state: Dictionary = world_ai.get_pawn_neural_state(int(data.id))
+			if not neural_state.is_empty():
+				var outs: Variant = neural_state.get("outputs", [])
+				if outs is Array and (outs as Array).size() >= 8:
+					_neural_priority_outputs = outs as Array
 	
-	var WorldAI_node = get_node_or_null("/root/WorldAI")
-	if WorldAI_node == null or not WorldAI_node.has_method("get_pawn_neural_state"):
+	if _neural_priority_outputs.size() < 8:
 		return 0
-	
-	var neural_state: Dictionary = WorldAI_node.get_pawn_neural_state(int(data.id))
-	if neural_state.is_empty():
-		return 0
-	
-	var outputs: Array = neural_state.get("outputs", [])
-	if outputs.size() < 8:
-		return 0
+	var outputs: Array = _neural_priority_outputs
 	
 	# Map job types to neural output indices
 	# Outputs: [Seek_Food, Seek_Rest, Seek_Social, Work_Forage, Work_Build, Work_Mine, Defend, Idle]

@@ -27,6 +27,9 @@ var _bed_tiles: Array[Vector2i] = []
 ## if not present in this dict OR mapped to null.
 var _bed_occupants: Dictionary = {}
 
+## Loose item stacks on the ground: tile -> { Item.Type -> qty }. Not persisted in WorldData (v1).
+var _ground_items: Dictionary = {}
+
 ## Cached base image + texture so we can patch individual tiles in-place
 ## (e.g. when a feature is harvested) without re-rendering the whole world.
 var _image: Image
@@ -70,6 +73,7 @@ func load_world_data(new_data: WorldData) -> void:
 	_render()
 	_bed_tiles.clear()
 	_bed_occupants.clear()
+	_ground_items.clear()
 	resync_beds_from_map()
 
 
@@ -86,6 +90,7 @@ func generate(world_seed: int) -> void:
 	# on are gone.
 	_bed_tiles.clear()
 	_bed_occupants.clear()
+	_ground_items.clear()
 	var dt: int = Time.get_ticks_msec() - t0
 	if OS.is_debug_build() and GameManager.verbose_logs():
 		print(
@@ -727,6 +732,54 @@ func find_free_bed_for(pawn: Pawn, from_tile: Vector2i) -> Vector2i:
 
 func bed_count() -> int:
 	return _bed_tiles.size()
+
+
+## Add loose items on the ground at `tile` (merge stacks). Ignores invalid tiles or NONE type.
+func add_ground_item(tile: Vector2i, item_type: int, qty: int) -> void:
+	if data == null or not data.in_bounds(tile.x, tile.y):
+		return
+	if item_type == Item.Type.NONE or qty <= 0:
+		return
+	if not _ground_items.has(tile):
+		_ground_items[tile] = {}
+	var inv: Dictionary = _ground_items[tile]
+	inv[item_type] = int(inv.get(item_type, 0)) + qty
+
+
+## Remove up to `qty` of `item_type` at `tile`. Returns amount actually removed.
+func take_ground_items(tile: Vector2i, item_type: int, qty: int) -> int:
+	if item_type == Item.Type.NONE or qty <= 0:
+		return 0
+	if not _ground_items.has(tile):
+		return 0
+	var inv: Dictionary = _ground_items[tile]
+	var have: int = int(inv.get(item_type, 0))
+	var taken: int = mini(have, qty)
+	if taken <= 0:
+		return 0
+	inv[item_type] = have - taken
+	if int(inv[item_type]) <= 0:
+		inv.erase(item_type)
+	if inv.is_empty():
+		_ground_items.erase(tile)
+	return taken
+
+
+## Copy of per-type stacks at `tile` (empty if none).
+func get_ground_stacks_at(tile: Vector2i) -> Dictionary:
+	if not _ground_items.has(tile):
+		return {}
+	return (_ground_items[tile] as Dictionary).duplicate()
+
+
+func has_any_ground_item_at(tile: Vector2i) -> bool:
+	if not _ground_items.has(tile):
+		return false
+	var inv: Dictionary = _ground_items[tile]
+	for t in inv.keys():
+		if int(inv[t]) > 0:
+			return true
+	return false
 
 
 ## After loading a world from save (or any bulk feature change), rescan the

@@ -10,6 +10,7 @@ const ACTION_MOVE_WEST: int = 3
 const ACTION_MOVE_EAST: int = 4
 const ACTION_INTERACT: int = 5
 const ACTION_INSPECT: int = 6
+const ACTION_DROP_ITEM: int = 7
 
 var _intent_queue: Array[int] = []
 var _command_queue: Array[String] = []
@@ -30,8 +31,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_D or event.keycode == KEY_RIGHT:
 			action_id = ACTION_MOVE_EAST
 		elif event.keycode == KEY_E:
-			# Space is reserved globally for pause; NPC parity uses the same move/interact verbs.
+			# Pickup / contextual interact (Pawn tries ground pickup first, then haul/eat/sleep).
 			action_id = ACTION_INTERACT
+		elif event.keycode == KEY_Q:
+			action_id = ACTION_DROP_ITEM
 		elif event.keycode == KEY_F:
 			# Quick local inspect / look action
 			action_id = ACTION_INSPECT
@@ -75,6 +78,8 @@ func execute_intent(pawn: Node, action_id: int) -> bool:
 			executed = bool(pawn.call("interact")) if pawn.has_method("interact") else false
 		ACTION_INSPECT:
 			executed = bool(pawn.call("inspect")) if pawn.has_method("inspect") else false
+		ACTION_DROP_ITEM:
+			executed = bool(pawn.call("drop_item")) if pawn.has_method("drop_item") else false
 		_:
 			executed = false
 	if executed and pawn.has_method("record_skill_gain"):
@@ -158,6 +163,10 @@ func _action_to_string(action_id: int) -> String:
 			return "move_west"
 		ACTION_INTERACT:
 			return "interact"
+		ACTION_INSPECT:
+			return "inspect"
+		ACTION_DROP_ITEM:
+			return "drop_item"
 		_:
 			return "unknown"
 

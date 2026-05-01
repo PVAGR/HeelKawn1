@@ -921,10 +921,78 @@ func move(tile_delta: Vector2i) -> bool:
 	return true
 
 
+func _can_use_manual_ground_item_actions() -> bool:
+	match _state:
+		State.WORKING, State.WALKING_TO_JOB, State.HAULING, State.GOING_TO_EAT, State.EATING, State.SLEEPING, State.FETCHING_MATERIAL, State.GOING_TO_BED, State.TEACHING, State.CHALLENGE, State.CRAFTING:
+			return false
+		_:
+			return true
+
+
+## Pick up one logical stack from the ground at the current tile (deterministic type order).
+## Returns false if busy, hands full of a different item, or nothing on the tile.
+func try_pickup_item() -> bool:
+	if data == null or _world == null:
+		return false
+	if not _can_use_manual_ground_item_actions():
+		return false
+	var tile: Vector2i = data.tile_pos
+	var stacks: Dictionary = _world.get_ground_stacks_at(tile)
+	if stacks.is_empty():
+		return false
+	var type_keys: Array = stacks.keys()
+	type_keys.sort()
+	var chosen_type: int = Item.Type.NONE
+	var on_ground: int = 0
+	for tk in type_keys:
+		var q: int = int(stacks[tk])
+		if q > 0:
+			chosen_type = int(tk)
+			on_ground = q
+			break
+	if chosen_type == Item.Type.NONE or on_ground <= 0:
+		return false
+	if data.is_carrying() and data.carrying != chosen_type:
+		return false
+	var taken: int = _world.take_ground_items(tile, chosen_type, on_ground)
+	if taken <= 0:
+		return false
+	if data.carrying == chosen_type:
+		data.carrying_qty += taken
+	else:
+		data.carrying = chosen_type
+		data.carrying_qty = taken
+	_request_redraw()
+	if GameManager.verbose_logs():
+		print("[Pawn] %s picked up %s x%d @(%d,%d)" % [data.display_name, Item.name_for(chosen_type), taken, tile.x, tile.y])
+	return true
+
+
+## Place the carried stack on the ground at the current tile.
+func drop_item() -> bool:
+	if data == null or _world == null:
+		return false
+	if not _can_use_manual_ground_item_actions():
+		return false
+	if not data.is_carrying():
+		return false
+	var tile: Vector2i = data.tile_pos
+	var it: int = data.carrying
+	var q: int = data.carrying_qty
+	_world.add_ground_item(tile, it, q)
+	data.clear_carry()
+	_request_redraw()
+	if GameManager.verbose_logs():
+		print("[Pawn] %s dropped %s x%d @(%d,%d)" % [data.display_name, Item.name_for(it), q, tile.x, tile.y])
+	return true
+
+
 ## Contextual player action hook used by deterministic player input queue.
 func interact() -> bool:
 	if data == null:
 		return false
+	if try_pickup_item():
+		return true
 	if data.is_carrying():
 		_begin_haul_to_stockpile()
 		return true
@@ -4923,14 +4991,7 @@ func increase_legacy(amount: float) -> void:
 ## Stage 1: Small direct actions
 
 func gather() -> bool:
-	# Pick up items from ground at current tile
-	if _world == null:
-		return false
-	
-	# Check for items on ground (placeholder - needs ground item system)
-	# TODO: Check for dropped items on current tile
-	# For now, just return false
-	return false
+	return try_pickup_item()
 
 
 func craft_simple_tool(_tool_type: int) -> bool:

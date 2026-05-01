@@ -1,0 +1,24 @@
+=== Godot Compile Check ===
+Using: C:\Users\user\Documents\GitHub\HeelKawn1\tools\godot\Godot_v4.6.2-stable_win64_console.exe
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+[CrashTrap] CrashTrap initialized. trace_enabled=false trace_first_sim_tick=false (per-listener tick-1 trace when both true)
+[VALIDATION_SMOKETEST] marker=PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp source=SettlementMemory.autoload debug_build=true VALIDATION_SESSION_ENABLED_const=false clean_economy_armed=false settlement_truth_verify_armed=false specialization_log_armed=false
+[WorldAI] Neural world matrix initialized with 9 neural networks
+[WorldAI] Specialized neural networks initialized
+[AIAgentManager] Neural network matrix initialized with 4 layers
+[AIAgentManager] Learning algorithms initialized
+[AIAgentManager] Pattern recognition systems initialized
+[AIAgentManager] Predictive models initialized
+[AIAgentManager] Collective intelligence initialized
+[INFO] PawnSpawner: pawn_scene loaded successfully: res://scenes/pawn/Pawn.tscn
+[VALIDATION_SMOKETEST] marker=PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp source=Main.gd debug_build=true VALIDATION_SESSION_ENABLED_const=false clean_economy_armed=false settlement_truth_verify_armed=false specialization_log_armed=false
+[CrashTrap] OK: Autoload 'SettlementMemory' (Node)
+[CrashTrap] OK: Autoload 'WorldAI' (Node)
+[Main] Scene ready. Tick interval: 1.00s
+[Main] Speed: 1.0x
+[Main] Seed stockpile placed at (127, 127) (3x3, ALL)
+[Main] Seeded jobs: 80 forage, 32 mine, 60 chop, 0 hunt  (pool: 101 fertile / 141 ore / 4382 tree / 38 wildlife; skipped: F0 M109 C0 H0 off-mainland)
+[Main] React: +0 MINE  +1 MINE_WALL  (active walls=1)
+[VALIDATION_STATUS] debug_build=true VALIDATION_SESSION_ENABLED_const=false WorldEvents_VALIDATION_CLEAN_ECONOMY_EVENTS_const=false clean_economy_active=false settlement_truth_verify_active=false specialization_validation_log_active=false
+[DayNight] Year 1 · Day 1/50 begins (tick 1)

@@ -1206,3 +1206,114 @@ func get_relationship_timeline(a_id: int, b_id: int, max_items: int = 64) -> Arr
 		out.append(evt.duplicate(true))
 	out.reverse()
 	return out
+
+
+## ============================================================
+## World Seed Export + Chronicle Summary
+## ============================================================
+
+func export_world_seed(file_path: String) -> bool:
+	## Export world seed and snapshot data to JSON file.
+	var export_data := {
+		"schema": "heelkawn_v1",
+		"world_seed": _get_world_seed(),
+		"export_tick": _get_tick_count(),
+		"calendar": _get_calendar_data(),
+		"settlements": _get_settlement_snapshot(),
+		"population": {"total": _get_total_pawns()},
+		"biomes": _get_biomes_data(),
+	}
+	var json := JSON.stringify(export_data, "  ")
+	var file = FileAccess.open(file_path, FileAccess.WRITE)
+	if file:
+		file.store_string(json)
+		file.close()
+		return true
+	return false
+
+
+func get_chronicle_summary() -> String:
+	## Generate a readable summary of the world state and recent history.
+	var lines: PackedStringArray = []
+	lines.append("=== HEELKAWN CHRONICLE ===")
+	var cal = _get_calendar_data()
+	lines.append("Year %d, Day %d" % [cal.get("year", 0), cal.get("day", 0)])
+	lines.append("Population: %d" % _get_total_pawns())
+	lines.append("Settlements: %d" % _get_settlement_count())
+	lines.append("")
+	lines.append("Recent Events:")
+	var recent = _get_recent_events(10)
+	for evt in recent:
+		var tick = evt.get("tick", 0)
+		var type = evt.get("type", "unknown")
+		lines.append("  [Tick %d] %s" % [tick, type])
+	return "\n".join(lines)
+
+
+## ---- Internal helpers for export/chronicle ----
+
+func _get_world_seed() -> int:
+	if get_node_or_null("/root/WorldRNG") != null:
+		var w = get_node_or_null("/root/WorldRNG")
+		if w and w.has_method("get_current_seed"):
+			return w.get_current_seed()
+	return 0
+
+
+func _get_tick_count() -> int:
+	if get_node_or_null("/root/GameManager") != null:
+		var gm = get_node_or_null("/root/GameManager")
+		if gm and "tick_count" in gm:
+			return gm.tick_count
+	return 0
+
+
+func _get_calendar_data() -> Dictionary:
+	var cal: Dictionary = {"year": 1, "day": 1}
+	if get_node_or_null("/root/WorldClock") != null:
+		var wc = get_node_or_null("/root/WorldClock")
+		if "current_year" in wc:
+			cal["year"] = wc.current_year
+		if "current_day" in wc:
+			cal["day"] = wc.current_day
+	return cal
+
+
+func _get_settlement_snapshot() -> Array:
+	if get_node_or_null("/root/SettlementMemory") != null:
+		var sm = get_node_or_null("/root/SettlementMemory")
+		if sm and sm.has_method("get_snapshot"):
+			return sm.get_snapshot()
+	return []
+
+
+func _get_total_pawns() -> int:
+	var spawner = get_node_or_null("/root/PawnSpawner")
+	if spawner and "pawns" in spawner:
+		return spawner.pawns.size()
+	return 0
+
+
+func _get_settlement_count() -> int:
+	if get_node_or_null("/root/SettlementMemory") != null:
+		var sm = get_node_or_null("/root/SettlementMemory")
+		if sm and sm.has_method("get_settlement_count"):
+			return sm.get_settlement_count()
+	return 0
+
+
+func _get_biomes_data() -> Array:
+	## Return biome data if available.
+	if "_biomes" in self and _biomes != null:
+		return _biomes.duplicate()
+	return []
+
+
+func _get_recent_events(max_items: int = 10) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var start = max(0, _events.size() - max_items)
+	for i in range(start, _events.size()):
+		var evt = _events[i]
+		if evt is Dictionary:
+			out.append(evt.duplicate(true))
+	return out

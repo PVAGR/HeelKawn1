@@ -880,8 +880,14 @@ func get_last_pawn_death_tick_for_region(rk: int) -> int:
 
 
 func get_all_region_keys() -> PackedInt32Array:
-	var out: PackedInt32Array = []
-	for rk in meaning_by_region.keys():
+	var seen: Dictionary = {}
+	for rk in _pawn_death_last_tick_by_region:
+		seen[int(rk)] = true
+	for e in _events:
+		if e.has("r"):
+			seen[int(e["r"])] = true
+	var out: PackedInt32Array = PackedInt32Array()
+	for rk in seen:
 		out.append(int(rk))
 	out.sort()
 	return out
@@ -1254,9 +1260,7 @@ func get_chronicle_summary() -> String:
 		year = get_node("/root/WorldClock").current_year
 		day = get_node("/root/WorldClock").current_day
 	lines.append("Year %d, Day %d" % [year, day])
-	var total_pawns: int = 0
-	if "_pawns" in self and _pawns != null:
-		total_pawns = _pawns.size()
+	var total_pawns: int = _get_total_pawns()
 	lines.append("Population: %d" % total_pawns)
 	if has_node("/root/SettlementMemory"):
 		var sm = get_node("/root/SettlementMemory")
@@ -1320,9 +1324,7 @@ func _get_settlement_count() -> int:
 
 
 func _get_biomes_data() -> Array:
-	## Return biome data if available.
-	if "_biomes" in self and _biomes != null:
-		return _biomes.duplicate()
+	## Chronicle export: full biome raster not exposed on WorldMemory; keep empty until needed.
 	return []
 
 

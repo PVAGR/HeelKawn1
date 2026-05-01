@@ -50,7 +50,7 @@ func _call_tick_on_tickables(tick: int) -> void:
 		if node != null and is_instance_valid(node) and node.has_method("_on_world_tick"):
 			tickable_nodes.append(node)
 	# Sort by node path for deterministic order
-	tickable_nodes.sort_custom(func(a, b): return a.get_path() < b.get_path())
+	tickable_nodes.sort_custom(func(a, b): return str(a.get_path()) < str(b.get_path()))
 	for node in tickable_nodes:
 		node._on_world_tick(tick)
 

@@ -1190,12 +1190,3 @@ func _find_nearest_settlement(agent_id: int) -> int:
 	for settlement_id in settlement_ai_system:
 		return settlement_id
 	return -1
-#	return settlement_id
-#	return -1
-
-## Called by TickManager - forwards tick to all SettlementAI instances
-func _on_world_tick(tick_number: int) -> void:
-	for settlement_id in settlement_ai_system:
-		var ai = settlement_ai_system[settlement_id]
-		if ai != null and ai.has_method("_on_world_tick"):
-			ai._on_world_tick(tick_number)

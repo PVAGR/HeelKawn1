@@ -2970,8 +2970,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_debug_capture_resource_truth()
 			# F7: export chronicle
 		Key.KEY_F7:
-			if OS.is_debug_build():
-				_export_chronicle()
+			_export_chronicle()
 		# F3: debug grant Krond (25)
 		Key.KEY_F3:
 			if OS.is_debug_build():
@@ -3072,15 +3071,14 @@ func _toggle_debug_panel() -> void:
 
 ## Debug: export chronicle to user://exports/chronicle_<tick>.json
 func _export_chronicle() -> void:
-	if not OS.is_debug_build():
-		return
 	var tick: int = 0
 	if Engine.has_singleton("GameManager") and GameManager != null:
 		tick = GameManager.tick_count
 	var dir_path: String = "user://exports"
 	var da := DirAccess.open("user://")
 	if da != null:
-		da.make_dir_recursive(dir_path)
+		# create exports directory under user://
+		da.make_dir_recursive("exports")
 	var file_path: String = "%s/chronicle_%d.json" % [dir_path, tick]
 	var ok: bool = false
 	if WorldMemory != null and WorldMemory.has_method("export_chronicle"):
@@ -3965,12 +3963,6 @@ func get_camera_settlement_revival_digest() -> Dictionary:
 	d_near["profile_region_key"] = near_ckr
 	d_near["region_key"] = cam_rk
 	return d_near
-
-
-func _center_tile_from_region_key(ckr: int) -> Vector2i:
-	var tcx: int = (ckr & 0xFFFF) * 16 + 8
-	var tcy: int = ((ckr >> 16) & 0xFFFF) * 16 + 8
-	return Vector2i(tcx, tcy)
 
 
 func _nearest_settlement_center_region_key(cam_tile: Vector2i) -> int:

@@ -1103,9 +1103,3 @@ func get_cultural_influence() -> float:
 	influence += float(cultural_norms.size()) * 0.5
 	influence += float(diplomatic_relations.size()) * 0.3
 	return influence
-
-func _on_world_tick(tick_number: int) -> void:
-	# SettlementAI tick processing - called by TickManager
-	# Update collective goals, check for emergencies, etc.
-	# This method is called deterministically for all registered SettlementAI instances
-	pass

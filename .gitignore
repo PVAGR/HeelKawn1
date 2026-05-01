@@ -1,35 +1,3 @@
-# Godot
-.import/
-.export/
-.export_presets.cfg
-
-# Mono / C#
-.mono/
-.vs/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-# Observer/automation artifacts (machine-readable + human-readable reports)
-logs/
-logs/**
-
-# Godot editor cache
-.godot/
-export/
-!scripts/export/
-!scripts/export/**
-*.pck
-*.zip
-.vscode/*
-!.vscode/settings.json
-
-# Local addon secrets
-addons/godotassistant/config.cfg
-
-# Portable Godot (see tools/Download-GodotPortable.ps1); do not commit engine binaries.
-/tools/godot/*.exe
-.aider*
+```
+*.backup
+```

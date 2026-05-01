@@ -685,7 +685,7 @@ func _request_redraw() -> void:
 
 
 func _ready() -> void:
-	GameManager.game_tick.connect(_on_game_tick)
+	## [signal GameManager.game_tick] is connected from [method bind] after [member data] and [member _world] exist.
 	_sfx = AudioStreamPlayer2D.new()
 	_sfx.max_distance = 320.0
 	_sfx.volume_db = -5.0
@@ -718,6 +718,13 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	refresh_inherited_cultural_reputation()
 	data.ensure_soul_identity()
 	_request_redraw()
+	if GameManager != null and not GameManager.game_tick.is_connected(_on_game_tick):
+		GameManager.game_tick.connect(_on_game_tick)
+
+
+func _exit_tree() -> void:
+	if GameManager != null and GameManager.game_tick.is_connected(_on_game_tick):
+		GameManager.game_tick.disconnect(_on_game_tick)
 
 
 ## Re-read the spawn tile’s [CulturalMemory] entry (e.g. after load once ruins are applied). Does not run every tick.
@@ -1223,22 +1230,30 @@ func _on_path_complete() -> void:
 # ==================== per-tick simulation ====================
 
 func _on_game_tick(_tick: int) -> void:
-	if data == null:
+	if not is_instance_valid(self):
+		return
+	if data == null or not is_instance_valid(data):
+		push_warning("Pawn: game_tick skipped - data not ready (path=%s)" % str(get_path()))
 		return
 	if _hit_flash_ticks > 0:
 		_hit_flash_ticks -= 1
-	
+
 	# Stagger needs/threshold upkeep by pawn id so not every pawn runs this
 	# bookkeeping on the same sim tick.
 	if posmod(GameManager.tick_count + int(data.id), 5) == 0:
+		CrashTrap.enter_system("pawn_tick:needs")
 		_decay_needs()
 		_check_thresholds()
+		CrashTrap.exit_system("pawn_tick:needs")
 	# Sleepers only need wake checks; skip full AI branch logic to reduce
 	# per-tick overhead during overnight "everyone in bed" windows.
 	if _state == State.SLEEPING:
+		CrashTrap.enter_system("pawn_tick:sleep")
 		_tick_sleeping()
+		CrashTrap.exit_system("pawn_tick:sleep")
 		return
-	
+
+	CrashTrap.enter_system("pawn_tick:ai")
 	var stride: int = _fast_forward_tick_stride()
 	var ai_phase: int = int(data.id) if data != null else 0
 	var run_full_ai: bool = stride <= 1 or (posmod(_tick + ai_phase, stride) == 0)
@@ -1256,6 +1271,7 @@ func _on_game_tick(_tick: int) -> void:
 	# keeps a pawn busy until rest hits 0.
 	if _should_panic_sleep():
 		_force_panic_sleep()
+		CrashTrap.exit_system("pawn_tick:ai")
 		return
 	if not run_full_ai:
 		match _state:
@@ -1271,12 +1287,15 @@ func _on_game_tick(_tick: int) -> void:
 				_tick_challenge()
 			_:
 				pass
+		CrashTrap.exit_system("pawn_tick:ai")
 		return
 	match _state:
 		State.IDLE:
 			_tick_idle()
 		State.WALKING_TO_JOB:
+			CrashTrap.enter_system("pawn_tick:movement")
 			_tick_walking()
+			CrashTrap.exit_system("pawn_tick:movement")
 		State.WORKING:
 			_tick_working()
 		State.HAULING, State.GOING_TO_EAT, State.FETCHING_MATERIAL, State.GOING_TO_BED, State.DRAFT_WALK:
@@ -1290,6 +1309,7 @@ func _on_game_tick(_tick: int) -> void:
 			_tick_teaching()
 		State.CHALLENGE:
 			_tick_challenge()
+	CrashTrap.exit_system("pawn_tick:ai")
 
 
 func _fast_forward_tick_stride() -> int:

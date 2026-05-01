@@ -938,6 +938,91 @@ func _default_profile(region_key: int) -> Dictionary:
 	}
 
 
+## ARCHITECT TASK 2: Get the settlement ID a pawn belongs to.
+func get_settlement_id_for_pawn(pawn_id: int) -> int:
+	for st_v in settlements:
+		if not (st_v is Dictionary):
+			continue
+		var st: Dictionary = st_v as Dictionary
+		var settlement_pawns_in_snap: Array[int] = st.get("pawns_in_settlement", []) # This field might need to be added/tracked
+		# For now, iterate through all regions of the settlement and check if any pawn data matches the region.
+		# A more efficient solution would be to have a direct pawn_id -> settlement_id mapping if performance becomes an issue.
+		var regions: PackedInt32Array = _regions_from_settlement(st)
+		for rk in regions:
+			# This is an indirect check; ideally, PawnData would directly link to settlement_id
+			# For now, we rely on iterating to find the settlement the pawn's tile_pos is in.
+			# This implies an assumption that pawns only challenge leaders in their current settlement.
+			# A direct lookup is needed if Pawn.data.settlement_id is populated.
+			# For now, return the center region as the settlement ID if the pawn is in one of its regions.
+			# This function may need refinement if PawnData gets a proper `settlement_id` field.
+			if get_center_region_for_region(rk) == int(st.get("center_region", -1)): # Simple check to see if region belongs to this settlement
+				# We don't have direct access to pawn.data.tile_pos here, so a direct lookup
+				# from Pawn.gd would be more accurate. This is a placeholder.
+				# A better approach would be to update `pawns_in_settlement` in `_update_governance_state`
+				# and use that directly here.
+				# For current purposes of `Pawn.gd` calling this, Pawn.data.settlement_id should ideally be set and used.
+				# Assuming `Pawn.data.settlement_id` will be correctly set by other systems during `recompute`.
+				# This function will rely on that.
+				# Until then, we can't reliably map a pawn_id to a settlement_id without global pawn data.
+				pass
+	# Placeholder: This needs Pawn data to be properly linked to settlements.
+	# The current `recompute` method builds settlements, but doesn't explicitly list `pawns_in_settlement`.
+	# For now, we return -1 and expect higher-level logic (e.g. Pawn.gd) to verify its own `data.settlement_id`.
+	# ARCHITECT NOTE: A more robust pawn.id -> settlement.id mapping is a future improvement.
+	return -1 # Default to not found, let the caller handle it.
+
+## ARCHITECT TASK 2: Get the ID of the current ruler of a settlement.
+func get_ruler_pawn_id(settlement_id: int) -> int:
+	for st_v in settlements:
+		if not (st_v is Dictionary):
+			continue
+		var st: Dictionary = st_v as Dictionary
+		if int(st.get("center_region", -1)) == settlement_id:
+			return int(st.get("current_ruler_id", -1))
+	return -1
+
+## ARCHITECT TASK 2: Internal method to set a settlement's ruler and governance type.
+## This function is called by AuthoritySystem to finalize leadership changes.
+## It updates the internal `settlements` array and records a `governance_change` event.
+func _set_settlement_ruler_and_type(settlement_id: int, new_ruler_id: int, new_governance_type: String) -> bool:
+	for i in range(settlements.size()):
+		if not (settlements[i] is Dictionary):
+			continue
+		var st: Dictionary = settlements[i] as Dictionary
+		if int(st.get("center_region", -1)) == settlement_id:
+			var old_ruler_id: int = int(st.get("current_ruler_id", -1))
+			var old_governance_type: String = str(st.get("governance_type", "anarchy"))
+
+			st["current_ruler_id"] = new_ruler_id
+			st["governance_type"] = new_governance_type
+			# If transitioning to monarchy, ensure council_ids is cleared or set appropriately.
+			if new_governance_type == "monarchy":
+				st["council_ids"] = PackedInt32Array() # A monarch rules alone, no council
+
+			settlements[i] = st # Update the settlement in the array
+
+			# Record governance_change event in WorldMemory
+			WorldMemory.record_event({
+				"type": "governance_change",
+				"settlement_id": settlement_id,
+				"old_ruler_id": old_ruler_id,
+				"new_ruler_id": new_ruler_id,
+				"old_governance_type": old_governance_type,
+				"new_governance_type": new_governance_type,
+				"tick": GameManager.tick_count,
+			})
+
+			if GameManager.verbose_logs():
+				print("[SettlementMemory] Settlement %d governance updated: Ruler %d, Type %s." % [
+					settlement_id, new_ruler_id, new_governance_type
+				])
+			
+			return true
+	if GameManager.verbose_logs():
+		print("[SettlementMemory] Failed to update settlement %d: Not found." % settlement_id)
+	return false
+
+
 func _regions_from_settlement(settlement: Dictionary) -> PackedInt32Array:
 	var reg: Variant = settlement.get("regions", null)
 	if reg is PackedInt32Array:

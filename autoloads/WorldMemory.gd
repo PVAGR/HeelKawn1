@@ -51,6 +51,95 @@ func _on_world_tick(tick_number: int) -> void:
 	# This method satisfies the tickable interface for deterministic ordering.
 	pass
 
+# ARCHITECT TASK 2: Record a leadership challenge attempt.
+# This is called regardless of outcome.
+func record_leadership_challenge_attempt(
+		tick: int,
+		settlement_id: int,
+		challenger_id: int,
+		challenger_name: String,
+		leader_id: int,
+		leader_name: String,
+		challenger_score: float,
+		leader_score: float,
+		challenger_chance: float,
+		outcome_seed: int,
+		success: bool
+	) -> void:
+	_append({
+		"s": SCHEMA,
+		"type": "leadership_challenge_attempt",
+		"t": tick,
+		"settlement_id": settlement_id,
+		"challenger_id": challenger_id,
+		"challenger_name": challenger_name,
+		"leader_id": leader_id,
+		"leader_name": leader_name,
+		"challenger_score": challenger_score,
+		"leader_score": leader_score,
+		"challenger_chance": challenger_chance,
+		"outcome_seed": outcome_seed,
+		"success": success,
+	})
+
+# ARCHITECT TASK 2: Record a leadership change after a successful challenge.
+func record_leadership_change(
+		tick: int,
+		settlement_id: int,
+		old_leader_id: int,
+		old_leader_name: String,
+		new_leader_id: int,
+		new_leader_name: String
+	) -> void:
+	_append({
+		"s": SCHEMA,
+		"type": "leadership_change",
+		"t": tick,
+		"settlement_id": settlement_id,
+		"old_leader_id": old_leader_id,
+		"old_leader_name": old_leader_name,
+		"new_leader_id": new_leader_id,
+		"new_leader_name": new_leader_name,
+	})
+
+# ARCHITECT TASK 2: Record a failed leadership challenge.
+func record_leadership_challenge_failed(
+		tick: int,
+		settlement_id: int,
+		challenger_id: int,
+		challenger_name: String,
+		leader_id: int,
+		leader_name: String
+	) -> void:
+	_append({
+		"s": SCHEMA,
+		"type": "leadership_challenge_failed",
+		"t": tick,
+		"settlement_id": settlement_id,
+		"challenger_id": challenger_id,
+		"challenger_name": challenger_name,
+		"leader_id": leader_id,
+		"leader_name": leader_name,
+	})
+
+# ARCHITECT TASK 2: Record a leadership resolution failure (e.g., SettlementMemory update issue).
+func record_leadership_resolution_failed(
+		tick: int,
+		settlement_id: int,
+		challenger_id: int,
+		old_ruler_id: int,
+		reason: String
+	) -> void:
+	_append({
+		"s": SCHEMA,
+		"type": "leadership_resolution_failed",
+		"t": tick,
+		"settlement_id": settlement_id,
+		"challenger_id": challenger_id,
+		"old_ruler_id": old_ruler_id,
+		"reason": reason,
+	})
+
 # === Neural Network Matrix Connections ===
 
 func get_world_stability() -> float:

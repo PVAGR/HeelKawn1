@@ -861,10 +861,17 @@ func get_teaching_priority_weight() -> float:
 func get_pawn_obedience_weight(pawn_id: int) -> float:
 	if AuthoritySystem == null:
 		return 1.0
-	
-	var civ_neurons = neural_world_matrix["civilization_neurons"]
-	var civil_auth = civ_neurons["civil_authority"].value
-	var military_auth = civ_neurons["military_authority"].value
+	if not neural_world_matrix.has("civilization_neurons"):
+		return 1.0
+	var civ_neurons: Dictionary = neural_world_matrix["civilization_neurons"]
+	if not civ_neurons.has("civil_authority") or not civ_neurons.has("military_authority"):
+		return 1.0
+	var civil_entry: Variant = civ_neurons["civil_authority"]
+	var military_entry: Variant = civ_neurons["military_authority"]
+	if not (civil_entry is Dictionary) or not (military_entry is Dictionary):
+		return 1.0
+	var civil_auth: float = float((civil_entry as Dictionary).get("value", 0.0))
+	var military_auth: float = float((military_entry as Dictionary).get("value", 0.0))
 	
 	# Get pawn's authority level
 	var pawn_civil = AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.CIVIL)

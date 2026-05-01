@@ -44,7 +44,7 @@ func export_character(pawn_data: PawnData) -> Dictionary:
 	var export_data: Dictionary = {
 		"version": export_version,
 		"export_timestamp": Time.get_unix_time_from_system(),
-		"game_tick": GameManager.tick_count if "tick_count" in GameManager else 0,
+		"game_tick": GameManager.tick_count if GameManager != null else 0,
 		"character": _serialize_character(pawn_data),
 		"signature": _generate_signature(pawn_data)
 	}
@@ -58,7 +58,7 @@ func export_character(pawn_data: PawnData) -> Dictionary:
 	export_history.append({
 		"character_id": pawn_data.id,
 		"character_name": pawn_data.display_name,
-		"tick": GameManager.tick_count if "tick_count" in GameManager else 0,
+		"tick": GameManager.tick_count if GameManager != null else 0,
 		"destination": "pvabazaar.org",
 		"timestamp": export_data.export_timestamp
 	})
@@ -93,7 +93,7 @@ func _serialize_character(pawn_data: PawnData) -> Dictionary:
 	character["_metadata"] = {
 		"export_version": export_version,
 		"source_world": "HeelKawn",
-		"total_playtime_ticks": GameManager.tick_count if "tick_count" in GameManager else 0
+		"total_playtime_ticks": GameManager.tick_count if GameManager != null else 0
 	}
 	
 	return character
@@ -126,7 +126,7 @@ func _generate_signature(pawn_data: PawnData) -> String:
 	var signature_data: String = "%d_%s_%d" % [
 		pawn_data.id,
 		pawn_data.display_name,
-		GameManager.tick_count if "tick_count" in GameManager else 0
+		GameManager.tick_count if GameManager != null else 0
 	]
 	
 	# Simple hash-based signature (in production, use proper cryptographic signature)

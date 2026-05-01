@@ -128,7 +128,7 @@ func start_research(settlement_id: int, tech_id: String, researchers: Array, res
 		"progress": 0.0,
 		"researchers": researchers,
 		"resources": resources,
-		"start_tick": GameManager.tick_count if "tick_count" in GameManager else 0
+		"start_tick": GameManager.tick_count if GameManager != null else 0
 	}
 	
 	return true
@@ -169,7 +169,7 @@ func _complete_research(settlement_id: int) -> void:
 	research_history.append({
 		"tech_id": tech_id,
 		"settlement_id": settlement_id,
-		"tick": GameManager.tick_count if "tick_count" in GameManager else 0,
+		"tick": GameManager.tick_count if GameManager != null else 0,
 		"success": true
 	})
 	
@@ -201,13 +201,13 @@ func _discover_technology(tech_id: String, discoverer: int) -> void:
 				"description": hidden_data.description,
 				"prerequisites": hidden_data.prerequisites,
 				"discovered": true,
-				"discovery_tick": GameManager.tick_count if "tick_count" in GameManager else 0,
+				"discovery_tick": GameManager.tick_count if GameManager != null else 0,
 				"discoverer": str(discoverer)
 			}
 			hidden_nodes.remove_at(hidden_index)
 	else:
 		knowledge_graph[tech_id].discovered = true
-		knowledge_graph[tech_id].discovery_tick = GameManager.tick_count if "tick_count" in GameManager else 0
+		knowledge_graph[tech_id].discovery_tick = GameManager.tick_count if GameManager != null else 0
 		knowledge_graph[tech_id].discoverer = str(discoverer)
 	
 	# Initialize diffusion
@@ -286,7 +286,7 @@ func attempt_innovation(settlement_id: int) -> String:
 	
 	# Innovation success based on potential and randomness
 	var success_chance: float = candidate.potential * 0.3
-	if WorldRNG.range_for(StringName("tech:innov_success:%d" % GameManager.tick_count if "tick_count" in GameManager else 0), 0.0, 1.0) < success_chance:
+	if WorldRNG.range_for(StringName("tech:innov_success:%d" % (GameManager.tick_count if GameManager != null else 0)), 0.0, 1.0) < success_chance:
 		# Create new technology
 		var new_tech_id: String = "innovation_%d" % innovations.size()
 		var tech_name: String = _generate_procedural_name(candidate.category)
@@ -296,14 +296,14 @@ func attempt_innovation(settlement_id: int) -> String:
 			"description": "An innovative technology combining %s and %s" % [candidate.parent_techs[0], candidate.parent_techs[1]],
 			"prerequisites": candidate.parent_techs,
 			"discovered": true,
-			"discovery_tick": GameManager.tick_count if "tick_count" in GameManager else 0,
+			"discovery_tick": GameManager.tick_count if GameManager != null else 0,
 			"discoverer": str(settlement_id)
 		}
 		
 		innovations.append({
 			"tech_id": new_tech_id,
 			"parent_techs": candidate.parent_techs,
-			"innovation_tick": GameManager.tick_count if "tick_count" in GameManager else 0,
+			"innovation_tick": GameManager.tick_count if GameManager != null else 0,
 			"innovator_settlement": settlement_id
 		})
 		

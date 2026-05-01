@@ -1254,10 +1254,17 @@ func _on_game_tick(_tick: int) -> void:
 		return
 
 	CrashTrap.enter_system("pawn_tick:ai")
-	var stride: int = _fast_forward_tick_stride()
+	var _trace_ai_slice: bool = CrashTrap.should_trace_game_tick_dispatch(_tick)
+	if _trace_ai_slice:
+		CrashTrap.enter_system("pawn_tick:ai:stride")
+	var stride: int = maxi(1, _fast_forward_tick_stride())
 	var ai_phase: int = int(data.id) if data != null else 0
 	var run_full_ai: bool = stride <= 1 or (posmod(_tick + ai_phase, stride) == 0)
+	if _trace_ai_slice:
+		CrashTrap.exit_system("pawn_tick:ai:stride")
 	if run_full_ai:
+		if _trace_ai_slice:
+			CrashTrap.enter_system("pawn_tick:ai:cohort_draft")
 		# Throttled cohort system calls for performance
 		if GameManager.tick_count % COHORT_UPDATE_TICKS == 0:
 			update_cohort_membership()
@@ -1265,15 +1272,25 @@ func _on_game_tick(_tick: int) -> void:
 			_refresh_or_decay_cohort_stability()
 		if draft_mode:
 			_engage_enemies()
+		if _trace_ai_slice:
+			CrashTrap.exit_system("pawn_tick:ai:cohort_draft")
 	# Panic-sleep interrupt: if rest is critically low and we're not already
 	# resolving a true emergency (asleep, eating, or fed/in-hand), abandon
 	# what we're doing and collapse. Beats the eat/haul cycle that otherwise
 	# keeps a pawn busy until rest hits 0.
+	if _trace_ai_slice:
+		CrashTrap.enter_system("pawn_tick:ai:panic")
 	if _should_panic_sleep():
 		_force_panic_sleep()
+		if _trace_ai_slice:
+			CrashTrap.exit_system("pawn_tick:ai:panic")
 		CrashTrap.exit_system("pawn_tick:ai")
 		return
+	if _trace_ai_slice:
+		CrashTrap.exit_system("pawn_tick:ai:panic")
 	if not run_full_ai:
+		if _trace_ai_slice:
+			CrashTrap.enter_system("pawn_tick:ai:throttled_state")
 		match _state:
 			State.WORKING:
 				_tick_working()
@@ -1287,8 +1304,12 @@ func _on_game_tick(_tick: int) -> void:
 				_tick_challenge()
 			_:
 				pass
+		if _trace_ai_slice:
+			CrashTrap.exit_system("pawn_tick:ai:throttled_state")
 		CrashTrap.exit_system("pawn_tick:ai")
 		return
+	if _trace_ai_slice:
+		CrashTrap.enter_system("pawn_tick:ai:full_state")
 	match _state:
 		State.IDLE:
 			_tick_idle()
@@ -1309,6 +1330,8 @@ func _on_game_tick(_tick: int) -> void:
 			_tick_teaching()
 		State.CHALLENGE:
 			_tick_challenge()
+	if _trace_ai_slice:
+		CrashTrap.exit_system("pawn_tick:ai:full_state")
 	CrashTrap.exit_system("pawn_tick:ai")
 
 
@@ -1486,7 +1509,7 @@ func _tick_idle() -> void:
 	
 	# Job claiming is one of the hottest paths at ultra speed; spread claims so
 	# not every pawn rescans the full queue on the same tick burst.
-	var claim_iv: int = _job_claim_interval_for_speed()
+	var claim_iv: int = maxi(1, _job_claim_interval_for_speed())
 	var claim_phase: int = 0
 	if data != null:
 		claim_phase = posmod(int(data.id), claim_iv)
@@ -3292,7 +3315,7 @@ func assess_risk(tile: Vector2i) -> float:
 
 func remember_resources(tile: Vector2i, resource_type: String) -> void:
 	var tile_key: String = "%d,%d" % [tile.x, tile.y]
-	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	var current_tick: int = GameManager.tick_count if GameManager != null else 0
 	
 	data.location_memory[tile_key] = {
 		"last_seen": current_tick,

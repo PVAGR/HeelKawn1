@@ -330,7 +330,7 @@ var need_urgency: Dictionary = {
 func _init() -> void:
 	id = _next_id
 	_next_id += 1
-	birth_tick = int(GameManager.tick_count) if "tick_count" in GameManager else 0
+	birth_tick = int(GameManager.tick_count) if GameManager != null else 0
 	initialize_affinities(birth_tick, -1, -1)
 	_initialize_personality(birth_tick, parent_a_id, parent_b_id)
 	_initialize_neural_network()
@@ -528,22 +528,22 @@ func get_mood_stability() -> float:
 
 ## Phase 1.2: Record an episodic memory (significant event)
 func record_episodic_memory(event_type: String, location: Vector2i, participants: Array, emotional_impact: float, details: Dictionary = {}) -> void:
-	var event_id: String = "%s_%d_%d" % [event_type, GameManager.tick_count if "tick_count" in GameManager else 0, id]
+	var event_id: String = "%s_%d_%d" % [event_type, GameManager.tick_count if GameManager != null else 0, id]
 	episodic_memory[event_id] = {
 		"type": event_type,
-		"tick": GameManager.tick_count if "tick_count" in GameManager else 0,
+		"tick": GameManager.tick_count if GameManager != null else 0,
 		"location": location,
 		"participants": participants,
 		"emotional_impact": emotional_impact,
 		"details": details
 	}
-	memory_access["episodic"] = GameManager.tick_count if "tick_count" in GameManager else 0
+	memory_access["episodic"] = GameManager.tick_count if GameManager != null else 0
 
 
 ## Phase 1.2: Recall episodic memories by type or emotional impact
 func recall_episodic_memories(event_type: String = "", min_impact: float = 0.0, limit: int = 10) -> Array:
 	var recalled: Array = []
-	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	var current_tick: int = GameManager.tick_count if GameManager != null else 0
 	
 	for event_id in episodic_memory:
 		var memory = episodic_memory[event_id]
@@ -583,7 +583,7 @@ func recall_episodic_memories(event_type: String = "", min_impact: float = 0.0, 
 
 ## Phase 1.2: Learn a semantic fact
 func learn_semantic_fact(fact_key: String, details: Dictionary, confidence: float = 1.0, source: String = "observation") -> void:
-	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	var current_tick: int = GameManager.tick_count if GameManager != null else 0
 	
 	# If fact already exists, update confidence (higher confidence wins)
 	if semantic_memory.has(fact_key):
@@ -612,7 +612,7 @@ func recall_semantic_fact(fact_key: String) -> Dictionary:
 		return {}
 	
 	var fact = semantic_memory[fact_key]
-	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	var current_tick: int = GameManager.tick_count if GameManager != null else 0
 	
 	# Check if fact has decayed
 	var age: int = current_tick - fact.get("learned_tick", 0)
@@ -630,7 +630,7 @@ func recall_semantic_fact(fact_key: String) -> Dictionary:
 ## Phase 1.2: Update spatial memory for a tile
 func update_spatial_memory(tile: Vector2i, resource_type: String = "", danger_level: float = 0.0, terrain_type: String = "") -> void:
 	var tile_key: String = "%d,%d" % [tile.x, tile.y]
-	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	var current_tick: int = GameManager.tick_count if GameManager != null else 0
 	
 	spatial_memory[tile_key] = {
 		"last_seen_tick": current_tick,
@@ -645,7 +645,7 @@ func update_spatial_memory(tile: Vector2i, resource_type: String = "", danger_le
 ## Phase 1.2: Recall spatial memory for nearby tiles
 func recall_nearby_spatial_memory(center: Vector2i, radius: int) -> Dictionary:
 	var nearby: Dictionary = {}
-	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	var current_tick: int = GameManager.tick_count if GameManager != null else 0
 	
 	for dx in range(-radius, radius + 1):
 		for dy in range(-radius, radius + 1):
@@ -672,7 +672,7 @@ func recall_nearby_spatial_memory(center: Vector2i, radius: int) -> Dictionary:
 
 ## Phase 1.2: Update social memory for another pawn
 func update_social_memory(other_pawn_id: int, trust_change: float = 0.0, debt_change: float = 0.0, grudge_change: float = 0.0, friendship_change: float = 0.0, interaction_type: String = "") -> void:
-	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	var current_tick: int = GameManager.tick_count if GameManager != null else 0
 	
 	if not social_memory.has(other_pawn_id):
 		social_memory[other_pawn_id] = {
@@ -720,7 +720,7 @@ func recall_social_memory(other_pawn_id: int) -> Dictionary:
 		}
 	
 	var memory = social_memory[other_pawn_id]
-	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	var current_tick: int = GameManager.tick_count if GameManager != null else 0
 	
 	# Decay social memories over time
 	var age: int = current_tick - memory.get("last_interaction", 0)
@@ -738,7 +738,7 @@ func recall_social_memory(other_pawn_id: int) -> Dictionary:
 
 ## Phase 1.2: Decay all memories periodically
 func decay_memories() -> void:
-	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	var current_tick: int = GameManager.tick_count if GameManager != null else 0
 	
 	# Decay episodic memories
 	var episodic_to_remove: Array = []
@@ -837,14 +837,14 @@ func get_most_urgent_need() -> String:
 
 ## Phase 1.3: Add a new goal
 func add_goal(goal_type: String, priority: float = 1.0, deadline: int = -1, details: Dictionary = {}) -> String:
-	var goal_id: String = "%s_%d_%d" % [goal_type, GameManager.tick_count if "tick_count" in GameManager else 0, id]
+	var goal_id: String = "%s_%d_%d" % [goal_type, GameManager.tick_count if GameManager != null else 0, id]
 	active_goals[goal_id] = {
 		"type": goal_type,
 		"priority": priority,
 		"progress": 0.0,
 		"sub_goals": [],
 		"deadline": deadline,
-		"created_tick": GameManager.tick_count if "tick_count" in GameManager else 0,
+		"created_tick": GameManager.tick_count if GameManager != null else 0,
 		"details": details
 	}
 	return goal_id
@@ -859,7 +859,7 @@ func complete_goal(goal_id: String, success: bool = true) -> void:
 	goal_history.append({
 		"type": goal.type,
 		"success": success,
-		"completed_tick": GameManager.tick_count if "tick_count" in GameManager else 0,
+		"completed_tick": GameManager.tick_count if GameManager != null else 0,
 		"priority": goal.priority,
 		"details": goal.details
 	})
@@ -880,7 +880,7 @@ func abandon_goal(goal_id: String, reason: String = "") -> void:
 	goal_history.append({
 		"type": goal.type,
 		"success": false,
-		"abandoned_tick": GameManager.tick_count if "tick_count" in GameManager else 0,
+		"abandoned_tick": GameManager.tick_count if GameManager != null else 0,
 		"priority": goal.priority,
 		"reason": reason,
 		"details": goal.details
@@ -913,7 +913,7 @@ func get_highest_priority_goal() -> Dictionary:
 		
 		# Adjust priority based on deadline urgency
 		if goal.deadline > 0:
-			var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+			var current_tick: int = GameManager.tick_count if GameManager != null else 0
 			var ticks_remaining: int = goal.deadline - current_tick
 			if ticks_remaining < 100:
 				adjusted_priority *= 2.0  # Urgent deadline
@@ -931,7 +931,7 @@ func get_highest_priority_goal() -> Dictionary:
 ## Phase 1.3: Generate goals based on unmet needs
 func generate_goals_from_needs() -> void:
 	var urgent_need: String = get_most_urgent_need()
-	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	var current_tick: int = GameManager.tick_count if GameManager != null else 0
 	
 	match urgent_need:
 		"survival":
@@ -970,7 +970,7 @@ func generate_goals_from_needs() -> void:
 
 ## Phase 1.3: Clean up expired or completed goals
 func cleanup_goals() -> void:
-	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	var current_tick: int = GameManager.tick_count if GameManager != null else 0
 	var goals_to_remove: Array = []
 	
 	for goal_id in active_goals:
@@ -1604,7 +1604,7 @@ func add_skill_xp(skill: int, amount: float) -> bool:
 	skill_xp[skill] = get_skill_xp(skill) + amount * trait_mult
 	
 	# Stage 1: Track last used time for XP decay
-	skill_last_used[skill] = GameManager.tick_count if "tick_count" in GameManager else 0
+	skill_last_used[skill] = GameManager.tick_count if GameManager != null else 0
 	
 	# Stage 1: Check for overall level up
 	_check_level_up()
@@ -1680,7 +1680,7 @@ func _grant_mastery_perk(skill: int, perk_level: int) -> void:
 ## Stage 1: Decay unused skills over time
 ## Call this periodically (e.g., once per day)
 func decay_unused_skills() -> void:
-	var current_tick: int = GameManager.tick_count if "tick_count" in GameManager else 0
+	var current_tick: int = GameManager.tick_count if GameManager != null else 0
 	var decay_threshold: int = DayNightCycle.TICKS_PER_DAY * 7  # 7 days without use
 	
 	for skill in skill_xp:

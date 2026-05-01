@@ -276,7 +276,7 @@ func _store_internal_state(output_values: Array[float]) -> void:
 		obfuscated.append(obf_value)
 	
 	_internal_state = {
-		"timestamp": GameManager.tick_count if "tick_count" in GameManager else 0,
+		"timestamp": GameManager.tick_count if GameManager != null else 0,
 		"obfuscated_output": obfuscated,
 		"checksum": _calculate_checksum(obfuscated)
 	}

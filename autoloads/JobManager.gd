@@ -145,7 +145,7 @@ func claim_next_for(
 		# Apply obedience weight to priority (lower obedience = higher priority needed to accept)
 		var adjusted_priority: int = j.priority
 		if obedience_weight < 0.5:
-			adjusted_priority = int(j.priority / obedience_weight)
+			adjusted_priority = int(j.priority / maxf(obedience_weight, 0.01))
 		
 		var eff: int = adjusted_priority + bonus
 		var d: int = _chebyshev(pawn_tile, j.work_tile)

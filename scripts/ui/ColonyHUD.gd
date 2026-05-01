@@ -337,7 +337,7 @@ func _first_play_hint_line() -> String:
 		return ""
 	return (
 		"[color=#cfd8dc][i]HeelKawn backbone:[/i][/color] click people for the sheet · "
-		+ "[b]F9[/b] realm readout · [b]F10[/b] creator → [b]35[/b] (what is LIVE vs deferred) · "
+		+ "[b]F9[/b] realm readout · [b]F10[/b] creator hub → [b]35 · Backbone / first-play[/b] (LIVE vs DEFERRED) · "
 		+ "default role is observer/chronicler (incarnation optional)"
 	)
 

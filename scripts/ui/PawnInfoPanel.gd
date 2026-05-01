@@ -816,11 +816,11 @@ func _refresh() -> void:
 			_hint_label.text = "Incarnation picker open · %s" % esc
 		elif _player_context_mode_label == "INCARNATED" and _player_context_pawn_id >= 0:
 			if int(d.id) == _player_context_pawn_id:
-				_hint_label.text = "You are incarnated · %s · F9 realm · F10 → 35" % esc
+				_hint_label.text = "You are incarnated · %s · F9 realm · F10 → 35 · Backbone" % esc
 			else:
 				_hint_label.text = "Inspecting (your pawn #%d) · %s" % [_player_context_pawn_id, esc]
 		else:
-			_hint_label.text = "Observer/chronicler · %s · F9 · F10 → 35" % esc
+			_hint_label.text = "Observer/chronicler · %s · F9 · F10 → 35 · Backbone" % esc
 
 	# Reposition each tick because the panel can grow/shrink with carry text.
 	_reposition()

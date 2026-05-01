@@ -2562,6 +2562,14 @@ static func skill_for_job(job_type: int) -> int:
 		Job.Type.DRY_MEAT:          return Skill.BUILDING
 		Job.Type.PLANT_SEEDS:       return Skill.FORAGING
 		Job.Type.HARVEST_CROPS:     return Skill.FORAGING
+		Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH:
+			return Skill.BUILDING
+		Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP:
+			return Skill.BUILDING
+		Job.Type.GROW_FOOD:
+			return Skill.FORAGING
+		Job.Type.PROTECT, Job.Type.DEFEND:
+			return Skill.HUNTING
 	return -1
 
 
@@ -2594,6 +2602,14 @@ func allows_job_type(job_type: int) -> bool:
 			return work_forage
 		Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS:
 			return work_forage
+		Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH:
+			return work_build
+		Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP:
+			return work_build
+		Job.Type.GROW_FOOD:
+			return work_forage
+		Job.Type.PROTECT, Job.Type.DEFEND:
+			return work_hunt
 	return true
 
 
@@ -2630,6 +2646,14 @@ func _allows_job_type_lightweight(job_type: int) -> bool:
 		return work_forage and profession_progress_xp() >= 200
 	if job_type == Job.Type.PLANT_SEEDS or job_type == Job.Type.HARVEST_CROPS:
 		return work_forage and profession_progress_xp() >= 50
+	if job_type == Job.Type.BUILD_SHELTER or job_type == Job.Type.BUILD_HEARTH:
+		return work_build and profession_progress_xp() >= 200
+	if job_type == Job.Type.TEACH_SKILL or job_type == Job.Type.APPRENTICESHIP:
+		return work_build and profession_progress_xp() >= 150
+	if job_type == Job.Type.GROW_FOOD:
+		return work_forage and profession_progress_xp() >= 50
+	if job_type == Job.Type.PROTECT or job_type == Job.Type.DEFEND:
+		return work_hunt and profession_progress_xp() >= 100
 	return false
 
 

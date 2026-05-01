@@ -33,6 +33,14 @@ enum Type {
 	DRY_MEAT,          # smoke/dry meat for preservation
 	PLANT_SEEDS,       # plant seeds on fertile soil for future harvest
 	HARVEST_CROPS,     # harvest planted crops
+	# --- Progression / social job hooks (optional posts; Impact wired in JobManager) ---
+	BUILD_SHELTER,
+	BUILD_HEARTH,
+	TEACH_SKILL,
+	APPRENTICESHIP,
+	GROW_FOOD,
+	PROTECT,
+	DEFEND,
 }
 
 enum State {
@@ -101,6 +109,13 @@ static func describe_type(t: int) -> String:
 		Type.DRY_MEAT:          return "DryMeat"
 		Type.PLANT_SEEDS:       return "PlantSeeds"
 		Type.HARVEST_CROPS:     return "HarvestCrops"
+		Type.BUILD_SHELTER:     return "BuildShelter"
+		Type.BUILD_HEARTH:      return "BuildHearth"
+		Type.TEACH_SKILL:       return "TeachSkill"
+		Type.APPRENTICESHIP:    return "Apprenticeship"
+		Type.GROW_FOOD:         return "GrowFood"
+		Type.PROTECT:           return "Protect"
+		Type.DEFEND:            return "Defend"
 	return "Unknown"
 
 

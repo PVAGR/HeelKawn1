@@ -235,6 +235,8 @@ func complete(job: Job) -> void:
 	# Notify WorldAI of job completion for economic neuron updates
 	_notify_world_ai_job_completion(job)
 
+	_record_progression_impact_for_completed_job(job)
+
 	job_completed.emit(job)
 	# NOTE: `BUILD_WALL` path reservation is cleared in `World.build_wall` when
 	# the feature is committed — not here (job may complete without build on edge cases).
@@ -351,11 +353,38 @@ func _notify_world_ai_job_completion(job: Job) -> void:
 		WorldAI.on_job_completed(job.type, job.priority)
 
 
+func _record_progression_impact_for_completed_job(job: Job) -> void:
+	var ps: Node = get_node_or_null("/root/ProgressionSystem")
+	if ps == null or not ps.has_method("record_impact"):
+		return
+	var impact_amount: int = 0
+	match job.type:
+		Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH, Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP:
+			impact_amount = 10
+		Job.Type.GROW_FOOD, Job.Type.HARVEST_CROPS:
+			impact_amount = 5
+		Job.Type.PROTECT, Job.Type.DEFEND:
+			impact_amount = 15
+		_:
+			pass
+	if impact_amount <= 0:
+		return
+	var pawn_id: int = 0
+	if job.assigned_pawn != null:
+		var pd: PawnData = job.assigned_pawn.get_pawn_data()
+		if pd != null:
+			pawn_id = int(pd.id)
+	if pawn_id <= 0:
+		return
+	var type_name: String = str(Job.Type.keys()[job.type])
+	ps.call("record_impact", pawn_id, impact_amount, type_name)
+
+
 ## `abandon` keeps the open job: construction reservations on tiles stay. Only
 ## a full `cancel` (no longer any job) releases them.
-func _on_world_tick(tick_number: int) -> void:
-    # JobManager is event-driven; no per-tick state changes required.
-    pass
+func _on_world_tick(_tick_number: int) -> void:
+	# JobManager is event-driven; no per-tick state changes required.
+	pass
 
 func _notify_path_reservation_released(j: Job) -> void:
 	if j == null or j.type != Job.Type.BUILD_WALL:

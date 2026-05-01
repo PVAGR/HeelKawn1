@@ -272,6 +272,58 @@ static func export_world_seed(file_path: String) -> bool:
 	return true
 
 
+static func _write_text_file(file_path: String, content: String) -> bool:
+	var file: FileAccess = FileAccess.open(file_path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(content)
+	file.close()
+	return true
+
+
+## One-click folder under [code]user://heelkawn_promotion_exports/[/code]: seed JSON, readable summary, full chronicle, bloodlines, artifacts.
+## Returns [code]ok[/code], [code]path[/code] ([code]user://…[/code]), and OS path in [code]absolute_path[/code] for Finder/Explorer.
+static func export_promotion_bundle() -> Dictionary:
+	var ts: int = int(Time.get_unix_time_from_system())
+	var rel_folder: String = "user://heelkawn_promotion_exports/export_%d" % ts
+	var abs_folder: String = ProjectSettings.globalize_path(rel_folder)
+	var mk_err: Error = DirAccess.make_dir_recursive_absolute(abs_folder)
+	if mk_err != OK and mk_err != ERR_ALREADY_EXISTS:
+		push_warning("[ExportSystem] promotion bundle mkdir failed: %s err=%d" % [abs_folder, mk_err])
+		return {"ok": false, "error": "mkdir %d" % mk_err, "path": rel_folder, "absolute_path": abs_folder}
+	var pawn_n: int = 0
+	var st: SceneTree = Engine.get_main_loop() as SceneTree
+	if st != null:
+		pawn_n = st.get_nodes_in_group("pawns").size()
+	var set_n: int = 0
+	if SettlementMemory != null:
+		set_n = SettlementMemory.get_settlements().size()
+	var rich: Dictionary = {
+		"schema": "heelkawn_promotion_world_seed/v1",
+		"export_unix_time": ts,
+		"world_seed": WorldRNG.current_seed() if WorldRNG != null else 0,
+		"tick_count": GameManager.tick_count if GameManager != null else 0,
+		"game_speed": GameManager.game_speed if GameManager != null else 1.0,
+		"is_paused": GameManager.is_paused if GameManager != null else false,
+		"pawn_count_live": pawn_n,
+		"settlement_count": set_n,
+		"world_memory_events": WorldMemory.event_count() if WorldMemory != null else 0,
+	}
+	var seed_path: String = rel_folder.path_join("world_seed.json")
+	var seed_file: FileAccess = FileAccess.open(seed_path, FileAccess.WRITE)
+	if seed_file == null:
+		return {"ok": false, "error": "open world_seed.json", "path": rel_folder, "absolute_path": abs_folder}
+	seed_file.store_string(JSON.stringify(rich, "\t"))
+	seed_file.close()
+	if WorldMemory != null:
+		_write_text_file(rel_folder.path_join("chronicle_summary.txt"), WorldMemory.build_readable_chronicle_summary(22))
+		export_chronicle(rel_folder.path_join("chronicle.json"))
+	export_bloodlines(rel_folder.path_join("bloodlines.json"))
+	export_artifacts(rel_folder.path_join("artifacts.json"))
+	print("[ExportSystem] Promotion bundle -> %s (OS: %s)" % [rel_folder, abs_folder])
+	return {"ok": true, "error": "", "path": rel_folder, "absolute_path": abs_folder}
+
+
 ## Export world chronicle (events from WorldMemory)
 static func export_chronicle(file_path: String) -> bool:
 	var export_data: Dictionary = {

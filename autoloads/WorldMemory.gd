@@ -741,6 +741,36 @@ func get_recent_event_summaries(max_items: int = 3) -> PackedStringArray:
 	return out
 
 
+## Plain-text chronicle for promotion, streams, or “what happened” UI. Deterministic given the same event log.
+func build_readable_chronicle_summary(max_tail_lines: int = 20) -> String:
+	var sb: PackedStringArray = PackedStringArray()
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	var wseed: int = WorldRNG.current_seed() if WorldRNG != null else 0
+	sb.append("HEELKAWN_CHRONICLE_SUMMARY")
+	sb.append("tick=%d  world_seed=%d  events_retained=%d" % [tick, wseed, _events.size()])
+	# Bucket counts (indexed types)
+	var counts: Dictionary = get_event_type_counts()
+	if not counts.is_empty():
+		var pairs: Array = []
+		for kt in counts.keys():
+			pairs.append({"k": str(kt), "n": int(counts[kt])})
+		pairs.sort_custom(func(a: Variant, b: Variant) -> bool: return int(a["n"]) > int(b["n"]))
+		sb.append("event_types_top:")
+		var limit: int = mini(14, pairs.size())
+		for i in range(limit):
+			sb.append("  • %s × %d" % [str(pairs[i]["k"]).replace("_", " "), int(pairs[i]["n"])])
+	sb.append("newest_facts_tail:")
+	var tail: PackedStringArray = get_recent_event_summaries(maxi(1, max_tail_lines))
+	for j in range(tail.size()):
+		sb.append("  • %s" % tail[j])
+	var out: String = ""
+	for si in range(sb.size()):
+		if si > 0:
+			out += "\n"
+		out += sb[si]
+	return out
+
+
 ## Latest tick of an [enum Kind.ANIMAL_DEATH] in [param rk] for [param species] (Animal enum), or -1.
 func get_last_animal_death_tick_in_region(rk: int, species: int) -> int:
 	var best: int = -1

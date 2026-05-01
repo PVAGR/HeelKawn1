@@ -53,6 +53,7 @@ var pawns: Array[Pawn] = []
 
 
 func _ready() -> void:
+	add_to_group("pawn_spawner")
 	if pawn_scene == null:
 		print("[ERROR] PawnSpawner: pawn_scene is null - check Main.tscn configuration")
 	else:

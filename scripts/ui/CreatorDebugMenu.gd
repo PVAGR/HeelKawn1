@@ -31,6 +31,8 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "soul_bundle", "label": "32 · Soul bundle (1–2 sim-year handoff paste)"},
 			{"id": "portable_character", "label": "33 · Portable character JSON (MMO / website handoff)"},
 			{"id": "creator_digest", "label": "34 · Creator session digest (plain + AI · one paste)"},
+			{"id": "chronicle_summary", "label": "36 · Readable chronicle summary (paste pack / streams)"},
+			{"id": "promotion_bundle", "label": "37 · Write promotion bundle (seed + summary + JSON → user://)"},
 			{"id": "calendar", "label": "01 · Calendar + day/night + checkpoints"},
 			{"id": "sim_diag", "label": "02 · GameManager sim_diag"},
 			{"id": "kernel", "label": "24 · KernelDiagnostic session summary"},
@@ -293,6 +295,10 @@ func _emit_report(report_id: String) -> void:
 			_report_portable_character()
 		"creator_digest":
 			_report_creator_session_digest()
+		"chronicle_summary":
+			_report_chronicle_summary()
+		"promotion_bundle":
+			_report_promotion_bundle()
 		_:
 			print("Unknown report_id=%s" % report_id)
 	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d END ===" % [report_id, tick])
@@ -1010,6 +1016,29 @@ func _creator_digest_plain_event_line(ev: Dictionary) -> String:
 			if typ.is_empty():
 				return ""
 			return "• (%s)" % typ
+
+
+func _report_chronicle_summary() -> void:
+	print("=== HEELKAWN_READABLE_CHRONICLE_SUMMARY BEGIN ===")
+	print(WorldMemory.build_readable_chronicle_summary(22))
+	print("=== HEELKAWN_READABLE_CHRONICLE_SUMMARY END ===")
+	print(
+			"[CHRONICLE_SUMMARY] hint: also F10 → 37 writes this plus JSON to user://heelkawn_promotion_exports/…"
+	)
+
+
+func _report_promotion_bundle() -> void:
+	var res: Dictionary = ExportSystem.export_promotion_bundle()
+	if bool(res.get("ok", false)):
+		print(
+				"[PROMOTION_BUNDLE] ok  user_path=%s  os_path=%s"
+				% [str(res.get("path", "")), str(res.get("absolute_path", ""))]
+		)
+		print(
+				"[PROMOTION_BUNDLE] files: world_seed.json chronicle_summary.txt chronicle.json bloodlines.json artifacts.json"
+		)
+	else:
+		print("[PROMOTION_BUNDLE] failed: %s" % str(res.get("error", "?")))
 
 
 func _report_playtest_bundle() -> void:

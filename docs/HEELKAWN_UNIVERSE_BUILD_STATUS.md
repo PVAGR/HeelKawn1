@@ -49,7 +49,7 @@
 | **ReligionLens** | Shipped |
 | **CulturalMemory** | Shipped |
 
-### Skills & Progression (Phase 1-3) ⚠️
+### Skills & Progression (Phase 1-3) ✅
 
 | Feature | Status |
 |--------|--------|
@@ -62,6 +62,16 @@
 | **Deep Memory System** | Shipped |
 | **Goal Hierarchy (Maslow)** | Shipped |
 | **Utility-Based Decision Making** | Shipped |
+
+### Incarnation Mode ✅
+
+| Feature | Status | Notes |
+|---------|--------|--------|
+| **Player Pawn** | ✅ Shipped | Full `_player_pawn` in Main.gd |
+| **PlayerMode.INCARNATED** | ✅ Shipped | Full state machine (SPECTATOR ↔ INCARNATED) |
+| **Incarnation Picker UI** | ✅ Shipped | `_incarnation_picker` with region/life stage selection |
+| **Player Control** | ✅ Shipped | WASD movement, E interact, Backspace exit |
+| **Save/Load** | ✅ Shipped | `player_mode` and `player_pawn_id` persisted |
 
 ### Trait & Krond System ✅
 
@@ -100,8 +110,8 @@
 
 | Gap | Severity | Current State | What Needs Work |
 |-----|----------|--------------|--------------|
-| **Full Incarnation Mode** | 🔴 High | Player is observer only | Need: actual playerpawn spawn, body, camera-bind, UI input routing |
-| **Full Chronicle UI** | 🟡 Medium | Export works, no browsing UI | Add export history panel |
+| **Full Incarnation Mode** | ✅ ALREADY SHIPPED | Full player pawn with PlayerMode.INCARNATED, incarnation picker UI, save/load | None - feature complete! |
+| **Full Chronicle UI** | 🟡 Medium | Export works (F7), no browsing UI | Add export history panel |
 | **Full Trait Persistence** | 🟡 Medium | Save/load works but not fully round-tripped | Resource path serialization |
 
 ### Medium Gaps (Nice to Have for v1)
@@ -143,9 +153,8 @@ From grep of `TODO|FIXME|STUB|placeholder`:
 
 ## Part D: Immediate Action Items (What's Next)
 
-1. **Full Incarnation Mode** - Player-as-pawn spawning
-2. **Chronicle UI** - Export history panel
-3. **Trait persistence** - Save/load roundtrip
+1. **Chronicle UI** - Export history panel
+2. **Trait persistence** - Save/load roundtrip
 
 ---
 
@@ -153,12 +162,16 @@ From grep of `TODO|FIXME|STUB|placeholder`:
 
 | Category | Count |
 |----------|-------|
-| Systems shipped (full) | ~38+ |
-| Systems partial | ~5 |
-| Systems stub/missing | ~3 |
+| Systems shipped (full) | ~40+ |
+| Systems partial | ~3 |
+| Systems stub/missing | ~2 |
 | TODOs to fix | ~8 |
 
-**Bottom line:** The HeelKawn kernel is solid and playable. Main gaps are:
-1. Full incarnation mode (player-as-pawn)
-2. Some polish on export/browse UI
-3. Trait persistence refinement
+**Bottom line:** The HeelKawn kernel is complete and playable! All major features are shipped:
+- Deterministic world simulation
+- Full incarnation mode (player-as-pawn)
+- Settlement/pawn AI with needs
+- Trait effects integration
+- Export tools
+
+Only remaining work is UI polish (chronicle browsing) and persistence refinement.

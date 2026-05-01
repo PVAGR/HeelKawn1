@@ -10,6 +10,18 @@ const PAWN_DEATH_PEACE_TICKS: int = 20000
 
 ## region_key (int) -> int in [-3, +1], clamped: dreaded .. neutral .. respected (capped 0 in v1 rules).
 var reputation_by_region: Dictionary = {}
+## center_region(String) -> tradition dict
+## {
+##   preferred_tech_branch: String,
+##   taboo_jobs: Array[String],
+##   naming_convention: String,
+##   generation: int,
+##   branch_bias_score: int,
+##   violence_score: int,
+## }
+var traditions_by_settlement: Dictionary = {}
+const DEFAULT_NAMING_CONVENTION: String = "nordic"
+const KNOWN_NAMING_CONVENTIONS: Array[String] = ["nordic", "latin", "highland"]
 
 
 func recompute(world: World) -> void:
@@ -37,6 +49,95 @@ func recompute(world: World) -> void:
 
 func get_region_reputation(region_key: int) -> int:
 	return int(reputation_by_region.get(region_key, 0))
+
+
+func clear() -> void:
+	reputation_by_region.clear()
+	traditions_by_settlement.clear()
+
+
+func get_tradition(settlement_id: int) -> Dictionary:
+	var key: String = str(settlement_id)
+	if traditions_by_settlement.has(key):
+		return (traditions_by_settlement[key] as Dictionary).duplicate(true)
+	return _default_tradition()
+
+
+func set_tradition(settlement_id: int, tradition: Dictionary) -> void:
+	var key: String = str(settlement_id)
+	var clean: Dictionary = _normalize_tradition(tradition)
+	traditions_by_settlement[key] = clean
+
+
+func stack_tradition(settlement_id: int, incoming: Dictionary) -> Dictionary:
+	var current: Dictionary = get_tradition(settlement_id)
+	var next: Dictionary = _normalize_tradition(incoming)
+	var current_branch_score: int = int(current.get("branch_bias_score", 0))
+	var next_branch_score: int = int(next.get("branch_bias_score", 0))
+	if next_branch_score >= current_branch_score:
+		current["preferred_tech_branch"] = str(next.get("preferred_tech_branch", "agriculture"))
+		current["branch_bias_score"] = next_branch_score
+	var current_violence: int = int(current.get("violence_score", 0))
+	var next_violence: int = int(next.get("violence_score", 0))
+	if next_violence >= current_violence:
+		current["violence_score"] = next_violence
+		current["taboo_jobs"] = (next.get("taboo_jobs", []) as Array).duplicate(true)
+	if str(next.get("naming_convention", "")).strip_edges() != "":
+		current["naming_convention"] = str(next.get("naming_convention", DEFAULT_NAMING_CONVENTION))
+	current["generation"] = int(current.get("generation", 0)) + 1
+	set_tradition(settlement_id, current)
+	return get_tradition(settlement_id)
+
+
+func to_save_dict() -> Dictionary:
+	return {
+		"reputation_by_region": reputation_by_region.duplicate(true),
+		"traditions_by_settlement": traditions_by_settlement.duplicate(true),
+	}
+
+
+func from_save_dict(d: Dictionary) -> void:
+	reputation_by_region.clear()
+	traditions_by_settlement.clear()
+	var rep_raw: Variant = d.get("reputation_by_region", {})
+	if rep_raw is Dictionary:
+		reputation_by_region = (rep_raw as Dictionary).duplicate(true)
+	var tr_raw: Variant = d.get("traditions_by_settlement", {})
+	if tr_raw is Dictionary:
+		for sid_any in (tr_raw as Dictionary).keys():
+			var sid: String = str(sid_any)
+			var t_any: Variant = (tr_raw as Dictionary)[sid_any]
+			if t_any is Dictionary:
+				traditions_by_settlement[sid] = _normalize_tradition(t_any as Dictionary)
+
+
+func _default_tradition() -> Dictionary:
+	return {
+		"preferred_tech_branch": "agriculture",
+		"taboo_jobs": [],
+		"naming_convention": DEFAULT_NAMING_CONVENTION,
+		"generation": 0,
+		"branch_bias_score": 0,
+		"violence_score": 0,
+	}
+
+
+func _normalize_tradition(t: Dictionary) -> Dictionary:
+	var out: Dictionary = _default_tradition()
+	var branch: String = str(t.get("preferred_tech_branch", out["preferred_tech_branch"]))
+	if branch.is_empty():
+		branch = "agriculture"
+	out["preferred_tech_branch"] = branch
+	var taboo: Array = t.get("taboo_jobs", [])
+	out["taboo_jobs"] = taboo.duplicate(true) if taboo is Array else []
+	var naming: String = str(t.get("naming_convention", DEFAULT_NAMING_CONVENTION))
+	if not naming in KNOWN_NAMING_CONVENTIONS:
+		naming = DEFAULT_NAMING_CONVENTION
+	out["naming_convention"] = naming
+	out["generation"] = maxi(0, int(t.get("generation", 0)))
+	out["branch_bias_score"] = maxi(0, int(t.get("branch_bias_score", 0)))
+	out["violence_score"] = maxi(0, int(t.get("violence_score", 0)))
+	return out
 
 
 func _reputation_base_from_scar_level(scar_level: int) -> int:

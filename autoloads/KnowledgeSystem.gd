@@ -26,6 +26,8 @@ const KNOWLEDGE_DEGRADATION_INTERVAL_TICKS: int = 1000
 const KNOWLEDGE_DEGRADATION_PHASE_OFFSET_TICKS: int = 127
 const BASE_DISCOVERY_RESEARCH_POINTS: int = 3
 const BASE_TEACHING_RESEARCH_POINTS: int = 2
+const RESEARCH_POINT_ACCUM_INTERVAL_TICKS: int = 300
+const RESEARCH_POINT_ACCUM_PHASE_OFFSET_TICKS: int = 61
 
 ## Knowledge carriers: pawn_id -> Array[KnowledgeType]
 var knowledge_carriers: Dictionary = {}
@@ -55,6 +57,8 @@ func _initialize_degradation() -> void:
 func _on_game_tick(tick: int) -> void:
 	if GameManager.periodic_phase_due(tick, KNOWLEDGE_DEGRADATION_INTERVAL_TICKS, KNOWLEDGE_DEGRADATION_PHASE_OFFSET_TICKS):
 		_update_knowledge_degradation()
+	if GameManager.periodic_phase_due(tick, RESEARCH_POINT_ACCUM_INTERVAL_TICKS, RESEARCH_POINT_ACCUM_PHASE_OFFSET_TICKS):
+		_accrue_research_points_from_knowledge_carriers()
 
 # === Knowledge Carrier Management ===
 
@@ -402,18 +406,7 @@ func spend_research_points(settlement_id: int, amount: int, tech_id: String = ""
 func get_researchable_techs(settlement_id: int) -> Array:
 	if TechnologySystem == null or not TechnologySystem.has_method("get_available_research"):
 		return []
-	var available: Array = TechnologySystem.get_available_research(settlement_id)
-	var points: int = get_research_points(settlement_id)
-	var out: Array = []
-	for tech_id_any in available:
-		var tech_id: String = str(tech_id_any)
-		if not TechnologySystem.TECH_TREE.has(tech_id):
-			continue
-		var node: Dictionary = TechnologySystem.TECH_TREE[tech_id] as Dictionary
-		var cost: int = int(node.get("cost", 0))
-		if points >= cost:
-			out.append(tech_id)
-	return out
+	return TechnologySystem.get_available_research(settlement_id)
 
 
 func _add_research_points_for_pawn(pawn_id: int, amount: int, reason: String) -> void:
@@ -445,3 +438,50 @@ func _settlement_id_for_pawn(pawn_id: int) -> int:
 		var rk: int = WorldMemory._region_key(pos.x, pos.y)
 		return SettlementMemory.get_center_region_for_region(rk)
 	return -1
+
+
+func _accrue_research_points_from_knowledge_carriers() -> void:
+	var counts_by_settlement: Dictionary = _knowledge_carrier_counts_by_settlement()
+	for sid_key in counts_by_settlement.keys():
+		var carrier_count: int = int(counts_by_settlement.get(sid_key, 0))
+		if carrier_count <= 0:
+			continue
+		# Deterministic baseline: every 2 carriers generate +1 point per accrual step, min 1.
+		var gain: int = maxi(1, int(floor(float(carrier_count) / 2.0)))
+		add_research_points(int(str(sid_key)), gain, "knowledge_carriers")
+
+
+func _knowledge_carrier_counts_by_settlement() -> Dictionary:
+	var out: Dictionary = {}
+	if SettlementMemory == null:
+		return out
+	var main_loop: MainLoop = Engine.get_main_loop()
+	if main_loop == null or not (main_loop is SceneTree):
+		return out
+	var tree: SceneTree = main_loop as SceneTree
+	var carriers_present: Dictionary = {}
+	for n in tree.get_nodes_in_group("pawns"):
+		if n == null or not is_instance_valid(n):
+			continue
+		if not n.has_method("get"):
+			continue
+		var data_v: Variant = n.get("data")
+		if data_v == null:
+			continue
+		var pid: int = int(data_v.id)
+		if not knowledge_carriers.has(pid):
+			continue
+		var held: Array = knowledge_carriers[pid] as Array
+		if held.is_empty():
+			continue
+		var pos: Vector2i = data_v.tile_pos
+		var rk: int = WorldMemory._region_key(pos.x, pos.y)
+		var settlement_id: int = SettlementMemory.get_center_region_for_region(rk)
+		if settlement_id < 0:
+			continue
+		carriers_present[pid] = settlement_id
+	for pid_any in carriers_present.keys():
+		var sid: int = int(carriers_present[pid_any])
+		var key: String = str(sid)
+		out[key] = int(out.get(key, 0)) + 1
+	return out

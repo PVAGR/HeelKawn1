@@ -835,23 +835,34 @@ func _advance_technology() -> void:
 		researchable = KnowledgeSystem.call("get_researchable_techs", settlement_id)
 	if researchable.is_empty():
 		return
-	var cheapest: String = ""
-	var cheapest_cost: int = 1_000_000
+	var preferred_branch: String = ""
+	if CulturalMemory != null and CulturalMemory.has_method("get_tradition"):
+		var trad_v: Variant = CulturalMemory.call("get_tradition", settlement_id)
+		if trad_v is Dictionary:
+			preferred_branch = str((trad_v as Dictionary).get("preferred_tech_branch", "")).to_lower()
+	var best: String = ""
+	var best_score: int = -1_000_000
 	for tech_any in researchable:
 		var tech_id: String = str(tech_any)
 		if not TechnologySystem.TECH_TREE.has(tech_id):
 			continue
 		var node: Dictionary = TechnologySystem.TECH_TREE[tech_id] as Dictionary
 		var cost: int = int(node.get("cost", 0))
-		if cost < cheapest_cost or (cost == cheapest_cost and tech_id < cheapest):
-			cheapest_cost = cost
-			cheapest = tech_id
-	if cheapest.is_empty():
+		var score: int = -cost
+		if not preferred_branch.is_empty():
+			var tech_lc: String = tech_id.to_lower()
+			var effect_lc: String = str(node.get("effect", "")).to_lower()
+			if tech_lc.find(preferred_branch) >= 0 or effect_lc.find(preferred_branch) >= 0:
+				score += 1000
+		if score > best_score or (score == best_score and tech_id < best):
+			best_score = score
+			best = tech_id
+	if best.is_empty():
 		return
-	TechnologySystem.call("set_active_research", settlement_id, cheapest)
-	var researched: bool = bool(TechnologySystem.call("research_tech", cheapest, settlement_id))
+	TechnologySystem.call("set_active_research", settlement_id, best)
+	var researched: bool = bool(TechnologySystem.call("research_tech", best, settlement_id))
 	if researched:
-		historical_events.append("Researched technology: %s" % cheapest)
+		historical_events.append("Researched technology: %s" % best)
 
 func _update_government_type() -> void:
 	# Government evolves with population and complexity

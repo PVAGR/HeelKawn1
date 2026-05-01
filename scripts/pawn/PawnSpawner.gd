@@ -18,6 +18,22 @@ const FIRST_NAMES: Array[String] = [
 	"Osric", "Petra", "Quinn", "Rhea", "Silas", "Tess", "Ulric",
 	"Vera", "Wren", "Xara", "Yorick", "Zella",
 ]
+const FIRST_NAMES_NORDIC: Array[String] = [
+	"Aldric", "Brenna", "Cormac", "Dena", "Elric", "Fiona", "Garrick",
+	"Hilda", "Ivor", "Jora", "Kenan", "Lira", "Morven", "Nessa",
+	"Osric", "Petra", "Quinn", "Rhea", "Silas", "Tess", "Ulric",
+	"Vera", "Wren", "Xara", "Yorick", "Zella",
+]
+const FIRST_NAMES_LATIN: Array[String] = [
+	"Marcus", "Livia", "Titus", "Claudia", "Lucius", "Aurelia", "Gaius",
+	"Sabina", "Flavius", "Julia", "Caius", "Octavia", "Cassius", "Drusa",
+	"Felix", "Marcia", "Quintus", "Rufina", "Severus", "Valeria",
+]
+const FIRST_NAMES_HIGHLAND: Array[String] = [
+	"Alastair", "Brigid", "Callum", "Deirdre", "Ewan", "Fiona", "Gregor",
+	"Isla", "Kieran", "Moira", "Niall", "Rowan", "Sorcha", "Torin",
+	"Una", "Keir", "Maeve", "Tavish", "Iona", "Brodie",
+]
 
 const PAWN_COLORS: Array[Color] = [
 	Color("#29b6f6"),  # light blue
@@ -204,7 +220,17 @@ func spawn_generational_pawn(
 		if parent_data != null:
 			parent_data.ensure_soul_identity()
 	var data := PawnData.new()
-	data.display_name = _pick_name_deterministic()
+	var naming_convention: String = "nordic"
+	var taboo_jobs: Array = []
+	var preferred_branch: String = ""
+	if not settlement_context.is_empty():
+		var tradition_v: Variant = settlement_context.get("tradition", {})
+		if tradition_v is Dictionary:
+			var tradition: Dictionary = tradition_v as Dictionary
+			naming_convention = str(tradition.get("naming_convention", "nordic")).to_lower()
+			taboo_jobs = (tradition.get("taboo_jobs", []) as Array).duplicate(true)
+			preferred_branch = str(tradition.get("preferred_tech_branch", "")).to_lower()
+	data.display_name = _pick_name_deterministic(naming_convention)
 	data.age = 20 + (int(tick_seed) % 5)
 	data.gender = PawnData.Gender.MALE if (int(tick_seed) + pawns.size()) % 2 == 0 else PawnData.Gender.FEMALE
 	data.tile_pos = tile
@@ -228,6 +254,15 @@ func spawn_generational_pawn(
 			data.settlement_reputation[str(center_region)] = rep
 		if not culture_name.is_empty():
 			data.cultural_affinity[culture_name] = 100.0
+	var taboo_job_names: Array[String] = []
+	for j_any in taboo_jobs:
+		var j_str: String = str(j_any).strip_edges().to_upper()
+		if not j_str.is_empty() and not taboo_job_names.has(j_str):
+			taboo_job_names.append(j_str)
+	data.set_meta("tradition_taboo_jobs", taboo_job_names)
+	data.set_meta("tradition_preferred_tech_branch", preferred_branch)
+	data.set_meta("tradition_mood_bonus", 4.0)
+	data.set_meta("tradition_mood_penalty", -6.0)
 	var pawn: Pawn = pawn_scene.instantiate() as Pawn
 	pawn.bind(data, world.tile_to_world(tile), world)
 	add_child(pawn)
@@ -290,15 +325,26 @@ func spawn_pawn_at(
 	return spawn_pawn_at_tile(world, tile, tick_seed, settlement_context, birth_kind)
 
 
-func _pick_name_deterministic() -> String:
+func _pick_name_deterministic(naming_convention: String = "nordic") -> String:
 	var used: Dictionary = {}
 	for p in pawns:
 		if p != null and p.data != null and p.data.display_name != "":
 			used[p.data.display_name] = true
-	for n in FIRST_NAMES:
+	var pool: Array[String] = _name_pool_for_convention(naming_convention)
+	for n in pool:
 		if not used.has(n):
 			return n
 	return "Settler-%d" % pawns.size()
+
+
+func _name_pool_for_convention(naming_convention: String) -> Array[String]:
+	match naming_convention.to_lower():
+		"latin":
+			return FIRST_NAMES_LATIN
+		"highland":
+			return FIRST_NAMES_HIGHLAND
+		_:
+			return FIRST_NAMES_NORDIC
 
 
 func spawn_pawn() -> void:
@@ -418,6 +464,7 @@ func spawn_child_pawn(
 	data.parent_a_id = parent_a.id
 	data.parent_b_id = parent_b.id
 	var inbreeding_penalty: float = 0.0
+	var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
 	if bloodline_sys != null and bloodline_sys.has_method("get_inbreeding_penalty"):
 		inbreeding_penalty = float(bloodline_sys.call("get_inbreeding_penalty", int(parent_a.id), int(parent_b.id)))
 	if inbreeding_penalty > 0.0:

@@ -1824,6 +1824,24 @@ func _tick_idle() -> void:
 			# the closest one in _begin_fetching_material.
 			if StockpileManager.total_count_of(mats.item) < mats.qty:
 				return false
+		# === Check cultural style material availability ===
+		if not mats.is_empty():
+			var settlement_id: int = int(from_center_region) if from_center_region >= 0 else -1
+			if settlement_id >= 0 and CulturalStyleManager != null:
+				var style_material: int = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, j.type))
+				if style_material != mats.item:
+					# Check if we have the style-specific material instead
+					if StockpileManager.total_count_of(style_material) < mats.qty:
+						return false
+		# === End style material check ===
+		# === CHECK TECH REQUIREMENT ===
+		# Only allow job claiming if the settlement has researched required technology
+		if TechnologySystem != null:
+			var settle_center: int = int(from_center_region)
+			if settle_center >= 0:
+				if not bool(TechnologySystem.call("can_settle_perform_job_type", settle_center, int(j.type))):
+					return false
+		# === END TECH CHECK ===
 		return true
 	if food_emergency:
 		# Either harvest type fills the pantry; let pawns pick whichever is
@@ -2380,6 +2398,7 @@ func _calculate_work_efficiency() -> float:
 	# Improvised tool proxy from carried material (no separate pickaxe/axe items in v1).
 	if _current_job != null and data != null:
 		var jt: int = _current_job.type
+		_apply_tradition_mood_for_job(jt)
 		if jt == Job.Type.MINE or jt == Job.Type.MINE_WALL:
 			if data.is_carrying() and (data.carrying == Item.Type.STONE or data.carrying == Item.Type.WOOD):
 				efficiency *= 1.04
@@ -2395,6 +2414,26 @@ func _calculate_work_efficiency() -> float:
 				efficiency *= 0.93
 	
 	return clamp(efficiency, 0.1, 2.0)
+
+
+func _apply_tradition_mood_for_job(job_type: int) -> void:
+	if data == null:
+		return
+	if not data.has_meta("tradition_taboo_jobs"):
+		return
+	var taboo_v: Variant = data.get_meta("tradition_taboo_jobs", [])
+	if not (taboo_v is Array):
+		return
+	var taboo: Array = taboo_v as Array
+	var bonus: float = float(data.get_meta("tradition_mood_bonus", 4.0))
+	var penalty: float = float(data.get_meta("tradition_mood_penalty", -6.0))
+	var job_name: String = str(Job.Type.keys()[job_type]).to_upper()
+	var mood_delta: float = bonus
+	for taboo_any in taboo:
+		if str(taboo_any).to_upper() == job_name:
+			mood_delta = penalty
+			break
+	data.mood = clampf(data.mood + mood_delta * 0.01, 0.0, 100.0)
 
 
 func _tick_eating() -> void:
@@ -2523,6 +2562,11 @@ func _begin_job(job: Job) -> void:
 	if not mats.is_empty():
 		var item_type: int = mats.item
 		var need_qty: int = mats.qty
+		# === Check for cultural style material override ===
+		var settlement_id: int = int(from_center_region) if from_center_region >= 0 else -1
+		if settlement_id >= 0 and CulturalStyleManager != null:
+			item_type = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, job.type))
+		# === End style check ===
 		var have: int = data.carrying_qty if data.carrying == item_type else 0
 		if have < need_qty:
 			_begin_fetching_material(item_type, need_qty)
@@ -2896,6 +2940,13 @@ func _finish_build(job: Job) -> void:
 		return
 	var item_type: int = mats.item
 	var need_qty: int = mats.qty
+	# === Override material based on settlement's cultural style ===
+	var settlement_id: int = int(from_center_region) if from_center_region >= 0 else -1
+	if settlement_id >= 0 and CulturalStyleManager != null:
+		item_type = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, job.type))
+		if GameManager.verbose_logs():
+			print("[Culture] %s building with material %d (style override) @(%d,%d)" % [data.display_name, item_type, job.tile.x, job.tile.y])
+	# === End style material override ===
 	if data.carrying != item_type or data.carrying_qty < need_qty:
 		if GameManager.verbose_logs():
 			print("[Pawn] %s missing material at completion -- %s not built @(%d,%d)" %

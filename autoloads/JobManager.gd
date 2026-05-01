@@ -175,6 +175,20 @@ func claim_by_id_for(pawn: Pawn, job_id: int) -> Job:
 			continue
 		if pd.has_method("allows_job_type") and not pd.allows_job_type(j.type):
 			return null
+		# === CHECK TECH REQUIREMENT ===
+		var settlement_id: int = -1
+		if pd.has_method("get_tile_pos"):
+			var tile_pos: Vector2i = pd.call("get_tile_pos")
+			var rk: int = WorldMemory._region_key(int(tile_pos.x), int(tile_pos.y))
+			settlement_id = SettlementMemory.get_center_region_for_region(rk)
+		if settlement_id < 0 and j.has_method("get_work_tile"):
+			var work_tile: Vector2i = j.call("get_work_tile")
+			var rk: int = WorldMemory._region_key(int(work_tile.x), int(work_tile.y))
+			settlement_id = SettlementMemory.get_center_region_for_region(rk)
+		if settlement_id >= 0 and TechnologySystem != null:
+			if not bool(TechnologySystem.call("can_settle_perform_job_type", settlement_id, int(j.type))):
+				return null
+		# === END TECH CHECK ===
 		_open.remove_at(i)
 		_claimed.append(j)
 		j.state = Job.State.CLAIMED

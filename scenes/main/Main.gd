@@ -5292,6 +5292,7 @@ func _build_save_dict() -> Dictionary:
 		"myth": MythMemory.to_save_dict(),
 		"sacred": SacredMemory.to_save_dict(),
 		"chronicle": ChronicleLog.to_save_dict(),
+		"cultural_memory": CulturalMemory.to_save_dict(),
 		"player_intent_queue": PlayerIntentQueue.to_save_dict(),
 		"faction_registry": FactionRegistry.to_save_dict(),
 		"last_generation_tick": _last_generation_tick,
@@ -5387,6 +5388,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 	MythMemory.from_save_dict(s.get("myth", {}))
 	SacredMemory.from_save_dict(s.get("sacred", {}))
 	ChronicleLog.from_save_dict(s.get("chronicle", {}))
+	CulturalMemory.from_save_dict(s.get("cultural_memory", {}))
 	WorldMeaning.recompute()
 	WorldPersistence.from_save_dict(s.get("world_persistence", {}))
 	WorldPersistence.recompute()

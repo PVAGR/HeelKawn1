@@ -1,94 +1,151 @@
 extends Control
+## Speed control UI for the TickManager.
+## Provides buttons for Pause, 1x, 4x, 16x, 64x speed settings.
+## Connects to TickManager singleton for speed control.
 
-## Speed control UI for the TickManager system.
-## Provides buttons for Pause, 1x, 4x, 16x, 64x speed multipliers.
+signal speed_changed(speed_multiplier: float)
+signal pause_toggled(is_paused: bool)
 
-signal speed_changed(multiplier: float)
+@onready var TickMgr = get_node_or_null("/root/TickManager")
 
-@onready var tick_manager = get_node_or_null("/root/TickManager")
+# UI Elements (to be set up in scene or _ready)
+var pause_button: Button
+var speed_buttons: Array[Button] = []
+var current_speed_label: Label
+
+# Speed options matching TickManager.SPEED_MULTIPLIERS
+const SPEEDS: Array[float] = [0.5, 1.0, 4.0, 16.0, 64.0]
+const SPEED_LABELS: Array[String] = ["0.5x", "1x", "4x", "16x", "64x"]
+
+var selected_speed_index: int = 1  # Default to 1x (index 1)
+
 
 func _ready() -> void:
-	# Connect buttons if they exist as children
-	_setup_buttons()
+	# Create UI if not already present
+	_create_ui()
+	# Connect to TickManager if available
+	_connect_to_tick_manager()
 
 
-func _setup_buttons() -> void:
-	if tick_manager == null:
-		push_warning("SpeedControlUI: TickManager not found as autoload")
-		return
+func _create_ui() -> void:
+	# Set up container
+	var hbox: HBoxContainer = HBoxContainer.new()
+	hbox.name = "SpeedControlContainer"
+	add_child(hbox)
+	
+	# Pause button
+	pause_button = Button.new()
+	pause_button.name = "PauseButton"
+	pause_button.text = "Pause"
+	pause_button.pressed.connect(_on_pause_pressed)
+	hbox.add_child(pause_button)
+	
+	# Spacer
+	var spacer: Control = Control.new()
+	spacer.custom_minimum_size = Vector2(10, 0)
+	hbox.add_child(spacer)
+	
+	# Speed buttons
+	for i in range(SPEEDS.size()):
+		var btn: Button = Button.new()
+		btn.name = "SpeedButton_%d" % i
+		btn.text = SPEED_LABELS[i]
+		btn.pressed.connect(_on_speed_pressed.bind(i))
+		speed_buttons.append(btn)
+		hbox.add_child(btn)
+	
+	# Current speed label
+	var label_spacer: Control = Control.new()
+	label_spacer.custom_minimum_size = Vector2(10, 0)
+	hbox.add_child(label_spacer)
+	
+	current_speed_label = Label.new()
+	current_speed_label.name = "SpeedLabel"
+	current_speed_label.text = "Speed: 1x"
+	hbox.add_child(current_speed_label)
+	
+	# Set initial selection
+	_update_button_highlight()
 
-	# Look for buttons by name
-	var pause_btn = get_node_or_null("PauseButton")
-	var speed_1x_btn = get_node_or_null("Speed1xButton")
-	var speed_4x_btn = get_node_or_null("Speed4xButton")
-	var speed_16x_btn = get_node_or_null("Speed16xButton")
-	var speed_64x_btn = get_node_or_null("Speed64xButton")
 
-	if pause_btn and pause_btn is Button:
-		pause_btn.pressed.connect(_on_pause_pressed)
-
-	if speed_1x_btn and speed_1x_btn is Button:
-		speed_1x_btn.pressed.connect(_on_speed_1x_pressed)
-
-	if speed_4x_btn and speed_4x_btn is Button:
-		speed_4x_btn.pressed.connect(_on_speed_4x_pressed)
-
-	if speed_16x_btn and speed_16x_btn is Button:
-		speed_16x_btn.pressed.connect(_on_speed_16x_pressed)
-
-	if speed_64x_btn and speed_64x_btn is Button:
-		speed_64x_btn.pressed.connect(_on_speed_64x_pressed)
+func _connect_to_tick_manager() -> void:
+	if TickMgr == null:
+		TickMgr = get_node_or_null("/root/TickManager")
+	if TickMgr != null:
+		# Sync initial state
+		selected_speed_index = TickMgr.speed_index
+		_update_button_highlight()
+		_update_pause_button()
 
 
 func _on_pause_pressed() -> void:
-	if tick_manager == null:
+	if TickMgr == null:
 		return
-	if tick_manager.is_paused():
-		tick_manager.resume()
+	TickMgr.toggle_pause()
+	_update_pause_button()
+	pause_toggled.emit(TickMgr.is_paused)
+
+
+func _on_speed_pressed(speed_idx: int) -> void:
+	if TickMgr == null:
+		return
+	TickMgr.set_speed_index(speed_idx)
+	selected_speed_index = speed_idx
+	_update_button_highlight()
+	_update_speed_label()
+	speed_changed.emit(TickMgr.get_speed_multiplier())
+
+
+func _update_button_highlight() -> void:
+	for i in range(speed_buttons.size()):
+		if i == selected_speed_index:
+			speed_buttons[i].modulate = Color.YELLOW
+		else:
+			speed_buttons[i].modulate = Color.WHITE
+
+
+func _update_pause_button() -> void:
+	if TickMgr == null:
+		return
+	if TickMgr.is_paused:
+		pause_button.text = "Resume"
 	else:
-		tick_manager.pause()
+		pause_button.text = "Pause"
 
 
-func _on_speed_1x_pressed() -> void:
-	_set_speed(TickManager.SpeedPreset.SPEED_1X)
-
-
-func _on_speed_4x_pressed() -> void:
-	_set_speed(TickManager.SpeedPreset.SPEED_4X)
-
-
-func _on_speed_16x_pressed() -> void:
-	_set_speed(TickManager.SpeedPreset.SPEED_16X)
-
-
-func _on_speed_64x_pressed() -> void:
-	_set_speed(TickManager.SpeedPreset.SPEED_64X)
-
-
-func _set_speed(preset: int) -> void:
-	if tick_manager == null:
+func _update_speed_label() -> void:
+	if TickMgr == null or current_speed_label == null:
 		return
-	tick_manager.set_speed(preset)
-	speed_changed.emit(_get_multiplier_for_preset(preset))
+	current_speed_label.text = "Speed: %s" % SPEED_LABELS[selected_speed_index]
 
 
-func _get_multiplier_for_preset(preset: int) -> float:
-	match preset:
-		TickManager.SpeedPreset.SPEED_0_5X:
-			return 0.5
-		TickManager.SpeedPreset.SPEED_1X:
-			return 1.0
-		TickManager.SpeedPreset.SPEED_4X:
-			return 4.0
-		TickManager.SpeedPreset.SPEED_16X:
-			return 16.0
-		TickManager.SpeedPreset.SPEED_64X:
-			return 64.0
-	return 1.0
-
-
-## Public method to set speed from external UI
-func set_speed_multiplier(multiplier: float) -> void:
-	if tick_manager == null:
+## Public method to set speed (can be called by other scripts)
+func set_speed(multiplier: float) -> void:
+	if TickMgr == null:
 		return
-	tick_manager.set_speed_multiplier(multiplier)
+	TickMgr.set_speed(multiplier)
+	selected_speed_index = TickMgr.speed_index
+	_update_button_highlight()
+	_update_speed_label()
+
+
+## Public method to pause/resume
+func pause_game() -> void:
+	if TickMgr == null:
+		return
+	TickMgr.pause()
+	_update_pause_button()
+
+
+func resume_game() -> void:
+	if TickMgr == null:
+		return
+	TickMgr.resume()
+	_update_pause_button()
+
+
+func toggle_pause_game() -> void:
+	if TickMgr == null:
+		return
+	TickMgr.toggle_pause()
+	_update_pause_button()

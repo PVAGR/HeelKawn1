@@ -15,6 +15,9 @@ class SettlementAIShim:
 		settlement_name = name
 		location = pos
 
+	func _on_world_tick(tick_number: int) -> void:
+		update()
+
 	func update() -> void:
 		pass
 
@@ -65,17 +68,15 @@ var _last_settlement_ai_update_tick: int = -1
 
 func _ready() -> void:
 	add_to_group("tickable")
-	## Connect to TickManager for deterministic ticks
-	if has_node("/root/TickManager"):
-		var tick_mgr = get_node("/root/TickManager")
-		if tick_mgr != null and tick_mgr.has_signal("tick_processed"):
-			tick_mgr.tick_processed.connect(_on_world_tick)
-	## Fallback: use GameManager for backward compatibility
-	elif GameManager != null:
-		GameManager.game_tick.connect(_on_game_tick)
-	last_update_tick = GameManager.tick_count
-	_last_world_ai_update_tick = GameManager.tick_count
-	_last_settlement_ai_update_tick = GameManager.tick_count
+	## TickManager will call _on_world_tick() directly on "tickable" nodes
+	## No need to connect to signal - avoids double-processing
+	## Fallback: use GameManager for backward compatibility (if TickManager not available)
+	if not has_node("/root/TickManager"):
+		if GameManager != null:
+			GameManager.game_tick.connect(_on_world_tick)
+		last_update_tick = GameManager.tick_count
+		_last_world_ai_update_tick = GameManager.tick_count
+		_last_settlement_ai_update_tick = GameManager.tick_count
 	# Initialize advanced neural network matrix systems
 	_initialize_neural_network_matrix()
 	_initialize_learning_algorithms()
@@ -748,7 +749,7 @@ func _extract_event_features(world_state: Dictionary) -> Array[float]:
 	return features
 
 
-func _on_game_tick(tick: int) -> void:
+func _on_world_tick(tick: int) -> void:
 	if not enabled:
 		return
 	

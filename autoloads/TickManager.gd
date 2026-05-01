@@ -40,7 +40,12 @@ func _call_tick_on_tickables(tick: int) -> void:
 	var tree: SceneTree = get_tree()
 	if tree == null:
 		return
-	for node in tree.get_nodes_in_group("tickable"):
+	var tickables: Array = tree.get_nodes_in_group("tickable")
+	# Sort deterministically by node path for identical order every run
+	tickables.sort_custom(func(a: Node, b: Node) -> bool:
+		return str(a.get_path()) < str(b.get_path())
+	)
+	for node in tickables:
 		if node != null and is_instance_valid(node) and node.has_method("_on_world_tick"):
 			node._on_world_tick(tick)
 

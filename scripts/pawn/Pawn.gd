@@ -751,7 +751,6 @@ func _ready() -> void:
 	_action_popup = $ActionPopup
 	add_to_group("tickable")
 	call_deferred("_pawn_connect_sim_tick_deferred")
-	add_to_group("tickable")
 
 
 func _pawn_connect_sim_tick_deferred() -> void:

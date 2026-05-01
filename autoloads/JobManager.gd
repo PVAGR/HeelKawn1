@@ -17,11 +17,6 @@ func _ready() -> void:
 	add_to_group("tickable")
 
 
-func _on_world_tick(tick_number: int) -> void:
-	# JobManager is event-driven (job_posted, job_claimed, etc.)
-	# Add any periodic tick-based logic here if needed in the future.
-	pass
-
 
 
 
@@ -46,9 +41,6 @@ var cancelled_count: int = 0
 
 const MAX_OPEN_JOBS_DEFAULT: int = 256
 const MAX_OPEN_JOBS_LIGHTWEIGHT: int = 96
-
-func _ready() -> void:
-    add_to_group("tickable")
 
 
 func _bump_jobs_data_generation() -> void:

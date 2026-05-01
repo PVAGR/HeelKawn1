@@ -107,6 +107,8 @@ var _social_label: Label = null
 var _identity_label: Label = null
 var _settlement_label: Label = null
 var _action_skills_label: Label = null
+var _tier_label: Label = null
+var _tier_bar: ProgressBar = null
 var _portrait_cells: Array[ColorRect] = []
 var _poll_accum_sec: float = 0.0
 var _last_ui_signature: String = ""
@@ -224,6 +226,38 @@ func _build_ui() -> void:
 	_subtitle_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_col.add_child(_subtitle_label)
 	_header_row.add_child(name_col)
+
+	# Tier indicator (small bar like need indicators)
+	var tier_col := VBoxContainer.new()
+	tier_col.name = "TierColumn"
+	tier_col.size_flags_horizontal = Control.SIZE_SHRINK_END
+	tier_col.add_theme_constant_override("separation", 2)
+	_header_row.add_child(tier_col)
+
+	var tier_header := _make_label("TIER", FONT_SMALL, ACCENT)
+	tier_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tier_col.add_child(tier_header)
+
+	_tier_bar = ProgressBar.new()
+	_tier_bar.min_value = 0.0
+	_tier_bar.max_value = 100.0
+	_tier_bar.value = 0.0
+	_tier_bar.show_percentage = false
+	_tier_bar.custom_minimum_size = Vector2(40, 8)
+	_tier_bar.size_flags_horizontal = Control.SIZE_SHRINK_END
+	var tier_fill := StyleBoxFlat.new()
+	tier_fill.bg_color = Color8(255, 209, 102)
+	tier_fill.set_corner_radius_all(2)
+	_tier_bar.add_theme_stylebox_override("fill", tier_fill)
+	var tier_bg := StyleBoxFlat.new()
+	tier_bg.bg_color = Color(0.12, 0.13, 0.16, 1.0)
+	tier_bg.set_corner_radius_all(2)
+	_tier_bar.add_theme_stylebox_override("background", tier_bg)
+	tier_col.add_child(_tier_bar)
+
+	_tier_label = _make_label("1", FONT_SMALL, TEXT_BRIGHT)
+	_tier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tier_col.add_child(_tier_label)
 
 	# Current activity (compact)
 	_state_label = _make_label("", FONT_BODY, ACCENT)
@@ -655,6 +689,18 @@ func _refresh() -> void:
 		else:
 			_subtitle_label.text = "%s · %s · bias %s" % [arc_bits, prof, hk]
 		_refresh_portrait_strip(d)
+
+	# Update tier indicator
+	if _tier_bar != null and _tier_label != null:
+		var tier: int = _level_to_tier(d.level)
+		var progress: float = _tier_progress(d.level)
+		_tier_bar.value = clampf(progress, 0.0, 100.0)
+		_tier_label.text = "T%d" % tier
+		# Update tier bar color based on tier
+		var tier_fill := StyleBoxFlat.new()
+		tier_fill.bg_color = _tier_color(tier)
+		tier_fill.set_corner_radius_all(2)
+		_tier_bar.add_theme_stylebox_override("fill", tier_fill)
 	
 	_state_label.text = _pawn.describe_state()
 	
@@ -1106,3 +1152,22 @@ static func _hair_style_label(hair_style: int) -> String:
 			return "Bun"
 		_:
 			return "Short hair"
+
+## Calculate tier (1-5) from pawn level. Each tier spans 5 levels.
+static func _level_to_tier(level: int) -> int:
+	return clampi((level - 1) / 5 + 1, 1, 5)
+
+## Calculate progress (0-100) within current tier.
+static func _tier_progress(level: int) -> float:
+	var tier_start: int = (_level_to_tier(level) - 1) * 5 + 1
+	return float(level - tier_start) / 4.0 * 100.0
+
+## Get tier color (golden for higher tiers).
+static func _tier_color(tier: int) -> Color:
+	match tier:
+		1: return Color8(180, 180, 180)  # Gray
+		2: return Color8(76, 175, 80)    # Green
+		3: return Color8(33, 150, 243)    # Blue
+		4: return Color8(156, 39, 176)    # Purple
+		5: return Color8(255, 193, 7)     # Gold
+		_: return Color8(180, 180, 180)

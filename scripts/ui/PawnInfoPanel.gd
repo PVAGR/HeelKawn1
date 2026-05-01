@@ -98,6 +98,7 @@ var _player_context_pawn_id: int = -1
 var _player_context_picker_visible: bool = false
 var _traits_label: Label = null
 var _lineage_label: Label = null
+var _simple_lineage_label: Label = null
 var _appearance_label: Label = null
 var _mood_status_label: Label = null
 var _crisis_level_label: Label = null
@@ -331,6 +332,11 @@ func _populate_identity_tab() -> void:
 	_lineage_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_lineage_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tab_identity.add_child(_lineage_label)
+
+	# Simple lineage display (Born: Parent | Household)
+	_simple_lineage_label = _make_label("", FONT_SMALL, TEXT_BRIGHT)
+	_simple_lineage_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_identity.add_child(_simple_lineage_label)
 
 	_appearance_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_appearance_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -720,6 +726,18 @@ func _refresh() -> void:
 		_traits_label.text = "Traits: %s" % d.traits_display()
 	if _lineage_label != null:
 		_lineage_label.text = _lineage_block(d)
+	if _simple_lineage_label != null:
+		var parent_name: String = "Unknown"
+		if d.parent_a_id >= 0:
+			var parent_pd = d._get_parent_data(d.parent_a_id)
+			if parent_pd != null:
+				parent_name = parent_pd.display_name
+		
+		var household_info: String = "None"
+		if d.household_id >= 0:
+			household_info = "Household #" + str(d.household_id)
+		
+		_simple_lineage_label.text = "Born: " + parent_name + " | " + household_info
 	if _appearance_label != null:
 		_appearance_label.text = "Appearance: %s, %s" % [_body_type_label(d.body_type), _hair_style_label(d.hair_style)]
 	if _liking_label != null:

@@ -338,16 +338,33 @@ func diffuse_technologies() -> void:
 						diffusion.known_by.append(neighbor)
 
 
-## Get neighboring settlements
-func _get_neighboring_settlements(settlement_id: int) -> Array:
-	# TODO: Implement actual settlement neighbor lookup
-	# For now, return random settlements
+## Other settlements as diffusion peers (real [SettlementMemory] centers, not random IDs).
+## Geographic adjacency graph is future work; v1 spreads among coexisting places.
+func _get_neighboring_settlements(settlement_center_or_index: int) -> Array:
 	var neighbors: Array = []
-	var num_neighbors: int = WorldRNG.rangei(0, 3)
-	
-	for i in range(num_neighbors):
-		neighbors.append(WorldRNG.rangei(0, 100))
-	
+	if SettlementMemory == null:
+		return neighbors
+	var centers: Array[int] = []
+	for st_any in SettlementMemory.settlements:
+		if not (st_any is Dictionary):
+			continue
+		var c: int = int((st_any as Dictionary).get("center_region", -1))
+		if c < 0:
+			continue
+		if c == settlement_center_or_index:
+			continue
+		if not c in centers:
+			centers.append(c)
+	centers.sort()
+	if centers.is_empty():
+		return neighbors
+	var salt: int = settlement_center_or_index * 1009 + WorldRNG.current_seed()
+	var start: int = posmod(salt, centers.size())
+	var want: int = mini(3, centers.size())
+	for k in range(want):
+		var pick: int = int(centers[(start + k) % centers.size()])
+		if not pick in neighbors:
+			neighbors.append(pick)
 	return neighbors
 
 

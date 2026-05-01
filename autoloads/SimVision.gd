@@ -15,10 +15,10 @@ const NOTE_KERNEL: String = (
 
 func roadmap_debug_block() -> String:
 	return (
-			"""SimVision (roadmap stub — not simulating yet)
+			"""SimVision (roadmap — long-horizon design surface; not a second sim loop)
 %s
 
-Shipped pillars (partial): settlements + intent + trade + cultural reputation + scars/revival + pawn jobs/liking + observer tools + PlayerIntentQueue dispatch; stubs FactionRegistry, ReligionLens (F10 29–30).
+Shipped pillars (colony playtest): settlements + intent + trade + cultural reputation + scars/revival + pawn jobs/matrix/neural parity + observer tools + PlayerIntentQueue + FactionRegistry houses (real records). ReligionLens remains thin; grand campaigns / era stack / travel are future tiers.
 
 Named future tiers (implementation TBD; each needs its own design pass vs kernel rules):
   • Player travel + shared world presence (netcode, persistence, anti-abuse)

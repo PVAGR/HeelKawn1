@@ -10,6 +10,12 @@ CURRENT PHASE
 
 - Phase 4: Identity & Meaning
 
+FIRST PLAYABLE (where to look)
+
+- In-game: F10 → **35 · Backbone / first-play** — prints what is LIVE vs DEFERRED this build (paste to log or AI).
+- Doc: **docs/HEELKAWN_STATE.md** section “FIRST PLAYABLE (v0.1 — backbone you can run today)”.
+- Run main scene, select pawns, use F9 observer when needed; kernel + colony loop + inspection are the backbone.
+
 NEXT TARGET
 
 - Player-readable meaning refinement (audio + settlement identity depth, no text overlay substitute).
@@ -34,7 +40,11 @@ OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
 
 LOG (newest first)
 
-2026-04-30  **Canon queue progress (item 3):** Completed region-to-faction bridge. `docs/WORLD_BIBLE/REGIONS.md` now defines deterministic scar/conflict/recovery cause profiles and maps seed regions to faction seeds. `docs/WORLD_BIBLE/FACTIONS.md` now links each early identity seed to a region archetype with supporting deterministic history profiles. Immediate queue in `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md` is now fully completed.
+2026-04-30  **First-play orientation:** `docs/HEELKAWN_STATE.md` adds FIRST PLAYABLE (v0.1 backbone). F10 → **35 · Backbone / first-play** prints LIVE vs DEFERRED + scene counts. `TechnologySystem` diffusion peers use real settlement `center_region` list (not random IDs). `HEELKAWN.txt` points creators to F10/35 + state doc.
+
+2026-04-30  **Universe build status analysis:** Comprehensive scan of HeelKawn universe codebase completed. Generated `docs/HEELKAWN_UNIVERSE_BUILD_STATUS.md` documenting ~45 shipped systems (kernel complete, no blockers). PR #10 merged: Phase 4 identity + trait system + universe build status docs includes MeaningAudioCue, Trait.gd, TraitShop.gd, skill branch unlocks (L5/10/15/20), trait effect integration.
+
+2026-04-30
 2026-04-30  **Canon queue progress (items 1+2):** `docs/WORLD_BIBLE/GLOSSARY.md` now maps legacy terms to canonical systems with implementation anchors (neural/civilization/monitoring/cultural/economic/historical). `docs/WORLD_BIBLE/TIMELINE.md` open hooks now include measurable detection conditions + evidence anchors tied to `WorldMemory`/`SettlementMemory`/`WorldMeaning` and identity divergence signals. `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md` marks items 1 and 2 done, item 3 next.
 2026-04-30  **Canon execution queue scaffolded:** Added `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md` to convert legacy docs into ordered canon/system feature tasks (immediate + near-term), indexed in `docs/WORLD_BIBLE/MASTER_INDEX.md`, and recorded governance decision in `docs/WORLD_BIBLE/CANON_CHANGELOG.md`.
 2026-04-30  **Docs authority + canon-reference pass (Immediate 1):** Clarified determinism wording to allow seeded emergence (`WorldRNG`) while still forbidding unseeded historical randomness in canonical sim paths. Marked `HEELKAWN_INTEGRATION.md` as historical/superseded reference (legacy canon/system context only) with explicit pointers to current authority (`docs/HEELKAWN_STATE.md`, `HEELKAWN.txt`, active docs roadmap). Updated `docs/LLM_ONBOARDING.md`, `.github/copilot-instructions.md`, and `HEELKAWN_KERNEL.md` to align this rule across AI handoff and coding guidance.

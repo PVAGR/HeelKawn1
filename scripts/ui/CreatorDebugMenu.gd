@@ -36,6 +36,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "kernel", "label": "24 · KernelDiagnostic session summary"},
 			{"id": "harness", "label": "25 · Validation / harness flags"},
 			{"id": "colony_sim", "label": "03 · ColonySimServices"},
+			{"id": "backbone_status", "label": "35 · Backbone / first-play (LIVE vs DEFERRED)"},
 		],
 	},
 	{
@@ -228,6 +229,8 @@ func _emit_report(report_id: String) -> void:
 			_report_sim_diag()
 		"colony_sim":
 			_report_colony_sim()
+		"backbone_status":
+			_report_backbone_status()
 		"intent":
 			_report_intent()
 		"age":
@@ -397,6 +400,53 @@ func _report_colony_sim() -> void:
 				ColonySimServices.get_haul_pressure(),
 			]
 	)
+
+
+func _report_backbone_status() -> void:
+	const LIVE: String = "LIVE"
+	const DEF: String = "DEFERRED"
+	var tick: int = GameManager.tick_count
+	var seed: int = WorldRNG.current_seed()
+	print("HEELKAWN_BACKBONE_FIRST_PLAY  tick=%d  world_seed=%d" % [tick, seed])
+	print("Authoritative detail: docs/HEELKAWN_STATE.md  (section FIRST PLAYABLE)")
+	print("")
+	print("LIVE = you can see it working in this build. DEFERRED = roadmap or thin stub.")
+	print("")
+	print("— SIM CORE —")
+	var spd: float = GameManager.game_speed if GameManager != null else 0.0
+	print("  GameManager            %s  speed=%.1f" % [LIVE, spd])
+	var n_set: int = SettlementMemory.settlements.size() if SettlementMemory != null else 0
+	print("  SettlementMemory       %s  settlements=%d" % [LIVE, n_set])
+	var open_j: int = JobManager.open_count() if JobManager != null else -1
+	print("  JobManager             %s  open_jobs=%d" % [LIVE, open_j])
+	var wm_ct: int = WorldMemory.event_count() if WorldMemory != null else -1
+	print("  WorldMemory            %s  event_count=%d" % [LIVE, wm_ct])
+	var houses: int = -1
+	if FactionRegistry != null:
+		FactionRegistry.sync_from_settlements()
+		houses = FactionRegistry.get_synced_house_count()
+	print("  FactionRegistry        %s  houses=%d" % [LIVE, houses])
+	var living: int = 0
+	var m: Node2D = _main()
+	if m != null:
+		var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+		if ps != null:
+			for p in ps.pawns:
+				if p != null and is_instance_valid(p):
+					living += 1
+	print("  Pawns (scene)          %s  living=%d" % [LIVE, living])
+	var wai_ok: bool = WorldAI != null and WorldAI.has_method("get_pawn_neural_state")
+	print("  WorldAI + matrix       %s  neural+rules+12ch parity" % (LIVE if wai_ok else DEF))
+	print("  ColonySimServices      %s  food/mat/haul/housing pressures" % LIVE)
+	print("  StockpileManager       %s  zones + aggregates" % LIVE)
+	print("")
+	print("— PARTIAL / ROADMAP —")
+	print("  SimVision              %s  full vision/campaign sim" % DEF)
+	print("  Tech diffusion graph   %s  peer settlement IDs (real list), not map adjacency" % LIVE)
+	print("  Tool items (axe/pick)  %s  carry + efficiency proxy" % DEF)
+	print("")
+	print("— TRY —")
+	print("  Click pawn → ID / Needs / Matrix / Neural / Social.  F9 realm.  F10 → 31 playtest bundle.")
 
 
 func _report_intent() -> void:

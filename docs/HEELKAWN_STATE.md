@@ -47,6 +47,35 @@ Animals:
 Observer/chronicler.
 No required micromanagement.
 
+## FIRST PLAYABLE (v0.1 — backbone you can run today)
+
+This is the **minimum “HeelKawn is HeelKawn”** layer: living world kernel + colony loop + inspectability. Use it to **see, test, and tune** before grand-strategy UI depth.
+
+**You can verify in one session**
+
+- Run the main scene, let ticks advance, **click pawns** (sheet: needs, Matrix if/then, Neural stack, Social).
+- **F9** — realm / observer crown view (settlements, houses, chronicler context when wired).
+- **F10** — creator hub; use **35 · Backbone / first-play** for a pasteable checklist of what is **LIVE** vs **DEFERRED** this build.
+- **31 · Playtest bundle** / **34 · Creator digest** — session truth for tuning (see menu).
+
+**Backbone treated as LIVE in this repo**
+
+- **Truth & scars:** `WorldMemory`, `WorldPersistence`, `WorldMeaning`, `CulturalMemory`.
+- **Places:** `SettlementMemory`, `SettlementPlanner`, revival/rebirth gates, autonomous build intents.
+- **Colony loop:** `JobManager`, stockpiles, `Pawn` jobs/needs/reproduction, `ColonySimServices` pressures.
+- **People:** `PawnData` + `Pawn` AI (neural forward + if/then matrix + 12 intent channels), incarnation uses the same `Pawn` class.
+- **Houses:** `FactionRegistry` (deterministic house per settlement zone; focus lines use real records).
+- **AI policy:** `WorldAI` + `AIAgentManager` (world-scale scaffolding; pawn decisions are sim-local).
+
+**Explicitly DEFERRED (roadmap — not required to “see HeelKawn”)**
+
+- **SimVision** — long-horizon vision sim / campaigns (menu may still describe scope).
+- Full **grand-strategy map** routing (CK3-style) as primary UI — observer/incarnation are the shipped shells.
+- Dedicated **tool items** (pickaxe/axe); v1 uses **carry + matrix** proxies for extract work.
+- **TechnologySystem** diffusion neighbors are **peer settlements** (real list), not geographic adjacency graphs yet.
+
+When in doubt, **`docs/HEELKAWN_STATE.md` (this file) + F10 → 35** are the orientation sources.
+
 ## KNOWN ENGINE NOTES
 
 - Godot 4.6 may emit reload-time warnings for static autoload calls

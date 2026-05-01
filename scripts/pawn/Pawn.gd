@@ -4126,7 +4126,8 @@ func marry(spouse: Pawn) -> void:
 		])
 
 
-## Spawn a child via [PawnSpawner]; parents default to this pawn and [member PawnData.spouse_id].
+## Spawn a child via [PawnSpawner] (bind, tile, lineage, [PawnData] registry). Not a raw scene instantiate:
+## that would skip world placement, job safety, and [method PawnData.register_pawn_data].
 func _spawn_child_pawn(parent_pawn_id: int = -1, second_parent_id: int = -1) -> Pawn:
 	var spawner: PawnSpawner = _resolve_pawn_spawner()
 	if spawner == null or _world == null or GameManager == null or data == null:
@@ -4142,25 +4143,46 @@ func _spawn_child_pawn(parent_pawn_id: int = -1, second_parent_id: int = -1) -> 
 	return spawner.spawn_child_pawn(_world, data.tile_pos, parent_a, parent_b, GameManager.tick_count)
 
 
-## Deterministic blend toward parents' current affinity map (after [method PawnData.initialize_affinities]).
+## Single-parent affinity nudge: scale parent's values by 70–130% (deterministic) and lerp child's map.
+static func _inherit_from_parent(
+		child_pd: PawnData, parent_id: int, birth_tick: int, pass_index: int = 0
+) -> void:
+	if child_pd == null or parent_id < 0:
+		return
+	var parent_pd: PawnData = child_pd._get_parent_data(parent_id)
+	if parent_pd == null:
+		return
+	for k in child_pd.affinities.keys():
+		var paf: float = float(parent_pd.affinities.get(k, 0.5))
+		var cur: float = float(child_pd.affinities.get(k, 0.5))
+		var mul: float = WorldRNG.range_for(
+				StringName(
+						"pawn:inherit_from_parent:%s:%d:%d:%d:%d"
+						% [str(k), child_pd.id, parent_id, birth_tick, pass_index]
+				),
+				0.7,
+				1.3
+		)
+		var target: float = clampf(paf * mul, 0.0, 1.0)
+		var w: float = WorldRNG.range_for(
+				StringName(
+						"pawn:inherit_from_parent_w:%s:%d:%d:%d"
+						% [str(k), child_pd.id, parent_id, pass_index]
+				),
+				0.35,
+				0.55
+		)
+		child_pd.affinities[k] = clampf(lerpf(cur, target, w), 0.0, 1.0)
+
+
+## Apply both parents in order (after [method PawnData.initialize_affinities]).
 static func _inherit_affinities(
 		child_pd: PawnData, parent_a: PawnData, parent_b: PawnData, birth_tick: int
 ) -> void:
 	if child_pd == null or parent_a == null or parent_b == null:
 		return
-	for k in child_pd.affinities.keys():
-		var va: float = float(parent_a.affinities.get(k, 0.5))
-		var vb: float = float(parent_b.affinities.get(k, 0.5))
-		var target: float = (va + vb) * 0.5
-		var w: float = WorldRNG.range_for(
-				StringName(
-						"pawn:inherit_affinity:%s:%d:%d:%d"
-						% [str(k), child_pd.id, birth_tick, parent_a.id + parent_b.id]
-				),
-				0.25,
-				0.55
-		)
-		child_pd.affinities[k] = clampf(lerpf(float(child_pd.affinities[k]), target, w), 0.0, 1.0)
+	_inherit_from_parent(child_pd, int(parent_a.id), birth_tick, 0)
+	_inherit_from_parent(child_pd, int(parent_b.id), birth_tick, 1)
 
 
 func have_child(partner: Pawn) -> int:

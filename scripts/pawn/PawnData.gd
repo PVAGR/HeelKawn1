@@ -23,6 +23,7 @@ const SKILL_LEVEL_MAX: int = 20
 ##   work_speed = 1.0 + (level / SKILL_LEVEL_MAX) * (SKILL_BONUS_AT_MAX - 1.0)
 ## At level 20 a skilled pawn works 2.0x as fast as a novice.
 const SKILL_BONUS_AT_MAX: float = 2.0
+const MISSING_REQUIRED_TOOL_WORK_SPEED_MULT: float = 0.5
 ## XP gained per tick of work on the matching skill. Tuned so a fresh pawn
 ## passes lvl 1 in ~one job cycle and reaches lvl 5 over a few in-game days.
 const XP_PER_WORK_TICK: float = 1.5
@@ -1962,10 +1963,17 @@ func teach_efficiency_multiplier() -> float:
 	return 1.0
 
 
+func _root_node_or_null(node_name: String) -> Node:
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	if tree == null or tree.root == null:
+		return null
+	return tree.root.get_node_or_null(node_name)
+
+
 func bloodline_pride_mood_bonus() -> float:
 	if bloodline_id < 0:
 		return 0.0
-	var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
+	var bloodline_sys: Node = _root_node_or_null("BloodlineSystem")
 	if bloodline_sys != null and bloodline_sys.has_method("get_bloodline_pride_mood_bonus"):
 		return clampf(float(bloodline_sys.call("get_bloodline_pride_mood_bonus", bloodline_id)), 0.0, 0.08)
 	return 0.0
@@ -1974,7 +1982,7 @@ func bloodline_pride_mood_bonus() -> float:
 func bloodline_specialization_multiplier(skill: int) -> float:
 	if bloodline_id < 0:
 		return 1.0
-	var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
+	var bloodline_sys: Node = _root_node_or_null("BloodlineSystem")
 	if bloodline_sys != null and bloodline_sys.has_method("get_bloodline_specialization_multiplier"):
 		return maxf(0.85, float(bloodline_sys.call("get_bloodline_specialization_multiplier", bloodline_id, skill)))
 	return 1.0
@@ -2093,6 +2101,37 @@ func work_speed_for(skill: int) -> float:
 	var tree_mult: float = skill_tree_bonus_product_for_category(cat, "work_speed_mult")
 	var bloodline_mult: float = bloodline_specialization_multiplier(skill)
 	return base * tree_mult * bloodline_mult
+
+
+func has_tool_required(job_type: int) -> bool:
+	var required_tools: Array[int] = required_tools_for_job(job_type)
+	if required_tools.is_empty():
+		return true
+	if not is_equipped_tool_valid():
+		return false
+	return required_tools.has(equipped_tool)
+
+
+func get_work_speed_for_job(job_type: int) -> float:
+	var skill: int = skill_for_job(job_type)
+	var speed: float = 1.0
+	if skill >= 0:
+		speed = work_speed_for(skill)
+	speed *= get_tool_efficacy(job_type)
+	if not has_tool_required(job_type):
+		speed *= MISSING_REQUIRED_TOOL_WORK_SPEED_MULT
+	return speed
+
+
+static func required_tools_for_job(job_type: int) -> Array[int]:
+	match job_type:
+		Job.Type.MINE, Job.Type.MINE_WALL:
+			return [Item.Type.FLINT_PICK]
+		Job.Type.CHOP:
+			return [Item.Type.FLINT_KNIFE]
+		Job.Type.HUNT, Job.Type.PROTECT, Job.Type.DEFEND:
+			return [Item.Type.WOODEN_SPEAR, Item.Type.FLINT_KNIFE]
+	return []
 
 
 func _skill_to_profession(skill_key: String) -> int:

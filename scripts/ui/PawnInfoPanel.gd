@@ -690,17 +690,28 @@ func _refresh() -> void:
 			_subtitle_label.text = "%s · %s · bias %s" % [arc_bits, prof, hk]
 		_refresh_portrait_strip(d)
 
-	# Update tier indicator
+	# Update tier indicator from ProgressionSystem
 	if _tier_bar != null and _tier_label != null:
-		var tier: int = _level_to_tier(d.level)
-		var progress: float = _tier_progress(d.level)
-		_tier_bar.value = clampf(progress, 0.0, 100.0)
-		_tier_label.text = "T%d" % tier
-		# Update tier bar color based on tier
-		var tier_fill := StyleBoxFlat.new()
-		tier_fill.bg_color = _tier_color(tier)
-		tier_fill.set_corner_radius_all(2)
-		_tier_bar.add_theme_stylebox_override("fill", tier_fill)
+		if Engine.has_singleton("ProgressionSystem") or get_node_or_null("/root/ProgressionSystem") != null:
+			var prog_sys = get_node_or_null("/root/ProgressionSystem")
+			if prog_sys and prog_sys.has_method("get_tier_name"):
+				var tier_name: String = prog_sys.get_tier_name(int(d.id))
+				var tier: int = prog_sys.get_tier(int(d.id)) if prog_sys.has_method("get_tier") else 0
+				var impact: int = prog_sys.get_impact(int(d.id)) if prog_sys.has_method("get_impact") else 0
+				_tier_label.text = tier_name
+				_tier_bar.value = float(impact)
+				# Color based on tier
+				var tier_color: Color = _tier_color(tier)
+				var tier_fill := StyleBoxFlat.new()
+				tier_fill.bg_color = tier_color
+				tier_fill.set_corner_radius_all(2)
+				_tier_bar.add_theme_stylebox_override("fill", tier_fill)
+			else:
+				_tier_label.text = "Unknown"
+				_tier_bar.value = 0.0
+		else:
+			_tier_label.text = "Unknown"
+			_tier_bar.value = 0.0
 	
 	_state_label.text = _pawn.describe_state()
 	

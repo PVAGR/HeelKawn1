@@ -399,11 +399,23 @@ func _generate_random_personality(personality_salt: int) -> void:
 	neuroticism = WorldRNG.range_for(StringName("personality:neuroticism:%d" % personality_salt), 0.0, 1.0)
 
 
-## Get parent data (simplified - in full system would query from PawnManager)
+## Static registry for pawn data lookup (set by PawnSpawner at spawn time)
+static var _pawn_data_by_id: Dictionary = {}
+
+## Register a pawn data instance for lineage lookup
+static func register_pawn_data(data: PawnData) -> void:
+	if data != null:
+		_pawn_data_by_id[data.id] = data
+
+## Unregister pawn data when pawn dies
+static func unregister_pawn_data(pawn_id: int) -> void:
+	_pawn_data_by_id.erase(pawn_id)
+
+## Get parent data from static registry
 func _get_parent_data(parent_id: int) -> PawnData:
-	# TODO: Implement proper parent data lookup from PawnManager
-	# For now, return null to trigger random personality
-	return null
+	if parent_id < 0:
+		return null
+	return _pawn_data_by_id.get(parent_id, null)
 
 
 ## Phase 2: Initialize neural network based on personality

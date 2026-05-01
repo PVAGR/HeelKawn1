@@ -1,0 +1,53 @@
+{
+    "version":  "1.0",
+    "last_updated":  "2026-05-01",
+    "knowledge_files":  [
+                            {
+                                "file":  "knowledge/architecture.md",
+                                "topic":  "System architecture and autoload structure",
+                                "last_updated":  "2026-05-01"
+                            },
+                            {
+                                "file":  "knowledge/design_decisions.md",
+                                "topic":  "Why things were built the way they were",
+                                "last_updated":  "2026-05-01"
+                            },
+                            {
+                                "file":  "knowledge/code_changes.md",
+                                "topic":  "Changelog of all AI-assisted edits",
+                                "last_updated":  "2026-05-01"
+                            },
+                            {
+                                "file":  "knowledge/tasks.md",
+                                "topic":  "Task queue — pending, in-progress, completed",
+                                "last_updated":  "2026-05-01"
+                            }
+                        ],
+    "lore_files":  [
+                       {
+                           "file":  "lore/canonical.md",
+                           "topic":  "Consolidated universe canon",
+                           "last_updated":  "2026-05-01"
+                       }
+                   ],
+    "external_references":  [
+                                {
+                                    "path":  "docs/HEELKAWN_STATE.md",
+                                    "note":  "Authoritative project state — always wins on conflicts"
+                                },
+                                {
+                                    "path":  "docs/WORLD_BIBLE/",
+                                    "note":  "Full lore library — canon truth for universe"
+                                },
+                                {
+                                    "path":  "AI_README.md",
+                                    "note":  "Master AI instructions — read before any work"
+                                },
+                                {
+                                    "path":  "HEELKAWN.txt",
+                                    "note":  "Session handoff log — what was done last"
+                                }
+                            ],
+    "model_recommendation":  "qwen2.5-coder:7b",
+    "ollama_status":  "installed_v0.21.2_needs_model_download"
+}

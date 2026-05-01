@@ -284,10 +284,16 @@ var _hit_flash_ticks: int = 0
 ## propagation must not run hundreds of times in one claim scan (was freezing / hard-stopping).
 var _neural_priority_fetch_tick: int = -1
 var _neural_priority_outputs: Array = []
+var _neural_priority_next_refresh_tick: int = -1
+## Prevent per-job scan event spam from turning priority evaluation into a hitch source.
+var _last_neural_decision_log_tick: int = -1000000
 var _last_inspect_msg: String = ""
 var _last_inspect_tick: int = -999999
 var _initial_knowledge_granted: bool = false
 var _perception_scan_cursor: int = 0
+var _cached_idle_action: String = "work"
+var _cached_idle_action_food_emergency: bool = false
+var _next_idle_action_refresh_tick: int = -1
 ## Set true only after [method _pawn_connect_sim_tick_deferred] connects [signal GameManager.game_tick].
 ## Prevents sim ticks from running before [method bind] + [method _ready] have finished.
 var _pawn_sim_tick_armed: bool = false
@@ -605,7 +611,7 @@ static func is_job_history_critical(job_type: int) -> bool:
 
 func _scar_level_at_tile(t: Vector2i) -> int:
 	var rk: int = _WM._region_key(t.x, t.y)
-	return int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))
+	return int(WorldPersistence.get_region_scar_level(rk))
 
 
 func _job_region_scar_blocks_noncritical(j: Job) -> bool:
@@ -1268,26 +1274,31 @@ func _on_game_tick(_tick: int) -> void:
 		push_warning("Pawn: game_tick skipped - data not ready (path=%s)" % str(get_path()))
 		return
 	var pid: int = int(data.id)
+	var _trace_ai_slice: bool = CrashTrap.should_trace_game_tick_dispatch(_tick)
 	if _hit_flash_ticks > 0:
 		_hit_flash_ticks -= 1
 
 	# Stagger needs/threshold upkeep by pawn id so not every pawn runs this
 	# bookkeeping on the same sim tick.
 	if posmod(GameManager.tick_count + pid, 5) == 0:
-		CrashTrap.enter_system("pawn_tick:%d:needs" % pid)
+		if _trace_ai_slice:
+			CrashTrap.enter_system("pawn_tick:%d:needs" % pid)
 		_decay_needs()
 		_check_thresholds()
-		CrashTrap.exit_system("pawn_tick:%d:needs" % pid)
+		if _trace_ai_slice:
+			CrashTrap.exit_system("pawn_tick:%d:needs" % pid)
 	# Sleepers only need wake checks; skip full AI branch logic to reduce
 	# per-tick overhead during overnight "everyone in bed" windows.
 	if _state == State.SLEEPING:
-		CrashTrap.enter_system("pawn_tick:%d:sleep" % pid)
+		if _trace_ai_slice:
+			CrashTrap.enter_system("pawn_tick:%d:sleep" % pid)
 		_tick_sleeping()
-		CrashTrap.exit_system("pawn_tick:%d:sleep" % pid)
+		if _trace_ai_slice:
+			CrashTrap.exit_system("pawn_tick:%d:sleep" % pid)
 		return
 
-	CrashTrap.enter_system("pawn_tick:%d:ai" % pid)
-	var _trace_ai_slice: bool = CrashTrap.should_trace_game_tick_dispatch(_tick)
+	if _trace_ai_slice:
+		CrashTrap.enter_system("pawn_tick:%d:ai" % pid)
 	if _trace_ai_slice:
 		CrashTrap.enter_system("pawn_tick:%d:ai:stride" % pid)
 	var stride: int = maxi(1, _fast_forward_tick_stride())
@@ -1317,7 +1328,7 @@ func _on_game_tick(_tick: int) -> void:
 		_force_panic_sleep()
 		if _trace_ai_slice:
 			CrashTrap.exit_system("pawn_tick:%d:ai:panic" % pid)
-		CrashTrap.exit_system("pawn_tick:%d:ai" % pid)
+			CrashTrap.exit_system("pawn_tick:%d:ai" % pid)
 		return
 	if _trace_ai_slice:
 		CrashTrap.exit_system("pawn_tick:%d:ai:panic" % pid)
@@ -1339,7 +1350,8 @@ func _on_game_tick(_tick: int) -> void:
 				pass
 		if _trace_ai_slice:
 			CrashTrap.exit_system("pawn_tick:%d:ai:throttled_state" % pid)
-		CrashTrap.exit_system("pawn_tick:%d:ai" % pid)
+		if _trace_ai_slice:
+			CrashTrap.exit_system("pawn_tick:%d:ai" % pid)
 		return
 	if _trace_ai_slice:
 		CrashTrap.enter_system("pawn_tick:%d:ai:full_state" % pid)
@@ -1347,9 +1359,11 @@ func _on_game_tick(_tick: int) -> void:
 		State.IDLE:
 			_tick_idle()
 		State.WALKING_TO_JOB:
-			CrashTrap.enter_system("pawn_tick:%d:movement" % pid)
+			if _trace_ai_slice:
+				CrashTrap.enter_system("pawn_tick:%d:movement" % pid)
 			_tick_walking()
-			CrashTrap.exit_system("pawn_tick:%d:movement" % pid)
+			if _trace_ai_slice:
+				CrashTrap.exit_system("pawn_tick:%d:movement" % pid)
 		State.WORKING:
 			_tick_working()
 		State.HAULING, State.GOING_TO_EAT, State.FETCHING_MATERIAL, State.GOING_TO_BED, State.DRAFT_WALK:
@@ -1365,7 +1379,7 @@ func _on_game_tick(_tick: int) -> void:
 			_tick_challenge()
 	if _trace_ai_slice:
 		CrashTrap.exit_system("pawn_tick:%d:ai:full_state" % pid)
-	CrashTrap.exit_system("pawn_tick:%d:ai" % pid)
+		CrashTrap.exit_system("pawn_tick:%d:ai" % pid)
 
 
 func _fast_forward_tick_stride() -> int:
@@ -1383,8 +1397,9 @@ func _fast_forward_tick_stride() -> int:
 		return 4
 	if gs >= 4.0:
 		return 2
-	# At baseline play speed, stagger heavy think logic across adjacent ticks.
-	return 2
+	# At baseline play speed, stagger heavy think logic across a slightly
+	# wider window to reduce startup/frame hitching under dense populations.
+	return 3
 
 
 func _job_claim_interval_for_speed() -> int:
@@ -1404,6 +1419,44 @@ func _job_claim_interval_for_speed() -> int:
 	# 1x is the common play speed; a slightly slower claim cadence cuts
 	# full-queue scans per frame while still keeping workers responsive.
 	return 6
+
+
+func _neural_priority_refresh_interval_for_speed() -> int:
+	if GameManager == null:
+		return 45
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 420
+	if gs >= 50.0:
+		return 260
+	if gs >= 26.0:
+		return 180
+	if gs >= 12.0:
+		return 130
+	if gs >= 6.0:
+		return 90
+	if gs >= 3.0:
+		return 60
+	return 45
+
+
+func _idle_action_refresh_interval_for_speed() -> int:
+	if GameManager == null:
+		return 12
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 180
+	if gs >= 50.0:
+		return 120
+	if gs >= 26.0:
+		return 90
+	if gs >= 12.0:
+		return 60
+	if gs >= 6.0:
+		return 36
+	if gs >= 3.0:
+		return 24
+	return 12
 
 
 func _work_step_interval_for_speed() -> int:
@@ -1515,9 +1568,20 @@ func _tick_idle() -> void:
 		available_idle_actions.append({"type": "forage"})
 	var preferred_idle_action: String = "work"
 	if data != null:
-		var best_idle_action: Dictionary = data.choose_best_action(available_idle_actions, utility_context)
-		if not best_idle_action.is_empty() and best_idle_action.has("type"):
-			preferred_idle_action = str(best_idle_action.get("type", "work"))
+		var now_tick: int = GameManager.tick_count if GameManager != null else 0
+		var should_refresh_idle_action: bool = (
+			_next_idle_action_refresh_tick < 0
+			or now_tick >= _next_idle_action_refresh_tick
+			or _cached_idle_action_food_emergency != food_emergency
+		)
+		if should_refresh_idle_action:
+			var best_idle_action: Dictionary = data.choose_best_action(available_idle_actions, utility_context)
+			_cached_idle_action = "work"
+			if not best_idle_action.is_empty() and best_idle_action.has("type"):
+				_cached_idle_action = str(best_idle_action.get("type", "work"))
+			_cached_idle_action_food_emergency = food_emergency
+			_next_idle_action_refresh_tick = now_tick + _idle_action_refresh_interval_for_speed()
+		preferred_idle_action = _cached_idle_action
 	# 5. Social cognition: choose one social action first, then fall back.
 	if preferred_idle_action == "teach":
 		if _maybe_start_teaching():
@@ -1562,36 +1626,107 @@ func _tick_idle() -> void:
 	# we have to sum across zones, not peek at one hardcoded pile.
 	var affinity_key: String = data.highest_affinity_skill() if data != null else ""
 	var utility_cache: Dictionary = {}
+	var utility_bias_cache: Dictionary = {}
+	var neural_bias_cache: Dictionary = {}
+	var work_tile_component_cache: Dictionary = {}
+	var work_tile_region_cache: Dictionary = {}
+	var region_scar_cache: Dictionary = {}
+	var region_history_offset_cache: Dictionary = {}
+	var inherited_history_offset: int = _culture_inherited_job_offset()
+	var crisis_housing_pressure: float = 0.0
+	var crisis_food_pressure: float = 0.0
+	if ColonySimServices != null:
+		crisis_housing_pressure = ColonySimServices.get_housing_pressure()
+		crisis_food_pressure = ColonySimServices.get_food_pressure()
+	var from_region_key: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
+	var from_center_region: int = SettlementMemory.get_center_region_for_region(from_region_key)
+	var from_intent: int = int(IntentMemory.settlement_intent.get(from_center_region, IntentMemory.INTENT_HOLD))
+	var from_pressure: float = float(IntentMemory.settlement_pressure.get(from_center_region, 0.5))
+	var scar_priority_for_level: Dictionary = {0: 0, 1: -5, 2: -24}
+	
+	var resolve_region_key_for_work_tile: Callable = func(work_tile: Vector2i) -> int:
+		if work_tile_region_cache.has(work_tile):
+			return int(work_tile_region_cache[work_tile])
+		var rk: int = _WM._region_key(work_tile.x, work_tile.y)
+		work_tile_region_cache[work_tile] = rk
+		return rk
+	
+	var resolve_component_for_work_tile: Callable = func(work_tile: Vector2i) -> int:
+		if work_tile_component_cache.has(work_tile):
+			return int(work_tile_component_cache[work_tile])
+		var comp: int = _world.pathfinder.component_of(work_tile)
+		work_tile_component_cache[work_tile] = comp
+		return comp
+	
+	var resolve_region_scar_level: Callable = func(region_key: int) -> int:
+		if region_scar_cache.has(region_key):
+			return int(region_scar_cache[region_key])
+		var sl: int = int(WorldPersistence.get_region_scar_level(region_key))
+		region_scar_cache[region_key] = sl
+		return sl
+	
+	var resolve_history_offset_for_region: Callable = func(region_key: int) -> int:
+		if region_history_offset_cache.has(region_key):
+			return int(region_history_offset_cache[region_key])
+		var scar_level: int = int(resolve_region_scar_level.call(region_key))
+		var scar_offset: int = int(scar_priority_for_level.get(scar_level, 0))
+		var to_center: int = SettlementMemory.get_center_region_for_region(region_key)
+		var intent_delta: int = 0
+		if not (from_center_region < 0 and to_center < 0):
+			var to_intent: int = int(IntentMemory.settlement_intent.get(to_center, IntentMemory.INTENT_HOLD))
+			var to_pressure: float = float(IntentMemory.settlement_pressure.get(to_center, 0.5))
+			if to_intent == IntentMemory.INTENT_GROW:
+				intent_delta += 3
+			elif to_intent == IntentMemory.INTENT_ABANDON:
+				intent_delta -= 4
+			if to_pressure < from_pressure:
+				intent_delta += 1
+			elif to_pressure > from_pressure + 0.12:
+				intent_delta -= 1
+			if from_intent == IntentMemory.INTENT_ABANDON and to_intent != IntentMemory.INTENT_ABANDON:
+				intent_delta += 2
+			elif from_intent != IntentMemory.INTENT_ABANDON and to_intent == IntentMemory.INTENT_ABANDON:
+				intent_delta -= 2
+		var history_offset: int = scar_offset + inherited_history_offset + intent_delta
+		region_history_offset_cache[region_key] = history_offset
+		return history_offset
 
 	# Simplified priority calculation for performance; affinity is a small nudge — not a separate queue pass — so build/mining jobs can compete with forage.
 	var priority_cb: Callable = func(j: Job) -> int:
-		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j)) + _job_history_scar_priority_offset(j)
+		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j))
+		if not is_job_history_critical(j.type):
+			var rk_hist: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
+			base_bias += int(resolve_history_offset_for_region.call(rk_hist))
 		if affinity_key != "" and _job_matches_affinity(j.type, affinity_key):
 			base_bias += AFFINITY_JOB_PRIORITY_BONUS
 		var action_key: String = _utility_action_for_job(int(j.type))
-		var utility_bias: int = int(round((_utility_score_normalized(action_key, utility_context, utility_cache) - 0.5) * float(UTILITY_JOB_PRIORITY_BIAS_RANGE)))
+		var utility_bias: int = 0
+		if utility_bias_cache.has(action_key):
+			utility_bias = int(utility_bias_cache[action_key])
+		else:
+			utility_bias = int(round((_utility_score_normalized(action_key, utility_context, utility_cache) - 0.5) * float(UTILITY_JOB_PRIORITY_BIAS_RANGE)))
+			utility_bias_cache[action_key] = utility_bias
 		base_bias += utility_bias
 		if preferred_idle_action == "forage" and (j.type == Job.Type.FORAGE or j.type == Job.Type.HUNT):
 			base_bias += 2
-		
-		# Crisis priority bonus (use autoload directly; `"X" in get_tree()` is not valid GDScript and can hard-crash.)
-		var housing_pressure: float = 0.0
-		var food_pressure: float = 0.0
-		if ColonySimServices != null:
-			housing_pressure = ColonySimServices.get_housing_pressure()
-			food_pressure = ColonySimServices.get_food_pressure()
-		
+
+		# Crisis priority bonus (snapshot pressures once per claim pass).
 		# Boost BUILD_BED jobs during housing crisis
-		if housing_pressure > 0.8 and j.type == Job.Type.BUILD_BED:
+		if crisis_housing_pressure > 0.8 and j.type == Job.Type.BUILD_BED:
 			base_bias += 4
 		# Boost FORAGE/HUNT jobs during food crisis
-		if food_pressure > 0.7 and (j.type == Job.Type.FORAGE or j.type == Job.Type.HUNT):
+		if crisis_food_pressure > 0.7 and (j.type == Job.Type.FORAGE or j.type == Job.Type.HUNT):
 			base_bias += 4
-		
-		# Neural AI priority bonus from WorldAI matrix
-		var neural_bias: int = _get_neural_job_priority_bias(j.type)
+
+		# Neural AI priority bonus from WorldAI matrix (once per job type/tick).
+		var neural_bias: int = 0
+		if neural_bias_cache.has(j.type):
+			neural_bias = int(neural_bias_cache[j.type])
+		else:
+			neural_bias = _get_neural_job_priority_bias(j.type)
+			neural_bias_cache[j.type] = neural_bias
 		base_bias += neural_bias
-		
+
 		# Keep bias math cheap and deterministic on hot claim path.
 		return base_bias
 	var base_passes: Callable = func(j: Job) -> bool:
@@ -1599,9 +1734,11 @@ func _tick_idle() -> void:
 			return false
 		if not data.allows_job_type(j.type):
 			return false
-		if _job_region_scar_blocks_noncritical(j):
-			return false
-		if _world.pathfinder.component_of(j.work_tile) != my_component:
+		var rk_filter: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
+		if not is_job_history_critical(j.type):
+			if int(resolve_region_scar_level.call(rk_filter)) >= 3:
+				return false
+		if int(resolve_component_for_work_tile.call(j.work_tile)) != my_component:
 			return false
 		var mats: Dictionary = _materials_for_build(j.type)
 		if not mats.is_empty():
@@ -1788,17 +1925,31 @@ func get_preferred_front_bias(job: Job) -> float:
 func _get_neural_job_priority_bias(job_type: int) -> int:
 	if data == null:
 		return 0
+	if GameManager != null:
+		# Startup and extreme fast-forward prioritize frame pacing over
+		# per-claim neural nuance. Neural bias returns automatically later.
+		if GameManager.tick_count < 1200:
+			return 0
+		if GameManager.game_speed >= 50.0:
+			return 0
 	var tick: int = GameManager.tick_count if GameManager != null else -1
-	if _neural_priority_fetch_tick != tick:
+	var should_refresh: bool = (_neural_priority_next_refresh_tick < 0 or tick >= _neural_priority_next_refresh_tick)
+	if should_refresh:
 		_neural_priority_fetch_tick = tick
-		_neural_priority_outputs.clear()
+		var refreshed_outputs: Array = []
 		var world_ai: Node = get_node_or_null("/root/WorldAI")
 		if world_ai != null and world_ai.has_method("get_pawn_neural_state"):
 			var neural_state: Dictionary = world_ai.get_pawn_neural_state(int(data.id))
 			if not neural_state.is_empty():
 				var outs: Variant = neural_state.get("outputs", [])
 				if outs is Array and (outs as Array).size() >= 8:
-					_neural_priority_outputs = outs as Array
+					refreshed_outputs = outs as Array
+		if refreshed_outputs.size() >= 8:
+			_neural_priority_outputs = refreshed_outputs
+			_neural_priority_next_refresh_tick = tick + _neural_priority_refresh_interval_for_speed()
+		else:
+			# Failed fetch: retry soon, but do not thrash every tick.
+			_neural_priority_next_refresh_tick = tick + 10
 	
 	if _neural_priority_outputs.size() < 8:
 		return 0
@@ -1831,10 +1982,19 @@ func _get_neural_job_priority_bias(job_type: int) -> int:
 			neural_bias = 0
 	
 	# Log unusual neural-driven decisions to WorldMemory
-	if neural_bias >= 4:
+	if neural_bias >= 4 and _should_log_neural_decision_tick(tick):
 		_log_neural_decision(job_type, neural_bias, outputs)
 	
 	return neural_bias
+
+
+func _should_log_neural_decision_tick(tick: int) -> bool:
+	if GameManager == null or not GameManager.verbose_logs():
+		return false
+	if tick - _last_neural_decision_log_tick < 120:
+		return false
+	_last_neural_decision_log_tick = tick
+	return true
 
 
 ## Log neural-driven decisions to WorldMemory for analysis

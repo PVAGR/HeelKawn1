@@ -65,6 +65,9 @@ var _last_settlement_ai_update_tick: int = -1
 
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
+	last_update_tick = GameManager.tick_count
+	_last_world_ai_update_tick = GameManager.tick_count
+	_last_settlement_ai_update_tick = GameManager.tick_count
 	# Initialize advanced neural network matrix systems
 	_initialize_neural_network_matrix()
 	_initialize_learning_algorithms()
@@ -773,26 +776,7 @@ func _on_game_tick(tick: int) -> void:
 
 func _world_ai_interval_for_speed() -> int:
 	if GameManager == null:
-		return 3
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 24
-	if gs >= 50.0:
-		return 16
-	if gs >= 26.0:
-		return 12
-	if gs >= 12.0:
-		return 8
-	if gs >= 6.0:
-		return 6
-	if gs >= 3.0:
-		return 4
-	return 3
-
-
-func _settlement_ai_interval_for_speed() -> int:
-	if GameManager == null:
-		return 8
+		return 10
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
 		return 48
@@ -804,7 +788,26 @@ func _settlement_ai_interval_for_speed() -> int:
 		return 16
 	if gs >= 6.0:
 		return 12
-	return 8
+	if gs >= 3.0:
+		return 8
+	return 10
+
+
+func _settlement_ai_interval_for_speed() -> int:
+	if GameManager == null:
+		return 16
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 72
+	if gs >= 50.0:
+		return 48
+	if gs >= 26.0:
+		return 36
+	if gs >= 12.0:
+		return 24
+	if gs >= 6.0:
+		return 18
+	return 16
 
 
 func _agent_update_budget_for_speed(total_agents: int) -> int:

@@ -4,15 +4,17 @@ extends Node
 ## Logs which system is entered/exited during init and which [signal GameManager.game_tick] slot runs.
 ## GDScript cannot catch most runtime faults; the last [method enter_system] line before a hard stop is the hint.
 
-var trace_enabled: bool = OS.has_feature("editor") or OS.is_debug_build()
+## Trace is opt-in. Enable from CLI when actively diagnosing startup/tick crashes.
+var trace_enabled: bool = false
 var current_system: String = "startup"
 var last_successful_step: String = ""
 ## When true, [method GameManager._dispatch_game_tick] logs each listener for [member GameManager.tick_count] == 1.
-## Editor-only by default so headless [code]--headless[/code] CI is not flooded; set [code]true[/code] to trace tick 1 in exports.
-var trace_first_sim_tick: bool = OS.has_feature("editor")
+## Off by default; use [code]--crashtrap-tick1[/code] (or [code]--game-tick-trace[/code]) to enable.
+var trace_first_sim_tick: bool = false
 
 
 func _ready() -> void:
+	_apply_command_line_flags()
 	_log(
 			"CrashTrap initialized. trace_enabled=%s trace_first_sim_tick=%s (per-listener tick-1 trace when both true)"
 			% [trace_enabled, trace_first_sim_tick]
@@ -25,6 +27,27 @@ func _ready() -> void:
 
 func should_trace_game_tick_dispatch(tick: int) -> bool:
 	return trace_enabled and trace_first_sim_tick and tick == 1
+
+
+func _apply_command_line_flags() -> void:
+	for raw_arg in OS.get_cmdline_args():
+		var arg: String = str(raw_arg)
+		match arg:
+			"--crashtrap-trace":
+				trace_enabled = true
+			"--no-crashtrap-trace":
+				trace_enabled = false
+			"--crashtrap-tick1":
+				trace_enabled = true
+				trace_first_sim_tick = true
+			"--no-crashtrap-tick1":
+				trace_first_sim_tick = false
+			"--game-tick-trace":
+				trace_enabled = true
+				trace_first_sim_tick = true
+			"--no-game-tick-trace":
+				trace_enabled = false
+				trace_first_sim_tick = false
 
 
 func enter_system(system_name: String) -> void:

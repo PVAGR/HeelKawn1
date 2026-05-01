@@ -162,6 +162,7 @@ const LEARN_EVENTS_PAGE_SIZE: int = 128
 const LEARN_MAX_EVENTS_PER_UPDATE: int = 64
 const LEARN_EVENT_TICK_WINDOW: int = 1000
 var _last_learned_event_eid: int = 0
+var _cached_pawn_spawner: WeakRef = null
 
 func _ready():
 	_initialize_world_state()
@@ -3094,10 +3095,17 @@ func _pawn_neural_input_vector(pd: PawnData) -> Array[float]:
 
 
 func _resolve_pawn_spawner_for_world_ai() -> PawnSpawner:
+	if _cached_pawn_spawner != null:
+		var cached_v: Variant = _cached_pawn_spawner.get_ref()
+		if cached_v is PawnSpawner and is_instance_valid(cached_v):
+			return cached_v as PawnSpawner
 	if get_tree() == null or get_tree().root == null:
 		return null
 	var n: Node = get_tree().root.find_child("PawnSpawner", true, false)
-	return n as PawnSpawner
+	if n is PawnSpawner and is_instance_valid(n):
+		_cached_pawn_spawner = weakref(n)
+		return n as PawnSpawner
+	return null
 
 
 func remove_settlement(settlement_id: int) -> void:

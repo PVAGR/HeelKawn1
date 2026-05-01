@@ -98,31 +98,41 @@ func forward_propagate(input_data: Array[float]) -> Array[float]:
 	if current_values.size() > layers[0].size:
 		current_values = current_values.slice(0, layers[0].size)
 	
-	for layer_idx in range(layers.size()):
-		var layer = layers[layer_idx]
+	# Input layer: copy values into neuron state and seed current_values.
+	var input_layer: Dictionary = layers[0]
+	var input_neurons: Array = input_layer.neurons
+	var input_activations: Array[float] = []
+	for i in range(input_neurons.size()):
+		var in_neuron: Dictionary = input_neurons[i]
+		var in_value: float = current_values[i]
+		in_neuron.value = in_value
+		in_neuron.activation = in_value
+		input_activations.append(in_value)
+	current_values = input_activations
+	
+	# Hidden + output layers: O(source*target), direct connection lookup.
+	for layer_idx in range(1, layers.size()):
+		var prev_layer: Dictionary = layers[layer_idx - 1]
+		var layer: Dictionary = layers[layer_idx]
+		var prev_neurons: Array = prev_layer.neurons
+		var layer_neurons: Array = layer.neurons
 		var next_values: Array[float] = []
+		var prev_layer_name: String = str((prev_neurons[0] as Dictionary).get("id", "")).split("_")[0]
+		var curr_layer_name: String = str((layer_neurons[0] as Dictionary).get("id", "")).split("_")[0]
+		var connection_key: String = "%s_to_%s" % [prev_layer_name, curr_layer_name]
+		var layer_connections: Dictionary = connections.get(connection_key, {})
 		
-		for neuron_idx in range(layer.neurons.size()):
-			var neuron = layer.neurons[neuron_idx]
+		for neuron_idx in range(layer_neurons.size()):
+			var neuron: Dictionary = layer_neurons[neuron_idx]
 			var neuron_value: float = 0.0
-			
-			if layer_idx == 0:
-				# Input layer: use input values
-				neuron_value = current_values[neuron_idx]
-			else:
-				# Hidden/output layers: weighted sum from previous layer
-				var prev_layer_name = layers[layer_idx - 1].neurons[0].id.split("_")[0]
-				var curr_layer_name = neuron.id.split("_")[0]
-				var connection_key: String = "%s_to_%s" % [prev_layer_name, curr_layer_name]
-				
-				if connections.has(connection_key):
-					for conn_id in connections[connection_key]:
-						var conn = connections[connection_key][conn_id]
-						var source_idx: int = _find_neuron_index(conn.source, layer_idx - 1)
-						if source_idx >= 0 and source_idx < current_values.size():
-							neuron_value += current_values[source_idx] * conn.weight
-			
-			# Apply activation function
+			for source_idx in range(prev_neurons.size()):
+				var source_neuron: Dictionary = prev_neurons[source_idx]
+				var source_id: String = str(source_neuron.get("id", ""))
+				var target_id: String = str(neuron.get("id", ""))
+				var conn_id: String = "%s_%s" % [source_id, target_id]
+				var conn_v: Variant = layer_connections.get(conn_id, null)
+				if conn_v is Dictionary:
+					neuron_value += current_values[source_idx] * float((conn_v as Dictionary).get("weight", 0.0))
 			neuron.activation = _apply_activation(neuron_value, layer_idx)
 			neuron.value = neuron_value
 			next_values.append(neuron.activation)

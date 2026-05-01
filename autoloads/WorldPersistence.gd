@@ -95,6 +95,16 @@ func get_region_persistence(region_key: int) -> Dictionary:
 	return _default_entry()
 
 
+## Fast hot-path read used by pawn job filters/priority logic.
+## Avoids dictionary duplication in [method get_region_persistence].
+func get_region_scar_level(region_key: int) -> int:
+	if persistent_regions.has(region_key):
+		var v: Variant = persistent_regions[region_key]
+		if v is Dictionary:
+			return int((v as Dictionary).get("scar_level", 0))
+	return 0
+
+
 func recompute() -> void:
 	var old: Dictionary = persistent_regions.duplicate(true)
 	persistent_regions.clear()

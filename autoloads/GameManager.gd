@@ -257,7 +257,23 @@ func _dispatch_game_tick(tick: int) -> void:
 			print("[GameManager] game_tick(%d) dispatch %s" % [tick, label])
 		if ct_slots:
 			CrashTrap.enter_system("listener:%s" % label)
+		var cb_start_us: int = Time.get_ticks_usec()
 		cb2.call(tick)
+		var cb_elapsed_us: int = Time.get_ticks_usec() - cb_start_us
+		if trace_game_tick_dispatch and cb_elapsed_us >= 1000:
+			var debug_suffix: String = ""
+			var cb_obj: Object = cb2.get_object()
+			if cb_obj != null and is_instance_valid(cb_obj):
+				if cb_obj.has_method("get_state_name"):
+					var st: String = str(cb_obj.call("get_state_name"))
+					var job_lbl: String = ""
+					if cb_obj.has_method("get_current_job_label"):
+						job_lbl = str(cb_obj.call("get_current_job_label"))
+					debug_suffix = " state=%s job=%s" % [st, job_lbl]
+			print(
+					"[GameManager] game_tick(%d) timing %s = %.2fms%s"
+					% [tick, label, float(cb_elapsed_us) / 1000.0, debug_suffix]
+			)
 		if ct_slots:
 			CrashTrap.exit_system("listener:%s" % label)
 	if ct_slots:

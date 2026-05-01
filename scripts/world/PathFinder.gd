@@ -182,7 +182,7 @@ func refresh_pawn_historic_scar_weights(p_world: World) -> void:
 			if _astar.is_point_solid(Vector2i(x, y)):
 				continue
 			var rk: int = _WM._region_key(x, y)
-			var sl: int = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))
+			var sl: int = int(WorldPersistence.get_region_scar_level(rk))
 			var w: float = 1.0
 			if sl > 0:
 				match sl:

@@ -276,6 +276,8 @@ var _teaching_ticks_left: int = 0
 var _teaching_knowledge_type: int = -1
 var _last_teach_tick: int = 0
 var _teach_cooldown_ticks: int = 0  # Will be set in _ready()
+## Student progress tracking: pawn_id -> {skill: level, ticks_taught: int}
+var _students_taught: Dictionary = {}
 
 ## Challenge state variables
 var _challenge_target: Pawn = null
@@ -3963,11 +3965,23 @@ func _process_injuries() -> void:
 func _observe_nearby_work() -> void:
 	# DISABLED for performance - iterates through all pawns
 	return
+	
+
+func can_teach_skill(target_pawn: Pawn) -> bool:
+	# Check if teaching is allowed (cooldown, etc.)
+	if GameManager.tick_count - _last_teach_tick < _teach_cooldown_ticks:
+		return false
+	# Can add more conditions here (distance, etc.)
+	return true
 
 
 func teach_skill(target_pawn: Pawn, skill: int) -> bool:
 	# Teach a skill to another pawn
 	# Requires: teacher has skill level >= 5, target has lower skill level
+	
+	# Check cooldown first
+	if not can_teach_skill(target_pawn):
+		return false
 	if data == null or target_pawn == null or not is_instance_valid(target_pawn) or target_pawn.data == null:
 		return false
 	var teacher_level: int = data.get_skill_level(skill)
@@ -3983,6 +3997,16 @@ func teach_skill(target_pawn: Pawn, skill: int) -> bool:
 	# Small XP bonus to teacher for teaching
 	data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK * 0.5 * te)
 	_record_teaching_memory_fact(target_pawn, PawnData.skill_name(skill).to_lower())
+	
+	# Update cooldown timestamp
+	_last_teach_tick = GameManager.tick_count
+	
+	# Track student progress
+	var student_id: int = int(target_pawn.data.id)
+	if not _students_taught.has(student_id):
+		_students_taught[student_id] = {"skill": skill, "ticks_taught": 0}
+	_students_taught[student_id]["ticks_taught"] = int(_students_taught[student_id].get("ticks_taught", 0)) + 1
+	_students_taught[student_id]["skill"] = skill
 	
 	if GameManager.verbose_logs():
 		print("[Pawn] %s taught %s in %s" % [

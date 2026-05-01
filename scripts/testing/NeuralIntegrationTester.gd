@@ -1334,7 +1334,10 @@ func get_detailed_report() -> String:
 
 	var report: PackedStringArray = []
 	report.append("=== HEELKAWN NEURAL NETWORK MATRIX INTEGRATION TEST REPORT ===")
-	report.append("Test Timestamp: %s" % Time.get_datetime_string_from_system(test_results.test_timestamp))
+	report.append(
+			"Test Timestamp: %s"
+			% Time.get_datetime_string_from_unix_time(int(test_results.test_timestamp))
+	)
 	report.append("Overall Status: %s" % test_results.overall_status.to_upper())
 	report.append("Total Tests: %d" % test_results.total_tests)
 	report.append("Passed: %d" % test_results.passed_tests)

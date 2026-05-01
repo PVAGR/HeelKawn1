@@ -21,7 +21,7 @@ static func export_pawn(pawn: Pawn) -> Dictionary:
 		"age": pd.age,
 		"age_years": pd.age_years,
 		"gender": pd.gender,
-		"profession": pd.Profession.keys()[pd.current_profession],
+		"profession": str(PawnData.Profession.keys()[pd.current_profession]),
 		
 		# Stage 1: Individual progression
 		"level": pd.level,

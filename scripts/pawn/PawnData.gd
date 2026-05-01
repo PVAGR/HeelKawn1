@@ -330,6 +330,9 @@ var need_urgency: Dictionary = {
 func _init() -> void:
 	id = _next_id
 	_next_id += 1
+	# Explicit defaults (also on fields) so saves/tools never see unset sentinel bugs.
+	settlement_id = -1
+	current_profession = Profession.NONE
 	birth_tick = int(GameManager.tick_count) if GameManager != null else 0
 	initialize_affinities(birth_tick, -1, -1)
 	_initialize_personality(birth_tick, parent_a_id, parent_b_id)
@@ -1354,7 +1357,7 @@ func update_historical_memory(site_id: int, state: String) -> void:
 		avoidance_modifier = 0.3
 		avoidance_tick_timer = 30
 	elif state == "RUINS":
-		if Profession.keys()[current_profession] == "BUILDER":
+		if current_profession == Profession.BUILDER:
 			# Increase job priority for builders near ruins
 			pass
 	

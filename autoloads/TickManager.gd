@@ -13,6 +13,9 @@ var _target_interval: float = BASE_TICK_INTERVAL
 var _is_paused: bool = false
 var _speed_multiplier: float = 1.0
 
+## RefCounted objects that register for tick notifications (SettlementAI, etc.)
+var _refcounted_tickables: Array = []
+
 ## Speed presets: 0.5x, 1x, 4x, 16x, 64x
 const SPEED_PRESETS: Array[float] = [0.5, 1.0, 4.0, 16.0, 64.0]
 var _current_speed_index: int = 1  # Start at 1x (index 1)
@@ -32,6 +35,7 @@ func _process(delta: float) -> void:
 func _dispatch_tick(tick: int) -> void:
 	tick_processed.emit(tick)
 	_call_tick_on_tickables(tick)
+	_call_tick_on_refcounted(tick)
 	# Keep GameManager in sync for systems that still read tick_count
 	if GameManager != null:
 		GameManager.tick_count = tick
@@ -40,14 +44,28 @@ func _call_tick_on_tickables(tick: int) -> void:
 	var tree: SceneTree = get_tree()
 	if tree == null:
 		return
-	var tickables: Array = tree.get_nodes_in_group("tickable")
-	# Sort deterministically by node path for identical order every run
-	tickables.sort_custom(func(a: Node, b: Node) -> bool:
-		return str(a.get_path()) < str(b.get_path())
-	)
-	for node in tickables:
+	# Collect valid tickable nodes
+	var tickable_nodes: Array = []
+	for node in tree.get_nodes_in_group("tickable"):
 		if node != null and is_instance_valid(node) and node.has_method("_on_world_tick"):
-			node._on_world_tick(tick)
+			tickable_nodes.append(node)
+	# Sort by node path for deterministic order
+	tickable_nodes.sort_custom(func(a, b): return a.get_path() < b.get_path())
+	for node in tickable_nodes:
+		node._on_world_tick(tick)
+
+func _call_tick_on_refcounted(tick: int) -> void:
+	for obj in _refcounted_tickables:
+		if is_instance_valid(obj) and obj.has_method("_on_world_tick"):
+			obj._on_world_tick(tick)
+
+## Register a RefCounted object for tick notifications (e.g., SettlementAI).
+func register_refcounted_tickable(obj: RefCounted) -> void:
+	if not _refcounted_tickables.has(obj):
+		_refcounted_tickables.append(obj)
+
+func unregister_refcounted_tickable(obj: RefCounted) -> void:
+	_refcounted_tickables.erase(obj)
 
 ## Set speed by multiplier (0.5, 1, 4, 16, 64).
 func set_speed(multiplier: float) -> void:

@@ -759,29 +759,16 @@ func _pawn_connect_sim_tick_deferred() -> void:
 	if data == null or _world == null:
 		push_warning("Pawn: deferred tick connect skipped — not bound (path=%s)" % str(get_path()))
 		return
-	# Prefer TickManager; fall back to GameManager for backward compatibility
-	var tick_manager = get_node_or_null("/root/TickManager")
-	if tick_manager != null and tick_manager.has_signal("tick_processed"):
-		if not tick_manager.tick_processed.is_connected(_on_world_tick):
-			tick_manager.tick_processed.connect(_on_world_tick)
+	# Pawns are in "tickable" group - TickManager calls _on_world_tick() directly.
+	# No need to connect to signal (avoids double-processing).
+	# Fallback: if TickManager not available, use GameManager.
+	if not has_node("/root/TickManager"):
+		if GameManager != null:
+			if not GameManager.game_tick.is_connected(_on_world_tick):
+				GameManager.game_tick.connect(_on_world_tick)
 		_pawn_sim_tick_armed = true
 		return
-	# Fallback to GameManager
-	if GameManager == null:
-		return
-	if GameManager.game_tick.is_connected(_on_world_tick):
-		_pawn_sim_tick_armed = true
-		return
-	GameManager.game_tick.connect(_on_world_tick)
 	_pawn_sim_tick_armed = true
-			return
-	## Fallback: use GameManager for backward compatibility
-	if GameManager != null:
-		if GameManager.game_tick.is_connected(_on_world_tick):
-			_pawn_sim_tick_armed = true
-			return
-		GameManager.game_tick.connect(_on_world_tick)
-		_pawn_sim_tick_armed = true
 
 
 ## Called by PawnSpawner immediately after instantiation.

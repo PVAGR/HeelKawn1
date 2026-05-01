@@ -815,6 +815,14 @@ func get_last_pawn_death_tick_for_region(rk: int) -> int:
 	return int(_pawn_death_last_tick_by_region.get(rk, -1))
 
 
+func get_all_region_keys() -> PackedInt32Array:
+	var out: PackedInt32Array = []
+	for rk in meaning_by_region.keys():
+		out.append(int(rk))
+	out.sort()
+	return out
+
+
 ## Region keys (16x16) that have at least one animal death event, sorted ascending (deterministic).
 func get_region_keys_with_animal_deaths() -> Array[int]:
 	var seen: Dictionary = {}

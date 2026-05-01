@@ -8,6 +8,7 @@ extends Node
 
 const BLOODLINE_CLEANUP_INTERVAL_TICKS: int = 10000
 const BLOODLINE_CLEANUP_PHASE_OFFSET_TICKS: int = 1151
+const BLOODLINE_PRIDE_PER_LIVING_MEMBER: float = 0.006
 
 # Bloodline data: bloodline_id -> bloodline info
 var bloodlines: Dictionary = {}
@@ -28,7 +29,7 @@ func _on_game_tick(tick: int) -> void:
 
 # === Bloodline Creation ===
 
-func create_bloodline(founder_id: int, founder_name: String = "") -> int:
+func create_bloodline(founder_id: int, founder_name: String = "", specialization_key: String = "") -> int:
 	var bloodline_id: int = GameManager.tick_count * 1000 + bloodlines.size()
 	
 	bloodlines[bloodline_id] = {
@@ -39,6 +40,9 @@ func create_bloodline(founder_id: int, founder_name: String = "") -> int:
 		"current_generation": 1,
 		"total_members": 1,
 		"living_members": 1,
+		"historical_deaths": 0,
+		"specialization_key": specialization_key,
+		"genetic_traits": [],
 		"extinct": false,
 		"extinction_tick": -1,
 	}
@@ -72,9 +76,37 @@ func create_bloodline(founder_id: int, founder_name: String = "") -> int:
 	
 	return bloodline_id
 
+
+func assign_birth_bloodline(newborn_id: int, newborn_name: String, parent_a_id: int = -1, parent_b_id: int = -1, specialization_key: String = "") -> int:
+	var bloodline_id: int = -1
+	var parent_id: int = parent_a_id if parent_a_id >= 0 else parent_b_id
+	if parent_id >= 0:
+		bloodline_id = get_bloodline_for_pawn(parent_id)
+	if bloodline_id < 0:
+		bloodline_id = create_bloodline(newborn_id, newborn_name, specialization_key)
+	else:
+		add_pawn_to_bloodline(newborn_id, bloodline_id, parent_id)
+		if specialization_key != "":
+			_update_bloodline_specialization(bloodline_id, specialization_key)
+	return bloodline_id
+
+
+func get_inbreeding_penalty(parent_a_id: int, parent_b_id: int) -> float:
+	if parent_a_id < 0 or parent_b_id < 0:
+		return 0.0
+	if parent_a_id == parent_b_id:
+		return 0.35
+	var bloodline_a: int = get_bloodline_for_pawn(parent_a_id)
+	var bloodline_b: int = get_bloodline_for_pawn(parent_b_id)
+	if bloodline_a < 0 or bloodline_b < 0 or bloodline_a != bloodline_b:
+		return 0.0
+	var generation_gap: int = abs(get_generation_for_pawn(parent_a_id) - get_generation_for_pawn(parent_b_id))
+	var penalty: float = 0.20 - 0.03 * float(generation_gap)
+	return clampf(penalty, 0.05, 0.20)
+
 # === Bloodline Membership ===
 
-func add_pawn_to_bloodline(pawn_id: int, bloodline_id: int, parent_id: int = -1) -> void:
+func add_pawn_to_bloodline(pawn_id: int, bloodline_id: int, parent_id: int = -1, genetic_traits: Array = []) -> void:
 	if not bloodlines.has(bloodline_id):
 		return
 	
@@ -83,6 +115,12 @@ func add_pawn_to_bloodline(pawn_id: int, bloodline_id: int, parent_id: int = -1)
 	var bloodline: Dictionary = bloodlines[bloodline_id]
 	bloodline["total_members"] += 1
 	bloodline["living_members"] += 1
+	for trait_any in genetic_traits:
+		var trait_name: String = str(trait_any).strip_edges()
+		if trait_name.is_empty():
+			continue
+		if not trait_name in bloodline["genetic_traits"]:
+			bloodline["genetic_traits"].append(trait_name)
 	
 	# Determine generation
 	var generation: int = 1
@@ -120,6 +158,81 @@ func add_pawn_to_bloodline(pawn_id: int, bloodline_id: int, parent_id: int = -1)
 	}
 	if WorldMemory:
 		WorldMemory.record_event(event)
+
+
+func record_pawn_death(pawn_id: int) -> void:
+	if not pawn_to_bloodline.has(pawn_id):
+		return
+	var bloodline_id: int = int(pawn_to_bloodline[pawn_id])
+	if not bloodlines.has(bloodline_id):
+		return
+	var bloodline: Dictionary = bloodlines[bloodline_id]
+	bloodline["historical_deaths"] = int(bloodline.get("historical_deaths", 0)) + 1
+	bloodline["living_members"] = maxi(0, int(bloodline.get("living_members", 0)) - 1)
+	if bloodline["living_members"] <= 0 and not bool(bloodline.get("extinct", false)):
+		bloodline["extinct"] = true
+		bloodline["extinction_tick"] = GameManager.tick_count
+		if WorldMemory:
+			WorldMemory.record_event({
+				"type": "bloodline_extinct",
+				"bloodline_id": bloodline_id,
+				"tick": GameManager.tick_count,
+			})
+		if WorldPersistence:
+			WorldPersistence.record_family_event(
+				bloodline_id,
+				"extinct",
+				GameManager.tick_count,
+				"Bloodline went extinct",
+				[]
+			)
+
+
+func get_bloodline_pride_mood_bonus(bloodline_id: int) -> float:
+	if not bloodlines.has(bloodline_id):
+		return 0.0
+	var bloodline: Dictionary = bloodlines[bloodline_id]
+	var living: int = int(bloodline.get("living_members", 0))
+	var pride: float = BLOODLINE_PRIDE_PER_LIVING_MEMBER * float(mini(living, 10))
+	if bloodline.get("extinct", false):
+		pride *= 0.5
+	return pride
+
+
+func get_bloodline_specialization_multiplier(bloodline_id: int, skill: int) -> float:
+	if not bloodlines.has(bloodline_id):
+		return 1.0
+	var bloodline: Dictionary = bloodlines[bloodline_id]
+	var spec: String = str(bloodline.get("specialization_key", ""))
+	if spec.is_empty():
+		return 1.0
+	var cat: String = PawnData.tree_skill_category_for_job_skill(skill)
+	if cat.is_empty():
+		return 1.0
+	if spec == cat:
+		return 1.08
+	return 1.0
+
+
+func get_generation_for_pawn(pawn_id: int) -> int:
+	if not pawn_to_bloodline.has(pawn_id):
+		return 1
+	var bloodline_id: int = int(pawn_to_bloodline[pawn_id])
+	if not generation_data.has(bloodline_id):
+		return 1
+	for generation in generation_data[bloodline_id].keys():
+		var generation_block: Dictionary = generation_data[bloodline_id][generation]
+		if pawn_id in generation_block.get("members", []):
+			return int(generation)
+	return 1
+
+
+func _update_bloodline_specialization(bloodline_id: int, specialization_key: String) -> void:
+	if not bloodlines.has(bloodline_id):
+		return
+	var bloodline: Dictionary = bloodlines[bloodline_id]
+	if str(bloodline.get("specialization_key", "")).is_empty():
+		bloodline["specialization_key"] = specialization_key
 
 func remove_pawn_from_bloodline(pawn_id: int, died: bool = false) -> void:
 	if not pawn_to_bloodline.has(pawn_id):

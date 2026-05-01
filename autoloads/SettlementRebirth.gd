@@ -10,6 +10,8 @@ extends Node
 const CHECK_INTERVAL_TICKS: int = 1000
 const REBIRTH_PEACE_TICKS: int = 5000
 const REBIRTH_INTERVAL_TICKS: int = 20000
+const REBIRTH_SPAWN_BASE_COUNT: int = 2
+const REBIRTH_SPAWN_COUNT_VARIANCE: int = 2  # deterministic 2..3 cohort size
 const TILE_SCORE_STRUCT_NEIGHBOR: int = 85
 const TILE_SCORE_SCAR_WEIGHT: int = 40
 const TILE_SCORE_ROAD_WEIGHT: int = 120
@@ -63,16 +65,34 @@ func process(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 		var cands0: Array[Vector2i] = _rebirth_tiles_in_order_cached(world, s)
 		if cands0.is_empty():
 			continue
+		var spawn_target: int = _rebirth_spawn_target_count(now1, ckey)
 		var seed0: int = now1 + ckey * 7 + 11
-		var did_spawn0: bool = false
+		var spawned_count: int = 0
+		var attempt_index: int = 0
 		for tspawn0 in cands0:
-			if ps.spawn_pawn_at(world, tspawn0, seed0):
-				did_spawn0 = true
+			if spawned_count >= spawn_target:
 				break
-		if not did_spawn0:
+			var spawn_seed: int = seed0 + attempt_index * 31 + spawned_count * 97
+			attempt_index += 1
+			if ps.spawn_pawn_at(world, tspawn0, spawn_seed, s, "rebirth"):
+				spawned_count += 1
+		if spawned_count <= 0:
 			continue
 		_last_rebirth_tick_by_center[ck2] = now1
 		MythMemory.register_rebirth_success(ckey)
+		WorldMemory.record_event({
+			"type": "settlement_rebirth",
+			"tick": now1,
+			"center_region": ckey,
+			"spawned_count": spawned_count,
+			"culture_name": str(s.get("culture_name", "")),
+			"state": str(s.get("state", "")),
+		})
+
+
+func _rebirth_spawn_target_count(now_tick: int, center_region: int) -> int:
+	var parity: int = int((now_tick / maxi(1, REBIRTH_INTERVAL_TICKS)) + center_region)
+	return REBIRTH_SPAWN_BASE_COUNT + int(abs(parity) % REBIRTH_SPAWN_COUNT_VARIANCE)
 
 
 func _rebirth_tiles_in_order_cached(world: World, settlement: Dictionary) -> Array[Vector2i]:

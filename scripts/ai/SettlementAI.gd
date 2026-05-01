@@ -9,6 +9,8 @@ var CollapseSystem = null
 var AuthoritySystem = null
 var WorldAI = null
 var GameManager = null
+var TechnologySystem = null
+var KnowledgeSystem = null
 
 func _autoload_or_null(path: String) -> Node:
 	var main_loop: MainLoop = Engine.get_main_loop()
@@ -26,6 +28,8 @@ func _resolve_autoload_refs() -> void:
 	AuthoritySystem = _autoload_or_null("/root/AuthoritySystem")
 	WorldAI = _autoload_or_null("/root/WorldAI")
 	GameManager = _autoload_or_null("/root/GameManager")
+	TechnologySystem = _autoload_or_null("/root/TechnologySystem")
+	KnowledgeSystem = _autoload_or_null("/root/KnowledgeSystem")
 
 enum GovernmentType {
 	TRIBAL = 0,        # Hunter-gatherer bands, consensus decisions
@@ -808,9 +812,8 @@ func _has_cultural_norm(norm_name: String) -> bool:
 	return false
 
 func _advance_technology() -> void:
-	# Technology advances based on population and focus
-	var tech_progress: float = 0.0
-	
+	# Keep legacy tech-level drift so older systems remain stable.
+	var tech_progress: float = 0.05
 	match development_focus:
 		DevelopmentFocus.KNOWLEDGE:
 			tech_progress = 0.2
@@ -818,10 +821,37 @@ func _advance_technology() -> void:
 			tech_progress = 0.15
 		DevelopmentFocus.BALANCED:
 			tech_progress = 0.1
-		_:
-			tech_progress = 0.05
-	
 	technological_level = min(100, technological_level + tech_progress)
+	# Deterministic backend research hook: choose cheapest available tech when points allow.
+	if TechnologySystem == null or KnowledgeSystem == null:
+		return
+	if not TechnologySystem.has_method("get_active_research"):
+		return
+	var active_id: String = str(TechnologySystem.call("get_active_research", settlement_id))
+	if not active_id.is_empty():
+		return
+	var researchable: Array = []
+	if KnowledgeSystem.has_method("get_researchable_techs"):
+		researchable = KnowledgeSystem.call("get_researchable_techs", settlement_id)
+	if researchable.is_empty():
+		return
+	var cheapest: String = ""
+	var cheapest_cost: int = 1_000_000
+	for tech_any in researchable:
+		var tech_id: String = str(tech_any)
+		if not TechnologySystem.TECH_TREE.has(tech_id):
+			continue
+		var node: Dictionary = TechnologySystem.TECH_TREE[tech_id] as Dictionary
+		var cost: int = int(node.get("cost", 0))
+		if cost < cheapest_cost or (cost == cheapest_cost and tech_id < cheapest):
+			cheapest_cost = cost
+			cheapest = tech_id
+	if cheapest.is_empty():
+		return
+	TechnologySystem.call("set_active_research", settlement_id, cheapest)
+	var researched: bool = bool(TechnologySystem.call("research_tech", cheapest, settlement_id))
+	if researched:
+		historical_events.append("Researched technology: %s" % cheapest)
 
 func _update_government_type() -> void:
 	# Government evolves with population and complexity

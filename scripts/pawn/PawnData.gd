@@ -118,6 +118,8 @@ var trust: Dictionary = {}
 var spouse_id: int = -1
 ## Children IDs
 var children_ids: Array[int] = []
+## Bloodline ID (-1 if not assigned)
+var bloodline_id: int = -1
 
 ## Stage 3: Clan & Household Network
 ## Clan ID (-1 if not in a clan)
@@ -1960,6 +1962,98 @@ func teach_efficiency_multiplier() -> float:
 	return 1.0
 
 
+func bloodline_pride_mood_bonus() -> float:
+	if bloodline_id < 0:
+		return 0.0
+	var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
+	if bloodline_sys != null and bloodline_sys.has_method("get_bloodline_pride_mood_bonus"):
+		return clampf(float(bloodline_sys.call("get_bloodline_pride_mood_bonus", bloodline_id)), 0.0, 0.08)
+	return 0.0
+
+
+func bloodline_specialization_multiplier(skill: int) -> float:
+	if bloodline_id < 0:
+		return 1.0
+	var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
+	if bloodline_sys != null and bloodline_sys.has_method("get_bloodline_specialization_multiplier"):
+		return maxf(0.85, float(bloodline_sys.call("get_bloodline_specialization_multiplier", bloodline_id, skill)))
+	return 1.0
+
+
+func _related_pawn_ids() -> PackedInt32Array:
+	var out: PackedInt32Array = []
+	var seen: Dictionary = {}
+	for rid in [parent_a_id, parent_b_id, spouse_id]:
+		if rid >= 0 and not seen.has(rid):
+			seen[rid] = true
+			out.append(rid)
+	for cid in children_ids:
+		if cid >= 0 and not seen.has(cid):
+			seen[cid] = true
+			out.append(cid)
+	for fid_any in family_bonds.keys():
+		var fid: int = int(fid_any)
+		if fid >= 0 and not seen.has(fid):
+			seen[fid] = true
+			out.append(fid)
+	return out
+
+
+func kinship_mood_bonus() -> float:
+	var delta: float = bloodline_pride_mood_bonus()
+	for rid in _related_pawn_ids():
+		var rel: PawnData = _pawn_data_by_id.get(rid, null)
+		var bond: float = float(family_bonds.get(rid, 0.0))
+		if rel != null:
+			var health_ratio: float = clampf(rel.health / maxf(1.0, rel.max_health), 0.0, 1.0)
+			if health_ratio >= 0.75:
+				delta += 0.002 + bond / 50000.0
+			elif health_ratio <= 0.25:
+				delta -= 0.004
+		else:
+			delta -= 0.006
+	return clampf(delta, -0.05, 0.05)
+
+
+func kinship_work_speed_multiplier(work_tile: Vector2i, radius: int = 6) -> float:
+	var mult: float = 1.0
+	for rid in _related_pawn_ids():
+		var rel: PawnData = _pawn_data_by_id.get(rid, null)
+		if rel == null:
+			continue
+		if work_tile.distance_to(rel.tile_pos) > float(radius):
+			continue
+		var bond: float = float(family_bonds.get(rid, 0.0))
+		mult += 0.015 + bond / 10000.0
+	return clampf(mult, 1.0, 1.15)
+
+
+func kinship_job_priority_bonus(work_tile: Vector2i, radius: int = 6) -> int:
+	var bonus: int = 0
+	for rid in _related_pawn_ids():
+		var rel: PawnData = _pawn_data_by_id.get(rid, null)
+		if rel == null:
+			continue
+		if work_tile.distance_to(rel.tile_pos) > float(radius):
+			continue
+		bonus += 1
+	return mini(3, bonus)
+
+
+func kinship_teach_efficiency_multiplier(target_pawn_id: int) -> float:
+	if target_pawn_id < 0:
+		return 1.0
+	var mult: float = 1.0
+	if target_pawn_id == spouse_id:
+		mult *= 1.35
+	if target_pawn_id == parent_a_id or target_pawn_id == parent_b_id or target_pawn_id in children_ids:
+		mult *= 1.20
+	if family_bonds.has(target_pawn_id):
+		var bond: float = clampf(float(family_bonds[target_pawn_id]) / 100.0, 0.0, 1.0)
+		mult *= lerpf(1.0, 1.12, bond)
+	return mult
+
+
 func leadership_presence_multiplier() -> float:
 	var mult: float = 1.0
 	for branch_key in skill_trees:
@@ -1997,7 +2091,8 @@ func work_speed_for(skill: int) -> float:
 		base = 1.0 + t * (SKILL_BONUS_AT_MAX - 1.0)
 	var cat: String = tree_skill_category_for_job_skill(skill)
 	var tree_mult: float = skill_tree_bonus_product_for_category(cat, "work_speed_mult")
-	return base * tree_mult
+	var bloodline_mult: float = bloodline_specialization_multiplier(skill)
+	return base * tree_mult * bloodline_mult
 
 
 func _skill_to_profession(skill_key: String) -> int:
@@ -2736,6 +2831,7 @@ func to_save_dict() -> Dictionary:
 		"parent_a_id": parent_a_id,
 		"parent_b_id": parent_b_id,
 		"children_count": children_count,
+		"bloodline_id": bloodline_id,
 		"influence": influence,
 		"military_rank": military_rank_legacy,  # Use legacy string for save compatibility
 		"military_rank_int": military_rank,  # Stage 6 int-based rank
@@ -2847,6 +2943,7 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	p.parent_a_id = int(d.get("parent_a_id", -1))
 	p.parent_b_id = int(d.get("parent_b_id", -1))
 	p.children_count = int(d.get("children_count", 0))
+	p.bloodline_id = int(d.get("bloodline_id", -1))
 	p.influence = float(d.get("influence", 0.0))
 	p.military_rank_legacy = str(d.get("military_rank_legacy", "grunt"))
 	p.military_rank = int(d.get("military_rank_int", 0))

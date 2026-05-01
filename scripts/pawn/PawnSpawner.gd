@@ -146,6 +146,9 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		data.hair_color = HAIR_COLORS[rng.randi_range(0, HAIR_COLORS.size() - 1)]
 		data.apparel_color = APPAREL_COLORS[rng.randi_range(0, APPAREL_COLORS.size() - 1)]
 		_assign_random_traits(data, rng)
+		var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
+		if bloodline_sys != null and bloodline_sys.has_method("create_bloodline"):
+			data.bloodline_id = int(bloodline_sys.call("create_bloodline", data.id, data.display_name, data.highest_affinity_skill()))
 
 		var pawn: Pawn = pawn_scene.instantiate() as Pawn
 		pawn.bind(data, world.tile_to_world(tile), world)
@@ -177,7 +180,9 @@ func spawn_generational_pawn(
 		   tile: Vector2i,
 		   tick_seed: int,
 		   parent_id: int = -1,
-		   household_id: int = -1
+		   household_id: int = -1,
+		   settlement_context: Dictionary = {},
+		   birth_kind: String = "generational"
 ) -> bool:
 	if world == null or world.data == null or world.pathfinder == null or pawn_scene == null:
 		return false
@@ -211,19 +216,43 @@ func spawn_generational_pawn(
 	data.apparel_color = APPAREL_COLORS[(int(tick_seed) + 2) % APPAREL_COLORS.size()]
 	if parent_data != null:
 		data.lineage_id = parent_data.unique_id
+	var bloodline_sys_birth: Node = get_node_or_null("/root/BloodlineSystem")
+	if bloodline_sys_birth != null and bloodline_sys_birth.has_method("assign_birth_bloodline"):
+		var spec_hint: String = parent_data.highest_affinity_skill() if parent_data != null else data.highest_affinity_skill()
+		data.bloodline_id = int(bloodline_sys_birth.call("assign_birth_bloodline", data.id, data.display_name, parent_id, -1, spec_hint))
+	if not settlement_context.is_empty():
+		var center_region: int = int(settlement_context.get("center_region", -1))
+		var culture_name: String = str(settlement_context.get("culture_name", ""))
+		if center_region >= 0:
+			var rep: float = float(CulturalMemory.get_region_reputation(center_region))
+			data.settlement_reputation[str(center_region)] = rep
+		if not culture_name.is_empty():
+			data.cultural_affinity[culture_name] = 100.0
 	var pawn: Pawn = pawn_scene.instantiate() as Pawn
 	pawn.bind(data, world.tile_to_world(tile), world)
 	add_child(pawn)
 	pawns.append(pawn)
 	WorldMemory.record_event({
 		"type": "pawn_birth",
-		"birth_kind": "generational",
+		"birth_kind": birth_kind,
 		"tick": GameManager.tick_count,
 		"pawn_id": int(data.id),
 		"pawn_name": data.display_name,
 		"tile": {"x": tile.x, "y": tile.y},
 		"region": WorldMemory._region_key(tile.x, tile.y),
 	})
+	if birth_kind == "rebirth":
+		WorldMemory.record_event({
+			"type": "generational_birth",
+			"birth_kind": "rebirth",
+			"tick": GameManager.tick_count,
+			"pawn_id": int(data.id),
+			"pawn_name": data.display_name,
+			"tile": {"x": tile.x, "y": tile.y},
+			"region": WorldMemory._region_key(tile.x, tile.y),
+			"center_region": int(settlement_context.get("center_region", -1)),
+			"culture_name": str(settlement_context.get("culture_name", "")),
+		})
 	var kin: Node = get_node_or_null("/root/KinshipSystem")
 	if kin != null:
 		if kin.has_method("add_person"):
@@ -240,13 +269,25 @@ func spawn_generational_pawn(
 
 
 ## Deterministic: alias for [method spawn_generational_pawn] (Settlement Rebirth, etc.).
-func spawn_pawn_at_tile(world: World, tile: Vector2i, tick_seed: int) -> bool:
-	return spawn_generational_pawn(world, tile, tick_seed)
+func spawn_pawn_at_tile(
+		world: World,
+		tile: Vector2i,
+		tick_seed: int,
+		settlement_context: Dictionary = {},
+		birth_kind: String = "generational"
+) -> bool:
+	return spawn_generational_pawn(world, tile, tick_seed, -1, -1, settlement_context, birth_kind)
 
 
 ## Same as [method spawn_pawn_at_tile].
-func spawn_pawn_at(world: World, tile: Vector2i, tick_seed: int) -> bool:
-	return spawn_pawn_at_tile(world, tile, tick_seed)
+func spawn_pawn_at(
+		world: World,
+		tile: Vector2i,
+		tick_seed: int,
+		settlement_context: Dictionary = {},
+		birth_kind: String = "generational"
+) -> bool:
+	return spawn_pawn_at_tile(world, tile, tick_seed, settlement_context, birth_kind)
 
 
 func _pick_name_deterministic() -> String:
@@ -376,6 +417,12 @@ func spawn_child_pawn(
 	data.initialize_affinities(birth_tick, parent_a.id, parent_b.id)
 	data.parent_a_id = parent_a.id
 	data.parent_b_id = parent_b.id
+	var inbreeding_penalty: float = 0.0
+	if bloodline_sys != null and bloodline_sys.has_method("get_inbreeding_penalty"):
+		inbreeding_penalty = float(bloodline_sys.call("get_inbreeding_penalty", int(parent_a.id), int(parent_b.id)))
+	if inbreeding_penalty > 0.0:
+		data.health = clampf(data.health - 35.0 * inbreeding_penalty, 15.0, 100.0)
+		data.mood = clampf(data.mood - 20.0 * inbreeding_penalty, 20.0, 100.0)
 	for sk in parent_a.skills.keys():
 		var inherited: int = int((int(parent_a.skills[sk]) + int(parent_b.skills.get(sk, 0))) * 0.2)
 		data.skills[sk] = inherited
@@ -393,6 +440,7 @@ func spawn_child_pawn(
 		"pawn_name": data.display_name,
 		"parent_a_id": int(parent_a.id),
 		"parent_b_id": int(parent_b.id),
+		"inbreeding_penalty": inbreeding_penalty,
 		"tile": {"x": tile.x, "y": tile.y},
 		"region": WorldMemory._region_key(tile.x, tile.y),
 	})

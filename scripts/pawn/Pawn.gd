@@ -1774,6 +1774,7 @@ func _tick_idle() -> void:
 			utility_bias = int(round((_utility_score_normalized(action_key, utility_context, utility_cache) - 0.5) * float(UTILITY_JOB_PRIORITY_BIAS_RANGE)))
 			utility_bias_cache[action_key] = utility_bias
 		base_bias += utility_bias
+		base_bias += data.kinship_job_priority_bonus(j.work_tile)
 		if preferred_idle_action == "forage" and (j.type == Job.Type.FORAGE or j.type == Job.Type.HUNT):
 			base_bias += 2
 		# When the pantry is not in emergency, nudge non-food labor so the colony
@@ -2319,6 +2320,7 @@ func _tick_working() -> void:
 	var speed: float = data.effective_labor_mult() * float(work_step_multiplier)
 	# Tool efficacy: equipped tools boost specific job types
 	speed *= data.get_tool_efficacy(_current_job.type)
+	speed *= data.kinship_work_speed_multiplier(_current_job.work_tile)
 	if skill >= 0:
 		speed *= data.work_speed_for(skill)
 		# Apply efficiency modifier
@@ -3609,9 +3611,9 @@ func _decay_needs() -> void:
 		mood_event_impact = data.get_mood_event_impact()
 	
 	if data.hunger >= MOOD_CONTENT_FLOOR and data.rest >= MOOD_CONTENT_FLOOR:
-		data.mood = min(100.0, data.mood + MOOD_GAIN_PER_TICK_CONTENT - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact)
+		data.mood = min(100.0, data.mood + MOOD_GAIN_PER_TICK_CONTENT - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact + data.kinship_mood_bonus())
 	else:
-		data.mood = max(0.0, data.mood - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact)
+		data.mood = max(0.0, data.mood - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact + data.kinship_mood_bonus())
 	# Occasional uplift — same world rules, but some people notice small good moments more often.
 	if posmod(GameManager.tick_count + int(data.id) * 5, 211) == 0:
 		var flutter: float = 0.1 + _bp(4) * 0.22
@@ -3861,7 +3863,7 @@ func teach_skill(target_pawn: Pawn, skill: int) -> bool:
 		return false
 	
 	# Grant XP to target (faster than self-learning); teaching branch boosts output.
-	var te: float = data.teach_efficiency_multiplier()
+	var te: float = data.teach_efficiency_multiplier() * data.kinship_teach_efficiency_multiplier(int(target_pawn.data.id))
 	target_pawn.data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK * 2.0 * te)
 	
 	# Small XP bonus to teacher for teaching

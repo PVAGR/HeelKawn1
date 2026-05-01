@@ -5286,6 +5286,7 @@ func _build_save_dict() -> Dictionary:
 		"regrow": _save_regrow_queue(),
 		"zone_filter": _zone_next_filter,
 		"world_memory": WorldMemory.to_save_dict(),
+		"bloodline_system": BloodlineSystem.to_save_dict(),
 		"settlement_registry": SettlementRegistry.to_save_dict(),
 		"world_persistence": WorldPersistence.to_save_dict(),
 		"myth": MythMemory.to_save_dict(),
@@ -5334,6 +5335,10 @@ func _apply_save_dict(s: Dictionary) -> void:
 		return
 
 	JobManager.clear_all()
+	if KinshipSystem != null and KinshipSystem.has_method("clear"):
+		KinshipSystem.clear()
+	if BloodlineSystem != null and BloodlineSystem.has_method("clear"):
+		BloodlineSystem.clear()
 	TradeMemory.clear()
 	RemnantMemory.clear()
 	IntentMemory.clear()
@@ -5377,6 +5382,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 	_last_generation_tick = int(s.get("last_generation_tick", loaded_tick))
 	_zone_next_filter = int(s.get("zone_filter", 0))
 	WorldMemory.from_save_dict(s.get("world_memory", {}))
+	BloodlineSystem.from_save_dict(s.get("bloodline_system", {}))
 	SettlementRegistry.from_save_dict(s.get("settlement_registry", {}))
 	MythMemory.from_save_dict(s.get("myth", {}))
 	SacredMemory.from_save_dict(s.get("sacred", {}))
@@ -5395,6 +5401,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 		if pd is Dictionary:
 			var pdat: PawnData = PawnData.from_save_dict(pd)
 			_pawn_spawner.spawn_from_data(pdat, _world)
+	if KinshipSystem != null and KinshipSystem.has_method("rebuild_from_pawn_spawner"):
+		KinshipSystem.call("rebuild_from_pawn_spawner", _pawn_spawner)
 	_restore_player_state(saved_player_mode, saved_player_pawn_id)
 	_world.set_meta("animal_spawner", _animal_spawner)
 	if is_instance_valid(_world):
@@ -5500,6 +5508,8 @@ func register_enemy_kill(enemy_name: String, attacker_name: String, tile: Vector
 
 func register_pawn_death(_pawn_id: int) -> void:
 	_kill_count += 1
+	if BloodlineSystem != null and BloodlineSystem.has_method("record_pawn_death"):
+		BloodlineSystem.call("record_pawn_death", int(_pawn_id))
 
 
 func get_kill_count() -> int:

@@ -81,6 +81,28 @@ func add_spouses(person_a: int, person_b: int):
 func add_household_member(person_id: int, household_id: int):
 	add_kinship(person_id, household_id, "household_member")
 
+
+func rebuild_from_pawn_spawner(spawner: PawnSpawner) -> void:
+	clear()
+	if spawner == null:
+		return
+	for pawn in spawner.pawns:
+		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
+			continue
+		var data: PawnData = pawn.data
+		add_person(int(data.id), {"display_name": data.display_name, "age": data.age, "gender": data.gender})
+		if data.parent_a_id >= 0:
+			add_parent_child(int(data.parent_a_id), int(data.id))
+		if data.parent_b_id >= 0:
+			add_parent_child(int(data.parent_b_id), int(data.id))
+		if data.spouse_id >= 0:
+			add_spouses(int(data.id), int(data.spouse_id))
+		if data.household_id >= 0:
+			add_household_member(int(data.id), int(data.household_id))
+		for child_id in data.children_ids:
+			if int(child_id) >= 0:
+				add_parent_child(int(data.id), int(child_id))
+
 # Clear all kinship data (for tests or resets)
 func clear() -> void:
 	household_data.clear()

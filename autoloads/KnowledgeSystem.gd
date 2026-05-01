@@ -24,6 +24,8 @@ enum KnowledgeType {
 
 const KNOWLEDGE_DEGRADATION_INTERVAL_TICKS: int = 1000
 const KNOWLEDGE_DEGRADATION_PHASE_OFFSET_TICKS: int = 127
+const BASE_DISCOVERY_RESEARCH_POINTS: int = 3
+const BASE_TEACHING_RESEARCH_POINTS: int = 2
 
 ## Knowledge carriers: pawn_id -> Array[KnowledgeType]
 var knowledge_carriers: Dictionary = {}
@@ -39,6 +41,8 @@ var rediscovered_knowledge: Array[Dictionary] = []
 
 ## Knowledge degradation: knowledge_type -> degradation level (0.0-1.0)
 var knowledge_degradation: Dictionary = {}
+## settlement_id(String) -> research points (knowledge currency for TechnologySystem)
+var research_points_by_settlement: Dictionary = {}
 
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
@@ -217,6 +221,7 @@ func _record_discovery_event(pawn_id: int, knowledge_type: KnowledgeType, source
 		"tick": GameManager.tick_count
 	}
 	WorldMemory.record_event(event)
+	_add_research_points_for_pawn(pawn_id, BASE_DISCOVERY_RESEARCH_POINTS, "discovery")
 
 func _record_apprenticeship_start(teacher_id: int, apprentice_id: int, knowledge_type: KnowledgeType) -> void:
 	var event: Dictionary = {
@@ -246,6 +251,7 @@ func _record_teaching_success(teacher_id: int, apprentice_id: int, knowledge_typ
 		"tick": GameManager.tick_count
 	}
 	WorldMemory.record_event(event)
+	_add_research_points_for_pawn(teacher_id, BASE_TEACHING_RESEARCH_POINTS, "teaching_success")
 
 func _record_teaching_failure(teacher_id: int, apprentice_id: int, knowledge_type: KnowledgeType) -> void:
 	var record: Dictionary = {
@@ -349,4 +355,93 @@ func clear() -> void:
 	teaching_records.clear()
 	lost_knowledge.clear()
 	rediscovered_knowledge.clear()
+	research_points_by_settlement.clear()
 	_initialize_degradation()
+
+
+## === Research Pool Integration ===
+
+func get_research_points(settlement_id: int) -> int:
+	return int(research_points_by_settlement.get(str(settlement_id), 0))
+
+
+func add_research_points(settlement_id: int, amount: int, reason: String = "knowledge_flow") -> void:
+	if settlement_id < 0 or amount <= 0:
+		return
+	var key: String = str(settlement_id)
+	var now_points: int = int(research_points_by_settlement.get(key, 0))
+	research_points_by_settlement[key] = now_points + amount
+	WorldMemory.record_event({
+		"type": "research_points_gain",
+		"settlement_id": settlement_id,
+		"amount": amount,
+		"reason": reason,
+		"tick": GameManager.tick_count,
+	})
+
+
+func spend_research_points(settlement_id: int, amount: int, tech_id: String = "") -> bool:
+	if settlement_id < 0 or amount <= 0:
+		return false
+	var key: String = str(settlement_id)
+	var now_points: int = int(research_points_by_settlement.get(key, 0))
+	if now_points < amount:
+		return false
+	research_points_by_settlement[key] = now_points - amount
+	WorldMemory.record_event({
+		"type": "research_points_spend",
+		"settlement_id": settlement_id,
+		"amount": amount,
+		"tech_id": tech_id,
+		"tick": GameManager.tick_count,
+	})
+	return true
+
+
+## Filter tree by prerequisite state + already researched state + available points.
+func get_researchable_techs(settlement_id: int) -> Array:
+	if TechnologySystem == null or not TechnologySystem.has_method("get_available_research"):
+		return []
+	var available: Array = TechnologySystem.get_available_research(settlement_id)
+	var points: int = get_research_points(settlement_id)
+	var out: Array = []
+	for tech_id_any in available:
+		var tech_id: String = str(tech_id_any)
+		if not TechnologySystem.TECH_TREE.has(tech_id):
+			continue
+		var node: Dictionary = TechnologySystem.TECH_TREE[tech_id] as Dictionary
+		var cost: int = int(node.get("cost", 0))
+		if points >= cost:
+			out.append(tech_id)
+	return out
+
+
+func _add_research_points_for_pawn(pawn_id: int, amount: int, reason: String) -> void:
+	if amount <= 0:
+		return
+	var settlement_id: int = _settlement_id_for_pawn(pawn_id)
+	if settlement_id >= 0:
+		add_research_points(settlement_id, amount, reason)
+
+
+func _settlement_id_for_pawn(pawn_id: int) -> int:
+	if SettlementMemory == null:
+		return -1
+	var main_loop: MainLoop = Engine.get_main_loop()
+	if main_loop == null or not (main_loop is SceneTree):
+		return -1
+	var tree: SceneTree = main_loop as SceneTree
+	for n in tree.get_nodes_in_group("pawns"):
+		if n == null or not is_instance_valid(n):
+			continue
+		if not n.has_method("get"):
+			continue
+		var data_v: Variant = n.get("data")
+		if data_v == null:
+			continue
+		if int(data_v.id) != pawn_id:
+			continue
+		var pos: Vector2i = data_v.tile_pos
+		var rk: int = WorldMemory._region_key(pos.x, pos.y)
+		return SettlementMemory.get_center_region_for_region(rk)
+	return -1

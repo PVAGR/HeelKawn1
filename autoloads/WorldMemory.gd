@@ -1213,7 +1213,6 @@ func get_relationship_timeline(a_id: int, b_id: int, max_items: int = 64) -> Arr
 ## ============================================================
 
 func export_world_seed(file_path: String) -> bool:
-	## Export world seed and snapshot data to JSON file.
 	var export_data := {
 		"schema": "heelkawn_v1",
 		"world_seed": _get_world_seed(),
@@ -1233,30 +1232,24 @@ func export_world_seed(file_path: String) -> bool:
 
 
 func get_chronicle_summary() -> String:
-	## Generate a readable summary of the world state and recent history.
 	var lines: PackedStringArray = []
 	lines.append("=== HEELKAWN CHRONICLE ===")
-	var cal = _get_calendar_data()
-	lines.append("Year %d, Day %d" % [cal.get("year", 0), cal.get("day", 0)])
+	var cal: Dictionary = _get_calendar_data()
+	lines.append("Year %d, Day %d" % [int(cal.get("year", 1)), int(cal.get("day", 1))])
 	lines.append("Population: %d" % _get_total_pawns())
 	lines.append("Settlements: %d" % _get_settlement_count())
-	lines.append("")
-	lines.append("Recent Events:")
-	var recent = _get_recent_events(10)
-	for evt in recent:
-		var tick = evt.get("tick", 0)
-		var type = evt.get("type", "unknown")
-		lines.append("  [Tick %d] %s" % [tick, type])
 	return "\n".join(lines)
 
 
 ## ---- Internal helpers for export/chronicle ----
 
 func _get_world_seed() -> int:
-	if get_node_or_null("/root/WorldRNG") != null:
-		var w = get_node_or_null("/root/WorldRNG")
-		if w and w.has_method("get_current_seed"):
-			return w.get_current_seed()
+	var w: Node = get_node_or_null("/root/WorldRNG")
+	if w != null:
+		if w.has_method("current_seed"):
+			return int(w.call("current_seed"))
+		if w.has_method("get_current_seed"):
+			return int(w.call("get_current_seed"))
 	return 0
 
 

@@ -339,3 +339,49 @@ func get_live_wildlife_snapshot() -> Dictionary:
 		"deer": d_count,
 		"total": r_count + d_count,
 	}
+
+
+## Diagnostic: compare live scene counts vs derived population counts
+## Returns Dictionary with discrepancies for validation
+func get_population_validation_diagnostic(world: World) -> Dictionary:
+	if world == null or not is_instance_valid(world) or world.data == null:
+		return {"error": "world_invalid"}
+	
+	cleanup_dead_animals()
+	
+	var live_r: int = get_animal_count_by_type(Animal.Type.RABBIT)
+	var live_d: int = get_animal_count_by_type(Animal.Type.DEER)
+	
+	# Sum derived counts across all regions
+	var derived_r: int = 0
+	var derived_d: int = 0
+	var region_keys: Array[int] = _collect_region_keys(animals, world)
+	
+	for rk in region_keys:
+		derived_r += population_count(rk, int(Animal.Type.RABBIT))
+		derived_d += population_count(rk, int(Animal.Type.DEER))
+	
+	# Also include regions with initial placements but no current animals
+	for k in _initial_placed.keys():
+		var parts: PackedStringArray = str(k).split("#")
+		if parts.size() == 2:
+			var rk_check: int = int(parts[0])
+			var sp_check: int = int(parts[1])
+			if not region_keys.has(rk_check):
+				if sp_check == int(Animal.Type.RABBIT):
+					derived_r += population_count(rk_check, int(Animal.Type.RABBIT))
+				elif sp_check == int(Animal.Type.DEER):
+					derived_d += population_count(rk_check, int(Animal.Type.DEER))
+	
+	return {
+		"live_rabbit": live_r,
+		"live_deer": live_d,
+		"live_total": live_r + live_d,
+		"derived_rabbit": derived_r,
+		"derived_deer": derived_d,
+		"derived_total": derived_r + derived_d,
+		"rabbit_diff": live_r - derived_r,
+		"deer_diff": live_d - derived_d,
+		"total_diff": (live_r + live_d) - (derived_r + derived_d),
+		"regions_sampled": region_keys.size(),
+	}

@@ -1450,7 +1450,18 @@ func update_settlement_intents(tick: int) -> void:
 			settlements[i] = st
 			continue
 		var old_intent: String = str(st.get("current_intent", INTENT_GROW))
-		var new_intent: String = _derive_settlement_intent(st, local_food_pressure, local_housing_pressure)
+
+		# Life-path awareness: tally dominant paths among settlement pawns.
+		var lp_tally: Dictionary = _tally_settlement_life_paths(settlement_pawns)
+
+		# Extend intent lock when ruler path is present (governance stability).
+		var ruler_count: int = int(lp_tally.get("ruler", 0))
+		if ruler_count > 0 and lock_ticks > 0:
+			st["intent_lock_ticks"] = mini(lock_ticks + INTENT_UPDATE_INTERVAL_TICKS, 2000)
+			settlements[i] = st
+			continue
+
+		var new_intent: String = _derive_settlement_intent_v2(st, local_food_pressure, local_housing_pressure, lp_tally)
 		st["last_intent_tick"] = tick
 		if old_intent != new_intent:
 			st["current_intent"] = new_intent
@@ -1466,8 +1477,76 @@ func update_settlement_intents(tick: int) -> void:
 				"local_food_pressure": local_food_pressure,
 				"local_housing_pressure": local_housing_pressure,
 				"intent_lock_ticks": int(st.get("intent_lock_ticks", 0)),
+				"life_path_tally": lp_tally,
 			})
 		settlements[i] = st
+
+
+## Derive settlement intent with life-path awareness. This is a v2 version
+## that factors in the dominant life paths of settlement pawns.
+## - Farmers bias toward GROW (food production)
+## - Soldiers bias toward DEFEND (lower mobilization threshold)
+## - Wanderers bias toward exploration-driven RECOVER exit
+## - Rulers bias toward governance stability (intent lock extension)
+func _derive_settlement_intent_v2(
+	st: Dictionary,
+	local_food_pressure: float,
+	local_housing_pressure: float,
+	life_path_tally: Dictionary,
+) -> String:
+	var settlement_state: String = str(st.get("state", ""))
+	var war_state: String = _war_state_string_from_settlement(st)
+
+	# Recovering states are sticky unless wanderers push exploration.
+	if settlement_state == "recovering" or settlement_state == "revivable":
+		var wanderer_count: int = int(life_path_tally.get("wanderer", 0))
+		# Enough wanderers can break recovery early through scouting.
+		if wanderer_count >= 3:
+			return INTENT_GROW
+		return INTENT_RECOVER
+
+	# War states: soldiers reinforce defense, but rulers can negotiate peace.
+	if war_state == "mobilizing" or war_state == "at_war":
+		return INTENT_DEFEND
+
+	# Food pressure: farmers mitigate hoarding by producing food.
+	var farmer_count: int = int(life_path_tally.get("farmer", 0))
+	var effective_food_pressure: float = local_food_pressure
+	if farmer_count > 0:
+		# Each farmer reduces effective food pressure by 5% (diminishing returns).
+		var relief: float = float(farmer_count) * 0.05
+		relief = min(relief, 0.3)  # Cap at 30% relief
+		effective_food_pressure = maxf(0.0, effective_food_pressure - relief)
+	if effective_food_pressure >= 0.55:
+		return INTENT_HOARD
+
+	# Housing pressure: soldiers build fortifications, reducing urgency.
+	var soldier_count: int = int(life_path_tally.get("soldier", 0))
+	var effective_housing_pressure: float = local_housing_pressure
+	if soldier_count > 0:
+		var relief: float = float(soldier_count) * 0.03
+		relief = min(relief, 0.2)
+		effective_housing_pressure = maxf(0.0, effective_housing_pressure - relief)
+	if effective_housing_pressure >= LOCAL_HOUSING_PRESSURE_THRESHOLD:
+		return INTENT_RECOVER
+
+	return INTENT_GROW
+
+
+## Tally the life paths of all pawns in a settlement. Returns a dictionary
+## with keys "farmer", "soldier", "ruler", "wanderer" and integer counts.
+func _tally_settlement_life_paths(pawns: Array[Pawn]) -> Dictionary:
+	var tally: Dictionary = {"farmer": 0, "soldier": 0, "ruler": 0, "wanderer": 0}
+	for p in pawns:
+		if p == null or p.data == null:
+			continue
+		var lp: int = int(p.data.life_path)
+		match lp:
+			1: tally["farmer"] = int(tally["farmer"]) + 1
+			2: tally["soldier"] = int(tally["soldier"]) + 1
+			3: tally["ruler"] = int(tally["ruler"]) + 1
+			4: tally["wanderer"] = int(tally["wanderer"]) + 1
+	return tally
 
 
 func _derive_settlement_intent(st: Dictionary, local_food_pressure: float, local_housing_pressure: float) -> String:

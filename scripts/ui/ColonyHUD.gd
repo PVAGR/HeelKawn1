@@ -835,6 +835,46 @@ func _wildlife_line() -> String:
 	return "🦌 Wildlife: R:%d D:%d T:%d %s %s" % [r, d, t, span, tail]
 
 
+## Diagnostic: breakdown of wildlife trend calculation for validation
+func get_wildlife_trend_diagnostic() -> Dictionary:
+	if _wildlife_history.size() < 3:
+		return {
+			"status": "insufficient_data",
+			"history_size": _wildlife_history.size(),
+			"history": _wildlife_history.duplicate(),
+		}
+	
+	var recent_avg: float = 0.0
+	var older_avg: float = 0.0
+	var split: int = _wildlife_history.size() / 2
+	for i in range(split):
+		older_avg += float(_wildlife_history[i])
+	for i in range(split, _wildlife_history.size()):
+		recent_avg += float(_wildlife_history[i])
+	older_avg /= float(split)
+	recent_avg /= float(_wildlife_history.size() - split)
+	
+	var trend_ratio: float = recent_avg / maxf(1.0, older_avg)
+	var trend_label: String = "stable"
+	if trend_ratio > 1.1:
+		trend_label = "growing"
+	elif trend_ratio < 0.9:
+		trend_label = "declining"
+	
+	return {
+		"status": "ok",
+		"history_size": _wildlife_history.size(),
+		"history": _wildlife_history.duplicate(),
+		"split_index": split,
+		"older_avg": older_avg,
+		"recent_avg": recent_avg,
+		"trend_ratio": trend_ratio,
+		"trend_label": trend_label,
+		"momentum_spark": _momentum_spark,
+		"sample_tick": _wildlife_sample_tick,
+	}
+
+
 func _player_intent_hud_line() -> String:
 	var u: int = PlayerIntentQueue.unprocessed_count()
 	var pin: String = ""

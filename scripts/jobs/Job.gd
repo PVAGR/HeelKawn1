@@ -15,6 +15,24 @@ enum Type {
 	BUILD_WALL, # consume 2 wood, place a WALL feature, marks tile impassable
 	BUILD_DOOR, # consume 1 wood, place a DOOR feature (passable)
 	TRADE_HAUL, # pick from trade_from stockpile, walk to trade_to; inter-settlement transfer
+	# --- Tool jobs ---
+	GATHER_FLINT, # search for flint on rocky/gravel tiles
+	GATHER_STICK, # pick up sticks from forest floor
+	CRAFT_KNIFE,  # craft flint knife from flint + stick
+	CRAFT_TORCH,  # craft torch from wood + stick
+	CRAFT_PICK,   # craft flint pick from flint + wood
+	CRAFT_SPEAR,  # craft wooden spear from stick + wood
+	# --- Shelter / Storage / Hearth / Marker ---
+	BUILD_FIRE_PIT,    # craft fire pit: wood + stone = warmth/cooking hub
+	BUILD_STORAGE_HUT, # expand storage: wood + wood = higher capacity
+	BUILD_MARKER_STONE,# carve marker: stone + stick = territorial marker
+	BUILD_SHRINE,      # build shrine: wood + stone + stone = ritual site
+	# --- Food chain ---
+	COOK_MEAT,         # cook raw meat at fire pit
+	COOK_BERRIES,      # cook berries at fire pit
+	DRY_MEAT,          # smoke/dry meat for preservation
+	PLANT_SEEDS,       # plant seeds on fertile soil for future harvest
+	HARVEST_CROPS,     # harvest planted crops
 }
 
 enum State {
@@ -68,6 +86,21 @@ static func describe_type(t: int) -> String:
 		Type.BUILD_WALL: return "BuildWall"
 		Type.BUILD_DOOR: return "BuildDoor"
 		Type.TRADE_HAUL: return "TradeHaul"
+		Type.GATHER_FLINT: return "GatherFlint"
+		Type.GATHER_STICK: return "GatherStick"
+		Type.CRAFT_KNIFE:  return "CraftKnife"
+		Type.CRAFT_TORCH:  return "CraftTorch"
+		Type.CRAFT_PICK:   return "CraftPick"
+		Type.CRAFT_SPEAR:  return "CraftSpear"
+		Type.BUILD_FIRE_PIT:    return "BuildFirePit"
+		Type.BUILD_STORAGE_HUT: return "BuildStorageHut"
+		Type.BUILD_MARKER_STONE:return "BuildMarker"
+		Type.BUILD_SHRINE:      return "BuildShrine"
+		Type.COOK_MEAT:         return "CookMeat"
+		Type.COOK_BERRIES:      return "CookBerries"
+		Type.DRY_MEAT:          return "DryMeat"
+		Type.PLANT_SEEDS:       return "PlantSeeds"
+		Type.HARVEST_CROPS:     return "HarvestCrops"
 	return "Unknown"
 
 
@@ -85,3 +118,60 @@ func describe() -> String:
 		id, describe_type(type), tile.x, tile.y, work_tile.x, work_tile.y,
 		describe_state(state), priority, work_ticks_done, work_ticks_needed
 	]
+
+
+# --- Tool job metadata ---
+
+## Output item type produced when this job completes.
+static func tool_job_output(job_type: int) -> int:
+	match job_type:
+		Type.GATHER_FLINT: return Item.Type.FLINT
+		Type.GATHER_STICK: return Item.Type.STICK
+		Type.CRAFT_KNIFE:  return Item.Type.FLINT_KNIFE
+		Type.CRAFT_TORCH:  return Item.Type.TORCH
+		Type.CRAFT_PICK:   return Item.Type.FLINT_PICK
+		Type.CRAFT_SPEAR:  return Item.Type.WOODEN_SPEAR
+		Type.COOK_MEAT:    return Item.Type.COOKED_MEAT
+		Type.COOK_BERRIES: return Item.Type.COOKED_BERRIES
+		Type.DRY_MEAT:     return Item.Type.DRIED_MEAT
+		Type.PLANT_SEEDS:  return Item.Type.NONE  # transforms tile, no carry output
+		Type.HARVEST_CROPS:return Item.Type.BERRY  # harvest yields berries (or better)
+	return Item.Type.NONE
+
+
+## Work ticks needed for each tool job type.
+static func tool_job_work_ticks(job_type: int) -> int:
+	match job_type:
+		Type.GATHER_FLINT: return 15
+		Type.GATHER_STICK: return 8
+		Type.CRAFT_KNIFE:  return 20
+		Type.CRAFT_TORCH:  return 12
+		Type.CRAFT_PICK:   return 25
+		Type.CRAFT_SPEAR:  return 18
+		Type.BUILD_FIRE_PIT:    return 30
+		Type.BUILD_STORAGE_HUT: return 35
+		Type.BUILD_MARKER_STONE:return 25
+		Type.BUILD_SHRINE:      return 45
+		Type.COOK_MEAT:         return 15
+		Type.COOK_BERRIES:      return 10
+		Type.DRY_MEAT:          return 25
+		Type.PLANT_SEEDS:       return 12
+		Type.HARVEST_CROPS:     return 15
+	return 20  # default
+
+
+## Which skill this job trains.
+static func tool_job_skill(job_type: int) -> int:
+	match job_type:
+		Type.GATHER_FLINT: return PawnData.Skill.MINING
+		Type.GATHER_STICK: return PawnData.Skill.FORAGING
+		Type.CRAFT_KNIFE:  return PawnData.Skill.BUILDING
+		Type.CRAFT_TORCH:  return PawnData.Skill.BUILDING
+		Type.CRAFT_PICK:   return PawnData.Skill.BUILDING
+		Type.CRAFT_SPEAR:  return PawnData.Skill.HUNTING
+		Type.COOK_MEAT:    return PawnData.Skill.BUILDING
+		Type.COOK_BERRIES: return PawnData.Skill.FORAGING
+		Type.DRY_MEAT:     return PawnData.Skill.BUILDING
+		Type.PLANT_SEEDS:  return PawnData.Skill.FORAGING
+		Type.HARVEST_CROPS:return PawnData.Skill.FORAGING
+	return PawnData.Skill.FORAGING

@@ -172,12 +172,22 @@ func _tile_color(x: int, y: int) -> Color:
 				feature == TileFeature.Type.WALL
 				or feature == TileFeature.Type.DOOR
 				or feature == TileFeature.Type.BED
+				or feature == TileFeature.Type.FIRE_PIT
+				or feature == TileFeature.Type.STORAGE_HUT
+				or feature == TileFeature.Type.MARKER_STONE
+				or feature == TileFeature.Type.SHRINE
 		):
 			var rk_ct: int = WorldMemory._region_key(x, y)
 			if _region_culture_tint_cache.has(rk_ct):
-				base = TileFeature.apply_culture_tint_to_built_color(
-						base, int(_region_culture_tint_cache[rk_ct])
-				)
+				# Landmark buildings get stronger cultural tint
+				if feature == TileFeature.Type.FIRE_PIT or feature == TileFeature.Type.SHRINE or feature == TileFeature.Type.MARKER_STONE:
+					base = TileFeature.apply_culture_landmark_tint(
+							base, int(_region_culture_tint_cache[rk_ct])
+					)
+				else:
+					base = TileFeature.apply_culture_tint_to_built_color(
+							base, int(_region_culture_tint_cache[rk_ct])
+					)
 			# Apply settlement state tint (Phase 4: posture visual indicators)
 			if is_instance_valid(SettlementMemory):
 				var settlement_state: String = SettlementMemory.get_state_for_region(rk_ct)

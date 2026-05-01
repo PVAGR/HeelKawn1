@@ -12,6 +12,9 @@ enum Type {
 	BOREDOM,      # -5 mood: repetitive work
 	CONTENTMENT,  # +8 mood: peaceful day, good health
 	DREAD,        # -15 mood: impending conflict, enemy sighting
+	PRIDE,        # +12 mood: marking territory, achievement
+	REVERENCE,    # +18 mood: sacred act, ritual participation
+	HOPE,         # +15 mood: planting, future-looking act
 }
 
 var type: Type
@@ -36,6 +39,9 @@ func _set_description() -> void:
 		Type.BOREDOM: description = "Bored"
 		Type.CONTENTMENT: description = "Content"
 		Type.DREAD: description = "Dreadful"
+		Type.PRIDE: description = "Proud"
+		Type.REVERENCE: description = "Reverent"
+		Type.HOPE: description = "Hopeful"
 	description += " (%d%%)" % int(intensity)
 
 
@@ -51,6 +57,9 @@ func mood_impact() -> float:
 		Type.BOREDOM: base_impact = -0.02
 		Type.CONTENTMENT: base_impact = 0.03
 		Type.DREAD: base_impact = -0.06
+		Type.PRIDE: base_impact = 0.04
+		Type.REVERENCE: base_impact = 0.07
+		Type.HOPE: base_impact = 0.05
 	return base_impact * (intensity / 50.0)  # Stronger events = stronger impact
 
 

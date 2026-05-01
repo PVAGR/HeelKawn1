@@ -118,6 +118,13 @@ static func _materials_for_build(job_type: int) -> Dictionary:
 		Job.Type.BUILD_BED:  return {"item": Item.Type.WOOD, "qty": BED_WOOD_COST}
 		Job.Type.BUILD_WALL: return {"item": Item.Type.WOOD, "qty": WALL_WOOD_COST}
 		Job.Type.BUILD_DOOR: return {"item": Item.Type.WOOD, "qty": DOOR_WOOD_COST}
+		Job.Type.BUILD_FIRE_PIT:     return {"item": Item.Type.WOOD, "qty": 2}  # wood + stone (stone tracked separately)
+		Job.Type.BUILD_STORAGE_HUT:  return {"item": Item.Type.WOOD, "qty": 3}
+		Job.Type.BUILD_MARKER_STONE: return {"item": Item.Type.STONE, "qty": 2}
+		Job.Type.BUILD_SHRINE:       return {"item": Item.Type.WOOD, "qty": 2}  # + stone tracked separately
+		Job.Type.COOK_MEAT:          return {"item": Item.Type.MEAT, "qty": 1}
+		Job.Type.COOK_BERRIES:       return {"item": Item.Type.BERRY, "qty": 2}
+		Job.Type.DRY_MEAT:           return {"item": Item.Type.MEAT, "qty": 2}
 	return {}
 
 
@@ -1229,6 +1236,9 @@ func _process(delta: float) -> void:
 	if _path.is_empty():
 		return
 	var step: float = WALK_SPEED_WORLD_UNITS_PER_SEC * delta * GameManager.game_speed * _meaning_speed_multiplier
+	# Apply injury mobility penalty
+	if not data.injuries.is_empty():
+		step *= (1.0 - BodyRiskManager.get_mobility_penalty(data))
 	var to_target: Vector2 = _target_world_pos - position
 	if to_target.length() <= step:
 		position = _target_world_pos
@@ -1236,6 +1246,8 @@ func _process(delta: float) -> void:
 		data.tile_pos = _target_tile
 		if from_step != _target_tile:
 			RoadMemory.record_step(from_step, _target_tile, _world)
+		# Wanderer path: track region exploration.
+		_track_region_visit(_target_tile)
 		_advance_path()
 	else:
 		position += to_target.normalized() * step
@@ -2297,6 +2309,8 @@ func _tick_working() -> void:
 	# old constant-rate baseline). XP accrues only while actually working.
 	var skill: int = PawnData.skill_for_job(_current_job.type)
 	var speed: float = data.effective_labor_mult() * float(work_step_multiplier)
+	# Tool efficacy: equipped tools boost specific job types
+	speed *= data.get_tool_efficacy(_current_job.type)
 	if skill >= 0:
 		speed *= data.work_speed_for(skill)
 		# Apply efficiency modifier
@@ -2326,6 +2340,10 @@ func _tick_working() -> void:
 func _calculate_work_efficiency() -> float:
 	var efficiency: float = 1.0
 	
+	# Tool efficacy: equipped tools boost specific job types
+	if data.is_equipped_tool_valid():
+		efficiency *= data.get_tool_efficacy(_current_job.type)
+	
 	# Job proficiency bonus (0-100 proficiency -> 0.5-2.0 multiplier)
 	var job_type_str: String = Job.describe_type(_current_job.type).to_lower()
 	var proficiency: float = data.job_proficiency.get(job_type_str, 0.0)
@@ -2344,14 +2362,10 @@ func _calculate_work_efficiency() -> float:
 	elif data.pain > 30.0:
 		efficiency *= 0.75
 	
-	# Injury penalty (severe injuries reduce efficiency)
-	var total_injury_severity: float = 0.0
-	for injury_type in data.injuries:
-		total_injury_severity += data.injuries[injury_type]
-	if total_injury_severity > 50.0:
-		efficiency *= 0.5
-	elif total_injury_severity > 30.0:
-		efficiency *= 0.75
+	# Injury penalty from BodyRiskManager (severity-weighted per injury type)
+	if not data.injuries.is_empty():
+		var injury_penalty: float = BodyRiskManager.get_work_efficiency_penalty(data)
+		efficiency *= (1.0 - injury_penalty)
 	
 	# Improvised tool proxy from carried material (no separate pickaxe/axe items in v1).
 	if _current_job != null and data != null:
@@ -2466,6 +2480,15 @@ func _apply_work_hazards(work_ticks_simulated: int = 1) -> void:
 		_play_sfx("res://assets/audio/pawn_hurt.ogg", 0.9)
 		# Trigger stress mood event from injury
 		data.add_mood_event(MoodEvent.Type.STRESS, 60.0, 300)
+		
+		# Apply specific injury via BodyRiskManager
+		var injury_type: int = BodyRiskManager.InjuryType.BLUNT
+		if _current_job.type == Job.Type.MINE or _current_job.type == Job.Type.MINE_WALL:
+			injury_type = BodyRiskManager.InjuryType.CUT  # Rock cuts
+		elif _current_job.type == Job.Type.CHOP:
+			injury_type = BodyRiskManager.InjuryType.CUT  # Axe cuts
+		BodyRiskManager.apply_injury(self, injury_type, damage * 2.0, Job.describe_type(_current_job.type))
+		
 		if GameManager.verbose_logs():
 			print("[Pawn] %s injured while working  (damage=%.1f health=%.1f)" %
 				[data.display_name, damage, data.health])
@@ -2778,6 +2801,30 @@ func _complete_current_job() -> void:
 					job.tile.x, job.tile.y, produced_qty])
 		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
 			_finish_build(job)
+		Job.Type.GATHER_FLINT:
+			produced_type = Item.Type.FLINT
+			if GameManager.verbose_logs():
+				print("[Pawn] %s gathered flint @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+		Job.Type.GATHER_STICK:
+			produced_type = Item.Type.STICK
+			if GameManager.verbose_logs():
+				print("[Pawn] %s gathered stick @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+		Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_TORCH, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR:
+			_finish_craft(job)
+			produced_type = Item.Type.NONE  # tool is equipped, not carried
+		Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_MARKER_STONE, Job.Type.BUILD_SHRINE:
+			_finish_shelter_build(job)
+			produced_type = Item.Type.NONE
+		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.DRY_MEAT:
+			produced_type = Job.tool_job_output(job.type)
+			if GameManager.verbose_logs():
+				print("[Pawn] %s cooked/preserved food @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+		Job.Type.PLANT_SEEDS:
+			FoodChainManager.plant_seeds(job.tile)
+			produced_type = Item.Type.NONE
+		Job.Type.HARVEST_CROPS:
+			produced_type = FoodChainManager.harvest_crop(job.tile)
+			produced_qty = 2 if produced_type != Item.Type.NONE else 0  # Crops yield more
 	var yield_skill: int = PawnData.skill_for_job(job.type)
 	if yield_skill >= 0 and produced_type != Item.Type.NONE:
 		var qmult: float = data.harvest_quality_multiplier_for_job_skill(yield_skill)
@@ -2793,7 +2840,29 @@ func _complete_current_job() -> void:
 			data.add_mood_event(MoodEvent.Type.CONTENTMENT, 40.0, 180)  # Basic harvesting
 		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
 			data.add_mood_event(MoodEvent.Type.JOY, 60.0, 220)  # Building feels productive
+		Job.Type.GATHER_FLINT, Job.Type.GATHER_STICK:
+			data.add_mood_event(MoodEvent.Type.CONTENTMENT, 30.0, 150)  # Gathering materials
+		Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_TORCH, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR:
+			data.add_mood_event(MoodEvent.Type.JOY, 70.0, 250)  # Crafting feels like progress
+		Job.Type.BUILD_FIRE_PIT:
+			data.add_mood_event(MoodEvent.Type.JOY, 80.0, 300)  # Fire brings warmth and hope
+		Job.Type.BUILD_STORAGE_HUT:
+			data.add_mood_event(MoodEvent.Type.CONTENTMENT, 55.0, 200)  # Security feels good
+		Job.Type.BUILD_MARKER_STONE:
+			data.add_mood_event(MoodEvent.Type.PRIDE, 65.0, 280)  # Marking territory feels significant
+		Job.Type.BUILD_SHRINE:
+			data.add_mood_event(MoodEvent.Type.REVERENCE, 90.0, 350)  # Sacred act
+		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES:
+			data.add_mood_event(MoodEvent.Type.JOY, 60.0, 200)  # Cooking is satisfying
+		Job.Type.DRY_MEAT:
+			data.add_mood_event(MoodEvent.Type.CONTENTMENT, 45.0, 180)  # Preservation feels prudent
+		Job.Type.PLANT_SEEDS:
+			data.add_mood_event(MoodEvent.Type.HOPE, 70.0, 300)  # Planting is an act of faith
+		Job.Type.HARVEST_CROPS:
+			data.add_mood_event(MoodEvent.Type.TRIUMPH, 75.0, 250)  # Harvest rewards patience
 	JobManager.complete(job)
+	# Consume tool durability for tool-requiring jobs
+	_consume_tool_durability(job.type)
 	_clear_cohort_state()
 	_current_job = null
 	_state = State.IDLE   # reset before transitioning; _begin_haul will set it
@@ -2839,6 +2908,165 @@ func _finish_build(job: Job) -> void:
 			_world.build_door(job.tile.x, job.tile.y)
 			if GameManager.verbose_logs():
 				print("[Pawn] %s placed a door @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+
+
+## Complete a tool-crafting job: consume materials from stockpile, equip the tool.
+func _finish_craft(job: Job) -> void:
+	var output_type: int = Job.tool_job_output(job.type)
+	if output_type == Item.Type.NONE:
+		return
+	if not Item.is_craftable(output_type):
+		return
+	
+	# Consume materials from stockpile
+	var recipe: Array = Item.get_recipe(output_type)
+	if _target_zone != null and is_instance_valid(_target_zone):
+		for ingredient in recipe:
+			var item_type: int = int(ingredient["type"])
+			var qty: int = int(ingredient["qty"])
+			_target_zone.take_item(item_type, qty)
+	else:
+		# Fallback: consume from any stockpile via StockpileManager
+		if StockpileManager != null:
+			for ingredient in recipe:
+				var item_type: int = int(ingredient["type"])
+				var qty: int = int(ingredient["qty"])
+				var remaining: int = qty
+				for zone in StockpileManager.zones():
+					if remaining <= 0:
+						break
+					var taken: int = zone.take_item(item_type, remaining)
+					remaining -= taken
+	
+	# Equip the tool directly on the pawn
+	data.equip_tool(output_type)
+	
+	WorldMemory.record_event({
+		"type": "tool_crafted",
+		"pawn_id": int(data.id),
+		"pawn_name": data.display_name,
+		"tool": output_type,
+		"tool_name": Item.name_for(output_type),
+		"tick": GameManager.tick_count,
+		"tile": {"x": data.tile_pos.x, "y": data.tile_pos.y},
+	})
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s crafted and equipped %s (durability=%d)" % [
+			data.display_name, Item.name_for(output_type), data.equipped_tool_durability
+		])
+
+
+## Complete a shelter/hearth/marker build job: consume materials, place feature.
+## Also handles cooking/preservation jobs.
+func _finish_shelter_build(job: Job) -> void:
+	# Cooking jobs: consume materials and produce food
+	if job.type == Job.Type.COOK_MEAT or job.type == Job.Type.COOK_BERRIES or job.type == Job.Type.DRY_MEAT:
+		var output_type: int = Job.tool_job_output(job.type)
+		var recipe: Array = Item.get_cooking_recipe(output_type)
+		if recipe.is_empty():
+			return
+		
+		# Verify and consume materials from carried items or stockpile
+		for ingredient in recipe:
+			var item_type: int = int(ingredient["type"])
+			var qty: int = int(ingredient["qty"])
+			# Check if pawn is carrying it
+			if data.carrying == item_type and data.carrying_qty >= qty:
+				data.carrying_qty -= qty
+				if data.carrying_qty <= 0:
+					data.clear_carry()
+			elif _target_zone != null and is_instance_valid(_target_zone):
+				_target_zone.take_item(item_type, qty)
+		
+		WorldMemory.record_event({
+			"type": "food_cooked",
+			"pawn_id": int(data.id),
+			"pawn_name": data.display_name,
+			"food_type": output_type,
+			"food_name": Item.name_for(output_type),
+			"tick": GameManager.tick_count,
+			"tile": {"x": job.tile.x, "y": job.tile.y},
+		})
+		
+		if GameManager.verbose_logs():
+			print("[Pawn] %s prepared %s @(%d,%d)" % [data.display_name, Item.name_for(output_type), job.tile.x, job.tile.y])
+		return
+	
+	var mats: Dictionary = _materials_for_build(job.type)
+	if mats.is_empty():
+		return
+	var item_type: int = mats.item
+	var need_qty: int = mats.qty
+	
+	# Check if pawn is carrying the required material
+	if data.carrying != item_type or data.carrying_qty < need_qty:
+		if GameManager.verbose_logs():
+			print("[Pawn] %s missing material -- %s not built @(%d,%d)" %
+				[data.display_name, Job.describe_type(job.type), job.tile.x, job.tile.y])
+		return
+	
+	# Consume materials
+	data.carrying_qty -= need_qty
+	if data.carrying_qty <= 0:
+		data.clear_carry()
+	
+	# Place the feature
+	match job.type:
+		Job.Type.BUILD_FIRE_PIT:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.FIRE_PIT)
+			WorldMemory.record_event({
+				"type": "hearth_built",
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"tick": GameManager.tick_count,
+				"tile": {"x": job.tile.x, "y": job.tile.y},
+			})
+			if GameManager.verbose_logs():
+				print("[Pawn] %s built a fire pit @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+		Job.Type.BUILD_STORAGE_HUT:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.STORAGE_HUT)
+			WorldMemory.record_event({
+				"type": "storage_built",
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"tick": GameManager.tick_count,
+				"tile": {"x": job.tile.x, "y": job.tile.y},
+			})
+			if GameManager.verbose_logs():
+				print("[Pawn] %s built a storage hut @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+		Job.Type.BUILD_MARKER_STONE:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.MARKER_STONE)
+			WorldMemory.record_event({
+				"type": "marker_built",
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"tick": GameManager.tick_count,
+				"tile": {"x": job.tile.x, "y": job.tile.y},
+			})
+			if GameManager.verbose_logs():
+				print("[Pawn] %s carved a marker stone @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+		Job.Type.BUILD_SHRINE:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.SHRINE)
+			WorldMemory.record_event({
+				"type": "shrine_built",
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"tick": GameManager.tick_count,
+				"tile": {"x": job.tile.x, "y": job.tile.y},
+			})
+			if GameManager.verbose_logs():
+				print("[Pawn] %s built a shrine @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+
+
+## Consume 1 durability from the equipped tool if the job benefits from a tool.
+func _consume_tool_durability(job_type: int) -> void:
+	if not data.is_equipped_tool_valid():
+		return
+	# Only consume durability for jobs that the tool actually helps
+	var efficacy: float = data.get_tool_efficacy(job_type)
+	if efficacy > 1.0:
+		data.use_tool()
 
 
 func _cancel_current_job() -> void:
@@ -2980,17 +3208,25 @@ func _deposit_at_stockpile() -> void:
 					data.carrying, data.tile_pos, _world.pathfinder
 			)
 	if sp != null and data.is_carrying():
-		sp.add_item(data.carrying, data.carrying_qty)
-		if is_trade:
-			data.add_profession_liking_for_trade_completion()
-		if not is_trade:
+		# If carrying a tool, auto-equip it instead of depositing
+		if Item.is_tool(data.carrying) and not data.is_equipped_tool_valid():
+			data.equip_tool(data.carrying)
 			if GameManager.verbose_logs():
-				print("[Pawn] %s deposited %d %s into %s zone (zone now has %d)" % [
-					data.display_name, data.carrying_qty,
-					Item.name_for(data.carrying),
-					Stockpile.FILTER_NAME.get(sp.filter, "?"),
-					sp.count_of(data.carrying)
+				print("[Pawn] %s equipped %s (durability=%d)" % [
+					data.display_name, Item.name_for(data.carrying), data.equipped_tool_durability
 				])
+		else:
+			sp.add_item(data.carrying, data.carrying_qty)
+			if is_trade:
+				data.add_profession_liking_for_trade_completion()
+			if not is_trade:
+				if GameManager.verbose_logs():
+					print("[Pawn] %s deposited %d %s into %s zone (zone now has %d)" % [
+						data.display_name, data.carrying_qty,
+						Item.name_for(data.carrying),
+						Stockpile.FILTER_NAME.get(sp.filter, "?"),
+						sp.count_of(data.carrying)
+					])
 	data.clear_carry()
 	_target_zone = null
 	if is_trade and j_done != null and j_done.type == Job.Type.TRADE_HAUL:
@@ -3550,10 +3786,13 @@ func _check_temperature() -> void:
 		data.hypothermia_risk = max(0.0, data.hypothermia_risk - 0.1)
 		data.heat_exhaustion_risk = max(0.0, data.heat_exhaustion_risk - 0.1)
 	
-	# Hypothermia causes health damage
+	# Hypothermia causes health damage and can lead to frostbite
 	if data.hypothermia_risk > 80.0:
 		data.health = max(0.0, data.health - 0.1)
 		data.exposure_sickness = min(100.0, data.exposure_sickness + 0.05)
+		# Severe hypothermia causes frostbite
+		if data.hypothermia_risk > 95.0 and GameManager.tick_count % 200 == 0:
+			BodyRiskManager.apply_injury(self, BodyRiskManager.InjuryType.FROSTBITE, 5.0, "cold_exposure")
 	
 	# Heat exhaustion causes health damage
 	if data.heat_exhaustion_risk > 80.0:
@@ -3561,39 +3800,9 @@ func _check_temperature() -> void:
 
 
 func _process_injuries() -> void:
-	# Pain decays slowly over time
-	data.pain = max(0.0, data.pain - 0.05)
-	
-	# Process each injury
-	var injuries_to_remove: Array = []
-	for injury_type in data.injuries:
-		var severity: float = data.injuries[injury_type]
-		
-		# Injuries heal slowly when resting
-		if _state == State.SLEEPING or _state == State.IDLE:
-			severity -= 0.02
-		else:
-			severity -= 0.005  # Very slow healing when active
-		
-		# Pain from injury
-		if severity > 30.0:
-			data.pain = min(100.0, data.pain + severity * 0.01)
-		
-		# Remove healed injuries
-		if severity <= 0.0:
-			injuries_to_remove.append(injury_type)
-		else:
-			data.injuries[injury_type] = severity
-	
-	# Remove healed injuries
-	for injury_type in injuries_to_remove:
-		data.injuries.erase(injury_type)
-	
-	# Severe injuries cause health damage
-	for injury_type in data.injuries:
-		var severity: float = data.injuries[injury_type]
-		if severity > 70.0:
-			data.health = max(0.0, data.health - 0.02)
+	# BodyRiskManager handles all injury recovery on its own tick schedule
+	# This function is kept for backwards compatibility and pain visualization
+	pass
 
 
 func _observe_nearby_work() -> void:

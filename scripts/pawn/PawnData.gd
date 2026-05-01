@@ -231,6 +231,11 @@ var social_squad_anchor_id: int = -1
 var carrying: int = 0  # Item.Type.NONE
 var carrying_qty: int = 0
 
+## Equipped tool (Item.Type). None means bare-handed.
+var equipped_tool: int = 0  # Item.Type.NONE
+## Current durability of the equipped tool (0 = broken).
+var equipped_tool_durability: int = 0
+
 ## Skill XP per Skill enum value. Defaults to 0 for everything; pawns earn it
 ## by working. Stored as Dictionary so save/load is trivial and so we don't
 ## have to enumerate skills here.
@@ -2447,6 +2452,21 @@ static func skill_for_job(job_type: int) -> int:
 		Job.Type.BUILD_BED:  return Skill.BUILDING
 		Job.Type.BUILD_WALL: return Skill.BUILDING
 		Job.Type.BUILD_DOOR: return Skill.BUILDING
+		Job.Type.GATHER_FLINT: return Skill.MINING
+		Job.Type.GATHER_STICK: return Skill.FORAGING
+		Job.Type.CRAFT_KNIFE:  return Skill.BUILDING
+		Job.Type.CRAFT_TORCH:  return Skill.BUILDING
+		Job.Type.CRAFT_PICK:   return Skill.BUILDING
+		Job.Type.CRAFT_SPEAR:  return Skill.HUNTING
+		Job.Type.BUILD_FIRE_PIT:    return Skill.BUILDING
+		Job.Type.BUILD_STORAGE_HUT: return Skill.BUILDING
+		Job.Type.BUILD_MARKER_STONE:return Skill.BUILDING
+		Job.Type.BUILD_SHRINE:      return Skill.BUILDING
+		Job.Type.COOK_MEAT:         return Skill.BUILDING
+		Job.Type.COOK_BERRIES:      return Skill.FORAGING
+		Job.Type.DRY_MEAT:          return Skill.BUILDING
+		Job.Type.PLANT_SEEDS:       return Skill.FORAGING
+		Job.Type.HARVEST_CROPS:     return Skill.FORAGING
 	return -1
 
 
@@ -2467,6 +2487,18 @@ func allows_job_type(job_type: int) -> bool:
 			return work_build
 		Job.Type.TRADE_HAUL:
 			return true
+		Job.Type.GATHER_FLINT:
+			return work_mine
+		Job.Type.GATHER_STICK:
+			return work_forage
+		Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_TORCH, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR:
+			return work_build
+		Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, 		Job.Type.BUILD_MARKER_STONE, Job.Type.BUILD_SHRINE:
+			return work_build
+		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.DRY_MEAT:
+			return work_forage
+		Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS:
+			return work_forage
 	return true
 
 
@@ -2485,6 +2517,24 @@ func _allows_job_type_lightweight(job_type: int) -> bool:
 		return work_build and work_mine and profession_progress_xp() >= 500
 	if job_type == Job.Type.TRADE_HAUL:
 		return profession_progress_xp() >= 800
+	if job_type == Job.Type.GATHER_FLINT:
+		return work_mine
+	if job_type == Job.Type.GATHER_STICK:
+		return work_forage
+	if job_type == Job.Type.CRAFT_KNIFE or job_type == Job.Type.CRAFT_TORCH:
+		return work_build and profession_progress_xp() >= 50
+	if job_type == Job.Type.CRAFT_PICK or job_type == Job.Type.CRAFT_SPEAR:
+		return work_build and profession_progress_xp() >= 150
+	if job_type == Job.Type.BUILD_FIRE_PIT or job_type == Job.Type.BUILD_STORAGE_HUT:
+		return work_build and profession_progress_xp() >= 200
+	if job_type == Job.Type.BUILD_MARKER_STONE or job_type == Job.Type.BUILD_SHRINE:
+		return work_build and profession_progress_xp() >= 400
+	if job_type == Job.Type.COOK_MEAT or job_type == Job.Type.COOK_BERRIES:
+		return work_forage and profession_progress_xp() >= 100
+	if job_type == Job.Type.DRY_MEAT:
+		return work_forage and profession_progress_xp() >= 200
+	if job_type == Job.Type.PLANT_SEEDS or job_type == Job.Type.HARVEST_CROPS:
+		return work_forage and profession_progress_xp() >= 50
 	return false
 
 
@@ -2915,3 +2965,40 @@ func is_carrying() -> bool:
 func clear_carry() -> void:
 	carrying = 0
 	carrying_qty = 0
+
+
+# --- Tool system ---
+
+func equip_tool(tool_type: int) -> void:
+	equipped_tool = tool_type
+	equipped_tool_durability = Item.tool_durability(tool_type)
+
+
+func use_tool() -> void:
+	if equipped_tool_durability > 0:
+		equipped_tool_durability -= 1
+		if equipped_tool_durability <= 0:
+			# Tool breaks
+			WorldMemory.record_event({
+				"type": "tool_break",
+				"pawn_id": int(id),
+				"tool": equipped_tool,
+				"tool_name": Item.name_for(equipped_tool),
+				"tick": GameManager.tick_count,
+			})
+			equipped_tool = Item.Type.NONE
+			equipped_tool_durability = 0
+
+
+func has_tool(tool_type: int) -> bool:
+	return equipped_tool == tool_type and equipped_tool_durability > 0
+
+
+func is_equipped_tool_valid() -> bool:
+	return equipped_tool != Item.Type.NONE and equipped_tool_durability > 0
+
+
+func get_tool_efficacy(job_type: int) -> float:
+	if not is_equipped_tool_valid():
+		return 1.0  # bare-handed baseline
+	return Item.tool_efficacy(equipped_tool, job_type)

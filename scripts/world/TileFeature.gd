@@ -14,6 +14,11 @@ enum Type {
 	DOOR,          # built by pawns from wood; passable; future: open/close state
 	RABBIT,        # passive wildlife; HUNT yields 1 meat; respawns
 	DEER,          # passive wildlife; HUNT yields 2 meat; slower hunt; respawns
+	# --- Shelter / Storage / Hearth / Marker (sacred early order) ---
+	FIRE_PIT,      # hearth: warmth, cooking, gathering point; prevents hypothermia
+	STORAGE_HUT,   # expanded storage: higher capacity, slower spoilage
+	MARKER_STONE,  # carved stone: territorial marker, boosts morale, navigation aid
+	SHRINE,        # ritual site: cultural memory anchor, mood recovery
 }
 
 ## Colors used for the v1 pixel renderer. Chosen to pop against the biome below.
@@ -28,6 +33,10 @@ const COLORS: Dictionary = {
 	Type.DOOR:         Color8(160, 100,  45),  # lighter wood, slightly orange
 	Type.RABBIT:       Color8(245, 240, 230),  # off-white; reads against grass + sand
 	Type.DEER:         Color8(170, 110,  55),  # warm tan; obvious "animal" sprite
+	Type.FIRE_PIT:     Color8(255, 140,  30),  # warm fire orange
+	Type.STORAGE_HUT:  Color8(150, 120,  70),  # tan/brown -- reads as storage
+	Type.MARKER_STONE: Color8(140, 140, 150),  # carved gray stone
+	Type.SHRINE:       Color8(180, 160, 200),  # muted purple -- sacred feel
 }
 
 const NAMES: Dictionary = {
@@ -41,6 +50,10 @@ const NAMES: Dictionary = {
 	Type.DOOR:         "Door",
 	Type.RABBIT:       "Rabbit",
 	Type.DEER:         "Deer",
+	Type.FIRE_PIT:     "Fire Pit",
+	Type.STORAGE_HUT:  "Storage Hut",
+	Type.MARKER_STONE: "Marker Stone",
+	Type.SHRINE:       "Shrine",
 }
 
 
@@ -59,8 +72,9 @@ static func name_for(f: int) -> String:
 
 
 ## Subtle deterministic tint for built furniture (read-only render; [SettlementPlanner] branch ints).
+## Extended for cultural architectural styles: fire pits, markers, shrines get stronger tints.
 static func apply_culture_tint_to_built_color(base: Color, culture_type: int) -> Color:
-	const TINT: float = 0.075
+	var tint_strength: float = 0.075
 	var warm: Color = Color(1.03, 1.01, 0.96, 1.0)
 	var cool: Color = Color(0.94, 0.97, 1.04, 1.0)
 	var neut: Color = Color(1.0, 1.0, 1.0, 1.0)
@@ -71,6 +85,22 @@ static func apply_culture_tint_to_built_color(base: Color, culture_type: int) ->
 		mul = cool
 	elif culture_type == SettlementPlanner.CULTURE_CAUTIOUS:
 		mul = Color(1.01, 1.0, 0.995, 1.0)
+	return base.lerp(base * mul, tint_strength)
+
+
+## Stronger cultural tint for landmark buildings (fire pits, shrines, markers).
+static func apply_culture_landmark_tint(base: Color, culture_type: int) -> Color:
+	const TINT: float = 0.15  # Stronger than regular buildings
+	var warm: Color = Color(1.08, 1.04, 0.92, 1.0)   # golden warmth
+	var cool: Color = Color(0.88, 0.92, 1.08, 1.0)   # steely cool
+	var neut: Color = Color(1.0, 1.0, 1.0, 1.0)
+	var mul: Color = neut
+	if culture_type == SettlementPlanner.CULTURE_OPEN:
+		mul = warm
+	elif culture_type == SettlementPlanner.CULTURE_DEFENSIVE:
+		mul = cool
+	elif culture_type == SettlementPlanner.CULTURE_CAUTIOUS:
+		mul = Color(1.02, 1.0, 0.99, 1.0)
 	return base.lerp(base * mul, TINT)
 
 

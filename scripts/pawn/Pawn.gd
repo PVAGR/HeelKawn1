@@ -82,12 +82,10 @@ const REST_PANIC_THRESHOLD: float = 12.0
 
 # -------------------- food-supply tuning --------------------
 
-## When the stockpile food count drops below this, idle pawns will preferentially
-## claim FORAGE jobs even if other harvest types are closer. Without this safety
-## net the colony can starve while pawns happily mine stone (which is exactly
-## what a previous tuning pass caused). Tuned to ~2 berries per pawn -- roughly
-## one in-flight emergency snack each.
-const STOCKPILE_FOOD_LOW_THRESHOLD: int = 10
+## Hard floor: at or below this, forage/hunt-only pass always runs (true starvation guard).
+const STOCKPILE_FOOD_CRITICAL_UNITS: int = 3
+## Colony food pressure at/above this triggers the forage-only pass together with critical units.
+const COLONY_FOOD_PRESSURE_FOR_EMERGENCY: float = 0.56
 ## Added inside JobManager priority_cb only — not an exclusive job filter (see _tick_idle).
 const AFFINITY_JOB_PRIORITY_BONUS: int = 2
 const UTILITY_JOB_PRIORITY_BIAS_RANGE: int = 6
@@ -1418,9 +1416,8 @@ func _job_claim_interval_for_speed() -> int:
 		return 4
 	if gs >= 3.0:
 		return 5
-	# 1x is the common play speed; a slightly slower claim cadence cuts
-	# full-queue scans per frame while still keeping workers responsive.
-	return 6
+	# 1x: claim often enough that pawns feel "busy" without scanning every tick.
+	return 4
 
 
 func _neural_priority_refresh_interval_for_speed() -> int:
@@ -1556,7 +1553,14 @@ func _tick_idle() -> void:
 	# 4. Tired -> sleep. Skipped if we're starving (food first, sleep when full).
 	if _maybe_start_sleeping():
 		return
-	var food_emergency: bool = StockpileManager.total_food() < STOCKPILE_FOOD_LOW_THRESHOLD
+	var food_units: int = StockpileManager.total_food()
+	var food_pressure: float = 0.0
+	if ColonySimServices != null:
+		food_pressure = ColonySimServices.get_food_pressure()
+	var food_emergency: bool = (
+			food_units <= STOCKPILE_FOOD_CRITICAL_UNITS
+			or food_pressure >= COLONY_FOOD_PRESSURE_FOR_EMERGENCY
+	)
 	var utility_context: Dictionary = _build_idle_utility_context(food_emergency)
 	var available_idle_actions: Array = [
 		{"type": "work"},
@@ -1711,6 +1715,14 @@ func _tick_idle() -> void:
 		base_bias += utility_bias
 		if preferred_idle_action == "forage" and (j.type == Job.Type.FORAGE or j.type == Job.Type.HUNT):
 			base_bias += 2
+		# When the pantry is not in emergency, nudge non-food labor so the colony
+		# visibly diversifies (stone, wood, planned builds) instead of idle wandering.
+		if not food_emergency:
+			match int(j.type):
+				Job.Type.MINE, Job.Type.MINE_WALL, Job.Type.CHOP:
+					base_bias += 2
+				Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+					base_bias += 1
 
 		# Crisis priority bonus (snapshot pressures once per claim pass).
 		# Boost BUILD_BED jobs during housing crisis
@@ -1815,6 +1827,7 @@ func _idle_memory_confidence() -> float:
 		"action_success:hunt",
 		"action_success:build",
 		"action_success:trade",
+		"action_success:teach",
 	]
 	var total: float = 0.0
 	var count: int = 0
@@ -3007,14 +3020,66 @@ func _maybe_start_sleeping() -> bool:
 
 ## Check if pawn can teach knowledge to nearby pawn
 func _maybe_start_teaching() -> bool:
-	# DISABLED for performance - iterates through all pawns
-	return false
+	if data == null or _world == null or GameManager == null:
+		return false
+	# Needs enough comfort to mentor; still below eating/sleep gates in [_tick_idle].
+	if data.hunger < HUNGER_EAT_THRESHOLD + 8.0:
+		return false
+	if data.rest < REST_SLEEP_THRESHOLD + 10.0:
+		return false
+	# Throttle: cheap social layer, not a per-tick O(n) scan.
+	var tick: int = GameManager.tick_count
+	if posmod(tick + int(data.id) * 7, 29) != 0:
+		return false
+	var spawner: PawnSpawner = _resolve_pawn_spawner()
+	if spawner == null:
+		return false
+	var best_peer: Pawn = null
+	var best_d: int = 1_000_000
+	var seen: int = 0
+	for p in spawner.pawns:
+		seen += 1
+		if seen > 24:
+			break
+		if p == null or not is_instance_valid(p) or p == self or p.data == null:
+			continue
+		var d2: int = data.tile_pos.distance_squared_to(p.data.tile_pos)
+		if d2 > 81:
+			continue
+		if d2 < best_d:
+			best_d = d2
+			best_peer = p
+	if best_peer == null:
+		return false
+	var sk: String = data.highest_affinity_skill()
+	var my_xp: int = data.tracked_skill_xp(sk)
+	var peer_xp: int = best_peer.data.tracked_skill_xp(sk)
+	if my_xp + 6 <= peer_xp:
+		return false
+	best_peer.data.gain_skill_xp(sk, 2)
+	data.add_social_rapport(int(best_peer.data.id), 2)
+	best_peer.data.add_social_rapport(int(data.id), 2)
+	data.mood = min(100.0, data.mood + 0.4)
+	best_peer.data.mood = min(100.0, best_peer.data.mood + 0.35)
+	data.learn_semantic_fact(
+			"action_success:teach",
+			{"peer_id": int(best_peer.data.id), "skill": sk},
+			0.55,
+			"mentoring"
+	)
+	return true
 
 
 ## Check if pawn can challenge nearby pawn's authority
 func _maybe_start_challenge() -> bool:
-	# DISABLED for performance - iterates through all pawns
 	return false
+
+
+func _resolve_pawn_spawner() -> PawnSpawner:
+	var main_node: Node = get_tree().get_root().get_node_or_null("Main")
+	if main_node == null:
+		return null
+	return main_node.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
 
 
 func _try_walk_to_bed() -> bool:
@@ -4259,18 +4324,7 @@ func apply_trait(trait_res: Resource) -> bool:
 	if data == null or trait_res == null:
 		return false
 	return data.apply_trait(trait_res)
-		
-		# PersistenceSystem: create grave entity
-		if PersistenceSystem != null:
-			var entity_id: int = PersistenceSystem.create_persistent_entity(
-				PersistenceSystem.EntityType.GRAVE_FIELD,
-				data.tile_pos,
-				"%s's grave" % data.display_name,
-				0.4
-			)
-			# Record visitation (the deceased's location is visited by mourners)
-			PersistenceSystem.record_visitation(entity_id, int(data.id))
-	
+
 	# Remove from groups and free the node
 	remove_from_group("pawns")
 	queue_free()

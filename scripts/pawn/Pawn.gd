@@ -3410,10 +3410,6 @@ func _finish_eating() -> void:
 					data.add_mood_event(MoodEvent.Type.JOY, 40.0, 150)
 				# After eating, reset warning band so we don't re-log instantly.
 				_hunger_level = _level_for(data.hunger)
-	if GameManager.verbose_logs() and food_type != Item.Type.NONE and gain > 0.0:
-		print("[Pawn] %s ate 1 %s  (+%.0f hunger -> %.1f, mood %.1f)" % [
-			data.display_name, Item.name_for(food_type), gain, data.hunger, data.mood
-		])
 	_target_zone = null
 	_reset_to_idle()
 
@@ -4482,8 +4478,6 @@ func _evaluate_life_path_on_job_complete(job_type: int) -> void:
 	# Ruler path: direct influence gain (leadership emergence).
 	if new_path == PawnData.LifePath.RULER:
 		data.influence += 1.0
-		if GameManager.verbose_logs():
-			print("[Pawn] %s gained influence from ruler path (now %.1f)" % [data.display_name, data.influence])
 
 	# Milestone events at 10 / 25 / 50 / 100 on current path.
 	var prog: int = data.life_path_progress

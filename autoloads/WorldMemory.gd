@@ -692,13 +692,9 @@ func export_chronicle(file_path: String) -> bool:
 	# Use JSON printing if available; fall back to rudimentary string dump
 	var ok: bool = true
 	var js: Variant = null
-	if Engine.has_singleton("JSON"):
-		# Some runtimes expose JSON helpers; try to use JSON.print
-		# but guard in case it's not present.
-		js = JSON.print(out_obj)
-		serialized = str(js)
-	else:
-		serialized = str(out_obj)
+	# Use JSON.stringify
+	js = JSON.stringify(out_obj)
+	serialized = str(js)
 
 	var f := FileAccess.open(file_path, FileAccess.WRITE)
 	if f == null:

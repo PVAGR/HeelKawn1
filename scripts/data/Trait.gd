@@ -1,11 +1,11 @@
 extends Resource
 class_name TraitData
 
-@export_var var id: String = ""
-@export_var var name: String = ""
-@export_var var tier: String = "Minor"
-@export_var var krond_cost: float = 0.0
-@export_var var effects: Dictionary = {}
+@export var id: String = ""
+@export var name: String = ""
+@export var tier: String = "Minor"
+@export var krond_cost: float = 0.0
+@export var effects: Dictionary = {}
 
 func to_dict() -> Dictionary:
 	return {

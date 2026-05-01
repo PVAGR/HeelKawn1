@@ -40,17 +40,28 @@ var rediscovered_knowledge: Array[Dictionary] = []
 ## Knowledge degradation: knowledge_type -> degradation level (0.0-1.0)
 var knowledge_degradation: Dictionary = {}
 
+## Colony knowledge pools: settlement_id -> {knowledge_type: amount}
+var colony_knowledge_pools: Dictionary = {}
+
+const KNOWLEDGE_PER_CARRIER_TICK: float = 0.1
+
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 	_initialize_degradation()
+	_initialize_colony_pools()
 
 func _initialize_degradation() -> void:
 	for k in KnowledgeType.values():
 		knowledge_degradation[k] = 0.0
 
+func _initialize_colony_pools() -> void:
+	# Initialize empty - pools created when settlements are registered
+	pass
+
 func _on_game_tick(tick: int) -> void:
 	if GameManager.periodic_phase_due(tick, KNOWLEDGE_DEGRADATION_INTERVAL_TICKS, KNOWLEDGE_DEGRADATION_PHASE_OFFSET_TICKS):
 		_update_knowledge_degradation()
+	_generate_colony_knowledge(tick)
 
 # === Knowledge Carrier Management ===
 
@@ -322,6 +333,52 @@ func _record_rediscovery(pawn_id: int, knowledge_type: KnowledgeType, method: St
 	}
 	WorldMemory.record_event(event)
 
+# === Colony Knowledge Pool Management ===
+
+func register_settlement_knowledge_pool(settlement_id: int) -> void:
+	if not colony_knowledge_pools.has(settlement_id):
+		colony_knowledge_pools[settlement_id] = {}
+		for k in KnowledgeType.values():
+			colony_knowledge_pools[settlement_id][k] = 0.0
+
+func _generate_colony_knowledge(tick: int) -> void:
+	# Each knowledge carrier generates points for their settlement's pool
+	for settlement_id in colony_knowledge_pools:
+		var pool = colony_knowledge_pools[settlement_id]
+		for k in KnowledgeType.values():
+			var carrier_count = get_carrier_count(k)
+			if carrier_count > 0:
+				pool[k] += float(carrier_count) * KNOWLEDGE_PER_CARRIER_TICK
+
+func get_colony_knowledge(settlement_id: int, knowledge_type: KnowledgeType) -> float:
+	if not colony_knowledge_pools.has(settlement_id):
+		return 0.0
+	return colony_knowledge_pools[settlement_id].get(knowledge_type, 0.0)
+
+func get_total_colony_knowledge(settlement_id: int) -> float:
+	if not colony_knowledge_pools.has(settlement_id):
+		return 0.0
+	var total: float = 0.0
+	for k in KnowledgeType.values():
+		total += colony_knowledge_pools[settlement_id].get(k, 0.0)
+	return total
+
+func deduct_colony_knowledge(settlement_id: int, amount: float) -> bool:
+	if not colony_knowledge_pools.has(settlement_id):
+		return false
+	
+	var total_available = get_total_colony_knowledge(settlement_id)
+	if total_available < amount:
+		return false
+	
+	# Deduct proportionally from all knowledge types
+	var deduction_ratio = amount / total_available if total_available > 0 else 0.0
+	for k in KnowledgeType.values():
+		var current = colony_knowledge_pools[settlement_id].get(k, 0.0)
+		colony_knowledge_pools[settlement_id][k] = max(0.0, current - (current * deduction_ratio))
+	
+	return true
+
 # === Public Interface ===
 
 func get_knowledge_status() -> Dictionary:
@@ -349,4 +406,5 @@ func clear() -> void:
 	teaching_records.clear()
 	lost_knowledge.clear()
 	rediscovered_knowledge.clear()
+	colony_knowledge_pools.clear()
 	_initialize_degradation()

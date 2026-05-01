@@ -2,6 +2,12 @@ extends Node
 ## Phase 5: Infinite Technology Tree and Knowledge Discovery
 ## REFACTORED: Closed-loop research system driven by KnowledgeSystem carriers
 
+# Autoload references
+@onready var WorldAI = get_node_or_null("/root/WorldAI")
+@onready var KnowledgeSystem = get_node_or_null("/root/KnowledgeSystem")
+@onready var GameManager = get_node_or_null("/root/GameManager")
+@onready var WorldMemory = get_node_or_null("/root/WorldMemory")
+
 ## === CORE DATA STRUCTURES ===
 
 ## Hard-coded technology tree - each tech has meaning and purpose

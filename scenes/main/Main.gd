@@ -444,12 +444,17 @@ func _cycle_realm_crown_max_settlements() -> void:
 
 
 func _ready() -> void:
+	CrashTrap.enter_system("Main._ready")
 	var simulation_worker: bool = _is_simulation_worker_mode()
 	if not simulation_worker:
 		SettlementMemory.print_validation_smoketest_from_main()
 	# Ticks are driven from [member GameManager._dispatch_game_tick] (optional per-listener trace: --game-tick-trace).
 	GameManager.game_tick.connect(_on_game_tick)
 	GameManager.speed_changed.connect(_on_speed_changed)
+	CrashTrap.validate_signal(GameManager, &"game_tick")
+	CrashTrap.validate_signal(GameManager, &"speed_changed")
+	CrashTrap.validate_autoload("SettlementMemory", "Node")
+	CrashTrap.validate_autoload("WorldAI", "Node")
 	if not simulation_worker:
 		_player_input = PlayerInputBuffer.new()
 		_player_input.name = "PlayerInputBuffer"
@@ -492,6 +497,7 @@ func _ready() -> void:
 		_disconnect_worker_ui_signal_receivers()
 		_configure_simulation_worker_mode()
 	call_deferred("_log_validation_harness_observability_once")
+	CrashTrap.exit_system("Main._ready")
 
 
 func _configure_simulation_worker_mode() -> void:
@@ -1891,6 +1897,8 @@ func _sync_pawn_inherited_cultural_reputation() -> void:
 
 
 func _on_game_tick(tick: int) -> void:
+	if CrashTrap.trace_enabled and tick == 1:
+		CrashTrap.log_tick_event("Main._on_game_tick", "tick=%d" % tick)
 	if _is_simulation_worker_mode() and GameManager != null and GameManager.is_tick_benchmark_enabled():
 		return
 	var section_us: Dictionary = {}

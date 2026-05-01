@@ -22,6 +22,7 @@ config/features=PackedStringArray("4.6", "GL Compatibility")
 [autoload]
 
 KinshipSystem="*res://autoloads/KinshipSystem.gd"
+CrashTrap="*res://autoloads/CrashTrap.gd"
 GameManager="*res://autoloads/GameManager.gd"
 JobManager="*res://autoloads/JobManager.gd"
 StockpileManager="*res://autoloads/StockpileManager.gd"

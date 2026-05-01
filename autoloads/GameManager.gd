@@ -177,7 +177,18 @@ func _adaptive_frame_tick_cap(base_cap: int) -> int:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	## Headless [code]-s res://tools/diagnose_tick1.gd[/code] must not advance ticks before that script pauses; start paused when diagnose is on the command line.
+	if _cmdline_contains_substring("diagnose_tick1"):
+		pause()
 	_apply_command_line_flags()
+
+
+func _cmdline_contains_substring(needle: String) -> bool:
+	var n: String = needle.to_lower()
+	for raw_arg in OS.get_cmdline_args():
+		if String(raw_arg).to_lower().find(n) >= 0:
+			return true
+	return false
 
 
 func _apply_command_line_flags() -> void:
@@ -215,8 +226,11 @@ func _format_game_tick_callable(cb: Callable, ordinal: int, total: int) -> Strin
 
 ## Invokes [signal game_tick] listeners in engine order. Traced mode logs each slot first
 ## (GDScript cannot try/catch most runtime faults — see [member trace_game_tick_dispatch]).
+## [CrashTrap] can add tick-1 per-listener ENTER/EXIT when [method CrashTrap.should_trace_game_tick_dispatch] is true.
 func _dispatch_game_tick(tick: int) -> void:
-	if not trace_game_tick_dispatch:
+	var ct_slots: bool = CrashTrap.should_trace_game_tick_dispatch(tick)
+	var trace_slots: bool = trace_game_tick_dispatch or ct_slots
+	if not trace_slots:
 		game_tick.emit(tick)
 		return
 	var conns: Array = get_signal_connection_list(&"game_tick")
@@ -233,12 +247,21 @@ func _dispatch_game_tick(tick: int) -> void:
 			continue
 		slots.append(cb)
 	var n: int = slots.size()
+	if ct_slots:
+		CrashTrap.log_tick_event("dispatch_start", "tick=%d listeners=%d" % [tick, n])
 	for idx in range(n):
 		var cb2: Callable = slots[idx]
 		var label: String = _format_game_tick_callable(cb2, idx + 1, n)
 		last_game_tick_listener_label = label
-		print("[GameManager] game_tick(%d) dispatch %s" % [tick, label])
+		if trace_game_tick_dispatch:
+			print("[GameManager] game_tick(%d) dispatch %s" % [tick, label])
+		if ct_slots:
+			CrashTrap.enter_system("listener:%s" % label)
 		cb2.call(tick)
+		if ct_slots:
+			CrashTrap.exit_system("listener:%s" % label)
+	if ct_slots:
+		CrashTrap.log_tick_event("dispatch_end", "processed %d listeners" % n)
 
 
 func _process(delta: float) -> void:

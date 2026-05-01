@@ -280,6 +280,11 @@ var total_krond_earned: float = 0.0
 ## reproduction and future player social actions (gift, commend, etc.).
 var social_rapport: Dictionary = {}
 
+## Crusader-Kings-style directed opinion: other pawn id (string key) -> -100..100.
+## Drifts from shared time near peers (see Main social pass); future: slights,
+## favors, battles, succession.
+var character_opinions: Dictionary = {}
+
 ## Phase 1.1: Big Five Personality Traits (0.0-1.0)
 ## Openness: creativity, curiosity, preference for variety
 var openness: float = 0.5
@@ -2356,6 +2361,31 @@ func top_social_rapport_peer() -> Dictionary:
 	return {"peer_id": best_id, "score": best_score}
 
 
+func modify_character_opinion(peer_id: int, delta: int) -> void:
+	if peer_id < 0 or peer_id == id or delta == 0:
+		return
+	var k: String = str(peer_id)
+	character_opinions[k] = clampi(int(character_opinions.get(k, 0)) + delta, -100, 100)
+
+
+func get_character_opinion(peer_id: int) -> int:
+	if peer_id < 0 or peer_id == id:
+		return 0
+	return clampi(int(character_opinions.get(str(peer_id), 0)), -100, 100)
+
+
+func top_character_opinion_peer() -> Dictionary:
+	var best_id: int = -1
+	var best_op: int = -101
+	for k in character_opinions:
+		var op: int = int(character_opinions[k])
+		var pid: int = int(k)
+		if op > best_op or (op == best_op and (best_id < 0 or pid < best_id)):
+			best_op = op
+			best_id = pid
+	return {"peer_id": best_id, "opinion": best_op}
+
+
 func social_status_line(peer_display: String = "") -> String:
 	var t: Dictionary = top_social_rapport_peer()
 	var pid: int = int(t.get("peer_id", -1))
@@ -2447,6 +2477,18 @@ func to_save_dict() -> Dictionary:
 			continue
 		if a is Trait:
 			active_traits_ser.append({"legacy_trait_type": int(a.trait_type)})
+		elif a is Resource:
+			# Prefer saving as a resource path when the trait is a saved resource.
+			var rp: String = str(a.resource_path) if a.has_method("get_resource_path") or a.has("resource_path") else ""
+			if rp != "":
+				active_traits_ser.append({"resource_path": rp})
+			elif a.has_method("to_dict"):
+				active_traits_ser.append(a.to_dict())
+			else:
+				if a.has("id"):
+					active_traits_ser.append({"id": str(a.get("id"))})
+				else:
+					active_traits_ser.append({})
 		elif a.has_method("to_dict"):
 			active_traits_ser.append(a.to_dict())
 		else:
@@ -2498,6 +2540,7 @@ func to_save_dict() -> Dictionary:
 		"work_build": work_build,
 		"trait_types": trait_types,
 		"social_rapport": social_rapport.duplicate(true),
+		"character_opinions": character_opinions.duplicate(true),
 		"neural_network": neural_network.to_dict() if neural_network != null and neural_network.has_method("to_dict") else {},
 		"unique_id": unique_id,
 		"lineage_id": lineage_id,
@@ -2597,6 +2640,10 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	if d.has("social_rapport") and d["social_rapport"] is Dictionary:
 		for sk in (d["social_rapport"] as Dictionary).keys():
 			p.social_rapport[str(sk)] = clampi(int((d["social_rapport"] as Dictionary)[sk]), 0, 3000)
+	p.character_opinions = {}
+	if d.has("character_opinions") and d["character_opinions"] is Dictionary:
+		for ok in (d["character_opinions"] as Dictionary).keys():
+			p.character_opinions[str(ok)] = clampi(int((d["character_opinions"] as Dictionary)[ok]), -100, 100)
 	p.unique_id = str(d.get("unique_id", p.unique_id))
 	p.lineage_id = str(d.get("lineage_id", p.lineage_id))
 	p.biography = []
@@ -2646,22 +2693,39 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 				elif at is Dictionary and (at.has("id") or at.has("krond_cost") or at.has("effects")):
 					# Create TraitData from dict when possible
 					var td: TraitData = null
-					if Engine.has_singleton("ResourceLoader"):
-						# Use TraitData.new_from_dict if available
-						if TraitData != null and TraitData.has_method("new_from_dict"):
-							td = TraitData.new_from_dict(at)
+					# If we saved a resource path, try to load the resource to restore the exact object.
+					if at.has("resource_path"):
+						var rp := str(at.get("resource_path"))
+						var loaded := ResourceLoader.load(rp)
+						if loaded != null and loaded is TraitData:
+							td = loaded
 						else:
-							td = TraitData.new()
-							td.id = str(at.get("id", "")) if at.has("id") else td.id
+							# Fall back to dict-based construction via instance method if available
+							if TraitData != null:
+								var td_candidate := TraitData.new()
+								if td_candidate.has_method("from_dict"):
+									td_candidate.from_dict(at)
+									td = td_candidate
+								else:
+									td = td_candidate
+									td.id = str(at.get("id", "")) if at.has("id") else td.id
 					else:
-						# Fallback: create minimal TraitData
-						td = TraitData.new()
-						td.id = str(at.get("id", "")) if at.has("id") else td.id
+						# No resource path; try dict-based construction
+						if TraitData != null:
+							var td_candidate2 := TraitData.new()
+							if td_candidate2.has_method("from_dict"):
+								td_candidate2.from_dict(at)
+								td = td_candidate2
+							else:
+								td = td_candidate2
+								td.id = str(at.get("id", "")) if at.has("id") else td.id
 					if td != null:
 						p.active_traits.append(td)
 				# Empty/fallback entries are ignored
 		# Note: custom/resource-backed TraitData deserialization is not implemented here.
-		return p
+	# End neural network / trait restore block; always return constructed PawnData
+	return p
+
 
 
 func is_carrying() -> bool:

@@ -137,6 +137,15 @@ func _pawn_salt(extra: int = 0) -> int:
 var _behavior_profile: PackedFloat32Array = PackedFloat32Array()
 var _behavior_profile_ready: bool = false
 
+## 1.0 at world start, 0.0 after this many ticks: looser idle, more wander, slower job claims.
+const FOUNDING_PERIOD_TICKS: int = 4500
+
+
+func _founding_blend() -> float:
+	if GameManager == null:
+		return 0.0
+	return clampf(1.0 - float(GameManager.tick_count) / float(FOUNDING_PERIOD_TICKS), 0.0, 1.0)
+
 
 func _reset_behavior_profile() -> void:
 	_behavior_profile.clear()
@@ -1638,12 +1647,13 @@ func _tick_idle() -> void:
 	# Job claiming is one of the hottest paths at ultra speed; spread claims so
 	# not every pawn rescans the full queue on the same tick burst.
 	var claim_iv: int = maxi(1, _job_claim_interval_for_speed())
+	claim_iv += int(round(_founding_blend() * 2.0))
 	var claim_phase: int = 0
 	if data != null:
 		claim_phase = posmod(int(data.id), claim_iv)
 	if posmod(GameManager.tick_count + claim_phase, claim_iv) != 0:
 		var wanderlust: float = lerpf(0.52, 1.68, _bp(3))
-		var early_wander_chance: float = WANDER_CHANCE_PER_TICK * wanderlust
+		var early_wander_chance: float = WANDER_CHANCE_PER_TICK * wanderlust * (1.0 + 0.55 * _founding_blend())
 		if preferred_idle_action == "wander":
 			early_wander_chance *= 1.7
 		if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(early_wander_chance, 0.0, 0.35), _pawn_salt(11)):
@@ -3060,7 +3070,8 @@ func _maybe_start_teaching() -> bool:
 		return false
 	# Throttle: cheap social layer, not a per-tick O(n) scan.
 	var tick: int = GameManager.tick_count
-	if posmod(tick + int(data.id) * 7, 29) != 0:
+	var teach_period: int = int(round(lerpf(19.0, 29.0, 1.0 - _founding_blend())))
+	if posmod(tick + int(data.id) * 7, maxi(1, teach_period)) != 0:
 		return false
 	var spawner: PawnSpawner = _resolve_pawn_spawner()
 	if spawner == null:

@@ -2393,6 +2393,7 @@ func _accumulate_social_rapport() -> void:
 		return
 	const R2: float = 128.0 * 128.0
 	const GAIN: int = 14
+	const OPINION_GAIN: int = 2
 	var pl: Array[Pawn] = []
 	for p in _pawn_spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null:
@@ -2425,6 +2426,8 @@ func _accumulate_social_rapport() -> void:
 				continue
 			da.add_social_rapport(int(db.id), GAIN)
 			db.add_social_rapport(int(da.id), GAIN)
+			da.modify_character_opinion(int(db.id), OPINION_GAIN)
+			db.modify_character_opinion(int(da.id), OPINION_GAIN)
 			if wm_budget > 0:
 				var n: int = _record_social_pair_events(da, db, wm_budget)
 				wm_budget -= n

@@ -714,7 +714,13 @@ func _refresh() -> void:
 		var top_peer: Dictionary = d.top_social_rapport_peer()
 		var pid: int = int(top_peer.get("peer_id", -1))
 		var peer_disp: String = _peer_display_for_social(pid)
-		_social_label.text = d.social_status_line(peer_disp)
+		var social_text: String = d.social_status_line(peer_disp)
+		var top_op: Dictionary = d.top_character_opinion_peer()
+		var opid: int = int(top_op.get("peer_id", -1))
+		if opid >= 0:
+			var opv: int = int(top_op.get("opinion", 0))
+			social_text += "\nOpinion (CK-style): %s (%+d)" % [_peer_display_for_social(opid), opv]
+		_social_label.text = social_text
 	
 	if _mood_status_label != null:
 		var active_mood_event: MoodEvent = d.get_active_mood_event()

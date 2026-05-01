@@ -5464,9 +5464,29 @@ func _print_stockpile() -> void:
 
 
 # ==================== save / load (F5 / F8) ====================
+#
+# Cross-session continuity (must survive save → quit → load): everything in
+# `_build_save_dict()` / `_apply_save_dict`: sim identity (`GameManager.tick_count`,
+# optional speed/pause when `RESTORE_SPEED_FROM_SAVE`), `last_generation_tick`,
+# `WorldData` (terrain + `world_seed`), stockpile zones, pawn blobs, regrow queue,
+# `WorldMemory`, bloodlines, `SettlementRegistry` + `SettlementMemory` (including
+# persisted governance keys from `SettlementMemory.to_save_dict`), `WorldPersistence`,
+# myth/sacred/chronicle/cultural memory, `PlayerIntentQueue`, `FactionRegistry`,
+# and player mode / pawn binding.
+#
+# Verification here does **not** prove `_apply_save_dict` is bug-free; it proves the
+# snapshot dict round-trips through the same binary encoding as `GameSave` (`store_var`
+# / `get_var`, i.e. `var_to_bytes` / `bytes_to_var`). Call `verify_save_load_state()` from
+# the editor Remote Inspector on the Main node when you need a quick encoding check without
+# applying load (full F5→F8 smoke test remains manual in-editor).
 
 func _colony_save() -> void:
 	var snapshot: Dictionary = _build_save_dict()
+	if OS.is_debug_build():
+		if not verify_save_roundtrip(snapshot):
+			push_warning(
+					"[Main] Save encoding round-trip failed (var_to_bytes). File still written; investigate persistence."
+			)
 	var err: Error = GameSave.write_file(GameSave.get_save_path(), snapshot)
 	if err == OK:
 		_reset_job_cooldown_telemetry()
@@ -5495,6 +5515,29 @@ func _colony_load() -> void:
 	_reset_job_cooldown_telemetry()
 	if OS.is_debug_build():
 		print("[Main] Loaded colony from %s" % GameSave.get_save_path())
+
+
+## Debug/editor: ensures `_build_save_dict()` survives `var_to_bytes` → `bytes_to_var` (same
+## family as [member FileAccess.store_var]). Does not read disk and does not run `_apply_save_dict`.
+## In running game: Remote Inspector → select [Main] → call [method verify_save_load_state].
+func verify_save_load_state() -> bool:
+	return verify_save_roundtrip(_build_save_dict())
+
+
+## Returns true if `bytes_to_var(var_to_bytes(snapshot))` equals `snapshot` (same encoding path as
+## [member FileAccess.store_var]). Used automatically on F5 in debug builds; safe to call from tooling while paused.
+func verify_save_roundtrip(snapshot: Dictionary) -> bool:
+	var enc: PackedByteArray = var_to_bytes(snapshot)
+	var restored: Variant = bytes_to_var(enc)
+	if not (restored is Dictionary):
+		if OS.is_debug_build():
+			push_warning("[Main] verify_save_roundtrip: round-trip did not yield a Dictionary")
+		return false
+	if (restored as Dictionary) != snapshot:
+		if OS.is_debug_build():
+			push_warning("[Main] verify_save_roundtrip: snapshot differs after var_to_bytes round-trip")
+		return false
+	return true
 
 
 func _build_save_dict() -> Dictionary:

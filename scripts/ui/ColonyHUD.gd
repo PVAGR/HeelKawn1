@@ -181,6 +181,7 @@ func _refresh() -> void:
 		lines.append(_settlement_identity_line())
 		lines.append(_stockpile_simple_line())
 		lines.append(_pawn_line_simple())
+		lines.append(_krond_line_simple())
 		lines.append(_jobs_line_simple())
 		lines.append(_wildlife_line())
 		var intent_simple: String = _player_intent_hud_line()
@@ -522,6 +523,14 @@ func _pawn_line_simple() -> String:
 		_color_value(avg_r),
 		_color_value(avg_m),
 	]
+
+
+func _krond_line_simple() -> String:
+	if _player_pawn == null or _player_pawn.data == null:
+		return "[color=#cccccc]Krond:[/color] -"
+	var kr: float = float(_player_pawn.data.available_krond)
+	var kint: int = int(round(kr))
+	return "[color=#ffd54f]Krond:[/color] [b]%d[/b]" % [kint]
 
 
 func _stockpile_line() -> String:

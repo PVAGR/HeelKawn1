@@ -31,11 +31,15 @@ Authority:
    - Implementation exists in autoloads/SettlementPlanner.gd with OPEN/CAUTIOUS/DEFENSIVE branches
    - Exit criteria: Documented with implementation anchor — COMPLETE
 
-2. Player-readable meaning refinement packet
+2. [done 2026-04-30] Player-readable meaning refinement packet
    - Specify non-text-forward cues for quiet/scarred/bloodied/grave transitions (audio, ambiance, behavior density, settlement posture).
+   - Update: docs/PLAYER_READABLE_MEANING_SPEC.md (spec), autoloads/MeaningAudioCue.gd (audio), scripts/pawn/Pawn.gd (behavior), scripts/world/TileFeature.gd (visual posture)
+   - Exit criteria: All 4 cue types implemented with deterministic behavior — COMPLETE
 
-3. Revival storyline constraints
+3. [done 2026-04-30] Revival storyline constraints
    - Document canon-safe revival boundaries so rebirth behavior remains emergent but interpretable (no heroic script overrides).
+   - Update: docs/WORLD_BIBLE/TIMELINE.md (boundaries section), docs/WORLD_BIBLE/CANON_CHANGELOG.md (entry)
+   - Exit criteria: All revival gates documented with implementation anchors — COMPLETE
 
 ## Legacy-to-Current Mapping Notes
 

@@ -72,3 +72,32 @@ static func apply_culture_tint_to_built_color(base: Color, culture_type: int) ->
 	elif culture_type == SettlementPlanner.CULTURE_CAUTIOUS:
 		mul = Color(1.01, 1.0, 0.995, 1.0)
 	return base.lerp(base * mul, TINT)
+
+
+## Apply settlement state-based tint (Phase 4: posture visual indicators)
+## Adds desaturation/darkening based on settlement state (active/revivable/recovering/abandoned/permanently_abandoned)
+static func apply_settlement_state_tint(base: Color, settlement_state: String) -> Color:
+	const STATE_TINT: float = 0.15
+	var state_mul: Color = Color(1.0, 1.0, 1.0, 1.0)
+	
+	match settlement_state:
+		"active":
+			# No additional tint - use culture tint only
+			return base
+		"revivable":
+			# Slightly worn/faded
+			state_mul = Color(0.95, 0.93, 0.90, 1.0)
+		"recovering":
+			# Gray-brown, muted
+			state_mul = Color(0.85, 0.82, 0.78, 1.0)
+		"abandoned":
+			# Desaturated, dark gray
+			state_mul = Color(0.70, 0.68, 0.65, 1.0)
+		"permanently_abandoned":
+			# Cold gray, near-black
+			state_mul = Color(0.55, 0.55, 0.50, 1.0)
+		_:
+			# Default: no state tint
+			return base
+	
+	return base.lerp(base * state_mul, STATE_TINT)

@@ -178,6 +178,11 @@ func _tile_color(x: int, y: int) -> Color:
 				base = TileFeature.apply_culture_tint_to_built_color(
 						base, int(_region_culture_tint_cache[rk_ct])
 				)
+			# Apply settlement state tint (Phase 4: posture visual indicators)
+			if is_instance_valid(SettlementMemory):
+				var settlement_state: String = SettlementMemory.get_state_for_region(rk_ct)
+				if not settlement_state.is_empty():
+					base = TileFeature.apply_settlement_state_tint(base, settlement_state)
 		if feature == TileFeature.Type.RUIN:
 			# Further desaturate / drain rubble; land-recovery v1: ruin tint still uses max scar, not recovery_stage.
 			var g: float = (base.r + base.g + base.b) * 0.33

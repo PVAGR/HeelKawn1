@@ -36,6 +36,20 @@ Proposed canon: legacy docs are canon-reference context only; implementation aut
 Reason: keep universe history usable while preventing stale architecture claims from steering active feature/system work.
 Status: accepted
 
+---
+
+## 2026-04-30 - Revival storyline constraints documentation
+
+Date: 2026-04-30
+Proposed by: assistant
+Affected file(s): `docs/WORLD_BIBLE/TIMELINE.md`
+Current canon: revival hook lacked explicit non-negotiable boundary documentation
+Proposed canon: document canon-safe revival boundaries (scar gate, peace gate, state gate, cooldown gate, collapse gate, revival score curve) with implementation anchors to SettlementRebirth.gd and SettlementMemory.gd
+Reason: ensure rebirth behavior remains emergent but interpretable without heroic script overrides; provide deterministic constraints for lore/storyline interpretation
+Status: accepted
+
+---
+
 ## 2026-04-25 - World Bible bootstrap
 
 Date: 2026-04-25

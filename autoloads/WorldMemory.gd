@@ -681,6 +681,34 @@ func get_recent_events(count: int) -> Array[Dictionary]:
 	return out
 
 
+## Export a chronicle file (JSON). Returns true if write succeeded.
+func export_chronicle(file_path: String) -> bool:
+	var out_obj: Dictionary = {
+		"schema": SCHEMA,
+		"exported_at_tick": GameManager.tick_count if GameManager != null else 0,
+		"events": _events.duplicate(true),
+	}
+	var serialized: String = ""
+	# Use JSON printing if available; fall back to rudimentary string dump
+	var ok: bool = true
+	var js: Variant = null
+	if Engine.has_singleton("JSON"):
+		# Some runtimes expose JSON helpers; try to use JSON.print
+		# but guard in case it's not present.
+		js = JSON.print(out_obj)
+		serialized = str(js)
+	else:
+		serialized = str(out_obj)
+
+	var f := FileAccess.open(file_path, FileAccess.WRITE)
+	if f == null:
+		return false
+	# Write a compact JSON-like string; ensure newline
+	f.store_string(serialized)
+	f.close()
+	return true
+
+
 func get_recent_event_summaries(max_items: int = 3) -> PackedStringArray:
 	var out: PackedStringArray = PackedStringArray()
 	if max_items <= 0 or _events.is_empty():

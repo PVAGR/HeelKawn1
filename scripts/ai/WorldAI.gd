@@ -2306,8 +2306,11 @@ func _advance_world_age() -> void:
 	# Get actual game metrics from SettlementMemory
 	var settlements = SettlementMemory.get_settlements()
 	var active_settlement_count = 0
-	for s in settlements:
-		if s.get("state", "") == "active":
+	for s_any in settlements:
+		if not s_any is Dictionary:
+			continue
+		var s: Dictionary = s_any as Dictionary
+		if str(s.get("state", "")) == "active":
 			active_settlement_count += 1
 	
 	var living_pawns = SettlementMemory._living_pawns()

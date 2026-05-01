@@ -67,6 +67,18 @@ var adaptive_ticks_cap_last_frame: int = 0
 var _last_slow_tick_log_msec: int = -1_000_000
 var _last_catchup_hint_log_msec: int = -1_000_000
 
+## GDScript has no try/catch for runtime faults. When true, each [signal game_tick] slot is
+## invoked in order with a console line naming the target — the **last line printed** before
+## a hard stop identifies the crashing listener. Enable with CLI [code]--game-tick-trace[/code]
+## (see [method _apply_command_line_flags]); [method set_game_tick_trace_enabled] for tooling.
+var trace_game_tick_dispatch: bool = false
+## Path / object id and method of the listener currently running (for post-mortem in the editor).
+var last_game_tick_listener_label: String = ""
+
+
+func set_game_tick_trace_enabled(on: bool) -> void:
+	trace_game_tick_dispatch = on
+
 
 func verbose_logs() -> bool:
 	return VERBOSE_SIM_LOGS
@@ -169,6 +181,11 @@ func _ready() -> void:
 
 
 func _apply_command_line_flags() -> void:
+	## Off by default: debug/editor startup order can run a custom [SceneTree] [code]_ready[/code]
+	## before autoload [code]_ready[/code], so a "disable trace" step in boot scripts would be
+	## overwritten if we tied this to [code]OS.is_debug_build()[/code]. Use [code]--game-tick-trace[/code]
+	## when hunting a crashing [signal game_tick] listener; [code]--no-game-tick-trace[/code] forces off.
+	trace_game_tick_dispatch = false
 	var args: PackedStringArray = OS.get_cmdline_args()
 	for raw_arg in args:
 		var arg: String = str(raw_arg)
@@ -177,6 +194,51 @@ func _apply_command_line_flags() -> void:
 				simulation_worker_mode = true
 			"--lightweight-sim", "--lite-sim":
 				lightweight_simulation_mode = true
+			"--game-tick-trace":
+				trace_game_tick_dispatch = true
+			"--no-game-tick-trace":
+				trace_game_tick_dispatch = false
+
+
+func _format_game_tick_callable(cb: Callable, ordinal: int, total: int) -> String:
+	var obj: Object = cb.get_object()
+	var mid: StringName = cb.get_method()
+	var mid_str: String = str(mid)
+	if obj == null:
+		return "[%d/%d] <null> :: %s" % [ordinal, total, mid_str]
+	if not is_instance_valid(obj):
+		return "[%d/%d] <freed> :: %s" % [ordinal, total, mid_str]
+	if obj is Node:
+		return "[%d/%d] %s :: %s" % [ordinal, total, str((obj as Node).get_path()), mid_str]
+	return "[%d/%d] %s :: %s" % [ordinal, total, str(obj), mid_str]
+
+
+## Invokes [signal game_tick] listeners in engine order. Traced mode logs each slot first
+## (GDScript cannot try/catch most runtime faults — see [member trace_game_tick_dispatch]).
+func _dispatch_game_tick(tick: int) -> void:
+	if not trace_game_tick_dispatch:
+		game_tick.emit(tick)
+		return
+	var conns: Array = get_signal_connection_list(&"game_tick")
+	var slots: Array[Callable] = []
+	for entry_any in conns:
+		if not entry_any is Dictionary:
+			continue
+		var entry: Dictionary = entry_any as Dictionary
+		var cb_var: Variant = entry.get("callable", null)
+		if not cb_var is Callable:
+			continue
+		var cb: Callable = cb_var as Callable
+		if not cb.is_valid():
+			continue
+		slots.append(cb)
+	var n: int = slots.size()
+	for idx in range(n):
+		var cb2: Callable = slots[idx]
+		var label: String = _format_game_tick_callable(cb2, idx + 1, n)
+		last_game_tick_listener_label = label
+		print("[GameManager] game_tick(%d) dispatch %s" % [tick, label])
+		cb2.call(tick)
 
 
 func _process(delta: float) -> void:
@@ -207,7 +269,7 @@ func _process(delta: float) -> void:
 		_tick_accumulator -= TICK_INTERVAL_SECONDS
 		tick_count += 1
 		var t0: int = Time.get_ticks_usec()
-		game_tick.emit(tick_count)
+		_dispatch_game_tick(tick_count)
 		tick_chain_usecs += Time.get_ticks_usec() - t0
 		ticks_this_frame += 1
 	ticks_emitted_last_frame = ticks_this_frame

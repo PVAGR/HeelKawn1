@@ -447,6 +447,7 @@ func _ready() -> void:
 	var simulation_worker: bool = _is_simulation_worker_mode()
 	if not simulation_worker:
 		SettlementMemory.print_validation_smoketest_from_main()
+	# Ticks are driven from [member GameManager._dispatch_game_tick] (optional per-listener trace: --game-tick-trace).
 	GameManager.game_tick.connect(_on_game_tick)
 	GameManager.speed_changed.connect(_on_speed_changed)
 	if not simulation_worker:

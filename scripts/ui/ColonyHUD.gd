@@ -283,6 +283,8 @@ func _time_line() -> String:
 	var tick: int = GameManager.tick_count
 	var day_len: int = SimTime.TICKS_PER_VISUAL_DAY
 	var phase: float = float(tick % day_len) / float(day_len)
+	if not is_finite(phase):
+		phase = 0.0
 	var phase_name: String = _phase_name(phase)
 	var speed_str: String = "PAUSED" if GameManager.is_paused else "%dx" % int(GameManager.game_speed)
 	# In-game hour estimate: 24 notional hours across one visual day cycle (see docs/TIME_SCALE.md).
@@ -308,8 +310,15 @@ func _colony_state_line() -> String:
 	var stance: String = ColonySimServices.get_stance_display()
 	var fp: float = ColonySimServices.get_food_pressure()
 	var hp: float = ColonySimServices.get_housing_pressure()
+	if not is_finite(fp):
+		fp = 0.0
+	if not is_finite(hp):
+		hp = 0.0
+	var stance3: String = stance
+	if stance3.length() > 3:
+		stance3 = stance3.substr(0, 3)
 	return "[color=#c9b37c]C:[/color]%s F%d%% H%d%%" % [
-		stance.substr(0, 3),
+		stance3,
 		int(round(fp * 100.0)),
 		int(round(hp * 100.0)),
 	]

@@ -110,6 +110,7 @@ func _realm_crown_block(s: Dictionary) -> String:
 func _world_governance_block(s: Dictionary) -> String:
 	return (
 		"[b]WORLD STATUS[/b]\n"
+		+ "[color=#b0bec5][i]Same sim time as ground view — summary readout; detail lives in Colony HUD + pawn sheets (F9 toggles this stack).[/i][/color]\n"
 		+ "%s\n\n" % str(s.get("world_status_summary", "WORLD STATUS: Unknown"))
 		+ "[b]WORLD / GOVERNANCE[/b]\n"
 		+ "Speed: %s  Pause: %s\n" % [str(s.get("speed", "1x")), str(s.get("paused", "No"))]

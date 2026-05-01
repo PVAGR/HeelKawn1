@@ -29,6 +29,8 @@ const PANEL_PAD_X: int = 4
 const PANEL_PAD_Y: int = 3
 ## Readability mode: bigger, simpler HUD for at-a-glance play.
 const SIMPLE_READABLE_HUD: bool = true
+## Show a one-line first-session orientation in simple HUD for this many in-game days, then hide (see docs/HEELKAWN_STATE.md).
+const FIRST_PLAY_HINT_VISUAL_DAYS: int = 8
 
 const HOTKEY_HINTS: String = "SPACE pause · F5 save · F8 load · F9 realm · Shift+F9 rows · K sprite · F10 reports"
 
@@ -174,6 +176,9 @@ func _refresh() -> void:
 		lines.append("[bgcolor=#583a14][color=#ffe082]  BUILD MODE: %s   (click or click-drag to place · right-click / Esc to cancel)  [/color][/bgcolor]" %
 			_designation_label)
 	if SIMPLE_READABLE_HUD:
+		var first_hint: String = _first_play_hint_line()
+		if not first_hint.is_empty():
+			lines.append(first_hint)
 		lines.append(_time_line())
 		lines.append(_world_pulse_line())
 		lines.append(_history_totals_line())
@@ -323,6 +328,18 @@ func _colony_state_line() -> String:
 		int(round(fp * 100.0)),
 		int(round(hp * 100.0)),
 	]
+
+
+## Short, truthful onboarding line; disappears after a few in-game days so veterans stay uncluttered.
+func _first_play_hint_line() -> String:
+	var cap: int = FIRST_PLAY_HINT_VISUAL_DAYS * SimTime.TICKS_PER_VISUAL_DAY
+	if GameManager.tick_count >= cap:
+		return ""
+	return (
+		"[color=#cfd8dc][i]HeelKawn backbone:[/i][/color] click people for the sheet · "
+		+ "[b]F9[/b] realm readout · [b]F10[/b] creator → [b]35[/b] (what is LIVE vs deferred) · "
+		+ "default role is observer/chronicler (incarnation optional)"
+	)
 
 
 ## High-level world snapshot (places, memory log size, work queue).

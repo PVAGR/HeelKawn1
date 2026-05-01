@@ -26,7 +26,11 @@ func open_with_candidates(candidates: Array, current_mode_label: String) -> void
 	if _title_label != null:
 		_title_label.text = "Incarnation Entry"
 	if _subtitle_label != null:
-		_subtitle_label.text = "Current mode: %s | ranked by life stage, settlement vitality, and region context" % current_mode_label
+		_subtitle_label.text = (
+			"Mode: %s — same simulation clock before and after entry. "
+			+ "Pick who you steer; ranked by life stage, settlement vitality, and region. "
+			+ "F9 realm panel · F10 → 35 for LIVE vs deferred backbone."
+		) % current_mode_label
 	_rebuild_candidate_rows(candidates)
 	_update_action_state()
 

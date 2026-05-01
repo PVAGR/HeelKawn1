@@ -9,7 +9,8 @@ const STOCKPILE_SCENE: PackedScene = preload("res://scenes/stockpile/Stockpile.t
 const INCARNATION_PICKER_SCRIPT: Script = preload("res://scripts/ui/IncarnationPicker.gd")
 ## Static `_region_key` helper lives on the script; reuse instead of per-call preload in hot paths.
 const _WM = preload("res://autoloads/WorldMemory.gd")
-const TRAIT_SHOP_SCRIPT: Script = preload("res://scripts/ui/TraitShop.gd")
+const TRAIT_SHOP_PATH: String = "res://scripts/ui/TraitShop.gd"
+const DEBUG_PANEL_PATH: String = "res://scripts/ui/DebugControlPanel.gd"
 
 ## Tuning for initial job generation.
 const FORAGE_WORK_TICKS: int = 20
@@ -134,7 +135,7 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _hud: ColonyHUD = $UI_Viewport/ColonyHUD
 @onready var _observer_hud: ObserverHUD = $UI_Viewport/ObserverHUD
 @onready var _chronicle_ledger: ChronicleLedger = $UI_Viewport/ChronicleLedger
-@onready var _pawn_ai_inspector: PawnAIInspector = $UI_Viewport/PawnAIInspector
+@onready var _pawn_ai_inspector = $UI_Viewport/PawnAIInspector
 @onready var _focus_inspector: FocusInspector = $UI_Viewport/FocusInspector
 @onready var _region_inspector: RegionInspector = $UI_Viewport/RegionInspector
 @onready var _timeline_controls: TimelineControls = $UI_Viewport/TimelineControls
@@ -144,19 +145,21 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _toolbar: BuildToolbar = $UI_Viewport/BuildToolbar
 @onready var _info_panel: PawnInfoPanel = $UI_Viewport/PawnInfoPanel
 @onready var _trait_shop: Control = null
+@onready var _debug_panel: Control = null
 @onready var _day_night: DayNightCycle = $DayNight
 @onready var _camera: Camera2D = $WorldViewport/Camera
 
 # -------------------- selection --------------------
 ## Currently selected pawn (right-side info panel). null = nothing selected.
 ## Click a pawn to select; click empty ground or press Esc to deselect.
-var _selected_pawn: Pawn = null
+var _selected_pawn = null
 ## HUD + bottom toolbar + pawn sheet visibility (`` ` `` toggles for map-first play).
 var _play_chrome_visible: bool = true
 ## Smooth camera lock on selected pawn (`G`). Cleared by middle-mouse pan.
 var _camera_follow_selected: bool = false
 ## Deterministic local-control pawn. Defaults to current selection.
-var _player_pawn: Pawn = null
+var _player_pawn = null
+var _hotkeys_enabled: bool = true
 ## Two **shipped** perspectives (CK3-style map cam, first-person, etc. are later layers).
 ## - **SPECTATOR** — worldwide / chronicler / “god or developer” flyover: same sim clock, free camera, inspection, time speed, no single-body embodiment (docs/HEELKAWN_STANDALONE_MASTER_PLAN.md: Spectator state).
 ## - **INCARNATED** — you are one `Pawn` in the world (same class as NPCs): embodied input, shared needs/jobs; parity target = everything an NPC can do that is implemented (ibid.: Incarnation state).
@@ -497,11 +500,32 @@ func _ready() -> void:
 			_focus_inspector.set_visible_state(false)
 		_init_phase8_proof_overlay()
 		_ensure_meaning_vignette()
+		# Debug panel is loaded lazily via F12 to keep startup path minimal.
 	else:
 		_disconnect_worker_ui_signal_receivers()
 		_configure_simulation_worker_mode()
 	call_deferred("_log_validation_harness_observability_once")
 	CrashTrap.exit_system("Main._ready")
+
+
+func _ensure_debug_panel() -> void:
+	# Keep startup resilient: if the debug panel script fails, boot still proceeds.
+	if _debug_panel != null and is_instance_valid(_debug_panel):
+		return
+	var debug_script := ResourceLoader.load(DEBUG_PANEL_PATH) as Script
+	if debug_script == null:
+		if OS.is_debug_build():
+			print("[Main] Debug panel script not found: %s" % DEBUG_PANEL_PATH)
+		return
+	var dp = debug_script.new()
+	if dp == null or not (dp is Control):
+		if OS.is_debug_build():
+			print("[Main] Debug panel instantiation failed")
+		return
+	_debug_panel = dp
+	$UI_Viewport.add_child(_debug_panel)
+	# Ensure hotkeys default to enabled; panel checkbox can toggle
+	_set_hotkeys_enabled(true)
 
 
 func _configure_simulation_worker_mode() -> void:
@@ -2724,6 +2748,8 @@ func _on_speed_changed(speed: float, paused: bool) -> void:
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
+	if not _hotkeys_enabled:
+		return
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
 	# When the F10 creator menu is open, number keys are used for report labels.
@@ -2894,6 +2920,15 @@ func _handle_key_input(key: InputEventKey) -> void:
 			_toggle_pawn_ai_inspector()
 		KEY_U:
 			_toggle_trait_shop()
+		KEY_F12:
+			_toggle_debug_panel()
+
+
+func _toggle_debug_panel() -> void:
+	if _debug_panel == null or not is_instance_valid(_debug_panel):
+		_ensure_debug_panel()
+	if _debug_panel != null and is_instance_valid(_debug_panel):
+		_debug_panel.visible = not _debug_panel.visible
 		
 
 ## Debug: export chronicle to user://exports/chronicle_<tick>.json
@@ -2904,13 +2939,13 @@ func _export_chronicle() -> void:
 	if Engine.has_singleton("GameManager") and GameManager != null:
 		tick = GameManager.tick_count
 	var dir_path: String = "user://exports"
-	var da := DirAccess.open(dir_path)
-	if da == null:
-		DirAccess.make_dir_recursive(dir_path)
+	var da := DirAccess.open("user://")
+	if da != null:
+		da.make_dir_recursive(dir_path)
 	var file_path: String = "%s/chronicle_%d.json" % [dir_path, tick]
 	var ok: bool = false
-	if _WM != null and _WM.has_method("export_chronicle"):
-		ok = _WM.export_chronicle(file_path)
+	if WorldMemory != null and WorldMemory.has_method("export_chronicle"):
+		ok = WorldMemory.export_chronicle(file_path)
 	if OS.is_debug_build():
 		print("[Main] Chronicle export -> %s  ok=%s" % [file_path, str(ok)])
 	# notify ledger/UI if present
@@ -2935,17 +2970,24 @@ func _toggle_trait_shop() -> void:
 		# toggle visibility
 		_trait_shop.visible = not _trait_shop.visible
 		return
-	# instantiate and attach
-	if TRAIT_SHOP_SCRIPT == null:
+	# instantiate and attach (load at runtime to avoid circular preloads)
+	var trait_script := ResourceLoader.load(TRAIT_SHOP_PATH) as Script
+	if trait_script == null:
 		print("[Main] Trait shop script not found")
 		return
-	var shop := TRAIT_SHOP_SCRIPT.new() as Control
+	var shop := trait_script.new() as Control
 	if shop == null:
 		print("[Main] Failed to instantiate TraitShop")
 		return
 	_trait_shop = shop
 	$UI_Viewport.add_child(_trait_shop)
 	_trait_shop.open_shop(_player_pawn)
+
+
+func _set_hotkeys_enabled(enabled: bool) -> void:
+	_hotkeys_enabled = enabled
+	if OS.is_debug_build():
+		print("[Main] Hotkeys enabled: %s" % str(_hotkeys_enabled))
 
 
 func _toggle_region_inspector() -> void:
@@ -4636,9 +4678,18 @@ func _mining_react_budget_for_speed() -> int:
 
 
 ## Full react pass (legacy callers). Tick loop should prefer `_react_to_mining_progress_step`.
+## Bootstrap must not spin unbounded: one bad state in the scanner would hard-freeze the game.
 func _react_to_mining_progress() -> void:
+	var guard: int = 0
+	const MAX_BOOTSTRAP_MINING_REACT_LOOPS: int = 8192
 	while not _react_to_mining_progress_step():
-		pass
+		guard += 1
+		if guard >= MAX_BOOTSTRAP_MINING_REACT_LOOPS:
+			push_error(
+					"[Main] _react_to_mining_progress: bootstrap step cap (%d) — continuing on future ticks"
+					% MAX_BOOTSTRAP_MINING_REACT_LOOPS
+			)
+			break
 
 
 ## Multi-source BFS starting from every still-sealed ORE_VEIN, expanding only

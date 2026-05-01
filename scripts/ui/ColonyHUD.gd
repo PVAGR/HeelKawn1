@@ -38,8 +38,8 @@ const HOTKEY_HINTS: String = "SPACE pause · F5 save · F8 load · F9 realm · S
 var _history_panel: PopupPanel = null
 var _history_text: RichTextLabel = null
 
-var _world: World = null
-var _spawner: PawnSpawner = null
+var _world = null
+var _spawner = null
 var _animal_spawner: AnimalSpawner = null
 ## Empty string when no designation mode is active. Otherwise "Bed" / "Wall" / etc.
 var _designation_label: String = ""
@@ -49,7 +49,7 @@ var _wildlife_sample_tick: int = 0
 var _wildlife_history: Array[int] = []
 var _momentum_spark: String = "........"
 var _player_input_buffer: PlayerInputBuffer = null
-var _player_pawn: Pawn = null
+var _player_pawn = null
 var _hud_dirty: bool = true
 var _last_refresh_stride: int = REFRESH_EVERY_N_TICKS
 var _last_coarse_gate: int = 10
@@ -439,11 +439,14 @@ static func _phase_name(p: float) -> String:
 func _prune_freed_pawns_in_spawner() -> void:
 	if _spawner == null:
 		return
-	var living: Array[Pawn] = []
-	for p in _spawner.pawns:
-		if is_instance_valid(p) and p is Pawn:
-			living.append(p)
-	_spawner.pawns = living
+	var list: Array[Pawn] = _spawner.pawns
+	var i: int = 0
+	while i < list.size():
+		var p: Pawn = list[i]
+		if p != null and is_instance_valid(p):
+			i += 1
+		else:
+			list.remove_at(i)
 
 
 func _pawn_line() -> String:
@@ -802,7 +805,7 @@ func _wildlife_line() -> String:
 		older_avg /= float(split)
 		recent_avg /= float(_wildlife_history.size() - split)
 		
-		var trend_ratio: float = recent_avg / maxi(1.0, older_avg)
+		var trend_ratio: float = recent_avg / maxf(1.0, older_avg)
 		if trend_ratio > 1.1:
 			tail = "▲"  # Growing
 		elif trend_ratio < 0.9:

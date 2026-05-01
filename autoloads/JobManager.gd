@@ -235,7 +235,25 @@ func complete(job: Job) -> void:
 	# Notify WorldAI of job completion for economic neuron updates
 	_notify_world_ai_job_completion(job)
 
-	_record_progression_impact_for_completed_job(job)
+	# Record progression impact
+	var impact_amount: int = 0
+	if job.type == Job.Type.BUILD_SHELTER or job.type == Job.Type.BUILD_HEARTH:
+		impact_amount = 10
+	elif job.type == Job.Type.TEACH_SKILL or job.type == Job.Type.APPRENTICESHIP:
+		impact_amount = 10
+	elif job.type == Job.Type.GROW_FOOD or job.type == Job.Type.HARVEST_CROPS:
+		impact_amount = 5
+	elif job.type == Job.Type.PROTECT or job.type == Job.Type.DEFEND:
+		impact_amount = 15
+	if impact_amount > 0 and get_tree() != null and get_tree().root.has_node("ProgressionSystem"):
+		var pawn_id: int = 0
+		if job.assigned_pawn != null and job.assigned_pawn.has_method("get_pawn_data"):
+			var pd: PawnData = job.assigned_pawn.get_pawn_data()
+			if pd != null:
+				pawn_id = int(pd.id)
+		var progression: Node = get_node("/root/ProgressionSystem")
+		if progression.has_method("record_impact"):
+			progression.call("record_impact", pawn_id, impact_amount, str(Job.Type.keys()[job.type]))
 
 	job_completed.emit(job)
 	# NOTE: `BUILD_WALL` path reservation is cleared in `World.build_wall` when
@@ -351,33 +369,6 @@ func _notify_world_ai_job_completion(job: Job) -> void:
 	# Notify WorldAI of job completion for economic neuron updates
 	if WorldAI != null and WorldAI.has_method("on_job_completed"):
 		WorldAI.on_job_completed(job.type, job.priority)
-
-
-func _record_progression_impact_for_completed_job(job: Job) -> void:
-	var ps: Node = get_node_or_null("/root/ProgressionSystem")
-	if ps == null or not ps.has_method("record_impact"):
-		return
-	var impact_amount: int = 0
-	match job.type:
-		Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH, Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP:
-			impact_amount = 10
-		Job.Type.GROW_FOOD, Job.Type.HARVEST_CROPS:
-			impact_amount = 5
-		Job.Type.PROTECT, Job.Type.DEFEND:
-			impact_amount = 15
-		_:
-			pass
-	if impact_amount <= 0:
-		return
-	var pawn_id: int = 0
-	if job.assigned_pawn != null:
-		var pd: PawnData = job.assigned_pawn.get_pawn_data()
-		if pd != null:
-			pawn_id = int(pd.id)
-	if pawn_id <= 0:
-		return
-	var type_name: String = str(Job.Type.keys()[job.type])
-	ps.call("record_impact", pawn_id, impact_amount, type_name)
 
 
 ## `abandon` keeps the open job: construction reservations on tiles stay. Only

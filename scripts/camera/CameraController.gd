@@ -52,7 +52,6 @@ func get_screen_center_to_world(screen_pos: Vector2) -> Vector2:
 func clamp_position_to_world(world: Node2D, margin_px: float) -> void:
 	if world == null or not (world is World):
 		return
-	var w: World = world as World
 	var half_w: float = float(WorldData.WIDTH * World.TILE_PIXELS) * 0.5
 	var half_h: float = float(WorldData.HEIGHT * World.TILE_PIXELS) * 0.5
 	var o: Vector2 = world.global_position

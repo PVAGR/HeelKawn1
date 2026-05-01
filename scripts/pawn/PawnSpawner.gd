@@ -147,8 +147,8 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		_assign_random_traits(data, rng)
 
 		var pawn: Pawn = pawn_scene.instantiate() as Pawn
-		add_child(pawn)
 		pawn.bind(data, world.tile_to_world(tile), world)
+		add_child(pawn)
 		pawns.append(pawn)
 		placed += 1
 
@@ -211,8 +211,8 @@ func spawn_generational_pawn(
 	if parent_data != null:
 		data.lineage_id = parent_data.unique_id
 	var pawn: Pawn = pawn_scene.instantiate() as Pawn
-	add_child(pawn)
 	pawn.bind(data, world.tile_to_world(tile), world)
+	add_child(pawn)
 	pawns.append(pawn)
 	WorldMemory.record_event({
 		"type": "pawn_birth",
@@ -313,8 +313,8 @@ func spawn_pawn() -> void:
 ## not check component — caller must ensure the tile is passable.
 func spawn_from_data(d: PawnData, world: World) -> void:
 	var p: Pawn = pawn_scene.instantiate() as Pawn
-	add_child(p)
 	p.bind(d, world.tile_to_world(d.tile_pos), world)
+	add_child(p)
 	pawns.append(p)
 	if GameManager.verbose_logs():
 		print("[Spawn] load: %s @(%d,%d)" % [d.display_name, d.tile_pos.x, d.tile_pos.y])
@@ -379,8 +379,8 @@ func spawn_child_pawn(
 		var inherited: int = int((int(parent_a.skills[sk]) + int(parent_b.skills.get(sk, 0))) * 0.2)
 		data.skills[sk] = inherited
 	var pawn: Pawn = pawn_scene.instantiate() as Pawn
-	add_child(pawn)
 	pawn.bind(data, world.tile_to_world(tile), world)
+	add_child(pawn)
 	pawns.append(pawn)
 	parent_a.children_count += 1
 	parent_b.children_count += 1

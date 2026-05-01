@@ -220,7 +220,8 @@ func _initialize_neural_world_matrix() -> void:
 		"evolution_cycles": 0
 	}
 	
-	print("[WorldAI] Neural world matrix initialized with %d neural networks" % neural_world_matrix.size())
+	if OS.is_debug_build():
+		print("[WorldAI] Neural world matrix initialized with %d neural networks" % neural_world_matrix.size())
 
 func _create_world_state_neurons() -> Dictionary:
 	return {
@@ -328,7 +329,8 @@ func _initialize_neural_networks() -> void:
 	economic_neural_network = _create_specialized_network("economic", 20, 10, 5)
 	technological_neural_network = _create_specialized_network("technological", 16, 8, 4)
 	
-	print("[WorldAI] Specialized neural networks initialized")
+	if OS.is_debug_build():
+		print("[WorldAI] Specialized neural networks initialized")
 
 func _create_specialized_network(network_type: String, input_size: int, hidden_size: int, output_size: int) -> Dictionary:
 	return {

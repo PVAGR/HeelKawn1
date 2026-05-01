@@ -15,10 +15,11 @@ var trace_first_sim_tick: bool = false
 
 func _ready() -> void:
 	_apply_command_line_flags()
-	_log(
-			"CrashTrap initialized. trace_enabled=%s trace_first_sim_tick=%s (per-listener tick-1 trace when both true)"
-			% [trace_enabled, trace_first_sim_tick]
-	)
+	if OS.is_debug_build() or trace_enabled:
+		_log(
+				"CrashTrap initialized. trace_enabled=%s trace_first_sim_tick=%s (per-listener tick-1 trace when both true)"
+				% [trace_enabled, trace_first_sim_tick]
+		)
 	if trace_enabled:
 		_log("=== TICK-1 DIAGNOSTIC MODE (CrashTrap) ACTIVE ===")
 		_log("If the process stops hard, the LAST [CrashTrap] ENTER line names the active slice.")
@@ -89,7 +90,8 @@ func validate_autoload(name: String, expected_type: String = "") -> bool:
 		_log("FAIL: '%s' get_class()=%s (expected native class name '%s')" % [name, node.get_class(), expected_type])
 		exit_system(key)
 		return false
-	_log("OK: Autoload '%s' (%s)" % [name, node.get_class()])
+	if OS.is_debug_build():
+		_log("OK: Autoload '%s' (%s)" % [name, node.get_class()])
 	exit_system(key)
 	return true
 

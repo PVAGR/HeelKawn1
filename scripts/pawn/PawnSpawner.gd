@@ -74,7 +74,7 @@ func _ready() -> void:
 	add_to_group("pawn_spawner")
 	if pawn_scene == null:
 		print("[ERROR] PawnSpawner: pawn_scene is null - check Main.tscn configuration")
-	else:
+	elif OS.is_debug_build():
 		print("[INFO] PawnSpawner: pawn_scene loaded successfully: ", pawn_scene.resource_path)
 
 

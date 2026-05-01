@@ -479,6 +479,10 @@ func _prune_job_post_cooldowns() -> void:
 		print("[JobCooldown] Pruned cooldowns: before=%d after=%d" % [before_size, after_size])
 
 
+func _reset_job_cooldown_telemetry() -> void:
+	_jobs_suppressed_this_session = 0
+
+
 func _cycle_realm_crown_max_settlements() -> void:
 	var opts: Array = [8, 12, 16, 24]
 	var idx: int = opts.find(_realm_crown_max_settlements)
@@ -5236,6 +5240,7 @@ func _colony_save() -> void:
 	var snapshot: Dictionary = _build_save_dict()
 	var err: Error = GameSave.write_file(GameSave.get_save_path(), snapshot)
 	if err == OK:
+		_reset_job_cooldown_telemetry()
 		if OS.is_debug_build():
 			print("[Main] Saved colony -> %s" % GameSave.get_save_path())
 	else:
@@ -5258,6 +5263,7 @@ func _colony_load() -> void:
 			)
 		return
 	_apply_save_dict(d)
+	_reset_job_cooldown_telemetry()
 	if OS.is_debug_build():
 		print("[Main] Loaded colony from %s" % GameSave.get_save_path())
 

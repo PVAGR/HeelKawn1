@@ -4,6 +4,7 @@ extends Node
 
 ## Quiet period (ticks) with no new deaths in region before one step of *visual* recovery.
 const RECOVERY_TICKS: int = 20000
+const ORPHAN_RETIRE_TICKS: int = RECOVERY_TICKS * 3
 
 ## region_key (int) -> persistence record
 var persistent_regions: Dictionary = {}
@@ -108,6 +109,7 @@ func get_region_scar_level(region_key: int) -> int:
 func recompute() -> void:
 	var old: Dictionary = persistent_regions.duplicate(true)
 	persistent_regions.clear()
+	var now: int = GameManager.tick_count
 	# -- Phase 1: scar_level / meaning merge + recovery state (scar_level never decreases)
 	for rk in WorldMeaning.meaning_by_region.keys():
 		var region_key: int = int(rk)
@@ -152,9 +154,18 @@ func recompute() -> void:
 				o["recovery_stage"] = int(o.get("scar_level", 0))
 			if not o.has("next_recovery_at_tick"):
 				o["next_recovery_at_tick"] = _initial_next_recovery_at(int(o.get("last_death_tick", -1)))
+			var orphan_since_tick: int = int(o.get("orphan_since_tick", now))
+			o["orphan_since_tick"] = orphan_since_tick
+			var region_key: int = int(rk)
+			var no_death_facts: bool = (
+				int(o.get("last_death_tick", -1)) < 0
+				and WorldMemory.get_last_pawn_death_tick_for_region(region_key) < 0
+			)
+			var orphan_retire_due: bool = (now - orphan_since_tick) >= ORPHAN_RETIRE_TICKS
+			if no_death_facts and orphan_retire_due:
+				continue
 			persistent_regions[rk] = o
 	# -- Phase 2: one step of visual recovery (recovery_stage only; never scar_level; ticks only)
-	var now: int = GameManager.tick_count
 	for rk2 in persistent_regions.keys():
 		var pr: Dictionary = persistent_regions[rk2]
 		var slev: int = int(pr.get("scar_level", 0))

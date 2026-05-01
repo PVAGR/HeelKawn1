@@ -809,11 +809,12 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	# Load saved age as years for display
 	data.age_years = float(data.age)
 	
-	# Initialize teaching cooldown (3 days)
-	if has_node("/root/WorldClock"):
-		var wc = get_node("/root/WorldClock")
-		if "ticks_per_day" in wc:
-			_teach_cooldown_ticks = int(wc.ticks_per_day) * 3
+	# Teaching cooldown (3 days). bind() runs before add_child; resolve WorldClock from scene root.
+	var tree_bt: SceneTree = Engine.get_main_loop() as SceneTree
+	if tree_bt != null and tree_bt.root != null:
+		var wc_bt: Node = tree_bt.root.get_node_or_null("WorldClock")
+		if wc_bt != null and "ticks_per_day" in wc_bt:
+			_teach_cooldown_ticks = int(wc_bt.ticks_per_day) * 3
 	_clear_cohort_state()
 	add_to_group("pawns")
 	add_to_group("tickable")
@@ -2310,7 +2311,7 @@ func attempt_reproduction() -> bool:
 			"parent_a_id": int(data.id),
 			"parent_b_id": int(mate.data.id),
 		})
-	return did_spawn
+	return child != null
 
 
 func _reproduction_mate_range_px() -> float:

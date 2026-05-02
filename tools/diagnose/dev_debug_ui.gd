@@ -18,7 +18,7 @@ func _create_ui() -> void:
 	add_child(layer)
 
 	var panel = Panel.new()
-	panel.min_size = Vector2(260, 220)
+	panel.custom_minimum_size = Vector2(260, 220)
 	panel.position = Vector2(10, 10)
 	layer.add_child(panel)
 

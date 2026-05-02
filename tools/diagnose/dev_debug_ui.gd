@@ -3,7 +3,7 @@ extends Node
 # Dev debug UI: on-screen buttons to control diagnostics and inspect runtime state.
 # Autoload this script as `DevDebugUI` for dev runs.
 
-var _log: TextEdit = null
+var _log: RichTextLabel = null
 var _autostart_monitor: bool = true
 # Toggle to show/hide the dev UI (set false to hide)
 var _dev_ui_enabled: bool = true
@@ -61,10 +61,12 @@ func _create_ui() -> void:
 	var h = HSeparator.new()
 	v.add_child(h)
 
-	_log = TextEdit.new()
-	# Godot 4 uses `editable` (true/false). Make non-editable for log output.
-	_log.editable = false
-	_log.rect_min_size = Vector2(240, 100)
+	_log = RichTextLabel.new()
+	_log.bbcode_enabled = true
+	_log.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_log.custom_minimum_size = Vector2(240, 100)
+	_log.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_log.scroll_active = true
 	v.add_child(_log)
 
 	_append_log("DevDebugUI ready")
@@ -93,13 +95,16 @@ func _on_stop_pressed() -> void:
 
 func _on_diag_once_pressed() -> void:
 	_append_log("Diag Once pressed")
-	if typeof(self).has_method("heelkawn_diag_once"):
-		# If this script was added to the global scene and the diagnostic helper
-		# function exists globally, call it. Otherwise instruct user.
-		heelkawn_diag_once()
-		_append_log("heelkawn_diag_once() called")
-	else:
-		_append_log("heelkawn_diag_once() not found; run from remote console")
+	# Prefer autoload Main if it provides the diagnostic helper
+	if typeof(Main) != TYPE_NIL and Main != null and Main.has_method("heelkawn_diag_once"):
+		Main.heelkawn_diag_once()
+		_append_log("Main.heelkawn_diag_once() called")
+		return
+	if typeof(TickMonitor) != TYPE_NIL and TickMonitor != null and TickMonitor.has_method("monitor_once"):
+		TickMonitor.monitor_once()
+		_append_log("TickMonitor.monitor_once() called")
+		return
+	_append_log("Diagnostic helper not found; run heelkawn_diag_once() from remote console")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -107,7 +112,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		# Toggle UI with F10
-		if event.keycode == Key.F10:
+		if event.keycode == KEY_F10:
 			if _panel != null:
 				_panel.visible = not _panel.visible
 				_append_log("DevDebugUI %s" % ("shown" if _panel.visible else "hidden"))

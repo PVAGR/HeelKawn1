@@ -1448,6 +1448,8 @@ func _on_world_tick(_tick: int) -> void:
 		_check_thresholds()
 		if _trace_ai_slice:
 			CrashTrap.exit_system("pawn_tick:%d:needs" % pid)
+	if _state != State.SLEEPING and posmod(GameManager.tick_count + pid * 3, 23) == 0:
+		_pawn_neural_autonomy_pulse()
 	# Sleepers only need wake checks; skip full AI branch logic to reduce
 	# per-tick overhead during overnight "everyone in bed" windows.
 	if _state == State.SLEEPING:
@@ -5460,6 +5462,33 @@ func describe_state() -> String:
 		State.HIDING:
 			return "Hiding"
 	return "Unknown State"
+
+
+func _pawn_neural_autonomy_pulse() -> void:
+	if data == null or data.neural_network == null:
+		return
+	var nn: Variant = data.neural_network
+	if not nn.has_method("tick_autonomy"):
+		return
+	var ctx: Dictionary = {
+		"hunger": data.hunger,
+		"rest": data.rest,
+		"mood": data.mood,
+		"fear": clampf(data.pain + data.exposure_sickness * 0.35 + data.hypothermia_risk * 0.25, 0.0, 100.0),
+		"shelter": 0.55,
+		"social_warmth": clampf(float(data.co_presence.size()) / 12.0, 0.0, 1.0),
+		"clan_bond": clampf(float(data.family_bonds.size()) / 8.0, 0.0, 1.0),
+		"nation_pride": 0.42,
+		"ambition": clampf(float(data.level) / 20.0, 0.0, 1.0),
+		"fame": clampf(float(data.legacy_score) / 5000.0, 0.0, 1.0),
+	}
+	if WorldEventSystem != null:
+		ctx["weather_mult"] = WorldEventSystem.get_weather_resource_mult()
+		ctx["price_pressure"] = WorldEventSystem.get_price_pressure()
+		ctx["world_mood"] = WorldEventSystem.get_world_mood()
+		ctx["theft_pressure"] = WorldEventSystem.get_theft_pressure()
+		ctx["labor_urgency"] = WorldEventSystem.get_labor_urgency_bonus()
+	nn.tick_autonomy(GameManager.tick_count, int(data.id), ctx)
 
 
 static func _verb_for_job(job_type: int) -> String:

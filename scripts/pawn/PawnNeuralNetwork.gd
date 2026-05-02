@@ -403,13 +403,15 @@ func _prune_weak_connections() -> void:
 
 ## Serialize network for save/load
 func to_dict() -> Dictionary:
-	return {
+	var d: Dictionary = {
 		"layers": layers,
 		"connections": _serialize_connections(),
 		"activation_functions": activation_functions,
 		"learning_rate": learning_rate,
-		"obfuscation_key": _obfuscation_key
+		"obfuscation_key": _obfuscation_key,
+		"goap_v1": _goap_to_dict(),
 	}
+	return d
 
 
 ## Serialize connections (obfuscated)
@@ -439,6 +441,7 @@ func from_dict(data: Dictionary) -> void:
 	activation_functions = data.get("activation_functions", ["relu", "sigmoid", "tanh"])
 	learning_rate = data.get("learning_rate", 0.01)
 	_obfuscation_key = data.get("obfuscation_key", WorldRNG.rangei(1000000, 9999999))
+	_goap_from_dict(data.get("goap_v1", {}))
 
 
 ## Deserialize connections
@@ -461,6 +464,164 @@ func _deserialize_connections(serialized: Dictionary) -> void:
 		
 		connections[connection_key] = deobfuscated_conn
 
+
+## --- GOAP-lite: Maslow needs + memory + autonomy hints (throttled from [Pawn]) ---
+## GOAP-lite + Maslow: runs on a throttled tick from [Pawn]; does not replace weight-based forward pass.
+const SHORT_MEM_CAP: int = 12
+const LONG_MEM_CAP: int = 28
+const MEMORY_DECAY: float = 0.9985
+
+## 0 = biological … 3 = ego — aggregate urgency per layer.
+var _maslow: Dictionary = {
+	"bio": 0.0,
+	"safety": 0.0,
+	"social": 0.0,
+	"ego": 0.0,
+}
+var _short_term_memory: Array[Dictionary] = []
+var _long_term_memory: Array[Dictionary] = []
+var last_autonomy_hint: String = "idle"
+var last_autonomy_tick: int = -1
+
+
+func _goap_to_dict() -> Dictionary:
+	return {
+		"maslow": _maslow.duplicate(true),
+		"short": _short_term_memory.duplicate(true),
+		"long": _long_term_memory.duplicate(true),
+		"last_hint": last_autonomy_hint,
+		"last_autonomy_tick": last_autonomy_tick,
+	}
+
+
+func _goap_from_dict(d: Dictionary) -> void:
+	if d.is_empty():
+		return
+	_maslow = d.get("maslow", _maslow).duplicate(true)
+	_short_term_memory.clear()
+	_long_term_memory.clear()
+	for e in d.get("short", []):
+		if e is Dictionary:
+			_short_term_memory.append((e as Dictionary).duplicate(true))
+	for e2 in d.get("long", []):
+		if e2 is Dictionary:
+			_long_term_memory.append((e2 as Dictionary).duplicate(true))
+	last_autonomy_hint = str(d.get("last_hint", "idle"))
+	last_autonomy_tick = int(d.get("last_autonomy_tick", -1))
+
+
+## Throttled entry from [Pawn] — one pass: sync needs, decay, plan hint.
+func tick_autonomy(tick: int, pawn_id: int, ctx: Dictionary) -> void:
+	sync_maslow_from_context(ctx)
+	decay_memories(tick)
+	last_autonomy_hint = choose_autonomy_action(tick, pawn_id, ctx)
+	last_autonomy_tick = tick
+
+
+func sync_maslow_from_context(ctx: Dictionary) -> void:
+	var hunger: float = float(ctx.get("hunger", 100.0))
+	var rest: float = float(ctx.get("rest", 100.0))
+	var mood: float = float(ctx.get("mood", 50.0))
+	var fear: float = float(ctx.get("fear", 0.0))
+	var shelter: float = float(ctx.get("shelter", 0.5))
+	var social: float = float(ctx.get("social_warmth", 0.5))
+	var clan: float = float(ctx.get("clan_bond", 0.4))
+	var nation: float = float(ctx.get("nation_pride", 0.3))
+	var ambition: float = float(ctx.get("ambition", 0.5))
+	var fame: float = float(ctx.get("fame", 0.2))
+	# Urgency = deficit (0 = satisfied, 1 = critical)
+	_maslow["bio"] = clampf((100.0 - hunger) / 100.0 * 0.6 + (100.0 - rest) / 100.0 * 0.4, 0.0, 1.0)
+	_maslow["safety"] = clampf(fear / 100.0 + (1.0 - shelter) * 0.5, 0.0, 1.0)
+	_maslow["social"] = clampf((1.0 - social) * 0.45 + (1.0 - clan) * 0.35 + (1.0 - nation) * 0.2, 0.0, 1.0)
+	_maslow["ego"] = clampf(ambition * (1.0 - fame), 0.0, 1.0)
+	if mood < 40.0:
+		_maslow["social"] = clampf(_maslow["social"] + 0.08, 0.0, 1.0)
+
+
+func record_memory_event(tick: int, kind: String, other_pawn_id: int, valence: float) -> void:
+	var ev: Dictionary = {
+		"t": tick,
+		"k": kind,
+		"o": other_pawn_id,
+		"v": clampf(valence, -1.0, 1.0),
+		"s": 1.0,
+	}
+	_short_term_memory.append(ev)
+	while _short_term_memory.size() > SHORT_MEM_CAP:
+		_promote_or_drop_oldest_short()
+
+
+func _promote_or_drop_oldest_short() -> void:
+	var old: Dictionary = _short_term_memory.pop_front()
+	var sal: float = absf(float(old.get("v", 0.0)))
+	if sal > 0.55:
+		_long_term_memory.append(old)
+		while _long_term_memory.size() > LONG_MEM_CAP:
+			_long_term_memory.pop_front()
+
+
+func decay_memories(tick: int) -> void:
+	var kept_short: Array[Dictionary] = []
+	for e in _short_term_memory:
+		var ns: float = float(e.get("s", 1.0)) * MEMORY_DECAY
+		if ns > 0.08:
+			e["s"] = ns
+			e["t"] = tick
+			kept_short.append(e)
+	_short_term_memory.clear()
+	for x in kept_short:
+		_short_term_memory.append(x)
+	var kept_long: Array[Dictionary] = []
+	for e2 in _long_term_memory:
+		var ns2: float = float(e2.get("s", 1.0)) * pow(MEMORY_DECAY, 0.85)
+		if ns2 > 0.05:
+			e2["s"] = ns2
+			kept_long.append(e2)
+	_long_term_memory.clear()
+	for y in kept_long:
+		_long_term_memory.append(y)
+
+
+func grudge_toward(other_pawn_id: int) -> float:
+	var g: float = 0.0
+	for e in _long_term_memory:
+		if int(e.get("o", -1)) != other_pawn_id:
+			continue
+		if str(e.get("k", "")).find("attack") >= 0 or str(e.get("k", "")).find("hurt") >= 0:
+			g += float(e.get("v", 0.0)) * float(e.get("s", 1.0))
+	return clampf(g, -1.0, 1.0)
+
+
+func choose_autonomy_action(tick: int, pawn_id: int, ctx: Dictionary) -> String:
+	var wm: float = float(ctx.get("world_mood", 50.0))
+	var theft_p: float = float(ctx.get("theft_pressure", 0.0))
+	var labor_u: float = float(ctx.get("labor_urgency", 0.0))
+	var bio: float = float(_maslow.get("bio", 0.0))
+	var safety: float = float(_maslow.get("safety", 0.0))
+	var soc: float = float(_maslow.get("social", 0.0))
+	var ego: float = float(_maslow.get("ego", 0.0))
+	var scores: Dictionary = {
+		"eat": bio * 1.15 + (100.0 - float(ctx.get("hunger", 100.0))) / 200.0,
+		"sleep": bio * 0.95 + (100.0 - float(ctx.get("rest", 100.0))) / 200.0,
+		"shelter": safety * 1.05,
+		"work": labor_u * 1.2 + ego * 0.35 + (1.0 - wm / 100.0) * 0.15,
+		"social": soc * 1.1 + (wm / 100.0) * 0.2,
+		"steal": theft_p * 1.25 + (1.0 - wm / 100.0) * 0.25,
+	}
+	var best_k: String = "idle"
+	var best_v: float = -1.0
+	for k in scores:
+		var sc: float = float(scores[k])
+		var jitter: float = WorldRNG.range_for(StringName("goap_pick:%d:%s:%d" % [pawn_id, k, tick]), -0.02, 0.02, 1)
+		sc += jitter
+		if sc > best_v:
+			best_v = sc
+			best_k = k
+	return best_k
+
+
+func get_autonomy_hint() -> String:
+	return last_autonomy_hint
 
 func _encode_obfuscated_float(value: float) -> int:
 	var scaled: int = int(round(value * _OBF_SCALE))

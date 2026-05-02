@@ -83,6 +83,7 @@ CharacterExport="*res://autoloads/CharacterExport.gd"
 ToolManager="*res://autoloads/ToolManager.gd"
 FoodChainManager="*res://autoloads/FoodChainManager.gd"
 BodyRiskManager="*res://autoloads/BodyRiskManager.gd"
+TickMonitor="*res://tools/diagnose/monitor_ticks.gd"
 
 [display]
 

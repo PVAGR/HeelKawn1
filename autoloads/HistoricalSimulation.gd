@@ -37,7 +37,8 @@ func simulate_history(years: int) -> void:
 		historical_ticks += 1
 	
 	years_elapsed += years
-	print("[HistoricalSimulation] Simulated %d years of history. Total: %d years" % [years, years_elapsed])
+	if OS.is_debug_build():
+		print("[HistoricalSimulation] Simulated %d years of history. Total: %d years" % [years, years_elapsed])
 
 
 ## Simulate a single historical tick

@@ -24,6 +24,10 @@ enum KnowledgeType {
 
 const KNOWLEDGE_DEGRADATION_INTERVAL_TICKS: int = 1000
 const KNOWLEDGE_DEGRADATION_PHASE_OFFSET_TICKS: int = 127
+const BASE_DISCOVERY_RESEARCH_POINTS: int = 3
+const BASE_TEACHING_RESEARCH_POINTS: int = 2
+const RESEARCH_POINT_ACCUM_INTERVAL_TICKS: int = 300
+const RESEARCH_POINT_ACCUM_PHASE_OFFSET_TICKS: int = 61
 
 ## Knowledge carriers: pawn_id -> Array[KnowledgeType]
 var knowledge_carriers: Dictionary = {}
@@ -39,29 +43,22 @@ var rediscovered_knowledge: Array[Dictionary] = []
 
 ## Knowledge degradation: knowledge_type -> degradation level (0.0-1.0)
 var knowledge_degradation: Dictionary = {}
-
-## Colony knowledge pools: settlement_id -> {knowledge_type: amount}
-var colony_knowledge_pools: Dictionary = {}
-
-const KNOWLEDGE_PER_CARRIER_TICK: float = 0.1
+## settlement_id(String) -> research points (knowledge currency for TechnologySystem)
+var research_points_by_settlement: Dictionary = {}
 
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 	_initialize_degradation()
-	_initialize_colony_pools()
 
 func _initialize_degradation() -> void:
 	for k in KnowledgeType.values():
 		knowledge_degradation[k] = 0.0
 
-func _initialize_colony_pools() -> void:
-	# Initialize empty - pools created when settlements are registered
-	pass
-
 func _on_game_tick(tick: int) -> void:
 	if GameManager.periodic_phase_due(tick, KNOWLEDGE_DEGRADATION_INTERVAL_TICKS, KNOWLEDGE_DEGRADATION_PHASE_OFFSET_TICKS):
 		_update_knowledge_degradation()
-	_generate_colony_knowledge(tick)
+	if GameManager.periodic_phase_due(tick, RESEARCH_POINT_ACCUM_INTERVAL_TICKS, RESEARCH_POINT_ACCUM_PHASE_OFFSET_TICKS):
+		_accrue_research_points_from_knowledge_carriers()
 
 # === Knowledge Carrier Management ===
 
@@ -228,6 +225,7 @@ func _record_discovery_event(pawn_id: int, knowledge_type: KnowledgeType, source
 		"tick": GameManager.tick_count
 	}
 	WorldMemory.record_event(event)
+	_add_research_points_for_pawn(pawn_id, BASE_DISCOVERY_RESEARCH_POINTS, "discovery")
 
 func _record_apprenticeship_start(teacher_id: int, apprentice_id: int, knowledge_type: KnowledgeType) -> void:
 	var event: Dictionary = {
@@ -257,6 +255,7 @@ func _record_teaching_success(teacher_id: int, apprentice_id: int, knowledge_typ
 		"tick": GameManager.tick_count
 	}
 	WorldMemory.record_event(event)
+	_add_research_points_for_pawn(teacher_id, BASE_TEACHING_RESEARCH_POINTS, "teaching_success")
 
 func _record_teaching_failure(teacher_id: int, apprentice_id: int, knowledge_type: KnowledgeType) -> void:
 	var record: Dictionary = {
@@ -333,52 +332,6 @@ func _record_rediscovery(pawn_id: int, knowledge_type: KnowledgeType, method: St
 	}
 	WorldMemory.record_event(event)
 
-# === Colony Knowledge Pool Management ===
-
-func register_settlement_knowledge_pool(settlement_id: int) -> void:
-	if not colony_knowledge_pools.has(settlement_id):
-		colony_knowledge_pools[settlement_id] = {}
-		for k in KnowledgeType.values():
-			colony_knowledge_pools[settlement_id][k] = 0.0
-
-func _generate_colony_knowledge(tick: int) -> void:
-	# Each knowledge carrier generates points for their settlement's pool
-	for settlement_id in colony_knowledge_pools:
-		var pool = colony_knowledge_pools[settlement_id]
-		for k in KnowledgeType.values():
-			var carrier_count = get_carrier_count(k)
-			if carrier_count > 0:
-				pool[k] += float(carrier_count) * KNOWLEDGE_PER_CARRIER_TICK
-
-func get_colony_knowledge(settlement_id: int, knowledge_type: KnowledgeType) -> float:
-	if not colony_knowledge_pools.has(settlement_id):
-		return 0.0
-	return colony_knowledge_pools[settlement_id].get(knowledge_type, 0.0)
-
-func get_total_colony_knowledge(settlement_id: int) -> float:
-	if not colony_knowledge_pools.has(settlement_id):
-		return 0.0
-	var total: float = 0.0
-	for k in KnowledgeType.values():
-		total += colony_knowledge_pools[settlement_id].get(k, 0.0)
-	return total
-
-func deduct_colony_knowledge(settlement_id: int, amount: float) -> bool:
-	if not colony_knowledge_pools.has(settlement_id):
-		return false
-	
-	var total_available = get_total_colony_knowledge(settlement_id)
-	if total_available < amount:
-		return false
-	
-	# Deduct proportionally from all knowledge types
-	var deduction_ratio = amount / total_available if total_available > 0 else 0.0
-	for k in KnowledgeType.values():
-		var current = colony_knowledge_pools[settlement_id].get(k, 0.0)
-		colony_knowledge_pools[settlement_id][k] = max(0.0, current - (current * deduction_ratio))
-	
-	return true
-
 # === Public Interface ===
 
 func get_knowledge_status() -> Dictionary:
@@ -406,5 +359,129 @@ func clear() -> void:
 	teaching_records.clear()
 	lost_knowledge.clear()
 	rediscovered_knowledge.clear()
-	colony_knowledge_pools.clear()
+	research_points_by_settlement.clear()
 	_initialize_degradation()
+
+
+## === Research Pool Integration ===
+
+func get_research_points(settlement_id: int) -> int:
+	return int(research_points_by_settlement.get(str(settlement_id), 0))
+
+
+func add_research_points(settlement_id: int, amount: int, reason: String = "knowledge_flow") -> void:
+	if settlement_id < 0 or amount <= 0:
+		return
+	var key: String = str(settlement_id)
+	var now_points: int = int(research_points_by_settlement.get(key, 0))
+	research_points_by_settlement[key] = now_points + amount
+	WorldMemory.record_event({
+		"type": "research_points_gain",
+		"settlement_id": settlement_id,
+		"amount": amount,
+		"reason": reason,
+		"tick": GameManager.tick_count,
+	})
+
+
+func spend_research_points(settlement_id: int, amount: int, tech_id: String = "") -> bool:
+	if settlement_id < 0 or amount <= 0:
+		return false
+	var key: String = str(settlement_id)
+	var now_points: int = int(research_points_by_settlement.get(key, 0))
+	if now_points < amount:
+		return false
+	research_points_by_settlement[key] = now_points - amount
+	WorldMemory.record_event({
+		"type": "research_points_spend",
+		"settlement_id": settlement_id,
+		"amount": amount,
+		"tech_id": tech_id,
+		"tick": GameManager.tick_count,
+	})
+	return true
+
+
+## Filter tree by prerequisite state + already researched state + available points.
+func get_researchable_techs(settlement_id: int) -> Array:
+	if TechnologySystem == null or not TechnologySystem.has_method("get_available_research"):
+		return []
+	return TechnologySystem.get_available_research(settlement_id)
+
+
+func _add_research_points_for_pawn(pawn_id: int, amount: int, reason: String) -> void:
+	if amount <= 0:
+		return
+	var settlement_id: int = _settlement_id_for_pawn(pawn_id)
+	if settlement_id >= 0:
+		add_research_points(settlement_id, amount, reason)
+
+
+func _settlement_id_for_pawn(pawn_id: int) -> int:
+	if SettlementMemory == null:
+		return -1
+	var main_loop: MainLoop = Engine.get_main_loop()
+	if main_loop == null or not (main_loop is SceneTree):
+		return -1
+	var tree: SceneTree = main_loop as SceneTree
+	for n in tree.get_nodes_in_group("pawns"):
+		if n == null or not is_instance_valid(n):
+			continue
+		if not n.has_method("get"):
+			continue
+		var data_v: Variant = n.get("data")
+		if data_v == null:
+			continue
+		if int(data_v.id) != pawn_id:
+			continue
+		var pos: Vector2i = data_v.tile_pos
+		var rk: int = WorldMemory._region_key(pos.x, pos.y)
+		return SettlementMemory.get_center_region_for_region(rk)
+	return -1
+
+
+func _accrue_research_points_from_knowledge_carriers() -> void:
+	var counts_by_settlement: Dictionary = _knowledge_carrier_counts_by_settlement()
+	for sid_key in counts_by_settlement.keys():
+		var carrier_count: int = int(counts_by_settlement.get(sid_key, 0))
+		if carrier_count <= 0:
+			continue
+		# Deterministic baseline: every 2 carriers generate +1 point per accrual step, min 1.
+		var gain: int = maxi(1, int(floor(float(carrier_count) / 2.0)))
+		add_research_points(int(str(sid_key)), gain, "knowledge_carriers")
+
+
+func _knowledge_carrier_counts_by_settlement() -> Dictionary:
+	var out: Dictionary = {}
+	if SettlementMemory == null:
+		return out
+	var main_loop: MainLoop = Engine.get_main_loop()
+	if main_loop == null or not (main_loop is SceneTree):
+		return out
+	var tree: SceneTree = main_loop as SceneTree
+	var carriers_present: Dictionary = {}
+	for n in tree.get_nodes_in_group("pawns"):
+		if n == null or not is_instance_valid(n):
+			continue
+		if not n.has_method("get"):
+			continue
+		var data_v: Variant = n.get("data")
+		if data_v == null:
+			continue
+		var pid: int = int(data_v.id)
+		if not knowledge_carriers.has(pid):
+			continue
+		var held: Array = knowledge_carriers[pid] as Array
+		if held.is_empty():
+			continue
+		var pos: Vector2i = data_v.tile_pos
+		var rk: int = WorldMemory._region_key(pos.x, pos.y)
+		var settlement_id: int = SettlementMemory.get_center_region_for_region(rk)
+		if settlement_id < 0:
+			continue
+		carriers_present[pid] = settlement_id
+	for pid_any in carriers_present.keys():
+		var sid: int = int(carriers_present[pid_any])
+		var key: String = str(sid)
+		out[key] = int(out.get(key, 0)) + 1
+	return out

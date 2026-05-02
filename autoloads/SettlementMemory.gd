@@ -57,6 +57,20 @@ const INTENT_HOARD: String = "HOARD"
 const INTENT_DEFEND: String = "DEFEND"
 const INTENT_RECOVER: String = "RECOVER"
 
+## Policy layer on top of derived power structure ([member settlements] also stores [code]governance_type[/code]
+## as council/monarchy/anarchy from [method _governance_for_settlement]).
+enum GovernanceForm {
+	ELDER_COUNCIL,
+	MILITIA_PROTECTORS,
+	CHIEF_HOUSEHOLDS,
+	COUNCIL_RULE,
+}
+
+const GOVERNANCE_FORM_DEFAULT: GovernanceForm = GovernanceForm.ELDER_COUNCIL
+
+## center_region -> persisted governance form key string ([method governance_form_to_storage_string]).
+var _governance_form_by_center: Dictionary = {}
+
 var settlements: Array = []
 ## center_region -> hysteresis for settlement [state] material truth (survives settlement dict rebuilds).
 var _settlement_state_truth_hysteresis: Dictionary = {}
@@ -244,21 +258,22 @@ func _print_validation_smoketest(source: String) -> void:
 	var clean_active: bool = WorldEvents.validation_clean_economy_events_active()
 	var truth_active: bool = validation_truth_verify_armed()
 	var spec_active: bool = validation_specialization_log_armed()
-	print(
-			(
-					"[VALIDATION_SMOKETEST] marker=%s source=%s debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
-					+ "clean_economy_armed=%s settlement_truth_verify_armed=%s specialization_log_armed=%s"
-			)
-			% [
-				VALIDATION_RUNTIME_SMOKE_MARKER,
-				source,
-				dbg,
-				session_const,
-				clean_active,
-				truth_active,
-				spec_active,
-			]
-	)
+	if dbg:
+		print(
+				(
+						"[VALIDATION_SMOKETEST] marker=%s source=%s debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
+						+ "clean_economy_armed=%s settlement_truth_verify_armed=%s specialization_log_armed=%s"
+				)
+				% [
+					VALIDATION_RUNTIME_SMOKE_MARKER,
+					source,
+					dbg,
+					session_const,
+					clean_active,
+					truth_active,
+					spec_active,
+				]
+		)
 
 
 func print_validation_smoketest_from_main() -> void:
@@ -344,6 +359,7 @@ func recompute(_world: World) -> void:
 	)
 	_prune_settlement_state_truth_hysteresis()
 	_update_governance_state()
+	_apply_persisted_governance_forms()
 	_settlement_truth_verify_post_recompute_pass()
 
 
@@ -938,6 +954,84 @@ func _default_profile(region_key: int) -> Dictionary:
 	}
 
 
+## ARCHITECT TASK 2: Get the settlement ID a pawn belongs to.
+func get_settlement_id_for_pawn(pawn_id: int) -> int:
+	for st_v in settlements:
+		if not (st_v is Dictionary):
+			continue
+		var st: Dictionary = st_v as Dictionary
+		var settlement_pawns_in_snap: Array[int] = st.get("pawns_in_settlement", []) # This field might need to be added/tracked
+		# For now, iterate through all regions of the settlement and check if any pawn data matches the region.
+		# A more efficient solution would be to have a direct pawn_id -> settlement_id mapping if performance becomes an issue.
+		var regions: PackedInt32Array = _regions_from_settlement(st)
+		for rk in regions:
+			# This is an indirect check; ideally, PawnData would directly link to settlement_id
+			# For now, we rely on iterating to find the settlement the pawn's tile_pos is in.
+			# This implies an assumption that pawns only challenge leaders in their current settlement.
+			# A direct lookup is needed if Pawn.data.settlement_id is populated.
+			# For now, return the center region as the settlement ID if the pawn is in one of its regions.
+			# This function may need refinement if PawnData gets a proper `settlement_id` field.
+			if get_center_region_for_region(rk) == int(st.get("center_region", -1)): # Simple check to see if region belongs to this settlement
+				# We don't have direct access to pawn.data.tile_pos here, so a direct lookup
+				# from Pawn.gd would be more accurate. This is a placeholder.
+				# A better approach would be to update `pawns_in_settlement` in `_update_governance_state`
+				# and use that directly here.
+				# For current purposes of `Pawn.gd` calling this, Pawn.data.settlement_id should ideally be set and used.
+				# Assuming `Pawn.data.settlement_id` will be correctly set by other systems during `recompute`.
+				# This function will rely on that.
+				# Until then, we can't reliably map a pawn_id to a settlement_id without global pawn data.
+				pass
+	# Placeholder: This needs Pawn data to be properly linked to settlements.
+	# The current `recompute` method builds settlements, but doesn't explicitly list `pawns_in_settlement`.
+	# For now, we return -1 and expect higher-level logic (e.g. Pawn.gd) to verify its own `data.settlement_id`.
+	# ARCHITECT NOTE: A more robust pawn.id -> settlement.id mapping is a future improvement.
+	return -1 # Default to not found, let the caller handle it.
+
+## ARCHITECT TASK 2: Get the ID of the current ruler of a settlement.
+func get_ruler_pawn_id(settlement_id: int) -> int:
+	for st_v in settlements:
+		if not (st_v is Dictionary):
+			continue
+		var st: Dictionary = st_v as Dictionary
+		if int(st.get("center_region", -1)) == settlement_id:
+			return int(st.get("current_ruler_id", -1))
+	return -1
+
+## ARCHITECT TASK 2: Internal method to set a settlement's ruler and governance type.
+## This function is called by AuthoritySystem to finalize leadership changes.
+## It updates the internal `settlements` array and records a `governance_change` event.
+func _set_settlement_ruler_and_type(settlement_id: int, new_ruler_id: int, new_governance_type: String) -> bool:
+	for i in range(settlements.size()):
+		if not (settlements[i] is Dictionary):
+			continue
+		var st: Dictionary = settlements[i] as Dictionary
+		if int(st.get("center_region", -1)) == settlement_id:
+			var old_ruler_id: int = int(st.get("current_ruler_id", -1))
+			var old_governance_type: String = str(st.get("governance_type", "anarchy"))
+
+			st["current_ruler_id"] = new_ruler_id
+			st["governance_type"] = new_governance_type
+			# If transitioning to monarchy, ensure council_ids is cleared or set appropriately.
+			if new_governance_type == "monarchy":
+				st["council_ids"] = PackedInt32Array() # A monarch rules alone, no council
+
+			settlements[i] = st # Update the settlement in the array
+
+			# Record governance_change event in WorldMemory
+			WorldMemory.record_event({
+				"type": "governance_change",
+				"settlement_id": settlement_id,
+				"old_ruler_id": old_ruler_id,
+				"new_ruler_id": new_ruler_id,
+				"old_governance_type": old_governance_type,
+				"new_governance_type": new_governance_type,
+				"tick": GameManager.tick_count,
+			})
+
+			return true
+	return false
+
+
 func _regions_from_settlement(settlement: Dictionary) -> PackedInt32Array:
 	var reg: Variant = settlement.get("regions", null)
 	if reg is PackedInt32Array:
@@ -1152,15 +1246,137 @@ func _governance_for_settlement(st: Dictionary, pawns: Array[Pawn]) -> Dictionar
 	return {"type": "monarchy", "ruler_id": int(ranked[0].id), "council_ids": PackedInt32Array()}
 
 
+func governance_form_to_storage_string(form: GovernanceForm) -> String:
+	match form:
+		GovernanceForm.ELDER_COUNCIL:
+			return "elder_council"
+		GovernanceForm.MILITIA_PROTECTORS:
+			return "militia_protectors"
+		GovernanceForm.CHIEF_HOUSEHOLDS:
+			return "chief_households"
+		GovernanceForm.COUNCIL_RULE:
+			return "council_rule"
+	return "elder_council"
+
+
+func governance_form_from_storage_string(s: String) -> GovernanceForm:
+	match str(s):
+		"militia_protectors":
+			return GovernanceForm.MILITIA_PROTECTORS
+		"chief_households":
+			return GovernanceForm.CHIEF_HOUSEHOLDS
+		"council_rule":
+			return GovernanceForm.COUNCIL_RULE
+		_:
+			return GovernanceForm.ELDER_COUNCIL
+
+
+## Numeric modifiers for downstream sim (job routing, intent glue). Multipliers scale priority-like weights.
+## Ratios stay near 1.0 so defaults remain playable without tuning explosions.
+func get_governance_bonus(form: GovernanceForm) -> Dictionary:
+	match form:
+		GovernanceForm.ELDER_COUNCIL:
+			# Elder consensus: favor stabilizing food/forage and negotiated exchange over rash builds or raids.
+			return {"food": 1.08, "defense": 0.94, "build": 1.02, "production": 0.98, "trade": 1.05}
+		GovernanceForm.MILITIA_PROTECTORS:
+			# Militia-led: favor patrol/defense work (walls, hunting threats) over civilian expansion.
+			return {"food": 0.97, "defense": 1.12, "build": 1.0, "production": 0.98, "trade": 0.96}
+		GovernanceForm.CHIEF_HOUSEHOLDS:
+			# Kin-house hierarchy: favor shelter/construction and domestic order over distant trade.
+			return {"food": 1.03, "defense": 1.0, "build": 1.1, "production": 1.02, "trade": 0.94}
+		GovernanceForm.COUNCIL_RULE:
+			# Formal quorum: balanced productive labor with slight bias to civic cohesion (production/trade).
+			return {"food": 1.02, "defense": 1.02, "build": 1.02, "production": 1.04, "trade": 1.04}
+		_:
+			return {"food": 1.0, "defense": 1.0, "build": 1.0, "production": 1.0, "trade": 1.0}
+
+
+func get_governance_bonus_for_storage_string(form_key: String) -> Dictionary:
+	return get_governance_bonus(governance_form_from_storage_string(form_key))
+
+
+## settlement_id matches other settlement APIs ([method get_ruler_pawn_id]): [code]center_region[/code] id.
+func set_governance_type(settlement_id: int, form: GovernanceForm) -> void:
+	if settlement_id < 0:
+		return
+	var s: String = governance_form_to_storage_string(form)
+	_governance_form_by_center[settlement_id] = s
+	SettlementRegistry.upsert_overlay_field(str(settlement_id), "governance_form", s)
+	for i in range(settlements.size()):
+		if not (settlements[i] is Dictionary):
+			continue
+		var st: Dictionary = settlements[i] as Dictionary
+		if int(st.get("center_region", -1)) == settlement_id:
+			st["governance_form"] = s
+			settlements[i] = st
+			break
+
+
+func _apply_persisted_governance_forms() -> void:
+	for i in range(settlements.size()):
+		if not (settlements[i] is Dictionary):
+			continue
+		var st: Dictionary = settlements[i] as Dictionary
+		var c: int = int(st.get("center_region", -1))
+		if c < 0:
+			continue
+		var form_str: String = ""
+		if _governance_form_by_center.has(c):
+			form_str = str(_governance_form_by_center[c])
+		else:
+			var ov: Variant = SettlementRegistry.get_overlay_field(str(c), "governance_form")
+			if ov != null and str(ov) != "":
+				form_str = str(ov)
+				_governance_form_by_center[c] = form_str
+		if form_str.is_empty():
+			form_str = governance_form_to_storage_string(GOVERNANCE_FORM_DEFAULT)
+		st["governance_form"] = form_str
+		settlements[i] = st
+
+
+func to_save_dict() -> Dictionary:
+	var gf: Dictionary = {}
+	for k_any in _governance_form_by_center.keys():
+		gf[str(k_any)] = str(_governance_form_by_center[k_any])
+	return {"governance_forms": gf}
+
+
+func from_save_dict(d: Variant) -> void:
+	_governance_form_by_center.clear()
+	if d == null or not (d is Dictionary):
+		return
+	var gf_v: Variant = (d as Dictionary).get("governance_forms", {})
+	if not (gf_v is Dictionary):
+		return
+	for k_any in (gf_v as Dictionary).keys():
+		var ck: int = int(str(k_any))
+		var fs: String = str((gf_v as Dictionary)[k_any])
+		if ck >= 0 and not fs.is_empty():
+			_governance_form_by_center[ck] = fs
+			SettlementRegistry.upsert_overlay_field(str(ck), "governance_form", fs)
+
+
+func clear_persisted_governance_forms() -> void:
+	_governance_form_by_center.clear()
+
+
 func get_governance_profile_for_region(region_key: int) -> Dictionary:
 	var st_v: Variant = get_settlement_at_region(region_key)
 	if not (st_v is Dictionary):
-		return {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
+		return {
+			"type": "anarchy",
+			"ruler_id": -1,
+			"council_ids": PackedInt32Array(),
+			"governance_form": governance_form_to_storage_string(GOVERNANCE_FORM_DEFAULT),
+		}
 	var st: Dictionary = st_v as Dictionary
 	return {
 		"type": str(st.get("governance_type", "anarchy")),
 		"ruler_id": int(st.get("current_ruler_id", -1)),
 		"council_ids": st.get("council_ids", PackedInt32Array()),
+		"governance_form": str(
+				st.get("governance_form", governance_form_to_storage_string(GOVERNANCE_FORM_DEFAULT))
+		),
 	}
 
 
@@ -1201,7 +1417,6 @@ func _process_war_state(settlement_idx: int, pawns: Array[Pawn]) -> void:
 		_assign_military_hierarchy(set_pawns)
 		if center >= 0 and not bool(_war_command_announced.get(center, false)):
 			_war_command_announced[center] = true
-			print("[War] BattleMaster takes command of forces.")
 		if center >= 0 and not bool(_war_battle_spawned.get(center, false)):
 			var strength: float = get_settlement_military_score(settlement_idx)
 			if _trigger_war_battle_spawn(center, int(ws.get("target_settlement_id", -1)), strength):
@@ -1237,7 +1452,6 @@ func _resolve_war_votes(settlement_idx: int) -> void:
 			favor += 1
 		else:
 			against += 1
-	print("[War] Council Vote: %d-%d in favor. Preparing Messengers..." % [favor, against])
 	if favor < 3:
 		ws["state"] = "truce"
 		ws["votes"] = vote_records
@@ -1272,7 +1486,6 @@ func _resolve_war_votes(settlement_idx: int) -> void:
 		var center: int = int(st.get("center_region", -1))
 		if center >= 0 and not bool(_war_command_announced.get(center, false)):
 			_war_command_announced[center] = true
-			print("[War] BattleMaster takes command of forces.")
 		if center >= 0 and not bool(_war_battle_spawned.get(center, false)):
 			var strength: float = get_settlement_military_score(settlement_idx)
 			if _trigger_war_battle_spawn(center, int(ws.get("target_settlement_id", -1)), strength):
@@ -2183,3 +2396,137 @@ func get_resource_pressure_for_tile(tile_pos: Vector2i) -> Dictionary:
 		if rp_v is Dictionary:
 			return (rp_v as Dictionary).duplicate(true)
 	return _default_resource_pressure()
+
+
+# ============================================================
+## Law & Custom System
+# ============================================================
+
+## Laws affect: behavior, penalties, rewards
+## Structure: settlement_id -> Array of law dictionaries
+
+var _laws: Dictionary = {}  ## settlement_id -> Array[Dictionary]
+var _law_id_counter: int = 1
+
+
+## Add a law to a settlement
+## law_data should contain: type, description, penalties, rewards
+func add_law(settlement_id: int, law_data: Dictionary) -> int:
+	if settlement_id < 0:
+		push_error("[SettlementMemory] Invalid settlement_id for add_law")
+		return -1
+	
+	if not _laws.has(settlement_id):
+		_laws[settlement_id] = []
+	
+	var law_id: int = _law_id_counter
+	_law_id_counter += 1
+	
+	var law: Dictionary = {
+		"id": law_id,
+		"settlement_id": settlement_id,
+		"type": law_data.get("type", "custom"),
+		"description": law_data.get("description", ""),
+		"penalties": law_data.get("penalties", []),
+		"rewards": law_data.get("rewards", []),
+		"created_tick": GameManager.tick_count if (GameManager != null) else 0,
+		"active": true,
+	}
+	
+	(_laws[settlement_id] as Array).append(law)
+	
+	## Record in WorldMemory
+	if WorldMemory != null and WorldMemory.has_method("record_event"):
+		WorldMemory.record_event({
+			"type": "law_added",
+			"settlement_id": settlement_id,
+			"law_id": law_id,
+			"law_type": law.get("type", "custom"),
+			"tick": GameManager.tick_count if (GameManager != null) else 0,
+		})
+	
+	return law_id
+
+
+## Remove a law from a settlement
+func remove_law(settlement_id: int, law_id: int) -> bool:
+	if not _laws.has(settlement_id):
+		return false
+	
+	var laws_array: Array = _laws[settlement_id] as Array
+	for i in range(laws_array.size() - 1, -1, -1):
+		var law: Dictionary = laws_array[i] as Dictionary
+		if int(law.get("id", -1)) == law_id:
+			laws_array.remove_at(i)
+			## Record in WorldMemory
+			if WorldMemory != null and WorldMemory.has_method("record_event"):
+				WorldMemory.record_event({
+					"type": "law_removed",
+					"settlement_id": settlement_id,
+					"law_id": law_id,
+					"tick": GameManager.tick_count if (GameManager != null) else 0,
+				})
+			return true
+	return false
+
+
+## Get all laws for a settlement
+func get_laws(settlement_id: int) -> Array:
+	if not _laws.has(settlement_id):
+		return []
+	return (_laws[settlement_id] as Array).duplicate(true)
+
+
+## Get a specific law by ID
+func get_law(settlement_id: int, law_id: int) -> Dictionary:
+	if not _laws.has(settlement_id):
+		return {}
+	
+	var laws_array: Array = _laws[settlement_id] as Array
+	for law_v in laws_array:
+		if law_v is Dictionary:
+			var law: Dictionary = law_v as Dictionary
+			if int(law.get("id", -1)) == law_id:
+				return law.duplicate(true)
+	return {}
+
+
+## Check if a pawn violates any laws
+## Returns: Array of violated law IDs
+func check_law_violations(settlement_id: int, pawn_data: Dictionary) -> Array:
+	var violations: Array = []
+	if not _laws.has(settlement_id):
+		return violations
+	
+	var laws_array: Array = _laws[settlement_id] as Array
+	for law_v in laws_array:
+		if law_v is not Dictionary:
+			continue
+		var law: Dictionary = law_v as Dictionary
+		if not law.get("active", true):
+			continue
+		
+		## Check penalties (simplified check)
+		var penalties = law.get("penalties", [])
+		## This is where you'd check pawn_data against penalties
+		## For now, just return the law ID if active
+		violations.append(int(law.get("id", -1)))
+	
+	return violations
+
+
+## Save/Load support
+func _laws_to_save_dict() -> Dictionary:
+	return {
+		"laws": _laws.duplicate(true),
+		"law_id_counter": _law_id_counter,
+	}
+
+func _laws_from_save_dict(d: Dictionary) -> void:
+	_laws.clear()
+	_law_id_counter = 1
+	
+	if d.has("laws"):
+		_laws = d["laws"].duplicate(true)
+	if d.has("law_id_counter"):
+		_law_id_counter = int(d["law_id_counter"])

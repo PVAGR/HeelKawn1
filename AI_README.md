@@ -65,13 +65,21 @@ This is the heart of HeelKawn. **Kernel = deterministic world memory + meaning +
 
 **What still must be built (core work):**
 
-#### 2.1 WorldMemory (0% → next)
+#### 2.1 WorldMemory (80% complete - substantial implementation)
 A non‑UI system that records **facts**:
-- Pawn deaths (who, when, where, cause)
-- Animal population collapse by region
-- Buildings created / abandoned
-- Starvation events
-- First occurrences
+- Pawn deaths (who, when, where, cause, profession, parents)
+- Animal deaths (species, location)
+- Building construction / destruction
+- Fire events (started, extinguished)
+- Starvation events (pawn, severity)
+- Migration events (started, completed)
+- Teaching events (teacher, student, skill)
+- Leadership challenges (attempts, successes, failures)
+- Governance changes (ruler, type, council)
+- Life path milestones
+- Region discovery
+- Neural AI decisions
+- Player presence / inspect
 
 This is *not* lore. It's data.
 

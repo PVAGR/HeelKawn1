@@ -172,6 +172,53 @@ enum PlayerMode {
 	INCARNATED = 1,
 }
 var _player_mode: int = PlayerMode.SPECTATOR
+
+## Incarnated players only "know" pawns / nearby places within this Chebyshev tile radius (spectator: worldwide).
+const INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES: int = 18
+
+
+func _tile_chebyshev_dist(a: Vector2i, b: Vector2i) -> int:
+	return maxi(absi(a.x - b.x), absi(a.y - b.y))
+
+
+## UI / observer: all pawns in spectator; only local pawns when [method is_player_incarnated].
+func get_visible_pawns() -> Array[Pawn]:
+	var out: Array[Pawn] = []
+	if _pawn_spawner == null:
+		return out
+	if not is_player_incarnated():
+		for p in _pawn_spawner.pawns:
+			if p != null and is_instance_valid(p) and p.data != null:
+				out.append(p)
+		return out
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return out
+	var my_tile: Vector2i = _player_pawn.data.tile_pos
+	var r: int = INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		if _tile_chebyshev_dist(my_tile, p.data.tile_pos) <= r:
+			out.append(p)
+	return out
+
+
+func get_visible_settlement_count() -> int:
+	if not is_player_incarnated() or _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return SettlementMemory.settlements.size()
+	var pt: Vector2i = _player_pawn.data.tile_pos
+	var r: int = INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES
+	var n: int = 0
+	for st_any in SettlementMemory.settlements:
+		if not (st_any is Dictionary):
+			continue
+		var ckr: int = int((st_any as Dictionary).get("center_region", -1))
+		if ckr < 0:
+			continue
+		var ct: Vector2i = _center_tile_from_region_key(ckr)
+		if _tile_chebyshev_dist(pt, ct) <= r:
+			n += 1
+	return n
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
 ## Observer routing from [PlayerIntentQueue] (one dispatch step per sim tick).
@@ -183,6 +230,8 @@ var _kernel_diagnostic: KernelDiagnostic = null
 ## selection, pause/speed, camera. Structures/zones: planner + jobs only (no human stamp).
 var _phase8_proof_overlay_layer: CanvasLayer = null
 var _phase8_proof_overlay_text: RichTextLabel = null
+var _spatial_profile_overlay_text: RichTextLabel = null
+var _research_particle_texture: Texture2D = null
 ## Content signature for resource-balance console lines (never use snapshot_tick alone — it changes every refresh).
 var _resource_balance_audit_last_sig: String = ""
 ## pawn_id -> last claimed job label (debug instrumentation only).
@@ -500,10 +549,13 @@ func _ready() -> void:
 	var simulation_worker: bool = _is_simulation_worker_mode()
 	if not simulation_worker:
 		SettlementMemory.print_validation_smoketest_from_main()
-	# Connect to deterministic TickManager instead of raw GameManager tick
-	TickManager.tick_processed.connect(_on_game_tick)
-	TickManager.speed_changed.connect(_on_speed_changed)
-	TickManager.paused.connect(_on_tick_manager_paused)
+	# Ticks are driven by TickManager fixed-step clock.
+	if TickManager != null and TickManager.has_signal("tick_processed"):
+		TickManager.tick_processed.connect(_on_world_tick)
+	GameManager.speed_changed.connect(_on_speed_changed)
+	if TickManager != null:
+		CrashTrap.validate_signal(TickManager, &"tick_processed")
+	CrashTrap.validate_signal(GameManager, &"speed_changed")
 	CrashTrap.validate_autoload("SettlementMemory", "Node")
 	CrashTrap.validate_autoload("WorldAI", "Node")
 	if not simulation_worker:
@@ -518,14 +570,25 @@ func _ready() -> void:
 		# Initialize Phase 5 Map Mode overlay
 		if _map_mode_overlay != null and _map_mode_overlay.has_method("initialize"):
 			_map_mode_overlay.call("initialize", _world, _camera)
+		if TechnologySystem != null:
+			if TechnologySystem.has_signal("research_started") and not TechnologySystem.research_started.is_connected(_on_research_started):
+				TechnologySystem.research_started.connect(_on_research_started)
+			# Backward/forward compatibility: some branches expose `research_progress`,
+			# others expose `research_progressed`.
+			if TechnologySystem.has_signal("research_progress") and not TechnologySystem.research_progress.is_connected(_on_research_progressed):
+				TechnologySystem.research_progress.connect(_on_research_progressed)
+			if TechnologySystem.has_signal("research_progressed") and not TechnologySystem.research_progressed.is_connected(_on_research_progressed):
+				TechnologySystem.research_progressed.connect(_on_research_progressed)
+			if TechnologySystem.has_signal("research_completed") and not TechnologySystem.research_completed.is_connected(_on_research_completed):
+				TechnologySystem.research_completed.connect(_on_research_completed)
 		# React to mining progress: when a wall comes down or an ore is cleared,
 		# new ores can become reachable and we may want to queue the next tunnel.
 		JobManager.job_completed.connect(_on_job_completed)
 		JobManager.job_claimed.connect(_on_job_claimed)
 		# Bottom toolbar: time, save/load, appearance (no manual structure stamping).
 		if _toolbar != null:
-			_toolbar.speed_index_requested.connect(_on_toolbar_speed_requested)
-			_toolbar.pause_toggled.connect(TickManager.toggle_pause)
+			_toolbar.speed_index_requested.connect(GameManager.set_speed_index)
+			_toolbar.pause_toggled.connect(GameManager.toggle_pause)
 			_toolbar.save_requested.connect(_colony_save)
 			_toolbar.load_requested.connect(_colony_load)
 			_toolbar.appearance_edit_requested.connect(_toggle_avatar_panel)
@@ -533,7 +596,7 @@ func _ready() -> void:
 	if OS.is_debug_build():
 		print("[Main] Scene ready. Tick interval: %.2fs" % GameManager.TICK_INTERVAL_SECONDS)
 	# Start every session at 1x, unpaused. Player can change only through explicit controls.
-	TickManager.set_speed(1.0)
+	GameManager.set_speed_index(0)
 	_bootstrap_colony()
 	if not simulation_worker:
 		if _hud != null:
@@ -543,6 +606,7 @@ func _ready() -> void:
 		if _focus_inspector != null:
 			_focus_inspector.set_visible_state(false)
 		_init_phase8_proof_overlay()
+		_refresh_spatial_profile_overlay()
 		_ensure_meaning_vignette()
 		# Debug panel is loaded lazily via F12 to keep startup path minimal.
 	else:
@@ -631,14 +695,15 @@ func _log_validation_harness_observability_once() -> void:
 	var clean_active: bool = WorldEvents.validation_clean_economy_events_active()
 	var truth_active: bool = SettlementMemory.validation_truth_verify_armed()
 	var spec_active: bool = SettlementMemory.validation_specialization_log_armed()
-	print(
-			(
-					"[VALIDATION_STATUS] debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
-					+ "WorldEvents_VALIDATION_CLEAN_ECONOMY_EVENTS_const=%s clean_economy_active=%s "
-					+ "settlement_truth_verify_active=%s specialization_validation_log_active=%s"
-			)
-			% [dbg, session_const, clean_const, clean_active, truth_active, spec_active]
-	)
+	if dbg:
+		print(
+				(
+						"[VALIDATION_STATUS] debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
+						+ "WorldEvents_VALIDATION_CLEAN_ECONOMY_EVENTS_const=%s clean_economy_active=%s "
+						+ "settlement_truth_verify_active=%s specialization_validation_log_active=%s"
+				)
+				% [dbg, session_const, clean_const, clean_active, truth_active, spec_active]
+		)
 	if session_const and not dbg:
 		print(
 				"[VALIDATION_WARN] VALIDATION_SESSION_ENABLED is true but OS.is_debug_build() is false — harness stays DISARMED "
@@ -1976,6 +2041,10 @@ func _sync_pawn_inherited_cultural_reputation() -> void:
 			p.call("refresh_inherited_cultural_reputation")
 
 
+func _on_world_tick(tick_number: int) -> void:
+	_on_game_tick(tick_number)
+
+
 func _on_game_tick(tick: int) -> void:
 	if CrashTrap.trace_enabled and tick == 1:
 		CrashTrap.log_tick_event("Main._on_game_tick", "tick=%d" % tick)
@@ -2162,6 +2231,8 @@ func _on_game_tick(tick: int) -> void:
 		if tick % road_flush_interval == 0 and not _road_flush_deferred_pending:
 			_road_flush_deferred_pending = true
 			call_deferred("_flush_road_memory_dirty_tiles")
+	if tick % 10 == 0:
+		_refresh_spatial_profile_overlay()
 	_maybe_log_tick_hotspots(tick, section_us)
 
 
@@ -2807,18 +2878,13 @@ func _update_ambient_audio(delta: float) -> void:
 		_ambient_playback.push_frame(Vector2(s, s))
 
 
-func _on_speed_changed(new_speed: float) -> void:
+func _on_speed_changed(speed: float, paused: bool) -> void:
 	if not OS.is_debug_build():
 		return
-	print("[Main] Speed: %.1fx" % new_speed)
-
-func _on_tick_manager_paused(is_paused: bool) -> void:
-	if not OS.is_debug_build():
-		return
-	if is_paused:
+	if paused:
 		print("[Main] PAUSED")
 	else:
-		print("[Main] RESUMED")
+		print("[Main] Speed: %.1fx" % speed)
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -2847,28 +2913,28 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			if _hud != null:
 				_hud.toggle_hud_verbose()
 		Key.KEY_SPACE:
-			TickManager.toggle_pause()
+			GameManager.toggle_pause()
 		Key.KEY_1:
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
-				TickManager.set_speed(1.0)
+				GameManager.set_speed_index(0)
 		Key.KEY_2:
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
-				TickManager.set_speed(3.0)
+				GameManager.set_speed_index(1)
 		Key.KEY_3:
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
-				TickManager.set_speed(6.0)
+				GameManager.set_speed_index(2)
 		Key.KEY_4:
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
-				TickManager.set_speed(12.0)
+				GameManager.set_speed_index(3)
 		Key.KEY_5:
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
-				TickManager.set_speed(26.0)
+				GameManager.set_speed_index(4)
 		Key.KEY_6:
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
-				TickManager.set_speed(50.0)
+				GameManager.set_speed_index(5)
 		Key.KEY_7:
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
-				TickManager.set_speed(100.0)
+				GameManager.set_speed_index(6)
 		Key.KEY_R:
 			if OS.is_debug_build():
 				_reroll_world()
@@ -2905,8 +2971,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_debug_capture_resource_truth()
 			# F7: export chronicle
 		Key.KEY_F7:
-			if OS.is_debug_build():
-				_export_chronicle()
+			_export_chronicle()
 		# F3: debug grant Krond (25)
 		Key.KEY_F3:
 			if OS.is_debug_build():
@@ -3007,15 +3072,14 @@ func _toggle_debug_panel() -> void:
 
 ## Debug: export chronicle to user://exports/chronicle_<tick>.json
 func _export_chronicle() -> void:
-	if not OS.is_debug_build():
-		return
 	var tick: int = 0
 	if Engine.has_singleton("GameManager") and GameManager != null:
 		tick = GameManager.tick_count
 	var dir_path: String = "user://exports"
 	var da := DirAccess.open("user://")
 	if da != null:
-		da.make_dir_recursive(dir_path)
+		# create exports directory under user://
+		da.make_dir_recursive("exports")
 	var file_path: String = "%s/chronicle_%d.json" % [dir_path, tick]
 	var ok: bool = false
 	if WorldMemory != null and WorldMemory.has_method("export_chronicle"):
@@ -3167,7 +3231,19 @@ func _init_phase8_proof_overlay() -> void:
 	if last_line == "":
 		last_line = "[PHASE8_PROOF_BUNDLE] waiting_for_first_resource_truth_tick..."
 	_phase8_proof_overlay_text.text = last_line
+	_spatial_profile_overlay_text = RichTextLabel.new()
+	_spatial_profile_overlay_text.name = "SpatialProfileOverlayText"
+	_spatial_profile_overlay_text.bbcode_enabled = false
+	_spatial_profile_overlay_text.fit_content = false
+	_spatial_profile_overlay_text.scroll_active = false
+	_spatial_profile_overlay_text.selection_enabled = false
+	_spatial_profile_overlay_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_spatial_profile_overlay_text.position = Vector2(8, 156)
+	_spatial_profile_overlay_text.size = Vector2(1240, 88)
+	_spatial_profile_overlay_text.add_theme_font_size_override("normal_font_size", 12)
+	_phase8_proof_overlay_layer.add_child(_spatial_profile_overlay_text)
 	_refresh_phase8_proof_overlay_style()
+	_refresh_spatial_profile_overlay()
 
 
 func _refresh_phase8_proof_overlay_style() -> void:
@@ -3189,6 +3265,109 @@ func _on_phase8_proof_bundle_emitted(bundle_line: String) -> void:
 	else:
 		_phase8_proof_overlay_text.text = bundle_line
 	_refresh_phase8_proof_overlay_style()
+	_refresh_spatial_profile_overlay()
+
+
+func _refresh_spatial_profile_overlay() -> void:
+	if not OS.is_debug_build():
+		return
+	if _spatial_profile_overlay_text == null or not is_instance_valid(_spatial_profile_overlay_text):
+		return
+	var spatial_stats: Dictionary = SpatialManager.get_stats() if SpatialManager != null else {}
+	var total_chunks: int = int(spatial_stats.get("total_chunks", 0))
+	var active_chunks: int = int(spatial_stats.get("active_chunks", 0))
+	var culled_entities: int = int(spatial_stats.get("culled_entities", spatial_stats.get("culled_count", 0)))
+	_spatial_profile_overlay_text.text = "Spatial: %d/%d | Culled Entities: %d" % [
+		active_chunks, total_chunks, culled_entities
+	]
+
+
+func _center_tile_from_region_key(center_region: int) -> Vector2i:
+	if center_region < 0:
+		return Vector2i(-1, -1)
+	var rx: int = center_region & 0xFFFF
+	var ry: int = (center_region >> 16) & 0xFFFF
+	if rx & 0x8000:
+		rx = -(0x10000 - rx)
+	if ry & 0x8000:
+		ry = -(0x10000 - ry)
+	return Vector2i(rx * 16 + 8, ry * 16 + 8)
+
+
+func _research_particle_color(settlement_id: int, tech_id: String, completed: bool) -> Color:
+	var alpha: float = 0.80 if completed else 0.55
+	match tech_id:
+		"stone_knapping":
+			return Color(0.58, 0.58, 0.58, alpha) # Stone = Gray
+		"agriculture":
+			return Color(0.38, 0.70, 0.38, alpha) # Agriculture = Green
+		"masonry":
+			return Color(0.46, 0.33, 0.20, alpha) # Masonry = Brown
+		"metallurgy":
+			return Color(0.86, 0.48, 0.17, alpha) # Metallurgy = Orange
+		_:
+			return Color(0.72, 0.72, 0.72, alpha)
+
+
+func _spawn_research_particles(settlement_id: int, tech_id: String, completed: bool, progress: float) -> void:
+	if _preview_layer == null or not is_instance_valid(_preview_layer):
+		return
+	var settlement_tile: Vector2i = _center_tile_from_region_key(settlement_id)
+	if settlement_tile.x < 0 or _world == null:
+		return
+	if _research_particle_texture == null:
+		var img: Image = Image.create(4, 4, false, Image.FORMAT_RGBA8)
+		img.fill(Color.WHITE)
+		_research_particle_texture = ImageTexture.create_from_image(img)
+	var particles: GPUParticles2D = GPUParticles2D.new()
+	particles.name = "ResearchBurst_%s_%d" % [tech_id, GameManager.tick_count]
+	particles.texture = _research_particle_texture
+	particles.one_shot = true
+	particles.emitting = false
+	particles.amount = 10 if completed else 6
+	particles.lifetime = 0.55 if completed else 0.35
+	particles.explosiveness = 1.0
+	particles.preprocess = 0.0
+	particles.local_coords = false
+	particles.position = _world.tile_to_world(settlement_tile)
+	particles.z_index = 20
+	var material: ParticleProcessMaterial = ParticleProcessMaterial.new()
+	material.direction = Vector3(0.0, -1.0, 0.0)
+	material.spread = 180.0
+	material.gravity = Vector3(0.0, -10.0, 0.0)
+	material.initial_velocity_min = 8.0 if completed else 5.0
+	material.initial_velocity_max = 20.0 if completed else 12.0
+	material.scale_min = 0.25
+	material.scale_max = 0.60 if completed else 0.45
+	particles.process_material = material
+	particles.modulate = _research_particle_color(settlement_id, tech_id, completed)
+	_preview_layer.add_child(particles)
+	particles.emitting = true
+	var cleanup: Timer = Timer.new()
+	cleanup.one_shot = true
+	cleanup.wait_time = 0.75 if completed else 0.50
+	cleanup.timeout.connect(func() -> void:
+		if is_instance_valid(particles):
+			particles.queue_free()
+	)
+	particles.add_child(cleanup)
+	cleanup.start()
+
+
+func _on_research_started(settlement_id: int, tech_id: String, _started_tick: int) -> void:
+	# Keep start/progress handlers connected for future ambient pulses, but do not
+	# emit particles here (completion-only burst by spec).
+	_refresh_spatial_profile_overlay()
+
+
+func _on_research_progressed(settlement_id: int, tech_id: String, _spent_points: int, _cost: int, progress: float) -> void:
+	# Completion-only visual burst; no per-progress particle spam.
+	_refresh_spatial_profile_overlay()
+
+
+func _on_research_completed(settlement_id: int, tech_id: String, _cost: int) -> void:
+	_spawn_research_particles(settlement_id, tech_id, true, 1.0)
+	_refresh_spatial_profile_overlay()
 
 
 func _update_phase8_proof_bundle_preferred_center() -> void:
@@ -3361,7 +3540,7 @@ func _commit_build_rect(rect: Rect2i) -> void:
 		if OS.is_debug_build():
 			print(
 					"[Main] Drag-stamped %s: %d placed%s" % [
-						_designation_mode_label(_designation_mode),
+						_designation_action_label(_designation_mode),
 						posted,
 						"" if skipped == 0 else ", %d skipped" % skipped
 					]
@@ -3452,7 +3631,7 @@ func _set_designation_mode(mode: int) -> void:
 		else:
 			print(
 					"[Main] Designation mode: %s  (left-click to place, right-click / Esc to cancel)" %
-					_designation_mode_label(mode)
+					_designation_action_label(mode)
 			)
 	_update_wall_path_preview()
 	_queue_designation_redraw()
@@ -3465,6 +3644,54 @@ static func _designation_mode_label(mode: int) -> String:
 		DesignationMode.BUILD_DOOR:    return "Door"
 		DesignationMode.DESIGNATE_ZONE: return "Zone"
 	return ""
+
+
+func _designation_action_label(mode: int) -> String:
+	var base_label: String = _designation_mode_label(mode)
+	if mode == DesignationMode.BUILD_WALL:
+		var suffix: String = _designation_style_suffix_for_current_focus()
+		var family_label: String = _designation_material_family_for_current_focus()
+		return "Constructing %s Wall%s" % [family_label, suffix]
+	if mode == DesignationMode.BUILD_DOOR:
+		return "Constructing %s Door%s" % [_designation_material_family_for_current_focus(), _designation_style_suffix_for_current_focus()]
+	if mode == DesignationMode.BUILD_BED:
+		return "Constructing Bed%s" % _designation_style_suffix_for_current_focus()
+	return base_label
+
+
+func _designation_style_suffix_for_current_focus() -> String:
+	if CulturalStyleManager == null:
+		return ""
+	var center_region: int = _designation_center_region_for_style()
+	if center_region < 0:
+		return ""
+	var style_label: String = str(CulturalStyleManager.call("describe_settlement_style", center_region))
+	if style_label.strip_edges().is_empty():
+		return ""
+	return " [%s Style]" % style_label
+
+
+func _designation_material_family_for_current_focus() -> String:
+	if CulturalStyleManager == null:
+		return "Wood"
+	var center_region: int = _designation_center_region_for_style()
+	if center_region < 0:
+		return "Wood"
+	var family: String = str(CulturalStyleManager.call("get_build_material_family", center_region)).to_lower()
+	match family:
+		"stone":
+			return "Stone"
+		_:
+			return "Wood"
+
+
+func _designation_center_region_for_style() -> int:
+	if _selected_pawn != null and is_instance_valid(_selected_pawn) and _selected_pawn.data != null:
+		var prk: int = _WM._region_key(_selected_pawn.data.tile_pos.x, _selected_pawn.data.tile_pos.y)
+		return SettlementMemory.get_center_region_for_region(prk)
+	var focus: Dictionary = _observer_focus_settlement()
+	var sdata: Dictionary = focus.get("settlement_data", {})
+	return int(sdata.get("center_region", -1))
 
 
 func _handle_select_click_at(world_pos: Vector2) -> void:
@@ -3651,11 +3878,13 @@ func get_player_governance_profile() -> Dictionary:
 	var gtype: String = str(gov.get("type", "anarchy"))
 	var rid: int = int(gov.get("ruler_id", -1))
 	var ruler_name: String = "None"
-	if rid >= 0 and _pawn_spawner != null:
-		for p in _pawn_spawner.pawns:
+	if rid >= 0:
+		for p in get_visible_pawns():
 			if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == rid:
 				ruler_name = p.data.display_name
 				break
+		if ruler_name == "None" and is_player_incarnated():
+			ruler_name = "Unknown"
 	var status: String = "Rebel"
 	var pid: int = int(_player_pawn.data.id)
 	if rid < 0:
@@ -3711,6 +3940,8 @@ func get_camera_settlement_revival_digest() -> Dictionary:
 	if not is_instance_valid(_world) or _camera == null or _world.data == null:
 		return out_empty
 	var cam_tile: Vector2i = _world.world_to_tile(_camera.global_position)
+	if is_player_incarnated() and _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		cam_tile = _player_pawn.data.tile_pos
 	if cam_tile.x < 0:
 		out_empty["region_key"] = -2
 		out_empty["camera_region_key"] = -2
@@ -3733,12 +3964,6 @@ func get_camera_settlement_revival_digest() -> Dictionary:
 	d_near["profile_region_key"] = near_ckr
 	d_near["region_key"] = cam_rk
 	return d_near
-
-
-func _center_tile_from_region_key(ckr: int) -> Vector2i:
-	var tcx: int = (ckr & 0xFFFF) * 16 + 8
-	var tcy: int = ((ckr >> 16) & 0xFFFF) * 16 + 8
-	return Vector2i(tcx, tcy)
 
 
 func _nearest_settlement_center_region_key(cam_tile: Vector2i) -> int:
@@ -4147,6 +4372,7 @@ func _blueprint_feature_for_mode() -> int:
 func _reroll_world() -> void:
 	JobManager.clear_all()
 	SettlementRegistry.clear()
+	SettlementMemory.clear_persisted_governance_forms()
 	FragmentationManager.clear()
 	SchismManager.clear()
 	WorldMemory.clear()
@@ -5239,9 +5465,29 @@ func _print_stockpile() -> void:
 
 
 # ==================== save / load (F5 / F8) ====================
+#
+# Cross-session continuity (must survive save → quit → load): everything in
+# `_build_save_dict()` / `_apply_save_dict`: sim identity (`GameManager.tick_count`,
+# optional speed/pause when `RESTORE_SPEED_FROM_SAVE`), `last_generation_tick`,
+# `WorldData` (terrain + `world_seed`), stockpile zones, pawn blobs, regrow queue,
+# `WorldMemory`, bloodlines, `SettlementRegistry` + `SettlementMemory` (including
+# persisted governance keys from `SettlementMemory.to_save_dict`), `WorldPersistence`,
+# myth/sacred/chronicle/cultural memory, `PlayerIntentQueue`, `FactionRegistry`,
+# and player mode / pawn binding.
+#
+# Verification here does **not** prove `_apply_save_dict` is bug-free; it proves the
+# snapshot dict round-trips through the same binary encoding as `GameSave` (`store_var`
+# / `get_var`, i.e. `var_to_bytes` / `bytes_to_var`). Call `verify_save_load_state()` from
+# the editor Remote Inspector on the Main node when you need a quick encoding check without
+# applying load (full F5→F8 smoke test remains manual in-editor).
 
 func _colony_save() -> void:
 	var snapshot: Dictionary = _build_save_dict()
+	if OS.is_debug_build():
+		if not verify_save_roundtrip(snapshot):
+			push_warning(
+					"[Main] Save encoding round-trip failed (var_to_bytes). File still written; investigate persistence."
+			)
 	var err: Error = GameSave.write_file(GameSave.get_save_path(), snapshot)
 	if err == OK:
 		_reset_job_cooldown_telemetry()
@@ -5272,6 +5518,29 @@ func _colony_load() -> void:
 		print("[Main] Loaded colony from %s" % GameSave.get_save_path())
 
 
+## Debug/editor: ensures `_build_save_dict()` survives `var_to_bytes` → `bytes_to_var` (same
+## family as [member FileAccess.store_var]). Does not read disk and does not run `_apply_save_dict`.
+## In running game: Remote Inspector → select [Main] → call [method verify_save_load_state].
+func verify_save_load_state() -> bool:
+	return verify_save_roundtrip(_build_save_dict())
+
+
+## Returns true if `bytes_to_var(var_to_bytes(snapshot))` equals `snapshot` (same encoding path as
+## [member FileAccess.store_var]). Used automatically on F5 in debug builds; safe to call from tooling while paused.
+func verify_save_roundtrip(snapshot: Dictionary) -> bool:
+	var enc: PackedByteArray = var_to_bytes(snapshot)
+	var restored: Variant = bytes_to_var(enc)
+	if not (restored is Dictionary):
+		if OS.is_debug_build():
+			push_warning("[Main] verify_save_roundtrip: round-trip did not yield a Dictionary")
+		return false
+	if (restored as Dictionary) != snapshot:
+		if OS.is_debug_build():
+			push_warning("[Main] verify_save_roundtrip: snapshot differs after var_to_bytes round-trip")
+		return false
+	return true
+
+
 func _build_save_dict() -> Dictionary:
 	var pawns_s: Array = []
 	for p in _pawn_spawner.pawns:
@@ -5290,11 +5559,14 @@ func _build_save_dict() -> Dictionary:
 		"regrow": _save_regrow_queue(),
 		"zone_filter": _zone_next_filter,
 		"world_memory": WorldMemory.to_save_dict(),
+		"bloodline_system": BloodlineSystem.to_save_dict(),
 		"settlement_registry": SettlementRegistry.to_save_dict(),
+		"settlement_memory": SettlementMemory.to_save_dict(),
 		"world_persistence": WorldPersistence.to_save_dict(),
 		"myth": MythMemory.to_save_dict(),
 		"sacred": SacredMemory.to_save_dict(),
 		"chronicle": ChronicleLog.to_save_dict(),
+		"cultural_memory": CulturalMemory.to_save_dict(),
 		"player_intent_queue": PlayerIntentQueue.to_save_dict(),
 		"faction_registry": FactionRegistry.to_save_dict(),
 		"last_generation_tick": _last_generation_tick,
@@ -5338,6 +5610,10 @@ func _apply_save_dict(s: Dictionary) -> void:
 		return
 
 	JobManager.clear_all()
+	if KinshipSystem != null and KinshipSystem.has_method("clear"):
+		KinshipSystem.clear()
+	if BloodlineSystem != null and BloodlineSystem.has_method("clear"):
+		BloodlineSystem.clear()
 	TradeMemory.clear()
 	RemnantMemory.clear()
 	IntentMemory.clear()
@@ -5381,10 +5657,13 @@ func _apply_save_dict(s: Dictionary) -> void:
 	_last_generation_tick = int(s.get("last_generation_tick", loaded_tick))
 	_zone_next_filter = int(s.get("zone_filter", 0))
 	WorldMemory.from_save_dict(s.get("world_memory", {}))
+	BloodlineSystem.from_save_dict(s.get("bloodline_system", {}))
 	SettlementRegistry.from_save_dict(s.get("settlement_registry", {}))
+	SettlementMemory.from_save_dict(s.get("settlement_memory", {}))
 	MythMemory.from_save_dict(s.get("myth", {}))
 	SacredMemory.from_save_dict(s.get("sacred", {}))
 	ChronicleLog.from_save_dict(s.get("chronicle", {}))
+	CulturalMemory.from_save_dict(s.get("cultural_memory", {}))
 	WorldMeaning.recompute()
 	WorldPersistence.from_save_dict(s.get("world_persistence", {}))
 	WorldPersistence.recompute()
@@ -5399,6 +5678,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 		if pd is Dictionary:
 			var pdat: PawnData = PawnData.from_save_dict(pd)
 			_pawn_spawner.spawn_from_data(pdat, _world)
+	if KinshipSystem != null and KinshipSystem.has_method("rebuild_from_pawn_spawner"):
+		KinshipSystem.call("rebuild_from_pawn_spawner", _pawn_spawner)
 	_restore_player_state(saved_player_mode, saved_player_pawn_id)
 	_world.set_meta("animal_spawner", _animal_spawner)
 	if is_instance_valid(_world):
@@ -5504,6 +5785,8 @@ func register_enemy_kill(enemy_name: String, attacker_name: String, tile: Vector
 
 func register_pawn_death(_pawn_id: int) -> void:
 	_kill_count += 1
+	if BloodlineSystem != null and BloodlineSystem.has_method("record_pawn_death"):
+		BloodlineSystem.call("record_pawn_death", int(_pawn_id))
 
 
 func get_kill_count() -> int:
@@ -5693,6 +5976,15 @@ func _focus_lines_for_settlement(focus: Dictionary) -> PackedStringArray:
 		int(round(ColonySimServices.get_food_pressure() * 100.0)),
 		int(round(ColonySimServices.get_housing_pressure() * 100.0)),
 	])
+	var tradition: Dictionary = CulturalMemory.get_tradition(center)
+	var t_branch: String = str(tradition.get("preferred_tech_branch", "agriculture"))
+	var t_naming: String = str(tradition.get("naming_convention", "nordic"))
+	var taboo_v: Variant = tradition.get("taboo_jobs", [])
+	var taboo_s: String = "none"
+	if taboo_v is Array and not (taboo_v as Array).is_empty():
+		taboo_s = ", ".join(taboo_v as Array)
+	out.append("Tradition: branch=%s | naming=%s | taboo=%s" % [t_branch, t_naming, taboo_s])
+	out.append(_tradition_narrative_tooltip_line(tradition))
 	_focus_append_house_stub_lines(out, center)
 	return out
 
@@ -5719,6 +6011,8 @@ func _focus_lines_for_tile(focus: Dictionary) -> PackedStringArray:
 					_pretty_governance_name(str(gov.get("type", "anarchy"))),
 				]
 		)
+		var t_line: String = _tradition_narrative_tooltip_line(CulturalMemory.get_tradition(center))
+		out.append("Tradition narrative: %s" % t_line)
 		_focus_append_house_stub_lines(out, int(st.get("center_region", -1)))
 	var events: Array[Dictionary] = WorldMemory.get_events_for_tile(tile)
 	if not events.is_empty():
@@ -5726,6 +6020,26 @@ func _focus_lines_for_tile(focus: Dictionary) -> PackedStringArray:
 		var etype: String = str(evt.get("type", "event"))
 		out.append("Last Event: %s @ tick %d" % [etype.replace("_", " "), int(evt.get("t", 0))])
 	return out
+
+
+func _tradition_narrative_tooltip_line(tradition: Dictionary) -> String:
+	var branch: String = str(tradition.get("preferred_tech_branch", "agriculture")).to_lower()
+	var naming: String = str(tradition.get("naming_convention", "nordic")).to_lower()
+	var taboo_v: Variant = tradition.get("taboo_jobs", [])
+	var taboo_hunt: bool = false
+	if taboo_v is Array:
+		for t_any in taboo_v as Array:
+			if str(t_any).to_upper() == "HUNT":
+				taboo_hunt = true
+				break
+	var branch_line: String = "leans into patient fieldcraft and food security."
+	if branch.find("metal") >= 0:
+		branch_line = "leans into forge-minded craft and durable tools."
+	var taboo_line: String = "No major labor taboo dominates memory."
+	if taboo_hunt:
+		taboo_line = "Hunting is culturally avoided after prior bloodshed."
+	var naming_line: String = "Names preserve a %s cadence across generations." % naming
+	return "%s %s %s" % [branch_line, taboo_line, naming_line]
 
 
 ## FactionRegistry: deterministic house line for settlement zone (focus / observer readout).
@@ -5763,9 +6077,7 @@ func _count_pawns_in_regions(regions_v: Variant) -> int:
 
 func _pawn_counts_by_region_key() -> Dictionary:
 	var out: Dictionary = {}
-	if _pawn_spawner == null:
-		return out
-	for p in _pawn_spawner.pawns:
+	for p in get_visible_pawns():
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		var rk: int = _WM._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
@@ -5796,6 +6108,21 @@ func _build_realm_crown_view_text() -> String:
 			return an < bn
 		return int(ad.get("center_region", 0)) < int(bd.get("center_region", 0))
 	)
+	if is_player_incarnated() and _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		var pt: Vector2i = _player_pawn.data.tile_pos
+		var r_fog: int = INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES
+		var rows_f: Array = []
+		for st_row in rows:
+			if not (st_row is Dictionary):
+				continue
+			var st_f: Dictionary = st_row
+			var ckr_f: int = int(st_f.get("center_region", -1))
+			if ckr_f < 0:
+				continue
+			var ct_f: Vector2i = _center_tile_from_region_key(ckr_f)
+			if _tile_chebyshev_dist(pt, ct_f) <= r_fog:
+				rows_f.append(st_row)
+		rows = rows_f
 	var place_count: int = rows.size()
 	var listed: int = 0
 	var lines: PackedStringArray = PackedStringArray()
@@ -6137,11 +6464,32 @@ func _observer_focus_settlement() -> Dictionary:
 				settlement_data = st
 				break
 	if settlement_idx < 0:
-		for i in range(SettlementMemory.settlements.size()):
-			if SettlementMemory.settlements[i] is Dictionary:
-				settlement_idx = i
-				settlement_data = SettlementMemory.settlements[i] as Dictionary
-				break
+		if is_player_incarnated() and _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+			var pt_obs: Vector2i = _player_pawn.data.tile_pos
+			var r_obs: int = INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES
+			var best_i: int = -1
+			var best_d: int = 1_000_000_000
+			for i in range(SettlementMemory.settlements.size()):
+				if not (SettlementMemory.settlements[i] is Dictionary):
+					continue
+				var st_try: Dictionary = SettlementMemory.settlements[i] as Dictionary
+				var ckr_t: int = int(st_try.get("center_region", -1))
+				if ckr_t < 0:
+					continue
+				var ct_t: Vector2i = _center_tile_from_region_key(ckr_t)
+				var dist_t: int = _tile_chebyshev_dist(pt_obs, ct_t)
+				if dist_t <= r_obs and dist_t < best_d:
+					best_d = dist_t
+					best_i = i
+			if best_i >= 0:
+				settlement_idx = best_i
+				settlement_data = SettlementMemory.settlements[best_i] as Dictionary
+		else:
+			for i in range(SettlementMemory.settlements.size()):
+				if SettlementMemory.settlements[i] is Dictionary:
+					settlement_idx = i
+					settlement_data = SettlementMemory.settlements[i] as Dictionary
+					break
 	var governance: Dictionary = {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
 	var war: Dictionary = {"state": "peace", "target_settlement_id": -1, "votes": []}
 	if settlement_idx >= 0:
@@ -6158,20 +6506,12 @@ func _observer_focus_settlement() -> Dictionary:
 
 
 func _observer_total_pawns() -> int:
-	if _pawn_spawner == null:
-		return 0
-	var n: int = 0
-	for p in _pawn_spawner.pawns:
-		if p != null and is_instance_valid(p) and p.data != null:
-			n += 1
-	return n
+	return get_visible_pawns().size()
 
 
 func _observer_children_count() -> int:
-	if _pawn_spawner == null:
-		return 0
 	var c: int = 0
-	for p in _pawn_spawner.pawns:
+	for p in get_visible_pawns():
 		if p != null and is_instance_valid(p) and p.data != null:
 			c += int(p.data.children_count)
 	return c
@@ -6209,11 +6549,13 @@ func _observer_battlefield_mode() -> String:
 
 
 func _pawn_name_by_id(pawn_id: int) -> String:
-	if pawn_id < 0 or _pawn_spawner == null:
+	if pawn_id < 0:
 		return "None"
-	for p in _pawn_spawner.pawns:
+	for p in get_visible_pawns():
 		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
 			return p.data.display_name
+	if is_player_incarnated():
+		return "Unknown"
 	return "None"
 
 
@@ -6226,7 +6568,7 @@ func _find_battlemaster_name(settlement_idx: int, settlement_data: Dictionary) -
 	var region_set: Dictionary = {}
 	for rk in regs as PackedInt32Array:
 		region_set[int(rk)] = true
-	for p in _pawn_spawner.pawns:
+	for p in get_visible_pawns():
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		if str(p.data.military_rank_legacy).to_lower() != "battlemaster":

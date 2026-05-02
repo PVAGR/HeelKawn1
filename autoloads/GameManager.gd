@@ -2,6 +2,7 @@ extends Node
 
 ## Emitted once per simulation tick. All simulation systems should listen to this
 ## instead of running on _process, so pause/speed affects everything uniformly.
+## NOTE: This signal is now emitted by TickManager.tick_processed via _on_tick_manager_tick().
 signal game_tick(tick_count: int)
 
 ## Emitted whenever the speed or pause state changes. UI can listen to update icons.
@@ -16,6 +17,8 @@ const TICK_INTERVAL_SECONDS: float = 1.0
 ## "overnight farming" tier -- fine for running an established colony, but at
 ## this rate a single _process frame can queue many sim ticks so any per-tick
 ## work (pathing, allocations) amplifies. Keep hot paths cheap.
+## NOTE: TickManager is now the authoritative source for speed control.
+## These steps are kept for reference and backward compatibility.
 const SPEED_STEPS: Array[float] = [1.0, 3.0, 6.0, 12.0, 26.0, 50.0, 100.0]
 ## Set true only when actively debugging pawn/animal internals.
 const VERBOSE_SIM_LOGS: bool = false
@@ -206,10 +209,21 @@ func _adaptive_frame_tick_cap(base_cap: int) -> int:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	## Connect to TickManager for central tick processing
+	if has_node("/root/TickManager"):
+		var tick_mgr = get_node("/root/TickManager")
+		if tick_mgr != null and tick_mgr.has_signal("tick_processed"):
+			tick_mgr.tick_processed.connect(_on_tick_manager_tick)
 	## Headless [code]-s res://tools/diagnose_tick1.gd[/code] must not advance ticks before that script pauses; start paused when diagnose is on the command line.
 	if _cmdline_contains_substring("diagnose_tick1"):
 		pause()
 	_apply_command_line_flags()
+
+
+func _on_tick_manager_tick(tick_number: int) -> void:
+	## Re-emit as game_tick for backward compatibility
+	tick_count = tick_number
+	_dispatch_game_tick(tick_number)
 
 
 func _cmdline_contains_substring(needle: String) -> bool:
@@ -310,11 +324,24 @@ func _dispatch_game_tick(tick: int) -> void:
 
 
 func _process(delta: float) -> void:
+	## Tick processing is now handled by TickManager.
+	## This _process() only handles pause state updates.
 	if is_paused:
-		ticks_emitted_last_frame = 0
+		ticks_emitted_last_frame =0
 		last_frame_game_tick_usecs = 0
 		last_frame_tick_cap_backlog = false
 		return
+	## If TickManager is active, we don't do tick processing here.
+	## TickManager._process() handles the accumulator and emits tick_processed.
+	## We just update diagnostics if needed.
+	if has_node("/root/TickManager"):
+		var tick_mgr = get_node("/root/TickManager")
+		if tick_mgr != null and "current_tick" in tick_mgr:
+			ticks_emitted_last_frame = 0  # Updated by TickManager
+			last_frame_game_tick_usecs = 0  # Updated by TickManager
+			last_frame_tick_cap_backlog = false
+			return
+	## Fallback: if TickManager not active, use legacy tick processing
 	var desired_add: float = delta * game_speed
 	var max_accumulator: float = TICK_INTERVAL_SECONDS * float(_max_accumulated_ticks_for_speed())
 	if DROP_BACKLOG_WHEN_OVER_CAP:
@@ -322,8 +349,6 @@ func _process(delta: float) -> void:
 		if _tick_accumulator > max_accumulator:
 			_tick_accumulator = max_accumulator
 	else:
-		# Soft clamp: never discard already-queued sim time (no tick skipping),
-		# but also never let the backlog grow without bound (prevents rubber banding).
 		if _tick_accumulator >= max_accumulator:
 			desired_add = 0.0
 		elif _tick_accumulator + desired_add > max_accumulator:
@@ -344,8 +369,8 @@ func _process(delta: float) -> void:
 	adaptive_ticks_cap_last_frame = frame_tick_cap
 	last_frame_game_tick_usecs = tick_chain_usecs
 	last_frame_tick_cap_backlog = (
-			ticks_this_frame >= frame_tick_cap
-			and _tick_accumulator >= TICK_INTERVAL_SECONDS
+		ticks_this_frame >= frame_tick_cap
+		and _tick_accumulator >= TICK_INTERVAL_SECONDS
 	)
 	_maybe_log_sim_hitch(ticks_this_frame, frame_tick_cap, tick_chain_usecs)
 

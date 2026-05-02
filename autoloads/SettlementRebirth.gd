@@ -10,6 +10,8 @@ extends Node
 const CHECK_INTERVAL_TICKS: int = 1000
 const REBIRTH_PEACE_TICKS: int = 5000
 const REBIRTH_INTERVAL_TICKS: int = 20000
+const REBIRTH_SPAWN_BASE_COUNT: int = 2
+const REBIRTH_SPAWN_COUNT_VARIANCE: int = 2  # deterministic 2..3 cohort size
 const TILE_SCORE_STRUCT_NEIGHBOR: int = 85
 const TILE_SCORE_SCAR_WEIGHT: int = 40
 const TILE_SCORE_ROAD_WEIGHT: int = 120
@@ -56,6 +58,19 @@ func process(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 		var ckey: int = int(s.get("center_region", -1))
 		if ckey < 0:
 			continue
+		# === Assign biome-driven cultural style if not yet assigned ===
+		if CulturalStyleManager != null:
+			var first_region: int = -1
+			var regions_var: Variant = s.get("regions", null)
+			if regions_var is PackedInt32Array:
+				var regions_arr: PackedInt32Array = regions_var as PackedInt32Array
+				if regions_arr.size() > 0:
+					first_region = int(regions_arr[0])
+			if first_region >= 0:
+				var style: Dictionary = CulturalStyleManager.get_or_assign_style(ckey, world, first_region)
+				if OS.is_debug_build():
+					print("[Culture] Settlement %d adopted style '%s' for region %d" % [ckey, style.get("style_name", "Unknown"), first_region])
+		# === End style assignment ===
 		var ck2: String = str(ckey)
 		if _last_rebirth_tick_by_center.has(ck2):
 			if (now1 - int(_last_rebirth_tick_by_center[ck2])) < REBIRTH_INTERVAL_TICKS:
@@ -63,16 +78,45 @@ func process(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 		var cands0: Array[Vector2i] = _rebirth_tiles_in_order_cached(world, s)
 		if cands0.is_empty():
 			continue
+		var center_region: int = int(s.get("center_region", -1))
+		var derived: Dictionary = _derive_tradition_from_history(s)
+		var inherited: Dictionary = CulturalMemory.stack_tradition(center_region, derived)
+		s["tradition"] = inherited
+		if OS.is_debug_build() and GameManager.verbose_logs():
+			print("[Memory] Settlement %d inherited tradition: [Branch=%s, Taboo=%s]" % [
+				center_region,
+				str(inherited.get("preferred_tech_branch", "")),
+				str(inherited.get("taboo_jobs", [])),
+			])
+		var spawn_target: int = _rebirth_spawn_target_count(now1, ckey)
 		var seed0: int = now1 + ckey * 7 + 11
-		var did_spawn0: bool = false
+		var spawned_count: int = 0
+		var attempt_index: int = 0
 		for tspawn0 in cands0:
-			if ps.spawn_pawn_at(world, tspawn0, seed0):
-				did_spawn0 = true
+			if spawned_count >= spawn_target:
 				break
-		if not did_spawn0:
+			var spawn_seed: int = seed0 + attempt_index * 31 + spawned_count * 97
+			attempt_index += 1
+			if ps.spawn_pawn_at(world, tspawn0, spawn_seed, s, "rebirth"):
+				spawned_count += 1
+		if spawned_count <= 0:
 			continue
 		_last_rebirth_tick_by_center[ck2] = now1
 		MythMemory.register_rebirth_success(ckey)
+		WorldMemory.record_event({
+			"type": "settlement_rebirth",
+			"tick": now1,
+			"center_region": ckey,
+			"spawned_count": spawned_count,
+			"culture_name": str(s.get("culture_name", "")),
+			"state": str(s.get("state", "")),
+			"tradition": inherited.duplicate(true),
+		})
+
+
+func _rebirth_spawn_target_count(now_tick: int, center_region: int) -> int:
+	var parity: int = int((now_tick / maxi(1, REBIRTH_INTERVAL_TICKS)) + center_region)
+	return REBIRTH_SPAWN_BASE_COUNT + int(abs(parity) % REBIRTH_SPAWN_COUNT_VARIANCE)
 
 
 func _rebirth_tiles_in_order_cached(world: World, settlement: Dictionary) -> Array[Vector2i]:
@@ -186,6 +230,44 @@ func _gather_eligible_settlements() -> Array[Dictionary]:
 			continue
 		out2.append(d)
 	return out2
+
+
+func _derive_tradition_from_history(settlement: Dictionary) -> Dictionary:
+	var center_region: int = int(settlement.get("center_region", -1))
+	var events: Array[Dictionary] = WorldMemory.get_recent_events_for_settlement(center_region, 512, true)
+	var farm_research_count: int = 0
+	var metallurgy_research_count: int = 0
+	var violent_deaths: int = 0
+	for ev in events:
+		var typ: String = str(ev.get("type", "")).to_lower()
+		if typ == "technology_researched":
+			var tech_id: String = str(ev.get("tech_id", ev.get("technology", ""))).to_lower()
+			if tech_id.find("agri") >= 0 or tech_id.find("farm") >= 0 or tech_id.find("food") >= 0:
+				farm_research_count += 1
+			if tech_id.find("metal") >= 0:
+				metallurgy_research_count += 1
+		elif typ == "pawn_death" or typ == "enemy_death":
+			violent_deaths += 1
+	var preferred_branch: String = "agriculture"
+	var branch_score: int = farm_research_count
+	if metallurgy_research_count > farm_research_count:
+		preferred_branch = "metallurgy"
+		branch_score = metallurgy_research_count
+	var taboo_jobs: Array[String] = []
+	if violent_deaths >= 3:
+		taboo_jobs = ["HUNT"]
+	var naming_convention: String = "nordic"
+	if preferred_branch == "metallurgy":
+		naming_convention = "latin"
+	elif violent_deaths >= 5:
+		naming_convention = "highland"
+	return {
+		"preferred_tech_branch": preferred_branch,
+		"taboo_jobs": taboo_jobs,
+		"naming_convention": naming_convention,
+		"branch_bias_score": branch_score,
+		"violence_score": violent_deaths,
+	}
 
 
 ## Smallest [code]last_activity_tick[/code] (missing/invalid -> sentinel so they sort first), then [code]center_region[/code].

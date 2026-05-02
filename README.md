@@ -25,6 +25,8 @@ HeelKawn is a deterministic Godot 4.6 world simulation.
 
 Kernel status: complete (memory -> meaning -> persistence -> culture).
 
+**Macro simulation:** `WorldEventSystem` (autoload) advances economy pressure, aggregate **world mood**, and weather-linked modifiers on a slow cadence (~every 1000 sim ticks) while `TickManager` drives the kernel. `LivingWorldController` remains the light pressure hook on `GameManager.game_tick`; pair it with `StockpileManager`/`WorldEventSystem` for supply-aware narratives.
+
 **Documentation:**
 - `AI_README.md` — Canonical AI instructions and kernel rules (READ FIRST for all AI agents)
 - `docs/HEELKAWN_STATE.md` — Canonical project state

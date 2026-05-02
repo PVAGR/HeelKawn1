@@ -163,6 +163,11 @@ func recompute() -> void:
 			)
 			var orphan_retire_due: bool = (now - orphan_since_tick) >= ORPHAN_RETIRE_TICKS
 			if no_death_facts and orphan_retire_due:
+				if OS.is_debug_build() and GameManager.verbose_logs():
+					print(
+							"[WorldPersistence] Retired orphan region %d (no deaths, idle for %d ticks)"
+							% [region_key, now - orphan_since_tick]
+					)
 				continue
 			persistent_regions[rk] = o
 	# -- Phase 2: one step of visual recovery (recovery_stage only; never scar_level; ticks only)

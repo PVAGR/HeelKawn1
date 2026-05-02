@@ -9,6 +9,8 @@ var CollapseSystem = null
 var AuthoritySystem = null
 var WorldAI = null
 var GameManager = null
+var TechnologySystem = null
+var KnowledgeSystem = null
 
 func _autoload_or_null(path: String) -> Node:
 	var main_loop: MainLoop = Engine.get_main_loop()
@@ -26,6 +28,8 @@ func _resolve_autoload_refs() -> void:
 	AuthoritySystem = _autoload_or_null("/root/AuthoritySystem")
 	WorldAI = _autoload_or_null("/root/WorldAI")
 	GameManager = _autoload_or_null("/root/GameManager")
+	TechnologySystem = _autoload_or_null("/root/TechnologySystem")
+	KnowledgeSystem = _autoload_or_null("/root/KnowledgeSystem")
 
 enum GovernmentType {
 	TRIBAL = 0,        # Hunter-gatherer bands, consensus decisions
@@ -808,9 +812,8 @@ func _has_cultural_norm(norm_name: String) -> bool:
 	return false
 
 func _advance_technology() -> void:
-	# Technology advances based on population and focus
-	var tech_progress: float = 0.0
-	
+	# Keep legacy tech-level drift so older systems remain stable.
+	var tech_progress: float = 0.05
 	match development_focus:
 		DevelopmentFocus.KNOWLEDGE:
 			tech_progress = 0.2
@@ -818,10 +821,48 @@ func _advance_technology() -> void:
 			tech_progress = 0.15
 		DevelopmentFocus.BALANCED:
 			tech_progress = 0.1
-		_:
-			tech_progress = 0.05
-	
 	technological_level = min(100, technological_level + tech_progress)
+	# Deterministic backend research hook: choose cheapest available tech when points allow.
+	if TechnologySystem == null or KnowledgeSystem == null:
+		return
+	if not TechnologySystem.has_method("get_active_research"):
+		return
+	var active_id: String = str(TechnologySystem.call("get_active_research", settlement_id))
+	if not active_id.is_empty():
+		return
+	var researchable: Array = []
+	if KnowledgeSystem.has_method("get_researchable_techs"):
+		researchable = KnowledgeSystem.call("get_researchable_techs", settlement_id)
+	if researchable.is_empty():
+		return
+	var preferred_branch: String = ""
+	if CulturalMemory != null and CulturalMemory.has_method("get_tradition"):
+		var trad_v: Variant = CulturalMemory.call("get_tradition", settlement_id)
+		if trad_v is Dictionary:
+			preferred_branch = str((trad_v as Dictionary).get("preferred_tech_branch", "")).to_lower()
+	var best: String = ""
+	var best_score: int = -1_000_000
+	for tech_any in researchable:
+		var tech_id: String = str(tech_any)
+		if not TechnologySystem.TECH_TREE.has(tech_id):
+			continue
+		var node: Dictionary = TechnologySystem.TECH_TREE[tech_id] as Dictionary
+		var cost: int = int(node.get("cost", 0))
+		var score: int = -cost
+		if not preferred_branch.is_empty():
+			var tech_lc: String = tech_id.to_lower()
+			var effect_lc: String = str(node.get("effect", "")).to_lower()
+			if tech_lc.find(preferred_branch) >= 0 or effect_lc.find(preferred_branch) >= 0:
+				score += 1000
+		if score > best_score or (score == best_score and tech_id < best):
+			best_score = score
+			best = tech_id
+	if best.is_empty():
+		return
+	TechnologySystem.call("set_active_research", settlement_id, best)
+	var researched: bool = bool(TechnologySystem.call("research_tech", best, settlement_id))
+	if researched:
+		historical_events.append("Researched technology: %s" % best)
 
 func _update_government_type() -> void:
 	# Government evolves with population and complexity
@@ -920,6 +961,10 @@ func update() -> void:
 	_process_collective_goals()
 	_update_leadership()
 	_propose_automatic_goals()
+
+## Called by TickManager via AIAgentManager forwarding
+func _on_world_tick(tick_number: int) -> void:
+	update()
 
 func _process_collective_goals() -> void:
 	var completed_goals: Array[int] = []

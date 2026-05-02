@@ -399,7 +399,7 @@ func _derive_period_meanings(events: Array) -> void:
 		if not event is Dictionary:
 			continue
 
-		var tick: int = event.get("tick", 0)
+		var tick: int = int(event.get("t", event.get("tick", 0)))
 		var period: int = int(tick / 10000)
 
 		if not meaning_by_period.has(period):

@@ -1,204 +1,347 @@
 extends Node
-## Spatial Partitioning System for Infinite World Scaling
-## Manages chunk-based entity culling to prevent performance degradation
+## SpatialManager.gd — Chunk-based spatial partitioning for infinite world culling
+## Tracks active chunks (containing Pawns, Settlements, or active Jobs)
+## Pawns in inactive chunks skip their tick loop (sleep state) to reduce CPU cost
 
-const CHUNK_SIZE: int = 32  # 32x32 tiles per chunk
-const ACTIVATION_RADIUS: int = 2  # Chunks within 2 of active area stay awake
+@onready var GameManager = get_node_or_null("/root/GameManager")
+@onready var JobManager = get_node_or_null("/root/JobManager")
+@onready var SettlementMemory = get_node_or_null("/root/SettlementMemory")
+@onready var TickManager = get_node_or_null("/root/TickManager") # FIX T009
 
-## chunk_key (Vector2i) -> {entities: Array, last_active_tick: int, is_active: bool}
-var _chunks: Dictionary = {}
-## entity_id -> chunk_key
-var _entity_chunk_map: Dictionary = {}
-## settlement_id -> center_chunk_key
-var _settlement_chunks: Dictionary = {}
+## Chunk size in tiles (32x32 = 1024 tiles per chunk)
+const CHUNK_SIZE: int = 32
 
-var _cleanup_counter: int = 0
-const CLEANUP_INTERVAL: int = 600  # Clean up empty chunks every 600 ticks
+## Minimum distance threshold for "wake-up" notification (in chunks)
+## Pawns within this radius of active zones will receive wake signals
+const WAKE_RADIUS_CHUNKS: int = 2
+
+## Chunk storage: Vector2i(chunk_x, chunk_y) -> ChunkData dictionary
+var chunks: Dictionary = {}
+
+## Entity to chunk mapping: entity_id -> Vector2i (chunk_coord)
+var entity_chunks: Dictionary = {}
+
+## Debug tracking: enable with set_debug_enabled(true)
+var debug_enabled: bool = false
+
+
+class ChunkData:
+	var coord: Vector2i
+	var pawns: Array[int] = []
+	var settlements: Array[int] = []
+	var jobs: Array[int] = []
+	var last_activity_tick: int = 0
+	var is_active: bool = false
+	
+	func _init(chunk_coord: Vector2i) -> void:
+		coord = chunk_coord
+		last_activity_tick = 0
+		is_active = false
+	
+	func is_empty() -> bool:
+		return pawns.is_empty() and settlements.is_empty() and jobs.is_empty()
+	
+	func entity_count() -> int:
+		return pawns.size() + settlements.size() + jobs.size()
+
 
 func _ready() -> void:
-	pass
+	# ARCHITECT T006: Connect to central TickManager for updates.
+	# Retain GameManager connection for backwards compatibility / direct scene run if needed.
+	if GameManager != null:
+		GameManager.game_tick.connect(_on_game_tick)
+	if TickManager != null:
+		TickManager.tick_processed.connect(_on_game_tick)
 
-## === CORE API ===
 
-func register_entity(entity_id: Variant, tile_pos: Vector2i, entity_type: String = "pawn") -> void:
-	var chunk_key = _tile_to_chunk(tile_pos)
-	
-	if not _chunks.has(chunk_key):
-		_chunks[chunk_key] = {
-			"entities": [],
-			"last_active_tick": GameManager.tick_count if GameManager else 0,
-			"is_active": true
-		}
-	
-	var chunk_data = _chunks[chunk_key] as Dictionary
-	if entity_id not in chunk_data.entities:
-		chunk_data.entities.append(entity_id)
-	
-	_entity_chunk_map[entity_id] = chunk_key
-	_update_chunk_activity(chunk_key)
-
-func unregister_entity(entity_id: Variant) -> void:
-	if not _entity_chunk_map.has(entity_id):
-		return
-	
-	var chunk_key = _entity_chunk_map[entity_id] as Vector2i
-	_entity_chunk_map.erase(entity_id)
-	
-	if _chunks.has(chunk_key):
-		var chunk_data = _chunks[chunk_key] as Dictionary
-		chunk_data.entities.erase(entity_id)
-
-func update_entity_position(entity_id: Variant, new_tile_pos: Vector2i) -> void:
-	if not _entity_chunk_map.has(entity_id):
-		register_entity(entity_id, new_tile_pos)
-		return
-	
-	var old_chunk_key = _entity_chunk_map[entity_id] as Vector2i
-	var new_chunk_key = _tile_to_chunk(new_tile_pos)
-	
-	if old_chunk_key != new_chunk_key:
-		unregister_entity(entity_id)
-		register_entity(entity_id, new_tile_pos)
-
-func is_chunk_active(tile_pos: Vector2i) -> bool:
-	var chunk_key = _tile_to_chunk(tile_pos)
-	if not _chunks.has(chunk_key):
-		return true  # Unregistered chunks are active by default
-	
-	var chunk_data = _chunks[chunk_key] as Dictionary
-	return chunk_data.is_active
-
-func should_entity_tick(entity_id: Variant) -> bool:
-	if not _entity_chunk_map.has(entity_id):
-		return true
-	
-	var chunk_key = _entity_chunk_map[entity_id] as Vector2i
-	if not _chunks.has(chunk_key):
-		return true
-	
-	var chunk_data = _chunks[chunk_key] as Dictionary
-	return chunk_data.is_active
-
-## === SETTLEMENT TRACKING ===
-
-func register_settlement(settlement_id: int, center_tile: Vector2i) -> void:
-	var chunk_key = _tile_to_chunk(center_tile)
-	_settlement_chunks[settlement_id] = chunk_key
-	_update_chunk_activity(chunk_key)
-
-func unregister_settlement(settlement_id: int) -> void:
-	_settlement_chunks.erase(settlement_id)
-
-## === INTERNAL HELPERS ===
-
-func _tile_to_chunk(tile_pos: Vector2i) -> Vector2i:
-	return Vector2i(
-		floori(float(tile_pos.x) / float(CHUNK_SIZE)),
-		floori(float(tile_pos.y) / float(CHUNK_SIZE))
-	)
-
-func _update_chunk_activity(center_chunk: Vector2i) -> void:
-	# Mark all chunks within activation radius as active
-	for dx in range(-ACTIVATION_RADIUS, ACTIVATION_RADIUS + 1):
-		for dy in range(-ACTIVATION_RADIUS, ACTIVATION_RADIUS + 1):
-			var neighbor_key = Vector2i(center_chunk.x + dx, center_chunk.y + dy)
-			if _chunks.has(neighbor_key):
-				var chunk_data = _chunks[neighbor_key] as Dictionary
-				chunk_data.is_active = true
-				chunk_data.last_active_tick = GameManager.tick_count if GameManager else 0
-
-func _tick(_delta: float) -> void:
-	if GameManager == null:
-		return
-	
-	_cleanup_counter += 1
-	
-	# Update chunk activity based on settlements
-	for settlement_id in _settlement_chunks.keys():
-		var center_chunk = _settlement_chunks[settlement_id] as Vector2i
-		_update_chunk_activity(center_chunk)
-	
-	# Deactivate distant chunks after timeout
-	var current_tick = GameManager.tick_count
-	for chunk_key in _chunks.keys():
-		var chunk_data = _chunks[chunk_key] as Dictionary
-		
-		# Skip if chunk has entities or is near settlement
-		if not chunk_data.entities.is_empty():
-			chunk_data.is_active = true
-			continue
-		
-		var has_nearby_settlement = false
-		for settlement_chunk in _settlement_chunks.values():
-			if _chunk_distance(chunk_key, settlement_chunk) <= ACTIVATION_RADIUS:
-				has_nearby_settlement = true
-				break
-		
-		if has_nearby_settlement:
-			chunk_data.is_active = true
-			continue
-		
-		# Deactivate if inactive for too long
-		if current_tick - chunk_data.last_active_tick > 300:
-			chunk_data.is_active = false
-	
-	# Periodic cleanup of empty, inactive chunks
-	if _cleanup_counter >= CLEANUP_INTERVAL:
-		_cleanup_counter = 0
+func _on_game_tick(_tick: int) -> void:
+	# Periodic chunk cleanup: remove empty chunks to prevent memory bloat
+	if GameManager.periodic_phase_due(_tick, 5000, 1147):
 		_cleanup_empty_chunks()
 
-func _chunk_distance(a: Vector2i, b: Vector2i) -> int:
-	return maxi(absi(a.x - b.x), absi(a.y - b.y))
 
+## Convert world tile position to chunk coordinate
+func tile_to_chunk(tile_pos: Vector2i) -> Vector2i:
+	return Vector2i(
+		int(tile_pos.x) / CHUNK_SIZE,
+		int(tile_pos.y) / CHUNK_SIZE
+	)
+
+
+## Convert chunk coordinate to world tile position (top-left corner)
+func chunk_to_tile(chunk_coord: Vector2i) -> Vector2i:
+	return chunk_coord * CHUNK_SIZE
+
+
+## Get or create chunk data for a coordinate
+func _get_or_create_chunk(chunk_coord: Vector2i) -> ChunkData:
+	if not chunks.has(chunk_coord):
+		chunks[chunk_coord] = ChunkData.new(chunk_coord)
+	return chunks[chunk_coord]
+
+
+## Register an entity (pawn, settlement, or job) at a world position
+## entity_id: unique identifier (pawn.data.id, settlement center_region, or job.id)
+## entity_type: "pawn", "settlement", or "job"
+## world_pos: Vector2i tile position
+func register_entity(entity_id: int, entity_type: String, world_pos: Vector2i) -> void:
+	# Unregister from old chunk if already registered
+	if entity_chunks.has(entity_id):
+		_unregister_from_chunk(entity_id, entity_chunks[entity_id])
+	
+	var chunk_coord: Vector2i = tile_to_chunk(world_pos)
+	var chunk: ChunkData = _get_or_create_chunk(chunk_coord)
+	
+	# Add to appropriate list based on entity type
+	match entity_type:
+		"pawn":
+			if entity_id not in chunk.pawns:
+				chunk.pawns.append(entity_id)
+		"settlement":
+			if entity_id not in chunk.settlements:
+				chunk.settlements.append(entity_id)
+		"job":
+			if entity_id not in chunk.jobs:
+				chunk.jobs.append(entity_id)
+	
+	entity_chunks[entity_id] = chunk_coord
+	chunk.is_active = true
+	chunk.last_activity_tick = GameManager.tick_count
+	
+	if debug_enabled:
+		print("[Spatial] Chunk (%d,%d) waking up — registered %s #%d" % [
+			chunk_coord.x, chunk_coord.y, entity_type, entity_id
+		])
+
+
+## Unregister an entity from all chunks (e.g., when a pawn dies or job completes)
+func unregister_entity(entity_id: int) -> void:
+	if entity_chunks.has(entity_id):
+		var chunk_coord: Vector2i = entity_chunks[entity_id]
+		_unregister_from_chunk(entity_id, chunk_coord)
+		entity_chunks.erase(entity_id)
+
+
+## Internal: remove entity from a specific chunk
+func _unregister_from_chunk(entity_id: int, chunk_coord: Vector2i) -> void:
+	if chunks.has(chunk_coord):
+		var chunk: ChunkData = chunks[chunk_coord]
+		
+		if entity_id in chunk.pawns:
+			chunk.pawns.erase(entity_id)
+		if entity_id in chunk.settlements:
+			chunk.settlements.erase(entity_id)
+		if entity_id in chunk.jobs:
+			chunk.jobs.erase(entity_id)
+		
+		# If chunk is now empty, mark it inactive (will be cleaned up later)
+		if chunk.is_empty():
+			chunk.is_active = false
+			if debug_enabled:
+				print("[Spatial] Chunk (%d,%d) sleeping — now empty" % [
+					chunk_coord.x, chunk_coord.y
+				])
+
+
+## Check if a chunk is active (contains entities or is within wake radius of active chunk)
+func is_chunk_active(chunk_coord: Vector2i) -> bool:
+	if chunks.has(chunk_coord):
+		var chunk: ChunkData = chunks[chunk_coord]
+		if not chunk.is_empty():
+			return true
+	
+	# Check if any neighboring chunk within WAKE_RADIUS_CHUNKS has entities
+	for dx in range(-WAKE_RADIUS_CHUNKS, WAKE_RADIUS_CHUNKS + 1):
+		for dy in range(-WAKE_RADIUS_CHUNKS, WAKE_RADIUS_CHUNKS + 1):
+			if dx == 0 and dy == 0:
+				continue
+			var neighbor: Vector2i = chunk_coord + Vector2i(dx, dy)
+			if chunks.has(neighbor):
+				var neighbor_chunk: ChunkData = chunks[neighbor]
+				if not neighbor_chunk.is_empty():
+					return true
+	
+	return false
+
+
+## Get all active chunks (for debug visualization or broad queries)
+func get_active_chunks() -> Array[Vector2i]:
+	var active: Array[Vector2i] = []
+	for coord in chunks.keys():
+		var chunk: ChunkData = chunks[coord]
+		if not chunk.is_empty():
+			active.append(coord)
+	return active
+
+
+## Get chunk data for inspection (returns a copy for safety)
+func get_chunk_info(chunk_coord: Vector2i) -> Dictionary:
+	if not chunks.has(chunk_coord):
+		return {}
+	
+	var chunk: ChunkData = chunks[chunk_coord]
+	return {
+		"coord": chunk.coord,
+		"pawn_count": chunk.pawns.size(),
+		"settlement_count": chunk.settlements.size(),
+		"job_count": chunk.jobs.size(),
+		"is_active": chunk.is_active,
+		"last_activity_tick": chunk.last_activity_tick,
+		"total_entities": chunk.entity_count(),
+	}
+
+
+## Sync a pawn's chunk registration when it moves
+## Call this from Pawn._on_game_tick or whenever tile_pos changes significantly
+func update_pawn_position(pawn_id: int, new_tile_pos: Vector2i) -> void:
+	if entity_chunks.has(pawn_id):
+		var old_chunk: Vector2i = entity_chunks[pawn_id]
+		var new_chunk: Vector2i = tile_to_chunk(new_tile_pos)
+		
+		# Only update if chunk actually changed (avoid thrashing on movement within chunk)
+		if old_chunk != new_chunk:
+			_unregister_from_chunk(pawn_id, old_chunk)
+			register_entity(pawn_id, "pawn", new_tile_pos)
+	else:
+		# Fallback: register if not already tracked
+		register_entity(pawn_id, "pawn", new_tile_pos)
+
+
+## Update all active jobs in the spatial grid (called from JobManager tick)
+func sync_all_job_chunks() -> void:
+	if JobManager == null:
+		return
+	
+	var active_jobs: Array[Job] = JobManager.get_active_jobs_union()
+	
+	# First, unregister all current job entries (they may have moved or been completed)
+	var old_job_ids: Array[int] = []
+	for entity_id in entity_chunks.keys():
+		var chunk_coord: Vector2i = entity_chunks[entity_id]
+		if chunks.has(chunk_coord):
+			var chunk: ChunkData = chunks[chunk_coord]
+			if entity_id in chunk.jobs:
+				old_job_ids.append(entity_id)
+	
+	for job_id in old_job_ids:
+		unregister_entity(job_id)
+	
+	# Re-register all active jobs at their current tile
+	for job_any in active_jobs:
+		var job: Job = job_any as Job
+		if job == null:
+			continue
+		register_entity(int(job.id), "job", job.tile)
+
+
+## Update all settlements in the spatial grid
+func sync_all_settlement_chunks() -> void:
+	if SettlementMemory == null:
+		return
+	
+	var settlements: Array = SettlementMemory.get_settlements()
+	
+	# Unregister old settlements
+	var old_settlement_ids: Array[int] = []
+	for entity_id in entity_chunks.keys():
+		var chunk_coord: Vector2i = entity_chunks[entity_id]
+		if chunks.has(chunk_coord):
+			var chunk: ChunkData = chunks[chunk_coord]
+			if entity_id in chunk.settlements:
+				old_settlement_ids.append(entity_id)
+	
+	for settlement_id in old_settlement_ids:
+		unregister_entity(settlement_id)
+	
+	# Re-register all settlements at their center region
+	for settlement_any in settlements:
+		var settlement: Dictionary = settlement_any as Dictionary
+		if settlement == null:
+			continue
+		
+		var center_region: int = int(settlement.get("center_region", -1))
+		if center_region < 0:
+			continue
+		
+		# Convert region key to tile coordinate (center of region)
+		# Region key: (rx & 0xFFFF) | ((ry & 0xFFFF) << 16)
+		var rx: int = center_region & 0xFFFF
+		var ry: int = (center_region >> 16) & 0xFFFF
+		
+		# Sign-extend if needed (for negative regions in sign-magnitude representation)
+		if rx & 0x8000:
+			rx = -(0x10000 - rx)
+		if ry & 0x8000:
+			ry = -(0x10000 - ry)
+		
+		# Tile at center of 16x16 region (each region is 16 tiles)
+		var settlement_tile: Vector2i = Vector2i(rx * 16 + 8, ry * 16 + 8)
+		register_entity(center_region, "settlement", settlement_tile)
+
+
+## Internal cleanup: remove empty chunks to prevent unbounded memory growth
 func _cleanup_empty_chunks() -> void:
-	var chunks_to_remove: Array = []
+	var empty_chunks: Array[Vector2i] = []
 	
-	for chunk_key in _chunks.keys():
-		var chunk_data = _chunks[chunk_key] as Dictionary
-		if chunk_data.entities.is_empty() and not chunk_data.is_active:
-			chunks_to_remove.append(chunk_key)
+	for coord in chunks.keys():
+		var chunk: ChunkData = chunks[coord]
+		if chunk.is_empty():
+			empty_chunks.append(coord)
 	
-	for chunk_key in chunks_to_remove:
-		_chunks.erase(chunk_key)
+	for coord in empty_chunks:
+		chunks.erase(coord)
+	
+	if debug_enabled and not empty_chunks.is_empty():
+		print("[Spatial] Cleaned up %d empty chunks" % empty_chunks.size())
 
-## === DEBUG & UTILS ===
 
-func get_chunk_stats() -> Dictionary:
-	var total_chunks = _chunks.size()
-	var active_chunks = 0
-	var total_entities = 0
+## Enable/disable debug logging
+func set_debug_enabled(enabled: bool) -> void:
+	debug_enabled = enabled
+
+
+## Get total stats (for HUD or diagnostics)
+func get_stats() -> Dictionary:
+	var active_chunks: int = 0
+	var total_pawns: int = 0
+	var total_jobs: int = 0
+	var total_settlements: int = 0
 	
-	for chunk_key in _chunks.keys():
-		var chunk_data = _chunks[chunk_key] as Dictionary
-		if chunk_data.is_active:
+	for chunk_any in chunks.values():
+		var chunk: ChunkData = chunk_any as ChunkData
+		if not chunk.is_empty():
 			active_chunks += 1
-		total_entities += chunk_data.entities.size()
+		total_pawns += chunk.pawns.size()
+		total_jobs += chunk.jobs.size()
+		total_settlements += chunk.settlements.size()
 	
 	return {
-		"total_chunks": total_chunks,
+		"total_chunks": chunks.size(),
 		"active_chunks": active_chunks,
-		"sleeping_chunks": total_chunks - active_chunks,
-		"total_entities": total_entities,
-		"avg_entities_per_chunk": float(total_entities) / float(maxi(1, total_chunks))
+		"total_pawns": total_pawns,
+		"total_jobs": total_jobs,
+		"total_settlements": total_settlements,
+		"chunk_size": CHUNK_SIZE,
 	}
 
-func debug_print_status() -> void:
-	var stats = get_chunk_stats()
-	print("[SpatialManager] Chunks: %d total, %d active, %d sleeping" % [
-		stats.total_chunks, stats.active_chunks, stats.sleeping_chunks
-	])
-	print("[SpatialManager] Entities: %d total, %.2f avg/chunk" % [
-		stats.total_entities, stats.avg_entities_per_chunk
-	])
 
-func to_dict() -> Dictionary:
-	return {
-		"chunks": _chunks,
-		"entity_chunk_map": _entity_chunk_map,
-		"settlement_chunks": _settlement_chunks
-	}
+## Performance profile for debug HUDs: emphasizes how much of the grid is still active.
+func get_performance_profile() -> Dictionary:
+	var stats: Dictionary = get_stats()
+	var total_chunks: int = int(stats.get("total_chunks", 0))
+	var active_chunks: int = int(stats.get("active_chunks", 0))
+	var dormant_chunks: int = maxi(0, total_chunks - active_chunks)
+	var active_ratio: float = 0.0
+	if total_chunks > 0:
+		active_ratio = float(active_chunks) / float(total_chunks)
+	stats["dormant_chunks"] = dormant_chunks
+	stats["active_ratio"] = active_ratio
+	stats["culled_ratio"] = 1.0 - active_ratio if total_chunks > 0 else 0.0
+	stats["wake_radius_chunks"] = WAKE_RADIUS_CHUNKS
+	return stats
 
-func from_dict(data: Dictionary) -> void:
-	_chunks = data.get("chunks", {})
-	_entity_chunk_map = data.get("entity_chunk_map", {})
-	_settlement_chunks = data.get("settlement_chunks", {})
+
+## Clear all spatial data (e.g., on new save/load)
+func clear() -> void:
+	chunks.clear()
+	entity_chunks.clear()

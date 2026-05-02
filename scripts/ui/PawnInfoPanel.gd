@@ -98,6 +98,7 @@ var _player_context_pawn_id: int = -1
 var _player_context_picker_visible: bool = false
 var _traits_label: Label = null
 var _lineage_label: Label = null
+var _simple_lineage_label: Label = null
 var _appearance_label: Label = null
 var _mood_status_label: Label = null
 var _crisis_level_label: Label = null
@@ -107,6 +108,8 @@ var _social_label: Label = null
 var _identity_label: Label = null
 var _settlement_label: Label = null
 var _action_skills_label: Label = null
+var _tier_label: Label = null
+var _tier_bar: ProgressBar = null
 var _portrait_cells: Array[ColorRect] = []
 var _poll_accum_sec: float = 0.0
 var _last_ui_signature: String = ""
@@ -225,6 +228,38 @@ func _build_ui() -> void:
 	name_col.add_child(_subtitle_label)
 	_header_row.add_child(name_col)
 
+	# Tier indicator (small bar like need indicators)
+	var tier_col := VBoxContainer.new()
+	tier_col.name = "TierColumn"
+	tier_col.size_flags_horizontal = Control.SIZE_SHRINK_END
+	tier_col.add_theme_constant_override("separation", 2)
+	_header_row.add_child(tier_col)
+
+	var tier_header := _make_label("TIER", FONT_SMALL, ACCENT)
+	tier_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tier_col.add_child(tier_header)
+
+	_tier_bar = ProgressBar.new()
+	_tier_bar.min_value = 0.0
+	_tier_bar.max_value = 100.0
+	_tier_bar.value = 0.0
+	_tier_bar.show_percentage = false
+	_tier_bar.custom_minimum_size = Vector2(40, 8)
+	_tier_bar.size_flags_horizontal = Control.SIZE_SHRINK_END
+	var tier_fill := StyleBoxFlat.new()
+	tier_fill.bg_color = Color8(255, 209, 102)
+	tier_fill.set_corner_radius_all(2)
+	_tier_bar.add_theme_stylebox_override("fill", tier_fill)
+	var tier_bg := StyleBoxFlat.new()
+	tier_bg.bg_color = Color(0.12, 0.13, 0.16, 1.0)
+	tier_bg.set_corner_radius_all(2)
+	_tier_bar.add_theme_stylebox_override("background", tier_bg)
+	tier_col.add_child(_tier_bar)
+
+	_tier_label = _make_label("1", FONT_SMALL, TEXT_BRIGHT)
+	_tier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tier_col.add_child(_tier_label)
+
 	# Current activity (compact)
 	_state_label = _make_label("", FONT_BODY, ACCENT)
 	_state_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -297,6 +332,11 @@ func _populate_identity_tab() -> void:
 	_lineage_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_lineage_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tab_identity.add_child(_lineage_label)
+
+	# Simple lineage display (Born: Parent | Household)
+	_simple_lineage_label = _make_label("", FONT_SMALL, TEXT_BRIGHT)
+	_simple_lineage_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_identity.add_child(_simple_lineage_label)
 
 	_appearance_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_appearance_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -655,6 +695,29 @@ func _refresh() -> void:
 		else:
 			_subtitle_label.text = "%s · %s · bias %s" % [arc_bits, prof, hk]
 		_refresh_portrait_strip(d)
+
+	# Update tier indicator from ProgressionSystem
+	if _tier_bar != null and _tier_label != null:
+		if Engine.has_singleton("ProgressionSystem") or get_node_or_null("/root/ProgressionSystem") != null:
+			var prog_sys = get_node_or_null("/root/ProgressionSystem")
+			if prog_sys and prog_sys.has_method("get_tier_name"):
+				var tier_name: String = prog_sys.get_tier_name(int(d.id))
+				var tier: int = prog_sys.get_tier(int(d.id)) if prog_sys.has_method("get_tier") else 0
+				var impact: int = prog_sys.get_impact(int(d.id)) if prog_sys.has_method("get_impact") else 0
+				_tier_label.text = tier_name
+				_tier_bar.value = float(impact)
+				# Color based on tier
+				var tier_color: Color = _tier_color(tier)
+				var tier_fill := StyleBoxFlat.new()
+				tier_fill.bg_color = tier_color
+				tier_fill.set_corner_radius_all(2)
+				_tier_bar.add_theme_stylebox_override("fill", tier_fill)
+			else:
+				_tier_label.text = "Unknown"
+				_tier_bar.value = 0.0
+		else:
+			_tier_label.text = "Unknown"
+			_tier_bar.value = 0.0
 	
 	_state_label.text = _pawn.describe_state()
 	
@@ -663,6 +726,18 @@ func _refresh() -> void:
 		_traits_label.text = "Traits: %s" % d.traits_display()
 	if _lineage_label != null:
 		_lineage_label.text = _lineage_block(d)
+	if _simple_lineage_label != null:
+		var parent_name: String = "Unknown"
+		if d.parent_a_id >= 0:
+			var parent_pd = d._get_parent_data(d.parent_a_id)
+			if parent_pd != null:
+				parent_name = parent_pd.display_name
+		
+		var household_info: String = "None"
+		if d.household_id >= 0:
+			household_info = "Household #" + str(d.household_id)
+		
+		_simple_lineage_label.text = "Born: " + parent_name + " | " + household_info
 	if _appearance_label != null:
 		_appearance_label.text = "Appearance: %s, %s" % [_body_type_label(d.body_type), _hair_style_label(d.hair_style)]
 	if _liking_label != null:
@@ -927,6 +1002,19 @@ func _profession_inheritance_note(d: PawnData) -> String:
 
 func _lineage_block(d: PawnData) -> String:
 	var lines: PackedStringArray = PackedStringArray()
+	if d.bloodline_id >= 0:
+		var bloodline_line: String = "Bloodline: #%d" % d.bloodline_id
+		if has_node("/root/BloodlineSystem"):
+			var bloodline_sys: Node = get_node("/root/BloodlineSystem")
+			if bloodline_sys != null and bloodline_sys.has_method("get_bloodline_info"):
+				var info: Dictionary = bloodline_sys.call("get_bloodline_info", d.bloodline_id)
+				if not info.is_empty():
+					bloodline_line += " · founder %s · members %d · deaths %d" % [
+						str(info.get("founder_name", "unknown")),
+						int(info.get("living_members", 0)),
+						int(info.get("historical_deaths", 0)),
+					]
+		lines.append(bloodline_line)
 	if d.parent_a_id >= 0 or d.parent_b_id >= 0:
 		lines.append("Parent A: %s" % _parent_line(d.parent_a_id))
 		lines.append("Parent B: %s" % _parent_line(d.parent_b_id))
@@ -1093,3 +1181,22 @@ static func _hair_style_label(hair_style: int) -> String:
 			return "Bun"
 		_:
 			return "Short hair"
+
+## Calculate tier (1-5) from pawn level. Each tier spans 5 levels.
+static func _level_to_tier(level: int) -> int:
+	return clampi((level - 1) / 5 + 1, 1, 5)
+
+## Calculate progress (0-100) within current tier.
+static func _tier_progress(level: int) -> float:
+	var tier_start: int = (_level_to_tier(level) - 1) * 5 + 1
+	return float(level - tier_start) / 4.0 * 100.0
+
+## Get tier color (golden for higher tiers).
+static func _tier_color(tier: int) -> Color:
+	match tier:
+		1: return Color8(180, 180, 180)  # Gray
+		2: return Color8(76, 175, 80)    # Green
+		3: return Color8(33, 150, 243)    # Blue
+		4: return Color8(156, 39, 176)    # Purple
+		5: return Color8(255, 193, 7)     # Gold
+		_: return Color8(180, 180, 180)

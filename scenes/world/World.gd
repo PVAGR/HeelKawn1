@@ -27,6 +27,9 @@ var _bed_tiles: Array[Vector2i] = []
 ## if not present in this dict OR mapped to null.
 var _bed_occupants: Dictionary = {}
 
+## Loose item stacks on the ground: tile -> { Item.Type -> qty }. Not persisted in WorldData (v1).
+var _ground_items: Dictionary = {}
+
 ## Cached base image + texture so we can patch individual tiles in-place
 ## (e.g. when a feature is harvested) without re-rendering the whole world.
 var _image: Image
@@ -37,6 +40,8 @@ var _player_meaning_region_state: Dictionary = {}
 var _player_meaning_region_label: Dictionary = {}
 ## 16x16 region_key -> IntentMemory intent int (derived; rebuilt with terrain refresh).
 var _player_meaning_region_intent: Dictionary = {}
+## 16x16 region_key -> settlement center region key (for center-marker overlays).
+var _player_meaning_region_center: Dictionary = {}
 ## Rebuilt once per terrain raster: region_key -> culture type for built-feature tint (O(settlements), not O(tiles)).
 var _region_culture_tint_cache: Dictionary = {}
 ## Off-Main autoloads: coalesce at most one end-of-idle full [refresh_terrain_scar_tint] + [refresh_pawn_historic_path_weights] per [GameManager] tick.
@@ -68,6 +73,7 @@ func load_world_data(new_data: WorldData) -> void:
 	_render()
 	_bed_tiles.clear()
 	_bed_occupants.clear()
+	_ground_items.clear()
 	resync_beds_from_map()
 
 
@@ -84,6 +90,7 @@ func generate(world_seed: int) -> void:
 	# on are gone.
 	_bed_tiles.clear()
 	_bed_occupants.clear()
+	_ground_items.clear()
 	var dt: int = Time.get_ticks_msec() - t0
 	if OS.is_debug_build() and GameManager.verbose_logs():
 		print(
@@ -287,6 +294,7 @@ func _rebuild_player_meaning_region_state() -> void:
 	_player_meaning_region_state.clear()
 	_player_meaning_region_label.clear()
 	_player_meaning_region_intent.clear()
+	_player_meaning_region_center.clear()
 	for s in SettlementMemory.settlements:
 		if s is not Dictionary:
 			continue
@@ -306,6 +314,7 @@ func _rebuild_player_meaning_region_state() -> void:
 			_player_meaning_region_state[rk2] = st
 			_player_meaning_region_label[rk2] = label
 			_player_meaning_region_intent[rk2] = intent
+			_player_meaning_region_center[rk2] = ckr
 
 
 ## Stacks on scar; deterministic per 16x16 region (settlement state only).
@@ -315,28 +324,36 @@ func _apply_player_meaning_tint(c: Color, x: int, y: int) -> Color:
 		return c
 	var st: String = str(_player_meaning_region_state.get(rk, ""))
 	var label: String = str(_player_meaning_region_label.get(rk, "quiet"))
-	var intent: int = int(_player_meaning_region_intent.get(rk, IntentMemory.INTENT_HOLD))
+	var now_tick: int = GameManager.tick_count
 	if st == "permanently_abandoned":
 		var yv0: float = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 		var gray0: Color = Color(yv0, yv0, yv0, 1.0)
-		c = c.lerp(gray0, 0.18 if label == "grave" else 0.13)
-		return c * Color(0.84, 0.88, 0.96, 1.0)
+		c = c.lerp(gray0, 0.28 if label == "grave" else 0.2)
+		c = c * Color(0.82, 0.85, 0.9, 1.0)
+		var center_rk: int = int(_player_meaning_region_center.get(rk, -1))
+		if center_rk >= 0:
+			var cx: int = (center_rk & 0xFFFF) * 16 + 8
+			var cy: int = ((center_rk >> 16) & 0xFFFF) * 16 + 8
+			var md: int = abs(x - cx) + abs(y - cy)
+			if md <= 2:
+				# Deterministic grave marker overlay at settlement center.
+				return c.lerp(Color(0.86, 0.86, 0.9, 1.0), 0.5)
+		if (abs((x + y + int(now_tick / 800)) % 9) == 0):
+			c = c.lerp(Color(0.78, 0.8, 0.85, 1.0), 0.18)
+		return c
 	if st == "abandoned":
 		var yv: float = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 		var gray: Color = Color(yv, yv, yv, 1.0)
-		c = c.lerp(gray, 0.105 if label == "bloodied" else 0.085)
-		c = c * Color(0.91, 0.91, 0.89, 1.0)
-		if intent == IntentMemory.INTENT_ABANDON:
-			c = c.lerp(c * Color(0.94, 0.97, 1.03, 1.0), 0.04)
-		elif intent == IntentMemory.INTENT_GROW:
-			c = c.lerp(c * Color(1.02, 1.03, 1.01, 1.0), 0.02)
+		# Gray static: deterministic, non-pulsing abandoned presentation.
+		c = c.lerp(gray, 0.18 if label == "bloodied" else 0.14)
+		c = c * Color(0.88, 0.88, 0.88, 1.0)
 		return c
 	if st == "revivable":
-		c = c.lerp(c * Color(1.03, 1.05, 1.02, 1.0), 0.08 if label == "scarred" else 0.06)
-		if intent == IntentMemory.INTENT_GROW:
-			c = c.lerp(c * Color(1.03, 1.02, 0.99, 1.0), 0.03)
-		elif intent == IntentMemory.INTENT_ABANDON:
-			c = c.lerp(c * Color(0.98, 0.99, 1.02, 1.0), 0.03)
+		# Green pulse to show rebirth readiness.
+		var pulse: float = 0.5 + 0.5 * sin(float(now_tick + rk) * 0.01)
+		var pulse_strength: float = lerpf(0.08, 0.22, pulse)
+		var pulse_color: Color = Color(0.8, 1.15, 0.82, 1.0)
+		c = c.lerp(c * pulse_color, pulse_strength)
 		return c
 	return c
 
@@ -715,6 +732,54 @@ func find_free_bed_for(pawn: Pawn, from_tile: Vector2i) -> Vector2i:
 
 func bed_count() -> int:
 	return _bed_tiles.size()
+
+
+## Add loose items on the ground at `tile` (merge stacks). Ignores invalid tiles or NONE type.
+func add_ground_item(tile: Vector2i, item_type: int, qty: int) -> void:
+	if data == null or not data.in_bounds(tile.x, tile.y):
+		return
+	if item_type == Item.Type.NONE or qty <= 0:
+		return
+	if not _ground_items.has(tile):
+		_ground_items[tile] = {}
+	var inv: Dictionary = _ground_items[tile]
+	inv[item_type] = int(inv.get(item_type, 0)) + qty
+
+
+## Remove up to `qty` of `item_type` at `tile`. Returns amount actually removed.
+func take_ground_items(tile: Vector2i, item_type: int, qty: int) -> int:
+	if item_type == Item.Type.NONE or qty <= 0:
+		return 0
+	if not _ground_items.has(tile):
+		return 0
+	var inv: Dictionary = _ground_items[tile]
+	var have: int = int(inv.get(item_type, 0))
+	var taken: int = mini(have, qty)
+	if taken <= 0:
+		return 0
+	inv[item_type] = have - taken
+	if int(inv[item_type]) <= 0:
+		inv.erase(item_type)
+	if inv.is_empty():
+		_ground_items.erase(tile)
+	return taken
+
+
+## Copy of per-type stacks at `tile` (empty if none).
+func get_ground_stacks_at(tile: Vector2i) -> Dictionary:
+	if not _ground_items.has(tile):
+		return {}
+	return (_ground_items[tile] as Dictionary).duplicate()
+
+
+func has_any_ground_item_at(tile: Vector2i) -> bool:
+	if not _ground_items.has(tile):
+		return false
+	var inv: Dictionary = _ground_items[tile]
+	for t in inv.keys():
+		if int(inv[t]) > 0:
+			return true
+	return false
 
 
 ## After loading a world from save (or any bulk feature change), rescan the

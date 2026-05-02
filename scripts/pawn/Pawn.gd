@@ -33,6 +33,7 @@ const DRAFT_CHEVRON_Y: float = -12.0
 const CARRY_OFFSET: Vector2 = Vector2(0.0, -6.0)
 const CARRY_SIZE: Vector2 = Vector2(3.5, 3.5)
 const _WM = preload("res://autoloads/WorldMemory.gd")
+@onready var SpatialManager = get_node_or_null("/root/SpatialManager") # ARCHITECT T006
 
 # -------------------- need decay tuning --------------------
 
@@ -274,6 +275,10 @@ var _eat_ticks_left: int = 0
 var _teaching_target: Pawn = null
 var _teaching_ticks_left: int = 0
 var _teaching_knowledge_type: int = -1
+var _last_teach_tick: int = 0
+var _teach_cooldown_ticks: int = 0  # Will be set in _ready()
+## Student progress tracking: pawn_id -> {skill: level, ticks_taught: int}
+var _students_taught: Dictionary = {}
 
 ## Challenge state variables
 var _challenge_target: Pawn = null
@@ -330,6 +335,13 @@ var _last_neural_decision_log_tick: int = -1000000
 var _last_inspect_msg: String = ""
 var _last_inspect_tick: int = -999999
 var _last_teaching_memory_event_tick: int = -TEACHING_MEMORY_EVENT_MIN_INTERVAL_TICKS
+var _last_body_needs_tick_applied: int = -1
+## Autonomy-driven draft walks (social / grudge); not player draft.
+var _autonomy_draft_purpose: String = ""
+var _autonomy_draft_peer_id: int = -1
+var _last_autonomy_feedback: String = ""
+var _next_autonomy_grudge_tick: int = 0
+var _next_autonomy_social_seek_tick: int = 0
 ## One [WorldAI.build_idle_parity_context_for_pawn] snapshot per pawn per tick (NPC / player parity).
 var _parity_context_tick: int = -1
 var _parity_context: Dictionary = {}
@@ -346,6 +358,18 @@ var _pawn_sim_tick_armed: bool = false
 ## parser can fail to resolve the `data` member on class_name Pawn in autoload scripts.
 func get_pawn_data() -> PawnData:
 	return data
+
+
+func apply_body_needs() -> void:
+	if data == null:
+		return
+	var tick_now: int = GameManager.tick_count if GameManager != null else -1
+	if tick_now >= 0 and _last_body_needs_tick_applied == tick_now:
+		_publish_player_body_needs_to_hud_if_incarnated()
+		return
+	_last_body_needs_tick_applied = tick_now
+	_decay_needs()
+	_publish_player_body_needs_to_hud_if_incarnated()
 
 
 func get_state_name() -> String:
@@ -749,21 +773,25 @@ func _ready() -> void:
 	_sfx.volume_db = -5.0
 	add_child(_sfx)
 	_action_popup = $ActionPopup
+	add_to_group("tickable")
 	call_deferred("_pawn_connect_sim_tick_deferred")
 
 
 func _pawn_connect_sim_tick_deferred() -> void:
 	if not is_instance_valid(self):
 		return
-	if GameManager == null:
-		return
 	if data == null or _world == null:
-		push_warning("Pawn: deferred game_tick connect skipped — not bound (path=%s)" % str(get_path()))
+		push_warning("Pawn: deferred tick connect skipped — not bound (path=%s)" % str(get_path()))
 		return
-	if GameManager.game_tick.is_connected(_on_game_tick):
+	# Pawns are in "tickable" group - TickManager calls _on_world_tick() directly.
+	# No need to connect to signal (avoids double-processing).
+	# Fallback: if TickManager not available, use GameManager.
+	if not has_node("/root/TickManager"):
+		if GameManager != null:
+			if not GameManager.game_tick.is_connected(_on_world_tick):
+				GameManager.game_tick.connect(_on_world_tick)
 		_pawn_sim_tick_armed = true
 		return
-	GameManager.game_tick.connect(_on_game_tick)
 	_pawn_sim_tick_armed = true
 
 
@@ -775,6 +803,8 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	_reset_behavior_profile()
 	_world = world
 	position = world_pos
+	if SpatialManager != null: # ARCHITECT T006
+		SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 	_state = State.IDLE
 	_clear_path()
 	_reserved_bed = Vector2i(-1, -1)
@@ -787,8 +817,16 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	_perception_scan_cursor = 0
 	# Load saved age as years for display
 	data.age_years = float(data.age)
+	
+	# Teaching cooldown (3 days). bind() runs before add_child; resolve WorldClock from scene root.
+	var tree_bt: SceneTree = Engine.get_main_loop() as SceneTree
+	if tree_bt != null and tree_bt.root != null:
+		var wc_bt: Node = tree_bt.root.get_node_or_null("WorldClock")
+		if wc_bt != null and "ticks_per_day" in wc_bt:
+			_teach_cooldown_ticks = int(wc_bt.ticks_per_day) * 3
 	_clear_cohort_state()
 	add_to_group("pawns")
+	add_to_group("tickable")
 	if not _initial_knowledge_granted:
 		_grant_initial_knowledge()
 		_initial_knowledge_granted = true
@@ -798,10 +836,6 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	_parity_context_tick = -1
 	_parity_context.clear()
 	_request_redraw()
-	# Register with SpatialManager for infinite world culling
-	if SpatialManager != null and data != null:
-		var tile_pos = Vector2i(int(world_pos.x), int(world_pos.y))
-		SpatialManager.register_entity(int(data.id), tile_pos, "pawn")
 
 
 func _reset_neural_priority_cache() -> void:
@@ -811,14 +845,18 @@ func _reset_neural_priority_cache() -> void:
 
 func _exit_tree() -> void:
 	_pawn_sim_tick_armed = false
-	if GameManager != null and GameManager.game_tick.is_connected(_on_game_tick):
-		GameManager.game_tick.disconnect(_on_game_tick)
+	# Disconnect from TickManager if connected
+	var tick_manager = get_node_or_null("/root/TickManager")
+	if tick_manager != null and tick_manager.tick_processed.is_connected(_on_world_tick):
+		tick_manager.tick_processed.disconnect(_on_world_tick)
+	# Disconnect from GameManager if connected (backward compatibility)
+	if GameManager != null and GameManager.game_tick.is_connected(_on_world_tick):
+		GameManager.game_tick.disconnect(_on_world_tick)
 	# Unregister pawn data so static registry stays accurate
 	if data != null:
 		PawnData.unregister_pawn_data(int(data.id))
-	# Unregister from SpatialManager
-	if SpatialManager != null and data != null:
-		SpatialManager.unregister_entity(int(data.id))
+		if SpatialManager != null: # ARCHITECT T006
+			SpatialManager.unregister_entity(int(data.id))
 
 
 ## Re-read the spawn tile’s [CulturalMemory] entry (e.g. after load once ruins are applied). Does not run every tick.
@@ -858,6 +896,8 @@ func _grant_initial_knowledge() -> void:
 ## Player-ordered direct move. Cancels a claimed work job, drops bed/zone
 ## holds, and paths to a passable tile (Kenshi / RimWorld "draft" feel).
 func draft_goto(world_tile: Vector2i) -> void:
+	_autonomy_draft_purpose = ""
+	_autonomy_draft_peer_id = -1
 	if _world == null or _world.data == null:
 		return
 	if not _world.data.in_bounds(world_tile.x, world_tile.y):
@@ -882,6 +922,39 @@ func draft_goto(world_tile: Vector2i) -> void:
 	_request_redraw()
 
 
+## NPC autonomy: same pathing as [draft_goto] but tags arrival for social / grudge resolution.
+func autonomy_draft_goto(world_tile: Vector2i, purpose: String, peer_id: int = -1) -> void:
+	if _world == null or _world.data == null:
+		return
+	if not _world.data.in_bounds(world_tile.x, world_tile.y):
+		return
+	if not _world.pathfinder.is_passable(world_tile):
+		return
+	_autonomy_draft_purpose = purpose
+	_autonomy_draft_peer_id = peer_id
+	release_job_if_any()
+	_release_bed_if_reserved()
+	_target_zone = null
+	_clear_path()
+	_state = State.DRAFT_WALK
+	if data.tile_pos == world_tile:
+		_autonomy_draft_purpose = ""
+		_autonomy_draft_peer_id = -1
+		_state = State.IDLE
+		_request_redraw()
+		return
+	var path: Array[Vector2i] = _path_for_pawn(world_tile)
+	if path.is_empty():
+		_autonomy_draft_purpose = ""
+		_autonomy_draft_peer_id = -1
+		_state = State.IDLE
+		_request_redraw()
+		return
+	_notify_autonomy_feedback(purpose)
+	_start_path(path)
+	_request_redraw()
+
+
 ## Tick-safe one-tile move used by deterministic player input queue.
 func move(tile_delta: Vector2i) -> bool:
 	if _world == null or data == null:
@@ -895,10 +968,218 @@ func move(tile_delta: Vector2i) -> bool:
 	return true
 
 
+func _notify_autonomy_feedback(action_key: String) -> void:
+	if action_key.is_empty() or action_key == _last_autonomy_feedback:
+		return
+	_last_autonomy_feedback = action_key
+	if OS.is_debug_build():
+		print("[Autonomy] %s → %s" % [data.display_name if data != null else "?", action_key])
+	if _action_popup != null and data != null and GameManager != null and GameManager.game_speed < 60.0:
+		_action_popup.show_action_context(data.display_name, "Autonomy: %s" % action_key, "", "", "")
+
+
+func _finish_autonomy_draft_walk(purpose: String, peer_id: int) -> void:
+	if data == null or GameManager == null:
+		return
+	var tick: int = GameManager.tick_count
+	var peer: Pawn = _find_pawn_by_id(peer_id)
+	match purpose:
+		"social_seek":
+			if peer != null and is_instance_valid(peer) and peer.data != null:
+				data.add_social_rapport(peer_id, 3)
+				peer.data.add_social_rapport(int(data.id), 2)
+				data.mood = min(100.0, data.mood + 0.35)
+				peer.data.mood = min(100.0, peer.data.mood + 0.25)
+				if data.neural_network != null and data.neural_network.has_method("record_memory_event"):
+					data.neural_network.record_memory_event(tick, "social_visit", peer_id, 0.35)
+		"grudge_confront":
+			if peer != null and is_instance_valid(peer) and peer.data != null:
+				data.update_social_memory(peer_id, 0.0, 0.0, -0.15, -0.05, "autonomy_confront")
+				data.mood = clampf(data.mood - 0.4, 0.0, 100.0)
+				if data.neural_network != null and data.neural_network.has_method("record_memory_event"):
+					data.neural_network.record_memory_event(tick, "confront_attempt", peer_id, -0.08)
+		_:
+			pass
+	_next_autonomy_grudge_tick = tick + 80
+	_next_autonomy_social_seek_tick = tick + 50
+
+
+func _find_pawn_by_id(pid: int) -> Pawn:
+	if pid < 0:
+		return null
+	var spawner: PawnSpawner = _resolve_pawn_spawner()
+	if spawner == null:
+		return null
+	for p in spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pid:
+			return p
+	return null
+
+
+func _pick_passable_near_tile(origin: Vector2i, goal: Vector2i) -> Vector2i:
+	if _world == null:
+		return Vector2i(-1, -1)
+	var best: Vector2i = Vector2i(-1, -1)
+	var best_d: int = 1_000_000
+	var dirs: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+		Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1),
+	]
+	for d in dirs:
+		var t: Vector2i = goal + d
+		if not _world.data.in_bounds(t.x, t.y):
+			continue
+		if not _world.pathfinder.is_passable(t):
+			continue
+		var dd: int = origin.distance_squared_to(t)
+		if dd < best_d:
+			best_d = dd
+			best = t
+	return best
+
+
+func _try_autonomy_grudge_confront() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	if data.neural_network == null:
+		return false
+	var nn: Variant = data.neural_network
+	if not nn.has_method("get_strongest_grudge_target_id"):
+		return false
+	var tick: int = GameManager.tick_count
+	if tick < _next_autonomy_grudge_tick:
+		return false
+	if posmod(tick + int(data.id) * 11, 41) != 0:
+		return false
+	var gid: int = int(nn.get_strongest_grudge_target_id())
+	if gid < 0:
+		return false
+	var gmag: float = absf(float(nn.grudge_toward(gid)))
+	if gmag < 0.08:
+		return false
+	var p_roll: float = clampf(0.06 + gmag * 0.22, 0.05, 0.38)
+	if not WorldRNG.chance_for(_pawn_stream("grudge_seek"), p_roll, _pawn_salt(71)):
+		return false
+	var target: Pawn = _find_pawn_by_id(gid)
+	if target == null or not is_instance_valid(target) or target.data == null:
+		return false
+	var near_tile: Vector2i = _pick_passable_near_tile(data.tile_pos, target.data.tile_pos)
+	if near_tile.x < 0:
+		return false
+	autonomy_draft_goto(near_tile, "grudge_confront", gid)
+	return _state == State.DRAFT_WALK
+
+
+func _try_autonomy_social_seek() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	if data.neural_network == null:
+		return false
+	if str(data.neural_network.get_autonomy_hint()) != "social":
+		return false
+	var tick: int = GameManager.tick_count
+	if tick < _next_autonomy_social_seek_tick:
+		return false
+	if posmod(tick + int(data.id) * 5, 37) != 0:
+		return false
+	var spawner: PawnSpawner = _resolve_pawn_spawner()
+	if spawner == null:
+		return false
+	var best_peer: Pawn = null
+	var best_score: float = -1.0
+	var seen: int = 0
+	for p in spawner.pawns:
+		seen += 1
+		if seen > 28:
+			break
+		if p == null or not is_instance_valid(p) or p == self or p.data == null:
+			continue
+		var d2: int = data.tile_pos.distance_squared_to(p.data.tile_pos)
+		if d2 > 400:
+			continue
+		var pid_i: int = int(p.data.id)
+		var rap: float = float(data.get_social_rapport(pid_i))
+		var score: float = rap / 3000.0 - float(d2) / 20000.0
+		if score > best_score:
+			best_score = score
+			best_peer = p
+	if best_peer == null:
+		return false
+	var near_tile: Vector2i = _pick_passable_near_tile(data.tile_pos, best_peer.data.tile_pos)
+	if near_tile.x < 0:
+		return false
+	autonomy_draft_goto(near_tile, "social_seek", int(best_peer.data.id))
+	return _state == State.DRAFT_WALK
+
+
+func _can_use_manual_ground_item_actions() -> bool:
+	match _state:
+		State.WORKING, State.WALKING_TO_JOB, State.HAULING, State.GOING_TO_EAT, State.EATING, State.SLEEPING, State.FETCHING_MATERIAL, State.GOING_TO_BED, State.TEACHING, State.CHALLENGE, State.CRAFTING:
+			return false
+		_:
+			return true
+
+
+## Pick up one logical stack from the ground at the current tile (deterministic type order).
+## Returns false if busy, hands full of a different item, or nothing on the tile.
+func try_pickup_item() -> bool:
+	if data == null or _world == null:
+		return false
+	if not _can_use_manual_ground_item_actions():
+		return false
+	var tile: Vector2i = data.tile_pos
+	var stacks: Dictionary = _world.get_ground_stacks_at(tile)
+	if stacks.is_empty():
+		return false
+	var type_keys: Array = stacks.keys()
+	type_keys.sort()
+	var chosen_type: int = Item.Type.NONE
+	var on_ground: int = 0
+	for tk in type_keys:
+		var q: int = int(stacks[tk])
+		if q > 0:
+			chosen_type = int(tk)
+			on_ground = q
+			break
+	if chosen_type == Item.Type.NONE or on_ground <= 0:
+		return false
+	if data.is_carrying() and data.carrying != chosen_type:
+		return false
+	var taken: int = _world.take_ground_items(tile, chosen_type, on_ground)
+	if taken <= 0:
+		return false
+	if data.carrying == chosen_type:
+		data.carrying_qty += taken
+	else:
+		data.carrying = chosen_type
+		data.carrying_qty = taken
+	_request_redraw()
+	return true
+
+
+## Place the carried stack on the ground at the current tile.
+func drop_item() -> bool:
+	if data == null or _world == null:
+		return false
+	if not _can_use_manual_ground_item_actions():
+		return false
+	if not data.is_carrying():
+		return false
+	var tile: Vector2i = data.tile_pos
+	var it: int = data.carrying
+	var q: int = data.carrying_qty
+	_world.add_ground_item(tile, it, q)
+	data.clear_carry()
+	_request_redraw()
+	return true
+
+
 ## Contextual player action hook used by deterministic player input queue.
 func interact() -> bool:
 	if data == null:
 		return false
+	if try_pickup_item():
+		return true
 	if data.is_carrying():
 		_begin_haul_to_stockpile()
 		return true
@@ -925,8 +1206,6 @@ func _perform_presence_action() -> void:
 		"tile": {"x": data.tile_pos.x, "y": data.tile_pos.y},
 		"mood": int(round(data.mood)),
 	})
-	if GameManager.verbose_logs():
-		print("[Pawn] %s grounds themselves at region=%d state=%s (mood=%.1f)" % [data.display_name, rk, settlement_state, data.mood])
 	_request_redraw()
 
 
@@ -960,8 +1239,6 @@ func _perform_inspect_action() -> void:
 		"tags": tags,
 		"tile": {"x": data.tile_pos.x, "y": data.tile_pos.y},
 	})
-	if GameManager.verbose_logs():
-		print("[Pawn] %s inspects region=%d meaning=%s tags=%s" % [data.display_name, region_key_for_meaning, meaning_label, str(tags)])
 	# Record ephemeral inspect message for immediate HUD feedback
 	_last_inspect_msg = "%s — %s" % [meaning_label, (", ".join(tags) if tags.size() > 0 else "no notable tags")]
 	_last_inspect_tick = GameManager.tick_count
@@ -1145,9 +1422,6 @@ func nudge_if_standing_on_solid() -> void:
 	position = _world.tile_to_world(dest)
 	_target_tile = dest
 	_target_world_pos = position
-	# Update SpatialManager with new position
-	if SpatialManager != null and data != null:
-		SpatialManager.update_entity_position(int(data.id), dest)
 	_request_redraw()
 
 
@@ -1179,9 +1453,6 @@ func evict_to_neighbor_of_tile(stand_tile: Vector2i) -> void:
 	position = _world.tile_to_world(dest)
 	_target_tile = dest
 	_target_world_pos = position
-	# Update SpatialManager with new position
-	if SpatialManager != null and data != null:
-		SpatialManager.update_entity_position(int(data.id), dest)
 	_request_redraw()
 
 
@@ -1227,6 +1498,8 @@ func on_world_nav_changed() -> void:
 					_state = State.GOING_TO_BED
 					_start_path(pbed)
 		State.DRAFT_WALK:
+			_autonomy_draft_purpose = ""
+			_autonomy_draft_peer_id = -1
 			_state = State.IDLE
 			_clear_path()
 		_:
@@ -1239,12 +1512,7 @@ func sanity_check_impassable_tile() -> void:
 		return
 	if _world.pathfinder.is_passable(data.tile_pos):
 		return
-	if not _reported_stuck:
-		_reported_stuck = true
-		if GameManager.verbose_logs():
-			print("[Pawn] WARN: %s on impassable sim tile (%d,%d)  state=%d - forcing nudge" % [
-				data.display_name, data.tile_pos.x, data.tile_pos.y, int(_state),
-			])
+	# Nudge will handle logging if needed for debug builds.
 	nudge_if_standing_on_solid()
 
 
@@ -1261,6 +1529,8 @@ func _process(delta: float) -> void:
 	if not data.injuries.is_empty():
 		step *= (1.0 - BodyRiskManager.get_mobility_penalty(data))
 	var to_target: Vector2 = _target_world_pos - position
+	
+	var old_tile_pos = data.tile_pos # ARCHITECT T006 - Store old position for chunk check
 	if to_target.length() <= step:
 		position = _target_world_pos
 		var from_step: Vector2i = data.tile_pos
@@ -1269,12 +1539,14 @@ func _process(delta: float) -> void:
 			RoadMemory.record_step(from_step, _target_tile, _world)
 		# Wanderer path: track region exploration.
 		_track_region_visit(_target_tile)
-		# Update SpatialManager with new position
-		if SpatialManager != null and data != null:
-			SpatialManager.update_entity_position(int(data.id), _target_tile)
 		_advance_path()
 	else:
 		position += to_target.normalized() * step
+
+	# ARCHITECT T006: Update SpatialManager if pawn moved to a new chunk
+	if SpatialManager != null and data != null and old_tile_pos != data.tile_pos:
+		SpatialManager.update_pawn_position(int(data.id), data.tile_pos)
+
 	# DISABLED cohort bias calculations for performance
 	# var cohort_bias: Vector2 = _cohort_cohesion_bias(step)
 	# if cohort_bias != Vector2.ZERO:
@@ -1315,7 +1587,13 @@ func _clear_path() -> void:
 func _on_path_complete() -> void:
 	match _state:
 		State.DRAFT_WALK:
+			var ap: String = _autonomy_draft_purpose
+			var apid: int = _autonomy_draft_peer_id
+			_autonomy_draft_purpose = ""
+			_autonomy_draft_peer_id = -1
 			_state = State.IDLE
+			if ap != "":
+				_finish_autonomy_draft_walk(ap, apid)
 			_request_redraw()
 		State.WALKING_TO_JOB:
 			if _current_job != null and data.tile_pos == _current_job.work_tile:
@@ -1337,7 +1615,7 @@ func _on_path_complete() -> void:
 
 # ==================== per-tick simulation ====================
 
-func _on_game_tick(_tick: int) -> void:
+func _on_world_tick(_tick: int) -> void:
 	# Hard guard: no sim until bind + _ready + deferred connect completed.
 	if not is_instance_valid(self):
 		return
@@ -1346,12 +1624,10 @@ func _on_game_tick(_tick: int) -> void:
 	if data == null:
 		push_warning("Pawn: game_tick skipped - data not ready (path=%s)" % str(get_path()))
 		return
+	## Sync GameManager.tick_count for backward compatibility
+	if GameManager != null:
+		GameManager.tick_count = _tick
 	var pid: int = int(data.id)
-	
-	# SPATIAL CULLING: Skip AI tick if pawn's chunk is inactive (infinite world optimization)
-	if SpatialManager != null and not SpatialManager.should_entity_tick(pid):
-		return
-	
 	var _trace_ai_slice: bool = CrashTrap.should_trace_game_tick_dispatch(_tick)
 	if _hit_flash_ticks > 0:
 		_hit_flash_ticks -= 1
@@ -1361,10 +1637,12 @@ func _on_game_tick(_tick: int) -> void:
 	if posmod(GameManager.tick_count + pid, 5) == 0:
 		if _trace_ai_slice:
 			CrashTrap.enter_system("pawn_tick:%d:needs" % pid)
-		_decay_needs()
+		apply_body_needs()
 		_check_thresholds()
 		if _trace_ai_slice:
 			CrashTrap.exit_system("pawn_tick:%d:needs" % pid)
+	if _state != State.SLEEPING and posmod(GameManager.tick_count + pid * 3, 23) == 0:
+		_pawn_neural_autonomy_pulse()
 	# Sleepers only need wake checks; skip full AI branch logic to reduce
 	# per-tick overhead during overnight "everyone in bed" windows.
 	if _state == State.SLEEPING:
@@ -1587,9 +1865,11 @@ func _force_panic_sleep() -> void:
 	# If we were already walking to a bed when panic hit, give up the
 	# reservation so other pawns can use it; we're sleeping where we stand.
 	_release_bed_if_reserved()
-	if GameManager.verbose_logs():
-		print("[Pawn] %s collapses from exhaustion  (rest=%.1f hunger=%.1f)" %
-			[data.display_name, data.rest, data.hunger])
+	# `where` string for logs could be re-added if verbose_logs are re-enabled.
+	# var on_bed: bool = _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed
+	# var where: String = " in a bed" if on_bed else ""
+	# if GameManager.verbose_logs():
+	# 	print("[Pawn] %s lies down to sleep%s  (rest=%.1f)" % [data.display_name, where, data.rest])
 	_begin_sleeping()
 
 
@@ -1627,11 +1907,17 @@ func _tick_idle() -> void:
 		else:
 			_begin_haul_to_stockpile()
 		return
+	# 2b. Long-memory grudge: occasionally seek a confrontation while otherwise idle.
+	if _try_autonomy_grudge_confront():
+		return
 	# 3. Need-driven: hungry + food nearby -> go eat
 	if _maybe_start_eating():
 		return
 	# 4. Tired -> sleep. Skipped if we're starving (food first, sleep when full).
 	if _maybe_start_sleeping():
+		return
+	# 4b. Neural "social" hint: path toward a high-rapport nearby pawn if not already eating/sleeping.
+	if _try_autonomy_social_seek():
 		return
 	var food_units: int = StockpileManager.total_food()
 	var food_pressure: float = 0.0
@@ -1795,6 +2081,7 @@ func _tick_idle() -> void:
 			utility_bias = int(round((_utility_score_normalized(action_key, utility_context, utility_cache) - 0.5) * float(UTILITY_JOB_PRIORITY_BIAS_RANGE)))
 			utility_bias_cache[action_key] = utility_bias
 		base_bias += utility_bias
+		base_bias += data.kinship_job_priority_bonus(j.work_tile)
 		if preferred_idle_action == "forage" and (j.type == Job.Type.FORAGE or j.type == Job.Type.HUNT):
 			base_bias += 2
 		# When the pantry is not in emergency, nudge non-food labor so the colony
@@ -1826,7 +2113,7 @@ func _tick_idle() -> void:
 		base_bias += clampi(int(floor((_bp(5) - 0.5) * 6.0)), -2, 2)
 
 		# Keep bias math cheap and deterministic on hot claim path.
-		return base_bias
+		return AuthoritySystem.apply_authority_bonus(base_bias, int(data.id))
 	var base_passes: Callable = func(j: Job) -> bool:
 		if Pawn._world_hunt_stabilization_blocks() and j.type == Job.Type.HUNT:
 			return false
@@ -1844,6 +2131,24 @@ func _tick_idle() -> void:
 			# the closest one in _begin_fetching_material.
 			if StockpileManager.total_count_of(mats.item) < mats.qty:
 				return false
+		# === Check cultural style material availability ===
+		if not mats.is_empty():
+			var settlement_id: int = int(from_center_region) if from_center_region >= 0 else -1
+			if settlement_id >= 0 and CulturalStyleManager != null:
+				var style_material: int = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, j.type))
+				if style_material != mats.item:
+					# Check if we have the style-specific material instead
+					if StockpileManager.total_count_of(style_material) < mats.qty:
+						return false
+		# === End style material check ===
+		# === CHECK TECH REQUIREMENT ===
+		# Only allow job claiming if the settlement has researched required technology
+		if TechnologySystem != null:
+			var settle_center: int = int(from_center_region)
+			if settle_center >= 0:
+				if not bool(TechnologySystem.call("can_settle_perform_job_type", settle_center, int(j.type))):
+					return false
+		# === END TECH CHECK ===
 		return true
 	if food_emergency:
 		# Either harvest type fills the pantry; let pawns pick whichever is
@@ -2193,14 +2498,8 @@ func attempt_reproduction() -> bool:
 		return false
 	if int(data.id) > int(mate.data.id):
 		return false
-	var main_node: Node = get_tree().get_root().get_node_or_null("Main")
-	if main_node == null:
-		return false
-	var spawner: PawnSpawner = main_node.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
-	if spawner == null:
-		return false
-	var did_spawn: bool = spawner.spawn_child_pawn(_world, data.tile_pos, data, mate.data, now)
-	if did_spawn:
+	var child: Pawn = _spawn_child_pawn(int(data.id), int(mate.data.id))
+	if child != null:
 		_next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
 		mate._next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
 		WorldMemory.record_event({
@@ -2214,7 +2513,7 @@ func attempt_reproduction() -> bool:
 			"parent_a_id": int(data.id),
 			"parent_b_id": int(mate.data.id),
 		})
-	return did_spawn
+	return child != null
 
 
 func _reproduction_mate_range_px() -> float:
@@ -2326,6 +2625,17 @@ func _tick_working() -> void:
 		if _current_job.type != Job.Type.FORAGE and _current_job.type != Job.Type.HUNT:
 			_unclaim_current_job()
 			return
+	# Hungry + autonomy wants food: release non-forage work so the pawn can eat sooner than emergency.
+	if (
+			data.hunger <= HUNGER_EAT_THRESHOLD
+			and _current_job != null
+			and data.neural_network != null
+			and str(data.neural_network.get_autonomy_hint()) == "eat"
+	):
+		if _current_job.type != Job.Type.FORAGE and _current_job.type != Job.Type.HUNT:
+			_notify_autonomy_feedback("need_eat (drop job)")
+			_unclaim_current_job()
+			return
 	if not _is_job_tile_still_valid(_current_job):
 		_cancel_current_job()
 		return
@@ -2340,6 +2650,7 @@ func _tick_working() -> void:
 	var speed: float = data.effective_labor_mult() * float(work_step_multiplier)
 	# Tool efficacy: equipped tools boost specific job types
 	speed *= data.get_tool_efficacy(_current_job.type)
+	speed *= data.kinship_work_speed_multiplier(_current_job.work_tile)
 	if skill >= 0:
 		speed *= data.work_speed_for(skill)
 		# Apply efficiency modifier
@@ -2347,13 +2658,6 @@ func _tick_working() -> void:
 		var leveled_up: bool = data.add_skill_xp(
 				skill, PawnData.XP_PER_WORK_TICK * float(work_step_multiplier)
 		)
-		if leveled_up:
-			if GameManager.verbose_logs():
-				print("[Pawn] %s's %s went up to %d" % [
-					data.display_name,
-					PawnData.skill_name(skill),
-					data.get_skill_level(skill),
-				])
 		var w: int = maxi(1, int(ceil(speed)))
 		data.add_profession_liking_for_job(_current_job.type, w)
 		_current_job.work_ticks_done += w
@@ -2399,6 +2703,7 @@ func _calculate_work_efficiency() -> float:
 	# Improvised tool proxy from carried material (no separate pickaxe/axe items in v1).
 	if _current_job != null and data != null:
 		var jt: int = _current_job.type
+		_apply_tradition_mood_for_job(jt)
 		if jt == Job.Type.MINE or jt == Job.Type.MINE_WALL:
 			if data.is_carrying() and (data.carrying == Item.Type.STONE or data.carrying == Item.Type.WOOD):
 				efficiency *= 1.04
@@ -2414,6 +2719,26 @@ func _calculate_work_efficiency() -> float:
 				efficiency *= 0.93
 	
 	return clamp(efficiency, 0.1, 2.0)
+
+
+func _apply_tradition_mood_for_job(job_type: int) -> void:
+	if data == null:
+		return
+	if not data.has_meta("tradition_taboo_jobs"):
+		return
+	var taboo_v: Variant = data.get_meta("tradition_taboo_jobs", [])
+	if not (taboo_v is Array):
+		return
+	var taboo: Array = taboo_v as Array
+	var bonus: float = float(data.get_meta("tradition_mood_bonus", 4.0))
+	var penalty: float = float(data.get_meta("tradition_mood_penalty", -6.0))
+	var job_name: String = str(Job.Type.keys()[job_type]).to_upper()
+	var mood_delta: float = bonus
+	for taboo_any in taboo:
+		if str(taboo_any).to_upper() == job_name:
+			mood_delta = penalty
+			break
+	data.mood = clampf(data.mood + mood_delta * 0.01, 0.0, 100.0)
 
 
 func _tick_eating() -> void:
@@ -2518,9 +2843,6 @@ func _apply_work_hazards(work_ticks_simulated: int = 1) -> void:
 			injury_type = BodyRiskManager.InjuryType.CUT  # Axe cuts
 		BodyRiskManager.apply_injury(self, injury_type, damage * 2.0, Job.describe_type(_current_job.type))
 		
-		if GameManager.verbose_logs():
-			print("[Pawn] %s injured while working  (damage=%.1f health=%.1f)" %
-				[data.display_name, damage, data.health])
 		if damage >= 5.0:
 			var scar_pool: Array[String] = ["LameLeg", "MissingArm", "BlindedEye", "DeepScar"]
 			var pick: int = WorldRNG.index_for(_pawn_stream("work_hazard_scar"), scar_pool.size(), _pawn_salt(31))
@@ -2542,6 +2864,12 @@ func _begin_job(job: Job) -> void:
 	if not mats.is_empty():
 		var item_type: int = mats.item
 		var need_qty: int = mats.qty
+		# === Check for cultural style material override ===
+		var settlement_id: int = _current_settlement_center_region()
+		# material_family is not directly used by this pawn for logic, so no verbose logging here.
+		if settlement_id >= 0 and CulturalStyleManager != null:
+			item_type = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, job.type))
+		# === End style check ===
 		var have: int = data.carrying_qty if data.carrying == item_type else 0
 		if have < need_qty:
 			_begin_fetching_material(item_type, need_qty)
@@ -2634,9 +2962,6 @@ func _begin_fetching_material(item_type: int, qty: int) -> void:
 		item_type, qty, data.tile_pos, _world.pathfinder
 	)
 	if sp == null:
-		if GameManager.verbose_logs():
-			print("[Pawn] %s aborts build job: no reachable zone has %d %s" %
-				[data.display_name, qty, Item.name_for(item_type)])
 		_unclaim_current_job()
 		return
 	_target_zone = sp
@@ -2696,9 +3021,6 @@ func _pickup_material(item_type: int, qty: int) -> void:
 		# Partial take: put it back so we don't strand items in our hand.
 		if taken > 0:
 			sp.add_item(item_type, taken)
-		if GameManager.verbose_logs():
-			print("[Pawn] %s aborts build job: zone ran out of %s mid-fetch" %
-				[data.display_name, Item.name_for(item_type)])
 		_target_zone = null
 		_unclaim_current_job()
 		return
@@ -2790,25 +3112,17 @@ func _complete_current_job() -> void:
 		Job.Type.FORAGE:
 			produced_type = Item.Type.BERRY
 			_world.clear_feature(job.tile.x, job.tile.y)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s foraged berries @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.MINE:
 			produced_type = Item.Type.STONE
 			_world.clear_feature(job.tile.x, job.tile.y)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s mined stone @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.MINE_WALL:
 			produced_type = Item.Type.STONE
 			# This converts MOUNTAIN -> STONE_FLOOR and rebuilds the components
 			# map, which can cascade-unlock sealed ore veins.
 			_world.mine_out_wall(job.tile.x, job.tile.y)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s mined wall @(%d,%d) -> stone floor" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.CHOP:
 			produced_type = Item.Type.WOOD
 			_world.clear_feature(job.tile.x, job.tile.y)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s chopped tree @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.HUNT:
 			produced_type = Item.Type.MEAT
 			# Read the species off the tile BEFORE we clear it, so we know
@@ -2824,20 +3138,12 @@ func _complete_current_job() -> void:
 						TileFeature.name_for(animal_feat),
 				)
 			_world.clear_feature(job.tile.x, job.tile.y)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s hunted %s @(%d,%d) -> %d meat" % [
-					data.display_name, TileFeature.name_for(animal_feat),
-					job.tile.x, job.tile.y, produced_qty])
 		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
 			_finish_build(job)
 		Job.Type.GATHER_FLINT:
 			produced_type = Item.Type.FLINT
-			if GameManager.verbose_logs():
-				print("[Pawn] %s gathered flint @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.GATHER_STICK:
 			produced_type = Item.Type.STICK
-			if GameManager.verbose_logs():
-				print("[Pawn] %s gathered stick @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_TORCH, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR:
 			_finish_craft(job)
 			produced_type = Item.Type.NONE  # tool is equipped, not carried
@@ -2846,8 +3152,6 @@ func _complete_current_job() -> void:
 			produced_type = Item.Type.NONE
 		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.DRY_MEAT:
 			produced_type = Job.tool_job_output(job.type)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s cooked/preserved food @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.PLANT_SEEDS:
 			FoodChainManager.plant_seeds(job.tile)
 			produced_type = Item.Type.NONE
@@ -2915,10 +3219,14 @@ func _finish_build(job: Job) -> void:
 		return
 	var item_type: int = mats.item
 	var need_qty: int = mats.qty
+	# === Override material based on settlement's cultural style ===
+	var settlement_id: int = _current_settlement_center_region()
+	var material_family: String = "wood"
+	if settlement_id >= 0 and CulturalStyleManager != null:
+		item_type = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, job.type))
+		# material_family is not directly used by this pawn for logic, so no verbose logging here.
+	# === End style material override ===
 	if data.carrying != item_type or data.carrying_qty < need_qty:
-		if GameManager.verbose_logs():
-			print("[Pawn] %s missing material at completion -- %s not built @(%d,%d)" %
-				[data.display_name, Job.describe_type(job.type), job.tile.x, job.tile.y])
 		return
 	data.carrying_qty -= need_qty
 	if data.carrying_qty <= 0:
@@ -2927,16 +3235,17 @@ func _finish_build(job: Job) -> void:
 		Job.Type.BUILD_BED:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.BED)
 			_world.register_bed(job.tile)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s built a bed @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.BUILD_WALL:
 			_world.build_wall(job.tile.x, job.tile.y)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s built a wall @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.BUILD_DOOR:
 			_world.build_door(job.tile.x, job.tile.y)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s placed a door @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
+
+
+func _current_settlement_center_region() -> int:
+	if data == null:
+		return -1
+	var region_key: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
+	return SettlementMemory.get_center_region_for_region(region_key)
 
 
 ## Complete a tool-crafting job: consume materials from stockpile, equip the tool.
@@ -3018,8 +3327,6 @@ func _finish_shelter_build(job: Job) -> void:
 			"tile": {"x": job.tile.x, "y": job.tile.y},
 		})
 		
-		if GameManager.verbose_logs():
-			print("[Pawn] %s prepared %s @(%d,%d)" % [data.display_name, Item.name_for(output_type), job.tile.x, job.tile.y])
 		return
 	
 	var mats: Dictionary = _materials_for_build(job.type)
@@ -3030,9 +3337,6 @@ func _finish_shelter_build(job: Job) -> void:
 	
 	# Check if pawn is carrying the required material
 	if data.carrying != item_type or data.carrying_qty < need_qty:
-		if GameManager.verbose_logs():
-			print("[Pawn] %s missing material -- %s not built @(%d,%d)" %
-				[data.display_name, Job.describe_type(job.type), job.tile.x, job.tile.y])
 		return
 	
 	# Consume materials
@@ -3051,8 +3355,6 @@ func _finish_shelter_build(job: Job) -> void:
 				"tick": GameManager.tick_count,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
-			if GameManager.verbose_logs():
-				print("[Pawn] %s built a fire pit @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.BUILD_STORAGE_HUT:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.STORAGE_HUT)
 			WorldMemory.record_event({
@@ -3062,8 +3364,6 @@ func _finish_shelter_build(job: Job) -> void:
 				"tick": GameManager.tick_count,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
-			if GameManager.verbose_logs():
-				print("[Pawn] %s built a storage hut @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.BUILD_MARKER_STONE:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.MARKER_STONE)
 			WorldMemory.record_event({
@@ -3073,8 +3373,6 @@ func _finish_shelter_build(job: Job) -> void:
 				"tick": GameManager.tick_count,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
-			if GameManager.verbose_logs():
-				print("[Pawn] %s carved a marker stone @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 		Job.Type.BUILD_SHRINE:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.SHRINE)
 			WorldMemory.record_event({
@@ -3084,8 +3382,6 @@ func _finish_shelter_build(job: Job) -> void:
 				"tick": GameManager.tick_count,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
-			if GameManager.verbose_logs():
-				print("[Pawn] %s built a shrine @(%d,%d)" % [data.display_name, job.tile.x, job.tile.y])
 
 
 ## Consume 1 durability from the equipped tool if the job benefits from a tool.
@@ -3196,11 +3492,12 @@ func _log_haul_fail(reason: String) -> void:
 	if t - _last_haul_fail_log_tick < HAUL_FAIL_LOG_EVERY_N_TICKS:
 		return
 	_last_haul_fail_log_tick = t
-	var my_comp: int = -1
-	if _world != null and _world.pathfinder != null:
-		my_comp = _world.pathfinder.component_of(data.tile_pos)
-	var zone_count: int = StockpileManager.zones().size()
-	if GameManager.verbose_logs():
+	# For debug builds, print this information. Otherwise, remain silent.
+	if OS.is_debug_build() and GameManager.verbose_logs():
+		var my_comp: int = -1
+		if _world != null and _world.pathfinder != null:
+			my_comp = _world.pathfinder.component_of(data.tile_pos)
+		var zone_count: int = StockpileManager.zones().size()
 		print("[Pawn] %s haul FAIL (%s): at (%d,%d) comp=%d  carrying=%s x%d  zones=%d" % [
 			data.display_name, reason,
 			data.tile_pos.x, data.tile_pos.y, my_comp,
@@ -3238,7 +3535,7 @@ func _deposit_at_stockpile() -> void:
 			)
 	if sp != null and data.is_carrying():
 		# If carrying a tool, auto-equip it instead of depositing
-		if Item.is_tool(data.carrying) and not data.is_equipped_tool_valid():
+		if Item.is_tool_type(data.carrying) and not data.is_equipped_tool_valid():
 			data.equip_tool(data.carrying)
 			if GameManager.verbose_logs():
 				print("[Pawn] %s equipped %s (durability=%d)" % [
@@ -3248,14 +3545,6 @@ func _deposit_at_stockpile() -> void:
 			sp.add_item(data.carrying, data.carrying_qty)
 			if is_trade:
 				data.add_profession_liking_for_trade_completion()
-			if not is_trade:
-				if GameManager.verbose_logs():
-					print("[Pawn] %s deposited %d %s into %s zone (zone now has %d)" % [
-						data.display_name, data.carrying_qty,
-						Item.name_for(data.carrying),
-						Stockpile.FILTER_NAME.get(sp.filter, "?"),
-						sp.count_of(data.carrying)
-					])
 	data.clear_carry()
 	_target_zone = null
 	if is_trade and j_done != null and j_done.type == Job.Type.TRADE_HAUL:
@@ -3270,6 +3559,8 @@ func _deposit_at_stockpile() -> void:
 
 func _maybe_start_eating() -> bool:
 	var eat_threshold: float = HUNGER_EAT_THRESHOLD + lerpf(-5.0, 5.0, _bp(6))
+	if data.neural_network != null and str(data.neural_network.get_autonomy_hint()) == "eat":
+		eat_threshold += 14.0
 	if data.hunger >= eat_threshold:
 		return false
 	if data.is_carrying():
@@ -3278,6 +3569,8 @@ func _maybe_start_eating() -> bool:
 	var sp: Stockpile = StockpileManager.find_food_source(data.tile_pos, _world.pathfinder)
 	if sp == null:
 		return false
+	if data.neural_network != null and str(data.neural_network.get_autonomy_hint()) == "eat":
+		_notify_autonomy_feedback("go eat")
 	_begin_going_to_eat(sp)
 	return true
 
@@ -3333,10 +3626,6 @@ func _finish_eating() -> void:
 					data.add_mood_event(MoodEvent.Type.JOY, 40.0, 150)
 				# After eating, reset warning band so we don't re-log instantly.
 				_hunger_level = _level_for(data.hunger)
-	if GameManager.verbose_logs() and food_type != Item.Type.NONE and gain > 0.0:
-		print("[Pawn] %s ate 1 %s  (+%.0f hunger -> %.1f, mood %.1f)" % [
-			data.display_name, Item.name_for(food_type), gain, data.hunger, data.mood
-		])
 	_target_zone = null
 	_reset_to_idle()
 
@@ -3353,6 +3642,12 @@ func _maybe_start_sleeping() -> bool:
 	# when the sun goes down, giving the colony a real day/night rhythm.
 	var base_th: float = REST_SLEEP_THRESHOLD_NIGHT if DayNightCycle.is_night_for_tick(GameManager.tick_count) else REST_SLEEP_THRESHOLD
 	var threshold: float = base_th + lerpf(-7.0, 7.0, _bp(2))
+	if data.neural_network != null:
+		var ah: String = str(data.neural_network.get_autonomy_hint())
+		if ah == "sleep":
+			threshold += 12.0
+		elif ah == "shelter":
+			threshold += 9.0
 	if data.rest > threshold:
 		return false
 	# Don't curl up while starving -- if there's any food path open we should
@@ -3363,9 +3658,18 @@ func _maybe_start_sleeping() -> bool:
 	# Don't sleep mid-haul; stockpile that item first.
 	if data.is_carrying():
 		return false
+	var autonomy_rest_lbl: String = ""
+	if data.neural_network != null:
+		var ah2: String = str(data.neural_network.get_autonomy_hint())
+		if ah2 == "sleep" or ah2 == "shelter":
+			autonomy_rest_lbl = ah2
 	if _try_walk_to_bed():
+		if not autonomy_rest_lbl.is_empty():
+			_notify_autonomy_feedback("rest → %s" % autonomy_rest_lbl)
 		return true
 	_begin_sleeping()
+	if not autonomy_rest_lbl.is_empty():
+		_notify_autonomy_feedback("rest → %s" % autonomy_rest_lbl)
 	return true
 
 
@@ -3446,12 +3750,6 @@ func _record_teaching_memory_fact(student: Pawn, skill_taught: String) -> void:
 			skill_taught,
 			settlement_id
 	)
-	if GameManager.verbose_logs():
-		print("[Pawn] teaching memory fact: %s taught %s to %s" % [
-			data.display_name,
-			skill_taught,
-			student.data.display_name,
-		])
 
 
 ## Check if pawn can challenge nearby pawn's authority
@@ -3502,10 +3800,11 @@ func _begin_sleeping() -> void:
 	_state = State.SLEEPING
 	_clear_path()
 	_request_redraw()
-	var on_bed: bool = _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed
-	var where: String = " in a bed" if on_bed else ""
-	if GameManager.verbose_logs():
-		print("[Pawn] %s lies down to sleep%s  (rest=%.1f)" % [data.display_name, where, data.rest])
+	# `where` string for logs could be re-added if verbose_logs are re-enabled.
+	# var on_bed: bool = _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed
+	# var where: String = " in a bed" if on_bed else ""
+	# if GameManager.verbose_logs():
+	# 	print("[Pawn] %s lies down to sleep%s  (rest=%.1f)" % [data.display_name, where, data.rest])
 
 
 ## Per-tick while in SLEEPING. The actual rest restoration / hunger decay
@@ -3514,9 +3813,6 @@ func _begin_sleeping() -> void:
 func _tick_sleeping() -> void:
 	# Wake up early if we get critically hungry -- food trumps sleep.
 	if data.hunger <= HUNGER_EMERGENCY:
-		if GameManager.verbose_logs():
-			print("[Pawn] %s wakes hungry  (hunger=%.1f rest=%.1f)" %
-				[data.display_name, data.hunger, data.rest])
 		_release_bed_if_reserved()
 		_reset_to_idle()
 		return
@@ -3547,10 +3843,6 @@ func _tick_sleeping() -> void:
 				should_wake = true
 			
 			if should_wake:
-				if GameManager.verbose_logs():
-					var crisis_type: String = "housing" if is_housing_crisis else "food"
-					print("[Pawn] %s wakes for %s crisis (affinity=%.2f pressure=%.2f)" %
-						[data.display_name, crisis_type, building_affinity if is_housing_crisis else farming_affinity, housing_pressure if is_housing_crisis else food_pressure])
 				_release_bed_if_reserved()
 				_reset_to_idle()
 				return
@@ -3586,10 +3878,6 @@ func _eat_from_hand() -> void:
 	if data.carrying_qty <= 0:
 		data.clear_carry()
 	_hunger_level = _level_for(data.hunger)
-	if GameManager.verbose_logs():
-		print("[Pawn] %s ate 1 %s FROM HAND (emergency, +%.0f hunger -> %.1f, mood %.1f)" % [
-			data.display_name, Item.name_for(food_type), gain, data.hunger, data.mood
-		])
 	_request_redraw()
 
 
@@ -3630,9 +3918,9 @@ func _decay_needs() -> void:
 		mood_event_impact = data.get_mood_event_impact()
 	
 	if data.hunger >= MOOD_CONTENT_FLOOR and data.rest >= MOOD_CONTENT_FLOOR:
-		data.mood = min(100.0, data.mood + MOOD_GAIN_PER_TICK_CONTENT - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact)
+		data.mood = min(100.0, data.mood + MOOD_GAIN_PER_TICK_CONTENT - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact + data.kinship_mood_bonus())
 	else:
-		data.mood = max(0.0, data.mood - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact)
+		data.mood = max(0.0, data.mood - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact + data.kinship_mood_bonus())
 	# Occasional uplift — same world rules, but some people notice small good moments more often.
 	if posmod(GameManager.tick_count + int(data.id) * 5, 211) == 0:
 		var flutter: float = 0.1 + _bp(4) * 0.22
@@ -3696,6 +3984,28 @@ func _decay_needs() -> void:
 	_check_death_conditions()
 
 
+func _publish_player_body_needs_to_hud_if_incarnated() -> void:
+	if data == null or get_tree() == null:
+		return
+	var root: Window = get_tree().get_root()
+	if root == null:
+		return
+	var main_node: Node = root.get_node_or_null("Main")
+	if main_node == null:
+		return
+	if not main_node.has_method("is_player_incarnated") or not main_node.has_method("get_player_pawn_id"):
+		return
+	if not bool(main_node.call("is_player_incarnated")):
+		return
+	if int(main_node.call("get_player_pawn_id")) != int(data.id):
+		return
+	var hud: Node = root.get_node_or_null("Main/UI_Viewport/ColonyHUD")
+	if hud == null:
+		hud = root.get_node_or_null("ColonyHUD")
+	if hud != null and hud.has_method("update_player_needs"):
+		hud.call("update_player_needs", data.hunger, data.rest)
+
+
 ## Crisis strike: pawn refuses to work when mood is critical.
 func _trigger_crisis_strike() -> void:
 	# Release current job and enter idle state
@@ -3705,32 +4015,21 @@ func _trigger_crisis_strike() -> void:
 	# Add DESPAIR mood event
 	if not data.has_trait(Trait.Type.PESSIMIST):  # Pessimists expect this already
 		data.add_mood_event(MoodEvent.Type.DESPAIR, 75.0, 400)
-	if GameManager.verbose_logs():
-		print("[Pawn] %s is on strike due to critical morale (mood=%.1f)" %
-			[data.display_name, data.mood])
 
 
 func _check_death_conditions() -> void:
 	# Emergency food-seeking for AI agents
 	if data.hunger < 15.0 and _state != State.GOING_TO_EAT and _state != State.EATING:
-		if GameManager.verbose_logs():
-			print("[Pawn] %s seeking emergency food (hunger=%.1f)" % [data.display_name, data.hunger])
 		_emergency_seek_food()
 	
 	# More lenient death conditions
 	if data.hunger <= -5.0:  # Allow some buffer before death
-		if GameManager.verbose_logs():
-			print("[Pawn] %s died of starvation  (hunger=%.1f)" % [data.display_name, data.hunger])
 		_die("")
 		return
 	if data.rest <= -5.0:  # Allow some buffer before death
-		if GameManager.verbose_logs():
-			print("[Pawn] %s died from exhaustion  (rest=%.1f)" % [data.display_name, data.rest])
 		_die("")
 		return
 	if data.health <= 0.0:
-		if GameManager.verbose_logs():
-			print("[Pawn] %s died from injuries  (health=%.1f)" % [data.display_name, data.health])
 		_die("")
 		return
 
@@ -3743,11 +4042,8 @@ func _emergency_seek_food() -> void:
 	var stockpile: Stockpile = StockpileManager.find_food_source(data.tile_pos, pathfinder)
 	if stockpile != null:
 		_begin_going_to_eat(stockpile)
-		if GameManager.verbose_logs():
-			print("[Pawn] %s going to food source for emergency food" % data.display_name)
 	else:
-		if GameManager.verbose_logs():
-			print("[Pawn] %s cannot find food source for emergency food" % data.display_name)
+		pass # No emergency food source found.
 
 
 func _decay_stamina() -> void:
@@ -3868,11 +4164,23 @@ func _process_injuries() -> void:
 func _observe_nearby_work() -> void:
 	# DISABLED for performance - iterates through all pawns
 	return
+	
+
+func can_teach_skill(target_pawn: Pawn) -> bool:
+	# Check if teaching is allowed (cooldown, etc.)
+	if GameManager.tick_count - _last_teach_tick < _teach_cooldown_ticks:
+		return false
+	# Can add more conditions here (distance, etc.)
+	return true
 
 
 func teach_skill(target_pawn: Pawn, skill: int) -> bool:
 	# Teach a skill to another pawn
 	# Requires: teacher has skill level >= 5, target has lower skill level
+	
+	# Check cooldown first
+	if not can_teach_skill(target_pawn):
+		return false
 	if data == null or target_pawn == null or not is_instance_valid(target_pawn) or target_pawn.data == null:
 		return false
 	var teacher_level: int = data.get_skill_level(skill)
@@ -3882,19 +4190,22 @@ func teach_skill(target_pawn: Pawn, skill: int) -> bool:
 		return false
 	
 	# Grant XP to target (faster than self-learning); teaching branch boosts output.
-	var te: float = data.teach_efficiency_multiplier()
+	var te: float = data.teach_efficiency_multiplier() * data.kinship_teach_efficiency_multiplier(int(target_pawn.data.id))
 	target_pawn.data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK * 2.0 * te)
 	
 	# Small XP bonus to teacher for teaching
 	data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK * 0.5 * te)
 	_record_teaching_memory_fact(target_pawn, PawnData.skill_name(skill).to_lower())
 	
-	if GameManager.verbose_logs():
-		print("[Pawn] %s taught %s in %s" % [
-			data.display_name,
-			target_pawn.data.display_name,
-			PawnData.skill_name(skill)
-		])
+	# Update cooldown timestamp
+	_last_teach_tick = GameManager.tick_count
+	
+	# Track student progress
+	var student_id: int = int(target_pawn.data.id)
+	if not _students_taught.has(student_id):
+		_students_taught[student_id] = {"skill": skill, "ticks_taught": 0}
+	_students_taught[student_id]["ticks_taught"] = int(_students_taught[student_id].get("ticks_taught", 0)) + 1
+	_students_taught[student_id]["skill"] = skill
 	
 	return true
 
@@ -4074,26 +4385,75 @@ func marry(spouse: Pawn) -> void:
 		])
 
 
+## Spawn a child via [PawnSpawner] (bind, tile, lineage, [PawnData] registry). Not a raw scene instantiate:
+## that would skip world placement, job safety, and [method PawnData.register_pawn_data].
+func _spawn_child_pawn(parent_pawn_id: int = -1, second_parent_id: int = -1) -> Pawn:
+	var spawner: PawnSpawner = _resolve_pawn_spawner()
+	if spawner == null or _world == null or GameManager == null or data == null:
+		return null
+	var pa_id: int = parent_pawn_id if parent_pawn_id >= 0 else int(data.id)
+	var pb_id: int = second_parent_id if second_parent_id >= 0 else int(data.spouse_id)
+	if pb_id < 0:
+		return null
+	var parent_a: PawnData = spawner.pawn_data_for_id(pa_id)
+	var parent_b: PawnData = spawner.pawn_data_for_id(pb_id)
+	if parent_a == null or parent_b == null:
+		return null
+	return spawner.spawn_child_pawn(_world, data.tile_pos, parent_a, parent_b, GameManager.tick_count)
+
+
+## Single-parent affinity nudge: scale parent's values by 70–130% (deterministic) and lerp child's map.
+static func _inherit_from_parent(
+		child_pd: PawnData, parent_id: int, birth_tick: int, pass_index: int = 0
+) -> void:
+	if child_pd == null or parent_id < 0:
+		return
+	var parent_pd: PawnData = child_pd._get_parent_data(parent_id)
+	if parent_pd == null:
+		return
+	for k in child_pd.affinities.keys():
+		var paf: float = float(parent_pd.affinities.get(k, 0.5))
+		var cur: float = float(child_pd.affinities.get(k, 0.5))
+		var mul: float = WorldRNG.range_for(
+				StringName(
+						"pawn:inherit_from_parent:%s:%d:%d:%d:%d"
+						% [str(k), child_pd.id, parent_id, birth_tick, pass_index]
+				),
+				0.7,
+				1.3
+		)
+		var target: float = clampf(paf * mul, 0.0, 1.0)
+		var w: float = WorldRNG.range_for(
+				StringName(
+						"pawn:inherit_from_parent_w:%s:%d:%d:%d"
+						% [str(k), child_pd.id, parent_id, pass_index]
+				),
+				0.35,
+				0.55
+		)
+		child_pd.affinities[k] = clampf(lerpf(cur, target, w), 0.0, 1.0)
+
+
+## Apply both parents in order (after [method PawnData.initialize_affinities]).
+static func _inherit_affinities(
+		child_pd: PawnData, parent_a: PawnData, parent_b: PawnData, birth_tick: int
+) -> void:
+	if child_pd == null or parent_a == null or parent_b == null:
+		return
+	_inherit_from_parent(child_pd, int(parent_a.id), birth_tick, 0)
+	_inherit_from_parent(child_pd, int(parent_b.id), birth_tick, 1)
+
+
 func have_child(partner: Pawn) -> int:
 	# Have a child with partner (same path as [method attempt_reproduction] / Main tick).
 	if partner == null or not is_instance_valid(partner) or partner.data == null or data == null:
 		return -1
 	if data.spouse_id != int(partner.data.id):
 		return -1
-	var spawner: PawnSpawner = _resolve_pawn_spawner()
-	if spawner == null or _world == null or GameManager == null:
+	var child: Pawn = _spawn_child_pawn(int(data.id), int(partner.data.id))
+	if child == null or child.data == null:
 		return -1
-	var now: int = GameManager.tick_count
-	if not spawner.spawn_child_pawn(_world, data.tile_pos, data, partner.data, now):
-		return -1
-	for p in spawner.pawns:
-		if p == null or not is_instance_valid(p) or p.data == null:
-			continue
-		if p.data.parent_a_id == int(data.id) and p.data.parent_b_id == int(partner.data.id):
-			return int(p.data.id)
-		if p.data.parent_b_id == int(data.id) and p.data.parent_a_id == int(partner.data.id):
-			return int(p.data.id)
-	return -1
+	return int(child.data.id)
 
 
 func _create_household() -> int:
@@ -4349,8 +4709,6 @@ func _evaluate_life_path_on_job_complete(job_type: int) -> void:
 	# Ruler path: direct influence gain (leadership emergence).
 	if new_path == PawnData.LifePath.RULER:
 		data.influence += 1.0
-		if GameManager.verbose_logs():
-			print("[Pawn] %s gained influence from ruler path (now %.1f)" % [data.display_name, data.influence])
 
 	# Milestone events at 10 / 25 / 50 / 100 on current path.
 	var prog: int = data.life_path_progress
@@ -4437,9 +4795,6 @@ func _trigger_ruler_decision_event(milestone: int) -> void:
 		"region_key": rk,
 		"tick": GameManager.tick_count,
 	})
-	if GameManager.verbose_logs():
-		print("[Pawn] %s (ruler) triggered decision: %s @ milestone %d" % [
-			data.display_name, decision_type, milestone])
 
 
 ## Track region visits for wanderer path progression. Each new region
@@ -4472,9 +4827,6 @@ func _world_record_discovery_event(region_key: int, tile: Vector2i) -> void:
 		"total_regions": data.regions_visited.size(),
 		"tick": GameManager.tick_count,
 	})
-	if GameManager.verbose_logs():
-		print("[Pawn] %s discovered region %d @(%d,%d) (total=%d)" % [
-			data.display_name, region_key, tile.x, tile.y, data.regions_visited.size()])
 
 
 ## Re-evaluate life path from current contribution counts (used after
@@ -4755,14 +5107,7 @@ func increase_legacy(amount: float) -> void:
 ## Stage 1: Small direct actions
 
 func gather() -> bool:
-	# Pick up items from ground at current tile
-	if _world == null:
-		return false
-	
-	# Check for items on ground (placeholder - needs ground item system)
-	# TODO: Check for dropped items on current tile
-	# For now, just return false
-	return false
+	return try_pickup_item()
 
 
 func craft_simple_tool(_tool_type: int) -> bool:
@@ -4932,6 +5277,11 @@ func _die(_p_cause: String = "") -> void:
 	# Release any held job and bed reservation
 	release_job_if_any()
 	_release_bed_if_reserved()
+	
+	# ARCHITECT T006: Unregister pawn from SpatialManager upon death
+	if SpatialManager != null and data != null:
+		SpatialManager.unregister_entity(int(data.id))
+
 	# Drop any carried items into the nearest stockpile
 	if data.is_carrying() and _world != null:
 		var sp: Stockpile = StockpileManager.find_drop_zone(data.carrying, data.tile_pos, _world.pathfinder)
@@ -4978,10 +5328,6 @@ func _die(_p_cause: String = "") -> void:
 		# KnowledgeSystem: remove knowledge carrier when pawn dies
 		if KnowledgeSystem != null:
 			KnowledgeSystem.remove_knowledge_carrier(int(data.id))
-		
-		# SpatialManager: unregister entity from spatial grid
-		if SpatialManager != null:
-			SpatialManager.unregister_entity(int(data.id))
 
 
 ## Trait / Krond convenience wrappers (delegates to PawnData)
@@ -5306,8 +5652,8 @@ func describe_state() -> String:
 			return "Idle"
 		State.WALKING_TO_JOB:
 			if _current_job != null:
-				return "Heading out: %s" % _verb_for_job(_current_job.type).to_lower()
-			return "Walking"
+				return "Moving to %s" % _verb_for_job(_current_job.type).to_lower()
+			return "Moving"
 		State.WORKING:
 			if _current_job != null:
 				return _verb_for_job(_current_job.type)
@@ -5317,41 +5663,111 @@ func describe_state() -> String:
 				return "Hauling %s" % Item.name_for(data.carrying)
 			return "Hauling"
 		State.GOING_TO_EAT:
-			return "Heading to eat"
+			return "Seeking Food"
 		State.EATING:
 			return "Eating"
 		State.SLEEPING:
 			if _reserved_bed.x >= 0:
-				return "Sleeping in bed"
-			return "Sleeping on the ground"
+				return "Sleeping in Bed"
+			return "Sleeping (Ground)"
 		State.GOING_TO_BED:
-			return "Heading to bed"
+			return "Moving to Bed"
 		State.FETCHING_MATERIAL:
 			if _current_job != null:
-				return "Fetching wood for %s" % \
-					_verb_for_job(_current_job.type).to_lower()
-			return "Fetching materials"
+				return "Gathering for %s" % _verb_for_job(_current_job.type).to_lower()
+			return "Gathering Materials"
 		State.DRAFT_WALK:
-			return "Moving (direct order)"
-	return "?"
+			return "Moving (Ordered)"
+		State.TEACHING:
+			return "Teaching"
+		State.CHALLENGE:
+			return "Challenging Authority"
+		State.GATHERING:
+			return "Gathering"
+		State.CRAFTING:
+			return "Crafting"
+		State.FLEEING:
+			return "Fleeing"
+		State.HIDING:
+			return "Hiding"
+	return "Unknown State"
+
+
+func _pawn_neural_autonomy_pulse() -> void:
+	if data == null or data.neural_network == null:
+		return
+	var nn: Variant = data.neural_network
+	if not nn.has_method("tick_autonomy"):
+		return
+	var ctx: Dictionary = {
+		"hunger": data.hunger,
+		"rest": data.rest,
+		"mood": data.mood,
+		"fear": clampf(data.pain + data.exposure_sickness * 0.35 + data.hypothermia_risk * 0.25, 0.0, 100.0),
+		"shelter": 0.55,
+		"social_warmth": clampf(float(data.co_presence.size()) / 12.0, 0.0, 1.0),
+		"clan_bond": clampf(float(data.family_bonds.size()) / 8.0, 0.0, 1.0),
+		"nation_pride": 0.42,
+		"ambition": clampf(float(data.level) / 20.0, 0.0, 1.0),
+		"fame": clampf(float(data.legacy_score) / 5000.0, 0.0, 1.0),
+	}
+	if WorldEventSystem != null:
+		ctx["weather_mult"] = WorldEventSystem.get_weather_resource_mult()
+		ctx["price_pressure"] = WorldEventSystem.get_price_pressure()
+		ctx["world_mood"] = WorldEventSystem.get_world_mood()
+		ctx["theft_pressure"] = WorldEventSystem.get_theft_pressure()
+		ctx["labor_urgency"] = WorldEventSystem.get_labor_urgency_bonus()
+	nn.tick_autonomy(GameManager.tick_count, int(data.id), ctx)
 
 
 static func _verb_for_job(job_type: int) -> String:
 	match job_type:
 		Job.Type.FORAGE:
-			return "Foraging berries"
+			return "Foraging"
 		Job.Type.MINE:
-			return "Mining stone"
+			return "Mining Stone"
 		Job.Type.MINE_WALL:
-			return "Tunneling"
+			return "Mining Wall"
 		Job.Type.CHOP:
-			return "Chopping wood"
+			return "Chopping Wood"
 		Job.Type.HUNT:
 			return "Hunting"
 		Job.Type.BUILD_BED:
-			return "Building bed"
+			return "Building Bed"
 		Job.Type.BUILD_WALL:
-			return "Building wall"
+			return "Building Wall"
 		Job.Type.BUILD_DOOR:
-			return "Building door"
+			return "Building Door"
+		Job.Type.GATHER_FLINT:
+			return "Gathering Flint"
+		Job.Type.GATHER_STICK:
+			return "Gathering Stick"
+		Job.Type.CRAFT_KNIFE:
+			return "Crafting Knife"
+		Job.Type.CRAFT_TORCH:
+			return "Crafting Torch"
+		Job.Type.CRAFT_PICK:
+			return "Crafting Pick"
+		Job.Type.CRAFT_SPEAR:
+			return "Crafting Spear"
+		Job.Type.BUILD_FIRE_PIT:
+			return "Building Fire Pit"
+		Job.Type.BUILD_STORAGE_HUT:
+			return "Building Storage Hut"
+		Job.Type.BUILD_MARKER_STONE:
+			return "Building Marker Stone"
+		Job.Type.BUILD_SHRINE:
+			return "Building Shrine"
+		Job.Type.COOK_MEAT:
+			return "Cooking Meat"
+		Job.Type.COOK_BERRIES:
+			return "Cooking Berries"
+		Job.Type.DRY_MEAT:
+			return "Drying Meat"
+		Job.Type.PLANT_SEEDS:
+			return "Planting Seeds"
+		Job.Type.HARVEST_CROPS:
+			return "Harvesting Crops"
+		Job.Type.TRADE_HAUL:
+			return "Trading"
 	return "Working"

@@ -5,6 +5,22 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-05-01 - TickManager Burst Tick Fix
+
+Date: 2026-05-01
+Goal: Refactor `autoloads/TickManager.gd` to support burst ticks with an accumulator while preventing spiral-of-death backlog growth.
+
+Planned change:
+- Keep the fixed-step accumulator in `_process(delta)`
+- Process multiple simulation ticks per frame with a `while` loop
+- Cap per-frame work with `MAX_TICKS_PER_FRAME`
+- Drop excess backlog when the cap is hit so the sim can recover cleanly
+- Leave notes for heavy tick-loop work that should move to deferred workers or LOD
+
+Validation target:
+- Run a syntax check on `autoloads/TickManager.gd`
+- Review the local diff to confirm the backlog drop path is deterministic
+
 ## 2026-04-30 - Civilization Simulation Assessment
 
 Date: 2026-04-30

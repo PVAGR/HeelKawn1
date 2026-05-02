@@ -2,12 +2,14 @@ extends Node
 ## Deterministic append-only world fact log (Phase 2.1). No RNG; no UI.
 ## Events are plain Dictionaries for trivial save/load via Main snapshot.
 ## Connected to HeelKawn Universe Neural Network Matrix
+## CANON SOURCE: See docs/lore/UNIVERSE_CONSTITUTION.md
 
 const SCHEMA: int = 1
 ## Text/history export line format; bump when column order or provenance rules change.
 const HISTORY_EXPORT_FORMAT: String = "1.0.0"
 ## Keep a long chronology by default; older entries rotate out only after this cap.
 const MAX_EVENTS: int = 50000
+const CONSTITUTION_PATH: String = "res://docs/lore/UNIVERSE_CONSTITUTION.md"
 
 enum Kind {
 	PAWN_DEATH = 0,
@@ -35,6 +37,108 @@ var _event_type_counts: Dictionary = {}
 var _pawn_death_last_tick_by_region: Dictionary = {}
 ## Monotonic event id (stable cursor for paging/query surfaces).
 var _next_event_id: int = 1
+var _constitution_text: String = ""
+var _constitution_loaded: bool = false
+
+
+func _ready() -> void:
+	add_to_group("tickable")
+	_load_constitution_text()
+
+
+func _on_world_tick(tick_number: int) -> void:
+	# WorldMemory is primarily a data store; no per-tick logic required.
+	# This method satisfies the tickable interface for deterministic ordering.
+	pass
+
+# ARCHITECT TASK 2: Record a leadership challenge attempt.
+# This is called regardless of outcome.
+func record_leadership_challenge_attempt(
+		tick: int,
+		settlement_id: int,
+		challenger_id: int,
+		challenger_name: String,
+		leader_id: int,
+		leader_name: String,
+		challenger_score: float,
+		leader_score: float,
+		challenger_chance: float,
+		outcome_seed: int,
+		success: bool
+	) -> void:
+	_append({
+		"s": SCHEMA,
+		"type": "leadership_challenge_attempt",
+		"t": tick,
+		"settlement_id": settlement_id,
+		"challenger_id": challenger_id,
+		"challenger_name": challenger_name,
+		"leader_id": leader_id,
+		"leader_name": leader_name,
+		"challenger_score": challenger_score,
+		"leader_score": leader_score,
+		"challenger_chance": challenger_chance,
+		"outcome_seed": outcome_seed,
+		"success": success,
+	})
+
+# ARCHITECT TASK 2: Record a leadership change after a successful challenge.
+func record_leadership_change(
+		tick: int,
+		settlement_id: int,
+		old_leader_id: int,
+		old_leader_name: String,
+		new_leader_id: int,
+		new_leader_name: String
+	) -> void:
+	_append({
+		"s": SCHEMA,
+		"type": "leadership_change",
+		"t": tick,
+		"settlement_id": settlement_id,
+		"old_leader_id": old_leader_id,
+		"old_leader_name": old_leader_name,
+		"new_leader_id": new_leader_id,
+		"new_leader_name": new_leader_name,
+	})
+
+# ARCHITECT TASK 2: Record a failed leadership challenge.
+func record_leadership_challenge_failed(
+		tick: int,
+		settlement_id: int,
+		challenger_id: int,
+		challenger_name: String,
+		leader_id: int,
+		leader_name: String
+	) -> void:
+	_append({
+		"s": SCHEMA,
+		"type": "leadership_challenge_failed",
+		"t": tick,
+		"settlement_id": settlement_id,
+		"challenger_id": challenger_id,
+		"challenger_name": challenger_name,
+		"leader_id": leader_id,
+		"leader_name": leader_name,
+	})
+
+# ARCHITECT TASK 2: Record a leadership resolution failure (e.g., SettlementMemory update issue).
+func record_leadership_resolution_failed(
+		tick: int,
+		settlement_id: int,
+		challenger_id: int,
+		old_ruler_id: int,
+		reason: String
+	) -> void:
+	_append({
+		"s": SCHEMA,
+		"type": "leadership_resolution_failed",
+		"t": tick,
+		"settlement_id": settlement_id,
+		"challenger_id": challenger_id,
+		"old_ruler_id": old_ruler_id,
+		"reason": reason,
+	})
 
 # === Neural Network Matrix Connections ===
 
@@ -164,6 +268,8 @@ static func _region_key(tx: int, ty: int) -> int:
 
 
 func _append(e: Dictionary) -> void:
+	if not validate_event_against_constitution(e):
+		return
 	_dirty = true
 	if _events.size() >= MAX_EVENTS:
 		var dropped: Dictionary = _events[0]
@@ -171,6 +277,53 @@ func _append(e: Dictionary) -> void:
 		_on_event_removed_from_indexes(dropped)
 	_events.append(e)
 	_on_event_added_to_indexes(e)
+
+
+func _load_constitution_text() -> void:
+	_constitution_text = ""
+	_constitution_loaded = false
+	if not FileAccess.file_exists(CONSTITUTION_PATH):
+		push_warning("[WorldMemory] Constitution file missing: %s" % CONSTITUTION_PATH)
+		return
+	var f: FileAccess = FileAccess.open(CONSTITUTION_PATH, FileAccess.READ)
+	if f == null:
+		push_warning("[WorldMemory] Failed to open constitution file: %s" % CONSTITUTION_PATH)
+		return
+	_constitution_text = f.get_as_text()
+	_constitution_loaded = not _constitution_text.strip_edges().is_empty()
+
+
+func validate_event_against_constitution(event_dict: Dictionary) -> bool:
+	var type_s: String = _canonical_event_type(event_dict).to_lower()
+	var payload: String = JSON.stringify(event_dict).to_lower()
+	var violations: Array[String] = []
+	# Deterministic Kernel gate: reject random/luck/chosen-one flavored history claims.
+	if event_dict.has("random") \
+			or event_dict.has("rng") \
+			or event_dict.has("luck") \
+			or event_dict.has("chosen_one") \
+			or payload.find("random_luck") >= 0 \
+			or payload.find("\"chosen_one\"") >= 0 \
+			or payload.find("chosen one") >= 0 \
+			or payload.find("destiny_override") >= 0 \
+			or payload.find("miracle") >= 0:
+		violations.append("Deterministic Kernel / No Chosen Ones")
+	# Type-level guard rails for direct event names.
+	if type_s.find("chosen") >= 0 or type_s.find("luck") >= 0 or type_s.find("random") >= 0:
+		violations.append("Deterministic Kernel event naming")
+	# Optional constitution-presence hint for easier diagnostics.
+	if not _constitution_loaded:
+		push_warning("[WorldMemory] Constitution not loaded; applying fallback deterministic validator.")
+	if not violations.is_empty():
+		push_warning(
+				"[WorldMemory][CanonViolation] Rejected event type=%s laws=%s payload=%s" % [
+					type_s,
+					", ".join(violations),
+					JSON.stringify(event_dict),
+				]
+		)
+		return false
+	return true
 
 
 func _on_event_added_to_indexes(evt: Dictionary) -> void:
@@ -318,7 +471,7 @@ func _severity_for_type(typ: String) -> int:
 			return 3
 		"enemy_death", "war_proposed", "war_battle_spawned", "governance_change", "birth", "pawn_birth", "building_destroyed":
 			return 2
-		"social_bond_milestone", "social_meeting", "structure_built", "job_completed", "knowledge_discovery", "knowledge_rediscovery", "teaching_success", "settlement_intent_shift", "building_constructed", "fire_extinguished", "migration_started", "migration_completed", "teaching_event":
+		"social_bond_milestone", "social_meeting", "structure_built", "job_completed", "knowledge_discovery", "knowledge_rediscovery", "teaching_success", "settlement_intent_shift", "building_constructed", "fire_extinguished", "migration_started", "migration_completed", "teaching_event", "leadership_change": # ARCHITECT TASK 2: Add leadership_change to moderate severity
 			return 1
 		_:
 			return 0
@@ -815,6 +968,20 @@ func get_last_pawn_death_tick_for_region(rk: int) -> int:
 	return int(_pawn_death_last_tick_by_region.get(rk, -1))
 
 
+func get_all_region_keys() -> PackedInt32Array:
+	var seen: Dictionary = {}
+	for rk in _pawn_death_last_tick_by_region:
+		seen[int(rk)] = true
+	for e in _events:
+		if e.has("r"):
+			seen[int(e["r"])] = true
+	var out: PackedInt32Array = PackedInt32Array()
+	for rk in seen:
+		out.append(int(rk))
+	out.sort()
+	return out
+
+
 ## Region keys (16x16) that have at least one animal death event, sorted ascending (deterministic).
 func get_region_keys_with_animal_deaths() -> Array[int]:
 	var seen: Dictionary = {}
@@ -1133,4 +1300,128 @@ func get_relationship_timeline(a_id: int, b_id: int, max_items: int = 64) -> Arr
 			continue
 		out.append(evt.duplicate(true))
 	out.reverse()
+	return out
+
+
+## ============================================================
+## World Seed Export + Chronicle Summary
+## ============================================================
+
+func export_world_seed(file_path: String) -> bool:
+	var world_seed: int = 0
+	var wr: Node = get_node_or_null("/root/WorldRNG")
+	if wr != null and wr.has_method("current_seed"):
+		world_seed = int(wr.call("current_seed"))
+	var export_tick: int = 0
+	var gm: Node = get_node_or_null("/root/GameManager")
+	if gm != null and "tick_count" in gm:
+		export_tick = int(gm.tick_count)
+	var cal: Dictionary = _get_calendar_data()
+	var year: int = int(cal.get("year", 1))
+	var day: int = int(cal.get("day", 1))
+	var settlements: Array = _get_settlement_snapshot()
+	var total_pawns: int = _get_total_pawns()
+	var biomes: Array = _get_biomes_data()
+	var export_data := {
+		"schema": "heelkawn_v1",
+		"world_seed": world_seed,
+		"export_tick": export_tick,
+		"calendar": {"year": year, "day": day},
+		"settlements": settlements,
+		"population": {"total": total_pawns},
+		"biomes": biomes,
+	}
+	var json := JSON.stringify(export_data, "  ")
+	var file = FileAccess.open(file_path, FileAccess.WRITE)
+	if file:
+		file.store_string(json)
+		file.close()
+		return true
+	return false
+
+
+func get_chronicle_summary() -> String:
+	var lines = []
+	lines.append("=== HEELKAWN CHRONICLE ===")
+	var year: int = 1
+	var day: int = 1
+	if has_node("/root/WorldClock"):
+		year = get_node("/root/WorldClock").current_year
+		day = get_node("/root/WorldClock").current_day
+	lines.append("Year %d, Day %d" % [year, day])
+	var total_pawns: int = _get_total_pawns()
+	lines.append("Population: %d" % total_pawns)
+	if has_node("/root/SettlementMemory"):
+		var sm = get_node("/root/SettlementMemory")
+		if sm.has_method("get_settlement_count"):
+			lines.append("Settlements: %d" % sm.get_settlement_count())
+	return "\n".join(lines)
+
+
+## ---- Internal helpers for export/chronicle ----
+
+func _get_world_seed() -> int:
+	var w: Node = get_node_or_null("/root/WorldRNG")
+	if w != null:
+		if w.has_method("current_seed"):
+			return int(w.call("current_seed"))
+		if w.has_method("get_current_seed"):
+			return int(w.call("get_current_seed"))
+	return 0
+
+
+func _get_tick_count() -> int:
+	if get_node_or_null("/root/GameManager") != null:
+		var gm = get_node_or_null("/root/GameManager")
+		if gm and "tick_count" in gm:
+			return gm.tick_count
+	return 0
+
+
+func _get_calendar_data() -> Dictionary:
+	var cal: Dictionary = {"year": 1, "day": 1}
+	if get_node_or_null("/root/WorldClock") != null:
+		var wc = get_node_or_null("/root/WorldClock")
+		if "current_year" in wc:
+			cal["year"] = wc.current_year
+		if "current_day" in wc:
+			cal["day"] = wc.current_day
+	return cal
+
+
+func _get_settlement_snapshot() -> Array:
+	if get_node_or_null("/root/SettlementMemory") != null:
+		var sm = get_node_or_null("/root/SettlementMemory")
+		if sm and sm.has_method("get_snapshot"):
+			return sm.get_snapshot()
+	return []
+
+
+func _get_total_pawns() -> int:
+	var spawner = get_node_or_null("/root/PawnSpawner")
+	if spawner and "pawns" in spawner:
+		return spawner.pawns.size()
+	return 0
+
+
+func _get_settlement_count() -> int:
+	if get_node_or_null("/root/SettlementMemory") != null:
+		var sm = get_node_or_null("/root/SettlementMemory")
+		if sm and sm.has_method("get_settlement_count"):
+			return sm.get_settlement_count()
+	return 0
+
+
+func _get_biomes_data() -> Array:
+	## Chronicle export: full biome raster not exposed on WorldMemory; keep empty until needed.
+	return []
+
+
+func _get_recent_events(max_items: int = 10) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var start = max(0, _events.size() - max_items)
+	for i in range(start, _events.size()):
+		var evt = _events[i]
+		if evt is Dictionary:
+			out.append(evt.duplicate(true))
 	return out

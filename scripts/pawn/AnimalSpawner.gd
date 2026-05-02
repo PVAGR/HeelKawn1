@@ -341,6 +341,48 @@ func get_live_wildlife_snapshot() -> Dictionary:
 	}
 
 
+## Deterministic local wildlife snapshot around a tile.
+func get_nearby_wildlife_snapshot(center_tile: Vector2i, radius_tiles: int = 12) -> Dictionary:
+	var rabbits: int = 0
+	var deer: int = 0
+	var nearest_deer_dist: int = 1_000_000
+	var nearest_any_dist: int = 1_000_000
+	var r2: int = radius_tiles * radius_tiles
+	for animal in animals:
+		if animal == null or not is_instance_valid(animal):
+			continue
+		var dt: Vector2i = animal.tile_pos - center_tile
+		var dsq: int = dt.x * dt.x + dt.y * dt.y
+		if dsq > r2:
+			continue
+		nearest_any_dist = mini(nearest_any_dist, dsq)
+		if int(animal.animal_type) == int(Animal.Type.RABBIT):
+			rabbits += 1
+		elif int(animal.animal_type) == int(Animal.Type.DEER):
+			deer += 1
+			nearest_deer_dist = mini(nearest_deer_dist, dsq)
+	var nearest_any: int = -1 if nearest_any_dist >= 1_000_000 else int(round(sqrt(float(nearest_any_dist))))
+	var nearest_deer: int = -1 if nearest_deer_dist >= 1_000_000 else int(round(sqrt(float(nearest_deer_dist))))
+	var threat_score: float = float(deer) * 1.4
+	if nearest_deer >= 0:
+		threat_score += maxf(0.0, 6.0 - float(nearest_deer) * 0.35)
+	var threat_level: String = "low"
+	if threat_score >= 9.0:
+		threat_level = "high"
+	elif threat_score >= 4.0:
+		threat_level = "medium"
+	return {
+		"rabbit": rabbits,
+		"deer": deer,
+		"total": rabbits + deer,
+		"radius": radius_tiles,
+		"nearest_any_dist": nearest_any,
+		"nearest_deer_dist": nearest_deer,
+		"threat_score": threat_score,
+		"threat_level": threat_level,
+	}
+
+
 ## Diagnostic: compare live scene counts vs derived population counts
 ## Returns Dictionary with discrepancies for validation
 func get_population_validation_diagnostic(world: World) -> Dictionary:

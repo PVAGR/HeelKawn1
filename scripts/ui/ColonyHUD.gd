@@ -15,6 +15,7 @@ const REFRESH_EVERY_N_TICKS_EXTREME: int = 6
 const REFRESH_EVERY_N_TICKS_MAX: int = 8
 const WILDLIFE_SAMPLE_EVERY_TICKS: int = 20
 const WILDLIFE_HISTORY_SIZE: int = 8
+const WILDLIFE_NEARBY_RADIUS_TILES: int = 14
 const SHOW_REFRESH_DIAG: bool = true
 
 const PANEL_BG: Color = Color(0.05, 0.06, 0.08, 0.78)
@@ -50,8 +51,12 @@ var _wildlife_prev_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
 var _wildlife_sample_tick: int = 0
 var _wildlife_history: Array[int] = []
 var _momentum_spark: String = "........"
+var _wildlife_nearby_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0, "threat_level": "low"}
 var _player_input_buffer: PlayerInputBuffer = null
 var _player_pawn = null
+var _has_player_needs: bool = false
+var _player_hunger: float = 100.0
+var _player_rest: float = 100.0
 var _hud_dirty: bool = true
 var _last_refresh_stride: int = REFRESH_EVERY_N_TICKS
 var _last_coarse_gate: int = 10
@@ -99,6 +104,17 @@ func set_player_control_refs(input_buffer: PlayerInputBuffer, player_pawn: Pawn)
 	_player_pawn = player_pawn
 	if _player_input_buffer != null and not _player_input_buffer.intent_ready.is_connected(_on_intent_ready):
 		_player_input_buffer.intent_ready.connect(_on_intent_ready)
+	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		update_player_needs(_player_pawn.data.hunger, _player_pawn.data.rest)
+	else:
+		_has_player_needs = false
+	_hud_dirty = true
+
+
+func update_player_needs(hunger: float, rest: float) -> void:
+	_player_hunger = clampf(hunger, 0.0, 100.0)
+	_player_rest = clampf(rest, 0.0, 100.0)
+	_has_player_needs = true
 	_hud_dirty = true
 
 
@@ -111,6 +127,19 @@ func _on_intent_ready(_action_id: int) -> void:
 func set_designation_mode(label: String) -> void:
 	_designation_label = label
 	_hud_dirty = true
+
+
+func _visible_pawns_for_hud() -> Array[Pawn]:
+	var out: Array[Pawn] = []
+	if _spawner == null:
+		return out
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node != null:
+		return main_node.get_visible_pawns()
+	for p in _spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
+			out.append(p)
+	return out
 
 
 # ==================== refresh hooks ====================
@@ -187,6 +216,9 @@ func _refresh() -> void:
 		lines.append(_stockpile_simple_line())
 		lines.append(_pawn_line_simple())
 		lines.append(_krond_line_simple())
+		var body_simple: String = _player_body_needs_line_simple()
+		if body_simple != "":
+			lines.append(body_simple)
 		lines.append(_jobs_line_simple())
 		lines.append(_wildlife_line())
 		var intent_simple: String = _player_intent_hud_line()
@@ -344,7 +376,7 @@ func _first_play_hint_line() -> String:
 
 ## High-level world snapshot (places, memory log size, work queue).
 func _world_pulse_line() -> String:
-	var settlements_n: int = SettlementMemory.settlements.size()
+	var settlements_n: int = _visible_settlement_count_for_hud()
 	var facts: int = WorldMemory.event_count()
 	var js: Dictionary = JobManager.stats()
 	var open_j: int = int(js.get("open", 0))
@@ -466,6 +498,13 @@ func _prune_freed_pawns_in_spawner() -> void:
 			list.remove_at(i)
 
 
+func _visible_settlement_count_for_hud() -> int:
+	var m: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if m != null:
+		return m.get_visible_settlement_count()
+	return SettlementMemory.settlements.size()
+
+
 func _pawn_line() -> String:
 	if _spawner == null:
 		return "[color=#cccccc]Pawns:[/color] (none)"
@@ -479,7 +518,7 @@ func _pawn_line() -> String:
 	var children_total: int = 0
 	var n: int = 0
 	var lead: Pawn = null
-	for p in _spawner.pawns:
+	for p in _visible_pawns_for_hud():
 		if not is_instance_valid(p) or p.data == null:
 			continue
 		if lead == null:
@@ -525,7 +564,7 @@ func _pawn_line_simple() -> String:
 	var avg_h: float = 0.0
 	var avg_r: float = 0.0
 	var avg_m: float = 0.0
-	for p in _spawner.pawns:
+	for p in _visible_pawns_for_hud():
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		n += 1
@@ -551,6 +590,35 @@ func _krond_line_simple() -> String:
 	var kr: float = float(_player_pawn.data.available_krond)
 	var kint: int = int(round(kr))
 	return "[color=#ffd54f]Krond:[/color] [b]%d[/b]" % [kint]
+
+
+func _player_body_needs_text() -> String:
+	if not _is_player_incarnated_for_hud():
+		return ""
+	if not _has_player_needs:
+		if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+			return ""
+		_player_hunger = clampf(float(_player_pawn.data.hunger), 0.0, 100.0)
+		_player_rest = clampf(float(_player_pawn.data.rest), 0.0, 100.0)
+		_has_player_needs = true
+	return "hunger %s · rest %s" % [
+		_color_value(_player_hunger),
+		_color_value(_player_rest),
+	]
+
+
+func _player_body_needs_line_simple() -> String:
+	var needs: String = _player_body_needs_text()
+	if needs == "":
+		return ""
+	return "[color=#90caf9]Body:[/color] %s" % needs
+
+
+func _is_player_incarnated_for_hud() -> bool:
+	var main_node: Node = get_tree().get_root().get_node_or_null("Main")
+	if main_node == null or not main_node.has_method("is_player_incarnated"):
+		return false
+	return bool(main_node.call("is_player_incarnated"))
 
 
 func _stockpile_line() -> String:
@@ -612,8 +680,10 @@ func _player_status_line() -> String:
 	var queue_count: int = main_node.get_player_queue_size()
 	var state: String = main_node.get_player_action_state()
 	var pawn_id_text: String = str(pawn_id) if pawn_id >= 0 else "--"
-	return "[color=#cccccc]PLAYER PAWN:[/color] [b]%s[/b]  |  QUEUE: [b]%d[/b]  |  STATE: [b]%s[/b]" % [
-		pawn_id_text, queue_count, state
+	var body_text: String = _player_body_needs_text()
+	var body_suffix: String = "" if body_text == "" else "  |  BODY: %s" % body_text
+	return "[color=#cccccc]PLAYER PAWN:[/color] [b]%s[/b]  |  QUEUE: [b]%d[/b]  |  STATE: [b]%s[/b]%s" % [
+		pawn_id_text, queue_count, state, body_suffix
 	]
 
 
@@ -645,7 +715,7 @@ func _session_diag_line() -> String:
 	var js: Dictionary = JobManager.stats()
 	var open_j: int = int(js.get("open", 0))
 	var claimed_j: int = int(js.get("claimed", 0))
-	var settlements_n: int = SettlementMemory.settlements.size()
+	var settlements_n: int = _visible_settlement_count_for_hud()
 	var q: float = float(d.get("queued_ticks_est", 0.0))
 	var acc_cap: int = int(d.get("max_accumulated_ticks", 16))
 	var tpf: int = int(d.get("max_ticks_per_frame", 8))
@@ -769,6 +839,8 @@ func _sample_wildlife(current_tick: int) -> void:
 		return
 	_wildlife_prev_snapshot = _wildlife_snapshot.duplicate()
 	_wildlife_snapshot = spawner.get_live_wildlife_snapshot()
+	var probe_tile: Vector2i = _wildlife_probe_tile()
+	_wildlife_nearby_snapshot = spawner.get_nearby_wildlife_snapshot(probe_tile, WILDLIFE_NEARBY_RADIUS_TILES)
 	_wildlife_sample_tick = current_tick
 	_wildlife_history.append(int(_wildlife_snapshot.get("total", 0)))
 	if _wildlife_history.size() > WILDLIFE_HISTORY_SIZE:
@@ -832,7 +904,30 @@ func _wildlife_line() -> String:
 	else:
 		tail = _momentum_spark
 	
-	return "🦌 Wildlife: R:%d D:%d T:%d %s %s" % [r, d, t, span, tail]
+	var nr: int = int(_wildlife_nearby_snapshot.get("rabbit", 0))
+	var nd: int = int(_wildlife_nearby_snapshot.get("deer", 0))
+	var nt: int = int(_wildlife_nearby_snapshot.get("total", 0))
+	var near_dist: int = int(_wildlife_nearby_snapshot.get("nearest_any_dist", -1))
+	var near_str: String = "n/a" if near_dist < 0 else str(near_dist)
+	var threat_level: String = str(_wildlife_nearby_snapshot.get("threat_level", "low"))
+	var threat_icon: String = "!" if threat_level == "low" else "!!"
+	if threat_level == "high":
+		threat_icon = "!!!"
+	return "🦌 Wildlife: R:%d D:%d T:%d %s %s | Nearby(%dt): R:%d D:%d T:%d nearest:%s threat:%s %s" % [
+		r, d, t, span, tail,
+		WILDLIFE_NEARBY_RADIUS_TILES, nr, nd, nt, near_str, threat_level.to_upper(), threat_icon
+	]
+
+
+func _wildlife_probe_tile() -> Vector2i:
+	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		return _player_pawn.data.tile_pos
+	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	if main_node != null:
+		var camera: Camera2D = main_node.get_node_or_null("Camera2D") as Camera2D
+		if camera != null and _world != null:
+			return _world.world_to_tile(camera.global_position)
+	return Vector2i(WorldData.WIDTH / 2, WorldData.HEIGHT / 2)
 
 
 ## Diagnostic: breakdown of wildlife trend calculation for validation

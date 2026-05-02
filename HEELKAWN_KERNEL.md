@@ -33,11 +33,11 @@ It is superseded by docs/HEELKAWN_STATE.md, which is the authoritative project s
 - `WorldTrace` (visual memory)
 - Time / tick index
 - Stable handles (tiles, pawns, zones)
-- **WorldMemory v1** ([`autoloads/WorldMemory.gd`](autoloads/WorldMemory.gd)): append-only pawn/animal death facts, `MAX_EVENTS` cap, included in colony save (v2).
+- **WorldMemory v2** ([`autoloads/WorldMemory.gd`](autoloads/WorldMemory.gd)): comprehensive append-only fact log including pawn/animal deaths, builds, fires, starvation, migrations, teaching, leadership changes, etc. `MAX_EVENTS` cap, included in colony save (v2).
 
 **To build (core):**
 
-- **2.1 WorldMemory** — extend with more fact types (builds, starvation as world event, first occurrences); deaths + save path are in.
+- **2.1 WorldMemory** — Fine-tune existing fact types; ensure full coverage for all significant world events. (Currently 80% complete, focus on edge cases).
 - **2.2 WorldMeaning** — derived, computed interpretations (e.g. “repeated death here”, “exhausted biome”). Never scripted.
 - **2.3 Persistence rules** — what survives (ruins, scars, damage, later culture).
 

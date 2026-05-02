@@ -15,6 +15,9 @@ class SettlementAIShim:
 		settlement_name = name
 		location = pos
 
+	func _on_world_tick(tick_number: int) -> void:
+		update()
+
 	func update() -> void:
 		pass
 
@@ -64,10 +67,16 @@ var _last_world_ai_update_tick: int = -1
 var _last_settlement_ai_update_tick: int = -1
 
 func _ready() -> void:
-	GameManager.game_tick.connect(_on_game_tick)
-	last_update_tick = GameManager.tick_count
-	_last_world_ai_update_tick = GameManager.tick_count
-	_last_settlement_ai_update_tick = GameManager.tick_count
+	add_to_group("tickable")
+	## TickManager will call _on_world_tick() directly on "tickable" nodes
+	## No need to connect to signal - avoids double-processing
+	## Fallback: use GameManager for backward compatibility (if TickManager not available)
+	if not has_node("/root/TickManager"):
+		if GameManager != null:
+			GameManager.game_tick.connect(_on_world_tick)
+		last_update_tick = GameManager.tick_count
+		_last_world_ai_update_tick = GameManager.tick_count
+		_last_settlement_ai_update_tick = GameManager.tick_count
 	# Initialize advanced neural network matrix systems
 	_initialize_neural_network_matrix()
 	_initialize_learning_algorithms()
@@ -116,7 +125,8 @@ func _initialize_neural_network_matrix() -> void:
 	# Initialize neural connections between layers
 	_initialize_neural_connections()
 	
-	print("[AIAgentManager] Neural network matrix initialized with %d layers" % neural_matrix.layers.size())
+	if OS.is_debug_build():
+		print("[AIAgentManager] Neural network matrix initialized with %d layers" % neural_matrix.layers.size())
 
 
 func _initialize_neural_connections() -> void:
@@ -170,7 +180,8 @@ func _initialize_learning_algorithms() -> void:
 		}
 	}
 	
-	print("[AIAgentManager] Learning algorithms initialized")
+	if OS.is_debug_build():
+		print("[AIAgentManager] Learning algorithms initialized")
 
 
 func _initialize_pattern_recognition() -> void:
@@ -191,7 +202,8 @@ func _initialize_pattern_recognition() -> void:
 		"confidence_scores": {}
 	}
 	
-	print("[AIAgentManager] Pattern recognition systems initialized")
+	if OS.is_debug_build():
+		print("[AIAgentManager] Pattern recognition systems initialized")
 
 
 func _initialize_predictive_models() -> void:
@@ -216,7 +228,8 @@ func _initialize_predictive_models() -> void:
 		}
 	}
 	
-	print("[AIAgentManager] Predictive models initialized")
+	if OS.is_debug_build():
+		print("[AIAgentManager] Predictive models initialized")
 
 
 func _initialize_collective_intelligence() -> void:
@@ -235,7 +248,8 @@ func _initialize_collective_intelligence() -> void:
 		}
 	}
 	
-	print("[AIAgentManager] Collective intelligence initialized")
+	if OS.is_debug_build():
+		print("[AIAgentManager] Collective intelligence initialized")
 
 
 # === Neural Network Processing ===
@@ -740,7 +754,7 @@ func _extract_event_features(world_state: Dictionary) -> Array[float]:
 	return features
 
 
-func _on_game_tick(tick: int) -> void:
+func _on_world_tick(tick: int) -> void:
 	if not enabled:
 		return
 	
@@ -1181,5 +1195,3 @@ func _find_nearest_settlement(agent_id: int) -> int:
 	for settlement_id in settlement_ai_system:
 		return settlement_id
 	return -1
-#		return settlement_id
-#	return -1

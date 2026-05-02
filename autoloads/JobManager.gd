@@ -12,6 +12,14 @@ signal job_claimed(job: Job, pawn: Pawn)
 signal job_completed(job: Job)
 signal job_cancelled(job: Job)
 
+
+func _ready() -> void:
+	add_to_group("tickable")
+
+
+
+
+
 var _next_id: int = 1
 
 ## All currently-known, non-retired jobs.
@@ -175,6 +183,20 @@ func claim_by_id_for(pawn: Pawn, job_id: int) -> Job:
 			continue
 		if pd.has_method("allows_job_type") and not pd.allows_job_type(j.type):
 			return null
+		# === CHECK TECH REQUIREMENT ===
+		var settlement_id: int = -1
+		if pd.has_method("get_tile_pos"):
+			var tile_pos: Vector2i = pd.call("get_tile_pos")
+			var rk: int = WorldMemory._region_key(int(tile_pos.x), int(tile_pos.y))
+			settlement_id = SettlementMemory.get_center_region_for_region(rk)
+		if settlement_id < 0 and j.has_method("get_work_tile"):
+			var work_tile: Vector2i = j.call("get_work_tile")
+			var rk: int = WorldMemory._region_key(int(work_tile.x), int(work_tile.y))
+			settlement_id = SettlementMemory.get_center_region_for_region(rk)
+		if settlement_id >= 0 and TechnologySystem != null:
+			if not bool(TechnologySystem.call("can_settle_perform_job_type", settlement_id, int(j.type))):
+				return null
+		# === END TECH CHECK ===
 		_open.remove_at(i)
 		_claimed.append(j)
 		j.state = Job.State.CLAIMED
@@ -212,6 +234,26 @@ func complete(job: Job) -> void:
 
 	# Notify WorldAI of job completion for economic neuron updates
 	_notify_world_ai_job_completion(job)
+
+	# Record progression impact
+	var impact_amount: int = 0
+	if job.type == Job.Type.BUILD_SHELTER or job.type == Job.Type.BUILD_HEARTH:
+		impact_amount = 10
+	elif job.type == Job.Type.TEACH_SKILL or job.type == Job.Type.APPRENTICESHIP:
+		impact_amount = 10
+	elif job.type == Job.Type.GROW_FOOD or job.type == Job.Type.HARVEST_CROPS:
+		impact_amount = 5
+	elif job.type == Job.Type.PROTECT or job.type == Job.Type.DEFEND:
+		impact_amount = 15
+	if impact_amount > 0 and get_tree() != null and get_tree().root.has_node("ProgressionSystem"):
+		var pawn_id: int = 0
+		if job.assigned_pawn != null and job.assigned_pawn.has_method("get_pawn_data"):
+			var pd: PawnData = job.assigned_pawn.get_pawn_data()
+			if pd != null:
+				pawn_id = int(pd.id)
+		var progression: Node = get_node("/root/ProgressionSystem")
+		if progression.has_method("record_impact"):
+			progression.call("record_impact", pawn_id, impact_amount, str(Job.Type.keys()[job.type]))
 
 	job_completed.emit(job)
 	# NOTE: `BUILD_WALL` path reservation is cleared in `World.build_wall` when
@@ -331,6 +373,10 @@ func _notify_world_ai_job_completion(job: Job) -> void:
 
 ## `abandon` keeps the open job: construction reservations on tiles stay. Only
 ## a full `cancel` (no longer any job) releases them.
+func _on_world_tick(_tick_number: int) -> void:
+	# JobManager is event-driven; no per-tick state changes required.
+	pass
+
 func _notify_path_reservation_released(j: Job) -> void:
 	if j == null or j.type != Job.Type.BUILD_WALL:
 		return

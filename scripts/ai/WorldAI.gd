@@ -173,10 +173,19 @@ var _pawn_neural_cache_tick: int = -1
 var _pawn_neural_cache: Dictionary = {}
 
 func _ready():
+	add_to_group("tickable")
 	_initialize_world_state()
 	_setup_initial_discoveries()
 	_initialize_neural_world_matrix()
 	_initialize_neural_networks()
+
+
+func _on_world_tick(tick_number: int) -> void:
+	# Forward tick to all SettlementAI instances
+	for settlement_id in active_settlements:
+		var settlement_ai = active_settlements[settlement_id]
+		if settlement_ai != null and settlement_ai.has_method("_on_world_tick"):
+			settlement_ai._on_world_tick(tick_number)
 
 func _world_stream(label: String) -> StringName:
 	return StringName("world_ai:%s" % label)
@@ -211,7 +220,8 @@ func _initialize_neural_world_matrix() -> void:
 		"evolution_cycles": 0
 	}
 	
-	print("[WorldAI] Neural world matrix initialized with %d neural networks" % neural_world_matrix.size())
+	if OS.is_debug_build():
+		print("[WorldAI] Neural world matrix initialized with %d neural networks" % neural_world_matrix.size())
 
 func _create_world_state_neurons() -> Dictionary:
 	return {
@@ -319,7 +329,8 @@ func _initialize_neural_networks() -> void:
 	economic_neural_network = _create_specialized_network("economic", 20, 10, 5)
 	technological_neural_network = _create_specialized_network("technological", 16, 8, 4)
 	
-	print("[WorldAI] Specialized neural networks initialized")
+	if OS.is_debug_build():
+		print("[WorldAI] Specialized neural networks initialized")
 
 func _create_specialized_network(network_type: String, input_size: int, hidden_size: int, output_size: int) -> Dictionary:
 	return {

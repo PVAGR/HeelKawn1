@@ -108,6 +108,38 @@ func _initialize_recipes() -> void:
 		"durability": 40,
 	}
 
+	# Stone Axe: 1 stone + 1 stick (flint knife + wood)
+	recipes["stone_axe"] = {
+		"result": Item.Type.FLINT_KNIFE,  # Reuse flint knife as stone axe
+		"materials": {MaterialType.STONE: 1, MaterialType.WOOD: 1},
+		"skill_required": "crafting",
+		"skill_level": 5,
+		"crafting_ticks": 100,
+		"durability": 40,
+	}
+
+	# Stone Pickaxe: 2 stone + 1 stick
+	recipes["stone_pickaxe"] = {
+		"result": Item.Type.FLINT_PICK,  # Reuse flint pick as stone pickaxe
+		"materials": {MaterialType.STONE: 2, MaterialType.WOOD: 1},
+		"skill_required": "crafting",
+		"skill_level": 8,
+		"crafting_ticks": 150,
+		"durability": 50,
+	}
+
+	# Wood Shelter: 4 wood + 2 fiber
+	recipes["wood_shelter"] = {
+		"result": -1,  # Special: creates a building, not a tool
+		"materials": {MaterialType.WOOD: 4, MaterialType.FIBER: 2},
+		"skill_required": "building",
+		"skill_level": 5,
+		"crafting_ticks": 300,
+		"durability": 0,  # Buildings don't have durability
+		"is_building": true,
+		"building_type": "shelter",
+	}
+
 func _on_game_tick(_tick: int) -> void:
 	# Update active crafting jobs
 	var to_remove: Array[int] = []
@@ -199,7 +231,11 @@ func start_crafting(pawn_id: int, recipe_name: String, tile_pos: Vector2i) -> in
 		WorldMemory.record_event(event)
 	
 	return job_id
-
+ 
+func craft(pawn_id: int, recipe_name: String, tile_pos: Vector2i) -> int:
+	## Alias for start_crafting() to match requested API.
+	return start_crafting(pawn_id, recipe_name, tile_pos)
+ 
 func _complete_crafting(_job_id: int, crafting_data: Dictionary) -> void:
 	var pawn_id: int = crafting_data.get("pawn_id", -1)
 	var recipe_name: String = crafting_data.get("recipe_name", "")

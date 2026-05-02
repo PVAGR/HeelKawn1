@@ -13,9 +13,10 @@ signal tick_processed(tick_number: int)
 
 const BASE_TICK_INTERVAL: float = 1.0
 
-## SAFETY: Maximum ticks processed in a single frame to prevent hangs.
-## At 100x speed, this still allows large bursts, but stops runaway catch-up.
-const MAX_TICKS_PER_FRAME: int = 300
+## SAFETY: Maximum ticks processed in one render frame (bounded burst).
+## Keeps catch-up work predictable; combine with fmod clamp + degrade path when backlog grows.
+## Typical range 10–60; 30 balances fast-forward throughput vs frame time at ultra speed.
+const MAX_TICKS_PER_FRAME: int = 30
 
 var current_tick: int = 0
 var _accumulated_time: float = 0.0
@@ -32,6 +33,10 @@ var _current_speed_index: int = 1  # Start at 1x (index 1)
 
 var _ticks_behind: int = 0
 var _last_frame_ticks: int = 0
+## Debug-only: microseconds spent in the tick batch last frame (0 when not a debug build).
+var debug_last_tick_batch_usec: int = 0
+## Once per backlog spike: warn when accumulated time exceeds 2× target interval until recovered.
+var _backlog_degrade_warned: bool = false
 
 
 func _ready() -> void:
@@ -51,21 +56,38 @@ func _process(delta: float) -> void:
 	if _target_interval <= 0.0:
 		return
 
-	## Process all pending ticks in this frame (burst pattern).
-	var ticks_this_frame: int = 0
-	while _accumulated_time >= _target_interval and ticks_this_frame < MAX_TICKS_PER_FRAME:
-		_accumulated_time -= _target_interval
-		current_tick += 1
-		ticks_this_frame += 1
-		_dispatch_tick(current_tick)
+	var prof_start_usec: int = 0
+	if OS.is_debug_build():
+		prof_start_usec = Time.get_ticks_usec()
 
-	## If we hit the safety cap, drop the rest of the backlog instead of
-	## carrying debt forever and creating a spiral of death.
-	if _accumulated_time >= _target_interval:
+	var ticks_this_frame: int = 0
+	## Graceful degradation: more than two whole tick intervals of backlog — skip catch-up bursts
+	## for this frame and clamp with fmod (same threshold family as "2× behind").
+	if _accumulated_time > 2.0 * _target_interval:
+		if not _backlog_degrade_warned:
+			push_warning(
+				"TickManager: accumulated simulation time exceeded 2× target tick interval; skipping catch-up burst and clamping backlog."
+			)
+			_backlog_degrade_warned = true
 		_ticks_behind = int(_accumulated_time / _target_interval)
-		_accumulated_time = 0.0
+		_accumulated_time = fmod(_accumulated_time, _target_interval)
 	else:
-		_ticks_behind = 0
+		_backlog_degrade_warned = false
+		while _accumulated_time >= _target_interval and ticks_this_frame < MAX_TICKS_PER_FRAME:
+			_accumulated_time -= _target_interval
+			current_tick += 1
+			ticks_this_frame += 1
+			_dispatch_tick(current_tick)
+		if _accumulated_time >= _target_interval:
+			_ticks_behind = int(_accumulated_time / _target_interval)
+			_accumulated_time = fmod(_accumulated_time, _target_interval)
+		else:
+			_ticks_behind = 0
+
+	if OS.is_debug_build():
+		debug_last_tick_batch_usec = Time.get_ticks_usec() - prof_start_usec
+	else:
+		debug_last_tick_batch_usec = 0
 
 	_last_frame_ticks = ticks_this_frame
 
@@ -209,3 +231,5 @@ func reset() -> void:
 	_accumulated_time = 0.0
 	_ticks_behind = 0
 	_last_frame_ticks = 0
+	_backlog_degrade_warned = false
+	debug_last_tick_batch_usec = 0

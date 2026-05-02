@@ -256,6 +256,8 @@ func spawn_generational_pawn(
 		if center_region >= 0:
 			var rep: float = float(CulturalMemory.get_region_reputation(center_region))
 			data.settlement_reputation[str(center_region)] = rep
+			# Record birth settlement for lineage tracking and cultural revival naming
+			data.birth_settlement = center_region
 		if not culture_name.is_empty():
 			data.cultural_affinity[culture_name] = 100.0
 	var taboo_job_names: Array[String] = []
@@ -281,6 +283,7 @@ func spawn_generational_pawn(
 		"pawn_name": data.display_name,
 		"tile": {"x": tile.x, "y": tile.y},
 		"region": WorldMemory._region_key(tile.x, tile.y),
+		"birth_settlement": data.birth_settlement,
 	})
 	if birth_kind == "rebirth":
 		WorldMemory.record_event({
@@ -293,6 +296,7 @@ func spawn_generational_pawn(
 			"region": WorldMemory._region_key(tile.x, tile.y),
 			"center_region": int(settlement_context.get("center_region", -1)),
 			"culture_name": str(settlement_context.get("culture_name", "")),
+			"birth_settlement": data.birth_settlement,
 		})
 	var kin: Node = get_node_or_null("/root/KinshipSystem")
 	if kin != null:

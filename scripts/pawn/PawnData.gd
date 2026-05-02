@@ -265,6 +265,9 @@ var affinity_birth_snapshot: Dictionary = {}
 var profession_liking: Dictionary = {}
 var current_profession: int = Profession.NONE
 var birth_tick: int = 0
+## Settlement center_region where this pawn was born (-1 if unknown or pre-system).
+## Used for cultural memory and lineage-based settlement revival naming.
+var birth_settlement: int = -1
 var parent_a_id: int = -1
 var parent_b_id: int = -1
 var children_count: int = 0

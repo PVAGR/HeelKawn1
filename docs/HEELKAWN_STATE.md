@@ -11,7 +11,8 @@ This document outlines the state management strategies for the HeelKawn simulati
   - Fixed Pawn parse errors that were cascading into job-system and UI dependency failures.
   - Verified `ProceduresPawnVisualizer` exists, exposes `class_name ProceduresPawnVisualizer`, and compiles cleanly.
   - Confirmed `Job.gd` and `JobManager.gd` compile cleanly after the Pawn dependency chain is restored.
-- Next Task: Harden Settlement Revival Logic
+  - Added the Phase 4 settlement lifecycle machine with active / abandoned / reviving / permanent ruin states.
+- Next Task: Validate settlement lifecycle transitions in a full headless run.
 
 ## Blockers
 
@@ -21,8 +22,15 @@ This document outlines the state management strategies for the HeelKawn simulati
 ## Action Plan
 
 - Keep `ProceduresPawnVisualizer` as a compiled dependency unless a future regression proves it is the blocker.
-- Harden Settlement Revival Logic.
+- Keep the settlement lifecycle machine deterministic and centered on region bounds plus stockpile food thresholds.
 - Continue kernel validation for deterministic, staggered pawn behavior.
+
+## Phase 4 Settlement Lifecycle
+
+- Lifecycle labels now come from `SettlementMemory` as `active`, `abandoned`, `reviving`, and `permanent_ruin`.
+- Revival trigger: a pawn entering the settlement bounds or local stockpile food rising above 10 units.
+- Permanent ruin threshold: 60000 ticks spent empty and below the revival food threshold.
+- Legacy settlement meaning states remain in place for compatibility, but the new lifecycle drives the region tint path.
 
 ## Core Principles
 

@@ -57,6 +57,14 @@ const INTENT_HOARD: String = "HOARD"
 const INTENT_DEFEND: String = "DEFEND"
 const INTENT_RECOVER: String = "RECOVER"
 
+## Phase 4 settlement lifecycle labels (new explicit machine; legacy [state] stays for back-compat).
+const SETTLEMENT_LIFECYCLE_ACTIVE: String = "active"
+const SETTLEMENT_LIFECYCLE_ABANDONED: String = "abandoned"
+const SETTLEMENT_LIFECYCLE_REVIVING: String = "reviving"
+const SETTLEMENT_LIFECYCLE_PERMANENT_RUIN: String = "permanent_ruin"
+const SETTLEMENT_LIFECYCLE_REVIVAL_FOOD_THRESHOLD: int = 10
+const SETTLEMENT_LIFECYCLE_PERMANENT_RUIN_TICKS: int = 60000
+
 ## Policy layer on top of derived power structure ([member settlements] also stores [code]governance_type[/code]
 ## as council/monarchy/anarchy from [method _governance_for_settlement]).
 enum GovernanceForm {
@@ -74,6 +82,8 @@ var _governance_form_by_center: Dictionary = {}
 var settlements: Array = []
 ## center_region -> hysteresis for settlement [state] material truth (survives settlement dict rebuilds).
 var _settlement_state_truth_hysteresis: Dictionary = {}
+## center_region -> explicit lifecycle state machine memory (survives recompute passes).
+var _settlement_lifecycle_by_center: Dictionary = {}
 ## Align with [Main.REBIRTH_CHECK_INTERVAL_TICKS]: one hysteresis step per recompute pass.
 const STATE_TRUTH_HYSTERESIS_INTERVAL_TICKS: int = 2000
 ## Require this many ticks at the same raw target before committing (anti-flicker).
@@ -95,6 +105,8 @@ const SETTLEMENT_STATE_TRUTH_DIAG_ENABLED: bool = (
 )
 ## region_key -> state string (derived cache for O(1) regional queries)
 var _region_state: Dictionary = {}
+## region_key -> lifecycle state string (Phase 4 settlement lifecycle labels).
+var _region_lifecycle_state: Dictionary = {}
 ## region_key -> settlement center_region key (derived cache for O(1) intent joins)
 var _region_center: Dictionary = {}
 ## center_region -> governance snapshot hash for change detection.
@@ -283,6 +295,7 @@ func print_validation_smoketest_from_main() -> void:
 func recompute(_world: World) -> void:
 	settlements.clear()
 	_region_state.clear()
+	_region_lifecycle_state.clear()
 	_region_center.clear()
 	_war_command_announced.clear()
 	_war_battle_spawned.clear()
@@ -303,14 +316,17 @@ func recompute(_world: World) -> void:
 		if bootstrap_cluster.is_empty():
 			return
 		var st0: Dictionary = _build_settlement_from_regions(bootstrap_cluster)
+		var lifecycle_state0: String = _update_settlement_lifecycle_state(st0, _world, living_pawns)
 		var base_state0: String = str(st0.get("state", "recovering"))
 		var raw_state0: String = _material_activity_state_override(
 				st0, _world, living_pawns, active_jobs, base_state0
 		)
 		var center_id0: int = int(st0.get("center_region", -1))
 		st0["state"] = _apply_settlement_state_truth_hysteresis(center_id0, raw_state0, base_state0, st0)
+		st0["lifecycle_state"] = lifecycle_state0
 		settlements.append(st0)
 		var st_name0: String = str(st0.get("state", ""))
+		var lifecycle_name0: String = str(st0.get("lifecycle_state", lifecycle_state0))
 		var ckr0: int = int(st0.get("center_region", -1))
 		var preg0: Variant = st0.get("regions", null)
 		if preg0 is PackedInt32Array:
@@ -318,6 +334,7 @@ func recompute(_world: World) -> void:
 			for i in range(pa0.size()):
 				var rk0: int = int(pa0[i])
 				_region_state[rk0] = st_name0
+				_region_lifecycle_state[rk0] = lifecycle_name0
 				_region_center[rk0] = ckr0
 	elif not eligible.is_empty():
 		var in_eligible: Dictionary = {}
@@ -330,14 +347,17 @@ func recompute(_world: World) -> void:
 			var cluster: Array[int] = _bfs_cluster(seed_value, in_eligible, visited)
 			cluster.sort()
 			var st: Dictionary = _build_settlement_from_regions(cluster)
+			var lifecycle_state: String = _update_settlement_lifecycle_state(st, _world, living_pawns)
 			var base_state: String = str(st.get("state", "recovering"))
 			var raw_state: String = _material_activity_state_override(
 					st, _world, living_pawns, active_jobs, base_state
 			)
 			var center_id: int = int(st.get("center_region", -1))
 			st["state"] = _apply_settlement_state_truth_hysteresis(center_id, raw_state, base_state, st)
+			st["lifecycle_state"] = lifecycle_state
 			settlements.append(st)
 			var st_name: String = str(st.get("state", ""))
+			var lifecycle_name: String = str(st.get("lifecycle_state", lifecycle_state))
 			var ckr: int = int(st.get("center_region", -1))
 			var preg: Variant = st.get("regions", null)
 			if preg is PackedInt32Array:
@@ -345,6 +365,7 @@ func recompute(_world: World) -> void:
 				for i in range(pa.size()):
 					var rk2: int = int(pa[i])
 					_region_state[rk2] = st_name
+					_region_lifecycle_state[rk2] = lifecycle_name
 					_region_center[rk2] = ckr
 	settlements.sort_custom(func(a, b) -> bool:
 		var ap: Variant = (a as Dictionary).get("regions", null)
@@ -358,6 +379,7 @@ func recompute(_world: World) -> void:
 		return pa[0] < pb[0]
 	)
 	_prune_settlement_state_truth_hysteresis()
+	_prune_settlement_lifecycle_state_cache()
 	_update_governance_state()
 	_apply_persisted_governance_forms()
 	_settlement_truth_verify_post_recompute_pass()
@@ -379,6 +401,133 @@ func _prune_settlement_state_truth_hysteresis() -> void:
 						% [GameManager.tick_count, int(k)]
 				)
 			_settlement_state_truth_hysteresis.erase(k)
+
+
+func _prune_settlement_lifecycle_state_cache() -> void:
+	var present: Dictionary = {}
+	for st_v in settlements:
+		if not (st_v is Dictionary):
+			continue
+		var c: int = int((st_v as Dictionary).get("center_region", -1))
+		if c >= 0:
+			present[c] = true
+	for k in _settlement_lifecycle_by_center.keys():
+		if not present.has(int(k)):
+			_settlement_lifecycle_by_center.erase(k)
+
+
+func _coords_rect_for_region_set(regions: PackedInt32Array) -> Rect2i:
+	if regions.is_empty():
+		return Rect2i(0, 0, 0, 0)
+	var first: Vector2i = _coords_from_region_key(int(regions[0]))
+	var min_x: int = first.x * 16
+	var min_y: int = first.y * 16
+	var max_x: int = min_x + 15
+	var max_y: int = min_y + 15
+	for rk in regions:
+		var c: Vector2i = _coords_from_region_key(int(rk))
+		var x0: int = c.x * 16
+		var y0: int = c.y * 16
+		min_x = mini(min_x, x0)
+		min_y = mini(min_y, y0)
+		max_x = maxi(max_x, x0 + 15)
+		max_y = maxi(max_y, y0 + 15)
+	return Rect2i(Vector2i(min_x, min_y), Vector2i(max_x - min_x + 1, max_y - min_y + 1))
+
+
+func _rects_overlap(a: Rect2i, b: Rect2i) -> bool:
+	return (
+		a.position.x < b.position.x + b.size.x
+		and a.position.x + a.size.x > b.position.x
+		and a.position.y < b.position.y + b.size.y
+		and a.position.y + a.size.y > b.position.y
+	)
+
+
+func _living_pawns_in_rect(living_pawns: Array[Pawn], bounds: Rect2i) -> int:
+	if bounds.size.x <= 0 or bounds.size.y <= 0:
+		return 0
+	var count: int = 0
+	for p in living_pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		if bounds.has_point(p.data.tile_pos):
+			count += 1
+	return count
+
+
+func _settlement_food_in_bounds(bounds: Rect2i) -> int:
+	if bounds.size.x <= 0 or bounds.size.y <= 0:
+		return 0
+	var total: int = 0
+	for z in StockpileManager.zones():
+		if z == null or not is_instance_valid(z):
+			continue
+		if not _rects_overlap(bounds, z.rect):
+			continue
+		total += z.count_food()
+	return total
+
+
+func _update_settlement_lifecycle_state(st: Dictionary, world: World, living_pawns: Array[Pawn]) -> String:
+	var center: int = int(st.get("center_region", -1))
+	var regions_v: Variant = st.get("regions", PackedInt32Array())
+	if not (regions_v is PackedInt32Array):
+		var fallback_state: String = SETTLEMENT_LIFECYCLE_ACTIVE
+		st["lifecycle_state"] = fallback_state
+		return fallback_state
+	var regions: PackedInt32Array = regions_v as PackedInt32Array
+	if regions.is_empty():
+		var empty_state: String = SETTLEMENT_LIFECYCLE_ACTIVE
+		st["lifecycle_state"] = empty_state
+		return empty_state
+	var bounds: Rect2i = _coords_rect_for_region_set(regions)
+	var living_in_bounds: int = _living_pawns_in_rect(living_pawns, bounds)
+	var food_total: int = _settlement_food_in_bounds(bounds)
+	var tick: int = GameManager.tick_count
+	var cache_v: Variant = _settlement_lifecycle_by_center.get(center, {})
+	var cache: Dictionary = {}
+	if cache_v is Dictionary:
+		cache = cache_v as Dictionary
+	var state: String = str(cache.get("state", SETTLEMENT_LIFECYCLE_ACTIVE))
+	var empty_since_tick: int = int(cache.get("empty_since_tick", -1))
+	var active_now: bool = living_in_bounds > 0 and food_total > SETTLEMENT_LIFECYCLE_REVIVAL_FOOD_THRESHOLD
+	var revival_triggered: bool = living_in_bounds > 0 or food_total > SETTLEMENT_LIFECYCLE_REVIVAL_FOOD_THRESHOLD
+	var empty_now: bool = living_in_bounds <= 0 and food_total <= SETTLEMENT_LIFECYCLE_REVIVAL_FOOD_THRESHOLD
+	if active_now:
+		state = SETTLEMENT_LIFECYCLE_ACTIVE
+		empty_since_tick = -1
+	elif revival_triggered:
+		if state == SETTLEMENT_LIFECYCLE_PERMANENT_RUIN:
+			state = SETTLEMENT_LIFECYCLE_PERMANENT_RUIN
+		else:
+			state = SETTLEMENT_LIFECYCLE_REVIVING
+			if empty_since_tick < 0:
+				empty_since_tick = tick
+	elif empty_now:
+		if empty_since_tick < 0:
+			empty_since_tick = tick
+		var empty_for: int = maxi(0, tick - empty_since_tick)
+		if empty_for >= SETTLEMENT_LIFECYCLE_PERMANENT_RUIN_TICKS:
+			state = SETTLEMENT_LIFECYCLE_PERMANENT_RUIN
+		else:
+			state = SETTLEMENT_LIFECYCLE_ABANDONED
+	else:
+		state = SETTLEMENT_LIFECYCLE_ABANDONED
+	if state == SETTLEMENT_LIFECYCLE_ACTIVE:
+		empty_since_tick = -1
+	cache["state"] = state
+	cache["empty_since_tick"] = empty_since_tick
+	cache["last_food_total"] = food_total
+	cache["last_living_in_bounds"] = living_in_bounds
+	cache["last_tick"] = tick
+	_settlement_lifecycle_by_center[center] = cache
+	st["lifecycle_state"] = state
+	st["lifecycle_food_total"] = food_total
+	st["lifecycle_living_pawns"] = living_in_bounds
+	st["lifecycle_empty_since_tick"] = empty_since_tick
+	st["lifecycle_last_tick"] = tick
+	return state
 
 
 func _settlement_truth_verify_active() -> bool:
@@ -906,12 +1055,14 @@ func get_settlement_profile(region_key: int) -> Dictionary:
 	if settlement == null or not (settlement is Dictionary):
 		return _default_profile(region_key)
 	var d: Dictionary = settlement as Dictionary
+	var lifecycle_state: String = str(d.get("lifecycle_state", d.get("state", "")))
 	var mean: Dictionary = WorldMeaning.get_region_meaning_summary(region_key)
 	var pers: Dictionary = WorldPersistence.get_region_persistence(region_key)
 	var profile: Dictionary = {
 		"region_key": region_key,
 		"center_region": int(d.get("center_region", -1)),
 		"state": str(d.get("state", "")),
+		"lifecycle_state": lifecycle_state,
 		"culture_type": SettlementPlanner.get_culture_type_for_settlement(d),
 		"culture_name": SettlementPlanner.get_culture_name_for_settlement(d),
 		"scar_max": int(d.get("scar_max", 0)),
@@ -927,8 +1078,7 @@ func get_settlement_profile(region_key: int) -> Dictionary:
 		"revival_score": int(d.get("revival_score", 0)),
 		"revival_ready": false,
 	}
-	var state_now: String = str(profile.get("state", ""))
-	profile["revival_ready"] = state_now == "revivable"
+	profile["revival_ready"] = lifecycle_state == SETTLEMENT_LIFECYCLE_REVIVING or lifecycle_state == SETTLEMENT_LIFECYCLE_ABANDONED
 	return profile
 
 
@@ -937,6 +1087,7 @@ func _default_profile(region_key: int) -> Dictionary:
 		"region_key": region_key,
 		"center_region": -1,
 		"state": "",
+		"lifecycle_state": "",
 		"culture_type": SettlementPlanner.CULTURE_CAUTIOUS,
 		"culture_name": "cautious",
 		"scar_max": 0,
@@ -1045,11 +1196,18 @@ func _max_last_pawn_death_tick_in_regions(regions: PackedInt32Array) -> int:
 
 ## True for [abandoned] (recent hard collapse) and [permanently_abandoned] (older hard collapse).
 func is_collapsed_state(state: String) -> bool:
-	return state == "abandoned" or state == "permanently_abandoned"
+	return (
+		state == "abandoned"
+		or state == "permanently_abandoned"
+		or state == SETTLEMENT_LIFECYCLE_ABANDONED
+		or state == SETTLEMENT_LIFECYCLE_PERMANENT_RUIN
+	)
 
 
 ## True if [param region_key] lies in a settlement whose current [member settlements] [code]state[/code] is collapsed.
 func is_region_in_collapsed_settlement(region_key: int) -> bool:
+	if _region_lifecycle_state.has(region_key):
+		return is_collapsed_state(str(_region_lifecycle_state[region_key]))
 	if _region_state.has(region_key):
 		return is_collapsed_state(str(_region_state[region_key]))
 	for st in settlements:
@@ -1070,13 +1228,18 @@ func is_region_in_collapsed_settlement(region_key: int) -> bool:
 
 ## Kept for backward compatibility: same as [method is_region_in_collapsed_settlement] (name predates the split state string).
 func is_region_in_permanently_abandoned_settlement(region_key: int) -> bool:
+	if _region_lifecycle_state.has(region_key):
+		var life_state: String = str(_region_lifecycle_state[region_key])
+		return life_state == "permanently_abandoned" or life_state == SETTLEMENT_LIFECYCLE_PERMANENT_RUIN
 	if _region_state.has(region_key):
-		return str(_region_state[region_key]) == "permanently_abandoned"
+		var legacy_state: String = str(_region_state[region_key])
+		return legacy_state == "permanently_abandoned" or legacy_state == SETTLEMENT_LIFECYCLE_PERMANENT_RUIN
 	for st in settlements:
 		if st is not Dictionary:
 			continue
 		var d: Dictionary = st as Dictionary
-		if str(d.get("state", "")) != "permanently_abandoned":
+		var state_value: String = str(d.get("lifecycle_state", d.get("state", "")))
+		if state_value != "permanently_abandoned" and state_value != SETTLEMENT_LIFECYCLE_PERMANENT_RUIN:
 			continue
 		var reg: Variant = d.get("regions", null)
 		if not (reg is PackedInt32Array):
@@ -1089,6 +1252,8 @@ func is_region_in_permanently_abandoned_settlement(region_key: int) -> bool:
 
 
 func get_state_at_region(region_key: int) -> String:
+	if _region_lifecycle_state.has(region_key):
+		return str(_region_lifecycle_state[region_key])
 	if _region_state.has(region_key):
 		return str(_region_state[region_key])
 	return ""
@@ -1338,22 +1503,38 @@ func to_save_dict() -> Dictionary:
 	var gf: Dictionary = {}
 	for k_any in _governance_form_by_center.keys():
 		gf[str(k_any)] = str(_governance_form_by_center[k_any])
-	return {"governance_forms": gf}
+	var lc: Dictionary = {}
+	for k_any in _settlement_lifecycle_by_center.keys():
+		var entry_v: Variant = _settlement_lifecycle_by_center.get(k_any, {})
+		if not (entry_v is Dictionary):
+			continue
+		lc[str(k_any)] = (entry_v as Dictionary).duplicate(true)
+	return {"governance_forms": gf, "settlement_lifecycle": lc}
 
 
 func from_save_dict(d: Variant) -> void:
 	_governance_form_by_center.clear()
+	_settlement_lifecycle_by_center.clear()
 	if d == null or not (d is Dictionary):
 		return
 	var gf_v: Variant = (d as Dictionary).get("governance_forms", {})
 	if not (gf_v is Dictionary):
-		return
+		gf_v = {}
 	for k_any in (gf_v as Dictionary).keys():
 		var ck: int = int(str(k_any))
 		var fs: String = str((gf_v as Dictionary)[k_any])
 		if ck >= 0 and not fs.is_empty():
 			_governance_form_by_center[ck] = fs
 			SettlementRegistry.upsert_overlay_field(str(ck), "governance_form", fs)
+	var lc_v: Variant = (d as Dictionary).get("settlement_lifecycle", {})
+	if lc_v is Dictionary:
+		for k_any in (lc_v as Dictionary).keys():
+			var ck_life: int = int(str(k_any))
+			if ck_life < 0:
+				continue
+			var entry_v: Variant = (lc_v as Dictionary)[k_any]
+			if entry_v is Dictionary:
+				_settlement_lifecycle_by_center[ck_life] = (entry_v as Dictionary).duplicate(true)
 
 
 func clear_persisted_governance_forms() -> void:
@@ -1707,11 +1888,11 @@ func _derive_settlement_intent_v2(
 	local_housing_pressure: float,
 	life_path_tally: Dictionary,
 ) -> String:
-	var settlement_state: String = str(st.get("state", ""))
+	var settlement_state: String = str(st.get("lifecycle_state", st.get("state", "")))
 	var war_state: String = _war_state_string_from_settlement(st)
 
 	# Recovering states are sticky unless wanderers push exploration.
-	if settlement_state == "recovering" or settlement_state == "revivable":
+	if settlement_state == SETTLEMENT_LIFECYCLE_ABANDONED or settlement_state == SETTLEMENT_LIFECYCLE_REVIVING:
 		var wanderer_count: int = int(life_path_tally.get("wanderer", 0))
 		# Enough wanderers can break recovery early through scouting.
 		if wanderer_count >= 3:
@@ -1763,9 +1944,9 @@ func _tally_settlement_life_paths(pawns: Array[Pawn]) -> Dictionary:
 
 
 func _derive_settlement_intent(st: Dictionary, local_food_pressure: float, local_housing_pressure: float) -> String:
-	var settlement_state: String = str(st.get("state", ""))
+	var settlement_state: String = str(st.get("lifecycle_state", st.get("state", "")))
 	var war_state: String = _war_state_string_from_settlement(st)
-	if settlement_state == "recovering" or settlement_state == "revivable":
+	if settlement_state == SETTLEMENT_LIFECYCLE_ABANDONED or settlement_state == SETTLEMENT_LIFECYCLE_REVIVING:
 		return INTENT_RECOVER
 	if war_state == "mobilizing" or war_state == "at_war":
 		return INTENT_DEFEND
@@ -1894,7 +2075,7 @@ func _derive_settlement_resource_pressure(st: Dictionary, active_jobs: Array[Job
 func _emit_specialization_validation_log_if_needed(tick: int, settlement_idx: int, st: Dictionary) -> void:
 	if not _specialization_validation_log_active():
 		return
-	if str(st.get("state", "")) != "active":
+	if str(st.get("lifecycle_state", st.get("state", ""))) != SETTLEMENT_LIFECYCLE_ACTIVE:
 		return
 	var rp_v: Variant = st.get("resource_pressure", _default_resource_pressure())
 	var rp: Dictionary = rp_v as Dictionary if rp_v is Dictionary else _default_resource_pressure()
@@ -2361,13 +2542,11 @@ func _state_to_meaning_label(state: String) -> String:
 	match state:
 		"active":
 			return "quiet"
-		"revivable":
+		SETTLEMENT_LIFECYCLE_REVIVING, "revivable":
 			return "scarred"
-		"recovering":
-			return "recovering"
-		"abandoned":
+		SETTLEMENT_LIFECYCLE_ABANDONED, "recovering":
 			return "bloodied"
-		"permanently_abandoned":
+		SETTLEMENT_LIFECYCLE_PERMANENT_RUIN, "permanently_abandoned":
 			return "grave"
 	return "quiet"
 
@@ -2383,6 +2562,8 @@ func get_settlement_intent_for_tile(tile_pos: Vector2i) -> String:
 ## Get settlement state for a region (Phase 4: posture visual indicators)
 ## Returns empty string if region is not part of any settlement
 func get_state_for_region(region_key: int) -> String:
+	if _region_lifecycle_state.has(region_key):
+		return str(_region_lifecycle_state[region_key])
 	if _region_state.has(region_key):
 		return str(_region_state[region_key])
 	return ""

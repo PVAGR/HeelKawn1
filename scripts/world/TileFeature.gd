@@ -105,7 +105,8 @@ static func apply_culture_landmark_tint(base: Color, culture_type: int) -> Color
 
 
 ## Apply settlement state-based tint (Phase 4: posture visual indicators)
-## Adds desaturation/darkening based on settlement state (active/revivable/recovering/abandoned/permanently_abandoned)
+## Adds desaturation/darkening based on settlement lifecycle state (active/reviving/abandoned/permanent_ruin)
+## while keeping the legacy labels accepted for back-compat.
 static func apply_settlement_state_tint(base: Color, settlement_state: String) -> Color:
 	const STATE_TINT: float = 0.15
 	var state_mul: Color = Color(1.0, 1.0, 1.0, 1.0)
@@ -114,16 +115,13 @@ static func apply_settlement_state_tint(base: Color, settlement_state: String) -
 		"active":
 			# No additional tint - use culture tint only
 			return base
-		"revivable":
+		"reviving", "revivable":
 			# Slightly worn/faded
 			state_mul = Color(0.95, 0.93, 0.90, 1.0)
-		"recovering":
+		"abandoned", "recovering":
 			# Gray-brown, muted
 			state_mul = Color(0.85, 0.82, 0.78, 1.0)
-		"abandoned":
-			# Desaturated, dark gray
-			state_mul = Color(0.70, 0.68, 0.65, 1.0)
-		"permanently_abandoned":
+		"permanent_ruin", "permanently_abandoned":
 			# Cold gray, near-black
 			state_mul = Color(0.55, 0.55, 0.50, 1.0)
 		_:

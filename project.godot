@@ -84,6 +84,7 @@ ToolManager="*res://autoloads/ToolManager.gd"
 FoodChainManager="*res://autoloads/FoodChainManager.gd"
 BodyRiskManager="*res://autoloads/BodyRiskManager.gd"
 TickMonitor="*res://tools/diagnose/monitor_ticks.gd"
+DevDebugUI="*res://tools/diagnose/dev_debug_ui.gd"
 
 [display]
 

@@ -5,6 +5,8 @@ extends Node
 
 var _log: TextEdit = null
 var _autostart_monitor: bool = true
+# Toggle to show/hide the dev UI (set false to hide)
+var _dev_ui_enabled: bool = true
 
 func _ready() -> void:
 	_create_ui()
@@ -54,7 +56,8 @@ func _create_ui() -> void:
 	v.add_child(h)
 
 	_log = TextEdit.new()
-	_log.readonly = true
+	# Godot 4 uses `editable` (true/false). Make non-editable for log output.
+	_log.editable = false
 	_log.rect_min_size = Vector2(240, 80)
 	v.add_child(_log)
 

@@ -48,4 +48,33 @@ func _on_timeout() -> void:
 				if pos != last:
 					moving_count += 1
 			_last_positions[id] = pos
-	print("[TickMonitor] tick=%s tickables=%d pawns=%d moving=%d" % [str(tick), tickables.size(), pawns.size(), moving_count])
+	# Basic sim snapshot
+	var sim_diag_str: String = ""
+	if GameManager != null and GameManager.has_method("sim_diag"):
+		var sd: Dictionary = GameManager.call("sim_diag")
+		if sd != null:
+			sim_diag_str = " sim_diag(tick=%s speed=%s paused=%s queued=%.2f ticks_last=%s)" % [str(sd.get("tick_count")), str(sd.get("speed")), str(sd.get("paused")), float(sd.get("queued_ticks_est", 0.0)), str(sd.get("ticks_emitted_last_frame"))]
+
+	# TickManager snapshot (if present)
+	var tm_str: String = ""
+	if has_node("/root/TickManager"):
+		var tm = get_node("/root/TickManager")
+		if tm != null:
+			var sp = "?"
+			var si = "?"
+			var paused = "?"
+			var last_frame_ticks = "?"
+			var accum = "?"
+			if tm.has_method("get_speed_multiplier"):
+				sp = str(tm.call("get_speed_multiplier"))
+			if tm.has_method("get_speed_index"):
+				si = str(tm.call("get_speed_index"))
+			if tm.has_method("is_paused"):
+				paused = str(tm.call("is_paused"))
+			if "_last_frame_ticks" in tm:
+				last_frame_ticks = str(tm.get("_last_frame_ticks"))
+			if "_accumulated_time" in tm:
+				accum = str(tm.get("_accumulated_time"))
+			tm_str = " TickMgr(speed=%s idx=%s paused=%s last_frame_ticks=%s accum=%s)" % [sp, si, paused, last_frame_ticks, accum]
+
+	print("[TickMonitor] tick=%s tickables=%d pawns=%d moving=%d%s%s" % [str(tick), tickables.size(), pawns.size(), moving_count, sim_diag_str, tm_str])

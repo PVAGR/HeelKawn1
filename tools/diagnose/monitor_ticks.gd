@@ -1,5 +1,4 @@
 extends Node
-class_name TickMonitor
 
 # Lightweight runtime probe to inspect tick delivery and pawn movement.
 # Usage (in Godot remote/Console):

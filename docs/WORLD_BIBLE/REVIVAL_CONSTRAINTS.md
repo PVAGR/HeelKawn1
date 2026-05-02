@@ -10,11 +10,22 @@ This document defines canon-safe revival boundaries for HeelKawn. Rebirth behavi
 
 Settlements follow a deterministic revival curve with these states:
 
-1. **permanently_abandoned** - Scar level ≥ 3, no recovery possible
-2. **abandoned** - Scar level 2, recovery possible but unlikely
-3. **revivable** - Moderate scar profile, quiet region, recovery active
-4. **recovering** - In active recovery phase
-5. **active** - Fully functional settlement
+**Canonical Flow:** `abandoned` → `revivable` → `recovering` → `active`
+
+1. **permanently_abandoned** - Scar level ≥ 3, no recovery possible (irreversible)
+2. **abandoned** - Recent collapse (<30000 ticks) OR very low revival score (<70)
+3. **revivable** - Moderate scar profile (scar ≤2), quiet region, recovery possible (score ≥70)
+4. **recovering** - In active recovery phase (score ≥88, scar ≤1, extended peace)
+5. **active** - Fully functional settlement (score ≥88, scar ≤1, 2x peace threshold)
+
+**State Transition Rules:**
+- `abandoned` → `revivable`: When revival score reaches 70+ AND scar ≤2 AND peace threshold met
+- `revivable` → `recovering`: When revival score reaches 88+ AND scar ≤1
+- `recovering` → `active`: After sustained recovery (2x peace threshold) AND scar ≤1
+- Any state → `permanently_abandoned`: When scar level reaches 3 (irreversible)
+- Any state → `abandoned`: When conflict events occur or conditions deteriorate
+
+**Note:** The `recovering` state is an intermediate phase between `revivable` and `active`, representing settlements with strong recovery momentum but not yet fully stabilized.
 
 ## Revival Gate Conditions
 
@@ -61,18 +72,27 @@ When gates pass, revival proceeds deterministically:
    - System checks revival gates every 2000 ticks
    - Only regions meeting all conditions are considered
 
-2. **Rebirth Tick**
-   - Peace-gated: requires 5000 ticks of no conflict
-   - Tick-only: no player input or heroic override
-   - Evidence: GameManager.tick_count + conflict-free window
+2. **State Computation** (SettlementMemory._settlement_state_v1)
+   - Revival score computed from: collapse time, scar level, peace duration, culture, reputation
+   - Score thresholds:
+     - `< 70`: abandoned
+     - `≥ 70` + scar ≤ 2 + peace met: revivable
+     - `≥ 88` + scar ≤ 1: recovering
+     - `≥ 88` + scar ≤ 1 + 2x peace: active
 
-3. **State Transition**
-   - `abandoned` → `revivable` (if gates pass and resources available)
-   - `revivable` → `recovering` (if gates pass and survivor potential met)
-   - `recovering` → `active` (after sustained recovery period)
+3. **Rebirth Spawning** (SettlementRebirth)
+   - Eligible states: `revivable` AND `recovering` (both can receive new pawns)
+   - Spawn interval: 20000 ticks per settlement
+   - Peace requirement: max(5000, culture_branch_peace_ticks)
+   - Scar block: scar ≥ 3 permanently blocks spawning
 
-4. **Recovery Period**
-   - Minimum 10000 ticks in `recovering` state before `active`
+4. **State Transition Logging**
+   - All state changes derive from tick count + deterministic scores
+   - No heroic override or player-forced transitions
+   - Evidence: SettlementMemory state curve + WorldMemory events
+
+5. **Recovery Period**
+   - Minimum 10000 ticks in `recovering` state before `active` (via 2x peace threshold)
    - Must maintain scar level < 3 throughout
    - Must avoid conflict events during recovery
    - Evidence: SettlementMemory state tracking + WorldMemory events

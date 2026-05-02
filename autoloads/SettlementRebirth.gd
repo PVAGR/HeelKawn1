@@ -182,8 +182,11 @@ func _prune_rebirth_tile_cache(eligible: Array[Dictionary]) -> void:
 func get_rebirth_eligibility(world: World, settlement: Dictionary) -> Dictionary:
 	var now: int = GameManager.tick_count
 	var state_now: String = str(settlement.get("state", ""))
-	if state_now != "revivable":
-		return {"ok": false, "reason": "state_not_revivable"}
+	# Accept both revivable AND recovering states for rebirth spawning
+	# Canonical flow: abandoned → revivable → recovering → active
+	# Both revivable and recovering settlements can receive new pawns
+	if state_now != "revivable" and state_now != "recovering":
+		return {"ok": false, "reason": "state_not_revivable_or_recovering"}
 	var scar_max: int = int(settlement.get("scar_max", 0))
 	if scar_max >= 3:
 		return {"ok": false, "reason": "scar_level_gte_3"}
@@ -220,7 +223,9 @@ func _gather_eligible_settlements() -> Array[Dictionary]:
 		if st is not Dictionary:
 			continue
 		var d: Dictionary = st as Dictionary
-		if str(d.get("state", "")) != "revivable":
+		var state_str: String = str(d.get("state", ""))
+		# Accept both revivable AND recovering states (canonical flow)
+		if state_str != "revivable" and state_str != "recovering":
 			continue
 		var reg2: Variant = d.get("regions", null)
 		if not (reg2 is PackedInt32Array):

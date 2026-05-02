@@ -844,7 +844,12 @@ func _settlement_state_v1(
 		culture_branch: int
 ) -> String:
 	# Exclusivity:
-	# permanently_abandoned > abandoned > recovering > revivable > active.
+	# permanently_abandoned > abandoned > revivable > recovering > active.
+	# Canonical flow per REVIVAL_CONSTRAINTS.md:
+	#   abandoned: recent collapse or very low revival score
+	#   revivable: moderate scars, quiet region, recovery possible (score 70+)
+	#   recovering: in active recovery phase (score 88+, scar ≤1, extended peace)
+	#   active: fully functional (score 88+, scar ≤1, 2x peace threshold)
 	var ticks_since_collapse: int = _ticks_since_or_large(last_pawn_death_tick)
 	var regional_peace_ticks: int = ticks_since_collapse
 	var peace_threshold: int = get_peace_ticks_for_culture_branch(culture_branch)
@@ -858,15 +863,17 @@ func _settlement_state_v1(
 	var revival_score: int = _deterministic_revival_score(
 			ticks_since_collapse, scar_max, regional_peace_ticks, culture_branch, reputation_min
 	)
-	if revival_score < REVIVAL_SCORE_RECOVERING_MIN:
-		return "abandoned"
+	# Canonical flow: abandoned → revivable → recovering → active
 	if revival_score < REVIVAL_SCORE_REVIVABLE_MIN:
-		return "recovering"
+		return "abandoned"
 	if scar_max <= REVIVABLE_SCAR_MAX and regional_peace_ticks >= peace_threshold:
 		if revival_score >= REVIVAL_SCORE_ACTIVE_MIN and scar_max <= 1 and regional_peace_ticks >= peace_threshold * 2:
 			return "active"
+		# recovering = revivable + sustained recovery momentum (between revivable and active)
+		if revival_score >= REVIVAL_SCORE_RECOVERING_MIN:
+			return "recovering"
 		return "revivable"
-	return "recovering"
+	return "abandoned"
 
 
 func get_peace_ticks_for_culture_branch(culture_branch: int) -> int:
@@ -2364,7 +2371,7 @@ func _state_to_meaning_label(state: String) -> String:
 		"revivable":
 			return "scarred"
 		"recovering":
-			return "recovering"
+			return "scarred"  # recovering settlements are still scarred but healing
 		"abandoned":
 			return "bloodied"
 		"permanently_abandoned":

@@ -3900,11 +3900,11 @@ func _decay_needs() -> void:
 	if _state == State.SLEEPING:
 		data.hunger = max(0.0, data.hunger - HUNGER_DECAY_PER_TICK_SLEEPING * hunger_mult * pace_h)
 		var rate: float = REST_RECOVER_PER_TICK_SLEEP
-		if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed and \
-				_world != null and _world.is_bed_owned_by(_reserved_bed, self):
+		if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed and _world != null and _world.is_bed_owned_by(_reserved_bed, self):
 			rate *= REST_RECOVER_BED_MULTIPLIER
 		data.rest = min(100.0, data.rest + rate)
 	else:
+			data.rest = min(100.0, data.rest + rate)
 		data.hunger = max(0.0, data.hunger - HUNGER_DECAY_PER_TICK * hunger_mult * pace_h)
 		data.rest   = max(0.0, data.rest   - REST_DECAY_PER_TICK * rest_mult * pace_r)
 	

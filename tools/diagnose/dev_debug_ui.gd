@@ -7,6 +7,7 @@ var _log: TextEdit = null
 var _autostart_monitor: bool = true
 # Toggle to show/hide the dev UI (set false to hide)
 var _dev_ui_enabled: bool = true
+var _panel: Panel = null
 
 func _ready() -> void:
 	_create_ui()
@@ -19,13 +20,13 @@ func _create_ui() -> void:
 	var layer = CanvasLayer.new()
 	add_child(layer)
 
-	var panel = Panel.new()
-	panel.custom_minimum_size = Vector2(260, 220)
-	panel.position = Vector2(10, 10)
-	layer.add_child(panel)
+	_panel = Panel.new()
+	_panel.custom_minimum_size = Vector2(260, 240)
+	_panel.position = Vector2(10, 10)
+	layer.add_child(_panel)
 
 	var v = VBoxContainer.new()
-	panel.add_child(v)
+	_panel.add_child(v)
 
 	var btn_start = Button.new()
 	btn_start.text = "Start Monitor"
@@ -52,13 +53,18 @@ func _create_ui() -> void:
 	btn_dump_moving.connect("pressed", Callable(self, "_on_count_moving_pressed"))
 	v.add_child(btn_dump_moving)
 
+	var btn_diag_once = Button.new()
+	btn_diag_once.text = "Diag Once"
+	btn_diag_once.connect("pressed", Callable(self, "_on_diag_once_pressed"))
+	v.add_child(btn_diag_once)
+
 	var h = HSeparator.new()
 	v.add_child(h)
 
 	_log = TextEdit.new()
 	# Godot 4 uses `editable` (true/false). Make non-editable for log output.
 	_log.editable = false
-	_log.rect_min_size = Vector2(240, 80)
+	_log.rect_min_size = Vector2(240, 100)
 	v.add_child(_log)
 
 	_append_log("DevDebugUI ready")
@@ -83,6 +89,28 @@ func _on_stop_pressed() -> void:
 		_append_log("TickMonitor.monitor_stop() called")
 	else:
 		_append_log("TickMonitor not available")
+	
+
+func _on_diag_once_pressed() -> void:
+	_append_log("Diag Once pressed")
+	if typeof(self).has_method("heelkawn_diag_once"):
+		# If this script was added to the global scene and the diagnostic helper
+		# function exists globally, call it. Otherwise instruct user.
+		heelkawn_diag_once()
+		_append_log("heelkawn_diag_once() called")
+	else:
+		_append_log("heelkawn_diag_once() not found; run from remote console")
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not _dev_ui_enabled:
+		return
+	if event is InputEventKey and event.pressed and not event.echo:
+		# Toggle UI with F10
+		if event.keycode == Key.F10:
+			if _panel != null:
+				_panel.visible = not _panel.visible
+				_append_log("DevDebugUI %s" % ("shown" if _panel.visible else "hidden"))
 
 func _on_dump_tickables() -> void:
 	var tree = get_tree()

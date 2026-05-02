@@ -95,15 +95,24 @@ func _on_stop_pressed() -> void:
 
 func _on_diag_once_pressed() -> void:
 	_append_log("Diag Once pressed")
-	# Prefer autoload Main if it provides the diagnostic helper
-	if typeof(Main) != TYPE_NIL and Main != null and Main.has_method("heelkawn_diag_once"):
-		Main.heelkawn_diag_once()
+	# Prefer autoload Main instance if it provides the diagnostic helper
+	var main_node: Node = get_node_or_null("/root/Main")
+	if main_node != null and main_node.has_method("heelkawn_diag_once"):
+		main_node.call("heelkawn_diag_once")
 		_append_log("Main.heelkawn_diag_once() called")
 		return
-	if typeof(TickMonitor) != TYPE_NIL and TickMonitor != null and TickMonitor.has_method("monitor_once"):
-		TickMonitor.monitor_once()
-		_append_log("TickMonitor.monitor_once() called")
-		return
+	# Fallback: use TickMonitor autoload instance if present and call its timeout handler
+	var tm: Node = get_node_or_null("/root/TickMonitor")
+	if tm != null:
+		if tm.has_method("_on_timeout"):
+			tm.call("_on_timeout")
+			_append_log("TickMonitor._on_timeout() called")
+			return
+		elif tm.has_method("monitor_start"):
+			# As a last resort start a one-shot monitor briefly
+			tm.call("monitor_start", 1.0)
+			_append_log("TickMonitor.monitor_start(1.0) called (use Stop Monitor to stop)")
+			return
 	_append_log("Diagnostic helper not found; run heelkawn_diag_once() from remote console")
 
 

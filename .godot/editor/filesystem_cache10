@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1777698398
+::res://::1777698660
 AI_README.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 BIOME_DRIVEN_ARCHITECTURE.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 blackbox_mcp_settings.json::JSON::-1::1777694600::0::1::::<><><>0<>0<><>::
@@ -388,6 +388,6 @@ _vc-err.txt::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 _vc-out.txt::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 _verify-compile-capture.txt::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 ::res://tools/diagnose/::1777697035
-dev_debug_ui.gd::GDScript::3584493956201855911::1777698309::0::1::::<>Node<><>0<>0<><>::
+dev_debug_ui.gd::GDScript::3584493956201855911::1777698625::0::1::::<>Node<><>0<>0<><>::
 monitor_ticks.gd::GDScript::8868891242208846835::1777696840::0::1::::<>Node<><>0<>0<><>::
 ::res://tools/godot/::1777695221

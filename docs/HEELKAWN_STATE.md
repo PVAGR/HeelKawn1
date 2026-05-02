@@ -13,6 +13,17 @@ This document outlines the state management strategies for the HeelKawn simulati
   - Confirmed `Job.gd` and `JobManager.gd` compile cleanly after the Pawn dependency chain is restored.
 - Next Task: Harden Settlement Revival Logic
 
+## Blockers
+
+- None currently reproducible in source validation.
+- Historical note: a `ProceduresPawnVisualizer` dependency failure was previously reported at `Pawn.gd:5785`; if it reappears, inspect `scripts/utils/ProceduresPawnVisualizer.gd` first, then the `Pawn.gd` call site.
+
+## Action Plan
+
+- Keep `ProceduresPawnVisualizer` as a compiled dependency unless a future regression proves it is the blocker.
+- Harden Settlement Revival Logic.
+- Continue kernel validation for deterministic, staggered pawn behavior.
+
 ## Core Principles
 
 1. **Deterministic Kernel**: All operations must be deterministic based on input parameters and the current tick count.
@@ -22,36 +33,42 @@ This document outlines the state management strategies for the HeelKawn simulati
 ## Key Components
 
 ### 1. WorldMemory
+
 - **Purpose**: Stores all historical events and current state data.
 - **Functions**:
   - `record_event(event: Dictionary)`: Records a single event.
   - `get_events_for_tile(target_pos: Vector2i)`: Retrieves events for a specific tile.
 
 ### 2. WorldMeaning
+
 - **Purpose**: Manages the meaning and significance of events within the world.
 - **Functions**:
   - `assign_meaning(event_id: int, meaning_type: String)`: Assigns a meaningful type to an event.
   - `get_meaning(event_id: int) -> String`: Retrieves the meaning of an event.
 
 ### 3. WorldPersistence
+
 - **Purpose**: Handles saving and loading the world state.
 - **Functions**:
   - `save_state() -> Dictionary`: Saves the current state as a dictionary.
   - `load_state(state_dict: Dictionary)`: Loads the state from a dictionary.
 
 ### 4. LandRecovery
+
 - **Purpose**: Manages the recovery of land after events like abandonment or destruction.
 - **Functions**:
   - `recover_land(event_id: int) -> bool`: Attempts to recover land affected by an event.
   - `is_recoverable(event_id: int) -> bool`: Checks if land can be recovered.
 
 ### 5. CulturalMemory
+
 - **Purpose**: Stores and manages cultural knowledge and traditions.
 - **Functions**:
   - `record_cultural_event(event_id: int, culture_type: String)`: Records a cultural event.
   - `get_cultural_events(culture_type: String) -> Array`: Retrieves cultural events of a specific type.
 
 ### 6. ProgressionSystem (KERNEL)
+
 - **Purpose**: Tracks pawn significance through impact points earned from actions (building, teaching, etc.).
 - **Phase**: Phase 4 - Identity & Meaning
 - **Signal**: `progression_changed(pawn_id: int)` - emitted when a pawn gains impact.

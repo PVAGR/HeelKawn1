@@ -397,6 +397,10 @@ func set_speed(new_speed: float) -> void:
 			_tick_accumulator = max_accumulator
 	is_paused = false
 	_reset_frame_pacing_history()
+	# Keep authoritative TickManager in sync when present
+	if typeof(TickManager) != TYPE_NIL and TickManager != null:
+		TickManager.set_speed(game_speed)
+	# Emit UI notification
 	speed_changed.emit(game_speed, is_paused)
 
 
@@ -431,6 +435,9 @@ func pause() -> void:
 		return
 	is_paused = true
 	_reset_frame_pacing_history()
+	# Propagate to TickManager so tick emission actually pauses
+	if typeof(TickManager) != TYPE_NIL and TickManager != null:
+		TickManager.pause()
 	speed_changed.emit(game_speed, is_paused)
 
 
@@ -439,6 +446,9 @@ func resume() -> void:
 		return
 	is_paused = false
 	_reset_frame_pacing_history()
+	# Propagate to TickManager so tick emission actually resumes
+	if typeof(TickManager) != TYPE_NIL and TickManager != null:
+		TickManager.resume()
 	speed_changed.emit(game_speed, is_paused)
 
 
@@ -461,4 +471,11 @@ func set_state_from_load(tick: int, speed: float, paused: bool) -> void:
 	game_speed = max(speed, 0.0001)
 	is_paused = paused
 	_reset_frame_pacing_history()
+	# Sync TickManager to loaded state when present
+	if typeof(TickManager) != TYPE_NIL and TickManager != null:
+		TickManager.set_speed(game_speed)
+		if is_paused:
+			TickManager.pause()
+		else:
+			TickManager.resume()
 	speed_changed.emit(game_speed, is_paused)

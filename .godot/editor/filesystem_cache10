@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1777697196
+::res://::1777697967
 AI_README.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 BIOME_DRIVEN_ARCHITECTURE.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 blackbox_mcp_settings.json::JSON::-1::1777694600::0::1::::<><><>0<>0<><>::
@@ -127,7 +127,7 @@ CulturalStyleManager.gd::GDScript::6734428572572920136::1777694600::0::1::::<>No
 FactionRegistry.gd::GDScript::4416904286542695183::1777694600::0::1::::<>Node<><>0<>0<><>::
 FoodChainManager.gd::GDScript::7376747890299068317::1777694600::0::1::::<>Node<><>0<>0<><>::
 FragmentationManager.gd::GDScript::8000988159227967882::1777694600::0::1::::<>Node<><>0<>0<><>::
-GameManager.gd::GDScript::5622587907003291061::1777694600::0::1::::<>Node<><>0<>0<><>::
+GameManager.gd::GDScript::5622587907003291061::1777697954::0::1::::<>Node<><>0<>0<><>::
 GeneticEvolution.gd::GDScript::8750185901044209157::1777694600::0::1::::<>Node<><>0<>0<><>::
 HistoricalSimulation.gd::GDScript::5001299926847266409::1777694600::0::1::::<>Node<><>0<>0<><>::
 IntentMemory.gd::GDScript::7523474435381960454::1777694600::0::1::::<>Node<><>0<>0<><>::
@@ -388,6 +388,6 @@ _vc-err.txt::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 _vc-out.txt::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 _verify-compile-capture.txt::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 ::res://tools/diagnose/::1777697035
-dev_debug_ui.gd::GDScript::3584493956201855911::1777697180::0::1::::<>Node<><>0<>0<><>::
+dev_debug_ui.gd::GDScript::3584493956201855911::1777697367::0::1::::<>Node<><>0<>0<><>::
 monitor_ticks.gd::GDScript::8868891242208846835::1777696840::0::1::::<>Node<><>0<>0<><>::
 ::res://tools/godot/::1777695221

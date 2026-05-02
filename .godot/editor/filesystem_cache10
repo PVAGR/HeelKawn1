@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1777698900
+::res://::1777700051
 AI_README.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 BIOME_DRIVEN_ARCHITECTURE.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 blackbox_mcp_settings.json::JSON::-1::1777694600::0::1::::<><><>0<>0<><>::
@@ -184,7 +184,7 @@ README.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 canonical.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 ::res://brain/memory/::1777694600
 active_context.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
-ai_status_log.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
+ai_status_log.md::TextFile::-1::1777699159::0::1::::<><><>0<>0<><>::
 architecture_decisions.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 index.json::JSON::-1::1777694600::0::1::::<><><>0<>0<><>::
 ::res://brain/memory/knowledge/::1777694600
@@ -357,9 +357,9 @@ CreatorDebugMenu.gd::GDScript::2571068876045846871::1777694600::0::1::::CreatorD
 DebugControlPanel.gd::GDScript::5220637974334766322::1777694600::0::1::::DebugControlPanel<>Control<><>0<>0<><>::
 DynamicSpriteText.gd::GDScript::5775588346636683544::1777694600::0::1::::DynamicSpriteText<>Node2D<><>0<>0<><>::
 FocusInspector.gd::GDScript::8205132484311571619::1777694600::0::1::::FocusInspector<>CanvasLayer<><>0<>0<><>::
-IncarnationPicker.gd::GDScript::1798688542570847852::1777694600::0::1::::IncarnationPicker<>CanvasLayer<><>0<>0<><>::
+IncarnationPicker.gd::GDScript::1798688542570847852::1777699162::0::1::::IncarnationPicker<>CanvasLayer<><>0<>0<><>::
 MapModeOverlay.gd::GDScript::732084776285595907::1777694600::0::1::::MapModeOverlay<>Node<><>0<>0<><>::
-ObserverHUD.gd::GDScript::948590416549376643::1777694600::0::1::::ObserverHUD<>CanvasLayer<><>0<>0<><>::
+ObserverHUD.gd::GDScript::948590416549376643::1777699162::0::1::::ObserverHUD<>CanvasLayer<><>0<>0<><>::
 observer_lens_panel.gd::GDScript::7758710406776762680::1777694600::0::1::::ObserverLensPanel<>PanelContainer<><>0<>0<><>::
 PawnAIInspector.gd::GDScript::4582259285785959029::1777694600::0::1::::PawnAIInspector<>CanvasLayer<><>0<>0<><>::
 PawnInfoPanel.gd::GDScript::422338802411255888::1777694600::0::1::::PawnInfoPanel<>CanvasLayer<><>0<>0<><>::
@@ -389,5 +389,5 @@ _vc-out.txt::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 _verify-compile-capture.txt::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 ::res://tools/diagnose/::1777697035
 dev_debug_ui.gd::GDScript::3584493956201855911::1777698875::0::1::::<>Node<><>0<>0<><>::
-monitor_ticks.gd::GDScript::8868891242208846835::1777696840::0::1::::<>Node<><>0<>0<><>::
+monitor_ticks.gd::GDScript::8868891242208846835::1777699924::0::1::::<>Node<><>0<>0<><>::
 ::res://tools/godot/::1777695221

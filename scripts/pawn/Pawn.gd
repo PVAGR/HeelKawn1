@@ -352,12 +352,12 @@ var _cached_path: Array[Vector2i] = []
 var _cached_path_dest: Vector2i = Vector2i.ZERO
 var _cached_path_tick: int = -10000
 var _path_cache_duration: int = 100  # ticks before path expires
-	# "One of One" Pawn Brain — unified super-intelligent AI controller
-	# Combines: Neural Network + Decision Matrix + Memory + Goals + Gossip
-	# + Career + Dramatic Events + Combat Awareness + Social Scan
-	# WorldBox scale (thousands) + Bannerlord RPG + Crusader Kings + Kenshi survival
-	var _brain: RefCounted = null
-	var _cached_idle_action: String = "work"
+## "One of One" Pawn Brain — unified super-intelligent AI controller
+## Combines: Neural Network + Decision Matrix + Memory + Goals + Gossip
+## + Career + Dramatic Events + Combat Awareness + Social Scan
+## WorldBox scale (thousands) + Bannerlord RPG + Crusader Kings + Kenshi survival
+var _brain: RefCounted = null
+var _cached_idle_action: String = "work"
 var _cached_idle_action_food_emergency: bool = false
 var _next_idle_action_refresh_tick: int = -1
 ## Set true only after [method _pawn_connect_sim_tick_deferred] connects [signal GameManager.game_tick].

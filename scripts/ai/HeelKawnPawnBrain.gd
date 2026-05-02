@@ -47,6 +47,8 @@ var _current_world_state: Dictionary = {}
 var _neural_outputs: Array[float] = []
 var _decision_scores: Dictionary = {}
 
+var _world_state_cache_tick: int = -10000
+
 # === Brain Configuration ===
 const DECISION_INTERVAL_TICKS: int = 8  # Re-evaluate major decisions every N ticks
 const NEURAL_FORWARD_INTERVAL: int = 4  # Run neural forward pass every N ticks
@@ -80,7 +82,8 @@ func _init(pawn_data: PawnData, world: Node2D) -> void:
 	_cache_world_references()
 
 	# Build initial context
-	_rebuild_decision_context()
+	# Build initial context (use current tick; pawn may be null during init)
+	_rebuild_decision_context(null, GameManager.tick_count if GameManager != null else 0)
 
 
 func _initialize_neural_network() -> void:
@@ -306,7 +309,7 @@ func _rebuild_decision_context(pawn: Pawn, tick: int) -> void:
 	if cur_settlement != _ctx_last_settlement:
 		_decision_context["settlement_id"] = cur_settlement
 		_ctx_last_settlement = cur_settlement
-		var rk: int = WorldMemory._region_key(cur_tile.x, cur_tile.y) if "WorldMemory" in global else 0
+		var rk: int = WorldMemory._region_key(cur_tile.x, cur_tile.y) if WorldMemory != null else 0
 		_decision_context["region_key"] = rk
 
 

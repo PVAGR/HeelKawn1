@@ -356,7 +356,7 @@ var _path_cache_duration: int = 100  # ticks before path expires
 ## Combines: Neural Network + Decision Matrix + Memory + Goals + Gossip
 ## + Career + Dramatic Events + Combat Awareness + Social Scan
 ## WorldBox scale (thousands) + Bannerlord RPG + Crusader Kings + Kenshi survival
-var _brain: RefCounted = null
+var _brain: HeelKawnPawnBrain = null
 ## Cached references to brain subsystems for fast access (avoid property lookups)
 var _long_term_memory: RefCounted = null
 var _goal_engine: RefCounted = null
@@ -5417,6 +5417,7 @@ func _on_brain_social_interaction(pawn_id: int, target_id: int, interaction_type
 	# Handle social interactions triggered by brain
 	if data == null:
 		return
+	var tick: int = GameManager.tick_count if GameManager != null else 0
 	# Share gossip if applicable
 	if interaction_type == "gossip_share" and _brain != null:
 		var target_pawn: Pawn = _find_pawn_by_id(target_id)
@@ -5469,15 +5470,19 @@ func _record_dramatic_event(beat: Dictionary) -> void:
 	var WorldMemory = get_node_or_null("/root/WorldMemory")
 	if WorldMemory != null and WorldMemory.has_method("record_event"):
 		WorldMemory.record_event(beat)
-	# Record in LongTermMemory
+	# Record in LongTermMemory using the beat itself as the factual summary.
 	if _brain != null and _brain.long_term_memory != null:
 		if "add_memory" in _brain.long_term_memory:
+			var event_type_name: String = str(beat.get("event_type", "dramatic_event"))
+			var beat_name: String = str(beat.get("beat", ""))
+			var summary: String = str(beat.get("summary", event_type_name))
+			var location: Vector2i = data.tile_pos if data != null else Vector2i(-1, -1)
 			_brain.long_term_memory.add_memory(
-				LongTermMemory.MemoryType.ACCOMPLISHMENT,
-				"completed_job_%s" % job_type_str,
-				"pride",
-				importance,
-				Vector2i(job.tile.x, job.tile.y),
+				LongTermMemory.MemoryType.EVENT,
+				summary,
+				beat_name.to_lower(),
+				0.6,
+				location,
 				[]
 			)
 

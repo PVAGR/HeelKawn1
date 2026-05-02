@@ -193,12 +193,12 @@ func _apply_persistence_decay() -> void:
 		
 		# Decay based on time since last interaction
 		var decay_rate: float = 0.0
-		if time_since_visit > 10000:
-			decay_rate = 0.01
+		if time_since_visit > 50000:
+			decay_rate = 0.05
 		elif time_since_visit > 20000:
 			decay_rate = 0.02
-		elif time_since_visit > 50000:
-			decay_rate = 0.05
+		elif time_since_visit > 10000:
+			decay_rate = 0.01
 		
 		# Material condition decays faster
 		var old_condition = entity["material_condition"]

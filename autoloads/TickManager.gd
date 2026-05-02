@@ -2,10 +2,20 @@ extends Node
 ## Central deterministic tick manager. Drives ALL simulation logic via fixed-step
 ## accumulation. Emits `tick_processed` and calls `_on_world_tick()` on all
 ## nodes in the "tickable" group.
+##
+## BURST TICK PATTERN:
+## At high speeds (100x, 1000x), multiple simulation ticks accumulate in one frame.
+## The `while` loop processes all pending ticks, but is capped by MAX_TICKS_PER_FRAME
+## to prevent hanging. If the cap is hit, we drop the remaining backlog so the
+## sim can recover instead of spiraling forever.
 
 signal tick_processed(tick_number: int)
 
 const BASE_TICK_INTERVAL: float = 1.0
+
+## SAFETY: Maximum ticks processed in a single frame to prevent hangs.
+## At 100x speed, this still allows large bursts, but stops runaway catch-up.
+const MAX_TICKS_PER_FRAME: int = 300
 
 var current_tick: int = 0
 var _accumulated_time: float = 0.0
@@ -20,25 +30,99 @@ var _refcounted_tickables: Array = []
 const SPEED_PRESETS: Array[float] = [0.5, 1.0, 4.0, 16.0, 64.0]
 var _current_speed_index: int = 1  # Start at 1x (index 1)
 
+var _ticks_behind: int = 0
+var _last_frame_ticks: int = 0
+
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+
 
 func _process(delta: float) -> void:
 	if _is_paused:
 		return
+	if delta <= 0.0:
+		_last_frame_ticks = 0
+		return
+
+	## BURST TICK ACCUMULATION
+	## At 100x speed, delta (0.016s) * 100 = 1.6s of simulation time per frame.
 	_accumulated_time += delta * _speed_multiplier
-	while _accumulated_time >= _target_interval:
+	if _target_interval <= 0.0:
+		return
+
+	## Process all pending ticks in this frame (burst pattern).
+	var ticks_this_frame: int = 0
+	while _accumulated_time >= _target_interval and ticks_this_frame < MAX_TICKS_PER_FRAME:
 		_accumulated_time -= _target_interval
 		current_tick += 1
+		ticks_this_frame += 1
 		_dispatch_tick(current_tick)
 
+	## If we hit the safety cap, drop the rest of the backlog instead of
+	## carrying debt forever and creating a spiral of death.
+	if _accumulated_time >= _target_interval:
+		_ticks_behind = int(_accumulated_time / _target_interval)
+		_accumulated_time = 0.0
+	else:
+		_ticks_behind = 0
+
+	_last_frame_ticks = ticks_this_frame
+
 func _dispatch_tick(tick: int) -> void:
+	## PERFORMANCE NOTE: This is the CRITICAL tick loop.
+	## Expensive operations that should be MOVED out:
+	## 1. Complex pathfinding → use deferred worker or cache results
+	## 2. Heavy math (per-pawn matrix calculations) → simplify at high speeds
+	## 3. Distant pawn updates → use LOD (Level of Detail) system:
+	##    - At 16x+: pawns >50 tiles from nearest settlement update at 1/4 rate
+	##    - At 64x+: pawns >100 tiles update at 1/8 rate
+	## 4. Settlement AI recalculations → run on 100-tick cadence, not every tick
+	
 	tick_processed.emit(tick)
 	_call_tick_on_tickables(tick)
 	_call_tick_on_refcounted(tick)
+	
 	# Keep GameManager in sync for systems that still read tick_count
 	if GameManager != null:
 		GameManager.tick_count = tick
+
+
+## LOD (Level of Detail) helper: should this pawn skip this tick?
+func _should_skip_pawn_tick(pawn: Node, current_speed: float) -> bool:
+	## At high speeds, distant pawns update less frequently
+	## pawn must have a `position` and `tile_pos` property
+	if current_speed < 16.0:
+		return false  # No LOD at normal speeds
+	
+	if not is_instance_valid(pawn) or pawn.get("tile_pos") == null:
+		return false
+	
+	## Get nearest settlement center (cached lookup)
+	var tile_pos: Vector2i = pawn.get("tile_pos")
+	var nearest_dist: float = 99999.0
+	
+	## Simple check: if pawn has a settlement_id, use that for distance
+	if pawn.get("data") != null:
+		var d = pawn.get("data")
+		if d != null and d.has("settlement_id"):
+			var sid: int = int(d.get("settlement_id"))
+			if sid >= 0:
+				## Pawn is in a settlement - always update
+				return false
+	
+	## At 64x, skip pawns without a settlement (distant/wanderers)
+	if current_speed >= 64.0:
+		return true
+	
+	## At 16x-32x, use distance-based skip
+	if current_speed >= 16.0:
+		## Skip if pawn is far from any activity (no settlement, not carrying resources)
+		if pawn.get("carrying") == null or pawn.get("carrying") == 0:
+			## 50% chance to skip distant pawns (simplified update)
+			return (GameManager.tick_count + int(pawn.get_instance_id())) % 2 == 0
+	
+	return false
 
 func _call_tick_on_tickables(tick: int) -> void:
 	var tree: SceneTree = get_tree()
@@ -123,3 +207,5 @@ func get_speed_index() -> int:
 func reset() -> void:
 	current_tick = 0
 	_accumulated_time = 0.0
+	_ticks_behind = 0
+	_last_frame_ticks = 0

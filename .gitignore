@@ -1,35 +1,51 @@
-# Godot
-.import/
-.export/
-.export_presets.cfg
+```
+# Backup files
+*.backup
 
-# Mono / C#
-.mono/
-.vs/
+# Godot-specific
+.project
+*.import
+*.remap
+export_presets.cfg
+
+# Dependencies
+node_modules/
+venv/
+.venv/
+__pycache__/
+
+# Build artifacts
+build/
+dist/
+target/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-# Observer/automation artifacts (machine-readable + human-readable reports)
-logs/
-logs/**
+# Coverage
+.coverage
+coverage/
+htmlcov/
 
-# Godot editor cache
-.godot/
-export/
-!scripts/export/
-!scripts/export/**
-*.pck
-*.zip
-.vscode/*
-!.vscode/settings.json
-
-# Local addon secrets
-addons/godotassistant/config.cfg
-
-# Portable Godot (see tools/Download-GodotPortable.ps1); do not commit engine binaries.
-/tools/godot/*.exe
-.aider*
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+```

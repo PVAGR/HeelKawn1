@@ -592,6 +592,26 @@ func grudge_toward(other_pawn_id: int) -> float:
 	return clampf(g, -1.0, 1.0)
 
 
+## Strongest negative attack/hurt memory toward another pawn (by weighted severity).
+func get_strongest_grudge_target_id() -> int:
+	var best_id: int = -1
+	var best_w: float = 0.0
+	for e in _long_term_memory:
+		var k: String = str(e.get("k", ""))
+		if k.find("attack") < 0 and k.find("hurt") < 0:
+			continue
+		if float(e.get("v", 0.0)) >= 0.0:
+			continue
+		var oid: int = int(e.get("o", -1))
+		if oid < 0:
+			continue
+		var w: float = absf(float(e.get("v", 0.0))) * float(e.get("s", 1.0))
+		if w > best_w:
+			best_w = w
+			best_id = oid
+	return best_id
+
+
 func choose_autonomy_action(tick: int, pawn_id: int, ctx: Dictionary) -> String:
 	var wm: float = float(ctx.get("world_mood", 50.0))
 	var theft_p: float = float(ctx.get("theft_pressure", 0.0))

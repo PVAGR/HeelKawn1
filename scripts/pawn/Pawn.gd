@@ -336,6 +336,12 @@ var _last_inspect_msg: String = ""
 var _last_inspect_tick: int = -999999
 var _last_teaching_memory_event_tick: int = -TEACHING_MEMORY_EVENT_MIN_INTERVAL_TICKS
 var _last_body_needs_tick_applied: int = -1
+## Autonomy-driven draft walks (social / grudge); not player draft.
+var _autonomy_draft_purpose: String = ""
+var _autonomy_draft_peer_id: int = -1
+var _last_autonomy_feedback: String = ""
+var _next_autonomy_grudge_tick: int = 0
+var _next_autonomy_social_seek_tick: int = 0
 ## One [WorldAI.build_idle_parity_context_for_pawn] snapshot per pawn per tick (NPC / player parity).
 var _parity_context_tick: int = -1
 var _parity_context: Dictionary = {}
@@ -890,6 +896,8 @@ func _grant_initial_knowledge() -> void:
 ## Player-ordered direct move. Cancels a claimed work job, drops bed/zone
 ## holds, and paths to a passable tile (Kenshi / RimWorld "draft" feel).
 func draft_goto(world_tile: Vector2i) -> void:
+	_autonomy_draft_purpose = ""
+	_autonomy_draft_peer_id = -1
 	if _world == null or _world.data == null:
 		return
 	if not _world.data.in_bounds(world_tile.x, world_tile.y):
@@ -914,6 +922,39 @@ func draft_goto(world_tile: Vector2i) -> void:
 	_request_redraw()
 
 
+## NPC autonomy: same pathing as [draft_goto] but tags arrival for social / grudge resolution.
+func autonomy_draft_goto(world_tile: Vector2i, purpose: String, peer_id: int = -1) -> void:
+	if _world == null or _world.data == null:
+		return
+	if not _world.data.in_bounds(world_tile.x, world_tile.y):
+		return
+	if not _world.pathfinder.is_passable(world_tile):
+		return
+	_autonomy_draft_purpose = purpose
+	_autonomy_draft_peer_id = peer_id
+	release_job_if_any()
+	_release_bed_if_reserved()
+	_target_zone = null
+	_clear_path()
+	_state = State.DRAFT_WALK
+	if data.tile_pos == world_tile:
+		_autonomy_draft_purpose = ""
+		_autonomy_draft_peer_id = -1
+		_state = State.IDLE
+		_request_redraw()
+		return
+	var path: Array[Vector2i] = _path_for_pawn(world_tile)
+	if path.is_empty():
+		_autonomy_draft_purpose = ""
+		_autonomy_draft_peer_id = -1
+		_state = State.IDLE
+		_request_redraw()
+		return
+	_notify_autonomy_feedback(purpose)
+	_start_path(path)
+	_request_redraw()
+
+
 ## Tick-safe one-tile move used by deterministic player input queue.
 func move(tile_delta: Vector2i) -> bool:
 	if _world == null or data == null:
@@ -925,6 +966,150 @@ func move(tile_delta: Vector2i) -> bool:
 		return false
 	draft_goto(dest)
 	return true
+
+
+func _notify_autonomy_feedback(action_key: String) -> void:
+	if action_key.is_empty() or action_key == _last_autonomy_feedback:
+		return
+	_last_autonomy_feedback = action_key
+	if OS.is_debug_build():
+		print("[Autonomy] %s → %s" % [data.display_name if data != null else "?", action_key])
+	if _action_popup != null and data != null and GameManager != null and GameManager.game_speed < 60.0:
+		_action_popup.show_action_context(data.display_name, "Autonomy: %s" % action_key, "", "", "")
+
+
+func _finish_autonomy_draft_walk(purpose: String, peer_id: int) -> void:
+	if data == null or GameManager == null:
+		return
+	var tick: int = GameManager.tick_count
+	var peer: Pawn = _find_pawn_by_id(peer_id)
+	match purpose:
+		"social_seek":
+			if peer != null and is_instance_valid(peer) and peer.data != null:
+				data.add_social_rapport(peer_id, 3)
+				peer.data.add_social_rapport(int(data.id), 2)
+				data.mood = min(100.0, data.mood + 0.35)
+				peer.data.mood = min(100.0, peer.data.mood + 0.25)
+				if data.neural_network != null and data.neural_network.has_method("record_memory_event"):
+					data.neural_network.record_memory_event(tick, "social_visit", peer_id, 0.35)
+		"grudge_confront":
+			if peer != null and is_instance_valid(peer) and peer.data != null:
+				data.update_social_memory(peer_id, 0.0, 0.0, -0.15, -0.05, "autonomy_confront")
+				data.mood = clampf(data.mood - 0.4, 0.0, 100.0)
+				if data.neural_network != null and data.neural_network.has_method("record_memory_event"):
+					data.neural_network.record_memory_event(tick, "confront_attempt", peer_id, -0.08)
+		_:
+			pass
+	_next_autonomy_grudge_tick = tick + 80
+	_next_autonomy_social_seek_tick = tick + 50
+
+
+func _find_pawn_by_id(pid: int) -> Pawn:
+	if pid < 0:
+		return null
+	var spawner: PawnSpawner = _resolve_pawn_spawner()
+	if spawner == null:
+		return null
+	for p in spawner.pawns:
+		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pid:
+			return p
+	return null
+
+
+func _pick_passable_near_tile(origin: Vector2i, goal: Vector2i) -> Vector2i:
+	if _world == null:
+		return Vector2i(-1, -1)
+	var best: Vector2i = Vector2i(-1, -1)
+	var best_d: int = 1_000_000
+	var dirs: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+		Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1),
+	]
+	for d in dirs:
+		var t: Vector2i = goal + d
+		if not _world.data.in_bounds(t.x, t.y):
+			continue
+		if not _world.pathfinder.is_passable(t):
+			continue
+		var dd: int = origin.distance_squared_to(t)
+		if dd < best_d:
+			best_d = dd
+			best = t
+	return best
+
+
+func _try_autonomy_grudge_confront() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	if data.neural_network == null:
+		return false
+	var nn: Variant = data.neural_network
+	if not nn.has_method("get_strongest_grudge_target_id"):
+		return false
+	var tick: int = GameManager.tick_count
+	if tick < _next_autonomy_grudge_tick:
+		return false
+	if posmod(tick + int(data.id) * 11, 41) != 0:
+		return false
+	var gid: int = int(nn.get_strongest_grudge_target_id())
+	if gid < 0:
+		return false
+	var gmag: float = absf(float(nn.grudge_toward(gid)))
+	if gmag < 0.08:
+		return false
+	var p_roll: float = clampf(0.06 + gmag * 0.22, 0.05, 0.38)
+	if not WorldRNG.chance_for(_pawn_stream("grudge_seek"), p_roll, _pawn_salt(71)):
+		return false
+	var target: Pawn = _find_pawn_by_id(gid)
+	if target == null or not is_instance_valid(target) or target.data == null:
+		return false
+	var near_tile: Vector2i = _pick_passable_near_tile(data.tile_pos, target.data.tile_pos)
+	if near_tile.x < 0:
+		return false
+	autonomy_draft_goto(near_tile, "grudge_confront", gid)
+	return _state == State.DRAFT_WALK
+
+
+func _try_autonomy_social_seek() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	if data.neural_network == null:
+		return false
+	if str(data.neural_network.get_autonomy_hint()) != "social":
+		return false
+	var tick: int = GameManager.tick_count
+	if tick < _next_autonomy_social_seek_tick:
+		return false
+	if posmod(tick + int(data.id) * 5, 37) != 0:
+		return false
+	var spawner: PawnSpawner = _resolve_pawn_spawner()
+	if spawner == null:
+		return false
+	var best_peer: Pawn = null
+	var best_score: float = -1.0
+	var seen: int = 0
+	for p in spawner.pawns:
+		seen += 1
+		if seen > 28:
+			break
+		if p == null or not is_instance_valid(p) or p == self or p.data == null:
+			continue
+		var d2: int = data.tile_pos.distance_squared_to(p.data.tile_pos)
+		if d2 > 400:
+			continue
+		var rid: String = str(int(p.data.id))
+		var rap: float = float(data.social_rapport.get(rid, 600.0))
+		var score: float = rap / 3000.0 - float(d2) / 20000.0
+		if score > best_score:
+			best_score = score
+			best_peer = p
+	if best_peer == null:
+		return false
+	var near_tile: Vector2i = _pick_passable_near_tile(data.tile_pos, best_peer.data.tile_pos)
+	if near_tile.x < 0:
+		return false
+	autonomy_draft_goto(near_tile, "social_seek", int(best_peer.data.id))
+	return _state == State.DRAFT_WALK
 
 
 func _can_use_manual_ground_item_actions() -> bool:
@@ -1313,6 +1498,8 @@ func on_world_nav_changed() -> void:
 					_state = State.GOING_TO_BED
 					_start_path(pbed)
 		State.DRAFT_WALK:
+			_autonomy_draft_purpose = ""
+			_autonomy_draft_peer_id = -1
 			_state = State.IDLE
 			_clear_path()
 		_:
@@ -1400,7 +1587,13 @@ func _clear_path() -> void:
 func _on_path_complete() -> void:
 	match _state:
 		State.DRAFT_WALK:
+			var ap: String = _autonomy_draft_purpose
+			var apid: int = _autonomy_draft_peer_id
+			_autonomy_draft_purpose = ""
+			_autonomy_draft_peer_id = -1
 			_state = State.IDLE
+			if ap != "":
+				_finish_autonomy_draft_walk(ap, apid)
 			_request_redraw()
 		State.WALKING_TO_JOB:
 			if _current_job != null and data.tile_pos == _current_job.work_tile:
@@ -1714,11 +1907,17 @@ func _tick_idle() -> void:
 		else:
 			_begin_haul_to_stockpile()
 		return
+	# 2b. Long-memory grudge: occasionally seek a confrontation while otherwise idle.
+	if _try_autonomy_grudge_confront():
+		return
 	# 3. Need-driven: hungry + food nearby -> go eat
 	if _maybe_start_eating():
 		return
 	# 4. Tired -> sleep. Skipped if we're starving (food first, sleep when full).
 	if _maybe_start_sleeping():
+		return
+	# 4b. Neural "social" hint: path toward a high-rapport nearby pawn if not already eating/sleeping.
+	if _try_autonomy_social_seek():
 		return
 	var food_units: int = StockpileManager.total_food()
 	var food_pressure: float = 0.0
@@ -2424,6 +2623,17 @@ func _tick_working() -> void:
 	# Starving: let go of non-harvest work so the next tick can path to food.
 	if data.hunger <= HUNGER_EMERGENCY and _current_job != null:
 		if _current_job.type != Job.Type.FORAGE and _current_job.type != Job.Type.HUNT:
+			_unclaim_current_job()
+			return
+	# Hungry + autonomy wants food: release non-forage work so the pawn can eat sooner than emergency.
+	if (
+			data.hunger <= HUNGER_EAT_THRESHOLD
+			and _current_job != null
+			and data.neural_network != null
+			and str(data.neural_network.get_autonomy_hint()) == "eat"
+	):
+		if _current_job.type != Job.Type.FORAGE and _current_job.type != Job.Type.HUNT:
+			_notify_autonomy_feedback("need_eat (drop job)")
 			_unclaim_current_job()
 			return
 	if not _is_job_tile_still_valid(_current_job):
@@ -3349,6 +3559,8 @@ func _deposit_at_stockpile() -> void:
 
 func _maybe_start_eating() -> bool:
 	var eat_threshold: float = HUNGER_EAT_THRESHOLD + lerpf(-5.0, 5.0, _bp(6))
+	if data.neural_network != null and str(data.neural_network.get_autonomy_hint()) == "eat":
+		eat_threshold += 14.0
 	if data.hunger >= eat_threshold:
 		return false
 	if data.is_carrying():
@@ -3428,6 +3640,12 @@ func _maybe_start_sleeping() -> bool:
 	# when the sun goes down, giving the colony a real day/night rhythm.
 	var base_th: float = REST_SLEEP_THRESHOLD_NIGHT if DayNightCycle.is_night_for_tick(GameManager.tick_count) else REST_SLEEP_THRESHOLD
 	var threshold: float = base_th + lerpf(-7.0, 7.0, _bp(2))
+	if data.neural_network != null:
+		var ah: String = str(data.neural_network.get_autonomy_hint())
+		if ah == "sleep":
+			threshold += 12.0
+		elif ah == "shelter":
+			threshold += 9.0
 	if data.rest > threshold:
 		return false
 	# Don't curl up while starving -- if there's any food path open we should

@@ -101,11 +101,12 @@ static func _draw_humanoid_body(
 	pos: Vector2,
 	data,
 	pose_type: int,
-	anim_t: float
+	anim_t: float,
+	body_radius: float = 0.0
 ) -> void:
 	"""Draw the main body structure (head, torso, arms, legs) based on pose."""
 	
-	var radius = _get_body_radius(data)
+	var radius = body_radius if body_radius > 0.0 else _get_body_radius(data)
 	var color = data.color
 	
 	match pose_type:
@@ -344,14 +345,16 @@ static func _draw_humanoid_hair(
 	canvas_item: CanvasItem,
 	pos: Vector2,
 	data,
-	pose_type: int
+	pose_type: int,
+	body_radius: float = 0.0
 ) -> void:
 	"""Draw hair style above head."""
 	
 	if data.hair_style == HairStyle.NONE:
 		return
 	
-	var head_pos = pos + Vector2(0, -data.color_radius * 1.8) if pose_type != 3 else pos + Vector2(-data.color_radius * 1.2, data.color_radius * 0.2)
+	var radius = body_radius if body_radius > 0.0 else _get_body_radius(data)
+	var head_pos = pos + Vector2(0, -radius * 1.8) if pose_type != 3 else pos + Vector2(-radius * 1.2, radius * 0.2)
 	var color = data.hair_color
 	var radius = _get_body_radius(data)
 	
@@ -378,12 +381,13 @@ static func _draw_humanoid_apparel(
 	canvas_item: CanvasItem,
 	pos: Vector2,
 	data,
-	pose_type: int
+	pose_type: int,
+	body_radius: float = 0.0
 ) -> void:
 	"""Draw clothing trim overlay on shoulders and waist."""
 	
 	var color = data.apparel_color
-	var radius = _get_body_radius(data)
+	var radius = body_radius if body_radius > 0.0 else _get_body_radius(data)
 	
 	# Shoulder trim (left)
 	canvas_item.draw_line(

@@ -271,7 +271,7 @@ func _on_count_moving_pressed() -> void:
 						moving += 1
 					p.set_meta("__dev_prev_pos", p.position)
 	_append_log("Moving pawns: %d" % moving)
-		_refresh_status()
+	_refresh_status()
 
 func escape_bbcode(s: String) -> String:
 	return s.replace("[", "\\[").replace("]", "\\]")

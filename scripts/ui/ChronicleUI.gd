@@ -240,7 +240,7 @@ func _refresh_export_history() -> void:
 		h.add_child(l)
 		var open_btn = Button.new()
 		open_btn.text = "Open"
-		open_btn.connect("pressed", Callable(self, "_on_open_export_pressed"), [f])
+		open_btn.connect("pressed", Callable(self, "_on_open_export_pressed").bind(f))
 		h.add_child(open_btn)
 		_export_history_vbox.add_child(h)
 

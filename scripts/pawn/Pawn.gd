@@ -357,6 +357,12 @@ var _path_cache_duration: int = 100  # ticks before path expires
 ## + Career + Dramatic Events + Combat Awareness + Social Scan
 ## WorldBox scale (thousands) + Bannerlord RPG + Crusader Kings + Kenshi survival
 var _brain: RefCounted = null
+## Cached references to brain subsystems for fast access (avoid property lookups)
+var _long_term_memory: RefCounted = null
+var _goal_engine: RefCounted = null
+var _gossip: RefCounted = null
+var _career: RefCounted = null
+var _dramatic_engine: RefCounted = null
 var _cached_idle_action: String = "work"
 var _cached_idle_action_food_emergency: bool = false
 var _next_idle_action_refresh_tick: int = -1
@@ -5331,7 +5337,7 @@ func _tick_fleeing() -> void:
 func _tick_brain() -> void:
 	if _brain == null or data == null:
 		return
-	var tick: int = GameManager.tick_count if GameManager != null else0
+	var tick: int = GameManager.tick_count if GameManager != null else 0
 
 	# Run the unified brain tick (neural + decision + goals + combat + social)
 	var decision: Dictionary = _brain.tick(tick, self)
@@ -5376,7 +5382,7 @@ func _on_brain_story_beat(pawn_id: int, beat: Dictionary) -> void:
 	# Record story beat in WorldMemory
 	if data == null:
 		return
-	var tick: int = GameManager.tick_count if GameManager != null else0
+	var tick: int = GameManager.tick_count if GameManager != null else 0
 	var WorldMemory = get_node_or_null("/root/WorldMemory")
 	if WorldMemory != null and WorldMemory.has_method("record_event"):
 		WorldMemory.record_event(beat)

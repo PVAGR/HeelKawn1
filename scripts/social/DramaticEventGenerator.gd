@@ -71,7 +71,7 @@ func attempt_story_beat(pawn_data: PawnData, world_state: Dictionary) -> Diction
 
 func _try_start_story(pawn_data: PawnData, world_state: Dictionary) -> Dictionary:
 	var rng_label: StringName = StringName("dramatic:%d:start" % _pawn_id)
-	var roll: float = WorldRNG.range_for(rng_label, 0.0, 1.0, tick)
+	var roll: float = WorldRNG.range_for(rng_label, 0.0, 1.0, _current_tick())
 
 	if roll > STORY_CHANCE_PER_2000_TICKS:
 		return {}

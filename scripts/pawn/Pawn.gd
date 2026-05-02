@@ -5504,37 +5504,24 @@ func _draw_procedural_pixel_figure(origin: Vector2, body_radius: float) -> void:
 func _draw() -> void:
 	if data == null:
 		return
+	
+	# Render dynamic humanoid sprite using procedural visualizer
 	var body_radius: float = _body_radius()
 	var bob: float = 0.0
 	if not _path.is_empty() and _state != State.SLEEPING:
 		bob = sin(_anim_t * 9.0) * 0.45
 	var body_origin: Vector2 = Vector2(0.0, bob)
-	# Sleeping pawns render slightly dimmer to read as "off duty".
-	var body_color: Color = data.color
-	if _state == State.SLEEPING:
-		body_color = data.color.darkened(0.25)
 	
-	# Simplified rendering for performance - just draw circle and outline
-	draw_circle(body_origin, body_radius, body_color)
+	# Draw humanoid pawn using procedural sprite generator
+	ProceduresPawnVisualizer.draw_pawn(self, body_origin, _state, _anim_t, data)
 	
-	# Outline color communicates state (simplified)
-	var outline_c: Color = Color.BLACK
-	if _state == State.WORKING:
-		outline_c = Color.WHITE
-	elif _state == State.EATING:
-		outline_c = Color(0.2, 0.9, 0.2)
-	elif _state == State.SLEEPING:
-		outline_c = Color(0.49, 0.30, 0.81)
-	elif _state == State.DRAFT_WALK:
-		outline_c = Color(0.45, 0.95, 1.0)
-	draw_arc(body_origin, body_radius, 0.0, TAU, 20, outline_c, OUTLINE_WIDTH, true)
-	
-	# Selection ring only
+	# Selection ring (overlay, keep original style)
 	if is_selected:
+		var body_radius_calc = _body_radius()
 		var sel_color := Color(1.0, 0.92, 0.18)
-		draw_arc(body_origin, body_radius + 3.5, 0.0, TAU, 28, sel_color, 1.4, true)
+		draw_arc(body_origin, body_radius_calc + 3.5, 0.0, TAU, 28, sel_color, 1.4, true)
 	
-	# Draft marker only
+	# Draft marker (overlay, keep original style)
 	if draft_mode:
 		var c0: Vector2 = body_origin + Vector2(-2.5, DRAFT_CHEVRON_Y)
 		var c1: Vector2 = body_origin + Vector2(0.0, DRAFT_CHEVRON_Y - 2.0)

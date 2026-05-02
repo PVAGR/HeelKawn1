@@ -1468,7 +1468,7 @@ func update_historical_memory(site_id: int, state: String) -> void:
 
 
 ## Phase 4: Process tick for historical memory decay
-func process_tick(delta: float) -> void:
+func process_tick(_delta: float) -> void:
 	if avoidance_tick_timer > 0:
 		avoidance_tick_timer -= 1
 		if avoidance_tick_timer <= 0:
@@ -2262,14 +2262,14 @@ func add_profession_liking_for_job(job_type: int, tick_weight: int) -> void:
 			_bump_lane("tillage", w)
 		Job.Type.MINE:
 			_bump_lane("industry", w)
-			_bump_lane("inquiry", maxi(1, w / 4.0))
+			_bump_lane("inquiry", maxi(1, int(float(w) * 0.25)))
 		Job.Type.MINE_WALL:
 			_bump_lane("industry", w)
 			_bump_lane("inquiry", w)
-			_bump_lane("structure", maxi(1, w / 5.0))
+			_bump_lane("structure", maxi(1, int(float(w) * 0.2)))
 		Job.Type.CHOP:
 			_bump_lane("industry", w)
-			_bump_lane("outdoors", maxi(1, w / 3.0))
+			_bump_lane("outdoors", maxi(1, int(float(w) * 0.3333333333)))
 		Job.Type.HUNT:
 			_bump_lane("martial", w)
 			_bump_lane("outdoors", w)
@@ -2292,19 +2292,19 @@ func add_liking_from_action_skill(skill_key: String, amount: int) -> void:
 	match skill_key:
 		"movement":
 			_bump_lane("inquiry", a)
-			_bump_lane("circulation", maxi(1, a / 2.0))
+			_bump_lane("circulation", maxi(1, int(float(a) * 0.5)))
 		"farming":
 			_bump_lane("tillage", a)
-			_bump_lane("outdoors", maxi(1, a / 3.0))
+			_bump_lane("outdoors", maxi(1, int(float(a) * 0.3333333333)))
 		"building":
 			_bump_lane("structure", a)
-			_bump_lane("industry", maxi(1, a / 3.0))
+			_bump_lane("industry", maxi(1, int(float(a) * 0.3333333333)))
 		"gathering":
-			_bump_lane("tillage", maxi(1, a / 2.0))
+			_bump_lane("tillage", maxi(1, int(float(a) * 0.5)))
 			_bump_lane("outdoors", a)
 		"combat":
 			_bump_lane("martial", a)
-			_bump_lane("inquiry", maxi(1, a / 4.0))
+			_bump_lane("inquiry", maxi(1, int(float(a) * 0.25)))
 		_:
 			return
 	_flush_liking_to_affinities()

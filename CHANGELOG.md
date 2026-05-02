@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-05-02
+
+- Fixed remaining Pawn parser blockers so the class now reloads cleanly.
+- Cleaned up PawnData warning patterns and marked the unused tick parameter explicitly.
+
 ## 2026-05-01
 
 - Restored `main` to the fullest verified historical snapshot (`cff67a5`).

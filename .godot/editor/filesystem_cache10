@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1777761551
+::res://::1777761741
 AI_README.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 BIOME_DRIVEN_ARCHITECTURE.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 blackbox_mcp_settings.json::JSON::-1::1777694600::0::1::::<><><>0<>0<><>::
@@ -318,8 +318,8 @@ ActionPopupLabel.gd::GDScript::5174978775249392183::1777694600::0::1::::ActionPo
 Animal.gd::GDScript::3893107784844328532::1777694600::0::1::::Animal<>Node2D<><>0<>0<><>::
 AnimalSpawner.gd::GDScript::8350566320011331673::1777694600::0::1::::AnimalSpawner<>Node<><>0<>0<><>::
 MoodEvent.gd::GDScript::919426344482337370::1777694600::0::1::::MoodEvent<>Resource<><>0<>0<><>::
-Pawn.gd::GDScript::6658654347304257201::1777761537::0::1::::Pawn<>Node2D<><>0<>0<><>::
-PawnData.gd::GDScript::2791538913256910102::1777761461::0::1::::PawnData<>RefCounted<><>0<>0<><>::
+Pawn.gd::GDScript::6658654347304257201::1777761701::0::1::::Pawn<>Node2D<><>0<>0<><>::
+PawnData.gd::GDScript::2791538913256910102::1777761955::0::1::::PawnData<>RefCounted<><>0<>0<><>::
 PawnNeuralNetwork.gd::GDScript::5633698643138899321::1777694600::0::1::::PawnNeuralNetwork<>RefCounted<><>0<>0<><>::
 PawnSpawner.gd::GDScript::2411157889018663487::1777694600::0::1::::PawnSpawner<>Node<><>0<>0<><>::
 PlayerInputBuffer.gd::GDScript::7019315646774504164::1777694600::0::1::::PlayerInputBuffer<>Node<><>0<>0<><>::

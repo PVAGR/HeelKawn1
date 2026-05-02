@@ -347,7 +347,17 @@ var _parity_context_tick: int = -1
 var _parity_context: Dictionary = {}
 var _initial_knowledge_granted: bool = false
 var _perception_scan_cursor: int = 0
-var _cached_idle_action: String = "work"
+## Pathfinding cache (WorldBox-scale optimization for 100x speed)
+var _cached_path: Array[Vector2i] = []
+var _cached_path_dest: Vector2i = Vector2i.ZERO
+var _cached_path_tick: int = -10000
+var _path_cache_duration: int = 100  # ticks before path expires
+	# "One of One" Pawn Brain — unified super-intelligent AI controller
+	# Combines: Neural Network + Decision Matrix + Memory + Goals + Gossip
+	# + Career + Dramatic Events + Combat Awareness + Social Scan
+	# WorldBox scale (thousands) + Bannerlord RPG + Crusader Kings + Kenshi survival
+	var _brain: RefCounted = null
+	var _cached_idle_action: String = "work"
 var _cached_idle_action_food_emergency: bool = false
 var _next_idle_action_refresh_tick: int = -1
 ## Set true only after [method _pawn_connect_sim_tick_deferred] connects [signal GameManager.game_tick].
@@ -751,12 +761,27 @@ func _culture_inherited_job_offset() -> int:
 func _path_for_pawn(to: Vector2i) -> Array[Vector2i]:
 	if _world == null or _world.pathfinder == null or data == null:
 		return [] as Array[Vector2i]
-	# Throttle pathfinding to every 3 ticks to reduce lag
-	if GameManager.tick_count % 3 != 0:
-		return [] as Array[Vector2i]
-	if GameManager.game_speed >= FAST_PATHFIND_SPEED_THRESHOLD:
-		return _world.pathfinder.find_path(data.tile_pos, to)
-	return _world.pathfinder.find_path_pawn_historic_aversion(data.tile_pos, to)
+
+	# Path cache (WorldBox-scale optimization for 100x speed)
+	# Reuse cached path if destination hasn't changed and cache is fresh
+	var cache_duration: int = _path_cache_duration
+	if GameManager != null and GameManager.game_speed >= 50.0:
+		cache_duration = 300  # Longer cache at high speed
+	if data.tile_pos == _cached_path_dest and GameManager.tick_count - _cached_path_tick < cache_duration:
+		return _cached_path.duplicate()  # Return cached path
+
+	# Cache miss or expired — calculate new path
+	var new_path: Array[Vector2i] = []
+	if GameManager != null and GameManager.game_speed >= FAST_PATHFIND_SPEED_THRESHOLD:
+		new_path = _world.pathfinder.find_path(data.tile_pos, to)
+	else:
+		new_path = _world.pathfinder.find_path_pawn_historic_aversion(data.tile_pos, to)
+
+	# Update cache
+	_cached_path = new_path.duplicate()
+	_cached_path_dest = data.tile_pos
+	_cached_path_tick = GameManager.tick_count
+	return new_path
 
 
 func _request_redraw() -> void:
@@ -832,6 +857,30 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 		_initial_knowledge_granted = true
 	refresh_inherited_cultural_reputation()
 	data.ensure_soul_identity()
+	# Initialize "One of One" Pawn Brain — unified super-intelligent AI
+	# Combines: Neural Network + Decision Matrix + Memory + Goals + Gossip
+	# + Career + Dramatic Events + Combat Awareness + Social Scan
+	# WorldBox scale (thousands) + Bannerlord RPG + Crusader Kings + Kenshi survival
+	_brain = load("res://scripts/ai/HeelKawnPawnBrain.gd").new()
+	if _brain != null:
+		_brain._init(data, _world)
+		# Connect brain signals
+		if _brain.has_signal("decision_made"):
+			_brain.decision_made.connect(_on_brain_decision_made)
+		if _brain.has_signal("story_beat_fired"):
+			_brain.story_beat_fired.connect(_on_brain_story_beat)
+		if _brain.has_signal("goal_changed"):
+			_brain.goal_changed.connect(_on_brain_goal_changed)
+		if _brain.has_signal("combat_engaged"):
+			_brain.combat_engaged.connect(_on_brain_combat_engaged)
+		if _brain.has_signal("social_interaction"):
+			_brain.social_interaction.connect(_on_brain_social_interaction)
+		# Cache brain subsystems for fast access (avoid property lookups)
+		_long_term_memory = _brain.long_term_memory
+		_goal_engine = _brain.goal_engine
+		_gossip = _brain.gossip
+		_career = _brain.career
+		_dramatic_engine = _brain.dramatic_engine
 	_reset_neural_priority_cache()
 	_parity_context_tick = -1
 	_parity_context.clear()
@@ -992,16 +1041,56 @@ func _finish_autonomy_draft_walk(purpose: String, peer_id: int) -> void:
 				peer.data.mood = min(100.0, peer.data.mood + 0.25)
 				if data.neural_network != null and data.neural_network.has_method("record_memory_event"):
 					data.neural_network.record_memory_event(tick, "social_visit", peer_id, 0.35)
+				# Phase 4: Record social memory + share gossip
+				if _long_term_memory != null and is_instance_valid(_long_term_memory):
+					_long_term_memory.add_memory(
+						LongTermMemory.MemoryType.SOCIAL,
+						"social_visit_with_pawn%d" % peer_id,
+						"joy",
+						0.6,
+						data.tile_pos,
+						[peer_id]
+					)
+				if _gossip != null and is_instance_valid(_gossip) and peer._gossip != null:
+					_share_gossip_with_peer(peer)
 		"grudge_confront":
 			if peer != null and is_instance_valid(peer) and peer.data != null:
 				data.update_social_memory(peer_id, 0.0, 0.0, -0.15, -0.05, "autonomy_confront")
 				data.mood = clampf(data.mood - 0.4, 0.0, 100.0)
 				if data.neural_network != null and data.neural_network.has_method("record_memory_event"):
 					data.neural_network.record_memory_event(tick, "confront_attempt", peer_id, -0.08)
+				# Phase 4: Record negative memory
+				if _long_term_memory != null and is_instance_valid(_long_term_memory):
+					_long_term_memory.add_memory(
+						LongTermMemory.MemoryType.REGRET,
+						"confronted_pawn%d" % peer_id,
+						"anger",
+						0.5,
+						data.tile_pos,
+						[peer_id]
+					)
 		_:
 			pass
 	_next_autonomy_grudge_tick = tick + 80
 	_next_autonomy_social_seek_tick = tick + 50
+
+
+## Share gossip with a nearby peer using GossipPropagation system
+func _share_gossip_with_peer(peer: Pawn) -> void:
+	if _gossip == null or peer == null or peer._gossip == null:
+		return
+	var rng_label: StringName = StringName("gossip_share:%d:%d" % [int(data.id), int(peer.data.id)])
+	var relationship: float = float(data.get_social_rapport(int(peer.data.id))) / 100.0
+	if relationship < GossipPropagation.MIN_TRUST_THRESHOLD:
+		return
+	# Get gossip to share
+	var to_share: Array = _gossip.get_gossip_to_share(int(peer.data.id), relationship)
+	for g in to_share:
+		var content: String = g.get("content", "")
+		var original: int = int(g.get("original_source", int(data.id)))
+		var accuracy: float = float(g.get("accuracy", 0.8))
+		if peer._gossip.receive_gossip(content, int(data.id), original, accuracy, relationship):
+			g.spread_count = int(g.get("spread_count", 0)) + 1
 
 
 func _find_pawn_by_id(pid: int) -> Pawn:
@@ -1655,27 +1744,29 @@ func _on_world_tick(_tick: int) -> void:
 
 	if _trace_ai_slice:
 		CrashTrap.enter_system("pawn_tick:%d:ai" % pid)
+
+	# Cohort + meaning updates: throttled independently (brain handles its own stride)
 	if _trace_ai_slice:
-		CrashTrap.enter_system("pawn_tick:%d:ai:stride" % pid)
-	var stride: int = maxi(1, _fast_forward_tick_stride())
-	var ai_phase: int = pid
-	var run_full_ai: bool = stride <= 1 or (posmod(_tick + ai_phase, stride) == 0)
+		CrashTrap.enter_system("pawn_tick:%d:ai:cohort_draft" % pid)
+	# Throttled cohort system calls for performance
+	if GameManager.tick_count % COHORT_UPDATE_TICKS == 0:
+		update_cohort_membership()
+		_validate_or_dissolve_cohort()
+		_refresh_or_decay_cohort_stability()
+	# Apply meaning-based behavior density modifiers (Phase 4)
+	_apply_meaning_behavior_modifiers()
 	if _trace_ai_slice:
-		CrashTrap.exit_system("pawn_tick:%d:ai:stride" % pid)
-	if run_full_ai:
-		if _trace_ai_slice:
-			CrashTrap.enter_system("pawn_tick:%d:ai:cohort_draft" % pid)
-		# Throttled cohort system calls for performance
-		if GameManager.tick_count % COHORT_UPDATE_TICKS == 0:
-			update_cohort_membership()
-			_validate_or_dissolve_cohort()
-			_refresh_or_decay_cohort_stability()
-		# Apply meaning-based behavior density modifiers (Phase 4)
-		_apply_meaning_behavior_modifiers()
-		if draft_mode:
-			_engage_enemies()
-		if _trace_ai_slice:
-			CrashTrap.exit_system("pawn_tick:%d:ai:cohort_draft" % pid)
+		CrashTrap.exit_system("pawn_tick:%d:ai:cohort_draft" % pid)
+
+	# "One of One" Pawn Brain — always called; brain internally handles
+	# stride-based throttling (full AI vs. lightweight survival tick).
+	if _trace_ai_slice:
+		CrashTrap.enter_system("pawn_tick:%d:ai:brain" % pid)
+	_tick_brain()
+	if draft_mode:
+		_engage_enemies()
+	if _trace_ai_slice:
+		CrashTrap.exit_system("pawn_tick:%d:ai:brain" % pid)
 	# Panic-sleep interrupt: if rest is critically low and we're not already
 	# resolving a true emergency (asleep, eating, or fed/in-hand), abandon
 	# what we're doing and collapse. Beats the eat/haul cycle that otherwise
@@ -1690,29 +1781,11 @@ func _on_world_tick(_tick: int) -> void:
 		return
 	if _trace_ai_slice:
 		CrashTrap.exit_system("pawn_tick:%d:ai:panic" % pid)
-	if not run_full_ai:
-		if _trace_ai_slice:
-			CrashTrap.enter_system("pawn_tick:%d:ai:throttled_state" % pid)
-		match _state:
-			State.WORKING:
-				_tick_working()
-			State.EATING:
-				_tick_eating()
-			State.SLEEPING:
-				_tick_sleeping()
-			State.TEACHING:
-				_tick_teaching()
-			State.CHALLENGE:
-				_tick_challenge()
-			_:
-				pass
-		if _trace_ai_slice:
-			CrashTrap.exit_system("pawn_tick:%d:ai:throttled_state" % pid)
-		if _trace_ai_slice:
-			CrashTrap.exit_system("pawn_tick:%d:ai" % pid)
-		return
+
+	# State ticks: ALWAYS run (they have internal cooldowns for work/eat/sleep).
+	# Brain (decision-making) is throttled via stride in _tick_brain().
 	if _trace_ai_slice:
-		CrashTrap.enter_system("pawn_tick:%d:ai:full_state" % pid)
+		CrashTrap.enter_system("pawn_tick:%d:ai:state" % pid)
 	match _state:
 		State.IDLE:
 			_tick_idle()
@@ -1736,7 +1809,7 @@ func _on_world_tick(_tick: int) -> void:
 		State.CHALLENGE:
 			_tick_challenge()
 	if _trace_ai_slice:
-		CrashTrap.exit_system("pawn_tick:%d:ai:full_state" % pid)
+		CrashTrap.exit_system("pawn_tick:%d:ai:state" % pid)
 		CrashTrap.exit_system("pawn_tick:%d:ai" % pid)
 
 
@@ -1763,14 +1836,16 @@ func _job_claim_interval_for_speed() -> int:
 	if GameManager == null:
 		return 5
 	var gs: float = GameManager.game_speed
+	# At 100x with 2000 pawns, claim interval of 20 means ~100 pawns claim per tick.
+	# This prevents the "job claim storm" that freezes the sim at high speed.
 	if gs >= 100.0:
-		return 8
+		return 20
 	if gs >= 50.0:
-		return 6
+		return 12
 	if gs >= 26.0:
-		return 4
+		return 8
 	if gs >= 12.0:
-		return 4
+		return 6
 	if gs >= 3.0:
 		return 5
 	# 1x: claim often enough that pawns feel "busy" without scanning every tick.
@@ -3102,6 +3177,40 @@ func _complete_current_job() -> void:
 	var job_type_str: String = Job.describe_type(job.type).to_lower()
 	var current_proficiency: float = data.job_proficiency.get(job_type_str, 0.0)
 	data.job_proficiency[job_type_str] = min(100.0, current_proficiency + 2.0)  # +2 proficiency per job
+
+	# Phase 4: Career XP on job completion
+	if _career != null and is_instance_valid(_career) and "add_xp_for_job" in _career:
+		var xp_amount: float = 10.0  # Base XP per job
+		match job.type:
+			Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT, \
+			Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_MARKER_STONE, Job.Type.BUILD_SHRINE:
+				xp_amount = 15.0
+			Job.Type.HUNT:
+				xp_amount = 20.0
+			Job.Type.MINE, Job.Type.MINE_WALL:
+				xp_amount = 18.0
+			Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_TORCH, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR:
+				xp_amount = 12.0
+		_career.add_xp_for_job(job.type, xp_amount)
+
+	# Phase 4: Record job completion in long-term memory
+	if _long_term_memory != null and is_instance_valid(_long_term_memory):
+		var importance: float = 0.3
+		match job.type:
+			Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+				importance = 0.6
+			Job.Type.BUILD_SHRINE, Job.Type.BUILD_MARKER_STONE:
+				importance = 0.8
+			Job.Type.HUNT:
+				importance = 0.5
+		_long_term_memory.add_memory(
+			LongTermMemory.MemoryType.ACCOMPLISHMENT,
+			"completed_job_%s" % job_type_str,
+			"pride",
+			importance,
+			Vector2i(job.tile.x, job.tile.y),
+			[]
+		)
 	
 	var produced_type: int = Item.Type.NONE
 	# Most harvests yield 1; only HUNT (deer) yields more, but plumbing it as a
@@ -5218,6 +5327,155 @@ func _tick_fleeing() -> void:
 ## Apply meaning-based behavior density modifiers (Phase 4)
 ## Reads region meaning from MeaningAmbianceController and adjusts movement speed,
 ## clustering radius, and wander bias
+## "One of One" Pawn Brain — unified super-intelligent AI tick
+func _tick_brain() -> void:
+	if _brain == null or data == null:
+		return
+	var tick: int = GameManager.tick_count if GameManager != null else0
+
+	# Run the unified brain tick (neural + decision + goals + combat + social)
+	var decision: Dictionary = _brain.tick(tick, self)
+
+	# Apply the brain's decision to pawn state if needed
+	if not decision.is_empty():
+		var action: String = decision.get("action", "idle")
+		var confidence: float = decision.get("confidence", 0.0)
+		# High-confidence decisions can override idle behavior
+		if confidence > 0.7 and _state == State.IDLE:
+			_apply_brain_decision(action, decision)
+
+
+## Apply a brain-generated decision to pawn behavior
+func _apply_brain_decision(action: String, decision: Dictionary) -> void:
+	match action:
+		"seek_food":
+			if data.hunger < HUNGER_EAT_THRESHOLD:
+				pass  # Job system will handle
+		"seek_rest", "sleep":
+			if data.rest < REST_SLEEP_THRESHOLD:
+				pass  # Job system will handle
+		"social_bond", "seek_social":
+			if data.mood < 40.0:
+				data.mood = min(100.0, data.mood + 0.2)
+		"face_threat", "combat":
+			pass  # Combat system handles
+		"scout_wonder":
+			pass  # Movement system handles
+		_:
+			pass
+
+
+## Brain signal handlers
+
+func _on_brain_decision_made(pawn_id: int, action: String, confidence: float) -> void:
+	if OS.is_debug_build() and confidence > 0.8:
+		pass  # Could log high-confidence decisions
+
+
+func _on_brain_story_beat(pawn_id: int, beat: Dictionary) -> void:
+	# Record story beat in WorldMemory
+	if data == null:
+		return
+	var tick: int = GameManager.tick_count if GameManager != null else0
+	var WorldMemory = get_node_or_null("/root/WorldMemory")
+	if WorldMemory != null and WorldMemory.has_method("record_event"):
+		WorldMemory.record_event(beat)
+	# Show action popup for significant story beats
+	if _action_popup != null and GameManager.game_speed < 50.0:
+		var event_name: String = beat.get("event_type", "unknown")
+		_action_popup.show_action_context(data.display_name if data != null else "?", "Story: %s" % event_name, "", "", "")
+
+
+func _on_brain_goal_changed(pawn_id: int, old_goal: String, new_goal: String) -> void:
+	if OS.is_debug_build():
+		pass  # Could log goal changes
+
+
+func _on_brain_combat_engaged(pawn_id: int, target_id: int, combat_type: String) -> void:
+	# Could trigger combat state, animations, etc.
+	if data == null:
+		return
+	# Record in memory via brain
+	if _brain != null and "long_term_memory" in _brain and _brain.long_term_memory != null:
+		_brain.long_term_memory.add_memory(
+			LongTermMemory.MemoryType.EVENT,
+			"combat_engaged_%s" % combat_type,
+			"determination",
+			0.6,
+			data.tile_pos,
+			[target_id]
+		)
+
+
+func _on_brain_social_interaction(pawn_id: int, target_id: int, interaction_type: String) -> void:
+	# Handle social interactions triggered by brain
+	if data == null:
+		return
+	# Share gossip if applicable
+	if interaction_type == "gossip_share" and _brain != null:
+		var target_pawn: Pawn = _find_pawn_by_id(target_id)
+		if target_pawn != null and is_instance_valid(target_pawn) and "gossip" in _brain and _brain.gossip != null:
+			# Gossip sharing logic
+			pass
+
+	# Career XP: tick-based XP decay/growth
+	if _career != null and is_instance_valid(_career):
+		if "tick_update" in _career and tick % 100 == 0:
+			_career.tick_update(data)
+
+	# Long-term memory: decay old memories
+	if _long_term_memory != null and is_instance_valid(_long_term_memory):
+		if tick % 500 == 0:
+			_long_term_memory.decay_memories()
+
+	# Dramatic event: attempt story beat every 2000 ticks
+	if _dramatic_engine != null and is_instance_valid(_dramatic_engine):
+		if tick % 2000 == 0 or tick == _dramatic_engine._story_cooldown_tick:
+			var world_state: Dictionary = _build_world_state_for_ai()
+			var beat: Dictionary = _dramatic_engine.attempt_story_beat(data, world_state)
+			if not beat.is_empty():
+				_record_dramatic_event(beat)
+
+	# Gossip: share with nearby pawns (handled in social proximity, see _finish_autonomy_draft_walk)
+
+
+## Build a minimal world state snapshot for AI systems
+func _build_world_state_for_ai() -> Dictionary:
+	var state: Dictionary = {}
+	if data != null:
+		state["hunger"] = data.hunger
+		state["rest"] = data.rest
+		state["mood"] = data.mood
+		state["health"] = data.health
+		state["tile_pos"] = data.tile_pos
+		state["age_years"] = data.age_years
+	if _world != null and _world.data != null:
+		state["biome"] = _world.data.get_biome(data.tile_pos.x, data.tile_pos.y)
+	return state
+
+
+## Record a dramatic event to WorldMemory + LongTermMemory
+func _record_dramatic_event(beat: Dictionary) -> void:
+	if data == null:
+		return
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	# Record in WorldMemory
+	var WorldMemory = get_node_or_null("/root/WorldMemory")
+	if WorldMemory != null and WorldMemory.has_method("record_event"):
+		WorldMemory.record_event(beat)
+	# Record in LongTermMemory
+	if _brain != null and _brain.long_term_memory != null:
+		if "add_memory" in _brain.long_term_memory:
+			_brain.long_term_memory.add_memory(
+				LongTermMemory.MemoryType.ACCOMPLISHMENT,
+				"completed_job_%s" % job_type_str,
+				"pride",
+				importance,
+				Vector2i(job.tile.x, job.tile.y),
+				[]
+			)
+
+
 func _apply_meaning_behavior_modifiers() -> void:
 	if _world == null or data == null:
 		return

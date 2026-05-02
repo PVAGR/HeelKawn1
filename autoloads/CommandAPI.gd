@@ -11,6 +11,11 @@ enum CommandType {
 	TOGGLE_DRAFT_MODE = 5,
 	REQUEST_INCARNATION = 6,
 	RETURN_TO_SPECTATOR = 7,
+	SHARE_GOSSIP = 8,
+	SET_GOAL = 9,
+	RECORD_MEMORY = 10,
+	TRIGGER_STORY_BEAT = 11,
+	CHANGE_CAREER_TRACK = 12,
 }
 
 ## Command structure for unified processing
@@ -52,6 +57,16 @@ static func execute_command(command: Command) -> Dictionary:
 			result = _execute_request_incarnation(command)
 		CommandType.RETURN_TO_SPECTATOR:
 			result = _execute_return_to_spectator(command)
+		CommandType.SHARE_GOSSIP:
+			result = _execute_share_gossip(command)
+		CommandType.SET_GOAL:
+			result = _execute_set_goal(command)
+		CommandType.RECORD_MEMORY:
+			result = _execute_record_memory(command)
+		CommandType.TRIGGER_STORY_BEAT:
+			result = _execute_trigger_story_beat(command)
+		CommandType.CHANGE_CAREER_TRACK:
+			result = _execute_change_career_track(command)
 		_:
 			result.error = "Unknown command type: %d" % command.type
 	
@@ -558,7 +573,191 @@ static func _validate_return_to_spectator(command: Command) -> Dictionary:
 
 static func _validate_designate_tile(command: Command) -> Dictionary:
 	var result: Dictionary = {"valid": false, "error": "", "requirements": {}}
-	
+
 	# Designation is player-only
 	result.error = "Tile designation is player-only feature"
+	return result
+
+# === Phase 4: New Command Execution Methods ===
+
+static func _execute_share_gossip(command: Command) -> Dictionary:
+	var result: Dictionary = {"success": false, "error": "", "data": {}}
+	var pawn_obs: Dictionary = ObservationAPI.observe_pawn(command.actor_id)
+	if pawn_obs.has("error"):
+		result.error = "Pawn not found: %s" % pawn_obs.get("error", "Unknown")
+		return result
+	var target_id: int = command.target_data.get("target_pawn_id", -1)
+	if target_id < 0:
+		result.error = "No target pawn specified for gossip"
+		return result
+	# Get pawn node to access gossip system
+	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
+	if main == null:
+		result.error = "Main scene not available"
+		return result
+	var pawn: Pawn = null
+	if main.has_method("get_pawn_by_id"):
+		pawn = main.get_pawn_by_id(command.actor_id)
+	if pawn == null or not is_instance_valid(pawn):
+		result.error = "Pawn instance not found"
+		return result
+	if "_gossip" in pawn and "share_gossip" in pawn:
+		var shared: int = pawn.share_gossip(target_id)
+		result.success = true
+		result.data["shared_count"] = shared
+	else:
+		result.error = "Pawn gossip system not initialized"
+	return result
+
+
+static func _execute_set_goal(command: Command) -> Dictionary:
+	var result: Dictionary = {"success": false, "error": "", "data": {}}
+	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
+	if main == null:
+		result.error = "Main scene not available"
+		return result
+	var pawn: Pawn = null
+	if main.has_method("get_pawn_by_id"):
+		pawn = main.get_pawn_by_id(command.actor_id)
+	if pawn == null or not is_instance_valid(pawn):
+		result.error = "Pawn instance not found"
+		return result
+	var goal_key: String = command.target_data.get("goal_key", "")
+	var scope: int = command.target_data.get("scope", GoalEngine.GoalScope.TODAY)
+	if goal_key.is_empty():
+		result.error = "No goal key specified"
+		return result
+	if pawn._goal_engine != null and "add_goal" in pawn._goal_engine:
+		pawn._goal_engine.add_goal(goal_key, scope, "AI set goal", [], 0.5)
+		result.success = true
+		result.data["goal_key"] = goal_key
+	else:
+		result.error = "Goal engine not initialized for pawn"
+	return result
+
+
+static func _execute_record_memory(command: Command) -> Dictionary:
+	var result: Dictionary = {"success": false, "error": "", "data": {}}
+	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
+	if main == null:
+		result.error = "Main scene not available"
+		return result
+	var pawn: Pawn = null
+	if main.has_method("get_pawn_by_id"):
+		pawn = main.get_pawn_by_id(command.actor_id)
+	if pawn == null or not is_instance_valid(pawn):
+		result.error = "Pawn instance not found"
+		return result
+	if pawn._long_term_memory != null and "add_memory" in pawn._long_term_memory:
+		var mem_type: int = command.target_data.get("memory_type", LongTermMemory.MemoryType.EVENT)
+		var summary: String = command.target_data.get("summary", "command_memory")
+		var importance: float = command.target_data.get("importance", 0.5)
+		var mem_id: int = pawn._long_term_memory.add_memory(mem_type, summary, "neutral", importance, Vector2i.ZERO, [])
+		result.success = true
+		result.data["memory_id"] = mem_id
+	else:
+		result.error = "Long-term memory not initialized for pawn"
+	return result
+
+
+static func _execute_trigger_story_beat(command: Command) -> Dictionary:
+	var result: Dictionary = {"success": false, "error": "", "data": {}}
+	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
+	if main == null:
+		result.error = "Main scene not available"
+		return result
+	var pawn: Pawn = null
+	if main.has_method("get_pawn_by_id"):
+		pawn = main.get_pawn_by_id(command.actor_id)
+	if pawn == null or not is_instance_valid(pawn):
+		result.error = "Pawn instance not found"
+		return result
+	if pawn._dramatic_engine != null and "attempt_story_beat" in pawn._dramatic_engine:
+		var world_state: Dictionary = pawn._build_world_state_for_ai() if "get_world_state_for_ai" in pawn else {}
+		var beat: Dictionary = pawn._dramatic_engine.attempt_story_beat(pawn.data, world_state)
+		result.success = not beat.is_empty()
+		result.data["beat"] = beat
+	else:
+		result.error = "Dramatic event engine not initialized for pawn"
+	return result
+
+
+static func _execute_change_career_track(command: Command) -> Dictionary:
+	var result: Dictionary = {"success": false, "error": "", "data": {}}
+	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
+	if main == null:
+		result.error = "Main scene not available"
+		return result
+	var pawn: Pawn = null
+	if main.has_method("get_pawn_by_id"):
+		pawn = main.get_pawn_by_id(command.actor_id)
+	if pawn == null or not is_instance_valid(pawn):
+		result.error = "Pawn instance not found"
+		return result
+	if pawn._career != null and "set_career" in pawn._career:
+		var track: int = command.target_data.get("career_track", CareerXP.CareerTrack.NONE)
+		var master_id: int = command.target_data.get("master_id", -1)
+		pawn._career.set_career(track, master_id)
+		result.success = true
+		result.data["track"] = track
+	else:
+		result.error = "Career system not initialized for pawn"
+	return result
+
+
+# === Validation methods for new commands ===
+
+static func _validate_share_gossip(command: Command) -> Dictionary:
+	var result: Dictionary = {"valid": false, "error": "", "requirements": {}}
+	var pawn_obs: Dictionary = ObservationAPI.observe_pawn(command.actor_id)
+	if pawn_obs.has("error"):
+		result.error = "Actor not found: %s" % pawn_obs.get("error", "Unknown")
+		return result
+	if command.target_data.get("target_pawn_id", -1) < 0:
+		result.error = "No target pawn specified"
+		return result
+	result.valid = true
+	return result
+
+
+static func _validate_set_goal(command: Command) -> Dictionary:
+	var result: Dictionary = {"valid": false, "error": "", "requirements": {}}
+	var pawn_obs: Dictionary = ObservationAPI.observe_pawn(command.actor_id)
+	if pawn_obs.has("error"):
+		result.error = "Actor not found: %s" % pawn_obs.get("error", "Unknown")
+		return result
+	if command.target_data.get("goal_key", "").is_empty():
+		result.error = "No goal key specified"
+		return result
+	result.valid = true
+	return result
+
+
+static func _validate_record_memory(command: Command) -> Dictionary:
+	var result: Dictionary = {"valid": false, "error": "", "requirements": {}}
+	var pawn_obs: Dictionary = ObservationAPI.observe_pawn(command.actor_id)
+	if pawn_obs.has("error"):
+		result.error = "Actor not found: %s" % pawn_obs.get("error", "Unknown")
+		return result
+	result.valid = true
+	return result
+
+
+static func _validate_trigger_story_beat(command: Command) -> Dictionary:
+	var result: Dictionary = {"valid": false, "error": "", "requirements": {}}
+	var pawn_obs: Dictionary = ObservationAPI.observe_pawn(command.actor_id)
+	if pawn_obs.has("error"):
+		result.error = "Actor not found: %s" % pawn_obs.get("error", "Unknown")
+		return result
+	result.valid = true
+	return result
+
+
+static func _validate_change_career_track(command: Command) -> Dictionary:
+	var result: Dictionary = {"valid": false, "error": "", "requirements": {}}
+	var pawn_obs: Dictionary = ObservationAPI.observe_pawn(command.actor_id)
+	if pawn_obs.has("error"):
+		result.error = "Actor not found: %s" % pawn_obs.get("error", "Unknown")
+		return result
+	result.valid = true
 	return result

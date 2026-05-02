@@ -102,20 +102,31 @@ func set_lifelong_aspiration(aspiration: String, hope: float = 0.5) -> void:
 
 
 ## Pick daily goals (called each morning)
-func pick_daily_goals(survival_importance: float = 0.7) -> Array[Dictionary]:
+## Accepts optional neural_summary: Dictionary from WorldAI.get_neural_network_summary()
+func pick_daily_goals(survival_importance: float = 0.7, neural_summary: Dictionary = {}) -> Array[Dictionary]:
 	var tick_now: int = _current_tick()
-	
+
 	# Only refresh once per day
 	if tick_now - _tick_last_daily_refresh < DAILY_GOAL_REFRESH_TICKS:
 		return get_active_goals()
-	
+
 	_tick_last_daily_refresh = tick_now
-	
+
 	# Keep completed goals, remove failed ones
-	_goals = _goals.filter(func(g): 
+	_goals = _goals.filter(func(g):
 		return g.status == GoalStatus.ACTIVE or g.progress < 1.0
 	)
-	
+
+	# Neural-driven goal bias
+	var collapse_risk: float = float(neural_summary.get("collapse_risk", 0.5))
+	var economic_stability: float = float(neural_summary.get("economic_stability", 0.5))
+	var religious_fervor: float = float(neural_summary.get("religious_fervor", 0.5))
+	var knowledge_scarcity: float = float(neural_summary.get("knowledge_scarcity", 0.5))
+
+	# High collapse risk → prioritize survival
+	if collapse_risk > 0.6:
+		survival_importance = minf(1.0, survival_importance + 0.2)
+
 	# Add survival goal if needed
 	if survival_importance > 0.6:
 		add_goal(
@@ -123,9 +134,35 @@ func pick_daily_goals(survival_importance: float = 0.7) -> Array[Dictionary]:
 			GoalScope.TODAY,
 			"Don't starve",
 			[],
-			0.9
+			survival_importance
 		)
-	
+
+	# Neural-driven goal additions
+	if economic_stability < 0.4:
+		add_goal(
+			"improve_economy",
+			GoalScope.THIS_YEAR,
+			"Stabilize local economy",
+			[],
+			0.6
+		)
+	if knowledge_scarcity > 0.6:
+		add_goal(
+			"preserve_knowledge",
+			GoalScope.THIS_YEAR,
+			"Record and preserve knowledge",
+			[],
+			0.7
+		)
+	if religious_fervor > 0.7:
+		add_goal(
+			"religious_unity",
+			GoalScope.THIS_YEAR,
+			"Strengthen faith community",
+			[],
+			religious_fervor
+		)
+
 	# Add variation from lifelong aspirations
 	_lifelong_aspirations.shuffle()
 	var selected_aspirations = _lifelong_aspirations.slice(0, 1)
@@ -133,7 +170,7 @@ func pick_daily_goals(survival_importance: float = 0.7) -> Array[Dictionary]:
 		var key: String = asp.key
 		if WorldRNG.chance_for(StringName("aspire:%d" % _pawn_id), asp.hope, 1.0):
 			add_goal(key, GoalScope.THIS_YEAR, "Aspiration", [], asp.hope)
-	
+
 	return get_active_goals()
 
 

@@ -136,4 +136,4 @@ func _on_count_moving_pressed() -> void:
     _append_log("Moving pawns: %d" % moving)
 
 func escape_bbcode(s: String) -> String:
-    return s.replace("[", "\[").replace("]", "\]")
+    return s.replace("[", "\\[").replace("]", "\\]")

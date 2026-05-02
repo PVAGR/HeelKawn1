@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1777700051
+::res://::1777701084
 AI_README.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 BIOME_DRIVEN_ARCHITECTURE.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 blackbox_mcp_settings.json::JSON::-1::1777694600::0::1::::<><><>0<>0<><>::
@@ -158,7 +158,7 @@ SpatialManager.gd::GDScript::24198543567273865::1777694600::0::1::::<>Node<><>0<
 SquadCoordinator.gd::GDScript::6749140353094337295::1777694600::0::1::::<>Node<><>0<>0<><>::
 StockpileManager.gd::GDScript::215983093589793156::1777694600::0::1::::<>Node<><>0<>0<><>::
 TechnologySystem.gd::GDScript::1479520665738386352::1777694600::0::1::::<>Node<><>0<>0<><>::
-TickManager.gd::GDScript::5792076579507672326::1777694655::0::1::::<>Node<><>0<>0<><>::
+TickManager.gd::GDScript::5792076579507672326::1777700908::0::1::::<>Node<><>0<>0<><>::
 ToolManager.gd::GDScript::292220667211019745::1777694600::0::1::::<>Node<><>0<>0<><>::
 TradeMemory.gd::GDScript::5248539327593372606::1777694600::0::1::::<>Node<><>0<>0<><>::
 TradePlanner.gd::GDScript::8396858183117698797::1777694600::0::1::::<>Node<><>0<>0<><>::
@@ -317,7 +317,7 @@ ActionPopupLabel.gd::GDScript::5174978775249392183::1777694600::0::1::::ActionPo
 Animal.gd::GDScript::3893107784844328532::1777694600::0::1::::Animal<>Node2D<><>0<>0<><>::
 AnimalSpawner.gd::GDScript::8350566320011331673::1777694600::0::1::::AnimalSpawner<>Node<><>0<>0<><>::
 MoodEvent.gd::GDScript::919426344482337370::1777694600::0::1::::MoodEvent<>Resource<><>0<>0<><>::
-Pawn.gd::GDScript::6658654347304257201::1777694600::0::1::::Pawn<>Node2D<><>0<>0<><>::
+Pawn.gd::GDScript::6658654347304257201::1777700908::0::1::::Pawn<>Node2D<><>0<>0<><>::
 PawnData.gd::GDScript::2791538913256910102::1777694600::0::1::::PawnData<>RefCounted<><>0<>0<><>::
 PawnNeuralNetwork.gd::GDScript::5633698643138899321::1777694600::0::1::::PawnNeuralNetwork<>RefCounted<><>0<>0<><>::
 PawnSpawner.gd::GDScript::2411157889018663487::1777694600::0::1::::PawnSpawner<>Node<><>0<>0<><>::
@@ -388,6 +388,6 @@ _vc-err.txt::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 _vc-out.txt::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 _verify-compile-capture.txt::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 ::res://tools/diagnose/::1777697035
-dev_debug_ui.gd::GDScript::3584493956201855911::1777698875::0::1::::<>Node<><>0<>0<><>::
+dev_debug_ui.gd::GDScript::3584493956201855911::1777701056::0::1::::<>Node<><>0<>0<><>::
 monitor_ticks.gd::GDScript::8868891242208846835::1777699924::0::1::::<>Node<><>0<>0<><>::
 ::res://tools/godot/::1777695221

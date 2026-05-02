@@ -8,6 +8,11 @@
 
 ## DONE ✅
 
+### Session 2026-05-02 (Continued)
+- [x] Fixed Pawn.gd compilation error: removed erroneous duplicate line in `_decay_needs()` (line 3907)
+- [x] Updated CHANGELOG.md with latest fix
+- [x] Scanned for duplicate variable declarations across codebase (found several in CombatResolver, WorldGenerator, etc. - noted for future cleanup)
+
 ### Session 2026-05-02
 - [x] Repository scan completed
 - [x] Documentation review (AI_README.md, HEELKAWN_STATE.md, REVIVAL_CONSTRAINTS.md)

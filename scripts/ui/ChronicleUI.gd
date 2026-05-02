@@ -193,7 +193,8 @@ func _flash_export_status(message: String, ok: bool) -> void:
 	_export_status_label.add_theme_color_override(
 			"font_color", Color(0.55, 0.92, 0.62) if ok else Color(0.95, 0.42, 0.42)
 	)
-	get_tree().create_timer(5.0).timeout.connect(_clear_export_status_once, CONNECT_ONE_SHOT)
+	# `create_timer()` returns a single-shot timer; connect with a Callable.
+	get_tree().create_timer(5.0).timeout.connect(Callable(self, "_clear_export_status_once"))
 
 
 func _clear_export_status_once() -> void:

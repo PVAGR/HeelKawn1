@@ -190,6 +190,48 @@ func get_state() -> Dictionary:
 		"tick_career_started": _tick_career_started,
 	}
 
+## Add XP based on job type (called from Pawn.gd on job completion)
+func add_xp_for_job(job_type: int, base_xp: float) -> void:
+	if _career_track == CareerTrack.NONE:
+		return
+	# Map job type to career track
+	var matched_track: int = _job_type_to_career_track(job_type)
+	if matched_track != _career_track:
+		return  # Only gain XP for the pawn's current career track
+	var xp_gained: int = int(base_xp)
+	if xp_gained <= 0:
+		return
+	gain_xp(xp_gained, "job_%d" % job_type)
+	# Track proud moment for significant XP gains
+	if xp_gained >= 15:
+		_proud_moments.append({
+			"event": "job_xp_milestone",
+			"job_type": job_type,
+			"xp_gained": xp_gained,
+			"tick": GameManager.tick_count if GameManager != null else 0,
+		})
+
+
+## Map Job.Type to CareerTrack
+func _job_type_to_career_track(job_type: int) -> int:
+	match job_type:
+		Job.Type.FORAGE, Job.Type.GATHER_FLINT, Job.Type.GATHER_STICK:
+			return CareerTrack.FORAGER
+		Job.Type.HUNT:
+			return CareerTrack.HUNTER
+		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, \
+		Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, \
+		Job.Type.BUILD_MARKER_STONE, Job.Type.BUILD_SHRINE:
+			return CareerTrack.BUILDER
+		Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_TORCH, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR:
+			return CareerTrack.CRAFTSMAN
+		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.DRY_MEAT:
+			return CareerTrack.COOK
+		Job.Type.MINE, Job.Type.MINE_WALL:
+			return CareerTrack.NONE  # Mining doesn't map to a specific track yet
+		_:
+			return CareerTrack.NONE
+
 
 func load_state(state: Dictionary) -> void:
 	_career_track = state.get("career_track", CareerTrack.NONE)

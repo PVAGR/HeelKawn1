@@ -26,6 +26,18 @@
 - [x] _state_to_meaning_label() fixed to return standard WorldMeaning labels
 - [x] REVIVAL_CONSTRAINTS.md updated with canonical state flow diagram
 
+### From origin/main
+- [x] Restored the repository to the fullest known historical snapshot on `main`
+- [x] Re-established the deterministic kernel authoring context for future sessions
+- [x] Synced the visible workspace with the restored repository snapshot
+- [x] Fixed persistence decay threshold ordering in `autoloads/PersistenceSystem.gd`
+- [x] Fixed settlement rebirth so revival can run even when no living pawns remain
+- [x] Fixed Pawn parser blockers and added PawnData cleanup for warning reduction
+- [x] Added the Phase 4 settlement lifecycle machine with deterministic revival and ruin thresholds
+- [x] Canonical startup documentation cleanup
+- [x] Kernel contract review for WorldMemory / WorldMeaning / WorldPersistence
+- [x] Full-run validation of the settlement lifecycle transition path
+
 ### Previous Sessions
 - [x] Neural AI integration (WorldAI matrix for pawn decision-making)
 - [x] Compact UI refactor (ColonyHUD, PawnInfoPanel with tabs)
@@ -55,6 +67,11 @@
 - [ ] Add validation tests for state transitions
 - [ ] Document state machine in REVIVAL_CONSTRAINTS.md with diagram
 
+### Kernel Hardening
+- [ ] Harden the kernel contract where meaning and persistence read from world facts
+- [ ] Add missing kernel-facing documentation if a code path lacks an authoritative spec
+- [ ] Verify settlement lifecycle boundaries against the current canonical constraints
+
 ---
 
 ## NEXT ⏭️
@@ -78,6 +95,14 @@
 3. Focus inspector enhancements
 4. Regional meaning heatmap
 
+### Documentation & Infrastructure
+1. Canonical startup documentation cleanup
+2. Kernel contract review for WorldMemory / WorldMeaning / WorldPersistence
+3. Full-run validation of the settlement lifecycle transition path
+4. Observer/chronicler tooling improvements
+5. PVABazaar integration and export adapters
+6. Long-horizon automation helpers under `/ai/`
+
 ---
 
 ## FUTURE 📋
@@ -98,6 +123,7 @@
 - 1000+ pawn performance targets
 - Save/load compression
 - Deterministic replay system
+- Lineage and cultural continuity polish
 
 ---
 

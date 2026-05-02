@@ -5,7 +5,7 @@
 
 ---
 
-## Overview
+## Purpose
 
 Prometheus is the playable world continent in HeelKawn — a land shaped by ancient cataclysms, forgotten wars, and the slow accumulation of human meaning. This document describes the canonical regions, their historical significance, and their role in the deterministic simulation.
 
@@ -98,6 +98,24 @@ Biomes are deterministically seeded from world seed + region coordinates:
 
 ---
 
+## Named Region Patterns
+
+### The Quiet Ring
+- **Type:** Recovering settlement belt
+- **Biome traits:** Stable food and moderate travel safety
+- **Settlement tendency:** Open and adaptive
+- **Memory profile:** Low scar density, occasional ruins
+- **Current status:** Viable for revival behavior tuning
+
+### Red Scar Basin
+- **Type:** Heavily impacted conflict corridor
+- **Biome traits:** Unstable population pressure zones
+- **Settlement tendency:** Defensive and inward
+- **Memory profile:** Repeated death markers and abandonment
+- **Current status:** Bloodied-to-grave transition risk
+
+---
+
 ## Settlement Clusters
 
 ### Cluster Alpha (Regions 0-10)
@@ -171,6 +189,14 @@ Biomes are deterministically seeded from world seed + region coordinates:
 
 ---
 
+## Map Reading Rules
+
+- Regions are read through facts first, meaning second
+- Persistent scars should be explained by recorded history, not by authorial drama
+- Revival is possible only where the canonical peace and scar gates allow it
+
+---
+
 ## Deterministic Generation Rules
 
 1. **No Random Placement:** All features derive from seed + tick
@@ -203,6 +229,15 @@ Biomes are deterministically seeded from world seed + region coordinates:
 - Canonical regions serve as reference points for testing
 - Player actions can create new points of interest
 - All geography serves the simulation — no decorative features
+
+---
+
+## Primary Canon Anchors
+
+- `docs/WORLD_BIBLE/REGIONS.md`
+- `docs/WORLD_BIBLE/TIMELINE.md`
+- `docs/WORLD_BIBLE/FACTIONS.md`
+- `docs/lore/UNIVERSE_CONSTITUTION.md`
 
 ---
 

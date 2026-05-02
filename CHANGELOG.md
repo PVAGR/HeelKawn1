@@ -11,12 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Pawn.gd: Removed erroneous duplicate line in `_decay_needs()` that caused incorrect indentation and potential logic error (line 3907)
+- Fixed remaining Pawn parser blockers so the class now reloads cleanly
+- Cleaned up PawnData warning patterns and marked the unused tick parameter explicitly
+- Restored `main` to the fullest verified historical snapshot (`cff67a5`)
+- Fixed `PersistenceSystem` decay threshold ordering so older entities now decay more strongly than recently visited ones
+- Fixed `SettlementRebirth.process()` so revival can proceed even when the world has zero living pawns
 
 ### Changed
-- 
+- Added Phase 4 settlement lifecycle machine with deterministic abandoned, reviving, and permanent ruin states
 
 ### Added
-- 
+- Settlement state machine semantics fix
+- Documentation infrastructure (TASKS.md, CHANGELOG.md)
+- Repository scan and status assessment
 
 ---
 

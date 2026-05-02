@@ -43,8 +43,6 @@ func process(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 	for p in ps.pawns:
 		if p != null and is_instance_valid(p) and p.data != null:
 			alive0 += 1
-	if alive0 == 0:
-		return
 	var eligible: Array[Dictionary] = _gather_eligible_settlements()
 	if eligible.is_empty():
 		return

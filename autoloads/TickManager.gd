@@ -133,9 +133,11 @@ func _should_skip_pawn_tick(pawn: Node, current_speed: float) -> bool:
 				## Pawn is in a settlement - always update
 				return false
 	
-	## At 64x, skip pawns without a settlement (distant/wanderers)
+	## At 64x, only sample distant pawns without a settlement.
 	if current_speed >= 64.0:
-		return true
+		if pawn.get("carrying") == null or pawn.get("carrying") == 0:
+			## Sample distant non-settlement pawns instead of skipping all of them.
+			return (GameManager.tick_count + int(pawn.get_instance_id())) % 8 != 0
 	
 	## At 16x-32x, use distance-based skip
 	if current_speed >= 16.0:

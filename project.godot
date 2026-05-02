@@ -78,13 +78,12 @@ PersistenceSystem="*res://autoloads/PersistenceSystem.gd"
 GeneticEvolution="*res://autoloads/GeneticEvolution.gd"
 HistoricalSimulation="*res://autoloads/HistoricalSimulation.gd"
 TechnologySystem="*res://autoloads/TechnologySystem.gd"
-SpatialManager="*res://autoloads/SpatialManager.gd"
-TickManager="*res://autoloads/TickManager.gd"
 SquadCoordinator="*res://autoloads/SquadCoordinator.gd"
 CharacterExport="*res://autoloads/CharacterExport.gd"
 ToolManager="*res://autoloads/ToolManager.gd"
 FoodChainManager="*res://autoloads/FoodChainManager.gd"
 BodyRiskManager="*res://autoloads/BodyRiskManager.gd"
+TickMonitor="*res://tools/diagnose/monitor_ticks.gd"
 
 [display]
 

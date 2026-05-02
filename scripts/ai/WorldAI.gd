@@ -215,6 +215,17 @@ func _initialize_neural_world_matrix() -> void:
 		"cultural_neurons": _create_cultural_neurons(),
 		"economic_neurons": _create_economic_neurons(),
 		"religious_neurons": _create_religious_neurons(),
+		# Phase 4 expansions — new neuron groups
+		"military_neurons": _create_military_neurons(),
+		"technology_neurons": _create_technology_neurons(),
+		"migration_neurons": _create_migration_neurons(),
+		"weather_neurons": _create_weather_neurons(),
+		"trade_neurons": _create_trade_neurons(),
+		"social_neurons": _create_social_neurons(),
+		"political_neurons": _create_political_neurons(),
+		"health_neurons": _create_health_neurons(),
+		"infrastructure_neurons": _create_infrastructure_neurons(),
+		"agriculture_neurons": _create_agriculture_neurons(),
 		"interconnections": _create_neural_interconnections(),
 		"learning_rate": neural_evolution_rate,
 		"evolution_cycles": 0
@@ -299,6 +310,98 @@ func _create_religious_neurons() -> Dictionary:
 		"belief_diversity": {"value": 0.0, "activation": 0.0, "connections": []},
 		"sacred_sites": {"value": 0.0, "activation": 0.0, "connections": []},
 		"religious_influence": {"value": 0.0, "activation": 0.0, "connections": []}
+	}
+
+# === Phase 4 Expansion: New Neuron Groups ===
+
+func _create_military_neurons() -> Dictionary:
+	return {
+		"military_strength": {"value": 0.0, "activation": 0.0, "connections": []},
+		"combat_experience": {"value": 0.0, "activation": 0.0, "connections": []},
+		"tactical_awareness": {"value": 0.0, "activation": 0.0, "connections": []},
+		"weapon_quality": {"value": 0.0, "activation": 0.0, "connections": []},
+		"morale": {"value": 0.5, "activation": 0.0, "connections": []},
+	}
+
+func _create_technology_neurons() -> Dictionary:
+	return {
+		"innovation_rate": {"value": 0.0, "activation": 0.0, "connections": []},
+		"tech_adoption": {"value": 0.0, "activation": 0.0, "connections": []},
+		"research_efficiency": {"value": 0.0, "activation": 0.0, "connections": []},
+		"tech_diversity": {"value": 0.0, "activation": 0.0, "connections": []},
+		"innovation_stagnation": {"value": 0.0, "activation": 0.0, "connections": []},
+	}
+
+func _create_migration_neurons() -> Dictionary:
+	return {
+		"migration_pressure": {"value": 0.0, "activation": 0.0, "connections": []},
+		"settlement_capacity": {"value": 0.5, "activation": 0.0, "connections": []},
+		"population_growth": {"value": 0.0, "activation": 0.0, "connections": []},
+		"migration_success": {"value": 0.5, "activation": 0.0, "connections": []},
+		"overcrowding_risk": {"value": 0.0, "activation": 0.0, "connections": []},
+	}
+
+func _create_weather_neurons() -> Dictionary:
+	return {
+		"season_severity": {"value": 0.1, "activation": 0.0, "connections": []},
+		"climate_stability": {"value": 0.8, "activation": 0.0, "connections": []},
+		"disaster_risk": {"value": 0.05, "activation": 0.0, "connections": []},
+		"drought_severity": {"value": 0.0, "activation": 0.0, "connections": []},
+		"flood_risk": {"value": 0.0, "activation": 0.0, "connections": []},
+	}
+
+func _create_trade_neurons() -> Dictionary:
+	return {
+		"trade_volume": {"value": 0.0, "activation": 0.0, "connections": []},
+		"resource_flow": {"value": 0.0, "activation": 0.0, "connections": []},
+		"market_integration": {"value": 0.0, "activation": 0.0, "connections": []},
+		"trade_risk": {"value": 0.1, "activation": 0.0, "connections": []},
+		"economic_interdependence": {"value": 0.0, "activation": 0.0, "connections": []},
+	}
+
+func _create_social_neurons() -> Dictionary:
+	return {
+		"social_cohesion": {"value": 0.5, "activation": 0.0, "connections": []},
+		"class_stratification": {"value": 0.0, "activation": 0.0, "connections": []},
+		"cultural_diversity": {"value": 0.3, "activation": 0.0, "connections": []},
+		"social_mobility": {"value": 0.5, "activation": 0.0, "connections": []},
+		"social_tension": {"value": 0.0, "activation": 0.0, "connections": []},
+	}
+
+func _create_political_neurons() -> Dictionary:
+	return {
+		"political_stability": {"value": 0.7, "activation": 0.0, "connections": []},
+		"faction_power": {"value": 0.0, "activation": 0.0, "connections": []},
+		"diplomatic_reputation": {"value": 0.5, "activation": 0.0, "connections": []},
+		"government_effectiveness": {"value": 0.5, "activation": 0.0, "connections": []},
+		"political_polarization": {"value": 0.0, "activation": 0.0, "connections": []},
+	}
+
+func _create_health_neurons() -> Dictionary:
+	return {
+		"public_health": {"value": 0.8, "activation": 0.0, "connections": []},
+		"disease_resistance": {"value": 0.7, "activation": 0.0, "connections": []},
+		"life_expectancy": {"value": 0.5, "activation": 0.0, "connections": []},
+		"sanitation_level": {"value": 0.3, "activation": 0.0, "connections": []},
+		"healthcare_access": {"value": 0.0, "activation": 0.0, "connections": []},
+	}
+
+func _create_infrastructure_neurons() -> Dictionary:
+	return {
+		"road_network": {"value": 0.0, "activation": 0.0, "connections": []},
+		"irrigation_systems": {"value": 0.0, "activation": 0.0, "connections": []},
+		"fortification_level": {"value": 0.0, "activation": 0.0, "connections": []},
+		"building_quality": {"value": 0.3, "activation": 0.0, "connections": []},
+		"infrastructure_maintenance": {"value": 0.5, "activation": 0.0, "connections": []},
+	}
+
+func _create_agriculture_neurons() -> Dictionary:
+	return {
+		"crop_yield": {"value": 0.3, "activation": 0.0, "connections": []},
+		"food_security": {"value": 0.5, "activation": 0.0, "connections": []},
+		"agricultural_innovation": {"value": 0.0, "activation": 0.0, "connections": []},
+		"soil_health": {"value": 0.7, "activation": 0.0, "connections": []},
+		"famine_risk": {"value": 0.0, "activation": 0.0, "connections": []},
 	}
 
 func _create_neural_interconnections() -> Dictionary:
@@ -1606,40 +1709,129 @@ func _update_authority_average(current_avg: float, new_value: float) -> float:
 func get_neural_network_summary() -> Dictionary:
 	# Return a summary of neural network state for UI display
 	var summary: Dictionary = {}
-	
+
 	# World state neurons
 	var world_neurons = neural_world_matrix.get("world_state_neurons", {})
 	summary["collapse_risk"] = world_neurons.get("collapse_risk", {}).get("value", 0.0)
 	summary["trust_level"] = world_neurons.get("trust_level", {}).get("value", 0.0)
-	
+	summary["technological_progress"] = world_neurons.get("technological_progress", {}).get("value", 0.0)
+	summary["social_complexity"] = world_neurons.get("social_complexity", {}).get("value", 0.0)
+
 	# Civilization neurons
 	var civ_neurons = neural_world_matrix.get("civilization_neurons", {})
 	summary["civil_authority"] = civ_neurons.get("civil_authority", {}).get("value", 0.0)
 	summary["military_authority"] = civ_neurons.get("military_authority", {}).get("value", 0.0)
 	summary["religious_authority"] = civ_neurons.get("religious_authority", {}).get("value", 0.0)
 	summary["knowledge_authority"] = civ_neurons.get("knowledge_authority", {}).get("value", 0.0)
-	
+	summary["governance_complexity"] = civ_neurons.get("governance_complexity", {}).get("value", 0.0)
+
 	# Cultural neurons
 	var cult_neurons = neural_world_matrix.get("cultural_neurons", {})
 	summary["knowledge_scarcity"] = cult_neurons.get("knowledge_scarcity", {}).get("value", 0.0)
 	summary["teaching_activity"] = cult_neurons.get("teaching_activity", {}).get("value", 0.0)
-	
+	summary["cultural_coherence"] = cult_neurons.get("cultural_coherence", {}).get("value", 0.0)
+
 	# Environmental neurons
 	var env_neurons = neural_world_matrix.get("environmental_neurons", {})
 	summary["ruin_density"] = env_neurons.get("ruin_density", {}).get("value", 0.0)
 	summary["resource_depletion"] = env_neurons.get("resource_depletion", {}).get("value", 0.0)
 	summary["historical_layering"] = env_neurons.get("historical_layering", {}).get("value", 0.0)
-	
+	summary["environmental_health"] = env_neurons.get("environmental_health", {}).get("value", 0.0)
+
 	# Economic neurons
 	var econ_neurons = neural_world_matrix.get("economic_neurons", {})
 	summary["production_efficiency"] = econ_neurons.get("production_efficiency", {}).get("value", 0.0)
 	summary["economic_stability"] = econ_neurons.get("economic_stability", {}).get("value", 0.0)
-	
+	summary["labor_specialization"] = econ_neurons.get("labor_specialization", {}).get("value", 0.0)
+
 	# Religious neurons
 	var rel_neurons = neural_world_matrix.get("religious_neurons", {})
 	summary["religious_fervor"] = rel_neurons.get("religious_fervor", {}).get("value", 0.0)
 	summary["religious_influence"] = rel_neurons.get("religious_influence", {}).get("value", 0.0)
-	
+	summary["ritual_complexity"] = rel_neurons.get("ritual_complexity", {}).get("value", 0.0)
+
+	# === Phase 4 Expansion: New Neuron Groups ===
+
+	# Military neurons
+	var mil_neurons = neural_world_matrix.get("military_neurons", {})
+	summary["military_strength"] = mil_neurons.get("military_strength", {}).get("value", 0.0)
+	summary["combat_experience"] = mil_neurons.get("combat_experience", {}).get("value", 0.0)
+	summary["tactical_awareness"] = mil_neurons.get("tactical_awareness", {}).get("value", 0.0)
+	summary["weapon_quality"] = mil_neurons.get("weapon_quality", {}).get("value", 0.0)
+	summary["morale"] = mil_neurons.get("morale", {}).get("value", 0.5)
+
+	# Technology neurons
+	var tech_neurons = neural_world_matrix.get("technology_neurons", {})
+	summary["innovation_rate"] = tech_neurons.get("innovation_rate", {}).get("value", 0.0)
+	summary["tech_adoption"] = tech_neurons.get("tech_adoption", {}).get("value", 0.0)
+	summary["research_efficiency"] = tech_neurons.get("research_efficiency", {}).get("value", 0.0)
+	summary["tech_diversity"] = tech_neurons.get("tech_diversity", {}).get("value", 0.0)
+	summary["innovation_stagnation"] = tech_neurons.get("innovation_stagnation", {}).get("value", 0.0)
+
+	# Migration neurons
+	var mig_neurons = neural_world_matrix.get("migration_neurons", {})
+	summary["migration_pressure"] = mig_neurons.get("migration_pressure", {}).get("value", 0.0)
+	summary["settlement_capacity"] = mig_neurons.get("settlement_capacity", {}).get("value", 0.5)
+	summary["population_growth"] = mig_neurons.get("population_growth", {}).get("value", 0.0)
+	summary["migration_success"] = mig_neurons.get("migration_success", {}).get("value", 0.5)
+	summary["overcrowding_risk"] = mig_neurons.get("overcrowding_risk", {}).get("value", 0.0)
+
+	# Weather/Environment neurons
+	var weather_neurons = neural_world_matrix.get("weather_neurons", {})
+	summary["season_severity"] = weather_neurons.get("season_severity", {}).get("value", 0.1)
+	summary["climate_stability"] = weather_neurons.get("climate_stability", {}).get("value", 0.8)
+	summary["disaster_risk"] = weather_neurons.get("disaster_risk", {}).get("value", 0.05)
+	summary["drought_severity"] = weather_neurons.get("drought_severity", {}).get("value", 0.0)
+	summary["flood_risk"] = weather_neurons.get("flood_risk", {}).get("value", 0.0)
+
+	# Trade neurons
+	var trade_neurons = neural_world_matrix.get("trade_neurons", {})
+	summary["trade_volume"] = trade_neurons.get("trade_volume", {}).get("value", 0.0)
+	summary["resource_flow"] = trade_neurons.get("resource_flow", {}).get("value", 0.0)
+	summary["market_integration"] = trade_neurons.get("market_integration", {}).get("value", 0.0)
+	summary["trade_risk"] = trade_neurons.get("trade_risk", {}).get("value", 0.1)
+	summary["economic_interdependence"] = trade_neurons.get("economic_interdependence", {}).get("value", 0.0)
+
+	# Social neurons
+	var social_neurons = neural_world_matrix.get("social_neurons", {})
+	summary["social_cohesion"] = social_neurons.get("social_cohesion", {}).get("value", 0.5)
+	summary["class_stratification"] = social_neurons.get("class_stratification", {}).get("value", 0.0)
+	summary["cultural_diversity"] = social_neurons.get("cultural_diversity", {}).get("value", 0.3)
+	summary["social_mobility"] = social_neurons.get("social_mobility", {}).get("value", 0.5)
+	summary["social_tension"] = social_neurons.get("social_tension", {}).get("value", 0.0)
+
+	# Political neurons
+	var pol_neurons = neural_world_matrix.get("political_neurons", {})
+	summary["political_stability"] = pol_neurons.get("political_stability", {}).get("value", 0.7)
+	summary["faction_power"] = pol_neurons.get("faction_power", {}).get("value", 0.0)
+	summary["diplomatic_reputation"] = pol_neurons.get("diplomatic_reputation", {}).get("value", 0.5)
+	summary["government_effectiveness"] = pol_neurons.get("government_effectiveness", {}).get("value", 0.5)
+	summary["political_polarization"] = pol_neurons.get("political_polarization", {}).get("value", 0.0)
+
+	# Health neurons
+	var health_neurons = neural_world_matrix.get("health_neurons", {})
+	summary["public_health"] = health_neurons.get("public_health", {}).get("value", 0.8)
+	summary["disease_resistance"] = health_neurons.get("disease_resistance", {}).get("value", 0.7)
+	summary["life_expectancy"] = health_neurons.get("life_expectancy", {}).get("value", 0.5)
+	summary["sanitation_level"] = health_neurons.get("sanitation_level", {}).get("value", 0.3)
+	summary["healthcare_access"] = health_neurons.get("healthcare_access", {}).get("value", 0.0)
+
+	# Infrastructure neurons
+	var infra_neurons = neural_world_matrix.get("infrastructure_neurons", {})
+	summary["road_network"] = infra_neurons.get("road_network", {}).get("value", 0.0)
+	summary["irrigation_systems"] = infra_neurons.get("irrigation_systems", {}).get("value", 0.0)
+	summary["fortification_level"] = infra_neurons.get("fortification_level", {}).get("value", 0.0)
+	summary["building_quality"] = infra_neurons.get("building_quality", {}).get("value", 0.3)
+	summary["infrastructure_maintenance"] = infra_neurons.get("infrastructure_maintenance", {}).get("value", 0.5)
+
+	# Agriculture neurons
+	var ag_neurons = neural_world_matrix.get("agriculture_neurons", {})
+	summary["crop_yield"] = ag_neurons.get("crop_yield", {}).get("value", 0.3)
+	summary["food_security"] = ag_neurons.get("food_security", {}).get("value", 0.5)
+	summary["agricultural_innovation"] = ag_neurons.get("agricultural_innovation", {}).get("value", 0.0)
+	summary["soil_health"] = ag_neurons.get("soil_health", {}).get("value", 0.7)
+	summary["famine_risk"] = ag_neurons.get("famine_risk", {}).get("value", 0.0)
+
 	return summary
 
 

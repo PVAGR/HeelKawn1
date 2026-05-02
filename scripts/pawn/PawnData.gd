@@ -384,7 +384,7 @@ func get_max_health() -> float:
 
 
 ## Phase 1.1: Initialize personality traits with inheritance and mutation
-func _initialize_personality(birth_tick: int, parent_a: int, parent_b: int) -> void:
+func _initialize_personality(init_tick: int, parent_a: int, parent_b: int) -> void:
 	if parent_a >= 0 and parent_b >= 0:
 		# Inherit from parents with mutation
 		var parent_a_data: PawnData = _get_parent_data(parent_a)
@@ -392,17 +392,17 @@ func _initialize_personality(birth_tick: int, parent_a: int, parent_b: int) -> v
 		
 		if parent_a_data != null and parent_b_data != null:
 			# Blend parent personalities with mutation
-			openness = _blend_with_mutation(parent_a_data.openness, parent_b_data.openness, birth_tick, "openness")
-			conscientiousness = _blend_with_mutation(parent_a_data.conscientiousness, parent_b_data.conscientiousness, birth_tick, "conscientiousness")
-			extraversion = _blend_with_mutation(parent_a_data.extraversion, parent_b_data.extraversion, birth_tick, "extraversion")
-			agreeableness = _blend_with_mutation(parent_a_data.agreeableness, parent_b_data.agreeableness, birth_tick, "agreeableness")
-			neuroticism = _blend_with_mutation(parent_a_data.neuroticism, parent_b_data.neuroticism, birth_tick, "neuroticism")
+			openness = _blend_with_mutation(parent_a_data.openness, parent_b_data.openness, init_tick, "openness")
+			conscientiousness = _blend_with_mutation(parent_a_data.conscientiousness, parent_b_data.conscientiousness, init_tick, "conscientiousness")
+			extraversion = _blend_with_mutation(parent_a_data.extraversion, parent_b_data.extraversion, init_tick, "extraversion")
+			agreeableness = _blend_with_mutation(parent_a_data.agreeableness, parent_b_data.agreeableness, init_tick, "agreeableness")
+			neuroticism = _blend_with_mutation(parent_a_data.neuroticism, parent_b_data.neuroticism, init_tick, "neuroticism")
 		else:
 			# Fallback to random if parent data unavailable
-			_generate_random_personality(birth_tick)
+			_generate_random_personality(init_tick)
 	else:
 		# No parents: generate random personality
-		_generate_random_personality(birth_tick)
+		_generate_random_personality(init_tick)
 
 
 ## Blend two parent values with small mutation
@@ -642,8 +642,8 @@ func recall_episodic_memories(event_type: String = "", min_impact: float = 0.0, 
 			continue
 		
 		# Calculate memory decay (older memories fade)
-		var age: int = current_tick - memory.get("tick", 0)
-		var decay_factor: float = exp(-age / 10000.0)  # Memories decay over ~10000 ticks
+		var ticks_since_event: int = current_tick - memory.get("tick", 0) if current_tick > 0 else 0
+		var decay_factor: float = exp(-ticks_since_event / 10000.0) if ticks_since_event >= 0 else 1.0  # Memories decay over ~10000 ticks
 		
 		# Only recall if memory is still strong enough
 		if decay_factor < 0.1:
@@ -700,8 +700,8 @@ func recall_semantic_fact(fact_key: String) -> Dictionary:
 	var current_tick: int = GameManager.tick_count if GameManager != null else 0
 	
 	# Check if fact has decayed
-	var age: int = current_tick - fact.get("learned_tick", 0)
-	var decay_factor: float = exp(-age / 20000.0)  # Semantic memories last longer
+	var ticks_since_learned: int = current_tick - fact.get("learned_tick", 0) if current_tick > 0 else 0
+	var decay_factor: float = exp(-ticks_since_learned / 20000.0) if ticks_since_learned >= 0 else 1.0  # Semantic memories last longer
 	
 	if decay_factor < 0.1:
 		# Fact has been forgotten
@@ -739,10 +739,10 @@ func recall_nearby_spatial_memory(center: Vector2i, radius: int) -> Dictionary:
 			
 			if spatial_memory.has(tile_key):
 				var memory = spatial_memory[tile_key]
-				var age: int = current_tick - memory.get("last_seen_tick", 0)
+				var ticks_since_seen: int = current_tick - memory.get("last_seen_tick", 0) if current_tick > 0 else 0
 				
 				# Spatial memories decay faster (geographic knowledge becomes outdated)
-				var decay_factor: float = exp(-age / 5000.0)
+				var decay_factor: float = exp(-ticks_since_seen / 5000.0) if ticks_since_seen >= 0 else 1.0
 				
 				if decay_factor >= 0.1:
 					nearby[tile_key] = {
@@ -808,8 +808,8 @@ func recall_social_memory(other_pawn_id: int) -> Dictionary:
 	var current_tick: int = GameManager.tick_count if GameManager != null else 0
 	
 	# Decay social memories over time
-	var age: int = current_tick - memory.get("last_interaction", 0)
-	var decay_factor: float = exp(-age / 15000.0)  # Social memories last ~15000 ticks
+	var ticks_since_interaction: int = current_tick - memory.get("last_interaction", 0)
+	var decay_factor: float = exp(-ticks_since_interaction / 15000.0) if ticks_since_interaction >= 0 else 1.0  # Social memories last ~15000 ticks
 	
 	# Apply decay to emotional values
 	if decay_factor < 1.0:
@@ -829,8 +829,8 @@ func decay_memories() -> void:
 	var episodic_to_remove: Array = []
 	for event_id in episodic_memory:
 		var memory = episodic_memory[event_id]
-		var age: int = current_tick - memory.get("tick", 0)
-		if age > 20000:  # Remove very old episodic memories
+		var ticks_old: int = current_tick - memory.get("tick", 0) if current_tick > 0 else 0
+		if ticks_old > 20000:  # Remove very old episodic memories
 			episodic_to_remove.append(event_id)
 	
 	for event_id in episodic_to_remove:
@@ -840,8 +840,8 @@ func decay_memories() -> void:
 	var semantic_to_remove: Array = []
 	for fact_key in semantic_memory:
 		var fact = semantic_memory[fact_key]
-		var age: int = current_tick - fact.get("learned_tick", 0)
-		if age > 50000:  # Remove very old semantic memories
+		var fact_ticks_old: int = current_tick - fact.get("learned_tick", 0) if current_tick > 0 else 0
+		if fact_ticks_old > 50000:  # Remove very old semantic memories
 			semantic_to_remove.append(fact_key)
 	
 	for fact_key in semantic_to_remove:
@@ -851,8 +851,8 @@ func decay_memories() -> void:
 	var spatial_to_remove: Array = []
 	for tile_key in spatial_memory:
 		var memory = spatial_memory[tile_key]
-		var age: int = current_tick - memory.get("last_seen_tick", 0)
-		if age > 10000:  # Remove outdated spatial memories
+		var spatial_ticks_old: int = current_tick - memory.get("last_seen_tick", 0) if current_tick > 0 else 0
+		if spatial_ticks_old > 10000:  # Remove outdated spatial memories
 			spatial_to_remove.append(tile_key)
 	
 	for tile_key in spatial_to_remove:
@@ -1471,7 +1471,7 @@ func update_historical_memory(site_id: int, state: String) -> void:
 
 
 ## Phase 4: Process tick for historical memory decay
-func process_tick(delta: float) -> void:
+func process_tick(_delta: float) -> void:
 	if avoidance_tick_timer > 0:
 		avoidance_tick_timer -= 1
 		if avoidance_tick_timer <= 0:
@@ -2265,14 +2265,14 @@ func add_profession_liking_for_job(job_type: int, tick_weight: int) -> void:
 			_bump_lane("tillage", w)
 		Job.Type.MINE:
 			_bump_lane("industry", w)
-			_bump_lane("inquiry", maxi(1, w / 4))
+			_bump_lane("inquiry", maxi(1, int(float(w) * 0.25)))
 		Job.Type.MINE_WALL:
 			_bump_lane("industry", w)
 			_bump_lane("inquiry", w)
-			_bump_lane("structure", maxi(1, w / 5))
+			_bump_lane("structure", maxi(1, int(float(w) * 0.2)))
 		Job.Type.CHOP:
 			_bump_lane("industry", w)
-			_bump_lane("outdoors", maxi(1, w / 3))
+			_bump_lane("outdoors", maxi(1, int(float(w) * 0.3333333333)))
 		Job.Type.HUNT:
 			_bump_lane("martial", w)
 			_bump_lane("outdoors", w)
@@ -2295,19 +2295,19 @@ func add_liking_from_action_skill(skill_key: String, amount: int) -> void:
 	match skill_key:
 		"movement":
 			_bump_lane("inquiry", a)
-			_bump_lane("circulation", maxi(1, a / 2))
+			_bump_lane("circulation", maxi(1, int(float(a) * 0.5)))
 		"farming":
 			_bump_lane("tillage", a)
-			_bump_lane("outdoors", maxi(1, a / 3))
+			_bump_lane("outdoors", maxi(1, int(float(a) * 0.3333333333)))
 		"building":
 			_bump_lane("structure", a)
-			_bump_lane("industry", maxi(1, a / 3))
+			_bump_lane("industry", maxi(1, int(float(a) * 0.3333333333)))
 		"gathering":
-			_bump_lane("tillage", maxi(1, a / 2))
+			_bump_lane("tillage", maxi(1, int(float(a) * 0.5)))
 			_bump_lane("outdoors", a)
 		"combat":
 			_bump_lane("martial", a)
-			_bump_lane("inquiry", maxi(1, a / 4))
+			_bump_lane("inquiry", maxi(1, int(float(a) * 0.25)))
 		_:
 			return
 	_flush_liking_to_affinities()

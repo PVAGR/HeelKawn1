@@ -1097,8 +1097,8 @@ func _try_autonomy_social_seek() -> bool:
 		var d2: int = data.tile_pos.distance_squared_to(p.data.tile_pos)
 		if d2 > 400:
 			continue
-		var rid: String = str(int(p.data.id))
-		var rap: float = float(data.social_rapport.get(rid, 600.0))
+		var pid_i: int = int(p.data.id)
+		var rap: float = float(data.get_social_rapport(pid_i))
 		var score: float = rap / 3000.0 - float(d2) / 20000.0
 		if score > best_score:
 			best_score = score
@@ -3569,6 +3569,8 @@ func _maybe_start_eating() -> bool:
 	var sp: Stockpile = StockpileManager.find_food_source(data.tile_pos, _world.pathfinder)
 	if sp == null:
 		return false
+	if data.neural_network != null and str(data.neural_network.get_autonomy_hint()) == "eat":
+		_notify_autonomy_feedback("go eat")
 	_begin_going_to_eat(sp)
 	return true
 
@@ -3656,9 +3658,18 @@ func _maybe_start_sleeping() -> bool:
 	# Don't sleep mid-haul; stockpile that item first.
 	if data.is_carrying():
 		return false
+	var autonomy_rest_lbl: String = ""
+	if data.neural_network != null:
+		var ah2: String = str(data.neural_network.get_autonomy_hint())
+		if ah2 == "sleep" or ah2 == "shelter":
+			autonomy_rest_lbl = ah2
 	if _try_walk_to_bed():
+		if not autonomy_rest_lbl.is_empty():
+			_notify_autonomy_feedback("rest → %s" % autonomy_rest_lbl)
 		return true
 	_begin_sleeping()
+	if not autonomy_rest_lbl.is_empty():
+		_notify_autonomy_feedback("rest → %s" % autonomy_rest_lbl)
 	return true
 
 

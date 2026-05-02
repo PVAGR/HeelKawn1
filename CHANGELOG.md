@@ -6,3 +6,4 @@
 - Rehydrated the visible workspace from the restored repository checkout.
 - Added root maintenance docs for canonical startup, task tracking, and changelog continuity.
 - Fixed `PersistenceSystem` decay threshold ordering so older entities now decay more strongly than recently visited ones.
+- Fixed `SettlementRebirth.process()` so revival can proceed even when the world has zero living pawns.

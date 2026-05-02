@@ -6,6 +6,7 @@
 - Re-established the deterministic kernel authoring context for future sessions.
 - Synced the visible workspace with the restored repository snapshot.
 - Fixed persistence decay threshold ordering in `autoloads/PersistenceSystem.gd`.
+- Fixed settlement rebirth so revival can run even when no living pawns remain.
 
 ## IN PROGRESS
 

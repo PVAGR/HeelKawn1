@@ -3904,7 +3904,6 @@ func _decay_needs() -> void:
 			rate *= REST_RECOVER_BED_MULTIPLIER
 		data.rest = min(100.0, data.rest + rate)
 	else:
-			data.rest = min(100.0, data.rest + rate)
 		data.hunger = max(0.0, data.hunger - HUNGER_DECAY_PER_TICK * hunger_mult * pace_h)
 		data.rest   = max(0.0, data.rest   - REST_DECAY_PER_TICK * rest_mult * pace_r)
 	

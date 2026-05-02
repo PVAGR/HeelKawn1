@@ -2396,3 +2396,137 @@ func get_resource_pressure_for_tile(tile_pos: Vector2i) -> Dictionary:
 		if rp_v is Dictionary:
 			return (rp_v as Dictionary).duplicate(true)
 	return _default_resource_pressure()
+
+
+# ============================================================
+## Law & Custom System
+# ============================================================
+
+## Laws affect: behavior, penalties, rewards
+## Structure: settlement_id -> Array of law dictionaries
+
+var _laws: Dictionary = {}  ## settlement_id -> Array[Dictionary]
+var _law_id_counter: int = 1
+
+
+## Add a law to a settlement
+## law_data should contain: type, description, penalties, rewards
+func add_law(settlement_id: int, law_data: Dictionary) -> int:
+	if settlement_id < 0:
+		push_error("[SettlementMemory] Invalid settlement_id for add_law")
+		return -1
+	
+	if not _laws.has(settlement_id):
+		_laws[settlement_id] = []
+	
+	var law_id: int = _law_id_counter
+	_law_id_counter += 1
+	
+	var law: Dictionary = {
+		"id": law_id,
+		"settlement_id": settlement_id,
+		"type": law_data.get("type", "custom"),
+		"description": law_data.get("description", ""),
+		"penalties": law_data.get("penalties", []),
+		"rewards": law_data.get("rewards", []),
+		"created_tick": GameManager.tick_count if (GameManager != null) else 0,
+		"active": true,
+	}
+	
+	(_laws[settlement_id] as Array).append(law)
+	
+	## Record in WorldMemory
+	if WorldMemory != null and WorldMemory.has_method("record_event"):
+		WorldMemory.record_event({
+			"type": "law_added",
+			"settlement_id": settlement_id,
+			"law_id": law_id,
+			"law_type": law.get("type", "custom"),
+			"tick": GameManager.tick_count if (GameManager != null) else 0,
+		})
+	
+	return law_id
+
+
+## Remove a law from a settlement
+func remove_law(settlement_id: int, law_id: int) -> bool:
+	if not _laws.has(settlement_id):
+		return false
+	
+	var laws_array: Array = _laws[settlement_id] as Array
+	for i in range(laws_array.size() - 1, -1, -1):
+		var law: Dictionary = laws_array[i] as Dictionary
+		if int(law.get("id", -1)) == law_id:
+			laws_array.remove_at(i)
+			## Record in WorldMemory
+			if WorldMemory != null and WorldMemory.has_method("record_event"):
+				WorldMemory.record_event({
+					"type": "law_removed",
+					"settlement_id": settlement_id,
+					"law_id": law_id,
+					"tick": GameManager.tick_count if (GameManager != null) else 0,
+				})
+			return true
+	return false
+
+
+## Get all laws for a settlement
+func get_laws(settlement_id: int) -> Array:
+	if not _laws.has(settlement_id):
+		return []
+	return (_laws[settlement_id] as Array).duplicate(true)
+
+
+## Get a specific law by ID
+func get_law(settlement_id: int, law_id: int) -> Dictionary:
+	if not _laws.has(settlement_id):
+		return {}
+	
+	var laws_array: Array = _laws[settlement_id] as Array
+	for law_v in laws_array:
+		if law_v is Dictionary:
+			var law: Dictionary = law_v as Dictionary
+			if int(law.get("id", -1)) == law_id:
+				return law.duplicate(true)
+	return {}
+
+
+## Check if a pawn violates any laws
+## Returns: Array of violated law IDs
+func check_law_violations(settlement_id: int, pawn_data: Dictionary) -> Array:
+	var violations: Array = []
+	if not _laws.has(settlement_id):
+		return violations
+	
+	var laws_array: Array = _laws[settlement_id] as Array
+	for law_v in laws_array:
+		if law_v is not Dictionary:
+			continue
+		var law: Dictionary = law_v as Dictionary
+		if not law.get("active", true):
+			continue
+		
+		## Check penalties (simplified check)
+		var penalties = law.get("penalties", [])
+		## This is where you'd check pawn_data against penalties
+		## For now, just return the law ID if active
+		violations.append(int(law.get("id", -1)))
+	
+	return violations
+
+
+## Save/Load support
+func _laws_to_save_dict() -> Dictionary:
+	return {
+		"laws": _laws.duplicate(true),
+		"law_id_counter": _law_id_counter,
+	}
+
+func _laws_from_save_dict(d: Dictionary) -> void:
+	_laws.clear()
+	_law_id_counter = 1
+	
+	if d.has("laws"):
+		_laws = d["laws"].duplicate(true)
+	if d.has("law_id_counter"):
+		_law_id_counter = int(d["law_id_counter"])

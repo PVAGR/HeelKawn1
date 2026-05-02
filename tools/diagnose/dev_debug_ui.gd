@@ -9,11 +9,8 @@ var _autostart_monitor: bool = true
 func _ready() -> void:
     _create_ui()
     if _autostart_monitor:
-        # attempt to start TickMonitor if available
-        if typeof(self).has_property("TickMonitor"):
-            pass
-        # best-effort call (TickMonitor is an autoload)
-        if TickMonitor != null:
+        # best-effort call: start TickMonitor if autoloaded
+        if typeof(TickMonitor) != TYPE_NIL and TickMonitor != null:
             TickMonitor.monitor_start(1.0)
 
 func _create_ui() -> void:

@@ -73,10 +73,10 @@ func _process(delta: float) -> void:
 	if time_since_update >= update_frequency:
 		_update_text()
 		time_since_update = 0.0
-	
-	# Follow target sprite
-	if target_sprite:
-		position = target_sprite.global_position + offset
+		
+		# Update position only when updating text to reduce overhead
+		if target_sprite:
+			position = target_sprite.global_position + offset
 
 func _update_text() -> void:
 	if label == null:

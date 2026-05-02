@@ -10,7 +10,7 @@ class_name ObserverLensPanel
 
 var _target_zone: String = ""
 var _refresh_ticks: int = 0
-const REFRESH_INTERVAL: int = 400  # sparse UI updates only
+const REFRESH_INTERVAL: int = 600  # Increased from 400 to 600 ticks for better performance
 
 
 func _process(_delta: float) -> void:

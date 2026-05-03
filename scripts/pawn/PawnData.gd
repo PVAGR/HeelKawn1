@@ -1740,10 +1740,14 @@ func add_skill_xp(skill: int, amount: float) -> bool:
 	var cat: String = tree_skill_category_for_job_skill(skill)
 	var tree_xp: float = skill_tree_bonus_product_for_category(cat, "xp_mult")
 	skill_xp[skill] = get_skill_xp(skill) + amount * trait_mult * tree_xp
-	
+
 	# Stage 1: Track last used time for XP decay
 	skill_last_used[skill] = GameManager.tick_count if GameManager != null else 0
-	
+
+	# Auto-assign profession when skill XP reaches 100 and no profession yet
+	if current_profession == Profession.NONE and cat != "" and get_skill_xp(skill) >= 100.0:
+		current_profession = _skill_to_profession(cat)
+
 	# Stage 1: Check for overall level up
 	_check_level_up()
 	

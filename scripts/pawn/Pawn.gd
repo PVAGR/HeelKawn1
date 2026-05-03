@@ -324,6 +324,7 @@ var _cohort_stability_ticks: int = 0
 var _cohort_locus_tile: Vector2i = Vector2i(-1, -1)
 var _cohort_stability_job_type: int = -1
 var _anim_t: float = 0.0
+var _draw_frame_counter: int = 0
 var _sfx: AudioStreamPlayer2D = null
 var _action_popup: ActionPopupLabel = null
 var _hit_flash_ticks: int = 0
@@ -1557,8 +1558,11 @@ func _process(delta: float) -> void:
 	if SpatialManager != null and data != null and old_tile_pos != data.tile_pos:
 		SpatialManager.update_pawn_position(int(data.id), data.tile_pos)
 
-	# Redraw during movement so the bobbing animation and position are visible
-	queue_redraw()
+	# Redraw during movement at a throttled rate (every 2nd frame)
+	# to keep bobbing animation visible without overwhelming the renderer.
+	_draw_frame_counter += 1
+	if _draw_frame_counter % 2 == 0:
+		queue_redraw()
 
 	# DISABLED cohort bias calculations for performance
 	# var cohort_bias: Vector2 = _cohort_cohesion_bias(step)

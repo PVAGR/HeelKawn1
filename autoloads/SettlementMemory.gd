@@ -800,10 +800,10 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
             scar_max, reputation_min, last_activity_tick, last_pawn_death_tick, culture_type
     )
     var peace_threshold_ticks: int = get_peace_ticks_for_culture_branch(culture_type)
-        var ticks_since_collapse: int = _ticks_since_or_large(last_pawn_death_tick)
-        var revival_score: int = _deterministic_revival_score(
-            ticks_since_collapse, scar_max, ticks_since_collapse, culture_type, reputation_min, center_rk
-        )
+    var ticks_since_collapse: int = _ticks_since_or_large(last_pawn_death_tick)
+    var revival_score: int = _deterministic_revival_score(
+        ticks_since_collapse, scar_max, ticks_since_collapse, culture_type, reputation_min, center_rk
+    )
     var packed: PackedInt32Array = PackedInt32Array()
     for rk2 in cluster:
         packed.append(int(rk2))

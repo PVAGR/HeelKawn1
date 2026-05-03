@@ -88,6 +88,9 @@
 3. Implement tradition decay over generations
 4. Connect KnowledgeSystem to teaching events
 
+### Recent Edits
+- [x] Cultural Revival Naming implemented (SettlementRebirth): lineage-based `Continued / New` naming and WorldMemory events
+
 ### Observer Tools (Priority 3)
 1. Timeline inspector for settlement history
 2. Chronicle log viewer UI

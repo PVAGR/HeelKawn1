@@ -101,15 +101,48 @@ func process(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 			continue
 		_last_rebirth_tick_by_center[ck2] = now1
 		MythMemory.register_rebirth_success(ckey)
-		WorldMemory.record_event({
-			"type": "settlement_rebirth",
-			"tick": now1,
-			"center_region": ckey,
-			"spawned_count": spawned_count,
-			"culture_name": str(s.get("culture_name", "")),
-			"state": str(s.get("state", "")),
-			"tradition": inherited.duplicate(true),
-		})
+		# Determine lineage continuity: check recent events for native-born pawns
+		var lineage_found: bool = false
+		var recent_events: Array = WorldMemory.get_recent_events_for_settlement(center_region, 1024, true)
+		for ev in recent_events:
+			var et: String = str(ev.get("type", "")).to_lower()
+			if et == "pawn_death" or et == "pawn_birth" or et == "generational_birth":
+				if ev.has("birth_settlement"):
+					if int(ev.get("birth_settlement", -1)) == center_region:
+						lineage_found = true
+						break
+		# Choose a base settlement name (try HistoricalSimulation if available)
+		var base_name: String = ""
+		var hist: Node = get_node_or_null("/root/HistoricalSimulation")
+		if hist != null and hist.has_method("_get_random_settlement_name"):
+			base_name = str(hist.call("_get_random_settlement_name"))
+		if base_name == "":
+			base_name = str(s.get("culture_name", "settlement")).capitalize()
+		# Apply lineage-based naming
+		if lineage_found:
+			s["settlement_name"] = "Continued %s" % base_name
+			WorldMemory.record_event({
+				"type": "settlement_revival_with_lineage",
+				"tick": now1,
+				"center_region": ckey,
+				"spawned_count": spawned_count,
+				"culture_name": str(s.get("culture_name", "")),
+				"state": str(s.get("state", "")),
+				"settlement_name": str(s.get("settlement_name", "")),
+				"tradition": inherited.duplicate(true),
+			})
+		else:
+			s["settlement_name"] = "New %s" % base_name
+			WorldMemory.record_event({
+				"type": "settlement_new_foundation",
+				"tick": now1,
+				"center_region": ckey,
+				"spawned_count": spawned_count,
+				"culture_name": str(s.get("culture_name", "")),
+				"state": str(s.get("state", "")),
+				"settlement_name": str(s.get("settlement_name", "")),
+				"tradition": inherited.duplicate(true),
+			})
 
 
 func _rebirth_spawn_target_count(now_tick: int, center_region: int) -> int:

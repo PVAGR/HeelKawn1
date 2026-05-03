@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settlement state machine semantics fix
 - Documentation infrastructure (TASKS.md, CHANGELOG.md)
 - Repository scan and status assessment
+ - Lineage-based settlement revival naming: settlements revived by native-born pawns are now labeled `Continued <Name>`, otherwise `New <Name>`; events `settlement_revival_with_lineage` and `settlement_new_foundation` recorded to `WorldMemory`.
 
 ---
 

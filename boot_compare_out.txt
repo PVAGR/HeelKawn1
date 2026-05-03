@@ -1,0 +1,12 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+[CrashTrap] CrashTrap initialized. trace_enabled=false trace_first_sim_tick=false (per-listener tick-1 trace when both true)
+[VALIDATION_SMOKETEST] marker=PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp source=SettlementMemory.autoload debug_build=true VALIDATION_SESSION_ENABLED_const=false clean_economy_armed=false settlement_truth_verify_armed=false specialization_log_armed=false
+[WorldAI] Neural world matrix initialized with 19 neural networks
+[WorldAI] Specialized neural networks initialized
+[AIAgentManager] Neural network matrix initialized with 4 layers
+[AIAgentManager] Learning algorithms initialized
+[AIAgentManager] Pattern recognition systems initialized
+[AIAgentManager] Predictive models initialized
+[AIAgentManager] Collective intelligence initialized
+[SMOKE] OK reached tick_count=10

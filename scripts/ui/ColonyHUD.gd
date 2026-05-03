@@ -215,12 +215,16 @@ func _refresh() -> void:
 		lines.append(_settlement_identity_line())
 		lines.append(_stockpile_simple_line())
 		lines.append(_pawn_line_simple())
+		lines.append(_profession_breakdown_line())
 		lines.append(_krond_line_simple())
 		var body_simple: String = _player_body_needs_line_simple()
 		if body_simple != "":
 			lines.append(body_simple)
 		lines.append(_jobs_line_simple())
 		lines.append(_wildlife_line())
+		var meaning_ln: String = _region_meaning_line()
+		if meaning_ln != "":
+			lines.append(meaning_ln)
 		var intent_simple: String = _player_intent_hud_line()
 		if intent_simple != "":
 			lines.append(intent_simple)
@@ -584,6 +588,49 @@ func _pawn_line_simple() -> String:
 	]
 
 
+func _profession_breakdown_line() -> String:
+	if _spawner == null:
+		return ""
+	var counts: Dictionary = {
+		PawnData.Profession.FARMER: 0,
+		PawnData.Profession.BUILDER: 0,
+		PawnData.Profession.GATHERER: 0,
+		PawnData.Profession.WARRIOR: 0,
+		PawnData.Profession.SCHOLAR: 0,
+		PawnData.Profession.NONE: 0,
+	}
+	for p in _visible_pawns_for_hud():
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var prof: int = int(p.data.current_profession)
+		if counts.has(prof):
+			counts[prof] = int(counts[prof]) + 1
+		else:
+			counts[PawnData.Profession.NONE] = int(counts[PawnData.Profession.NONE]) + 1
+	var parts: Array[String] = []
+	var farmer_n: int = int(counts[PawnData.Profession.FARMER])
+	var builder_n: int = int(counts[PawnData.Profession.BUILDER])
+	var gatherer_n: int = int(counts[PawnData.Profession.GATHERER])
+	var warrior_n: int = int(counts[PawnData.Profession.WARRIOR])
+	var scholar_n: int = int(counts[PawnData.Profession.SCHOLAR])
+	var none_n: int = int(counts[PawnData.Profession.NONE])
+	if farmer_n > 0:
+		parts.append("[color=#d9a832]Farm:%d[/color]" % farmer_n)
+	if builder_n > 0:
+		parts.append("[color=#999999]Bld:%d[/color]" % builder_n)
+	if gatherer_n > 0:
+		parts.append("[color=#33cc44]Gth:%d[/color]" % gatherer_n)
+	if warrior_n > 0:
+		parts.append("[color=#e63333]War:%d[/color]" % warrior_n)
+	if scholar_n > 0:
+		parts.append("[color=#4d80e6]Sch:%d[/color]" % scholar_n)
+	if none_n > 0:
+		parts.append("[color=#888888]?:%d[/color]" % none_n)
+	if parts.is_empty():
+		return ""
+	return "[color=#cccccc]Roles:[/color] " + " · ".join(parts)
+
+
 func _krond_line_simple() -> String:
 	if _player_pawn == null or _player_pawn.data == null:
 		return "[color=#cccccc]Krond:[/color] -"
@@ -871,6 +918,24 @@ func _wildlife_total_span() -> String:
 	if lo > hi:
 		return ""
 	return "T %d…%d" % [lo, hi]
+
+
+func _region_meaning_line() -> String:
+	if WorldMeaning == null:
+		return ""
+	# Show meaning tags for the region the camera is centered on
+	var cam: Camera2D = get_viewport().get_camera_2d() if get_viewport() != null else null
+	if cam == null:
+		return ""
+	var cam_tile: Vector2i = Vector2i(int(cam.global_position.x / 16.0), int(cam.global_position.y / 16.0))
+	if WorldMemory == null:
+		return ""
+	var rk: int = WorldMemory._region_key(cam_tile.x, cam_tile.y)
+	var tags: PackedStringArray = WorldMeaning.get_region_tags(rk)
+	if tags.is_empty():
+		return ""
+	var tag_str: String = " | ".join(tags.slice(0, 4))
+	return "[color=#cccccc]Region:[/color] [color=#aaddaa]%s[/color]" % tag_str
 
 
 func _wildlife_line() -> String:

@@ -72,6 +72,7 @@ func _spoilage_check_zone(zone: Stockpile) -> void:
 			zone.take_item(item_type, spoil_count)
 			WorldMemory.record_event({
 				"type": "food_spoiled",
+				"k": WorldMemory.Kind.STARVATION_EVENT,
 				"item_type": item_type,
 				"item_name": Item.name_for(item_type),
 				"qty": spoil_count,
@@ -120,6 +121,7 @@ func plant_seeds(tile: Vector2i, seed_type: int = Item.Type.SEEDS) -> bool:
 	
 	WorldMemory.record_event({
 		"type": "seeds_planted",
+		"k": WorldMemory.Kind.FOOD_EVENT,
 		"tile": {"x": tile.x, "y": tile.y},
 		"tick": GameManager.tick_count,
 	})
@@ -160,6 +162,7 @@ func harvest_crop(tile: Vector2i) -> int:
 	
 	WorldMemory.record_event({
 		"type": "crop_harvested",
+		"k": WorldMemory.Kind.FOOD_EVENT,
 		"tile": {"x": tile.x, "y": tile.y},
 		"tick": GameManager.tick_count,
 	})

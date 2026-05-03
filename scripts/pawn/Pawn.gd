@@ -1124,6 +1124,9 @@ func _try_autonomy_social_seek() -> bool:
 		var pid_i: int = int(p.data.id)
 		var rap: float = float(data.get_social_rapport(pid_i))
 		var score: float = rap / 3000.0 - float(d2) / 20000.0
+		# Profession clustering: same-profession pawns are slightly more attractive
+		if data.current_profession != PawnData.Profession.NONE and p.data.current_profession == data.current_profession:
+			score += 0.15
 		if score > best_score:
 			best_score = score
 			best_peer = p
@@ -2109,6 +2112,25 @@ func _tick_idle() -> void:
 			base_bias += int(resolve_history_offset_for_region.call(rk_hist))
 		if affinity_key != "" and _job_matches_affinity(j.type, affinity_key):
 			base_bias += AFFINITY_JOB_PRIORITY_BONUS
+		# Profession-specific job priority: pawns strongly prefer jobs matching their role
+		if data.current_profession != PawnData.Profession.NONE:
+			var prof: int = data.current_profession
+			match prof:
+				PawnData.Profession.FARMER:
+					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.PLANT_SEEDS or j.type == _Job.Type.HARVEST_CROPS:
+						base_bias += 5
+				PawnData.Profession.BUILDER:
+					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH:
+						base_bias += 5
+				PawnData.Profession.GATHERER:
+					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.GATHER_FLINT or j.type == _Job.Type.GATHER_STICK:
+						base_bias += 5
+				PawnData.Profession.WARRIOR:
+					if j.type == _Job.Type.HUNT or j.type == _Job.Type.PROTECT or j.type == _Job.Type.DEFEND:
+						base_bias += 5
+				PawnData.Profession.SCHOLAR:
+					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
+						base_bias += 5
 		var action_key: String = _utility_action_for_job(int(j.type))
 		var utility_bias: int = 0
 		if utility_bias_cache.has(action_key):
@@ -3236,6 +3258,25 @@ func _complete_current_job() -> void:
 		_Job.Type.HARVEST_CROPS:
 			data.add_mood_event(MoodEvent.Type.TRIUMPH, 75.0, 250)  # Harvest rewards patience
 	JobManager.complete(job)
+	# Record job completion event for WorldMeaning pipeline
+	if WorldMemory != null:
+		var job_kind: int = WorldMemory.Kind.WORK_EVENT
+		if job.type == _Job.Type.FORAGE or job.type == _Job.Type.HUNT:
+			job_kind = WorldMemory.Kind.FOOD_EVENT
+		elif job.type == _Job.Type.PLANT_SEEDS or job.type == _Job.Type.HARVEST_CROPS:
+			job_kind = WorldMemory.Kind.FOOD_EVENT
+		elif job.type == _Job.Type.COOK_MEAT or job.type == _Job.Type.COOK_BERRIES or job.type == _Job.Type.DRY_MEAT:
+			job_kind = WorldMemory.Kind.FOOD_EVENT
+		elif job.type == _Job.Type.BUILD_BED or job.type == _Job.Type.BUILD_WALL or job.type == _Job.Type.BUILD_DOOR:
+			job_kind = WorldMemory.Kind.BUILDING_CONSTRUCTED
+		WorldMemory.record_event({
+			"type": "job_completed",
+			"k": job_kind,
+			"r": _WM._region_key(job.work_tile.x, job.work_tile.y),
+			"job_type": int(job.type),
+			"pawn_id": data.id,
+			"tick": GameManager.tick_count if GameManager != null else 0,
+		})
 	# Consume tool durability for tool-requiring jobs
 	_consume_tool_durability(job.type)
 	_clear_cohort_state()
@@ -5559,7 +5600,12 @@ func _draw() -> void:
 	var body_color: Color = data.color
 	if _state == State.SLEEPING:
 		body_color = data.color.darkened(0.25)
-	
+
+	# Profession body tint — subtle overlay so pawns of same role look alike
+	if data.current_profession != PawnData.Profession.NONE:
+		var prof_tint: Color = _profession_color(data.current_profession)
+		body_color = body_color.lerp(prof_tint, 0.12)
+
 	# Simplified rendering for performance - just draw circle and outline
 	draw_circle(body_origin, body_radius, body_color)
 	
@@ -5580,11 +5626,41 @@ func _draw() -> void:
 		var sel_color := Color(1.0, 0.92, 0.18)
 		draw_arc(body_origin, body_radius + 3.5, 0.0, TAU, 28, sel_color, 1.4, true)
 	
-	# Profession indicator: small colored dot above the pawn
+	# Profession indicator: visible badge above the pawn
 	if data.current_profession != PawnData.Profession.NONE:
 		var prof_color: Color = _profession_color(data.current_profession)
-		var prof_pos: Vector2 = body_origin + Vector2(0.0, -body_radius - 2.5)
-		draw_circle(prof_pos, 1.2, prof_color)
+		var prof_pos: Vector2 = body_origin + Vector2(0.0, -body_radius - 3.5)
+		var badge_r: float = 2.0
+		draw_circle(prof_pos, badge_r, prof_color)
+		# Draw a small profession-specific shape inside the badge
+		match data.current_profession:
+			PawnData.Profession.FARMER:
+				# Triangle (wheat)
+				var s: float = badge_r * 0.7
+				draw_colored_polygon(
+					PackedVector2Array([prof_pos + Vector2(0, -s), prof_pos + Vector2(-s, s), prof_pos + Vector2(s, s)]),
+					Color.WHITE
+				)
+			PawnData.Profession.BUILDER:
+				# Square (brick)
+				var s: float = badge_r * 0.55
+				draw_rect(Rect2(prof_pos - Vector2(s, s), Vector2(s * 2, s * 2)), Color.WHITE, true)
+			PawnData.Profession.GATHERER:
+				# Diamond (leaf)
+				var s: float = badge_r * 0.7
+				draw_colored_polygon(
+					PackedVector2Array([prof_pos + Vector2(0, -s), prof_pos + Vector2(s, 0), prof_pos + Vector2(0, s), prof_pos + Vector2(-s, 0)]),
+					Color.WHITE
+				)
+			PawnData.Profession.WARRIOR:
+				# Sword chevron
+				var s: float = badge_r * 0.6
+				draw_line(prof_pos + Vector2(-s, s), prof_pos + Vector2(0, -s), Color.WHITE, 1.0, true)
+				draw_line(prof_pos + Vector2(s, s), prof_pos + Vector2(0, -s), Color.WHITE, 1.0, true)
+			PawnData.Profession.SCHOLAR:
+				# Star (knowledge)
+				var s: float = badge_r * 0.5
+				draw_circle(prof_pos, s, Color.WHITE)
 
 	# Draft marker only
 	if draft_mode:

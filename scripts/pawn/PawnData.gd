@@ -1745,7 +1745,7 @@ func add_skill_xp(skill: int, amount: float) -> bool:
 	skill_last_used[skill] = GameManager.tick_count if GameManager != null else 0
 
 	# Auto-assign profession when skill XP reaches 100 and no profession yet
-	if current_profession == Profession.NONE and cat != "" and get_skill_xp(skill) >= 100.0:
+	if current_profession == Profession.NONE and cat != "" and get_skill_xp(skill) >= 30.0:
 		current_profession = _skill_to_profession(cat)
 
 	# Stage 1: Check for overall level up
@@ -2188,6 +2188,16 @@ func _skill_to_profession(skill_key: String) -> int:
 			return Profession.WARRIOR
 		"movement":
 			return Profession.SCHOLAR
+		"mining":
+			return Profession.BUILDER
+		"crafting":
+			return Profession.BUILDER
+		"foraging":
+			return Profession.GATHERER
+		"hunting":
+			return Profession.WARRIOR
+		"teaching":
+			return Profession.SCHOLAR
 		_:
 			return Profession.NONE
 
@@ -2257,7 +2267,7 @@ func gain_skill_xp(skill_key: String, amount: int) -> bool:
 	var before: int = tracked_skill_xp(skill_key)
 	var after: int = before + amount
 	var just_locked: bool = false
-	if current_profession == Profession.NONE and after >= 100:
+	if current_profession == Profession.NONE and after >= 30:
 		current_profession = _skill_to_profession(skill_key)
 		just_locked = true
 	skills[skill_key] = after

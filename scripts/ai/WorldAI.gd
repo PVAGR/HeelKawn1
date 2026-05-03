@@ -3326,17 +3326,17 @@ func build_idle_parity_context_for_pawn(pawn_id: int) -> Dictionary:
 		"forage": 0.14,
 	}
 	if outs.size() >= 8:
-		ub["work"] += float(outs[4]) * 0.11 + float(outs[5]) * 0.11 + float(outs[3]) * 0.07
-		ub["wander"] += float(outs[7]) * 0.13 + float(outs[3]) * 0.035
-		ub["teach"] += float(outs[2]) * 0.17
-		ub["challenge"] += float(outs[6]) * 0.12
-		ub["forage"] += float(outs[0]) * 0.055 + float(outs[3]) * 0.14
+		ub["work"] += float(outs[4]) * 0.22 + float(outs[5]) * 0.22 + float(outs[3]) * 0.14
+		ub["wander"] += float(outs[7]) * 0.26 + float(outs[3]) * 0.07
+		ub["teach"] += float(outs[2]) * 0.34
+		ub["challenge"] += float(outs[6]) * 0.24
+		ub["forage"] += float(outs[0]) * 0.11 + float(outs[3]) * 0.28
 	if hc.size() >= 12:
-		ub["teach"] += float(hc[9]) * 0.14 + float(hc[8]) * 0.05
-		ub["wander"] += float(hc[11]) * 0.11
-		ub["challenge"] += float(hc[6]) * 0.06
-		ub["work"] += float(hc[4]) * 0.045 + float(hc[5]) * 0.045
-		ub["forage"] += float(hc[3]) * 0.05
+		ub["teach"] += float(hc[9]) * 0.28 + float(hc[8]) * 0.10
+		ub["wander"] += float(hc[11]) * 0.22
+		ub["challenge"] += float(hc[6]) * 0.12
+		ub["work"] += float(hc[4]) * 0.09 + float(hc[5]) * 0.09
+		ub["forage"] += float(hc[3]) * 0.10
 	return {
 		"utility_bias": ub,
 		"weather": str(dc.get("weather_tag", "clear")),

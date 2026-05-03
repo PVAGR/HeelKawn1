@@ -25,6 +25,8 @@ enum Kind {
     MIGRATION_STARTED = 10,
     MIGRATION_COMPLETED = 11,
     TEACHING_EVENT = 12,
+    FOOD_EVENT = 13,
+    WORK_EVENT = 14,
 }
 
 var _events: Array[Dictionary] = []
@@ -457,11 +459,54 @@ func _normalize_event_payload(e: Dictionary) -> Dictionary:
     var rr: int = _region_from_event_payload(payload)
     if rr >= 0:
         payload["r"] = rr
+    # Bridge: if event lacks "k" (Kind int), infer it from the string "type".
+    # This connects FoodChainManager and other string-typed events to the
+    # WorldMeaning pipeline which requires "k" to process events.
+    if not payload.has("k"):
+        var inferred_k: int = _infer_kind_from_type(typ)
+        if inferred_k >= 0:
+            payload["k"] = inferred_k
     var first_tick: int = int(payload.get("t", 0))
     if not _first_event_tick_by_type.has(typ):
         _first_event_tick_by_type[typ] = first_tick
         payload["first_of_type"] = true
     return payload
+
+
+## Map string event types to Kind ints so WorldMeaning can process them.
+## Returns -1 if no mapping exists (event stays invisible to meaning pipeline).
+func _infer_kind_from_type(typ: String) -> int:
+    match typ:
+        "food_spoiled", "famine_warning":
+            return Kind.STARVATION_EVENT
+        "seeds_planted", "crop_harvested":
+            return Kind.FOOD_EVENT
+        "job_completed", "job_claimed":
+            return Kind.WORK_EVENT
+        "pawn_death", "starvation_death":
+            return Kind.PAWN_DEATH
+        "animal_killed":
+            return Kind.ANIMAL_DEATH
+        "enemy_killed":
+            return Kind.ENEMY_DEATH
+        "building_constructed", "bed_built", "wall_built", "door_built":
+            return Kind.BUILDING_CONSTRUCTED
+        "building_destroyed", "fire_destroyed_building":
+            return Kind.BUILDING_DESTROYED
+        "fire_started":
+            return Kind.FIRE_STARTED
+        "fire_extinguished":
+            return Kind.FIRE_EXTINGUISHED
+        "teaching_event", "skill_taught":
+            return Kind.TEACHING_EVENT
+        "migration_started", "pawn_migrated":
+            return Kind.MIGRATION_STARTED
+        "migration_completed":
+            return Kind.MIGRATION_COMPLETED
+        "social_fragment", "schism_event":
+            return Kind.SOCIAL_FRAGMENT
+        _:
+            return -1
 
 
 func _canonical_event_type(payload: Dictionary) -> String:

@@ -13,6 +13,8 @@ const KIND_STARVATION_EVENT: int = 9
 const KIND_MIGRATION_STARTED: int = 10
 const KIND_MIGRATION_COMPLETED: int = 11
 const KIND_TEACHING_EVENT: int = 12
+const KIND_FOOD_EVENT: int = 13
+const KIND_WORK_EVENT: int = 14
 
 ## region_key (int) -> aggregated entry Dictionary
 var meaning_by_region: Dictionary = {}
@@ -85,6 +87,10 @@ func recompute() -> void:
 				rec["migrations_completed"] = int(rec.get("migrations_completed", 0)) + 1
 			KIND_TEACHING_EVENT:
 				rec["teaching_events"] = int(rec.get("teaching_events", 0)) + 1
+			KIND_FOOD_EVENT:
+				rec["food_events"] = int(rec.get("food_events", 0)) + 1
+			KIND_WORK_EVENT:
+				rec["work_events"] = int(rec.get("work_events", 0)) + 1
 
 		# Read impact from ProgressionSystem
 		if has_node("/root/ProgressionSystem"):
@@ -242,6 +248,8 @@ func _default_region_entry() -> Dictionary:
 		"migrations_started": 0,
 		"migrations_completed": 0,
 		"teaching_events": 0,
+		"food_events": 0,
+		"work_events": 0,
 		"tags": PackedStringArray(),
 	}
 
@@ -304,7 +312,21 @@ func _compute_region_tags(data: Dictionary) -> PackedStringArray:
 	# Safe-hearth: shelter + knowledge + no deaths
 	if total_deaths == 0 and buildings_built >= 1 and teaching_events >= 1:
 		tags.append("safe_hearth")
-	
+
+	# Food activity tags
+	var food_events: int = int(data.get("food_events", 0))
+	if food_events >= 10:
+		tags.append("fertile")
+	if food_events >= 5:
+		tags.append("farmed")
+
+	# Work activity tags
+	var work_events: int = int(data.get("work_events", 0))
+	if work_events >= 15:
+		tags.append("busy")
+	if work_events >= 5:
+		tags.append("active")
+
 	return tags
 
 

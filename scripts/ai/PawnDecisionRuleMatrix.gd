@@ -281,6 +281,49 @@ func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump(outs, 4, -0.08)
 		fired.append({"id": "perm_no_build", "line": "IF build disabled THEN suppress Work_Build channel.", "w": 0.25})
 
+	# --- Profession-driven rules (strong nudge so pawns act their role) ---
+	var prof: int = int(pd.current_profession) if pd != null else 0
+	match prof:
+		PawnData.Profession.FARMER:
+			_bump_many(outs, [0, 3], 0.20)
+			_bump(outs, 4, -0.04)
+			fired.append({"id": "prof_farmer", "line": "IF farmer THEN strong food/forage bias; less building.", "w": 0.62})
+		PawnData.Profession.BUILDER:
+			_bump_many(outs, [4, 5], 0.20)
+			fired.append({"id": "prof_builder", "line": "IF builder THEN strong build/mine bias.", "w": 0.62})
+		PawnData.Profession.GATHERER:
+			_bump_many(outs, [0, 3], 0.18)
+			_bump(outs, 7, 0.06)
+			fired.append({"id": "prof_gatherer", "line": "IF gatherer THEN forage + food seeking; slight idle wander.", "w": 0.55})
+		PawnData.Profession.WARRIOR:
+			_bump_many(outs, [6, 3], 0.20)
+			_bump(outs, 1, -0.04)
+			fired.append({"id": "prof_warrior", "line": "IF warrior THEN defend/hunt bias; less rest.", "w": 0.62})
+		PawnData.Profession.SCHOLAR:
+			_bump_many(outs, [2, 7], 0.18)
+			_bump(outs, 1, 0.06)
+			fired.append({"id": "prof_scholar", "line": "IF scholar THEN social + idle/observe; slight rest nudge.", "w": 0.55})
+
+	# --- Life path rules (advisory, reinforces profession) ---
+	var lpath: int = int(pd.life_path) if pd != null else 0
+	match lpath:
+		PawnData.LifePath.FARMER:
+			_bump(outs, 3, 0.10)
+			fired.append({"id": "lpath_farmer", "line": "IF life path farmer THEN forage nudge.", "w": 0.35})
+		PawnData.LifePath.SOLDIER:
+			_bump(outs, 6, 0.10)
+			fired.append({"id": "lpath_soldier", "line": "IF life path soldier THEN defend nudge.", "w": 0.35})
+		PawnData.LifePath.WANDERER:
+			_bump_many(outs, [7, 3], 0.08)
+			fired.append({"id": "lpath_wanderer", "line": "IF life path wanderer THEN idle + explore nudge.", "w": 0.30})
+
+	# --- Settlement demand awareness ---
+	var food_pressure_val: float = float(ctx.get("food_pressure", 0.0))
+	var settlement_id_val: int = int(ctx.get("settlement_id", -1))
+	if settlement_id_val >= 0 and food_pressure_val >= 0.5:
+		_bump_many(outs, [0, 3], 0.10)
+		fired.append({"id": "settlement_hungry", "line": "IF settlement food pressure high THEN all pawns nudge food.", "w": 0.55})
+
 	fired.sort_custom(func(a, b): return float(a.get("w", 0.0)) > float(b.get("w", 0.0)))
 	var human_ch: Array = _build_human_channels(pd, ctx, outs)
 	_apply_human_semantic_projection(outs, human_ch)

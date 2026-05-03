@@ -573,8 +573,8 @@ func register_birth(child_id: int, mother_id: int, father_id: int) -> void:
 	}
 
 
-## Get direct children of a pawn
-func get_children(pawn_id: int) -> Array[int]:
+## Get direct children of a pawn (lineage)
+func get_lineage_children(pawn_id: int) -> Array[int]:
 	if pawn_id <= 0:
 		return []
 	
@@ -599,8 +599,8 @@ func get_children(pawn_id: int) -> Array[int]:
 	return result
 
 
-## Get direct parents of a pawn
-func get_parents(pawn_id: int) -> Array[int]:
+## Get direct parents of a pawn (lineage)
+func get_lineage_parents(pawn_id: int) -> Array[int]:
 	if pawn_id <= 0:
 		return []
 	
@@ -625,17 +625,17 @@ func get_parents(pawn_id: int) -> Array[int]:
 	return result
 
 
-## Get siblings of a pawn (shares at least one parent, excludes self)
-func get_siblings(pawn_id: int) -> Array[int]:
+## Get siblings of a pawn (lineage, shares at least one parent, excludes self)
+func get_lineage_siblings(pawn_id: int) -> Array[int]:
 	if pawn_id <= 0:
 		return []
 	
 	var result: Array[int] = []
-	var parents = get_parents(pawn_id)
+	var parents = get_lineage_parents(pawn_id)
 	
 	# Union all children of all parents
 	for parent_id in parents:
-		for child_id in get_children(parent_id):
+		for child_id in get_lineage_children(parent_id):
 			if int(child_id) != pawn_id and not result.has(int(child_id)):
 				result.append(int(child_id))
 	
@@ -644,7 +644,7 @@ func get_siblings(pawn_id: int) -> Array[int]:
 
 
 ## Get ancestors up to specified depth (cap at 10)
-func get_ancestors(pawn_id: int, depth: int) -> Array[int]:
+func get_lineage_ancestors(pawn_id: int, depth: int) -> Array[int]:
 	if pawn_id <= 0 or depth <= 0:
 		return []
 	
@@ -662,7 +662,7 @@ func get_ancestors(pawn_id: int, depth: int) -> Array[int]:
 			visited[pid] = true
 			
 			# Get parents (grandparents at next level)
-			var parents = get_parents(pid)
+			var parents = get_lineage_parents(pid)
 			for parent_id in parents:
 				if not visited.has(parent_id):
 					result.append(parent_id)

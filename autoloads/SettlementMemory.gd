@@ -873,7 +873,7 @@ func _settlement_state_v1(
     )
     # Canonical flow: abandoned → recovering → revivable → active
     # Score gates: <35=abandoned, 35-69=recovering, 70-87=revivable, 88+=active
-    if scar_max <= REVIVAL_SCAR_MAX and regional_peace_ticks >= peace_threshold:
+    if scar_max <= REVIVABLE_SCAR_MAX and regional_peace_ticks >= peace_threshold:
         if revival_score >= REVIVAL_SCORE_ACTIVE_MIN and scar_max <= 1 and regional_peace_ticks >= peace_threshold * 2:
             return "active"
         if revival_score >= REVIVAL_SCORE_REVIVABLE_MIN:

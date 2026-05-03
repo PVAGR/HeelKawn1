@@ -13,11 +13,11 @@ var pause_button: Button
 var speed_buttons: Array[Button] = []
 var current_speed_label: Label
 
-# Speed options matching TickManager.SPEED_MULTIPLIERS
-const SPEEDS: Array[float] = [0.5, 1.0, 4.0, 16.0, 64.0]
-const SPEED_LABELS: Array[String] = ["0.5x", "1x", "4x", "16x", "64x"]
+# Speed options matching TickManager.SPEED_PRESETS
+const SPEEDS: Array[float] = [1.0, 3.0, 6.0, 12.0, 26.0, 50.0, 100.0]
+const SPEED_LABELS: Array[String] = ["1x", "3x", "6x", "12x", "26x", "50x", "100x"]
 
-var selected_speed_index: int = 1  # Default to 1x (index 1)
+var selected_speed_index: int = 0  # Default to 1x (index 0)
 
 
 func _ready() -> void:
@@ -73,7 +73,7 @@ func _connect_to_tick_manager() -> void:
 		TickMgr = get_node_or_null("/root/TickManager")
 	if TickMgr != null:
 		# Sync initial state
-		selected_speed_index = TickMgr.speed_index
+		selected_speed_index = TickMgr.get_speed_index()
 		_update_button_highlight()
 		_update_pause_button()
 
@@ -83,7 +83,7 @@ func _on_pause_pressed() -> void:
 		return
 	TickMgr.toggle_pause()
 	_update_pause_button()
-	pause_toggled.emit(TickMgr.is_paused)
+	pause_toggled.emit(TickMgr.is_paused())
 
 
 func _on_speed_pressed(speed_idx: int) -> void:
@@ -107,7 +107,7 @@ func _update_button_highlight() -> void:
 func _update_pause_button() -> void:
 	if TickMgr == null:
 		return
-	if TickMgr.is_paused:
+	if TickMgr.is_paused():
 		pause_button.text = "Resume"
 	else:
 		pause_button.text = "Pause"
@@ -124,7 +124,7 @@ func set_speed(multiplier: float) -> void:
 	if TickMgr == null:
 		return
 	TickMgr.set_speed(multiplier)
-	selected_speed_index = TickMgr.speed_index
+	selected_speed_index = TickMgr.get_speed_index()
 	_update_button_highlight()
 	_update_speed_label()
 

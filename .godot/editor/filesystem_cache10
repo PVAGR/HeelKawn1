@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1777777621
+::res://::1777780036
 AI_README.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 BIOME_DRIVEN_ARCHITECTURE.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 blackbox_mcp_settings.json::JSON::-1::1777694600::0::1::::<><><>0<>0<><>::
@@ -148,7 +148,7 @@ RoadMemory.gd::GDScript::4885973602104061496::1777694600::0::1::::<>Node<><>0<>0
 SacredMemory.gd::GDScript::7677869012457273724::1777694600::0::1::::<>Node<><>0<>0<><>::
 SchismManager.gd::GDScript::810131285511513470::1777694600::0::1::::<>Node<><>0<>0<><>::
 SettlementArchitect.gd::GDScript::8965997991269203430::1777694600::0::1::::<>Node<><>0<>0<><>::
-SettlementMemory.gd::GDScript::3014913635517556679::1777777527::0::1::::<>Node<><>0<>0<><>::
+SettlementMemory.gd::GDScript::3014913635517556679::1777779711::0::1::::<>Node<><>0<>0<><>::
 SettlementPersistenceManager.gd::GDScript::1742009134159448662::1777694600::0::1::::SettlementPersistenceManager<>Node<><>0<>0<><>::
 SettlementPlanner.gd::GDScript::6005194213945483152::1777694600::0::1::::<>Node<><>0<>0<><>::
 SettlementRebirth.gd::GDScript::7428695576235804400::1777776915::0::1::::<>Node<><>0<>0<><>::
@@ -166,7 +166,7 @@ WorldClock.gd::GDScript::2210150197519616697::1777694600::0::1::::<>Node<><>0<>0
 WorldEvents.gd::GDScript::327847784156342633::1777694600::0::1::::<>Node<><>0<>0<><>::
 WorldEventSystem.gd::GDScript::2240822361188270874::1777694600::0::1::::<>Node<><>0<>0<><>::
 WorldMeaning.gd::GDScript::7565976206211732807::1777777105::0::1::::<>Node<><>0<>0<><>::
-WorldMemory.gd::GDScript::3156246899067335515::1777772158::0::1::::<>Node<><>0<>0<><>::
+WorldMemory.gd::GDScript::3156246899067335515::1777777946::0::1::::<>Node<><>0<>0<><>::
 WorldPersistence.gd::GDScript::2908562363029369037::1777694600::0::1::::<>Node<><>0<>0<><>::
 WorldRNG.gd::GDScript::450310579566985166::1777694600::0::1::::<>Node<><>0<>0<><>::
 ::res://brain/::1777694600
@@ -275,10 +275,10 @@ TimelineControls.tscn::PackedScene::211294077223583106::1777694600::0::1::::<><>
 World.gd::GDScript::6420505296756273027::1777694600::0::1::::World<>Node2D<><>0<>0<><>::
 World.tscn::PackedScene::-1::1777694600::0::1::::<><><>0<>0<><>::res://scenes/world/World.gd
 ::res://scripts/::1777765505
-::res://scripts/ai/::1777772369
+::res://scripts/ai/::1777777623
 AIAgent.gd::GDScript::138437304583959177::1777694600::0::1::::AIAgent<>RefCounted<><>0<>0<><>::
 CivilizationAgent.gd::GDScript::2246281808571983635::1777694600::0::1::::CivilizationAgent<>AIAgent<><>0<>0<><>::
-HeelKawnPawnBrain.gd::GDScript::5698329963018427707::1777772465::0::1::::HeelKawnPawnBrain<>RefCounted<><>0<>0<><>::
+HeelKawnPawnBrain.gd::GDScript::5698329963018427707::1777777946::0::1::::HeelKawnPawnBrain<>RefCounted<><>0<>0<><>::
 PawnDecisionRuleMatrix.gd::GDScript::1799434569812519709::1777694600::0::1::::PawnDecisionRuleMatrix<>RefCounted<><>0<>0<><>::
 SettlementAI.gd::GDScript::6340692512974189301::1777694600::0::1::::SettlementAI<>RefCounted<><>0<>0<><>::
 SpatialGrid.gd::GDScript::2797234459260380184::1777772369::0::1::::SpatialGrid<>RefCounted<><>0<>0<><>::

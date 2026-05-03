@@ -11,25 +11,25 @@ extends Node
 
 signal tick_processed(tick_number: int)
 
-const BASE_TICK_INTERVAL: float = 1.0
+const TICK_STEP: float = 1.0 / 60.0  # Fixed simulation step (60 ticks/sec base)
 
 ## SAFETY: Maximum ticks processed in one render frame (bounded burst).
-## Keeps catch-up work predictable; combine with fmod clamp + degrade path when backlog grows.
-## Typical range 10–60; 30 balances fast-forward throughput vs frame time at ultra speed.
-const MAX_TICKS_PER_FRAME: int = 30
+## Hard cap prevents spiral-of-death at high speeds (12x+, 100x).
+## At 100x speed with 60 FPS: delta ≈ 16.7ms * 100 = 1667ms of sim → ~100 ticks.
+## With MAX=64, we process 64/frame, degrade gracefully, recover next frames.
+const MAX_TICKS_PER_FRAME: int = 64
 
 var current_tick: int = 0
 var _accumulated_time: float = 0.0
-var _target_interval: float = BASE_TICK_INTERVAL
 var _is_paused: bool = false
 var _speed_multiplier: float = 1.0
 
 ## RefCounted objects that register for tick notifications (SettlementAI, etc.)
 var _refcounted_tickables: Array = []
 
-## Speed presets: 0.5x, 1x, 4x, 16x, 64x
-const SPEED_PRESETS: Array[float] = [0.5, 1.0, 4.0, 16.0, 64.0]
-var _current_speed_index: int = 1  # Start at 1x (index 1)
+## Speed presets: 1x, 3x, 6x, 12x, 26x, 50x, 100x
+const SPEED_PRESETS: Array[float] = [1.0, 3.0, 6.0, 12.0, 26.0, 50.0, 100.0]
+var _current_speed_index: int = 0  # Start at 1x (index 0)
 
 var _ticks_behind: int = 0
 var _last_frame_ticks: int = 0
@@ -46,43 +46,29 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _is_paused:
 		return
-	if delta <= 0.0:
+	if delta <= 0.0 or _speed_multiplier <= 0.0:
 		_last_frame_ticks = 0
 		return
 
-	## BURST TICK ACCUMULATION
-	## At 100x speed, delta (0.016s) * 100 = 1.6s of simulation time per frame.
+	## BOUNDED TICK ACCUMULATION
+	## Accumulate scaled time and process ticks with hard cap.
 	_accumulated_time += delta * _speed_multiplier
-	if _target_interval <= 0.0:
-		return
 
 	var prof_start_usec: int = 0
 	if OS.is_debug_build():
 		prof_start_usec = Time.get_ticks_usec()
 
 	var ticks_this_frame: int = 0
-	## Graceful degradation: more than two whole tick intervals of backlog — skip catch-up bursts
-	## for this frame and clamp with fmod (same threshold family as "2× behind").
-	if _accumulated_time > 2.0 * _target_interval:
-		if not _backlog_degrade_warned:
-			push_warning(
-				"TickManager: accumulated simulation time exceeded 2× target tick interval; skipping catch-up burst and clamping backlog."
-			)
-			_backlog_degrade_warned = true
-		_ticks_behind = int(_accumulated_time / _target_interval)
-		_accumulated_time = fmod(_accumulated_time, _target_interval)
-	else:
-		_backlog_degrade_warned = false
-		while _accumulated_time >= _target_interval and ticks_this_frame < MAX_TICKS_PER_FRAME:
-			_accumulated_time -= _target_interval
-			current_tick += 1
-			ticks_this_frame += 1
-			_dispatch_tick(current_tick)
-		if _accumulated_time >= _target_interval:
-			_ticks_behind = int(_accumulated_time / _target_interval)
-			_accumulated_time = fmod(_accumulated_time, _target_interval)
-		else:
-			_ticks_behind = 0
+	## Process all pending ticks up to MAX_TICKS_PER_FRAME (hard cap).
+	while _accumulated_time >= TICK_STEP and ticks_this_frame < MAX_TICKS_PER_FRAME:
+		_accumulated_time -= TICK_STEP
+		current_tick += 1
+		ticks_this_frame += 1
+		_dispatch_tick(current_tick)
+
+	## Graceful degradation: if backlog grows beyond recovery window, clamp to prevent lag spiral.
+	if _accumulated_time > TICK_STEP * MAX_TICKS_PER_FRAME * 2:
+		_accumulated_time = TICK_STEP * MAX_TICKS_PER_FRAME
 
 	if OS.is_debug_build():
 		debug_last_tick_batch_usec = Time.get_ticks_usec() - prof_start_usec
@@ -90,6 +76,7 @@ func _process(delta: float) -> void:
 		debug_last_tick_batch_usec = 0
 
 	_last_frame_ticks = ticks_this_frame
+
 
 func _dispatch_tick(tick: int) -> void:
 	## PERFORMANCE NOTE: This is the CRITICAL tick loop.
@@ -175,10 +162,9 @@ func register_refcounted_tickable(obj: RefCounted) -> void:
 func unregister_refcounted_tickable(obj: RefCounted) -> void:
 	_refcounted_tickables.erase(obj)
 
-## Set speed by multiplier (0.5, 1, 4, 16, 64).
+## Set speed by multiplier (1.0, 3.0, 6.0, 12.0, 26.0, 50.0, 100.0).
 func set_speed(multiplier: float) -> void:
 	_speed_multiplier = max(multiplier, 0.0001)
-	_target_interval = BASE_TICK_INTERVAL / _speed_multiplier
 	# Update GameManager speed for UI compatibility
 	if GameManager != null:
 		GameManager.game_speed = _speed_multiplier

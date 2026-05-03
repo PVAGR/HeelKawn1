@@ -31,21 +31,7 @@ const TIMEOUT_FRAMES: int = 600  # ~10s at 60fps; hard ceiling so CI never hangs
 var _smoke_done: bool = false
 var _frame_count: int = 0
 var _main_spawned: bool = false
-
-
-func _ready() -> void:
-	# Quiet CI: disable tick trace before any ticks fire.
-	var gm_trace: Node = root.get_node_or_null("GameManager")
-	if gm_trace != null:
-		if gm_trace.has_method("set_game_tick_trace_enabled"):
-			gm_trace.call("set_game_tick_trace_enabled", false)
-		else:
-			gm_trace.set("trace_game_tick_dispatch", false)
-	# Hold sim until Main connects game_tick (same guard as sim_boot_smoke).
-	var gm_hold: Node = root.get_node_or_null("GameManager")
-	if gm_hold != null and gm_hold.has_method("pause"):
-		gm_hold.call("pause")
-	call_deferred("_spawn_main")
+var _started: bool = false
 
 
 func _spawn_main() -> void:
@@ -62,7 +48,7 @@ func _spawn_main() -> void:
 			gm.call("set_game_tick_trace_enabled", false)
 		else:
 			gm.set("trace_game_tick_dispatch", false)
-		# Resume simulation — _ready() paused GameManager so ticks wouldn't
+		# Resume simulation - paused GameManager so ticks wouldn't
 		# fire before Main connected game_tick. Now Main is in the tree, so
 		# unpause to let tick_count advance toward MIN_TICK.
 		if gm.has_method("resume"):
@@ -76,6 +62,25 @@ func _spawn_main() -> void:
 func _process(_delta: float) -> bool:
 	if _smoke_done:
 		return false
+
+	# SceneTree-safe startup: _ready() is not reliable for `-s` scripts,
+	# so bootstrap on the first _process frame instead.
+	if not _started:
+		_started = true
+		# Quiet CI: disable tick trace before any ticks fire.
+		var gm_trace: Node = root.get_node_or_null("GameManager")
+		if gm_trace != null:
+			if gm_trace.has_method("set_game_tick_trace_enabled"):
+				gm_trace.call("set_game_tick_trace_enabled", false)
+			else:
+				gm_trace.set("trace_game_tick_dispatch", false)
+		# Hold sim until Main connects game_tick (same guard as sim_boot_smoke).
+		var gm_hold: Node = root.get_node_or_null("GameManager")
+		if gm_hold != null and gm_hold.has_method("pause"):
+			gm_hold.call("pause")
+		call_deferred("_spawn_main")
+		return false
+
 	if not _main_spawned:
 		return false
 	_frame_count += 1
@@ -96,7 +101,7 @@ func _process(_delta: float) -> bool:
 	if tick < MIN_TICK:
 		return false
 
-	# Tick threshold reached — run the structure validation.
+	# Tick threshold reached - run the structure validation.
 	_smoke_done = true
 	_validate_settlement_structure(tick)
 	return true

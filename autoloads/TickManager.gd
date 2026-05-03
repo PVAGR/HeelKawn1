@@ -19,6 +19,10 @@ const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base; stable f
 ## With MAX=64, we process 64/frame; backlog drains over ~26 frames naturally.
 const MAX_TICKS_PER_FRAME: int = 64
 
+## Adaptive Throttle: Target frame time to leave CPU headroom (ms).
+## At ~70 FPS target, each frame should take <14ms of tick processing to preserve 60 FPS UI rendering.
+const TARGET_FRAME_TIME_MS: float = 14.0
+
 var current_tick: int = 0
 var _accumulated_time: float = 0.0
 var _is_paused: bool = false
@@ -53,10 +57,7 @@ func _process(delta: float) -> void:
 	# Accumulate scaled time
 	_accumulated_time += delta * _speed_multiplier
 
-	var prof_start_usec: int = 0
-	if OS.is_debug_build():
-		prof_start_usec = Time.get_ticks_usec()
-
+	var start_time: int = Time.get_ticks_msec()
 	var ticks_this_frame: int = 0
 
 	# Process ticks up to safety cap
@@ -66,17 +67,18 @@ func _process(delta: float) -> void:
 		ticks_this_frame += 1
 		_dispatch_tick(current_tick)
 
-	# SAFETY: If backlog grows dangerously large (>5 seconds worth),
-	# log a warning but DO NOT drop time. The sim will catch up over frames.
-	if _accumulated_time > TICK_STEP * MAX_TICKS_PER_FRAME * 4:
-		if OS.is_debug_build():
-			push_warning("[TickManager] Large backlog detected (%.1fs). Simulation is catching up deterministically." % (_accumulated_time / TICK_STEP))
-		# DO NOT clamp or drop accumulated_time. Let it drain naturally.
+		# Adaptive Throttle: If processing this batch takes too long, break to let the frame render
+		var elapsed: int = Time.get_ticks_msec() - start_time
+		if elapsed > int(TARGET_FRAME_TIME_MS):
+			if OS.is_debug_build():
+				push_warning("[TickManager] Adaptive throttle active: Processed %d ticks in %dms, pausing to prevent freeze." % [ticks_this_frame, elapsed])
+			break
 
-	if OS.is_debug_build():
-		debug_last_tick_batch_usec = Time.get_ticks_usec() - prof_start_usec
-	else:
-		debug_last_tick_batch_usec = 0
+	# SAFETY: If backlog grows dangerously large (>10x cap),
+	# log a warning but DO NOT drop time. The sim will catch up over frames.
+	if _accumulated_time > TICK_STEP * MAX_TICKS_PER_FRAME * 10:
+		if OS.is_debug_build():
+			push_warning("[TickManager] Massive backlog detected (%.1fs). System is catching up." % (_accumulated_time / TICK_STEP))
 
 	_last_frame_ticks = ticks_this_frame
 

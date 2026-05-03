@@ -70,6 +70,29 @@ const SPAWNABLE_BIOMES: Array[int] = [Biome.Type.PLAINS, Biome.Type.FOREST]
 var pawns: Array[Pawn] = []
 
 
+## Return the cached pawn registry. This is the preferred way to iterate all pawns
+## instead of get_nodes_in_group("pawns"), which traverses the entire scene tree.
+## The array is maintained on spawn/death — no per-tick allocation.
+func get_all_pawns() -> Array[Pawn]:
+	return pawns
+
+
+## Static: find the PawnSpawner and return its cached pawn list.
+## Returns empty array if PawnSpawner not found (e.g. during early boot).
+## Use this from autoloads that don't have a direct reference to PawnSpawner.
+static func find_pawns() -> Array[Pawn]:
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return []
+	var spawner_node: Node = tree.get_first_node_in_group("pawn_spawner")
+	if spawner_node == null:
+		return []
+	var ps: PawnSpawner = spawner_node as PawnSpawner
+	if ps == null:
+		return []
+	return ps.pawns
+
+
 func _ready() -> void:
 	add_to_group("pawn_spawner")
 	if pawn_scene == null:

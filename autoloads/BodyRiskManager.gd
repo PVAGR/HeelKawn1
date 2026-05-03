@@ -103,10 +103,9 @@ func apply_injury(pawn: Pawn, injury_type: int, severity: float, source: String 
 
 ## Tick all pawn injuries: recover, check for complications.
 func _tick_pawn_injuries() -> void:
-	var pawns = get_tree().get_nodes_in_group("pawns")
+	var pawns: Array[Pawn] = PawnSpawner.find_pawns()
 	for p in pawns:
-		if p is Pawn:
-			_tick_pawn_injury_recovery(p)
+		_tick_pawn_injury_recovery(p)
 
 
 ## Process recovery for a single pawn's injuries.
@@ -166,9 +165,9 @@ func _has_healer_nearby(pawn: Pawn, radius: int = 12) -> bool:
 	if pd == null:
 		return false
 	
-	var pawns = get_tree().get_nodes_in_group("pawns")
+	var pawns: Array[Pawn] = PawnSpawner.find_pawns()
 	for p in pawns:
-		if p is Pawn and p != pawn:
+		if p != pawn:
 			var other_pd = p.get_pawn_data()
 			if other_pd == null:
 				continue

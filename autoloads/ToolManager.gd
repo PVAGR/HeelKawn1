@@ -118,13 +118,12 @@ func _spawn_tool_jobs_if_needed() -> void:
 	var toolless_count: int = 0
 	var total_pawns: int = 0
 	
-	var pawns = get_tree().get_nodes_in_group("pawns")
+	var pawns: Array[Pawn] = PawnSpawner.find_pawns()
 	for p in pawns:
-		if p is Pawn:
-			total_pawns += 1
-			var pd = p.get_pawn_data()
-			if not pd.is_equipped_tool_valid():
-				toolless_count += 1
+		total_pawns += 1
+		var pd = p.get_pawn_data()
+		if not pd.is_equipped_tool_valid():
+			toolless_count += 1
 	
 	if total_pawns == 0:
 		return

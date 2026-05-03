@@ -420,11 +420,7 @@ func _add_research_points_for_pawn(pawn_id: int, amount: int, reason: String) ->
 func _settlement_id_for_pawn(pawn_id: int) -> int:
 	if SettlementMemory == null:
 		return -1
-	var main_loop: MainLoop = Engine.get_main_loop()
-	if main_loop == null or not (main_loop is SceneTree):
-		return -1
-	var tree: SceneTree = main_loop as SceneTree
-	for n in tree.get_nodes_in_group("pawns"):
+	for n in PawnSpawner.find_pawns():
 		if n == null or not is_instance_valid(n):
 			continue
 		if not n.has_method("get"):
@@ -455,12 +451,8 @@ func _knowledge_carrier_counts_by_settlement() -> Dictionary:
 	var out: Dictionary = {}
 	if SettlementMemory == null:
 		return out
-	var main_loop: MainLoop = Engine.get_main_loop()
-	if main_loop == null or not (main_loop is SceneTree):
-		return out
-	var tree: SceneTree = main_loop as SceneTree
 	var carriers_present: Dictionary = {}
-	for n in tree.get_nodes_in_group("pawns"):
+	for n in PawnSpawner.find_pawns():
 		if n == null or not is_instance_valid(n):
 			continue
 		if not n.has_method("get"):

@@ -418,14 +418,10 @@ func refresh_trade_memory_terrain() -> void:
 func apply_ruins_from_persistence() -> void:
 	if data == null:
 		return
-	var tree: SceneTree = get_tree()
-	if tree == null:
-		return
 	var region_has_pawn: Dictionary = {}
-	for node in tree.get_nodes_in_group("pawns"):
-		if not is_instance_valid(node) or not (node is Pawn):
+	for p in PawnSpawner.find_pawns():
+		if not is_instance_valid(p):
 			continue
-		var p: Pawn = node
 		if p.data == null:
 			continue
 		var tp: Vector2i = p.data.tile_pos
@@ -517,23 +513,17 @@ func nudge_occupants_off_tile_for_construction(x: int, y: int) -> void:
 	var here := Vector2i(x, y)
 	for _i in range(4):
 		var any: bool = false
-		for node in scene_tree.get_nodes_in_group("pawns"):
-			if node is Pawn:
-				var p: Pawn = node
-				if p.data != null and p.data.tile_pos == here:
-					p.evict_to_neighbor_of_tile(here)
-					any = true
+		for p in PawnSpawner.find_pawns():
+			if p.data != null and p.data.tile_pos == here:
+				p.evict_to_neighbor_of_tile(here)
+				any = true
 		if not any:
 			break
 
 
 func notify_pawns_nav_changed() -> void:
-	var scene_tree: SceneTree = get_tree()
-	if scene_tree == null:
-		return
-	for node in scene_tree.get_nodes_in_group("pawns"):
-		if node is Pawn:
-			(node as Pawn).on_world_nav_changed()
+	for p in PawnSpawner.find_pawns():
+		p.on_world_nav_changed()
 
 
 ## `JobManager` only: release path reservations on full job **cancel** (the job
@@ -551,17 +541,12 @@ func on_construction_path_job_ended(job: Job) -> void:
 ## nearest passable neighbor. Re-run a few times if multiple pawns share a tile.
 func _bump_occupants_off_tile(x: int, y: int) -> void:
 	var target: Vector2i = Vector2i(x, y)
-	var scene_tree: SceneTree = get_tree()
-	if scene_tree == null:
-		return
 	for _i in range(8):
 		var any: bool = false
-		for node in scene_tree.get_nodes_in_group("pawns"):
-			if node is Pawn:
-				var pawn: Pawn = node
-				if pawn.data != null and pawn.data.tile_pos == target:
-					pawn.nudge_if_standing_on_solid()
-					any = true
+		for pawn in PawnSpawner.find_pawns():
+			if pawn.data != null and pawn.data.tile_pos == target:
+				pawn.nudge_if_standing_on_solid()
+				any = true
 		if not any:
 			break
 

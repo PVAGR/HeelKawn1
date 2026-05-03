@@ -70,11 +70,7 @@ func _tick_macro_if_due(tick: int) -> void:
 
 
 func _pawn_count() -> int:
-	var tree: SceneTree = get_tree()
-	if tree == null:
-		return 1
-	var nodes: Array[Node] = tree.get_nodes_in_group("pawns")
-	return maxi(1, nodes.size())
+	return maxi(1, PawnSpawner.find_pawns().size())
 
 
 func _run_macro_step(tick: int) -> void:
@@ -125,10 +121,7 @@ func _run_macro_step(tick: int) -> void:
 
 
 func _refresh_world_mood_from_pawns() -> void:
-	var tree: SceneTree = get_tree()
-	if tree == null:
-		return
-	var nodes: Array[Node] = tree.get_nodes_in_group("pawns")
+	var nodes: Array[Pawn] = PawnSpawner.find_pawns()
 	if nodes.is_empty():
 		return
 	var sum: float = 0.0

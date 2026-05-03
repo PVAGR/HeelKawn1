@@ -206,10 +206,7 @@ func _nearest_ruler(pawn: Pawn) -> Pawn:
 		return null
 	var best: Pawn = null
 	var best_d2: float = INF
-	for n in pawn.get_tree().get_nodes_in_group("pawns"):
-		if not (n is Pawn):
-			continue
-		var p: Pawn = n as Pawn
+	for p in PawnSpawner.find_pawns():
 		if p.data == null:
 			continue
 		if not SettlementMemory.is_pawn_current_ruler(int(p.data.id)):

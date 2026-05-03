@@ -23,6 +23,12 @@ enum Type {
 	DRIED_MEAT,      # preserved: long shelf life, moderate hunger
 	SEEDS,           # planting: future food production
 	COOKED_BERRIES,  # cooked berries: better nutrition
+	PAPER,
+	LEATHER,
+	INK,
+	PEN,
+	BOOK,
+	WRITTEN_BOOK,
 }
 
 ## Display color for the carry-indicator above a pawn and for the stockpile icon.
@@ -42,6 +48,12 @@ const COLORS: Dictionary = {
 	Type.DRIED_MEAT:   Color8(160,  90,  50),  # tan dried meat
 	Type.SEEDS:        Color8(180, 160,  80),  # golden seed color
 	Type.COOKED_BERRIES:Color8(180,  40,  60), # deep cooked berry
+	Type.PAPER: Color8(255, 255, 240), # off-white paper
+	Type.LEATHER: Color8(139, 69, 19), # saddle brown
+	Type.INK: Color8(25, 25, 112), # midnight blue
+	Type.PEN: Color8(210, 180, 140), # tan feather shaft
+	Type.BOOK: Color8(101, 67, 33), # saddle brown cover
+	Type.WRITTEN_BOOK: Color8(101, 67, 33), # same as book
 }
 
 const NAMES: Dictionary = {
@@ -60,6 +72,12 @@ const NAMES: Dictionary = {
 	Type.DRIED_MEAT:   "Dried Meat",
 	Type.SEEDS:        "Seeds",
 	Type.COOKED_BERRIES:"Cooked Berries",
+	Type.PAPER: "Paper",
+	Type.LEATHER: "Leather",
+	Type.INK: "Ink",
+	Type.PEN: "Pen",
+	Type.BOOK: "Book",
+	Type.WRITTEN_BOOK: "Written Book",
 }
 
 ## Short single-letter label used in the stockpile's inventory readout.
@@ -79,6 +97,12 @@ const LABELS: Dictionary = {
 	Type.DRIED_MEAT:   "D",
 	Type.SEEDS:        "E",
 	Type.COOKED_BERRIES:"K",
+	Type.PAPER: "P",
+	Type.LEATHER: "L",
+	Type.INK: "I",
+	Type.PEN: "N",
+	Type.BOOK: "B",
+	Type.WRITTEN_BOOK: "W",
 }
 
 ## Hunger restored per unit when a pawn consumes this item. Non-food items
@@ -101,6 +125,12 @@ const HUNGER_RESTORE: Dictionary = {
 	Type.DRIED_MEAT:   95.0,   # preserved, slightly better than raw
 	Type.SEEDS:        0.0,    # not eaten (unless famine)
 	Type.COOKED_BERRIES:75.0,  # better than raw berries
+	Type.PAPER: 0,
+	Type.LEATHER: 0,
+	Type.INK: 0,
+	Type.PEN: 0,
+	Type.BOOK: 0,
+	Type.WRITTEN_BOOK: 0,
 }
 
 
@@ -139,6 +169,12 @@ const IS_TOOL: Dictionary = {
 	Type.TORCH:       true,
 	Type.FLINT_PICK:  true,
 	Type.WOODEN_SPEAR:true,
+	Type.PAPER: false,
+	Type.LEATHER: false,
+	Type.INK: false,
+	Type.PEN: false,
+	Type.BOOK: false,
+	Type.WRITTEN_BOOK: false,
 }
 
 ## Durability: max uses before the tool breaks. Each job completion consumes 1 use.
@@ -154,6 +190,12 @@ const TOOL_DURABILITY: Dictionary = {
 	Type.TORCH:       40,
 	Type.FLINT_PICK:  30,
 	Type.WOODEN_SPEAR:20,
+	Type.PAPER: 0,
+	Type.LEATHER: 0,
+	Type.INK: 0,
+	Type.PEN: 0,
+	Type.BOOK: 0,
+	Type.WRITTEN_BOOK: 0,
 }
 
 ## Job efficacy multiplier per tool type. Maps Job.Type -> multiplier.
@@ -196,6 +238,27 @@ const CRAFTING_RECIPES: Dictionary = {
 		{"type": Type.STICK, "qty": 2},
 		{"type": Type.WOOD,  "qty": 1},
 	],
+	Type.PAPER: [
+		{"type": Type.STICK, "qty": 3},  # plant fibers proxy
+	],
+	Type.LEATHER: [
+		{"type": Type.MEAT, "qty": 2},  # hides proxy
+	],
+	Type.INK: [
+		{"type": Type.BERRY, "qty": 1},
+		{"type": Type.STONE, "qty": 1},  # coal proxy
+	],
+	Type.PEN: [
+		{"type": Type.STICK, "qty": 1},  # feather proxy
+		{"type": Type.WOOD, "qty": 1},
+		{"type": Type.MEAT, "qty": 1},  # leather strip proxy
+	],
+	Type.BOOK: [
+		{"type": Type.PAPER, "qty": 5},
+		{"type": Type.LEATHER, "qty": 2},
+		{"type": Type.INK, "qty": 1},
+	],
+	# WRITTEN_BOOK crafted post-placement/write
 }
 
 

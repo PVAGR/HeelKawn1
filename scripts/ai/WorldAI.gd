@@ -1021,7 +1021,7 @@ func _update_authority_neurons(civ_neurons: Dictionary) -> void:
 	var pawn_count: int = 0
 	
 	# Get all pawns in the world
-	var pawns = get_tree().get_nodes_in_group("pawns")
+	var pawns: Array[Pawn] = PawnSpawner.find_pawns()
 	for pawn in pawns:
 		if not is_instance_valid(pawn) or pawn.data == null:
 			continue
@@ -1061,7 +1061,7 @@ func _update_knowledge_neurons(cult_neurons: Dictionary) -> void:
 	# Get knowledge distribution metrics
 	var carrier_count: int = KnowledgeSystem.get_total_carrier_count()
 	var total_knowledge: int = KnowledgeSystem.get_total_knowledge_count()
-	var pawns = get_tree().get_nodes_in_group("pawns")
+	var pawns: Array[Pawn] = PawnSpawner.find_pawns()
 	var pawn_count: int = pawns.size()
 	
 	if pawn_count > 0:

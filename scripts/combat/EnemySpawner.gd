@@ -40,8 +40,8 @@ func process_tick(world: World, tick: int) -> void:
 			if tick % 100 == 0:
 				print("[Combat] Battle cleared: timeout reached.")
 			return
-		var alive_pawns: int = get_tree().get_nodes_in_group("pawns").filter(
-			func(p: Node) -> bool: return is_instance_valid(p)
+		var alive_pawns: int = PawnSpawner.find_pawns().filter(
+			func(p: Pawn) -> bool: return is_instance_valid(p)
 		).size()
 		if alive_pawns < 2:
 			if _no_target_since_tick < 0:

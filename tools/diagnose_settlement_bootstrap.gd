@@ -91,7 +91,7 @@ func _print_snapshot(label: String, actual_tick: int) -> void:
 	if spm != null and spm.has_method("zones"):
 		zones_n = spm.call("zones").size()
 
-	var pawn_n: int = get_nodes_in_group("pawns").size()
+	var pawn_n: int = PawnSpawner.find_pawns().size()
 
 	print("[SETTLEMENT_BOOTSTRAP_DIAG] label=%s actual_tick=%d settlements=%d stockpile_zones=%d pawn_group=%d" % [label, actual_tick, settlements_n, zones_n, pawn_n])
 

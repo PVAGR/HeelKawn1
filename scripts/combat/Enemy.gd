@@ -164,7 +164,7 @@ func _select_target() -> void:
 	var closest_pawn: Pawn = null
 	var closest_dist_sq: float = INF
 	
-	for pawn in get_tree().get_nodes_in_group("pawns"):
+	for pawn in PawnSpawner.find_pawns():
 		if not is_instance_valid(pawn):
 			continue
 		var dist_sq: float = (pawn.position - position).length_squared()

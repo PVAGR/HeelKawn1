@@ -3164,11 +3164,9 @@ func _open_incarnation_picker() -> void:
 
 func _generate_incarnation_candidates() -> Array:
 	var candidates: Array = []
-	var pawns: Array = get_tree().get_nodes_in_group("pawns")
-	
+	var pawns: Array[Pawn] = _pawn_spawner.get_all_pawns() if _pawn_spawner != null else PawnSpawner.find_pawns()
+
 	for pawn in pawns:
-		if not (pawn is Pawn):
-			continue
 		if not is_instance_valid(pawn):
 			continue
 		if pawn.data == null:

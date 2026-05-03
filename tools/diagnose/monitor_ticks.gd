@@ -35,7 +35,7 @@ func _on_timeout() -> void:
 	var tree := get_tree()
 	if tree != null:
 		tickables = tree.get_nodes_in_group("tickable")
-		pawns = tree.get_nodes_in_group("pawns")
+		pawns = PawnSpawner.find_pawns()
 		for p in pawns:
 			if p == null or not is_instance_valid(p):
 				continue

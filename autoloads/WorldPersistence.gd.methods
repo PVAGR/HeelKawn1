@@ -1,0 +1,22 @@
+## Place a placeable item at tile
+func place_item(item: PlaceableItem, tile: Vector2i) -> void:
+	item.place_at(tile, 0, 0)  # placer_id = 0 for now
+	var tile_key: String = "%d_%d" % [tile.x, tile.y]
+	placed_items[tile_key] = item
+
+## Pickup item from tile by pawn
+func pickup_placeable(tile: Vector2i, pawn_id: int) -> PlaceableItem:
+	var tile_key: String = "%d_%d" % [tile.x, tile.y]
+	if placed_items.has(tile_key):
+		var item: PlaceableItem = placed_items[tile_key]
+		if item.pickup_by_pawn(pawn_id):
+			placed_items.erase(tile_key)
+			return item
+	return null
+
+func get_placeables_at_tile(tile: Vector2i) -> Array:
+	var results: Array = []
+	var tile_key: String = "%d_%d" % [tile.x, tile.y]
+	if placed_items.has(tile_key):
+		results.append(placed_items[tile_key])
+	return results

@@ -72,7 +72,7 @@ func _refresh_housing_pressure() -> void:
 	if scene_tree == null:
 		_housing_press = 0.0
 		return
-	var pawns: int = scene_tree.get_nodes_in_group("pawns").size()
+	var pawns: int = PawnSpawner.find_pawns().size()
 	if pawns <= 0:
 		_housing_press = 0.0
 		return

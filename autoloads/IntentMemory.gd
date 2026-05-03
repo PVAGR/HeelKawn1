@@ -47,11 +47,9 @@ func recompute(world: World) -> void:
 		return
 	var now: int = GameManager.tick_count
 	var pawns_alive: int = 0
-	var tree0: SceneTree = get_tree()
-	if tree0 != null:
-		for n in tree0.get_nodes_in_group("pawns"):
-			if n is Pawn and n.data != null:
-				pawns_alive += 1
+	for n in PawnSpawner.find_pawns():
+		if n.data != null:
+			pawns_alive += 1
 	var aidx: int = AgeMemory.get_current_age_index()
 	var age_bump: float = 0.0
 	if aidx > _age_index_last_seen:

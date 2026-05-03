@@ -37,6 +37,7 @@ func to_save_dict() -> Dictionary:
 		"family_memory": family_memory.duplicate(true),
 		"road_traces": road_traces.duplicate(true),
 		"ruins": ruins.duplicate(true),
+		"placed_items": placed_items.duplicate(true),
 	}
 
 
@@ -74,9 +75,17 @@ func from_save_dict(d: Dictionary) -> void:
 	if raw_roads is Dictionary:
 		road_traces = raw_roads.duplicate(true)
 	
-	var raw_ruins: Variant = d.get("ruins", {})
-	if raw_ruins is Dictionary:
-		ruins = raw_ruins.duplicate(true)
+		var raw_ruins: Variant = d.get("ruins", {})
+		if raw_ruins is Dictionary:
+			ruins = raw_ruins.duplicate(true)
+		
+		# Load placed items
+		var raw_placed: Variant = d.get("placed_items", {})
+		if raw_placed is Dictionary:
+			for tile_key in raw_placed.keys():
+				var item_dict: Dictionary = raw_placed[tile_key]
+				var item: PlaceableItem = PlaceableItem.from_dict(item_dict)
+				placed_items[tile_key] = item
 
 
 func _default_entry() -> Dictionary:

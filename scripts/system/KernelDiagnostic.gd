@@ -302,10 +302,7 @@ func _settlement_material_snapshot() -> Array[Dictionary]:
 	var tree: SceneTree = get_tree()
 	if tree == null:
 		return out
-	var pawns: Array[Pawn] = []
-	for n in tree.get_nodes_in_group("pawns"):
-		if n is Pawn and is_instance_valid(n):
-			pawns.append(n as Pawn)
+	var pawns: Array[Pawn] = PawnSpawner.find_pawns()
 	var jobs: Array[Job] = []
 	var open_v: Variant = JobManager.get("_open")
 	if open_v is Array:

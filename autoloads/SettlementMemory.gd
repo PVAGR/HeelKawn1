@@ -1214,13 +1214,11 @@ func _living_pawns() -> Array[Pawn]:
     # Throttle to every 30 ticks to avoid lag
     if GameManager.tick_count % 30 != 0:
         return []  # Return empty to skip this update cycle
+    var all_pawns: Array[Pawn] = PawnSpawner.find_pawns()
     var out: Array[Pawn] = []
-    var tree: SceneTree = get_tree()
-    if tree == null:
-        return out
-    for n in tree.get_nodes_in_group("pawns"):
-        if n is Pawn and is_instance_valid(n):
-            out.append(n as Pawn)
+    for n in all_pawns:
+        if is_instance_valid(n):
+            out.append(n)
     return out
 
 

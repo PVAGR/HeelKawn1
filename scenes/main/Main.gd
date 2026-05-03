@@ -146,6 +146,7 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _incarnation_picker: Control = null  # IncarnationPicker instance (created on demand)
 @onready var _map_mode_overlay: Node = $MapModeOverlay
 @onready var _creator_debug_menu: CreatorDebugMenu = $CreatorDebugMenu
+@onready var _settings_panel: CanvasLayer = $UI_Viewport/SettingsPanel
 @onready var _toolbar: BuildToolbar = $UI_Viewport/BuildToolbar
 @onready var _info_panel: PawnInfoPanel = $UI_Viewport/PawnInfoPanel
 @onready var _trait_shop: Control = null
@@ -641,7 +642,7 @@ func _configure_simulation_worker_mode() -> void:
 	if not _is_simulation_worker_mode():
 		return
 	_play_chrome_visible = false
-	var muted_nodes: Array[Node] = [_hud, _observer_hud, _focus_inspector, _toolbar, _info_panel, _map_mode_overlay, _creator_debug_menu]
+	var muted_nodes: Array[Node] = [_hud, _observer_hud, _focus_inspector, _toolbar, _info_panel, _map_mode_overlay, _creator_debug_menu, _settings_panel]
 	for node in muted_nodes:
 		if node != null and is_instance_valid(node):
 			node.process_mode = Node.PROCESS_MODE_DISABLED
@@ -2932,6 +2933,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	# When the F10 creator menu is open, number keys are used for report labels.
 	# Ignore global gameplay hotkeys so menu interaction never changes sim speed.
 	if _creator_debug_menu != null and _creator_debug_menu.visible:
+		return
+	# ESC toggles settings panel (takes priority over other hotkeys)
+	if event.keycode == Key.KEY_ESCAPE:
+		if _settings_panel != null:
+			_settings_panel.toggle()
 		return
 	match event.keycode:
 		Key.KEY_QUOTELEFT:

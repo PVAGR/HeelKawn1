@@ -97,6 +97,8 @@ func set_game_tick_trace_enabled(on: bool) -> void:
 
 
 func verbose_logs() -> bool:
+	if GameSettings != null:
+		return bool(GameSettings.get_value("verbose_logs"))
 	return VERBOSE_SIM_LOGS
 
 

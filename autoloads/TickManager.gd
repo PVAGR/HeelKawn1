@@ -24,6 +24,19 @@ const MAX_TICKS_PER_FRAME: int = 500
 ## Prioritizes simulation speed over render framerate; game may drop to 20fps at 100x but simulation stays smooth.
 const TARGET_FRAME_TIME_USEC: int = 50000  # 50ms budget
 
+
+## Read max ticks/frame from GameSettings if available, else fall back to constant.
+func _get_max_ticks_per_frame() -> int:
+	if GameSettings != null:
+		return int(GameSettings.get_value("max_ticks_per_frame"))
+	return MAX_TICKS_PER_FRAME
+
+## Read frame budget from GameSettings if available, else fall back to constant.
+func _get_frame_budget_usec() -> int:
+	if GameSettings != null:
+		return int(GameSettings.get_value("frame_budget_ms")) * 1000
+	return TARGET_FRAME_TIME_USEC
+
 ## How often (in ticks) to force-rebuild the tickable cache.
 ## A low value ensures dead nodes are pruned; a high value minimizes overhead.
 const TICKABLE_CACHE_REBUILD_INTERVAL: int = 300
@@ -47,7 +60,7 @@ var _current_speed_index: int = 0  # Start at 1x (index 0)
 
 var _ticks_behind: int = 0
 var _last_frame_ticks: int = 0
-var _adaptive_max_ticks_per_frame: int = MAX_TICKS_PER_FRAME
+var _adaptive_max_ticks_per_frame: int = 500  # initialized from _get_max_ticks_per_frame() in _ready
 var _low_fps_frame_streak: int = 0
 ## Debug-only: microseconds spent in the tick batch last frame (0 when not a debug build).
 var debug_last_tick_batch_usec: int = 0
@@ -66,6 +79,7 @@ var batch_stats: Dictionary = {
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_adaptive_max_ticks_per_frame = _get_max_ticks_per_frame()
 
 
 ## Mark the tickable cache as dirty. Call this when a node joins/leaves the "tickable" group.
@@ -90,7 +104,7 @@ func _process(delta: float) -> void:
 			_low_fps_frame_streak = 0
 	else:
 		_low_fps_frame_streak = 0
-		_adaptive_max_ticks_per_frame = MAX_TICKS_PER_FRAME
+		_adaptive_max_ticks_per_frame = _get_max_ticks_per_frame()
 
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
@@ -115,14 +129,14 @@ func _process(delta: float) -> void:
 			# Check time every 4 ticks to reduce overhead
 			if ticks_this_frame % 4 == 0:
 				var elapsed: int = Time.get_ticks_usec() - start_time
-				if elapsed > TARGET_FRAME_TIME_USEC:
+				if elapsed > _get_frame_budget_usec():
 					if OS.is_debug_build():
 						push_warning("[TickManager] Frame budget exceeded: Processed %d ticks in %.1fms, pausing." % [ticks_this_frame, elapsed / 1000.0])
 					break
 
 	# SAFETY: If backlog grows dangerously large (>10x cap),
 	# log a warning but DO NOT drop time. The sim will catch up over frames.
-	if _accumulated_time > TICK_STEP * MAX_TICKS_PER_FRAME * 10:
+	if _accumulated_time > TICK_STEP * _get_max_ticks_per_frame() * 10:
 		if OS.is_debug_build():
 			push_warning("[TickManager] Massive backlog detected (%.1fs). System is catching up." % (_accumulated_time / TICK_STEP))
 

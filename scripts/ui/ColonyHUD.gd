@@ -30,6 +30,28 @@ const PANEL_PAD_X: int = 4
 const PANEL_PAD_Y: int = 3
 ## Readability mode: bigger, simpler HUD for at-a-glance play.
 const SIMPLE_READABLE_HUD: bool = true
+
+
+## Helpers that read from GameSettings when available, falling back to constants.
+func _is_simple_hud() -> bool:
+	if GameSettings != null:
+		return GameSettings.is_simple_hud()
+	return _is_simple_hud()
+
+func _get_font_size() -> int:
+	if GameSettings != null:
+		return int(GameSettings.get_value("hud_font_size"))
+	return FONT_SIZE_BODY
+
+func _is_show_refresh_diag() -> bool:
+	if GameSettings != null:
+		return bool(GameSettings.get_value("show_refresh_diag"))
+	return SHOW_REFRESH_DIAG
+
+func _is_show_hotkey_hints() -> bool:
+	if GameSettings != null:
+		return bool(GameSettings.get_value("show_hotkey_hints"))
+	return true
 ## Show a one-line first-session orientation in simple HUD for this many in-game days, then hide (see docs/HEELKAWN_STATE.md).
 const FIRST_PLAY_HINT_VISUAL_DAYS: int = 8
 
@@ -43,6 +65,8 @@ var _history_text: RichTextLabel = null
 
 var _world = null
 var _spawner = null
+## Cached Main node reference — avoids repeated get_node_or_null tree traversals every HUD refresh.
+var _main: Main = null
 var _animal_spawner: AnimalSpawner = null
 ## Empty string when no designation mode is active. Otherwise "Bed" / "Wall" / etc.
 var _designation_label: String = ""
@@ -62,6 +86,9 @@ var _last_refresh_stride: int = REFRESH_EVERY_N_TICKS
 var _last_coarse_gate: int = 10
 var _last_refresh_tick: int = 0
 var _last_render_signature: String = ""
+## Narrative rail cache — recomputes only when WorldMemory event count changes.
+var _narrative_cache: String = ""
+var _narrative_cache_event_count: int = -1
 
 
 func _ready() -> void:
@@ -82,6 +109,15 @@ func _ready() -> void:
 	_ensure_history_panel()
 	_hotkeys.text = HOTKEY_HINTS
 	_refresh()
+
+
+## Cached Main node lookup — avoids repeated get_node_or_null tree traversals.
+## Re-fetches if the cached reference becomes invalid (e.g. scene reload).
+func _get_main() -> Main:
+	if _main != null and is_instance_valid(_main):
+		return _main
+	_main = get_tree().get_root().get_node_or_null("Main") as Main
+	return _main
 
 
 ## Called by Main once it has spawned the world + spawner.
@@ -133,7 +169,7 @@ func _visible_pawns_for_hud() -> Array[Pawn]:
 	var out: Array[Pawn] = []
 	if _spawner == null:
 		return out
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Main = _get_main()
 	if main_node != null:
 		return main_node.get_visible_pawns()
 	for p in _spawner.pawns:
@@ -189,8 +225,8 @@ func _apply_panel_style() -> void:
 	style.content_margin_top = PANEL_PAD_Y
 	style.content_margin_bottom = PANEL_PAD_Y
 	_panel.add_theme_stylebox_override("panel", style)
-	_label.add_theme_font_size_override("normal_font_size", FONT_SIZE_BODY)
-	_label.add_theme_font_size_override("bold_font_size", FONT_SIZE_BODY)
+	_label.add_theme_font_size_override("normal_font_size", _get_font_size())
+	_label.add_theme_font_size_override("bold_font_size", _get_font_size())
 	_hotkeys.add_theme_font_size_override("font_size", FONT_SIZE_HOTKEYS)
 
 
@@ -200,11 +236,17 @@ func _refresh() -> void:
 	if _label == null:
 		return
 	_prune_freed_pawns_in_spawner()
+	# Sync hotkey hints visibility from settings
+	if _hotkeys != null:
+		_hotkeys.visible = _is_show_hotkey_hints()
+	# Sync font size from settings
+	_label.add_theme_font_size_override("normal_font_size", _get_font_size())
+	_label.add_theme_font_size_override("bold_font_size", _get_font_size())
 	var lines: Array[String] = []
 	if _designation_label != "":
 		lines.append("[bgcolor=#583a14][color=#ffe082]  BUILD MODE: %s   (click or click-drag to place · right-click / Esc to cancel)  [/color][/bgcolor]" %
 			_designation_label)
-	if SIMPLE_READABLE_HUD:
+	if _is_simple_hud():
 		var first_hint: String = _first_play_hint_line()
 		if not first_hint.is_empty():
 			lines.append(first_hint)
@@ -336,7 +378,7 @@ func _time_line() -> String:
 	var year_n: int = SimTime.sim_year_index(tick)
 	var day_in_year: int = SimTime.visual_day_within_sim_year(tick)
 	var days_per_y: int = SimTime.visual_days_per_sim_year()
-	if SIMPLE_READABLE_HUD:
+	if _is_simple_hud():
 		var base: String = "[b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]" % [
 			year_n, day_in_year, days_per_y, hour, phase_name, speed_str,
 		]
@@ -442,7 +484,7 @@ func _stockpile_simple_line() -> String:
 ## In-universe identity strip driven by backend settlement/memory systems.
 ## Keeps labels short and scans quickly during play.
 func _settlement_identity_line() -> String:
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Main = _get_main()
 	if main_node == null:
 		return "[color=#c9b37c]Identity:[/color] world link offline"
 	var digest: Dictionary = main_node.get_camera_settlement_revival_digest()
@@ -475,7 +517,7 @@ func _settlement_identity_line() -> String:
 	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(profile_rk)
 	var war_state: String = str(war.get("state", "peace")).replace("_", " ")
 	var gov_txt: String = str(gov.get("type", "anarchy")).replace("_", " ")
-	if SIMPLE_READABLE_HUD:
+	if _is_simple_hud():
 		return "[color=#c9b37c]Identity:[/color] [b]%s[/b] · %s · %s · war %s · gov %s" % [
 			state_txt.capitalize(), culture_txt.capitalize(), meaning, war_state, gov_txt,
 		]
@@ -520,7 +562,7 @@ func _prune_freed_pawns_in_spawner() -> void:
 
 
 func _visible_settlement_count_for_hud() -> int:
-	var m: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var m: Main = _get_main()
 	if m != null:
 		return m.get_visible_settlement_count()
 	return SettlementMemory.settlements.size()
@@ -679,7 +721,7 @@ func _player_body_needs_line_simple() -> String:
 
 
 func _is_player_incarnated_for_hud() -> bool:
-	var main_node: Node = get_tree().get_root().get_node_or_null("Main")
+	var main_node: Node = _get_main()
 	if main_node == null or not main_node.has_method("is_player_incarnated"):
 		return false
 	return bool(main_node.call("is_player_incarnated"))
@@ -769,7 +811,7 @@ func _wildlife_line_simple() -> String:
 
 
 func _player_status_line() -> String:
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Main = _get_main()
 	if main_node == null:
 		return "[color=#cccccc]PLAYER PAWN:[/color] --  |  QUEUE: [b]0[/b]  |  STATE: [b]offline[/b]"
 	var pawn_id: int = main_node.get_player_pawn_id()
@@ -794,7 +836,7 @@ func _skill_line() -> String:
 
 
 func _export_status_line() -> String:
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Main = _get_main()
 	var milestone: int = SimTime.KERNEL_DIAGNOSTIC_TICK
 	if main_node == null:
 		return "📜 Export / kernel checkpoint: tick %d | Status: Waiting" % milestone
@@ -837,7 +879,7 @@ func _session_diag_line() -> String:
 			settlements_n,
 		]
 	)
-	if not SHOW_REFRESH_DIAG:
+	if not _is_show_refresh_diag():
 		return base
 	var lag: int = max(0, tick_n - _last_refresh_tick)
 	return "%s | hud iv=%d coarse=%d lag=%dt" % [base, _last_refresh_stride, _last_coarse_gate, lag]
@@ -866,14 +908,14 @@ func _coarse_gate_for_speed(speed: float) -> int:
 
 
 func _kill_line() -> String:
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Main = _get_main()
 	if main_node == null:
 		return "💀 Kills: 0"
 	return "💀 Kills: %d" % int(main_node.get_kill_count())
 
 
 func _politics_line() -> String:
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Main = _get_main()
 	if main_node == null:
 		return "🏛 Settlement State: Anarchy | Ruler: None | Player Status: None"
 	var gp: Dictionary = main_node.get_player_governance_profile()
@@ -894,7 +936,7 @@ func _politics_line() -> String:
 
 
 func _war_status_line() -> String:
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Main = _get_main()
 	if main_node == null:
 		return "⚔ WAR STATUS: Peace | RANK: Grunt"
 	var wp: Dictionary = main_node.get_player_war_profile()
@@ -1036,7 +1078,7 @@ func _wildlife_line() -> String:
 func _wildlife_probe_tile() -> Vector2i:
 	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
 		return _player_pawn.data.tile_pos
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Main = _get_main()
 	if main_node != null:
 		var camera: Camera2D = main_node.get_node_or_null("Camera2D") as Camera2D
 		if camera != null and _world != null:
@@ -1087,7 +1129,7 @@ func get_wildlife_trend_diagnostic() -> Dictionary:
 func _player_intent_hud_line() -> String:
 	var u: int = PlayerIntentQueue.unprocessed_count()
 	var pin: String = ""
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Main = _get_main()
 	if main_node != null and main_node.has_method("get_chronicler_pin_zone_id"):
 		pin = str(main_node.call("get_chronicler_pin_zone_id"))
 	if u <= 0 and pin.is_empty():
@@ -1103,9 +1145,15 @@ func _player_intent_hud_line() -> String:
 ## Compact high-signal narrative rail (DF/CK/RimWorld-style summary strip).
 ## Purposefully filters out spammy low-signal events (e.g. job_completed) and
 ## reports only identity/meaning-relevant shifts for in-universe readability.
+## Cached: only recomputes when the WorldMemory event count changes, avoiding
+## expensive event log iteration every HUD refresh.
 func _narrative_rail_line() -> String:
+	var current_count: int = WorldMemory.event_count()
+	if current_count == _narrative_cache_event_count and _narrative_cache != "":
+		return _narrative_cache
+	_narrative_cache_event_count = current_count
 	var ev: Array = []
-	var main_node: Main = get_tree().get_root().get_node_or_null("Main") as Main
+	var main_node: Main = _get_main()
 	if main_node != null:
 		var digest: Dictionary = main_node.get_camera_settlement_revival_digest()
 		var profile_rk: int = int(digest.get("profile_region_key", -1))
@@ -1114,7 +1162,8 @@ func _narrative_rail_line() -> String:
 	if ev.is_empty():
 		ev = WorldMemory.get_recent_events(64)
 	if ev.is_empty():
-		return "📜 Chronicle: world is quiet"
+		_narrative_cache = "📜 Chronicle: world is quiet"
+		return _narrative_cache
 	var entries: PackedStringArray = PackedStringArray()
 	for i in range(ev.size() - 1, -1, -1):
 		if entries.size() >= 5:
@@ -1130,8 +1179,10 @@ func _narrative_rail_line() -> String:
 			continue
 		entries.append("[t%d] %s" % [tick, line])
 	if entries.is_empty():
-		return "📜 Chronicle: no major shifts"
-	return "📜 Chronicle: %s" % "  •  ".join(entries)
+		_narrative_cache = "📜 Chronicle: no major shifts"
+		return _narrative_cache
+	_narrative_cache = "📜 Chronicle: %s" % "  •  ".join(entries)
+	return _narrative_cache
 
 
 func _narrative_line_for_event(typ: String, e: Dictionary) -> String:

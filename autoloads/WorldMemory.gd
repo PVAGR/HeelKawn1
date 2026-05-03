@@ -1430,3 +1430,29 @@ func _get_recent_events(max_items: int = 10) -> Array[Dictionary]:
         if evt is Dictionary:
             out.append(evt.duplicate(true))
     return out
+
+func record_settlement_state_transition(center_id: int, old_state: String, new_state: String, score: int, scar: int, peace_ticks: int) -> void:
+    if not is_instance_valid(GameManager):
+        return
+    var e: Dictionary = {
+        "s": SCHEMA,
+        "k": -1,  # reserved for future Kind.SETTLEMENT_STATE_CHANGE
+        "type": "settlement_state_change",
+        "t": GameManager.tick_count,
+        "center_id": center_id,
+        "old_state": old_state,
+        "new_state": new_state,
+        "revival_score": score,
+        "scar_max": scar,
+        "peace_ticks": peace_ticks,
+    }
+    _append(e)
+
+func _append(e: Dictionary) -> void:
+    if not (e is Dictionary):
+        return
+    _events.append(e)
+    _dirty = true
+    if _events.size() > MAX_EVENTS:
+        _events = _events.slice(-MAX_EVENTS, _events.size())
+

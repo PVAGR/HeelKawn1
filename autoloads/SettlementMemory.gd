@@ -535,6 +535,14 @@ func _apply_settlement_state_truth_hysteresis(center_id: int, raw_state: String,
             # Trigger audio cue on committed state change
             if old_committed != raw_state:
                 _trigger_meaning_audio_cue(center_id, old_committed, raw_state)
+                # Log deterministic state transition to WorldMemory
+                if WorldMemory != null and WorldMemory.has_method("record_settlement_state_transition"):
+                    WorldMemory.record_settlement_state_transition(
+                        center_id, old_committed, raw_state,
+                        int(st.get("revival_score", 0)),
+                        int(st.get("scar_max", 0)),
+                        int(st.get("peace_threshold_ticks", 0))
+                    )
         else:
             reason = "pending_accumulate"
     else:

@@ -356,7 +356,6 @@ static func _draw_humanoid_hair(
 	var radius = body_radius if body_radius > 0.0 else _get_body_radius(data)
 	var head_pos = pos + Vector2(0, -radius * 1.8) if pose_type != 3 else pos + Vector2(-radius * 1.2, radius * 0.2)
 	var color = data.hair_color
-	var radius = _get_body_radius(data)
 	
 	match data.hair_style:
 		HairStyle.SHORT:

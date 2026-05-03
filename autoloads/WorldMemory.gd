@@ -40,6 +40,29 @@ var _next_event_id: int = 1
 var _constitution_text: String = ""
 var _constitution_loaded: bool = false
 
+## Persistence rules configuration
+const PERSISTENCE_RULES: Dictionary = {
+	## Event types to persist across saves (core world history)
+	"core_events": ["pawn_death", "birth", "settlement_founded", "settlement_destroyed", "leadership_change"],
+	## Event types with regional retention (pruned by region)
+	"regional_events": ["pawn_death", "animal_death", "building_constructed", "building_destroyed"],
+	## Event types with time-based retention (older events pruned)
+	"time_based_events": ["social_meeting", "mood_event", "foraging"],
+	## Maximum events to retain per type (0 = unlimited)
+	"max_per_type": {
+		"pawn_death": 50000,
+		"birth": 20000,
+		"leadership_change": 5000,
+		"social_meeting": 10000,
+	},
+	## Time-based retention: ticks before pruning (0 = never)
+	"retention_ticks": {
+		"mood_event": 10000,
+		"foraging": 5000,
+		"social_meeting": 20000,
+	},
+}
+
 
 func _ready() -> void:
     add_to_group("tickable")

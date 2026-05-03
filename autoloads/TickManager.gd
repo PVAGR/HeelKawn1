@@ -45,6 +45,15 @@ var debug_last_tick_batch_usec: int = 0
 ## Once per backlog spike: warn when accumulated time exceeds 2× target interval until recovered.
 var _backlog_degrade_warned: bool = false
 
+## Batch processing statistics (for performance monitoring)
+var batch_stats: Dictionary = {
+	"total_ticks": 0,
+	"total_nodes_called": 0,
+	"total_refcounted_called": 0,
+	"avg_ticks_per_frame": 0.0,
+	"last_frame_time_usec": 0,
+}
+
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -116,9 +125,17 @@ func _dispatch_tick(tick: int) -> void:
 	##    - At 64x+: pawns >100 tiles update at 1/8 rate
 	## 4. Settlement AI recalculations → run on 100-tick cadence, not every tick
 	
+	var node_count: int = 0
+	var refcounted_count: int = 0
+	
 	tick_processed.emit(tick)
-	_call_tick_on_tickables(tick)
-	_call_tick_on_refcounted(tick)
+	node_count = _call_tick_on_tickables(tick)
+	refcounted_count = _call_tick_on_refcounted(tick)
+	
+	# Update batch stats
+	batch_stats["total_ticks"] = int(batch_stats.get("total_ticks", 0)) + 1
+	batch_stats["total_nodes_called"] = int(batch_stats.get("total_nodes_called", 0)) + node_count
+	batch_stats["total_refcounted_called"] = int(batch_stats.get("total_refcounted_called", 0)) + refcounted_count
 	
 	# Keep GameManager in sync for systems that still read tick_count
 	if GameManager != null:
@@ -163,10 +180,10 @@ func _should_skip_pawn_tick(pawn: Node, current_speed: float) -> bool:
 	
 	return false
 
-func _call_tick_on_tickables(tick: int) -> void:
+func _call_tick_on_tickables(tick: int) -> int:
 	var tree: SceneTree = get_tree()
 	if tree == null:
-		return
+		return 0
 	# Collect valid tickable nodes
 	var tickable_nodes: Array = []
 	for node in tree.get_nodes_in_group("tickable"):
@@ -176,11 +193,15 @@ func _call_tick_on_tickables(tick: int) -> void:
 	tickable_nodes.sort_custom(func(a, b): return str(a.get_path()) < str(b.get_path()))
 	for node in tickable_nodes:
 		node._on_world_tick(tick)
+	return tickable_nodes.size()
 
-func _call_tick_on_refcounted(tick: int) -> void:
+func _call_tick_on_refcounted(tick: int) -> int:
+	var count: int = 0
 	for obj in _refcounted_tickables:
 		if is_instance_valid(obj) and obj.has_method("_on_world_tick"):
 			obj._on_world_tick(tick)
+			count += 1
+	return count
 
 ## Register a RefCounted object for tick notifications (e.g., SettlementAI).
 func register_refcounted_tickable(obj: RefCounted) -> void:

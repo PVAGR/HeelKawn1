@@ -611,6 +611,41 @@ func get_mood_stability() -> float:
 	return clamp(stability, 0.0, 1.0)
 
 
+## Phase 1.1: Mood consistency enforcement
+## Ensures mood doesn't swing too wildly between ticks based on personality
+## Returns clamped mood value that respects personality-based consistency rules
+func enforce_mood_consistency(new_mood: float, old_mood: float, ticks_delta: int) -> float:
+	if ticks_delta <= 0:
+		return new_mood
+	
+	var stability: float = get_mood_stability()
+	var max_swing: float = 15.0 * (1.0 - stability) * float(ticks_delta)
+	
+	# High stability = smaller swings allowed
+	if ticks_delta < 10:
+		max_swing *= 0.5  # Dampen for frequent updates
+	
+	var swing: float = new_mood - old_mood
+	if abs(swing) > max_swing:
+		# Clamp the swing
+		return old_mood + sign(swing) * max_swing
+	
+	return new_mood
+
+
+## Get mood category for AI behavior (calm, neutral, agitated)
+func get_mood_category() -> int:
+	## 0 = agitated (<30), 1 = low (30-60), 2 = neutral (60-80), 3 = happy (>80)
+	if mood < 30.0:
+		return 0
+	elif mood < 60.0:
+		return 1
+	elif mood < 80.0:
+		return 2
+	else:
+		return 3
+
+
 ## Phase 1.2: Record an episodic memory (significant event)
 func record_episodic_memory(event_type: String, location: Vector2i, participants: Array, emotional_impact: float, details: Dictionary = {}) -> void:
 	var event_id: String = "%s_%d_%d" % [event_type, GameManager.tick_count if GameManager != null else 0, id]

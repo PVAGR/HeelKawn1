@@ -14,10 +14,10 @@ signal tick_processed(tick_number: int)
 const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base; stable for HeelKawn)
 
 ## SAFETY: Maximum ticks processed in one render frame (bounded burst).
-## Hard cap prevents spiral-of-death at high speeds (12x+, 100x).
+## Hard cap prevents infinite loops while allowing deterministic catch-up.
 ## At 100x speed: delta ≈ 16.7ms * 100 = 1667ms of sim → ~1667 ticks pending.
-## With MAX=10, we process 10/frame, degrade gracefully, recover over ~167 frames.
-const MAX_TICKS_PER_FRAME: int = 10
+## With MAX=64, we process 64/frame; backlog drains over ~26 frames naturally.
+const MAX_TICKS_PER_FRAME: int = 64
 
 var current_tick: int = 0
 var _accumulated_time: float = 0.0
@@ -50,8 +50,7 @@ func _process(delta: float) -> void:
 		_last_frame_ticks = 0
 		return
 
-	## BOUNDED TICK ACCUMULATION
-	## Accumulate scaled time and process ticks with hard cap.
+	# Accumulate scaled time
 	_accumulated_time += delta * _speed_multiplier
 
 	var prof_start_usec: int = 0
@@ -59,16 +58,20 @@ func _process(delta: float) -> void:
 		prof_start_usec = Time.get_ticks_usec()
 
 	var ticks_this_frame: int = 0
-	## Process all pending ticks up to MAX_TICKS_PER_FRAME (hard cap).
+
+	# Process ticks up to safety cap
 	while _accumulated_time >= TICK_STEP and ticks_this_frame < MAX_TICKS_PER_FRAME:
 		_accumulated_time -= TICK_STEP
 		current_tick += 1
 		ticks_this_frame += 1
 		_dispatch_tick(current_tick)
 
-	## Graceful degradation: if backlog grows beyond recovery window, clamp to prevent lag spiral.
-	if _accumulated_time > TICK_STEP * MAX_TICKS_PER_FRAME * 2:
-		_accumulated_time = TICK_STEP * MAX_TICKS_PER_FRAME
+	# SAFETY: If backlog grows dangerously large (>5 seconds worth),
+	# log a warning but DO NOT drop time. The sim will catch up over frames.
+	if _accumulated_time > TICK_STEP * MAX_TICKS_PER_FRAME * 4:
+		if OS.is_debug_build():
+			push_warning("[TickManager] Large backlog detected (%.1fs). Simulation is catching up deterministically." % (_accumulated_time / TICK_STEP))
+		# DO NOT clamp or drop accumulated_time. Let it drain naturally.
 
 	if OS.is_debug_build():
 		debug_last_tick_batch_usec = Time.get_ticks_usec() - prof_start_usec

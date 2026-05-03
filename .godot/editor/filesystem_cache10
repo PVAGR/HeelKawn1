@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1777780377
+::res://::1777783949
 AI_README.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 BIOME_DRIVEN_ARCHITECTURE.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 blackbox_mcp_settings.json::JSON::-1::1777694600::0::1::::<><><>0<>0<><>::
@@ -158,7 +158,7 @@ SpatialManager.gd::GDScript::24198543567273865::1777694600::0::1::::<>Node<><>0<
 SquadCoordinator.gd::GDScript::6749140353094337295::1777694600::0::1::::<>Node<><>0<>0<><>::
 StockpileManager.gd::GDScript::215983093589793156::1777694600::0::1::::<>Node<><>0<>0<><>::
 TechnologySystem.gd::GDScript::1479520665738386352::1777694600::0::1::::<>Node<><>0<>0<><>::
-TickManager.gd::GDScript::5792076579507672326::1777780365::0::1::::<>Node<><>0<>0<><>::
+TickManager.gd::GDScript::5792076579507672326::1777782671::0::1::::<>Node<><>0<>0<><>::
 ToolManager.gd::GDScript::292220667211019745::1777694600::0::1::::<>Node<><>0<>0<><>::
 TradeMemory.gd::GDScript::5248539327593372606::1777694600::0::1::::<>Node<><>0<>0<><>::
 TradePlanner.gd::GDScript::8396858183117698797::1777694600::0::1::::<>Node<><>0<>0<><>::

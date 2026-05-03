@@ -14,10 +14,10 @@ signal tick_processed(tick_number: int)
 const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base; stable for HeelKawn)
 
 ## SAFETY: Maximum ticks processed in one render frame (bounded burst).
-## Hard cap prevents infinite loops while allowing deterministic catch-up.
+## High value (500) prioritizes simulation speed at high multipliers.
 ## At 100x speed: delta ≈ 16.7ms * 100 = 1667ms of sim → ~1667 ticks pending.
-## With MAX=64, we process 64/frame; backlog drains over ~26 frames naturally.
-const MAX_TICKS_PER_FRAME: int = 64
+## With MAX=500, we can catch up faster and sustain smooth 100x simulation.
+const MAX_TICKS_PER_FRAME: int = 500
 
 ## Adaptive Throttle: Target frame time budget (microseconds).
 ## 50ms = 50000 usec budget allows substantial CPU use for simulation.
@@ -61,21 +61,30 @@ func _process(delta: float) -> void:
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
 
-	# Process ticks up to safety cap; prioritize simulation speed
-	while _accumulated_time >= TICK_STEP and ticks_this_frame < MAX_TICKS_PER_FRAME:
-		_accumulated_time -= TICK_STEP
-		current_tick += 1
-		ticks_this_frame += 1
-		_dispatch_tick(current_tick)
+	# HIGH-SPEED OPTIMIZATION: At >20x speed, bypass frame budget entirely.
+	# Prioritize simulation throughput; render framerate will drop but ticks flow smoothly.
+	if _speed_multiplier > 20.0:
+		# Unlimited burst: process all pending ticks up to hard cap
+		while _accumulated_time >= TICK_STEP and ticks_this_frame < MAX_TICKS_PER_FRAME:
+			_accumulated_time -= TICK_STEP
+			current_tick += 1
+			ticks_this_frame += 1
+			_dispatch_tick(current_tick)
+	else:
+		# Normal speeds: respect frame budget to maintain UI responsiveness
+		while _accumulated_time >= TICK_STEP and ticks_this_frame < MAX_TICKS_PER_FRAME:
+			_accumulated_time -= TICK_STEP
+			current_tick += 1
+			ticks_this_frame += 1
+			_dispatch_tick(current_tick)
 
-		# Adaptive Throttle: Check time every 4 ticks to reduce overhead.
-		# Break if processing exceeds 50ms budget, allowing render frame to proceed.
-		if ticks_this_frame % 4 == 0:
-			var elapsed: int = Time.get_ticks_usec() - start_time
-			if elapsed > TARGET_FRAME_TIME_USEC:
-				if OS.is_debug_build():
-					push_warning("[TickManager] Adaptive throttle: Processed %d ticks in %.1fms, pausing." % [ticks_this_frame, elapsed / 1000.0])
-				break
+			# Check time every 4 ticks to reduce overhead
+			if ticks_this_frame % 4 == 0:
+				var elapsed: int = Time.get_ticks_usec() - start_time
+				if elapsed > TARGET_FRAME_TIME_USEC:
+					if OS.is_debug_build():
+						push_warning("[TickManager] Frame budget exceeded: Processed %d ticks in %.1fms, pausing." % [ticks_this_frame, elapsed / 1000.0])
+					break
 
 	# SAFETY: If backlog grows dangerously large (>10x cap),
 	# log a warning but DO NOT drop time. The sim will catch up over frames.

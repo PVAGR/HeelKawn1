@@ -150,6 +150,13 @@ func tick(tick: int, pawn: Pawn) -> Dictionary:
 
 	# --- Full AI tick (staggered across pawns) ---
 
+	# HIGH-SPEED THROTTLE: At 100x speed, only run full decisions every 4 ticks per pawn
+	var game_speed: float = GameManager.game_speed if GameManager != null else 1.0
+	if game_speed > 20.0:
+		var throttle_interval: int = 4
+		if not (posmod(tick + pid, throttle_interval) == 0):
+			return _lightweight_tick(tick, pawn)
+
 	# 1. Rebuild decision context (what does the pawn know right now?)
 	_rebuild_decision_context(pawn, tick)
 

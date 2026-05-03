@@ -788,8 +788,3 @@ func lightweight_tick(tick: int, pawn: Pawn) -> Dictionary:
 			result["action"] = "face_threat"
 			result["confidence"] = 0.7
 	return result
-
-
-func _find_nearby_enemies(pawn: Pawn) -> Array:
-	## Placeholder: returns empty array (combat scan disabled for high-speed simulation)
-	return []

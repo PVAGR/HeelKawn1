@@ -1,30 +1,19 @@
-extends Item
+extends PlaceableItem
 
 class_name BookItem
-
-extends Item
 
 ## Book item with custom written content.
 ## Placeable in world, tradable, readable.
 
 var content: String = ""
 
-var is_placeable: bool = true
-
-var world_tile: Vector2i = Vector2i.ZERO
-
-var rotation_degrees: int = 0  # 0,90,180,270
-
-var placed_by_pawn_id: int = 0
-
-var placed_tick: int = 0
-
 func _init(content_text: String = "") -> void:
 	content = content_text
-	type = Item.Type.BOOK  # assume defined in Item.Type
+	item_type = Item.Type.BOOK
 
 static func from_dict(d: Dictionary) -> BookItem:
-	var b = BookItem.new(d.get("content", ""))
+	var b: BookItem = BookItem.new(d.get("content", ""))
+	b.item_type = Item.Type.BOOK
 	b.world_tile = d.get("world_tile", Vector2i.ZERO)
 	b.rotation_degrees = d.get("rotation", 0)
 	b.placed_by_pawn_id = d.get("placed_by", 0)

@@ -21,6 +21,9 @@ var road_traces: Dictionary = {}
 ## Ruins: tile_position -> ruin data
 var ruins: Dictionary = {}
 
+## Placed items: tile_key -> PlaceableItem dict
+var placed_items: Dictionary = {}
+
 
 func clear() -> void:
 	persistent_regions.clear()

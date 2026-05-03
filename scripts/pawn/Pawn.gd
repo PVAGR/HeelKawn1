@@ -762,7 +762,12 @@ func _path_for_pawn(to: Vector2i) -> Array[Vector2i]:
 
 
 func _request_redraw() -> void:
-	# Throttle redraws to every 3 ticks to reduce rendering overhead
+	queue_redraw()
+
+
+## Throttled variant: only redraws every 3 ticks. Use for periodic/position
+## updates where a 2-tick visual delay is acceptable.
+func _request_redraw_throttled() -> void:
 	if GameManager.tick_count % 3 == 0:
 		queue_redraw()
 
@@ -830,7 +835,7 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 			_teach_cooldown_ticks = int(wc_bt.ticks_per_day) * 3
 	_clear_cohort_state()
 	add_to_group("pawns")
-	add_to_group("tickable")
+	# Already added to "tickable" in _ready(); just mark cache dirty
 	if TickManager != null:
 		TickManager.mark_tickable_cache_dirty()
 	if not _initial_knowledge_granted:
@@ -1534,7 +1539,7 @@ func _process(delta: float) -> void:
 	if not data.injuries.is_empty():
 		step *= (1.0 - BodyRiskManager.get_mobility_penalty(data))
 	var to_target: Vector2 = _target_world_pos - position
-	
+
 	var old_tile_pos = data.tile_pos # ARCHITECT T006 - Store old position for chunk check
 	if to_target.length() <= step:
 		position = _target_world_pos
@@ -1551,6 +1556,9 @@ func _process(delta: float) -> void:
 	# ARCHITECT T006: Update SpatialManager if pawn moved to a new chunk
 	if SpatialManager != null and data != null and old_tile_pos != data.tile_pos:
 		SpatialManager.update_pawn_position(int(data.id), data.tile_pos)
+
+	# Redraw during movement so the bobbing animation and position are visible
+	queue_redraw()
 
 	# DISABLED cohort bias calculations for performance
 	# var cohort_bias: Vector2 = _cohort_cohesion_bias(step)
@@ -1760,9 +1768,8 @@ func _fast_forward_tick_stride() -> int:
 		return 4
 	if gs >= 4.0:
 		return 2
-	# At baseline play speed, stagger heavy think logic across a slightly
-	# wider window to reduce startup/frame hitching under dense populations.
-	return 3
+	# At baseline play speed, run full AI every tick for responsive behavior.
+	return 1
 
 
 func _job_claim_interval_for_speed() -> int:
@@ -5357,6 +5364,9 @@ func apply_trait(trait_res: Resource) -> bool:
 
 	# Remove from groups and free the node
 	remove_from_group("pawns")
+	remove_from_group("tickable")
+	if TickManager != null:
+		TickManager.mark_tickable_cache_dirty()
 	queue_free()
 
 
@@ -5540,12 +5550,28 @@ func _draw() -> void:
 		var sel_color := Color(1.0, 0.92, 0.18)
 		draw_arc(body_origin, body_radius + 3.5, 0.0, TAU, 28, sel_color, 1.4, true)
 	
+	# Profession indicator: small colored dot above the pawn
+	if data.current_profession != PawnData.Profession.NONE:
+		var prof_color: Color = _profession_color(data.current_profession)
+		var prof_pos: Vector2 = body_origin + Vector2(0.0, -body_radius - 2.5)
+		draw_circle(prof_pos, 1.2, prof_color)
+
 	# Draft marker only
 	if draft_mode:
 		var c0: Vector2 = body_origin + Vector2(-2.5, DRAFT_CHEVRON_Y)
 		var c1: Vector2 = body_origin + Vector2(0.0, DRAFT_CHEVRON_Y - 2.0)
 		var c2: Vector2 = body_origin + Vector2(2.5, DRAFT_CHEVRON_Y)
 		draw_polyline([c0, c1, c2], Color(1.0, 0.35, 0.25), 1.0, true)
+
+
+func _profession_color(prof: int) -> Color:
+	match prof:
+		PawnData.Profession.FARMER:   return Color(0.85, 0.65, 0.2)   # gold
+		PawnData.Profession.BUILDER:  return Color(0.6, 0.6, 0.6)     # silver
+		PawnData.Profession.GATHERER: return Color(0.2, 0.75, 0.3)    # green
+		PawnData.Profession.WARRIOR:  return Color(0.9, 0.2, 0.2)     # red
+		PawnData.Profession.SCHOLAR:  return Color(0.3, 0.5, 0.9)     # blue
+		_:                            return Color.WHITE
 
 
 func _body_radius() -> float:

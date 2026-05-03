@@ -91,7 +91,7 @@ func _repeated_collapse_bonus(regions: PackedInt32Array) -> int:
 	var want0: Dictionary = {}
 	for w in range(regions.size()):
 		want0[int(regions[w])] = true
-	var ev0: Array = WorldMemory.to_save_dict().get("events", []) as Array
+	var ev0: Array[Dictionary] = WorldMemory.get_events()
 	if ev0.is_empty():
 		return 0
 	var seq: Array[Dictionary] = []

@@ -2,6 +2,8 @@ extends Item
 
 class_name PlaceableItem
 
+extends Item
+
 ## Base class for placeable items like books, tools, furniture.
 ## Persists position/rotation/creator in WorldPersistence.
 

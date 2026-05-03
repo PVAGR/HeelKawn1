@@ -178,18 +178,32 @@ func _tick_crop_growth() -> void:
 func _check_famine_conditions() -> void:
 	if StockpileManager == null:
 		return
-	
+
 	var total_food: int = StockpileManager.total_food()
-	
+
 	if total_food <= FAMINE_FOOD_THRESHOLD:
+		# Derive region from first stockpile zone; fall back to first settlement center
+		var region_key: int = 0
+		var zones: Array = StockpileManager.zones()
+		if zones.size() > 0 and zones[0] != null and is_instance_valid(zones[0]):
+			var z_pos: Vector2i = zones[0].tile_pos if zones[0].get("tile_pos") != null else Vector2i.ZERO
+			region_key = WorldMemory._region_key(z_pos.x, z_pos.y)
+		elif SettlementMemory != null and SettlementMemory.get_settlements().size() > 0:
+			var s: Dictionary = SettlementMemory.get_settlements()[0] as Dictionary
+			var cv: Variant = s.get("center_tile")
+			if cv is Dictionary:
+				region_key = WorldMemory._region_key(int(cv.get("x", 0)), int(cv.get("y", 0)))
+
 		WorldMemory.record_event({
 			"type": "famine_warning",
+			"k": WorldMemory.Kind.STARVATION_EVENT,
+			"r": region_key,
 			"total_food": total_food,
 			"tick": GameManager.tick_count,
 		})
-		
+
 		if GameManager.verbose_logs():
-			print("[FoodChain] FAMINE WARNING: only %d food units remaining" % total_food)
+			print("[FoodChain] FAMINE WARNING: only %d food units remaining (region=%d)" % [total_food, region_key])
 
 
 ## Returns the total food value of all stockpiles (weighted by nutrition).

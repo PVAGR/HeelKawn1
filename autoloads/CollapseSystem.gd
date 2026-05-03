@@ -96,7 +96,7 @@ func update_environmental_health(settlement_id: int, delta: float) -> void:
 
 func _detect_collapse_signs() -> void:
 	# Analyze WorldMemory for collapse signs
-	var events: Array = WorldMemory.to_save_dict().get("events", [])
+	var events: Array[Dictionary] = WorldMemory.get_events()
 	var recent_events: Array = []
 	var current_tick: int = GameManager.tick_count
 	
@@ -341,7 +341,7 @@ func _count_surviving_techniques(settlement_id: int) -> int:
 func _count_surviving_stories(settlement_id: int) -> int:
 	# Count stories preserved in WorldMemory
 	var count: int = 0
-	var events: Array = WorldMemory.to_save_dict().get("events", [])
+	var events: Array[Dictionary] = WorldMemory.get_events()
 	for event in events:
 		if event.get("type") == "story_preservation":
 			count += 1
@@ -350,7 +350,7 @@ func _count_surviving_stories(settlement_id: int) -> int:
 func _count_protected_names(settlement_id: int) -> int:
 	# Count protected names
 	var count: int = 0
-	var events: Array = WorldMemory.to_save_dict().get("events", [])
+	var events: Array[Dictionary] = WorldMemory.get_events()
 	for event in events:
 		if event.get("type") == "name_protection":
 			count += 1
@@ -359,7 +359,7 @@ func _count_protected_names(settlement_id: int) -> int:
 func _count_surviving_bloodlines(settlement_id: int) -> int:
 	# Count surviving bloodlines
 	var count: int = 0
-	var events: Array = WorldMemory.to_save_dict().get("events", [])
+	var events: Array[Dictionary] = WorldMemory.get_events()
 	for event in events:
 		if event.get("type") == "bloodline_survival":
 			count += 1
@@ -368,7 +368,7 @@ func _count_surviving_bloodlines(settlement_id: int) -> int:
 func _count_sacred_sites(settlement_id: int) -> int:
 	# Count sacred/practical sites
 	var count: int = 0
-	var events: Array = WorldMemory.to_save_dict().get("events", [])
+	var events: Array[Dictionary] = WorldMemory.get_events()
 	for event in events:
 		if event.get("type") in ["sacred_site", "practical_site"]:
 			count += 1

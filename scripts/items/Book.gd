@@ -2,6 +2,8 @@ extends Item
 
 class_name BookItem
 
+extends Item
+
 ## Book item with custom written content.
 ## Placeable in world, tradable, readable.
 

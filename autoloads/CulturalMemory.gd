@@ -157,10 +157,10 @@ func _reputation_base_from_scar_level(scar_level: int) -> int:
 ## Read WorldMemory only (same events as WorldMeaning) — last *pawn* death tick.
 func _build_last_pawn_death_tick_by_region() -> Dictionary:
 	var out: Dictionary = {}
-	var ev: Variant = WorldMemory.to_save_dict().get("events", [])
-	if not (ev is Array):
+	var ev: Array[Dictionary] = WorldMemory.get_events()
+	if ev.is_empty():
 		return out
-	for item in (ev as Array):
+	for item in ev:
 		if not (item is Dictionary):
 			continue
 		var e: Dictionary = item

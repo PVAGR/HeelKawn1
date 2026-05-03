@@ -26,23 +26,35 @@ var meaning_by_bloodline: Dictionary = {}
 ## Time period meanings: time period -> derived meanings
 var meaning_by_period: Dictionary = {}
 
+## Cursor for incremental recompute: index of last processed event.
+var _last_recompute_event_index: int = 0
+
 
 func recompute() -> void:
-	meaning_by_region.clear()
-	meaning_by_settlement.clear()
-	meaning_by_bloodline.clear()
-	meaning_by_period.clear()
+	# If events were evicted (swap-pop), counts are stale — full rebuild needed.
+	if WorldMemory._eviction_occurred:
+		meaning_by_region.clear()
+		meaning_by_settlement.clear()
+		meaning_by_bloodline.clear()
+		meaning_by_period.clear()
+		_last_recompute_event_index = 0
+		WorldMemory._eviction_occurred = false
 
-	# Public snapshot; WorldMemory is not modified by this.
-	var ev: Variant = WorldMemory.to_save_dict().get("events", [])
-	if not (ev is Array):
+	# Incremental: only process new events since last recompute.
+	var ev: Array[Dictionary] = WorldMemory.get_events()
+	var ev_count: int = ev.size()
+
+	if _last_recompute_event_index >= ev_count:
+		# No new events — skip
 		return
 
-	# Count pawn/animal deaths and other events per region
-	for item in ev:
+	# Process only new events
+	var start_idx: int = _last_recompute_event_index
+	for i in range(start_idx, ev_count):
+		var item: Variant = ev[i]
 		if not item is Dictionary:
 			continue
-		var e: Dictionary = item
+		var e: Dictionary = item as Dictionary
 		if not e.has("r") or not e.has("k"):
 			continue
 		var rk: int = int(e["r"])
@@ -73,7 +85,7 @@ func recompute() -> void:
 				rec["migrations_completed"] = int(rec.get("migrations_completed", 0)) + 1
 			KIND_TEACHING_EVENT:
 				rec["teaching_events"] = int(rec.get("teaching_events", 0)) + 1
-		
+
 		# Read impact from ProgressionSystem
 		if has_node("/root/ProgressionSystem"):
 			var ps = get_node("/root/ProgressionSystem")
@@ -82,12 +94,12 @@ func recompute() -> void:
 				total_impact = ps.call("get_all_impact_in_region", rk)
 			elif ps.has_method("get_impact"):
 				total_impact = ps.call("get_impact", rk)
-			
+
 			if total_impact > 1000:
 				rec["influential_here"] = true
 			if total_impact > 5000:
 				rec["legendary_land"] = true
-		
+
 		var last: int = int(rec["last_death_tick"])
 		if t > last:
 			rec["last_death_tick"] = t
@@ -101,8 +113,10 @@ func recompute() -> void:
 				rec["stranger_count"] = int(rec.get("stranger_count", 0)) + 1
 			"pawn_death":
 				rec["death_count"] = int(rec.get("death_count", 0)) + 1
-	
-	# Derive total_deaths and death_density
+
+	_last_recompute_event_index = ev_count
+
+	# Derive total_deaths and death_density (only for regions that got new events)
 	for rk in meaning_by_region.keys():
 		var r2: Dictionary = meaning_by_region[rk]
 		var pdc: int = int(r2.get("pawn_deaths", 0))
@@ -121,8 +135,8 @@ func recompute() -> void:
 		else:
 			r2["meaning_label"] = "scarred"
 		r2["tags"] = _compute_region_tags(r2)
-	
-	# Derive enhanced meanings
+
+	# Derive enhanced meanings (these still iterate all events — acceptable for now)
 	_derive_settlement_meanings(ev)
 	_derive_bloodline_meanings(ev)
 	_derive_period_meanings(ev)
@@ -130,7 +144,7 @@ func recompute() -> void:
 
 func get_region_meaning(region_key: int) -> Dictionary:
 	if meaning_by_region.has(region_key):
-		return (meaning_by_region[region_key] as Dictionary).duplicate(true)
+		return meaning_by_region[region_key] as Dictionary
 	return _default_region_entry()
 
 

@@ -80,7 +80,12 @@ func get_all_pawns() -> Array[Pawn]:
 ## Static: find the PawnSpawner and return its cached pawn list.
 ## Returns empty array if PawnSpawner not found (e.g. during early boot).
 ## Use this from autoloads that don't have a direct reference to PawnSpawner.
+## Caches the spawner reference after first lookup to avoid repeated group queries.
+static var _cached_spawner: PawnSpawner = null
+
 static func find_pawns() -> Array[Pawn]:
+	if _cached_spawner != null and is_instance_valid(_cached_spawner):
+		return _cached_spawner.pawns
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	if tree == null:
 		return []
@@ -90,6 +95,7 @@ static func find_pawns() -> Array[Pawn]:
 	var ps: PawnSpawner = spawner_node as PawnSpawner
 	if ps == null:
 		return []
+	_cached_spawner = ps
 	return ps.pawns
 
 

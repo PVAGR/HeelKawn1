@@ -299,9 +299,6 @@ func _print_settlement_verify_summary(tick: int) -> void:
 
 func _settlement_material_snapshot() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	var tree: SceneTree = get_tree()
-	if tree == null:
-		return out
 	var pawns: Array[Pawn] = PawnSpawner.find_pawns()
 	var jobs: Array[Job] = []
 	var open_v: Variant = JobManager.get("_open")

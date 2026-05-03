@@ -1163,7 +1163,7 @@ func _pick_center_region(cluster: Array) -> int:
 
 
 func get_settlements() -> Array:
-    return settlements.duplicate(true)
+    return settlements
 
 
 ## Duplicated settlement dict, or [null] if this [region_key] is not in any cluster.
@@ -1211,15 +1211,7 @@ func _update_governance_state() -> void:
 
 
 func _living_pawns() -> Array[Pawn]:
-    # Throttle to every 30 ticks to avoid lag
-    if GameManager.tick_count % 30 != 0:
-        return []  # Return empty to skip this update cycle
-    var all_pawns: Array[Pawn] = PawnSpawner.find_pawns()
-    var out: Array[Pawn] = []
-    for n in all_pawns:
-        if is_instance_valid(n):
-            out.append(n)
-    return out
+    return PawnSpawner.find_pawns()
 
 
 func _governance_for_settlement(st: Dictionary, pawns: Array[Pawn]) -> Dictionary:

@@ -29,6 +29,8 @@ enum Kind {
 
 var _events: Array[Dictionary] = []
 var _dirty: bool = false
+## Set when events are evicted (swap-pop); signals WorldMeaning to full-rebuild.
+var _eviction_occurred: bool = false
 ## event_type -> first tick observed in this session/save timeline.
 var _first_event_tick_by_type: Dictionary = {}
 ## event_type -> total retained events (O(1) counters for large timelines).
@@ -297,9 +299,12 @@ func _append(e: Dictionary) -> void:
         return
     _dirty = true
     if _events.size() >= MAX_EVENTS:
+        # O(1) eviction: swap oldest with last, pop back instead of O(n) shift
         var dropped: Dictionary = _events[0]
-        _events.remove_at(0)
+        _events[0] = _events[_events.size() - 1]
+        _events.pop_back()
         _on_event_removed_from_indexes(dropped)
+        _eviction_occurred = true
     _events.append(e)
     _on_event_added_to_indexes(e)
 
@@ -809,6 +814,13 @@ func to_save_dict() -> Dictionary:
         "schema": SCHEMA,
         "events": _events.duplicate(true),
     }
+
+
+## Return the live event array (read-only reference, no copy).
+## Use this instead of to_save_dict()["events"] for iteration — avoids
+## deep-copying the entire 50K event array on every call.
+func get_events() -> Array[Dictionary]:
+    return _events
 
 
 func from_save_dict(d: Variant) -> void:

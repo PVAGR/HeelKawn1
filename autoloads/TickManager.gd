@@ -38,6 +38,8 @@ var _current_speed_index: int = 0  # Start at 1x (index 0)
 
 var _ticks_behind: int = 0
 var _last_frame_ticks: int = 0
+var _adaptive_max_ticks_per_frame: int = MAX_TICKS_PER_FRAME
+var _low_fps_frame_streak: int = 0
 ## Debug-only: microseconds spent in the tick batch last frame (0 when not a debug build).
 var debug_last_tick_batch_usec: int = 0
 ## Once per backlog spike: warn when accumulated time exceeds 2× target interval until recovered.
@@ -57,6 +59,15 @@ func _process(delta: float) -> void:
 
 	# Accumulate scaled time
 	_accumulated_time += delta * _speed_multiplier
+	var current_fps: int = Engine.get_frames_per_second()
+	if current_fps < 55:
+		_low_fps_frame_streak += 1
+		if _low_fps_frame_streak >= 3:
+			_adaptive_max_ticks_per_frame = maxi(1, int(floor(float(_adaptive_max_ticks_per_frame) * 0.75)))
+			_low_fps_frame_streak = 0
+	else:
+		_low_fps_frame_streak = 0
+		_adaptive_max_ticks_per_frame = MAX_TICKS_PER_FRAME
 
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
@@ -65,14 +76,14 @@ func _process(delta: float) -> void:
 	# Prioritize simulation throughput; render framerate will drop but ticks flow smoothly.
 	if _speed_multiplier > 20.0:
 		# Unlimited burst: process all pending ticks up to hard cap
-		while _accumulated_time >= TICK_STEP and ticks_this_frame < MAX_TICKS_PER_FRAME:
+		while _accumulated_time >= TICK_STEP and ticks_this_frame < _adaptive_max_ticks_per_frame:
 			_accumulated_time -= TICK_STEP
 			current_tick += 1
 			ticks_this_frame += 1
 			_dispatch_tick(current_tick)
 	else:
 		# Normal speeds: respect frame budget to maintain UI responsiveness
-		while _accumulated_time >= TICK_STEP and ticks_this_frame < MAX_TICKS_PER_FRAME:
+		while _accumulated_time >= TICK_STEP and ticks_this_frame < _adaptive_max_ticks_per_frame:
 			_accumulated_time -= TICK_STEP
 			current_tick += 1
 			ticks_this_frame += 1

@@ -254,45 +254,71 @@ func _initialize_collective_intelligence() -> void:
 
 # === Neural Network Processing ===
 
+## Clamp invalid float values to zero and keep the manager stable.
+func _sanitize_float(value: Variant, label: String = "") -> float:
+	var result: float = float(value)
+	if is_nan(result) or is_inf(result):
+		if OS.is_debug_build():
+			push_warning("[AIAgentManager] Invalid float%s sanitized to 0.0" % (" for %s" % label if label != "" else ""))
+		return 0.0
+	return result
+
 func process_neural_network(input_data: Array[float]) -> Array[float]:
-	# Forward propagation through neural network
-	var current_values = input_data.duplicate()
-	
-	var layer_names = neural_matrix.layers.keys()
+	# Deterministic 4-layer forward propagation through the matrix.
+	var layer_names: Array[String] = ["input", "hidden1", "hidden2", "output"]
+	var current_values: Array[float] = []
+	var input_layer: Dictionary = neural_matrix.layers.get("input", {})
+	var input_size: int = int(input_layer.get("size", input_data.size()))
+	current_values.resize(input_size)
+	for i in range(input_size):
+		current_values[i] = _sanitize_float(input_data[i] if i < input_data.size() else 0.0, "input[%d]" % i)
+
 	for i in range(layer_names.size()):
-		var layer_name = layer_names[i]
-		var layer = neural_matrix.layers[layer_name]
+		var layer_name: String = layer_names[i]
+		if not neural_matrix.layers.has(layer_name):
+			continue
+		var layer: Dictionary = neural_matrix.layers[layer_name]
+		var layer_size: int = int(layer.get("size", 0))
 		var next_values: Array[float] = []
-		
-		for neuron in layer.neurons:
-			var neuron_value = 0.0
-			
-			# Calculate weighted sum from previous layer
-			if i == 0:  # Input layer
-				var neuron_index = layer.neurons.find(neuron)
-				if neuron_index < current_values.size():
-					neuron_value = current_values[neuron_index]
-			else:
-				# Process connections from previous layer
-				var prev_layer_name = layer_names[i - 1]
-				var connection_key = prev_layer_name + "_to_" + layer_name
-				
-				if neural_matrix.connections.has(connection_key):
-					for connection_id in neural_matrix.connections[connection_key]:
-						var connection = neural_matrix.connections[connection_id]
-						if connection.source in current_values:
-							neuron_value += current_values[current_values.find(connection.source)] * connection.weight
-			
-			# Apply activation function
-			neuron.activation = _apply_activation_function(neuron_value, i)
-			next_values.append(neuron.activation)
-		
+		next_values.resize(layer_size)
+
+		if i == 0:
+			for neuron_idx in range(layer_size):
+				next_values[neuron_idx] = _sanitize_float(current_values[neuron_idx] if neuron_idx < current_values.size() else 0.0, "input_layer_%d" % neuron_idx)
+		else:
+			var prev_layer_name: String = layer_names[i - 1]
+			var prev_layer: Dictionary = neural_matrix.layers.get(prev_layer_name, {})
+			var prev_neurons: Array = prev_layer.get("neurons", [])
+			var layer_neurons: Array = layer.get("neurons", [])
+			var connection_key: String = "%s_to_%s" % [prev_layer_name, layer_name]
+			var layer_connections: Dictionary = neural_matrix.connections.get(connection_key, {})
+
+			for neuron_idx in range(layer_neurons.size()):
+				var neuron: Dictionary = layer_neurons[neuron_idx]
+				var neuron_value: float = 0.0
+				var target_id: String = str(neuron.get("id", ""))
+				for source_idx in range(prev_neurons.size()):
+					var source_neuron: Dictionary = prev_neurons[source_idx]
+					var source_id: String = str(source_neuron.get("id", ""))
+					var conn_id: String = "%s_%s" % [source_id, target_id]
+					var conn_v: Variant = layer_connections.get(conn_id, null)
+					if conn_v is Dictionary:
+						var source_value: float = _sanitize_float(current_values[source_idx] if source_idx < current_values.size() else 0.0, "source_%s" % source_id)
+						var weight: float = _sanitize_float((conn_v as Dictionary).get("weight", 0.0), "weight_%s" % conn_id)
+						neuron_value += source_value * weight
+				neuron.activation = _apply_activation_function(neuron_value, i)
+				next_values[neuron_idx] = _sanitize_float(neuron.activation, "activation_%s" % target_id)
+
 		current_values = next_values
-	
+
 	return current_values
 
 
 func _apply_activation_function(value: float, layer_index: int) -> float:
+	if is_nan(value) or is_inf(value):
+		if OS.is_debug_build():
+			push_warning("[AIAgentManager] Activation received invalid input at layer %d" % layer_index)
+		return 0.0
 	var activation_functions = neural_matrix.activation_functions
 	var func_index = layer_index % activation_functions.size()
 	
@@ -300,9 +326,9 @@ func _apply_activation_function(value: float, layer_index: int) -> float:
 		"relu":
 			return max(0.0, value)
 		"sigmoid":
-			return 1.0 / (1.0 + exp(-value))
+			return _sanitize_float(1.0 / (1.0 + exp(-value)), "sigmoid")
 		"tanh":
-			return tanh(value)
+			return _sanitize_float(tanh(value), "tanh")
 		_:
 			return value
 

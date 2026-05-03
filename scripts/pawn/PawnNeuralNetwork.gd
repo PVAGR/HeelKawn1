@@ -36,7 +36,7 @@ func _initialize_network_structure(personality: Dictionary) -> void:
 	
 	var hidden1_size: int = int(64 + openness * 32)  # 64-96 neurons
 	var hidden2_size: int = int(32 + conscientiousness * 16)  # 32-48 neurons
-	var output_size: int = 16  # Action outputs
+	var output_size: int = 8  # Direct action heads: food, rest, social, gather, build, mine, defend, idle
 	
 	layers = [
 		{"size": input_size, "neurons": _create_neurons(input_size, "input")},
@@ -44,6 +44,16 @@ func _initialize_network_structure(personality: Dictionary) -> void:
 		{"size": hidden2_size, "neurons": _create_neurons(hidden2_size, "hidden2")},
 		{"size": output_size, "neurons": _create_neurons(output_size, "output")}
 	]
+
+
+## Clamp invalid float values to zero and keep the network stable.
+func _sanitize_float(value: Variant, label: String = "") -> float:
+	var result: float = float(value)
+	if is_nan(result) or is_inf(result):
+		if OS.is_debug_build():
+			push_warning("[PawnNeuralNetwork] Invalid float%s sanitized to 0.0" % (" for %s" % label if label != "" else ""))
+		return 0.0
+	return result
 
 
 ## Create neurons for a layer
@@ -90,24 +100,23 @@ func _initialize_connections() -> void:
 
 ## Forward propagation through network
 func forward_propagate(input_data: Array[float]) -> Array[float]:
-	var current_values: Array[float] = input_data.duplicate()
-	
-	# Pad or truncate input to match input layer size
-	while current_values.size() < layers[0].size:
-		current_values.append(0.0)
-	if current_values.size() > layers[0].size:
-		current_values = current_values.slice(0, layers[0].size)
+	var input_size: int = layers[0].size
+	var current_values: Array[float] = []
+	current_values.resize(input_size)
+	for i in range(input_size):
+		current_values[i] = _sanitize_float(input_data[i] if i < input_data.size() else 0.0, "input[%d]" % i)
 	
 	# Input layer: copy values into neuron state and seed current_values.
 	var input_layer: Dictionary = layers[0]
 	var input_neurons: Array = input_layer.neurons
 	var input_activations: Array[float] = []
+	input_activations.resize(input_neurons.size())
 	for i in range(input_neurons.size()):
 		var in_neuron: Dictionary = input_neurons[i]
 		var in_value: float = current_values[i]
 		in_neuron.value = in_value
 		in_neuron.activation = in_value
-		input_activations.append(in_value)
+		input_activations[i] = in_value
 	current_values = input_activations
 	
 	# Hidden + output layers: O(source*target), direct connection lookup.
@@ -117,6 +126,7 @@ func forward_propagate(input_data: Array[float]) -> Array[float]:
 		var prev_neurons: Array = prev_layer.neurons
 		var layer_neurons: Array = layer.neurons
 		var next_values: Array[float] = []
+		next_values.resize(layer_neurons.size())
 		var prev_layer_name: String = str((prev_neurons[0] as Dictionary).get("id", "")).split("_")[0]
 		var curr_layer_name: String = str((layer_neurons[0] as Dictionary).get("id", "")).split("_")[0]
 		var connection_key: String = "%s_to_%s" % [prev_layer_name, curr_layer_name]
@@ -132,10 +142,12 @@ func forward_propagate(input_data: Array[float]) -> Array[float]:
 				var conn_id: String = "%s_%s" % [source_id, target_id]
 				var conn_v: Variant = layer_connections.get(conn_id, null)
 				if conn_v is Dictionary:
-					neuron_value += current_values[source_idx] * float((conn_v as Dictionary).get("weight", 0.0))
+					var source_value: float = _sanitize_float(current_values[source_idx], "layer_%d_source_%d" % [layer_idx, source_idx])
+					var weight: float = _sanitize_float((conn_v as Dictionary).get("weight", 0.0), "weight_%s" % conn_id)
+					neuron_value += source_value * weight
 			neuron.activation = _apply_activation(neuron_value, layer_idx)
 			neuron.value = neuron_value
-			next_values.append(neuron.activation)
+			next_values[neuron_idx] = _sanitize_float(neuron.activation, "activation_%s" % str(neuron.get("id", "")))
 		
 		current_values = next_values
 	
@@ -159,14 +171,18 @@ func _find_neuron_index(neuron_id: String, layer_idx: int) -> int:
 
 ## Apply activation function
 func _apply_activation(value: float, layer_idx: int) -> float:
+	if is_nan(value) or is_inf(value):
+		if OS.is_debug_build():
+			push_warning("[PawnNeuralNetwork] Activation received invalid input at layer %d" % layer_idx)
+		return 0.0
 	var func_index: int = layer_idx % activation_functions.size()
 	match activation_functions[func_index]:
 		"relu":
 			return max(0.0, value)
 		"sigmoid":
-			return 1.0 / (1.0 + exp(-value))
+			return _sanitize_float(1.0 / (1.0 + exp(-value)), "sigmoid")
 		"tanh":
-			return tanh(value)
+			return _sanitize_float(tanh(value), "tanh")
 		_:
 			return value
 

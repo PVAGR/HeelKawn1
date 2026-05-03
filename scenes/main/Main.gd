@@ -2908,7 +2908,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				_camera_follow_selected = false
 		Key.KEY_EQUAL:
 			if _hud != null:
-				_hud.toggle_hud_verbose()
+					_hud.toggle_hud_verbose()
 		Key.KEY_KP_ADD:
 			if _hud != null:
 				_hud.toggle_hud_verbose()

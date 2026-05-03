@@ -135,18 +135,18 @@ func _cache_world_references() -> void:
 # === Main Brain Tick (called from Pawn._on_world_tick) ===
 ## Optimized for 39,000 ticks @ 100x speed with thousands of pawns.
 ## Uses stride-based throttling + lightweight path for distant pawns.
-func tick(tick: int, pawn: Pawn) -> Dictionary:
+func brain_tick(sim_tick: int, pawn: Pawn) -> Dictionary:
 	_ticks_processed += 1
 
 	# Stride-based throttling: not every pawn runs full AI every tick.
 	# This is the "One of One" secret: stagger so the sim never spikes.
 	var pid: int = _pawn_id
 	var stride: int = _compute_stride()
-	var run_full_ai: bool = stride <= 1 or (posmod(tick + pid, stride) == 0)
+	var run_full_ai: bool = stride <= 1 or (posmod(sim_tick + pid, stride) == 0)
 
 	if not run_full_ai:
 		# Lightweight tick for non-primary ticks (survival only, Kenshi-style)
-		return _lightweight_tick(tick, pawn)
+		return _lightweight_tick(sim_tick, pawn)
 
 	# --- Full AI tick (staggered across pawns) ---
 
@@ -154,38 +154,38 @@ func tick(tick: int, pawn: Pawn) -> Dictionary:
 	var game_speed: float = GameManager.game_speed if GameManager != null else 1.0
 	if game_speed > 20.0:
 		var throttle_interval: int = 4
-		if not (posmod(tick + pid, throttle_interval) == 0):
-			return _lightweight_tick(tick, pawn)
+		if not (posmod(sim_tick + pid, throttle_interval) == 0):
+			return _lightweight_tick(sim_tick, pawn)
 
 	# 1. Rebuild decision context (what does the pawn know right now?)
-	_rebuild_decision_context(pawn, tick)
+	_rebuild_decision_context(pawn, sim_tick)
 
 	# 2. Neural forward pass (every NEURAL_FORWARD_INTERVAL ticks)
-	if posmod(tick, NEURAL_FORWARD_INTERVAL) == 0 or tick - _last_neural_tick >= NEURAL_FORWARD_INTERVAL:
-		_run_neural_forward_pass(tick)
+	if posmod(sim_tick, NEURAL_FORWARD_INTERVAL) == 0 or sim_tick - _last_neural_tick >= NEURAL_FORWARD_INTERVAL:
+		_run_neural_forward_pass(sim_tick)
 
 	# 3. Run decision matrix (uses neural outputs + context)
-	var decision: Dictionary = _run_decision_matrix(pawn, tick)
+	var decision: Dictionary = _run_decision_matrix(pawn, sim_tick)
 
 	# 4. Check if we should trigger a dramatic story beat
-	if posmod(tick, 2000) == 0:
-		_check_dramatic_events(pawn, tick)
+	if posmod(sim_tick, 2000) == 0:
+		_check_dramatic_events(pawn, sim_tick)
 
 	# 5. Refresh goals periodically
-	if tick - _last_goal_refresh_tick >= GOAL_CHECK_INTERVAL:
-		_refresh_goals(tick)
-		_last_goal_refresh_tick = tick
+	if sim_tick - _last_goal_refresh_tick >= GOAL_CHECK_INTERVAL:
+		_refresh_goals(sim_tick)
+		_last_goal_refresh_tick = sim_tick
 
 	# 6. Combat awareness (Bannerlord-style) — only if in danger or near enemies
-	if posmod(tick + pid * 3, 23) == 0:
-		_scan_for_combat_threats(pawn, tick)
+	if posmod(sim_tick + pid * 3, 23) == 0:
+		_scan_for_combat_threats(pawn, sim_tick)
 
 	# 7. Social scan (Crusader Kings-style) — staggered
-	if posmod(tick + pid * 5, 45) == 0:
-		_scan_for_social_interactions(pawn, tick)
+	if posmod(sim_tick + pid * 5, 45) == 0:
+		_scan_for_social_interactions(pawn, sim_tick)
 
 	# 8. Update career XP based on recent actions
-	_update_career_tracking(pawn, tick)
+	_update_career_tracking(pawn, sim_tick)
 
 	return decision
 
@@ -223,7 +223,7 @@ func _compute_stride() -> int:
 
 
 # === Lightweight Tick (Kenshi survival — ultra-fast) ===
-func _lightweight_tick(tick: int, pawn: Pawn) -> Dictionary:
+func _lightweight_tick(sim_tick: int, pawn: Pawn) -> Dictionary:
 	# Only process critical survival needs + basic combat.
 	# Used for staggered ticks where full AI doesn't run.
 	if _pawn_data == null or pawn == null:
@@ -243,7 +243,7 @@ func _lightweight_tick(tick: int, pawn: Pawn) -> Dictionary:
 		result["confidence"] = 0.8
 
 	# Basic combat scan (Bannerlord-style) — very infrequent
-	if posmod(tick + _pawn_id * 7, 45) == 0:
+	if posmod(sim_tick + _pawn_id * 7, 45) == 0:
 		if _combat_resolver != null and "get_enemies_near_position" in _combat_resolver:
 			# Placeholder for combat check
 			pass
@@ -259,7 +259,7 @@ var _ctx_last_state: int = -1
 var _ctx_last_tile: Vector2i = Vector2i(-99999, -99999)
 var _ctx_last_settlement: int = -99999
 
-func _rebuild_decision_context(pawn: Pawn, tick: int) -> void:
+func _rebuild_decision_context(pawn: Pawn, sim_tick: int) -> void:
 	if _pawn_data == null:
 		return
 
@@ -304,24 +304,24 @@ func _rebuild_decision_context(pawn: Pawn, tick: int) -> void:
 		_ctx_last_tile = cur_tile
 
 	# --- Tick info ---
-	_decision_context["tick"] = tick
+	_decision_context["tick"] = sim_tick
 	if pawn != null:
 		_decision_context["founding_blend"] = pawn._founding_blend()
 
 	# --- World state (from WorldAI neural matrix) ---
-	_update_world_state_cache(tick)
+	_update_world_state_cache(sim_tick)
 
 	# --- Settlement info (only update if changed) ---
 	var cur_settlement: int = _pawn_data.settlement_id
 	if cur_settlement != _ctx_last_settlement:
 		_decision_context["settlement_id"] = cur_settlement
 		_ctx_last_settlement = cur_settlement
-		var rk: int = WorldMemory._region_key(cur_tile.x, cur_tile.y) if WorldMemory != null else 0
+		var rk: int = ((int(cur_tile.x) >> 4) & 0xFFFF) | (((int(cur_tile.y) >> 4) & 0xFFFF) << 16)
 		_decision_context["region_key"] = rk
 
 
-func _update_world_state_cache(tick: int) -> void:
-	if tick - _world_state_cache_tick < WORLD_STATE_CACHE_TICKS and not _current_world_state.is_empty():
+func _update_world_state_cache(sim_tick: int) -> void:
+	if sim_tick - _world_state_cache_tick < WORLD_STATE_CACHE_TICKS and not _current_world_state.is_empty():
 		_decision_context.merge(_current_world_state, false)
 		return
 
@@ -336,12 +336,12 @@ func _update_world_state_cache(tick: int) -> void:
 		_current_world_state["military_strength"] = summary.get("military_strength", 0.0)
 		_current_world_state["tech_innovation"] = summary.get("innovation_rate", 0.0)
 
-	_world_state_cache_tick = tick
+	_world_state_cache_tick = sim_tick
 	_decision_context.merge(_current_world_state, false)
 
 
 # === Neural Forward Pass ===
-func _run_neural_forward_pass(tick: int) -> void:
+func _run_neural_forward_pass(sim_tick: int) -> void:
 	if neural_network == null:
 		return
 
@@ -350,7 +350,7 @@ func _run_neural_forward_pass(tick: int) -> void:
 
 	# Forward propagate
 	_neural_outputs = neural_network.forward_propagate(neural_input)
-	_last_neural_tick = tick
+	_last_neural_tick = sim_tick
 
 
 func _build_neural_input() -> Array[float]:
@@ -412,7 +412,7 @@ func _build_neural_input() -> Array[float]:
 
 
 # === Decision Matrix (PawnDecisionRuleMatrix) ===
-func _run_decision_matrix(pawn: Pawn, tick: int) -> Dictionary:
+func _run_decision_matrix(_pawn: Pawn, _sim_tick: int) -> Dictionary:
 	if decision_matrix == null or _pawn_data == null:
 		return {"action": "idle", "confidence": 0.0}
 
@@ -529,7 +529,7 @@ func _synthesize_decision(fired_rules: Array, human_channels: Array, ctx: Dictio
 
 
 # === Goals (Crusader Kings-style life goals) ===
-func _refresh_goals(tick: int) -> void:
+func _refresh_goals(_sim_tick: int) -> void:
 	if goal_engine == null:
 		return
 
@@ -554,7 +554,7 @@ func _refresh_goals(tick: int) -> void:
 ## Uses SpatialGrid for O(n) lookups instead of O(n²) scans
 var _spatial_grid: RefCounted = null  # SpatialGrid instance
 
-func _scan_for_combat_threats(pawn: Pawn, tick: int) -> void:
+func _scan_for_combat_threats(pawn: Pawn, _sim_tick: int) -> void:
 	if pawn == null or _combat_resolver == null:
 		return
 
@@ -614,7 +614,7 @@ func _find_nearby_pawns(pawn: Pawn, radius_px: float) -> Array:
 
 
 # === Social Scan (Crusader Kings diplomacy) ===
-func _scan_for_social_interactions(pawn: Pawn, tick: int) -> void:
+func _scan_for_social_interactions(pawn: Pawn, _sim_tick: int) -> void:
 	if pawn == null or gossip == null:
 		return
 
@@ -647,7 +647,7 @@ func _scan_for_social_interactions(pawn: Pawn, tick: int) -> void:
 
 
 # === Dramatic Events (Narrative Engine) ===
-func _check_dramatic_events(pawn: Pawn, tick: int) -> void:
+func _check_dramatic_events(_pawn: Pawn, _sim_tick: int) -> void:
 	if dramatic_engine == null or _pawn_data == null:
 		return
 
@@ -670,7 +670,7 @@ func _check_dramatic_events(pawn: Pawn, tick: int) -> void:
 
 
 # === Career Tracking (Bannerlord/Kenshi RPG) ===
-func _update_career_tracking(pawn: Pawn, tick: int) -> void:
+func _update_career_tracking(_pawn: Pawn, _sim_tick: int) -> void:
 	if career == null:
 		return
 
@@ -735,7 +735,7 @@ func cleanup() -> void:
 # === WorldBox-Scale: Batch Process Multiple Pawns ===
 ## Static method to process multiple pawns in one call.
 ## Used by Main/GameManager for thousands of NPCs at WorldBox scale.
-static func batch_tick(pawn_list: Array, tick: int) -> Dictionary:
+static func batch_tick(pawn_list: Array, sim_tick: int) -> Dictionary:
 	var stats: Dictionary = {
 		"processed": 0,
 		"decisions": 0,
@@ -757,7 +757,7 @@ static func batch_tick(pawn_list: Array, tick: int) -> Dictionary:
 		if brain == null:
 			stats["errors"] = int(stats.get("errors", 0)) + 1
 			continue
-		var decision: Dictionary = brain.tick(tick, pawn)
+		var decision: Dictionary = brain.brain_tick(sim_tick, pawn)
 		stats["processed"] = int(stats.get("processed", 0)) + 1
 		if not decision.is_empty() and decision.get("confidence", 0.0) > 0.3:
 			stats["decisions"] = int(stats.get("decisions", 0)) + 1
@@ -767,7 +767,7 @@ static func batch_tick(pawn_list: Array, tick: int) -> Dictionary:
 # === WorldBox-Scale: Lightweight Tick (Survival-Only) ===
 ## Ultra-fast tick for distant/thousands of NPCs — Kenshi survival style.
 ## Only processes critical survival needs + basic combat awareness.
-func lightweight_tick(tick: int, pawn: Pawn) -> Dictionary:
+func lightweight_tick(sim_tick: int, pawn: Pawn) -> Dictionary:
 	if _pawn_data == null or pawn == null:
 		return {"action": "idle", "confidence": 0.0}
 	# Only check critical needs (Kenshi survival)
@@ -782,7 +782,7 @@ func lightweight_tick(tick: int, pawn: Pawn) -> Dictionary:
 		result["action"] = "flee"
 		result["confidence"] = 0.8
 	# Basic combat scan (Bannerlord-style)
-	if _combat_resolver != null and posmod(tick, 16) == 0:
+	if _combat_resolver != null and posmod(sim_tick, 16) == 0:
 		var nearby: Array = _find_nearby_enemies(pawn)
 		if not nearby.is_empty():
 			result["action"] = "face_threat"

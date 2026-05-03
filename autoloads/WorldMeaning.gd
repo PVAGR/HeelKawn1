@@ -74,6 +74,20 @@ func recompute() -> void:
 			KIND_TEACHING_EVENT:
 				rec["teaching_events"] = int(rec.get("teaching_events", 0)) + 1
 		
+		# Read impact from ProgressionSystem
+		if has_node("/root/ProgressionSystem"):
+			var ps = get_node("/root/ProgressionSystem")
+			var total_impact = 0
+			if ps.has_method("get_all_impact_in_region"):
+				total_impact = ps.call("get_all_impact_in_region", rk)
+			elif ps.has_method("get_impact"):
+				total_impact = ps.call("get_impact", rk)
+			
+			if total_impact > 1000:
+				rec["influential_here"] = true
+			if total_impact > 5000:
+				rec["legendary_land"] = true
+		
 		var last: int = int(rec["last_death_tick"])
 		if t > last:
 			rec["last_death_tick"] = t

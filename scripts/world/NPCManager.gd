@@ -21,6 +21,8 @@ var _npcs: Dictionary = {}
 
 func _ready() -> void:
 	add_to_group("tickable")
+	if TickManager != null:
+		TickManager.mark_tickable_cache_dirty()
 
 
 func _on_world_tick(tick_number: int) -> void:

@@ -174,6 +174,8 @@ var _pawn_neural_cache: Dictionary = {}
 
 func _ready():
 	add_to_group("tickable")
+	if TickManager != null:
+		TickManager.mark_tickable_cache_dirty()
 	_initialize_world_state()
 	_setup_initial_discoveries()
 	_initialize_neural_world_matrix()

@@ -24,6 +24,10 @@ const MAX_TICKS_PER_FRAME: int = 500
 ## Prioritizes simulation speed over render framerate; game may drop to 20fps at 100x but simulation stays smooth.
 const TARGET_FRAME_TIME_USEC: int = 50000  # 50ms budget
 
+## How often (in ticks) to force-rebuild the tickable cache.
+## A low value ensures dead nodes are pruned; a high value minimizes overhead.
+const TICKABLE_CACHE_REBUILD_INTERVAL: int = 300
+
 var current_tick: int = 0
 var _accumulated_time: float = 0.0
 var _is_paused: bool = false
@@ -31,6 +35,11 @@ var _speed_multiplier: float = 1.0
 
 ## RefCounted objects that register for tick notifications (SettlementAI, etc.)
 var _refcounted_tickables: Array = []
+
+## Cached sorted tickable nodes. Rebuilt when dirty or periodically.
+var _tickable_cache: Array = []
+var _tickable_cache_dirty: bool = true
+var _tickable_cache_last_rebuild_tick: int = -TICKABLE_CACHE_REBUILD_INTERVAL
 
 ## Speed presets: 1x, 3x, 6x, 12x, 26x, 50x, 100x
 const SPEED_PRESETS: Array[float] = [1.0, 3.0, 6.0, 12.0, 26.0, 50.0, 100.0]
@@ -57,6 +66,11 @@ var batch_stats: Dictionary = {
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+
+
+## Mark the tickable cache as dirty. Call this when a node joins/leaves the "tickable" group.
+func mark_tickable_cache_dirty() -> void:
+	_tickable_cache_dirty = true
 
 
 func _process(delta: float) -> void:
@@ -181,19 +195,43 @@ func _should_skip_pawn_tick(pawn: Node, current_speed: float) -> bool:
 	return false
 
 func _call_tick_on_tickables(tick: int) -> int:
-	var tree: SceneTree = get_tree()
-	if tree == null:
-		return 0
-	# Collect valid tickable nodes
-	var tickable_nodes: Array = []
-	for node in tree.get_nodes_in_group("tickable"):
-		if node != null and is_instance_valid(node) and node.has_method("_on_world_tick"):
-			tickable_nodes.append(node)
-	# Sort by node path for deterministic order
-	tickable_nodes.sort_custom(func(a, b): return str(a.get_path()) < str(b.get_path()))
-	for node in tickable_nodes:
-		node._on_world_tick(tick)
-	return tickable_nodes.size()
+	## PERFORMANCE OPTIMIZATION: Cached tickable nodes.
+	## Instead of calling get_nodes_in_group() + sort every tick (O(n) traversal
+	## + O(n log n) sort × 500 ticks/frame at 100x), we cache the sorted list and
+	## only rebuild when dirty or every TICKABLE_CACHE_REBUILD_INTERVAL ticks.
+	var needs_rebuild: bool = _tickable_cache_dirty
+	if not needs_rebuild:
+		var ticks_since_rebuild: int = tick - _tickable_cache_last_rebuild_tick
+		if ticks_since_rebuild >= TICKABLE_CACHE_REBUILD_INTERVAL:
+			needs_rebuild = true
+
+	if needs_rebuild:
+		var tree: SceneTree = get_tree()
+		if tree == null:
+			return 0
+		var new_cache: Array = []
+		for node in tree.get_nodes_in_group("tickable"):
+			if node != null and is_instance_valid(node) and node.has_method("_on_world_tick"):
+				new_cache.append(node)
+		# Sort by node path for deterministic order
+		new_cache.sort_custom(func(a, b): return str(a.get_path()) < str(b.get_path()))
+		_tickable_cache = new_cache
+		_tickable_cache_dirty = false
+		_tickable_cache_last_rebuild_tick = tick
+
+	# Call cached tickables, pruning any that became invalid since last rebuild
+	var valid_count: int = 0
+	var i: int = _tickable_cache.size() - 1
+	while i >= 0:
+		var node: Node = _tickable_cache[i]
+		if is_instance_valid(node):
+			node._on_world_tick(tick)
+			valid_count += 1
+		else:
+			_tickable_cache.remove_at(i)
+			_tickable_cache_dirty = true
+		i -= 1
+	return valid_count
 
 func _call_tick_on_refcounted(tick: int) -> int:
 	var count: int = 0
@@ -270,3 +308,6 @@ func reset() -> void:
 	_last_frame_ticks = 0
 	_backlog_degrade_warned = false
 	debug_last_tick_batch_usec = 0
+	_tickable_cache.clear()
+	_tickable_cache_dirty = true
+	_tickable_cache_last_rebuild_tick = -TICKABLE_CACHE_REBUILD_INTERVAL

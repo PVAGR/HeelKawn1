@@ -68,6 +68,8 @@ var _last_settlement_ai_update_tick: int = -1
 
 func _ready() -> void:
 	add_to_group("tickable")
+	if TickManager != null:
+		TickManager.mark_tickable_cache_dirty()
 	## TickManager will call _on_world_tick() directly on "tickable" nodes
 	## No need to connect to signal - avoids double-processing
 	## Fallback: use GameManager for backward compatibility (if TickManager not available)

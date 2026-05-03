@@ -776,6 +776,8 @@ func _ready() -> void:
 	add_child(_sfx)
 	_action_popup = $ActionPopup
 	add_to_group("tickable")
+	if TickManager != null:
+		TickManager.mark_tickable_cache_dirty()
 	call_deferred("_pawn_connect_sim_tick_deferred")
 
 
@@ -829,6 +831,8 @@ func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
 	_clear_cohort_state()
 	add_to_group("pawns")
 	add_to_group("tickable")
+	if TickManager != null:
+		TickManager.mark_tickable_cache_dirty()
 	if not _initial_knowledge_granted:
 		_grant_initial_knowledge()
 		_initial_knowledge_granted = true

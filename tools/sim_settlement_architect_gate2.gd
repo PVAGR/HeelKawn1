@@ -52,7 +52,19 @@ func _run_gate2() -> void:
 	var main_node: Node = root.get_node_or_null("Main")
 	if main_node != null:
 		world = main_node.get_node_or_null("WorldViewport/World")
+	if world == null and main_node != null:
+		# Try direct children
+		world = main_node.get_node_or_null("World")
 	if world == null:
+		# Debug: print what's under Main
+		if main_node != null:
+			var children: Array = main_node.get_children()
+			var child_names: String = ""
+			for c in children:
+				child_names += c.name + " "
+			print("[OPTIMIZER] GATE-2 DEBUG Main children: %s" % child_names)
+		else:
+			print("[OPTIMIZER] GATE-2 DEBUG Main not found")
 		print("[OPTIMIZER] GATE-2 NEEDS_FIX reason=World_not_found")
 		quit(1)
 		return
@@ -136,12 +148,6 @@ func _run_gate2() -> void:
 
 	# Reset the architect's internal tick gate so it will actually run
 	architect.set("_last_architect_tick", -1_000_000_000)
-
-	var main_node: Node = root.get_node_or_null("Main")
-	if main_node == null:
-		print("[OPTIMIZER] GATE-2 NEEDS_FIX reason=Main_not_found")
-		quit(1)
-		return
 
 	architect.call("process", world, main_node)
 

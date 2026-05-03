@@ -800,10 +800,10 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
             scar_max, reputation_min, last_activity_tick, last_pawn_death_tick, culture_type
     )
     var peace_threshold_ticks: int = get_peace_ticks_for_culture_branch(culture_type)
-    var ticks_since_collapse: int = _ticks_since_or_large(last_pawn_death_tick)
-    var revival_score: int = _deterministic_revival_score(
-            ticks_since_collapse, scar_max, ticks_since_collapse, culture_type, reputation_min
-    )
+        var ticks_since_collapse: int = _ticks_since_or_large(last_pawn_death_tick)
+        var revival_score: int = _deterministic_revival_score(
+            ticks_since_collapse, scar_max, ticks_since_collapse, culture_type, reputation_min, center_rk
+        )
     var packed: PackedInt32Array = PackedInt32Array()
     for rk2 in cluster:
         packed.append(int(rk2))
@@ -910,7 +910,8 @@ func _deterministic_revival_score(
         scar_level: int,
         regional_peace_ticks: int,
         cultural_branch: int,
-        reputation_min: int
+        reputation_min: int,
+        center_region: int = -1
 ) -> int:
     var peace_threshold: int = get_peace_ticks_for_culture_branch(cultural_branch)
     var collapse_component: int = mini(100, int((float(ticks_since_collapse) / float(maxi(1, HARD_COLLAPSE_TICKS * 2))) * 100.0))
@@ -924,7 +925,18 @@ func _deterministic_revival_score(
     else:
         branch_bonus = -10
     var rep_bonus: int = clampi(reputation_min * 5, -20, 20)
-    return clampi(int((collapse_component + peace_component) / 2) - scar_penalty + branch_bonus + rep_bonus, 0, 100)
+    var base_score: int = int((collapse_component + peace_component) / 2) - scar_penalty + branch_bonus + rep_bonus
+
+    # Apply WorldMeaning modifiers when a center region is known
+    if center_region != null and int(center_region) >= 0:
+        var mean: Dictionary = WorldMeaning.get_region_meaning(int(center_region))
+        var label: String = str(mean.get("meaning_label", ""))
+        if label == "resilient":
+            base_score += 25
+        elif label == "cursed":
+            base_score -= 30
+
+    return clampi(base_score, 0, 100)
 
 
 func get_settlement_profile(region_key: int) -> Dictionary:

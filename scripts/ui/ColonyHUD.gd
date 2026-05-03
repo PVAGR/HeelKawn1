@@ -209,19 +209,21 @@ func _refresh() -> void:
 		if not first_hint.is_empty():
 			lines.append(first_hint)
 		lines.append(_time_line())
-		lines.append(_world_pulse_line())
-		lines.append(_history_totals_line())
 		lines.append(_colony_state_line())
 		lines.append(_settlement_identity_line())
 		lines.append(_stockpile_simple_line())
 		lines.append(_pawn_line_simple())
 		lines.append(_profession_breakdown_line())
+		var beds_ln: String = _beds_line_simple()
+		if beds_ln != "":
+			lines.append(beds_ln)
 		lines.append(_krond_line_simple())
 		var body_simple: String = _player_body_needs_line_simple()
 		if body_simple != "":
 			lines.append(body_simple)
-		lines.append(_jobs_line_simple())
-		lines.append(_wildlife_line())
+		var wildlife_ln: String = _wildlife_line_simple()
+		if wildlife_ln != "":
+			lines.append(wildlife_ln)
 		var meaning_ln: String = _region_meaning_line()
 		if meaning_ln != "":
 			lines.append(meaning_ln)
@@ -332,9 +334,20 @@ func _time_line() -> String:
 	# In-game hour estimate: 24 notional hours across one visual day cycle (see docs/TIME_SCALE.md).
 	var hour: int = int(phase * 24.0) % 24
 	var year_n: int = SimTime.sim_year_index(tick)
-	var y_tick: int = SimTime.tick_within_sim_year(tick)
 	var day_in_year: int = SimTime.visual_day_within_sim_year(tick)
 	var days_per_y: int = SimTime.visual_days_per_sim_year()
+	if SIMPLE_READABLE_HUD:
+		var base: String = "[b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]" % [
+			year_n, day_in_year, days_per_y, hour, phase_name, speed_str,
+		]
+		if GameManager.game_speed >= 26.0 and not GameManager.is_paused:
+			var d: Dictionary = GameManager.sim_diag()
+			var q: float = float(d.get("queued_ticks_est", 0.0))
+			var cap: int = int(d.get("max_ticks_per_frame", 6))
+			if q >= 3.0:
+				base += "   [color=#ffab91]Δ~%.0f tf%d[/color]" % [q, cap]
+		return base
+	var y_tick: int = SimTime.tick_within_sim_year(tick)
 	var base: String = "[b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](σ+%d)[/color]" % [
 		year_n, day_in_year, days_per_y, hour, phase_name, speed_str, tick, y_tick,
 	]
@@ -438,7 +451,7 @@ func _settlement_identity_line() -> String:
 	var has_settlement: bool = bool(digest.get("has_settlement", false))
 	if not has_settlement or profile_rk < 0:
 		var cam_meaning: String = str(WorldMeaning.get_region_meaning_label(cam_rk)).replace("_", " ")
-		return "[color=#c9b37c]Identity:[/color] Wilds @%d · meaning [b]%s[/b]" % [cam_rk, cam_meaning]
+		return "[color=#c9b37c]Identity:[/color] Wilds · [b]%s[/b]" % cam_meaning
 	var prof: Dictionary = SettlementMemory.get_settlement_profile(profile_rk)
 	var st_any: Variant = SettlementMemory.get_settlement_at_region(profile_rk)
 	var intent: String = "none"
@@ -462,6 +475,10 @@ func _settlement_identity_line() -> String:
 	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(profile_rk)
 	var war_state: String = str(war.get("state", "peace")).replace("_", " ")
 	var gov_txt: String = str(gov.get("type", "anarchy")).replace("_", " ")
+	if SIMPLE_READABLE_HUD:
+		return "[color=#c9b37c]Identity:[/color] [b]%s[/b] · %s · %s · war %s · gov %s" % [
+			state_txt.capitalize(), culture_txt.capitalize(), meaning, war_state, gov_txt,
+		]
 	return (
 		"[color=#c9b37c]Identity:[/color] #%d  [b]%s[/b] · %s · intent %s · rev %d  "
 		+ "| meaning %s · rep %s(%d) · war %s · gov %s"
@@ -717,6 +734,38 @@ func _jobs_line_simple() -> String:
 		int(s.get("completed", 0)),
 		beds_built,
 	]
+
+
+## Simple beds-only line for readable HUD — players care about shelter, not job queue internals.
+func _beds_line_simple() -> String:
+	var beds_built: int = _world.bed_count() if _world != null else 0
+	if beds_built <= 0:
+		return ""
+	return "[color=#dcb478]Beds:[/color] [b]%d[/b]" % beds_built
+
+
+## Shorter wildlife line for readable HUD — just total count and trend, no nearby/threat details.
+func _wildlife_line_simple() -> String:
+	if _wildlife_sample_tick == 0:
+		return ""
+	var t: int = int(_wildlife_snapshot.get("total", 0))
+	var tail: String = ""
+	if _wildlife_history.size() >= 3:
+		var recent_avg: float = 0.0
+		var older_avg: float = 0.0
+		var split: int = _wildlife_history.size() / 2
+		for i in range(split):
+			older_avg += float(_wildlife_history[i])
+		for i in range(split, _wildlife_history.size()):
+			recent_avg += float(_wildlife_history[i])
+		older_avg /= float(split)
+		recent_avg /= float(_wildlife_history.size() - split)
+		var trend_ratio: float = recent_avg / maxf(1.0, older_avg)
+		if trend_ratio > 1.1:
+			tail = " ▲"
+		elif trend_ratio < 0.9:
+			tail = " ▼"
+	return "[color=#a5d6a7]Wildlife:[/color] %d%s" % [t, tail]
 
 
 func _player_status_line() -> String:

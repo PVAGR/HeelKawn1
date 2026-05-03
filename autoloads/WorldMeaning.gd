@@ -153,6 +153,23 @@ func get_region_meaning_summary(region_key: int) -> Dictionary:
 	return out
 
 
+## Public API: deterministic region tags derived from recorded world facts.
+## Returns a PackedStringArray of tag strings for the given region_key.
+## No mutation, no RNG, no UI. Tags are computed from WorldMemory event data.
+func get_region_tags(region_key: int) -> PackedStringArray:
+	var meaning: Dictionary = get_region_meaning(region_key)
+	var tags_val: Variant = meaning.get("tags", PackedStringArray())
+	if tags_val is PackedStringArray:
+		return tags_val
+	if tags_val is Array:
+		var psa: PackedStringArray = PackedStringArray()
+		for item in (tags_val as Array):
+			if item is String:
+				psa.append(item)
+		return psa
+	return PackedStringArray()
+
+
 func get_cultural_style(region_key: int) -> String:
 	var tags: PackedStringArray = get_zone_tags(str(region_key))
 	if "myth_origin" in tags:
@@ -249,6 +266,16 @@ func _compute_region_tags(data: Dictionary) -> PackedStringArray:
 		tags.append("graveyard")
 	if total_deaths >= 5:
 		tags.append("blood_soaked")
+	if total_deaths >= 2:
+		tags.append("repeated_death")
+	
+	# Hunger-place: starvation in an inhabited region
+	if starvation_events >= 1 and buildings_built >= 1:
+		tags.append("hunger_place")
+	
+	# Safe-hearth: shelter + knowledge + no deaths
+	if total_deaths == 0 and buildings_built >= 1 and teaching_events >= 1:
+		tags.append("safe_hearth")
 	
 	return tags
 

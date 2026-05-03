@@ -440,7 +440,11 @@ func record_event(e: Dictionary) -> void:
 
 
 func _normalize_event_payload(e: Dictionary) -> Dictionary:
-    var payload: Dictionary = e.duplicate(true)
+    # Shallow copy is sufficient — callers pass fresh dict literals,
+    # and we only add top-level keys. Deep copy was defensive but expensive.
+    var payload: Dictionary = {}
+    for k in e:
+        payload[k] = e[k]
     payload["eid"] = _next_event_id
     _next_event_id += 1
     payload["s"] = SCHEMA

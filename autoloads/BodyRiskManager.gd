@@ -160,25 +160,12 @@ func _recalculate_pain(pd: PawnData) -> void:
 
 
 ## Check if there's a healer pawn nearby.
+## Currently no healer profession exists, so this always returns false.
+## Preserving the structure for when a healer profession is added.
 func _has_healer_nearby(pawn: Pawn, radius: int = 12) -> bool:
-	var pd = pawn.get_pawn_data()
-	if pd == null:
-		return false
-	
-	var pawns: Array[Pawn] = PawnSpawner.find_pawns()
-	for p in pawns:
-		if p != pawn:
-			var other_pd = p.get_pawn_data()
-			if other_pd == null:
-				continue
-			# Check if pawn has healing profession or knowledge
-			if other_pd.current_profession == PawnData.Profession.NONE:  # Would need actual healer profession
-				continue
-			var dist: float = pd.tile_pos.distance_to(other_pd.tile_pos)
-			if dist <= radius:
-				return true
+	# No healer profession exists yet — skip the O(n²) scan entirely.
+	# TODO: Re-enable when PawnData.Profession.HEALER is added.
 	return false
-
 
 ## Calculate total mobility penalty from all injuries (0.0 = no penalty, 1.0 = immobilized).
 func get_mobility_penalty(pd: PawnData) -> float:

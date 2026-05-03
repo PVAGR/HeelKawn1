@@ -64,8 +64,16 @@ func _process(_delta: float) -> void:
 			_meaning_by_region[rk] = ts["to_label"]
 
 
+var _last_tick: int = -1000
+
 func _tick() -> void:
 	# Called by GameManager or Main on tick; poll for meaning changes
+	# Throttle: meaning labels change slowly, no need to check every tick
+	if GameManager != null:
+		var now: int = GameManager.tick_count
+		if now - _last_tick < 20:
+			return
+		_last_tick = now
 	_update_meaning_snapshot()
 
 

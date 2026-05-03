@@ -323,8 +323,20 @@ var _recruitment_signal_cache: Array[Dictionary] = []
 var _cohort_stability_ticks: int = 0
 var _cohort_locus_tile: Vector2i = Vector2i(-1, -1)
 var _cohort_stability_job_type: int = -1
+## Per-tick cache for global food queries — avoids every pawn calling StockpileManager.total_food()
+static var _s_food_units: int = 0
+static var _s_food_pressure: float = 0.0
+static var _s_food_emergency: bool = false
+static var _s_food_cache_tick: int = -1
+## Per-tick cache for idle utility context — avoids rebuilding dict every idle tick
+var _cached_utility_context: Dictionary = {}
+var _cached_utility_context_tick: int = -1
+var _cached_utility_food_emergency: bool = false
 var _anim_t: float = 0.0
 var _draw_frame_counter: int = 0
+## Cached enemy list — refreshed every 30 ticks to avoid per-pawn scene tree scans.
+static var _cached_enemies: Array = []
+static var _cached_enemies_tick: int = -100
 var _sfx: AudioStreamPlayer2D = null
 var _action_popup: ActionPopupLabel = null
 var _hit_flash_ticks: int = 0
@@ -782,6 +794,7 @@ func _ready() -> void:
 	add_child(_sfx)
 	_action_popup = $ActionPopup
 	add_to_group("tickable")
+	set_process(false)  # Pawns start idle — no per-frame movement needed
 	if TickManager != null:
 		TickManager.mark_tickable_cache_dirty()
 	call_deferred("_pawn_connect_sim_tick_deferred")
@@ -1558,10 +1571,11 @@ func _process(delta: float) -> void:
 	if SpatialManager != null and data != null and old_tile_pos != data.tile_pos:
 		SpatialManager.update_pawn_position(int(data.id), data.tile_pos)
 
-	# Redraw during movement at a throttled rate (every 2nd frame)
+	# Redraw during movement at a throttled rate (every 3rd frame)
 	# to keep bobbing animation visible without overwhelming the renderer.
 	_draw_frame_counter += 1
-	if _draw_frame_counter % 2 == 0:
+	if _draw_frame_counter >= 3:
+		_draw_frame_counter = 0
 		queue_redraw()
 
 	# DISABLED cohort bias calculations for performance
@@ -1582,6 +1596,7 @@ func _start_path(path: Array[Vector2i]) -> void:
 		return
 	_target_tile = _path[0]
 	_target_world_pos = _world.tile_to_world(_target_tile)
+	set_process(true)  # Enable per-frame movement while pathing
 
 
 func _advance_path() -> void:
@@ -1599,6 +1614,7 @@ func _clear_path() -> void:
 	_path_index = 0
 	_target_tile = data.tile_pos if data != null else Vector2i.ZERO
 	_target_world_pos = position
+	set_process(false)  # No movement needed — stop per-frame updates
 
 
 func _on_path_complete() -> void:
@@ -1935,14 +1951,19 @@ func _tick_idle() -> void:
 	# 4b. Neural "social" hint: path toward a high-rapport nearby pawn if not already eating/sleeping.
 	if _try_autonomy_social_seek():
 		return
-	var food_units: int = StockpileManager.total_food()
-	var food_pressure: float = 0.0
-	if ColonySimServices != null:
-		food_pressure = ColonySimServices.get_food_pressure()
-	var food_emergency: bool = (
-			food_units <= STOCKPILE_FOOD_CRITICAL_UNITS
-			or food_pressure >= COLONY_FOOD_PRESSURE_FOR_EMERGENCY
-	)
+	# Cache global food queries once per tick across all pawns
+	var now_tick: int = GameManager.tick_count if GameManager != null else 0
+	if now_tick != Pawn._s_food_cache_tick:
+		Pawn._s_food_units = StockpileManager.total_food()
+		Pawn._s_food_pressure = 0.0
+		if ColonySimServices != null:
+			Pawn._s_food_pressure = ColonySimServices.get_food_pressure()
+		Pawn._s_food_emergency = (
+			Pawn._s_food_units <= STOCKPILE_FOOD_CRITICAL_UNITS
+			or Pawn._s_food_pressure >= COLONY_FOOD_PRESSURE_FOR_EMERGENCY
+		)
+		Pawn._s_food_cache_tick = now_tick
+	var food_emergency: bool = Pawn._s_food_emergency
 	var utility_context: Dictionary = _build_idle_utility_context(food_emergency)
 	var available_idle_actions: Array = [
 		{"type": "work"},
@@ -1956,7 +1977,6 @@ func _tick_idle() -> void:
 		available_idle_actions.append({"type": "forage"})
 	var preferred_idle_action: String = "work"
 	if data != null:
-		var now_tick: int = GameManager.tick_count if GameManager != null else 0
 		var should_refresh_idle_action: bool = (
 			_next_idle_action_refresh_tick < 0
 			or now_tick >= _next_idle_action_refresh_tick
@@ -2206,6 +2226,9 @@ func _parity_idle_context() -> Dictionary:
 
 
 func _build_idle_utility_context(food_emergency: bool) -> Dictionary:
+	var t: int = GameManager.tick_count if GameManager != null else 0
+	if t == _cached_utility_context_tick and food_emergency == _cached_utility_food_emergency and not _cached_utility_context.is_empty():
+		return _cached_utility_context
 	var weather: String = "clear"
 	if WorldAI != null and WorldAI.has_method("get_weather_tag_for_sim"):
 		weather = WorldAI.get_weather_tag_for_sim()
@@ -2215,8 +2238,8 @@ func _build_idle_utility_context(food_emergency: bool) -> Dictionary:
 		parity_utility = pc["utility_bias"] as Dictionary
 	if pc.has("weather"):
 		weather = str(pc["weather"])
-	return {
-		"is_night": DayNightCycle.is_night_for_tick(GameManager.tick_count),
+	_cached_utility_context = {
+		"is_night": DayNightCycle.is_night_for_tick(t),
 		"weather": weather,
 		"resources_available": JobManager.open_count() > 0,
 		"danger_level": _idle_danger_level(),
@@ -2226,6 +2249,9 @@ func _build_idle_utility_context(food_emergency: bool) -> Dictionary:
 		"food_emergency": food_emergency,
 		"parity_utility": parity_utility,
 	}
+	_cached_utility_context_tick = t
+	_cached_utility_food_emergency = food_emergency
+	return _cached_utility_context
 
 
 func _idle_settlement_pressure() -> float:
@@ -5143,7 +5169,7 @@ func flee_from_danger() -> bool:
 	var nearest_danger_dist: float = INF
 	
 	# Check for nearby enemies
-	for enemy in get_tree().get_nodes_in_group("enemies"):
+	for enemy in Pawn._get_enemies_cached():
 		if not is_instance_valid(enemy):
 			continue
 		var enemy_tile: Vector2i = _world.world_to_tile(enemy.position)
@@ -5214,7 +5240,7 @@ func _tick_fleeing() -> void:
 	
 	# Check if still in danger
 	var danger_nearby: bool = false
-	for enemy in get_tree().get_nodes_in_group("enemies"):
+	for enemy in Pawn._get_enemies_cached():
 		if not is_instance_valid(enemy):
 			continue
 		var enemy_tile: Vector2i = _world.world_to_tile(enemy.position)
@@ -5268,7 +5294,7 @@ func _tick_hiding() -> void:
 	if _path.is_empty():
 		# At hiding spot, wait for danger to pass
 		var danger_nearby: bool = false
-		for enemy in get_tree().get_nodes_in_group("enemies"):
+		for enemy in Pawn._get_enemies_cached():
 			if not is_instance_valid(enemy):
 				continue
 			var enemy_tile: Vector2i = _world.world_to_tile(enemy.position)
@@ -5576,6 +5602,20 @@ func _profession_color(prof: int) -> Color:
 		PawnData.Profession.WARRIOR:  return Color(0.9, 0.2, 0.2)     # red
 		PawnData.Profession.SCHOLAR:  return Color(0.3, 0.5, 0.9)     # blue
 		_:                            return Color.WHITE
+
+
+## Get cached enemy list, refreshing every 30 ticks.
+static func _get_enemies_cached() -> Array:
+	var now: int = GameManager.tick_count if GameManager != null else 0
+	if now - Pawn._cached_enemies_tick >= 30:
+		Pawn._cached_enemies = []
+		var tree: SceneTree = Engine.get_main_loop() as SceneTree
+		if tree != null:
+			for e in tree.get_nodes_in_group("enemies"):
+				if e != null and is_instance_valid(e):
+					Pawn._cached_enemies.append(e)
+		Pawn._cached_enemies_tick = now
+	return Pawn._cached_enemies
 
 
 func _body_radius() -> float:

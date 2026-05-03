@@ -1210,8 +1210,16 @@ func _update_governance_state() -> void:
         _process_war_state(i, pawns)
 
 
+var _living_pawns_cache: Array[Pawn] = []
+var _living_pawns_cache_tick: int = -1
+
 func _living_pawns() -> Array[Pawn]:
-    return PawnSpawner.find_pawns()
+    var t: int = GameManager.tick_count if GameManager != null else 0
+    if t == _living_pawns_cache_tick:
+        return _living_pawns_cache
+    _living_pawns_cache = PawnSpawner.find_pawns()
+    _living_pawns_cache_tick = t
+    return _living_pawns_cache
 
 
 func _governance_for_settlement(st: Dictionary, pawns: Array[Pawn]) -> Dictionary:
@@ -1238,17 +1246,21 @@ func _governance_for_settlement(st: Dictionary, pawns: Array[Pawn]) -> Dictionar
     if ranked.is_empty():
         return {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
     # Influence scales with local settlement population.
+    # Build a lookup dict to avoid O(n²) pawn scan per ranked entry.
+    var pawn_by_id: Dictionary = {}
+    for p in pawns:
+        if p.data != null:
+            pawn_by_id[int(p.data.id)] = p
     for rec in ranked:
         var pid: int = int((rec as Dictionary).get("id", -1))
-        for p in pawns:
-            if p.data != null and int(p.data.id) == pid:
-                (rec as Dictionary)["influence"] = p.data.calculate_influence(ranked.size())
-                # Life-path ruler bonus: pawns on ruler path gain influence boost.
-                if int(p.data.life_path) == 3:  # PawnData.LifePath.RULER
-                    var lp_prog: int = int(p.data.life_path_progress)
-                    var ruler_bonus: float = float(lp_prog) * 0.5  # +0.5 per progress level
-                    (rec as Dictionary)["influence"] = float((rec as Dictionary)["influence"]) + ruler_bonus
-                break
+        var p: Pawn = pawn_by_id.get(pid) as Pawn
+        if p != null and p.data != null:
+            (rec as Dictionary)["influence"] = p.data.calculate_influence(ranked.size())
+            # Life-path ruler bonus: pawns on ruler path gain influence boost.
+            if int(p.data.life_path) == 3:  # PawnData.LifePath.RULER
+                var lp_prog: int = int(p.data.life_path_progress)
+                var ruler_bonus: float = float(lp_prog) * 0.5  # +0.5 per progress level
+                (rec as Dictionary)["influence"] = float((rec as Dictionary)["influence"]) + ruler_bonus
     ranked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
         var ai: float = float(a.get("influence", 0.0))
         var bi: float = float(b.get("influence", 0.0))
@@ -1539,17 +1551,21 @@ func _pawns_in_settlement(st: Dictionary, pawns: Array[Pawn]) -> Array[Pawn]:
 
 
 func _top_influence(pawns: Array[Pawn], count: int) -> Array[Pawn]:
-    var arr: Array[Pawn] = pawns.duplicate()
-    arr.sort_custom(func(a: Pawn, b: Pawn) -> bool:
-        if a.data == null or b.data == null:
-            return false
-        if not is_equal_approx(a.data.influence, b.data.influence):
-            return a.data.influence > b.data.influence
-        return int(a.data.id) < int(b.data.id)
+    # Build index pairs, sort by influence, then pick top N — avoids array duplicate.
+    var scored: Array = []
+    for p in pawns:
+        if p.data != null:
+            scored.append({"p": p, "inf": p.data.influence, "id": int(p.data.id)})
+    scored.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+        if not is_equal_approx(a["inf"], b["inf"]):
+            return a["inf"] > b["inf"]
+        return a["id"] < b["id"]
     )
-    if arr.size() > count:
-        arr.resize(count)
-    return arr
+    var result: Array[Pawn] = []
+    var limit: int = mini(count, scored.size())
+    for i in range(limit):
+        result.append(scored[i]["p"])
+    return result
 
 
 func _top_influence_excluding(pawns: Array[Pawn], count: int, excluded: Array[Pawn]) -> Array[Pawn]:

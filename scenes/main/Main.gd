@@ -281,6 +281,7 @@ const AMBIENT_AUDIO_UPDATE_INTERVAL_MS: int = 200
 const MAX_AMBIENT_AUDIO_FRAMES_PER_UPDATE: int = 64
 ## 0 = dead/empty, 1 = open/living. Drives crossfade; current region at camera.
 var _meaning_ambient_mood: float = 0.5
+var _meaning_cam_bias_timer: float = 0.0
 ## Settlement style expression (derived): open -> positive, defensive -> negative.
 var _meaning_style_bias: float = 0.0
 ## Full-screen very low-alpha overlay (read-only mood); created in [_ensure_meaning_vignette].
@@ -2531,43 +2532,74 @@ func _accumulate_social_rapport() -> void:
 	const R2: float = 128.0 * 128.0
 	const GAIN: int = 14
 	const OPINION_GAIN: int = 2
+	const CELL_SIZE: float = 160.0  # Grid cell size, slightly larger than proximity radius
 	var pl: Array[Pawn] = []
 	for p in _pawn_spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null:
 			pl.append(p)
 	if pl.size() < 2:
 		return
-	pl.sort_custom(func(a: Pawn, b: Pawn) -> bool: return a.data.id < b.data.id)
+	# Spatial grid: only check pairs within the same or adjacent cells
+	var grid: Dictionary = {}
+	for p in pl:
+		var cx: int = int(p.position.x / CELL_SIZE)
+		var cy: int = int(p.position.y / CELL_SIZE)
+		var key: int = cx * 10000 + cy
+		if not grid.has(key):
+			grid[key] = []
+		grid[key].append(p)
 	var wm_budget: int = SOCIAL_WM_RECORD_BUDGET_PER_PASS
 	var comp_by_id: Dictionary = {}
 	for p in pl:
 		comp_by_id[int(p.data.id)] = _world.pathfinder.component_of(p.data.tile_pos)
-	for i in range(pl.size()):
-		var pa: Pawn = pl[i]
-		var da: PawnData = pa.data
-		var da_id: int = int(da.id)
-		var da_comp: int = int(comp_by_id.get(da_id, -1))
-		if da_comp < 0 or pa.is_sleeping():
-			continue
-		for j in range(i + 1, pl.size()):
-			var pb: Pawn = pl[j]
-			var db: PawnData = pb.data
-			if pb.is_sleeping():
+	var checked_pairs: Dictionary = {}
+	for cell_key in grid:
+		var cx: int = cell_key / 10000
+		var cy: int = cell_key % 10000
+		# Gather pawns from this cell and 8 neighbors
+		var nearby: Array[Pawn] = []
+		for dx in range(-1, 2):
+			for dy in range(-1, 2):
+				var nk: int = (cx + dx) * 10000 + (cy + dy)
+				if grid.has(nk):
+					nearby.append_array(grid[nk])
+		var cell_pawns: Array = grid[cell_key]
+		for pa in cell_pawns:
+			var da: PawnData = pa.data
+			if da == null or pa.is_sleeping():
 				continue
-			if da.hunger <= 38.0 or db.hunger <= 38.0:
+			var da_id: int = int(da.id)
+			var da_comp: int = int(comp_by_id.get(da_id, -1))
+			if da_comp < 0:
 				continue
-			var db_comp: int = int(comp_by_id.get(int(db.id), -1))
-			if da_comp != db_comp:
-				continue
-			if pa.position.distance_squared_to(pb.position) > R2:
-				continue
-			da.add_social_rapport(int(db.id), GAIN)
-			db.add_social_rapport(int(da.id), GAIN)
-			da.modify_character_opinion(int(db.id), OPINION_GAIN)
-			db.modify_character_opinion(int(da.id), OPINION_GAIN)
-			if wm_budget > 0:
-				var n: int = _record_social_pair_events(da, db, wm_budget)
-				wm_budget -= n
+			for pb in nearby:
+				if pb == pa:
+					continue
+				var db: PawnData = pb.data
+				if db == null or pb.is_sleeping():
+					continue
+				var db_id: int = int(db.id)
+				# Avoid double-processing: only process if pa.id < pb.id
+				if da_id >= db_id:
+					continue
+				var pair_key: int = da_id * 100000 + db_id
+				if checked_pairs.has(pair_key):
+					continue
+				checked_pairs[pair_key] = true
+				if da.hunger <= 38.0 or db.hunger <= 38.0:
+					continue
+				var db_comp: int = int(comp_by_id.get(db_id, -1))
+				if da_comp != db_comp:
+					continue
+				if pa.position.distance_squared_to(pb.position) > R2:
+					continue
+				da.add_social_rapport(db_id, GAIN)
+				db.add_social_rapport(da_id, GAIN)
+				da.modify_character_opinion(db_id, OPINION_GAIN)
+				db.modify_character_opinion(da_id, OPINION_GAIN)
+				if wm_budget > 0:
+					var n: int = _record_social_pair_events(da, db, wm_budget)
+					wm_budget -= n
 
 
 func _process_reproduction_tick() -> void:
@@ -2782,6 +2814,11 @@ func _update_camera_meaning_bias(delta: float) -> void:
 		return
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
 		return
+	# Throttle: camera bias changes slowly, no need to recalculate every frame
+	_meaning_cam_bias_timer += delta
+	if _meaning_cam_bias_timer < 0.2:
+		return
+	_meaning_cam_bias_timer = 0.0
 	var vel: Vector2 = Vector2.ZERO
 	for s in SettlementMemory.settlements:
 		if s is not Dictionary:
@@ -4664,7 +4701,9 @@ func _post_hunting_jobs_for_animals() -> void:
 		return
 	var hunt_budget: int = _dynamic_hunt_job_budget(_hunt_live_total_cache)
 	var hunt_jobs_posted: int = 0
-	var live_by_species: Dictionary = _hunt_live_counts_cache.duplicate(true)
+	var live_by_species: Dictionary = {}
+	for k in _hunt_live_counts_cache:
+		live_by_species[k] = _hunt_live_counts_cache[k]
 	var scan_limit: int = maxi(HUNT_CANDIDATE_SCAN_LIMIT_MIN, hunt_budget * 4)
 	var scanned: int = 0
 	while (
@@ -5752,6 +5791,9 @@ func _restore_stockpiles_from_save(zones_data: Array) -> void:
 
 func _on_enemy_tick(tick: int, spawner: EnemySpawner) -> void:
 	if spawner == null:
+		return
+	# Skip enemy processing entirely when no enemies exist
+	if spawner.enemies.is_empty():
 		return
 	spawner.process_tick(_world, tick)
 	if spawner.get_enemy_count() > 0 and tick % 100 == 0 and OS.is_debug_build():

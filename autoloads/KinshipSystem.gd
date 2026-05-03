@@ -20,6 +20,9 @@ var obligations: Dictionary = {}
 # Inheritance records: inheritance_id -> inheritance data
 var inheritance_records: Dictionary = {}
 
+# Tick connected flag
+var _tick_connected: bool = false
+
 
 func _with_person_id(person_id: int, data: Dictionary) -> Dictionary:
 	var merged: Dictionary = data.duplicate(true)
@@ -517,3 +520,224 @@ func from_save_dict(d: Dictionary) -> void:
 		obligations = d["obligations"].duplicate(true)
 	if d.has("inheritance_records"):
 		inheritance_records = d["inheritance_records"].duplicate(true)
+
+
+# ============================================================================
+# LINEAGE KEEPER - Kin APIs (deterministic, tick-based mutations)
+# ============================================================================
+
+signal kinship_updated(pawn_id: int)
+
+## parent_id -> [child_ids]
+var _parent_to_children: Dictionary = {}
+
+## child_id -> [parent_ids]
+var _child_to_parents: Dictionary = {}
+
+## Pending births: child_id -> {child_id, mother_id, father_id}
+var _pending_births: Dictionary = {}
+
+
+func _ready() -> void:
+	# Connect to GameManager tick if available
+	var gm = get_node_or_null("/root/GameManager")
+	if gm != null and gm.has_signal("game_tick"):
+		if not gm.game_tick.is_connected(_on_game_tick):
+			gm.game_tick.connect(_on_game_tick)
+
+
+## Internal tick handler - flushes pending births
+func _on_game_tick(tick: int) -> void:
+	_flush_pending_births(tick)
+
+
+## Queue a birth for processing on next game_tick
+func register_birth(child_id: int, mother_id: int, father_id: int) -> void:
+	# Invalid child_id check
+	if child_id <= 0:
+		return
+	
+	# Idempotent: already registered in graph
+	if _child_to_parents.has(child_id):
+		return
+	
+	# Idempotent: already pending
+	if _pending_births.has(child_id):
+		return
+	
+	# Queue the birth (do not mutate graph immediately)
+	_pending_births[child_id] = {
+		"child_id": child_id,
+		"mother_id": mother_id,
+		"father_id": father_id,
+	}
+
+
+## Get direct children of a pawn (lineage)
+func get_lineage_children(pawn_id: int) -> Array[int]:
+	if pawn_id <= 0:
+		return []
+	
+	var result: Array[int] = []
+	if _parent_to_children.has(pawn_id):
+		for child_id in _parent_to_children[pawn_id]:
+			result.append(int(child_id))
+	
+	# Also check graph if available
+	if RelationalGraph:
+		for e in RelationalGraph.edges:
+			if e.get("type", "") == "parent" and e.get("from") == pawn_id:
+				var cid = int(e.get("to", -1))
+				if cid > 0 and not result.has(cid):
+					result.append(cid)
+			elif e.get("type", "") == "child" and e.get("to") == pawn_id:
+				var cid = int(e.get("from", -1))
+				if cid > 0 and not result.has(cid):
+					result.append(cid)
+	
+	result.sort()
+	return result
+
+
+## Get direct parents of a pawn (lineage)
+func get_lineage_parents(pawn_id: int) -> Array[int]:
+	if pawn_id <= 0:
+		return []
+	
+	var result: Array[int] = []
+	if _child_to_parents.has(pawn_id):
+		for parent_id in _child_to_parents[pawn_id]:
+			result.append(int(parent_id))
+	
+	# Also check graph if available
+	if RelationalGraph:
+		for e in RelationalGraph.edges:
+			if e.get("type", "") == "parent" and e.get("to") == pawn_id:
+				var pid = int(e.get("from", -1))
+				if pid > 0 and not result.has(pid):
+					result.append(pid)
+			elif e.get("type", "") == "child" and e.get("from") == pawn_id:
+				var pid = int(e.get("to", -1))
+				if pid > 0 and not result.has(pid):
+					result.append(pid)
+	
+	result.sort()
+	return result
+
+
+## Get siblings of a pawn (lineage, shares at least one parent, excludes self)
+func get_lineage_siblings(pawn_id: int) -> Array[int]:
+	if pawn_id <= 0:
+		return []
+	
+	var result: Array[int] = []
+	var parents = get_lineage_parents(pawn_id)
+	
+	# Union all children of all parents
+	for parent_id in parents:
+		for child_id in get_lineage_children(parent_id):
+			if int(child_id) != pawn_id and not result.has(int(child_id)):
+				result.append(int(child_id))
+	
+	result.sort()
+	return result
+
+
+## Get ancestors up to specified depth (cap at 10)
+func get_lineage_ancestors(pawn_id: int, depth: int) -> Array[int]:
+	if pawn_id <= 0 or depth <= 0:
+		return []
+	
+	var max_depth = mini(depth, 10)
+	var result: Array[int] = []
+	var visited: Dictionary = {}
+	
+	# BFS by generation
+	var current_gen: Array[int] = [pawn_id]
+	for gen in range(max_depth):
+		var next_gen: Array[int] = []
+		for pid in current_gen:
+			if visited.has(pid):
+				continue
+			visited[pid] = true
+			
+			# Get parents (grandparents at next level)
+			var parents = get_lineage_parents(pid)
+			for parent_id in parents:
+				if not visited.has(parent_id):
+					result.append(parent_id)
+					next_gen.append(parent_id)
+		
+		current_gen = next_gen
+		if current_gen.is_empty():
+			break
+	
+	result.sort()
+	return result
+
+
+## Flush pending births - applies queued births to graph
+func _flush_pending_births(tick: int) -> void:
+	if _pending_births.is_empty():
+		return
+	
+	# Sort by child_id for deterministic order
+	var sorted_children = _pending_births.keys()
+	sorted_children.sort()
+	
+	var processed: Array[int] = []
+	for child_id in sorted_children:
+		var birth = _pending_births[child_id]
+		var cid = int(birth["child_id"])
+		var mother = int(birth["mother_id"])
+		var father = int(birth["father_id"])
+		
+		# Skip if already registered
+		if _child_to_parents.has(cid):
+			continue
+		
+		# Build valid parents array
+		var valid_parents: Array[int] = []
+		if mother > 0:
+			valid_parents.append(mother)
+		if father > 0:
+			valid_parents.append(father)
+		
+		# Insert into child_to_parents
+		_child_to_parents[cid] = valid_parents.duplicate()
+		
+		# Insert into parent_to_children for each valid parent
+		for parent_id in valid_parents:
+			if not _parent_to_children.has(parent_id):
+				_parent_to_children[parent_id] = []
+			var children = _parent_to_children[parent_id]
+			if not children.has(cid):
+				children.append(cid)
+			_parent_to_children[parent_id] = children
+		
+		# Record to WorldMemory
+		var world_mem = get_node_or_null("/root/WorldMemory")
+		if world_mem:
+			world_mem.record_event({
+				"type": "birth",
+				"child_id": cid,
+				"mother_id": mother,
+				"father_id": father,
+				"tick": tick,
+			})
+		
+		# Emit signals
+		kinship_updated.emit(cid)
+		for parent_id in valid_parents:
+			kinship_updated.emit(parent_id)
+		
+		processed.append(cid)
+	
+	# Clear processed births
+	for cid in processed:
+		_pending_births.erase(cid)
+
+
+## Test helper - flush pending births without game_tick
+func _test_flush_pending_births(tick: int = 0) -> void:
+	_flush_pending_births(tick)

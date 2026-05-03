@@ -11,13 +11,13 @@ extends Node
 
 signal tick_processed(tick_number: int)
 
-const TICK_STEP: float = 1.0 / 60.0  # Fixed simulation step (60 ticks/sec base)
+const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base; stable for HeelKawn)
 
 ## SAFETY: Maximum ticks processed in one render frame (bounded burst).
 ## Hard cap prevents spiral-of-death at high speeds (12x+, 100x).
-## At 100x speed with 60 FPS: delta ≈ 16.7ms * 100 = 1667ms of sim → ~100 ticks.
-## With MAX=64, we process 64/frame, degrade gracefully, recover next frames.
-const MAX_TICKS_PER_FRAME: int = 64
+## At 100x speed: delta ≈ 16.7ms * 100 = 1667ms of sim → ~1667 ticks pending.
+## With MAX=10, we process 10/frame, degrade gracefully, recover over ~167 frames.
+const MAX_TICKS_PER_FRAME: int = 10
 
 var current_tick: int = 0
 var _accumulated_time: float = 0.0

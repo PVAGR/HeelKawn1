@@ -353,24 +353,24 @@ static func _draw_humanoid_hair(
 	if data.hair_style == HairStyle.NONE:
 		return
 	
-	var radius = body_radius if body_radius > 0.0 else _get_body_radius(data)
-	var head_pos = pos + Vector2(0, -radius * 1.8) if pose_type != 3 else pos + Vector2(-radius * 1.2, radius * 0.2)
+	var local_radius = body_radius if body_radius > 0.0 else _get_body_radius(data)
+	var head_pos = pos + Vector2(0, -local_radius * 1.8) if pose_type != 3 else pos + Vector2(-local_radius * 1.2, local_radius * 0.2)
 	var color = data.hair_color
 	
 	match data.hair_style:
 		HairStyle.SHORT:
 			# Short cap above head
-			canvas_item.draw_arc(head_pos, radius * 0.9, 0, PI, 2, color)
+			canvas_item.draw_arc(head_pos, local_radius * 0.9, 0, PI, 2, color)
 		
 		HairStyle.MOHAWK:
 			# Spiky ridge down center
 			for i in range(3):
-				var spike_pos = head_pos + Vector2(0, -radius * 0.5 - i * 0.5)
+				var spike_pos = head_pos + Vector2(0, -local_radius * 0.5 - i * 0.5)
 				canvas_item.draw_circle(spike_pos, 0.5, color)
 		
 		HairStyle.BUN:
 			# Bun on top
-			canvas_item.draw_circle(head_pos + Vector2(0, -radius * 1.2), radius * 0.5, color)
+			canvas_item.draw_circle(head_pos + Vector2(0, -local_radius * 1.2), local_radius * 0.5, color)
 
 #---------------------------------------------------------------------------
 # Apparel/Clothing Rendering
@@ -386,26 +386,26 @@ static func _draw_humanoid_apparel(
 	"""Draw clothing trim overlay on shoulders and waist."""
 	
 	var color = data.apparel_color
-	var radius = body_radius if body_radius > 0.0 else _get_body_radius(data)
+	var local_radius = body_radius if body_radius > 0.0 else _get_body_radius(data)
 	
 	# Shoulder trim (left)
 	canvas_item.draw_line(
-		pos + Vector2(-radius * 0.6, -radius * 0.3),
-		pos + Vector2(-radius * 0.4, -radius * 0.5),
+		pos + Vector2(-local_radius * 0.6, -local_radius * 0.3),
+		pos + Vector2(-local_radius * 0.4, -local_radius * 0.5),
 		color, 0.5
 	)
 	
 	# Shoulder trim (right)
 	canvas_item.draw_line(
-		pos + Vector2(radius * 0.6, -radius * 0.3),
-		pos + Vector2(radius * 0.4, -radius * 0.5),
+		pos + Vector2(local_radius * 0.6, -local_radius * 0.3),
+		pos + Vector2(local_radius * 0.4, -local_radius * 0.5),
 		color, 0.5
 	)
 	
 	# Waist trim
 	canvas_item.draw_line(
-		pos + Vector2(-radius * 0.5, radius * 0.4),
-		pos + Vector2(radius * 0.5, radius * 0.4),
+		pos + Vector2(-local_radius * 0.5, local_radius * 0.4),
+		pos + Vector2(local_radius * 0.5, local_radius * 0.4),
 		color, 0.5
 	)
 

@@ -77,6 +77,16 @@ func recompute() -> void:
 		var last: int = int(rec["last_death_tick"])
 		if t > last:
 			rec["last_death_tick"] = t
+
+		# Also process string-typed WorldMemory events for lineage and stranger tracking
+		var typ: String = str(e.get("type", "")).to_lower()
+		match typ:
+			"settlement_revival_with_lineage":
+				rec["continuity_count"] = int(rec.get("continuity_count", 0)) + 1
+			"settlement_new_foundation":
+				rec["stranger_count"] = int(rec.get("stranger_count", 0)) + 1
+			"pawn_death":
+				rec["death_count"] = int(rec.get("death_count", 0)) + 1
 	
 	# Derive total_deaths and death_density
 	for rk in meaning_by_region.keys():
@@ -86,7 +96,16 @@ func recompute() -> void:
 		var tot: int = pdc + adc
 		r2["total_deaths"] = tot
 		r2["death_density"] = classify_death_density(tot)
-		r2["meaning_label"] = describe_meaning_label(tot)
+		# Lineage-based meaning overrides
+		var continuity_count: int = int(r2.get("continuity_count", 0))
+		var stranger_count: int = int(r2.get("stranger_count", 0))
+		var death_count: int = int(r2.get("death_count", 0))
+		if continuity_count > 1:
+			r2["meaning_label"] = "resilient"
+		elif death_count > 5 and stranger_count > 0:
+			r2["meaning_label"] = "cursed"
+		else:
+			r2["meaning_label"] = "scarred"
 		r2["tags"] = _compute_region_tags(r2)
 	
 	# Derive enhanced meanings
@@ -162,6 +181,9 @@ func get_wildlife_trend(region_key: int) -> String:
 
 func _default_region_entry() -> Dictionary:
 	return {
+		"continuity_count": 0,
+		"stranger_count": 0,
+		"death_count": 0,
 		"pawn_deaths": 0,
 		"animal_deaths": 0,
 		"total_deaths": 0,

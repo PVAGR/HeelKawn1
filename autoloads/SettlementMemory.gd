@@ -863,9 +863,20 @@ func _settlement_state_v1(
     var revival_score: int = _deterministic_revival_score(
             ticks_since_collapse, scar_max, regional_peace_ticks, culture_branch, reputation_min
     )
-    # Canonical flow: abandoned → revivable → recovering → active
-    if revival_score < REVIVAL_SCORE_REVIVABLE_MIN:
+    # Canonical flow: abandoned → recovering → revivable → active
+    # Score gates: <35=abandoned, 35-69=recovering, 70-87=revivable, 88+=active
+    if scar_max <= REVIVAL_SCAR_MAX and regional_peace_ticks >= peace_threshold:
+        if revival_score >= REVIVAL_SCORE_ACTIVE_MIN and scar_max <= 1 and regional_peace_ticks >= peace_threshold * 2:
+            return "active"
+        if revival_score >= REVIVAL_SCORE_REVIVABLE_MIN:
+            return "revivable"
+        if revival_score >= REVIVAL_SCORE_RECOVERING_MIN:
+            return "recovering"
+    # Outside revival branch: score too low or conditions not met
+    if revival_score < REVIVAL_SCORE_RECOVERING_MIN:
         return "abandoned"
+    # Score >= 35 but scar > 2 or peace insufficient — still recovering
+    return "recovering"
     if scar_max <= REVIVABLE_SCAR_MAX and regional_peace_ticks >= peace_threshold:
         if revival_score >= REVIVAL_SCORE_ACTIVE_MIN and scar_max <= 1 and regional_peace_ticks >= peace_threshold * 2:
             return "active"

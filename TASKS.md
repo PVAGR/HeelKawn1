@@ -57,14 +57,12 @@
 ## IN PROGRESS 🔶
 
 ### Critical: Settlement State Machine Fix
-- [ ] **BLOCKER**: Fix `recovering` state semantics in SettlementMemory.gd
-  - Current issue: `recovering` used as intermediate state BEFORE `revivable`, contradicts REVIVAL_CONSTRAINTS.md
-  - Required flow: `abandoned` → `revivable` → `recovering` → `active`
-  - SettlementRebirth.gd only spawns into `revivable`, missing `recovering` settlements
-  - _state_to_meaning_label() returns non-standard "recovering" instead of WorldMeaning labels
-- [ ] Update _settlement_state_v1() to match canonical flow
-- [ ] Update SettlementRebirth.gd to accept both `revivable` AND `recovering` states
-- [ ] Fix _state_to_meaning_label() to return standard WorldMeaning labels
+- [x] **BLOCKER**: Fix `recovering` state semantics in SettlementMemory.gd
+  - Canonical flow now: `abandoned` → `recovering` → `revivable` → `active`
+  - Score gates: <35=abandoned, 35-69=recovering, 70-87=revivable, 88+=active
+- [x] Update _settlement_state_v1() to match canonical flow
+- [x] Update SettlementRebirth.gd to accept both `revivable` AND `recovering` states
+- [x] Fix _state_to_meaning_label() to return standard WorldMeaning labels (already correct: "quiet"/"scarred"/"bloodied"/"grave")
 - [ ] Add validation tests for state transitions
 - [ ] Document state machine in REVIVAL_CONSTRAINTS.md with diagram
 

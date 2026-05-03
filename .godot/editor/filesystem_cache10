@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1777769275
+::res://::1777770545
 AI_README.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 BIOME_DRIVEN_ARCHITECTURE.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 blackbox_mcp_settings.json::JSON::-1::1777694600::0::1::::<><><>0<>0<><>::
@@ -109,7 +109,7 @@ GodotBuddyDock.tscn::PackedScene::5103328612067216837::1777694600::0::1::::<><><
 loading.png::CompressedTexture2D::2205840014398374103::1777694600::1777695766::1::::<><><>0<>0<>8708dc21ada07be0b7f15a08a8812a75<>res://.godot/imported/loading.png-4a6d5b8f52b079f395fd7e662c514f57.ctex::
 LoadingIcon.gd::GDScript::8695608469916876005::1777694600::0::1::::<>TextureRect<><>0<>0<><>::
 plugin.cfg::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
-::res://autoloads/::1777767018
+::res://autoloads/::1777769293
 AgeMemory.gd::GDScript::3623017377226678626::1777694600::0::1::::<>Node<><>0<>0<><>::
 AIAgentManager.gd::GDScript::4954939857757967540::1777694600::0::1::::<>Node<><>0<>0<><>::
 AuthoritySystem.gd::GDScript::662900908174916362::1777694600::0::1::::<>Node<><>0<>0<><>::
@@ -131,7 +131,7 @@ GameManager.gd::GDScript::5622587907003291061::1777765505::0::1::::<>Node<><>0<>
 GeneticEvolution.gd::GDScript::8750185901044209157::1777694600::0::1::::<>Node<><>0<>0<><>::
 HistoricalSimulation.gd::GDScript::5001299926847266409::1777694600::0::1::::<>Node<><>0<>0<><>::
 IntentMemory.gd::GDScript::7523474435381960454::1777694600::0::1::::<>Node<><>0<>0<><>::
-JobManager.gd::GDScript::338930026156234980::1777767018::0::1::::<>Node<><>0<>0<><>::
+JobManager.gd::GDScript::338930026156234980::1777769293::0::1::::<>Node<><>0<>0<><>::
 KinshipSystem.gd::GDScript::2683721610511728833::1777694600::0::1::::<>Node<><>0<>0<><>::
 KnowledgeSystem.gd::GDScript::2224485433782550535::1777694600::0::1::::<>Node<><>0<>0<><>::
 MeaningAmbianceController.gd::GDScript::7214985866489669453::1777694600::0::1::::<>Node<><>0<>0<><>::
@@ -313,12 +313,12 @@ sim_time.gd::GDScript::4781232912047051919::1777694600::0::1::::SimTime<>RefCoun
 world_meaning_safe.gd::GDScript::364407411864143448::1777694600::0::1::::<>RefCounted<><>0<>0<><>::
 ::res://scripts/memory/::1777765505
 LongTermMemory.gd::GDScript::5974671399758704568::1777694762::0::1::::LongTermMemory<>RefCounted<><>0<>0<><>::
-::res://scripts/pawn/::1777767018
+::res://scripts/pawn/::1777769282
 ActionPopupLabel.gd::GDScript::5174978775249392183::1777694600::0::1::::ActionPopupLabel<>Label<><>0<>0<><>::
 Animal.gd::GDScript::3893107784844328532::1777694600::0::1::::Animal<>Node2D<><>0<>0<><>::
 AnimalSpawner.gd::GDScript::8350566320011331673::1777694600::0::1::::AnimalSpawner<>Node<><>0<>0<><>::
 MoodEvent.gd::GDScript::919426344482337370::1777694600::0::1::::MoodEvent<>Resource<><>0<>0<><>::
-Pawn.gd::GDScript::6658654347304257201::1777767018::0::1::::Pawn<>Node2D<><>0<>0<><>::
+Pawn.gd::GDScript::6658654347304257201::1777769282::0::1::::Pawn<>Node2D<><>0<>0<><>::
 PawnData.gd::GDScript::2791538913256910102::1777767018::0::1::::PawnData<>RefCounted<><>0<>0<><>::
 PawnNeuralNetwork.gd::GDScript::5633698643138899321::1777694600::0::1::::PawnNeuralNetwork<>RefCounted<><>0<>0<><>::
 PawnSpawner.gd::GDScript::2411157889018663487::1777767018::0::1::::PawnSpawner<>Node<><>0<>0<><>::

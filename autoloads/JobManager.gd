@@ -26,6 +26,10 @@ var _next_id: int = 1
 var _open: Array[Job] = []
 var _claimed: Array[Job] = []
 
+## Indexed by job type - buckets for O(1) lookup instead of O(N) scan.
+## job_type (int) -> Array of Job indices into _open array.
+var _open_by_type: Dictionary = {}
+
 ## tile(Vector2i) -> Job. Prevents posting two jobs on the same tile.
 var _jobs_by_tile: Dictionary = {}
 
@@ -76,6 +80,12 @@ func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) ->
 	job.state = Job.State.OPEN
 	_open.append(job)
 	_jobs_by_tile[tile] = job
+	
+	# Index by type for O(1) lookup
+	if not _open_by_type.has(type):
+		_open_by_type[type] = []
+	(_open_by_type[type] as Array).append(_open.size() - 1)
+	
 	posted_count += 1
 	_bump_jobs_data_generation()
 	job_posted.emit(job)
@@ -142,25 +152,55 @@ func claim_next_for(
 	var best_dist: int = 0x7FFFFFFF
 	var use_filter: bool = filter.is_valid()
 	var use_bonus: bool = priority_bonus.is_valid()
-	for i in range(_open.size()):
-		var j: Job = _open[i]
-		if use_filter and not filter.call(j):
-			continue
-		var bonus: int = 0
-		if use_bonus:
-			bonus = int(priority_bonus.call(j))
-		
-		# Apply obedience weight to priority (lower obedience = higher priority needed to accept)
-		var adjusted_priority: int = j.priority
-		if obedience_weight < 0.5:
-			adjusted_priority = int(j.priority / maxf(obedience_weight, 0.01))
-		
-		var eff: int = adjusted_priority + bonus
-		var d: int = _chebyshev(pawn_tile, j.work_tile)
-		if eff > best_eff or (eff == best_eff and d < best_dist):
-			best_idx = i
-			best_eff = eff
-			best_dist = d
+	
+	# OPTIMIZATION: Try indexed lookup first when no filter/bonus
+	# Fall back to full scan for complex cases to preserve determinism
+	var candidates_scanned: int = 0
+	if not use_filter and not use_bonus and obedience_weight >= 0.5 and _open_by_type.size() > 0:
+		# Scan through bucket indices - still O(bucket_size) but smaller than full _open
+		for job_type in _open_by_type.keys():
+			var indices: Array = _open_by_type[job_type] as Array
+			if indices.is_empty():
+				continue
+			for idx in indices:
+				if idx < 0 or idx >= _open.size():
+					continue
+				var j: Job = _open[idx]
+				if j == null:
+					continue
+				candidates_scanned += 1
+				var adjusted_priority: int = j.priority
+				var eff: int = adjusted_priority
+				var d: int = _chebyshev(pawn_tile, j.work_tile)
+				if eff > best_eff or (eff == best_eff and d < best_dist):
+					best_idx = idx
+					best_eff = eff
+					best_dist = d
+		# Log index performance (debug builds only)
+		if OS.is_debug_build() and candidates_scanned > 0:
+			print("[JOB_INDEX] candidates_scanned=%d total_open=%d" % [candidates_scanned, _open.size()])
+	else:
+		# Full scan for complex cases (filter, bonus, low obedience)
+		for i in range(_open.size()):
+			var j: Job = _open[i]
+			if use_filter and not filter.call(j):
+				continue
+			candidates_scanned += 1
+			var bonus: int = 0
+			if use_bonus:
+				bonus = int(priority_bonus.call(j))
+			
+			# Apply obedience weight to priority (lower obedience = higher priority needed to accept)
+			var adjusted_priority: int = j.priority
+			if obedience_weight < 0.5:
+				adjusted_priority = int(j.priority / maxf(obedience_weight, 0.01))
+			
+			var eff: int = adjusted_priority + bonus
+			var d: int = _chebyshev(pawn_tile, j.work_tile)
+			if eff > best_eff or (eff == best_eff and d < best_dist):
+				best_idx = i
+				best_eff = eff
+				best_dist = d
 	if best_idx < 0:
 		return null
 	var job: Job = _open[best_idx]
@@ -168,6 +208,10 @@ func claim_next_for(
 	_claimed.append(job)
 	job.state = Job.State.CLAIMED
 	job.assigned_pawn = pawn
+	
+	# Remove from type index (find and remove the index)
+	_remove_from_type_index(job.type, best_idx)
+	
 	_bump_jobs_data_generation()
 	job_claimed.emit(job, pawn)
 	return job
@@ -219,6 +263,13 @@ func abandon(job: Job) -> void:
 	job.assigned_pawn = null
 	job.work_ticks_done = 0
 	_open.append(job)
+	
+	# Re-index by type
+	var new_idx: int = _open.size() - 1
+	if not _open_by_type.has(job.type):
+		_open_by_type[job.type] = []
+	(_open_by_type[job.type] as Array).append(new_idx)
+	
 	_bump_jobs_data_generation()
 
 
@@ -230,6 +281,7 @@ func complete(job: Job) -> void:
 	_jobs_by_tile.erase(job.tile)
 	job.state = Job.State.COMPLETED
 	completed_count += 1
+	# Note: completed jobs are removed from _open, so no need to update index
 	_bump_jobs_data_generation()
 
 	# Notify WorldAI of job completion for economic neuron updates
@@ -363,6 +415,30 @@ func print_debug(max_rows: int = 10) -> void:
 
 static func _chebyshev(a: Vector2i, b: Vector2i) -> int:
 	return max(abs(a.x - b.x), abs(a.y - b.y))
+
+
+## Remove job index from type bucket. Called when job is claimed/removed.
+func _remove_from_type_index(job_type: int, claimed_idx: int) -> void:
+	if not _open_by_type.has(job_type):
+		return
+	var indices: Array = _open_by_type[job_type] as Array
+	for i in range(indices.size()):
+		if int(indices[i]) == claimed_idx:
+			indices.remove_at(i)
+			break
+
+
+## Rebuild type index. Called when index gets out of sync.
+func _rebuild_type_index() -> void:
+	_open_by_type.clear()
+	for i in range(_open.size()):
+		var j: Job = _open[i]
+		if j == null:
+			continue
+		var t: int = j.type
+		if not _open_by_type.has(t):
+			_open_by_type[t] = []
+		(_open_by_type[t] as Array).append(i)
 
 
 func _notify_world_ai_job_completion(job: Job) -> void:

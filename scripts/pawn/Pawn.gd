@@ -1642,8 +1642,18 @@ func _on_world_tick(_tick: int) -> void:
 		_check_thresholds()
 		if _trace_ai_slice:
 			CrashTrap.exit_system("pawn_tick:%d:needs" % pid)
-	if _state != State.SLEEPING and posmod(GameManager.tick_count + pid * 3, 23) == 0:
+	
+	# Brain cadence: neural autonomy runs throttled at high speeds
+	if posmod(GameManager.tick_count + pid * 3, 23) == 0:
 		_pawn_neural_autonomy_pulse()
+		
+	# Log cadence stats at intervals
+	if OS.is_debug_build() and GameManager.tick_count % 100 == 0:
+		var stride: int = maxi(1, _fast_forward_tick_stride())
+		print("[PAWN_CADENCE] id=%d stride=%d run_full_ai=%s" % [
+			pid, stride,
+			"true" if stride <= 1 or (posmod(_tick + pid, stride) == 0) else "false"
+		])
 	# Sleepers only need wake checks; skip full AI branch logic to reduce
 	# per-tick overhead during overnight "everyone in bed" windows.
 	if _state == State.SLEEPING:

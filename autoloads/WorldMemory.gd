@@ -441,6 +441,9 @@ func _normalize_event_payload(e: Dictionary) -> Dictionary:
         payload["t"] = GameManager.tick_count
     var typ: String = _canonical_event_type(payload)
     payload["type"] = typ
+    # Add "k" (kind) field if not present - map from type string
+    if not payload.has("k"):
+        payload["k"] = _kind_from_type_string(typ)
     var sev: int = _severity_for_type(typ)
     payload["severity"] = sev
     var rr: int = _region_from_event_payload(payload)
@@ -451,6 +454,39 @@ func _normalize_event_payload(e: Dictionary) -> Dictionary:
         _first_event_tick_by_type[typ] = first_tick
         payload["first_of_type"] = true
     return payload
+
+
+## Map type string to kind integer for WorldMeaning.
+func _kind_from_type_string(typ: String) -> int:
+    match typ:
+        "pawn_death":
+            return int(Kind.PAWN_DEATH)
+        "animal_death":
+            return int(Kind.ANIMAL_DEATH)
+        "enemy_death":
+            return int(Kind.ENEMY_DEATH)
+        "social_fragment":
+            return int(Kind.SOCIAL_FRAGMENT)
+        "social_schism":
+            return int(Kind.SOCIAL_SCHISM)
+        "building_constructed":
+            return int(Kind.BUILDING_CONSTRUCTED)
+        "building_destroyed":
+            return int(Kind.BUILDING_DESTROYED)
+        "fire_started":
+            return int(Kind.FIRE_STARTED)
+        "fire_extinguished":
+            return int(Kind.FIRE_EXTINGUISHED)
+        "starvation_event":
+            return int(Kind.STARVATION_EVENT)
+        "migration_started":
+            return int(Kind.MIGRATION_STARTED)
+        "migration_completed":
+            return int(Kind.MIGRATION_COMPLETED)
+        "teaching_event", "teaching_success", "teaching_failure":
+            return int(Kind.TEACHING_EVENT)
+        _:
+            return -1  # Unknown/untyped
 
 
 func _canonical_event_type(payload: Dictionary) -> String:

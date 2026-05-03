@@ -24,6 +24,13 @@ var _astar: AStarGrid2D
 var _component_id: PackedInt32Array
 var _largest_component_id_cached: int = -1
 
+## Dirty flag: if true, components need rebuild before next reachability query.
+## Set by sync_tile_from_data, set_job_construction_reservation, set_preview_wall_tiles.
+## Cleared after flush_component_rebuild_if_dirty() is called.
+var _components_dirty: bool = false
+## Pending tile changes to process in batch. Accumulates between dirty flag and flush.
+var _pending_dirty_tiles: Array[Vector2i] = []
+
 ## Pending BUILD_WALL jobs: treat cell as impassable so paths route around
 ## planned walls. Cleared on job complete/cancel/world regen.
 var _resv_job: PackedByteArray = PackedByteArray()
@@ -72,7 +79,11 @@ func rebuild(data: WorldData) -> void:
 ## After changing terrain in `data` (wall, door, mine-out), re-sync A* for one tile.
 func sync_tile_from_data(x: int, y: int, data: WorldData) -> void:
 	_refresh_one_tile(x, y, data)
-	_compute_components(data)
+	# Mark dirty instead of immediate rebuild - batch happens at tick dispatch
+	if not _components_dirty:
+		_components_dirty = true
+		_pending_dirty_tiles.clear()
+	_pending_dirty_tiles.append(Vector2i(x, y))
 
 
 ## Reserve / release a future wall cell for the job queue. `on=true` when a
@@ -83,7 +94,11 @@ func set_job_construction_reservation(x: int, y: int, on: bool, data: WorldData)
 	var i: int = y * WorldData.WIDTH + x
 	_resv_job[i] = 1 if on else 0
 	_refresh_one_tile(x, y, data)
-	_compute_components(data)
+	# Mark dirty instead of immediate rebuild - batch happens at tick dispatch
+	if not _components_dirty:
+		_components_dirty = true
+		_pending_dirty_tiles.clear()
+	_pending_dirty_tiles.append(Vector2i(x, y))
 
 
 ## Update drag-preview for planned walls. Pass tile coords of cells that
@@ -104,8 +119,11 @@ func set_preview_wall_tiles(tiles: Array, data: WorldData) -> void:
 			_last_preview_tiles.append(t)
 	for t2 in _last_preview_tiles:
 		_refresh_one_tile(t2.x, t2.y, data)
-	# Also recompute neighbors? Full recompute is fine at preview rate.
-	_compute_components(data)
+	# Mark dirty once (not per tile) - batch rebuild at tick
+	if tiles.size() > 0 and not _components_dirty:
+		_components_dirty = true
+		_pending_dirty_tiles.clear()
+		_pending_dirty_tiles.append_array(_last_preview_tiles)
 
 
 ## Legacy entry point: prefer `sync_tile_from_data` after data edits.
@@ -113,7 +131,22 @@ func set_preview_wall_tiles(tiles: Array, data: WorldData) -> void:
 ## Deprecated: use `WorldData` + `sync_tile_from_data`.
 func set_passable(x: int, y: int, passable: bool, data: WorldData) -> void:
 	_astar.set_point_solid(Vector2i(x, y), not passable)
+	if not _components_dirty:
+		_components_dirty = true
+		_pending_dirty_tiles.clear()
+	_pending_dirty_tiles.append(Vector2i(x, y))
+
+
+## Call this once per game tick (from Main or tick manager) to flush
+## pending component rebuilds. Returns number of rebuilds performed.
+func flush_component_rebuild_if_dirty(data: WorldData) -> int:
+	if not _components_dirty:
+		return 0
+	var rebuilds: int = 1  # We batch all changes into one rebuild
 	_compute_components(data)
+	_components_dirty = false
+	_pending_dirty_tiles.clear()
+	return rebuilds
 
 
 func _refresh_one_tile(x: int, y: int, data: WorldData) -> void:

@@ -2422,6 +2422,14 @@ func _flush_world_memory_derivatives() -> void:
 	_world_memory_derivative_flush_queued = false
 	if not is_instance_valid(_world) or not WorldMemory.consume_dirty():
 		return
+	# Flush PathFinder component batch rebuilds (batched from tile/preview changes)
+	if _world.pathfinder != null:
+		var pf = _world.pathfinder
+		if pf.has_method("flush_component_rebuild_if_dirty"):
+			var rebuilds: int = int(pf.call("flush_component_rebuild_if_dirty", _world.data))
+			if rebuilds > 0:
+				print("[PATH_COMPONENT_BATCH] pending_tiles=%d component_rebuilds=%d" % [pf.get("_pending_dirty_tiles", []).size(), rebuilds])
+	
 	WorldMeaning.recompute()
 	WorldPersistence.recompute()
 	CulturalMemory.recompute(_world)

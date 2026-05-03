@@ -1,8 +1,2 @@
 res://autoloads/JobManager.gd
-res://autoloads/SettlementMemory.gd
-res://autoloads/SettlementRebirth.gd
-res://autoloads/WorldMemory.gd
-res://scenes/main/Main.gd
 res://scripts/pawn/Pawn.gd
-res://scripts/pawn/PawnData.gd
-res://scripts/pawn/PawnSpawner.gd

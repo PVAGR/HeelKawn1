@@ -783,10 +783,13 @@ func lightweight_tick(tick: int, pawn: Pawn) -> Dictionary:
 		result["confidence"] = 0.8
 	# Basic combat scan (Bannerlord-style)
 	if _combat_resolver != null and posmod(tick, 16) == 0:
-		var nearby: Array = []
-		if "get_nearby_enemies" in self and "get_nearby_enemies" in self:
-			nearby = get_nearby_enemies(pawn)
+		var nearby: Array = _find_nearby_enemies(pawn)
 		if not nearby.is_empty():
 			result["action"] = "face_threat"
 			result["confidence"] = 0.7
 	return result
+
+
+func _find_nearby_enemies(pawn: Pawn) -> Array:
+	## Placeholder: returns empty array (combat scan disabled for high-speed simulation)
+	return []

@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1777783949
+::res://::1777784548
 AI_README.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 BIOME_DRIVEN_ARCHITECTURE.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 blackbox_mcp_settings.json::JSON::-1::1777694600::0::1::::<><><>0<>0<><>::
@@ -158,7 +158,7 @@ SpatialManager.gd::GDScript::24198543567273865::1777694600::0::1::::<>Node<><>0<
 SquadCoordinator.gd::GDScript::6749140353094337295::1777694600::0::1::::<>Node<><>0<>0<><>::
 StockpileManager.gd::GDScript::215983093589793156::1777694600::0::1::::<>Node<><>0<>0<><>::
 TechnologySystem.gd::GDScript::1479520665738386352::1777694600::0::1::::<>Node<><>0<>0<><>::
-TickManager.gd::GDScript::5792076579507672326::1777782671::0::1::::<>Node<><>0<>0<><>::
+TickManager.gd::GDScript::5792076579507672326::1777784460::0::1::::<>Node<><>0<>0<><>::
 ToolManager.gd::GDScript::292220667211019745::1777694600::0::1::::<>Node<><>0<>0<><>::
 TradeMemory.gd::GDScript::5248539327593372606::1777694600::0::1::::<>Node<><>0<>0<><>::
 TradePlanner.gd::GDScript::8396858183117698797::1777694600::0::1::::<>Node<><>0<>0<><>::
@@ -278,7 +278,7 @@ World.tscn::PackedScene::-1::1777694600::0::1::::<><><>0<>0<><>::res://scenes/wo
 ::res://scripts/ai/::1777777623
 AIAgent.gd::GDScript::138437304583959177::1777694600::0::1::::AIAgent<>RefCounted<><>0<>0<><>::
 CivilizationAgent.gd::GDScript::2246281808571983635::1777694600::0::1::::CivilizationAgent<>AIAgent<><>0<>0<><>::
-HeelKawnPawnBrain.gd::GDScript::5698329963018427707::1777777946::0::1::::HeelKawnPawnBrain<>RefCounted<><>0<>0<><>::
+HeelKawnPawnBrain.gd::GDScript::5698329963018427707::1777784504::0::1::::HeelKawnPawnBrain<>RefCounted<><>0<>0<><>::
 PawnDecisionRuleMatrix.gd::GDScript::1799434569812519709::1777694600::0::1::::PawnDecisionRuleMatrix<>RefCounted<><>0<>0<><>::
 SettlementAI.gd::GDScript::6340692512974189301::1777694600::0::1::::SettlementAI<>RefCounted<><>0<>0<><>::
 SpatialGrid.gd::GDScript::2797234459260380184::1777772369::0::1::::SpatialGrid<>RefCounted<><>0<>0<><>::
@@ -319,7 +319,7 @@ ActionPopupLabel.gd::GDScript::5174978775249392183::1777694600::0::1::::ActionPo
 Animal.gd::GDScript::3893107784844328532::1777694600::0::1::::Animal<>Node2D<><>0<>0<><>::
 AnimalSpawner.gd::GDScript::8350566320011331673::1777694600::0::1::::AnimalSpawner<>Node<><>0<>0<><>::
 MoodEvent.gd::GDScript::919426344482337370::1777694600::0::1::::MoodEvent<>Resource<><>0<>0<><>::
-Pawn.gd::GDScript::6658654347304257201::1777769282::0::1::::Pawn<>Node2D<><>0<>0<><>::
+Pawn.gd::GDScript::6658654347304257201::1777784460::0::1::::Pawn<>Node2D<><>0<>0<><>::
 PawnData.gd::GDScript::2791538913256910102::1777767018::0::1::::PawnData<>RefCounted<><>0<>0<><>::
 PawnNeuralNetwork.gd::GDScript::5633698643138899321::1777694600::0::1::::PawnNeuralNetwork<>RefCounted<><>0<>0<><>::
 PawnSpawner.gd::GDScript::2411157889018663487::1777767018::0::1::::PawnSpawner<>Node<><>0<>0<><>::

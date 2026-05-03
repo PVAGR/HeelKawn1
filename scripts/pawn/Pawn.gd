@@ -974,8 +974,7 @@ func _notify_autonomy_feedback(action_key: String) -> void:
 	if action_key.is_empty() or action_key == _last_autonomy_feedback:
 		return
 	_last_autonomy_feedback = action_key
-	if OS.is_debug_build():
-		# print("[Autonomy] %s → %s" % [data.display_name if data != null else "?", action_key])
+	# Debug print disabled for performance
 	if _action_popup != null and data != null and GameManager != null and GameManager.game_speed < 60.0:
 		_action_popup.show_action_context(data.display_name, "Autonomy: %s" % action_key, "", "", "")
 

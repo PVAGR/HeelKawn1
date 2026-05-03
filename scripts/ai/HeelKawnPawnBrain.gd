@@ -638,10 +638,6 @@ func _scan_for_social_interactions(pawn: Pawn, tick: int) -> void:
 			)
 
 
-func _find_nearby_pawns(pawn: Pawn, radius_px: float) -> Array:
-	# Placeholder — integrate with PawnSpawner
-	return []
-
 
 # === Dramatic Events (Narrative Engine) ===
 func _check_dramatic_events(pawn: Pawn, tick: int) -> void:

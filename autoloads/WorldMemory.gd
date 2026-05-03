@@ -1448,11 +1448,4 @@ func record_settlement_state_transition(center_id: int, old_state: String, new_s
     }
     _append(e)
 
-func _append(e: Dictionary) -> void:
-    if not (e is Dictionary):
-        return
-    _events.append(e)
-    _dirty = true
-    if _events.size() > MAX_EVENTS:
-        _events = _events.slice(-MAX_EVENTS, _events.size())
 

@@ -106,9 +106,9 @@ func _get_main() -> Node:
 func _log_message(msg: String) -> void:
 	var t := "[%s] %s\n" % [str(Time.get_unix_time_from_system()), msg]
 	if _log != null:
-		_log.append_text(t)
+		_log.text += t
 		# TextEdit scroll API differs across Godot versions; force to bottom safely.
-		_log.scroll_vertical = 1000000
+		_log.scroll_vertical = _log.get_line_count()
 	print(t)
 
 func _action_export() -> void:

@@ -9,6 +9,7 @@
 ## DONE ✅
 
 ### Session 2026-05-02 (Continued)
+- [x] Fixed DebugControlPanel.gd Godot 4.6 compatibility: replaced deprecated `append_text()` with `text +=` for TextEdit logging
 - [x] Fixed Pawn.gd compilation error: removed erroneous duplicate line in `_decay_needs()` (line 3907)
 - [x] Updated CHANGELOG.md with latest fix
 - [x] Scanned for duplicate variable declarations across codebase (found several in CombatResolver, WorldGenerator, etc. - noted for future cleanup)

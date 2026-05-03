@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- DebugControlPanel.gd: Fixed Godot 4.6 compatibility - replaced deprecated `append_text()` with `text +=` for TextEdit logging
 - Pawn.gd: Removed erroneous duplicate line in `_decay_needs()` that caused incorrect indentation and potential logic error (line 3907)
 - Fixed remaining Pawn parser blockers so the class now reloads cleanly
 - Cleaned up PawnData warning patterns and marked the unused tick parameter explicitly

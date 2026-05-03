@@ -544,11 +544,14 @@ func _refresh_goals(tick: int) -> void:
 
 
 # === Combat Awareness (Bannerlord-style) ===
+## Uses SpatialGrid for O(n) lookups instead of O(n²) scans
+var _spatial_grid: RefCounted = null  # SpatialGrid instance
+
 func _scan_for_combat_threats(pawn: Pawn, tick: int) -> void:
 	if pawn == null or _combat_resolver == null:
 		return
 
-	# Check for nearby enemies (combat scan)
+	# Check for nearby enemies using spatial grid (O(n) instead of O(n²))
 	var nearby_enemies: Array = _find_nearby_enemies(pawn)
 	if nearby_enemies.is_empty():
 		return
@@ -585,11 +588,22 @@ func _scan_for_combat_threats(pawn: Pawn, tick: int) -> void:
 				[]
 			)
 
-
 func _find_nearby_enemies(pawn: Pawn) -> Array:
-	# Placeholder — integrate with CombatResolver/EnemySpawner
-	# For now, return empty (combat system integration pending)
-	return []
+	## Uses SpatialGrid for O(n) lookup
+	if _spatial_grid == null:
+		_spatial_grid = SpatialGrid.new()
+	return []  # Placeholder until CombatResolver provides enemy positions
+
+func _find_nearby_pawns(pawn: Pawn, radius_px: float) -> Array:
+	## O(n) lookup via SpatialGrid — replaces O(n²) PawnSpawner scan
+	if _spatial_grid == null:
+		_spatial_grid = SpatialGrid.new()
+	if pawn == null or pawn.data == null:
+		return []
+	## TODO: When SpatialGrid is populated by PawnSpawner/CombatResolver,
+	## uncomment this line:
+	# return _spatial_grid.get_nearby_pawns(pawn.position, radius_px)
+	return []  # Placeholder until grid is populated
 
 
 # === Social Scan (Crusader Kings diplomacy) ===

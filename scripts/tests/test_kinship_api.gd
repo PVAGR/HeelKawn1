@@ -1,25 +1,22 @@
 extends Node
 
 ## Headless test for KinshipSystem LINEAGE KEEPER Kin APIs
-## Run with: godot --headless --script scripts/tests/test_kinship_api.gd
+## Run with: godot --headless --path . --script scripts/tests/test_kinship_api.gd
 
 func _ready() -> void:
 	print("[test_kinship_api] Starting...")
 	var passed = 0
 	var failed = 0
 	
-	# Get or create KinshipSystem
-	var ks = get_node_or_null("/root/KinshipSystem")
-	if ks == null:
-		# Create if not present
-		ks = load("res://autoloads/KinshipSystem.gd").new()
-		add_child(ks)
+	# Create fresh KinshipSystem instance for testing
+	var KinshipSystem = load("res://autoloads/KinshipSystem.gd")
+	var ks = KinshipSystem.new()
 	
 	# Clear any existing data
 	if ks.has_method("clear"):
 		ks.clear()
 	
-	# Clear lineage-specific data
+	# Clear lineage-specific data  
 	if ks.has("_child_to_parents"):
 		ks._child_to_parents = {}
 	if ks.has("_parent_to_children"):
@@ -54,7 +51,6 @@ func _ready() -> void:
 	
 	# Test 2: Siblings
 	print("[test_kinship_api] Test 2: Siblings...")
-	# Already have parent(2) with child(3), add sibling for child(3)
 	ks.register_birth(4, 2, -1)  # sibling(4) shares parent(2)
 	ks._test_flush_pending_births(30)
 	
@@ -66,7 +62,6 @@ func _ready() -> void:
 		failed += 1
 		print("[test_kinship_api]   FAIL: sibling not found in get_siblings")
 	
-	# Verify self excluded
 	if not siblings.has(3):
 		passed += 1
 		print("[test_kinship_api]   PASS: self excluded from siblings")
@@ -130,7 +125,6 @@ func _ready() -> void:
 		failed += 1
 		print("[test_kinship_api]   FAIL: duplicate parents found")
 	
-	# Verify child appears only once under each parent
 	var parent2_children = ks.get_children(2)
 	if parent2_children.count(3) == 1:
 		passed += 1
@@ -155,13 +149,11 @@ func _ready() -> void:
 	
 	# Test 6: Loop protection
 	print("[test_kinship_api] Test 6: Loop protection...")
-	# Create circular: A -> B -> C -> A
 	ks.register_birth(101, 103, -1)  # 101 child of 103
 	ks.register_birth(102, 101, -1)  # 102 child of 101
 	ks.register_birth(103, 102, -1)  # 103 child of 102 (circular!)
 	ks._test_flush_pending_births(60)
 	
-	# Should not infinite loop
 	var loop_ancestors_101 = ks.get_ancestors(101, 10)
 	if loop_ancestors_101.size() < 10:
 		passed += 1
@@ -170,7 +162,6 @@ func _ready() -> void:
 		failed += 1
 		print("[test_kinship_api]   FAIL: possible infinite loop, got %d ancestors" % loop_ancestors_101.size())
 	
-	# Verify depth cap
 	if loop_ancestors_101.size() <= 10:
 		passed += 1
 		print("[test_kinship_api]   PASS: depth cap respected")
@@ -186,7 +177,9 @@ func _ready() -> void:
 	
 	if failed > 0:
 		print("[test_kinship_api] TESTS FAILED")
-		get_tree().quit(1)
 	else:
 		print("[test_kinship_api] ALL TESTS PASSED")
-		get_tree().quit(0)
+	
+	# Clean up
+	ks.free()
+	get_tree().quit(0 if failed == 0 else 1)

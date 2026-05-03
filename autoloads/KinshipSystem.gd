@@ -537,9 +537,6 @@ var _child_to_parents: Dictionary = {}
 ## Pending births: child_id -> {child_id, mother_id, father_id}
 var _pending_births: Dictionary = {}
 
-## Tick connected flag
-var _tick_connected: bool = false
-
 
 func _ready() -> void:
 	# Connect to GameManager tick if available
@@ -547,7 +544,6 @@ func _ready() -> void:
 	if gm != null and gm.has_signal("game_tick"):
 		if not gm.game_tick.is_connected(_on_game_tick):
 			gm.game_tick.connect(_on_game_tick)
-			_tick_connected = true
 
 
 ## Internal tick handler - flushes pending births

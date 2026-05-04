@@ -38,8 +38,7 @@ Percentages are **world-completeness**, not polish.
 - UI resilient
 - Long-run simulation survives time
 
-### ✅ Phase 1 — Living World Baseline (MOSTLY COMPLETE - ~85%)
-**What's done:**
+### ✅ Phase 1 — Living World Baseline (COMPLETE - 100%)
 - World generation
 - Time + ticks
 - Pawns, animals, enemies
@@ -47,81 +46,113 @@ Percentages are **world-completeness**, not polish.
 - Needs (hunger, rest, mood)
 - Death that propagates safely
 - HUD that reflects reality
+- Job pacing and food spiral balanced
+- Housing pressure responsive
 
-**What's missing (15%):**
-- Better pacing (job spam vs labor)
-- Minor balance (food spiral, housing pressure)
-- These are tuning, not structure
-
-✅ You are **allowed to move on**.
-
-### 🔶 Phase 2 — The Kernel (WE ARE HERE - ~30% complete)
-This is the heart of HeelKawn. **Kernel = deterministic world memory + meaning + persistence**
-
-**What exists already:**
-- `WorldTrace` (visual memory)
-- Time/tick index
-- Stable identifiers (tiles, pawns, zones)
-
-**What still must be built (core work):**
-
-#### 2.1 WorldMemory (80% complete - substantial implementation)
-A non‑UI system that records **facts**:
+### ✅ Phase 2 — The Kernel (COMPLETE - 100%)
+**WorldMemory** — Append-only fact log recording:
 - Pawn deaths (who, when, where, cause, profession, parents)
-- Animal deaths (species, location)
-- Building construction / destruction
-- Fire events (started, extinguished)
-- Starvation events (pawn, severity)
-- Migration events (started, completed)
-- Teaching events (teacher, student, skill)
-- Leadership challenges (attempts, successes, failures)
-- Governance changes (ruler, type, council)
-- Life path milestones
-- Region discovery
-- Neural AI decisions
-- Player presence / inspect
+- Animal deaths, building construction/destruction
+- Fire events, starvation events, migration events
+- Teaching events, leadership challenges
+- Governance changes, life path milestones
+- Region discovery, neural AI decisions, player presence
+- Food events (FOOD_EVENT), work events (WORK_EVENT)
+- Auto-infers kind from string type via _infer_kind_from_type()
 
-This is *not* lore. It's data.
+**WorldMeaning** — Derived, deterministic interpretations:
+- Region tags computed from facts (hunger_place, repeated_death, safe_hearth, fertile, farmed, busy, active)
+- Meaning is computed, never scripted
+- Connected to the dominant event pipeline (schema gap fixed)
 
-#### 2.2 WorldMeaning (0%)
-Derived, deterministic interpretations:
-- "This area has seen repeated death"
-- "This biome is exhausted"
-- "This settlement failed due to hunger"
+**Persistence Rules** — What survives:
+- Ruins, scars, ecological damage
+- WorldPersistence tracks persistence scores per region
+- SettlementRebirth handles revival vs permanent ruin
+- Cultural habits survive through CulturalMemory
 
-Meaning is **computed**, never scripted.
-
-#### 2.3 Persistence Rules (0%)
-What survives:
-- Ruins
-- Scars
-- Ecological damage
-- Cultural habits (later)
-
-This is where HeelKawn becomes *mythic*.
-
-📍 **Current overall project completion: ~55%**
-
-### 🔶 Phase 3 — Historical Continuity (0%)
+### ✅ Phase 3 — Historical Continuity (COMPLETE - 100%)
 - Ruins replacing old builds
-- Long-term land degradation / recovery
+- Long-term land degradation / recovery (LandRecovery)
 - Pawns reacting to historical places
-- "This place feels wrong" without UI text
+- Settlement lifecycle: active → abandoned → reviving → permanent_ruin
+- SettlementArchitect: visual decay for abandoned settlements
+- WorldPersistence: scar levels, ruin persistence
+- SettlementRebirth: deterministic revival gates (food, pawn presence, cooldown)
+- Graves accumulate, roads form from repeated use
 
-This sits **on top of the kernel**.
+### ✅ Phase 4 — Civilization & Identity (COMPLETE - 100%)
+- Roles beyond jobs (Big Five personality, life paths, affinities)
+- Lineages / continuity (KinshipSystem, BloodlineSystem)
+- Factions (emergent, FactionRegistry, SchismManager, FragmentationManager)
+- Cultural memory (CulturalMemory, CulturalStyleManager)
+- Cultural architecture signatures (PERIM_R, DOOR2_MIN_SPAN, PEACE_TICKS)
+- Settlement identity divergence (OPEN/CAUTIOUS/DEFENSIVE cultures)
+- Authority emergence and decay (AuthoritySystem)
+- Collapse progression (CollapseSystem: Trust → Authority → Knowledge → Environment)
+- Player-readable meaning audio (MeaningAudioCue, MeaningAmbianceController)
+- ProgressionSystem (impact tiers: Unknown → Known → Remembered → Noticed → Influential → Legendary)
+- Religion lens, sacred memory, myth memory
+- Knowledge transmission and loss (KnowledgeSystem, TechnologySystem)
+- Gossip propagation, dramatic event generation, goal engine
+- Display settings (resolution, window mode, vsync)
+- Profession reassignment (pawns can change roles based on skill growth)
+- Colony role balance (diversity pressure when one profession dominates)
+- Neural bias active at all normal play speeds (gate moved from 50x to 200x)
+- Settlement planner posts infrastructure + security jobs (fire pit, storage hut, protect, defend)
+- Warrior peacetime patrol (visible perimeter presence instead of stockpile clustering)
 
-### 🔶 Phase 4 — Civilization & Identity (0%)
-- Roles beyond jobs
-- Lineages / continuity
-- Factions (emergent, not scripted)
-- Cultural memory
+### 🔶 Phase 5 — Emergent Life (WE ARE HERE - ~10% complete)
+The Truman phase. The goal: NPCs and the world live so richly and unpredictably that neither the player nor AI can predict what will happen after a few years in-world. Emergence, not scripting.
 
-Do **not** touch this yet.
+**What this means:**
+- Pawns develop unique life stories that no one authored
+- Settlements diverge in ways that surprise even the system architect
+- Social bonds, feuds, and traditions form organically from repeated interaction
+- The world produces stories worth telling — not because we wrote them, but because the simulation lived them
+- A pawn's 30-year life arc should be as unpredictable as a real person's
 
-### 🔶 Phase 5 — Player Meaning Layer (0%)
+**What still must be built:**
+
+#### 5.1 Deep Social Dynamics (~0%)
+- Multi-generational grudges and alliances that persist beyond individuals
+- Social norms that emerge from repeated behavior, not rules
+- Gossip that actually changes how pawns treat each other
+- Reputation that spreads between settlements via travelers and traders
+- Pawn-driven law: taboos and obligations that form from crisis response
+
+#### 5.2 Knowledge Ecology (~5%)
+- Teaching chains that create lineages of knowledge (master → apprentice → master)
+- Knowledge loss events: a skill dies with its last carrier
+- Rediscovery: lost techniques found through experimentation or outside contact
+- Record carriers: grave markers, carved stones, ledgers that preserve knowledge beyond death
+- Technology divergence between isolated settlements
+
+#### 5.3 Emergent Narrative (~0%)
+- Situations that arise from pressure, not scripts (famine → hoarding → conflict → exile → diaspora)
+- Pawn life arcs that are readable as stories without authoring
+- Generational change: the same town feels different 50 years later
+- Silence as outcome: sometimes nothing survives, and that's meaningful
+
+#### 5.4 World-Memory-Driven Behavior (~15%)
+- Pawns react to regional meaning tags (avoid death places, seek safe hearths)
+- Settlement policy shaped by historical events (famine survivors hoard differently)
+- Cultural drift: customs change over generations without anyone deciding
+- Myth formation: after enough time, facts become legends, legends become religion
+
+#### 5.5 Embodied Unpredictability (~5%)
+- Body risk creates individual stories (injury → career change → teaching path)
+- Personality-driven divergence: same situation, different pawn, different outcome
+- Neural matrix produces genuinely different behavior per pawn
+- Stochastic resonance: small events cascade into settlement-scale change
+
+📍 **Current overall project completion: ~80%**
+
+### 🔶 Phase 6 — Player Meaning Layer (0%)
 - What the *player* understands vs what the world knows
 - Partial information
 - Myth vs truth
+- Incarnation knowledge fog (spectator knowledge doesn't leak)
 
 Endgame design.
 
@@ -433,17 +464,20 @@ HeelKawn draws from these influences — preserve their spirit:
 
 ## CURRENT PROJECT STATUS
 
-**Phase**: Phase 4 (Identity & Meaning)
-**Next Target**: Settlement revival vs permanent abandonment tuning
-**Engine**: Godot 4.6
-**Development Lane**: Identity/culture behavior in a deterministic world
+**Phase**: Phase 5 (Emergent Life)
+**Next Target**: Deep social dynamics — multi-generational grudges, emergent norms, reputation spread
+**Engine**: Godot 4.6.2
+**Development Lane**: Making NPCs live unpredictable, unique lives that neither player nor AI can predict
 
 **Recently Completed**:
-- Neural AI integration (WorldAI matrix for pawn decision-making)
-- Compact UI refactor (ColonyHUD, PawnInfoPanel with tabs)
-- COPY DUMP functionality for inspect panel
-- Crisis response mechanism in Pawn AI
-- Performance intervalization for hot listeners
+- Profession reassignment (pawns can change roles based on skill growth)
+- Colony role balance (diversity pressure when one profession dominates)
+- Neural bias active at all normal play speeds (gate moved from 50x to 200x)
+- Settlement planner posts infrastructure + security jobs (fire pit, storage hut, protect, defend)
+- Warrior peacetime patrol (visible perimeter presence)
+- Display settings (resolution, window mode, vsync)
+- Performance optimizations (spatial grid, redraw throttle, meaning throttle, caches)
+- Event schema gap fix (FoodChainManager events now reach WorldMeaning)
 
 ---
 

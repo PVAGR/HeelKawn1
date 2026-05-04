@@ -1139,6 +1139,64 @@ func _try_autonomy_social_seek() -> bool:
 	return _state == State.DRAFT_WALK
 
 
+## Warrior peacetime patrol: path toward a settlement wall tile and idle there.
+## Gives warriors visible presence around the perimeter instead of clustering at stockpile.
+func _maybe_warrior_patrol() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	var tick: int = GameManager.tick_count
+	# Don't patrol every tick — check every ~60 ticks
+	if posmod(tick + int(data.id) * 7, 60) != 0:
+		return false
+	# Only patrol if no HUNT/DEFEND/PROTECT jobs are available
+	if JobManager.active_count_of_type(_Job.Type.HUNT) > 0:
+		return false
+	if JobManager.active_count_of_type(_Job.Type.DEFEND) > 0:
+		return false
+	if JobManager.active_count_of_type(_Job.Type.PROTECT) > 0:
+		return false
+	# Find a wall tile near the settlement to patrol toward
+	if data.settlement_id < 0:
+		return false
+	var sm: Node = get_node_or_null("/root/SettlementMemory")
+	if sm == null or not sm.has_method("get_settlements"):
+		return false
+	var arr: Array = sm.get_settlements()
+	if data.settlement_id >= arr.size():
+		return false
+	var st: Dictionary = arr[data.settlement_id] as Dictionary
+	var regions: Variant = st.get("regions", PackedInt32Array())
+	if not (regions is PackedInt32Array):
+		return false
+	var packed: PackedInt32Array = regions as PackedInt32Array
+	if packed.is_empty():
+		return false
+	# Pick a random wall tile from the settlement
+	var center_rk: int = int(st.get("center_region", packed[0]))
+	var center: Vector2i = SettlementPlanner._center_tile_of_region_key(center_rk)
+	# Search for walls in a small radius
+	var wall_cands: Array[Vector2i] = []
+	for dy in range(-6, 7):
+		for dx in range(-6, 7):
+			var t: Vector2i = Vector2i(center.x + dx, center.y + dy)
+			if not _world.data.in_bounds(t.x, t.y):
+				continue
+			if int(_world.data.get_feature(t.x, t.y)) == TileFeature.Type.WALL:
+				# Find passable tile adjacent to this wall
+				for ady in range(-1, 2):
+					for adx in range(-1, 2):
+						var at: Vector2i = Vector2i(t.x + adx, t.y + ady)
+						if _world.data.in_bounds(at.x, at.y) and _world.data.is_passable(at.x, at.y):
+							wall_cands.append(at)
+	if wall_cands.is_empty():
+		return false
+	# Deterministic pick based on pawn id + tick
+	var idx: int = posmod(int(data.id) * 31 + tick / 60, wall_cands.size())
+	var target: Vector2i = wall_cands[idx]
+	autonomy_draft_goto(target, "warrior_patrol", 0)
+	return _state == State.DRAFT_WALK
+
+
 func _can_use_manual_ground_item_actions() -> bool:
 	match _state:
 		State.WORKING, State.WALKING_TO_JOB, State.HAULING, State.GOING_TO_EAT, State.EATING, State.SLEEPING, State.FETCHING_MATERIAL, State.GOING_TO_BED, State.TEACHING, State.CHALLENGE, State.CRAFTING:
@@ -2006,6 +2064,12 @@ func _tick_idle() -> void:
 			return
 		if _maybe_start_challenge():
 			return
+	# 5b. Warrior peacetime patrol: if this pawn is a WARRIOR and no
+	# combat/security jobs are available, path toward a settlement wall
+	# and idle there (visible presence, not stuck at stockpile).
+	if data != null and data.current_profession == PawnData.Profession.WARRIOR:
+		if _maybe_warrior_patrol():
+			return
 	# 6. Job queue: take the best reachable job. We additionally skip build
 	# jobs whose required materials aren't on hand at the stockpile -- this
 	# prevents pawns from claim/abort looping when wood is empty.
@@ -2167,6 +2231,56 @@ func _tick_idle() -> void:
 			neural_bias = _get_neural_job_priority_bias(j.type)
 			neural_bias_cache[j.type] = neural_bias
 		base_bias += neural_bias
+		# World-memory-driven job bias: meaning tags at the job's work tile
+		# shape whether pawns want to work there.
+		var meaning_bias: int = 0
+		var job_rk: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
+		var job_tags: PackedStringArray = WorldMeaning.get_region_tags(job_rk)
+		for _mt in job_tags:
+			match _mt:
+				"repeated_death", "blood_soaked", "graveyard":
+					meaning_bias -= 2  # avoid death places
+				"cursed":
+					meaning_bias -= 3  # strongly avoid cursed places
+				# Myth formation: ancient danger is feared more
+				"old_death_place":
+					meaning_bias -= 3
+				"ancient_death_place":
+					meaning_bias -= 4
+				"old_famine":
+					meaning_bias -= 2
+				"ancient_famine":
+					meaning_bias -= 3
+				"famine_stricken", "hunger_place":
+					# Hunger memory: food jobs are urgent here, others avoid
+					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT:
+						meaning_bias += 2
+					else:
+						meaning_bias -= 1
+				"fire_prone":
+					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
+						meaning_bias -= 1  # don't build where fire keeps happening
+				"safe_hearth", "fertile":
+					meaning_bias += 1  # prefer working in safe/fertile regions
+				# Myth formation: ancient safety is revered
+				"old_heart":
+					meaning_bias += 2
+				"ancient_heart":
+					meaning_bias += 3
+				"learned", "educated":
+					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
+						meaning_bias += 2  # teach where knowledge already lives
+				# Myth formation: ancient wisdom draws scholars
+				"old_wisdom":
+					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
+						meaning_bias += 3
+				"ancient_wisdom":
+					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
+						meaning_bias += 4
+				"ruined":
+					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
+						meaning_bias += 1  # rebuild ruined places
+		base_bias += meaning_bias
 		# Personal whim: same queue, slightly different ordering per pawn (still deterministic).
 		base_bias += clampi(int(floor((_bp(5) - 0.5) * 6.0)), -2, 2)
 
@@ -2420,7 +2534,7 @@ func _get_neural_job_priority_bias(job_type: int) -> int:
 		# per-claim neural nuance. Neural bias returns automatically later.
 		if GameManager.tick_count < 1200:
 			return 0
-		if GameManager.game_speed >= 50.0:
+		if GameManager.game_speed >= 200.0:
 			return 0
 	var tick: int = GameManager.tick_count if GameManager != null else -1
 	var should_refresh: bool = (_neural_priority_next_refresh_tick < 0 or tick >= _neural_priority_next_refresh_tick)

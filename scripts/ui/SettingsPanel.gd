@@ -3,7 +3,7 @@ extends CanvasLayer
 ## settings appear automatically. Pauses the game while open, resumes on close.
 
 const PANEL_W: int = 420
-const PANEL_H: int = 520
+const PANEL_H: int = 720
 const PAD: int = 12
 const SECTION_GAP: int = 18
 const ROW_H: int = 32

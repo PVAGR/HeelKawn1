@@ -10,14 +10,12 @@
 
 ## Executive Summary
 
-The HeelKawn kernel is solid and deterministic. The simulation runs well with ~45 systems shipped. What remains for v1.0 is:
+The HeelKawn kernel is solid and deterministic. The simulation runs well with ~45 systems shipped. Phases 0-4 are now **complete**. What remains for v1.0 is:
 
-1. **NPC Depth** - Skill trees, lineage, inheritance
-2. **Player Incarnation** - Full embodied experience
-3. **Crafting & Tools** - Ground items, material systems
-4. **Governance** - Leadership, authority
-5. **Export/Sharing** - One-click world export for promotion
-6. **Performance** - Reduce SIM_HITCH from 25-55ms to <16ms
+1. **Emergent Life** — Deep social dynamics, knowledge ecology, emergent narrative, world-memory-driven behavior
+2. **Player Meaning Layer** — Knowledge fog, partial information, myth vs truth
+3. **Performance** — Reduce SIM_HITCH from 25-55ms to <16ms (partially addressed)
+4. **Content Polish** — Tutorial, save/load verification, clean .exe
 
 ---
 
@@ -323,26 +321,26 @@ Priority Order:
 
 ### Must Have
 
-- [ ] All skill trees working with bonuses
-- [ ] Parent lookup and child spawning
-- [ ] Full kinship system
-- [ ] Player incarnation with body needs
+- [x] All skill trees working with bonuses
+- [x] Parent lookup and child spawning
+- [x] Full kinship system
+- [x] Player incarnation with body needs
 - [ ] Local knowledge fog
-- [ ] Tool requirements and ground items
-- [ ] Crafting material system
-- [ ] Governance forms
-- [ ] World seed export
-- [ ] Chronicle export
+- [x] Tool requirements and ground items
+- [x] Crafting material system
+- [x] Governance forms
+- [x] World seed export
+- [x] Chronicle export
 - [ ] SIM_HITCH <16ms at 1x
-- [ ] 100x speed runs smoothly
+- [x] 100x speed runs smoothly
 - [ ] Save/load verified
 - [ ] Clean .exe builds
 
 ### Nice to Have (v1.0+)
 
-- [ ] Full faction system
-- [ ] Law & custom
-- [ ] Technology sharing
+- [x] Full faction system
+- [x] Law & custom (AuthoritySystem, CollapseSystem)
+- [x] Technology sharing (KnowledgeSystem, TechnologySystem)
 - [ ] Tutorial flow
 - [ ] Graphics polish
 

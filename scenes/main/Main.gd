@@ -5488,6 +5488,50 @@ func settlement_planner_post_zone_rect(rect: Rect2i) -> bool:
 	return true
 
 
+func settlement_planner_post_fire_pit(t: Vector2i) -> bool:
+	if not _world.data.in_bounds(t.x, t.y):
+		return false
+	if _world.data.get_feature(t.x, t.y) != TileFeature.Type.NONE:
+		return false
+	if not _world.data.is_passable(t.x, t.y):
+		return false
+	if StockpileManager.total_wood() < 1:
+		return false
+	var job: Job = JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 3, 35)
+	return job != null
+
+
+func settlement_planner_post_storage_hut(t: Vector2i) -> bool:
+	if not _world.data.in_bounds(t.x, t.y):
+		return false
+	if _world.data.get_feature(t.x, t.y) != TileFeature.Type.NONE:
+		return false
+	if not _world.data.is_passable(t.x, t.y):
+		return false
+	if StockpileManager.total_wood() < 2:
+		return false
+	var job: Job = JobManager.post(Job.Type.BUILD_STORAGE_HUT, t, 3, 40)
+	return job != null
+
+
+func settlement_planner_post_protect(t: Vector2i) -> bool:
+	if not _world.data.in_bounds(t.x, t.y):
+		return false
+	if not _world.data.is_passable(t.x, t.y):
+		return false
+	var job: Job = JobManager.post(Job.Type.PROTECT, t, 6, 60)
+	return job != null
+
+
+func settlement_planner_post_defend(t: Vector2i) -> bool:
+	if not _world.data.in_bounds(t.x, t.y):
+		return false
+	if not _world.data.is_passable(t.x, t.y):
+		return false
+	var job: Job = JobManager.post(Job.Type.DEFEND, t, 7, 80)
+	return job != null
+
+
 func _print_stockpile() -> void:
 	if not OS.is_debug_build():
 		return

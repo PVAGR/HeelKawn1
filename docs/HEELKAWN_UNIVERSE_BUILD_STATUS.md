@@ -25,7 +25,7 @@
 | **Wildlife Emergent Ecology** | `AnimalSpawner.gd`, `AnimalPopulation.gd` | Shipped |
 | **Cultural Architecture** | `SettlementPlanner.gd` | Shipped |
 
-### Identity & Meaning (Phase 4) ✅
+### Identity & Meaning (Phase 4) ✅ COMPLETE
 
 | Feature | Status | Notes |
 |---------|-------|-------|
@@ -33,6 +33,27 @@
 | **Player-Readable Meaning Audio** | ✅ Shipped | `_trigger_meaning_audio_cue()` → `MeaningAudioCue` |
 | **Settlement Identity Divergence** | ✅ Shipped | OPEN/CAUTIOUS/DEFENSIVE |
 | **Revival Constraints** | ✅ Shipped | Scar/Peace/State/Cooldown/Collapse gates |
+| **Profession Reassignment** | ✅ Shipped | Pawns change roles when non-primary skill outpaces primary |
+| **Colony Role Balance** | ✅ Shipped | Diversity pressure dampens overrepresented professions |
+| **Neural Bias at All Speeds** | ✅ Shipped | Gate moved from 50x to 200x |
+| **Infrastructure Job Posting** | ✅ Shipped | Fire pit, storage hut, protect, defend in SettlementPlanner |
+| **Warrior Peacetime Patrol** | ✅ Shipped | Visible perimeter presence instead of stockpile clustering |
+| **Display Settings** | ✅ Shipped | Resolution, window mode, vsync in GameSettings |
+
+### Emergent Life (Phase 5) 🔶 IN PROGRESS
+
+| Feature | Status | Notes |
+|---------|-------|-------|
+| **Multi-generational grudges** | ❌ NOT | Social bonds don't persist beyond individuals |
+| **Emergent social norms** | ❌ NOT | Norms are scripted, not emergent from behavior |
+| **Reputation spread between settlements** | ❌ NOT | Reputation is local only |
+| **Knowledge loss events** | ❌ NOT | Skills don't die with last carrier |
+| **Teaching lineages** | ❌ NOT | No master→apprentice→master chains |
+| **Record carriers** | ❌ NOT | No grave markers, carved stones preserving knowledge |
+| **Pawn-driven law** | ❌ NOT | Taboos don't form from crisis response |
+| **Myth formation** | ❌ NOT | Facts don't become legends over time |
+| **Cultural drift** | ⚠️ Partial | CulturalStyleManager exists but doesn't drift autonomously |
+| **World-memory-driven behavior** | ⚠️ Partial | Meaning tags exist but pawns don't react to them |
 
 ### Player Systems ✅
 
@@ -59,7 +80,7 @@
 | Feature | Status |
 |---------|--------|
 | **Job XP System** | Shipped |
-| **Profession Locking** | Shipped |
+| **Profession Locking** | Shipped (now dynamic — pawns can reassign) |
 | **Affinities/Liking Lanes** | Shipped |
 | **Skill Trees (5/10/15/20)** | Shipped |
 | **Mastery Perks** | Shipped |
@@ -127,11 +148,15 @@ These are design placeholders, not blockers:
 | TODOs/stubs | ~6 |
 | Blockers | 0 |
 
-**Bottom line:** The HeelKawn kernel is **complete and playable**. All major systems are shipped:
+**Bottom line:** The HeelKawn kernel is **complete and playable**. Phases 0-4 are shipped. All major systems are shipped:
 - Deterministic world simulation
 - Full incarnation mode
 - Trait effects integration
 - Save/load persistence
 - Export tools
+- Profession reassignment and colony role balance
+- Infrastructure and security job posting
+- Warrior peacetime patrol
+- Display settings
 
-There are no blocking gaps. The remaining TODOs are low-priority stubs that don't affect the core gameplay loop.
+The next frontier is Phase 5 (Emergent Life): making NPCs live unpredictable, unique lives where the simulation produces stories worth telling without anyone authoring them.

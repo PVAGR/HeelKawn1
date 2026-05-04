@@ -3397,6 +3397,10 @@ func _pawn_decision_rule_context(pd: PawnData) -> Dictionary:
 		"conscientiousness": pd.conscientiousness,
 		"weather_tag": _weather_tag_for_tick(),
 		"danger_level_hint": danger_hint,
+		"meaning_danger": _pawn_meaning_danger(rk_ctx),
+		"meaning_safety": _pawn_meaning_safety(rk_ctx),
+		"meaning_hunger": _pawn_meaning_hunger(rk_ctx),
+		"meaning_knowledge": _pawn_meaning_knowledge(rk_ctx),
 		"affinity_combat": float(pd.affinities.get("combat", 0.5)),
 		"affinity_farming": float(pd.affinities.get("farming", 0.5)),
 		"affinity_building": float(pd.affinities.get("building", 0.5)),
@@ -3408,6 +3412,7 @@ func _pawn_decision_rule_context(pd: PawnData) -> Dictionary:
 		"work_mine": pd.work_mine,
 		"work_build": pd.work_build,
 		"work_hunt": pd.work_hunt,
+		"profession_overrep": _pawn_profession_overrep(pd),
 	}
 
 
@@ -3429,6 +3434,120 @@ func _pawn_martial_settlement_context(pd: PawnData) -> float:
 			if str(t) == "Martial":
 				return 1.0
 	return 0.0
+
+
+## Returns true if the pawn's profession is overrepresented (>40% of same-settlement pawns share it).
+func _pawn_profession_overrep(pd: PawnData) -> bool:
+	if pd.current_profession == PawnData.Profession.NONE:
+		return false
+	var sp: PawnSpawner = _resolve_pawn_spawner_for_world_ai()
+	if sp == null:
+		return false
+	var total: int = 0
+	var same_prof: int = 0
+	for p in sp.pawns:
+		if p == null or not is_instance_valid(p):
+			continue
+		if p.data == null:
+			continue
+		if p.data.settlement_id != pd.settlement_id:
+			continue
+		total += 1
+		if p.data.current_profession == pd.current_profession:
+			same_prof += 1
+	if total < 3:
+		return false
+	return float(same_prof) / float(total) >= 0.4
+
+
+## Returns 0.0-1.0 danger level from WorldMeaning tags (repeated_death, blood_soaked, graveyard, famine_stricken, fire_prone, ruined, ancient/old myth tags).
+func _pawn_meaning_danger(region_key: int) -> float:
+	var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
+	var danger: float = 0.0
+	for tag in tags:
+		match tag:
+			"repeated_death":
+				danger += 0.2
+			"blood_soaked":
+				danger += 0.3
+			"graveyard":
+				danger += 0.4
+			"famine_stricken":
+				danger += 0.25
+			"fire_prone":
+				danger += 0.15
+			"ruined":
+				danger += 0.1
+			"cursed":
+				danger += 0.35
+			# Myth formation: ancient danger is feared more
+			"old_death_place":
+				danger += 0.35
+			"ancient_death_place":
+				danger += 0.5
+			"old_famine":
+				danger += 0.3
+			"ancient_famine":
+				danger += 0.45
+	return clampf(danger, 0.0, 1.0)
+
+
+## Returns 0.0-1.0 safety level from WorldMeaning tags (safe_hearth, fertile, learned, welcoming, ancient/old myth tags).
+func _pawn_meaning_safety(region_key: int) -> float:
+	var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
+	var safety: float = 0.0
+	for tag in tags:
+		match tag:
+			"safe_hearth":
+				safety += 0.4
+			"fertile":
+				safety += 0.2
+			"learned":
+				safety += 0.15
+			"welcoming":
+				safety += 0.1
+			"educated":
+				safety += 0.1
+			"resilient":
+				safety += 0.2
+			# Myth formation: ancient safety is revered more
+			"old_heart":
+				safety += 0.3
+			"ancient_heart":
+				safety += 0.5
+	return clampf(safety, 0.0, 1.0)
+
+
+## Returns 0.0-1.0 hunger memory from WorldMeaning tags (hunger_place, hungry, famine_stricken).
+func _pawn_meaning_hunger(region_key: int) -> float:
+	var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
+	var hunger: float = 0.0
+	for tag in tags:
+		match tag:
+			"hunger_place":
+				hunger += 0.3
+			"hungry":
+				hunger += 0.2
+			"famine_stricken":
+				hunger += 0.5
+	return clampf(hunger, 0.0, 1.0)
+
+
+## Returns 0.0-1.0 knowledge level from WorldMeaning tags (learned, educated, ancient/old wisdom).
+func _pawn_meaning_knowledge(region_key: int) -> float:
+	var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
+	var knowledge: float = 0.0
+	for tag in tags:
+		match tag:
+			"learned":
+				knowledge += 0.5
+			"educated":
+				knowledge += 0.3
+			"old_wisdom":
+				knowledge += 0.6
+			"ancient_wisdom":
+				knowledge += 0.8
+	return clampf(knowledge, 0.0, 1.0)
 
 
 func _pawn_neural_input_vector(pd: PawnData) -> Array[float]:

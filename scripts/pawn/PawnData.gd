@@ -2218,6 +2218,32 @@ func _profession_primary_skill(prof: int) -> String:
 			return ""
 
 
+## Reassign profession if a non-primary skill has grown far beyond the
+## current profession's primary skill. Threshold: the new skill must have
+## ≥2x the XP of the current primary, and both must be ≥30 (the initial
+## assign threshold). This prevents pawns from being locked into roles
+## that no longer match what they actually do.
+func _maybe_reassign_profession(_just_gained_key: String) -> void:
+	if current_profession == Profession.NONE:
+		return
+	var primary: String = _profession_primary_skill(current_profession)
+	if primary == "":
+		return
+	var primary_xp: int = tracked_skill_xp(primary)
+	var best_key: String = ""
+	var best_xp: int = primary_xp
+	for k in skills:
+		var xp: int = int(skills[k])
+		if xp > best_xp:
+			best_xp = xp
+			best_key = k
+	# Only reassign if the best skill is different and significantly stronger
+	if best_key != "" and best_key != primary and best_xp >= 30 and best_xp >= primary_xp * 2:
+		var new_prof: int = _skill_to_profession(best_key)
+		if new_prof != Profession.NONE and new_prof != current_profession:
+			current_profession = new_prof
+
+
 func profession_name() -> String:
 	return profession_label_from_enum(int(current_profession))
 
@@ -2259,11 +2285,6 @@ func gain_skill_xp(skill_key: String, amount: int) -> bool:
 		return false
 	if not skills.has(skill_key):
 		return false
-	# Once locked, only the profession's primary skill can gain XP.
-	if current_profession != Profession.NONE:
-		var primary_skill: String = _profession_primary_skill(current_profession)
-		if skill_key != primary_skill:
-			return false
 	var before: int = tracked_skill_xp(skill_key)
 	var after: int = before + amount
 	var just_locked: bool = false
@@ -2272,6 +2293,9 @@ func gain_skill_xp(skill_key: String, amount: int) -> bool:
 		just_locked = true
 	skills[skill_key] = after
 	add_liking_from_action_skill(skill_key, amount)
+	# Check for profession reassignment: if a non-primary skill has grown
+	# significantly beyond the current profession's primary, switch roles.
+	_maybe_reassign_profession(skill_key)
 	return (after != before) or just_locked
 
 

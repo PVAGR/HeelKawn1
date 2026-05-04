@@ -9,7 +9,7 @@
 >
 > Before working on this repository, you MUST read `AI_README.md` at the repository root. It contains the canonical source of truth for:
 > - The deterministic kernel choice
-> - Current development phase (Phase 2: The Kernel)
+> - Current development phase (Phase 5: Emergent Life)
 > - Core world laws and philosophy
 > - Implementation rules and forbidden patterns
 >

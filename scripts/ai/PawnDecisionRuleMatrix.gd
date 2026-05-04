@@ -324,6 +324,74 @@ func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump_many(outs, [0, 3], 0.10)
 		fired.append({"id": "settlement_hungry", "line": "IF settlement food pressure high THEN all pawns nudge food.", "w": 0.55})
 
+	# --- Profession overrepresentation (diversity pressure) ---
+	var prof_overrep: bool = bool(ctx.get("profession_overrep", false))
+	if prof_overrep:
+		# Dampen the dominant profession's bias channels so other roles can emerge
+		match prof:
+			PawnData.Profession.FARMER:
+				_bump_many(outs, [0, 3], -0.10)
+				_bump(outs, 4, 0.08)
+				fired.append({"id": "overrep_farmer", "line": "IF too many farmers THEN reduce food/forage bias; nudge build.", "w": 0.50})
+			PawnData.Profession.GATHERER:
+				_bump_many(outs, [0, 3], -0.08)
+				_bump(outs, 4, 0.06)
+				fired.append({"id": "overrep_gatherer", "line": "IF too many gatherers THEN reduce forage bias; nudge build.", "w": 0.45})
+			PawnData.Profession.WARRIOR:
+				_bump(outs, 6, -0.06)
+				_bump_many(outs, [3, 4], 0.06)
+				fired.append({"id": "overrep_warrior", "line": "IF too many warriors THEN reduce defend bias; nudge work.", "w": 0.45})
+
+	# --- World-memory-driven behavior (meaning tags shape decisions) ---
+	var m_danger: float = float(ctx.get("meaning_danger", 0.0))
+	var m_safety: float = float(ctx.get("meaning_safety", 0.0))
+	var m_hunger: float = float(ctx.get("meaning_hunger", 0.0))
+	var m_knowledge: float = float(ctx.get("meaning_knowledge", 0.0))
+
+	# Danger memory: avoid danger regions, prefer safety and defense
+	if m_danger >= 0.3:
+		_bump(outs, 7, 0.12)  # idle/observe more — hesitation
+		_bump(outs, 6, 0.10)  # defend bias up
+		_bump_many(outs, [0, 3], -0.06)  # food/forage down (avoid the danger zone)
+		fired.append({"id": "meaning_danger", "line": "IF region has death/famine memory THEN hesitate + defend; avoid forage.", "w": 0.55})
+	elif m_danger >= 0.15:
+		_bump(outs, 6, 0.05)
+		fired.append({"id": "meaning_danger_low", "line": "IF region has some danger memory THEN slight defend nudge.", "w": 0.35})
+	# Ancient danger: even stronger aversion (myth formation)
+	if m_danger >= 0.5:
+		_bump(outs, 7, 0.15)  # strong hesitation near ancient death places
+		_bump_many(outs, [0, 3], -0.10)  # strongly avoid foraging here
+		_bump(outs, 6, 0.08)
+		fired.append({"id": "meaning_ancient_danger", "line": "IF region has ancient death/famine memory THEN strong avoidance + defend.", "w": 0.65})
+
+	# Safety memory: seek safe hearths, more relaxed
+	if m_safety >= 0.3:
+		_bump(outs, 1, 0.08)  # rest more — it's safe
+		_bump(outs, 2, 0.06)  # social more — community
+		_bump_many(outs, [0, 3], 0.05)  # food/forage easier
+		fired.append({"id": "meaning_safety", "line": "IF region is safe_hearth THEN rest + social + forage easier.", "w": 0.50})
+	# Ancient safety: pilgrimage-worthy — even more attractive (myth formation)
+	if m_safety >= 0.5:
+		_bump(outs, 1, 0.12)  # deep rest
+		_bump(outs, 2, 0.10)  # strong community bonds
+		_bump_many(outs, [0, 3], 0.08)
+		fired.append({"id": "meaning_ancient_safety", "line": "IF region is ancient_heart THEN pilgrimage-level attraction.", "w": 0.60})
+
+	# Hunger memory: hoard food, avoid the region for new settlement
+	if m_hunger >= 0.3:
+		_bump_many(outs, [0, 3], 0.12)  # food/forage urgency
+		_bump(outs, 1, -0.06)  # rest less — survival mode
+		fired.append({"id": "meaning_hunger", "line": "IF region has famine memory THEN food urgency; less rest.", "w": 0.55})
+	elif m_hunger >= 0.15:
+		_bump(outs, 0, 0.05)
+		fired.append({"id": "meaning_hunger_low", "line": "IF region has some hunger memory THEN slight food nudge.", "w": 0.30})
+
+	# Knowledge memory: seek teaching, social learning
+	if m_knowledge >= 0.3:
+		_bump(outs, 2, 0.10)  # social — learning community
+		_bump(outs, 7, 0.05)  # observe/idle — contemplation
+		fired.append({"id": "meaning_knowledge", "line": "IF region has teaching memory THEN seek social learning.", "w": 0.45})
+
 	fired.sort_custom(func(a, b): return float(a.get("w", 0.0)) > float(b.get("w", 0.0)))
 	var human_ch: Array = _build_human_channels(pd, ctx, outs)
 	_apply_human_semantic_projection(outs, human_ch)

@@ -4,7 +4,7 @@ This document outlines the state management strategies for the HeelKawn simulati
 
 ## Current Status
 
-- Current Phase: Phase 4 - Identity & Meaning
+- Current Phase: Phase 5 - Emergent Life
 - Kernel Health: 🟢
 - Compilation: PASS
 - Resolved Blockers:
@@ -12,7 +12,16 @@ This document outlines the state management strategies for the HeelKawn simulati
   - Verified `ProceduresPawnVisualizer` exists, exposes `class_name ProceduresPawnVisualizer`, and compiles cleanly.
   - Confirmed `Job.gd` and `JobManager.gd` compile cleanly after the Pawn dependency chain is restored.
   - Added the Phase 4 settlement lifecycle machine with active / abandoned / reviving / permanent ruin states.
-- Next Task: Validate settlement lifecycle transitions in a full headless run.
+  - Fixed profession lock bug (pawns were permanently locked into first profession, preventing role diversity).
+  - Fixed event schema gap (FoodChainManager events now reach WorldMeaning via _infer_kind_from_type).
+  - Relaxed neural bias speed gate from 50x to 200x so neural matrix contributes at normal play speeds.
+  - Added profession reassignment so pawns can change roles when a non-primary skill outpaces their current profession.
+  - Added colony role balance rules to dampen overrepresented professions.
+  - Added infrastructure + security job posting to SettlementPlanner (fire pit, storage hut, protect, defend).
+  - Added warrior peacetime patrol for visible perimeter presence.
+  - Added display settings (resolution, window mode, vsync) to GameSettings.
+  - Performance optimizations: spatial grid for social proximity, redraw throttle, meaning throttle, caches.
+- Next Task: Deep social dynamics — multi-generational grudges, emergent norms, reputation spread between settlements.
 
 ## Blockers
 
@@ -78,7 +87,7 @@ This document outlines the state management strategies for the HeelKawn simulati
 ### 6. ProgressionSystem (KERNEL)
 
 - **Purpose**: Tracks pawn significance through impact points earned from actions (building, teaching, etc.).
-- **Phase**: Phase 4 - Identity & Meaning
+- **Phase**: Phase 5 - Emergent Life
 - **Signal**: `progression_changed(pawn_id: int)` - emitted when a pawn gains impact.
 - **Functions**:
   - `record_impact(pawn_id, amount, reason)`: Add impact points to a pawn.

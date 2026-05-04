@@ -1053,7 +1053,7 @@ func _set_settlement_ruler_and_type(settlement_id: int, new_ruler_id: int, new_g
             if new_governance_type == "monarchy":
                 st["council_ids"] = PackedInt32Array() # A monarch rules alone, no council
 
-            settlements[i] = st # Update the settlement in the array
+            settlements[i] = st
 
             # Record governance_change event in WorldMemory
             WorldMemory.record_event({
@@ -1737,6 +1737,92 @@ func update_settlement_intents(tick: int) -> void:
                 "life_path_tally": lp_tally,
             })
         settlements[i] = st
+
+        # Cultural drift from meaning pressure: the world's memory shapes
+        # settlement identity over time. Famine → defensive. Safety → open.
+        _apply_meaning_drift(st, tick)
+        settlements[i] = st
+
+
+## Cultural drift from meaning pressure: the world's memory shapes settlement identity.
+## Settlements in famine-stricken or dangerous regions slowly drift toward DEFENSIVE.
+## Settlements in safe, fertile, learned regions slowly drift toward OPEN.
+## Drift is slow — culture doesn't flip overnight. It accumulates over many update cycles.
+func _apply_meaning_drift(st: Dictionary, tick: int) -> void:
+    var center_rk: int = int(st.get("center_region", -1))
+    if center_rk < 0:
+        return
+    # Only drift every 3rd intent update cycle (every ~1500 ticks)
+    if posmod(tick, INTENT_UPDATE_INTERVAL_TICKS * 3) != 0:
+        return
+    var tags: PackedStringArray = WorldMeaning.get_region_tags(center_rk)
+    var drift_score: float = 0.0
+    for tag in tags:
+        match tag:
+            # Danger/famine tags push toward DEFENSIVE
+            "famine_stricken":
+                drift_score -= 0.4
+            "hunger_place":
+                drift_score -= 0.25
+            "repeated_death", "blood_soaked":
+                drift_score -= 0.3
+            "graveyard":
+                drift_score -= 0.35
+            "cursed":
+                drift_score -= 0.5
+            "fire_prone":
+                drift_score -= 0.15
+            "ruined":
+                drift_score -= 0.1
+            # Myth formation: ancient danger drives stronger defensive drift
+            "old_death_place":
+                drift_score -= 0.35
+            "ancient_death_place":
+                drift_score -= 0.5
+            "old_famine":
+                drift_score -= 0.3
+            "ancient_famine":
+                drift_score -= 0.45
+            # Safety/abundance tags push toward OPEN
+            "safe_hearth":
+                drift_score += 0.3
+            "fertile":
+                drift_score += 0.2
+            "learned":
+                drift_score += 0.15
+            "welcoming":
+                drift_score += 0.1
+            "resilient":
+                drift_score += 0.2
+            "educated":
+                drift_score += 0.1
+            # Myth formation: ancient safety drives stronger open drift
+            "old_heart":
+                drift_score += 0.35
+            "ancient_heart":
+                drift_score += 0.5
+            "old_wisdom":
+                drift_score += 0.25
+            "ancient_wisdom":
+                drift_score += 0.35
+    # Apply drift as tiny adjustments to scar_max and reputation_min
+    # These are the inputs to _derive_culture_type_v1_for_age
+    # Positive drift → more open → lower scar, higher reputation
+    # Negative drift → more defensive → higher scar, lower reputation
+    var scar_max: int = int(st.get("scar_max", 0))
+    var rep_min: int = int(st.get("reputation_min", 0))
+    if drift_score > 0.2:
+        # Drift toward OPEN: reduce scar, increase reputation
+        scar_max = maxi(0, scar_max - 1)
+        rep_min = mini(rep_min + 1, 5)
+    elif drift_score < -0.2:
+        # Drift toward DEFENSIVE: increase scar, decrease reputation
+        scar_max = mini(scar_max + 1, 5)
+        rep_min = maxi(rep_min - 1, -5)
+    st["scar_max"] = scar_max
+    st["reputation_min"] = rep_min
+    # Recalculate culture type from the drifted values
+    st["culture_type"] = SettlementPlanner.get_culture_type_for_settlement(st)
 
 
 ## Derive settlement intent with life-path awareness. This is a v2 version

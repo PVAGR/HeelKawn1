@@ -65,6 +65,9 @@ func recompute() -> void:
 		if not meaning_by_region.has(rk):
 			meaning_by_region[rk] = _default_region_entry()
 		var rec: Dictionary = meaning_by_region[rk]
+		# Track first event tick for myth formation (age-based tag amplification)
+		if int(rec.get("first_event_tick", -1)) < 0 or t < int(rec.get("first_event_tick", 999999999)):
+			rec["first_event_tick"] = t
 
 		match k:
 			KIND_PAWN_DEATH:
@@ -140,7 +143,7 @@ func recompute() -> void:
 			r2["meaning_label"] = "cursed"
 		else:
 			r2["meaning_label"] = "scarred"
-		r2["tags"] = _compute_region_tags(r2)
+		r2["tags"] = _compute_region_tags(r2, GameManager.tick_count)
 
 	# Derive enhanced meanings (these still iterate all events — acceptable for now)
 	_derive_settlement_meanings(ev)
@@ -240,6 +243,7 @@ func _default_region_entry() -> Dictionary:
 		"total_deaths": 0,
 		"death_density": "none",
 		"last_death_tick": -1,
+		"first_event_tick": -1,
 		"buildings_constructed": 0,
 		"buildings_destroyed": 0,
 		"fires_started": 0,
@@ -254,9 +258,9 @@ func _default_region_entry() -> Dictionary:
 	}
 
 
-func _compute_region_tags(data: Dictionary) -> PackedStringArray:
+func _compute_region_tags(data: Dictionary, current_tick: int = 0) -> PackedStringArray:
 	var tags: PackedStringArray = []
-	
+
 	var buildings_built: int = int(data.get("buildings_constructed", 0))
 	var buildings_destroyed: int = int(data.get("buildings_destroyed", 0))
 	var fires_started: int = int(data.get("fires_started", 0))
@@ -264,6 +268,14 @@ func _compute_region_tags(data: Dictionary) -> PackedStringArray:
 	var teaching_events: int = int(data.get("teaching_events", 0))
 	var migrations_completed: int = int(data.get("migrations_completed", 0))
 	var total_deaths: int = int(data.get("total_deaths", 0))
+
+	# Myth formation: compute age of this region's memory
+	var first_tick: int = int(data.get("first_event_tick", -1))
+	var age_ticks: int = 0
+	if first_tick >= 0 and current_tick > first_tick:
+		age_ticks = current_tick - first_tick
+	var is_ancient: bool = age_ticks >= 10000  # ~55 in-world years at 180 ticks/day
+	var is_old: bool = age_ticks >= 5000      # ~28 in-world years
 	
 	# Construction tags
 	if buildings_built >= 10:
@@ -326,6 +338,27 @@ func _compute_region_tags(data: Dictionary) -> PackedStringArray:
 		tags.append("busy")
 	if work_events >= 5:
 		tags.append("active")
+
+	# Myth formation: time amplifies meaning. Old events become legend.
+	# Ancient death places are feared more. Ancient safe hearths are revered.
+	if is_ancient:
+		if total_deaths >= 2:
+			tags.append("ancient_death_place")  # Stronger aversion than repeated_death
+		if starvation_events >= 1:
+			tags.append("ancient_famine")  # Deep cultural memory of hunger
+		if total_deaths == 0 and buildings_built >= 1:
+			tags.append("ancient_heart")  # Revered safe place — pilgrimage worthy
+		if teaching_events >= 2:
+			tags.append("ancient_wisdom")  # Knowledge shrine — seek teaching here
+	elif is_old:
+		if total_deaths >= 3:
+			tags.append("old_death_place")  # Moderate aversion
+		if starvation_events >= 2:
+			tags.append("old_famine")  # Cultural memory forming
+		if total_deaths == 0 and buildings_built >= 1:
+			tags.append("old_heart")  # Respected safe place
+		if teaching_events >= 3:
+			tags.append("old_wisdom")  # Established learning place
 
 	return tags
 

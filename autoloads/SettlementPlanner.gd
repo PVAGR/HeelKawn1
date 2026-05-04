@@ -159,6 +159,8 @@ func _plan_one_settlement(
 	var bed_n: int = int(feature_summary.get("bed_n", 0))
 	var wall_n: int = int(feature_summary.get("wall_n", 0))
 	var door_n: int = int(feature_summary.get("door_n", 0))
+	var fire_pit_n: int = int(feature_summary.get("fire_pit_n", 0))
+	var storage_hut_n: int = int(feature_summary.get("storage_hut_n", 0))
 	var stage: int = _derive_settlement_stage(
 			world, data, center, planning_regions, bed_n, wall_n, door_n, feature_summary
 	)
@@ -178,22 +180,24 @@ func _plan_one_settlement_culture(
 		cult: int, intent: int, pawns: int, bed_n: int, wall_n: int, door_n: int, stage: int,
 		feature_summary: Dictionary
 ) -> void:
-	var order: Array[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+	var fire_pit_n: int = int(feature_summary.get("fire_pit_n", 0))
+	var storage_hut_n: int = int(feature_summary.get("storage_hut_n", 0))
+	var order: Array[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 	if cult == CULTURE_OPEN:
 		# Beds + zone before fortifying; sprawl (tile picks below).
-		order = [1, 6, 4, 2, 3, 5, 7, 8, 9, 10]
+		order = [1, 6, 4, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13, 14]
 	elif cult == CULTURE_DEFENSIVE:
 		# Wall expansion before stockpile; compact defaults.
-		order = [1, 2, 3, 5, 4, 6, 7, 8, 9, 10]
+		order = [1, 2, 3, 5, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 	if intent == IntentMemory.INTENT_GROW:
 		if cult == CULTURE_OPEN:
-			order = [1, 6, 4, 5, 2, 3, 7, 8, 9, 10]
+			order = [1, 6, 4, 5, 2, 3, 7, 8, 9, 10, 11, 12, 13, 14]
 		elif cult == CULTURE_DEFENSIVE:
-			order = [1, 2, 3, 6, 5, 4, 7, 8, 9, 10]
+			order = [1, 2, 3, 6, 5, 4, 7, 8, 9, 10, 11, 12, 13, 14]
 		else:
 			order = [1, 6, 4, 2, 3, 5, 7, 8, 9, 10]
 	elif intent == IntentMemory.INTENT_ABANDON:
-		order = [1, 3, 7, 10, 2, 4, 5, 6, 8, 9]
+		order = [1, 3, 7, 10, 2, 4, 5, 6, 8, 9, 11, 12, 13, 14]
 	for rid: int in order:
 		match rid:
 			1:
@@ -312,6 +316,34 @@ func _plan_one_settlement_culture(
 					)
 					if t10.x >= 0 and bool(main.call("settlement_planner_post_door", t10)):
 						return
+			11:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if bed_n >= 2 and fire_pit_n == 0:
+					var t11: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
+					if t11.x >= 0 and bool(main.call("settlement_planner_post_fire_pit", t11)):
+						return
+			12:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if bed_n >= 4 and storage_hut_n == 0:
+					var t12: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
+					if t12.x >= 0 and bool(main.call("settlement_planner_post_storage_hut", t12)):
+						return
+			13:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if wall_n >= 4 and pawns >= 3:
+					var t13: Vector2i = _pick_defend_tile(world, main, data, center, regions)
+					if t13.x >= 0 and bool(main.call("settlement_planner_post_protect", t13)):
+						return
+			14:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if stage >= 2 and pawns >= 4:
+					var t14: Vector2i = _pick_defend_tile(world, main, data, center, regions)
+					if t14.x >= 0 and bool(main.call("settlement_planner_post_defend", t14)):
+						return
 
 
 static func _intent_for_settlement(center_region: int) -> int:
@@ -415,6 +447,59 @@ func _pick_expansion_wall_tile_culture(
 	return _pick_expansion_wall_tile(world, main, data, center, regions, false, feature_summary)
 
 
+## Pick a tile near center for infrastructure (fire pit, storage hut).
+func _pick_infrastructure_tile(
+		world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array
+) -> Vector2i:
+	var region_lookup: Dictionary = _regions_lookup(regions)
+	var cands: Array[Vector2i] = []
+	for dy in range(-4, 5):
+		for dx in range(-4, 5):
+			var t := Vector2i(center.x + dx, center.y + dy)
+			if not _tile_belongs_to_lookup(t, region_lookup):
+				continue
+			if not data.in_bounds(t.x, t.y):
+				continue
+			if data.get_feature(t.x, t.y) != TileFeature.Type.NONE:
+				continue
+			if not data.is_passable(t.x, t.y):
+				continue
+			cands.append(t)
+	if cands.is_empty():
+		return Vector2i(-1, -1)
+	_sort_tiles_index_order_remnant(cands, center, world)
+	return cands[0]
+
+
+## Pick a tile near a wall for defense (protect/defend jobs).
+func _pick_defend_tile(
+		world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array
+) -> Vector2i:
+	var walls: Array[Vector2i] = _collect_wall_tiles_in_regions(data, regions, center)
+	if walls.is_empty():
+		return Vector2i(-1, -1)
+	# Find passable tiles adjacent to walls
+	var region_lookup: Dictionary = _regions_lookup(regions)
+	var cands: Array[Vector2i] = []
+	for w in walls:
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				if dx == 0 and dy == 0:
+					continue
+				var t := Vector2i(w.x + dx, w.y + dy)
+				if not data.in_bounds(t.x, t.y):
+					continue
+				if not data.is_passable(t.x, t.y):
+					continue
+				if not _tile_belongs_to_lookup(t, region_lookup):
+					continue
+				cands.append(t)
+	if cands.is_empty():
+		return Vector2i(-1, -1)
+	_sort_tiles_index_order_remnant(cands, center, world)
+	return cands[0]
+
+
 static func _center_tile_of_region_key(rk: int) -> Vector2i:
 	var rx: int = int(rk) & 0xFFFF
 	var ry: int = (int(rk) >> 16) & 0xFFFF
@@ -515,6 +600,8 @@ static func _scan_region_feature_summary(
 	var bed_n: int = 0
 	var wall_n: int = 0
 	var door_n: int = 0
+	var fire_pit_n: int = 0
+	var storage_hut_n: int = 0
 	var wx0: int = 1_000_000
 	var wx1: int = -1_000_000
 	var wy0: int = 1_000_000
@@ -542,6 +629,10 @@ static func _scan_region_feature_summary(
 					wy1 = maxi(wy1, y)
 				elif f == TileFeature.Type.DOOR:
 					door_n += 1
+				elif f == TileFeature.Type.FIRE_PIT:
+					fire_pit_n += 1
+				elif f == TileFeature.Type.STORAGE_HUT:
+					storage_hut_n += 1
 	return {
 		"bed_n": bed_n,
 		"wall_n": wall_n,
@@ -551,6 +642,8 @@ static func _scan_region_feature_summary(
 		"wall_x1": wx1,
 		"wall_y0": wy0,
 		"wall_y1": wy1,
+		"fire_pit_n": fire_pit_n,
+		"storage_hut_n": storage_hut_n,
 	}
 
 

@@ -36,7 +36,7 @@ const SIMPLE_READABLE_HUD: bool = true
 func _is_simple_hud() -> bool:
 	if GameSettings != null:
 		return GameSettings.is_simple_hud()
-	return _is_simple_hud()
+	return SIMPLE_READABLE_HUD
 
 func _get_font_size() -> int:
 	if GameSettings != null:
@@ -105,6 +105,8 @@ func _ready() -> void:
 	StockpileManager.zone_registered.connect(_on_zones_changed)
 	StockpileManager.zone_unregistered.connect(_on_zones_changed)
 	ColonySimServices.demand_snapshot.connect(_on_colony_demand)
+	if GameSettings != null:
+		GameSettings.setting_changed.connect(_on_setting_changed)
 	_apply_panel_style()
 	_ensure_history_panel()
 	_hotkeys.text = HOTKEY_HINTS
@@ -227,7 +229,16 @@ func _apply_panel_style() -> void:
 	_panel.add_theme_stylebox_override("panel", style)
 	_label.add_theme_font_size_override("normal_font_size", _get_font_size())
 	_label.add_theme_font_size_override("bold_font_size", _get_font_size())
-	_hotkeys.add_theme_font_size_override("font_size", FONT_SIZE_HOTKEYS)
+	_hotkeys.add_theme_font_size_override("font_size", max(8, _get_font_size() - 1))
+
+
+## React to live settings changes — re-apply font size and mark HUD dirty.
+func _on_setting_changed(key: String, _new_value: Variant) -> void:
+	if key == "hud_font_size":
+		_label.add_theme_font_size_override("normal_font_size", _get_font_size())
+		_label.add_theme_font_size_override("bold_font_size", _get_font_size())
+		_hotkeys.add_theme_font_size_override("font_size", max(8, _get_font_size() - 1))
+	_hud_dirty = true
 
 
 # ==================== text ====================
@@ -887,12 +898,20 @@ func _session_diag_line() -> String:
 
 func _refresh_stride_for_speed(speed: float) -> int:
 	if speed >= 100.0:
+		if GameSettings != null:
+			return int(GameSettings.get_value("hud_refresh_max"))
 		return REFRESH_EVERY_N_TICKS_MAX
 	if speed >= 50.0:
+		if GameSettings != null:
+			return int(GameSettings.get_value("hud_refresh_extreme"))
 		return REFRESH_EVERY_N_TICKS_EXTREME
 	if speed >= 26.0:
+		if GameSettings != null:
+			return int(GameSettings.get_value("hud_refresh_ultra"))
 		return REFRESH_EVERY_N_TICKS_ULTRA
 	if speed >= 12.0:
+		if GameSettings != null:
+			return int(GameSettings.get_value("hud_refresh_fast"))
 		return REFRESH_EVERY_N_TICKS_FAST
 	return REFRESH_EVERY_N_TICKS
 

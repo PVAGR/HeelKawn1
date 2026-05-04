@@ -3402,6 +3402,9 @@ func _pawn_decision_rule_context(pd: PawnData) -> Dictionary:
 		"meaning_hunger": _pawn_meaning_hunger(rk_ctx),
 		"meaning_knowledge": _pawn_meaning_knowledge(rk_ctx),
 		"meaning_custom": _pawn_meaning_custom(rk_ctx),
+		"knowledge_at_risk": _pawn_knowledge_at_risk(pd),
+		"teaching_obligation": _pawn_teaching_obligation(pd),
+		"diaspora_exile": 1.0 if pd._diaspora_origin >= 0 else 0.0,
 		"affinity_combat": float(pd.affinities.get("combat", 0.5)),
 		"affinity_farming": float(pd.affinities.get("farming", 0.5)),
 		"affinity_building": float(pd.affinities.get("building", 0.5)),
@@ -3592,6 +3595,34 @@ func _pawn_meaning_custom(region_key: int) -> float:
 			"faded_gathering_place":
 				custom += 0.12
 	return clampf(custom, 0.0, 1.0)
+
+
+## Returns 0.0-1.0 knowledge risk level for this pawn's settlement.
+## High risk = few carriers for skills this pawn knows = urgency to teach.
+func _pawn_knowledge_at_risk(pd: PawnData) -> float:
+	if KnowledgeSystem == null:
+		return 0.0
+	var sid: int = pd.settlement_id
+	if sid < 0:
+		return 0.0
+	var security: Dictionary = KnowledgeSystem.get_knowledge_security_for_settlement(sid)
+	var at_risk_count: int = (security.get("at_risk", []) as Array).size()
+	var lost_count: int = (security.get("lost", []) as Array).size()
+	# Normalize: 0 at-risk + 0 lost = 0.0, 3+ at-risk or 1+ lost = 1.0
+	var risk: float = clampf(float(at_risk_count) / 3.0 + float(lost_count) * 0.3, 0.0, 1.0)
+	return risk
+
+
+## Returns 0.0-1.0 teaching obligation weight for this pawn.
+## High obligation = they carry knowledge but haven't taught recently.
+func _pawn_teaching_obligation(pd: PawnData) -> float:
+	if KnowledgeSystem == null:
+		return 0.0
+	var pid: int = int(pd.id)
+	if not KnowledgeSystem.teaching_debt.has(pid):
+		return 0.0
+	var debt: Dictionary = KnowledgeSystem.teaching_debt[pid]
+	return clampf(float(debt.get("obligation_weight", 0.0)), 0.0, 1.0)
 
 
 func _pawn_neural_input_vector(pd: PawnData) -> Array[float]:

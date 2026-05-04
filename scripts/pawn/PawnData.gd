@@ -139,6 +139,10 @@ var clan_influence: float = 0.0
 ## Stage 4: Settlement/Homestead
 ## Settlement ID (-1 if not in a settlement)
 var settlement_id: int = -1
+## Diaspora tracking: origin settlement for exiled pawns (-1 = native)
+var _diaspora_origin: int = -1
+## Diaspora tracking: tick when this pawn was exiled
+var _diaspora_tick: int = -1
 ## Homestead tile location (-1 if no homestead)
 var homestead_tile: Vector2i = Vector2i(-1, -1)
 ## Food production contribution: total_food_produced
@@ -3238,3 +3242,45 @@ func get_tool_efficacy(job_type: int) -> float:
 	if not is_equipped_tool_valid():
 		return 1.0  # bare-handed baseline
 	return Item.tool_efficacy(equipped_tool, job_type)
+
+
+# === Life Arc Composer ===
+
+## Compose a short life arc string for this pawn.
+## Returns a human-readable narrative of major life events.
+func compose_life_arc() -> String:
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	var age_ticks: int = maxi(tick - birth_tick, 0)
+	var lines: Array = []
+
+	# Opening: name, age, profession
+	var prof_str: String = profession_name()
+	lines.append("%s, %s" % [display_name, prof_str])
+	lines.append("  Born tick %d, age %d ticks" % [birth_tick, age_ticks])
+
+	# Diaspora origin
+	if _diaspora_origin >= 0:
+		lines.append("  Exiled from settlement %d at tick %d" % [_diaspora_origin, _diaspora_tick])
+
+	# Profession history
+	if current_profession != Profession.NONE:
+		lines.append("  Profession: %s" % prof_str)
+
+	# Key episodic memories (top 5 by emotional impact)
+	var key_memories: Array = recall_episodic_memories("", 0.3, 5)
+	if not key_memories.is_empty():
+		lines.append("  Key memories:")
+		for mem in key_memories:
+			if not (mem is Dictionary):
+				continue
+			var mem_d: Dictionary = mem as Dictionary
+			var mem_type: String = str(mem_d.get("type", "?")).replace("_", " ")
+			var mem_tick: int = int(mem_d.get("tick", 0))
+			var impact: float = float(mem_d.get("emotional_impact", 0.0))
+			var impact_label: String = "strong" if impact > 0.7 else "notable" if impact > 0.4 else "mild"
+			lines.append("    [t%d] %s (%s)" % [mem_tick, mem_type, impact_label])
+
+	# Mood
+	lines.append("  Mood: %.0f" % mood)
+
+	return "\n".join(lines)

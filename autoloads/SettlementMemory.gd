@@ -309,6 +309,7 @@ func recompute(_world: World) -> void:
         )
         var center_id0: int = int(st0.get("center_region", -1))
         st0["state"] = _apply_settlement_state_truth_hysteresis(center_id0, raw_state0, base_state0, st0)
+        _apply_diaspora_founding(st0, center_id0)
         settlements.append(st0)
         var st_name0: String = str(st0.get("state", ""))
         var ckr0: int = int(st0.get("center_region", -1))
@@ -336,6 +337,7 @@ func recompute(_world: World) -> void:
             )
             var center_id: int = int(st.get("center_region", -1))
             st["state"] = _apply_settlement_state_truth_hysteresis(center_id, raw_state, base_state, st)
+            _apply_diaspora_founding(st, center_id)
             settlements.append(st)
             var st_name: String = str(st.get("state", ""))
             var ckr: int = int(st.get("center_region", -1))
@@ -841,6 +843,9 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
         "specialization_confidence": 0,
         "settlement_specialization": "",
         "cultural_tags": [],
+        "parent_settlement_id": -1,  # Diaspora: ID of parent settlement (-1 = original)
+        "founding_pressure": "",     # Diaspora: cause chain that produced this settlement
+        "founding_tick": -1,         # Diaspora: tick when this settlement was founded
     }
 
 
@@ -1743,6 +1748,14 @@ func update_settlement_intents(tick: int) -> void:
         _apply_meaning_drift(st, tick)
         settlements[i] = st
 
+    # Diaspora pressure check: when food + housing + grudge pressure is high,
+    # pawns may leave to found a daughter settlement.
+    _check_diaspora_pressure(tick)
+    # Pressure situation detection: name emergent crises for readability.
+    _check_pressure_situations(tick)
+    # Generational shift: detect when founding generation dies off.
+    _check_generational_shift(tick)
+
 
 ## Cultural drift from meaning pressure: the world's memory shapes settlement identity.
 ## Settlements in famine-stricken or dangerous regions slowly drift toward DEFENSIVE.
@@ -1843,8 +1856,216 @@ func _apply_meaning_drift(st: Dictionary, tick: int) -> void:
         rep_min = maxi(rep_min - 1, -5)
     st["scar_max"] = scar_max
     st["reputation_min"] = rep_min
+    # Knowledge ecology: settlements with lost knowledge drift toward DEFENSIVE
+    # (knowledge sealed = cultural loss = fear of forgetting)
+    if KnowledgeSystem != null and KnowledgeSystem.has_method("get_knowledge_security_for_settlement"):
+        var ksec: Dictionary = KnowledgeSystem.get_knowledge_security_for_settlement(center_rk)
+        var lost_count: int = (ksec.get("lost", []) as Array).size()
+        if lost_count >= 2:
+            scar_max = mini(scar_max + 1, 5)  # Lost knowledge = cultural scar
+            rep_min = maxi(rep_min - 1, -5)
+        elif lost_count >= 1:
+            scar_max = mini(scar_max + 1, 5)  # Mild scar from knowledge loss
+    st["scar_max"] = scar_max
+    st["reputation_min"] = rep_min
     # Recalculate culture type from the drifted values
     st["culture_type"] = SettlementPlanner.get_culture_type_for_settlement(st)
+
+
+# === Diaspora Pressure Architecture ===
+# When a settlement reaches critical pressure (food + housing + social tension),
+# one or more pawns may leave to found a daughter settlement.
+# This is not scripted — it emerges from threshold crossing.
+
+const DIASPORA_CHECK_INTERVAL_TICKS: int = 2000
+const DIASPORA_CHECK_PHASE_OFFSET: int = 311
+const DIASPORA_FOOD_PRESSURE_THRESHOLD: float = 0.7
+const DIASPORA_HOUSING_PRESSURE_THRESHOLD: float = 0.7
+const DIASPORA_MIN_POPULATION: int = 8  # Settlement must have 8+ pawns for exile to happen
+const DIASPORA_MIN_EXILES: int = 2       # At least 2 pawns must leave together
+const DIASPORA_MAX_EXILES: int = 5       # Cap on group size
+const DIASPORA_GRUDGE_THRESHOLD: float = 0.3  # 30% of pawns must have active grudges
+
+## Check all settlements for diaspora pressure and trigger exile events.
+func _check_diaspora_pressure(tick: int) -> void:
+    if not GameManager.periodic_phase_due(tick, DIASPORA_CHECK_INTERVAL_TICKS, DIASPORA_CHECK_PHASE_OFFSET):
+        return
+    if ColonySimServices == null:
+        return
+    var food_pressure: float = ColonySimServices.get_food_pressure()
+    var housing_pressure: float = ColonySimServices.get_housing_pressure()
+    # Both pressures must be high simultaneously
+    if food_pressure < DIASPORA_FOOD_PRESSURE_THRESHOLD or housing_pressure < DIASPORA_HOUSING_PRESSURE_THRESHOLD:
+        return
+    # Find settlements with enough population and sufficient grudge density
+    for i in range(settlements.size()):
+        if not (settlements[i] is Dictionary):
+            continue
+        var st: Dictionary = settlements[i] as Dictionary
+        var center_rk: int = int(st.get("center_region", -1))
+        # Count living pawns in this settlement
+        var settlement_pawns: Array = []
+        var grudge_pawns: Array = []
+        for n in PawnSpawner.find_pawns():
+            if n == null or not is_instance_valid(n):
+                continue
+            if not n.has_method("get"):
+                continue
+            var data_v: Variant = n.get("data")
+            if data_v == null:
+                continue
+            var pawn_sid: int = data_v.settlement_id
+            if pawn_sid != center_rk:
+                continue
+            settlement_pawns.append(n)
+            # Check for active grudges
+            var nn = data_v.get("neural_network") if data_v != null else null
+            if nn != null and nn.has_method("get_strongest_grudge_target_id"):
+                if nn.get_strongest_grudge_target_id() >= 0:  # Has an active grudge target
+                    grudge_pawns.append(n)
+        if settlement_pawns.size() < DIASPORA_MIN_POPULATION:
+            continue
+        # Grudge density check
+        var grudge_ratio: float = float(grudge_pawns.size()) / float(settlement_pawns.size())
+        if grudge_ratio < DIASPORA_GRUDGE_THRESHOLD:
+            continue
+        # Diaspora pressure triggered! Select exile group
+        _trigger_exile(st, settlement_pawns, grudge_pawns, tick, food_pressure, housing_pressure)
+
+
+## Trigger an exile event: select a group of pawns to leave and found a daughter settlement.
+func _trigger_exile(parent_settlement: Dictionary, all_pawns: Array, grudge_pawns: Array, tick: int, food_pressure: float, housing_pressure: float) -> void:
+    var center_rk: int = int(parent_settlement.get("center_region", -1))
+    # Select exile group: prioritize pawns with strongest grudges
+    # Deterministic: sort by pawn id, then pick from grudge_pawns
+    var candidates: Array = []
+    for n in grudge_pawns:
+        if n == null or not is_instance_valid(n):
+            continue
+        var data_v: Variant = n.get("data")
+        if data_v == null:
+            continue
+        candidates.append({"node": n, "id": int(data_v.id)})
+    candidates.sort_custom(func(a, b): return int(a["id"]) < int(b["id"]))
+    # Pick exile group size (2-5, capped by available candidates)
+    var group_size: int = mini(DIASPORA_MAX_EXILES, maxi(DIASPORA_MIN_EXILES, candidates.size() / 2))
+    if candidates.size() < DIASPORA_MIN_EXILES:
+        return  # Not enough candidates
+    var exile_group: Array = []
+    for j in range(mini(group_size, candidates.size())):
+        exile_group.append(candidates[j]["node"])
+    if exile_group.size() < DIASPORA_MIN_EXILES:
+        return
+    # Find a suitable founding location (unclaimed region, 15+ tiles from parent)
+    var parent_center: Vector2i = SettlementPlanner._center_tile_of_region_key(center_rk)
+    var founding_tile: Vector2i = _find_exile_founding_tile(parent_center, tick)
+    if founding_tile.x < 0:
+        return  # No suitable location found
+    # Record the exile event in WorldMemory
+    var exile_ids: Array = []
+    for n in exile_group:
+        var data_v: Variant = n.get("data")
+        if data_v != null:
+            exile_ids.append(int(data_v.id))
+    var founding_rk: int = WorldMemory._region_key(founding_tile.x, founding_tile.y)
+    var pressure_chain: String = "food:%.2f+housing:%.2f+grudge:%.2f" % [food_pressure, housing_pressure, float(grudge_pawns.size()) / float(all_pawns.size())]
+    WorldMemory.record_event({
+        "type": "diaspora_exile",
+        "k": WorldMemory.Kind.MIGRATION_STARTED,
+        "r": founding_rk,
+        "t": tick,
+        "from_region": center_rk,
+        "to_region": founding_rk,
+        "exile_pawn_ids": exile_ids,
+        "parent_settlement": center_rk,
+        "pressure_chain": pressure_chain,
+    })
+    # Mark exiled pawns with diaspora state
+    for n in exile_group:
+        var data_v: Variant = n.get("data")
+        if data_v == null:
+            continue
+        data_v.settlement_id = -1  # Remove from parent settlement
+        data_v._diaspora_origin = center_rk  # Track origin for homesickness
+        data_v._diaspora_tick = tick
+        # Path the pawn toward the founding location
+        if n.has_method("autonomy_draft_goto"):
+            n.autonomy_draft_goto(founding_tile, "diaspora_exile", 0)
+    # Record founding pressure on the new settlement (will be created when pawns arrive)
+    _pending_diaspora_foundings[founding_rk] = {
+        "parent_settlement_id": center_rk,
+        "founding_pressure": pressure_chain,
+        "founding_tick": tick,
+        "exile_ids": exile_ids,
+    }
+
+
+## Pending diaspora foundings: region_key -> founding info
+## When pawns arrive and settle, the settlement is created with parent info.
+var _pending_diaspora_foundings: Dictionary = {}
+
+
+## Find a suitable tile for exile founding.
+## Must be unclaimed, passable, and 15+ tiles from parent center.
+func _find_exile_founding_tile(parent_center: Vector2i, tick: int) -> Vector2i:
+    var wd_node = get_node_or_null("/root/World")
+    if wd_node == null:
+        return Vector2i(-1, -1)
+    var wd = wd_node.get("data") if wd_node.has_method("get") else null
+    if wd == null:
+        return Vector2i(-1, -1)
+    if not wd.has_method("in_bounds"):
+        return Vector2i(-1, -1)
+    # Deterministic search: spiral outward from a seed offset
+    var seed_val: int = posmod(tick * 31 + parent_center.x * 9176 + parent_center.y * 131, 1000)
+    var angle_offset: float = float(seed_val % 360) * PI / 180.0
+    for dist in range(15, 40):
+        for angle_step in range(8):
+            var angle: float = angle_offset + float(angle_step) * PI / 4.0
+            var tx: int = int(round(parent_center.x + float(dist) * cos(angle)))
+            var ty: int = int(round(parent_center.y + float(dist) * sin(angle)))
+            if not wd.in_bounds(tx, ty):
+                continue
+            if not wd.is_passable(tx, ty):
+                continue
+            var rk: int = WorldMemory._region_key(tx, ty)
+            # Check if region is unclaimed
+            if _region_state.has(rk):
+                continue
+            return Vector2i(tx, ty)
+    return Vector2i(-1, -1)
+
+
+## When a settlement is built from regions, check if it's a diaspora founding
+## and apply parent settlement info.
+func _apply_diaspora_founding(st: Dictionary, center_rk: int) -> void:
+    if _pending_diaspora_foundings.has(center_rk):
+        var info: Dictionary = _pending_diaspora_foundings[center_rk]
+        st["parent_settlement_id"] = int(info.get("parent_settlement_id", -1))
+        st["founding_pressure"] = str(info.get("founding_pressure", ""))
+        st["founding_tick"] = int(info.get("founding_tick", -1))
+        # Copy degraded cultural tags from parent
+        var parent_id: int = int(info.get("parent_settlement_id", -1))
+        if parent_id >= 0:
+            var parent_st: Variant = get_settlement_at_region(parent_id)
+            if parent_st != null and parent_st is Dictionary:
+                var parent_tags: Variant = (parent_st as Dictionary).get("cultural_tags", [])
+                if parent_tags is Array:
+                    # Degraded copy: keep 60% of tags (deterministic based on tick)
+                    var kept_tags: Array = []
+                    var tick_salt: int = int(info.get("founding_tick", 0))
+                    for idx in range(parent_tags.size()):
+                        if posmod(tick_salt + idx * 7, 10) < 6:  # 60% retention
+                            kept_tags.append(parent_tags[idx])
+                    st["cultural_tags"] = kept_tags
+        # Add founding pressure tag
+        var pressure: String = str(info.get("founding_pressure", ""))
+        if not pressure.is_empty():
+            var tags: Variant = st.get("cultural_tags", [])
+            if tags is Array:
+                tags.append("founded_by_exile:" + pressure)
+                st["cultural_tags"] = tags
+        _pending_diaspora_foundings.erase(center_rk)
 
 
 ## Derive settlement intent with life-path awareness. This is a v2 version
@@ -2677,8 +2898,211 @@ func _laws_to_save_dict() -> Dictionary:
 func _laws_from_save_dict(d: Dictionary) -> void:
     _laws.clear()
     _law_id_counter = 1
-    
+
     if d.has("laws"):
         _laws = d["laws"].duplicate(true)
     if d.has("law_id_counter"):
         _law_id_counter = int(d["law_id_counter"])
+
+
+# === Pressure Situation Detector ===
+# When multiple pressures converge, detect and name the situation.
+# This makes emergent crises readable to the player.
+
+const SITUATION_CHECK_INTERVAL_TICKS: int = 500
+const SITUATION_CHECK_PHASE_OFFSET: int = 73
+
+## Current active situations per settlement: center_rk -> Array of { name, severity, tick }
+var _active_situations: Dictionary = {}
+
+## Detect pressure convergence situations for all settlements.
+func _check_pressure_situations(tick: int) -> void:
+    if not GameManager.periodic_phase_due(tick, SITUATION_CHECK_INTERVAL_TICKS, SITUATION_CHECK_PHASE_OFFSET):
+        return
+    if ColonySimServices == null:
+        return
+    var food_pressure: float = ColonySimServices.get_food_pressure()
+    var housing_pressure: float = ColonySimServices.get_housing_pressure()
+
+    for i in range(settlements.size()):
+        if not (settlements[i] is Dictionary):
+            continue
+        var st: Dictionary = settlements[i] as Dictionary
+        var center_rk: int = int(st.get("center_region", -1))
+        var situations: Array = []
+
+        # Count living pawns and check various pressures
+        var pop: int = 0
+        var elder_count: int = 0
+        var youth_count: int = 0
+        var grudge_count: int = 0
+        for n in PawnSpawner.find_pawns():
+            if n == null or not is_instance_valid(n):
+                continue
+            if not n.has_method("get"):
+                continue
+            var data_v: Variant = n.get("data")
+            if data_v == null:
+                continue
+            if int(data_v.settlement_id) != center_rk:
+                continue
+            pop += 1
+            var pawn_age: int = int(data_v.age)
+            if pawn_age >= 60:
+                elder_count += 1
+            elif pawn_age < 18:
+                youth_count += 1
+            var nn = data_v.get("neural_network") if data_v != null else null
+            if nn != null and nn.has_method("get_strongest_grudge_target_id"):
+                if nn.get_strongest_grudge_target_id() >= 0:
+                    grudge_count += 1
+
+        # Famine situation
+        if food_pressure >= 0.8:
+            situations.append({"name": "famine", "severity": 1.0, "tick": tick})
+        elif food_pressure >= 0.5:
+            situations.append({"name": "food_shortage", "severity": 0.5, "tick": tick})
+
+        # Overcrowding situation
+        if housing_pressure >= 0.8:
+            situations.append({"name": "overcrowding", "severity": 1.0, "tick": tick})
+        elif housing_pressure >= 0.5:
+            situations.append({"name": "housing_strain", "severity": 0.5, "tick": tick})
+
+        # Knowledge crisis
+        if KnowledgeSystem != null and KnowledgeSystem.has_method("get_knowledge_security_for_settlement"):
+            var ksec: Dictionary = KnowledgeSystem.get_knowledge_security_for_settlement(center_rk)
+            var lost_count: int = (ksec.get("lost", []) as Array).size()
+            var at_risk_count: int = (ksec.get("at_risk", []) as Array).size()
+            if lost_count >= 2:
+                situations.append({"name": "knowledge_crisis", "severity": 1.0, "tick": tick})
+            elif at_risk_count >= 3:
+                situations.append({"name": "knowledge_at_risk", "severity": 0.6, "tick": tick})
+
+        # Social tension
+        if pop > 0 and grudge_count > 0:
+            var grudge_ratio: float = float(grudge_count) / float(pop)
+            if grudge_ratio >= 0.5:
+                situations.append({"name": "social_crisis", "severity": 1.0, "tick": tick})
+            elif grudge_ratio >= 0.3:
+                situations.append({"name": "social_tension", "severity": 0.5, "tick": tick})
+
+        # Generational shift: elder majority dying off
+        if pop > 0 and elder_count >= pop / 2 and elder_count >= 3:
+            situations.append({"name": "generational_shift", "severity": 0.7, "tick": tick})
+
+        # Composite situations: when two or more pressures converge
+        var high_severity: int = 0
+        for s in situations:
+            if float(s.get("severity", 0.0)) >= 0.8:
+                high_severity += 1
+        if high_severity >= 2:
+            situations.append({"name": "convergence_crisis", "severity": 1.0, "tick": tick})
+
+        # Record new situations to WorldMemory
+        var prev_situations: Array = _active_situations.get(center_rk, [])
+        var prev_names: Dictionary = {}
+        for ps in prev_situations:
+            prev_names[str(ps.get("name", ""))] = true
+        for s in situations:
+            var s_name: String = str(s.get("name", ""))
+            if not prev_names.has(s_name):
+                # New situation detected — record it
+                WorldMemory.record_event({
+                    "type": "pressure_situation",
+                    "k": WorldMemory.Kind.SETTLEMENT_EVENT,
+                    "r": center_rk,
+                    "t": tick,
+                    "situation": s_name,
+                    "severity": float(s.get("severity", 0.0)),
+                })
+
+        _active_situations[center_rk] = situations
+
+
+## Get active situations for a settlement.
+func get_active_situations(center_rk: int) -> Array:
+    return _active_situations.get(center_rk, [])
+
+
+# === Generational Shift Tracker ===
+# Tracks when the founding generation dies off and a new generation takes over.
+
+## Founding generation: tick -> pawn_ids born within 1000 ticks of settlement founding
+var _founding_generation: Dictionary = {}  # center_rk -> Array of pawn_ids
+
+## Check for generational shifts. When the founding generation is mostly dead,
+## record a generational shift event.
+func _check_generational_shift(tick: int) -> void:
+    if not GameManager.periodic_phase_due(tick, 3000, 431):
+        return
+    for i in range(settlements.size()):
+        if not (settlements[i] is Dictionary):
+            continue
+        var st: Dictionary = settlements[i] as Dictionary
+        var center_rk: int = int(st.get("center_region", -1))
+        var founding_tick: int = int(st.get("founding_tick", -1))
+        if founding_tick < 0:
+            # Use birth_tick of oldest living pawn as proxy
+            var oldest_tick: int = 999999999
+            for n in PawnSpawner.find_pawns():
+                if n == null or not is_instance_valid(n):
+                    continue
+                if not n.has_method("get"):
+                    continue
+                var data_v: Variant = n.get("data")
+                if data_v == null:
+                    continue
+                if int(data_v.settlement_id) != center_rk:
+                    continue
+                if int(data_v.birth_tick) < oldest_tick:
+                    oldest_tick = int(data_v.birth_tick)
+            if oldest_tick < 999999999:
+                founding_tick = oldest_tick
+            else:
+                continue
+        # Identify founding generation: pawns born within 2000 ticks of founding
+        if not _founding_generation.has(center_rk):
+            var founders: Array = []
+            for n in PawnSpawner.find_pawns():
+                if n == null or not is_instance_valid(n):
+                    continue
+                if not n.has_method("get"):
+                    continue
+                var data_v: Variant = n.get("data")
+                if data_v == null:
+                    continue
+                if int(data_v.settlement_id) != center_rk:
+                    continue
+                if absi(int(data_v.birth_tick) - founding_tick) <= 2000:
+                    founders.append(int(data_v.id))
+            if founders.size() >= 2:
+                _founding_generation[center_rk] = founders
+        # Check if most founders are dead
+        if _founding_generation.has(center_rk):
+            var founders: Array = _founding_generation[center_rk]
+            var alive_count: int = 0
+            for fid in founders:
+                for n in PawnSpawner.find_pawns():
+                    if n == null or not is_instance_valid(n):
+                        continue
+                    if not n.has_method("get"):
+                        continue
+                    var data_v: Variant = n.get("data")
+                    if data_v == null:
+                        continue
+                    if int(data_v.id) == int(fid):
+                        alive_count += 1
+                        break
+            # If 75%+ of founders are dead, generational shift
+            if founders.size() >= 2 and alive_count <= founders.size() / 4:
+                WorldMemory.record_event({
+                    "type": "generational_shift",
+                    "k": WorldMemory.Kind.SETTLEMENT_EVENT,
+                    "r": center_rk,
+                    "t": tick,
+                    "founders_total": founders.size(),
+                    "founders_alive": alive_count,
+                })
+                # Clear founding generation — shift recorded once
+                _founding_generation.erase(center_rk)

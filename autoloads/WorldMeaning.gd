@@ -15,6 +15,7 @@ const KIND_MIGRATION_COMPLETED: int = 11
 const KIND_TEACHING_EVENT: int = 12
 const KIND_FOOD_EVENT: int = 13
 const KIND_WORK_EVENT: int = 14
+const KIND_SETTLEMENT_EVENT: int = 15
 
 ## region_key (int) -> aggregated entry Dictionary
 var meaning_by_region: Dictionary = {}
@@ -102,6 +103,9 @@ func recompute() -> void:
 			KIND_WORK_EVENT:
 				rec["work_events"] = int(rec.get("work_events", 0)) + 1
 				rec["last_work_tick"] = t
+			KIND_SETTLEMENT_EVENT:
+				rec["settlement_events"] = int(rec.get("settlement_events", 0)) + 1
+				rec["last_settlement_tick"] = t
 
 		# Read impact from ProgressionSystem
 		if has_node("/root/ProgressionSystem"):

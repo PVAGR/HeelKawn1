@@ -27,6 +27,7 @@ enum Kind {
     TEACHING_EVENT = 12,
     FOOD_EVENT = 13,
     WORK_EVENT = 14,
+    SETTLEMENT_EVENT = 15,
 }
 
 var _events: Array[Dictionary] = []
@@ -505,6 +506,8 @@ func _infer_kind_from_type(typ: String) -> int:
             return Kind.MIGRATION_COMPLETED
         "social_fragment", "schism_event":
             return Kind.SOCIAL_FRAGMENT
+        "pressure_situation", "generational_shift", "diaspora_exile", "diaspora_grief", "knowledge_sealed":
+            return Kind.SETTLEMENT_EVENT
         _:
             return -1
 

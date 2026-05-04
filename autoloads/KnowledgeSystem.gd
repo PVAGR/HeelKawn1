@@ -46,6 +46,30 @@ var knowledge_degradation: Dictionary = {}
 ## settlement_id(String) -> research points (knowledge currency for TechnologySystem)
 var research_points_by_settlement: Dictionary = {}
 
+## Dormant knowledge: knowledge_type -> { last_known_location, last_practiced_tick, last_carrier_id, marker_placed }
+## When the last carrier of a knowledge type dies, the knowledge enters dormant state.
+## It can be rediscovered by curious/scholar pawns at the last known location.
+var dormant_knowledge: Dictionary = {}
+
+## Teaching debt: pawn_id -> { obligation_weight, last_taught_tick, knowledge_types_mastered }
+## Masters who don't teach accumulate obligation weight, affecting mood and community support.
+var teaching_debt: Dictionary = {}
+
+## Knowledge genealogy: knowledge_type -> Array of { teacher_id, student_id, tick }
+## Tracks the lineage of who learned from whom for each knowledge type.
+var knowledge_genealogy: Dictionary = {}
+
+## Knowledge security per settlement: settlement_id(str) -> { secure: [KnowledgeType], at_risk: [KnowledgeType], lost: [KnowledgeType] }
+var knowledge_security: Dictionary = {}
+
+const TEACHING_DEBT_INTERVAL_TICKS: int = 500
+const TEACHING_DEBT_PHASE_OFFSET: int = 83
+const KNOWLEDGE_SECURITY_INTERVAL_TICKS: int = 1000
+const KNOWLEDGE_SECURITY_PHASE_OFFSET: int = 197
+const MASTERY_XP_THRESHOLD: int = 100  # XP level at which a pawn is considered a "master"
+const TEACHING_DEBT_MOOD_PENALTY: float = 0.5  # Mood reduction per 0.1 obligation weight
+const REDISCOVERY_BASE_CHANCE: float = 0.05  # 5% per check at dormant location
+
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 	_initialize_degradation()
@@ -59,6 +83,10 @@ func _on_game_tick(tick: int) -> void:
 		_update_knowledge_degradation()
 	if GameManager.periodic_phase_due(tick, RESEARCH_POINT_ACCUM_INTERVAL_TICKS, RESEARCH_POINT_ACCUM_PHASE_OFFSET_TICKS):
 		_accrue_research_points_from_knowledge_carriers()
+	if GameManager.periodic_phase_due(tick, TEACHING_DEBT_INTERVAL_TICKS, TEACHING_DEBT_PHASE_OFFSET):
+		_update_teaching_debt()
+	if GameManager.periodic_phase_due(tick, KNOWLEDGE_SECURITY_INTERVAL_TICKS, KNOWLEDGE_SECURITY_PHASE_OFFSET):
+		_update_knowledge_security()
 
 # === Knowledge Carrier Management ===
 
@@ -71,12 +99,32 @@ func add_knowledge_carrier(pawn_id: int, knowledge_type: KnowledgeType) -> void:
 		known.append(knowledge_type)
 		_record_knowledge_acquisition(pawn_id, knowledge_type)
 
-func remove_knowledge_carrier(pawn_id: int) -> void:
+func remove_knowledge_carrier(pawn_id: int, last_pos: Vector2i = Vector2i(-1, -1)) -> void:
 	if knowledge_carriers.has(pawn_id):
 		var known: Array = knowledge_carriers[pawn_id]
 		for knowledge_type in known:
+			# Record the dying carrier's location for dormant state
+			_last_dying_carrier_pos = last_pos
+			_last_dying_carrier_id = pawn_id
 			_check_knowledge_loss(knowledge_type)
 		knowledge_carriers.erase(pawn_id)
+	# Remove teaching debt for dead pawn
+	if teaching_debt.has(pawn_id):
+		# If they died with unfulfilled obligation, record "knowledge sealed"
+		var debt: Dictionary = teaching_debt[pawn_id]
+		if float(debt.get("obligation_weight", 0.0)) > 0.3:
+			WorldMemory.record_event({
+				"type": "knowledge_sealed",
+				"k": WorldMemory.Kind.TEACHING_EVENT,
+				"r": WorldMemory._region_key(last_pos.x, last_pos.y) if last_pos.x >= 0 else 0,
+				"t": GameManager.tick_count,
+				"pawn_id": pawn_id,
+				"obligation_weight": float(debt.get("obligation_weight", 0.0)),
+			})
+		teaching_debt.erase(pawn_id)
+
+var _last_dying_carrier_pos: Vector2i = Vector2i(-1, -1)
+var _last_dying_carrier_id: int = -1
 
 func has_knowledge(pawn_id: int, knowledge_type: KnowledgeType) -> bool:
 	if not knowledge_carriers.has(pawn_id):
@@ -144,11 +192,43 @@ func _check_knowledge_loss(knowledge_type: KnowledgeType) -> void:
 	var carrier_count: int = get_carrier_count(knowledge_type)
 	
 	if carrier_count == 0:
-		# Knowledge is lost - no carriers remain
+		# Knowledge enters dormant state — no living carriers remain
+		# Record last known location from the most recent carrier
+		var last_location: Vector2i = Vector2i(-1, -1)
+		var last_carrier_id: int = -1
+		var last_tick: int = 0
+		# Find the most recent carrier's info from lost_knowledge records
+		for rec in lost_knowledge:
+			if int(rec.get("knowledge_type", -1)) == int(knowledge_type):
+				var rec_tick: int = int(rec.get("tick", 0))
+				if rec_tick > last_tick:
+					last_tick = rec_tick
+					last_carrier_id = int(rec.get("last_carrier_id", -1))
+					last_location = Vector2i(int(rec.get("last_x", -1)), int(rec.get("last_y", -1)))
+		# Also check current dying carrier for location
+		if last_carrier_id >= 0:
+			# Try to get the dying pawn's last known position
+			for n in PawnSpawner.find_pawns():
+				if n == null or not is_instance_valid(n):
+					continue
+				if not n.has_method("get"):
+					continue
+				var data_v: Variant = n.get("data")
+				if data_v == null:
+					continue
+				if int(data_v.id) == last_carrier_id:
+					last_location = data_v.tile_pos
+					break
+		dormant_knowledge[int(knowledge_type)] = {
+			"last_known_location": last_location,
+			"last_practiced_tick": last_tick,
+			"last_carrier_id": last_carrier_id,
+			"marker_placed": false,
+		}
 		_record_knowledge_loss(knowledge_type, "no_carriers")
 		_notify_world_ai_knowledge_loss(knowledge_type)
 	elif carrier_count <= 2:
-		# Knowledge is at risk - few carriers remain
+		# Knowledge is at risk — few carriers remain
 		_record_knowledge_risk(knowledge_type, carrier_count)
 		_notify_world_ai_knowledge_risk(knowledge_type, carrier_count)
 
@@ -256,6 +336,8 @@ func _record_teaching_success(teacher_id: int, apprentice_id: int, knowledge_typ
 	}
 	WorldMemory.record_event(event)
 	_add_research_points_for_pawn(teacher_id, BASE_TEACHING_RESEARCH_POINTS, "teaching_success")
+	# Teaching debt: successful teaching reduces obligation
+	on_teaching_success(teacher_id, int(knowledge_type))
 
 func _record_teaching_failure(teacher_id: int, apprentice_id: int, knowledge_type: KnowledgeType) -> void:
 	var record: Dictionary = {
@@ -280,15 +362,24 @@ func _record_knowledge_loss(knowledge_type: KnowledgeType, reason: String) -> vo
 	var record: Dictionary = {
 		"knowledge_type": knowledge_type,
 		"reason": reason,
-		"tick": GameManager.tick_count
+		"tick": GameManager.tick_count,
+		"last_carrier_id": _last_dying_carrier_id,
+		"last_x": _last_dying_carrier_pos.x,
+		"last_y": _last_dying_carrier_pos.y,
 	}
 	lost_knowledge.append(record)
 	
+	var rk: int = 0
+	if _last_dying_carrier_pos.x >= 0:
+		rk = WorldMemory._region_key(_last_dying_carrier_pos.x, _last_dying_carrier_pos.y)
 	var event: Dictionary = {
 		"type": "knowledge_loss",
+		"k": WorldMemory.Kind.TEACHING_EVENT,
+		"r": rk,
+		"t": GameManager.tick_count,
 		"knowledge_type": knowledge_type,
 		"reason": reason,
-		"tick": GameManager.tick_count
+		"last_carrier_id": _last_dying_carrier_id,
 	}
 	WorldMemory.record_event(event)
 
@@ -360,7 +451,196 @@ func clear() -> void:
 	lost_knowledge.clear()
 	rediscovered_knowledge.clear()
 	research_points_by_settlement.clear()
+	dormant_knowledge.clear()
+	teaching_debt.clear()
+	knowledge_genealogy.clear()
+	knowledge_security.clear()
 	_initialize_degradation()
+
+
+# === Teaching Debt System ===
+
+## Update teaching debt for all masters. Masters who don't teach accumulate
+## obligation weight, which reduces mood and community support.
+func _update_teaching_debt() -> void:
+	var tick: int = GameManager.tick_count
+	# Scan all living pawns for mastery-level skills
+	for n in PawnSpawner.find_pawns():
+		if n == null or not is_instance_valid(n):
+			continue
+		if not n.has_method("get"):
+			continue
+		var data_v: Variant = n.get("data")
+		if data_v == null:
+			continue
+		var pid: int = int(data_v.id)
+		# Check if this pawn carries any knowledge (is a carrier = potential master)
+		if not knowledge_carriers.has(pid):
+			continue
+		var known: Array = knowledge_carriers[pid]
+		if known.is_empty():
+			continue
+		# Initialize debt tracking if new
+		if not teaching_debt.has(pid):
+			teaching_debt[pid] = {
+				"obligation_weight": 0.0,
+				"last_taught_tick": -1,
+				"knowledge_types_mastered": known.size(),
+			}
+		var debt: Dictionary = teaching_debt[pid]
+		# Update mastered count
+		debt["knowledge_types_mastered"] = known.size()
+		# Check if they've taught recently
+		var last_taught: int = int(debt.get("last_taught_tick", -1))
+		var ticks_since_teaching: int = tick - last_taught if last_taught >= 0 else 9999
+		# Obligation increases if they haven't taught in 2000+ ticks
+		if ticks_since_teaching > 2000 and known.size() >= 1:
+			var increment: float = 0.02 * float(known.size())  # More knowledge = more obligation
+			debt["obligation_weight"] = minf(float(debt.get("obligation_weight", 0.0)) + increment, 1.0)
+		elif ticks_since_teaching <= 500:
+			# Recent teaching reduces obligation
+			debt["obligation_weight"] = maxf(float(debt.get("obligation_weight", 0.0)) - 0.05, 0.0)
+		# Apply mood penalty from obligation weight
+		var mood_penalty: float = float(debt.get("obligation_weight", 0.0)) * TEACHING_DEBT_MOOD_PENALTY
+		if mood_penalty > 0.1:
+			data_v.mood = maxf(data_v.mood - mood_penalty, 0.0)
+
+
+## Record that a pawn taught successfully (reduces their debt)
+func on_teaching_success(teacher_id: int, knowledge_type: int) -> void:
+	if teaching_debt.has(teacher_id):
+		teaching_debt[teacher_id]["last_taught_tick"] = GameManager.tick_count
+		teaching_debt[teacher_id]["obligation_weight"] = maxf(
+			float(teaching_debt[teacher_id].get("obligation_weight", 0.0)) - 0.15, 0.0)
+	# Record genealogy
+	if not knowledge_genealogy.has(knowledge_type):
+		knowledge_genealogy[knowledge_type] = []
+	# Find the student from the most recent teaching record
+	for rec in teaching_records:
+		if int(rec.get("teacher_id", -1)) == teacher_id and int(rec.get("knowledge_type", -1)) == knowledge_type:
+			knowledge_genealogy[knowledge_type].append({
+				"teacher_id": teacher_id,
+				"student_id": int(rec.get("apprentice_id", -1)),
+				"tick": int(rec.get("tick", 0)),
+			})
+			break
+
+
+# === Knowledge Security ===
+
+## Update knowledge security per settlement: which skills are secure, at-risk, or lost.
+func _update_knowledge_security() -> void:
+	knowledge_security.clear()
+	# Count carriers per knowledge type per settlement
+	var carriers_by_settlement: Dictionary = {}  # settlement_id(str) -> { knowledge_type -> count }
+	for n in PawnSpawner.find_pawns():
+		if n == null or not is_instance_valid(n):
+			continue
+		if not n.has_method("get"):
+			continue
+		var data_v: Variant = n.get("data")
+		if data_v == null:
+			continue
+		var pid: int = int(data_v.id)
+		if not knowledge_carriers.has(pid):
+			continue
+		var pos: Vector2i = data_v.tile_pos
+		var rk: int = WorldMemory._region_key(pos.x, pos.y)
+		var sid: int = SettlementMemory.get_center_region_for_region(rk)
+		if sid < 0:
+			continue
+		var sid_key: String = str(sid)
+		if not carriers_by_settlement.has(sid_key):
+			carriers_by_settlement[sid_key] = {}
+		for kt in knowledge_carriers[pid]:
+			var kt_key: String = str(kt)
+			carriers_by_settlement[sid_key][kt_key] = int(carriers_by_settlement[sid_key].get(kt_key, 0)) + 1
+	# Classify each settlement's knowledge
+	for sid_key in carriers_by_settlement.keys():
+		var secure: Array = []
+		var at_risk: Array = []
+		var lost: Array = []
+		var settlement_carriers: Dictionary = carriers_by_settlement[sid_key]
+		for k in KnowledgeType.values():
+			var count: int = int(settlement_carriers.get(str(k), 0))
+			if count >= 3:
+				secure.append(k)
+			elif count >= 1:
+				at_risk.append(k)
+			# Lost = dormant knowledge that this settlement doesn't carry
+			if count == 0 and dormant_knowledge.has(k):
+				lost.append(k)
+		knowledge_security[sid_key] = {
+			"secure": secure,
+			"at_risk": at_risk,
+			"lost": lost,
+		}
+
+
+## Get knowledge security for a settlement. Returns { secure, at_risk, lost } arrays.
+func get_knowledge_security_for_settlement(settlement_id: int) -> Dictionary:
+	var key: String = str(settlement_id)
+	if knowledge_security.has(key):
+		return knowledge_security[key]
+	return {"secure": [], "at_risk": [], "lost": []}
+
+
+# === Dormant Knowledge & Rediscovery ===
+
+## Check if a knowledge type is dormant (no living carriers).
+func is_knowledge_dormant(knowledge_type: KnowledgeType) -> bool:
+	return dormant_knowledge.has(int(knowledge_type)) and get_carrier_count(knowledge_type) == 0
+
+
+## Attempt rediscovery: a pawn at a dormant knowledge's last known location
+## may rediscover the knowledge. Deterministic chance based on pawn traits and location.
+func attempt_rediscovery(pawn_id: int, pawn_pos: Vector2i, knowledge_type: KnowledgeType) -> bool:
+	if not is_knowledge_dormant(knowledge_type):
+		return false
+	var dormant: Dictionary = dormant_knowledge.get(int(knowledge_type), {})
+	var last_loc: Vector2i = Vector2i(int(dormant.get("last_known_location", Vector2i(-1, -1)).x), int(dormant.get("last_known_location", Vector2i(-1, -1)).y))
+	# Must be within 5 tiles of the last known location
+	if last_loc.x < 0:
+		return false
+	var dist: int = absi(pawn_pos.x - last_loc.x) + absi(pawn_pos.y - last_loc.y)
+	if dist > 5:
+		return false
+	# Deterministic chance: scholars and curious pawns have higher chance
+	var chance: float = REDISCOVERY_BASE_CHANCE
+	# Check pawn profession
+	for n in PawnSpawner.find_pawns():
+		if n == null or not is_instance_valid(n):
+			continue
+		if not n.has_method("get"):
+			continue
+		var data_v: Variant = n.get("data")
+		if data_v == null:
+			continue
+		if int(data_v.id) != pawn_id:
+			continue
+		if data_v.current_profession == PawnData.Profession.SCHOLAR:
+			chance += 0.10  # Scholars are better at rediscovery
+		if data_v.openness > 0.7:
+			chance += 0.03  # Open-minded pawns notice more
+		break
+	# Seed-based deterministic check
+	var salt: int = pawn_id * 1009 + int(knowledge_type) * 37 + GameManager.tick_count / 100
+	if WorldRNG.chance_for(StringName("knowledge_rediscovery:%d" % int(knowledge_type)), chance, salt):
+		rediscover_knowledge(pawn_id, knowledge_type, "site_rediscovery")
+		# Remove from dormant
+		dormant_knowledge.erase(int(knowledge_type))
+		return true
+	return false
+
+
+## Get all dormant knowledge types.
+func get_dormant_knowledge_types() -> Array:
+	return dormant_knowledge.keys()
+
+
+## Get dormant info for a knowledge type.
+func get_dormant_info(knowledge_type: int) -> Dictionary:
+	return dormant_knowledge.get(knowledge_type, {})
 
 
 ## === Research Pool Integration ===

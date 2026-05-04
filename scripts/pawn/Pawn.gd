@@ -1237,6 +1237,72 @@ func _maybe_absorb_custom() -> void:
 	})
 
 
+## Knowledge rediscovery: if this pawn is a scholar or has high openness,
+## and they're near a dormant knowledge site, they may rediscover lost knowledge.
+func _maybe_attempt_rediscovery() -> void:
+	if data == null or KnowledgeSystem == null or GameManager == null:
+		return
+	# Only scholars and high-openness pawns attempt rediscovery
+	if data.current_profession != PawnData.Profession.SCHOLAR and data.openness < 0.6:
+		return
+	var dormant_types: Array = KnowledgeSystem.get_dormant_knowledge_types()
+	if dormant_types.is_empty():
+		return
+	# Check each dormant knowledge type
+	for kt in dormant_types:
+		if KnowledgeSystem.attempt_rediscovery(int(data.id), data.tile_pos, int(kt)):
+			break  # One rediscovery per check is enough
+
+
+## Diaspora homesickness: exiled pawns check their origin settlement.
+## If the origin has collapsed, they experience a grief event derived from facts.
+func _maybe_diaspora_homesickness(tick: int) -> void:
+	if data == null or SettlementMemory == null or GameManager == null:
+		return
+	var origin_id: int = int(data._diaspora_origin)
+	if origin_id < 0:
+		return
+	# Check if origin settlement still exists
+	var origin_exists: bool = false
+	var origin_collapsed: bool = false
+	if SettlementMemory.has_method("get_settlements"):
+		for s in SettlementMemory.get_settlements():
+			if s is Dictionary:
+				if int(s.get("center_region", -1)) == origin_id:
+					origin_exists = true
+					var state: String = str(s.get("state", ""))
+					if state == "collapsed" or state == "abandoned":
+						origin_collapsed = true
+					break
+	if origin_collapsed:
+		# Origin settlement has collapsed — grief event
+		data.mood = maxf(data.mood - 15.0, 0.0)
+		WorldMemory.record_event({
+			"type": "diaspora_grief",
+			"k": WorldMemory.Kind.PAWN_DEATH,
+			"r": WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y),
+			"t": tick,
+			"pawn_id": int(data.id),
+			"origin_settlement": origin_id,
+			"origin_state": "collapsed",
+		})
+		# Clear diaspora origin — grief is processed once
+		data._diaspora_origin = -1
+	elif not origin_exists:
+		# Origin settlement no longer exists at all — deeper grief
+		data.mood = maxf(data.mood - 25.0, 0.0)
+		WorldMemory.record_event({
+			"type": "diaspora_grief",
+			"k": WorldMemory.Kind.PAWN_DEATH,
+			"r": WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y),
+			"t": tick,
+			"pawn_id": int(data.id),
+			"origin_settlement": origin_id,
+			"origin_state": "destroyed",
+		})
+		data._diaspora_origin = -1
+
+
 func _can_use_manual_ground_item_actions() -> bool:
 	match _state:
 		State.WORKING, State.WALKING_TO_JOB, State.HAULING, State.GOING_TO_EAT, State.EATING, State.SLEEPING, State.FETCHING_MATERIAL, State.GOING_TO_BED, State.TEACHING, State.CHALLENGE, State.CRAFTING:
@@ -2114,6 +2180,14 @@ func _tick_idle() -> void:
 	# Runs every ~100 ticks to stay cheap.
 	if data != null and posmod(now_tick + int(data.id), 100) == 0:
 		_maybe_absorb_custom()
+	# 5d. Knowledge rediscovery: scholars and curious pawns near dormant
+	# knowledge sites may rediscover lost knowledge.
+	if data != null and posmod(now_tick + int(data.id) * 3, 200) == 0:
+		_maybe_attempt_rediscovery()
+	# 5e. Diaspora homesickness: exiled pawns periodically check their
+	# origin settlement's status. If origin collapsed, grief event.
+	if data != null and data._diaspora_origin >= 0 and posmod(now_tick + int(data.id) * 7, 500) == 0:
+		_maybe_diaspora_homesickness(now_tick)
 	# 6. Job queue: take the best reachable job. We additionally skip build
 	# jobs whose required materials aren't on hand at the stockpile -- this
 	# prevents pawns from claim/abort looping when wood is empty.
@@ -5602,7 +5676,7 @@ func _die(_p_cause: String = "") -> void:
 		
 		# KnowledgeSystem: remove knowledge carrier when pawn dies
 		if KnowledgeSystem != null:
-			KnowledgeSystem.remove_knowledge_carrier(int(data.id))
+			KnowledgeSystem.remove_knowledge_carrier(int(data.id), data.tile_pos)
 
 
 ## Trait / Krond convenience wrappers (delegates to PawnData)

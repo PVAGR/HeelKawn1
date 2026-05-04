@@ -404,6 +404,34 @@ func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump(outs, 2, 0.04)  # mild social nudge
 		fired.append({"id": "meaning_custom_low", "line": "IF region has fading customs THEN mild social nudge.", "w": 0.30})
 
+	# Knowledge risk: settlement has skills at risk → teach urgency
+	var k_risk: float = float(ctx.get("knowledge_at_risk", 0.0))
+	if k_risk >= 0.5:
+		_bump(outs, 2, 0.12)  # social — seek students
+		_bump(outs, 7, -0.05)  # less idle — knowledge is at risk
+		fired.append({"id": "knowledge_at_risk", "line": "IF settlement knowledge at risk THEN seek students.", "w": 0.55})
+	elif k_risk >= 0.2:
+		_bump(outs, 2, 0.06)  # mild social nudge
+		fired.append({"id": "knowledge_at_risk_low", "line": "IF some knowledge at risk THEN mild teach nudge.", "w": 0.35})
+
+	# Teaching obligation: master who hasn't taught → social pressure
+	var t_obligation: float = float(ctx.get("teaching_obligation", 0.0))
+	if t_obligation >= 0.5:
+		_bump(outs, 2, 0.15)  # strong social — community expects teaching
+		_bump(outs, 1, -0.08)  # less rest — guilt/pressure
+		fired.append({"id": "teaching_obligation", "line": "IF master hasn't taught THEN social pressure + less rest.", "w": 0.60})
+	elif t_obligation >= 0.2:
+		_bump(outs, 2, 0.06)  # mild social nudge
+		fired.append({"id": "teaching_obligation_low", "line": "IF some teaching debt THEN mild social nudge.", "w": 0.35})
+
+	# Diaspora exile: exiled pawns seek community bonds and are restless
+	var d_exile: float = float(ctx.get("diaspora_exile", 0.0))
+	if d_exile >= 0.5:
+		_bump(outs, 2, 0.12)  # social — seek new community
+		_bump(outs, 0, 0.06)  # forage — work hard to establish
+		_bump(outs, 1, -0.05)  # less rest — urgency
+		fired.append({"id": "diaspora_exile", "line": "IF pawn is exiled THEN seek community + work hard.", "w": 0.50})
+
 	fired.sort_custom(func(a, b): return float(a.get("w", 0.0)) > float(b.get("w", 0.0)))
 	var human_ch: Array = _build_human_channels(pd, ctx, outs)
 	_apply_human_semantic_projection(outs, human_ch)

@@ -1251,6 +1251,27 @@ func _narrative_line_for_event(typ: String, e: Dictionary) -> String:
 			return "%s died" % nm
 		"animal_death":
 			return "wildlife was culled"
+		"diaspora_exile":
+			var exiles: int = int(e.get("exile_pawn_ids", []) if e.get("exile_pawn_ids") is Array else 0)
+			return "exile: %d left to found new settlement" % maxi(exiles, 1)
+		"diaspora_grief":
+			var nm: String = str(e.get("pawn_id", "someone"))
+			return "exile grieved for lost home"
+		"knowledge_loss":
+			return "knowledge was lost — no carriers remain"
+		"knowledge_sealed":
+			return "a master died with unfulfilled teaching obligation"
+		"knowledge_rediscovery":
+			return "lost knowledge was rediscovered"
+		"pressure_situation":
+			var sit: String = str(e.get("situation", "crisis")).replace("_", " ")
+			return "situation: %s" % sit
+		"generational_shift":
+			var alive: int = int(e.get("founders_alive", 0))
+			var total: int = int(e.get("founders_total", 0))
+			return "founding generation passed (%d/%d remain)" % [alive, total]
+		"cultural_exposure":
+			return "an outsider absorbed local customs"
 		"job_completed":
 			# Too noisy for the rail; totals live in Story / Work lines.
 			return ""

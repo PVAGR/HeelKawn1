@@ -1805,6 +1805,28 @@ func _apply_meaning_drift(st: Dictionary, tick: int) -> void:
                 drift_score += 0.25
             "ancient_wisdom":
                 drift_score += 0.35
+            # Ritual Echo System: active customs push toward OPEN (community bonds)
+            "burial_grove":
+                drift_score += 0.15  # shared grief = community
+            "teaching_ground":
+                drift_score += 0.2   # knowledge sharing = openness
+            "feast_ground":
+                drift_score += 0.15  # shared food = trust
+            "builder_yard":
+                drift_score += 0.1   # construction = investment
+            "gathering_place":
+                drift_score += 0.2   # crossroads = cosmopolitanism
+            # Faded customs: weaker but still present
+            "faded_burial_grove":
+                drift_score += 0.05
+            "faded_teaching_ground":
+                drift_score += 0.08
+            "faded_feast_ground":
+                drift_score += 0.05
+            "faded_builder_yard":
+                drift_score += 0.04
+            "faded_gathering_place":
+                drift_score += 0.08
     # Apply drift as tiny adjustments to scar_max and reputation_min
     # These are the inputs to _derive_culture_type_v1_for_age
     # Positive drift → more open → lower scar, higher reputation

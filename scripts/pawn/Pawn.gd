@@ -1197,6 +1197,46 @@ func _maybe_warrior_patrol() -> bool:
 	return _state == State.DRAFT_WALK
 
 
+## Cultural exposure: if this pawn is from a different settlement than the
+## region they're standing in, and the region has active custom tags, they
+## may absorb the custom. Absorbed customs nudge the pawn's home settlement
+## toward adopting the same custom over time (via SettlementMemory drift).
+func _maybe_absorb_custom() -> void:
+	if data == null or _WM == null or GameManager == null:
+		return
+	var rk: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
+	var tags: PackedStringArray = WorldMeaning.get_region_tags(rk)
+	# Only active customs (not faded) can be absorbed
+	var active_customs: PackedStringArray = []
+	for tag in tags:
+		if tag == "burial_grove" or tag == "teaching_ground" or tag == "feast_ground" or tag == "builder_yard" or tag == "gathering_place":
+			active_customs.append(tag)
+	if active_customs.is_empty():
+		return
+	# Check if this pawn is an outsider (different settlement than the region)
+	var pawn_settlement: int = data.settlement_id
+	var region_settlement: Variant = SettlementMemory.get_settlement_at_region(rk)
+	var region_settlement_id: int = -1
+	if region_settlement != null and region_settlement is Dictionary:
+		region_settlement_id = int((region_settlement as Dictionary).get("center_region", -1))
+	if pawn_settlement < 0 or region_settlement_id < 0 or pawn_settlement == region_settlement_id:
+		return  # Same settlement — no exposure effect
+	# Deterministic chance: 10% per check (every 100 ticks = ~1.8% per in-world day)
+	if not WorldRNG.chance_for(_pawn_stream("custom_absorb"), 0.10, _pawn_salt(17)):
+		return
+	# Record cultural exposure event
+	WorldMemory.record_event({
+		"type": "cultural_exposure",
+		"k": WorldMemory.Kind.TEACHING_EVENT,  # Reuse teaching kind for knowledge transmission
+		"r": rk,
+		"t": GameManager.tick_count,
+		"pawn_id": int(data.id),
+		"custom_tag": active_customs[0],  # Absorb one custom at a time
+		"from_settlement": region_settlement,
+		"to_settlement": pawn_settlement,
+	})
+
+
 func _can_use_manual_ground_item_actions() -> bool:
 	match _state:
 		State.WORKING, State.WALKING_TO_JOB, State.HAULING, State.GOING_TO_EAT, State.EATING, State.SLEEPING, State.FETCHING_MATERIAL, State.GOING_TO_BED, State.TEACHING, State.CHALLENGE, State.CRAFTING:
@@ -2070,6 +2110,10 @@ func _tick_idle() -> void:
 	if data != null and data.current_profession == PawnData.Profession.WARRIOR:
 		if _maybe_warrior_patrol():
 			return
+	# 5c. Cultural exposure: outsiders near custom-tagged regions may adopt customs.
+	# Runs every ~100 ticks to stay cheap.
+	if data != null and posmod(now_tick + int(data.id), 100) == 0:
+		_maybe_absorb_custom()
 	# 6. Job queue: take the best reachable job. We additionally skip build
 	# jobs whose required materials aren't on hand at the stockpile -- this
 	# prevents pawns from claim/abort looping when wood is empty.
@@ -2280,6 +2324,40 @@ func _tick_idle() -> void:
 				"ruined":
 					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
 						meaning_bias += 1  # rebuild ruined places
+				# Ritual Echo System: custom tags from repeated actions
+				"burial_grove":
+					# Respect burial sites — don't build here, but defend them
+					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
+						meaning_bias -= 2  # violation tension
+					if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
+						meaning_bias += 2  # guard the sacred dead
+				"faded_burial_grove":
+					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
+						meaning_bias -= 1  # mild violation tension
+				"teaching_ground":
+					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
+						meaning_bias += 3  # teach where teaching is customary
+				"faded_teaching_ground":
+					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
+						meaning_bias += 1  # faint echo of teaching custom
+				"feast_ground":
+					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT:
+						meaning_bias += 2  # food gathering where feasts happen
+				"faded_feast_ground":
+					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT:
+						meaning_bias += 1
+				"builder_yard":
+					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR:
+						meaning_bias += 2  # build where building is customary
+				"faded_builder_yard":
+					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
+						meaning_bias += 1
+				"gathering_place":
+					meaning_bias += 1  # generally prefer working where people gather
+					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
+						meaning_bias += 1  # knowledge exchange at crossroads
+				"faded_gathering_place":
+					meaning_bias += 1  # faint echo of community
 		base_bias += meaning_bias
 		# Personal whim: same queue, slightly different ordering per pawn (still deterministic).
 		base_bias += clampi(int(floor((_bp(5) - 0.5) * 6.0)), -2, 2)

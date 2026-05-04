@@ -3401,6 +3401,7 @@ func _pawn_decision_rule_context(pd: PawnData) -> Dictionary:
 		"meaning_safety": _pawn_meaning_safety(rk_ctx),
 		"meaning_hunger": _pawn_meaning_hunger(rk_ctx),
 		"meaning_knowledge": _pawn_meaning_knowledge(rk_ctx),
+		"meaning_custom": _pawn_meaning_custom(rk_ctx),
 		"affinity_combat": float(pd.affinities.get("combat", 0.5)),
 		"affinity_farming": float(pd.affinities.get("farming", 0.5)),
 		"affinity_building": float(pd.affinities.get("building", 0.5)),
@@ -3489,6 +3490,9 @@ func _pawn_meaning_danger(region_key: int) -> float:
 				danger += 0.3
 			"ancient_famine":
 				danger += 0.45
+			# Ritual Echo: burial groves carry residual danger memory
+			"burial_grove":
+				danger += 0.1
 	return clampf(danger, 0.0, 1.0)
 
 
@@ -3515,6 +3519,15 @@ func _pawn_meaning_safety(region_key: int) -> float:
 				safety += 0.3
 			"ancient_heart":
 				safety += 0.5
+			# Ritual Echo: customs create safety (community bonds)
+			"teaching_ground":
+				safety += 0.15
+			"feast_ground":
+				safety += 0.1
+			"gathering_place":
+				safety += 0.15
+			"builder_yard":
+				safety += 0.05
 	return clampf(safety, 0.0, 1.0)
 
 
@@ -3548,6 +3561,37 @@ func _pawn_meaning_knowledge(region_key: int) -> float:
 			"ancient_wisdom":
 				knowledge += 0.8
 	return clampf(knowledge, 0.0, 1.0)
+
+
+## Returns 0.0-1.0 custom/ritual strength from WorldMeaning echo tags.
+## Active customs are full weight, faded customs are half weight.
+func _pawn_meaning_custom(region_key: int) -> float:
+	var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
+	var custom: float = 0.0
+	for tag in tags:
+		match tag:
+			"burial_grove":
+				custom += 0.3
+			"teaching_ground":
+				custom += 0.25
+			"feast_ground":
+				custom += 0.2
+			"builder_yard":
+				custom += 0.2
+			"gathering_place":
+				custom += 0.25
+			# Faded customs: half weight
+			"faded_burial_grove":
+				custom += 0.15
+			"faded_teaching_ground":
+				custom += 0.12
+			"faded_feast_ground":
+				custom += 0.1
+			"faded_builder_yard":
+				custom += 0.1
+			"faded_gathering_place":
+				custom += 0.12
+	return clampf(custom, 0.0, 1.0)
 
 
 func _pawn_neural_input_vector(pd: PawnData) -> Array[float]:

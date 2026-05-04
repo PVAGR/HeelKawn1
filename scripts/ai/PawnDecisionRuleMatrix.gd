@@ -392,6 +392,18 @@ func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump(outs, 7, 0.05)  # observe/idle — contemplation
 		fired.append({"id": "meaning_knowledge", "line": "IF region has teaching memory THEN seek social learning.", "w": 0.45})
 
+	# Ritual Echo System: custom tags shape behavior
+	var m_custom: float = float(ctx.get("meaning_custom", 0.0))
+	if m_custom >= 0.3:
+		# Strong customs: social + rest + community bonds
+		_bump(outs, 2, 0.08)  # social — community rituals
+		_bump(outs, 1, 0.06)  # rest — customs feel safe
+		_bump(outs, 7, 0.04)  # observe — participate in customs
+		fired.append({"id": "meaning_custom", "line": "IF region has strong customs THEN social + rest + observe.", "w": 0.50})
+	elif m_custom >= 0.15:
+		_bump(outs, 2, 0.04)  # mild social nudge
+		fired.append({"id": "meaning_custom_low", "line": "IF region has fading customs THEN mild social nudge.", "w": 0.30})
+
 	fired.sort_custom(func(a, b): return float(a.get("w", 0.0)) > float(b.get("w", 0.0)))
 	var human_ch: Array = _build_human_channels(pd, ctx, outs)
 	_apply_human_semantic_projection(outs, human_ch)

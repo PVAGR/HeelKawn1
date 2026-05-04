@@ -72,14 +72,19 @@ func recompute() -> void:
 		match k:
 			KIND_PAWN_DEATH:
 				rec["pawn_deaths"] = int(rec["pawn_deaths"]) + 1
+				rec["total_deaths"] = int(rec["total_deaths"]) + 1
+				rec["last_death_tick"] = t
 			KIND_ANIMAL_DEATH:
 				rec["animal_deaths"] = int(rec["animal_deaths"]) + 1
+				rec["total_deaths"] = int(rec["total_deaths"]) + 1
 			KIND_BUILDING_CONSTRUCTED:
 				rec["buildings_constructed"] = int(rec.get("buildings_constructed", 0)) + 1
+				rec["last_build_tick"] = t
 			KIND_BUILDING_DESTROYED:
 				rec["buildings_destroyed"] = int(rec.get("buildings_destroyed", 0)) + 1
 			KIND_FIRE_STARTED:
 				rec["fires_started"] = int(rec.get("fires_started", 0)) + 1
+				rec["last_fire_tick"] = t
 			KIND_FIRE_EXTINGUISHED:
 				rec["fires_extinguished"] = int(rec.get("fires_extinguished", 0)) + 1
 			KIND_STARVATION_EVENT:
@@ -90,10 +95,13 @@ func recompute() -> void:
 				rec["migrations_completed"] = int(rec.get("migrations_completed", 0)) + 1
 			KIND_TEACHING_EVENT:
 				rec["teaching_events"] = int(rec.get("teaching_events", 0)) + 1
+				rec["last_teaching_tick"] = t
 			KIND_FOOD_EVENT:
 				rec["food_events"] = int(rec.get("food_events", 0)) + 1
+				rec["last_food_tick"] = t
 			KIND_WORK_EVENT:
 				rec["work_events"] = int(rec.get("work_events", 0)) + 1
+				rec["last_work_tick"] = t
 
 		# Read impact from ProgressionSystem
 		if has_node("/root/ProgressionSystem"):
@@ -254,6 +262,12 @@ func _default_region_entry() -> Dictionary:
 		"teaching_events": 0,
 		"food_events": 0,
 		"work_events": 0,
+		# Echo tracking: last tick of each action type for custom tag formation
+		"last_teaching_tick": -1,
+		"last_food_tick": -1,
+		"last_work_tick": -1,
+		"last_build_tick": -1,
+		"last_fire_tick": -1,
 		"tags": PackedStringArray(),
 	}
 
@@ -359,6 +373,57 @@ func _compute_region_tags(data: Dictionary, current_tick: int = 0) -> PackedStri
 			tags.append("old_heart")  # Respected safe place
 		if teaching_events >= 3:
 			tags.append("old_wisdom")  # Established learning place
+
+	# Ritual Echo System: repeated actions at same region form customs.
+	# Custom tags emerge when an action type is repeated enough within a recency window.
+	# If no reinforcing event for 5000+ ticks, the custom fades (faded_ prefix).
+	var ECHO_RECENCY_TICKS: int = 500   # Action must be recent to count as echo
+	var ECHO_FADE_TICKS: int = 5000     # Custom fades if no reinforcement for this long
+
+	# Burial grove: 3+ pawn deaths with recent activity
+	var last_death_t: int = int(data.get("last_death_tick", -1))
+	if total_deaths >= 3 and last_death_t >= 0:
+		if current_tick - last_death_t <= ECHO_FADE_TICKS:
+			if current_tick - last_death_t <= ECHO_RECENCY_TICKS:
+				tags.append("burial_grove")
+			else:
+				tags.append("faded_burial_grove")
+
+	# Teaching ground: 5+ teaching events with recent activity
+	var last_teach_t: int = int(data.get("last_teaching_tick", -1))
+	if teaching_events >= 5 and last_teach_t >= 0:
+		if current_tick - last_teach_t <= ECHO_FADE_TICKS:
+			if current_tick - last_teach_t <= ECHO_RECENCY_TICKS:
+				tags.append("teaching_ground")
+			else:
+				tags.append("faded_teaching_ground")
+
+	# Feast ground: 8+ food events with recent activity
+	var last_food_t: int = int(data.get("last_food_tick", -1))
+	if food_events >= 8 and last_food_t >= 0:
+		if current_tick - last_food_t <= ECHO_FADE_TICKS:
+			if current_tick - last_food_t <= ECHO_RECENCY_TICKS:
+				tags.append("feast_ground")
+			else:
+				tags.append("faded_feast_ground")
+
+	# Builder yard: 5+ building events with recent activity
+	var last_build_t: int = int(data.get("last_build_tick", -1))
+	if buildings_built >= 5 and last_build_t >= 0:
+		if current_tick - last_build_t <= ECHO_FADE_TICKS:
+			if current_tick - last_build_t <= ECHO_RECENCY_TICKS:
+				tags.append("builder_yard")
+			else:
+				tags.append("faded_builder_yard")
+
+	# Gathering place: 10+ work events + 3+ migrations with recent activity
+	var last_work_t: int = int(data.get("last_work_tick", -1))
+	if work_events >= 10 and migrations_completed >= 3 and last_work_t >= 0:
+		if current_tick - last_work_t <= ECHO_FADE_TICKS:
+			if current_tick - last_work_t <= ECHO_RECENCY_TICKS:
+				tags.append("gathering_place")
+			else:
+				tags.append("faded_gathering_place")
 
 	return tags
 

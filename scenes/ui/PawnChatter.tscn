@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://heelkawn_pawn_chatter"]
+
+[ext_resource type="Script" path="res://scripts/ui/PawnChatter.gd" id="1_chatter"]
+
+[node name="PawnChatter" type="Node2D"]
+script = ExtResource("1_chatter")

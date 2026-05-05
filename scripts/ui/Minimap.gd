@@ -113,8 +113,9 @@ func _draw_overlay() -> void:
 			if cr < 0:
 				continue
 			# Convert region key to tile coords
-			var rx: int = (cr % (WorldData.WIDTH / 16)) * 16 + 8
-			var ry: int = (cr / (WorldData.WIDTH / 16)) * 16 + 8
+			# Region key = (rx & 0xFFFF) | ((ry & 0xFFFF) << 16)
+			var rx: int = (cr & 0xFFFF) * 16 + 8
+			var ry: int = ((cr >> 16) & 0xFFFF) * 16 + 8
 			var px: float = rx * scale_x
 			var py: float = ry * scale_y
 			_overlay.draw_circle(Vector2(px, py), 3.0, SETTLEMENT_COLOR)

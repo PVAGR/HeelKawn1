@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://heelkawn_ambient_audio"]
+
+[ext_resource type="Script" path="res://scripts/ui/AmbientAudio.gd" id="1_ambient"]
+
+[node name="AmbientAudio" type="Node"]
+script = ExtResource("1_ambient")

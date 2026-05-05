@@ -1,4 +1,4 @@
-[gd_scene load_steps=31 format=3 uid="uid://heelkawn_main"]
+[gd_scene load_steps=39 format=3 uid="uid://heelkawn_main"]
 
 [ext_resource type="Script" path="res://scenes/main/Main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scenes/main/BuildPreviewOverlay.gd" id="1_preview"]
@@ -34,6 +34,12 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/CameraBookmarks.tscn" id="31_cam_bookmarks"]
 [ext_resource type="PackedScene" path="res://scenes/ui/EventParticles.tscn" id="32_event_particles"]
 [ext_resource type="PackedScene" path="res://scenes/ui/WeatherOverlay.tscn" id="33_weather"]
+[ext_resource type="PackedScene" path="res://scenes/ui/CommandMode.tscn" id="34_command"]
+[ext_resource type="PackedScene" path="res://scenes/ui/CommandIndicator.tscn" id="35_cmd_indicator"]
+[ext_resource type="PackedScene" path="res://scenes/ui/PawnNameLabels.tscn" id="36_names"]
+[ext_resource type="PackedScene" path="res://scenes/ui/PawnChatter.tscn" id="37_chatter"]
+[ext_resource type="PackedScene" path="res://scenes/ui/SettlementBanner.tscn" id="38_banner"]
+[ext_resource type="PackedScene" path="res://scenes/ui/AmbientAudio.tscn" id="39_ambient"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -119,3 +125,15 @@ script = ExtResource("9_info")
 [node name="EventParticles" parent="." instance=ExtResource("32_event_particles")]
 
 [node name="WeatherOverlay" parent="." instance=ExtResource("33_weather")]
+
+[node name="CommandMode" parent="." instance=ExtResource("34_command")]
+
+[node name="CommandIndicator" parent="WorldViewport" instance=ExtResource("35_cmd_indicator")]
+
+[node name="PawnNameLabels" parent="WorldViewport" instance=ExtResource("36_names")]
+
+[node name="PawnChatter" parent="WorldViewport" instance=ExtResource("37_chatter")]
+
+[node name="SettlementBanner" parent="WorldViewport" instance=ExtResource("38_banner")]
+
+[node name="AmbientAudio" parent="." instance=ExtResource("39_ambient")]

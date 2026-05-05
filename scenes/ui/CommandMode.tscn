@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://heelkawn_command_mode"]
+
+[ext_resource type="Script" path="res://scripts/ui/CommandMode.gd" id="1_cmd"]
+
+[node name="CommandMode" type="Node"]
+script = ExtResource("1_cmd")

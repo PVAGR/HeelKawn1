@@ -6,6 +6,7 @@ extends Node
 
 const SLOT_COUNT: int = 5
 const SAVE_PATH: String = "user://camera_bookmarks.json"
+const EMPTY: Vector2 = Vector2(-999999.0, -999999.0)  # sentinel for empty slot
 
 var _bookmarks: Array[Vector2] = []  # world positions
 var _camera: Camera2D = null
@@ -14,7 +15,7 @@ var _camera: Camera2D = null
 func _ready() -> void:
 	_bookmarks.resize(SLOT_COUNT)
 	for i in range(SLOT_COUNT):
-		_bookmarks[i] = Vector2.ZERO
+		_bookmarks[i] = EMPTY
 	_load()
 
 
@@ -51,7 +52,7 @@ func _jump_to_bookmark(slot: int) -> void:
 	if _camera == null:
 		return
 	var pos: Vector2 = _bookmarks[slot]
-	if pos == Vector2.ZERO:
+	if pos == EMPTY:
 		return
 	_camera.global_position = pos
 
@@ -81,4 +82,6 @@ func _load() -> void:
 	for i in range(SLOT_COUNT):
 		var entry: Variant = data.get(str(i), null)
 		if entry is Dictionary:
-			_bookmarks[i] = Vector2(float(entry.get("x", 0.0)), float(entry.get("y", 0.0)))
+			var x: float = float(entry.get("x", EMPTY.x))
+			var y: float = float(entry.get("y", EMPTY.y))
+			_bookmarks[i] = Vector2(x, y)

@@ -97,7 +97,7 @@ func _refresh(tile: Vector2i) -> void:
 	if WorldMeaning != null:
 		var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
 		if not tags.is_empty():
-			var tag_str: String = " ".join(" ", tags)
+			var tag_str: String = " ".join(tags)
 			lines.append("[color=%s]%s[/color]" % [TAG_COLOR.to_html(false), tag_str])
 
 	# Settlement ownership
@@ -132,9 +132,9 @@ func _refresh(tile: Vector2i) -> void:
 				var nm: String = str(p.data.get("name", "Pawn"))
 				pawn_names.append(nm)
 		if not pawn_names.is_empty():
-			lines.append("[color=#e0e0e0]%s[/color]" % " ".join(", ", pawn_names))
+			lines.append("[color=#e0e0e0]%s[/color]" % ", ".join(pawn_names))
 
-	_label.text = "\n".join("\n", lines)
+	_label.text = "\n".join(lines)
 	_panel.visible = not lines.is_empty()
 
 

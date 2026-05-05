@@ -5887,10 +5887,14 @@ func _draw() -> void:
 		outline_c = Color(0.45, 0.95, 1.0)
 	draw_arc(body_origin, body_radius, 0.0, TAU, 20, outline_c, OUTLINE_WIDTH, true)
 	
-	# Selection ring only
+	# Selection ring with pulsing glow
 	if is_selected:
-		var sel_color := Color(1.0, 0.92, 0.18)
+		var pulse: float = 0.6 + 0.4 * sin(Time.get_ticks_msec() * 0.005)
+		var sel_color := Color(1.0, 0.92, 0.18, pulse)
 		draw_arc(body_origin, body_radius + 3.5, 0.0, TAU, 28, sel_color, 1.4, true)
+		# Outer glow ring
+		var glow_alpha: float = pulse * 0.35
+		draw_arc(body_origin, body_radius + 6.0, 0.0, TAU, 28, Color(1.0, 0.92, 0.18, glow_alpha), 2.0, true)
 	
 	# Profession indicator: visible badge above the pawn
 	if data.current_profession != PawnData.Profession.NONE:

@@ -109,8 +109,11 @@ func _event_world_position(e: Dictionary) -> Vector2:
 	if e.has("r"):
 		var rk: int = int(e.get("r", -1))
 		if rk >= 0:
-			var nrx: int = WorldData.WIDTH / 16
-			var tile: Vector2i = Vector2i((rk % nrx) * 16 + 8, (rk / nrx) * 16 + 8)
+			# Region key = (rx & 0xFFFF) | ((ry & 0xFFFF) << 16)
+			# where rx = tx >> 4, ry = ty >> 4 (16x16 tile regions)
+			var rx: int = rk & 0xFFFF
+			var ry: int = (rk >> 16) & 0xFFFF
+			var tile: Vector2i = Vector2i(rx * 16 + 8, ry * 16 + 8)
 			return _world.tile_to_world(tile)
 	return Vector2.ZERO
 

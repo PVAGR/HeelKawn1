@@ -158,6 +158,12 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _camera_bookmarks = $CameraBookmarks
 @onready var _event_particles = $EventParticles
 @onready var _weather_overlay = $WeatherOverlay
+@onready var _command_mode = $CommandMode
+@onready var _command_indicator = $WorldViewport/CommandIndicator
+@onready var _pawn_name_labels = $WorldViewport/PawnNameLabels
+@onready var _pawn_chatter = $WorldViewport/PawnChatter
+@onready var _settlement_banner = $WorldViewport/SettlementBanner
+@onready var _ambient_audio = $AmbientAudio
 @onready var _trait_shop: Control = null
 @onready var _debug_panel: Control = null
 @onready var _day_night: DayNightCycle = $DayNight
@@ -595,6 +601,20 @@ func _ready() -> void:
 			_event_particles.initialize(_world)
 		if _weather_overlay != null and _weather_overlay.has_method("initialize"):
 			_weather_overlay.initialize(_world, _camera)
+		# Initialize command mode
+		if _command_mode != null and _command_mode.has_method("initialize"):
+			_command_mode.initialize(_world, _camera, _pawn_spawner)
+			_command_mode.command_issued.connect(_on_command_issued)
+		if _command_indicator != null and _command_indicator.has_method("initialize"):
+			_command_indicator.initialize(_world)
+		if _pawn_name_labels != null and _pawn_name_labels.has_method("initialize"):
+			_pawn_name_labels.initialize(_world, _camera)
+		if _pawn_chatter != null and _pawn_chatter.has_method("initialize"):
+			_pawn_chatter.initialize(_world)
+		if _settlement_banner != null and _settlement_banner.has_method("initialize"):
+			_settlement_banner.initialize(_world)
+		if _ambient_audio != null and _ambient_audio.has_method("initialize"):
+			_ambient_audio.initialize(_world, _camera)
 		# Wire SaveLoadMenu signals
 		if _save_load_menu != null:
 			_save_load_menu.save_requested.connect(_on_save_slot)
@@ -3142,6 +3162,12 @@ func _handle_key_input(key: InputEventKey) -> void:
 			_toggle_trait_shop()
 		KEY_F12:
 			_toggle_debug_panel()
+		KEY_Z:
+			if key.ctrl_pressed and _command_mode != null:
+				_cycle_zone_type()
+		KEY_G:
+			if key.shift_pressed and _command_mode != null:
+				_command_mode.set_zone_type(1)  # FORAGE_ZONE
 
 
 func _toggle_debug_panel() -> void:
@@ -3153,6 +3179,42 @@ func _toggle_debug_panel() -> void:
 
 ## Debug: export chronicle to user://exports/chronicle_<tick>.json
 func _export_chronicle() -> void:
+	var tick: int = 0
+	if Engine.has_singleton("GameManager") and GameManager != null:
+		tick = GameManager.tick_count
+	var dir_path: String = "user://exports"
+	var da := DirAccess.open("user://")
+	if da != null:
+		da.make_dir_recursive("exports")
+	var file_path: String = "%s/chronicle_%d.json" % [dir_path, tick]
+	var ok: bool = false
+	if WorldMemory != null and WorldMemory.has_method("export_chronicle"):
+		ok = WorldMemory.export_chronicle(file_path)
+	if OS.is_debug_build():
+		print("[Main] Chronicle export -> %s  ok=%s" % [file_path, str(ok)])
+	if ok and _chronicle_ledger != null:
+		_chronicle_ledger.queue_free()
+
+## Cycle through zone designation types (Ctrl+Z)
+func _cycle_zone_type() -> void:
+	if _command_mode == null:
+		return
+	var current: int = _command_mode._zone_type
+	var next: int = (current + 1) % 5  # NONE, FORAGE, BUILD, DEFEND, STORAGE
+	_command_mode.set_zone_type(next)
+	var names: PackedStringArray = ["None", "Forage Zone", "Build Zone", "Defend Zone", "Storage Zone"]
+	if next == 0:  # NONE
+		_set_designation_mode(DesignationMode.NONE)
+	elif next == 4:  # STORAGE_ZONE
+		_set_designation_mode(DesignationMode.DESIGNATE_ZONE)
+	if OS.is_debug_build():
+		print("[Main] Zone type: %s" % names[next])
+
+
+## Visual feedback when a command is issued to a pawn
+func _on_command_issued(pawn: Pawn, order_type: String, target_tile: Vector2i) -> void:
+	if _command_indicator != null and _command_indicator.has_method("show_indicator"):
+		_command_indicator.show_indicator(target_tile, order_type)
 	var tick: int = 0
 	if Engine.has_singleton("GameManager") and GameManager != null:
 		tick = GameManager.tick_count
@@ -3492,6 +3554,14 @@ func _on_left_press() -> void:
 		_drag_current = _hover_tile
 		_queue_designation_redraw()
 		get_viewport().set_input_as_handled()
+	elif _command_mode != null and _command_mode._zone_type != 0:  # NONE
+		if _hover_tile.x < 0:
+			return
+		_is_dragging = true
+		_drag_start = _hover_tile
+		_drag_current = _hover_tile
+		_queue_designation_redraw()
+		get_viewport().set_input_as_handled()
 	else:
 		_handle_select_click_at(get_global_mouse_position())
 		get_viewport().set_input_as_handled()
@@ -3518,6 +3588,14 @@ func _on_right_press() -> void:
 		_set_designation_mode(DesignationMode.NONE)
 		get_viewport().set_input_as_handled()
 		return
+	# Command mode: if a pawn is selected, right-click issues a command
+	if _selected_pawn != null and is_instance_valid(_selected_pawn):
+		if _command_mode != null:
+			_command_mode.set_selected_pawn(_selected_pawn)
+			var world_pos: Vector2 = get_global_mouse_position()
+			if _command_mode.handle_right_click(world_pos):
+				get_viewport().set_input_as_handled()
+				return
 	var t: Vector2i = _world.world_to_tile(get_global_mouse_position())
 	if t.x >= 0 and t.y >= 0:
 		inspect_tile(t)
@@ -3558,6 +3636,17 @@ func _commit_drag() -> void:
 		_queue_designation_redraw()
 		return
 	var rect: Rect2i = _normalize_rect(start, end)
+	# CommandMode zone painting takes priority
+	if _command_mode != null and _command_mode._zone_type != 0:  # NONE
+		if _command_mode._zone_type == 4:  # STORAGE_ZONE
+			_commit_zone_rect(rect)
+		else:
+			_command_mode._paint_start = start
+			_command_mode._paint_current = end
+			_command_mode.commit_zone_paint()
+		_command_mode.set_zone_type(0)  # NONE
+		_queue_designation_redraw()
+		return
 	match _designation_mode:
 		DesignationMode.DESIGNATE_ZONE:
 			_commit_zone_rect(rect)
@@ -3813,6 +3902,10 @@ func _set_selected_pawn(p: Pawn) -> void:
 	if _selected_pawn != null:
 		_player_pawn = _selected_pawn
 		_camera_follow_selected = true
+		if _command_mode != null:
+			_command_mode.set_selected_pawn(_selected_pawn)
+		if _pawn_name_labels != null:
+			_pawn_name_labels.set_selected_pawn(_selected_pawn)
 	elif _player_mode != PlayerMode.INCARNATED:
 		if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 			_player_pawn = _first_live_pawn()

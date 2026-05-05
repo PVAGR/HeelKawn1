@@ -90,6 +90,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "life_arcs", "label": "43 · Life Arcs (Phase 5 — readable pawn narratives)"},
 			{"id": "knowledge_carriers", "label": "44 · Knowledge Carriers (Phase 5 — knowledge at risk, masters)"},
 			{"id": "myth_formation", "label": "45 · Myth Formation (Phase 5 — feared/revered regions)"},
+			{"id": "record_carriers", "label": "46 · Record Carriers (Phase 5 — knowledge preservation stones)"},
 			{"id": "force_building", "label": "50 · FORCE BUILDING — post 10 wall/bed/zone jobs NOW"},
 		],
 	},
@@ -321,6 +322,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_knowledge_carriers, "knowledge_carriers")
 		"myth_formation":
 			error_occurred = _safe_report(_report_myth_formation, "myth_formation")
+		"record_carriers":
+			error_occurred = _safe_report(_report_record_carriers, "record_carriers")
 		"force_building":
 			error_occurred = _safe_report(_force_building_now, "force_building")
 		"vision_scope":
@@ -1694,6 +1697,76 @@ func _report_myth_formation() -> void:
 
 	print("")
 	print("=== END MYTH FORMATION REPORT ===")
+
+
+# === Phase 5: Record Carriers Report ===
+
+func _report_record_carriers() -> void:
+	print("=== HEELKAWN RECORD CARRIERS (Phase 5: Knowledge Preservation) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+
+	var ks: Node = get_node_or_null("/root/KnowledgeSystem")
+	if ks == null:
+		print("KnowledgeSystem not found - system not loaded")
+		return
+
+	# Get record carrier statistics
+	var total_carriers: int = 0
+	var grave_markers: int = 0
+	var knowledge_stones: int = 0
+	var ledger_stones: int = 0
+
+	if ks.has("record_carriers"):
+		var carriers: Dictionary = ks.get("record_carriers")
+		total_carriers = carriers.size()
+		for tile_key in carriers:
+			var carrier: Dictionary = carriers[tile_key]
+			var carrier_type: String = str(carrier.get("carrier_type", "unknown"))
+			if carrier_type == "grave_marker":
+				grave_markers += 1
+			elif carrier_type == "knowledge_stone":
+				knowledge_stones += 1
+			elif carrier_type == "ledger_stone":
+				ledger_stones += 1
+
+	print("--- RECORD CARRIER STATISTICS ---")
+	print("Total record carriers: %d" % total_carriers)
+	print("  Grave Markers: %d" % grave_markers)
+	print("  Knowledge Stones: %d" % knowledge_stones)
+	print("  Ledger Stones: %d" % ledger_stones)
+	print("")
+
+	# Show all record carriers with their stored knowledge
+	print("--- ALL RECORD CARRIERS ---")
+	if ks.has("record_carriers"):
+		var carriers: Dictionary = ks.get("record_carriers")
+		if carriers.is_empty():
+			print("  (No record carriers inscribed yet)")
+		else:
+			var shown: int = 0
+			for tile_key in carriers:
+				if shown >= 20:
+					print("  ... and %d more" % (carriers.size() - shown))
+					break
+				var carrier: Dictionary = carriers[tile_key]
+				var knowledge_types: Array = carrier.get("knowledge_types", [])
+				var inscriber: int = int(carrier.get("inscriber_id", -1))
+				var inscribed_tick: int = int(carrier.get("inscribed_tick", -1))
+				var carrier_type: String = str(carrier.get("carrier_type", "unknown"))
+				var ticks_ago: int = GameManager.tick_count - inscribed_tick
+
+				print("  %s at (%s)" % [carrier_type.to_upper(), tile_key])
+				print("    Inscribed by pawn %d, %d ticks ago" % [inscriber, ticks_ago])
+				print("    Stores %d knowledge types:" % knowledge_types.size())
+				for kt in knowledge_types:
+					print("      - KnowledgeType #%d" % int(kt))
+				print("")
+				shown += 1
+
+	print("")
+	print("=== END RECORD CARRIERS REPORT ===")
 
 
 # === BUILDING FORCES ===

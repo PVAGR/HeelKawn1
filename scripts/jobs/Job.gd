@@ -27,6 +27,10 @@ enum Type {
 	BUILD_STORAGE_HUT, # expand storage: wood + wood = higher capacity
 	BUILD_MARKER_STONE,# carve marker: stone + stick = territorial marker
 	BUILD_SHRINE,      # build shrine: wood + stone + stone = ritual site
+	# --- Record Carriers (Phase 5: Knowledge Preservation) ---
+	CARVE_GRAVE_MARKER,    # carve grave: stone = memory preservation
+	CARVE_KNOWLEDGE_STONE, # carve knowledge: stone + scholar = knowledge storage
+	CARVE_LEDGER_STONE,    # carve ledger: stone = settlement history record
 	# --- Food chain ---
 	COOK_MEAT,         # cook raw meat at fire pit
 	COOK_BERRIES,      # cook berries at fire pit
@@ -109,6 +113,9 @@ static func describe_type(t: int) -> String:
 		Type.BUILD_STORAGE_HUT: return "BuildStorageHut"
 		Type.BUILD_MARKER_STONE:return "BuildMarker"
 		Type.BUILD_SHRINE:      return "BuildShrine"
+		Type.CARVE_GRAVE_MARKER:    return "CarveGrave"
+		Type.CARVE_KNOWLEDGE_STONE: return "CarveKnowledge"
+		Type.CARVE_LEDGER_STONE:    return "CarveLedger"
 		Type.COOK_MEAT:         return "CookMeat"
 		Type.COOK_BERRIES:      return "CookBerries"
 		Type.DRY_MEAT:          return "DryMeat"
@@ -172,6 +179,9 @@ static func tool_job_work_ticks(job_type: int) -> int:
 		Type.BUILD_STORAGE_HUT: return 35
 		Type.BUILD_MARKER_STONE:return 25
 		Type.BUILD_SHRINE:      return 45
+		Type.CARVE_GRAVE_MARKER:    return 30  # Grave carving
+		Type.CARVE_KNOWLEDGE_STONE: return 50  # Knowledge inscription takes longer
+		Type.CARVE_LEDGER_STONE:    return 60  # Ledger requires detailed records
 		Type.COOK_MEAT:         return 15
 		Type.COOK_BERRIES:      return 10
 		Type.DRY_MEAT:          return 25
@@ -194,4 +204,7 @@ static func tool_job_skill(job_type: int) -> int:
 		Type.DRY_MEAT:     return PawnData.Skill.BUILDING
 		Type.PLANT_SEEDS:  return PawnData.Skill.FORAGING
 		Type.HARVEST_CROPS:return PawnData.Skill.FORAGING
+		Type.CARVE_GRAVE_MARKER:    return PawnData.Skill.BUILDING  # Carving/inscription
+		Type.CARVE_KNOWLEDGE_STONE: return PawnData.Skill.BUILDING  # Knowledge inscription
+		Type.CARVE_LEDGER_STONE:    return PawnData.Skill.BUILDING  # Record-keeping
 	return PawnData.Skill.FORAGING

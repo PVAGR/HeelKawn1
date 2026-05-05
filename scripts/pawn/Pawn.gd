@@ -1789,6 +1789,16 @@ func _process(delta: float) -> void:
 	if SpatialManager != null and data != null and old_tile_pos != data.tile_pos:
 		SpatialManager.update_pawn_position(int(data.id), data.tile_pos)
 
+	# RECORD CARRIERS: Auto-read knowledge when walking over inscribed stones
+	if KnowledgeSystem != null and KnowledgeSystem.has_method("read_knowledge_from_stone"):
+		var gained: Array = KnowledgeSystem.read_knowledge_from_stone(int(data.id), data.tile_pos)
+		if not gained.is_empty():
+			# Pawn gained knowledge from reading stone
+			if GameManager.verbose_logs():
+				print("[Pawn] %s read stone at (%d,%d) and gained %d knowledge types" % [
+					data.display_name, data.tile_pos.x, data.tile_pos.y, gained.size()
+				])
+
 	# Redraw during movement at a throttled rate (every 5th frame at 1x, scales with speed)
 	# to keep bobbing animation visible without overwhelming the renderer.
 	# OPTIMIZATION: Reduced redraw frequency for smoother frames
@@ -3670,6 +3680,23 @@ func _finish_build(job: Job) -> void:
 			_world.build_wall(job.tile.x, job.tile.y)
 		_Job.Type.BUILD_DOOR:
 			_world.build_door(job.tile.x, job.tile.y)
+		# Record Carriers (Phase 5: Knowledge Preservation)
+		_Job.Type.CARVE_GRAVE_MARKER:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.GRAVE_MARKER)
+			# Grave markers preserve memory of dead (future: link to dead pawn's knowledge)
+		_Job.Type.CARVE_KNOWLEDGE_STONE:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.KNOWLEDGE_STONE)
+			# Inscribe pawn's knowledge onto stone
+			if KnowledgeSystem != null and KnowledgeSystem.has_method("inscribe_knowledge_on_stone"):
+				var pawn_knowledge: Array = []
+				if KnowledgeSystem.has("knowledge_carriers"):
+					var carriers: Dictionary = KnowledgeSystem.get("knowledge_carriers")
+					if carriers.has(int(data.id)):
+						pawn_knowledge = carriers[int(data.id)].duplicate()
+				KnowledgeSystem.inscribe_knowledge_on_stone(job.tile, pawn_knowledge, int(data.id), "knowledge_stone")
+		_Job.Type.CARVE_LEDGER_STONE:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.LEDGER_STONE)
+			# Ledger stones store settlement history (future: store multiple knowledge types)
 
 
 func _current_settlement_center_region() -> int:

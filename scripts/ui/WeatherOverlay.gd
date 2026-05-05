@@ -122,7 +122,8 @@ func _make_weather_system(
 	mat.scale_max = scale_max
 	if turbulence > 0.0:
 		mat.turbulence_enabled = true
-		mat.turbulence_strength = turbulence
+		if "turbulence_strength" in mat:
+			mat.turbulence_strength = turbulence
 
 	p.process_material = mat
 	p.modulate = color

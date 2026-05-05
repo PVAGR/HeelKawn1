@@ -122,7 +122,7 @@ func _generate_text(pawn) -> String:
 				1: return _pick(["Crops need tending.", "Soil looks good.", "Planting soon."])  # FARMER
 				2: return _pick(["Need more wood.", "Walls going up.", "Building."])             # BUILDER
 				3: return _pick(["Found berries!", "Gathering.", "Foraging nearby."])            # GATHERER
-				4: return _pick(["Staying alert.", "Patrol soon.", "Watching.")                  # WARRIOR
+				4: return _pick(["Staying alert.", "Patrol soon.", "Watching."])                  # WARRIOR
 				5: return _pick(["Interesting...", "Studying.", "So much to learn."])            # SCHOLAR
 
 	# Time-of-day

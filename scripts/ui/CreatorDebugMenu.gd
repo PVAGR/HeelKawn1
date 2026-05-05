@@ -11,6 +11,9 @@ const _WM = preload("res://autoloads/WorldMemory.gd")
 ## PHASE 6: Knowledge Fog - incarnated player only sees what their pawn knows
 const LOCAL_KNOWLEDGE_RADIUS_TILES: int = 50  # Incarnated player only knows events within this radius
 
+## PHASE 6: Myth vs Truth - player sees facts, pawns believe distorted versions
+const MYTH_DISTORTION_FACTOR: float = 0.6  # Myths are 60% more extreme than facts
+
 func _is_player_incarnated() -> bool:
 	var main_node: Node = get_node_or_null("/root/Main")
 	if main_node == null:
@@ -1714,10 +1717,15 @@ func _report_myth_formation() -> void:
 
 	# PHASE 6: Knowledge Fog - incarnated player sees world myths (heard through gossip)
 	# LOCAL KNOWLEDGE: Only shows myths for regions near player pawn
+	# MYTH VS TRUTH: Shows both factual events and distorted myths
 	var incarnated: bool = _is_player_incarnated()
 	if incarnated:
 		print("⚠ LOCAL KNOWLEDGE ACTIVE")
 		print("  You only know myths for regions within %d tiles." % LOCAL_KNOWLEDGE_RADIUS_TILES)
+		print("")
+	else:
+		print("👁 SPECTATOR MODE: You see TRUTH (facts from WorldMemory)")
+		print("  Pawns believe distorted MYTHS (rumors, gossip, exaggeration)")
 		print("")
 
 	var m: Node2D = _main()
@@ -1759,6 +1767,36 @@ func _report_myth_formation() -> void:
 	print("Revered regions (-1): %d" % revered_regions)
 	print("Neutral regions (0): %d" % neutral_regions)
 	print("")
+
+	# MYTH VS TRUTH: Show factual events that created the myths
+	if not incarnated:
+		print("--- TRUTH: FACTUAL EVENTS (WorldMemory) ---")
+		var wmem: Node = get_node_or_null("/root/WorldMemory")
+		if wmem != null and wmem.has("event_history"):
+			var events: Array = wmem.get("event_history")
+			var death_events_by_region: Dictionary = {}
+			for e in events:
+				if e is Dictionary and e.has("r") and e.has("type"):
+					var event_type: String = str(e.get("type", ""))
+					if event_type.contains("death") or event_type.contains("collapse"):
+						var rk: int = int(e.get("r", -1))
+						if rk >= 0:
+							if not death_events_by_region.has(rk):
+								death_events_by_region[rk] = 0
+							death_events_by_region[rk] += 1
+			
+			for rk in death_events_by_region:
+				if not _is_region_known_to_player(rk) and incarnated:
+					continue
+				var count: int = death_events_by_region[rk]
+				var myth_state: int = mm.get_region_myth_state(rk) if mm.has_method("get_region_myth_state") else 0
+				var myth_label: String = "Neutral"
+				if myth_state == 1:
+					myth_label = "⚠ FEARED (myth exaggerated)"
+				elif myth_state == -1:
+					myth_label = "✓ REVERED (myth glorified)"
+				print("  Region %d: %d deaths → %s" % [rk, count, myth_label])
+		print("")
 
 	# Show settlement rebirth success counts
 	print("--- SETTLEMENT REBIRTH HISTORY ---")

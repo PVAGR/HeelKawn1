@@ -88,6 +88,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "gossip_reputation", "label": "41 · Gossip & Reputation (Phase 5 — social propagation)"},
 			{"id": "avoidance_ai", "label": "42 · Avoidance AI (Phase 5 — enemy avoidance patterns)"},
 			{"id": "life_arcs", "label": "43 · Life Arcs (Phase 5 — readable pawn narratives)"},
+			{"id": "knowledge_carriers", "label": "44 · Knowledge Carriers (Phase 5 — knowledge at risk, masters)"},
 			{"id": "force_building", "label": "50 · FORCE BUILDING — post 10 wall/bed/zone jobs NOW"},
 		],
 	},
@@ -315,6 +316,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_avoidance_ai, "avoidance_ai")
 		"life_arcs":
 			error_occurred = _safe_report(_report_life_arcs, "life_arcs")
+		"knowledge_carriers":
+			error_occurred = _safe_report(_report_knowledge_carriers, "knowledge_carriers")
 		"force_building":
 			error_occurred = _safe_report(_force_building_now, "force_building")
 		"vision_scope":
@@ -1504,6 +1507,90 @@ func _report_life_arcs() -> void:
 			shown_pawns += 1
 
 	print("=== END LIFE ARCS REPORT ===")
+
+
+# === Phase 5: Knowledge Carriers Report ===
+
+func _report_knowledge_carriers() -> void:
+	print("=== HEELKAWN KNOWLEDGE CARRIERS (Phase 5: Knowledge Ecology) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+
+	var ks: Node = get_node_or_null("/root/KnowledgeSystem")
+	if ks == null:
+		print("KnowledgeSystem not found - system not loaded")
+		return
+
+	# Get knowledge carrier statistics
+	var total_carriers: int = 0
+	if ks.has("knowledge_carriers"):
+		var carriers: Dictionary = ks.get("knowledge_carriers")
+		for pawn_id in carriers:
+			total_carriers += 1
+
+	print("--- KNOWLEDGE STATISTICS ---")
+	print("Total knowledge carriers: %d" % total_carriers)
+	print("")
+
+	# Show dormant knowledge (at risk of being lost)
+	print("--- DORMANT KNOWLEDGE (At Risk of Being Lost) ---")
+	if ks.has("dormant_knowledge"):
+		var dormant: Dictionary = ks.get("dormant_knowledge")
+		if dormant.is_empty():
+			print("  (No dormant knowledge - all knowledge has active carriers)")
+		else:
+			for kt_key in dormant:
+				var dk: Dictionary = dormant[kt_key]
+				var last_carrier: int = int(dk.get("last_carrier_id", -1))
+				var last_tick: int = int(dk.get("last_practiced_tick", -1))
+				var ticks_ago: int = GameManager.tick_count - last_tick
+				print("  %s: Last carrier pawn_id=%d, %d ticks ago" % [kt_key, last_carrier, ticks_ago])
+	print("")
+
+	# Show top 10 knowledge carriers (masters)
+	print("--- TOP KNOWLEDGE CARRIERS (Masters) ---")
+	var m: Node2D = _main()
+	if m == null:
+		print("Main node not found")
+		return
+
+	var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+	if ps == null:
+		print("PawnSpawner not found")
+		return
+
+	# Count knowledge per pawn
+	var pawn_knowledge_count: Dictionary = {}
+	if ks.has("knowledge_carriers"):
+		var carriers: Dictionary = ks.get("knowledge_carriers")
+		for pawn_id in carriers:
+			pawn_knowledge_count[pawn_id] = carriers[pawn_id].size()
+
+	# Sort by knowledge count (descending)
+	var sorted_pawns: Array = []
+	for pawn_id in pawn_knowledge_count:
+		sorted_pawns.append({"id": pawn_id, "count": pawn_knowledge_count[pawn_id]})
+	sorted_pawns.sort_custom(func(a, b): return a.count > b.count)
+
+	var shown: int = 0
+	for entry in sorted_pawns:
+		if shown >= 10:
+			break
+		var pawn_id: int = int(entry.id)
+		var count: int = int(entry.count)
+		# Find pawn by ID
+		var pawn: Pawn = null
+		for p in ps.pawns:
+			if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
+				pawn = p
+				break
+		if pawn != null:
+			print("  %s (%s): %d knowledge types" % [pawn.data.display_name, pawn.data.profession_name(), count])
+			shown += 1
+
+	print("")
+	print("=== END KNOWLEDGE CARRIERS REPORT ===")
 
 
 # === BUILDING FORCES ===

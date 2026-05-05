@@ -467,6 +467,17 @@ func _pick_infrastructure_tile(
 			cands.append(t)
 	if cands.is_empty():
 		return Vector2i(-1, -1)
+	# Prefer tiles inside DEFEND_ZONE
+	var defended: Array[Vector2i] = []
+	var rest: Array[Vector2i] = []
+	for c in cands:
+		if ZoneRegistry.tile_in_zone_type(c, ZoneRegistry.ZoneType.DEFEND):
+			defended.append(c)
+		else:
+			rest.append(c)
+	if not defended.is_empty():
+		_sort_tiles_index_order_remnant(defended, center, world)
+		return defended[0]
 	_sort_tiles_index_order_remnant(cands, center, world)
 	return cands[0]
 
@@ -699,15 +710,19 @@ static func _sort_tiles_index_order_remnant(
 	cands.sort_custom(func(a, b) -> bool:
 		var a2: Vector2i = a as Vector2i
 		var b2: Vector2i = b as Vector2i
+		var zone_bonus_a: int = -3 if ZoneRegistry.tile_in_zone_type(a2, ZoneRegistry.ZoneType.BUILD) else 0
+		var zone_bonus_b: int = -3 if ZoneRegistry.tile_in_zone_type(b2, ZoneRegistry.ZoneType.BUILD) else 0
 		var am: int = (
 				abs(a2.x - center.x)
 				+ abs(a2.y - center.y)
 				+ RemnantMemory.get_planner_penalty(a2, w)
+				+ zone_bonus_a
 		)
 		var bm: int = (
 				abs(b2.x - center.x)
 				+ abs(b2.y - center.y)
 				+ RemnantMemory.get_planner_penalty(b2, w)
+				+ zone_bonus_b
 		)
 		if am != bm:
 			return am < bm

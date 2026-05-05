@@ -1,6 +1,12 @@
 class_name World
 extends Node2D
 
+## --- Sprite Assets ---
+const TREE_SPRITE = preload("res://assets/sprites/terrain/tree.png")
+const WALL_SPRITE = preload("res://assets/sprites/terrain/wall.png")
+const BED_SPRITE = preload("res://assets/sprites/terrain/bed.png")
+const DOOR_SPRITE = preload("res://assets/sprites/terrain/door.png")
+
 @onready var _age_memory := get_node("/root/AgeMemory")
 
 ## Pixels of screen space per tile. The world is rendered as a 256x256 Image
@@ -9,6 +15,8 @@ const TILE_PIXELS: int = 10
 const DEFAULT_WORLD_SEED: int = 20260429
 
 @onready var _sprite: Sprite2D = $Sprite2D
+@onready var _sprite_containers: Node2D = Node2D.new() # Holds individual feature sprites
+var _feature_sprites: Dictionary = {} # (x,y) -> Sprite2D
 
 var data: WorldData
 
@@ -53,6 +61,8 @@ func _ready() -> void:
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_sprite.scale = Vector2(TILE_PIXELS, TILE_PIXELS)
 	add_to_group("colony_world")
+	add_child(_sprite_containers)
+	_sprite_containers.z_index = 1
 	pathfinder = PathFinder.new()
 	generate(_initial_world_seed())
 
@@ -130,6 +140,7 @@ func _render() -> void:
 	_refresh_terrain_image_pixels()
 	_texture = ImageTexture.create_from_image(_image)
 	_sprite.texture = _texture
+	_refresh_feature_sprites()
 
 
 ## Re-raster all tiles (biome, features, and deterministic historical scar tint). Call after
@@ -778,3 +789,37 @@ func resync_beds_from_map() -> void:
 			if data.get_feature(x, y) == TileFeature.Type.BED:
 				var t: Vector2i = Vector2i(x, y)
 				register_bed(t)
+
+
+func _refresh_feature_sprites() -> void:
+# Clear old sprites
+for pos in _feature_sprites:
+_feature_sprites[pos].queue_free()
+_feature_sprites.clear()
+
+for y in range(WorldData.HEIGHT):
+for x in range(WorldData.WIDTH):
+var i: int = data.index(x, y)
+var feature: int = data.features[i]
+var s: Sprite2D = null
+
+match feature:
+TileFeature.Type.TREE:
+s = Sprite2D.new()
+s.texture = TREE_SPRITE
+TileFeature.Type.WALL:
+s = Sprite2D.new()
+s.texture = WALL_SPRITE
+TileFeature.Type.BED:
+s = Sprite2D.new()
+s.texture = BED_SPRITE
+TileFeature.Type.DOOR:
+s = Sprite2D.new()
+s.texture = DOOR_SPRITE
+
+if s:
+s.texture_filter = CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+s.position = Vector2(x - WorldData.WIDTH * 0.5 + 0.5, y - WorldData.HEIGHT * 0.5 + 0.5) * TILE_PIXELS
+s.scale = Vector2(TILE_PIXELS / 16.0, TILE_PIXELS / 16.0)
+_sprite_containers.add_child(s)
+_feature_sprites[Vector2i(x,y)] = s

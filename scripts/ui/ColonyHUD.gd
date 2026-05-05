@@ -1283,3 +1283,12 @@ static func _alert_chip(label: String, count: int, color_hex: String) -> String:
 	if count <= 0:
 		return ""
 	return "[color=%s]%dx %s[/color]  " % [color_hex, count, label]
+
+
+func _recenter() -> void:
+	# Anchor HUD elements to screen edges post-fullscreen resize
+	var sw = get_viewport().get_visible_rect().size.x
+	var sh = get_viewport().get_visible_rect().size.y
+	# Example: Ensure bottom panel stays at bottom
+	if has_node("BottomPanel"):
+		get_node("BottomPanel").position.y = sh - get_node("BottomPanel").size.y

@@ -310,6 +310,8 @@ func _append(e: Dictionary) -> void:
         _eviction_occurred = true
     _events.append(e)
     _on_event_added_to_indexes(e)
+    # Phase 5: Generate grudges from events
+    _on_event_appended(e)
 
 
 func _load_constitution_text() -> void:
@@ -1536,5 +1538,112 @@ func record_settlement_state_transition(center_id: int, old_state: String, new_s
         "peace_ticks": peace_ticks,
     }
     _append(e)
+
+
+# === Grudge Generation (Phase 5: Emergent Life) ===
+
+## Generate grudges from recorded events
+## Called automatically when events are appended to the log
+func _generate_grudges_from_event(e: Dictionary) -> void:
+    var GrudgeMgr: Node = get_node_or_null("/root/GrudgeManager")
+    if GrudgeMgr == null:
+        return
+    
+    var tick: int = int(e.get("t", GameManager.tick_count))
+    var event_type: String = e.get("type", "")
+    
+    # Pawn death -> grudges against killer (if recorded)
+    if event_type == "pawn_death":
+        var victim_id: int = int(e.get("pid", -1))
+        var killer_id: int = int(e.get("killer_id", -1))
+        var cause: String = e.get("c", "")
+        
+        if victim_id >= 0 and killer_id >= 0 and killer_id != victim_id:
+            # Determine grudge type based on cause
+            var grudge_type: String = "kin_death"
+            if cause.find("combat") >= 0 or cause.find("attack") >= 0:
+                grudge_type = "kin_death"
+            elif cause.find("betrayal") >= 0:
+                grudge_type = "betrayal"
+            
+            # Generate grudge for victim's kin
+            _generate_grudges_for_victim_kin(victim_id, killer_id, grudge_type, int(e.get("eid", 0)), event_type, tick, GrudgeMgr)
+    
+    # Pawn harmed -> direct grudge
+    elif event_type == "pawn_harmed":
+        var victim_id: int = int(e.get("victim_id", -1))
+        var aggressor_id: int = int(e.get("aggressor_id", -1))
+        var harm_type: String = e.get("harm_type", "minor_harm")
+        
+        if victim_id >= 0 and aggressor_id >= 0 and aggressor_id != victim_id:
+            GrudgeMgr.record_grudge(victim_id, aggressor_id, harm_type, int(e.get("eid", 0)), event_type, tick)
+    
+    # Theft event -> grudge against thief
+    elif event_type == "theft":
+        var victim_id: int = int(e.get("victim_id", -1))
+        var thief_id: int = int(e.get("thief_id", -1))
+        
+        if victim_id >= 0 and thief_id >= 0 and thief_id != victim_id:
+            GrudgeMgr.record_grudge(victim_id, thief_id, "theft", int(e.get("eid", 0)), event_type, tick)
+    
+    # Betrayal event -> grudge
+    elif event_type == "betrayal":
+        var betrayed_id: int = int(e.get("betrayed_id", -1))
+        var betrayer_id: int = int(e.get("betrayer_id", -1))
+        
+        if betrayed_id >= 0 and betrayer_id >= 0 and betrayer_id != betrayed_id:
+            GrudgeMgr.record_grudge(betrayed_id, betrayer_id, "betrayal", int(e.get("eid", 0)), event_type, tick)
+    
+    # Abandonment event -> grudge
+    elif event_type == "abandonment":
+        var abandoned_id: int = int(e.get("abandoned_id", -1))
+        var abandoner_id: int = int(e.get("abandoner_id", -1))
+        
+        if abandoned_id >= 0 and abandoner_id >= 0 and abandoner_id != abandoned_id:
+            GrudgeMgr.record_grudge(abandoned_id, abandoner_id, "abandonment", int(e.get("eid", 0)), event_type, tick)
+    
+    # Conflict start -> mutual grudges
+    elif event_type == "conflict_start":
+        var pawn_a: int = int(e.get("pawn_id_a", -1))
+        var pawn_b: int = int(e.get("pawn_id_b", -1))
+        var conflict_type: String = e.get("conflict_type", "minor_harm")
+        
+        if pawn_a >= 0 and pawn_b >= 0 and pawn_a != pawn_b:
+            GrudgeMgr.record_grudge(pawn_a, pawn_b, conflict_type, int(e.get("eid", 0)), event_type, tick)
+            GrudgeMgr.record_grudge(pawn_b, pawn_a, conflict_type, int(e.get("eid", 0)), event_type, tick)
+
+
+## Generate grudges for victim's kin when a pawn dies
+func _generate_grudges_for_victim_kin(
+    victim_id: int, killer_id: int, grudge_type: String, event_id: int, event_type: String, tick: int, GrudgeMgr: Node
+) -> void:
+    var Kinship: Node = get_node_or_null("/root/KinshipSystem")
+    if Kinship == null:
+        return
+    
+    # Get victim's immediate family
+    var parents: Array = Kinship.get_parents(victim_id) if Kinship.has_method("get_parents") else []
+    var children: Array = Kinship.get_children(victim_id) if Kinship.has_method("get_children") else []
+    var spouse: Array = Kinship.get_spouses(victim_id) if Kinship.has_method("get_spouses") else []
+    
+    # Parents grudge for child's death
+    for parent_id in parents:
+        if int(parent_id) >= 0 and int(parent_id) != killer_id:
+            GrudgeMgr.record_grudge(int(parent_id), killer_id, grudge_type, event_id, event_type, tick)
+    
+    # Children grudge for parent's death
+    for child_id in children:
+        if int(child_id) >= 0 and int(child_id) != killer_id:
+            GrudgeMgr.record_grudge(int(child_id), killer_id, grudge_type, event_id, event_type, tick)
+    
+    # Spouse grudge
+    for spouse_id in spouse:
+        if int(spouse_id) >= 0 and int(spouse_id) != killer_id:
+            GrudgeMgr.record_grudge(int(spouse_id), killer_id, grudge_type, event_id, event_type, tick)
+
+
+## Hook into event appending to generate grudges
+func _on_event_appended(e: Dictionary) -> void:
+    _generate_grudges_from_event(e)
 
 

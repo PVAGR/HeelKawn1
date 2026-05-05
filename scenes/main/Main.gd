@@ -608,6 +608,7 @@ func _ready() -> void:
 		if _command_mode != null and _command_mode.has_method("initialize"):
 			_command_mode.initialize(_world, _camera, _pawn_spawner)
 			_command_mode.command_issued.connect(_on_command_issued)
+			_command_mode.zone_painted.connect(_on_zone_painted)
 		if _command_indicator != null and _command_indicator.has_method("initialize"):
 			_command_indicator.initialize(_world)
 		if _pawn_name_labels != null and _pawn_name_labels.has_method("initialize"):
@@ -3228,6 +3229,11 @@ func _cycle_zone_type() -> void:
 		print("[Main] Zone type: %s" % names[next])
 
 
+## Handler for zone_painted signal — triggers overlay redraw
+func _on_zone_painted(_zone_type: String, _rect: Rect2i) -> void:
+	_queue_designation_redraw()
+
+
 ## Visual feedback when a command is issued to a pawn
 func _on_command_issued(pawn: Pawn, order_type: String, target_tile: Vector2i) -> void:
 	if _command_indicator != null and _command_indicator.has_method("show_indicator"):
@@ -4473,6 +4479,8 @@ func _queue_designation_redraw() -> void:
 func draw_designation_previews_on(ci: CanvasItem) -> void:
 	if _world == null or ci == null:
 		return
+	# Always draw registered zone overlays (even when not in designation mode)
+	_draw_registered_zones(ci)
 	if _designation_mode == DesignationMode.NONE:
 		return
 	# Resolve the rect we're previewing. During an active drag it's
@@ -4487,6 +4495,27 @@ func draw_designation_previews_on(ci: CanvasItem) -> void:
 		_draw_zone_preview(rect, ci)
 	else:
 		_draw_build_preview(rect, ci)
+
+
+## Draw registered zone overlays so the player can see designated areas.
+func _draw_registered_zones(ci: CanvasItem) -> void:
+	if ZoneRegistry == null:
+		return
+	var zone_colors: Dictionary = {
+		ZoneRegistry.ZoneType.FORAGE: Color(0.3, 0.85, 0.3, 0.18),
+		ZoneRegistry.ZoneType.BUILD: Color(0.85, 0.7, 0.2, 0.18),
+		ZoneRegistry.ZoneType.DEFEND: Color(0.85, 0.3, 0.3, 0.18),
+	}
+	var border_colors: Dictionary = {
+		ZoneRegistry.ZoneType.FORAGE: Color(0.3, 0.85, 0.3, 0.55),
+		ZoneRegistry.ZoneType.BUILD: Color(0.85, 0.7, 0.2, 0.55),
+		ZoneRegistry.ZoneType.DEFEND: Color(0.85, 0.3, 0.3, 0.55),
+	}
+	for zt: int in zone_colors:
+		for r: Rect2i in ZoneRegistry.zones_of_type(zt):
+			var area: Rect2 = _tiles_rect_to_world_rect(r)
+			ci.draw_rect(area, zone_colors[zt], true)
+			ci.draw_rect(area.grow(0.5), border_colors[zt], false, 1.0)
 
 
 ## Tinted solid rectangle for a pending Stockpile zone.
@@ -5850,6 +5879,7 @@ func _build_save_dict() -> Dictionary:
 		"cultural_memory": CulturalMemory.to_save_dict(),
 		"player_intent_queue": PlayerIntentQueue.to_save_dict(),
 		"faction_registry": FactionRegistry.to_save_dict(),
+		"grudge_manager": GrudgeManager.to_save_dict(),
 		"last_generation_tick": _last_generation_tick,
 		# Metadata for save/load menu
 		"settlement_name": _get_primary_settlement_name(),
@@ -5961,6 +5991,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 	WorldMeaning.recompute()
 	WorldPersistence.from_save_dict(s.get("world_persistence", {}))
 	WorldPersistence.recompute()
+	if GrudgeManager != null and GrudgeManager.has_method("from_save_dict"):
+		GrudgeManager.from_save_dict(s.get("grudge_manager", {}))
 	_push_zone_filter_label_to_toolbar()
 	var zlist: Array = s.get("zones", [])
 	if zlist is Array and not zlist.is_empty():

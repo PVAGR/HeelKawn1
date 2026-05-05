@@ -21,6 +21,7 @@ const SCAR_THRESHOLD: int = 80
 
 ## Settlement state tracking
 var _settlement_states: Dictionary = {}
+var _events: Array[Dictionary] = [] # Historical log for Chronicles
 
 ## History of state transitions
 var _state_transitions: Array[Dictionary] = []
@@ -167,3 +168,18 @@ func get_all_states() -> Dictionary:
 ## Restore settlement states (from save)
 func restore_all_states(states: Dictionary) -> void:
 	_settlement_states = states.duplicate(true)
+
+func record_event(type: String, victim_id: int, actor_id: int, pos: Vector2i, extra: String = "") -> void:
+	var e = {
+		"t": GameManager.tick_count if GameManager else 0,
+		"type": type,
+		"vid": victim_id,
+		"pid": actor_id,
+		"r": _region_key(pos.x, pos.y),
+		"n": extra
+	}
+	_events.append(e)
+	if _events.size() > 1000: _events.remove_at(0)
+
+func _region_key(x: int, y: int) -> int:
+	return (int(y) / 16) * 16 + (int(x) / 16)

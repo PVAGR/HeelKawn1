@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Phase 5: Emergent Life — Grudge System** (`autoloads/GrudgeManager.gd`)
+  - Deterministic grudge tracking from WorldMemory events (harm, theft, betrayal, neglect, kin death)
+  - Grudge inheritance: children remember wrongs done to parents (50% intensity, decays per generation)
+  - Tick-based decay: minor grudges decay faster, blood feuds barely decay
+  - Intensity thresholds: grudge (0.3), hatred (0.6), blood feud (0.85)
+  - Integration with WorldMemory: automatic grudge generation from recorded events
+  - Integration with KinshipSystem: grudge inheritance on pawn birth
+  - Pawn AI integration: trust penalties, avoidance behavior, revenge seeking
+  - Save/load support in Main.gd
+  - F10 debug report: "40 · Grudge system" shows statistics and blood feuds
+- Documentation: `docs/GRUDGE_SYSTEM.md` — full architecture, API, and design principles
+
+### Changed
+- `WorldMemory.gd`: Added `_generate_grudges_from_event()` and `_on_event_appended()` hooks
+- `KinshipSystem.gd`: `_flush_pending_births()` now calls `GrudgeManager.inherit_grudges()`
+- `Pawn.gd`: Added grudge query functions (`get_grudge_toward`, `has_grudge_against`, etc.)
+- `PawnData.gd`: `_calculate_social_factor()` applies grudge-based trust penalty
+- `CreatorDebugMenu.gd`: Added grudge report button and handler
+- `project.godot`: Registered GrudgeManager autoload
+
 ### Fixed
 - DebugControlPanel.gd: Fixed Godot 4.6 compatibility - replaced deprecated `append_text()` with `text +=` for TextEdit logging
 - Pawn.gd: Removed erroneous duplicate line in `_decay_needs()` that caused incorrect indentation and potential logic error (line 3907)

@@ -1288,13 +1288,54 @@ func _calculate_social_factor(action_type: String, context: Dictionary) -> float
 	var trust_norm: float = 0.5
 	if trust_n > 0:
 		trust_norm = clampf((trust_total / float(trust_n)) / 100.0, 0.0, 1.0)
+	
+	# Phase 5: Apply grudge-based trust penalty
+	# Grudges reduce effective trust for social actions
+	var grudge_penalty: float = 0.0
+	if trust_n > 0:
+		# Sample a few trusted pawns and check for grudges against them
+		var sampled: int = 0
+		for peer_id in trust:
+			if sampled >= 5:  # Sample up to 5 for performance
+				break
+			var peer_trust: float = float(trust[peer_id])
+			# If we have low trust in this pawn, check for grudges
+			if peer_trust < 70.0:
+				var grudge_intensity: float = _get_grudge_penalty_for_peer(peer_id)
+				grudge_penalty = maxf(grudge_penalty, grudge_intensity)
+			sampled += 1
+	
 	if action_type in ["socialize", "talk", "help", "cooperate", "trade"]:
 		factor += rapport_norm * 0.25
-		factor += trust_norm * 0.2
+		factor += trust_norm * 0.2 * (1.0 - grudge_penalty)  # Grudges reduce trust benefit
 	if action_type in ["fight", "challenge"]:
-		factor += (1.0 - trust_norm) * 0.2
-	
+		factor += (1.0 - trust_norm) * 0.2 * (1.0 + grudge_penalty)  # Grudges increase aggression
+
 	return clamp(factor, 0.0, 1.0)
+
+
+## Get grudge penalty for a peer (helper for social calculations)
+func _get_grudge_penalty_for_peer(peer_id: int) -> float:
+	# Check if anyone holds a grudge against this peer
+	var GrudgeMgr: Node = Engine.get_main_loop().get_root().get_node_or_null("GrudgeManager")
+	if GrudgeMgr == null:
+		return 0.0
+	
+	# Get grudges against this peer
+	var grudges: Array = []
+	if GrudgeMgr.has_method("get_grudges_against"):
+		grudges = GrudgeMgr.get_grudges_against(int(peer_id))
+	
+	if grudges.is_empty():
+		return 0.0
+	
+	# Find maximum grudge intensity
+	var max_intensity: float = 0.0
+	for grudge in grudges:
+		if grudge is Dictionary:
+			max_intensity = maxf(max_intensity, float(grudge.get("intensity", 0.0)))
+	
+	return max_intensity
 
 
 ## Calculate environmental context factor for an action

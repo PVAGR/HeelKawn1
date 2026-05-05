@@ -680,32 +680,32 @@ func get_lineage_ancestors(pawn_id: int, depth: int) -> Array[int]:
 func _flush_pending_births(tick: int) -> void:
 	if _pending_births.is_empty():
 		return
-	
+
 	# Sort by child_id for deterministic order
 	var sorted_children = _pending_births.keys()
 	sorted_children.sort()
-	
+
 	var processed: Array[int] = []
 	for child_id in sorted_children:
 		var birth = _pending_births[child_id]
 		var cid = int(birth["child_id"])
 		var mother = int(birth["mother_id"])
 		var father = int(birth["father_id"])
-		
+
 		# Skip if already registered
 		if _child_to_parents.has(cid):
 			continue
-		
+
 		# Build valid parents array
 		var valid_parents: Array[int] = []
 		if mother > 0:
 			valid_parents.append(mother)
 		if father > 0:
 			valid_parents.append(father)
-		
+
 		# Insert into child_to_parents
 		_child_to_parents[cid] = valid_parents.duplicate()
-		
+
 		# Insert into parent_to_children for each valid parent
 		for parent_id in valid_parents:
 			if not _parent_to_children.has(parent_id):
@@ -714,7 +714,7 @@ func _flush_pending_births(tick: int) -> void:
 			if not children.has(cid):
 				children.append(cid)
 			_parent_to_children[parent_id] = children
-		
+
 		# Record to WorldMemory
 		var world_mem = get_node_or_null("/root/WorldMemory")
 		if world_mem:
@@ -725,14 +725,20 @@ func _flush_pending_births(tick: int) -> void:
 				"father_id": father,
 				"tick": tick,
 			})
-		
+
+		# Phase 5: Inherit grudges from parents
+		var grudge_mgr = get_node_or_null("/root/GrudgeManager")
+		if grudge_mgr and grudge_mgr.has_method("inherit_grudges"):
+			for parent_id in valid_parents:
+				grudge_mgr.inherit_grudges(parent_id, cid, tick)
+
 		# Emit signals
 		kinship_updated.emit(cid)
 		for parent_id in valid_parents:
 			kinship_updated.emit(parent_id)
-		
+
 		processed.append(cid)
-	
+
 	# Clear processed births
 	for cid in processed:
 		_pending_births.erase(cid)

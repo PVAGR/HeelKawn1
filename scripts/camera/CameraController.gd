@@ -69,5 +69,5 @@ func reset_to_world_bounds(world: Node) -> void:
 	var world_px_h: float = float(WorldData.HEIGHT * 10)
 	var scale_x: float = viewport_size.x / world_px_w
 	var scale_y: float = viewport_size.y / world_px_h
-	var fit_zoom: float = clamp(maxf(scale_x, scale_y), min_zoom, max_zoom)
+	var fit_zoom: float = clamp(minf(scale_x, scale_y), min_zoom, max_zoom)
 	zoom = Vector2(fit_zoom, fit_zoom)

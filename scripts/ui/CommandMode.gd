@@ -228,14 +228,13 @@ func commit_zone_paint() -> void:
 	match _zone_type:
 		ZoneType.FORAGE_ZONE:
 			zone_name = "forage"
-			_post_zone_jobs(Job.Type.FORAGE, rect)
+			ZoneRegistry.register(ZoneRegistry.ZoneType.FORAGE, rect)
 		ZoneType.BUILD_ZONE:
 			zone_name = "build"
-			# Build zone doesn't post jobs directly — it marks the area
-			# for SettlementPlanner to prioritize
+			ZoneRegistry.register(ZoneRegistry.ZoneType.BUILD, rect)
 		ZoneType.DEFEND_ZONE:
 			zone_name = "defend"
-			_post_zone_jobs(Job.Type.DEFEND, rect)
+			ZoneRegistry.register(ZoneRegistry.ZoneType.DEFEND, rect)
 		ZoneType.STORAGE_ZONE:
 			zone_name = "storage"
 			# Storage zone handled by existing _commit_zone_rect
@@ -243,25 +242,6 @@ func commit_zone_paint() -> void:
 	zone_painted.emit(zone_name, rect)
 	if OS.is_debug_build():
 		print("[CommandMode] Zone %s painted at %s (%dx%d)" % [zone_name, rect.position, rect.size.x, rect.size.y])
-
-
-## Post jobs for every valid tile in the zone rect
-func _post_zone_jobs(job_type: int, rect: Rect2i) -> void:
-	var posted: int = 0
-	var ticks: int = _work_ticks_for_type(job_type)
-	for dy in range(rect.size.y):
-		for dx in range(rect.size.x):
-			var tile: Vector2i = Vector2i(rect.position.x + dx, rect.position.y + dy)
-			if not _world.data.in_bounds(tile.x, tile.y):
-				continue
-			if not _world.pathfinder.is_passable(tile):
-				continue
-			# JobManager.post() dedupes by tile automatically
-			var job: Job = JobManager.post(job_type, tile, 5, ticks)
-			if job != null:
-				posted += 1
-	if OS.is_debug_build() and posted > 0:
-		print("[CommandMode] Posted %d zone jobs of type %d" % [posted, job_type])
 
 
 func _normalize_rect(a: Vector2i, b: Vector2i) -> Rect2i:

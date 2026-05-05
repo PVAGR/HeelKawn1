@@ -254,6 +254,7 @@ enum State {
 # -------------------- runtime --------------------
 
 var data: PawnData
+@onready var _sprite: Sprite2D = Sprite2D.new() # SPRITE_ART
 
 var _world: World
 var _state: int = State.IDLE
@@ -2433,6 +2434,19 @@ func _tick_idle() -> void:
 				"faded_gathering_place":
 					meaning_bias += 1  # faint echo of community
 		base_bias += meaning_bias
+		# Player zone designation bias: jobs in designated zones get priority
+		var zone_bias: int = 0
+		var job_tile: Vector2i = j.work_tile
+		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.FORAGE):
+			if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.PLANT_SEEDS or j.type == _Job.Type.HARVEST_CROPS:
+				zone_bias += 6
+		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.BUILD):
+			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH:
+				zone_bias += 6
+		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.DEFEND):
+			if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
+				zone_bias += 6
+		base_bias += zone_bias
 		# Personal whim: same queue, slightly different ordering per pawn (still deterministic).
 		base_bias += clampi(int(floor((_bp(5) - 0.5) * 6.0)), -2, 2)
 
@@ -4658,6 +4672,36 @@ func remember_resources(tile: Vector2i, resource_type: String) -> void:
 
 
 ## Stage 2: Family & Trust system
+
+## Get grudge intensity toward another pawn (Phase 5: Emergent Life)
+func get_grudge_toward(other_pawn_id: int) -> float:
+	if GrudgeManager != null and GrudgeManager.has_method("get_grudge_intensity"):
+		return GrudgeManager.get_grudge_intensity(int(data.id), other_pawn_id)
+	return 0.0
+
+## Check if pawn has a grudge against another pawn
+func has_grudge_against(other_pawn_id: int, min_intensity: float = 0.3) -> bool:
+	if GrudgeManager != null and GrudgeManager.has_method("has_grudge"):
+		return GrudgeManager.has_grudge(int(data.id), other_pawn_id, min_intensity)
+	return false
+
+## Get trust penalty from grudges (0.0 to 0.9)
+func get_grudge_trust_penalty(other_pawn_id: int) -> float:
+	if GrudgeManager != null and GrudgeManager.has_method("get_trust_penalty"):
+		return GrudgeManager.get_trust_penalty(int(data.id), other_pawn_id)
+	return 0.0
+
+## Get list of pawns this pawn should avoid (grudge enemies)
+func get_grudge_enemies() -> Array[int]:
+	if GrudgeManager != null and GrudgeManager.has_method("get_enemies_for"):
+		return GrudgeManager.get_enemies_for(int(data.id), 0.4)
+	return []
+
+## Check if pawn should seek revenge against target
+func should_seek_revenge(other_pawn_id: int) -> bool:
+	if GrudgeManager != null and GrudgeManager.has_method("should_seek_revenge"):
+		return GrudgeManager.should_seek_revenge(int(data.id), other_pawn_id)
+	return false
 
 func track_co_presence() -> void:
 	_track_co_presence_light()

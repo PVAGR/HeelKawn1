@@ -80,6 +80,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 		"rows": [
 			{"id": "pawns", "label": "22 · All pawns"},
 			{"id": "profession_liking", "label": "26 · Profession liking"},
+			{"id": "grudges", "label": "40 · Grudge system (Phase 5 — grudges, blood feuds)"},
 		],
 	},
 	{
@@ -285,6 +286,8 @@ func _emit_report(report_id: String) -> void:
 			_report_harness()
 		"profession_liking":
 			_report_profession_liking()
+		"grudges":
+			_report_grudges()
 		"vision_scope":
 			_report_vision_scope()
 		"player_intents":
@@ -1106,6 +1109,84 @@ func _report_profession_liking() -> void:
 			float(d.affinities.get("diplomacy", 0.5)),
 		]
 		print("  id=%d %s  %s  %s" % [int(d.id), d.display_name, aff, d.profession_liking_digest_line()])
+
+
+# === Phase 5: Grudge System Report ===
+
+func _report_grudges() -> void:
+	print("=== HEELKAWN GRUDGE SYSTEM (Phase 5: Emergent Life) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+	
+	var grudge_mgr: Node = get_node_or_null("/root/GrudgeManager")
+	if grudge_mgr == null:
+		print("GrudgeManager not found - system not loaded")
+		return
+	
+	# Get grudge statistics
+	var total_grudges: int = 0
+	var blood_feuds: int = 0
+	var active_holders: int = 0
+	
+	if grudge_mgr.has_method("grudge_count"):
+		total_grudges = grudge_mgr.grudge_count()
+	
+	if grudge_mgr.has_method("get_blood_feuds"):
+		var feuds: Array = grudge_mgr.get_blood_feuds()
+		blood_feuds = feuds.size()
+		if feuds.size() > 0:
+			print("--- BLOOD FEUDS (intensity >= 0.85) ---")
+			for feud in feuds:
+				print("  Holder: %d → Target: %d | Type: %s | Intensity: %.2f | Gen: %d" % [
+					feud.get("holder_id", -1),
+					feud.get("target_id", -1),
+					feud.get("type", "unknown"),
+					feud.get("intensity", 0.0),
+					feud.get("generation", 0)
+				])
+			print("")
+	
+	print("--- GRUDGE STATISTICS ---")
+	print("Total grudges tracked: %d" % total_grudges)
+	print("Blood feuds (intensity >= 0.85): %d" % blood_feuds)
+	print("")
+	
+	# Sample grudges from first few pawns
+	var m: Node2D = _main()
+	if m == null:
+		print("Main node not found")
+		return
+	
+	var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+	if ps == null:
+		print("PawnSpawner not found")
+		return
+	
+	print("--- SAMPLE GRUDGES BY PAWN (first 10 pawns) ---")
+	var shown_pawns: int = 0
+	for p in ps.pawns:
+		if shown_pawns >= 10:
+			break
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		
+		var pawn_id: int = int(p.data.id)
+		if grudge_mgr.has_method("get_grudges_held_by"):
+			var grudges: Array = grudge_mgr.get_grudges_held_by(pawn_id)
+			if not grudges.is_empty():
+				print("Pawn %d (%s) holds %d grudges:" % [pawn_id, p.data.display_name, grudges.size()])
+				for g in grudges:
+					print("  → Target: %d | Type: %s | Intensity: %.2f | Gen: %d" % [
+						g.get("target_id", -1),
+						g.get("type", "unknown"),
+						g.get("intensity", 0.0),
+						g.get("generation", 0)
+					])
+				shown_pawns += 1
+	
+	print("")
+	print("=== END GRUDGE REPORT ===")
 
 
 func _report_error_issues() -> void:

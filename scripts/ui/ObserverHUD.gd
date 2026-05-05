@@ -203,3 +203,9 @@ func _kernel_block(s: Dictionary) -> String:
 		"[b]SYSTEM STAMP[/b]\n"
 		+ "[font=monospace]%s[/font]" % str(s.get("footer_stamp", "Tick 0 | Day 1 | Determinism Pending"))
 	)
+
+
+func _recenter() -> void:
+	# Center observer overlays
+	var sw = get_viewport().get_visible_rect().size.x
+	var sh = get_viewport().get_visible_rect().size.y

@@ -2269,7 +2269,8 @@ func _on_game_tick(tick: int) -> void:
 			section_us["animal_population"] = Time.get_ticks_usec() - t0
 	# Regrowth + ambient are display/maintenance layers; they should not run
 	# every sim tick in normal mode or high speeds will hitch.
-	var regrowth_interval: int = _high_speed_interval(6, 8, 12)
+	# AGGRESSIVE 100x OPTIMIZATION: Much longer intervals
+	var regrowth_interval: int = _high_speed_interval(6, 20, 60)  # Was (6, 8, 12) - now 60 ticks at 100x
 	if tick % regrowth_interval == 0:
 		# OPTIMIZATION: Skip if over budget (deferrable operation)
 		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
@@ -2278,7 +2279,7 @@ func _on_game_tick(tick: int) -> void:
 			t0 = Time.get_ticks_usec()
 			_process_regrowth(tick)
 			section_us["regrowth"] = Time.get_ticks_usec() - t0
-	var ambient_interval: int = _high_speed_interval(2, 4, 8)
+	var ambient_interval: int = _high_speed_interval(2, 8, 40)  # Was (2, 4, 8) - now 40 ticks at 100x
 	if tick % ambient_interval == 0:
 		# OPTIMIZATION: Skip if over budget (deferrable operation)
 		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
@@ -2288,7 +2289,7 @@ func _on_game_tick(tick: int) -> void:
 			_update_ambient_target()
 			section_us["ambient_target"] = Time.get_ticks_usec() - t0
 	# Post dynamic hunt jobs less aggressively than harvest loops.
-	var hunt_post_interval: int = _high_speed_interval(30, 60, 120)
+	var hunt_post_interval: int = _high_speed_interval(30, 120, 400)  # Was (30, 60, 120) - now 400 ticks at 100x
 	var hunt_phase_offset: int = maxi(1, hunt_post_interval / 2)
 	if (
 			(tick + hunt_phase_offset) % hunt_post_interval == 0
@@ -2309,13 +2310,16 @@ func _on_game_tick(tick: int) -> void:
 	if GameManager != null and GameManager.verbose_logs():
 		if tick % 1000 == 0:
 			print("[JobCooldown] Suppressed this session: %d" % [_jobs_suppressed_this_session])
-	# Enemy AI and raid spawning
-	t0 = Time.get_ticks_usec()
-	_on_enemy_tick(tick, _enemy_spawner)
-	section_us["enemy_tick"] = Time.get_ticks_usec() - t0
+	# Enemy AI and raid spawning - OPTIMIZATION: Skip at 100x or run less frequently
+	if GameManager.game_speed < 100.0:
+		t0 = Time.get_ticks_usec()
+		_on_enemy_tick(tick, _enemy_spawner)
+		section_us["enemy_tick"] = Time.get_ticks_usec() - t0
 	# Suppress hot-loop tick spam; this is a major source of debug-mode stutter.
 	# Failsafe: pawns that slipped into solid tiles (rare) get nudged; log once per pawn.
-	if tick % 60 == 0 and _pawn_spawner != null:
+	# OPTIMIZATION: Less frequent at 100x
+	var sanity_interval: int = _high_speed_interval(60, 200, 600)  # Was 60 always
+	if tick % sanity_interval == 0 and _pawn_spawner != null:
 		for p in _pawn_spawner.pawns:
 			if p != null and is_instance_valid(p):
 				p.sanity_check_impassable_tile()
@@ -2323,7 +2327,7 @@ func _on_game_tick(tick: int) -> void:
 	if is_instance_valid(_world) and not _world_memory_derivative_flush_queued:
 		# Derivative flush recomputes meaning/persistence/culture; too-frequent calls
 		# will hitch even when tick ordering is correct.
-		var derivative_flush_interval: int = _high_speed_interval(8, 12, 20)
+		var derivative_flush_interval: int = _high_speed_interval(8, 40, 150)  # Was (8, 12, 20) - now 150 at 100x
 		if tick % derivative_flush_interval == 0:
 			_world_memory_derivative_flush_queued = true
 			call_deferred("_flush_world_memory_derivatives")

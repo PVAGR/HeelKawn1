@@ -1835,6 +1835,7 @@ func _set_player_mode(mode: int) -> void:
 	_player_mode = mode
 	_sync_player_context_ui()
 	_update_hud_mode_badge()
+	_update_ui_for_player_mode()
 	if OS.is_debug_build():
 		print("[Main] Player mode: %s" % get_player_mode_label())
 
@@ -1954,7 +1955,29 @@ func request_spectator_return(note: String = "manual_return", payload: Dictionar
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		_player_pawn = _first_live_pawn()
 	_set_player_mode(PlayerMode.SPECTATOR)
+	_update_ui_for_player_mode()
 	return ok
+
+
+func _update_ui_for_player_mode() -> void:
+	# PHASE 6: Hide spectator UI when incarnated
+	var is_incarnated: bool = _player_mode == PlayerMode.INCARNATED
+	
+	# Hide/show HUD elements based on mode
+	if _hud != null:
+		_hud.visible = not is_incarnated
+	
+	if _observer_hud != null:
+		_observer_hud.visible = not is_incarnated
+	
+	if _minimap != null:
+		_minimap.visible = not is_incarnated
+	
+	# Show minimal incarnated UI
+	if is_incarnated:
+		print("[Main] Incarnated mode: Spectator UI hidden. You now experience the world through your pawn's senses.")
+	else:
+		print("[Main] Spectator mode: Full UI restored.")
 
 
 func _reset_player_intent_observer_routing() -> void:

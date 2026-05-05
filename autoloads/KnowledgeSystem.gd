@@ -24,7 +24,14 @@ enum KnowledgeType {
 	RUIN_INTERPRETATION = 8,
 	HOSPITALITY = 9,
 	WINTER_SURVIVAL = 10,
-	TEACHING = 11
+	TEACHING = 11,
+	# Phase 5 Expansion
+	HUNTING = 12,
+	FARMING = 13,
+	COMBAT = 14,
+	DIPLOMACY = 15,
+	CRAFTING = 16,
+	LEADERSHIP = 17,
 }
 
 const KNOWLEDGE_DEGRADATION_INTERVAL_TICKS: int = 1000
@@ -527,6 +534,12 @@ func _get_knowledge_type_name(kt: int) -> String:
 		9: return "Hospitality"
 		10: return "Winter Survival"
 		11: return "Teaching"
+		12: return "Hunting"
+		13: return "Farming"
+		14: return "Combat"
+		15: return "Diplomacy"
+		16: return "Crafting"
+		17: return "Leadership"
 		_: return "Unknown Knowledge #%d" % kt
 
 # === Helper Functions ===

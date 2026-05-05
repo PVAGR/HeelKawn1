@@ -3,13 +3,21 @@ extends Node
 ## Suppresses only the four deterministic roll outcomes (Trade Caravan, Harvest Moon, Locust Swarm, Diplomatic Envoy). Debug build only; use with SettlementMemory.VALIDATION_SESSION_ENABLED or alone.
 const VALIDATION_CLEAN_ECONOMY_EVENTS: bool = false
 
-## Condition check intervals - much longer than before, only for evaluating world state
-const CONDITION_CHECK_INTERVAL: int = 5000  # Check conditions every 5000 ticks
-const REGIONAL_CONDITION_CHECK_INTERVAL: int = 7000
-const LOCAL_CONDITION_CHECK_INTERVAL: int = 10000
-const CONDITION_CHECK_PHASE_OFFSET_TICKS: int = 431
-const REGIONAL_CONDITION_PHASE_OFFSET_TICKS: int = 113
-const LOCAL_CONDITION_PHASE_OFFSET_TICKS: int = 677
+## Condition check intervals - EXTREMELY RARE to prevent spam
+## Events only fire when pawns trigger them through actions
+const WORLD_EVENT_CHECK_INTERVAL: int = 50000  # Check world events every 50k ticks (~1 sim-year)
+const WORLD_EVENT_PHASE_OFFSET: int = 1337
+const REGIONAL_EVENT_CHECK_INTERVAL: int = 40000  # Regional events every 40k ticks
+const REGIONAL_EVENT_PHASE_OFFSET: int = 719
+const LOCAL_EVENT_CHECK_INTERVAL: int = 30000  # Local events every 30k ticks
+const LOCAL_EVENT_PHASE_OFFSET: int = 431
+
+## Event probability tuning - EXTREMELY LOW base chance
+## These are multiplied by pawn-action-based triggers
+const WORLD_EVENT_BASE_CHANCE: float = 0.001  # 0.1% base chance per check
+const REGIONAL_EVENT_BASE_CHANCE: float = 0.002  # 0.2% base chance per check
+const LOCAL_EVENT_BASE_CHANCE: float = 0.003  # 0.3% base chance per check
+
 const HARVEST_MOON_DURATION_TICKS: int = 200
 const HARVEST_MOON_MULT: float = 1.25
 const LOCUST_FOOD_DRAIN: int = 2
@@ -20,6 +28,12 @@ var _gathering_efficiency_mult: float = 1.0
 var _validation_first_event_roll_proof_logged: bool = false
 ## When a regional shortage last fired; used for light world-event chains (deterministic).
 var _last_regional_shortage_tick: int = -1
+
+## PAWN-ACTIVATED EVENT TRACKING
+## Events only fire after pawns accumulate enough "causal weight" through actions
+var _pawn_action_counters: Dictionary = {}  # action_type -> count
+var _last_event_tick: int = -1
+const MIN_TICKS_BETWEEN_EVENTS: int = 10000  # Minimum 10k ticks between any world events
 
 
 func _ready() -> void:
@@ -38,25 +52,37 @@ func validation_clean_economy_events_active() -> bool:
 	return _suppress_economy_distorting_world_events()
 
 
+## PAWN-ACTIVATED EVENT SYSTEM
+## Call this from pawn action code to accumulate causal weight
+## Example: call when pawn completes job, trades, discovers, etc.
+func record_pawn_action(action_type: String, pawn_id: int) -> void:
+	var key: String = "%s_%d" % [action_type, pawn_id]
+	var count: int = _pawn_action_counters.get(key, 0)
+	_pawn_action_counters[key] = count + 1
+
+
 func _on_game_tick(tick: int) -> void:
 	if _active_event_until_tick >= 0 and tick >= _active_event_until_tick:
 		_clear_temporary_event()
 	if _suppress_economy_distorting_world_events() and _active_event_until_tick >= 0:
 		_clear_temporary_event()
-	
-	# Condition-based event checks (much less frequent than old timer rolls)
-	if GameManager.periodic_phase_due(tick, REGIONAL_CONDITION_CHECK_INTERVAL, REGIONAL_CONDITION_PHASE_OFFSET_TICKS):
+
+	# ENFORCE MINIMUM TIME BETWEEN EVENTS
+	if tick - _last_event_tick < MIN_TICKS_BETWEEN_EVENTS:
+		return
+
+	# Check world-level events (EXTREMELY RARE - every 50k ticks)
+	if GameManager.periodic_phase_due(tick, WORLD_EVENT_CHECK_INTERVAL, WORLD_EVENT_PHASE_OFFSET):
+		if not _suppress_economy_distorting_world_events():
+			_check_world_conditions(tick)
+
+	# Check regional events (RARE - every 40k ticks)
+	if GameManager.periodic_phase_due(tick, REGIONAL_EVENT_CHECK_INTERVAL, REGIONAL_EVENT_PHASE_OFFSET):
 		_check_regional_conditions(tick)
-	if GameManager.periodic_phase_due(tick, LOCAL_CONDITION_CHECK_INTERVAL, LOCAL_CONDITION_PHASE_OFFSET_TICKS):
+
+	# Check local events (less rare - every 30k ticks)
+	if GameManager.periodic_phase_due(tick, LOCAL_EVENT_CHECK_INTERVAL, LOCAL_EVENT_PHASE_OFFSET):
 		_check_local_conditions(tick)
-	if not GameManager.periodic_phase_due(tick, CONDITION_CHECK_INTERVAL, CONDITION_CHECK_PHASE_OFFSET_TICKS):
-		return
-	
-	if _suppress_economy_distorting_world_events():
-		return
-	
-	# Check world-level event conditions
-	_check_world_conditions(tick)
 
 
 func _check_world_conditions(tick: int) -> void:
@@ -324,6 +350,9 @@ func _current_day() -> int:
 
 
 func _record_world_event(event_name: String, description: String, payload: Dictionary = {}) -> void:
+	# Track when this event fired
+	_last_event_tick = GameManager.tick_count
+	
 	var rec: Dictionary = {
 		"type": "world_event",
 		"event": event_name,
@@ -340,6 +369,25 @@ func _record_world_event(event_name: String, description: String, payload: Dicti
 		return
 	if OS.is_debug_build():
 		print("[WorldEvent] Day %d: %s - %s" % [_current_day(), event_name, description])
+
+
+## PAWN-ACTIVATED EVENT TRIGGER HELPER
+## Call this instead of direct triggers - adds causal chain validation
+func _try_trigger_pawn_activated_event(event_name: String, pawn_cause: Dictionary) -> bool:
+	# Events must have a pawn cause
+	if not pawn_cause.has("pawn_id"):
+		return false
+	
+	# Record the pawn action for future event checks
+	record_pawn_action(event_name, int(pawn_cause.get("pawn_id", -1)))
+	
+	# Fire the event
+	_record_world_event(
+		event_name,
+		str(pawn_cause.get("description", "Event triggered by pawn action")),
+		pawn_cause
+	)
+	return true
 
 
 func _trigger_trade_caravan(tick: int) -> void:

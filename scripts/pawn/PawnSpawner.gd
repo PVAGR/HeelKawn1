@@ -417,6 +417,69 @@ func _name_pool_for_convention(naming_convention: String) -> Array[String]:
 			return FIRST_NAMES_NORDIC
 
 
+## HETEROGENEOUS PROFESSION ASSIGNMENT
+## Assign diverse professions at spawn based on weighted random (deterministic)
+## This ensures pawns are NOT all farmers - they're HeelKawnians with diverse roles
+func _assign_heterogeneous_profession(data: PawnData, rng: RandomNumberGenerator) -> void:
+	# Weight distribution for starter pawns - diverse community
+	# Builder: 20% (housing pressure relief)
+	# Gatherer: 20% (food diversity)
+	# Warrior: 15% (defense, hunting)
+	# Scholar: 10% (knowledge, research)
+	# Farmer: 35% (food baseline)
+	var roll: float = rng.randf()
+	
+	if roll < 0.20:
+		data.current_profession = PawnData.Profession.BUILDER
+	elif roll < 0.40:
+		data.current_profession = PawnData.Profession.GATHERER
+	elif roll < 0.55:
+		data.current_profession = PawnData.Profession.WARRIOR
+	elif roll < 0.65:
+		data.current_profession = PawnData.Profession.SCHOLAR
+	else:
+		data.current_profession = PawnData.Profession.FARMER
+	
+	# Grant initial skill XP based on profession (deterministic bonus)
+	match data.current_profession:
+		PawnData.Profession.BUILDER:
+			data.add_skill_xp(PawnData.SKILL_CONSTRUCTION, 50.0)
+			data.add_skill_xp(PawnData.SKILL_CARPENTRY, 30.0)
+		PawnData.Profession.GATHERER:
+			data.add_skill_xp(PawnData.SKILL_FORAGING, 50.0)
+			data.add_skill_xp(PawnData.SKILL_HUNTING, 30.0)
+		PawnData.Profession.WARRIOR:
+			data.add_skill_xp(PawnData.SKILL_COMBAT, 50.0)
+			data.add_skill_xp(PawnData.SKILL_HUNTING, 40.0)
+		PawnData.Profession.SCHOLAR:
+			data.add_skill_xp(PawnData.SKILL_RESEARCH, 50.0)
+			data.add_skill_xp(PawnData.SKILL_TEACHING, 30.0)
+		PawnData.Profession.FARMER:
+			data.add_skill_xp(PawnData.SKILL_FARMING, 50.0)
+			data.add_skill_xp(PawnData.SKILL_FORAGING, 30.0)
+
+
+## PROFESSION INHERITANCE - children inherit profession tendencies from parents
+func _inherit_profession_from_parents(data: PawnData, parent_a: PawnData, parent_b: PawnData, birth_tick: int) -> void:
+	# 70% chance to inherit one parent's profession, 30% random
+	var rng: RandomNumberGenerator = WorldRNG.rng_for(&"living_inherit_profession")
+	var inherit_roll: float = float((birth_tick * 31337) % 1000) / 1000.0  # Deterministic roll
+	
+	if inherit_roll < 0.70:
+		# Inherit from one parent (50/50)
+		var parent_prof: int = parent_a.current_profession if (birth_tick % 2 == 0) else parent_b.current_profession
+		if parent_prof != PawnData.Profession.NONE:
+			data.current_profession = parent_prof
+			# Grant 50% of parent's relevant skill XP
+			var primary_skill: String = PawnData._profession_primary_skill(parent_prof)
+			if primary_skill != "" and parent_a.skills.has(primary_skill):
+				var parent_xp: float = float(parent_a.skills.get(primary_skill, 0))
+				data.add_skill_xp(PawnData._skill_name_to_enum(primary_skill), parent_xp * 0.5)
+	else:
+		# 30% - random heterogeneous assignment (community needs)
+		_assign_heterogeneous_profession(data, rng)
+
+
 func spawn_pawn() -> void:
 	var rng: RandomNumberGenerator = WorldRNG.rng_for(&"living_spawn_v1")
 	var main_n: Node = get_parent()
@@ -456,6 +519,8 @@ func spawn_pawn() -> void:
 		data.hair_color = HAIR_COLORS[rng.randi_range(0, HAIR_COLORS.size() - 1)]
 		data.apparel_color = APPAREL_COLORS[rng.randi_range(0, APPAREL_COLORS.size() - 1)]
 		_assign_random_traits(data, rng)
+		# HETEROGENEOUS PROFESSION - NOT all farmers!
+		_assign_heterogeneous_profession(data, rng)
 		var pawnc: Pawn = pawn_scene.instantiate() as Pawn
 		add_child(pawnc)
 		pawnc.bind(data, world.tile_to_world(tile), world)
@@ -540,6 +605,10 @@ func spawn_child_pawn(
 	data.affinity_birth_snapshot = data.affinities.duplicate(true)
 	data._initialize_personality(birth_tick, parent_a.id, parent_b.id)
 	data._initialize_neural_network()
+	
+	# PROFESSION INHERITANCE - children tend toward parent professions but with variation
+	_inherit_profession_from_parents(data, parent_a, parent_b, birth_tick)
+	
 	var inbreeding_penalty: float = 0.0
 	var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
 	if bloodline_sys != null and bloodline_sys.has_method("get_inbreeding_penalty"):

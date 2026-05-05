@@ -1292,12 +1292,20 @@ func _report_grudges() -> void:
 	if m == null:
 		print("Main node not found")
 		return
-	
+
+	# PHASE 6: Knowledge Fog - incarnated player only sees their own grudges
+	var incarnated: bool = _is_player_incarnated()
+	var player_pawn_id: int = _get_player_pawn_id() if incarnated else -1
+	if incarnated and player_pawn_id >= 0:
+		print("⚠ KNOWLEDGE FOG ACTIVE (Incarnated as pawn %d)" % player_pawn_id)
+		print("  You only see grudges YOUR pawn holds.")
+		print("")
+
 	var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
 	if ps == null:
 		print("PawnSpawner not found")
 		return
-	
+
 	print("--- SAMPLE GRUDGES BY PAWN (first 10 pawns) ---")
 	var shown_pawns: int = 0
 	for p in ps.pawns:
@@ -1305,8 +1313,11 @@ func _report_grudges() -> void:
 			break
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
-		
+
 		var pawn_id: int = int(p.data.id)
+		if incarnated and pawn_id != player_pawn_id:
+			continue  # Fog: hide other pawns' grudges
+
 		if grudge_mgr.has_method("get_grudges_held_by"):
 			var grudges: Array = grudge_mgr.get_grudges_held_by(pawn_id)
 			if not grudges.is_empty():
@@ -1384,12 +1395,20 @@ func _report_gossip_reputation() -> void:
 	if m == null:
 		print("Main node not found")
 		return
-	
+
+	# PHASE 6: Knowledge Fog - incarnated player only sees reputation they know about
+	var incarnated: bool = _is_player_incarnated()
+	var player_pawn_id: int = _get_player_pawn_id() if incarnated else -1
+	if incarnated and player_pawn_id >= 0:
+		print("⚠ KNOWLEDGE FOG ACTIVE (Incarnated as pawn %d)" % player_pawn_id)
+		print("  You only see reputation YOUR pawn knows about.")
+		print("")
+
 	var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
 	if ps == null:
 		print("PawnSpawner not found")
 		return
-	
+
 	print("--- SAMPLE REPUTATIONS (first 10 pawns) ---")
 	var shown_pawns: int = 0
 	for p in ps.pawns:
@@ -1397,8 +1416,11 @@ func _report_gossip_reputation() -> void:
 			break
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
-		
+
 		var pawn_id: int = int(p.data.id)
+		if incarnated and pawn_id != player_pawn_id:
+			continue  # Fog: hide other pawns' reputation
+
 		if gossip_mgr.has_method("get_reputation_for") and gossip_mgr.has_method("get_reputation_label"):
 			var rep: float = gossip_mgr.get_reputation_for(pawn_id)
 			var label: String = gossip_mgr.get_reputation_label(pawn_id)

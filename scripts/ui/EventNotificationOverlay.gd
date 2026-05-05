@@ -11,6 +11,10 @@ const FADE_IN_SEC: float = 0.5
 const FADE_OUT_SEC: float = 1.0
 const MAX_VISIBLE_NOTIFICATIONS: int = 3
 
+# PERFORMANCE: Throttle notifications to prevent spam and frame drops
+const NOTIFICATION_THROTTLE_SEC: float = 0.3  # Minimum time between notifications
+const NOTIFICATION_BATCH_SIMILAR: bool = true  # Group similar events together
+
 # Notification types with visual styles
 const NOTIFICATION_STYLES: Dictionary = {
 	"birth": {"color": Color8(87, 197, 182), "icon": "👶", "priority": 1},
@@ -27,6 +31,8 @@ const NOTIFICATION_STYLES: Dictionary = {
 var _notification_container: VBoxContainer
 var _active_notifications: Array[Dictionary] = []
 var _notification_id_counter: int = 0
+var _last_notification_time: float = 0.0  # PERFORMANCE: Throttle notification spam
+var _pending_notifications: Array[Dictionary] = []  # PERFORMANCE: Batch similar events
 
 
 func _ready() -> void:
@@ -59,12 +65,23 @@ func _build_ui() -> void:
 
 func _update_notifications(delta: float) -> void:
 	var now: float = Time.get_ticks_msec() / 1000.0
-	
+
+	# PERFORMANCE: Try to process pending notifications if throttle allows
+	if not _pending_notifications.is_empty() and (now - _last_notification_time) >= NOTIFICATION_THROTTLE_SEC:
+		var next: Dictionary = _pending_notifications.pop_front()
+		show_notification(
+			next.type,
+			next.title,
+			next.description,
+			next.get("icon", ""),
+			next.get("pawn_id", -1)
+		)
+
 	# Remove expired notifications
 	for i in range(_active_notifications.size() - 1, -1, -1):
 		var notif: Dictionary = _active_notifications[i]
 		var age: float = now - notif.start_time
-		
+
 		if age > NOTIFICATION_LIFETIME_SEC:
 			# Fade out
 			var fade_progress: float = (age - NOTIFICATION_LIFETIME_SEC) / FADE_OUT_SEC
@@ -109,16 +126,46 @@ func _remove_notification(index: int) -> void:
 ## @param icon_override Optional custom icon emoji
 ## @param pawn_id Optional pawn ID for clickable biographies
 func show_notification(event_type: String, title: String, description: String, icon_override: String = "", pawn_id: int = -1) -> void:
+	# PERFORMANCE: Throttle notifications to prevent spam and frame drops
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if (now - _last_notification_time) < NOTIFICATION_THROTTLE_SEC:
+		# Queue for later if throttled
+		_pending_notifications.append({
+			"type": event_type,
+			"title": title,
+			"description": description,
+			"icon": icon_override,
+			"pawn_id": pawn_id,
+			"queued_at": now
+		})
+		# Limit queue size to prevent memory buildup
+		if _pending_notifications.size() > 10:
+			_pending_notifications.pop_front()
+		return
+	
+	_last_notification_time = now
+	
+	# PERFORMANCE: Process any pending notifications of same type
+	if NOTIFICATION_BATCH_SIMILAR and not _pending_notifications.is_empty():
+		var to_process: Array[Dictionary] = []
+		for i in range(_pending_notifications.size() - 1, -1, -1):
+			if _pending_notifications[i].type == event_type:
+				to_process.append(_pending_notifications[i])
+				_pending_notifications.remove_at(i)
+		
+		if not to_process.is_empty():
+			title = "%s (+%d more)" % [title, to_process.size()]
+	
 	var style: Dictionary = NOTIFICATION_STYLES.get(event_type, {
 		"color": Color.WHITE,
 		"icon": "📢",
 		"priority": 0
 	})
-	
+
 	var icon: String = icon_override if icon_override != "" else style.icon
 	var color: Color = style.color
 	var priority: int = style.priority
-	
+
 	# Enforce max visible notifications
 	while _active_notifications.size() >= MAX_VISIBLE_NOTIFICATIONS:
 		# Remove lowest priority notification
@@ -129,11 +176,11 @@ func show_notification(event_type: String, title: String, description: String, i
 				lowest_priority = _active_notifications[i].priority
 				lowest_idx = i
 		_remove_notification(lowest_idx)
-	
+
 	# Create notification panel
 	var panel: PanelContainer = _create_notification_panel(title, description, icon, color)
 	_notification_container.add_child(panel)
-	
+
 	# Add to active list
 	var notif_id: int = _notification_id_counter
 	_notification_id_counter += 1

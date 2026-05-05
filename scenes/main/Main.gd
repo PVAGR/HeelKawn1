@@ -3269,25 +3269,47 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				_hud.toggle_hud_verbose()
 		Key.KEY_SPACE:
 			GameManager.toggle_pause()
+		# PHASE 6: Speed controls disabled when incarnated (pawns can't control time)
 		Key.KEY_1:
+			if _is_player_incarnated():
+				print("[Main] Speed controls disabled during incarnation (pawns can't control time)")
+				return
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
 				GameManager.set_speed_index(0)
 		Key.KEY_2:
+			if _is_player_incarnated():
+				print("[Main] Speed controls disabled during incarnation")
+				return
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
 				GameManager.set_speed_index(1)
 		Key.KEY_3:
+			if _is_player_incarnated():
+				print("[Main] Speed controls disabled during incarnation")
+				return
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
 				GameManager.set_speed_index(2)
 		Key.KEY_4:
+			if _is_player_incarnated():
+				print("[Main] Speed controls disabled during incarnation")
+				return
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
 				GameManager.set_speed_index(3)
 		Key.KEY_5:
+			if _is_player_incarnated():
+				print("[Main] Speed controls disabled during incarnation")
+				return
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
 				GameManager.set_speed_index(4)
 		Key.KEY_6:
+			if _is_player_incarnated():
+				print("[Main] Speed controls disabled during incarnation")
+				return
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
 				GameManager.set_speed_index(5)
 		Key.KEY_7:
+			if _is_player_incarnated():
+				print("[Main] Speed controls disabled during incarnation")
+				return
 			if ALLOW_SPEED_NUMBER_HOTKEYS:
 				GameManager.set_speed_index(6)
 		Key.KEY_R:
@@ -3308,6 +3330,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		Key.KEY_F8:
 			_colony_load()
 		Key.KEY_F9:
+			# PHASE 6: Observer HUD disabled when incarnated (pawns don't see omniscient HUD)
+			if _is_player_incarnated():
+				print("[Main] Observer HUD disabled during incarnation (pawns don't have omniscient view)")
+				return
 			if event.shift_pressed:
 				_cycle_realm_crown_max_settlements()
 				if _observer_hud != null and _observer_hud.is_visible_state():
@@ -3315,6 +3341,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				return
 			_toggle_observer_hud()
 		Key.KEY_F10:
+			# PHASE 6: Debug menu disabled when incarnated (pawns don't have debug menus)
+			if _is_player_incarnated():
+				print("[Main] F10 debug menu disabled during incarnation")
+				return
 			if _creator_debug_menu != null:
 				_creator_debug_menu.toggle_menu()
 		Key.KEY_F6:

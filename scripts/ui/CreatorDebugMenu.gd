@@ -194,6 +194,10 @@ func _input(event: InputEvent) -> void:
 
 
 func toggle_menu() -> void:
+	# PHASE 6: Hide debug menu when incarnated (pawns don't have debug menus)
+	if _is_player_incarnated():
+		print("[CreatorDebugMenu] Disabled during incarnation (pawns don't have F10 menus)")
+		return
 	visible = not visible
 
 

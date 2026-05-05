@@ -5935,6 +5935,21 @@ func _draw() -> void:
 		var c2: Vector2 = body_origin + Vector2(2.5, DRAFT_CHEVRON_Y)
 		draw_polyline([c0, c1, c2], Color(1.0, 0.35, 0.25), 1.0, true)
 
+	# Activity label below pawn — shows what they're doing at a glance
+	if _state != State.IDLE:
+		var activity_text: String = _activity_label()
+		if not activity_text.is_empty():
+			var font: Font = ThemeDB.fallback_font
+			var font_size: int = 5
+			var label_color: Color = _activity_label_color()
+			var label_pos: Vector2 = body_origin + Vector2(0.0, body_radius + 5.0)
+			# Center the text horizontally
+			var str_size: Vector2 = font.get_string_size(activity_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+			var centered: Vector2 = label_pos - Vector2(str_size.x * 0.5, 0.0)
+			# Shadow for readability
+			draw_string(font, centered + Vector2(0.5, 0.5), activity_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(0.0, 0.0, 0.0, 0.6))
+			draw_string(font, centered, activity_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, label_color)
+
 
 func _profession_color(prof: int) -> Color:
 	match prof:
@@ -5944,6 +5959,71 @@ func _profession_color(prof: int) -> Color:
 		PawnData.Profession.WARRIOR:  return Color(0.9, 0.2, 0.2)     # red
 		PawnData.Profession.SCHOLAR:  return Color(0.3, 0.5, 0.9)     # blue
 		_:                            return Color.WHITE
+
+
+## Short activity verb shown below the pawn. Empty string for idle.
+func _activity_label() -> String:
+	match _state:
+		State.WALKING_TO_JOB, State.FETCHING_MATERIAL:
+			if _current_job != null:
+				return "→ %s" % Job.describe_type(_current_job.type).to_lower()
+			return "walking"
+		State.WORKING:
+			if _current_job != null:
+				return Job.describe_type(_current_job.type).to_lower()
+			return "working"
+		State.HAULING:
+			return "hauling"
+		State.GOING_TO_EAT:
+			return "→ food"
+		State.EATING:
+			return "eating"
+		State.SLEEPING:
+			return "zzz"
+		State.GOING_TO_BED:
+			return "→ bed"
+		State.TEACHING:
+			return "teaching"
+		State.CHALLENGE:
+			return "challenging"
+		State.DRAFT_WALK:
+			return "marching"
+		State.GATHERING:
+			return "gathering"
+		State.CRAFTING:
+			return "crafting"
+		State.FLEEING:
+			return "fleeing!"
+		State.HIDING:
+			return "hiding"
+		_:
+			return ""
+
+
+func _activity_label_color() -> Color:
+	match _state:
+		State.WORKING, State.WALKING_TO_JOB, State.FETCHING_MATERIAL:
+			return Color(0.9, 0.88, 0.7)    # warm white
+		State.HAULING:
+			return Color(0.7, 0.7, 0.8)     # cool gray
+		State.GOING_TO_EAT, State.EATING:
+			return Color(0.5, 0.9, 0.5)     # green
+		State.SLEEPING, State.GOING_TO_BED:
+			return Color(0.6, 0.5, 0.8)     # purple
+		State.TEACHING:
+			return Color(0.5, 0.7, 0.95)    # blue
+		State.CHALLENGE:
+			return Color(1.0, 0.6, 0.3)     # orange
+		State.DRAFT_WALK:
+			return Color(1.0, 0.4, 0.35)    # red
+		State.GATHERING:
+			return Color(0.4, 0.8, 0.4)     # green
+		State.CRAFTING:
+			return Color(0.8, 0.7, 0.4)     # gold
+		State.FLEEING, State.HIDING:
+			return Color(1.0, 0.3, 0.3)     # red
+		_:
+			return Color(0.7, 0.7, 0.7)
 
 
 ## Get cached enemy list, refreshing every 30 ticks.

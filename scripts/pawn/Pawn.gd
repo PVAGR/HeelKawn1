@@ -6290,7 +6290,7 @@ func _get_profession_priority_bonus(job: Job) -> int:
 		match job.type:
 			Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_TORCH, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR:
 				return 2
-			Job.Type.RESEARCH:
+			Job.Type.BUILD_SHRINE:  # Scholar-like activity
 				return 3
 	
 	# Farmer: +2 priority for food jobs

@@ -441,22 +441,21 @@ func _assign_heterogeneous_profession(data: PawnData, rng: RandomNumberGenerator
 		data.current_profession = PawnData.Profession.FARMER
 	
 	# Grant initial skill XP based on profession (deterministic bonus)
+	# Note: Using PawnData.Skill enum values - FORAGING, MINING, CHOPPING, BUILDING, HUNTING
 	match data.current_profession:
 		PawnData.Profession.BUILDER:
-			data.add_skill_xp(PawnData.SKILL_CONSTRUCTION, 50.0)
-			data.add_skill_xp(PawnData.SKILL_CARPENTRY, 30.0)
+			data.add_skill_xp(PawnData.Skill.BUILDING, 50.0)
 		PawnData.Profession.GATHERER:
-			data.add_skill_xp(PawnData.SKILL_FORAGING, 50.0)
-			data.add_skill_xp(PawnData.SKILL_HUNTING, 30.0)
+			data.add_skill_xp(PawnData.Skill.FORAGING, 50.0)
+			data.add_skill_xp(PawnData.Skill.HUNTING, 30.0)
 		PawnData.Profession.WARRIOR:
-			data.add_skill_xp(PawnData.SKILL_COMBAT, 50.0)
-			data.add_skill_xp(PawnData.SKILL_HUNTING, 40.0)
+			data.add_skill_xp(PawnData.Skill.HUNTING, 50.0)
 		PawnData.Profession.SCHOLAR:
-			data.add_skill_xp(PawnData.SKILL_RESEARCH, 50.0)
-			data.add_skill_xp(PawnData.SKILL_TEACHING, 30.0)
+			# Scholars get bonus to all skills (no specific research skill exists)
+			data.add_skill_xp(PawnData.Skill.BUILDING, 30.0)
+			data.add_skill_xp(PawnData.Skill.FORAGING, 20.0)
 		PawnData.Profession.FARMER:
-			data.add_skill_xp(PawnData.SKILL_FARMING, 50.0)
-			data.add_skill_xp(PawnData.SKILL_FORAGING, 30.0)
+			data.add_skill_xp(PawnData.Skill.FORAGING, 50.0)
 
 
 ## PROFESSION INHERITANCE - children inherit profession tendencies from parents
@@ -470,11 +469,17 @@ func _inherit_profession_from_parents(data: PawnData, parent_a: PawnData, parent
 		var parent_prof: int = parent_a.current_profession if (birth_tick % 2 == 0) else parent_b.current_profession
 		if parent_prof != PawnData.Profession.NONE:
 			data.current_profession = parent_prof
-			# Grant 50% of parent's relevant skill XP
-			var primary_skill: String = PawnData._profession_primary_skill(parent_prof)
-			if primary_skill != "" and parent_a.skills.has(primary_skill):
-				var parent_xp: float = float(parent_a.skills.get(primary_skill, 0))
-				data.add_skill_xp(PawnData._skill_name_to_enum(primary_skill), parent_xp * 0.5)
+			# Grant 25 XP in profession-related skill
+			match parent_prof:
+				PawnData.Profession.BUILDER:
+					data.add_skill_xp(PawnData.Skill.BUILDING, 25.0)
+				PawnData.Profession.GATHERER, PawnData.Profession.FARMER:
+					data.add_skill_xp(PawnData.Skill.FORAGING, 25.0)
+				PawnData.Profession.WARRIOR:
+					data.add_skill_xp(PawnData.Skill.HUNTING, 25.0)
+				PawnData.Profession.SCHOLAR:
+					data.add_skill_xp(PawnData.Skill.BUILDING, 15.0)
+					data.add_skill_xp(PawnData.Skill.FORAGING, 10.0)
 	else:
 		# 30% - random heterogeneous assignment (community needs)
 		_assign_heterogeneous_profession(data, rng)

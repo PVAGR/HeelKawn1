@@ -162,9 +162,9 @@ func _check_regional_conditions(tick: int) -> void:
 	var sl: Array = SettlementMemory.settlements
 	if sl.is_empty():
 		return
-	
+
 	# Regional events only fire when settlements exist
-	var wave: int = int(tick / REGIONAL_CONDITION_CHECK_INTERVAL)
+	var wave: int = int(tick / REGIONAL_EVENT_CHECK_INTERVAL)
 	var idx: int = wave % sl.size()
 	var st_any: Variant = sl[idx]
 	if not (st_any is Dictionary):
@@ -173,7 +173,7 @@ func _check_regional_conditions(tick: int) -> void:
 	var center_region: int = int(st.get("center_region", -1))
 	if center_region < 0:
 		return
-	
+
 	# Check regional conditions before triggering
 	var flavor: int = int((wave * 7919 + center_region * 524287) % 3)
 	match flavor:
@@ -192,14 +192,14 @@ func _check_local_conditions(tick: int) -> void:
 	var zones: Array[Stockpile] = StockpileManager.zones()
 	if zones.is_empty():
 		return
-	
+
 	# Local flavor events only when stockpiles exist
 	var z: Stockpile = zones[0]
 	var rk: int = WorldMemory._region_key(z.tile.x, z.tile.y)
 	var ml: String = WorldMeaning.get_region_meaning_label(rk)
-	var wave: int = int(tick / LOCAL_CONDITION_CHECK_INTERVAL)
+	var wave: int = int(tick / LOCAL_EVENT_CHECK_INTERVAL)
 	var variant: int = int((wave * 17 + rk) % 2)
-	
+
 	# Only trigger local events when there's actual activity
 	if variant == 0 and _should_trigger_hearth_whisper():
 		_record_world_event(
@@ -450,7 +450,7 @@ func _trigger_trade_caravan(tick: int) -> void:
 	var caravan_payload: Dictionary = {"wood": added_wood, "stone": added_stone, "berry": added_berry}
 	if (
 			_last_regional_shortage_tick >= 0
-			and tick - _last_regional_shortage_tick <= CONDITION_CHECK_INTERVAL * 3
+			and tick - _last_regional_shortage_tick <= WORLD_EVENT_CHECK_INTERVAL * 3
 	):
 		caravan_payload["chain_note"] = "convoys hedge loads after shortage hearsay"
 	_record_world_event(

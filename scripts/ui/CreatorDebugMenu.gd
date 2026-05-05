@@ -162,6 +162,8 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "chronicle_view", "label": "71 · Chronicle View (Phase 5 — settlement history as story)"},
 			{"id": "settlement_legends", "label": "72 · Settlement Legends (Phase 5 — emergent myths & stories)"},
 			{"id": "read_knowledge_stone", "label": "73 · Read Knowledge Stone (Phase 5 — inscribed knowledge)"},
+			{"id": "dynasty_tree", "label": "74 · Dynasty Tree (Phase 7 — visual family tree)"},
+			{"id": "endgame_status", "label": "75 · Endgame Status (Phase 7 — run completion progress)"},
 		],
 	},
 	{
@@ -408,6 +410,10 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_settlement_legends, "settlement_legends")
 		"read_knowledge_stone":
 			_report_read_knowledge_stone()
+		"dynasty_tree":
+			_show_dynasty_tree_ui()
+		"endgame_status":
+			_report_endgame_status()
 		"vision_scope":
 			error_occurred = _safe_report(_report_vision_scope, "vision_scope")
 		"player_intents":
@@ -2363,6 +2369,98 @@ func _report_read_knowledge_stone() -> void:
 							print("    %s\n" % stone_text)
 	
 	print("\n=== END KNOWLEDGE STONES ===")
+
+
+# === Phase 7: Dynasty Tree UI ===
+
+func _show_dynasty_tree_ui() -> void:
+	print("Opening Dynasty Tree UI...")
+	
+	var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
+	if legacy_sys == null:
+		print("LegacySystem not found")
+		return
+	
+	# Get first dynasty (or current player's dynasty)
+	var dynasty_id: int = -1
+	if legacy_sys.has("dynasties"):
+		var dynasties: Dictionary = legacy_sys.get("dynasties")
+		for did in dynasties:
+			dynasty_id = int(did)
+			break
+	
+	if dynasty_id < 0:
+		print("No dynasties found - pawns must have children to create dynasties")
+		return
+	
+	# Create and show dynasty tree UI
+	var tree_ui: CanvasLayer = CanvasLayer.new()
+	tree_ui.set_script(load("res://scripts/ui/DynastyTreeUI.gd"))
+	get_tree().root.add_child(tree_ui)
+	
+	if tree_ui.has_method("show_dynasty"):
+		tree_ui.call("show_dynasty", dynasty_id)
+	
+	print("Dynasty Tree UI opened for dynasty %d" % dynasty_id)
+
+
+# === Phase 7: Endgame Status ===
+
+func _report_endgame_status() -> void:
+	print("=== HEELKAWN ENDGAME STATUS (Phase 7: Run Completion) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+
+	var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
+	if legacy_sys == null:
+		print("LegacySystem not found")
+		return
+
+	# Get endgame status
+	var status: Dictionary = {}
+	if legacy_sys.has_method("get_endgame_status"):
+		status = legacy_sys.call("get_endgame_status")
+
+	print("--- RUN PROGRESS ---")
+	print("Total Legacy Score: %d / 1000 (goal)" % status.get("total_legacy", 0))
+	print("Total Dynasties: %d" % status.get("dynasty_count", 0))
+	print("Total Dynasty Members: %d" % status.get("total_dynasty_members", 0))
+	print("Player Incarnations: %d" % status.get("player_incarnations", 0))
+	print("")
+
+	# Endgame conditions
+	print("--- ENDGAME CONDITIONS ---")
+	var legacy_goal: int = 1000
+	var dynasty_goal: int = 3
+	var members_goal: int = 20
+	var incarnations_goal: int = 3
+
+	var legacy_progress: float = float(status.get("total_legacy", 0)) / float(legacy_goal) * 100.0
+	var dynasty_progress: float = float(status.get("dynasty_count", 0)) / float(dynasty_goal) * 100.0
+	var members_progress: float = float(status.get("total_dynasty_members", 0)) / float(members_goal) * 100.0
+	var incarnations_progress: float = float(status.get("player_incarnations", 0)) / float(incarnations_goal) * 100.0
+
+	print("Legacy Score: %.1f%% (%d/%d)" % [legacy_progress, status.get("total_legacy", 0), legacy_goal])
+	print("Dynasties Founded: %.1f%% (%d/%d)" % [dynasty_progress, status.get("dynasty_count", 0), dynasty_goal])
+	print("Dynasty Members: %.1f%% (%d/%d)" % [members_progress, status.get("total_dynasty_members", 0), members_goal])
+	print("Player Incarnations: %.1f%% (%d/%d)" % [incarnations_progress, status.get("player_incarnations", 0), incarnations_goal])
+	print("")
+
+	# Overall completion
+	var total_progress: float = (legacy_progress + dynasty_progress + members_progress + incarnations_progress) / 4.0
+	print("OVERALL RUN COMPLETION: %.1f%%" % total_progress)
+
+	if total_progress >= 100.0:
+		print("\n[color=#57C5B6][b]🎉 RUN COMPLETE! All endgame conditions met![/b][/color]")
+	elif total_progress >= 75.0:
+		print("\n[color=#FFD166]Getting close! Keep building your legacy.[/color]")
+	elif total_progress >= 50.0:
+		print("\n[color=#FF9F6B]Halfway there. Your dynasty is growing.[/color]")
+	else:
+		print("\n[color=#888888]Your legacy has just begun. Build, teach, and preserve.[/color]")
+
+	print("\n=== END ENDGAME STATUS ===")
 
 
 func _report_error_issues() -> void:

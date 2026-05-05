@@ -86,6 +86,7 @@ FoodChainManager="*res://autoloads/FoodChainManager.gd"
 BodyRiskManager="*res://autoloads/BodyRiskManager.gd"
 GrudgeManager="*res://autoloads/GrudgeManager.gd"
 GossipManager="*res://autoloads/GossipManager.gd"
+LegacySystem="*res://autoloads/LegacySystem.gd"
 TickMonitor="*res://tools/diagnose/monitor_ticks.gd"
 GameSettings="*res://autoloads/GameSettings.gd"
 

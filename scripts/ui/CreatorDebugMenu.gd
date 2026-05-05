@@ -238,87 +238,92 @@ func _emit_report(report_id: String) -> void:
 	_last_report_tick = tick
 	_last_report_key = report_id
 	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d BEGIN ===" % [report_id, tick])
+	
+	# WRAPPER: Catch errors in report functions to prevent menu crashes
+	var error_occurred: bool = false
+	var error_msg: String = ""
+	
 	match report_id:
 		"session_snapshot_guide":
-			_report_session_snapshot_guide()
+			error_occurred = _safe_report(_report_session_snapshot_guide, "session_snapshot_guide")
 		"session_snapshot_pack":
-			_report_session_snapshot_pack()
+			error_occurred = _safe_report(_report_session_snapshot_pack, "session_snapshot_pack")
 		"performance_snapshot":
-			_report_performance_snapshot()
+			error_occurred = _safe_report(_report_performance_snapshot, "performance_snapshot")
 		"error_report":
-			_report_error_issues()
+			error_occurred = _safe_report(_report_error_issues, "error_report")
 		"calendar":
-			_report_calendar(tick)
+			error_occurred = _safe_report(_report_calendar.bind(tick), "calendar")
 		"sim_diag":
-			_report_sim_diag()
+			error_occurred = _safe_report(_report_sim_diag, "sim_diag")
 		"colony_sim":
-			_report_colony_sim()
+			error_occurred = _safe_report(_report_colony_sim, "colony_sim")
 		"backbone_status":
-			_report_backbone_status()
+			error_occurred = _safe_report(_report_backbone_status, "backbone_status")
 		"intent":
-			_report_intent()
+			error_occurred = _safe_report(_report_intent, "intent")
 		"age":
-			_report_age()
+			error_occurred = _safe_report(_report_age, "age")
 		"settlements":
-			_report_settlements()
+			error_occurred = _safe_report(_report_settlements, "settlements")
 		"registry":
-			_report_registry()
+			error_occurred = _safe_report(_report_registry, "registry")
 		"revival":
-			_report_revival()
+			error_occurred = _safe_report(_report_revival, "revival")
 		"rebirth":
-			_report_rebirth_consts()
+			error_occurred = _safe_report(_report_rebirth_consts, "rebirth_consts")
 		"wildlife":
-			_report_wildlife()
+			error_occurred = _safe_report(_report_wildlife, "wildlife")
 		"jobs_stock":
-			_report_jobs_stock()
+			error_occurred = _safe_report(_report_jobs_stock, "jobs_stock")
 		"trade":
-			_report_trade()
+			error_occurred = _safe_report(_report_trade, "trade")
 		"world_events":
-			_report_world_events()
+			error_occurred = _safe_report(_report_world_events, "world_events")
 		"world_memory":
-			_report_world_memory()
+			error_occurred = _safe_report(_report_world_memory, "world_memory")
 		"history_snip":
-			_report_history_snip()
+			error_occurred = _safe_report(_report_history_snip, "history_snip")
 		"world_meaning":
-			_report_world_meaning()
+			error_occurred = _safe_report(_report_world_meaning, "world_meaning")
 		"world_persist":
-			_report_world_persist()
+			error_occurred = _safe_report(_report_world_persist, "world_persist")
 		"cultural":
-			_report_cultural()
+			error_occurred = _safe_report(_report_cultural, "cultural")
 		"myth":
-			_report_myth()
+			error_occurred = _safe_report(_report_myth, "myth")
 		"road":
-			_report_road()
+			error_occurred = _safe_report(_report_road, "road")
 		"remnant":
-			_report_remnant()
+			error_occurred = _safe_report(_report_remnant, "remnant")
 		"pawns":
-			_report_pawns()
+			error_occurred = _safe_report(_report_pawns, "pawns")
 		"main_world":
-			_report_main_world()
+			error_occurred = _safe_report(_report_main_world, "main_world")
 		"kernel":
-			_report_kernel()
+			error_occurred = _safe_report(_report_kernel, "kernel")
 		"harness":
-			_report_harness()
+			error_occurred = _safe_report(_report_harness, "harness")
 		"profession_liking":
-			_report_profession_liking()
+			error_occurred = _safe_report(_report_profession_liking, "profession_liking")
 		"grudges":
-			_report_grudges()
+			error_occurred = _safe_report(_report_grudges, "grudges")
 		"gossip_reputation":
-			_report_gossip_reputation()
+			error_occurred = _safe_report(_report_gossip_reputation, "gossip_reputation")
 		"avoidance_ai":
-			_report_avoidance_ai()
+			error_occurred = _safe_report(_report_avoidance_ai, "avoidance_ai")
 		"force_building":
-			_force_building_now()
+			error_occurred = _safe_report(_force_building_now, "force_building")
 		"vision_scope":
-			_report_vision_scope()
+			error_occurred = _safe_report(_report_vision_scope, "vision_scope")
 		"player_intents":
-			_report_player_intents()
+			error_occurred = _safe_report(_report_player_intents, "player_intents")
 		"factions":
-			_report_factions()
+			error_occurred = _safe_report(_report_factions, "factions")
 		"religion_lens":
-			_report_religion_lens()
+			error_occurred = _safe_report(_report_religion_lens, "religion_lens")
 		"playtest_bundle":
-			_report_playtest_bundle()
+			error_occurred = _safe_report(_report_playtest_bundle, "playtest_bundle")
 		"soul_bundle":
 			_report_soul_bundle()
 		"portable_character":
@@ -361,6 +366,17 @@ func _print_session_snapshot_checklist(tick_now: int) -> void:
 			+ "or (A)+(B)+ separate D blocks."
 	)
 	print("")
+
+
+## SAFE REPORT WRAPPER - catches errors to prevent menu crashes
+func _safe_report(report_func: Callable, report_name: String) -> bool:
+	if not report_func.is_valid():
+		print("[_safe_report] Invalid function: %s" % report_name)
+		return true
+	print("[_safe_report] Starting: %s" % report_name)
+	report_func.call()
+	print("[_safe_report] Completed: %s" % report_name)
+	return false
 
 
 func _report_session_snapshot_guide() -> void:
@@ -563,6 +579,9 @@ func _report_age() -> void:
 
 
 func _report_settlements() -> void:
+	if SettlementMemory == null or not SettlementMemory.has("settlements"):
+		print("[_report_settlements] SettlementMemory not available")
+		return
 	print("settlement_count=%d" % SettlementMemory.settlements.size())
 	var i: int = 0
 	for s in SettlementMemory.settlements:

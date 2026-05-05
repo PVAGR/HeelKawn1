@@ -4,7 +4,9 @@
       "Bash(godot *)",
       "Bash(git commit *)",
       "Bash(git pull *)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(powershell *)",
+      "Bash(move-item *)"
     ]
   },
   "$version": 3

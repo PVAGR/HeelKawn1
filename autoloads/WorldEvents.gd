@@ -126,33 +126,40 @@ func _on_game_tick(tick: int) -> void:
 
 
 func _check_world_conditions(tick: int) -> void:
+	# EARLY EXIT: No events if not enough pawn actions accumulated
+	var total_actions: int = 0
+	for k in _pawn_action_counters:
+		total_actions += int(_pawn_action_counters[k])
+	if total_actions < 50:  # Need at least 50 pawn actions before any event can fire
+		return
+
 	# Check world-level event conditions based on actual state
 	# Events only fire when their preconditions are met
-	
+
 	# Trade Caravan: Only when stockpiles are low
 	if _should_trigger_trade_caravan():
 		_trigger_trade_caravan(tick)
-	
+
 	# Harvest Moon: Only during appropriate season and when gathering is active
 	if _should_trigger_harvest_moon():
 		_trigger_harvest_moon(tick)
-	
+
 	# Locust Swarm: Only when food stockpiles are high (attracts swarm)
 	if _should_trigger_locust_swarm():
 		_trigger_locust_swarm(tick)
-	
+
 	# Diplomatic Envoy: Only when settlement exists with sufficient population
 	if _should_trigger_diplomatic_envoy():
 		_trigger_diplomatic_envoy(tick)
-	
+
 	# Technological Breakthrough: Only when research activity is happening
 	if _should_trigger_technological_breakthrough():
 		_trigger_technological_breakthrough(tick)
-	
+
 	# Cultural Renaissance: Only when cultural metrics reach threshold
 	if _should_trigger_cultural_renaissance():
 		_trigger_cultural_renaissance(tick)
-	
+
 	# Resource Discovery: Only when exploration/mining is active
 	if _should_trigger_resource_discovery():
 		_trigger_resource_discovery(tick)
@@ -258,53 +265,47 @@ func _should_trigger_locust_swarm() -> bool:
 
 
 func _should_trigger_diplomatic_envoy() -> bool:
-	# Diplomatic envoy only when settlement exists with sufficient population
-	var sl: Array = SettlementMemory.settlements
-	if sl.is_empty():
+	# EARLY EXIT: Quick check first
+	if SettlementMemory.settlements.is_empty():
 		return false
-	
-	for st_any in sl:
+	# Diplomatic envoy only when settlement exists with sufficient population
+	for st_any in SettlementMemory.settlements:
 		if st_any is Dictionary:
 			var st: Dictionary = st_any
 			var population: int = int(st.get("population", 0))
 			if population >= 20:  # Minimum population for diplomatic interest
 				return true
-	
 	return false
 
 
 func _should_trigger_technological_breakthrough() -> bool:
-	# Technological breakthrough only when research activity is happening
-	# Check if pawns are working on knowledge-related jobs
-	# For now, use WorldAI technological tier and discovery count
+	# EARLY EXIT: Quick checks first
 	if WorldAI == null:
 		return false
-	
+	# Technological breakthrough only when research activity is happening
 	var tech_tier: int = WorldAI.technological_tier
 	var discoveries: int = WorldAI.technological_discoveries.size()
-	
 	# Breakthroughs more likely at higher tech tiers with existing discoveries
 	return tech_tier >= 1 and discoveries >= 2
 
 
 func _should_trigger_cultural_renaissance() -> bool:
-	# Cultural renaissance only when cultural metrics reach threshold
+	# EARLY EXIT: Quick checks first
 	if WorldAI == null:
 		return false
-	
 	var cultural_advancement: float = WorldAI.cultural_advancement
 	var social_development: float = WorldAI.social_development
-	
 	# Renaissance when culture and society are sufficiently developed
 	return cultural_advancement > 0.5 and social_development > 0.4
 
 
 func _should_trigger_resource_discovery() -> bool:
-	# Resource discovery only when exploration/mining is active
+	# EARLY EXIT: Quick job count checks (no iteration)
 	var active_mine_jobs: int = JobManager.active_count_of_type(Job.Type.MINE)
+	if active_mine_jobs > 0:
+		return true
 	var active_chop_jobs: int = JobManager.active_count_of_type(Job.Type.CHOP)
-	
-	return active_mine_jobs > 0 or active_chop_jobs > 0
+	return active_chop_jobs > 0
 
 
 func _should_trigger_regional_shortage() -> bool:

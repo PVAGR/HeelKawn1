@@ -1071,12 +1071,10 @@ func _finish_autonomy_draft_walk(purpose: String, peer_id: int) -> void:
 func _find_pawn_by_id(pid: int) -> Pawn:
 	if pid < 0:
 		return null
-	var spawner: PawnSpawner = _resolve_pawn_spawner()
-	if spawner == null:
-		return null
-	for p in spawner.pawns:
-		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pid:
-			return p
+	# OPTIMIZATION: Use O(1) lookup instead of O(n) scan
+	var _ps: PawnSpawner = _resolve_pawn_spawner()
+	if _ps != null:
+		return _ps.get_pawn_by_id(pid)
 	return null
 
 
@@ -4761,7 +4759,7 @@ func get_reputation_label_for(other_pawn_id: int) -> String:
 	return "Unknown"
 
 ## Get tiles to avoid due to grudge-enemies (Phase 5: Avoidance AI)
-## OPTIMIZATION: Cache enemy positions per tick to avoid repeated scans
+## OPTIMIZATION: Cache enemy positions per tick, use O(1) pawn lookup
 var _enemy_positions_cache: Array[Vector2i] = []
 var _enemy_cache_tick: int = -1
 
@@ -4777,85 +4775,60 @@ func get_avoidance_tiles() -> Array[Vector2i]:
 		_enemy_cache_tick = GameManager.tick_count
 		return _enemy_positions_cache
 	
-	var sp: PawnSpawner = _resolve_pawn_spawner()
-	if sp == null:
-		_enemy_cache_tick = GameManager.tick_count
-		return _enemy_positions_cache
-	
-	# Get positions of all enemies (limit to first 5 for performance)
-	var checked: int = 0
+	# OPTIMIZATION: Use O(1) pawn lookup instead of O(n) scan
+	var _ps: PawnSpawner = _resolve_pawn_spawner()
 	for enemy_id in enemies:
-		if checked >= 5:  # OPTIMIZATION: Limit enemy scans
-			break
-		for p in sp.pawns:
-			if p != null and is_instance_valid(p) and p.data != null:
-				if int(p.data.id) == enemy_id:
-					# Add enemy's tile and surrounding tiles to avoid list
-					_enemy_positions_cache.append(p.data.tile_pos)
-					# Also add adjacent tiles (radius 2) - limit for performance
-					_enemy_positions_cache.append(p.data.tile_pos + Vector2i(1, 0))
-					_enemy_positions_cache.append(p.data.tile_pos + Vector2i(-1, 0))
-					_enemy_positions_cache.append(p.data.tile_pos + Vector2i(0, 1))
-					_enemy_positions_cache.append(p.data.tile_pos + Vector2i(0, -1))
-					checked += 1
-					break
+		var enemy_pawn: Pawn = _ps.get_pawn_by_id(enemy_id) if _ps != null else null
+		if enemy_pawn == null or not is_instance_valid(enemy_pawn) or enemy_pawn.data == null:
+			continue
+		
+		# Add enemy's tile and 4 adjacent tiles (radius 1)
+		_enemy_positions_cache.append(enemy_pawn.data.tile_pos)
+		_enemy_positions_cache.append(enemy_pawn.data.tile_pos + Vector2i(1, 0))
+		_enemy_positions_cache.append(enemy_pawn.data.tile_pos + Vector2i(-1, 0))
+		_enemy_positions_cache.append(enemy_pawn.data.tile_pos + Vector2i(0, 1))
+		_enemy_positions_cache.append(enemy_pawn.data.tile_pos + Vector2i(0, -1))
 	
 	_enemy_cache_tick = GameManager.tick_count
 	return _enemy_positions_cache
 
 ## Check if a tile is near an enemy (for avoidance)
-## OPTIMIZATION: Early exit, limited scans
+## OPTIMIZATION: Use O(1) pawn lookup instead of nested loop
 func is_tile_near_enemy(tile: Vector2i) -> bool:
 	var enemies: Array[int] = get_grudge_enemies()
 	if enemies.is_empty():
 		return false
 	
-	var sp: PawnSpawner = _resolve_pawn_spawner()
-	if sp == null:
-		return false
-	
-	# OPTIMIZATION: Check only first 3 enemies for performance
-	var checked: int = 0
+	# OPTIMIZATION: Use O(1) pawn lookup instead of O(n) scan
+	var _ps: PawnSpawner = _resolve_pawn_spawner()
 	for enemy_id in enemies:
-		if checked >= 3:
-			break
-		for p in sp.pawns:
-			if p != null and is_instance_valid(p) and p.data != null:
-				if int(p.data.id) == enemy_id:
-					if tile.distance_squared_to(p.data.tile_pos) <= 9:  # 3 tile radius
-						return true
-					checked += 1
-					break
+		var enemy_pawn: Pawn = _ps.get_pawn_by_id(enemy_id) if _ps != null else null
+		if enemy_pawn == null or not is_instance_valid(enemy_pawn) or enemy_pawn.data == null:
+			continue
+		if tile.distance_squared_to(enemy_pawn.data.tile_pos) <= 9:  # 3 tile radius
+			return true
 	return false
 
 ## Get mood drain from being near enemies (proximity stress)
-## OPTIMIZATION: Early exit, limited scans
+## OPTIMIZATION: Use O(1) pawn lookup instead of nested loop
 func get_proximity_stress_drain() -> float:
 	var enemies: Array[int] = get_grudge_enemies()
 	if enemies.is_empty():
 		return 0.0
 	
-	var sp: PawnSpawner = _resolve_pawn_spawner()
-	if sp == null:
-		return 0.0
-	
 	var stress: float = 0.0
-	var checked: int = 0
 	
-	# OPTIMIZATION: Check only first 3 enemies for performance
+	# OPTIMIZATION: Use O(1) pawn lookup instead of O(n) scan
+	var _ps: PawnSpawner = _resolve_pawn_spawner()
 	for enemy_id in enemies:
-		if checked >= 3:
-			break
-		for p in sp.pawns:
-			if p != null and is_instance_valid(p) and p.data != null:
-				if int(p.data.id) == enemy_id:
-					var dist_sq: float = data.tile_pos.distance_squared_to(p.data.tile_pos)  # OPTIMIZATION: Avoid sqrt
-					if dist_sq <= 9.0:  # Very close (3^2) - high stress
-						stress += 0.15
-					elif dist_sq <= 36.0:  # Medium close (6^2) - moderate stress
-						stress += 0.05
-					checked += 1
-					break
+		var enemy_pawn: Pawn = _ps.get_pawn_by_id(enemy_id) if _ps != null else null
+		if enemy_pawn == null or not is_instance_valid(enemy_pawn) or enemy_pawn.data == null:
+			continue
+		var dist_sq: float = data.tile_pos.distance_squared_to(enemy_pawn.data.tile_pos)
+		if dist_sq <= 9.0:  # Very close (3^2) - high stress
+			stress += 0.15
+		elif dist_sq <= 36.0:  # Medium close (6^2) - moderate stress
+			stress += 0.05
 	
 	return clampf(stress, 0.0, 0.5)
 
@@ -6251,8 +6224,9 @@ func _draw_social_bonds(body_origin: Vector2) -> void:
 		enemy_intensities.sort_custom(func(a, b): return a.intensity > b.intensity)
 		enemies = enemy_intensities.slice(0, 3).map(func(e): return e.id)
 	
+	var _ps: PawnSpawner = _resolve_pawn_spawner()
 	for enemy_id in enemies:
-		var enemy_pawn: Pawn = _find_pawn_by_id(enemy_id)
+		var enemy_pawn: Pawn = _ps.get_pawn_by_id(enemy_id) if _ps != null else null  # OPTIMIZATION: O(1) lookup
 		if enemy_pawn == null or not is_instance_valid(enemy_pawn):
 			continue
 		var dist_sq: float = global_position.distance_squared_to(enemy_pawn.global_position)  # OPTIMIZATION: Avoid sqrt

@@ -242,6 +242,7 @@ func get_visible_settlement_count() -> int:
 	return n
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
+var _chronicle_feed = null  # ChronicleFeed instance
 ## Observer routing from [PlayerIntentQueue] (one dispatch step per sim tick).
 var _player_intent_pin_zone_id: String = ""
 var _player_intent_focus_center_region: int = -1
@@ -588,6 +589,11 @@ func _ready() -> void:
 		_player_input.name = "PlayerInputBuffer"
 		add_child(_player_input)
 		_player_input.set_process_unhandled_input(true)
+		# Chronicle feed — real-time event stream
+		var _cf = load("res://scripts/ui/ChronicleFeed.gd").new()
+		_cf.name = "ChronicleFeed"
+		add_child(_cf)
+		_chronicle_feed = _cf
 		_kernel_diagnostic = KernelDiagnostic.new()
 		_kernel_diagnostic.name = "KernelDiagnostic"
 		add_child(_kernel_diagnostic)
@@ -2211,11 +2217,20 @@ func _on_world_tick(tick_number: int) -> void:
 	_on_game_tick(tick_number)
 
 
+# OPTIMIZATION: Frame time budget constants
+const FRAME_BUDGET_USEC: int = 8000  # 8ms = ~60fps with headroom
+const DEFERRABLE_OPERATIONS: Array[String] = ["regrowth", "ambient_target", "animal_population", "observer_snapshot"]
+
 func _on_game_tick(tick: int) -> void:
 	if CrashTrap.trace_enabled and tick == 1:
 		CrashTrap.log_tick_event("Main._on_game_tick", "tick=%d" % tick)
 	if _is_simulation_worker_mode() and GameManager != null and GameManager.is_tick_benchmark_enabled():
 		return
+	
+	# OPTIMIZATION: Frame budget tracking - exit early if we're over budget
+	var frame_start: int = Time.get_ticks_usec()
+	var frame_budget_exceeded: bool = false
+	
 	var section_us: Dictionary = {}
 	var t0: int = Time.get_ticks_usec()
 	_process_player_intent_dispatch_tick()
@@ -2243,21 +2258,33 @@ func _on_game_tick(tick: int) -> void:
 			_animal_spawner != null
 			and (int(tick) + ANIMAL_POPULATION_PHASE_TICKS) % AnimalSpawner.POPULATION_CHECK_TICKS == 0
 	):
-		t0 = Time.get_ticks_usec()
-		_animal_spawner.update_population_dynamics(_world)
-		section_us["animal_population"] = Time.get_ticks_usec() - t0
+		# OPTIMIZATION: Skip if over budget (deferrable operation)
+		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
+			frame_budget_exceeded = true
+		if not frame_budget_exceeded:
+			t0 = Time.get_ticks_usec()
+			_animal_spawner.update_population_dynamics(_world)
+			section_us["animal_population"] = Time.get_ticks_usec() - t0
 	# Regrowth + ambient are display/maintenance layers; they should not run
 	# every sim tick in normal mode or high speeds will hitch.
 	var regrowth_interval: int = _high_speed_interval(6, 8, 12)
 	if tick % regrowth_interval == 0:
-		t0 = Time.get_ticks_usec()
-		_process_regrowth(tick)
-		section_us["regrowth"] = Time.get_ticks_usec() - t0
+		# OPTIMIZATION: Skip if over budget (deferrable operation)
+		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
+			frame_budget_exceeded = true
+		if not frame_budget_exceeded:
+			t0 = Time.get_ticks_usec()
+			_process_regrowth(tick)
+			section_us["regrowth"] = Time.get_ticks_usec() - t0
 	var ambient_interval: int = _high_speed_interval(2, 4, 8)
 	if tick % ambient_interval == 0:
-		t0 = Time.get_ticks_usec()
-		_update_ambient_target()
-		section_us["ambient_target"] = Time.get_ticks_usec() - t0
+		# OPTIMIZATION: Skip if over budget (deferrable operation)
+		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
+			frame_budget_exceeded = true
+		if not frame_budget_exceeded:
+			t0 = Time.get_ticks_usec()
+			_update_ambient_target()
+			section_us["ambient_target"] = Time.get_ticks_usec() - t0
 	# Post dynamic hunt jobs less aggressively than harvest loops.
 	var hunt_post_interval: int = _high_speed_interval(30, 60, 120)
 	var hunt_phase_offset: int = maxi(1, hunt_post_interval / 2)
@@ -2399,14 +2426,20 @@ func _on_game_tick(tick: int) -> void:
 			and _observer_hud.is_visible_state()
 			and tick % obs_iv == 0
 	):
-		t0 = Time.get_ticks_usec()
-		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
-		section_us["observer_snapshot"] = Time.get_ticks_usec() - t0
+		# OPTIMIZATION: Skip if over budget (deferrable operation)
+		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
+			frame_budget_exceeded = true
+		if not frame_budget_exceeded:
+			t0 = Time.get_ticks_usec()
+			_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
+			section_us["observer_snapshot"] = Time.get_ticks_usec() - t0
 	# Handle recent player_inspect events for tooltip + audio feedback
 	if tick % _inspect_scan_interval_for_speed() == 0:
-		t0 = Time.get_ticks_usec()
-		_scan_recent_inspects_and_handle()
-		section_us["inspect_scan"] = Time.get_ticks_usec() - t0
+		# OPTIMIZATION: Skip if over budget
+		if Time.get_ticks_usec() - frame_start <= FRAME_BUDGET_USEC:
+			t0 = Time.get_ticks_usec()
+			_scan_recent_inspects_and_handle()
+			section_us["inspect_scan"] = Time.get_ticks_usec() - t0
 	# FocusInspector snapshotting is another large allocation hotspot (see ObservationAPI — programmatic reads must stay on-demand, not per-frame).
 	var focus_iv: int = _high_speed_interval(30, 24, 48)
 	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % focus_iv == 0:
@@ -2734,12 +2767,22 @@ func _accumulate_social_rapport() -> void:
 		if not grid.has(key):
 			grid[key] = []
 		grid[key].append(p)
+	# OPTIMIZATION: Early exit if grid is sparse (no cell has 2+ pawns)
+	var crowded_cells: Array = []
+	for cell_key in grid:
+		if (grid[cell_key] as Array).size() >= 2:
+			crowded_cells.append(cell_key)
+	if crowded_cells.is_empty():
+		return  # No cells with multiple pawns, no social interactions possible
+	
 	var wm_budget: int = SOCIAL_WM_RECORD_BUDGET_PER_PASS
 	var comp_by_id: Dictionary = {}
 	for p in pl:
 		comp_by_id[int(p.data.id)] = _world.pathfinder.component_of(p.data.tile_pos)
 	var checked_pairs: Dictionary = {}
-	for cell_key in grid:
+	
+	# OPTIMIZATION: Only process crowded cells and their neighbors
+	for cell_key in crowded_cells:
 		var cx: int = cell_key / 10000
 		var cy: int = cell_key % 10000
 		# Gather pawns from this cell and 8 neighbors
@@ -2749,7 +2792,11 @@ func _accumulate_social_rapport() -> void:
 				var nk: int = (cx + dx) * 10000 + (cy + dy)
 				if grid.has(nk):
 					nearby.append_array(grid[nk])
-		var cell_pawns: Array = grid[cell_key]
+		# OPTIMIZATION: Skip if still not enough pawns for interaction
+		if nearby.size() < 2:
+			continue
+		
+		var cell_pawns: Array = grid[cell_key] as Array
 		for pa in cell_pawns:
 			var da: PawnData = pa.data
 			if da == null or pa.is_sleeping():
@@ -2758,6 +2805,7 @@ func _accumulate_social_rapport() -> void:
 			var da_comp: int = int(comp_by_id.get(da_id, -1))
 			if da_comp < 0:
 				continue
+			# OPTIMIZATION: Pre-filter nearby by hunger and sleep state
 			for pb in nearby:
 				if pb == pa:
 					continue
@@ -2772,11 +2820,13 @@ func _accumulate_social_rapport() -> void:
 				if checked_pairs.has(pair_key):
 					continue
 				checked_pairs[pair_key] = true
+				# OPTIMIZATION: Early exit checks before expensive operations
 				if da.hunger <= 38.0 or db.hunger <= 38.0:
 					continue
 				var db_comp: int = int(comp_by_id.get(db_id, -1))
 				if da_comp != db_comp:
 					continue
+				# Distance check is already squared, no sqrt needed
 				if pa.position.distance_squared_to(pb.position) > R2:
 					continue
 				da.add_social_rapport(db_id, GAIN)
@@ -3206,6 +3256,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				_debug_grant_krond()
 		Key.KEY_M:
 			ColonySimServices.cycle_labor_stance()
+		KEY_C:
+			if _chronicle_feed != null:
+				_chronicle_feed.toggle()
 		Key.KEY_P:
 			request_incarnation_entry()
 		Key.KEY_BACKSPACE:

@@ -411,7 +411,7 @@ func _mode_badge_line() -> String:
 				hint = "right-click any pawn to command · Ctrl+T to exit"
 			return "[bgcolor=#082a3a][color=#82e0ff]  INCARNATED · %s  (%s)  [/color][/bgcolor]" % [rank, hint]
 		_:
-			return "[bgcolor=#1a1a1a][color=#888888]  SPECTATOR  (Ctrl+G god · Ctrl+T incarnate)  [/color][/bgcolor]"
+			return "[bgcolor=#1a1a1a][color=#888888]  SPECTATOR  (Ctrl+G god · Ctrl+T incarnate · C chronicle)  [/color][/bgcolor]"
 
 
 func _time_line() -> String:
@@ -1289,6 +1289,94 @@ func _narrative_line_for_event(typ: String, e: Dictionary) -> String:
 			return "%s died" % nm
 		"animal_death":
 			return "wildlife was culled"
+		"teaching_success":
+			var teacher: String = str(e.get("teacher_name", "A")).strip_edges()
+			var student: String = str(e.get("student_name", "B")).strip_edges()
+			if not teacher.is_empty() and not student.is_empty():
+				return "%s taught %s" % [teacher, student]
+			return "teaching succeeded"
+		"teaching_failure":
+			return "a teaching attempt failed"
+		"knowledge_sealed":
+			var nm: String = str(e.get("carrier_name", "a scholar")).strip_edges()
+			return "%s died with unfulfilled teaching obligations" % nm
+		"knowledge_lost":
+			return "knowledge was lost to the settlement"
+		"knowledge_at_risk":
+			return "knowledge at risk — only one carrier remains"
+		"knowledge_crisis":
+			return "knowledge crisis — multiple skills at risk"
+		"authority_change":
+			var nm: String = str(e.get("pawn_name", "someone")).strip_edges()
+			var ctx: String = str(e.get("context", "")).replace("_", " ")
+			return "%s gained %s authority" % [nm, ctx]
+		"authority_points_added":
+			return "authority recognized"
+		"authority_vacuum":
+			return "authority vacuum — no recognized leader"
+		"diaspora_exile":
+			var count: int = int(e.get("exile_count", 0))
+			return "diaspora — %d pawns exiled" % maxi(count, 1)
+		"diaspora_grief":
+			var nm: String = str(e.get("pawn_name", "someone")).strip_edges()
+			return "%s grieved for their lost home" % nm
+		"cultural_exposure":
+			var nm: String = str(e.get("pawn_name", "someone")).strip_edges()
+			var custom: String = str(e.get("custom_tag", "a custom")).replace("_", " ")
+			return "%s absorbed a new custom: %s" % [nm, custom]
+		"collapse_warning":
+			return "collapse warning — settlement under strain"
+		"environmental_degradation":
+			return "environmental degradation detected"
+		"economic_boom":
+			return "economic boom — surplus detected"
+		"market_crash":
+			return "market crash — resources scarce"
+		"religious_schism":
+			return "religious schism — beliefs diverged"
+		"religious_conversion":
+			var nm: String = str(e.get("pawn_name", "someone")).strip_edges()
+			return "%s underwent a religious conversion" % nm
+		"sacred_site_established":
+			return "a sacred site was established"
+		"ritual_performed":
+			return "a ritual was performed"
+		"bloodline_founded":
+			var nm: String = str(e.get("founder_name", "a founder")).strip_edges()
+			return "%s founded a bloodline" % nm
+		"bloodline_member_added":
+			return "a bloodline gained a new member"
+		"bloodline_extinct":
+			var nm: String = str(e.get("bloodline_name", "a bloodline")).strip_edges()
+			return "the %s bloodline went extinct" % nm
+		"food_spoiled":
+			return "food spoiled in storage"
+		"seeds_planted":
+			return "seeds were planted"
+		"crop_harvested":
+			return "crops were harvested"
+		"starvation_event":
+			return "starvation — settlement is hungry"
+		"injury":
+			var nm: String = str(e.get("pawn_name", "someone")).strip_edges()
+			return "%s was injured" % nm
+		"war_battle_spawned":
+			return "enemies appeared — battle imminent"
+		"war_proposed":
+			return "war was proposed"
+		"entity_decay":
+			return "an entity began to decay"
+		"entity_loss":
+			return "an entity was lost"
+		"collapse_metric_change":
+			return "collapse metrics shifted"
+		"emergent_pattern_detected":
+			var pattern: String = str(e.get("pattern", "")).replace("_", " ")
+			if not pattern.is_empty():
+				return "emergent pattern: %s" % pattern
+			return "emergent pattern detected"
+		"historical_saturation":
+			return "historical saturation"
 		"job_completed":
 			# Too noisy for the rail; totals live in Story / Work lines.
 			return ""

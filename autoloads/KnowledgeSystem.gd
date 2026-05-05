@@ -67,6 +67,10 @@ var knowledge_genealogy: Dictionary = {}
 ## Knowledge security per settlement: settlement_id(str) -> { secure: [KnowledgeType], at_risk: [KnowledgeType], lost: [KnowledgeType] }
 var knowledge_security: Dictionary = {}
 
+## Record carriers: physical objects that store knowledge beyond death
+## tile_key ("x,y") -> { knowledge_types: [KnowledgeType], inscribed_tick: int, inscriber_id: int, carrier_type: String }
+var record_carriers: Dictionary = {}
+
 const TEACHING_DEBT_INTERVAL_TICKS: int = 500
 const TEACHING_DEBT_PHASE_OFFSET: int = 83
 const KNOWLEDGE_SECURITY_INTERVAL_TICKS: int = 1000
@@ -78,6 +82,7 @@ const REDISCOVERY_CHECK_INTERVAL_TICKS: int = 200  # Check for rediscovery every
 const REDISCOVERY_CHECK_PHASE_OFFSET: int = 47
 const SCHOLAR_REDISCOVERY_BONUS: float = 0.15  # +15% chance for scholar pawns
 const CURIOSITY_REDISCOVERY_BONUS: float = 0.08  # +8% per 0.1 curiosity trait
+const INSCRIBE_JOB_WORK_TICKS: int = 200  # Ticks to inscribe knowledge on stone
 
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
@@ -329,6 +334,61 @@ func _check_rediscovery_opportunities() -> void:
 				if WorldRNG.chance_for(StringName("knowledge_rediscover:%d" % int(kt)), chance, salt):
 					rediscover_knowledge(int(p.data.id), kt, "rediscovery")
 					break  # One rediscovery per check
+
+
+# === Record Carriers (Phase 5: Knowledge Preservation) ===
+
+func inscribe_knowledge_on_stone(tile: Vector2i, knowledge_types: Array, inscriber_id: int, carrier_type: String = "knowledge_stone") -> void:
+	# Inscribe knowledge onto a physical record carrier (stone, grave, ledger)
+	var tile_key: String = "%d,%d" % [tile.x, tile.y]
+	record_carriers[tile_key] = {
+		"knowledge_types": knowledge_types.duplicate(),
+		"inscribed_tick": GameManager.tick_count,
+		"inscriber_id": inscriber_id,
+		"carrier_type": carrier_type
+	}
+	# Record inscription event
+	WorldMemory.record_event({
+		"type": "knowledge_inscribed",
+		"tile": {"x": tile.x, "y": tile.y},
+		"knowledge_types": knowledge_types,
+		"inscriber_id": inscriber_id,
+		"carrier_type": carrier_type,
+		"tick": GameManager.tick_count
+	})
+
+func read_knowledge_from_stone(pawn_id: int, tile: Vector2i) -> Array:
+	# Pawn reads knowledge from a record carrier, gaining any knowledge they don't have
+	var tile_key: String = "%d,%d" % [tile.x, tile.y]
+	if not record_carriers.has(tile_key):
+		return []
+	
+	var carrier: Dictionary = record_carriers[tile_key]
+	var gained: Array = []
+	for kt in carrier.get("knowledge_types", []):
+		if not has_knowledge(pawn_id, kt):
+			add_knowledge_carrier(pawn_id, kt)
+			gained.append(kt)
+	
+	if not gained.is_empty():
+		# Record reading event
+		WorldMemory.record_event({
+			"type": "knowledge_read",
+			"pawn_id": pawn_id,
+			"tile": {"x": tile.x, "y": tile.y},
+			"gained_knowledge": gained,
+			"tick": GameManager.tick_count
+		})
+	
+	return gained
+
+func get_record_carrier_at(tile: Vector2i) -> Dictionary:
+	var tile_key: String = "%d,%d" % [tile.x, tile.y]
+	return record_carriers.get(tile_key, {})
+
+func has_record_carrier(tile: Vector2i) -> bool:
+	var tile_key: String = "%d,%d" % [tile.x, tile.y]
+	return record_carriers.has(tile_key)
 
 # === Helper Functions ===
 

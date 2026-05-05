@@ -12,7 +12,10 @@
       "Bash(\"c:\\users\\user\\hk\\tools\\godot\\godot_v4.6.2-stable_win64.exe\" *)",
       "Bash(rm *)",
       "Bash(python *)",
-      "Bash(del *)"
+      "Bash(del *)",
+      "Bash(git checkout *)",
+      "Bash(copy *)",
+      "Bash(move *)"
     ]
   },
   "$version": 3

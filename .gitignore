@@ -55,3 +55,4 @@ htmlcov/
 # Local AI/editor state
 .letta/
 .godot/
+.godot/  

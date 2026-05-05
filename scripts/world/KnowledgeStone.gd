@@ -10,7 +10,7 @@ class_name KnowledgeStone
 @export var inscribed_tick: int = 0
 @export var knowledge_types: Array = []
 
-var _sprite: Sprite2D
+var _sprite: Node2D
 var _tooltip: Control = null
 
 
@@ -21,17 +21,15 @@ func _ready() -> void:
 
 
 func _create_sprite() -> void:
-	_sprite = Sprite2D.new()
-	add_child(_sprite)
-	
-	# Different sprite based on carrier type
+	# Try to load texture
 	var texture_path: String = "res://sprites/stone_marker.png"
 	var texture: Texture2D = load(texture_path) if ResourceLoader.exists(texture_path) else null
 	
 	if texture == null:
-		# Fallback: create colored rectangle
+		# Fallback: create colored rectangle as child
 		var rect: ColorRect = ColorRect.new()
 		rect.custom_minimum_size = Vector2(12, 12)
+		rect.position = Vector2(-6, -6)  # Center on pawn
 		match carrier_type:
 			"grave_marker":
 				rect.color = Color8(120, 120, 130)  # Gray grave
@@ -44,15 +42,18 @@ func _create_sprite() -> void:
 		add_child(rect)
 		_sprite = rect
 	else:
+		# Use sprite with texture
+		_sprite = Sprite2D.new()
 		_sprite.texture = texture
+		add_child(_sprite)
 	
 	# Add glow effect
-	_sprite.modulate = Color(1.0, 1.0, 1.0, 0.8)
+	if _sprite != null:
+		_sprite.modulate = Color(1.0, 1.0, 1.0, 0.8)
 
 
 func _setup_interaction() -> void:
-	# Enable mouse interaction
-	mouse_filter = Control.MOUSE_FILTER_STOP
+	# Enable mouse interaction on this Node2D
 	z_index = 100
 
 

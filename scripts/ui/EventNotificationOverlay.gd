@@ -1,5 +1,6 @@
 extends CanvasLayer
-class_name EventNotificationOverlay
+## EventNotificationOverlay - Beautiful popup notifications for important game events.
+## NOT using class_name to avoid conflict with autoload singleton
 
 ## Phase 5: Rich Event Notifications
 ## Beautiful popup notifications for important game events.

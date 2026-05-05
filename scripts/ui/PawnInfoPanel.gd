@@ -1515,14 +1515,6 @@ func _get_settlement_name(settlement_id: int) -> String:
 	return "Settlement %d" % settlement_id
 
 
-## Get pawn spawner reference.
-func _pawn_spawner() -> PawnSpawner:
-	var main_node: Node = get_node_or_null("/root/Main")
-	if main_node == null:
-		return null
-	return main_node.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
-
-
 ## Get skills summary as formatted string.
 func _get_skills_summary(d: PawnData) -> String:
 	var skills: Array[String] = []

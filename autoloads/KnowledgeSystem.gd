@@ -407,6 +407,89 @@ func has_record_carrier(tile: Vector2i) -> bool:
 	var tile_key: String = "%d,%d" % [tile.x, tile.y]
 	return record_carriers.has(tile_key)
 
+
+# ==================== TEXT-RICH: Knowledge Stone Reader ====================
+
+## Get full readable text for a knowledge stone.
+func get_knowledge_stone_text(tile: Vector2i) -> String:
+	var carrier: Dictionary = get_record_carrier_at(tile)
+	if carrier.is_empty():
+		return "[color=#666666]This stone bears no inscriptions.[/color]"
+	
+	var text: String = ""
+	var carrier_type: String = str(carrier.get("carrier_type", "stone"))
+	var inscriber_id: int = int(carrier.get("inscriber_id", -1))
+	var inscribed_tick: int = int(carrier.get("inscribed_tick", 0))
+	var knowledge_types: Array = carrier.get("knowledge_types", [])
+	
+	# Header based on carrier type
+	match carrier_type:
+		"grave_marker":
+			text += "[color=#FF6B6B][b]━━━ GRAVE MARKER ━━━[/b][/color]\n\n"
+		"knowledge_stone":
+			text += "[color=#B084CC][b]━━━ KNOWLEDGE STONE ━━━[/b][/color]\n\n"
+		"ledger_stone":
+			text += "[color=#FFD166][b]━━━ LEDGER STONE ━━━[/b][/color]\n\n"
+		_:
+			text += "[color=#888888][b]━━━ INSCRIBED STONE ━━━[/b][/color]\n\n"
+	
+	# Get inscriber name
+	var inscriber_name: String = "Unknown"
+	var ps: Node = get_node_or_null("/root/PawnSpawner")
+	if ps != null and ps.has_method("pawn_data_for_id"):
+		var pawn_data: PawnData = ps.call("pawn_data_for_id", inscriber_id)
+		if pawn_data != null:
+			inscriber_name = pawn_data.display_name
+	
+	# Inscription info
+	var years_ago: int = (GameManager.tick_count - inscribed_tick) / 360
+	if years_ago > 0:
+		text += "[color=#888888]Inscribed by %s, %d year%s ago[/color]\n\n" % [inscriber_name, years_ago, "s" if years_ago > 1 else ""]
+	else:
+		text += "[color=#888888]Inscribed by %s, recently[/color]\n\n" % inscriber_name
+	
+	# Knowledge types inscribed
+	text += "[color=#B084CC][b]PRESERVED KNOWLEDGE:[/b][/color]\n"
+	if knowledge_types.is_empty():
+		text += "  [color=#666666]No knowledge types recorded[/color]\n"
+	else:
+		for kt in knowledge_types:
+			var kt_name: String = _get_knowledge_type_name(int(kt))
+			text += "  • %s\n" % kt_name
+	
+	text += "\n"
+	
+	# Epitaph based on carrier type
+	match carrier_type:
+		"grave_marker":
+			text += "[color=#888888]\"Here rests %s. Their memory endures.\"[/color]" % inscriber_name
+		"knowledge_stone":
+			text += "[color=#888888]\"Knowledge preserved, that it might not be lost.\"[/color]"
+		"ledger_stone":
+			text += "[color=#888888]\"Recorded for those who come after.\"[/color]"
+		_:
+			text += "[color=#888888]\"A mark upon the world.\"[/color]"
+	
+	return text
+
+
+## Get knowledge type name from enum value.
+func _get_knowledge_type_name(kt: int) -> String:
+	match kt:
+		0: return "Fire Keeping"
+		1: return "Food Storage"
+		2: return "Tool Making"
+		3: return "Season Reading"
+		4: return "Sickness Avoidance"
+		5: return "Navigation"
+		6: return "Shelter Building"
+		7: return "Memory Preservation"
+		8: return "Ruin Interpretation"
+		9: return "Hospitality"
+		10: return "Winter Survival"
+		11: return "Teaching"
+		_: return "Unknown Knowledge #%d" % kt
+
 # === Helper Functions ===
 
 func _get_nearby_knowledge_carriers(_tile: Vector2i, knowledge_type: KnowledgeType, _radius: int) -> Array[int]:

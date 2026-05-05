@@ -161,6 +161,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "legacy_dynasty", "label": "70 · Legacy & Dynasty (Phase 7 — endgame tracking)"},
 			{"id": "chronicle_view", "label": "71 · Chronicle View (Phase 5 — settlement history as story)"},
 			{"id": "settlement_legends", "label": "72 · Settlement Legends (Phase 5 — emergent myths & stories)"},
+			{"id": "read_knowledge_stone", "label": "73 · Read Knowledge Stone (Phase 5 — inscribed knowledge)"},
 		],
 	},
 	{
@@ -405,6 +406,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_chronicle_view, "chronicle_view")
 		"settlement_legends":
 			error_occurred = _safe_report(_report_settlement_legends, "settlement_legends")
+		"read_knowledge_stone":
+			_report_read_knowledge_stone()
 		"vision_scope":
 			error_occurred = _safe_report(_report_vision_scope, "vision_scope")
 		"player_intents":
@@ -2312,6 +2315,54 @@ func _report_settlement_legends() -> void:
 			print("\n[color=#666666]━━━ ━━━\n[/color]")
 
 	print("=== END SETTLEMENT LEGENDS ===")
+
+
+# === Phase 5: Read Knowledge Stone ===
+
+func _report_read_knowledge_stone() -> void:
+	print("=== READ KNOWLEDGE STONE ===")
+	print("Usage: Pass tile coordinates as arguments")
+	print("Example: F10 → type command with tile X Y")
+	print("")
+	
+	# For now, show all known knowledge stones
+	var ks: Node = get_node_or_null("/root/KnowledgeSystem")
+	if ks == null:
+		print("KnowledgeSystem not found")
+		return
+	
+	print("━━━ ALL INSCRIBED STONES ━━━\n")
+	
+	if ks.has("record_carriers"):
+		var carriers: Dictionary = ks.get("record_carriers")
+		if carriers.is_empty():
+			print("  [color=#666666]No knowledge stones inscribed yet.[/color]")
+		else:
+			for tile_key in carriers:
+				var carrier: Dictionary = carriers[tile_key]
+				var carrier_type: String = str(carrier.get("carrier_type", "stone"))
+				var inscriber_id: int = int(carrier.get("inscriber_id", -1))
+				var knowledge_count: int = int(carrier.get("knowledge_types", []).size())
+				
+				print("  [color=#B084CC]📍 Tile (%s)[/color]" % tile_key)
+				print("    Type: %s | Inscriber: ID %d | Knowledge: %d types" % [carrier_type, inscriber_id, knowledge_count])
+				
+				# Get full text
+				var parts: PackedStringArray = tile_key.split(",")
+				if parts.size() >= 2:
+					var tile_x: int = int(parts[0])
+					var tile_y: int = int(parts[1])
+					var tile: Vector2i = Vector2i(tile_x, tile_y)
+					
+					if ks.has_method("get_knowledge_stone_text"):
+						var stone_text: String = ks.call("get_knowledge_stone_text", tile)
+						# Print first 200 chars as preview
+						if stone_text.length() > 200:
+							print("    Preview: %s...\n" % stone_text.left(200))
+						else:
+							print("    %s\n" % stone_text)
+	
+	print("\n=== END KNOWLEDGE STONES ===")
 
 
 func _report_error_issues() -> void:

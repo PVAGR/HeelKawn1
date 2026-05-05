@@ -2219,8 +2219,8 @@ func _on_world_tick(tick_number: int) -> void:
 	_on_game_tick(tick_number)
 
 
-# OPTIMIZATION: Frame time budget constants
-const FRAME_BUDGET_USEC: int = 8000  # 8ms = ~60fps with headroom
+# OPTIMIZATION: Frame time budget constants - higher at 100x to prevent defer pileup
+const FRAME_BUDGET_USEC: int = 12000  # 12ms base (was 8ms) - allows more work per frame at high speed
 const DEFERRABLE_OPERATIONS: Array[String] = ["regrowth", "ambient_target", "animal_population", "observer_snapshot"]
 
 func _on_game_tick(tick: int) -> void:

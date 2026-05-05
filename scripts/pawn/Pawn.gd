@@ -2070,19 +2070,21 @@ func _idle_action_refresh_interval_for_speed() -> int:
 
 func _work_step_interval_for_speed() -> int:
 	if GameManager == null:
-		return 2
+		return 1
 	var gs: float = GameManager.game_speed
+	# REDUCED intervals - pawns were working too infrequently (1 out of N ticks)
+	# At 100x: was 6 (16.7% work rate), now 2 (50% work rate)
 	if gs >= 100.0:
-		return 6
+		return 2  # Was 6 - pawns work 50% of ticks instead of 16.7%
 	if gs >= 50.0:
-		return 4
+		return 2  # Was 4
 	if gs >= 26.0:
-		return 3
+		return 2
 	if gs >= 12.0:
 		return 2
 	if gs >= 3.0:
 		return 2
-	return 2
+	return 1  # At 1x, every pawn works every tick
 
 
 func _should_panic_sleep() -> bool:
@@ -6255,51 +6257,60 @@ func _profession_color(prof: int) -> Color:
 
 
 ## PROFESSION PRIORITY BONUS - Builders prioritize build jobs, Warriors prioritize hunt
+## INCREASED bonuses to ensure profession bias dominates over other job priority factors
 func _get_profession_priority_bonus(job: Job) -> int:
 	if data == null or data.current_profession == PawnData.Profession.NONE:
 		return 0
 	
-	# Builder: +3 priority for all build jobs (critical for housing strain fix)
+	# Builder: +10 priority for all build jobs (critical for housing strain fix)
 	if data.current_profession == PawnData.Profession.BUILDER:
 		match job.type:
 			Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
-				return 3  # High priority for builds
+				return 10  # VERY HIGH priority for builds
+			Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_SHRINE:
+				return 8
 			Job.Type.GATHER_STICK, Job.Type.GATHER_FLINT:  # Building materials
-				return 1
+				return 5
 			Job.Type.MINE, Job.Type.MINE_WALL:  # Stone for building
-				return 1
+				return 4
 	
-	# Warrior: +3 priority for hunt/combat jobs
+	# Warrior: +10 priority for hunt/combat jobs
 	if data.current_profession == PawnData.Profession.WARRIOR:
 		match job.type:
 			Job.Type.HUNT:
-				return 3
+				return 10
+			Job.Type.PROTECT, Job.Type.DEFEND:
+				return 8
 			Job.Type.CRAFT_SPEAR:  # Weapon crafting
-				return 1
+				return 5
 	
-	# Gatherer: +2 priority for foraging/gathering
+	# Gatherer: +8 priority for foraging/gathering
 	if data.current_profession == PawnData.Profession.GATHERER:
 		match job.type:
-			Job.Type.FORAGE, Job.Type.GATHER_STICK, Job.Type.GATHER_FLINT:
-				return 2
+			Job.Type.FORAGE, Job.Type.CHOP:
+				return 8
+			Job.Type.GATHER_STICK, Job.Type.GATHER_FLINT:
+				return 6
 			Job.Type.HUNT:
-				return 1
+				return 4
 	
-	# Scholar: +2 priority for research/crafting
+	# Scholar: +8 priority for teaching/crafting
 	if data.current_profession == PawnData.Profession.SCHOLAR:
 		match job.type:
+			Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP:
+				return 10
 			Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_TORCH, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR:
-				return 2
-			Job.Type.BUILD_SHRINE:  # Scholar-like activity
-				return 3
+				return 6
+			Job.Type.BUILD_SHRINE:
+				return 8
 	
-	# Farmer: +2 priority for food jobs
+	# Farmer: +8 priority for food jobs
 	if data.current_profession == PawnData.Profession.FARMER:
 		match job.type:
-			Job.Type.FORAGE, Job.Type.HUNT, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES:
-				return 2
-			Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS:
-				return 3
+			Job.Type.FORAGE, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS:
+				return 10
+			Job.Type.HUNT, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES:
+				return 6
 	
 	return 0
 

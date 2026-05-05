@@ -2693,16 +2693,14 @@ func _deferred_settlement_rebirth_process(world: World, main: Node) -> void:
 func _maybe_generational_turnover() -> void:
 	if _pawn_spawner == null or not is_instance_valid(_world) or _world.data == null:
 		return
-	var alive: int = 0
-	for p in _pawn_spawner.pawns:
-		if p != null and is_instance_valid(p):
-			alive += 1
-	if alive == 0:
-		return
 	var t: int = GameManager.tick_count
 	if t - _last_generation_tick < GENERATION_TICKS:
 		return
-	var sp: Vector2i = _find_generational_spawn_tile()
+	# OPTIMIZATION: Use pawn count from spawner instead of iterating
+	var alive: int = _pawn_spawner.pawns.size()
+	if alive == 0:
+		return
+	var sp: Vector2i = _find_generational_spawn_tile_optimized()
 	_last_generation_tick = t
 	if sp.x < 0:
 		return
@@ -2891,6 +2889,53 @@ func _update_pawn_influence_tick() -> void:
 
 ## Best region: max [CulturalMemory] reputation, then min [WorldPersistence] scar, then lowest region_key.
 ## Tile: first passable plains/forest on main landmass, row-major within that region, not occupied.
+## OPTIMIZED VERSION: Sample fewer regions, early exit on good enough tile
+func _find_generational_spawn_tile_optimized() -> Vector2i:
+	var out: Vector2i = Vector2i(-1, -1)
+	var comp: int = _world.pathfinder.largest_component_id()
+	if comp < 0:
+		return out
+	
+	# OPTIMIZATION: Sample only 25% of regions (every other in each direction)
+	var nrx: int = int((WorldData.WIDTH + 15) / 16.0)
+	var nry: int = int((WorldData.HEIGHT + 15) / 16.0)
+	var best_rk: int = 0x7FFFFFFF
+	var best_rep: int = -9999
+	var best_sl: int = 9999
+	
+	# Randomized sampling pattern based on tick for variety
+	var sample_offset: int = int(GameManager.tick_count / GENERATION_TICKS)
+	for ry in range(0, nry, 2):  # Every other row
+		for rx in range(0, nrx, 2):  # Every other column
+			var x0: int = ((rx + sample_offset) % nrx) * 16
+			var y0: int = ((ry + sample_offset) % nry) * 16
+			var rk: int = _WM._region_key(x0, y0)
+			var t1: Vector2i = _first_valid_gen_tile_in_block(x0, y0, comp)
+			if t1.x < 0:
+				continue
+			var rep: int = CulturalMemory.get_region_reputation(rk)
+			var sl: int = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0))
+			var take: bool = false
+			if rep > best_rep:
+				take = true
+			elif rep == best_rep and sl < best_sl:
+				take = true
+			elif rep == best_rep and sl == best_sl and rk < best_rk:
+				take = true
+			if take:
+				best_rk = rk
+				best_rep = rep
+				best_sl = sl
+				out = t1
+			# EARLY EXIT: Good enough tile found (high rep, low scar)
+			if rep >= 50 and sl <= 1:
+				return out
+	if out.x < 0:
+		return Vector2i(-1, -1)
+	return out
+
+
+## Original full-scan version kept for reference
 func _find_generational_spawn_tile() -> Vector2i:
 	var out: Vector2i = Vector2i(-1, -1)
 	var comp: int = _world.pathfinder.largest_component_id()

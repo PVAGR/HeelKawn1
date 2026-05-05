@@ -1521,6 +1521,14 @@ func _report_life_arcs() -> void:
 		print("Main node not found")
 		return
 
+	# PHASE 6: Knowledge Fog - incarnated player only sees their own life story
+	var incarnated: bool = _is_player_incarnated()
+	var player_pawn_id: int = _get_player_pawn_id() if incarnated else -1
+	if incarnated and player_pawn_id >= 0:
+		print("⚠ KNOWLEDGE FOG ACTIVE (Incarnated as pawn %d)" % player_pawn_id)
+		print("  You only see YOUR OWN life story.")
+		print("")
+
 	var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
 	if ps == null:
 		print("PawnSpawner not found")
@@ -1539,6 +1547,10 @@ func _report_life_arcs() -> void:
 		if shown_pawns >= 15:
 			break
 		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+
+		# Fog: skip other pawns when incarnated
+		if incarnated and int(p.data.id) != player_pawn_id:
 			continue
 
 		# Call compose_life_arc() on pawn data
@@ -1665,6 +1677,14 @@ func _report_myth_formation() -> void:
 	if mm == null:
 		print("MythMemory not found - system not loaded")
 		return
+
+	# PHASE 6: Knowledge Fog - incarnated player sees world myths (heard through gossip)
+	var incarnated: bool = _is_player_incarnated()
+	if incarnated:
+		print("⚠ KNOWLEDGE FOG NOTE")
+		print("  Myth states are heard through gossip/rumors.")
+		print("  Your pawn may not know ALL regional myths.")
+		print("")
 
 	var m: Node2D = _main()
 	if m == null:

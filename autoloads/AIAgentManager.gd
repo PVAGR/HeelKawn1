@@ -66,6 +66,14 @@ var _agent_update_cursor: int = 0
 var _last_world_ai_update_tick: int = -1
 var _last_settlement_ai_update_tick: int = -1
 
+# Performance optimization variables
+var _last_neural_update: int = 0
+var _last_pattern_update: int = 0
+var _last_prediction_update: int = 0
+var _neural_update_interval: int = 60  # Only update neural networks every 60 ticks
+var _pattern_update_interval: int = 120  # Only update patterns every 120 ticks
+var _prediction_update_interval: int = 180  # Only update predictions every 180 ticks
+
 func _ready() -> void:
 	add_to_group("tickable")
 	if TickManager != null:
@@ -100,10 +108,10 @@ func _initialize_neural_network_matrix() -> void:
 	# Core neural network matrix structure
 	neural_matrix = {
 		"layers": {
-			"input": {"size": 64, "neurons": []},
-			"hidden1": {"size": 128, "neurons": []},
-			"hidden2": {"size": 64, "neurons": []},
-			"output": {"size": 32, "neurons": []}
+			"input": {"size": 16, "neurons": []},  # Reduced from 64 to 16
+			"hidden1": {"size": 32, "neurons": []},  # Reduced from 128 to 32
+			"hidden2": {"size": 16, "neurons": []},  # Reduced from 64 to 16
+			"output": {"size": 8, "neurons": []}  # Reduced from 32 to 8
 		},
 		"connections": {},
 		"weights": {},
@@ -336,7 +344,13 @@ func _apply_activation_function(value: float, layer_index: int) -> float:
 
 
 func train_neural_network(input_data: Array[float], target_output: Array[float]) -> void:
-	# Backpropagation training
+	# Backpropagation training - now only runs periodically
+	var current_tick = GameManager.tick_count if GameManager != null else 0
+	if current_tick - _last_neural_update < _neural_update_interval:
+		return  # Skip training if not enough time has passed
+	
+	_last_neural_update = current_tick
+	
 	var predicted_output = process_neural_network(input_data)
 	var error = _calculate_error(predicted_output, target_output)
 	
@@ -401,6 +415,13 @@ func _calculate_accuracy(predicted: Array[float], target: Array[float]) -> float
 # === Pattern Recognition ===
 
 func recognize_patterns(world_state: Dictionary) -> Dictionary:
+	# Only run pattern recognition periodically
+	var current_tick = GameManager.tick_count if GameManager != null else 0
+	if current_tick - _last_pattern_update < _pattern_update_interval:
+		# Return cached patterns if not enough time has passed
+		return pattern_recognition.get("cached_results", {})
+	
+	_last_pattern_update = current_tick
 	var recognized_patterns: Dictionary = {}
 	
 	# Analyze resource cycles
@@ -418,6 +439,8 @@ func recognize_patterns(world_state: Dictionary) -> Dictionary:
 	if cultural_pattern.confidence >= pattern_threshold:
 		recognized_patterns.cultural_shift = cultural_pattern
 	
+	# Cache results for performance
+	pattern_recognition.cached_results = recognized_patterns
 	return recognized_patterns
 
 
@@ -602,6 +625,13 @@ func _calculate_cultural_trend(historical: Array, current: Dictionary) -> Dictio
 # === Predictive Modeling ===
 
 func generate_predictions(world_state: Dictionary) -> Dictionary:
+	# Only run predictions periodically
+	var current_tick = GameManager.tick_count if GameManager != null else 0
+	if current_tick - _last_prediction_update < _prediction_update_interval:
+		# Return cached predictions if not enough time has passed
+		return predictive_models.get("cached_predictions", {})
+	
+	_last_prediction_update = current_tick
 	var predictions: Dictionary = {}
 	
 	# Resource predictions
@@ -616,6 +646,8 @@ func generate_predictions(world_state: Dictionary) -> Dictionary:
 	if predictive_models.world_events.enabled:
 		predictions.events = _predict_world_events(world_state)
 	
+	# Cache results for performance
+	predictive_models.cached_predictions = predictions
 	return predictions
 
 
@@ -665,8 +697,8 @@ func _extract_resource_features(world_state: Dictionary) -> Array[float]:
 	features.append(resources.get("stone", 0) / 1000.0)
 	features.append(resources.get("ore", 0) / 1000.0)
 	
-	# Pad to match input layer size
-	while features.size() < 64:
+	# Pad to match input layer size (now 16)
+	while features.size() < 16:
 		features.append(0.0)
 	
 	return features
@@ -747,8 +779,8 @@ func _extract_settlement_features(world_state: Dictionary) -> Array[float]:
 	features.append(world_state.get("technology_level", 0) / 10.0)
 	features.append(world_state.get("infrastructure", 0.0))
 	
-	# Pad to match input layer size
-	while features.size() < 64:
+	# Pad to match input layer size (now 16)
+	while features.size() < 16:
 		features.append(0.0)
 	
 	return features
@@ -775,8 +807,8 @@ func _extract_event_features(world_state: Dictionary) -> Array[float]:
 	features.append(world_state.get("cultural_tension", 0.0))
 	features.append(world_state.get("innovation_rate", 0.0))
 	
-	# Pad to match input layer size
-	while features.size() < 64:
+	# Pad to match input layer size (now 16)
+	while features.size() < 16:
 		features.append(0.0)
 	
 	return features

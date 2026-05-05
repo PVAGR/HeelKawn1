@@ -4532,7 +4532,7 @@ func _format_camera_revival_digest_plain(d: Dictionary) -> String:
 		var rdy: String = "Y" if bool(d.get("revival_ready", false)) else "N"
 		var ok: String = "Y" if bool(d.get("rebirth_ok", false)) else "N"
 		return (
-            "%s: %s rs=%d peace=%s/%s rdy=%s rebirth_ok=%s rb=%s%s"
+			"%s: %s rs=%d peace=%s/%s rdy=%s rebirth_ok=%s rb=%s%s"
 			% [prefix, st_plain, rs_p, pc_show, str(pt), rdy, ok, rb, loc_note]
 		)
 	return "%s: %s rs=%d peace=%s/%s rebirth=n/a%s" % [prefix, st_plain, rs_p, pc_show, str(pt), loc_note]
@@ -4549,10 +4549,10 @@ func _format_camera_revival_digest_bbcode(d: Dictionary) -> String:
 	var cam_rk2: int = int(d.get("camera_region_key", int(d.get("region_key", -1))))
 	var prof_rk2: int = int(d.get("profile_region_key", cam_rk2))
 	var head: String = (
-        "[color=#c9b37c]🏚 Cam:[/color]"
+		"[color=#c9b37c]🏚 Cam:[/color]"
 		if src2 == "cam"
 		else (
-            "[color=#c9b37c]🏚 Near[/color] [color=#888](cam rk=%d · profile rk=%d)[/color]"
+			"[color=#c9b37c]🏚 Near[/color] [color=#888](cam rk=%d · profile rk=%d)[/color]"
 			% [cam_rk2, prof_rk2]
 		)
 	)
@@ -4572,11 +4572,11 @@ func _format_camera_revival_digest_bbcode(d: Dictionary) -> String:
 			else "[color=#ffcc80]%s[/color]" % rb2
 		)
 		return (
-            "%s [b]%s[/b]  rs:%d  peace:%s/%s  revivable:%s  rebirth:%s"
+			"%s [b]%s[/b]  rs:%d  peace:%s/%s  revivable:%s  rebirth:%s"
 			% [head, stc, rs, pc_label, str(pt2), rdy_s, rb_ok_s]
 		)
 	return (
-        "%s [b]%s[/b]  rs:%d  peace:%s/%s  [color=#888888](rebirth n/a)[/color]"
+		"%s [b]%s[/b]  rs:%d  peace:%s/%s  [color=#888888](rebirth n/a)[/color]"
 		% [head, stc, rs, pc_label, str(pt2)]
 	)
 
@@ -5646,7 +5646,7 @@ func _react_to_mining_progress() -> void:
 		guard += 1
 		if guard >= MAX_BOOTSTRAP_MINING_REACT_LOOPS:
 			print(
-                    "[Main][WARN] _react_to_mining_progress: bootstrap step cap (%d) — continuing on future ticks"
+					"[Main][WARN] _react_to_mining_progress: bootstrap step cap (%d) — continuing on future ticks"
 					% MAX_BOOTSTRAP_MINING_REACT_LOOPS
 			)
 			break

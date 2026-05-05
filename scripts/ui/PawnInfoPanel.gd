@@ -85,6 +85,7 @@ var _tab_needs: VBoxContainer = null
 var _tab_matrix: VBoxContainer = null
 var _tab_neural: VBoxContainer = null
 var _tab_social: VBoxContainer = null
+var _tab_narrative: VBoxContainer = null  # Phase 5: Emergent Narrative
 ## Matrix/Neural display labels
 var _matrix_inputs_label: RichTextLabel = null
 var _neural_outputs_label: RichTextLabel = null
@@ -290,17 +291,18 @@ func _build_ui() -> void:
 	_tab_container.add_child(_tab_needs)
 	_populate_needs_tab()
 
-	# Matrix Inputs tab
-	_tab_matrix = VBoxContainer.new()
-	_tab_matrix.add_theme_constant_override("separation", 2)
-	_tab_container.add_child(_tab_matrix)
-	_populate_matrix_tab()
+	# Matrix Inputs tab (DEBUG ONLY - hidden in release builds)
+	if OS.is_debug_build():
+		_tab_matrix = VBoxContainer.new()
+		_tab_matrix.add_theme_constant_override("separation", 2)
+		_tab_container.add_child(_tab_matrix)
+		_populate_matrix_tab()
 
-	# Neural Outputs tab
-	_tab_neural = VBoxContainer.new()
-	_tab_neural.add_theme_constant_override("separation", 2)
-	_tab_container.add_child(_tab_neural)
-	_populate_neural_tab()
+		# Neural Outputs tab (DEBUG ONLY - hidden in release builds)
+		_tab_neural = VBoxContainer.new()
+		_tab_neural.add_theme_constant_override("separation", 2)
+		_tab_container.add_child(_tab_neural)
+		_populate_neural_tab()
 
 	# Social tab
 	_tab_social = VBoxContainer.new()
@@ -308,12 +310,23 @@ func _build_ui() -> void:
 	_tab_container.add_child(_tab_social)
 	_populate_social_tab()
 
+	# Narrative tab (Phase 5: Emergent Narrative)
+	_tab_narrative = VBoxContainer.new()
+	_tab_narrative.add_theme_constant_override("separation", 2)
+	_tab_container.add_child(_tab_narrative)
+	_populate_narrative_tab()
+
 	# Set tab titles
 	_tab_container.set_tab_title(0, "ID")
 	_tab_container.set_tab_title(1, "Needs")
-	_tab_container.set_tab_title(2, "Matrix")
-	_tab_container.set_tab_title(3, "Neural")
-	_tab_container.set_tab_title(4, "Social")
+	if OS.is_debug_build():
+		_tab_container.set_tab_title(2, "Matrix")
+		_tab_container.set_tab_title(3, "Neural")
+		_tab_container.set_tab_title(4, "Social")
+		_tab_container.set_tab_title(5, "Narrative")
+	else:
+		_tab_container.set_tab_title(2, "Social")
+		_tab_container.set_tab_title(3, "Narrative")
 
 	# Footer hint
 	_hint_label = _make_label("[Esc] deselect", FONT_SMALL, Color(0.55, 0.55, 0.60))
@@ -403,6 +416,18 @@ func _populate_social_tab() -> void:
 
 	_crisis_level_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_tab_social.add_child(_crisis_level_label)
+
+
+func _populate_narrative_tab() -> void:
+	# Narrative label - shows dynamic pawn story
+	var narrative_label: RichTextLabel = RichTextLabel.new()
+	narrative_label.name = "NarrativeLabel"
+	narrative_label.bbcode_enabled = true
+	narrative_label.fit_content = true
+	narrative_label.scroll_active = true
+	narrative_label.custom_minimum_size = Vector2(0, 280)
+	narrative_label.add_theme_font_size_override("normal_font_size", FONT_BODY)
+	_tab_narrative.add_child(narrative_label)
 
 
 func _add_need_row_to_tab(label_text: String, field: String, color: Color, parent: VBoxContainer) -> void:
@@ -758,7 +783,8 @@ func _refresh() -> void:
 		entry.label.text = "%d" % int(round(v))
 
 	# Matrix tab updates — explicit if/then policy (see PawnDecisionRuleMatrix)
-	if _matrix_inputs_label != null:
+	# DEBUG ONLY: Hidden in release builds
+	if OS.is_debug_build() and _matrix_inputs_label != null:
 		var matrix_lines: PackedStringArray = []
 		matrix_lines.append("[b]If / then matrix[/b] (colony + body + bonds + permissions)")
 		if WorldAI != null and WorldAI.has_method("get_pawn_neural_state"):
@@ -824,28 +850,29 @@ func _refresh() -> void:
 			matrix_lines.append("  %s: %.2f" % [ak, d.affinities.get(ak, 0.5)])
 		_matrix_inputs_label.text = "\n".join(matrix_lines)
 
-	# Neural tab updates
-	if _neural_bias_label != null:
-		var bias: String = d.highest_affinity_skill()
-		_neural_bias_label.text = "Current Bias: %s" % bias
-	
-	if _neural_outputs_label != null:
-		var neural_lines: PackedStringArray = []
-		neural_lines.append("[b]Neural Outputs:[/b]")
-		neural_lines.append("[color=#8a8a95]forward → if/then matrix → scar & site nudge[/color]")
-		if WorldAI != null and WorldAI.has_method("get_pawn_neural_state"):
-			var neural_state: Dictionary = WorldAI.get_pawn_neural_state(int(d.id))
-			if not neural_state.is_empty():
-				var outputs: Array = neural_state.get("outputs", [])
-				for i in range(outputs.size()):
-					var out_val: float = float(outputs[i])
-					var action_name: String = _neural_output_action_name(i)
-					neural_lines.append("%s: %.3f" % [action_name, out_val])
+	# Neural tab updates (DEBUG ONLY - hidden in release builds)
+	if OS.is_debug_build():
+		if _neural_bias_label != null:
+			var bias: String = d.highest_affinity_skill()
+			_neural_bias_label.text = "Current Bias: %s" % bias
+		
+		if _neural_outputs_label != null:
+			var neural_lines: PackedStringArray = []
+			neural_lines.append("[b]Neural Outputs:[/b]")
+			neural_lines.append("[color=#8a8a95]forward → if/then matrix → scar & site nudge[/color]")
+			if WorldAI != null and WorldAI.has_method("get_pawn_neural_state"):
+				var neural_state: Dictionary = WorldAI.get_pawn_neural_state(int(d.id))
+				if not neural_state.is_empty():
+					var outputs: Array = neural_state.get("outputs", [])
+					for i in range(outputs.size()):
+						var out_val: float = float(outputs[i])
+						var action_name: String = _neural_output_action_name(i)
+						neural_lines.append("%s: %.3f" % [action_name, out_val])
+				else:
+					neural_lines.append("[i]No neural state available[/i]")
 			else:
-				neural_lines.append("[i]No neural state available[/i]")
-		else:
-			neural_lines.append("[i]WorldAI not available[/i]")
-		_neural_outputs_label.text = "\n".join(neural_lines)
+				neural_lines.append("[i]WorldAI not available[/i]")
+			_neural_outputs_label.text = "\n".join(neural_lines)
 
 	# Social tab updates
 	if _social_label != null:
@@ -896,6 +923,20 @@ func _refresh() -> void:
 				_hint_label.text = "Inspecting (your pawn #%d) · %s" % [_player_context_pawn_id, esc]
 		else:
 			_hint_label.text = "Observer/chronicler · %s · F9 · F10 → 35 · Backbone" % esc
+
+	# Narrative tab updates (Phase 5: Emergent Narrative)
+	var narrative_label: RichTextLabel = _tab_narrative.get_node_or_null("NarrativeLabel") as RichTextLabel
+	if narrative_label != null:
+		var narrative_text: String = _generate_pawn_narrative(_pawn)
+		if narrative_text != "":
+			# Convert emoji to bbcode colors for better readability
+			var formatted: String = narrative_text.replace("📍", "[color=#FFD166]📍[/color]")
+			formatted = formatted.replace("🎒", "[color=#57C5B6]🎒[/color]")
+			formatted = formatted.replace("📜", "[color=#B084CC]📜[/color]")
+			formatted = formatted.replace("🏠", "[color=#FF6B6B]🏠[/color]")
+			narrative_label.text = formatted
+		else:
+			narrative_label.text = "[i]No narrative data available[/i]"
 
 	# Reposition each tick because the panel can grow/shrink with carry text.
 	_reposition()
@@ -1200,3 +1241,255 @@ static func _tier_color(tier: int) -> Color:
 		4: return Color8(156, 39, 176)    # Purple
 		5: return Color8(255, 193, 7)     # Gold
 		_: return Color8(180, 180, 180)
+
+
+# ==================== NARRATIVE SYSTEM (Phase 5: Emergent Narrative) ====================
+
+## Generate Dwarf Fortress-style narrative text for a pawn based on their current state and history.
+func _generate_pawn_narrative(pawn: Pawn) -> String:
+	if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
+		return ""
+	
+	var d: PawnData = pawn.data
+	var text: String = ""
+	
+	# Current activity with location
+	text += "📍 Currently: " + _get_activity_description(pawn) + "\n"
+	
+	# Carrying status
+	if d.carrying != Item.Type.NONE and d.carrying_qty > 0:
+		var item_name: String = _get_item_name(d.carrying)
+		text += "🎒 Carrying: %d %s" % [d.carrying_qty, item_name]
+		if d.carrying_qty > 1:
+			text += "s"
+		# Check if hauling to stockpile
+		if pawn._state == Pawn.State.HAULING or pawn._state == Pawn.State.FETCHING_MATERIAL:
+			text += " → heading to stockpile"
+		text += "\n"
+	
+	# Recent history (last 3-5 events)
+	var events: Array[Dictionary] = _get_pawn_events(d.id, 5)
+	if not events.is_empty():
+		text += "📜 Recent History:\n"
+		for ev in events:
+			var event_text: String = _format_event(ev)
+			if event_text != "":
+				text += "   • " + event_text + "\n"
+	
+	# Settlement home
+	if d.settlement_id >= 0:
+		var settlement_name: String = _get_settlement_name(d.settlement_id)
+		if settlement_name != "":
+			text += "🏠 Home: %s\n" % settlement_name
+	
+	return text
+
+
+## Get human-readable activity description from pawn state.
+func _get_activity_description(pawn: Pawn) -> String:
+	if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
+		return "Unknown"
+	
+	var d: PawnData = pawn.data
+	var state: int = pawn._state
+	var job: Job = pawn._current_job
+	
+	match state:
+		Pawn.State.IDLE:
+			return "Idle at %s" % _format_tile_pos(d.tile_pos)
+		
+		Pawn.State.WALKING_TO_JOB, Pawn.State.FETCHING_MATERIAL:
+			if job != null:
+				var job_type: String = Job.describe_type(job.type).to_lower()
+				return "%sing at %s" % [job_type.capitalize().left(-1), _format_tile_pos(job.work_tile)]
+			return "Walking to work"
+		
+		Pawn.State.WORKING:
+			if job != null:
+				var job_type: String = Job.describe_type(job.type)
+				return "%s at %s" % [job_type, _format_tile_pos(job.work_tile)]
+			return "Working"
+		
+		Pawn.State.HAULING:
+			return "Hauling to stockpile"
+		
+		Pawn.State.GOING_TO_EAT:
+			return "Going to eat at stockpile"
+		
+		Pawn.State.EATING:
+			return "Eating at stockpile"
+		
+		Pawn.State.GOING_TO_BED:
+			return "Going to bed"
+		
+		Pawn.State.SLEEPING:
+			return "Sleeping"
+		
+		Pawn.State.DRAFT_WALK:
+			if job != null:
+				return "Moving to %s (drafted)" % _format_tile_pos(job.work_tile)
+			return "Moving (drafted)"
+		
+		Pawn.State.TEACHING:
+			return "Teaching nearby"
+		
+		Pawn.State.CHALLENGE:
+			return "Challenging authority"
+		
+		Pawn.State.GATHERING:
+			return "Gathering items at %s" % _format_tile_pos(d.tile_pos)
+		
+		Pawn.State.CRAFTING:
+			return "Crafting at %s" % _format_tile_pos(d.tile_pos)
+		
+		Pawn.State.FLEEING:
+			return "Fleeing from danger!"
+		
+		Pawn.State.HIDING:
+			return "Hiding from threats"
+		
+		_:
+			return "Unknown activity"
+
+
+## Get item name from Item.Type enum.
+func _get_item_name(item_type: int) -> String:
+	match item_type:
+		Item.Type.BERRY:
+			return "berry"
+		Item.Type.MEAT:
+			return "meat"
+		Item.Type.WOOD:
+			return "wood"
+		Item.Type.STONE:
+			return "stone"
+		Item.Type.FLINT:
+			return "flint"
+		Item.Type.STICK:
+			return "stick"
+		Item.Type.FLINT_KNIFE:
+			return "flint knife"
+		Item.Type.FLINT_PICK:
+			return "flint pick"
+		Item.Type.WOODEN_SPEAR:
+			return "wooden spear"
+		Item.Type.TORCH:
+			return "torch"
+		Item.Type.COOKED_MEAT:
+			return "cooked meat"
+		Item.Type.COOKED_BERRIES:
+			return "cooked berries"
+		Item.Type.DRIED_MEAT:
+			return "dried meat"
+		_:
+			return "item"
+
+
+## Get recent events for a specific pawn from WorldMemory.
+func _get_pawn_events(pawn_id: int, count: int) -> Array[Dictionary]:
+	if WorldMemory == null:
+		return []
+	
+	var all_events: Array[Dictionary] = WorldMemory.get_events()
+	var pawn_events: Array[Dictionary] = []
+	
+	# Search backwards from most recent events
+	for i in range(all_events.size() - 1, -1, -1):
+		if pawn_events.size() >= count:
+			break
+		
+		var ev: Dictionary = all_events[i]
+		var ev_pawn_id: int = int(ev.get("pawn_id", ev.get("pid", -1)))
+		
+		if ev_pawn_id == pawn_id:
+			pawn_events.append(ev)
+	
+	return pawn_events
+
+
+## Format a WorldMemory event into readable text.
+func _format_event(ev: Dictionary) -> String:
+	var event_type: String = str(ev.get("type", "unknown"))
+	var tick: int = int(ev.get("t", 0))
+	var ticks_ago: int = GameManager.tick_count - tick
+	
+	# Convert ticks to human-readable time
+	var time_str: String = ""
+	if ticks_ago < 60:
+		time_str = "%d ticks ago" % ticks_ago
+	elif ticks_ago < 3600:
+		time_str = "%d min ago" % int(ticks_ago / 60)
+	else:
+		time_str = "%d hr ago" % int(ticks_ago / 3600)
+	
+	match event_type:
+		"work_event":
+			var job_type: String = str(ev.get("job_type", "work")).to_lower()
+			var tile_data: Variant = ev.get("tile", {})
+			var tile_str: String = ""
+			if tile_data is Dictionary:
+				tile_str = " at (%d,%d)" % [int(tile_data.get("x", 0)), int(tile_data.get("y", 0))]
+			return "Completed %s%s (%s)" % [job_type, tile_str, time_str]
+		
+		"pawn_death":
+			var cause: String = str(ev.get("cause", "unknown"))
+			return "Died: %s (%s)" % [cause, time_str]
+		
+		"birth":
+			return "Born (%s)" % time_str
+		
+		"teaching_event":
+			var skill: String = str(ev.get("skill", "skill"))
+			return "Taught %s (%s)" % [skill, time_str]
+		
+		"social_meeting":
+			var other_name: String = str(ev.get("other_name", "someone"))
+			return "Met %s (%s)" % [other_name, time_str]
+		
+		"social_bond_milestone":
+			var milestone: int = int(ev.get("milestone", 0))
+			return "Friendship milestone (%s)" % time_str
+		
+		"knowledge_acquisition":
+			var knowledge: String = str(ev.get("knowledge_type", "knowledge"))
+			return "Learned %s (%s)" % [knowledge, time_str]
+		
+		"knowledge_inscribed":
+			var carrier_type: String = str(ev.get("carrier_type", "stone"))
+			return "Inscribed %s (%s)" % [carrier_type, time_str]
+		
+		"knowledge_read":
+			var gained_count: int = int(ev.get("gained_knowledge", []).size())
+			return "Read stone, gained %d knowledge (%s)" % [gained_count, time_str]
+		
+		_:
+			return "%s (%s)" % [event_type.capitalize(), time_str]
+
+
+## Format tile position as readable string.
+func _format_tile_pos(tile: Vector2i) -> String:
+	return "(%d,%d)" % [tile.x, tile.y]
+
+
+## Get settlement name from settlement_id.
+func _get_settlement_name(settlement_id: int) -> String:
+	if SettlementMemory == null or settlement_id < 0:
+		return ""
+	
+	var settlements: Array = SettlementMemory.settlements
+	if settlement_id >= settlements.size():
+		return ""
+	
+	var st: Variant = settlements[settlement_id]
+	if st is Dictionary:
+		return str(st.get("culture_name", "Unnamed Settlement"))
+	
+	return "Settlement %d" % settlement_id
+
+
+## Get pawn spawner reference.
+func _pawn_spawner() -> PawnSpawner:
+	var main_node: Node = get_node_or_null("/root/Main")
+	if main_node == null:
+		return null
+	return main_node.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner

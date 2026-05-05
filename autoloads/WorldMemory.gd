@@ -51,25 +51,25 @@ var _constitution_loaded: bool = false
 
 ## Persistence rules configuration
 const PERSISTENCE_RULES: Dictionary = {
-	## Event types to persist across saves (core world history)
-	"core_events": ["pawn_death", "birth", "settlement_founded", "settlement_destroyed", "leadership_change"],
-	## Event types with regional retention (pruned by region)
-	"regional_events": ["pawn_death", "animal_death", "building_constructed", "building_destroyed"],
-	## Event types with time-based retention (older events pruned)
-	"time_based_events": ["social_meeting", "mood_event", "foraging"],
-	## Maximum events to retain per type (0 = unlimited)
-	"max_per_type": {
-		"pawn_death": 50000,
-		"birth": 20000,
-		"leadership_change": 5000,
-		"social_meeting": 10000,
-	},
-	## Time-based retention: ticks before pruning (0 = never)
-	"retention_ticks": {
-		"mood_event": 10000,
-		"foraging": 5000,
-		"social_meeting": 20000,
-	},
+    ## Event types to persist across saves (core world history)
+    "core_events": ["pawn_death", "birth", "settlement_founded", "settlement_destroyed", "leadership_change"],
+    ## Event types with regional retention (pruned by region)
+    "regional_events": ["pawn_death", "animal_death", "building_constructed", "building_destroyed"],
+    ## Event types with time-based retention (older events pruned)
+    "time_based_events": ["social_meeting", "mood_event", "foraging"],
+    ## Maximum events to retain per type (0 = unlimited)
+    "max_per_type": {
+        "pawn_death": 50000,
+        "birth": 20000,
+        "leadership_change": 5000,
+        "social_meeting": 10000,
+    },
+    ## Time-based retention: ticks before pruning (0 = never)
+    "retention_ticks": {
+        "mood_event": 10000,
+        "foraging": 5000,
+        "social_meeting": 20000,
+    },
 }
 
 
@@ -1687,163 +1687,163 @@ func _generate_pawn_biography(d: PawnData, death_cause: String) -> String:
     # Header
     text += "[color=#888888]Born: Year %d, Day %d[/color]\n" % [int(d.birth_tick / 360) + 1, int((d.birth_tick % 360) / 10) + 1]
     text += "[color=#888888]Died: Year %d, Day %d (%.1f years old)[/color]\n\n" % [int(GameManager.tick_count / 360) + 1, int((GameManager.tick_count % 360) / 10) + 1, d.age / 360.0]
-	
-	# Identity
-	text += "[color=#FFD166][b]IDENTITY[/b][/color]\n"
-	text += "  Profession: %s\n" % d.profession_name()
-	text += "  Level: %d | Legacy Score: %d\n" % [d.level, _get_pawn_legacy_score(d.id)]
-	text += "  Traits: %s\n\n" % d.traits_display()
-	
-	# Family
-	text += "[color=#FF9F6B][b]FAMILY[/b][/color]\n"
-	if d.parent_a_id >= 0 or d.parent_b_id >= 0:
-		var parents: Array[String] = []
-		if d.parent_a_id >= 0:
-			var pa = d._get_parent_data(d.parent_a_id)
-			if pa != null:
-				parents.append(pa.display_name)
-		if d.parent_b_id >= 0:
-			var pb = d._get_parent_data(d.parent_b_id)
-			if pb != null:
-				parents.append(pb.display_name)
-		if not parents.is_empty():
-			text += "  Parents: %s\n" % " & ".join(parents)
-	if d.spouse_id >= 0:
-		var spouse = d._get_parent_data(d.spouse_id)
-		if spouse != null:
-			text += "  Spouse: %s\n" % spouse.display_name
-	if d.children_count > 0:
-		text += "  Children: %d\n" % d.children_count
-	text += "\n"
-	
-	# Skills
-	text += "[color=#B084CC][b]SKILLS & KNOWLEDGE[/b][/color]\n"
-	var skills_text: String = _get_biography_skills(d)
-	text += "  %s\n\n" % skills_text
-	
-	# Life events
-	text += "[color=#B084CC][b]LIFE EVENTS[/b][/color]\n"
-	var events_text: String = _get_biography_events(d.id)
-	if events_text != "":
-		text += events_text
-	else:
-		text += "  [color=#666666]No recorded events[/color]\n"
-	text += "\n"
-	
-	# Legacy
-	text += "[color=#FFD166][b]LEGACY[/b][/color]\n"
-	var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
-	if legacy_sys != null and legacy_sys.has_method("get_legacy_entry"):
-		var legacy: Dictionary = legacy_sys.call("get_legacy_entry", int(d.id))
-		if not legacy.is_empty():
-			text += "  Legacy Score: %d\n" % int(legacy.get("legacy_score", 0))
-			text += "  Children: %d | Grandchildren: %d\n" % [int(legacy.get("children_count", 0)), int(legacy.get("grandchildren_count", 0))]
-			text += "  Knowledge Preserved: %d types\n" % int(legacy.get("knowledge_preserved", []).size())
-			text += "  Students Taught: %d\n" % int(legacy.get("students_taught", 0))
-	else:
-		text += "  [color=#666666]No legacy data available[/color]"
-	
-	return text
+    
+    # Identity
+    text += "[color=#FFD166][b]IDENTITY[/b][/color]\n"
+    text += "  Profession: %s\n" % d.profession_name()
+    text += "  Level: %d | Legacy Score: %d\n" % [d.level, _get_pawn_legacy_score(d.id)]
+    text += "  Traits: %s\n\n" % d.traits_display()
+    
+    # Family
+    text += "[color=#FF9F6B][b]FAMILY[/b][/color]\n"
+    if d.parent_a_id >= 0 or d.parent_b_id >= 0:
+        var parents: Array[String] = []
+        if d.parent_a_id >= 0:
+            var pa = d._get_parent_data(d.parent_a_id)
+            if pa != null:
+                parents.append(pa.display_name)
+        if d.parent_b_id >= 0:
+            var pb = d._get_parent_data(d.parent_b_id)
+            if pb != null:
+                parents.append(pb.display_name)
+        if not parents.is_empty():
+            text += "  Parents: %s\n" % " & ".join(parents)
+    if d.spouse_id >= 0:
+        var spouse = d._get_parent_data(d.spouse_id)
+        if spouse != null:
+            text += "  Spouse: %s\n" % spouse.display_name
+    if d.children_count > 0:
+        text += "  Children: %d\n" % d.children_count
+    text += "\n"
+    
+    # Skills
+    text += "[color=#B084CC][b]SKILLS & KNOWLEDGE[/b][/color]\n"
+    var skills_text: String = _get_biography_skills(d)
+    text += "  %s\n\n" % skills_text
+    
+    # Life events
+    text += "[color=#B084CC][b]LIFE EVENTS[/b][/color]\n"
+    var events_text: String = _get_biography_events(d.id)
+    if events_text != "":
+        text += events_text
+    else:
+        text += "  [color=#666666]No recorded events[/color]\n"
+    text += "\n"
+    
+    # Legacy
+    text += "[color=#FFD166][b]LEGACY[/b][/color]\n"
+    var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
+    if legacy_sys != null and legacy_sys.has_method("get_legacy_entry"):
+        var legacy: Dictionary = legacy_sys.call("get_legacy_entry", int(d.id))
+        if not legacy.is_empty():
+            text += "  Legacy Score: %d\n" % int(legacy.get("legacy_score", 0))
+            text += "  Children: %d | Grandchildren: %d\n" % [int(legacy.get("children_count", 0)), int(legacy.get("grandchildren_count", 0))]
+            text += "  Knowledge Preserved: %d types\n" % int(legacy.get("knowledge_preserved", []).size())
+            text += "  Students Taught: %d\n" % int(legacy.get("students_taught", 0))
+    else:
+        text += "  [color=#666666]No legacy data available[/color]"
+    
+    return text
 
 
 ## Get formatted skills string for biography.
 func _get_biography_skills(d: PawnData) -> String:
-	var lines: Array[String] = []
-	
-	for skill_idx in range(5):
-		var skill_name: String = PawnData.skill_name(skill_idx)
-		var level: int = d.get_skill_level(skill_idx)
-		if level > 0:
-			lines.append("%s %d" % [skill_name, level])
-	
-	if lines.is_empty():
-		return "[color=#666666]No skills trained[/color]"
-	
-	return ", ".join(lines)
+    var lines: Array[String] = []
+    
+    for skill_idx in range(5):
+        var skill_name: String = PawnData.skill_name(skill_idx)
+        var level: int = d.get_skill_level(skill_idx)
+        if level > 0:
+            lines.append("%s %d" % [skill_name, level])
+    
+    if lines.is_empty():
+        return "[color=#666666]No skills trained[/color]"
+    
+    return ", ".join(lines)
 
 
 ## Get life events for biography.
 func _get_biography_events(pawn_id: int) -> String:
-	var events: Array[Dictionary] = _get_pawn_events_limited(pawn_id, 10)
-	if events.is_empty():
-		return ""
-	
-	var text: String = ""
-	for ev in events:
-		var event_type: String = str(ev.get("type", "unknown"))
-		var tick: int = int(ev.get("t", 0))
-		var year: int = tick / 360
-		var day: int = (tick % 360) / 10
-		
-		var event_text: String = _format_biography_event(event_type, ev)
-		if event_text != "":
-			text += "  [color=#888888]Y%d D%d:[/color] %s\n" % [year + 1, day + 1, event_text]
-	
-	return text
+    var events: Array[Dictionary] = _get_pawn_events_limited(pawn_id, 10)
+    if events.is_empty():
+        return ""
+    
+    var text: String = ""
+    for ev in events:
+        var event_type: String = str(ev.get("type", "unknown"))
+        var tick: int = int(ev.get("t", 0))
+        var year: int = tick / 360
+        var day: int = (tick % 360) / 10
+        
+        var event_text: String = _format_biography_event(event_type, ev)
+        if event_text != "":
+            text += "  [color=#888888]Y%d D%d:[/color] %s\n" % [year + 1, day + 1, event_text]
+    
+    return text
 
 
 ## Format a single event for biography.
 func _format_biography_event(event_type: String, ev: Dictionary) -> String:
-	match event_type:
-		"work_event":
-			var job_type: String = str(ev.get("job_type", "work"))
-			return "Completed %s" % job_type
-		"teaching_event":
-			var skill: String = str(ev.get("skill", "skill"))
-			return "Taught %s" % skill
-		"social_meeting":
-			return "Formed friendship"
-		"social_bond_milestone":
-			var milestone: int = int(ev.get("milestone", 0))
-			return "Friendship milestone (%d)" % milestone
-		"knowledge_acquisition":
-			var knowledge: String = str(ev.get("knowledge_type", "knowledge"))
-			return "Learned %s" % knowledge
-		"knowledge_inscribed":
-			return "Inscribed knowledge on stone"
-		"knowledge_read":
-			var gained: int = int(ev.get("gained_knowledge", []).size())
-			return "Read ancient stone (+%d knowledge)" % gained
-		"building_constructed":
-			var building: String = str(ev.get("building_type", "structure"))
-			return "Built %s" % building
-		_:
-			return event_type.capitalize()
-	
-	return ""
+    match event_type:
+        "work_event":
+            var job_type: String = str(ev.get("job_type", "work"))
+            return "Completed %s" % job_type
+        "teaching_event":
+            var skill: String = str(ev.get("skill", "skill"))
+            return "Taught %s" % skill
+        "social_meeting":
+            return "Formed friendship"
+        "social_bond_milestone":
+            var milestone: int = int(ev.get("milestone", 0))
+            return "Friendship milestone (%d)" % milestone
+        "knowledge_acquisition":
+            var knowledge: String = str(ev.get("knowledge_type", "knowledge"))
+            return "Learned %s" % knowledge
+        "knowledge_inscribed":
+            return "Inscribed knowledge on stone"
+        "knowledge_read":
+            var gained: int = int(ev.get("gained_knowledge", []).size())
+            return "Read ancient stone (+%d knowledge)" % gained
+        "building_constructed":
+            var building: String = str(ev.get("building_type", "structure"))
+            return "Built %s" % building
+        _:
+            return event_type.capitalize()
+    
+    return ""
 
 
 ## Get recent events for a pawn (limited count).
 func _get_pawn_events_limited(pawn_id: int, count: int) -> Array[Dictionary]:
-	var all_events: Array[Dictionary] = get_events()
-	var pawn_events: Array[Dictionary] = []
-	
-	for i in range(all_events.size() - 1, -1, -1):
-		if pawn_events.size() >= count:
-			break
-		
-		var ev: Dictionary = all_events[i]
-		var ev_pawn_id: int = int(ev.get("pawn_id", ev.get("pid", -1)))
-		
-		if ev_pawn_id == pawn_id:
-			pawn_events.append(ev)
-	
-	pawn_events.reverse()
-	return pawn_events
+    var all_events: Array[Dictionary] = get_events()
+    var pawn_events: Array[Dictionary] = []
+    
+    for i in range(all_events.size() - 1, -1, -1):
+        if pawn_events.size() >= count:
+            break
+        
+        var ev: Dictionary = all_events[i]
+        var ev_pawn_id: int = int(ev.get("pawn_id", ev.get("pid", -1)))
+        
+        if ev_pawn_id == pawn_id:
+            pawn_events.append(ev)
+    
+    pawn_events.reverse()
+    return pawn_events
 
 
 ## Get pawn legacy score.
 func _get_pawn_legacy_score(pawn_id: int) -> int:
-	var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
-	if legacy_sys == null:
-		return 0
-	
-	if legacy_sys.has_method("get_legacy_entry"):
-		var legacy: Dictionary = legacy_sys.call("get_legacy_entry", pawn_id)
-		if not legacy.is_empty():
-			return int(legacy.get("legacy_score", 0))
-	
-	return 0
+    var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
+    if legacy_sys == null:
+        return 0
+    
+    if legacy_sys.has_method("get_legacy_entry"):
+        var legacy: Dictionary = legacy_sys.call("get_legacy_entry", pawn_id)
+        if not legacy.is_empty():
+            return int(legacy.get("legacy_score", 0))
+    
+    return 0
 
 
 ## Hook into event appending to generate grudges

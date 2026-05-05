@@ -452,10 +452,16 @@ func set_current_player_pawn(pawn_id: int) -> void:
 
 ## Get endgame status
 func get_endgame_status() -> Dictionary:
+	# Calculate total dynasty members manually (Godot 4.x doesn't support list comprehension)
+	var total_members: int = 0
+	for d in dynasties.values():
+		if d is Dictionary:
+			total_members += int(d.get("total_members", 0))
+	
 	return {
 		"total_legacy": _legacy_score,
 		"dynasty_count": dynasties.size(),
-		"total_dynasty_members": sum([d.total_members for d in dynasties.values()]),
+		"total_dynasty_members": total_members,
 		"player_incarnations": _count_player_incarnations()
 	}
 

@@ -40,7 +40,7 @@ func _create_sprite() -> void:
 			_:
 				rect.color = Color8(140, 140, 140)  # Generic gray
 		add_child(rect)
-		_sprite = rect
+		_sprite = rect as Node2D
 	else:
 		# Use sprite with texture
 		_sprite = Sprite2D.new()

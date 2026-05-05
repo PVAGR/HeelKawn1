@@ -40,6 +40,10 @@ var _first_event_tick_by_type: Dictionary = {}
 var _event_type_counts: Dictionary = {}
 ## region_key -> latest pawn-death tick (hot-path settlement/rebirth query index).
 var _pawn_death_last_tick_by_region: Dictionary = {}
+## Per-pawn death throttle: pawn_id -> last death record tick. Prevents
+## duplicate death events and caps the recording rate during mass-death events.
+var _pawn_death_last_tick_by_id: Dictionary = {}
+const PAWN_DEATH_THROTTLE_TICKS: int = 30  # Same pawn can't die twice within 30 ticks
 ## Monotonic event id (stable cursor for paging/query surfaces).
 var _next_event_id: int = 1
 var _constitution_text: String = ""
@@ -280,6 +284,7 @@ func clear() -> void:
     _first_event_tick_by_type.clear()
     _event_type_counts.clear()
     _pawn_death_last_tick_by_region.clear()
+    _pawn_death_last_tick_by_id.clear()
     _next_event_id = 1
     _dirty = false
 
@@ -598,6 +603,12 @@ func record_pawn_death(
         parent_b_snapshot: int = -1,
         settlement_id: int = -1
     ) -> void:
+    # Throttle: skip if this pawn was already recorded dead recently
+    var pid_key: int = pawn_id
+    if _pawn_death_last_tick_by_id.has(pid_key):
+        if tick - int(_pawn_death_last_tick_by_id[pid_key]) < PAWN_DEATH_THROTTLE_TICKS:
+            return
+    _pawn_death_last_tick_by_id[pid_key] = tick
     var e: Dictionary = {
         "s": SCHEMA,
         "k": int(Kind.PAWN_DEATH),

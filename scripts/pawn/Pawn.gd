@@ -102,6 +102,11 @@ const REST_RECOVER_PER_TICK_SLEEP: float = 0.6
 ## Multiplier applied to REST_RECOVER_PER_TICK_SLEEP when the sleeping pawn is
 ## standing on a bed they own. Beds make sleep ~67% faster.
 const REST_RECOVER_BED_MULTIPLIER: float = 1.67
+## Health recovered per tick while sleeping. Slow but steady — a pawn with 50
+## health recovers in ~100 ticks of sleep (~1 sleep cycle). In a bed the rate
+## is doubled, so the same pawn heals in ~50 ticks.
+const HEALTH_RECOVER_PER_TICK_SLEEP: float = 0.5
+const HEALTH_RECOVER_BED_MULTIPLIER: float = 2.0
 ## Hunger keeps decaying while asleep, but at half rate (rest body burns less).
 const HUNGER_DECAY_PER_TICK_SLEEPING: float = 0.025  # Reduced from 0.05
 
@@ -338,6 +343,10 @@ var _draw_frame_counter: int = 0
 ## Cached enemy list — refreshed every 30 ticks to avoid per-pawn scene tree scans.
 static var _cached_enemies: Array = []
 static var _cached_enemies_tick: int = -100
+## Cached job-type → upper-name lookup. Built once, avoids str()+to_upper()
+## per pawn per job tick.
+static var _job_type_name_cache: Dictionary = {}
+static var _job_type_name_cache_built: bool = false
 var _sfx: AudioStreamPlayer2D = null
 var _action_popup: ActionPopupLabel = null
 var _hit_flash_ticks: int = 0
@@ -922,6 +931,8 @@ func _exit_tree() -> void:
 		PawnData.unregister_pawn_data(int(data.id))
 		if SpatialManager != null: # ARCHITECT T006
 			SpatialManager.unregister_entity(int(data.id))
+	# OPTIMIZATION: Invalidate avoidance caches for all pawns when this pawn dies
+	_invalidate_avoidance_cache_for_pawn(int(data.id))
 
 
 ## Re-read the spawn tile’s [CulturalMemory] entry (e.g. after load once ruins are applied). Does not run every tick.
@@ -1776,10 +1787,12 @@ func _process(delta: float) -> void:
 	if SpatialManager != null and data != null and old_tile_pos != data.tile_pos:
 		SpatialManager.update_pawn_position(int(data.id), data.tile_pos)
 
-	# Redraw during movement at a throttled rate (every 3rd frame)
+	# Redraw during movement at a throttled rate (every 5th frame at 1x, scales with speed)
 	# to keep bobbing animation visible without overwhelming the renderer.
+	# OPTIMIZATION: Reduced redraw frequency for smoother frames
+	var redraw_threshold: int = 5 + int(GameManager.game_speed * 0.5)
 	_draw_frame_counter += 1
-	if _draw_frame_counter >= 3:
+	if _draw_frame_counter >= redraw_threshold:
 		_draw_frame_counter = 0
 		queue_redraw()
 
@@ -3116,7 +3129,7 @@ func _apply_tradition_mood_for_job(job_type: int) -> void:
 	var taboo: Array = taboo_v as Array
 	var bonus: float = float(data.get_meta("tradition_mood_bonus", 4.0))
 	var penalty: float = float(data.get_meta("tradition_mood_penalty", -6.0))
-	var job_name: String = str(_Job.Type.keys()[job_type]).to_upper()
+	var job_name: String = _cached_job_type_name(job_type)
 	var mood_delta: float = bonus
 	for taboo_any in taboo:
 		if str(taboo_any).to_upper() == job_name:
@@ -4306,6 +4319,12 @@ func _decay_needs() -> void:
 		if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed and _world != null and _world.is_bed_owned_by(_reserved_bed, self):
 			rate *= REST_RECOVER_BED_MULTIPLIER
 		data.rest = min(100.0, data.rest + rate)
+		# Health recovery while sleeping — injuries heal during rest
+		var heal_rate: float = HEALTH_RECOVER_PER_TICK_SLEEP
+		if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed and _world != null and _world.is_bed_owned_by(_reserved_bed, self):
+			heal_rate *= HEALTH_RECOVER_BED_MULTIPLIER
+		if data.health < data.max_health:
+			data.health = min(data.max_health, data.health + heal_rate)
 	else:
 		data.hunger = max(0.0, data.hunger - HUNGER_DECAY_PER_TICK * hunger_mult * pace_h)
 		data.rest   = max(0.0, data.rest   - REST_DECAY_PER_TICK * rest_mult * pace_r)
@@ -4331,9 +4350,9 @@ func _decay_needs() -> void:
 	
 	# Historically used land: subtle mood drain from nearby past deaths / builds - throttled to every 30 ticks
 	if GameManager.tick_count % 30 == 0:
-		if get_tree().get_root().has_node("Main/WorldTrace"):
-			var wt: WorldTrace = get_tree().get_root().get_node("Main/WorldTrace") as WorldTrace
-			data.mood = max(0.0, data.mood - wt.get_mood_drain_at(data.tile_pos))
+		var wt_node: Node = get_tree().get_root().get_node_or_null("Main/WorldTrace")
+		if wt_node != null and wt_node is WorldTrace:
+			data.mood = max(0.0, data.mood - (wt_node as WorldTrace).get_mood_drain_at(data.tile_pos))
 	
 	# Phase 5: Proximity stress from being near grudge-enemies - throttled to every 10 ticks
 	if GameManager.tick_count % 10 == 0:
@@ -4765,74 +4784,101 @@ func get_reputation_label_for(other_pawn_id: int) -> String:
 ## OPTIMIZATION: Cache enemy positions per tick, use O(1) pawn lookup
 var _enemy_positions_cache: Array[Vector2i] = []
 var _enemy_cache_tick: int = -1
+## OPTIMIZATION: Cache enemy pawn references to avoid repeated lookups
+var _enemy_pawn_cache: Array[Pawn] = []
+var _enemy_pawn_cache_tick: int = -1
 
 func get_avoidance_tiles() -> Array[Vector2i]:
 	# Return cached positions if still valid for this tick
 	if _enemy_cache_tick == GameManager.tick_count:
 		return _enemy_positions_cache
-	
+
 	_enemy_positions_cache.clear()
-	var enemies: Array[int] = get_grudge_enemies()
 	
-	if enemies.is_empty():
+	# OPTIMIZATION: Cache enemy pawn references per tick
+	if _enemy_pawn_cache_tick != GameManager.tick_count:
+		_enemy_pawn_cache.clear()
+		var enemies: Array[int] = get_grudge_enemies()
+		var _ps: PawnSpawner = _resolve_pawn_spawner()
+		for enemy_id in enemies:
+			var enemy_pawn: Pawn = _ps.get_pawn_by_id(enemy_id) if _ps != null else null
+			if enemy_pawn != null and is_instance_valid(enemy_pawn) and enemy_pawn.data != null:
+				_enemy_pawn_cache.append(enemy_pawn)
+		_enemy_pawn_cache_tick = GameManager.tick_count
+
+	if _enemy_pawn_cache.is_empty():
 		_enemy_cache_tick = GameManager.tick_count
 		return _enemy_positions_cache
-	
-	# OPTIMIZATION: Use O(1) pawn lookup instead of O(n) scan
-	var _ps: PawnSpawner = _resolve_pawn_spawner()
-	for enemy_id in enemies:
-		var enemy_pawn: Pawn = _ps.get_pawn_by_id(enemy_id) if _ps != null else null
-		if enemy_pawn == null or not is_instance_valid(enemy_pawn) or enemy_pawn.data == null:
+
+	# OPTIMIZATION: Use cached pawn references, avoid repeated lookups
+	for enemy_pawn in _enemy_pawn_cache:
+		if enemy_pawn.data == null:
 			continue
-		
 		# Add enemy's tile and 4 adjacent tiles (radius 1)
 		_enemy_positions_cache.append(enemy_pawn.data.tile_pos)
 		_enemy_positions_cache.append(enemy_pawn.data.tile_pos + Vector2i(1, 0))
 		_enemy_positions_cache.append(enemy_pawn.data.tile_pos + Vector2i(-1, 0))
 		_enemy_positions_cache.append(enemy_pawn.data.tile_pos + Vector2i(0, 1))
 		_enemy_positions_cache.append(enemy_pawn.data.tile_pos + Vector2i(0, -1))
-	
+
 	_enemy_cache_tick = GameManager.tick_count
 	return _enemy_positions_cache
 
 ## Check if a tile is near an enemy (for avoidance)
-## OPTIMIZATION: Use O(1) pawn lookup instead of nested loop
+## OPTIMIZATION: Use cached pawn references, early exit on first match
 func is_tile_near_enemy(tile: Vector2i) -> bool:
-	var enemies: Array[int] = get_grudge_enemies()
-	if enemies.is_empty():
-		return false
+	# OPTIMIZATION: Use cached pawn references from get_avoidance_tiles
+	if _enemy_pawn_cache_tick != GameManager.tick_count:
+		# Force cache population
+		get_avoidance_tiles()
 	
-	# OPTIMIZATION: Use O(1) pawn lookup instead of O(n) scan
-	var _ps: PawnSpawner = _resolve_pawn_spawner()
-	for enemy_id in enemies:
-		var enemy_pawn: Pawn = _ps.get_pawn_by_id(enemy_id) if _ps != null else null
-		if enemy_pawn == null or not is_instance_valid(enemy_pawn) or enemy_pawn.data == null:
+	if _enemy_pawn_cache.is_empty():
+		return false
+
+	# OPTIMIZATION: Early exit on first match, use squared distance
+	for enemy_pawn in _enemy_pawn_cache:
+		if enemy_pawn.data == null:
 			continue
 		if tile.distance_squared_to(enemy_pawn.data.tile_pos) <= 9:  # 3 tile radius
 			return true
 	return false
 
+## OPTIMIZATION: Invalidate avoidance cache for a specific enemy pawn
+## Called when a pawn dies or is removed from the game
+func _invalidate_avoidance_cache_for_pawn(enemy_pawn_id: int) -> void:
+	# Clear cached enemy references that include this pawn
+	if not _enemy_pawn_cache.is_empty():
+		var changed: bool = false
+		for i in range(_enemy_pawn_cache.size() - 1, -1, -1):
+			var cached_pawn: Pawn = _enemy_pawn_cache[i]
+			if cached_pawn != null and cached_pawn.data != null and int(cached_pawn.data.id) == enemy_pawn_id:
+				_enemy_pawn_cache.remove_at(i)
+				changed = true
+		if changed:
+			_enemy_cache_tick = -1  # Force refresh next tick
+
 ## Get mood drain from being near enemies (proximity stress)
-## OPTIMIZATION: Use O(1) pawn lookup instead of nested loop
+## OPTIMIZATION: Use cached pawn references, early exit
 func get_proximity_stress_drain() -> float:
-	var enemies: Array[int] = get_grudge_enemies()
-	if enemies.is_empty():
+	# OPTIMIZATION: Use cached pawn references from get_avoidance_tiles
+	if _enemy_pawn_cache_tick != GameManager.tick_count:
+		# Force cache population
+		get_avoidance_tiles()
+	
+	if _enemy_pawn_cache.is_empty():
 		return 0.0
-	
+
 	var stress: float = 0.0
-	
-	# OPTIMIZATION: Use O(1) pawn lookup instead of O(n) scan
-	var _ps: PawnSpawner = _resolve_pawn_spawner()
-	for enemy_id in enemies:
-		var enemy_pawn: Pawn = _ps.get_pawn_by_id(enemy_id) if _ps != null else null
-		if enemy_pawn == null or not is_instance_valid(enemy_pawn) or enemy_pawn.data == null:
+	# OPTIMIZATION: Use cached references, avoid repeated lookups
+	for enemy_pawn in _enemy_pawn_cache:
+		if enemy_pawn.data == null:
 			continue
 		var dist_sq: float = data.tile_pos.distance_squared_to(enemy_pawn.data.tile_pos)
 		if dist_sq <= 9.0:  # Very close (3^2) - high stress
 			stress += 0.15
 		elif dist_sq <= 36.0:  # Medium close (6^2) - moderate stress
 			stress += 0.05
-	
+
 	return clampf(stress, 0.0, 0.5)
 
 func track_co_presence() -> void:
@@ -5860,10 +5906,9 @@ func _die(_p_cause: String = "") -> void:
 	_play_sfx("res://assets/audio/pawn_die.ogg", 0.85)
 
 	# world_trace: all deaths, including old_age
-	if get_tree().get_root().has_node("Main/WorldTrace"):
-		var world_trace: WorldTrace = get_tree().get_root().get_node("Main/WorldTrace")
-		if world_trace != null:
-			world_trace.record_trace(global_position, "death")
+	var root_node: Node = get_tree().get_root().get_node_or_null("Main/WorldTrace")
+	if root_node != null and root_node is WorldTrace:
+		(root_node as WorldTrace).record_trace(global_position, "death")
 	
 	# WorldMemory: deterministic fact log (before node freed; data still valid).
 	if data != null:
@@ -6193,47 +6238,70 @@ func _draw_social_bonds(body_origin: Vector2) -> void:
 	if data == null:
 		return
 
+	# OPTIMIZATION: Stricter distance culling for smoother rendering
+	const MAX_DIST_SQ: float = 10000.0  # ~100^2 tiles (reduced from 500^2)
+	const FAMILY_BOND_LIMIT: int = 8  # Limit family bonds drawn
+
 	# Family bonds — gold lines
+	var bonds_drawn: int = 0
 	for other_id in data.family_bonds:
+		if bonds_drawn >= FAMILY_BOND_LIMIT:
+			break
 		var other_pawn: Pawn = _find_pawn_by_id(int(other_id))
 		if other_pawn == null or not is_instance_valid(other_pawn):
 			continue
-		var dist_sq: float = global_position.distance_squared_to(other_pawn.global_position)  # OPTIMIZATION: Avoid sqrt
-		if dist_sq > 250000.0:  # ~500^2 tiles
+		var dist_sq: float = global_position.distance_squared_to(other_pawn.global_position)
+		if dist_sq > MAX_DIST_SQ:
 			continue
 		var strength: float = float(data.family_bonds[other_id])
 		var alpha: float = clampf(strength / 100.0, 0.15, 0.8)
 		var local_end: Vector2 = to_local(other_pawn.global_position)
 		draw_line(body_origin, local_end, Color(1.0, 0.85, 0.3, alpha), 1.0, true)
+		bonds_drawn += 1
 
 	# Social squad — teal line to anchor
 	if data.social_squad_anchor_id >= 0 and data.social_squad_anchor_id != int(data.id):
 		var anchor_pawn: Pawn = _find_pawn_by_id(data.social_squad_anchor_id)
 		if anchor_pawn != null and is_instance_valid(anchor_pawn):
-			var dist_sq: float = global_position.distance_squared_to(anchor_pawn.global_position)  # OPTIMIZATION: Avoid sqrt
-			if dist_sq <= 250000.0:  # ~500^2
+			var dist_sq: float = global_position.distance_squared_to(anchor_pawn.global_position)
+			if dist_sq <= MAX_DIST_SQ:
 				var local_end: Vector2 = to_local(anchor_pawn.global_position)
 				draw_line(body_origin, local_end, Color(0.3, 0.8, 0.8, 0.5), 1.0, true)
-	
+
 	# Phase 5: Enemy avoidance lines — red lines to grudge-enemies
-	# OPTIMIZATION: Draw only top 3 enemies by intensity to reduce rendering cost
+	# OPTIMIZATION: Use cached enemy pawns, limit to top 3 by intensity, stricter culling
+	const ENEMY_DIST_SQ: float = 6400.0  # ~80^2 tiles (stricter culling)
 	var enemies: Array[int] = get_grudge_enemies()
-	if enemies.size() > 3:
-		# Sort by intensity and take top 3
-		var enemy_intensities: Array = []
-		for enemy_id in enemies:
-			var intensity: float = get_grudge_toward(enemy_id)
-			enemy_intensities.append({"id": enemy_id, "intensity": intensity})
-		enemy_intensities.sort_custom(func(a, b): return a.intensity > b.intensity)
-		enemies = enemy_intensities.slice(0, 3).map(func(e): return e.id)
+	if enemies.is_empty():
+		return
 	
+	# OPTIMIZATION: Avoid sorting every frame - just take first 3 if already limited
+	if enemies.size() > 3:
+		# Quick intensity check without full sort - take first 3 above threshold
+		var high_intensity_enemies: Array[int] = []
+		for enemy_id in enemies:
+			if get_grudge_toward(enemy_id) >= 0.5:
+				high_intensity_enemies.append(enemy_id)
+				if high_intensity_enemies.size() >= 3:
+					break
+		if high_intensity_enemies.size() < 3:
+			# Fill remaining slots with any enemies
+			for enemy_id in enemies:
+				if not high_intensity_enemies.has(enemy_id):
+					high_intensity_enemies.append(enemy_id)
+					if high_intensity_enemies.size() >= 3:
+						break
+		enemies = high_intensity_enemies
+	else:
+		enemies = enemies.slice(0, 3)
+
 	var _ps: PawnSpawner = _resolve_pawn_spawner()
 	for enemy_id in enemies:
-		var enemy_pawn: Pawn = _ps.get_pawn_by_id(enemy_id) if _ps != null else null  # OPTIMIZATION: O(1) lookup
+		var enemy_pawn: Pawn = _ps.get_pawn_by_id(enemy_id) if _ps != null else null
 		if enemy_pawn == null or not is_instance_valid(enemy_pawn):
 			continue
-		var dist_sq: float = global_position.distance_squared_to(enemy_pawn.global_position)  # OPTIMIZATION: Avoid sqrt
-		if dist_sq > 250000.0:  # ~500^2 tiles
+		var dist_sq: float = global_position.distance_squared_to(enemy_pawn.global_position)
+		if dist_sq > ENEMY_DIST_SQ:
 			continue
 		# Get grudge intensity for line opacity
 		var intensity: float = get_grudge_toward(enemy_id)
@@ -6321,6 +6389,16 @@ static func _get_enemies_cached() -> Array:
 					Pawn._cached_enemies.append(e)
 		Pawn._cached_enemies_tick = now
 	return Pawn._cached_enemies
+
+
+## Cached job-type → upper-name string. Avoids str()+to_upper() per pawn per tick.
+static func _cached_job_type_name(job_type: int) -> String:
+	if not Pawn._job_type_name_cache_built:
+		var keys: Array = _Job.Type.keys()
+		for i in range(keys.size()):
+			Pawn._job_type_name_cache[i] = str(keys[i]).to_upper()
+		Pawn._job_type_name_cache_built = true
+	return str(Pawn._job_type_name_cache.get(job_type, "UNKNOWN"))
 
 
 func _body_radius() -> float:

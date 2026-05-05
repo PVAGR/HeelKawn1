@@ -5,7 +5,7 @@ extends Node2D
 ## pawns are near each other and idle, based on their needs, mood,
 ## profession, and recent events. Throttled to avoid spam.
 
-const CHECK_EVERY_N_TICKS: int = 30
+const CHECK_EVERY_N_TICKS: int = 60  # Throttled from 30 to reduce O(n²) scan frequency
 const MAX_BUBBLES: int = 5
 const BUBBLE_LIFETIME: float = 2.5
 const BUBBLE_RADIUS: float = 60.0  # proximity for social chatter
@@ -55,8 +55,9 @@ func _try_spawn_bubbles() -> void:
 	if all_pawns.is_empty():
 		return
 
-	# Find idle pawns near other idle pawns
-	var candidates: Array[Dictionary] = []
+	# Find idle pawns near other idle pawns — use spatial proximity instead of O(n²) scan.
+	# First collect idle pawns, then check distance only among idle set.
+	var idle_pawns: Array = []
 	for p in all_pawns:
 		if p == null or not is_instance_valid(p):
 			continue
@@ -64,15 +65,16 @@ func _try_spawn_bubbles() -> void:
 			continue
 		if p.data == null:
 			continue
-		# Check if near another idle pawn
+		idle_pawns.append(p)
+	var candidates: Array[Dictionary] = []
+	var r_sq: float = BUBBLE_RADIUS * BUBBLE_RADIUS
+	for p in idle_pawns:
 		var has_neighbor: bool = false
-		for other in all_pawns:
-			if other == p or other == null or not is_instance_valid(other):
+		for other in idle_pawns:
+			if other == p:
 				continue
-			if other._state != other.State.IDLE:
-				continue
-			var dist: float = p.global_position.distance_squared_to(other.global_position)  # OPTIMIZATION: Avoid sqrt
-			if dist <= BUBBLE_RADIUS * BUBBLE_RADIUS:
+			var dist: float = p.global_position.distance_squared_to(other.global_position)
+			if dist <= r_sq:
 				has_neighbor = true
 				break
 		if has_neighbor:

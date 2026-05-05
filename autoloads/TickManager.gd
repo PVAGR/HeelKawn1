@@ -176,36 +176,35 @@ func _should_skip_pawn_tick(pawn: Node, current_speed: float) -> bool:
 	## pawn must have a `position` and `tile_pos` property
 	if current_speed < 16.0:
 		return false  # No LOD at normal speeds
-	
+
 	if not is_instance_valid(pawn) or pawn.get("tile_pos") == null:
 		return false
-	
-	## Get nearest settlement center (cached lookup)
-	var tile_pos: Vector2i = pawn.get("tile_pos")
-	var nearest_dist: float = 99999.0
-	
+
 	## Simple check: if pawn has a settlement_id, use that for distance
 	if pawn.get("data") != null:
 		var d = pawn.get("data")
 		if d != null and d.has("settlement_id"):
 			var sid: int = int(d.get("settlement_id"))
 			if sid >= 0:
-				## Pawn is in a settlement - always update
-				return false
-	
-	## At 64x, only sample distant pawns without a settlement.
+				## OPTIMIZATION: Pawns in settlements always update at 16x-32x, sampled at 64x+
+				if current_speed < 64.0:
+					return false
+				## At 64x+, sample settlement pawns at 1/2 rate instead of skipping
+				return (GameManager.tick_count + int(pawn.get_instance_id())) % 2 != 0
+
+	## OPTIMIZATION: Distant pawns without settlement - aggressive LOD
 	if current_speed >= 64.0:
+		## At 64x+: sample at 1/4 rate (skip 3 of 4 ticks)
+		return (GameManager.tick_count + int(pawn.get_instance_id())) % 4 != 0
+	elif current_speed >= 32.0:
+		## At 32x-64x: sample at 1/2 rate (skip every other tick)
+		return (GameManager.tick_count + int(pawn.get_instance_id())) % 2 != 0
+	elif current_speed >= 16.0:
+		## At 16x-32x: skip if pawn is far from activity (no settlement, not carrying)
 		if pawn.get("carrying") == null or pawn.get("carrying") == 0:
-			## Sample distant non-settlement pawns instead of skipping all of them.
-			return (GameManager.tick_count + int(pawn.get_instance_id())) % 8 != 0
-	
-	## At 16x-32x, use distance-based skip
-	if current_speed >= 16.0:
-		## Skip if pawn is far from any activity (no settlement, not carrying resources)
-		if pawn.get("carrying") == null or pawn.get("carrying") == 0:
-			## 50% chance to skip distant pawns (simplified update)
+			## 50% chance to skip distant pawns
 			return (GameManager.tick_count + int(pawn.get_instance_id())) % 2 == 0
-	
+
 	return false
 
 func _call_tick_on_tickables(tick: int) -> int:
@@ -239,8 +238,16 @@ func _call_tick_on_tickables(tick: int) -> int:
 	while i >= 0:
 		var node: Node = _tickable_cache[i]
 		if is_instance_valid(node):
-			node._on_world_tick(tick)
-			valid_count += 1
+			# OPTIMIZATION: Apply LOD to pawn ticks at high speeds
+			var should_skip: bool = false
+			if _speed_multiplier >= 16.0 and node.has_method("_on_world_tick"):
+				# Check if this is a Pawn (has data property with tile_pos)
+				if node.get("data") != null and node.get("data") is Object:
+					should_skip = _should_skip_pawn_tick(node, _speed_multiplier)
+			
+			if not should_skip:
+				node._on_world_tick(tick)
+				valid_count += 1
 		else:
 			_tickable_cache.remove_at(i)
 			_tickable_cache_dirty = true

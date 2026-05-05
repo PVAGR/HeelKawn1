@@ -252,6 +252,7 @@ var _kernel_diagnostic: KernelDiagnostic = null
 ## selection, pause/speed, camera. Structures/zones: planner + jobs only (no human stamp).
 var _phase8_proof_overlay_layer: CanvasLayer = null
 var _phase8_proof_overlay_text: RichTextLabel = null
+var _performance_monitor: PerformanceMonitorUI = null
 var _spatial_profile_overlay_text: RichTextLabel = null
 var _research_particle_texture: Texture2D = null
 ## Content signature for resource-balance console lines (never use snapshot_tick alone — it changes every refresh).
@@ -681,6 +682,7 @@ func _ready() -> void:
 		if _focus_inspector != null:
 			_focus_inspector.set_visible_state(false)
 		_init_phase8_proof_overlay()
+		_init_performance_monitor()
 		_refresh_spatial_profile_overlay()
 		_ensure_meaning_vignette()
 		# Debug panel is loaded lazily via F12 to keep startup path minimal.
@@ -3254,6 +3256,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_toggle_draft_mode()
 		Key.KEY_F5:
 			_colony_save()
+		Key.KEY_F4:
+			_toggle_performance_monitor()
 		Key.KEY_F8:
 			_colony_load()
 		Key.KEY_F9:
@@ -3636,13 +3640,16 @@ func _refresh_spatial_profile_overlay() -> void:
 		return
 	if _spatial_profile_overlay_text == null or not is_instance_valid(_spatial_profile_overlay_text):
 		return
-	var spatial_stats: Dictionary = SpatialManager.get_stats() if SpatialManager != null else {}
-	var total_chunks: int = int(spatial_stats.get("total_chunks", 0))
-	var active_chunks: int = int(spatial_stats.get("active_chunks", 0))
-	var culled_entities: int = int(spatial_stats.get("culled_entities", spatial_stats.get("culled_count", 0)))
-	_spatial_profile_overlay_text.text = "Spatial: %d/%d | Culled Entities: %d" % [
-		active_chunks, total_chunks, culled_entities
-	]
+
+
+func _init_performance_monitor() -> void:
+	# Create performance monitor overlay (toggle with F4)
+	var pm_script := load("res://tools/diagnose/PerformanceMonitor.gd") as Script
+	if pm_script != null:
+		_performance_monitor = pm_script.new() as PerformanceMonitorUI
+		if _performance_monitor != null:
+			add_child(_performance_monitor)
+			_performance_monitor.set_visible_custom(false)  # Start hidden
 
 
 func _center_tile_from_region_key(center_region: int) -> Vector2i:
@@ -6380,6 +6387,12 @@ func _toggle_focus_inspector() -> void:
 	_focus_inspector.set_visible_state(next_visible)
 	if next_visible:
 		_focus_inspector.apply_snapshot(_build_focus_snapshot(GameManager.tick_count))
+
+
+func _toggle_performance_monitor() -> void:
+	if _performance_monitor == null:
+		return
+	_performance_monitor.toggle()
 
 
 func _build_focus_snapshot(tick: int) -> Dictionary:

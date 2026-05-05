@@ -53,9 +53,14 @@ func initialize(world_ref: World, camera_ref: Camera2D) -> void:
 	camera = camera_ref
 	_update_region_colors()
 
+var _overlay_throttle_frames: int = 0
+
 func _process(_delta: float) -> void:
 	if overlay_visible and world != null:
-		_update_overlay()
+		_overlay_throttle_frames += 1
+		if _overlay_throttle_frames >= 30:  # Rebuild every 30 frames instead of every frame
+			_overlay_throttle_frames = 0
+			_update_overlay()
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:

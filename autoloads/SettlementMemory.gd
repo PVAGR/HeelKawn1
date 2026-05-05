@@ -1231,6 +1231,10 @@ func _update_governance_state() -> void:
 
 var _living_pawns_cache: Array[Pawn] = []
 var _living_pawns_cache_tick: int = -1
+## Region-key → Array[Pawn] index, rebuilt alongside _living_pawns_cache.
+## Eliminates O(S×P) governance scan — each settlement looks up its regions
+## in O(1) instead of scanning all pawns.
+var _pawns_by_region_cache: Dictionary = {}
 
 func _living_pawns() -> Array[Pawn]:
     var t: int = GameManager.tick_count if GameManager != null else 0
@@ -1238,25 +1242,46 @@ func _living_pawns() -> Array[Pawn]:
         return _living_pawns_cache
     _living_pawns_cache = PawnSpawner.find_pawns()
     _living_pawns_cache_tick = t
-    return _living_pawns_cache
-
-
-func _governance_for_settlement(st: Dictionary, pawns: Array[Pawn]) -> Dictionary:
-    var regv: Variant = st.get("regions", PackedInt32Array())
-    if not (regv is PackedInt32Array):
-        return {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
-    var regions: PackedInt32Array = regv as PackedInt32Array
-    if regions.is_empty():
-        return {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
-    var region_set: Dictionary = {}
-    for rk in regions:
-        region_set[int(rk)] = true
-    var ranked: Array[Dictionary] = []
-    for p in pawns:
+    # Build region→pawns index in the same pass
+    _pawns_by_region_cache.clear()
+    for p in _living_pawns_cache:
         if p.data == null:
             continue
         var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
-        if not region_set.has(rk):
+        if not _pawns_by_region_cache.has(rk):
+            _pawns_by_region_cache[rk] = []
+        (_pawns_by_region_cache[rk] as Array).append(p)
+    return _living_pawns_cache
+
+
+## Return pawns belonging to a settlement's regions using the cached index.
+## O(R) where R = number of regions in the settlement, instead of O(P).
+func _pawns_in_settlement_indexed(st: Dictionary) -> Array[Pawn]:
+    var regv: Variant = st.get("regions", PackedInt32Array())
+    if not (regv is PackedInt32Array):
+        return []
+    var regs: PackedInt32Array = regv as PackedInt32Array
+    var out: Array[Pawn] = []
+    var seen: Dictionary = {}
+    for rk in regs:
+        var arr: Variant = _pawns_by_region_cache.get(int(rk), null)
+        if arr is Array:
+            for p in arr:
+                var pid: int = int(p.data.id) if p.data != null else -1
+                if pid >= 0 and not seen.has(pid):
+                    seen[pid] = true
+                    out.append(p)
+    return out
+
+
+func _governance_for_settlement(st: Dictionary, _pawns_all: Array[Pawn]) -> Dictionary:
+    # Use indexed lookup instead of scanning all pawns per settlement
+    var set_pawns: Array[Pawn] = _pawns_in_settlement_indexed(st)
+    if set_pawns.is_empty():
+        return {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
+    var ranked: Array[Dictionary] = []
+    for p in set_pawns:
+        if p.data == null:
             continue
         ranked.append({
             "id": int(p.data.id),
@@ -1265,9 +1290,9 @@ func _governance_for_settlement(st: Dictionary, pawns: Array[Pawn]) -> Dictionar
     if ranked.is_empty():
         return {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
     # Influence scales with local settlement population.
-    # Build a lookup dict to avoid O(n²) pawn scan per ranked entry.
+    # Build a lookup dict from settlement pawns only.
     var pawn_by_id: Dictionary = {}
-    for p in pawns:
+    for p in set_pawns:
         if p.data != null:
             pawn_by_id[int(p.data.id)] = p
     for rec in ranked:
@@ -1470,7 +1495,7 @@ func _process_war_state(settlement_idx: int, pawns: Array[Pawn]) -> void:
         return
     var st: Dictionary = settlements[settlement_idx] as Dictionary
     var ws: Dictionary = _coerce_war_status_from_settlement(st)
-    var set_pawns: Array[Pawn] = _pawns_in_settlement(st, pawns)
+    var set_pawns: Array[Pawn] = _pawns_in_settlement_indexed(st)
     var center: int = int(st.get("center_region", -1))
     if str(ws.get("state", "peace")) == "at_war":
         _assign_military_hierarchy(set_pawns)
@@ -1494,7 +1519,7 @@ func _resolve_war_votes(settlement_idx: int) -> void:
         return
     var st: Dictionary = settlements[settlement_idx] as Dictionary
     var ws: Dictionary = _coerce_war_status_from_settlement(st)
-    var pawns: Array[Pawn] = _pawns_in_settlement(st, _living_pawns())
+    var pawns: Array[Pawn] = _pawns_in_settlement_indexed(st)
     if pawns.is_empty():
         ws["state"] = "peace"
         st["war_status"] = ws
@@ -1540,7 +1565,7 @@ func _resolve_war_votes(settlement_idx: int) -> void:
     st["war_status"] = ws
     settlements[settlement_idx] = st
     if ws["state"] == "at_war":
-        var set_pawns: Array[Pawn] = _pawns_in_settlement(st, _living_pawns())
+        var set_pawns: Array[Pawn] = _pawns_in_settlement_indexed(st)
         _assign_military_hierarchy(set_pawns)
         var center: int = int(st.get("center_region", -1))
         if center >= 0 and not bool(_war_command_announced.get(center, false)):
@@ -1661,8 +1686,8 @@ func settlement_should_declare_war(src_idx: int, target_idx: int) -> bool:
         + float(ColonySimServices.get_haul_pressure())
     ) / 4.0
     var living: Array[Pawn] = _living_pawns()
-    var src_score: float = _settlement_military_score(_pawns_in_settlement(src_st, living))
-    var dst_score: float = _settlement_military_score(_pawns_in_settlement(dst_st, living))
+    var src_score: float = _settlement_military_score(_pawns_in_settlement_indexed(src_st))
+    var dst_score: float = _settlement_military_score(_pawns_in_settlement_indexed(dst_st))
     return pressure >= 0.55 and src_score > dst_score
 
 
@@ -1681,7 +1706,7 @@ func get_settlement_military_score(settlement_idx: int) -> float:
     if settlement_idx < 0 or settlement_idx >= settlements.size() or not (settlements[settlement_idx] is Dictionary):
         return 0.0
     var st: Dictionary = settlements[settlement_idx] as Dictionary
-    return _settlement_military_score(_pawns_in_settlement(st, _living_pawns()))
+    return _settlement_military_score(_pawns_in_settlement_indexed(st))
 
 
 func _trigger_war_battle_spawn(src_settlement_id: int, target_settlement_id: int, strength: float) -> bool:
@@ -1710,7 +1735,7 @@ func update_settlement_intents(tick: int) -> void:
         if not (settlements[i] is Dictionary):
             continue
         var st: Dictionary = settlements[i] as Dictionary
-        var settlement_pawns: Array[Pawn] = _pawns_in_settlement(st, living_pawns)
+        var settlement_pawns: Array[Pawn] = _pawns_in_settlement_indexed(st)
         var local_food_pressure: float = _calculate_local_food_pressure(settlement_pawns)
         var local_housing_pressure: float = _calculate_local_housing_pressure(st, settlement_pawns)
         var war_state: String = _war_state_string_from_settlement(st)

@@ -28,8 +28,13 @@ func set_selected_pawn(pawn) -> void:
 	_selected_pawn = pawn
 
 
+var _hover_throttle_frames: int = 0
+
 func _process(_delta: float) -> void:
-	_hovered_pawn = _find_pawn_under_cursor()
+	_hover_throttle_frames += 1
+	if _hover_throttle_frames >= 5:  # Check hover every 5 frames instead of every frame
+		_hover_throttle_frames = 0
+		_hovered_pawn = _find_pawn_under_cursor()
 	queue_redraw()
 
 

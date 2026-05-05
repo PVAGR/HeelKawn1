@@ -83,7 +83,7 @@ func _process(_delta: float) -> void:
 	_tick_counter += 1
 	if _tick_counter % REFRESH_EVERY_N_TICKS == 0:
 		_refresh_terrain()
-	_overlay.queue_redraw()
+		_overlay.queue_redraw()  # Only redraw overlay when terrain refreshes
 
 
 func _refresh_terrain() -> void:

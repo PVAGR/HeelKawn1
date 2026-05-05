@@ -1682,7 +1682,7 @@ func _generate_grudges_for_victim_kin(
 
 ## Generate a complete life biography for a pawn.
 func _generate_pawn_biography(d: PawnData, death_cause: String) -> String:
-	var text: String = ""
+    var text: String = ""
 	
 	# Header
 	text += "[color=#888888]Born: Year %d, Day %d[/color]\n" % [int(d.birth_tick / 360) + 1, int((d.birth_tick % 360) / 10) + 1]

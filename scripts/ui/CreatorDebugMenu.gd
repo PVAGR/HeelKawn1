@@ -87,6 +87,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "grudges", "label": "40 · Grudge system (Phase 5 — grudges, blood feuds)"},
 			{"id": "gossip_reputation", "label": "41 · Gossip & Reputation (Phase 5 — social propagation)"},
 			{"id": "avoidance_ai", "label": "42 · Avoidance AI (Phase 5 — enemy avoidance patterns)"},
+			{"id": "force_building", "label": "50 · FORCE BUILDING — post 10 wall/bed/zone jobs NOW"},
 		],
 	},
 	{
@@ -300,6 +301,8 @@ func _emit_report(report_id: String) -> void:
 			_report_gossip_reputation()
 		"avoidance_ai":
 			_report_avoidance_ai()
+		"force_building":
+			_force_building_now()
 		"vision_scope":
 			_report_vision_scope()
 		"player_intents":
@@ -1424,6 +1427,75 @@ func _report_avoidance_ai() -> void:
 	
 	print("")
 	print("=== END AVOIDANCE REPORT ===")
+
+
+# === BUILDING FORCES ===
+
+func _force_building_now() -> void:
+	print("=== FORCE BUILDING JOBS ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+	
+	var main_node: Node = get_node_or_null("/root/Main")
+	if main_node == null:
+		print("ERROR: Main node not found")
+		return
+	
+	var world_node: Node = main_node.get_node_or_null("World")
+	if world_node == null:
+		print("ERROR: World node not found")
+		return
+	
+	var jobs_posted: int = 0
+	
+	# Post 5 wall jobs
+	for i in range(5):
+		var wall_tile: Vector2i = Vector2i(127 + i, 127 + i)
+		if world_node.has_method("get"):
+			var data: Variant = world_node.get("data")
+			if data != null and data.has_method("in_bounds") and data.in_bounds(wall_tile.x, wall_tile.y):
+				if main_node.has_method("settlement_planner_post_wall"):
+					var result: Variant = main_node.call("settlement_planner_post_wall", wall_tile)
+					if result:
+						jobs_posted += 1
+						print("Posted WALL job at (%d, %d)" % [wall_tile.x, wall_tile.y])
+	
+	# Post 3 bed jobs
+	for i in range(3):
+		var bed_tile: Vector2i = Vector2i(125 + i, 125 + i)
+		if world_node.has_method("get"):
+			var data: Variant = world_node.get("data")
+			if data != null and data.has_method("in_bounds") and data.in_bounds(bed_tile.x, bed_tile.y):
+				if main_node.has_method("settlement_planner_post_bed"):
+					var result: Variant = main_node.call("settlement_planner_post_bed", bed_tile)
+					if result:
+						jobs_posted += 1
+						print("Posted BED job at (%d, %d)" % [bed_tile.x, bed_tile.y])
+	
+	# Post 2 zone jobs
+	for i in range(2):
+		var zone_origin: Vector2i = Vector2i(120 + (i * 5), 120 + (i * 5))
+		if main_node.has_method("settlement_planner_post_zone_rect"):
+			var rect: Rect2i = Rect2i(zone_origin, Vector2i(3, 3))
+			var result: Variant = main_node.call("settlement_planner_post_zone_rect", rect)
+			if result:
+				jobs_posted += 1
+				print("Posted ZONE job at (%d, %d) size 3x3" % [zone_origin.x, zone_origin.y])
+	
+	# Force settlement state to active
+	if SettlementMemory != null and SettlementMemory.has_method("get_settlements"):
+		var settlements: Array = SettlementMemory.get_settlements()
+		for s in settlements:
+			if s is Dictionary:
+				var current_state: String = str(s.get("state", "unknown"))
+				if current_state == "abandoned":
+					s["state"] = "active"
+					print("Forced settlement %s to ACTIVE state" % str(s.get("id", "?")))
+	
+	print("")
+	print("Total jobs posted: %d" % jobs_posted)
+	print("=== END FORCE BUILDING ===")
 
 
 func _report_error_issues() -> void:

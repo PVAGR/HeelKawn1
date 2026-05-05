@@ -3,7 +3,7 @@ extends Node
 ## (read-only; posts via Main + JobManager). Not every tick: memory-dirty or interval.
 ## Culture: derived from settlement scar_max + reputation_min (read-only; not stored).
 
-const PLANNING_INTERVAL_TICKS: int = 2000
+const PLANNING_INTERVAL_TICKS: int = 500  # OPTIMIZATION: Increased frequency from 2000 for faster building response
 const CORE_BOX_R: int = 2
 const VILLAGE_SPAN: int = 7
 ## First perimeter: OPEN uses a larger initial ring (loose), DEF a tighter one (fortified).

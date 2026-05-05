@@ -237,6 +237,7 @@ var social_squad_anchor_id: int = -1
 ## comes later with proper inventories.
 var carrying: int = 0  # Item.Type.NONE
 var carrying_qty: int = 0
+var carrying_capacity: int = 20  # OPTIMIZATION: Increased from default - pawns can carry more before returning to stockpile
 
 ## Equipped tool (Item.Type). None means bare-handed.
 var equipped_tool: int = 0  # Item.Type.NONE

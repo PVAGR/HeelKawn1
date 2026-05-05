@@ -309,6 +309,8 @@ func recompute(_world: World) -> void:
         )
         var center_id0: int = int(st0.get("center_region", -1))
         st0["state"] = _apply_settlement_state_truth_hysteresis(center_id0, raw_state0, base_state0, st0)
+        # OPTIMIZATION: Force new settlements active for better early game
+        st0 = _force_settlement_active_on_founding(st0)
         _apply_diaspora_founding(st0, center_id0)
         settlements.append(st0)
         var st_name0: String = str(st0.get("state", ""))
@@ -337,6 +339,8 @@ func recompute(_world: World) -> void:
             )
             var center_id: int = int(st.get("center_region", -1))
             st["state"] = _apply_settlement_state_truth_hysteresis(center_id, raw_state, base_state, st)
+            # OPTIMIZATION: Force new settlements active for better early game
+            st = _force_settlement_active_on_founding(st)
             _apply_diaspora_founding(st, center_id)
             settlements.append(st)
             var st_name: String = str(st.get("state", ""))
@@ -1089,6 +1093,16 @@ func _max_last_pawn_death_tick_in_regions(regions: PackedInt32Array) -> int:
 ## True for [abandoned] (recent hard collapse) and [permanently_abandoned] (older hard collapse).
 func is_collapsed_state(state: String) -> bool:
     return state == "abandoned" or state == "permanently_abandoned"
+
+
+## OPTIMIZATION: Force new settlements to start as "active" for better early game
+func _force_settlement_active_on_founding(settlement: Dictionary) -> Dictionary:
+    var current_state: String = str(settlement.get("state", "active"))
+    # Only override collapsed states - let natural abandonment happen later
+    if current_state == "abandoned" or current_state == "permanently_abandoned":
+        settlement["state"] = "active"
+        settlement["force_active_ticks"] = 10000  # Force active for first 10000 ticks
+    return settlement
 
 
 ## True if [param region_key] lies in a settlement whose current [member settlements] [code]state[/code] is collapsed.

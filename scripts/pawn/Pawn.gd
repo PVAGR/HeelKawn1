@@ -2364,12 +2364,15 @@ func _tick_idle() -> void:
 			base_bias += 2
 		# When the pantry is not in emergency, nudge non-food labor so the colony
 		# visibly diversifies (stone, wood, planned builds) instead of idle wandering.
+		# OPTIMIZATION: Strong bias toward BUILD jobs to get settlement started
 		if not food_emergency:
 			match int(j.type):
 				_Job.Type.MINE, _Job.Type.MINE_WALL, _Job.Type.CHOP:
-					base_bias += 2
-				_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR:
-					base_bias += 1
+					base_bias += 3  # Increased from 2
+				_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT:
+					base_bias += 6  # NEW: Strong priority for building
+				_Job.Type.FORAGE, _Job.Type.HUNT:
+					base_bias -= 1  # Slightly deprioritize foraging when not starving
 
 		# Crisis priority bonus (snapshot pressures once per claim pass).
 		# Boost BUILD_BED jobs during housing crisis

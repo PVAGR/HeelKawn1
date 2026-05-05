@@ -356,6 +356,18 @@ func inscribe_knowledge_on_stone(tile: Vector2i, knowledge_types: Array, inscrib
 		"carrier_type": carrier_type,
 		"tick": GameManager.tick_count
 	})
+	
+	# TEXT-RICH: Show knowledge inscription notification
+	var event_overlay: Node = get_node_or_null("/root/EventNotificationOverlay")
+	if event_overlay != null and event_overlay.has_method("notify_knowledge_inscribed"):
+		# Get pawn name
+		var pawn_name: String = "Unknown"
+		var ps: Node = get_node_or_null("/root/PawnSpawner")
+		if ps != null and ps.has_method("pawn_data_for_id"):
+			var pawn_data: PawnData = ps.call("pawn_data_for_id", inscriber_id)
+			if pawn_data != null:
+				pawn_name = pawn_data.display_name
+		event_overlay.call("notify_knowledge_inscribed", pawn_name, knowledge_types)
 
 func read_knowledge_from_stone(pawn_id: int, tile: Vector2i) -> Array:
 	# Pawn reads knowledge from a record carrier, gaining any knowledge they don't have
@@ -379,6 +391,11 @@ func read_knowledge_from_stone(pawn_id: int, tile: Vector2i) -> Array:
 			"gained_knowledge": gained,
 			"tick": GameManager.tick_count
 		})
+		
+		# TEXT-RICH: Show knowledge reading notification
+		var event_overlay: Node = get_node_or_null("/root/EventNotificationOverlay")
+		if event_overlay != null and event_overlay.has_method("notify_knowledge_read"):
+			event_overlay.call("notify_knowledge_read", pawn_id, gained.size())
 	
 	return gained
 

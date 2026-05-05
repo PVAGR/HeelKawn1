@@ -639,6 +639,14 @@ func record_pawn_death(
         if ps != null and ps.has_method("pawn_data_for_id"):
             pawn_data = ps.call("pawn_data_for_id", pawn_id)
         legacy_sys.call("record_legacy", pawn_id, pawn_data, cause)
+    
+    # TEXT-RICH: Show death notification
+    var event_overlay: Node = get_node_or_null("/root/EventNotificationOverlay")
+    if event_overlay != null and event_overlay.has_method("notify_death"):
+        var age_years: float = 0.0
+        if pawn_data != null:
+            age_years = pawn_data.age / 360.0
+        event_overlay.call("notify_death", pawn_name, age_years, cause)
 
 
 func record_animal_death(

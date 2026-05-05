@@ -929,14 +929,9 @@ func _refresh() -> void:
 	if narrative_label != null:
 		var narrative_text: String = _generate_pawn_narrative(_pawn)
 		if narrative_text != "":
-			# Convert emoji to bbcode colors for better readability
-			var formatted: String = narrative_text.replace("📍", "[color=#FFD166]📍[/color]")
-			formatted = formatted.replace("🎒", "[color=#57C5B6]🎒[/color]")
-			formatted = formatted.replace("📜", "[color=#B084CC]📜[/color]")
-			formatted = formatted.replace("🏠", "[color=#FF6B6B]🏠[/color]")
-			narrative_label.text = formatted
+			narrative_label.text = narrative_text
 		else:
-			narrative_label.text = "[i]No narrative data available[/i]"
+			narrative_label.text = "[i][color=#666666]No narrative data available[/color][/i]"
 
 	# Reposition each tick because the panel can grow/shrink with carry text.
 	_reposition()
@@ -1253,34 +1248,67 @@ func _generate_pawn_narrative(pawn: Pawn) -> String:
 	var d: PawnData = pawn.data
 	var text: String = ""
 	
+	# Header with pawn identity
+	text += "[color=#FFD166][b]━━━ %s the %s ━━━[/b][/color]\n" % [d.display_name.to_upper(), d.profession_name().to_upper()]
+	text += "[color=#888888]Age: %.1f years | Level: %d | Mood: %s[/color]\n\n" % [d.age / 360.0, d.level, d.mood_state_display()]
+	
 	# Current activity with location
-	text += "📍 Currently: " + _get_activity_description(pawn) + "\n"
+	text += "[color=#FFD166][b]📍 CURRENTLY:[/b][/color]\n"
+	text += "  %s\n" % _get_activity_description(pawn)
+	if pawn._current_job != null:
+		var job_name: String = Job.describe_type(pawn._current_job.type)
+		text += "  [color=#666666](%s job at tile %d,%d)[/color]\n\n" % [job_name, pawn._current_job.work_tile.x, pawn._current_job.work_tile.y]
+	else:
+		text += "\n"
 	
 	# Carrying status
 	if d.carrying != Item.Type.NONE and d.carrying_qty > 0:
 		var item_name: String = _get_item_name(d.carrying)
-		text += "🎒 Carrying: %d %s" % [d.carrying_qty, item_name]
+		text += "[color=#57C5B6][b]🎒 CARRYING:[/b][/color]\n"
+		text += "  %d %s" % [d.carrying_qty, item_name]
 		if d.carrying_qty > 1:
 			text += "s"
 		# Check if hauling to stockpile
 		if pawn._state == Pawn.State.HAULING or pawn._state == Pawn.State.FETCHING_MATERIAL:
-			text += " → heading to stockpile"
-		text += "\n"
+			text += " [color=#666666]→ heading to stockpile[/color]"
+		text += "\n\n"
 	
-	# Recent history (last 3-5 events)
+	# Skills summary
+	text += "[color=#B084CC][b]📊 SKILLS:[/b][/color]\n"
+	var skill_text: String = _get_skills_summary(d)
+	text += "  %s\n\n" % skill_text
+	
+	# Recent history (last 5 events)
 	var events: Array[Dictionary] = _get_pawn_events(d.id, 5)
 	if not events.is_empty():
-		text += "📜 Recent History:\n"
+		text += "[color=#B084CC][b]📜 RECENT HISTORY:[/b][/color]\n"
 		for ev in events:
 			var event_text: String = _format_event(ev)
 			if event_text != "":
-				text += "   • " + event_text + "\n"
+				text += "  [color=#888888]•[/color] %s\n" % event_text
+		text += "\n"
 	
 	# Settlement home
 	if d.settlement_id >= 0:
 		var settlement_name: String = _get_settlement_name(d.settlement_id)
 		if settlement_name != "":
-			text += "🏠 Home: %s\n" % settlement_name
+			var settlement_state: String = _get_settlement_state(d.settlement_id)
+			text += "[color=#FF6B6B][b]🏠 HOME:[/b][/color]\n"
+			text += "  %s [color=#666666](%s)[/color]\n\n" % [settlement_name, settlement_state]
+	
+	# Family ties
+	var family_text: String = _get_family_summary(d)
+	if family_text != "":
+		text += "[color=#FF9F6B][b]👨‍👩‍👧‍👦 FAMILY:[/b][/color]\n"
+		text += "  %s\n\n" % family_text
+	
+	# Legacy preview (Phase 7)
+	var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
+	if legacy_sys != null and legacy_sys.has_method("get_legacy_entry"):
+		var legacy: Dictionary = legacy_sys.call("get_legacy_entry", int(d.id))
+		if not legacy.is_empty():
+			var score: int = int(legacy.get("legacy_score", 0))
+			text += "[color=#FFD166][b]⭐ LEGACY SCORE:[/b][/color] [color=#FFD166]%d[/color]\n" % score
 	
 	return text
 
@@ -1493,3 +1521,77 @@ func _pawn_spawner() -> PawnSpawner:
 	if main_node == null:
 		return null
 	return main_node.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+
+
+## Get skills summary as formatted string.
+func _get_skills_summary(d: PawnData) -> String:
+	var skills: Array[String] = []
+	
+	# Get skill levels
+	var foraging: int = d.get_skill_level(PawnData.Skill.FORAGING)
+	var mining: int = d.get_skill_level(PawnData.Skill.MINING)
+	var chopping: int = d.get_skill_level(PawnData.Skill.CHOPPING)
+	var building: int = d.get_skill_level(PawnData.Skill.BUILDING)
+	var hunting: int = d.get_skill_level(PawnData.Skill.HUNTING)
+	
+	if foraging > 0:
+		skills.append("Foraging %d" % foraging)
+	if mining > 0:
+		skills.append("Mining %d" % mining)
+	if chopping > 0:
+		skills.append("Chopping %d" % chopping)
+	if building > 0:
+		skills.append("Building %d" % building)
+	if hunting > 0:
+		skills.append("Hunting %d" % hunting)
+	
+	if skills.is_empty():
+		return "[color=#666666]No skills yet[/color]"
+	
+	return ", ".join(skills)
+
+
+## Get family summary as formatted string.
+func _get_family_summary(d: PawnData) -> String:
+	var parts: Array[String] = []
+	
+	if d.children_count > 0:
+		parts.append("%d childr%s" % [d.children_count, "en" if d.children_count > 1 else ""])
+	
+	if d.parent_a_id >= 0 or d.parent_b_id >= 0:
+		var parents: Array[String] = []
+		if d.parent_a_id >= 0:
+			var parent_a = d._get_parent_data(d.parent_a_id)
+			if parent_a != null:
+				parents.append(parent_a.display_name)
+		if d.parent_b_id >= 0:
+			var parent_b = d._get_parent_data(d.parent_b_id)
+			if parent_b != null:
+				parents.append(parent_b.display_name)
+		if not parents.is_empty():
+			parts.append("Child of %s" % " & ".join(parents))
+	
+	if d.spouse_id >= 0:
+		parts.append("Married")
+	
+	if parts.is_empty():
+		return ""
+	
+	return " | ".join(parts)
+
+
+## Get settlement state as string.
+func _get_settlement_state(settlement_id: int) -> String:
+	if SettlementMemory == null or settlement_id < 0:
+		return "Unknown"
+	
+	var settlements: Array = SettlementMemory.settlements
+	if settlement_id >= settlements.size():
+		return "Unknown"
+	
+	var st: Variant = settlements[settlement_id]
+	if st is Dictionary:
+		var state: String = str(st.get("state", "unknown"))
+		return state.capitalize()
+	
+	return "Unknown"

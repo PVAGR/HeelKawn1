@@ -89,6 +89,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "avoidance_ai", "label": "42 · Avoidance AI (Phase 5 — enemy avoidance patterns)"},
 			{"id": "life_arcs", "label": "43 · Life Arcs (Phase 5 — readable pawn narratives)"},
 			{"id": "knowledge_carriers", "label": "44 · Knowledge Carriers (Phase 5 — knowledge at risk, masters)"},
+			{"id": "myth_formation", "label": "45 · Myth Formation (Phase 5 — feared/revered regions)"},
 			{"id": "force_building", "label": "50 · FORCE BUILDING — post 10 wall/bed/zone jobs NOW"},
 		],
 	},
@@ -318,6 +319,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_life_arcs, "life_arcs")
 		"knowledge_carriers":
 			error_occurred = _safe_report(_report_knowledge_carriers, "knowledge_carriers")
+		"myth_formation":
+			error_occurred = _safe_report(_report_myth_formation, "myth_formation")
 		"force_building":
 			error_occurred = _safe_report(_force_building_now, "force_building")
 		"vision_scope":
@@ -1591,6 +1594,106 @@ func _report_knowledge_carriers() -> void:
 
 	print("")
 	print("=== END KNOWLEDGE CARRIERS REPORT ===")
+
+
+# === Phase 5: Myth Formation Report ===
+
+func _report_myth_formation() -> void:
+	print("=== HEELKAWN MYTH FORMATION (Phase 5: World-Memory Behavior) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+
+	var mm: Node = get_node_or_null("/root/MythMemory")
+	if mm == null:
+		print("MythMemory not found - system not loaded")
+		return
+
+	var m: Node2D = _main()
+	if m == null:
+		print("Main node not found")
+		return
+
+	# Get myth state statistics
+	var feared_regions: int = 0
+	var revered_regions: int = 0
+	var neutral_regions: int = 0
+
+	if mm.has_method("get_region_myth_state"):
+		# Sample regions from WorldMemory
+		var wmem: Node = get_node_or_null("/root/WorldMemory")
+		if wmem != null and wmem.has("event_history"):
+			var events: Array = wmem.get("event_history")
+			var sampled_regions: Dictionary = {}
+			for e in events:
+				if e is Dictionary and e.has("r"):
+					var rk: int = int(e.get("r", -1))
+					if rk >= 0:
+						sampled_regions[rk] = true
+
+			for rk in sampled_regions:
+				var state: int = mm.get_region_myth_state(rk)
+				if state == 1:
+					feared_regions += 1
+				elif state == -1:
+					revered_regions += 1
+				else:
+					neutral_regions += 1
+
+	print("--- MYTH STATISTICS ---")
+	print("Feared regions (+1): %d" % feared_regions)
+	print("Revered regions (-1): %d" % revered_regions)
+	print("Neutral regions (0): %d" % neutral_regions)
+	print("")
+
+	# Show settlement rebirth success counts
+	print("--- SETTLEMENT REBIRTH HISTORY ---")
+	if mm.has_method("get_rebirth_success_count_for_center"):
+		var sl: Array = SettlementMemory.settlements
+		if sl.is_empty():
+			print("  (No settlements)")
+		else:
+			for s in sl:
+				if not (s is Dictionary):
+					continue
+				var st: Dictionary = s as Dictionary
+				var ckr: int = int(st.get("center_region", -1))
+				if ckr < 0:
+					continue
+				var rebirths: int = mm.get_rebirth_success_count_for_center(ckr)
+				var state: String = str(st.get("state", "unknown"))
+				var name: String = str(st.get("culture_name", "Unnamed"))
+				print("  %s (%s): %d rebirths, state=%s" % [name, ckr, rebirths, state])
+	print("")
+
+	# Show regional myth states for sampled regions
+	print("--- SAMPLE REGION MYTH STATES ---")
+	var wmem: Node = get_node_or_null("/root/WorldMemory")
+	if wmem != null and wmem.has("event_history"):
+		var events: Array = wmem.get("event_history")
+		var sampled_regions: Dictionary = {}
+		for e in events:
+			if e is Dictionary and e.has("r"):
+				var rk: int = int(e.get("r", -1))
+				if rk >= 0:
+					sampled_regions[rk] = true
+
+		var shown: int = 0
+		for rk in sampled_regions:
+			if shown >= 15:
+				break
+			if mm.has_method("get_region_myth_state"):
+				var state: int = mm.get_region_myth_state(rk)
+				var state_label: String = "Neutral"
+				if state == 1:
+					state_label = "⚠ FEARED (repeated deaths/collapse)"
+				elif state == -1:
+					state_label = "✓ REVERED (successful rebirths)"
+				print("  Region %d: %s" % [rk, state_label])
+				shown += 1
+
+	print("")
+	print("=== END MYTH FORMATION REPORT ===")
 
 
 # === BUILDING FORCES ===

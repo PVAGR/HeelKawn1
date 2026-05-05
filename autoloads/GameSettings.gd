@@ -141,6 +141,34 @@ const SCHEMA: Array[Dictionary] = [
 		"type": "bool",
 		"default": true,
 	},
+	# ── Audio ────────────────────────────────────────────
+	{
+		"key": "master_volume",
+		"label": "Master Volume",
+		"section": "Audio",
+		"type": "int",
+		"min": 0,
+		"max": 100,
+		"step": 5,
+		"default": 80,
+	},
+	{
+		"key": "sfx_volume",
+		"label": "SFX Volume",
+		"section": "Audio",
+		"type": "int",
+		"min": 0,
+		"max": 100,
+		"step": 5,
+		"default": 70,
+	},
+	{
+		"key": "event_sounds",
+		"label": "Event Sounds",
+		"section": "Audio",
+		"type": "bool",
+		"default": true,
+	},
 ]
 
 var _values: Dictionary = {}

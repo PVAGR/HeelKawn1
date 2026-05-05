@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://heelkawn_urgent_alert"]
+
+[ext_resource type="Script" path="res://scripts/ui/UrgentAlert.gd" id="1_alert"]
+
+[node name="UrgentAlert" type="CanvasLayer"]
+script = ExtResource("1_alert")

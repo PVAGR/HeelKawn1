@@ -5950,6 +5950,10 @@ func _draw() -> void:
 			draw_string(font, centered + Vector2(0.5, 0.5), activity_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(0.0, 0.0, 0.0, 0.6))
 			draw_string(font, centered, activity_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, label_color)
 
+	# Social bond lines — draw thin lines to bonded pawns when selected
+	if is_selected and data != null:
+		_draw_social_bonds(body_origin)
+
 
 func _profession_color(prof: int) -> Color:
 	match prof:
@@ -5959,6 +5963,35 @@ func _profession_color(prof: int) -> Color:
 		PawnData.Profession.WARRIOR:  return Color(0.9, 0.2, 0.2)     # red
 		PawnData.Profession.SCHOLAR:  return Color(0.3, 0.5, 0.9)     # blue
 		_:                            return Color.WHITE
+
+
+## Draw thin lines to bonded pawns when this pawn is selected.
+## Family bonds = gold, social squad = teal. Only draws to nearby pawns.
+func _draw_social_bonds(body_origin: Vector2) -> void:
+	if data == null:
+		return
+
+	# Family bonds — gold lines
+	for other_id in data.family_bonds:
+		var other_pawn: Pawn = _find_pawn_by_id(int(other_id))
+		if other_pawn == null or not is_instance_valid(other_pawn):
+			continue
+		var dist: float = global_position.distance_to(other_pawn.global_position)
+		if dist > 500.0:  # ~50 tiles
+			continue
+		var strength: float = float(data.family_bonds[other_id])
+		var alpha: float = clampf(strength / 100.0, 0.15, 0.8)
+		var local_end: Vector2 = to_local(other_pawn.global_position)
+		draw_line(body_origin, local_end, Color(1.0, 0.85, 0.3, alpha), 1.0, true)
+
+	# Social squad — teal line to anchor
+	if data.social_squad_anchor_id >= 0 and data.social_squad_anchor_id != int(data.id):
+		var anchor_pawn: Pawn = _find_pawn_by_id(data.social_squad_anchor_id)
+		if anchor_pawn != null and is_instance_valid(anchor_pawn):
+			var dist: float = global_position.distance_to(anchor_pawn.global_position)
+			if dist <= 500.0:
+				var local_end: Vector2 = to_local(anchor_pawn.global_position)
+				draw_line(body_origin, local_end, Color(0.3, 0.8, 0.8, 0.5), 1.0, true)
 
 
 ## Short activity verb shown below the pawn. Empty string for idle.

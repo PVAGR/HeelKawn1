@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3 uid="uid://heelkawn_main"]
+[gd_scene load_steps=26 format=3 uid="uid://heelkawn_main"]
 
 [ext_resource type="Script" path="res://scenes/main/Main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scenes/main/BuildPreviewOverlay.gd" id="1_preview"]
@@ -25,6 +25,11 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/PawnAIInspector.tscn" id="22_ai_inspector"]
 [ext_resource type="PackedScene" path="res://scenes/ui/SettingsPanel.tscn" id="23_settings"]
 [ext_resource type="PackedScene" path="res://scenes/ui/EventToast.tscn" id="24_event_toast"]
+[ext_resource type="PackedScene" path="res://scenes/ui/Minimap.tscn" id="25_minimap"]
+[ext_resource type="PackedScene" path="res://scenes/ui/UrgentAlert.tscn" id="26_urgent_alert"]
+[ext_resource type="PackedScene" path="res://scenes/ui/AudioController.tscn" id="27_audio"]
+[ext_resource type="PackedScene" path="res://scenes/ui/SaveLoadMenu.tscn" id="28_save_load"]
+[ext_resource type="PackedScene" path="res://scenes/ui/MainMenu.tscn" id="29_main_menu"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -92,3 +97,13 @@ script = ExtResource("9_info")
 [node name="SettingsPanel" parent="UI_Viewport" instance=ExtResource("23_settings")]
 
 [node name="EventToast" parent="UI_Viewport" instance=ExtResource("24_event_toast")]
+
+[node name="Minimap" parent="UI_Viewport" instance=ExtResource("25_minimap")]
+
+[node name="UrgentAlert" parent="UI_Viewport" instance=ExtResource("26_urgent_alert")]
+
+[node name="AudioController" parent="UI_Viewport" instance=ExtResource("27_audio")]
+
+[node name="SaveLoadMenu" parent="UI_Viewport" instance=ExtResource("28_save_load")]
+
+[node name="MainMenu" parent="UI_Viewport" instance=ExtResource("29_main_menu")]

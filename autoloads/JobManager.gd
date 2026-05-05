@@ -325,9 +325,9 @@ func active_count_of_type(type: int) -> int:
 
 func stats() -> Dictionary:
 	return {
-		"open":       _open.size(),
-		"claimed":    _claimed.size(),
-		"posted":     posted_count,
+		"open":	   _open.size(),
+		"claimed":	_claimed.size(),
+		"posted":	 posted_count,
 		"completed":  completed_count,
 		"cancelled":  cancelled_count,
 	}
@@ -389,3 +389,4 @@ func _notify_path_reservation_released(j: Job) -> void:
 		if w is World:
 			(w as World).on_construction_path_job_ended(j)
 			return
+

@@ -149,6 +149,11 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _settings_panel: CanvasLayer = $UI_Viewport/SettingsPanel
 @onready var _toolbar: BuildToolbar = $UI_Viewport/BuildToolbar
 @onready var _info_panel: PawnInfoPanel = $UI_Viewport/PawnInfoPanel
+@onready var _minimap = $UI_Viewport/Minimap
+@onready var _urgent_alert = $UI_Viewport/UrgentAlert
+@onready var _audio_controller = $UI_Viewport/AudioController
+@onready var _save_load_menu = $UI_Viewport/SaveLoadMenu
+@onready var _main_menu = $UI_Viewport/MainMenu
 @onready var _trait_shop: Control = null
 @onready var _debug_panel: Control = null
 @onready var _day_night: DayNightCycle = $DayNight
@@ -572,6 +577,22 @@ func _ready() -> void:
 		# Initialize Phase 5 Map Mode overlay
 		if _map_mode_overlay != null and _map_mode_overlay.has_method("initialize"):
 			_map_mode_overlay.call("initialize", _world, _camera)
+		# Initialize new UI systems
+		if _minimap != null and _minimap.has_method("initialize"):
+			_minimap.initialize(_world, _camera, _pawn_spawner)
+		if _urgent_alert != null and _urgent_alert.has_method("initialize"):
+			_urgent_alert.initialize(_world, _camera)
+		# Wire SaveLoadMenu signals
+		if _save_load_menu != null:
+			_save_load_menu.save_requested.connect(_on_save_slot)
+			_save_load_menu.load_requested.connect(_on_load_slot)
+			_save_load_menu.new_game_requested.connect(_on_new_game)
+		# Wire MainMenu signals
+		if _main_menu != null:
+			_main_menu.new_game_pressed.connect(_on_new_game)
+			_main_menu.load_game_pressed.connect(func(): if _save_load_menu != null: _save_load_menu.toggle())
+			_main_menu.settings_pressed.connect(func(): if _settings_panel != null: _settings_panel.toggle())
+			_main_menu.quit_pressed.connect(func(): get_tree().quit())
 		if TechnologySystem != null:
 			if TechnologySystem.has_signal("research_started") and not TechnologySystem.research_started.is_connected(_on_research_started):
 				TechnologySystem.research_started.connect(_on_research_started)
@@ -5609,6 +5630,40 @@ func _colony_load() -> void:
 		print("[Main] Loaded colony from %s" % GameSave.get_save_path())
 
 
+func _on_save_slot(slot: int) -> void:
+	var snapshot: Dictionary = _build_save_dict()
+	var err: Error = GameSave.write_file(GameSave.get_save_path(slot), snapshot)
+	if err == OK:
+		if OS.is_debug_build():
+			print("[Main] Saved colony to slot %d -> %s" % [slot, GameSave.get_save_path(slot)])
+	else:
+		push_error("[Main] Save slot %d failed (code %d)" % [slot, err])
+
+
+func _on_load_slot(slot: int) -> void:
+	var d: Dictionary = GameSave.read_file(GameSave.get_save_path(slot))
+	if d.is_empty():
+		if OS.is_debug_build():
+			print("[Main] No save at slot %d" % slot)
+		return
+	var save_v: int = int(d.get("v", 0))
+	if save_v < 1 or save_v > GameSave.SAVE_VERSION:
+		if OS.is_debug_build():
+			print("[Main] Save version mismatch at slot %d: got v=%d, supported 1..%d" % [slot, save_v, GameSave.SAVE_VERSION])
+		return
+	_apply_save_dict(d)
+	_reset_job_cooldown_telemetry()
+	if OS.is_debug_build():
+		print("[Main] Loaded colony from slot %d" % slot)
+
+
+func _on_new_game() -> void:
+	if OS.is_debug_build():
+		_reroll_world()
+	if _main_menu != null:
+		_main_menu.hide_menu()
+
+
 ## Debug/editor: ensures `_build_save_dict()` survives `var_to_bytes` → `bytes_to_var` (same
 ## family as [member FileAccess.store_var]). Does not read disk and does not run `_apply_save_dict`.
 ## In running game: Remote Inspector → select [Main] → call [method verify_save_load_state].
@@ -5661,7 +5716,20 @@ func _build_save_dict() -> Dictionary:
 		"player_intent_queue": PlayerIntentQueue.to_save_dict(),
 		"faction_registry": FactionRegistry.to_save_dict(),
 		"last_generation_tick": _last_generation_tick,
+		# Metadata for save/load menu
+		"settlement_name": _get_primary_settlement_name(),
+		"pawn_count": pawns_s.size(),
+		"timestamp": Time.get_datetime_string_from_system(),
 	}
+
+
+func _get_primary_settlement_name() -> String:
+	if SettlementMemory != null:
+		var settlements: Array = SettlementMemory.get_settlements()
+		if not settlements.is_empty():
+			var s: Dictionary = settlements[0] as Dictionary
+			return str(s.get("name", s.get("intent", "Settlement")))
+	return "Settlement"
 
 
 func _save_stockpiles_to_array() -> Array:

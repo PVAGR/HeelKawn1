@@ -5,18 +5,18 @@ const VALIDATION_CLEAN_ECONOMY_EVENTS: bool = false
 
 ## Condition check intervals - EXTREMELY RARE to prevent spam
 ## Events only fire when pawns trigger them through actions
-const WORLD_EVENT_CHECK_INTERVAL: int = 50000  # Check world events every 50k ticks (~1 sim-year)
+## TESTING: Lowered intervals for verification (original values in comments)
+const WORLD_EVENT_CHECK_INTERVAL: int = 10000  # Check world events every 10k ticks (was 50k)
 const WORLD_EVENT_PHASE_OFFSET: int = 1337
-const REGIONAL_EVENT_CHECK_INTERVAL: int = 40000  # Regional events every 40k ticks
+const REGIONAL_EVENT_CHECK_INTERVAL: int = 8000  # Regional events every 8k ticks (was 40k)
 const REGIONAL_EVENT_PHASE_OFFSET: int = 719
-const LOCAL_EVENT_CHECK_INTERVAL: int = 30000  # Local events every 30k ticks
+const LOCAL_EVENT_CHECK_INTERVAL: int = 6000  # Local events every 6k ticks (was 30k)
 const LOCAL_EVENT_PHASE_OFFSET: int = 431
 
-## Event probability tuning - EXTREMELY LOW base chance
-## These are multiplied by pawn-action-based triggers
-const WORLD_EVENT_BASE_CHANCE: float = 0.001  # 0.1% base chance per check
-const REGIONAL_EVENT_BASE_CHANCE: float = 0.002  # 0.2% base chance per check
-const LOCAL_EVENT_BASE_CHANCE: float = 0.003  # 0.3% base chance per check
+## Event probability tuning - increased for testing
+const WORLD_EVENT_BASE_CHANCE: float = 0.01  # 1% base chance per check (was 0.1%)
+const REGIONAL_EVENT_BASE_CHANCE: float = 0.02  # 2% base chance per check (was 0.2%)
+const LOCAL_EVENT_BASE_CHANCE: float = 0.03  # 3% base chance per check (was 0.3%)
 
 const HARVEST_MOON_DURATION_TICKS: int = 200
 const HARVEST_MOON_MULT: float = 1.25
@@ -34,6 +34,11 @@ var _last_regional_shortage_tick: int = -1
 var _pawn_action_counters: Dictionary = {}  # action_type -> count
 var _last_event_tick: int = -1
 const MIN_TICKS_BETWEEN_EVENTS: int = 10000  # Minimum 10k ticks between any world events
+
+## DEBUG: Track total actions for observability
+var _debug_total_actions: int = 0
+var _debug_last_log_tick: int = -1
+const DEBUG_LOG_INTERVAL: int = 5000  # Log action counts every 5k ticks
 
 
 func _ready() -> void:
@@ -59,6 +64,26 @@ func record_pawn_action(action_type: String, pawn_id: int) -> void:
 	var key: String = "%s_%d" % [action_type, pawn_id]
 	var count: int = _pawn_action_counters.get(key, 0)
 	_pawn_action_counters[key] = count + 1
+	_debug_total_actions += 1
+	
+	# DEBUG: Track action accumulation
+	if OS.is_debug_build() and GameManager.tick_count - _debug_last_log_tick >= DEBUG_LOG_INTERVAL:
+		_debug_last_log_tick = GameManager.tick_count
+		var total_actions: int = 0
+		var action_summary: Dictionary = {}
+		for k in _pawn_action_counters:
+			var v: int = int(_pawn_action_counters[k])
+			total_actions += v
+			var parts: PackedStringArray = k.split("_")
+			var atype: String = parts[0] if parts.size() > 0 else k
+			action_summary[atype] = int(action_summary.get(atype, 0)) + v
+		
+		var summary_parts: PackedStringArray = []
+		for atype in action_summary:
+			summary_parts.append("%s:%d" % [atype, int(action_summary[atype])])
+		print("[WorldEvents] tick=%d total_actions=%d %s" % [
+			GameManager.tick_count, total_actions, " | ".join(summary_parts)
+		])
 
 
 func _on_game_tick(tick: int) -> void:
@@ -71,17 +96,32 @@ func _on_game_tick(tick: int) -> void:
 	if tick - _last_event_tick < MIN_TICKS_BETWEEN_EVENTS:
 		return
 
-	# Check world-level events (EXTREMELY RARE - every 50k ticks)
+	# Check world-level events (EXTREMELY RARE - every 10k ticks for testing)
 	if GameManager.periodic_phase_due(tick, WORLD_EVENT_CHECK_INTERVAL, WORLD_EVENT_PHASE_OFFSET):
+		if OS.is_debug_build():
+			var total_actions: int = 0
+			for k in _pawn_action_counters:
+				total_actions += int(_pawn_action_counters[k])
+			print("[WorldEvents] tick=%d checking WORLD events (accumulated_actions=%d)" % [tick, total_actions])
 		if not _suppress_economy_distorting_world_events():
 			_check_world_conditions(tick)
 
-	# Check regional events (RARE - every 40k ticks)
+	# Check regional events (RARE - every 8k ticks for testing)
 	if GameManager.periodic_phase_due(tick, REGIONAL_EVENT_CHECK_INTERVAL, REGIONAL_EVENT_PHASE_OFFSET):
+		if OS.is_debug_build():
+			var total_actions: int = 0
+			for k in _pawn_action_counters:
+				total_actions += int(_pawn_action_counters[k])
+			print("[WorldEvents] tick=%d checking REGIONAL events (accumulated_actions=%d)" % [tick, total_actions])
 		_check_regional_conditions(tick)
 
-	# Check local events (less rare - every 30k ticks)
+	# Check local events (less rare - every 6k ticks for testing)
 	if GameManager.periodic_phase_due(tick, LOCAL_EVENT_CHECK_INTERVAL, LOCAL_EVENT_PHASE_OFFSET):
+		if OS.is_debug_build():
+			var total_actions: int = 0
+			for k in _pawn_action_counters:
+				total_actions += int(_pawn_action_counters[k])
+			print("[WorldEvents] tick=%d checking LOCAL events (accumulated_actions=%d)" % [tick, total_actions])
 		_check_local_conditions(tick)
 
 
@@ -352,7 +392,7 @@ func _current_day() -> int:
 func _record_world_event(event_name: String, description: String, payload: Dictionary = {}) -> void:
 	# Track when this event fired
 	_last_event_tick = GameManager.tick_count
-	
+
 	var rec: Dictionary = {
 		"type": "world_event",
 		"event": event_name,
@@ -365,10 +405,17 @@ func _record_world_event(event_name: String, description: String, payload: Dicti
 	if not rec.has("scope"):
 		rec["scope"] = "world"
 	WorldMemory.record_event(rec)
-	if GameManager.game_speed >= 26.0:
-		return
+	
+	# DEBUG: Always log event firing (even at high speed)
 	if OS.is_debug_build():
-		print("[WorldEvent] Day %d: %s - %s" % [_current_day(), event_name, description])
+		print("[WorldEvent] *** EVENT FIRED *** tick=%d day=%d %s - %s" % [
+			GameManager.tick_count, _current_day(), event_name, description
+		])
+		# Also show accumulated actions
+		var total_actions: int = 0
+		for k in _pawn_action_counters:
+			total_actions += int(_pawn_action_counters[k])
+		print("[WorldEvent]     accumulated_actions=%d" % [total_actions])
 
 
 ## PAWN-ACTIVATED EVENT TRIGGER HELPER

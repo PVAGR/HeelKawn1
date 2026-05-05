@@ -2557,7 +2557,9 @@ func _tick_idle() -> void:
 		if food_job != null:
 			_begin_job(food_job)
 			return
-	var job: Job = JobManager.claim_next_for(self, base_passes, priority_cb)
+	# PROFESSION PRIORITY: Builders prioritize build jobs, Warriors prioritize hunt/combat
+	var profession_bonus: Callable = _get_profession_priority_bonus
+	var job: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(priority_cb, profession_bonus))
 	if job != null:
 		_begin_job(job)
 		return
@@ -6250,6 +6252,72 @@ func _profession_color(prof: int) -> Color:
 		PawnData.Profession.WARRIOR:  return Color(0.9, 0.2, 0.2)     # red
 		PawnData.Profession.SCHOLAR:  return Color(0.3, 0.5, 0.9)     # blue
 		_:                            return Color.WHITE
+
+
+## PROFESSION PRIORITY BONUS - Builders prioritize build jobs, Warriors prioritize hunt
+func _get_profession_priority_bonus(job: Job) -> int:
+	if data == null or data.current_profession == PawnData.Profession.NONE:
+		return 0
+	
+	# Builder: +3 priority for all build jobs (critical for housing strain fix)
+	if data.current_profession == PawnData.Profession.BUILDER:
+		match job.type:
+			Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+				return 3  # High priority for builds
+			Job.Type.GATHER_STICK, Job.Type.GATHER_FLINT:  # Building materials
+				return 1
+			Job.Type.MINE, Job.Type.MINE_WALL:  # Stone for building
+				return 1
+	
+	# Warrior: +3 priority for hunt/combat jobs
+	if data.current_profession == PawnData.Profession.WARRIOR:
+		match job.type:
+			Job.Type.HUNT:
+				return 3
+			Job.Type.CRAFT_SPEAR:  # Weapon crafting
+				return 1
+	
+	# Gatherer: +2 priority for foraging/gathering
+	if data.current_profession == PawnData.Profession.GATHERER:
+		match job.type:
+			Job.Type.FORAGE, Job.Type.GATHER_STICK, Job.Type.GATHER_FLINT:
+				return 2
+			Job.Type.HUNT:
+				return 1
+	
+	# Scholar: +2 priority for research/crafting
+	if data.current_profession == PawnData.Profession.SCHOLAR:
+		match job.type:
+			Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_TORCH, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR:
+				return 2
+			Job.Type.RESEARCH:
+				return 3
+	
+	# Farmer: +2 priority for food jobs
+	if data.current_profession == PawnData.Profession.FARMER:
+		match job.type:
+			Job.Type.FORAGE, Job.Type.HUNT, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES:
+				return 2
+			Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS:
+				return 3
+	
+	return 0
+
+
+## Merge two priority callbacks into one
+func _merge_priority_callbacks(cb1: Callable, cb2: Callable) -> Callable:
+	if not cb1.is_valid() and not cb2.is_valid():
+		return Callable()
+	if not cb1.is_valid():
+		return cb2
+	if not cb2.is_valid():
+		return cb1
+	
+	# Return a merged callback that sums both bonuses
+	return func(job: Job) -> int:
+		var bonus1: int = int(cb1.call(job)) if cb1.is_valid() else 0
+		var bonus2: int = int(cb2.call(job)) if cb2.is_valid() else 0
+		return bonus1 + bonus2
 
 
 ## Draw thin lines to bonded pawns when this pawn is selected.

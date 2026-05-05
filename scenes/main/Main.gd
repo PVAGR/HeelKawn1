@@ -2204,6 +2204,10 @@ func _on_game_tick(tick: int) -> void:
 			SquadCoordinator.recompute(_pawn_spawner)
 		section_us["social_rapport"] = Time.get_ticks_usec() - t0
 	_emit_pawn_divergence_summary_if_needed(tick)
+	# AI observer state export: write lightweight snapshot for external tools.
+	var ai_export_interval: int = _high_speed_interval(30, 60, 120)
+	if tick % ai_export_interval == 0:
+		ObservationAPI.export_ai_state()
 	if _is_simulation_worker_mode():
 		_maybe_log_tick_hotspots(tick, section_us)
 		return

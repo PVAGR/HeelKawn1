@@ -570,6 +570,71 @@ static func _pawn_name_by_id(pawn_id: int) -> String:
 	return "Unknown"
 
 
+## Write a lightweight AI observer snapshot to [code]user://exports/ai_state.json[/code].
+## Called on a tick cadence (not every frame). Returns [code]true[/code] on success.
+## External tools (Python observer, OpenClaw) poll this file for analysis.
+static func export_ai_state() -> bool:
+	var dir := DirAccess.open("user://")
+	if dir != null:
+		dir.make_dir_recursive("exports")
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	var speed: float = GameManager.game_speed if GameManager != null else 1.0
+	var paused: bool = GameManager.is_paused if GameManager != null else false
+	var fps: int = Engine.get_frames_per_second()
+	var settlements_arr: Array = []
+	for st_v in SettlementMemory.settlements:
+		if not (st_v is Dictionary):
+			continue
+		var st: Dictionary = st_v as Dictionary
+		settlements_arr.append({
+			"center_region": int(st.get("center_region", -1)),
+			"state": str(st.get("state", "unknown")),
+			"intent": str(st.get("current_intent", "")),
+			"culture": str(st.get("culture_name", "")),
+			"scar_max": int(st.get("scar_max", 0)),
+			"revival_score": int(st.get("revival_score", 0)),
+			"pawn_count": _count_pawns_in_regions(st.get("regions", PackedInt32Array())),
+		})
+	var wildlife: Dictionary = {}
+	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
+	if main != null and main.has_method("get_wildlife_snapshot_for_diagnostic"):
+		wildlife = main.call("get_wildlife_snapshot_for_diagnostic") as Dictionary
+	var snapshot: Dictionary = {
+		"type": "ai_state",
+		"api_version": "2026-05-05a",
+		"tick": tick,
+		"wall_time": Time.get_datetime_string_from_system(),
+		"fps": fps,
+		"speed": speed,
+		"paused": paused,
+		"sim_diag": GameManager.sim_diag() if GameManager != null else {},
+		"colony": {
+			"stance": ColonySimServices.get_stance_display() if ColonySimServices != null else "unknown",
+			"food_pressure": ColonySimServices.get_food_pressure() if ColonySimServices != null else 0.0,
+			"housing_pressure": ColonySimServices.get_housing_pressure() if ColonySimServices != null else 0.0,
+			"materials_pressure": ColonySimServices.get_materials_pressure() if ColonySimServices != null else 0.0,
+			"haul_pressure": ColonySimServices.get_haul_pressure() if ColonySimServices != null else 0.0,
+		},
+		"settlements": settlements_arr,
+		"jobs": {
+			"open_count": JobManager.open_count() if JobManager != null else 0,
+			"stats": JobManager.stats() if JobManager != null else {},
+		},
+		"world": {
+			"event_count": WorldMemory.event_count() if WorldMemory != null else 0,
+			"wildlife": wildlife,
+		},
+		"player_intent": observe_sim_ambient(-1).get("player_intent", {}),
+	}
+	var path: String = "user://exports/ai_state.json"
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(JSON.stringify(snapshot, "\t"))
+	file.close()
+	return true
+
+
 static func _count_pawns_in_regions(regions_v: Variant) -> int:
 	if not (regions_v is PackedInt32Array):
 		return 0

@@ -99,6 +99,8 @@ var _vbox: VBoxContainer = null
 var _demo_player_intent_seeded: bool = false
 var _last_report_key: String = ""
 var _last_report_tick: int = -1
+var _last_report_wall_time: float = 0.0
+const REPORT_COOLDOWN_SEC: float = 2.0
 
 
 func _ready() -> void:
@@ -212,6 +214,10 @@ func _add_report_button(label_text: String, report_id: String) -> void:
 
 
 func _emit_report(report_id: String) -> void:
+	var now: float = Time.get_unix_time_from_system()
+	if now - _last_report_wall_time < REPORT_COOLDOWN_SEC:
+		return
+	_last_report_wall_time = now
 	var tick: int = GameManager.tick_count
 	if _last_report_tick == tick and _last_report_key == report_id:
 		return

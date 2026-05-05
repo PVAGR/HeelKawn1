@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3 uid="uid://heelkawn_main"]
+[gd_scene load_steps=21 format=3 uid="uid://heelkawn_main"]
 
 [ext_resource type="Script" path="res://scenes/main/Main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scenes/main/BuildPreviewOverlay.gd" id="1_preview"]
@@ -24,6 +24,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/ChronicleLedger.tscn" id="21_ledger"]
 [ext_resource type="PackedScene" path="res://scenes/ui/PawnAIInspector.tscn" id="22_ai_inspector"]
 [ext_resource type="PackedScene" path="res://scenes/ui/SettingsPanel.tscn" id="23_settings"]
+[ext_resource type="PackedScene" path="res://scenes/ui/EventToast.tscn" id="24_event_toast"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -89,3 +90,5 @@ script = ExtResource("9_info")
 [node name="PawnAIInspector" parent="UI_Viewport" instance=ExtResource("22_ai_inspector")]
 
 [node name="SettingsPanel" parent="UI_Viewport" instance=ExtResource("23_settings")]
+
+[node name="EventToast" parent="UI_Viewport" instance=ExtResource("24_event_toast")]

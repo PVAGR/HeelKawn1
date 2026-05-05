@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://heelkawn_event_toast"]
+
+[ext_resource type="Script" path="res://scripts/ui/EventToast.gd" id="1_toast"]
+
+[node name="EventToast" type="CanvasLayer"]
+script = ExtResource("1_toast")

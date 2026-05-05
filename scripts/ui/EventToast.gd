@@ -66,6 +66,8 @@ var _tick_counter: int = 0
 
 
 func _ready() -> void:
+	get_viewport().size_changed.connect(_recenter)
+	call_deferred("_recenter")
 	layer = 10  # Above HUD (default layer 1)
 
 	_panel = PanelContainer.new()
@@ -308,3 +310,10 @@ func _make_panel_style() -> StyleBoxFlat:
 	style.corner_radius_bottom_left = 4
 	style.corner_radius_bottom_right = 4
 	return style
+
+
+func _recenter() -> void:
+	if not is_inside_tree(): return
+	var vs = get_viewport().get_visible_rect().size
+	if _panel:
+		_panel.position = Vector2(MARGIN_LEFT, vs.y - _panel.size.y - MARGIN_BOTTOM)

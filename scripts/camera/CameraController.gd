@@ -73,7 +73,7 @@ func reset_to_world_bounds(world: Node) -> void:
 		return
 	var world_px_w: float = float(WorldData.WIDTH * World.TILE_PIXELS)
 	var world_px_h: float = float(WorldData.HEIGHT * World.TILE_PIXELS)
-	var fit_x: float = world_px_w / viewport_size.x
-	var fit_y: float = world_px_h / viewport_size.y
-	var fit_zoom: float = clamp(maxf(fit_x, fit_y), min_zoom, max_zoom)
-	zoom = Vector2(fit_zoom, fit_zoom)
+        var scale_x: float = viewport_size.x / world_px_w
+        var scale_y: float = viewport_size.y / world_px_h
+        var fit_zoom: float = clamp(maxf(scale_x, scale_y), min_zoom, max_zoom)
+        zoom = Vector2(fit_zoom, fit_zoom)

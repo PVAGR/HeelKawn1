@@ -92,6 +92,8 @@ var _narrative_cache_event_count: int = -1
 
 
 func _ready() -> void:
+	get_viewport().size_changed.connect(_recenter)
+	call_deferred("_recenter")
 	# Pin top-left, leave a small inset.
 	layer = 10
 	GameManager.game_tick.connect(_on_tick)
@@ -1298,3 +1300,10 @@ static func _alert_chip(label: String, count: int, color_hex: String) -> String:
 	if count <= 0:
 		return ""
 	return "[color=%s]%dx %s[/color]  " % [color_hex, count, label]
+
+
+func _recenter() -> void:
+	if not is_inside_tree(): return
+	var p = get_node_or_null("Panel")
+	if p:
+		p.position = Vector2(8, 8)

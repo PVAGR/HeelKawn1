@@ -629,17 +629,18 @@ func record_pawn_death(
     if settlement_id >= 0:
         e["sid"] = settlement_id
     _append(e)
-    
+
     # PHASE 7: Record legacy for this pawn
+    # Get pawn data first (needed for legacy, notification, and biography)
+    var pawn_data: PawnData = null
+    var ps: Node = get_node_or_null("/root/PawnSpawner")
+    if ps != null and ps.has_method("pawn_data_for_id"):
+        pawn_data = ps.call("pawn_data_for_id", pawn_id)
+    
     var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
     if legacy_sys != null and legacy_sys.has_method("record_legacy"):
-        # Get pawn data if available
-        var pawn_data: PawnData = null
-        var ps: Node = get_node_or_null("/root/PawnSpawner")
-        if ps != null and ps.has_method("pawn_data_for_id"):
-            pawn_data = ps.call("pawn_data_for_id", pawn_id)
         legacy_sys.call("record_legacy", pawn_id, pawn_data, cause)
-    
+
     # TEXT-RICH: Show death notification
     var event_overlay: Node = get_node_or_null("/root/EventNotificationOverlay")
     if event_overlay != null and event_overlay.has_method("notify_death"):
@@ -647,7 +648,7 @@ func record_pawn_death(
         if pawn_data != null:
             age_years = pawn_data.age / 360.0
         event_overlay.call("notify_death", pawn_name, age_years, cause, pawn_id)
-    
+
     # TEXT-RICH: Generate and show full pawn biography
     if pawn_data != null:
         var biography: String = _generate_pawn_biography(pawn_data, cause)

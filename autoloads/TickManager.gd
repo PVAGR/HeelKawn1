@@ -170,43 +170,6 @@ func _dispatch_tick(tick: int) -> void:
 		GameManager.tick_count = tick
 
 
-## LOD (Level of Detail) helper: should this pawn skip this tick?
-func _should_skip_pawn_tick(pawn: Node, current_speed: float) -> bool:
-	## At high speeds, distant pawns update less frequently
-	## pawn must have a `position` and `tile_pos` property
-	if current_speed < 16.0:
-		return false  # No LOD at normal speeds
-
-	if not is_instance_valid(pawn) or pawn.get("tile_pos") == null:
-		return false
-
-	## Simple check: if pawn has a settlement_id, use that for distance
-	if pawn.get("data") != null:
-		var d = pawn.get("data")
-		if d != null and d.has("settlement_id"):
-			var sid: int = int(d.get("settlement_id"))
-			if sid >= 0:
-				## OPTIMIZATION: Pawns in settlements always update at 16x-32x, sampled at 64x+
-				if current_speed < 64.0:
-					return false
-				## At 64x+, sample settlement pawns at 1/2 rate instead of skipping
-				return (GameManager.tick_count + int(pawn.get_instance_id())) % 2 != 0
-
-	## OPTIMIZATION: Distant pawns without settlement - aggressive LOD
-	if current_speed >= 64.0:
-		## At 64x+: sample at 1/4 rate (skip 3 of 4 ticks)
-		return (GameManager.tick_count + int(pawn.get_instance_id())) % 4 != 0
-	elif current_speed >= 32.0:
-		## At 32x-64x: sample at 1/2 rate (skip every other tick)
-		return (GameManager.tick_count + int(pawn.get_instance_id())) % 2 != 0
-	elif current_speed >= 16.0:
-		## At 16x-32x: skip if pawn is far from activity (no settlement, not carrying)
-		if pawn.get("carrying") == null or pawn.get("carrying") == 0:
-			## 50% chance to skip distant pawns
-			return (GameManager.tick_count + int(pawn.get_instance_id())) % 2 == 0
-
-	return false
-
 func _call_tick_on_tickables(tick: int) -> int:
 	## PERFORMANCE OPTIMIZATION: Cached tickable nodes.
 	## Instead of calling get_nodes_in_group() + sort every tick (O(n) traversal
@@ -238,16 +201,10 @@ func _call_tick_on_tickables(tick: int) -> int:
 	while i >= 0:
 		var node: Node = _tickable_cache[i]
 		if is_instance_valid(node):
-			# OPTIMIZATION: Apply LOD to pawn ticks at high speeds
-			var should_skip: bool = false
-			if _speed_multiplier >= 16.0 and node.has_method("_on_world_tick"):
-				# Check if this is a Pawn (has data property with tile_pos)
-				if node.get("data") != null and node.get("data") is Object:
-					should_skip = _should_skip_pawn_tick(node, _speed_multiplier)
-			
-			if not should_skip:
-				node._on_world_tick(tick)
-				valid_count += 1
+			# All tickables run every tick - no LOD skipping for pawns
+			# HeelKawn principle: deterministic causality, no frame-dependent behavior
+			node._on_world_tick(tick)
+			valid_count += 1
 		else:
 			_tickable_cache.remove_at(i)
 			_tickable_cache_dirty = true

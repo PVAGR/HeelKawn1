@@ -328,6 +328,9 @@ const MINING_REACT_MIN_INTERVAL_TICKS: int = 300
 const REGROWTH_SCAN_BUDGET_PER_TICK: int = 32
 const REGROWTH_RESTORE_BUDGET_PER_TICK: int = 4
 const MINING_REACT_SCAN_ROWS_PER_STEP: int = 4
+
+# Mining react step interval at high speed (skip N ticks between steps to reduce per-frame load)
+var _mining_react_step_skip_counter: int = 0
 const MINING_REACT_WORK_BUDGET_PER_TICK: int = 2048
 const INSPECT_SCAN_INTERVAL_TICKS: int = 30
 var _last_inspect_event_tick_shown: int = -1
@@ -2219,11 +2222,25 @@ func _on_game_tick(tick: int) -> void:
 			IntentMemory.recompute(_world)
 	var can_run_mining_react: bool = _mining_react_in_progress or (tick - _last_mining_react_tick) >= MINING_REACT_MIN_INTERVAL_TICKS
 	if _mining_react_pending and can_run_mining_react:
-		t0 = Time.get_ticks_usec()
-		var mining_react_done: bool = _react_to_mining_progress_step()
-		section_us["mining_react"] = Time.get_ticks_usec() - t0
-		_last_mining_react_tick = tick
-		_mining_react_pending = not mining_react_done
+		# At high speed, skip N ticks between mining react steps to reduce per-frame load
+		var step_skip: int = _mining_react_step_skip_for_speed()
+		if step_skip > 0:
+			_mining_react_step_skip_counter += 1
+			if _mining_react_step_skip_counter <= step_skip:
+				section_us["mining_react"] = 0
+			else:
+				_mining_react_step_skip_counter = 0
+				t0 = Time.get_ticks_usec()
+				var mining_react_done: bool = _react_to_mining_progress_step()
+				section_us["mining_react"] = Time.get_ticks_usec() - t0
+				_last_mining_react_tick = tick
+				_mining_react_pending = not mining_react_done
+		else:
+			t0 = Time.get_ticks_usec()
+			var mining_react_done: bool = _react_to_mining_progress_step()
+			section_us["mining_react"] = Time.get_ticks_usec() - t0
+			_last_mining_react_tick = tick
+			_mining_react_pending = not mining_react_done
 	t0 = Time.get_ticks_usec()
 	_maybe_generational_turnover()
 	section_us["generational_turnover"] = Time.get_ticks_usec() - t0
@@ -5274,6 +5291,18 @@ func _mining_react_budget_for_speed() -> int:
 	if gs >= 3.0:
 		return maxi(row_safe_minimum, 1024)
 	return maxi(row_safe_minimum, MINING_REACT_WORK_BUDGET_PER_TICK)
+
+
+## At high speed, skip N ticks between mining react steps to spread load.
+func _mining_react_step_skip_for_speed() -> int:
+	if GameManager == null:
+		return 0
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 3  # Run every 4th tick
+	if gs >= 50.0:
+		return 1  # Run every 2nd tick
+	return 0  # Run every tick at normal speed
 
 
 ## Full react pass (legacy callers). Tick loop should prefer `_react_to_mining_progress_step`.

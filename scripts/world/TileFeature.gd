@@ -19,6 +19,10 @@ enum Type {
 	STORAGE_HUT,   # expanded storage: higher capacity, slower spoilage
 	MARKER_STONE,  # carved stone: territorial marker, boosts morale, navigation aid
 	SHRINE,        # ritual site: cultural memory anchor, mood recovery
+	# --- Record Carriers (Phase 5: Knowledge Ecology) ---
+	GRAVE_MARKER,      # grave: preserves memory of dead, knowledge marker
+	KNOWLEDGE_STONE,   # carved stone: stores knowledge for rediscovery
+	LEDGER_STONE,      # record stone: stores settlement history, teachings
 }
 
 ## Colors used for the v1 pixel renderer. Chosen to pop against the biome below.
@@ -37,23 +41,31 @@ const COLORS: Dictionary = {
 	Type.STORAGE_HUT:  Color8(150, 120,  70),  # tan/brown -- reads as storage
 	Type.MARKER_STONE: Color8(140, 140, 150),  # carved gray stone
 	Type.SHRINE:       Color8(180, 160, 200),  # muted purple -- sacred feel
+	# Record Carriers
+	Type.GRAVE_MARKER:    Color8(120, 120, 130),  # somber gray grave
+	Type.KNOWLEDGE_STONE: Color8(100, 140, 180),  # blue-ish knowledge stone
+	Type.LEDGER_STONE:    Color8(160, 140, 100),  # tan/brown record stone
 }
 
 const NAMES: Dictionary = {
-	Type.NONE:         "None",
-	Type.ORE_VEIN:     "Ore Vein",
-	Type.FERTILE_SOIL: "Fertile Soil",
-	Type.RUIN:         "Ruin",
-	Type.TREE:         "Tree",
-	Type.BED:          "Bed",
-	Type.WALL:         "Wall",
-	Type.DOOR:         "Door",
-	Type.RABBIT:       "Rabbit",
-	Type.DEER:         "Deer",
-	Type.FIRE_PIT:     "Fire Pit",
-	Type.STORAGE_HUT:  "Storage Hut",
-	Type.MARKER_STONE: "Marker Stone",
-	Type.SHRINE:       "Shrine",
+	Type.NONE:           "None",
+	Type.ORE_VEIN:       "Ore Vein",
+	Type.FERTILE_SOIL:   "Fertile Soil",
+	Type.RUIN:           "Ruin",
+	Type.TREE:           "Tree",
+	Type.BED:            "Bed",
+	Type.WALL:           "Wall",
+	Type.DOOR:           "Door",
+	Type.RABBIT:         "Rabbit",
+	Type.DEER:           "Deer",
+	Type.FIRE_PIT:       "Fire Pit",
+	Type.STORAGE_HUT:    "Storage Hut",
+	Type.MARKER_STONE:   "Marker Stone",
+	Type.SHRINE:         "Shrine",
+	# Record Carriers
+	Type.GRAVE_MARKER:    "Grave Marker",
+	Type.KNOWLEDGE_STONE: "Knowledge Stone",
+	Type.LEDGER_STONE:    "Ledger Stone",
 }
 
 

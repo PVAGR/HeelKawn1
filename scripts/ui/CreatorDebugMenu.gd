@@ -9,6 +9,8 @@ const _SOUL_EXPORT := preload("res://scripts/kernel/heelkawn_soul_export.gd")
 const _WM = preload("res://autoloads/WorldMemory.gd")
 
 ## PHASE 6: Knowledge Fog - incarnated player only sees what their pawn knows
+const LOCAL_KNOWLEDGE_RADIUS_TILES: int = 50  # Incarnated player only knows events within this radius
+
 func _is_player_incarnated() -> bool:
 	var main_node: Node = get_node_or_null("/root/Main")
 	if main_node == null:
@@ -27,6 +29,38 @@ func _get_player_pawn_id() -> int:
 		if pawn_data != null:
 			return int(pawn_data.get("id", -1))
 	return -1
+
+func _get_player_pawn_tile() -> Vector2i:
+	var main_node: Node = get_node_or_null("/root/Main")
+	if main_node == null:
+		return Vector2i(-1, -1)
+	var player_pawn: Variant = main_node.get("_player_pawn")
+	if player_pawn != null and is_instance_valid(player_pawn):
+		var pawn_data: Variant = player_pawn.get("data")
+		if pawn_data != null and pawn_data.has("tile_pos"):
+			return Vector2i(int(pawn_data.get("tile_pos", Vector2i(-1, -1))))
+	return Vector2i(-1, -1)
+
+func _is_region_known_to_player(region_key: int) -> bool:
+	# Check if region is within LOCAL_KNOWLEDGE_RADIUS_TILES of player pawn
+	if not _is_player_incarnated():
+		return true  # Spectator knows all regions
+	
+	var player_tile: Vector2i = _get_player_pawn_tile()
+	if player_tile.x < 0:
+		return false
+	
+	# Convert region_key to approximate tile position
+	var rx: int = region_key & 0xFFFF
+	var ry: int = (region_key >> 16) & 0xFFFF
+	if rx & 0x8000:
+		rx = -(0x10000 - rx)
+	if ry & 0x8000:
+		ry = -(0x10000 - ry)
+	var region_tile: Vector2i = Vector2i(rx * 16 + 8, ry * 16 + 8)
+	
+	var dist: int = abs(player_tile.x - region_tile.x) + abs(player_tile.y - region_tile.y)
+	return dist <= LOCAL_KNOWLEDGE_RADIUS_TILES
 
 ## Sectioned menu: importance-ish order (playtest first, stubs last).
 const DEBUG_SECTIONS: Array[Dictionary] = [
@@ -1679,11 +1713,11 @@ func _report_myth_formation() -> void:
 		return
 
 	# PHASE 6: Knowledge Fog - incarnated player sees world myths (heard through gossip)
+	# LOCAL KNOWLEDGE: Only shows myths for regions near player pawn
 	var incarnated: bool = _is_player_incarnated()
 	if incarnated:
-		print("⚠ KNOWLEDGE FOG NOTE")
-		print("  Myth states are heard through gossip/rumors.")
-		print("  Your pawn may not know ALL regional myths.")
+		print("⚠ LOCAL KNOWLEDGE ACTIVE")
+		print("  You only know myths for regions within %d tiles." % LOCAL_KNOWLEDGE_RADIUS_TILES)
 		print("")
 
 	var m: Node2D = _main()
@@ -1709,6 +1743,9 @@ func _report_myth_formation() -> void:
 						sampled_regions[rk] = true
 
 			for rk in sampled_regions:
+				# LOCAL KNOWLEDGE: Skip regions player doesn't know about
+				if incarnated and not _is_region_known_to_player(rk):
+					continue
 				var state: int = mm.get_region_myth_state(rk)
 				if state == 1:
 					feared_regions += 1
@@ -1787,11 +1824,13 @@ func _report_record_carriers() -> void:
 		return
 
 	# PHASE 6: Knowledge Fog - incarnated player only sees their inscribed stones
+	# LOCAL KNOWLEDGE: Also filter by distance from player pawn
 	var incarnated: bool = _is_player_incarnated()
 	var player_pawn_id: int = _get_player_pawn_id() if incarnated else -1
+	var player_tile: Vector2i = _get_player_pawn_tile() if incarnated else Vector2i(-1, -1)
 	if incarnated and player_pawn_id >= 0:
-		print("⚠ KNOWLEDGE FOG ACTIVE (Incarnated as pawn %d)" % player_pawn_id)
-		print("  You only see stones YOUR pawn inscribed.")
+		print("⚠ LOCAL KNOWLEDGE ACTIVE")
+		print("  You only see stones YOUR pawn inscribed AND within %d tiles." % LOCAL_KNOWLEDGE_RADIUS_TILES)
 		print("")
 
 	# Get record carrier statistics
@@ -1805,8 +1844,22 @@ func _report_record_carriers() -> void:
 		for tile_key in carriers:
 			var carrier: Dictionary = carriers[tile_key]
 			var inscriber: int = int(carrier.get("inscriber_id", -1))
+			
+			# Fog: hide stones inscribed by others
 			if incarnated and inscriber != player_pawn_id:
-				continue  # Fog: hide stones inscribed by others
+				continue
+			
+			# Local knowledge: hide stones far from player
+			if incarnated and player_tile.x >= 0:
+				# Parse tile_key "x,y"
+				var parts: PackedStringArray = tile_key.split(",")
+				if parts.size() >= 2:
+					var stone_x: int = int(parts[0])
+					var stone_y: int = int(parts[1])
+					var dist: int = abs(player_tile.x - stone_x) + abs(player_tile.y - stone_y)
+					if dist > LOCAL_KNOWLEDGE_RADIUS_TILES:
+						continue
+			
 			total_carriers += 1
 			var carrier_type: String = str(carrier.get("carrier_type", "unknown"))
 			if carrier_type == "grave_marker":

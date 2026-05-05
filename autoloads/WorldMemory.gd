@@ -646,7 +646,7 @@ func record_pawn_death(
         var age_years: float = 0.0
         if pawn_data != null:
             age_years = pawn_data.age / 360.0
-        event_overlay.call("notify_death", pawn_name, age_years, cause)
+        event_overlay.call("notify_death", pawn_name, age_years, cause, pawn_id)
     
     # TEXT-RICH: Generate and show full pawn biography
     if pawn_data != null:

@@ -106,7 +106,8 @@ func _remove_notification(index: int) -> void:
 ## @param title Main title text (e.g., pawn name)
 ## @param description Detailed description (e.g., "died of old age at 67")
 ## @param icon_override Optional custom icon emoji
-func show_notification(event_type: String, title: String, description: String, icon_override: String = "") -> void:
+## @param pawn_id Optional pawn ID for clickable biographies
+func show_notification(event_type: String, title: String, description: String, icon_override: String = "", pawn_id: int = -1) -> void:
 	var style: Dictionary = NOTIFICATION_STYLES.get(event_type, {
 		"color": Color.WHITE,
 		"icon": "📢",
@@ -135,18 +136,20 @@ func show_notification(event_type: String, title: String, description: String, i
 	# Add to active list
 	var notif_id: int = _notification_id_counter
 	_notification_id_counter += 1
-	
+
 	_active_notifications.append({
 		"id": notif_id,
 		"panel": panel,
 		"start_time": Time.get_ticks_msec() / 1000.0,
-		"priority": priority
+		"priority": priority,
+		"pawn_id": pawn_id
 	})
 
 
 func _create_notification_panel(title: String, description: String, icon: String, color: Color) -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
 	panel.custom_minimum_size = Vector2(400, 0)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP  # Enable clicks
 	
 	# StyleBox for panel
 	var style: StyleBoxFlat = StyleBoxFlat.new()
@@ -192,7 +195,57 @@ func _create_notification_panel(title: String, description: String, icon: String
 	desc_label.add_theme_color_override("font_color", Color8(180, 180, 190))
 	text_container.add_child(desc_label)
 	
+	# Add click handler for death notifications
+	panel.gui_input.connect(_on_notification_clicked.bind(panel))
+	
 	return panel
+
+
+func _on_notification_clicked(event: InputEvent, panel: PanelContainer) -> void:
+	if event is InputEventMouseButton:
+		var mouse_event: InputEventMouseButton = event as InputEventMouseButton
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
+			# Find the notification data
+			for notif in _active_notifications:
+				if notif.panel == panel:
+					# Check if this is a death notification
+					if notif.has("pawn_id"):
+						# Show biography for this pawn
+						_show_pawn_biography(int(notif.pawn_id))
+					break
+
+
+func _show_pawn_biography(pawn_id: int) -> void:
+	# Get pawn data
+	var ps: Node = get_node_or_null("/root/PawnSpawner")
+	if ps == null:
+		return
+	
+	var pawn_data: PawnData = ps.call("pawn_data_for_id", pawn_id)
+	if pawn_data == null:
+		return
+	
+	# Generate biography using WorldMemory's function
+	var wmem: Node = get_node_or_null("/root/WorldMemory")
+	if wmem == null or not wmem.has_method("_generate_pawn_biography"):
+		return
+	
+	var biography: String = wmem.call("_generate_pawn_biography", pawn_data, "clicked_notification")
+	
+	# Show in dialog
+	var dialog: AcceptDialog = AcceptDialog.new()
+	dialog.title = "Biography: %s" % pawn_data.display_name
+	dialog.dialog_text = biography
+	dialog.exclusive = false
+	dialog.resizable = true
+	dialog.size = Vector2(600, 500)
+	
+	# Add close button
+	dialog.add_button("Close", true, "close")
+	
+	# Add to scene
+	get_tree().root.add_child(dialog)
+	dialog.popup_centered()
 
 
 # ==================== PRESET NOTIFICATION HELPERS ====================
@@ -205,11 +258,13 @@ func notify_birth(pawn_name: String, settlement_name: String) -> void:
 	)
 
 
-func notify_death(pawn_name: String, age: float, cause: String) -> void:
+func notify_death(pawn_name: String, age: float, cause: String, pawn_id: int = -1) -> void:
 	show_notification(
 		"death",
 		"⚰ %s Died" % pawn_name,
-		"Age %.1f - %s" % [age, cause]
+		"Age %.1f - %s" % [age, cause],
+		"",
+		pawn_id
 	)
 
 

@@ -357,6 +357,9 @@ func inscribe_knowledge_on_stone(tile: Vector2i, knowledge_types: Array, inscrib
 		"tick": GameManager.tick_count
 	})
 	
+	# TEXT-RICH: Spawn interactive knowledge stone in world
+	_spawn_knowledge_stone(tile, knowledge_types, inscriber_id, carrier_type)
+	
 	# TEXT-RICH: Show knowledge inscription notification
 	var event_overlay: Node = get_node_or_null("/root/EventNotificationOverlay")
 	if event_overlay != null and event_overlay.has_method("notify_knowledge_inscribed"):
@@ -368,6 +371,42 @@ func inscribe_knowledge_on_stone(tile: Vector2i, knowledge_types: Array, inscrib
 			if pawn_data != null:
 				pawn_name = pawn_data.display_name
 		event_overlay.call("notify_knowledge_inscribed", pawn_name, knowledge_types)
+
+
+# ==================== Interactive Knowledge Stone Spawning ====================
+
+func _spawn_knowledge_stone(tile: Vector2i, knowledge_types: Array, inscriber_id: int, carrier_type: String) -> void:
+	var main_node: Node = get_node_or_null("/root/Main")
+	if main_node == null:
+		return
+	
+	# Check if World node exists
+	var world_node: Node = main_node.get_node_or_null("World")
+	if world_node == null:
+		return
+	
+	# Load knowledge stone scene or create from script
+	var stone_script: GDScript = load("res://scripts/world/KnowledgeStone.gd")
+	if stone_script == null:
+		return
+	
+	# Create stone instance
+	var stone: Node2D = Node2D.new()
+	stone.set_script(stone_script)
+	
+	# Set stone data
+	if stone.has_method("set_data"):
+		stone.call("set_data", {
+			"tile_pos": tile,
+			"carrier_type": carrier_type,
+			"inscriber_id": inscriber_id,
+			"inscribed_tick": GameManager.tick_count,
+			"knowledge_types": knowledge_types
+		})
+	
+	# Add to world
+	world_node.add_child(stone)
+
 
 func read_knowledge_from_stone(pawn_id: int, tile: Vector2i) -> Array:
 	# Pawn reads knowledge from a record carrier, gaining any knowledge they don't have

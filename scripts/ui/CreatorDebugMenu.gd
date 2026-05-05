@@ -8,6 +8,26 @@ const PAD: int = 10
 const _SOUL_EXPORT := preload("res://scripts/kernel/heelkawn_soul_export.gd")
 const _WM = preload("res://autoloads/WorldMemory.gd")
 
+## PHASE 6: Knowledge Fog - incarnated player only sees what their pawn knows
+func _is_player_incarnated() -> bool:
+	var main_node: Node = get_node_or_null("/root/Main")
+	if main_node == null:
+		return false
+	if main_node.has_method("is_player_incarnated"):
+		return bool(main_node.call("is_player_incarnated"))
+	return false
+
+func _get_player_pawn_id() -> int:
+	var main_node: Node = get_node_or_null("/root/Main")
+	if main_node == null:
+		return -1
+	var player_pawn: Variant = main_node.get("_player_pawn")
+	if player_pawn != null and is_instance_valid(player_pawn):
+		var pawn_data: Variant = player_pawn.get("data")
+		if pawn_data != null:
+			return int(pawn_data.get("id", -1))
+	return -1
+
 ## Sectioned menu: importance-ish order (playtest first, stubs last).
 const DEBUG_SECTIONS: Array[Dictionary] = [
 	{
@@ -1528,11 +1548,21 @@ func _report_knowledge_carriers() -> void:
 		print("KnowledgeSystem not found - system not loaded")
 		return
 
+	# PHASE 6: Knowledge Fog - incarnated player only sees their own knowledge
+	var incarnated: bool = _is_player_incarnated()
+	var player_pawn_id: int = _get_player_pawn_id() if incarnated else -1
+	if incarnated and player_pawn_id >= 0:
+		print("⚠ KNOWLEDGE FOG ACTIVE (Incarnated as pawn %d)" % player_pawn_id)
+		print("  You only see knowledge YOUR pawn knows.")
+		print("")
+
 	# Get knowledge carrier statistics
 	var total_carriers: int = 0
 	if ks.has("knowledge_carriers"):
 		var carriers: Dictionary = ks.get("knowledge_carriers")
 		for pawn_id in carriers:
+			if incarnated and pawn_id != player_pawn_id:
+				continue  # Fog: hide other pawns' knowledge
 			total_carriers += 1
 
 	print("--- KNOWLEDGE STATISTICS ---")
@@ -1566,11 +1596,13 @@ func _report_knowledge_carriers() -> void:
 		print("PawnSpawner not found")
 		return
 
-	# Count knowledge per pawn
+	# Count knowledge per pawn (filtered by fog)
 	var pawn_knowledge_count: Dictionary = {}
 	if ks.has("knowledge_carriers"):
 		var carriers: Dictionary = ks.get("knowledge_carriers")
 		for pawn_id in carriers:
+			if incarnated and pawn_id != player_pawn_id:
+				continue  # Fog: hide other pawns' knowledge
 			pawn_knowledge_count[pawn_id] = carriers[pawn_id].size()
 
 	# Sort by knowledge count (descending)
@@ -1712,6 +1744,14 @@ func _report_record_carriers() -> void:
 		print("KnowledgeSystem not found - system not loaded")
 		return
 
+	# PHASE 6: Knowledge Fog - incarnated player only sees their inscribed stones
+	var incarnated: bool = _is_player_incarnated()
+	var player_pawn_id: int = _get_player_pawn_id() if incarnated else -1
+	if incarnated and player_pawn_id >= 0:
+		print("⚠ KNOWLEDGE FOG ACTIVE (Incarnated as pawn %d)" % player_pawn_id)
+		print("  You only see stones YOUR pawn inscribed.")
+		print("")
+
 	# Get record carrier statistics
 	var total_carriers: int = 0
 	var grave_markers: int = 0
@@ -1720,9 +1760,12 @@ func _report_record_carriers() -> void:
 
 	if ks.has("record_carriers"):
 		var carriers: Dictionary = ks.get("record_carriers")
-		total_carriers = carriers.size()
 		for tile_key in carriers:
 			var carrier: Dictionary = carriers[tile_key]
+			var inscriber: int = int(carrier.get("inscriber_id", -1))
+			if incarnated and inscriber != player_pawn_id:
+				continue  # Fog: hide stones inscribed by others
+			total_carriers += 1
 			var carrier_type: String = str(carrier.get("carrier_type", "unknown"))
 			if carrier_type == "grave_marker":
 				grave_markers += 1
@@ -1747,12 +1790,14 @@ func _report_record_carriers() -> void:
 		else:
 			var shown: int = 0
 			for tile_key in carriers:
+				var carrier: Dictionary = carriers[tile_key]
+				var inscriber: int = int(carrier.get("inscriber_id", -1))
+				if incarnated and inscriber != player_pawn_id:
+					continue  # Fog: hide stones inscribed by others
 				if shown >= 20:
 					print("  ... and %d more" % (carriers.size() - shown))
 					break
-				var carrier: Dictionary = carriers[tile_key]
 				var knowledge_types: Array = carrier.get("knowledge_types", [])
-				var inscriber: int = int(carrier.get("inscriber_id", -1))
 				var inscribed_tick: int = int(carrier.get("inscribed_tick", -1))
 				var carrier_type: String = str(carrier.get("carrier_type", "unknown"))
 				var ticks_ago: int = GameManager.tick_count - inscribed_tick

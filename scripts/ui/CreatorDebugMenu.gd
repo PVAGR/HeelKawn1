@@ -21,6 +21,10 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 				"id": "session_snapshot_pack",
 				"label": "00 · One paste pack — checklist + ERROR + 31 + 34 (digest)",
 			},
+			{
+				"id": "performance_snapshot",
+				"label": "01 · PERFORMANCE SNAPSHOT — copy this for lag debugging",
+			},
 		],
 	},
 	{
@@ -232,6 +236,8 @@ func _emit_report(report_id: String) -> void:
 			_report_session_snapshot_guide()
 		"session_snapshot_pack":
 			_report_session_snapshot_pack()
+		"performance_snapshot":
+			_report_performance_snapshot()
 		"error_report":
 			_report_error_issues()
 		"calendar":
@@ -368,6 +374,69 @@ func _report_session_snapshot_pack() -> void:
 	print("")
 	print("--- embedded: Creator session digest (34) — CREATOR_START … CREATOR_END ---")
 	_report_creator_session_digest()
+
+
+# === PERFORMANCE DIAGNOSTICS ===
+
+func _report_performance_snapshot() -> void:
+	print("=== HEELKAWN PERFORMANCE SNAPSHOT ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("Game Speed: %.1fx" % GameManager.game_speed)
+	print("")
+	
+	# Count pawns
+	var pawn_count: int = 0
+	var ps: PawnSpawner = null
+	if get_node_or_null("/root/PawnSpawner") != null:
+		ps = get_node_or_null("/root/PawnSpawner") as PawnSpawner
+		if ps != null:
+			pawn_count = ps.pawns.size()
+	
+	print("--- SIMULATION STATE ---")
+	print("Total Pawns: %d" % pawn_count)
+	print("Game Speed: %.1fx" % GameManager.game_speed)
+	print("Is Paused: %s" % str(GameManager.paused))
+	print("")
+	
+	# Settlement stats
+	var settlement_count: int = 0
+	if SettlementMemory != null:
+		settlement_count = SettlementMemory.get_settlement_count() if SettlementMemory.has_method("get_settlement_count") else 0
+	
+	print("--- SETTLEMENT STATS ---")
+	print("Active Settlements: %d" % settlement_count)
+	print("")
+	
+	# Job stats
+	print("--- JOB STATS ---")
+	if JobManager != null:
+		var open_jobs: int = JobManager.open_count() if JobManager.has_method("open_count") else 0
+		var claimed_jobs: int = JobManager.claimed_count() if JobManager.has_method("claimed_count") else 0
+		print("Open Jobs: %d" % open_jobs)
+		print("Claimed Jobs: %d" % claimed_jobs)
+	print("")
+	
+	# Mining react status
+	print("--- MINING REACT STATUS ---")
+	var main_node: Node = get_node_or_null("/root/Main")
+	if main_node != null and main_node.has_method("get"):
+		var mining_pending: Variant = main_node.get("_mining_react_pending")
+		var mining_in_progress: Variant = main_node.get("_mining_react_in_progress")
+		var mining_cursor: Variant = main_node.get("_mining_react_scan_y_cursor")
+		print("Mining React Pending: %s" % str(mining_pending))
+		print("Mining React In Progress: %s" % str(mining_in_progress))
+		print("Mining Scan Y Cursor: %d / 256" % [mining_cursor if mining_cursor != null else 0])
+	print("")
+	
+	# Instructions
+	print("--- HOW TO USE THIS DATA ---")
+	print("1. Run game at speed where you see lag (e.g., 100x)")
+	print("2. When you see freeze, press F10 immediately")
+	print("3. Click '01 · PERFORMANCE SNAPSHOT'")
+	print("4. Copy the output above and send to AI")
+	print("")
+	print("=== END PERFORMANCE SNAPSHOT ===")
 
 
 func _main() -> Node2D:

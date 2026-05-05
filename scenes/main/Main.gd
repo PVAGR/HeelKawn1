@@ -5411,6 +5411,10 @@ static func _is_biome_compatible(feature: int, biome: int) -> bool:
 ##   2. If we have headroom, post one more MINE_WALL aimed at the closest
 ##      still-sealed ore vein, so colonies autonomously dig toward resources.
 func _react_to_mining_progress_step() -> bool:
+	# OPTIMIZATION: Check frame budget at entry
+	var mining_start: int = Time.get_ticks_usec()
+	const MINING_BUDGET_USEC: int = 3000  # 3ms budget for mining react
+	
 	var pf: PathFinder = _world.pathfinder
 	var main_component: int = pf.largest_component_id()
 	if main_component < 0:
@@ -5432,6 +5436,13 @@ func _react_to_mining_progress_step() -> bool:
 	var y_end: int = mini(WorldData.HEIGHT, y_start + rows_step)
 	for y in range(y_start, y_end):
 		for x in range(WorldData.WIDTH):
+			# OPTIMIZATION: Check frame budget periodically
+			if _mining_react_work_used % 512 == 0:
+				if Time.get_ticks_usec() - mining_start > MINING_BUDGET_USEC:
+					_mining_react_in_progress = true
+					_mining_react_scan_y_cursor = y
+					return false  # Defer rest to next tick
+			
 			# Budgeting: count a cheap unit per tile checked. If we exceed
 			# the per-tick budget, pause the scan and continue next tick.
 			_mining_react_work_used += 1
@@ -5472,6 +5483,11 @@ func _react_to_mining_progress_step() -> bool:
 	if active_walls < MAX_ACTIVE_MINE_WALL_JOBS:
 		var wall_tile: Vector2i = _find_next_tunnel_target_cached(main_component)
 		if wall_tile.x >= 0:
+			# OPTIMIZATION: Check frame budget before expensive BFS
+			if Time.get_ticks_usec() - mining_start > MINING_BUDGET_USEC:
+				_mining_react_in_progress = true
+				return false  # Defer wall posting to next tick
+			
 			# work_tile = a passable main-component neighbor of the wall tile.
 			var work_tile: Vector2i = _find_main_component_neighbor(wall_tile, main_component)
 			if work_tile.x >= 0:

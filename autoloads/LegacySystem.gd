@@ -254,15 +254,6 @@ func _check_succession_opportunities() -> void:
 			var heir_id: int = _find_valid_heir(pawn_id)
 			if heir_id >= 0:
 				succession_available.emit(pawn_id, heir_id)
-				
-				# Show succession notification
-				var event_overlay: Node = get_node_or_null("/root/EventNotificationOverlay")
-				if event_overlay != null and event_overlay.has_method("notify_succession"):
-					# Get names
-					var ancestor_name: String = _get_pawn_name(pawn_id)
-					var heir_name: String = _get_pawn_name(heir_id)
-					var knowledge_gained: int = _count_inheritable_knowledge(pawn_id, heir_id)
-					event_overlay.call("notify_succession", heir_name, ancestor_name, knowledge_gained)
 
 
 ## Find a valid heir for succession
@@ -461,15 +452,10 @@ func set_current_player_pawn(pawn_id: int) -> void:
 
 ## Get endgame status
 func get_endgame_status() -> Dictionary:
-	var total_members: int = 0
-	for d in dynasties.values():
-		if d is Dictionary:
-			total_members += int(d.get("total_members", 0))
-	
 	return {
 		"total_legacy": _legacy_score,
 		"dynasty_count": dynasties.size(),
-		"total_dynasty_members": total_members,
+		"total_dynasty_members": sum([d.total_members for d in dynasties.values()]),
 		"player_incarnations": _count_player_incarnations()
 	}
 
@@ -480,25 +466,6 @@ func _count_player_incarnations() -> int:
 		if entry.get("player_incarnated", false):
 			count += 1
 	return count
-
-
-## Get pawn name by ID
-func _get_pawn_name(pawn_id: int) -> String:
-	var ps: Node = get_node_or_null("/root/PawnSpawner")
-	if ps == null or not ps.has_method("pawn_data_for_id"):
-		return "Unknown"
-	
-	var pawn_data: PawnData = ps.call("pawn_data_for_id", pawn_id)
-	if pawn_data != null:
-		return pawn_data.display_name
-	return "Unknown"
-
-
-## Count knowledge that heir can inherit from ancestor
-func _count_inheritable_knowledge(ancestor_id: int, heir_id: int) -> int:
-	var ancestor_entry: Dictionary = legacy_entries.get(ancestor_id, {})
-	var knowledge_preserved: Array = ancestor_entry.get("knowledge_preserved", [])
-	return knowledge_preserved.size()
 
 
 func sum(arr: Array) -> int:

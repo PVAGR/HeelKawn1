@@ -353,9 +353,9 @@ func spawn_generational_pawn(
 	# TEXT-RICH: Show birth notification
 	var event_overlay: Node = get_node_or_null("/root/EventNotificationOverlay")
 	if event_overlay != null and event_overlay.has_method("notify_birth"):
-		var settlement_name: String = data.birth_settlement if str(data.birth_settlement) != "" else "the wilderness"
+		var settlement_name: String = data.birth_settlement if data.birth_settlement != "" else "the wilderness"
 		event_overlay.call("notify_birth", data.display_name, settlement_name)
-	if str(birth_kind) == "rebirth":
+	if birth_kind == "rebirth":
 		WorldMemory.record_event({
 			"type": "generational_birth",
 			"birth_kind": "rebirth",

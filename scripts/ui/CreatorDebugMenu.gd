@@ -159,6 +159,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 		"heading": "★ Phase 7: Dynasty & Legacy",
 		"rows": [
 			{"id": "legacy_dynasty", "label": "70 · Legacy & Dynasty (Phase 7 — endgame tracking)"},
+			{"id": "chronicle_view", "label": "71 · Chronicle View (Phase 5 — settlement history as story)"},
 		],
 	},
 	{
@@ -399,6 +400,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_force_building_now, "force_building")
 		"legacy_dynasty":
 			error_occurred = _safe_report(_report_legacy_dynasty, "legacy_dynasty")
+		"chronicle_view":
+			error_occurred = _safe_report(_report_chronicle_view, "chronicle_view")
 		"vision_scope":
 			error_occurred = _safe_report(_report_vision_scope, "vision_scope")
 		"player_intents":
@@ -2111,6 +2114,157 @@ func _report_legacy_dynasty() -> void:
 
 	print("")
 	print("=== END LEGACY & DYNASTY REPORT ===")
+
+
+# === Phase 5: Chronicle View (Settlement History as Story) ===
+
+func _report_chronicle_view() -> void:
+	print("=== HEELKAWN CHRONICLE (Settlement History as Story) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+
+	var wmem: Node = get_node_or_null("/root/WorldMemory")
+	if wmem == null:
+		print("WorldMemory not found")
+		return
+
+	# Get all events
+	var events: Array[Dictionary] = wmem.get_events()
+	if events.is_empty():
+		print("No events recorded yet.")
+		return
+
+	# Group events by settlement
+	var events_by_settlement: Dictionary = {}
+	var events_global: Array[Dictionary] = []
+
+	for ev in events:
+		var settlement_id: int = int(ev.get("sid", -1))
+		if settlement_id >= 0:
+			if not events_by_settlement.has(settlement_id):
+				events_by_settlement[settlement_id] = []
+			events_by_settlement[settlement_id].append(ev)
+		else:
+			events_global.append(ev)
+
+	# Print global events first
+	if not events_global.is_empty():
+		print("━━━ WORLD EVENTS ━━━")
+		var shown: int = 0
+		for ev in events_global:
+			if shown >= 15:
+				print("  [color=#666666]... and %d more events" % (events_global.size() - shown))
+				break
+			print("  %s" % _format_chronicle_event(ev))
+			shown += 1
+		print("")
+
+	# Print settlement-specific events as stories
+	print("━━━ SETTLEMENT CHRONICLES ━━━")
+	for settlement_id in events_by_settlement:
+		var settlement_events: Array[Dictionary] = events_by_settlement[settlement_id]
+		var settlement_name: String = _get_settlement_name_chronicle(settlement_id)
+		
+		print("\n[color=#FFD166][b]━━━ %s ━━━[/b][/color]" % settlement_name)
+		
+		# Sort events by tick
+		settlement_events.sort_custom(func(a, b): return int(a.get("t", 0)) < int(b.get("t", 0)))
+		
+		# Group by year (every 360 ticks)
+		var events_by_year: Dictionary = {}
+		for ev in settlement_events:
+			var tick: int = int(ev.get("t", 0))
+			var year: int = tick / 360
+			if not events_by_year.has(year):
+				events_by_year[year] = []
+			events_by_year[year].append(ev)
+		
+		# Print by year
+		var years: Array = events_by_year.keys()
+		years.sort()
+		
+		var shown_years: int = 0
+		for year in years:
+			if shown_years >= 5:  # Show last 5 years only
+				var remaining: int = years.size() - shown_years
+				print("  [color=#666666]... %d more years of history" % remaining)
+				break
+			
+			print("\n  [color=#B084CC][b]Year %d:[/b][/color]" % (year + 1))
+			var year_events: Array[Dictionary] = events_by_year[year]
+			
+			for ev in year_events:
+				print("    %s" % _format_chronicle_event(ev))
+			
+			shown_years += 1
+
+	print("\n=== END CHRONICLE ===")
+
+
+## Format a single event for chronicle display.
+func _format_chronicle_event(ev: Dictionary) -> String:
+	var event_type: String = str(ev.get("type", "unknown"))
+	var tick: int = int(ev.get("t", 0))
+	var year: int = tick / 360
+	var day: int = (tick % 360) / 10
+	
+	var time_str: String = "Y%d D%d" % [year + 1, day + 1]
+	
+	match event_type:
+		"pawn_death":
+			var name: String = str(ev.get("n", "Someone"))
+			var cause: String = str(ev.get("c", "unknown"))
+			return "[color=#FF6B6B]⚰ %s died (%s)[/color]" % [name, cause]
+		
+		"birth":
+			var name: String = str(ev.get("n", "A child"))
+			return "[color=#57C5B6]👶 %s was born[/color]" % name
+		
+		"work_event":
+			var job_type: String = str(ev.get("job_type", "work"))
+			return "Completed %s" % job_type
+		
+		"teaching_event":
+			var skill: String = str(ev.get("skill", "skill"))
+			return "[color=#B084CC]📚 Taught %s[/color]" % skill
+		
+		"building_constructed":
+			var building: String = str(ev.get("building_type", "structure"))
+			return "[color=#FFD166]🏗 Built %s[/color]" % building
+		
+		"knowledge_inscribed":
+			return "[color=#B084CC]📜 Knowledge inscribed on stone[/color]"
+		
+		"settlement_founded":
+			var name: String = str(ev.get("name", "Settlement"))
+			return "[color=#FFD166][b]🏰 %s was founded[/b][/color]" % name
+		
+		"social_meeting":
+			return "Social meeting occurred"
+		
+		"social_bond_milestone":
+			var milestone: int = int(ev.get("milestone", 0))
+			return "[color=#FF9F6B]💕 Friendship milestone (%d)[/color]" % milestone
+		
+		_:
+			return "%s occurred" % event_type.capitalize()
+
+
+## Get settlement name for chronicle.
+func _get_settlement_name_chronicle(settlement_id: int) -> String:
+	if SettlementMemory == null or settlement_id < 0:
+		return "Unknown Settlement"
+	
+	var settlements: Array = SettlementMemory.settlements
+	if settlement_id >= settlements.size():
+		return "Settlement #%d" % settlement_id
+	
+	var st: Variant = settlements[settlement_id]
+	if st is Dictionary:
+		return str(st.get("culture_name", "Settlement #%d" % settlement_id))
+	
+	return "Settlement #%d" % settlement_id
 
 
 func _report_error_issues() -> void:

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://heelkawn_weather_overlay"]
+
+[ext_resource type="Script" path="res://scripts/ui/WeatherOverlay.gd" id="1_weather"]
+
+[node name="WeatherOverlay" type="CanvasLayer"]
+script = ExtResource("1_weather")

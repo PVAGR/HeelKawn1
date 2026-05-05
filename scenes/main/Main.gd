@@ -154,6 +154,10 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _audio_controller = $UI_Viewport/AudioController
 @onready var _save_load_menu = $UI_Viewport/SaveLoadMenu
 @onready var _main_menu = $UI_Viewport/MainMenu
+@onready var _tile_tooltip = $UI_Viewport/TileTooltip
+@onready var _camera_bookmarks = $CameraBookmarks
+@onready var _event_particles = $EventParticles
+@onready var _weather_overlay = $WeatherOverlay
 @onready var _trait_shop: Control = null
 @onready var _debug_panel: Control = null
 @onready var _day_night: DayNightCycle = $DayNight
@@ -582,6 +586,15 @@ func _ready() -> void:
 			_minimap.initialize(_world, _camera, _pawn_spawner)
 		if _urgent_alert != null and _urgent_alert.has_method("initialize"):
 			_urgent_alert.initialize(_world, _camera)
+		# Initialize new UI systems (round 2)
+		if _tile_tooltip != null and _tile_tooltip.has_method("initialize"):
+			_tile_tooltip.initialize(_world, _camera)
+		if _camera_bookmarks != null and _camera_bookmarks.has_method("initialize"):
+			_camera_bookmarks.initialize(_camera)
+		if _event_particles != null and _event_particles.has_method("initialize"):
+			_event_particles.initialize(_world)
+		if _weather_overlay != null and _weather_overlay.has_method("initialize"):
+			_weather_overlay.initialize(_world, _camera)
 		# Wire SaveLoadMenu signals
 		if _save_load_menu != null:
 			_save_load_menu.save_requested.connect(_on_save_slot)

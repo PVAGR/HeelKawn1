@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3 uid="uid://heelkawn_main"]
+[gd_scene load_steps=31 format=3 uid="uid://heelkawn_main"]
 
 [ext_resource type="Script" path="res://scenes/main/Main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scenes/main/BuildPreviewOverlay.gd" id="1_preview"]
@@ -30,6 +30,10 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/AudioController.tscn" id="27_audio"]
 [ext_resource type="PackedScene" path="res://scenes/ui/SaveLoadMenu.tscn" id="28_save_load"]
 [ext_resource type="PackedScene" path="res://scenes/ui/MainMenu.tscn" id="29_main_menu"]
+[ext_resource type="PackedScene" path="res://scenes/ui/TileTooltip.tscn" id="30_tile_tooltip"]
+[ext_resource type="PackedScene" path="res://scenes/ui/CameraBookmarks.tscn" id="31_cam_bookmarks"]
+[ext_resource type="PackedScene" path="res://scenes/ui/EventParticles.tscn" id="32_event_particles"]
+[ext_resource type="PackedScene" path="res://scenes/ui/WeatherOverlay.tscn" id="33_weather"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -107,3 +111,11 @@ script = ExtResource("9_info")
 [node name="SaveLoadMenu" parent="UI_Viewport" instance=ExtResource("28_save_load")]
 
 [node name="MainMenu" parent="UI_Viewport" instance=ExtResource("29_main_menu")]
+
+[node name="TileTooltip" parent="UI_Viewport" instance=ExtResource("30_tile_tooltip")]
+
+[node name="CameraBookmarks" parent="." instance=ExtResource("31_cam_bookmarks")]
+
+[node name="EventParticles" parent="." instance=ExtResource("32_event_particles")]
+
+[node name="WeatherOverlay" parent="." instance=ExtResource("33_weather")]

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://heelkawn_tile_tooltip"]
+
+[ext_resource type="Script" path="res://scripts/ui/TileTooltip.gd" id="1_tooltip"]
+
+[node name="TileTooltip" type="CanvasLayer"]
+script = ExtResource("1_tooltip")

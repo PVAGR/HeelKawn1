@@ -389,4 +389,3 @@ func _notify_path_reservation_released(j: Job) -> void:
 		if w is World:
 			(w as World).on_construction_path_job_ended(j)
 			return
-

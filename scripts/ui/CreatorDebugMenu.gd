@@ -160,6 +160,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 		"rows": [
 			{"id": "legacy_dynasty", "label": "70 · Legacy & Dynasty (Phase 7 — endgame tracking)"},
 			{"id": "chronicle_view", "label": "71 · Chronicle View (Phase 5 — settlement history as story)"},
+			{"id": "settlement_legends", "label": "72 · Settlement Legends (Phase 5 — emergent myths & stories)"},
 		],
 	},
 	{
@@ -402,6 +403,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_legacy_dynasty, "legacy_dynasty")
 		"chronicle_view":
 			error_occurred = _safe_report(_report_chronicle_view, "chronicle_view")
+		"settlement_legends":
+			error_occurred = _safe_report(_report_settlement_legends, "settlement_legends")
 		"vision_scope":
 			error_occurred = _safe_report(_report_vision_scope, "vision_scope")
 		"player_intents":
@@ -2265,6 +2268,50 @@ func _get_settlement_name_chronicle(settlement_id: int) -> String:
 		return str(st.get("culture_name", "Settlement #%d" % settlement_id))
 	
 	return "Settlement #%d" % settlement_id
+
+
+# === Phase 5: Settlement Legends (Emergent Myths & Stories) ===
+
+func _report_settlement_legends() -> void:
+	print("=== HEELKAWN SETTLEMENT LEGENDS (Phase 5: Emergent Stories) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+
+	var wmem: Node = get_node_or_null("/root/WorldMemory")
+	if wmem == null:
+		print("WorldMemory not found")
+		return
+
+	# Get all events
+	var events: Array[Dictionary] = wmem.get_events()
+	if events.is_empty():
+		print("No events recorded yet.")
+		return
+
+	# Group events by settlement
+	var events_by_settlement: Dictionary = {}
+	for ev in events:
+		var settlement_id: int = int(ev.get("sid", -1))
+		if settlement_id >= 0:
+			if not events_by_settlement.has(settlement_id):
+				events_by_settlement[settlement_id] = []
+			events_by_settlement[settlement_id].append(ev)
+
+	# Generate legend for each settlement
+	print("━━━ SETTLEMENT LEGENDS ━━━\n")
+	for settlement_id in events_by_settlement:
+		var settlement_events: Array[Dictionary] = events_by_settlement[settlement_id]
+		var settlement_name: String = _get_settlement_name_chronicle(settlement_id)
+		
+		# Generate legend using SettlementLegend class
+		var legend_script: GDScript = load("res://scripts/world/SettlementLegend.gd")
+		if legend_script != null:
+			var legend: String = legend_script.generate_legend(settlement_id, settlement_name, settlement_events)
+			print(legend)
+			print("\n[color=#666666]━━━ ━━━\n[/color]")
+
+	print("=== END SETTLEMENT LEGENDS ===")
 
 
 func _report_error_issues() -> void:

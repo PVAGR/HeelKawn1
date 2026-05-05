@@ -9,8 +9,8 @@ script = ExtResource("1_observer")
 [node name="WorldGovernancePanel" type="PanelContainer" parent="."]
 offset_left = 8.0
 offset_top = 8.0
-offset_right = 440.0
-offset_bottom = 220.0
+offset_right = 408.0
+offset_bottom = 120.0
 mouse_filter = 2
 
 [node name="Margin" type="MarginContainer" parent="WorldGovernancePanel"]
@@ -26,10 +26,10 @@ mouse_filter = 2
 text = "Observer HUD"
 
 [node name="RealmCrownPanel" type="PanelContainer" parent="."]
-offset_left = 448.0
+offset_left = 416.0
 offset_top = 8.0
-offset_right = 832.0
-offset_bottom = 220.0
+offset_right = 824.0
+offset_bottom = 120.0
 mouse_filter = 2
 
 [node name="Margin" type="MarginContainer" parent="RealmCrownPanel"]
@@ -45,10 +45,10 @@ mouse_filter = 2
 text = "Realm crown view"
 
 [node name="DemoEconomyPanel" type="PanelContainer" parent="."]
-offset_left = 840.0
-offset_top = 8.0
-offset_right = 1272.0
-offset_bottom = 220.0
+offset_left = 8.0
+offset_top = 128.0
+offset_right = 408.0
+offset_bottom = 240.0
 mouse_filter = 2
 
 [node name="Margin" type="MarginContainer" parent="DemoEconomyPanel"]
@@ -64,10 +64,10 @@ mouse_filter = 2
 text = "Observer HUD"
 
 [node name="ConflictWarPanel" type="PanelContainer" parent="."]
-offset_left = 8.0
-offset_top = 470.0
-offset_right = 440.0
-offset_bottom = 700.0
+offset_left = 416.0
+offset_top = 128.0
+offset_right = 824.0
+offset_bottom = 240.0
 mouse_filter = 2
 
 [node name="Margin" type="MarginContainer" parent="ConflictWarPanel"]
@@ -83,10 +83,10 @@ mouse_filter = 2
 text = "Observer HUD"
 
 [node name="KernelMemoryPanel" type="PanelContainer" parent="."]
-offset_left = 840.0
-offset_top = 470.0
-offset_right = 1272.0
-offset_bottom = 580.0
+offset_left = 8.0
+offset_top = 248.0
+offset_right = 824.0
+offset_bottom = 358.0
 mouse_filter = 2
 
 [node name="Margin" type="MarginContainer" parent="KernelMemoryPanel"]

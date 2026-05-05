@@ -15,7 +15,7 @@ var _main_loaded: bool = false
 var _test_results: Array[String] = []
 
 
-func _process(_delta: float) -> bool:
+func _process(delta: float) -> void:
 	_test_frame_count += 1
 	
 	# Wait for Main to load
@@ -25,20 +25,19 @@ func _process(_delta: float) -> bool:
 			_main_loaded = true
 			print("[Phase5_6_Test] Main loaded, beginning tests...")
 			print("")
-		return false
+		return
 	
 	# Run tests on frame 30 (after simulation stabilizes)
 	if _test_frame_count == 30:
 		_run_all_tests()
-		return false
+		return
 	
 	# Check for timeout
 	if _test_frame_count > TEST_TIMEOUT_FRAMES:
 		print("[Phase5_6_Test] TIMEOUT - tests took too long")
 		_print_summary()
-		return true
-	
-	return false
+		get_tree().quit(1)
+		return
 
 
 func _run_all_tests() -> void:

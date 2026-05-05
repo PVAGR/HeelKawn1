@@ -41,7 +41,11 @@ func _get_player_pawn_tile() -> Vector2i:
 	if player_pawn != null and is_instance_valid(player_pawn):
 		var pawn_data: Variant = player_pawn.get("data")
 		if pawn_data != null and pawn_data.has("tile_pos"):
-			return Vector2i(int(pawn_data.get("tile_pos", Vector2i(-1, -1))))
+			var tile_pos: Variant = pawn_data.get("tile_pos")
+			if tile_pos is Vector2i:
+				return tile_pos
+			elif tile_pos is Vector2:
+				return Vector2i(int(tile_pos.x), int(tile_pos.y))
 	return Vector2i(-1, -1)
 
 func _is_region_known_to_player(region_key: int) -> bool:
@@ -1597,8 +1601,11 @@ func _report_life_arcs() -> void:
 		# Call compose_life_arc() on pawn data
 		if p.data.has_method("compose_life_arc"):
 			var life_arc: String = p.data.compose_life_arc()
+			var name_padded: String = p.data.display_name
+			while name_padded.length() < 35:
+				name_padded += " "
 			print("╔════════════════════════════════════════╗")
-			print("║ %s" % p.data.display_name.pad_spaces(35))
+			print("║ %s" % name_padded)
 			print("╚════════════════════════════════════════╝")
 			# Print each line of the life arc
 			var lines: PackedStringArray = life_arc.split("\n")

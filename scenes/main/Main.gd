@@ -198,6 +198,10 @@ var _player_mode: int = PlayerMode.SPECTATOR
 const INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES: int = 18
 
 
+func _is_player_incarnated() -> bool:
+	return _player_mode == PlayerMode.INCARNATED
+
+
 func _tile_chebyshev_dist(a: Vector2i, b: Vector2i) -> int:
 	return maxi(absi(a.x - b.x), absi(a.y - b.y))
 

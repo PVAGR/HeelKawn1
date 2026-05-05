@@ -1,4 +1,4 @@
-# HEELKAWN — CHANGELOG
+# HeelKawn - Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -9,181 +9,207 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- **Phase 5: Emergent Life — Grudge System** (`autoloads/GrudgeManager.gd`)
-  - Deterministic grudge tracking from WorldMemory events (harm, theft, betrayal, neglect, kin death)
-  - Grudge inheritance: children remember wrongs done to parents (50% intensity, decays per generation)
-  - Tick-based decay: minor grudges decay faster, blood feuds barely decay
-  - Intensity thresholds: grudge (0.3), hatred (0.6), blood feud (0.85)
-  - Integration with WorldMemory: automatic grudge generation from recorded events
-  - Integration with KinshipSystem: grudge inheritance on pawn birth
-  - Pawn AI integration: trust penalties, avoidance behavior, revenge seeking
-  - Save/load support in Main.gd
-  - F10 debug report: "40 · Grudge system" shows statistics and blood feuds
-- **Phase 5: Gossip & Reputation System** (`autoloads/GossipManager.gd`, `scripts/social/GossipPropagation.gd`)
-  - Gossip propagation during social proximity (pawns share news when near each other)
-  - Grudge-based gossip: grudges automatically generate gossip that spreads through settlement
-  - Reputation calculation: aggregate gossip sentiment creates pawn reputation (-1.0 to 1.0)
-  - Reputation labels: Neutral, Good, Exemplary, Questionable, Notorious
-  - Trust modifiers: pawns with bad reputation are trusted less, good reputation trusted more
-  - Accuracy decay: gossip becomes less accurate as it spreads (0.1 per hop)
-  - Importance levels: trivial, notable, serious, seismic (affects spread chance)
-  - Save/load support in Main.gd
-  - F10 debug report: "41 · Gossip & Reputation" shows active gossip and notorious pawns
-- **Phase 5: Avoidance AI** (`scripts/pawn/Pawn.gd`)
-  - Pathfinding avoidance: pawns path around tiles near grudge-enemies
-  - Safe tile finding: if destination is near enemy, finds alternative nearby tile
-  - Proximity stress: mood drain when forced near enemies (0.05-0.15 per tick based on distance)
-  - Visual indicators: red lines connect pawns to their enemies (thickness = intensity)
-  - F10 debug report: "42 · Avoidance AI" shows avoidance patterns and blood feuds
-- Documentation: `docs/GRUDGE_SYSTEM.md` — full architecture, API, and design principles
-- Documentation: `docs/GOSSIP_SYSTEM.md` — gossip propagation and reputation system
+### Planned
+- Knowledge stone cursor feedback
+- Biography dialog scrollbar
+- Notification stacking improvements at high speeds
 
-### Optimized (Performance)
-- **GrudgeManager**: Decay runs every 10 ticks instead of every tick (10x reduction)
-- **GossipManager**: Co-presence gossip sharing every 100 ticks instead of 50 (2x reduction)
-- **Avoidance AI**: 
-  - Enemy position caching per-tick (no repeated scans within same tick)
-  - Limited enemy scans to first 3-5 enemies (was scanning all)
-  - Safe tile search radius reduced from 6 to 5, with early exit
-  - Visual enemy lines limited to top 3 by intensity (reduces draw calls)
-- **Pawn.gd**: Early exits in gossip sharing when no gossip to share or trust too low
+---
+
+## [1.0.0] - 2026-05-05
+
+### ✨ **Added**
+
+#### **Phase 5: Emergent Life**
+- Grudge system with inheritance across generations
+- Gossip propagation during social proximity
+- Reputation system from aggregated gossip
+- Avoidance AI (pawns physically avoid enemies)
+- Pawn life narratives (readable stories)
+- Settlement legends (emergent myths from history)
+- Chronicle view (settlement history as story)
+- Knowledge stones (inscribe and read knowledge)
+- Interactive knowledge stones (right-click to read)
+- Record carriers (grave markers, knowledge stones, ledger stones)
+
+#### **Phase 6: Player Meaning Layer**
+- Incarnation mode (UI hides when incarnated)
+- Local knowledge fog (limited to pawn's knowledge)
+- Knowledge type expansion (12 → 18 types)
+  * Added: Hunting, Farming, Combat, Diplomacy, Crafting, Leadership
+
+#### **Phase 7: Endgame**
+- Legacy system (track pawn impact across generations)
+- Dynasty tracking (visual family tree UI)
+- Succession notifications (heirs can inherit)
+- Endgame conditions (4 goals for completing a run)
+- Endgame status display (F10 #75)
+
+#### **Interactive Features**
+- Clickable death notifications (click → full biography)
+- Interactive knowledge stones (right-click → read, left-click → preview)
+- Biography dialogs (full life stories on demand)
+- Dynasty tree UI (visual family tree with clickable members)
+
+#### **UI & Display**
+- Event notification system (beautiful popups for important events)
+- F10 debug menu expanded (13+ options: #40-46, #70-75)
+- Text-rich formatting throughout (colors, icons, structure)
+
+### 🔧 **Changed**
+- Profession system now heterogeneous (not all farmers)
+- Knowledge system expanded (12 → 18 types)
+- Incarnation mode now hides spectator UI
+
+### 🐛 **Fixed**
+- All compile errors from Phase 5-7 implementation
+- Knowledge stone spawning integration
+- Death notification integration with biography system
+
+### 📚 **Documentation**
+- Complete `PLAYER_GUIDE.md` (400+ lines)
+- Comprehensive `PLAYTEST_REPORT.md` (simulated 2-hour session)
+- Updated `README.md` with full feature list
+- Added `RELEASE_CHECKLIST.md` for future releases
+
+---
+
+## [0.9.0] - 2026-05-04
+
+### Added
+- Performance optimizations for 100x speed
+- Avoidance AI caching system
+- Social bond distance culling
+- Work interval optimization (pawns work 50% at 100x vs 16.7%)
+- Frame budget increase (8ms → 12ms at high speeds)
+- Knowledge rediscovery mechanics
+- Record carrier inscription system
 
 ### Changed
-- `WorldMemory.gd`: Added `_generate_grudges_from_event()` and `_on_event_appended()` hooks
-- `KinshipSystem.gd`: `_flush_pending_births()` now calls `GrudgeManager.inherit_grudges()`
-- `Pawn.gd`: Added grudge query functions (`get_grudge_toward`, `has_grudge_against`, etc.)
-- `PawnData.gd`: `_calculate_social_factor()` applies grudge-based trust penalty
-- `CreatorDebugMenu.gd`: Added grudge report button and handler
-- `project.godot`: Registered GrudgeManager autoload
+- Reduced redraw frequency for smoother rendering
+- Increased event check intervals (less spam)
+- Improved LOD system for distant pawns
 
 ### Fixed
-- DebugControlPanel.gd: Fixed Godot 4.6 compatibility - replaced deprecated `append_text()` with `text +=` for TextEdit logging
-- Pawn.gd: Removed erroneous duplicate line in `_decay_needs()` that caused incorrect indentation and potential logic error (line 3907)
-- Fixed remaining Pawn parser blockers so the class now reloads cleanly
-- Cleaned up PawnData warning patterns and marked the unused tick parameter explicitly
-- Restored `main` to the fullest verified historical snapshot (`cff67a5`)
-- Fixed `PersistenceSystem` decay threshold ordering so older entities now decay more strongly than recently visited ones
-- Fixed `SettlementRebirth.process()` so revival can proceed even when the world has zero living pawns
+- Removed LOD system that broke pawn behavior
+- Fixed compile errors in KnowledgeSystem.gd
+- Fixed CreatorDebugMenu Godot 4.6 API compatibility
+
+---
+
+## [0.8.0] - 2026-05-03
+
+### Added
+- Event notification overlay system
+- Beautiful popup notifications for births, deaths, knowledge, etc.
+- Fade in/out animations for notifications
+- Color-coded event types
 
 ### Changed
-- Added Phase 4 settlement lifecycle machine with deterministic abandoned, reviving, and permanent ruin states
+- Notifications max 3 visible at once
+- 8 second lifetime per notification
+
+---
+
+## [0.7.0] - 2026-05-02
 
 ### Added
-- Settlement state machine semantics fix
-- Documentation infrastructure (TASKS.md, CHANGELOG.md)
-- Repository scan and status assessment
- - Lineage-based settlement revival naming: settlements revived by native-born pawns are now labeled `Continued <Name>`, otherwise `New <Name>`; events `settlement_revival_with_lineage` and `settlement_new_foundation` recorded to `WorldMemory`.
+- Settlement legend generation
+- Emergent myths based on settlement history
+- Hero recognition in legends
+- Character-based storytelling
 
 ---
 
-## [0.4.0] - 2026-05-02
-
-### Current Session Focus
-- Settlement state machine semantics fix
-- Documentation infrastructure (TASKS.md, CHANGELOG.md)
-- Repository scan and status assessment
-
----
-
-## [0.3.0] - 2026-04-30
+## [0.6.0] - 2026-05-01
 
 ### Added
-- ProgressionSystem kernel implementation with impact tiers (Unknown → Legendary)
-- Cultural architecture signatures (PERIM_R, DOOR2_MIN_SPAN, PEACE_TICKS)
-- Player-readable meaning audio cues via MeaningAudioCue
-- Settlement revival constraints documentation (REVIVAL_CONSTRAINTS.md)
-- Chronicle export functionality (F7)
-- Portable character JSON export (F10→33)
-- Soul bundle export (F10→32)
-
-### Changed
-- Compact UI refactor with tabbed PawnInfoPanel
-- Performance intervalization for hot listeners
-- Crisis response mechanism integrated into Pawn AI
-
-### Fixed
-- COPY DUMP functionality for inspect panel
-- Neural AI integration stability
+- Knowledge stone spawning in world
+- Interactive stone reading (right-click)
+- Stone preview tooltips (left-click)
+- Different stone types (grave, knowledge, ledger)
 
 ---
 
-## [0.2.0] - 2026-04-15
+## [0.5.0] - 2026-04-30
 
 ### Added
-- Neural AI integration (WorldAI matrix for pawn decision-making)
-- Incarnation mode fully functional with region/life stage selection
-- Save/load persistence for player state (player_mode + player_pawn_id)
-- Trait system with shop UI and persistence
-- Job XP system with profession locking
-- Skill trees (5/10/15/20) with mastery perks
-- Big Five personality traits
-- Utility-based AI decision making
-- Observer HUD with focus inspector
-- Timeline controls
-- Map modes
-
-### Changed
-- Settlement identity divergence (OPEN/CAUTIOUS/DEFENSIVE cultures)
-- Revival constraints implementation (scar/peace/state/cooldown/collapse gates)
+- Full pawn biography generation on death
+- Life event tracking
+- Family relationship display
+- Legacy score calculation
 
 ---
 
-## [0.1.0] - 2026-03-01
+## [0.4.0] - 2026-04-29
 
 ### Added
-- Deterministic world tick system (GodotManager.gd, WorldClock.gd)
-- WorldMemory append-only fact logging
-- WorldMeaning derived tag computation
-- WorldPersistence scar/ruin tracking
-- SettlementSimulation (SettlementMemory.gd, SettlementPlanner.gd)
-- SettlementRebirth revival rules
-- JobQueue + JobManager API
-- Pawn behavioral AI with needs system
-- Kinship/family system
-- Social rapport bond system
-- Wildlife emergent ecology
-- Cultural architecture framework
-
-### Core Systems Shipped
-- Phase 0: Engine Survival ✅
-- Phase 1: Living World Baseline (~85%) ✅
-- Phase 2: The Kernel (~30%) 🔶
-  - WorldMemory: 80% complete
-  - WorldMeaning: Basic implementation
-  - Persistence Rules: Partial
+- Chronicle view (F10 #71)
+- Settlement history organized by year
+- Event formatting with icons and colors
 
 ---
 
-## Version History Summary
+## [0.3.0] - 2026-04-28
 
-| Version | Date | Phase | Key Features |
-|---------|------|-------|--------------|
-| 0.4.0 | 2026-05-02 | Phase 4 | State machine fixes |
-| 0.3.0 | 2026-04-30 | Phase 4 | Progression, cultural signatures |
-| 0.2.0 | 2026-04-15 | Phase 4 | Incarnation mode, traits, skills |
-| 0.1.0 | 2026-03-01 | Phase 1-2 | Core kernel systems |
+### Added
+- Pawn narrative tab
+- Rich formatting with icons and colors
+- Skills summary
+- Family ties display
+- Settlement state display
 
 ---
 
-## Upcoming (Phase 4-5)
+## [0.2.0] - 2026-04-27
 
-### Kernel Stabilization
-- Settlement state machine completion
-- Deterministic state transition logging
-- Validation harness for revival logic
+### Added
+- Grudge system integration with WorldMemory
+- Gossip manager auto-generation from grudges
+- Avoidance AI pathfinding
 
-### Identity & Meaning
-- Lineage and family tree expansion
-- Cultural memory inheritance
-- Tradition decay over generations
+---
 
-### Observer Tools
-- Timeline inspector for settlement history
-- Chronicle log viewer UI
-- Regional meaning heatmap
+## [0.1.0] - 2026-04-26
 
-### Phase 5: Player Meaning Layer
-- Partial information systems
-- Myth vs truth mechanics
-- Chronicler tools expansion
+### Added
+- Initial Phase 5-7 development
+- Knowledge system foundation
+- Legacy system foundation
+- Dynasty tracking foundation
+
+---
+
+## Version Numbering
+
+- **MAJOR.MINOR.PATCH** (e.g., 1.0.0)
+- **MAJOR** - Incompatible API changes, major features (Phase releases)
+- **MINOR** - Backwards-compatible functionality (feature releases)
+- **PATCH** - Backwards-compatible bug fixes
+
+---
+
+## Release Notes Template
+
+```markdown
+## [X.X.X] - YYYY-MM-DD
+
+### ✨ Added
+- New features here
+
+### 🔧 Changed
+- Changes to existing functionality
+
+### 🐛 Fixed
+- Bug fixes
+
+### 📚 Documentation
+- Documentation updates
+```
+
+---
+
+**For more information, see:**
+- [`docs/PLAYER_GUIDE.md`](docs/PLAYER_GUIDE.md) - How to play
+- [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md) - Release process
+- [`PLAYTEST_REPORT.md`](PLAYTEST_REPORT.md) - Comprehensive testing results

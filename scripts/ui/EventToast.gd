@@ -91,7 +91,7 @@ func _ready() -> void:
 	_panel.anchor_top = 1.0
 	_panel.anchor_right = 0.0
 	_panel.anchor_bottom = 1.0
-	_panel.grow_horizontal = Control.GROW_DIRECTION_RIGHT
+	_panel.grow_horizontal = Control.GROW_DIRECTION_END
 	_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_panel.offset_left = MARGIN_LEFT
 	_panel.offset_top = -300.0  # Will grow upward from bottom

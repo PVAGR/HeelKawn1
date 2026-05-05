@@ -1,4 +1,4 @@
-extends SceneTree
+extends Node
 
 ## Headless smoke test for Gate 5: ProgressionSystem -> WorldMeaning integration.
 ## Run: godot --path . --headless -s res://tools/sim_progression_meaning_smoke.gd
@@ -13,9 +13,9 @@ func _process(_delta: float) -> bool:
 		return false
 	_test_done = true
 
-	# Validate autoloads
-	var ps = get_node_or_null("/root/ProgressionSystem")
-	var wm = get_node_or_null("/root/WorldMeaning")
+	# Validate autoloads (use Engine singleton for headless script)
+	var ps = Engine.get_singleton("ProgressionSystem") if Engine.has_singleton("ProgressionSystem") else null
+	var wm = Engine.get_singleton("WorldMeaning") if Engine.has_singleton("WorldMeaning") else null
 	if ps == null or wm == null:
 		print("[FAIL] ProgressionSystem or WorldMeaning missing")
 		quit(1)

@@ -74,6 +74,10 @@ const KNOWLEDGE_SECURITY_PHASE_OFFSET: int = 197
 const MASTERY_XP_THRESHOLD: int = 100  # XP level at which a pawn is considered a "master"
 const TEACHING_DEBT_MOOD_PENALTY: float = 0.5  # Mood reduction per 0.1 obligation weight
 const REDISCOVERY_BASE_CHANCE: float = 0.05  # 5% per check at dormant location
+const REDISCOVERY_CHECK_INTERVAL_TICKS: int = 200  # Check for rediscovery every 200 ticks
+const REDISCOVERY_CHECK_PHASE_OFFSET: int = 47
+const SCHOLAR_REDISCOVERY_BONUS: float = 0.15  # +15% chance for scholar pawns
+const CURIOSITY_REDISCOVERY_BONUS: float = 0.08  # +8% per 0.1 curiosity trait
 
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
@@ -110,6 +114,8 @@ func _on_game_tick(tick: int) -> void:
 		_update_teaching_debt()
 	if GameManager.periodic_phase_due(tick, KNOWLEDGE_SECURITY_INTERVAL_TICKS, KNOWLEDGE_SECURITY_PHASE_OFFSET):
 		_update_knowledge_security()
+	if GameManager.periodic_phase_due(tick, REDISCOVERY_CHECK_INTERVAL_TICKS, REDISCOVERY_CHECK_PHASE_OFFSET):
+		_check_rediscovery_opportunities()
 
 # === Knowledge Carrier Management ===
 
@@ -272,6 +278,57 @@ func rediscover_knowledge(pawn_id: int, knowledge_type: KnowledgeType, method: S
 	if not has_knowledge(pawn_id, knowledge_type):
 		add_knowledge_carrier(pawn_id, knowledge_type)
 		_record_rediscovery(pawn_id, knowledge_type, method)
+
+
+# === Knowledge Rediscovery (Phase 5: Knowledge Ecology) ===
+
+func _check_rediscovery_opportunities() -> void:
+	# Check for pawns near dormant knowledge locations who might rediscover lost knowledge
+	if dormant_knowledge.is_empty():
+		return
+
+	var ps: PawnSpawner = PawnSpawnerRef
+	if ps == null:
+		return
+
+	# Check each dormant knowledge type
+	for kt_key in dormant_knowledge:
+		var kt: KnowledgeType = KnowledgeType.values()[kt_key]
+		var dk: Dictionary = dormant_knowledge[kt_key]
+		var last_pos: Vector2i = dk.get("last_known_location", Vector2i(-1, -1))
+		if last_pos.x < 0:
+			continue
+
+		# Find pawns near the dormant knowledge location
+		for p in ps.pawns:
+			if p == null or not is_instance_valid(p) or p.data == null:
+				continue
+
+			# Check if pawn is near the dormant knowledge location
+			var dist: int = abs(p.data.tile_pos.x - last_pos.x) + abs(p.data.tile_pos.y - last_pos.y)
+			if dist <= 10:  # Within 10 tiles
+				# Calculate rediscovery chance
+				var chance: float = REDISCOVERY_BASE_CHANCE
+
+				# Scholar profession bonus
+				if p.data.current_profession == p.data.Profession.SCHOLAR:
+					chance += SCHOLAR_REDISCOVERY_BONUS
+
+				# Curiosity trait bonus
+				if p.data.has("openness"):
+					chance += float(p.data.openness) * CURIOSITY_REDISCOVERY_BONUS
+
+				# Roll for rediscovery
+				var salt: int = (
+					GameManager.tick_count +
+					int(p.data.id) * 1009 +
+					last_pos.x * 9176 +
+					last_pos.y * 131 +
+					int(kt) * 37
+				)
+				if WorldRNG.chance_for(StringName("knowledge_rediscover:%d" % int(kt)), chance, salt):
+					rediscover_knowledge(int(p.data.id), kt, "rediscovery")
+					break  # One rediscovery per check
 
 # === Helper Functions ===
 

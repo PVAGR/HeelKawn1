@@ -629,6 +629,16 @@ func record_pawn_death(
     if settlement_id >= 0:
         e["sid"] = settlement_id
     _append(e)
+    
+    # PHASE 7: Record legacy for this pawn
+    var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
+    if legacy_sys != null and legacy_sys.has_method("record_legacy"):
+        # Get pawn data if available
+        var pawn_data: PawnData = null
+        var ps: Node = get_node_or_null("/root/PawnSpawner")
+        if ps != null and ps.has_method("pawn_data_for_id"):
+            pawn_data = ps.call("pawn_data_for_id", pawn_id)
+        legacy_sys.call("record_legacy", pawn_id, pawn_data, cause)
 
 
 func record_animal_death(

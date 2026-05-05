@@ -156,6 +156,12 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 		],
 	},
 	{
+		"heading": "★ Phase 7: Dynasty & Legacy",
+		"rows": [
+			{"id": "legacy_dynasty", "label": "70 · Legacy & Dynasty (Phase 7 — endgame tracking)"},
+		],
+	},
+	{
 		"heading": "Stubs · narrative scaffolding",
 		"rows": [
 			{"id": "vision_scope", "label": "27 · Vision scope (SimVision stub)"},
@@ -391,6 +397,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_record_carriers, "record_carriers")
 		"force_building":
 			error_occurred = _safe_report(_force_building_now, "force_building")
+		"legacy_dynasty":
+			error_occurred = _safe_report(_report_legacy_dynasty, "legacy_dynasty")
 		"vision_scope":
 			error_occurred = _safe_report(_report_vision_scope, "vision_scope")
 		"player_intents":
@@ -2025,6 +2033,84 @@ func _force_building_now() -> void:
 	print("")
 	print("Total jobs posted: %d" % jobs_posted)
 	print("=== END FORCE BUILDING ===")
+
+
+# === Phase 7: Legacy & Dynasty Report ===
+
+func _report_legacy_dynasty() -> void:
+	print("=== HEELKAWN LEGACY & DYNASTY (Phase 7: Endgame) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+
+	var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
+	if legacy_sys == null:
+		print("LegacySystem not found - system not loaded")
+		return
+
+	# Get endgame status
+	if legacy_sys.has_method("get_endgame_status"):
+		var status: Dictionary = legacy_sys.call("get_endgame_status")
+		print("--- ENDGAME STATUS ---")
+		print("Total Legacy Score: %d" % status.get("total_legacy", 0))
+		print("Total Dynasties: %d" % status.get("dynasty_count", 0))
+		print("Total Dynasty Members: %d" % status.get("total_dynasty_members", 0))
+		print("Player Incarnations: %d" % status.get("player_incarnations", 0))
+		print("")
+
+	# Get all legacy entries
+	if legacy_sys.has_method("get_all_legacy_entries"):
+		var entries: Array = legacy_sys.call("get_all_legacy_entries")
+		if entries.is_empty():
+			print("--- LEGACY ENTRIES ---")
+			print("  (No legacy entries yet - pawns must die to create entries)")
+		else:
+			print("--- TOP LEGACY ENTRIES (by score) ---")
+			# Sort by legacy score
+			entries.sort_custom(func(a, b): return int(a.get("legacy_score", 0)) > int(b.get("legacy_score", 0)))
+			var shown: int = 0
+			for entry in entries:
+				if shown >= 10:
+					break
+				var pawn_name: String = "Unknown"
+				if legacy_sys.has_method("_get_pawn_name"):
+					pawn_name = legacy_sys.call("_get_pawn_name", int(entry.get("pawn_id", -1)))
+				print("  %s (ID %d): Score %d" % [pawn_name, int(entry.get("pawn_id", -1)), int(entry.get("legacy_score", 0))])
+				print("    Children: %d | Grandchildren: %d | Knowledge: %d | Students: %d" % [
+					int(entry.get("children_count", 0)),
+					int(entry.get("grandchildren_count", 0)),
+					int(entry.get("knowledge_preserved", []).size()),
+					int(entry.get("students_taught", 0))
+				])
+				print("    Survived: %d ticks | Death: %s" % [
+					int(entry.get("ticks_survived", 0)),
+					entry.get("death_cause", "unknown")
+				])
+				shown += 1
+		print("")
+
+	# Get dynasty summaries
+	print("--- DYNASTY SUMMARIES ---")
+	var dynasty_count: int = 0
+	if legacy_sys.has("dynasties"):
+		var dynasties: Dictionary = legacy_sys.get("dynasties")
+		for dynasty_id in dynasties:
+			if dynasty_count >= 5:
+				print("  ... and %d more dynasties" % (dynasties.size() - dynasty_count))
+				break
+			if legacy_sys.has_method("get_dynasty_summary"):
+				var summary: Dictionary = legacy_sys.call("get_dynasty_summary", int(dynasty_id))
+				if not summary.is_empty():
+					print("  %s" % summary.get("name", "Unknown Dynasty"))
+					print("    Generations: %d | Members: %d | Total Legacy: %d" % [
+						summary.get("generations", 0),
+						summary.get("members", 0),
+						summary.get("legacy_score_total", 0)
+					])
+					dynasty_count += 1
+
+	print("")
+	print("=== END LEGACY & DYNASTY REPORT ===")
 
 
 func _report_error_issues() -> void:

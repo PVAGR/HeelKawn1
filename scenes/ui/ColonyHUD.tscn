@@ -6,6 +6,7 @@
 script = ExtResource("1_hud")
 
 [node name="Panel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(412, 64)
 offset_left = 8.0
 offset_top = 8.0
 offset_right = 420.0

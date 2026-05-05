@@ -20,6 +20,28 @@ func _ready() -> void:
 	_apply_panel_style($ConflictWarPanel)
 	_apply_panel_style($KernelMemoryPanel)
 	visible = false
+	get_viewport().size_changed.connect(_recenter)
+	call_deferred("_recenter")
+
+
+func _recenter() -> void:
+	if not is_inside_tree(): return
+	var vs: Vector2 = get_viewport().get_visible_rect().size
+	var inset: float = 8.0
+	
+	# Top row
+	$WorldGovernancePanel.position = Vector2(inset, inset)
+	$RealmCrownPanel.position = Vector2(448.0, inset)
+	
+	var demo_size: Vector2 = $DemoEconomyPanel.get_combined_minimum_size()
+	$DemoEconomyPanel.position = Vector2(vs.x - demo_size.x - inset, inset)
+	
+	# Bottom row
+	var conflict_size: Vector2 = $ConflictWarPanel.get_combined_minimum_size()
+	$ConflictWarPanel.position = Vector2(inset, vs.y - conflict_size.y - inset)
+	
+	var kernel_size: Vector2 = $KernelMemoryPanel.get_combined_minimum_size()
+	$KernelMemoryPanel.position = Vector2(vs.x - kernel_size.x - inset, vs.y - kernel_size.y - inset)
 
 
 func set_visible_state(is_visible: bool) -> void:

@@ -87,7 +87,17 @@ func _build_ui() -> void:
 
 	# Centered panel
 	_panel = PanelContainer.new()
-	_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_panel.custom_minimum_size = Vector2(PANEL_W, 0) # Width fixed, height can grow
+	
+	_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_panel.anchor_left = 0.5
+	_panel.anchor_top = 0.5
+	_panel.anchor_right = 0.5
+	_panel.anchor_bottom = 0.5
+	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_panel.offset_left = -PANEL_W / 2.0
 	_panel.offset_top = -PANEL_H / 2.0
 	_panel.offset_right = PANEL_W / 2.0

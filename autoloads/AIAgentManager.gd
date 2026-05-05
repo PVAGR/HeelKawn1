@@ -74,6 +74,11 @@ var _neural_update_interval: int = 60  # Only update neural networks every 60 ti
 var _pattern_update_interval: int = 120  # Only update patterns every 120 ticks
 var _prediction_update_interval: int = 180  # Only update predictions every 180 ticks
 
+# Pre-allocated arrays for performance
+var _agent_keys_cache: Array = []
+var _layer_names_cache: Array[String] = ["input", "hidden1", "hidden2", "output"]
+var _feature_cache: Array[float] = []
+
 func _ready() -> void:
 	add_to_group("tickable")
 	if TickManager != null:
@@ -275,7 +280,6 @@ func _sanitize_float(value: Variant, label: String = "") -> float:
 
 func process_neural_network(input_data: Array[float]) -> Array[float]:
 	# Deterministic 4-layer forward propagation through the matrix.
-	var layer_names: Array[String] = ["input", "hidden1", "hidden2", "output"]
 	var current_values: Array[float] = []
 	var input_layer: Dictionary = neural_matrix.layers.get("input", {})
 	var input_size: int = int(input_layer.get("size", input_data.size()))
@@ -283,8 +287,8 @@ func process_neural_network(input_data: Array[float]) -> Array[float]:
 	for i in range(input_size):
 		current_values[i] = _sanitize_float(input_data[i] if i < input_data.size() else 0.0, "input[%d]" % i)
 
-	for i in range(layer_names.size()):
-		var layer_name: String = layer_names[i]
+	for i in range(_layer_names_cache.size()):
+		var layer_name: String = _layer_names_cache[i]
 		if not neural_matrix.layers.has(layer_name):
 			continue
 		var layer: Dictionary = neural_matrix.layers[layer_name]
@@ -296,7 +300,7 @@ func process_neural_network(input_data: Array[float]) -> Array[float]:
 			for neuron_idx in range(layer_size):
 				next_values[neuron_idx] = _sanitize_float(current_values[neuron_idx] if neuron_idx < current_values.size() else 0.0, "input_layer_%d" % neuron_idx)
 		else:
-			var prev_layer_name: String = layer_names[i - 1]
+			var prev_layer_name: String = _layer_names_cache[i - 1]
 			var prev_layer: Dictionary = neural_matrix.layers.get(prev_layer_name, {})
 			var prev_neurons: Array = prev_layer.get("neurons", [])
 			var layer_neurons: Array = layer.get("neurons", [])
@@ -678,30 +682,30 @@ func _predict_resources(world_state: Dictionary) -> Dictionary:
 
 
 func _extract_resource_features(world_state: Dictionary) -> Array[float]:
-	var features: Array[float] = []
+	_feature_cache.resize(0)  # Clear the cache
 	
 	# Population
-	features.append(world_state.get("population", 0) / 100.0)
+	_feature_cache.append(world_state.get("population", 0) / 100.0)
 	
 	# Technology level
-	features.append(world_state.get("technology", 0) / 10.0)
+	_feature_cache.append(world_state.get("technology", 0) / 10.0)
 	
 	# Environmental factors
-	features.append(world_state.get("environment", {}).get("fertility", 0.5))
-	features.append(world_state.get("environment", {}).get("climate", 0.5))
+	_feature_cache.append(world_state.get("environment", {}).get("fertility", 0.5))
+	_feature_cache.append(world_state.get("environment", {}).get("climate", 0.5))
 	
 	# Current resource levels
 	var resources = world_state.get("resources", {})
-	features.append(resources.get("food", 0) / 1000.0)
-	features.append(resources.get("wood", 0) / 1000.0)
-	features.append(resources.get("stone", 0) / 1000.0)
-	features.append(resources.get("ore", 0) / 1000.0)
+	_feature_cache.append(resources.get("food", 0) / 1000.0)
+	_feature_cache.append(resources.get("wood", 0) / 1000.0)
+	_feature_cache.append(resources.get("stone", 0) / 1000.0)
+	_feature_cache.append(resources.get("ore", 0) / 1000.0)
 	
 	# Pad to match input layer size (now 16)
-	while features.size() < 16:
-		features.append(0.0)
+	while _feature_cache.size() < 16:
+		_feature_cache.append(0.0)
 	
-	return features
+	return _feature_cache.duplicate()
 
 
 func _predict_settlement_growth(world_state: Dictionary) -> Dictionary:
@@ -757,61 +761,61 @@ func _predict_world_events(world_state: Dictionary) -> Dictionary:
 
 
 func _extract_settlement_features(world_state: Dictionary) -> Array[float]:
-	var features: Array[float] = []
+	_feature_cache.resize(0)  # Clear the cache
 	
 	# Population and settlement data
-	features.append(world_state.get("population", 0) / 100.0)
-	features.append(world_state.get("settlement_count", 0) / 20.0)
+	_feature_cache.append(world_state.get("population", 0) / 100.0)
+	_feature_cache.append(world_state.get("settlement_count", 0) / 20.0)
 	
 	# Economic factors
-	features.append(world_state.get("prosperity", 0.0))
-	features.append(world_state.get("trade_activity", 0.0))
+	_feature_cache.append(world_state.get("prosperity", 0.0))
+	_feature_cache.append(world_state.get("trade_activity", 0.0))
 	
 	# Environmental factors
-	features.append(world_state.get("environment", {}).get("fertility", 0.5))
-	features.append(world_state.get("environment", {}).get("resources", 0.5))
+	_feature_cache.append(world_state.get("environment", {}).get("fertility", 0.5))
+	_feature_cache.append(world_state.get("environment", {}).get("resources", 0.5))
 	
 	# Social factors
-	features.append(world_state.get("social_stability", 0.5))
-	features.append(world_state.get("cultural_development", 0.0))
+	_feature_cache.append(world_state.get("social_stability", 0.5))
+	_feature_cache.append(world_state.get("cultural_development", 0.0))
 	
 	# Technology and infrastructure
-	features.append(world_state.get("technology_level", 0) / 10.0)
-	features.append(world_state.get("infrastructure", 0.0))
+	_feature_cache.append(world_state.get("technology_level", 0) / 10.0)
+	_feature_cache.append(world_state.get("infrastructure", 0.0))
 	
 	# Pad to match input layer size (now 16)
-	while features.size() < 16:
-		features.append(0.0)
+	while _feature_cache.size() < 16:
+		_feature_cache.append(0.0)
 	
-	return features
+	return _feature_cache.duplicate()
 
 
 func _extract_event_features(world_state: Dictionary) -> Array[float]:
-	var features: Array[float] = []
+	_feature_cache.resize(0)  # Clear the cache
 	
 	# World state factors
-	features.append(world_state.get("population", 0) / 100.0)
-	features.append(world_state.get("technology_level", 0) / 10.0)
-	features.append(world_state.get("social_stability", 0.5))
-	features.append(world_state.get("resource_pressure", 0.0))
+	_feature_cache.append(world_state.get("population", 0) / 100.0)
+	_feature_cache.append(world_state.get("technology_level", 0) / 10.0)
+	_feature_cache.append(world_state.get("social_stability", 0.5))
+	_feature_cache.append(world_state.get("resource_pressure", 0.0))
 	
 	# Environmental factors
-	features.append(world_state.get("environment", {}).get("stability", 0.5))
-	features.append(world_state.get("climate_stress", 0.0))
+	_feature_cache.append(world_state.get("environment", {}).get("stability", 0.5))
+	_feature_cache.append(world_state.get("climate_stress", 0.0))
 	
 	# Historical factors
-	features.append(world_state.get("recent_events", 0) / 10.0)
-	features.append(world_state.get("conflict_level", 0.0))
+	_feature_cache.append(world_state.get("recent_events", 0) / 10.0)
+	_feature_cache.append(world_state.get("conflict_level", 0.0))
 	
 	# Cultural factors
-	features.append(world_state.get("cultural_tension", 0.0))
-	features.append(world_state.get("innovation_rate", 0.0))
+	_feature_cache.append(world_state.get("cultural_tension", 0.0))
+	_feature_cache.append(world_state.get("innovation_rate", 0.0))
 	
 	# Pad to match input layer size (now 16)
-	while features.size() < 16:
-		features.append(0.0)
+	while _feature_cache.size() < 16:
+		_feature_cache.append(0.0)
 	
-	return features
+	return _feature_cache.duplicate()
 
 
 func _on_world_tick(tick: int) -> void:
@@ -1052,13 +1056,14 @@ func _update_all_agents() -> void:
 	var total: int = agents.size()
 	if total <= 0:
 		return
-	var agent_ids: Array = agents.keys()
-	agent_ids.sort()
+	_agent_keys_cache.clear()
+	_agent_keys_cache = agents.keys()
+	_agent_keys_cache.sort()
 	var budget: int = mini(total, _agent_update_budget_for_speed(total))
 	var start: int = posmod(_agent_update_cursor, total)
 	for step in range(budget):
 		var idx: int = posmod(start + step, total)
-		var agent_id: int = int(agent_ids[idx])
+		var agent_id: int = int(_agent_keys_cache[idx])
 		var agent: AIAgent = agents.get(agent_id, null)
 		if agent == null:
 			continue

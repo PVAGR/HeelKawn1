@@ -10,6 +10,7 @@ extends Control
 var selected_agent_id: int = -1
 var refresh_interval: float = 1.0
 var time_since_refresh: float = 0.0
+var _last_refresh_agents: Array[Dictionary] = []
 
 func _ready() -> void:
 	# Connect button signals
@@ -37,9 +38,22 @@ func _refresh_agent_list() -> void:
 	if agent_list == null or AIAgentManager == null:
 		return
 	
-	agent_list.clear()
-	
+	# Get agent status efficiently
 	var agents: Array[Dictionary] = AIAgentManager.get_all_agent_status()
+	
+	# Early exit if no changes detected
+	if _last_refresh_agents.size() == agents.size():
+		var changed = false
+		for i in range(agents.size()):
+			if agents[i].get("agent_id", -1) != _last_refresh_agents[i].get("agent_id", -1):
+				changed = true
+				break
+		if not changed:
+			return
+	
+	_last_refresh_agents = agents.duplicate(true)
+	
+	agent_list.clear()
 	
 	for agent_status in agents:
 		var agent_id: int = agent_status.get("agent_id", -1)

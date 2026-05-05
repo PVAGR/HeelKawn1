@@ -84,6 +84,10 @@ var trace_game_tick_dispatch: bool = false
 ## Path / object id and method of the listener currently running (for post-mortem in the editor).
 var last_game_tick_listener_label: String = ""
 
+## Pre-allocated variables for performance
+var _conns_cache: Array = []
+var _slots_cache: Array[Callable] = []
+
 
 func _reset_frame_pacing_history() -> void:
 	ticks_emitted_last_frame = 0
@@ -278,9 +282,12 @@ func _dispatch_game_tick(tick: int) -> void:
 	if not trace_slots:
 		game_tick.emit(tick)
 		return
-	var conns: Array = get_signal_connection_list(&"game_tick")
-	var slots: Array[Callable] = []
-	for entry_any in conns:
+	# Use pre-allocated cache arrays
+	_conns_cache.clear()
+	_slots_cache.clear()
+	_conns_cache = get_signal_connection_list(&"game_tick")
+	var n: int = 0
+	for entry_any in _conns_cache:
 		if not entry_any is Dictionary:
 			continue
 		var entry: Dictionary = entry_any as Dictionary
@@ -290,8 +297,9 @@ func _dispatch_game_tick(tick: int) -> void:
 		var cb: Callable = cb_var as Callable
 		if not cb.is_valid():
 			continue
-		slots.append(cb)
-	var n: int = slots.size()
+		_slots_cache.append(cb)
+		n += 1
+	var slots: Array[Callable] = _slots_cache
 	if ct_slots:
 		CrashTrap.log_tick_event("dispatch_start", "tick=%d listeners=%d" % [tick, n])
 	for idx in range(n):

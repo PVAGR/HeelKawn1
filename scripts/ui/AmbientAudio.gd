@@ -81,8 +81,8 @@ func _update_biome() -> void:
 	if not _world.data.in_bounds(cam_tile.x, cam_tile.y):
 		return
 	_current_biome = _world.data.get_biome(cam_tile.x, cam_tile.y)
-	if DayNightCycle != null:
-		_is_night = DayNightCycle.is_night()
+	if GameManager != null:
+		_is_night = DayNightCycle.is_night_for_tick(GameManager.tick_count)
 
 
 func _generate_sample() -> float:

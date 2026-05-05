@@ -120,13 +120,13 @@ func _generate_text(pawn) -> String:
 		if not prof_name.is_empty() and prof_name != "None":
 			match d.current_profession:
 				1: return _pick(["Crops need tending.", "Soil looks good.", "Planting soon."])  # FARMER
-				2: return _pick(["Need more wood.", "Walls going up.", "Building.")             # BUILDER
+				2: return _pick(["Need more wood.", "Walls going up.", "Building."])             # BUILDER
 				3: return _pick(["Found berries!", "Gathering.", "Foraging nearby."])            # GATHERER
 				4: return _pick(["Staying alert.", "Patrol soon.", "Watching.")                  # WARRIOR
 				5: return _pick(["Interesting...", "Studying.", "So much to learn."])            # SCHOLAR
 
 	# Time-of-day
-	if DayNightCycle != null and DayNightCycle.is_night():
+	if GameManager != null and DayNightCycle.is_night_for_tick(GameManager.tick_count):
 		return _pick(["Dark out...", "Cold night.", "Can't sleep.", "Quiet..."])
 
 	# Generic social

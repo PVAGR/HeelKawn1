@@ -275,5 +275,5 @@ func _normalize_rect(a: Vector2i, b: Vector2i) -> Rect2i:
 ## Get the current paint rect for visual feedback
 func get_paint_rect() -> Rect2i:
 	if not _is_painting:
-		return Rect2i.ZERO
+		return Rect2i()
 	return _normalize_rect(_paint_start, _paint_current)

@@ -60,8 +60,8 @@ func _ready() -> void:
 	panel.anchor_top = 1.0
 	panel.anchor_right = 1.0
 	panel.anchor_bottom = 1.0
-	panel.grow_horizontal = Control.GROW_DIRECTION_LEFT
-	panel.grow_vertical = Control.GROW_DIRECTION_UP
+	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	panel.offset_left = -MAP_SIZE_PX - MARGIN_RIGHT
 	panel.offset_top = -MAP_SIZE_PX - MARGIN_BOTTOM
 	panel.offset_right = -MARGIN_RIGHT

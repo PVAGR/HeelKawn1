@@ -6,7 +6,9 @@
       "Bash(git pull *)",
       "Bash(git push)",
       "Bash(powershell *)",
-      "Bash(move-item *)"
+      "Bash(move-item *)",
+      "Bash(get-childitem *)",
+      "Bash(select-object *)"
     ]
   },
   "$version": 3

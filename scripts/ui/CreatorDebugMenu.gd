@@ -87,6 +87,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "grudges", "label": "40 · Grudge system (Phase 5 — grudges, blood feuds)"},
 			{"id": "gossip_reputation", "label": "41 · Gossip & Reputation (Phase 5 — social propagation)"},
 			{"id": "avoidance_ai", "label": "42 · Avoidance AI (Phase 5 — enemy avoidance patterns)"},
+			{"id": "life_arcs", "label": "43 · Life Arcs (Phase 5 — readable pawn narratives)"},
 			{"id": "force_building", "label": "50 · FORCE BUILDING — post 10 wall/bed/zone jobs NOW"},
 		],
 	},
@@ -312,6 +313,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_gossip_reputation, "gossip_reputation")
 		"avoidance_ai":
 			error_occurred = _safe_report(_report_avoidance_ai, "avoidance_ai")
+		"life_arcs":
+			error_occurred = _safe_report(_report_life_arcs, "life_arcs")
 		"force_building":
 			error_occurred = _safe_report(_force_building_now, "force_building")
 		"vision_scope":
@@ -1452,6 +1455,55 @@ func _report_avoidance_ai() -> void:
 	
 	print("")
 	print("=== END AVOIDANCE REPORT ===")
+
+
+# === Phase 5: Life Arcs Report ===
+
+func _report_life_arcs() -> void:
+	print("=== HEELKAWN LIFE ARCS (Phase 5: Emergent Narrative) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+
+	var m: Node2D = _main()
+	if m == null:
+		print("Main node not found")
+		return
+
+	var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+	if ps == null:
+		print("PawnSpawner not found")
+		return
+
+	# Count living pawns
+	var total_pawns: int = ps.pawns.size()
+	print("--- LIFE ARC STATISTICS ---")
+	print("Total living pawns: %d" % total_pawns)
+	print("")
+
+	# Show life arcs for first 15 pawns (readable narratives)
+	print("--- SAMPLE LIFE ARCS (first 15 pawns) ---")
+	var shown_pawns: int = 0
+	for p in ps.pawns:
+		if shown_pawns >= 15:
+			break
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+
+		# Call compose_life_arc() on pawn data
+		if p.data.has_method("compose_life_arc"):
+			var life_arc: String = p.data.compose_life_arc()
+			print("╔════════════════════════════════════════╗")
+			print("║ %s" % p.data.display_name.pad_spaces(35))
+			print("╚════════════════════════════════════════╝")
+			# Print each line of the life arc
+			var lines: PackedStringArray = life_arc.split("\n")
+			for line in lines:
+				print("  " + line)
+			print("")
+			shown_pawns += 1
+
+	print("=== END LIFE ARCS REPORT ===")
 
 
 # === BUILDING FORCES ===

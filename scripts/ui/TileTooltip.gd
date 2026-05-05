@@ -129,7 +129,7 @@ func _refresh(tile: Vector2i) -> void:
 		var pawn_names: PackedStringArray = []
 		for p in pawns_here:
 			if p.data != null:
-				var nm: String = str(p.data.get("name", "Pawn"))
+				var nm: String = p.data.display_name if p.data.display_name != "" else "Pawn"
 				pawn_names.append(nm)
 		if not pawn_names.is_empty():
 			lines.append("[color=#e0e0e0]%s[/color]" % ", ".join(pawn_names))

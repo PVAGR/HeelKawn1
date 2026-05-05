@@ -69,12 +69,33 @@ const SPAWNABLE_BIOMES: Array[int] = [Biome.Type.PLAINS, Biome.Type.FOREST]
 
 var pawns: Array[Pawn] = []
 
+# OPTIMIZATION: pawn_id → pawn instance dictionary for O(1) lookup
+var _pawn_by_id: Dictionary = {}
+var _pawn_by_id_dirty: bool = true
 
 ## Return the cached pawn registry. This is the preferred way to iterate all pawns
 ## instead of get_nodes_in_group("pawns"), which traverses the entire scene tree.
 ## The array is maintained on spawn/death — no per-tick allocation.
 func get_all_pawns() -> Array[Pawn]:
 	return pawns
+
+## OPTIMIZATION: Get pawn by ID in O(1) time
+func get_pawn_by_id(pawn_id: int) -> Pawn:
+	if _pawn_by_id_dirty:
+		_rebuild_pawn_dict()
+	return _pawn_by_id.get(pawn_id, null)
+
+## OPTIMIZATION: Rebuild pawn dictionary only when pawns change
+func _rebuild_pawn_dict() -> void:
+	_pawn_by_id.clear()
+	for p in pawns:
+		if p != null and p.data != null:
+			_pawn_by_id[int(p.data.id)] = p
+	_pawn_by_id_dirty = false
+
+## OPTIMIZATION: Mark pawn dict as dirty (call when pawns spawn/despawn)
+func invalidate_pawn_dict() -> void:
+	_pawn_by_id_dirty = true
 
 
 ## Static: find the PawnSpawner and return its cached pawn list.
@@ -97,6 +118,17 @@ static func find_pawns() -> Array[Pawn]:
 		return []
 	_cached_spawner = ps
 	return ps.pawns
+
+## OPTIMIZATION: Static O(1) pawn lookup by ID
+static func find_pawn_by_id(pawn_id: int) -> Pawn:
+	if _cached_spawner != null and is_instance_valid(_cached_spawner):
+		return _cached_spawner.get_pawn_by_id(pawn_id)
+	# Fallback to slow path if cache not warm
+	var pawns: Array[Pawn] = find_pawns()
+	for p in pawns:
+		if p != null and p.data != null and int(p.data.id) == pawn_id:
+			return p
+	return null
 
 
 func _ready() -> void:
@@ -129,6 +161,7 @@ func clear_pawns() -> void:
 ## Remove a pawn from the spawner (when it dies). Cleans up the reference.
 func remove_pawn(pawn: Pawn) -> void:
 	pawns.erase(pawn)
+	invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
 	if pawn != null and is_instance_valid(pawn):
 		pawn.release_job_if_any()
 		if SpatialManager != null and pawn.data != null: # ARCHITECT T006
@@ -205,6 +238,7 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		pawn.bind(data, world.tile_to_world(tile), world)
 		add_child(pawn)
 		pawns.append(pawn)
+		invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
 		if SpatialManager != null: # ARCHITECT T006
 			SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 		placed += 1
@@ -302,6 +336,7 @@ func spawn_generational_pawn(
 	pawn.bind(data, world.tile_to_world(tile), world)
 	add_child(pawn)
 	pawns.append(pawn)
+	invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
 	if SpatialManager != null: # ARCHITECT T006
 		SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 	WorldMemory.record_event({
@@ -425,6 +460,7 @@ func spawn_pawn() -> void:
 		add_child(pawnc)
 		pawnc.bind(data, world.tile_to_world(tile), world)
 		pawns.append(pawnc)
+		invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
 		if SpatialManager != null: # ARCHITECT T006
 			SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 		return
@@ -439,6 +475,7 @@ func spawn_from_data(d: PawnData, world: World) -> void:
 	p.bind(d, world.tile_to_world(d.tile_pos), world)
 	add_child(p)
 	pawns.append(p)
+	invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
 	if SpatialManager != null: # ARCHITECT T006
 		SpatialManager.register_entity(int(d.id), "pawn", d.tile_pos)
 
@@ -517,6 +554,7 @@ func spawn_child_pawn(
 	pawn.bind(data, world.tile_to_world(tile), world)
 	add_child(pawn)
 	pawns.append(pawn)
+	invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
 	if SpatialManager != null: # ARCHITECT T006
 		SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 	parent_a.children_count += 1

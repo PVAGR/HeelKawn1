@@ -122,7 +122,11 @@ const ANIMAL_POPULATION_PHASE_TICKS: int = 500
 const WORLD_STABILIZATION_TICKS: int = 500
 ## Player does not architect the colony: no manual walls/beds/doors/stockpile zones.
 ## Construction remains `SettlementPlanner` + pawn job claims (NPC-equivalent sim path).
-const PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES: bool = false
+## Now dynamic: God mode enables placement; other modes disable it.
+const PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES: bool = false  # Legacy — use _can_player_place() instead
+
+func _can_player_place() -> bool:
+	return _player_mode == PlayerMode.GOD
 ## Toolbar + keys 1–7 match GameManager.SPEED_STEPS (F10 creator menu still steals digit keys while open).
 const ALLOW_SPEED_NUMBER_HOTKEYS: bool = true
 ## Keep load-in sessions predictable; speed only changes via explicit user action.
@@ -186,6 +190,7 @@ var _hotkeys_enabled: bool = true
 enum PlayerMode {
 	SPECTATOR = 0,
 	INCARNATED = 1,
+	GOD = 2,
 }
 var _player_mode: int = PlayerMode.SPECTATOR
 
@@ -609,6 +614,7 @@ func _ready() -> void:
 			_command_mode.initialize(_world, _camera, _pawn_spawner)
 			_command_mode.command_issued.connect(_on_command_issued)
 			_command_mode.zone_painted.connect(_on_zone_painted)
+			_command_mode.can_command_callback = _can_command_pawn
 		if _command_indicator != null and _command_indicator.has_method("initialize"):
 			_command_indicator.initialize(_world)
 		if _pawn_name_labels != null and _pawn_name_labels.has_method("initialize"):
@@ -627,6 +633,8 @@ func _ready() -> void:
 		# Wire MainMenu signals
 		if _main_menu != null:
 			_main_menu.new_game_pressed.connect(_on_new_game)
+			_main_menu.play_pressed.connect(_on_play_mode)
+			_main_menu.god_mode_pressed.connect(_on_god_mode_start)
 			_main_menu.load_game_pressed.connect(func(): if _save_load_menu != null: _save_load_menu.toggle())
 			_main_menu.settings_pressed.connect(func(): if _settings_panel != null: _settings_panel.toggle())
 			_main_menu.quit_pressed.connect(func(): get_tree().quit())
@@ -661,6 +669,7 @@ func _ready() -> void:
 	if not simulation_worker:
 		if _hud != null:
 			_hud.set_player_control_refs(_player_input, _player_pawn)
+			_update_hud_mode_badge()
 		if _observer_hud != null:
 			_observer_hud.set_visible_state(false)
 		if _focus_inspector != null:
@@ -1802,11 +1811,18 @@ func _sync_player_context_ui() -> void:
 		_info_panel.call("set_player_context", get_player_mode_label(), get_player_pawn_id(), _incarnation_picker != null and is_instance_valid(_incarnation_picker) and _incarnation_picker.visible)
 
 
+func _update_hud_mode_badge() -> void:
+	if _hud != null and is_instance_valid(_hud) and _hud.has_method("set_player_mode_badge"):
+		var rank: String = _get_player_authority_rank() if _player_mode == PlayerMode.INCARNATED else ""
+		_hud.set_player_mode_badge(get_player_mode_label(), rank)
+
+
 func _set_player_mode(mode: int) -> void:
 	if _player_mode == mode:
 		return
 	_player_mode = mode
 	_sync_player_context_ui()
+	_update_hud_mode_badge()
 	if OS.is_debug_build():
 		print("[Main] Player mode: %s" % get_player_mode_label())
 
@@ -1815,6 +1831,8 @@ func get_player_mode_label() -> String:
 	match _player_mode:
 		PlayerMode.INCARNATED:
 			return "INCARNATED"
+		PlayerMode.GOD:
+			return "GOD"
 		_:
 			return "SPECTATOR"
 
@@ -1823,9 +1841,97 @@ func is_player_incarnated() -> bool:
 	return _player_mode == PlayerMode.INCARNATED
 
 
+func is_player_god() -> bool:
+	return _player_mode == PlayerMode.GOD
+
+
+## Ctrl+G: toggle between SPECTATOR and GOD mode.
+func _toggle_god_mode() -> void:
+	if _player_mode == PlayerMode.GOD:
+		_set_player_mode(PlayerMode.SPECTATOR)
+		_player_pawn = null
+		_set_selected_pawn(null)
+		if OS.is_debug_build():
+			print("[Main] God mode OFF — returning to spectator")
+	else:
+		if _player_mode == PlayerMode.INCARNATED:
+			# Must exit incarnation first
+			_player_pawn = null
+			_set_selected_pawn(null)
+		_set_player_mode(PlayerMode.GOD)
+		_player_pawn = null
+		if OS.is_debug_build():
+			print("[Main] God mode ON — full command authority")
+
+
+## Ctrl+T: toggle between SPECTATOR and INCARNATED mode.
+func _toggle_incarnation_mode() -> void:
+	if _player_mode == PlayerMode.INCARNATED:
+		_set_player_mode(PlayerMode.SPECTATOR)
+		_player_pawn = null
+		_set_selected_pawn(null)
+		if OS.is_debug_build():
+			print("[Main] Incarnation released — returning to spectator")
+	else:
+		_open_incarnation_picker()
+
+
 func request_incarnation_entry(note: String = "manual_entry", payload: Dictionary = {}) -> bool:
 	_toggle_incarnation_picker()
 	return _incarnation_picker != null and is_instance_valid(_incarnation_picker) and bool(_incarnation_picker.visible)
+
+
+## Can the player command a specific pawn? God mode = always yes.
+## Incarnated mode = must outrank the target in at least one authority context.
+## Spectator = no.
+func _can_command_pawn(target: Pawn) -> bool:
+	if target == null or not is_instance_valid(target) or target.data == null:
+		return false
+	if _player_mode == PlayerMode.GOD:
+		return true
+	if _player_mode != PlayerMode.INCARNATED:
+		return false
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return false
+	# Check knowledge fog
+	var dist: int = _tile_chebyshev_dist(_player_pawn.data.tile_pos, target.data.tile_pos)
+	if dist > INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES:
+		return false
+	# Check authority — player must outrank target in at least one context
+	if AuthoritySystem != null:
+		var my_id: int = _player_pawn.data.id
+		var their_id: int = target.data.id
+		for ctx: int in [AuthoritySystem.AuthorityContext.MILITARY, AuthoritySystem.AuthorityContext.CIVIL]:
+			var my_auth: float = AuthoritySystem.get_authority_level(my_id, ctx)
+			var their_auth: float = AuthoritySystem.get_authority_level(their_id, ctx)
+			if my_auth > their_auth and my_auth >= 0.3:
+				return true
+	return false
+
+
+## Get the player's authority rank label for HUD display.
+func _get_player_authority_rank() -> String:
+	if _player_mode != PlayerMode.INCARNATED:
+		return ""
+	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
+		return ""
+	if AuthoritySystem == null:
+		return "Pawn"
+	var pid: int = _player_pawn.data.id
+	var mil: float = AuthoritySystem.get_authority_level(pid, AuthoritySystem.AuthorityContext.MILITARY)
+	var civ: float = AuthoritySystem.get_authority_level(pid, AuthoritySystem.AuthorityContext.CIVIL)
+	var high_contexts: int = 0
+	if mil >= 0.5:
+		high_contexts += 1
+	if civ >= 0.5:
+		high_contexts += 1
+	if high_contexts >= 2:
+		return "Ruler"
+	if mil >= 0.3:
+		return "Captain"
+	if civ >= 0.3:
+		return "Elder"
+	return "Pawn"
 
 
 func request_spectator_return(note: String = "manual_return", payload: Dictionary = {}) -> bool:
@@ -2127,6 +2233,9 @@ func _on_game_tick(tick: int) -> void:
 			_player_action_state = "no_pawn"
 	elif _player_mode != PlayerMode.INCARNATED:
 		_player_action_state = "spectator"
+	# Refresh HUD mode badge every 200 ticks (authority rank can change)
+	if tick % 200 == 0 and _player_mode == PlayerMode.INCARNATED:
+		_update_hud_mode_badge()
 	# First tick of post-stab window: (re)post HUNT for static wildlife skipped during [member _world_stabilization_until_tick] seed; deterministic order.
 	if Main._world_stabilization_until_tick >= 0 and tick == Main._world_stabilization_until_tick:
 		_post_wildlife_hunt_jobs_after_stabilization()
@@ -3169,7 +3278,10 @@ func _handle_key_input(key: InputEventKey) -> void:
 		KEY_I:
 			_toggle_region_inspector()
 		KEY_T:
-			_toggle_timeline_controls()
+			if key.ctrl_pressed:
+				_toggle_incarnation_mode()
+			else:
+				_toggle_timeline_controls()
 		KEY_O:
 			_open_incarnation_picker()
 		KEY_L:
@@ -3184,8 +3296,16 @@ func _handle_key_input(key: InputEventKey) -> void:
 			if key.ctrl_pressed and _command_mode != null:
 				_cycle_zone_type()
 		KEY_G:
-			if key.shift_pressed and _command_mode != null:
+			if key.ctrl_pressed:
+				_toggle_god_mode()
+			elif key.shift_pressed and _command_mode != null:
 				_command_mode.set_zone_type(1)  # FORAGE_ZONE
+			elif _selected_pawn != null and is_instance_valid(_selected_pawn):
+				_camera_follow_selected = not _camera_follow_selected
+				if OS.is_debug_build():
+					print("[Main] Camera follow selection: %s" % _camera_follow_selected)
+			else:
+				_camera_follow_selected = false
 
 
 func _toggle_debug_panel() -> void:
@@ -3794,7 +3914,7 @@ func _tear_down_all_zones() -> void:
 
 
 func _toggle_designation_mode(mode: int) -> void:
-	if not PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES:
+	if not _can_player_place():
 		return
 	if _designation_mode == mode:
 		_set_designation_mode(DesignationMode.NONE)
@@ -3803,7 +3923,7 @@ func _toggle_designation_mode(mode: int) -> void:
 
 
 func _set_designation_mode(mode: int) -> void:
-	if not PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES:
+	if not _can_player_place():
 		mode = DesignationMode.NONE
 	if _designation_mode == mode:
 		return
@@ -5824,6 +5944,30 @@ func _on_load_slot(slot: int) -> void:
 func _on_new_game() -> void:
 	if OS.is_debug_build():
 		_reroll_world()
+	_set_player_mode(PlayerMode.SPECTATOR)
+	_update_hud_mode_badge()
+	if _main_menu != null:
+		_main_menu.hide_menu()
+
+
+## "Play" button: start in spectator, then open incarnation picker
+func _on_play_mode() -> void:
+	if OS.is_debug_build():
+		_reroll_world()
+	_set_player_mode(PlayerMode.SPECTATOR)
+	_update_hud_mode_badge()
+	if _main_menu != null:
+		_main_menu.hide_menu()
+	# Open incarnation picker after a short delay so the world is ready
+	_open_incarnation_picker()
+
+
+## "God" button: start directly in God mode
+func _on_god_mode_start() -> void:
+	if OS.is_debug_build():
+		_reroll_world()
+	_set_player_mode(PlayerMode.GOD)
+	_update_hud_mode_badge()
 	if _main_menu != null:
 		_main_menu.hide_menu()
 
@@ -5880,6 +6024,7 @@ func _build_save_dict() -> Dictionary:
 		"player_intent_queue": PlayerIntentQueue.to_save_dict(),
 		"faction_registry": FactionRegistry.to_save_dict(),
 		"grudge_manager": GrudgeManager.to_save_dict(),
+		"gossip_manager": GossipManager.to_save_dict(),
 		"last_generation_tick": _last_generation_tick,
 		# Metadata for save/load menu
 		"settlement_name": _get_primary_settlement_name(),
@@ -5993,6 +6138,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 	WorldPersistence.recompute()
 	if GrudgeManager != null and GrudgeManager.has_method("from_save_dict"):
 		GrudgeManager.from_save_dict(s.get("grudge_manager", {}))
+	if GossipManager != null and GossipManager.has_method("from_save_dict"):
+		GossipManager.from_save_dict(s.get("gossip_manager", {}))
 	_push_zone_filter_label_to_toolbar()
 	var zlist: Array = s.get("zones", [])
 	if zlist is Array and not zlist.is_empty():

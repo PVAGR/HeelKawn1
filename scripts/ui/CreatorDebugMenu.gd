@@ -81,6 +81,8 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "pawns", "label": "22 · All pawns"},
 			{"id": "profession_liking", "label": "26 · Profession liking"},
 			{"id": "grudges", "label": "40 · Grudge system (Phase 5 — grudges, blood feuds)"},
+			{"id": "gossip_reputation", "label": "41 · Gossip & Reputation (Phase 5 — social propagation)"},
+			{"id": "avoidance_ai", "label": "42 · Avoidance AI (Phase 5 — enemy avoidance patterns)"},
 		],
 	},
 	{
@@ -288,6 +290,10 @@ func _emit_report(report_id: String) -> void:
 			_report_profession_liking()
 		"grudges":
 			_report_grudges()
+		"gossip_reputation":
+			_report_gossip_reputation()
+		"avoidance_ai":
+			_report_avoidance_ai()
 		"vision_scope":
 			_report_vision_scope()
 		"player_intents":
@@ -1187,6 +1193,168 @@ func _report_grudges() -> void:
 	
 	print("")
 	print("=== END GRUDGE REPORT ===")
+
+
+# === Phase 5: Gossip & Reputation Report ===
+
+func _report_gossip_reputation() -> void:
+	print("=== HEELKAWN GOSSIP & REPUTATION (Phase 5: Emergent Life) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+	
+	var gossip_mgr: Node = get_node_or_null("/root/GossipManager")
+	if gossip_mgr == null:
+		print("GossipManager not found - system not loaded")
+		return
+	
+	# Get gossip statistics
+	var total_gossip: int = 0
+	if gossip_mgr.has_method("gossip_count"):
+		total_gossip = gossip_mgr.gossip_count()
+	
+	print("--- GOSSIP STATISTICS ---")
+	print("Total gossip items tracked: %d" % total_gossip)
+	print("")
+	
+	# Get active gossip (not yet spread to max hops)
+	if gossip_mgr.has_method("get_active_gossip"):
+		var active_gossip: Array[Dictionary] = gossip_mgr.get_active_gossip()
+		if not active_gossip.is_empty():
+			print("--- ACTIVE GOSSIP (recent, still spreading) ---")
+			var shown: int = 0
+			for g in active_gossip:
+				if shown >= 15:
+					break
+				print("  About: %d | From: %d | Type: %s | Importance: %.2f | Spread: %d/%d" % [
+					g.get("subject_pawn_id", -1),
+					g.get("origin_pawn_id", -1),
+					g.get("type", "unknown"),
+					g.get("importance", 0.0),
+					g.get("spread_count", 0),
+					g.get("MAX_SPREAD_HOPS", 4)
+				])
+				shown += 1
+			print("")
+	
+	# Get notorious pawns
+	if gossip_mgr.has_method("get_notorious_report"):
+		var notorious: Array[Dictionary] = gossip_mgr.get_notorious_report()
+		if not notorious.is_empty():
+			print("--- NOTORIOUS PAWNS (bad reputation) ---")
+			for n in notorious:
+				print("  Pawn %d: Reputation %.2f (%s)" % [
+					n.get("pawn_id", -1),
+					n.get("reputation", 0.0),
+					n.get("label", "Unknown")
+				])
+			print("")
+	
+	# Sample reputation from first few pawns
+	var m: Node2D = _main()
+	if m == null:
+		print("Main node not found")
+		return
+	
+	var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+	if ps == null:
+		print("PawnSpawner not found")
+		return
+	
+	print("--- SAMPLE REPUTATIONS (first 10 pawns) ---")
+	var shown_pawns: int = 0
+	for p in ps.pawns:
+		if shown_pawns >= 10:
+			break
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		
+		var pawn_id: int = int(p.data.id)
+		if gossip_mgr.has_method("get_reputation_for") and gossip_mgr.has_method("get_reputation_label"):
+			var rep: float = gossip_mgr.get_reputation_for(pawn_id)
+			var label: String = gossip_mgr.get_reputation_label(pawn_id)
+			print("  Pawn %d (%s): %.2f (%s)" % [pawn_id, p.data.display_name, rep, label])
+			shown_pawns += 1
+	
+	print("")
+	print("=== END GOSSIP REPORT ===")
+
+
+# === Phase 5: Avoidance AI Report ===
+
+func _report_avoidance_ai() -> void:
+	print("=== HEELKAWN AVOIDANCE AI (Phase 5: Emergent Life) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+	
+	var grudge_mgr: Node = get_node_or_null("/root/GrudgeManager")
+	if grudge_mgr == null:
+		print("GrudgeManager not found - system not loaded")
+		return
+	
+	# Get grudge statistics
+	var total_grudges: int = 0
+	if grudge_mgr.has_method("grudge_count"):
+		total_grudges = grudge_mgr.grudge_count()
+	
+	print("--- AVOIDANCE STATISTICS ---")
+	print("Total grudges tracked: %d" % total_grudges)
+	
+	# Count pawns with enemies
+	var pawns_with_enemies: int = 0
+	var m: Node2D = _main()
+	if m == null:
+		print("Main node not found")
+		return
+	
+	var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+	if ps == null:
+		print("PawnSpawner not found")
+		return
+	
+	for p in ps.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		if grudge_mgr.has_method("get_enemies_for"):
+			var enemies: Array[int] = grudge_mgr.get_enemies_for(int(p.data.id), 0.4)
+			if not enemies.is_empty():
+				pawns_with_enemies += 1
+	
+	print("Pawns with enemies (avoidance active): %d" % pawns_with_enemies)
+	print("")
+	
+	# Sample avoidance patterns
+	print("--- SAMPLE AVOIDANCE PATTERNS (first 10 pawns with enemies) ---")
+	var shown_pawns: int = 0
+	for p in ps.pawns:
+		if shown_pawns >= 10:
+			break
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		
+		var pawn_id: int = int(p.data.id)
+		if grudge_mgr.has_method("get_enemies_for"):
+			var enemies: Array[int] = grudge_mgr.get_enemies_for(pawn_id, 0.4)
+			if not enemies.is_empty():
+				print("Pawn %d (%s) avoids %d enemies:" % [pawn_id, p.data.display_name, enemies.size()])
+				for enemy_id in enemies:
+					var intensity: float = 0.0
+					if grudge_mgr.has_method("get_grudge_intensity"):
+						intensity = grudge_mgr.get_grudge_intensity(pawn_id, enemy_id)
+					print("  → Pawn %d (intensity: %.2f)" % [enemy_id, intensity])
+				shown_pawns += 1
+	
+	# Count blood feuds (highest avoidance priority)
+	if grudge_mgr.has_method("get_blood_feuds"):
+		var feuds: Array[Dictionary] = grudge_mgr.get_blood_feuds()
+		if not feuds.is_empty():
+			print("")
+			print("--- BLOOD FEUDS (avoidance priority) ---")
+			print("Active blood feuds: %d" % feuds.size())
+	
+	print("")
+	print("=== END AVOIDANCE REPORT ===")
 
 
 func _report_error_issues() -> void:

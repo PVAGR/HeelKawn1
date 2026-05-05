@@ -70,6 +70,10 @@ var _main: Main = null
 var _animal_spawner: AnimalSpawner = null
 ## Empty string when no designation mode is active. Otherwise "Bed" / "Wall" / etc.
 var _designation_label: String = ""
+## Current player mode label for badge display ("SPECTATOR", "INCARNATED", "GOD")
+var _player_mode_label: String = "SPECTATOR"
+## Authority rank when incarnated ("Pawn", "Captain", "Elder", "Ruler")
+var _player_authority_rank: String = ""
 var _wildlife_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
 var _wildlife_prev_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
 var _wildlife_sample_tick: int = 0
@@ -173,6 +177,12 @@ func set_designation_mode(label: String) -> void:
 	_hud_dirty = true
 
 
+func set_player_mode_badge(mode_label: String, authority_rank: String = "") -> void:
+	_player_mode_label = mode_label
+	_player_authority_rank = authority_rank
+	_hud_dirty = true
+
+
 func _visible_pawns_for_hud() -> Array[Pawn]:
 	var out: Array[Pawn] = []
 	if _spawner == null:
@@ -260,6 +270,10 @@ func _refresh() -> void:
 	_label.add_theme_font_size_override("normal_font_size", _get_font_size())
 	_label.add_theme_font_size_override("bold_font_size", _get_font_size())
 	var lines: Array[String] = []
+	# Mode badge
+	var badge: String = _mode_badge_line()
+	if badge != "":
+		lines.append(badge)
 	if _designation_label != "":
 		lines.append("[bgcolor=#583a14][color=#ffe082]  BUILD MODE: %s   (click or click-drag to place · right-click / Esc to cancel)  [/color][/bgcolor]" %
 			_designation_label)
@@ -380,6 +394,24 @@ func show_tile_history(tile_pos: Vector2i, events: Array[Dictionary]) -> void:
 func hide_tile_history() -> void:
 	if _history_panel != null and is_instance_valid(_history_panel):
 		_history_panel.hide()
+
+
+func _mode_badge_line() -> String:
+	match _player_mode_label:
+		"GOD":
+			return "[bgcolor=#3a2a08][color=#ffe082]  GOD MODE  (Ctrl+G to exit · right-click pawns to command · Ctrl+Z zones)  [/color][/bgcolor]"
+		"INCARNATED":
+			var rank: String = _player_authority_rank if _player_authority_rank != "" else "Pawn"
+			var hint: String = "Ctrl+T to exit"
+			if rank == "Captain":
+				hint = "right-click warriors to command · Ctrl+T to exit"
+			elif rank == "Elder":
+				hint = "right-click builders/farmers to command · Ctrl+T to exit"
+			elif rank == "Ruler":
+				hint = "right-click any pawn to command · Ctrl+T to exit"
+			return "[bgcolor=#082a3a][color=#82e0ff]  INCARNATED · %s  (%s)  [/color][/bgcolor]" % [rank, hint]
+		_:
+			return "[bgcolor=#1a1a1a][color=#888888]  SPECTATOR  (Ctrl+G god · Ctrl+T incarnate)  [/color][/bgcolor]"
 
 
 func _time_line() -> String:

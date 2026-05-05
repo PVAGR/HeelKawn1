@@ -20,7 +20,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Pawn AI integration: trust penalties, avoidance behavior, revenge seeking
   - Save/load support in Main.gd
   - F10 debug report: "40 · Grudge system" shows statistics and blood feuds
+- **Phase 5: Gossip & Reputation System** (`autoloads/GossipManager.gd`, `scripts/social/GossipPropagation.gd`)
+  - Gossip propagation during social proximity (pawns share news when near each other)
+  - Grudge-based gossip: grudges automatically generate gossip that spreads through settlement
+  - Reputation calculation: aggregate gossip sentiment creates pawn reputation (-1.0 to 1.0)
+  - Reputation labels: Neutral, Good, Exemplary, Questionable, Notorious
+  - Trust modifiers: pawns with bad reputation are trusted less, good reputation trusted more
+  - Accuracy decay: gossip becomes less accurate as it spreads (0.1 per hop)
+  - Importance levels: trivial, notable, serious, seismic (affects spread chance)
+  - Save/load support in Main.gd
+  - F10 debug report: "41 · Gossip & Reputation" shows active gossip and notorious pawns
+- **Phase 5: Avoidance AI** (`scripts/pawn/Pawn.gd`)
+  - Pathfinding avoidance: pawns path around tiles near grudge-enemies
+  - Safe tile finding: if destination is near enemy, finds alternative nearby tile
+  - Proximity stress: mood drain when forced near enemies (0.05-0.15 per tick based on distance)
+  - Visual indicators: red lines connect pawns to their enemies (thickness = intensity)
+  - F10 debug report: "42 · Avoidance AI" shows avoidance patterns and blood feuds
 - Documentation: `docs/GRUDGE_SYSTEM.md` — full architecture, API, and design principles
+- Documentation: `docs/GOSSIP_SYSTEM.md` — gossip propagation and reputation system
+
+### Optimized (Performance)
+- **GrudgeManager**: Decay runs every 10 ticks instead of every tick (10x reduction)
+- **GossipManager**: Co-presence gossip sharing every 100 ticks instead of 50 (2x reduction)
+- **Avoidance AI**: 
+  - Enemy position caching per-tick (no repeated scans within same tick)
+  - Limited enemy scans to first 3-5 enemies (was scanning all)
+  - Safe tile search radius reduced from 6 to 5, with early exit
+  - Visual enemy lines limited to top 3 by intensity (reduces draw calls)
+- **Pawn.gd**: Early exits in gossip sharing when no gossip to share or trust too low
 
 ### Changed
 - `WorldMemory.gd`: Added `_generate_grudges_from_event()` and `_on_event_appended()` hooks

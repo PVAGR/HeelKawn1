@@ -29,6 +29,10 @@ var _zone_type: int = ZoneType.NONE
 var _is_painting: bool = false
 var _paint_start: Vector2i = Vector2i(-1, -1)
 var _paint_current: Vector2i = Vector2i(-1, -1)
+## Callback set by Main: Callable(target: Pawn) -> bool. Returns true if the
+## player is allowed to command the given pawn (God mode = always, Incarnated =
+## must outrank, Spectator = never). If null, commands are always allowed.
+var can_command_callback: Callable = Callable()
 
 
 func initialize(world_ref: World, camera_ref: Camera2D, spawner_ref: PawnSpawner) -> void:
@@ -52,6 +56,10 @@ func handle_right_click(world_pos: Vector2) -> bool:
 		return false
 	if _selected_pawn.data == null:
 		return false
+	# Authority check: can the player command this pawn?
+	if can_command_callback.is_valid():
+		if not can_command_callback.call(_selected_pawn):
+			return false
 
 	var tick: int = GameManager.tick_count
 	if tick - _last_command_tick < COMMAND_COOLDOWN_TICKS:

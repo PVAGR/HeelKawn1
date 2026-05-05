@@ -71,8 +71,8 @@ func _try_spawn_bubbles() -> void:
 				continue
 			if other._state != other.State.IDLE:
 				continue
-			var dist: float = p.global_position.distance_to(other.global_position)
-			if dist <= BUBBLE_RADIUS:
+			var dist: float = p.global_position.distance_squared_to(other.global_position)  # OPTIMIZATION: Avoid sqrt
+			if dist <= BUBBLE_RADIUS * BUBBLE_RADIUS:
 				has_neighbor = true
 				break
 		if has_neighbor:

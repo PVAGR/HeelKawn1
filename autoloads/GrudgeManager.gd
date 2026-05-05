@@ -95,8 +95,10 @@ func _exit_tree() -> void:
 
 
 func _on_world_tick(tick_number: int) -> void:
-	_tick_grudge_decay(tick_number)
-	_rebuild_cache_if_needed()
+	# OPTIMIZATION: Decay only every 10 ticks to reduce per-tick overhead
+	if tick_number % 10 == 0:
+		_tick_grudge_decay(tick_number)
+		_rebuild_cache_if_needed()
 
 
 ## Record a new grudge from a WorldMemory event
@@ -144,9 +146,12 @@ func record_grudge(
 	_index_grudge(_grudges.size() - 1, holder_id, target_id)
 	_next_grudge_id += 1
 	_mark_dirty()
-	
+
 	# Record to WorldMemory for audit trail
 	_record_grudge_event(holder_id, target_id, grudge_type, base_intensity, tick)
+	
+	# Phase 5: Generate gossip from this grudge (spreads the news)
+	_generate_gossip_from_grudge(holder_id, target_id, grudge_type, base_intensity, tick)
 
 
 ## Inherit grudges from parent to child
@@ -160,7 +165,7 @@ func inherit_grudges(parent_id: int, child_id: int, tick: int) -> void:
 		
 		var parent_grudge: Dictionary = _grudges[idx]
 		var inherited_intensity: float = parent_grudge["intensity"] * INHERITANCE_FACTOR
-		inherited_intensity *= powf(1.0 - INHERITANCE_DECAY_GENERATION, parent_grudge["generation"])
+		inherited_intensity *= pow(1.0 - INHERITANCE_DECAY_GENERATION, parent_grudge["generation"])
 		
 		if inherited_intensity < INTENSITY_GRUDGE:
 			continue  # Too weak to inherit
@@ -396,6 +401,36 @@ func _record_inheritance_event(
 			"intensity": intensity,
 			"tick": tick,
 		})
+
+
+## Generate gossip from a grudge (Phase 5: Social propagation)
+func _generate_gossip_from_grudge(
+	holder_id: int, target_id: int, grudge_type: String, intensity: float, tick: int
+) -> void:
+	var GossipMgr: Node = get_node_or_null("/root/GossipManager")
+	if GossipMgr == null or not GossipMgr.has_method("record_gossip"):
+		return
+	
+	# Create gossip content
+	var content: String = "%s holds grudge against %s for %s" % [
+		str(holder_id), str(target_id), grudge_type
+	]
+	
+	# Determine sentiment (negative for grudges)
+	var sentiment: float = -1.0 * intensity
+	
+	# Importance based on intensity
+	var importance: float = intensity
+	
+	GossipMgr.record_gossip(
+		target_id,  # Subject (the one being talked about)
+		content,
+		holder_id,  # Origin (who started the gossip)
+		grudge_type,
+		importance,
+		sentiment,
+		tick
+	)
 
 
 ## Save/Load support

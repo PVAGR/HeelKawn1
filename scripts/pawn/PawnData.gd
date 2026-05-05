@@ -1288,7 +1288,7 @@ func _calculate_social_factor(action_type: String, context: Dictionary) -> float
 	var trust_norm: float = 0.5
 	if trust_n > 0:
 		trust_norm = clampf((trust_total / float(trust_n)) / 100.0, 0.0, 1.0)
-	
+
 	# Phase 5: Apply grudge-based trust penalty
 	# Grudges reduce effective trust for social actions
 	var grudge_penalty: float = 0.0
@@ -1305,13 +1305,45 @@ func _calculate_social_factor(action_type: String, context: Dictionary) -> float
 				grudge_penalty = maxf(grudge_penalty, grudge_intensity)
 			sampled += 1
 	
+	# Phase 5: Apply reputation-based trust modifier
+	# Pawns with bad reputation are trusted less
+	var reputation_modifier: float = _get_reputation_trust_modifier()
+
 	if action_type in ["socialize", "talk", "help", "cooperate", "trade"]:
 		factor += rapport_norm * 0.25
-		factor += trust_norm * 0.2 * (1.0 - grudge_penalty)  # Grudges reduce trust benefit
+		factor += trust_norm * 0.2 * (1.0 - grudge_penalty) * (1.0 + reputation_modifier)  # Grudges reduce trust, reputation modifies
 	if action_type in ["fight", "challenge"]:
-		factor += (1.0 - trust_norm) * 0.2 * (1.0 + grudge_penalty)  # Grudges increase aggression
+		factor += (1.0 - trust_norm) * 0.2 * (1.0 + grudge_penalty) * (1.0 - reputation_modifier)  # Bad reputation = more aggression
 
 	return clamp(factor, 0.0, 1.0)
+
+
+## Get reputation-based trust modifier (-0.3 to 0.3)
+## Positive for good reputation (more trust), negative for bad (less trust)
+func _get_reputation_trust_modifier() -> float:
+	# Get average reputation of pawns we trust
+	if trust.is_empty():
+		return 0.0
+	
+	var GossipMgr: Node = Engine.get_main_loop().get_root().get_node_or_null("GossipManager")
+	if GossipMgr == null or not GossipMgr.has_method("get_reputation_for"):
+		return 0.0
+	
+	var total_rep: float = 0.0
+	var count: int = 0
+	for peer_id in trust:
+		if count >= 5:  # Sample up to 5 for performance
+			break
+		var rep: float = GossipMgr.get_reputation_for(int(peer_id))
+		total_rep += rep
+		count += 1
+	
+	if count <= 0:
+		return 0.0
+	
+	var avg_rep: float = total_rep / float(count)
+	# Scale to -0.3 to 0.3 range
+	return clampf(avg_rep * 0.3, -0.3, 0.3)
 
 
 ## Get grudge penalty for a peer (helper for social calculations)

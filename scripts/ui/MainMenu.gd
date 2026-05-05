@@ -8,6 +8,8 @@ signal new_game_pressed
 signal load_game_pressed
 signal settings_pressed
 signal quit_pressed
+signal god_mode_pressed
+signal play_pressed
 
 const BG_COLOR: Color = Color(0.03, 0.04, 0.06, 0.88)
 const TITLE_COLOR: Color = Color(0.85, 0.78, 0.40, 1.0)
@@ -67,9 +69,20 @@ func _ready() -> void:
 	btn_vbox.add_theme_constant_override("separation", 8)
 	btn_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 
-	var new_btn: Button = _make_menu_button("New Game")
-	new_btn.pressed.connect(func(): new_game_pressed.emit(); hide_menu())
-	btn_vbox.add_child(new_btn)
+	var watch_btn: Button = _make_menu_button("Watch")
+	watch_btn.tooltip_text = "Spectator mode — observe the world, paint zones"
+	watch_btn.pressed.connect(func(): new_game_pressed.emit(); hide_menu())
+	btn_vbox.add_child(watch_btn)
+
+	var play_btn: Button = _make_menu_button("Play")
+	play_btn.tooltip_text = "Incarnated mode — live as a pawn, earn authority"
+	play_btn.pressed.connect(func(): play_pressed.emit(); hide_menu())
+	btn_vbox.add_child(play_btn)
+
+	var god_btn: Button = _make_menu_button("God")
+	god_btn.tooltip_text = "God mode — command all pawns, place structures"
+	god_btn.pressed.connect(func(): god_mode_pressed.emit(); hide_menu())
+	btn_vbox.add_child(god_btn)
 
 	var load_btn: Button = _make_menu_button("Load Game")
 	load_btn.pressed.connect(func(): load_game_pressed.emit())

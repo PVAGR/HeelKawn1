@@ -770,9 +770,48 @@ func _path_for_pawn(to: Vector2i) -> Array[Vector2i]:
 	# Throttle pathfinding to every 3 ticks to reduce lag
 	if GameManager.tick_count % 3 != 0:
 		return [] as Array[Vector2i]
+	
+	# Phase 5: Check if destination is near an enemy
+	var destination_near_enemy: bool = is_tile_near_enemy(to)
+	
+	# If destination is near enemy, find alternative nearby tile
+	var actual_dest: Vector2i = to
+	if destination_near_enemy:
+		actual_dest = _find_safe_tile_near(to)
+		if actual_dest == to:
+			# No safe alternative found, proceed anyway
+			pass
+	
 	if GameManager.game_speed >= FAST_PATHFIND_SPEED_THRESHOLD:
-		return _world.pathfinder.find_path(data.tile_pos, to)
-	return _world.pathfinder.find_path_pawn_historic_aversion(data.tile_pos, to)
+		return _world.pathfinder.find_path(data.tile_pos, actual_dest)
+	return _world.pathfinder.find_path_pawn_historic_aversion(data.tile_pos, actual_dest)
+
+
+## Find a safe tile near the goal (avoiding enemies)
+## OPTIMIZATION: Limit search radius and iterations
+func _find_safe_tile_near(goal: Vector2i) -> Vector2i:
+	if _world == null or _world.data == null:
+		return goal
+	
+	# OPTIMIZATION: Search only up to radius 4 (was 6), limit iterations
+	for radius in range(1, 5):
+		var found: bool = false
+		for dx in range(-radius, radius + 1):
+			for dy in range(-radius, radius + 1):
+				if abs(dx) != radius and abs(dy) != radius:
+					continue  # Only check perimeter
+				var candidate: Vector2i = goal + Vector2i(dx, dy)
+				if _world.data.in_bounds(candidate.x, candidate.y):
+					if _world.pathfinder.is_passable(candidate):
+						if not is_tile_near_enemy(candidate):
+							return candidate
+				found = true
+			if found:
+				break
+		if found:
+			break
+	
+	return goal  # No safe tile found, return original
 
 
 func _request_redraw() -> void:
@@ -4295,6 +4334,12 @@ func _decay_needs() -> void:
 			var wt: WorldTrace = get_tree().get_root().get_node("Main/WorldTrace") as WorldTrace
 			data.mood = max(0.0, data.mood - wt.get_mood_drain_at(data.tile_pos))
 	
+	# Phase 5: Proximity stress from being near grudge-enemies - throttled to every 10 ticks
+	if GameManager.tick_count % 10 == 0:
+		var stress_drain: float = get_proximity_stress_drain()
+		if stress_drain > 0.0:
+			data.mood = max(0.0, data.mood - stress_drain)
+	
 	# Stage 1: Decay stamina based on activity - throttled to every 5 ticks
 	if GameManager.tick_count % 5 == 0:
 		_decay_stamina()
@@ -4703,6 +4748,117 @@ func should_seek_revenge(other_pawn_id: int) -> bool:
 		return GrudgeManager.should_seek_revenge(int(data.id), other_pawn_id)
 	return false
 
+## Get reputation score for another pawn (-1.0 to 1.0)
+func get_reputation_for(other_pawn_id: int) -> float:
+	if GossipManager != null and GossipManager.has_method("get_reputation_for"):
+		return GossipManager.get_reputation_for(other_pawn_id)
+	return 0.0
+
+## Get reputation label for another pawn (human-readable)
+func get_reputation_label_for(other_pawn_id: int) -> String:
+	if GossipManager != null and GossipManager.has_method("get_reputation_label"):
+		return GossipManager.get_reputation_label_for(other_pawn_id)
+	return "Unknown"
+
+## Get tiles to avoid due to grudge-enemies (Phase 5: Avoidance AI)
+## OPTIMIZATION: Cache enemy positions per tick to avoid repeated scans
+var _enemy_positions_cache: Array[Vector2i] = []
+var _enemy_cache_tick: int = -1
+
+func get_avoidance_tiles() -> Array[Vector2i]:
+	# Return cached positions if still valid for this tick
+	if _enemy_cache_tick == GameManager.tick_count:
+		return _enemy_positions_cache
+	
+	_enemy_positions_cache.clear()
+	var enemies: Array[int] = get_grudge_enemies()
+	
+	if enemies.is_empty():
+		_enemy_cache_tick = GameManager.tick_count
+		return _enemy_positions_cache
+	
+	var sp: PawnSpawner = _resolve_pawn_spawner()
+	if sp == null:
+		_enemy_cache_tick = GameManager.tick_count
+		return _enemy_positions_cache
+	
+	# Get positions of all enemies (limit to first 5 for performance)
+	var checked: int = 0
+	for enemy_id in enemies:
+		if checked >= 5:  # OPTIMIZATION: Limit enemy scans
+			break
+		for p in sp.pawns:
+			if p != null and is_instance_valid(p) and p.data != null:
+				if int(p.data.id) == enemy_id:
+					# Add enemy's tile and surrounding tiles to avoid list
+					_enemy_positions_cache.append(p.data.tile_pos)
+					# Also add adjacent tiles (radius 2) - limit for performance
+					_enemy_positions_cache.append(p.data.tile_pos + Vector2i(1, 0))
+					_enemy_positions_cache.append(p.data.tile_pos + Vector2i(-1, 0))
+					_enemy_positions_cache.append(p.data.tile_pos + Vector2i(0, 1))
+					_enemy_positions_cache.append(p.data.tile_pos + Vector2i(0, -1))
+					checked += 1
+					break
+	
+	_enemy_cache_tick = GameManager.tick_count
+	return _enemy_positions_cache
+
+## Check if a tile is near an enemy (for avoidance)
+## OPTIMIZATION: Early exit, limited scans
+func is_tile_near_enemy(tile: Vector2i) -> bool:
+	var enemies: Array[int] = get_grudge_enemies()
+	if enemies.is_empty():
+		return false
+	
+	var sp: PawnSpawner = _resolve_pawn_spawner()
+	if sp == null:
+		return false
+	
+	# OPTIMIZATION: Check only first 3 enemies for performance
+	var checked: int = 0
+	for enemy_id in enemies:
+		if checked >= 3:
+			break
+		for p in sp.pawns:
+			if p != null and is_instance_valid(p) and p.data != null:
+				if int(p.data.id) == enemy_id:
+					if tile.distance_squared_to(p.data.tile_pos) <= 9:  # 3 tile radius
+						return true
+					checked += 1
+					break
+	return false
+
+## Get mood drain from being near enemies (proximity stress)
+## OPTIMIZATION: Early exit, limited scans
+func get_proximity_stress_drain() -> float:
+	var enemies: Array[int] = get_grudge_enemies()
+	if enemies.is_empty():
+		return 0.0
+	
+	var sp: PawnSpawner = _resolve_pawn_spawner()
+	if sp == null:
+		return 0.0
+	
+	var stress: float = 0.0
+	var checked: int = 0
+	
+	# OPTIMIZATION: Check only first 3 enemies for performance
+	for enemy_id in enemies:
+		if checked >= 3:
+			break
+		for p in sp.pawns:
+			if p != null and is_instance_valid(p) and p.data != null:
+				if int(p.data.id) == enemy_id:
+					var dist_sq: float = data.tile_pos.distance_squared_to(p.data.tile_pos)  # OPTIMIZATION: Avoid sqrt
+					if dist_sq <= 9.0:  # Very close (3^2) - high stress
+						stress += 0.15
+					elif dist_sq <= 36.0:  # Medium close (6^2) - moderate stress
+						stress += 0.05
+					checked += 1
+					break
+	
+	return clampf(stress, 0.0, 0.5)
+
 func track_co_presence() -> void:
 	_track_co_presence_light()
 
@@ -4729,6 +4885,48 @@ func _track_co_presence_light() -> void:
 		if cur > 60000:
 			cur = 60000
 		data.co_presence[oid] = cur
+		
+		# Phase 5: Share gossip during social proximity (every 100 ticks of co-presence)
+		# OPTIMIZATION: Changed from 50 to 100 to reduce frequency
+		if cur % 100 == 0:
+			_share_gossip_with(p)
+
+
+## Share gossip with another pawn during social proximity (Phase 5)
+## OPTIMIZATION: Early exits, limited gossip sharing
+func _share_gossip_with(other_pawn: Pawn) -> void:
+	if other_pawn == null or not is_instance_valid(other_pawn):
+		return
+	if GossipManager == null or not GossipManager.has_method("share_gossip_between"):
+		return
+	
+	# OPTIMIZATION: Skip if either pawn has no gossip
+	var my_gossip: GossipPropagation = GossipManager._get_gossip_for_pawn(int(data.id)) if GossipManager.has_method("_get_gossip_for_pawn") else null
+	var other_gossip: GossipPropagation = GossipManager._get_gossip_for_pawn(int(other_pawn.data.id)) if GossipManager.has_method("_get_gossip_for_pawn") else null
+	
+	if my_gossip == null and other_gossip == null:
+		return  # Nothing to share
+	
+	# Calculate trust strength from social rapport
+	var other_id: int = int(other_pawn.data.id)
+	var rapport: float = float(data.get_social_rapport(other_id))
+	var trust_strength: float = clampf(rapport / 100.0, 0.0, 1.0)
+	
+	# OPTIMIZATION: Skip if trust too low for gossip sharing
+	if trust_strength < 0.3:
+		return
+	
+	# Share gossip (bidirectional)
+	var shared_count: int = GossipManager.share_gossip_between(
+		int(data.id),
+		other_id,
+		trust_strength
+	)
+	
+	# Mood bonus for social bonding through gossip
+	if shared_count > 0:
+		data.mood = min(100.0, data.mood + float(shared_count) * 0.05)
+		other_pawn.data.mood = min(100.0, other_pawn.data.mood + float(shared_count) * 0.05)
 
 
 func form_family_bond(other_pawn: Pawn, initial_strength: float = 20.0) -> void:
@@ -6024,8 +6222,8 @@ func _draw_social_bonds(body_origin: Vector2) -> void:
 		var other_pawn: Pawn = _find_pawn_by_id(int(other_id))
 		if other_pawn == null or not is_instance_valid(other_pawn):
 			continue
-		var dist: float = global_position.distance_to(other_pawn.global_position)
-		if dist > 500.0:  # ~50 tiles
+		var dist_sq: float = global_position.distance_squared_to(other_pawn.global_position)  # OPTIMIZATION: Avoid sqrt
+		if dist_sq > 250000.0:  # ~500^2 tiles
 			continue
 		var strength: float = float(data.family_bonds[other_id])
 		var alpha: float = clampf(strength / 100.0, 0.15, 0.8)
@@ -6036,10 +6234,37 @@ func _draw_social_bonds(body_origin: Vector2) -> void:
 	if data.social_squad_anchor_id >= 0 and data.social_squad_anchor_id != int(data.id):
 		var anchor_pawn: Pawn = _find_pawn_by_id(data.social_squad_anchor_id)
 		if anchor_pawn != null and is_instance_valid(anchor_pawn):
-			var dist: float = global_position.distance_to(anchor_pawn.global_position)
-			if dist <= 500.0:
+			var dist_sq: float = global_position.distance_squared_to(anchor_pawn.global_position)  # OPTIMIZATION: Avoid sqrt
+			if dist_sq <= 250000.0:  # ~500^2
 				var local_end: Vector2 = to_local(anchor_pawn.global_position)
 				draw_line(body_origin, local_end, Color(0.3, 0.8, 0.8, 0.5), 1.0, true)
+	
+	# Phase 5: Enemy avoidance lines — red lines to grudge-enemies
+	# OPTIMIZATION: Draw only top 3 enemies by intensity to reduce rendering cost
+	var enemies: Array[int] = get_grudge_enemies()
+	if enemies.size() > 3:
+		# Sort by intensity and take top 3
+		var enemy_intensities: Array = []
+		for enemy_id in enemies:
+			var intensity: float = get_grudge_toward(enemy_id)
+			enemy_intensities.append({"id": enemy_id, "intensity": intensity})
+		enemy_intensities.sort_custom(func(a, b): return a.intensity > b.intensity)
+		enemies = enemy_intensities.slice(0, 3).map(func(e): return e.id)
+	
+	for enemy_id in enemies:
+		var enemy_pawn: Pawn = _find_pawn_by_id(enemy_id)
+		if enemy_pawn == null or not is_instance_valid(enemy_pawn):
+			continue
+		var dist_sq: float = global_position.distance_squared_to(enemy_pawn.global_position)  # OPTIMIZATION: Avoid sqrt
+		if dist_sq > 250000.0:  # ~500^2 tiles
+			continue
+		# Get grudge intensity for line opacity
+		var intensity: float = get_grudge_toward(enemy_id)
+		var alpha: float = clampf(intensity, 0.3, 0.9)
+		var local_end: Vector2 = to_local(enemy_pawn.global_position)
+		# Red line for enemies (thicker for higher intensity)
+		var width: float = 1.0 + (intensity * 1.5)
+		draw_line(body_origin, local_end, Color(1.0, 0.2, 0.2, alpha), width, true)
 
 
 ## Short activity verb shown below the pawn. Empty string for idle.

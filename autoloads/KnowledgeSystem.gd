@@ -6,6 +6,11 @@ extends Node
 @onready var WorldAI = get_node_or_null("/root/WorldAI")
 @onready var WorldMemory = get_node_or_null("/root/WorldMemory")
 @onready var GameManager = get_node_or_null("/root/GameManager")
+@onready var PawnSpawnerRef = get_node_or_null("/root/PawnSpawner") as PawnSpawner
+
+# OPTIMIZATION: Cached pawn array, updated only when pawns spawn/despawn
+var _pawn_cache: Array[Pawn] = []
+var _pawn_cache_dirty: bool = true
 
 enum KnowledgeType {
 	FIRE_KEEPING = 0,
@@ -73,6 +78,24 @@ const REDISCOVERY_BASE_CHANCE: float = 0.05  # 5% per check at dormant location
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 	_initialize_degradation()
+	# OPTIMIZATION: Connect to pawn spawn/despawn for cache invalidation
+	if PawnSpawnerRef != null:
+		_refresh_pawn_cache()
+
+## OPTIMIZATION: Get cached pawn array, refresh only when dirty
+func _get_pawns() -> Array[Pawn]:
+	if _pawn_cache_dirty or PawnSpawnerRef == null:
+		_refresh_pawn_cache()
+	return _pawn_cache
+
+func _refresh_pawn_cache() -> void:
+	if PawnSpawnerRef == null:
+		return
+	_pawn_cache = PawnSpawnerRef.find_pawns()
+	_pawn_cache_dirty = false
+
+func _invalidate_pawn_cache() -> void:
+	_pawn_cache_dirty = true
 
 func _initialize_degradation() -> void:
 	for k in KnowledgeType.values():
@@ -208,7 +231,7 @@ func _check_knowledge_loss(knowledge_type: KnowledgeType) -> void:
 		# Also check current dying carrier for location
 		if last_carrier_id >= 0:
 			# Try to get the dying pawn's last known position
-			for n in PawnSpawner.find_pawns():
+			for n in _get_pawns():
 				if n == null or not is_instance_valid(n):
 					continue
 				if not n.has_method("get"):
@@ -465,7 +488,7 @@ func clear() -> void:
 func _update_teaching_debt() -> void:
 	var tick: int = GameManager.tick_count
 	# Scan all living pawns for mastery-level skills
-	for n in PawnSpawner.find_pawns():
+	for n in _get_pawns():
 		if n == null or not is_instance_valid(n):
 			continue
 		if not n.has_method("get"):
@@ -533,7 +556,7 @@ func _update_knowledge_security() -> void:
 	knowledge_security.clear()
 	# Count carriers per knowledge type per settlement
 	var carriers_by_settlement: Dictionary = {}  # settlement_id(str) -> { knowledge_type -> count }
-	for n in PawnSpawner.find_pawns():
+	for n in _get_pawns():
 		if n == null or not is_instance_valid(n):
 			continue
 		if not n.has_method("get"):
@@ -608,7 +631,7 @@ func attempt_rediscovery(pawn_id: int, pawn_pos: Vector2i, knowledge_type: Knowl
 	# Deterministic chance: scholars and curious pawns have higher chance
 	var chance: float = REDISCOVERY_BASE_CHANCE
 	# Check pawn profession
-	for n in PawnSpawner.find_pawns():
+	for n in _get_pawns():
 		if n == null or not is_instance_valid(n):
 			continue
 		if not n.has_method("get"):
@@ -700,7 +723,7 @@ func _add_research_points_for_pawn(pawn_id: int, amount: int, reason: String) ->
 func _settlement_id_for_pawn(pawn_id: int) -> int:
 	if SettlementMemory == null:
 		return -1
-	for n in PawnSpawner.find_pawns():
+	for n in _get_pawns():
 		if n == null or not is_instance_valid(n):
 			continue
 		if not n.has_method("get"):
@@ -732,7 +755,7 @@ func _knowledge_carrier_counts_by_settlement() -> Dictionary:
 	if SettlementMemory == null:
 		return out
 	var carriers_present: Dictionary = {}
-	for n in PawnSpawner.find_pawns():
+	for n in _get_pawns():
 		if n == null or not is_instance_valid(n):
 			continue
 		if not n.has_method("get"):

@@ -320,7 +320,7 @@ func spawn_generational_pawn(
 			var rep: float = float(CulturalMemory.get_region_reputation(center_region))
 			data.settlement_reputation[str(center_region)] = rep
 			# Record birth settlement for lineage tracking and cultural revival naming
-			data.birth_settlement = str(center_region)  # Convert int to String
+			data.birth_settlement = center_region  # Already int, matches PawnData type
 		if not culture_name.is_empty():
 			data.cultural_affinity[culture_name] = 100.0
 	var taboo_job_names: Array[String] = []

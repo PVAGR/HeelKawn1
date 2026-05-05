@@ -2901,6 +2901,11 @@ func attempt_reproduction() -> bool:
 	if child != null:
 		_next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
 		mate._next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
+		
+		# PAWN-ACTIVATED EVENT: Record birth for event system
+		if WorldEvents != null and WorldEvents.has_method("record_pawn_action"):
+			WorldEvents.record_pawn_action("birth", int(data.id))
+		
 		WorldMemory.record_event({
 			"type": "birth",
 			"tick": now,
@@ -3493,7 +3498,11 @@ func _complete_current_job() -> void:
 	if job != null and job.type == _Job.Type.HUNT and Pawn._world_hunt_stabilization_blocks():
 		_unclaim_current_job()
 		return
-	
+
+	# PAWN-ACTIVATED EVENT: Record job completion for event system
+	if WorldEvents != null and WorldEvents.has_method("record_pawn_action"):
+		WorldEvents.record_pawn_action("job_complete", int(data.id))
+
 	# Show action popup for significant job completions
 	if _action_popup != null and job != null and GameManager.game_speed < 50.0:
 		_show_action_popup_for_job(job)
@@ -4628,7 +4637,11 @@ func teach_skill(target_pawn: Pawn, skill: int) -> bool:
 	
 	# Update cooldown timestamp
 	_last_teach_tick = GameManager.tick_count
-	
+
+	# PAWN-ACTIVATED EVENT: Record teaching for event system
+	if WorldEvents != null and WorldEvents.has_method("record_pawn_action"):
+		WorldEvents.record_pawn_action("teaching", int(data.id))
+
 	# Track student progress
 	var student_id: int = int(target_pawn.data.id)
 	if not _students_taught.has(student_id):
@@ -5427,6 +5440,11 @@ func _track_region_visit(tile: Vector2i) -> void:
 	data.life_path_contributions = contribs
 	data.life_path_total += 1
 	_world_record_discovery_event(rk, tile)
+	
+	# PAWN-ACTIVATED EVENT: Record discovery for event system
+	if WorldEvents != null and WorldEvents.has_method("record_pawn_action"):
+		WorldEvents.record_pawn_action("discovery", int(data.id))
+	
 	# Re-evaluate dominant path after new discovery.
 	_reevaluate_life_path_from_contributions()
 

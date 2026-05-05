@@ -97,6 +97,12 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 			var attacker_name: String = _combat_name(attacker)
 			var enemy_name: String = enemy_defender.get_species_name()
 			print("[Combat] Enemy %s killed by %s" % [enemy_name, attacker_name])
+			
+			# PAWN-ACTIVATED EVENT: Record combat kill for event system
+			if attacker is Pawn and WorldEvents != null and WorldEvents.has_method("record_pawn_action"):
+				var pawn_attacker: Pawn = attacker as Pawn
+				WorldEvents.record_pawn_action("combat_kill", int(pawn_attacker.data.id))
+			
 			# Award krond to the pawn attacker (deterministic, fixed amount)
 			if attacker is Pawn:
 				var pawn_attacker: Pawn = attacker as Pawn

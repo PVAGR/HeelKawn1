@@ -55,7 +55,7 @@
 ### 3. Performance Monitoring (`tools/diagnose/PerformanceMonitor.gd`)
 
 #### New Performance Monitor Overlay
-- **Toggle:** F4 key in-game
+- **Access:** Press **F10** → Click "Toggle Performance Monitor Overlay" button
 - **Displays:**
   - Real-time FPS (current + 10-second average)
   - Ticks per frame (current + average)
@@ -70,7 +70,8 @@
 
 #### Integration
 - Auto-loaded in `Main._ready()`
-- Hidden by default, toggle with F4
+- Hidden by default, toggle via F10 Creator Debug Menu
+- Status indicator shows ON/OFF in menu
 
 ---
 
@@ -97,11 +98,13 @@
 
 ## How to Verify
 
-1. **Launch the game** and press **F4** to show performance monitor
-2. **Check FPS** at 1x speed - should be stable 55-60 FPS
-3. **Increase speed** to 26x, 50x, 100x - monitor tick throughput
-4. **Select pawns** with social bonds - observe reduced line drawing
-5. **Watch for "GOOD" grade** in performance monitor
+1. **Launch the game** and press **F10** to open debug menu
+2. **Click** "Toggle Performance Monitor Overlay" button
+3. **Check FPS** at 1x speed - should be stable 55-60 FPS
+4. **Increase speed** to 26x, 50x, 100x - monitor tick throughput
+5. **Select pawns** with social bonds - observe reduced line drawing
+6. **Watch for "GOOD" grade** in performance monitor
+7. **Press F10 again** to close menu (monitor stays active)
 
 ### Performance Targets
 - **GOOD:** FPS ≥ 55, Ticks/Frame ≤ 100
@@ -115,8 +118,9 @@
 
 1. `scripts/pawn/Pawn.gd` - Rendering, avoidance caching, social bonds
 2. `autoloads/TickManager.gd` - LOD system integration
-3. `scenes/main/Main.gd` - Performance monitor integration, F4 toggle
-4. `tools/diagnose/PerformanceMonitor.gd` - NEW: Performance overlay
+3. `scenes/main/Main.gd` - Performance monitor integration
+4. `scripts/ui/CreatorDebugMenu.gd` - F10 menu toggle button
+5. `tools/diagnose/PerformanceMonitor.gd` - NEW: Performance overlay (Godot 4.6 API fixed)
 
 ---
 

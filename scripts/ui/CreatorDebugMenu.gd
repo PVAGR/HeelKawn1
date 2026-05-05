@@ -110,6 +110,9 @@ var _last_report_tick: int = -1
 var _last_report_wall_time: float = 0.0
 const REPORT_COOLDOWN_SEC: float = 2.0
 
+## Performance monitor reference (toggled via F10 menu)
+var _performance_monitor_enabled: bool = false
+
 
 func _ready() -> void:
 	layer = 25
@@ -210,6 +213,9 @@ func _build_ui() -> void:
 				if row_any is Dictionary:
 					var rowd: Dictionary = row_any as Dictionary
 					_add_report_button(str(rowd.get("label", "?")), str(rowd.get("id", "")))
+	
+	# Add performance monitor toggle at the end
+	_add_performance_monitor_toggle()
 
 
 func _add_report_button(label_text: String, report_id: String) -> void:
@@ -1636,3 +1642,55 @@ func _check_file_syntax_errors(file_path: String) -> Array[String]:
 	# Avoid Script.reload() here: runtime instances can make reload return non-parse
 	# errors (for example code=22), which creates false positives in the report.
 	return errors
+
+
+func _add_performance_monitor_toggle() -> void:
+	# Add separator
+	var sep: HSeparator = HSeparator.new()
+	_vbox.add_child(sep)
+	
+	# Add heading
+	var hl: Label = Label.new()
+	hl.text = "★ Performance Monitor"
+	hl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hl.add_theme_font_size_override("font_size", 13)
+	hl.modulate = Color(0.55, 0.95, 0.72)
+	_vbox.add_child(hl)
+	
+	# Add toggle button
+	var b: Button = Button.new()
+	b.text = "Toggle Performance Monitor Overlay"
+	b.add_theme_font_size_override("font_size", 13)
+	b.custom_minimum_size = Vector2(PANEL_W - 40, 26)
+	b.pressed.connect(_toggle_performance_monitor)
+	_vbox.add_child(b)
+	
+	# Add status label
+	var status: Label = Label.new()
+	status.name = "PerformanceMonitorStatus"
+	status.text = "Status: OFF (press button to enable)"
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status.add_theme_font_size_override("font_size", 11)
+	status.modulate = Color(0.7, 0.7, 0.7)
+	_vbox.add_child(status)
+
+
+func _toggle_performance_monitor() -> void:
+	var main_node: Node = get_node_or_null("/root/Main")
+	if main_node == null or not main_node.has_method("_toggle_performance_monitor"):
+		print("[PerformanceMonitor] Not available - Main._toggle_performance_monitor() not found")
+		return
+	
+	# Toggle via Main
+	main_node.call("_toggle_performance_monitor")
+	
+	# Update status label
+	_performance_monitor_enabled = not _performance_monitor_enabled
+	var status_label: Label = _vbox.get_node_or_null("PerformanceMonitorStatus") as Label
+	if status_label != null:
+		if _performance_monitor_enabled:
+			status_label.text = "Status: ON (overlay active)"
+			status_label.modulate = Color(0.55, 0.95, 0.72)
+		else:
+			status_label.text = "Status: OFF (press button to enable)"
+			status_label.modulate = Color(0.7, 0.7, 0.7)

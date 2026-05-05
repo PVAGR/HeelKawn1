@@ -3256,8 +3256,6 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_toggle_draft_mode()
 		Key.KEY_F5:
 			_colony_save()
-		Key.KEY_F4:
-			_toggle_performance_monitor()
 		Key.KEY_F8:
 			_colony_load()
 		Key.KEY_F9:

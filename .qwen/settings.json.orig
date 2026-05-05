@@ -3,6 +3,5 @@
     "allow": [
       "Bash(godot *)"
     ]
-  },
-  "$version": 3
+  }
 }

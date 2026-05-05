@@ -10,7 +10,7 @@ class_name KnowledgeStone
 @export var inscribed_tick: int = 0
 @export var knowledge_types: Array = []
 
-var _sprite: Node2D
+var _sprite: Node
 var _tooltip: Control = null
 
 

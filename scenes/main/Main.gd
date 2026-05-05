@@ -111,7 +111,7 @@ const INFLUENCE_UPDATE_INTERVAL_TICKS: int = 500
 const OBSERVER_HUD_REFRESH_TICKS: int = 30
 const FOCUS_INSPECTOR_REFRESH_TICKS: int = 15
 ## Deterministic rebirth cadence (tick-gated, no frame-time).
-const REBIRTH_CHECK_INTERVAL_TICKS: int = 2000
+const REBIRTH_CHECK_INTERVAL_TICKS: int = 4000  # OPTIMIZATION: Increased from 2000 to reduce hitch frequency
 const SETTLEMENT_ARCHITECT_INTERVAL_TICKS: int = 5000
 const SETTLEMENT_ARCHITECT_PHASE_OFFSET_TICKS: int = 347
 const AGE_MEMORY_INTERVAL_TICKS: int = 10000
@@ -2339,15 +2339,30 @@ func _on_game_tick(tick: int) -> void:
 			t0 = Time.get_ticks_usec()
 			TradePlanner.plan(_world, self, false)
 			section_us["trade_planner"] = Time.get_ticks_usec() - t0
+		# OPTIMIZATION: Spread heavy settlement operations across ticks with frame budget check
 		if tick % REBIRTH_CHECK_INTERVAL_TICKS == 0:
-			t0 = Time.get_ticks_usec()
-			SettlementMemory.recompute(_world)
-			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
-		# Offset SettlementRebirth.process to the next tick to spread the load
-		if (tick + REBIRTH_CHECK_INTERVAL_TICKS / 2) % REBIRTH_CHECK_INTERVAL_TICKS == 0:
-			t0 = Time.get_ticks_usec()
-			SettlementRebirth.process(_world, self, false)
-			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
+			# Check frame budget before heavy recompute
+			if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
+				frame_budget_exceeded = true
+				# Defer to next frame
+				call_deferred("_deferred_settlement_memory_recompute", _world)
+			else:
+				t0 = Time.get_ticks_usec()
+				SettlementMemory.recompute(_world)
+				section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
+		
+		# Offset SettlementRebirth.process to a different tick to spread the load
+		var rebirth_offset_tick: int = (tick + REBIRTH_CHECK_INTERVAL_TICKS / 2) % REBIRTH_CHECK_INTERVAL_TICKS
+		if rebirth_offset_tick == 0:
+			# Check frame budget before heavy process
+			if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
+				frame_budget_exceeded = true
+				# Defer to next frame
+				call_deferred("_deferred_settlement_rebirth_process", _world, self)
+			else:
+				t0 = Time.get_ticks_usec()
+				SettlementRebirth.process(_world, self, false)
+				section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
 		# Phase 4 Identity: visual decay for permanently abandoned settlements (infrequent)
 		if GameManager.periodic_phase_due(tick, SETTLEMENT_ARCHITECT_INTERVAL_TICKS, SETTLEMENT_ARCHITECT_PHASE_OFFSET_TICKS):
 			t0 = Time.get_ticks_usec()
@@ -2660,6 +2675,17 @@ func _flush_world_memory_derivatives() -> void:
 	if (GameManager.tick_count + maxi(1, heavy_planner_interval / 3)) % heavy_planner_interval == 0:
 		TradePlanner.plan(_world, self, true)
 	RoadMemory.flush_dirty_tiles(_world)
+
+
+# OPTIMIZATION: Deferred heavy operations for frame budget management
+func _deferred_settlement_memory_recompute(world: World) -> void:
+	if is_instance_valid(world):
+		SettlementMemory.recompute(world)
+
+
+func _deferred_settlement_rebirth_process(world: World, main: Node) -> void:
+	if is_instance_valid(world) and is_instance_valid(main):
+		SettlementRebirth.process(world, main, false)
 
 
 func _maybe_generational_turnover() -> void:

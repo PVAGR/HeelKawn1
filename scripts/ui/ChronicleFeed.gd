@@ -205,6 +205,11 @@ func _chronicle_line_for_event(e: Dictionary) -> String:
 
 ## Human-readable text for an event type
 func _event_text(typ: String, e: Dictionary) -> String:
+	# Filter out noisy internal events that flood the feed
+	if typ in ["region_discovery", "knowledge_acquisition", "life_path_switch",
+			"life_path_milestone", "unknown", "job_completed", "player_inspect"]:
+		return ""
+
 	# First-of-type milestone
 	if bool(e.get("first_of_type", false)):
 		return "[i]first: %s[/i]" % typ.replace("_", " ")

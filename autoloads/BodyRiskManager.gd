@@ -30,6 +30,11 @@ const RECOVERY_RATES: Dictionary = {
 	InjuryType.INFECTION:    0.02,   # infection needs treatment
 }
 
+## Throttle injury event recording — don't spam WorldMemory with identical events.
+## Key: pawn_id, Value: last injury tick
+var _last_injury_event_tick: Dictionary = {}
+const INJURY_EVENT_THROTTLE_TICKS: int = 60  # Only record one injury per pawn per 60 ticks
+
 const MOBILITY_PENALTIES: Dictionary = {
 	InjuryType.CUT:          0.0,   # minor cut doesn't slow you
 	InjuryType.BURN:         0.15,  # burns reduce mobility
@@ -84,16 +89,22 @@ func apply_injury(pawn: Pawn, injury_type: int, severity: float, source: String 
 	# Update pain based on total injury severity
 	_recalculate_pain(pd)
 	
-	WorldMemory.record_event({
-		"type": "injury",
-		"pawn_id": int(pd.id),
-		"pawn_name": pd.display_name,
-		"injury_type": type_name,
-		"severity": int(new_severity),
-		"source": source,
-		"tick": GameManager.tick_count,
-		"tile": {"x": pd.tile_pos.x, "y": pd.tile_pos.y},
-	})
+	# Throttle injury event recording — don't spam WorldMemory
+	var pawn_id: int = int(pd.id)
+	var tick_now: int = GameManager.tick_count
+	var last_tick: int = _last_injury_event_tick.get(pawn_id, -INJURY_EVENT_THROTTLE_TICKS)
+	if tick_now - last_tick >= INJURY_EVENT_THROTTLE_TICKS:
+		_last_injury_event_tick[pawn_id] = tick_now
+		WorldMemory.record_event({
+			"type": "injury",
+			"pawn_id": pawn_id,
+			"pawn_name": pd.display_name,
+			"injury_type": type_name,
+			"severity": int(new_severity),
+			"source": source,
+			"tick": tick_now,
+			"tile": {"x": pd.tile_pos.x, "y": pd.tile_pos.y},
+		})
 	
 	if GameManager.verbose_logs():
 		print("[BodyRisk] %s suffered %s (severity=%.0f, source=%s)" % [

@@ -62,7 +62,9 @@ const MOOD_BONUS_ATE: float = 4.0
 const MOOD_BONUS_WOKE_REFRESHED: float = 8.0
 
 ## Pawns go eat when hunger drops below this (and a stockpile has food).
-const HUNGER_EAT_THRESHOLD: float = 50.0
+## Tuned so HeelKawnians work through most of their hunger bar before eating,
+## preventing the entire colony from abandoning work simultaneously.
+const HUNGER_EAT_THRESHOLD: float = 30.0
 ## Below this, a pawn will eat food directly from its own hands rather than
 ## insist on hauling it to the stockpile first. Saves starving pawns who got
 ## stranded mid-haul (unreachable stockpile, no path, etc).

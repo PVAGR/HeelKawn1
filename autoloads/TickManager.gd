@@ -100,7 +100,10 @@ func _process(delta: float) -> void:
 	if current_fps < 55:
 		_low_fps_frame_streak += 1
 		if _low_fps_frame_streak >= 3:
-			_adaptive_max_ticks_per_frame = maxi(1, int(floor(float(_adaptive_max_ticks_per_frame) * 0.75)))
+			# Reduce ticks but never below floor — prevents death spiral where
+			# adaptive throttle cuts to 1 tick/frame and pawns stop functioning.
+			var floor_ticks: int = maxi(10, _get_max_ticks_per_frame() / 4)
+			_adaptive_max_ticks_per_frame = maxi(floor_ticks, int(floor(float(_adaptive_max_ticks_per_frame) * 0.75)))
 			_low_fps_frame_streak = 0
 	else:
 		_low_fps_frame_streak = 0
@@ -130,9 +133,7 @@ func _process(delta: float) -> void:
 			if ticks_this_frame % 4 == 0:
 				var elapsed: int = Time.get_ticks_usec() - start_time
 				if elapsed > _get_frame_budget_usec():
-					if OS.is_debug_build():
-						push_warning("[TickManager] Frame budget exceeded: Processed %d ticks in %.1fms, pausing." % [ticks_this_frame, elapsed / 1000.0])
-					break
+					break  # Yield to next frame — don't pause, just defer remaining ticks
 
 	# SAFETY: If backlog grows dangerously large (>10x cap),
 	# log a warning but DO NOT drop time. The sim will catch up over frames.

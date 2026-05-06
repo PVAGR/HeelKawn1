@@ -411,3 +411,10 @@ func get_role(region_key: Variant) -> String:
 	# TODO: Implement actual trade route role tracking.
 	# Currently returns empty string (no trade role).
 	return ""
+
+
+## Clear all trade data (for world reroll/new game)
+func clear() -> void:
+	trade_routes.clear()
+	_next_route_id = 1
+	# Reset any other trade data as needed

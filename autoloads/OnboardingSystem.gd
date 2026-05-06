@@ -8,6 +8,7 @@ extends Node
 ## - Interactive tutorials
 
 # Tutorial state (persisted across sessions)
+var _last_speed_index: int = 0
 var tutorial_state: Dictionary = {
 	"first_launch": true,
 	"completed_tutorials": [],
@@ -118,10 +119,10 @@ func _check_tutorial_triggers(tick: int) -> void:
 				tutorial_state.pawns_clicked += 1
 				_trigger_tutorial_step("pawn_click")
 	
-	# Track speed changes
-	if Input.is_action_just_pressed("ui_speed_1") or \
-	   Input.is_action_just_pressed("ui_speed_2") or \
-	   Input.is_action_just_pressed("ui_speed_3"):
+	# Track speed changes (detect when speed index changes, matching Main.gd KEY_1/2/3 hotkeys)
+	var _cur_speed: int = GameManager.get_speed_index() if GameManager.has_method("get_speed_index") else 0
+	if _cur_speed != _last_speed_index:
+		_last_speed_index = _cur_speed
 		tutorial_state.speed_changed = true
 		_trigger_tutorial_step("speed_change")
 	
@@ -274,9 +275,6 @@ func _create_tutorial_panel() -> void:
 	# Text label
 	_tooltip_label = RichTextLabel.new()
 	_tooltip_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_tooltip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_tooltip_label.add_theme_font_size_override("font_size", 12)
-	vbox.add_child(_tooltip_label)
 	
 	# Button container
 	var button_container: HBoxContainer = HBoxContainer.new()

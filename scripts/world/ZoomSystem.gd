@@ -72,7 +72,7 @@ func _ready() -> void:
 	_camera = get_viewport().get_camera_2d()
 	if _camera == null:
 		_camera = Camera2D.new()
-		get_tree().get_root().add_child(_camera)
+		get_tree().get_root().add_child.call_deferred(_camera)
 	
 	_world = get_node_or_null("/root/Main/World")
 

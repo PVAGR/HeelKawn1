@@ -153,6 +153,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "myth_formation", "label": "45 · Myth Formation (Phase 5 — feared/revered regions)"},
 			{"id": "record_carriers", "label": "46 · Record Carriers (Phase 5 — knowledge preservation stones)"},
 			{"id": "memorial_system", "label": "47 · Memorial System (Phase 5/6 — memorials, sacred geography, pilgrimage)"},
+			{"id": "knowledge_system", "label": "48 · Knowledge Systems (Phase 5/6 — carriers, teaching, loss/rediscovery)"},
 			{"id": "force_building", "label": "50 · FORCE BUILDING — post 10 wall/bed/zone jobs NOW"},
 		],
 	},
@@ -403,6 +404,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_record_carriers, "record_carriers")
 		"memorial_system":
 			error_occurred = _safe_report(_report_memorial_system, "memorial_system")
+		"knowledge_system":
+			error_occurred = _safe_report(_report_knowledge_system, "knowledge_system")
 		"force_building":
 			error_occurred = _safe_report(_force_building_now, "force_building")
 		"legacy_dynasty":
@@ -2056,6 +2059,103 @@ func _report_memorial_system() -> void:
 	print("")
 
 	print("=== END MEMORIAL SYSTEM REPORT ===")
+
+
+# === Phase 5/6: Knowledge Systems Report ===
+
+func _report_knowledge_system() -> void:
+	print("=== HEELKAWN KNOWLEDGE SYSTEMS (Phase 5/6: Carriers, Teaching, Loss/Rediscovery) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+
+	var ks: Node = get_node_or_null("/root/KnowledgeSystem")
+	if ks == null:
+		print("KnowledgeSystem not found - system not loaded")
+		return
+
+	# Knowledge carrier statistics
+	var total_carriers: int = 0
+	var total_knowledge: int = 0
+	var knowledge_by_type: Dictionary = {}
+
+	if ks.has("knowledge_carriers"):
+		var carriers: Dictionary = ks.get("knowledge_carriers")
+		for pawn_id in carriers:
+			var pawn_knowledge: Array = carriers[pawn_id]
+			total_carriers += 1
+			total_knowledge += pawn_knowledge.size()
+			
+			for ktype in pawn_knowledge:
+				if not knowledge_by_type.has(ktype):
+					knowledge_by_type[ktype] = 0
+				knowledge_by_type[ktype] += 1
+
+	print("--- KNOWLEDGE CARRIER STATISTICS ---")
+	print("Total knowledge carriers: %d" % total_carriers)
+	print("Total knowledge instances: %d" % total_knowledge)
+	print("Average knowledge per carrier: %.1f" % (float(total_knowledge) / max(1, total_carriers)))
+	print("")
+
+	print("--- KNOWLEDGE BY TYPE ---")
+	var type_names: Dictionary = {
+		0: "Fire Keeping", 1: "Food Storage", 2: "Tool Making", 3: "Season Reading",
+		4: "Sickness Avoidance", 5: "Navigation", 6: "Shelter Building", 7: "Memory Preservation",
+		8: "Ruin Interpretation", 9: "Hospitality", 10: "Winter Survival", 11: "Teaching",
+		12: "Hunting", 13: "Farming", 14: "Combat", 15: "Diplomacy", 16: "Crafting", 17: "Leadership",
+		18: "Metallurgy", 19: "Animal Husbandry", 20: "Architecture", 21: "Medicine",
+		22: "Astronomy", 23: "Engineering", 24: "Writing", 25: "Philosophy"
+	}
+	for ktype in knowledge_by_type:
+		var count: int = knowledge_by_type[ktype]
+		var name: String = type_names.get(ktype, "Unknown")
+		var status: String = "✓" if count > 1 else "⚠ LAST CARRIER" if count == 1 else ""
+		print("  %s (%d carriers): %d %s" % [name, count, count, status])
+	print("")
+
+	# Dormant knowledge
+	if ks.has_method("get_dormant_knowledge_types"):
+		var dormant: Array = ks.call("get_dormant_knowledge_types")
+		print("--- DORMANT KNOWLEDGE (Lost, Can Rediscover) ---")
+		if dormant.is_empty():
+			print("  (No dormant knowledge)")
+		else:
+			for ktype in dormant:
+				var info: Dictionary = ks.call("get_dormant_info", ktype)
+				var name: String = type_names.get(ktype, "Unknown")
+				var ticks_ago: int = GameManager.tick_count - info.get("last_practiced_tick", 0)
+				print("  %s - Lost %d ticks ago at (%d, %d)" % [name, ticks_ago, info.get("last_known_location", Vector2i.ZERO).x, info.get("last_known_location", Vector2i.ZERO).y])
+		print("")
+
+	# Teaching records
+	if ks.has("teaching_records"):
+		var records: Array = ks.get("teaching_records")
+		print("--- RECENT TEACHING (Last 10) ---")
+		if records.is_empty():
+			print("  (No teaching records)")
+		else:
+			var shown: int = 0
+			for i in range(max(0, records.size() - 10), records.size()):
+				var record: Dictionary = records[i]
+				var teacher: int = int(record.get("teacher_id", -1))
+				var student: int = int(record.get("student_id", -1))
+				var ktype: int = int(record.get("knowledge_type", -1))
+				var tick: int = int(record.get("tick", 0))
+				var name: String = type_names.get(ktype, "Unknown")
+				print("  %s taught %s: %s (%d ticks ago)" % [teacher, student, name, GameManager.tick_count - tick])
+				shown += 1
+		print("")
+
+	# Knowledge security
+	if ks.has_method("get_knowledge_status"):
+		var status: Dictionary = ks.call("get_knowledge_status")
+		print("--- KNOWLEDGE SECURITY ---")
+		print("Secure (2+ carriers): %d knowledge types" % status.get("secure", 0))
+		print("At risk (1 carrier): %d knowledge types" % status.get("at_risk", 0))
+		print("Lost (dormant): %d knowledge types" % status.get("lost", 0))
+		print("")
+
+	print("=== END KNOWLEDGE SYSTEMS REPORT ===")
 
 
 # === BUILDING FORCES ===

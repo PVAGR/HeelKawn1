@@ -51,4 +51,40 @@ layout_mode = 2
 [node name="CarriersTitle" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/Content/CarriersSection"]
 layout_mode = 2
 text = "🎓 Knowledge Carriers"
-add_theme_font_size_override("font_size"
+add_theme_font_size_override("font_size", 13)
+add_theme_color_override("font_color", Color(1, 0.85, 0.55))
+
+[node name="CarriersList" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/Content/CarriersSection"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="AtRiskSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/Content"]
+layout_mode = 2
+
+[node name="AtRiskTitle" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/Content/AtRiskSection"]
+layout_mode = 2
+text = "⚠️ At Risk (Last Carrier)"
+add_theme_font_size_override("font_size", 13)
+add_theme_color_override("font_color", Color(1, 0.55, 0.55))
+
+[node name="AtRiskList" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/Content/AtRiskSection"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="DormantSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/Content"]
+layout_mode = 2
+
+[node name="DormantTitle" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/Content/DormantSection"]
+layout_mode = 2
+text = "💤 Lost Knowledge (Can Rediscover)"
+add_theme_font_size_override("font_size", 13)
+add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+
+[node name="DormantList" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/Content/DormantSection"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="CloseButton" type="Button" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(430, 0)
+text = "Close (K)"

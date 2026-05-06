@@ -1196,7 +1196,8 @@ func _try_autonomy_social_seek() -> bool:
 func _try_start_pilgrimage() -> bool:
 	if data == null or _world == null or GameManager == null:
 		return false
-	if MemorialSystem == null:
+	var ms: Node = get_node_or_null("/root/MemorialSystem")
+	if ms == null:
 		return false
 	
 	var tick: int = GameManager.tick_count
@@ -1210,7 +1211,7 @@ func _try_start_pilgrimage() -> bool:
 		return false
 	
 	# Check if any memorials call to this pawn
-	var memorial = MemorialSystem.get_memorial_for_pilgrimage(int(data.id))
+	var memorial: Dictionary = ms.call("get_memorial_for_pilgrimage", int(data.id)) if ms.has_method("get_memorial_for_pilgrimage") else {}
 	if memorial.is_empty():
 		return false
 	
@@ -1222,7 +1223,7 @@ func _try_start_pilgrimage() -> bool:
 func _start_pilgrimage_to_memorial(memorial: Dictionary) -> void:
 	var target_tile: Vector2i = memorial.tile
 	
-	# Pathfind to memorial tile (use cached pathfinding)
+	# Pathfind to memorial tile (use cached pathfinding, no historic aversion for pilgrimage)
 	var path = _get_cached_path(data.tile_pos, target_tile, false)
 	if path.is_empty():
 		return  # No valid path
@@ -1863,15 +1864,11 @@ func _process(delta: float) -> void:
 	# SACRED GEOGRAPHY: Apply reverence slowdown on sacred tiles
 	# OPTIMIZATION: Only check when pawn moves to new tile (not every frame)
 	if data.tile_pos != _last_sacred_check_tile:
-		if SacredGeography != null and SacredGeography.has_method("check_sacred_tile_effect"):
-			SacredGeography.check_sacred_tile_effect(self)
+		var sg: Node = get_node_or_null("/root/SacredGeography")
+		if sg != null and sg.has_method("check_sacred_tile_effect"):
+			sg.call("check_sacred_tile_effect", self)
 		_last_sacred_check_tile = data.tile_pos
 	
-	if GameManager.verbose_logs():
-		print("[Pawn] %s read stone at (%d,%d) and gained %d knowledge types" % [
-			data.display_name, data.tile_pos.x, data.tile_pos.y, gained.size()
-		])
-
 	# PERFORMANCE: Adaptive redraw throttling
 	# At 1x: redraw every 5th frame
 	# At 26x: redraw every 12th frame  
@@ -1902,13 +1899,13 @@ func _get_cached_path(from: Vector2i, to: Vector2i, use_historic: bool = true) -
 	if to == _cached_path_target and GameManager.tick_count - _cached_path_tick < PATH_CACHE_DURATION:
 		if not _cached_path.is_empty():
 			return _cached_path
-	
+
 	# Need new path
 	if use_historic:
 		_cached_path = _world.pathfinder.find_path_pawn_historic_aversion(from, to)
 	else:
-		_cached_path = _world.pathfinder.find_path(from, to, false)
-	
+		_cached_path = _world.pathfinder.find_path(from, to)
+
 	_cached_path_target = to
 	_cached_path_tick = GameManager.tick_count
 	return _cached_path

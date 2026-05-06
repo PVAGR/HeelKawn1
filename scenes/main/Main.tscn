@@ -1,4 +1,4 @@
-[gd_scene load_steps=45 format=3 uid="uid://heelkawn_main"]
+[gd_scene load_steps=46 format=3 uid="uid://heelkawn_main"]
 
 [ext_resource type="Script" path="res://scenes/main/Main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scenes/main/BuildPreviewOverlay.gd" id="1_preview"]
@@ -14,6 +14,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/MemorialInscriptionUI.tscn" id="43_memorial"]
 [ext_resource type="PackedScene" path="res://scenes/ui/BuildingToolbar.tscn" id="44_building"]
 [ext_resource type="PackedScene" path="res://scenes/ui/CraftingMenu.tscn" id="45_crafting"]
+[ext_resource type="PackedScene" path="res://scenes/ui/KnowledgePanel.tscn" id="46_knowledge"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ObserverHUD.tscn" id="14_observer_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/FocusInspector.tscn" id="15_focus_inspector"]
 [ext_resource type="PackedScene" path="res://scenes/ui/RegionInspector.tscn" id="18_region_inspector"]
@@ -96,6 +97,8 @@ script = ExtResource("2_cam")
 [node name="BuildingToolbar" parent="UI_Viewport" instance=ExtResource("44_building")]
 
 [node name="CraftingMenu" parent="UI_Viewport" instance=ExtResource("45_crafting")]
+
+[node name="KnowledgePanel" parent="UI_Viewport" instance=ExtResource("46_knowledge")]
 
 [node name="ObserverHUD" parent="UI_Viewport" instance=ExtResource("14_observer_hud")]
 

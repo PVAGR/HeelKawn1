@@ -135,6 +135,9 @@ func _build_ui() -> void:
 	if GameSettings != null:
 		for section in GameSettings.get_sections():
 			_build_section(section)
+	
+	# Tutorial Hints section (Polish Pass — May 6, 2026)
+	_build_tutorial_hints_section()
 
 	# Resume button
 	inner.add_child(HSeparator.new())
@@ -326,3 +329,64 @@ func _make_sep_style() -> StyleBoxFlat:
 	s.content_margin_top = 2
 	s.content_margin_bottom = 2
 	return s
+
+
+# ────────────────────────── Tutorial Hints Section ──────────────────────────
+
+func _build_tutorial_hints_section() -> void:
+	# Section heading
+	var heading: Label = _make_label("📚 Tutorial Hints", SECTION_COLOR, 14)
+	_content.add_child(heading)
+	
+	# Separator
+	var sep: HSeparator = HSeparator.new()
+	sep.add_theme_stylebox_override("separator", _make_sep_style())
+	_content.add_child(sep)
+	
+	# Description
+	var desc: Label = _make_label("Contextual hints for new players. Can be reset to show again.", LABEL_COLOR, 11)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_content.add_child(desc)
+	
+	# Toggle button
+	var toggle_row: HBoxContainer = HBoxContainer.new()
+	toggle_row.add_theme_constant_override("separation", 8)
+	_content.add_child(toggle_row)
+	
+	var toggle_label: Label = _make_label("Enable hints:", LABEL_COLOR, 12)
+	toggle_label.custom_minimum_size = Vector2(LABEL_W, 0)
+	toggle_row.add_child(toggle_label)
+	
+	var toggle_btn: CheckBox = CheckBox.new()
+	toggle_btn.button_pressed = true  # Enabled by default
+	toggle_btn.toggled.connect(_on_tutorial_hints_toggled)
+	toggle_row.add_child(toggle_btn)
+	
+	# Reset button
+	var reset_row: HBoxContainer = HBoxContainer.new()
+	reset_row.add_theme_constant_override("separation", 8)
+	_content.add_child(reset_row)
+	
+	var reset_label: Label = _make_label("Reset hints:", LABEL_COLOR, 12)
+	reset_label.custom_minimum_size = Vector2(LABEL_W, 0)
+	reset_row.add_child(reset_label)
+	
+	var reset_btn: Button = Button.new()
+	reset_btn.text = "Show All Hints Again"
+	reset_btn.custom_minimum_size = Vector2(160, 28)
+	reset_btn.pressed.connect(_on_tutorial_hints_reset)
+	reset_row.add_child(reset_btn)
+
+
+func _on_tutorial_hints_toggled(enabled: bool) -> void:
+	var th: Node = get_node_or_null("/root/Main/TutorialHints")
+	if th != null and th.has_method("toggle_hints"):
+		th.call("toggle_hints", enabled)
+		print("[SettingsPanel] Tutorial hints %s" % ("enabled" if enabled else "disabled"))
+
+
+func _on_tutorial_hints_reset() -> void:
+	var th: Node = get_node_or_null("/root/Main/TutorialHints")
+	if th != null and th.has_method("reset_hints"):
+		th.call("reset_hints")
+		print("[SettingsPanel] Tutorial hints reset — will show again")

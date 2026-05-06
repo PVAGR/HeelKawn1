@@ -148,6 +148,8 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _region_inspector: RegionInspector = $UI_Viewport/RegionInspector
 @onready var _timeline_controls: TimelineControls = $UI_Viewport/TimelineControls
 @onready var _incarnation_picker: Control = null  # IncarnationPicker instance (created on demand)
+@onready var _tutorial_hints: Node = null  # TutorialHints instance (created on demand)
+@onready var _first_launch_welcome: Node = null  # FirstLaunchWelcome instance (created on demand)
 @onready var _map_mode_overlay: Node = $MapModeOverlay
 @onready var _creator_debug_menu: CreatorDebugMenu = $CreatorDebugMenu
 @onready var _settings_panel: CanvasLayer = $UI_Viewport/SettingsPanel
@@ -658,6 +660,19 @@ func _ready() -> void:
 			_settlement_banner.initialize(_world)
 		if _ambient_audio != null and _ambient_audio.has_method("initialize"):
 			_ambient_audio.initialize(_world, _camera)
+		
+		# Initialize TutorialHints (polish pass)
+		var tutorial_hints_script: Script = load("res://scripts/ui/TutorialHints.gd")
+		_tutorial_hints = tutorial_hints_script.new()
+		_tutorial_hints.name = "TutorialHints"
+		add_child(_tutorial_hints)
+		
+		# Initialize FirstLaunchWelcome (polish pass)
+		var welcome_script: Script = load("res://scripts/ui/FirstLaunchWelcome.gd")
+		_first_launch_welcome = welcome_script.new()
+		_first_launch_welcome.name = "FirstLaunchWelcome"
+		add_child(_first_launch_welcome)
+		
 		# Wire SaveLoadMenu signals
 		if _save_load_menu != null:
 			_save_load_menu.save_requested.connect(_on_save_slot)

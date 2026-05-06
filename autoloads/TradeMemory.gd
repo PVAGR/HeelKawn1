@@ -388,3 +388,11 @@ func count_t2_tiles() -> int:
 	# TODO: Implement actual trade route logic.
 	# Currently returns 0 to prevent IntentMemory crash.
 	return 0
+
+
+## Returns the last tick when T2 trade routes existed.
+## Required by IntentMemory for trade history assessment.
+func get_last_tick_t2_existed() -> int:
+	# TODO: Implement actual trade route tracking.
+	# Currently returns 0 (no trade routes yet).
+	return 0

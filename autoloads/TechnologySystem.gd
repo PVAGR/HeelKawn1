@@ -325,6 +325,11 @@ func is_technology_completed(tech_id: String) -> bool:
 		return false
 	return technologies[tech_id].status == "completed"
 
+## Compatibility function for settlement job validation
+## TODO: Implement proper settlement job type checking
+func can_settle_perform_job_type(_settlement_id: int, _job_type: String) -> bool:
+	return true  # Stub: always allow for now
+
 ## Get total technologies completed
 func get_completed_count() -> int:
 	var count: int = 0

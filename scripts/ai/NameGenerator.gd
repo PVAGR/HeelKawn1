@@ -150,31 +150,39 @@ func generate_surname(pawn_id: int, culture: String = "common",
 ## Generate nickname based on circumstances
 func generate_nickname(pawn_id: int, circumstances: Dictionary = {}) -> String:
 	var nicknames: PackedStringArray = []
-	
+
 	# Add trait-based nicknames
 	if circumstances.has("traits"):
-		for trait in circumstances.traits:
+		var traits_array: Array = circumstances.traits
+		var i: int = 0
+		while i < traits_array.size():
+			var trait: String = traits_array[i]
 			if circumstantial_names.traits.has(trait):
 				var pool: Array = circumstantial_names.traits[trait]
 				nicknames.append(pool[randi() % pool.size()])
-	
+			i += 1
+
 	# Add profession-based nickname
 	if circumstances.has("profession"):
 		var prof: String = circumstances.profession
 		if circumstantial_names.professions.has(prof):
 			var pool: Array = circumstantial_names.professions[prof]
 			nicknames.append(pool[randi() % pool.size()])
-	
+
 	# Add event-based nickname
 	if circumstances.has("events"):
-		for event in circumstances.events:
+		var events_array: Array = circumstances.events
+		var j: int = 0
+		while j < events_array.size():
+			var event: String = events_array[j]
 			if circumstantial_names.events.has(event):
 				var pool: Array = circumstantial_names.events[event]
 				nicknames.append(pool[randi() % pool.size()])
-	
+			j += 1
+
 	if nicknames.size() == 0:
 		return ""
-	
+
 	# Return first nickname (could combine multiple)
 	return "The " + nicknames[0]
 

@@ -314,23 +314,43 @@ func _scan_for_new_pawns(tick: int) -> void:
 	for pawn in pawn_spawner.pawns:
 		if pawn == null or not is_instance_valid(pawn):
 			continue
-		
-		var data: Node = pawn.get("data", null)
+
+		var data: Node = pawn.get("data")
 		if data == null:
 			continue
-		
+
 		# Check if pawn is idle and needs direction
-		var state: String = pawn.get("state", "")
+		var state: String = ""
+		if pawn.has_method("get_state"):
+			state = pawn.get_state()
+		elif pawn.has_meta("state"):
+			state = pawn.get_meta("state")
+		
 		if state == "idle" or state == "wandering":
-			var profession: int = data.get("current_profession", -1)
+			var profession: int = -1
+			if data.has_method("get_current_profession"):
+				profession = data.get_current_profession()
+			elif data.has_meta("current_profession"):
+				profession = data.get_meta("current_profession")
+			
 			if profession == 1:  # BUILDER
 				_direct_builder_pawn(pawn, data)
 
 
 func _direct_builder_pawn(pawn: Node, data: Node) -> void:
-	var tile: Vector2i = data.get("tile_pos", Vector2i.ZERO)
-	var settlement_id: int = data.get("settlement_id", -1)
+	var tile: Vector2i = Vector2i.ZERO
+	var settlement_id: int = -1
 	
+	if data.has_method("get_tile_pos"):
+		tile = data.get_tile_pos()
+	elif data.has_meta("tile_pos"):
+		tile = data.get_meta("tile_pos")
+	
+	if data.has_method("get_settlement_id"):
+		settlement_id = data.get_settlement_id()
+	elif data.has_meta("settlement_id"):
+		settlement_id = data.get_meta("settlement_id")
+
 	# Create build intents for this builder
 	create_build_intents(int(data.id), tile, settlement_id)
 

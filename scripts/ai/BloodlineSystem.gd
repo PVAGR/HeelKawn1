@@ -325,10 +325,13 @@ func inherit_traits(child_id: int, father_id: int, mother_id: int) -> Array[Stri
 		var bloodline: int = _get_pawn_bloodline(child_id)
 		if bloodline >= 0:
 			var bloodline_data: Dictionary = _get_bloodline(bloodline)
-			for trait in inherited:
+			var i: int = 0
+			while i < inherited.size():
+				var trait: String = inherited[i]
 				if not bloodline_data.inherited_traits.has(trait):
 					bloodline_data.inherited_traits.append(trait)
-	
+				i += 1
+
 	return inherited
 
 

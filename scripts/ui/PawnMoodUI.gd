@@ -214,25 +214,34 @@ func _update_traits() -> void:
 		return
 	
 	# Clear existing traits
-	for child in _traits_container.get_children():
+	var trait_children: Array = _traits_container.get_children()
+	var i: int = 0
+	while i < trait_children.size():
+		var child: Node = trait_children[i]
 		child.queue_free()
-	
+		i += 1
+
 	# Get traits from pawn data
-	var traits: Array = _pawn_data.get("traits", [])
-	
-	for trait in traits:
+	var traits: Array = []
+	if _pawn_data.has_meta("traits"):
+		traits = _pawn_data.get_meta("traits")
+
+	var j: int = 0
+	while j < traits.size():
+		var trait: String = str(traits[j])
 		var trait_chip: Label = Label.new()
 		trait_chip.text = str(trait)
 		trait_chip.add_theme_color_override("font_color", _modern_theme.get_color("text_primary"))
 		trait_chip.add_theme_font_size_override("font_size", _modern_theme.get_font_size("small"))
-		
+
 		# Style chip background
 		var style: StyleBoxFlat = StyleBoxFlat.new()
 		style.bg_color = _modern_theme.get_color("bg_light")
 		style.set_corner_radius_all(4)
 		trait_chip.add_theme_stylebox_override("normal", style)
-		
+
 		_traits_container.add_child(trait_chip)
+		j += 1
 
 
 func _update_health() -> void:

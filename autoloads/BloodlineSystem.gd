@@ -46,17 +46,19 @@ func establish_bloodline(founder_pawn_id: int) -> int:
 	return create_bloodline(founder_pawn_id, "", "")
 
 
-func create_bloodline(founder_id: int, founder_name: String = "", specialization_key: String = "") -> int:
+func create_bloodline(founder_id: int, founder_name: String, specialization_key: String) -> int:
+	# Fallback for dynamic calls with insufficient arguments
+	return create_bloodline_safe(founder_id, founder_name, specialization_key)
+
+func create_bloodline_safe(founder_id: int, founder_name: String = "", specialization_key: String = "") -> int:
 	_refresh_next_bloodline_id()
 	var bloodline_id: int = _next_bloodline_id
 	_next_bloodline_id += 1
-	
 	bloodlines[bloodline_id] = {
+		"founding_tick": GameManager.tick_count,
 		"bloodline_id": bloodline_id,
 		"founder_id": founder_id,
 		"founder_name": founder_name,
-		"founding_tick": GameManager.tick_count,
-		"current_generation": 1,
 		"total_members": 1,
 		"living_members": 1,
 		"historical_deaths": 0,

@@ -862,7 +862,7 @@ func _ready() -> void:
 	call_deferred("_pawn_connect_sim_tick_deferred")
 
 	# HeelKawnian identity hook
-	if Engine.has_singleton("HeelKawnianManager"):
+	if ClassDB.class_exists("HeelKawnianManager"):
 		HeelKawnianManager.ensure_identity_for_pawn(self)
 
 

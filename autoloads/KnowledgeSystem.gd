@@ -32,6 +32,15 @@ enum KnowledgeType {
 	DIPLOMACY = 15,
 	CRAFTING = 16,
 	LEADERSHIP = 17,
+	# Phase 6 Expansion
+	METALLURGY = 18,      # Smithing, metalworking
+	ANIMAL_HUSBANDRY = 19, # Domestication, breeding
+	ARCHITECTURE = 20,     # Advanced building design
+	MEDICINE = 21,         # Healing, surgery
+	ASTRONOMY = 22,        # Star reading, calendars
+	ENGINEERING = 23,      # Complex mechanisms
+	WRITING = 24,          # Record keeping, literature
+	PHILOSOPHY = 25,       # Abstract thinking, ethics
 }
 
 const KNOWLEDGE_DEGRADATION_INTERVAL_TICKS: int = 1000
@@ -540,6 +549,14 @@ func _get_knowledge_type_name(kt: int) -> String:
 		15: return "Diplomacy"
 		16: return "Crafting"
 		17: return "Leadership"
+		18: return "Metallurgy"
+		19: return "Animal Husbandry"
+		20: return "Architecture"
+		21: return "Medicine"
+		22: return "Astronomy"
+		23: return "Engineering"
+		24: return "Writing"
+		25: return "Philosophy"
 		_: return "Unknown Knowledge #%d" % kt
 
 # === Helper Functions ===

@@ -361,9 +361,11 @@ func get_route_tier_at(x: int, y: int) -> int:
 	return TIER_NONE
 
 
-## Get pathfinding weight multiplier for trade route tier
+## Get pathfinding weight multiplier for trade route at tile
 ## Used by PathFinder.gd to determine if pawns should prefer trade paths
-func get_trade_path_weight_mul(route_tier: int) -> float:
+func get_trade_path_weight_mul(x: int, y: int) -> float:
+	var route_tier: int = get_route_tier_at(x, y)
+	
 	match route_tier:
 		TIER_NONE:
 			return 1.0  # No route (default cost)

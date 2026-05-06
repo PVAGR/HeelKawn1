@@ -12,6 +12,13 @@ const TIER_NONE: int = 0
 const TIER_ROUTE_1: int = 1
 const TIER_ROUTE_2: int = 2
 
+# Trade route roles
+const ROLE_NONE: String = ""
+const ROLE_SOURCE: String = "source"
+const ROLE_DESTINATION: String = "destination"
+const ROLE_WAYPOINT: String = "waypoint"
+const ROLE_DEPENDENT: String = "dependent"
+
 # Trade route data structure
 ## {
 ##   "route_id": int,
@@ -398,9 +405,9 @@ func get_last_tick_t2_existed() -> int:
 	return 0
 
 
-## Returns the trade role at a given tile (e.g., "source", "destination", "waypoint").
+## Returns the trade role at a given tile/region key.
 ## Required by IntentMemory.recompute for trade intent calculation.
-func get_role(x: int, y: int) -> String:
+func get_role(region_key: Variant) -> String:
 	# TODO: Implement actual trade route role tracking.
 	# Currently returns empty string (no trade role).
 	return ""

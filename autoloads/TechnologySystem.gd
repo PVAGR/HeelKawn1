@@ -46,15 +46,15 @@ func _on_game_tick(tick: int) -> void:
 
 
 func _initialize_technologies() -> void:
-	# Tier 1: Basic Survival (immediate unlocks)
+	# Tier 1: Basic Survival (immediate unlocks) - BALANCED COSTS (Option C)
 	_add_technology({
 		"tech_id": "basic_tools",
 		"name": "Basic Tools",
 		"description": "Craft simple tools for more efficient work",
 		"prerequisites": [],
-		"cost": 50,
+		"cost": 40,  # REDUCED from 50 - faster early progress
 		"unlock_type": "upgrade",
-		"unlock_data": {"work_speed_bonus": 0.1}
+		"unlock_data": {"work_speed_bonus": 0.15}  # INCREASED from 0.1 - more noticeable bonus
 	})
 	
 	_add_technology({
@@ -62,18 +62,18 @@ func _initialize_technologies() -> void:
 		"name": "Fire Making",
 		"description": "Create and maintain fire for warmth and cooking",
 		"prerequisites": [],
-		"cost": 75,
+		"cost": 60,  # REDUCED from 75
 		"unlock_type": "building",
 		"unlock_data": {"building": "fire_pit"}
 	})
 	
-	# Tier 2: Settlement Foundation
+	# Tier 2: Settlement Foundation - BALANCED COSTS (Option C)
 	_add_technology({
 		"tech_id": "woodworking",
 		"name": "Woodworking",
 		"description": "Work wood into useful structures",
 		"prerequisites": ["basic_tools"],
-		"cost": 100,
+		"cost": 80,  # REDUCED from 100
 		"unlock_type": "building",
 		"unlock_data": {"buildings": ["wall", "door", "bed"]}
 	})
@@ -83,18 +83,18 @@ func _initialize_technologies() -> void:
 		"name": "Food Storage",
 		"description": "Store food to prevent spoilage",
 		"prerequisites": ["woodworking"],
-		"cost": 125,
+		"cost": 100,  # REDUCED from 125
 		"unlock_type": "building",
 		"unlock_data": {"building": "storage_hut"}
 	})
 	
-	# Tier 3: Advanced Crafts
+	# Tier 3: Advanced Crafts - BALANCED COSTS (Option C)
 	_add_technology({
 		"tech_id": "pottery",
 		"name": "Pottery",
 		"description": "Create containers from clay",
 		"prerequisites": ["food_storage"],
-		"cost": 150,
+		"cost": 120,  # REDUCED from 150
 		"unlock_type": "job",
 		"unlock_data": {"job": "craft_pottery"}
 	})
@@ -104,18 +104,18 @@ func _initialize_technologies() -> void:
 		"name": "Animal Domestication",
 		"description": "Breed and raise animals for food",
 		"prerequisites": ["food_storage"],
-		"cost": 200,
+		"cost": 160,  # REDUCED from 200
 		"unlock_type": "knowledge",
 		"unlock_data": {"knowledge": "animal_husbandry"}
 	})
 	
-	# Tier 4: Specialization
+	# Tier 4: Specialization - BALANCED COSTS (Option C)
 	_add_technology({
 		"tech_id": "metallurgy",
 		"name": "Metallurgy",
 		"description": "Work with metals for superior tools",
 		"prerequisites": ["pottery", "fire_making"],
-		"cost": 300,
+		"cost": 240,  # REDUCED from 300
 		"unlock_type": "knowledge",
 		"unlock_data": {"knowledge": "metallurgy"}
 	})
@@ -125,18 +125,18 @@ func _initialize_technologies() -> void:
 		"name": "Architecture",
 		"description": "Design advanced buildings",
 		"prerequisites": ["woodworking"],
-		"cost": 250,
+		"cost": 200,  # REDUCED from 250
 		"unlock_type": "building",
 		"unlock_data": {"buildings": ["workshop", "temple"]}
 	})
 	
-	# Tier 5: Civilization
+	# Tier 5: Civilization - BALANCED COSTS (Option C)
 	_add_technology({
 		"tech_id": "writing",
 		"name": "Writing",
 		"description": "Record knowledge for future generations",
 		"prerequisites": ["metallurgy"],
-		"cost": 400,
+		"cost": 320,  # REDUCED from 400
 		"unlock_type": "knowledge",
 		"unlock_data": {"knowledge": "writing"}
 	})
@@ -146,9 +146,9 @@ func _initialize_technologies() -> void:
 		"name": "Philosophy",
 		"description": "Abstract thinking and ethics",
 		"prerequisites": ["writing"],
-		"cost": 500,
+		"cost": 400,  # REDUCED from 500
 		"unlock_type": "upgrade",
-		"unlock_data": {"mood_bonus": 0.2}
+		"unlock_data": {"mood_bonus": 0.25}  # INCREASED from 0.2 - better late-game reward
 	})
 
 

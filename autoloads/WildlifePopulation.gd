@@ -22,20 +22,22 @@ enum Species { RABBIT, DEER }
 ## }
 var wildlife_populations: Array[Dictionary] = []
 
-# Configuration
-const POPULATION_CHECK_INTERVAL: int = 500  # Check population dynamics every 500 ticks
-const BIRTH_RATE_PER_CHECK: float = 0.15  # 15% chance to birth per check
-const DEATH_RATE_PER_CHECK: float = 0.08  # 8% chance to die per check
-const MIN_POPULATION: int = 5  # Minimum viable population
-const MAX_POPULATION_PER_REGION: int = 50  # Carrying capacity
-const RABBIT_BIOME_MULTIPLIER: float = 1.5  # Rabbits thrive in forests
-const DEER_BIOME_MULTIPLIER: float = 1.2  # Deer prefer plains
+# Configuration - BALANCED FOR ENGAGING HUNTING (Option C)
+const POPULATION_CHECK_INTERVAL: int = 400  # Check every 400 ticks (REDUCED from 500 - faster population dynamics)
+const BIRTH_RATE_PER_CHECK: float = 0.18  # 18% chance to birth per check (INCREASED from 15% - more wildlife)
+const DEATH_RATE_PER_CHECK: float = 0.06  # 6% chance to die per check (REDUCED from 8% - wildlife survives better)
+const MIN_POPULATION: int = 4  # Minimum viable population (REDUCED from 5 - easier to maintain)
+const MAX_POPULATION_PER_REGION: int = 60  # Carrying capacity (INCREASED from 50 - more hunting opportunities)
+const RABBIT_BIOME_MULTIPLIER: float = 1.8  # Rabbits thrive in forests (INCREASED from 1.5 - more rabbits)
+const DEER_BIOME_MULTIPLIER: float = 1.4  # Deer prefer plains (INCREASED from 1.2 - more deer)
 
-# Hunting configuration
-const HUNTING_SUCCESS_RATE: float = 0.4  # 40% base success rate
-const WARRIOR_HUNTING_BONUS: float = 0.2  # Warriors get +20% success
+# Hunting configuration - BALANCED FOR FUN (Option C)
+const HUNTING_SUCCESS_RATE: float = 0.45  # 45% base success rate (INCREASED from 40% - hunting more viable)
+const WARRIOR_HUNTING_BONUS: float = 0.25  # Warriors get +25% success (INCREASED from 0.2 - profession matters more)
+const SKILL_HUNTING_BONUS: float = 0.03  # +3% per hunting level (INCREASED from 0.02 - skill progression feels better)
+const MAX_HUNTING_SUCCESS: float = 0.90  # Cap at 90% (NEW - always some challenge)
 const MEAT_PER_RABBIT: int = 1
-const MEAT_PER_DEER: int = 4
+const MEAT_PER_DEER: int = 5  # INCREASED from 4 - deer are worth the effort
 
 # References
 @onready var _world: Node = null
@@ -228,22 +230,22 @@ func get_wildlife_count(region: int, species: Species = -1) -> int:
 	return total
 
 
-## Calculate hunting success chance for a pawn
+## Calculate hunting success chance for a pawn - BALANCED (Option C)
 func get_hunting_success_chance(pawn: Node) -> float:
 	if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 		return HUNTING_SUCCESS_RATE
-	
+
 	var chance: float = HUNTING_SUCCESS_RATE
-	
+
 	# Warrior profession bonus
 	if pawn.data.current_profession == pawn.data.Profession.WARRIOR:
 		chance += WARRIOR_HUNTING_BONUS
-	
-	# Hunting skill bonus
+
+	# Hunting skill bonus - USES NEW CONSTANT
 	var hunting_level: int = pawn.data.get_skill_level(pawn.data.Skill.HUNTING)
-	chance += float(hunting_level) * 0.02  # +2% per level
-	
-	return minf(0.95, chance)  # Cap at 95%
+	chance += float(hunting_level) * SKILL_HUNTING_BONUS  # +3% per level
+
+	return minf(MAX_HUNTING_SUCCESS, chance)  # Cap at 90%
 
 
 ## Process a successful hunt

@@ -30,19 +30,19 @@ extends Node
 var factions: Array[Dictionary] = []
 var _next_faction_id: int = 1
 
-# Relation thresholds
-const RELATION_ALLIED: int = 80
-const RELATION_FRIENDLY: int = 50
-const RELATION_NEUTRAL: int = 20
-const RELATION_HOSTILE: int = -20
-# Below -20 = war
+# Relation thresholds - BALANCED FOR MEANINGFUL DIPLOMACY (Option C)
+const RELATION_ALLIED: int = 75  # (REDUCED from 80 - easier to achieve alliance)
+const RELATION_FRIENDLY: int = 40  # (REDUCED from 50 - more friendly settlements)
+const RELATION_NEUTRAL: int = 15  # (REDUCED from 20 - easier to make friends)
+const RELATION_HOSTILE: int = -15  # (REDUCED magnitude - harder to become hostile)
+# Below -15 = war
 
-# Configuration
-const FACTION_CHECK_INTERVAL: int = 2000  # Check every 2000 ticks
-const TRADE_RELATION_BONUS: int = 1  # +1 relation per 10 trade value
-const KNOWLEDGE_RELATION_BONUS: int = 5  # +5 per knowledge type shared
-const CONFLICT_RELATION_PENALTY: int = -15  # -15 per conflict
-const NATURAL_RELATION_DECAY: int = -1  # -1 per check (drift to neutral)
+# Configuration - BALANCED FOR ENGAGEMENT (Option C)
+const FACTION_CHECK_INTERVAL: int = 1500  # Check every 1500 ticks (REDUCED from 2000 - faster diplomacy)
+const TRADE_RELATION_BONUS: int = 2  # +2 relation per 10 trade value (DOUBLED from 1 - trade matters more)
+const KNOWLEDGE_RELATION_BONUS: int = 8  # +8 per knowledge type shared (INCREASED from 5 - knowledge is valuable)
+const CONFLICT_RELATION_PENALTY: int = -12  # -12 per conflict (REDUCED magnitude from -15 - wars less common)
+const NATURAL_RELATION_DECAY: int = 0  # NO decay (CHANGED from -1 - relations persist, less micromanagement)
 const MAX_RELATION: int = 100
 const MIN_RELATION: int = -100
 

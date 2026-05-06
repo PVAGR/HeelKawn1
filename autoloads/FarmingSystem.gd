@@ -28,34 +28,34 @@ enum CropType { WHEAT, CORN, VEGETABLES, HERBS }
 var farm_plots: Array[Dictionary] = []
 var _next_plot_id: int = 1
 
-# Crop configuration
+# Crop configuration - BALANCED FOR FUN (Option C)
 const CROP_CONFIG: Dictionary = {
 	CropType.WHEAT: {
-		"growth_ticks": 3000,  # ~50 minutes at 1x
-		"water_need": 0.3,  # Water consumption per tick
-		"base_yield": 3,
-		"nutrition": 40,
+		"growth_ticks": 2400,  # ~40 minutes at 1x (REDUCED from 3000 for faster gameplay)
+		"water_need": 0.25,  # Water consumption per tick (REDUCED for less micromanagement)
+		"base_yield": 4,  # (INCREASED from 3 for better reward)
+		"nutrition": 50,  # (INCREASED from 40 for viable food source)
 		"seed_item": "wheat_seeds"
 	},
 	CropType.CORN: {
-		"growth_ticks": 4000,
-		"water_need": 0.4,
-		"base_yield": 5,
-		"nutrition": 50,
+		"growth_ticks": 3200,  # ~53 minutes (REDUCED from 4000)
+		"water_need": 0.3,  # (REDUCED from 0.4)
+		"base_yield": 6,  # (INCREASED from 5 - highest yield crop)
+		"nutrition": 60,  # (INCREASED from 50)
 		"seed_item": "corn_seeds"
 	},
 	CropType.VEGETABLES: {
-		"growth_ticks": 2500,
-		"water_need": 0.5,
-		"base_yield": 4,
-		"nutrition": 60,
+		"growth_ticks": 2000,  # ~33 minutes - fastest crop (REDUCED from 2500)
+		"water_need": 0.35,  # (REDUCED from 0.5)
+		"base_yield": 5,  # (INCREASED from 4)
+		"nutrition": 75,  # (INCREASED from 60 - best nutrition)
 		"seed_item": "vegetable_seeds"
 	},
 	CropType.HERBS: {
-		"growth_ticks": 2000,
-		"water_need": 0.2,
-		"base_yield": 2,
-		"nutrition": 10,
+		"growth_ticks": 1600,  # ~27 minutes - quick medicine (REDUCED from 2000)
+		"water_need": 0.15,  # (REDUCED from 0.2 - low maintenance)
+		"base_yield": 3,  # (INCREASED from 2)
+		"nutrition": 15,  # (INCREASED from 10)
 		"seed_item": "herb_seeds",
 		"medicine_bonus": true
 	}
@@ -142,9 +142,9 @@ func _check_crop_health(tick: int) -> void:
 		if plot.status == "withered":
 			continue
 		
-		# Check water level
+		# Check water level - BALANCED: Slower withering for less frustration
 		if plot.water_level <= 0.0:
-			plot.health -= 0.01  # Lose 1% health per tick without water
+			plot.health -= 0.005  # Lose 0.5% health per tick (REDUCED from 1% - gives 200 ticks grace period)
 			if plot.health <= 0.0:
 				plot.status = "withered"
 				plot.health = 0.0

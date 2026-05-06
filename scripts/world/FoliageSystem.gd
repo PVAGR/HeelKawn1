@@ -1,5 +1,7 @@
 extends Node
 
+class_name FoliageSystem
+
 ## Procedural foliage overlay for livable feel (grass/flowers sway).
 ## Tick-driven, deterministic per tile.
 
@@ -14,7 +16,8 @@ static func apply_foliage_tint(c: Color, x: int, y: int, biome: int) -> Color:
 	return c.lerp(grass_tint, grass_blend)
 
 static func foliage_density(x: int, y: int) -> float:
-	var rng = WorldRNG.stream_seed(FOLIAGE_SEED_SALT, x * 123 + y * 456)
+	var seed_value: int = x * 123 + y * 456
+	var rng = WorldRNG.stream_seed(str(FOLIAGE_SEED_SALT + seed_value))
 	return 0.2 + 0.3 * rng.randf() # 20-50% tiles
 
 

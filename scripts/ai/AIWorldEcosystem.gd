@@ -10,6 +10,7 @@ class_name AIWorldEcosystem
 var _llm_client: LLMClient = null
 var _wildlife_population: Node = null
 var _disaster_system: Node = null
+var _world_memory: Node = null
 var _initialized: bool = false
 
 
@@ -17,6 +18,7 @@ func initialize(deps: Dictionary) -> void:
 	_llm_client = deps.get("llm_client")
 	_wildlife_population = deps.get("wildlife_population")
 	_disaster_system = deps.get("disaster_system")
+	_world_memory = deps.get("world_memory")
 	_initialized = true
 
 
@@ -28,7 +30,7 @@ func evaluate(context: Dictionary) -> Dictionary:
 	var world_state: Dictionary = _build_world_ecosystem_state(context)
 	
 	# Evaluate world events
-	var events: Array[Dictionary] = await _evaluate_world_events(world_state, context)
+	var events: Array = await _evaluate_world_events(world_state, context)
 	
 	# Execute world events
 	for event in events:
@@ -141,8 +143,10 @@ RESPOND JSON:
 	var events: Array = []
 	if response is Array:
 		events = response
-	elif response.has("events"):
-		events = response.get("events", [])
+	elif response is Dictionary and response.has("events"):
+		var events_data = response.get("events")
+		if events_data is Array:
+			events = events_data
 
 	return events
 
@@ -193,9 +197,8 @@ func _trigger_migration(event: Dictionary) -> void:
 		pass
 	
 	# Record event
-	var world_memory: Node = get_node_or_null("/root/WorldMemory")
-	if world_memory != null:
-		world_memory.record_event({
+	if _world_memory != null:
+		_world_memory.record_event({
 			"type": "ai_migration_wave",
 			"species": species,
 			"region": target,

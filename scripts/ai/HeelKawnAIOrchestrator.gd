@@ -408,10 +408,10 @@ func _initialize_layers() -> void:
 
 
 func _load_layer_script(class_name: String) -> GDScript:
-	var script_path: String = "res://scripts/ai/{name}.gd".format({"name": class_name})
+	var script_path: String = "res://scripts/ai/" + class_name + ".gd"
 
 	if not ResourceLoader.exists(script_path):
-		push_warning("[AIOrchestrator] Layer script not found: {path}".format({"path": script_path}))
+		push_warning("[AIOrchestrator] Layer script not found: " + script_path)
 		return null
 
 	var script: GDScript = load(script_path)

@@ -384,6 +384,16 @@ func _is_simulation_worker_mode() -> bool:
 		return false
 	return GameManager.get("simulation_worker_mode") == true
 
+
+func get_pawn_spawner() -> Node:
+	return _pawn_spawner
+
+
+func get_player_pawn_id() -> int:
+	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		return int(_player_pawn.data.id)
+	return -1
+
 func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
 	if _is_ultra_speed():
 		return ultra_ticks
@@ -495,7 +505,17 @@ func _live_wildlife_counts() -> Dictionary:
 ##
 ## BUILD_BED / BUILD_WALL / BUILD_DOOR post one build job per tile in the rect.
 ## DESIGNATE_ZONE creates a single Stockpile covering the whole rect.
-enum DesignationMode { NONE, BUILD_BED, BUILD_WALL, BUILD_DOOR, DESIGNATE_ZONE }
+enum DesignationMode { 
+	NONE, 
+	BUILD_BED, 
+	BUILD_WALL, 
+	BUILD_DOOR, 
+	BUILD_SHELTER,
+	BUILD_STORAGE_HUT,
+	BUILD_FIRE_PIT,
+	BUILD_WORKSHOP,
+	DESIGNATE_ZONE 
+}
 var _designation_mode: int = DesignationMode.NONE
 ## Currently hovered tile in tile coords, or (-1,-1) if mouse is off-map.
 var _hover_tile: Vector2i = Vector2i(-1, -1)
@@ -654,6 +674,11 @@ func _ready() -> void:
 			_main_menu.load_game_pressed.connect(func(): if _save_load_menu != null: _save_load_menu.toggle())
 			_main_menu.settings_pressed.connect(func(): if _settings_panel != null: _settings_panel.toggle())
 			_main_menu.quit_pressed.connect(func(): get_tree().quit())
+		
+		# Wire BuildToolbar signals
+		if _toolbar != null:
+			_toolbar.structure_type_requested.connect(_on_structure_type_requested)
+			
 		if TechnologySystem != null:
 			# Connect to technology signals safely
 			if TechnologySystem.has_signal("research_started"):
@@ -3508,6 +3533,8 @@ func _handle_key_input(key: InputEventKey) -> void:
 			_toggle_pawn_ai_inspector()
 		KEY_U:
 			_toggle_trait_shop()
+		Key.KEY_ESCAPE:
+			_handle_cancel_action()
 		KEY_F12:
 			_toggle_debug_panel()
 		KEY_Z:
@@ -3547,6 +3574,22 @@ func _toggle_debug_panel() -> void:
 		_ensure_debug_panel()
 	if _debug_panel != null and is_instance_valid(_debug_panel):
 		_debug_panel.visible = not _debug_panel.visible
+
+
+func _handle_cancel_action() -> void:
+	if _is_dragging:
+		_cancel_drag()
+		return
+	if _designation_mode != DesignationMode.NONE:
+		_set_designation_mode(DesignationMode.NONE)
+		return
+	if _selected_pawn != null:
+		_set_selected_pawn(null)
+		if _hud != null:
+			_hud.hide_tile_history()
+		return
+	# If nothing else to cancel, maybe open pause menu (legacy)
+	pass
 		
 
 ## Debug: export chronicle to user://exports/chronicle_<tick>.json
@@ -3586,6 +3629,20 @@ func _cycle_zone_type() -> void:
 ## Handler for zone_painted signal — triggers overlay redraw
 func _on_zone_painted(_zone_type: String, _rect: Rect2i) -> void:
 	_queue_designation_redraw()
+
+
+func _on_structure_type_requested(structure_type: String) -> void:
+	if OS.is_debug_build():
+		print("[Main] Build structure requested: %s" % structure_type)
+	
+	match structure_type:
+		"bed": _set_designation_mode(DesignationMode.BUILD_BED)
+		"wall_wood", "wall_stone": _set_designation_mode(DesignationMode.BUILD_WALL)
+		"door_wood": _set_designation_mode(DesignationMode.BUILD_DOOR)
+		"shelter": _set_designation_mode(DesignationMode.BUILD_SHELTER)
+		"storage_hut": _set_designation_mode(DesignationMode.BUILD_STORAGE_HUT)
+		"fire_pit": _set_designation_mode(DesignationMode.BUILD_FIRE_PIT)
+		"workshop": _set_designation_mode(DesignationMode.BUILD_WORKSHOP)
 
 
 ## Visual feedback when a command is issued to a pawn
@@ -4189,10 +4246,14 @@ func _set_designation_mode(mode: int) -> void:
 
 static func _designation_mode_label(mode: int) -> String:
 	match mode:
-		DesignationMode.BUILD_BED:     return "Bed"
-		DesignationMode.BUILD_WALL:    return "Wall"
-		DesignationMode.BUILD_DOOR:    return "Door"
-		DesignationMode.DESIGNATE_ZONE: return "Zone"
+		DesignationMode.BUILD_BED:         return "Bed"
+		DesignationMode.BUILD_WALL:        return "Wall"
+		DesignationMode.BUILD_DOOR:        return "Door"
+		DesignationMode.BUILD_SHELTER:     return "Shelter"
+		DesignationMode.BUILD_STORAGE_HUT: return "Storage Hut"
+		DesignationMode.BUILD_FIRE_PIT:    return "Fire Pit"
+		DesignationMode.BUILD_WORKSHOP:    return "Workshop"
+		DesignationMode.DESIGNATE_ZONE:    return "Zone"
 	return ""
 
 
@@ -4206,6 +4267,8 @@ func _designation_action_label(mode: int) -> String:
 		return "Constructing %s Door%s" % [_designation_material_family_for_current_focus(), _designation_style_suffix_for_current_focus()]
 	if mode == DesignationMode.BUILD_BED:
 		return "Constructing Bed%s" % _designation_style_suffix_for_current_focus()
+	if mode in [DesignationMode.BUILD_SHELTER, DesignationMode.BUILD_STORAGE_HUT, DesignationMode.BUILD_FIRE_PIT, DesignationMode.BUILD_WORKSHOP]:
+		return "Constructing %s" % base_label
 	return base_label
 
 
@@ -4391,12 +4454,6 @@ func get_player_action_state() -> String:
 
 func get_chronicler_pin_zone_id() -> String:
 	return _player_intent_pin_zone_id
-
-
-func get_player_pawn_id() -> int:
-	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
-		return -1
-	return int(_player_pawn.data.id)
 
 
 func get_player_pawn() -> Pawn:
@@ -4926,6 +4983,9 @@ func _preview_tile_valid(t: Vector2i, main_component: int) -> bool:
 			return _is_valid_build_site(t, main_component)
 		DesignationMode.BUILD_DOOR:
 			return _is_valid_door_site(t, main_component)
+		DesignationMode.BUILD_FIRE_PIT, DesignationMode.BUILD_STORAGE_HUT, \
+		DesignationMode.BUILD_SHELTER, DesignationMode.BUILD_WORKSHOP:
+			return _is_valid_build_site(t, main_component)
 	return false
 
 
@@ -4940,9 +5000,15 @@ func _tiles_rect_to_world_rect(rect: Rect2i) -> Rect2:
 
 func _blueprint_feature_for_mode() -> int:
 	match _designation_mode:
-		DesignationMode.BUILD_BED:  return TileFeature.Type.BED
-		DesignationMode.BUILD_WALL: return TileFeature.Type.WALL
-		DesignationMode.BUILD_DOOR: return TileFeature.Type.DOOR
+		DesignationMode.BUILD_BED:         return TileFeature.Type.BED
+		DesignationMode.BUILD_WALL:        return TileFeature.Type.WALL
+		DesignationMode.BUILD_DOOR:        return TileFeature.Type.DOOR
+		DesignationMode.BUILD_FIRE_PIT:    return TileFeature.Type.FIRE_PIT
+		DesignationMode.BUILD_STORAGE_HUT: return TileFeature.Type.STORAGE_HUT
+		DesignationMode.BUILD_SHELTER:     # No feature for complex buildings yet, use a ghost color?
+			return TileFeature.Type.NONE
+		DesignationMode.BUILD_WORKSHOP:
+			return TileFeature.Type.NONE
 	return TileFeature.Type.NONE
 
 

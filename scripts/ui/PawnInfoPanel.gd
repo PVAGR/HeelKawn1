@@ -1517,6 +1517,46 @@ func _format_event(ev: Dictionary) -> String:
 	var event_type: String = str(ev.get("type", "unknown"))
 	var tick: int = int(ev.get("t", 0))
 	var ticks_ago: int = GameManager.tick_count - tick
+	var time_str: String = ""
+	if ticks_ago < 60:
+		time_str = "%d ticks ago" % ticks_ago
+	elif ticks_ago < 3600:
+		time_str = "%d min ago" % int(ticks_ago / 60)
+	else:
+		time_str = "%d hr ago" % int(ticks_ago / 3600)
+	
+	match event_type:
+		"work_event":
+			var job_type: String = str(ev.get("job_type", "work")).to_lower()
+			var tile_data: Variant = ev.get("tile", {})
+			var tile_str: String = ""
+			if tile_data is Dictionary:
+				tile_str = " at (%d,%d)" % [int(tile_data.get("x", 0)), int(tile_data.get("y", 0))]
+			return "Completed %s%s (%s)" % [job_type, tile_str, time_str]
+		"pawn_death":
+			var cause: String = str(ev.get("cause", "unknown"))
+			return "Died: %s (%s)" % [cause, time_str]
+		"birth":
+			return "Born (%s)" % time_str
+		"teaching_event":
+			var skill: String = str(ev.get("skill", "skill"))
+			return "Taught %s (%s)" % [skill, time_str]
+		"social_meeting":
+			var other_name: String = str(ev.get("other_name", "someone"))
+			return "Met %s (%s)" % [other_name, time_str]
+		"social_bond_milestone":
+			return "Friendship milestone (%s)" % time_str
+		"knowledge_acquisition":
+			var knowledge: String = str(ev.get("knowledge_type", "knowledge"))
+			return "Learned %s (%s)" % [knowledge, time_str]
+		"knowledge_inscribed":
+			var carrier_type: String = str(ev.get("carrier_type", "stone"))
+			return "Inscribed %s (%s)" % [carrier_type, time_str]
+		"knowledge_read":
+			var gained_count: int = int(ev.get("gained_knowledge", []).size())
+			return "Read stone, gained %d knowledge (%s)" % [gained_count, time_str]
+		_:
+			return "%s (%s)" % [event_type.capitalize(), time_str]
 
 
 # ==================== CONSCIOUSNESS SYSTEM (Phase 5: Pawn Consciousness) ====================
@@ -1692,58 +1732,6 @@ func _format_memory(memory: Dictionary) -> String:
 	return "[color=%s]%s[/color] • %s [color=#666666](%s)[/color]" % [
 		emotion_color, emotion_label, description, time_text
 	]
-	
-	# Convert ticks to human-readable time
-	var time_str: String = ""
-	if ticks_ago < 60:
-		time_str = "%d ticks ago" % ticks_ago
-	elif ticks_ago < 3600:
-		time_str = "%d min ago" % int(ticks_ago / 60)
-	else:
-		time_str = "%d hr ago" % int(ticks_ago / 3600)
-	
-	match event_type:
-		"work_event":
-			var job_type: String = str(ev.get("job_type", "work")).to_lower()
-			var tile_data: Variant = ev.get("tile", {})
-			var tile_str: String = ""
-			if tile_data is Dictionary:
-				tile_str = " at (%d,%d)" % [int(tile_data.get("x", 0)), int(tile_data.get("y", 0))]
-			return "Completed %s%s (%s)" % [job_type, tile_str, time_str]
-		
-		"pawn_death":
-			var cause: String = str(ev.get("cause", "unknown"))
-			return "Died: %s (%s)" % [cause, time_str]
-		
-		"birth":
-			return "Born (%s)" % time_str
-		
-		"teaching_event":
-			var skill: String = str(ev.get("skill", "skill"))
-			return "Taught %s (%s)" % [skill, time_str]
-		
-		"social_meeting":
-			var other_name: String = str(ev.get("other_name", "someone"))
-			return "Met %s (%s)" % [other_name, time_str]
-		
-		"social_bond_milestone":
-			var milestone: int = int(ev.get("milestone", 0))
-			return "Friendship milestone (%s)" % time_str
-		
-		"knowledge_acquisition":
-			var knowledge: String = str(ev.get("knowledge_type", "knowledge"))
-			return "Learned %s (%s)" % [knowledge, time_str]
-		
-		"knowledge_inscribed":
-			var carrier_type: String = str(ev.get("carrier_type", "stone"))
-			return "Inscribed %s (%s)" % [carrier_type, time_str]
-		
-		"knowledge_read":
-			var gained_count: int = int(ev.get("gained_knowledge", []).size())
-			return "Read stone, gained %d knowledge (%s)" % [gained_count, time_str]
-		
-		_:
-			return "%s (%s)" % [event_type.capitalize(), time_str]
 
 
 ## Format tile position as readable string.

@@ -135,6 +135,10 @@ Pawn Consciousness tab may show "No recent dreams" / "No significant memories" i
 | BUG-003 | WorldMeaning.gd duplicate `var typ` parse error | May 6 | Removed duplicate block at lines 173-181 | Letta Code |
 | BUG-004 | JobManager.gd `TickManager` not found compile error | May 6 | Added `@onready var TickManager = get_node_or_null(...)` | Letta Code |
 | BUG-005 | OnboardingSystem.gd null add_child crash | May 6 | Added null/child_count guards to all 3 button methods | Letta Code |
+| BUG-006 | Main.gd duplicate `get_player_pawn_id()` function | May 6 | Removed duplicate at line 4439 | Letta Code |
+| BUG-007 | Main.gd `KEY_ESC` not found (should be `Key.KEY_ESCAPE`) | May 6 | Changed to `Key.KEY_ESCAPE` | Letta Code |
+| BUG-008 | PawnInfoPanel.gd `_format_event` body split from signature | May 6 | Moved match block into function, removed dead code from `_format_memory` | Letta Code |
+| BUG-009 | VictorySystem.gd `.has()` on Node (not Dictionary) | May 6 | Changed to `"prop" in node` pattern | Letta Code |
 | BUG-010 | 30+ compile errors from autoload parse failure | May 6 | Fixed tabs in WorldMemory.gd, type casts | Qwen |
 | BUG-011 | KnowledgeStone sprite type mismatch | May 6 | Changed Sprite2D → Node2D | Qwen |
 | BUG-012 | Profession lock bug (pawns stuck in first job) | May 5 | Fixed reassignment logic | AI Session |

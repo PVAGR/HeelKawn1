@@ -1,0 +1,101 @@
+﻿Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+Godot_v4.6.2-stable_win64_console.exe : SCRIPT ERROR: Parse Error: Not all 
+code paths return a value.
+At line:1 char:315
++ ... v:USER_CWD; & 
+"C:\Users\user\hk\tools\godot\Godot_v4.6.2-stable_win64 ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (SCRIPT ERROR: P...return a va 
+   lue.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+   at: GDScript::reload (res://scripts/ui/PawnInfoPanel.gd:1516)
+SCRIPT ERROR: Parse Error: Identifier "ev" not declared in the current 
+scope.
+   at: GDScript::reload (res://scripts/ui/PawnInfoPanel.gd:1707)
+SCRIPT ERROR: Parse Error: Identifier "ev" not declared in the current 
+scope.
+   at: GDScript::reload (res://scripts/ui/PawnInfoPanel.gd:1708)
+SCRIPT ERROR: Parse Error: Identifier "ev" not declared in the current 
+scope.
+   at: GDScript::reload (res://scripts/ui/PawnInfoPanel.gd:1715)
+SCRIPT ERROR: Parse Error: Identifier "ev" not declared in the current 
+scope.
+   at: GDScript::reload (res://scripts/ui/PawnInfoPanel.gd:1722)
+SCRIPT ERROR: Parse Error: Identifier "ev" not declared in the current 
+scope.
+   at: GDScript::reload (res://scripts/ui/PawnInfoPanel.gd:1726)
+SCRIPT ERROR: Parse Error: Identifier "ev" not declared in the current 
+scope.
+   at: GDScript::reload (res://scripts/ui/PawnInfoPanel.gd:1730)
+SCRIPT ERROR: Parse Error: Identifier "ev" not declared in the current 
+scope.
+   at: GDScript::reload (res://scripts/ui/PawnInfoPanel.gd:1734)
+SCRIPT ERROR: Parse Error: Identifier "ev" not declared in the current 
+scope.
+   at: GDScript::reload (res://scripts/ui/PawnInfoPanel.gd:1738)
+SCRIPT ERROR: Parse Error: Identifier "ev" not declared in the current 
+scope.
+   at: GDScript::reload (res://scripts/ui/PawnInfoPanel.gd:1742)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://scenes/main/Main.gd:0)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://scripts/pawn/Animal.gd:0)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://scripts/pawn/AnimalSpawner.gd:0)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://autoloads/IntentMemory.gd:0)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://scenes/world/World.gd:0)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://autoloads/SettlementPlanner.gd:0)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://autoloads/SettlementMemory.gd:0)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://autoloads/WorldMemory.gd:0)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://scripts/pawn/PawnData.gd:0)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://scripts/pawn/Pawn.gd:0)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://scripts/jobs/Job.gd:0)
+SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
+   at: GDScript::reload (res://autoloads/JobManager.gd:0)
+ERROR: Failed to load script "res://autoloads/JobManager.gd" with error 
+"Compilation failed".
+   at: load (modules/gdscript/gdscript.cpp:2907)
+[CrashTrap] CrashTrap initialized. trace_enabled=false trace_first_sim_tick=false (per-listener tick-1 trace when both true)
+[VALIDATION_SMOKETEST] marker=PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp source=SettlementMemory.autoload debug_build=true VALIDATION_SESSION_ENABLED_const=false clean_economy_armed=false settlement_truth_verify_armed=false specialization_log_armed=false
+[WorldAI] Neural world matrix initialized with 19 neural networks
+[WorldAI] Specialized neural networks initialized
+[AIAgentManager] Neural network matrix initialized with 4 layers
+[AIAgentManager] Learning algorithms initialized
+[AIAgentManager] Pattern recognition systems initialized
+[AIAgentManager] Predictive models initialized
+[AIAgentManager] Collective intelligence initialized
+[TickDecoupler] Registered system: Input (interval: 1 ticks)
+[TickDecoupler] Registered system: Camera (interval: 1 ticks)
+[TickDecoupler] Registered system: UI (interval: 1 ticks)
+[TickDecoupler] Registered system: Physics (interval: 2 ticks)
+[TickDecoupler] Registered system: Pathfinding (interval: 2 ticks)
+[TickDecoupler] Registered system: AI (interval: 5 ticks)
+[TickDecoupler] Registered system: Economy (interval: 5 ticks)
+[TickDecoupler] Registered system: Social (interval: 5 ticks)
+[TickDecoupler] Registered system: Weather (interval: 10 ticks)
+[TickDecoupler] Registered system: Foliage (interval: 10 ticks)
+[TickDecoupler] Registered system: AmbientAudio (interval: 10 ticks)
+[TickDecoupler] Registered system: MemoryCleanup (interval: 60 ticks)
+[TickDecoupler] Registered system: StatsCollection (interval: 60 ticks)
+[SMOKE] OK reached tick_count=10
+WARNING: 6 RIDs of type "CanvasItem" were leaked.
+   at: _free_rids (servers/rendering/renderer_canvas_cull.cpp:2692)
+ERROR: 4 RID allocations of type 
+'PN13RendererDummy14TextureStorage12DummyTextureE' were leaked at exit.
+ERROR: 16 RID allocations of type 
+'PN18TextServerAdvanced22ShapedTextDataAdvancedE' were leaked at exit.
+ERROR: 1 RID allocations of type 'PN18TextServerAdvanced12FontAdvancedE' 
+were leaked at exit.
+WARNING: ObjectDB instances leaked at exit (run with --verbose for 
+details).
+   at: cleanup (core/object/object.cpp:2641)

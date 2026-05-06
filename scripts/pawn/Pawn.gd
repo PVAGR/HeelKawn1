@@ -266,6 +266,7 @@ enum State {
 	CRAFTING,           # creating simple tools from materials
 	FLEEING,            # running from danger
 	HIDING,             # taking cover from threats
+	PILGRIMAGE,         # visiting memorial site (reverence, closure)
 }
 
 # -------------------- runtime --------------------
@@ -1187,6 +1188,54 @@ func _try_autonomy_social_seek() -> bool:
 	return _state == State.DRAFT_WALK
 
 
+## Memorial pilgrimage: pawn feels desire to visit memorial (closure, remembrance, family)
+func _try_start_pilgrimage() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	if MemorialSystem == null:
+		return false
+	
+	var tick: int = GameManager.tick_count
+	
+	# Check pilgrimage desire occasionally (every 200 ticks, staggered by pawn ID)
+	if tick % 200 != int(data.id) % 200:
+		return false
+	
+	# Only pilgrimage when idle
+	if _state != State.IDLE:
+		return false
+	
+	# Check if any memorials call to this pawn
+	var memorial = MemorialSystem.get_memorial_for_pilgrimage(int(data.id))
+	if memorial.is_empty():
+		return false
+	
+	# Start pilgrimage
+	_start_pilgrimage_to_memorial(memorial)
+	return true
+
+
+func _start_pilgrimage_to_memorial(memorial: Dictionary) -> void:
+	var target_tile: Vector2i = memorial.tile
+	
+	# Pathfind to memorial tile
+	var path = _world.pathfinder.find_path(data.tile_pos, target_tile, false)
+	if path.is_empty():
+		return  # No valid path
+	
+	# Set state to PILGRIMAGE
+	_state = State.PILGRIMAGE
+	_current_job = null  # Clear any job
+	_path = path
+	_target_tile = target_tile
+	_target_world_pos = _world.tile_to_center_pos(target_tile)
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s starting pilgrimage to memorial at (%d,%d)" % [
+			data.display_name, target_tile.x, target_tile.y
+		])
+
+
 ## Warrior peacetime patrol: path toward a settlement wall tile and idle there.
 ## Gives warriors visible presence around the perimeter instead of clustering at stockpile.
 func _maybe_warrior_patrol() -> bool:
@@ -1805,6 +1854,11 @@ func _process(delta: float) -> void:
 		var gained: Array = KnowledgeSystem.read_knowledge_from_stone(int(data.id), data.tile_pos)
 		if not gained.is_empty():
 			# Pawn gained knowledge from reading stone
+			pass
+	
+	# SACRED GEOGRAPHY: Apply reverence slowdown on sacred tiles
+	if SacredGeography != null and SacredGeography.has_method("check_sacred_tile_effect"):
+		SacredGeography.check_sacred_tile_effect(self)
 			if GameManager.verbose_logs():
 				print("[Pawn] %s read stone at (%d,%d) and gained %d knowledge types" % [
 					data.display_name, data.tile_pos.x, data.tile_pos.y, gained.size()
@@ -2187,6 +2241,9 @@ func _tick_idle() -> void:
 		return
 	# 4b. Neural "social" hint: path toward a high-rapport nearby pawn if not already eating/sleeping.
 	if _try_autonomy_social_seek():
+		return
+	# 4c. Memorial pilgrimage: occasional desire to visit memorials (closure, remembrance)
+	if _try_start_pilgrimage():
 		return
 	# Cache global food queries once per tick across all pawns
 	var now_tick: int = GameManager.tick_count if GameManager != null else 0

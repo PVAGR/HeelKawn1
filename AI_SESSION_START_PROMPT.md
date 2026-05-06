@@ -105,6 +105,135 @@ If you have an idea that doesn't fit existing tracks:
 ```
 **AI:** [Your name/ID]
 **Session Date:** [Date]
+**Track:** [TRACK # or "Innovation"]
+
+**What I Understand:**
+- [2-3 sentences on HeelKawn's core vision]
+- [What makes it unique]
+
+**What I'm Working On:**
+- [Track # or innovation proposal]
+- [Brief description]
+
+**Innovation Idea (if any):**
+- [One sentence on something new you want to create]
+
+**Other AIs Active (from AI_COLLABORATION_HUB.md):**
+- [AI name] on TRACK [#] — [what they're doing]
+- [AI name] on TRACK [#] — [what they're doing]
+- [Or "No other AIs currently active"]
+
+**Continuity Check:**
+- [How your work relates to or integrates with other AIs' work]
+- [Or "No conflicts — working independently on TRACK [#]"]
+```
+
+---
+
+## ✅ AFTER YOU COMPLETE YOUR WORK
+
+**When you finish a task or reach a natural stopping point:**
+
+### 1. Update Collaboration Files
+
+**In AI_COLLABORATION_HUB.md, update the Active AI Status table:**
+```markdown
+### 🟢 AI Status Updates
+
+| AI | Track | Working On | Status | Next |
+|----|-------|------------|--------|------|
+| Qwen | TRACK 3 | Memorial integration | ✅ Done → 🔄 Starting WorldMemory | Integrating with WorldMemory.gd |
+| Leta | TRACK 1 | UI testing | 🔄 In Progress | Testing SurvivalHUD |
+```
+
+**In AI_SESSIONS/current.md:**
+- Log progress with your AI name as section header
+- Note what you completed
+- Note what you're starting next
+
+### 2. Ask the Human What's Next
+
+**Provide 3-5 options based on current priorities:**
+
+```
+**Session Complete! What should I do next?**
+
+**Option 1:** [Task from AI_TODO_QUEUE.md HIGH priority]
+- Brief description
+- Estimated time
+
+**Option 2:** [Task from AI_TODO_QUEUE.md MEDIUM priority]
+- Brief description
+- Estimated time
+
+**Option 3:** [Continue current innovation / integration work]
+- Brief description
+- Estimated time
+
+**Option 4:** [Something you noticed needs attention]
+- Brief description
+- Estimated time
+
+**Option 5:** Rescan & Realign — I'll re-read all collaboration files to ensure I'm in continuity with other AIs currently working
+- Estimated time: 5-10 min
+
+**Or press a number (1-5) to command me.**
+```
+
+### 3. If Human Presses a Number (1-5)
+
+**Execute that option immediately.** No questions, no hesitation.
+
+**If human says "rescan" or presses 5:**
+1. Re-read: `AI_COLLABORATION_HUB.md`, `AI_SESSIONS/current.md`, `AI_TODO_QUEUE.md`
+2. Check what other AIs are working on (if any active sessions)
+3. Ensure your next task doesn't conflict with their work
+4. Report back: "Rescanned. I see [X] AI working on [track]. I'll proceed with [option] — no conflicts."
+
+---
+
+## 💬 Multi-AI Continuity Check
+
+**If multiple AIs are active simultaneously:**
+
+**Before starting major work:**
+1. Check `AI_COLLABORATION_HUB.md` for active AI status table
+2. Check `AI_SESSIONS/current.md` for in-progress work
+3. If another AI is on same track → collaborate, don't duplicate
+4. Announce your intention in hub: "Starting [task] — any conflicts?"
+
+**Every AI must always state clearly:**
+- **WHO:** Which AI they are (Qwen, Leta, etc.)
+- **WHAT:** Which track + specific task
+- **WHY:** How it fits the bigger picture / integrates with other AIs
+
+**Example:**
+```
+**AI:** Qwen Code
+**Track:** TRACK 3 (World Richness)
+**Working On:** Memorial System → WorldMemory integration
+
+**What:** Connecting MemorialSystem to auto-create memorials on pawn_death, battle events
+
+**Why:** Makes history physical — places where things happened become marked forever. 
+Integrates with TRACK 4's grudge/gossip work (memorials become gossip hubs).
+
+**Other AIs Active:**
+- Leta on TRACK 1 — Testing SurvivalHUD, will help with memorial UI next
+- [None on TRACK 2, 4, 5, 6]
+
+**Continuity:** No conflicts. TRACK 1 AI will handle memorial UI when ready.
+```
+
+**This ensures every AI and the human always knows:**
+- Who is working on what
+- Why it matters
+- How it connects to other work
+- No duplication or silos
+
+```
+**AI:** [Your name/ID]
+**Session Date:** [Date]
 
 **What I Understand:**
 - [2-3 sentences on HeelKawn's core vision]

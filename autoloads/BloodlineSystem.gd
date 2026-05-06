@@ -46,7 +46,7 @@ func establish_bloodline(founder_pawn_id: int) -> int:
 	return create_bloodline(founder_pawn_id, "", "")
 
 
-func create_bloodline(founder_id: int, founder_name: String, specialization_key: String) -> int:
+func create_bloodline(founder_id: int, founder_name: String = "", specialization_key: String = "") -> int:
 	# Fallback for dynamic calls with insufficient arguments
 	return create_bloodline_safe(founder_id, founder_name, specialization_key)
 

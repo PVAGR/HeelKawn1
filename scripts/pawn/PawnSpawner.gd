@@ -236,10 +236,14 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		
 		# PHASE 4: Assign heterogeneous profession (NOT all farmers!)
 		_assign_heterogeneous_profession(data, rng)
-		
+
 		var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
 		if bloodline_sys != null and bloodline_sys.has_method("create_bloodline"):
-			data.bloodline_id = int(bloodline_sys.call("create_bloodline", data.id, data.display_name, data.highest_affinity_skill()))
+			# Pass founder_id, founder_name, and specialization_key (as String)
+			var spec_key: String = ""
+			if data.has_method("highest_affinity_skill"):
+				spec_key = str(data.highest_affinity_skill())
+			data.bloodline_id = int(bloodline_sys.call("create_bloodline", data.id, data.display_name, spec_key))
 
 		var pawn: Pawn = pawn_scene.instantiate() as Pawn
 		pawn.bind(data, world.tile_to_world(tile), world)

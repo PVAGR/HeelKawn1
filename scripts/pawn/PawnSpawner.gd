@@ -374,7 +374,7 @@ func spawn_generational_pawn(
 			"region": WorldMemory._region_key(tile.x, tile.y),
 			"center_region": int(settlement_context.get("center_region", -1)),
 			"culture_name": str(settlement_context.get("culture_name", "")),
-			"birth_settlement": data.birth_settlement,
+			"birth_settlement": str(data.birth_settlement),  # FIX: Convert int to String
 		})
 	var kin: Node = get_node_or_null("/root/KinshipSystem")
 	if kin != null:

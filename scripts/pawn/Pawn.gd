@@ -859,7 +859,11 @@ func _ready() -> void:
 	set_process(false)  # Pawns start idle — no per-frame movement needed
 	if TickManager != null:
 		TickManager.mark_tickable_cache_dirty()
-	call_deferred("_pawn_connect_sim_tick_deferred")
+    call_deferred("_pawn_connect_sim_tick_deferred")
+
+    # Lightweight HeelKawnian identity hook (safe, additive)
+    if Engine.has_singleton("HeelKawnianManager"):
+        HeelKawnianManager.ensure_identity_for_pawn(self)
 
 
 func _pawn_connect_sim_tick_deferred() -> void:

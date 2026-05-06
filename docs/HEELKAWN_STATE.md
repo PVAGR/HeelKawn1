@@ -30,6 +30,11 @@ We are always building, always refining, always expanding. This document capture
   - Added warrior peacetime patrol for visible perimeter presence.
   - Added display settings (resolution, window mode, vsync) to GameSettings.
   - Performance optimizations: spatial grid for social proximity, redraw throttle, meaning throttle, caches.
+  - **FEAT: Literature & Knowledge Preservation (Phase 5)**:
+    - Implemented Book crafting recipes (Paper, Leather, Ink, Pen, Book) in `CraftingSystem.gd`.
+    - Expanded `WorldMeaning.gd` with deterministic tags for literate regions (`great_library`, `scriptorium`, `literate`).
+    - Integrated Literature recording into the `WorldMeaning` recompute pipeline.
+    - Verified `KnowledgeSystem.gd` uses deterministic `WorldRNG` for rediscovery checks.
 - Next Task: Deep social dynamics — multi-generational grudges, emergent norms, reputation spread between settlements.
 
 ## Blockers

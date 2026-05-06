@@ -1,0 +1,12 @@
+[gd_scene load_steps=2 format=3 uid="uid://heelkawn_pawn_mood"]
+
+[ext_resource type="Script" path="res://scripts/ui/PawnMoodUI.gd" id="1_mood"]
+
+[node name="PawnMoodUI" type="PanelContainer"]
+script = ExtResource("1_mood")
+custom_minimum_size = Vector2(250, 300)
+offset_left = 10.0
+offset_top = 240.0
+offset_right = 260.0
+offset_bottom = 540.0
+visibility_mode = 1

@@ -1,4 +1,4 @@
-[gd_scene load_steps=39 format=3 uid="uid://heelkawn_main"]
+[gd_scene load_steps=42 format=3 uid="uid://heelkawn_main"]
 
 [ext_resource type="Script" path="res://scenes/main/Main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scenes/main/BuildPreviewOverlay.gd" id="1_preview"]
@@ -8,6 +8,9 @@
 [ext_resource type="Script" path="res://scripts/pawn/PawnSpawner.gd" id="5_spawn"]
 [ext_resource type="PackedScene" path="res://scenes/pawn/Pawn.tscn" id="6_pawn"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ColonyHUD.tscn" id="7_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/SurvivalHUD.tscn" id="40_survival_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/PlayerInventoryUI.tscn" id="41_inventory"]
+[ext_resource type="PackedScene" path="res://scenes/ui/PawnMoodUI.tscn" id="42_mood"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ObserverHUD.tscn" id="14_observer_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/FocusInspector.tscn" id="15_focus_inspector"]
 [ext_resource type="PackedScene" path="res://scenes/ui/RegionInspector.tscn" id="18_region_inspector"]
@@ -78,6 +81,12 @@ script = ExtResource("2_cam")
 [node name="UI_Viewport" type="CanvasLayer" parent="."]
 
 [node name="ColonyHUD" parent="UI_Viewport" instance=ExtResource("7_hud")]
+
+[node name="SurvivalHUD" parent="UI_Viewport" instance=ExtResource("40_survival_hud")]
+
+[node name="PlayerInventory" parent="UI_Viewport" instance=ExtResource("41_inventory")]
+
+[node name="PawnMoodUI" parent="UI_Viewport" instance=ExtResource("42_mood")]
 
 [node name="ObserverHUD" parent="UI_Viewport" instance=ExtResource("14_observer_hud")]
 

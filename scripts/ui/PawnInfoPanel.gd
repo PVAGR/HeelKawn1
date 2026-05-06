@@ -86,6 +86,7 @@ var _tab_matrix: VBoxContainer = null
 var _tab_neural: VBoxContainer = null
 var _tab_social: VBoxContainer = null
 var _tab_narrative: VBoxContainer = null  # Phase 5: Emergent Narrative
+var _tab_consciousness: VBoxContainer = null  # Phase 5: Pawn Consciousness
 ## Matrix/Neural display labels
 var _matrix_inputs_label: RichTextLabel = null
 var _neural_outputs_label: RichTextLabel = null
@@ -316,6 +317,12 @@ func _build_ui() -> void:
 	_tab_container.add_child(_tab_narrative)
 	_populate_narrative_tab()
 
+	# Consciousness tab (Phase 5: Pawn Consciousness)
+	_tab_consciousness = VBoxContainer.new()
+	_tab_consciousness.add_theme_constant_override("separation", 2)
+	_tab_container.add_child(_tab_consciousness)
+	_populate_consciousness_tab()
+
 	# Set tab titles
 	_tab_container.set_tab_title(0, "ID")
 	_tab_container.set_tab_title(1, "Needs")
@@ -324,9 +331,11 @@ func _build_ui() -> void:
 		_tab_container.set_tab_title(3, "Neural")
 		_tab_container.set_tab_title(4, "Social")
 		_tab_container.set_tab_title(5, "Narrative")
+		_tab_container.set_tab_title(6, "Consciousness")
 	else:
 		_tab_container.set_tab_title(2, "Social")
 		_tab_container.set_tab_title(3, "Narrative")
+		_tab_container.set_tab_title(4, "Consciousness")
 
 	# Footer hint
 	_hint_label = _make_label("[Esc] deselect", FONT_SMALL, Color(0.55, 0.55, 0.60))
@@ -431,6 +440,68 @@ func _populate_narrative_tab() -> void:
 	narrative_label.custom_minimum_size = Vector2(0, 280)
 	narrative_label.add_theme_font_size_override("normal_font_size", FONT_BODY)
 	_tab_narrative.add_child(narrative_label)
+
+
+func _populate_consciousness_tab() -> void:
+	# Self-Awareness section
+	_tab_consciousness.add_child(_make_section_header("Consciousness"))
+	
+	var awareness_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(awareness_row)
+	
+	var awareness_label: Label = _make_label("Self-Awareness:", FONT_SMALL, TEXT_DIM)
+	awareness_row.add_child(awareness_label)
+	
+	var awareness_value: Label = _make_label("", FONT_SMALL, ACCENT)
+	awareness_value.name = "AwarenessValue"
+	awareness_row.add_child(awareness_value)
+	
+	# Trauma section
+	_tab_consciousness.add_child(_make_section_header("Trauma"))
+	
+	var trauma_bar: ProgressBar = ProgressBar.new()
+	trauma_bar.name = "TraumaBar"
+	trauma_bar.min_value = 0.0
+	trauma_bar.max_value = 100.0
+	trauma_bar.value = 0.0
+	trauma_bar.show_percentage = true
+	trauma_bar.custom_minimum_size = Vector2(0, 20)
+	_tab_consciousness.add_child(trauma_bar)
+	
+	var trauma_status: Label = _make_label("", FONT_SMALL, TEXT_DIM)
+	trauma_status.name = "TraumaStatus"
+	_tab_consciousness.add_child(trauma_status)
+	
+	# Growth section
+	_tab_consciousness.add_child(_make_section_header("Growth"))
+	
+	var growth_label: Label = _make_label("", FONT_SMALL, TEXT_BRIGHT)
+	growth_label.name = "GrowthLabel"
+	_tab_consciousness.add_child(growth_label)
+	
+	# Dreams section
+	_tab_consciousness.add_child(_make_section_header("Recent Dreams"))
+	
+	var dreams_container: VBoxContainer = VBoxContainer.new()
+	dreams_container.name = "DreamsContainer"
+	dreams_container.add_theme_constant_override("separation", 4)
+	_tab_consciousness.add_child(dreams_container)
+	
+	# Memories section
+	_tab_consciousness.add_child(_make_section_header("Significant Memories"))
+	
+	var memories_container: VBoxContainer = VBoxContainer.new()
+	memories_container.name = "MemoriesContainer"
+	memories_container.add_theme_constant_override("separation", 4)
+	_tab_consciousness.add_child(memories_container)
+	
+	# Beliefs section
+	_tab_consciousness.add_child(_make_section_header("Core Beliefs"))
+	
+	var beliefs_label: Label = _make_label("", FONT_SMALL, TEXT_DIM)
+	beliefs_label.name = "BeliefsLabel"
+	beliefs_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_consciousness.add_child(beliefs_label)
 
 
 func _add_need_row_to_tab(label_text: String, field: String, color: Color, parent: VBoxContainer) -> void:
@@ -935,6 +1006,9 @@ func _refresh() -> void:
 			narrative_label.text = narrative_text
 		else:
 			narrative_label.text = "[i][color=#666666]No narrative data available[/color][/i]"
+
+	# Consciousness tab updates (Phase 5: Pawn Consciousness)
+	_update_consciousness_tab()
 
 	# Reposition each tick because the panel can grow/shrink with carry text.
 	_reposition()
@@ -1443,6 +1517,181 @@ func _format_event(ev: Dictionary) -> String:
 	var event_type: String = str(ev.get("type", "unknown"))
 	var tick: int = int(ev.get("t", 0))
 	var ticks_ago: int = GameManager.tick_count - tick
+
+
+# ==================== CONSCIOUSNESS SYSTEM (Phase 5: Pawn Consciousness) ====================
+
+## Update the Consciousness tab with pawn's mental state data.
+func _update_consciousness_tab() -> void:
+	if _pawn == null or _pawn.data == null or PawnConsciousness == null:
+		return
+
+	var pawn_id: int = int(_pawn.data.id)
+
+	# Self-Awareness
+	var awareness_value: Label = _tab_consciousness.get_node_or_null("AwarenessValue") as Label
+	if awareness_value != null:
+		var awareness_level: int = PawnConsciousness.get_awareness_level(pawn_id)
+		var awareness_name: String = PawnConsciousness.get_awareness_name(awareness_level)
+		awareness_value.text = " %s (Level %d)" % [awareness_name, awareness_level]
+
+	# Trauma
+	var trauma_bar: ProgressBar = _tab_consciousness.get_node_or_null("TraumaBar") as ProgressBar
+	var trauma_status: Label = _tab_consciousness.get_node_or_null("TraumaStatus") as Label
+	if trauma_bar != null and trauma_status != null:
+		var trauma_level: float = PawnConsciousness.get_trauma_level(pawn_id)
+		trauma_bar.value = clampf(trauma_level, 0.0, 100.0)
+		if trauma_level >= 80:
+			trauma_status.text = "[color=#FF4444]Severely Traumatized[/color] - permanent scars likely"
+			trauma_bar.modulate = Color(0.8, 0.2, 0.2)
+		elif trauma_level >= 50:
+			trauma_status.text = "[color=#FF8800]Moderately Traumatized[/color] - behavioral effects active"
+			trauma_bar.modulate = Color(0.8, 0.5, 0.2)
+		elif trauma_level >= 25:
+			trauma_status.text = "[color=#FFCC00]Mildly Traumatized[/color] - recovering naturally"
+			trauma_bar.modulate = Color(0.8, 0.8, 0.2)
+		else:
+			trauma_status.text = "[color=#44FF44]Psychologically Stable[/color]"
+			trauma_bar.modulate = Color(0.2, 0.8, 0.2)
+
+	# Growth
+	var growth_label: Label = _tab_consciousness.get_node_or_null("GrowthLabel") as Label
+	if growth_label != null:
+		var consciousness: Dictionary = PawnConsciousness.get_consciousness(pawn_id)
+		var growth_points: int = consciousness.get("growth_points", 0)
+		var growth_text: String = "Growth Points: %d" % growth_points
+		if growth_points >= 100:
+			growth_text += " [color=#44FF44](Ready for growth milestone)[/color]"
+		growth_label.text = growth_text
+
+	# Dreams
+	var dreams_container: VBoxContainer = _tab_consciousness.get_node_or_null("DreamsContainer") as VBoxContainer
+	if dreams_container != null:
+		# Clear existing dream labels
+		for child in dreams_container.get_children():
+			child.queue_free()
+
+		var dreams: Array[Dictionary] = PawnConsciousness.get_dreams(pawn_id, 3)
+		if dreams.is_empty():
+			var no_dreams: Label = _make_label("[i][color=#666666]No recent dreams[/color][/i]", FONT_SMALL, TEXT_DIM)
+			dreams_container.add_child(no_dreams)
+		else:
+			for dream in dreams:
+				var dream_text: String = _format_dream(dream)
+				var dream_label: Label = _make_label(dream_text, FONT_SMALL, TEXT_BRIGHT)
+				dream_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				dreams_container.add_child(dream_label)
+
+	# Memories
+	var memories_container: VBoxContainer = _tab_consciousness.get_node_or_null("MemoriesContainer") as VBoxContainer
+	if memories_container != null:
+		# Clear existing memory labels
+		for child in memories_container.get_children():
+			child.queue_free()
+
+		var memories: Array[Dictionary] = PawnConsciousness.get_memories(pawn_id, "", 5)
+		if memories.is_empty():
+			var no_memories: Label = _make_label("[i][color=#666666]No significant memories[/color][/i]", FONT_SMALL, TEXT_DIM)
+			memories_container.add_child(no_memories)
+		else:
+			for memory in memories:
+				var memory_text: String = _format_memory(memory)
+				var memory_label: Label = _make_label(memory_text, FONT_SMALL, TEXT_BRIGHT)
+				memory_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				memories_container.add_child(memory_label)
+
+	# Beliefs
+	var beliefs_label: Label = _tab_consciousness.get_node_or_null("BeliefsLabel") as Label
+	if beliefs_label != null:
+		var beliefs: Array[String] = PawnConsciousness.get_core_beliefs(pawn_id)
+		if beliefs.is_empty():
+			beliefs_label.text = "[i][color=#666666]No core beliefs formed yet[/color][/i]"
+		else:
+			beliefs_label.text = "• " + "\n• ".join(beliefs)
+
+
+## Format a dream into readable text.
+func _format_dream(dream: Dictionary) -> String:
+	var theme: String = str(dream.get("theme", "general"))
+	var content: String = str(dream.get("content", "unknown"))
+	var emotion: float = float(dream.get("emotion", 0.0))
+	var lucid: bool = bool(dream.get("lucid", false))
+	var tick: int = int(dream.get("tick", 0))
+	var ticks_ago: int = GameManager.tick_count - tick
+	var minutes_ago: float = float(ticks_ago) / 60.0
+
+	var emotion_color: String = "#888888"
+	if emotion > 30:
+		emotion_color = "#44FF44"
+	elif emotion < -30:
+		emotion_color = "#FF4444"
+	elif emotion > 0:
+		emotion_color = "#44CCFF"
+
+	var lucid_tag: String = " [color=#FFD166][Lucid Dream][/color]" if lucid else ""
+	var theme_emoji: String = _get_dream_theme_emoji(theme)
+
+	return "%s %s%s [color=%s](%s)[/color] [color=#666666](%.0f min ago)[/color]" % [
+		theme_emoji, content, lucid_tag, emotion_color, theme, minutes_ago
+	]
+
+
+## Get emoji for dream theme.
+func _get_dream_theme_emoji(theme: String) -> String:
+	match theme:
+		"trauma":
+			return "💀"
+		"desire":
+			return "✨"
+		"survival":
+			return "🏃"
+		"social":
+			return "💬"
+		"achievement":
+			return "🏆"
+		_:
+			return "💭"
+
+
+## Format a memory into readable text.
+func _format_memory(memory: Dictionary) -> String:
+	var event_type: String = str(memory.get("event_type", "unknown"))
+	var description: String = str(memory.get("description", ""))
+	var emotion: float = float(memory.get("emotion", 0.0))
+	var importance: int = int(memory.get("importance", 5))
+	var tick: int = int(memory.get("tick", 0))
+	var ticks_ago: int = GameManager.tick_count - tick
+	var minutes_ago: float = float(ticks_ago) / 60.0
+	var hours_ago: float = minutes_ago / 60.0
+
+	var emotion_color: String = "#888888"
+	var emotion_label: String = "Neutral"
+	if emotion > 50:
+		emotion_color = "#44FF44"
+		emotion_label = "Joyful"
+	elif emotion > 20:
+		emotion_color = "#44CCFF"
+		emotion_label = "Positive"
+	elif emotion < -50:
+		emotion_color = "#FF4444"
+		emotion_label = "Traumatic"
+	elif emotion < -20:
+		emotion_color = "#FF8800"
+		emotion_label = "Negative"
+
+	var time_text: String = ""
+	if minutes_ago < 60:
+		time_text = "%.0f min ago" % minutes_ago
+	else:
+		time_text = "%.1f hr ago" % hours_ago
+
+	var importance_stars: String = ""
+	for i in range(importance):
+		importance_stars += "★" if i < importance else "☆"
+
+	return "[color=%s]%s[/color] • %s [color=#666666](%s)[/color]" % [
+		emotion_color, emotion_label, description, time_text
+	]
 	
 	# Convert ticks to human-readable time
 	var time_str: String = ""

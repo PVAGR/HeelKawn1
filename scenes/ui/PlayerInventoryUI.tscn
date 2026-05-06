@@ -1,0 +1,39 @@
+[gd_scene load_steps=2 format=3 uid="uid://heelkawn_player_inventory"]
+
+[ext_resource type="Script" path="res://scripts/ui/PlayerInventoryUI.gd" id="1_inventory"]
+
+[node name="PlayerInventoryUI" type="PanelContainer"]
+script = ExtResource("1_inventory")
+custom_minimum_size = Vector2(300, 400)
+offset_left = 10.0
+offset_top = 240.0
+offset_right = 310.0
+offset_bottom = 640.0
+visibility_mode = 1
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 2
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "🎒 Inventory"
+custom_minimum_size = Vector2(280, 0)
+
+[node name="ItemsGrid" type="GridContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+columns = 4
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+
+[node name="ActionButtons" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+visible = false

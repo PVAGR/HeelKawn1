@@ -158,6 +158,72 @@ func _initialize_recipes() -> void:
 		"output_quantity": 3
 	})
 
+	# ===== KNOWLEDGE (Phase 5: Book System) =====
+	_add_recipe({
+		"recipe_id": "paper",
+		"name": "Paper",
+		"category": "knowledge",
+		"ingredients": {"stick": 3},
+		"craft_ticks": 40,
+		"required_profession": -1,
+		"required_skill": 0,  # FORAGING
+		"min_skill_level": 1,
+		"output_item": Item.Type.PAPER,
+		"output_quantity": 5
+	})
+	
+	_add_recipe({
+		"recipe_id": "leather_binding",
+		"name": "Leather Binding",
+		"category": "knowledge",
+		"ingredients": {"meat": 2},
+		"craft_ticks": 60,
+		"required_profession": -1,
+		"required_skill": 4,  # HUNTING
+		"min_skill_level": 2,
+		"output_item": Item.Type.LEATHER,
+		"output_quantity": 1
+	})
+	
+	_add_recipe({
+		"recipe_id": "ink",
+		"name": "Ink",
+		"category": "knowledge",
+		"ingredients": {"berry": 2},
+		"craft_ticks": 30,
+		"required_profession": -1,
+		"required_skill": 0,  # FORAGING
+		"min_skill_level": 1,
+		"output_item": Item.Type.INK,
+		"output_quantity": 2
+	})
+	
+	_add_recipe({
+		"recipe_id": "quill_pen",
+		"name": "Quill Pen",
+		"category": "knowledge",
+		"ingredients": {"stick": 1},
+		"craft_ticks": 20,
+		"required_profession": -1,
+		"required_skill": 0,  # FORAGING
+		"min_skill_level": 1,
+		"output_item": Item.Type.PEN,
+		"output_quantity": 1
+	})
+	
+	_add_recipe({
+		"recipe_id": "blank_book",
+		"name": "Blank Book",
+		"category": "knowledge",
+		"ingredients": {"paper": 5, "leather": 1},
+		"craft_ticks": 100,
+		"required_profession": -1,
+		"required_skill": 3,  # BUILDING
+		"min_skill_level": 3,
+		"output_item": Item.Type.BOOK,
+		"output_quantity": 1
+	})
+
 
 func _add_recipe(recipe_data: Dictionary) -> void:
 	recipes[recipe_data.recipe_id] = recipe_data

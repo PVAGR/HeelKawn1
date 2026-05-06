@@ -139,6 +139,19 @@ func recompute() -> void:
 				rec["world_events"] = int(rec.get("world_events", 0)) + 1
 				rec["last_world_tick"] = t
 
+		# Also process string-typed WorldMemory events for knowledge and lineage
+		var typ: String = str(e.get("type", "")).to_lower()
+		match typ:
+			"literature_recorded", "book_written":
+				rec["literature_recorded"] = int(rec.get("literature_recorded", 0)) + 1
+				rec["last_literature_tick"] = t
+			"settlement_revival_with_lineage":
+				rec["continuity_count"] = int(rec.get("continuity_count", 0)) + 1
+			"settlement_new_foundation":
+				rec["stranger_count"] = int(rec.get("stranger_count", 0)) + 1
+			"pawn_death":
+				rec["death_count"] = int(rec.get("death_count", 0)) + 1
+
 		# Read impact from ProgressionSystem
 		if has_node("/root/ProgressionSystem"):
 			var ps = get_node("/root/ProgressionSystem")
@@ -314,6 +327,7 @@ func _default_region_entry() -> Dictionary:
 		"culture_events": 0,
 		"injury_events": 0,
 		"world_events": 0,
+		"literature_recorded": 0,
 		"last_settlement_tick": -1,
 		"last_craft_tick": -1,
 		"last_authority_tick": -1,
@@ -323,6 +337,7 @@ func _default_region_entry() -> Dictionary:
 		"last_culture_tick": -1,
 		"last_injury_tick": -1,
 		"last_world_tick": -1,
+		"last_literature_tick": -1,
 		"tags": PackedStringArray(),
 	}
 
@@ -449,6 +464,24 @@ func _compute_region_tags(data: Dictionary, current_tick: int = 0) -> PackedStri
 		tags.append("sacred")
 	if culture_events >= 6:
 		tags.append("hallowed")
+
+	# Knowledge & Literature tags (Phase 5)
+	var literature_count: int = int(data.get("literature_recorded", 0))
+	if literature_count >= 10:
+		tags.append("great_library")
+	elif literature_count >= 5:
+		tags.append("scriptorium")
+	elif literature_count >= 1:
+		tags.append("literate")
+
+	# Mythic age amplification (deterministic from fact density * time)
+	if is_ancient:
+		if total_deaths > 10:
+			tags.append("eternal_grave")
+		if literature_count > 5:
+			tags.append("fabled_archive")
+		if authority_events > 10:
+			tags.append("old_capital")
 
 	# Injury tags
 	var injury_events: int = int(data.get("injury_events", 0))

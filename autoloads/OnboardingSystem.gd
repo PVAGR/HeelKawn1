@@ -287,7 +287,7 @@ func _create_tutorial_panel() -> void:
 	# Add to scene
 	if _main != null:
 		_main.add_child(_tutorial_panel)
-		_tutorial_panel.set_as_toplevel(true)
+		_tutorial_panel.set_as_top_level(true)  # Godot 4: set_as_top_level (not set_as_toplevel)
 
 
 func _set_tutorial_text(text: String) -> void:

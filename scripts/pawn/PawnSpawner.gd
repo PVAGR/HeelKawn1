@@ -233,6 +233,10 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		data.hair_color = HAIR_COLORS[rng.randi_range(0, HAIR_COLORS.size() - 1)]
 		data.apparel_color = APPAREL_COLORS[rng.randi_range(0, APPAREL_COLORS.size() - 1)]
 		_assign_random_traits(data, rng)
+		
+		# PHASE 4: Assign heterogeneous profession (NOT all farmers!)
+		_assign_heterogeneous_profession(data, rng)
+		
 		var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
 		if bloodline_sys != null and bloodline_sys.has_method("create_bloodline"):
 			data.bloodline_id = int(bloodline_sys.call("create_bloodline", data.id, data.display_name, data.highest_affinity_skill()))

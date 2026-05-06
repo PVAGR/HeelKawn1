@@ -307,6 +307,14 @@ func spawn_generational_pawn(
 	data.hair_style = hs
 	data.hair_color = HAIR_COLORS[(int(tick_seed) + 1) % HAIR_COLORS.size()]
 	data.apparel_color = APPAREL_COLORS[(int(tick_seed) + 2) % APPAREL_COLORS.size()]
+	
+	# PHASE 4: Assign heterogeneous profession (NOT all farmers!)
+	# Children have 70% chance to inherit parent's profession, 30% random
+	if parent_data != null and parent_data.current_profession != PawnData.Profession.NONE:
+		_inherit_profession_from_parents(data, parent_data, null, GameManager.tick_count)
+	else:
+		_assign_heterogeneous_profession(data, WorldRNG.rng_for(&"pawn_profession_assignment"))
+	
 	if parent_data != null:
 		data.lineage_id = parent_data.unique_id
 	var bloodline_sys_birth: Node = get_node_or_null("/root/BloodlineSystem")

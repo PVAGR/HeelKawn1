@@ -14,7 +14,7 @@ func ensure_identity_for_pawn(pawn) -> String:
 func log_heelkawn_event(soul_id: String, event_type: String, payload: Dictionary, rationale: String, inputs_snapshot: Dictionary, tick: int) -> void:
     var event = {
         "event_id": "heelkawnian_%s_%d" % [soul_id, tick],
-        "timestamp": OS.get_datetime_from_unix_time(OS.get_unix_time()),
+        "timestamp": Time.get_datetime_dict_from_unix_time(Time.get_unix_time_from_system()),
         "source_ai": "HeelKawnianManager",
         "event_type": event_type,
         "payload": payload,

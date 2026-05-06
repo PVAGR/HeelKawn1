@@ -635,7 +635,7 @@ func _refresh_character() -> void:
 	if pawn_spawner == null or not pawn_spawner.has_node("pawns"):
 		return
 	
-	var pawns: Array = pawn_spawner.get("pawns", [])
+	var pawns: Array = (pawn_spawner.get("pawns") if pawn_spawner.get("pawns") != null else [])
 	if pawns.size() == 0:
 		return
 	
@@ -676,7 +676,7 @@ func _refresh_survival_hud() -> void:
 	if pawn_spawner == null or not pawn_spawner.has_node("pawns"):
 		return
 	
-	var pawns: Array = pawn_spawner.get("pawns", [])
+	var pawns: Array = (pawn_spawner.get("pawns") if pawn_spawner.get("pawns") != null else [])
 	if pawns.size() == 0:
 		return
 	
@@ -703,7 +703,7 @@ func _refresh_survival_hud() -> void:
 		thirst_bar.value = data.thirst
 	
 	if energy_bar != null:
-		var energy: float = data.get("energy", data.get("rest", 100.0))
+		var energy: float = (data.get("energy") if data.get("energy") != null else (data.get("rest") if data.get("rest") != null else 100.0))
 		energy_bar.value = energy
 	
 	if temp_value != null and data.has("body_temperature"):

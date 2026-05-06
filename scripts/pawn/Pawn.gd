@@ -856,46 +856,28 @@ func _ready() -> void:
 	add_child(_sfx)
 	_action_popup = $ActionPopup
 	add_to_group("tickable")
-	set_process(false)  # Pawns start idle — no per-frame movement needed
+	set_process(false)
 	if TickManager != null:
 		TickManager.mark_tickable_cache_dirty()
-    call_deferred("_pawn_connect_sim_tick_deferred")
+	call_deferred("_pawn_connect_sim_tick_deferred")
 
-    # Lightweight HeelKawnian identity hook (safe, additive)
-    if Engine.has_singleton("HeelKawnianManager"):
-        HeelKawnianManager.ensure_identity_for_pawn(self)
+	# HeelKawnian identity hook
+	if Engine.has_singleton("HeelKawnianManager"):
+		HeelKawnianManager.ensure_identity_for_pawn(self)
 
 
 func _pawn_connect_sim_tick_deferred() -> void:
 	if not is_instance_valid(self):
 		return
 	if data == null or _world == null:
-		push_warning("Pawn: deferred tick connect skipped — not bound (path=%s)" % str(get_path()))
+		push_warning("Pawn: deferred tick connect skipped — not bound")
 		return
-	# Pawns are in "tickable" group - TickManager calls _on_world_tick() directly.
-	# No need to connect to signal (avoids double-processing).
-	# Fallback: if TickManager not available, use GameManager.
-	if not has_node("/root/TickManager"):
+	if not has_node("/root/TickManager"): 
 		if GameManager != null:
 			if not GameManager.game_tick.is_connected(_on_world_tick):
 				GameManager.game_tick.connect(_on_world_tick)
 		_pawn_sim_tick_armed = true
 		return
-	_pawn_sim_tick_armed = true
-
-
-## Called by PawnSpawner immediately after instantiation.
-func bind(p_data: PawnData, world_pos: Vector2, world: World) -> void:
-	data = p_data
-	# Register pawn data for global lookups (lineage, parent lookup)
-	PawnData.register_pawn_data(data)
-	_reset_behavior_profile()
-	_world = world
-	position = world_pos
-	if SpatialManager != null: # ARCHITECT T006
-		SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
-	_state = State.IDLE
-	_clear_path()
 	_reserved_bed = Vector2i(-1, -1)
 	_target_zone = null
 	_cohort_id = -1

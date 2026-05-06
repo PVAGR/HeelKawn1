@@ -15,13 +15,13 @@ const REQUEST_TIMEOUT_SEC: float = 30.0
 
 # LLM Provider configuration (set in project settings or here)
 var config: Dictionary = {
-	"provider": "mock",  # "openai", "ollama", "mock"
+	"provider": "ollama",  # "ollama", "openai", "groq", "huggingface", "mock"
 	"api_key": "",
-	"api_url": "",
-	"model": "gpt-3.5-turbo",
+	"api_url": "http://localhost:11434",  # Default Ollama URL
+	"model": "phi3",  # Default Ollama model
 	"max_tokens": DEFAULT_MAX_TOKENS,
 	"temperature": DEFAULT_TEMPERATURE,
-	"use_mock": true  # Fallback to mock if API fails
+	"use_mock": false  # Set to true for mock responses (testing)
 }
 
 # Performance tracking
@@ -87,10 +87,14 @@ func request(
 	# Send request based on provider
 	var response: Dictionary
 	match config.provider:
-		"openai":
-			response = await _request_openai(full_prompt)
 		"ollama":
 			response = await _request_ollama(full_prompt)
+		"openai":
+			response = await _request_openai(full_prompt)
+		"groq":
+			response = await _request_groq(full_prompt)
+		"huggingface":
+			response = await _request_huggingface(full_prompt)
 		"mock", _:
 			response = await _request_mock(full_prompt, context)
 	
@@ -317,7 +321,11 @@ func _request_ollama(prompt: String) -> Dictionary:
 	var body: Dictionary = {
 		"model": config.model,
 		"prompt": prompt,
-		"stream": false
+		"stream": false,
+		"options": {
+			"temperature": config.temperature,
+			"num_predict": config.max_tokens
+		}
 	}
 	
 	var error: Error = http_request.request(
@@ -345,6 +353,113 @@ func _request_ollama(prompt: String) -> Dictionary:
 		return {
 			"content": response.response,
 			"usage": response.get("prompt_eval_count", 0) + response.get("eval_count", 0)
+		}
+	
+	return {"error": "invalid_response_format"}
+
+
+# ==================== GROQ PROVIDER ====================
+
+func _request_groq(prompt: String) -> Dictionary:
+	if config.api_key == "":
+		return {"error": "api_key_missing", "provider": "groq"}
+	
+	var http_request: HTTPRequest = HTTPRequest.new()
+	add_child(http_request)
+	
+	var headers: PackedStringArray = [
+		"Content-Type: application/json",
+		"Authorization: Bearer %s" % config.api_key
+	]
+	
+	var body: Dictionary = {
+		"model": config.model,
+		"messages": [
+			{"role": "user", "content": prompt}
+		],
+		"max_tokens": config.max_tokens,
+		"temperature": config.temperature
+	}
+	
+	var error: Error = http_request.request(
+		"https://api.groq.com/openai/v1/chat/completions",
+		headers,
+		HTTPClient.METHOD_POST,
+		JSON.stringify(body)
+	)
+	
+	if error != OK:
+		http_request.queue_free()
+		return {"error": "request_failed", "details": error_string(error)}
+	
+	# Wait for response
+	var result: Array = await http_request.request_completed
+	http_request.queue_free()
+	
+	if result[0] != HTTPClient.RESPONSE_OK:
+		return {"error": "http_error", "code": result[0]}
+	
+	# Parse response
+	var response: Dictionary = JSON.parse_string(result[3].get_string_from_utf8())
+	
+	if response.has("choices") and response.choices.size() > 0:
+		return {
+			"content": response.choices[0].message.content,
+			"usage": response.usage
+		}
+	
+	return {"error": "invalid_response_format"}
+
+
+# ==================== HUGGINGFACE PROVIDER ====================
+
+func _request_huggingface(prompt: String) -> Dictionary:
+	if config.api_key == "":
+		return {"error": "api_key_missing", "provider": "huggingface"}
+	
+	var http_request: HTTPRequest = HTTPRequest.new()
+	add_child(http_request)
+	
+	var headers: PackedStringArray = [
+		"Content-Type: application/json",
+		"Authorization: Bearer %s" % config.api_key
+	]
+	
+	var body: Dictionary = {
+		"inputs": prompt,
+		"parameters": {
+			"max_new_tokens": config.max_tokens,
+			"temperature": config.temperature
+		}
+	}
+	
+	var model_url: String = "https://api-inference.huggingface.co/models/%s" % config.model
+	
+	var error: Error = http_request.request(
+		model_url,
+		headers,
+		HTTPClient.METHOD_POST,
+		JSON.stringify(body)
+	)
+	
+	if error != OK:
+		http_request.queue_free()
+		return {"error": "request_failed", "details": error_string(error)}
+	
+	# Wait for response
+	var result: Array = await http_request.request_completed
+	http_request.queue_free()
+	
+	if result[0] != HTTPClient.RESPONSE_OK:
+		return {"error": "http_error", "code": result[0]}
+	
+	# Parse response (HF returns array for text generation)
+	var response: Array = JSON.parse_string(result[3].get_string_from_utf8())
+	
+	if response.size() > 0 and response[0].has("generated_text"):
+		return {
+			"content": response[0].generated_text,
+			"usage": {"total_tokens": config.max_tokens}
 		}
 	
 	return {"error": "invalid_response_format"}

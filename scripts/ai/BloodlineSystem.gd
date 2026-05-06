@@ -454,7 +454,7 @@ func _get_bloodline(bloodline_id: int) -> Dictionary:
 	for bloodline in bloodlines:
 		if bloodline.bloodline_id == bloodline_id:
 			return bloodline
-	return null
+	return {}
 
 
 func _get_pawn_bloodline(pawn_id: int) -> int:

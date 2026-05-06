@@ -262,7 +262,7 @@ func _get_culture(pawn_id: int) -> String:
 	if data == null or not data.has_method("get_culture"):
 		return "common"
 	
-	return data.get("culture", "common")
+	return data.get("culture") ?? "common"
 
 
 # ==================== UTILITY ====================
@@ -305,9 +305,9 @@ func generate_name_for_pawn(pawn_id: int, culture: String = "common",
 		var data: Node = pawn_spawner.call("pawn_data_for_id", pawn_id)
 		if data != null:
 			if data.has_method("get_profession"):
-				circumstances.profession = data.get("profession", "")
+				circumstances.profession = data.get("profession") ?? ""
 			if data.has_method("get_traits"):
-				circumstances.traits = data.get("traits", [])
+				circumstances.traits = data.get("traits") ?? []
 	
 	var full_name: String = generate_full_name(pawn_id, culture, gender, circumstances)
 	

@@ -258,8 +258,8 @@ func add_cultural_trait(pawn_id: int, trait_id: String) -> bool:
 	if not trait_definitions.has(trait_id):
 		return false
 	
-	var trait: Dictionary = trait_definitions[trait_id]
-	if trait.type != TraitType.CULTURAL:
+	var trait_def: Dictionary = trait_definitions[trait_id]
+	if trait_def.type != TraitType.CULTURAL:
 		return false
 	
 	if not pawn_traits.has(pawn_id):
@@ -277,8 +277,8 @@ func add_scar(pawn_id: int, trait_id: String, reason: String = "") -> bool:
 	if not trait_definitions.has(trait_id):
 		return false
 	
-	var trait: Dictionary = trait_definitions[trait_id]
-	if trait.type != TraitType.SCAR:
+	var trait_def: Dictionary = trait_definitions[trait_id]
+	if trait_def.type != TraitType.SCAR:
 		return false
 	
 	if not pawn_traits.has(pawn_id):

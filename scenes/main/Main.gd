@@ -2247,7 +2247,8 @@ func _on_world_tick(tick_number: int) -> void:
 
 
 # OPTIMIZATION: Frame time budget constants - higher at 100x to prevent defer pileup
-const FRAME_BUDGET_USEC: int = 12000  # 12ms base (was 8ms) - allows more work per frame at high speed
+const FRAME_BUDGET_USEC: int = 10000  # 10ms = 100 FPS target (aggressive optimization)
+const FRAME_BUDGET_SOFT_USEC: int = 8000  # 8ms soft target for 125 FPS
 const DEFERRABLE_OPERATIONS: Array[String] = ["regrowth", "ambient_target", "animal_population", "observer_snapshot"]
 
 func _on_game_tick(tick: int) -> void:
@@ -2296,8 +2297,8 @@ func _on_game_tick(tick: int) -> void:
 			section_us["animal_population"] = Time.get_ticks_usec() - t0
 	# Regrowth + ambient are display/maintenance layers; they should not run
 	# every sim tick in normal mode or high speeds will hitch.
-	# AGGRESSIVE 100x OPTIMIZATION: Much longer intervals
-	var regrowth_interval: int = _high_speed_interval(6, 20, 60)  # Was (6, 8, 12) - now 60 ticks at 100x
+	# AGGRESSIVE OPTIMIZATION: Even longer intervals for smooth FPS
+	var regrowth_interval: int = _high_speed_interval(8, 30, 80)  # Was (6, 20, 60) - now 80 ticks at 100x
 	if tick % regrowth_interval == 0:
 		# OPTIMIZATION: Skip if over budget (deferrable operation)
 		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
@@ -2306,7 +2307,7 @@ func _on_game_tick(tick: int) -> void:
 			t0 = Time.get_ticks_usec()
 			_process_regrowth(tick)
 			section_us["regrowth"] = Time.get_ticks_usec() - t0
-	var ambient_interval: int = _high_speed_interval(2, 8, 40)  # Was (2, 4, 8) - now 40 ticks at 100x
+	var ambient_interval: int = _high_speed_interval(3, 12, 50)  # Was (2, 8, 40) - now 50 ticks at 100x
 	if tick % ambient_interval == 0:
 		# OPTIMIZATION: Skip if over budget (deferrable operation)
 		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
@@ -2316,7 +2317,7 @@ func _on_game_tick(tick: int) -> void:
 			_update_ambient_target()
 			section_us["ambient_target"] = Time.get_ticks_usec() - t0
 	# Post dynamic hunt jobs less aggressively than harvest loops.
-	var hunt_post_interval: int = _high_speed_interval(30, 120, 400)  # Was (30, 60, 120) - now 400 ticks at 100x
+	var hunt_post_interval: int = _high_speed_interval(40, 150, 500)  # Was (30, 120, 400) - now 500 ticks at 100x
 	var hunt_phase_offset: int = maxi(1, hunt_post_interval / 2)
 	if (
 			(tick + hunt_phase_offset) % hunt_post_interval == 0
@@ -2360,18 +2361,28 @@ func _on_game_tick(tick: int) -> void:
 			call_deferred("_flush_world_memory_derivatives")
 	if is_instance_valid(_world):
 		# Planning every tick at 1x causes severe frame-time spikes in large worlds.
-		# Keep planning frequent, but not per-tick.
+		# Keep planning frequent, but not per-tick. AGGRESSIVE OPTIMIZATION: Longer intervals
 		var planner_interval: int = _planner_interval_for_speed()
 		if tick % planner_interval == 0:
-			t0 = Time.get_ticks_usec()
-			SettlementPlanner.plan(_world, self, false)
-			section_us["settlement_planner"] = Time.get_ticks_usec() - t0
+			# Check frame budget before heavy planning
+			if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
+				# Defer to next frame
+				call_deferred("_deferred_settlement_planner_plan", _world, self, false)
+			else:
+				t0 = Time.get_ticks_usec()
+				SettlementPlanner.plan(_world, self, false)
+				section_us["settlement_planner"] = Time.get_ticks_usec() - t0
 		# Spread heavy planning across adjacent ticks to reduce one-tick hitch spikes.
 		var trade_offset: int = maxi(1, planner_interval / 3)
 		if (tick + trade_offset) % planner_interval == 0:
-			t0 = Time.get_ticks_usec()
-			TradePlanner.plan(_world, self, false)
-			section_us["trade_planner"] = Time.get_ticks_usec() - t0
+			# Check frame budget before heavy planning
+			if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
+				# Defer to next frame
+				call_deferred("_deferred_trade_planner_plan", _world, self, false)
+			else:
+				t0 = Time.get_ticks_usec()
+				TradePlanner.plan(_world, self, false)
+				section_us["trade_planner"] = Time.get_ticks_usec() - t0
 		# OPTIMIZATION: Spread heavy settlement operations across ticks with frame budget check
 		if tick % REBIRTH_CHECK_INTERVAL_TICKS == 0:
 			# Check frame budget before heavy recompute
@@ -2383,7 +2394,7 @@ func _on_game_tick(tick: int) -> void:
 				t0 = Time.get_ticks_usec()
 				SettlementMemory.recompute(_world)
 				section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
-		
+
 		# Offset SettlementRebirth.process to a different tick to spread the load
 		var rebirth_offset_tick: int = (tick + REBIRTH_CHECK_INTERVAL_TICKS / 2) % REBIRTH_CHECK_INTERVAL_TICKS
 		if rebirth_offset_tick == 0:
@@ -2719,6 +2730,16 @@ func _deferred_settlement_memory_recompute(world: World) -> void:
 func _deferred_settlement_rebirth_process(world: World, main: Node) -> void:
 	if is_instance_valid(world) and is_instance_valid(main):
 		SettlementRebirth.process(world, main, false)
+
+
+# OPTIMIZATION: Deferred planning functions for frame budget management
+func _deferred_settlement_planner_plan(world: World, main: Node, use_cache: bool) -> void:
+	if is_instance_valid(world) and is_instance_valid(main):
+		SettlementPlanner.plan(world, main, use_cache)
+
+func _deferred_trade_planner_plan(world: World, main: Node, use_cache: bool) -> void:
+	if is_instance_valid(world) and is_instance_valid(main):
+		TradePlanner.plan(world, main, use_cache)
 
 
 func _maybe_generational_turnover() -> void:

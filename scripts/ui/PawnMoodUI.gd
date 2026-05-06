@@ -169,7 +169,8 @@ func _update_mood() -> void:
 	if _mood_bar == null or _mood_label == null:
 		return
 	
-	var mood: float = _pawn_data.get("mood") ?? 50.0
+	var mood_val = _pawn_data.get("mood")
+	var mood: float = mood_val if mood_val != null else 50.0
 	_mood_bar.value = mood
 	_mood_label.text = "%d/100" % int(mood)
 	
@@ -190,7 +191,8 @@ func _update_needs() -> void:
 		var need_bar: ProgressBar = _needs_container.get_node_or_null("Need_" + need_type)
 		if need_bar != null:
 			# Get need value from pawn data
-			var need_value: float = _pawn_data.get(need_type) ?? 50.0
+			var nv = _pawn_data.get(need_type)
+			var need_value: float = nv if nv != null else 50.0
 			need_bar.value = need_value
 
 
@@ -203,7 +205,8 @@ func _update_thoughts() -> void:
 		child.queue_free()
 	
 	# Get thoughts from pawn data
-	var thoughts: Array = _pawn_data.get("thoughts") ?? []
+	var thoughts_raw = _pawn_data.get("thoughts")
+	var thoughts: Array = thoughts_raw if thoughts_raw != null else []
 	
 	for thought in thoughts:
 		var thought_label: Label = _modern_theme.create_styled_label("• " + str(thought), "small")
@@ -249,8 +252,10 @@ func _update_health() -> void:
 	if _health_label == null:
 		return
 	
-	var health: float = _pawn_data.get("health") ?? 100.0
-	var wounds: Array = _pawn_data.get("wounds") ?? []
+	var h = _pawn_data.get("health")
+	var health: float = h if h != null else 100.0
+	var w = _pawn_data.get("wounds")
+	var wounds: Array = w if w != null else []
 	
 	if wounds.size() > 0:
 		_health_label.text = "Wounded (%d wounds)" % wounds.size()

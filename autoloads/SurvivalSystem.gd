@@ -133,9 +133,9 @@ func _decay_hunger(data: RefCounted, work_mult: float) -> void:
 	
 	# Traits can affect hunger decay
 	if data.has("traits"):
-		for trait in data.traits:
-			if trait.has("hunger_decay_mult"):
-				decay *= trait.hunger_decay_mult
+		for tr in data.traits:
+			if tr.has("hunger_decay_mult"):
+				decay *= tr.hunger_decay_mult
 	
 	data.hunger = maxf(0.0, data.hunger - decay)
 	

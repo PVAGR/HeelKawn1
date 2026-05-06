@@ -2518,91 +2518,91 @@ func _tick_idle() -> void:
 					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
 						meaning_bias += 1  # knowledge exchange at crossroads
 				"faded_gathering_place":
-					meaning_bias += 1  # faint echo of community
+				meaning_bias += 1  # faint echo of community
 			# New meaning pipeline tags: craft, authority, trade, conflict, legacy, culture
 			"craftsman_quarter":
-					meaning_bias += 2  # work where craft lives
-					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR:
-						meaning_bias += 2  # build in craft district
+				meaning_bias += 2  # work where craft lives
+				if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR:
+					meaning_bias += 2  # build in craft district
 			"industrial":
-					meaning_bias += 1  # mild work preference
+				meaning_bias += 1  # mild work preference
 			"forge_echo":
-					meaning_bias += 2  # work where forging is customary
+				meaning_bias += 2  # work where forging is customary
 			"faded_forge_echo":
-					meaning_bias += 1
+				meaning_bias += 1
 			"governed":
-					meaning_bias += 1  # stability attracts work
+				meaning_bias += 1  # stability attracts work
 			"seat_of_power":
-					meaning_bias += 2  # authority center
-					if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
-						meaning_bias += 2  # defend the seat of power
+				meaning_bias += 2  # authority center
+				if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
+					meaning_bias += 2  # defend the seat of power
 			"trading_post":
-					meaning_bias += 1  # trade attracts foragers
-					if j.type == _Job.Type.FORAGE:
-						meaning_bias += 2
+				meaning_bias += 1  # trade attracts foragers
+				if j.type == _Job.Type.FORAGE:
+					meaning_bias += 2
 			"merchant_quarter":
-					meaning_bias += 2  # strong trade center
+				meaning_bias += 2  # strong trade center
 			"market_echo":
-					meaning_bias += 1  # faint market memory
+				meaning_bias += 1  # faint market memory
 			"faded_market_echo":
-					meaning_bias += 1
+				meaning_bias += 1
 			"war_torn":
-					meaning_bias -= 3  # avoid war zones
-					if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
-						meaning_bias += 3  # but warriors go where war is
+				meaning_bias -= 3  # avoid war zones
+				if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
+					meaning_bias += 3  # but warriors go where war is
 			"grudge_haunted":
-					meaning_bias -= 1  # mild unease
+				meaning_bias -= 1  # mild unease
 			"war_echo":
-					meaning_bias -= 2  # residual danger
-					if j.type == _Job.Type.DEFEND:
-						meaning_bias += 2
+				meaning_bias -= 2  # residual danger
+				if j.type == _Job.Type.DEFEND:
+					meaning_bias += 2
 			"faded_war_echo":
-					meaning_bias -= 1
+				meaning_bias -= 1
 			"dangerous_ground":
-					meaning_bias -= 2  # avoid injury places
+				meaning_bias -= 2  # avoid injury places
 			"blood_stained":
-					meaning_bias -= 1
+				meaning_bias -= 1
 			"storied":
-					meaning_bias += 1  # history attracts
+				meaning_bias += 1  # history attracts
 			"ancient_lineage":
-					meaning_bias += 2  # deep history
+				meaning_bias += 2  # deep history
 			"sacred":
-					meaning_bias += 1  # sacred places attract
-					if j.type == _Job.Type.TEACH_SKILL:
-						meaning_bias += 2  # teach at sacred sites
+				meaning_bias += 1  # sacred places attract
+				if j.type == _Job.Type.TEACH_SKILL:
+					meaning_bias += 2  # teach at sacred sites
 			"hallowed":
-					meaning_bias += 2  # deeply sacred
+				meaning_bias += 2  # deeply sacred
 			"sanctuary_echo":
-					meaning_bias += 2  # active sanctuary
+				meaning_bias += 2  # active sanctuary
 			"faded_sanctuary_echo":
-					meaning_bias += 1
+				meaning_bias += 1
 			# Myth-amplified tags
 			"old_forge":
-					meaning_bias += 1  # historic workshop
+				meaning_bias += 1  # historic workshop
 			"ancient_forge":
-					meaning_bias += 2  # legendary workshop
+				meaning_bias += 2  # legendary workshop
 			"old_throne":
-					meaning_bias += 1  # former power
+				meaning_bias += 1  # former power
 			"ancient_throne":
-					meaning_bias += 2  # mythic power
+				meaning_bias += 2  # mythic power
 			"old_battleground":
-					meaning_bias -= 2
-					if j.type == _Job.Type.DEFEND:
-						meaning_bias += 2
+				meaning_bias -= 2
+				if j.type == _Job.Type.DEFEND:
+					meaning_bias += 2
 			"ancient_battleground":
-					meaning_bias -= 3
-					if j.type == _Job.Type.DEFEND:
-						meaning_bias += 3
+				meaning_bias -= 3
+				if j.type == _Job.Type.DEFEND:
+					meaning_bias += 3
 			"old_sanctuary":
-					meaning_bias += 1
+				meaning_bias += 1
 			"ancient_sanctuary":
-					meaning_bias += 2
+				meaning_bias += 2
 			"old_market":
-					meaning_bias += 1
+				meaning_bias += 1
 			"ancient_market":
-					meaning_bias += 2
+				meaning_bias += 2
 			"world_touched":
-					meaning_bias += 1  # world events leave marks
+				meaning_bias += 1  # world events leave marks
 		base_bias += meaning_bias
 		# Player zone designation bias: jobs in designated zones get priority
 		var zone_bias: int = 0

@@ -307,9 +307,11 @@ func generate_name_for_pawn(pawn_id: int, culture: String = "common",
 		var data: Node = pawn_spawner.call("pawn_data_for_id", pawn_id)
 		if data != null:
 			if data.has_method("get_profession"):
-				circumstances.profession = data.get("profession") ?? ""
+				var prof = data.get("profession")
+				circumstances.profession = prof if prof != null else ""
 			if data.has_method("get_traits"):
-				circumstances.traits = data.get("traits") ?? []
+				var traits = data.get("traits")
+				circumstances.traits = traits if traits != null else []
 	
 	var full_name: String = generate_full_name(pawn_id, culture, gender, circumstances)
 	

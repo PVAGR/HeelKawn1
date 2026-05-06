@@ -348,7 +348,7 @@ func award_guild_xp(guild_id: int, xp: int, reason: String = "") -> void:
 	
 	# Check for level up
 	var old_level: int = guild.guild_level
-	var new_level: int = _calculate_guild_level(guild.guild_xp)
+	var new_level: int = _calculate_guild_xp(guild.guild_xp)
 	
 	if new_level > old_level:
 		guild.guild_level = new_level

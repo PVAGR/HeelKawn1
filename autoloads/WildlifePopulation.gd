@@ -71,10 +71,10 @@ func _initial_wildlife_spawn() -> void:
 		return
 	
 	# Spawn rabbits in forest biomes
-	_spawn_species_in_biome(Species.RABBIT, TileFeature.Biome.FOREST, 20)
+	_spawn_species_in_biome(Species.RABBIT, Biome.Type.FOREST, 20)
 	
 	# Spawn deer in plains biomes
-	_spawn_species_in_biome(Species.DEER, TileFeature.Biome.PLAINS, 15)
+	_spawn_species_in_biome(Species.DEER, Biome.Type.PLAINS, 15)
 	
 	if OS.is_debug_build():
 		print("[Wildlife] Initial wildlife spawned")

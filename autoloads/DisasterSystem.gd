@@ -532,7 +532,8 @@ func _is_flammable_tile(tile: Vector2i) -> bool:
 		return false
 	
 	var feature: int = _world.data.get_feature(tile.x, tile.y)
-	return feature == TileFeature.Type.WOOD_WALL or feature == TileFeature.Type.WOOD_DOOR
+	# WALL and DOOR are wooden (flammable) in early game
+	return feature == TileFeature.Type.WALL or feature == TileFeature.Type.DOOR or feature == TileFeature.Type.TREE
 
 
 func _region_center(region: int) -> Vector2i:

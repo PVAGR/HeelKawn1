@@ -103,6 +103,11 @@ func _create_trade_route(from_settlement: int, to_settlement: int, tick: int) ->
 	# Create goods based on settlement surplus
 	var goods: Dictionary = _generate_trade_goods(from_settlement)
 	
+	# Calculate total goods count
+	var goods_count: int = 0
+	for value in goods.values():
+		goods_count += int(value)
+	
 	# Create route
 	var route: Dictionary = {
 		"route_id": _next_route_id,
@@ -126,13 +131,13 @@ func _create_trade_route(from_settlement: int, to_settlement: int, tick: int) ->
 			"from": from_settlement,
 			"to": to_settlement,
 			"pawn_id": int(trader_pawn.data.id),
-			"goods_count": goods.values().sum(),
+			"goods_count": goods_count,
 			"tick": tick
 		})
-	
+
 	if OS.is_debug_build():
 		print("[TradeMemory] Created route %d: %d → %d (%d goods)" % [
-			route.route_id, from_settlement, to_settlement, goods.values().sum()
+			route.route_id, from_settlement, to_settlement, goods_count
 		])
 
 
@@ -163,18 +168,18 @@ func _generate_trade_goods(settlement_region: int) -> Dictionary:
 	
 	# Check stockpile for surplus items
 	if StockpileManager != null:
-		# Food surplus
-		var food_count: int = StockpileManager.count_item(Item.Type.BERRIES)
+		# Food surplus (use BERRY type which exists)
+		var food_count: int = StockpileManager.count_item(1)  # Item.Type.BERRY
 		if food_count > 20:
 			goods["food"] = min(TRADE_GOODS_PER_ROUTE, food_count / 2)
 		
 		# Wood surplus
-		var wood_count: int = StockpileManager.count_item(Item.Type.WOOD)
+		var wood_count: int = StockpileManager.count_item(3)  # Item.Type.WOOD
 		if wood_count > 15:
 			goods["wood"] = min(TRADE_GOODS_PER_ROUTE, wood_count / 2)
 		
 		# Stone surplus
-		var stone_count: int = StockpileManager.count_item(Item.Type.STONE)
+		var stone_count: int = StockpileManager.count_item(2)  # Item.Type.STONE
 		if stone_count > 10:
 			goods["stone"] = min(TRADE_GOODS_PER_ROUTE, stone_count / 2)
 	

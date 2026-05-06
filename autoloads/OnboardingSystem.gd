@@ -65,9 +65,12 @@ var _tooltip_label: Label = null
 @onready var _legacy_system: Node = null
 
 
+# Key state tracking for "just pressed" detection
+var _p_key_was_pressed: bool = false
+var _f10_key_was_pressed: bool = false
+
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
-	Input.ui_cancel.connect(_on_ui_cancel)
 	
 	await get_tree().process_frame
 	_main = get_node_or_null("/root/Main")
@@ -81,12 +84,33 @@ func _ready() -> void:
 func _on_game_tick(tick: int) -> void:
 	# Check tutorial triggers
 	_check_tutorial_triggers(tick)
+	
+	# Track key state for "just pressed" detection
+	var p_pressed: bool = Input.is_key_pressed(KEY_P)
+	var f10_pressed: bool = Input.is_key_pressed(KEY_F10)
+	
+	if p_pressed and not _p_key_was_pressed:
+		tutorial_state.incarnation_tried = true
+		_trigger_tutorial_step("incarnation_enter")
+	_p_key_was_pressed = p_pressed
+	
+	if f10_pressed and not _f10_key_was_pressed:
+		tutorial_state.f10_pressed = true
+		_trigger_tutorial_step("f10_press")
+	_f10_key_was_pressed = f10_pressed
 
 
 func _check_tutorial_triggers(tick: int) -> void:
 	# Track pawn clicks
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-		var mouse_pos: Vector2 = get_global_mouse_position()
+		# Get mouse position in world coordinates
+		var mouse_pos: Vector2
+		if _main != null and _main._camera != null:
+			var viewport_pos: Vector2 = _main.get_local_mouse_position()
+			mouse_pos = _main._camera.get_global_transform().affine_inverse() * viewport_pos
+		else:
+			mouse_pos = Vector2.ZERO
+		
 		# Check if clicked on pawn
 		if _main != null:
 			var clicked_pawn: Pawn = _get_pawn_at_position(mouse_pos)
@@ -101,15 +125,11 @@ func _check_tutorial_triggers(tick: int) -> void:
 		tutorial_state.speed_changed = true
 		_trigger_tutorial_step("speed_change")
 	
-	# Track F10 press
-	if Input.is_key_just_pressed(KEY_F10):
-		tutorial_state.f10_pressed = true
-		_trigger_tutorial_step("f10_press")
+	# Track incarnation (already tracked in _on_game_tick)
 	
-	# Track incarnation
-	if Input.is_key_just_pressed(KEY_P):
-		tutorial_state.incarnation_tried = true
-		_trigger_tutorial_step("incarnation_enter")
+	# Close tutorial on ESC
+	if Input.is_action_just_pressed("ui_cancel"):
+		_on_ui_cancel()
 
 
 func _get_pawn_at_position(pos: Vector2) -> Pawn:

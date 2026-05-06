@@ -18,7 +18,7 @@ var config: Dictionary = {
 	"provider": "ollama",  # "ollama", "openai", "groq", "huggingface", "mock"
 	"api_key": "",
 	"api_url": "http://localhost:11434",  # Default Ollama URL
-	"model": "phi3",  # Default Ollama model
+	"model": "qwen2.5-coder:7b",  # Default: Qwen 2.5 Coder (7B, 4.7GB) - already installed!
 	"max_tokens": DEFAULT_MAX_TOKENS,
 	"temperature": DEFAULT_TEMPERATURE,
 	"use_mock": false  # Set to true for mock responses (testing)

@@ -481,10 +481,10 @@ func get_blood_feuds() -> Array[Dictionary]:
 
 ## Process grudge closure from memorial visits
 func _process_memorial_grudge_closure(tick: int) -> void:
-	if MemorialSystem == null:
+	var ms: Node = get_node_or_null("/root/MemorialSystem")
+	if ms == null:
 		return
 	
-	var ms: Node = MemorialSystem
 	if not ms.has_method("get_memorials"):
 		return
 	
@@ -524,7 +524,7 @@ func _process_memorial_grudges(memorial: Dictionary, tick: int) -> void:
 ## Attempt grudge closure when pawn visits memorial of someone they had grudge against
 func _try_grudge_closure(pawn_id: int, deceased_id: int, memorial: Dictionary, tick: int) -> void:
 	# Check if pawn has grudge against deceased
-	var grudges: Array[Dictionary] = get_grudges_for_holder(pawn_id)
+	var grudges: Array[Dictionary] = get_grudges_held_by(pawn_id)
 	
 	for grudge in grudges:
 		if grudge.get("target_id") == deceased_id:

@@ -24,8 +24,11 @@ func _ready() -> void:
 	# Build UI
 	_build_ui()
 	
-	# Show on top
-	layer = 200
+	# Show on top (CanvasLayer)
+	var canvas: CanvasLayer = CanvasLayer.new()
+	canvas.layer = 200
+	canvas.add_child(self)
+	get_tree().root.add_child(canvas)
 	visible = true
 
 

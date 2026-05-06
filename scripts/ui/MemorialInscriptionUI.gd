@@ -64,10 +64,10 @@ func _build_inscription_display() -> void:
 		for pawn_id in associated_pawns:
 			var pawn_name: String = _get_pawn_name(pawn_id)
 			var pawn_data = _get_pawn_data(pawn_id)
-			
+
 			if pawn_data != null:
 				var profession: String = pawn_data.profession_name()
-				var age: float = pawn_data.get("age", 0.0) / 360.0
+				var age: float = pawn_data.age / 360.0
 				_inscription_text.text += "• [color=#AAAAAA]%s[/color] - %s (%.1f yrs)\n" % [pawn_name, profession, age]
 			else:
 				_inscription_text.text += "• [color=#888888]%s[/color] (departed)\n" % pawn_name

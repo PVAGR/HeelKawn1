@@ -196,11 +196,11 @@ func _get_resource_icon(resource: String) -> String:
 func _check_resources(resources: Dictionary) -> bool:
 	if _player_gathering == null:
 		return false
-	
-	var inventory: Dictionary = _player_gathering.get("player_inventory", {})
+
+	var inventory: Dictionary = _player_gathering.player_inventory if _player_gathering.has("player_inventory") else {}
 	for resource in resources:
 		var required: int = resources[resource]
-		var has: int = inventory.get(resource, 0)
+		var has: int = inventory[resource] if inventory.has(resource) else 0
 		if has < required:
 			return false
 	return true
@@ -209,9 +209,9 @@ func _check_resources(resources: Dictionary) -> bool:
 func _has_resource(resource: String, amount: int) -> bool:
 	if _player_gathering == null:
 		return false
-	
-	var inventory: Dictionary = _player_gathering.get("player_inventory", {})
-	return inventory.get(resource, 0) >= amount
+
+	var inventory: Dictionary = _player_gathering.player_inventory if _player_gathering.has("player_inventory") else {}
+	return (inventory[resource] if inventory.has(resource) else 0) >= amount
 
 
 func _update_all_buttons() -> void:

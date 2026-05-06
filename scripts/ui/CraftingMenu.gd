@@ -93,7 +93,7 @@ func _build_recipe_list() -> void:
 		var btn: Button = Button.new()
 		btn.name = recipe_key
 		btn.custom_minimum_size = Vector2(360, 60)
-		btn.text_align = Button.TEXT_ALIGN_LEFT
+		btn.text_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		btn.pressed.connect(_on_craft_pressed.bind(recipe_key))
 		btn.mouse_entered.connect(_on_recipe_hovered.bind(recipe_key))
 		_recipes_list.add_child(btn)
@@ -134,15 +134,15 @@ func _on_craft_pressed(recipe_key: String) -> void:
 func _craft_item(recipe_key: String, recipe: Dictionary) -> void:
 	# Deduct resources
 	_deduct_resources(recipe.resources)
-	
+
 	# Add crafted item to inventory
 	if _player_gathering != null:
-		var inventory: Dictionary = _player_gathering.get("player_inventory", {})
-		inventory[recipe_key] = inventory.get(recipe_key, 0) + 1
-		
+		var inventory: Dictionary = _player_gathering.player_inventory if _player_gathering.has("player_inventory") else {}
+		inventory[recipe_key] = (inventory[recipe_key] if inventory.has(recipe_key) else 0) + 1
+
 		# Refresh recipe list
 		_refresh_recipes()
-		
+
 		push_notification("Crafted %s!" % recipe.name)
 
 
@@ -154,11 +154,11 @@ func _on_recipe_hovered(recipe_key: String) -> void:
 func _check_resources(resources: Dictionary) -> bool:
 	if _player_gathering == null:
 		return false
-	
-	var inventory: Dictionary = _player_gathering.get("player_inventory", {})
+
+	var inventory: Dictionary = _player_gathering.player_inventory if _player_gathering.has("player_inventory") else {}
 	for resource in resources:
 		var required: int = resources[resource]
-		var has: int = inventory.get(resource, 0)
+		var has: int = inventory[resource] if inventory.has(resource) else 0
 		if has < required:
 			return false
 	return true
@@ -167,9 +167,9 @@ func _check_resources(resources: Dictionary) -> bool:
 func _has_resource(resource: String, amount: int) -> bool:
 	if _player_gathering == null:
 		return false
-	
-	var inventory: Dictionary = _player_gathering.get("player_inventory", {})
-	return inventory.get(resource, 0) >= amount
+
+	var inventory: Dictionary = _player_gathering.player_inventory if _player_gathering.has("player_inventory") else {}
+	return (inventory[resource] if inventory.has(resource) else 0) >= amount
 
 
 func _format_resources(resources: Dictionary) -> String:

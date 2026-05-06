@@ -334,10 +334,10 @@ func get_notorious_report() -> Array[Dictionary]:
 
 ## Gossip spreads faster at commemoration gatherings (memorial sites)
 func _process_memorial_gossip_spread(tick: int) -> void:
-	if MemorialSystem == null:
+	var ms: Node = get_node_or_null("/root/MemorialSystem")
+	if ms == null:
 		return
 	
-	var ms: Node = MemorialSystem
 	if not ms.has_method("get_memorials"):
 		return
 	
@@ -392,13 +392,31 @@ func _share_gossip_between(pawn_a: int, pawn_b: int, tick: int) -> void:
 	var a_gossip: Array = gossip_a.get_stored_gossip()
 	if not a_gossip.is_empty():
 		var random_gossip: Dictionary = a_gossip[randi() % a_gossip.size()]
-		gossip_b.receive_gossip(random_gossip, tick)
+		gossip_b.receive_gossip(
+			random_gossip.get("content", ""),
+			pawn_a,
+			random_gossip.get("original_source", pawn_a),
+			random_gossip.get("accuracy", 0.8),
+			1.0,  # trust_strength
+			random_gossip.get("hot", false),
+			random_gossip.get("importance", 0.5),
+			random_gossip.get("type", "general")
+		)
 	
 	# Share from B to A
 	var b_gossip: Array = gossip_b.get_stored_gossip()
 	if not b_gossip.is_empty():
 		var random_gossip: Dictionary = b_gossip[randi() % b_gossip.size()]
-		gossip_a.receive_gossip(random_gossip, tick)
+		gossip_a.receive_gossip(
+			random_gossip.get("content", ""),
+			pawn_b,
+			random_gossip.get("original_source", pawn_b),
+			random_gossip.get("accuracy", 0.8),
+			1.0,  # trust_strength
+			random_gossip.get("hot", false),
+			random_gossip.get("importance", 0.5),
+			random_gossip.get("type", "general")
+		)
 
 
 ## Debug: clear all gossip (for testing)

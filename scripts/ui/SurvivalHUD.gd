@@ -61,7 +61,11 @@ func _update_display() -> void:
 		thirst_bar.modulate = _get_bar_color(data.thirst)
 	
 	if data.has("rest") or data.has("energy"):
-		var energy: float = data.get("energy", data.get("rest", 100.0))
+		var energy: float = 100.0
+		if data.has("energy"):
+			energy = data.energy
+		elif data.has("rest"):
+			energy = data.rest
 		energy_bar.value = energy
 		energy_bar.modulate = _get_bar_color(energy)
 	

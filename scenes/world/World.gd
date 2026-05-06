@@ -260,8 +260,22 @@ func _apply_age_tint(c: Color) -> Color:
 ## Land uses `recovery_stage` (0..scar_level); ruins use `scar_level` so they never "heal" visually in v1.
 ## Does not change biome or walkability; visual only.
 func _apply_scar_visual_to_color(c: Color, x: int, y: int, use_max_scar: bool) -> Color:
-	var rk: int = WorldMemory._region_key(x, y)
-	var p: Dictionary = WorldPersistence.get_region_persistence(rk)
+	# Calculate region key - handle case where singletons aren't ready yet
+	var rk: int
+	if WorldMemory != null:
+		rk = WorldMemory._region_key(x, y)
+	else:
+		# Fallback calculation: region key from tile coordinates (16x16 tiles per region)
+		var rx: int = int(x) >> 4
+		var ry: int = int(y) >> 4
+		rk = (rx & 0xFFFF) | ((ry & 0xFFFF) << 16)
+	
+	var p: Dictionary
+	if WorldPersistence != null:
+		p = WorldPersistence.get_region_persistence(rk)
+	else:
+		p = {}  # Empty dictionary as fallback
+		
 	var sl: int = int(p.get("scar_level", 0))
 	var tier: int
 	if use_max_scar:

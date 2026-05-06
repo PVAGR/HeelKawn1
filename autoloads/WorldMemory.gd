@@ -2008,69 +2008,70 @@ func _on_event_appended(e: Dictionary) -> void:
 
 ## MEMORIAL SYSTEM: Create memorials from world events
 func _create_memorials_from_event(e: Dictionary) -> void:
-    if MemorialSystem == null:
-        return
-    
-    var typ: String = str(e.get("type", "")).to_lower()
-    
-    match typ:
-        "pawn_death":
-            var pawn_id: int = int(e.get("pawn_id", -1))
-            var tile: Variant = e.get("tile", e.get("position", Vector2i.ZERO))
-            var violent: bool = e.get("violent", false) or e.get("cause", "") in ["killed", "battle", "murder"]
-            
-            if pawn_id >= 0:
-                var ps: Node = get_node_or_null("/root/PawnSpawner")
-                if ps != null and ps.has_method("pawn_data_for_id"):
-                    var pawn_data: PawnData = ps.call("pawn_data_for_id", pawn_id)
-                    if pawn_data != null:
-                        MemorialSystem.create_death_memorial(pawn_data, tile, violent)
-        
-        "battle", "war_battle", "conflict_event":
-            var casualties: int = int(e.get("casualties", 0))
-            var tile: Variant = e.get("tile", e.get("position", Vector2i.ZERO))
-            var participants: Array = e.get("participants", [])
-            
-            # Create mass memorial for battles with 3+ casualties
-            if casualties >= 3:
-                var ps: Node = get_node_or_null("/root/PawnSpawner")
-                var deceased_pawns: Array[Node] = []
-                
-                # Find deceased pawns from battle
-                for participant_id in participants:
-                    if ps != null and ps.has_method("pawn_data_for_id"):
-                        var pawn_data: PawnData = ps.call("pawn_data_for_id", int(participant_id))
-                        if pawn_data != null and pawn_data.health <= 0:
-                            deceased_pawns.append(pawn_data)
-                
-                if deceased_pawns.size() > 0:
-                    var event_name: String = e.get("name", "Battle")
-                    var event_desc: String = e.get("description", "Here %d fell in battle" % casualties)
-                    MemorialSystem.create_mass_memorial(tile, deceased_pawns, event_name, event_desc)
-        
-        "settlement_founded":
-            var tile: Variant = e.get("tile", e.get("position", Vector2i.ZERO))
-            var settlement_name: String = e.get("settlement_name", "Unknown Settlement")
-            
-            MemorialSystem.create_memorial({
-                "tile": tile,
-                "type": "founding_stone",
-                "inscription": "Here %s was founded\nYear %d" % [settlement_name, int(e.get("tick", 0)) / 3600],
-                "built_by": "auto"
-            })
-        
-        "disaster_event", "fire_started", "flood_event":
-            var tile: Variant = e.get("tile", e.get("position", Vector2i.ZERO))
-            var casualties: int = int(e.get("casualties", 0))
-            
-            if casualties > 0:
-                var disaster_name: String = e.get("name", "Disaster")
-                var disaster_desc: String = e.get("description", "Here %d perished" % casualties)
-                MemorialSystem.create_memorial({
-                    "tile": tile,
-                    "type": "ruin_marker",
-                    "inscription": "%s\n%d perished here" % [disaster_name, casualties],
-                    "built_by": "auto"
-                })
+	var ms: Node = get_node_or_null("/root/MemorialSystem")
+	if ms == null:
+		return
+	
+	var typ: String = str(e.get("type", "")).to_lower()
+	
+	match typ:
+		"pawn_death":
+			var pawn_id: int = int(e.get("pawn_id", -1))
+			var tile: Variant = e.get("tile", e.get("position", Vector2i.ZERO))
+			var violent: bool = e.get("violent", false) or e.get("cause", "") in ["killed", "battle", "murder"]
+			
+			if pawn_id >= 0:
+				var ps: Node = get_node_or_null("/root/PawnSpawner")
+				if ps != null and ps.has_method("pawn_data_for_id"):
+					var pawn_data = ps.call("pawn_data_for_id", pawn_id)
+					if pawn_data != null:
+						ms.call("create_death_memorial", pawn_data, tile, violent)
+		
+		"battle", "war_battle", "conflict_event":
+			var casualties: int = int(e.get("casualties", 0))
+			var tile: Variant = e.get("tile", e.get("position", Vector2i.ZERO))
+			var participants: Array = e.get("participants", [])
+			
+			# Create mass memorial for battles with 3+ casualties
+			if casualties >= 3:
+				var ps: Node = get_node_or_null("/root/PawnSpawner")
+				var deceased_pawns: Array = []
+				
+				# Find deceased pawns from battle
+				for participant_id in participants:
+					if ps != null and ps.has_method("pawn_data_for_id"):
+						var pawn_data = ps.call("pawn_data_for_id", int(participant_id))
+						if pawn_data != null and pawn_data.get("health", 100) <= 0:
+							deceased_pawns.append(pawn_data)
+				
+				if deceased_pawns.size() > 0:
+					var event_name: String = e.get("name", "Battle")
+					var event_desc: String = e.get("description", "Here %d fell in battle" % casualties)
+					ms.call("create_mass_memorial", tile, deceased_pawns, event_name, event_desc)
+		
+		"settlement_founded":
+			var tile: Variant = e.get("tile", e.get("position", Vector2i.ZERO))
+			var settlement_name: String = e.get("settlement_name", "Unknown Settlement")
+			
+			ms.call("create_memorial", {
+				"tile": tile,
+				"type": "founding_stone",
+				"inscription": "Here %s was founded\nYear %d" % [settlement_name, int(e.get("tick", 0)) / 3600],
+				"built_by": "auto"
+			})
+		
+		"disaster_event", "fire_started", "flood_event":
+			var tile: Variant = e.get("tile", e.get("position", Vector2i.ZERO))
+			var casualties: int = int(e.get("casualties", 0))
+			
+			if casualties > 0:
+				var disaster_name: String = e.get("name", "Disaster")
+				var disaster_desc: String = e.get("description", "Here %d perished" % casualties)
+				ms.call("create_memorial", {
+					"tile": tile,
+					"type": "ruin_marker",
+					"inscription": "%s\n%d perished here" % [disaster_name, casualties],
+					"built_by": "auto"
+				})
 
 

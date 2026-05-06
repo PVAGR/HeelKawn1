@@ -1,259 +1,332 @@
 extends Node
-## v1: Derived (not saved) — recurring trade pairs, soft supplier/dependent roles, route tiers on tiles.
-## Updated on [JobManager.job_completed] for [Job.Type.TRADE_HAUL] only; no per-tick work.
+## TradeMemory - Inter-settlement trade route tracking
+## 
+## Tracks:
+## - Active trade routes between settlements
+## - Caravan positions and progress
+## - Goods exchanged
+## - Trade-based knowledge spread
 
-const ROUTE_T1: int = 3
-const ROUTE_T2: int = 8
-const TIER_NONE: int = 0
-const TIER_ROUTE_1: int = 1
-const TIER_ROUTE_2: int = 2
-const PATH_W_T2: float = 0.94
+# Trade route data structure
+## {
+##   "route_id": int,
+##   "from_settlement": int,  # center_region
+##   "to_settlement": int,
+##   "caravan_pawn_id": int,
+##   "goods": Dictionary,  # {item_type: quantity}
+##   "progress": float,  # 0.0 to 1.0
+##   "status": String,  # "en_route", "delivered", "returning"
+##   "created_tick": int,
+##   "last_updated_tick": int
+## }
+var trade_routes: Array[Dictionary] = []
+var _next_route_id: int = 1
 
-## Role: [ROLE_BALANCED] if within one of parity; [ROLE_SUPPLIER] if exports run ahead; [ROLE_DEPENDENT] if imports do.
-const ROLE_BALANCED: int = 0
-const ROLE_SUPPLIER: int = 1
-const ROLE_DEPENDENT: int = 2
-const ROLE_GAP: int = 2
+# Trade statistics for diagnostics
+var stats: Dictionary = {
+	"total_routes": 0,
+	"active_routes": 0,
+	"completed_routes": 0,
+	"total_goods_traded": 0,
+	"knowledge_spread_count": 0
+}
 
-## pair_key (u64) -> completed trade count
-var _pair_count: Dictionary = {}
-## pair_key -> last GameManager tick when a trade completed
-var _pair_last_tick: Dictionary = {}
-## center_region -> total completed exports / imports
-var _exports: Dictionary = {}
-var _imports: Dictionary = {}
-## per tile: 0 none, 1 T1, 2 T2 (T2 overwrites T1 on same tile)
-var _route_tier: PackedInt32Array = PackedInt32Array()
-## Last [GameManager] tick a T2 trade-route tile was present (set by [update_t2_collapse_cursor]).
-var _last_tick_t2_existed: int = -1
-
-var _ready_connected: bool = false
+# Configuration
+const TRADE_ROUTE_CHECK_INTERVAL: int = 1000  # Check for new routes every 1000 ticks
+const TRADE_ROUTE_DURATION_TICKS: int = 5000  # How long a route takes
+const TRADE_GOODS_PER_ROUTE: int = 10  # Base goods per caravan
+const MAX_TRADE_ROUTES_PER_SETTLEMENT: int = 3  # Limit concurrent routes
 
 
 func _ready() -> void:
-	_ensure_route_buffer()
-	if not _ready_connected:
-		_ready_connected = true
-		JobManager.job_completed.connect(_on_job_completed)
+	GameManager.game_tick.connect(_on_game_tick)
 
 
-func _ensure_route_buffer() -> void:
-	if _route_tier.size() == WorldData.TILE_COUNT:
+func _on_game_tick(tick: int) -> void:
+	# Check for new trade routes periodically
+	if tick % TRADE_ROUTE_CHECK_INTERVAL == 0:
+		_try_create_trade_routes(tick)
+	
+	# Update existing routes
+	_update_trade_routes(tick)
+	
+	# Update stats
+	_update_stats()
+
+
+func _try_create_trade_routes(tick: int) -> void:
+	if SettlementMemory == null or SettlementMemory.settlements.is_empty():
 		return
-	_route_tier.resize(WorldData.TILE_COUNT)
-	for i0 in range(WorldData.TILE_COUNT):
-		_route_tier[i0] = 0
-
-
-## Clear on world reroll; routes and counters are re-derived only from new play.
-func clear() -> void:
-	_pair_count.clear()
-	_pair_last_tick.clear()
-	_exports.clear()
-	_imports.clear()
-	_ensure_route_buffer()
-	for i1 in range(WorldData.TILE_COUNT):
-		_route_tier[i1] = 0
-	_last_tick_t2_existed = -1
-
-
-static func pair_key_for_centers(c_a: int, c_b: int) -> int:
-	var lo: int = mini(c_a, c_b)
-	var hi: int = maxi(c_a, c_b)
-	# Two 32-bit region keys combined (center_region is a packed u32 key).
-	return (lo & 0xFFFFFFFF) | ((hi & 0xFFFFFFFF) << 32)
-
-
-func get_route_tier_at(x: int, y: int) -> int:
-	if x < 0 or y < 0 or x >= WorldData.WIDTH or y >= WorldData.HEIGHT:
-		return TIER_NONE
-	_ensure_route_buffer()
-	return int(_route_tier[y * WorldData.WIDTH + x])
-
-
-## Extra path multiplier after [RoadMemory] and with scar/myth; T2 only (T1 is visual).
-func get_trade_path_weight_mul(x: int, y: int) -> float:
-	if get_route_tier_at(x, y) >= TIER_ROUTE_2:
-		return PATH_W_T2
-	return 1.0
-
-
-func get_exports(center_region: int) -> int:
-	return int(_exports.get(center_region, 0))
-
-
-func get_imports(center_region: int) -> int:
-	return int(_imports.get(center_region, 0))
-
-
-func get_role(center_region: int) -> int:
-	var ex: int = get_exports(center_region)
-	var im: int = get_imports(center_region)
-	if ex >= im + ROLE_GAP:
-		return ROLE_SUPPLIER
-	if im >= ex + ROLE_GAP:
-		return ROLE_DEPENDENT
-	return ROLE_BALANCED
-
-
-func get_pair_trade_count(c_a: int, c_b: int) -> int:
-	var k: int = pair_key_for_centers(c_a, c_b)
-	return int(_pair_count.get(k, 0))
-
-
-func get_last_trade_tick(c_a: int, c_b: int) -> int:
-	var k2: int = pair_key_for_centers(c_a, c_b)
-	return int(_pair_last_tick.get(k2, -1))
-
-
-func count_t2_tiles() -> int:
-	_ensure_route_buffer()
-	var n2: int = 0
-	for i2 in range(WorldData.TILE_COUNT):
-		if int(_route_tier[i2]) >= TIER_ROUTE_2:
-			n2 += 1
-	return n2
-
-
-## Route corridor tiles (T1+T2) for density classifiers.
-func count_route_tiles() -> int:
-	_ensure_route_buffer()
-	var n3: int = 0
-	for i3 in range(WorldData.TILE_COUNT):
-		if int(_route_tier[i3]) > TIER_NONE:
-			n3 += 1
-	return n3
-
-
-## Call from [AgeMemory] on its cadence so [last-t2-existed] tracks while T2 is on the map.
-func update_t2_collapse_cursor() -> void:
-	if count_t2_tiles() > 0:
-		_last_tick_t2_existed = GameManager.tick_count
-
-
-func get_last_tick_t2_existed() -> int:
-	return _last_tick_t2_existed
-
-
-func get_trade_partners(center_region: int) -> Array:
-	var rg: Node = get_node_or_null("/root/RelationalGraph")
-	if rg == null or not rg.has_method("get_edges"):
-		return []
-	var partners: Array = []
-	for e in rg.get_edges(center_region, "trade"):
-		if not (e is Dictionary):
+	
+	# Get all active settlements
+	var active_settlements: Array = []
+	for st in SettlementMemory.settlements:
+		if st is Dictionary:
+			var state: String = str(st.get("state", ""))
+			if state == "active" or state == "revivable":
+				var center: int = int(st.get("center_region", -1))
+				if center >= 0:
+					active_settlements.append(center)
+	
+	# Need at least 2 settlements for trade
+	if active_settlements.size() < 2:
+		return
+	
+	# Try to create routes between settlements
+	for i in range(active_settlements.size()):
+		var from_settlement: int = active_settlements[i]
+		
+		# Check if this settlement already has max routes
+		var existing_routes: int = _count_routes_for_settlement(from_settlement)
+		if existing_routes >= MAX_TRADE_ROUTES_PER_SETTLEMENT:
 			continue
-		var from_id: Variant = e.get("from", -1)
-		var to_id: Variant = e.get("to", -1)
-		var other: Variant = to_id if int(from_id) == center_region else from_id
-		if not partners.has(other):
-			partners.append(other)
-	return partners
+		
+		# Find a destination settlement
+		for j in range(i + 1, active_settlements.size()):
+			var to_settlement: int = active_settlements[j]
+			
+			# Check if route already exists
+			if _route_exists(from_settlement, to_settlement):
+				continue
+			
+			# Create new trade route
+			_create_trade_route(from_settlement, to_settlement, tick)
+			break  # One route per settlement per check
 
 
-func _on_job_completed(job: Job) -> void:
-	if job == null or job.type != Job.Type.TRADE_HAUL:
-		return
-	var c_from: int = _center_for_stockpile(job.trade_from)
-	var c_to: int = _center_for_stockpile(job.trade_to)
-	if c_from < 0 or c_to < 0 or c_from == c_to:
-		return
-	_record_pair_and_flow(c_from, c_to)
-	var w: World = _find_world()
-	if w == null or w.pathfinder == null or w.data == null:
-		return
-	_apply_route_thresholds(w, c_from, c_to)
-	w.refresh_trade_memory_terrain()
-	w.refresh_pawn_historic_path_weights()
-	IntentMemory.recompute(w)
+func _create_trade_route(from_settlement: int, to_settlement: int, tick: int) -> void:
+	# Find a pawn to be the trader
+	var trader_pawn: Pawn = _find_available_trader(from_settlement)
+	if trader_pawn == null:
+		return  # No available traders
+	
+	# Create goods based on settlement surplus
+	var goods: Dictionary = _generate_trade_goods(from_settlement)
+	
+	# Create route
+	var route: Dictionary = {
+		"route_id": _next_route_id,
+		"from_settlement": from_settlement,
+		"to_settlement": to_settlement,
+		"caravan_pawn_id": int(trader_pawn.data.id),
+		"goods": goods,
+		"progress": 0.0,
+		"status": "en_route",
+		"created_tick": tick,
+		"last_updated_tick": tick
+	}
+	
+	trade_routes.append(route)
+	_next_route_id += 1
+	
+	# Record trade event
+	if WorldMemory != null:
+		WorldMemory.record_event({
+			"type": "trade_route_started",
+			"from": from_settlement,
+			"to": to_settlement,
+			"pawn_id": int(trader_pawn.data.id),
+			"goods_count": goods.values().sum(),
+			"tick": tick
+		})
+	
+	if OS.is_debug_build():
+		print("[TradeMemory] Created route %d: %d → %d (%d goods)" % [
+			route.route_id, from_settlement, to_settlement, goods.values().sum()
+		])
 
 
-func _record_pair_and_flow(c_from: int, c_to: int) -> void:
-	var k: int = pair_key_for_centers(c_from, c_to)
-	_pair_count[k] = int(_pair_count.get(k, 0)) + 1
-	_pair_last_tick[k] = GameManager.tick_count
-	_exports[c_from] = int(_exports.get(c_from, 0)) + 1
-	_imports[c_to] = int(_imports.get(c_to, 0)) + 1
-
-
-func _apply_route_thresholds(w: World, c_from: int, c_to: int) -> void:
-	var k4: int = pair_key_for_centers(c_from, c_to)
-	var n: int = int(_pair_count.get(k4, 0))
-	var need_t1: bool = n >= ROUTE_T1
-	var need_t2: bool = n >= ROUTE_T2
-	if not need_t1:
-		return
-	var tier: int = TIER_ROUTE_2 if need_t2 else TIER_ROUTE_1
-	_mark_path_for_pair(w, c_from, c_to, tier)
-
-
-static func _center_for_stockpile(sp: Stockpile) -> int:
-	if sp == null or not is_instance_valid(sp):
-		return -1
-	var best: int = 0x7FFFFFFF
-	var found: bool = false
-	for s_any in SettlementMemory.get_settlements():
-		if not (s_any is Dictionary):
+func _find_available_trader(settlement_region: int) -> Pawn:
+	if _pawn_spawner == null:
+		return null
+	
+	# Find pawns in or near the settlement
+	for pawn in _pawn_spawner.pawns:
+		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue
-		var st: Dictionary = s_any as Dictionary
-		var reg: Variant = st.get("regions", null)
-		if not (reg is PackedInt32Array):
+		
+		# Check if pawn is in the settlement region
+		var pawn_region: int = _WM._region_key(pawn.data.tile_pos.x, pawn.data.tile_pos.y)
+		if pawn_region != settlement_region:
 			continue
-		if not _zone_overlaps_region_set(sp, reg as PackedInt32Array):
-			continue
-		var c: int = int(st.get("center_region", 0x7FFFFFFF))
-		if c < best:
-			best = c
-			found = true
-	if not found:
-		return -1
-	return best
+		
+		# Check if pawn is idle or has Trader profession
+		if pawn.data.current_profession == PawnData.Profession.NONE or \
+		   pawn._state == Pawn.State.IDLE:
+			return pawn
+	
+	return null
 
 
-static func _zone_overlaps_region_set(z: Stockpile, region_want: PackedInt32Array) -> bool:
-	if z == null or region_want.is_empty():
-		return false
-	var r: Rect2i = z.rect
-	for y3 in range(r.position.y, r.position.y + r.size.y):
-		for x3 in range(r.position.x, r.position.x + r.size.x):
-			var rk: int = WorldMemory._region_key(x3, y3)
-			for u2 in range(region_want.size()):
-				if int(region_want[u2]) == rk:
-					return true
+func _generate_trade_goods(settlement_region: int) -> Dictionary:
+	var goods: Dictionary = {}
+	
+	# Check stockpile for surplus items
+	if StockpileManager != null:
+		# Food surplus
+		var food_count: int = StockpileManager.count_item(Item.Type.BERRIES)
+		if food_count > 20:
+			goods["food"] = min(TRADE_GOODS_PER_ROUTE, food_count / 2)
+		
+		# Wood surplus
+		var wood_count: int = StockpileManager.count_item(Item.Type.WOOD)
+		if wood_count > 15:
+			goods["wood"] = min(TRADE_GOODS_PER_ROUTE, wood_count / 2)
+		
+		# Stone surplus
+		var stone_count: int = StockpileManager.count_item(Item.Type.STONE)
+		if stone_count > 10:
+			goods["stone"] = min(TRADE_GOODS_PER_ROUTE, stone_count / 2)
+	
+	# Default goods if no surplus
+	if goods.is_empty():
+		goods["misc"] = TRADE_GOODS_PER_ROUTE
+	
+	return goods
+
+
+func _update_trade_routes(tick: int) -> void:
+	for i in range(trade_routes.size() - 1, -1, -1):
+		var route: Dictionary = trade_routes[i]
+		
+		if route.status != "en_route":
+			continue
+		
+		# Update progress
+		var elapsed: int = tick - route.last_updated_tick
+		var progress_increment: float = float(elapsed) / float(TRADE_ROUTE_DURATION_TICKS)
+		route.progress += progress_increment
+		route.last_updated_tick = tick
+		
+		# Check if route is complete
+		if route.progress >= 1.0:
+			_complete_trade_route(i, tick)
+
+
+func _complete_trade_route(route_index: int, tick: int) -> void:
+	var route: Dictionary = trade_routes[route_index]
+	route.status = "delivered"
+	
+	# Spread knowledge from origin to destination
+	_spread_knowledge(route.from_settlement, route.to_settlement, route.goods)
+	
+	# Record completion event
+	if WorldMemory != null:
+		WorldMemory.record_event({
+			"type": "trade_route_completed",
+			"from": route.from_settlement,
+			"to": route.to_settlement,
+			"goods_count": route.goods.values().sum(),
+			"tick": tick
+		})
+	
+	if OS.is_debug_build():
+		print("[TradeMemory] Route %d completed: %d → %d" % [
+			route.route_id, route.from_settlement, route.to_settlement
+		])
+	
+	# Remove route after completion (could keep for history)
+	trade_routes.remove_at(route_index)
+
+
+func _spread_knowledge(from_region: int, to_region: int, goods: Dictionary) -> void:
+	if KnowledgeSystem == null:
+		return
+	
+	# Trade spreads knowledge types based on goods traded
+	var knowledge_types: Array = []
+	
+	if goods.has("food") or goods.has("misc"):
+		knowledge_types.append(KnowledgeSystem.KnowledgeType.FOOD_STORAGE)
+	
+	if goods.has("wood") or goods.has("stone"):
+		knowledge_types.append(KnowledgeSystem.KnowledgeType.TOOL_MAKING)
+	
+	# Add knowledge to destination settlement
+	for kt in knowledge_types:
+		# Find pawns in destination settlement
+		var pawns: Array = _get_pawns_in_region(to_region)
+		for pawn in pawns:
+			if pawn != null and is_instance_valid(pawn) and pawn.data != null:
+				if not KnowledgeSystem.has_knowledge(int(pawn.data.id), kt):
+					KnowledgeSystem.add_knowledge_carrier(int(pawn.data.id), kt)
+	
+	stats.knowledge_spread_count += knowledge_types.size()
+	
+	if OS.is_debug_build() and not knowledge_types.is_empty():
+		print("[TradeMemory] Spread %d knowledge types from region %d to %d" % [
+			knowledge_types.size(), from_region, to_region
+		])
+
+
+func _get_pawns_in_region(region: int) -> Array:
+	var pawns: Array = []
+	if _pawn_spawner == null:
+		return pawns
+	
+	for pawn in _pawn_spawner.pawns:
+		if pawn == null or not is_instance_valid(pawn):
+			continue
+		
+		var pawn_region: int = _WM._region_key(pawn.data.tile_pos.x, pawn.data.tile_pos.y)
+		if pawn_region == region:
+			pawns.append(pawn)
+	
+	return pawns
+
+
+func _route_exists(from: int, to: int) -> bool:
+	for route in trade_routes:
+		if (route.from_settlement == from and route.to_settlement == to) or \
+		   (route.from_settlement == to and route.to_settlement == from):
+			return true
 	return false
 
 
-func _mark_path_for_pair(w: World, c_a: int, c_b: int, tier: int) -> void:
-	var start: Vector2i = SettlementPlanner._center_tile_of_region_key(c_a)
-	var goal: Vector2i = SettlementPlanner._center_tile_of_region_key(c_b)
-	if not w.data.in_bounds(start.x, start.y) or not w.data.in_bounds(goal.x, goal.y):
-		return
-	# Geometric path for stable route paint (not historic-weighted; tile set is the same "corridor" aim).
-	var steps: Array[Vector2i] = w.pathfinder.find_path(start, goal)
-	if steps.is_empty():
-		return
-	# [steps] is every passable step after [start] through [goal] (see [PathFinder.find_path]).
-	_ensure_route_buffer()
-	_paint_tier_at(start, tier)
-	for st in steps:
-		_paint_tier_at(st, tier)
+func _count_routes_for_settlement(settlement: int) -> int:
+	var count: int = 0
+	for route in trade_routes:
+		if route.from_settlement == settlement or route.to_settlement == settlement:
+			count += 1
+	return count
 
 
-func _paint_tier_at(t: Vector2i, tier: int) -> void:
-	if t.x < 0 or t.y < 0 or t.x >= WorldData.WIDTH or t.y >= WorldData.HEIGHT:
-		return
-	var i2: int = t.y * WorldData.WIDTH + t.x
-	var cur5: int = int(_route_tier[i2])
-	_route_tier[i2] = maxi(cur5, tier)
-	if int(_route_tier[i2]) >= TIER_ROUTE_2 and cur5 < TIER_ROUTE_2:
-		RemnantMemory.on_t2_painted(t.x, t.y)
+func _update_stats() -> void:
+	stats.total_routes = trade_routes.size()
+	stats.active_routes = 0
+	for route in trade_routes:
+		if route.status == "en_route":
+			stats.active_routes += 1
 
 
-func _find_world() -> World:
-	var tree: SceneTree = Engine.get_main_loop() as SceneTree
-	if tree == null or tree.root == null:
-		return null
-	for n in tree.get_nodes_in_group("colony_world"):
-		if n is World:
-			return n as World
-	return null
+# ==================== Autoload References ====================
+
+@onready var _WM = get_node_or_null("/root/WorldMemory")
+@onready var _pawn_spawner: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
+
+
+# ==================== Public API ====================
+
+## Get all active trade routes
+func get_active_routes() -> Array[Dictionary]:
+	return trade_routes.filter(func(r): return r.status == "en_route")
+
+
+## Get trade statistics
+func get_stats() -> Dictionary:
+	return stats.duplicate()
+
+
+## Get goods in transit for a settlement
+func get_goods_in_transit(settlement: int) -> Dictionary:
+	var total: Dictionary = {}
+	for route in trade_routes:
+		if route.to_settlement == settlement and route.status == "en_route":
+			for item in route.goods:
+				total[item] = total.get(item, 0) + route.goods[item]
+	return total
+
+
+## Manually create a trade route (for testing)
+func debug_create_route(from: int, to: int) -> void:
+	_create_trade_route(from, to, GameManager.tick_count)

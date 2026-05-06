@@ -435,14 +435,15 @@ func _name_pool_for_convention(naming_convention: String) -> Array[String]:
 ## Assign diverse professions at spawn based on weighted random (deterministic)
 ## This ensures pawns are NOT all farmers - they're HeelKawnians with diverse roles
 func _assign_heterogeneous_profession(data: PawnData, rng: RandomNumberGenerator) -> void:
-	# Weight distribution for starter pawns - diverse community
+	# Weight distribution for starter pawns - diverse community (Phase 6: Added TRADER)
 	# Builder: 20% (housing pressure relief)
 	# Gatherer: 20% (food diversity)
 	# Warrior: 15% (defense, hunting)
 	# Scholar: 10% (knowledge, research)
-	# Farmer: 35% (food baseline)
+	# Trader: 5% (inter-settlement commerce) - NEW
+	# Farmer: 30% (food baseline)
 	var roll: float = rng.randf()
-	
+
 	if roll < 0.20:
 		data.current_profession = PawnData.Profession.BUILDER
 	elif roll < 0.40:
@@ -451,9 +452,11 @@ func _assign_heterogeneous_profession(data: PawnData, rng: RandomNumberGenerator
 		data.current_profession = PawnData.Profession.WARRIOR
 	elif roll < 0.65:
 		data.current_profession = PawnData.Profession.SCHOLAR
+	elif roll < 0.70:
+		data.current_profession = PawnData.Profession.TRADER
 	else:
 		data.current_profession = PawnData.Profession.FARMER
-	
+
 	# Grant initial skill XP based on profession (deterministic bonus)
 	# Note: Using PawnData.Skill enum values - FORAGING, MINING, CHOPPING, BUILDING, HUNTING
 	match data.current_profession:
@@ -468,6 +471,10 @@ func _assign_heterogeneous_profession(data: PawnData, rng: RandomNumberGenerator
 			# Scholars get bonus to all skills (no specific research skill exists)
 			data.add_skill_xp(PawnData.Skill.BUILDING, 30.0)
 			data.add_skill_xp(PawnData.Skill.FORAGING, 20.0)
+		PawnData.Profession.TRADER:
+			# Traders get balanced skills for versatility
+			data.add_skill_xp(PawnData.Skill.FORAGING, 30.0)
+			data.add_skill_xp(PawnData.Skill.HUNTING, 30.0)
 		PawnData.Profession.FARMER:
 			data.add_skill_xp(PawnData.Skill.FORAGING, 50.0)
 

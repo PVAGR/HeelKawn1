@@ -521,7 +521,7 @@ func _report_performance_snapshot() -> void:
 	print("--- SIMULATION STATE ---")
 	print("Total Pawns: %d" % pawn_count)
 	print("Game Speed: %.1fx" % GameManager.game_speed)
-	print("Is Paused: %s" % str(GameManager.paused))
+	print("Is Paused: %s" % str(GameManager.is_paused))
 	print("")
 	
 	# Settlement stats

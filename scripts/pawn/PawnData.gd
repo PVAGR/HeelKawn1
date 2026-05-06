@@ -1810,6 +1810,16 @@ func get_skill_level(skill: int) -> int:
 	return int(get_skill_xp(skill) / XP_PER_LEVEL)
 
 
+## PHASE 4: Get highest skill level across all skills (for event significance gating)
+func get_highest_skill_level() -> int:
+	var highest: int = 0
+	for skill_idx in range(5):  # FORAGING, MINING, CHOPPING, BUILDING, HUNTING
+		var level: int = get_skill_level(skill_idx)
+		if level > highest:
+			highest = level
+	return highest
+
+
 ## Add XP to a skill. Returns true when the level changed (so callers can log
 ## a "Brenna's mining went up to 3!" message).
 func add_skill_xp(skill: int, amount: float) -> bool:

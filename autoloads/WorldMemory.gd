@@ -444,9 +444,54 @@ func _recompute_last_pawn_death_tick_for_region(rk: int) -> void:
 
 
 ## Generic deterministic event appender for non-core typed events (e.g. player input).
+## PHASE 4: Added skill-gated probability to reduce event spam
 func record_event(e: Dictionary) -> void:
+    # PERFORMANCE: Event noise reduction - skip low-significance events
+    # Events must pass significance threshold based on pawn skill levels
+    if not _event_passes_significance_threshold(e):
+        return
+    
     var payload: Dictionary = _normalize_event_payload(e)
     _append(payload)
+
+
+## PHASE 4: Skill-gated event significance filter
+## Events are only recorded if they represent meaningful thresholds
+func _event_passes_significance_threshold(e: Dictionary) -> bool:
+    var typ: String = str(e.get("type", "")).to_lower()
+    
+    # ALWAYS record these (core kernel events)
+    var core_events: Array = ["pawn_death", "birth", "pawn_birth", "settlement_founded", 
+                              "settlement_destroyed", "settlement_revived", "settlement_abandoned",
+                              "knowledge_inscribed", "knowledge_read", "teaching_event", "skill_taught"]
+    if core_events.has(typ):
+        return true
+    
+    # Work events: only record if pawn has skill level >= 5 (mastery threshold)
+    if typ == "work_event" or typ == "job_completed":
+        var pawn_id: int = int(e.get("pawn_id", -1))
+        if pawn_id >= 0:
+            var ps: Node = get_node_or_null("/root/PawnSpawner")
+            if ps != null and ps.has_method("pawn_data_for_id"):
+                var pawn_data: PawnData = ps.call("pawn_data_for_id", pawn_id)
+                if pawn_data != null:
+                    # Only record work events for skilled pawns (level 5+)
+                    var highest_skill: int = pawn_data.get_highest_skill_level()
+                    return highest_skill >= 5
+        # If we can't find pawn data, allow the event (defensive)
+        return true
+    
+    # Building events: always record (visible infrastructure changes)
+    if typ.begins_with("building_"):
+        return true
+    
+    # Social events: only record milestone situations (severity >= 2)
+    if typ.begins_with("social_"):
+        var severity: int = int(e.get("severity", 0))
+        return severity >= 2
+    
+    # Default: allow through (don't break existing systems)
+    return true
 
 
 func _normalize_event_payload(e: Dictionary) -> Dictionary:

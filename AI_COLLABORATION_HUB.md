@@ -7,6 +7,18 @@ This is the central coordination point for all AI assistants working on HeelKawn
 > **Philosophy:** HeelKawn is a living simulation that outlives any single developer or AI session. Continuity, transparency, and collective intelligence make it great.
 
 ---
+## OPENCLAW Coordination (Inter-AI Sync)
+
+Status: Awaiting cross-track inputs from all active tracks. We will synthesize responses and propose a consolidated path before the next execution cycle.
+
+- TRACK 1 UI: Please share any blocking UI issues observed during runtime tests and any UI-001/UI-002/UI-003 readiness gaps.
+- TRACK 2 Performance: Provide current bottlenecks, hot paths, and a plan to stabilize 60+ FPS at 1x across scenes.
+- TRACK 3 World Richness: Propose seed-driven event types you want exercised first and how they should feed WorldMemory/WorldMeaning.
+- TRACK 4 Polish: Identify any edge-case polish items that affect stability (grudges, gossip, momentum) and coupling risks.
+- TRACK 5 Building: Outline minimal scaffolds to test building placement UI without breaking memory/state.
+- TRACK 6 Knowledge: Suggest any cross-track knowledge flows that could impact seeds or memory.
+
+When a track responds, we will summarize the inputs here and align on next steps as a single plan.
 
 ## 📖 How This Works
 
@@ -30,9 +42,45 @@ This is the central coordination point for all AI assistants working on HeelKawn
 
 **ON SESSION END:**
 1. Complete `AI_SESSIONS/current.md` with full details + innovations proposed
-2. Move to `AI_SESSIONS/archive/` with timestamp filename
-3. Update this hub's status section + innovation announcements
-4. Leave handoff note in "Messages Between Sessions"
+2. **DO NOT DELETE YOUR WORK** — Session reports are PERMANENT for other AIs to read
+3. Move to `AI_SESSIONS/archive/` with timestamp filename (if archiving)
+4. Update this hub's status section + innovation announcements
+5. Leave handoff note in "Messages Between Sessions"
+
+### ⚠️ CRITICAL RULE: PERMANENT RECORDS
+
+**All AI session reports are PERMANENT — NEVER DELETE:**
+- Once you write to `AI_SESSIONS/current.md`, it stays forever
+- Other AIs read these to understand what was built, why, and how
+- Never delete, overwrite, or truncate session reports
+- When starting a new session, APPEND your section below existing content
+- If you must update, ADD to existing content, never remove
+
+**Why This Matters:**
+- Future AIs scan these files to understand the full collaboration history
+- Deleting breaks continuity — next AI won't know what was tried/why
+- Permanent records enable async collaboration across timezones/sessions
+- This is how OpenClaw-style teams coordinate without talking directly
+
+**Example:**
+```markdown
+# 📝 AI Session Report - Current
+
+**Session Date:** May 6, 2026  
+**AI Agent:** Qwen Code
+
+## ✅ My Work This Session
+[Your content here - PERMANENT]
+
+---
+
+## Previous AI Work (For Context)
+**From: Leta Code - May 5, 2026**
+[Their work stays here - DO NOT DELETE]
+
+**From: Qwen Code - May 4, 2026**
+[Their work also stays - ALL OF IT PERMANENT]
+```
 
 ### For Humans (Project Owner)
 
@@ -57,6 +105,20 @@ This is the central coordination point for all AI assistants working on HeelKawn
 **Why:** Human stays informed without reading everything. Full context lives in these files for AI continuity.
 
 **Current Rule:** Every AI introduces themselves to the human and confirms they understand this protocol.
+
+---
+## OPENCLAW Coordination (Inter-AI Sync)
+
+Status: Awaiting cross-track inputs from all active tracks. We will synthesize responses and propose a consolidated path before the next execution cycle.
+
+- TRACK 1 UI: Please share any blocking UI issues observed during runtime tests and any UI-001/UI-002/UI-003 readiness gaps.
+- TRACK 2 Performance: Provide current bottlenecks, hot paths, and a plan to stabilize 60+ FPS at 1x across scenes.
+- TRACK 3 World Richness: Propose seed-driven event types you want exercised first and how they should feed WorldMemory/WorldMeaning.
+- TRACK 4 Polish: Identify any edge-case polish items that affect stability (grudges, gossip, momentum) and coupling risks.
+- TRACK 5 Building: Outline minimal scaffolds to test building placement UI without breaking memory/state.
+- TRACK 6 Knowledge: Suggest any cross-track knowledge flows that could impact seeds or memory.
+
+When a track responds, we will summarize the inputs here and align on next steps as a single plan.
 
 ## 🧭 Post-Action Menu (Human Input)
 After an AI completes its current action, it MUST:
@@ -129,11 +191,12 @@ AI responds: "Rescanning... I see no other AIs active. All collaboration files c
 
 | AI | Track | Working On | Status | Next |
 |----|-------|------------|--------|------|
-| Qwen | TRACK 3 | Memorial System → WorldMemory integration | ✅ COMPLETE | Awaiting human command |
-| [Leta] | TRACK 1 | [UI testing] | ⏳ Not started yet | Testing SurvivalHUD |
-| [Open] | TRACK 2 | Performance profiling | ⏳ Available | Pick this up |
-| [Open] | TRACK 4 | System polish (grudges/gossip) | ⏳ Available | Integrate with memorials |
-| [Open] | TRACK 5 | Building/Crafting UI | ⏳ Available | Pick this up |
+| Qwen | CROSS-001 | Cross-Track Integration Contract | ✅ COMPLETE — Full system map documented | Awaiting human command |
+| [You] | TRACK 1 | UI Testing | ⏳ Ready for human | Run TESTING_CHECKLIST.md |
+| [Open] | TRACK 2 | Performance Optimization | ✅ COMPLETE (SacredGeo + Pathfinding cache) | Done |
+| [Open] | TRACK 3 | World Richness (Memorial complete) | ✅ All features done + integrated | Done |
+| [Open] | TRACK 4 | System Polish (Grudges/Gossip) | ✅ COMPLETE — Memorial integration done | Done |
+| [Open] | TRACK 5 | Building/Crafting UI | ✅ COMPLETE — All player UI done | Done |
 | [Open] | TRACK 6 | Knowledge visualization | ⏳ Available | Pick this up |
 
 **How to update:** Every AI updates this table when they start/finish work. Keeps everyone in sync.

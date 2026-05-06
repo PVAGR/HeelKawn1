@@ -1,4 +1,4 @@
-[gd_scene load_steps=42 format=3 uid="uid://heelkawn_main"]
+[gd_scene load_steps=45 format=3 uid="uid://heelkawn_main"]
 
 [ext_resource type="Script" path="res://scenes/main/Main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scenes/main/BuildPreviewOverlay.gd" id="1_preview"]
@@ -11,6 +11,9 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/SurvivalHUD.tscn" id="40_survival_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/PlayerInventoryUI.tscn" id="41_inventory"]
 [ext_resource type="PackedScene" path="res://scenes/ui/PawnMoodUI.tscn" id="42_mood"]
+[ext_resource type="PackedScene" path="res://scenes/ui/MemorialInscriptionUI.tscn" id="43_memorial"]
+[ext_resource type="PackedScene" path="res://scenes/ui/BuildingToolbar.tscn" id="44_building"]
+[ext_resource type="PackedScene" path="res://scenes/ui/CraftingMenu.tscn" id="45_crafting"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ObserverHUD.tscn" id="14_observer_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/FocusInspector.tscn" id="15_focus_inspector"]
 [ext_resource type="PackedScene" path="res://scenes/ui/RegionInspector.tscn" id="18_region_inspector"]
@@ -87,6 +90,12 @@ script = ExtResource("2_cam")
 [node name="PlayerInventory" parent="UI_Viewport" instance=ExtResource("41_inventory")]
 
 [node name="PawnMoodUI" parent="UI_Viewport" instance=ExtResource("42_mood")]
+
+[node name="MemorialInscription" parent="UI_Viewport" instance=ExtResource("43_memorial")]
+
+[node name="BuildingToolbar" parent="UI_Viewport" instance=ExtResource("44_building")]
+
+[node name="CraftingMenu" parent="UI_Viewport" instance=ExtResource("45_crafting")]
 
 [node name="ObserverHUD" parent="UI_Viewport" instance=ExtResource("14_observer_hud")]
 

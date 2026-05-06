@@ -83,6 +83,13 @@ type: reference
 3. Update AI_COLLABORATION_HUB.md with handoff
 4. Update AI_TODO_QUEUE.md with completed work
 
+**CRITICAL: PERMANENT RECORDS**
+- **NEVER DELETE session reports** — All AI work in collaboration files is PERMANENT
+- Other AIs read these to understand what was built, why, and how
+- When starting new session, APPEND below existing content, never overwrite
+- Permanent records enable async collaboration across timezones/sessions
+- This is how OpenClaw-style teams coordinate without direct communication
+
 **For humans:**
 1. Review AI_SESSIONS/ to see what AI built
 2. Clear AI_BLOCKERS/ when decisions needed

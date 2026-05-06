@@ -24,7 +24,7 @@
 ## 🔴 TRACK 1: UI Integration & Testing
 
 ### [UI-001] Test All UI Components in Godot
-**Priority:** 🔴 HIGH | **Est:** 30-60 min | **Status:** ⏳ PENDING
+**Priority:** 🔴 HIGH | **Est:** 30-60 min | **Status:** 🔄 IN PROGRESS
 
 **Task:**
 1. Open Godot 4.6.2
@@ -57,8 +57,23 @@ Create UI for 9 building types with resource requirements, preview overlay, clic
 **Priority:** 🟡 MEDIUM | **Est:** 1-2 hrs | **Status:** ⏳ PENDING
 
 Tool crafting interface (Flint Knife, Pickaxe, Axe, Torch) with recipes and inventory display.
-
+ 
 ---
+
+### [CROSS-001] Cross-AI Collaboration Framework
+**Priority:** 🔴 HIGH | **Est:** 30-60 min | **Status:** 🔄 IN PROGRESS
+
+**Task:** Define channels, templates, and cadences for cross-track collaboration. Establish input/output contracts between tracks (UI, Performance, World Richness, Polish, Building, Knowledge) and a shared cadence for updates. Provide an example collaboration flow (UI-001 + WORLD-001) to surface edge cases and data dependencies.
+
+**Files to Modify/Reference:**
+- AI_COLLABORATION_HUB.md (add cross-track coordination block)
+- AI_SESSIONS/current.md (append cross-track plan and progress)
+- AI_TODO_QUEUE.md (log CROSS-001 with status)
+
+**Acceptance Criteria:**
+- [ ] Collaboration contract skeleton defined in HUB
+- [ ] Example cross-track flow documented
+- [ ] Cadence documented and agreed by tracks
 
 ## 🔴 TRACK 2: Performance Optimization
 

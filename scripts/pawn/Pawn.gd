@@ -354,6 +354,11 @@ var _cached_utility_food_emergency: bool = false
 var _anim_t: float = 0.0
 var _draw_frame_counter: int = 0
 var _visual_frame_counter: int = 0  # PERFORMANCE: Adaptive visual update throttling
+var _last_sacred_check_tile: Vector2i = Vector2i(-9999, -9999)  # PERFORMANCE: SacredGeography tile cache
+var _cached_path: Array[Vector2i] = []  # PERFORMANCE: Pathfinding cache
+var _cached_path_target: Vector2i = Vector2i(-9999, -9999)  # PERFORMANCE: Path target cache
+var _cached_path_tick: int = -1  # PERFORMANCE: Path cache timestamp
+const PATH_CACHE_DURATION: int = 20  # PERFORMANCE: Ticks to cache path
 ## Cached enemy list — refreshed every 30 ticks to avoid per-pawn scene tree scans.
 static var _cached_enemies: Array = []
 static var _cached_enemies_tick: int = -100
@@ -804,10 +809,9 @@ func _path_for_pawn(to: Vector2i) -> Array[Vector2i]:
 		if actual_dest == to:
 			# No safe alternative found, proceed anyway
 			pass
-	
-	if GameManager.game_speed >= FAST_PATHFIND_SPEED_THRESHOLD:
-		return _world.pathfinder.find_path(data.tile_pos, actual_dest)
-	return _world.pathfinder.find_path_pawn_historic_aversion(data.tile_pos, actual_dest)
+
+	# PERFORMANCE: Use cached pathfinding
+	return _get_cached_path(data.tile_pos, actual_dest, not GameManager.game_speed >= FAST_PATHFIND_SPEED_THRESHOLD)
 
 
 ## Find a safe tile near the goal (avoiding enemies)
@@ -1218,8 +1222,8 @@ func _try_start_pilgrimage() -> bool:
 func _start_pilgrimage_to_memorial(memorial: Dictionary) -> void:
 	var target_tile: Vector2i = memorial.tile
 	
-	# Pathfind to memorial tile
-	var path = _world.pathfinder.find_path(data.tile_pos, target_tile, false)
+	# Pathfind to memorial tile (use cached pathfinding)
+	var path = _get_cached_path(data.tile_pos, target_tile, false)
 	if path.is_empty():
 		return  # No valid path
 	
@@ -1857,12 +1861,16 @@ func _process(delta: float) -> void:
 			pass
 	
 	# SACRED GEOGRAPHY: Apply reverence slowdown on sacred tiles
-	if SacredGeography != null and SacredGeography.has_method("check_sacred_tile_effect"):
-		SacredGeography.check_sacred_tile_effect(self)
-			if GameManager.verbose_logs():
-				print("[Pawn] %s read stone at (%d,%d) and gained %d knowledge types" % [
-					data.display_name, data.tile_pos.x, data.tile_pos.y, gained.size()
-				])
+	# OPTIMIZATION: Only check when pawn moves to new tile (not every frame)
+	if data.tile_pos != _last_sacred_check_tile:
+		if SacredGeography != null and SacredGeography.has_method("check_sacred_tile_effect"):
+			SacredGeography.check_sacred_tile_effect(self)
+		_last_sacred_check_tile = data.tile_pos
+	
+	if GameManager.verbose_logs():
+		print("[Pawn] %s read stone at (%d,%d) and gained %d knowledge types" % [
+			data.display_name, data.tile_pos.x, data.tile_pos.y, gained.size()
+		])
 
 	# PERFORMANCE: Adaptive redraw throttling
 	# At 1x: redraw every 5th frame
@@ -1886,6 +1894,24 @@ func _start_path(path: Array[Vector2i]) -> void:
 	_target_tile = _path[0]
 	_target_world_pos = _world.tile_to_world(_target_tile)
 	set_process(true)  # Enable per-frame movement while pathing
+
+
+## PERFORMANCE: Get cached path or compute new one
+func _get_cached_path(from: Vector2i, to: Vector2i, use_historic: bool = true) -> Array[Vector2i]:
+	# Check if we can reuse cached path
+	if to == _cached_path_target and GameManager.tick_count - _cached_path_tick < PATH_CACHE_DURATION:
+		if not _cached_path.is_empty():
+			return _cached_path
+	
+	# Need new path
+	if use_historic:
+		_cached_path = _world.pathfinder.find_path_pawn_historic_aversion(from, to)
+	else:
+		_cached_path = _world.pathfinder.find_path(from, to, false)
+	
+	_cached_path_target = to
+	_cached_path_tick = GameManager.tick_count
+	return _cached_path
 
 
 func _advance_path() -> void:

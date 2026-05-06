@@ -1,0 +1,54 @@
+[gd_scene load_steps=2 format=3 uid="uid://heelkawn_knowledge_panel"]
+
+[ext_resource type="Script" path="res://scripts/ui/KnowledgePanel.gd" id="1_knowledge_panel"]
+
+[node name="KnowledgePanel" type="PanelContainer"]
+script = ExtResource("1_knowledge_panel")
+custom_minimum_size = Vector2(450, 550)
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 450.0
+offset_bottom = 550.0
+visibility_mode = 1
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 2
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "📚 Knowledge & Teaching"
+custom_minimum_size = Vector2(430, 0)
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="SettlementLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Settlement: [Select a settlement]"
+custom_minimum_size = Vector2(430, 0)
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Content" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="CarriersSection" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ScrollContainer/Content"]
+layout_mode = 2
+
+[node name="CarriersTitle" type="Label" parent="MarginContainer/VBoxContainer/ScrollContainer/Content/CarriersSection"]
+layout_mode = 2
+text = "🎓 Knowledge Carriers"
+add_theme_font_size_override("font_size"

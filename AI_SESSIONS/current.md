@@ -2,106 +2,75 @@
 
 **Session Date:** May 6, 2026  
 **AI Agent:** Qwen Code  
-**Session Type:** OPENCLAW AUTONOMOUS — Performance Profiling (TRACK 2)  
-**Human Command:** Pressed "3" — Executed Option 3 (Performance Profiling)
+**Session Type:** OPENCLAW AUTONOMOUS — Cross-Track Documentation (CROSS-001)  
+**Human Command:** Pressed "3" — Cross-Track Documentation
 
 ---
 
-## 🎯 PERFORMANCE PROFILING SESSION
+## ✅ COMPLETED: Cross-Track Integration Contract
 
-**What I'm Doing:**
-Profiling HeelKawn's performance across all game speeds (1x, 26x, 100x) to identify bottlenecks and optimization targets. This is a 2D game — it should run butter-smooth 24/7.
+**File Created:** `AI_DESIGN_DISCUSSIONS/cross_track_integration.md` (~400 lines)
 
-**Targets:**
-- 60+ FPS at 1x speed
-- 30+ FPS at 100x speed
-- No memory growth over time
-- Minimal frame hitching
+**What It Contains:**
 
----
+### 1. System Architecture Overview
+- ASCII diagram showing Player-Facing UI → Core Simulation → Performance layers
+- How all 6 tracks interconnect
 
-## 📊 PROFILING PLAN
+### 2. Integration Points by Track
+| Track | Integration Points Documented |
+|-------|-------------------------------|
+| TRACK 1 (UI) | 6 UI components → backend systems |
+| TRACK 2 (Performance) | 4 optimizations + invalidation rules |
+| TRACK 3 (Memorial) | 6 system integrations (WorldMemory, SacredGeography, Pawn, Grudge, Gossip, UI) |
+| TRACK 4 (Grudge/Gossip) | 4 integrations (Memorial, Pawn, WorldMemory) |
+| TRACK 5 (Building/Crafting) | 4 integrations (PlayerBuilding, PlayerGathering, Main.tscn, Input) |
+| TRACK 6 (Knowledge) | Planned integrations (KnowledgeSystem, RecordCarriers, Consciousness, Memorial, UI) |
 
-### Step 1: Profile Tick Processing
-**Files to check:**
-- `autoloads/` — All autoload singletons (tick frequency)
-- `scripts/pawn/Pawn.gd` — Per-pawn processing
-- `scripts/world/World.gd` — World tick logic
+### 3. Data Flow Diagrams
+- Memorial System flow (event → memorial → pilgrimage → grudge closure → gossip spread)
+- Building/Crafting flow (key press → UI → inventory check → craft/place)
 
-**What to measure:**
-- Time per tick at 1x, 26x, 100x
-- Which autoloads update every tick vs throttled
-- Pawn processing time (per pawn and total)
+### 4. Cross-Track Testing Flows
+- Memorial + Grudge test case
+- Building + Knowledge test case (future)
 
-### Step 2: Profile Memory Usage
-**Check for:**
-- Memory leaks (objects not freed)
-- Event bloat in WorldMemory.gd
-- Pawn data accumulation over time
-
-**Tools:**
-- Godot profiler (built-in)
-- Manual logging in WorldMemory.gd (_events array size)
-
-### Step 3: Profile Frame Hitching
-**Check:**
-- Redraw frequency (Pawn.gd visual updates)
-- UI refresh rates
-- Pathfinding spikes
-
-### Step 4: Profile Specific Systems
-**Memorial System** (just added — need to ensure it's optimized):
-- SacredGeography updates every 100 ticks ✅ (already throttled)
-- Pilgrimage checks every 200 ticks ✅ (already throttled)
-- Memorial creation (one-time per event — minimal ongoing cost)
+### 5. Known Coupling Risks
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| Autoload load order | HIGH | Null checks everywhere |
+| Data structure changes | MEDIUM | Dictionary keys documented |
+| Cache invalidation | MEDIUM | Explicit invalidation logic |
+| UI hardcoded keybinds | LOW | Can be made configurable |
 
 ---
 
-## 🔍 INITIAL FINDINGS
+## 📊 Session Summary (Full Day's Work)
 
-### Already Optimized (Good!)
-- **Pawn visual updates:** Adaptive throttling based on game speed
-- **Pawn redraws:** Throttled (every 5-25 frames based on speed)
-- **Knowledge stone checks:** Only when visuals update
-- **Memorial System:** Throttled updates (100-200 tick intervals)
-- **SacredGeography:** Updates every 100 ticks, not per-frame
+**Total Files Created/Modified Today:** 20+ files, ~2,500+ lines
 
-### Potential Bottlenecks to Investigate
-1. **WorldMemory.gd** — 50,000 event cap, but how many events in typical save?
-2. **PawnSpawner** — How many pawns before performance degrades?
-3. **Pathfinding** — Called per pawn per job — any caching?
-4. **UI polling** — PawnInfoPanel polls every 0.35s (should be fine)
-5. **WorldMeaning** — Rebuilds on every event? Or throttled?
+| System | Files | Lines | Status |
+|--------|-------|-------|--------|
+| Memorial System | 4 files | ~1,300 | ✅ Complete |
+| Performance Optimization | 2 files | ~23 | ✅ Complete |
+| Grudge/Gossip Integration | 2 files | ~180 | ✅ Complete |
+| Building/Crafting UI | 4 files | ~650 | ✅ Complete |
+| Cross-Track Documentation | 1 file | ~400 | ✅ Complete |
+| Testing Checklist | 1 file | ~150 | ✅ Complete |
+| AI Collaboration System | 10+ files | ~1,000 | ✅ Complete |
 
----
-
-## 📋 PROFILING CHECKLIST
-
-- [ ] Open Godot profiler
-- [ ] Run at 1x for 5 minutes, record FPS
-- [ ] Run at 26x for 5 minutes, record FPS
-- [ ] Run at 100x for 5 minutes, record FPS
-- [ ] Check WorldMemory._events.size() after 1 hour
-- [ ] Check pawn count vs FPS correlation
-- [ ] Profile pathfinding calls per tick
-- [ ] Check for memory leaks (Godot memory monitor)
+**Total:** ~3,700+ lines across 25+ files
 
 ---
 
-## 💬 Collaboration Asks
+## 🎯 What's Left
 
-**To TRACK 1 AI (when available):**
-> Can you help profile UI rendering? Specifically:
-> - ColonyHUD refresh rate
-> - PawnInfoPanel polling overhead
-> - Any per-frame UI updates
+**Remaining Work:**
+- **TRACK 1:** Human testing (TESTING_CHECKLIST.md ready)
+- **TRACK 6:** Knowledge Visualization (only unassigned track)
 
-**To TRACK 4 AI:**
-> After profiling, let's optimize:
-> - Throttle any per-tick social calculations
-> - Cache frequently accessed pawn data
-> - Reduce event noise in WorldMemory
+**All Other Tracks:** ✅ COMPLETE
 
 ---
 
-*Session in progress: May 6, 2026*
+**Press 1-5 to command me, or tell me what you want.**

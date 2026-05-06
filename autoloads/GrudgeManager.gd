@@ -98,6 +98,10 @@ func _on_world_tick(tick_number: int) -> void:
 	# OPTIMIZATION: Decay only every 10 ticks to reduce per-tick overhead
 	if tick_number % 10 == 0:
 		_tick_grudge_decay(tick_number)
+	
+	# MEMORIAL SYSTEM: Check for grudge closure from memorial visits
+	if tick_number % 100 == 0:
+		_process_memorial_grudge_closure(tick_number)
 		_rebuild_cache_if_needed()
 
 
@@ -471,6 +475,102 @@ func get_blood_feuds() -> Array[Dictionary]:
 		if grudge["intensity"] >= INTENSITY_BLOOD_FEUD:
 			feuds.append(grudge)
 	return feuds
+
+
+# ==================== MEMORIAL SYSTEM INTEGRATION ====================
+
+## Process grudge closure from memorial visits
+func _process_memorial_grudge_closure(tick: int) -> void:
+	if MemorialSystem == null:
+		return
+	
+	var ms: Node = MemorialSystem
+	if not ms.has_method("get_memorials"):
+		return
+	
+	var memorials: Array[Dictionary] = ms.call("get_memorials")
+	for memorial in memorials:
+		_process_memorial_grudges(memorial, tick)
+
+
+## Process grudges related to a specific memorial
+func _process_memorial_grudges(memorial: Dictionary, tick: int) -> void:
+	var associated_pawns: Array = memorial.get("associated_pawns", [])
+	if associated_pawns.is_empty():
+		return
+	
+	# Check if any pawns with grudges visited this memorial
+	var memorial_tile: Vector2i = memorial.get("tile", Vector2i.ZERO)
+	
+	# Find pawns near this memorial
+	var ps: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
+	if ps == null:
+		return
+	
+	for pawn in ps.pawns:
+		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
+			continue
+		
+		var pawn_id: int = int(pawn.data.id)
+		var pawn_tile: Vector2i = pawn.data.tile_pos
+		
+		# Check if pawn is at memorial tile
+		if pawn_tile == memorial_tile:
+			# Pawn is visiting memorial — check for grudge closure
+			for associated_id in associated_pawns:
+				_try_grudge_closure(pawn_id, int(associated_id), memorial, tick)
+
+
+## Attempt grudge closure when pawn visits memorial of someone they had grudge against
+func _try_grudge_closure(pawn_id: int, deceased_id: int, memorial: Dictionary, tick: int) -> void:
+	# Check if pawn has grudge against deceased
+	var grudges: Array[Dictionary] = get_grudges_for_holder(pawn_id)
+	
+	for grudge in grudges:
+		if grudge.get("target_id") == deceased_id:
+			# Found grudge against deceased — chance for closure
+			var intensity: float = grudge.get("intensity", 0.0)
+			var memorial_type: String = memorial.get("memorial_type", "")
+			
+			# Closure chance based on memorial type and grudge intensity
+			var closure_chance: float = 0.0
+			
+			if memorial_type in ["grave_marker", "memorial_plaque"]:
+				closure_chance = 0.3  # 30% chance per visit
+			elif memorial_type == "battle_monument":
+				closure_chance = 0.2  # 20% for war dead
+			elif memorial_type == "mass_grave":
+				closure_chance = 0.15  # Harder to closure mass deaths
+			
+			# Blood feuds rarely closure
+			if intensity >= INTENSITY_BLOOD_FEUD:
+				closure_chance *= 0.1  # Only 10% of normal chance
+			
+			# Roll for closure (deterministic based on tick + pawn_id)
+			var roll: float = abs(sin(float(tick) * 0.01 + float(pawn_id) * 0.1))
+			if roll < closure_chance:
+				# Grudge closure!
+				_closure_grudge(grudge, tick)
+
+
+## Close a grudge (reduce intensity significantly)
+func _closure_grudge(grudge: Dictionary, tick: int) -> void:
+	var grudge_idx: int = _grudges.find(grudge)
+	if grudge_idx < 0:
+		return
+	
+	# Reduce intensity by 50% (closure doesn't erase, but heals)
+	grudge["intensity"] *= 0.5
+	grudge["tick_last_updated"] = tick
+	
+	# Mark cache dirty for rebuild
+	_cache_dirty = true
+	
+	# Optional: Log closure event
+	if GameManager != null and GameManager.verbose_logs():
+		print("[GrudgeManager] Pawn %d found closure at memorial — grudge intensity reduced to %.2f" % [
+			grudge.get("holder_id", -1), grudge.get("intensity", 0.0)
+		])
 
 
 ## Debug: clear all grudges (for testing)

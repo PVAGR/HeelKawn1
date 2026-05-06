@@ -152,6 +152,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "knowledge_carriers", "label": "44 · Knowledge Carriers (Phase 5 — knowledge at risk, masters)"},
 			{"id": "myth_formation", "label": "45 · Myth Formation (Phase 5 — feared/revered regions)"},
 			{"id": "record_carriers", "label": "46 · Record Carriers (Phase 5 — knowledge preservation stones)"},
+			{"id": "memorial_system", "label": "47 · Memorial System (Phase 5/6 — memorials, sacred geography, pilgrimage)"},
 			{"id": "force_building", "label": "50 · FORCE BUILDING — post 10 wall/bed/zone jobs NOW"},
 		],
 	},
@@ -400,6 +401,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_myth_formation, "myth_formation")
 		"record_carriers":
 			error_occurred = _safe_report(_report_record_carriers, "record_carriers")
+		"memorial_system":
+			error_occurred = _safe_report(_report_memorial_system, "memorial_system")
 		"force_building":
 			error_occurred = _safe_report(_force_building_now, "force_building")
 		"legacy_dynasty":
@@ -1979,6 +1982,80 @@ func _report_record_carriers() -> void:
 
 	print("")
 	print("=== END RECORD CARRIERS REPORT ===")
+
+
+# === Phase 5/6: Memorial System Report ===
+
+func _report_memorial_system() -> void:
+	print("=== HEELKAWN MEMORIAL SYSTEM (Phase 5/6: Memorials, Sacred Geography, Pilgrimage) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+
+	var ms: Node = get_node_or_null("/root/MemorialSystem")
+	var sg: Node = get_node_or_null("/root/SacredGeography")
+
+	if ms == null:
+		print("MemorialSystem not found - system not loaded")
+		return
+
+	# Memorial statistics
+	var memorials: Array[Dictionary] = ms.get_memorials() if ms.has_method("get_memorials") else []
+	var memorial_types: Dictionary = {}
+	for memorial in memorials:
+		var mtype: String = memorial.get("memorial_type", "unknown")
+		memorial_types[mtype] = memorial_types.get(mtype, 0) + 1
+
+	print("--- MEMORIAL STATISTICS ---")
+	print("Total memorials: %d" % memorials.size())
+	for mtype in memorial_types:
+		print("  %s: %d" % [mtype, memorial_types[mtype]])
+	print("")
+
+	# Sacred geography statistics
+	if sg != null and sg.has_method("get_sacred_tile_counts"):
+		var sacred_counts: Dictionary = sg.call("get_sacred_tile_counts")
+		print("--- SACRED GEOGRAPHY ---")
+		print("Remembered tiles (1-2 memorials): %d" % sacred_counts.get("remembered", 0))
+		print("Sacred tiles (3-4 memorials): %d" % sacred_counts.get("sacred", 0))
+		print("Holy Ground tiles (5+ memorials): %d" % sacred_counts.get("holy_ground", 0))
+		print("")
+
+	# Show recent memorials
+	print("--- RECENT MEMORIALS ---")
+	if memorials.is_empty():
+		print("  (No memorials created yet)")
+	else:
+		var shown: int = 0
+		for memorial in memorials:
+			if shown >= 10:
+				print("  ... and %d more" % (memorials.size() - shown))
+				break
+
+			var mtype: String = memorial.get("memorial_type", "unknown")
+			var tile: Vector2i = memorial.get("tile", Vector2i.ZERO)
+			var created_tick: int = memorial.get("created_tick", 0)
+			var ticks_ago: int = GameManager.tick_count - created_tick
+			var associated_pawns: Array = memorial.get("associated_pawns", [])
+
+			print("  %s at (%d, %d)" % [mtype, tile.x, tile.y])
+			print("    Created %d ticks ago" % ticks_ago)
+			print("    Associated pawns: %d" % associated_pawns.size())
+			if associated_pawns.size() > 0:
+				for pawn_id in associated_pawns:
+					print("      - Pawn #%d" % pawn_id)
+			print("")
+			shown += 1
+
+	# Pilgrimage activity
+	print("--- PILGRIMAGE ACTIVITY ---")
+	var total_crossings: int = 0
+	if sg != null and sg.has_method("get_total_crossings"):
+		total_crossings = sg.call("get_total_crossings")
+	print("Total sacred tile crossings: %d" % total_crossings)
+	print("")
+
+	print("=== END MEMORIAL SYSTEM REPORT ===")
 
 
 # === BUILDING FORCES ===

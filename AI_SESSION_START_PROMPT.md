@@ -136,6 +136,15 @@ If you have an idea that doesn't fit existing tracks:
 
 ### 1. Update Collaboration Files
 
+**CRITICAL RULE: NEVER DELETE OR OVERWRITE SESSION UPDATES**
+
+**All AI session reports are PERMANENT records for collaboration:**
+- Once you write to `AI_SESSIONS/current.md`, it stays forever
+- Other AIs read these to understand what was built, why, and how
+- Never delete, overwrite, or truncate session reports
+- When starting a new session, create a NEW section with your AI name + date
+- If you must update, ADD to existing content, never remove
+
 **In AI_COLLABORATION_HUB.md, update the Active AI Status table:**
 ```markdown
 ### 🟢 AI Status Updates
@@ -150,6 +159,29 @@ If you have an idea that doesn't fit existing tracks:
 - Log progress with your AI name as section header
 - Note what you completed
 - Note what you're starting next
+- **DO NOT DELETE PREVIOUS AI'S WORK** — Append your section below theirs
+- Example structure:
+  ```markdown
+  # 📝 AI Session Report - Current
+
+  **Session Date:** May 6, 2026
+  **AI Agent:** Qwen Code
+
+  ## ✅ My Work This Session
+  [Your content here]
+
+  ---
+
+  ## Previous AI Work (For Context)
+  **From: [Previous AI Name] - [Date]**
+  [Their work stays here - DO NOT DELETE]
+  ```
+
+**Why This Matters:**
+- Future AIs scan these files to understand the full collaboration history
+- Deleting breaks continuity — next AI won't know what was tried/why
+- Permanent records enable async collaboration across timezones/sessions
+- This is how OpenClaw-style teams coordinate without talking directly
 
 ### 2. Ask the Human What's Next
 

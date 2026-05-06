@@ -1,0 +1,54 @@
+[gd_scene load_steps=2 format=3 uid="uid://heelkawn_memorial_inscription"]
+
+[ext_resource type="Script" path="res://scripts/ui/MemorialInscriptionUI.gd" id="1_memorial_ui"]
+
+[node name="MemorialInscriptionUI" type="PanelContainer"]
+script = ExtResource("1_memorial_ui")
+custom_minimum_size = Vector2(400, 300)
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 400.0
+offset_bottom = 300.0
+visibility_mode = 1
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 2
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "🏛️ Memorial"
+custom_minimum_size = Vector2(380, 0)
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="InscriptionText" type="RichTextLabel" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(380, 150)
+bbcode_enabled = true
+fit_content = false
+scroll_active = true
+
+[node name="AssociatedPawnsLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Remembered:"
+custom_minimum_size = Vector2(380, 0)
+
+[node name="PawnsList" type="VBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="CloseButton" type="Button" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(380, 0)
+text = "Close"

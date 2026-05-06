@@ -68,6 +68,10 @@ func _on_world_tick(tick_number: int) -> void:
 	if tick_number % 100 == 0:
 		_tick_gossip_decay()
 		_reputation_cache.clear()
+	
+	# MEMORIAL SYSTEM: Gossip spreads faster at commemoration gatherings
+	if tick_number % 1000 == 0:  # Check every 1000 ticks for gatherings
+		_process_memorial_gossip_spread(tick_number)
 
 
 ## Get or create GossipPropagation for a pawn
@@ -324,6 +328,77 @@ func get_notorious_report() -> Array[Dictionary]:
 			"label": get_reputation_label(pawn_id),
 		})
 	return result
+
+
+# ==================== MEMORIAL SYSTEM INTEGRATION ====================
+
+## Gossip spreads faster at commemoration gatherings (memorial sites)
+func _process_memorial_gossip_spread(tick: int) -> void:
+	if MemorialSystem == null:
+		return
+	
+	var ms: Node = MemorialSystem
+	if not ms.has_method("get_memorials"):
+		return
+	
+	var memorials: Array[Dictionary] = ms.call("get_memorials")
+	for memorial in memorials:
+		# Check if any gathering is happening at this memorial
+		# (Simplified: assume gatherings happen when 3+ pawns at memorial tile)
+		var memorial_tile: Vector2i = memorial.get("tile", Vector2i.ZERO)
+		
+		var ps: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
+		if ps == null:
+			continue
+		
+		# Count pawns at memorial
+		var pawns_at_memorial: Array[int] = []
+		for pawn in ps.pawns:
+			if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
+				continue
+			
+			if pawn.data.tile_pos == memorial_tile:
+				pawns_at_memorial.append(int(pawn.data.id))
+		
+		# If 3+ pawns at memorial, gossip spreads faster
+		if pawns_at_memorial.size() >= 3:
+			_spread_gossip_at_memorial(pawns_at_memorial, memorial, tick)
+
+
+## Spread gossip among pawns at memorial gathering
+func _spread_gossip_at_memorial(pawn_ids: Array[int], memorial: Dictionary, tick: int) -> void:
+	# Pawns at memorial share gossip with 2x normal chance
+	var enhanced_share_chance: float = GOSSIP_SHARE_CHANCE_BASE * 2.0
+	
+	for i in range(pawn_ids.size()):
+		for j in range(i + 1, pawn_ids.size()):
+			var pawn_a: int = pawn_ids[i]
+			var pawn_b: int = pawn_ids[j]
+			
+			# Share gossip between these pawns with enhanced chance
+			if randf() < enhanced_share_chance:
+				_share_gossip_between(pawn_a, pawn_b, tick)
+
+
+## Share gossip between two pawns
+func _share_gossip_between(pawn_a: int, pawn_b: int, tick: int) -> void:
+	var gossip_a = _get_gossip_for_pawn(pawn_a)
+	var gossip_b = _get_gossip_for_pawn(pawn_b)
+	
+	if gossip_a == null or gossip_b == null:
+		return
+	
+	# Share a random piece of gossip from A to B
+	var a_gossip: Array = gossip_a.get_stored_gossip()
+	if not a_gossip.is_empty():
+		var random_gossip: Dictionary = a_gossip[randi() % a_gossip.size()]
+		gossip_b.receive_gossip(random_gossip, tick)
+	
+	# Share from B to A
+	var b_gossip: Array = gossip_b.get_stored_gossip()
+	if not b_gossip.is_empty():
+		var random_gossip: Dictionary = b_gossip[randi() % b_gossip.size()]
+		gossip_a.receive_gossip(random_gossip, tick)
 
 
 ## Debug: clear all gossip (for testing)

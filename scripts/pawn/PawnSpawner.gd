@@ -357,13 +357,13 @@ func spawn_generational_pawn(
 	
 	WorldMemory.record_event({
 		"type": "pawn_birth",
-		"birth_kind": birth_kind,
+		"birth_kind": str(birth_kind),  # Ensure String type
 		"tick": GameManager.tick_count,
 		"pawn_id": int(data.id),
 		"pawn_name": data.display_name,
 		"tile": {"x": tile.x, "y": tile.y},
 		"region": WorldMemory._region_key(tile.x, tile.y),
-		"birth_settlement": data.birth_settlement,
+		"birth_settlement": str(data.birth_settlement),  # Ensure String type
 	})
 	
 	# TEXT-RICH: Show birth notification

@@ -202,10 +202,10 @@ func _get_resource_icon(resource: String) -> String:
 func _deduct_resources(resources: Dictionary) -> void:
 	if _player_gathering == null:
 		return
-	
+
 	for resource in resources:
 		var amount: int = resources[resource]
-		var inventory: Dictionary = _player_gathering.get("player_inventory", {})
+		var inventory: Dictionary = _player_gathering.player_inventory if _player_gathering.has("player_inventory") else {}
 		if inventory.has(resource):
 			inventory[resource] = max(0, inventory[resource] - amount)
 

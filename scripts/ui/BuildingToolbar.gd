@@ -133,9 +133,9 @@ func _on_building_selected(building_type: String) -> void:
 	for btn_type in _buttons:
 		var btn: Button = _buttons[btn_type]
 		if btn_type == building_type:
-			btn.pressed = true
+			btn.button_pressed = true
 		else:
-			btn.pressed = false
+			btn.button_pressed = false
 
 
 ## Show tooltip with building info
@@ -269,9 +269,9 @@ func try_place_building(tile: Vector2i) -> bool:
 func _deduct_resources(resources: Dictionary) -> void:
 	if _player_gathering == null:
 		return
-	
+
 	for resource in resources:
 		var amount: int = resources[resource]
-		var inventory: Dictionary = _player_gathering.get("player_inventory", {})
+		var inventory: Dictionary = _player_gathering.player_inventory if _player_gathering.has("player_inventory") else {}
 		if inventory.has(resource):
 			inventory[resource] = max(0, inventory[resource] - amount)

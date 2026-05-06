@@ -6,17 +6,17 @@ class_name WorldEventSeedManager
 var _seeds := {}
 
 ## Ensure default seeds exist (idempotent)
-func ensure_default_seeds(): void:
+func ensure_default_seeds() -> void:
     if not _seeds.has("seasonal_1"):
         var SeedClass = preload("res://autoloads/WorldEventSeed.gd")
-        var s = SeedClass.new_seed("seasonal_1", "SeasonalSeed", 42, {"season_id": 1})
+        var s = SeedClass.new("seasonal_1", "SeasonalSeed", 42, {"season_id": 1})
         _seeds["seasonal_1"] = s
     if not _seeds.has("social_1"):
         var SeedClass2 = preload("res://autoloads/WorldEventSeed.gd")
-        var s2 = SeedClass2.new_seed("social_1", "SocialSeed", 7, {"density": 0.2})
+        var s2 = SeedClass2.new("social_1", "SocialSeed", 7, {"density": 0.2})
         _seeds["social_1"] = s2
 
-func register_seed(seed_id: String, seed_type: String, seed_value: int, params: Dictionary = {}): void:
+func register_seed(seed_id: String, seed_type: String, seed_value: int, params: Dictionary = {}) -> void:
     var SeedClass = preload("res://autoloads/WorldEventSeed.gd")
     var s = SeedClass.new(seed_id, seed_type, seed_value, params)
     # Fallback if static helper exists and new() path failed

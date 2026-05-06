@@ -56,9 +56,8 @@ func _ready() -> void:
 	_gossip_manager = get_node_or_null("/root/GossipManager")
 	_knowledge_system = get_node_or_null("/root/KnowledgeSystem")
 	
-	# Connect to WorldMemory for automatic memorial creation
-	if _world_memory != null and _world_memory.has_signal("event_appended"):
-		_world_memory.event_appended.connect(_on_world_memory_event)
+	# Note: WorldMemory.gd calls MemorialSystem directly via ms.call() methods
+	# No signal connection needed
 
 
 func _on_game_tick(tick: int) -> void:
@@ -234,11 +233,10 @@ func _apply_gathering_effects(gathering: Dictionary) -> void:
 			# "Honored" moodlet
 			if pawn.data.has("mood"):
 				pawn.data.mood = minf(100.0, pawn.data.mood + 15.0)
-	
-	# Gossip spread among attendees
-	if _gossip_manager != null:
-		_share_gossip_at_gathering(gathering)
-	
+
+	# Note: Gossip spread is handled by GossipManager._process_memorial_gossip_spread()
+	# when 3+ pawns gather at memorial
+
 	# Knowledge transmission
 	if _knowledge_system != null and gathering.knowledge_transmitted.size() > 0:
 		_transmit_knowledge_at_gathering(gathering)
@@ -439,9 +437,10 @@ func _get_event_id_for_battle(tile: Vector2i) -> int:
 	var events = _world_memory.get_events()
 	for i in range(events.size() - 1, -1, -1):
 		var event = events[i]
-		if event.get("type") == "battle" and Vector2(event.get("tile", Vector2i.ZERO)) == tile:
+		var event_tile: Vector2i = event.get("tile", Vector2i.ZERO)
+		if event.get("type") == "battle" and event_tile == tile:
 			return event.get("id", -1)
-	
+
 	return -1
 
 

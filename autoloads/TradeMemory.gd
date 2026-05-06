@@ -361,6 +361,20 @@ func get_route_tier_at(x: int, y: int) -> int:
 	return TIER_NONE
 
 
+## Get pathfinding weight multiplier for trade route tier
+## Used by PathFinder.gd to determine if pawns should prefer trade paths
+func get_trade_path_weight_mul(route_tier: int) -> float:
+	match route_tier:
+		TIER_NONE:
+			return 1.0  # No route (default cost)
+		TIER_ROUTE_1:
+			return 0.8  # Minor route (slightly faster - 20% bonus)
+		TIER_ROUTE_2:
+			return 0.5  # Major route (significantly faster - 50% bonus)
+		_:
+			return 1.0  # Default
+
+
 ## Manually create a trade route (for testing)
 func debug_create_route(from: int, to: int) -> void:
 	_create_trade_route(from, to, GameManager.tick_count)

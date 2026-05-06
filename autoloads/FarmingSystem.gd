@@ -359,7 +359,7 @@ func _get_plot_by_id(plot_id: int) -> Dictionary:
 	for plot in farm_plots:
 		if plot.plot_id == plot_id:
 			return plot
-	return null
+	return {}  # Return empty dict instead of null
 
 
 # ==================== Public API ====================

@@ -650,15 +650,14 @@ func _ready() -> void:
 			_main_menu.settings_pressed.connect(func(): if _settings_panel != null: _settings_panel.toggle())
 			_main_menu.quit_pressed.connect(func(): get_tree().quit())
 		if TechnologySystem != null:
-			if TechnologySystem.has_signal("research_started") and not TechnologySystem.research_started.is_connected(_on_research_started):
+			# Connect to technology signals safely
+			if TechnologySystem.has_signal("research_started"):
 				TechnologySystem.research_started.connect(_on_research_started)
 			# Backward/forward compatibility: some branches expose `research_progress`,
 			# others expose `research_progressed`.
-			if TechnologySystem.has_signal("research_progress") and not TechnologySystem.research_progress.is_connected(_on_research_progressed):
-				TechnologySystem.research_progress.connect(_on_research_progressed)
-			if TechnologySystem.has_signal("research_progressed") and not TechnologySystem.research_progressed.is_connected(_on_research_progressed):
+			if TechnologySystem.has_signal("research_progressed"):
 				TechnologySystem.research_progressed.connect(_on_research_progressed)
-			if TechnologySystem.has_signal("research_completed") and not TechnologySystem.research_completed.is_connected(_on_research_completed):
+			if TechnologySystem.has_signal("research_completed"):
 				TechnologySystem.research_completed.connect(_on_research_completed)
 		# React to mining progress: when a wall comes down or an ore is cleared,
 		# new ores can become reachable and we may want to queue the next tunnel.

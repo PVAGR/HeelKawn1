@@ -24,6 +24,11 @@ var technologies: Dictionary = {}
 var research_progress: Dictionary = {}  # tech_id -> current_progress
 var total_research_points: int = 0
 
+# Signals for Main.gd to connect to
+signal research_started(tech_id: String)
+signal research_progressed(tech_id: String, progress: int, cost: int)
+signal research_completed(tech_id: String)
+
 # References
 @onready var _world_memory: Node = null
 @onready var _settlement_memory: Node = null
@@ -179,6 +184,9 @@ func add_research_points(amount: int, researcher_pawn_id: int = -1) -> void:
 					"tick": GameManager.tick_count
 				})
 			
+			# Emit progress signal
+			research_progressed.emit(tech_id, research_progress[tech_id], tech.cost)
+			
 			break
 
 
@@ -204,6 +212,9 @@ func start_research(tech_id: String) -> bool:
 	
 	tech.status = "researching"
 	research_progress[tech_id] = 0
+	
+	# Emit signal
+	research_started.emit(tech_id)
 	
 	if OS.is_debug_build():
 		print("[Technology] Started researching: %s" % tech.name)
@@ -242,6 +253,9 @@ func _complete_research(tech_id: String, tick: int) -> void:
 			"unlock_type": tech.unlock_type,
 			"tick": tick
 		})
+	
+	# Emit completion signal
+	research_completed.emit(tech_id)
 	
 	if OS.is_debug_build():
 		print("[Technology] Completed: %s (%s)" % [tech.name, tech.unlock_type])

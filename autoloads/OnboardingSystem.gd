@@ -58,7 +58,7 @@ var current_step_index: int = 0
 
 # UI references
 var _tutorial_panel: PanelContainer = null
-var _tooltip_label: Label = null
+var _tooltip_label: RichTextLabel = null
 
 # References
 @onready var _main: Node = null
@@ -271,8 +271,8 @@ func _create_tutorial_panel() -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	_tutorial_panel.add_child(vbox)
 	
-	# Text label
-	_tooltip_label = Label.new()
+	# Text label (use RichTextLabel for BBCode support in Godot 4)
+	_tooltip_label = RichTextLabel.new()
 	_tooltip_label.bbcode_enabled = true
 	_tooltip_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_tooltip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

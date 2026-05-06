@@ -380,3 +380,11 @@ func get_trade_path_weight_mul(x: int, y: int) -> float:
 ## Manually create a trade route (for testing)
 func debug_create_route(from: int, to: int) -> void:
 	_create_trade_route(from, to, GameManager.tick_count)
+
+
+## Returns the count of T2 (Tier 2 / Advanced) trade route tiles.
+## Required by IntentMemory.recompute to assess trade capabilities.
+func count_t2_tiles() -> int:
+	# TODO: Implement actual trade route logic.
+	# Currently returns 0 to prevent IntentMemory crash.
+	return 0

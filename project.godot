@@ -111,6 +111,8 @@ GeneticsSystem="*res://scripts/ai/GeneticsSystem.gd"
 NameGenerator="*res://scripts/ai/NameGenerator.gd"
 GovernorSystem="*res://scripts/ai/GovernorSystem.gd"
 EventNotificationOverlay="*res://scripts/ui/EventNotificationOverlay.gd"
+ModernTheme="*res://scripts/ui/ModernTheme.gd"
+PawnMoodUI="*res://scripts/ui/PawnMoodUI.tscn"
 TickMonitor="*res://tools/diagnose/monitor_ticks.gd"
 GameSettings="*res://autoloads/GameSettings.gd"
 

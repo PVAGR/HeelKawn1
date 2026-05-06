@@ -146,7 +146,8 @@ func _update_display() -> void:
 	# Update name
 	var name_label: Label = get_node_or_null("VBoxContainer/NameLabel")
 	if name_label != null:
-		name_label.text = _pawn_data.get("display_name") ?? "Unknown"
+		var dn = _pawn_data.get("display_name")
+		name_label.text = dn if dn != null else "Unknown"
 	
 	# Update mood
 	_update_mood()

@@ -24,6 +24,8 @@ const COLOR_WORLD: String = "#eeaa44"      # amber — economy, collapse, ritual
 const COLOR_CONFLICT: String = "#dd3333"  # dark red — war, injury, feud
 const COLOR_FOOD: String = "#aaaa44"      # olive — food, farming
 const COLOR_CULTURE: String = "#44aaaa"    # teal — culture, social
+const COLOR_CRAFT: String = "#cc8844"     # bronze — crafting, tools
+const COLOR_TRADE: String = "#88bb44"     # lime — trade routes, markets
 const COLOR_DEFAULT: String = "#999999"   # gray — uncategorized
 
 var _feed: RichTextLabel
@@ -165,11 +167,15 @@ func _color_for_type(typ: String) -> String:
 			"knowledge_sealed", "knowledge_lost", "knowledge_at_risk", "knowledge_crisis"]:
 		return COLOR_KNOWLEDGE
 	# Authority
-	if typ in ["authority_change", "authority_points_added", "authority_vacuum", "governance_change"]:
+	if typ in ["authority_change", "authority_points_added", "authority_vacuum", "governance_change",
+			"succession", "abdicate", "pledge_loyalty", "edict_issued", "law_added", "law_removed",
+			"ruler_decision"]:
 		return COLOR_AUTHORITY
 	# Settlement
 	if typ in ["structure_built", "cooperative_build", "settlement_intent_shift",
 			"settlement_abandon", "settlement_revival", "settlement_rebirth",
+			"settlement_collapse", "settlement_new_foundation", "settlement_revival_with_lineage",
+			"hearth_built", "storage_built", "shrine_built", "marker_built",
 			"diaspora_exile", "migration_started", "migration_completed"]:
 		return COLOR_SETTLEMENT
 	# World
@@ -179,14 +185,25 @@ func _color_for_type(typ: String) -> String:
 			"entity_decay", "entity_loss"]:
 		return COLOR_WORLD
 	# Conflict
-	if typ in ["war_battle_spawned", "war_proposed", "injury", "social_fragment", "social_schism"]:
+	if typ in ["war_battle_spawned", "war_proposed", "injury", "social_fragment", "social_schism",
+			"grudge_formed", "grudge_inherited"]:
 		return COLOR_CONFLICT
 	# Food
-	if typ in ["food_spoiled", "seeds_planted", "crop_harvested", "starvation_event"]:
+	if typ in ["food_spoiled", "seeds_planted", "crop_harvested", "starvation_event",
+			"famine_warning", "food_cooked"]:
 		return COLOR_FOOD
 	# Culture
-	if typ in ["cultural_exposure", "social_bond_milestone", "social_meeting"]:
+	if typ in ["cultural_exposure", "cultural_building", "social_bond_milestone", "social_meeting",
+			"ritual_performed", "sacred_site_established", "legacy_record", "bloodline_extinct",
+			"macro_festival"]:
 		return COLOR_CULTURE
+	# Craft
+	if typ in ["tool_crafted", "tool_break", "food_cooked", "book_bound", "ink_made",
+			"paper_made", "leather_tanned", "pen_crafted"]:
+		return COLOR_CRAFT
+	# Trade
+	if typ in ["trade_route_started", "trade_route_completed", "macro_unrest"]:
+		return COLOR_TRADE
 	return COLOR_DEFAULT
 
 
@@ -417,6 +434,116 @@ func _event_text(typ: String, e: Dictionary) -> String:
 		"job_completed":
 			# Too noisy for chronicle
 			return ""
+
+		# Craft events
+		"tool_crafted":
+			var tool: String = str(e.get("tool_type", "a tool")).replace("_", " ")
+			return "a %s was crafted" % tool
+		"tool_break":
+			return "a tool broke"
+		"food_cooked":
+			return "food was cooked"
+		"book_bound":
+			return "a book was bound"
+		"ink_made":
+			return "ink was made"
+		"paper_made":
+			return "paper was made"
+		"leather_tanned":
+			return "leather was tanned"
+		"pen_crafted":
+			return "a pen was crafted"
+
+		# Authority events
+		"succession":
+			var nm: String = str(e.get("new_leader_name", "someone")).strip_edges()
+			return "%s assumed leadership" % nm
+		"abdicate":
+			var nm: String = str(e.get("pawn_name", "the leader")).strip_edges()
+			return "%s abdicated" % nm
+		"pledge_loyalty":
+			var nm: String = str(e.get("pawn_name", "someone")).strip_edges()
+			return "%s pledged loyalty" % nm
+		"edict_issued":
+			return "an edict was issued"
+		"law_added":
+			var law: String = str(e.get("law_type", "a law")).replace("_", " ")
+			return "a new law was enacted: %s" % law
+		"law_removed":
+			return "a law was repealed"
+		"ruler_decision":
+			var decision: String = str(e.get("decision", "")).replace("_", " ")
+			if not decision.is_empty():
+				return "the ruler decided: %s" % decision
+			return "the ruler made a decision"
+
+		# Trade events
+		"trade_route_started":
+			return "a trade route was opened"
+		"trade_route_completed":
+			return "a trade route was completed"
+
+		# Conflict events
+		"grudge_formed":
+			var an: String = str(e.get("pawn_name", "someone")).strip_edges()
+			return "%s formed a grudge" % an
+		"grudge_inherited":
+			var nm: String = str(e.get("pawn_name", "someone")).strip_edges()
+			return "%s inherited a grudge" % nm
+
+		# Legacy events
+		"legacy_record":
+			var nm: String = str(e.get("pawn_name", "someone")).strip_edges()
+			return "%s left a legacy" % nm
+		"life_path_milestone":
+			return ""  # too noisy
+		"life_path_switch":
+			return ""  # too noisy
+		"bloodline_extinct":
+			var nm: String = str(e.get("bloodline_name", "a bloodline")).strip_edges()
+			return "the %s bloodline went extinct" % nm
+
+		# Culture events
+		"cultural_building":
+			return "a cultural building was raised"
+		"cultural_exposure":
+			var nm: String = str(e.get("pawn_name", "someone")).strip_edges()
+			var custom: String = str(e.get("custom_tag", "a custom")).replace("_", " ")
+			return "%s absorbed a new custom: %s" % [nm, custom]
+
+		# Settlement events
+		"settlement_collapse":
+			return "a settlement collapsed"
+		"settlement_new_foundation":
+			return "a new settlement was founded"
+		"settlement_revival_with_lineage":
+			return "a settlement was revived with lineage memory"
+		"famine_warning":
+			return "famine warning — food reserves critical"
+
+		# Building subtypes
+		"hearth_built":
+			return "a hearth was built"
+		"storage_built":
+			return "storage was built"
+		"shrine_built":
+			return "a shrine was built"
+		"marker_built":
+			return "a marker was placed"
+		"cooperative_build":
+			return "crews raised new structures together"
+
+		# Knowledge events
+		"skill_gain":
+			return ""  # too noisy
+
+		# World events
+		"macro_festival":
+			return "a festival was held"
+		"macro_unrest":
+			return "unrest spread across the region"
+		"region_discovery":
+			return ""  # too noisy
 
 		_:
 			# Surface rare settlement/world events

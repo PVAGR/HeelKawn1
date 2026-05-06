@@ -16,6 +16,14 @@ const KIND_TEACHING_EVENT: int = 12
 const KIND_FOOD_EVENT: int = 13
 const KIND_WORK_EVENT: int = 14
 const KIND_SETTLEMENT_EVENT: int = 15
+const KIND_CRAFT_EVENT: int = 16
+const KIND_AUTHORITY_EVENT: int = 17
+const KIND_TRADE_EVENT: int = 18
+const KIND_CONFLICT_EVENT: int = 19
+const KIND_LEGACY_EVENT: int = 20
+const KIND_CULTURE_EVENT: int = 21
+const KIND_INJURY_EVENT: int = 22
+const KIND_WORLD_EVENT: int = 23
 
 ## region_key (int) -> aggregated entry Dictionary
 var meaning_by_region: Dictionary = {}
@@ -106,6 +114,30 @@ func recompute() -> void:
 			KIND_SETTLEMENT_EVENT:
 				rec["settlement_events"] = int(rec.get("settlement_events", 0)) + 1
 				rec["last_settlement_tick"] = t
+			KIND_CRAFT_EVENT:
+				rec["craft_events"] = int(rec.get("craft_events", 0)) + 1
+				rec["last_craft_tick"] = t
+			KIND_AUTHORITY_EVENT:
+				rec["authority_events"] = int(rec.get("authority_events", 0)) + 1
+				rec["last_authority_tick"] = t
+			KIND_TRADE_EVENT:
+				rec["trade_events"] = int(rec.get("trade_events", 0)) + 1
+				rec["last_trade_tick"] = t
+			KIND_CONFLICT_EVENT:
+				rec["conflict_events"] = int(rec.get("conflict_events", 0)) + 1
+				rec["last_conflict_tick"] = t
+			KIND_LEGACY_EVENT:
+				rec["legacy_events"] = int(rec.get("legacy_events", 0)) + 1
+				rec["last_legacy_tick"] = t
+			KIND_CULTURE_EVENT:
+				rec["culture_events"] = int(rec.get("culture_events", 0)) + 1
+				rec["last_culture_tick"] = t
+			KIND_INJURY_EVENT:
+				rec["injury_events"] = int(rec.get("injury_events", 0)) + 1
+				rec["last_injury_tick"] = t
+			KIND_WORLD_EVENT:
+				rec["world_events"] = int(rec.get("world_events", 0)) + 1
+				rec["last_world_tick"] = t
 
 		# Read impact from ProgressionSystem
 		if has_node("/root/ProgressionSystem"):
@@ -272,6 +304,25 @@ func _default_region_entry() -> Dictionary:
 		"last_work_tick": -1,
 		"last_build_tick": -1,
 		"last_fire_tick": -1,
+		# New meaning pipeline categories
+		"settlement_events": 0,
+		"craft_events": 0,
+		"authority_events": 0,
+		"trade_events": 0,
+		"conflict_events": 0,
+		"legacy_events": 0,
+		"culture_events": 0,
+		"injury_events": 0,
+		"world_events": 0,
+		"last_settlement_tick": -1,
+		"last_craft_tick": -1,
+		"last_authority_tick": -1,
+		"last_trade_tick": -1,
+		"last_conflict_tick": -1,
+		"last_legacy_tick": -1,
+		"last_culture_tick": -1,
+		"last_injury_tick": -1,
+		"last_world_tick": -1,
 		"tags": PackedStringArray(),
 	}
 
@@ -357,6 +408,60 @@ func _compute_region_tags(data: Dictionary, current_tick: int = 0) -> PackedStri
 	if work_events >= 5:
 		tags.append("active")
 
+	# Craft district tags
+	var craft_events: int = int(data.get("craft_events", 0))
+	if craft_events >= 10:
+		tags.append("craftsman_quarter")
+	if craft_events >= 5:
+		tags.append("industrial")
+
+	# Authority seat tags
+	var authority_events: int = int(data.get("authority_events", 0))
+	if authority_events >= 5:
+		tags.append("governed")
+	if authority_events >= 10:
+		tags.append("seat_of_power")
+
+	# Trade hub tags
+	var trade_events: int = int(data.get("trade_events", 0))
+	if trade_events >= 3:
+		tags.append("trading_post")
+	if trade_events >= 6:
+		tags.append("merchant_quarter")
+
+	# Conflict zone tags
+	var conflict_events: int = int(data.get("conflict_events", 0))
+	if conflict_events >= 5:
+		tags.append("war_torn")
+	if conflict_events >= 2:
+		tags.append("grudge_haunted")
+
+	# Legacy ground tags
+	var legacy_events: int = int(data.get("legacy_events", 0))
+	if legacy_events >= 5:
+		tags.append("storied")
+	if legacy_events >= 10:
+		tags.append("ancient_lineage")
+
+	# Culture site tags
+	var culture_events: int = int(data.get("culture_events", 0))
+	if culture_events >= 3:
+		tags.append("sacred")
+	if culture_events >= 6:
+		tags.append("hallowed")
+
+	# Injury tags
+	var injury_events: int = int(data.get("injury_events", 0))
+	if injury_events >= 5:
+		tags.append("dangerous_ground")
+	if injury_events >= 2:
+		tags.append("blood_stained")
+
+	# World event tags
+	var world_events: int = int(data.get("world_events", 0))
+	if world_events >= 2:
+		tags.append("world_touched")
+
 	# Myth formation: time amplifies meaning. Old events become legend.
 	# Ancient death places are feared more. Ancient safe hearths are revered.
 	if is_ancient:
@@ -377,6 +482,29 @@ func _compute_region_tags(data: Dictionary, current_tick: int = 0) -> PackedStri
 			tags.append("old_heart")  # Respected safe place
 		if teaching_events >= 3:
 			tags.append("old_wisdom")  # Established learning place
+		# Myth amplification for new categories
+		if craft_events >= 5:
+			tags.append("old_forge")  # Historic workshop district
+		if authority_events >= 3:
+			tags.append("old_throne")  # Former seat of power
+		if conflict_events >= 3:
+			tags.append("old_battleground")  # Remembered war
+		if culture_events >= 2:
+			tags.append("old_sanctuary")  # Former sacred site
+		if trade_events >= 2:
+			tags.append("old_market")  # Historic trade route
+	elif is_ancient:
+		# Ancient amplification for new categories
+		if craft_events >= 5:
+			tags.append("ancient_forge")  # Legendary workshop
+		if authority_events >= 3:
+			tags.append("ancient_throne")  # Mythic seat of power
+		if conflict_events >= 3:
+			tags.append("ancient_battleground")  # Legendary war site
+		if culture_events >= 2:
+			tags.append("ancient_sanctuary")  # Pilgrimage destination
+		if trade_events >= 2:
+			tags.append("ancient_market")  # Legendary trade crossroads
 
 	# Ritual Echo System: repeated actions at same region form customs.
 	# Custom tags emerge when an action type is repeated enough within a recency window.
@@ -428,6 +556,42 @@ func _compute_region_tags(data: Dictionary, current_tick: int = 0) -> PackedStri
 				tags.append("gathering_place")
 			else:
 				tags.append("faded_gathering_place")
+
+	# Forge echo: 5+ craft events with recent activity
+	var last_craft_t: int = int(data.get("last_craft_tick", -1))
+	if craft_events >= 5 and last_craft_t >= 0:
+		if current_tick - last_craft_t <= ECHO_FADE_TICKS:
+			if current_tick - last_craft_t <= ECHO_RECENCY_TICKS:
+				tags.append("forge_echo")
+			else:
+				tags.append("faded_forge_echo")
+
+	# War echo: 3+ conflict events with recent activity
+	var last_conflict_t: int = int(data.get("last_conflict_tick", -1))
+	if conflict_events >= 3 and last_conflict_t >= 0:
+		if current_tick - last_conflict_t <= ECHO_FADE_TICKS:
+			if current_tick - last_conflict_t <= ECHO_RECENCY_TICKS:
+				tags.append("war_echo")
+			else:
+				tags.append("faded_war_echo")
+
+	# Market echo: 3+ trade events with recent activity
+	var last_trade_t: int = int(data.get("last_trade_tick", -1))
+	if trade_events >= 3 and last_trade_t >= 0:
+		if current_tick - last_trade_t <= ECHO_FADE_TICKS:
+			if current_tick - last_trade_t <= ECHO_RECENCY_TICKS:
+				tags.append("market_echo")
+			else:
+				tags.append("faded_market_echo")
+
+	# Sanctuary echo: 3+ culture events with recent activity
+	var last_culture_t: int = int(data.get("last_culture_tick", -1))
+	if culture_events >= 3 and last_culture_t >= 0:
+		if current_tick - last_culture_t <= ECHO_FADE_TICKS:
+			if current_tick - last_culture_t <= ECHO_RECENCY_TICKS:
+				tags.append("sanctuary_echo")
+			else:
+				tags.append("faded_sanctuary_echo")
 
 	return tags
 

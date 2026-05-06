@@ -262,7 +262,9 @@ func _get_culture(pawn_id: int) -> String:
 	if data == null or not data.has_method("get_culture"):
 		return "common"
 	
-	return data.get("culture") ?? "common"
+	var culture: String = str(data.get("culture", "common"))
+	if culture.is_empty(): culture = "common"
+	return culture
 
 
 # ==================== UTILITY ====================

@@ -3402,6 +3402,12 @@ func _pawn_decision_rule_context(pd: PawnData) -> Dictionary:
 		"meaning_hunger": _pawn_meaning_hunger(rk_ctx),
 		"meaning_knowledge": _pawn_meaning_knowledge(rk_ctx),
 		"meaning_custom": _pawn_meaning_custom(rk_ctx),
+		"meaning_craft": _pawn_meaning_craft(rk_ctx),
+		"meaning_authority": _pawn_meaning_authority(rk_ctx),
+		"meaning_trade": _pawn_meaning_trade(rk_ctx),
+		"meaning_conflict": _pawn_meaning_conflict(rk_ctx),
+		"meaning_legacy": _pawn_meaning_legacy(rk_ctx),
+		"meaning_culture": _pawn_meaning_culture(rk_ctx),
 		"knowledge_at_risk": _pawn_knowledge_at_risk(pd),
 		"teaching_obligation": _pawn_teaching_obligation(pd),
 		"diaspora_exile": 1.0 if pd._diaspora_origin >= 0 else 0.0,
@@ -3496,6 +3502,21 @@ func _pawn_meaning_danger(region_key: int) -> float:
 			# Ritual Echo: burial groves carry residual danger memory
 			"burial_grove":
 				danger += 0.1
+			# New conflict/injury tags amplify danger
+			"war_torn":
+				danger += 0.35
+			"grudge_haunted":
+				danger += 0.15
+			"dangerous_ground":
+				danger += 0.25
+			"blood_stained":
+				danger += 0.1
+			"war_echo":
+				danger += 0.2
+			"old_battleground":
+				danger += 0.25
+			"ancient_battleground":
+				danger += 0.4
 	return clampf(danger, 0.0, 1.0)
 
 
@@ -3531,6 +3552,29 @@ func _pawn_meaning_safety(region_key: int) -> float:
 				safety += 0.15
 			"builder_yard":
 				safety += 0.05
+			# New culture/trade/craft tags amplify safety
+			"sacred":
+				safety += 0.15
+			"hallowed":
+				safety += 0.25
+			"trading_post":
+				safety += 0.1
+			"merchant_quarter":
+				safety += 0.15
+			"craftsman_quarter":
+				safety += 0.1
+			"industrial":
+				safety += 0.05
+			"sanctuary_echo":
+				safety += 0.2
+			"market_echo":
+				safety += 0.1
+			"forge_echo":
+				safety += 0.05
+			"old_sanctuary":
+				safety += 0.15
+			"ancient_sanctuary":
+				safety += 0.3
 	return clampf(safety, 0.0, 1.0)
 
 
@@ -3595,6 +3639,120 @@ func _pawn_meaning_custom(region_key: int) -> float:
 			"faded_gathering_place":
 				custom += 0.12
 	return clampf(custom, 0.0, 1.0)
+
+
+## Returns 0.0-1.0 craft meaning from tags (industrial, craftsman_quarter, forge_echo, ancient_forge).
+func _pawn_meaning_craft(region_key: int) -> float:
+	var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
+	var craft: float = 0.0
+	for tag in tags:
+		match tag:
+			"craftsman_quarter":
+				craft += 0.4
+			"industrial":
+				craft += 0.2
+			"forge_echo":
+				craft += 0.25
+			"old_forge":
+				craft += 0.15
+			"ancient_forge":
+				craft += 0.3
+			"faded_forge_echo":
+				craft += 0.1
+	return clampf(craft, 0.0, 1.0)
+
+
+## Returns 0.0-1.0 authority meaning from tags (governed, seat_of_power, old_throne, ancient_throne).
+func _pawn_meaning_authority(region_key: int) -> float:
+	var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
+	var auth: float = 0.0
+	for tag in tags:
+		match tag:
+			"seat_of_power":
+				auth += 0.5
+			"governed":
+				auth += 0.2
+			"old_throne":
+				auth += 0.2
+			"ancient_throne":
+				auth += 0.35
+	return clampf(auth, 0.0, 1.0)
+
+
+## Returns 0.0-1.0 trade meaning from tags (trading_post, merchant_quarter, market_echo, old_market, ancient_market).
+func _pawn_meaning_trade(region_key: int) -> float:
+	var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
+	var trade: float = 0.0
+	for tag in tags:
+		match tag:
+			"merchant_quarter":
+				trade += 0.4
+			"trading_post":
+				trade += 0.2
+			"market_echo":
+				trade += 0.25
+			"old_market":
+				trade += 0.15
+			"ancient_market":
+				trade += 0.3
+			"faded_market_echo":
+				trade += 0.1
+	return clampf(trade, 0.0, 1.0)
+
+
+## Returns 0.0-1.0 conflict meaning from tags (war_torn, grudge_haunted, war_echo, old_battleground, ancient_battleground).
+func _pawn_meaning_conflict(region_key: int) -> float:
+	var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
+	var conflict: float = 0.0
+	for tag in tags:
+		match tag:
+			"war_torn":
+				conflict += 0.5
+			"grudge_haunted":
+				conflict += 0.2
+			"war_echo":
+				conflict += 0.3
+			"old_battleground":
+				conflict += 0.2
+			"ancient_battleground":
+				conflict += 0.35
+			"faded_war_echo":
+				conflict += 0.1
+	return clampf(conflict, 0.0, 1.0)
+
+
+## Returns 0.0-1.0 legacy meaning from tags (storied, ancient_lineage).
+func _pawn_meaning_legacy(region_key: int) -> float:
+	var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
+	var legacy: float = 0.0
+	for tag in tags:
+		match tag:
+			"ancient_lineage":
+				legacy += 0.5
+			"storied":
+				legacy += 0.25
+	return clampf(legacy, 0.0, 1.0)
+
+
+## Returns 0.0-1.0 culture meaning from tags (sacred, hallowed, sanctuary_echo, old_sanctuary, ancient_sanctuary).
+func _pawn_meaning_culture(region_key: int) -> float:
+	var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
+	var culture: float = 0.0
+	for tag in tags:
+		match tag:
+			"hallowed":
+				culture += 0.5
+			"sacred":
+				culture += 0.2
+			"sanctuary_echo":
+				culture += 0.3
+			"old_sanctuary":
+				culture += 0.2
+			"ancient_sanctuary":
+				culture += 0.35
+			"faded_sanctuary_echo":
+				culture += 0.1
+	return clampf(culture, 0.0, 1.0)
 
 
 ## Returns 0.0-1.0 knowledge risk level for this pawn's settlement.

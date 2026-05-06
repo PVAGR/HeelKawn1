@@ -404,6 +404,55 @@ func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump(outs, 2, 0.04)  # mild social nudge
 		fired.append({"id": "meaning_custom_low", "line": "IF region has fading customs THEN mild social nudge.", "w": 0.30})
 
+	# Craft meaning: industrial/craftsman regions attract builders and foragers
+	var m_craft: float = float(ctx.get("meaning_craft", 0.0))
+	if m_craft >= 0.3:
+		_bump(outs, 4, 0.08)  # build — craft district needs workers
+		_bump(outs, 3, 0.05)  # forage — gather materials for crafting
+		_bump(outs, 2, 0.04)  # social — craft community
+		fired.append({"id": "meaning_craft", "line": "IF craft district THEN build + forage + social.", "w": 0.45})
+
+	# Authority meaning: governed regions attract social and rest
+	var m_authority: float = float(ctx.get("meaning_authority", 0.0))
+	if m_authority >= 0.3:
+		_bump(outs, 2, 0.10)  # social — power center draws people
+		_bump(outs, 1, 0.04)  # rest — governed places feel stable
+		_bump(outs, 6, 0.05)  # defend — authority needs protection
+		fired.append({"id": "meaning_authority", "line": "IF seat of power THEN social + rest + defend.", "w": 0.50})
+
+	# Trade meaning: trading posts attract forage and social
+	var m_trade: float = float(ctx.get("meaning_trade", 0.0))
+	if m_trade >= 0.3:
+		_bump(outs, 3, 0.08)  # forage — gather goods for trade
+		_bump(outs, 2, 0.06)  # social — market draws people
+		fired.append({"id": "meaning_trade", "line": "IF trading post THEN forage + social.", "w": 0.40})
+
+	# Conflict meaning: war-torn regions trigger defend and avoid idle
+	var m_conflict: float = float(ctx.get("meaning_conflict", 0.0))
+	if m_conflict >= 0.4:
+		_bump(outs, 6, 0.12)  # defend — war zone
+		_bump(outs, 7, -0.08)  # less idle — danger
+		_bump(outs, 1, -0.05)  # less rest — no relaxing in war zone
+		fired.append({"id": "meaning_conflict", "line": "IF war-torn region THEN defend + less idle + less rest.", "w": 0.55})
+	elif m_conflict >= 0.2:
+		_bump(outs, 6, 0.06)  # mild defend
+		fired.append({"id": "meaning_conflict_low", "line": "IF grudge-haunted THEN mild defend.", "w": 0.35})
+
+	# Legacy meaning: storied regions attract social and observe
+	var m_legacy: float = float(ctx.get("meaning_legacy", 0.0))
+	if m_legacy >= 0.3:
+		_bump(outs, 2, 0.06)  # social — legacy draws community
+		_bump(outs, 7, 0.04)  # observe — contemplate history
+		fired.append({"id": "meaning_legacy", "line": "IF storied region THEN social + observe.", "w": 0.40})
+
+	# Culture meaning: sacred/hallowed regions attract social and rest
+	var m_culture: float = float(ctx.get("meaning_culture", 0.0))
+	if m_culture >= 0.3:
+		_bump(outs, 2, 0.08)  # social — sacred sites draw community
+		_bump(outs, 1, 0.06)  # rest — sanctuary feels safe
+		_bump(outs, 7, 0.04)  # observe — ritual participation
+		fired.append({"id": "meaning_culture", "line": "IF sacred site THEN social + rest + observe.", "w": 0.45})
+
 	# Knowledge risk: settlement has skills at risk → teach urgency
 	var k_risk: float = float(ctx.get("knowledge_at_risk", 0.0))
 	if k_risk >= 0.5:

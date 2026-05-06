@@ -271,9 +271,8 @@ func _create_tutorial_panel() -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	_tutorial_panel.add_child(vbox)
 	
-	# Text label (RichTextLabel has BBCode enabled by default in Godot 4)
+	# Text label
 	_tooltip_label = RichTextLabel.new()
-	_tooltip_label.bbcode_enabled = true  # Explicit enable for BBCode text formatting
 	_tooltip_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_tooltip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_tooltip_label.add_theme_font_size_override("font_size", 12)

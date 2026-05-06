@@ -61,6 +61,7 @@ var apparel_color: Color = Color("#5d7ea8")
 
 ## Needs (0..100, higher is better). Will decay on tick in Phase 2b.
 var hunger: float = 100.0
+var thirst: float = 100.0  # NEW: Dehydrates faster than hunger
 var rest: float = 100.0
 var mood: float = 100.0
 var health: float = 100.0

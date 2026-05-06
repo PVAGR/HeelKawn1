@@ -1879,6 +1879,75 @@ func _apply_meaning_drift(st: Dictionary, tick: int) -> void:
                 drift_score += 0.04
             "faded_gathering_place":
                 drift_score += 0.08
+            # New meaning pipeline: conflict tags push toward DEFENSIVE
+            "war_torn":
+                drift_score -= 0.4
+            "grudge_haunted":
+                drift_score -= 0.2
+            "war_echo":
+                drift_score -= 0.25
+            "dangerous_ground":
+                drift_score -= 0.2
+            "blood_stained":
+                drift_score -= 0.1
+            "old_battleground":
+                drift_score -= 0.25
+            "ancient_battleground":
+                drift_score -= 0.4
+            "faded_war_echo":
+                drift_score -= 0.08
+            # New meaning pipeline: craft/trade/culture/authority push toward OPEN
+            "craftsman_quarter":
+                drift_score += 0.15  # industry = investment
+            "industrial":
+                drift_score += 0.1
+            "forge_echo":
+                drift_score += 0.12
+            "faded_forge_echo":
+                drift_score += 0.04
+            "governed":
+                drift_score += 0.1   # governance = stability
+            "seat_of_power":
+                drift_score += 0.2   # authority center = confidence
+            "trading_post":
+                drift_score += 0.15  # trade = openness
+            "merchant_quarter":
+                drift_score += 0.2
+            "market_echo":
+                drift_score += 0.12
+            "faded_market_echo":
+                drift_score += 0.04
+            "sacred":
+                drift_score += 0.15  # sacred = community
+            "hallowed":
+                drift_score += 0.25
+            "sanctuary_echo":
+                drift_score += 0.15
+            "faded_sanctuary_echo":
+                drift_score += 0.05
+            "storied":
+                drift_score += 0.1   # legacy = pride
+            "ancient_lineage":
+                drift_score += 0.2
+            "world_touched":
+                drift_score += 0.1
+            # Myth-amplified new tags
+            "old_forge":
+                drift_score += 0.08
+            "ancient_forge":
+                drift_score += 0.15
+            "old_throne":
+                drift_score += 0.1
+            "ancient_throne":
+                drift_score += 0.2
+            "old_market":
+                drift_score += 0.08
+            "ancient_market":
+                drift_score += 0.15
+            "old_sanctuary":
+                drift_score += 0.1
+            "ancient_sanctuary":
+                drift_score += 0.2
     # Apply drift as tiny adjustments to scar_max and reputation_min
     # These are the inputs to _derive_culture_type_v1_for_age
     # Positive drift → more open → lower scar, higher reputation

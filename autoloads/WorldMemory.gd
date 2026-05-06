@@ -28,6 +28,14 @@ enum Kind {
     FOOD_EVENT = 13,
     WORK_EVENT = 14,
     SETTLEMENT_EVENT = 15,
+    CRAFT_EVENT = 16,
+    AUTHORITY_EVENT = 17,
+    TRADE_EVENT = 18,
+    CONFLICT_EVENT = 19,
+    LEGACY_EVENT = 20,
+    CULTURE_EVENT = 21,
+    INJURY_EVENT = 22,
+    WORLD_EVENT = 23,
 }
 
 var _events: Array[Dictionary] = []
@@ -510,6 +518,54 @@ func _event_passes_significance_threshold(e: Dictionary) -> bool:
     if typ.begins_with("combat_") or typ == "enemy_killed" or typ == "pawn_injured":
         return true
 
+    # Craft events: always record (visible material culture)
+    if typ in ["tool_crafted", "tool_break", "food_cooked", "book_bound", "ink_made",
+               "paper_made", "leather_tanned", "pen_crafted"]:
+        return true
+
+    # Authority events: always record (governance changes are historical)
+    if typ in ["authority_change", "governance_change", "succession", "abdicate",
+               "pledge_loyalty", "edict_issued", "law_added", "law_removed", "ruler_decision"]:
+        return true
+
+    # Trade events: always record (economic infrastructure)
+    if typ in ["trade_route_started", "trade_route_completed"]:
+        return true
+
+    # Conflict events: always record (wars and grudges shape the world)
+    if typ in ["war_proposed", "war_battle_spawned", "grudge_formed", "grudge_inherited"]:
+        return true
+
+    # Legacy events: always record (lineage and life arcs are core history)
+    if typ in ["legacy_record", "life_path_milestone", "life_path_switch", "bloodline_extinct"]:
+        return true
+
+    # Culture events: always record (rituals and sacred sites are meaning)
+    if typ in ["cultural_exposure", "cultural_building", "ritual_performed", "sacred_site_established"]:
+        return true
+
+    # Injury events: always record (bodily consequence matters)
+    if typ == "injury":
+        return true
+
+    # World events: always record (macro-scale history)
+    if typ in ["macro_festival", "macro_unrest", "region_discovery"]:
+        return true
+
+    # Knowledge events (non-teaching): always record (knowledge loss is critical)
+    if typ in ["knowledge_at_risk", "knowledge_lost", "skill_gain"]:
+        return true
+
+    # Settlement events: always record (civilizational milestones)
+    if typ in ["settlement_collapse", "settlement_revival", "settlement_revival_with_lineage",
+               "settlement_new_foundation", "famine_warning", "food_spoiled"]:
+        return true
+
+    # Building subtypes: always record (infrastructure is visible)
+    if typ in ["hearth_built", "storage_built", "shrine_built", "marker_built",
+               "structure_built", "cooperative_build"]:
+        return true
+
     # Default: SKIP unknown event types (stricter than before)
     return false
 
@@ -580,6 +636,36 @@ func _infer_kind_from_type(typ: String) -> int:
             return Kind.SOCIAL_FRAGMENT
         "pressure_situation", "generational_shift", "diaspora_exile", "diaspora_grief", "knowledge_sealed":
             return Kind.SETTLEMENT_EVENT
+        "settlement_collapse", "settlement_revival", "settlement_revival_with_lineage", "settlement_new_foundation":
+            return Kind.SETTLEMENT_EVENT
+        "tool_crafted", "tool_break", "food_cooked", "book_bound":
+            return Kind.CRAFT_EVENT
+        "ink_made", "paper_made", "leather_tanned", "pen_crafted":
+            return Kind.CRAFT_EVENT
+        "authority_change", "governance_change", "succession", "abdicate":
+            return Kind.AUTHORITY_EVENT
+        "pledge_loyalty", "edict_issued", "law_added", "law_removed", "ruler_decision":
+            return Kind.AUTHORITY_EVENT
+        "trade_route_started", "trade_route_completed":
+            return Kind.TRADE_EVENT
+        "war_proposed", "war_battle_spawned", "grudge_formed", "grudge_inherited":
+            return Kind.CONFLICT_EVENT
+        "legacy_record", "life_path_milestone", "life_path_switch", "bloodline_extinct":
+            return Kind.LEGACY_EVENT
+        "cultural_exposure", "cultural_building", "ritual_performed", "sacred_site_established":
+            return Kind.CULTURE_EVENT
+        "injury":
+            return Kind.INJURY_EVENT
+        "macro_festival", "macro_unrest", "region_discovery":
+            return Kind.WORLD_EVENT
+        # Knowledge events (not teaching) map to TEACHING_EVENT category
+        "knowledge_at_risk", "knowledge_lost", "skill_gain":
+            return Kind.TEACHING_EVENT
+        # Building subtypes map to BUILDING_CONSTRUCTED
+        "hearth_built", "storage_built", "shrine_built", "marker_built", "structure_built":
+            return Kind.BUILDING_CONSTRUCTED
+        "cooperative_build":
+            return Kind.BUILDING_CONSTRUCTED
         _:
             return -1
 

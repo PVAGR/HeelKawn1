@@ -396,3 +396,11 @@ func get_last_tick_t2_existed() -> int:
 	# TODO: Implement actual trade route tracking.
 	# Currently returns 0 (no trade routes yet).
 	return 0
+
+
+## Returns the trade role at a given tile (e.g., "source", "destination", "waypoint").
+## Required by IntentMemory.recompute for trade intent calculation.
+func get_role(x: int, y: int) -> String:
+	# TODO: Implement actual trade route role tracking.
+	# Currently returns empty string (no trade role).
+	return ""

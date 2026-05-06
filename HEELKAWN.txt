@@ -1,44 +1,75 @@
-WHERE WE LEFT OFF
+HEELKAWN - ONGOING DEVELOPMENT
 
-- Canon ladder (Taured / DRUJ / Ark): **3 exploratory → 2 parallel kernel-universe → 1 Age inside HeelKawn** (see docs/HEELKAWN_STATE.md).
-- Deterministic Godot 4.6 world sim remains stable.
-- Kernel is complete.
-- Current phase is Phase 4: Identity & Meaning.
-- Player role remains observer/chronicler.
+**IMPORTANT:** HeelKawn is NEVER FINISHED. It is a living, evolving simulation.
+We are always building, always refining, always expanding. This repository captures
+the CURRENT STATE of an ongoing creative journey.
 
-CURRENT PHASE
+WHERE WE ARE NOW (May 5, 2026)
 
-- Phase 4: Identity & Meaning
+- **Current Phase:** Phase 5 - Emergent Life (95% complete)
+- **Overall Progress:** ~90% complete
+- **Kernel Health:** 🟢 Stable
+- **Shipped Systems:** 45+
+
+WHAT WORKS NOW
+
+✅ Full pawn AI with needs, skills, professions (5 diverse roles)
+✅ Settlement lifecycle (active → abandoned → reviving)
+✅ Knowledge system (18 types, inscribe on stones, read them)
+✅ Grudge & gossip systems (emergent social dynamics)
+✅ Legacy & dynasty tracking (multi-generational)
+✅ Text-rich storytelling (biographies, legends, chronicles)
+✅ Performance optimized (stable at 100x speed)
+✅ All compile errors resolved
+
+WHAT'S NEXT (Priority Order)
+
+1. Trade system (inter-settlement caravans) - HIGH priority
+2. Wildlife population (hunt-able animals) - MEDIUM priority
+3. Polish pass (incarnation UI, F10 organization) - LOW priority
+
+FOR AI ASSISTANTS
+
+1. READ FIRST: docs/HEELKAWN_STATE.md - Authoritative current status
+2. THEN READ: docs/MASTER_DEVELOPMENT_PLAN.md - Full system inventory & roadmap
+3. QUICK CONTEXT: This file (HEELKAWN.txt)
+4. PRINCIPLES: AI_README.md - Core kernel philosophy (NON-NEGOTIABLE)
+
+KEY PRINCIPLES
+
+- Deterministic Kernel: History is computed, not scripted
+- Pawn-Activated: Events trigger from pawn actions, NOT global timers
+- No Random Decay: Memory does not decay randomly
+- Ongoing Project: HeelKawn is never finished
 
 FIRST PLAYABLE (where to look)
 
-- In-game: F10 → **35 · Backbone / first-play** — prints what is LIVE vs DEFERRED this build (paste to log or AI).
-- Doc: **docs/HEELKAWN_STATE.md** section “FIRST PLAYABLE (v0.1 — backbone you can run today)”.
-- Run main scene, select pawns, use F9 observer when needed; kernel + colony loop + inspection are the backbone.
+- In-game: F10 → 35 · Backbone / first-play — prints what is LIVE vs DEFERRED
+- Doc: docs/HEELKAWN_STATE.md section "Current Status"
+- Run main scene, select pawns, use F9 observer when needed
 
-NEXT TARGET
+GIT WORKFLOW
 
-- Player-readable meaning refinement (audio + settlement identity depth, no text overlay substitute).
-- Wildlife HUD trend validation + Phase 4 rebirth threshold tuning passes.
+cd c:\Users\user\Documents\GitHub\HeelKawn1
+git add -A
+git commit -m "fix: [description]"
+git pull --rebase origin main
+git push
 
-COMPLETED (2026-04-30)
+REPOSITORY
 
-- Cultural architectural styles: formally documented in docs/WORLD_BIBLE/GLOSSARY.md with Architecture Signature Constants table; marked as documented in CANON_SYSTEMS_FEATURE_QUEUE.md; logged in CANON_CHANGELOG.md.
-
-(Authoritative duplicate: docs/HEELKAWN_STATE.md NEXT TARGET.)
-
-WHERE TO PLAN LORE/TIERS
-
-- docs/CURSOR_MASTER_PLANNING_SPEC.md — umbrella planning brief (T1–T4 canon, tensions, overlays).
-
-OFFICIAL FOLDER + GITHUB (only this one for HeelKawn work)
-
-- Local: this repository root (the folder containing `.git/`)
+- Local: c:\Users\user\Documents\GitHub\HeelKawn1
 - Remote: https://github.com/PVAGR/HeelKawn1 (branch main)
-- When work is ready: **commit and `git push origin main`** — that is how GitHub (and everyone else) sees updates in real time; topic branches must merge to **main** first.
-- Full policy: docs/CANONICAL_REPOSITORY.md
+- When work is ready: commit and git push origin main
 
 LOG (newest first)
+
+2026-05-05  All rich text features implemented + documented. Master development plan created.
+2026-05-05  Performance optimizations complete (adaptive throttling, notification batching).
+2026-05-05  All compile errors resolved (tabs, type mismatches, scope issues).
+2026-05-05  Profession heterogeneity implemented (no more "all farmers").
+2026-05-05  Event noise reduction implemented (skill-gated significance filter).
+
 
 2026-05-01  **Player-readable meaning refinement complete:** Fixed compilation error (removed non-existent Job.Type.TRADE_PICKUP reference in Pawn.gd). Wired MeaningAmbianceController._tick() into Main.gd tick loop for real-time meaning state polling. Added clustering radius and wander bias methods to MeaningAmbianceController (128/96/64/48px and 0.5/0.3/0.2/0.1 for quiet/scarred/bloodied/grave). Extended Pawn._apply_meaning_behavior_modifiers to cache all three behavior density modifiers (speed, clustering, wander bias). All four cue types from PLAYER_READABLE_MEANING_SPEC.md now implemented: audio cues (MeaningAudioCue), ambiance (MeaningAmbianceController), behavior density (Pawn), and settlement posture (TileFeature).
 

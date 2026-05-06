@@ -4,6 +4,8 @@
 
 HeelKawn is a **persistent myth engine** — a deterministic 2D colony simulation where history is computed, not scripted. Memory does not decay randomly, history does not lie, and persistence is earned strictly by impact.
 
+**⚠️ IMPORTANT:** HeelKawn is **never finished**. It is a living, evolving simulation. We are always building, always refining, always expanding. This repository captures the current state of an ongoing creative journey.
+
 ---
 
 ## 🎮 **WHAT IS HEELKAWN?**
@@ -12,14 +14,44 @@ HeelKawn is NOT:
 - ❌ A game to "win"
 - ❌ A sandbox with no purpose
 - ❌ A roguelike with random events
+- ❌ A finished product
 
 HeelKawn IS:
 - ✅ A **living world** that continues without you
 - ✅ A **story generator** where every pawn has a life story
 - ✅ A **legacy builder** where knowledge outlives its carriers
 - ✅ A **deterministic simulation** where same inputs = same history
+- ✅ An **ongoing project** — always evolving, never complete
 
 **Think:** Dwarf Fortress meets RimWorld meets Crusader Kings, with a focus on emergent storytelling and multi-generational legacy.
+
+---
+
+## 🚧 **CURRENT STATUS**
+
+| Metric | Status |
+|--------|--------|
+| **Current Phase** | Phase 5 - Emergent Life |
+| **Overall Progress** | ~90% complete |
+| **Kernel Health** | 🟢 Stable |
+| **Last Updated** | May 5, 2026 |
+| **Shipped Systems** | 45+ |
+
+**What Works Now:**
+- ✅ Full pawn AI with needs, skills, professions (5 diverse roles)
+- ✅ Settlement lifecycle (active → abandoned → reviving)
+- ✅ Knowledge system (18 types, inscribe on stones, read them)
+- ✅ Grudge & gossip systems (emergent social dynamics)
+- ✅ Legacy & dynasty tracking (multi-generational)
+- ✅ Text-rich storytelling (biographies, legends, chronicles)
+- ✅ Performance optimized (stable at 100x speed)
+
+**What's Next:**
+- 🔶 Trade system (inter-settlement caravans)
+- 🔶 Wildlife population (hunt-able animals)
+- 🔶 Polish pass (incarnation UI, F10 organization)
+
+**See full plan:** [`docs/MASTER_DEVELOPMENT_PLAN.md`](docs/MASTER_DEVELOPMENT_PLAN.md)
 
 ---
 
@@ -89,12 +121,56 @@ Track progress in **F10 #75**.
 
 ## 📖 **DOCUMENTATION**
 
+### **For Players:**
 | Document | Purpose |
 |----------|---------|
 | [`docs/PLAYER_GUIDE.md`](docs/PLAYER_GUIDE.md) | **Start here** - How to play, all features explained |
+| [`docs/RICH_TEXT_FEATURES_GUIDE.md`](docs/RICH_TEXT_FEATURES_GUIDE.md) | Where to find all story features |
 | [`PLAYTEST_REPORT.md`](PLAYTEST_REPORT.md) | Comprehensive playtest results |
+
+### **For AI Assistants & Developers:**
+| Document | Purpose |
+|----------|---------|
+| [`docs/HEELKAWN_STATE.md`](docs/HEELKAWN_STATE.md) | **AUTHORITATIVE STATE** - Current phase, blockers, next tasks |
+| [`docs/MASTER_DEVELOPMENT_PLAN.md`](docs/MASTER_DEVELOPMENT_PLAN.md) | **COMPREHENSIVE PLAN** - Full system inventory, roadmap |
+| [`HEELKAWN.txt`](HEELKAWN.txt) | Quick context (what we're working on now) |
 | [`AI_README.md`](AI_README.md) | Development guidelines, canon, principles |
-| [`PERFORMANCE_OPTIMIZATIONS.md`](PERFORMANCE_OPTIMIZATIONS.md) | Technical optimizations made |
+
+### **For Contributors:**
+| Document | Purpose |
+|----------|---------|
+| [`CHANGELOG.md`](CHANGELOG.md) | Version history |
+| [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md) | How to release to itch.io |
+
+---
+
+## 🤖 **FOR AI ASSISTANTS**
+
+**If you are an AI assistant reading this repository:**
+
+1. **READ FIRST:** [`docs/HEELKAWN_STATE.md`](docs/HEELKAWN_STATE.md) - This is the authoritative source for current status
+2. **THEN READ:** [`docs/MASTER_DEVELOPMENT_PLAN.md`](docs/MASTER_DEVELOPMENT_PLAN.md) - Full context and roadmap
+3. **QUICK CONTEXT:** [`HEELKAWN.txt`](HEELKAWN.txt) - What we're working on right now
+4. **PRINCIPLES:** [`AI_README.md`](AI_README.md) - Core kernel philosophy (NON-NEGOTIABLE)
+
+**Key Principles:**
+- **Deterministic Kernel:** History is computed, not scripted. Same inputs = same history.
+- **Pawn-Activated:** Events trigger from pawn actions, NOT global timers.
+- **No Random Decay:** Memory does not decay randomly. Persistence by impact only.
+- **Ongoing Project:** HeelKawn is never finished. We are always building.
+
+**Git Workflow:**
+```bash
+cd c:\Users\user\Documents\GitHub\HeelKawn1
+git add -A
+git commit -m "fix: [description]"  # Or "feat:", "perf:", "docs:"
+git pull --rebase origin main
+git push
+```
+
+**Verify Systems:**
+- In-game: Press **F10** → **35 · Backbone / first-play** — prints what is LIVE vs DEFERRED
+- Check [`docs/HEELKAWN_STATE.md`](docs/HEELKAWN_STATE.md) section "Current Status"
 
 ---
 

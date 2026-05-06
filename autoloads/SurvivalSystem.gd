@@ -99,7 +99,8 @@ func _process_survival(pawn: Node, tick: int) -> void:
 	var data: RefCounted = pawn.data
 	
 	# Check if pawn is working (increases decay)
-	var is_working: bool = pawn.get("state", "") == "working"
+	var state_val = pawn.get("state")
+	var is_working: bool = (state_val if state_val != null else "") == "working"
 	var work_mult: float = 1.0
 	if is_working:
 		work_mult = WORK_HUNGER_MULT
@@ -172,12 +173,16 @@ func _decay_energy(data: RefCounted, work_mult: float) -> void:
 	var energy_key: String = "energy" if data.has("energy") else "rest"
 	var decay: float = ENERGY_DECAY_RATE * work_mult
 	
-	data.set(energy_key, maxf(0.0, data.get(energy_key, 100.0) - decay))
-	
+	var cur_energy = data.get(energy_key)
+	var energy_val: float = cur_energy if cur_energy != null else 100.0
+	data.set(energy_key, maxf(0.0, energy_val - decay))
+
 	# Apply moodlet
-	if data.get(energy_key, 100.0) < 20:
+	var check_energy = data.get(energy_key)
+	var check_val: float = check_energy if check_energy != null else 100.0
+	if check_val < 20:
 		_apply_moodlet(data, "exhausted")
-	elif data.get(energy_key, 100.0) > 80:
+	elif check_val > 80:
 		_apply_moodlet(data, "rested")
 
 
@@ -434,7 +439,7 @@ func _apply_death(pawn: Node, cause: String) -> void:
 		_world_memory.record_event({
 			"type": "pawn_death",
 			"pawn_id": int(data.id),
-			"pawn_name": data.get("display_name", "Unknown"),
+			"pawn_name": data.get("display_name") if data.get("display_name") != null else "Unknown",
 			"cause": cause,
 			"tick": GameManager.tick_count
 		})
@@ -463,20 +468,31 @@ func rest_pawn(pawn: Node, rest_value: float) -> void:
 	var data: RefCounted = pawn.data
 	var energy_key: String = "energy" if data.has("energy") else "rest"
 	if data.has(energy_key):
-		data.set(energy_key, minf(100.0, data.get(energy_key, 100.0) + rest_value))
+		var ev = data.get(energy_key)
+		var e_val: float = ev if ev != null else 100.0
+		data.set(energy_key, minf(100.0, e_val + rest_value))
 
 ## Get survival status for pawn
 func get_survival_status(pawn: Node) -> Dictionary:
 	var data: RefCounted = pawn.data
+	var _h = data.get("hunger"); var hunger: float = _h if _h != null else 100.0
+	var _t = data.get("thirst"); var thirst: float = _t if _t != null else 100.0
+	var _e = data.get("energy"); var _r = data.get("rest")
+	var energy: float = (_e if _e != null else (_r if _r != null else 100.0))
+	var _s = data.get("stamina"); var stamina: float = _s if _s != null else 100.0
+	var _bt = data.get("body_temperature"); var temperature: float = _bt if _bt != null else 37.0
+	var _p = data.get("pain"); var pain: float = _p if _p != null else 0.0
+	var _inj = data.get("injuries"); var injuries = _inj if _inj != null else {}
+	var _hp = data.get("health"); var health: float = _hp if _hp != null else 100.0
 	return {
-		"hunger": data.get("hunger", 100.0),
-		"thirst": data.get("thirst", 100.0),
-		"energy": data.get("energy", data.get("rest", 100.0)),
-		"stamina": data.get("stamina", 100.0),
-		"temperature": data.get("body_temperature", 37.0),
-		"pain": data.get("pain", 0.0),
-		"injuries": data.get("injuries", {}).size(),
-		"health": data.get("health", 100.0)
+		"hunger": hunger,
+		"thirst": thirst,
+		"energy": energy,
+		"stamina": stamina,
+		"temperature": temperature,
+		"pain": pain,
+		"injuries": injuries.size(),
+		"health": health
 	}
 
 ## Clear all data (for world reroll)

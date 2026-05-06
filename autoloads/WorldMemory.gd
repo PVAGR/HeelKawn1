@@ -462,16 +462,18 @@ func record_event(e: Dictionary) -> void:
 
 ## PHASE 4: Skill-gated event significance filter
 ## Events are only recorded if they represent meaningful thresholds
+## ARCHITECTURE: Stricter filtering to prevent event spam
 func _event_passes_significance_threshold(e: Dictionary) -> bool:
     var typ: String = str(e.get("type", "")).to_lower()
-    
+
     # ALWAYS record these (core kernel events)
-    var core_events: Array = ["pawn_death", "birth", "pawn_birth", "settlement_founded", 
+    var core_events: Array = ["pawn_death", "birth", "pawn_birth", "settlement_founded",
                               "settlement_destroyed", "settlement_revived", "settlement_abandoned",
-                              "knowledge_inscribed", "knowledge_read", "teaching_event", "skill_taught"]
+                              "knowledge_inscribed", "knowledge_read", "teaching_event", "skill_taught",
+                              "generational_birth", "ai_chronicle_written", "ai_layer_decision"]
     if core_events.has(typ):
         return true
-    
+
     # Work events: only record if pawn has skill level >= 5 (mastery threshold)
     if typ == "work_event" or typ == "job_completed":
         var pawn_id: int = int(e.get("pawn_id", -1))
@@ -483,20 +485,33 @@ func _event_passes_significance_threshold(e: Dictionary) -> bool:
                     # Only record work events for skilled pawns (level 5+)
                     var highest_skill: int = pawn_data.get_highest_skill_level()
                     return highest_skill >= 5
-        # If we can't find pawn data, allow the event (defensive)
-        return true
-    
+        # If we can't find pawn data, SKIP the event (stricter filtering)
+        return false
+
     # Building events: always record (visible infrastructure changes)
     if typ.begins_with("building_"):
         return true
-    
-    # Social events: only record milestone situations (severity >= 2)
+
+    # Social events: only record milestone situations (severity >= 3, increased from 2)
     if typ.begins_with("social_"):
         var severity: int = int(e.get("severity", 0))
-        return severity >= 2
-    
-    # Default: allow through (don't break existing systems)
-    return true
+        return severity >= 3
+
+    # Movement/wander events: SKIP (too spammy)
+    if typ.begins_with("movement_") or typ == "wander_step" or typ == "pathfinding":
+        return false
+
+    # Resource gathering: only record significant quantities
+    if typ == "resource_gathered" or typ == "forage_event":
+        var quantity: int = int(e.get("quantity", 0))
+        return quantity >= 5  # Only record hauls of 5+ items
+
+    # Combat events: always record (significant)
+    if typ.begins_with("combat_") or typ == "enemy_killed" or typ == "pawn_injured":
+        return true
+
+    # Default: SKIP unknown event types (stricter than before)
+    return false
 
 
 func _normalize_event_payload(e: Dictionary) -> Dictionary:

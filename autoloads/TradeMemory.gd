@@ -7,6 +7,11 @@ extends Node
 ## - Goods exchanged
 ## - Trade-based knowledge spread
 
+# Trade route tiers for visual rendering
+const TIER_NONE: int = 0
+const TIER_ROUTE_1: int = 1
+const TIER_ROUTE_2: int = 2
+
 # Trade route data structure
 ## {
 ##   "route_id": int,
@@ -330,6 +335,30 @@ func get_goods_in_transit(settlement: int) -> Dictionary:
 			for item in route.goods:
 				total[item] = total.get(item, 0) + route.goods[item]
 	return total
+
+
+## Get trade route tier at a tile (for World rendering)
+func get_route_tier_at(x: int, y: int) -> int:
+	# Simplified: check if tile is on a trade route path
+	# In full implementation, would track actual route paths
+	for route in trade_routes:
+		if route.status == "en_route":
+			# Check if tile is near route endpoints (simplified)
+			# Full implementation would interpolate along path
+			var from_settlement: Variant = SettlementMemory.get_settlement_at_region(route.from_settlement)
+			var to_settlement: Variant = SettlementMemory.get_settlement_at_region(route.to_settlement)
+			
+			if from_settlement is Dictionary:
+				var from_center: int = int(from_settlement.get("center_region", -1))
+				if from_center >= 0:
+					# Simplified: just check distance to endpoints
+					var dist_from: int = abs(x - (from_center % 256)) + abs(y - (from_center / 256))
+					var dist_to: int = abs(x - (route.to_settlement % 256)) + abs(y - (route.to_settlement / 256))
+					
+					if dist_from < 8 or dist_to < 8:
+						return TIER_ROUTE_1
+	
+	return TIER_NONE
 
 
 ## Manually create a trade route (for testing)

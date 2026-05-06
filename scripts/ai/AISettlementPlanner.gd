@@ -15,8 +15,8 @@ var _initialized: bool = false
 
 func initialize(deps: Dictionary) -> void:
 	_llm_client = deps.get("llm_client")
-	_settlement_memory = deps.get("world_memory")  # Fallback
-	_stockpile_manager = get_node_or_null("/root/StockpileManager")
+	_settlement_memory = deps.get("settlement_memory")
+	_stockpile_manager = deps.get("stockpile_manager")
 	_initialized = true
 
 
@@ -91,11 +91,11 @@ RESPOND JSON:
 	)
 	
 	# Parse strategies
-	var strategies: Array[Dictionary] = []
+	var strategies: Array = []
 	if response is Array:
 		strategies = response
 	elif response.has("strategies"):
-		strategies = response.strategies
+		strategies = response.get("strategies", [])
 	
 	# Execute strategies (would integrate with SettlementPlanner.plan())
 	for strategy in strategies:

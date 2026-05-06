@@ -212,10 +212,10 @@ func _build_layer_context(layer_name: String, tick: int) -> Dictionary:
 		"diplomacy":
 			context.settlement_relations = _get_settlement_relations()
 			context.active_grudges = _get_active_grudges()
-		
+
 		"ecosystem":
 			context.wildlife_pops = _get_wildlife_populations()
-		.context.disaster_risks = _get_disaster_risk_assessment()
+			context.disaster_risks = _get_disaster_risk_assessment()
 	
 	# Add cross-layer context
 	context.cross_layer_narratives = _layer_narratives.duplicate()
@@ -374,22 +374,37 @@ func reset_counters() -> void:
 # ==================== INTERNAL ====================
 
 func _initialize_layers() -> void:
+	# Get shared references
+	var grudge_manager: Node = get_node_or_null("/root/GrudgeManager")
+	var gossip_manager: Node = get_node_or_null("/root/GossipManager")
+	var settlement_memory: Node = get_node_or_null("/root/SettlementMemory")
+	var stockpile_manager: Node = get_node_or_null("/root/StockpileManager")
+	var wildlife_population: Node = get_node_or_null("/root/WildlifePopulation")
+	var disaster_system: Node = get_node_or_null("/root/DisasterSystem")
+	
 	# Create layer instances
 	for layer_name in LAYER_CONFIG:
 		var layer_class_name: String = LAYER_CONFIG[layer_name].class
 		var layer_script: GDScript = _load_layer_script(layer_class_name)
-		
+
 		if layer_script != null:
 			var layer_instance: Object = layer_script.new()
 			layers[layer_name] = layer_instance
-			
+
 			# Initialize layer with references
 			if layer_instance.has_method("initialize"):
-				layer_instance.initialize({
+				var deps: Dictionary = {
 					"llm_client": _llm_client,
 					"world_memory": _world_memory,
-					"orchestrator": self
-				})
+					"orchestrator": self,
+					"grudge_manager": grudge_manager,
+					"gossip_manager": gossip_manager,
+					"settlement_memory": settlement_memory,
+					"stockpile_manager": stockpile_manager,
+					"wildlife_population": wildlife_population,
+					"disaster_system": disaster_system
+				}
+				layer_instance.initialize(deps)
 
 
 func _load_layer_script(class_name: String) -> GDScript:

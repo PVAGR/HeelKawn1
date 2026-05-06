@@ -120,52 +120,52 @@ func get_pool(pool_name: String) -> ObjectPool:
 
 ## Get an object from a pool
 func get_object(pool_name: String) -> Node:
-	var pool: ObjectPool = get_pool(pool_name)
+	var pool = get_pool(pool_name)
 	if pool == null:
 		return null
-	
+
 	var obj: Node = pool.get_object()
-	
+
 	# Track stats
 	if obj in pool.available:
 		stats.objects_reused += 1
 	else:
 		stats.objects_created += 1
-	
+
 	stats.total_objects = _count_total_objects()
-	
+
 	return obj
 
 
 ## Return an object to its pool
 func return_object(pool_name: String, obj: Node) -> void:
-	var pool: ObjectPool = get_pool(pool_name)
+	var pool = get_pool(pool_name)
 	if pool == null:
 		return
-	
+
 	pool.return_object(obj)
 
 
 ## Return all objects to their pools
 func return_all(pool_name: String) -> void:
-	var pool: ObjectPool = get_pool(pool_name)
+	var pool = get_pool(pool_name)
 	if pool == null:
 		return
-	
+
 	pool.return_all()
 
 
 ## Clear all pools (free all objects)
 func clear_all() -> void:
-	for pool_name in pools:
-		var pool: ObjectPool = pools[pool_name]
+	for pool_name_iter in pools:
+		var pool = pools[pool_name_iter]
 		for obj in pool.available:
 			obj.queue_free()
 		for obj in pool.in_use:
 			obj.queue_free()
 		pool.available.clear()
 		pool.in_use.clear()
-	
+
 	pools.clear()
 	stats = {
 		"total_pools": 0,

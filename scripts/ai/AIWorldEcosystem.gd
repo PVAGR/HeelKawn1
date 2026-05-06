@@ -15,8 +15,8 @@ var _initialized: bool = false
 
 func initialize(deps: Dictionary) -> void:
 	_llm_client = deps.get("llm_client")
-	_wildlife_population = get_node_or_null("/root/WildlifePopulation")
-	_disaster_system = get_node_or_null("/root/DisasterSystem")
+	_wildlife_population = deps.get("wildlife_population")
+	_disaster_system = deps.get("disaster_system")
 	_initialized = true
 
 
@@ -138,12 +138,14 @@ RESPOND JSON:
 		{},
 		"Respond with a JSON array of 1-2 world events. No markdown, no explanations."
 	)
-	
+
+	# Parse events
+	var events: Array = []
 	if response is Array:
 		events = response
 	elif response.has("events"):
-		events = response.events
-	
+		events = response.get("events", [])
+
 	return events
 
 

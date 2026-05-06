@@ -11,14 +11,16 @@ var _llm_client: LLMClient = null
 var _grudge_manager: Node = null
 var _gossip_manager: Node = null
 var _settlement_memory: Node = null
+var _world_memory: Node = null
 var _initialized: bool = false
 
 
 func initialize(deps: Dictionary) -> void:
 	_llm_client = deps.get("llm_client")
-	_grudge_manager = get_node_or_null("/root/GrudgeManager")
-	_gossip_manager = get_node_or_null("/root/GossipManager")
-	_settlement_memory = get_node_or_null("/root/SettlementMemory")
+	_grudge_manager = deps.get("grudge_manager")
+	_gossip_manager = deps.get("gossip_manager")
+	_settlement_memory = deps.get("settlement_memory")
+	_world_memory = deps.get("world_memory")
 	_initialized = true
 
 
@@ -190,11 +192,10 @@ func _declare_war(from_id: int, to_id: int, action: Dictionary) -> void:
 		"from": from_id,
 		"to": to_id
 	}))
-	
+
 	# Record event
-	var world_memory: Node = get_node_or_null("/root/WorldMemory")
-	if world_memory != null:
-		world_memory.record_event({
+	if _world_memory != null:
+		_world_memory.record_event({
 			"type": "ai_war_declared",
 			"from_settlement": from_id,
 			"to_settlement": to_id,

@@ -15,8 +15,8 @@ var _initialized: bool = false
 
 func initialize(deps: Dictionary) -> void:
 	_llm_client = deps.get("llm_client")
-	_grudge_manager = get_node_or_null("/root/GrudgeManager")
-	_gossip_manager = get_node_or_null("/root/GossipManager")
+	_grudge_manager = deps.get("grudge_manager")
+	_gossip_manager = deps.get("gossip_manager")
 	_initialized = true
 
 

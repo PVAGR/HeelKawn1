@@ -58,7 +58,7 @@ func _update_victory_progress(tick: int) -> void:
 	
 	# Dynasty Victory
 	var large_dynasties: int = 0
-	if _legacy_system != null and _legacy_system.has("dynasties"):
+	if _legacy_system != null and "dynasties" in _legacy_system:
 		for dynasty in _legacy_system.dynasties.values():
 			if int(dynasty.get("total_members", 0)) >= 20:
 				large_dynasties += 1
@@ -66,7 +66,7 @@ func _update_victory_progress(tick: int) -> void:
 	
 	# Knowledge Victory
 	var preserved_knowledge: int = 0
-	if _knowledge_system != null and _knowledge_system.has("record_carriers"):
+	if _knowledge_system != null and "record_carriers" in _knowledge_system:
 		var knowledge_types: Dictionary = {}
 		for carrier in _knowledge_system.record_carriers.values():
 			for kt in carrier.get("knowledge_types", []):

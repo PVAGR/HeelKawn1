@@ -114,18 +114,29 @@ var building_queue: Array[Dictionary] = []
 var _next_build_id: int = 1
 
 # References
-@onready var _world: Node = null
-@onready var _world_memory: Node = null
-@onready var _player_gathering: Node = null
-@onready var _pawn_spawner: Node = null
+var _world: Node = null
+var _world_memory: Node = null
+var _player_gathering: Node = null
+var _pawn_spawner: Node = null
 
 
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
-	_world = get_node_or_null("/root/Main/World")
-	_world_memory = get_node_or_null("/root/WorldMemory")
-	_player_gathering = get_node_or_null("/root/PlayerGathering")
-	_pawn_spawner = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
+
+
+func _ensure_references() -> void:
+	if _world == null:
+		_world = get_node_or_null("/root/Main/World")
+	if _world_memory == null:
+		_world_memory = get_node_or_null("/root/WorldMemory")
+	if _player_gathering == null:
+		_player_gathering = get_node_or_null("/root/PlayerGathering")
+	if _pawn_spawner == null:
+		var main = get_node_or_null("/root/Main")
+		if main != null and main.has_method("get_pawn_spawner"):
+			_pawn_spawner = main.call("get_pawn_spawner")
+		else:
+			_pawn_spawner = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
 
 
 func _on_game_tick(tick: int) -> void:
@@ -294,10 +305,15 @@ func _consume_resources(required: Dictionary) -> void:
 
 
 func _get_player_pawn_id() -> int:
-	# TODO: Get actual player pawn ID
-	# For now, return first pawn as placeholder
+	_ensure_references()
+	var main = get_node_or_null("/root/Main")
+	if main != null and main.has_method("get_player_pawn_id"):
+		return main.call("get_player_pawn_id")
+	
+	# Fallback (Legacy/Spectator)
 	if _pawn_spawner != null and _pawn_spawner.pawns.size() > 0:
 		return int(_pawn_spawner.pawns[0].data.id)
+	return -1
 	return 1
 
 
@@ -318,6 +334,22 @@ func _add_to_building_queue(tile: Vector2i, building_type: String, builder_id: i
 	_next_build_id += 1
 	
 	return build.build_id
+
+
+## Called by Main.gd to check if a structure can be placed at this tile
+func can_place_structure(tile: Vector2i, type: String) -> Dictionary:
+	_ensure_references()
+	var config = BUILDING_CONFIG.get(type, {})
+	if config.is_empty():
+		return {"success": false, "message": "Unknown type"}
+	
+	if not _is_valid_build_tile(tile, config.get("required_tile", "any")):
+		return {"success": false, "message": "Invalid location"}
+	
+	if not _has_resources(config.get("resources", {})):
+		return {"success": false, "message": "Missing resources"}
+	
+	return {"success": true, "message": "Valid"}
 
 
 func _process_building_queue(tick: int) -> void:

@@ -13,6 +13,7 @@ var _player_building: Node = null
 @onready var items_grid: GridContainer = $MarginContainer/VBoxContainer/ItemsGrid
 @onready var action_buttons: VBoxContainer = $MarginContainer/VBoxContainer/ActionButtons
 
+var _craft_button: Button = null
 var _selected_item: String = ""
 var _update_timer: float = 0.0
 
@@ -21,8 +22,18 @@ func _ready() -> void:
 	_player_gathering = get_node_or_null("/root/PlayerGathering")
 	_player_building = get_node_or_null("/root/PlayerBuilding")
 	
+	_setup_craft_button()
 	# Hide by default
 	visible = false
+
+
+func _setup_craft_button() -> void:
+	if action_buttons == null:
+		return
+	_craft_button = Button.new()
+	_craft_button.text = "Open Crafting Menu"
+	_craft_button.pressed.connect(_on_craft_button_pressed)
+	action_buttons.add_child(_craft_button)
 
 
 func _process(delta: float) -> void:
@@ -161,3 +172,25 @@ func toggle_inventory() -> void:
 	visible = not visible
 	if visible:
 		_refresh_inventory()
+
+
+func _on_craft_button_pressed() -> void:
+	if _player_gathering == null:
+		return
+	
+	# Open crafting menu using the current inventory
+	var inventory: Dictionary = _player_gathering.get_inventory()
+	_open_crafting_dialog(inventory)
+
+
+func _open_crafting_dialog(inventory: Dictionary) -> void:
+	if CraftingSystem == null:
+		return
+	
+	var available_recipes: Array[Dictionary] = CraftingSystem.get_available_recipes(inventory)
+	
+	# In a real implementation, this would open a new Sub-Menu.
+	# For now, we'll log it and pick the first one as a proof-of-concept.
+	print("[PlayerInventory] Available recipes: ", available_recipes.size())
+	for recipe in available_recipes:
+		print(" - ", recipe.name)

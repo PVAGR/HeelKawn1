@@ -135,7 +135,13 @@ func _update_display() -> void:
 		return
 	
 	# Get pawn data
-	var pawn_spawner: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
+	var main = get_node_or_null("/root/Main")
+	var pawn_spawner: Node = null
+	if main != null and main.has_method("get_pawn_spawner"):
+		pawn_spawner = main.call("get_pawn_spawner")
+	else:
+		pawn_spawner = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
+	
 	if pawn_spawner == null or not pawn_spawner.has_method("pawn_data_for_id"):
 		return
 	

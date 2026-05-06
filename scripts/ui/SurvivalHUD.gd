@@ -164,17 +164,18 @@ func _update_status_effects(data: RefCounted) -> void:
 
 
 func _get_player_pawn() -> Node:
-	# Get player pawn from PawnSpawner
-	var pawn_spawner: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
-	if pawn_spawner == null or not pawn_spawner.has_method("get_player_pawn"):
-		# Fallback: return first pawn
-		if pawn_spawner != null and pawn_spawner.has_node("pawns"):
-			var pawns: Array = pawn_spawner.get("pawns", [])
+	# Get player pawn from Main
+	var main: Node = get_node_or_null("/root/Main")
+	if main == null or not main.has_method("get_player_pawn"):
+		# Fallback: check PawnSpawner first pawn
+		var pawn_spawner: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
+		if pawn_spawner != null:
+			var pawns: Array = pawn_spawner.get("pawns")
 			if pawns.size() > 0:
 				return pawns[0]
 		return null
 	
-	return pawn_spawner.call("get_player_pawn")
+	return main.call("get_player_pawn")
 
 
 ## Toggle HUD visibility

@@ -219,8 +219,8 @@ func _calculate_gather_quantity(config: Dictionary, tile: Vector2i) -> int:
 	var min_qty: int = base_range[0]
 	var max_qty: int = base_range[1]
 	
-	# Base quantity (random within range)
-	var quantity: int = randi_range(min_qty, max_qty)
+	# Base quantity (random within range) using deterministic WorldRNG
+	var quantity: int = WorldRNG.roll_range(min_qty, max_qty, "gather_quantity")
 	
 	# Tool bonus
 	var tool_bonus: String = config.get("tool_bonus", "none")

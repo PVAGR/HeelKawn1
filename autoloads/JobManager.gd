@@ -6,6 +6,7 @@ extends Node
 
 # Autoload references
 @onready var WorldAI = get_node_or_null("/root/WorldAI")
+@onready var TickManager = get_node_or_null("/root/TickManager")
 
 signal job_posted(job: Job)
 signal job_claimed(job: Job, pawn: Pawn)

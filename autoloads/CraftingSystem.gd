@@ -229,6 +229,31 @@ func _add_recipe(recipe_data: Dictionary) -> void:
 	recipes[recipe_data.recipe_id] = recipe_data
 
 
+## Returns a list of recipes that can be crafted given the available materials.
+## inventory: Dictionary {item_type (String/int): quantity (int)}
+func get_available_recipes(inventory: Dictionary) -> Array[Dictionary]:
+	var available: Array[Dictionary] = []
+	for recipe_id in recipes:
+		var recipe: Dictionary = recipes[recipe_id]
+		var can_craft: bool = true
+		var ingredients: Dictionary = recipe.get("ingredients", {})
+		
+		for resource in ingredients:
+			var required_qty: int = ingredients[resource]
+			var available_qty: int = inventory.get(resource, 0)
+			if available_qty < required_qty:
+				can_craft = false
+				break
+		
+		if can_craft:
+			available.append(recipe)
+	return available
+
+
+func get_recipe(recipe_id: String) -> Dictionary:
+	return recipes.get(recipe_id, {})
+
+
 func _update_crafting_progress(tick: int) -> void:
 	for i in range(active_crafting_jobs.size() - 1, -1, -1):
 		var job: Dictionary = active_crafting_jobs[i]

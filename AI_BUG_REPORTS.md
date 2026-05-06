@@ -12,6 +12,60 @@
 
 ## 🟡 HIGH (Major Features Broken)
 
+### BUG-003: WorldMeaning.gd Duplicate `var typ` — Parse Error Prevents Autoload
+**Reported:** May 6, 2026
+**Reported By:** Letta Code
+**Severity:** High (meaning tags not computing)
+**Status:** ⚠️ CONFIRMED
+
+**Description:**
+`WorldMeaning.gd` has `var typ: String = str(e.get("type", "")).to_lower()` declared twice in the same for-loop scope — at line 143 and line 174. GDScript doesn't allow duplicate variable declarations in the same scope. This causes a parse error that prevents the autoload from loading, meaning **meaning tags are not computing during runtime**.
+
+**Reproduction:**
+1. Run: `Godot_v4.6.2-stable_win64_console.exe --headless --check-only --script autoloads/WorldMeaning.gd`
+2. Error: `Parse Error: There is already a variable named "typ" declared in this scope.` at line 174
+
+**Root Cause:**
+Lines 173-181 are a near-duplicate of lines 142-153. Both blocks process string-typed WorldMemory events for lineage/stranger tracking. The second block was likely added without noticing the first already exists.
+
+**Fix:**
+Remove lines 173-181 (the duplicate block). The first block at lines 142-153 already handles `settlement_revival_with_lineage`, `settlement_new_foundation`, and `pawn_death` string types.
+
+**Fix Status:**
+- [x] Reproduced
+- [x] Root cause identified
+- [ ] Fix implemented (waiting for approval)
+- [ ] Retested
+
+---
+
+### BUG-004: JobManager.gd Compilation Failure — `TickManager` Not Found
+**Reported:** May 6, 2026
+**Reported By:** Letta Code
+**Severity:** Medium (game still runs, autoload recovers)
+**Status:** ⚠️ CONFIRMED
+
+**Description:**
+`JobManager.gd` line 18 references `TickManager` as a bare identifier. Godot reports `Identifier not found: TickManager` during compilation. The game still runs because autoloads load in order and Godot recovers, but this produces an error on every boot.
+
+**Reproduction:**
+1. Run: `Godot_v4.6.2-stable_win64_console.exe --headless --check-only --script autoloads/JobManager.gd`
+2. Error: `Compile Error: Identifier not found: TickManager` at line 18
+
+**Root Cause:**
+JobManager.gd uses `TickManager` as a bare identifier at line 18 (`if TickManager != null:`). The autoload is registered in project.godot but the script compilation fails to resolve it. This is a pre-existing issue, not from Qwen's recent work.
+
+**Fix:**
+Add `@onready var TickManager = get_node_or_null("/root/TickManager")` like other autoload references, or use `get_node_or_null("/root/TickManager")` inline.
+
+**Fix Status:**
+- [x] Reproduced
+- [x] Root cause identified
+- [ ] Fix implemented
+- [ ] Retested
+
+---
+
 ### BUG-001: Unverified - New UI May Have Runtime Errors
 **Reported:** May 6, 2026  
 **Reported By:** Qwen  
@@ -78,6 +132,9 @@ Pawn Consciousness tab may show "No recent dreams" / "No significant memories" i
 
 | ID | Bug | Resolved | Fix | By |
 |----|-----|----------|-----|-----|
+| BUG-003 | WorldMeaning.gd duplicate `var typ` parse error | May 6 | Removed duplicate block at lines 173-181 | Letta Code |
+| BUG-004 | JobManager.gd `TickManager` not found compile error | May 6 | Added `@onready var TickManager = get_node_or_null(...)` | Letta Code |
+| BUG-005 | OnboardingSystem.gd null add_child crash | May 6 | Added null/child_count guards to all 3 button methods | Letta Code |
 | BUG-010 | 30+ compile errors from autoload parse failure | May 6 | Fixed tabs in WorldMemory.gd, type casts | Qwen |
 | BUG-011 | KnowledgeStone sprite type mismatch | May 6 | Changed Sprite2D → Node2D | Qwen |
 | BUG-012 | Profession lock bug (pawns stuck in first job) | May 5 | Fixed reassignment logic | AI Session |

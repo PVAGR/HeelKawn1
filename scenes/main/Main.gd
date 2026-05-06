@@ -126,7 +126,7 @@ const WORLD_STABILIZATION_TICKS: int = 500
 const PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES: bool = false  # Legacy — use _can_player_place() instead
 
 func _can_player_place() -> bool:
-	return _player_mode == PlayerMode.GOD
+	return _player_mode == PlayerMode.GOD or _player_pawn != null
 ## Toolbar + keys 1–7 match GameManager.SPEED_STEPS (F10 creator menu still steals digit keys while open).
 const ALLOW_SPEED_NUMBER_HOTKEYS: bool = true
 ## Keep load-in sessions predictable; speed only changes via explicit user action.
@@ -159,6 +159,8 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _save_load_menu = $UI_Viewport/SaveLoadMenu
 @onready var _main_menu = $UI_Viewport/MainMenu
 @onready var _tile_tooltip = $UI_Viewport/TileTooltip
+@onready var _inventory_ui: Node = $UI_Viewport/PlayerInventoryUI
+@onready var _survival_hud: Node = $UI_Viewport/SurvivalHUD
 @onready var _camera_bookmarks = $CameraBookmarks
 @onready var _event_particles = $EventParticles
 @onready var _weather_overlay = $WeatherOverlay
@@ -641,6 +643,9 @@ func _ready() -> void:
 			_save_load_menu.save_requested.connect(_on_save_slot)
 			_save_load_menu.load_requested.connect(_on_load_slot)
 			_save_load_menu.new_game_requested.connect(_on_new_game)
+		# Initialize SurvivalHUD
+		if _survival_hud != null and _survival_hud.has_method("initialize"):
+			_survival_hud.call("initialize", _world, _camera)
 		# Wire MainMenu signals
 		if _main_menu != null:
 			_main_menu.new_game_pressed.connect(_on_new_game)
@@ -670,6 +675,8 @@ func _ready() -> void:
 			_toolbar.save_requested.connect(_colony_save)
 			_toolbar.load_requested.connect(_colony_load)
 			_toolbar.appearance_edit_requested.connect(_toggle_avatar_panel)
+			if _toolbar.has_signal("structure_type_requested"):
+				_toolbar.structure_type_requested.connect(_on_structure_type_selected)
 		call_deferred("_ensure_avatar_panel")
 	if OS.is_debug_build():
 		print("[Main] Scene ready. Tick interval: %.2fs" % GameManager.TICK_INTERVAL_SECONDS)
@@ -3493,6 +3500,10 @@ func _handle_key_input(key: InputEventKey) -> void:
 			_open_incarnation_picker()
 		KEY_L:
 			_toggle_chronicle_ledger()
+		KEY_TAB:
+			_toggle_inventory()
+		KEY_B:
+			_toggle_build_mode()
 		KEY_K:
 			_toggle_pawn_ai_inspector()
 		KEY_U:
@@ -3513,6 +3524,22 @@ func _handle_key_input(key: InputEventKey) -> void:
 					print("[Main] Camera follow selection: %s" % _camera_follow_selected)
 			else:
 				_camera_follow_selected = false
+
+
+func _toggle_inventory() -> void:
+	if _inventory_ui != null:
+		if _inventory_ui.has_method("toggle_inventory"):
+			_inventory_ui.call("toggle_inventory")
+		else:
+			_inventory_ui.visible = not _inventory_ui.visible
+
+
+func _toggle_build_mode() -> void:
+	# Toggle between NONE and BUILD_BED as starting build mode
+	if _designation_mode == DesignationMode.NONE:
+		_set_designation_mode(DesignationMode.BUILD_BED)
+	else:
+		_set_designation_mode(DesignationMode.NONE)
 
 
 func _toggle_debug_panel() -> void:
@@ -6140,6 +6167,29 @@ func _colony_load() -> void:
 	_reset_job_cooldown_telemetry()
 	if OS.is_debug_build():
 		print("[Main] Loaded colony from %s" % GameSave.get_save_path())
+
+
+func _on_structure_type_selected(type: String) -> void:
+	if PlayerBuilding == null:
+		return
+	
+	# Mapping display types to DesignationMode if necessary, 
+	# but player placement in HeelKawn follows a "Ghost Preview" pattern.
+	# For now, we'll log it and set the mode to WALL or similar as a proxy.
+	if OS.is_debug_build():
+		print("[Main] Player selected structure: %s" % type)
+	
+	# If Foundation/Wall/Door, use existing modes
+	match type:
+		"foundation":
+			_set_designation_mode(DesignationMode.BUILD_BED) # Proxy for foundation in v1
+		"wall", "wall_wood", "wall_stone":
+			_set_designation_mode(DesignationMode.BUILD_WALL)
+		"door", "door_wood":
+			_set_designation_mode(DesignationMode.BUILD_DOOR)
+		_:
+			# For other types, we might need a general "STAMP" mode in the future.
+			pass
 
 
 func _on_save_slot(slot: int) -> void:

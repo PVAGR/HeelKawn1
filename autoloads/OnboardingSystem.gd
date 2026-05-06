@@ -298,8 +298,14 @@ func _add_next_button() -> void:
 	button.custom_minimum_size = Vector2(100, 30)
 	button.pressed.connect(_on_next_clicked)
 	
+	if _tutorial_panel == null or _tutorial_panel.get_child_count() == 0:
+		return
 	var vbox: VBoxContainer = _tutorial_panel.get_child(0) as VBoxContainer
+	if vbox == null or vbox.get_child_count() < 2:
+		return
 	var button_container: HBoxContainer = vbox.get_child(1) as HBoxContainer
+	if button_container == null:
+		return
 	button_container.add_child(button)
 
 
@@ -309,8 +315,14 @@ func _add_start_button(tutorial: Dictionary) -> void:
 	button.custom_minimum_size = Vector2(100, 30)
 	button.pressed.connect(_on_start_clicked.bind(tutorial))
 	
+	if _tutorial_panel == null or _tutorial_panel.get_child_count() == 0:
+		return
 	var vbox: VBoxContainer = _tutorial_panel.get_child(0) as VBoxContainer
+	if vbox == null or vbox.get_child_count() < 2:
+		return
 	var button_container: HBoxContainer = vbox.get_child(1) as HBoxContainer
+	if button_container == null:
+		return
 	button_container.add_child(button)
 
 
@@ -320,8 +332,14 @@ func _add_continue_button() -> void:
 	button.custom_minimum_size = Vector2(100, 30)
 	button.pressed.connect(_on_continue_clicked)
 	
+	if _tutorial_panel == null or _tutorial_panel.get_child_count() == 0:
+		return
 	var vbox: VBoxContainer = _tutorial_panel.get_child(0) as VBoxContainer
+	if vbox == null or vbox.get_child_count() < 2:
+		return
 	var button_container: HBoxContainer = vbox.get_child(1) as HBoxContainer
+	if button_container == null:
+		return
 	button_container.add_child(button)
 
 

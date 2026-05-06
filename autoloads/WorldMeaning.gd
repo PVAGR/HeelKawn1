@@ -170,16 +170,6 @@ func recompute() -> void:
 		if t > last:
 			rec["last_death_tick"] = t
 
-		# Also process string-typed WorldMemory events for lineage and stranger tracking
-		var typ: String = str(e.get("type", "")).to_lower()
-		match typ:
-			"settlement_revival_with_lineage":
-				rec["continuity_count"] = int(rec.get("continuity_count", 0)) + 1
-			"settlement_new_foundation":
-				rec["stranger_count"] = int(rec.get("stranger_count", 0)) + 1
-			"pawn_death":
-				rec["death_count"] = int(rec.get("death_count", 0)) + 1
-
 	_last_recompute_event_index = ev_count
 
 	# Derive total_deaths and death_density (only for regions that got new events)

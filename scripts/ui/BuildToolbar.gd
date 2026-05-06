@@ -27,6 +27,8 @@ signal appearance_edit_requested()
 signal save_requested()
 signal load_requested()
 
+## Emitted when building type is selected.
+signal structure_type_requested(type: String)
 
 # Keep these mode ints in sync with Main.DesignationMode.
 const MODE_NONE: int = 0
@@ -41,6 +43,7 @@ const ACCENT_TIME:  Color = Color8(120, 200, 255)  # cool blue for time cluster
 const ACCENT_SAVE:  Color = Color8(100, 200, 140)  # save (disk)
 const ACCENT_LOAD:  Color = Color8(200, 160, 100)  # load / recall
 const ACCENT_YOU:  Color = Color8(200, 140, 220)
+const ACCENT_BUILD: Color = Color8(220, 180, 100)
 
 const FONT_SIZE_BUTTON: int = 11
 const FONT_SIZE_LABEL:  int = 9
@@ -91,6 +94,8 @@ func _build_ui() -> void:
 	_build_save_load_cluster(row)
 	row.add_child(_make_separator())
 	_build_appearance_cluster(row)
+	row.add_child(_make_separator())
+	_build_build_cluster(row)
 
 	_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	# Defer position so layout settles and we can read the actual minimum size.
@@ -120,6 +125,23 @@ func _build_appearance_cluster(row: HBoxContainer) -> void:
 	var btn := _make_button("Sprite [K]", ACCENT_YOU)
 	btn.pressed.connect(func(): appearance_edit_requested.emit())
 	row.add_child(btn)
+
+
+func _build_build_cluster(row: HBoxContainer) -> void:
+	var label := _make_cluster_label("Build")
+	row.add_child(label)
+	
+	# Mini dropdown or set of buttons for structures
+	# For now, we'll list core ones to keep the bar compact.
+	var items := ["Foundation", "Wall", "Door", "Shelter", "Fire Pit"]
+	for item in items:
+		var btn := _make_button(item, ACCENT_BUILD)
+		btn.pressed.connect(func(): _on_build_item_pressed(item.to_lower().replace(" ", "_")))
+		row.add_child(btn)
+
+
+func _on_build_item_pressed(type: String) -> void:
+	structure_type_requested.emit(type)
 
 
 func _build_save_load_cluster(row: HBoxContainer) -> void:

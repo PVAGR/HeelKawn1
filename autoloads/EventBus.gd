@@ -39,7 +39,7 @@ func _on_game_tick(tick: int) -> void:
 
 
 ## Subscribe to an event
-func connect(event_name: String, subscriber: Object, callback: String) -> void:
+func subscribe(event_name: String, subscriber: Object, callback: String) -> void:
 	if not subscriptions.has(event_name):
 		subscriptions[event_name] = []
 	
@@ -61,7 +61,7 @@ func connect(event_name: String, subscriber: Object, callback: String) -> void:
 
 
 ## Unsubscribe from an event
-func disconnect(event_name: String, subscriber: Object, callback: String) -> void:
+func unsubscribe(event_name: String, subscriber: Object, callback: String) -> void:
 	if not subscriptions.has(event_name):
 		return
 	

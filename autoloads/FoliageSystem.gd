@@ -1,14 +1,12 @@
 extends Node
 
-class_name FoliageSystem
-
 ## Procedural foliage overlay for livable feel (grass/flowers sway).
 ## Tick-driven, deterministic per tile.
 
 const FOLIAGE_SEED_SALT: int = 0x4f6c69 # "Foli"
 
 static func apply_foliage_tint(c: Color, x: int, y: int, biome: int) -> Color:
-	if biome not in [Biome.Type.FERTILE_SOIL, Biome.Type.FOREST]:
+	if biome not in [Biome.Type.PLAINS, Biome.Type.FOREST]:
 		return c
 	var sway_phase: float = sin((float(GameManager.tick_count) * 0.03 + float(x * 17 + y * 31) / 256.0))
 	var grass_blend: float = 0.08 + 0.04 * sway_phase

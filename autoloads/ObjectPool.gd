@@ -1,16 +1,16 @@
 extends Node
-## ObjectPool - Generic object pooling system for performance optimization
+## ObjectPoolSystem - Generic object pooling for performance optimization
 ##
 ## Prevents garbage collection stutter by reusing objects instead of
 ## destroying/recreating them. Use for: projectiles, particles, effects,
 ## temporary UI elements, pawns, enemies, etc.
 ##
 ## Usage:
-##   ObjectPool.get_pool("Enemy").get_object()  # Get pooled object
-##   ObjectPool.get_pool("Enemy").return_object(enemy)  # Return when done
+##   ObjectPoolSystem.get_pool("Enemy").get_object()  # Get pooled object
+##   ObjectPoolSystem.get_pool("Enemy").return_object(enemy)  # Return when done
 
 # Pool data structure
-class ObjectPool:
+class PoolData:
 	var available: Array[Node] = []
 	var in_use: Array[Node] = []
 	var scene: PackedScene

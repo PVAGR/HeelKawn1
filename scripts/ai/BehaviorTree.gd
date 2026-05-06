@@ -21,6 +21,7 @@ var children: Array[BehaviorNode] = []
 
 # Blackboard for shared data (passed from root)
 var blackboard: Dictionary = {}
+var _blackboard: Dictionary = {}  # Internal reference during execution
 
 # Decorator data
 var decorator_data: Dictionary = {}

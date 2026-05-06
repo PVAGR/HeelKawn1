@@ -217,20 +217,17 @@ func calculate_inheritance(child_id: int, father_id: int, mother_id: int) -> Arr
 func _should_inherit_trait(trait_id: String, parent: String) -> bool:
 	if not trait_definitions.has(trait_id):
 		return false
-	
-	var trait: Dictionary = trait_definitions[trait_id]
-	var inheritance: String = trait.get("inheritance", "none")
-	
+
+	var trait_def: Dictionary = trait_definitions[trait_id]
+	var inheritance: String = trait_def.get("inheritance", "none")
+
 	match inheritance:
 		"dominant":
-			# 70% chance to inherit dominant traits
-			return true  # Deterministic: always inherit
+			return true
 		"recessive":
-			# 30% chance to inherit recessive traits
-			return true  # Deterministic: always inherit
+			return true
 		"complex":
-			# Complex inheritance (multiple genes)
-			return true  # Deterministic: always inherit
+			return true
 		_:
 			return false
 

@@ -241,10 +241,12 @@ func _notify_family_of_death(pawn_id: int, battle: Dictionary) -> void:
 	var pawn_data: Node = _pawn_spawner.call("pawn_data_for_id", pawn_id)
 	if pawn_data == null:
 		return
-	
+
 	# Get family members
-	var family: Array = pawn_data.get("family_members", [])
-	
+	var family: Array = []
+	if pawn_data.has_meta("family_members"):
+		family = pawn_data.get_meta("family_members")
+
 	for family_id in family:
 		if _world_memory != null:
 			_world_memory.record_event({
@@ -263,7 +265,7 @@ func _get_battle(battle_id: int) -> Dictionary:
 	for battle in battle_reports:
 		if battle.battle_id == battle_id:
 			return battle
-	return null
+	return {}
 
 
 func _generate_battle_name(location: Vector2i) -> String:

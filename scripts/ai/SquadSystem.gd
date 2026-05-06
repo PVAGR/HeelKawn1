@@ -388,7 +388,7 @@ func _get_squad(squad_id: int) -> Dictionary:
 	for squad in squads:
 		if squad.squad_id == squad_id:
 			return squad
-	return null
+	return {}
 
 
 func _get_pawn_name(pawn_id: int) -> String:

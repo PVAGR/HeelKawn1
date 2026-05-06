@@ -66,7 +66,7 @@ const MAX_ENTITIES_AT_ZOOM: Dictionary = {
 
 
 func _ready() -> void:
-	_process_mode = Node.PROCESS_MODE_ALWAYS
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	
 	# Get camera
 	_camera = get_viewport().get_camera_2d()

@@ -454,7 +454,7 @@ func _get_guild(guild_id: int) -> Dictionary:
 	for guild in guilds:
 		if guild.guild_id == guild_id:
 			return guild
-	return null
+	return {}
 
 
 func _get_pawn_name(pawn_id: int) -> String:

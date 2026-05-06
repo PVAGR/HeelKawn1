@@ -12,7 +12,7 @@ enum HairStyle { NONE, SHORT, MOHAWK, BUN }
 ## Trainable proficiencies. Higher level -> faster work + more XP per tick on
 ## that skill type. Pawns earn XP only while doing the matching job.
 enum Skill { FORAGING, MINING, CHOPPING, BUILDING, HUNTING }
-enum Profession { NONE, FARMER, BUILDER, GATHERER, WARRIOR, SCHOLAR, TRADER }
+enum Profession { NONE, FARMER, BUILDER, GATHERER, WARRIOR, SCHOLAR, TRADER, SMITH, HEALER }
 
 ## Skill XP curve. Each skill tracked as raw XP; level = floor(xp / XP_PER_LEVEL).
 const XP_PER_LEVEL: float = 100.0

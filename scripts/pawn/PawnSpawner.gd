@@ -435,25 +435,31 @@ func _name_pool_for_convention(naming_convention: String) -> Array[String]:
 ## Assign diverse professions at spawn based on weighted random (deterministic)
 ## This ensures pawns are NOT all farmers - they're HeelKawnians with diverse roles
 func _assign_heterogeneous_profession(data: PawnData, rng: RandomNumberGenerator) -> void:
-	# Weight distribution for starter pawns - diverse community (Phase 6: Added TRADER)
-	# Builder: 20% (housing pressure relief)
-	# Gatherer: 20% (food diversity)
+	# Weight distribution for starter pawns - diverse community (Phase 6: Added SMITH, HEALER)
+	# Builder: 18% (housing pressure relief)
+	# Gatherer: 18% (food diversity)
 	# Warrior: 15% (defense, hunting)
 	# Scholar: 10% (knowledge, research)
-	# Trader: 5% (inter-settlement commerce) - NEW
-	# Farmer: 30% (food baseline)
+	# Trader: 5% (inter-settlement commerce)
+	# Smith: 5% (crafting, metalworking) - NEW
+	# Healer: 5% (healthcare, medicine) - NEW
+	# Farmer: 24% (food baseline)
 	var roll: float = rng.randf()
 
-	if roll < 0.20:
+	if roll < 0.18:
 		data.current_profession = PawnData.Profession.BUILDER
-	elif roll < 0.40:
+	elif roll < 0.36:
 		data.current_profession = PawnData.Profession.GATHERER
-	elif roll < 0.55:
+	elif roll < 0.51:
 		data.current_profession = PawnData.Profession.WARRIOR
-	elif roll < 0.65:
+	elif roll < 0.61:
 		data.current_profession = PawnData.Profession.SCHOLAR
-	elif roll < 0.70:
+	elif roll < 0.66:
 		data.current_profession = PawnData.Profession.TRADER
+	elif roll < 0.71:
+		data.current_profession = PawnData.Profession.SMITH
+	elif roll < 0.76:
+		data.current_profession = PawnData.Profession.HEALER
 	else:
 		data.current_profession = PawnData.Profession.FARMER
 
@@ -475,6 +481,14 @@ func _assign_heterogeneous_profession(data: PawnData, rng: RandomNumberGenerator
 			# Traders get balanced skills for versatility
 			data.add_skill_xp(PawnData.Skill.FORAGING, 30.0)
 			data.add_skill_xp(PawnData.Skill.HUNTING, 30.0)
+		PawnData.Profession.SMITH:
+			# Smiths get mining and building for metalworking
+			data.add_skill_xp(PawnData.Skill.MINING, 40.0)
+			data.add_skill_xp(PawnData.Skill.BUILDING, 20.0)
+		PawnData.Profession.HEALER:
+			# Healers get foraging (herbs) and hunting (precision)
+			data.add_skill_xp(PawnData.Skill.FORAGING, 30.0)
+			data.add_skill_xp(PawnData.Skill.HUNTING, 20.0)
 		PawnData.Profession.FARMER:
 			data.add_skill_xp(PawnData.Skill.FORAGING, 50.0)
 

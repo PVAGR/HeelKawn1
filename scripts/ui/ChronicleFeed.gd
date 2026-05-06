@@ -70,7 +70,8 @@ func _ready() -> void:
 	_feed.offset_top = FEED_MARGIN_TOP + 18
 	_feed.offset_right = -FEED_MARGIN_RIGHT
 	_feed.offset_bottom = -FEED_MARGIN_BOTTOM
-	_feed.bbcode_enabled = true
+    # bbcode_enabled disabled for runtime stability
+    # _feed.bbcode_enabled = true
 	_feed.scroll_following = true
 	_feed.scroll_active = true
 	_feed.add_theme_font_size_override("normal_font_size", FONT_SIZE)

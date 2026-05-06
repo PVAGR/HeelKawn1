@@ -2518,7 +2518,7 @@ func _tick_idle() -> void:
 					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
 						meaning_bias += 1  # knowledge exchange at crossroads
 				"faded_gathering_place":
-				meaning_bias += 1  # faint echo of community
+					meaning_bias += 1  # faint echo of community
 				# New meaning pipeline tags: craft, authority, trade, conflict, legacy, culture
 				"craftsman_quarter":
 					meaning_bias += 2  # work where craft lives

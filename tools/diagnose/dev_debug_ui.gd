@@ -100,7 +100,8 @@ func _create_ui() -> void:
 	v.add_child(h)
 
 	_log = RichTextLabel.new()
-	_log.bbcode_enabled = true
+    # bbcode_enabled disabled for runtime stability
+    # _log.bbcode_enabled = true
 	_log.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_log.custom_minimum_size = Vector2(240, 100)
 	_log.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

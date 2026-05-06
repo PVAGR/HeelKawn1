@@ -32,7 +32,8 @@ func _ready() -> void:
 	_panel.visible = false
 
 	_label = RichTextLabel.new()
-	_label.bbcode_enabled = true
+    # bbcode_enabled disabled for runtime stability
+    # _label.bbcode_enabled = true
 	_label.fit_content = true
 	_label.scroll_active = false
 	_label.add_theme_font_size_override("normal_font_size", 11)

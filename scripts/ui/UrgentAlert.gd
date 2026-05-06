@@ -135,7 +135,8 @@ func _add_alert(event: Dictionary) -> void:
 	icon_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var body_label: RichTextLabel = RichTextLabel.new()
-	body_label.bbcode_enabled = true
+    # bbcode_enabled disabled for runtime stability
+    # body_label.bbcode_enabled = true
 	body_label.fit_content = true
 	body_label.scroll_active = false
 	body_label.add_theme_font_size_override("normal_font_size", 13)

@@ -3702,7 +3702,8 @@ func _init_phase8_proof_overlay() -> void:
 	add_child(_phase8_proof_overlay_layer)
 	_phase8_proof_overlay_text = RichTextLabel.new()
 	_phase8_proof_overlay_text.name = "Phase8ProofOverlayText"
-	_phase8_proof_overlay_text.bbcode_enabled = false
+    # bbcode_enabled disabled for runtime stability
+    # _phase8_proof_overlay_text.bbcode_enabled = false
 	_phase8_proof_overlay_text.fit_content = false
 	_phase8_proof_overlay_text.scroll_active = true
 	_phase8_proof_overlay_text.selection_enabled = false
@@ -3724,7 +3725,8 @@ func _init_phase8_proof_overlay() -> void:
 	_phase8_proof_overlay_text.text = last_line
 	_spatial_profile_overlay_text = RichTextLabel.new()
 	_spatial_profile_overlay_text.name = "SpatialProfileOverlayText"
-	_spatial_profile_overlay_text.bbcode_enabled = false
+    # bbcode_enabled disabled for runtime stability
+    # _spatial_profile_overlay_text.bbcode_enabled = false
 	_spatial_profile_overlay_text.fit_content = false
 	_spatial_profile_overlay_text.scroll_active = false
 	_spatial_profile_overlay_text.selection_enabled = false

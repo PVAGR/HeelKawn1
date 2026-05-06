@@ -201,11 +201,11 @@ func get_max_cluster_size_for_region(region_key: int) -> int:
 	return 4
 
 
-## Get particle density multiplier (for WorldEnvironment or custom particles)
+## Get particle density multiplier (for WorldEnvironment or custom particles) - now live
 func get_particle_density_multiplier_for_region(region_key: int) -> float:
 	var label: String = str(_meaning_by_region.get(region_key, "quiet"))
 	match label:
-		"quiet": return 0.3
+		"quiet": return FoliageSystem.foliage_density(region_key & 0xFFFF, (region_key >> 16) & 0xFFFF)
 		"scarred": return 0.6
 		"bloodied": return 0.9
 		"grave": return 1.2

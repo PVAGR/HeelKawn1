@@ -175,7 +175,7 @@ func _tile_color(x: int, y: int) -> Color:
 	var base: Color
 	if feature != TileFeature.Type.NONE:
 		base = TileFeature.color_for(feature)
-		if (
+	if (
 				feature == TileFeature.Type.WALL
 				or feature == TileFeature.Type.DOOR
 				or feature == TileFeature.Type.BED
@@ -184,6 +184,12 @@ func _tile_color(x: int, y: int) -> Color:
 				or feature == TileFeature.Type.MARKER_STONE
 				or feature == TileFeature.Type.SHRINE
 		):
+			if feature == TileFeature.Type.FIRE_PIT:
+				# Spawn fire particles at fire pit
+				var fire_scene = preload("res://scenes/world/FireParticles.tscn")
+				var fire_instance = fire_scene.instantiate()
+				fire_instance.position = tile_to_world(Vector2i(x, y))
+				get_parent().add_child(fire_instance)
 			var rk_ct: int = WorldMemory._region_key(x, y)
 			if _region_culture_tint_cache.has(rk_ct):
 				# Landmark buildings get stronger cultural tint
@@ -207,6 +213,10 @@ func _tile_color(x: int, y: int) -> Color:
 	else:
 		base = Biome.color_for(data.biomes[i])
 	# RUIN: full historical scar; meaning; road; trade; local Remnant patina; then epochal Age.
+	var biome_i: int = data.biomes[i]
+	base = FoliageSystem.apply_foliage_tint(base, x, y, biome_i)
+	base = Weather.apply_weather_tint(base, x, y)
+	
 	return _apply_age_tint(
 			_apply_remnant_patina(
 					_apply_trade_route_tint(

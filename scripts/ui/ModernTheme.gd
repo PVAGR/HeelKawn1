@@ -143,7 +143,7 @@ func _style_button(button: Button) -> void:
 	button.add_theme_stylebox_override("hover", hover_style)
 
 
-func _style_panel(panel: Panel) -> void:
+func _style_panel(panel: PanelContainer) -> void:
 	var style: StyleBoxFlat = StyleBoxFlat.new()
 	style.bg_color = COLORS.bg_medium
 	style.set_corner_radius_all(8)

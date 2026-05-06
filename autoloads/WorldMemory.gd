@@ -445,14 +445,19 @@ func _recompute_last_pawn_death_tick_for_region(rk: int) -> void:
 
 ## Generic deterministic event appender for non-core typed events (e.g. player input).
 ## PHASE 4: Added skill-gated probability to reduce event spam
+## ARCHITECTURE: Also emits through EventBus for decoupled system communication
 func record_event(e: Dictionary) -> void:
     # PERFORMANCE: Event noise reduction - skip low-significance events
-    # Events must pass significance threshold based on pawn skill levels
     if not _event_passes_significance_threshold(e):
         return
-    
+
     var payload: Dictionary = _normalize_event_payload(e)
     _append(payload)
+    
+    # ARCHITECTURE: Emit through EventBus for decoupled listeners
+    if EventBus != null:
+        var event_type: String = str(payload.get("type", "unknown"))
+        EventBus.emit(event_type, payload)
 
 
 ## PHASE 4: Skill-gated event significance filter

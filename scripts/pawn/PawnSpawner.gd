@@ -9,6 +9,9 @@ extends Node
 ## guarantees every pawn can reach the stockpile and pick up jobs on its own
 ## landmass. Otherwise falls back to any plains/forest tile.
 
+# PERFORMANCE: SpatialGrid integration for O(1) neighbor queries
+@onready var _spatial_grid: Node = get_node_or_null("/root/SpatialGrid")
+
 const STARTER_COUNT: int = 20
 const MAX_PLACEMENT_ATTEMPTS: int = 2000
 
@@ -347,6 +350,11 @@ func spawn_generational_pawn(
 	invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
 	if SpatialManager != null: # ARCHITECT T006
 		SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
+	
+	# PERFORMANCE: Register in SpatialGrid for O(1) neighbor queries
+	if _spatial_grid != null:
+		_spatial_grid.insert(pawn, data.tile_pos)
+	
 	WorldMemory.record_event({
 		"type": "pawn_birth",
 		"birth_kind": birth_kind,

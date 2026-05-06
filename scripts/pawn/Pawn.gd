@@ -37,6 +37,10 @@ const _Job = preload("res://scripts/jobs/Job.gd")
 const _Item = preload("res://scripts/items/Item.gd")
 @onready var SpatialManager = get_node_or_null("/root/SpatialManager") # ARCHITECT T006
 
+# PERFORMANCE: Tick rate decoupling for AI systems
+@onready var _tick_rate_decoupler: Node = get_node_or_null("/root/TickRateDecoupler")
+@onready var _spatial_grid: Node = get_node_or_null("/root/SpatialGrid")
+
 # -------------------- PERFORMANCE OPTIMIZATION: Frame skipping --------------------
 ## Only update visuals every N frames based on game speed.
 ## At 1x: update every 3rd frame. At 26x: every 8th frame. At 100x: every 15th frame.
@@ -4435,11 +4439,17 @@ func _decay_needs() -> void:
 	# Stage 1: Update perception and location memory - throttled to every 20 ticks
 	if posmod(GameManager.tick_count + int(data.id), 20) == 0:
 		_update_perception()
-	
-	# Stage 2: Co-presence — cheap pass; rapport spikes still come from Main._accumulate_social_rapport.
-	if posmod(GameManager.tick_count + int(data.id) * 3, 37) == 0:
-		_track_co_presence_light()
-	
+
+	# PERFORMANCE: Tick rate decoupling for social AI (every 5 ticks instead of every tick)
+	if _tick_rate_decoupler != null and _tick_rate_decoupler.should_update("Social"):
+		# Stage 2: Co-presence using SpatialGrid for O(1) neighbor queries
+		if _spatial_grid != null:
+			_track_co_presence_spatial()
+		else:
+			# Fallback to old method if SpatialGrid not available
+			if posmod(GameManager.tick_count + int(data.id) * 3, 37) == 0:
+				_track_co_presence_light()
+
 	# Stage 1: Decay unused skills (throttled to once per day)
 	if GameManager.tick_count % DayNightCycle.TICKS_PER_DAY == 0:
 		data.decay_unused_skills()
@@ -4946,6 +4956,31 @@ func track_co_presence() -> void:
 	_track_co_presence_light()
 
 
+# PERFORMANCE: SpatialGrid-based co-presence tracking (O(1) neighbor queries)
+func _track_co_presence_spatial() -> void:
+	if data == null or _spatial_grid == null:
+		return
+	
+	# Query neighbors within 13 tiles (sqrt(169) = 13)
+	var neighbors: Array = _spatial_grid.query_radius(data.tile_pos, 13)
+	
+	for neighbor in neighbors:
+		if neighbor == null or not is_instance_valid(neighbor) or neighbor == self or neighbor.data == null:
+			continue
+		if neighbor.is_sleeping():
+			continue
+		
+		var oid: int = int(neighbor.data.id)
+		var cur: int = int(data.co_presence.get(oid, 0)) + 1
+		if cur > 60000:
+			cur = 60000
+		data.co_presence[oid] = cur
+		
+		# Phase 5: Share gossip during social proximity (every 100 ticks of co-presence)
+		if cur % 100 == 0:
+			_share_gossip_with(neighbor)
+
+
 func _track_co_presence_light() -> void:
 	if data == null:
 		return
@@ -4968,7 +5003,7 @@ func _track_co_presence_light() -> void:
 		if cur > 60000:
 			cur = 60000
 		data.co_presence[oid] = cur
-		
+
 		# Phase 5: Share gossip during social proximity (every 100 ticks of co-presence)
 		# OPTIMIZATION: Changed from 50 to 100 to reduce frequency
 		if cur % 100 == 0:

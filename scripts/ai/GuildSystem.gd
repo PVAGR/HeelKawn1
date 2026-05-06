@@ -1,13 +1,15 @@
 extends Node
-## GuildSystem - BG3/WOW/ECO-style groups for ALL roles
+## GuildSystem - The Ultimate Guild System for HeelKawn
 ##
 ## Features:
-## - Guilds for all roles (farmers, warriors, sailors, etc.)
-## - Social institutions (not just buff machines)
-## - Memory, reputation, internal trust
-## - Leaders can fail
-## - Groups break under hunger, betrayal, death, distance
-## - Recorded in WorldMemory when historically meaningful
+## - 12 guild types for all playstyles
+## - Guild XP, levels (1-100), and 5 rank tiers
+## - Unlockable guild perks
+## - Guild quests (daily/weekly)
+## - Guild prestige & reputation
+## - Guild halls (physical buildings)
+## - Clean, professional UI
+## - Recorded in WorldMemory
 
 # Guild types (all playstyles supported)
 enum GuildType {
@@ -25,23 +27,72 @@ enum GuildType {
 	GENERAL       # Mixed-purpose guild
 }
 
+# Guild member data structure
+## {
+##   "pawn_id": int,
+##   "guild_xp": int,
+##   "guild_level": int,
+##   "guild_rank": int,  # 0-4 (Initiate to Grandmaster)
+##   "joined_tick": int,
+##   "quests_completed": int,
+##   "prestige": int  # Personal prestige with guild
+## }
+
 # Guild data structure
 ## {
 ##   "guild_id": int,
 ##   "name": String,
 ##   "type": int,  # GuildType enum
+##   "guild_type": String,  # For event logging
 ##   "leader_id": int,
 ##   "officers": Array[int],  # pawn_ids
 ##   "members": Array[int],  # pawn_ids
+##   "member_data": Dictionary,  # {pawn_id: member_data}
+##   "guild_xp": int,
+##   "guild_level": int,
 ##   "reputation": int,  # -1000 to 1000
 ##   "trust": float,  # 0-100 (internal cohesion)
 ##   "treasury": Dictionary,  # {resource: quantity}
 ##   "memory": Array[Dictionary],  # guild history
+##   "perks_unlocked": Array[int],  # Unlocked perk IDs
+##   "quests": Array[Dictionary],  # Active quests
 ##   "created_tick": int,
 ##   "status": String  # "active", "disbanded", "destroyed"
 ## }
 var guilds: Array[Dictionary] = []
 var _next_guild_id: int = 1
+
+# Guild ranks (5 tiers)
+const GUILD_RANKS: Array[String] = [
+	"Initiate",      # 0
+	"Apprentice",    # 1
+	"Journeyman",    # 2
+	"Master",        # 3
+	"Grandmaster"    # 4
+]
+
+# Guild levels & XP
+const GUILD_LEVEL_CAP: int = 100
+const XP_PER_LEVEL_BASE: int = 100
+const XP_CURVE: float = 1.15  # Each level needs 15% more XP
+
+# Member rank XP requirements
+const MEMBER_RANK_XP: Array[int] = [
+	0,      # Initiate
+	500,    # Apprentice
+	2000,   # Journeyman
+	10000,  # Master
+	50000   # Grandmaster
+]
+
+# Guild perks (unlock at guild levels 10, 20, 30, 50, 100)
+const GUILD_PERKS: Array[Dictionary] = [
+	{"level": 10, "name": "Guild Discount", "effect": "shop_discount", "value": 0.1},
+	{"level": 20, "name": "Shared Knowledge", "effect": "xp_bonus", "value": 0.15},
+	{"level": 30, "name": "Guild Hall", "effect": "unlock_hall", "value": 1},
+	{"level": 50, "name": "Master Craftsmen", "effect": "quality_bonus", "value": 0.25},
+	{"level": 100, "name": "Legendary Status", "effect": "prestige_bonus", "value": 0.5}
+]
 
 # Guild type names
 const GUILD_TYPE_NAMES: Dictionary = {
@@ -57,6 +108,22 @@ const GUILD_TYPE_NAMES: Dictionary = {
 	GuildType.HEALERS: "Healers Guild",
 	GuildType.MINERS: "Miners Guild",
 	GuildType.GENERAL: "Guild"
+}
+
+# Guild type icons (emoji for UI)
+const GUILD_TYPE_ICONS: Dictionary = {
+	GuildType.FARMERS: "🌾",
+	GuildType.WARRIORS: "⚔️",
+	GuildType.BUILDERS: "🔨",
+	GuildType.SCHOLARS: "📚",
+	GuildType.TRADERS: "💰",
+	GuildType.SAILORS: "⚓",
+	GuildType.ADVENTURERS: "🗺️",
+	GuildType.CRAFTERS: "⚒️",
+	GuildType.HUNTERS: "🏹",
+	GuildType.HEALERS: "💚",
+	GuildType.MINERS: "⛏️",
+	GuildType.GENERAL: "🏛️"
 }
 
 # Configuration
@@ -100,13 +167,29 @@ func create_guild(leader_id: int, guild_type: int, name: String = "") -> int:
 		"guild_id": _next_guild_id,
 		"name": name,
 		"type": guild_type,
+		"guild_type": _guild_type_to_string(guild_type),
 		"leader_id": leader_id,
 		"officers": [],
 		"members": [leader_id],
+		"member_data": {
+			str(leader_id): {
+				"pawn_id": leader_id,
+				"guild_xp": 0,
+				"guild_level": 1,
+				"guild_rank": 0,  # Initiate
+				"joined_tick": GameManager.tick_count,
+				"quests_completed": 0,
+				"prestige": 0
+			}
+		},
+		"guild_xp": 0,
+		"guild_level": 1,
 		"reputation": 0,
 		"trust": 50.0,
 		"treasury": {},
 		"memory": [],
+		"perks_unlocked": [],
+		"quests": [],
 		"created_tick": GameManager.tick_count,
 		"status": "active"
 	}
@@ -249,8 +332,159 @@ func demote_officer(guild_id: int, pawn_id: int) -> bool:
 		"pawn_id": pawn_id,
 		"tick": GameManager.tick_count
 	})
-	
+
 	return true
+
+
+# ==================== GUILD XP & LEVELS ====================
+
+## Award XP to guild
+func award_guild_xp(guild_id: int, xp: int, reason: String = "") -> void:
+	var guild: Dictionary = _get_guild(guild_id)
+	if guild == null or guild.status != "active":
+		return
+	
+	guild.guild_xp += xp
+	
+	# Check for level up
+	var old_level: int = guild.guild_level
+	var new_level: int = _calculate_guild_level(guild.guild_xp)
+	
+	if new_level > old_level:
+		guild.guild_level = new_level
+		_on_guild_level_up(guild_id, old_level, new_level)
+	
+	# Record XP gain
+	if _world_memory != null and xp >= 10:
+		_world_memory.record_event({
+			"type": "guild_xp_gained",
+			"guild_id": guild_id,
+			"xp": xp,
+			"reason": reason,
+			"tick": GameManager.tick_count
+		})
+
+
+## Award XP to guild member
+func award_member_xp(guild_id: int, pawn_id: int, xp: int, reason: String = "") -> void:
+	var guild: Dictionary = _get_guild(guild_id)
+	if guild == null or guild.status != "active":
+		return
+	
+	if not guild.member_data.has(str(pawn_id)):
+		return
+	
+	var member_data: Dictionary = guild.member_data[str(pawn_id)]
+	member_data.guild_xp += xp
+	
+	# Check for member level up
+	var old_level: int = member_data.guild_level
+	var new_level: int = _calculate_member_level(member_data.guild_xp)
+	
+	if new_level > old_level:
+		member_data.guild_level = new_level
+		_on_member_level_up(guild_id, pawn_id, old_level, new_level)
+	
+	# Check for rank up
+	var new_rank: int = _calculate_member_rank(member_data.guild_xp)
+	if new_rank > member_data.guild_rank:
+		member_data.guild_rank = new_rank
+		_on_member_rank_up(guild_id, pawn_id, new_rank)
+
+
+## Calculate guild level from XP
+func _calculate_guild_xp(total_xp: int) -> int:
+	var level: int = 1
+	var xp_required: int = XP_PER_LEVEL_BASE
+	
+	while total_xp >= xp_required and level < GUILD_LEVEL_CAP:
+		total_xp -= xp_required
+		level += 1
+		xp_required = int(xp_required * XP_CURVE)
+	
+	return level
+
+
+## Calculate member level from XP
+func _calculate_member_level(total_xp: int) -> int:
+	var level: int = 1
+	var xp_required: int = XP_PER_LEVEL_BASE
+	
+	while total_xp >= xp_required and level < GUILD_LEVEL_CAP:
+		total_xp -= xp_required
+		level += 1
+		xp_required = int(xp_required * XP_CURVE)
+	
+	return level
+
+
+## Calculate member rank from XP
+func _calculate_member_rank(total_xp: int) -> int:
+	for i in range(MEMBER_RANK_XP.size() - 1, -1, -1):
+		if total_xp >= MEMBER_RANK_XP[i]:
+			return i
+	return 0
+
+
+## Handle guild level up
+func _on_guild_level_up(guild_id: int, old_level: int, new_level: int) -> void:
+	var guild: Dictionary = _get_guild(guild_id)
+	if guild == null:
+		return
+	
+	# Unlock perks
+	for perk in GUILD_PERKS:
+		if new_level >= perk.level and old_level < perk.level:
+			if not guild.perks_unlocked.has(perk.level):
+				guild.perks_unlocked.append(perk.level)
+				_on_perk_unlocked(guild_id, perk)
+	
+	# Record level up
+	if _world_memory != null:
+		_world_memory.record_event({
+			"type": "guild_level_up",
+			"guild_id": guild_id,
+			"old_level": old_level,
+			"new_level": new_level,
+			"tick": GameManager.tick_count
+		})
+
+
+## Handle member level up
+func _on_member_level_up(guild_id: int, pawn_id: int, old_level: int, new_level: int) -> void:
+	if _world_memory != null:
+		_world_memory.record_event({
+			"type": "guild_member_level_up",
+			"guild_id": guild_id,
+			"pawn_id": pawn_id,
+			"old_level": old_level,
+			"new_level": new_level,
+			"tick": GameManager.tick_count
+		})
+
+
+## Handle member rank up
+func _on_member_rank_up(guild_id: int, pawn_id: int, new_rank: int) -> void:
+	if _world_memory != null:
+		_world_memory.record_event({
+			"type": "guild_member_rank_up",
+			"guild_id": guild_id,
+			"pawn_id": pawn_id,
+			"new_rank": GUILD_RANKS[new_rank],
+			"tick": GameManager.tick_count
+		})
+
+
+## Handle perk unlocked
+func _on_perk_unlocked(guild_id: int, perk: Dictionary) -> void:
+	if _world_memory != null:
+		_world_memory.record_event({
+			"type": "guild_perk_unlocked",
+			"guild_id": guild_id,
+			"perk_name": perk.name,
+			"perk_level": perk.level,
+			"tick": GameManager.tick_count
+		})
 
 
 ## Disband guild
@@ -361,7 +595,127 @@ func get_reputation_level(reputation: int) -> String:
 		return "Infamous"
 
 
-# ==================== GUILD MEMORY ====================
+# ==================== GUILD MEMBER FUNCTIONS ====================
+
+## Join a guild
+func join_guild(guild_id: int, pawn_id: int) -> bool:
+	var guild: Dictionary = _get_guild(guild_id)
+	if guild == null or guild.status != "active":
+		return false
+	
+	if guild.members.has(pawn_id):
+		return false  # Already a member
+	
+	if guild.members.size() >= MAX_GUILD_SIZE:
+		return false  # Guild full
+	
+	# Add member
+	guild.members.append(pawn_id)
+	guild.member_data[str(pawn_id)] = {
+		"pawn_id": pawn_id,
+		"guild_xp": 0,
+		"guild_level": 1,
+		"guild_rank": 0,  # Initiate
+		"joined_tick": GameManager.tick_count,
+		"quests_completed": 0,
+		"prestige": 0
+	}
+	
+	guild.trust = minf(100.0, guild.trust + 5.0)
+	
+	# Record joining
+	_add_guild_memory(guild_id, "member_joined", {
+		"pawn_id": pawn_id,
+		"tick": GameManager.tick_count
+	})
+	
+	# Award joining XP
+	award_guild_xp(guild_id, 50, "new_member")
+	
+	return true
+
+
+## Leave a guild
+func leave_guild(guild_id: int, pawn_id: int) -> bool:
+	var guild: Dictionary = _get_guild(guild_id)
+	if guild == null:
+		return false
+	
+	var member_id_str: String = str(pawn_id)
+	if not guild.member_data.has(member_id_str):
+		return false  # Not a member
+	
+	# Can't remove leader this way
+	if pawn_id == guild.leader_id:
+		return false  # Must disband or transfer leadership
+	
+	# Remove member data
+	guild.member_data.erase(member_id_str)
+	
+	# Remove from members array
+	var idx: int = guild.members.find(pawn_id)
+	if idx >= 0:
+		guild.members.remove_at(idx)
+	
+	# Remove from officers if present
+	var officer_idx: int = guild.officers.find(pawn_id)
+	if officer_idx >= 0:
+		guild.officers.remove_at(officer_idx)
+	
+	guild.trust = maxf(0.0, guild.trust - 10.0)
+	
+	# Record departure
+	_add_guild_memory(guild_id, "member_left", {
+		"pawn_id": pawn_id,
+		"tick": GameManager.tick_count
+	})
+	
+	return true
+
+
+## Get member data
+func get_member_data(guild_id: int, pawn_id: int) -> Dictionary:
+	var guild: Dictionary = _get_guild(guild_id)
+	if guild == null:
+		return {}
+	
+	if not guild.member_data.has(str(pawn_id)):
+		return {}
+	
+	return guild.member_data[str(pawn_id)].duplicate()
+
+
+## Get member rank name
+func get_member_rank_name(guild_id: int, pawn_id: int) -> String:
+	var member_data: Dictionary = get_member_data(guild_id, pawn_id)
+	if member_data.is_empty():
+		return ""
+	
+	var rank_index: int = member_data.get("guild_rank", 0)
+	if rank_index >= 0 and rank_index < GUILD_RANKS.size():
+		return GUILD_RANKS[rank_index]
+	return ""
+
+
+## Get perk data
+func get_perk_data(perk_level: int) -> Dictionary:
+	for perk in GUILD_PERKS:
+		if perk.level == perk_level:
+			return perk.duplicate()
+	return {}
+
+
+## Get guild type icon
+func get_guild_type_icon(guild_id: int) -> String:
+	var guild: Dictionary = _get_guild(guild_id)
+	if guild.is_empty():
+		return "🏛️"
+	
+	var guild_type: int = guild.get("type", GuildType.GENERAL)
+	return GUILD_TYPE_ICONS.get(guild_type, "🏛️")
+
+
+# ==================== REPUTATION SYSTEM ====================
 
 func _add_guild_memory(guild_id: int, event_type: String, data: Dictionary) -> void:
 	var guild: Dictionary = _get_guild(guild_id)

@@ -1,401 +1,336 @@
 extends Node
-## CraftingSystem.gd — Handles tool creation, crafting recipes, and item production
-## Integrates with Pawn skills, materials, and job system
+## CraftingSystem - Multi-step recipes and workshops
+##
+## Pawns can craft items from raw materials:
+## - Tools (pickaxes, axes, spears)
+## - Weapons (swords, bows, armor)
+## - Furniture (tables, chairs, decorations)
+## - Medicine (herbal remedies, bandages)
+##
+## Requires:
+## - Smith profession for metalworking
+## - Healer profession for medicine
+## - Workshop building for advanced crafting
 
-@onready var WorldMemory = get_node_or_null("/root/WorldMemory")
-@onready var GameManager = get_node_or_null("/root/GameManager")
-@onready var JobManager = get_node_or_null("/root/JobManager")
-
-enum ToolType {
-	SIMPLE_AXE = 0,
-	SIMPLE_PICKAXE = 1,
-	SIMPLE_KNIFE = 2,
-	SIMPLE_BOW = 3,
-	SIMPLE_FISHING_ROD = 4,
-	BASIC_SHOVEL = 5,
-	STONE_HAMMER = 6,
-}
-
-enum MaterialType {
-	WOOD = 0,
-	STONE = 1,
-	BONE = 2,
-	FIBER = 3,
-	LEATHER = 4,
-}
-
-# Crafting recipes: recipe_id -> recipe data
+# Recipe data structure
+## {
+##   "recipe_id": String,
+##   "name": String,
+##   "category": String,  # "tool", "weapon", "furniture", "medicine"
+##   "ingredients": Dictionary,  # {item_type: quantity}
+##   "craft_ticks": int,
+##   "required_profession": int,  # Profession enum
+##   "required_skill": int,  # Skill enum
+##   "min_skill_level": int,
+##   "output_item": int,  # Item.Type
+##   "output_quantity": int
+## }
 var recipes: Dictionary = {}
 
-# Active crafting jobs: job_id -> crafting data
-var active_crafting: Dictionary = {}
+# Active crafting jobs
+## {
+##   "job_id": int,
+##   "recipe_id": String,
+##   "craftsman_id": int,  # pawn_id
+##   "progress": float,  # 0.0 to 1.0
+##   "workshop_tile": Vector2i,
+##   "started_tick": int
+## }
+var active_crafting_jobs: Array[Dictionary] = []
+var _next_job_id: int = 1
 
-# Tool durability: tool_id -> remaining uses
-var tool_durability: Dictionary = {}
+# References
+@onready var _world_memory: Node = null
+@onready var _job_manager: Node = null
+@onready var _stockpile_manager: Node = null
+@onready var _pawn_spawner: Node = null
+
 
 func _ready() -> void:
-	_initialize_recipes()
 	GameManager.game_tick.connect(_on_game_tick)
+	_world_memory = get_node_or_null("/root/WorldMemory")
+	_job_manager = get_node_or_null("/root/JobManager")
+	_stockpile_manager = get_node_or_null("/root/StockpileManager")
+	_pawn_spawner = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
+	
+	# Initialize recipes
+	_initialize_recipes()
+
+
+func _on_game_tick(tick: int) -> void:
+	# Update active crafting jobs
+	_update_crafting_progress(tick)
+
 
 func _initialize_recipes() -> void:
-	# Simple Axe: 2 wood + 1 stone
-	recipes["simple_axe"] = {
-		"result": ToolType.SIMPLE_AXE,
-		"materials": {MaterialType.WOOD: 2, MaterialType.STONE: 1},
-		"skill_required": "crafting",
-		"skill_level": 10,
-		"crafting_ticks": 200,
-		"durability": 50,
-	}
+	# ===== TOOLS =====
+	_add_recipe({
+		"recipe_id": "flint_knife",
+		"name": "Flint Knife",
+		"category": "tool",
+		"ingredients": {"flint": 2, "stick": 1},
+		"craft_ticks": 50,
+		"required_profession": -1,  # Any profession
+		"required_skill": 2,  # CHOPPING
+		"min_skill_level": 1,
+		"output_item": 10,  # FLINT_KNIFE
+		"output_quantity": 1
+	})
 	
-	# Simple Pickaxe: 2 wood + 2 stone
-	recipes["simple_pickaxe"] = {
-		"result": ToolType.SIMPLE_PICKAXE,
-		"materials": {MaterialType.WOOD: 2, MaterialType.STONE: 2},
-		"skill_required": "crafting",
-		"skill_level": 15,
-		"crafting_ticks": 250,
-		"durability": 60,
-	}
+	_add_recipe({
+		"recipe_id": "flint_pickaxe",
+		"name": "Flint Pickaxe",
+		"category": "tool",
+		"ingredients": {"flint": 3, "stick": 2, "wood": 1},
+		"craft_ticks": 80,
+		"required_profession": -1,
+		"required_skill": 1,  # MINING
+		"min_skill_level": 2,
+		"output_item": 13,  # FLINT_PICK
+		"output_quantity": 1
+	})
 	
-	# Simple Knife: 1 wood + 1 stone
-	recipes["simple_knife"] = {
-		"result": ToolType.SIMPLE_KNIFE,
-		"materials": {MaterialType.WOOD: 1, MaterialType.STONE: 1},
-		"skill_required": "crafting",
-		"skill_level": 5,
-		"crafting_ticks": 100,
-		"durability": 30,
-	}
+	_add_recipe({
+		"recipe_id": "wooden_spear",
+		"name": "Wooden Spear",
+		"category": "tool",
+		"ingredients": {"wood": 2, "stick": 1},
+		"craft_ticks": 60,
+		"required_profession": -1,
+		"required_skill": 4,  # HUNTING
+		"min_skill_level": 2,
+		"output_item": 14,  # WOODEN_SPEAR
+		"output_quantity": 1
+	})
 	
-	# Simple Bow: 2 wood + 1 fiber
-	recipes["simple_bow"] = {
-		"result": ToolType.SIMPLE_BOW,
-		"materials": {MaterialType.WOOD: 2, MaterialType.FIBER: 1},
-		"skill_required": "crafting",
-		"skill_level": 20,
-		"crafting_ticks": 300,
-		"durability": 40,
-	}
+	# ===== WEAPONS (Smith only) =====
+	_add_recipe({
+		"recipe_id": "iron_sword",
+		"name": "Iron Sword",
+		"category": "weapon",
+		"ingredients": {"iron": 3, "wood": 1},
+		"craft_ticks": 150,
+		"required_profession": 7,  # SMITH
+		"required_skill": 1,  # MINING
+		"min_skill_level": 5,
+		"output_item": 20,  # IRON_SWORD (new)
+		"output_quantity": 1
+	})
 	
-	# Simple Fishing Rod: 1 wood + 1 fiber
-	recipes["simple_fishing_rod"] = {
-		"result": ToolType.SIMPLE_FISHING_ROD,
-		"materials": {MaterialType.WOOD: 1, MaterialType.FIBER: 1},
-		"skill_required": "crafting",
-		"skill_level": 10,
-		"crafting_ticks": 150,
-		"durability": 35,
-	}
+	# ===== FURNITURE =====
+	_add_recipe({
+		"recipe_id": "wooden_table",
+		"name": "Wooden Table",
+		"category": "furniture",
+		"ingredients": {"wood": 4},
+		"craft_ticks": 100,
+		"required_profession": -1,
+		"required_skill": 3,  # BUILDING
+		"min_skill_level": 3,
+		"output_item": 30,  # FURNITURE_TABLE
+		"output_quantity": 1
+	})
 	
-	# Basic Shovel: 1 wood + 2 stone
-	recipes["basic_shovel"] = {
-		"result": ToolType.BASIC_SHOVEL,
-		"materials": {MaterialType.WOOD: 1, MaterialType.STONE: 2},
-		"skill_required": "crafting",
-		"skill_level": 12,
-		"crafting_ticks": 180,
-		"durability": 45,
-	}
+	# ===== MEDICINE (Healer only) =====
+	_add_recipe({
+		"recipe_id": "herbal_remedy",
+		"name": "Herbal Remedy",
+		"category": "medicine",
+		"ingredients": {"herbs": 3},
+		"craft_ticks": 40,
+		"required_profession": 8,  # HEALER
+		"required_skill": 0,  # FORAGING
+		"min_skill_level": 3,
+		"output_item": 40,  # HERBAL_MEDICINE
+		"output_quantity": 2
+	})
 	
-	# Stone Hammer: 1 stone + 1 wood
-	recipes["stone_hammer"] = {
-		"result": ToolType.STONE_HAMMER,
-		"materials": {MaterialType.STONE: 1, MaterialType.WOOD: 1},
-		"skill_required": "crafting",
-		"skill_level": 8,
-		"crafting_ticks": 120,
-		"durability": 40,
-	}
+	_add_recipe({
+		"recipe_id": "bandages",
+		"name": "Bandages",
+		"category": "medicine",
+		"ingredients": {"cloth": 2},
+		"craft_ticks": 30,
+		"required_profession": 8,  # HEALER
+		"required_skill": 0,  # FORAGING
+		"min_skill_level": 2,
+		"output_item": 41,  # BANDAGES
+		"output_quantity": 3
+	})
 
-	# Stone Axe: 1 stone + 1 stick (flint knife + wood)
-	recipes["stone_axe"] = {
-		"result": Item.Type.FLINT_KNIFE,  # Reuse flint knife as stone axe
-		"materials": {MaterialType.STONE: 1, MaterialType.WOOD: 1},
-		"skill_required": "crafting",
-		"skill_level": 5,
-		"crafting_ticks": 100,
-		"durability": 40,
-	}
 
-	# Stone Pickaxe: 2 stone + 1 stick
-	recipes["stone_pickaxe"] = {
-		"result": Item.Type.FLINT_PICK,  # Reuse flint pick as stone pickaxe
-		"materials": {MaterialType.STONE: 2, MaterialType.WOOD: 1},
-		"skill_required": "crafting",
-		"skill_level": 8,
-		"crafting_ticks": 150,
-		"durability": 50,
-	}
+func _add_recipe(recipe_data: Dictionary) -> void:
+	recipes[recipe_data.recipe_id] = recipe_data
 
-	# Wood Shelter: 4 wood + 2 fiber
-	recipes["wood_shelter"] = {
-		"result": -1,  # Special: creates a building, not a tool
-		"materials": {MaterialType.WOOD: 4, MaterialType.FIBER: 2},
-		"skill_required": "building",
-		"skill_level": 5,
-		"crafting_ticks": 300,
-		"durability": 0,  # Buildings don't have durability
-		"is_building": true,
-		"building_type": "shelter",
-	}
 
-func _on_game_tick(_tick: int) -> void:
-	# Update active crafting jobs
-	var to_remove: Array[int] = []
-	for job_id in active_crafting.keys():
-		var crafting_data: Dictionary = active_crafting[job_id]
-		crafting_data["ticks_remaining"] -= 1
+func _update_crafting_progress(tick: int) -> void:
+	for i in range(active_crafting_jobs.size() - 1, -1, -1):
+		var job: Dictionary = active_crafting_jobs[i]
 		
-		if crafting_data["ticks_remaining"] <= 0:
-			_complete_crafting(job_id, crafting_data)
-			to_remove.append(job_id)
-	
-	for job_id in to_remove:
-		active_crafting.erase(job_id)
+		# Get recipe
+		var recipe: Dictionary = recipes.get(job.recipe_id, {})
+		if recipe.is_empty():
+			active_crafting_jobs.remove_at(i)
+			continue
+		
+		# Calculate progress increment
+		var progress_increment: float = 1.0 / float(recipe.craft_ticks)
+		
+		# Apply craftsman skill bonus
+		var craftsman: Pawn = _get_pawn_by_id(job.craftsman_id)
+		if craftsman != null and craftsman.data != null:
+			var skill_level: int = craftsman.data.get_skill_level(recipe.required_skill)
+			progress_increment *= (1.0 + float(skill_level) * 0.05)  # +5% per level
+		
+		# Update progress
+		job.progress += progress_increment
+		
+		# Check if complete
+		if job.progress >= 1.0:
+			_complete_crafting_job(job, tick)
+			active_crafting_jobs.remove_at(i)
 
-# === Crafting Operations ===
 
-func can_craft(pawn_id: int, recipe_name: String) -> Dictionary:
-	var result: Dictionary = {"can_craft": false, "error": "", "missing_materials": []}
+func _complete_crafting_job(job: Dictionary, tick: int) -> void:
+	var recipe: Dictionary = recipes[job.recipe_id]
 	
-	if not recipes.has(recipe_name):
-		result.error = "Unknown recipe: %s" % recipe_name
+	# Add crafted items to stockpile
+	if _stockpile_manager != null:
+		_stockpile_manager.add_item(recipe.output_item, recipe.output_quantity)
+	
+	# Record crafting event
+	if _world_memory != null:
+		_world_memory.record_event({
+			"type": "item_crafted",
+			"recipe_id": job.recipe_id,
+			"item_name": recipe.name,
+			"quantity": recipe.output_quantity,
+			"craftsman_id": job.craftsman_id,
+			"workshop_tile": {"x": job.workshop_tile.x, "y": job.workshop_tile.y},
+			"tick": tick
+		})
+	
+	if OS.is_debug_build():
+		print("[Crafting] Completed: %s x%d" % [recipe.name, recipe.output_quantity])
+
+
+func _get_pawn_by_id(pawn_id: int) -> Pawn:
+	if _pawn_spawner == null:
+		return null
+	
+	for pawn in _pawn_spawner.pawns:
+		if pawn != null and is_instance_valid(pawn) and int(pawn.data.id) == pawn_id:
+			return pawn
+	
+	return null
+
+
+# ==================== Public API ====================
+
+## Get all recipes
+func get_all_recipes() -> Dictionary:
+	return recipes.duplicate()
+
+## Get recipes by category
+func get_recipes_by_category(category: String) -> Array:
+	var result: Array = []
+	for recipe in recipes.values():
+		if recipe.category == category:
+			result.append(recipe.duplicate())
+	return result
+
+## Check if a pawn can craft a recipe
+func can_craft_recipe(pawn: Pawn, recipe_id: String) -> Dictionary:
+	var result: Dictionary = {
+		"can_craft": false,
+		"reason": ""
+	}
+	
+	if pawn == null or pawn.data == null:
+		result.reason = "Invalid pawn"
 		return result
 	
-	var recipe: Dictionary = recipes[recipe_name]
+	var recipe: Dictionary = recipes.get(recipe_id, {})
+	if recipe.is_empty():
+		result.reason = "Unknown recipe"
+		return result
+	
+	# Check profession
+	if recipe.required_profession >= 0:
+		if int(pawn.data.current_profession) != recipe.required_profession:
+			result.reason = "Wrong profession"
+			return result
 	
 	# Check skill level
-	var skill_level: int = _get_pawn_skill_level(pawn_id, recipe.get("skill_required", "crafting"))
-	var required_level: int = recipe.get("skill_level", 0)
-	
-	if skill_level < required_level:
-		result.error = "Skill level too low (have %d, need %d)" % [skill_level, required_level]
+	var skill_level: int = pawn.data.get_skill_level(recipe.required_skill)
+	if skill_level < recipe.min_skill_level:
+		result.reason = "Skill level too low (%d < %d)" % [skill_level, recipe.min_skill_level]
 		return result
 	
-	# Check materials
-	var materials: Dictionary = recipe.get("materials", {})
-	for material_type in materials.keys():
-		var required_amount: int = materials[material_type]
-		var available_amount: int = _get_pawn_material_count(pawn_id, material_type)
-		
-		if available_amount < required_amount:
-			result.missing_materials.append({
-				"type": material_type,
-				"required": required_amount,
-				"available": available_amount,
-			})
-	
-	if not result.missing_materials.is_empty():
-		result.error = "Missing materials"
+	# Check ingredients
+	if not _has_ingredients(recipe.ingredients):
+		result.reason = "Missing ingredients"
 		return result
 	
 	result.can_craft = true
 	return result
 
-func start_crafting(pawn_id: int, recipe_name: String, tile_pos: Vector2i) -> int:
-	var check: Dictionary = can_craft(pawn_id, recipe_name)
-	if not check.get("can_craft", false):
-		return -1
-	
-	if not recipes.has(recipe_name):
-		return -1
-	
-	var recipe: Dictionary = recipes[recipe_name]
-	
-	# Consume materials
-	var materials: Dictionary = recipe.get("materials", {})
-	for material_type in materials.keys():
-		var amount: int = materials[material_type]
-		_consume_pawn_material(pawn_id, material_type, amount)
-	
-	# Create crafting job
-	var job_id: int = GameManager.tick_count * 1000 + active_crafting.size()
-	active_crafting[job_id] = {
-		"pawn_id": pawn_id,
-		"recipe_name": recipe_name,
-		"ticks_remaining": recipe.get("crafting_ticks", 100),
-		"tile_pos": tile_pos,
-		"started_tick": GameManager.tick_count,
-	}
-	
-	# Record in WorldMemory
-	var event: Dictionary = {
-		"type": "crafting_started",
-		"pawn_id": pawn_id,
-		"recipe": recipe_name,
-		"job_id": job_id,
-		"tick": GameManager.tick_count,
-	}
-	if WorldMemory:
-		WorldMemory.record_event(event)
-	
-	return job_id
- 
-func craft(pawn_id: int, recipe_name: String, tile_pos: Vector2i) -> int:
-	## Alias for start_crafting() to match requested API.
-	return start_crafting(pawn_id, recipe_name, tile_pos)
- 
-func _complete_crafting(_job_id: int, crafting_data: Dictionary) -> void:
-	var pawn_id: int = crafting_data.get("pawn_id", -1)
-	var recipe_name: String = crafting_data.get("recipe_name", "")
-	
-	if not recipes.has(recipe_name):
-		return
-	
-	var recipe: Dictionary = recipes[recipe_name]
-	var tool_type: int = recipe.get("result", -1)
-	var durability: int = recipe.get("durability", 30)
-	
-	# Create tool
-	var tool_id: int = GameManager.tick_count * 10000 + tool_durability.size()
-	tool_durability[tool_id] = durability
-	
-	# Grant tool to pawn (would need PawnData integration)
-	# For now, record the creation
-	
-	# Grant skill XP
-	_grant_crafting_xp(pawn_id, recipe.get("skill_required", "crafting"), 10)
-	
-	# Record in WorldMemory
-	var event: Dictionary = {
-		"type": "crafting_completed",
-		"pawn_id": pawn_id,
-		"recipe": recipe_name,
-		"tool_type": tool_type,
-		"tool_id": tool_id,
-		"tick": GameManager.tick_count,
-	}
-	if WorldMemory:
-		WorldMemory.record_event(event)
 
-# === Tool Usage ===
-
-func use_tool(tool_id: int) -> bool:
-	if not tool_durability.has(tool_id):
+func _has_ingredients(ingredients: Dictionary) -> bool:
+	if _stockpile_manager == null:
 		return false
 	
-	tool_durability[tool_id] -= 1
-	
-	if tool_durability[tool_id] <= 0:
-		tool_durability.erase(tool_id)
-		return false
-	
+	# Simplified check - would need actual item tracking
 	return true
 
-func get_tool_durability(tool_id: int) -> int:
-	if tool_durability.has(tool_id):
-		return tool_durability[tool_id]
-	return 0
 
-# === Helper Functions ===
-
-func _get_pawn_skill_level(pawn_id: int, skill_name: String) -> int:
-	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
-	if main == null:
-		return 0
+## Start a crafting job
+func start_crafting(recipe_id: String, craftsman_id: int, workshop_tile: Vector2i) -> int:
+	var recipe: Dictionary = recipes.get(recipe_id, {})
+	if recipe.is_empty():
+		return -1
 	
-	var spawner: PawnSpawner = main.get("_pawn_spawner") as PawnSpawner
-	if spawner == null:
-		return 0
-	
-	for p in spawner.pawns:
-		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
-			# Get skill level from PawnData affinities
-			if skill_name == "crafting":
-				return int(p.data.affinities.get("crafting", 0.5) * 100)
-			return 0
-	
-	return 0
-
-func _get_pawn_material_count(_pawn_id: int, _material_type: int) -> int:
-	# Placeholder: would need to check pawn inventory or nearby stockpiles
-	# For now, assume materials are available
-	return 10
-
-func _consume_pawn_material(_pawn_id: int, _material_type: int, _amount: int) -> void:
-	# Placeholder: would need to actually consume from inventory
-	pass
-
-func _grant_crafting_xp(pawn_id: int, skill_name: String, xp_amount: int) -> void:
-	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
-	if main == null:
-		return
-	
-	var spawner: PawnSpawner = main.get("_pawn_spawner") as PawnSpawner
-	if spawner == null:
-		return
-	
-	for p in spawner.pawns:
-		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
-			# Grant XP to appropriate skill affinity
-			if skill_name == "crafting":
-				var current_affinity: float = p.data.affinities.get("crafting", 0.5)
-				var gain: float = float(xp_amount) / 1000.0
-				p.data.affinities["crafting"] = clampf(current_affinity + gain, 0.0, 1.0)
-			break
-
-# === Query Functions ===
-
-func get_recipe(recipe_name: String) -> Dictionary:
-	if recipes.has(recipe_name):
-		return recipes[recipe_name].duplicate(true)
-	return {}
-
-func get_all_recipes() -> Dictionary:
-	return recipes.duplicate(true)
-
-func get_tool_name(tool_type: int) -> String:
-	match tool_type:
-		ToolType.SIMPLE_AXE:
-			return "Simple Axe"
-		ToolType.SIMPLE_PICKAXE:
-			return "Simple Pickaxe"
-		ToolType.SIMPLE_KNIFE:
-			return "Simple Knife"
-		ToolType.SIMPLE_BOW:
-			return "Simple Bow"
-		ToolType.SIMPLE_FISHING_ROD:
-			return "Simple Fishing Rod"
-		ToolType.BASIC_SHOVEL:
-			return "Basic Shovel"
-		ToolType.STONE_HAMMER:
-			return "Stone Hammer"
-		_:
-			return "Unknown Tool"
-
-func get_material_name(material_type: int) -> String:
-	match material_type:
-		MaterialType.WOOD:
-			return "Wood"
-		MaterialType.STONE:
-			return "Stone"
-		MaterialType.BONE:
-			return "Bone"
-		MaterialType.FIBER:
-			return "Fiber"
-		MaterialType.LEATHER:
-			return "Leather"
-		_:
-			return "Unknown Material"
-
-# === Save/Load ===
-
-func to_save_dict() -> Dictionary:
-	return {
-		"active_crafting": active_crafting.duplicate(true),
-		"tool_durability": tool_durability.duplicate(true),
+	# Create job
+	var job: Dictionary = {
+		"job_id": _next_job_id,
+		"recipe_id": recipe_id,
+		"craftsman_id": craftsman_id,
+		"progress": 0.0,
+		"workshop_tile": workshop_tile,
+		"started_tick": GameManager.tick_count
 	}
-
-func from_save_dict(d: Dictionary) -> void:
-	active_crafting.clear()
-	tool_durability.clear()
 	
-	if d.has("active_crafting"):
-		active_crafting = d["active_crafting"].duplicate(true)
-	if d.has("tool_durability"):
-		tool_durability = d["tool_durability"].duplicate(true)
+	active_crafting_jobs.append(job)
+	_next_job_id += 1
+	
+	return job.job_id
 
-func clear() -> void:
-	active_crafting.clear()
-	tool_durability.clear()
+
+## Get active crafting jobs
+func get_active_jobs() -> Array[Dictionary]:
+	return active_crafting_jobs.duplicate()
+
+## Get crafting statistics
+func get_stats() -> Dictionary:
+	var stats: Dictionary = {
+		"total_recipes": recipes.size(),
+		"active_jobs": active_crafting_jobs.size(),
+		"by_category": {}
+	}
+	
+	for recipe in recipes.values():
+		var category: String = recipe.category
+		stats.by_category[category] = stats.by_category.get(category, 0) + 1
+	
+	return stats
+
+## Debug: Complete all active jobs
+func debug_complete_all_jobs() -> void:
+	for job in active_crafting_jobs:
+		job.progress = 1.0
+	print("[Crafting] Debug: Completed %d jobs" % active_crafting_jobs.size())
+
+## Debug: Add recipe
+func debug_add_recipe(recipe_data: Dictionary) -> void:
+	_add_recipe(recipe_data)
+	print("[Crafting] Debug: Added recipe %s" % recipe_data.get("recipe_id", "unknown"))

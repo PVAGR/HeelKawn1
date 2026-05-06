@@ -124,7 +124,7 @@ func get_object(pool_name: String) -> Node:
 	if pool == null:
 		return null
 
-	var obj: Node = pool.get_object()
+	var obj: Node = pool.call("get_object")
 
 	# Track stats
 	if obj in pool.available:
@@ -143,7 +143,7 @@ func return_object(pool_name: String, obj: Node) -> void:
 	if pool == null:
 		return
 
-	pool.return_object(obj)
+	pool.call("return_object", obj)
 
 
 ## Return all objects to their pools
@@ -152,7 +152,7 @@ func return_all(pool_name: String) -> void:
 	if pool == null:
 		return
 
-	pool.return_all()
+	pool.call("return_all")
 
 
 ## Clear all pools (free all objects)

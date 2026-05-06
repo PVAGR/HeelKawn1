@@ -81,8 +81,6 @@ func _build_world_ecosystem_state(context: Dictionary) -> Dictionary:
 
 
 func _evaluate_world_events(world_state: Dictionary, context: Dictionary) -> Array:
-	var events: Array[Dictionary] = []
-	
 	# Build prompt
 	var prompt: String = """
 You oversee the world ecosystem.

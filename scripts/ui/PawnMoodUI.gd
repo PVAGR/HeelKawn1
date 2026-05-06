@@ -228,9 +228,9 @@ func _update_traits() -> void:
 
 	var j: int = 0
 	while j < traits.size():
-		var trait: String = str(traits[j])
+		var t: String = str(traits[j])
 		var trait_chip: Label = Label.new()
-		trait_chip.text = str(trait)
+		trait_chip.text = str(t)
 		trait_chip.add_theme_color_override("font_color", _modern_theme.get_color("text_primary"))
 		trait_chip.add_theme_font_size_override("font_size", _modern_theme.get_font_size("small"))
 

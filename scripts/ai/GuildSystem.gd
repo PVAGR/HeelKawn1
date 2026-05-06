@@ -120,7 +120,7 @@ func create_guild(leader_id: int, guild_type: int, name: String = "") -> int:
 			"type": "guild_created",
 			"guild_id": guild.guild_id,
 			"name": guild.name,
-			"type": _guild_type_to_string(guild_type),
+			"guild_type": _guild_type_to_string(guild_type),
 			"leader_id": leader_id,
 			"tick": GameManager.tick_count
 		})

@@ -238,18 +238,18 @@ func _should_inherit_trait(trait_id: String, parent: String) -> bool:
 func add_learned_trait(pawn_id: int, trait_id: String) -> bool:
 	if not trait_definitions.has(trait_id):
 		return false
-	
-	var trait: Dictionary = trait_definitions[trait_id]
-	if trait.type != TraitType.LEARNED:
-		return false  # Can only add learned traits this way
-	
+
+	var tdef: Dictionary = trait_definitions[trait_id]
+	if tdef.type != TraitType.LEARNED:
+		return false
+
 	if not pawn_traits.has(pawn_id):
 		_initialize_pawn_traits(pawn_id)
-	
+
 	if not pawn_traits[pawn_id].learned_traits.has(trait_id):
 		pawn_traits[pawn_id].learned_traits.append(trait_id)
 		return true
-	
+
 	return false
 
 

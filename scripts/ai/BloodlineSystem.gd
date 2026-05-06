@@ -327,9 +327,9 @@ func inherit_traits(child_id: int, father_id: int, mother_id: int) -> Array[Stri
 			var bloodline_data: Dictionary = _get_bloodline(bloodline)
 			var i: int = 0
 			while i < inherited.size():
-				var trait: String = inherited[i]
-				if not bloodline_data.inherited_traits.has(trait):
-					bloodline_data.inherited_traits.append(trait)
+				var t: String = inherited[i]
+				if not bloodline_data.inherited_traits.has(t):
+					bloodline_data.inherited_traits.append(t)
 				i += 1
 
 	return inherited

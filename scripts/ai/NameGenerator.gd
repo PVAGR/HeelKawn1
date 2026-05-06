@@ -156,9 +156,9 @@ func generate_nickname(pawn_id: int, circumstances: Dictionary = {}) -> String:
 		var traits_array: Array = circumstances.traits
 		var i: int = 0
 		while i < traits_array.size():
-			var trait: String = traits_array[i]
-			if circumstantial_names.traits.has(trait):
-				var pool: Array = circumstantial_names.traits[trait]
+			var t: String = traits_array[i]
+			if circumstantial_names.traits.has(t):
+				var pool: Array = circumstantial_names.traits[t]
 				nicknames.append(pool[randi() % pool.size()])
 			i += 1
 

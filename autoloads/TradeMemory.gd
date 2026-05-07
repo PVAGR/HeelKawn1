@@ -226,14 +226,18 @@ func _complete_trade_route(route_index: int, tick: int) -> void:
 	
 	# Spread knowledge from origin to destination
 	_spread_knowledge(route.from_settlement, route.to_settlement, route.goods)
-	
+
 	# Record completion event
 	if WorldMemory != null:
+		var goods_total: int = 0
+		for value in route.goods.values():
+			goods_total += int(value)
+		
 		WorldMemory.record_event({
 			"type": "trade_route_completed",
 			"from": route.from_settlement,
 			"to": route.to_settlement,
-			"goods_count": route.goods.values().sum(),
+			"goods_count": goods_total,
 			"tick": tick
 		})
 	

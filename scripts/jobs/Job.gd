@@ -174,25 +174,25 @@ static func tool_job_output(job_type: int) -> int:
 ## Work ticks needed for each tool job type.
 static func tool_job_work_ticks(job_type: int) -> int:
 	match job_type:
-		Type.GATHER_FLINT: return 15
-		Type.GATHER_STICK: return 8
-		Type.CRAFT_KNIFE:  return 20
-		Type.CRAFT_TORCH:  return 12
-		Type.CRAFT_PICK:   return 25
-		Type.CRAFT_SPEAR:  return 18
-		Type.BUILD_FIRE_PIT:    return 30
-		Type.BUILD_STORAGE_HUT: return 35
-		Type.BUILD_MARKER_STONE:return 25
-		Type.BUILD_SHRINE:      return 45
-		Type.CARVE_GRAVE_MARKER:    return 30  # Grave carving
-		Type.CARVE_KNOWLEDGE_STONE: return 50  # Knowledge inscription takes longer
-		Type.CARVE_LEDGER_STONE:    return 60  # Ledger requires detailed records
-		Type.COOK_MEAT:         return 15
-		Type.COOK_BERRIES:      return 10
-		Type.DRY_MEAT:          return 25
-		Type.PLANT_SEEDS:       return 12
-		Type.HARVEST_CROPS:     return 15
-	return 20  # default
+		Type.GATHER_FLINT: return 8   # Faster (was 15)
+		Type.GATHER_STICK: return 4   # Faster (was 8)
+		Type.CRAFT_KNIFE:  return 10  # Faster (was 20)
+		Type.CRAFT_TORCH:  return 6   # Faster (was 12)
+		Type.CRAFT_PICK:   return 12  # Faster (was 25)
+		Type.CRAFT_SPEAR:  return 8   # Faster (was 18)
+		Type.BUILD_FIRE_PIT:    return 12  # Much faster (was 30)
+		Type.BUILD_STORAGE_HUT: return 15  # Much faster (was 35)
+		Type.BUILD_MARKER_STONE:return 10  # Much faster (was 25)
+		Type.BUILD_SHRINE:      return 20  # Much faster (was 45)
+		Type.CARVE_GRAVE_MARKER:    return 15  # Faster (was 30)
+		Type.CARVE_KNOWLEDGE_STONE: return 25  # Faster (was 50)
+		Type.CARVE_LEDGER_STONE:    return 30  # Faster (was 60)
+		Type.COOK_MEAT:         return 8   # Faster (was 15)
+		Type.COOK_BERRIES:      return 5   # Faster (was 10)
+		Type.DRY_MEAT:          return 12  # Faster (was 25)
+		Type.PLANT_SEEDS:       return 6   # Faster (was 12)
+		Type.HARVEST_CROPS:     return 8   # Faster (was 15)
+	return 10  # Faster default (was 20)
 
 
 ## Which skill this job trains.

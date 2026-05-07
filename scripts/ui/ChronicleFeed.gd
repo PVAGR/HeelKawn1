@@ -4,12 +4,12 @@ extends CanvasLayer
 ## Real-time scrolling event stream. Shows the latest significant world events
 ## as colored, human-readable text. Always visible (toggle with C key).
 
-const MAX_VISIBLE_LINES: int = 20
-const FEED_WIDTH: float = 300.0
-const FEED_MARGIN_RIGHT: float = 8.0
-const FEED_MARGIN_TOP: float = 40.0
-const FEED_MARGIN_BOTTOM: float = 8.0
-const FONT_SIZE: int = 11
+const MAX_VISIBLE_LINES: int = 7  # Show only latest 7 events (was 20)
+const FEED_WIDTH: float = 280.0  # Narrower (was 300)
+const FEED_MARGIN_RIGHT: float = 12.0  # More margin from edge
+const FEED_MARGIN_TOP: float = 80.0  # Lower from top (was 40)
+const FEED_MARGIN_BOTTOM: float = 12.0
+const FONT_SIZE: int = 10  # Smaller font (was 11)
 const REFRESH_EVERY_N_TICKS: int = 10
 const REFRESH_FAST: int = 30
 const REFRESH_ULTRA: int = 60
@@ -38,10 +38,10 @@ var _header: Label
 func _ready() -> void:
 	layer = 15  # Below HUD (20), above game
 
-	# Background
+	# Background - more opaque for better readability
 	_bg = ColorRect.new()
 	_bg.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
-	_bg.color = Color(0.02, 0.03, 0.05, 0.75)
+	_bg.color = Color(0.06, 0.08, 0.10, 0.92)  # More opaque (was 0.75)
 	_bg.offset_left = -FEED_WIDTH - FEED_MARGIN_RIGHT
 	_bg.offset_top = FEED_MARGIN_TOP
 	_bg.offset_right = -FEED_MARGIN_RIGHT
@@ -55,17 +55,17 @@ func _ready() -> void:
 	_header.offset_left = -FEED_WIDTH - FEED_MARGIN_RIGHT
 	_header.offset_top = FEED_MARGIN_TOP
 	_header.offset_right = -FEED_MARGIN_RIGHT
-	_header.offset_bottom = FEED_MARGIN_TOP + 18
+	_header.offset_bottom = FEED_MARGIN_TOP + 20
 	_header.text = "  Chronicle"
-	_header.add_theme_font_size_override("font_size", 10)
-	_header.add_theme_color_override("font_color", Color(0.6, 0.58, 0.50, 0.7))
+	_header.add_theme_font_size_override("font_size", 11)
+	_header.add_theme_color_override("font_color", Color(0.75, 0.70, 0.60, 0.85))
 	add_child(_header)
 
-	# Feed text
+	# Feed text - better padding and contrast
 	_feed = RichTextLabel.new()
 	_feed.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
 	_feed.offset_left = -FEED_WIDTH - FEED_MARGIN_RIGHT
-	_feed.offset_top = FEED_MARGIN_TOP + 18
+	_feed.offset_top = FEED_MARGIN_TOP + 20
 	_feed.offset_right = -FEED_MARGIN_RIGHT
 	_feed.offset_bottom = -FEED_MARGIN_BOTTOM
     # bbcode_enabled disabled for runtime stability
@@ -74,12 +74,16 @@ func _ready() -> void:
 	_feed.scroll_active = true
 	_feed.add_theme_font_size_override("normal_font_size", FONT_SIZE)
 	_feed.add_theme_font_size_override("bold_font_size", FONT_SIZE)
-	_feed.add_theme_color_override("default_color", Color(0.75, 0.73, 0.65, 0.9))
+	_feed.add_theme_color_override("default_color", Color(0.85, 0.82, 0.75, 0.95))  # Lighter text
 	_feed.mouse_filter = Control.MOUSE_FILTER_PASS
 	_feed.selection_enabled = false
 	# Fit content
 	_feed.fit_content = false
 	_feed.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Add internal padding
+	_feed.add_theme_constant_override("margin_left", 8)
+	_feed.add_theme_constant_override("margin_right", 8)
+	_feed.add_theme_constant_override("line_spacing", 3)  # Better line spacing
 	add_child(_feed)
 
 	# Connect game tick

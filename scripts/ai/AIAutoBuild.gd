@@ -135,11 +135,11 @@ func scan_resources(tile: Vector2i, radius: int = 20) -> Dictionary:
 # ==================== BUILD INTENT CREATION ====================
 
 ## Create build intents for a pawn/settlement
-func create_build_intents(_pawn_id: int, tile: Vector2i, settlement_id: int = -1) -> void:
+func create_build_intents(_pawn_id: int, tile: Vector2i, _settlement_id: int = -1) -> void:
 	var resources: Dictionary = scan_resources(tile, 20)
 	
 	# Check what already exists
-	_check_existing_structures(tile, resources, settlement_id)
+	_check_existing_structures(tile, resources, _settlement_id)
 	
 	# Create intents in priority order
 	

@@ -582,7 +582,7 @@ func get_disaster_risk(region: int) -> String:
 		return "Low"
 
 ## Manually trigger a disaster (for testing)
-func debug_trigger_disaster(type: String, region: int = -1) -> void:
+func debug_trigger_disaster(type: String, _region: int = -1) -> void:
 	var tick: int = GameManager.tick_count
 	var rng = RandomNumberGenerator.new()
 	rng.seed = tick + 99999

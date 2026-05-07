@@ -177,28 +177,28 @@ func _find_available_trader(settlement_region: int) -> Pawn:
 
 func _generate_trade_goods(settlement_region: int) -> Dictionary:
 	var goods: Dictionary = {}
-	
+
 	# Check stockpile for surplus items
-	if StockpileManager != null:
+	if StockpileManager != null and StockpileManager.has_method("total_count_of"):
 		# Food surplus (use BERRY type which exists)
-		var food_count: int = StockpileManager.count_item(1)  # Item.Type.BERRY
+		var food_count: int = StockpileManager.total_count_of(1)  # Item.Type.BERRY
 		if food_count > 20:
 			goods["food"] = min(TRADE_GOODS_PER_ROUTE, food_count / 2)
-		
+
 		# Wood surplus
-		var wood_count: int = StockpileManager.count_item(3)  # Item.Type.WOOD
+		var wood_count: int = StockpileManager.total_count_of(3)  # Item.Type.WOOD
 		if wood_count > 15:
 			goods["wood"] = min(TRADE_GOODS_PER_ROUTE, wood_count / 2)
-		
+
 		# Stone surplus
-		var stone_count: int = StockpileManager.count_item(2)  # Item.Type.STONE
+		var stone_count: int = StockpileManager.total_count_of(2)  # Item.Type.STONE
 		if stone_count > 10:
 			goods["stone"] = min(TRADE_GOODS_PER_ROUTE, stone_count / 2)
-	
+
 	# Default goods if no surplus
 	if goods.is_empty():
 		goods["misc"] = TRADE_GOODS_PER_ROUTE
-	
+
 	return goods
 
 

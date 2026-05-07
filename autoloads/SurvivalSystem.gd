@@ -11,17 +11,17 @@ extends Node
 ##
 ## Minecraft ease + Vintage Story depth + Kenshi tension + Rust stakes
 
-# Decay rates (per tick at rest)
-const HUNGER_DECAY_RATE: float = 0.03  # ~33 ticks to starve from full
-const THIRST_DECAY_RATE: float = 0.05  # ~20 ticks to dehydrate from full
-const ENERGY_DECAY_RATE: float = 0.02  # ~50 ticks to exhaust from full
-const STAMINA_DECAY_RATE: float = 0.04  # ~25 ticks to deplete from full
+# Decay rates (per tick at rest) - BALANCED FOR SURVIVABILITY
+const HUNGER_DECAY_RATE: float = 0.003  # ~33,333 ticks to starve from full (~9 hours at 1 tick/sec)
+const THIRST_DECAY_RATE: float = 0.005  # ~20,000 ticks to dehydrate from full (~5.5 hours at 1 tick/sec)
+const ENERGY_DECAY_RATE: float = 0.002  # ~50,000 ticks to exhaust from full (~14 hours at 1 tick/sec)
+const STAMINA_DECAY_RATE: float = 0.004  # ~25,000 ticks to deplete from full (~7 hours at 1 tick/sec)
 
 # Work multipliers (faster decay when working)
-const WORK_HUNGER_MULT: float = 2.0    # Working pawns get hungry 2x faster
-const WORK_THIRST_MULT: float = 1.5   # Working pawns get thirsty 1.5x faster
-const WORK_ENERGY_MULT: float = 3.0   # Working pawns tire 3x faster
-const WORK_STAMINA_MULT: float = 4.0  # Working pawns exhaust 4x faster
+const WORK_HUNGER_MULT: float = 1.5    # Working pawns get hungry 1.5x faster
+const WORK_THIRST_MULT: float = 1.3   # Working pawns get thirsty 1.3x faster
+const WORK_ENERGY_MULT: float = 2.0   # Working pawns tire 2x faster
+const WORK_STAMINA_MULT: float = 3.0  # Working pawns exhaust 3x faster
 
 # Temperature thresholds (Celsius)
 const TEMP_NORMAL_LOW: float = 36.0

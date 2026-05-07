@@ -404,10 +404,8 @@ func _check_death_conditions(pawn: Node, tick: int) -> void:
 	var data: RefCounted = pawn.data
 
 	# CRITICAL: Skip death checks for already-dead pawns
-	if data.has("is_dead"):
-		var is_dead_val: Variant = data.get("is_dead")
-		if is_dead_val != null and bool(is_dead_val):
-			return  # Pawn is already dead - skip all death processing
+	if "is_dead" in data and bool(data.get("is_dead")):
+		return  # Pawn is already dead - skip all death processing
 
 	var cause: String = ""
 
@@ -440,10 +438,8 @@ func _apply_death(pawn: Node, cause: String) -> void:
 	var data: RefCounted = pawn.data
 
 	# CRITICAL: Prevent duplicate death events for already-dead pawns
-	if data.has("is_dead"):
-		var is_dead_val: Variant = data.get("is_dead")
-		if is_dead_val != null and bool(is_dead_val):
-			return  # Pawn already marked dead - skip duplicate death processing
+	if "is_dead" in data and bool(data.get("is_dead")):
+		return  # Pawn already marked dead - skip duplicate death processing
 
 	# Record death event
 	if _world_memory != null:

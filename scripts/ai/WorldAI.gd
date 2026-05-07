@@ -3777,10 +3777,12 @@ func _pawn_teaching_obligation(pd: PawnData) -> float:
 	if KnowledgeSystem == null:
 		return 0.0
 	var pid: int = int(pd.id)
-	if not KnowledgeSystem.teaching_debt.has(pid):
-		return 0.0
-	var debt: Dictionary = KnowledgeSystem.teaching_debt[pid]
-	return clampf(float(debt.get("obligation_weight", 0.0)), 0.0, 1.0)
+	if KnowledgeSystem.has_method("get"):
+		var teaching_debt: Variant = KnowledgeSystem.get("teaching_debt")
+		if teaching_debt != null and teaching_debt is Dictionary and teaching_debt.has(pid):
+			var debt: Dictionary = teaching_debt[pid]
+			return clampf(float(debt.get("obligation_weight", 0.0)), 0.0, 1.0)
+	return 0.0
 
 
 func _pawn_neural_input_vector(pd: PawnData) -> Array[float]:

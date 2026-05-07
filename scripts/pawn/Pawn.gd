@@ -3858,9 +3858,9 @@ func _finish_build(job: Job) -> void:
 			# Inscribe pawn's knowledge onto stone
 			if KnowledgeSystem != null and KnowledgeSystem.has_method("inscribe_knowledge_on_stone"):
 				var pawn_knowledge: Array = []
-				if KnowledgeSystem.has("knowledge_carriers"):
-					var carriers: Dictionary = KnowledgeSystem.get("knowledge_carriers")
-					if carriers.has(int(data.id)):
+				if KnowledgeSystem.has_method("get"):
+					var carriers: Variant = KnowledgeSystem.get("knowledge_carriers")
+					if carriers != null and carriers is Dictionary and carriers.has(int(data.id)):
 						pawn_knowledge = carriers[int(data.id)].duplicate()
 				KnowledgeSystem.inscribe_knowledge_on_stone(job.tile, pawn_knowledge, int(data.id), "knowledge_stone")
 		_Job.Type.CARVE_LEDGER_STONE:

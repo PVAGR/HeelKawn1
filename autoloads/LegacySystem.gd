@@ -324,7 +324,7 @@ func _get_preserved_knowledge(pawn_id: int) -> Array[int]:
 	var preserved: Array[int] = []
 
 	# Check record carriers inscribed by this pawn (Node-safe access)
-	if KnowledgeSystem.has_method("get") and KnowledgeSystem.has("record_carriers"):
+	if KnowledgeSystem.has_method("get"):
 		var carriers: Variant = KnowledgeSystem.get("record_carriers")
 		if carriers != null and carriers is Dictionary:
 			for tile_key in carriers:

@@ -2241,7 +2241,7 @@ func _report_heelkawnians() -> void:
 	print("=== HEELKAWNIAN DEVELOPMENT AI (Individual Sprite Profiles) ===")
 	print("Generated: %s" % Time.get_datetime_string_from_system())
 	print("Game Tick: %d" % GameManager.tick_count)
-	print("Derived only: each profile reads live pawn needs, skills, knowledge, memory, settlement, and era state.")
+	print("Derived + live influence: profiles read pawn needs, skills, knowledge, memory, settlement, and era state; Matrix biases job choice without overriding job legality.")
 	print("")
 
 	var main_node: Node2D = _main()
@@ -2327,6 +2327,23 @@ func _report_heelkawnians() -> void:
 				int(axes.get("trauma_pressure", 0)),
 			]
 		)
+		var matrix_decision: Dictionary = {}
+		for pawn in ps.pawns:
+			if pawn == null or not is_instance_valid(pawn):
+				continue
+			var pdata: PawnData = pawn.get("data") as PawnData
+			if pdata != null and int(pdata.id) == int(profile.get("pawn_id", -1)):
+				matrix_decision = HeelKawnianManager.get_matrix_decision_for_pawn(pawn)
+				break
+		if not matrix_decision.is_empty():
+			var top_jobs: Array = matrix_decision.get("top_jobs", [])
+			var matrix_parts: Array[String] = []
+			for item in top_jobs:
+				if matrix_parts.size() >= 4:
+					break
+				matrix_parts.append("%s+%d" % [str(item.get("job_name", "Job")), int(item.get("bias", 0))])
+			print("  matrix=%s" % (", ".join(matrix_parts) if not matrix_parts.is_empty() else "no strong bias"))
+			print("  rationale=%s" % str(matrix_decision.get("rationale", "")))
 	print("=== END HEELKAWNIAN DEVELOPMENT AI ===")
 
 

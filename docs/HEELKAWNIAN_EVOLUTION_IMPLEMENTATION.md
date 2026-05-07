@@ -111,22 +111,26 @@ func get_average_lifespan(settlement_id: int) -> int:
 
 ---
 
-### Task 1B: HeelKawnian Development Profiles ✅ INITIAL LIVE
+### Task 1B: HeelKawnian Development Profiles + Matrix Job Bias ✅ INITIAL LIVE
 
-**Files:** `autoloads/HeelKawnianIdentity.gd`, `autoloads/HeelKawnianManager.gd`, `scripts/ui/CreatorDebugMenu.gd`
+**Files:** `autoloads/HeelKawnianIdentity.gd`, `autoloads/HeelKawnianManager.gd`, `scripts/pawn/Pawn.gd`, `scripts/ui/CreatorDebugMenu.gd`
 
-**Purpose:** Give every sprite a deterministic, inspectable development profile before making the profile command behavior.
+**Purpose:** Give every sprite a deterministic, inspectable development profile and use that profile as a real job-choice influence layer.
 
 **Implemented:**
 - Stable soul identity creation from live pawn data.
 - Identity resources now remember profile history and evolve simple traits from meaningful events.
 - Per-pawn profiles derive development score, phase, drive, next need, era context, skill summary, knowledge summary, social signal, preservation pressure, innovation pressure, and trauma pressure.
-- F10 `49 · HeelKawnians` prints aggregate drive/phase counts and sample individual profiles.
+- Matrix job biases derive from drive, needs, skill, profession, era context, and identity traits.
+- `Pawn.gd` consumes those Matrix biases during ordinary `JobManager` claiming without overriding job legality.
+- Strong Matrix-influenced job choices log back through `heelkawnian_development` events for auditability.
+- F10 `49 · HeelKawnians` prints aggregate drive/phase counts, sample individual profiles, top Matrix job pulls, and rationale.
 
 **Current boundary:**
-- This is a read-only intelligence/profile layer.
-- It does not yet bias pawn jobs, movement, research, teaching, preservation, or innovation.
-- The next frontier is behavior wiring, not another detached roadmap.
+- This is an initial job-bias bridge, not full agency.
+- It now includes an initial deterministic social intent bridge (`social_seek`, `teach_seek`, `grudge_confront`) consumed by pawn idle autonomy.
+- It does not yet provide full household planning, coordinated settlement ambition planning, dedicated research target steering, or broad movement strategy control.
+- The next frontier is deeper Matrix AI steering across social, knowledge, household, and settlement layers.
 
 ---
 

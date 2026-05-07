@@ -70,17 +70,17 @@ func _ready() -> void:
 	btn_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 
 	var watch_btn: Button = _make_menu_button("Watch")
-	watch_btn.tooltip_text = "Spectator mode — observe the world, paint zones"
+	watch_btn.tooltip_text = "Watch mode — fully autonomous world simulation, no direct control"
 	watch_btn.pressed.connect(func(): new_game_pressed.emit(); hide_menu())
 	btn_vbox.add_child(watch_btn)
 
 	var play_btn: Button = _make_menu_button("Play")
-	play_btn.tooltip_text = "Incarnated mode — live as a pawn, earn authority"
+	play_btn.tooltip_text = "Sprite mode — live as one sprite inside the world"
 	play_btn.pressed.connect(func(): play_pressed.emit(); hide_menu())
 	btn_vbox.add_child(play_btn)
 
 	var observer_btn: Button = _make_menu_button("Observer")
-	observer_btn.tooltip_text = "Observer mode — command all pawns, place structures"
+	observer_btn.tooltip_text = "Observer mode — full edit and command authority"
 	observer_btn.pressed.connect(func(): observer_mode_pressed.emit(); hide_menu())
 	btn_vbox.add_child(observer_btn)
 

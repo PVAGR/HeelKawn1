@@ -47,11 +47,31 @@ We are always building, always refining, always expanding. This document capture
     - Expanded `HeelKawnianManager.gd` into a derived per-pawn development intelligence layer.
     - Each pawn profile now summarizes soul id, phase, drive, next need, era context, skills, knowledge, social signal, preservation pressure, and trauma pressure.
     - Exposes F10 `49 · HeelKawnians` for sample individual sprite profiles.
+  - **FEAT: HeelKawnian Matrix AI Behavior Wiring (Phase 5A initial live)**:
+    - `HeelKawnianManager.gd` now turns each pawn's derived profile into deterministic job priority biases.
+    - `Pawn.gd` consumes those Matrix biases during normal `JobManager` claiming, so identity/memory/development drive nudges actual work without overriding job legality.
+    - Strong Matrix-influenced job choices are logged back through `heelkawnian_development` events for auditability and replay-facing inspection.
+    - F10 `49 · HeelKawnians` now prints top Matrix job pulls and rationale for sampled sprites.
+  - **FEAT: Matrix Social Intent Bridge + AutoBuild Job Wiring (Phase 5A extension)**:
+    - `HeelKawnianManager.gd` now exposes deterministic social intent suggestions (`social_seek`, `teach_seek`, `grudge_confront`) based on trust/rapport, grudge intensity, reputation, proximity, and settlement.
+    - `Pawn.gd` now checks the Matrix social intent layer during idle autonomy, including `teach_seek` handling that writes rapport/social/neural memory traces.
+    - `JobManager.gd` now includes a `post_from_dict(...)` compatibility adapter so older dict-post callers can map into concrete `Job.Type` entries safely.
+    - `AIAutoBuild.gd` now posts concrete build jobs via `JobManager.post(...)`, includes settlement-aware intent dedupe, and safely falls back when advanced settlement building queries are unavailable.
+  - **FEAT: Matrix Settlement Ambition Seeding (Phase 5A extension)**:
+    - `HeelKawnianManager.gd` now derives periodic local ambitions (hearth, storage, beds, walls/door, marker stone, food, tooling, teaching) from drive + local settlement feature pressure.
+    - `Pawn.gd` now runs a throttled ambition seed hook in idle to inject one strategic job into `JobManager` without overriding normal job legality or claim flow.
+    - Ambition seeding is throttled per pawn and per settlement region to avoid queue spam at high simulation speed.
+    - Ambition posts are logged via `heelkawnian_development` as `matrix_settlement_ambition` for deterministic audit and replay tracing.
+  - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
+    - `WATCH` mode is now non-interactive with world command/edit input.
+    - `INCARNATED` mode is embodied sprite play (not full-command mode).
+    - `OBSERVER` mode is the sole full edit/command authority path.
+    - Placement/command gates in `Main.gd` now enforce observer-only control for world editing and pawn command routing.
   - **FIX: Gentle onboarding runtime blocker**:
     - Replaced the bad `Label.bbcode_enabled` path with an attached `RichTextLabel` in `OnboardingSystem.gd`.
     - Updated visible language from tutorial rewards to first-body orientation.
     - Verified Godot headless smoke passes after the fix on May 7, 2026.
-- Next Task: Wire HeelKawnian development profiles into real pawn behavior while continuing the v1 consolidation loop.
+- Next Task: deepen from first ambition seeding into true household membership logic, coordinated group plans, and longer-horizon settlement objective chains while continuing the v1 consolidation loop.
 
 ## Blockers
 
@@ -70,7 +90,7 @@ We are always building, always refining, always expanding. This document capture
 ## Immediate Path
 
 1. Runtime truth pass in Godot: verify F10 diagnostics, UI panels, and red errors.
-2. HeelKawnian behavior wiring: let development profiles bias learn/teach/preserve/practice/innovate/recover choices.
+2. HeelKawnian Matrix AI deepening: expand from job bias into teaching target selection, cooperation, recovery, household intent, and settlement ambitions.
 3. Lineage/progression: finish parent lookup, child creation, inheritance hooks, and skill branches.
 4. Material reality: connect crafting consumption to inventory/stockpile and tool requirements.
 5. Knowledge preservation: unify stones, books, teaching, literacy, and rediscovery.

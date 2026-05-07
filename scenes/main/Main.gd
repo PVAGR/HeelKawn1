@@ -126,7 +126,7 @@ const WORLD_STABILIZATION_TICKS: int = 500
 const PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES: bool = false  # Legacy — use _can_player_place() instead
 
 func _can_player_place() -> bool:
-	return _player_mode == PlayerMode.OBSERVER or _player_pawn != null
+	return _player_mode == PlayerMode.OBSERVER
 ## Toolbar + keys 1–7 match GameManager.SPEED_STEPS (F10 creator menu still steals digit keys while open).
 const ALLOW_SPEED_NUMBER_HOTKEYS: bool = true
 ## Keep load-in sessions predictable; speed only changes via explicit user action.
@@ -1910,7 +1910,7 @@ func get_player_mode_label() -> String:
 		PlayerMode.OBSERVER:
 			return "OBSERVER"
 		_:
-			return "SPECTATOR"
+			return "WATCH"
 
 
 func is_player_incarnated() -> bool:
@@ -1919,6 +1919,10 @@ func is_player_incarnated() -> bool:
 
 func is_player_observer() -> bool:
 	return _player_mode == PlayerMode.OBSERVER
+
+
+func _is_watch_mode() -> bool:
+	return _player_mode == PlayerMode.SPECTATOR
 
 
 ## Ctrl+G: toggle between SPECTATOR and OBSERVER mode.
@@ -1957,32 +1961,12 @@ func request_incarnation_entry(note: String = "manual_entry", payload: Dictionar
 	return _incarnation_picker != null and is_instance_valid(_incarnation_picker) and bool(_incarnation_picker.visible)
 
 
-## Can the player command a specific pawn? Observer mode = always yes.
-## Incarnated mode = must outrank the target in at least one authority context.
-## Spectator = no.
+## Can the player command a specific pawn?
+## Observer mode = yes. Watch/Sprite modes = no.
 func _can_command_pawn(target: Pawn) -> bool:
 	if target == null or not is_instance_valid(target) or target.data == null:
 		return false
-	if _player_mode == PlayerMode.OBSERVER:
-		return true
-	if _player_mode != PlayerMode.INCARNATED:
-		return false
-	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
-		return false
-	# Check knowledge fog
-	var dist: int = _tile_chebyshev_dist(_player_pawn.data.tile_pos, target.data.tile_pos)
-	if dist > INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES:
-		return false
-	# Check authority — player must outrank target in at least one context
-	if AuthoritySystem != null:
-		var my_id: int = _player_pawn.data.id
-		var their_id: int = target.data.id
-		for ctx: int in [AuthoritySystem.AuthorityContext.MILITARY, AuthoritySystem.AuthorityContext.CIVIL]:
-			var my_auth: float = AuthoritySystem.get_authority_level(my_id, ctx)
-			var their_auth: float = AuthoritySystem.get_authority_level(their_id, ctx)
-			if my_auth > their_auth and my_auth >= 0.3:
-				return true
-	return false
+	return _player_mode == PlayerMode.OBSERVER
 
 
 ## Get the player's authority rank label for HUD display.
@@ -2052,7 +2036,7 @@ func _update_ui_for_player_mode() -> void:
 	elif _player_mode == PlayerMode.OBSERVER:
 		print("[Main] Observer mode: Full command UI. You command all pawns from above.")
 	else:
-		print("[Main] Spectator mode: Full UI restored. You watch the world unfold.")
+		print("[Main] Watch mode: world runs fully autonomous; you observe without commanding.")
 
 
 func _reset_player_intent_observer_routing() -> void:
@@ -3536,6 +3520,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		var key: InputEventKey = event
 		if key.pressed:
 			_handle_key_input(key)
+			return
+	# Watch mode is intentionally non-interactive with the simulation layer.
+	# Camera/navigation can still work in dedicated camera scripts.
+	if _is_watch_mode():
+		if event is InputEventMouseButton:
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseMotion:
 		_update_hover_tile(event.position)
 		# Safety net: if the toolbar / HUD swallowed the mouse-release (e.g.
@@ -3565,6 +3556,15 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _handle_key_input(key: InputEventKey) -> void:
+	if _is_watch_mode():
+		var allow_watch_transition: bool = (
+			(key.keycode == KEY_T and key.ctrl_pressed)
+			or (key.keycode == KEY_G and key.ctrl_pressed)
+			or (key.keycode == KEY_O)
+			or (key.keycode == KEY_ESCAPE)
+		)
+		if not allow_watch_transition:
+			return
 	match key.keycode:
 		KEY_I:
 			_toggle_region_inspector()

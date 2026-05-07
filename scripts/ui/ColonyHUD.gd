@@ -411,8 +411,10 @@ func _mode_badge_line() -> String:
 			elif rank == "Ruler":
 				hint = "right-click any pawn to command · Ctrl+T to exit"
 			return "[bgcolor=#082a3a][color=#82e0ff]  INCARNATED · %s  (%s)  [/color][/bgcolor]" % [rank, hint]
+		"WATCH", "SPECTATOR":
+			return "[bgcolor=#1a1a1a][color=#888888]  WATCH MODE  (Ctrl+T play as sprite · Ctrl+G observer)  [/color][/bgcolor]"
 		_:
-			return "[bgcolor=#1a1a1a][color=#888888]  SPECTATOR  (Ctrl+G god · Ctrl+T incarnate · C chronicle)  [/color][/bgcolor]"
+			return "[bgcolor=#1a1a1a][color=#888888]  WATCH MODE  (Ctrl+T play as sprite · Ctrl+G observer)  [/color][/bgcolor]"
 
 
 func _time_line() -> String:

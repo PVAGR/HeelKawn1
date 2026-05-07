@@ -56,6 +56,18 @@ const CACHE_DURATION_TICKS: int = 100  # Cache lasts 100 ticks
 @onready var _world_memory: Node = null
 @onready var _settlement_memory: Node = null
 
+const BUILD_TO_JOB_TYPE: Dictionary = {
+	"shelter": Job.Type.BUILD_SHELTER,
+	"expand_shelter": Job.Type.BUILD_SHELTER,
+	"storage": Job.Type.BUILD_STORAGE_HUT,
+	"hearth": Job.Type.BUILD_HEARTH,
+	"workshop": Job.Type.TOOL_MAKING,
+	"wall": Job.Type.BUILD_WALL,
+	"bed": Job.Type.BUILD_BED,
+	"monument": Job.Type.BUILD_MARKER_STONE,
+	"great_hall": Job.Type.BUILD_WALL
+}
+
 
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
@@ -182,7 +194,7 @@ func create_build_intents(_pawn_id: int, tile: Vector2i, settlement_id: int = -1
 
 func _check_existing_structures(tile: Vector2i, resources: Dictionary, _settlement_id: int) -> void:
 	# Check for existing structures in area
-	if _settlement_memory != null:
+	if _settlement_memory != null and _settlement_memory.has_method("get_buildings_near"):
 		var buildings: Array = _settlement_memory.get_buildings_near(tile, 20)
 		for building in buildings:
 			var type: String = building.get("type", "")
@@ -192,12 +204,27 @@ func _check_existing_structures(tile: Vector2i, resources: Dictionary, _settleme
 				resources.storage_exists = true
 			elif type == "hearth" or type == "fire_pit" or type == "kitchen":
 				resources.hearth_exists = true
+	else:
+		# Fallback scan from world features if settlement building API is not present.
+		if _world == null or _world.data == null:
+			return
+		for x in range(tile.x - 12, tile.x + 12):
+			for y in range(tile.y - 12, tile.y + 12):
+				if not _world.data.in_bounds(x, y):
+					continue
+				var feature: int = _world.data.get_feature(x, y)
+				if feature == TileFeature.Type.BED:
+					resources.shelter_exists = true
+				elif feature == TileFeature.Type.FIRE_PIT:
+					resources.hearth_exists = true
+				elif feature == TileFeature.Type.STORAGE_HUT:
+					resources.storage_exists = true
 
 
 func _create_build_intent(priority: int, build_type: String, tile: Vector2i, settlement_id: int) -> void:
 	# Check if intent already exists for this type
 	for intent in build_intents:
-		if intent.build_type == build_type and not intent.completed:
+		if intent.build_type == build_type and int(intent.get("settlement_id", -9999)) == settlement_id and not bool(intent.get("completed", false)):
 			return  # Already have this intent
 	
 	# Determine required resources
@@ -280,17 +307,19 @@ func _assign_pawn_to_intent(intent: Dictionary) -> void:
 	# Find nearby builder pawns
 	if _job_manager == null:
 		return
-	
-	# Post a job for this build intent
-	var job_data: Dictionary = {
-		"type": "build",
-		"build_intent_id": intent.intent_id,
-		"tile": intent.tile,
-		"priority": 10 - intent.priority,  # Higher priority = lower number
-		"required_resources": intent.required_resources
-	}
-	
-	_job_manager.post_from_dict(job_data)
+	var build_type: String = str(intent.get("build_type", ""))
+	var job_type: int = int(BUILD_TO_JOB_TYPE.get(build_type, -1))
+	if job_type < 0:
+		return
+	# Post a concrete deterministic job for this build intent.
+	var posted: Job = _job_manager.post(
+		job_type,
+		intent.tile,
+		10 - int(intent.priority),  # higher intent priority becomes stronger job priority
+		20
+	)
+	if posted != null:
+		intent.assigned_pawn_id = -2  # queued marker (claimed pawn id comes later in JobManager)
 
 
 func _has_required_resources(intent: Dictionary) -> bool:
@@ -326,14 +355,14 @@ func _scan_for_new_pawns(_tick: int) -> void:
 		elif pawn.has_meta("state"):
 			state = str(pawn.get_meta("state"))
 		
-		if state == "idle" or state == "wandering":
+		if state == "idle" or state == "wandering" or state == "":
 			var profession: int = -1
-			if data.has_method("get_current_profession"):
-				profession = data.get_current_profession()
+			if data.has_method("profession_name"):
+				profession = int(data.get("current_profession"))
 			elif data.has_meta("current_profession"):
-				profession = data.get_meta("current_profession")
+				profession = int(data.get_meta("current_profession"))
 			
-			if profession == 1:  # BUILDER
+			if profession == int(PawnData.Profession.BUILDER):
 				_direct_builder_pawn(pawn, data)
 
 
@@ -341,15 +370,14 @@ func _direct_builder_pawn(pawn: Node, data: RefCounted) -> void:
 	var tile: Vector2i = Vector2i.ZERO
 	var settlement_id: int = -1
 
-	if data.has_method("get_tile_pos"):
-		tile = data.get_tile_pos()
+	if data.has_method("get"):
+		var tile_v: Variant = data.get("tile_pos")
+		if tile_v is Vector2i:
+			tile = tile_v
+		settlement_id = int(data.get("settlement_id"))
 	elif data.has_meta("tile_pos"):
 		tile = data.get_meta("tile_pos")
-
-	if data.has_method("get_settlement_id"):
-		settlement_id = data.get_settlement_id()
-	elif data.has_meta("settlement_id"):
-		settlement_id = data.get_meta("settlement_id")
+		settlement_id = int(data.get_meta("settlement_id"))
 
 	# Create build intents for this builder
 	create_build_intents(int(data.id), tile, settlement_id)

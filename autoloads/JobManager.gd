@@ -85,6 +85,90 @@ func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) ->
 	return job
 
 
+## Compatibility adapter for systems that post job dictionaries.
+## Accepts either numeric `type` or string aliases (`"harvest_crops"`, `"build"`).
+func post_from_dict(job_data: Dictionary) -> Job:
+	if job_data.is_empty():
+		return null
+	var tile_v: Variant = job_data.get("work_tile", job_data.get("tile", null))
+	if not (tile_v is Vector2i):
+		return null
+	var tile: Vector2i = tile_v as Vector2i
+	var type_v: Variant = job_data.get("type", Job.Type.FORAGE)
+	var resolved_type: int = _resolve_job_type(type_v, job_data)
+	if resolved_type < 0:
+		return null
+	var priority: int = int(job_data.get("priority", 0))
+	var work_ticks: int = int(job_data.get("work_ticks", 20))
+	return post(resolved_type, tile, priority, work_ticks)
+
+
+func _resolve_job_type(type_v: Variant, job_data: Dictionary) -> int:
+	if type_v is int:
+		return int(type_v)
+	var type_s: String = str(type_v).strip_edges().to_lower()
+	match type_s:
+		"forage":
+			return Job.Type.FORAGE
+		"hunt":
+			return Job.Type.HUNT
+		"chop":
+			return Job.Type.CHOP
+		"mine":
+			return Job.Type.MINE
+		"build_bed", "bed":
+			return Job.Type.BUILD_BED
+		"build_wall", "wall":
+			return Job.Type.BUILD_WALL
+		"build_door", "door":
+			return Job.Type.BUILD_DOOR
+		"build_shelter", "shelter":
+			return Job.Type.BUILD_SHELTER
+		"build_hearth", "hearth":
+			return Job.Type.BUILD_HEARTH
+		"storage", "build_storage_hut":
+			return Job.Type.BUILD_STORAGE_HUT
+		"grow_food", "water_crops", "tend_crops":
+			return Job.Type.GROW_FOOD
+		"harvest_crops":
+			return Job.Type.HARVEST_CROPS
+		"defend":
+			return Job.Type.DEFEND
+		"protect":
+			return Job.Type.PROTECT
+		"teach_skill":
+			return Job.Type.TEACH_SKILL
+		"apprenticeship":
+			return Job.Type.APPRENTICESHIP
+		"trade_haul":
+			return Job.Type.TRADE_HAUL
+		"build":
+			var build_type: String = str(job_data.get("build_type", "")).to_lower()
+			return _resolve_build_type_alias(build_type)
+	return -1
+
+
+func _resolve_build_type_alias(build_type: String) -> int:
+	match build_type:
+		"shelter", "expand_shelter":
+			return Job.Type.BUILD_SHELTER
+		"storage":
+			return Job.Type.BUILD_STORAGE_HUT
+		"hearth":
+			return Job.Type.BUILD_HEARTH
+		"workshop":
+			return Job.Type.TOOL_MAKING
+		"wall":
+			return Job.Type.BUILD_WALL
+		"bed":
+			return Job.Type.BUILD_BED
+		"monument":
+			return Job.Type.BUILD_MARKER_STONE
+		"great_hall":
+			return Job.Type.BUILD_WALL
+	return -1
+
+
 ## [TRADE_HAUL]: stand at [work_tile] (in [trade_from] zone), load batch, deliver to [trade_to].
 ## [tile] and [work_tile] must be the same unique key (see [_jobs_by_tile]).
 func post_trade_haul(

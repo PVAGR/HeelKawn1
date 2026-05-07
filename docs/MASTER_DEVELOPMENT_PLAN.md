@@ -78,6 +78,8 @@ Invalid assignment of property or key 'bbcode_enabled' with value of type 'bool'
 
 has been corrected in `autoloads/OnboardingSystem.gd` by using an attached `RichTextLabel` for BBCode copy. A Godot headless smoke passed on May 7, 2026. Full editor/playtest verification is still required before broad release claims.
 
+Initial HeelKawnian Matrix AI behavior wiring is now implemented: `HeelKawnianManager.gd` derives deterministic job biases from each pawn's phase, drive, memory traits, skills, knowledge, and era context, and `Pawn.gd` uses those biases during normal job claiming. This is an implemented bridge that still needs full in-editor/runtime behavior verification.
+
 ---
 
 ## Corrected Build Order
@@ -85,7 +87,7 @@ has been corrected in `autoloads/OnboardingSystem.gd` by using an attached `Rich
 1. Fix current red Godot runtime errors.
 2. Verify the game boots clean.
 3. Confirm which systems actually run without crashing.
-4. Build AI Autonomy, starting with a minimal deterministic Auto-Build Seed.
+4. Build AI Autonomy, starting with deterministic HeelKawnian Matrix behavior and the Auto-Build Seed.
 5. Build Combat Overhaul.
 6. Build Group/Guild institutions.
 7. Polish Lineage/Genetics.

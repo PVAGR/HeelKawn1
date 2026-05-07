@@ -41,6 +41,22 @@ func evolve(event: Dictionary) -> void:
             _add_trait("mentor_drive", 0.04)
         "social_meeting", "social_bond_milestone":
             _add_trait("social_memory", 0.03)
+        "matrix_decision":
+            var payload: Dictionary = event.get("payload", {})
+            match str(payload.get("drive", "")):
+                "learn", "innovate":
+                    _add_trait("curiosity", 0.01)
+                    _add_trait("knowledge_drive", 0.01)
+                "preserve":
+                    _add_trait("preservation_drive", 0.015)
+                "practice", "serve_settlement":
+                    _add_trait("labor_pride", 0.01)
+                "recover", "survive":
+                    _add_trait("caution", 0.01)
+                "teach":
+                    _add_trait("mentor_drive", 0.015)
+                "bond":
+                    _add_trait("social_memory", 0.01)
 
 
 func absorb_profile(profile: Dictionary) -> void:

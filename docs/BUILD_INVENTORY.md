@@ -26,8 +26,8 @@
 | Settlement Rebirth | `autoloads/SettlementRebirth.gd` | Implemented but Needs Runtime Verification | Revival with gates |
 | Animal Spawner/Population | `autoloads/AnimalSpawner.gd`, `autoloads/AnimalPopulation.gd` | Implemented but Needs Runtime Verification | Seeded ecology |
 | Pawn Behavior | `scripts/pawn/Pawn.gd`, `scripts/pawn/PawnData.gd` | Implemented but Needs Runtime Verification | Jobs, pathfinding, needs |
-| HeelKawnian Development Profiles | `autoloads/HeelKawnianManager.gd`, `autoloads/HeelKawnianIdentity.gd` | Partial / Prototype | Derived per-pawn phase/drive/next need; diagnostic/read-only, not action steering yet |
-| Job Manager | `autoloads/JobManager.gd` | Implemented but Needs Runtime Verification | Job queue system |
+| HeelKawnian Matrix AI | `autoloads/HeelKawnianManager.gd`, `autoloads/HeelKawnianIdentity.gd`, `scripts/pawn/Pawn.gd` | Implemented but Needs Runtime Verification | Derived per-pawn phase/drive/next need now biases real job choice; includes initial social intent bridge (`social_seek` / `teach_seek` / `grudge_confront`); strong decisions log back to WorldMemory |
+| Job Manager | `autoloads/JobManager.gd` | Implemented but Needs Runtime Verification | Job queue system with dict compatibility adapter (`post_from_dict`) for legacy callers |
 | Stockpile System | `autoloads/StockpileManager.gd` | Implemented but Needs Runtime Verification | Resource storage |
 | Trade Planner | `autoloads/TradePlanner.gd` | Implemented but Needs Runtime Verification | Trade routes |
 | World Clock | `autoloads/WorldClock.gd` | Implemented but Needs Runtime Verification | Tick/time management |
@@ -62,7 +62,7 @@
 | **Skill Trees** | `scripts/pawn/PawnData.gd` | TODO slots at levels 5/10/15/20 - basic/intermediate/advanced/mastery branches not implemented | P0 |
 | **Parent Data Lookup** | `scripts/pawn/PawnData.gd` | TODO - proper `PawnManager` lookup for lineage | P0 |
 | **Child Creation** | `scripts/pawn/Pawn.gd` | TODO stub - `_spawn_child_pawn` placeholder | P0 |
-| **HeelKawnian Behavior Wiring** | `scripts/pawn/Pawn.gd`, `autoloads/JobManager.gd` | Profile layer exists but does not yet bias learn/teach/preserve/practice/innovate decisions | P0 |
+| **HeelKawnian Matrix AI Deepening** | `scripts/pawn/Pawn.gd`, `autoloads/HeelKawnianManager.gd` | Job-bias bridge and initial social/teaching/grudge intent selection are live; still needs household intent, coordinated group goals, and long-horizon ambitions | P0 |
 | **Crafting System** | `autoloads/CraftingSystem.gd` | Placeholder - material consumption not connected to inventory | P1 |
 | **Material Consumption** | `autoloads/CraftingSystem.gd` | TODO - consume from pawn inventory/stockpile | P1 |
 | **Tool/Item Check** | `scripts/pawn/Pawn.gd` | TODO - check if pawn has required tool equipped | P1 |
@@ -148,7 +148,7 @@ From `docs/HEELKAWN_STANDALONE_MASTER_PLAN.md` **Section 7** (Must-have v1):
 | WorldMeaning prototype | ✅ DONE | — |
 | Historical ruins | ✅ DONE | — |
 | Civilization stage lens | ✅ INITIAL LIVE | Derived era score, not full era simulation |
-| Per-pawn HeelKawnian development AI | ✅ INITIAL LIVE | Derived profile/readout exists; not yet behavior-driving |
+| Per-pawn HeelKawnian development AI | ✅ INITIAL LIVE | Derived profile/readout exists and now biases job selection; needs in-editor runtime verification and deeper social/ambition steering |
 | Birth and death | ⚠️ Basic | No lineage depth |
 | Basic kinship | ⚠️ Stub | No full tree |
 | Food and storage | ✅ DONE | — |
@@ -184,7 +184,7 @@ Based on gaps + master plan v1 requirements:
 
 ### P0 - Must Build Next
 1. **Runtime Truth Pass** - verify UI panels, F10 diagnostics, and red errors in Godot.
-2. **HeelKawnian Behavior Wiring** - feed per-pawn profiles into learning, teaching, preservation, practice, innovation, and recovery choices.
+2. **HeelKawnian Matrix AI Deepening** - expand the initial job-bias bridge into learning targets, teaching targets, preservation choices, household goals, cooperation, and recovery behavior.
 3. **Skill Tree System** - `PawnData.gd` skill branching (levels 5/10/15/20).
 4. **Lineage/Kinship System** - full parents, children, inheritance, and real child creation.
 
@@ -221,7 +221,7 @@ Based on gaps + master plan v1 requirements:
 - `autoloads/AIAgentManager.gd` - 1 observation placeholder
 - `scripts/pawn/PawnData.gd` - parent lookup placeholder
 - `autoloads/CivilizationStage.gd` - initial derived era lens; deepen with future institution metrics
-- `autoloads/HeelKawnianManager.gd` - initial derived individual profile lens; wire into pawn behavior
+- `autoloads/HeelKawnianManager.gd` - derived individual profile lens plus deterministic Matrix job-bias generation
 
 ### Stub classes (5)
 - `SimVision.gd` - Roadmap design surface
@@ -251,4 +251,4 @@ The kernel has a strong deterministic foundation and currently passes headless s
 - Religion/metaphysics hooks
 - Long-vision (travel, clans, eras)
 
-**Recommended next step:** Run the runtime truth pass, then wire HeelKawnian development profiles into real behavior before expanding the skill tree and kinship graph.
+**Recommended next step:** Run the runtime truth pass, then deepen the HeelKawnian Matrix AI from job bias into social target selection, teaching targets, household goals, and settlement ambitions before expanding the skill tree and kinship graph.

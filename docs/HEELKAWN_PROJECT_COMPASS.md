@@ -36,6 +36,7 @@ What is strong now:
 - Pawn jobs, needs, social dynamics, knowledge, stories, and debug surfaces.
 - An initial read-only civilization stage lens that derives era labels from live world state.
 - Initial per-pawn HeelKawnian development profiles that derive phase, drive, next need, skill/knowledge summaries, and era context.
+- Initial HeelKawnian Matrix AI job-bias wiring: derived profiles now nudge real pawn job choices and log strong Matrix decisions for auditability.
 - A deep canon and design identity centered on memory, inheritance, knowledge loss, and emergent civilization.
 
 What still needs consolidation:
@@ -43,7 +44,7 @@ What still needs consolidation:
 - Player-facing verification in the running Godot editor.
 - Full in-editor confirmation after the onboarding `RichTextLabel` runtime fix.
 - Skill tree branches and deeper profession progression.
-- HeelKawnian development profiles wired into actual pawn decisions.
+- HeelKawnian Matrix AI expanded beyond job bias into social target selection, household intent, teaching target choice, recovery plans, and settlement ambitions.
 - Real lineage/child creation depth.
 - Crafting material consumption connected cleanly to inventory/stockpile.
 - Household, leadership, faction, governance, and religion systems moved beyond stubs.
@@ -72,7 +73,7 @@ Avoid adding isolated feature islands. Prefer wiring existing systems together s
 The best next work is a consolidation sequence:
 
 1. **Runtime truth pass:** run the game, use F10 diagnostics, verify UI panels, capture any red errors.
-2. **HeelKawnian behavior wiring:** let each pawn's derived profile bias learning, teaching, preservation, practice, innovation, and recovery.
+2. **HeelKawnian Matrix AI deepening:** extend the initial profile-to-job-bias bridge into learning targets, teaching targets, preservation choices, recovery behavior, household intent, and settlement ambitions.
 3. **Lineage and progression:** finish parent lookup, child creation, skill tree thresholds, and inheritance hooks.
 4. **Material reality:** make crafting consume real inventory/stockpile resources and require tools where intended.
 5. **Knowledge preservation:** connect books, stones, teaching, literacy, and lost/rediscovered knowledge into one loop.

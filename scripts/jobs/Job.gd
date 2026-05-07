@@ -128,6 +128,11 @@ static func describe_type(t: int) -> String:
 		Type.GROW_FOOD:         return "GrowFood"
 		Type.PROTECT:           return "Protect"
 		Type.DEFEND:            return "Defend"
+		Type.PAPER_MAKING:      return "PaperMaking"
+		Type.LEATHER_MAKING:    return "LeatherMaking"
+		Type.INK_MAKING:        return "InkMaking"
+		Type.TOOL_MAKING:       return "ToolMaking"
+		Type.BOOK_BINDING:      return "BookBinding"
 	return "Unknown"
 
 

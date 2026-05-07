@@ -284,11 +284,14 @@ func _update_crafting_progress(tick: int) -> void:
 
 func _complete_crafting_job(job: Dictionary, tick: int) -> void:
 	var recipe: Dictionary = recipes[job.recipe_id]
-	
+
+	# CRITICAL: Consume ingredients from stockpile
+	_consume_ingredients(recipe.ingredients)
+
 	# Add crafted items to stockpile
 	if _stockpile_manager != null:
 		_stockpile_manager.add_item(recipe.output_item, recipe.output_quantity)
-	
+
 	# Record crafting event
 	if _world_memory != null:
 		_world_memory.record_event({
@@ -300,7 +303,7 @@ func _complete_crafting_job(job: Dictionary, tick: int) -> void:
 			"workshop_tile": {"x": job.workshop_tile.x, "y": job.workshop_tile.y},
 			"tick": tick
 		})
-	
+
 	if OS.is_debug_build():
 		print("[Crafting] Completed: %s x%d" % [recipe.name, recipe.output_quantity])
 
@@ -370,8 +373,71 @@ func can_craft_recipe(pawn: Pawn, recipe_id: String) -> Dictionary:
 func _has_ingredients(ingredients: Dictionary) -> bool:
 	if _stockpile_manager == null:
 		return false
+
+	# Check if stockpile has all required ingredients
+	for resource in ingredients:
+		var required_qty: int = ingredients[resource]
+		var available_qty: int = _get_stockpile_quantity(resource)
+		if available_qty < required_qty:
+			return false
+	return true
+
+func _get_stockpile_quantity(resource: String) -> int:
+	# Map resource names to Item.Type enums
+	var resource_to_item: Dictionary = {
+		"flint": 1,  # Assuming Item.Type.FLINT = 1
+		"stick": 2,
+		"wood": 3,
+		"iron": 4,
+		"herbs": 5,
+		"cloth": 6,
+		"meat": 7,
+		"berry": 8,
+		"paper": 9,
+		"leather": 10,
+	}
 	
-	# Simplified check - would need actual item tracking
+	var item_type: int = resource_to_item.get(resource, -1)
+	if item_type < 0 or _stockpile_manager == null:
+		return 0
+	
+	# Use StockpileManager's total_count_of method
+	if _stockpile_manager.has_method("total_count_of"):
+		return int(_stockpile_manager.call("total_count_of", item_type))
+	
+	return 0
+
+func _consume_ingredients(ingredients: Dictionary) -> bool:
+	if _stockpile_manager == null:
+		return false
+	
+	# Map resource names to Item.Type enums
+	var resource_to_item: Dictionary = {
+		"flint": 1,
+		"stick": 2,
+		"wood": 3,
+		"iron": 4,
+		"herbs": 5,
+		"cloth": 6,
+		"meat": 7,
+		"berry": 8,
+		"paper": 9,
+		"leather": 10,
+	}
+	
+	# Consume each ingredient from stockpile
+	for resource in ingredients:
+		var required_qty: int = ingredients[resource]
+		var item_type: int = resource_to_item.get(resource, -1)
+		if item_type < 0:
+			continue
+		
+		# Remove from stockpile
+		if _stockpile_manager.has_method("remove_item"):
+			_stockpile_manager.call("remove_item", item_type, required_qty)
+		elif _stockpile_manager.has_method("take_item"):
+			_stockpile_manager.call("take_item", item_type, required_qty)
+	
 	return true
 
 

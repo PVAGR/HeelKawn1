@@ -26,11 +26,19 @@
 
 ## SYSTEM OVERVIEW
 
+### Runtime Mode Contract (authoritative behavior)
+
+- `WATCH`: observe autonomous NPC/AI world progression (no direct command/edit interaction).
+- `INCARNATED`: play as one sprite in-world.
+- `OBSERVER`: full command + build/edit authority.
+
+This contract is enforced in `scenes/main/Main.gd` and should be treated as the canonical input-permission model for future AI/system work.
+
 ### All Systems by Category:
 
 | Category | Systems | Purpose |
 |----------|---------|---------|
-| **AI Autonomy** | AIAutoBuild, AILearning, AICooperation | WorldBox-style AI |
+| **AI Autonomy** | AIAutoBuild, AILearning, AICooperation, HeelKawnianManager | WorldBox-style AI + deterministic per-sprite Matrix job bias |
 | **Combat** | AICombatProgression, CombatNarrative, SquadSystem, BattleReporter | Kenshi/Bannerlord |
 | **Social** | GuildSystem | BG3/WOW/ECO groups |
 | **Lineage** | BloodlineSystem, GeneticsSystem, NameGenerator | CK3 family trees |
@@ -42,8 +50,30 @@
 
 ## PHASE 1: AI AUTONOMY
 
+### HeelKawnianManager.gd
+**Purpose:** Deterministic Matrix AI layer for individual sprites.
+
+**Current Runtime Note:** Initial job-choice wiring is implemented and headless-smoke clean; full in-editor verification is still required. The manager derives each pawn's phase, drive, next need, era, memory traits, skills, and knowledge context, then produces job priority biases consumed by `Pawn.gd` during normal `JobManager` selection.
+
+**Authority Rule:** This layer nudges decisions only. It does not override job legality, player designations, `WorldMemory`, or deterministic simulation facts.
+
+**Additional Live Bridge (May 7, 2026):**
+- `get_social_action_for_pawn(pawn)` now returns deterministic social intent candidates:
+  - `social_seek`
+  - `teach_seek`
+  - `grudge_confront`
+- Selection uses settlement, proximity, trust/rapport, grudge intensity, and local reputation signals.
+- `Pawn.gd` now consumes this signal in idle autonomy before fallback social logic.
+
+---
+
 ### AIAutoBuild.gd
 **Purpose:** WorldBox-style autonomous construction
+
+**Current Runtime Note (May 7, 2026):**
+- Intent assignment now posts concrete `Job.Type` jobs through `JobManager.post(...)` (instead of generic dict-only build actions).
+- Intent dedupe includes `settlement_id`, preventing cross-settlement intent collisions.
+- Existing-structure checks now safely use `SettlementMemory.get_buildings_near` when available and fall back to tile feature scans when not.
 
 **Key Functions:**
 ```gdscript

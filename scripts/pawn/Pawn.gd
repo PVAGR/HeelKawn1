@@ -338,6 +338,7 @@ var _next_haul_retry_tick: int = 0
 var _next_cohort_update_tick: int = 0
 var _cohort_anchor_ref: WeakRef = null
 var _next_recruitment_cache_tick: int = 0
+var _next_matrix_ambition_tick: int = 0
 var _last_recruitment_job_type: int = -2
 var _recruitment_signal_cache: Array[Dictionary] = []
 var _cohort_stability_ticks: int = 0
@@ -375,6 +376,11 @@ var _hit_flash_ticks: int = 0
 var _neural_priority_fetch_tick: int = -1
 var _neural_priority_outputs: Array = []
 var _neural_priority_next_refresh_tick: int = -1
+## HeelKawnian Matrix AI profile cache: identity/memory/development job bias.
+## Kept per tick so a job scan can read "soul intent" without recomputing it
+## for every open job.
+var _matrix_priority_fetch_tick: int = -1
+var _matrix_priority_decision: Dictionary = {}
 ## Prevent per-job scan event spam from turning priority evaluation into a hitch source.
 var _last_neural_decision_log_tick: int = -1000000
 var _last_inspect_msg: String = ""
@@ -1079,6 +1085,14 @@ func _finish_autonomy_draft_walk(purpose: String, peer_id: int) -> void:
 				peer.data.mood = min(100.0, peer.data.mood + 0.25)
 				if data.neural_network != null and data.neural_network.has_method("record_memory_event"):
 					data.neural_network.record_memory_event(tick, "social_visit", peer_id, 0.35)
+		"teach_seek":
+			if peer != null and is_instance_valid(peer) and peer.data != null:
+				data.add_social_rapport(peer_id, 4)
+				peer.data.add_social_rapport(int(data.id), 3)
+				data.update_social_memory(peer_id, 0.08, 0.0, -0.02, 0.07, "autonomy_teach_seek")
+				data.mood = min(100.0, data.mood + 0.25)
+				if data.neural_network != null and data.neural_network.has_method("record_memory_event"):
+					data.neural_network.record_memory_event(tick, "teach_seek", peer_id, 0.25)
 		"grudge_confront":
 			if peer != null and is_instance_valid(peer) and peer.data != null:
 				data.update_social_memory(peer_id, 0.0, 0.0, -0.15, -0.05, "autonomy_confront")
@@ -1153,6 +1167,171 @@ func _try_autonomy_grudge_confront() -> bool:
 		return false
 	autonomy_draft_goto(near_tile, "grudge_confront", gid)
 	return _state == State.DRAFT_WALK
+
+
+func _try_heelkawnian_matrix_social_action() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	var tick: int = GameManager.tick_count
+	if posmod(tick + int(data.id) * 9, 29) != 0:
+		return false
+	var decision: Dictionary = HeelKawnianManager.get_social_action_for_pawn(self)
+	if decision.is_empty():
+		return false
+	var action: String = str(decision.get("action", "none"))
+	var target_id: int = int(decision.get("target_id", -1))
+	if action == "none" or target_id < 0:
+		return false
+	if action == "grudge_confront" and tick < _next_autonomy_grudge_tick:
+		return false
+	if (action == "social_seek" or action == "teach_seek") and tick < _next_autonomy_social_seek_tick:
+		return false
+	var target: Pawn = _find_pawn_by_id(target_id)
+	if target == null or not is_instance_valid(target) or target.data == null:
+		return false
+	var near_tile: Vector2i = _pick_passable_near_tile(data.tile_pos, target.data.tile_pos)
+	if near_tile.x < 0:
+		return false
+	autonomy_draft_goto(near_tile, action, target_id)
+	return _state == State.DRAFT_WALK
+
+
+func _try_heelkawnian_matrix_ambition_seed() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	var tick: int = GameManager.tick_count
+	if tick < _next_matrix_ambition_tick:
+		return false
+	if posmod(tick + int(data.id) * 13, 47) != 0:
+		return false
+	var ambition: Dictionary = HeelKawnianManager.get_settlement_ambition_for_pawn(self)
+	if ambition.is_empty():
+		_next_matrix_ambition_tick = tick + 40
+		return false
+	var job_type: int = int(ambition.get("job_type", -1))
+	if job_type < 0:
+		_next_matrix_ambition_tick = tick + 55
+		return false
+	var target_tile: Vector2i = _matrix_ambition_target_tile(job_type)
+	if target_tile.x < 0:
+		_next_matrix_ambition_tick = tick + 65
+		return false
+	var priority: int = clampi(int(ambition.get("priority", 5)), 1, 10)
+	var work_ticks: int = Job.tool_job_work_ticks(job_type)
+	if work_ticks <= 0:
+		work_ticks = 20
+	var posted: Job = JobManager.post(job_type, target_tile, priority, work_ticks)
+	if posted == null:
+		_next_matrix_ambition_tick = tick + 70
+		return false
+	var payload: Dictionary = {
+		"pawn_id": int(data.id),
+		"pawn_name": data.display_name,
+		"job_type": job_type,
+		"job_name": Job.describe_type(job_type),
+		"tile": target_tile,
+		"priority": priority,
+		"reason": str(ambition.get("reason", "")),
+		"settlement_id": int(ambition.get("settlement_id", -1)),
+	}
+	HeelKawnianManager.log_heelkawn_event(
+		str(ambition.get("soul_id", data.unique_id)),
+		"matrix_settlement_ambition",
+		payload,
+		str(ambition.get("reason", "")),
+		ambition,
+		tick
+	)
+	_next_matrix_ambition_tick = tick + 110
+	return true
+
+
+func _try_heelkawnian_affiliation_action() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	# Belonging actions should not override survival.
+	if data.hunger < HUNGER_EAT_THRESHOLD + 10.0:
+		return false
+	if data.rest < REST_SLEEP_THRESHOLD + 8.0:
+		return false
+	var tick: int = GameManager.tick_count
+	if posmod(tick + int(data.id) * 7, 61) != 0:
+		return false
+	var act: Dictionary = HeelKawnianManager.get_affiliation_action_for_pawn(self)
+	if act.is_empty():
+		return false
+	var kind: String = str(act.get("action", ""))
+	match kind:
+		"join_household":
+			if int(data.household_id) >= 0:
+				return false
+			var hid: int = int(act.get("household_id", -1))
+			if hid < 0:
+				return false
+			join_household(hid)
+		"join_clan":
+			if int(data.clan_id) >= 0:
+				return false
+			var cid: int = int(act.get("clan_id", -1))
+			if cid < 0:
+				return false
+			join_clan(cid)
+		"join_nation":
+			if int(data.nation_id) >= 0:
+				return false
+			var nid: int = int(act.get("nation_id", -1))
+			if nid < 0:
+				return false
+			join_nation(nid)
+			if data.national_citizenship <= 0:
+				set_national_citizenship(1)
+		_:
+			return false
+	HeelKawnianManager.log_heelkawn_event(
+		data.unique_id,
+		"matrix_affiliation",
+		{
+			"pawn_id": int(data.id),
+			"pawn_name": data.display_name,
+			"action": kind,
+			"household_id": int(data.household_id),
+			"clan_id": int(data.clan_id),
+			"nation_id": int(data.nation_id),
+		},
+		str(act.get("rationale", "")),
+		act,
+		tick
+	)
+	return true
+
+
+func _matrix_ambition_target_tile(job_type: int) -> Vector2i:
+	if _world == null or _world.data == null or _world.pathfinder == null or data == null:
+		return Vector2i(-1, -1)
+	var origin: Vector2i = data.tile_pos
+	var prefer_ring: int = 3
+	if job_type == _Job.Type.BUILD_WALL or job_type == _Job.Type.BUILD_DOOR:
+		prefer_ring = 5
+	elif job_type == _Job.Type.GROW_FOOD or job_type == _Job.Type.PLANT_SEEDS:
+		prefer_ring = 6
+	for r in range(1, prefer_ring + 1):
+		for y in range(-r, r + 1):
+			for x in range(-r, r + 1):
+				if abs(x) != r and abs(y) != r:
+					continue
+				var t: Vector2i = origin + Vector2i(x, y)
+				if not _world.data.in_bounds(t.x, t.y):
+					continue
+				if not _world.pathfinder.is_passable(t):
+					continue
+				var feat: int = int(_world.data.get_feature(t.x, t.y))
+				if job_type == _Job.Type.BUILD_WALL or job_type == _Job.Type.BUILD_DOOR:
+					if feat != TileFeature.Type.NONE and feat != TileFeature.Type.WALL:
+						continue
+				elif feat != TileFeature.Type.NONE:
+					continue
+				return t
+	return _pick_passable_near_tile(origin, origin + Vector2i(2, 0))
 
 
 func _try_autonomy_social_seek() -> bool:
@@ -2270,7 +2449,13 @@ func _tick_idle() -> void:
 		else:
 			_begin_haul_to_stockpile()
 		return
-	# 2b. Long-memory grudge: occasionally seek a confrontation while otherwise idle.
+	# 2b. HeelKawnian Matrix social intent: ally-seek, mentor-seek, or confrontation.
+	if _try_heelkawnian_matrix_social_action():
+		return
+	# 2c. Human ladder affiliation: household -> clan -> nation.
+	if _try_heelkawnian_affiliation_action():
+		return
+	# Fallback autonomy paths.
 	if _try_autonomy_grudge_confront():
 		return
 	# 3. Need-driven: hungry + food nearby -> go eat
@@ -2279,6 +2464,9 @@ func _tick_idle() -> void:
 	# 4. Tired -> sleep. Skipped if we're starving (food first, sleep when full).
 	if _maybe_start_sleeping():
 		return
+	# 4a. Matrix ambition seed: post one strategic household/settlement job.
+	# This does not force movement; it injects world-building work into the queue.
+	_try_heelkawnian_matrix_ambition_seed()
 	# 4b. Neural "social" hint: path toward a high-rapport nearby pawn if not already eating/sleeping.
 	if _try_autonomy_social_seek():
 		return
@@ -2519,6 +2707,7 @@ func _tick_idle() -> void:
 			neural_bias = _get_neural_job_priority_bias(j.type)
 			neural_bias_cache[j.type] = neural_bias
 		base_bias += neural_bias
+		base_bias += _get_heelkawnian_matrix_job_bias(j.type)
 		# World-memory-driven job bias: meaning tags at the job's work tile
 		# shape whether pawns want to work there.
 		var meaning_bias: int = 0
@@ -2710,6 +2899,12 @@ func _tick_idle() -> void:
 			return false
 		if not data.allows_job_type(j.type):
 			return false
+		
+		# TOOL REQUIREMENT CHECK - pawns can't claim jobs without required tools
+		if j.required_tool != Item.Type.NONE:
+			if not data.has_tool(j.required_tool):
+				return false  # Pawn doesn't have required tool
+		
 		var rk_filter: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
 		if not is_job_history_critical(j.type):
 			if int(resolve_region_scar_level.call(rk_filter)) >= 3:
@@ -3011,6 +3206,27 @@ func _get_neural_job_priority_bias(job_type: int) -> int:
 		_log_neural_decision(job_type, neural_bias, outputs)
 	
 	return neural_bias
+
+
+## HeelKawnian Matrix AI priority bias. This is the "sprite soul" layer:
+## survival, memory, learned traits, phase, and era nudge the pawn toward
+## work that fits its current development drive.
+func _get_heelkawnian_matrix_job_bias(job_type: int) -> int:
+	if data == null:
+		return 0
+	if GameManager != null:
+		if GameManager.tick_count < 300:
+			return 0
+		if GameManager.game_speed >= 200.0:
+			return 0
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	if _matrix_priority_fetch_tick != tick:
+		_matrix_priority_fetch_tick = tick
+		_matrix_priority_decision = HeelKawnianManager.get_matrix_decision_for_pawn(self)
+	if _matrix_priority_decision.is_empty():
+		return 0
+	var biases: Dictionary = _matrix_priority_decision.get("job_biases", {})
+	return clampi(int(biases.get(int(job_type), 0)), -8, 16)
 
 
 func _should_log_neural_decision_tick(tick: int) -> bool:
@@ -3472,6 +3688,7 @@ func _apply_work_hazards(work_ticks_simulated: int = 1) -> void:
 
 func _begin_job(job: Job) -> void:
 	_current_job = job
+	HeelKawnianManager.note_matrix_job_choice(self, job)
 	# Throttled cohort system calls for performance
 	_invalidate_recruitment_signal_cache()
 	update_cohort_membership(true)

@@ -181,10 +181,15 @@ func _check_player_near_resource() -> bool:
 		return false
 
 	# Simplified: just check if player has no resources
-	var inventory: Dictionary = pg.get("player_inventory") if pg.has_method("get") else {}
-	if inventory == null:
-		inventory = {}
-	return (inventory.get("wood", 0) if inventory.has("wood") else 0) == 0 and (inventory.get("stone", 0) if inventory.has("stone") else 0) == 0
+	var inventory: Dictionary = {}
+	if pg.has_method("get"):
+		var inv_variant = pg.get("player_inventory")
+		if inv_variant != null and inv_variant is Dictionary:
+			inventory = inv_variant
+	
+	var wood_count: int = inventory.get("wood", 0)
+	var stone_count: int = inventory.get("stone", 0)
+	return wood_count == 0 and stone_count == 0
 
 
 func _check_memorial_created() -> bool:
@@ -243,10 +248,10 @@ func _check_pawn_hunger_low() -> bool:
 	var ps: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
 	if ps == null:
 		return false
-	
+
 	for pawn in ps.pawns:
 		if pawn != null and pawn.data != null:
-			var hunger: float = pawn.data.get("hunger", 100.0)
+			var hunger: float = pawn.data.hunger if pawn.data.hunger != null else 100.0
 			if hunger < 30.0:
 				return true
 	return false

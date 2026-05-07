@@ -8,7 +8,7 @@ signal new_game_pressed
 signal load_game_pressed
 signal settings_pressed
 signal quit_pressed
-signal god_mode_pressed
+signal observer_mode_pressed
 signal play_pressed
 
 const BG_COLOR: Color = Color(0.03, 0.04, 0.06, 0.88)
@@ -79,10 +79,10 @@ func _ready() -> void:
 	play_btn.pressed.connect(func(): play_pressed.emit(); hide_menu())
 	btn_vbox.add_child(play_btn)
 
-	var god_btn: Button = _make_menu_button("God")
-	god_btn.tooltip_text = "God mode — command all pawns, place structures"
-	god_btn.pressed.connect(func(): god_mode_pressed.emit(); hide_menu())
-	btn_vbox.add_child(god_btn)
+	var observer_btn: Button = _make_menu_button("Observer")
+	observer_btn.tooltip_text = "Observer mode — command all pawns, place structures"
+	observer_btn.pressed.connect(func(): observer_mode_pressed.emit(); hide_menu())
+	btn_vbox.add_child(observer_btn)
 
 	var load_btn: Button = _make_menu_button("Load Game")
 	load_btn.pressed.connect(func(): load_game_pressed.emit())

@@ -70,7 +70,7 @@ var _main: Main = null
 var _animal_spawner: AnimalSpawner = null
 ## Empty string when no designation mode is active. Otherwise "Bed" / "Wall" / etc.
 var _designation_label: String = ""
-## Current player mode label for badge display ("SPECTATOR", "INCARNATED", "GOD")
+## Current player mode label for badge display ("SPECTATOR", "INCARNATED", "OBSERVER")
 var _player_mode_label: String = "SPECTATOR"
 ## Authority rank when incarnated ("Pawn", "Captain", "Elder", "Ruler")
 var _player_authority_rank: String = ""
@@ -399,8 +399,8 @@ func hide_tile_history() -> void:
 
 func _mode_badge_line() -> String:
 	match _player_mode_label:
-		"GOD":
-			return "[bgcolor=#3a2a08][color=#ffe082]  GOD MODE  (Ctrl+G to exit · right-click pawns to command · Ctrl+Z zones)  [/color][/bgcolor]"
+		"OBSERVER":
+			return "[bgcolor=#3a2a08][color=#ffe082]  OBSERVER MODE  (Ctrl+G to exit · right-click pawns to command · Ctrl+Z zones)  [/color][/bgcolor]"
 		"INCARNATED":
 			var rank: String = _player_authority_rank if _player_authority_rank != "" else "Pawn"
 			var hint: String = "Ctrl+T to exit"

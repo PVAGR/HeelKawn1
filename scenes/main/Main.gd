@@ -122,11 +122,11 @@ const ANIMAL_POPULATION_PHASE_TICKS: int = 500
 const WORLD_STABILIZATION_TICKS: int = 500
 ## Player does not architect the colony: no manual walls/beds/doors/stockpile zones.
 ## Construction remains `SettlementPlanner` + pawn job claims (NPC-equivalent sim path).
-## Now dynamic: God mode enables placement; other modes disable it.
+## Now dynamic: Observer mode enables placement; other modes disable it.
 const PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES: bool = false  # Legacy — use _can_player_place() instead
 
 func _can_player_place() -> bool:
-	return _player_mode == PlayerMode.GOD or _player_pawn != null
+	return _player_mode == PlayerMode.OBSERVER or _player_pawn != null
 ## Toolbar + keys 1–7 match GameManager.SPEED_STEPS (F10 creator menu still steals digit keys while open).
 const ALLOW_SPEED_NUMBER_HOTKEYS: bool = true
 ## Keep load-in sessions predictable; speed only changes via explicit user action.
@@ -189,12 +189,13 @@ var _camera_follow_selected: bool = false
 var _player_pawn = null
 var _hotkeys_enabled: bool = true
 ## Two **shipped** perspectives (CK3-style map cam, first-person, etc. are later layers).
-## - **SPECTATOR** — worldwide / chronicler / “god or developer” flyover: same sim clock, free camera, inspection, time speed, no single-body embodiment (docs/HEELKAWN_STANDALONE_MASTER_PLAN.md: Spectator state).
+## - **SPECTATOR** — worldwide / chronicler / "observer or developer" flyover: same sim clock, free camera, inspection, time speed, no single-body embodiment (docs/HEELKAWN_STANDALONE_MASTER_PLAN.md: Spectator state).
 ## - **INCARNATED** — you are one `Pawn` in the world (same class as NPCs): embodied input, shared needs/jobs; parity target = everything an NPC can do that is implemented (ibid.: Incarnation state).
+## - **OBSERVER** — full command authority over all pawns and structures (formerly "God mode").
 enum PlayerMode {
 	SPECTATOR = 0,
 	INCARNATED = 1,
-	GOD = 2,
+	OBSERVER = 2,
 }
 var _player_mode: int = PlayerMode.SPECTATOR
 
@@ -685,7 +686,7 @@ func _ready() -> void:
 		if _main_menu != null:
 			_main_menu.new_game_pressed.connect(_on_new_game)
 			_main_menu.play_pressed.connect(_on_play_mode)
-			_main_menu.god_mode_pressed.connect(_on_god_mode_start)
+			_main_menu.observer_mode_pressed.connect(_on_observer_mode_start)
 			_main_menu.load_game_pressed.connect(func(): if _save_load_menu != null: _save_load_menu.toggle())
 			_main_menu.settings_pressed.connect(func(): if _settings_panel != null: _settings_panel.toggle())
 			_main_menu.quit_pressed.connect(func(): get_tree().quit())
@@ -1890,8 +1891,8 @@ func get_player_mode_label() -> String:
 	match _player_mode:
 		PlayerMode.INCARNATED:
 			return "INCARNATED"
-		PlayerMode.GOD:
-			return "GOD"
+		PlayerMode.OBSERVER:
+			return "OBSERVER"
 		_:
 			return "SPECTATOR"
 
@@ -1900,27 +1901,27 @@ func is_player_incarnated() -> bool:
 	return _player_mode == PlayerMode.INCARNATED
 
 
-func is_player_god() -> bool:
-	return _player_mode == PlayerMode.GOD
+func is_player_observer() -> bool:
+	return _player_mode == PlayerMode.OBSERVER
 
 
-## Ctrl+G: toggle between SPECTATOR and GOD mode.
-func _toggle_god_mode() -> void:
-	if _player_mode == PlayerMode.GOD:
+## Ctrl+G: toggle between SPECTATOR and OBSERVER mode.
+func _toggle_observer_mode() -> void:
+	if _player_mode == PlayerMode.OBSERVER:
 		_set_player_mode(PlayerMode.SPECTATOR)
 		_player_pawn = null
 		_set_selected_pawn(null)
 		if OS.is_debug_build():
-			print("[Main] God mode OFF — returning to spectator")
+			print("[Main] Observer mode OFF — returning to spectator")
 	else:
 		if _player_mode == PlayerMode.INCARNATED:
 			# Must exit incarnation first
 			_player_pawn = null
 			_set_selected_pawn(null)
-		_set_player_mode(PlayerMode.GOD)
+		_set_player_mode(PlayerMode.OBSERVER)
 		_player_pawn = null
 		if OS.is_debug_build():
-			print("[Main] God mode ON — full command authority")
+			print("[Main] Observer mode ON — full command authority")
 
 
 ## Ctrl+T: toggle between SPECTATOR and INCARNATED mode.
@@ -1940,13 +1941,13 @@ func request_incarnation_entry(note: String = "manual_entry", payload: Dictionar
 	return _incarnation_picker != null and is_instance_valid(_incarnation_picker) and bool(_incarnation_picker.visible)
 
 
-## Can the player command a specific pawn? God mode = always yes.
+## Can the player command a specific pawn? Observer mode = always yes.
 ## Incarnated mode = must outrank the target in at least one authority context.
 ## Spectator = no.
 func _can_command_pawn(target: Pawn) -> bool:
 	if target == null or not is_instance_valid(target) or target.data == null:
 		return false
-	if _player_mode == PlayerMode.GOD:
+	if _player_mode == PlayerMode.OBSERVER:
 		return true
 	if _player_mode != PlayerMode.INCARNATED:
 		return false
@@ -2006,24 +2007,36 @@ func request_spectator_return(note: String = "manual_return", payload: Dictionar
 
 
 func _update_ui_for_player_mode() -> void:
-	# PHASE 6: Hide spectator UI when incarnated
+	# Show survival UI only when incarnated (playing as a pawn)
+	# Hide in spectator and observer modes (watching/commanding from above)
 	var is_incarnated: bool = _player_mode == PlayerMode.INCARNATED
-	
-	# Hide/show HUD elements based on mode
+
+	# Hide/show main HUD elements based on mode
 	if _hud != null:
 		_hud.visible = not is_incarnated
-	
+
 	if _observer_hud != null:
 		_observer_hud.visible = not is_incarnated
-	
+
 	if _minimap != null:
 		_minimap.visible = not is_incarnated
-	
+
+	# Hide/show survival UI (SurvivalHUD, PlayerInventory) based on mode
+	var survival_hud: Node = get_node_or_null("UI_Viewport/SurvivalHUD")
+	if survival_hud != null:
+		survival_hud.visible = is_incarnated
+
+	var inventory_ui: Node = get_node_or_null("UI_Viewport/PlayerInventory")
+	if inventory_ui != null:
+		inventory_ui.visible = is_incarnated
+
 	# Show minimal incarnated UI
 	if is_incarnated:
-		print("[Main] Incarnated mode: Spectator UI hidden. You now experience the world through your pawn's senses.")
+		print("[Main] Incarnated mode: Survival UI visible. You experience needs, hunger, thirst through your pawn.")
+	elif _player_mode == PlayerMode.OBSERVER:
+		print("[Main] Observer mode: Full command UI. You command all pawns from above.")
 	else:
-		print("[Main] Spectator mode: Full UI restored.")
+		print("[Main] Spectator mode: Full UI restored. You watch the world unfold.")
 
 
 func _reset_player_intent_observer_routing() -> void:
@@ -3557,7 +3570,7 @@ func _handle_key_input(key: InputEventKey) -> void:
 				_cycle_zone_type()
 		KEY_G:
 			if key.ctrl_pressed:
-				_toggle_god_mode()
+				_toggle_observer_mode()
 			elif key.shift_pressed and _command_mode != null:
 				_command_mode.set_zone_type(1)  # FORAGE_ZONE
 			elif _selected_pawn != null and is_instance_valid(_selected_pawn):
@@ -6321,11 +6334,11 @@ func _on_play_mode() -> void:
 	_open_incarnation_picker()
 
 
-## "God" button: start directly in God mode
-func _on_god_mode_start() -> void:
+## "Observer" button: start directly in Observer mode (full command authority)
+func _on_observer_mode_start() -> void:
 	if OS.is_debug_build():
 		_reroll_world()
-	_set_player_mode(PlayerMode.GOD)
+	_set_player_mode(PlayerMode.OBSERVER)
 	_update_hud_mode_badge()
 	if _main_menu != null:
 		_main_menu.hide_menu()

@@ -30,7 +30,7 @@ var _is_painting: bool = false
 var _paint_start: Vector2i = Vector2i(-1, -1)
 var _paint_current: Vector2i = Vector2i(-1, -1)
 ## Callback set by Main: Callable(target: Pawn) -> bool. Returns true if the
-## player is allowed to command the given pawn (God mode = always, Incarnated =
+## player is allowed to command the given pawn (Observer mode = always, Incarnated =
 ## must outrank, Spectator = never). If null, commands are always allowed.
 var can_command_callback: Callable = Callable()
 

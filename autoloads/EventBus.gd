@@ -33,6 +33,18 @@ func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 
 
+func _exit_tree() -> void:
+	# Disconnect from GameManager to prevent callbacks after freed
+	if GameManager != null and GameManager.game_tick.is_connected(_on_game_tick):
+		GameManager.game_tick.disconnect(_on_game_tick)
+	
+	# Clear all subscriptions and history
+	for event_name in subscriptions:
+		subscriptions[event_name].clear()
+	subscriptions.clear()
+	event_history.clear()
+
+
 func _on_game_tick(tick: int) -> void:
 	# Reset per-frame stats
 	stats.events_this_frame = 0
@@ -117,12 +129,16 @@ func emit_delayed(event_name: String, payload: Dictionary, delay_ticks: int) -> 
 	timer.wait_time = float(delay_ticks) / 60.0  # Convert ticks to seconds
 	timer.one_shot = true
 	add_child(timer)
-	
+
+	# Capture only primitive data, not objects
+	var event_name_copy: String = event_name
+	var payload_copy: Dictionary = payload.duplicate(true)
 	timer.timeout.connect(func():
-		emit(event_name, payload)
-		timer.queue_free()
+		emit(event_name_copy, payload_copy)
+		if is_instance_valid(timer):
+			timer.queue_free()
 	)
-	
+
 	timer.start()
 
 

@@ -29,6 +29,16 @@ func _ready() -> void:
 	add_child(timer)
 
 
+func _exit_tree() -> void:
+	# Cleanup all bubbles when node is freed
+	for pawn_id in pawn_bubbles:
+		var bubbles: Array = pawn_bubbles[pawn_id]
+		for bubble in bubbles:
+			if is_instance_valid(bubble):
+				bubble.queue_free()
+	pawn_bubbles.clear()
+
+
 ## Show speech bubble above pawn
 func show_bubble(pawn_id: int, pawn_node: Node2D, text: String, bubble_type: String = "speech") -> void:
 	if pawn_node == null:
@@ -56,9 +66,13 @@ func show_bubble(pawn_id: int, pawn_node: Node2D, text: String, bubble_type: Str
 	var timer: Timer = Timer.new()
 	timer.wait_time = BUBBLE_LIFETIME_SEC
 	timer.autostart = true
+	# Use weakref to avoid capturing freed bubble
+	var bubble_weak: WeakRef = weakref(bubble)
 	timer.timeout.connect(func():
-		if is_instance_valid(bubble):
-			_fade_out_bubble(bubble)
+		var b: Node = bubble_weak.get_ref()
+		if b != null and is_instance_valid(b):
+			_fade_out_bubble(b)
+		timer.queue_free()
 	)
 	add_child(timer)
 
@@ -98,14 +112,16 @@ func _create_bubble(pawn_node: Node2D, text: String, bubble_type: String) -> Nod
 	
 	# Position above pawn
 	_update_bubble_position(panel, pawn_node)
-	
-	# Connect to pawn's movement for following
+
+	# Connect to pawn's movement for following - use weakref to avoid capturing freed pawn
 	if pawn_node.has_signal("tree_exiting"):
+		var panel_weak: WeakRef = weakref(panel)
 		pawn_node.tree_exiting.connect(func():
-			if is_instance_valid(panel):
-				panel.queue_free()
+			var p: Node = panel_weak.get_ref()
+			if p != null and is_instance_valid(p):
+				p.queue_free()
 		)
-	
+
 	return panel
 
 

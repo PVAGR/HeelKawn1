@@ -153,9 +153,12 @@ func _spawn_particles(event_type: String, world_pos: Vector2) -> void:
 	var cleanup: Timer = Timer.new()
 	cleanup.one_shot = true
 	cleanup.wait_time = CLEANUP_LIFETIME
+	# Use weakref to avoid capturing freed particles
+	var particles_weak: WeakRef = weakref(particles)
 	cleanup.timeout.connect(func() -> void:
-		if is_instance_valid(particles):
-			particles.queue_free()
+		var p: Node = particles_weak.get_ref()
+		if p != null and is_instance_valid(p):
+			p.queue_free()
 		if is_instance_valid(cleanup):
 			cleanup.queue_free()
 	)

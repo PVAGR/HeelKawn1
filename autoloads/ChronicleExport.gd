@@ -122,17 +122,13 @@ func _build_chronicle(events: Array) -> String:
 	return chronicle
 
 
-func _filter_events(events: Array, categories: Dictionary) -> Array:
+func _filter_events(events: Array, categories: Array) -> Array:
 	var filtered: Array = []
 	for event in events:
 		if event is Dictionary:
 			var event_type: String = str(event.get("type", ""))
-			for category_name in categories.keys():
-				if category_name in categories:
-					var type_list: Array = categories[category_name]
-					if event_type in type_list:
-						filtered.append(event)
-						break
+			if event_type in categories:
+				filtered.append(event)
 	return filtered
 
 

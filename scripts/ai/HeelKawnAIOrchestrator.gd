@@ -407,8 +407,8 @@ func _initialize_layers() -> void:
 				layer_instance.initialize(deps)
 
 
-func _load_layer_script(class_name: String) -> GDScript:
-	var script_path: String = "res://scripts/ai/" + class_name + ".gd"
+func _load_layer_script(layer_name: String) -> GDScript:
+	var script_path: String = "res://scripts/ai/" + layer_name + ".gd"
 
 	if not ResourceLoader.exists(script_path):
 		push_warning("[AIOrchestrator] Layer script not found: " + script_path)

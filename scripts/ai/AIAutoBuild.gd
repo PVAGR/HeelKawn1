@@ -337,15 +337,15 @@ func _scan_for_new_pawns(_tick: int) -> void:
 				_direct_builder_pawn(pawn, data)
 
 
-func _direct_builder_pawn(pawn: Node, data: Node) -> void:
+func _direct_builder_pawn(pawn: Node, data: RefCounted) -> void:
 	var tile: Vector2i = Vector2i.ZERO
 	var settlement_id: int = -1
-	
+
 	if data.has_method("get_tile_pos"):
 		tile = data.get_tile_pos()
 	elif data.has_meta("tile_pos"):
 		tile = data.get_meta("tile_pos")
-	
+
 	if data.has_method("get_settlement_id"):
 		settlement_id = data.get_settlement_id()
 	elif data.has_meta("settlement_id"):

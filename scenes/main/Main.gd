@@ -605,13 +605,33 @@ func _ready() -> void:
 	var simulation_worker: bool = _is_simulation_worker_mode()
 	if not simulation_worker:
 		SettlementMemory.print_validation_smoketest_from_main()
-	
+
 	# CRITICAL: Create and add TickManager if it doesn't exist
 	if TickManager == null:
-		var tick_manager := load("res://autoloads/TickManager.gd").new()
+		var tick_manager: Node = load("res://autoloads/TickManager.gd").new()
 		tick_manager.name = "TickManager"
 		add_child(tick_manager)
-	
+
+	# CRITICAL: Connect to PlaytestRecorder for automated playtest logging
+	var playtest_recorder: Node = get_node_or_null("/root/PlaytestRecorder")
+	if playtest_recorder != null:
+		# Log pawn selections
+		if has_method("_set_selected_pawn"):
+			var original_set_selected_pawn = _set_selected_pawn
+			_set_selected_pawn = func(pawn):
+				original_set_selected_pawn.call(pawn)
+				if pawn != null and pawn.data != null:
+					playtest_recorder.call("record_pawn_selection", int(pawn.data.id), pawn.data.display_name, pawn.data.tile_pos)
+		
+		# Log camera movement (sample every 10 ticks)
+		if _camera != null:
+			var last_cam_tick: int = 0
+			_camera.moved.connect(func():
+				if GameManager != null and GameManager.tick_count - last_cam_tick > 10:
+					playtest_recorder.call("record_camera_movement", _camera.position, _camera.zoom.x)
+					last_cam_tick = GameManager.tick_count
+			)
+
 	# Ticks are driven by TickManager fixed-step clock.
 	if TickManager != null and TickManager.has_signal("tick_processed"):
 		TickManager.tick_processed.connect(_on_world_tick)

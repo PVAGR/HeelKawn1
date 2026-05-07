@@ -1,4 +1,4 @@
-class_name SettlementPersistenceManager
+
 extends Node
 
 signal settlement_state_changed(id: int, new_state: int)

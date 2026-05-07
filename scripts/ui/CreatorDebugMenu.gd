@@ -1945,14 +1945,14 @@ func _report_record_carriers() -> void:
 						if dist > LOCAL_KNOWLEDGE_RADIUS_TILES:
 							continue
 			
-			total_carriers += 1
-			var carrier_type: String = str(carrier.get("carrier_type", "unknown"))
-			if carrier_type == "grave_marker":
-				grave_markers += 1
-			elif carrier_type == "knowledge_stone":
-				knowledge_stones += 1
-			elif carrier_type == "ledger_stone":
-				ledger_stones += 1
+				total_carriers += 1
+				var carrier_type: String = str(carrier.get("carrier_type", "unknown"))
+				if carrier_type == "grave_marker":
+					grave_markers += 1
+				elif carrier_type == "knowledge_stone":
+					knowledge_stones += 1
+				elif carrier_type == "ledger_stone":
+					ledger_stones += 1
 
 	print("--- RECORD CARRIER STATISTICS ---")
 	print("Total record carriers: %d" % total_carriers)
@@ -2540,22 +2540,22 @@ func _report_read_knowledge_stone() -> void:
 					var knowledge_count: int = int(carrier.get("knowledge_types", []).size())
 
 					print("  [color=#B084CC]📍 Tile (%s)[/color]" % tile_key)
-				print("    Type: %s | Inscriber: ID %d | Knowledge: %d types" % [carrier_type, inscriber_id, knowledge_count])
-				
-				# Get full text
-				var parts: PackedStringArray = tile_key.split(",")
-				if parts.size() >= 2:
-					var tile_x: int = int(parts[0])
-					var tile_y: int = int(parts[1])
-					var tile: Vector2i = Vector2i(tile_x, tile_y)
+					print("    Type: %s | Inscriber: ID %d | Knowledge: %d types" % [carrier_type, inscriber_id, knowledge_count])
 					
-					if ks.has_method("get_knowledge_stone_text"):
-						var stone_text: String = ks.call("get_knowledge_stone_text", tile)
-						# Print first 200 chars as preview
-						if stone_text.length() > 200:
-							print("    Preview: %s...\n" % stone_text.left(200))
-						else:
-							print("    %s\n" % stone_text)
+					# Get full text
+					var parts: PackedStringArray = tile_key.split(",")
+					if parts.size() >= 2:
+						var tile_x: int = int(parts[0])
+						var tile_y: int = int(parts[1])
+						var tile: Vector2i = Vector2i(tile_x, tile_y)
+						
+						if ks.has_method("get_knowledge_stone_text"):
+							var stone_text: String = ks.call("get_knowledge_stone_text", tile)
+							# Print first 200 chars as preview
+							if stone_text.length() > 200:
+								print("    Preview: %s...\n" % stone_text.left(200))
+							else:
+								print("    %s\n" % stone_text)
 	
 	print("\n=== END KNOWLEDGE STONES ===")
 

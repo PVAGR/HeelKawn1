@@ -3423,6 +3423,13 @@ func _pawn_decision_rule_context(pd: PawnData) -> Dictionary:
 		"work_build": pd.work_build,
 		"work_hunt": pd.work_hunt,
 		"profession_overrep": _pawn_profession_overrep(pd),
+		# PawnConsciousness — trauma, awareness, dreams, beliefs
+		"trauma_level": _pawn_consciousness_trauma(pd),
+		"self_awareness": _pawn_consciousness_awareness(pd),
+		"recent_dream_theme": _pawn_consciousness_dream_theme(pd),
+		"core_beliefs_count": _pawn_consciousness_beliefs_count(pd),
+		# GrudgeManager — grudge intensity
+		"grudge_intensity": _pawn_grudge_intensity(pd),
 	}
 
 
@@ -3468,6 +3475,46 @@ func _pawn_profession_overrep(pd: PawnData) -> bool:
 	if total < 3:
 		return false
 	return float(same_prof) / float(total) >= 0.4
+
+
+# ==================== PawnConsciousness context helpers ====================
+
+func _pawn_consciousness_trauma(pd: PawnData) -> float:
+	var pc: Node = get_node_or_null("/root/PawnConsciousness")
+	if pc == null or not pc.has_method("get_trauma_level"):
+		return 0.0
+	return pc.get_trauma_level(int(pd.id))
+
+func _pawn_consciousness_awareness(pd: PawnData) -> int:
+	var pc: Node = get_node_or_null("/root/PawnConsciousness")
+	if pc == null or not pc.has_method("get_awareness_level"):
+		return 0
+	return pc.get_awareness_level(int(pd.id))
+
+func _pawn_consciousness_dream_theme(pd: PawnData) -> String:
+	var pc: Node = get_node_or_null("/root/PawnConsciousness")
+	if pc == null or not pc.has_method("get_dreams"):
+		return ""
+	var dreams: Array = pc.get_dreams(int(pd.id), 1)
+	if dreams.is_empty():
+		return ""
+	return str(dreams[0].get("theme", ""))
+
+func _pawn_consciousness_beliefs_count(pd: PawnData) -> int:
+	var pc: Node = get_node_or_null("/root/PawnConsciousness")
+	if pc == null or not pc.has_method("get_core_beliefs"):
+		return 0
+	return pc.get_core_beliefs(int(pd.id)).size()
+
+func _pawn_grudge_intensity(pd: PawnData) -> float:
+	var gm: Node = get_node_or_null("/root/GrudgeManager")
+	if gm == null or not gm.has_method("get_grudges_held_by"):
+		return 0.0
+	var grudges: Array = gm.get_grudges_held_by(int(pd.id))
+	var total: float = 0.0
+	for g in grudges:
+		total += float(g.get("intensity", 0.0))
+	return minf(total, 2.0)  # Cap at 2.0 for rule matrix
 
 
 ## Returns 0.0-1.0 danger level from WorldMeaning tags (repeated_death, blood_soaked, graveyard, famine_stricken, fire_prone, ruined, ancient/old myth tags).

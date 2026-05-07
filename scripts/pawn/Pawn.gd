@@ -279,7 +279,6 @@ var _state: int = State.IDLE
 var _current_job: Job = null
 var _cohort_id: int = -1
 var _sacred_geography_cache: Node = null
-var _last_sacred_check_tile: Vector2i = Vector2i(-999999, -999999)
 var _cohort_role: int = -1
 var _carrying_spawn_item: bool = false
 var draft_mode: bool = false
@@ -3088,7 +3087,16 @@ func attempt_reproduction() -> bool:
 	if child != null:
 		_next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
 		mate._next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
-		
+
+		# Record joyful birth memory to consciousness
+		_record_consciousness_event("birth", "Child born with %s" % str(mate.data.display_name), 70.0, 8, "joy")
+		mate._record_consciousness_event("birth", "Child born with %s" % str(data.display_name), 70.0, 8, "joy")
+
+		# Record birth gossip
+		var gossip: Node = get_node_or_null("/root/GossipManager")
+		if gossip != null and gossip.has_method("record_gossip"):
+			gossip.record_gossip(int(data.id), "Child born with %s" % str(mate.data.display_name), int(data.id), "birth", 0.5, 0.7, now)
+
 		# PAWN-ACTIVATED EVENT: Record birth for event system
 		if WorldEvents != null and WorldEvents.has_method("record_pawn_action"):
 			WorldEvents.record_pawn_action("birth", int(data.id))
@@ -3357,6 +3365,8 @@ func _tick_teaching() -> void:
 			var teacher_id: int = int(data.id)
 			var student_id: int = int(_teaching_target.data.id)
 			KnowledgeSystem.teach_knowledge(teacher_id, student_id, _teaching_knowledge_type)
+			# Record teaching achievement to consciousness
+			_record_consciousness_event("teaching", "Taught knowledge type %d to %s" % [_teaching_knowledge_type, str(_teaching_target.data.display_name)], 40.0, 6, "achievement")
 		_finish_teaching()
 
 
@@ -3425,6 +3435,10 @@ func _apply_work_hazards(work_ticks_simulated: int = 1) -> void:
 		_play_sfx("res://assets/audio/pawn_hurt.ogg", 0.9)
 		# Trigger stress mood event from injury
 		data.add_mood_event(MoodEvent.Type.STRESS, 60.0, 300)
+		# Record injury trauma to PawnConsciousness
+		_record_consciousness_event("injury", "Hurt while working (%s)" % Job.describe_type(_current_job.type), -60.0, 7, "survival")
+		# Record grudge against the job type (workplace hazard) — no specific target
+		# This creates a mild "workplace resentment" that affects job preference
 		
 		# Apply specific injury via BodyRiskManager
 		var injury_type: int = BodyRiskManager.InjuryType.BLUNT
@@ -4669,6 +4683,9 @@ func _check_death_conditions() -> void:
 	# Emergency food-seeking for AI agents
 	if data.hunger < 15.0 and _state != State.GOING_TO_EAT and _state != State.EATING:
 		_emergency_seek_food()
+		# Record near-death starvation to consciousness
+		if data.hunger < 10.0:
+			_record_consciousness_event("near_death", "Starving — hunger at %.0f" % data.hunger, -80.0, 9, "survival")
 	
 	# More lenient death conditions
 	if data.hunger <= -5.0:  # Allow some buffer before death
@@ -6158,6 +6175,10 @@ func _die(_p_cause: String = "") -> void:
 	
 	# Trigger sorrow in nearby pawns who witness the death
 	_trigger_sorrow_in_nearby_pawns()
+	# Record death trauma to consciousness of nearby witnesses
+	_record_witnessed_death_consciousness()
+	# Record grudges for family members (kin_death)
+	_record_kin_death_grudges()
 	_play_sfx("res://assets/audio/pawn_die.ogg", 0.85)
 
 	# world_trace: all deaths, including old_age
@@ -6253,6 +6274,75 @@ static func _level_for(value: float) -> int:
 		return 1
 	return 0
 
+
+# ==================== consciousness integration ====================
+
+## Record an event to PawnConsciousness. Lightweight — early-outs if system unavailable.
+func _record_consciousness_event(event_type: String, description: String, emotion: float, importance: int, category: String) -> void:
+	var pc: Node = get_node_or_null("/root/PawnConsciousness")
+	if pc == null or not pc.has_method("record_memory"):
+		return
+	if data == null:
+		return
+	pc.record_memory(int(data.id), event_type, description, emotion, importance, category, [], data.tile_pos)
+
+## Record witnessed death trauma in nearby pawns' consciousness
+func _record_witnessed_death_consciousness() -> void:
+	var pc: Node = get_node_or_null("/root/PawnConsciousness")
+	if pc == null or not pc.has_method("record_memory"):
+		return
+	if data == null:
+		return
+	var sp: PawnSpawner = _resolve_pawn_spawner()
+	if sp == null:
+		return
+	var dead_name: String = str(data.display_name)
+	for p in sp.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		if p == self:
+			continue
+		var dist: float = p.global_position.distance_squared_to(global_position)
+		if dist > 2500.0:  # 50px radius
+			continue
+		pc.record_memory(int(p.data.id), "witnessed_death", "Witnessed %s die" % dead_name, -70.0, 8, "trauma", [int(data.id)], p.data.tile_pos)
+
+## Record kin_death grudges for family members of the dead pawn
+func _record_kin_death_grudges() -> void:
+	var gm: Node = get_node_or_null("/root/GrudgeManager")
+	if gm == null or not gm.has_method("record_grudge"):
+		return
+	if data == null:
+		return
+	var sp: PawnSpawner = _resolve_pawn_spawner()
+	if sp == null:
+		return
+	var dead_id: int = int(data.id)
+	# Parents hold grudge against whoever caused the death
+	for p in sp.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		if p == self:
+			continue
+		var pid: int = int(p.data.id)
+		# Check if this pawn is a parent of the dead pawn
+		if pid == data.parent_a_id or pid == data.parent_b_id:
+			gm.record_grudge(pid, dead_id, "kin_death", 1.0, 0)
+		# Check if dead pawn is parent of this pawn
+		if dead_id == p.data.parent_a_id or dead_id == p.data.parent_b_id:
+			gm.record_grudge(pid, dead_id, "kin_death", 0.8, 0)
+
+	# Also create gossip about the death
+	var gossip: Node = get_node_or_null("/root/GossipManager")
+	if gossip != null and gossip.has_method("record_gossip"):
+		var cause: String = "died"
+		if data.hunger <= 0.0:
+			cause = "starved to death"
+		elif data.rest <= 0.0:
+			cause = "died of exhaustion"
+		elif data.health <= 0.0:
+			cause = "died from injuries"
+		gossip.record_gossip(dead_id, "%s %s" % [str(data.display_name), cause], dead_id, "death", 0.8, -0.8, GameManager.tick_count)
 
 # ==================== wander fallback ====================
 

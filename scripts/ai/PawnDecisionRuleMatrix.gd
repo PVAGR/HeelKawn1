@@ -481,6 +481,85 @@ func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump(outs, 1, -0.05)  # less rest — urgency
 		fired.append({"id": "diaspora_exile", "line": "IF pawn is exiled THEN seek community + work hard.", "w": 0.50})
 
+	# ==================== PawnConsciousness rules ====================
+	# Trauma: traumatized pawns avoid danger, seek rest, withdraw
+	var trauma: float = float(ctx.get("trauma_level", 0.0))
+	if trauma >= 75.0:
+		_bump(outs, 6, -0.15)  # avoid defend — too traumatized for combat
+		_bump(outs, 1, 0.12)   # seek rest — need recovery
+		_bump(outs, 7, 0.08)   # withdraw/observe — hypervigilant
+		_bump(outs, 3, -0.06)  # less forage — avoid risky expeditions
+		fired.append({"id": "trauma_severe", "line": "IF severe trauma THEN avoid combat + seek rest + hypervigilant.", "w": 0.65})
+	elif trauma >= 50.0:
+		_bump(outs, 6, -0.08)  # less defend
+		_bump(outs, 1, 0.06)   # mild rest preference
+		_bump(outs, 7, 0.04)   # slight observe
+		fired.append({"id": "trauma_moderate", "line": "IF moderate trauma THEN avoid combat + mild rest.", "w": 0.45})
+	elif trauma >= 25.0:
+		_bump(outs, 6, -0.04)  # slight defend avoidance
+		fired.append({"id": "trauma_mild", "line": "IF mild trauma THEN slight defend avoidance.", "w": 0.25})
+
+	# Self-awareness: aware pawns teach more, seek social, are less idle
+	var awareness: int = int(ctx.get("self_awareness", 0))
+	if awareness >= 4:
+		# Enlightened/transcendent: strong teaching drive, community leadership
+		_bump(outs, 2, 0.15)   # social — teach and guide
+		_bump(outs, 7, -0.08)  # less idle — purpose-driven
+		_bump(outs, 0, 0.06)   # help provide food — civic duty
+		fired.append({"id": "awareness_transcendent", "line": "IF transcendent THEN teach + lead + provide.", "w": 0.60})
+	elif awareness >= 3:
+		# Reflective: teach, plan, seek knowledge
+		_bump(outs, 2, 0.10)   # social — share wisdom
+		_bump(outs, 7, -0.04)  # less idle — thoughtful
+		fired.append({"id": "awareness_reflective", "line": "IF reflective THEN teach + share wisdom.", "w": 0.45})
+	elif awareness >= 2:
+		# Aware: slight social nudge, learns from mistakes
+		_bump(outs, 2, 0.05)   # mild social
+		fired.append({"id": "awareness_aware", "line": "IF aware THEN mild social nudge.", "w": 0.25})
+
+	# Dreams: recent dream themes nudge behavior
+	var dream_theme: String = str(ctx.get("recent_dream_theme", ""))
+	if dream_theme == "trauma":
+		_bump(outs, 1, 0.06)   # seek rest — nightmares disturb sleep
+		_bump(outs, 6, -0.04)  # avoid combat — fear from dreams
+		fired.append({"id": "dream_trauma", "line": "IF trauma dream THEN seek rest + avoid danger.", "w": 0.30})
+	elif dream_theme == "desire":
+		_bump(outs, 3, 0.05)   # forage — ambition drives work
+		_bump(outs, 4, 0.04)   # build — desire for achievement
+		fired.append({"id": "dream_desire", "line": "IF desire dream THEN work harder + build.", "w": 0.30})
+	elif dream_theme == "survival":
+		_bump(outs, 0, 0.06)   # seek food — survival anxiety
+		_bump(outs, 1, 0.04)   # seek rest — exhaustion
+		fired.append({"id": "dream_survival", "line": "IF survival dream THEN seek food + rest.", "w": 0.30})
+
+	# Core beliefs: pawns with many beliefs are more community-oriented
+	var beliefs_n: int = int(ctx.get("core_beliefs_count", 0))
+	if beliefs_n >= 3:
+		_bump(outs, 2, 0.08)   # social — belief-driven community
+		_bump(outs, 6, 0.04)   # defend — protect what they believe in
+		fired.append({"id": "beliefs_strong", "line": "IF many core beliefs THEN social + defend community.", "w": 0.35})
+
+	# ==================== GrudgeManager rules ====================
+	# Grudges make pawns withdrawn, avoidant, and potentially vengeful
+	var grudge_i: float = float(ctx.get("grudge_intensity", 0.0))
+	if grudge_i >= 1.5:
+		# Blood feud level: hostile, avoid social, seek revenge
+		_bump(outs, 2, -0.12)  # less social — don't trust anyone
+		_bump(outs, 6, 0.10)   # defend — ready to fight
+		_bump(outs, 7, 0.08)   # observe — hypervigilant
+		_bump(outs, 1, -0.05)  # less rest — can't relax
+		fired.append({"id": "grudge_blood_feud", "line": "IF blood feud THEN hostile + defensive + hypervigilant.", "w": 0.60})
+	elif grudge_i >= 0.8:
+		# Hatred level: avoid social, slight defend
+		_bump(outs, 2, -0.06)  # less social — avoid people
+		_bump(outs, 6, 0.06)   # mild defend — on guard
+		_bump(outs, 7, 0.04)   # mild observe — watchful
+		fired.append({"id": "grudge_hatred", "line": "IF hatred THEN avoid social + on guard.", "w": 0.40})
+	elif grudge_i >= 0.3:
+		# Grudge level: slight social withdrawal
+		_bump(outs, 2, -0.03)  # mild social avoidance
+		fired.append({"id": "grudge_mild", "line": "IF mild grudge THEN slight social avoidance.", "w": 0.20})
+
 	fired.sort_custom(func(a, b): return float(a.get("w", 0.0)) > float(b.get("w", 0.0)))
 	var human_ch: Array = _build_human_channels(pd, ctx, outs)
 	_apply_human_semantic_projection(outs, human_ch)

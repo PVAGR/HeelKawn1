@@ -1,7 +1,6 @@
 ## WorldEventSeedManager.gd
 ## Simple registry for deterministic world event seeds
 extends Node
-class_name WorldEventSeedManager
 
 var _seeds := {}
 

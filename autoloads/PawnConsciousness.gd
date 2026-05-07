@@ -122,6 +122,15 @@ func record_memory(pawn_id: int, event_type: String, description: String,
 	# Check for growth opportunity (positive emotion + importance)
 	if emotion > 30 and importance >= 7:
 		_apply_growth(pawn_id, importance * int(emotion / 10))
+
+	# Category-based belief formation
+	var consciousness: Dictionary = pawn_consciousness[str(pawn_id)]
+	if category == "achievement" and not consciousness.core_beliefs.has("skilled"):
+		consciousness.core_beliefs.append("skilled")
+	if category == "joy" and not consciousness.subconscious_desires.has("seek_joy"):
+		consciousness.subconscious_desires.append("seek_joy")
+	if category == "trauma" and not consciousness.subconscious_desires.has("seek_safety"):
+		consciousness.subconscious_desires.append("seek_safety")
 	
 	# Add to memories
 	pawn_consciousness[str(pawn_id)].memories.append(memory)
@@ -259,14 +268,19 @@ func _apply_trauma(pawn_id: int, severity: float) -> void:
 	
 	# Trauma affects behavior
 	if consciousness.trauma_level > 75:
-		# Severe trauma: may cause breakdowns, flashbacks
-		pass
+		# Severe trauma: gain survivor belief, avoid danger
+		if not consciousness.core_beliefs.has("survivor"):
+			consciousness.core_beliefs.append("survivor")
+		if not consciousness.subconscious_desires.has("avoid_danger"):
+			consciousness.subconscious_desires.append("avoid_danger")
 	elif consciousness.trauma_level > 50:
-		# Moderate trauma: mood penalties, avoidance
-		pass
+		# Moderate trauma: cautious worldview
+		if not consciousness.core_beliefs.has("cautious"):
+			consciousness.core_beliefs.append("cautious")
 	elif consciousness.trauma_level > 25:
 		# Mild trauma: slight mood effects
-		pass
+		if not consciousness.core_beliefs.has("resilient"):
+			consciousness.core_beliefs.append("resilient")
 
 
 func _process_trauma_recovery(tick: int) -> void:
@@ -293,6 +307,12 @@ func _apply_growth(pawn_id: int, growth_points: int) -> void:
 	
 	# Accumulate growth points
 	consciousness.growth_points += growth_points
+
+	# Growth can form beliefs about purpose
+	if consciousness.growth_points > 2000 and not consciousness.core_beliefs.has("purposeful"):
+		consciousness.core_beliefs.append("purposeful")
+	if consciousness.growth_points > 5000 and not consciousness.subconscious_desires.has("seek_wisdom"):
+		consciousness.subconscious_desires.append("seek_wisdom")
 	
 	# Check for self-awareness increase
 	var required_for_next_level: int = consciousness.self_awareness * consciousness.self_awareness * 1000

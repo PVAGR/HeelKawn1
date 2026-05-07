@@ -182,13 +182,22 @@ func _apply_cataclysm_effects(cataclysm: Dictionary) -> void:
 func _apply_plague_effects(regions: Array[Vector2i], severity: int) -> void:
 	# Affect pawns in regions
 	var casualties: int = 0
-	
+
 	if _pawn_spawner != null:
 		for pawn in _pawn_spawner.pawns:
 			if pawn == null or not is_instance_valid(pawn):
 				continue
+
+			# Safe access for PawnData (RefCounted, not Dictionary)
+			var tile: Vector2i = Vector2i(-1, -1)
+			if pawn.data != null:
+				if pawn.data.has_method("get"):
+					tile = pawn.data.call("get", "tile_pos")
+					if tile == null:
+						tile = Vector2i(-1, -1)
+				elif "tile_pos" in pawn.data:
+					tile = pawn.data.tile_pos
 			
-			var tile: Vector2i = pawn.data.get("tile_pos", Vector2i(-1, -1))
 			if regions.has(tile):
 				# Chance of infection based on severity
 				if randf() * 100.0 < severity * 2.0:
@@ -196,7 +205,7 @@ func _apply_plague_effects(regions: Array[Vector2i], severity: int) -> void:
 					# Apply disease to pawn
 					if pawn.data.has_method("add_disease"):
 						pawn.data.call("add_disease", "plague", severity)
-	
+
 	# Update casualties
 	for cataclysm in active_cataclysms:
 		if cataclysm.type == CataclysmType.PLAGUE and cataclysm.status == "active":

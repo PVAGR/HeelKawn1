@@ -162,47 +162,75 @@ func _on_world_event(event: Dictionary) -> void:
 	})
 
 
-func _on_job_posted(job: Node) -> void:
+func _on_job_posted(job: Object) -> void:
 	if not is_recording or job == null:
 		return
-	
-	var job_data: Dictionary = job.to_dict() if job.has_method("to_dict") else {
-		"type": str(job.get("type") if "type" in job else -1),
-		"work_tile": str(job.get("work_tile") if "work_tile" in job else Vector2i.ZERO),
-		"priority": job.get("priority") if "priority" in job else 0
-	}
-	
+
+	var job_data: Dictionary = {}
+	if job.has_method("to_dict"):
+		job_data = job.call("to_dict")
+	else:
+		# Safe access for RefCounted Job object
+		var job_type: Variant = -1
+		var work_tile: Variant = Vector2i.ZERO
+		var priority: Variant = 0
+		
+		if job.has_method("get"):
+			job_type = job.call("get", "type")
+			work_tile = job.call("get", "work_tile")
+			priority = job.call("get", "priority")
+		
+		job_data = {
+			"type": str(job_type if job_type != null else -1),
+			"work_tile": str(work_tile if work_tile != null else Vector2i.ZERO),
+			"priority": priority if priority != null else 0
+		}
+
 	_record_event("job_posted", job_data)
 
 
-func _on_job_claimed(job: Node, pawn: Node) -> void:
+func _on_job_claimed(job: Object, pawn: Node) -> void:
 	if not is_recording or job == null or pawn == null:
 		return
-	
+
 	var pawn_id: int = -1
 	if pawn.has_method("get_pawn_data"):
 		var pd = pawn.call("get_pawn_data")
 		if pd != null:
 			pawn_id = int(pd.id)
-	
+
+	# Safe access for RefCounted Job object
+	var job_type: Variant = -1
+	if job.has_method("get"):
+		job_type = job.call("get", "type")
+	elif "type" in job:
+		job_type = job.type
+
 	_record_event("job_claimed", {
-		"job_type": str(job.get("type") if "type" in job else -1),
+		"job_type": str(job_type if job_type != null else -1),
 		"pawn_id": pawn_id,
 		"tick": GameManager.tick_count if GameManager != null else 0
 	})
 
 
-func _on_job_completed(job: Node) -> void:
+func _on_job_completed(job: Object) -> void:
 	if not is_recording or job == null:
 		return
-	
+
+	# Safe access for RefCounted Job object
+	var job_type: Variant = -1
+	if job.has_method("get"):
+		job_type = job.call("get", "type")
+	elif "type" in job:
+		job_type = job.type
+
 	_record_event("job_completed", {
-		"job_type": str(job.get("type") if "type" in job else -1),
+		"job_type": str(job_type if job_type != null else -1),
 		"tick": GameManager.tick_count if GameManager != null else 0
 	})
 
 
-func _on_game_speed_changed(new_speed: float) -> void:
+func _on_game_speed_changed(new_speed: float, _is_paused: bool = false) -> void:
 	_record_event("speed_change", {
 		"old_speed": records[-1].get("game_speed", 1.0) if not records.is_empty() else 1.0,
 		"new_speed": new_speed,

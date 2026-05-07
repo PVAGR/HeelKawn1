@@ -4925,6 +4925,17 @@ func _trigger_crisis_strike() -> void:
 
 
 func _check_death_conditions() -> void:
+	# Grace period: newborn pawns can't die in first 300 ticks
+	# This gives them time to find food, build shelter, get oriented
+	var age: int = maxi(GameManager.tick_count - data.birth_tick, 0)
+	if age < 300:
+		# During grace: clamp health to minimum 20, hunger to minimum -3
+		if data.health < 20.0:
+			data.health = 20.0
+		if data.hunger < -3.0:
+			data.hunger = -3.0
+		return
+	
 	# Emergency food-seeking for AI agents
 	if data.hunger < 15.0 and _state != State.GOING_TO_EAT and _state != State.EATING:
 		_emergency_seek_food()
@@ -5037,14 +5048,27 @@ func _check_temperature() -> void:
 	if has_shelter:
 		ambient_temp += 4.0
 	
-	var temp_change_rate: float = 0.05 if has_shelter else 0.1
-	var target_temp: float = ambient_temp
+	# Grace period: first 500 ticks of life, pawns resist cold
+	# This gives them time to build fire pit and shelter before dying
+	var age: int = maxi(GameManager.tick_count - data.birth_tick, 0)
+	var grace_remaining: float = clampf(1.0 - float(age) / 500.0, 0.0, 1.0)
 	
-	data.body_temperature = lerp(data.body_temperature, target_temp, temp_change_rate)
+	var temp_change_rate: float = 0.05 if has_shelter else 0.1
+	if grace_remaining > 0.0:
+		# During grace: body temp drops 5x slower toward cold ambient
+		if ambient_temp < data.body_temperature:
+			temp_change_rate *= 0.2
+		# Grace warmth: body temp stays closer to 37°C
+		var grace_target: float = lerp(ambient_temp, 37.0, grace_remaining * 0.6)
+		data.body_temperature = lerp(data.body_temperature, grace_target, temp_change_rate)
+	else:
+		data.body_temperature = lerp(data.body_temperature, ambient_temp, temp_change_rate)
 	
 	# Accumulate hypothermia/heat exhaustion risk
 	if data.body_temperature < 35.0:
-		data.hypothermia_risk = min(100.0, data.hypothermia_risk + 0.2)
+		# During grace period, hypothermia risk accumulates 4x slower
+		var hypo_rate: float = 0.2 * (1.0 - grace_remaining * 0.75)
+		data.hypothermia_risk = min(100.0, data.hypothermia_risk + hypo_rate)
 	elif data.body_temperature > 38.0:
 		data.heat_exhaustion_risk = min(100.0, data.heat_exhaustion_risk + 0.2)
 	else:
@@ -5053,11 +5077,13 @@ func _check_temperature() -> void:
 		data.heat_exhaustion_risk = max(0.0, data.heat_exhaustion_risk - 0.1)
 	
 	# Hypothermia causes health damage and can lead to frostbite
+	# During grace period, damage is suppressed
 	if data.hypothermia_risk > 80.0:
-		data.health = max(0.0, data.health - 0.1)
-		data.exposure_sickness = min(100.0, data.exposure_sickness + 0.05)
-		# Severe hypothermia causes frostbite
-		if data.hypothermia_risk > 95.0 and GameManager.tick_count % 200 == 0:
+		var dmg: float = 0.1 * (1.0 - grace_remaining * 0.9)
+		data.health = max(0.0, data.health - dmg)
+		data.exposure_sickness = min(100.0, data.exposure_sickness + 0.05 * (1.0 - grace_remaining * 0.8))
+		# Severe hypothermia causes frostbite (suppressed during grace)
+		if data.hypothermia_risk > 95.0 and GameManager.tick_count % 200 == 0 and grace_remaining < 0.1:
 			BodyRiskManager.apply_injury(self, BodyRiskManager.InjuryType.FROSTBITE, 5.0, "cold_exposure")
 	
 	# Heat exhaustion causes health damage

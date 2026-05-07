@@ -44,17 +44,17 @@ func _ready() -> void:
 	_border_rect.color = Color(1.0, 0.0, 0.0, 0.0)
 	add_child(_border_rect)
 
-	# Alert container (top-center)
+	# Alert container (top-center) — compact
 	var container: VBoxContainer = VBoxContainer.new()
 	container.anchor_left = 0.5
 	container.anchor_top = 0.0
 	container.anchor_right = 0.5
 	container.anchor_bottom = 0.0
 	container.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	container.offset_left = -160.0
-	container.offset_right = 160.0
-	container.offset_top = 60.0
-	container.add_theme_constant_override("separation", 4)
+	container.offset_left = -120.0
+	container.offset_right = 120.0
+	container.offset_top = 40.0
+	container.add_theme_constant_override("separation", 2)
 	container.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(container)
 
@@ -124,14 +124,14 @@ func _add_alert(event: Dictionary) -> void:
 	var panel: PanelContainer = PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", _make_alert_style())
 	panel.mouse_filter = Control.MOUSE_FILTER_PASS
-	panel.custom_minimum_size = Vector2(300, 36)
+	panel.custom_minimum_size = Vector2(220, 24)
 
 	var hbox: HBoxContainer = HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 6)
 
 	var icon_label: Label = Label.new()
 	icon_label.text = icon
-	icon_label.add_theme_font_size_override("font_size", 16)
+	icon_label.add_theme_font_size_override("font_size", 12)
 	icon_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var body_label: RichTextLabel = RichTextLabel.new()
@@ -139,14 +139,14 @@ func _add_alert(event: Dictionary) -> void:
     # body_label.bbcode_enabled = true
 	body_label.fit_content = true
 	body_label.scroll_active = false
-	body_label.add_theme_font_size_override("normal_font_size", 13)
+	body_label.add_theme_font_size_override("normal_font_size", 10)
 	body_label.text = text
 	body_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var click_btn: Button = Button.new()
-	click_btn.text = "Focus"
-	click_btn.add_theme_font_size_override("font_size", 11)
-	click_btn.custom_minimum_size = Vector2(50, 24)
+	click_btn.text = "→"
+	click_btn.add_theme_font_size_override("font_size", 9)
+	click_btn.custom_minimum_size = Vector2(28, 18)
 	click_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	# Wire click to focus camera on event
 	var ev_copy: Dictionary = event.duplicate()
@@ -280,8 +280,8 @@ func _make_alert_style() -> StyleBoxFlat:
 	style.corner_radius_top_right = 4
 	style.corner_radius_bottom_left = 4
 	style.corner_radius_bottom_right = 4
-	style.content_margin_left = 8
-	style.content_margin_right = 8
-	style.content_margin_top = 4
-	style.content_margin_bottom = 4
+	style.content_margin_left = 5
+	style.content_margin_right = 5
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
 	return style

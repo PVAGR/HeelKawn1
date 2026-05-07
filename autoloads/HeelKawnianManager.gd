@@ -446,7 +446,7 @@ static func _scan_local_features(center: Vector2i, radius: int) -> Dictionary:
 					out["wall"] = int(out["wall"]) + 1
 				TileFeature.Type.DOOR:
 					out["door"] = int(out["door"]) + 1
-				TileFeature.Type.FIRE_PIT, TileFeature.Type.HEARTH:
+				TileFeature.Type.FIRE_PIT:
 					out["hearth"] = int(out["hearth"]) + 1
 				TileFeature.Type.STORAGE_HUT:
 					out["storage_hut"] = int(out["storage_hut"]) + 1

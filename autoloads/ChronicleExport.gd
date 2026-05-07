@@ -65,61 +65,61 @@ func export_chronicle() -> String:
 
 
 func _build_chronicle(events: Array) -> String:
-	var chronicle: StringBuilder = StringBuilder.new()
+	var chronicle: String = ""
 	
 	# Header
-	chronicle.append("╔══════════════════════════════════════════════════════════╗\n")
-	chronicle.append("║           HEELKAWN CHRONICLE - SETTLEMENT HISTORY        ║\n")
-	chronicle.append("╚══════════════════════════════════════════════════════════╝\n\n")
+	chronicle += "╔══════════════════════════════════════════════════════════╗\n"
+	chronicle += "║           HEELKAWN CHRONICLE - SETTLEMENT HISTORY        ║\n"
+	chronicle += "╚══════════════════════════════════════════════════════════╝\n\n"
 	
-	chronicle.append("Generated: %s\n" % Time.get_datetime_string_from_system())
-	chronicle.append("Total Events: %d\n" % events.size())
-	chronicle.append("Tick Range: 0 - %d\n\n" % GameManager.tick_count)
+	chronicle += "Generated: %s\n" % Time.get_datetime_string_from_system()
+	chronicle += "Total Events: %d\n" % events.size()
+	chronicle += "Tick Range: 0 - %d\n\n" % GameManager.tick_count
 	
 	# Table of Contents
-	chronicle.append("━━━ TABLE OF CONTENTS ━━━\n")
-	chronicle.append("1. Settlement Founding & Major Events\n")
-	chronicle.append("2. Births & Lineages\n")
-	chronicle.append("3. Deaths & Memorials\n")
-	chronicle.append("4. Innovations & Knowledge\n")
-	chronicle.append("5. Conflicts & Battles\n")
-	chronicle.append("6. Natural Events & Festivals\n\n")
+	chronicle += "━━━ TABLE OF CONTENTS ━━━\n"
+	chronicle += "1. Settlement Founding & Major Events\n"
+	chronicle += "2. Births & Lineages\n"
+	chronicle += "3. Deaths & Memorials\n"
+	chronicle += "4. Innovations & Knowledge\n"
+	chronicle += "5. Conflicts & Battles\n"
+	chronicle += "6. Natural Events & Festivals\n\n"
 	
 	# Section 1: Settlement Events
-	chronicle.append("━━━ 1. SETTLEMENT FOUNDING & MAJOR EVENTS ━━━\n\n")
+	chronicle += "━━━ 1. SETTLEMENT FOUNDING & MAJOR EVENTS ━━━\n\n"
 	var settlement_events: Array = _filter_events(events, EVENT_CATEGORIES.settlements)
-	chronicle.append(_format_event_section(settlement_events, "Settlement"))
+	chronicle += _format_event_section(settlement_events, "Settlement")
 	
 	# Section 2: Births
-	chronicle.append("\n━━━ 2. BIRTHS & LINEAGES ━━━\n\n")
+	chronicle += "\n━━━ 2. BIRTHS & LINEAGES ━━━\n\n"
 	var birth_events: Array = _filter_events(events, EVENT_CATEGORIES.births)
-	chronicle.append(_format_event_section(birth_events, "Birth"))
+	chronicle += _format_event_section(birth_events, "Birth")
 	
 	# Section 3: Deaths
-	chronicle.append("\n━━━ 3. DEATHS & MEMORIALS ━━━\n\n")
+	chronicle += "\n━━━ 3. DEATHS & MEMORIALS ━━━\n\n"
 	var death_events: Array = _filter_events(events, EVENT_CATEGORIES.deaths)
-	chronicle.append(_format_event_section(death_events, "Death"))
+	chronicle += _format_event_section(death_events, "Death")
 	
 	# Section 4: Innovations
-	chronicle.append("\n━━━ 4. INNOVATIONS & KNOWLEDGE ━━━\n\n")
+	chronicle += "\n━━━ 4. INNOVATIONS & KNOWLEDGE ━━━\n\n"
 	var innovation_events: Array = _filter_events(events, EVENT_CATEGORIES.innovations)
-	chronicle.append(_format_event_section(innovation_events, "Innovation"))
+	chronicle += _format_event_section(innovation_events, "Innovation")
 	
 	# Section 5: Conflicts
-	chronicle.append("\n━━━ 5. CONFLICTS & BATTLES ━━━\n\n")
+	chronicle += "\n━━━ 5. CONFLICTS & BATTLES ━━━\n\n"
 	var conflict_events: Array = _filter_events(events, EVENT_CATEGORIES.conflicts)
-	chronicle.append(_format_event_section(conflict_events, "Conflict"))
+	chronicle += _format_event_section(conflict_events, "Conflict")
 	
 	# Section 6: Natural Events
-	chronicle.append("\n━━━ 6. NATURAL EVENTS & FESTIVALS ━━━\n\n")
+	chronicle += "\n━━━ 6. NATURAL EVENTS & FESTIVALS ━━━\n\n"
 	var natural_events: Array = _filter_events(events, EVENT_CATEGORIES.natural)
-	chronicle.append(_format_event_section(natural_events, "Event"))
+	chronicle += _format_event_section(natural_events, "Event")
 	
 	# Summary Statistics
-	chronicle.append("\n━━━ SUMMARY STATISTICS ━━━\n\n")
-	chronicle.append(_generate_statistics(events))
+	chronicle += "\n━━━ SUMMARY STATISTICS ━━━\n\n"
+	chronicle += _generate_statistics(events)
 	
-	return chronicle.toString()
+	return chronicle
 
 
 func _filter_events(events: Array, categories: Dictionary) -> Array:
@@ -137,25 +137,25 @@ func _filter_events(events: Array, categories: Dictionary) -> Array:
 
 
 func _format_event_section(events: Array, section_name: String) -> String:
-	var output: StringBuilder = StringBuilder.new()
-	
+	var output: String = ""
+
 	if events.is_empty():
-		output.append("  (No %s events recorded)\n" % section_name.to_lower())
-		return output.toString()
-	
+		output += "  (No %s events recorded)\n" % section_name.to_lower()
+		return output
+
 	# Limit to most recent events for readability
 	var limit: int = mini(EVENTS_PER_SECTION, events.size())
 	var start_idx: int = maxi(0, events.size() - limit)
-	
+
 	for i in range(start_idx, events.size()):
 		var event: Dictionary = events[i]
 		var line: String = _format_event_line(event)
-		output.append("  %s\n" % line)
-	
+		output += "  %s\n" % line
+
 	if events.size() > EVENTS_PER_SECTION:
-		output.append("\n  ... and %d more %s events\n" % [events.size() - EVENTS_PER_SECTION, section_name.to_lower()])
-	
-	return output.toString()
+		output += "\n  ... and %d more %s events\n" % [events.size() - EVENTS_PER_SECTION, section_name.to_lower()]
+
+	return output
 
 
 func _format_event_line(event: Dictionary) -> String:
@@ -202,27 +202,27 @@ func _format_event_line(event: Dictionary) -> String:
 
 
 func _generate_statistics(events: Array) -> String:
-	var stats: StringBuilder = StringBuilder.new()
-	
+	var stats: String = ""
+
 	# Count by type
 	var type_counts: Dictionary = {}
 	for event in events:
 		if event is Dictionary:
 			var event_type: String = str(event.get("type", "unknown"))
 			type_counts[event_type] = type_counts.get(event_type, 0) + 1
-	
-	stats.append("Event Counts by Type:\n")
+
+	stats += "Event Counts by Type:\n"
 	for event_type in type_counts.keys():
-		stats.append("  • %s: %d\n" % [event_type, type_counts[event_type]])
-	
+		stats += "  • %s: %d\n" % [event_type, type_counts[event_type]]
+
 	# Time span
 	if not events.is_empty():
 		var first_tick: int = int(events[0].get("tick", 0))
 		var last_tick: int = int(events[-1].get("tick", 0))
 		var total_days: int = (last_tick - first_tick) / 600
-		stats.append("\nTimeline Span: %d sim days (%d ticks)\n" % [total_days, last_tick - first_tick])
-	
-	return stats.toString()
+		stats += "\nTimeline Span: %d sim days (%d ticks)\n" % [total_days, last_tick - first_tick]
+
+	return stats
 
 
 func _generate_filename() -> String:
@@ -234,20 +234,20 @@ func _generate_filename() -> String:
 func export_pawn_biography(pawn_data: RefCounted) -> String:
 	if pawn_data == null:
 		return ""
-	
-	var bio: StringBuilder = StringBuilder.new()
-	bio.append("╔══════════════════════════════════════════════════════════╗\n")
-	bio.append("║                    LIFE CHRONICLE                        ║\n")
-	bio.append("╚══════════════════════════════════════════════════════════╝\n\n")
-	
-	bio.append("Name: %s\n" % pawn_data.display_name)
-	bio.append("Profession: %s\n" % pawn_data.profession_name())
-	bio.append("Born: Tick %d\n" % pawn_data.birth_tick)
-	bio.append("Age: %.1f years\n\n" % (pawn_data.age / 360.0))
-	
+
+	var bio: String = ""
+	bio += "╔══════════════════════════════════════════════════════════╗\n"
+	bio += "║                    LIFE CHRONICLE                        ║\n"
+	bio += "╚══════════════════════════════════════════════════════════╝\n\n"
+
+	bio += "Name: %s\n" % pawn_data.display_name
+	bio += "Profession: %s\n" % pawn_data.profession_name()
+	bio += "Born: Tick %d\n" % pawn_data.birth_tick
+	bio += "Age: %.1f years\n\n" % (pawn_data.age / 360.0)
+
 	# Life events would be pulled from WorldMemory
 	# For now, use the pawn's built-in biography if available
 	if pawn_data.has_method("compose_life_arc"):
-		bio.append(pawn_data.call("compose_life_arc"))
-	
-	return bio.toString()
+		bio += pawn_data.call("compose_life_arc")
+
+	return bio

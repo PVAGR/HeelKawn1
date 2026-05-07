@@ -218,49 +218,49 @@ func import_world_state(filename: String) -> bool:
 
 ## Export summary text file (human-readable)
 func export_summary() -> String:
-	var summary: StringBuilder = StringBuilder.new()
+	var summary: String = ""
 	
-	summary.append("╔══════════════════════════════════════════════════════════╗\n")
-	summary.append("║              HEELKAWN WORLD SEED SUMMARY                 ║\n")
-	summary.append("╚══════════════════════════════════════════════════════════╝\n\n")
-	
-	summary.append("Export Time: %s\n" % Time.get_datetime_string_from_system())
-	summary.append("Current Tick: %d\n\n" % (GameManager.tick_count if GameManager != null else 0))
-	
+	summary += "╔══════════════════════════════════════════════════════════╗\n"
+	summary += "║              HEELKAWN WORLD SEED SUMMARY                 ║\n"
+	summary += "╚══════════════════════════════════════════════════════════╝\n\n"
+
+	summary += "Export Time: %s\n" % Time.get_datetime_string_from_system()
+	summary += "Current Tick: %d\n\n" % (GameManager.tick_count if GameManager != null else 0)
+
 	# Settlements summary
-	summary.append("━━━ SETTLEMENTS ━━━\n")
+	summary += "━━━ SETTLEMENTS ━━━\n"
 	if SettlementMemory != null:
 		var settlements_data: Variant = null
 		if SettlementMemory.has_method("get"):
 			settlements_data = SettlementMemory.get("settlements")
-		
+
 		if settlements_data != null and settlements_data is Array:
-			summary.append("Total Settlements: %d\n\n" % settlements_data.size())
+			summary += "Total Settlements: %d\n\n" % settlements_data.size()
 			for settlement in settlements_data:
 				if settlement is Dictionary:
-					summary.append("• %s (Region %d, Population %d, State: %s)\n" % [
+					summary += "• %s (Region %d, Population %d, State: %s)\n" % [
 						settlement.get("name", "Unnamed"),
 						settlement.get("center_region", -1),
 						settlement.get("population", 0),
 						settlement.get("state", "unknown")
-					])
-	
-	summary.append("\n")
-	
+					]
+
+	summary += "\n"
+
 	# Pawns summary
-	summary.append("━━━ POPULATION ━━━\n")
+	summary += "━━━ POPULATION ━━━\n"
 	var spawner: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
 	if spawner != null and spawner.has_method("get_pawn_count"):
 		var pawn_count: int = int(spawner.call("get_pawn_count"))
-		summary.append("Total Pawns: %d\n" % pawn_count)
-	
-	summary.append("\n")
-	
+		summary += "Total Pawns: %d\n" % pawn_count
+
+	summary += "\n"
+
 	# Events summary
-	summary.append("━━━ HISTORY ━━━\n")
+	summary += "━━━ HISTORY ━━━\n"
 	if WorldMemory != null:
 		if WorldMemory.has_method("get_event_count"):
 			var event_count: int = int(WorldMemory.call("get_event_count"))
-			summary.append("Total Events: %d\n" % event_count)
+			summary += "Total Events: %d\n" % event_count
 	
-	return summary.toString()
+	return summary

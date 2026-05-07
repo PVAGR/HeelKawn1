@@ -156,7 +156,8 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "memorial_system", "label": "47 · Memorial System (Phase 5/6 — memorials, sacred geography, pilgrimage)"},
 			{"id": "knowledge_system", "label": "48 · Knowledge Systems (Phase 5/6 — carriers, teaching, loss/rediscovery)"},
 			{"id": "heelkawnians", "label": "49 · HeelKawnians (individual development AI profiles)"},
-			{"id": "force_building", "label": "50 · FORCE BUILDING — post 10 wall/bed/zone jobs NOW"},
+			{"id": "communication", "label": "50 · Pawn Communication Log (conversations, plans, clans)"},
+			{"id": "force_building", "label": "51 · FORCE BUILDING — post 10 wall/bed/zone jobs NOW"},
 		],
 	},
 	{
@@ -412,6 +413,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_knowledge_system, "knowledge_system")
 		"heelkawnians":
 			error_occurred = _safe_report(_report_heelkawnians, "heelkawnians")
+		"communication":
+			error_occurred = _safe_report(_report_communication, "communication")
 		"force_building":
 			error_occurred = _safe_report(_force_building_now, "force_building")
 		"legacy_dynasty":
@@ -2345,6 +2348,21 @@ func _report_heelkawnians() -> void:
 			print("  matrix=%s" % (", ".join(matrix_parts) if not matrix_parts.is_empty() else "no strong bias"))
 			print("  rationale=%s" % str(matrix_decision.get("rationale", "")))
 	print("=== END HEELKAWNIAN DEVELOPMENT AI ===")
+
+
+# === PAWN COMMUNICATION LOG ===
+
+func _report_communication() -> void:
+	var comm_log: Node = get_node_or_null("/root/PawnCommunicationLog")
+	if comm_log == null:
+		print("PawnCommunicationLog not found - system not loaded")
+		return
+	
+	if not comm_log.has_method("generate_communication_report"):
+		print("PawnCommunicationLog.generate_communication_report() not found")
+		return
+	
+	print(comm_log.call("generate_communication_report"))
 
 
 # === BUILDING FORCES ===

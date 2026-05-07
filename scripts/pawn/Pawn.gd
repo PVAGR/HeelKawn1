@@ -2305,15 +2305,15 @@ func _job_claim_interval_for_speed() -> int:
 		return 3
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 3  # Reduced from 8 - pawns need to work at high speed!
+		return 1  # Claim every tick at 100x - MAXIMUM BUILDING ACTIVITY
 	if gs >= 50.0:
-		return 3  # Reduced from 6
+		return 1  # Claim every tick at 50x
 	if gs >= 26.0:
-		return 2  # Reduced from 4
+		return 1  # Claim every tick at 26x
 	if gs >= 12.0:
-		return 2  # Reduced from 4
+		return 2  # Every 2 ticks at 12x
 	if gs >= 3.0:
-		return 3  # Reduced from 5
+		return 3  # Every 3 ticks at 3x
 	# 1x: claim often enough that pawns feel "busy" without scanning every tick.
 	return 3  # Reduced from 4
 
@@ -2899,12 +2899,11 @@ func _tick_idle() -> void:
 			return false
 		if not data.allows_job_type(j.type):
 			return false
-		
-		# TOOL REQUIREMENT CHECK - pawns can't claim jobs without required tools
-		if j.required_tool != Item.Type.NONE:
-			if not data.has_tool(j.required_tool):
-				return false  # Pawn doesn't have required tool
-		
+
+		# TOOL REQUIREMENT CHECK - lenient: pawns can work without tools, just slower
+		# Only block if pawn TRULY can't do the job (e.g., no hands, incapacitated)
+		# Removed hard block - pawns will work with bare hands if needed
+
 		var rk_filter: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
 		if not is_job_history_critical(j.type):
 			if int(resolve_region_scar_level.call(rk_filter)) >= 3:
@@ -2955,6 +2954,16 @@ func _tick_idle() -> void:
 	var job: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(priority_cb, profession_bonus))
 	if job != null:
 		_begin_job(job)
+		
+		# LOG COMMUNICATION: Announce work to nearby pawns
+		if data != null and PawnCommunicationLog != null:
+			PawnCommunicationLog.log_work_announcement(
+				int(data.id), 
+				data.display_name, 
+				job.type, 
+				job.work_tile,
+				"Priority: %d" % job.priority
+			)
 		return
 	# 7. Nothing to do: idle wander
 	var wanderlust2: float = lerpf(0.52, 1.68, _bp(3))

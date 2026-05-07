@@ -41,38 +41,59 @@ func _exit_tree() -> void:
 
 ## Show speech bubble above pawn
 func show_bubble(pawn_id: int, pawn_node: Node2D, text: String, bubble_type: String = "speech") -> void:
+	# CRITICAL: Validate pawn before doing anything
 	if pawn_node == null:
 		return
-	
-	# Remove oldest bubble if too many
+	if not is_instance_valid(pawn_node):
+		# Pawn was freed - clean up any stale references
+		if pawn_bubbles.has(pawn_id):
+			pawn_bubbles.erase(pawn_id)
+		return
+	if pawn_node.is_queued_for_deletion():
+		return
+
+	# Clean up stale bubbles for this pawn FIRST
 	if pawn_bubbles.has(pawn_id):
 		var bubbles: Array = pawn_bubbles[pawn_id]
-		while bubbles.size() >= MAX_BUBBLES_PER_PAWN:
-			var old_bubble: Node = bubbles.pop_front()
-			if is_instance_valid(old_bubble):
-				old_bubble.queue_free()
-	
+		var valid_bubbles: Array = []
+		for b in bubbles:
+			if b != null and is_instance_valid(b):
+				valid_bubbles.append(b)
+			else:
+				# Bubble was freed - remove reference
+				pass
+		pawn_bubbles[pawn_id] = valid_bubbles
+
+	# Remove oldest bubble if too many
+	while pawn_bubbles[pawn_id].size() >= MAX_BUBBLES_PER_PAWN:
+		var old_bubble: Node = pawn_bubbles[pawn_id].pop_front()
+		if old_bubble != null and is_instance_valid(old_bubble):
+			_remove_bubble_clean(old_bubble)
+
 	# Create bubble node
 	var bubble: Node = _create_bubble(pawn_node, text, bubble_type)
-	if bubble == null:
+	if bubble == null or not is_instance_valid(bubble):
 		return
-	
+
 	# Add to pawn's bubble list
 	if not pawn_bubbles.has(pawn_id):
 		pawn_bubbles[pawn_id] = []
 	pawn_bubbles[pawn_id].append(bubble)
-	
+
 	# Auto-fade after lifetime
 	var timer: Timer = Timer.new()
 	timer.wait_time = BUBBLE_LIFETIME_SEC
 	timer.autostart = true
 	# Use weakref to avoid capturing freed bubble
 	var bubble_weak: WeakRef = weakref(bubble)
+	var timer_weak: WeakRef = weakref(timer)
 	timer.timeout.connect(func():
 		var b: Node = bubble_weak.get_ref()
+		var t: Timer = timer_weak.get_ref()
 		if b != null and is_instance_valid(b):
 			_fade_out_bubble(b)
-		timer.queue_free()
+		if t != null and is_instance_valid(t):
+			t.queue_free()
 	)
 	add_child(timer)
 
@@ -146,14 +167,29 @@ func _update_bubble_position(bubble: Node, pawn_node: Node2D) -> void:
 func _fade_out_bubble(bubble: Node) -> void:
 	if not is_instance_valid(bubble):
 		return
-	
+
+	# Remove from pawn_bubbles FIRST before freeing
+	_remove_bubble_clean(bubble)
+
 	# Tween fade out
 	var tween: Tween = create_tween()
 	tween.tween_property(bubble, "modulate:a", 0.0, 0.5)
 	tween.tween_callback(func():
-		if is_instance_valid(bubble):
-			bubble.queue_free()
+		var b: Node = bubble
+		if b != null and is_instance_valid(b):
+			b.queue_free()
 	)
+
+
+func _remove_bubble_clean(bubble: Node) -> void:
+	# Remove from pawn_bubbles dictionary
+	for pawn_id in pawn_bubbles:
+		var bubbles: Array = pawn_bubbles[pawn_id]
+		if bubbles.has(bubble):
+			bubbles.erase(bubble)
+			if bubbles.is_empty():
+				pawn_bubbles.erase(pawn_id)
+			break
 
 
 func _cleanup_old_bubbles() -> void:
@@ -163,13 +199,16 @@ func _cleanup_old_bubbles() -> void:
 		var bubbles: Array = pawn_bubbles[pawn_id]
 		var valid_bubbles: Array = []
 		for bubble in bubbles:
-			if is_instance_valid(bubble):
+			if bubble != null and is_instance_valid(bubble):
 				valid_bubbles.append(bubble)
+			else:
+				# Bubble was freed - don't keep reference
+				pass
 		if valid_bubbles.is_empty():
 			to_remove.append(pawn_id)
 		else:
 			pawn_bubbles[pawn_id] = valid_bubbles
-	
+
 	for pawn_id in to_remove:
 		pawn_bubbles.erase(pawn_id)
 
@@ -232,17 +271,35 @@ func get_need_bubble_text(need_type: String, value: float) -> String:
 
 ## Show work bubble when pawn starts job
 func show_work_bubble(pawn_id: int, pawn_node: Node2D, job_type: int) -> void:
+	# CRITICAL: Validate pawn before creating bubble
+	if pawn_node == null or not is_instance_valid(pawn_node):
+		return
+	if pawn_node.is_queued_for_deletion():
+		return
+	
 	var text: String = get_job_bubble_text(job_type)
 	show_bubble(pawn_id, pawn_node, text, "work")
 
 
 ## Show chat bubble when pawn talks
 func show_chat_bubble(pawn_id: int, pawn_node: Node2D, message: String) -> void:
+	# CRITICAL: Validate pawn before creating bubble
+	if pawn_node == null or not is_instance_valid(pawn_node):
+		return
+	if pawn_node.is_queued_for_deletion():
+		return
+	
 	show_bubble(pawn_id, pawn_node, "💬 " + message, "chat")
 
 
 ## Show thought bubble for pawn needs
 func show_thought_bubble(pawn_id: int, pawn_node: Node2D, need_type: String, value: float) -> void:
+	# CRITICAL: Validate pawn before creating bubble
+	if pawn_node == null or not is_instance_valid(pawn_node):
+		return
+	if pawn_node.is_queued_for_deletion():
+		return
+	
 	var text: String = get_need_bubble_text(need_type, value)
 	if text != "":
 		show_bubble(pawn_id, pawn_node, "💭 " + text, "thought")

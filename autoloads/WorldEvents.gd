@@ -621,8 +621,8 @@ func _trigger_resource_discovery(tick: int) -> void:
 func _generate_neural_signature(event_type: String, tick: int) -> String:
 	# Generate unique neural network matrix signature for events
 	var signature_base: String = "%s_%d_%d" % [event_type, tick, GameManager.tick_count]
-	var hash: int = signature_base.hash()
-	return "NM_%08X" % hash
+	var hash_value: int = signature_base.hash()
+	return "NM_%08X" % hash_value
 
 
 func _clear_temporary_event() -> void:

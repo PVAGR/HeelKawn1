@@ -310,7 +310,7 @@ func player_succeed(ancestor_id: int, heir_id: int) -> void:
 # ==================== HELPER FUNCTIONS ====================
 
 ## Check if pawn was ever player-controlled
-func _is_former_player_pawn(pawn_id: int) -> bool:
+func _is_former_player_pawn(_pawn_id: int) -> bool:
 	# This would need to track player incarnations
 	# For now, simplified check
 	return false

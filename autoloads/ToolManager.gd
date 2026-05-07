@@ -147,7 +147,7 @@ func _spawn_tool_jobs_if_needed() -> void:
 
 
 ## Spawn gather jobs for flint/stick on appropriate tiles.
-func _spawn_gather_jobs(job_type: int, feature_type: int) -> void:
+func _spawn_gather_jobs(job_type: int, _feature_type: int) -> void:
 	var world: World = _get_world()
 	if world == null or world.data == null:
 		return

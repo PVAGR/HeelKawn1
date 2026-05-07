@@ -338,7 +338,7 @@ func _count_surviving_techniques(settlement_id: int) -> int:
 				count += 1
 	return count
 
-func _count_surviving_stories(settlement_id: int) -> int:
+func _count_surviving_stories(_settlement_id: int) -> int:
 	# Count stories preserved in WorldMemory
 	var count: int = 0
 	var events: Array[Dictionary] = WorldMemory.get_events()
@@ -347,7 +347,7 @@ func _count_surviving_stories(settlement_id: int) -> int:
 			count += 1
 	return count
 
-func _count_protected_names(settlement_id: int) -> int:
+func _count_protected_names(_settlement_id: int) -> int:
 	# Count protected names
 	var count: int = 0
 	var events: Array[Dictionary] = WorldMemory.get_events()
@@ -356,7 +356,7 @@ func _count_protected_names(settlement_id: int) -> int:
 			count += 1
 	return count
 
-func _count_surviving_bloodlines(settlement_id: int) -> int:
+func _count_surviving_bloodlines(_settlement_id: int) -> int:
 	# Count surviving bloodlines
 	var count: int = 0
 	var events: Array[Dictionary] = WorldMemory.get_events()
@@ -365,7 +365,7 @@ func _count_surviving_bloodlines(settlement_id: int) -> int:
 			count += 1
 	return count
 
-func _count_sacred_sites(settlement_id: int) -> int:
+func _count_sacred_sites(_settlement_id: int) -> int:
 	# Count sacred/practical sites
 	var count: int = 0
 	var events: Array[Dictionary] = WorldMemory.get_events()

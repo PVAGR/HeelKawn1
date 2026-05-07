@@ -11,12 +11,12 @@ extends CanvasLayer
 ##
 ## Minecraft/Rust style survival HUD.
 
-@onready var hunger_bar: ProgressBar = $MarginContainer/VBoxContainer/HungerBox/HungerBar
-@onready var thirst_bar: ProgressBar = $MarginContainer/VBoxContainer/ThirstBox/ThirstBar
-@onready var energy_bar: ProgressBar = $MarginContainer/VBoxContainer/EnergyBox/EnergyBar
-@onready var temp_label: Label = $MarginContainer/VBoxContainer/TempBox/TempLabel
-@onready var health_bar: ProgressBar = $MarginContainer/VBoxContainer/HealthBox/HealthBar
-@onready var status_container: VBoxContainer = $MarginContainer/VBoxContainer/StatusContainer
+@onready var hunger_bar: ProgressBar = $MarginContainer/Panel/VBoxContainer/HungerBox/HungerBar
+@onready var thirst_bar: ProgressBar = $MarginContainer/Panel/VBoxContainer/ThirstBox/ThirstBar
+@onready var energy_bar: ProgressBar = $MarginContainer/Panel/VBoxContainer/EnergyBox/EnergyBar
+@onready var temp_label: Label = $MarginContainer/Panel/VBoxContainer/TempBox/TempLabel
+@onready var health_bar: ProgressBar = $MarginContainer/Panel/VBoxContainer/HealthBox/HealthBar
+@onready var status_container: VBoxContainer = $MarginContainer/Panel/VBoxContainer/StatusContainer
 
 var _survival_system: Node = null
 var _player_pawn: Node = null

@@ -128,10 +128,10 @@ func _generate_signature(pawn_data: PawnData) -> String:
 		pawn_data.display_name,
 		GameManager.tick_count if GameManager != null else 0
 	]
-	
+
 	# Simple hash-based signature (in production, use proper cryptographic signature)
-	var hash: int = signature_data.hash()
-	return str(hash)
+	var hash_value: int = signature_data.hash()
+	return str(hash_value)
 
 
 ## Validate export data

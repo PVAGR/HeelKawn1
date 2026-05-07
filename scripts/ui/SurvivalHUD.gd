@@ -66,33 +66,33 @@ func _update_display() -> void:
 		return
 	
 	visible = true
-	
+
 	var data: RefCounted = _player_pawn.data
-	
-	# Update bars
-	if data.has("hunger"):
+
+	# Update bars (RefCounted uses direct property access, not .has())
+	if data.hunger != null:
 		hunger_bar.value = data.hunger
 		hunger_bar.modulate = _get_bar_color(data.hunger)
-	
-	if data.has("thirst"):
+
+	if data.thirst != null:
 		thirst_bar.value = data.thirst
 		thirst_bar.modulate = _get_bar_color(data.thirst)
-	
-	if data.has("rest") or data.has("energy"):
+
+	if data.rest != null or data.energy != null:
 		var energy: float = 100.0
-		if data.has("energy"):
+		if data.energy != null:
 			energy = data.energy
-		elif data.has("rest"):
+		elif data.rest != null:
 			energy = data.rest
 		energy_bar.value = energy
 		energy_bar.modulate = _get_bar_color(energy)
-	
-	if data.has("health"):
+
+	if data.health != null:
 		health_bar.value = data.health
 		health_bar.modulate = _get_bar_color(data.health)
-	
+
 	# Update temperature
-	if data.has("body_temperature"):
+	if data.body_temperature != null:
 		var temp: float = data.body_temperature
 		temp_label.text = "%.1f°C" % temp
 		temp_label.modulate = _get_temp_color(temp)
@@ -128,27 +128,27 @@ func _update_status_effects(data: RefCounted) -> void:
 	
 	# Check for status effects
 	var effects: Array[String] = []
-	
+
 	# Hunger effects
-	if data.has("hunger"):
+	if data.hunger != null:
 		if data.hunger <= 0:
 			effects.append("🍖 STARVING (-20 mood)")
 		elif data.hunger < 30:
 			effects.append("🍖 Hungry (-5 mood)")
 		elif data.hunger > 80:
 			effects.append("🍖 Well Fed (+10 mood)")
-	
+
 	# Thirst effects
-	if data.has("thirst"):
+	if data.thirst != null:
 		if data.thirst <= 0:
 			effects.append("💧 PARCHED (-25 mood)")
 		elif data.thirst < 30:
 			effects.append("💧 Thirsty (-8 mood)")
 		elif data.thirst > 80:
 			effects.append("💧 Quenched (+5 mood)")
-	
+
 	# Temperature effects
-	if data.has("body_temperature"):
+	if data.body_temperature != null:
 		var temp: float = data.body_temperature
 		if temp < 33.0:
 			effects.append("🥶 SEVERE HYPOTHERMIA")
@@ -158,9 +158,9 @@ func _update_status_effects(data: RefCounted) -> void:
 			effects.append("🥵 SEVERE HEATSTROKE")
 		elif temp > 39.0:
 			effects.append("🥵 Heatstroke (-20 mood)")
-	
+
 	# Injury effects
-	if data.has("injuries") and data.injuries is Dictionary:
+	if data.injuries != null and data.injuries is Dictionary:
 		var injury_count: int = data.injuries.size()
 		if injury_count > 0:
 			var total_severity: float = 0.0

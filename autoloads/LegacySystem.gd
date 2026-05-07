@@ -320,19 +320,20 @@ func _is_former_player_pawn(_pawn_id: int) -> bool:
 func _get_preserved_knowledge(pawn_id: int) -> Array[int]:
 	if KnowledgeSystem == null:
 		return []
-	
+
 	var preserved: Array[int] = []
-	
-	# Check record carriers inscribed by this pawn
-	if KnowledgeSystem.has("record_carriers"):
-		var carriers: Dictionary = KnowledgeSystem.get("record_carriers")
-		for tile_key in carriers:
-			var carrier: Dictionary = carriers[tile_key]
-			if int(carrier.get("inscriber_id", -1)) == pawn_id:
-				for kt in carrier.get("knowledge_types", []):
-					if not preserved.has(int(kt)):
-						preserved.append(int(kt))
-	
+
+	# Check record carriers inscribed by this pawn (Node-safe access)
+	if KnowledgeSystem.has_method("get") and KnowledgeSystem.has("record_carriers"):
+		var carriers: Variant = KnowledgeSystem.get("record_carriers")
+		if carriers != null and carriers is Dictionary:
+			for tile_key in carriers:
+				var carrier: Dictionary = carriers[tile_key]
+				if int(carrier.get("inscriber_id", -1)) == pawn_id:
+					for kt in carrier.get("knowledge_types", []):
+						if not preserved.has(int(kt)):
+							preserved.append(int(kt))
+
 	return preserved
 
 

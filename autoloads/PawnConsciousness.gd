@@ -135,36 +135,36 @@ func record_memory(pawn_id: int, event_type: String, description: String,
 
 
 ## Get memories for a pawn
-func get_memories(pawn_id: int, category: String = "", limit: int = -1) -> Array[Dictionary]:
+func get_memories(pawn_id: int, category: String = "", limit: int = -1) -> Array:
 	_init_consciousness(pawn_id)
-	
-	var memories: Array[Dictionary] = pawn_consciousness[str(pawn_id)].memories
-	
+
+	var memories: Array = pawn_consciousness[str(pawn_id)].memories
+
 	# Filter by category
 	if category != "":
 		memories = memories.filter(func(m): return m.category == category and not m.suppressed)
 	else:
 		memories = memories.filter(func(m): return not m.suppressed)
-	
+
 	# Sort by importance and emotion (most significant first)
-	memories.sort_custom(func(a, b): 
+	memories.sort_custom(func(a, b):
 		return (a.importance * abs(a.emotion)) > (b.importance * abs(b.emotion))
 	)
-	
+
 	# Limit results
 	if limit > 0:
 		return memories.slice(0, limit)
-	
+
 	return memories
 
 
 ## Get traumatic memories
-func get_traumatic_memories(pawn_id: int) -> Array[Dictionary]:
+func get_traumatic_memories(pawn_id: int) -> Array:
 	return get_memories(pawn_id).filter(func(m): return m.emotion < -50)
 
 
 ## Get joyful memories
-func get_joyful_memories(pawn_id: int) -> Array[Dictionary]:
+func get_joyful_memories(pawn_id: int) -> Array:
 	return get_memories(pawn_id).filter(func(m): return m.emotion > 50)
 
 
@@ -235,15 +235,15 @@ func _generate_dream(pawn: Node) -> void:
 
 
 ## Get recent dreams for a pawn
-func get_dreams(pawn_id: int, limit: int = 5) -> Array[Dictionary]:
+func get_dreams(pawn_id: int, limit: int = 5) -> Array:
 	_init_consciousness(pawn_id)
-	
-	var dreams: Array[Dictionary] = pawn_consciousness[str(pawn_id)].dreams
+
+	var dreams: Array = pawn_consciousness[str(pawn_id)].dreams
 	dreams.sort_custom(func(a, b): return a.tick > b.tick)
-	
+
 	if limit > 0:
 		return dreams.slice(0, limit)
-	
+
 	return dreams
 
 

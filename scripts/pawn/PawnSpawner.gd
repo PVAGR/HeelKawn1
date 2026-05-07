@@ -239,13 +239,15 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 
 		var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
 		if bloodline_sys != null and bloodline_sys.has_method("create_bloodline"):
-			# Use create_bloodline with explicit arguments (founder_id, founder_name, specialization_key)
-			var result: Variant = bloodline_sys.create_bloodline(data.id, data.display_name, "")
+			var bloodline_name: String = "Bloodline_%s" % str(data.id)
+			var result: Variant = bloodline_sys.callv("create_bloodline", [data.id, bloodline_name])
 			if typeof(result) == TYPE_INT:
 				data.bloodline_id = result
 
 		var pawn: Pawn = pawn_scene.instantiate() as Pawn
-		pawn.bind(data, world.tile_to_world(tile), world)
+		pawn.data = data
+		pawn.position = world.tile_to_world(tile)
+		pawn._world = world
 		add_child(pawn)
 		pawns.append(pawn)
 		invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
@@ -351,7 +353,9 @@ func spawn_generational_pawn(
 	data.set_meta("tradition_mood_bonus", 4.0)
 	data.set_meta("tradition_mood_penalty", -6.0)
 	var pawn: Pawn = pawn_scene.instantiate() as Pawn
-	pawn.bind(data, world.tile_to_world(tile), world)
+	pawn.data = data
+	pawn.position = world.tile_to_world(tile)
+	pawn._world = world
 	add_child(pawn)
 	pawns.append(pawn)
 	invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
@@ -577,8 +581,10 @@ func spawn_pawn() -> void:
 		# HETEROGENEOUS PROFESSION - NOT all farmers!
 		_assign_heterogeneous_profession(data, rng)
 		var pawnc: Pawn = pawn_scene.instantiate() as Pawn
+		pawnc.data = data
+		pawnc.position = world.tile_to_world(tile)
+		pawnc._world = world
 		add_child(pawnc)
-		pawnc.bind(data, world.tile_to_world(tile), world)
 		pawns.append(pawnc)
 		invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
 		if SpatialManager != null: # ARCHITECT T006
@@ -592,7 +598,9 @@ func spawn_pawn() -> void:
 ## not check component — caller must ensure the tile is passable.
 func spawn_from_data(d: PawnData, world: World) -> void:
 	var p: Pawn = pawn_scene.instantiate() as Pawn
-	p.bind(d, world.tile_to_world(d.tile_pos), world)
+	p.data = d
+	p.position = world.tile_to_world(d.tile_pos)
+	p._world = world
 	add_child(p)
 	pawns.append(p)
 	invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
@@ -675,7 +683,9 @@ func spawn_child_pawn(
 		var inherited: int = int((int(parent_a.skills[sk]) + int(parent_b.skills.get(sk, 0))) * 0.2)
 		data.skills[sk] = inherited
 	var pawn: Pawn = pawn_scene.instantiate() as Pawn
-	pawn.bind(data, world.tile_to_world(tile), world)
+	pawn.data = data
+	pawn.position = world.tile_to_world(tile)
+	pawn._world = world
 	add_child(pawn)
 	pawns.append(pawn)
 	invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty

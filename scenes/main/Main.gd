@@ -185,6 +185,8 @@ var _selected_pawn = null
 var _play_chrome_visible: bool = true
 ## Smooth camera lock on selected pawn (`G`). Cleared by middle-mouse pan.
 var _camera_follow_selected: bool = false
+var _playtest_recorder_ref: Node = null
+var _playtest_last_cam_tick: int = 0
 ## Deterministic local-control pawn. Defaults to current selection.
 var _player_pawn = null
 var _hotkeys_enabled: bool = true
@@ -616,14 +618,8 @@ func _ready() -> void:
 	# (Pawn selection recording is now handled inside _set_selected_pawn)
 	var playtest_recorder: Node = get_node_or_null("/root/PlaytestRecorder")
 	if playtest_recorder != null:
-		# Log camera movement (sample every 10 ticks)
-		if _camera != null:
-			var last_cam_tick: int = 0
-			_camera.moved.connect(func():
-				if GameManager != null and GameManager.tick_count - last_cam_tick > 10:
-					playtest_recorder.call("record_camera_movement", _camera.position, _camera.zoom.x)
-					last_cam_tick = GameManager.tick_count
-			)
+		# Log camera movement (sample every 10 ticks via _on_world_tick)
+		_playtest_recorder_ref = playtest_recorder
 
 	# Ticks are driven by TickManager fixed-step clock.
 	if TickManager != null and TickManager.has_signal("tick_processed"):
@@ -2335,7 +2331,12 @@ func _on_game_tick(tick: int) -> void:
 		CrashTrap.log_tick_event("Main._on_game_tick", "tick=%d" % tick)
 	if _is_simulation_worker_mode() and GameManager != null and GameManager.is_tick_benchmark_enabled():
 		return
-	
+
+	# Playtest: log camera movement every 10 ticks
+	if _playtest_recorder_ref != null and _camera != null and tick - _playtest_last_cam_tick >= 10:
+		_playtest_last_cam_tick = tick
+		_playtest_recorder_ref.call("record_camera_movement", _camera.position, _camera.zoom.x)
+
 	# OPTIMIZATION: Frame budget tracking - exit early if we're over budget
 	var frame_start: int = Time.get_ticks_usec()
 	var frame_budget_exceeded: bool = false
@@ -6259,7 +6260,7 @@ func _colony_save() -> void:
 	if OS.is_debug_build():
 		if not verify_save_roundtrip(snapshot):
 			push_warning(
-                    "[Main] Save encoding round-trip failed (var_to_bytes). File still written; investigate persistence."
+					"[Main] Save encoding round-trip failed (var_to_bytes). File still written; investigate persistence."
 			)
 	var err: Error = GameSave.write_file(GameSave.get_save_path(), snapshot)
 	if err == OK:
@@ -6791,16 +6792,16 @@ func _focus_lines_for_settlement(focus: Dictionary) -> PackedStringArray:
 	var war: Dictionary = SettlementMemory.get_war_profile_for_region(center)
 	out.append("Region: %d | Tile: (%d,%d)" % [center, tile.x, tile.y])
 	out.append(
-            "Settlement state (committed/hysteresis-smoothed): %s"
+			"Settlement state (committed/hysteresis-smoothed): %s"
 			% _pretty_settlement_state(str(st.get("state", "unknown")))
 	)
 	out.append(
-            "Settlement truth raw (material audit, not smoothed): %s"
+			"Settlement truth raw (material audit, not smoothed): %s"
 			% str(st.get("state_truth_raw", st.get("state", "unknown")))
 	)
 	out.append(
 			(
-                    "Material signals: liv=%d shelter=%s work=%d stockpile=%s (flag=designated stockpile-zone overlap only) "
+					"Material signals: liv=%d shelter=%s work=%d stockpile=%s (flag=designated stockpile-zone overlap only) "
 					+ "sp_zone_overlap_hits=%d | hysteresis_key=center_region:%d"
 			)
 			% [
@@ -6886,7 +6887,7 @@ func _focus_lines_for_tile(focus: Dictionary) -> PackedStringArray:
 		var center: int = int(st.get("center_region", -1))
 		var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(center)
 		out.append(
-                "Settlement committed: %s | truth raw: %s | Governance (political): %s"
+				"Settlement committed: %s | truth raw: %s | Governance (political): %s"
 				% [
 					_pretty_settlement_state(str(st.get("state", "unknown"))),
 					str(st.get("state_truth_raw", st.get("state", "unknown"))),
@@ -7040,7 +7041,7 @@ func _build_realm_crown_view_text() -> String:
 	var harm: float = ReligionLens.get_harmony_index() if ReligionLens != null else 0.0
 	var total_pawns: int = _observer_total_pawns()
 	var head: String = (
-            "[b]REALM (crown view)[/b]\n"
+			"[b]REALM (crown view)[/b]\n"
 			+ "Places %d · Heelkawnians %d · Houses %d · Sacred sites %d · Harmony %.2f\n"
 			% [place_count, total_pawns, houses_n, sac_n, harm]
 	)
@@ -7148,7 +7149,7 @@ func _build_observer_snapshot(tick: int) -> Dictionary:
 		_resource_balance_audit_last_sig = rb_audit_sig
 		print(
 				(
-                        "[RESOURCE_BALANCE_AUDIT] tick=%d center_region=%d result=%s "
+						"[RESOURCE_BALANCE_AUDIT] tick=%d center_region=%d result=%s "
 						+ "food=%d=>%s(actual=%s) wood=%d=>%s(actual=%s) "
 						+ "stone=%d=>%s(actual=%s) ore_proxy=%d=>%s(actual=%s)"
 				)

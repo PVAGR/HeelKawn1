@@ -874,12 +874,23 @@ func _pawn_connect_sim_tick_deferred() -> void:
 	if data == null or _world == null:
 		push_warning("Pawn: deferred tick connect skipped — not bound")
 		return
-	if not has_node("/root/TickManager"): 
-		if GameManager != null:
-			if not GameManager.game_tick.is_connected(_on_world_tick):
-				GameManager.game_tick.connect(_on_world_tick)
-		_pawn_sim_tick_armed = true
-		return
+	
+	# CRITICAL: Arm pawn simulation ticks FIRST
+	# This flag gates ALL pawn behavior in _on_world_tick
+	_pawn_sim_tick_armed = true
+	
+	# TickManager automatically calls _on_world_tick on all "tickable" group members
+	# We were added to "tickable" in _ready(), so just ensure cache is dirty
+	if TickManager != null:
+		TickManager.mark_tickable_cache_dirty()
+		# Force immediate cache rebuild so we're included in next tick
+		TickManager._tickable_cache_dirty = true
+	
+	# DEBUG: Verify connection worked
+	if OS.is_debug_build():
+		print("[Pawn] #%s %s: tick armed=%s, tickable=%s" % [data.id, data.display_name, _pawn_sim_tick_armed, is_in_group("tickable")])
+	
+	# Continue with pawn initialization
 	_reserved_bed = Vector2i(-1, -1)
 	_target_zone = null
 	_cohort_id = -1
@@ -1964,6 +1975,8 @@ func _on_world_tick(_tick: int) -> void:
 	if not is_instance_valid(self):
 		return
 	if not _pawn_sim_tick_armed:
+		# DEBUG: This should not happen after deferred connect runs
+		# If it does, the pawn wasn't properly initialized
 		return
 	if data == null:
 		push_warning("Pawn: game_tick skipped - data not ready (path=%s)" % str(get_path()))

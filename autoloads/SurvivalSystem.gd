@@ -127,19 +127,19 @@ func _process_survival(pawn: Node, tick: int) -> void:
 # ==================== NEEDS DECAY ====================
 
 func _decay_hunger(data: RefCounted, work_mult: float) -> void:
-	if not data.has("hunger"):
+	if data.hunger == null:
 		return
-	
+
 	var decay: float = HUNGER_DECAY_RATE * work_mult
-	
+
 	# Traits can affect hunger decay
-	if data.has("traits"):
+	if data.traits != null:
 		for tr in data.traits:
-			if tr.has("hunger_decay_mult"):
+			if tr.hunger_decay_mult != null:
 				decay *= tr.hunger_decay_mult
-	
+
 	data.hunger = maxf(0.0, data.hunger - decay)
-	
+
 	# Apply moodlet
 	if data.hunger <= 0:
 		_apply_moodlet(data, "starving")
@@ -150,13 +150,13 @@ func _decay_hunger(data: RefCounted, work_mult: float) -> void:
 
 
 func _decay_thirst(data: RefCounted, work_mult: float) -> void:
-	if not data.has("thirst"):
+	if data.thirst == null:
 		# Add thirst if missing (for backwards compatibility)
 		data.thirst = 100.0
-	
+
 	var decay: float = THIRST_DECAY_RATE * work_mult
 	data.thirst = maxf(0.0, data.thirst - decay)
-	
+
 	# Apply moodlet
 	if data.thirst <= 0:
 		_apply_moodlet(data, "parched")
@@ -167,12 +167,12 @@ func _decay_thirst(data: RefCounted, work_mult: float) -> void:
 
 
 func _decay_energy(data: RefCounted, work_mult: float) -> void:
-	if not data.has("rest") and not data.has("energy"):
+	if data.rest == null and data.energy == null:
 		return
-	
-	var energy_key: String = "energy" if data.has("energy") else "rest"
+
+	var energy_key: String = "energy" if data.energy != null else "rest"
 	var decay: float = ENERGY_DECAY_RATE * work_mult
-	
+
 	var cur_energy = data.get(energy_key)
 	var energy_val: float = cur_energy if cur_energy != null else 100.0
 	data.set(energy_key, maxf(0.0, energy_val - decay))
@@ -187,9 +187,9 @@ func _decay_energy(data: RefCounted, work_mult: float) -> void:
 
 
 func _decay_stamina(data: RefCounted, work_mult: float) -> void:
-	if not data.has("stamina"):
+	if data.stamina == null:
 		return
-	
+
 	var decay: float = STAMINA_DECAY_RATE * work_mult
 	data.stamina = maxf(0.0, data.stamina - decay)
 
@@ -198,18 +198,18 @@ func _decay_stamina(data: RefCounted, work_mult: float) -> void:
 
 func _regulate_temperature(pawn: Node, tick: int) -> void:
 	var data: RefCounted = pawn.data
-	if not data.has("body_temperature"):
+	if data.body_temperature == null:
 		return
-	
+
 	var current_temp: float = data.body_temperature
 	var target_temp: float = 37.0  # Normal body temperature
-	
+
 	# Get environmental temperature (from tile/weather)
 	var env_temp: float = _get_environmental_temperature(pawn)
-	
+
 	# Wetness affects cold exposure
 	var wet_mult: float = 1.0
-	if data.has("wetness") and data.wetness > 50:
+	if data.wetness != null and data.wetness > 50:
 		wet_mult = WET_COLD_MULT
 	
 	# Adjust towards environmental temperature
@@ -259,26 +259,26 @@ func _get_environmental_temperature(pawn: Node) -> float:
 # ==================== INJURY SYSTEM ====================
 
 func _process_injuries(data: RefCounted, tick: int) -> void:
-	if not data.has("injuries") or not data.injuries is Dictionary:
+	if data.injuries == null or not data.injuries is Dictionary:
 		data.injuries = {}
 		return
-	
+
 	# Process each injury
 	var injuries_to_remove: Array = []
-	
+
 	for injury_type in data.injuries.keys():
 		var severity: float = data.injuries[injury_type]
-		
+
 		# Natural healing (1 severity per 100 ticks)
 		severity -= 0.01
 		data.injuries[injury_type] = maxf(0.0, severity)
-		
+
 		# Mark for removal if healed
 		if severity <= 0:
 			injuries_to_remove.append(injury_type)
-		
+
 		# Injuries affect pain
-		if data.has("pain"):
+		if data.pain != null:
 			data.pain = minf(100.0, data.pain + severity * 0.1)
 	
 	# Remove healed injuries
@@ -301,17 +301,17 @@ func _process_injuries(data: RefCounted, tick: int) -> void:
 ## Apply injury to pawn
 func apply_injury(pawn: Node, injury_type: String, severity: float, cause: String = "") -> void:
 	var data: RefCounted = pawn.data
-	if not data.has("injuries") or not data.injuries is Dictionary:
+	if data.injuries == null or not data.injuries is Dictionary:
 		data.injuries = {}
-	
+
 	# Add or increase injury
 	if data.injuries.has(injury_type):
 		data.injuries[injury_type] = minf(INJURY_SEVERE_MAX, data.injuries[injury_type] + severity)
 	else:
 		data.injuries[injury_type] = minf(INJURY_SEVERE_MAX, severity)
-	
+
 	# Apply pain
-	if data.has("pain"):
+	if data.pain != null:
 		data.pain = minf(100.0, data.pain + severity * 0.2)
 	
 	# Record injury event
@@ -329,23 +329,23 @@ func apply_injury(pawn: Node, injury_type: String, severity: float, cause: Strin
 ## Apply wound (bleeding injury)
 func apply_wound(pawn: Node, severity: float, cause: String = "") -> void:
 	apply_injury(pawn, "laceration", severity, cause)
-	
+
 	# Bleeding causes ongoing health loss
 	var data: RefCounted = pawn.data
-	if data.has("health"):
+	if data.health != null:
 		data.health = maxf(0.0, data.health - severity * 0.1)
 
 
 ## Heal injury
 func heal_injury(pawn: Node, injury_type: String, amount: float) -> void:
 	var data: RefCounted = pawn.data
-	if not data.has("injuries") or not data.injuries.has(injury_type):
+	if data.injuries == null or not data.injuries.has(injury_type):
 		return
 	
 	data.injuries[injury_type] = maxf(0.0, data.injuries[injury_type] - amount)
 	
 	# Reduce pain
-	if data.has("pain"):
+	if data.pain != null:
 		data.pain = maxf(0.0, data.pain - amount * 0.1)
 
 
@@ -356,46 +356,46 @@ var _active_moodlets: Dictionary = {}  # {pawn_id: {moodlet_key: end_tick}}
 func _apply_moodlet(data: RefCounted, moodlet_key: String) -> void:
 	if not MOODLETS.has(moodlet_key):
 		return
-	
+
 	var moodlet: Dictionary = MOODLETS[moodlet_key]
 	var pawn_id: int = int(data.id)
-	
+
 	# Initialize moodlets for this pawn
 	if not _active_moodlets.has(pawn_id):
 		_active_moodlets[pawn_id] = {}
-	
+
 	# Check if moodlet already active
 	if _active_moodlets[pawn_id].has(moodlet_key):
 		var end_tick: int = _active_moodlets[pawn_id][moodlet_key]
 		if end_tick > GameManager.tick_count:
 			return  # Already active, don't refresh
-	
+
 	# Apply moodlet
 	var duration: int = moodlet.duration
 	var end_tick: int = GameManager.tick_count + duration if duration > 0 else -1
 	_active_moodlets[pawn_id][moodlet_key] = end_tick
-	
-	if data.has("mood"):
+
+	if data.mood != null:
 		data.mood = minf(100.0, data.mood + moodlet.mood)
 
 
 func _apply_moodlets(pawn: Node, tick: int) -> void:
 	var data: RefCounted = pawn.data
 	var pawn_id: int = int(data.id)
-	
+
 	if not _active_moodlets.has(pawn_id):
 		return
-	
+
 	# Remove expired moodlets
 	for moodlet_key in _active_moodlets[pawn_id].keys():
 		var end_tick: int = _active_moodlets[pawn_id][moodlet_key]
 		if end_tick >= 0 and end_tick < tick:
 			_active_moodlets[pawn_id].erase(moodlet_key)
-			
+
 			# Remove moodlet effect
 			if MOODLETS.has(moodlet_key):
 				var moodlet: Dictionary = MOODLETS[moodlet_key]
-				if data.has("mood"):
+				if data.mood != null:
 					data.mood = maxf(0.0, data.mood - moodlet.mood)
 
 
@@ -403,29 +403,29 @@ func _apply_moodlets(pawn: Node, tick: int) -> void:
 
 func _check_death_conditions(pawn: Node, tick: int) -> void:
 	var data: RefCounted = pawn.data
-	
+
 	var cause: String = ""
-	
+
 	# Starvation
-	if data.has("hunger") and data.hunger <= 0:
+	if data.hunger != null and data.hunger <= 0:
 		cause = "starvation"
-	
+
 	# Dehydration
-	if data.has("thirst") and data.thirst <= 0:
+	if data.thirst != null and data.thirst <= 0:
 		cause = "dehydration"
-	
+
 	# Hypothermia
-	if data.has("body_temperature") and data.body_temperature < TEMP_HYPOTHERMIA_SEVERE:
+	if data.body_temperature != null and data.body_temperature < TEMP_HYPOTHERMIA_SEVERE:
 		cause = "hypothermia"
-	
+
 	# Heatstroke
-	if data.has("body_temperature") and data.body_temperature > TEMP_HEATSTROKE_SEVERE:
+	if data.body_temperature != null and data.body_temperature > TEMP_HEATSTROKE_SEVERE:
 		cause = "heatstroke"
-	
+
 	# Health depletion
-	if data.has("health") and data.health <= 0:
+	if data.health != null and data.health <= 0:
 		cause = "injuries"
-	
+
 	# Apply death
 	if cause != "":
 		_apply_death(pawn, cause)
@@ -454,22 +454,21 @@ func _apply_death(pawn: Node, cause: String) -> void:
 ## Feed pawn (restore hunger)
 func feed_pawn(pawn: Node, food_value: float) -> void:
 	var data: RefCounted = pawn.data
-	if data.has("hunger"):
+	if data.hunger != null:
 		data.hunger = minf(100.0, data.hunger + food_value)
 
 ## Water pawn (restore thirst)
 func water_pawn(pawn: Node, water_value: float) -> void:
 	var data: RefCounted = pawn.data
-	if data.has("thirst"):
+	if data.thirst != null:
 		data.thirst = minf(100.0, data.thirst + water_value)
 
 ## Rest pawn (restore energy)
 func rest_pawn(pawn: Node, rest_value: float) -> void:
 	var data: RefCounted = pawn.data
-	var energy_key: String = "energy" if data.has("energy") else "rest"
-	if data.has(energy_key):
-		var ev = data.get(energy_key)
-		var e_val: float = ev if ev != null else 100.0
+	var energy_key: String = "energy" if data.energy != null else "rest"
+	if data.get(energy_key) != null:
+		var e_val: float = data.get(energy_key)
 		data.set(energy_key, minf(100.0, e_val + rest_value))
 
 ## Get survival status for pawn

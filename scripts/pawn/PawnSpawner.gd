@@ -243,8 +243,8 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 			var spec_key: String = ""
 			if data.has_method("highest_affinity_skill"):
 				spec_key = str(data.highest_affinity_skill())
-			# Call with explicit arguments (Godot 4.x)
-			var result: Variant = bloodline_sys.create_bloodline(data.id, data.display_name, spec_key)
+			# Call safe version directly (avoids Godot 4.x default param issues)
+			var result: Variant = bloodline_sys.create_bloodline_safe(data.id, data.display_name, spec_key)
 			if typeof(result) == TYPE_INT:
 				data.bloodline_id = result
 
@@ -654,7 +654,7 @@ func spawn_child_pawn(
 	data.tile_pos = tile
 	data.color = parent_a.color.lerp(parent_b.color, 0.5)
 	data.body_type = morph_mix % 3
-	data.hair_style = int(morph_mix / 3) % 4
+	data.hair_style = int(morph_mix / 3.0) % 4
 	data.hair_color = parent_a.hair_color.lerp(parent_b.hair_color, 0.5)
 	data.apparel_color = parent_a.apparel_color.lerp(parent_b.apparel_color, 0.5)
 	data.initialize_affinities(birth_tick, parent_a.id, parent_b.id)

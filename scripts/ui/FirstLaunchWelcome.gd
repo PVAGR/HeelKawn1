@@ -137,18 +137,17 @@ func _has_been_shown() -> bool:
 	if FileAccess.file_exists(SAVE_PATH):
 		var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.READ)
 		var json: JSON = JSON.new()
-		var error: Error = json.parse(file.get_as_text())
+		var parse_result: Error = json.parse(file.get_as_text())
 		file.close()
-		if error == OK:
+		if parse_result == OK:
 			return json.data.get("shown", false)
 	return false
 
 
 func _save_shown() -> void:
 	var file: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	var json: JSON = JSON.new()
 	var data: Dictionary = {"shown": true}
-	file.store_string(json.stringify(data))
+	file.store_string(JSON.stringify(data))
 	file.close()
 
 

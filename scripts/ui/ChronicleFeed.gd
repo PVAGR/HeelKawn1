@@ -32,8 +32,6 @@ var _feed: RichTextLabel
 var _bg: ColorRect
 var _visible: bool = true
 var _last_seen_event_count: int = 0
-var _last_refresh_tick: int = 0
-var _cached_lines: Array[String] = []
 var _header: Label
 
 

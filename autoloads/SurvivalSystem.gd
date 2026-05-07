@@ -167,22 +167,19 @@ func _decay_thirst(data: RefCounted, work_mult: float) -> void:
 
 
 func _decay_energy(data: RefCounted, work_mult: float) -> void:
-	if data.rest == null and data.energy == null:
+	if data.rest == null:
 		return
 
-	var energy_key: String = "energy" if data.energy != null else "rest"
 	var decay: float = ENERGY_DECAY_RATE * work_mult
 
-	var cur_energy = data.get(energy_key)
-	var energy_val: float = cur_energy if cur_energy != null else 100.0
-	data.set(energy_key, maxf(0.0, energy_val - decay))
+	var cur_rest = data.rest
+	var rest_val: float = cur_rest if cur_rest != null else 100.0
+	data.rest = maxf(0.0, rest_val - decay)
 
 	# Apply moodlet
-	var check_energy = data.get(energy_key)
-	var check_val: float = check_energy if check_energy != null else 100.0
-	if check_val < 20:
+	if data.rest < 20:
 		_apply_moodlet(data, "exhausted")
-	elif check_val > 80:
+	elif data.rest > 80:
 		_apply_moodlet(data, "rested")
 
 
@@ -207,10 +204,12 @@ func _regulate_temperature(pawn: Node, tick: int) -> void:
 	# Get environmental temperature (from tile/weather)
 	var env_temp: float = _get_environmental_temperature(pawn)
 
-	# Wetness affects cold exposure
+	# Wetness affects cold exposure (if wetness property exists)
 	var wet_mult: float = 1.0
-	if data.wetness != null and data.wetness > 50:
-		wet_mult = WET_COLD_MULT
+	if data.has_method("get") and data.get("wetness") != null:
+		var wetness_val = data.get("wetness")
+		if wetness_val != null and wetness_val > 50:
+			wet_mult = WET_COLD_MULT
 	
 	# Adjust towards environmental temperature
 	if env_temp < 10:  # Cold environment
@@ -466,18 +465,16 @@ func water_pawn(pawn: Node, water_value: float) -> void:
 ## Rest pawn (restore energy)
 func rest_pawn(pawn: Node, rest_value: float) -> void:
 	var data: RefCounted = pawn.data
-	var energy_key: String = "energy" if data.energy != null else "rest"
-	if data.get(energy_key) != null:
-		var e_val: float = data.get(energy_key)
-		data.set(energy_key, minf(100.0, e_val + rest_value))
+	if data.rest != null:
+		data.rest = minf(100.0, data.rest + rest_value)
 
 ## Get survival status for pawn
 func get_survival_status(pawn: Node) -> Dictionary:
 	var data: RefCounted = pawn.data
 	var _h = data.get("hunger"); var hunger: float = _h if _h != null else 100.0
 	var _t = data.get("thirst"); var thirst: float = _t if _t != null else 100.0
-	var _e = data.get("energy"); var _r = data.get("rest")
-	var energy: float = (_e if _e != null else (_r if _r != null else 100.0))
+	var _r = data.get("rest")
+	var rest: float = _r if _r != null else 100.0
 	var _s = data.get("stamina"); var stamina: float = _s if _s != null else 100.0
 	var _bt = data.get("body_temperature"); var temperature: float = _bt if _bt != null else 37.0
 	var _p = data.get("pain"); var pain: float = _p if _p != null else 0.0
@@ -486,7 +483,7 @@ func get_survival_status(pawn: Node) -> Dictionary:
 	return {
 		"hunger": hunger,
 		"thirst": thirst,
-		"energy": energy,
+		"rest": rest,
 		"stamina": stamina,
 		"temperature": temperature,
 		"pain": pain,

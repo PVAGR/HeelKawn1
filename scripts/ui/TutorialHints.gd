@@ -181,8 +181,10 @@ func _check_player_near_resource() -> bool:
 		return false
 
 	# Simplified: just check if player has no resources
-	var inventory: Dictionary = pg.player_inventory if pg.has("player_inventory") else {}
-	return (inventory["wood"] if inventory.has("wood") else 0) == 0 and (inventory["stone"] if inventory.has("stone") else 0) == 0
+	var inventory: Dictionary = pg.get("player_inventory") if pg.has_method("get") else {}
+	if inventory == null:
+		inventory = {}
+	return (inventory.get("wood", 0) if inventory.has("wood") else 0) == 0 and (inventory.get("stone", 0) if inventory.has("stone") else 0) == 0
 
 
 func _check_memorial_created() -> bool:

@@ -97,17 +97,17 @@ func scan_resources(tile: Vector2i, radius: int = 20) -> Dictionary:
 	# Check cache first
 	for x in range(tile.x - radius, tile.x + radius):
 		for y in range(tile.y - radius, tile.y + radius):
-			var check_tile: Vector2i = Vector2i(x, y)
-			if _resource_cache.has(check_tile):
-				var cached: String = _resource_cache[check_tile]
+			var _check_tile: Vector2i = Vector2i(x, y)
+			if _resource_cache.has(_check_tile):
+				var cached: String = _resource_cache[_check_tile]
 				if cached in resources:
 					resources[cached] += 1
-	
+
 	# If cache miss, scan world
 	if _world != null and _world.data != null:
 		for x in range(tile.x - radius, tile.x + radius):
 			for y in range(tile.y - radius, tile.y + radius):
-				var check_tile: Vector2i = Vector2i(x, y)
+				var _check_tile: Vector2i = Vector2i(x, y)
 				if _world.data.in_bounds(x, y):
 					var biome: int = _world.data.get_biome(x, y)
 					var feature: int = _world.data.get_feature(x, y)
@@ -135,7 +135,7 @@ func scan_resources(tile: Vector2i, radius: int = 20) -> Dictionary:
 # ==================== BUILD INTENT CREATION ====================
 
 ## Create build intents for a pawn/settlement
-func create_build_intents(pawn_id: int, tile: Vector2i, settlement_id: int = -1) -> void:
+func create_build_intents(_pawn_id: int, tile: Vector2i, settlement_id: int = -1) -> void:
 	var resources: Dictionary = scan_resources(tile, 20)
 	
 	# Check what already exists

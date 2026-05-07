@@ -108,40 +108,40 @@ func player_place_memorial(tile: Vector2i, memorial_type: String, associated_paw
 
 
 ## NPC/HeelKawnian autonomously builds memorial for their dead
-func npc_build_memorial(pawn_builder: Node, deceased_pawn: Node, tile: Vector2i) -> void:
+func npc_build_memorial(pawn_builder: Node, deceased_pawn_data: RefCounted, tile: Vector2i) -> void:
 	var memorial_type: String = "grave_marker"
-	
+
 	# Check relationship to determine memorial type
-	if pawn_builder.data != null and deceased_pawn.data != null:
+	if pawn_builder.data != null and deceased_pawn_data != null:
 		# Family member builds memorial
-		if _are_related(int(pawn_builder.data.id), int(deceased_pawn.data.id)):
+		if _are_related(int(pawn_builder.data.id), int(deceased_pawn_data.id)):
 			memorial_type = "memorial_plaque"  # More personal
 		# Grudge enemy might build mocking memorial
-		elif _gossip_manager != null and _gossip_manager.has_grudge(int(pawn_builder.data.id), int(deceased_pawn.data.id)):
+		elif _gossip_manager != null and _gossip_manager.has_grudge(int(pawn_builder.data.id), int(deceased_pawn_data.id)):
 			memorial_type = "ruin_marker"  # Minimal, dismissive
-	
+
 	create_memorial({
 		"tile": tile,
 		"type": memorial_type,
-		"associated_pawns": [int(deceased_pawn.data.id)],
+		"associated_pawns": [int(deceased_pawn_data.id)],
 		"built_by": "npc",
-		"event_id": _get_event_id_for_death(int(deceased_pawn.data.id))
+		"event_id": _get_event_id_for_death(int(deceased_pawn_data.id))
 	})
 
 
 ## Create mass memorial for multiple deaths (battle, disaster, etc.)
-func create_mass_memorial(tile: Vector2i, deceased_pawns: Array[Node], event_name: String, event_description: String) -> int:
+func create_mass_memorial(tile: Vector2i, deceased_pawns: Array[RefCounted], event_name: String, event_description: String) -> int:
 	var pawn_ids: Array[int] = []
-	for pawn in deceased_pawns:
-		if pawn.data != null:
-			pawn_ids.append(int(pawn.data.id))
-	
+	for pawn_data in deceased_pawns:
+		if pawn_data != null:
+			pawn_ids.append(int(pawn_data.id))
+
 	var inscription: String = "%s\n\n%s" % [event_name, event_description]
 	inscription += "\n\nHere fell:\n"
-	for pawn in deceased_pawns:
-		if pawn.data != null:
-			inscription += "• %s\n" % pawn.data.display_name
-	
+	for pawn_data in deceased_pawns:
+		if pawn_data != null:
+			inscription += "• %s\n" % pawn_data.display_name
+
 	return create_memorial({
 		"tile": tile,
 		"type": "mass_grave",
@@ -152,11 +152,11 @@ func create_mass_memorial(tile: Vector2i, deceased_pawns: Array[Node], event_nam
 
 
 ## Create memorial for pawn death
-func create_death_memorial(pawn_data: Node, death_tile: Vector2i, violent: bool = false) -> void:
+func create_death_memorial(pawn_data: RefCounted, death_tile: Vector2i, violent: bool = false) -> void:
 	var memorial_type: String = "grave_marker"
 	if violent:
 		memorial_type = "memorial_plaque"
-	
+
 	create_memorial({
 		"tile": death_tile,
 		"type": memorial_type,

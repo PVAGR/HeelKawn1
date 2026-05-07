@@ -20,16 +20,26 @@ func _ready() -> void:
 	if _has_been_shown():
 		queue_free()
 		return
-	
+
 	# Build UI
 	_build_ui()
 	
-	# Show on top (CanvasLayer)
-	var canvas: CanvasLayer = CanvasLayer.new()
-	canvas.layer = 200
-	canvas.add_child(self)
-	get_tree().root.add_child(canvas)
+	# Move to CanvasLayer (avoids parenting conflicts with Main.gd)
+	call_deferred("_move_to_canvas_layer")
 	visible = true
+
+
+func _move_to_canvas_layer() -> void:
+	# Only move if not already in a CanvasLayer
+	if get_parent() != null and get_parent() is CanvasLayer:
+		return
+	
+	# Create CanvasLayer and move self to it
+	var canvas: CanvasLayer = CanvasLayer.new()
+	canvas.name = "FirstLaunchWelcomeCanvas"
+	canvas.layer = 200
+	get_tree().root.add_child(canvas)
+	reparent(canvas)
 
 
 func _build_ui() -> void:

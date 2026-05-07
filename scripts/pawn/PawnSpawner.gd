@@ -238,13 +238,15 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		_assign_heterogeneous_profession(data, rng)
 
 		var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
-		if bloodline_sys != null and bloodline_sys.has_method("create_bloodline"):
+		if bloodline_sys != null:
 			# Pass founder_id, founder_name, and specialization_key
 			var spec_key: String = ""
 			if data.has_method("highest_affinity_skill"):
 				spec_key = str(data.highest_affinity_skill())
-			# Direct method call (Godot 4.x compatible)
-			data.bloodline_id = bloodline_sys.create_bloodline(data.id, data.display_name, spec_key)
+			# Call with explicit arguments (Godot 4.x)
+			var result: Variant = bloodline_sys.create_bloodline(data.id, data.display_name, spec_key)
+			if typeof(result) == TYPE_INT:
+				data.bloodline_id = result
 
 		var pawn: Pawn = pawn_scene.instantiate() as Pawn
 		pawn.bind(data, world.tile_to_world(tile), world)

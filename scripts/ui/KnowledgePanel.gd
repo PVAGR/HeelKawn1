@@ -41,15 +41,21 @@ var _pawn_spawner: Node = null
 var _current_settlement_id: int = -1
 
 @onready var _settlement_label: Label = $MarginContainer/VBoxContainer/SettlementLabel
-@onready var _carriers_list: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/Content/CarriersList
-@onready var _at_risk_list: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/Content/AtRiskList
-@onready var _dormant_list: VBoxContainer = $MarginContainer/VBoxContainer/ScrollContainer/Content/DormantList
+@onready var _carriers_list: VBoxContainer = _get_node_safe("MarginContainer/VBoxContainer/ScrollContainer/Content/CarriersList")
+@onready var _at_risk_list: VBoxContainer = _get_node_safe("MarginContainer/VBoxContainer/ScrollContainer/Content/AtRiskList")
+@onready var _dormant_list: VBoxContainer = _get_node_safe("MarginContainer/VBoxContainer/ScrollContainer/Content/DormantList")
 @onready var _close_button: Button = $MarginContainer/VBoxContainer/CloseButton
 
 
 func _ready() -> void:
 	_knowledge_system = get_node_or_null("/root/KnowledgeSystem")
 	_pawn_spawner = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
+	
+	# Verify critical nodes exist
+	if not _verify_nodes():
+		push_error("[KnowledgePanel] Missing required nodes - panel will not display correctly")
+		visible = false
+		return
 	
 	_close_button.pressed.connect(_on_close_pressed)
 	
@@ -58,8 +64,26 @@ func _ready() -> void:
 	
 	# Build initial (empty) lists
 	_build_carrier_list()
-	_build_at_risk_list()
-	_build_dormant_list()
+
+
+func _verify_nodes() -> bool:
+	return (
+		_settlement_label != null and
+		_carriers_list != null and
+		_at_risk_list != null and
+		_dormant_list != null and
+		_close_button != null
+	)
+
+
+func _get_node_safe(path: String) -> VBoxContainer:
+	var node = get_node_or_null(path)
+	if node == null:
+		# Create fallback node if path doesn't exist
+		node = VBoxContainer.new()
+		node.name = path.split("/")[-1]
+		add_child(node)
+	return node
 
 
 func _input(event: InputEvent) -> void:

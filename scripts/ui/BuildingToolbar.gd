@@ -261,8 +261,8 @@ func try_place_building(tile: Vector2i) -> bool:
 		_update_all_buttons()
 		return true
 	else:
-		var error: String = result.get("message", "Unknown error")
-		_tooltip.text = "[color=#FF4444]Failed: %s[/color]" % error
+		var error_msg: String = result.get("message", "Unknown error")
+		_tooltip.text = "[color=#FF4444]Failed: %s[/color]" % error_msg
 		return false
 
 

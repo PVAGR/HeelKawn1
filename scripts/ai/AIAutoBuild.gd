@@ -180,7 +180,7 @@ func create_build_intents(_pawn_id: int, tile: Vector2i, settlement_id: int = -1
 		_create_build_intent(BuildPriority.AMBITION, "great_hall", tile, settlement_id)
 
 
-func _check_existing_structures(tile: Vector2i, resources: Dictionary, settlement_id: int) -> void:
+func _check_existing_structures(tile: Vector2i, resources: Dictionary, _settlement_id: int) -> void:
 	# Check for existing structures in area
 	if _settlement_memory != null:
 		var buildings: Array = _settlement_memory.get_buildings_near(tile, 20)
@@ -257,7 +257,7 @@ func _get_required_resources(build_type: String) -> Dictionary:
 
 # ==================== INTENT PROCESSING ====================
 
-func _process_build_intents(tick: int) -> void:
+func _process_build_intents(_tick: int) -> void:
 	# Sort intents by priority (lower = higher priority)
 	build_intents.sort_custom(func(a, b): return a.priority < b.priority)
 	

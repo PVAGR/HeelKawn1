@@ -26,8 +26,26 @@ var _update_timer: float = 0.0
 func _ready() -> void:
 	_survival_system = get_node_or_null("/root/SurvivalSystem")
 	
+	# Verify all required nodes exist before using them
+	if not _verify_nodes():
+		push_error("[SurvivalHUD] Missing required nodes - HUD will not display correctly")
+		set_process(false)
+		return
+	
 	# Hide status container initially
 	status_container.visible = false
+
+
+func _verify_nodes() -> bool:
+	# Check all @onready variables are valid
+	return (
+		hunger_bar != null and
+		thirst_bar != null and
+		energy_bar != null and
+		temp_label != null and
+		health_bar != null and
+		status_container != null
+	)
 
 
 func _process(delta: float) -> void:

@@ -93,7 +93,7 @@ func _build_recipe_list() -> void:
 		var btn: Button = Button.new()
 		btn.name = recipe_key
 		btn.custom_minimum_size = Vector2(360, 60)
-		btn.text_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.horizontal_text_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		btn.pressed.connect(_on_craft_pressed.bind(recipe_key))
 		btn.mouse_entered.connect(_on_recipe_hovered.bind(recipe_key))
 		_recipes_list.add_child(btn)

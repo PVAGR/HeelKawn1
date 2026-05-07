@@ -1241,7 +1241,7 @@ func _start_pilgrimage_to_memorial(memorial: Dictionary) -> void:
 	_current_job = null  # Clear any job
 	_path = path
 	_target_tile = target_tile
-	_target_world_pos = _world.tile_to_center_pos(target_tile)
+	_target_world_pos = _world.tile_to_world(target_tile)
 	
 	if GameManager.verbose_logs():
 		print("[Pawn] %s starting pilgrimage to memorial at (%d,%d)" % [

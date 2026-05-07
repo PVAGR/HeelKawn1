@@ -2954,16 +2954,21 @@ func _tick_idle() -> void:
 	var job: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(priority_cb, profession_bonus))
 	if job != null:
 		_begin_job(job)
-		
+
 		# LOG COMMUNICATION: Announce work to nearby pawns
 		if data != null and PawnCommunicationLog != null:
 			PawnCommunicationLog.log_work_announcement(
-				int(data.id), 
-				data.display_name, 
-				job.type, 
+				int(data.id),
+				data.display_name,
+				job.type,
 				job.work_tile,
 				"Priority: %d" % job.priority
 			)
+
+		# SHOW CHATTER BUBBLE: Visible speech bubble above pawn
+		if data != null and PawnChatterBubbles != null:
+			PawnChatterBubbles.show_work_bubble(int(data.id), self, job.type)
+
 		return
 	# 7. Nothing to do: idle wander
 	var wanderlust2: float = lerpf(0.52, 1.68, _bp(3))

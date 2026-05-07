@@ -18,20 +18,23 @@ const WILDLIFE_HISTORY_SIZE: int = 8
 const WILDLIFE_NEARBY_RADIUS_TILES: int = 14
 const SHOW_REFRESH_DIAG: bool = true
 
-const PANEL_BG: Color = Color(0.05, 0.06, 0.08, 0.85)
-const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.70)
+const PANEL_BG: Color = Color(0.05, 0.06, 0.08, 0.88)
+const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.75)
 
-# Tuned to be unobtrusive: thin top-left strip, easy to read, doesn't
-# eat the world.
-const FONT_SIZE_BODY: int = 10
-const FONT_SIZE_HOTKEYS: int = 9
-const FONT_SIZE_COMPACT: int = 8
-const PANEL_PAD_X: int = 8
-const PANEL_PAD_Y: int = 6
+# SPECTATOR MODE: Compact, readable, unobtrusive
+const FONT_SIZE_BODY: int = 11
+const FONT_SIZE_HOTKEYS: int = 10
+const FONT_SIZE_COMPACT: int = 9
+const PANEL_PAD_X: int = 10
+const PANEL_PAD_Y: int = 8
 ## Readability mode: bigger, simpler HUD for at-a-glance play.
 const SIMPLE_READABLE_HUD: bool = true
 ## Max width for HUD panel (prevents it from taking over screen)
-const PANEL_MAX_WIDTH: int = 420
+const PANEL_MAX_WIDTH: int = 380
+## Max height (prevents vertical overflow)
+const PANEL_MAX_HEIGHT: int = 240
+## Show only essential info in spectator mode
+const SPECTATOR_MODE: bool = true
 
 
 ## Helpers that read from GameSettings when available, falling back to constants.
@@ -245,11 +248,17 @@ func _apply_panel_style() -> void:
 	style.content_margin_top = PANEL_PAD_Y
 	style.content_margin_bottom = PANEL_PAD_Y
 	_panel.add_theme_stylebox_override("panel", style)
-	
-	# Set max width to prevent panel from taking over screen
+
+	# Set max size to prevent panel from taking over screen
 	_panel.custom_minimum_size = Vector2(PANEL_MAX_WIDTH, 0)
+	_panel.custom_minimum_size.y = PANEL_MAX_HEIGHT
 	_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	
+	_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+
+	# Enable text wrapping to prevent overflow
+	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
 	_label.add_theme_font_size_override("normal_font_size", _get_font_size())
 	_label.add_theme_font_size_override("bold_font_size", _get_font_size())
 	_label.add_theme_constant_override("line_spacing", 4)  # Better line spacing

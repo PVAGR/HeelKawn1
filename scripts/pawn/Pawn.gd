@@ -6293,7 +6293,8 @@ func _record_consciousness_event(event_type: String, description: String, emotio
 		return
 	if data == null:
 		return
-	pc.record_memory(int(data.id), event_type, description, emotion, importance, category, [], data.tile_pos)
+	var empty_pawn_ids: Array[int] = []
+	pc.record_memory(int(data.id), event_type, description, emotion, importance, category, empty_pawn_ids, data.tile_pos)
 
 ## Record witnessed death trauma in nearby pawns' consciousness
 func _record_witnessed_death_consciousness() -> void:
@@ -6314,7 +6315,8 @@ func _record_witnessed_death_consciousness() -> void:
 		var dist: float = p.global_position.distance_squared_to(global_position)
 		if dist > 2500.0:  # 50px radius
 			continue
-		pc.record_memory(int(p.data.id), "witnessed_death", "Witnessed %s die" % dead_name, -70.0, 8, "trauma", [int(data.id)], p.data.tile_pos)
+		var witness_pawn_ids: Array[int] = [int(data.id)]
+		pc.record_memory(int(p.data.id), "witnessed_death", "Witnessed %s die" % dead_name, -70.0, 8, "trauma", witness_pawn_ids, p.data.tile_pos)
 
 ## Record kin_death grudges for family members of the dead pawn
 func _record_kin_death_grudges() -> void:

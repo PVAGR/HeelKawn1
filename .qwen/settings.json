@@ -17,7 +17,8 @@
       "Bash(copy *)",
       "Bash(move *)",
       "Bash(git reset *)",
-      "Bash(mkdir *)"
+      "Bash(mkdir *)",
+      "Bash(git diff *)"
     ]
   },
   "$version": 3

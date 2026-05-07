@@ -741,12 +741,25 @@ func _report_age() -> void:
 
 
 func _report_settlements() -> void:
-	if SettlementMemory == null or not SettlementMemory.has("settlements"):
+	if SettlementMemory == null:
 		print("[_report_settlements] SettlementMemory not available")
 		return
-	print("settlement_count=%d" % SettlementMemory.settlements.size())
+	
+	# Safe access: SettlementMemory is a Node, check if it has the property
+	var settlements: Variant = null
+	if SettlementMemory.has_method("get"):
+		settlements = SettlementMemory.get("settlements")
+	elif "settlements" in SettlementMemory:
+		settlements = SettlementMemory.settlements
+	
+	if settlements == null:
+		print("[_report_settlements] SettlementMemory.settlements not available")
+		return
+	
+	var settlements_array: Array = settlements as Array
+	print("settlement_count=%d" % settlements_array.size())
 	var i: int = 0
-	for s in SettlementMemory.settlements:
+	for s in settlements_array:
 		if not (s is Dictionary):
 			continue
 		var st: Dictionary = s as Dictionary

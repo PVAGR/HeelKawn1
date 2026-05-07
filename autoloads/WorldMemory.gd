@@ -756,10 +756,13 @@ func record_pawn_death(
 	) -> void:
 	# Throttle: skip if this pawn was already recorded dead recently
 	var pid_key: int = pawn_id
+	var is_first_death: bool = true
 	if _pawn_death_last_tick_by_id.has(pid_key):
 		if tick - int(_pawn_death_last_tick_by_id[pid_key]) < PAWN_DEATH_THROTTLE_TICKS:
-			return
+			return  # Skip duplicate death within throttle window
+		is_first_death = false  # This pawn died before, but outside throttle window
 	_pawn_death_last_tick_by_id[pid_key] = tick
+	
 	var e: Dictionary = {
 		"s": SCHEMA,
 		"k": int(Kind.PAWN_DEATH),
@@ -787,7 +790,7 @@ func record_pawn_death(
 	var ps: Node = _get_pawn_spawner()
 	if ps != null and ps.has_method("pawn_data_for_id"):
 		pawn_data = ps.call("pawn_data_for_id", pawn_id)
-	
+
 	var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
 	if legacy_sys != null and legacy_sys.has_method("record_legacy"):
 		legacy_sys.call("record_legacy", pawn_id, pawn_data, cause)
@@ -800,8 +803,8 @@ func record_pawn_death(
 			age_years = pawn_data.age / 360.0
 		event_overlay.call("notify_death", pawn_name, age_years, cause, pawn_id)
 
-	# TEXT-RICH: Generate and show full pawn biography
-	if pawn_data != null:
+	# TEXT-RICH: Generate and show full pawn biography (ONLY ON FIRST DEATH)
+	if pawn_data != null and is_first_death:
 		var biography: String = _generate_pawn_biography(pawn_data, cause)
 		print("\n[color=#FFD166][b]━━━ BIOGRAPHY: %s ━━━[/b][/color]" % pawn_name)
 		print(biography)

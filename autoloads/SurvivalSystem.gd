@@ -402,7 +402,11 @@ func _apply_moodlets(pawn: Node, tick: int) -> void:
 
 func _check_death_conditions(pawn: Node, tick: int) -> void:
 	var data: RefCounted = pawn.data
-
+	
+	# CRITICAL: Skip death checks for already-dead pawns
+	if data.has("is_dead") and bool(data.get("is_dead", false)):
+		return  # Pawn is already dead - skip all death processing
+	
 	var cause: String = ""
 
 	# Starvation
@@ -433,6 +437,10 @@ func _check_death_conditions(pawn: Node, tick: int) -> void:
 func _apply_death(pawn: Node, cause: String) -> void:
 	var data: RefCounted = pawn.data
 	
+	# CRITICAL: Prevent duplicate death events for already-dead pawns
+	if data.has("is_dead") and bool(data.get("is_dead", false)):
+		return  # Pawn already marked dead - skip duplicate death processing
+	
 	# Record death event
 	if _world_memory != null:
 		_world_memory.record_event({
@@ -442,7 +450,7 @@ func _apply_death(pawn: Node, cause: String) -> void:
 			"cause": cause,
 			"tick": GameManager.tick_count
 		})
-	
+
 	# Kill pawn
 	if pawn.has_method("_die"):
 		pawn.call("_die", cause)

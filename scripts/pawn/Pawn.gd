@@ -1971,7 +1971,7 @@ func _on_path_complete() -> void:
 # ==================== per-tick simulation ====================
 
 func _on_world_tick(_tick: int) -> void:
-	# Hard guard: no sim until bind + _ready + deferred connect completed.
+	# CRITICAL: Hard guard: no sim until bind + _ready + deferred connect completed.
 	if not is_instance_valid(self):
 		return
 	if not _pawn_sim_tick_armed:
@@ -1981,6 +1981,11 @@ func _on_world_tick(_tick: int) -> void:
 	if data == null:
 		push_warning("Pawn: game_tick skipped - data not ready (path=%s)" % str(get_path()))
 		return
+	
+	# CRITICAL: Dead pawns do NOT process ticks - prevents duplicate deaths, biography spam, legacy duplication
+	if data.is_dead:
+		return  # Pawn is already dead - skip all processing
+	
 	## Sync GameManager.tick_count for backward compatibility
 	if GameManager != null:
 		GameManager.tick_count = _tick
@@ -6167,10 +6172,14 @@ func die(_p_cause: String) -> void:
 
 
 func _die(_p_cause: String = "") -> void:
+	# CRITICAL: Mark pawn as dead FIRST to prevent re-entry and duplicate death processing
+	if data != null:
+		data.is_dead = true
+	
 	# Release any held job and bed reservation
 	release_job_if_any()
 	_release_bed_if_reserved()
-	
+
 	# ARCHITECT T006: Unregister pawn from SpatialManager upon death
 	if SpatialManager != null and data != null:
 		SpatialManager.unregister_entity(int(data.id))
@@ -6181,7 +6190,7 @@ func _die(_p_cause: String = "") -> void:
 		if sp != null:
 			sp.add_item(data.carrying, data.carrying_qty)
 	data.clear_carry()
-	
+
 	# Trigger sorrow in nearby pawns who witness the death
 	_trigger_sorrow_in_nearby_pawns()
 	# Record death trauma to consciousness of nearby witnesses

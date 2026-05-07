@@ -51,6 +51,10 @@ var age_years: float = 0.0
 var gender: int = Gender.OTHER
 var tile_pos: Vector2i = Vector2i.ZERO
 
+## Death flag - once true, pawn is dead and should not be processed further
+## This prevents duplicate death events, biography spam, and legacy duplication
+var is_dead: bool = false
+
 ## Display color used by the v1 circle renderer. Will be replaced by a sprite
 ## once we have pawn art. Kept on the data so it survives save/load.
 var color: Color = Color.WHITE

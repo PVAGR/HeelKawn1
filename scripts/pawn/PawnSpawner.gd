@@ -238,17 +238,14 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		_assign_heterogeneous_profession(data, rng)
 
 		var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
-		if bloodline_sys != null and bloodline_sys.has_method("create_bloodline"):
-			# Pass founder_id, founder_name, and specialization_key
-			var spec_key: String = ""
-			if data.has_method("highest_affinity_skill"):
-				spec_key = str(data.highest_affinity_skill())
-			# Call with all 3 arguments (Godot 4.x requires explicit args for default params)
-			var result: Variant = bloodline_sys.create_bloodline(data.id, data.display_name, spec_key)
+		if bloodline_sys != null:
+			# Use establish_bloodline() API (takes founder_id only, returns bloodline_id)
+			# This is the proper deterministic API for spawning new pawns
+			var result: Variant = bloodline_sys.establish_bloodline(data.id)
 			if typeof(result) == TYPE_INT:
 				data.bloodline_id = result
 			else:
-				push_warning("[PawnSpawner] create_bloodline returned non-int value: ", typeof(result))
+				push_warning("[PawnSpawner] establish_bloodline returned non-int value: ", typeof(result))
 
 		var pawn: Pawn = pawn_scene.instantiate() as Pawn
 		pawn.bind(data, world.tile_to_world(tile), world)

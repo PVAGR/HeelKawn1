@@ -6,7 +6,7 @@ extends PanelContainer
 ## - Food production vs consumption
 ## - Knowledge preservation status
 ## - Settlement health metrics
-## - Victory condition progress
+## - Legacy milestone progress
 
 var _vbox: VBoxContainer = null
 var _stats_labels: Dictionary = {}
@@ -81,10 +81,10 @@ func _build_ui() -> void:
 	
 	_vbox.add_child(_make_separator())
 	
-	# Victory progress
-	_add_section_header("🏆 Victory Progress")
-	_add_stat_label("victory_overall", "Overall Completion")
-	_add_stat_label("victory_closest", "Closest Victory")
+	# Legacy milestone progress
+	_add_section_header("Legacy Milestones")
+	_add_stat_label("victory_overall", "Overall Milestone Progress")
+	_add_stat_label("victory_closest", "Closest Milestone")
 	
 	_vbox.add_child(_make_separator())
 	
@@ -177,15 +177,15 @@ func _update_statistics() -> void:
 	_update_label("knowledge_preserved", "Knowledge Types Preserved: %d/26" % knowledge_count)
 	_update_label("knowledge_carriers", "Knowledge Carriers: %d" % carrier_count)
 	
-	# Victory progress
+	# Legacy milestone progress
 	var overall: float = 0.0
 	var closest: String = "None"
 	if _victory_system != null:
 		overall = _victory_system.get_overall_completion()
 		closest = _victory_system.get_closest_victory()
 	
-	_update_label("victory_overall", "Overall Completion: %.1f%%" % overall)
-	_update_label("victory_closest", "Closest Victory: %s" % closest)
+	_update_label("victory_overall", "Overall Milestone Progress: %.1f%%" % overall)
+	_update_label("victory_closest", "Closest Milestone: %s" % closest)
 	
 	# Production
 	var farm_plots: int = 0

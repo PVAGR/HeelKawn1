@@ -170,13 +170,13 @@ Year 2:
 
 ---
 
-### **8. Endgame Status (F10 Debug Menu)**
-**Location:** F10 → #75 Endgame Status
+### **8. Legacy Milestones (F10 Debug Menu)**
+**Location:** F10 → #75 Legacy Milestones
 
 **How to access:**
 1. Press **F10** during gameplay
-2. Click **"75 · Endgame Status"**
-3. See your run completion progress
+2. Click **"75 · Legacy Milestones"**
+3. See historical milestone progress
 
 **What you'll see:**
 ```
@@ -204,7 +204,7 @@ OVERALL RUN COMPLETION: 29.6%
 | **Settlement Legends** | F10 → #72 | Debug menu |
 | **Chronicle View** | F10 → #71 | Debug menu |
 | **Dynasty Tree** | F10 → #74 | Debug menu (new window) |
-| **Endgame Status** | F10 → #75 | Debug menu |
+| **Legacy Milestones** | F10 → #75 | Debug menu |
 
 ---
 

@@ -567,14 +567,18 @@ func _settlement_identity_line() -> String:
 	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(profile_rk)
 	var war_state: String = str(war.get("state", "peace")).replace("_", " ")
 	var gov_txt: String = str(gov.get("type", "anarchy")).replace("_", " ")
+	var era_txt: String = "Primitive"
+	if CivilizationStage != null:
+		var civ_snap: Dictionary = CivilizationStage.get_stage_snapshot(profile_rk)
+		era_txt = str(civ_snap.get("stage_name", era_txt))
 	if _is_simple_hud():
-		return "[color=#c9b37c]Identity:[/color] [b]%s[/b] · %s · %s · war %s · gov %s" % [
-			state_txt.capitalize(), culture_txt.capitalize(), meaning, war_state, gov_txt,
+		return "[color=#c9b37c]Identity:[/color] [b]%s[/b] · %s · %s · era %s · war %s · gov %s" % [
+			state_txt.capitalize(), culture_txt.capitalize(), meaning, era_txt, war_state, gov_txt,
 		]
 	return (
-		"[color=#c9b37c]Identity:[/color] #%d  [b]%s[/b] · %s · intent %s · rev %d  "
+		"[color=#c9b37c]Identity:[/color] #%d  [b]%s[/b] · %s · era %s · intent %s · rev %d  "
 		+ "| meaning %s · rep %s(%d) · war %s · gov %s"
-	) % [profile_rk, state_txt, culture_txt, intent, revival_score, meaning, rep_word, rep, war_state, gov_txt]
+	) % [profile_rk, state_txt, culture_txt, era_txt, intent, revival_score, meaning, rep_word, rep, war_state, gov_txt]
 
 
 static func _demand_tier(p: float) -> String:

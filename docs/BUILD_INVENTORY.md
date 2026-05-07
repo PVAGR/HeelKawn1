@@ -2,54 +2,58 @@
 
 > Comprehensive analysis of what is built vs. what the master plan requires
 
-**Last Updated:** 2026-04-30  
+**Last Updated:** 2026-05-07
 **Analysis Scope:** All autoloads, scripts, docs, and feature specs
+**Authority:** This is the repo's built-vs-missing reality check. See `HEELKAWN_PROJECT_COMPASS.md` for the full truth hierarchy.
+
+**Status label rule:** use **Verified Runtime Complete**, **Implemented but Needs Runtime Verification**, **Partial / Prototype**, or **Vision / TODO**. Older `DONE` language in historical docs should be interpreted as "implemented, then verify in the current runtime" unless this inventory explicitly marks a system verified.
 
 ---
 
-## SECTION 1: COMPLETED KERNEL SYSTEMS ✅
+## SECTION 1: KERNEL SYSTEMS — IMPLEMENTED, VERIFY CURRENT RUNTIME
 
 | System | File | Status | Notes |
 |--------|------|--------|-------|
-| World Memory | `autoloads/WorldMemory.gd` | ✅ DONE | Append-only factual history |
-| World Meaning | `autoloads/WorldMeaning.gd` | ✅ DONE | Derived regional interpretation |
-| World Persistence | `autoloads/WorldPersistence.gd` | ✅ DONE | Scars, ruins, abandonment |
-| Land Recovery | `autoloads/SettlementPersistenceManager.gd` | ✅ DONE | Visual healing |
-| Cultural Memory | `autoloads/CulturalMemory.gd` | ✅ DONE | Inherited reputation |
-| Settlement Memory | `autoloads/SettlementMemory.gd` | ✅ DONE | Clustered regions → places |
-| Settlement Planner | `autoloads/SettlementPlanner.gd` | ✅ DONE | Autonomous building |
-| Settlement Architect | `autoloads/SettlementArchitect.gd` | ✅ DONE | Building placement logic |
-| Settlement Registry | `autoloads/SettlementRegistry.gd` | ✅ DONE | Settlement tracking |
-| Settlement Rebirth | `autoloads/SettlementRebirth.gd` | ✅ DONE | Revival with gates |
-| Animal Spawner/Population | `autoloads/AnimalSpawner.gd`, `autoloads/AnimalPopulation.gd` | ✅ DONE | Seeded ecology |
-| Pawn Behavior | `scripts/pawn/Pawn.gd`, `scripts/pawn/PawnData.gd` | ✅ DONE | Jobs, pathfinding, needs |
-| Job Manager | `autoloads/JobManager.gd` | ✅ DONE | Job queue system |
-| Stockpile System | `autoloads/StockpileManager.gd` | ✅ DONE | Resource storage |
-| Trade Planner | `autoloads/TradePlanner.gd` | ✅ DONE | Trade routes |
-| World Clock | `autoloads/WorldClock.gd` | ✅ DONE | Tick/time management |
-| World RNG | `autoloads/WorldRNG.gd` | ✅ DONE | Seeded randomness |
-| Faction Registry | `autoloads/FactionRegistry.gd` | ⚠️ STUB | House stub per zone only |
-| Religion Lens | `autoloads/ReligionLens.gd` | ⚠️ STUB | Read-only overlay |
-| Meaning Ambiance Controller | `autoloads/MeaningAmbianceController.gd` | ✅ DONE | Audio/visual cues |
+| World Memory | `autoloads/WorldMemory.gd` | Implemented but Needs Runtime Verification | Append-only factual history |
+| World Meaning | `autoloads/WorldMeaning.gd` | Implemented but Needs Runtime Verification | Derived regional interpretation |
+| World Persistence | `autoloads/WorldPersistence.gd` | Implemented but Needs Runtime Verification | Scars, ruins, abandonment |
+| Land Recovery | `autoloads/SettlementPersistenceManager.gd` | Implemented but Needs Runtime Verification | Visual healing |
+| Cultural Memory | `autoloads/CulturalMemory.gd` | Implemented but Needs Runtime Verification | Inherited reputation |
+| Settlement Memory | `autoloads/SettlementMemory.gd` | Implemented but Needs Runtime Verification | Clustered regions → places |
+| Settlement Planner | `autoloads/SettlementPlanner.gd` | Implemented but Needs Runtime Verification | Autonomous building |
+| Settlement Architect | `autoloads/SettlementArchitect.gd` | Implemented but Needs Runtime Verification | Building placement logic |
+| Settlement Registry | `autoloads/SettlementRegistry.gd` | Implemented but Needs Runtime Verification | Settlement tracking |
+| Settlement Rebirth | `autoloads/SettlementRebirth.gd` | Implemented but Needs Runtime Verification | Revival with gates |
+| Animal Spawner/Population | `autoloads/AnimalSpawner.gd`, `autoloads/AnimalPopulation.gd` | Implemented but Needs Runtime Verification | Seeded ecology |
+| Pawn Behavior | `scripts/pawn/Pawn.gd`, `scripts/pawn/PawnData.gd` | Implemented but Needs Runtime Verification | Jobs, pathfinding, needs |
+| HeelKawnian Development Profiles | `autoloads/HeelKawnianManager.gd`, `autoloads/HeelKawnianIdentity.gd` | Partial / Prototype | Derived per-pawn phase/drive/next need; diagnostic/read-only, not action steering yet |
+| Job Manager | `autoloads/JobManager.gd` | Implemented but Needs Runtime Verification | Job queue system |
+| Stockpile System | `autoloads/StockpileManager.gd` | Implemented but Needs Runtime Verification | Resource storage |
+| Trade Planner | `autoloads/TradePlanner.gd` | Implemented but Needs Runtime Verification | Trade routes |
+| World Clock | `autoloads/WorldClock.gd` | Implemented but Needs Runtime Verification | Tick/time management |
+| World RNG | `autoloads/WorldRNG.gd` | Implemented but Needs Runtime Verification | Seeded randomness |
+| Faction Registry | `autoloads/FactionRegistry.gd` | Partial / Prototype | House stub per zone only |
+| Religion Lens | `autoloads/ReligionLens.gd` | Partial / Prototype | Read-only overlay |
+| Meaning Ambiance Controller | `autoloads/MeaningAmbianceController.gd` | Implemented but Needs Runtime Verification | Audio/visual cues |
 
 ---
 
-## SECTION 2: COMPLETED PHASE 4 FEATURES ✅
+## SECTION 2: PHASE 4 FEATURES — IMPLEMENTED, VERIFY CURRENT RUNTIME
 
 | Feature | Implementation | Status |
 |---------|----------------|--------|
-| Cultural divergence (OPEN/CAUTIOUS/DEFENSIVE) | `SettlementPlanner` constants | ✅ DONE |
-| Architecture signature constants | GLOSSARY.md table | ✅ DONE |
-| Revival/rebirth system | `SettlementRebirth.gd` + gates | ✅ DONE |
-| Player-readable meaning (audio) | `MeaningAudioCue.gd` | ✅ DONE |
-| Settlement identity depth | `SettlementMemory` state curve | ✅ DONE |
-| Wildlife HUD trends | `ColonyHUD` / `Main` | ✅ DONE |
-| Scar system | `WorldPersistence` + regional tracking | ✅ DONE |
-| Peace gating | Per-culture peace tick thresholds | ✅ DONE |
+| Cultural divergence (OPEN/CAUTIOUS/DEFENSIVE) | `SettlementPlanner` constants | Implemented but Needs Runtime Verification |
+| Architecture signature constants | GLOSSARY.md table | Implemented but Needs Runtime Verification |
+| Revival/rebirth system | `SettlementRebirth.gd` + gates | Implemented but Needs Runtime Verification |
+| Player-readable meaning (audio) | `MeaningAudioCue.gd` | Implemented but Needs Runtime Verification |
+| Settlement identity depth | `SettlementMemory` state curve | Implemented but Needs Runtime Verification |
+| Wildlife HUD trends | `ColonyHUD` / `Main` | Implemented but Needs Runtime Verification |
+| Scar system | `WorldPersistence` + regional tracking | Implemented but Needs Runtime Verification |
+| Peace gating | Per-culture peace tick thresholds | Implemented but Needs Runtime Verification |
 
 ---
 
-## SECTION 3: INCOMPLETE SYSTEMS — PRIORITY分类
+## SECTION 3: INCOMPLETE SYSTEMS — PRIORITY
 
 ### 🔴 CRITICAL (v1 Essential - Not Yet Implemented)
 
@@ -58,6 +62,7 @@
 | **Skill Trees** | `scripts/pawn/PawnData.gd` | TODO slots at levels 5/10/15/20 - basic/intermediate/advanced/mastery branches not implemented | P0 |
 | **Parent Data Lookup** | `scripts/pawn/PawnData.gd` | TODO - proper `PawnManager` lookup for lineage | P0 |
 | **Child Creation** | `scripts/pawn/Pawn.gd` | TODO stub - `_spawn_child_pawn` placeholder | P0 |
+| **HeelKawnian Behavior Wiring** | `scripts/pawn/Pawn.gd`, `autoloads/JobManager.gd` | Profile layer exists but does not yet bias learn/teach/preserve/practice/innovate decisions | P0 |
 | **Crafting System** | `autoloads/CraftingSystem.gd` | Placeholder - material consumption not connected to inventory | P1 |
 | **Material Consumption** | `autoloads/CraftingSystem.gd` | TODO - consume from pawn inventory/stockpile | P1 |
 | **Tool/Item Check** | `scripts/pawn/Pawn.gd` | TODO - check if pawn has required tool equipped | P1 |
@@ -142,6 +147,8 @@ From `docs/HEELKAWN_STANDALONE_MASTER_PLAN.md` **Section 7** (Must-have v1):
 | WorldMemory expanded | ✅ DONE | — |
 | WorldMeaning prototype | ✅ DONE | — |
 | Historical ruins | ✅ DONE | — |
+| Civilization stage lens | ✅ INITIAL LIVE | Derived era score, not full era simulation |
+| Per-pawn HeelKawnian development AI | ✅ INITIAL LIVE | Derived profile/readout exists; not yet behavior-driving |
 | Birth and death | ⚠️ Basic | No lineage depth |
 | Basic kinship | ⚠️ Stub | No full tree |
 | Food and storage | ✅ DONE | — |
@@ -150,7 +157,7 @@ From `docs/HEELKAWN_STANDALONE_MASTER_PLAN.md` **Section 7** (Must-have v1):
 | Conflict and raids | ⚠️ Basic | — |
 | Local reputation | ⚠️ Partial | — |
 | Region history panel | ⚠️ Focus inspector | — |
-| **Chronicle export** | ��� NOT | No auto-summary |
+| **Chronicle export** | ❌ NOT | No auto-summary |
 | **World seed export** | ❌ NOT | — |
 
 ---
@@ -176,28 +183,30 @@ From `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md`:
 Based on gaps + master plan v1 requirements:
 
 ### P0 - Must Build Next
-1. **Skill Tree System** - `PawnData.gd` skill branching (levels 5/10/15/20)
-2. **Lineage/Kinship System** - Full `KinshipSystem` - parents, children, inheritance
-3. **Embodied Player** - Create player pawn on incarnation entry
+1. **Runtime Truth Pass** - verify UI panels, F10 diagnostics, and red errors in Godot.
+2. **HeelKawnian Behavior Wiring** - feed per-pawn profiles into learning, teaching, preservation, practice, innovation, and recovery choices.
+3. **Skill Tree System** - `PawnData.gd` skill branching (levels 5/10/15/20).
+4. **Lineage/Kinship System** - full parents, children, inheritance, and real child creation.
 
 ### P1 - High Priority
-4. **Crafting Integration** - Connect `_consume_pawn_material` to inventory/stockpile
-5. **Tool/Item System** - Ground items, tool requirements check
-6. **Chronicle Auto-Summary** - Generate readable summaries from WorldMemory
-7. **Exports** - World seed + chronicle export functions
-8. **Governance Forms** - Implement actual leadership selection
+5. **Crafting Integration** - connect `_consume_pawn_material` to inventory/stockpile.
+6. **Tool/Item System** - ground items and tool requirement checks.
+7. **Knowledge Preservation Loop** - stones, books, teaching, literacy, and rediscovery.
+8. **Chronicle Auto-Summary** - generate readable summaries from WorldMemory.
+9. **Exports** - world seed + chronicle export functions.
 
 ### P2 - Medium Priority
-9. **Knowledge Propagation** - Connect `KnowledgeSystem` to teaching
-10. **Full Faction System** - Extend stub to real CK3-style houses
-11. **Taboo System** - Law and custom accumulation
-12. **Diplomacy** - Messenger/treaty foundation
+10. **Civilization Stage Deepening** - initial derived lens is live; add per-settlement tech diffusion, literacy, lifespan, and institution signals.
+11. **Knowledge Propagation** - connect `KnowledgeSystem` to teaching.
+12. **Governance Forms** - implement actual leadership selection.
+13. **Full Faction System** - extend stub to real CK3-style houses.
 
 ### P3 - Future Vision
-13. **Asha/DRUJ Currents**
-14. **Echoes of Dead**
-15. **Era Stack**
-16. **Grand Campaigns**
+14. **Taboo System** - law and custom accumulation.
+15. **Diplomacy** - messenger/treaty foundation.
+16. **Asha/DRUJ Currents**
+17. **Echoes of Dead**
+18. **Grand Campaigns**
 
 ---
 
@@ -211,6 +220,8 @@ Based on gaps + master plan v1 requirements:
 - `autoloads/TechnologySystem.gd` - 1 neighbor lookup placeholder
 - `autoloads/AIAgentManager.gd` - 1 observation placeholder
 - `scripts/pawn/PawnData.gd` - parent lookup placeholder
+- `autoloads/CivilizationStage.gd` - initial derived era lens; deepen with future institution metrics
+- `autoloads/HeelKawnianManager.gd` - initial derived individual profile lens; wire into pawn behavior
 
 ### Stub classes (5)
 - `SimVision.gd` - Roadmap design surface
@@ -223,7 +234,7 @@ Based on gaps + master plan v1 requirements:
 
 ## CONCLUSION
 
-The **kernel is solid and deterministic**. The simulation runs well.
+The kernel has a strong deterministic foundation and currently passes headless smoke checks. Full editor/runtime validation remains the gate for "Verified Runtime Complete" labels.
 
 **What's built:**
 - Core world simulation (tick, memory, persistence)
@@ -240,4 +251,4 @@ The **kernel is solid and deterministic**. The simulation runs well.
 - Religion/metaphysics hooks
 - Long-vision (travel, clans, eras)
 
-**Recommended next step:** Build the skill tree system and kinship graph to give NPCs real heritage and progression depth.
+**Recommended next step:** Run the runtime truth pass, then wire HeelKawnian development profiles into real behavior before expanding the skill tree and kinship graph.

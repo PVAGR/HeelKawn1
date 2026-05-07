@@ -1,14 +1,15 @@
 extends Node
-## VictorySystem - Endgame conditions and victory tracking
+## VictorySystem - Legacy milestones and historical progress tracking
 ##
-## Tracks progress toward victory conditions:
-## - Legacy Victory: Reach 1000 legacy score
-## - Dynasty Victory: Found 3 dynasties with 20+ members each
-## - Knowledge Victory: Preserve all 26 knowledge types
-## - Population Victory: Reach 100 pawns across settlements
-## - Culture Victory: Establish 5 active settlements
+## The autoload name is retained for compatibility, but HeelKawn has no final
+## victory screen. These are legacy conditions / historical milestones:
+## - Legacy Milestone: Reach 1000 legacy score
+## - Dynasty Milestone: Found 3 dynasties with 20+ members each
+## - Knowledge Milestone: Preserve all 26 knowledge types
+## - Population Milestone: Reach 100 pawns across settlements
+## - Culture Milestone: Establish 5 active settlements
 
-# Victory condition definitions
+# Legacy milestone definitions
 const VICTORY_CONDITIONS: Dictionary = {
 	"legacy": {"target": 1000, "current": 0, "description": "Accumulate 1000 Legacy Score"},
 	"dynasty": {"target": 3, "current": 0, "description": "Found 3 dynasties with 20+ members"},
@@ -17,11 +18,12 @@ const VICTORY_CONDITIONS: Dictionary = {
 	"culture": {"target": 5, "current": 0, "description": "Establish 5 active settlements"}
 }
 
-# Victory progress tracking
+# Legacy milestone progress tracking
 var victory_progress: Dictionary = {}
 var game_won: bool = false
 var victory_type: String = ""
 var victory_tick: int = -1
+var reached_milestones: Dictionary = {}
 
 # References
 @onready var _legacy_system: Node = null
@@ -39,9 +41,10 @@ func _ready() -> void:
 	_pawn_spawner = _get_pawn_spawner()
 	_world_memory = get_node_or_null("/root/WorldMemory")
 	
-	# Initialize victory progress
+	# Initialize legacy milestone progress
 	for condition in VICTORY_CONDITIONS.keys():
 		victory_progress[condition] = 0
+		reached_milestones[condition] = false
 
 
 func _get_pawn_spawner() -> Node:
@@ -52,18 +55,18 @@ func _get_pawn_spawner() -> Node:
 
 
 func _on_game_tick(tick: int) -> void:
-	# Check victory conditions every 100 ticks
+	# Check legacy milestones every 100 ticks
 	if tick % 100 == 0:
 		_update_victory_progress(tick)
 		_check_victory_conditions(tick)
 
 
 func _update_victory_progress(tick: int) -> void:
-	# Legacy Victory
+	# Legacy milestone
 	if _legacy_system != null:
 		victory_progress["legacy"] = _legacy_system._legacy_score
 	
-	# Dynasty Victory
+	# Dynasty milestone
 	var large_dynasties: int = 0
 	if _legacy_system != null and "dynasties" in _legacy_system:
 		for dynasty in _legacy_system.dynasties.values():
@@ -71,7 +74,7 @@ func _update_victory_progress(tick: int) -> void:
 				large_dynasties += 1
 	victory_progress["dynasty"] = large_dynasties
 	
-	# Knowledge Victory
+	# Knowledge milestone
 	var preserved_knowledge: int = 0
 	if _knowledge_system != null and "record_carriers" in _knowledge_system:
 		var knowledge_types: Dictionary = {}
@@ -81,14 +84,14 @@ func _update_victory_progress(tick: int) -> void:
 		preserved_knowledge = knowledge_types.size()
 	victory_progress["knowledge"] = preserved_knowledge
 	
-	# Population Victory
+	# Population milestone
 	var pawn_spawner: Node = _pawn_spawner
 	if pawn_spawner == null:
 		pawn_spawner = _get_pawn_spawner()
 	if pawn_spawner != null:
 		victory_progress["population"] = pawn_spawner.pawns.size()
 	
-	# Culture Victory
+	# Culture milestone
 	var active_settlements: int = 0
 	if _settlement_memory != null:
 		for settlement in _settlement_memory.settlements:
@@ -100,73 +103,73 @@ func _update_victory_progress(tick: int) -> void:
 
 
 func _check_victory_conditions(tick: int) -> void:
-	if game_won:
-		return  # Already won
-	
 	for condition in VICTORY_CONDITIONS.keys():
+		if bool(reached_milestones.get(condition, false)):
+			continue
+
 		var target: int = VICTORY_CONDITIONS[condition].target
 		var current: int = victory_progress[condition]
 		
 		if current >= target:
 			_trigger_victory(condition, tick)
-			return  # Only one victory at a time
 
 
 func _trigger_victory(condition: String, tick: int) -> void:
+	reached_milestones[condition] = true
 	game_won = true
 	victory_type = condition
 	victory_tick = tick
 	
-	# Record victory event
+	# Record legacy milestone event
 	if _world_memory != null:
 		_world_memory.record_event({
-			"type": "victory_achieved",
-			"victory_type": condition,
+			"type": "legacy_milestone_reached",
+			"milestone_type": condition,
 			"final_score": victory_progress[condition],
 			"tick": tick
 		})
 	
-	# Show victory notification
+	# Show legacy milestone notification
 	_show_victory_message(condition)
 	
 	if OS.is_debug_build():
-		print("[Victory] Game won via %s condition!" % condition)
+		print("[Legacy] Historical milestone reached via %s condition." % condition)
 
 
 func _show_victory_message(condition: String) -> void:
 	var messages: Dictionary = {
-		"legacy": "🏆 LEGACY VICTORY! Your legacy echoes through the ages!",
-		"dynasty": "👑 DYNASTY VICTORY! Your bloodline dominates the land!",
-		"knowledge": "📚 KNOWLEDGE VICTORY! Wisdom prevails over ignorance!",
-		"population": "👥 POPULATION VICTORY! Your civilization flourishes!",
-		"culture": "🏛️ CULTURE VICTORY! Your influence spans the land!"
+		"legacy": "LEGACY MILESTONE: A life echoes through the ages.",
+		"dynasty": "DYNASTY MILESTONE: A bloodline endures long enough to matter.",
+		"knowledge": "KNOWLEDGE MILESTONE: Knowledge survived beyond its carriers.",
+		"population": "POPULATION MILESTONE: The settlement endured into scale.",
+		"culture": "CULTURE MILESTONE: Influence hardened into history."
 	}
 	
-	var message: String = messages.get(condition, "🎉 VICTORY! You have triumphed!")
+	var message: String = messages.get(condition, "LEGACY MILESTONE: History took notice.")
 	print("\n" + message)
-	print("Final Score: %d/%d" % [victory_progress[condition], VICTORY_CONDITIONS[condition].target])
-	print("Completed in %d ticks (%.1f years)\n" % [victory_tick, float(victory_tick) / 360.0])
+	print("Milestone Score: %d/%d" % [victory_progress[condition], VICTORY_CONDITIONS[condition].target])
+	print("Recorded after %d ticks (%.1f years)\n" % [victory_tick, float(victory_tick) / 360.0])
 
 
 # ==================== Public API ====================
 
-## Get current victory progress
+## Get current legacy milestone progress
 func get_victory_progress() -> Dictionary:
 	return victory_progress.duplicate()
 
-## Get victory condition details
+## Get legacy milestone details
 func get_victory_conditions() -> Dictionary:
 	return VICTORY_CONDITIONS.duplicate()
 
-## Check if game is won
+## Compatibility API: true after the first major legacy milestone is reached.
 func is_game_won() -> bool:
 	return game_won
 
-## Get victory type (if won)
+## Get legacy milestone type (if reached)
 func get_victory_type() -> String:
 	return victory_type
 
-## Get victory tick (if won)
+## Get legacy milestone tick (if reached)
 func get_victory_tick() -> int:
 	return victory_tick
 
@@ -187,7 +190,7 @@ func get_overall_completion() -> float:
 		total += get_progress_percent(condition)
 	return total / float(VICTORY_CONDITIONS.size())
 
-## Get the closest victory condition
+## Get the closest legacy milestone
 func get_closest_victory() -> String:
 	var closest: String = ""
 	var highest_percent: float = 0.0
@@ -200,26 +203,27 @@ func get_closest_victory() -> String:
 	
 	return closest
 
-## Debug: Set victory progress (for testing)
+## Debug: Set legacy milestone progress (for testing)
 func debug_set_progress(condition: String, value: int) -> void:
 	if VICTORY_CONDITIONS.has(condition):
 		victory_progress[condition] = value
-		print("[Victory] Debug: Set %s to %d/%d" % [
+		print("[Legacy] Debug: Set %s to %d/%d" % [
 			condition, value, VICTORY_CONDITIONS[condition].target
 		])
 
-## Debug: Trigger immediate victory (for testing)
+## Debug: Trigger immediate legacy milestone (for testing)
 func debug_trigger_victory(condition: String) -> void:
 	if VICTORY_CONDITIONS.has(condition):
 		victory_progress[condition] = VICTORY_CONDITIONS[condition].target
 		_trigger_victory(condition, GameManager.tick_count)
 
-## Get victory statistics for endgame screen
+## Get legacy milestone statistics for progress screens
 func get_victory_stats() -> Dictionary:
 	var stats: Dictionary = {
 		"game_won": game_won,
 		"victory_type": victory_type,
 		"victory_tick": victory_tick,
+		"reached_milestones": reached_milestones.duplicate(),
 		"progress": victory_progress.duplicate(),
 		"conditions": VICTORY_CONDITIONS.duplicate(),
 		"overall_completion": get_overall_completion()

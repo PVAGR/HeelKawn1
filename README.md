@@ -31,27 +31,32 @@ HeelKawn IS:
 
 | Metric | Status |
 |--------|--------|
-| **Current Phase** | Phase 5 - Emergent Life |
-| **Overall Progress** | ~90% complete |
-| **Kernel Health** | 🟢 Stable |
-| **Last Updated** | May 5, 2026 |
-| **Shipped Systems** | 45+ |
+| **Current Focus** | Consolidation toward a truthful v1 foundation |
+| **Kernel Health** | 🟢 Godot headless smoke passes |
+| **Last Updated** | May 7, 2026 |
+| **Project Shape** | Large playable prototype, not a final release candidate |
+| **North Star** | Indefinite deterministic civilization simulation |
 
 **What Works Now:**
-- ✅ Full pawn AI with needs, skills, professions (5 diverse roles)
+- ✅ Pawn AI with needs, skills, jobs, and professions
 - ✅ Settlement lifecycle (active → abandoned → reviving)
 - ✅ Knowledge system (18 types, inscribe on stones, read them)
 - ✅ Grudge & gossip systems (emergent social dynamics)
-- ✅ Legacy & dynasty tracking (multi-generational)
+- ✅ Legacy, memory, and dynasty-facing systems in active development
 - ✅ Text-rich storytelling (biographies, legends, chronicles)
-- ✅ Performance optimized (stable at 100x speed)
+- ✅ Performance work and diagnostics are present
+- ✅ Civilization stage lens derives a live era label from world state
+- ✅ HeelKawnian development profiles derive per-pawn phase, drive, next need, skills, knowledge, and era context
 
 **What's Next:**
-- 🔶 Trade system (inter-settlement caravans)
-- 🔶 Wildlife population (hunt-able animals)
-- 🔶 Polish pass (incarnation UI, F10 organization)
+- 🔶 Runtime truth pass in Godot: verify UI, F10 diagnostics, and red errors
+- 🔶 Wire HeelKawnian profiles into pawn behavior: learn, teach, preserve, practice, innovate, and recover
+- 🔶 Lineage/progression: parent lookup, child creation, skill branches
+- 🔶 Material reality: crafting consumes real inventory/stockpile resources
+- 🔶 Indefinite evolution foundation: deepen era/stage tracking from real world state
 
-**See full plan:** [`docs/MASTER_DEVELOPMENT_PLAN.md`](docs/MASTER_DEVELOPMENT_PLAN.md)
+**Start with:** [`docs/HEELKAWN_PROJECT_COMPASS.md`](docs/HEELKAWN_PROJECT_COMPASS.md) and [`docs/HEELKAWN_BLUEPRINT.md`](docs/HEELKAWN_BLUEPRINT.md)
+**Then see:** [`docs/HEELKAWN_STATE.md`](docs/HEELKAWN_STATE.md), [`docs/BUILD_INVENTORY.md`](docs/BUILD_INVENTORY.md), and [`docs/HEELKAWNIAN_EVOLUTION_SYSTEM.md`](docs/HEELKAWNIAN_EVOLUTION_SYSTEM.md)
 
 ---
 
@@ -69,17 +74,23 @@ HeelKawn IS:
 - **Interactive Reading** - Right-click stones to read inscribed knowledge
 - **Knowledge Death** - If last carrier dies without inscribing, knowledge is lost forever
 
+### **HeelKawnian Development AI**
+- **Stable Soul Identity** - Pawns receive deterministic identity anchors that can carry memory and traits
+- **Development Profiles** - Each pawn gets a derived phase, drive, next need, knowledge summary, and skill summary
+- **Era Context** - Individual profiles include the current civilization stage so personal growth stays rooted in the world
+- **Debug Visibility** - F10 #49 prints sample HeelKawnian profiles for inspection
+
 ### **👨‍👩‍👧‍👦 Dynasty System**
 - **Family Trees** - Track generations visually
 - **Legacy Scoring** - Measure your impact (children, knowledge, buildings, students)
 - **Succession** - Heirs inherit from ancestors
-- **Endgame Goals** - Complete runs by achieving legacy milestones
+- **Legacy Milestones** - Historical markers replace final win states
 
-### **🎭 Incarnation Mode**
+### **🎭 Incarnation Mode Roadmap**
 - **Spectator Mode** - Omniscient view with full UI
-- **Incarnated Mode** - Experience world through pawn's senses (UI hides)
-- **Knowledge Fog** - Only know what your pawn knows
-- **Multiple Lives** - Incarnate as different pawns across generations
+- **Incarnated Mode** - Target experience is world-through-a-pawn perception
+- **Knowledge Fog** - Target experience is only knowing what the pawn knows
+- **Multiple Lives** - Target experience is moving through generations without owning the world
 
 ### **⚔️ Emergent Social Dynamics**
 - **Grudges** - Pawns remember wrongs, inherit family feuds
@@ -108,8 +119,8 @@ HeelKawn IS:
 4. **Speed up** - Press 3 (26x) for faster simulation
 5. **Open F10** - Explore all features
 
-### **Endgame Goals**
-Complete a "run" by achieving:
+### **Legacy Milestones**
+HeelKawn is not won or completed. Track historical milestones such as:
 - **1000 Legacy Score** (from children, knowledge, buildings, students)
 - **3 Dynasties Founded**
 - **20 Dynasty Members**
@@ -131,8 +142,12 @@ Track progress in **F10 #75**.
 ### **For AI Assistants & Developers:**
 | Document | Purpose |
 |----------|---------|
-| [`docs/HEELKAWN_STATE.md`](docs/HEELKAWN_STATE.md) | **AUTHORITATIVE STATE** - Current phase, blockers, next tasks |
-| [`docs/MASTER_DEVELOPMENT_PLAN.md`](docs/MASTER_DEVELOPMENT_PLAN.md) | **COMPREHENSIVE PLAN** - Full system inventory, roadmap |
+| [`docs/HEELKAWN_PROJECT_COMPASS.md`](docs/HEELKAWN_PROJECT_COMPASS.md) | **READ FIRST** - Truth hierarchy, north star, immediate path |
+| [`docs/HEELKAWN_BLUEPRINT.md`](docs/HEELKAWN_BLUEPRINT.md) | Canonical Persistent Simulation Universe blueprint, not runtime truth |
+| [`docs/HEELKAWN_STATE.md`](docs/HEELKAWN_STATE.md) | Current working state, blockers, next tasks |
+| [`docs/BUILD_INVENTORY.md`](docs/BUILD_INVENTORY.md) | Built-vs-missing reality check |
+| [`docs/HEELKAWNIAN_EVOLUTION_SYSTEM.md`](docs/HEELKAWNIAN_EVOLUTION_SYSTEM.md) | Long-range indefinite evolution vision |
+| [`docs/MASTER_DEVELOPMENT_PLAN.md`](docs/MASTER_DEVELOPMENT_PLAN.md) | Historical/comprehensive roadmap |
 | [`HEELKAWN.txt`](HEELKAWN.txt) | Quick context (what we're working on now) |
 | [`AI_README.md`](AI_README.md) | Development guidelines, canon, principles |
 
@@ -148,10 +163,12 @@ Track progress in **F10 #75**.
 
 **If you are an AI assistant reading this repository:**
 
-1. **READ FIRST:** [`docs/HEELKAWN_STATE.md`](docs/HEELKAWN_STATE.md) - This is the authoritative source for current status
-2. **THEN READ:** [`docs/MASTER_DEVELOPMENT_PLAN.md`](docs/MASTER_DEVELOPMENT_PLAN.md) - Full context and roadmap
-3. **QUICK CONTEXT:** [`HEELKAWN.txt`](HEELKAWN.txt) - What we're working on right now
-4. **PRINCIPLES:** [`AI_README.md`](AI_README.md) - Core kernel philosophy (NON-NEGOTIABLE)
+1. **READ FIRST:** [`docs/HEELKAWN_PROJECT_COMPASS.md`](docs/HEELKAWN_PROJECT_COMPASS.md) - North star, truth hierarchy, immediate path
+2. **CANON BLUEPRINT:** [`docs/HEELKAWN_BLUEPRINT.md`](docs/HEELKAWN_BLUEPRINT.md) - Persistent Simulation Universe laws, not runtime truth
+3. **THEN READ:** [`docs/HEELKAWN_STATE.md`](docs/HEELKAWN_STATE.md) - Current working state
+4. **REALITY CHECK:** [`docs/BUILD_INVENTORY.md`](docs/BUILD_INVENTORY.md) - What is live, partial, stubbed, or missing
+5. **LONG VISION:** [`docs/HEELKAWNIAN_EVOLUTION_SYSTEM.md`](docs/HEELKAWNIAN_EVOLUTION_SYSTEM.md) - Indefinite civilization evolution
+6. **PRINCIPLES:** [`AI_README.md`](AI_README.md) - Core kernel philosophy
 
 **Key Principles:**
 - **Deterministic Kernel:** History is computed, not scripted. Same inputs = same history.
@@ -178,30 +195,33 @@ git push
 
 **Engine:** Godot 4.6.2  
 **Language:** GDScript  
-**Status:** Feature Complete (98%)  
-**Performance:** Stable at 26x, playable at 100x  
+**Status:** Playable prototype under consolidation
+**Performance:** Optimized paths and diagnostics are present; verify per build
 
-### **Current Phase:** Phase 5-7 Complete
-- ✅ Phase 5: Emergent Life (grudges, gossip, narratives, legends)
-- ✅ Phase 6: Player Meaning Layer (incarnation, knowledge fog)
-- ✅ Phase 7: Endgame (dynasty tree, succession, legacy goals)
+### **Current Phase:** Consolidation + Phase 5A foundation
+- ✅ Core deterministic simulation foundation exists
+- ✅ Emergent life systems are partially/live integrated
+- ✅ Initial civilization-stage and HeelKawnian development profile lenses are live
+- 🔶 Player meaning, lineage depth, material reality, and indefinite era progression need verification and build-out
 
 ### **Features Implemented:**
 | System | Status | Access |
 |--------|--------|--------|
-| Grudge System | ✅ Complete | F10 #40 |
-| Gossip & Reputation | ✅ Complete | F10 #41 |
-| Avoidance AI | ✅ Complete | F10 #42 |
-| Pawn Narratives | ✅ Complete | F10 #43 / Click pawn |
-| Knowledge System | ✅ Complete (18 types) | F10 #44 |
-| Myth Formation | ✅ Complete | F10 #45 |
-| Knowledge Stones | ✅ Complete (interactive) | F10 #46 / Right-click |
-| Settlement Legends | ✅ Complete | F10 #72 |
-| Chronicle View | ✅ Complete | F10 #71 |
-| Legacy System | ✅ Complete | F10 #70 |
-| Dynasty Tree | ✅ Complete | F10 #74 |
-| Endgame Goals | ✅ Complete | F10 #75 |
-| Incarnation Mode | ✅ Complete | Press P |
+| Grudge System | Implemented / verify current runtime | F10 #40 |
+| Gossip & Reputation | Implemented / verify current runtime | F10 #41 |
+| Avoidance AI | Implemented / verify current runtime | F10 #42 |
+| Pawn Narratives | Implemented / verify current runtime | F10 #43 / Click pawn |
+| Knowledge System | Implemented / verify current runtime (18 types) | F10 #44 |
+| Myth Formation | Implemented / verify current runtime | F10 #45 |
+| Knowledge Stones | Implemented / verify current runtime | F10 #46 / Right-click |
+| Settlement Legends | Implemented / verify current runtime | F10 #72 |
+| Chronicle View | Implemented / verify current runtime | F10 #71 |
+| Legacy System | Implemented / verify current runtime | F10 #70 |
+| Dynasty Tree | Implemented / verify current runtime | F10 #74 |
+| Legacy Milestones | Implemented / verify current runtime | F10 #75 |
+| Civilization Stage Lens | ✅ Initial live | F10 #03B / HUD |
+| HeelKawnian Development Profiles | ✅ Initial live | F10 #49 |
+| Incarnation Mode | ⚠️ Needs runtime truth pass | Press P |
 | Event Notifications | ✅ Complete (clickable) | Automatic popups |
 
 ---
@@ -232,19 +252,16 @@ cd HeelKawn1
 
 ## 📊 **PROJECT STATUS**
 
-```
-Phase 0-4: ████████████████████ 100% ✅
-Phase 5:   ████████████████████ 100% ✅
-Phase 6:   ████████████████████ 100% ✅
-Phase 7:   ████████████████████ 100% ✅
+HeelKawn should be described as a deep playable prototype with a stable kernel, active systems, and major v1 gaps still being consolidated. Older docs may use "complete" to mean "implemented as a file" or "planned by an AI session"; current docs should reserve complete for behavior that compiles, runs, and has a verification path.
 
-Overall:   ████████████████████ 98% COMPLETE
-```
-
-**Remaining (Minor):**
-- [ ] Knowledge stone cursor feedback
-- [ ] Biography dialog scrollbar
-- [ ] Notification stacking polish
+**Current consolidation gates:**
+- [ ] Runtime UI truth pass in Godot
+- [ ] Lineage and child creation depth
+- [ ] Skill tree branch effects
+- [ ] Crafting resource consumption and tool requirements
+- [ ] Chronicle/seed export
+- [x] Civilization stage tracking from real world state (initial derived lens)
+- [ ] Civilization stage deepening with institutions, literacy, lifespan, and per-settlement tech diffusion
 
 ---
 

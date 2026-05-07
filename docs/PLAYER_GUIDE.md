@@ -131,7 +131,7 @@ Visual family tree showing:
 - Each member's name, profession, legacy score
 - **Click any member** → Read their biography
 
-### **7. Endgame Goals (F10 #75)**
+### **7. Legacy Milestones (F10 #75)**
 Track your "run" completion:
 ```
 Legacy Score: 450 / 1000
@@ -222,7 +222,7 @@ Pawns have 5 professions (assigned at spawn):
 | 72 | Settlement Legends | Emergent myths |
 | 73 | Read Knowledge Stone | Read all stones |
 | 74 | Dynasty Tree | Visual family tree |
-| 75 | Endgame Status | Run completion % |
+| 75 | Legacy Milestones | Historical progress % |
 
 ---
 
@@ -241,10 +241,10 @@ Pawns have 5 professions (assigned at spawn):
 4. **Try incarnation** (P) for immersive experience
 
 ### **Late Game (10000+ Ticks)**
-1. **Check endgame progress** - F10 #75
+1. **Check legacy milestone progress** - F10 #75
 2. **Read settlement legends** - F10 #72
 3. **Preserve knowledge** - stones outlive people
-4. **Start new dynasties** if needed for endgame
+4. **Start new dynasties** if needed for legacy milestones
 
 ---
 

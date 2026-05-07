@@ -1,9 +1,11 @@
-# HEELKAWN AI SYSTEMS - COMPLETE REFERENCE
+# HEELKAWN AI SYSTEMS - HISTORICAL REFERENCE
 
-**Version:** 1.0  
-**Date:** May 5, 2026  
-**Status:** ✅ **ALL SYSTEMS COMPLETE**  
+**Version:** 1.0
+**Date:** May 5, 2026
+**Status:** Historical snapshot / Needs Runtime Verification
 **Total:** 18 Systems, 7,450+ Lines
+
+> This file preserves an earlier AI systems reference. Treat its "complete" language as historical, not authoritative. AI adaptation must remain deterministic and auditable through `WorldMemory`; LLM output is presentation only unless approved systems convert it into deterministic world data.
 
 ---
 
@@ -550,10 +552,10 @@ ZoomSystem="*res://scripts/world/ZoomSystem.gd"
 func _ready() -> void:
     # Create guild
     var guild_id = GuildSystem.create_guild(player_id, GuildSystem.GuildType.WARRIORS)
-    
+
     # Award combat XP
-    AICombatProgression.award_xp(player_id, 100, "tutorial")
-    
+    AICombatProgression.award_xp(player_id, 100, "orientation_example")
+
     # Set governor policy
     GovernorSystem.set_policy(settlement_id, "tax", "low")
 ```
@@ -588,5 +590,5 @@ Use provided `get_stats()` functions on all systems for debugging.
 
 ---
 
-**HEELKAWN AI SYSTEMS - COMPLETE REFERENCE**  
+**HEELKAWN AI SYSTEMS - COMPLETE REFERENCE**
 **18 Systems | 7,450+ Lines | 100% Feature Complete**

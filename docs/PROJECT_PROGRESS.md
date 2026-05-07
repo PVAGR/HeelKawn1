@@ -1,16 +1,16 @@
 # HEELKAWN: PROJECT PROGRESS REPORT
 
-**Date:** May 5, 2026  
-**Status:** 🟡 **~50% COMPLETE**  
+**Date:** May 5, 2026
+**Status:** Historical progress snapshot / verify against current runtime
 **Total Lines:** 3,350+ lines of AI systems
 
 ---
 
-## ✅ **COMPLETED PHASES:**
+## Historical Phase Claims
 
 ### **Phase 1: AI Autonomy** (WorldBox + Pax Historia + ECO)
-**Status:** ✅ 100% Complete  
-**Lines:** 1,200+  
+**Status:** Historical claim / verify runtime
+**Lines:** 1,200+
 **Systems:** 3
 
 | System | Lines | Purpose |
@@ -21,15 +21,15 @@
 
 **Vision Realized:**
 - ✅ Pawns auto-build based on environment
-- ✅ AI learns from world events
+- ✅ Deterministic AI adaptation hooks from recorded world events
 - ✅ Player sovereignty + optional cooperation
 - ✅ Reputation-based trust
 
 ---
 
 ### **Phase 2: Combat Overhaul** (Kenshi + Bannerlord)
-**Status:** ✅ 100% Complete  
-**Lines:** 1,600+  
+**Status:** Historical claim / verify runtime
+**Lines:** 1,600+
 **Systems:** 4
 
 | System | Lines | Purpose |
@@ -50,8 +50,8 @@
 ---
 
 ### **Phase 3: Group/Guild System** (BG3 + WOW + ECO)
-**Status:** ✅ 100% Complete  
-**Lines:** 550+  
+**Status:** Historical claim / verify runtime
+**Lines:** 550+
 **Systems:** 1
 
 | System | Lines | Purpose |
@@ -84,8 +84,8 @@
 ## 🔶 **REMAINING PHASES:**
 
 ### **Phase 4: Lineage & Genetics** (CK3)
-**Status:** ⏳ Pending  
-**Estimated:** 600+ lines  
+**Status:** ⏳ Pending
+**Estimated:** 600+ lines
 **Systems:** 2-3
 
 **Planned:**
@@ -103,8 +103,8 @@
 ---
 
 ### **Phase 5: Governor System** (Songs of Syx)
-**Status:** ⏳ Pending  
-**Estimated:** 400+ lines  
+**Status:** ⏳ Pending
+**Estimated:** 400+ lines
 **Systems:** 1-2
 
 **Planned:**
@@ -121,8 +121,8 @@
 ---
 
 ### **Phase 6: UI/UX Modernization** (RimWorld + CK3)
-**Status:** ⏳ Pending  
-**Estimated:** 500+ lines  
+**Status:** ⏳ Pending
+**Estimated:** 500+ lines
 **Systems:** 3-4
 
 **Planned:**
@@ -134,8 +134,8 @@
 ---
 
 ### **Phase 7: Scale & Cataclysms** (EVE + Stronghold)
-**Status:** ⏳ Pending  
-**Estimated:** 600+ lines  
+**Status:** ⏳ Pending
+**Estimated:** 600+ lines
 **Systems:** 2-3
 
 **Planned:**

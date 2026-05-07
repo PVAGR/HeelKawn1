@@ -69,7 +69,7 @@ Think: *Dwarf Fortress* meets *RimWorld* meets *Crusader Kings*, with a focus on
 - **Family Trees** - Track generations visually with clickable dynasty tree UI
 - **Legacy Scoring** - Measure your impact (children, knowledge, buildings, students)
 - **Succession** - Heirs inherit from ancestors when they die
-- **Endgame Goals** - Complete runs by achieving legacy milestones
+- **Legacy Milestones** - Track historical impact without a final victory state
 
 ### 🎭 Incarnation Mode
 - **Spectator Mode** - Omniscient view with full UI (default)
@@ -109,14 +109,14 @@ Think: *Dwarf Fortress* meets *RimWorld* meets *Crusader Kings*, with a focus on
 4. **Speed up** - Press 3 (26x) for faster simulation
 5. **Open F10** - Explore all features (chronicles, legends, dynasty tree, etc.)
 
-### Endgame Goals
+### Legacy Milestones
 Complete a "run" by achieving:
 - ✅ **1000 Legacy Score** (from children, knowledge, buildings, students)
 - ✅ **3 Dynasties Founded**
 - ✅ **20 Dynasty Members**
 - ✅ **3 Player Incarnations**
 
-Track progress in **F10 → #75 Endgame Status**.
+Track progress in **F10 → #75 Legacy Milestones**.
 
 ## Technical Details
 
@@ -176,7 +176,7 @@ Build. Teach. Preserve. Leave your legacy.
 4. **Knowledge Stone** - Right-click reading interface
 5. **Dynasty Tree** - Visual family tree UI (F10 #74)
 6. **F10 Menu** - Showing all available features
-7. **Endgame Status** - F10 #75 showing run progress
+7. **Legacy Milestones** - F10 #75 showing historical progress
 8. **Trade Caravan** - Trader pawn moving between settlements (if visible)
 
 ### Screenshot Settings
@@ -237,7 +237,7 @@ A world simulation where every pawn tells a story, every settlement has legends,
 ✅ Text-rich storytelling (biographies, legends, chronicles)
 ✅ Interactive knowledge stones (right-click to read)
 ✅ Dynasty tracking with visual family tree
-✅ Endgame goals (legacy, succession, incarnations)
+✅ Legacy milestones (legacy, succession, incarnations)
 ✅ Incarnation mode (experience world through pawn's senses)
 ✅ Grudge & gossip systems (emergent social dynamics)
 ✅ Trade system (inter-settlement caravans)

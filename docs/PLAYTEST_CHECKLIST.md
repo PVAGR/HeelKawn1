@@ -44,7 +44,7 @@
 - [ ] Event notifications appear (births, etc.)
 - [ ] Speed controls work (1-7 keys)
 - [ ] F10 menu opens with all features
-- [ ] Onboarding tutorial triggers (first launch)
+- [ ] Gentle onboarding / first-body orientation triggers (first launch)
 
 **Expected:** Smooth, no crashes, clear what to do
 
@@ -116,7 +116,7 @@
 - [ ] Pawn deaths create legacy entries
 - [ ] Dynasties form and track generations
 - [ ] Victory progress updates (F10 #75)
-- [ ] All 5 victory conditions trackable
+- [ ] Legacy milestones trackable without final victory/completion language
 - [ ] Succession notifications work
 
 **Expected:** Long-term goals are clear
@@ -298,4 +298,3 @@
 ## COMMENTS
 
 [Add any additional comments, suggestions, or feedback here]
-

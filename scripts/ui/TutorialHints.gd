@@ -1,5 +1,5 @@
 extends Node
-## TutorialHints.gd — First-time player guidance
+## TutorialHints.gd — First-body orientation hints
 ##
 ## Shows contextual hints for new players:
 ## - First gather (click tree → "Press E to gather wood")
@@ -299,10 +299,10 @@ func _save_shown_hints() -> void:
 func reset_hints() -> void:
 	_shown_hints.clear()
 	_save_shown_hints()
-	print("[TutorialHints] All hints reset — will show again")
+	print("[OrientationHints] All hints reset - will show again")
 
 
 ## Toggle hints on/off (for settings menu)
 func toggle_hints(enabled: bool) -> void:
 	_hints_enabled = enabled
-	print("[TutorialHints] Hints %s" % ("enabled" if enabled else "disabled"))
+	print("[OrientationHints] Hints %s" % ("enabled" if enabled else "disabled"))

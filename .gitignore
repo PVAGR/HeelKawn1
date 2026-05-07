@@ -1,4 +1,3 @@
-```
 # Compiled and build artifacts
 *.pyc
 __pycache__/
@@ -49,10 +48,33 @@ htmlcov/
 .mypy_cache/
 .pytest_cache/
 .gradle/
-```
+
 .aider*
 
 # Local AI/editor state
 .letta/
 .godot/
-.godot/  
+.godot/
+.qwen/
+.roo/
+.cursor/
+.agents_tmp/
+.aider.tags.cache.v4/
+
+# Local bundled tools and generated diagnostics
+.tools/
+autoload_audit*.json*
+*_compare_out.txt
+*_compare_err.txt
+smoke_errors.txt
+settlement_*_output.txt
+
+# Accidental shell/transcript artifacts
+$null
+Command to Run
+Diff Summary
+return []
+return event_id in _recoverable_events
+return results
+WorldMemory.record_event(event)
+WorldPersistence.load_state(loaded_state)

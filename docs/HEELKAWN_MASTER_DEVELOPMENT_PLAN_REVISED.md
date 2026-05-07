@@ -62,7 +62,7 @@ HeelKawn does not copy other games. It takes the *feeling* and rebuilds it under
 
 **This section reflects only what we have verified by runtime.**
 
-At the moment, **visible red runtime errors exist** (see Section 8). Therefore, any broader “complete” claims are prohibited until Godot boots cleanly.
+The previously visible onboarding red error is corrected and a Godot headless smoke passed on May 7, 2026. Full editor/playtest verification is still required, and any broader "complete" claims remain prohibited until systems have runtime proof.
 
 ---
 
@@ -70,7 +70,7 @@ At the moment, **visible red runtime errors exist** (see Section 8). Therefore, 
 
 Systems can be “implemented in code” but must be treated as **partial/prototype** until verified to run without red blockers.
 
-- `OnboardingSystem.gd` exists but currently fails at runtime due to `bbcode_enabled` assignment type mismatch on a `Label`.
+- `OnboardingSystem.gd` had a visible runtime error from assigning `bbcode_enabled` on a `Label`; this has been corrected to use an attached `RichTextLabel`, and a Godot headless smoke passed on May 7, 2026. Full editor/playtest verification is still required.
 - World rendering improvements (e.g., tint/foliage/weather) may be present, but runtime FPS/perf stability must be measured in Godot.
 - Any AI learning/adaptation must be confirmed deterministic and tick-stable before claiming “learning.”
 
@@ -116,7 +116,7 @@ The timeline is **aspirational**, dependent on testing/performance/scope control
 
 ## 8) Immediate Red Error Fixes
 
-**Current visible red blocker:**
+**Resolved visible red blocker:**
 
 - `Invalid assignment of property or key 'bbcode_enabled' with value of type 'bool' on a base object of type 'Label'.`
 - File: `res://autoloads/OnboardingSystem.gd`
@@ -125,9 +125,9 @@ The timeline is **aspirational**, dependent on testing/performance/scope control
   - Line 200 at `_show_welcome_message`
   - Line 81 at `_ready`
 
-**Likely cause:** a normal `Label` is being treated like a `RichTextLabel` (or BBCode is enabled on a non-RichText node).
+**Likely cause:** a normal `Label` was being treated like a `RichTextLabel` (or BBCode was enabled on a non-RichText node).
 
-**Fast safe fix:** remove/comment the `bbcode_enabled` line, or ensure the node is truly a `RichTextLabel` if BBCode is required.
+**Fix applied:** ensure the node is truly a `RichTextLabel`, enable BBCode there, and attach the text node to the orientation panel before the button row.
 
 ---
 
@@ -140,8 +140,14 @@ Goal: establish a stable, minimal autonomy loop without advanced learning.
 - When pawns spawn, scan nearby resources.
 - Deterministic priority stack:
   1. Survival
-  2. Storage
-  3. Hearth
+  2. Shelter
+  3. Storage
+  4. Hearth
+  5. Tools
+  6. Defense
+  7. Comfort
+  8. Identity
+  9. Ambition
 - If no shelter exists → create shelter intent.
 - If food is unsafe → create food intent.
 - If storage missing → create storage intent.

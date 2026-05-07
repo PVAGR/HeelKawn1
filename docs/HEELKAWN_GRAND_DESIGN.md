@@ -1,8 +1,12 @@
 # HEELKAWN: GRAND DESIGN DOCUMENT
 
-**Version:** 1.0  
-**Date:** May 5, 2026  
+**Version:** 1.0
+**Date:** May 5, 2026
 **Vision:** A living world where every sprite matters, every player has agency, and thousands can coexist in a simulation that learns and grows alongside them.
+
+**Status:** Historical vision document / Not Runtime Truth
+
+> This file preserves an early grand vision pass. It may overstate implementation status. For current authority, read `docs/HEELKAWN_BLUEPRINT.md`, `docs/HEELKAWN_PROJECT_COMPASS.md`, `docs/HEELKAWN_STATE.md`, and `docs/BUILD_INVENTORY.md`.
 
 ---
 
@@ -281,7 +285,7 @@ HeelKawn is not just a game — it is a **living world simulation** that combine
 | Disaster System | autoloads/DisasterSystem.gd | ✅ Complete | 600+ |
 | Onboarding System | autoloads/OnboardingSystem.gd | ✅ Complete | 400+ |
 | Technology System | autoloads/TechnologySystem.gd | ✅ Complete | 350+ |
-| Victory System | autoloads/VictorySystem.gd | ✅ Complete | 300+ |
+| Legacy Milestone System | autoloads/VictorySystem.gd (compatibility name) | Implemented / verify current runtime | 300+ |
 | Faction System | autoloads/FactionSystem.gd | ✅ Complete | 320+ |
 | Farming System | autoloads/FarmingSystem.gd | ✅ Complete | 450+ |
 | Crafting System | autoloads/CraftingSystem.gd | ✅ Complete | 350+ |
@@ -527,7 +531,7 @@ Players can take on Governor role for settlements.
 ### **Phase 5: Polish (12-16 weeks)**
 - [ ] Art assets (replace placeholders)
 - [ ] Sound/music
-- [ ] Tutorial/onboarding
+- [ ] Gentle onboarding / first-body orientation
 - [ ] Bug fixing
 - [ ] Balance tuning
 
@@ -619,7 +623,7 @@ Based on vision alignment, here's what to build next:
 - [ ] 15+ professions
 - [ ] 10+ disaster types
 - [ ] 10+ wildlife species
-- [ ] 5+ victory conditions
+- [ ] 5+ legacy conditions / historical milestones
 
 ---
 
@@ -630,7 +634,7 @@ This document is being shared across multiple AI assistants. Each AI is reviewin
 **Current AI Implementation Status:**
 - ✅ All core systems implemented
 - ✅ 5-Layer AI architecture complete
-- ✅ All compile errors fixed
+- ⚠️ Runtime status must be verified in Godot before marking systems complete
 - ⚠️ Combat system needs overhaul
 - ⚠️ Group system needs implementation
 - ⚠️ UI needs modernization
@@ -672,7 +676,7 @@ HeelKawn is ambitious. It combines the best of 11 different games into one unifi
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** May 5, 2026  
-**Next Review:** After all AI feedback synthesized  
+**Document Version:** 1.0
+**Last Updated:** May 5, 2026
+**Next Review:** After all AI feedback synthesized
 **Status:** READY FOR IMPLEMENTATION

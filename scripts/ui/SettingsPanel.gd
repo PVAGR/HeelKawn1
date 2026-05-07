@@ -331,11 +331,11 @@ func _make_sep_style() -> StyleBoxFlat:
 	return s
 
 
-# ────────────────────────── Tutorial Hints Section ──────────────────────────
+# ────────────────────────── Orientation Hints Section ──────────────────────────
 
 func _build_tutorial_hints_section() -> void:
 	# Section heading
-	var heading: Label = _make_label("📚 Tutorial Hints", SECTION_COLOR, 14)
+	var heading: Label = _make_label("Orientation Hints", SECTION_COLOR, 14)
 	_content.add_child(heading)
 	
 	# Separator
@@ -382,11 +382,11 @@ func _on_tutorial_hints_toggled(enabled: bool) -> void:
 	var th: Node = get_node_or_null("/root/Main/TutorialHints")
 	if th != null and th.has_method("toggle_hints"):
 		th.call("toggle_hints", enabled)
-		print("[SettingsPanel] Tutorial hints %s" % ("enabled" if enabled else "disabled"))
+		print("[SettingsPanel] Orientation hints %s" % ("enabled" if enabled else "disabled"))
 
 
 func _on_tutorial_hints_reset() -> void:
 	var th: Node = get_node_or_null("/root/Main/TutorialHints")
 	if th != null and th.has_method("reset_hints"):
 		th.call("reset_hints")
-		print("[SettingsPanel] Tutorial hints reset — will show again")
+		print("[SettingsPanel] Orientation hints reset - will show again")

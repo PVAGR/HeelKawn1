@@ -15,7 +15,7 @@ The HeelKawn kernel is solid and deterministic. The simulation runs well with ~4
 1. **Emergent Life** — Deep social dynamics, knowledge ecology, emergent narrative, world-memory-driven behavior
 2. **Player Meaning Layer** — Knowledge fog, partial information, myth vs truth
 3. **Performance** — Reduce SIM_HITCH from 25-55ms to <16ms (partially addressed)
-4. **Content Polish** — Tutorial, save/load verification, clean .exe
+4. **Content Polish** — Gentle orientation, save/load verification, clean .exe
 
 ---
 
@@ -272,7 +272,7 @@ Priority Order:
 
 | # | Feature | Priority |
 |---|---------|-----------|
-| 8.1 | Tutorial/intro flow | P0 |
+| 8.1 | Gentle orientation / intro flow | P0 |
 | 8.2 | Save/load verification | P0 |
 | 8.3 | Graphics polish | P1 |
 | 8.4 | Sound/music pass | P1 |
@@ -281,7 +281,7 @@ Priority Order:
 ### Implementation Week 9-10
 
 ```
-8.1 Tutorial Flow
+8.1 Gentle Orientation Flow
 - First-time player intro
 - Explain spectator mode
 - Explain incarnation
@@ -341,7 +341,7 @@ Priority Order:
 - [x] Full faction system
 - [x] Law & custom (AuthoritySystem, CollapseSystem)
 - [x] Technology sharing (KnowledgeSystem, TechnologySystem)
-- [ ] Tutorial flow
+- [ ] Gentle orientation flow
 - [ ] Graphics polish
 
 ---

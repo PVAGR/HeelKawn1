@@ -47,7 +47,7 @@ every settlement has legends, and knowledge is preserved in stone.
   <li><strong>Family Trees</strong> - Track generations visually with clickable dynasty tree UI</li>
   <li><strong>Legacy Scoring</strong> - Measure your impact (children, knowledge, buildings, students)</li>
   <li><strong>Succession</strong> - Heirs inherit from ancestors when they die</li>
-  <li><strong>Endgame Goals</strong> - Complete runs by achieving legacy milestones</li>
+  <li><strong>Legacy Milestones</strong> - Track historical impact without a final victory state</li>
 </ul>
 
 <h3>🎭 Incarnation Mode</h3>
@@ -89,15 +89,15 @@ every settlement has legends, and knowledge is preserved in stone.
   <li><strong>Open F10</strong> - Explore all features (chronicles, legends, dynasty tree, etc.)</li>
 </ol>
 
-<h3>Endgame Goals</h3>
-<p>Complete a "run" by achieving:</p>
+<h3>Legacy Milestones</h3>
+<p>HeelKawn is not won or completed. Track historical milestones such as:</p>
 <ul>
   <li>✅ <strong>1000 Legacy Score</strong> (from children, knowledge, buildings, students)</li>
   <li>✅ <strong>3 Dynasties Founded</strong></li>
   <li>✅ <strong>20 Dynasty Members</strong></li>
   <li>✅ <strong>3 Player Incarnations</strong></li>
 </ul>
-<p>Track progress in <strong>F10 → #75 Endgame Status</strong></p>
+<p>Track progress in <strong>F10 → #75 Legacy Milestones</strong></p>
 
 <hr>
 
@@ -108,7 +108,7 @@ every settlement has legends, and knowledge is preserved in stone.
   <tr><td><strong>Platform:</strong></td><td>Windows (Linux/Mac available)</td></tr>
   <tr><td><strong>Size:</strong></td><td>~100-150 MB</td></tr>
   <tr><td><strong>Performance:</strong></td><td>Stable at 26x speed, playable at 100x</td></tr>
-  <tr><td><strong>Status:</strong></td><td>Feature Complete (98%)</td></tr>
+  <tr><td><strong>Status:</strong></td><td>Playable prototype under active consolidation</td></tr>
 </table>
 
 <h3>System Requirements</h3>
@@ -175,7 +175,7 @@ every settlement has legends, and knowledge is preserved in stone.
 <ul>
   <li>More knowledge types and professions</li>
   <li>Enhanced incarnation mode features</li>
-  <li>Additional endgame conditions</li>
+  <li>Additional legacy milestones</li>
   <li>Community-requested features</li>
 </ul>
 
@@ -226,7 +226,7 @@ emergent
 4. **Knowledge stone** - Right-click reading interface
 5. **Dynasty tree** - Visual family tree UI
 6. **F10 menu** - Show all available features
-7. **Endgame status** - F10 #75 showing progress
+7. **Legacy milestones** - F10 #75 showing historical progress
 8. **Settlement legend** - F10 #72 showing emergent myth
 
 ---
@@ -244,13 +244,13 @@ emergent
 
 ---
 
-## 📢 **RELEASE ANNOUNCEMENT TEMPLATE**
+## 📢 **EARLY ACCESS ANNOUNCEMENT TEMPLATE**
 
 ```
-🎉 HeelKawn v1.0 is NOW AVAILABLE! 🎉
+🎉 HeelKawn early prototype is ready for playtesting! 🎉
 
 After [X months/years] of development, my deterministic colony 
-simulation is finally here!
+simulation is ready for its next round of feedback.
 
 **What is HeelKawn?**
 A world simulation where every pawn tells a story, every settlement 
@@ -260,10 +260,17 @@ has legends, and knowledge is preserved in stone.
 ✅ Text-rich storytelling (biographies, legends, chronicles)
 ✅ Interactive knowledge stones (right-click to read)
 ✅ Dynasty tracking with visual family tree
-✅ Endgame goals (legacy, succession, incarnations)
+✅ Legacy milestones (legacy, succession, incarnations)
 ✅ Incarnation mode (experience world through pawn's senses)
 ✅ Grudge & gossip systems
 ✅ 18 knowledge types
+✅ Initial civilization stage and HeelKawnian development profile diagnostics
+
+Still under active consolidation:
+🔶 Runtime truth pass
+🔶 Lineage and skill tree depth
+🔶 Material consumption and tool reality
+🔶 Deeper indefinite evolution AI
 
 **Play it now:** [itch.io link]
 

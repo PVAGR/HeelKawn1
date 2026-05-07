@@ -1,9 +1,9 @@
 # HEELKAWN: PERSISTENT SIMULATION UNIVERSE BLUEPRINT
 
-**Status:** Canonical Vision / Not Runtime Truth  
-**Version:** 3.0 (Corrected)  
-**Date:** May 5, 2026  
-**Last Verified:** Pending Godot runtime verification
+**Status:** Canonical Vision / Not Runtime Truth
+**Version:** 3.1 (Corrected Runtime Status)
+**Date:** May 7, 2026
+**Last Verified:** Godot headless smoke passed on May 7, 2026 after the onboarding RichTextLabel fix
 
 ---
 
@@ -29,7 +29,7 @@ HeelKawn is **not just a game**. It is a **Persistent Simulation Universe**: a l
 - **WorldBox's autonomy** (self-building, god-sim perspective)
 - **EVE/Stronghold's longevity** (years-long campaigns, cataclysms)
 - **Arma Reforger's individual meaning** (every human matters)
-- **Pax Historia's AI ambition** (learning, adaptive, solo-viable)
+- **Pax Historia's AI ambition** (deterministic adaptation, solo-viable)
 
 ### The Three Pillars
 
@@ -74,20 +74,20 @@ HeelKawn does **not copy** these games. It takes their **feeling** and rebuilds 
 | **Baldur's Gate 3 / WoW** | Group content for all playstyles | Farmers, warriors, sailors, adventurers all have group loops. |
 | **EVE Online / Stronghold** | Years-long persistence | World suffers cataclysms. History outlives players. |
 | **Arma Reforger** | Every human matters | No cannon fodder. Individual decisions shift outcomes. |
-| **Pax Historia** | State-of-the-art AI civilization | AI grows, remembers, learns, adapts alongside players. |
+| **Pax Historia** | State-of-the-art AI civilization | AI grows, remembers, and adapts through recorded facts alongside players. |
 | **WorldBox** | Autonomous god-map simulation | Plop humans → they auto-build based on resources, knowledge, memory. |
 
 ---
 
 ## 🔴 CURRENT RUNTIME TRUTH
 
-**Status:** Requires Godot verification. Visible red errors must be fixed first.
+**Status:** Headless boot currently passes. Full editor/playtest verification is still required before broad completion claims.
 
 ### Known Runtime Blockers:
 
 | Error | File | Line | Status |
 |-------|------|------|--------|
-| `bbcode_enabled` on Label | OnboardingSystem.gd | 276 | 🔶 Fix in progress |
+| `bbcode_enabled` on Label | OnboardingSystem.gd | 276 | ✅ Fixed by using `RichTextLabel`; headless smoke passed May 7, 2026 |
 
 ### What Is Actually Running (Unverified):
 
@@ -97,7 +97,7 @@ HeelKawn does **not copy** these games. It takes their **feeling** and rebuilds 
 - Day/night cycle
 - Basic job assignment
 
-**Nothing is marked "Complete" until it boots without red errors in Godot.**
+**Nothing is marked "Complete" until it boots without red errors in Godot and has a clear user-facing or diagnostic verification path.**
 
 ---
 
@@ -220,7 +220,7 @@ These are **design goals**, not implemented features:
 
 ### Priority 1: OnboardingSystem.gd
 
-**Error:**
+**Historical Error:**
 ```
 Invalid assignment of property or key 'bbcode_enabled' with value of type 'bool' on a base object of type 'Label'.
 ```
@@ -232,7 +232,7 @@ Invalid assignment of property or key 'bbcode_enabled' with value of type 'bool'
 - Line 200 at `_show_welcome_message`
 - Line 81 at `_ready`
 
-**Fix:** Change `Label.new()` to `RichTextLabel.new()` or remove `bbcode_enabled` line.
+**Fix Applied:** `_tooltip_label` now uses `RichTextLabel`, enables BBCode on that rich text node, and is attached to the orientation panel before the button row.
 
 ---
 
@@ -405,18 +405,18 @@ HeelKawn is a **Persistent Simulation Universe** where:
 - Every role can become meaningful (Kenshi → General)
 - Every path is valid (BG3/WOW groups for all)
 - Every world tells a story (Dwarf Fortress chronicles)
-- Every AI learns alongside players (Pax Historia)
+- Every AI adapts through recorded, deterministic world facts alongside players (Pax Historia)
 - Every settlement builds autonomously (WorldBox)
 
 **But only if the deterministic world records it, remembers it, and carries its consequences forward.**
 
 ---
 
-**Document Version:** 3.0 (Corrected)  
-**Status:** Canonical Vision / Not Runtime Truth  
-**Last Updated:** May 5, 2026  
-**Next Review:** After runtime verification complete  
-**Shared With:** All AI Collaborators  
+**Document Version:** 3.1 (Corrected Runtime Status)
+**Status:** Canonical Vision / Not Runtime Truth
+**Last Updated:** May 7, 2026
+**Next Review:** After runtime verification complete
+**Shared With:** All AI Collaborators
 
 **Source of Truth:** This document describes the vision. Runtime truth is determined by Godot boot status and in-game verification.
 

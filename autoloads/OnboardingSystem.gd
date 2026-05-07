@@ -1,11 +1,11 @@
 extends Node
-## OnboardingSystem - Tutorial and first-time player guidance
+## OnboardingSystem - Gentle first-body orientation
 ##
 ## Helps new players learn HeelKawn's complex systems through:
 ## - Contextual tooltips
 ## - Milestone celebrations
 ## - Progressive feature unlocks
-## - Interactive tutorials
+## - Light orientation prompts
 
 # Tutorial state (persisted across sessions)
 var _last_speed_index: int = 0
@@ -30,7 +30,7 @@ var tutorials: Array[Dictionary] = [
 			{"text": "Press 1-7 to change simulation speed.", "trigger": "speed_change", "count": 1},
 			{"text": "Press F10 to access debug features.", "trigger": "f10_press", "count": 1}
 		],
-		"reward": "First Steps complete! +50 Legacy Score"
+		"reward": "First-body orientation recorded."
 	},
 	{
 		"id": "narrative",
@@ -39,7 +39,7 @@ var tutorials: Array[Dictionary] = [
 		"steps": [
 			{"text": "Click the 'Narrative' tab to see their story.", "trigger": "narrative_view", "count": 1}
 		],
-		"reward": "Storyteller achievement! +100 Legacy Score"
+		"reward": "Narrative inspection recorded."
 	},
 	{
 		"id": "incarnation",
@@ -49,7 +49,7 @@ var tutorials: Array[Dictionary] = [
 			{"text": "Press P to incarnate into a pawn.", "trigger": "incarnation_enter", "count": 1},
 			{"text": "Press P again to return to spectator mode.", "trigger": "incarnation_exit", "count": 1}
 		],
-		"reward": "Embodiment achievement! +200 Legacy Score"
+		"reward": "Embodiment orientation recorded."
 	}
 ]
 
@@ -204,7 +204,7 @@ func _show_welcome_message() -> void:
 
 A deterministic colony simulation where every pawn tells a story.
 
-[color=#888888]This tutorial will teach you the basics.[/color]
+[color=#888888]This first-body orientation shows the basic controls. The world itself remains learned through observation, failure, teaching, and consequence.[/color]
 
 Click [color=#57C5B6]Next[/color] to begin."""
 	
@@ -217,7 +217,7 @@ func _show_tutorial_intro(tutorial: Dictionary) -> void:
 
 %s
 
-[color=#888888]Complete the steps to earn rewards.[/color]""" % [tutorial.title, tutorial.description]
+[color=#888888]Notice these controls, then return to the world.[/color]""" % [tutorial.title, tutorial.description]
 	
 	_set_tutorial_text(intro_text)
 	_add_start_button(tutorial)
@@ -226,13 +226,13 @@ func _show_tutorial_intro(tutorial: Dictionary) -> void:
 func _show_tutorial_step(step: Dictionary) -> void:
 	var step_text: String = """[color=#57C5B6]%s[/color]
 
-[color=#888888]Do this to continue...[/color]""" % step.text
+[color=#888888]Use this when you are ready.[/color]""" % step.text
 	
 	_set_tutorial_text(step_text)
 
 
 func _show_tutorial_complete(tutorial: Dictionary) -> void:
-	var complete_text: String = """[color=#FFD166][b]Tutorial Complete![/b][/color]
+	var complete_text: String = """[color=#FFD166][b]Orientation Recorded[/b][/color]
 
 %s
 
@@ -274,7 +274,10 @@ func _create_tutorial_panel() -> void:
 	
 	# Text label
 	_tooltip_label = RichTextLabel.new()
+	_tooltip_label.bbcode_enabled = true
 	_tooltip_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_tooltip_label.custom_minimum_size = Vector2(360, 185)
+	vbox.add_child(_tooltip_label)
 	
 	# Button container
 	var button_container: HBoxContainer = HBoxContainer.new()

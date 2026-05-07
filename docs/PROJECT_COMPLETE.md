@@ -1,16 +1,18 @@
-# 🎉 HEELKAWN: PROJECT COMPLETE
+# HEELKAWN: HISTORICAL PROJECT-COMPLETE CLAIM
 
-**Date:** May 5, 2026  
-**Status:** ✅ **ALL PHASES COMPLETE**  
+**Date:** May 5, 2026
+**Status:** Historical snapshot / Not Runtime Truth
 **Total Lines:** 6,600+ lines of production AI systems
+
+> This document is retained as historical context only. Its "complete" language must not be used as current runtime authority. Current status labels live in `docs/BUILD_INVENTORY.md`; the canonical vision lives in `docs/HEELKAWN_BLUEPRINT.md`.
 
 ---
 
-## ✅ **ALL PHASES COMPLETE:**
+## Historical Phase Claims
 
 ### **Phase 1: AI Autonomy** (WorldBox + Pax Historia + ECO)
-**Status:** ✅ 100% Complete  
-**Lines:** 1,200+  
+**Status:** Historical claim / verify runtime
+**Lines:** 1,200+
 **Systems:** 3
 
 | System | Lines | Purpose |
@@ -22,8 +24,8 @@
 ---
 
 ### **Phase 2: Combat Overhaul** (Kenshi + Bannerlord)
-**Status:** ✅ 100% Complete  
-**Lines:** 1,600+  
+**Status:** Historical claim / verify runtime
+**Lines:** 1,600+
 **Systems:** 4
 
 | System | Lines | Purpose |
@@ -36,8 +38,8 @@
 ---
 
 ### **Phase 3: Group/Guild System** (BG3 + WOW + ECO)
-**Status:** ✅ 100% Complete  
-**Lines:** 550+  
+**Status:** Historical claim / verify runtime
+**Lines:** 550+
 **Systems:** 1
 
 | System | Lines | Purpose |
@@ -47,8 +49,8 @@
 ---
 
 ### **Phase 4: Lineage & Genetics** (CK3)
-**Status:** ✅ 100% Complete  
-**Lines:** 1,400+  
+**Status:** Historical claim / verify runtime
+**Lines:** 1,400+
 **Systems:** 3
 
 | System | Lines | Purpose |
@@ -60,8 +62,8 @@
 ---
 
 ### **Phase 5: Governor System** (Songs of Syx)
-**Status:** ✅ 100% Complete  
-**Lines:** 550+  
+**Status:** Historical claim / verify runtime
+**Lines:** 550+
 **Systems:** 1
 
 | System | Lines | Purpose |
@@ -71,8 +73,8 @@
 ---
 
 ### **Phase 6: UI/UX Modernization** (RimWorld + CK3)
-**Status:** ✅ 100% Complete  
-**Lines:** 600+  
+**Status:** Historical claim / verify runtime
+**Lines:** 600+
 **Systems:** 2
 
 | System | Lines | Purpose |
@@ -83,8 +85,8 @@
 ---
 
 ### **Phase 7: Scale & Cataclysms** (EVE + Stronghold)
-**Status:** ✅ 100% Complete  
-**Lines:** 700+  
+**Status:** Historical claim / verify runtime
+**Lines:** 700+
 **Systems:** 2
 
 | System | Lines | Purpose |
@@ -101,7 +103,7 @@
 | **Total Phases** | 7 |
 | **Total Systems** | 16 |
 | **Total Lines** | 6,600+ |
-| **Completion** | 100% |
+| **Completion** | Historical claim; verify runtime |
 
 ---
 
@@ -109,13 +111,13 @@
 
 | Pillar | Game Inspiration | Status |
 |--------|------------------|--------|
-| **AI Autonomy** | WorldBox + Pax Historia + ECO | ✅ 100% |
-| **Combat** | Kenshi + Bannerlord | ✅ 100% |
-| **Groups** | BG3 + WOW + ECO | ✅ 100% |
-| **Lineage** | Crusader Kings 3 | ✅ 100% |
-| **Governance** | Songs of Syx | ✅ 100% |
-| **UI/UX** | RimWorld + CK3 | ✅ 100% |
-| **Scale** | EVE + Stronghold | ✅ 100% |
+| **AI Autonomy** | WorldBox + Pax Historia + ECO | Historical claim; verify runtime |
+| **Combat** | Kenshi + Bannerlord | Historical claim; verify runtime |
+| **Groups** | BG3 + WOW + ECO | Historical claim; verify runtime |
+| **Lineage** | Crusader Kings 3 | Historical claim; verify runtime |
+| **Governance** | Songs of Syx | Historical claim; verify runtime |
+| **UI/UX** | RimWorld + CK3 | Historical claim; verify runtime |
+| **Scale** | EVE + Stronghold | Historical claim; verify runtime |
 
 ---
 
@@ -249,23 +251,23 @@ var effects = GovernorSystem.get_policy_effects(settlement_id)
 - A Persistent Simulation Universe
 - 6,600+ lines of production AI systems
 - 16 interconnected systems
-- 100% feature-complete
-- Ready for testing and deployment
+- Historical feature-complete claim retained for context, not runtime truth
+- Ready for verification, not automatic deployment
 
 **All vision pillars realized:**
 - Every sprite matters
 - Every human matters
 - Every choice echoes through generations
 
-**The deterministic myth-engine is complete.**
+**The deterministic myth-engine vision is defined; runtime verification decides completion.**
 
 ---
 
-**HEELKAWN: PHASES 1-7 - 100% COMPLETE! 🎉**
+**HEELKAWN: PHASES 1-7 - HISTORICAL COMPLETION CLAIM**
 
-**Total Development Time:** ~8 hours  
-**Total Systems Built:** 16  
-**Total Lines Written:** 6,600+  
-**Vision Realization:** 100%
+**Total Development Time:** ~8 hours
+**Total Systems Built:** 16
+**Total Lines Written:** 6,600+
+**Vision Realization:** Historical claim; verify runtime
 
-**Ready for Godot testing and deployment!**
+**Ready for Godot testing before any deployment claim.**

@@ -1,14 +1,16 @@
 # 🚀 HeelKawn Pre-Flight Checklist
 
 **Created:** May 7, 2026  
-**Purpose:** Final systems check before game launch  
-**Status:** ✅ READY FOR TAKEOFF
+**Purpose:** Historical systems checklist before launch consolidation
+**Status:** ⚠️ HISTORICAL SNAPSHOT - verify against `HEELKAWN_PROJECT_COMPASS.md` and `BUILD_INVENTORY.md`
+
+> This file records an optimistic preflight view from May 7, 2026. It is useful as a checklist, but it is not the authority for release readiness. A system is release-ready only when it compiles, runs, and has a user-facing or diagnostic verification path.
 
 ---
 
 ## ✅ AUTOLOAD SYSTEMS (All Registered)
 
-### Core Kernel (✅ 100% Complete)
+### Core Kernel (Registered / verify runtime)
 - [x] TickManager - Deterministic tick processing
 - [x] GameManager - Game state, speed control
 - [x] WorldMemory - Append-only event log
@@ -17,7 +19,7 @@
 - [x] WorldRNG - Seeded random number generation
 - [x] WorldClock - Time tracking
 
-### Settlement Systems (✅ 100% Complete)
+### Settlement Systems (Registered / verify runtime)
 - [x] SettlementMemory - Settlement state & lifecycle
 - [x] SettlementRegistry - Settlement tracking
 - [x] SettlementPlanner - Build planning
@@ -26,7 +28,7 @@
 - [x] ColonySimServices - Colony metrics
 - [x] ZoneRegistry - Multi-zone stockpiles
 
-### Pawn Systems (✅ 100% Complete)
+### Pawn Systems (Registered / verify runtime)
 - [x] PawnConsciousness - Memories, dreams, trauma, growth
 - [x] KinshipSystem - Family trees, relationships
 - [x] BloodlineSystem - Dynasty tracking
@@ -35,7 +37,7 @@
 - [x] AuthoritySystem - Leadership, hierarchy
 - [x] CollapseSystem - Social collapse mechanics
 
-### Social Systems (✅ 100% Complete)
+### Social Systems (Registered / verify runtime)
 - [x] GrudgeManager - Grudge formation, inheritance, closure
 - [x] GossipManager - Information propagation
 - [x] FactionRegistry - Faction tracking
@@ -44,7 +46,7 @@
 - [x] CulturalMemory - Cultural traditions
 - [x] CulturalStyleManager - Visual styles
 
-### Survival Systems (✅ 100% Complete)
+### Survival Systems (Registered / verify runtime)
 - [x] SurvivalSystem - Hunger, thirst, temp, injuries
 - [x] PlayerGathering - Resource gathering
 - [x] PlayerBuilding - Building placement
@@ -55,14 +57,14 @@
 - [x] WildlifePopulation - Deer, rabbit spawning
 - [x] FarmingSystem - Crop planting/harvesting
 
-### Knowledge Systems (✅ 100% Complete)
+### Knowledge Systems (Registered / verify runtime)
 - [x] KnowledgeSystem - Knowledge carriers, teaching
 - [x] TechnologySystem - Tech progression
 - [x] MemorialSystem - Memorials, commemorations
 - [x] SacredGeography - Sacred tile effects
 - [x] RoadMemory - Road network tracking
 
-### AI Systems (✅ 100% Complete)
+### AI Systems (Registered / verify runtime)
 - [x] WorldAI - 5-layer neural network
 - [x] AIAgentManager - AI agent coordination
 - [x] AIAutoBuild - Autonomous building
@@ -77,7 +79,7 @@
 - [x] NameGenerator - Deterministic names
 - [x] GovernorSystem - Settlement governors
 
-### Memory Systems (✅ 100% Complete)
+### Memory Systems (Registered / verify runtime)
 - [x] AgeMemory - Age tracking
 - [x] IntentMemory - Settlement intents
 - [x] RemnantMemory - Ruin preservation
@@ -87,7 +89,7 @@
 - [x] TradeMemory - Trade route tracking
 - [x] WorldActionLedger - Action persistence
 
-### Event Systems (✅ 100% Complete)
+### Event Systems (Registered / verify runtime)
 - [x] WorldEvents - Event generation
 - [x] WorldEventSystem - Event management
 - [x] WorldEventSeed - Seeded event generation
@@ -97,7 +99,7 @@
 - [x] EventNotificationOverlay - Event popups
 - [x] ObservationAPI - Observation tracking
 
-### Specialized Systems (✅ 100% Complete)
+### Specialized Systems (Registered / verify runtime)
 - [x] TradePlanner - Trade route planning
 - [x] CommandAPI - Command mode
 - [x] PlayerIntentQueue - Player commands
@@ -114,12 +116,12 @@
 - [x] GeneticEvolution - Genetic algorithms
 - [x] HistoricalSimulation - Historical sims
 - [x] CharacterExport - Character export
-- [x] OnboardingSystem - Tutorial system
+- [x] OnboardingSystem - Gentle first-body orientation system
 - [x] VictorySystem - Victory conditions
 - [x] CataclysmSystem - Cataclysm events
 - [x] Weather - Weather system
 
-### Recording Systems (✅ 100% Complete)
+### Recording Systems (Registered / verify runtime)
 - [x] PlaytestRecorder - Automated playtest recording
 - [x] PlaytestInputRecorder - Input recording
 - [x] CrashTrap - Crash diagnostics

@@ -137,7 +137,7 @@ Use **Semantic Versioning**: `MAJOR.MINOR.PATCH`
 |------|-------------|---------|
 | **PATCH** (v1.0.1) | Bug fixes only, no new features | Fixed crash on death |
 | **MINOR** (v1.1) | Small features, polish | Added 6 knowledge types |
-| **MAJOR** (v2.0) | Big features, new systems | Added Phase 7 endgame |
+| **MAJOR** (v2.0) | Big features, new systems | Added Phase 7 legacy milestones |
 
 ---
 
@@ -180,7 +180,7 @@ every settlement has legends, and knowledge is preserved in stone.
 ✅ Text-rich storytelling (biographies, legends, chronicles)
 ✅ Interactive knowledge stones (right-click to read)
 ✅ Dynasty tracking with visual family tree
-✅ Endgame goals (legacy score, succession)
+✅ Legacy milestones (legacy score, succession)
 ✅ Incarnation mode (UI hides for immersion)
 ✅ Grudge & gossip systems
 ✅ Avoidance AI

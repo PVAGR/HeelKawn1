@@ -4,11 +4,13 @@
 **Priority:** CRITICAL - Core to HeelKawn vision  
 **Timeline:** 2 weeks for Phase 5A foundation
 
+> This is an implementation proposal, not proof that the systems below exist. Use `HEELKAWN_PROJECT_COMPASS.md` and `BUILD_INVENTORY.md` to decide current truth before coding.
+
 ---
 
 ## 📋 PHASE 5A: FOUNDATION (This Session - May 7, 2026)
 
-### Task 1: Civilization Stage Tracking ⏳ PENDING
+### Task 1: Civilization Stage Tracking ✅ INITIAL LIVE
 
 **File:** `autoloads/CivilizationStage.gd` (NEW)
 
@@ -102,9 +104,29 @@ func get_average_lifespan(settlement_id: int) -> int:
 ```
 
 **Integration:**
-- Register as autoload in project.godot
-- Display in ColonyHUD (next to settlement name)
-- Add to F10 #3 debug report
+- Registered as autoload in `project.godot`.
+- Displayed in `ColonyHUD` identity line as an era label.
+- Added to F10 as `03B · Civilization Stage`.
+- Current implementation is intentionally derived/read-only. It does not advance eras by itself.
+
+---
+
+### Task 1B: HeelKawnian Development Profiles ✅ INITIAL LIVE
+
+**Files:** `autoloads/HeelKawnianIdentity.gd`, `autoloads/HeelKawnianManager.gd`, `scripts/ui/CreatorDebugMenu.gd`
+
+**Purpose:** Give every sprite a deterministic, inspectable development profile before making the profile command behavior.
+
+**Implemented:**
+- Stable soul identity creation from live pawn data.
+- Identity resources now remember profile history and evolve simple traits from meaningful events.
+- Per-pawn profiles derive development score, phase, drive, next need, era context, skill summary, knowledge summary, social signal, preservation pressure, innovation pressure, and trauma pressure.
+- F10 `49 · HeelKawnians` prints aggregate drive/phase counts and sample individual profiles.
+
+**Current boundary:**
+- This is a read-only intelligence/profile layer.
+- It does not yet bias pawn jobs, movement, research, teaching, preservation, or innovation.
+- The next frontier is behavior wiring, not another detached roadmap.
 
 ---
 
@@ -343,12 +365,14 @@ func _report_colony_sim() -> void:
 **Phase 5A Complete When:**
 
 1. ✅ CivilizationStage.gd exists and calculates stages correctly
-2. ✅ Knowledge combination system allows innovation
-3. ✅ Books craftable and store knowledge
-4. ✅ Lifespan/literacy tracked and displayed
-5. ✅ All systems visible in debug menu
-6. ✅ No compilation errors
-7. ✅ Game runs without crashes
+2. ✅ Initial HeelKawnian development profiles visible in F10 #49
+3. ⏳ HeelKawnian profiles bias real pawn behavior
+4. ⏳ Knowledge combination system allows innovation
+5. ⏳ Books craftable and store knowledge
+6. ⏳ Lifespan/literacy tracked and displayed
+7. ✅ Initial systems visible in debug menu
+8. ✅ No compilation errors
+9. ✅ Game runs without crashes
 
 ---
 

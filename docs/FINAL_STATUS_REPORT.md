@@ -239,9 +239,9 @@ d99c5bb FIX: Compile errors in new architecture systems
 - API reference
 
 ✅ **Ready to Run**
-- All compile errors fixed
-- All systems integrated
-- All fallbacks in place
+- Historical claim only; verify current Godot runtime before treating systems as ready
+- Current authoritative status lives in `HEELKAWN_STATE.md` and `BUILD_INVENTORY.md`
+- Use `HEELKAWN_BLUEPRINT.md` for canon vision, not runtime proof
 
 ✅ **Ready to Scale**
 - 1000+ entities support

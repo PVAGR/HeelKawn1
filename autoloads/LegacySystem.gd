@@ -6,7 +6,7 @@ extends Node
 ## - Legacy scoring: measures player's impact on the world
 ## - Dynasty tracking: follows bloodlines across generations
 ## - Succession: inherit traits, knowledge, and status from ancestors
-## - Endgame conditions: determines when a "run" is complete
+## - Legacy milestones: records historical progress without ending the world
 
 # ---- Signals ----
 signal legacy_score_changed(new_score: int)
@@ -456,7 +456,8 @@ func set_current_player_pawn(pawn_id: int) -> void:
 		_current_dynasty_id = pawn_to_dynasty[pawn_id]
 
 
-## Get endgame status
+## Get legacy milestone status.
+## Compatibility name retained because UI/debug callers already use it.
 func get_endgame_status() -> Dictionary:
 	# Calculate total dynasty members manually (Godot 4.x doesn't support list comprehension)
 	var total_members: int = 0
@@ -470,6 +471,10 @@ func get_endgame_status() -> Dictionary:
 		"total_dynasty_members": total_members,
 		"player_incarnations": _count_player_incarnations()
 	}
+
+
+func get_legacy_milestone_status() -> Dictionary:
+	return get_endgame_status()
 
 
 func _count_player_incarnations() -> int:

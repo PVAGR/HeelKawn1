@@ -103,6 +103,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "kernel", "label": "24 · KernelDiagnostic session summary"},
 			{"id": "harness", "label": "25 · Validation / harness flags"},
 			{"id": "colony_sim", "label": "03 · ColonySimServices"},
+			{"id": "civilization_stage", "label": "03B · Civilization Stage (derived era lens)"},
 			{"id": "backbone_status", "label": "35 · Backbone / first-play (LIVE vs DEFERRED)"},
 		],
 	},
@@ -154,18 +155,19 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "record_carriers", "label": "46 · Record Carriers (Phase 5 — knowledge preservation stones)"},
 			{"id": "memorial_system", "label": "47 · Memorial System (Phase 5/6 — memorials, sacred geography, pilgrimage)"},
 			{"id": "knowledge_system", "label": "48 · Knowledge Systems (Phase 5/6 — carriers, teaching, loss/rediscovery)"},
+			{"id": "heelkawnians", "label": "49 · HeelKawnians (individual development AI profiles)"},
 			{"id": "force_building", "label": "50 · FORCE BUILDING — post 10 wall/bed/zone jobs NOW"},
 		],
 	},
 	{
 		"heading": "★ Phase 7: Dynasty & Legacy",
 		"rows": [
-			{"id": "legacy_dynasty", "label": "70 · Legacy & Dynasty (Phase 7 — endgame tracking)"},
+			{"id": "legacy_dynasty", "label": "70 · Legacy & Dynasty (Phase 7 — milestone tracking)"},
 			{"id": "chronicle_view", "label": "71 · Chronicle View (Phase 5 — settlement history as story)"},
 			{"id": "settlement_legends", "label": "72 · Settlement Legends (Phase 5 — emergent myths & stories)"},
 			{"id": "read_knowledge_stone", "label": "73 · Read Knowledge Stone (Phase 5 — inscribed knowledge)"},
 			{"id": "dynasty_tree", "label": "74 · Dynasty Tree (Phase 7 — visual family tree)"},
-			{"id": "endgame_status", "label": "75 · Endgame Status (Phase 7 — run completion progress)"},
+			{"id": "endgame_status", "label": "75 · Legacy Milestones (Phase 7 — historical progress)"},
 		],
 	},
 	{
@@ -340,6 +342,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_sim_diag, "sim_diag")
 		"colony_sim":
 			error_occurred = _safe_report(_report_colony_sim, "colony_sim")
+		"civilization_stage":
+			error_occurred = _safe_report(_report_civilization_stage, "civilization_stage")
 		"backbone_status":
 			error_occurred = _safe_report(_report_backbone_status, "backbone_status")
 		"intent":
@@ -406,6 +410,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_memorial_system, "memorial_system")
 		"knowledge_system":
 			error_occurred = _safe_report(_report_knowledge_system, "knowledge_system")
+		"heelkawnians":
+			error_occurred = _safe_report(_report_heelkawnians, "heelkawnians")
 		"force_building":
 			error_occurred = _safe_report(_force_building_now, "force_building")
 		"legacy_dynasty":
@@ -624,6 +630,50 @@ func _report_colony_sim() -> void:
 	)
 
 
+func _report_civilization_stage() -> void:
+	if CivilizationStage == null:
+		print("CivilizationStage autoload missing")
+		return
+	print("=== HEELKAWN CIVILIZATION STAGE ===")
+	print("Derived only: era comes from live technology, knowledge, infrastructure, profession diversity, and quality-of-life signals.")
+	var world: Dictionary = CivilizationStage.get_world_stage_snapshot()
+	_print_civilization_stage_snapshot("WORLD", world)
+	print("")
+	print("--- SETTLEMENTS ---")
+	var snaps: Array[Dictionary] = CivilizationStage.get_all_stage_snapshots(12)
+	if snaps.is_empty():
+		print("No settlements discovered yet.")
+	for snap in snaps:
+		_print_civilization_stage_snapshot(str(snap.get("name", "Settlement")), snap)
+	print("=== END CIVILIZATION STAGE ===")
+
+
+func _print_civilization_stage_snapshot(label: String, snap: Dictionary) -> void:
+	var breakdown: Dictionary = snap.get("breakdown", {})
+	print(
+		"%s: %s (stage %d) score=%d next=%d pawns=%d"
+		% [
+			label,
+			str(snap.get("stage_name", "Unknown")),
+			int(snap.get("stage", 0)),
+			int(snap.get("score", 0)),
+			int(snap.get("next_stage_score", 10)),
+			int(snap.get("pawns", 0)),
+		]
+	)
+	print("  %s" % str(snap.get("description", "")))
+	print(
+		"  tech=%d knowledge=%d infrastructure=%d complexity=%d quality=%d"
+		% [
+			int(breakdown.get("technology", 0)),
+			int(breakdown.get("knowledge", 0)),
+			int(breakdown.get("infrastructure", 0)),
+			int(breakdown.get("complexity", 0)),
+			int(breakdown.get("quality_of_life", 0)),
+		]
+	)
+
+
 func _report_backbone_status() -> void:
 	const LIVE: String = "LIVE"
 	const DEF: String = "DEFERRED"
@@ -660,6 +710,11 @@ func _report_backbone_status() -> void:
 	var wai_ok: bool = WorldAI != null and WorldAI.has_method("get_pawn_neural_state")
 	print("  WorldAI + matrix       %s  neural+rules+12ch parity" % (LIVE if wai_ok else DEF))
 	print("  ColonySimServices      %s  food/mat/haul/housing pressures" % LIVE)
+	var civ_stage: String = "missing"
+	if CivilizationStage != null:
+		var civ_snap: Dictionary = CivilizationStage.get_world_stage_snapshot()
+		civ_stage = "%s score=%d" % [str(civ_snap.get("stage_name", "Unknown")), int(civ_snap.get("score", 0))]
+	print("  CivilizationStage      %s  %s" % [LIVE if CivilizationStage != null else DEF, civ_stage])
 	print("  StockpileManager       %s  zones + aggregates" % LIVE)
 	print("")
 	print("— PARTIAL / ROADMAP —")
@@ -2169,6 +2224,99 @@ func _report_knowledge_system() -> void:
 	print("=== END KNOWLEDGE SYSTEMS REPORT ===")
 
 
+func _report_heelkawnians() -> void:
+	print("=== HEELKAWNIAN DEVELOPMENT AI (Individual Sprite Profiles) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("Derived only: each profile reads live pawn needs, skills, knowledge, memory, settlement, and era state.")
+	print("")
+
+	var main_node: Node2D = _main()
+	if main_node == null:
+		print("Main node not found")
+		return
+	var ps: PawnSpawner = main_node.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+	if ps == null:
+		print("PawnSpawner not found")
+		return
+
+	var profiles: Array[Dictionary] = HeelKawnianManager.get_profiles_for_pawns(ps.pawns, 16)
+	if profiles.is_empty():
+		print("No living HeelKawnians found.")
+		return
+
+	var drive_counts: Dictionary = {}
+	var phase_counts: Dictionary = {}
+	var total_score: int = 0
+	for profile in profiles:
+		var drive: String = str(profile.get("development_drive", "unknown"))
+		var phase: String = str(profile.get("development_phase", "unknown"))
+		drive_counts[drive] = int(drive_counts.get(drive, 0)) + 1
+		phase_counts[phase] = int(phase_counts.get(phase, 0)) + 1
+		total_score += int(profile.get("development_score", 0))
+
+	print("--- SUMMARY ---")
+	print("sampled=%d avg_development=%d" % [profiles.size(), int(total_score / maxi(1, profiles.size()))])
+	print("drives=%s" % str(drive_counts))
+	print("phases=%s" % str(phase_counts))
+	print("")
+	print("--- SAMPLE HEELKAWNIANS ---")
+	for profile in profiles:
+		var axes: Dictionary = profile.get("axes", {})
+		var skills: Dictionary = profile.get("skills", {})
+		var known_names: Array = profile.get("known_knowledge", [])
+		var known_preview: String = "none"
+		if not known_names.is_empty():
+			var parts: Array[String] = []
+			for i in range(mini(4, known_names.size())):
+				parts.append(str(known_names[i]))
+			known_preview = ", ".join(parts)
+			if known_names.size() > 4:
+				known_preview += ", ..."
+		print(
+			"#%d %s soul=%s"
+			% [
+				int(profile.get("pawn_id", -1)),
+				str(profile.get("name", "unknown")),
+				str(profile.get("soul_id", "")).left(12),
+			]
+		)
+		print(
+			"  phase=%s drive=%s next=%s era=%s dev=%d"
+			% [
+				str(profile.get("development_phase", "")),
+				str(profile.get("development_drive", "")),
+				str(profile.get("next_need", "")),
+				str(profile.get("era", "")),
+				int(profile.get("development_score", 0)),
+			]
+		)
+		print(
+			"  profession=%s path=%s best_skill=%s:%d known=%d [%s]"
+			% [
+				str(profile.get("profession", "")),
+				str(profile.get("life_path", "")),
+				str(skills.get("highest_skill", "none")),
+				int(skills.get("highest_level", 0)),
+				int(profile.get("known_knowledge_count", 0)),
+				known_preview,
+			]
+		)
+		print(
+			"  axes survival=%d practice=%d knowledge=%d social=%d preservation=%d innovation=%d trauma=%d"
+			% [
+				int(axes.get("survival", 0)),
+				int(axes.get("practice", 0)),
+				int(axes.get("knowledge", 0)),
+				int(axes.get("social", 0)),
+				int(axes.get("preservation", 0)),
+				int(axes.get("innovation", 0)),
+				int(axes.get("trauma_pressure", 0)),
+			]
+		)
+	print("=== END HEELKAWNIAN DEVELOPMENT AI ===")
+
+
 # === BUILDING FORCES ===
 
 func _force_building_now() -> void:
@@ -2241,7 +2389,7 @@ func _force_building_now() -> void:
 # === Phase 7: Legacy & Dynasty Report ===
 
 func _report_legacy_dynasty() -> void:
-	print("=== HEELKAWN LEGACY & DYNASTY (Phase 7: Endgame) ===")
+	print("=== HEELKAWN LEGACY & DYNASTY (Phase 7: Historical Milestones) ===")
 	print("Generated: %s" % Time.get_datetime_string_from_system())
 	print("Game Tick: %d" % GameManager.tick_count)
 	print("")
@@ -2251,10 +2399,10 @@ func _report_legacy_dynasty() -> void:
 		print("LegacySystem not found - system not loaded")
 		return
 
-	# Get endgame status
+		# Get legacy milestone status
 	if legacy_sys.has_method("get_endgame_status"):
 		var status: Dictionary = legacy_sys.call("get_endgame_status")
-		print("--- ENDGAME STATUS ---")
+		print("--- LEGACY MILESTONE STATUS ---")
 		print("Total Legacy Score: %d" % status.get("total_legacy", 0))
 		print("Total Dynasties: %d" % status.get("dynasty_count", 0))
 		print("Total Dynasty Members: %d" % status.get("total_dynasty_members", 0))
@@ -2595,10 +2743,10 @@ func _show_dynasty_tree_ui() -> void:
 	print("Dynasty Tree UI opened for dynasty %d" % dynasty_id)
 
 
-# === Phase 7: Endgame Status ===
+# === Phase 7: Legacy Milestones ===
 
 func _report_endgame_status() -> void:
-	print("=== HEELKAWN ENDGAME STATUS (Phase 7: Run Completion) ===")
+	print("=== HEELKAWN LEGACY MILESTONES (Phase 7: Historical Progress) ===")
 	print("Generated: %s" % Time.get_datetime_string_from_system())
 	print("Game Tick: %d" % GameManager.tick_count)
 	print("")
@@ -2608,20 +2756,20 @@ func _report_endgame_status() -> void:
 		print("LegacySystem not found")
 		return
 
-	# Get endgame status
+	# Get legacy milestone status
 	var status: Dictionary = {}
 	if legacy_sys.has_method("get_endgame_status"):
 		status = legacy_sys.call("get_endgame_status")
 
-	print("--- RUN PROGRESS ---")
+	print("--- HISTORICAL PROGRESS ---")
 	print("Total Legacy Score: %d / 1000 (goal)" % status.get("total_legacy", 0))
 	print("Total Dynasties: %d" % status.get("dynasty_count", 0))
 	print("Total Dynasty Members: %d" % status.get("total_dynasty_members", 0))
 	print("Player Incarnations: %d" % status.get("player_incarnations", 0))
 	print("")
 
-	# Endgame conditions
-	print("--- ENDGAME CONDITIONS ---")
+	# Legacy milestones
+	print("--- LEGACY CONDITIONS / HISTORICAL MILESTONES ---")
 	var legacy_goal: int = 1000
 	var dynasty_goal: int = 3
 	var members_goal: int = 20
@@ -2638,12 +2786,12 @@ func _report_endgame_status() -> void:
 	print("Player Incarnations: %.1f%% (%d/%d)" % [incarnations_progress, status.get("player_incarnations", 0), incarnations_goal])
 	print("")
 
-	# Overall completion
+	# Overall milestone progress
 	var total_progress: float = (legacy_progress + dynasty_progress + members_progress + incarnations_progress) / 4.0
-	print("OVERALL RUN COMPLETION: %.1f%%" % total_progress)
+	print("OVERALL MILESTONE PROGRESS: %.1f%%" % total_progress)
 
 	if total_progress >= 100.0:
-		print("\n[color=#57C5B6][b]🎉 RUN COMPLETE! All endgame conditions met![/b][/color]")
+		print("\n[color=#57C5B6][b]Legacy milestone set reached. HeelKawn continues.[/b][/color]")
 	elif total_progress >= 75.0:
 		print("\n[color=#FFD166]Getting close! Keep building your legacy.[/color]")
 	elif total_progress >= 50.0:
@@ -2651,7 +2799,7 @@ func _report_endgame_status() -> void:
 	else:
 		print("\n[color=#888888]Your legacy has just begun. Build, teach, and preserve.[/color]")
 
-	print("\n=== END ENDGAME STATUS ===")
+	print("\n=== END LEGACY MILESTONES ===")
 
 
 func _report_error_issues() -> void:
@@ -2700,6 +2848,7 @@ func _report_error_issues() -> void:
 		"AIAgentManager": AIAgentManager != null,
 		"WorldMemory": WorldMemory != null,
 		"SettlementMemory": SettlementMemory != null,
+		"CivilizationStage": CivilizationStage != null,
 		"CulturalMemory": CulturalMemory != null,
 		"ReligionLens": ReligionLens != null,
 		"JobManager": JobManager != null,

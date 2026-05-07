@@ -341,10 +341,10 @@
 - **Clickable:** Click member for biography
 - **Stats:** Shows profession, legacy score
 
-### **Endgame Status**
+### **Legacy Milestones**
 - **F10 → #75:** Victory condition progress
 - **Percentage:** Overall completion %
-- **Goals:** All 5 victory conditions tracked
+- **Goals:** Historical milestones tracked without a final win state
 - **Messages:** Encouragement based on progress
 
 ---
@@ -366,7 +366,7 @@
 - **72:** Settlement legends (emergent myths)
 - **73:** Read knowledge stones
 - **74:** Dynasty tree (visual family tree)
-- **75:** Endgame status (victory progress)
+- **75:** Legacy milestone status (historical progress)
 
 ### **Utilities**
 - **50:** Force building (instant construction)
@@ -391,7 +391,7 @@
 5. **Trade begins** - Caravans between settlements
 
 ### **Long-Term Goals**
-1. **Complete victory condition** - Any of 5 types
+1. **Reach legacy milestone** - Historical impact, not final completion
 2. **Preserve all knowledge** - Prevent any from dying out
 3. **Build thriving civilization** - 100+ pawns, 5+ settlements
 4. **Create lasting legacy** - Multi-generational dynasty
@@ -462,7 +462,7 @@ HeelKawn1/
 ## 🎓 **LEARNING RESOURCES**
 
 ### **For New Players**
-1. **Onboarding Tutorial** - Interactive guidance (first launch)
+1. **Gentle Onboarding / First-Body Orientation** - Light guidance (first launch)
 2. **docs/PLAYER_GUIDE.md** - Complete how-to-play (400+ lines)
 3. **docs/RICH_TEXT_FEATURES_GUIDE.md** - Where features are
 4. **F10 Menu** - All features accessible

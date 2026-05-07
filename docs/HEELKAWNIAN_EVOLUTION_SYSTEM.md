@@ -27,7 +27,7 @@ HeelKawn is **not** a game with an end state. It is a **living simulation** wher
 
 ---
 
-## 📊 CURRENT STATE (Phase 5 - ~10% Complete)
+## 📊 CURRENT STATE (Phase 5A - first live footholds)
 
 ### ✅ What Exists
 
@@ -56,18 +56,34 @@ HeelKawn is **not** a game with an end state. It is a **living simulation** wher
 - Records all impactful events
 - Deterministic history
 
+**Civilization Stage Lens:**
+- `CivilizationStage.gd` derives a live world/settlement era label from current knowledge, infrastructure, profession diversity, and quality-of-life proxies
+- The HUD identity strip and F10 `03B` expose the current era readout
+- This is a read-only lens, not a full era simulation yet
+
+**HeelKawnian Development Profiles:**
+- `HeelKawnianIdentity.gd` gives pawns deterministic soul anchors, profile history, and evolving traits
+- `HeelKawnianManager.gd` derives each pawn's development phase, drive, next need, skills, knowledge, social signal, preservation pressure, trauma pressure, and era context
+- F10 `49 · HeelKawnians` prints sample individual sprite profiles
+- This is a read-only intelligence profile layer; it does not yet command pawn actions
+
 ### ❌ What's Missing
 
 **The Evolution Engine:**
-- No long-term tech progression tracking (where is civilization on primitive→medieval→industrial→modern scale?)
+- Initial long-term stage tracking exists, but it is a derived lens rather than a full era progression engine
 - No innovation system (pawns can't invent NEW technologies beyond predefined tree)
 - No scientific method (no experimentation, hypothesis testing)
 - No industrialization (no factories, mass production, automation)
 - No information age (no computers, networks, digital knowledge storage)
 - No space age (no off-world expansion)
 
+**Behavior Integration:**
+- HeelKawnian profiles do not yet bias job selection, learning, teaching, invention, preservation, travel, or recovery
+- Drives such as learn, teach, preserve, practice, innovate, and survive need to feed into real pawn decisions
+- Per-pawn goals need deterministic event recording so long-running civilizations remain replayable
+
 **Civilization Metrics:**
-- No civilization level indicator (are we bronze age? industrial?)
+- Initial civilization level indicator now exists as `CivilizationStage.gd` (derived score/stage lens; not yet a full era simulation)
 - No quality of life tracking (lifespan, literacy, health, leisure time)
 - No complexity metrics (specialization, trade networks, governance sophistication)
 
@@ -218,6 +234,8 @@ Track civilization sophistication:
 
 ### Phase 5A: Foundation (NOW - 2 weeks)
 
+**Initial live footholds:** `autoloads/CivilizationStage.gd` now derives a settlement/world stage from live technology, knowledge carriers, settlement infrastructure, profession diversity, and quality-of-life proxies. `autoloads/HeelKawnianManager.gd` now derives individual HeelKawnian development profiles from live pawn state. Next work should connect these lenses to behavior rather than hard-code era jumps.
+
 **Goal:** Make current systems support indefinite evolution
 
 1. **Civilization Stage Tracking**
@@ -225,17 +243,22 @@ Track civilization sophistication:
    - Based on: technologies researched, knowledge types known, infrastructure built
    - Display in ColonyHUD and F10 debug
 
-2. **Innovation System v1**
+2. **HeelKawnian Development AI v1**
+   - Initial profile lens is live: phase, drive, next need, skills, knowledge, era context
+   - Wire profile drives into behavior choice weights
+   - Record major profile-driven actions in WorldMemory
+
+3. **Innovation System v1**
    - Allow knowledge combination (Hunting + Crafting = Better Bows)
    - Track discoveries in WorldMemory
    - Display in ChronicleFeed
 
-3. **Knowledge Preservation v2**
+4. **Knowledge Preservation v2**
    - Add Book crafting (requires Paper, Leather, Ink)
    - Books store more knowledge than stones
    - Libraries store multiple books
 
-4. **Quality of Life Tracking**
+5. **Quality of Life Tracking**
    - Track average lifespan per settlement
    - Track literacy rate (% who know reading knowledge)
    - Display in PawnInfoPanel (settlement tab)
@@ -467,6 +490,8 @@ const STORAGE_LONGEVITY = {
 ### Short-Term (Phase 5A - 2 weeks)
 
 - [ ] Civilization stage displayed for each settlement
+- [x] Initial HeelKawnian development profiles visible in F10 #49
+- [ ] HeelKawnian profiles influence real behavior choices
 - [ ] At least 1 innovation discovered through combination
 - [ ] Books craftable and store knowledge
 - [ ] Lifespan tracking active
@@ -507,22 +532,27 @@ const STORAGE_LONGEVITY = {
 
 ### This Session (May 7, 2026)
 
-1. **Add Civilization Stage Tracking**
-   - Create `CivilizationStage.gd` autoload
-   - Implement `get_civilization_stage(settlement_id)` function
-   - Display in ColonyHUD and F10 #3 debug report
+1. **Verify Civilization Stage Tracking**
+   - `CivilizationStage.gd` autoload exists
+   - `get_civilization_stage(settlement_id)` has an initial live implementation
+   - Display exists in ColonyHUD and F10 `03B`
 
-2. **Enable Knowledge Combination**
+2. **Wire HeelKawnian Development Profiles Into Behavior**
+   - Use each pawn's development drive to bias learning, teaching, preservation, practice, innovation, and recovery choices
+   - Keep the profile deterministic and observable through F10 `49`
+   - Record major profile-led decisions in WorldMemory
+
+3. **Enable Knowledge Combination**
    - Add `try_innovate(pawn_id, knowledge_a, knowledge_b)` to KnowledgeSystem
    - Track innovations in WorldMemory
    - Display in ChronicleFeed
 
-3. **Add Book Crafting**
+4. **Add Book Crafting**
    - Add Book recipe to CraftingSystem
    - Requires: Paper (plant fiber), Leather (animal hide), Ink (berries + soot)
    - Books store 10x more knowledge than stones
 
-4. **Track Quality of Life**
+5. **Track Quality of Life**
    - Add lifespan tracking to WorldMemory
    - Calculate literacy rate (% knowing reading knowledge)
    - Display in F10 #31 (Soul bundle)

@@ -74,6 +74,20 @@ var _neural_update_interval: int = 60  # Only update neural networks every 60 ti
 var _pattern_update_interval: int = 120  # Only update patterns every 120 ticks
 var _prediction_update_interval: int = 180  # Only update predictions every 180 ticks
 
+
+## Get neural update interval scaled by game speed (longer intervals at high speed)
+func _neural_interval_for_speed(base_interval: int) -> int:
+	if GameManager == null:
+		return base_interval
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return base_interval * 4
+	if gs >= 50.0:
+		return base_interval * 3
+	if gs >= 26.0:
+		return base_interval * 2
+	return base_interval
+
 # Pre-allocated arrays for performance
 var _agent_keys_cache: Array = []
 var _layer_names_cache: Array[String] = ["input", "hidden1", "hidden2", "output"]
@@ -350,7 +364,7 @@ func _apply_activation_function(value: float, layer_index: int) -> float:
 func train_neural_network(input_data: Array[float], target_output: Array[float]) -> void:
 	# Backpropagation training - now only runs periodically
 	var current_tick = GameManager.tick_count if GameManager != null else 0
-	if current_tick - _last_neural_update < _neural_update_interval:
+	if current_tick - _last_neural_update < _neural_interval_for_speed(_neural_update_interval):
 		return  # Skip training if not enough time has passed
 	
 	_last_neural_update = current_tick
@@ -421,7 +435,7 @@ func _calculate_accuracy(predicted: Array[float], target: Array[float]) -> float
 func recognize_patterns(world_state: Dictionary) -> Dictionary:
 	# Only run pattern recognition periodically
 	var current_tick = GameManager.tick_count if GameManager != null else 0
-	if current_tick - _last_pattern_update < _pattern_update_interval:
+	if current_tick - _last_pattern_update < _neural_interval_for_speed(_pattern_update_interval):
 		# Return cached patterns if not enough time has passed
 		return pattern_recognition.get("cached_results", {})
 	

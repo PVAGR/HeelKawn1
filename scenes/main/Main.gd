@@ -605,6 +605,13 @@ func _ready() -> void:
 	var simulation_worker: bool = _is_simulation_worker_mode()
 	if not simulation_worker:
 		SettlementMemory.print_validation_smoketest_from_main()
+	
+	# CRITICAL: Create and add TickManager if it doesn't exist
+	if TickManager == null:
+		var tick_manager := load("res://autoloads/TickManager.gd").new()
+		tick_manager.name = "TickManager"
+		add_child(tick_manager)
+	
 	# Ticks are driven by TickManager fixed-step clock.
 	if TickManager != null and TickManager.has_signal("tick_processed"):
 		TickManager.tick_processed.connect(_on_world_tick)
@@ -2508,9 +2515,12 @@ func _on_game_tick(tick: int) -> void:
 		_update_pawn_influence_tick()
 		section_us["influence"] = Time.get_ticks_usec() - t0
 	_update_phase8_proof_bundle_preferred_center()
-	t0 = Time.get_ticks_usec()
-	SettlementMemory.update_settlement_intents(tick)
-	section_us["settlement_intents"] = Time.get_ticks_usec() - t0
+	# Settlement intents: scale with speed like other settlement updates
+	var settlement_intent_interval: int = _high_speed_interval(5, 15, 30)
+	if tick % settlement_intent_interval == 0:
+		t0 = Time.get_ticks_usec()
+		SettlementMemory.update_settlement_intents(tick)
+		section_us["settlement_intents"] = Time.get_ticks_usec() - t0
 	# Spread settlement updates across ticks to reduce hitch spikes
 	var settlement_update_interval: int = _high_speed_interval(30, 45, 60)
 	if tick % settlement_update_interval == 0:

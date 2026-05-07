@@ -1711,12 +1711,13 @@ func _report_knowledge_carriers() -> void:
 
 	# Count knowledge per pawn (filtered by fog)
 	var pawn_knowledge_count: Dictionary = {}
-	if ks.has("knowledge_carriers"):
-		var carriers: Dictionary = ks.get("knowledge_carriers")
-		for pawn_id in carriers:
-			if incarnated and pawn_id != player_pawn_id:
-				continue  # Fog: hide other pawns' knowledge
-			pawn_knowledge_count[pawn_id] = carriers[pawn_id].size()
+	if ks.has_method("get"):
+		var carriers: Variant = ks.get("knowledge_carriers")
+		if carriers != null and carriers is Dictionary:
+			for pawn_id in carriers:
+				if incarnated and pawn_id != player_pawn_id:
+					continue  # Fog: hide other pawns' knowledge
+				pawn_knowledge_count[pawn_id] = carriers[pawn_id].size()
 
 	# Sort by knowledge count (descending)
 	var sorted_pawns: Array = []
@@ -1783,26 +1784,27 @@ func _report_myth_formation() -> void:
 	if mm.has_method("get_region_myth_state"):
 		# Sample regions from WorldMemory
 		var wmem: Node = get_node_or_null("/root/WorldMemory")
-		if wmem != null and wmem.has("event_history"):
-			var events: Array = wmem.get("event_history")
-			var sampled_regions: Dictionary = {}
-			for e in events:
-				if e is Dictionary and e.has("r"):
-					var rk: int = int(e.get("r", -1))
-					if rk >= 0:
-						sampled_regions[rk] = true
+		if wmem != null and wmem.has_method("get"):
+			var events: Variant = wmem.get("event_history")
+			if events != null and events is Array:
+				var sampled_regions: Dictionary = {}
+				for e in events:
+					if e is Dictionary and e.has("r"):
+						var rk: int = int(e.get("r", -1))
+						if rk >= 0:
+							sampled_regions[rk] = true
 
-			for rk in sampled_regions:
-				# LOCAL KNOWLEDGE: Skip regions player doesn't know about
-				if incarnated and not _is_region_known_to_player(rk):
-					continue
-				var state: int = mm.get_region_myth_state(rk)
-				if state == 1:
-					feared_regions += 1
-				elif state == -1:
-					revered_regions += 1
-				else:
-					neutral_regions += 1
+				for rk in sampled_regions:
+					# LOCAL KNOWLEDGE: Skip regions player doesn't know about
+					if incarnated and not _is_region_known_to_player(rk):
+						continue
+					var state: int = mm.get_region_myth_state(rk)
+					if state == 1:
+						feared_regions += 1
+					elif state == -1:
+						revered_regions += 1
+					else:
+						neutral_regions += 1
 
 	print("--- MYTH STATISTICS ---")
 	print("Feared regions (+1): %d" % feared_regions)
@@ -1814,30 +1816,31 @@ func _report_myth_formation() -> void:
 	if not incarnated:
 		print("--- TRUTH: FACTUAL EVENTS (WorldMemory) ---")
 		var wmem: Node = get_node_or_null("/root/WorldMemory")
-		if wmem != null and wmem.has("event_history"):
-			var events: Array = wmem.get("event_history")
-			var death_events_by_region: Dictionary = {}
-			for e in events:
-				if e is Dictionary and e.has("r") and e.has("type"):
-					var event_type: String = str(e.get("type", ""))
-					if event_type.contains("death") or event_type.contains("collapse"):
-						var rk: int = int(e.get("r", -1))
-						if rk >= 0:
-							if not death_events_by_region.has(rk):
-								death_events_by_region[rk] = 0
-							death_events_by_region[rk] += 1
-			
-			for rk in death_events_by_region:
-				if not _is_region_known_to_player(rk) and incarnated:
-					continue
-				var count: int = death_events_by_region[rk]
-				var myth_state: int = mm.get_region_myth_state(rk) if mm.has_method("get_region_myth_state") else 0
-				var myth_label: String = "Neutral"
-				if myth_state == 1:
-					myth_label = "⚠ FEARED (myth exaggerated)"
-				elif myth_state == -1:
-					myth_label = "✓ REVERED (myth glorified)"
-				print("  Region %d: %d deaths → %s" % [rk, count, myth_label])
+		if wmem != null and wmem.has_method("get"):
+			var events: Variant = wmem.get("event_history")
+			if events != null and events is Array:
+				var death_events_by_region: Dictionary = {}
+				for e in events:
+					if e is Dictionary and e.has("r") and e.has("type"):
+						var event_type: String = str(e.get("type", ""))
+						if event_type.contains("death") or event_type.contains("collapse"):
+							var rk: int = int(e.get("r", -1))
+							if rk >= 0:
+								if not death_events_by_region.has(rk):
+									death_events_by_region[rk] = 0
+								death_events_by_region[rk] += 1
+
+				for rk in death_events_by_region:
+					if not _is_region_known_to_player(rk) and incarnated:
+						continue
+					var count: int = death_events_by_region[rk]
+					var myth_state: int = mm.get_region_myth_state(rk) if mm.has_method("get_region_myth_state") else 0
+					var myth_label: String = "Neutral"
+					if myth_state == 1:
+						myth_label = "⚠ FEARED (myth exaggerated)"
+					elif myth_state == -1:
+						myth_label = "✓ REVERED (myth glorified)"
+					print("  Region %d: %d deaths → %s" % [rk, count, myth_label])
 		print("")
 
 	# Show settlement rebirth success counts
@@ -1863,28 +1866,29 @@ func _report_myth_formation() -> void:
 	# Show regional myth states for sampled regions
 	print("--- SAMPLE REGION MYTH STATES ---")
 	var wmem: Node = get_node_or_null("/root/WorldMemory")
-	if wmem != null and wmem.has("event_history"):
-		var events: Array = wmem.get("event_history")
-		var sampled_regions: Dictionary = {}
-		for e in events:
-			if e is Dictionary and e.has("r"):
-				var rk: int = int(e.get("r", -1))
-				if rk >= 0:
-					sampled_regions[rk] = true
+	if wmem != null and wmem.has_method("get"):
+		var events: Variant = wmem.get("event_history")
+		if events != null and events is Array:
+			var sampled_regions: Dictionary = {}
+			for e in events:
+				if e is Dictionary and e.has("r"):
+					var rk: int = int(e.get("r", -1))
+					if rk >= 0:
+						sampled_regions[rk] = true
 
-		var shown: int = 0
-		for rk in sampled_regions:
-			if shown >= 15:
-				break
-			if mm.has_method("get_region_myth_state"):
-				var state: int = mm.get_region_myth_state(rk)
-				var state_label: String = "Neutral"
-				if state == 1:
-					state_label = "⚠ FEARED (repeated deaths/collapse)"
-				elif state == -1:
-					state_label = "✓ REVERED (successful rebirths)"
-				print("  Region %d: %s" % [rk, state_label])
-				shown += 1
+			var shown: int = 0
+			for rk in sampled_regions:
+				if shown >= 15:
+					break
+				if mm.has_method("get_region_myth_state"):
+					var state: int = mm.get_region_myth_state(rk)
+					var state_label: String = "Neutral"
+					if state == 1:
+						state_label = "⚠ FEARED (repeated deaths/collapse)"
+					elif state == -1:
+						state_label = "✓ REVERED (successful rebirths)"
+					print("  Region %d: %s" % [rk, state_label])
+					shown += 1
 
 	print("")
 	print("=== END MYTH FORMATION REPORT ===")
@@ -1919,26 +1923,27 @@ func _report_record_carriers() -> void:
 	var knowledge_stones: int = 0
 	var ledger_stones: int = 0
 
-	if ks.has("record_carriers"):
-		var carriers: Dictionary = ks.get("record_carriers")
-		for tile_key in carriers:
-			var carrier: Dictionary = carriers[tile_key]
-			var inscriber: int = int(carrier.get("inscriber_id", -1))
-			
-			# Fog: hide stones inscribed by others
-			if incarnated and inscriber != player_pawn_id:
-				continue
-			
-			# Local knowledge: hide stones far from player
-			if incarnated and player_tile.x >= 0:
-				# Parse tile_key "x,y"
-				var parts: PackedStringArray = tile_key.split(",")
-				if parts.size() >= 2:
-					var stone_x: int = int(parts[0])
-					var stone_y: int = int(parts[1])
-					var dist: int = abs(player_tile.x - stone_x) + abs(player_tile.y - stone_y)
-					if dist > LOCAL_KNOWLEDGE_RADIUS_TILES:
-						continue
+	if ks.has_method("get"):
+		var carriers: Variant = ks.get("record_carriers")
+		if carriers != null and carriers is Dictionary:
+			for tile_key in carriers:
+				var carrier: Dictionary = carriers[tile_key]
+				var inscriber: int = int(carrier.get("inscriber_id", -1))
+
+				# Fog: hide stones inscribed by others
+				if incarnated and inscriber != player_pawn_id:
+					continue
+
+				# Local knowledge: hide stones far from player
+				if incarnated and player_tile.x >= 0:
+					# Parse tile_key "x,y"
+					var parts: PackedStringArray = tile_key.split(",")
+					if parts.size() >= 2:
+						var stone_x: int = int(parts[0])
+						var stone_y: int = int(parts[1])
+						var dist: int = abs(player_tile.x - stone_x) + abs(player_tile.y - stone_y)
+						if dist > LOCAL_KNOWLEDGE_RADIUS_TILES:
+							continue
 			
 			total_carriers += 1
 			var carrier_type: String = str(carrier.get("carrier_type", "unknown"))
@@ -1958,32 +1963,33 @@ func _report_record_carriers() -> void:
 
 	# Show all record carriers with their stored knowledge
 	print("--- ALL RECORD CARRIERS ---")
-	if ks.has("record_carriers"):
-		var carriers: Dictionary = ks.get("record_carriers")
-		if carriers.is_empty():
-			print("  (No record carriers inscribed yet)")
-		else:
-			var shown: int = 0
-			for tile_key in carriers:
-				var carrier: Dictionary = carriers[tile_key]
-				var inscriber: int = int(carrier.get("inscriber_id", -1))
-				if incarnated and inscriber != player_pawn_id:
-					continue  # Fog: hide stones inscribed by others
-				if shown >= 20:
-					print("  ... and %d more" % (carriers.size() - shown))
-					break
-				var knowledge_types: Array = carrier.get("knowledge_types", [])
-				var inscribed_tick: int = int(carrier.get("inscribed_tick", -1))
-				var carrier_type: String = str(carrier.get("carrier_type", "unknown"))
-				var ticks_ago: int = GameManager.tick_count - inscribed_tick
+	if ks.has_method("get"):
+		var carriers: Variant = ks.get("record_carriers")
+		if carriers != null and carriers is Dictionary:
+			if carriers.is_empty():
+				print("  (No record carriers inscribed yet)")
+			else:
+				var shown: int = 0
+				for tile_key in carriers:
+					var carrier: Dictionary = carriers[tile_key]
+					var inscriber: int = int(carrier.get("inscriber_id", -1))
+					if incarnated and inscriber != player_pawn_id:
+						continue  # Fog: hide stones inscribed by others
+					if shown >= 20:
+						print("  ... and %d more" % (carriers.size() - shown))
+						break
+					var knowledge_types: Array = carrier.get("knowledge_types", [])
+					var inscribed_tick: int = int(carrier.get("inscribed_tick", -1))
+					var carrier_type: String = str(carrier.get("carrier_type", "unknown"))
+					var ticks_ago: int = GameManager.tick_count - inscribed_tick
 
-				print("  %s at (%s)" % [carrier_type.to_upper(), tile_key])
-				print("    Inscribed by pawn %d, %d ticks ago" % [inscriber, ticks_ago])
-				print("    Stores %d knowledge types:" % knowledge_types.size())
-				for kt in knowledge_types:
-					print("      - KnowledgeType #%d" % int(kt))
-				print("")
-				shown += 1
+					print("  %s at (%s)" % [carrier_type.to_upper(), tile_key])
+					print("    Inscribed by pawn %d, %d ticks ago" % [inscriber, ticks_ago])
+					print("    Stores %d knowledge types:" % knowledge_types.size())
+					for kt in knowledge_types:
+						print("      - KnowledgeType #%d" % int(kt))
+					print("")
+					shown += 1
 
 	print("")
 	print("=== END RECORD CARRIERS REPORT ===")
@@ -2081,17 +2087,18 @@ func _report_knowledge_system() -> void:
 	var total_knowledge: int = 0
 	var knowledge_by_type: Dictionary = {}
 
-	if ks.has("knowledge_carriers"):
-		var carriers: Dictionary = ks.get("knowledge_carriers")
-		for pawn_id in carriers:
-			var pawn_knowledge: Array = carriers[pawn_id]
-			total_carriers += 1
-			total_knowledge += pawn_knowledge.size()
-			
-			for ktype in pawn_knowledge:
-				if not knowledge_by_type.has(ktype):
-					knowledge_by_type[ktype] = 0
-				knowledge_by_type[ktype] += 1
+	if ks.has_method("get"):
+		var carriers: Variant = ks.get("knowledge_carriers")
+		if carriers != null and carriers is Dictionary:
+			for pawn_id in carriers:
+				var pawn_knowledge: Array = carriers[pawn_id]
+				total_carriers += 1
+				total_knowledge += pawn_knowledge.size()
+
+				for ktype in pawn_knowledge:
+					if not knowledge_by_type.has(ktype):
+						knowledge_by_type[ktype] = 0
+					knowledge_by_type[ktype] += 1
 
 	print("--- KNOWLEDGE CARRIER STATISTICS ---")
 	print("Total knowledge carriers: %d" % total_carriers)
@@ -2130,23 +2137,24 @@ func _report_knowledge_system() -> void:
 		print("")
 
 	# Teaching records
-	if ks.has("teaching_records"):
-		var records: Array = ks.get("teaching_records")
-		print("--- RECENT TEACHING (Last 10) ---")
-		if records.is_empty():
-			print("  (No teaching records)")
-		else:
-			var shown: int = 0
-			for i in range(max(0, records.size() - 10), records.size()):
-				var record: Dictionary = records[i]
-				var teacher: int = int(record.get("teacher_id", -1))
-				var student: int = int(record.get("student_id", -1))
-				var ktype: int = int(record.get("knowledge_type", -1))
-				var tick: int = int(record.get("tick", 0))
-				var name: String = type_names.get(ktype, "Unknown")
-				print("  %s taught %s: %s (%d ticks ago)" % [teacher, student, name, GameManager.tick_count - tick])
-				shown += 1
-		print("")
+	if ks.has_method("get"):
+		var records: Variant = ks.get("teaching_records")
+		if records != null and records is Array:
+			print("--- RECENT TEACHING (Last 10) ---")
+			if records.is_empty():
+				print("  (No teaching records)")
+			else:
+				var shown: int = 0
+				for i in range(max(0, records.size() - 10), records.size()):
+					var record: Dictionary = records[i]
+					var teacher: int = int(record.get("teacher_id", -1))
+					var student: int = int(record.get("student_id", -1))
+					var ktype: int = int(record.get("knowledge_type", -1))
+					var tick: int = int(record.get("tick", 0))
+					var name: String = type_names.get(ktype, "Unknown")
+					print("  %s taught %s: %s (%d ticks ago)" % [teacher, student, name, GameManager.tick_count - tick])
+					shown += 1
+			print("")
 
 	# Knowledge security
 	if ks.has_method("get_knowledge_status"):
@@ -2286,20 +2294,21 @@ func _report_legacy_dynasty() -> void:
 	# Get dynasty summaries
 	print("--- DYNASTY SUMMARIES ---")
 	var dynasty_count: int = 0
-	if legacy_sys.has("dynasties"):
-		var dynasties: Dictionary = legacy_sys.get("dynasties")
-		for dynasty_id in dynasties:
-			if dynasty_count >= 5:
-				print("  ... and %d more dynasties" % (dynasties.size() - dynasty_count))
-				break
-			if legacy_sys.has_method("get_dynasty_summary"):
-				var summary: Dictionary = legacy_sys.call("get_dynasty_summary", int(dynasty_id))
-				if not summary.is_empty():
-					print("  %s" % summary.get("name", "Unknown Dynasty"))
-					print("    Generations: %d | Members: %d | Total Legacy: %d" % [
-						summary.get("generations", 0),
-						summary.get("members", 0),
-						summary.get("legacy_score_total", 0)
+	if legacy_sys.has_method("get"):
+		var dynasties: Variant = legacy_sys.get("dynasties")
+		if dynasties != null and dynasties is Dictionary:
+			for dynasty_id in dynasties:
+				if dynasty_count >= 5:
+					print("  ... and %d more dynasties" % (dynasties.size() - dynasty_count))
+					break
+				if legacy_sys.has_method("get_dynasty_summary"):
+					var summary: Dictionary = legacy_sys.call("get_dynasty_summary", int(dynasty_id))
+					if not summary.is_empty():
+						print("  %s" % summary.get("name", "Unknown Dynasty"))
+						print("    Generations: %d | Members: %d | Total Legacy: %d" % [
+							summary.get("generations", 0),
+							summary.get("members", 0),
+							summary.get("legacy_score_total", 0)
 					])
 					dynasty_count += 1
 
@@ -2517,19 +2526,20 @@ func _report_read_knowledge_stone() -> void:
 		return
 	
 	print("━━━ ALL INSCRIBED STONES ━━━\n")
-	
-	if ks.has("record_carriers"):
-		var carriers: Dictionary = ks.get("record_carriers")
-		if carriers.is_empty():
-			print("  [color=#666666]No knowledge stones inscribed yet.[/color]")
-		else:
-			for tile_key in carriers:
-				var carrier: Dictionary = carriers[tile_key]
-				var carrier_type: String = str(carrier.get("carrier_type", "stone"))
-				var inscriber_id: int = int(carrier.get("inscriber_id", -1))
-				var knowledge_count: int = int(carrier.get("knowledge_types", []).size())
-				
-				print("  [color=#B084CC]📍 Tile (%s)[/color]" % tile_key)
+
+	if ks.has_method("get"):
+		var carriers: Variant = ks.get("record_carriers")
+		if carriers != null and carriers is Dictionary:
+			if carriers.is_empty():
+				print("  [color=#666666]No knowledge stones inscribed yet.[/color]")
+			else:
+				for tile_key in carriers:
+					var carrier: Dictionary = carriers[tile_key]
+					var carrier_type: String = str(carrier.get("carrier_type", "stone"))
+					var inscriber_id: int = int(carrier.get("inscriber_id", -1))
+					var knowledge_count: int = int(carrier.get("knowledge_types", []).size())
+
+					print("  [color=#B084CC]📍 Tile (%s)[/color]" % tile_key)
 				print("    Type: %s | Inscriber: ID %d | Knowledge: %d types" % [carrier_type, inscriber_id, knowledge_count])
 				
 				# Get full text
@@ -2562,12 +2572,13 @@ func _show_dynasty_tree_ui() -> void:
 	
 	# Get first dynasty (or current player's dynasty)
 	var dynasty_id: int = -1
-	if legacy_sys.has("dynasties"):
-		var dynasties: Dictionary = legacy_sys.get("dynasties")
-		for did in dynasties:
-			dynasty_id = int(did)
-			break
-	
+	if legacy_sys.has_method("get"):
+		var dynasties: Variant = legacy_sys.get("dynasties")
+		if dynasties != null and dynasties is Dictionary:
+			for did in dynasties:
+				dynasty_id = int(did)
+				break
+
 	if dynasty_id < 0:
 		print("No dynasties found - pawns must have children to create dynasties")
 		return

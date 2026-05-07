@@ -35,7 +35,7 @@ func _process(_delta: float) -> void:
 	if _hover_throttle_frames >= 5:  # Check hover every 5 frames instead of every frame
 		_hover_throttle_frames = 0
 		_hovered_pawn = _find_pawn_under_cursor()
-	queue_redraw()
+		queue_redraw()  # Only redraw when hover state changes
 
 
 func _find_pawn_under_cursor():

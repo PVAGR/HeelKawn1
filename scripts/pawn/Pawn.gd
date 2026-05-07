@@ -278,6 +278,8 @@ var _world: World
 var _state: int = State.IDLE
 var _current_job: Job = null
 var _cohort_id: int = -1
+var _sacred_geography_cache: Node = null
+var _last_sacred_check_tile: Vector2i = Vector2i(-999999, -999999)
 var _cohort_role: int = -1
 var _carrying_spawn_item: bool = false
 var draft_mode: bool = false
@@ -1863,12 +1865,13 @@ func _process(delta: float) -> void:
 			pass
 	
 	# SACRED GEOGRAPHY: Apply reverence slowdown on sacred tiles
-	# OPTIMIZATION: Only check when pawn moves to new tile (not every frame)
+	# OPTIMIZATION: Cache SacredGeography reference, only check on tile change
 	if data.tile_pos != _last_sacred_check_tile:
-		var sg: Node = get_node_or_null("/root/SacredGeography")
-		if sg != null and sg.has_method("check_sacred_tile_effect"):
-			sg.call("check_sacred_tile_effect", self)
 		_last_sacred_check_tile = data.tile_pos
+		if _sacred_geography_cache == null:
+			_sacred_geography_cache = get_node_or_null("/root/SacredGeography")
+		if _sacred_geography_cache != null and _sacred_geography_cache.has_method("check_sacred_tile_effect"):
+			_sacred_geography_cache.call("check_sacred_tile_effect", self)
 	
 	# PERFORMANCE: Adaptive redraw throttling
 	# At 1x: redraw every 5th frame

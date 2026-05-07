@@ -1667,14 +1667,15 @@ func _report_knowledge_carriers() -> void:
 		print("  You only see knowledge YOUR pawn knows.")
 		print("")
 
-	# Get knowledge carrier statistics
+	# Get knowledge carrier statistics (Node-safe access)
 	var total_carriers: int = 0
-	if ks.has("knowledge_carriers"):
-		var carriers: Dictionary = ks.get("knowledge_carriers")
-		for pawn_id in carriers:
-			if incarnated and pawn_id != player_pawn_id:
-				continue  # Fog: hide other pawns' knowledge
-			total_carriers += 1
+	if ks.has_method("get"):
+		var carriers: Variant = ks.get("knowledge_carriers")
+		if carriers != null and carriers is Dictionary:
+			for pawn_id in carriers:
+				if incarnated and pawn_id != player_pawn_id:
+					continue  # Fog: hide other pawns' knowledge
+				total_carriers += 1
 
 	print("--- KNOWLEDGE STATISTICS ---")
 	print("Total knowledge carriers: %d" % total_carriers)
@@ -1682,17 +1683,18 @@ func _report_knowledge_carriers() -> void:
 
 	# Show dormant knowledge (at risk of being lost)
 	print("--- DORMANT KNOWLEDGE (At Risk of Being Lost) ---")
-	if ks.has("dormant_knowledge"):
-		var dormant: Dictionary = ks.get("dormant_knowledge")
-		if dormant.is_empty():
-			print("  (No dormant knowledge - all knowledge has active carriers)")
-		else:
-			for kt_key in dormant:
-				var dk: Dictionary = dormant[kt_key]
-				var last_carrier: int = int(dk.get("last_carrier_id", -1))
-				var last_tick: int = int(dk.get("last_practiced_tick", -1))
-				var ticks_ago: int = GameManager.tick_count - last_tick
-				print("  %s: Last carrier pawn_id=%d, %d ticks ago" % [kt_key, last_carrier, ticks_ago])
+	if ks.has_method("get"):
+		var dormant: Variant = ks.get("dormant_knowledge")
+		if dormant != null and dormant is Dictionary:
+			if dormant.is_empty():
+				print("  (No dormant knowledge - all knowledge has active carriers)")
+			else:
+				for kt_key in dormant:
+					var dk: Dictionary = dormant[kt_key]
+					var last_carrier: int = int(dk.get("last_carrier_id", -1))
+					var last_tick: int = int(dk.get("last_practiced_tick", -1))
+					var ticks_ago: int = GameManager.tick_count - last_tick
+					print("  %s: Last carrier pawn_id=%d, %d ticks ago" % [kt_key, last_carrier, ticks_ago])
 	print("")
 
 	# Show top 10 knowledge carriers (masters)

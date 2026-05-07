@@ -1821,8 +1821,9 @@ func _process(delta: float) -> void:
 	
 	# PERFORMANCE: Adaptive visual update rate based on game speed
 	# At high speeds, players can't perceive smooth movement anyway
+	# But we need to show SOME movement so pawns don't appear frozen
 	_visual_frame_counter += 1
-	var visual_interval: int = MIN_VISUAL_UPDATE_INTERVAL + int(GameManager.game_speed * 0.4)
+	var visual_interval: int = MIN_VISUAL_UPDATE_INTERVAL + int(GameManager.game_speed * 0.15)  # Reduced from 0.4 for better visibility
 	var should_update_visuals: bool = (_visual_frame_counter >= visual_interval)
 	
 	if should_update_visuals:
@@ -2106,20 +2107,20 @@ func _fast_forward_tick_stride() -> int:
 
 func _job_claim_interval_for_speed() -> int:
 	if GameManager == null:
-		return 5
+		return 3
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 8
+		return 3  # Reduced from 8 - pawns need to work at high speed!
 	if gs >= 50.0:
-		return 6
+		return 3  # Reduced from 6
 	if gs >= 26.0:
-		return 4
+		return 2  # Reduced from 4
 	if gs >= 12.0:
-		return 4
+		return 2  # Reduced from 4
 	if gs >= 3.0:
-		return 5
+		return 3  # Reduced from 5
 	# 1x: claim often enough that pawns feel "busy" without scanning every tick.
-	return 4
+	return 3  # Reduced from 4
 
 
 func _neural_priority_refresh_interval_for_speed() -> int:

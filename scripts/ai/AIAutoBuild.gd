@@ -315,7 +315,7 @@ func _scan_for_new_pawns(_tick: int) -> void:
 		if pawn == null or not is_instance_valid(pawn):
 			continue
 
-		var data: Node = pawn.get("data")
+		var data: RefCounted = pawn.data
 		if data == null:
 			continue
 

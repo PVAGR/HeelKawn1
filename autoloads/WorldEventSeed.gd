@@ -19,7 +19,7 @@ func _init(_seed_id: String, _seed_type: String, _seed_value: int, _params: Dict
 func next_event(current_tick: int) -> Dictionary:
     # Minimal deterministic stub: produce a simple event payload
     if current_tick <= last_tick:
-        return null
+        return {}
     last_tick = current_tick
     return {
         "seed_id": seed_id,

@@ -19,9 +19,6 @@ func ensure_default_seeds() -> void:
 func register_seed(seed_id: String, seed_type: String, seed_value: int, params: Dictionary = {}) -> void:
     var SeedClass = preload("res://autoloads/WorldEventSeed.gd")
     var s = SeedClass.new(seed_id, seed_type, seed_value, params)
-    # Fallback if static helper exists and new() path failed
-    if s == null and SeedClass.has_method("new_seed"):
-        s = SeedClass.new_seed(seed_id, seed_type, seed_value, params)
     _seeds[seed_id] = s
 
 func get_seed(seed_id: String) -> WorldEventSeed:

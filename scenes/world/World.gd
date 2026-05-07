@@ -184,7 +184,7 @@ func _tile_color(x: int, y: int) -> Color:
 				or feature == TileFeature.Type.MARKER_STONE
 				or feature == TileFeature.Type.SHRINE
 		):
-			var rk_ct: int = WorldMemory._region_key(x, y)
+			var rk_ct: int = WorldMemory._region_key(x, y) if WorldMemory != null else 0
 			if _region_culture_tint_cache.has(rk_ct):
 				# Landmark buildings get stronger cultural tint
 				if feature == TileFeature.Type.FIRE_PIT or feature == TileFeature.Type.SHRINE or feature == TileFeature.Type.MARKER_STONE:
@@ -333,6 +333,9 @@ func _rebuild_player_meaning_region_state() -> void:
 
 ## Stacks on scar; deterministic per 16x16 region (settlement state only).
 func _apply_player_meaning_tint(c: Color, x: int, y: int) -> Color:
+	# Handle case where WorldMemory isn't ready yet
+	if WorldMemory == null:
+		return c
 	var rk: int = WorldMemory._region_key(x, y)
 	if not _player_meaning_region_state.has(rk):
 		return c
@@ -439,7 +442,7 @@ func apply_ruins_from_persistence() -> void:
 		if p.data == null:
 			continue
 		var tp: Vector2i = p.data.tile_pos
-		var rpk: int = WorldMemory._region_key(tp.x, tp.y)
+		var rpk: int = WorldMemory._region_key(tp.x, tp.y) if WorldMemory != null else 0
 		region_has_pawn[rpk] = true
 	var any_change: bool = false
 	for y in range(WorldData.HEIGHT):
@@ -447,9 +450,11 @@ func apply_ruins_from_persistence() -> void:
 			var f: int = data.get_feature(x, y)
 			if f != TileFeature.Type.BED and f != TileFeature.Type.WALL and f != TileFeature.Type.DOOR:
 				continue
-			var rk: int = WorldMemory._region_key(x, y)
+			var rk: int = WorldMemory._region_key(x, y) if WorldMemory != null else 0
 			# Only ruinize structures in collapsed settlements.
 			if not SettlementMemory.is_region_in_collapsed_settlement(rk):
+				continue
+			if WorldPersistence == null:
 				continue
 			if int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0)) < 2:
 				continue

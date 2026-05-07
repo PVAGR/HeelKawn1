@@ -350,7 +350,7 @@ func remove_core_belief(pawn_id: int, belief: String) -> void:
 
 
 ## Get core beliefs
-func get_core_beliefs(pawn_id: int) -> Array[String]:
+func get_core_beliefs(pawn_id: int) -> Array:
 	_init_consciousness(pawn_id)
 	return pawn_consciousness[str(pawn_id)].core_beliefs.duplicate()
 
@@ -358,15 +358,15 @@ func get_core_beliefs(pawn_id: int) -> Array[String]:
 ## Add subconscious desire
 func add_subconscious_desire(pawn_id: int, desire: String) -> void:
 	_init_consciousness(pawn_id)
-	
+
 	var consciousness: Dictionary = pawn_consciousness[str(pawn_id)]
-	
+
 	if not consciousness.subconscious_desires.has(desire):
 		consciousness.subconscious_desires.append(desire)
 
 
 ## Get subconscious desires
-func get_subconscious_desires(pawn_id: int) -> Array[String]:
+func get_subconscious_desires(pawn_id: int) -> Array:
 	_init_consciousness(pawn_id)
 	return pawn_consciousness[str(pawn_id)].subconscious_desires.duplicate()
 

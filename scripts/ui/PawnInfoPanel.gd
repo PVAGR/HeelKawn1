@@ -392,8 +392,8 @@ func _populate_needs_tab() -> void:
 
 func _populate_matrix_tab() -> void:
 	_matrix_inputs_label = RichTextLabel.new()
-    # bbcode_enabled disabled for runtime stability
-    # _matrix_inputs_label.bbcode_enabled = true
+	# bbcode_enabled disabled for runtime stability
+	# _matrix_inputs_label.bbcode_enabled = true
 	_matrix_inputs_label.fit_content = true
 	_matrix_inputs_label.scroll_active = true
 	_matrix_inputs_label.custom_minimum_size = Vector2(0, 220)
@@ -407,8 +407,8 @@ func _populate_neural_tab() -> void:
 	_tab_neural.add_child(_neural_bias_label)
 
 	_neural_outputs_label = RichTextLabel.new()
-    # bbcode_enabled disabled for runtime stability
-    # _neural_outputs_label.bbcode_enabled = true
+	# bbcode_enabled disabled for runtime stability
+	# _neural_outputs_label.bbcode_enabled = true
 	_neural_outputs_label.fit_content = true
 	_neural_outputs_label.scroll_active = true
 	_neural_outputs_label.custom_minimum_size = Vector2(0, 100)
@@ -433,8 +433,8 @@ func _populate_narrative_tab() -> void:
 	# Narrative label - shows dynamic pawn story
 	var narrative_label: RichTextLabel = RichTextLabel.new()
 	narrative_label.name = "NarrativeLabel"
-    # bbcode_enabled disabled for runtime stability
-    # narrative_label.bbcode_enabled = true
+	# bbcode_enabled disabled for runtime stability
+	# narrative_label.bbcode_enabled = true
 	narrative_label.fit_content = true
 	narrative_label.scroll_active = true
 	narrative_label.custom_minimum_size = Vector2(0, 280)
@@ -1643,7 +1643,7 @@ func _update_consciousness_tab() -> void:
 	# Beliefs
 	var beliefs_label: Label = _tab_consciousness.get_node_or_null("BeliefsLabel") as Label
 	if beliefs_label != null:
-		var beliefs: Array[String] = PawnConsciousness.get_core_beliefs(pawn_id)
+		var beliefs: Array = PawnConsciousness.get_core_beliefs(pawn_id)
 		if beliefs.is_empty():
 			beliefs_label.text = "[i][color=#666666]No core beliefs formed yet[/color][/i]"
 		else:

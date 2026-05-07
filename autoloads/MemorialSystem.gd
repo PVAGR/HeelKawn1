@@ -46,6 +46,7 @@ var gatherings: Array[Dictionary] = []
 @onready var _world_memory: Node = null
 @onready var _pawn_spawner: Node = null
 @onready var _gossip_manager: Node = null
+@onready var _grudge_manager: Node = null
 @onready var _knowledge_system: Node = null
 
 
@@ -54,8 +55,9 @@ func _ready() -> void:
 	_world_memory = get_node_or_null("/root/WorldMemory")
 	_pawn_spawner = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
 	_gossip_manager = get_node_or_null("/root/GossipManager")
+	_grudge_manager = get_node_or_null("/root/GrudgeManager")
 	_knowledge_system = get_node_or_null("/root/KnowledgeSystem")
-	
+
 	# Note: WorldMemory.gd calls MemorialSystem directly via ms.call() methods
 	# No signal connection needed
 
@@ -117,8 +119,9 @@ func npc_build_memorial(pawn_builder: Node, deceased_pawn_data: RefCounted, tile
 		if _are_related(int(pawn_builder.data.id), int(deceased_pawn_data.id)):
 			memorial_type = "memorial_plaque"  # More personal
 		# Grudge enemy might build mocking memorial
-		elif _gossip_manager != null and _gossip_manager.has_grudge(int(pawn_builder.data.id), int(deceased_pawn_data.id)):
-			memorial_type = "ruin_marker"  # Minimal, dismissive
+		elif _grudge_manager != null and _grudge_manager.has_method("has_grudge"):
+			if _grudge_manager.call("has_grudge", int(pawn_builder.data.id), int(deceased_pawn_data.id)):
+				memorial_type = "ruin_marker"  # Minimal, dismissive
 
 	create_memorial({
 		"tile": tile,
@@ -308,11 +311,11 @@ func _should_pilgrimage(pawn: Node, memorial: Dictionary) -> bool:
 	# (simplified - would need death record profession data)
 	
 	# Grudge closure
-	if _gossip_manager != null:
+	if _grudge_manager != null and _grudge_manager.has_method("has_grudge"):
 		for associated_id in memorial.associated_pawns:
-			if _gossip_manager.has_grudge(pawn_id, associated_id):
+			if _grudge_manager.call("has_grudge", pawn_id, associated_id):
 				return true
-	
+
 	return false
 
 
@@ -484,10 +487,10 @@ func get_memorial_for_pilgrimage(pawn_id: int) -> Dictionary:
 				return memorial  # Family memorial
 	
 	# Check for grudge-related memorials
-	if _gossip_manager != null:
+	if _grudge_manager != null and _grudge_manager.has_method("has_grudge"):
 		for memorial in memorials:
 			for associated_id in memorial.associated_pawns:
-				if _gossip_manager.has_grudge(pawn_id, associated_id):
+				if _grudge_manager.call("has_grudge", pawn_id, associated_id):
 					return memorial  # Grudge enemy memorial (closure)
 	
 	# Check for same profession memorials

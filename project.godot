@@ -96,7 +96,6 @@ FactionSystem="*res://autoloads/FactionSystem.gd"
 Weather="*res://scenes/world/Weather.gd"
 FarmingSystem="*res://autoloads/FarmingSystem.gd"
 ObjectPool="*res://autoloads/ObjectPool.gd"
-; TickRateDecoupler intentionally not autoloaded: no live system calls should_update(), so it was pure overhead.
 SpatialGrid="*res://autoloads/SpatialGrid.gd"
 EventBus="*res://autoloads/EventBus.gd"
 AIAutoBuild="*res://scripts/ai/AIAutoBuild.gd"

@@ -210,15 +210,21 @@ func _process_dreams(tick: int) -> void:
 func _generate_dream(pawn: Node) -> void:
 	var pawn_id: int = int(pawn.data.id)
 	_init_consciousness(pawn_id)
-	
+
 	var consciousness: Dictionary = pawn_consciousness[str(pawn_id)]
-	
+
 	# Dreams draw from recent memories and subconscious desires
 	var recent_memories: Array[Dictionary] = get_memories(pawn_id, "", 10)
-	
+
 	if recent_memories.size() == 0:
 		return
-	
+
+	# Calculate emotion sum from recent memories
+	var emotion_sum: float = 0.0
+	for memory in recent_memories:
+		if memory.has("emotion"):
+			emotion_sum += float(memory.get("emotion", 0.0))
+
 	# Dream theme based on dominant emotions and life state
 	var theme: String = "general"
 	if emotion_sum < -50:
@@ -241,7 +247,7 @@ func _generate_dream(pawn: Node) -> void:
 	# Get dream content
 	var dream_themes: Array = DREAM_THEMES.get(theme, DREAM_THEMES.general)
 	var dream_content: String = dream_themes[randi() % dream_themes.size()]
-	
+
 	# Create dream
 	var dream: Dictionary = {
 		"tick": GameManager.tick_count,

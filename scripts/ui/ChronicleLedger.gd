@@ -269,22 +269,37 @@ func _refresh_technology_tab() -> void:
 			])
 	lines.append("")
 	
-	# Innovations
-	lines.append("[b]Innovations (%d):[/b]" % tech_sys.innovations.size())
-	if tech_sys.innovations.is_empty():
-		lines.append("  None")
+	# Innovations (from KnowledgeSystem)
+	var ks: Node = get_node_or_null("/root/KnowledgeSystem")
+	var innovation_count: int = 0
+	if ks != null and ks.has_method("get_innovation_count"):
+		innovation_count = int(ks.call("get_innovation_count"))
+	lines.append("[b]Innovations (%d):[/b]" % innovation_count)
+	if innovation_count <= 0:
+		lines.append("  None yet — pawns need 2+ knowledge types to combine")
 	else:
-		for innovation in tech_sys.innovations:
-			lines.append("  %s from %s" % [innovation.tech_id, str(innovation.parent_techs)])
+		var discovered: Dictionary = ks.get("_innovations_discovered") if ks != null else {}
+		for key in discovered.keys():
+			if str(key).begins_with("pawn_cd_"):
+				continue
+			var val: Variant = discovered.get(key)
+			if val is Dictionary:
+				var d: Dictionary = val as Dictionary
+				lines.append("  %s (pawn %d, tick %d)" % [str(d.get("name", "?")), int(d.get("pawn_id", -1)), int(d.get("tick", 0))])
 	lines.append("")
 	
 	# Innovation candidates
-	lines.append("[b]Innovation Candidates (%d):[/b]" % tech_sys.innovation_candidates.size())
-	if tech_sys.innovation_candidates.is_empty():
-		lines.append("  None")
-	else:
-		for candidate in tech_sys.innovation_candidates:
-			lines.append("  Potential: %.2f from %s" % [candidate.potential, str(candidate.parent_techs)])
+	lines.append("[b]Innovation Recipes:[/b]")
+	if ks != null and ks.has_method("get"):
+		var recipes: Dictionary = ks.get("_innovation_recipes") if ks != null else {}
+		if recipes.is_empty():
+			lines.append("  None")
+		else:
+			for rkey in recipes.keys():
+				var recipe: Variant = recipes.get(rkey)
+				if recipe is Dictionary:
+					var r: Dictionary = recipe as Dictionary
+					lines.append("  %s → %s (%.0f%% base)" % [rkey, str(r.get("name", "?")), float(r.get("base_chance", 0.0)) * 100.0])
 	
 	_technology_text.text = "\n".join(lines)
 
@@ -297,13 +312,11 @@ func _refresh_evolution_tab() -> void:
 	lines.append("[b]=== GENETIC EVOLUTION ===[/b]")
 	lines.append("")
 	
-	# Check if GeneticEvolution is loaded
-	if not has_node("/root/GeneticEvolution"):
+	var gen_evo: Node = get_node_or_null("/root/GeneticEvolution")
+	if gen_evo == null:
 		lines.append("[color=#888888]GeneticEvolution not loaded.[/color]")
 		_evolution_text.text = "\n".join(lines)
 		return
-	
-	var gen_evo: GeneticEvolution = get_node("/root/GeneticEvolution")
 	
 	# Population stats
 	lines.append("[b]Population Stats:[/b]")

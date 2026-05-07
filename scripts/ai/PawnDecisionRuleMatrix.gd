@@ -531,6 +531,18 @@ func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump(outs, 0, 0.06)   # seek food — survival anxiety
 		_bump(outs, 1, 0.04)   # seek rest — exhaustion
 		fired.append({"id": "dream_survival", "line": "IF survival dream THEN seek food + rest.", "w": 0.30})
+	elif dream_theme == "social":
+		_bump(outs, 2, 0.06)   # social — dream of belonging
+		_bump(outs, 4, 0.03)   # build — community drive
+		fired.append({"id": "dream_social", "line": "IF social dream THEN seek community + build.", "w": 0.30})
+	elif dream_theme == "achievement":
+		_bump(outs, 3, 0.06)   # forage — productive ambition
+		_bump(outs, 4, 0.05)   # build — creative drive
+		_bump(outs, 5, 0.03)   # craft — mastery drive
+		fired.append({"id": "dream_achievement", "line": "IF achievement dream THEN produce + build + craft.", "w": 0.30})
+	elif dream_theme == "general":
+		_bump(outs, 1, 0.02)   # mild rest — neutral dream
+		fired.append({"id": "dream_general", "line": "IF general dream THEN mild restfulness.", "w": 0.10})
 
 	# Core beliefs: pawns with many beliefs are more community-oriented
 	var beliefs_n: int = int(ctx.get("core_beliefs_count", 0))

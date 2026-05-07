@@ -289,6 +289,11 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 		ambition = _ambition_result(Job.Type.BUILD_MARKER_STONE, 6, "memory anchor missing for preservation-focused population")
 	elif drive == "survive":
 		ambition = _ambition_result(Job.Type.GROW_FOOD, 7, "survival drive requests stronger food loop")
+	elif drive == "preserve":
+		if markers <= 0:
+			ambition = _ambition_result(Job.Type.CARVE_KNOWLEDGE_STONE, 7, "preservation drive: no knowledge markers in settlement")
+		else:
+			ambition = _ambition_result(Job.Type.PAPER_MAKING, 6, "preservation drive: upgrade from stone to paper")
 	elif drive == "innovate":
 		ambition = _ambition_result(Job.Type.TOOL_MAKING, 6, "innovation drive requests production throughput")
 	elif drive == "bond":
@@ -317,11 +322,18 @@ static func _worldbox_loop_job_for_pawn(
 		local_features: Dictionary,
 		tick: int
 ) -> int:
-	var phase: int = posmod(tick / 90 + int(data.id) * 3, 8)
 	var walls: int = int(local_features.get("wall", 0))
 	var doors: int = int(local_features.get("door", 0))
 	var hearths: int = int(local_features.get("hearth", 0))
 	var storage_huts: int = int(local_features.get("storage_hut", 0))
+	var markers: int = int(local_features.get("marker", 0))
+	# Knowledge preservation phase: if settlement has writing, expand the loop
+	var has_writing: bool = false
+	var ks: Node = _root_node("KnowledgeSystem")
+	if ks != null and ks.has_method("has_knowledge"):
+		has_writing = bool(ks.call("has_knowledge", int(data.id), 24))  # WRITING
+	var phase_count: int = 12 if has_writing else 8
+	var phase: int = posmod(tick / 90 + int(data.id) * 3, phase_count)
 	match phase:
 		0:
 			return Job.Type.FORAGE
@@ -347,6 +359,17 @@ static func _worldbox_loop_job_for_pawn(
 			return Job.Type.HUNT
 		7:
 			return Job.Type.TOOL_MAKING
+		# Knowledge preservation phases (only when writing known)
+		8:
+			if markers <= 0:
+				return Job.Type.CARVE_KNOWLEDGE_STONE
+			return Job.Type.PAPER_MAKING
+		9:
+			return Job.Type.INK_MAKING
+		10:
+			return Job.Type.BOOK_BINDING
+		11:
+			return Job.Type.TEACH_SKILL
 	return -1
 
 

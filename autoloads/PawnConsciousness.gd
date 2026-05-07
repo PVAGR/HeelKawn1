@@ -194,13 +194,11 @@ func _process_dreams(tick: int) -> void:
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue
 
-		# Check if pawn is sleeping
-		var state: String = ""
+		# Check if pawn is sleeping (get_state returns Pawn.State enum int)
+		var is_sleeping: bool = false
 		if pawn.has_method("get_state"):
-			state = str(pawn.get_state())
-		elif pawn.has_meta("state"):
-			state = str(pawn.get_meta("state"))
-		if state != "sleeping":
+			is_sleeping = int(pawn.get_state()) == 6  # Pawn.State.SLEEPING = 6
+		if not is_sleeping:
 			continue
 
 		# Generate dream

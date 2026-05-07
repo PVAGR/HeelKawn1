@@ -154,11 +154,12 @@ func _create_trade_route(from_settlement: int, to_settlement: int, tick: int) ->
 
 
 func _find_available_trader(settlement_region: int) -> Pawn:
-	if _pawn_spawner == null:
+	var _ps: Node = _get_pawn_spawner()
+	if _ps == null:
 		return null
 	
 	# Find pawns in or near the settlement
-	for pawn in _pawn_spawner.pawns:
+	for pawn in _ps.pawns:
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue
 		
@@ -282,10 +283,11 @@ func _spread_knowledge(from_region: int, to_region: int, goods: Dictionary) -> v
 
 func _get_pawns_in_region(region: int) -> Array:
 	var pawns: Array = []
-	if _pawn_spawner == null:
+	var _ps: Node = _get_pawn_spawner()
+	if _ps == null:
 		return pawns
 	
-	for pawn in _pawn_spawner.pawns:
+	for pawn in _ps.pawns:
 		if pawn == null or not is_instance_valid(pawn):
 			continue
 		
@@ -323,7 +325,13 @@ func _update_stats() -> void:
 # ==================== Autoload References ====================
 
 @onready var _WM = get_node_or_null("/root/WorldMemory")
-@onready var _pawn_spawner: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
+
+
+func _get_pawn_spawner() -> Node:
+	var _main: Node = get_tree().get_root().get_node_or_null("Main") if get_tree() != null else null
+	if _main == null:
+		return null
+	return _main.get_node_or_null("WorldViewport/PawnSpawner")
 
 
 # ==================== Public API ====================

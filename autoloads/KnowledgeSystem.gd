@@ -53,6 +53,8 @@ const BASE_DISCOVERY_RESEARCH_POINTS: int = 3
 const BASE_TEACHING_RESEARCH_POINTS: int = 2
 const RESEARCH_POINT_ACCUM_INTERVAL_TICKS: int = 300
 const RESEARCH_POINT_ACCUM_PHASE_OFFSET_TICKS: int = 61
+const INNOVATION_CHECK_INTERVAL_TICKS: int = 500
+const INNOVATION_CHECK_PHASE_OFFSET: int = 73
 
 ## Knowledge carriers: pawn_id -> Array[KnowledgeType]
 var knowledge_carriers: Dictionary = {}
@@ -141,6 +143,8 @@ func _on_game_tick(tick: int) -> void:
 		_update_knowledge_security()
 	if GameManager.periodic_phase_due(tick, REDISCOVERY_CHECK_INTERVAL_TICKS, REDISCOVERY_CHECK_PHASE_OFFSET):
 		_check_rediscovery_opportunities()
+	if GameManager.periodic_phase_due(tick, INNOVATION_CHECK_INTERVAL_TICKS, INNOVATION_CHECK_PHASE_OFFSET):
+		_check_innovation_opportunities()
 
 # === Knowledge Carrier Management ===
 
@@ -1069,4 +1073,205 @@ func _knowledge_carrier_counts_by_settlement() -> Dictionary:
 		var sid: int = int(carriers_present[pid_any])
 		var key: String = str(sid)
 		out[key] = int(out.get(key, 0)) + 1
+	return out
+
+
+# === Innovation / Knowledge Combination System ===
+# HeelKawnians can invent new knowledge by combining what they already know.
+# This is the engine that drives civilization from primitive to post-scarcity.
+
+signal innovation_discovered(pawn_id: int, result_knowledge: int, recipe_name: String)
+
+# Combination recipes: key = sorted pair of knowledge types, value = result
+# Format: "{lo,hi}" -> {"result": KnowledgeType, "name": String, "base_chance": float}
+var _innovation_recipes: Dictionary = {
+	"{12,16}": {"result": 2, "name": "Advanced Toolmaking", "base_chance": 0.04},       # Hunting + Crafting -> Tool Making
+	"{13,6}": {"result": 20, "name": "Architectural Design", "base_chance": 0.04},       # Farming + Shelter -> Architecture
+	"{16,18}": {"result": 23, "name": "Mechanical Engineering", "base_chance": 0.03},     # Crafting + Metallurgy -> Engineering
+	"{17,15}": {"result": 25, "name": "Philosophical Governance", "base_chance": 0.04},   # Leadership + Diplomacy -> Philosophy
+	"{16,17}": {"result": 24, "name": "Written Records", "base_chance": 0.05},            # Crafting + Leadership -> Writing
+	"{14,12}": {"result": 19, "name": "War Hunting", "base_chance": 0.04},               # Combat + Hunting -> Animal Husbandry
+	"{21,4}": {"result": 22, "name": "Astrological Medicine", "base_chance": 0.03},      # Medicine + Sickness Avoidance -> Astronomy
+	"{18,2}": {"result": 23, "name": "Metallurgical Engineering", "base_chance": 0.03},   # Metallurgy + Tool Making -> Engineering
+	"{13,1}": {"result": 13, "name": "Irrigation Farming", "base_chance": 0.05},          # Farming + Food Storage -> Advanced Farming
+	"{7,24}": {"result": 7, "name": "Archival Preservation", "base_chance": 0.05},        # Memory Preservation + Writing -> Deep Preservation
+	"{22,5}": {"result": 22, "name": "Celestial Navigation", "base_chance": 0.04},        # Astronomy + Navigation -> Advanced Astronomy
+	"{20,23}": {"result": 20, "name": "Structural Architecture", "base_chance": 0.04},   # Architecture + Engineering -> Advanced Architecture
+	"{25,17}": {"result": 25, "name": "Ethical Leadership", "base_chance": 0.05},          # Philosophy + Leadership -> Advanced Philosophy
+	"{19,13}": {"result": 19, "name": "Selective Breeding", "base_chance": 0.04},         # Animal Husbandry + Farming -> Advanced Husbandry
+	"{21,16}": {"result": 21, "name": "Crafted Remedies", "base_chance": 0.05},           # Medicine + Crafting -> Advanced Medicine
+}
+
+# Track innovations to prevent duplicates
+var _innovations_discovered: Dictionary = {}  # recipe_key -> {pawn_id, tick, result}
+
+# Innovation attempt cooldown per pawn (ticks)
+const INNOVATION_PAWN_COOLDOWN: int = 600
+
+
+func _check_innovation_opportunities() -> void:
+	"""Periodic check: pawns with multiple knowledge types may innovate."""
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	for pawn in _get_pawns():
+		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
+			continue
+		var pid: int = int(pawn.data.id)
+		if not knowledge_carriers.has(pid):
+			continue
+		var known: Array = knowledge_carriers[pid] as Array
+		if known.size() < 2:
+			continue  # Need at least 2 knowledge types to combine
+		# Check cooldown
+		var last_attempt: int = int(_innovations_discovered.get("pawn_cd_%d" % pid, -999999))
+		if tick - last_attempt < INNOVATION_PAWN_COOLDOWN:
+			continue
+		# Try all pairs of known knowledge types
+		_try_innovate_for_pawn(pid, known, tick)
+
+
+func _try_innovate_for_pawn(pawn_id: int, known: Array, tick: int) -> void:
+	"""Try innovation for a pawn with their known knowledge types."""
+	for i in range(known.size()):
+		for j in range(i + 1, known.size()):
+			var ka: int = int(known[i])
+			var kb: int = int(known[j])
+			var lo: int = mini(ka, kb)
+			var hi: int = maxi(ka, kb)
+			var key: String = "{%d,%d}" % [lo, hi]
+			if not _innovation_recipes.has(key):
+				continue
+			var recipe: Dictionary = _innovation_recipes[key]
+			# Check if already discovered by this pawn
+			var disc_key: String = "%s_%d" % [key, pawn_id]
+			if _innovations_discovered.has(disc_key):
+				continue
+			# Calculate success chance
+			var chance: float = float(recipe.get("base_chance", 0.03))
+			# Intelligence bonus (from PawnData)
+			var pawn_data: PawnData = _get_pawn_data_by_id(pawn_id)
+			if pawn_data != null:
+				chance += float(pawn_data.intelligence) * 0.008
+				# Higher skill level = better experimenter
+				chance += float(pawn_data.level) * 0.005
+			# Knowledge depth bonus: longer-held knowledge = more likely to combine
+			chance += _get_knowledge_depth_bonus(pawn_id, lo, hi) * 0.01
+			# Institution bonus (university/guild proximity)
+			chance += _get_institution_bonus(pawn_id) * 0.02
+			# Era bonus: higher civilization = more innovation-friendly
+			if CivilizationStage != null and CivilizationStage.has_method("get_civilization_stage"):
+				var stage: int = CivilizationStage.get_civilization_stage()
+				chance += float(stage) * 0.005
+			# Clamp
+			chance = clampf(chance, 0.0, 0.35)
+			# Roll
+			var rng: Node = get_node_or_null("/root/WorldRNG")
+			if rng != null and rng.has_method("for_pawn"):
+				var gen = rng.call("for_pawn", pawn_id, tick)
+				if gen.call("float") < chance:
+					_succeed_innovation(pawn_id, key, recipe, tick)
+					return  # One innovation per check cycle
+			elif randf() < chance:
+				_succeed_innovation(pawn_id, key, recipe, tick)
+				return
+	# Mark cooldown even on failure
+	_innovations_discovered["pawn_cd_%d" % pawn_id] = tick
+
+
+func _succeed_innovation(pawn_id: int, recipe_key: String, recipe: Dictionary, tick: int) -> void:
+	"""A pawn has successfully innovated! Record and propagate."""
+	var result_kt: int = int(recipe.get("result", -1))
+	var name: String = str(recipe.get("name", "unknown"))
+	# Teach the new knowledge to the innovator
+	if result_kt >= 0 and result_kt < KnowledgeType.size():
+		add_knowledge_carrier(pawn_id, result_kt)
+	# Record discovery
+	var disc_key: String = "%s_%d" % [recipe_key, pawn_id]
+	_innovations_discovered[disc_key] = {"pawn_id": pawn_id, "tick": tick, "result": result_kt, "name": name}
+	_innovations_discovered["pawn_cd_%d" % pawn_id] = tick
+	# Record in WorldMemory
+	if WorldMemory != null and WorldMemory.has_method("record_event"):
+		WorldMemory.call("record_event", {
+			"type": "innovation",
+			"pawn_id": pawn_id,
+			"recipe": recipe_key,
+			"result_knowledge": result_kt,
+			"innovation_name": name,
+			"tick": tick,
+		})
+	# Emit signal
+	innovation_discovered.emit(pawn_id, result_kt, name)
+	# Add research points bonus
+	var sid: int = _settlement_id_for_pawn(pawn_id)
+	if sid >= 0:
+		add_research_points(sid, 15, "innovation_%s" % name)
+
+
+func _get_pawn_data_by_id(pawn_id: int) -> PawnData:
+	"""Look up PawnData by pawn ID."""
+	for pawn in _get_pawns():
+		if pawn != null and is_instance_valid(pawn) and pawn.data != null:
+			if int(pawn.data.id) == pawn_id:
+				return pawn.data
+	return null
+
+
+func _get_knowledge_depth_bonus(pawn_id: int, ka: int, kb: int) -> float:
+	"""Bonus for how long a pawn has held both knowledge types."""
+	# Approximate: more knowledge = more time to develop depth
+	var known: Array = knowledge_carriers.get(pawn_id, []) as Array
+	var depth: float = 0.0
+	if known.has(ka):
+		depth += 0.5
+	if known.has(kb):
+		depth += 0.5
+	# Extra bonus if pawn knows many related types
+	var related_count: int = 0
+	for kt in known:
+		if kt != ka and kt != kb:
+			related_count += 1
+	depth += mini(2.0, float(related_count) * 0.3)
+	return depth
+
+
+func _get_institution_bonus(pawn_id: int) -> float:
+	"""Bonus from nearby institutions (guilds, universities)."""
+	var bonus: float = 0.0
+	# Check if near a knowledge stone (proxy for institutional knowledge)
+	var pawn_data: PawnData = _get_pawn_data_by_id(pawn_id)
+	if pawn_data == null:
+		return 0.0
+	var tile: Vector2i = pawn_data.tile_pos
+	# Check for nearby knowledge stones
+	if has_record_carrier(tile):
+		bonus += 0.5
+	# Check for nearby scholars (other knowledge carriers)
+	var nearby_carriers: Array[int] = _get_nearby_knowledge_carriers(tile, KnowledgeType.TEACHING, 8)
+	if nearby_carriers.size() > 0:
+		bonus += 0.5
+	# Writing knowledge enables better institutions
+	if has_knowledge(pawn_id, KnowledgeType.WRITING):
+		bonus += 1.0
+	return bonus
+
+
+func get_innovation_count() -> int:
+	"""Return total number of innovations discovered."""
+	var count: int = 0
+	for key in _innovations_discovered.keys():
+		if not str(key).begins_with("pawn_cd_"):
+			count += 1
+	return count
+
+
+func get_innovations_for_pawn(pawn_id: int) -> Array[Dictionary]:
+	"""Return all innovations discovered by a specific pawn."""
+	var out: Array[Dictionary] = []
+	for key in _innovations_discovered.keys():
+		if str(key).begins_with("pawn_cd_"):
+			continue
+		var val: Variant = _innovations_discovered.get(key)
+		if val is Dictionary:
+			var d: Dictionary = val as Dictionary
+			if int(d.get("pawn_id", -1)) == pawn_id:
+				out.append(d)
 	return out

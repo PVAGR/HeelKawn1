@@ -2084,3 +2084,93 @@ func _create_memorials_from_event(e: Dictionary) -> void:
 					"inscription": "%s\n%d perished here" % [disaster_name, casualties],
 					"built_by": "auto"
 				})
+
+
+# === Quality of Life Tracking ===
+# Lifespan and literacy metrics for civilization stage calculation.
+
+## Calculate average lifespan from recorded death events (in ticks).
+func get_average_lifespan(settlement_id: int = -1) -> int:
+	var total_age: int = 0
+	var count: int = 0
+	for event in _events:
+		if not (event is Dictionary):
+			continue
+		var typ: String = str(event.get("type", ""))
+		if typ != "pawn_death":
+			continue
+		# Filter by settlement if specified
+		if settlement_id >= 0:
+			var region: int = int(event.get("region", -1))
+			if region != settlement_id:
+				continue
+		var birth_tick: int = int(event.get("birth_tick", -1))
+		var death_tick: int = int(event.get("tick", -1))
+		if birth_tick >= 0 and death_tick >= 0 and death_tick > birth_tick:
+			total_age += (death_tick - birth_tick)
+			count += 1
+	if count <= 0:
+		return 0
+	return total_age / count
+
+
+## Calculate literacy rate for a settlement.
+func get_literacy_rate(settlement_id: int = -1) -> float:
+	var ks: Node = get_node_or_null("/root/KnowledgeSystem")
+	if ks == null or not ks.has_method("has_knowledge"):
+		return 0.0
+	var total: int = 0
+	var literate: int = 0
+	# Get pawns for settlement
+	var spawner: Node = null
+	var main_node: Node = get_tree().get_root().get_node_or_null("Main") if get_tree() != null else null
+	if main_node != null:
+		spawner = main_node.get_node_or_null("WorldViewport/PawnSpawner")
+	if spawner == null:
+		return 0.0
+	var pawns_v: Variant = spawner.get("pawns")
+	if not (pawns_v is Array):
+		return 0.0
+	var pawns: Array = pawns_v as Array
+	for pawn in pawns:
+		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
+			continue
+		# Filter by settlement
+		if settlement_id >= 0:
+			var pawn_sid: int = int(pawn.data.settlement_id)
+			if pawn_sid != settlement_id:
+				continue
+		total += 1
+		if bool(ks.call("has_knowledge", int(pawn.data.id), 24)):  # WRITING = 24
+			literate += 1
+	if total <= 0:
+		return 0.0
+	return float(literate) / float(total)
+
+
+## Get average health for a settlement.
+func get_average_health(settlement_id: int = -1) -> float:
+	var total_health: float = 0.0
+	var count: int = 0
+	var main_node: Node = get_tree().get_root().get_node_or_null("Main") if get_tree() != null else null
+	if main_node == null:
+		return 0.0
+	var spawner: Node = main_node.get_node_or_null("WorldViewport/PawnSpawner")
+	if spawner == null:
+		return 0.0
+	var pawns_v: Variant = spawner.get("pawns")
+	if not (pawns_v is Array):
+		return 0.0
+	var pawns: Array = pawns_v as Array
+	for pawn in pawns:
+		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
+			continue
+		if settlement_id >= 0:
+			var pawn_sid: int = int(pawn.data.settlement_id)
+			if pawn_sid != settlement_id:
+				continue
+		total_health += float(pawn.data.health)
+		count += 1
+	if count <= 0:
+		return 0.0
+	return total_health / float(count)

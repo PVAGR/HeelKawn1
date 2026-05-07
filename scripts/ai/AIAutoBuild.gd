@@ -349,13 +349,11 @@ func _scan_for_new_pawns(_tick: int) -> void:
 			continue
 
 		# Check if pawn is idle and needs direction
-		var state: String = ""
+		var pawn_state: int = -1
 		if pawn.has_method("get_state"):
-			state = str(pawn.get_state())
-		elif pawn.has_meta("state"):
-			state = str(pawn.get_meta("state"))
-		
-		if state == "idle" or state == "wandering" or state == "":
+			pawn_state = int(pawn.get_state())
+
+		if pawn_state == 0 or pawn_state == -1:  # Pawn.State.IDLE = 0
 			var profession: int = -1
 			if data.has_method("profession_name"):
 				profession = int(data.get("current_profession"))

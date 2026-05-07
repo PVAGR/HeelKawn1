@@ -1356,7 +1356,7 @@ func _generate_pawn_narrative(pawn: Pawn) -> String:
 	text += "  %s\n\n" % skill_text
 	
 	# Recent history (last 5 events)
-	var events: Array[Dictionary] = _get_pawn_events(d.id, 5)
+	var events: Array = _get_pawn_events(d.id, 5)
 	if not events.is_empty():
 		text += "[color=#B084CC][b]📜 RECENT HISTORY:[/b][/color]\n"
 		for ev in events:
@@ -1491,12 +1491,12 @@ func _get_item_name(item_type: int) -> String:
 
 
 ## Get recent events for a specific pawn from WorldMemory.
-func _get_pawn_events(pawn_id: int, count: int) -> Array[Dictionary]:
+func _get_pawn_events(pawn_id: int, count: int) -> Array:
 	if WorldMemory == null:
 		return []
-	
-	var all_events: Array[Dictionary] = WorldMemory.get_events()
-	var pawn_events: Array[Dictionary] = []
+
+	var all_events: Array = WorldMemory.get_events()
+	var pawn_events: Array = []
 	
 	# Search backwards from most recent events
 	for i in range(all_events.size() - 1, -1, -1):
@@ -1611,7 +1611,7 @@ func _update_consciousness_tab() -> void:
 		for child in dreams_container.get_children():
 			child.queue_free()
 
-		var dreams: Array[Dictionary] = PawnConsciousness.get_dreams(pawn_id, 3)
+		var dreams: Array = PawnConsciousness.get_dreams(pawn_id, 3)
 		if dreams.is_empty():
 			var no_dreams: Label = _make_label("[i][color=#666666]No recent dreams[/color][/i]", FONT_SMALL, TEXT_DIM)
 			dreams_container.add_child(no_dreams)
@@ -1629,7 +1629,7 @@ func _update_consciousness_tab() -> void:
 		for child in memories_container.get_children():
 			child.queue_free()
 
-		var memories: Array[Dictionary] = PawnConsciousness.get_memories(pawn_id, "", 5)
+		var memories: Array = PawnConsciousness.get_memories(pawn_id, "", 5)
 		if memories.is_empty():
 			var no_memories: Label = _make_label("[i][color=#666666]No significant memories[/color][/i]", FONT_SMALL, TEXT_DIM)
 			memories_container.add_child(no_memories)

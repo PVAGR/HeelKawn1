@@ -399,3 +399,25 @@ func get_session_summary() -> Dictionary:
 		"warnings": warnings_encountered.size(),
 		"avg_fps": performance_samples[-1].get("avg_fps", 0.0) if not performance_samples.is_empty() else 0.0
 	}
+
+func record_pawn_selection(pawn_id: int, pawn_name: String, tile_pos: Vector2i) -> void:
+	if not is_recording:
+		return
+	_record_event("pawn_selection", {
+		"pawn_id": pawn_id,
+		"pawn_name": pawn_name,
+		"tile_x": tile_pos.x,
+		"tile_y": tile_pos.y,
+		"tick": GameManager.tick_count if GameManager != null else 0
+	})
+
+
+func record_camera_movement(camera_pos: Vector2, camera_zoom: float) -> void:
+	if not is_recording:
+		return
+	_record_event("camera_movement", {
+		"pos_x": camera_pos.x,
+		"pos_y": camera_pos.y,
+		"zoom": camera_zoom,
+		"tick": GameManager.tick_count if GameManager != null else 0
+	})

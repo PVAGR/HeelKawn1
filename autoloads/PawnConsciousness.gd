@@ -57,7 +57,8 @@ const DREAM_THEMES: Dictionary = {
 	"social": ["being alone", "being celebrated", "rejection", "belonging"],
 	"achievement": ["flying", "building", "creating", "mastering"],
 	"trauma": ["reliving trauma", "being powerless", "losing loved ones"],
-	"desire": ["finding treasure", "becoming master", "finding love"]
+	"desire": ["finding treasure", "becoming master", "finding love"],
+	"general": ["wandering", "floating", "watching", "remembering"]
 }
 
 # Trauma types
@@ -68,15 +69,20 @@ const TRAUMA_TYPES: Array[String] = [
 
 # References
 @onready var _world_memory: Node = null
-@onready var _pawn_spawner: Node = null
 @onready var _survival_system: Node = null
 
 
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 	_world_memory = get_node_or_null("/root/WorldMemory")
-	_pawn_spawner = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
 	_survival_system = get_node_or_null("/root/SurvivalSystem")
+
+
+func _get_pawn_spawner() -> Node:
+	var _main: Node = get_tree().get_root().get_node_or_null("Main")
+	if _main == null:
+		return null
+	return _main.get_node_or_null("WorldViewport/PawnSpawner")
 
 
 func _on_game_tick(tick: int) -> void:
@@ -180,10 +186,11 @@ func get_joyful_memories(pawn_id: int) -> Array:
 # ==================== DREAM SYSTEM ====================
 
 func _process_dreams(tick: int) -> void:
-	if _pawn_spawner == null:
+	var sp: Node = _get_pawn_spawner()
+	if sp == null:
 		return
 	
-	for pawn in _pawn_spawner.pawns:
+	for pawn in sp.pawns:
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue
 
@@ -212,17 +219,25 @@ func _generate_dream(pawn: Node) -> void:
 	if recent_memories.size() == 0:
 		return
 	
-	# Dream theme based on dominant emotions
-	var emotion_sum: float = 0.0
-	for memory in recent_memories:
-		emotion_sum += memory.emotion
-	
+	# Dream theme based on dominant emotions and life state
 	var theme: String = "general"
-	if emotion_sum < -30:
+	if emotion_sum < -50:
 		theme = "trauma"
-	elif emotion_sum > 30:
+	elif emotion_sum < -20:
+		theme = "survival"
+	elif emotion_sum > 50:
 		theme = "desire"
-	
+	elif emotion_sum > 20:
+		theme = "achievement"
+	else:
+		# Neutral emotions — check social context
+		var has_social_memories: bool = false
+		for memory in recent_memories:
+			if memory.category == "social" or memory.category == "joy":
+				has_social_memories = true
+				break
+		theme = "social" if has_social_memories else "general"
+
 	# Get dream content
 	var dream_themes: Array = DREAM_THEMES.get(theme, DREAM_THEMES.general)
 	var dream_content: String = dream_themes[randi() % dream_themes.size()]

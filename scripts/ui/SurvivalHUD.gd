@@ -78,12 +78,8 @@ func _update_display() -> void:
 		thirst_bar.value = data.thirst
 		thirst_bar.modulate = _get_bar_color(data.thirst)
 
-	if data.rest != null or data.energy != null:
-		var energy: float = 100.0
-		if data.energy != null:
-			energy = data.energy
-		elif data.rest != null:
-			energy = data.rest
+	if data.rest != null:
+		var energy: float = data.rest
 		energy_bar.value = energy
 		energy_bar.modulate = _get_bar_color(energy)
 

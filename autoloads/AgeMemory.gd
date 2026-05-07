@@ -56,7 +56,7 @@ func get_ambient_freq_shift() -> float:
 
 ## [recompute] may advance the Age, refresh terrain, and rebuild [age_signature].
 func recompute() -> void:
-	TradeMemory.update_t2_collapse_cursor()
+	# TradeMemory.update_t2_collapse_cursor() - REMOVED: function doesn't exist
 	var tick: int = GameManager.tick_count
 	if age_start_tick == 0:
 		age_start_tick = tick

@@ -263,10 +263,15 @@ func _update_neural_network_display() -> void:
 	if religious_fervor_bar:
 		religious_fervor_bar.value = summary.get("religious_fervor", 0.0) * 100
 
+var _last_ai_update_tick: int = -1
+
 func _process(_delta: float) -> void:
-	# Only update display if panel is visible and all components are ready
-	if visible and status_label != null:
-		_update_display()
+	# Only update display if panel is visible, and throttle to every 30 ticks
+	if visible and status_label != null and GameManager != null:
+		var cur_tick: int = GameManager.tick_count
+		if cur_tick - _last_ai_update_tick >= 30:
+			_last_ai_update_tick = cur_tick
+			_update_display()
 
 # === Public Interface ===
 

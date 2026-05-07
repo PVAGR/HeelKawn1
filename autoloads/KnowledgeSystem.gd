@@ -6,7 +6,11 @@ extends Node
 @onready var WorldAI = get_node_or_null("/root/WorldAI")
 @onready var WorldMemory = get_node_or_null("/root/WorldMemory")
 @onready var GameManager = get_node_or_null("/root/GameManager")
-@onready var PawnSpawnerRef = get_node_or_null("/root/PawnSpawner") as PawnSpawner
+func _get_pawn_spawner() -> PawnSpawner:
+	var _main: Node = get_tree().get_root().get_node_or_null("Main")
+	if _main == null:
+		return null
+	return _main.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
 
 # OPTIMIZATION: Cached pawn array, updated only when pawns spawn/despawn
 var _pawn_cache: Array[Pawn] = []
@@ -104,19 +108,19 @@ func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 	_initialize_degradation()
 	# OPTIMIZATION: Connect to pawn spawn/despawn for cache invalidation
-	if PawnSpawnerRef != null:
-		_refresh_pawn_cache()
+	_refresh_pawn_cache()
 
 ## OPTIMIZATION: Get cached pawn array, refresh only when dirty
 func _get_pawns() -> Array[Pawn]:
-	if _pawn_cache_dirty or PawnSpawnerRef == null:
+	if _pawn_cache_dirty:
 		_refresh_pawn_cache()
 	return _pawn_cache
 
 func _refresh_pawn_cache() -> void:
-	if PawnSpawnerRef == null:
+	var pawn_spawner: PawnSpawner = _get_pawn_spawner()
+	if pawn_spawner == null:
 		return
-	_pawn_cache = PawnSpawnerRef.find_pawns()
+	_pawn_cache = pawn_spawner.find_pawns()
 	_pawn_cache_dirty = false
 
 func _invalidate_pawn_cache() -> void:
@@ -308,7 +312,7 @@ func _check_rediscovery_opportunities() -> void:
 	if dormant_knowledge.is_empty():
 		return
 
-	var ps: PawnSpawner = PawnSpawnerRef
+	var ps: PawnSpawner = _get_pawn_spawner()
 	if ps == null:
 		return
 
@@ -381,7 +385,7 @@ func inscribe_knowledge_on_stone(tile: Vector2i, knowledge_types: Array, inscrib
 	if event_overlay != null and event_overlay.has_method("notify_knowledge_inscribed"):
 		# Get pawn name
 		var pawn_name: String = "Unknown"
-		var ps: Node = get_node_or_null("/root/PawnSpawner")
+		var ps: Node = _get_pawn_spawner()
 		if ps != null and ps.has_method("pawn_data_for_id"):
 			var pawn_data: PawnData = ps.call("pawn_data_for_id", inscriber_id)
 			if pawn_data != null:
@@ -490,7 +494,7 @@ func get_knowledge_stone_text(tile: Vector2i) -> String:
 	
 	# Get inscriber name
 	var inscriber_name: String = "Unknown"
-	var ps: Node = get_node_or_null("/root/PawnSpawner")
+	var ps: Node = _get_pawn_spawner()
 	if ps != null and ps.has_method("pawn_data_for_id"):
 		var pawn_data: PawnData = ps.call("pawn_data_for_id", inscriber_id)
 		if pawn_data != null:

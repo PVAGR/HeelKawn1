@@ -274,10 +274,15 @@ func _update_health() -> void:
 		_health_label.add_theme_color_override("font_color", _modern_theme.get_color("accent_success"))
 
 
+var _last_mood_update_tick: int = -1
+
 func _process(_delta: float) -> void:
-	# Update display periodically
-	if GameManager != null and GameManager.tick_count % 10 == 0:
-		_update_display()
+	# Update display periodically (every 10 ticks, but only once per tick)
+	if GameManager != null:
+		var cur_tick: int = GameManager.tick_count
+		if cur_tick % 10 == 0 and cur_tick != _last_mood_update_tick:
+			_last_mood_update_tick = cur_tick
+			_update_display()
 
 
 # ==================== PUBLIC API ====================

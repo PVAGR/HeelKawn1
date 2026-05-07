@@ -263,9 +263,15 @@ func _on_notification_clicked(event: InputEvent, panel: PanelContainer) -> void:
 					break
 
 
+func _get_pawn_spawner() -> Node:
+	var _main: Node = get_tree().get_root().get_node_or_null("Main")
+	if _main == null:
+		return null
+	return _main.get_node_or_null("WorldViewport/PawnSpawner")
+
 func _show_pawn_biography(pawn_id: int) -> void:
 	# Get pawn data
-	var ps: Node = get_node_or_null("/root/PawnSpawner")
+	var ps: Node = _get_pawn_spawner()
 	if ps == null:
 		return
 	

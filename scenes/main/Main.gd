@@ -612,17 +612,10 @@ func _ready() -> void:
 		tick_manager.name = "TickManager"
 		add_child(tick_manager)
 
-	# CRITICAL: Connect to PlaytestRecorder for automated playtest logging
+	# Connect to PlaytestRecorder for automated playtest logging
+	# (Pawn selection recording is now handled inside _set_selected_pawn)
 	var playtest_recorder: Node = get_node_or_null("/root/PlaytestRecorder")
 	if playtest_recorder != null:
-		# Log pawn selections
-		if has_method("_set_selected_pawn"):
-			var original_set_selected_pawn = _set_selected_pawn
-			_set_selected_pawn = func(pawn):
-				original_set_selected_pawn.call(pawn)
-				if pawn != null and pawn.data != null:
-					playtest_recorder.call("record_pawn_selection", int(pawn.data.id), pawn.data.display_name, pawn.data.tile_pos)
-		
 		# Log camera movement (sample every 10 ticks)
 		if _camera != null:
 			var last_cam_tick: int = 0
@@ -4426,6 +4419,11 @@ func _set_selected_pawn(p: Pawn) -> void:
 			print("[Main] Selection cleared")
 	if _info_panel != null:
 		_info_panel.bind_pawn(_selected_pawn)
+	# Playtest recording: log pawn selection
+	if _selected_pawn != null and _selected_pawn.data != null:
+		var _pr: Node = get_node_or_null("/root/PlaytestRecorder")
+		if _pr != null and _pr.has_method("record_pawn_selection"):
+			_pr.record_pawn_selection(int(_selected_pawn.data.id), _selected_pawn.data.display_name, _selected_pawn.data.tile_pos)
 
 
 func _sync_play_chrome() -> void:

@@ -31,10 +31,13 @@ func _process(_delta: float) -> void:
 
 	# Remove expired bubbles
 	var now: float = Time.get_ticks_msec()
+	var before_size: int = _bubbles.size()
 	_bubbles = _bubbles.filter(func(b: Dictionary) -> bool:
 		return (now - float(b.get("born", 0.0))) < BUBBLE_LIFETIME * 1000.0
 	)
-	queue_redraw()
+	# Only redraw if bubbles changed or still active
+	if _bubbles.size() != before_size or not _bubbles.is_empty():
+		queue_redraw()
 
 
 func _try_spawn_bubbles() -> void:

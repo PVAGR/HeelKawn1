@@ -486,7 +486,7 @@ func _event_passes_significance_threshold(e: Dictionary) -> bool:
     if typ == "work_event" or typ == "job_completed":
         var pawn_id: int = int(e.get("pawn_id", -1))
         if pawn_id >= 0:
-            var ps: Node = get_node_or_null("/root/PawnSpawner")
+            var ps: Node = _get_pawn_spawner()
             if ps != null and ps.has_method("pawn_data_for_id"):
                 var pawn_data: PawnData = ps.call("pawn_data_for_id", pawn_id)
                 if pawn_data != null:
@@ -784,7 +784,7 @@ func record_pawn_death(
     # PHASE 7: Record legacy for this pawn
     # Get pawn data first (needed for legacy, notification, and biography)
     var pawn_data: PawnData = null
-    var ps: Node = get_node_or_null("/root/PawnSpawner")
+    var ps: Node = _get_pawn_spawner()
     if ps != null and ps.has_method("pawn_data_for_id"):
         pawn_data = ps.call("pawn_data_for_id", pawn_id)
     
@@ -1681,8 +1681,15 @@ func _get_settlement_snapshot() -> Array:
     return []
 
 
+func _get_pawn_spawner() -> Node:
+    var _main: Node = get_tree().get_root().get_node_or_null("Main")
+    if _main == null:
+        return null
+    return _main.get_node_or_null("WorldViewport/PawnSpawner")
+
+
 func _get_total_pawns() -> int:
-    var spawner = get_node_or_null("/root/PawnSpawner")
+    var spawner = _get_pawn_spawner()
     if spawner and "pawns" in spawner:
         return spawner.pawns.size()
     return 0
@@ -2021,7 +2028,7 @@ func _create_memorials_from_event(e: Dictionary) -> void:
             var violent: bool = e.get("violent", false) or e.get("cause", "") in ["killed", "battle", "murder"]
             
             if pawn_id >= 0:
-                var ps: Node = get_node_or_null("/root/PawnSpawner")
+                var ps: Node = _get_pawn_spawner()
                 if ps != null and ps.has_method("pawn_data_for_id"):
                     var pawn_data = ps.call("pawn_data_for_id", pawn_id)
                     if pawn_data != null:
@@ -2034,7 +2041,7 @@ func _create_memorials_from_event(e: Dictionary) -> void:
             
             # Create mass memorial for battles with 3+ casualties
             if casualties >= 3:
-                var ps: Node = get_node_or_null("/root/PawnSpawner")
+                var ps: Node = _get_pawn_spawner()
                 var deceased_pawns: Array = []
                 
                 # Find deceased pawns from battle

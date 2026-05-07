@@ -141,7 +141,7 @@ func _screen_to_tile(screen_pos: Vector2) -> Vector2i:
 		return Vector2i.ZERO
 	
 	# Convert screen position to world position
-	var world_pos: Vector2 = camera.get_global_transform().xform_inv(screen_pos)
+	var world_pos: Vector2 = camera.get_global_transform().affine_inverse() * screen_pos
 	
 	# Convert to tile
 	return world.world_to_tile(world_pos) if world.has_method("world_to_tile") else Vector2i.ZERO

@@ -519,8 +519,9 @@ func _report_performance_snapshot() -> void:
 	# Count pawns
 	var pawn_count: int = 0
 	var ps: PawnSpawner = null
-	if get_node_or_null("/root/PawnSpawner") != null:
-		ps = get_node_or_null("/root/PawnSpawner") as PawnSpawner
+	var _main: Node = get_tree().get_root().get_node_or_null("Main")
+	if _main != null:
+		ps = _main.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
 		if ps != null:
 			pawn_count = ps.pawns.size()
 	

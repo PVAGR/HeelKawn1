@@ -167,9 +167,9 @@ func _on_job_posted(job: Node) -> void:
 		return
 	
 	var job_data: Dictionary = job.to_dict() if job.has_method("to_dict") else {
-		"type": str(job.get("type", -1)),
-		"work_tile": str(job.get("work_tile", Vector2i.ZERO)),
-		"priority": job.get("priority", 0)
+		"type": str(job.get("type") if "type" in job else -1),
+		"work_tile": str(job.get("work_tile") if "work_tile" in job else Vector2i.ZERO),
+		"priority": job.get("priority") if "priority" in job else 0
 	}
 	
 	_record_event("job_posted", job_data)
@@ -186,7 +186,7 @@ func _on_job_claimed(job: Node, pawn: Node) -> void:
 			pawn_id = int(pd.id)
 	
 	_record_event("job_claimed", {
-		"job_type": str(job.get("type", -1)),
+		"job_type": str(job.get("type") if "type" in job else -1),
 		"pawn_id": pawn_id,
 		"tick": GameManager.tick_count if GameManager != null else 0
 	})
@@ -197,7 +197,7 @@ func _on_job_completed(job: Node) -> void:
 		return
 	
 	_record_event("job_completed", {
-		"job_type": str(job.get("type", -1)),
+		"job_type": str(job.get("type") if "type" in job else -1),
 		"tick": GameManager.tick_count if GameManager != null else 0
 	})
 

@@ -867,10 +867,6 @@ func _ready() -> void:
 		TickManager.mark_tickable_cache_dirty()
 	call_deferred("_pawn_connect_sim_tick_deferred")
 
-	# HeelKawnian identity hook
-	if ClassDB.class_exists("HeelKawnianManager"):
-		HeelKawnianManager.ensure_identity_for_pawn(self)
-
 
 func _pawn_connect_sim_tick_deferred() -> void:
 	if not is_instance_valid(self):

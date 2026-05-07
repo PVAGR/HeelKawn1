@@ -45,8 +45,12 @@ const GOSSIP_PROXIMITY_DISTANCE: float = 5.0
 ## Per-pawn gossip storage: pawn_id -> GossipPropagation instance
 var _pawn_gossip: Dictionary = {}
 
-# OPTIMIZATION: Cached PawnSpawner reference
-@onready var _pawn_spawner: PawnSpawner = get_node_or_null("/root/PawnSpawner") as PawnSpawner
+# OPTIMIZATION: Resolve PawnSpawner lazily
+func _get_pawn_spawner() -> PawnSpawner:
+	var _main: Node = get_tree().get_root().get_node_or_null("Main")
+	if _main == null:
+		return null
+	return _main.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
 
 ## Global gossip registry (for debugging/queries)
 var _global_gossip: Array[Dictionary] = []
@@ -77,10 +81,11 @@ func _on_world_tick(tick_number: int) -> void:
 ## Get or create GossipPropagation for a pawn
 func _get_gossip_for_pawn(pawn_id: int) -> GossipPropagation:
 	if not _pawn_gossip.has(pawn_id):
-		# Check if pawn still exists - use cached spawner
+		# Check if pawn still exists - resolve spawner lazily
 		var pawn_exists: bool = false
-		if _pawn_spawner != null and _pawn_spawner.has_method("find_pawn_by_id"):
-			var pawn: Node = _pawn_spawner.call("find_pawn_by_id", pawn_id)
+		var pawn_spawner: PawnSpawner = _get_pawn_spawner()
+		if pawn_spawner != null and pawn_spawner.has_method("find_pawn_by_id"):
+			var pawn: Node = pawn_spawner.call("find_pawn_by_id", pawn_id)
 			pawn_exists = pawn != null
 		
 		if pawn_exists:
@@ -240,11 +245,12 @@ func _tick_gossip_decay() -> void:
 ## Get list of valid pawn IDs from PawnSpawner
 func _get_valid_pawn_ids() -> Array[int]:
 	var result: Array[int] = []
-	if _pawn_spawner == null:
+	var sp: PawnSpawner = _get_pawn_spawner()
+	if sp == null:
 		return result
 	
-	if _pawn_spawner.has_method("find_pawns"):
-		var pawns: Array = _pawn_spawner.call("find_pawns")
+	if sp.has_method("find_pawns"):
+		var pawns: Array = sp.call("find_pawns")
 		for p in pawns:
 			if p != null and p.data != null:
 				result.append(int(p.data.id))

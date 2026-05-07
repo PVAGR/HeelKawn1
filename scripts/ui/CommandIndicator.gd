@@ -36,10 +36,13 @@ func show_indicator(tile: Vector2i, order_type: String) -> void:
 func _process(_delta: float) -> void:
 	var now: float = Time.get_ticks_msec()
 	# Remove expired indicators
+	var before_size: int = _indicators.size()
 	_indicators = _indicators.filter(func(d: Dictionary) -> bool:
 		return (now - float(d.get("born", 0.0))) < FADE_DURATION * 1000.0
 	)
-	queue_redraw()
+	# Only redraw if indicators changed or still fading
+	if _indicators.size() != before_size or not _indicators.is_empty():
+		queue_redraw()
 
 
 func _draw() -> void:

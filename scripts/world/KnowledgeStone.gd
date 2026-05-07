@@ -104,11 +104,13 @@ func _show_preview_tooltip() -> void:
 	
 	# Get inscriber name
 	var inscriber_name: String = "Unknown"
-	var ps: Node = get_node_or_null("/root/PawnSpawner")
-	if ps != null and ps.has_method("pawn_data_for_id"):
-		var pawn_data = ps.call("pawn_data_for_id", inscriber_id)
-		if pawn_data != null:
-			inscriber_name = pawn_data.display_name
+	var _main_node: Node = get_tree().get_root().get_node_or_null("Main")
+	if _main_node != null:
+		var ps: Node = _main_node.get_node_or_null("WorldViewport/PawnSpawner")
+		if ps != null and ps.has_method("pawn_data_for_id"):
+			var pawn_data = ps.call("pawn_data_for_id", inscriber_id)
+			if pawn_data != null:
+				inscriber_name = pawn_data.display_name
 	
 	preview += "By: %s\n" % inscriber_name
 	preview += "Knowledge: %d types" % knowledge_types.size()
@@ -121,7 +123,10 @@ func _show_preview_tooltip() -> void:
 
 func _try_record_reading() -> void:
 	# Find nearby pawn (the one who clicked)
-	var ps: Node = get_node_or_null("/root/PawnSpawner")
+	var main_node: Node = get_tree().get_root().get_node_or_null("Main")
+	if main_node == null:
+		return
+	var ps: Node = main_node.get_node_or_null("WorldViewport/PawnSpawner")
 	if ps == null:
 		return
 	

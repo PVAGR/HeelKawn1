@@ -28,9 +28,15 @@ func _ready() -> void:
 	_update_display()
 
 
+var _last_displayed_tick: int = -1
+
+
 func _process(_delta: float) -> void:
 	if _tick_label != null and GameManager != null:
-		_tick_label.text = "Tick: %d" % GameManager.tick_count
+		var cur_tick: int = GameManager.tick_count
+		if cur_tick != _last_displayed_tick:
+			_last_displayed_tick = cur_tick
+			_tick_label.text = "Tick: %d" % cur_tick
 
 
 func _on_pause_pressed() -> void:

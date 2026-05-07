@@ -70,7 +70,11 @@ var _legacy_score: int = 0
 @onready var WorldMemory = get_node_or_null("/root/WorldMemory")
 @onready var KnowledgeSystem = get_node_or_null("/root/KnowledgeSystem")
 @onready var SettlementMemory = get_node_or_null("/root/SettlementMemory")
-@onready var PawnSpawnerRef = get_node_or_null("/root/PawnSpawner")
+func _get_pawn_spawner() -> PawnSpawner:
+	var _main: Node = get_tree().get_root().get_node_or_null("Main")
+	if _main == null:
+		return null
+	return _main.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
 
 
 func _ready() -> void:
@@ -366,11 +370,12 @@ func _is_pawn_alive(pawn_id: int) -> bool:
 
 ## Get pawn data
 func _get_pawn_data(pawn_id: int) -> PawnData:
-	if PawnSpawnerRef == null:
+	var pawn_spawner: PawnSpawner = _get_pawn_spawner()
+	if pawn_spawner == null:
 		return null
 	
-	if PawnSpawnerRef.has_method("pawn_data_for_id"):
-		return PawnSpawnerRef.call("pawn_data_for_id", pawn_id)
+	if pawn_spawner.has_method("pawn_data_for_id"):
+		return pawn_spawner.call("pawn_data_for_id", pawn_id)
 	
 	return null
 

@@ -94,10 +94,12 @@ func _update_display() -> void:
 
 	# Pawn count
 	var pawn_count: int = 0
-	var ps: Node = get_node_or_null("/root/PawnSpawner")
-	if ps != null and ps.has_method("find_pawns"):
-		var pawns: Array = ps.call("find_pawns")
-		pawn_count = pawns.size()
+	var main_node: Node = get_tree().get_root().get_node_or_null("Main")
+	if main_node != null:
+		var ps: Node = main_node.get_node_or_null("WorldViewport/PawnSpawner")
+		if ps != null and ps.has_method("find_pawns"):
+			var pawns: Array = ps.call("find_pawns")
+			pawn_count = pawns.size()
 
 	# Memory (approximate)
 	var mem_mb: float = Performance.get_monitor(Performance.MEMORY_STATIC) / (1024.0 * 1024.0)

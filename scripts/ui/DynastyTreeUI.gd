@@ -123,8 +123,14 @@ func _render_dynasty_tree() -> void:
 		_tree_container.add_child(gen_container)
 
 
+func _get_pawn_spawner() -> Node:
+	var _main: Node = get_tree().get_root().get_node_or_null("Main")
+	if _main == null:
+		return null
+	return _main.get_node_or_null("WorldViewport/PawnSpawner")
+
 func _create_member_card(pawn_id: int) -> Control:
-	var ps: Node = get_node_or_null("/root/PawnSpawner")
+	var ps: Node = _get_pawn_spawner()
 	if ps == null or not ps.has_method("pawn_data_for_id"):
 		return null
 	
@@ -189,7 +195,7 @@ func _on_member_clicked(event: InputEvent, pawn_id: int) -> void:
 
 
 func _show_member_biography(pawn_id: int) -> void:
-	var ps: Node = get_node_or_null("/root/PawnSpawner")
+	var ps: Node = _get_pawn_spawner()
 	if ps == null:
 		return
 	
@@ -220,7 +226,7 @@ func _show_member_biography(pawn_id: int) -> void:
 func _get_pawn_generation(pawn_id: int) -> int:
 	# Simplified: would need kinship system integration
 	# For now, estimate based on birth tick
-	var ps: Node = get_node_or_null("/root/PawnSpawner")
+	var ps: Node = _get_pawn_spawner()
 	if ps == null or not ps.has_method("pawn_data_for_id"):
 		return 0
 	

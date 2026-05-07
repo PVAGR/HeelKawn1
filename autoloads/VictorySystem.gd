@@ -27,7 +27,7 @@ var victory_tick: int = -1
 @onready var _legacy_system: Node = null
 @onready var _settlement_memory: Node = null
 @onready var _knowledge_system: Node = null
-@onready var _pawn_spawner: Node = null
+var _pawn_spawner: Node = null
 @onready var _world_memory: Node = null
 
 
@@ -36,12 +36,19 @@ func _ready() -> void:
 	_legacy_system = get_node_or_null("/root/LegacySystem")
 	_settlement_memory = get_node_or_null("/root/SettlementMemory")
 	_knowledge_system = get_node_or_null("/root/KnowledgeSystem")
-	_pawn_spawner = get_node_or_null("/root/PawnSpawner")
+	_pawn_spawner = _get_pawn_spawner()
 	_world_memory = get_node_or_null("/root/WorldMemory")
 	
 	# Initialize victory progress
 	for condition in VICTORY_CONDITIONS.keys():
 		victory_progress[condition] = 0
+
+
+func _get_pawn_spawner() -> Node:
+	var _main: Node = get_tree().get_root().get_node_or_null("Main")
+	if _main == null:
+		return null
+	return _main.get_node_or_null("WorldViewport/PawnSpawner")
 
 
 func _on_game_tick(tick: int) -> void:
@@ -75,8 +82,11 @@ func _update_victory_progress(tick: int) -> void:
 	victory_progress["knowledge"] = preserved_knowledge
 	
 	# Population Victory
-	if _pawn_spawner != null:
-		victory_progress["population"] = _pawn_spawner.pawns.size()
+	var pawn_spawner: Node = _pawn_spawner
+	if pawn_spawner == null:
+		pawn_spawner = _get_pawn_spawner()
+	if pawn_spawner != null:
+		victory_progress["population"] = pawn_spawner.pawns.size()
 	
 	# Culture Victory
 	var active_settlements: int = 0

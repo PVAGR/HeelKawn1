@@ -1,4 +1,3 @@
-class_name SpatialGrid
 extends RefCounted
 
 ## WorldBox-scale spatial partitioning for O(n) pawn lookups

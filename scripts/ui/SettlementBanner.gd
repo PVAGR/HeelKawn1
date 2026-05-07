@@ -22,11 +22,16 @@ func initialize(world_ref: World) -> void:
 	_world = world_ref
 
 
+var _last_banner_count: int = -1
+
 func _process(_delta: float) -> void:
 	_tick_counter += 1
 	if _tick_counter % UPDATE_EVERY_N_TICKS == 0:
 		_refresh_banners()
-	queue_redraw()
+	# Only redraw if banner data changed
+	if _banners.size() != _last_banner_count:
+		_last_banner_count = _banners.size()
+		queue_redraw()
 
 
 func _refresh_banners() -> void:

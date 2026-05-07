@@ -6,13 +6,13 @@ extends CanvasLayer
 ## Beautiful popup notifications for important game events.
 ## Displays with fade-in/fade-out animations and rich text formatting.
 
-const NOTIFICATION_LIFETIME_SEC: float = 8.0
-const FADE_IN_SEC: float = 0.5
-const FADE_OUT_SEC: float = 1.0
-const MAX_VISIBLE_NOTIFICATIONS: int = 3
+const NOTIFICATION_LIFETIME_SEC: float = 5.0  # Reduced from 8.0 for faster cleanup
+const FADE_IN_SEC: float = 0.3  # Faster fade in
+const FADE_OUT_SEC: float = 0.5  # Faster fade out
+const MAX_VISIBLE_NOTIFICATIONS: int = 4  # Show one more at a time
 
 # PERFORMANCE: Throttle notifications to prevent spam and frame drops
-const NOTIFICATION_THROTTLE_SEC: float = 0.3  # Minimum time between notifications
+const NOTIFICATION_THROTTLE_SEC: float = 0.5  # Slightly longer throttle
 const NOTIFICATION_BATCH_SIMILAR: bool = true  # Group similar events together
 
 # Notification types with visual styles
@@ -196,51 +196,55 @@ func show_notification(event_type: String, title: String, description: String, i
 
 func _create_notification_panel(title: String, description: String, icon: String, color: Color) -> PanelContainer:
 	var panel: PanelContainer = PanelContainer.new()
-	panel.custom_minimum_size = Vector2(400, 0)
+	panel.custom_minimum_size = Vector2(320, 0)  # Smaller width
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP  # Enable clicks
-	
-	# StyleBox for panel
+
+	# StyleBox for panel - better contrast
 	var style: StyleBoxFlat = StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.06, 0.08, 0.95)
+	style.bg_color = Color(0.08, 0.10, 0.14, 0.98)  # Slightly lighter, more opaque
 	style.border_color = color
-	style.border_width_left = 3
+	style.border_width_left = 4  # Thicker border for visual clarity
 	style.border_width_right = 0
 	style.border_width_top = 0
 	style.border_width_bottom = 0
-	style.set_corner_radius_all(4)
+	style.set_corner_radius_all(6)
 	panel.add_theme_stylebox_override("panel", style)
-	
+
 	# Content container
 	var content: HBoxContainer = HBoxContainer.new()
-	content.add_theme_constant_override("separation", 12)
+	content.add_theme_constant_override("separation", 10)
+	content.add_theme_constant_override("margin_left", 10)
+	content.add_theme_constant_override("margin_right", 10)
+	content.add_theme_constant_override("margin_top", 8)
+	content.add_theme_constant_override("margin_bottom", 8)
 	panel.add_child(content)
-	
-	# Icon (large emoji-style)
+
+	# Icon (smaller, cleaner)
 	var icon_label: Label = Label.new()
 	icon_label.text = icon
-	icon_label.add_theme_font_size_override("font_size", 32)
-	icon_label.custom_minimum_size = Vector2(40, 40)
+	icon_label.add_theme_font_size_override("font_size", 24)  # Smaller icon
+	icon_label.custom_minimum_size = Vector2(32, 32)
 	icon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	icon_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	content.add_child(icon_label)
-	
+
 	# Text container
 	var text_container: VBoxContainer = VBoxContainer.new()
 	text_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_child(text_container)
-	
-	# Title (bold, colored)
+
+	# Title (bold, colored, larger)
 	var title_label: Label = Label.new()
 	title_label.text = title
-	title_label.add_theme_font_size_override("font_size", 14)
+	title_label.add_theme_font_size_override("font_size", 13)  # Slightly smaller
 	title_label.add_theme_color_override("font_color", color)
 	text_container.add_child(title_label)
-	
-	# Description (smaller, gray)
+
+	# Description (smaller, gray, clearer)
 	var desc_label: Label = Label.new()
 	desc_label.text = description
-	desc_label.add_theme_font_size_override("font_size", 11)
-	desc_label.add_theme_color_override("font_color", Color8(180, 180, 190))
+	desc_label.add_theme_font_size_override("font_size", 10)  # Smaller desc
+	desc_label.add_theme_color_override("font_color", Color8(200, 200, 210))  # Lighter gray
 	text_container.add_child(desc_label)
 	
 	# Add click handler for death notifications
@@ -313,11 +317,13 @@ func notify_birth(pawn_name: String, settlement_name: String) -> void:
 
 
 func notify_death(pawn_name: String, age: float, cause: String, pawn_id: int = -1) -> void:
+	# Compact death notification format
+	var cause_text: String = cause.capitalize()
 	show_notification(
 		"death",
-		"⚰ %s Died" % pawn_name,
-		"Age %.1f - %s" % [age, cause],
-		"",
+		"%s" % pawn_name,  # Just the name, cleaner
+		"Age %.1f • %s" % [age, cause_text],  # Compact format
+		"⚰",
 		pawn_id
 	)
 

@@ -803,8 +803,9 @@ func record_pawn_death(
 			age_years = pawn_data.age / 360.0
 		event_overlay.call("notify_death", pawn_name, age_years, cause, pawn_id)
 
-	# TEXT-RICH: Generate and show full pawn biography (ONLY ON FIRST DEATH)
-	if pawn_data != null and is_first_death:
+	# TEXT-RICH: Generate and show full pawn biography (ONLY ON FIRST DEATH, DEBUG ONLY)
+	# Disabled by default to prevent console spam during normal play
+	if OS.is_debug_build() and GameManager != null and GameManager.verbose_logs() and pawn_data != null and is_first_death:
 		var biography: String = _generate_pawn_biography(pawn_data, cause)
 		print("\n[color=#FFD166][b]━━━ BIOGRAPHY: %s ━━━[/b][/color]" % pawn_name)
 		print(biography)

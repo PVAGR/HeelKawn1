@@ -235,14 +235,22 @@ func _regulate_temperature(pawn: Node, tick: int) -> void:
 
 func _get_environmental_temperature(pawn: Node) -> float:
 	# Get temperature from tile/weather
-	# TODO: Integrate with weather/climate system
-	# For now, return base temperature with seasonal variation
-	var base_temp: float = 20.0  # Base comfortable temperature
+	var data: RefCounted = pawn.data
 	
+	# GRACE PERIOD: New pawns (first 2 hours = 7200 ticks) are protected from extreme cold
+	var birth_tick: int = int(data.get("birth_tick", 0))
+	var age_ticks: int = GameManager.tick_count - birth_tick
+	var grace_mult: float = 1.0
+	if age_ticks < 7200:
+		# Linear interpolation from full protection to no protection
+		grace_mult = lerp(0.2, 1.0, float(age_ticks) / 7200.0)
+	
+	var base_temp: float = 20.0  # Base comfortable temperature
+
 	# Seasonal variation (simplified)
 	var tick: int = GameManager.tick_count
-	var day_in_year: int = tick % 360
-	var seasonal_mult: float = sin((day_in_year / 360.0) * 2.0 * PI)
+	var day_in_year: int = tick % TICKS_PER_VISUAL_DAY if "TICKS_PER_VISUAL_DAY" in self else tick % 30000
+	var seasonal_mult: float = sin((day_in_year / 30000.0) * 2.0 * PI)
 	base_temp += seasonal_mult * 10.0
 	
 	# Time of day variation
@@ -251,7 +259,21 @@ func _get_environmental_temperature(pawn: Node) -> float:
 		base_temp -= 5.0  # Night is colder
 	elif hour > 12 and hour < 16:
 		base_temp += 3.0  # Midday is warmer
-	
+
+	# Shelter bonus: pawns near beds/fire_pits are warmer
+	var tile: Vector2i = Vector2i.ZERO
+	if data.has_method("get"):
+		tile = data.get("tile_pos")
+	if tile.x >= 0 and tile.y >= 0:
+		var world: Node = get_node_or_null("/root/Main/WorldViewport/World")
+		if world != null and world.has_method("get_feature"):
+			var feat: int = int(world.call("get_feature", tile.x, tile.y))
+			if feat == 3 or feat == 8:  # BED or FIRE_PIT
+				base_temp += 8.0  # Shelter/fire provides significant warmth
+
+	# Apply grace period multiplier (new pawns are more resilient)
+	base_temp = lerp(base_temp, 37.0, grace_mult)
+
 	return base_temp
 
 

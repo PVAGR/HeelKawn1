@@ -135,46 +135,46 @@ func scan_resources(tile: Vector2i, radius: int = 20) -> Dictionary:
 # ==================== BUILD INTENT CREATION ====================
 
 ## Create build intents for a pawn/settlement
-func create_build_intents(_pawn_id: int, tile: Vector2i, _settlement_id: int = -1) -> void:
+func create_build_intents(_pawn_id: int, tile: Vector2i, settlement_id: int = -1) -> void:
 	var resources: Dictionary = scan_resources(tile, 20)
-	
+
 	# Check what already exists
-	_check_existing_structures(tile, resources, _settlement_id)
-	
+	_check_existing_structures(tile, resources, settlement_id)
+
 	# Create intents in priority order
-	
+
 	# 1. SURVIVAL - Immediate threats
 	if not resources.shelter_exists:
 		_create_build_intent(BuildPriority.SURVIVAL, "shelter", tile, settlement_id)
-	
+
 	# 2. SHELTER - Protection
 	if resources.shelter_exists and resources.wood > 0:
 		_create_build_intent(BuildPriority.SHELTER, "expand_shelter", tile, settlement_id)
-	
+
 	# 3. STORAGE - Preserve resources
 	if not resources.storage_exists and resources.food > 0:
 		_create_build_intent(BuildPriority.STORAGE, "storage", tile, settlement_id)
-	
+
 	# 4. HEARTH - Cooking, warmth
 	if not resources.hearth_exists and resources.stone > 0:
 		_create_build_intent(BuildPriority.HEARTH, "hearth", tile, settlement_id)
-	
+
 	# 5. TOOLS - Efficiency
 	if resources.wood > 5 and resources.stone > 3:
 		_create_build_intent(BuildPriority.TOOLS, "workshop", tile, settlement_id)
-	
+
 	# 6. DEFENSE - Protection
 	if resources.wood > 10:
 		_create_build_intent(BuildPriority.DEFENSE, "wall", tile, settlement_id)
-	
+
 	# 7. COMFORT - Quality of life
 	if resources.shelter_exists and resources.storage_exists:
 		_create_build_intent(BuildPriority.COMFORT, "bed", tile, settlement_id)
-	
+
 	# 8. IDENTITY - Cultural markers
 	if settlement_id >= 0 and resources.stone > 20:
 		_create_build_intent(BuildPriority.IDENTITY, "monument", tile, settlement_id)
-	
+
 	# 9. AMBITION - Long-term projects
 	if resources.wood > 50 and resources.stone > 50:
 		_create_build_intent(BuildPriority.AMBITION, "great_hall", tile, settlement_id)

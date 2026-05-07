@@ -212,7 +212,7 @@ func _generate_dream(pawn: Node) -> void:
 	var consciousness: Dictionary = pawn_consciousness[str(pawn_id)]
 
 	# Dreams draw from recent memories and subconscious desires
-	var recent_memories: Array[Dictionary] = get_memories(pawn_id, "", 10)
+	var recent_memories: Array = get_memories(pawn_id, "", 10)
 
 	if recent_memories.size() == 0:
 		return
@@ -220,7 +220,7 @@ func _generate_dream(pawn: Node) -> void:
 	# Calculate emotion sum from recent memories
 	var emotion_sum: float = 0.0
 	for memory in recent_memories:
-		if memory.has("emotion"):
+		if memory is Dictionary and memory.has("emotion"):
 			emotion_sum += float(memory.get("emotion", 0.0))
 
 	# Dream theme based on dominant emotions and life state

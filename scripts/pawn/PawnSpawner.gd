@@ -243,8 +243,12 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 			var spec_key: String = ""
 			if data.has_method("highest_affinity_skill"):
 				spec_key = str(data.highest_affinity_skill())
-			# Call with explicit arguments (Godot 4.x)
-			data.bloodline_id = bloodline_sys.create_bloodline(data.id, data.display_name, spec_key)
+			# Call with all 3 arguments (Godot 4.x requires explicit args for default params)
+			var result: Variant = bloodline_sys.create_bloodline(data.id, data.display_name, spec_key)
+			if typeof(result) == TYPE_INT:
+				data.bloodline_id = result
+			else:
+				push_warning("[PawnSpawner] create_bloodline returned non-int value: ", typeof(result))
 
 		var pawn: Pawn = pawn_scene.instantiate() as Pawn
 		pawn.bind(data, world.tile_to_world(tile), world)

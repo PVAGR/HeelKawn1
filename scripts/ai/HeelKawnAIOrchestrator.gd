@@ -257,19 +257,32 @@ func _get_sample_pawn_states(count: int) -> Array:
 					"name": data.display_name,
 					"hunger": data.hunger,
 					"mood": data.mood,
-					"state": pawn.get("state", "unknown") if pawn.has_method("get_state_name") else "unknown"
+					"state": "unknown"
 				})
-	
+
 	return states
 
 
 func _get_social_network_summary() -> Dictionary:
 	var gossip_manager: Node = get_node_or_null("/root/GossipManager")
 	var grudge_manager: Node = get_node_or_null("/root/GrudgeManager")
+
+	var active_gossip: int = 0
+	var active_grudges: int = 0
 	
+	if gossip_manager != null and gossip_manager.has_method("get_stats"):
+		var stats: Variant = gossip_manager.call("get_stats")
+		if stats is Dictionary:
+			active_gossip = int(stats.get("total_gossip", 0))
+	
+	if grudge_manager != null and grudge_manager.has_method("get_stats"):
+		var stats: Variant = grudge_manager.call("get_stats")
+		if stats is Dictionary:
+			active_grudges = int(stats.get("total_grudges", 0))
+
 	return {
-		"active_gossip": gossip_manager.get_stats().get("total_gossip", 0) if gossip_manager != null else 0,
-		"active_grudges": grudge_manager.get_stats().get("total_grudges", 0) if grudge_manager != null else 0
+		"active_gossip": active_gossip,
+		"active_grudges": active_grudges
 	}
 
 

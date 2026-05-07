@@ -142,11 +142,11 @@ RESPOND JSON:
 	# Parse events
 	var events: Array = []
 	if response is Array:
-		events = response
+		events = response as Array
 	elif response is Dictionary and response.has("events"):
-		var events_data = response.get("events")
-		if events_data is Array:
-			events = events_data
+		var events_var: Variant = response.get("events")
+		if events_var is Array:
+			events = events_var as Array
 
 	return events
 

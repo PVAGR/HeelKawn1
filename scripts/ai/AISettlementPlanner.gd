@@ -89,18 +89,20 @@ RESPOND JSON:
 		{},
 		"Respond with a JSON array of 2-3 strategic actions. No markdown, no explanations."
 	)
-	
+
 	# Parse strategies
 	var strategies: Array = []
 	if response is Array:
-		strategies = response
-	elif response.has("strategies"):
-		strategies = response.get("strategies", [])
-	
+		strategies = response as Array
+	elif response is Dictionary and response.has("strategies"):
+		var strat_var: Variant = response.get("strategies")
+		if strat_var is Array:
+			strategies = strat_var as Array
+
 	# Execute strategies (would integrate with SettlementPlanner.plan())
 	for strategy in strategies:
 		_execute_strategy(settlement, strategy)
-	
+
 	return {
 		"settlement": settlement_name,
 		"strategies": strategies,

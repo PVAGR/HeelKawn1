@@ -236,20 +236,22 @@ func _regulate_temperature(pawn: Node, tick: int) -> void:
 func _get_environmental_temperature(pawn: Node) -> float:
 	# Get temperature from tile/weather
 	var data: RefCounted = pawn.data
-	
+
 	# GRACE PERIOD: New pawns (first 2 hours = 7200 ticks) are protected from extreme cold
-	var birth_tick: int = int(data.get("birth_tick", 0))
+	var birth_tick: int = 0
+	if "birth_tick" in data:
+		birth_tick = int(data.get("birth_tick"))
 	var age_ticks: int = GameManager.tick_count - birth_tick
 	var grace_mult: float = 1.0
 	if age_ticks < 7200:
 		# Linear interpolation from full protection to no protection
 		grace_mult = lerp(0.2, 1.0, float(age_ticks) / 7200.0)
-	
+
 	var base_temp: float = 20.0  # Base comfortable temperature
 
 	# Seasonal variation (simplified)
 	var tick: int = GameManager.tick_count
-	var day_in_year: int = tick % TICKS_PER_VISUAL_DAY if "TICKS_PER_VISUAL_DAY" in self else tick % 30000
+	var day_in_year: int = tick % 30000  # 30000 ticks per year
 	var seasonal_mult: float = sin((day_in_year / 30000.0) * 2.0 * PI)
 	base_temp += seasonal_mult * 10.0
 	

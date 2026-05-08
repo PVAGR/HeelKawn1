@@ -114,7 +114,7 @@ func _get_resource_icon(resource: String) -> String:
 		"berries": "🫐",
 		"flint": "🔩",
 		"stick": "🥢",
-		"iron_ore": "ite",
+		"iron_ore": "⛏️",
 		"copper_ore": "🟠",
 		"meat_raw": "🥩",
 		"hide": "🟫",

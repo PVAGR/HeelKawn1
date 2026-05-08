@@ -355,6 +355,22 @@ func complete_farming_job(job_type: String, plot_id: int, pawn_id: int) -> Dicti
 	return result
 
 
+## Complete a farming job by tile position (used by Pawn._complete_current_job
+## when GROW_FOOD completes). Finds the plot at the tile, then delegates
+## to complete_farming_job.
+func complete_farming_job_by_tile(tile: Vector2i, pawn_id: int) -> Dictionary:
+	for plot in farm_plots:
+		if plot.tile == tile:
+			# Determine job type from plot status
+			var job_type: String = "grow_food"
+			if plot.water_level < 0.3:
+				job_type = "water_crops"
+			elif plot.health < 0.8:
+				job_type = "tend_crops"
+			return complete_farming_job(job_type, plot.plot_id, pawn_id)
+	return {"success": false, "items_gained": {}, "plot_updated": false}
+
+
 func _get_plot_by_id(plot_id: int) -> Dictionary:
 	for plot in farm_plots:
 		if plot.plot_id == plot_id:

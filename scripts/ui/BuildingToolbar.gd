@@ -103,15 +103,15 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not visible:
-		return
-	
-	# Toggle with B key
+	# Toggle with B key (must be before the visibility guard so B can reopen)
 	if event is InputEventKey and event.pressed and event.keycode == KEY_B:
 		visible = not visible
 		_is_placing = false
 		_selected_building_type = ""
 		_update_tooltip()
+		return
+	if not visible:
+		return
 
 
 ## Show/hide toolbar

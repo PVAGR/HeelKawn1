@@ -7,6 +7,7 @@ extends PanelContainer
 ## - Cancel
 
 var _world: Node = null
+var _camera: Camera2D = null
 var _player_gathering: Node = null
 var _player_building: Node = null
 var _target_tile: Vector2i = Vector2i.ZERO
@@ -18,6 +19,7 @@ var _update_timer: float = 0.0
 
 func _ready() -> void:
 	_world = get_node_or_null("/root/Main/World")
+	_camera = get_node_or_null("/root/Main/WorldViewport/Camera2D")
 	_player_gathering = get_node_or_null("/root/PlayerGathering")
 	_player_building = get_node_or_null("/root/PlayerBuilding")
 	
@@ -32,7 +34,7 @@ func _on_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 			# Right-click to show menu at mouse position
-			var mouse_pos: Vector2 = get_global_mouse_position()
+			var mouse_pos: Vector2 = _camera.get_global_mouse_position() if _camera != null else get_global_mouse_position()
 			var tile: Vector2i = _screen_to_tile(mouse_pos)
 			
 			if tile != _target_tile:
@@ -41,9 +43,10 @@ func _on_gui_input(event: InputEvent) -> void:
 
 
 func _screen_to_tile(screen_pos: Vector2) -> Vector2i:
-	# Convert screen position to world tile
-	# TODO: Implement proper screen-to-world conversion
-	# For now, return placeholder
+	# Convert screen/world position to world tile
+	if _world != null and _world.has_method("world_to_tile"):
+		return _world.world_to_tile(screen_pos)
+	# Fallback: crude division (only works if camera is at origin, no zoom)
 	return Vector2i(int(screen_pos.x / 16), int(screen_pos.y / 16))
 
 

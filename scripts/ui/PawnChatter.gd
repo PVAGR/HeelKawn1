@@ -129,6 +129,9 @@ func _generate_text(pawn) -> String:
 				3: return _pick(["Found berries!", "Gathering.", "Foraging nearby."])            # GATHERER
 				4: return _pick(["Staying alert.", "Patrol soon.", "Watching."])                  # WARRIOR
 				5: return _pick(["Interesting...", "Studying.", "So much to learn."])            # SCHOLAR
+				6: return _pick(["Good trade today.", "Need a deal.", "Prices looking up."])     # TRADER
+				7: return _pick(["Forge is hot.", "Need more ore.", "Hammering."])               # SMITH
+				8: return _pick(["Who's hurt?", "Healing herbs.", "Tending wounds."])            # HEALER
 
 	# Time-of-day
 	if GameManager != null and DayNightCycle.is_night_for_tick(GameManager.tick_count):

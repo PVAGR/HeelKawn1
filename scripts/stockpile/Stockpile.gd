@@ -190,6 +190,31 @@ func nearest_tile_to(from_tile: Vector2i) -> Vector2i:
 	return Vector2i(x, y)
 
 
+## Find the nearest tile in this zone that's in the same pathfinder component
+## as `from_tile`. Falls back to nearest_tile_to if no pathfinder given.
+func nearest_reachable_tile_to(from_tile: Vector2i, pathfinder: PathFinder) -> Vector2i:
+	if pathfinder == null:
+		return nearest_tile_to(from_tile)
+	var my_comp: int = pathfinder.component_of(from_tile)
+	# Check the nearest tile first — fast path
+	var near: Vector2i = nearest_tile_to(from_tile)
+	if pathfinder.component_of(near) == my_comp:
+		return near
+	# Scan all tiles in the zone for a reachable one
+	var best: Vector2i = near
+	var best_d: int = 0x7FFFFFFF
+	for tx in range(rect.position.x, rect.position.x + rect.size.x):
+		for ty in range(rect.position.y, rect.position.y + rect.size.y):
+			var t: Vector2i = Vector2i(tx, ty)
+			if pathfinder.component_of(t) != my_comp:
+				continue
+			var d: int = max(abs(t.x - from_tile.x), abs(t.y - from_tile.y))
+			if d < best_d:
+				best_d = d
+				best = t
+	return best
+
+
 ## Square tile distance (Chebyshev) from this zone's nearest edge tile to
 ## `from_tile`. 0 if inside the zone.
 func chebyshev_distance_from(from_tile: Vector2i) -> int:

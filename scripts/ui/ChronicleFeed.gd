@@ -566,6 +566,26 @@ func _event_text(typ: String, e: Dictionary) -> String:
 		"region_discovery":
 			return ""  # too noisy
 
+		# Combat / danger events
+		"battle_started":
+			return "a battle began"
+		"battle_ended":
+			return "a battle ended"
+		"battle_report":
+			return "a battle was reported"
+		"pawn_injured":
+			return "a pawn was injured"
+
+		# Memorial / death events
+		"memorial_created":
+			return "a memorial was created"
+		"death_recorded":
+			return "a death was recorded"
+
+		# Social events
+		"gossip_spread":
+			return ""  # too noisy
+
 		_:
 			# Surface rare settlement/world events
 			if typ.begins_with("settlement") or typ.contains("abandon") or typ.contains("revival") or typ.contains("rebirth"):

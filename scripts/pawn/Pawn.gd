@@ -88,8 +88,8 @@ const EAT_TICKS: int = 5
 ## (preferring a bed if one is reachable). At night the threshold is much
 ## higher so pawns settle into a natural diurnal schedule instead of working
 ## around the clock until exhausted.
-const REST_SLEEP_THRESHOLD: float = 35.0
-const REST_SLEEP_THRESHOLD_NIGHT: float = 75.0
+const REST_SLEEP_THRESHOLD: float = 25.0
+const REST_SLEEP_THRESHOLD_NIGHT: float = 55.0
 ## Below this, the pawn is so exhausted they abandon whatever they were doing
 ## (job, eating, hauling) and collapse. Without this, busy pawns happily ride
 ## rest down to 0 because they never reach the IDLE priority chain.
@@ -107,7 +107,7 @@ const UTILITY_JOB_PRIORITY_BIAS_RANGE: int = 6
 const UTILITY_SCORE_NORMALIZER: float = 6.0
 const UTILITY_WANDER_THRESHOLD: float = 0.42
 ## Sleep ends and the pawn wakes once rest climbs above this.
-const REST_WAKE_THRESHOLD: float = 90.0
+const REST_WAKE_THRESHOLD: float = 70.0
 ## Rest restored per tick while in SLEEPING state. ~7x the normal decay rate
 ## so a full sleep takes ~120 ticks (12 in-game hours) to go from crit to wake.
 const REST_RECOVER_PER_TICK_SLEEP: float = 0.6
@@ -142,6 +142,8 @@ static func _materials_for_build(job_type: int) -> Dictionary:
 		_Job.Type.BUILD_STORAGE_HUT:  return {"item": _Item.Type.WOOD, "qty": 3}
 		_Job.Type.BUILD_MARKER_STONE: return {"item": _Item.Type.STONE, "qty": 2}
 		_Job.Type.BUILD_SHRINE:       return {"item": _Item.Type.WOOD, "qty": 2}  # + stone tracked separately
+		_Job.Type.BUILD_SHELTER:      return {"item": _Item.Type.WOOD, "qty": BED_WOOD_COST}
+		_Job.Type.BUILD_HEARTH:       return {"item": _Item.Type.WOOD, "qty": 2}
 		_Job.Type.COOK_MEAT:          return {"item": _Item.Type.MEAT, "qty": 1}
 		_Job.Type.COOK_BERRIES:       return {"item": _Item.Type.BERRY, "qty": 2}
 		_Job.Type.DRY_MEAT:           return {"item": _Item.Type.MEAT, "qty": 2}
@@ -326,6 +328,7 @@ var _hunger_level: int = 0
 var initial_region_reputation: int = 0
 ## Failsafe log once: pawn standing on a tile A* now marks as solid.
 var _reported_stuck: bool = false
+var _woke_tick: int = -9999  # tick when pawn last woke; prevents sleep oscillation
 var _next_reproduction_tick: int = 0
 var _active_edict: String = ""
 var _rest_level: int = 0
@@ -349,6 +352,7 @@ static var _s_food_units: int = 0
 static var _s_food_pressure: float = 0.0
 static var _s_food_emergency: bool = false
 static var _s_food_cache_tick: int = -1
+static var _s_discovered_regions: Dictionary = {}  # region_key -> true (rate-limit discovery events)
 ## Per-tick cache for idle utility context — avoids rebuilding dict every idle tick
 var _cached_utility_context: Dictionary = {}
 var _cached_utility_context_tick: int = -1
@@ -2442,6 +2446,12 @@ func _tick_idle() -> void:
 	if data.hunger <= HUNGER_EMERGENCY and data.is_carrying() and Item.is_food(data.carrying):
 		_eat_from_hand()
 		return
+	# 1b. Starving + carrying non-food: drop it and seek food. Hauling can
+	# wait — survival comes first.
+	if data.hunger <= HUNGER_EMERGENCY and data.is_carrying():
+		data.clear_carry()
+		if _maybe_start_eating():
+			return
 	# 2. If we're still holding something from a prior task, deliver it first.
 	if data.is_carrying():
 		if _current_job != null and _current_job.type == _Job.Type.TRADE_HAUL and _current_job.trade_to != null:
@@ -2686,7 +2696,7 @@ func _tick_idle() -> void:
 			match int(j.type):
 				_Job.Type.MINE, _Job.Type.MINE_WALL, _Job.Type.CHOP:
 					base_bias += 3  # Increased from 2
-				_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT:
+				_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE:
 					base_bias += 6  # NEW: Strong priority for building
 				_Job.Type.FORAGE, _Job.Type.HUNT:
 					base_bias -= 1  # Slightly deprioritize foraging when not starving
@@ -3083,7 +3093,7 @@ func _utility_action_for_job(job_type: int) -> String:
 			return "gather"
 		_Job.Type.MINE, _Job.Type.MINE_WALL:
 			return "mine"
-		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR:
+		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE:
 			return "build"
 		_Job.Type.TRADE_HAUL:
 			return "trade"
@@ -3117,7 +3127,7 @@ func _job_matches_affinity(job_type: int, affinity_key: String) -> bool:
 		"gathering":
 			return job_type == _Job.Type.FORAGE or job_type == _Job.Type.CHOP or job_type == _Job.Type.MINE
 		"construction":
-			return job_type == _Job.Type.BUILD_BED or job_type == _Job.Type.BUILD_WALL or job_type == _Job.Type.BUILD_DOOR or job_type == _Job.Type.MINE_WALL
+			return job_type == _Job.Type.BUILD_BED or job_type == _Job.Type.BUILD_WALL or job_type == _Job.Type.BUILD_DOOR or job_type == _Job.Type.BUILD_FIRE_PIT or job_type == _Job.Type.BUILD_STORAGE_HUT or job_type == _Job.Type.BUILD_SHELTER or job_type == _Job.Type.BUILD_HEARTH or job_type == _Job.Type.MINE_WALL
 		_:
 			return false
 
@@ -3138,7 +3148,7 @@ func get_settlement_intent_job_multiplier(job: Job) -> float:
 			if job.type == _Job.Type.BUILD_WALL or job.type == _Job.Type.BUILD_DOOR:
 				return 1.1
 		SettlementMemory.INTENT_RECOVER:
-			if job.type == _Job.Type.BUILD_BED or job.type == _Job.Type.BUILD_WALL or job.type == _Job.Type.BUILD_DOOR:
+			if job.type == _Job.Type.BUILD_BED or job.type == _Job.Type.BUILD_WALL or job.type == _Job.Type.BUILD_DOOR or job.type == _Job.Type.BUILD_FIRE_PIT or job.type == _Job.Type.BUILD_SHELTER or job.type == _Job.Type.BUILD_HEARTH:
 				return 1.15
 			if job.type == _Job.Type.TRADE_HAUL:
 				return 1.1
@@ -3206,7 +3216,7 @@ func _get_neural_job_priority_bias(job_type: int) -> int:
 		_Job.Type.MINE, _Job.Type.MINE_WALL:
 			# Work_Mine (5)
 			neural_bias = int(outputs[5] * 4.0)
-		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR:
+		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE:
 			# Work_Build (4)
 			neural_bias = int(outputs[4] * 5.0)
 		_Job.Type.TRADE_HAUL:
@@ -3287,7 +3297,7 @@ func get_resource_pressure_bias(job: Job) -> float:
 		return 1.0
 	var intensity: float = 0.0
 	match int(job.type):
-		_Job.Type.CHOP, _Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR:
+		_Job.Type.CHOP, _Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_SHRINE:
 			intensity = wood_p
 		_Job.Type.MINE_WALL:
 			intensity = stone_p
@@ -3491,8 +3501,7 @@ func _tick_working() -> void:
 	# old constant-rate baseline). XP accrues only while actually working.
 	var skill: int = PawnData.skill_for_job(_current_job.type)
 	var speed: float = data.effective_labor_mult() * float(work_step_multiplier)
-	# Tool efficacy: equipped tools boost specific job types
-	speed *= data.get_tool_efficacy(_current_job.type)
+	# Tool efficacy is applied inside _calculate_work_efficiency() — don't double-count.
 	speed *= data.kinship_work_speed_multiplier(_current_job.work_tile)
 	if skill >= 0:
 		speed *= data.work_speed_for(skill)
@@ -3894,7 +3903,7 @@ func _is_job_tile_still_valid(job: Job) -> bool:
 	if not _world.data.in_bounds(job.tile.x, job.tile.y):
 		return false
 	match job.type:
-		_Job.Type.FORAGE:
+		_Job.Type.FORAGE, _Job.Type.PLANT_SEEDS:
 			return _world.data.get_feature(job.tile.x, job.tile.y) == TileFeature.Type.FERTILE_SOIL
 		_Job.Type.MINE:
 			return _world.data.get_feature(job.tile.x, job.tile.y) == TileFeature.Type.ORE_VEIN
@@ -3906,6 +3915,9 @@ func _is_job_tile_still_valid(job: Job) -> bool:
 			# Animals are tile features; the hunt's still valid as long as the
 			# critter hasn't already been killed (cleared) by someone else.
 			return TileFeature.is_wildlife(_world.data.get_feature(job.tile.x, job.tile.y))
+		_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.DRY_MEAT:
+			# Cooking requires a fire pit on the job tile (the hearth).
+			return _world.data.get_feature(job.tile.x, job.tile.y) == TileFeature.Type.FIRE_PIT
 		_Job.Type.TRADE_HAUL:
 			var tf: Stockpile = job.trade_from
 			var tt: Stockpile = job.trade_to
@@ -3916,13 +3928,20 @@ func _is_job_tile_still_valid(job: Job) -> bool:
 			if not tt.accepts(job.trade_item):
 				return false
 			return tf.count_of(job.trade_item) > 0
-		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL:
-			# Build sites are still valid if the tile is empty (no feature) and
-			# the underlying biome is passable. We DON'T check pathfinder
-			# passability for walls -- the wall tile itself is always passable
-			# until the moment the wall snaps in (work_tile is adjacent).
+		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, \
+		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, \
+		_Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, \
+		_Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH:
+			# Build sites are valid if the tile doesn't already have a
+			# structure on it (TREE/FERTILE_SOIL are OK — set_feature overwrites
+			# them on completion) and the underlying biome is passable.
 			var f1: int = _world.data.get_feature(job.tile.x, job.tile.y)
-			if f1 != TileFeature.Type.NONE:
+			# Skip tiles with existing structures (bed, wall, door, fire_pit, etc.)
+			if f1 == TileFeature.Type.BED or f1 == TileFeature.Type.WALL \
+				or f1 == TileFeature.Type.DOOR or f1 == TileFeature.Type.FIRE_PIT \
+				or f1 == TileFeature.Type.STORAGE_HUT or f1 == TileFeature.Type.MARKER_STONE \
+				or f1 == TileFeature.Type.SHRINE or f1 == TileFeature.Type.GRAVE_MARKER \
+				or f1 == TileFeature.Type.KNOWLEDGE_STONE or f1 == TileFeature.Type.LEDGER_STONE:
 				return false
 			return Biome.is_passable(_world.data.get_biome(job.tile.x, job.tile.y))
 		_Job.Type.BUILD_DOOR:
@@ -3932,6 +3951,16 @@ func _is_job_tile_still_valid(job: Job) -> bool:
 			if f2 == TileFeature.Type.WALL or f2 == TileFeature.Type.NONE:
 				return Biome.is_passable(_world.data.get_biome(job.tile.x, job.tile.y))
 			return false
+		_Job.Type.CARVE_GRAVE_MARKER, _Job.Type.CARVE_KNOWLEDGE_STONE, _Job.Type.CARVE_LEDGER_STONE:
+			# Carve jobs: tile must be passable and not already have a structure.
+			var f3: int = _world.data.get_feature(job.tile.x, job.tile.y)
+			if f3 == TileFeature.Type.GRAVE_MARKER or f3 == TileFeature.Type.KNOWLEDGE_STONE or f3 == TileFeature.Type.LEDGER_STONE:
+				return false
+			return Biome.is_passable(_world.data.get_biome(job.tile.x, job.tile.y))
+	# Jobs without specific tile requirements (PROTECT, DEFEND, TEACH, etc.)
+	# are valid as long as the tile is in bounds and passable.
+	if _world.data.in_bounds(job.tile.x, job.tile.y):
+		return Biome.is_passable(_world.data.get_biome(job.tile.x, job.tile.y))
 	return false
 
 
@@ -4012,6 +4041,51 @@ func _complete_current_job() -> void:
 		_Job.Type.HARVEST_CROPS:
 			produced_type = FoodChainManager.harvest_crop(job.tile)
 			produced_qty = 2 if produced_type != _Item.Type.NONE else 0  # Crops yield more
+		_Job.Type.CARVE_GRAVE_MARKER:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.GRAVE_MARKER)
+			produced_type = _Item.Type.NONE
+		_Job.Type.CARVE_KNOWLEDGE_STONE:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.KNOWLEDGE_STONE)
+			if KnowledgeSystem != null and KnowledgeSystem.has_method("inscribe_knowledge_on_stone"):
+				var pawn_knowledge: Array = []
+				if KnowledgeSystem.has_method("get"):
+					var carriers: Variant = KnowledgeSystem.get("knowledge_carriers")
+					if carriers != null and carriers is Dictionary and carriers.has(int(data.id)):
+						pawn_knowledge = carriers[int(data.id)].duplicate()
+				KnowledgeSystem.inscribe_knowledge_on_stone(job.tile, pawn_knowledge, int(data.id), "knowledge_stone")
+			produced_type = _Item.Type.NONE
+		_Job.Type.CARVE_LEDGER_STONE:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.LEDGER_STONE)
+			produced_type = _Item.Type.NONE
+		_Job.Type.GROW_FOOD:
+			# Route into FarmingSystem so plot state (water, health) actually updates.
+			# Item grants are skipped because farm crops (wheat, corn, etc.) don't
+			# yet exist in Item.Type — only the plot mutation matters for now.
+			if FarmingSystem != null and FarmingSystem.has_method("complete_farming_job_by_tile"):
+				FarmingSystem.complete_farming_job_by_tile(job.tile, int(data.id))
+			produced_type = _Item.Type.NONE
+		_Job.Type.TEACH_SKILL, _Job.Type.APPRENTICESHIP:
+			# Teaching jobs: find a nearby pawn with lower skill and transfer knowledge.
+			if KnowledgeSystem != null and KnowledgeSystem.has_method("teach_knowledge"):
+				var best_student: Pawn = null
+				var best_skill_gap: int = 0
+				for p in get_tree().get_nodes_in_group("pawns"):
+					if p == self or not is_instance_valid(p) or p.data == null:
+						continue
+					if position.distance_to(p.position) > 80.0:
+						continue
+					var gap: int = 0
+					for sk in range(PawnData.SKILL_COUNT):
+						var my_level: int = data.skill_level(sk)
+						var their_level: int = p.data.skill_level(sk)
+						if my_level > their_level:
+							gap += (my_level - their_level)
+					if gap > best_skill_gap:
+						best_skill_gap = gap
+						best_student = p
+				if best_student != null and best_skill_gap > 0:
+					KnowledgeSystem.teach_knowledge(int(data.id), int(best_student.data.id), 0)
+			produced_type = _Item.Type.NONE
 	var yield_skill: int = PawnData.skill_for_job(job.type)
 	if yield_skill >= 0 and produced_type != _Item.Type.NONE:
 		var qmult: float = data.harvest_quality_multiplier_for_job_skill(yield_skill)
@@ -4025,7 +4099,7 @@ func _complete_current_job() -> void:
 			data.add_mood_event(MoodEvent.Type.CONTENTMENT, 50.0, 200)  # Solid work
 		_Job.Type.CHOP, _Job.Type.FORAGE:
 			data.add_mood_event(MoodEvent.Type.CONTENTMENT, 40.0, 180)  # Basic harvesting
-		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR:
+		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_SHELTER:
 			data.add_mood_event(MoodEvent.Type.JOY, 60.0, 220)  # Building feels productive
 		_Job.Type.GATHER_FLINT, _Job.Type.GATHER_STICK:
 			data.add_mood_event(MoodEvent.Type.CONTENTMENT, 30.0, 150)  # Gathering materials
@@ -4057,7 +4131,7 @@ func _complete_current_job() -> void:
 			job_kind = WorldMemory.Kind.FOOD_EVENT
 		elif job.type == _Job.Type.COOK_MEAT or job.type == _Job.Type.COOK_BERRIES or job.type == _Job.Type.DRY_MEAT:
 			job_kind = WorldMemory.Kind.FOOD_EVENT
-		elif job.type == _Job.Type.BUILD_BED or job.type == _Job.Type.BUILD_WALL or job.type == _Job.Type.BUILD_DOOR:
+		elif job.type == _Job.Type.BUILD_BED or job.type == _Job.Type.BUILD_WALL or job.type == _Job.Type.BUILD_DOOR or job.type == _Job.Type.BUILD_FIRE_PIT or job.type == _Job.Type.BUILD_STORAGE_HUT or job.type == _Job.Type.BUILD_SHELTER or job.type == _Job.Type.BUILD_HEARTH:
 			job_kind = WorldMemory.Kind.BUILDING_CONSTRUCTED
 		WorldMemory.record_event({
 			"type": "job_completed",
@@ -4112,56 +4186,6 @@ func _finish_build(job: Job) -> void:
 			_world.build_wall(job.tile.x, job.tile.y)
 		_Job.Type.BUILD_DOOR:
 			_world.build_door(job.tile.x, job.tile.y)
-		_Job.Type.BUILD_SHELTER:
-			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.BED)
-			_world.register_bed(job.tile)
-		_Job.Type.BUILD_HEARTH:
-			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.FIRE_PIT)
-			WorldMemory.record_event({
-				"type": "hearth_built",
-				"pawn_id": int(data.id),
-				"pawn_name": data.display_name,
-				"tick": GameManager.tick_count,
-				"tile": {"x": job.tile.x, "y": job.tile.y},
-			})
-		_Job.Type.BUILD_SHELTER:
-			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.BED)
-			_world.register_bed(job.tile)
-			WorldMemory.record_event({
-				"type": "structure_built",
-				"category": "construction",
-				"severity": 2,
-				"pawn_id": int(data.id),
-				"pawn_name": data.display_name,
-				"tick": GameManager.tick_count,
-				"tile": {"x": job.tile.x, "y": job.tile.y},
-			})
-		_Job.Type.BUILD_HEARTH:
-			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.FIRE_PIT)
-			WorldMemory.record_event({
-				"type": "hearth_built",
-				"pawn_id": int(data.id),
-				"pawn_name": data.display_name,
-				"tick": GameManager.tick_count,
-				"tile": {"x": job.tile.x, "y": job.tile.y},
-			})
-		# Record Carriers (Phase 5: Knowledge Preservation)
-		_Job.Type.CARVE_GRAVE_MARKER:
-			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.GRAVE_MARKER)
-			# Grave markers preserve memory of dead (future: link to dead pawn's knowledge)
-		_Job.Type.CARVE_KNOWLEDGE_STONE:
-			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.KNOWLEDGE_STONE)
-			# Inscribe pawn's knowledge onto stone
-			if KnowledgeSystem != null and KnowledgeSystem.has_method("inscribe_knowledge_on_stone"):
-				var pawn_knowledge: Array = []
-				if KnowledgeSystem.has_method("get"):
-					var carriers: Variant = KnowledgeSystem.get("knowledge_carriers")
-					if carriers != null and carriers is Dictionary and carriers.has(int(data.id)):
-						pawn_knowledge = carriers[int(data.id)].duplicate()
-				KnowledgeSystem.inscribe_knowledge_on_stone(job.tile, pawn_knowledge, int(data.id), "knowledge_stone")
-		_Job.Type.CARVE_LEDGER_STONE:
-			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.LEDGER_STONE)
-			# Ledger stones store settlement history (future: store multiple knowledge types)
 
 
 func _current_settlement_center_region() -> int:
@@ -4308,8 +4332,24 @@ func _finish_shelter_build(job: Job) -> void:
 		_Job.Type.BUILD_SHELTER:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.BED)
 			_world.register_bed(job.tile)
+			WorldMemory.record_event({
+				"type": "structure_built",
+				"category": "construction",
+				"severity": 2,
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"tick": GameManager.tick_count,
+				"tile": {"x": job.tile.x, "y": job.tile.y},
+			})
 		_Job.Type.BUILD_HEARTH:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.FIRE_PIT)
+			WorldMemory.record_event({
+				"type": "hearth_built",
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"tick": GameManager.tick_count,
+				"tile": {"x": job.tile.x, "y": job.tile.y},
+			})
 
 
 ## Consume 1 durability from the equipped tool if the job benefits from a tool.
@@ -4566,6 +4606,11 @@ func _finish_eating() -> void:
 ## Bed preference: try to reserve and walk to the nearest free bed. If no bed
 ## is reachable, lie down on the spot (slower recovery, but better than dying).
 func _maybe_start_sleeping() -> bool:
+	# Anti-oscillation: don't go back to sleep immediately after waking.
+	# The wake threshold (70) is below the max possible sleep threshold (74),
+	# so without this cooldown a pawn would wake and re-sleep every tick.
+	if GameManager != null and (GameManager.tick_count - _woke_tick) < 20:
+		return false
 	# At night the threshold is raised so well-rested pawns still go to bed
 	# when the sun goes down, giving the colony a real day/night rhythm.
 	var base_th: float = REST_SLEEP_THRESHOLD_NIGHT if DayNightCycle.is_night_for_tick(GameManager.tick_count) else REST_SLEEP_THRESHOLD
@@ -4739,9 +4784,16 @@ func _begin_sleeping() -> void:
 ## happens in _decay_needs (which checks the state). Here we only handle
 ## the wake conditions.
 func _tick_sleeping() -> void:
+	# Wake up when well-rested
+	if data.rest >= REST_WAKE_THRESHOLD:
+		_release_bed_if_reserved()
+		_woke_tick = GameManager.tick_count
+		_reset_to_idle()
+		return
 	# Wake up early if we get critically hungry -- food trumps sleep.
 	if data.hunger <= HUNGER_EMERGENCY:
 		_release_bed_if_reserved()
+		_woke_tick = GameManager.tick_count
 		_reset_to_idle()
 		return
 	
@@ -4772,6 +4824,7 @@ func _tick_sleeping() -> void:
 			
 			if should_wake:
 				_release_bed_if_reserved()
+				_woke_tick = GameManager.tick_count
 				_reset_to_idle()
 				return
 
@@ -4826,7 +4879,7 @@ func _decay_needs() -> void:
 	var pace_h: float = lerpf(0.86, 1.15, _bp(0))
 	var pace_r: float = lerpf(0.86, 1.15, _bp(1))
 	if _state == State.SLEEPING:
-		data.hunger = max(0.0, data.hunger - HUNGER_DECAY_PER_TICK_SLEEPING * hunger_mult * pace_h)
+		data.hunger = data.hunger - HUNGER_DECAY_PER_TICK_SLEEPING * hunger_mult * pace_h
 		var rate: float = REST_RECOVER_PER_TICK_SLEEP
 		if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed and _world != null and _world.is_bed_owned_by(_reserved_bed, self):
 			rate *= REST_RECOVER_BED_MULTIPLIER
@@ -4838,8 +4891,8 @@ func _decay_needs() -> void:
 		if data.health < data.max_health:
 			data.health = min(data.max_health, data.health + heal_rate)
 	else:
-		data.hunger = max(0.0, data.hunger - HUNGER_DECAY_PER_TICK * hunger_mult * pace_h)
-		data.rest   = max(0.0, data.rest   - REST_DECAY_PER_TICK * rest_mult * pace_r)
+		data.hunger = data.hunger - HUNGER_DECAY_PER_TICK * hunger_mult * pace_h
+		data.rest   = data.rest   - REST_DECAY_PER_TICK * rest_mult * pace_r
 	
 	# Mood: net loss when needs aren't met, net gain when they are.
 	# Passive contentment outpaces decay, so a pawn whose hunger AND rest are
@@ -4976,6 +5029,10 @@ func _check_death_conditions() -> void:
 	
 	# Emergency food-seeking for AI agents
 	if data.hunger < 15.0 and _state != State.GOING_TO_EAT and _state != State.EATING:
+		# If carrying food, eat it right now — don't walk to a stockpile.
+		if data.is_carrying() and Item.is_food(data.carrying):
+			_eat_from_hand()
+			return
 		_emergency_seek_food()
 		# Record near-death starvation to consciousness
 		if data.hunger < 10.0:
@@ -5069,8 +5126,11 @@ func _hearth_proxy_warmth_bonus(tile: Vector2i) -> float:
 			var t: Vector2i = tile + Vector2i(dx, dy)
 			if not _world.data.in_bounds(t.x, t.y):
 				continue
-			if int(_world.data.get_feature(t.x, t.y)) == TileFeature.Type.BED:
-				bonus = maxf(bonus, 5.5)
+			var feat: int = int(_world.data.get_feature(t.x, t.y))
+			if feat == TileFeature.Type.FIRE_PIT:
+				bonus = maxf(bonus, 8.0)
+			elif feat == TileFeature.Type.BED:
+				bonus = maxf(bonus, 3.0)
 	return bonus
 
 
@@ -5940,7 +6000,7 @@ static func _life_path_key_for_job(job_type: int) -> String:
 	match job_type:
 		_Job.Type.MINE, _Job.Type.MINE_WALL:
 			return "farmer"
-		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR:
+		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE:
 			return "soldier"
 	return ""
 
@@ -6011,15 +6071,19 @@ func _track_region_visit(tile: Vector2i) -> void:
 
 
 func _world_record_discovery_event(region_key: int, tile: Vector2i) -> void:
-	WorldMemory.record_event({
-		"type": "region_discovery",
-		"pawn_id": int(data.id),
-		"pawn_name": data.display_name,
-		"region_key": region_key,
-		"tile": {"x": tile.x, "y": tile.y},
-		"total_regions": data.regions_visited.size(),
-		"tick": GameManager.tick_count,
-	})
+	# Rate-limit: only record the first discovery per region globally.
+	# Prevents hundreds of discovery events from flooding WorldMemory.
+	if not Pawn._s_discovered_regions.has(region_key):
+		Pawn._s_discovered_regions[region_key] = true
+		WorldMemory.record_event({
+			"type": "region_discovery",
+			"pawn_id": int(data.id),
+			"pawn_name": data.display_name,
+			"region_key": region_key,
+			"tile": {"x": tile.x, "y": tile.y},
+			"total_regions": data.regions_visited.size(),
+			"tick": GameManager.tick_count,
+		})
 
 
 ## Re-evaluate life path from current contribution counts (used after
@@ -6901,9 +6965,9 @@ func _get_profession_priority_bonus(job: Job) -> int:
 	# Builder: +10 priority for all build jobs (critical for housing strain fix)
 	if data.current_profession == PawnData.Profession.BUILDER:
 		match job.type:
-			Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+			Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH:
 				return 10  # VERY HIGH priority for builds
-			Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_SHRINE:
+			Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_SHRINE, Job.Type.BUILD_MARKER_STONE:
 				return 8
 			Job.Type.GATHER_STICK, Job.Type.GATHER_FLINT:  # Building materials
 				return 5

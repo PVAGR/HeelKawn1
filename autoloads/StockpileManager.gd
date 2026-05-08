@@ -128,7 +128,7 @@ func find_drop_zone(item_type: int, from_tile: Vector2i, pathfinder: PathFinder 
 			continue
 		if pathfinder != null:
 			# Any tile in the zone needs to be in the same connected component.
-			var near: Vector2i = z.nearest_tile_to(from_tile)
+			var near: Vector2i = z.nearest_reachable_tile_to(from_tile, pathfinder)
 			if pathfinder.component_of(near) != my_comp:
 				continue
 		var d: int = z.chebyshev_distance_from(from_tile)
@@ -150,7 +150,7 @@ func find_food_source(from_tile: Vector2i, pathfinder: PathFinder = null) -> Sto
 		if not z.has_any_food():
 			continue
 		if pathfinder != null:
-			var near: Vector2i = z.nearest_tile_to(from_tile)
+			var near: Vector2i = z.nearest_reachable_tile_to(from_tile, pathfinder)
 			if pathfinder.component_of(near) != my_comp:
 				continue
 		var d: int = z.chebyshev_distance_from(from_tile)
@@ -172,7 +172,7 @@ func find_source_for(item_type: int, qty: int, from_tile: Vector2i, pathfinder: 
 		if z.count_of(item_type) < qty:
 			continue
 		if pathfinder != null:
-			var near: Vector2i = z.nearest_tile_to(from_tile)
+			var near: Vector2i = z.nearest_reachable_tile_to(from_tile, pathfinder)
 			if pathfinder.component_of(near) != my_comp:
 				continue
 		var d: int = z.chebyshev_distance_from(from_tile)

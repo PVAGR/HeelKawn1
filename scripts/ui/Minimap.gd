@@ -8,6 +8,7 @@ extends CanvasLayer
 
 const MAP_SIZE_PX: int = 180
 const REFRESH_EVERY_N_TICKS: int = 30
+const OVERLAY_REFRESH_TICKS: int = 5  # Pawn dots / camera rect update more often
 const BORDER_COLOR: Color = Color(0.85, 0.78, 0.40, 0.50)
 const SETTLEMENT_COLOR: Color = Color(1.0, 0.85, 0.3, 1.0)
 const ENEMY_COLOR: Color = Color(1.0, 0.2, 0.15, 1.0)
@@ -83,7 +84,8 @@ func _process(_delta: float) -> void:
 	_tick_counter += 1
 	if _tick_counter % REFRESH_EVERY_N_TICKS == 0:
 		_refresh_terrain()
-		_overlay.queue_redraw()  # Only redraw overlay when terrain refreshes
+	if _tick_counter % OVERLAY_REFRESH_TICKS == 0:
+		_overlay.queue_redraw()
 
 
 func _refresh_terrain() -> void:

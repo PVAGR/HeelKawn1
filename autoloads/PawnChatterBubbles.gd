@@ -248,6 +248,8 @@ func get_job_bubble_text(job_type: int) -> String:
 		Job.Type.BUILD_STORAGE_HUT: return "Building"
 		Job.Type.BUILD_MARKER_STONE: return "Carving"
 		Job.Type.BUILD_SHRINE: return "Building"
+		Job.Type.BUILD_SHELTER: return "Building"
+		Job.Type.BUILD_HEARTH: return "Building"
 		Job.Type.MINE, Job.Type.MINE_WALL: return "Mining"
 		Job.Type.CHOP: return "Chopping"
 		Job.Type.FORAGE: return "Foraging"

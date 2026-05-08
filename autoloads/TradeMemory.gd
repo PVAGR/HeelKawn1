@@ -417,6 +417,20 @@ func get_last_tick_t2_existed() -> int:
 	return 0
 
 
+## Count total tiles across all active trade route paths.
+func count_route_tiles() -> int:
+	var total: int = 0
+	for route in trade_routes:
+		if route.has("path") and route.path is Array:
+			total += route.path.size()
+		elif route.has("tiles") and route.tiles is Array:
+			total += route.tiles.size()
+		else:
+			# Each route counts as at least 1 tile (origin)
+			total += 1
+	return total
+
+
 ## Returns the trade role at a given tile/region key.
 ## Required by IntentMemory.recompute for trade intent calculation.
 func get_role(region_key: Variant) -> String:

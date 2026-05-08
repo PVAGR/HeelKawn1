@@ -834,9 +834,12 @@ func _report_jobs_stock() -> void:
 
 
 func _report_trade() -> void:
+	var t2: int = TradeMemory.count_t2_tiles() if TradeMemory.has_method("count_t2_tiles") else 0
+	var rt: int = TradeMemory.count_route_tiles() if TradeMemory.has_method("count_route_tiles") else 0
+	var last_t2: int = TradeMemory.get_last_tick_t2_existed() if TradeMemory.has_method("get_last_tick_t2_existed") else 0
 	print(
 			"TradeMemory: count_t2_tiles=%d count_route_tiles=%d last_tick_t2_existed=%d"
-			% [TradeMemory.count_t2_tiles(), TradeMemory.count_route_tiles(), TradeMemory.get_last_tick_t2_existed()]
+			% [t2, rt, last_t2]
 	)
 
 

@@ -133,7 +133,7 @@ func npc_build_memorial(pawn_builder: Node, deceased_pawn_data: RefCounted, tile
 
 
 ## Create mass memorial for multiple deaths (battle, disaster, etc.)
-func create_mass_memorial(tile: Vector2i, deceased_pawns: Array[RefCounted], event_name: String, event_description: String) -> int:
+func create_mass_memorial(tile: Vector2i, deceased_pawns: Array, event_name: String, event_description: String) -> int:
 	var pawn_ids: Array[int] = []
 	for pawn_data in deceased_pawns:
 		if pawn_data != null:
@@ -155,16 +155,25 @@ func create_mass_memorial(tile: Vector2i, deceased_pawns: Array[RefCounted], eve
 
 
 ## Create memorial for pawn death
-func create_death_memorial(pawn_data: RefCounted, death_tile: Vector2i, violent: bool = false) -> void:
+func create_death_memorial(pawn_data: Variant, death_tile: Vector2i, violent: bool = false) -> void:
 	var memorial_type: String = "grave_marker"
 	if violent:
 		memorial_type = "memorial_plaque"
 
+	# Accept either PawnData or raw pawn_id int
+	var pawn_id: int = 0
+	if pawn_data is int:
+		pawn_id = pawn_data
+	elif pawn_data != null and pawn_data.has_method("get"):
+		pawn_id = int(pawn_data.get("id", 0))
+	elif pawn_data != null and "id" in pawn_data:
+		pawn_id = int(pawn_data.id)
+	
 	create_memorial({
 		"tile": death_tile,
 		"type": memorial_type,
-		"associated_pawns": [int(pawn_data.id)],
-		"event_id": _get_event_id_for_death(int(pawn_data.id))
+		"associated_pawns": [pawn_id],
+		"event_id": _get_event_id_for_death(pawn_id)
 	})
 
 

@@ -2027,20 +2027,18 @@ func _create_memorials_from_event(e: Dictionary) -> void:
 	
 	match typ:
 		"pawn_death":
-			var pawn_id: int = int(e.get("pawn_id", -1))
-			var tile: Variant = e.get("tile", e.get("position", Vector2i.ZERO))
+			var pawn_id: int = int(e.get("pawn_id", e.get("pid", -1)))
+			# Reconstruct tile from x,y keys (death events store x/y, not "tile")
+			var death_tile: Vector2i = Vector2i(int(e.get("x", 0)), int(e.get("y", 0)))
 			var violent: bool = e.get("violent", false) or e.get("cause", "") in ["killed", "battle", "murder"]
 			
 			if pawn_id >= 0:
-				var ps: Node = _get_pawn_spawner()
-				if ps != null and ps.has_method("pawn_data_for_id"):
-					var pawn_data = ps.call("pawn_data_for_id", pawn_id)
-					if pawn_data != null:
-						ms.call("create_death_memorial", pawn_data, tile, violent)
+				# Pass pawn_id directly — pawn_data_for_id returns null for dead pawns
+				ms.call("create_death_memorial", pawn_id, death_tile, violent)
 		
 		"battle", "war_battle", "conflict_event":
 			var casualties: int = int(e.get("casualties", 0))
-			var tile: Variant = e.get("tile", e.get("position", Vector2i.ZERO))
+			var battle_tile: Vector2i = Vector2i(int(e.get("x", 0)), int(e.get("y", 0)))
 			var participants: Array = e.get("participants", [])
 			
 			# Create mass memorial for battles with 3+ casualties
@@ -2052,34 +2050,34 @@ func _create_memorials_from_event(e: Dictionary) -> void:
 				for participant_id in participants:
 					if ps != null and ps.has_method("pawn_data_for_id"):
 						var pawn_data = ps.call("pawn_data_for_id", int(participant_id))
-						if pawn_data != null and pawn_data.get("health", 100) <= 0:
+						if pawn_data != null and pawn_data.health <= 0.0:
 							deceased_pawns.append(pawn_data)
 				
 				if deceased_pawns.size() > 0:
 					var event_name: String = e.get("name", "Battle")
 					var event_desc: String = e.get("description", "Here %d fell in battle" % casualties)
-					ms.call("create_mass_memorial", tile, deceased_pawns, event_name, event_desc)
+					ms.call("create_mass_memorial", battle_tile, deceased_pawns, event_name, event_desc)
 		
 		"settlement_founded":
-			var tile: Variant = e.get("tile", e.get("position", Vector2i.ZERO))
+			var found_tile: Vector2i = Vector2i(int(e.get("x", 0)), int(e.get("y", 0)))
 			var settlement_name: String = e.get("settlement_name", "Unknown Settlement")
 			
 			ms.call("create_memorial", {
-				"tile": tile,
+				"tile": found_tile,
 				"type": "founding_stone",
 				"inscription": "Here %s was founded\nYear %d" % [settlement_name, int(e.get("tick", 0)) / 3600],
 				"built_by": "auto"
 			})
 		
 		"disaster_event", "fire_started", "flood_event":
-			var tile: Variant = e.get("tile", e.get("position", Vector2i.ZERO))
+			var disaster_tile: Vector2i = Vector2i(int(e.get("x", 0)), int(e.get("y", 0)))
 			var casualties: int = int(e.get("casualties", 0))
 			
 			if casualties > 0:
 				var disaster_name: String = e.get("name", "Disaster")
 				var disaster_desc: String = e.get("description", "Here %d perished" % casualties)
 				ms.call("create_memorial", {
-					"tile": tile,
+					"tile": disaster_tile,
 					"type": "ruin_marker",
 					"inscription": "%s\n%d perished here" % [disaster_name, casualties],
 					"built_by": "auto"

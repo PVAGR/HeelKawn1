@@ -179,6 +179,43 @@ func print_resource_truth_capture(preferred_center: int, source: String) -> void
     )
 
 
+## Populate resource_truth on a settlement dict from StockpileManager.
+## Called after settlement recomputation so the audit reads real stockpile data.
+func _capture_resource_truth(st: Dictionary) -> void:
+    var food: int = 0
+    var wood: int = 0
+    var stone: int = 0
+    var ore_proxy: int = 0
+    var total: int = 0
+    if StockpileManager != null:
+        var snap: Dictionary = StockpileManager.labor_pressure_stock_snapshot()
+        food = int(snap.get("food", 0))
+        wood = int(snap.get("wood", 0))
+        stone = int(snap.get("stone", 0))
+        # ore_proxy: count FLINT as a rough ore stand-in
+        ore_proxy = StockpileManager.total_count_of(Item.Type.FLINT) if Item != null else 0
+        total = food + wood + stone + ore_proxy
+    st["resource_truth"] = {
+        "stock_food": food,
+        "stock_wood": wood,
+        "stock_stone": stone,
+        "stock_ore_proxy": ore_proxy,
+        "total_stock_units": total,
+        "snapshot_tick": GameManager.tick_count if GameManager != null else -1,
+        "center_region": int(st.get("center_region", -1)),
+    }
+    # Derive resource_balance labels from the truth
+    st["resource_balance"] = {
+        "food_balance": _balance_bucket_food(food),
+        "wood_balance": _balance_bucket_material(wood),
+        "stone_balance": _balance_bucket_material(stone),
+        "ore_proxy_balance": _balance_bucket_material(ore_proxy),
+        "snapshot_tick": GameManager.tick_count if GameManager != null else -1,
+        "center_region": int(st.get("center_region", -1)),
+        "source": "stockpile_manager_snapshot",
+    }
+
+
 func _balance_bucket_food(units: int) -> String:
     if units <= 0:
         return "DEFICIT"
@@ -312,6 +349,7 @@ func recompute(_world: World) -> void:
         # OPTIMIZATION: Force new settlements active for better early game
         st0 = _force_settlement_active_on_founding(st0)
         _apply_diaspora_founding(st0, center_id0)
+        _capture_resource_truth(st0)
         settlements.append(st0)
         var st_name0: String = str(st0.get("state", ""))
         var ckr0: int = int(st0.get("center_region", -1))
@@ -342,6 +380,7 @@ func recompute(_world: World) -> void:
             # OPTIMIZATION: Force new settlements active for better early game
             st = _force_settlement_active_on_founding(st)
             _apply_diaspora_founding(st, center_id)
+            _capture_resource_truth(st)
             settlements.append(st)
             var st_name: String = str(st.get("state", ""))
             var ckr: int = int(st.get("center_region", -1))

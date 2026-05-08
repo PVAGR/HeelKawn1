@@ -201,7 +201,7 @@ func _conflict_block(s: Dictionary) -> String:
 func _kernel_block(s: Dictionary) -> String:
 	return (
 		"[b]SYSTEM STAMP[/b]\n"
-		+ "[font=monospace]%s[/font]" % str(s.get("footer_stamp", "Tick 0 | Day 1 | Determinism Pending"))
+		+ "%s" % str(s.get("footer_stamp", "Tick 0 | Day 1 | Determinism Pending"))
 	)
 
 

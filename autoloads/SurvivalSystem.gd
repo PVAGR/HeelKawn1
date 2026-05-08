@@ -97,7 +97,11 @@ func _on_game_tick(tick: int) -> void:
 
 func _process_survival(pawn: Node, tick: int) -> void:
 	var data: RefCounted = pawn.data
-	
+
+	# Safety: clamp mood to valid range (guards against legacy corruption)
+	if data.mood != null and (data.mood < 0.0 or data.mood > 100.0):
+		data.mood = clampf(data.mood, 0.0, 100.0)
+
 	# Check if pawn is working (increases decay)
 	var state_val = pawn.get("state")
 	var is_working: bool = (state_val if state_val != null else "") == "working"
@@ -105,11 +109,14 @@ func _process_survival(pawn: Node, tick: int) -> void:
 	if is_working:
 		work_mult = WORK_HUNGER_MULT
 	
-	# Decay needs
-	_decay_hunger(data, work_mult)
-	_decay_thirst(data, work_mult)
-	_decay_energy(data, work_mult)
+	# Decay needs — Pawn.gd _decay_needs already handles hunger/rest/thirst
+	# with sleeping rates and personality multipliers. Only decay stamina here
+	# (Pawn.gd doesn't handle stamina). Moodlets are still applied below.
 	_decay_stamina(data, work_mult)
+
+	# Apply moodlets from current conditions (hunger/thirst/etc are
+	# decayed by Pawn.gd, but moodlets are managed here).
+	_apply_condition_moodlets(data)
 	
 	# Regulate body temperature
 	_regulate_temperature(pawn, tick)
@@ -376,6 +383,104 @@ func heal_injury(pawn: Node, injury_type: String, amount: float) -> void:
 
 var _active_moodlets: Dictionary = {}  # {pawn_id: {moodlet_key: end_tick}}
 
+## Check current pawn conditions and apply/remove moodlets accordingly.
+## This is separate from the decay functions because Pawn.gd handles the actual
+## hunger/thirst/rest decay with sleeping rates and personality multipliers.
+func _apply_condition_moodlets(data: RefCounted) -> void:
+	# Hunger moodlets
+	if data.hunger != null:
+		if data.hunger <= 0:
+			_apply_moodlet(data, "starving")
+			_remove_moodlet_if_active(data, "hungry")
+			_remove_moodlet_if_active(data, "well_fed")
+		elif data.hunger < 30:
+			_apply_moodlet(data, "hungry")
+			_remove_moodlet_if_active(data, "starving")
+			_remove_moodlet_if_active(data, "well_fed")
+		elif data.hunger > 80:
+			_apply_moodlet(data, "well_fed")
+			_remove_moodlet_if_active(data, "starving")
+			_remove_moodlet_if_active(data, "hungry")
+		else:
+			_remove_moodlet_if_active(data, "starving")
+			_remove_moodlet_if_active(data, "hungry")
+			_remove_moodlet_if_active(data, "well_fed")
+	# Thirst moodlets
+	if data.thirst != null:
+		if data.thirst <= 0:
+			_apply_moodlet(data, "parched")
+			_remove_moodlet_if_active(data, "thirsty")
+			_remove_moodlet_if_active(data, "quenched")
+		elif data.thirst < 30:
+			_apply_moodlet(data, "thirsty")
+			_remove_moodlet_if_active(data, "parched")
+			_remove_moodlet_if_active(data, "quenched")
+		elif data.thirst > 80:
+			_apply_moodlet(data, "quenched")
+			_remove_moodlet_if_active(data, "parched")
+			_remove_moodlet_if_active(data, "thirsty")
+		else:
+			_remove_moodlet_if_active(data, "parched")
+			_remove_moodlet_if_active(data, "thirsty")
+			_remove_moodlet_if_active(data, "quenched")
+	# Rest moodlets
+	if data.rest != null:
+		if data.rest > 70:
+			_apply_moodlet(data, "rested")
+			_remove_moodlet_if_active(data, "exhausted")
+		elif data.rest < 15:
+			_apply_moodlet(data, "exhausted")
+			_remove_moodlet_if_active(data, "rested")
+		else:
+			_remove_moodlet_if_active(data, "rested")
+			_remove_moodlet_if_active(data, "exhausted")
+	# Temperature moodlets (PawnData uses body_temperature, normal 36-38°C)
+	if data.body_temperature != null:
+		if data.body_temperature < 35.0:
+			_apply_moodlet(data, "hypothermia")
+			_remove_moodlet_if_active(data, "heatstroke")
+		elif data.body_temperature > 39.0:
+			_apply_moodlet(data, "heatstroke")
+			_remove_moodlet_if_active(data, "hypothermia")
+		else:
+			_remove_moodlet_if_active(data, "hypothermia")
+			_remove_moodlet_if_active(data, "heatstroke")
+	# Injury moodlets
+	if data.health != null and data.max_health != null:
+		var ratio: float = data.health / maxf(1.0, data.max_health)
+		if ratio < 0.3:
+			_apply_moodlet(data, "injured_severe")
+			_remove_moodlet_if_active(data, "injured_moderate")
+			_remove_moodlet_if_active(data, "injured_minor")
+		elif ratio < 0.6:
+			_apply_moodlet(data, "injured_moderate")
+			_remove_moodlet_if_active(data, "injured_severe")
+			_remove_moodlet_if_active(data, "injured_minor")
+		elif ratio < 0.85:
+			_apply_moodlet(data, "injured_minor")
+			_remove_moodlet_if_active(data, "injured_severe")
+			_remove_moodlet_if_active(data, "injured_moderate")
+		else:
+			_remove_moodlet_if_active(data, "injured_severe")
+			_remove_moodlet_if_active(data, "injured_moderate")
+			_remove_moodlet_if_active(data, "injured_minor")
+
+
+## Remove a moodlet if it's currently active for this pawn (reverses the mood effect).
+func _remove_moodlet_if_active(data: RefCounted, moodlet_key: String) -> void:
+	if not MOODLETS.has(moodlet_key):
+		return
+	var pawn_id: int = int(data.id)
+	if not _active_moodlets.has(pawn_id):
+		return
+	if not _active_moodlets[pawn_id].has(moodlet_key):
+		return
+	var moodlet: Dictionary = MOODLETS[moodlet_key]
+	_active_moodlets[pawn_id].erase(moodlet_key)
+	if data.mood != null:
+		# Reverse the mood effect: if moodlet.mood was -20, add 20 back
+		data.mood = clampf(data.mood - moodlet.mood, 0.0, 100.0)
+
 func _apply_moodlet(data: RefCounted, moodlet_key: String) -> void:
 	if not MOODLETS.has(moodlet_key):
 		return
@@ -390,7 +495,8 @@ func _apply_moodlet(data: RefCounted, moodlet_key: String) -> void:
 	# Check if moodlet already active
 	if _active_moodlets[pawn_id].has(moodlet_key):
 		var end_tick: int = _active_moodlets[pawn_id][moodlet_key]
-		if end_tick > GameManager.tick_count:
+		# end_tick == -1 means infinite duration (condition-based moodlet)
+		if end_tick == -1 or end_tick > GameManager.tick_count:
 			return  # Already active, don't refresh
 
 	# Apply moodlet
@@ -399,7 +505,7 @@ func _apply_moodlet(data: RefCounted, moodlet_key: String) -> void:
 	_active_moodlets[pawn_id][moodlet_key] = end_tick
 
 	if data.mood != null:
-		data.mood = minf(100.0, data.mood + moodlet.mood)
+		data.mood = clampf(data.mood + moodlet.mood, 0.0, 100.0)
 
 
 func _apply_moodlets(pawn: Node, tick: int) -> void:

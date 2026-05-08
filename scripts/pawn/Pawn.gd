@@ -4904,9 +4904,9 @@ func _decay_needs() -> void:
 		mood_event_impact = data.get_mood_event_impact()
 	
 	if data.hunger >= MOOD_CONTENT_FLOOR and data.rest >= MOOD_CONTENT_FLOOR:
-		data.mood = min(100.0, data.mood + MOOD_GAIN_PER_TICK_CONTENT - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact + data.kinship_mood_bonus())
+		data.mood = clampf(data.mood + MOOD_GAIN_PER_TICK_CONTENT - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact + data.kinship_mood_bonus(), 0.0, 100.0)
 	else:
-		data.mood = max(0.0, data.mood - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact + data.kinship_mood_bonus())
+		data.mood = clampf(data.mood - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact + data.kinship_mood_bonus(), 0.0, 100.0)
 	# Occasional uplift — same world rules, but some people notice small good moments more often.
 	if posmod(GameManager.tick_count + int(data.id) * 5, 211) == 0:
 		var flutter: float = 0.1 + _bp(4) * 0.22

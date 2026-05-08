@@ -18,8 +18,11 @@ extends Node
 const OUTPUT_DIR: String = "user://logs/playtest/"
 const MAX_RECORDS_PER_SESSION: int = 100000  # Prevent memory explosion
 const PERFORMANCE_SAMPLE_INTERVAL: int = 60  # Sample FPS every 60 ticks
-# Auto-save at varied tick intervals: 100, 500, 1000, 1500 (cycles through)
-const AUTO_SAVE_TICK_INTERVALS: Array[int] = [100, 500, 1000, 1500]
+# Auto-save intervals scale with game progress:
+# Early game (few events): save less often. Mid/late game: save more often.
+# The interval is based on WorldMemory event count, not fixed tick intervals.
+const AUTO_SAVE_MIN_INTERVAL: int = 500    # Never save more often than 500 ticks
+const AUTO_SAVE_MAX_INTERVAL: int = 5000   # Never wait longer than 5000 ticks
 var _auto_save_interval_index: int = 0
 
 # Recording state
@@ -280,7 +283,7 @@ func start_recording() -> void:
 	warnings_encountered.clear()
 	_record_count = 0
 	_last_auto_save_tick = session_start_tick
-	_next_auto_save_tick = session_start_tick + AUTO_SAVE_TICK_INTERVALS[0]
+	_next_auto_save_tick = session_start_tick + AUTO_SAVE_MAX_INTERVAL
 	_auto_save_interval_index = 0
 	
 	_record_event("session_start", {
@@ -295,9 +298,31 @@ func start_recording() -> void:
 
 
 func _get_next_auto_save_interval() -> int:
-	# Cycle through varied intervals: 100, 500, 1000, 1500 ticks
-	_auto_save_interval_index = (_auto_save_interval_index + 1) % AUTO_SAVE_TICK_INTERVALS.size()
-	return AUTO_SAVE_TICK_INTERVALS[_auto_save_interval_index]
+	# Scale interval with game progress (event count).
+	# First 100 events → 5000 ticks between saves
+	# 100-500 events → 3000 ticks
+	# 500-1000 events → 2000 ticks
+	# 1000+ events → 1000 ticks
+	# At high speed (50x+), further reduce frequency.
+	var event_count: int = 0
+	var wm: Node = get_node_or_null("/root/WorldMemory")
+	if wm != null and wm.has_method("event_count"):
+		event_count = wm.event_count
+	var interval: int
+	if event_count < 100:
+		interval = 5000
+	elif event_count < 500:
+		interval = 3000
+	elif event_count < 1000:
+		interval = 2000
+	else:
+		interval = 1000
+	# At high game speed, save less often (saves are expensive)
+	if GameManager != null and GameManager.game_speed >= 50.0:
+		interval = interval * 3
+	elif GameManager != null and GameManager.game_speed >= 20.0:
+		interval = int(float(interval) * 1.5)
+	return maxi(AUTO_SAVE_MIN_INTERVAL, mini(AUTO_SAVE_MAX_INTERVAL, interval))
 
 
 func stop_recording() -> void:

@@ -5346,7 +5346,7 @@ func _seed_construction_jobs() -> void:
 		var jobs_this_settlement: int = 0
 		# Priority 1: Fire pit if no hearth
 		if hearths <= 0 and jobs_this_settlement < 3:
-			var t: Vector2i = _find_build_tile_near(center_tile, 4)
+			var t: Vector2i = _find_build_tile_near(center_tile, 8)
 			if t.x >= 0 and not JobManager.has_job_at(t):
 				var j: Job = JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 7, 12)
 				if j != null:
@@ -5354,7 +5354,7 @@ func _seed_construction_jobs() -> void:
 					jobs_this_settlement += 1
 		# Priority 2: Storage hut if none
 		if storage_huts <= 0 and local_pop >= 3 and jobs_this_settlement < 3:
-			var t: Vector2i = _find_build_tile_near(center_tile, 5)
+			var t: Vector2i = _find_build_tile_near(center_tile, 10)
 			if t.x >= 0 and not JobManager.has_job_at(t):
 				var j: Job = JobManager.post(Job.Type.BUILD_STORAGE_HUT, t, 6, 15)
 				if j != null:
@@ -5363,7 +5363,7 @@ func _seed_construction_jobs() -> void:
 		# Priority 3: Beds if not enough
 		var need_beds: int = maxi(2, int(round(local_pop / 2.2)))
 		if beds < need_beds and jobs_this_settlement < 3:
-			var t: Vector2i = _find_build_tile_near(center_tile, 3)
+			var t: Vector2i = _find_build_tile_near(center_tile, 8)
 			if t.x >= 0 and not JobManager.has_job_at(t):
 				var j: Job = JobManager.post(Job.Type.BUILD_BED, t, 6, 10)
 				if j != null:
@@ -5372,7 +5372,7 @@ func _seed_construction_jobs() -> void:
 		# Priority 4: Walls + doors if population is large enough
 		if local_pop >= 6 and (walls < 4 or doors <= 0) and jobs_this_settlement < 3:
 			var build_type: int = Job.Type.BUILD_WALL if walls < 4 else Job.Type.BUILD_DOOR
-			var ring: int = 5 if build_type == Job.Type.BUILD_WALL else 4
+			var ring: int = 8 if build_type == Job.Type.BUILD_WALL else 6
 			var t: Vector2i = _find_build_tile_near(center_tile, ring)
 			if t.x >= 0 and not JobManager.has_job_at(t):
 				var j: Job = JobManager.post(build_type, t, 5, 10 if build_type == Job.Type.BUILD_WALL else 8)
@@ -5381,7 +5381,7 @@ func _seed_construction_jobs() -> void:
 					jobs_this_settlement += 1
 		# Priority 5: Plant seeds on nearby fertile soil
 		if jobs_this_settlement < 3:
-			var ft: Vector2i = _find_fertile_tile_near(center_tile, 8)
+			var ft: Vector2i = _find_fertile_tile_near(center_tile, 12)
 			if ft.x >= 0 and not JobManager.has_job_at(ft):
 				var j: Job = JobManager.post(Job.Type.PLANT_SEEDS, ft, 4, 6)
 				if j != null:
@@ -5392,41 +5392,55 @@ func _seed_construction_jobs() -> void:
 			var meat_count: int = StockpileManager.total_count_of(Item.Type.MEAT)
 			var berry_count: int = StockpileManager.total_count_of(Item.Type.BERRY)
 			if meat_count > 0:
-				var t: Vector2i = _find_hearth_tile_near(center_tile, 8)
+				var t: Vector2i = _find_hearth_tile_near(center_tile, 12)
 				if t.x >= 0 and not JobManager.has_job_at(t):
 					var j: Job = JobManager.post(Job.Type.COOK_MEAT, t, 4, 8)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
 			elif berry_count >= 2:
-				var t: Vector2i = _find_hearth_tile_near(center_tile, 8)
+				var t: Vector2i = _find_hearth_tile_near(center_tile, 12)
 				if t.x >= 0 and not JobManager.has_job_at(t):
 					var j: Job = JobManager.post(Job.Type.COOK_BERRIES, t, 3, 5)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
-	if posted > 0 and GameManager != null and GameManager.verbose_logs():
+	if posted > 0:
 		print("[Main] Construction seed: posted %d build jobs" % posted)
 
 
 ## Find an empty passable tile near center for building.
+## Allows tiles with clearable features (TREE, FERTILE_SOIL, STICK, FLINT)
+## since set_feature overwrites them on build completion.
 func _find_build_tile_near(center: Vector2i, radius: int) -> Vector2i:
 	if _world == null or _world.data == null or _world.pathfinder == null:
 		return Vector2i(-1, -1)
-	for r in range(1, radius + 1):
-		for y in range(-r, r + 1):
-			for x in range(-r, r + 1):
-				if abs(x) != r and abs(y) != r:
-					continue
-				var t: Vector2i = center + Vector2i(x, y)
-				if not _world.data.in_bounds(t.x, t.y):
-					continue
-				if not _world.pathfinder.is_passable(t):
-					continue
-				var feat: int = int(_world.data.get_feature(t.x, t.y))
-				if feat != TileFeature.Type.NONE:
-					continue
-				return t
+	# Prefer feature-free tiles first, then allow clearable features
+	for pass_n in range(2):
+		for r in range(1, radius + 1):
+			for y in range(-r, r + 1):
+				for x in range(-r, r + 1):
+					if abs(x) != r and abs(y) != r:
+						continue
+					var t: Vector2i = center + Vector2i(x, y)
+					if not _world.data.in_bounds(t.x, t.y):
+						continue
+					if not _world.pathfinder.is_passable(t):
+						continue
+					var feat: int = int(_world.data.get_feature(t.x, t.y))
+					if pass_n == 0:
+						# First pass: only feature-free tiles
+						if feat != TileFeature.Type.NONE:
+							continue
+					else:
+						# Second pass: allow clearable features (tree, fertile soil, sticks, flint)
+						if feat == TileFeature.Type.WALL or feat == TileFeature.Type.DOOR \
+							or feat == TileFeature.Type.BED or feat == TileFeature.Type.FIRE_PIT \
+							or feat == TileFeature.Type.STORAGE_HUT or feat == TileFeature.Type.MARKER_STONE \
+							or feat == TileFeature.Type.SHRINE or feat == TileFeature.Type.GRAVE_MARKER \
+							or feat == TileFeature.Type.KNOWLEDGE_STONE or feat == TileFeature.Type.LEDGER_STONE:
+							continue  # Don't build over existing structures
+					return t
 	return Vector2i(-1, -1)
 
 

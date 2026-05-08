@@ -4001,7 +4001,7 @@ func _complete_current_job() -> void:
 		_Job.Type.CRAFT_KNIFE, _Job.Type.CRAFT_TORCH, _Job.Type.CRAFT_PICK, _Job.Type.CRAFT_SPEAR:
 			_finish_craft(job)
 			produced_type = _Item.Type.NONE  # tool is equipped, not carried
-		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE:
+		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH:
 			_finish_shelter_build(job)
 			produced_type = _Item.Type.NONE
 		_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.DRY_MEAT:
@@ -4112,6 +4112,39 @@ func _finish_build(job: Job) -> void:
 			_world.build_wall(job.tile.x, job.tile.y)
 		_Job.Type.BUILD_DOOR:
 			_world.build_door(job.tile.x, job.tile.y)
+		_Job.Type.BUILD_SHELTER:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.BED)
+			_world.register_bed(job.tile)
+		_Job.Type.BUILD_HEARTH:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.FIRE_PIT)
+			WorldMemory.record_event({
+				"type": "hearth_built",
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"tick": GameManager.tick_count,
+				"tile": {"x": job.tile.x, "y": job.tile.y},
+			})
+		_Job.Type.BUILD_SHELTER:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.BED)
+			_world.register_bed(job.tile)
+			WorldMemory.record_event({
+				"type": "structure_built",
+				"category": "construction",
+				"severity": 2,
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"tick": GameManager.tick_count,
+				"tile": {"x": job.tile.x, "y": job.tile.y},
+			})
+		_Job.Type.BUILD_HEARTH:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.FIRE_PIT)
+			WorldMemory.record_event({
+				"type": "hearth_built",
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"tick": GameManager.tick_count,
+				"tile": {"x": job.tile.x, "y": job.tile.y},
+			})
 		# Record Carriers (Phase 5: Knowledge Preservation)
 		_Job.Type.CARVE_GRAVE_MARKER:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.GRAVE_MARKER)
@@ -4272,6 +4305,11 @@ func _finish_shelter_build(job: Job) -> void:
 				"tick": GameManager.tick_count,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
+		_Job.Type.BUILD_SHELTER:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.BED)
+			_world.register_bed(job.tile)
+		_Job.Type.BUILD_HEARTH:
+			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.FIRE_PIT)
 
 
 ## Consume 1 durability from the equipped tool if the job benefits from a tool.

@@ -54,6 +54,7 @@ func get_region_reputation(region_key: int) -> int:
 func clear() -> void:
 	reputation_by_region.clear()
 	traditions_by_settlement.clear()
+	_learnings.clear()
 
 
 func get_tradition(settlement_id: int) -> Dictionary:
@@ -93,12 +94,14 @@ func to_save_dict() -> Dictionary:
 	return {
 		"reputation_by_region": reputation_by_region.duplicate(true),
 		"traditions_by_settlement": traditions_by_settlement.duplicate(true),
+		"learnings": _learnings.duplicate(true),
 	}
 
 
 func from_save_dict(d: Dictionary) -> void:
 	reputation_by_region.clear()
 	traditions_by_settlement.clear()
+	_learnings.clear()
 	var rep_raw: Variant = d.get("reputation_by_region", {})
 	if rep_raw is Dictionary:
 		reputation_by_region = (rep_raw as Dictionary).duplicate(true)
@@ -109,6 +112,11 @@ func from_save_dict(d: Dictionary) -> void:
 			var t_any: Variant = (tr_raw as Dictionary)[sid_any]
 			if t_any is Dictionary:
 				traditions_by_settlement[sid] = _normalize_tradition(t_any as Dictionary)
+	var lrn_raw: Variant = d.get("learnings", [])
+	if lrn_raw is Array:
+		for item in lrn_raw:
+			if item is Dictionary:
+				_learnings.append(item.duplicate(true))
 
 
 func _default_tradition() -> Dictionary:
@@ -272,3 +280,64 @@ func get_maturity_level() -> float:
 	# Higher neutrality and better reputation = higher maturity
 	var maturity_factor: float = (neutrality_ratio * 0.6) + ((average_reputation + 3.0) / 6.0 * 0.4)
 	return base_maturity * (1.0 + maturity_factor)
+
+
+## Store a learning record from AILearning or teaching events.
+## Data must be a Dictionary with at least "pattern" or "skill".
+## Records are auditable: they derive from WorldMemory events, not RNG.
+var _learnings: Array = []  # Array of Dictionary records
+
+func store_learning(data: Dictionary) -> void:
+	if data.is_empty():
+		return
+	var tick: int = int(data.get("tick", data.get("learned_tick", GameManager.tick_count if GameManager != null else 0)))
+	var region: int = int(data.get("region", data.get("r", -1)))
+	var learner_id: int = int(data.get("pawn_id", data.get("learner_id", -1)))
+	var teacher_id: int = int(data.get("teacher_id", -1))
+	var skill: String = str(data.get("skill", data.get("pattern", data.get("lesson", "unknown"))))
+	var source: String = str(data.get("source", "ai_learning"))
+	var severity: int = int(data.get("severity", 0))
+	var trend: String = str(data.get("trend", "stable"))
+	var count: int = int(data.get("count", 1))
+	var rec: Dictionary = {
+		"tick": tick,
+		"region": region,
+		"learner_id": learner_id,
+		"teacher_id": teacher_id,
+		"skill": skill,
+		"source": source,
+		"severity": severity,
+		"trend": trend,
+		"count": count,
+		"raw": data,
+	}
+	_learnings.append(rec)
+	# Mirror a compact event into WorldMemory so it's auditable alongside
+	# other world events. Avoid duplicating if the caller already recorded.
+	if WorldMemory != null and not data.has("_wm_mirrored"):
+		WorldMemory.record_event({
+			"type": "cultural_learning",
+			"category": "knowledge",
+			"severity": maxi(1, severity),
+			"tick": tick,
+			"region": region,
+			"learner_id": learner_id,
+			"teacher_id": teacher_id,
+			"skill": skill,
+			"source": source,
+			"_wm_mirrored": true,
+		})
+
+
+## Get all stored learning records (read-only copy).
+func get_learnings() -> Array:
+	return _learnings.duplicate(true)
+
+
+## Get learning records for a specific settlement/region.
+func get_learnings_for_region(region_key: int) -> Array:
+	var out: Array = []
+	for rec in _learnings:
+		if int(rec.get("region", -1)) == region_key:
+			out.append(rec.duplicate(true))
+	return out

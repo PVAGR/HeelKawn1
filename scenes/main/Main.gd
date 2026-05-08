@@ -5658,6 +5658,12 @@ func _on_job_completed(job: Job) -> void:
 		job_type == Job.Type.BUILD_BED
 		or job_type == Job.Type.BUILD_WALL
 		or job_type == Job.Type.BUILD_DOOR
+		or job_type == Job.Type.BUILD_FIRE_PIT
+		or job_type == Job.Type.BUILD_STORAGE_HUT
+		or job_type == Job.Type.BUILD_MARKER_STONE
+		or job_type == Job.Type.BUILD_SHRINE
+		or job_type == Job.Type.BUILD_SHELTER
+		or job_type == Job.Type.BUILD_HEARTH
 	)
 	# Nearby-worker counting is only used for build/co-op lore events.
 	# Avoid full pawn scans for every labor completion.
@@ -5688,11 +5694,35 @@ func _on_job_completed(job: Job) -> void:
 		"s": WorldMemory.SCHEMA,
 	})
 	match job.type:
-		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, \
+		Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, \
+		Job.Type.BUILD_MARKER_STONE, Job.Type.BUILD_SHRINE, \
+		Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH:
 			if has_node("WorldTrace") and _world != null:
 				var wt: WorldTrace = $WorldTrace as WorldTrace
 				if wt != null:
 					wt.record_trace(_world.tile_to_world(job.tile), "build")
+			# Get settlement context for the build event
+			var settlement_name: String = ""
+			var housing_pressure: float = 0.0
+			var settlement_id: int = SettlementMemory.get_center_region_for_region(region_key)
+			if settlement_id >= 0:
+				var sd: Variant = SettlementMemory.get_settlement_at_region(region_key)
+				if sd != null and sd is Dictionary:
+					settlement_name = str((sd as Dictionary).get("name", (sd as Dictionary).get("intent", "")))
+				# Housing pressure: ratio of population to beds
+				var local_pop: int = 0
+				var bed_count: int = 0
+				if _pawn_spawner != null:
+					for p in _pawn_spawner.pawns:
+						if p != null and is_instance_valid(p) and p.data != null:
+							var pt: Vector2i = p.data.tile_pos
+							if abs(pt.x - job.tile.x) <= 24 and abs(pt.y - job.tile.y) <= 24:
+								local_pop += 1
+				var feats: Dictionary = HeelKawnianManager._scan_local_features(job.tile, 12)
+				bed_count = int(feats.get("bed", 0))
+				if local_pop > 0:
+					housing_pressure = clampf(float(local_pop) / maxf(1.0, float(bed_count)), 0.0, 10.0)
 			WorldMemory.record_event({
 				"type": "structure_built",
 				"category": "construction",
@@ -5704,6 +5734,8 @@ func _on_job_completed(job: Job) -> void:
 				"nearby_workers": nearby_workers,
 				"region": region_key,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
+				"settlement": settlement_name,
+				"housing_pressure": housing_pressure,
 			})
 			if nearby_workers >= 2:
 				WorldMemory.record_event({
@@ -5717,6 +5749,8 @@ func _on_job_completed(job: Job) -> void:
 					"nearby_workers": nearby_workers,
 					"region": region_key,
 					"tile": {"x": job.tile.x, "y": job.tile.y},
+					"settlement": settlement_name,
+					"housing_pressure": housing_pressure,
 				})
 		Job.Type.MINE, Job.Type.MINE_WALL:
 			_mining_react_pending = true

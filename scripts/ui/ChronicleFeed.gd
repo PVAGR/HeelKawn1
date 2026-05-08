@@ -68,15 +68,14 @@ func _ready() -> void:
 	_feed.offset_top = FEED_MARGIN_TOP + 20
 	_feed.offset_right = -FEED_MARGIN_RIGHT
 	_feed.offset_bottom = -FEED_MARGIN_BOTTOM
-    # bbcode_enabled disabled for runtime stability
-    # _feed.bbcode_enabled = true
+	_feed.bbcode_enabled = true
 	_feed.scroll_following = true
 	_feed.scroll_active = true
 	_feed.add_theme_font_size_override("normal_font_size", FONT_SIZE)
 	_feed.add_theme_font_size_override("bold_font_size", FONT_SIZE)
 	_feed.add_theme_color_override("default_color", Color(0.85, 0.82, 0.75, 0.95))  # Lighter text
 	_feed.mouse_filter = Control.MOUSE_FILTER_PASS
-	_feed.selection_enabled = false
+	_feed.selection_enabled = true  # Allow copyable text
 	# Fit content
 	_feed.fit_content = false
 	_feed.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -247,7 +246,11 @@ func _event_text(typ: String, e: Dictionary) -> String:
 		"pawn_death":
 			var nm: String = str(e.get("n", e.get("name", "someone"))).strip_edges()
 			if nm.is_empty(): nm = "someone"
-			return "%s died" % nm
+			var cause: String = str(e.get("cause", "")).strip_edges()
+			var cause_text: String = ""
+			if not cause.is_empty():
+				cause_text = " of %s" % cause.replace("_", " ")
+			return "%s died%s" % [nm, cause_text]
 
 		"animal_death":
 			return "wildlife was culled"
@@ -256,10 +259,25 @@ func _event_text(typ: String, e: Dictionary) -> String:
 			return "an enemy fell"
 
 		"structure_built":
-			return "new structures were completed"
+			var worker: String = str(e.get("worker_name", "")).strip_edges()
+			var job_type: int = int(e.get("job_type", -1))
+			var job_name: String = Job.describe_type(job_type) if Job != null else "structure"
+			var tile_x: int = int(e.get("x", int(e.get("tile", {}).get("x", -1))))
+			var tile_y: int = int(e.get("y", int(e.get("tile", {}).get("y", -1))))
+			if worker.is_empty():
+				worker = "someone"
+			var loc: String = ""
+			if tile_x >= 0 and tile_y >= 0:
+				loc = " at (%d,%d)" % [tile_x, tile_y]
+			return "%s built %s%s" % [worker, job_name, loc]
 
 		"cooperative_build":
-			return "crews raised new structures together"
+			var worker: String = str(e.get("worker_name", "")).strip_edges()
+			var nearby: int = int(e.get("nearby_workers", 0))
+			if worker.is_empty():
+				worker = "a crew"
+			var crew: String = " with %d nearby" % nearby if nearby > 1 else ""
+			return "%s raised a structure together%s" % [worker, crew]
 
 		"knowledge_discovery":
 			var kt: String = str(e.get("knowledge_type", "?"))

@@ -2778,6 +2778,25 @@ static func skill_for_job(job_type: int) -> int:
 			return Skill.FORAGING
 		Job.Type.PROTECT, Job.Type.DEFEND:
 			return Skill.HUNTING
+		# Phase 6: new building skills
+		Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_FARM_CORN, Job.Type.BUILD_FARM_VEGETABLES, Job.Type.BUILD_HERB_GARDEN:
+			return Skill.FORAGING  # Agriculture
+		Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_LOOM, Job.Type.BUILD_KILN, Job.Type.BUILD_SMELTER:
+			return Skill.BUILDING  # Production
+		Job.Type.BUILD_BOATYARD, Job.Type.BUILD_DOCK, Job.Type.BUILD_FISHERMAN_HUT:
+			return Skill.BUILDING  # Maritime
+		Job.Type.BUILD_APOTHECARY:
+			return Skill.BUILDING  # Medicine
+		Job.Type.BUILD_LIBRARY, Job.Type.BUILD_SCHOOL:
+			return Skill.BUILDING  # Knowledge
+		Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER:
+			return Skill.BUILDING  # Military
+		Job.Type.BUILD_MARKET, Job.Type.BUILD_TRADING_POST:
+			return Skill.BUILDING  # Trade
+		Job.Type.BUILD_ROAD:
+			return Skill.BUILDING  # Infrastructure
+		Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR:
+			return Skill.BUILDING  # Storage
 	return -1
 
 
@@ -2818,6 +2837,18 @@ func allows_job_type(job_type: int) -> bool:
 			return work_forage
 		Job.Type.PROTECT, Job.Type.DEFEND:
 			return work_hunt
+		# Phase 6: new building job permissions
+		Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_FARM_CORN, Job.Type.BUILD_FARM_VEGETABLES, Job.Type.BUILD_HERB_GARDEN:
+			return work_forage  # Agriculture = foraging skill
+		Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_LOOM, Job.Type.BUILD_KILN, Job.Type.BUILD_SMELTER, \
+		Job.Type.BUILD_BOATYARD, Job.Type.BUILD_DOCK, Job.Type.BUILD_FISHERMAN_HUT, \
+		Job.Type.BUILD_APOTHECARY, \
+		Job.Type.BUILD_LIBRARY, Job.Type.BUILD_SCHOOL, \
+		Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, \
+		Job.Type.BUILD_MARKET, Job.Type.BUILD_TRADING_POST, \
+		Job.Type.BUILD_ROAD, \
+		Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR:
+			return work_build  # All construction = building skill
 	return true
 
 

@@ -134,8 +134,10 @@ func _refresh_territories() -> void:
 	queue_redraw()
 
 
-## Register each settlement's region bounding box as a TERRITORY zone.
+## Register each settlement's regions as TERRITORY zones in ZoneRegistry.
 ## This gives pawns a priority bonus for building/working inside their territory.
+## We register each 16×16 region as a separate rect for accurate coverage
+## (bounding boxes would include non-settlement tiles for irregular shapes).
 func _register_territory_zones() -> void:
 	if ZoneRegistry == null:
 		return
@@ -148,22 +150,12 @@ func _register_territory_zones() -> void:
 		var regions: PackedInt32Array = territory["regions"]
 		if regions.is_empty():
 			continue
-		# Compute bounding rect of all regions in tile coords
-		var min_x: int = 999999
-		var min_y: int = 999999
-		var max_x: int = -1
-		var max_y: int = -1
+		# Register each region as a separate 16×16 tile rect
 		for rk in regions:
 			var rx: int = int(rk) & 0xFFFF
 			var ry: int = (int(rk) >> 16) & 0xFFFF
-			var tx: int = rx * 16
-			var ty: int = ry * 16
-			min_x = mini(min_x, tx)
-			min_y = mini(min_y, ty)
-			max_x = maxi(max_x, tx + 16)
-			max_y = maxi(max_y, ty + 16)
-		var rect: Rect2i = Rect2i(min_x, min_y, max_x - min_x, max_y - min_y)
-		ZoneRegistry.register(ZoneRegistry.ZoneType.TERRITORY, rect)
+			var rect: Rect2i = Rect2i(rx * 16, ry * 16, 16, 16)
+			ZoneRegistry.register(ZoneRegistry.ZoneType.TERRITORY, rect)
 
 
 func _draw() -> void:

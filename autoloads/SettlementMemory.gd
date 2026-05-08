@@ -329,11 +329,24 @@ func recompute(_world: World) -> void:
     for rk_any in WorldMeaning.meaning_by_region.keys():
         var rk: int = int(rk_any)
         var m: Dictionary = WorldMeaning.get_region_meaning(rk)
-        if int(m.get("total_deaths", 0)) == 0:
+        # A region is eligible for settlement if it has EITHER:
+        # - Deaths (original criterion — scarred regions are settled)
+        # - Buildings constructed (HeelKawnians actively building homes)
+        # - Active pawns living there (population presence)
+        var has_deaths: bool = int(m.get("total_deaths", 0)) > 0
+        var has_buildings: bool = int(m.get("buildings_constructed", 0)) > 0
+        var has_scar: bool = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0)) >= 1
+        if has_deaths and has_scar:
+            eligible.append(rk)
+        elif has_buildings:
+            eligible.append(rk)
+    # Also include regions where pawns are actively living (even if no events yet)
+    for p in living_pawns:
+        if p == null or not is_instance_valid(p) or p.data == null:
             continue
-        if int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0)) < 1:
-            continue
-        eligible.append(rk)
+        var rk_p: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+        if not eligible.has(rk_p):
+            eligible.append(rk_p)
     eligible.sort()
     if eligible.is_empty():
         var bootstrap_cluster: Array = _bootstrap_presettlement_cluster(living_pawns)

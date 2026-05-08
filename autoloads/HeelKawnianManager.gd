@@ -270,6 +270,16 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 	var walls: int = int(local_features.get("wall", 0))
 	var doors: int = int(local_features.get("door", 0))
 	var markers: int = int(local_features.get("marker", 0))
+	# Phase 6: new building counts
+	var farms: int = int(local_features.get("farm", 0))
+	var workshops: int = int(local_features.get("workshop", 0))
+	var granaries: int = int(local_features.get("granary", 0))
+	var apothecaries: int = int(local_features.get("apothecary", 0))
+	var libraries: int = int(local_features.get("library", 0))
+	var markets: int = int(local_features.get("market", 0))
+	var barracks: int = int(local_features.get("barracks", 0))
+	var boatyards: int = int(local_features.get("boatyard", 0))
+	var cellars: int = int(local_features.get("cellar", 0))
 	var drive: String = str(profile.get("development_drive", "serve_settlement"))
 	var next_need: String = str(profile.get("next_need", "serve local needs"))
 	var loop_job: int = _worldbox_loop_job_for_pawn(data, local_pop, local_features, tick)
@@ -285,6 +295,30 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 		ambition = _ambition_result(Job.Type.BUILD_BED, 7, "household pressure requires more beds")
 	elif (walls < 4 or doors <= 0) and local_pop >= 6:
 		ambition = _ambition_result(Job.Type.BUILD_WALL if walls < 4 else Job.Type.BUILD_DOOR, 6, "settlement perimeter is underdeveloped")
+	# Phase 6: farm ambition — food production for growing settlements
+	elif farms <= 0 and local_pop >= 4:
+		ambition = _ambition_result(Job.Type.BUILD_FARM_WHEAT, 7, "no farms — settlement needs food production")
+	# Phase 6: granary — food storage for settlements with farms
+	elif granaries <= 0 and farms >= 1 and local_pop >= 4:
+		ambition = _ambition_result(Job.Type.BUILD_GRANARY, 6, "farms exist but no granary — food spoilage risk")
+	# Phase 6: workshop — production for settlements with enough population
+	elif workshops <= 0 and local_pop >= 5:
+		ambition = _ambition_result(Job.Type.BUILD_WORKSHOP, 6, "no workshop — settlement needs crafting capacity")
+	# Phase 6: apothecary — medicine for settlements with injuries
+	elif apothecaries <= 0 and local_pop >= 5:
+		ambition = _ambition_result(Job.Type.BUILD_APOTHECARY, 6, "no apothecary — settlement needs healing capacity")
+	# Phase 6: market — trade for settlements with surplus
+	elif markets <= 0 and local_pop >= 6 and farms >= 1:
+		ambition = _ambition_result(Job.Type.BUILD_MARKET, 5, "surplus production but no market — trade needed")
+	# Phase 6: library — knowledge for advanced settlements
+	elif libraries <= 0 and local_pop >= 8:
+		ambition = _ambition_result(Job.Type.BUILD_LIBRARY, 5, "advanced settlement needs knowledge infrastructure")
+	# Phase 6: barracks — military for large settlements
+	elif barracks <= 0 and local_pop >= 6 and walls >= 4:
+		ambition = _ambition_result(Job.Type.BUILD_BARRACKS, 5, "walled settlement needs military capacity")
+	# Phase 6: cellar — advanced storage for mature settlements
+	elif cellars <= 0 and local_pop >= 7 and granaries >= 1:
+		ambition = _ambition_result(Job.Type.BUILD_CELLAR, 5, "mature settlement needs deep storage")
 	elif drive in ["preserve", "teach"] and markers <= 0:
 		ambition = _ambition_result(Job.Type.BUILD_MARKER_STONE, 6, "memory anchor missing for preservation-focused population")
 	elif drive == "survive":
@@ -327,12 +361,23 @@ static func _worldbox_loop_job_for_pawn(
 	var hearths: int = int(local_features.get("hearth", 0))
 	var storage_huts: int = int(local_features.get("storage_hut", 0))
 	var markers: int = int(local_features.get("marker", 0))
+	# Phase 6: new building counts
+	var farms: int = int(local_features.get("farm", 0))
+	var workshops: int = int(local_features.get("workshop", 0))
+	var granaries: int = int(local_features.get("granary", 0))
+	var apothecaries: int = int(local_features.get("apothecary", 0))
+	var libraries: int = int(local_features.get("library", 0))
+	var markets: int = int(local_features.get("market", 0))
+	var barracks: int = int(local_features.get("barracks", 0))
+	var boatyards: int = int(local_features.get("boatyard", 0))
+	var cellars: int = int(local_features.get("cellar", 0))
 	# Knowledge preservation phase: if settlement has writing, expand the loop
 	var has_writing: bool = false
 	var ks: Node = _root_node("KnowledgeSystem")
 	if ks != null and ks.has_method("has_knowledge"):
 		has_writing = bool(ks.call("has_knowledge", int(data.id), 24))  # WRITING
-	var phase_count: int = 12 if has_writing else 8
+	# Phase 6: civilization progression — more phases for advanced settlements
+	var phase_count: int = 20 if has_writing else 12
 	var phase: int = posmod(tick / 90 + int(data.id) * 3, phase_count)
 	match phase:
 		0:
@@ -359,17 +404,53 @@ static func _worldbox_loop_job_for_pawn(
 			return Job.Type.HUNT
 		7:
 			return Job.Type.TOOL_MAKING
-		# Knowledge preservation phases (only when writing known)
+		# Phase 6: civilization building phases
 		8:
+			if farms <= 0 and local_pop >= 4:
+				return Job.Type.BUILD_FARM_WHEAT
+			if granaries <= 0 and farms >= 1:
+				return Job.Type.BUILD_GRANARY
+			return Job.Type.FORAGE
+		9:
+			if workshops <= 0 and local_pop >= 5:
+				return Job.Type.BUILD_WORKSHOP
+			return Job.Type.CHOP
+		10:
+			if apothecaries <= 0 and local_pop >= 5:
+				return Job.Type.BUILD_APOTHECARY
+			return Job.Type.MINE
+		11:
+			if markets <= 0 and local_pop >= 6 and farms >= 1:
+				return Job.Type.BUILD_MARKET
+			return Job.Type.HUNT
+		# Knowledge preservation phases (only when writing known)
+		12:
 			if markers <= 0:
 				return Job.Type.CARVE_KNOWLEDGE_STONE
 			return Job.Type.PAPER_MAKING
-		9:
+		13:
 			return Job.Type.INK_MAKING
-		10:
+		14:
 			return Job.Type.BOOK_BINDING
-		11:
+		15:
 			return Job.Type.TEACH_SKILL
+		# Phase 6: advanced civilization phases (only when writing known)
+		16:
+			if libraries <= 0 and local_pop >= 8:
+				return Job.Type.BUILD_LIBRARY
+			return Job.Type.TEACH_SKILL
+		17:
+			if barracks <= 0 and local_pop >= 6 and walls >= 4:
+				return Job.Type.BUILD_BARRACKS
+			return Job.Type.PROTECT
+		18:
+			if cellars <= 0 and local_pop >= 7 and granaries >= 1:
+				return Job.Type.BUILD_CELLAR
+			return Job.Type.CHOP
+		19:
+			if boatyards <= 0 and local_pop >= 6:
+				return Job.Type.BUILD_BOATYARD
+			return Job.Type.FORAGE
 	return -1
 
 
@@ -446,6 +527,25 @@ static func _scan_local_features(center: Vector2i, radius: int) -> Dictionary:
 		"hearth": 0,
 		"storage_hut": 0,
 		"marker": 0,
+		# Phase 6: new building counts
+		"farm": 0,
+		"workshop": 0,
+		"loom": 0,
+		"kiln": 0,
+		"smelter": 0,
+		"boatyard": 0,
+		"dock": 0,
+		"fisherman_hut": 0,
+		"apothecary": 0,
+		"library": 0,
+		"school": 0,
+		"barracks": 0,
+		"watchtower": 0,
+		"market": 0,
+		"trading_post": 0,
+		"road": 0,
+		"granary": 0,
+		"cellar": 0,
 	}
 	var main_node: Node = _root_node("Main")
 	if main_node == null:
@@ -475,6 +575,51 @@ static func _scan_local_features(center: Vector2i, radius: int) -> Dictionary:
 					out["storage_hut"] = int(out["storage_hut"]) + 1
 				TileFeature.Type.MARKER_STONE:
 					out["marker"] = int(out["marker"]) + 1
+				# Phase 6: agriculture
+				TileFeature.Type.FARM_WHEAT, TileFeature.Type.FARM_CORN, TileFeature.Type.FARM_VEGETABLES, TileFeature.Type.HERB_GARDEN:
+					out["farm"] = int(out["farm"]) + 1
+				# Phase 6: production
+				TileFeature.Type.WORKSHOP:
+					out["workshop"] = int(out["workshop"]) + 1
+				TileFeature.Type.LOOM:
+					out["loom"] = int(out["loom"]) + 1
+				TileFeature.Type.KILN:
+					out["kiln"] = int(out["kiln"]) + 1
+				TileFeature.Type.SMELTER:
+					out["smelter"] = int(out["smelter"]) + 1
+				# Phase 6: maritime
+				TileFeature.Type.BOATYARD:
+					out["boatyard"] = int(out["boatyard"]) + 1
+				TileFeature.Type.DOCK:
+					out["dock"] = int(out["dock"]) + 1
+				TileFeature.Type.FISHERMAN_HUT:
+					out["fisherman_hut"] = int(out["fisherman_hut"]) + 1
+				# Phase 6: medicine
+				TileFeature.Type.APOTHECARY:
+					out["apothecary"] = int(out["apothecary"]) + 1
+				# Phase 6: knowledge
+				TileFeature.Type.LIBRARY:
+					out["library"] = int(out["library"]) + 1
+				TileFeature.Type.SCHOOL:
+					out["school"] = int(out["school"]) + 1
+				# Phase 6: military
+				TileFeature.Type.BARRACKS:
+					out["barracks"] = int(out["barracks"]) + 1
+				TileFeature.Type.WATCHTOWER:
+					out["watchtower"] = int(out["watchtower"]) + 1
+				# Phase 6: trade
+				TileFeature.Type.MARKET:
+					out["market"] = int(out["market"]) + 1
+				TileFeature.Type.TRADING_POST:
+					out["trading_post"] = int(out["trading_post"]) + 1
+				# Phase 6: infrastructure
+				TileFeature.Type.ROAD:
+					out["road"] = int(out["road"]) + 1
+				# Phase 6: storage
+				TileFeature.Type.GRANARY:
+					out["granary"] = int(out["granary"]) + 1
+				TileFeature.Type.CELLAR:
+					out["cellar"] = int(out["cellar"]) + 1
 	return out
 
 

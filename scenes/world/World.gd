@@ -175,19 +175,21 @@ func _tile_color(x: int, y: int) -> Color:
 	var base: Color
 	if feature != TileFeature.Type.NONE:
 		base = TileFeature.color_for(feature)
-		if (
-				feature == TileFeature.Type.WALL
-				or feature == TileFeature.Type.DOOR
-				or feature == TileFeature.Type.BED
-				or feature == TileFeature.Type.FIRE_PIT
-				or feature == TileFeature.Type.STORAGE_HUT
-				or feature == TileFeature.Type.MARKER_STONE
-				or feature == TileFeature.Type.SHRINE
-		):
+		# Phase 6: all built features (not wildlife/natural) get culture tints
+		var is_built_feature: bool = (
+			feature != TileFeature.Type.NONE
+			and feature != TileFeature.Type.ORE_VEIN
+			and feature != TileFeature.Type.FERTILE_SOIL
+			and feature != TileFeature.Type.RUIN
+			and feature != TileFeature.Type.TREE
+			and feature != TileFeature.Type.RABBIT
+			and feature != TileFeature.Type.DEER
+		)
+		if is_built_feature:
 			var rk_ct: int = WorldMemory._region_key(x, y) if WorldMemory != null else 0
 			if _region_culture_tint_cache.has(rk_ct):
 				# Landmark buildings get stronger cultural tint
-				if feature == TileFeature.Type.FIRE_PIT or feature == TileFeature.Type.SHRINE or feature == TileFeature.Type.MARKER_STONE:
+				if feature == TileFeature.Type.FIRE_PIT or feature == TileFeature.Type.SHRINE or feature == TileFeature.Type.MARKER_STONE or feature == TileFeature.Type.BARRACKS or feature == TileFeature.Type.WATCHTOWER or feature == TileFeature.Type.LIBRARY or feature == TileFeature.Type.MARKET:
 					base = TileFeature.apply_culture_landmark_tint(
 							base, int(_region_culture_tint_cache[rk_ct])
 					)

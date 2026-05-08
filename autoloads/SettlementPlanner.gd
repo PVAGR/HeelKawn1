@@ -199,22 +199,22 @@ func _plan_one_settlement_culture(
 ) -> void:
 	var fire_pit_n: int = int(feature_summary.get("fire_pit_n", 0))
 	var storage_hut_n: int = int(feature_summary.get("storage_hut_n", 0))
-	var order: Array[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+	var order: Array[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
 	if cult == CULTURE_OPEN:
-		# Beds + zone before fortifying; sprawl (tile picks below).
-		order = [1, 6, 4, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13, 14]
+		# Beds + zone before fortifying; sprawl (tile picks below). Farms early.
+		order = [1, 6, 4, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 17, 19, 20, 22, 21, 24, 23, 25]
 	elif cult == CULTURE_DEFENSIVE:
-		# Wall expansion before stockpile; compact defaults.
-		order = [1, 2, 3, 5, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+		# Wall expansion before stockpile; compact defaults. Military early.
+		order = [1, 2, 3, 5, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 23, 18, 16, 17, 19, 20, 21, 22, 24, 25]
 	if intent == IntentMemory.INTENT_GROW:
 		if cult == CULTURE_OPEN:
-			order = [1, 6, 4, 5, 2, 3, 7, 8, 9, 10, 11, 12, 13, 14]
+			order = [1, 6, 4, 5, 2, 3, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 22, 17, 19, 20, 21, 24, 23, 25]
 		elif cult == CULTURE_DEFENSIVE:
-			order = [1, 2, 3, 6, 5, 4, 7, 8, 9, 10, 11, 12, 13, 14]
+			order = [1, 2, 3, 6, 5, 4, 7, 8, 9, 10, 11, 12, 13, 14, 15, 23, 18, 16, 17, 19, 20, 21, 22, 24, 25]
 		else:
-			order = [1, 6, 4, 2, 3, 5, 7, 8, 9, 10]
+			order = [1, 6, 4, 2, 3, 5, 7, 8, 9, 10, 16, 18, 17, 19, 20, 21, 22, 23, 24, 25]
 	elif intent == IntentMemory.INTENT_ABANDON:
-		order = [1, 3, 7, 10, 2, 4, 5, 6, 8, 9, 11, 12, 13, 14]
+		order = [1, 3, 7, 10, 2, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 23, 24, 18, 16, 17, 19, 20, 21, 22, 25]
 	for rid: int in order:
 		if _budget_exceeded():
 			return
@@ -369,6 +369,230 @@ func _plan_one_settlement_culture(
 					var t14: Vector2i = _pick_defend_tile(world, main, data, center, regions)
 					if t14.x >= 0 and bool(main.call("settlement_planner_post_defend", t14)):
 						return
+			15:
+				# Territory expansion: growing settlements claim adjacent regions
+				# as TERRITORY zones so pawns prefer building/working there.
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if pawns >= 3 and intent == IntentMemory.INTENT_GROW:
+					_expand_territory_zone(world, main, data, center, regions)
+			# Phase 6: Agriculture — farms when settlement has enough pawns
+			16:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if pawns >= 4 and stage >= 1:
+					var farm_type: int = _pick_farm_type_for_settlement(regions, data)
+					if farm_type >= 0:
+						var tfarm: Vector2i = _pick_farm_tile(world, main, data, center, regions)
+						if tfarm.x >= 0 and bool(main.call("settlement_planner_post_job", tfarm, farm_type)):
+							return
+			# Phase 6: Production — workshop when settlement has enough pawns
+			17:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if pawns >= 5 and stage >= 1:
+					var workshop_n: int = int(feature_summary.get("workshop_n", 0))
+					if workshop_n < 1:
+						var tws: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
+						if tws.x >= 0 and bool(main.call("settlement_planner_post_job", tws, Job.Type.BUILD_WORKSHOP)):
+							return
+			# Phase 6: Granary — food storage for growing settlements
+			18:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if pawns >= 4 and stage >= 1:
+					var granary_n: int = int(feature_summary.get("granary_n", 0))
+					if granary_n < 1:
+						var tgr: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
+						if tgr.x >= 0 and bool(main.call("settlement_planner_post_job", tgr, Job.Type.BUILD_GRANARY)):
+							return
+			# Phase 6: Road — connect settlement to nearby settlements
+			19:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if pawns >= 5 and stage >= 2:
+					var road_n: int = int(feature_summary.get("road_n", 0))
+					if road_n < 3:
+						var troad: Vector2i = _pick_road_tile(world, main, data, center, regions)
+						if troad.x >= 0 and bool(main.call("settlement_planner_post_job", troad, Job.Type.BUILD_ROAD)):
+							return
+			# Phase 6: Maritime — boatyard/dock near water
+			20:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if pawns >= 6 and stage >= 2:
+					var boatyard_n: int = int(feature_summary.get("boatyard_n", 0))
+					if boatyard_n < 1 and _has_water_nearby(data, center, regions):
+						var tby: Vector2i = _pick_waterside_tile(world, main, data, center, regions)
+						if tby.x >= 0 and bool(main.call("settlement_planner_post_job", tby, Job.Type.BUILD_BOATYARD)):
+							return
+			# Phase 6: Knowledge — library/school for advanced settlements
+			21:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if pawns >= 8 and stage >= 2:
+					var library_n: int = int(feature_summary.get("library_n", 0))
+					if library_n < 1:
+						var tlib: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
+						if tlib.x >= 0 and bool(main.call("settlement_planner_post_job", tlib, Job.Type.BUILD_LIBRARY)):
+							return
+			# Phase 6: Market — trade hub for settlements with trade routes
+			22:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if pawns >= 6 and stage >= 2:
+					var market_n: int = int(feature_summary.get("market_n", 0))
+					if market_n < 1:
+						var tmkt: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
+						if tmkt.x >= 0 and bool(main.call("settlement_planner_post_job", tmkt, Job.Type.BUILD_MARKET)):
+							return
+			# Phase 6: Military — barracks for settlements under threat
+			23:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if pawns >= 6 and stage >= 2:
+					var barracks_n: int = int(feature_summary.get("barracks_n", 0))
+					if barracks_n < 1:
+						var tbar: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
+						if tbar.x >= 0 and bool(main.call("settlement_planner_post_job", tbar, Job.Type.BUILD_BARRACKS)):
+							return
+			# Phase 6: Apothecary — medicine for settlements with injuries
+			24:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if pawns >= 5 and stage >= 1:
+					var apothecary_n: int = int(feature_summary.get("apothecary_n", 0))
+					if apothecary_n < 1:
+						var tapo: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
+						if tapo.x >= 0 and bool(main.call("settlement_planner_post_job", tapo, Job.Type.BUILD_APOTHECARY)):
+							return
+			# Phase 6: Cellar — advanced storage for mature settlements
+			25:
+				if intent == IntentMemory.INTENT_ABANDON:
+					continue
+				if pawns >= 7 and stage >= 2:
+					var cellar_n: int = int(feature_summary.get("cellar_n", 0))
+					if cellar_n < 1:
+						var tcel: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
+						if tcel.x >= 0 and bool(main.call("settlement_planner_post_job", tcel, Job.Type.BUILD_CELLAR)):
+							return
+
+
+## Claim adjacent regions as TERRITORY zones for a growing settlement.
+## HeelKawnians actively expand their territory by building at the frontier.
+## This registers 1-ring of adjacent regions around the settlement's existing
+## regions as TERRITORY zones, giving pawns priority bias to build there.
+func _expand_territory_zone(
+		world: World, main: Node2D, data: WorldData,
+		center: Vector2i, regions: PackedInt32Array
+) -> void:
+	if ZoneRegistry == null:
+		return
+	# Build set of existing region keys
+	var existing: Dictionary = {}
+	for rk in regions:
+		existing[int(rk)] = true
+	# Find adjacent regions not yet claimed
+	var adjacent: Dictionary = {}
+	for rk in regions:
+		var rx: int = int(rk) & 0xFFFF
+		var ry: int = (int(rk) >> 16) & 0xFFFF
+		# 4-connected neighbors
+		for off in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(1, 0), Vector2i(-1, 0)]:
+			var nrx: int = rx + off.x
+			var nry: int = ry + off.y
+			var nkey: int = (nrx & 0xFFFF) | ((nry & 0xFFFF) << 16)
+			if not existing.has(nkey) and not adjacent.has(nkey):
+				# Check that the region is passable (has at least some passable tiles)
+				var crx: int = nrx * 16 + 8
+				var cry: int = nry * 16 + 8
+				if data.in_bounds(crx, cry) and Biome.is_passable(data.get_biome(crx, cry)):
+					adjacent[nkey] = true
+	# Register adjacent regions as TERRITORY zones
+	for nkey in adjacent:
+		var nrx: int = int(nkey) & 0xFFFF
+		var nry: int = (int(nkey) >> 16) & 0xFFFF
+		var rect: Rect2i = Rect2i(nrx * 16, nry * 16, 16, 16)
+		ZoneRegistry.register(ZoneRegistry.ZoneType.TERRITORY, rect)
+
+
+## Pick a farm type based on settlement needs and terrain.
+func _pick_farm_type_for_settlement(regions: PackedInt32Array, data: WorldData) -> int:
+	# Default: wheat (most reliable food source)
+	# TODO: check terrain moisture for corn, check for herb needs
+	return Job.Type.BUILD_FARM_WHEAT
+
+
+## Pick a tile for a farm — prefer fertile soil near settlement center.
+func _pick_farm_tile(world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array) -> Vector2i:
+	# Search for fertile soil tiles first, then any passable tile
+	for radius in range(2, 10):
+		for dx in range(-radius, radius + 1):
+			for dy in range(-radius, radius + 1):
+				if abs(dx) != radius and abs(dy) != radius:
+					continue
+				var t: Vector2i = center + Vector2i(dx, dy)
+				if not data.in_bounds(t.x, t.y):
+					continue
+				var feat: int = data.get_feature(t.x, t.y)
+				if feat == TileFeature.Type.FERTILE_SOIL:
+					if Biome.is_passable(data.get_biome(t.x, t.y)):
+						return t
+	# Fallback: any passable tile near center
+	return _pick_infrastructure_tile(world, main, data, center, regions)
+
+
+## Pick a tile for a road — prefer tiles between settlements.
+func _pick_road_tile(world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array) -> Vector2i:
+	# Simple: pick a passable tile in a direction away from center
+	var offsets: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	for dist in range(2, 8):
+		for off in offsets:
+			var t: Vector2i = center + off * dist
+			if data.in_bounds(t.x, t.y):
+				var feat: int = data.get_feature(t.x, t.y)
+				if feat == TileFeature.Type.NONE and Biome.is_passable(data.get_biome(t.x, t.y)):
+					return t
+	return Vector2i(-1, -1)
+
+
+## Check if there's water adjacent to any of the settlement's regions.
+func _has_water_nearby(data: WorldData, center: Vector2i, regions: PackedInt32Array) -> bool:
+	# Check tiles near center for water biome
+	for radius in range(1, 20):
+		for dx in range(-radius, radius + 1):
+			for dy in range(-radius, radius + 1):
+				if abs(dx) != radius and abs(dy) != radius:
+					continue
+				var t: Vector2i = center + Vector2i(dx, dy)
+				if data.in_bounds(t.x, t.y):
+					var biome: int = data.get_biome(t.x, t.y)
+					if biome == Biome.Type.WATER:
+						return true
+	return false
+
+
+## Pick a tile adjacent to water for maritime buildings.
+func _pick_waterside_tile(world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array) -> Vector2i:
+	# Find water tiles, then pick a passable tile adjacent to them
+	for radius in range(1, 20):
+		for dx in range(-radius, radius + 1):
+			for dy in range(-radius, radius + 1):
+				if abs(dx) != radius and abs(dy) != radius:
+					continue
+				var t: Vector2i = center + Vector2i(dx, dy)
+				if not data.in_bounds(t.x, t.y):
+					continue
+				var biome: int = data.get_biome(t.x, t.y)
+				if biome == Biome.Type.WATER:
+					# Check adjacent tiles for a buildable spot
+					for adj in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+						var at: Vector2i = t + adj
+						if data.in_bounds(at.x, at.y):
+							var feat: int = data.get_feature(at.x, at.y)
+							if feat == TileFeature.Type.NONE and Biome.is_passable(data.get_biome(at.x, at.y)):
+								return at
+	return Vector2i(-1, -1)
 
 
 static func _intent_for_settlement(center_region: int) -> int:
@@ -644,6 +868,17 @@ static func _scan_region_feature_summary(
 	var door_n: int = 0
 	var fire_pit_n: int = 0
 	var storage_hut_n: int = 0
+	# Phase 6: new building counts
+	var farm_n: int = 0
+	var workshop_n: int = 0
+	var granary_n: int = 0
+	var road_n: int = 0
+	var boatyard_n: int = 0
+	var library_n: int = 0
+	var market_n: int = 0
+	var barracks_n: int = 0
+	var apothecary_n: int = 0
+	var cellar_n: int = 0
 	var wx0: int = 1_000_000
 	var wx1: int = -1_000_000
 	var wy0: int = 1_000_000
@@ -677,6 +912,27 @@ static func _scan_region_feature_summary(
 					fire_pit_n += 1
 				elif f == TileFeature.Type.STORAGE_HUT:
 					storage_hut_n += 1
+				# Phase 6: new building counts
+				elif f == TileFeature.Type.FARM_WHEAT or f == TileFeature.Type.FARM_CORN or f == TileFeature.Type.FARM_VEGETABLES or f == TileFeature.Type.HERB_GARDEN:
+					farm_n += 1
+				elif f == TileFeature.Type.WORKSHOP:
+					workshop_n += 1
+				elif f == TileFeature.Type.GRANARY:
+					granary_n += 1
+				elif f == TileFeature.Type.ROAD:
+					road_n += 1
+				elif f == TileFeature.Type.BOATYARD:
+					boatyard_n += 1
+				elif f == TileFeature.Type.LIBRARY:
+					library_n += 1
+				elif f == TileFeature.Type.MARKET:
+					market_n += 1
+				elif f == TileFeature.Type.BARRACKS:
+					barracks_n += 1
+				elif f == TileFeature.Type.APOTHECARY:
+					apothecary_n += 1
+				elif f == TileFeature.Type.CELLAR:
+					cellar_n += 1
 	return {
 		"bed_n": bed_n,
 		"wall_n": wall_n,
@@ -688,6 +944,17 @@ static func _scan_region_feature_summary(
 		"wall_y1": wy1,
 		"fire_pit_n": fire_pit_n,
 		"storage_hut_n": storage_hut_n,
+		# Phase 6: new building counts
+		"farm_n": farm_n,
+		"workshop_n": workshop_n,
+		"granary_n": granary_n,
+		"road_n": road_n,
+		"boatyard_n": boatyard_n,
+		"library_n": library_n,
+		"market_n": market_n,
+		"barracks_n": barracks_n,
+		"apothecary_n": apothecary_n,
+		"cellar_n": cellar_n,
 	}
 
 

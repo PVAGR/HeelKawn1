@@ -6457,6 +6457,23 @@ func settlement_planner_post_defend(t: Vector2i) -> bool:
 	return job != null
 
 
+## Generic job posting for Phase 6 buildings via BuildingRegistry.
+## Posts a build job of any type at the given tile.
+func settlement_planner_post_job(t: Vector2i, job_type: int) -> bool:
+	if not _world.data.in_bounds(t.x, t.y):
+		return false
+	if not _world.data.is_passable(t.x, t.y):
+		return false
+	# Look up work ticks from BuildingRegistry
+	var work_ticks: int = 30
+	if BuildingRegistry != null:
+		var building: Dictionary = BuildingRegistry.get_building_by_job_type(job_type)
+		if not building.is_empty():
+			work_ticks = int(building.get("work_ticks", 30))
+	var job: Job = JobManager.post(job_type, t, 5, work_ticks)
+	return job != null
+
+
 func _print_stockpile() -> void:
 	if not OS.is_debug_build():
 		return

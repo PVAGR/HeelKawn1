@@ -50,6 +50,36 @@ enum Type {
 	INK_MAKING,
 	TOOL_MAKING,
 	BOOK_BINDING,
+	# --- Agriculture buildings (Phase 6: Civilization Progression) ---
+	BUILD_FARM_WHEAT,
+	BUILD_FARM_CORN,
+	BUILD_FARM_VEGETABLES,
+	BUILD_HERB_GARDEN,
+	# --- Production buildings (Phase 6) ---
+	BUILD_WORKSHOP,
+	BUILD_LOOM,
+	BUILD_KILN,
+	BUILD_SMELTER,
+	# --- Maritime buildings (Phase 6) ---
+	BUILD_BOATYARD,
+	BUILD_DOCK,
+	BUILD_FISHERMAN_HUT,
+	# --- Medicine buildings (Phase 6) ---
+	BUILD_APOTHECARY,
+	# --- Knowledge buildings (Phase 6) ---
+	BUILD_LIBRARY,
+	BUILD_SCHOOL,
+	# --- Military buildings (Phase 6) ---
+	BUILD_BARRACKS,
+	BUILD_WATCHTOWER,
+	# --- Trade buildings (Phase 6) ---
+	BUILD_MARKET,
+	BUILD_TRADING_POST,
+	# --- Infrastructure (Phase 6) ---
+	BUILD_ROAD,
+	# --- Storage buildings (Phase 6) ---
+	BUILD_GRANARY,
+	BUILD_CELLAR,
 }
 
 enum State {
@@ -133,6 +163,28 @@ static func describe_type(t: int) -> String:
 		Type.INK_MAKING:        return "InkMaking"
 		Type.TOOL_MAKING:       return "ToolMaking"
 		Type.BOOK_BINDING:      return "BookBinding"
+		# Phase 6: new buildings
+		Type.BUILD_FARM_WHEAT:       return "BuildWheatFarm"
+		Type.BUILD_FARM_CORN:        return "BuildCornFarm"
+		Type.BUILD_FARM_VEGETABLES:  return "BuildVegGarden"
+		Type.BUILD_HERB_GARDEN:      return "BuildHerbGarden"
+		Type.BUILD_WORKSHOP:         return "BuildWorkshop"
+		Type.BUILD_LOOM:             return "BuildLoom"
+		Type.BUILD_KILN:             return "BuildKiln"
+		Type.BUILD_SMELTER:          return "BuildSmelter"
+		Type.BUILD_BOATYARD:         return "BuildBoatyard"
+		Type.BUILD_DOCK:             return "BuildDock"
+		Type.BUILD_FISHERMAN_HUT:    return "BuildFishermanHut"
+		Type.BUILD_APOTHECARY:       return "BuildApothecary"
+		Type.BUILD_LIBRARY:          return "BuildLibrary"
+		Type.BUILD_SCHOOL:           return "BuildSchool"
+		Type.BUILD_BARRACKS:         return "BuildBarracks"
+		Type.BUILD_WATCHTOWER:       return "BuildWatchtower"
+		Type.BUILD_MARKET:           return "BuildMarket"
+		Type.BUILD_TRADING_POST:     return "BuildTradingPost"
+		Type.BUILD_ROAD:             return "BuildRoad"
+		Type.BUILD_GRANARY:          return "BuildGranary"
+		Type.BUILD_CELLAR:           return "BuildCellar"
 	return "Unknown"
 
 
@@ -192,6 +244,28 @@ static func tool_job_work_ticks(job_type: int) -> int:
 		Type.DRY_MEAT:          return 12  # Faster (was 25)
 		Type.PLANT_SEEDS:       return 6   # Faster (was 12)
 		Type.HARVEST_CROPS:     return 8   # Faster (was 15)
+		# Phase 6: new building work ticks
+		Type.BUILD_FARM_WHEAT:       return 30
+		Type.BUILD_FARM_CORN:        return 30
+		Type.BUILD_FARM_VEGETABLES:  return 30
+		Type.BUILD_HERB_GARDEN:      return 30
+		Type.BUILD_WORKSHOP:         return 40
+		Type.BUILD_LOOM:             return 35
+		Type.BUILD_KILN:             return 40
+		Type.BUILD_SMELTER:          return 50
+		Type.BUILD_BOATYARD:         return 60
+		Type.BUILD_DOCK:             return 45
+		Type.BUILD_FISHERMAN_HUT:    return 30
+		Type.BUILD_APOTHECARY:       return 40
+		Type.BUILD_LIBRARY:          return 50
+		Type.BUILD_SCHOOL:           return 40
+		Type.BUILD_BARRACKS:         return 45
+		Type.BUILD_WATCHTOWER:       return 35
+		Type.BUILD_MARKET:           return 40
+		Type.BUILD_TRADING_POST:     return 35
+		Type.BUILD_ROAD:             return 15
+		Type.BUILD_GRANARY:          return 35
+		Type.BUILD_CELLAR:           return 40
 	return 10  # Faster default (was 20)
 
 
@@ -212,4 +286,23 @@ static func tool_job_skill(job_type: int) -> int:
 		Type.CARVE_GRAVE_MARKER:    return PawnData.Skill.BUILDING  # Carving/inscription
 		Type.CARVE_KNOWLEDGE_STONE: return PawnData.Skill.BUILDING  # Knowledge inscription
 		Type.CARVE_LEDGER_STONE:    return PawnData.Skill.BUILDING  # Record-keeping
+		# Phase 6: new building skills
+		Type.BUILD_FARM_WHEAT, Type.BUILD_FARM_CORN, Type.BUILD_FARM_VEGETABLES, Type.BUILD_HERB_GARDEN:
+			return PawnData.Skill.FORAGING  # Agriculture
+		Type.BUILD_WORKSHOP, Type.BUILD_LOOM, Type.BUILD_KILN, Type.BUILD_SMELTER:
+			return PawnData.Skill.BUILDING  # Production
+		Type.BUILD_BOATYARD, Type.BUILD_DOCK, Type.BUILD_FISHERMAN_HUT:
+			return PawnData.Skill.BUILDING  # Maritime construction
+		Type.BUILD_APOTHECARY:
+			return PawnData.Skill.BUILDING  # Medicine
+		Type.BUILD_LIBRARY, Type.BUILD_SCHOOL:
+			return PawnData.Skill.BUILDING  # Knowledge
+		Type.BUILD_BARRACKS, Type.BUILD_WATCHTOWER:
+			return PawnData.Skill.BUILDING  # Military
+		Type.BUILD_MARKET, Type.BUILD_TRADING_POST:
+			return PawnData.Skill.BUILDING  # Trade
+		Type.BUILD_ROAD:
+			return PawnData.Skill.BUILDING  # Infrastructure
+		Type.BUILD_GRANARY, Type.BUILD_CELLAR:
+			return PawnData.Skill.BUILDING  # Storage
 	return PawnData.Skill.FORAGING

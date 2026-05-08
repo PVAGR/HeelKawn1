@@ -23,6 +23,36 @@ enum Type {
 	GRAVE_MARKER,      # grave: preserves memory of dead, knowledge marker
 	KNOWLEDGE_STONE,   # carved stone: stores knowledge for rediscovery
 	LEDGER_STONE,      # record stone: stores settlement history, teachings
+	# --- Agriculture (Phase 6: Civilization Progression) ---
+	FARM_WHEAT,        # wheat field: yields 4 wheat per harvest, 2400 ticks
+	FARM_CORN,         # corn field: yields 6 corn per harvest, 3200 ticks
+	FARM_VEGETABLES,   # vegetable garden: yields 5 veg per harvest, 2000 ticks
+	HERB_GARDEN,       # herb garden: yields 3 herbs per harvest, 1600 ticks
+	# --- Production (Phase 6) ---
+	WORKSHOP,          # crafting workshop: enables advanced crafting, +1 craft speed
+	LOOM,              # weaving loom: enables cloth production from plant fibers
+	KILN,              # pottery kiln: enables pottery from clay, +1 storage
+	SMELTER,           # ore smelter: enables metal tools from ore, +1 mining yield
+	# --- Maritime (Phase 6) ---
+	BOATYARD,          # ship construction: enables water trade routes and fishing
+	DOCK,              # landing dock: enables trade unloading, +2 trade speed
+	FISHERMAN_HUT,     # fishing hut: enables fishing jobs, +1 fish yield
+	# --- Medicine (Phase 6) ---
+	APOTHECARY,        # herb preparation: +2 healing rate, enables herbal remedies
+	# --- Knowledge (Phase 6) ---
+	LIBRARY,           # book storage: +2 knowledge spread, enables scholarship
+	SCHOOL,            # teaching space: +3 teaching speed, enables apprenticeship
+	# --- Military (Phase 6) ---
+	BARRACKS,          # military housing: +2 defense, enables warrior profession
+	WATCHTOWER,        # elevated guard: +4 detection range, +1 defense
+	# --- Trade (Phase 6) ---
+	MARKET,            # trade hub: +2 trade income, enables merchant profession
+	TRADING_POST,      # inter-settlement trade: enables caravan routes
+	# --- Infrastructure (Phase 6) ---
+	ROAD,              # paved path: +1.5 movement speed, passable
+	# --- Storage (Phase 6) ---
+	GRANARY,           # food storage: +4 food capacity, -50% spoilage
+	CELLAR,            # underground storage: +6 capacity, -75% spoilage
 }
 
 ## Colors used for the v1 pixel renderer. Chosen to pop against the biome below.
@@ -45,6 +75,36 @@ const COLORS: Dictionary = {
 	Type.GRAVE_MARKER:    Color8(120, 120, 130),  # somber gray grave
 	Type.KNOWLEDGE_STONE: Color8(100, 140, 180),  # blue-ish knowledge stone
 	Type.LEDGER_STONE:    Color8(160, 140, 100),  # tan/brown record stone
+	# Agriculture
+	Type.FARM_WHEAT:      Color8(200, 180,  60),  # golden wheat
+	Type.FARM_CORN:       Color8(220, 190,  40),  # bright corn yellow
+	Type.FARM_VEGETABLES: Color8( 60, 160,  60),  # fresh green
+	Type.HERB_GARDEN:     Color8( 80, 140,  60),  # herbal green
+	# Production
+	Type.WORKSHOP:        Color8(160, 120,  80),  # warm wood workshop
+	Type.LOOM:            Color8(180, 150, 170),  # soft cloth purple
+	Type.KILN:            Color8(200, 100,  50),  # fired orange
+	Type.SMELTER:         Color8(140,  80,  60),  # dark smelt brown
+	# Maritime
+	Type.BOATYARD:        Color8(120,  80,  40),  # dark wood dock
+	Type.DOCK:            Color8(100,  70,  35),  # weathered wood
+	Type.FISHERMAN_HUT:   Color8( 90, 120, 140),  # sea blue-gray
+	# Medicine
+	Type.APOTHECARY:      Color8( 60, 150,  80),  # medicinal green
+	# Knowledge
+	Type.LIBRARY:         Color8(100,  80, 140),  # scholarly purple
+	Type.SCHOOL:          Color8(130, 110, 150),  # lighter purple
+	# Military
+	Type.BARRACKS:        Color8(160,  60,  50),  # military red-brown
+	Type.WATCHTOWER:      Color8(140, 100,  70),  # wood tower
+	# Trade
+	Type.MARKET:          Color8(220, 180,  50),  # gold market
+	Type.TRADING_POST:    Color8(180, 150,  80),  # tan trade
+	# Infrastructure
+	Type.ROAD:            Color8(160, 150, 130),  # paved gray
+	# Storage
+	Type.GRANARY:         Color8(180, 160,  80),  # grain gold
+	Type.CELLAR:          Color8(100,  90,  80),  # dark cellar
 }
 
 const NAMES: Dictionary = {
@@ -66,6 +126,36 @@ const NAMES: Dictionary = {
 	Type.GRAVE_MARKER:    "Grave Marker",
 	Type.KNOWLEDGE_STONE: "Knowledge Stone",
 	Type.LEDGER_STONE:    "Ledger Stone",
+	# Agriculture
+	Type.FARM_WHEAT:      "Wheat Farm",
+	Type.FARM_CORN:       "Corn Farm",
+	Type.FARM_VEGETABLES: "Vegetable Garden",
+	Type.HERB_GARDEN:     "Herb Garden",
+	# Production
+	Type.WORKSHOP:        "Workshop",
+	Type.LOOM:            "Loom",
+	Type.KILN:            "Kiln",
+	Type.SMELTER:         "Smelter",
+	# Maritime
+	Type.BOATYARD:        "Boatyard",
+	Type.DOCK:            "Dock",
+	Type.FISHERMAN_HUT:   "Fisherman Hut",
+	# Medicine
+	Type.APOTHECARY:      "Apothecary",
+	# Knowledge
+	Type.LIBRARY:         "Library",
+	Type.SCHOOL:          "School",
+	# Military
+	Type.BARRACKS:        "Barracks",
+	Type.WATCHTOWER:      "Watchtower",
+	# Trade
+	Type.MARKET:          "Market",
+	Type.TRADING_POST:    "Trading Post",
+	# Infrastructure
+	Type.ROAD:            "Road",
+	# Storage
+	Type.GRANARY:         "Granary",
+	Type.CELLAR:          "Cellar",
 }
 
 

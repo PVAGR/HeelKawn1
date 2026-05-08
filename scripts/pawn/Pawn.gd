@@ -147,6 +147,24 @@ static func _materials_for_build(job_type: int) -> Dictionary:
 		_Job.Type.COOK_MEAT:          return {"item": _Item.Type.MEAT, "qty": 1}
 		_Job.Type.COOK_BERRIES:       return {"item": _Item.Type.BERRY, "qty": 2}
 		_Job.Type.DRY_MEAT:           return {"item": _Item.Type.MEAT, "qty": 2}
+	# Phase 6: new buildings use BuildingRegistry for cost lookup.
+	# Return the first (primary) material from the cost dict.
+	if BuildingRegistry != null:
+		var building: Dictionary = BuildingRegistry.get_building_by_job_type(job_type)
+		if not building.is_empty():
+			var cost: Dictionary = building.get("cost", {})
+			if not cost.is_empty():
+				# Map string cost keys to Item.Type
+				var item_map: Dictionary = {
+					"wood": _Item.Type.WOOD, "stone": _Item.Type.STONE,
+					"seeds": _Item.Type.SEEDS, "stick": _Item.Type.STICK,
+					"flint": _Item.Type.FLINT, "herbs": _Item.Type.BERRY,
+					"paper": _Item.Type.PAPER, "leather": _Item.Type.LEATHER,
+					"ink": _Item.Type.INK, "meat": _Item.Type.MEAT,
+				}
+				for cost_key in cost:
+					if item_map.has(cost_key):
+						return {"item": int(item_map[cost_key]), "qty": int(cost[cost_key])}
 	return {}
 
 
@@ -1311,10 +1329,21 @@ func _matrix_ambition_target_tile(job_type: int) -> Vector2i:
 		return Vector2i(-1, -1)
 	var origin: Vector2i = data.tile_pos
 	var prefer_ring: int = 3
+	var allow_fertile: bool = false  # Farms can go on fertile soil
 	if job_type == _Job.Type.BUILD_WALL or job_type == _Job.Type.BUILD_DOOR:
 		prefer_ring = 5
 	elif job_type == _Job.Type.GROW_FOOD or job_type == _Job.Type.PLANT_SEEDS:
 		prefer_ring = 6
+	# Phase 6: farms prefer fertile soil, larger search radius
+	elif job_type == _Job.Type.BUILD_FARM_WHEAT or job_type == _Job.Type.BUILD_FARM_CORN or job_type == _Job.Type.BUILD_FARM_VEGETABLES or job_type == _Job.Type.BUILD_HERB_GARDEN:
+		prefer_ring = 8
+		allow_fertile = true
+	# Phase 6: maritime buildings need water adjacency
+	elif job_type == _Job.Type.BUILD_BOATYARD or job_type == _Job.Type.BUILD_DOCK or job_type == _Job.Type.BUILD_FISHERMAN_HUT:
+		prefer_ring = 10
+	# Phase 6: roads go further out
+	elif job_type == _Job.Type.BUILD_ROAD:
+		prefer_ring = 7
 	for r in range(1, prefer_ring + 1):
 		for y in range(-r, r + 1):
 			for x in range(-r, r + 1):
@@ -1328,6 +1357,10 @@ func _matrix_ambition_target_tile(job_type: int) -> Vector2i:
 				var feat: int = int(_world.data.get_feature(t.x, t.y))
 				if job_type == _Job.Type.BUILD_WALL or job_type == _Job.Type.BUILD_DOOR:
 					if feat != TileFeature.Type.NONE and feat != TileFeature.Type.WALL:
+						continue
+				elif allow_fertile:
+					# Farms can go on fertile soil or empty tiles
+					if feat != TileFeature.Type.NONE and feat != TileFeature.Type.FERTILE_SOIL:
 						continue
 				elif feat != TileFeature.Type.NONE:
 					continue
@@ -3932,17 +3965,23 @@ func _is_job_tile_still_valid(job: Job) -> bool:
 		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, \
 		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, \
 		_Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, \
-		_Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH:
+		_Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, \
+		# Phase 6: new buildings via BuildingRegistry
+		_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN, \
+		_Job.Type.BUILD_WORKSHOP, _Job.Type.BUILD_LOOM, _Job.Type.BUILD_KILN, _Job.Type.BUILD_SMELTER, \
+		_Job.Type.BUILD_BOATYARD, _Job.Type.BUILD_DOCK, _Job.Type.BUILD_FISHERMAN_HUT, \
+		_Job.Type.BUILD_APOTHECARY, \
+		_Job.Type.BUILD_LIBRARY, _Job.Type.BUILD_SCHOOL, \
+		_Job.Type.BUILD_BARRACKS, _Job.Type.BUILD_WATCHTOWER, \
+		_Job.Type.BUILD_MARKET, _Job.Type.BUILD_TRADING_POST, \
+		_Job.Type.BUILD_ROAD, \
+		_Job.Type.BUILD_GRANARY, _Job.Type.BUILD_CELLAR:
 			# Build sites are valid if the tile doesn't already have a
 			# structure on it (TREE/FERTILE_SOIL are OK — set_feature overwrites
 			# them on completion) and the underlying biome is passable.
 			var f1: int = _world.data.get_feature(job.tile.x, job.tile.y)
-			# Skip tiles with existing structures (bed, wall, door, fire_pit, etc.)
-			if f1 == TileFeature.Type.BED or f1 == TileFeature.Type.WALL \
-				or f1 == TileFeature.Type.DOOR or f1 == TileFeature.Type.FIRE_PIT \
-				or f1 == TileFeature.Type.STORAGE_HUT or f1 == TileFeature.Type.MARKER_STONE \
-				or f1 == TileFeature.Type.SHRINE or f1 == TileFeature.Type.GRAVE_MARKER \
-				or f1 == TileFeature.Type.KNOWLEDGE_STONE or f1 == TileFeature.Type.LEDGER_STONE:
+			# Skip tiles with existing structures (any built feature)
+			if TileFeature.name_for(f1) != "None" and f1 != TileFeature.Type.TREE and f1 != TileFeature.Type.FERTILE_SOIL and f1 != TileFeature.Type.ORE_VEIN and f1 != TileFeature.Type.RUIN:
 				return false
 			return Biome.is_passable(_world.data.get_biome(job.tile.x, job.tile.y))
 		_Job.Type.BUILD_DOOR:
@@ -4033,6 +4072,18 @@ func _complete_current_job() -> void:
 			produced_type = _Item.Type.NONE  # tool is equipped, not carried
 		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH:
 			_finish_shelter_build(job)
+			produced_type = _Item.Type.NONE
+		# Phase 6: Data-driven building placement via BuildingRegistry
+		_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN, \
+		_Job.Type.BUILD_WORKSHOP, _Job.Type.BUILD_LOOM, _Job.Type.BUILD_KILN, _Job.Type.BUILD_SMELTER, \
+		_Job.Type.BUILD_BOATYARD, _Job.Type.BUILD_DOCK, _Job.Type.BUILD_FISHERMAN_HUT, \
+		_Job.Type.BUILD_APOTHECARY, \
+		_Job.Type.BUILD_LIBRARY, _Job.Type.BUILD_SCHOOL, \
+		_Job.Type.BUILD_BARRACKS, _Job.Type.BUILD_WATCHTOWER, \
+		_Job.Type.BUILD_MARKET, _Job.Type.BUILD_TRADING_POST, \
+		_Job.Type.BUILD_ROAD, \
+		_Job.Type.BUILD_GRANARY, _Job.Type.BUILD_CELLAR:
+			_finish_registry_build(job)
 			produced_type = _Item.Type.NONE
 		_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.DRY_MEAT:
 			produced_type = Job.tool_job_output(job.type)
@@ -4351,6 +4402,36 @@ func _finish_shelter_build(job: Job) -> void:
 				"tick": GameManager.tick_count,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
+
+
+## Data-driven building placement via BuildingRegistry.
+## Looks up the building definition by job type, places the feature, records the event.
+func _finish_registry_build(job: Job) -> void:
+	if BuildingRegistry == null:
+		return
+	var building: Dictionary = BuildingRegistry.get_building_by_job_type(job.type)
+	if building.is_empty():
+		return
+	var feature_type: int = int(building.get("feature_type", TileFeature.Type.NONE))
+	if feature_type == TileFeature.Type.NONE:
+		return
+	# Place the feature on the tile
+	_world.set_feature(job.tile.x, job.tile.y, feature_type)
+	# Register beds if this is a shelter-type building
+	if feature_type == TileFeature.Type.BED:
+		_world.register_bed(job.tile)
+	# Record the building event
+	var building_name: String = str(building.get("name", "Structure"))
+	WorldMemory.record_event({
+		"type": "structure_built",
+		"category": "construction",
+		"severity": 2,
+		"pawn_id": int(data.id),
+		"pawn_name": data.display_name,
+		"building_name": building_name,
+		"tick": GameManager.tick_count,
+		"tile": {"x": job.tile.x, "y": job.tile.y},
+	})
 
 
 ## Consume 1 durability from the equipped tool if the job benefits from a tool.
@@ -5128,6 +5209,12 @@ func _hearth_proxy_warmth_bonus(tile: Vector2i) -> float:
 			if not _world.data.in_bounds(t.x, t.y):
 				continue
 			var feat: int = int(_world.data.get_feature(t.x, t.y))
+			# Use BuildingRegistry buffs if available
+			if BuildingRegistry != null:
+				var buffs: Dictionary = BuildingRegistry.buffs_for_feature(feat)
+				if buffs.has("warmth"):
+					bonus = maxf(bonus, float(buffs["warmth"]))
+			# Fallback for known features
 			if feat == TileFeature.Type.FIRE_PIT:
 				bonus = maxf(bonus, 8.0)
 			elif feat == TileFeature.Type.BED:

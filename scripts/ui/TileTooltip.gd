@@ -88,7 +88,32 @@ func _refresh(tile: Vector2i) -> void:
 	var feature: int = _world.data.get_feature(tile.x, tile.y)
 	if feature != TileFeature.Type.NONE:
 		var feat_name: String = TileFeature.NAMES.get(feature, "?")
-		lines.append("[color=#bcaaa4]%s[/color]" % feat_name)
+		# Use BuildingRegistry for rich building info
+		if BuildingRegistry != null:
+			var building: Dictionary = BuildingRegistry.get_building_by_feature(feature)
+			if not building.is_empty():
+				var bname: String = str(building.get("name", feat_name))
+				var bdesc: String = str(building.get("description", ""))
+				var bcat: String = str(building.get("category", ""))
+				lines.append("[color=#c9a84c][b]%s[/b][/color]" % bname)
+				if bdesc != "":
+					lines.append("[color=#bcaaa4]%s[/color]" % bdesc)
+				# Show key buffs
+				var buffs: Dictionary = building.get("buffs", {})
+				var buff_parts: PackedStringArray = []
+				for bkey in buffs:
+					var bval: Variant = buffs[bkey]
+					if bval is bool and bval:
+						buff_parts.append(bkey.replace("_", " "))
+					elif bval is float or bval is int:
+						if str(bkey) != "crop_type" and str(bkey) != "growth_ticks":
+							buff_parts.append("%s: %s" % [bkey.replace("_", " "), str(bval)])
+				if not buff_parts.is_empty():
+					lines.append("[color=#8fa][%s][/color]" % " | ".join(buff_parts))
+			else:
+				lines.append("[color=#bcaaa4]%s[/color]" % feat_name)
+		else:
+			lines.append("[color=#bcaaa4]%s[/color]" % feat_name)
 
 	# Elevation + Moisture (compact)
 	var elev: float = _world.data.get_elevation(tile.x, tile.y)

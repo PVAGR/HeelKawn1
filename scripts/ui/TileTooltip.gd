@@ -12,6 +12,9 @@ const TEXT_COLOR: Color = Color(0.88, 0.84, 0.72, 1.0)
 const MUTED_COLOR: Color = Color(0.55, 0.55, 0.50, 0.7)
 const TAG_COLOR: Color = Color(0.6, 0.75, 0.55, 0.9)
 const SETTLEMENT_COLOR: Color = Color(1.0, 0.85, 0.3, 0.9)
+const STRUCTURE_COLOR: Color = Color(0.76, 0.69, 0.57, 0.85)
+const PROFESSION_COLOR: Color = Color(0.65, 0.80, 0.95, 0.9)
+const MOOD_COLOR: Color = Color(0.90, 0.85, 0.70, 0.9)
 const MAX_WIDTH: float = 260.0
 const REFRESH_EVERY_N_FRAMES: int = 3
 
@@ -32,8 +35,7 @@ func _ready() -> void:
 	_panel.visible = false
 
 	_label = RichTextLabel.new()
-    # bbcode_enabled disabled for runtime stability
-    # _label.bbcode_enabled = true
+	_label.bbcode_enabled = true
 	_label.fit_content = true
 	_label.scroll_active = false
 	_label.add_theme_font_size_override("normal_font_size", 11)
@@ -101,16 +103,43 @@ func _refresh(tile: Vector2i) -> void:
 			var tag_str: String = " ".join(tags)
 			lines.append("[color=%s]%s[/color]" % [TAG_COLOR.to_html(false), tag_str])
 
-	# Settlement ownership
+	# Settlement ownership + building counts
 	if SettlementMemory != null:
 		var settlement: Variant = SettlementMemory.get_settlement_at_region(region_key)
 		if settlement != null and settlement is Dictionary:
 			var s: Dictionary = settlement as Dictionary
 			var s_name: String = str(s.get("name", s.get("intent", "Settlement")))
 			var gov: String = str(s.get("governance_type", "anarchy"))
-			lines.append("[color=%s]%s (%s)[/color]" % [SETTLEMENT_COLOR.to_html(false), s_name, gov])
+			var pop: int = int(s.get("population", 0))
+			var state: String = str(s.get("state", ""))
+			var state_tag: String = ""
+			if state != "" and state != "active":
+				state_tag = " [%s]" % state
+			lines.append("[color=%s]%s%s (%s, pop %d)[/color]" % [SETTLEMENT_COLOR.to_html(false), s_name, state_tag, gov, pop])
+			# Building counts from local feature scan
+			var center_rk: int = int(s.get("center_region", -1))
+			if center_rk >= 0:
+				var crx: int = center_rk & 0xFFFF
+				var cry: int = (center_rk >> 16) & 0xFFFF
+				var center_tile: Vector2i = Vector2i(crx * 16 + 8, cry * 16 + 8)
+				var feats: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 12)
+				var struct_parts: PackedStringArray = []
+				if int(feats.get("hearth", 0)) > 0:
+					struct_parts.append("hearth×%d" % int(feats.get("hearth", 0)))
+				if int(feats.get("bed", 0)) > 0:
+					struct_parts.append("bed×%d" % int(feats.get("bed", 0)))
+				if int(feats.get("wall", 0)) > 0:
+					struct_parts.append("wall×%d" % int(feats.get("wall", 0)))
+				if int(feats.get("door", 0)) > 0:
+					struct_parts.append("door×%d" % int(feats.get("door", 0)))
+				if int(feats.get("storage_hut", 0)) > 0:
+					struct_parts.append("store×%d" % int(feats.get("storage_hut", 0)))
+				if int(feats.get("marker", 0)) > 0:
+					struct_parts.append("marker×%d" % int(feats.get("marker", 0)))
+				if not struct_parts.is_empty():
+					lines.append("[color=%s]%s[/color]" % [STRUCTURE_COLOR.to_html(false), " · ".join(struct_parts)])
 
-	# Pawn at tile
+	# Pawn at tile — with profession, job, mood, carrying
 	var pawns_here: Array = []
 	if _world != null:
 		var tree: SceneTree = Engine.get_main_loop() as SceneTree
@@ -127,13 +156,38 @@ func _refresh(tile: Vector2i) -> void:
 							pawns_here.append(p)
 
 	if not pawns_here.is_empty():
-		var pawn_names: PackedStringArray = []
 		for p in pawns_here:
 			if p.data != null:
 				var nm: String = p.data.display_name if p.data.display_name != "" else "Pawn"
-				pawn_names.append(nm)
-		if not pawn_names.is_empty():
-			lines.append("[color=#e0e0e0]%s[/color]" % ", ".join(pawn_names))
+				var prof: String = p.data.profession_name() if p.data.has_method("profession_name") else ""
+				var mood: float = p.data.mood
+				var mood_tag: String = "calm"
+				if mood >= 80.0:
+					mood_tag = "joyful"
+				elif mood >= 60.0:
+					mood_tag = "content"
+				elif mood >= 40.0:
+					mood_tag = "calm"
+				elif mood >= 20.0:
+					mood_tag = "uneasy"
+				else:
+					mood_tag = "distressed"
+				var carry: String = ""
+				if p.data.carrying_qty > 0:
+					var carry_name: String = str(Item.NAMES.get(int(p.data.carrying), "?"))
+					carry = " carrying %d %s" % [int(p.data.carrying_qty), carry_name]
+				var job_str: String = ""
+				if p._current_job != null and is_instance_valid(p._current_job):
+					job_str = " [%s]" % Job.describe_type(int(p._current_job.type))
+				var line: String = "[color=#e0e0e0]%s[/color]" % nm
+				if prof != "" and prof != "None":
+					line += " [color=%s]%s[/color]" % [PROFESSION_COLOR.to_html(false), prof]
+				line += " [color=%s]%s[/color]" % [MOOD_COLOR.to_html(false), mood_tag]
+				if job_str != "":
+					line += "[color=%s]%s[/color]" % [MUTED_COLOR.to_html(false), job_str]
+				if carry != "":
+					line += "[color=%s]%s[/color]" % [MUTED_COLOR.to_html(false), carry]
+				lines.append(line)
 
 	_label.text = "\n".join(lines)
 	_panel.visible = not lines.is_empty()

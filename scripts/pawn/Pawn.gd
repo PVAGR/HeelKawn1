@@ -1202,7 +1202,7 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 	var tick: int = GameManager.tick_count
 	if tick < _next_matrix_ambition_tick:
 		return false
-	if posmod(tick + int(data.id) * 13, 47) != 0:
+	if posmod(tick + int(data.id) * 7, 23) != 0:
 		return false
 	var ambition: Dictionary = HeelKawnianManager.get_settlement_ambition_for_pawn(self)
 	if ambition.is_empty():

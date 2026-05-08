@@ -2125,6 +2125,7 @@ func _bootstrap_colony() -> void:
 	_world.set_meta("animal_spawner", _animal_spawner)
 	Main._world_stabilization_until_tick = GameManager.tick_count + WORLD_STABILIZATION_TICKS
 	_seed_jobs_from_world()
+	_seed_construction_jobs()
 	# Seed initial tunneling toward sealed ore before the first logical tick.
 	_react_to_mining_progress()
 	if _hud != null:
@@ -2391,6 +2392,12 @@ func _on_game_tick(tick: int) -> void:
 		t0 = Time.get_ticks_usec()
 		_post_hunting_jobs_for_animals()
 		section_us["hunt_post"] = Time.get_ticks_usec() - t0
+
+	# Settlement construction seeder: post build/cook/plant jobs based on
+	# what each settlement actually needs (beds, walls, hearths, farms, etc.)
+	t0 = Time.get_ticks_usec()
+	_seed_construction_jobs()
+	section_us["construction_seed"] = Time.get_ticks_usec() - t0
 
 	# Periodic maintenance: prune old cooldown entries to bound memory.
 	if GameManager != null:
@@ -5284,6 +5291,179 @@ func _sort_tiles_by_seeded_order(tiles: Array[Vector2i], stream_name: StringName
 			return a.y * WorldData.WIDTH + a.x < b.y * WorldData.WIDTH + b.x
 		return key_a < key_b
 	)
+
+
+## Periodic construction job seeder: posts build/cook/plant jobs based on
+## what each settlement actually needs. Runs every ~200 ticks so pawns
+## build farms, walls, hearths, beds, etc. instead of only foraging.
+var _last_construction_seed_tick: int = -10000
+
+func _seed_construction_jobs() -> void:
+	if _world == null or _world.data == null:
+		return
+	var tick: int = GameManager.tick_count
+	if Main._world_stabilization_until_tick >= 0 and tick < Main._world_stabilization_until_tick:
+		return
+	var interval: int = _high_speed_interval(100, 200, 400)
+	if tick - _last_construction_seed_tick < interval:
+		return
+	_last_construction_seed_tick = tick
+
+	var posted: int = 0
+	var settlements: Array = SettlementMemory.get_settlements()
+	for s in settlements:
+		if not (s is Dictionary):
+			continue
+		var sd: Dictionary = s as Dictionary
+		var state: String = str(sd.get("state", ""))
+		if state == "abandoned" or state == "permanently_abandoned":
+			continue
+		var center_rk: int = int(sd.get("center_region", -1))
+		if center_rk < 0:
+			continue
+		# Convert region key to center tile
+		var crx: int = center_rk & 0xFFFF
+		var cry: int = (center_rk >> 16) & 0xFFFF
+		var center_tile: Vector2i = Vector2i(crx * 16 + 8, cry * 16 + 8)
+		# Count local population near this settlement
+		var local_pop: int = 0
+		if _pawn_spawner != null:
+			for p in _pawn_spawner.pawns:
+				if p != null and is_instance_valid(p) and p.data != null:
+					var pt: Vector2i = p.data.tile_pos
+					if abs(pt.x - center_tile.x) <= 24 and abs(pt.y - center_tile.y) <= 24:
+						local_pop += 1
+		if local_pop < 2:
+			continue
+		# Scan local features (beds, walls, hearths, etc.)
+		var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 12)
+		var beds: int = int(features.get("bed", 0))
+		var walls: int = int(features.get("wall", 0))
+		var doors: int = int(features.get("door", 0))
+		var hearths: int = int(features.get("hearth", 0))
+		var storage_huts: int = int(features.get("storage_hut", 0))
+		# Post at most 3 build jobs per settlement per cycle
+		var jobs_this_settlement: int = 0
+		# Priority 1: Fire pit if no hearth
+		if hearths <= 0 and jobs_this_settlement < 3:
+			var t: Vector2i = _find_build_tile_near(center_tile, 4)
+			if t.x >= 0 and not JobManager.has_job_at(t):
+				var j: Job = JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 7, 12)
+				if j != null:
+					posted += 1
+					jobs_this_settlement += 1
+		# Priority 2: Storage hut if none
+		if storage_huts <= 0 and local_pop >= 3 and jobs_this_settlement < 3:
+			var t: Vector2i = _find_build_tile_near(center_tile, 5)
+			if t.x >= 0 and not JobManager.has_job_at(t):
+				var j: Job = JobManager.post(Job.Type.BUILD_STORAGE_HUT, t, 6, 15)
+				if j != null:
+					posted += 1
+					jobs_this_settlement += 1
+		# Priority 3: Beds if not enough
+		var need_beds: int = maxi(2, int(round(local_pop / 2.2)))
+		if beds < need_beds and jobs_this_settlement < 3:
+			var t: Vector2i = _find_build_tile_near(center_tile, 3)
+			if t.x >= 0 and not JobManager.has_job_at(t):
+				var j: Job = JobManager.post(Job.Type.BUILD_BED, t, 6, 10)
+				if j != null:
+					posted += 1
+					jobs_this_settlement += 1
+		# Priority 4: Walls + doors if population is large enough
+		if local_pop >= 6 and (walls < 4 or doors <= 0) and jobs_this_settlement < 3:
+			var build_type: int = Job.Type.BUILD_WALL if walls < 4 else Job.Type.BUILD_DOOR
+			var ring: int = 5 if build_type == Job.Type.BUILD_WALL else 4
+			var t: Vector2i = _find_build_tile_near(center_tile, ring)
+			if t.x >= 0 and not JobManager.has_job_at(t):
+				var j: Job = JobManager.post(build_type, t, 5, 10 if build_type == Job.Type.BUILD_WALL else 8)
+				if j != null:
+					posted += 1
+					jobs_this_settlement += 1
+		# Priority 5: Plant seeds on nearby fertile soil
+		if jobs_this_settlement < 3:
+			var ft: Vector2i = _find_fertile_tile_near(center_tile, 8)
+			if ft.x >= 0 and not JobManager.has_job_at(ft):
+				var j: Job = JobManager.post(Job.Type.PLANT_SEEDS, ft, 4, 6)
+				if j != null:
+					posted += 1
+					jobs_this_settlement += 1
+		# Priority 6: Cook food if fire pit exists and raw food available
+		if hearths > 0 and jobs_this_settlement < 3:
+			var meat_count: int = StockpileManager.total_count_of(Item.Type.MEAT)
+			var berry_count: int = StockpileManager.total_count_of(Item.Type.BERRY)
+			if meat_count > 0:
+				var t: Vector2i = _find_hearth_tile_near(center_tile, 8)
+				if t.x >= 0 and not JobManager.has_job_at(t):
+					var j: Job = JobManager.post(Job.Type.COOK_MEAT, t, 4, 8)
+					if j != null:
+						posted += 1
+						jobs_this_settlement += 1
+			elif berry_count >= 2:
+				var t: Vector2i = _find_hearth_tile_near(center_tile, 8)
+				if t.x >= 0 and not JobManager.has_job_at(t):
+					var j: Job = JobManager.post(Job.Type.COOK_BERRIES, t, 3, 5)
+					if j != null:
+						posted += 1
+						jobs_this_settlement += 1
+	if posted > 0 and GameManager != null and GameManager.verbose_logs():
+		print("[Main] Construction seed: posted %d build jobs" % posted)
+
+
+## Find an empty passable tile near center for building.
+func _find_build_tile_near(center: Vector2i, radius: int) -> Vector2i:
+	if _world == null or _world.data == null or _world.pathfinder == null:
+		return Vector2i(-1, -1)
+	for r in range(1, radius + 1):
+		for y in range(-r, r + 1):
+			for x in range(-r, r + 1):
+				if abs(x) != r and abs(y) != r:
+					continue
+				var t: Vector2i = center + Vector2i(x, y)
+				if not _world.data.in_bounds(t.x, t.y):
+					continue
+				if not _world.pathfinder.is_passable(t):
+					continue
+				var feat: int = int(_world.data.get_feature(t.x, t.y))
+				if feat != TileFeature.Type.NONE:
+					continue
+				return t
+	return Vector2i(-1, -1)
+
+
+## Find a fertile soil tile near center for planting.
+func _find_fertile_tile_near(center: Vector2i, radius: int) -> Vector2i:
+	if _world == null or _world.data == null:
+		return Vector2i(-1, -1)
+	for r in range(1, radius + 1):
+		for y in range(-r, r + 1):
+			for x in range(-r, r + 1):
+				if abs(x) != r and abs(y) != r:
+					continue
+				var t: Vector2i = center + Vector2i(x, y)
+				if not _world.data.in_bounds(t.x, t.y):
+					continue
+				var feat: int = int(_world.data.get_feature(t.x, t.y))
+				if feat == TileFeature.Type.FERTILE_SOIL:
+					return t
+	return Vector2i(-1, -1)
+
+
+## Find a fire pit / hearth tile near center for cooking.
+func _find_hearth_tile_near(center: Vector2i, radius: int) -> Vector2i:
+	if _world == null or _world.data == null:
+		return Vector2i(-1, -1)
+	for r in range(1, radius + 1):
+		for y in range(-r, r + 1):
+			for x in range(-r, r + 1):
+				if abs(x) != r and abs(y) != r:
+					continue
+				var t: Vector2i = center + Vector2i(x, y)
+				if not _world.data.in_bounds(t.x, t.y):
+					continue
+				var feat: int = int(_world.data.get_feature(t.x, t.y))
+				if feat == TileFeature.Type.FIRE_PIT:
+					return t
+	return Vector2i(-1, -1)
 
 
 func _tile_seeded_order_key(tile: Vector2i, stream_name: StringName) -> int:

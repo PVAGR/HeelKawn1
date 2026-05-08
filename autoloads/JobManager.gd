@@ -44,6 +44,10 @@ var cancelled_count: int = 0
 
 const MAX_OPEN_JOBS_DEFAULT: int = 256
 const MAX_OPEN_JOBS_LIGHTWEIGHT: int = 96
+## Last N slots reserved for construction/build/cook/plant jobs.
+## Basic forage/mine/chop jobs cannot fill these slots, ensuring
+## build jobs always have room in the queue.
+const CONSTRUCTION_RESERVED_SLOTS: int = 40
 
 
 func _bump_jobs_data_generation() -> void:
@@ -66,7 +70,12 @@ func get_active_jobs_union() -> Array[Job]:
 func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) -> Job:
 	if _jobs_by_tile.has(tile):
 		return null
-	if _open.size() >= _max_open_jobs_allowed():
+	var max_jobs: int = _max_open_jobs_allowed()
+	var is_construction: bool = _is_construction_type(type)
+	# Basic forage/mine/chop can't fill the reserved construction slots.
+	if not is_construction and _open.size() >= max_jobs - CONSTRUCTION_RESERVED_SLOTS:
+		return null
+	if _open.size() >= max_jobs:
 		return null
 	var job := Job.new()
 	job.id = _next_id
@@ -83,6 +92,24 @@ func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) ->
 	_bump_jobs_data_generation()
 	job_posted.emit(job)
 	return job
+
+
+## Returns true if the job type is a construction/build/cook/plant type
+## that is allowed to use the reserved construction slots.
+static func _is_construction_type(type: int) -> bool:
+	match type:
+		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, \
+		Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_MARKER_STONE, \
+		Job.Type.BUILD_HEARTH, Job.Type.BUILD_SHRINE, \
+		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, \
+		Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS, Job.Type.GROW_FOOD, \
+		Job.Type.CARVE_GRAVE_MARKER, Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.CARVE_LEDGER_STONE, \
+		Job.Type.PAPER_MAKING, Job.Type.INK_MAKING, Job.Type.BOOK_BINDING, \
+		Job.Type.TOOL_MAKING, Job.Type.TEACH_SKILL, Job.Type.PROTECT:
+			return true
+		_:
+			return false
+	return false
 
 
 ## Compatibility adapter for systems that post job dictionaries.

@@ -132,7 +132,7 @@ RESPOND JSON:
 	})
 	
 	# Request from LLM
-	var response: Dictionary = await _llm_client.request_json(
+	var response = await _llm_client.request_json(
 		prompt,
 		world_state,
 		{},
@@ -142,11 +142,11 @@ RESPOND JSON:
 	# Parse events
 	var events: Array = []
 	if response is Array:
-		events = response as Array
+		events = response
 	elif response is Dictionary and response.has("events"):
 		var events_var: Variant = response.get("events")
 		if events_var is Array:
-			events = events_var as Array
+			events = events_var
 
 	return events
 

@@ -83,7 +83,7 @@ RESPOND JSON:
 	})
 	
 	# Request from LLM
-	var response: Dictionary = await _llm_client.request_json(
+	var response = await _llm_client.request_json(
 		prompt,
 		{"settlement": settlement_name, "population": population},
 		{},
@@ -93,11 +93,11 @@ RESPOND JSON:
 	# Parse strategies
 	var strategies: Array = []
 	if response is Array:
-		strategies = response as Array
+		strategies = response
 	elif response is Dictionary and response.has("strategies"):
 		var strat_var: Variant = response.get("strategies")
 		if strat_var is Array:
-			strategies = strat_var as Array
+			strategies = strat_var
 
 	# Execute strategies (would integrate with SettlementPlanner.plan())
 	for strategy in strategies:

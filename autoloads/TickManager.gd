@@ -14,15 +14,13 @@ signal tick_processed(tick_number: int)
 const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base; stable for HeelKawn)
 
 ## SAFETY: Maximum ticks processed in one render frame (bounded burst).
-## High value (500) prioritizes simulation speed at high multipliers.
-## At 100x speed: delta ≈ 16.7ms * 100 = 1667ms of sim → ~1667 ticks pending.
-## With MAX=500, we can catch up faster and sustain smooth 100x simulation.
-const MAX_TICKS_PER_FRAME: int = 500
+## At 60fps target, each frame has 16ms. We cap ticks to fit within that.
+const MAX_TICKS_PER_FRAME: int = 200
 
 ## Adaptive Throttle: Target frame time budget (microseconds).
-## 50ms = 50000 usec budget allows substantial CPU use for simulation.
-## Prioritizes simulation speed over render framerate; game may drop to 20fps at 100x but simulation stays smooth.
-const TARGET_FRAME_TIME_USEC: int = 50000  # 50ms budget
+## 16ms = 16000 usec = 60fps target. The sim must yield to the renderer
+## within this budget to maintain smooth framerate at all speeds.
+const TARGET_FRAME_TIME_USEC: int = 16_000  # 16ms = 60fps
 
 
 ## Read max ticks/frame from GameSettings if available, else fall back to constant.
@@ -99,15 +97,16 @@ func _process(delta: float) -> void:
 	var current_fps: int = Engine.get_frames_per_second()
 	if current_fps < 55:
 		_low_fps_frame_streak += 1
-		if _low_fps_frame_streak >= 3:
-			# Reduce ticks but never below floor — prevents death spiral where
-			# adaptive throttle cuts to 1 tick/frame and pawns stop functioning.
-			var floor_ticks: int = maxi(10, _get_max_ticks_per_frame() / 4)
-			_adaptive_max_ticks_per_frame = maxi(floor_ticks, int(floor(float(_adaptive_max_ticks_per_frame) * 0.75)))
+		if _low_fps_frame_streak >= 2:
+			# Aggressive cut: halve ticks per frame to recover 60fps
+			var floor_ticks: int = maxi(2, _get_max_ticks_per_frame() / 8)
+			_adaptive_max_ticks_per_frame = maxi(floor_ticks, _adaptive_max_ticks_per_frame / 2)
 			_low_fps_frame_streak = 0
 	else:
 		_low_fps_frame_streak = 0
-		_adaptive_max_ticks_per_frame = _get_max_ticks_per_frame()
+		# Gradually restore cap when FPS is healthy
+		if _adaptive_max_ticks_per_frame < _get_max_ticks_per_frame():
+			_adaptive_max_ticks_per_frame = mini(_get_max_ticks_per_frame(), _adaptive_max_ticks_per_frame + 4)
 
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
@@ -116,8 +115,8 @@ func _process(delta: float) -> void:
 	# 100ms keeps the window responsive (well under Windows' 5s kill threshold)
 	# while allowing ~10 ticks/frame for backlog catch-up at 10ms/tick.
 	var frame_budget_usec: int = _get_frame_budget_usec()
-	if _speed_multiplier > 20.0:
-		frame_budget_usec = 100_000  # 100ms — responsive but allows burst catch-up
+	# Never exceed 16ms regardless of speed — 60fps is the target
+	frame_budget_usec = mini(frame_budget_usec, TARGET_FRAME_TIME_USEC)
 
 	while _accumulated_time >= TICK_STEP and ticks_this_frame < _adaptive_max_ticks_per_frame:
 		_accumulated_time -= TICK_STEP
@@ -125,16 +124,16 @@ func _process(delta: float) -> void:
 		ticks_this_frame += 1
 		_dispatch_tick(current_tick)
 
-		# Check time every 4 ticks to balance overhead vs responsiveness
-		if ticks_this_frame % 4 == 0:
+		# Check time every 2 ticks to catch budget overruns quickly
+		if ticks_this_frame % 2 == 0:
 			var elapsed: int = Time.get_ticks_usec() - start_time
 			if elapsed > frame_budget_usec:
 				break  # Yield to renderer — remaining ticks deferred to next frame
 
-	# SAFETY: If backlog grows dangerously large (>10x cap),
+	# SAFETY: If backlog grows dangerously large (>5x cap),
 	# drop the excess to prevent death spiral. The sim will lose
 	# some ticks but recover instead of hanging forever.
-	var max_backlog: float = TICK_STEP * float(_get_max_ticks_per_frame()) * 10.0
+	var max_backlog: float = TICK_STEP * float(_get_max_ticks_per_frame()) * 5.0
 	if _accumulated_time > max_backlog:
 		if OS.is_debug_build():
 			push_warning("[TickManager] Backlog overflow (%.1f ticks). Dropping excess to prevent hang." % (_accumulated_time / TICK_STEP))

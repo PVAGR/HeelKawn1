@@ -5384,14 +5384,18 @@ func _seed_construction_jobs() -> void:
 	var tick: int = GameManager.tick_count
 	if Main._world_stabilization_until_tick >= 0 and tick < Main._world_stabilization_until_tick:
 		return
-	var interval: int = _high_speed_interval(100, 200, 400)
+	var interval: int = _high_speed_interval(200, 400, 800)
 	if tick - _last_construction_seed_tick < interval:
 		return
 	_last_construction_seed_tick = tick
+	var budget_usec: int = 4_000  # 4ms max — never freeze the frame
+	var start_usec: int = Time.get_ticks_usec()
 
 	var posted: int = 0
 	var settlements: Array = SettlementMemory.get_settlements()
 	for s in settlements:
+		if Time.get_ticks_usec() - start_usec >= budget_usec:
+			break
 		if not (s is Dictionary):
 			continue
 		var sd: Dictionary = s as Dictionary
@@ -5437,7 +5441,7 @@ func _seed_construction_jobs() -> void:
 		if hearths <= 0 and jobs_this_settlement < 5:
 			var pending_fire_pits: int = JobManager.count_pending_by_type(Job.Type.BUILD_FIRE_PIT)
 			if pending_fire_pits == 0:
-				var t: Vector2i = _find_build_tile_near(center_tile, 8)
+				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
 					var j: Job = JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 7, 12)
 					if j != null:
@@ -5447,7 +5451,7 @@ func _seed_construction_jobs() -> void:
 		if storage_huts <= 0 and local_pop >= 3 and jobs_this_settlement < 5:
 			var pending_storage: int = JobManager.count_pending_by_type(Job.Type.BUILD_STORAGE_HUT)
 			if pending_storage == 0:
-				var t: Vector2i = _find_build_tile_near(center_tile, 10)
+				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
 					var j: Job = JobManager.post(Job.Type.BUILD_STORAGE_HUT, t, 6, 15)
 					if j != null:
@@ -5457,7 +5461,7 @@ func _seed_construction_jobs() -> void:
 		var need_beds: int = maxi(2, int(round(local_pop / 2.2)))
 		var pending_beds: int = JobManager.count_pending_by_type(Job.Type.BUILD_BED)
 		if beds + pending_beds < need_beds and jobs_this_settlement < 5:
-			var t: Vector2i = _find_build_tile_near(center_tile, 8)
+			var t: Vector2i = _find_build_tile_near(center_tile, 6)
 			if t.x >= 0 and not JobManager.has_job_at(t):
 				var j: Job = JobManager.post(Job.Type.BUILD_BED, t, 6, 10)
 				if j != null:
@@ -5468,7 +5472,7 @@ func _seed_construction_jobs() -> void:
 		var pending_doors: int = JobManager.count_pending_by_type(Job.Type.BUILD_DOOR)
 		if local_pop >= 6 and (walls + pending_walls < 4 or doors + pending_doors <= 0) and jobs_this_settlement < 5:
 			var build_type: int = Job.Type.BUILD_WALL if walls < 4 else Job.Type.BUILD_DOOR
-			var ring: int = 8 if build_type == Job.Type.BUILD_WALL else 6
+			var ring: int = 6 if build_type == Job.Type.BUILD_WALL else 4
 			var t: Vector2i = _find_build_tile_near(center_tile, ring)
 			if t.x >= 0 and not JobManager.has_job_at(t):
 				var j: Job = JobManager.post(build_type, t, 5, 10 if build_type == Job.Type.BUILD_WALL else 8)
@@ -5477,7 +5481,7 @@ func _seed_construction_jobs() -> void:
 					jobs_this_settlement += 1
 		# Priority 5: Plant seeds on nearby fertile soil
 		if jobs_this_settlement < 5:
-			var ft: Vector2i = _find_fertile_tile_near(center_tile, 12)
+			var ft: Vector2i = _find_fertile_tile_near(center_tile, 8)
 			if ft.x >= 0 and not JobManager.has_job_at(ft):
 				var j: Job = JobManager.post(Job.Type.PLANT_SEEDS, ft, 4, 6)
 				if j != null:
@@ -5488,14 +5492,14 @@ func _seed_construction_jobs() -> void:
 			var meat_count: int = StockpileManager.total_count_of(Item.Type.MEAT)
 			var berry_count: int = StockpileManager.total_count_of(Item.Type.BERRY)
 			if meat_count > 0:
-				var t: Vector2i = _find_hearth_tile_near(center_tile, 12)
+				var t: Vector2i = _find_hearth_tile_near(center_tile, 8)
 				if t.x >= 0 and not JobManager.has_job_at(t):
 					var j: Job = JobManager.post(Job.Type.COOK_MEAT, t, 4, 8)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
 			elif berry_count >= 2:
-				var t: Vector2i = _find_hearth_tile_near(center_tile, 12)
+				var t: Vector2i = _find_hearth_tile_near(center_tile, 8)
 				if t.x >= 0 and not JobManager.has_job_at(t):
 					var j: Job = JobManager.post(Job.Type.COOK_BERRIES, t, 3, 5)
 					if j != null:
@@ -5505,7 +5509,7 @@ func _seed_construction_jobs() -> void:
 		if farms <= 0 and local_pop >= 4 and jobs_this_settlement < 5:
 			var pending_farms: int = JobManager.count_pending_by_type(Job.Type.BUILD_FARM_WHEAT)
 			if pending_farms == 0:
-				var t: Vector2i = _find_fertile_tile_near(center_tile, 12)
+				var t: Vector2i = _find_fertile_tile_near(center_tile, 8)
 				if t.x >= 0 and not JobManager.has_job_at(t):
 					var j: Job = JobManager.post(Job.Type.BUILD_FARM_WHEAT, t, 5, 30)
 					if j != null:
@@ -5515,7 +5519,7 @@ func _seed_construction_jobs() -> void:
 		if workshops <= 0 and local_pop >= 5 and jobs_this_settlement < 5:
 			var pending_workshops: int = JobManager.count_pending_by_type(Job.Type.BUILD_WORKSHOP)
 			if pending_workshops == 0:
-				var t: Vector2i = _find_build_tile_near(center_tile, 10)
+				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
 					var j: Job = JobManager.post(Job.Type.BUILD_WORKSHOP, t, 5, 40)
 					if j != null:
@@ -5525,7 +5529,7 @@ func _seed_construction_jobs() -> void:
 		if granaries <= 0 and farms >= 1 and local_pop >= 4 and jobs_this_settlement < 5:
 			var pending_granaries: int = JobManager.count_pending_by_type(Job.Type.BUILD_GRANARY)
 			if pending_granaries == 0:
-				var t: Vector2i = _find_build_tile_near(center_tile, 10)
+				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
 					var j: Job = JobManager.post(Job.Type.BUILD_GRANARY, t, 5, 35)
 					if j != null:
@@ -5535,7 +5539,7 @@ func _seed_construction_jobs() -> void:
 		if apothecaries <= 0 and local_pop >= 5 and jobs_this_settlement < 5:
 			var pending_apothecaries: int = JobManager.count_pending_by_type(Job.Type.BUILD_APOTHECARY)
 			if pending_apothecaries == 0:
-				var t: Vector2i = _find_build_tile_near(center_tile, 10)
+				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
 					var j: Job = JobManager.post(Job.Type.BUILD_APOTHECARY, t, 5, 40)
 					if j != null:
@@ -5545,7 +5549,7 @@ func _seed_construction_jobs() -> void:
 		if markets <= 0 and farms >= 1 and local_pop >= 6 and jobs_this_settlement < 5:
 			var pending_markets: int = JobManager.count_pending_by_type(Job.Type.BUILD_MARKET)
 			if pending_markets == 0:
-				var t: Vector2i = _find_build_tile_near(center_tile, 10)
+				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
 					var j: Job = JobManager.post(Job.Type.BUILD_MARKET, t, 4, 40)
 					if j != null:
@@ -6070,7 +6074,7 @@ static func _is_biome_compatible(feature: int, biome: int) -> bool:
 func _react_to_mining_progress_step() -> bool:
 	# OPTIMIZATION: Check frame budget at entry
 	var mining_start: int = Time.get_ticks_usec()
-	const MINING_BUDGET_USEC: int = 3000  # 3ms budget for mining react
+	const MINING_BUDGET_USEC: int = 2_000  # 2ms budget for mining react
 	
 	var pf: PathFinder = _world.pathfinder
 	var main_component: int = pf.largest_component_id()
@@ -6093,8 +6097,8 @@ func _react_to_mining_progress_step() -> bool:
 	var y_end: int = mini(WorldData.HEIGHT, y_start + rows_step)
 	for y in range(y_start, y_end):
 		for x in range(WorldData.WIDTH):
-			# OPTIMIZATION: Check frame budget periodically
-			if _mining_react_work_used % 512 == 0:
+			# OPTIMIZATION: Check frame budget every 128 tiles
+			if _mining_react_work_used % 128 == 0:
 				if Time.get_ticks_usec() - mining_start > MINING_BUDGET_USEC:
 					_mining_react_in_progress = true
 					_mining_react_scan_y_cursor = y
@@ -6203,6 +6207,8 @@ func _mining_react_step_skip_for_speed() -> int:
 		return 3  # Run every 4th tick
 	if gs >= 50.0:
 		return 2  # Run every 3rd tick
+	if gs >= 26.0:
+		return 1  # Run every 2nd tick
 	return 0  # Run every tick at normal speed
 
 

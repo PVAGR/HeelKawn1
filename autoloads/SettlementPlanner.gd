@@ -117,7 +117,7 @@ static func _planner_pass_settlement_limit() -> int:
 	if GameManager == null:
 		return PLANNER_MAX_SETTLEMENTS_PER_PASS
 	var gs: float = GameManager.game_speed
-	if gs >= 50.0:
+	if gs >= 26.0:
 		return 1
 	if gs >= 12.0:
 		return 2
@@ -128,19 +128,19 @@ static func _planner_pass_settlement_limit() -> int:
 
 static func _planner_pass_budget_usec() -> int:
 	if GameManager == null:
-		return 12_000
+		return 4_000
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 4_000
+		return 2_000
 	if gs >= 50.0:
-		return 5_000
+		return 2_000
 	if gs >= 26.0:
-		return 6_000
+		return 3_000
 	if gs >= 12.0:
-		return 8_000
+		return 4_000
 	if gs >= 3.0:
-		return 12_000
-	return 16_000
+		return 6_000
+	return 8_000
 
 
 static func _planner_open_job_backpressure_limit() -> int:
@@ -809,14 +809,10 @@ static func _planning_region_cap_for_speed() -> int:
 	if GameManager == null:
 		return PLANNING_REGION_HARD_CAP
 	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return mini(8, PLANNING_REGION_HARD_CAP)
-	if gs >= 50.0:
-		return mini(12, PLANNING_REGION_HARD_CAP)
 	if gs >= 26.0:
-		return mini(16, PLANNING_REGION_HARD_CAP)
+		return mini(4, PLANNING_REGION_HARD_CAP)
 	if gs >= 12.0:
-		return mini(24, PLANNING_REGION_HARD_CAP)
+		return mini(8, PLANNING_REGION_HARD_CAP)
 	return PLANNING_REGION_HARD_CAP
 
 
@@ -843,14 +839,20 @@ static func _count_feature_in_regions(
 		data: WorldData, regions: PackedInt32Array, feature_id: int
 ) -> int:
 	var n: int = 0
+	var _count_abort: bool = false
 	for j in range(regions.size()):
+		if _budget_exceeded():
+			break
 		var rk2: int = int(regions[j])
 		var rx: int = rk2 & 0xFFFF
 		var ry: int = (rk2 >> 16) & 0xFFFF
 		for dy in 16:
-			if _budget_exceeded():
+			if _count_abort:
 				break
 			for dx in 16:
+				if dy == 8 and dx == 0 and _budget_exceeded():
+					_count_abort = true
+					break
 				var x: int = rx * 16 + dx
 				var y: int = ry * 16 + dy
 				if not data.in_bounds(x, y):
@@ -884,21 +886,23 @@ static func _scan_region_feature_summary(
 	var wy0: int = 1_000_000
 	var wy1: int = -1_000_000
 	var wall_any: bool = false
+	var _scan_abort: bool = false
 	for j in range(regions.size()):
 		if _budget_exceeded():
 			break
 		var rk2: int = int(regions[j])
 		var rx: int = rk2 & 0xFFFF
 		var ry: int = (rk2 >> 16) & 0xFFFF
-		var tile_count: int = 0
 		for dy in 16:
+			if _scan_abort:
+				break
 			for dx in 16:
-				tile_count += 1
-				# Budget check every 256 tiles to prevent frame spikes
-				if tile_count % 256 == 0 and _budget_exceeded():
-					break
+				# Budget check every 64 tiles to prevent frame spikes
 				var x: int = rx * 16 + dx
 				var y: int = ry * 16 + dy
+				if ((dx == 8 and dy == 8) and _budget_exceeded()):
+					_scan_abort = true
+					break
 				if not data.in_bounds(x, y):
 					continue
 				var f: int = int(data.get_feature(x, y))

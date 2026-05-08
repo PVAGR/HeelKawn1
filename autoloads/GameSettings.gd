@@ -71,10 +71,10 @@ const SCHEMA: Array[Dictionary] = [
 		"label": "Max Ticks/Frame",
 		"section": "Simulation",
 		"type": "int",
-		"min": 50,
-		"max": 500,
-		"step": 50,
-		"default": 500,
+		"min": 10,
+		"max": 200,
+		"step": 10,
+		"default": 100,
 	},
 	{
 		"key": "frame_budget_ms",
@@ -84,7 +84,7 @@ const SCHEMA: Array[Dictionary] = [
 		"min": 16,
 		"max": 100,
 		"step": 2,
-		"default": 50,
+		"default": 16,
 	},
 	{
 		"key": "hud_refresh_fast",

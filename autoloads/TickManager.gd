@@ -112,15 +112,23 @@ func _process(delta: float) -> void:
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
 
-	# HIGH-SPEED OPTIMIZATION: At >20x speed, bypass frame budget entirely.
-	# Prioritize simulation throughput; render framerate will drop but ticks flow smoothly.
+	# HIGH-SPEED OPTIMIZATION: At >20x speed, use a generous frame budget
+	# to keep simulation throughput high while still yielding to the renderer.
+	# Without any budget, Windows kills the process after ~5s of unresponsiveness.
 	if _speed_multiplier > 20.0:
-		# Unlimited burst: process all pending ticks up to hard cap
+		# Generous budget: 200ms allows heavy simulation bursts while keeping
+		# the window responsive enough for Windows' "not responding" watchdog.
+		var high_speed_budget_usec: int = 200_000
 		while _accumulated_time >= TICK_STEP and ticks_this_frame < _adaptive_max_ticks_per_frame:
 			_accumulated_time -= TICK_STEP
 			current_tick += 1
 			ticks_this_frame += 1
 			_dispatch_tick(current_tick)
+			# Check time every 8 ticks to reduce overhead at high speeds
+			if ticks_this_frame % 8 == 0:
+				var elapsed: int = Time.get_ticks_usec() - start_time
+				if elapsed > high_speed_budget_usec:
+					break  # Yield to renderer — remaining ticks deferred to next frame
 	else:
 		# Normal speeds: respect frame budget to maintain UI responsiveness
 		while _accumulated_time >= TICK_STEP and ticks_this_frame < _adaptive_max_ticks_per_frame:
@@ -136,10 +144,13 @@ func _process(delta: float) -> void:
 					break  # Yield to next frame — don't pause, just defer remaining ticks
 
 	# SAFETY: If backlog grows dangerously large (>10x cap),
-	# log a warning but DO NOT drop time. The sim will catch up over frames.
-	if _accumulated_time > TICK_STEP * _get_max_ticks_per_frame() * 10:
+	# drop the excess to prevent death spiral. The sim will lose
+	# some ticks but recover instead of hanging forever.
+	var max_backlog: float = TICK_STEP * float(_get_max_ticks_per_frame()) * 10.0
+	if _accumulated_time > max_backlog:
 		if OS.is_debug_build():
-			push_warning("[TickManager] Massive backlog detected (%.1fs). System is catching up." % (_accumulated_time / TICK_STEP))
+			push_warning("[TickManager] Backlog overflow (%.1f ticks). Dropping excess to prevent hang." % (_accumulated_time / TICK_STEP))
+		_accumulated_time = max_backlog
 
 	_last_frame_ticks = ticks_this_frame
 

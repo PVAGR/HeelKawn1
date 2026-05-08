@@ -578,7 +578,9 @@ func _apply_death(pawn: Node, cause: String) -> void:
 			"pawn_id": int(data.id),
 			"pawn_name": data.get("display_name") if data.get("display_name") != null else "Unknown",
 			"cause": cause,
-			"tick": GameManager.tick_count
+			"tick": GameManager.tick_count,
+			"x": int(data.tile_pos.x) if data.tile_pos != null else 0,
+			"y": int(data.tile_pos.y) if data.tile_pos != null else 0,
 		})
 
 	# Kill pawn

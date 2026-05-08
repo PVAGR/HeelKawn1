@@ -405,6 +405,7 @@ func recompute(_world: World) -> void:
     _prune_settlement_state_truth_hysteresis()
     _update_governance_state()
     _apply_persisted_governance_forms()
+    _compute_dominant_clans()
     _settlement_truth_verify_post_recompute_pass()
 
 
@@ -889,6 +890,8 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
         "parent_settlement_id": -1,  # Diaspora: ID of parent settlement (-1 = original)
         "founding_pressure": "",     # Diaspora: cause chain that produced this settlement
         "founding_tick": -1,         # Diaspora: tick when this settlement was founded
+        "dominant_clan_id": -1,      # Most common clan among pawns in this settlement
+        "dominant_nation_id": -1,    # Most common nation among pawns in this settlement
     }
 
 
@@ -1288,6 +1291,50 @@ func _pawns_in_settlement_indexed(st: Dictionary) -> Array[Pawn]:
                     seen[pid] = true
                     out.append(p)
     return out
+
+
+## Compute the dominant clan and nation for each settlement based on
+## the pawns living in its regions. Used by TerritoryOverlay for coloring.
+func _compute_dominant_clans() -> void:
+    for st in settlements:
+        if not st is Dictionary:
+            continue
+        var d: Dictionary = st as Dictionary
+        var pawns: Array[Pawn] = _pawns_in_settlement_indexed(d)
+        if pawns.is_empty():
+            d["dominant_clan_id"] = -1
+            d["dominant_nation_id"] = -1
+            continue
+        # Count clan membership
+        var clan_counts: Dictionary = {}
+        var nation_counts: Dictionary = {}
+        for p in pawns:
+            if p.data == null:
+                continue
+            var cid: int = int(p.data.clan_id)
+            if cid >= 0:
+                clan_counts[cid] = int(clan_counts.get(cid, 0)) + 1
+            var nid: int = int(p.data.nation_id)
+            if nid >= 0:
+                nation_counts[nid] = int(nation_counts.get(nid, 0)) + 1
+        # Find most common clan
+        var best_clan: int = -1
+        var best_clan_count: int = 0
+        for cid in clan_counts:
+            var cnt: int = int(clan_counts[cid])
+            if cnt > best_clan_count:
+                best_clan_count = cnt
+                best_clan = int(cid)
+        d["dominant_clan_id"] = best_clan
+        # Find most common nation
+        var best_nation: int = -1
+        var best_nation_count: int = 0
+        for nid in nation_counts:
+            var cnt: int = int(nation_counts[nid])
+            if cnt > best_nation_count:
+                best_nation_count = cnt
+                best_nation = int(nid)
+        d["dominant_nation_id"] = best_nation
 
 
 func _governance_for_settlement(st: Dictionary, _pawns_all: Array[Pawn]) -> Dictionary:

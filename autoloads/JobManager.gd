@@ -417,6 +417,29 @@ func claimed_count() -> int:
 	return _claimed.size()
 
 
+## Count open (unclaimed) jobs of a specific type. Used by planners to avoid
+## over-posting when the queue is already full.
+func count_open_by_type(job_type: int) -> int:
+	var n: int = 0
+	for j in _open:
+		if j.type == job_type:
+			n += 1
+	return n
+
+
+## Count both open and claimed jobs of a specific type. Gives a fuller picture
+## of how much work is queued for a given build type.
+func count_pending_by_type(job_type: int) -> int:
+	var n: int = 0
+	for j in _open:
+		if j.type == job_type:
+			n += 1
+	for j in _claimed:
+		if j.type == job_type:
+			n += 1
+	return n
+
+
 ## True if there is already a job (open or claimed) at this tile. Used by
 ## reactive job seeders to avoid duplicate posts.
 func has_job_at(tile: Vector2i) -> bool:

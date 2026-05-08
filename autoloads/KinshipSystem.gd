@@ -747,3 +747,23 @@ func _flush_pending_births(tick: int) -> void:
 ## Test helper - flush pending births without game_tick
 func _test_flush_pending_births(tick: int = 0) -> void:
 	_flush_pending_births(tick)
+
+
+# === Territory Color Mapping ===
+
+## Deterministic color for a clan. Uses golden ratio hue spacing for
+## visually distinct colors across clans.
+static func get_color_for_clan(clan_id: int) -> Color:
+	if clan_id < 0:
+		return Color(0.5, 0.5, 0.5, 1.0)
+	var hue: float = fmod(float(abs(clan_id * 2654435761)) * 0.618033988749895, 1.0)
+	return Color.from_hsv(hue, 0.6, 0.85, 1.0)
+
+
+## Deterministic color for a nation/kingdom. Uses a different hash seed
+## than clan so nations and clans don't collide visually.
+static func get_color_for_nation(nation_id: int) -> Color:
+	if nation_id < 0:
+		return Color(0.5, 0.5, 0.5, 1.0)
+	var hue: float = fmod(float(abs(nation_id * 2246822519)) * 0.618033988749895, 1.0)
+	return Color.from_hsv(hue, 0.5, 0.9, 1.0)

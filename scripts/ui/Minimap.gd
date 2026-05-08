@@ -105,6 +105,67 @@ func _draw_overlay() -> void:
 	var scale_x: float = MAP_SIZE_PX / float(WorldData.WIDTH)
 	var scale_y: float = MAP_SIZE_PX / float(WorldData.HEIGHT)
 
+	# Draw territory fills (colored regions per settlement)
+	if SettlementMemory != null:
+		var settlements: Array = SettlementMemory.get_settlements()
+		for s in settlements:
+			if not s is Dictionary:
+				continue
+			var cr: int = int(s.get("center_region", -1))
+			if cr < 0:
+				continue
+			var regions: PackedInt32Array = s.get("regions", PackedInt32Array())
+			if regions.is_empty():
+				continue
+			# Deterministic color for this settlement
+			var hue: float = fmod(float(abs(cr)) * 0.618033988749895, 1.0)
+			var territory_color: Color = Color.from_hsv(hue, 0.55, 0.85, 0.35)
+			# Draw each region as a colored rect on the minimap
+			for rk in regions:
+				var rx: int = (int(rk) & 0xFFFF) * 16
+				var ry: int = ((int(rk) >> 16) & 0xFFFF) * 16
+				var px: float = rx * scale_x
+				var py: float = ry * scale_y
+				var rw: float = 16.0 * scale_x
+				var rh: float = 16.0 * scale_y
+				_overlay.draw_rect(Rect2(px, py, rw, rh), territory_color, true)
+		# Draw territory borders between different settlements
+		var region_to_settlement: Dictionary = {}
+		for i in range(settlements.size()):
+			var s: Dictionary = settlements[i] as Dictionary
+			if s == null:
+				continue
+			var rks: PackedInt32Array = s.get("regions", PackedInt32Array())
+			for rk in rks:
+				region_to_settlement[int(rk)] = i
+		var border_color_minimap: Color = Color(0.0, 0.0, 0.0, 0.6)
+		for rk_key in region_to_settlement:
+			var rk: int = int(rk_key)
+			var rx: int = int(rk) & 0xFFFF
+			var ry: int = (int(rk) >> 16) & 0xFFFF
+			var si: int = int(region_to_settlement[rk_key])
+			# Check 4 neighbors
+			var offsets: Array[Vector2i] = [Vector2i(0, -1), Vector2i(0, 1), Vector2i(1, 0), Vector2i(-1, 0)]
+			for off in offsets:
+				var nrx: int = rx + off.x
+				var nry: int = ry + off.y
+				var neighbor_key: int = (nrx & 0xFFFF) | ((nry & 0xFFFF) << 16)
+				var neighbor_si: int = int(region_to_settlement.get(neighbor_key, -1))
+				if neighbor_si != si:
+					# Draw border line on this edge
+					var px: float = rx * 16 * scale_x
+					var py: float = ry * 16 * scale_y
+					var rw: float = 16.0 * scale_x
+					var rh: float = 16.0 * scale_y
+					if off.y == -1:  # North edge
+						_overlay.draw_line(Vector2(px, py), Vector2(px + rw, py), border_color_minimap, 1.0)
+					elif off.y == 1:  # South edge
+						_overlay.draw_line(Vector2(px, py + rh), Vector2(px + rw, py + rh), border_color_minimap, 1.0)
+					elif off.x == 1:  # East edge
+						_overlay.draw_line(Vector2(px + rw, py), Vector2(px + rw, py + rh), border_color_minimap, 1.0)
+					elif off.x == -1:  # West edge
+						_overlay.draw_line(Vector2(px, py), Vector2(px, py + rh), border_color_minimap, 1.0)
+
 	# Draw settlements
 	if SettlementMemory != null:
 		var settlements: Array = SettlementMemory.get_settlements()

@@ -806,9 +806,6 @@ func _culture_inherited_job_offset() -> int:
 func _path_for_pawn(to: Vector2i) -> Array[Vector2i]:
 	if _world == null or _world.pathfinder == null or data == null:
 		return [] as Array[Vector2i]
-	# Throttle pathfinding to every 3 ticks to reduce lag
-	if GameManager.tick_count % 3 != 0:
-		return [] as Array[Vector2i]
 	
 	# Phase 5: Check if destination is near an enemy
 	var destination_near_enemy: bool = is_tile_near_enemy(to)
@@ -2898,6 +2895,10 @@ func _tick_idle() -> void:
 		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.DEFEND):
 			if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
 				zone_bias += 6
+		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.TERRITORY):
+			# Territory zones: pawns prefer building and working inside their own territory
+			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH or j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.MINE or j.type == _Job.Type.MINE_WALL:
+				zone_bias += 4
 		base_bias += zone_bias
 		# Personal whim: same queue, slightly different ordering per pawn (still deterministic).
 		base_bias += clampi(int(floor((_bp(5) - 0.5) * 6.0)), -2, 2)

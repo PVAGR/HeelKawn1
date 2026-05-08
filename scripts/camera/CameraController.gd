@@ -5,6 +5,10 @@ extends Camera2D
 @export var zoom_step: float = 1.1
 @export var pan_sensitivity: float = 1.0
 
+## Emitted when zoom level changes. Listeners use this for zoom-dependent
+## visibility (territory borders, name labels, etc.).
+signal zoom_changed(new_zoom: float)
+
 var _is_panning: bool = false
 
 func _ready() -> void:
@@ -36,6 +40,7 @@ func _zoom_toward(factor: float, screen_pos: Vector2) -> void:
 	zoom = Vector2(new_zoom_value, new_zoom_value)
 	var world_after: Vector2 = get_screen_center_to_world(screen_pos)
 	position += world_before - world_after
+	zoom_changed.emit(new_zoom_value)
 
 func get_screen_center_to_world(screen_pos: Vector2) -> Vector2:
 	var viewport_size: Vector2 = get_viewport_rect().size
@@ -71,3 +76,4 @@ func reset_to_world_bounds(world: Node) -> void:
 	var scale_y: float = viewport_size.y / world_px_h
 	var fit_zoom: float = clamp(minf(scale_x, scale_y), min_zoom, max_zoom)
 	zoom = Vector2(fit_zoom, fit_zoom)
+	zoom_changed.emit(fit_zoom)

@@ -1,11 +1,12 @@
 extends Node
 
-## Global registry of player-designated zones (forage, build, defend).
+## Global registry of player-designated zones (forage, build, defend, territory).
 ## Pawns query this during job scoring to prefer jobs inside designated areas.
 ## Storage zones are handled by StockpileManager — this is only for the
-## priority-bias zones that the player paints via Ctrl+Z.
+## priority-bias zones that the player paints via Ctrl+Z, plus auto-generated
+## territory zones from SettlementMemory.
 
-enum ZoneType { FORAGE, BUILD, DEFEND }
+enum ZoneType { FORAGE, BUILD, DEFEND, TERRITORY }
 
 signal zone_registered(zone_type: int, rect: Rect2i)
 signal zone_unregistered(zone_type: int, rect: Rect2i)

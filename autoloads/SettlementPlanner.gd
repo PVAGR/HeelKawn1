@@ -37,13 +37,13 @@ var _last_plan_tick: int = -1_000_000_000
 @onready var SpatialManager = get_node_or_null("/root/SpatialManager") # ARCHITECT T006
 var _plan_rr_cursor: int = 0
 ## Budget tracking: set at start of plan(), checked by tile-picking functions
-var _plan_budget_usec: int = 0
-var _plan_start_usec: int = 0
+static var _plan_budget_usec: int = 0
+static var _plan_start_usec: int = 0
 
 
 ## Check if the planner's time budget has been exceeded. Tile-picking functions
 ## call this to bail out early instead of running expensive scans past budget.
-func _budget_exceeded() -> bool:
+static func _budget_exceeded() -> bool:
 	if _plan_budget_usec <= 0:
 		return false
 	return Time.get_ticks_usec() - _plan_start_usec >= _plan_budget_usec
@@ -163,12 +163,16 @@ static func _planner_open_job_backpressure_limit() -> int:
 func _plan_one_settlement(
 		world: World, main: Node2D, settlement: Dictionary, planning_regions: PackedInt32Array
 ) -> void:
+	if _budget_exceeded():
+		return
 	var data: WorldData = world.data
 	var center_rk: int = int(settlement.get("center_region", planning_regions[0]))
 	var intent: int = SettlementPlanner._intent_for_settlement(center_rk)
 	var center: Vector2i = SettlementPlanner._center_tile_of_region_key(center_rk)
 	var pawns: int = int(main.call("settlement_planner_count_pawns_in_regions", planning_regions))
 	var feature_summary: Dictionary = _scan_region_feature_summary(data, planning_regions)
+	if _budget_exceeded():
+		return
 	var bed_n: int = int(feature_summary.get("bed_n", 0))
 	var wall_n: int = int(feature_summary.get("wall_n", 0))
 	var door_n: int = int(feature_summary.get("door_n", 0))
@@ -216,11 +220,12 @@ func _plan_one_settlement_culture(
 			return
 		match rid:
 			1:
-				var need_bed: bool = pawns > bed_n and pawns < bed_n + 2
+				var open_beds: int = JobManager.count_pending_by_type(Job.Type.BUILD_BED)
+				var need_bed: bool = pawns > bed_n + open_beds and pawns < bed_n + open_beds + 2
 				if intent == IntentMemory.INTENT_GROW:
-					need_bed = pawns >= bed_n and pawns < bed_n + 3
+					need_bed = pawns >= bed_n + open_beds and pawns < bed_n + open_beds + 3
 				elif intent == IntentMemory.INTENT_ABANDON:
-					need_bed = pawns > bed_n and pawns <= bed_n + 1
+					need_bed = pawns > bed_n + open_beds and pawns <= bed_n + open_beds + 1
 				if need_bed:
 					var tbed: Vector2i = _pick_bed_tile_culture(
 							world, main, center, regions, cult
@@ -228,7 +233,8 @@ func _plan_one_settlement_culture(
 					if tbed.x >= 0 and bool(main.call("settlement_planner_post_bed", tbed)):
 						return
 			2:
-				if bed_n > 0 and wall_n == 0:
+				var open_walls: int = JobManager.count_pending_by_type(Job.Type.BUILD_WALL)
+				if bed_n > 0 and wall_n + open_walls == 0:
 					if cult == CULTURE_OPEN and bed_n < 2:
 						continue
 					var tw: Vector2i = _pick_perimeter_wall_tile_culture(
@@ -237,7 +243,8 @@ func _plan_one_settlement_culture(
 					if tw.x >= 0 and bool(main.call("settlement_planner_post_wall", tw)):
 						return
 			3:
-				if wall_n > 0 and door_n == 0:
+				var open_doors: int = JobManager.count_pending_by_type(Job.Type.BUILD_DOOR)
+				if wall_n > 0 and door_n + open_doors == 0:
 					if cult == CULTURE_OPEN and pawns < 3:
 						continue
 					var td: Vector2i = _pick_door_tile_culture(
@@ -269,9 +276,10 @@ func _plan_one_settlement_culture(
 			6:
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
-				var can_bed2: bool = pawns >= bed_n + 2
+				var open_beds6: int = JobManager.count_pending_by_type(Job.Type.BUILD_BED)
+				var can_bed2: bool = pawns >= bed_n + open_beds6 + 2
 				if intent == IntentMemory.INTENT_GROW:
-					can_bed2 = pawns >= bed_n + 1
+					can_bed2 = pawns >= bed_n + open_beds6 + 1
 				if can_bed2:
 					if cult == CULTURE_DEFENSIVE and door_n == 0 and wall_n > 0:
 						continue
@@ -334,14 +342,16 @@ func _plan_one_settlement_culture(
 			11:
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
-				if bed_n >= 2 and fire_pit_n == 0:
+				var open_fire_pits: int = JobManager.count_pending_by_type(Job.Type.BUILD_FIRE_PIT)
+				if bed_n >= 2 and fire_pit_n + open_fire_pits == 0:
 					var t11: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
 					if t11.x >= 0 and bool(main.call("settlement_planner_post_fire_pit", t11)):
 						return
 			12:
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
-				if bed_n >= 4 and storage_hut_n == 0:
+				var open_storage: int = JobManager.count_pending_by_type(Job.Type.BUILD_STORAGE_HUT)
+				if bed_n >= 4 and storage_hut_n + open_storage == 0:
 					var t12: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
 					if t12.x >= 0 and bool(main.call("settlement_planner_post_storage_hut", t12)):
 						return
@@ -614,6 +624,8 @@ static func _count_feature_in_regions(
 		var rx: int = rk2 & 0xFFFF
 		var ry: int = (rk2 >> 16) & 0xFFFF
 		for dy in 16:
+			if _budget_exceeded():
+				break
 			for dx in 16:
 				var x: int = rx * 16 + dx
 				var y: int = ry * 16 + dy
@@ -638,6 +650,8 @@ static func _scan_region_feature_summary(
 	var wy1: int = -1_000_000
 	var wall_any: bool = false
 	for j in range(regions.size()):
+		if _budget_exceeded():
+			break
 		var rk2: int = int(regions[j])
 		var rx: int = rk2 & 0xFFFF
 		var ry: int = (rk2 >> 16) & 0xFFFF
@@ -840,6 +854,8 @@ func _collect_wall_tiles_in_regions(
 static func _collect_wall_tiles_in_regions_nosort(
 		data: WorldData, regions: PackedInt32Array, max_tiles: int = -1
 ) -> Array[Vector2i]:
+	if _budget_exceeded():
+		return []
 	var out0: Array[Vector2i] = []
 	for j in range(regions.size()):
 		var rk2: int = int(regions[j])
@@ -862,6 +878,8 @@ static func _collect_wall_tiles_in_regions_nosort(
 static func _collect_viable_door_tiles(
 		world: World, main: Node2D, _data: WorldData, center: Vector2i, regions: PackedInt32Array
 ) -> Array[Vector2i]:
+	if _budget_exceeded():
+		return []
 	var by_linear: Dictionary = {}
 	var region_lookup: Dictionary = _regions_lookup(regions)
 	for t in _collect_wall_tiles_in_regions_nosort(world.data, regions, PLANNER_WALL_SCAN_CAP):
@@ -927,6 +945,8 @@ static func _zone_rect_3x3_anchored_at(center: Vector2i, _data: WorldData) -> Re
 static func _collect_bed_tiles_in_regions(
 		data: WorldData, regions: PackedInt32Array, max_tiles: int = -1
 ) -> Array[Vector2i]:
+	if _budget_exceeded():
+		return []
 	var outb: Array[Vector2i] = []
 	for j in range(regions.size()):
 		var rk2: int = int(regions[j])
@@ -993,6 +1013,8 @@ func _pick_expansion_wall_tile(
 		_world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array,
 		prefer_farthest: bool = false, feature_summary: Dictionary = {}
 ) -> Vector2i:
+	if _budget_exceeded():
+		return Vector2i(-1, -1)
 	var wx0: int = 1_000_000
 	var wx1: int = -1_000_000
 	var wy0: int = 1_000_000
@@ -1070,6 +1092,8 @@ static func _derive_settlement_stage(
 static func _path_bed_to_center_exists(
 		world: World, data: WorldData, center: Vector2i, regions: PackedInt32Array
 ) -> bool:
+	if _budget_exceeded():
+		return true  # Assume path exists if budget exceeded — skip expensive check
 	var beds0: Array[Vector2i] = _collect_bed_tiles_in_regions(data, regions, PLANNER_BED_SCAN_CAP)
 	if beds0.is_empty():
 		return true
@@ -1162,6 +1186,8 @@ func _first_interior_bbox_wall_door(
 		_world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array,
 		cult: int, feature_summary: Dictionary = {}
 ) -> Vector2i:
+	if _budget_exceeded():
+		return Vector2i(-1, -1)
 	var wx0: int = 1_000_000
 	var wx1: int = -1_000_000
 	var wy0: int = 1_000_000

@@ -192,7 +192,7 @@ func nearest_tile_to(from_tile: Vector2i) -> Vector2i:
 
 ## Find the nearest tile in this zone that's in the same pathfinder component
 ## as `from_tile`. Falls back to nearest_tile_to if no pathfinder given.
-func nearest_reachable_tile_to(from_tile: Vector2i, pathfinder: PathFinder) -> Vector2i:
+func nearest_reachable_tile_to(from_tile: Vector2i, pathfinder) -> Vector2i:
 	if pathfinder == null:
 		return nearest_tile_to(from_tile)
 	var my_comp: int = pathfinder.component_of(from_tile)

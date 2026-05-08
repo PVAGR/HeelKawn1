@@ -4075,9 +4075,9 @@ func _complete_current_job() -> void:
 					if position.distance_to(p.position) > 80.0:
 						continue
 					var gap: int = 0
-					for sk in range(PawnData.SKILL_COUNT):
-						var my_level: int = data.skill_level(sk)
-						var their_level: int = p.data.skill_level(sk)
+					for sk in range(5):
+						var my_level: int = data.get_skill_level(sk)
+						var their_level: int = p.data.get_skill_level(sk)
 						if my_level > their_level:
 							gap += (my_level - their_level)
 					if gap > best_skill_gap:

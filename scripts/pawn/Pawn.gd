@@ -5098,10 +5098,11 @@ func _trigger_crisis_strike() -> void:
 
 
 func _check_death_conditions() -> void:
-	# Grace period: newborn pawns can't die in first 300 ticks
+	# Grace period: newborn pawns can't die in first 1500 ticks
 	# This gives them time to find food, build shelter, get oriented
+	# At 100x speed, 1500 ticks = ~15 seconds real time
 	var age: int = maxi(GameManager.tick_count - data.birth_tick, 0)
-	if age < 300:
+	if age < 1500:
 		# During grace: clamp health to minimum 20, hunger to minimum -3
 		if data.health < 20.0:
 			data.health = 20.0
@@ -5237,7 +5238,7 @@ func _check_temperature() -> void:
 	# Grace period: first 500 ticks of life, pawns resist cold
 	# This gives them time to build fire pit and shelter before dying
 	var age: int = maxi(GameManager.tick_count - data.birth_tick, 0)
-	var grace_remaining: float = clampf(1.0 - float(age) / 500.0, 0.0, 1.0)
+	var grace_remaining: float = clampf(1.0 - float(age) / 2500.0, 0.0, 1.0)
 	
 	var temp_change_rate: float = 0.05 if has_shelter else 0.1
 	if grace_remaining > 0.0:

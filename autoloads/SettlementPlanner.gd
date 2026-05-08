@@ -131,16 +131,16 @@ static func _planner_pass_budget_usec() -> int:
 		return 12_000
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 6_000
+		return 4_000
 	if gs >= 50.0:
-		return 7_000
+		return 5_000
 	if gs >= 26.0:
-		return 9_000
+		return 6_000
 	if gs >= 12.0:
-		return 12_000
+		return 8_000
 	if gs >= 3.0:
-		return 16_000
-	return 20_000
+		return 12_000
+	return 16_000
 
 
 static func _planner_open_job_backpressure_limit() -> int:
@@ -810,13 +810,13 @@ static func _planning_region_cap_for_speed() -> int:
 		return PLANNING_REGION_HARD_CAP
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return mini(24, PLANNING_REGION_HARD_CAP)
+		return mini(8, PLANNING_REGION_HARD_CAP)
 	if gs >= 50.0:
-		return mini(32, PLANNING_REGION_HARD_CAP)
+		return mini(12, PLANNING_REGION_HARD_CAP)
 	if gs >= 26.0:
-		return mini(48, PLANNING_REGION_HARD_CAP)
+		return mini(16, PLANNING_REGION_HARD_CAP)
 	if gs >= 12.0:
-		return mini(64, PLANNING_REGION_HARD_CAP)
+		return mini(24, PLANNING_REGION_HARD_CAP)
 	return PLANNING_REGION_HARD_CAP
 
 
@@ -890,8 +890,13 @@ static func _scan_region_feature_summary(
 		var rk2: int = int(regions[j])
 		var rx: int = rk2 & 0xFFFF
 		var ry: int = (rk2 >> 16) & 0xFFFF
+		var tile_count: int = 0
 		for dy in 16:
 			for dx in 16:
+				tile_count += 1
+				# Budget check every 256 tiles to prevent frame spikes
+				if tile_count % 256 == 0 and _budget_exceeded():
+					break
 				var x: int = rx * 16 + dx
 				var y: int = ry * 16 + dy
 				if not data.in_bounds(x, y):

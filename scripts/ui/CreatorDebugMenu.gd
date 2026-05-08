@@ -91,12 +91,12 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 		"heading": "★ AI / Cursor · session snapshot (paste to assistant)",
 		"rows": [
 			{
-				"id": "session_snapshot_guide",
-				"label": "00 · Checklist only — what to capture & order (A→G)",
-			},
-			{
 				"id": "session_snapshot_pack",
 				"label": "00 · One paste pack — checklist + ERROR + 31 + 34 (digest)",
+			},
+			{
+				"id": "session_snapshot_guide",
+				"label": "00 · Checklist only — what to capture & order (A→G)",
 			},
 			{
 				"id": "performance_snapshot",
@@ -107,6 +107,10 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 	{
 		"heading": "Playtest / session truth",
 		"rows": [
+			{
+				"id": "playtest_truth_all",
+				"label": "★ ALL PLAYTEST TRUTH — one paste (ERROR + calendar + sim_diag + colony_sim + civ + backbone + settlements + registry + intent + jobs_stock + trade + world_events + cultural + kernel + harness)",
+			},
 			{"id": "error_report", "label": "ERROR · Report (show all issues)"},
 			{"id": "playtest_bundle", "label": "31 · Playtest bundle (one paste)"},
 			{"id": "soul_bundle", "label": "32 · Soul bundle (1–2 sim-year handoff paste)"},
@@ -126,6 +130,10 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 	{
 		"heading": "Settlements · economy · jobs",
 		"rows": [
+			{
+				"id": "settlements_economy_all",
+				"label": "★ ALL SETTLEMENTS+ECONOMY — one paste (settlements + registry + intent + jobs_stock + trade + world_events + cultural)",
+			},
 			{"id": "settlements", "label": "06 · SettlementMemory (clusters)"},
 			{"id": "registry", "label": "07 · SettlementRegistry"},
 			{"id": "intent", "label": "04 · IntentMemory"},
@@ -138,6 +146,10 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 	{
 		"heading": "World · camera · revival",
 		"rows": [
+			{
+				"id": "world_camera_all",
+				"label": "★ ALL WORLD+CAMERA — one paste (revival + rebirth + wildlife + road + remnant + main_world)",
+			},
 			{"id": "revival", "label": "08 · Camera / revival digest"},
 			{"id": "rebirth", "label": "09 · SettlementRebirth constants"},
 			{"id": "wildlife", "label": "10 · Wildlife snapshot"},
@@ -149,6 +161,10 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 	{
 		"heading": "Memory layers (heavy dumps)",
 		"rows": [
+			{
+				"id": "memory_layers_all",
+				"label": "★ ALL MEMORY LAYERS — one paste (world_memory + history_snip + world_meaning + world_persist + myth + age)",
+			},
 			{"id": "world_memory", "label": "14 · WorldMemory"},
 			{"id": "history_snip", "label": "15 · WorldMemory history export"},
 			{"id": "world_meaning", "label": "16 · WorldMeaning"},
@@ -160,6 +176,10 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 	{
 		"heading": "Pawns · specialization",
 		"rows": [
+			{
+				"id": "pawns_social_all",
+				"label": "★ ALL PAWNS+SOCIAL — one paste (pawns + profession_liking + grudges + gossip + avoidance + life_arcs + knowledge_carriers + myth_formation + record_carriers + memorial + knowledge_system + heelkawnians + communication)",
+			},
 			{"id": "pawns", "label": "22 · All pawns"},
 			{"id": "profession_liking", "label": "26 · Profession liking"},
 			{"id": "grudges", "label": "40 · Grudge system (Phase 5 — grudges, blood feuds)"},
@@ -179,6 +199,10 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 	{
 		"heading": "★ Phase 7: Dynasty & Legacy",
 		"rows": [
+			{
+				"id": "dynasty_legacy_all",
+				"label": "★ ALL DYNASTY+LEGACY — one paste (legacy_dynasty + chronicle_view + settlement_legends + endgame_status)",
+			},
 			{"id": "legacy_dynasty", "label": "70 · Legacy & Dynasty (Phase 7 — milestone tracking)"},
 			{"id": "chronicle_view", "label": "71 · Chronicle View (Phase 5 — settlement history as story)"},
 			{"id": "settlement_legends", "label": "72 · Settlement Legends (Phase 5 — emergent myths & stories)"},
@@ -190,6 +214,10 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 	{
 		"heading": "Stubs · narrative scaffolding",
 		"rows": [
+			{
+				"id": "stubs_all",
+				"label": "★ ALL STUBS — one paste (vision_scope + player_intents + factions + religion_lens)",
+			},
 			{"id": "vision_scope", "label": "27 · Vision scope (SimVision stub)"},
 			{"id": "player_intents", "label": "28 · PlayerIntentQueue"},
 			{"id": "factions", "label": "29 · FactionRegistry"},
@@ -453,6 +481,20 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_factions, "factions")
 		"religion_lens":
 			error_occurred = _safe_report(_report_religion_lens, "religion_lens")
+		"playtest_truth_all":
+			_report_playtest_truth_all()
+		"settlements_economy_all":
+			_report_settlements_economy_all()
+		"world_camera_all":
+			_report_world_camera_all()
+		"memory_layers_all":
+			_report_memory_layers_all()
+		"pawns_social_all":
+			_report_pawns_social_all()
+		"dynasty_legacy_all":
+			_report_dynasty_legacy_all()
+		"stubs_all":
+			_report_stubs_all()
 		"ai_pipeline_health":
 			_report_ai_pipeline_health()
 		"food_pipeline":
@@ -3454,17 +3496,176 @@ func _report_save_dump() -> void:
 		print("  backup_tick=%s" % str(d.get("backup_tick", "?")))
 		print("  backup_time=%s" % str(d.get("backup_time", "?")))
 		print("  record_count=%s" % str(d.get("record_count", "?")))
-		# Print available top-level keys
 		print("  top_level_keys: %s" % str(d.keys()))
-		# Print first 1500 chars of JSON for AI analysis
 		var compact: String = JSON.stringify(d, "\t")
 		if compact.length() > 1500:
 			compact = compact.substr(0, 1500) + "\n... [truncated at 1500 chars]"
 		print("  json_preview:")
 		print(compact)
 	else:
-		# Not a dict, print raw
 		if content.length() > 2000:
 			content = content.substr(0, 2000) + "\n... [truncated]"
 		print(content)
 
+
+# ============================================================
+# SECTION MEGA-BUTTONS — one paste per section
+# ============================================================
+
+func _report_playtest_truth_all() -> void:
+	var tick: int = GameManager.tick_count
+	print("=== HEELKAWN_PLAYTEST_TRUTH_ALL:tick=%d BEGIN ===" % tick)
+	print("")
+	_report_error_issues()
+	print("")
+	_report_calendar(tick)
+	print("")
+	_report_sim_diag()
+	print("")
+	_report_colony_sim()
+	print("")
+	_report_civilization_stage()
+	print("")
+	_report_backbone_status()
+	print("")
+	_report_settlements()
+	print("")
+	_report_registry()
+	print("")
+	_report_intent()
+	print("")
+	_report_jobs_stock()
+	print("")
+	_report_trade()
+	print("")
+	_report_world_events()
+	print("")
+	_report_cultural()
+	print("")
+	_report_kernel()
+	print("")
+	_report_harness()
+	print("")
+	print("=== HEELKAWN_PLAYTEST_TRUTH_ALL:tick=%d END ===" % tick)
+
+
+func _report_settlements_economy_all() -> void:
+	var tick: int = GameManager.tick_count
+	print("=== HEELKAWN_SETTLEMENTS_ECONOMY_ALL:tick=%d BEGIN ===" % tick)
+	print("")
+	_report_settlements()
+	print("")
+	_report_registry()
+	print("")
+	_report_intent()
+	print("")
+	_report_jobs_stock()
+	print("")
+	_report_trade()
+	print("")
+	_report_world_events()
+	print("")
+	_report_cultural()
+	print("")
+	print("=== HEELKAWN_SETTLEMENTS_ECONOMY_ALL:tick=%d END ===" % tick)
+
+
+func _report_world_camera_all() -> void:
+	var tick: int = GameManager.tick_count
+	print("=== HEELKAWN_WORLD_CAMERA_ALL:tick=%d BEGIN ===" % tick)
+	print("")
+	_report_revival()
+	print("")
+	_report_rebirth_consts()
+	print("")
+	_report_wildlife()
+	print("")
+	_report_road()
+	print("")
+	_report_remnant()
+	print("")
+	_report_main_world()
+	print("")
+	print("=== HEELKAWN_WORLD_CAMERA_ALL:tick=%d END ===" % tick)
+
+
+func _report_memory_layers_all() -> void:
+	var tick: int = GameManager.tick_count
+	print("=== HEELKAWN_MEMORY_LAYERS_ALL:tick=%d BEGIN ===" % tick)
+	print("")
+	_report_world_memory()
+	print("")
+	_report_history_snip()
+	print("")
+	_report_world_meaning()
+	print("")
+	_report_world_persist()
+	print("")
+	_report_myth()
+	print("")
+	_report_age()
+	print("")
+	print("=== HEELKAWN_MEMORY_LAYERS_ALL:tick=%d END ===" % tick)
+
+
+func _report_pawns_social_all() -> void:
+	var tick: int = GameManager.tick_count
+	print("=== HEELKAWN_PAWNS_SOCIAL_ALL:tick=%d BEGIN ===" % tick)
+	print("")
+	_report_pawns()
+	print("")
+	_report_profession_liking()
+	print("")
+	_report_grudges()
+	print("")
+	_report_gossip_reputation()
+	print("")
+	_report_avoidance_ai()
+	print("")
+	_report_life_arcs()
+	print("")
+	_report_knowledge_carriers()
+	print("")
+	_report_myth_formation()
+	print("")
+	_report_record_carriers()
+	print("")
+	_report_memorial_system()
+	print("")
+	_report_knowledge_system()
+	print("")
+	_report_heelkawnians()
+	print("")
+	_report_communication()
+	print("")
+	print("=== HEELKAWN_PAWNS_SOCIAL_ALL:tick=%d END ===" % tick)
+
+
+func _report_dynasty_legacy_all() -> void:
+	var tick: int = GameManager.tick_count
+	print("=== HEELKAWN_DYNASTY_LEGACY_ALL:tick=%d BEGIN ===" % tick)
+	print("")
+	_report_legacy_dynasty()
+	print("")
+	_report_chronicle_view()
+	print("")
+	_report_settlement_legends()
+	print("")
+	_report_endgame_status()
+	print("")
+	print("=== HEELKAWN_DYNASTY_LEGACY_ALL:tick=%d END ===" % tick)
+
+
+func _report_stubs_all() -> void:
+	var tick: int = GameManager.tick_count
+	print("=== HEELKAWN_STUBS_ALL:tick=%d BEGIN ===" % tick)
+	print("")
+	_report_vision_scope()
+	print("")
+	_report_player_intents()
+	print("")
+	_report_factions()
+	print("")
+	_report_religion_lens()
+	print("")
+	print("=== HEELKAWN_STUBS_ALL:tick=%d END ===" % tick)

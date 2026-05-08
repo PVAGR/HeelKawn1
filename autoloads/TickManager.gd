@@ -112,36 +112,24 @@ func _process(delta: float) -> void:
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
 
-	# HIGH-SPEED OPTIMIZATION: At >20x speed, use a generous frame budget
-	# to keep simulation throughput high while still yielding to the renderer.
-	# Without any budget, Windows kills the process after ~5s of unresponsiveness.
+	# Frame budget: 50ms at normal speeds, 100ms at high speeds.
+	# 100ms keeps the window responsive (well under Windows' 5s kill threshold)
+	# while allowing ~10 ticks/frame for backlog catch-up at 10ms/tick.
+	var frame_budget_usec: int = _get_frame_budget_usec()
 	if _speed_multiplier > 20.0:
-		# Generous budget: 200ms allows heavy simulation bursts while keeping
-		# the window responsive enough for Windows' "not responding" watchdog.
-		var high_speed_budget_usec: int = 200_000
-		while _accumulated_time >= TICK_STEP and ticks_this_frame < _adaptive_max_ticks_per_frame:
-			_accumulated_time -= TICK_STEP
-			current_tick += 1
-			ticks_this_frame += 1
-			_dispatch_tick(current_tick)
-			# Check time every 8 ticks to reduce overhead at high speeds
-			if ticks_this_frame % 8 == 0:
-				var elapsed: int = Time.get_ticks_usec() - start_time
-				if elapsed > high_speed_budget_usec:
-					break  # Yield to renderer — remaining ticks deferred to next frame
-	else:
-		# Normal speeds: respect frame budget to maintain UI responsiveness
-		while _accumulated_time >= TICK_STEP and ticks_this_frame < _adaptive_max_ticks_per_frame:
-			_accumulated_time -= TICK_STEP
-			current_tick += 1
-			ticks_this_frame += 1
-			_dispatch_tick(current_tick)
+		frame_budget_usec = 100_000  # 100ms — responsive but allows burst catch-up
 
-			# Check time every 4 ticks to reduce overhead
-			if ticks_this_frame % 4 == 0:
-				var elapsed: int = Time.get_ticks_usec() - start_time
-				if elapsed > _get_frame_budget_usec():
-					break  # Yield to next frame — don't pause, just defer remaining ticks
+	while _accumulated_time >= TICK_STEP and ticks_this_frame < _adaptive_max_ticks_per_frame:
+		_accumulated_time -= TICK_STEP
+		current_tick += 1
+		ticks_this_frame += 1
+		_dispatch_tick(current_tick)
+
+		# Check time every 4 ticks to balance overhead vs responsiveness
+		if ticks_this_frame % 4 == 0:
+			var elapsed: int = Time.get_ticks_usec() - start_time
+			if elapsed > frame_budget_usec:
+				break  # Yield to renderer — remaining ticks deferred to next frame
 
 	# SAFETY: If backlog grows dangerously large (>10x cap),
 	# drop the excess to prevent death spiral. The sim will lose

@@ -36,6 +36,17 @@ const PLANNER_WALL_SCAN_CAP: int = 256
 var _last_plan_tick: int = -1_000_000_000
 @onready var SpatialManager = get_node_or_null("/root/SpatialManager") # ARCHITECT T006
 var _plan_rr_cursor: int = 0
+## Budget tracking: set at start of plan(), checked by tile-picking functions
+var _plan_budget_usec: int = 0
+var _plan_start_usec: int = 0
+
+
+## Check if the planner's time budget has been exceeded. Tile-picking functions
+## call this to bail out early instead of running expensive scans past budget.
+func _budget_exceeded() -> bool:
+	if _plan_budget_usec <= 0:
+		return false
+	return Time.get_ticks_usec() - _plan_start_usec >= _plan_budget_usec
 
 
 func plan(world: World, main: Node2D, from_memory_dirty: bool) -> void:
@@ -59,6 +70,8 @@ func plan(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 	var max_settlements: int = _planner_pass_settlement_limit()
 	var budget_usec: int = _planner_pass_budget_usec()
 	var started_usec: int = Time.get_ticks_usec()
+	_plan_budget_usec = budget_usec
+	_plan_start_usec = started_usec
 	var processed: int = 0
 	var scanned: int = 0
 	while scanned < total and processed < max_settlements:
@@ -199,6 +212,8 @@ func _plan_one_settlement_culture(
 	elif intent == IntentMemory.INTENT_ABANDON:
 		order = [1, 3, 7, 10, 2, 4, 5, 6, 8, 9, 11, 12, 13, 14]
 	for rid: int in order:
+		if _budget_exceeded():
+			return
 		match rid:
 			1:
 				var need_bed: bool = pawns > bed_n and pawns < bed_n + 2
@@ -425,12 +440,16 @@ func _pick_farthest_bed_tile(
 	var region_lookup: Dictionary = _regions_lookup(regions)
 	for dy in range(-12, 13):
 		for dx in range(-12, 13):
+			if _budget_exceeded():
+				break
 			var t := Vector2i(center.x + dx, center.y + dy)
 			if not _tile_belongs_to_lookup(t, region_lookup):
 				continue
 			if not bool(main.call("settlement_planner_is_valid_bed_site", t)):
 				continue
 			cands.append(t)
+		if _budget_exceeded():
+			break
 	if cands.is_empty():
 		return Vector2i(-1, -1)
 	_sort_tiles_farthest_first_remnant(cands, center, _world)
@@ -739,12 +758,16 @@ func _pick_nearest_bed_tile(
 	var region_lookup: Dictionary = _regions_lookup(regions)
 	for dy in range(-12, 13):
 		for dx in range(-12, 13):
+			if _budget_exceeded():
+				break
 			var t := Vector2i(center.x + dx, center.y + dy)
 			if not _tile_belongs_to_lookup(t, region_lookup):
 				continue
 			if not bool(main.call("settlement_planner_is_valid_bed_site", t)):
 				continue
 			cands.append(t)
+		if _budget_exceeded():
+			break
 	if cands.is_empty():
 		return Vector2i(-1, -1)
 	_sort_tiles_index_order_remnant(cands, center, _world)
@@ -1114,6 +1137,8 @@ func _pick_door_tile_far_from_center(
 	var region_lookup: Dictionary = _regions_lookup(regions)
 	for dy2 in range(-8, 9):
 		for dx2 in range(-8, 9):
+			if _budget_exceeded():
+				break
 			var t3 := Vector2i(center.x + dx2, center.y + dy2)
 			if not _tile_belongs_to_lookup(t3, region_lookup):
 				continue
@@ -1122,6 +1147,8 @@ func _pick_door_tile_far_from_center(
 			if not bool(main.call("settlement_planner_is_valid_door_site", t3)):
 				continue
 			by_idx[t3.y * WorldData.WIDTH + t3.x] = t3
+		if _budget_exceeded():
+			break
 	if by_idx.is_empty():
 		return Vector2i(-1, -1)
 	var uniq: Array[Vector2i] = []

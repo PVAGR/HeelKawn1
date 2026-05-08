@@ -2662,7 +2662,7 @@ func _mining_react_scan_rows_for_speed() -> int:
 	if gs >= 100.0:
 		return 1
 	if gs >= 50.0:
-		return 2
+		return 1
 	if gs >= 26.0:
 		return 3
 	return MINING_REACT_SCAN_ROWS_PER_STEP
@@ -6038,7 +6038,7 @@ func _mining_react_budget_for_speed() -> int:
 	if gs >= 100.0:
 		return maxi(row_safe_minimum, 256)
 	if gs >= 50.0:
-		return maxi(row_safe_minimum, 384)
+		return maxi(row_safe_minimum, 256)
 	if gs >= 26.0:
 		return maxi(row_safe_minimum, 512)
 	if gs >= 12.0:
@@ -6056,7 +6056,7 @@ func _mining_react_step_skip_for_speed() -> int:
 	if gs >= 100.0:
 		return 3  # Run every 4th tick
 	if gs >= 50.0:
-		return 1  # Run every 2nd tick
+		return 2  # Run every 3rd tick
 	return 0  # Run every tick at normal speed
 
 

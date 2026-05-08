@@ -738,6 +738,22 @@ func bed_count() -> int:
 	return _bed_tiles.size()
 
 
+## Return a Dictionary mapping each non-NONE TileFeature.Type to its count on the map.
+## Used by the F10 debug panel's structure inventory report.
+func get_feature_counts() -> Dictionary:
+	var counts: Dictionary = {}
+	if data == null:
+		return counts
+	for i in range(WorldData.TILE_COUNT):
+		var f: int = data.features[i]
+		if f == TileFeature.Type.NONE:
+			continue
+		if not counts.has(f):
+			counts[f] = 0
+		counts[f] += 1
+	return counts
+
+
 ## Add loose items on the ground at `tile` (merge stacks). Ignores invalid tiles or NONE type.
 func add_ground_item(tile: Vector2i, item_type: int, qty: int) -> void:
 	if data == null or not data.in_bounds(tile.x, tile.y):

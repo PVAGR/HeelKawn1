@@ -72,6 +72,22 @@ func _is_region_known_to_player(region_key: int) -> bool:
 ## Sectioned menu: importance-ish order (playtest first, stubs last).
 const DEBUG_SECTIONS: Array[Dictionary] = [
 	{
+		"heading": "★ AI PIPELINE HEALTH — one button shows everything",
+		"rows": [
+			{
+				"id": "ai_pipeline_health",
+				"label": "80 · AI PIPELINE HEALTH (one paste — food + survival + structures + jobs + pathfinder + resource truth)",
+			},
+			{"id": "food_pipeline", "label": "81 · Food pipeline (eating, hunger, stockpile food)"},
+			{"id": "survival_audit", "label": "82 · Survival audit (deaths, hypothermia, starvation)"},
+			{"id": "structure_inventory", "label": "83 · Structure inventory (beds, walls, hearths, shelters)"},
+			{"id": "job_pipeline", "label": "84 · Job pipeline (posted→claimed→completed→cancelled)"},
+			{"id": "pathfinder_audit", "label": "85 · Pathfinder audit (connectivity, components)"},
+			{"id": "resource_truth_audit", "label": "86 · Resource truth audit (stockpile vs settlement)"},
+			{"id": "save_dump", "label": "87 · Save dump (read latest PlaytestRecorder save)"},
+		],
+	},
+	{
 		"heading": "★ AI / Cursor · session snapshot (paste to assistant)",
 		"rows": [
 			{
@@ -437,6 +453,22 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_factions, "factions")
 		"religion_lens":
 			error_occurred = _safe_report(_report_religion_lens, "religion_lens")
+		"ai_pipeline_health":
+			_report_ai_pipeline_health()
+		"food_pipeline":
+			error_occurred = _safe_report(_report_food_pipeline, "food_pipeline")
+		"survival_audit":
+			error_occurred = _safe_report(_report_survival_audit, "survival_audit")
+		"structure_inventory":
+			error_occurred = _safe_report(_report_structure_inventory, "structure_inventory")
+		"job_pipeline":
+			error_occurred = _safe_report(_report_job_pipeline, "job_pipeline")
+		"pathfinder_audit":
+			error_occurred = _safe_report(_report_pathfinder_audit, "pathfinder_audit")
+		"resource_truth_audit":
+			error_occurred = _safe_report(_report_resource_truth_audit, "resource_truth_audit")
+		"save_dump":
+			_report_save_dump()
 		"playtest_bundle":
 			error_occurred = _safe_report(_report_playtest_bundle, "playtest_bundle")
 		"soul_bundle":
@@ -3044,3 +3076,395 @@ func _toggle_performance_monitor() -> void:
 		else:
 			status_label.text = "Status: OFF (press button to enable)"
 			status_label.modulate = Color(0.7, 0.7, 0.7)
+
+
+# ============================================================
+# AI PIPELINE HEALTH REPORTS (F10 buttons 80-87)
+# ============================================================
+
+func _report_ai_pipeline_health() -> void:
+	var tick: int = GameManager.tick_count
+	print("=== HEELKAWN_AI_PIPELINE_HEALTH:tick=%d BEGIN ===" % tick)
+	print("")
+	_report_food_pipeline()
+	print("")
+	_report_survival_audit()
+	print("")
+	_report_structure_inventory()
+	print("")
+	_report_job_pipeline()
+	print("")
+	_report_pathfinder_audit()
+	print("")
+	_report_resource_truth_audit()
+	print("")
+	# Colony sim pressures (compact)
+	print("[colony_sim_pressures] stance=%s food=%.3f housing=%.3f materials=%.3f haul=%.3f" % [
+		ColonySimServices.get_stance_display(),
+		ColonySimServices.get_food_pressure(),
+		ColonySimServices.get_housing_pressure(),
+		ColonySimServices.get_materials_pressure(),
+		ColonySimServices.get_haul_pressure(),
+	])
+	print("")
+	print("=== HEELKAWN_AI_PIPELINE_HEALTH:tick=%d END ===" % tick)
+
+
+func _report_food_pipeline() -> void:
+	print("[food_pipeline] tick=%d" % GameManager.tick_count)
+	var m: Node2D = _main()
+	if m == null:
+		print("  Main missing")
+		return
+	var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+	if ps == null:
+		print("  PawnSpawner null")
+		return
+
+	# Hunger histogram
+	var bands: Dictionary = {
+		"CRITICAL(0-20)": 0,
+		"HUNGRY(20-40)": 0,
+		"OK(40-60)": 0,
+		"FED(60-80)": 0,
+		"FULL(80-100)": 0,
+	}
+	var eating_count: int = 0
+	var seeking_food_count: int = 0
+	var starving_count: int = 0
+	for p in ps.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var h: float = p.data.hunger
+		if h < 20.0:
+			bands["CRITICAL(0-20)"] += 1
+			starving_count += 1
+		elif h < 40.0:
+			bands["HUNGRY(20-40)"] += 1
+		elif h < 60.0:
+			bands["OK(40-60)"] += 1
+		elif h < 80.0:
+			bands["FED(60-80)"] += 1
+		else:
+			bands["FULL(80-100)"] += 1
+		var state_name: String = p.get_state_name()
+		if state_name == "Eating":
+			eating_count += 1
+		elif state_name == "GoingToEat":
+			seeking_food_count += 1
+
+	print("  hunger_histogram: %s" % str(bands))
+	print("  pawns_eating=%d pawns_seeking_food=%d pawns_starving(h<20)=%d" % [eating_count, seeking_food_count, starving_count])
+
+	# Food in stockpiles by type
+	var food_by_type: Dictionary = {}
+	var total_food: int = 0
+	for z in StockpileManager.zones():
+		if z == null or not is_instance_valid(z):
+			continue
+		for t in z.inventory:
+			if Item.is_food(t):
+				var q: int = int(z.inventory[t])
+				var name: String = Item.name_for(t)
+				if not food_by_type.has(name):
+					food_by_type[name] = 0
+				food_by_type[name] += q
+				total_food += q
+	print("  stockpile_food_total=%d" % total_food)
+	print("  stockpile_food_by_type: %s" % str(food_by_type))
+	print("  StockpileManager.total_food()=%d has_any_food=%s" % [
+		StockpileManager.total_food(),
+		str(StockpileManager.has_any_food()),
+	])
+
+	# Food being carried by pawns
+	var food_in_hand: int = 0
+	for p in ps.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		if p.data.is_carrying() and Item.is_food(p.data.carrying):
+			food_in_hand += int(p.data.carrying_qty)
+	print("  food_in_pawn_hands=%d" % food_in_hand)
+
+
+func _report_survival_audit() -> void:
+	print("[survival_audit] tick=%d" % GameManager.tick_count)
+	var m: Node2D = _main()
+	if m == null:
+		print("  Main missing")
+		return
+
+	# Death causes from WorldMemory
+	var death_by_cause: Dictionary = {}
+	var recent_deaths: Array = []
+	var events: Array[Dictionary] = WorldMemory.get_events()
+	for e in events:
+		if str(e.get("type", "")) == "pawn_death":
+			var cause: String = str(e.get("cause", "unknown"))
+			if not death_by_cause.has(cause):
+				death_by_cause[cause] = 0
+			death_by_cause[cause] += 1
+			recent_deaths.append(e)
+	print("  deaths_by_cause: %s" % str(death_by_cause))
+	var total_deaths: int = 0
+	for cause in death_by_cause:
+		total_deaths += int(death_by_cause[cause])
+	print("  total_deaths=%d" % total_deaths)
+
+	# Recent deaths (last 10)
+	var shown: int = 0
+	for i in range(recent_deaths.size() - 1, -1, -1):
+		if shown >= 10:
+			break
+		var d: Dictionary = recent_deaths[i]
+		print("  recent_death: %s (cause=%s tick=%d)" % [
+			str(d.get("pawn_name", "?")),
+			str(d.get("cause", "?")),
+			int(d.get("tick", -1)),
+		])
+		shown += 1
+
+	# Warmth coverage
+	var w: World = m.get_node_or_null("WorldViewport/World") as World
+	var beds: int = 0
+	var fire_pits: int = 0
+	if w != null:
+		beds = w.bed_count()
+		var fc: Dictionary = w.get_feature_counts()
+		fire_pits = int(fc.get(TileFeature.Type.FIRE_PIT, 0))
+	var pawn_count: int = _get_playtest_pawn_count()
+	print("  warmth: beds=%d fire_pits=%d living_pawns=%d" % [beds, fire_pits, pawn_count])
+	if pawn_count > 0:
+		print("  bed_ratio=%.2f fire_pit_ratio=%.2f" % [
+			float(beds) / float(pawn_count),
+			float(fire_pits) / float(pawn_count),
+		])
+
+
+func _report_structure_inventory() -> void:
+	print("[structure_inventory] tick=%d" % GameManager.tick_count)
+	var m: Node2D = _main()
+	if m == null:
+		print("  Main missing")
+		return
+	var w: World = m.get_node_or_null("WorldViewport/World") as World
+	if w == null:
+		print("  World missing")
+		return
+	var counts: Dictionary = w.get_feature_counts()
+	var keys: Array = counts.keys()
+	keys.sort()
+	var total_structures: int = 0
+	for f in keys:
+		var c: int = int(counts[f])
+		total_structures += c
+		print("  %s=%d" % [TileFeature.name_for(int(f)), c])
+	print("  total_structures=%d" % total_structures)
+
+
+func _report_job_pipeline() -> void:
+	print("[job_pipeline] tick=%d" % GameManager.tick_count)
+	var stats: Dictionary = JobManager.stats()
+	print("  flow: posted=%d claimed=%d completed=%d cancelled=%d" % [
+		int(stats.get("posted", 0)),
+		int(stats.get("claimed", 0)),
+		int(stats.get("completed", 0)),
+		int(stats.get("cancelled", 0)),
+	])
+	print("  open=%d claimed=%d" % [JobManager.open_count(), JobManager.claimed_count()])
+
+	# Active jobs by type (open + claimed)
+	var active_by_type: Dictionary = {}
+	var all_jobs: Array = JobManager.get_active_jobs_union()
+	for job_any in all_jobs:
+		if job_any == null or not is_instance_valid(job_any):
+			continue
+		var j: Job = job_any as Job
+		var tname: String = Job.describe_type(j.type)
+		if not active_by_type.has(tname):
+			active_by_type[tname] = 0
+		active_by_type[tname] += 1
+	if active_by_type.size() > 0:
+		print("  active_by_type: %s" % str(active_by_type))
+
+	# Stuck jobs: claimed but work_ticks_done == 0 (pawn walking but not arrived)
+	var stuck_walking: int = 0
+	var stuck_working: int = 0
+	for job_any in all_jobs:
+		if job_any == null or not is_instance_valid(job_any):
+			continue
+		var j: Job = job_any as Job
+		if j.state == Job.State.CLAIMED:
+			if j.work_ticks_done == 0:
+				stuck_walking += 1
+			elif j.work_ticks_done >= j.work_ticks_needed:
+				stuck_working += 1  # should be completed but isn't
+	print("  stuck_walking(claimed+0_work_done)=%d stuck_working(work_done>=needed)=%d" % [stuck_walking, stuck_working])
+
+
+func _report_pathfinder_audit() -> void:
+	print("[pathfinder_audit] tick=%d" % GameManager.tick_count)
+	var m: Node2D = _main()
+	if m == null:
+		print("  Main missing")
+		return
+	var w: World = m.get_node_or_null("WorldViewport/World") as World
+	if w == null:
+		print("  World missing")
+		return
+	var pf: PathFinder = w.pathfinder
+	if pf == null:
+		print("  PathFinder missing")
+		return
+	var ps: PawnSpawner = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+	if ps == null:
+		print("  PawnSpawner missing")
+		return
+
+	# Pawn components
+	var pawn_components: Dictionary = {}  # component_id -> count
+	var stranded_pawns: int = 0
+	var stockpile_components: Dictionary = {}  # component_id -> count of zones
+
+	# Stockpile components
+	var zones: Array = StockpileManager.zones()
+	var stockpile_comp_set: Dictionary = {}
+	for z in zones:
+		if z == null or not is_instance_valid(z):
+			continue
+		var near_tile: Vector2i = z.rect.position
+		if pf != null:
+			var comp: int = pf.component_of(near_tile)
+			if comp >= 0:
+				if not stockpile_components.has(comp):
+					stockpile_components[comp] = 0
+				stockpile_components[comp] += 1
+				stockpile_comp_set[comp] = true
+
+	# Pawn components
+	for p in ps.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var tile: Vector2i = p.data.tile_pos
+		var comp: int = pf.component_of(tile)
+		if comp < 0:
+			stranded_pawns += 1
+			continue
+		if not pawn_components.has(comp):
+			pawn_components[comp] = 0
+		pawn_components[comp] += 1
+		# Check if this pawn's component has any stockpile
+		if not stockpile_comp_set.has(comp):
+			stranded_pawns += 1
+
+	var unique_components: int = pawn_components.size()
+	print("  unique_pawn_components=%d" % unique_components)
+	print("  pawn_components: %s" % str(pawn_components))
+	print("  stockpile_components: %s" % str(stockpile_components))
+	print("  stranded_pawns(no_stockpile_in_component)=%d" % stranded_pawns)
+	print("  largest_component=%d" % pf.largest_component_id())
+
+
+func _report_resource_truth_audit() -> void:
+	print("[resource_truth_audit] tick=%d" % GameManager.tick_count)
+	# Global stockpile truth
+	var snap: Dictionary = StockpileManager.labor_pressure_stock_snapshot()
+	print("  StockpileManager: food=%d wood=%d stone=%d" % [
+		int(snap.get("food", 0)),
+		int(snap.get("wood", 0)),
+		int(snap.get("stone", 0)),
+	])
+
+	# Per-settlement resource truth
+	var settlements: Array = SettlementMemory.settlements
+	for i in range(settlements.size()):
+		var s_any: Variant = settlements[i]
+		if not (s_any is Dictionary):
+			continue
+		var st: Dictionary = s_any as Dictionary
+		var center: int = int(st.get("center_region", -1))
+		var rt: Variant = st.get("resource_truth")
+		var rb: Variant = st.get("resource_balance")
+		if rt is Dictionary:
+			print("  settlement[%d] center=%d resource_truth: food=%d wood=%d stone=%d total=%d" % [
+				i, center,
+				int(rt.get("stock_food", -1)),
+				int(rt.get("stock_wood", -1)),
+				int(rt.get("stock_stone", -1)),
+				int(rt.get("total_stock_units", -1)),
+			])
+		else:
+			print("  settlement[%d] center=%d resource_truth: MISSING" % [i, center])
+		if rb is Dictionary:
+			print("  settlement[%d] center=%d resource_balance: food=%s wood=%s stone=%s source=%s" % [
+				i, center,
+				str(rb.get("food_balance", "?")),
+				str(rb.get("wood_balance", "?")),
+				str(rb.get("stone_balance", "?")),
+				str(rb.get("source", "?")),
+			])
+		else:
+			print("  settlement[%d] center=%d resource_balance: MISSING" % [i, center])
+
+
+func _report_save_dump() -> void:
+	print("[save_dump] tick=%d" % GameManager.tick_count)
+	var dir: DirAccess = DirAccess.open("user://logs/playtest/")
+	if dir == null:
+		print("  No playtest directory found")
+		return
+
+	# Find latest backup file (files are directly in playtest/ dir)
+	var files: PackedStringArray = dir.get_files()
+	var backup_files: PackedStringArray = PackedStringArray()
+	for f in files:
+		if f.contains("backup") and f.ends_with(".json"):
+			backup_files.append(f)
+	if backup_files.is_empty():
+		print("  No backup files found")
+		return
+	backup_files.sort()
+	var latest_backup: String = backup_files[backup_files.size() - 1]
+	print("  latest_backup=%s" % latest_backup)
+
+	# Read and parse
+	var path: String = "user://logs/playtest/%s" % latest_backup
+	var f_handle: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if f_handle == null:
+		print("  Cannot open file: %s" % path)
+		return
+	var content: String = f_handle.get_as_text()
+	f_handle.close()
+
+	# Parse JSON and extract key fields
+	var json: JSON = JSON.new()
+	var err: Error = json.parse(content)
+	if err != OK:
+		print("  JSON parse error: %s" % json.get_error_message())
+		# Print first 2000 chars raw
+		if content.length() > 2000:
+			content = content.substr(0, 2000) + "\n... [truncated]"
+		print(content)
+		return
+
+	var data: Variant = json.data
+	if data is Dictionary:
+		var d: Dictionary = data as Dictionary
+		print("  session_id=%s" % str(d.get("session_id", "?")))
+		print("  backup_tick=%s" % str(d.get("backup_tick", "?")))
+		print("  backup_time=%s" % str(d.get("backup_time", "?")))
+		print("  record_count=%s" % str(d.get("record_count", "?")))
+		# Print available top-level keys
+		print("  top_level_keys: %s" % str(d.keys()))
+		# Print first 1500 chars of JSON for AI analysis
+		var compact: String = JSON.stringify(d, "\t")
+		if compact.length() > 1500:
+			compact = compact.substr(0, 1500) + "\n... [truncated at 1500 chars]"
+		print("  json_preview:")
+		print(compact)
+	else:
+		# Not a dict, print raw
+		if content.length() > 2000:
+			content = content.substr(0, 2000) + "\n... [truncated]"
+		print(content)
+

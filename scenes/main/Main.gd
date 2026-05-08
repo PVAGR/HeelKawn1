@@ -2233,7 +2233,7 @@ func _seed_initial_fire_pits(main_component: int) -> void:
 				var feat: int = int(_world.data.get_feature(t.x, t.y))
 				if feat != TileFeature.Type.NONE and feat != TileFeature.Type.TREE:
 					continue
-				_world.data.set_feature(t.x, t.y, TileFeature.Type.FIRE_PIT)
+				_world.data.features[_world.data.index(t.x, t.y)] = TileFeature.Type.FIRE_PIT
 				placed += 1
 			if placed >= 3:
 				break
@@ -2256,7 +2256,7 @@ func _seed_initial_fire_pits(main_component: int) -> void:
 				var feat: int = int(_world.data.get_feature(t.x, t.y))
 				if feat != TileFeature.Type.NONE and feat != TileFeature.Type.TREE:
 					continue
-				_world.data.set_feature(t.x, t.y, TileFeature.Type.BED)
+				_world.data.features[_world.data.index(t.x, t.y)] = TileFeature.Type.BED
 				placed += 1
 			if placed >= 5:
 				break

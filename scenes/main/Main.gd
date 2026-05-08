@@ -2215,7 +2215,7 @@ func _seed_initial_fire_pits(main_component: int) -> void:
 		return
 	if _world.stockpile == null:
 		return
-	var center: Vector2i = _world.stockpile.rect_position
+	var center: Vector2i = _world.stockpile.rect.position
 	# Place 3 fire pits near the stockpile
 	var placed: int = 0
 	for r in range(2, 8):

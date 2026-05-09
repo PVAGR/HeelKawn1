@@ -382,7 +382,7 @@ func _spread_gossip_at_memorial(pawn_ids: Array[int], memorial: Dictionary, tick
 			var pawn_b: int = pawn_ids[j]
 			
 			# Share gossip between these pawns with enhanced chance
-			if randf() < enhanced_share_chance:
+			if WorldRNG != null and WorldRNG.chance_for(StringName("gossip_memorial:%d:%d:%d" % [pawn_a, pawn_b, tick]), enhanced_share_chance, 1.0):
 				_share_gossip_between(pawn_a, pawn_b, tick)
 
 
@@ -390,38 +390,44 @@ func _spread_gossip_at_memorial(pawn_ids: Array[int], memorial: Dictionary, tick
 func _share_gossip_between(pawn_a: int, pawn_b: int, tick: int) -> void:
 	var gossip_a = _get_gossip_for_pawn(pawn_a)
 	var gossip_b = _get_gossip_for_pawn(pawn_b)
-	
+
 	if gossip_a == null or gossip_b == null:
 		return
-	
-	# Share a random piece of gossip from A to B
-	var a_gossip: Array = gossip_a.get_stored_gossip()
-	if not a_gossip.is_empty():
-		var random_gossip: Dictionary = a_gossip[randi() % a_gossip.size()]
+
+	# Guard: ensure get_stored_gossip exists (API compatibility)
+	if not gossip_a.has_method("get_stored_gossip") or not gossip_b.has_method("get_stored_gossip"):
+		return
+
+	# Share a piece of gossip from A to B
+	var a_gossip: Array[Dictionary] = gossip_a.get_stored_gossip()
+	if a_gossip.size() > 0:
+		var idx: int = abs(WorldRNG.index_for(StringName("gossip_share_a:%d:%d" % [pawn_a, pawn_b]), a_gossip.size())) if WorldRNG != null else 0
+		var chosen: Dictionary = a_gossip[idx]
 		gossip_b.receive_gossip(
-			random_gossip.get("content", ""),
+			chosen.get("content", ""),
 			pawn_a,
-			random_gossip.get("original_source", pawn_a),
-			random_gossip.get("accuracy", 0.8),
+			chosen.get("original_source", pawn_a),
+			chosen.get("accuracy", 0.8),
 			1.0,  # trust_strength
-			random_gossip.get("hot", false),
-			random_gossip.get("importance", 0.5),
-			random_gossip.get("type", "general")
+			chosen.get("hot", false),
+			chosen.get("importance", 0.5),
+			chosen.get("type", "general")
 		)
-	
+
 	# Share from B to A
-	var b_gossip: Array = gossip_b.get_stored_gossip()
-	if not b_gossip.is_empty():
-		var random_gossip: Dictionary = b_gossip[randi() % b_gossip.size()]
+	var b_gossip: Array[Dictionary] = gossip_b.get_stored_gossip()
+	if b_gossip.size() > 0:
+		var idx: int = abs(WorldRNG.index_for(StringName("gossip_share_b:%d:%d" % [pawn_a, pawn_b]), b_gossip.size())) if WorldRNG != null else 0
+		var chosen: Dictionary = b_gossip[idx]
 		gossip_a.receive_gossip(
-			random_gossip.get("content", ""),
+			chosen.get("content", ""),
 			pawn_b,
-			random_gossip.get("original_source", pawn_b),
-			random_gossip.get("accuracy", 0.8),
+			chosen.get("original_source", pawn_b),
+			chosen.get("accuracy", 0.8),
 			1.0,  # trust_strength
-			random_gossip.get("hot", false),
-			random_gossip.get("importance", 0.5),
-			random_gossip.get("type", "general")
+			chosen.get("hot", false),
+			chosen.get("importance", 0.5),
+			chosen.get("type", "general")
 		)
 
 

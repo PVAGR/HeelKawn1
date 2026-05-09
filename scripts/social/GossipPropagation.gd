@@ -285,3 +285,12 @@ func load_state(state: Dictionary) -> void:
 
 func gossip_count() -> int:
 	return _received_gossip.size()
+
+
+## Return all stored gossip entries (used by GossipManager memorial sharing).
+func get_stored_gossip() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for g in _received_gossip:
+		if g is Dictionary:
+			result.append(g as Dictionary)
+	return result

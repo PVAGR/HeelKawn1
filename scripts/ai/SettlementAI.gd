@@ -294,7 +294,7 @@ func propose_collective_goal(goal_type: String, proposer_id: int, base_priority:
 	var neural_priority_modifier = _get_neural_priority_modifier(goal_type)
 	var adjusted_priority = base_priority + neural_priority_modifier
 	
-	var goal = CollectiveGoal.new(goal_type, proposer_id, adjusted_priority)
+	var goal = CollectiveGoal.new(goal_type, adjusted_priority)
 	goal.supporters.append(proposer_id)
 	
 	# Check if goal aligns with development focus

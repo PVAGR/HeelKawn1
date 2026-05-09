@@ -2855,12 +2855,18 @@ func _flush_world_memory_derivatives() -> void:
 	_world_memory_derivative_flush_queued = false
 	if not is_instance_valid(_world) or not WorldMemory.consume_dirty():
 		return
+	var flush_start: int = Time.get_ticks_usec()
+	const FLUSH_BUDGET_USEC: int = 4_000  # 4ms max for derivative flush
 	WorldMeaning.recompute()
 	WorldPersistence.recompute()
+	if Time.get_ticks_usec() - flush_start > FLUSH_BUDGET_USEC:
+		return
 	CulturalMemory.recompute(_world)
 	MythMemory.recompute(_world)
 	SacredMemory.sync_permanent_ruins_from_settlements()
 	IntentMemory.recompute(_world)
+	if Time.get_ticks_usec() - flush_start > FLUSH_BUDGET_USEC:
+		return
 	_run_heavy_stack_refresh_once_per_tick(func() -> void:
 		if is_instance_valid(_world):
 			_world.refresh_terrain_scar_tint()
@@ -2869,9 +2875,11 @@ func _flush_world_memory_derivatives() -> void:
 	)
 	var heavy_planner_interval: int = _heavy_planner_interval_for_speed()
 	if GameManager.tick_count % heavy_planner_interval == 0:
-		SettlementPlanner.plan(_world, self, true)
+		if Time.get_ticks_usec() - flush_start <= FLUSH_BUDGET_USEC:
+			SettlementPlanner.plan(_world, self, true)
 	if (GameManager.tick_count + maxi(1, heavy_planner_interval / 3)) % heavy_planner_interval == 0:
-		TradePlanner.plan(_world, self, true)
+		if Time.get_ticks_usec() - flush_start <= FLUSH_BUDGET_USEC:
+			TradePlanner.plan(_world, self, true)
 	RoadMemory.flush_dirty_tiles(_world)
 
 
@@ -5419,8 +5427,8 @@ func _seed_construction_jobs() -> void:
 						local_pop += 1
 		if local_pop < 2:
 			continue
-		# Scan local features (beds, walls, hearths, etc.)
-		var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 12)
+		# Scan local features (beds, walls, hearths, etc.) — reduced radius for budget
+		var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 6)
 		var beds: int = int(features.get("bed", 0))
 		var walls: int = int(features.get("wall", 0))
 		var doors: int = int(features.get("door", 0))
@@ -6097,13 +6105,13 @@ func _react_to_mining_progress_step() -> bool:
 	var y_end: int = mini(WorldData.HEIGHT, y_start + rows_step)
 	for y in range(y_start, y_end):
 		for x in range(WorldData.WIDTH):
-			# OPTIMIZATION: Check frame budget every 128 tiles
-			if _mining_react_work_used % 128 == 0:
+			# OPTIMIZATION: Check frame budget every 32 tiles
+			if _mining_react_work_used % 32 == 0:
 				if Time.get_ticks_usec() - mining_start > MINING_BUDGET_USEC:
 					_mining_react_in_progress = true
 					_mining_react_scan_y_cursor = y
 					return false  # Defer rest to next tick
-			
+
 			# Budgeting: count a cheap unit per tile checked. If we exceed
 			# the per-tick budget, pause the scan and continue next tick.
 			_mining_react_work_used += 1
@@ -6117,7 +6125,12 @@ func _react_to_mining_progress_step() -> bool:
 			var ore_tile := Vector2i(x, y)
 			if JobManager.has_job_at(ore_tile):
 				continue
+			# find_adjacent_passable is expensive — check budget after each call
 			var work_tile: Vector2i = pf.find_adjacent_passable(ore_tile)
+			if Time.get_ticks_usec() - mining_start > MINING_BUDGET_USEC:
+				_mining_react_in_progress = true
+				_mining_react_scan_y_cursor = y
+				return false
 			if work_tile.x < 0 or pf.component_of(work_tile) != main_component:
 				continue
 			if not _can_post_job_at(ore_tile):
@@ -6185,16 +6198,12 @@ func _mining_react_budget_for_speed() -> int:
 	if GameManager == null:
 		return maxi(row_safe_minimum, MINING_REACT_WORK_BUDGET_PER_TICK)
 	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return maxi(row_safe_minimum, 128)
-	if gs >= 50.0:
-		return maxi(row_safe_minimum, 128)
 	if gs >= 26.0:
-		return maxi(row_safe_minimum, 256)
+		return 64  # ~1/4 row at high speed — keeps frame budget
 	if gs >= 12.0:
-		return maxi(row_safe_minimum, 384)
+		return 128
 	if gs >= 3.0:
-		return maxi(row_safe_minimum, 512)
+		return 256
 	return maxi(row_safe_minimum, MINING_REACT_WORK_BUDGET_PER_TICK)
 
 
@@ -6268,8 +6277,15 @@ func _rebuild_tunnel_frontier_cache(main_component: int) -> void:
 	var visited: PackedByteArray = PackedByteArray()
 	visited.resize(WorldData.TILE_COUNT)
 	var queue: Array[Vector2i] = []
+	var rebuild_start: int = Time.get_ticks_usec()
+	const REBUILD_BUDGET_USEC: int = 2_000  # 2ms max for cache rebuild
 	for y in range(height):
 		for x in range(width):
+			# Budget check: don't let cache rebuild monopolize the frame
+			if (y * width + x) % 2048 == 0:
+				if Time.get_ticks_usec() - rebuild_start > REBUILD_BUDGET_USEC:
+					_tunnel_frontier_cache_built_tick = GameManager.tick_count
+					return  # Partial rebuild — will retry next refresh
 			var idx: int = y * width + x
 			if _world.data.features[idx] != TileFeature.Type.ORE_VEIN:
 				continue

@@ -4,6 +4,14 @@ class_name SettlementAI
 
 const _WM = preload("res://autoloads/WorldMemory.gd")
 
+## Safe leader or first resident, or -1 if no residents
+func _leader_or_first_resident() -> int:
+	if leader_id >= 0:
+		return leader_id
+	if not resident_agents.is_empty():
+		return resident_agents[0]
+	return -1
+
 # Autoload references (accessed via Engine.get_singleton or get_node)
 var CollapseSystem = null
 var AuthoritySystem = null
@@ -428,8 +436,8 @@ func enter_emergency_mode(reason: String) -> void:
 		i -= 1
 	
 	# Propose emergency goals
-	propose_collective_goal("gather_food", leader_id if leader_id >= 0 else resident_agents[0], 95)
-	propose_collective_goal("defend_settlement", leader_id if leader_id >= 0 else resident_agents[0], 90)
+	propose_collective_goal("gather_food", _leader_or_first_resident(), 95)
+	propose_collective_goal("defend_settlement", _leader_or_first_resident(), 90)
 	
 	historical_events.append("Emergency mode activated: %s" % reason)
 
@@ -456,8 +464,8 @@ func handle_collapse_warning_event(event_data: Dictionary) -> void:
 		enter_emergency_mode("world_collapse_warning")
 	
 	# Propose defensive goals
-	propose_collective_goal("defend_settlement", leader_id if leader_id >= 0 else resident_agents[0], 90)
-	propose_collective_goal("gather_food", leader_id if leader_id >= 0 else resident_agents[0], 85)
+	propose_collective_goal("defend_settlement", _leader_or_first_resident(), 90)
+	propose_collective_goal("gather_food", _leader_or_first_resident(), 85)
 	
 	historical_events.append("Responded to collapse warning: risk=%.2f, trust=%.2f" % [collapse_risk, trust_level])
 
@@ -473,8 +481,8 @@ func handle_knowledge_crisis_event(event_data: Dictionary) -> void:
 		development_focus = DevelopmentFocus.KNOWLEDGE
 	
 	# Propose knowledge goals
-	propose_collective_goal("preserve_knowledge", leader_id if leader_id >= 0 else resident_agents[0], 80)
-	propose_collective_goal("build_library", leader_id if leader_id >= 0 else resident_agents[0], 75)
+	propose_collective_goal("preserve_knowledge", _leader_or_first_resident(), 80)
+	propose_collective_goal("build_library", _leader_or_first_resident(), 75)
 	
 	historical_events.append("Responded to knowledge crisis: scarcity=%.2f, teaching=%.2f" % [knowledge_scarcity, teaching_activity])
 
@@ -489,7 +497,7 @@ func handle_authority_vacuum_event(event_data: Dictionary) -> void:
 		_trigger_emergency_leadership_selection()
 	
 	# Propose stability goals
-	propose_collective_goal("defend_settlement", leader_id if leader_id >= 0 else resident_agents[0], 85)
+	propose_collective_goal("defend_settlement", _leader_or_first_resident(), 85)
 	
 	historical_events.append("Responded to authority vacuum: civil=%.2f, military=%.2f" % [civil_auth, military_auth])
 
@@ -501,11 +509,11 @@ func handle_historical_discovery_event(event_data: Dictionary) -> void:
 	
 	# Propose memorial or exploration goals
 	if development_focus == DevelopmentFocus.ARTISTIC:
-		propose_collective_goal("build_monument", leader_id if leader_id >= 0 else resident_agents[0], 70)
+		propose_collective_goal("build_monument", _leader_or_first_resident(), 70)
 	elif development_focus == DevelopmentFocus.KNOWLEDGE:
-		propose_collective_goal("preserve_knowledge", leader_id if leader_id >= 0 else resident_agents[0], 70)
+		propose_collective_goal("preserve_knowledge", _leader_or_first_resident(), 70)
 	else:
-		propose_collective_goal("explore_territory", leader_id if leader_id >= 0 else resident_agents[0], 65)
+		propose_collective_goal("explore_territory", _leader_or_first_resident(), 65)
 	
 	historical_events.append("Responded to historical discovery: layering=%.2f, ruins=%.2f" % [historical_layering, ruin_density])
 
@@ -520,7 +528,7 @@ func handle_environmental_degradation_event(event_data: Dictionary) -> void:
 	development_focus = DevelopmentFocus.SURVIVAL
 	
 	# Propose resource conservation goals
-	var proposer_env: int = leader_id if leader_id >= 0 else (resident_agents[0] if not resident_agents.is_empty() else -1)
+	var proposer_env: int = _leader_or_first_resident()
 	if proposer_env >= 0:
 		propose_collective_goal("resource_conservation", proposer_env, 90)
 	
@@ -537,7 +545,7 @@ func handle_economic_boom_event(event_data: Dictionary) -> void:
 		development_focus = DevelopmentFocus.EXPANSION
 	
 	# Propose investment goals
-	var proposer_boom: int = leader_id if leader_id >= 0 else (resident_agents[0] if not resident_agents.is_empty() else -1)
+	var proposer_boom: int = _leader_or_first_resident()
 	if proposer_boom >= 0:
 		propose_collective_goal("infrastructure_investment", proposer_boom, 80)
 	
@@ -554,7 +562,7 @@ func handle_market_crash_event(event_data: Dictionary) -> void:
 	development_focus = DevelopmentFocus.SURVIVAL
 	
 	# Propose economic recovery goals
-	var proposer_crash: int = leader_id if leader_id >= 0 else (resident_agents[0] if not resident_agents.is_empty() else -1)
+	var proposer_crash: int = _leader_or_first_resident()
 	if proposer_crash >= 0:
 		propose_collective_goal("economic_recovery", proposer_crash, 90)
 	
@@ -567,7 +575,7 @@ func handle_religious_schism_event(event_data: Dictionary) -> void:
 	var religious_fervor = event_data.get("religious_fervor", 0.0)
 	
 	# Propose unity goals
-	var proposer_schism: int = leader_id if leader_id >= 0 else (resident_agents[0] if not resident_agents.is_empty() else -1)
+	var proposer_schism: int = _leader_or_first_resident()
 	if proposer_schism >= 0:
 		propose_collective_goal("religious_unity", proposer_schism, 80)
 	
@@ -586,7 +594,7 @@ func handle_religious_conversion_event(event_data: Dictionary) -> void:
 	religious_fervor = min(religious_fervor + 0.05, 1.0)
 	
 	# Propose integration goals
-	var proposer_convert: int = leader_id if leader_id >= 0 else (resident_agents[0] if not resident_agents.is_empty() else -1)
+	var proposer_convert: int = _leader_or_first_resident()
 	if proposer_convert >= 0:
 		propose_collective_goal("religious_integration", proposer_convert, 70)
 	
@@ -1016,7 +1024,7 @@ func _propose_automatic_goals() -> void:
 		# Higher priority in scarred regions (survival focus)
 		if death_density in ["medium", "high"]:
 			priority = 90
-		propose_collective_goal("gather_food", leader_id if leader_id >= 0 else resident_agents[0], priority)
+		propose_collective_goal("gather_food", _leader_or_first_resident(), priority)
 	
 	# Propose shelter building if population growing
 	if population > 10 and wood_stock > 5.0:
@@ -1024,7 +1032,7 @@ func _propose_automatic_goals() -> void:
 		# Higher priority in grave regions (need protection)
 		if meaning_label == "grave":
 			priority = 85
-		propose_collective_goal("build_shelter", leader_id if leader_id >= 0 else resident_agents[0], priority)
+		propose_collective_goal("build_shelter", _leader_or_first_resident(), priority)
 	
 	# Propose research if knowledge-focused
 	if development_focus == DevelopmentFocus.KNOWLEDGE and population > 15:
@@ -1038,11 +1046,11 @@ func _propose_automatic_goals() -> void:
 			var teaching_weight: float = WorldAI.get_teaching_priority_weight()
 			priority = int(priority * (1.0 + teaching_weight))
 		
-		propose_collective_goal("research_technology", leader_id if leader_id >= 0 else resident_agents[0], priority)
+		propose_collective_goal("research_technology", _leader_or_first_resident(), priority)
 	
 	# Propose memorial/remembering in scarred regions
 	if death_density in ["medium", "high"] and population > 5:
-		propose_collective_goal("honor_dead", leader_id if leader_id >= 0 else resident_agents[0], 65)
+		propose_collective_goal("honor_dead", _leader_or_first_resident(), 65)
 
 # === Public Interface ===
 

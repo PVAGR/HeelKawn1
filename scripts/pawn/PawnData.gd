@@ -28,6 +28,16 @@ const MISSING_REQUIRED_TOOL_WORK_SPEED_MULT: float = 0.5
 ## passes lvl 1 in ~one job cycle and reaches lvl 5 over a few in-game days.
 const XP_PER_WORK_TICK: float = 1.5
 
+## Likes/dislikes categories. Each pawn gets 2-4 likes and 1-3 dislikes at birth.
+const LIKE_CATEGORIES: PackedStringArray = [
+	"farming", "building", "mining", "hunting", "crafting",
+	"trading", "teaching", "exploring", "socializing", "resting",
+]
+const LIKE_THRESHOLD: float = 0.6   # >0.6 = liked
+const DISLIKE_THRESHOLD: float = 0.4  # <0.4 = disliked
+const LIKE_MUTATION_CHANCE: float = 0.2  # 20% chance per value to mutate on inheritance
+const PROFESSION_ASSIGN_MIN_TICKS: int = 100  # Must do 100+ ticks in a category before earning profession
+
 ## Cumulative "liking" (1..LIKING_MAX) per interest lane. Grows only from
 ## deterministic work and action-skill gains — no RNG in history. Lanes mix
 ## into the five job-affinity floats (birth baseline + earned blend).
@@ -249,6 +259,17 @@ var equipped_tool: int = 0  # Item.Type.NONE
 ## Current durability of the equipped tool (0 = broken).
 var equipped_tool_durability: int = 0
 
+## Equipment system: 5 gear slots (Weapon, Armor, Tool, Accessory, Offhand)
+## Each slot holds a GearItem or null. All gear is crafted by HeelKawnians.
+## Using untyped Variant for GearItem due to class_name resolution order.
+var equipped_gear: Dictionary = {
+	0: null,  # GearItem.Slot.WEAPON
+	1: null,  # GearItem.Slot.ARMOR
+	2: null,  # GearItem.Slot.TOOL
+	3: null,  # GearItem.Slot.ACCESSORY
+	4: null,  # GearItem.Slot.OFFHAND
+}
+
 ## Skill XP per Skill enum value. Defaults to 0 for everything; pawns earn it
 ## by working. Stored as Dictionary so save/load is trivial and so we don't
 ## have to enumerate skills here.
@@ -281,6 +302,13 @@ var birth_settlement: int = -1
 var parent_a_id: int = -1
 var parent_b_id: int = -1
 var children_count: int = 0
+## Likes/dislikes: randomly assigned at birth, inherited by children with mutation.
+## Key = category string, value = float 0.0-1.0 (>0.6 = liked, <0.4 = disliked).
+var likes: Dictionary = {}
+var dislikes: Dictionary = {}
+## Job tick tracking: how many ticks this pawn has spent on each job category.
+## Key = category string, value = int tick count.
+var job_ticks_by_category: Dictionary = {}
 var influence: float = 0.0
 var military_rank_legacy: String = "grunt"  # Legacy string rank, replaced by int military_rank in Stage 6
 var cohort_anchor_id: int = -1
@@ -386,6 +414,7 @@ func _init() -> void:
 	birth_tick = int(GameManager.tick_count) if GameManager != null else 0
 	initialize_affinities(birth_tick, -1, -1)
 	_initialize_personality(birth_tick, parent_a_id, parent_b_id)
+	_initialize_likes_dislikes(birth_tick, parent_a_id, parent_b_id)
 	_initialize_neural_network()
 
 
@@ -434,6 +463,125 @@ func _generate_random_personality(personality_salt: int) -> void:
 	extraversion = WorldRNG.range_for(StringName("personality:extraversion:%d" % personality_salt), 0.0, 1.0)
 	agreeableness = WorldRNG.range_for(StringName("personality:agreeableness:%d" % personality_salt), 0.0, 1.0)
 	neuroticism = WorldRNG.range_for(StringName("personality:neuroticism:%d" % personality_salt), 0.0, 1.0)
+
+
+## Initialize likes/dislikes: randomly assigned at birth, inherited by children with mutation.
+## Each pawn gets 2-4 likes and 1-3 dislikes. Children inherit from parents with 20% mutation.
+func _initialize_likes_dislikes(init_tick: int, parent_a: int, parent_b: int) -> void:
+	# Initialize job tick tracking
+	job_ticks_by_category = {
+		"farming": 0, "building": 0, "mining": 0, "hunting": 0,
+		"crafting": 0, "trading": 0, "teaching": 0, "exploring": 0,
+		"socializing": 0, "resting": 0,
+	}
+	# Generate raw values for each category
+	var raw_values: Dictionary = {}
+	if parent_a >= 0 and parent_b >= 0:
+		var parent_a_data: PawnData = _get_parent_data(parent_a)
+		var parent_b_data: PawnData = _get_parent_data(parent_b)
+		if parent_a_data != null and parent_b_data != null:
+			# Blend parent likes/dislikes with mutation
+			for cat in LIKE_CATEGORIES:
+				var val_a: float = _get_parent_like_value(parent_a_data, cat)
+				var val_b: float = _get_parent_like_value(parent_b_data, cat)
+				var base: float = (val_a + val_b) / 2.0
+				# Mutation: 20% chance to shift significantly
+				if WorldRNG.range_for(StringName("likes:mutate:%s:%d" % [cat, init_tick]), 0.0, 1.0) < LIKE_MUTATION_CHANCE:
+					base = WorldRNG.range_for(StringName("likes:mutated:%s:%d" % [cat, init_tick]), 0.0, 1.0)
+				raw_values[cat] = clampf(base, 0.0, 1.0)
+		else:
+			_generate_random_likes(init_tick, raw_values)
+	else:
+		_generate_random_likes(init_tick, raw_values)
+	# Classify into likes and dislikes
+	likes = {}
+	dislikes = {}
+	for cat in LIKE_CATEGORIES:
+		var val: float = float(raw_values.get(cat, 0.5))
+		if val >= LIKE_THRESHOLD:
+			likes[cat] = val
+		elif val <= DISLIKE_THRESHOLD:
+			dislikes[cat] = val
+
+
+func _generate_random_likes(salt: int, out: Dictionary) -> void:
+	for cat in LIKE_CATEGORIES:
+		out[cat] = WorldRNG.range_for(StringName("likes:%s:%d" % [cat, salt]), 0.0, 1.0)
+
+
+func _get_parent_like_value(parent: PawnData, category: String) -> float:
+	# If the parent explicitly likes/dislikes this category, use that value
+	if parent.likes.has(category):
+		return float(parent.likes[category])
+	if parent.dislikes.has(category):
+		return float(parent.dislikes[category])
+	# Otherwise infer from affinities and job history
+	var affinity_map: Dictionary = {
+		"farming": "farming", "building": "building", "mining": "combat",
+		"hunting": "combat", "crafting": "crafting", "trading": "diplomacy",
+		"teaching": "diplomacy", "exploring": "combat", "socializing": "diplomacy",
+		"resting": "farming",
+	}
+	var aff_key: String = str(affinity_map.get(category, ""))
+	if aff_key != "" and parent.affinities.has(aff_key):
+		return float(parent.affinities[aff_key])
+	return 0.5
+
+
+## Check if a pawn likes a job category (mood boost when doing it).
+func likes_category(cat: String) -> bool:
+	return likes.has(cat)
+
+
+## Check if a pawn dislikes a job category (mood drain when doing it).
+func dislikes_category(cat: String) -> bool:
+	return dislikes.has(cat)
+
+
+## Get mood modifier for a job category: +0.1 for likes, -0.1 for dislikes.
+func mood_modifier_for_category(cat: String) -> float:
+	if likes.has(cat):
+		return 0.1
+	if dislikes.has(cat):
+		return -0.1
+	return 0.0
+
+
+## Record a tick of work in a job category. Used for profession assignment and likes evolution.
+func record_job_tick(category: String) -> void:
+	if not job_ticks_by_category.has(category):
+		job_ticks_by_category[category] = 0
+	job_ticks_by_category[category] = int(job_ticks_by_category[category]) + 1
+
+
+## Get the job category for a Job.Type.
+static func job_category_for_type(job_type: int) -> String:
+	# Map Job.Type to like/dislike categories
+	match job_type:
+		0, 1:  return "farming"       # FORAGE, CHOP
+		2, 3:  return "mining"        # MINE, MINE_WALL
+		4:     return "building"      # BUILD_BED
+		5:     return "building"      # BUILD_WALL
+		6:     return "building"      # BUILD_DOOR
+		7:     return "hunting"       # HUNT
+		8:     return "building"      # BUILD_STORAGE
+		9:     return "crafting"      # CRAFT_TOOL
+		10:    return "building"      # BUILD_FIRE_PIT
+		11:    return "building"      # BUILD_HEARTH
+		12:    return "exploring"     # PROTECT
+		13:    return "exploring"     # DEFEND
+		14:    return "teaching"      # TEACH
+		15:    return "crafting"      # CARVE_GRAVE_MARKER
+		16:    return "crafting"      # CARVE_KNOWLEDGE_STONE
+		17:    return "crafting"      # CARVE_LEDGER_STONE
+		18:    return "building"      # BUILD_SHELTER
+		19:    return "building"      # BUILD_MARKER_STONE
+		20:    return "building"      # BUILD_SHRINE
+		21:    return "socializing"   # HAUL_TO_STOCKPILE
+		22:    return "farming"       # PLANT_CROP
+		23:    return "farming"       # HARVEST_CROP
+		24:    return "crafting"      # COOK_FOOD
+		_:     return "exploring"     # default for new job types
 
 
 ## Static registry for pawn data lookup (set by PawnSpawner at spawn time)
@@ -1837,9 +1985,13 @@ func add_skill_xp(skill: int, amount: float) -> bool:
 	# Stage 1: Track last used time for XP decay
 	skill_last_used[skill] = GameManager.tick_count if GameManager != null else 0
 
-	# Auto-assign profession when skill XP reaches 100 and no profession yet
+	# Auto-assign profession when pawn has done enough work in a category
+	# and doesn't dislike it. Requires PROFESSION_ASSIGN_MIN_TICKS in that category.
 	if current_profession == Profession.NONE and cat != "" and get_skill_xp(skill) >= 30.0:
-		current_profession = _skill_to_profession(cat)
+		var job_cat: String = _skill_to_like_category(cat)
+		var ticks_in_cat: int = int(job_ticks_by_category.get(job_cat, 0))
+		if ticks_in_cat >= PROFESSION_ASSIGN_MIN_TICKS and not dislikes.has(job_cat):
+			current_profession = _skill_to_profession(cat)
 
 	# Stage 1: Check for overall level up
 	_check_level_up()
@@ -2295,6 +2447,27 @@ func _skill_to_profession(skill_key: String) -> int:
 			return Profession.NONE
 
 
+func _skill_to_like_category(skill_key: String) -> String:
+	# Map internal skill keys to like/dislike categories
+	match skill_key:
+		"farming", "foraging":
+			return "farming"
+		"building", "crafting":
+			return "building"
+		"mining":
+			return "mining"
+		"combat", "hunting":
+			return "hunting"
+		"movement":
+			return "exploring"
+		"teaching":
+			return "teaching"
+		"gathering":
+			return "farming"
+		_:
+			return "exploring"
+
+
 func _profession_primary_skill(prof: int) -> String:
 	match prof:
 		Profession.FARMER:
@@ -2730,7 +2903,12 @@ func effective_labor_mult() -> float:
 	var r: float = clamp(rest * 0.01, 0.0, 1.0)
 	var base_mult: float = max(0.2, h * 0.55 + r * 0.45)
 	var trait_mult: float = get_trait_mult("work_speed_mult")
-	return base_mult * trait_mult * physical_scar_labor_mult()
+	# Gear work speed bonus
+	var gear_ws: float = 1.0
+	var gs: Dictionary = get_gear_stats()
+	if gs.has("work_speed"):
+		gear_ws = 1.0 + float(gs["work_speed"])
+	return base_mult * trait_mult * physical_scar_labor_mult() * gear_ws
 
 
 static func skill_name(skill: int) -> String:
@@ -3013,6 +3191,9 @@ func to_portable_character_export(export_tick: int, world_seed: int, origin_regi
 		"affinities": affinities.duplicate(true),
 		"affinity_birth_snapshot": affinity_birth_snapshot.duplicate(true),
 		"profession_liking": profession_liking.duplicate(true),
+		"likes": likes.duplicate(true),
+		"dislikes": dislikes.duplicate(true),
+		"job_ticks_by_category": job_ticks_by_category.duplicate(true),
 		"social_rapport_top": _social_rapport_top_for_export(24),
 		"trait_types": trait_types,
 		"military_rank": military_rank_legacy,  # Use legacy string for export compatibility
@@ -3081,6 +3262,7 @@ func to_save_dict() -> Dictionary:
 		"max_health": max_health,
 		"carrying": carrying,
 		"carrying_qty": carrying_qty,
+		"equipped_gear": _serialize_equipped_gear(),
 		"skill_xp": sx,
 		"level": level,
 		"skill_trees": skill_trees.duplicate(true),
@@ -3089,6 +3271,9 @@ func to_save_dict() -> Dictionary:
 		"affinities": affinities.duplicate(true),
 		"affinity_birth_snapshot": affinity_birth_snapshot.duplicate(true),
 		"profession_liking": profession_liking.duplicate(true),
+		"likes": likes.duplicate(true),
+		"dislikes": dislikes.duplicate(true),
+		"job_ticks_by_category": job_ticks_by_category.duplicate(true),
 		"current_profession": current_profession,
 		"birth_tick": birth_tick,
 		"parent_a_id": parent_a_id,
@@ -3155,6 +3340,7 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 	p.max_health = float(d.get("max_health", 100.0))
 	p.carrying = int(d.get("carrying", 0))
 	p.carrying_qty = int(d.get("carrying_qty", 0))
+	p._deserialize_equipped_gear(d)
 	p.skill_xp = {}
 	if d.has("skill_xp") and d["skill_xp"] is Dictionary:
 		for k in d["skill_xp"]:
@@ -3192,6 +3378,24 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 			if d["profession_liking"].has(lk):
 				p.profession_liking[lk] = clampi(int(d["profession_liking"][lk]), LIKING_MIN, LIKING_MAX)
 	p._ensure_profession_liking_defaults()
+	# Load likes/dislikes
+	p.likes = {}
+	if d.has("likes") and d["likes"] is Dictionary:
+		for lk in d["likes"]:
+			p.likes[str(lk)] = float(d["likes"][lk])
+	p.dislikes = {}
+	if d.has("dislikes") and d["dislikes"] is Dictionary:
+		for dlk in d["dislikes"]:
+			p.dislikes[str(dlk)] = float(d["dislikes"][dlk])
+	# Load job tick tracking
+	p.job_ticks_by_category = {}
+	if d.has("job_ticks_by_category") and d["job_ticks_by_category"] is Dictionary:
+		for jk in d["job_ticks_by_category"]:
+			p.job_ticks_by_category[str(jk)] = int(d["job_ticks_by_category"][jk])
+	else:
+		# Initialize for old saves
+		for cat in LIKE_CATEGORIES:
+			p.job_ticks_by_category[cat] = 0
 	p.affinity_birth_snapshot = {}
 	if d.has("affinity_birth_snapshot") and d["affinity_birth_snapshot"] is Dictionary:
 		for ak in p.affinities.keys():
@@ -3356,6 +3560,92 @@ func has_tool(tool_type: int) -> bool:
 
 func is_equipped_tool_valid() -> bool:
 	return equipped_tool != Item.Type.NONE and equipped_tool_durability > 0
+
+
+## Equip a GearItem into the appropriate slot. Returns the previously equipped item (or null).
+func equip_gear(gear: Variant) -> Variant:
+	if gear == null:
+		return null
+	var slot_key: int = int(gear.slot)
+	var old: Variant = equipped_gear.get(slot_key, null)
+	equipped_gear[slot_key] = gear
+	# Also update legacy equipped_tool for backward compatibility
+	if slot_key == 0 or slot_key == 2:  # WEAPON or TOOL
+		equipped_tool = int(gear.base_type)
+		equipped_tool_durability = int(gear.durability)
+	return old
+
+
+## Unequip a gear slot. Returns the removed item (or null).
+func unequip_gear(slot_key: int) -> Variant:
+	var old: Variant = equipped_gear.get(slot_key, null)
+	equipped_gear[slot_key] = null
+	# Clear legacy tool if we removed the tool/weapon slot
+	if slot_key == 0 or slot_key == 2:  # WEAPON or TOOL
+		if old != null:
+			equipped_tool = 0  # Item.Type.NONE
+			equipped_tool_durability = 0
+	return old
+
+
+## Get aggregated gear stats
+func get_gear_stats() -> Dictionary:
+	var total_attack: float = 1.0  # Bare fists
+	var total_defense: float = 0.0
+	var total_work_speed: float = 0.0
+	var total_warmth: float = 0.0
+	for slot_key in equipped_gear:
+		var gear: Variant = equipped_gear[slot_key]
+		if gear == null or not gear.has_method("is_broken") or gear.is_broken():
+			continue
+		total_attack += float(gear.attack)
+		total_defense += float(gear.defense)
+		total_work_speed += float(gear.work_speed)
+		total_warmth += float(gear.warmth)
+	return {
+		"attack": total_attack,
+		"defense": total_defense,
+		"work_speed": total_work_speed,
+		"warmth": total_warmth,
+	}
+
+
+## Get the weapon GearItem (or null)
+func get_weapon() -> Variant:
+	return equipped_gear.get(0, null)  # Slot.WEAPON
+
+
+## Get the armor GearItem (or null)
+func get_armor() -> Variant:
+	return equipped_gear.get(1, null)  # Slot.ARMOR
+
+
+func _serialize_equipped_gear() -> Dictionary:
+	var out: Dictionary = {}
+	for slot_key in equipped_gear:
+		var gear: Variant = equipped_gear[slot_key]
+		if gear != null and gear.has_method("to_dict"):
+			out[str(slot_key)] = gear.to_dict()
+	return out
+
+
+func _deserialize_equipped_gear(d: Dictionary) -> void:
+	equipped_gear = {
+		0: null,  # WEAPON
+		1: null,  # ARMOR
+		2: null,  # TOOL
+		3: null,  # ACCESSORY
+		4: null,  # OFFHAND
+	}
+	if not d.has("equipped_gear") or not (d["equipped_gear"] is Dictionary):
+		return
+	var eg: Dictionary = d["equipped_gear"] as Dictionary
+	var _GearItem = load("res://scripts/items/GearItem.gd")
+	for slot_key_str in eg:
+		var slot_key: int = int(slot_key_str)
+		var gear_dict: Variant = eg[slot_key_str]
+		if gear_dict is Dictionary and _GearItem != null:
+			equipped_gear[slot_key] = _GearItem.from_dict(gear_dict as Dictionary)
 
 
 func get_tool_efficacy(job_type: int) -> float:

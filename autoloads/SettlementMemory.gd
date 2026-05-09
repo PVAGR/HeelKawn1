@@ -419,8 +419,35 @@ func recompute(_world: World) -> void:
     _update_governance_state()
     _apply_persisted_governance_forms()
     _compute_dominant_clans()
+    _resolve_settlement_names()
     _settlement_truth_verify_post_recompute_pass()
 
+
+## Resolve settlement names: active settlements with buildings earn a proper name
+## from SettlementIdentity. Unnamed settlements show "Unnamed" until they've
+## been lived in long enough to deserve a name.
+func _resolve_settlement_names() -> void:
+    if SettlementIdentity == null:
+        return
+    for i in range(settlements.size()):
+        if not (settlements[i] is Dictionary):
+            continue
+        var st: Dictionary = settlements[i] as Dictionary
+        if bool(st.get("name_resolved", false)):
+            continue
+        var state: String = str(st.get("state", ""))
+        # Only active/recovering settlements can earn a name
+        if state != "active" and state != "recovering":
+            continue
+        # Must have at least some buildings or population to deserve a name
+        var pop: int = int(st.get("population", 0))
+        if pop < 2:
+            continue
+        # Resolve the name via SettlementIdentity
+        var identity: Dictionary = SettlementIdentity.resolve_for(st)
+        st["name"] = str(identity.get("name", ""))
+        st["name_resolved"] = true
+        settlements[i] = st
 
 func _prune_settlement_state_truth_hysteresis() -> void:
     var present: Dictionary = {}
@@ -869,6 +896,8 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
     return {
         "regions": packed,
         "center_region": center_rk,
+        "name": "",  # Empty until HeelKawnians earn a name through experience
+        "name_resolved": false,
         "total_pawn_deaths": total_pawn_deaths,
         "scar_max": scar_max,
         "reputation_min": reputation_min,

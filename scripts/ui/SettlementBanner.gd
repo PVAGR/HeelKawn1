@@ -55,7 +55,9 @@ func _refresh_banners() -> void:
 		if not _world.data.in_bounds(tile_pos.x, tile_pos.y):
 			continue
 		var world_pos: Vector2 = _world.tile_to_world(tile_pos)
-		var name: String = str(d.get("name", "Settlement"))
+		var name: String = str(d.get("name", ""))
+		if name.is_empty():
+			name = "Unnamed"
 		var pop: int = int(d.get("population", 0))
 		var gov: String = str(d.get("governance_type", ""))
 		if pop <= 0:

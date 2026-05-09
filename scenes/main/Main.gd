@@ -6839,6 +6839,7 @@ func _build_save_dict() -> Dictionary:
 		"faction_registry": FactionRegistry.to_save_dict(),
 		"grudge_manager": GrudgeManager.to_save_dict(),
 		"gossip_manager": GossipManager.to_save_dict(),
+		"myth_age": MythAge.to_save_dict(),
 		"last_generation_tick": _last_generation_tick,
 		# Metadata for save/load menu
 		"settlement_name": _get_primary_settlement_name(),
@@ -6954,6 +6955,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 		GrudgeManager.from_save_dict(s.get("grudge_manager", {}))
 	if GossipManager != null and GossipManager.has_method("from_save_dict"):
 		GossipManager.from_save_dict(s.get("gossip_manager", {}))
+	if MythAge != null and MythAge.has_method("from_save_dict"):
+		MythAge.from_save_dict(s.get("myth_age", {}))
 	_push_zone_filter_label_to_toolbar()
 	var zlist: Array = s.get("zones", [])
 	if zlist is Array and not zlist.is_empty():

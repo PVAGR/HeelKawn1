@@ -118,7 +118,7 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 ## Calculate damage from attacker to defender
 static func _calculate_damage(attacker: Node, defender: Node) -> float:
 	var damage: float = BASE_DAMAGE
-	
+
 	# Attacker modifiers
 	if attacker is Pawn:
 		var pawn_attacker: Pawn = attacker as Pawn
@@ -126,26 +126,35 @@ static func _calculate_damage(attacker: Node, defender: Node) -> float:
 		var combat_skill: float = (pawn_attacker.data.skill_xp.get(PawnData.Skill.HUNTING, 0.0) +
 									pawn_attacker.data.skill_xp.get(PawnData.Skill.MINING, 0.0)) / 200.0
 		damage *= (1.0 + combat_skill * 0.5)  # Up to 50% damage increase from skills
-		
+
+		# Gear-based attack bonus
+		var gear_stats: Dictionary = pawn_attacker.data.get_gear_stats()
+		damage *= (float(gear_stats.get("attack", 1.0)) / 1.0)  # Normalize: 1.0 attack = 1.0x
+
 		# Health/rest affects damage
 		damage *= pawn_attacker.data.effective_labor_mult()
-		
+
 		# Trait multipliers
 		damage *= pawn_attacker.data.get_trait_mult("work_speed_mult")
-	
+
 	elif attacker is Enemy:
 		var enemy: Enemy = attacker as Enemy
 		var spec = Enemy.SPECIES_DATA.get(enemy.enemy_type, {})
 		damage = spec.get("melee_damage", BASE_DAMAGE)
-	
+
 	# Defender reduction
 	if defender is Pawn:
 		var pawn_defender: Pawn = defender as Pawn
-		# Armor concept: health affects damage reduction
-		var armor_factor: float = 1.0 - (pawn_defender.data.get_trait_mult("damage_taken_mult") - 1.0)
-		armor_factor = clamp(armor_factor, 0.0, 0.95)
+		# Gear-based defense
+		var gear_stats: Dictionary = pawn_defender.data.get_gear_stats()
+		var gear_defense: float = float(gear_stats.get("defense", 0.0))
+		# Each point of defense reduces damage by 5%, capped at 75%
+		var armor_factor: float = clampf(gear_defense * 0.05, 0.0, 0.75)
+		# Trait damage reduction
+		var trait_reduction: float = 1.0 - (pawn_defender.data.get_trait_mult("damage_taken_mult") - 1.0)
+		armor_factor = clampf(armor_factor + (1.0 - trait_reduction), 0.0, 0.75)
 		damage *= (1.0 - armor_factor)
-	
+
 	return max(1.0, damage)
 
 

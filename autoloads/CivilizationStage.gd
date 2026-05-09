@@ -30,6 +30,13 @@ const STAGE_NAMES: Dictionary = {
 	STAGE_POST_SCARCITY: "Post-Scarcity",
 }
 
+## Display name: "—" until HeelKawnians have experienced enough to name their era.
+## Once a settlement has any infrastructure or knowledge, the era becomes visible.
+func get_stage_display_name(stage: int, score: int) -> String:
+	if score <= 0:
+		return "—"  # No experience yet — era is unknown
+	return str(STAGE_NAMES.get(stage, "Unknown"))
+
 const STAGE_DESCRIPTIONS: Dictionary = {
 	STAGE_PRIMITIVE: "survival, fire, oral memory",
 	STAGE_NEOLITHIC: "settlement, farming, stored food",
@@ -64,6 +71,13 @@ func get_stage_description(stage: int) -> String:
 
 func calculate_civilization_score(settlement_id: int = -1) -> int:
 	return int(get_stage_snapshot(settlement_id).get("score", 0))
+
+
+## Get the world-level civilization score (highest settlement score).
+## Used by MythAge to determine which myth age the world has entered.
+func get_world_score() -> int:
+	var world_snap: Dictionary = get_stage_snapshot(-1)
+	return int(world_snap.get("score", 0))
 
 
 func get_world_stage_snapshot() -> Dictionary:

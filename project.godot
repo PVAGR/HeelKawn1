@@ -134,6 +134,7 @@ CataclysmSystem="*res://scripts/world/CataclysmSystem.gd"
 ZoomSystem="*res://scripts/world/ZoomSystem.gd"
 TickMonitor="*res://tools/diagnose/monitor_ticks.gd"
 GameSettings="*res://autoloads/GameSettings.gd"
+MythAge="*res://autoloads/MythAge.gd"
 
 [display]
 

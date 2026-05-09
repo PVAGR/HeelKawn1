@@ -903,7 +903,11 @@ func _pawn_connect_sim_tick_deferred() -> void:
 	# CRITICAL: Arm pawn simulation ticks FIRST
 	# This flag gates ALL pawn behavior in _on_world_tick
 	_pawn_sim_tick_armed = true
-	
+
+	# Try to equip starting gear from stockpile (if available)
+	if CraftingSystem != null and CraftingSystem.has_method("try_equip_from_stockpile"):
+		CraftingSystem.try_equip_from_stockpile(data)
+
 	# TickManager automatically calls _on_world_tick on all "tickable" group members
 	# We were added to "tickable" in _ready(), so just ensure cache is dirty
 	if TickManager != null:
@@ -2489,6 +2493,10 @@ func _tick_idle() -> void:
 		else:
 			_begin_haul_to_stockpile()
 		return
+	# 2a. Periodic gear check: try equipping better gear from stockpile (every 200 ticks)
+	if GameManager.tick_count % 200 == int(data.id) % 200:
+		if CraftingSystem != null and CraftingSystem.has_method("try_equip_from_stockpile"):
+			CraftingSystem.try_equip_from_stockpile(data)
 	# 2b. HeelKawnian Matrix social intent: ally-seek, mentor-seek, or confrontation.
 	if _try_heelkawnian_matrix_social_action():
 		return
@@ -3546,6 +3554,35 @@ func _tick_working() -> void:
 		)
 		var w: int = maxi(1, int(ceil(speed)))
 		data.add_profession_liking_for_job(_current_job.type, w)
+		# Record job tick for likes/dislikes and profession assignment
+		var job_cat: String = PawnData.job_category_for_type(_current_job.type)
+		data.record_job_tick(job_cat)
+		# Apply mood modifier from likes/dislikes
+		var mood_mod: float = data.mood_modifier_for_category(job_cat)
+		if mood_mod != 0.0:
+			data.mood = clampf(data.mood + mood_mod, 0.0, 100.0)
+		# Decay gear durability for tool/weapon slots
+		var tool_gear: Variant = data.equipped_gear.get(2, null)  # Slot.TOOL
+		if tool_gear != null and tool_gear.has_method("use"):
+			if not tool_gear.use():
+				# Tool broke — unequip and record event
+				data.unequip_gear(2)
+				WorldMemory.record_event({
+					"type": "gear_break",
+					"pawn_id": int(data.id),
+					"gear_name": str(tool_gear.name),
+					"tick": GameManager.tick_count,
+				})
+		var weapon_gear: Variant = data.equipped_gear.get(0, null)  # Slot.WEAPON
+		if weapon_gear != null and weapon_gear.has_method("use"):
+			if not weapon_gear.use():
+				data.unequip_gear(0)
+				WorldMemory.record_event({
+					"type": "gear_break",
+					"pawn_id": int(data.id),
+					"gear_name": str(weapon_gear.name),
+					"tick": GameManager.tick_count,
+				})
 		_current_job.work_ticks_done += w
 	if _current_job.work_ticks_done >= _current_job.work_ticks_needed:
 		if _current_job.type == _Job.Type.TRADE_HAUL:
@@ -5223,12 +5260,21 @@ func _hearth_proxy_warmth_bonus(tile: Vector2i) -> float:
 	return bonus
 
 
+## Gear warmth bonus from equipped armor/accessories
+func _gear_warmth_bonus() -> float:
+	if data == null:
+		return 0.0
+	var gear_stats: Dictionary = data.get_gear_stats()
+	return float(gear_stats.get("warmth", 0.0))
+
+
 func _check_temperature() -> void:
 	if _world == null or data == null:
 		return
 	
 	var ambient_temp: float = _ambient_temperature_celsius_at_tile(data.tile_pos)
 	ambient_temp += _hearth_proxy_warmth_bonus(data.tile_pos)
+	ambient_temp += _gear_warmth_bonus()
 	var has_shelter: bool = false
 	if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed:
 		has_shelter = true
@@ -6948,6 +6994,12 @@ func _draw() -> void:
 		var prof_tint: Color = _profession_color(data.current_profession)
 		body_color = body_color.lerp(prof_tint, 0.12)
 
+	# Armor tint: subtle overlay from equipped armor
+	var armor_gear: Variant = data.equipped_gear.get(1, null)  # Slot.ARMOR
+	if armor_gear != null and armor_gear.has_method("is_broken") and not armor_gear.is_broken():
+		var armor_tint: Color = Color8(140, 160, 200)  # steel blue tint
+		body_color = body_color.lerp(armor_tint, 0.15)
+
 	# Simplified rendering for performance - just draw circle and outline
 	draw_circle(body_origin, body_radius, body_color)
 	
@@ -6971,7 +7023,18 @@ func _draw() -> void:
 		# Outer glow ring
 		var glow_alpha: float = pulse * 0.35
 		draw_arc(body_origin, body_radius + 6.0, 0.0, TAU, 28, Color(1.0, 0.92, 0.18, glow_alpha), 2.0, true)
-	
+
+	# Weapon silhouette: tiny pixel icon beside the pawn
+	var weapon_gear: Variant = data.equipped_gear.get(0, null)  # Slot.WEAPON
+	if weapon_gear != null and weapon_gear.has_method("is_broken") and not weapon_gear.is_broken():
+		var weapon_color: Color = Color8(200, 180, 140)  # tan weapon color
+		if weapon_gear.enchantments.size() > 0:
+			weapon_color = Color8(180, 140, 255)  # purple glow for enchanted
+		var w_pos: Vector2 = body_origin + Vector2(body_radius + 1.5, -1.0)
+		# Small weapon shape: 2px line + 1px crossguard
+		draw_line(w_pos, w_pos + Vector2(0.0, 4.0), weapon_color, 1.0, true)
+		draw_line(w_pos + Vector2(-1.0, 1.0), w_pos + Vector2(1.0, 1.0), weapon_color, 1.0, true)
+
 	# Profession indicator: visible badge above the pawn
 	if data.current_profession != PawnData.Profession.NONE:
 		var prof_color: Color = _profession_color(data.current_profession)

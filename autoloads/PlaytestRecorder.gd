@@ -307,7 +307,7 @@ func _get_next_auto_save_interval() -> int:
 	var event_count: int = 0
 	var wm: Node = get_node_or_null("/root/WorldMemory")
 	if wm != null and wm.has_method("event_count"):
-		event_count = wm.event_count
+		event_count = wm.event_count()
 	var interval: int
 	if event_count < 100:
 		interval = 5000

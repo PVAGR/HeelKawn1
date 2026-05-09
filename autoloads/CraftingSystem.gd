@@ -39,6 +39,10 @@ var recipes: Dictionary = {}
 var active_crafting_jobs: Array[Dictionary] = []
 var _next_job_id: int = 1
 
+## Gear inventory: GearItem instances stored in the stockpile, ready for equipping.
+## Key = item_id (String), Value = GearItem instance
+var _gear_inventory: Dictionary = {}
+
 # References
 @onready var _world_memory: Node = null
 @onready var _job_manager: Node = null
@@ -288,9 +292,32 @@ func _complete_crafting_job(job: Dictionary, tick: int) -> void:
 	# CRITICAL: Consume ingredients from stockpile
 	_consume_ingredients(recipe.ingredients)
 
-	# Add crafted items to stockpile
-	if _stockpile_manager != null:
-		_stockpile_manager.add_item(recipe.output_item, recipe.output_quantity)
+	# Determine if this recipe produces equippable gear
+	var category: String = str(recipe.get("category", ""))
+	var is_equippable: bool = (category == "tool" or category == "weapon" or category == "armor")
+
+	if is_equippable:
+		# Create a GearItem with quality from the crafter
+		var craftsman_data: PawnData = null
+		var craftsman: Pawn = _get_pawn_by_id(job.craftsman_id)
+		if craftsman != null and craftsman.data != null:
+			craftsman_data = craftsman.data
+		var _GearItem = load("res://scripts/items/GearItem.gd")
+		if _GearItem != null:
+			var gear = _GearItem.from_item_type(int(recipe.get("output_item", 0)), craftsman_data)
+			# Store gear in stockpile gear inventory
+			_store_gear_item(gear)
+			# Also add raw item to stockpile for backward compatibility
+			if _stockpile_manager != null:
+				_stockpile_manager.add_item(int(recipe.get("output_item", 0)), int(recipe.get("output_quantity", 1)))
+		else:
+			# Fallback: just add raw item
+			if _stockpile_manager != null:
+				_stockpile_manager.add_item(int(recipe.get("output_item", 0)), int(recipe.get("output_quantity", 1)))
+	else:
+		# Add crafted items to stockpile (non-equippable)
+		if _stockpile_manager != null:
+			_stockpile_manager.add_item(int(recipe.get("output_item", 0)), int(recipe.get("output_quantity", 1)))
 
 	# Record crafting event
 	if _world_memory != null:
@@ -491,3 +518,82 @@ func debug_complete_all_jobs() -> void:
 func debug_add_recipe(recipe_data: Dictionary) -> void:
 	_add_recipe(recipe_data)
 	print("[Crafting] Debug: Added recipe %s" % recipe_data.get("recipe_id", "unknown"))
+
+
+## Store a GearItem in the stockpile gear inventory
+func _store_gear_item(gear: Variant) -> void:
+	if gear == null or not gear.has_method("to_dict"):
+		return
+	_gear_inventory[str(gear.item_id)] = gear
+
+
+## Get all available gear items in the stockpile
+func get_available_gear() -> Array:
+	var result: Array = []
+	for gear_id in _gear_inventory:
+		var gear: Variant = _gear_inventory[gear_id]
+		if gear != null and not gear.is_broken():
+			result.append(gear)
+	return result
+
+
+## Get gear items for a specific slot
+func get_gear_for_slot(slot: int) -> Array:
+	var result: Array = []
+	for gear_id in _gear_inventory:
+		var gear: Variant = _gear_inventory[gear_id]
+		if gear != null and not gear.is_broken() and int(gear.slot) == slot:
+			result.append(gear)
+	return result
+
+
+## Remove a gear item from inventory (after equipping)
+func remove_gear_from_inventory(item_id: String) -> Variant:
+	var gear: Variant = _gear_inventory.get(item_id, null)
+	if gear != null:
+		_gear_inventory.erase(item_id)
+	return gear
+
+
+## Try to equip a pawn with better gear from the stockpile.
+## Called periodically by the pawn AI.
+func try_equip_from_stockpile(pawn_data: PawnData) -> bool:
+	if pawn_data == null:
+		return false
+	var equipped_any: bool = false
+	# Check each slot
+	for slot_idx in range(5):
+		var current_gear: Variant = pawn_data.equipped_gear.get(slot_idx, null)
+		var best_gear: Variant = null
+		var best_score: float = -1.0
+		# Find best available gear for this slot
+		var candidates: Array = get_gear_for_slot(slot_idx)
+		for candidate in candidates:
+			if candidate == null:
+				continue
+			var score: float = _gear_score(candidate)
+			# Must be better than current
+			if current_gear != null and current_gear.has_method("is_broken"):
+				if not current_gear.is_broken():
+					var current_score: float = _gear_score(current_gear)
+					if score <= current_score:
+						continue
+			if score > best_score:
+				best_score = score
+				best_gear = candidate
+		# Equip if found something better
+		if best_gear != null and best_score > 0.0:
+			var old: Variant = pawn_data.equip_gear(best_gear)
+			remove_gear_from_inventory(str(best_gear.item_id))
+			# Put old gear back in inventory
+			if old != null and old.has_method("is_broken") and not old.is_broken():
+				_store_gear_item(old)
+			equipped_any = true
+	return equipped_any
+
+
+## Score a gear item for comparison (higher = better)
+func _gear_score(gear: Variant) -> float:
+	if gear == null:
+		return -1.0
+	return float(gear.attack) + float(gear.defense) * 1.5 + float(gear.work_speed) * 10.0 + float(gear.warmth) * 2.0 + float(gear.quality) * 5.0

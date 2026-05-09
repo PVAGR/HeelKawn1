@@ -87,6 +87,7 @@ var _tab_neural: VBoxContainer = null
 var _tab_social: VBoxContainer = null
 var _tab_narrative: VBoxContainer = null  # Phase 5: Emergent Narrative
 var _tab_consciousness: VBoxContainer = null  # Phase 5: Pawn Consciousness
+var _tab_gear: VBoxContainer = null  # Equipment System
 ## Matrix/Neural display labels
 var _matrix_inputs_label: RichTextLabel = null
 var _neural_outputs_label: RichTextLabel = null
@@ -105,6 +106,9 @@ var _appearance_label: Label = null
 var _mood_status_label: Label = null
 var _crisis_level_label: Label = null
 var _liking_label: Label = null
+var _likes_dislikes_label: Label = null
+var _gear_labels: Dictionary = {}  # slot index -> Label
+var _gear_stats_label: Label = null
 var _coach_label: Label = null
 var _social_label: Label = null
 var _identity_label: Label = null
@@ -323,6 +327,12 @@ func _build_ui() -> void:
 	_tab_container.add_child(_tab_consciousness)
 	_populate_consciousness_tab()
 
+	# Gear tab (Equipment System)
+	_tab_gear = VBoxContainer.new()
+	_tab_gear.add_theme_constant_override("separation", 2)
+	_tab_container.add_child(_tab_gear)
+	_populate_gear_tab()
+
 	# Set tab titles
 	_tab_container.set_tab_title(0, "ID")
 	_tab_container.set_tab_title(1, "Needs")
@@ -332,10 +342,12 @@ func _build_ui() -> void:
 		_tab_container.set_tab_title(4, "Social")
 		_tab_container.set_tab_title(5, "Narrative")
 		_tab_container.set_tab_title(6, "Consciousness")
+		_tab_container.set_tab_title(7, "Gear")
 	else:
 		_tab_container.set_tab_title(2, "Social")
 		_tab_container.set_tab_title(3, "Narrative")
 		_tab_container.set_tab_title(4, "Consciousness")
+		_tab_container.set_tab_title(5, "Gear")
 
 	# Footer hint
 	_hint_label = _make_label("[Esc] deselect", FONT_SMALL, Color(0.55, 0.55, 0.60))
@@ -368,6 +380,11 @@ func _populate_identity_tab() -> void:
 	_liking_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_liking_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tab_identity.add_child(_liking_label)
+
+	_tab_identity.add_child(_make_section_header("Likes / Dislikes"))
+	_likes_dislikes_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_likes_dislikes_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_identity.add_child(_likes_dislikes_label)
 
 	_tab_identity.add_child(_make_section_header("Coach"))
 	_coach_label = _make_label("", FONT_SMALL, TEXT_DIM)
@@ -502,6 +519,36 @@ func _populate_consciousness_tab() -> void:
 	beliefs_label.name = "BeliefsLabel"
 	beliefs_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tab_consciousness.add_child(beliefs_label)
+
+
+func _populate_gear_tab() -> void:
+	_tab_gear.add_child(_make_section_header("Equipment"))
+	# 5 gear slots: Weapon, Armor, Tool, Accessory, Offhand
+	var slot_names: PackedStringArray = ["Weapon", "Armor", "Tool", "Accessory", "Offhand"]
+	var slot_colors: Array = [
+		Color8(220, 80, 80),   # Weapon: red
+		Color8(80, 140, 220),  # Armor: blue
+		Color8(180, 160, 60),  # Tool: gold
+		Color8(160, 80, 220),  # Accessory: purple
+		Color8(80, 180, 140),  # Offhand: green
+	]
+	for i in range(5):
+		var row: HBoxContainer = HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		_tab_gear.add_child(row)
+		# Slot name label
+		var slot_label: Label = _make_label(slot_names[i] + ":", FONT_SMALL, slot_colors[i])
+		slot_label.custom_minimum_size = Vector2(64, 0)
+		row.add_child(slot_label)
+		# Item name label
+		var item_label: Label = _make_label("Empty", FONT_SMALL, TEXT_DIM)
+		item_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.add_child(item_label)
+		_gear_labels[i] = item_label
+	_tab_gear.add_child(_make_section_header("Stats"))
+	_gear_stats_label = _make_label("", FONT_SMALL, TEXT_BRIGHT)
+	_gear_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_gear.add_child(_gear_stats_label)
 
 
 func _add_need_row_to_tab(label_text: String, field: String, color: Color, parent: VBoxContainer) -> void:
@@ -841,6 +888,8 @@ func _refresh() -> void:
 		_appearance_label.text = "Appearance: %s, %s" % [_body_type_label(d.body_type), _hair_style_label(d.hair_style)]
 	if _liking_label != null:
 		_liking_label.text = d.profession_liking_digest_line()
+	if _likes_dislikes_label != null:
+		_likes_dislikes_label.text = _build_likes_dislikes_text(d)
 	if _coach_label != null:
 		var hints: PackedStringArray = d.progression_coach_lines(3)
 		_coach_label.text = "\n".join(hints)
@@ -848,7 +897,10 @@ func _refresh() -> void:
 		_identity_label.text = _build_identity_strip(d)
 	if _settlement_label != null:
 		_settlement_label.text = _build_settlement_line(d)
-	
+
+	# Gear tab updates
+	_refresh_gear_tab(d)
+
 	# Needs tab updates
 	for field in _need_bars:
 		var entry: Dictionary = _need_bars[field]
@@ -1181,6 +1233,63 @@ func _build_identity_strip(d: PawnData) -> String:
 		+ "Settlement: %s · culture: %s · intent: %s · revival %d\n"
 		+ "Order: %s · governance: %s · center: %d"
 	) % [rk, meaning_label, rep_word, rep, st_state, culture_name, intent, rev_score, war_state, gov_type, center]
+
+
+func _build_likes_dislikes_text(d: PawnData) -> String:
+	var like_parts: PackedStringArray = []
+	for cat in d.likes:
+		like_parts.append("%s (%d%%)" % [str(cat).capitalize(), int(float(d.likes[cat]) * 100)])
+	var dislike_parts: PackedStringArray = []
+	for cat in d.dislikes:
+		dislike_parts.append("%s (%d%%)" % [str(cat).capitalize(), int(float(d.dislikes[cat]) * 100)])
+	var text: String = ""
+	if not like_parts.is_empty():
+		text += "Likes: " + ", ".join(like_parts)
+	if not dislike_parts.is_empty():
+		if text != "":
+			text += "\n"
+		text += "Dislikes: " + ", ".join(dislike_parts)
+	if text.is_empty():
+		text = "No strong preferences yet"
+	return text
+
+
+func _refresh_gear_tab(d: PawnData) -> void:
+	# Update each gear slot label
+	for slot_idx in range(5):
+		var label: Label = _gear_labels.get(slot_idx, null) as Label
+		if label == null:
+			continue
+		var gear: Variant = d.equipped_gear.get(slot_idx, null)
+		if gear == null or not gear.has_method("short_desc"):
+			label.text = "Empty"
+			label.add_theme_color_override("font_color", TEXT_DIM)
+		else:
+			var gear_name: String = str(gear.name)
+			var gear_desc: String = str(gear.short_desc())
+			var dur: int = int(gear.durability)
+			var max_dur: int = int(gear.max_durability)
+			var quality: int = int(gear.quality)
+			var quality_color: Color = TEXT_DIM
+			if quality == 3:  # MASTERWORK
+				quality_color = Color8(255, 180, 50)  # gold
+			elif quality == 2:  # FINE
+				quality_color = Color8(100, 200, 255)  # blue
+			elif quality == 0:  # POOR
+				quality_color = Color8(180, 100, 100)  # red
+			else:
+				quality_color = TEXT_BRIGHT
+			label.text = "%s [%d/%d] %s" % [gear_name, dur, max_dur, gear_desc]
+			label.add_theme_color_override("font_color", quality_color)
+	# Update stats summary
+	if _gear_stats_label != null:
+		var stats: Dictionary = d.get_gear_stats()
+		var parts: PackedStringArray = []
+		parts.append("ATK %.0f" % float(stats.get("attack", 1.0)))
+		parts.append("DEF %.0f" % float(stats.get("defense", 0.0)))
+		parts.append("SPD +%.0f%%" % (float(stats.get("work_speed", 0.0)) * 100.0))
+		parts.append("WRM +%.0f" % float(stats.get("warmth", 0.0)))
+		_gear_stats_label.text = " | ".join(parts)
 
 
 func _build_settlement_line(d: PawnData) -> String:

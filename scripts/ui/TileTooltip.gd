@@ -133,21 +133,42 @@ func _refresh(tile: Vector2i) -> void:
 		var settlement: Variant = SettlementMemory.get_settlement_at_region(region_key)
 		if settlement != null and settlement is Dictionary:
 			var s: Dictionary = settlement as Dictionary
-			var s_name: String = str(s.get("name", s.get("intent", "Settlement")))
+			var s_name: String = str(s.get("name", ""))
+			if s_name.is_empty():
+				s_name = "Unnamed Settlement"
 			var gov: String = str(s.get("governance_type", "anarchy"))
 			var pop: int = int(s.get("population", 0))
 			var state: String = str(s.get("state", ""))
 			var state_tag: String = ""
 			if state != "" and state != "active":
 				state_tag = " [%s]" % state
-			lines.append("[color=%s]%s%s (%s, pop %d)[/color]" % [SETTLEMENT_COLOR.to_html(false), s_name, state_tag, gov, pop])
-			# Building counts from local feature scan
+			var culture: String = str(s.get("culture_name", ""))
+			var culture_tag: String = ""
+			if not culture.is_empty():
+				culture_tag = " · %s" % culture
+			# Era from CivilizationStage
+			var era_tag: String = ""
+			if CivilizationStage != null:
+				var civ_snap: Dictionary = CivilizationStage.get_stage_snapshot(region_key)
+				var civ_score: int = int(civ_snap.get("score", 0))
+				var civ_stage: int = int(civ_snap.get("stage", 0))
+				var era_name: String = CivilizationStage.get_stage_display_name(civ_stage, civ_score)
+				if era_name != "—":
+					era_tag = " · era %s" % era_name
+			# Myth age overlay
+			var myth_tag: String = ""
+			if MythAge != null:
+				var myth_name: String = MythAge.get_current_age_name()
+				if myth_name != "—":
+					myth_tag = " · [color=#e8c170]%s[/color]" % myth_name
+			lines.append("[color=%s]%s%s%s%s%s (%s, pop %d)[/color]" % [SETTLEMENT_COLOR.to_html(false), s_name, state_tag, culture_tag, era_tag, myth_tag, gov, pop])
+			# Building counts from local feature scan (reduced radius for perf)
 			var center_rk: int = int(s.get("center_region", -1))
 			if center_rk >= 0:
 				var crx: int = center_rk & 0xFFFF
 				var cry: int = (center_rk >> 16) & 0xFFFF
 				var center_tile: Vector2i = Vector2i(crx * 16 + 8, cry * 16 + 8)
-				var feats: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 12)
+				var feats: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 6)
 				var struct_parts: PackedStringArray = []
 				if int(feats.get("hearth", 0)) > 0:
 					struct_parts.append("hearth×%d" % int(feats.get("hearth", 0)))
@@ -161,6 +182,25 @@ func _refresh(tile: Vector2i) -> void:
 					struct_parts.append("store×%d" % int(feats.get("storage_hut", 0)))
 				if int(feats.get("marker", 0)) > 0:
 					struct_parts.append("marker×%d" % int(feats.get("marker", 0)))
+				# Phase 6 buildings
+				if int(feats.get("farm", 0)) > 0:
+					struct_parts.append("farm×%d" % int(feats.get("farm", 0)))
+				if int(feats.get("workshop", 0)) > 0:
+					struct_parts.append("workshop×%d" % int(feats.get("workshop", 0)))
+				if int(feats.get("granary", 0)) > 0:
+					struct_parts.append("granary×%d" % int(feats.get("granary", 0)))
+				if int(feats.get("library", 0)) > 0:
+					struct_parts.append("library×%d" % int(feats.get("library", 0)))
+				if int(feats.get("market", 0)) > 0:
+					struct_parts.append("market×%d" % int(feats.get("market", 0)))
+				if int(feats.get("barracks", 0)) > 0:
+					struct_parts.append("barracks×%d" % int(feats.get("barracks", 0)))
+				if int(feats.get("apothecary", 0)) > 0:
+					struct_parts.append("apothecary×%d" % int(feats.get("apothecary", 0)))
+				if int(feats.get("cellar", 0)) > 0:
+					struct_parts.append("cellar×%d" % int(feats.get("cellar", 0)))
+				if int(feats.get("boatyard", 0)) > 0:
+					struct_parts.append("boatyard×%d" % int(feats.get("boatyard", 0)))
 				if not struct_parts.is_empty():
 					lines.append("[color=%s]%s[/color]" % [STRUCTURE_COLOR.to_html(false), " · ".join(struct_parts)])
 

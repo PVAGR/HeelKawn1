@@ -1138,6 +1138,27 @@ func _find_pawn_by_id(pid: int) -> Pawn:
 	return null
 
 
+## True if the job type places a structure (building, not cooking/teaching/etc.)
+func _is_structure_build_job(jtype: int) -> bool:
+	match jtype:
+		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, \
+		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_MARKER_STONE, \
+		_Job.Type.BUILD_SHRINE, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, \
+		_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN, \
+		_Job.Type.BUILD_WORKSHOP, _Job.Type.BUILD_LOOM, _Job.Type.BUILD_KILN, _Job.Type.BUILD_SMELTER, \
+		_Job.Type.BUILD_BOATYARD, _Job.Type.BUILD_DOCK, _Job.Type.BUILD_FISHERMAN_HUT, \
+		_Job.Type.BUILD_APOTHECARY, \
+		_Job.Type.BUILD_LIBRARY, _Job.Type.BUILD_SCHOOL, \
+		_Job.Type.BUILD_BARRACKS, _Job.Type.BUILD_WATCHTOWER, \
+		_Job.Type.BUILD_MARKET, _Job.Type.BUILD_TRADING_POST, \
+		_Job.Type.BUILD_ROAD, \
+		_Job.Type.BUILD_GRANARY, _Job.Type.BUILD_CELLAR:
+			return true
+		_:
+			return false
+	return false
+
+
 func _pick_passable_near_tile(origin: Vector2i, goal: Vector2i) -> Vector2i:
 	if _world == null:
 		return Vector2i(-1, -1)
@@ -1332,10 +1353,12 @@ func _matrix_ambition_target_tile(job_type: int) -> Vector2i:
 	if _world == null or _world.data == null or _world.pathfinder == null or data == null:
 		return Vector2i(-1, -1)
 	var origin: Vector2i = data.tile_pos
-	var prefer_ring: int = 3
+	var prefer_ring: int = 4
 	var allow_fertile: bool = false  # Farms can go on fertile soil
 	if job_type == _Job.Type.BUILD_WALL or job_type == _Job.Type.BUILD_DOOR:
-		prefer_ring = 5
+		prefer_ring = 8
+	elif job_type == _Job.Type.BUILD_BED or job_type == _Job.Type.BUILD_FIRE_PIT or job_type == _Job.Type.BUILD_STORAGE_HUT or job_type == _Job.Type.BUILD_SHELTER or job_type == _Job.Type.BUILD_HEARTH:
+		prefer_ring = 6  # Increased from 3 — critical infrastructure needs more space
 	elif job_type == _Job.Type.GROW_FOOD or job_type == _Job.Type.PLANT_SEEDS:
 		prefer_ring = 6
 	# Phase 6: farms prefer fertile soil, larger search radius
@@ -1348,27 +1371,40 @@ func _matrix_ambition_target_tile(job_type: int) -> Vector2i:
 	# Phase 6: roads go further out
 	elif job_type == _Job.Type.BUILD_ROAD:
 		prefer_ring = 7
-	for r in range(1, prefer_ring + 1):
-		for y in range(-r, r + 1):
-			for x in range(-r, r + 1):
-				if abs(x) != r and abs(y) != r:
-					continue
-				var t: Vector2i = origin + Vector2i(x, y)
-				if not _world.data.in_bounds(t.x, t.y):
-					continue
-				if not _world.pathfinder.is_passable(t):
-					continue
-				var feat: int = int(_world.data.get_feature(t.x, t.y))
-				if job_type == _Job.Type.BUILD_WALL or job_type == _Job.Type.BUILD_DOOR:
-					if feat != TileFeature.Type.NONE and feat != TileFeature.Type.WALL:
+	# Two-pass search: first pass prefers empty tiles, second pass allows clearable features
+	# (TREE, FERTILE_SOIL, STICK, FLINT, RUIN) — set_feature overwrites them on completion.
+	for pass_n in range(2):
+		for r in range(1, prefer_ring + 1):
+			for y in range(-r, r + 1):
+				for x in range(-r, r + 1):
+					if abs(x) != r and abs(y) != r:
 						continue
-				elif allow_fertile:
-					# Farms can go on fertile soil or empty tiles
-					if feat != TileFeature.Type.NONE and feat != TileFeature.Type.FERTILE_SOIL:
+					var t: Vector2i = origin + Vector2i(x, y)
+					if not _world.data.in_bounds(t.x, t.y):
 						continue
-				elif feat != TileFeature.Type.NONE:
-					continue
-				return t
+					if not _world.pathfinder.is_passable(t):
+						continue
+					var feat: int = int(_world.data.get_feature(t.x, t.y))
+					if job_type == _Job.Type.BUILD_WALL or job_type == _Job.Type.BUILD_DOOR:
+						if pass_n == 0:
+							if feat != TileFeature.Type.NONE and feat != TileFeature.Type.WALL:
+								continue
+						else:
+							# Second pass: allow clearable features for walls
+							if TileFeature.name_for(feat) != "None" and feat != TileFeature.Type.WALL and feat != TileFeature.Type.TREE and feat != TileFeature.Type.FERTILE_SOIL and feat != TileFeature.Type.ORE_VEIN and feat != TileFeature.Type.RUIN:
+								continue
+					elif allow_fertile:
+						if feat != TileFeature.Type.NONE and feat != TileFeature.Type.FERTILE_SOIL:
+							continue
+					else:
+						if pass_n == 0:
+							if feat != TileFeature.Type.NONE:
+								continue
+						else:
+							# Second pass: allow clearable features (tree, fertile soil, ore vein, ruin)
+							if TileFeature.name_for(feat) != "None" and feat != TileFeature.Type.TREE and feat != TileFeature.Type.FERTILE_SOIL and feat != TileFeature.Type.ORE_VEIN and feat != TileFeature.Type.RUIN:
+								continue
+					return t
 	return _pick_passable_near_tile(origin, origin + Vector2i(2, 0))
 
 
@@ -2746,6 +2782,18 @@ func _tick_idle() -> void:
 		# Boost FORAGE/HUNT jobs during food crisis
 		if crisis_food_pressure > 0.7 and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT):
 			base_bias += 4
+		# Leader proximity bonus: if the settlement ruler is nearby and this
+		# is a build job, the pawn gets +3 priority (leader directs construction)
+		if _is_structure_build_job(j.type):
+			var my_sid: int = SettlementMemory.get_settlement_id_for_pawn(int(data.id))
+			if my_sid >= 0:
+				var ruler_id: int = SettlementMemory.get_ruler_pawn_id(my_sid)
+				if ruler_id >= 0 and ruler_id != int(data.id):
+					var ruler_data: PawnData = HeelKawnianManager._pawn_data_for_id(ruler_id)
+					if ruler_data != null:
+						var dist_to_ruler: int = absi(data.tile_pos.x - ruler_data.tile_pos.x) + absi(data.tile_pos.y - ruler_data.tile_pos.y)
+						if dist_to_ruler <= 12:
+							base_bias += 3
 
 		# Neural AI priority bonus from WorldAI matrix (once per job type/tick).
 		var neural_bias: int = 0
@@ -6989,10 +7037,10 @@ func _draw() -> void:
 	if _state == State.SLEEPING:
 		body_color = data.color.darkened(0.25)
 
-	# Profession body tint — subtle overlay so pawns of same role look alike
+	# Profession body tint — strong overlay so pawns of same role look alike
 	if data.current_profession != PawnData.Profession.NONE:
 		var prof_tint: Color = _profession_color(data.current_profession)
-		body_color = body_color.lerp(prof_tint, 0.12)
+		body_color = body_color.lerp(prof_tint, 0.30)
 
 	# Armor tint: subtle overlay from equipped armor
 	var armor_gear: Variant = data.equipped_gear.get(1, null)  # Slot.ARMOR
@@ -7070,6 +7118,23 @@ func _draw() -> void:
 				# Star (knowledge)
 				var s: float = badge_r * 0.5
 				draw_circle(prof_pos, s, Color.WHITE)
+			PawnData.Profession.TRADER:
+				# Circle (coin)
+				var s: float = badge_r * 0.45
+				draw_circle(prof_pos, s, Color.WHITE)
+			PawnData.Profession.SMITH:
+				# Inverted triangle (anvil)
+				var s: float = badge_r * 0.7
+				draw_colored_polygon(
+					PackedVector2Array([prof_pos + Vector2(-s, -s), prof_pos + Vector2(s, -s), prof_pos + Vector2(0, s)]),
+					Color.WHITE
+				)
+			PawnData.Profession.HEALER:
+				# Cross (medical)
+				var s: float = badge_r * 0.6
+				var t: float = badge_r * 0.2
+				draw_rect(Rect2(prof_pos - Vector2(t, s), Vector2(t * 2, s * 2)), Color.WHITE, true)
+				draw_rect(Rect2(prof_pos - Vector2(s, t), Vector2(s * 2, t * 2)), Color.WHITE, true)
 
 	# Draft marker only
 	if draft_mode:
@@ -7105,6 +7170,9 @@ func _profession_color(prof: int) -> Color:
 		PawnData.Profession.GATHERER: return Color(0.2, 0.75, 0.3)    # green
 		PawnData.Profession.WARRIOR:  return Color(0.9, 0.2, 0.2)     # red
 		PawnData.Profession.SCHOLAR:  return Color(0.3, 0.5, 0.9)     # blue
+		PawnData.Profession.TRADER:   return Color(0.85, 0.75, 0.2)   # amber
+		PawnData.Profession.SMITH:    return Color(0.55, 0.55, 0.6)   # steel
+		PawnData.Profession.HEALER:   return Color(0.3, 0.75, 0.65)   # teal
 		_:                            return Color.WHITE
 
 
@@ -7163,7 +7231,37 @@ func _get_profession_priority_bonus(job: Job) -> int:
 				return 10
 			Job.Type.HUNT, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES:
 				return 6
-	
+
+	# Trader: +8 priority for trade/haul jobs
+	if data.current_profession == PawnData.Profession.TRADER:
+		match job.type:
+			Job.Type.TRADE_HAUL:
+				return 10
+			Job.Type.BUILD_MARKET, Job.Type.BUILD_TRADING_POST:
+				return 8
+			Job.Type.FORAGE:
+				return 5  # gather trade goods
+
+	# Smith: +8 priority for craft/mine jobs
+	if data.current_profession == PawnData.Profession.SMITH:
+		match job.type:
+			Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR:
+				return 10
+			Job.Type.MINE, Job.Type.MINE_WALL:
+				return 8
+			Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_SMELTER:
+				return 6
+
+	# Healer: +8 priority for healing/cooking jobs
+	if data.current_profession == PawnData.Profession.HEALER:
+		match job.type:
+			Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES:
+				return 10
+			Job.Type.BUILD_APOTHECARY:
+				return 8
+			Job.Type.FORAGE:
+				return 5  # gather herbs
+
 	return 0
 
 

@@ -242,17 +242,19 @@ func _generate_dream(pawn: Node) -> void:
 				break
 		theme = "social" if has_social_memories else "general"
 
-	# Get dream content
+	# Get dream content — deterministic selection via stable hash
 	var dream_themes: Array = DREAM_THEMES.get(theme, DREAM_THEMES.general)
-	var dream_content: String = dream_themes[randi() % dream_themes.size()]
+	var tick: int = GameManager.tick_count
+	var dream_idx: int = absi(_stable_hash(pawn_id, tick, 0)) % dream_themes.size()
+	var dream_content: String = dream_themes[dream_idx]
 
 	# Create dream
 	var dream: Dictionary = {
-		"tick": GameManager.tick_count,
+		"tick": tick,
 		"theme": theme,
 		"content": dream_content,
 		"emotion": emotion_sum / float(recent_memories.size()),
-		"lucid": randf() < (float(consciousness.self_awareness) / 5.0)  # Higher awareness = more lucid dreams
+		"lucid": _stable_randf(pawn_id, tick, 1) < (float(consciousness.self_awareness) / 5.0)  # Higher awareness = more lucid dreams
 	}
 	
 	consciousness.dreams.append(dream)
@@ -511,3 +513,36 @@ func clear_pawn_consciousness(pawn_id: int) -> void:
 func clear() -> void:
 	pawn_consciousness.clear()
 	_next_memory_id = 1
+
+
+# ==================== DETERMINISTIC HASH ====================
+
+## FNV-1a-inspired stable hash. Same inputs always produce same output.
+static func _stable_hash(a: int, b: int, c: int) -> int:
+	var h: int = 2166136261
+	h = h ^ (a & 0xFF)
+	h = (h * 16777619) & 0xFFFFFFFF
+	h = h ^ ((a >> 8) & 0xFF)
+	h = (h * 16777619) & 0xFFFFFFFF
+	h = h ^ ((a >> 16) & 0xFF)
+	h = (h * 16777619) & 0xFFFFFFFF
+	h = h ^ ((a >> 24) & 0xFF)
+	h = (h * 16777619) & 0xFFFFFFFF
+	h = h ^ (b & 0xFF)
+	h = (h * 16777619) & 0xFFFFFFFF
+	h = h ^ ((b >> 8) & 0xFF)
+	h = (h * 16777619) & 0xFFFFFFFF
+	h = h ^ ((b >> 16) & 0xFF)
+	h = (h * 16777619) & 0xFFFFFFFF
+	h = h ^ ((b >> 24) & 0xFF)
+	h = (h * 16777619) & 0xFFFFFFFF
+	h = h ^ (c & 0xFF)
+	h = (h * 16777619) & 0xFFFFFFFF
+	h = h ^ ((c >> 8) & 0xFF)
+	h = (h * 16777619) & 0xFFFFFFFF
+	return h
+
+
+## Deterministic float in [0, 1) from seed + two ints.
+static func _stable_randf(a: int, b: int, c: int) -> float:
+	return float(absi(_stable_hash(a, b, c)) % 10000) / 10000.0

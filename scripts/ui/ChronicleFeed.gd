@@ -13,6 +13,7 @@ const FONT_SIZE: int = 10  # Smaller font (was 11)
 const REFRESH_EVERY_N_TICKS: int = 10
 const REFRESH_FAST: int = 30
 const REFRESH_ULTRA: int = 60
+const SUMMARY_INTERVAL_TICKS: int = 600  # ~1 in-game day — compose a world summary
 
 ## Event category colors
 const COLOR_LIFE: String = "#dcb478"       # gold — births, bloodlines
@@ -33,6 +34,17 @@ var _bg: ColorRect
 var _visible: bool = true
 var _last_seen_event_count: int = 0
 var _header: Label
+var _last_summary_tick: int = -9999
+var _summary_deaths: int = 0
+var _summary_births: int = 0
+var _summary_teaching: int = 0
+var _summary_builds: int = 0
+var _summary_grudges: int = 0
+var _summary_innovations: int = 0
+var _toast_scene: PackedScene = null
+var _toast_container: VBoxContainer
+var _last_toast_tick: int = -9999
+const TOAST_COOLDOWN_TICKS: int = 120  # Don't spam toasts
 
 
 func _ready() -> void:
@@ -89,6 +101,19 @@ func _ready() -> void:
 	if GameManager != null:
 		GameManager.game_tick.connect(_on_tick)
 
+	# Toast container — top-center for important event popups
+	_toast_container = VBoxContainer.new()
+	_toast_container.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_toast_container.offset_left = -160
+	_toast_container.offset_right = 160
+	_toast_container.offset_top = 10
+	_toast_container.offset_bottom = 200
+	_toast_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	add_child(_toast_container)
+
+	# Load toast scene
+	_toast_scene = load("res://scenes/ui/EventToast.tscn")
+
 
 func _on_tick(tick: int) -> void:
 	if not _visible:
@@ -96,6 +121,14 @@ func _on_tick(tick: int) -> void:
 	var refresh_stride: int = _refresh_stride_for_speed(GameManager.game_speed)
 	if tick % refresh_stride != 0 and _last_seen_event_count > 0:
 		return
+	# Track event counts for summary composition
+	_track_events_for_summary()
+	# Compose periodic world summary
+	if tick - _last_summary_tick >= SUMMARY_INTERVAL_TICKS and tick > 100:
+		_compose_world_summary(tick)
+		_last_summary_tick = tick
+	# Check for important toast-worthy events
+	_check_toast_events(tick)
 	_refresh()
 
 
@@ -184,7 +217,7 @@ func _color_for_type(typ: String) -> String:
 	if typ in ["collapse_warning", "environmental_degradation", "economic_boom", "market_crash",
 			"sacred_site_established", "ritual_performed", "religious_schism", "religious_conversion",
 			"emergent_pattern_detected", "historical_saturation", "collapse_metric_change",
-			"entity_decay", "entity_loss"]:
+			"entity_decay", "entity_loss", "chronicle_summary"]:
 		return COLOR_WORLD
 	# Conflict
 	if typ in ["war_battle_spawned", "war_proposed", "injury", "social_fragment", "social_schism",
@@ -222,7 +255,7 @@ func _chronicle_line_for_event(e: Dictionary) -> String:
 	return "[color=#555555]d%d[/color] [color=%s]%s[/color]" % [day, color, text]
 
 
-## Human-readable text for an event type
+## Human-readable text for an event type — narrative composition
 func _event_text(typ: String, e: Dictionary) -> String:
 	# Filter out noisy internal events that flood the feed
 	if typ in ["region_discovery", "knowledge_acquisition", "life_path_switch",
@@ -240,7 +273,7 @@ func _event_text(typ: String, e: Dictionary) -> String:
 			var pa: String = str(e.get("parent_a_name", "")).strip_edges()
 			var pb: String = str(e.get("parent_b_name", "")).strip_edges()
 			if not pa.is_empty() and not pb.is_empty():
-				return "%s born to %s + %s" % [child_name, pa, pb]
+				return "%s was born to %s and %s" % [child_name, pa, pb]
 			return "%s was born" % child_name
 
 		"pawn_death":
@@ -250,6 +283,18 @@ func _event_text(typ: String, e: Dictionary) -> String:
 			var cause_text: String = ""
 			if not cause.is_empty():
 				cause_text = " of %s" % cause.replace("_", " ")
+			# Compose narrative death text
+			var profession: String = str(e.get("profession", "")).strip_edges()
+			var prof_prefix: String = ""
+			if not profession.is_empty() and profession != "None":
+				prof_prefix = "%s " % profession.to_lower()
+			# Check if this was a knowledge carrier
+			var knowledge_lost: bool = bool(e.get("knowledge_lost", false))
+			var lost_knowledge: String = str(e.get("lost_knowledge_type", "")).strip_edges()
+			if knowledge_lost and not lost_knowledge.is_empty():
+				return "%s%s died%s — and with them, the knowledge of %s" % [prof_prefix, nm, cause_text, lost_knowledge.replace("_", " ")]
+			if not prof_prefix.is_empty():
+				return "%s%s perished%s" % [prof_prefix, nm, cause_text]
 			return "%s died%s" % [nm, cause_text]
 
 		"animal_death":
@@ -269,53 +314,64 @@ func _event_text(typ: String, e: Dictionary) -> String:
 			var loc: String = ""
 			if tile_x >= 0 and tile_y >= 0:
 				loc = " at (%d,%d)" % [tile_x, tile_y]
-			return "%s built %s%s" % [worker, job_name, loc]
+			return "%s raised %s%s" % [worker, job_name.to_lower(), loc]
 
 		"cooperative_build":
 			var worker: String = str(e.get("worker_name", "")).strip_edges()
 			var nearby: int = int(e.get("nearby_workers", 0))
 			if worker.is_empty():
 				worker = "a crew"
-			var crew: String = " with %d nearby" % nearby if nearby > 1 else ""
+			var crew: String = " alongside %d others" % nearby if nearby > 1 else ""
 			return "%s raised a structure together%s" % [worker, crew]
 
 		"knowledge_discovery":
-			var kt: String = str(e.get("knowledge_type", "?"))
-			return "new knowledge discovered (%s)" % kt
+			var kt: String = str(e.get("knowledge_type", "?")).replace("_", " ")
+			var discoverer: String = str(e.get("pawn_name", "someone")).strip_edges()
+			if discoverer.is_empty(): discoverer = "someone"
+			return "%s discovered the art of %s" % [discoverer, kt]
 
 		"knowledge_rediscovery":
-			return "lost knowledge was rediscovered"
+			var kt: String = str(e.get("knowledge_type", "lost knowledge")).replace("_", " ")
+			return "the art of %s, long lost, was rediscovered" % kt
 
 		"knowledge_sealed":
 			var nm: String = str(e.get("carrier_name", "a scholar")).strip_edges()
+			var kt: String = str(e.get("knowledge_type", "")).strip_edges().replace("_", " ")
+			if not kt.is_empty():
+				return "%s died carrying the knowledge of %s — unfulfilled teaching obligations" % [nm, kt]
 			return "%s died with unfulfilled teaching obligations" % nm
 
 		"knowledge_lost":
-			var kt: String = str(e.get("knowledge_type", "knowledge")).strip_edges()
-			return "%s was lost to the settlement" % kt
+			var kt: String = str(e.get("knowledge_type", "knowledge")).strip_edges().replace("_", " ")
+			return "the knowledge of %s was lost to the settlement" % kt
 
 		"knowledge_at_risk":
-			var kt: String = str(e.get("knowledge_type", "knowledge")).strip_edges()
+			var kt: String = str(e.get("knowledge_type", "knowledge")).strip_edges().replace("_", " ")
+			var carrier: String = str(e.get("carrier_name", "")).strip_edges()
+			if not carrier.is_empty():
+				return "%s is the last carrier of %s — if they fall, it dies with them" % [carrier, kt]
 			return "%s is at risk — only one carrier remains" % kt
 
 		"knowledge_crisis":
-			return "knowledge crisis — multiple skills at risk"
+			return "knowledge crisis — multiple skills at risk of being lost forever"
 
 		"teaching_success":
 			var teacher: String = str(e.get("teacher_name", "A")).strip_edges()
 			var student: String = str(e.get("student_name", "B")).strip_edges()
-			var kt: String = str(e.get("knowledge_type", "")).strip_edges()
+			var kt: String = str(e.get("knowledge_type", "")).strip_edges().replace("_", " ")
 			if not teacher.is_empty() and not student.is_empty():
-				return "%s taught %s%s" % [teacher, student, " (%s)" % kt if not kt.is_empty() else ""]
+				if not kt.is_empty():
+					return "%s taught %s the art of %s" % [teacher, student, kt]
+				return "%s passed knowledge to %s" % [teacher, student]
 			return "teaching succeeded"
 
 		"teaching_failure":
-			return "a teaching attempt failed"
+			return "a teaching attempt failed — the knowledge did not take hold"
 
 		"social_bond_milestone":
 			var an: String = str(e.get("a_name", "A"))
 			var bn: String = str(e.get("b_name", "B"))
-			return "%s and %s bond deepened" % [an, bn]
+			return "%s and %s grew closer" % [an, bn]
 
 		"social_meeting":
 			var ma: String = str(e.get("a_name", "A"))
@@ -329,7 +385,7 @@ func _event_text(typ: String, e: Dictionary) -> String:
 		"settlement_intent_shift":
 			var old_i: String = str(e.get("old_intent", "?")).to_lower()
 			var new_i: String = str(e.get("new_intent", "?")).to_lower()
-			return "settlement intent shifted %s → %s" % [old_i, new_i]
+			return "settlement ambition shifted from %s to %s" % [old_i, new_i]
 
 		"authority_change":
 			var nm: String = str(e.get("pawn_name", "someone")).strip_edges()
@@ -344,7 +400,7 @@ func _event_text(typ: String, e: Dictionary) -> String:
 
 		"diaspora_exile":
 			var count: int = int(e.get("exile_count", 0))
-			return "diaspora — %d pawns were exiled" % maxi(count, 1)
+			return "diaspora — %d HeelKawnians were exiled from their home" % maxi(count, 1)
 
 		"diaspora_grief":
 			var nm: String = str(e.get("pawn_name", "someone")).strip_edges()
@@ -356,7 +412,7 @@ func _event_text(typ: String, e: Dictionary) -> String:
 			return "%s absorbed a new custom: %s" % [nm, custom]
 
 		"collapse_warning":
-			return "collapse warning — settlement under strain"
+			return "collapse warning — the settlement is under strain"
 
 		"environmental_degradation":
 			return "environmental degradation detected"
@@ -401,13 +457,16 @@ func _event_text(typ: String, e: Dictionary) -> String:
 			return "crops were harvested"
 
 		"starvation_event":
-			return "starvation — settlement is hungry"
+			var count: int = int(e.get("death_count", 0))
+			if count > 1:
+				return "starvation — %d HeelKawnians perished when the stockpile ran empty" % count
+			return "starvation — the settlement is hungry"
 
 		"injury":
 			var nm: String = str(e.get("pawn_name", "someone")).strip_edges()
 			var body_part: String = str(e.get("body_part", "")).replace("_", " ")
 			if not body_part.is_empty():
-				return "%s was injured (%s)" % [nm, body_part]
+				return "%s was injured — %s" % [nm, body_part]
 			return "%s was injured" % nm
 
 		"war_battle_spawned":
@@ -459,6 +518,9 @@ func _event_text(typ: String, e: Dictionary) -> String:
 		# Craft events
 		"tool_crafted":
 			var tool: String = str(e.get("tool_type", "a tool")).replace("_", " ")
+			var crafter: String = str(e.get("pawn_name", "")).strip_edges()
+			if not crafter.is_empty():
+				return "%s crafted %s" % [crafter, tool]
 			return "a %s was crafted" % tool
 		"tool_break":
 			return "a tool broke"
@@ -507,6 +569,12 @@ func _event_text(typ: String, e: Dictionary) -> String:
 		# Conflict events
 		"grudge_formed":
 			var an: String = str(e.get("pawn_name", "someone")).strip_edges()
+			var target: String = str(e.get("target_name", "")).strip_edges()
+			var reason: String = str(e.get("reason", "")).replace("_", " ")
+			if not target.is_empty():
+				if not reason.is_empty():
+					return "%s swore a grudge against %s — %s" % [an, target, reason]
+				return "%s swore a grudge against %s" % [an, target]
 			return "%s formed a grudge" % an
 		"grudge_inherited":
 			var nm: String = str(e.get("pawn_name", "someone")).strip_edges()
@@ -586,8 +654,183 @@ func _event_text(typ: String, e: Dictionary) -> String:
 		"gossip_spread":
 			return ""  # too noisy
 
+		# Chronicle summary — periodic world state
+		"chronicle_summary":
+			var summary: String = str(e.get("summary", "")).strip_edges()
+			if not summary.is_empty():
+				return "[b]— %s —[/b]" % summary
+			return ""
+
 		_:
 			# Surface rare settlement/world events
 			if typ.begins_with("settlement") or typ.contains("abandon") or typ.contains("revival") or typ.contains("rebirth"):
 				return typ.replace("_", " ")
 			return ""
+
+
+## Track event counts between summaries for narrative composition
+func _track_events_for_summary() -> void:
+	if WorldMemory == null:
+		return
+	var events: Array = WorldMemory.get_recent_events(128)
+	for e_any in events:
+		if not e_any is Dictionary:
+			continue
+		var e: Dictionary = e_any as Dictionary
+		var tick: int = int(e.get("tick", 0))
+		if tick <= _last_summary_tick:
+			continue
+		var typ: String = str(e.get("type", ""))
+		if typ == "pawn_death" or typ == "starvation_event":
+			_summary_deaths += 1
+		elif typ == "birth" or typ == "pawn_birth":
+			_summary_births += 1
+		elif typ == "teaching_success":
+			_summary_teaching += 1
+		elif typ == "structure_built" or typ == "hearth_built" or typ == "storage_built" or typ == "shrine_built":
+			_summary_builds += 1
+		elif typ == "grudge_formed":
+			_summary_grudges += 1
+		elif typ == "knowledge_discovery" or typ == "knowledge_rediscovery":
+			_summary_innovations += 1
+
+
+## Compose a world summary and inject it as a chronicle event
+func _compose_world_summary(tick: int) -> void:
+	var parts: PackedStringArray = []
+
+	# Population snapshot
+	var pop: int = 0
+	var sp: Node = get_tree().get_root().get_node_or_null("Main")
+	if sp != null:
+		sp = sp.get_node_or_null("WorldViewport/PawnSpawner")
+	if sp != null and sp.has_method("get_all_pawns"):
+		pop = sp.get_all_pawns().size()
+
+	# Settlement count
+	var settlement_count: int = 0
+	if SettlementMemory != null and SettlementMemory.has_method("get_settlements"):
+		settlement_count = SettlementMemory.get_settlements().size()
+
+	# Knowledge at risk
+	var at_risk_count: int = 0
+	if KnowledgeSystem != null and KnowledgeSystem.has_method("get_dormant_knowledge_types"):
+		at_risk_count = KnowledgeSystem.get_dormant_knowledge_types().size()
+
+	# Compose narrative
+	if _summary_deaths > 0:
+		if _summary_deaths >= 3:
+			parts.append("%d perished" % _summary_deaths)
+		else:
+			parts.append("%d died" % _summary_deaths)
+	if _summary_births > 0:
+		parts.append("%d born" % _summary_births)
+	if _summary_teaching > 0:
+		parts.append("%d lessons taught" % _summary_teaching)
+	if _summary_builds > 0:
+		parts.append("%d structures raised" % _summary_builds)
+	if _summary_grudges > 0:
+		parts.append("%d grudge%s formed" % [_summary_grudges, "s" if _summary_grudges > 1 else ""])
+	if _summary_innovations > 0:
+		parts.append("%d innovation%s" % [_summary_innovations, "s" if _summary_innovations > 1 else ""])
+	if at_risk_count > 0:
+		parts.append("%d knowledge%s at risk" % [at_risk_count, "s" if at_risk_count > 1 else ""])
+
+	# Reset counters
+	_summary_deaths = 0
+	_summary_births = 0
+	_summary_teaching = 0
+	_summary_builds = 0
+	_summary_grudges = 0
+	_summary_innovations = 0
+
+	if parts.is_empty():
+		return
+
+	# Inject as a summary event into WorldMemory
+	var day: int = tick / 600 if tick > 0 else 0
+	var summary_text: String = ""
+	if pop > 0:
+		summary_text = "Pop %d · %s" % [pop, ", ".join(parts)]
+	else:
+		summary_text = ", ".join(parts)
+
+	if settlement_count > 0:
+		summary_text = "%d settlement%s · %s" % [settlement_count, "s" if settlement_count > 1 else "", summary_text]
+
+	# Record as a special chronicle event
+	if WorldMemory != null and WorldMemory.has_method("record_event"):
+		WorldMemory.record_event({
+			"type": "chronicle_summary",
+			"tick": tick,
+			"summary": summary_text,
+		})
+
+
+## Check for important events that deserve a toast popup
+func _check_toast_events(tick: int) -> void:
+	if tick - _last_toast_tick < TOAST_COOLDOWN_TICKS:
+		return
+	if WorldMemory == null:
+		return
+	var events: Array = WorldMemory.get_recent_events(32)
+	for e_any in events:
+		if not e_any is Dictionary:
+			continue
+		var e: Dictionary = e_any as Dictionary
+		var e_tick: int = int(e.get("tick", 0))
+		if e_tick <= _last_toast_tick:
+			continue
+		var typ: String = str(e.get("type", ""))
+		var toast_text: String = ""
+		# Only toast for high-impact events
+		match typ:
+			"knowledge_at_risk":
+				var kt: String = str(e.get("knowledge_type", "knowledge")).replace("_", " ")
+				var carrier: String = str(e.get("carrier_name", "")).strip_edges()
+				if not carrier.is_empty():
+					toast_text = "%s is the last carrier of %s" % [carrier, kt]
+				else:
+					toast_text = "%s is at risk — only one carrier remains" % kt
+			"knowledge_crisis":
+				toast_text = "Knowledge crisis — multiple skills at risk"
+			"knowledge_lost":
+				var kt: String = str(e.get("knowledge_type", "knowledge")).replace("_", " ")
+				toast_text = "The knowledge of %s has been lost" % kt
+			"knowledge_discovery":
+				var kt: String = str(e.get("knowledge_type", "")).replace("_", " ")
+				var discoverer: String = str(e.get("pawn_name", "")).strip_edges()
+				if not discoverer.is_empty() and not kt.is_empty():
+					toast_text = "%s discovered %s" % [discoverer, kt]
+				elif not kt.is_empty():
+					toast_text = "New knowledge discovered: %s" % kt
+			"grudge_formed":
+				var an: String = str(e.get("pawn_name", "")).strip_edges()
+				var target: String = str(e.get("target_name", "")).strip_edges()
+				if not an.is_empty() and not target.is_empty():
+					toast_text = "%s swore a grudge against %s" % [an, target]
+			"starvation_event":
+				toast_text = "Starvation — the settlement is hungry"
+			"famine_warning":
+				toast_text = "Famine warning — food reserves critical"
+			"settlement_collapse":
+				toast_text = "A settlement has collapsed"
+			"settlement_new_foundation":
+				toast_text = "A new settlement was founded"
+			"social_schism":
+				toast_text = "Social schism — a community has fractured"
+		if not toast_text.is_empty():
+			_spawn_toast(toast_text)
+			_last_toast_tick = tick
+			return  # One toast per check
+
+
+func _spawn_toast(text: String) -> void:
+	if _toast_scene == null or _toast_container == null:
+		return
+	var toast: Node = _toast_scene.instantiate()
+	if toast == null:
+		return
+	_toast_container.add_child(toast)
+	if toast.has_method("setup"):
+		toast.setup(text)

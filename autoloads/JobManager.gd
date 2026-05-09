@@ -105,7 +105,17 @@ static func _is_construction_type(type: int) -> bool:
 		Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS, Job.Type.GROW_FOOD, \
 		Job.Type.CARVE_GRAVE_MARKER, Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.CARVE_LEDGER_STONE, \
 		Job.Type.PAPER_MAKING, Job.Type.INK_MAKING, Job.Type.BOOK_BINDING, \
-		Job.Type.TOOL_MAKING, Job.Type.TEACH_SKILL, Job.Type.PROTECT:
+		Job.Type.TOOL_MAKING, Job.Type.TEACH_SKILL, Job.Type.PROTECT, \
+		Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_FARM_CORN, Job.Type.BUILD_FARM_VEGETABLES, Job.Type.BUILD_HERB_GARDEN, \
+		Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_LOOM, Job.Type.BUILD_KILN, Job.Type.BUILD_SMELTER, \
+		Job.Type.BUILD_BOATYARD, Job.Type.BUILD_DOCK, Job.Type.BUILD_FISHERMAN_HUT, \
+		Job.Type.BUILD_APOTHECARY, \
+		Job.Type.BUILD_LIBRARY, Job.Type.BUILD_SCHOOL, \
+		Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, \
+		Job.Type.BUILD_MARKET, Job.Type.BUILD_TRADING_POST, \
+		Job.Type.BUILD_ROAD, \
+		Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR, \
+		Job.Type.BUILD_SHELTER:
 			return true
 		_:
 			return false

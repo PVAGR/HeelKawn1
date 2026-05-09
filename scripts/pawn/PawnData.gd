@@ -15,7 +15,7 @@ enum Skill { FORAGING, MINING, CHOPPING, BUILDING, HUNTING }
 enum Profession { NONE, FARMER, BUILDER, GATHERER, WARRIOR, SCHOLAR, TRADER, SMITH, HEALER }
 
 ## Skill XP curve. Each skill tracked as raw XP; level = floor(xp / XP_PER_LEVEL).
-const XP_PER_LEVEL: float = 100.0
+const XP_PER_LEVEL: float = 500.0
 ## Soft cap. Skills can technically go higher but we display / multiply against
 ## this as the "mastery" mark.
 const SKILL_LEVEL_MAX: int = 20
@@ -26,7 +26,7 @@ const SKILL_BONUS_AT_MAX: float = 2.0
 const MISSING_REQUIRED_TOOL_WORK_SPEED_MULT: float = 0.5
 ## XP gained per tick of work on the matching skill. Tuned so a fresh pawn
 ## passes lvl 1 in ~one job cycle and reaches lvl 5 over a few in-game days.
-const XP_PER_WORK_TICK: float = 1.5
+const XP_PER_WORK_TICK: float = 2.0
 
 ## Likes/dislikes categories. Each pawn gets 2-4 likes and 1-3 dislikes at birth.
 const LIKE_CATEGORIES: PackedStringArray = [
@@ -1992,6 +1992,7 @@ func add_skill_xp(skill: int, amount: float) -> bool:
 		var ticks_in_cat: int = int(job_ticks_by_category.get(job_cat, 0))
 		if ticks_in_cat >= PROFESSION_ASSIGN_MIN_TICKS and not dislikes.has(job_cat):
 			current_profession = _skill_to_profession(cat)
+			apparel_color = profession_apparel_color(current_profession)
 
 	# Stage 1: Check for overall level up
 	_check_level_up()
@@ -2508,6 +2509,7 @@ func _maybe_reassign_profession(_just_gained_key: String) -> void:
 		var new_prof: int = _skill_to_profession(best_key)
 		if new_prof != Profession.NONE and new_prof != current_profession:
 			current_profession = new_prof
+			apparel_color = profession_apparel_color(current_profession)
 
 
 func profession_name() -> String:
@@ -2528,8 +2530,38 @@ static func profession_label_from_enum(prof: int) -> String:
 			return "Warrior"
 		Profession.SCHOLAR:
 			return "Scholar"
+		Profession.TRADER:
+			return "Trader"
+		Profession.SMITH:
+			return "Smith"
+		Profession.HEALER:
+			return "Healer"
 		_:
 			return "None"
+
+
+## Returns the apparel color for a given profession. Used to visually
+## distinguish pawns by role — the pixel sprite torso uses apparel_color.
+static func profession_apparel_color(prof: int) -> Color:
+	match prof:
+		Profession.FARMER:
+			return Color("#7a9a4a")   # earthy green
+		Profession.BUILDER:
+			return Color("#8a7a6a")   # dusty brown
+		Profession.GATHERER:
+			return Color("#5a8a5a")   # forest green
+		Profession.WARRIOR:
+			return Color("#8a3a3a")   # dark red
+		Profession.SCHOLAR:
+			return Color("#4a5a8a")   # deep blue
+		Profession.TRADER:
+			return Color("#8a7a3a")   # gold/amber
+		Profession.SMITH:
+			return Color("#5a5a5a")   # dark gray (steel)
+		Profession.HEALER:
+			return Color("#5a8a7a")   # teal
+		_:
+			return Color("#5d7ea8")   # default (original random base)
 
 
 func tracked_skill_xp(skill_key: String) -> int:
@@ -2556,6 +2588,7 @@ func gain_skill_xp(skill_key: String, amount: int) -> bool:
 	var just_locked: bool = false
 	if current_profession == Profession.NONE and after >= 30:
 		current_profession = _skill_to_profession(skill_key)
+		apparel_color = profession_apparel_color(current_profession)
 		just_locked = true
 	skills[skill_key] = after
 	add_liking_from_action_skill(skill_key, amount)

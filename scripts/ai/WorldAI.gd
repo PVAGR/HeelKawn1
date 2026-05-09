@@ -3430,6 +3430,16 @@ func _pawn_decision_rule_context(pd: PawnData) -> Dictionary:
 		"core_beliefs_count": _pawn_consciousness_beliefs_count(pd),
 		# GrudgeManager — grudge intensity
 		"grudge_intensity": _pawn_grudge_intensity(pd),
+		# HeelKawnianMind — composed mind snapshot fields
+		"mind_pursuit": _pawn_mind_pursuit(pd),
+		"mind_emotional_pressure": _pawn_mind_emotional(pd),
+		"mind_place_feeling": _pawn_mind_place_feeling(pd),
+		"mind_culture_tradition": _pawn_mind_culture(pd),
+		"mind_reputation": _pawn_mind_reputation(pd),
+		# HeelKawnianMind — knowledge, war, settlement
+		"mind_knowledge_count": _pawn_mind_knowledge_count(pd),
+		"mind_knowledge_at_risk": _pawn_mind_knowledge_at_risk(pd),
+		"mind_conflict_count": _pawn_mind_conflict_count(pd),
 	}
 
 
@@ -3515,6 +3525,107 @@ func _pawn_grudge_intensity(pd: PawnData) -> float:
 	for g in grudges:
 		total += float(g.get("intensity", 0.0))
 	return minf(total, 2.0)  # Cap at 2.0 for rule matrix
+
+
+# ==================== HeelKawnianMind context helpers ====================
+
+func _pawn_mind_pursuit(pd: PawnData) -> String:
+	var hm: Node = get_node_or_null("/root/HeelKawnianMind")
+	if hm == null:
+		return ""
+	var pawn: Variant = _resolve_pawn_for_data(pd)
+	if pawn == null:
+		return ""
+	var snapshot: Dictionary = hm.compute_mind_snapshot(pawn)
+	return str(snapshot.get("pursuit", ""))
+
+
+func _pawn_mind_emotional(pd: PawnData) -> String:
+	var hm: Node = get_node_or_null("/root/HeelKawnianMind")
+	if hm == null:
+		return ""
+	var pawn: Variant = _resolve_pawn_for_data(pd)
+	if pawn == null:
+		return ""
+	var snapshot: Dictionary = hm.compute_mind_snapshot(pawn)
+	return str(snapshot.get("emotional_pressure", ""))
+
+
+func _pawn_mind_place_feeling(pd: PawnData) -> String:
+	var hm: Node = get_node_or_null("/root/HeelKawnianMind")
+	if hm == null:
+		return ""
+	var pawn: Variant = _resolve_pawn_for_data(pd)
+	if pawn == null:
+		return ""
+	# Read meaning tags directly for efficiency
+	var rk: int = WorldMemory._region_key(pd.tile_pos.x, pd.tile_pos.y)
+	var tags: PackedStringArray = WorldMeaning.get_region_tags(rk)
+	for tag in tags:
+		match tag:
+			"dangerous", "death", "blood":
+				return "dangerous"
+			"sacred":
+				return "sacred"
+			"home", "settlement", "hearth":
+				return "home"
+			"wild", "untamed":
+				return "wild"
+			"abandoned", "ruin":
+				return "haunted"
+	return ""
+
+
+func _pawn_mind_culture(pd: PawnData) -> String:
+	if pd.settlement_id < 0:
+		return ""
+	var cm: Node = get_node_or_null("/root/CulturalMemory")
+	if cm == null or not cm.has_method("get_tradition"):
+		return ""
+	var tradition: Dictionary = cm.get_tradition(pd.settlement_id)
+	if tradition.is_empty():
+		return ""
+	return str(tradition.get("type", ""))
+
+
+func _pawn_mind_reputation(pd: PawnData) -> float:
+	var gm: Node = get_node_or_null("/root/GossipManager")
+	if gm == null or not gm.has_method("get_reputation_for"):
+		return 0.0
+	return gm.get_reputation_for(int(pd.id))
+
+
+func _resolve_pawn_for_data(pd: PawnData) -> Variant:
+	var sp: PawnSpawner = _resolve_pawn_spawner_for_world_ai()
+	if sp == null or not sp.has_method("get_pawn_by_id"):
+		return null
+	return sp.get_pawn_by_id(int(pd.id))
+
+
+func _pawn_mind_knowledge_count(pd: PawnData) -> int:
+	var ks: Node = get_node_or_null("/root/KnowledgeSystem")
+	if ks == null or not ks.has_method("get_pawn_knowledge"):
+		return 0
+	return ks.get_pawn_knowledge(int(pd.id)).size()
+
+
+func _pawn_mind_knowledge_at_risk(pd: PawnData) -> bool:
+	var ks: Node = get_node_or_null("/root/KnowledgeSystem")
+	if ks == null or not ks.has_method("get_pawn_knowledge"):
+		return false
+	var known: Array = ks.get_pawn_knowledge(int(pd.id))
+	for kt in known:
+		if ks.has_method("get_carrier_count"):
+			if ks.get_carrier_count(int(kt)) <= 1:
+				return true
+	return false
+
+
+func _pawn_mind_conflict_count(pd: PawnData) -> int:
+	var gm: Node = get_node_or_null("/root/GrudgeManager")
+	if gm == null or not gm.has_method("get_grudges_held_by"):
+		return 0
+	return gm.get_grudges_held_by(int(pd.id)).size()
 
 
 ## Returns 0.0-1.0 danger level from WorldMeaning tags (repeated_death, blood_soaked, graveyard, famine_stricken, fire_prone, ruined, ancient/old myth tags).

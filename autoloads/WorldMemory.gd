@@ -478,7 +478,8 @@ func _event_passes_significance_threshold(e: Dictionary) -> bool:
 	var core_events: Array = ["pawn_death", "birth", "pawn_birth", "settlement_founded",
 							  "settlement_destroyed", "settlement_revived", "settlement_abandoned",
 							  "knowledge_inscribed", "knowledge_read", "teaching_event", "skill_taught",
-							  "generational_birth", "ai_chronicle_written", "ai_layer_decision"]
+							  "generational_birth", "ai_chronicle_written", "ai_layer_decision",
+							  "chronicle_summary"]
 	if core_events.has(typ):
 		return true
 

@@ -361,6 +361,7 @@ static func _worldbox_loop_job_for_pawn(
 	var hearths: int = int(local_features.get("hearth", 0))
 	var storage_huts: int = int(local_features.get("storage_hut", 0))
 	var markers: int = int(local_features.get("marker", 0))
+	var beds: int = int(local_features.get("bed", 0))
 	# Phase 6: new building counts
 	var farms: int = int(local_features.get("farm", 0))
 	var workshops: int = int(local_features.get("workshop", 0))
@@ -379,27 +380,35 @@ static func _worldbox_loop_job_for_pawn(
 	# Phase 6: civilization progression — more phases for advanced settlements
 	var phase_count: int = 20 if has_writing else 12
 	var phase: int = posmod(tick / 90 + int(data.id) * 3, phase_count)
+	# Beds needed: 1 per 2 pawns minimum
+	var need_beds: int = maxi(2, int(round(local_pop / 2.2)))
 	match phase:
 		0:
+			# CRITICAL: Build beds first if housing is insufficient
+			if beds < need_beds:
+				return Job.Type.BUILD_BED
 			return Job.Type.FORAGE
 		1:
-			return Job.Type.PLANT_SEEDS
-		2:
-			return Job.Type.HARVEST_CROPS
-		3:
+			# CRITICAL: Fire pit for warmth
 			if hearths <= 0:
 				return Job.Type.BUILD_FIRE_PIT
-			return Job.Type.COOK_MEAT
-		4:
+			return Job.Type.PLANT_SEEDS
+		2:
+			# CRITICAL: Storage for stockpile
 			if storage_huts <= 0:
 				return Job.Type.BUILD_STORAGE_HUT
+			return Job.Type.HARVEST_CROPS
+		3:
+			# Walls for defense — lowered threshold from 6 to 3
+			if local_pop >= 3 and (walls < 4 or doors <= 0):
+				return Job.Type.BUILD_WALL if walls < 4 else Job.Type.BUILD_DOOR
+			return Job.Type.COOK_MEAT
+		4:
 			return Job.Type.CHOP
 		5:
-			if local_pop >= 6 and (walls < 4 or doors <= 0):
-				return Job.Type.BUILD_WALL if walls < 4 else Job.Type.BUILD_DOOR
 			return Job.Type.MINE
 		6:
-			if local_pop >= 7:
+			if local_pop >= 5:
 				return Job.Type.PROTECT
 			return Job.Type.HUNT
 		7:
@@ -436,7 +445,7 @@ static func _worldbox_loop_job_for_pawn(
 			return Job.Type.TEACH_SKILL
 		# Phase 6: advanced civilization phases (only when writing known)
 		16:
-			if libraries <= 0 and local_pop >= 8:
+			if libraries <= 0 and local_pop >= 6:
 				return Job.Type.BUILD_LIBRARY
 			return Job.Type.TEACH_SKILL
 		17:
@@ -444,7 +453,7 @@ static func _worldbox_loop_job_for_pawn(
 				return Job.Type.BUILD_BARRACKS
 			return Job.Type.PROTECT
 		18:
-			if cellars <= 0 and local_pop >= 7 and granaries >= 1:
+			if cellars <= 0 and local_pop >= 5 and granaries >= 1:
 				return Job.Type.BUILD_CELLAR
 			return Job.Type.CHOP
 		19:
@@ -452,6 +461,94 @@ static func _worldbox_loop_job_for_pawn(
 				return Job.Type.BUILD_BOATYARD
 			return Job.Type.FORAGE
 	return -1
+
+
+## Settlement leader directs construction by posting build jobs directly.
+## Called every 50 ticks for the ruler of each settlement.
+## The leader scans settlement needs and posts up to 3 build jobs per cycle.
+static func leader_direct_construction(settlement_id: int) -> int:
+	var sm: Node = _root_node("SettlementMemory")
+	if sm == null or not sm.has_method("get_ruler_pawn_id"):
+		return 0
+	var ruler_id: int = int(sm.call("get_ruler_pawn_id", settlement_id))
+	if ruler_id < 0:
+		return 0
+	# Find the ruler's tile position
+	var ruler_data: PawnData = _pawn_data_for_id(ruler_id)
+	if ruler_data == null:
+		return 0
+	var center: Vector2i = ruler_data.tile_pos
+	# Scan local features
+	var features: Dictionary = _scan_local_features(center, 8)
+	var local_pop: int = int(features.get("population", 0))
+	if local_pop < 1:
+		return 0
+	var beds: int = int(features.get("bed", 0))
+	var hearths: int = int(features.get("hearth", 0))
+	var storage_huts: int = int(features.get("storage_hut", 0))
+	var walls: int = int(features.get("wall", 0))
+	var doors: int = int(features.get("door", 0))
+	var farms: int = int(features.get("farm", 0))
+	var workshops: int = int(features.get("workshop", 0))
+	var granaries: int = int(features.get("granary", 0))
+	var apothecaries: int = int(features.get("apothecary", 0))
+	var markets: int = int(features.get("market", 0))
+	var libraries: int = int(features.get("library", 0))
+	var barracks: int = int(features.get("barracks", 0))
+	var cellars: int = int(features.get("cellar", 0))
+	var need_beds: int = maxi(2, int(round(local_pop / 2.2)))
+	var posted: int = 0
+	var max_posts: int = 3
+	# Priority order: beds > fire pit > storage > walls > farms > granary > workshop > apothecary > market > library > barracks > cellar
+	var build_queue: Array[Dictionary] = []
+	if beds < need_beds:
+		build_queue.append({"type": Job.Type.BUILD_BED, "priority": 8, "work": 10})
+	if hearths <= 0:
+		build_queue.append({"type": Job.Type.BUILD_FIRE_PIT, "priority": 7, "work": 12})
+	if storage_huts <= 0:
+		build_queue.append({"type": Job.Type.BUILD_STORAGE_HUT, "priority": 6, "work": 20})
+	if walls < 4 and local_pop >= 3:
+		build_queue.append({"type": Job.Type.BUILD_WALL, "priority": 5, "work": 25})
+	if doors <= 0 and walls >= 2:
+		build_queue.append({"type": Job.Type.BUILD_DOOR, "priority": 5, "work": 15})
+	if farms <= 0 and local_pop >= 4:
+		build_queue.append({"type": Job.Type.BUILD_FARM_WHEAT, "priority": 5, "work": 40})
+	if granaries <= 0 and farms >= 1:
+		build_queue.append({"type": Job.Type.BUILD_GRANARY, "priority": 5, "work": 35})
+	if workshops <= 0 and local_pop >= 5:
+		build_queue.append({"type": Job.Type.BUILD_WORKSHOP, "priority": 5, "work": 40})
+	if apothecaries <= 0 and local_pop >= 5:
+		build_queue.append({"type": Job.Type.BUILD_APOTHECARY, "priority": 4, "work": 40})
+	if markets <= 0 and local_pop >= 6 and farms >= 1:
+		build_queue.append({"type": Job.Type.BUILD_MARKET, "priority": 4, "work": 40})
+	if libraries <= 0 and local_pop >= 6:
+		build_queue.append({"type": Job.Type.BUILD_LIBRARY, "priority": 4, "work": 45})
+	if barracks <= 0 and local_pop >= 6 and walls >= 4:
+		build_queue.append({"type": Job.Type.BUILD_BARRACKS, "priority": 4, "work": 45})
+	if cellars <= 0 and local_pop >= 5 and granaries >= 1:
+		build_queue.append({"type": Job.Type.BUILD_CELLAR, "priority": 4, "work": 35})
+	for entry in build_queue:
+		if posted >= max_posts:
+			break
+		var job_type: int = int(entry.get("type", -1))
+		var priority: int = int(entry.get("priority", 5))
+		var work: int = int(entry.get("work", 20))
+		var pending: int = JobManager.count_pending_by_type(job_type)
+		if pending > 0:
+			continue  # Already has a pending job of this type
+		# Find a build tile near the ruler (settlement center)
+		var main_node: Node = _root_node("Main")
+		if main_node == null or not main_node.has_method("_find_build_tile_near"):
+			continue
+		var t: Vector2i = main_node.call("_find_build_tile_near", center, 6)
+		if t.x < 0:
+			continue
+		if JobManager.has_job_at(t):
+			continue
+		var j: Job = JobManager.post(job_type, t, priority, work)
+		if j != null:
+			posted += 1
+	return posted
 
 
 static func get_affiliation_action_for_pawn(pawn: Variant) -> Dictionary:
@@ -1260,6 +1357,16 @@ static func _pawn_data(pawn: Variant) -> PawnData:
 	if data_v is PawnData:
 		return data_v as PawnData
 	return null
+
+
+static func _pawn_data_for_id(pawn_id: int) -> PawnData:
+	var ps: Node = _root_node("Main/WorldViewport/PawnSpawner")
+	if ps == null or not ps.has_method("get_pawn_by_id"):
+		return null
+	var pawn: Variant = ps.call("get_pawn_by_id", pawn_id)
+	if pawn == null or not is_instance_valid(pawn):
+		return null
+	return _pawn_data(pawn)
 
 
 static func _profession_name(profession: int) -> String:

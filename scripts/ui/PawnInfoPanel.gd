@@ -341,12 +341,12 @@ func _build_ui() -> void:
 		_tab_container.set_tab_title(3, "Neural")
 		_tab_container.set_tab_title(4, "Social")
 		_tab_container.set_tab_title(5, "Narrative")
-		_tab_container.set_tab_title(6, "Consciousness")
+		_tab_container.set_tab_title(6, "Mind")
 		_tab_container.set_tab_title(7, "Gear")
 	else:
 		_tab_container.set_tab_title(2, "Social")
 		_tab_container.set_tab_title(3, "Narrative")
-		_tab_container.set_tab_title(4, "Consciousness")
+		_tab_container.set_tab_title(4, "Mind")
 		_tab_container.set_tab_title(5, "Gear")
 
 	# Footer hint
@@ -460,8 +460,124 @@ func _populate_narrative_tab() -> void:
 
 
 func _populate_consciousness_tab() -> void:
-	# Self-Awareness section
-	_tab_consciousness.add_child(_make_section_header("Consciousness"))
+	# === MIND SNAPSHOT (HeelKawnianMind) — composed readable state ===
+	_tab_consciousness.add_child(_make_section_header("Mind"))
+
+	var thought_label: Label = _make_label("", FONT_BODY, ACCENT)
+	thought_label.name = "MindThought"
+	thought_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_consciousness.add_child(thought_label)
+
+	var pursuit_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(pursuit_row)
+	pursuit_row.add_child(_make_label("Pursuit: ", FONT_SMALL, TEXT_DIM))
+	var pursuit_val: Label = _make_label("", FONT_SMALL, TEXT_BRIGHT)
+	pursuit_val.name = "MindPursuit"
+	pursuit_row.add_child(pursuit_val)
+
+	var body_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(body_row)
+	body_row.add_child(_make_label("Body: ", FONT_SMALL, TEXT_DIM))
+	var body_val: Label = _make_label("", FONT_SMALL, Color8(230, 180, 140))
+	body_val.name = "MindBody"
+	body_row.add_child(body_val)
+
+	var emotion_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(emotion_row)
+	emotion_row.add_child(_make_label("Emotion: ", FONT_SMALL, TEXT_DIM))
+	var emotion_val: Label = _make_label("", FONT_SMALL, Color8(180, 200, 230))
+	emotion_val.name = "MindEmotion"
+	emotion_row.add_child(emotion_val)
+
+	var likes_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(likes_row)
+	likes_row.add_child(_make_label("Likes: ", FONT_SMALL, TEXT_DIM))
+	var likes_val: Label = _make_label("", FONT_SMALL, Color8(140, 220, 140))
+	likes_val.name = "MindLikes"
+	likes_val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	likes_row.add_child(likes_val)
+
+	var dislikes_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(dislikes_row)
+	dislikes_row.add_child(_make_label("Dislikes: ", FONT_SMALL, TEXT_DIM))
+	var dislikes_val: Label = _make_label("", FONT_SMALL, Color8(220, 140, 140))
+	dislikes_val.name = "MindDislikes"
+	dislikes_val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dislikes_row.add_child(dislikes_val)
+
+	var family_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(family_row)
+	family_row.add_child(_make_label("Family: ", FONT_SMALL, TEXT_DIM))
+	var family_val: Label = _make_label("", FONT_SMALL, TEXT_BRIGHT)
+	family_val.name = "MindFamily"
+	family_val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	family_row.add_child(family_val)
+
+	var rel_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(rel_row)
+	rel_row.add_child(_make_label("Bonds: ", FONT_SMALL, TEXT_DIM))
+	var rel_val: Label = _make_label("", FONT_SMALL, TEXT_BRIGHT)
+	rel_val.name = "MindRelationships"
+	rel_val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	rel_row.add_child(rel_val)
+
+	var memory_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(memory_row)
+	memory_row.add_child(_make_label("Memory: ", FONT_SMALL, TEXT_DIM))
+	var memory_val: Label = _make_label("", FONT_SMALL, Color8(200, 180, 220))
+	memory_val.name = "MindMemory"
+	memory_val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	memory_row.add_child(memory_val)
+
+	var culture_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(culture_row)
+	culture_row.add_child(_make_label("Culture: ", FONT_SMALL, TEXT_DIM))
+	var culture_val: Label = _make_label("", FONT_SMALL, Color8(200, 200, 160))
+	culture_val.name = "MindCulture"
+	culture_val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	culture_row.add_child(culture_val)
+
+	var work_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(work_row)
+	work_row.add_child(_make_label("Work: ", FONT_SMALL, TEXT_DIM))
+	var work_val: Label = _make_label("", FONT_SMALL, TEXT_BRIGHT)
+	work_val.name = "MindWork"
+	work_row.add_child(work_val)
+
+	var reason_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(reason_row)
+	reason_row.add_child(_make_label("Reason: ", FONT_SMALL, TEXT_DIM))
+	var reason_val: Label = _make_label("", FONT_SMALL, Color8(160, 160, 170))
+	reason_val.name = "MindReason"
+	reason_val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	reason_row.add_child(reason_val)
+
+	var knowledge_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(knowledge_row)
+	knowledge_row.add_child(_make_label("Knowledge: ", FONT_SMALL, TEXT_DIM))
+	var knowledge_val: Label = _make_label("", FONT_SMALL, Color8(180, 220, 255))
+	knowledge_val.name = "MindKnowledge"
+	knowledge_val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	knowledge_row.add_child(knowledge_val)
+
+	var war_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(war_row)
+	war_row.add_child(_make_label("Conflict: ", FONT_SMALL, TEXT_DIM))
+	var war_val: Label = _make_label("", FONT_SMALL, Color8(255, 180, 160))
+	war_val.name = "MindWar"
+	war_val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	war_row.add_child(war_val)
+
+	var settlement_row: HBoxContainer = HBoxContainer.new()
+	_tab_consciousness.add_child(settlement_row)
+	settlement_row.add_child(_make_label("Settlement: ", FONT_SMALL, TEXT_DIM))
+	var settlement_val: Label = _make_label("", FONT_SMALL, Color8(200, 200, 180))
+	settlement_val.name = "MindSettlement"
+	settlement_val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	settlement_row.add_child(settlement_val)
+
+	# === DEEP MIND (existing consciousness data) ===
+	_tab_consciousness.add_child(_make_section_header("Deep Mind"))
 	
 	var awareness_row: HBoxContainer = HBoxContainer.new()
 	_tab_consciousness.add_child(awareness_row)
@@ -1676,6 +1792,75 @@ func _update_consciousness_tab() -> void:
 		return
 
 	var pawn_id: int = int(_pawn.data.id)
+
+	# === MIND SNAPSHOT (HeelKawnianMind) ===
+	if HeelKawnianMind != null:
+		var snapshot: Dictionary = HeelKawnianMind.compute_mind_snapshot(_pawn)
+		if not snapshot.is_empty():
+			var thought_label: Label = _tab_consciousness.get_node_or_null("MindThought") as Label
+			if thought_label != null:
+				thought_label.text = "\"%s\"" % str(snapshot.get("current_thought", ""))
+
+			var pursuit_val: Label = _tab_consciousness.get_node_or_null("MindPursuit") as Label
+			if pursuit_val != null:
+				pursuit_val.text = str(snapshot.get("pursuit", ""))
+
+			var body_val: Label = _tab_consciousness.get_node_or_null("MindBody") as Label
+			if body_val != null:
+				body_val.text = str(snapshot.get("body_pressure", ""))
+
+			var emotion_val: Label = _tab_consciousness.get_node_or_null("MindEmotion") as Label
+			if emotion_val != null:
+				emotion_val.text = str(snapshot.get("emotional_pressure", ""))
+
+			var likes_val: Label = _tab_consciousness.get_node_or_null("MindLikes") as Label
+			if likes_val != null:
+				likes_val.text = str(snapshot.get("likes", ""))
+
+			var dislikes_val: Label = _tab_consciousness.get_node_or_null("MindDislikes") as Label
+			if dislikes_val != null:
+				dislikes_val.text = str(snapshot.get("dislikes", ""))
+
+			var family_val: Label = _tab_consciousness.get_node_or_null("MindFamily") as Label
+			if family_val != null:
+				family_val.text = str(snapshot.get("family", ""))
+
+			var rel_val: Label = _tab_consciousness.get_node_or_null("MindRelationships") as Label
+			if rel_val != null:
+				rel_val.text = str(snapshot.get("relationships", ""))
+
+			var memory_val: Label = _tab_consciousness.get_node_or_null("MindMemory") as Label
+			if memory_val != null:
+				memory_val.text = str(snapshot.get("memory_summary", ""))
+
+			var culture_val: Label = _tab_consciousness.get_node_or_null("MindCulture") as Label
+			if culture_val != null:
+				culture_val.text = str(snapshot.get("culture_summary", ""))
+
+			var work_val: Label = _tab_consciousness.get_node_or_null("MindWork") as Label
+			if work_val != null:
+				work_val.text = str(snapshot.get("work_intent", ""))
+
+			var reason_val: Label = _tab_consciousness.get_node_or_null("MindReason") as Label
+			if reason_val != null:
+				reason_val.text = str(snapshot.get("reason", ""))
+
+			var knowledge_val: Label = _tab_consciousness.get_node_or_null("MindKnowledge") as Label
+			if knowledge_val != null:
+				var ktext: String = str(snapshot.get("knowledge_summary", ""))
+				if bool(snapshot.get("knowledge_at_risk", false)):
+					ktext += " [color=#FF6644][AT RISK][/color]"
+				knowledge_val.text = ktext
+
+			var war_val: Label = _tab_consciousness.get_node_or_null("MindWar") as Label
+			if war_val != null:
+				war_val.text = str(snapshot.get("war_memory", ""))
+
+			var settlement_val: Label = _tab_consciousness.get_node_or_null("MindSettlement") as Label
+			if settlement_val != null:
+				settlement_val.text = str(snapshot.get("settlement_history", ""))
+
+	# === DEEP MIND (existing consciousness data) ===
 
 	# Self-Awareness
 	var awareness_value: Label = _tab_consciousness.get_node_or_null("AwarenessValue") as Label

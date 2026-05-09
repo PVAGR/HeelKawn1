@@ -572,6 +572,114 @@ func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump(outs, 2, -0.03)  # mild social avoidance
 		fired.append({"id": "grudge_mild", "line": "IF mild grudge THEN slight social avoidance.", "w": 0.20})
 
+	# ==================== HeelKawnianMind rules ====================
+	# Emotional pressure from mind snapshot shapes behavior
+	var emotional: String = str(ctx.get("mind_emotional_pressure", ""))
+	if emotional.contains("desperate"):
+		_bump_many(outs, [0, 7], 0.12)  # seek food + withdraw
+		_bump(outs, 3, -0.08)  # avoid risky forage
+		fired.append({"id": "mind_desperate", "line": "IF desperate THEN seek food urgently + avoid risk.", "w": 0.70})
+	elif emotional.contains("anxious"):
+		_bump(outs, 0, 0.08)  # seek food
+		_bump(outs, 7, 0.04)  # slight caution
+		fired.append({"id": "mind_anxious", "line": "IF anxious THEN seek food + cautious.", "w": 0.45})
+	elif emotional.contains("fearful"):
+		_bump_many(outs, [1, 7], 0.10)  # rest + observe
+		_bump(outs, 6, -0.06)  # avoid combat
+		fired.append({"id": "mind_fearful", "line": "IF fearful THEN rest + observe + avoid combat.", "w": 0.55})
+	elif emotional.contains("gloomy") or emotional.contains("despondent"):
+		_bump(outs, 2, 0.08)  # seek social comfort
+		_bump(outs, 7, 0.04)  # withdraw
+		fired.append({"id": "mind_gloomy", "line": "IF gloomy THEN seek social comfort + withdraw.", "w": 0.40})
+	elif emotional.contains("content"):
+		_bump_many(outs, [3, 4], 0.05)  # productive — forage + build
+		fired.append({"id": "mind_content", "line": "IF content THEN productive work.", "w": 0.30})
+	elif emotional.contains("curious"):
+		_bump_many(outs, [3, 7], 0.06)  # explore + forage
+		fired.append({"id": "mind_curious", "line": "IF curious THEN explore + forage.", "w": 0.30})
+
+	# Place feeling from WorldMeaning tags
+	var place: String = str(ctx.get("mind_place_feeling", ""))
+	if place == "dangerous":
+		_bump_many(outs, [1, 7], 0.08)  # rest + observe — danger sense
+		_bump(outs, 6, 0.06)  # defend — danger awareness
+		_bump(outs, 3, -0.05)  # less forage — avoid risky areas
+		fired.append({"id": "mind_place_dangerous", "line": "IF place feels dangerous THEN observe + defend + avoid forage.", "w": 0.50})
+	elif place == "sacred":
+		_bump(outs, 2, 0.06)  # social — sacred places draw community
+		_bump(outs, 4, 0.04)  # build — sacred places inspire construction
+		fired.append({"id": "mind_place_sacred", "line": "IF place feels sacred THEN social + build.", "w": 0.35})
+	elif place == "home":
+		_bump_many(outs, [2, 4], 0.05)  # social + build — home comfort
+		fired.append({"id": "mind_place_home", "line": "IF place feels like home THEN social + build.", "w": 0.30})
+	elif place == "haunted":
+		_bump(outs, 7, 0.08)  # observe — unease
+		_bump(outs, 1, 0.04)  # rest — cautious
+		fired.append({"id": "mind_place_haunted", "line": "IF place feels haunted THEN observe + rest cautiously.", "w": 0.40})
+
+	# Culture tradition from CulturalMemory
+	var culture_t: String = str(ctx.get("mind_culture_tradition", ""))
+	if culture_t == "martial":
+		_bump_many(outs, [6, 0], 0.08)  # defend + seek food (warrior culture)
+		fired.append({"id": "mind_culture_martial", "line": "IF martial culture THEN defend + provide.", "w": 0.40})
+	elif culture_t == "scholarly":
+		_bump(outs, 2, 0.10)  # social — teach and share
+		_bump(outs, 5, 0.06)  # craft — knowledge work
+		fired.append({"id": "mind_culture_scholarly", "line": "IF scholarly culture THEN teach + craft.", "w": 0.40})
+	elif culture_t == "agrarian":
+		_bump_many(outs, [3, 0], 0.08)  # forage + seek food (farming culture)
+		fired.append({"id": "mind_culture_agrarian", "line": "IF agrarian culture THEN forage + feed.", "w": 0.40})
+	elif culture_t == "mercantile":
+		_bump(outs, 3, 0.06)  # forage — gather trade goods
+		_bump(outs, 2, 0.04)  # social — trade requires contact
+		fired.append({"id": "mind_culture_mercantile", "line": "IF mercantile culture THEN gather + socialize.", "w": 0.35})
+
+	# Reputation from GossipManager — high reputation pawns lead
+	var reputation: float = float(ctx.get("mind_reputation", 0.0))
+	if reputation >= 0.7:
+		_bump(outs, 2, 0.08)  # social — respected, sought out
+		_bump(outs, 6, 0.06)  # defend — protect community
+		fired.append({"id": "mind_reputation_high", "line": "IF high reputation THEN lead + defend.", "w": 0.40})
+	elif reputation <= -0.5:
+		_bump(outs, 2, -0.10)  # less social — shunned
+		_bump(outs, 7, 0.06)  # observe — watchful, isolated
+		fired.append({"id": "mind_reputation_low", "line": "IF low reputation THEN withdraw + observe.", "w": 0.40})
+
+	# ==================== Knowledge rules ====================
+	# Knowledge carriers are more productive and teach-oriented
+	var knowledge_n: int = int(ctx.get("mind_knowledge_count", 0))
+	if knowledge_n >= 8:
+		# Scholar: strong teaching drive, less manual labor
+		_bump(outs, 2, 0.12)   # social — teach and share
+		_bump(outs, 5, 0.08)   # craft — knowledge work
+		_bump(outs, 3, -0.04)  # less raw forage — mind on higher things
+		fired.append({"id": "mind_knowledge_scholar", "line": "IF many knowledge THEN teach + craft + less forage.", "w": 0.50})
+	elif knowledge_n >= 4:
+		# Educated: mild teaching nudge
+		_bump(outs, 2, 0.06)   # social — share knowledge
+		_bump(outs, 5, 0.04)   # craft — apply knowledge
+		fired.append({"id": "mind_knowledge_educated", "line": "IF some knowledge THEN share + apply.", "w": 0.35})
+
+	# Knowledge at risk — only carrier for some knowledge type
+	var knowledge_at_risk: bool = bool(ctx.get("mind_knowledge_at_risk", false))
+	if knowledge_at_risk:
+		_bump(outs, 2, 0.10)   # social — must teach before knowledge dies
+		_bump(outs, 7, -0.06)  # less idle — urgency to pass on
+		fired.append({"id": "mind_knowledge_at_risk", "line": "IF knowledge at risk THEN teach urgently + avoid idleness.", "w": 0.65})
+
+	# ==================== Conflict/War memory rules ====================
+	var conflict_n: int = int(ctx.get("mind_conflict_count", 0))
+	if conflict_n >= 3:
+		# War-scarred: defensive, watchful, less social trust
+		_bump(outs, 6, 0.10)   # defend — battle-hardened
+		_bump(outs, 7, 0.06)   # observe — watchful
+		_bump(outs, 2, -0.06)  # less social — trust issues
+		fired.append({"id": "mind_conflict_scarred", "line": "IF many conflicts THEN defensive + watchful + less social.", "w": 0.50})
+	elif conflict_n >= 1:
+		# Conflict-aware: mild defensiveness
+		_bump(outs, 6, 0.04)   # mild defend
+		fired.append({"id": "mind_conflict_aware", "line": "IF some conflicts THEN mild defensiveness.", "w": 0.25})
+
 	fired.sort_custom(func(a, b): return float(a.get("w", 0.0)) > float(b.get("w", 0.0)))
 	var human_ch: Array = _build_human_channels(pd, ctx, outs)
 	_apply_human_semantic_projection(outs, human_ch)

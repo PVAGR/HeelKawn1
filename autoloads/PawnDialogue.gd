@@ -85,30 +85,30 @@ func _build_pawn_context(pawn_node: Node) -> Dictionary:
 	var ctx: Dictionary = {
 		"pawn_id": pid,
 		"name": str(data.display_name),
-		"age": int(data.get("age_years", data.get("age", 0))),
+		"age": int(data.age) if "age" in data else 0,
 		"profession": _get_profession_name(data),
-		"hunger": pawn_node.get("_hunger_level", 50),
-		"rest": pawn_node.get("_rest_level", 50),
-		"mood": pawn_node.get("_mood_level", 50),
+		"hunger": int(pawn_node.get("_hunger_level")) if pawn_node.get("_hunger_level") != null else 50,
+		"rest": int(pawn_node.get("_rest_level")) if pawn_node.get("_rest_level") != null else 50,
+		"mood": int(pawn_node.get("_mood_level")) if pawn_node.get("_mood_level") != null else 50,
 		"health": 100,
 		"activity": _get_activity_name(pawn_node),
 		"tick": _GameManager.tick_count if _GameManager != null else 0,
 		"location": "(%d, %d)" % [tile_pos.x, tile_pos.y],
 	}
 	if _PawnConsciousness != null:
-		var pid: int = ctx.pawn_id
-		if pid > 0:
-			var memories: Array = _PawnConsciousness.get_memories(pid, "", 5)
+		var pid2: int = ctx.pawn_id
+		if pid2 > 0:
+			var memories: Array = _PawnConsciousness.get_memories(pid2, "", 5)
 			var mem_text: String = ""
 			for m in memories:
 				if m is Dictionary:
 					mem_text += "- %s: %s\n" % [m.get("event_type", "event"), m.get("description", "")]
 			ctx["memories"] = mem_text
-			var beliefs: Array = _PawnConsciousness.get_core_beliefs(pid)
+			var beliefs: Array = _PawnConsciousness.get_core_beliefs(pid2)
 			ctx["beliefs"] = "\n".join(beliefs) if beliefs.size() > 0 else "(none yet)"
-			var desires: Array = _PawnConsciousness.get_subconscious_desires(pid)
+			var desires: Array = _PawnConsciousness.get_subconscious_desires(pid2)
 			ctx["desires"] = "\n".join(desires) if desires.size() > 0 else "(none yet)"
-			var awareness: int = _PawnConsciousness.get_awareness_level(pid)
+			var awareness: int = _PawnConsciousness.get_awareness_level(pid2)
 			var awareness_names: Array = ["Unaware", "Drowsing", "Aware", "Self-Aware", "Enlightened"]
 			ctx["awareness"] = awareness_names[clampi(awareness, 0, awareness_names.size() - 1)]
 		else:
@@ -134,7 +134,7 @@ func _get_profession_name(data) -> String:
 	return "Tribal Villager"
 
 func _get_activity_name(pawn_node: Node) -> String:
-	var state: int = pawn_node.get("_state", -1)
+	var state: int = int(pawn_node.get("_state")) if pawn_node.get("_state") != null else -1
 	if state < 0:
 		return "idle"
 	var names: Array = ["IDLE", "WORKING", "EATING", "SLEEPING", "WALKING", "FLEEING", "FIGHTING", "DEAD"]

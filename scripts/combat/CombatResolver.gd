@@ -80,7 +80,9 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 			var attacker_name: String = _combat_name(attacker)
 			var defender_name: String = pawn_defender.data.display_name
 			var weapon_name: String = _weapon_name(attacker)
-			var narrative: String = CombatNarrative.generate_attack_narrative(attacker_name, defender_name, damage, weapon_name, damage > 20.0)
+			var damage_int: int = int(damage)
+			var is_critical: bool = damage > 20.0
+			var narrative: String = CombatNarrative.generate_attack_narrative(attacker_name, defender_name, weapon_name, damage_int, true, is_critical)
 			if not narrative.is_empty() and WorldMemory != null:
 				WorldMemory.record_event({
 					"type": "combat_narrative",

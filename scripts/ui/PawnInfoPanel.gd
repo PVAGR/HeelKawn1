@@ -1632,67 +1632,136 @@ func _generate_pawn_narrative(pawn: HeelKawnian) -> String:
 func _get_activity_description(pawn: HeelKawnian) -> String:
 	if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 		return "Unknown"
-	
 	var d: HeelKawnianData = pawn.data
 	var state: int = pawn._state
 	var job: Job = pawn._current_job
-	
 	match state:
 		HeelKawnian.State.IDLE:
 			return "Idle at %s" % _format_tile_pos(d.tile_pos)
-		
 		HeelKawnian.State.WALKING_TO_JOB, HeelKawnian.State.FETCHING_MATERIAL:
 			if job != null:
 				var job_type: String = Job.describe_type(job.type).to_lower()
 				return "%sing at %s" % [job_type.capitalize().left(-1), _format_tile_pos(job.work_tile)]
 			return "Walking to work"
-		
 		HeelKawnian.State.WORKING:
 			if job != null:
 				var job_type: String = Job.describe_type(job.type)
 				return "%s at %s" % [job_type, _format_tile_pos(job.work_tile)]
 			return "Working"
-		
 		HeelKawnian.State.HAULING:
 			return "Hauling to stockpile"
-		
 		HeelKawnian.State.GOING_TO_EAT:
 			return "Going to eat at stockpile"
-		
 		HeelKawnian.State.EATING:
 			return "Eating at stockpile"
-		
 		HeelKawnian.State.GOING_TO_BED:
 			return "Going to bed"
-		
 		HeelKawnian.State.SLEEPING:
 			return "Sleeping"
-		
 		HeelKawnian.State.DRAFT_WALK:
 			if job != null:
 				return "Moving to %s (drafted)" % _format_tile_pos(job.work_tile)
 			return "Moving (drafted)"
-		
 		HeelKawnian.State.TEACHING:
 			return "Teaching nearby"
-		
 		HeelKawnian.State.CHALLENGE:
 			return "Challenging authority"
-		
 		HeelKawnian.State.GATHERING:
 			return "Gathering items at %s" % _format_tile_pos(d.tile_pos)
-		
 		HeelKawnian.State.CRAFTING:
 			return "Crafting at %s" % _format_tile_pos(d.tile_pos)
-		
 		HeelKawnian.State.FLEEING:
 			return "Fleeing from danger!"
-		
 		HeelKawnian.State.HIDING:
 			return "Hiding from threats"
-		
 		_:
 			return "Unknown activity"
+
+
+func _populate_talk_tab() -> void:
+	_tab_talk.add_child(_make_section_header("Talk"))
+	# Greeting from HeelKawnianVoice
+	_talk_greeting = RichTextLabel.new()
+	_talk_greeting.bbcode_enabled = true
+	_talk_greeting.fit_content = true
+	_talk_greeting.custom_minimum_size = Vector2(0, 60)
+	_tab_talk.add_child(_talk_greeting)
+	# Conversation output
+	_talk_output = RichTextLabel.new()
+	_talk_output.bbcode_enabled = true
+	_talk_output.fit_content = true
+	_talk_output.custom_minimum_size = Vector2(0, 120)
+	_tab_talk.add_child(_talk_output)
+	# Input field
+	_talk_input = LineEdit.new()
+	_talk_input.placeholder_text = "Say something..."
+	_talk_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_tab_talk.add_child(_talk_input)
+	# Quick topic buttons
+	var topics: HBoxContainer = HBoxContainer.new()
+	topics.add_theme_constant_override("separation", 4)
+	_tab_talk.add_child(topics)
+	for topic in ["Day", "Work", "Feelings", "Family", "Dreams", "Knowledge"]:
+		var btn: Button = Button.new()
+		btn.text = topic
+		btn.custom_minimum_size = Vector2(60, 24)
+		btn.pressed.connect(_on_talk_topic_button.bind(topic.to_lower()))
+		topics.add_child(btn)
+	_talk_input.text_submitted.connect(_on_talk_input_submitted)
+
+
+func _on_talk_topic_button(topic: String) -> void:
+	if _pawn == null or not is_instance_valid(_pawn):
+		return
+	var response: String = ""
+	if HeelKawnianVoice != null:
+		response = HeelKawnianVoice.compose_dialogue(_pawn, topic)
+	if _talk_output != null:
+		var name: String = _pawn.data.display_name if _pawn.data != null else "???"
+		_talk_output.append_text("[color=#c9a84c]%s:[/color] %s\n" % [name, response])
+
+
+func _on_talk_input_submitted(text: String) -> void:
+	if _talk_input != null:
+		_talk_input.clear()
+	if _pawn == null or not is_instance_valid(_pawn):
+		return
+	# Show player message
+	if _talk_output != null:
+		_talk_output.append_text("[color=#88aacc]You:[/color] %s\n" % text)
+	# Try PawnDialogue (LLM-powered) first, fall back to HeelKawnianVoice
+	if PawnDialogue != null:
+		var pawn_id: int = int(_pawn.data.id) if _pawn.data != null else -1
+		var pawn_name: String = _pawn.data.display_name if _pawn.data != null else "???"
+		PawnDialogue.start_conversation(pawn_id, pawn_name)
+		PawnDialogue.send_message(pawn_id, text)
+		# Connect to response signal (one-shot)
+		if not PawnDialogue.message_received.is_connected(_on_pawn_dialogue_response):
+			PawnDialogue.message_received.connect(_on_pawn_dialogue_response)
+	else:
+		# Deterministic fallback
+		var response: String = ""
+		if HeelKawnianVoice != null:
+			response = HeelKawnianVoice.compose_dialogue(_pawn, "")
+		if _talk_output != null:
+			var name: String = _pawn.data.display_name if _pawn.data != null else "???"
+			_talk_output.append_text("[color=#c9a84c]%s:[/color] %s\n" % [name, response])
+
+
+func _on_pawn_dialogue_response(pawn_id: int, speaker: String, text: String) -> void:
+	if _talk_output != null:
+		_talk_output.append_text("[color=#c9a84c]%s:[/color] %s\n" % [speaker, text])
+
+
+func _refresh_talk_tab() -> void:
+	if _pawn == null or not is_instance_valid(_pawn) or _pawn.data == null:
+		return
+	if _talk_greeting != null:
+		var greeting: String = ""
+		if HeelKawnianVoice != null:
+			greeting = HeelKawnianVoice.compose_greeting(_pawn)
+		_talk_greeting.clear()
+		_talk_greeting.append_text(greeting)
 
 
 ## Get item name from Item.Type enum.

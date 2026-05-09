@@ -178,6 +178,17 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _day_night: DayNightCycle = $DayNight
 @onready var _camera: Camera2D = $WorldViewport/Camera
 
+# -------------------- runtime diagnostics --------------------
+var _kernel_diagnostic: KernelDiagnostic = null
+var _phase8_proof_overlay_layer: CanvasLayer = null
+var _phase8_proof_overlay_text: RichTextLabel = null
+var _spatial_profile_overlay_text: RichTextLabel = null
+var _performance_monitor: PerformanceMonitorUI = null
+var _research_particle_texture: Texture2D = null
+const SELECT_PICK_RADIUS_PX: float = 16.0
+var _kill_count: int = 0
+var _resource_balance_audit_last_sig: String = ""
+
 # -------------------- selection --------------------
 ## Currently selected pawn (right-side info panel). null = nothing selected.
 ## Click a pawn to select; click empty ground or press Esc to deselect.
@@ -342,6 +353,27 @@ const HUNT_CANDIDATE_SCAN_LIMIT_MIN: int = 18
 var _social_meeting_last_tick_by_pair: Dictionary = {}
 ## pair key ("low-high") -> highest rapport milestone already logged.
 var _social_rapport_milestone_by_pair: Dictionary = {}
+
+const PAWN_DIVERGENCE_PACKET_SCHEMA_VERSION: int = 1
+var _pawn_divergence_by_center: Dictionary = {}
+var _pawn_divergence_total_claim_events_seen: int = 0
+var _pawn_divergence_skip_no_bound_center: int = 0
+var _pawn_divergence_skip_pre_settlement_context: int = 0
+var _pawn_divergence_native_bound_events: int = 0
+var _pawn_divergence_fallback_bound_events: int = 0
+var _pawn_divergence_context_source_counts: Dictionary = {}
+var _pawn_divergence_skip_no_specialization_context: int = 0
+var _pawn_divergence_no_spec_by_center: Dictionary = {}
+var _pawn_divergence_no_spec_by_phase: Dictionary = {}
+var _pawn_divergence_last_job_by_pawn_id: Dictionary = {}
+var _pawn_divergence_scored_events: int = 0
+var _pawn_divergence_aligned_total: int = 0
+var _pawn_divergence_divergent_total: int = 0
+var _pawn_divergence_neutral_total: int = 0
+var _pawn_divergence_first_scored_center_region: int = -1
+var _pawn_divergence_first20_scored_lines: Array[String] = []
+var _pawn_divergence_exit_summary_emitted: bool = false
+var _pawn_divergence_summary_emitted_ticks: Dictionary = {}
 
 func _is_ultra_speed() -> bool:
 	return GameManager.game_speed >= 12.0

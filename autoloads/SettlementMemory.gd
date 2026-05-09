@@ -1163,32 +1163,27 @@ func is_collapsed_state(state: String) -> bool:
 
 ## DEAD BRAIN REVIVED: Auto-appoint governor when a settlement forms
 func _appoint_initial_governor(settlement: Dictionary) -> void:
-	if GovernorSystem == null:
-		return
-	var settlement_id: int = int(settlement.get("center_region", -1))
-	if settlement_id < 0:
-		return
-	# Find the oldest HeelKawnian in this settlement to be governor
-	var pawns_in_region: Array = []
-	var regions_raw: Variant = settlement.get("regions", null)
-	if regions_raw is PackedInt32Array:
-		for rk in (regions_raw as PackedInt32Array):
-			var r_pawns: Array = get_pawns_in_region(int(rk))
-			for p in r_pawns:
-				if p != null and is_instance_valid(p) and p.data != null:
-					pawns_in_region.append(p)
-	if pawns_in_region.is_empty():
-		return
-	# Pick the one with highest age (wisdom = authority in primitive culture)
-	var best: Node = null
-	var best_age: int = -1
-	for p in pawns_in_region:
-		var age: int = int(p.data.age) if p.data != null else 0
-		if age > best_age:
-			best_age = age
-			best = p
-	if best != null and best.data != null:
-		GovernorSystem.appoint_governor(settlement_id, int(best.data.id))
+    if GovernorSystem == null:
+        return
+    var settlement_id: int = int(settlement.get("center_region", -1))
+    if settlement_id < 0:
+        return
+    # Find HeelKawnians in this settlement to pick a governor
+    var living_pawns: Array[HeelKawnian] = _living_pawns()
+    var pawns_in_settlement: Array[HeelKawnian] = _pawns_in_settlement(settlement, living_pawns)
+    if pawns_in_settlement.is_empty():
+        return
+    # Pick the one with highest age (wisdom = authority in primitive culture)
+    var best: HeelKawnian = null
+    var best_age: int = -1
+    for p in pawns_in_settlement:
+        if p != null and is_instance_valid(p) and p.data != null:
+            var age: int = int(p.data.age)
+            if age > best_age:
+                best_age = age
+                best = p
+    if best != null and best.data != null:
+        GovernorSystem.appoint_governor(settlement_id, int(best.data.id))
 
 
 ## OPTIMIZATION: Force new settlements to start as "active" for better early game

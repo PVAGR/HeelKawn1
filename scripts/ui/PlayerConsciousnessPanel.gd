@@ -233,4 +233,4 @@ func _bar(value: float, max_val: float, width: int) -> String:
 	var ratio: float = clampf(value / max_val, 0.0, 1.0)
 	var filled: int = int(ratio * width)
 	var empty: int = width - filled
-	return "[color=#81C784]%s[/color][color=#444444]%s[/color]" % ["#" * filled, "." * empty]
+	return "[color=#81C784]%s[/color][color=#444444]%s[/color]" % ["#".repeat(filled), ".".repeat(empty)]

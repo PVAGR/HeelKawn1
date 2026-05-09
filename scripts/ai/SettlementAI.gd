@@ -224,6 +224,9 @@ func _select_new_leader() -> void:
 
 func _tribal_leadership_selection() -> void:
 	# Select based on age and wisdom (simplified)
+	if resident_agents.size() == 0:
+		leader_id = -1
+		return
 	leader_id = resident_agents[0]  # First agent as elder
 	decision_making_process = "consensus"
 	

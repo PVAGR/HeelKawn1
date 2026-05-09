@@ -137,8 +137,12 @@ func generate_surname(pawn_id: int, culture: String = "common",
 		return bloodline_name
 	
 	# Generate from culture
-	var prefix_pool: Array[String] = culture_data.surname_prefix.duplicate()
-	var suffix_pool: Array[String] = culture_data.surname_suffix.duplicate()
+	var prefix_pool: Array[String] = []
+	for n in culture_data.surname_prefix:
+		prefix_pool.append(str(n))
+	var suffix_pool: Array[String] = []
+	for n in culture_data.surname_suffix:
+		suffix_pool.append(str(n))
 	
 	if prefix_pool.size() == 0 or suffix_pool.size() == 0:
 		return ""
@@ -199,9 +203,15 @@ func get_cultural_names(culture: String, gender: int = 0) -> Array[String]:
 	var culture_data: Dictionary = cultural_names[culture]
 	
 	if gender == 0:
-		return culture_data.male.duplicate()
+		var result: Array[String] = []
+		for n in culture_data.male:
+			result.append(str(n))
+		return result
 	else:
-		return culture_data.female.duplicate()
+		var result: Array[String] = []
+		for n in culture_data.female:
+			result.append(str(n))
+		return result
 
 
 ## Add new cultural name pool

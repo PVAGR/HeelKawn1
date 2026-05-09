@@ -114,7 +114,7 @@ func _world_governance_block(s: Dictionary) -> String:
 		+ "%s\n\n" % str(s.get("world_status_summary", "WORLD STATUS: Unknown"))
 		+ "[b]WORLD / GOVERNANCE[/b]\n"
 		+ "Speed: %s  Pause: %s\n" % [str(s.get("speed", "1x")), str(s.get("paused", "No"))]
-		+ "Player Mode: %s  Pawn: %s\n" % [str(s.get("player_mode", "SPECTATOR")), str(s.get("player_pawn_id", -1))]
+		+ "Player Mode: %s  HeelKawnian: %s\n" % [str(s.get("player_mode", "SPECTATOR")), str(s.get("player_pawn_id", -1))]
 		+ "Chronicler pin (zone id): %s\n"
 		% [str(s.get("chronicler_pin_zone_id", "")) if str(s.get("chronicler_pin_zone_id", "")) != "" else "(none)"]
 		+ "Sim ticks last frame: %d\n" % int(s.get("sim_ticks_last_frame", 0))

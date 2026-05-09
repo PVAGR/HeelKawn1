@@ -26,7 +26,7 @@ extends Node
 ##   "suppressed": bool  # Traumatic memories may be suppressed
 ## }
 
-# Pawn consciousness data
+# HeelKawnian consciousness data
 ## {
 ##   "pawn_id": int,
 ##   "memories": Array[Dictionary],
@@ -194,10 +194,10 @@ func _process_dreams(tick: int) -> void:
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue
 
-		# Check if pawn is sleeping (get_state returns Pawn.State enum int)
+		# Check if pawn is sleeping (get_state returns HeelKawnian.State enum int)
 		var is_sleeping: bool = false
 		if pawn.has_method("get_state"):
-			is_sleeping = int(pawn.get_state()) == 6  # Pawn.State.SLEEPING = 6
+			is_sleeping = int(pawn.get_state()) == 6  # HeelKawnian.State.SLEEPING = 6
 		if not is_sleeping:
 			continue
 

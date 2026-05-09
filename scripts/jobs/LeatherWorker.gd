@@ -4,7 +4,7 @@ class_name LeatherWorker
 
 ## NPC job for tanning leather from hides (MEAT proxy).
 
-func perform_work(pawn: Pawn, job: Job) -> bool:
+func perform_work(pawn: HeelKawnian, job: Job) -> bool:
 	if pawn.data.carrying != Item.Type.MEAT or pawn.data.carried_count < 2:
 		return false
 

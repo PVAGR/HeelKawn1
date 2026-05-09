@@ -95,7 +95,7 @@ func _refresh_personalities_tab() -> void:
 		if not is_instance_valid(pawn) or pawn.data == null:
 			continue
 		pawn_count += 1
-		var d: PawnData = pawn.data
+		var d: HeelKawnianData = pawn.data
 		
 		lines.append("[color=#dcb478][b]%s[/b] (ID %d)[/color]" % [d.display_name, d.id])
 		lines.append("  [b]Personality:[/b]")

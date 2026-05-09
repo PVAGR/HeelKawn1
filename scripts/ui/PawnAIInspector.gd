@@ -11,7 +11,7 @@ const REFRESH_EVERY_N_TICKS_FAST: int = 20
 @onready var _close_button: Button = $Panel/Margin/VBox/Header/CloseButton
 @onready var _content: RichTextLabel = $Panel/Margin/VBox/Scroll/Content
 
-var _selected_pawn: Pawn = null
+var _selected_pawn: HeelKawnian = null
 var _visible: bool = false
 var _last_refresh_tick: int = 0
 var _hud_dirty: bool = true
@@ -25,7 +25,7 @@ func _ready() -> void:
 	_apply_panel_style()
 
 
-func set_selected_pawn(pawn: Pawn) -> void:
+func set_selected_pawn(pawn: HeelKawnian) -> void:
 	_selected_pawn = pawn
 	_hud_dirty = true
 	if _visible:
@@ -75,9 +75,9 @@ func _refresh() -> void:
 		_content.text = "[color=#888888]No pawn selected.[/color]"
 		return
 	
-	var d: PawnData = _selected_pawn.data
+	var d: HeelKawnianData = _selected_pawn.data
 	if d == null:
-		_content.text = "[color=#888888]Pawn data not available.[/color]"
+		_content.text = "[color=#888888]HeelKawnian data not available.[/color]"
 		return
 	
 	var lines: Array[String] = []

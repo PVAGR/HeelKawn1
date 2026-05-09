@@ -5,7 +5,7 @@ extends Node
 ## Context-sensitive: right-clicking ground = move, resource = harvest, enemy = attack.
 ## Also handles zone designation painting (forage/build/defend zones).
 
-signal command_issued(pawn: Pawn, order_type: String, target_tile: Vector2i)
+signal command_issued(pawn: HeelKawnian, order_type: String, target_tile: Vector2i)
 signal zone_painted(zone_type: String, rect: Rect2i)
 
 ## Zone types for designation painting
@@ -23,13 +23,13 @@ const COMMAND_COOLDOWN_TICKS: int = 5
 var _world: World = null
 var _camera: Camera2D = null
 var _pawn_spawner: PawnSpawner = null
-var _selected_pawn: Pawn = null
+var _selected_pawn: HeelKawnian = null
 var _last_command_tick: int = -COMMAND_COOLDOWN_TICKS
 var _zone_type: int = ZoneType.NONE
 var _is_painting: bool = false
 var _paint_start: Vector2i = Vector2i(-1, -1)
 var _paint_current: Vector2i = Vector2i(-1, -1)
-## Callback set by Main: Callable(target: Pawn) -> bool. Returns true if the
+## Callback set by Main: Callable(target: HeelKawnian) -> bool. Returns true if the
 ## player is allowed to command the given pawn (Observer mode = always, Incarnated =
 ## must outrank, Spectator = never). If null, commands are always allowed.
 var can_command_callback: Callable = Callable()
@@ -41,7 +41,7 @@ func initialize(world_ref: World, camera_ref: Camera2D, spawner_ref: PawnSpawner
 	_pawn_spawner = spawner_ref
 
 
-func set_selected_pawn(pawn: Pawn) -> void:
+func set_selected_pawn(pawn: HeelKawnian) -> void:
 	_selected_pawn = pawn
 
 

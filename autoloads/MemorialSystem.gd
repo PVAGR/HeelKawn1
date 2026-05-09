@@ -2,7 +2,7 @@ extends Node
 ## MemorialSystem — Physical memory of significant events
 ##
 ## Creates memorials at sites of:
-## - Pawn deaths (grave markers)
+## - HeelKawnian deaths (grave markers)
 ## - Battles (monuments)
 ## - Great achievements (statues)
 ## - Settlement founding (founding stones)
@@ -160,7 +160,7 @@ func create_death_memorial(pawn_data: Variant, death_tile: Vector2i, violent: bo
 	if violent:
 		memorial_type = "memorial_plaque"
 
-	# Accept either PawnData or raw pawn_id int
+	# Accept either HeelKawnianData or raw pawn_id int
 	var pawn_id: int = 0
 	if pawn_data is int:
 		pawn_id = pawn_data
@@ -333,7 +333,7 @@ func _start_pilgrimage(pawn: Node, memorial: Dictionary) -> void:
 	if pawn.has_method("set_state"):
 		pawn.call("set_state", "pilgrimage")
 	
-	# Pawn will pathfind to memorial tile
+	# HeelKawnian will pathfind to memorial tile
 	# (integrate with pawn's pathfinding system)
 	if pawn.has_method("move_to"):
 		pawn.call("move_to", memorial.tile)

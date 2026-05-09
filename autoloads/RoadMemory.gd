@@ -12,6 +12,7 @@ const MAX_PATCH_PER_FLUSH: int = 256
 var _trav: PackedInt32Array = PackedInt32Array()
 var _dirty_tiles: PackedInt32Array = PackedInt32Array()
 var _ready_connected: bool = false
+var _road_regions: Dictionary = {}  # Cache: region_key → true for regions with road tiles
 ## When true, skip batch tile repaints; traversal memory still updates. For profiling.
 var debug_disable_visuals: bool = false
 
@@ -50,6 +51,13 @@ func record_step(from_tile: Vector2i, to_tile: Vector2i, world: World) -> void:
 	_trav[i1] = _trav[i1] + 1
 	_trav[i1] = mini(_trav[i1], ROAD_T2 + 20)
 	_dirty_tiles.append(i1)
+	# Track region for PathFinder optimization
+	if _trav[i1] >= ROAD_T1:
+		var rk: int = WorldMemory._region_key(to_tile.x, to_tile.y)
+		_road_regions[rk] = true
+		# DORMANT WORLD: Unlock road gate when first road forms
+		if DiscoveryGate != null:
+			DiscoveryGate.unlock("first_road")
 
 
 func flush_dirty_tiles(world: World) -> void:
@@ -93,6 +101,11 @@ func get_path_weight_mul(x: int, y: int) -> float:
 	if t >= ROAD_T1:
 		return PATH_W_T1
 	return 1.0
+
+
+## PERFORMANCE: Return regions that have road tiles (traversal >= ROAD_T1).
+func get_regions_with_roads() -> Dictionary:
+	return _road_regions
 
 
 func _on_game_tick(tick: int) -> void:

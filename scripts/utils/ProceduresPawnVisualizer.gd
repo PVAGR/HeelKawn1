@@ -2,10 +2,10 @@ extends RefCounted
 class_name ProceduresPawnVisualizer
 
 ## Procedural pixel-art humanoid sprite renderer for pawns.
-## Generates unique, state-responsive figures based on PawnData appearance fields.
+## Generates unique, state-responsive figures based on HeelKawnianData appearance fields.
 ## Uses canvas drawing (draw_circle, draw_line, draw_rect) for deterministic pixel art.
 
-# State enum (must match Pawn.State)
+# State enum (must match HeelKawnian.State)
 const State = {
 	IDLE = 0,
 	WALKING_TO_JOB = 1,
@@ -25,7 +25,7 @@ const State = {
 	HIDING = 15,
 }
 
-# Hair style constants (must match PawnData.HairStyle)
+# Hair style constants (must match HeelKawnianData.HairStyle)
 const HairStyle = {
 	NONE = 0,
 	SHORT = 1,
@@ -33,7 +33,7 @@ const HairStyle = {
 	BUN = 3,
 }
 
-# Body type constants (must match PawnData.BodyType)
+# Body type constants (must match HeelKawnianData.BodyType)
 const BodyType = {
 	SLIM = 0,
 	AVERAGE = 1,

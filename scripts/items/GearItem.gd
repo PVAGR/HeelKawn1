@@ -81,7 +81,7 @@ static func make_id() -> String:
 
 
 ## Create a basic gear item from an Item.Type
-static func from_item_type(item_type: int, crafter: PawnData = null) -> GearItem:
+static func from_item_type(item_type: int, crafter: HeelKawnianData = null) -> GearItem:
 	var g: GearItem = GearItem.new()
 	g.item_id = make_id()
 	g.base_type = item_type

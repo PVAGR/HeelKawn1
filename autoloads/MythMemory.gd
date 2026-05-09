@@ -54,6 +54,15 @@ func get_region_myth_state(region_key: int) -> int:
 	return 0
 
 
+## PERFORMANCE: Return only regions with non-zero myth state.
+func get_regions_with_myth_state() -> Dictionary:
+	var result: Dictionary = {}
+	for rk in _region_myth:
+		if int(_region_myth[rk]) != 0:
+			result[int(rk)] = true
+	return result
+
+
 func recompute(_w: World) -> void:
 	_region_myth.clear()
 	for s in SettlementMemory.settlements:

@@ -114,11 +114,11 @@ func reset_choices() -> void:
 
 
 ## Apply incarnation to an existing pawn
-func apply_incarnation_to_pawn(pawn: Pawn, incarnation_data: Dictionary) -> bool:
+func apply_incarnation_to_pawn(pawn: HeelKawnian, incarnation_data: Dictionary) -> bool:
 	if pawn == null or not is_instance_valid(pawn):
 		return false
 	
-	var pd: PawnData = pawn.data
+	var pd: HeelKawnianData = pawn.data
 	if pd == null:
 		return false
 	

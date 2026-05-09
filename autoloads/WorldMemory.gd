@@ -461,7 +461,10 @@ func record_event(e: Dictionary) -> void:
 
 	var payload: Dictionary = _normalize_event_payload(e)
 	_append(payload)
-	
+
+	# DORMANT WORLD: Unlock DiscoveryGate when HeelKawnians trigger key events
+	_check_discovery_gates(payload)
+
 	# ARCHITECTURE: Emit through EventBus for decoupled listeners
 	if EventBus != null:
 		var event_type: String = str(payload.get("type", "unknown"))
@@ -471,6 +474,28 @@ func record_event(e: Dictionary) -> void:
 ## PHASE 4: Skill-gated event significance filter
 ## Events are only recorded if they represent meaningful thresholds
 ## ARCHITECTURE: Stricter filtering to prevent event spam
+## DORMANT WORLD: Unlock DiscoveryGate when HeelKawnians trigger key events
+func _check_discovery_gates(payload: Dictionary) -> void:
+	if DiscoveryGate == null:
+		return
+	var typ: String = str(payload.get("type", "")).to_lower()
+	if typ == "death" or typ == "death_witnessed":
+		DiscoveryGate.unlock("first_death")
+	elif typ == "birth":
+		DiscoveryGate.unlock("first_birth")
+	elif typ == "settlement":
+		DiscoveryGate.unlock("first_settlement")
+	elif typ == "teaching" or typ == "knowledge_inscribed":
+		DiscoveryGate.unlock("first_teaching")
+		DiscoveryGate.unlock("first_knowledge")
+	elif typ == "trade_route":
+		DiscoveryGate.unlock("first_trade")
+	elif typ == "injury":
+		var source: String = str(payload.get("source", "")).to_lower()
+		if source == "combat" or source == "war":
+			DiscoveryGate.unlock("first_war")
+
+
 func _event_passes_significance_threshold(e: Dictionary) -> bool:
 	var typ: String = str(e.get("type", "")).to_lower()
 
@@ -489,7 +514,7 @@ func _event_passes_significance_threshold(e: Dictionary) -> bool:
 		if pawn_id >= 0:
 			var ps: Node = _get_pawn_spawner()
 			if ps != null and ps.has_method("pawn_data_for_id"):
-				var pawn_data: PawnData = ps.call("pawn_data_for_id", pawn_id)
+				var pawn_data: HeelKawnianData = ps.call("pawn_data_for_id", pawn_id)
 				if pawn_data != null:
 					# Only record work events for skilled pawns (level 5+)
 					var highest_skill: int = pawn_data.get_highest_skill_level()
@@ -787,7 +812,7 @@ func record_pawn_death(
 
 	# PHASE 7: Record legacy for this pawn
 	# Get pawn data first (needed for legacy, notification, and biography)
-	var pawn_data: PawnData = null
+	var pawn_data: HeelKawnianData = null
 	var ps: Node = _get_pawn_spawner()
 	if ps != null and ps.has_method("pawn_data_for_id"):
 		pawn_data = ps.call("pawn_data_for_id", pawn_id)
@@ -1752,7 +1777,7 @@ func _generate_grudges_from_event(e: Dictionary) -> void:
 	var tick: int = int(e.get("t", GameManager.tick_count))
 	var event_type: String = e.get("type", "")
 	
-	# Pawn death -> grudges against killer (if recorded)
+	# HeelKawnian death -> grudges against killer (if recorded)
 	if event_type == "pawn_death":
 		var victim_id: int = int(e.get("pid", -1))
 		var killer_id: int = int(e.get("killer_id", -1))
@@ -1769,7 +1794,7 @@ func _generate_grudges_from_event(e: Dictionary) -> void:
 			# Generate grudge for victim's kin
 			_generate_grudges_for_victim_kin(victim_id, killer_id, grudge_type, int(e.get("eid", 0)), event_type, tick, GrudgeMgr)
 	
-	# Pawn harmed -> direct grudge
+	# HeelKawnian harmed -> direct grudge
 	elif event_type == "pawn_harmed":
 		var victim_id: int = int(e.get("victim_id", -1))
 		var aggressor_id: int = int(e.get("aggressor_id", -1))
@@ -1842,10 +1867,10 @@ func _generate_grudges_for_victim_kin(
 			GrudgeMgr.record_grudge(int(spouse_id), killer_id, grudge_type, event_id, event_type, tick)
 
 
-# ==================== TEXT-RICH: Pawn Biography Generator ====================
+# ==================== TEXT-RICH: HeelKawnian Biography Generator ====================
 
 ## Generate a complete life biography for a pawn.
-func _generate_pawn_biography(d: PawnData, death_cause: String) -> String:
+func _generate_pawn_biography(d: HeelKawnianData, death_cause: String) -> String:
 	var text: String = ""
 	
 	# Header
@@ -1911,11 +1936,11 @@ func _generate_pawn_biography(d: PawnData, death_cause: String) -> String:
 
 
 ## Get formatted skills string for biography.
-func _get_biography_skills(d: PawnData) -> String:
+func _get_biography_skills(d: HeelKawnianData) -> String:
 	var lines: Array[String] = []
 	
 	for skill_idx in range(5):
-		var skill_name: String = PawnData.skill_name(skill_idx)
+		var skill_name: String = HeelKawnianData.skill_name(skill_idx)
 		var level: int = d.get_skill_level(skill_idx)
 		if level > 0:
 			lines.append("%s %d" % [skill_name, level])

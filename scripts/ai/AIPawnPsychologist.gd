@@ -1,11 +1,11 @@
 extends RefCounted
 class_name AIPawnPsychologist
 
-## Layer 2: RimWorld Spirit - Pawn Psychology AI
+## Layer 2: RimWorld Spirit - HeelKawnian Psychology AI
 ## Manages individual pawn needs, moods, social dynamics, psychological states
 ##
-## Reads from: PawnData, GrudgeManager, GossipManager
-## Writes to: Pawn mood modifiers, social desires, fear states
+## Reads from: HeelKawnianData, GrudgeManager, GossipManager
+## Writes to: HeelKawnian mood modifiers, social desires, fear states
 
 var _llm_client: LLMClient = null
 var _grudge_manager: Node = null
@@ -171,7 +171,7 @@ func _get_pawn_recent_events(pawn_id: int) -> Array:
 func _apply_mood_modifier(pawn_data: Dictionary, profile: Dictionary) -> void:
 	var mood_modifier: int = profile.get("mood_modifier", 0)
 	
-	# Would apply to actual pawn via PawnData
+	# Would apply to actual pawn via HeelKawnianData
 	# For now, just log
 	
 	if mood_modifier != 0:

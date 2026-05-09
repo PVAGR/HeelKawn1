@@ -66,7 +66,7 @@ const RANK_CONFIG: Dictionary = {
 	}
 }
 
-# Pawn combat data storage
+# HeelKawnian combat data storage
 ## {
 ##   "pawn_id": int,
 ##   "combat_xp": int,
@@ -302,7 +302,7 @@ func _get_pawn_name(pawn_id: int) -> String:
 	if data != null and data.has_method("get_display_name"):
 		return data.get_display_name()
 	
-	return "Pawn #%d" % pawn_id
+	return "HeelKawnian #%d" % pawn_id
 
 
 # ==================== PUBLIC API ====================

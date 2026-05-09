@@ -442,7 +442,7 @@ func check_compilation_errors() -> void:
 	# Check for common compilation error patterns
 	var files_to_check: Array[String] = [
 		"res://scripts/ui/AIControlPanel.gd",
-		"res://scripts/pawn/Pawn.gd",
+		"res://scripts/pawn/HeelKawnian.gd",
 		"res://scenes/main/Main.gd"
 	]
 	

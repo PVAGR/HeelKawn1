@@ -15,7 +15,7 @@ func _init(content_text: String = "") -> void:
 	item_type = Item.Type.BOOK
 
 ## Populates the book with historical events from world memory.
-func write_chronicle(pawn: Pawn, radius: int = 50) -> void:
+func write_chronicle(pawn: HeelKawnian, radius: int = 50) -> void:
 	author_id = pawn.data.id
 	creation_tick = GameManager.tick_count
 	

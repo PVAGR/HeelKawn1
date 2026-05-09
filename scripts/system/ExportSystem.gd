@@ -5,11 +5,11 @@ extends Node
 ## Allows exporting pawn data for future online MMO integration
 
 ## Export a pawn to JSON format
-static func export_pawn(pawn: Pawn) -> Dictionary:
+static func export_pawn(pawn: HeelKawnian) -> Dictionary:
 	if pawn == null or not is_instance_valid(pawn):
 		return {}
 	
-	var pd: PawnData = pawn.data
+	var pd: HeelKawnianData = pawn.data
 	if pd == null:
 		return {}
 	
@@ -21,7 +21,7 @@ static func export_pawn(pawn: Pawn) -> Dictionary:
 		"age": pd.age,
 		"age_years": pd.age_years,
 		"gender": pd.gender,
-		"profession": str(PawnData.Profession.keys()[pd.current_profession]),
+		"profession": str(HeelKawnianData.Profession.keys()[pd.current_profession]),
 		
 		# Stage 1: Individual progression
 		"level": pd.level,
@@ -100,7 +100,7 @@ static func export_pawn(pawn: Pawn) -> Dictionary:
 
 
 ## Export a pawn to a JSON file
-static func export_pawn_to_file(pawn: Pawn, file_path: String) -> bool:
+static func export_pawn_to_file(pawn: HeelKawnian, file_path: String) -> bool:
 	var export_data: Dictionary = export_pawn(pawn)
 	if export_data.is_empty():
 		return false
@@ -118,11 +118,11 @@ static func export_pawn_to_file(pawn: Pawn, file_path: String) -> bool:
 
 
 ## Import a pawn from JSON data
-static func import_pawn_from_data(import_data: Dictionary, target_pawn: Pawn) -> bool:
+static func import_pawn_from_data(import_data: Dictionary, target_pawn: HeelKawnian) -> bool:
 	if target_pawn == null or not is_instance_valid(target_pawn):
 		return false
 	
-	var pd: PawnData = target_pawn.data
+	var pd: HeelKawnianData = target_pawn.data
 	if pd == null:
 		return false
 	
@@ -213,7 +213,7 @@ static func import_pawn_from_data(import_data: Dictionary, target_pawn: Pawn) ->
 
 
 ## Import a pawn from a JSON file
-static func import_pawn_from_file(file_path: String, target_pawn: Pawn) -> bool:
+static func import_pawn_from_file(file_path: String, target_pawn: HeelKawnian) -> bool:
 	var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
 	if file == null:
 		return false

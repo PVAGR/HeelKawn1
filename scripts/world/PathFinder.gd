@@ -31,7 +31,7 @@ var _resv_job: PackedByteArray = PackedByteArray()
 var _resv_preview: PackedByteArray = PackedByteArray()
 var _last_preview_tiles: Array[Vector2i] = []
 
-# --- Pawn historical-scar aversion (v1) ---
+# --- HeelKawnian historical-scar aversion (v1) ---
 # Refreshed when WorldMemory records new history and Main reruns
 # `WorldPersistence.recompute()`; applied only around
 # `find_path_pawn_historic_aversion` so animals/enemies keep default 1.0 costs.
@@ -175,37 +175,86 @@ func refresh_pawn_historic_scar_weights(p_world: World) -> void:
 	_pawn_hist_dirty.clear()
 	if _pawn_hist_scale.size() != WorldData.TILE_COUNT:
 		_pawn_hist_scale.resize(WorldData.TILE_COUNT)
-	for y in range(WorldData.HEIGHT):
-		for x in range(WorldData.WIDTH):
-			var i: int = y * WorldData.WIDTH + x
-			_pawn_hist_scale[i] = 1.0
-			if _astar.is_point_solid(Vector2i(x, y)):
-				continue
-			var rk: int = _WM._region_key(x, y)
-			var sl: int = int(WorldPersistence.get_region_scar_level(rk))
-			var w: float = 1.0
-			if sl > 0:
-				match sl:
-					1:
-						w = 1.10
-					2:
-						w = 1.36
-					3:
-						w = 1.78
-					_:
-						w = 1.0
-				var mst: int = MythMemory.get_region_myth_state(rk)
-				if mst == 1:
-					w *= 1.08
-				elif mst == -1:
-					w *= 0.95
-			w *= RoadMemory.get_path_weight_mul(x, y)
-			w *= TradeMemory.get_trade_path_weight_mul(x, y)
-			if p_world != null and is_instance_valid(p_world) and p_world.data != null:
-				w *= RemnantMemory.get_remnant_path_mul(x, y, p_world)
-			_pawn_hist_scale[i] = w
-			if not is_equal_approx(w, 1.0):
-				_pawn_hist_dirty.append(i)
+	# PERFORMANCE: Only iterate regions that have non-default weights.
+	# Most of the map has scar_level=0, no roads, no trade, no myth state.
+	# Instead of 65,536 tile iterations, only scan the ~100-300 affected regions.
+	var dirty_regions: Dictionary = {}
+	# Collect regions with scar levels
+	if WorldPersistence != null:
+		var scar_regions: Dictionary = WorldPersistence.get_regions_with_scar()
+		for rk in scar_regions:
+			dirty_regions[int(rk)] = true
+	# Collect regions with myth states
+	if MythMemory != null:
+		var myth_regions: Dictionary = MythMemory.get_regions_with_myth_state()
+		for rk in myth_regions:
+			dirty_regions[int(rk)] = true
+	# Collect regions with roads
+	if RoadMemory != null:
+		var road_regions: Dictionary = RoadMemory.get_regions_with_roads()
+		for rk in road_regions:
+			dirty_regions[int(rk)] = true
+	# Collect regions with trade routes
+	if TradeMemory != null:
+		var trade_regions: Dictionary = TradeMemory.get_regions_with_trade()
+		for rk in trade_regions:
+			dirty_regions[int(rk)] = true
+	# Collect regions with remnants
+	if RemnantMemory != null and p_world != null and is_instance_valid(p_world) and p_world.data != null:
+		var remnant_regions: Dictionary = RemnantMemory.get_regions_with_remnants()
+		for rk in remnant_regions:
+			dirty_regions[int(rk)] = true
+	# Collect regions with abandoned settlements
+	if SettlementMemory != null:
+		var abandoned_regions: Dictionary = SettlementMemory.get_abandoned_regions()
+		for rk in abandoned_regions:
+			dirty_regions[int(rk)] = true
+	# If no dirty regions, skip entirely
+	if dirty_regions.is_empty():
+		return
+	# Only iterate tiles in dirty regions (16×16 tiles per region)
+	for rk_any in dirty_regions:
+		var rk: int = int(rk_any)
+		var rx: int = rk & 0xFFFF
+		var ry: int = (rk >> 16) & 0xFFFF
+		var tx_start: int = rx * 16
+		var ty_start: int = ry * 16
+		var tx_end: int = mini(tx_start + 16, WorldData.WIDTH)
+		var ty_end: int = mini(ty_start + 16, WorldData.HEIGHT)
+		for ty in range(ty_start, ty_end):
+			for tx in range(tx_start, tx_end):
+				var i: int = ty * WorldData.WIDTH + tx
+				_pawn_hist_scale[i] = 1.0
+				if _astar.is_point_solid(Vector2i(tx, ty)):
+					continue
+				var tile_rk: int = _WM._region_key(tx, ty)
+				# Only process tiles in dirty regions
+				if not dirty_regions.has(tile_rk):
+					continue
+				var w: float = 1.0
+				var sl: int = int(WorldPersistence.get_region_scar_level(tile_rk))
+				if sl > 0:
+					match sl:
+						1:
+							w = 1.10
+						2:
+							w = 1.36
+						3:
+							w = 1.78
+						_:
+							w = 1.0
+					var mst: int = MythMemory.get_region_myth_state(tile_rk)
+					if mst == 1:
+						w *= 1.08
+					elif mst == -1:
+						w *= 0.95
+				w *= RoadMemory.get_path_weight_mul(tx, ty)
+				w *= TradeMemory.get_trade_path_weight_mul(tx, ty)
+				if p_world != null and is_instance_valid(p_world) and p_world.data != null:
+					w *= RemnantMemory.get_remnant_path_mul(tx, ty, p_world)
+				_pawn_hist_scale[i] = w
+				if not is_equal_approx(w, 1.0):
+					_pawn_hist_dirty.append(i)
 
 
 func _idx_to_point(i: int) -> Vector2i:

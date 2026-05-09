@@ -279,7 +279,7 @@ func _show_pawn_biography(pawn_id: int) -> void:
 	if ps == null:
 		return
 	
-	var pawn_data: PawnData = ps.call("pawn_data_for_id", pawn_id)
+	var pawn_data: HeelKawnianData = ps.call("pawn_data_for_id", pawn_id)
 	if pawn_data == null:
 		return
 	

@@ -92,7 +92,7 @@ func _update_display() -> void:
 		_tick_history.pop_front()
 	var avg_ticks: float = _tick_history.reduce(func(a, b): return a + b) / float(_tick_history.size())
 
-	# Pawn count
+	# HeelKawnian count
 	var pawn_count: int = 0
 	var main_node: Node = get_tree().get_root().get_node_or_null("Main")
 	if main_node != null:

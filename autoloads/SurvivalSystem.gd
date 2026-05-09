@@ -109,13 +109,13 @@ func _process_survival(pawn: Node, tick: int) -> void:
 	if is_working:
 		work_mult = WORK_HUNGER_MULT
 	
-	# Decay needs — Pawn.gd _decay_needs already handles hunger/rest/thirst
+	# Decay needs — HeelKawnian.gd _decay_needs already handles hunger/rest/thirst
 	# with sleeping rates and personality multipliers. Only decay stamina here
-	# (Pawn.gd doesn't handle stamina). Moodlets are still applied below.
+	# (HeelKawnian.gd doesn't handle stamina). Moodlets are still applied below.
 	_decay_stamina(data, work_mult)
 
 	# Apply moodlets from current conditions (hunger/thirst/etc are
-	# decayed by Pawn.gd, but moodlets are managed here).
+	# decayed by HeelKawnian.gd, but moodlets are managed here).
 	_apply_condition_moodlets(data)
 	
 	# Regulate body temperature
@@ -384,7 +384,7 @@ func heal_injury(pawn: Node, injury_type: String, amount: float) -> void:
 var _active_moodlets: Dictionary = {}  # {pawn_id: {moodlet_key: end_tick}}
 
 ## Check current pawn conditions and apply/remove moodlets accordingly.
-## This is separate from the decay functions because Pawn.gd handles the actual
+## This is separate from the decay functions because HeelKawnian.gd handles the actual
 ## hunger/thirst/rest decay with sleeping rates and personality multipliers.
 func _apply_condition_moodlets(data: RefCounted) -> void:
 	# Hunger moodlets
@@ -434,7 +434,7 @@ func _apply_condition_moodlets(data: RefCounted) -> void:
 		else:
 			_remove_moodlet_if_active(data, "rested")
 			_remove_moodlet_if_active(data, "exhausted")
-	# Temperature moodlets (PawnData uses body_temperature, normal 36-38°C)
+	# Temperature moodlets (HeelKawnianData uses body_temperature, normal 36-38°C)
 	if data.body_temperature != null:
 		if data.body_temperature < 35.0:
 			_apply_moodlet(data, "hypothermia")
@@ -535,7 +535,7 @@ func _check_death_conditions(pawn: Node, tick: int) -> void:
 
 	# CRITICAL: Skip death checks for already-dead pawns
 	if "is_dead" in data and bool(data.get("is_dead")):
-		return  # Pawn is already dead - skip all death processing
+		return  # HeelKawnian is already dead - skip all death processing
 
 	var cause: String = ""
 
@@ -569,7 +569,7 @@ func _apply_death(pawn: Node, cause: String) -> void:
 
 	# CRITICAL: Prevent duplicate death events for already-dead pawns
 	if "is_dead" in data and bool(data.get("is_dead")):
-		return  # Pawn already marked dead - skip duplicate death processing
+		return  # HeelKawnian already marked dead - skip duplicate death processing
 
 	# Record death event
 	if _world_memory != null:

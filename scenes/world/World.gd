@@ -23,7 +23,7 @@ var stockpile: Stockpile = null
 ## All tiles with a BED feature, in placement order. Pawns scan this when
 ## they want to sleep. Kept in sync via register_bed / unregister_bed.
 var _bed_tiles: Array[Vector2i] = []
-## bed tile -> Pawn currently sleeping (or walking to) it. A bed is "free"
+## bed tile -> HeelKawnian currently sleeping (or walking to) it. A bed is "free"
 ## if not present in this dict OR mapped to null.
 var _bed_occupants: Dictionary = {}
 
@@ -495,6 +495,12 @@ func set_feature(x: int, y: int, feature: int) -> bool:
 		return false
 	data.features[i] = feature
 	RemnantMemory.on_feature_set(self, x, y, feature)
+	# DORMANT WORLD: Unlock gates when HeelKawnians build key structures
+	if DiscoveryGate != null:
+		if feature == TileFeature.Type.FIRE_PIT:
+			DiscoveryGate.unlock("first_fire")
+		elif feature == TileFeature.Type.BED:
+			DiscoveryGate.unlock("first_shelter")
 	if _image != null:
 		_image.set_pixel(x, y, _tile_color(x, y))
 		_texture.update(_image)
@@ -687,15 +693,15 @@ func is_bed_free(tile: Vector2i) -> bool:
 
 
 ## True if the bed is currently reserved/occupied by `pawn` specifically. Used
-## by Pawn._decay_needs to grant the bed sleep bonus only to its rightful sleeper.
-func is_bed_owned_by(tile: Vector2i, pawn: Pawn) -> bool:
+## by HeelKawnian._decay_needs to grant the bed sleep bonus only to its rightful sleeper.
+func is_bed_owned_by(tile: Vector2i, pawn: HeelKawnian) -> bool:
 	return _bed_occupants.get(tile, null) == pawn
 
 
 ## Atomically reserve the given bed for `pawn`. Returns false if it's not a
 ## bed or someone else already holds it. Successful reserve survives the walk
 ## to the bed and the entire sleep, then must be released.
-func reserve_bed(tile: Vector2i, pawn: Pawn) -> bool:
+func reserve_bed(tile: Vector2i, pawn: HeelKawnian) -> bool:
 	if not _bed_occupants.has(tile):
 		return false
 	var current = _bed_occupants[tile]
@@ -705,7 +711,7 @@ func reserve_bed(tile: Vector2i, pawn: Pawn) -> bool:
 	return true
 
 
-func release_bed(tile: Vector2i, pawn: Pawn) -> void:
+func release_bed(tile: Vector2i, pawn: HeelKawnian) -> void:
 	if not _bed_occupants.has(tile):
 		return
 	if _bed_occupants[tile] == pawn:
@@ -716,7 +722,7 @@ func release_bed(tile: Vector2i, pawn: Pawn) -> void:
 ## by Chebyshev distance to keep this O(N_beds); reachability uses the connected-
 ## components map so we never propose a bed across an impassable wall. Returns
 ## Vector2i(-1,-1) if no bed qualifies.
-func find_free_bed_for(pawn: Pawn, from_tile: Vector2i) -> Vector2i:
+func find_free_bed_for(pawn: HeelKawnian, from_tile: Vector2i) -> Vector2i:
 	if _bed_tiles.is_empty() or pathfinder == null:
 		return Vector2i(-1, -1)
 	var my_component: int = pathfinder.component_of(from_tile)

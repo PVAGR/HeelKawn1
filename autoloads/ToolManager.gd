@@ -45,7 +45,7 @@ func can_craft(tool_type: int, stockpile: Stockpile = null) -> bool:
 
 
 ## Consume materials from stockpile and craft the tool. Returns the crafted item type on success.
-func craft_tool(tool_type: int, pawn: Pawn, stockpile: Stockpile = null) -> bool:
+func craft_tool(tool_type: int, pawn: HeelKawnian, stockpile: Stockpile = null) -> bool:
 	if not Item.is_craftable(tool_type):
 		return false
 	if not can_craft(tool_type, stockpile):
@@ -85,7 +85,7 @@ func craft_tool(tool_type: int, pawn: Pawn, stockpile: Stockpile = null) -> bool
 
 ## Returns tool priority score for a pawn (higher = more desperate for a tool).
 ## Used to decide which pawns should craft first.
-func get_tool_need_score(pawn: Pawn) -> float:
+func get_tool_need_score(pawn: HeelKawnian) -> float:
 	var pd = pawn.get_pawn_data()
 	if pd == null:
 		return 0.0
@@ -118,7 +118,7 @@ func _spawn_tool_jobs_if_needed() -> void:
 	var toolless_count: int = 0
 	var total_pawns: int = 0
 	
-	var pawns: Array[Pawn] = PawnSpawner.find_pawns()
+	var pawns: Array[HeelKawnian] = PawnSpawner.find_pawns()
 	for p in pawns:
 		total_pawns += 1
 		var pd = p.get_pawn_data()

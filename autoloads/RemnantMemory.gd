@@ -18,6 +18,7 @@ const PLANNER_PERM_ABANDONED_PEN: int = 9
 
 ## birth Age index at first marking (0 = current or seed era).
 var _birth: PackedInt32Array = PackedInt32Array()
+var _remnant_regions: Dictionary = {}  # Cache: region_key → true for regions with remnant tiles
 
 
 func _ready() -> void:
@@ -39,6 +40,7 @@ func _clear_birth_to_none() -> void:
 func clear() -> void:
 	_ensure_birth_size()
 	_clear_birth_to_none()
+	_remnant_regions.clear()
 
 
 ## After load or first world, treat all extant remnant art as "this" Age 0.
@@ -56,8 +58,10 @@ func seed_births_from_current_world(w: World) -> void:
 					TileFeature.Type.DOOR
 			):
 				_birth[i0] = age0
+				_track_remnant_region(x, y)
 			elif TradeMemory.get_route_tier_at(x, y) >= TradeMemory.TIER_ROUTE_2:
 				_birth[i0] = age0
+				_track_remnant_region(x, y)
 
 
 ## On Age transition, everything still un-dated (world gen carry-over) becomes [ended_age] (one era old next tick).
@@ -73,6 +77,7 @@ func on_age_ended(ended_age: int, w: World) -> void:
 			if int(_birth[i1]) != BIRTH_NONE:
 				continue
 			_birth[i1] = ended_age
+			_track_remnant_region(x1, y1)
 
 
 ## First time a feature becomes a tracked structure.
@@ -87,6 +92,7 @@ func on_feature_set(w: World, x: int, y: int, new_feature: int) -> void:
 	if int(_birth[i2]) != BIRTH_NONE:
 		return
 	_birth[i2] = AgeMemory.get_current_age_index()
+	_track_remnant_region(x, y)
 
 
 ## [TradeMemory] T2 paint on passable path tiles.
@@ -98,6 +104,10 @@ func on_t2_painted(x: int, y: int) -> void:
 	if int(_birth[i3]) != BIRTH_NONE:
 		return
 	_birth[i3] = AgeMemory.get_current_age_index()
+	_track_remnant_region(x, y)
+	# DORMANT WORLD: Unlock ruin gate when first remnant structure appears
+	if DiscoveryGate != null:
+		DiscoveryGate.unlock("first_ruin")
 
 
 static func _feature_is_remnant(f: int) -> bool:
@@ -156,6 +166,18 @@ func get_remnant_path_mul(x: int, y: int, w: World) -> float:
 	elif st == "permanently_abandoned":
 		m0 *= PATH_PERM_ABANDONED
 	return m0
+
+
+## PERFORMANCE: Return regions that have remnant tiles.
+## Uses incrementally maintained cache.
+func get_regions_with_remnants() -> Dictionary:
+	return _remnant_regions
+
+
+## Track a region as having a remnant tile.
+func _track_remnant_region(x: int, y: int) -> void:
+	var rk: int = WorldMemory._region_key(x, y)
+	_remnant_regions[rk] = true
 
 
 ## Ruins that read as "fully" prior-era (v1: never spawn / reclaim targets).

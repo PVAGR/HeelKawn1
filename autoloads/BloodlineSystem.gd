@@ -1,6 +1,6 @@
 extends Node
 ## BloodlineSystem.gd — Tracks bloodlines and descendants across generations
-## Integrates with PawnData children_ids and WorldPersistence family memory
+## Integrates with HeelKawnianData children_ids and WorldPersistence family memory
 
 @onready var WorldMemory = get_node_or_null("/root/WorldMemory")
 @onready var WorldPersistence = get_node_or_null("/root/WorldPersistence")
@@ -16,7 +16,7 @@ var _next_bloodline_id: int = 1
 # Bloodline data: bloodline_id -> bloodline info (shared-ancestor group; founder + stats)
 var bloodlines: Dictionary = {}
 
-# Pawn to bloodline mapping: pawn_id -> bloodline_id
+# HeelKawnian to bloodline mapping: pawn_id -> bloodline_id
 var pawn_to_bloodline: Dictionary = {}
 
 # Generation tracking: bloodline_id -> generation_data
@@ -235,7 +235,7 @@ func get_bloodline_specialization_multiplier(bloodline_id: int, skill: int) -> f
 	var spec: String = str(bloodline.get("specialization_key", ""))
 	if spec.is_empty():
 		return 1.0
-	var cat: String = PawnData.tree_skill_category_for_job_skill(skill)
+	var cat: String = HeelKawnianData.tree_skill_category_for_job_skill(skill)
 	if cat.is_empty():
 		return 1.0
 	if spec == cat:
@@ -372,7 +372,7 @@ func get_ancestors(pawn_id: int, max_generations: int = -1) -> Array[int]:
 	return ancestors
 
 func _is_descendant_of(ancestor_id: int, descendant_id: int, bloodline_id: int) -> bool:
-	# Check if descendant_id is a child of ancestor_id (through PawnData)
+	# Check if descendant_id is a child of ancestor_id (through HeelKawnianData)
 	var main: Node2D = Engine.get_main_loop().current_scene as Node2D
 	if main == null:
 		return false
@@ -382,7 +382,7 @@ func _is_descendant_of(ancestor_id: int, descendant_id: int, bloodline_id: int) 
 		return false
 	
 	# Find ancestor pawn
-	var ancestor_pawn: Pawn = null
+	var ancestor_pawn: HeelKawnian = null
 	for p in spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == ancestor_id:
 			ancestor_pawn = p
@@ -405,7 +405,7 @@ func _is_ancestor_of(ancestor_id: int, descendant_id: int, bloodline_id: int) ->
 		return false
 	
 	# Find descendant pawn
-	var descendant_pawn: Pawn = null
+	var descendant_pawn: HeelKawnian = null
 	for p in spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == descendant_id:
 			descendant_pawn = p
@@ -414,7 +414,7 @@ func _is_ancestor_of(ancestor_id: int, descendant_id: int, bloodline_id: int) ->
 	if descendant_pawn == null:
 		return false
 	
-	# Check if ancestor_id is in descendant's parents (would need parent tracking in PawnData)
+	# Check if ancestor_id is in descendant's parents (would need parent tracking in HeelKawnianData)
 	# For now, use the inverse of descendant check
 	return _is_descendant_of(ancestor_id, descendant_id, bloodline_id)
 

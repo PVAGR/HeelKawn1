@@ -118,6 +118,17 @@ func get_region_scar_level(region_key: int) -> int:
 	return 0
 
 
+## PERFORMANCE: Return only regions with scar_level > 0.
+## Used by PathFinder to skip the 65,536-tile full scan.
+func get_regions_with_scar() -> Dictionary:
+	var result: Dictionary = {}
+	for rk in persistent_regions:
+		var v: Variant = persistent_regions[rk]
+		if v is Dictionary and int((v as Dictionary).get("scar_level", 0)) > 0:
+			result[int(rk)] = true
+	return result
+
+
 func recompute() -> void:
 	var old: Dictionary = persistent_regions.duplicate(true)
 	persistent_regions.clear()

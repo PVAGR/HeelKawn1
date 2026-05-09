@@ -66,7 +66,7 @@ func _on_game_tick(_tick: int) -> void:
 
 
 ## Apply an injury to a pawn.
-func apply_injury(pawn: Pawn, injury_type: int, severity: float, source: String = "unknown") -> void:
+func apply_injury(pawn: HeelKawnian, injury_type: int, severity: float, source: String = "unknown") -> void:
 	var pd = pawn.get_pawn_data()
 	if pd == null:
 		return
@@ -114,13 +114,13 @@ func apply_injury(pawn: Pawn, injury_type: int, severity: float, source: String 
 
 ## Tick all pawn injuries: recover, check for complications.
 func _tick_pawn_injuries() -> void:
-	var pawns: Array[Pawn] = PawnSpawner.find_pawns()
+	var pawns: Array[HeelKawnian] = PawnSpawner.find_pawns()
 	for p in pawns:
 		_tick_pawn_injury_recovery(p)
 
 
 ## Process recovery for a single pawn's injuries.
-func _tick_pawn_injury_recovery(pawn: Pawn) -> void:
+func _tick_pawn_injury_recovery(pawn: HeelKawnian) -> void:
 	var pd = pawn.get_pawn_data()
 	if pd == null or pd.injuries.is_empty():
 		return
@@ -161,7 +161,7 @@ func _tick_pawn_injury_recovery(pawn: Pawn) -> void:
 
 
 ## Recalculate pawn's pain level based on current injuries.
-func _recalculate_pain(pd: PawnData) -> void:
+func _recalculate_pain(pd: HeelKawnianData) -> void:
 	var total_pain: float = 0.0
 	for injury_name in pd.injuries:
 		var severity: float = float(pd.injuries[injury_name])
@@ -173,13 +173,13 @@ func _recalculate_pain(pd: PawnData) -> void:
 ## Check if there's a healer pawn nearby.
 ## Currently no healer profession exists, so this always returns false.
 ## Preserving the structure for when a healer profession is added.
-func _has_healer_nearby(pawn: Pawn, radius: int = 12) -> bool:
+func _has_healer_nearby(pawn: HeelKawnian, radius: int = 12) -> bool:
 	# No healer profession exists yet — skip the O(n²) scan entirely.
-	# TODO: Re-enable when PawnData.Profession.HEALER is added.
+	# TODO: Re-enable when HeelKawnianData.Profession.HEALER is added.
 	return false
 
 ## Calculate total mobility penalty from all injuries (0.0 = no penalty, 1.0 = immobilized).
-func get_mobility_penalty(pd: PawnData) -> float:
+func get_mobility_penalty(pd: HeelKawnianData) -> float:
 	if pd.injuries.is_empty():
 		return 0.0
 	
@@ -194,7 +194,7 @@ func get_mobility_penalty(pd: PawnData) -> float:
 
 
 ## Calculate work efficiency penalty from injuries.
-func get_work_efficiency_penalty(pd: PawnData) -> float:
+func get_work_efficiency_penalty(pd: HeelKawnianData) -> float:
 	if pd.injuries.is_empty():
 		return 0.0
 	
@@ -209,7 +209,7 @@ func get_work_efficiency_penalty(pd: PawnData) -> float:
 
 
 ## Check if pawn is immobilized (broken bone with high severity).
-func is_immobilized(pd: PawnData) -> bool:
+func is_immobilized(pd: HeelKawnianData) -> bool:
 	var broken_severity: float = float(pd.injuries.get("broken_bone", 0.0))
 	return broken_severity > 60.0
 
@@ -238,6 +238,6 @@ static func _injury_type_from_name(name: String) -> int:
 	return InjuryType.CUT
 
 
-static func _infection_roll_salt(pd: PawnData, injury_name: String, severity: float, source: String) -> int:
+static func _infection_roll_salt(pd: HeelKawnianData, injury_name: String, severity: float, source: String) -> int:
 	var tick: int = GameManager.tick_count if GameManager != null else 0
 	return int(pd.id) * 1000003 + tick * 9176 + int(severity * 10.0) + hash(injury_name) + hash(source)

@@ -323,7 +323,7 @@ func recompute(_world: World) -> void:
     _region_center.clear()
     _war_command_announced.clear()
     _war_battle_spawned.clear()
-    var living_pawns: Array[Pawn] = _living_pawns()
+    var living_pawns: Array[HeelKawnian] = _living_pawns()
     var active_jobs: Array[Job] = _active_jobs_snapshot()
     var eligible: Array[int] = []
     for rk_any in WorldMeaning.meaning_by_region.keys():
@@ -395,6 +395,8 @@ func recompute(_world: World) -> void:
             _apply_diaspora_founding(st, center_id)
             _capture_resource_truth(st)
             settlements.append(st)
+            # DEAD BRAIN REVIVED: Auto-appoint governor for new settlements
+            _appoint_initial_governor(st)
             var st_name: String = str(st.get("state", ""))
             var ckr: int = int(st.get("center_region", -1))
             var preg: Variant = st.get("regions", null)
@@ -664,7 +666,7 @@ func _apply_settlement_state_truth_hysteresis(center_id: int, raw_state: String,
 
 ## When no region yet qualifies for history-scar settlement clustering, still anchor one derived
 ## settlement to registered stockpile zones plus current pawn tiles (starters rarely overlap the seed pile).
-func _bootstrap_presettlement_cluster(living_pawns: Array[Pawn]) -> Array:
+func _bootstrap_presettlement_cluster(living_pawns: Array[HeelKawnian]) -> Array:
     var seen: Dictionary = {}
     var out: Array = []
     var max_keys: int = 512
@@ -735,7 +737,7 @@ func _stockpile_zone_overlaps_region_set(region_set: Dictionary) -> bool:
 func _material_activity_state_override(
         st: Dictionary,
         world: World,
-        living_pawns: Array[Pawn],
+        living_pawns: Array[HeelKawnian],
         active_jobs: Array[Job],
         base_state: String
 ) -> String:
@@ -957,6 +959,9 @@ func _settlement_state_v1(
     if scar_max >= 3:
         if ticks_since_collapse <= HARD_COLLAPSE_TICKS:
             return "abandoned"
+        # DORMANT WORLD: Settlements can't permanently abandon until era 2
+        if DiscoveryGate != null and not DiscoveryGate.is_unlocked("era_2"):
+            return "abandoned"
         return "permanently_abandoned"
     # Fresh moderate collapse still reads as abandoned.
     if last_activity_tick >= 0 and _ticks_since_or_large(last_activity_tick) < int(HARD_COLLAPSE_TICKS * 0.4):
@@ -1087,7 +1092,7 @@ func _default_profile(region_key: int) -> Dictionary:
 
 ## ARCHITECT TASK 2: Get the settlement ID a pawn belongs to.
 func get_settlement_id_for_pawn(pawn_id: int) -> int:
-    # Look up the pawn's settlement_id directly from PawnData via PawnSpawner
+    # Look up the pawn's settlement_id directly from HeelKawnianData via PawnSpawner
     var sp: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
     if sp != null and sp.has_method("pawn_data_for_id"):
         var pd = sp.call("pawn_data_for_id", pawn_id)
@@ -1156,6 +1161,36 @@ func is_collapsed_state(state: String) -> bool:
     return state == "abandoned" or state == "permanently_abandoned"
 
 
+## DEAD BRAIN REVIVED: Auto-appoint governor when a settlement forms
+func _appoint_initial_governor(settlement: Dictionary) -> void:
+	if GovernorSystem == null:
+		return
+	var settlement_id: int = int(settlement.get("center_region", -1))
+	if settlement_id < 0:
+		return
+	# Find the oldest HeelKawnian in this settlement to be governor
+	var pawns_in_region: Array = []
+	var regions_raw: Variant = settlement.get("regions", null)
+	if regions_raw is PackedInt32Array:
+		for rk in (regions_raw as PackedInt32Array):
+			var r_pawns: Array = get_pawns_in_region(int(rk))
+			for p in r_pawns:
+				if p != null and is_instance_valid(p) and p.data != null:
+					pawns_in_region.append(p)
+	if pawns_in_region.is_empty():
+		return
+	# Pick the one with highest age (wisdom = authority in primitive culture)
+	var best: Node = null
+	var best_age: int = -1
+	for p in pawns_in_region:
+		var age: int = int(p.data.age) if p.data != null else 0
+		if age > best_age:
+			best_age = age
+			best = p
+	if best != null and best.data != null:
+		GovernorSystem.appoint_governor(settlement_id, int(best.data.id))
+
+
 ## OPTIMIZATION: Force new settlements to start as "active" for better early game
 func _force_settlement_active_on_founding(settlement: Dictionary) -> Dictionary:
     var current_state: String = str(settlement.get("state", "active"))
@@ -1218,6 +1253,16 @@ func get_center_region_for_region(region_key: int) -> int:
     return -1
 
 
+## PERFORMANCE: Return regions that are in abandoned or permanently abandoned settlements.
+func get_abandoned_regions() -> Dictionary:
+    var result: Dictionary = {}
+    for rk in _region_state:
+        var st: String = str(_region_state[rk])
+        if st == "abandoned" or st == "permanently_abandoned":
+            result[int(rk)] = true
+    return result
+
+
 ## Latest pawn death tick in any listed region, or -1 if none.
 func _max_last_pawn_death_tick_in_cluster(cluster: Array) -> int:
     var best: int = -1
@@ -1259,7 +1304,7 @@ func get_settlement_at_region(region_key: int) -> Variant:
 
 
 func _update_governance_state() -> void:
-    var pawns: Array[Pawn] = _living_pawns()
+    var pawns: Array[HeelKawnian] = _living_pawns()
     for i in range(settlements.size()):
         if not (settlements[i] is Dictionary):
             continue
@@ -1290,14 +1335,14 @@ func _update_governance_state() -> void:
         _process_war_state(i, pawns)
 
 
-var _living_pawns_cache: Array[Pawn] = []
+var _living_pawns_cache: Array[HeelKawnian] = []
 var _living_pawns_cache_tick: int = -1
-## Region-key → Array[Pawn] index, rebuilt alongside _living_pawns_cache.
+## Region-key → Array[HeelKawnian] index, rebuilt alongside _living_pawns_cache.
 ## Eliminates O(S×P) governance scan — each settlement looks up its regions
 ## in O(1) instead of scanning all pawns.
 var _pawns_by_region_cache: Dictionary = {}
 
-func _living_pawns() -> Array[Pawn]:
+func _living_pawns() -> Array[HeelKawnian]:
     var t: int = GameManager.tick_count if GameManager != null else 0
     if t == _living_pawns_cache_tick:
         return _living_pawns_cache
@@ -1317,12 +1362,12 @@ func _living_pawns() -> Array[Pawn]:
 
 ## Return pawns belonging to a settlement's regions using the cached index.
 ## O(R) where R = number of regions in the settlement, instead of O(P).
-func _pawns_in_settlement_indexed(st: Dictionary) -> Array[Pawn]:
+func _pawns_in_settlement_indexed(st: Dictionary) -> Array[HeelKawnian]:
     var regv: Variant = st.get("regions", PackedInt32Array())
     if not (regv is PackedInt32Array):
         return []
     var regs: PackedInt32Array = regv as PackedInt32Array
-    var out: Array[Pawn] = []
+    var out: Array[HeelKawnian] = []
     var seen: Dictionary = {}
     for rk in regs:
         var arr: Variant = _pawns_by_region_cache.get(int(rk), null)
@@ -1342,7 +1387,7 @@ func _compute_dominant_clans() -> void:
         if not st is Dictionary:
             continue
         var d: Dictionary = st as Dictionary
-        var pawns: Array[Pawn] = _pawns_in_settlement_indexed(d)
+        var pawns: Array[HeelKawnian] = _pawns_in_settlement_indexed(d)
         if pawns.is_empty():
             d["dominant_clan_id"] = -1
             d["dominant_nation_id"] = -1
@@ -1379,9 +1424,9 @@ func _compute_dominant_clans() -> void:
         d["dominant_nation_id"] = best_nation
 
 
-func _governance_for_settlement(st: Dictionary, _pawns_all: Array[Pawn]) -> Dictionary:
+func _governance_for_settlement(st: Dictionary, _pawns_all: Array[HeelKawnian]) -> Dictionary:
     # Use indexed lookup instead of scanning all pawns per settlement
-    var set_pawns: Array[Pawn] = _pawns_in_settlement_indexed(st)
+    var set_pawns: Array[HeelKawnian] = _pawns_in_settlement_indexed(st)
     if set_pawns.is_empty():
         return {"type": "anarchy", "ruler_id": -1, "council_ids": PackedInt32Array()}
     var ranked: Array[Dictionary] = []
@@ -1402,11 +1447,11 @@ func _governance_for_settlement(st: Dictionary, _pawns_all: Array[Pawn]) -> Dict
             pawn_by_id[int(p.data.id)] = p
     for rec in ranked:
         var pid: int = int((rec as Dictionary).get("id", -1))
-        var p: Pawn = pawn_by_id.get(pid) as Pawn
+        var p: HeelKawnian = pawn_by_id.get(pid) as HeelKawnian
         if p != null and p.data != null:
             (rec as Dictionary)["influence"] = p.data.calculate_influence(ranked.size())
             # Life-path ruler bonus: pawns on ruler path gain influence boost.
-            if int(p.data.life_path) == 3:  # PawnData.LifePath.RULER
+            if int(p.data.life_path) == 3:  # HeelKawnianData.LifePath.RULER
                 var lp_prog: int = int(p.data.life_path_progress)
                 var ruler_bonus: float = float(lp_prog) * 0.5  # +0.5 per progress level
                 (rec as Dictionary)["influence"] = float((rec as Dictionary)["influence"]) + ruler_bonus
@@ -1595,12 +1640,12 @@ func propose_war_for_pawn(ruler_id: int, target_settlement_id: int) -> bool:
     return true
 
 
-func _process_war_state(settlement_idx: int, pawns: Array[Pawn]) -> void:
+func _process_war_state(settlement_idx: int, pawns: Array[HeelKawnian]) -> void:
     if settlement_idx < 0 or settlement_idx >= settlements.size() or not (settlements[settlement_idx] is Dictionary):
         return
     var st: Dictionary = settlements[settlement_idx] as Dictionary
     var ws: Dictionary = _coerce_war_status_from_settlement(st)
-    var set_pawns: Array[Pawn] = _pawns_in_settlement_indexed(st)
+    var set_pawns: Array[HeelKawnian] = _pawns_in_settlement_indexed(st)
     var center: int = int(st.get("center_region", -1))
     if str(ws.get("state", "peace")) == "at_war":
         _assign_military_hierarchy(set_pawns)
@@ -1624,13 +1669,13 @@ func _resolve_war_votes(settlement_idx: int) -> void:
         return
     var st: Dictionary = settlements[settlement_idx] as Dictionary
     var ws: Dictionary = _coerce_war_status_from_settlement(st)
-    var pawns: Array[Pawn] = _pawns_in_settlement_indexed(st)
+    var pawns: Array[HeelKawnian] = _pawns_in_settlement_indexed(st)
     if pawns.is_empty():
         ws["state"] = "peace"
         st["war_status"] = ws
         settlements[settlement_idx] = st
         return
-    var council: Array[Pawn] = _top_influence(pawns, 5)
+    var council: Array[HeelKawnian] = _top_influence(pawns, 5)
     var favor: int = 0
     var against: int = 0
     var vote_records: Array = []
@@ -1648,7 +1693,7 @@ func _resolve_war_votes(settlement_idx: int) -> void:
         settlements[settlement_idx] = st
         return
     ws["state"] = "mobilizing"
-    var lords: Array[Pawn] = _top_influence_excluding(pawns, 20, council)
+    var lords: Array[HeelKawnian] = _top_influence_excluding(pawns, 20, council)
     var total_weight: float = 0.0
     var favor_weight: float = 0.0
     for p in lords:
@@ -1670,7 +1715,7 @@ func _resolve_war_votes(settlement_idx: int) -> void:
     st["war_status"] = ws
     settlements[settlement_idx] = st
     if ws["state"] == "at_war":
-        var set_pawns: Array[Pawn] = _pawns_in_settlement_indexed(st)
+        var set_pawns: Array[HeelKawnian] = _pawns_in_settlement_indexed(st)
         _assign_military_hierarchy(set_pawns)
         var center: int = int(st.get("center_region", -1))
         if center >= 0 and not bool(_war_command_announced.get(center, false)):
@@ -1681,7 +1726,7 @@ func _resolve_war_votes(settlement_idx: int) -> void:
                 _war_battle_spawned[center] = true
 
 
-func _pawns_in_settlement(st: Dictionary, pawns: Array[Pawn]) -> Array[Pawn]:
+func _pawns_in_settlement(st: Dictionary, pawns: Array[HeelKawnian]) -> Array[HeelKawnian]:
     var regv: Variant = st.get("regions", PackedInt32Array())
     if not (regv is PackedInt32Array):
         return []
@@ -1689,7 +1734,7 @@ func _pawns_in_settlement(st: Dictionary, pawns: Array[Pawn]) -> Array[Pawn]:
     var region_set: Dictionary = {}
     for rk in regs:
         region_set[int(rk)] = true
-    var out: Array[Pawn] = []
+    var out: Array[HeelKawnian] = []
     for p in pawns:
         if p.data == null:
             continue
@@ -1699,7 +1744,7 @@ func _pawns_in_settlement(st: Dictionary, pawns: Array[Pawn]) -> Array[Pawn]:
     return out
 
 
-func _top_influence(pawns: Array[Pawn], count: int) -> Array[Pawn]:
+func _top_influence(pawns: Array[HeelKawnian], count: int) -> Array[HeelKawnian]:
     # Build index pairs, sort by influence, then pick top N — avoids array duplicate.
     var scored: Array = []
     for p in pawns:
@@ -1710,26 +1755,26 @@ func _top_influence(pawns: Array[Pawn], count: int) -> Array[Pawn]:
             return a["inf"] > b["inf"]
         return a["id"] < b["id"]
     )
-    var result: Array[Pawn] = []
+    var result: Array[HeelKawnian] = []
     var limit: int = mini(count, scored.size())
     for i in range(limit):
         result.append(scored[i]["p"])
     return result
 
 
-func _top_influence_excluding(pawns: Array[Pawn], count: int, excluded: Array[Pawn]) -> Array[Pawn]:
+func _top_influence_excluding(pawns: Array[HeelKawnian], count: int, excluded: Array[HeelKawnian]) -> Array[HeelKawnian]:
     var blocked: Dictionary = {}
     for p in excluded:
         if p != null and p.data != null:
             blocked[int(p.data.id)] = true
-    var filtered: Array[Pawn] = []
+    var filtered: Array[HeelKawnian] = []
     for p in pawns:
         if p.data != null and not blocked.has(int(p.data.id)):
             filtered.append(p)
     return _top_influence(filtered, count)
 
 
-func _council_vote_yes(p: Pawn) -> bool:
+func _council_vote_yes(p: HeelKawnian) -> bool:
     if p == null or p.data == null:
         return false
     var pressure: float = float(ColonySimServices.get_food_pressure()) + float(ColonySimServices.get_housing_pressure())
@@ -1737,7 +1782,7 @@ func _council_vote_yes(p: Pawn) -> bool:
     return score >= 1.0
 
 
-func _senate_vote_yes(p: Pawn) -> bool:
+func _senate_vote_yes(p: HeelKawnian) -> bool:
     if p == null or p.data == null:
         return false
     var loyalty: float = float(p.data.affinities.get("diplomacy", 0.5))
@@ -1745,7 +1790,7 @@ func _senate_vote_yes(p: Pawn) -> bool:
     return (loyalty + kills_proxy) >= 0.75
 
 
-func _assign_military_hierarchy(pawns: Array[Pawn]) -> void:
+func _assign_military_hierarchy(pawns: Array[HeelKawnian]) -> void:
     if pawns.is_empty():
         return
     var ranked: Array[Dictionary] = []
@@ -1762,7 +1807,7 @@ func _assign_military_hierarchy(pawns: Array[Pawn]) -> void:
         return int(a.get("id", 0)) < int(b.get("id", 0))
     )
     for i in range(ranked.size()):
-        var p: Pawn = ranked[i].pawn as Pawn
+        var p: HeelKawnian = ranked[i].pawn as HeelKawnian
         if p == null or p.data == null:
             continue
         if i == 0:
@@ -1790,13 +1835,13 @@ func settlement_should_declare_war(src_idx: int, target_idx: int) -> bool:
         + float(ColonySimServices.get_materials_pressure())
         + float(ColonySimServices.get_haul_pressure())
     ) / 4.0
-    var living: Array[Pawn] = _living_pawns()
+    var living: Array[HeelKawnian] = _living_pawns()
     var src_score: float = _settlement_military_score(_pawns_in_settlement_indexed(src_st))
     var dst_score: float = _settlement_military_score(_pawns_in_settlement_indexed(dst_st))
     return pressure >= 0.55 and src_score > dst_score
 
 
-func _settlement_military_score(pawns: Array[Pawn]) -> float:
+func _settlement_military_score(pawns: Array[HeelKawnian]) -> float:
     var total: float = 0.0
     for p in pawns:
         if p == null or p.data == null:
@@ -1835,12 +1880,12 @@ func get_war_profile_for_region(region_key: int) -> Dictionary:
 func update_settlement_intents(tick: int) -> void:
     if tick % INTENT_UPDATE_INTERVAL_TICKS != 0:
         return
-    var living_pawns: Array[Pawn] = _living_pawns()
+    var living_pawns: Array[HeelKawnian] = _living_pawns()
     for i in range(settlements.size()):
         if not (settlements[i] is Dictionary):
             continue
         var st: Dictionary = settlements[i] as Dictionary
-        var settlement_pawns: Array[Pawn] = _pawns_in_settlement_indexed(st)
+        var settlement_pawns: Array[HeelKawnian] = _pawns_in_settlement_indexed(st)
         var local_food_pressure: float = _calculate_local_food_pressure(settlement_pawns)
         var local_housing_pressure: float = _calculate_local_housing_pressure(st, settlement_pawns)
         var war_state: String = _war_state_string_from_settlement(st)
@@ -2334,7 +2379,7 @@ func _derive_settlement_intent_v2(
 
 ## Tally the life paths of all pawns in a settlement. Returns a dictionary
 ## with keys "farmer", "soldier", "ruler", "wanderer" and integer counts.
-func _tally_settlement_life_paths(pawns: Array[Pawn]) -> Dictionary:
+func _tally_settlement_life_paths(pawns: Array[HeelKawnian]) -> Dictionary:
     var tally: Dictionary = {"farmer": 0, "soldier": 0, "ruler": 0, "wanderer": 0}
     for p in pawns:
         if p == null or p.data == null:
@@ -2362,7 +2407,7 @@ func _derive_settlement_intent(st: Dictionary, local_food_pressure: float, local
     return INTENT_GROW
 
 
-func _calculate_local_food_pressure(pawns: Array[Pawn]) -> float:
+func _calculate_local_food_pressure(pawns: Array[HeelKawnian]) -> float:
     if pawns.is_empty():
         return 0.0
     var hunger_sum: float = 0.0
@@ -2370,7 +2415,7 @@ func _calculate_local_food_pressure(pawns: Array[Pawn]) -> float:
     for p in pawns:
         if p == null or p.data == null:
             continue
-        # PawnData.hunger is 0..100 with higher=better (less hungry),
+        # HeelKawnianData.hunger is 0..100 with higher=better (less hungry),
         # so pressure is inverse normalized hunger.
         hunger_sum += clamp(p.data.hunger, 0.0, 100.0)
         count += 1
@@ -2380,7 +2425,7 @@ func _calculate_local_food_pressure(pawns: Array[Pawn]) -> float:
     return clamp(1.0 - (avg_hunger / 100.0), 0.0, 1.0)
 
 
-func _calculate_local_housing_pressure(st: Dictionary, pawns: Array[Pawn]) -> float:
+func _calculate_local_housing_pressure(st: Dictionary, pawns: Array[HeelKawnian]) -> float:
     if pawns.size() < 2:
         return 0.0
     var regv: Variant = st.get("regions", PackedInt32Array())

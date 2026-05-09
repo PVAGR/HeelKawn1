@@ -2,7 +2,7 @@ extends Node
 
 func _ready() -> void:
 	print("[TestTraitSystem] Starting test...")
-	var pd: PawnData = PawnData.new()
+	var pd: HeelKawnianData = HeelKawnianData.new()
 	# Ensure fresh state
 	pd.available_krond = 0.0
 	pd.total_krond_earned = 0.0

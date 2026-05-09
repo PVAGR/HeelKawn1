@@ -398,7 +398,7 @@ func _get_pawn_name(pawn_id: int) -> String:
 		if data != null and data.has_method("get_display_name"):
 			return data.get_display_name()
 	
-	return "Pawn #%d" % pawn_id
+	return "HeelKawnian #%d" % pawn_id
 
 
 func _formation_to_string(formation: int) -> String:

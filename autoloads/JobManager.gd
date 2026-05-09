@@ -9,7 +9,7 @@ extends Node
 @onready var TickManager = get_node_or_null("/root/TickManager")
 
 signal job_posted(job: Job)
-signal job_claimed(job: Job, pawn: Pawn)
+signal job_claimed(job: Job, pawn: HeelKawnian)
 signal job_completed(job: Job)
 signal job_cancelled(job: Job)
 
@@ -249,7 +249,7 @@ func post_trade_haul(
 ## rejects ineligible jobs; `priority_bonus` can bias toward colony labor stance.
 ## Also applies WorldAI pawn obedience weight to influence job selection.
 func claim_next_for(
-		pawn: Pawn, filter: Callable = Callable(), priority_bonus: Callable = Callable()
+		pawn: HeelKawnian, filter: Callable = Callable(), priority_bonus: Callable = Callable()
 	) -> Job:
 	var pd = pawn.call("get_pawn_data") if pawn != null and pawn.has_method("get_pawn_data") else null
 	if _open.is_empty() or pawn == null or pd == null:
@@ -297,7 +297,7 @@ func claim_next_for(
 	return job
 
 
-func claim_by_id_for(pawn: Pawn, job_id: int) -> Job:
+func claim_by_id_for(pawn: HeelKawnian, job_id: int) -> Job:
 	var pd = pawn.call("get_pawn_data") if pawn != null and pawn.has_method("get_pawn_data") else null
 	if pawn == null or pd == null or job_id < 0:
 		return null
@@ -331,7 +331,7 @@ func claim_by_id_for(pawn: Pawn, job_id: int) -> Job:
 	return null
 
 
-## Pawn gave up on a job (couldn't reach it, or was freed). Puts it back in
+## HeelKawnian gave up on a job (couldn't reach it, or was freed). Puts it back in
 ## the open queue so another pawn can claim. Resets work progress.
 func abandon(job: Job) -> void:
 	if job == null:
@@ -372,7 +372,7 @@ func complete(job: Job) -> void:
 	if impact_amount > 0 and get_tree() != null and get_tree().root.has_node("ProgressionSystem"):
 		var pawn_id: int = 0
 		if job.assigned_pawn != null and job.assigned_pawn.has_method("get_pawn_data"):
-			var pd: PawnData = job.assigned_pawn.get_pawn_data()
+			var pd: HeelKawnianData = job.assigned_pawn.get_pawn_data()
 			if pd != null:
 				pawn_id = int(pd.id)
 		var progression: Node = get_node("/root/ProgressionSystem")

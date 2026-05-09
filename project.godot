@@ -136,6 +136,15 @@ ZoomSystem="*res://scripts/world/ZoomSystem.gd"
 TickMonitor="*res://tools/diagnose/monitor_ticks.gd"
 GameSettings="*res://autoloads/GameSettings.gd"
 MythAge="*res://autoloads/MythAge.gd"
+DiscoveryGate="*res://autoloads/DiscoveryGate.gd"
+FogOfDiscovery="*res://autoloads/FogOfDiscovery.gd"
+HeelKawnianVoice="*res://autoloads/HeelKawnianVoice.gd"
+HeelKawnAIOrchestrator="*res://scripts/ai/HeelKawnAIOrchestrator.gd"
+IncarnationManager="*res://autoloads/IncarnationManager.gd"
+SettlementAIBridge="*res://autoloads/SettlementAIBridge.gd"
+PawnBrainBridge="*res://autoloads/PawnBrainBridge.gd"
+PawnDialogue="*res://autoloads/PawnDialogue.gd"
+HeelKawnAIOrchestrator="*res://scripts/ai/HeelKawnAIOrchestrator.gd"
 
 [display]
 

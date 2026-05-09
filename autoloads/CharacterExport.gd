@@ -37,7 +37,7 @@ func export_character_data(pawn_id: String) -> Dictionary:
 
 
 ## Export a pawn character
-func export_character(pawn_data: PawnData) -> Dictionary:
+func export_character(pawn_data: HeelKawnianData) -> Dictionary:
 	if pawn_data == null:
 		return {"error": "Invalid pawn data"}
 	
@@ -67,7 +67,7 @@ func export_character(pawn_data: PawnData) -> Dictionary:
 
 
 ## Serialize character data
-func _serialize_character(pawn_data: PawnData) -> Dictionary:
+func _serialize_character(pawn_data: HeelKawnianData) -> Dictionary:
 	var character: Dictionary = {}
 	
 	for field in export_fields:
@@ -99,7 +99,7 @@ func _serialize_character(pawn_data: PawnData) -> Dictionary:
 	return character
 
 
-func _pawn_has_property(pawn_data: PawnData, field: String) -> bool:
+func _pawn_has_property(pawn_data: HeelKawnianData, field: String) -> bool:
 	for prop_data in pawn_data.get_property_list():
 		if str((prop_data as Dictionary).get("name", "")) == field:
 			return true
@@ -122,7 +122,7 @@ func _compress_memory(memory_dict: Dictionary) -> Dictionary:
 
 
 ## Generate signature for validation
-func _generate_signature(pawn_data: PawnData) -> String:
+func _generate_signature(pawn_data: HeelKawnianData) -> String:
 	var signature_data: String = "%d_%s_%d" % [
 		pawn_data.id,
 		pawn_data.display_name,
@@ -201,8 +201,8 @@ func import_character(import_data: Dictionary) -> Dictionary:
 	
 	var character: Dictionary = import_data.character
 	
-	# Create new PawnData from import
-	var imported_pawn: PawnData = _deserialize_character(character)
+	# Create new HeelKawnianData from import
+	var imported_pawn: HeelKawnianData = _deserialize_character(character)
 	
 	if imported_pawn == null:
 		return {"error": "Failed to deserialize character"}
@@ -251,8 +251,8 @@ func _is_version_compatible(version: String) -> bool:
 
 
 ## Deserialize character from import data
-func _deserialize_character(character: Dictionary) -> PawnData:
-	var pawn_data: PawnData = PawnData.new()
+func _deserialize_character(character: Dictionary) -> HeelKawnianData:
+	var pawn_data: HeelKawnianData = HeelKawnianData.new()
 	
 	# Restore basic fields
 	for field in ["id", "display_name", "age", "age_years", "gender", "color", "body_type", "hair_style", "hair_color", "apparel_color"]:
@@ -320,7 +320,7 @@ func _deserialize_character(character: Dictionary) -> PawnData:
 	# Restore neural network
 	if character.has("neural_network") and not character.neural_network.is_empty():
 		var network_dict: Dictionary = character.neural_network
-		var restored_network: Variant = PawnData.create_neural_network({
+		var restored_network: Variant = HeelKawnianData.create_neural_network({
 			"openness": pawn_data.openness,
 			"conscientiousness": pawn_data.conscientiousness,
 			"extraversion": pawn_data.extraversion,
@@ -338,7 +338,7 @@ func _deserialize_character(character: Dictionary) -> PawnData:
 
 
 ## Adapt imported character to local world state
-func _adapt_to_local_world(pawn_data: PawnData) -> void:
+func _adapt_to_local_world(pawn_data: HeelKawnianData) -> void:
 	# Reset settlement/household/clan if they don't exist in local world
 	# This is a simplified check - in production would validate against actual world data
 	if pawn_data.settlement_id < 0:

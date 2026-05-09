@@ -20,7 +20,7 @@ var current_ui_mode: int = UI_MODES.CLEAN_PLAYTEST
 # Top-left: Watch panel (compact)
 # Top-right: Chronicle (small)
 # Bottom: Toolbar + minimap
-# Left: Pawn sheet (only when pawn selected)
+# Left: HeelKawnian sheet (only when pawn selected)
 # Center: World view (untouched)
 
 # Zone definitions
@@ -140,7 +140,7 @@ func _reposition_all_panels() -> void:
 	_position_panel("/root/Main/UI_Viewport/BuildingToolbar", ZONE_BOTTOM_BAR)
 	_position_panel("/root/Main/UI_Viewport/Minimap", ZONE_MINIMAP)
 	
-	# Pawn sheet only visible when pawn selected
+	# HeelKawnian sheet only visible when pawn selected
 	var pawn_sheet: Node = _get_node_safe("/root/Main/UI_Viewport/PawnInfoPanel")
 	if pawn_sheet:
 		var main: Node = _get_node_safe("/root/Main")

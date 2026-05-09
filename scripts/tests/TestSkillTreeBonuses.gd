@@ -3,7 +3,7 @@ extends Node
 func _ready() -> void:
 	print("[TestSkillTreeBonuses] Starting skill tree bonus verification...")
 	
-	var pd: PawnData = PawnData.new()
+	var pd: HeelKawnianData = HeelKawnianData.new()
 	pd.display_name = "TestPawn"
 	
 	# Test 1: Level 5 - Basic branch (work_speed_mult: 1.1)
@@ -12,7 +12,7 @@ func _ready() -> void:
 	print("[TestSkillTreeBonuses] Level: %d" % pd.level)
 	print("[TestSkillTreeBonuses] Skill trees: %s" % [pd.skill_trees.keys()])
 	
-	var speed_5: float = pd.work_speed_for(PawnData.Skill.FORAGING)
+	var speed_5: float = pd.work_speed_for(HeelKawnianData.Skill.FORAGING)
 	print("[TestSkillTreeBonuses] work_speed_for(FORAGING) at level 5: %.3f (expect ~1.1)" % speed_5)
 	if speed_5 < 1.09 or speed_5 > 1.11:
 		print("[TestSkillTreeBonuses] WARN: Level 5 bonus out of range (got %.3f, expect ~1.1)" % speed_5)
@@ -24,7 +24,7 @@ func _ready() -> void:
 	_force_level_up(pd, 10)
 	print("[TestSkillTreeBonuses] Level: %d" % pd.level)
 	
-	var speed_10: float = pd.work_speed_for(PawnData.Skill.FORAGING)
+	var speed_10: float = pd.work_speed_for(HeelKawnianData.Skill.FORAGING)
 	print("[TestSkillTreeBonuses] work_speed_for(FORAGING) at level 10: %.3f (expect ~1.2)" % speed_10)
 	if speed_10 < 1.19 or speed_10 > 1.21:
 		print("[TestSkillTreeBonuses] WARN: Level 10 bonus out of range (got %.3f, expect ~1.2)" % speed_10)
@@ -36,8 +36,8 @@ func _ready() -> void:
 	_force_level_up(pd, 15)
 	print("[TestSkillTreeBonuses] Level: %d" % pd.level)
 	
-	var speed_15: float = pd.work_speed_for(PawnData.Skill.FORAGING)
-	var quality_15: float = pd.harvest_quality_multiplier_for_job_skill(PawnData.Skill.FORAGING)
+	var speed_15: float = pd.work_speed_for(HeelKawnianData.Skill.FORAGING)
+	var quality_15: float = pd.harvest_quality_multiplier_for_job_skill(HeelKawnianData.Skill.FORAGING)
 	print("[TestSkillTreeBonuses] work_speed_for(FORAGING) at level 15: %.3f (expect ~1.3)" % speed_15)
 	print("[TestSkillTreeBonuses] harvest_quality_multiplier at level 15: %.3f (expect ~1.1)" % quality_15)
 	if speed_15 < 1.29 or speed_15 > 1.31:
@@ -54,8 +54,8 @@ func _ready() -> void:
 	_force_level_up(pd, 20)
 	print("[TestSkillTreeBonuses] Level: %d" % pd.level)
 	
-	var speed_20: float = pd.work_speed_for(PawnData.Skill.FORAGING)
-	var quality_20: float = pd.harvest_quality_multiplier_for_job_skill(PawnData.Skill.FORAGING)
+	var speed_20: float = pd.work_speed_for(HeelKawnianData.Skill.FORAGING)
+	var quality_20: float = pd.harvest_quality_multiplier_for_job_skill(HeelKawnianData.Skill.FORAGING)
 	var leadership_20: float = pd.leadership_presence_multiplier()
 	print("[TestSkillTreeBonuses] work_speed_for(FORAGING) at level 20: %.3f (expect ~1.5)" % speed_20)
 	print("[TestSkillTreeBonuses] harvest_quality_multiplier at level 20: %.3f (expect ~1.2)" % quality_20)
@@ -75,10 +75,10 @@ func _ready() -> void:
 	
 	# Test 5: XP multiplier also applied
 	print("\n[TestSkillTreeBonuses] Test 5: Checking XP multiplier...")
-	var xp_before: float = pd.get_skill_xp(PawnData.Skill.FORAGING)
+	var xp_before: float = pd.get_skill_xp(HeelKawnianData.Skill.FORAGING)
 	var test_xp_amount: float = 100.0
-	pd.add_skill_xp(PawnData.Skill.FORAGING, test_xp_amount)
-	var xp_after: float = pd.get_skill_xp(PawnData.Skill.FORAGING)
+	pd.add_skill_xp(HeelKawnianData.Skill.FORAGING, test_xp_amount)
+	var xp_after: float = pd.get_skill_xp(HeelKawnianData.Skill.FORAGING)
 	var xp_applied: float = xp_after - xp_before
 	# At level 20, xp_mult is 1.2, so 100 XP should become 120
 	var expected_xp: float = test_xp_amount * 1.2
@@ -95,10 +95,10 @@ func _ready() -> void:
 		get_tree().quit()
 
 
-func _force_level_up(pd: PawnData, target_level: int) -> void:
+func _force_level_up(pd: HeelKawnianData, target_level: int) -> void:
 	"""Force XP until reaching target_level."""
 	while pd.level < target_level:
-		var xp_needed: float = (target_level - pd.level) * PawnData.XP_PER_LEVEL
+		var xp_needed: float = (target_level - pd.level) * HeelKawnianData.XP_PER_LEVEL
 		# Directly set skill XP to avoid multipliers during setup
 		pd.skill_xp[0] = xp_needed * 2  # Overestimate to ensure level
 		pd.sync_level_from_total_skill_xp()

@@ -270,7 +270,7 @@ const EVENT_SETTLEMENT_EXPANDED: String = "settlement_expanded"
 const EVENT_SETTLEMENT_ABANDONED: String = "settlement_abandoned"
 const EVENT_SETTLEMENT_ATTACKED: String = "settlement_attacked"
 
-# Pawn Events
+# HeelKawnian Events
 const EVENT_PAWN_BORN: String = "pawn_born"
 const EVENT_PAWN_DIED: String = "pawn_died"
 const EVENT_PAWN_HIRED: String = "pawn_hired"

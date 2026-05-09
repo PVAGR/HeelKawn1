@@ -6,7 +6,7 @@ extends Node
 ## - Key presses (keycode, modifiers, target)
 ## - Camera movement (pan, zoom, rotation)
 ## - UI interactions (button clicks, slider changes, selections)
-## - Pawn selections
+## - HeelKawnian selections
 ## - Building placements
 ## - Command mode actions
 

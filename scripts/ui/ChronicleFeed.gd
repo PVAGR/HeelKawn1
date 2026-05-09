@@ -121,14 +121,14 @@ func _on_tick(tick: int) -> void:
 	var refresh_stride: int = _refresh_stride_for_speed(GameManager.game_speed)
 	if tick % refresh_stride != 0 and _last_seen_event_count > 0:
 		return
-	# Track event counts for summary composition
-	_track_events_for_summary()
+	# Track event counts and check for toasts in one pass
+	var events: Array = []
+	if WorldMemory != null:
+		events = WorldMemory.get_recent_events(128)
+	_track_and_toast_events(events, tick)
 	# Compose periodic world summary
 	if tick - _last_summary_tick >= SUMMARY_INTERVAL_TICKS and tick > 100:
 		_compose_world_summary(tick)
-		_last_summary_tick = tick
-	# Check for important toast-worthy events
-	_check_toast_events(tick)
 	_refresh()
 
 
@@ -668,31 +668,73 @@ func _event_text(typ: String, e: Dictionary) -> String:
 			return ""
 
 
-## Track event counts between summaries for narrative composition
-func _track_events_for_summary() -> void:
-	if WorldMemory == null:
+## Track events for summary + check for toast-worthy events in one pass
+func _track_and_toast_events(events: Array, tick: int) -> void:
+	if events.is_empty():
 		return
-	var events: Array = WorldMemory.get_recent_events(128)
+	var toast_text: String = ""
 	for e_any in events:
 		if not e_any is Dictionary:
 			continue
 		var e: Dictionary = e_any as Dictionary
-		var tick: int = int(e.get("tick", 0))
-		if tick <= _last_summary_tick:
-			continue
-		var typ: String = str(e.get("type", ""))
-		if typ == "pawn_death" or typ == "starvation_event":
-			_summary_deaths += 1
-		elif typ == "birth" or typ == "pawn_birth":
-			_summary_births += 1
-		elif typ == "teaching_success":
-			_summary_teaching += 1
-		elif typ == "structure_built" or typ == "hearth_built" or typ == "storage_built" or typ == "shrine_built":
-			_summary_builds += 1
-		elif typ == "grudge_formed":
-			_summary_grudges += 1
-		elif typ == "knowledge_discovery" or typ == "knowledge_rediscovery":
-			_summary_innovations += 1
+		var e_tick: int = int(e.get("tick", 0))
+		# Summary tracking
+		if e_tick > _last_summary_tick:
+			var typ: String = str(e.get("type", ""))
+			if typ == "pawn_death" or typ == "starvation_event":
+				_summary_deaths += 1
+			elif typ == "birth" or typ == "pawn_birth":
+				_summary_births += 1
+			elif typ == "teaching_success":
+				_summary_teaching += 1
+			elif typ == "structure_built" or typ == "hearth_built" or typ == "storage_built" or typ == "shrine_built":
+				_summary_builds += 1
+			elif typ == "grudge_formed":
+				_summary_grudges += 1
+			elif typ == "knowledge_discovery" or typ == "knowledge_rediscovery":
+				_summary_innovations += 1
+		# Toast checking (only if we haven't found one yet)
+		if toast_text.is_empty() and e_tick > _last_toast_tick:
+			var typ: String = str(e.get("type", ""))
+			match typ:
+				"knowledge_at_risk":
+					var kt: String = str(e.get("knowledge_type", "knowledge")).replace("_", " ")
+					var carrier: String = str(e.get("carrier_name", "")).strip_edges()
+					if not carrier.is_empty():
+						toast_text = "%s is the last carrier of %s" % [carrier, kt]
+					else:
+						toast_text = "%s is at risk — only one carrier remains" % kt
+				"knowledge_crisis":
+					toast_text = "Knowledge crisis — multiple skills at risk"
+				"knowledge_lost":
+					var kt: String = str(e.get("knowledge_type", "knowledge")).replace("_", " ")
+					toast_text = "The knowledge of %s has been lost" % kt
+				"knowledge_discovery":
+					var kt: String = str(e.get("knowledge_type", "")).replace("_", " ")
+					var discoverer: String = str(e.get("pawn_name", "")).strip_edges()
+					if not discoverer.is_empty() and not kt.is_empty():
+						toast_text = "%s discovered %s" % [discoverer, kt]
+					elif not kt.is_empty():
+						toast_text = "New knowledge discovered: %s" % kt
+				"grudge_formed":
+					var an: String = str(e.get("pawn_name", "")).strip_edges()
+					var target: String = str(e.get("target_name", "")).strip_edges()
+					if not an.is_empty() and not target.is_empty():
+						toast_text = "%s swore a grudge against %s" % [an, target]
+				"starvation_event":
+					toast_text = "Starvation — the settlement is hungry"
+				"famine_warning":
+					toast_text = "Famine warning — food reserves critical"
+				"settlement_collapse":
+					toast_text = "A settlement has collapsed"
+				"settlement_new_foundation":
+					toast_text = "A new settlement was founded"
+				"social_schism":
+					toast_text = "Social schism — a community has fractured"
+	# Spawn toast if found
+	if not toast_text.is_empty() and tick - _last_toast_tick >= TOAST_COOLDOWN_TICKS:
+		_spawn_toast(toast_text)
+		_last_toast_tick = tick
 
 
 ## Compose a world summary and inject it as a chronicle event
@@ -743,6 +785,7 @@ func _compose_world_summary(tick: int) -> void:
 	_summary_builds = 0
 	_summary_grudges = 0
 	_summary_innovations = 0
+	_last_summary_tick = tick
 
 	if parts.is_empty():
 		return
@@ -767,67 +810,13 @@ func _compose_world_summary(tick: int) -> void:
 		})
 
 
-## Check for important events that deserve a toast popup
-func _check_toast_events(tick: int) -> void:
-	if tick - _last_toast_tick < TOAST_COOLDOWN_TICKS:
-		return
-	if WorldMemory == null:
-		return
-	var events: Array = WorldMemory.get_recent_events(32)
-	for e_any in events:
-		if not e_any is Dictionary:
-			continue
-		var e: Dictionary = e_any as Dictionary
-		var e_tick: int = int(e.get("tick", 0))
-		if e_tick <= _last_toast_tick:
-			continue
-		var typ: String = str(e.get("type", ""))
-		var toast_text: String = ""
-		# Only toast for high-impact events
-		match typ:
-			"knowledge_at_risk":
-				var kt: String = str(e.get("knowledge_type", "knowledge")).replace("_", " ")
-				var carrier: String = str(e.get("carrier_name", "")).strip_edges()
-				if not carrier.is_empty():
-					toast_text = "%s is the last carrier of %s" % [carrier, kt]
-				else:
-					toast_text = "%s is at risk — only one carrier remains" % kt
-			"knowledge_crisis":
-				toast_text = "Knowledge crisis — multiple skills at risk"
-			"knowledge_lost":
-				var kt: String = str(e.get("knowledge_type", "knowledge")).replace("_", " ")
-				toast_text = "The knowledge of %s has been lost" % kt
-			"knowledge_discovery":
-				var kt: String = str(e.get("knowledge_type", "")).replace("_", " ")
-				var discoverer: String = str(e.get("pawn_name", "")).strip_edges()
-				if not discoverer.is_empty() and not kt.is_empty():
-					toast_text = "%s discovered %s" % [discoverer, kt]
-				elif not kt.is_empty():
-					toast_text = "New knowledge discovered: %s" % kt
-			"grudge_formed":
-				var an: String = str(e.get("pawn_name", "")).strip_edges()
-				var target: String = str(e.get("target_name", "")).strip_edges()
-				if not an.is_empty() and not target.is_empty():
-					toast_text = "%s swore a grudge against %s" % [an, target]
-			"starvation_event":
-				toast_text = "Starvation — the settlement is hungry"
-			"famine_warning":
-				toast_text = "Famine warning — food reserves critical"
-			"settlement_collapse":
-				toast_text = "A settlement has collapsed"
-			"settlement_new_foundation":
-				toast_text = "A new settlement was founded"
-			"social_schism":
-				toast_text = "Social schism — a community has fractured"
-		if not toast_text.is_empty():
-			_spawn_toast(toast_text)
-			_last_toast_tick = tick
-			return  # One toast per check
-
-
 func _spawn_toast(text: String) -> void:
 	if _toast_scene == null or _toast_container == null:
 		return
+	# Safety cap: don't accumulate more than 3 toasts
+	while _toast_container.get_child_count() >= 3:
+		var oldest: Node = _toast_container.get_child(0)
+		oldest.queue_free()
 	var toast: Node = _toast_scene.instantiate()
 	if toast == null:
 		return

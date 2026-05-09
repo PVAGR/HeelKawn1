@@ -69,7 +69,7 @@ func _refresh_agent_list() -> void:
 		
 		var status_text: String = "Agent %d (%s) - Goals: %d" % [agent_id, type_name, goal_count]
 		if controlled_pawn_id >= 0:
-			status_text += " - Pawn: %d" % controlled_pawn_id
+			status_text += " - HeelKawnian: %d" % controlled_pawn_id
 		else:
 			status_text += " - Spectator"
 		
@@ -115,7 +115,7 @@ func _update_agent_details() -> void:
 	var details_text: String = ""
 	details_text += "[b]Agent %d (%s)[/b]\n\n" % [selected_agent_id, type_name]
 	details_text += "[b]Status:[/b]\n"
-	details_text += "Controlled Pawn: %d\n" % (controlled_pawn_id if controlled_pawn_id >= 0 else "None (Spectator)")
+	details_text += "Controlled HeelKawnian: %d\n" % (controlled_pawn_id if controlled_pawn_id >= 0 else "None (Spectator)")
 	details_text += "Active Goals: %d\n" % goal_count
 	details_text += "Memory Size: %d observations\n" % memory_size
 	details_text += "Last Decision: Tick %d\n\n" % last_decision
@@ -131,7 +131,7 @@ func _update_agent_details() -> void:
 	if controlled_pawn_id >= 0:
 		var pawn_obs: Dictionary = ObservationAPI.observe_pawn(controlled_pawn_id)
 		if not pawn_obs.has("error"):
-			details_text += "[b]Controlled Pawn:[/b]\n"
+			details_text += "[b]Controlled HeelKawnian:[/b]\n"
 			details_text += "Name: %s\n" % pawn_obs.get("display_name", "Unknown")
 			details_text += "Health: %d%%\n" % pawn_obs.get("health_percentage", 0)
 			details_text += "Hunger: %.0f\n" % pawn_obs.get("hunger", 0)

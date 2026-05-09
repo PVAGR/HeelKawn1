@@ -7,16 +7,16 @@ static func export_character_data(pawn_id: String) -> Dictionary:
 	var spawner: PawnSpawner = _resolve_spawner()
 	if spawner == null:
 		return {"error": "no_spawner", "pawn_id": pawn_id}
-	var pd: PawnData = _resolve_pawn_data(spawner, pawn_id)
+	var pd: HeelKawnianData = _resolve_pawn_data(spawner, pawn_id)
 	if pd == null:
 		return {"error": "pawn_not_found", "pawn_id": pawn_id}
 	pd.ensure_soul_identity()
 	var skills: Dictionary = {
-		"foraging_level": pd.get_skill_level(PawnData.Skill.FORAGING),
-		"mining_level": pd.get_skill_level(PawnData.Skill.MINING),
-		"chopping_level": pd.get_skill_level(PawnData.Skill.CHOPPING),
-		"building_level": pd.get_skill_level(PawnData.Skill.BUILDING),
-		"hunting_level": pd.get_skill_level(PawnData.Skill.HUNTING),
+		"foraging_level": pd.get_skill_level(HeelKawnianData.Skill.FORAGING),
+		"mining_level": pd.get_skill_level(HeelKawnianData.Skill.MINING),
+		"chopping_level": pd.get_skill_level(HeelKawnianData.Skill.CHOPPING),
+		"building_level": pd.get_skill_level(HeelKawnianData.Skill.BUILDING),
+		"hunting_level": pd.get_skill_level(HeelKawnianData.Skill.HUNTING),
 		"skills": pd.skills.duplicate(true),
 		"skill_xp": _skill_xp_string_keys(pd),
 	}
@@ -44,7 +44,7 @@ static func export_character_data(pawn_id: String) -> Dictionary:
 	}
 
 
-static func _skill_xp_string_keys(pd: PawnData) -> Dictionary:
+static func _skill_xp_string_keys(pd: HeelKawnianData) -> Dictionary:
 	var out: Dictionary = {}
 	for k in pd.skill_xp:
 		out[str(k)] = pd.skill_xp[k]
@@ -66,7 +66,7 @@ static func _resolve_spawner() -> PawnSpawner:
 	return n as PawnSpawner
 
 
-static func _resolve_pawn_data(spawner: PawnSpawner, pawn_id: String) -> PawnData:
+static func _resolve_pawn_data(spawner: PawnSpawner, pawn_id: String) -> HeelKawnianData:
 	var key: String = str(pawn_id).strip_edges()
 	if key.is_valid_int():
 		return spawner.pawn_data_for_id(int(key))
@@ -76,7 +76,7 @@ static func _resolve_pawn_data(spawner: PawnSpawner, pawn_id: String) -> PawnDat
 	return null
 
 
-static func _pawn_data_by_soul_id(spawner: PawnSpawner, soul: String) -> PawnData:
+static func _pawn_data_by_soul_id(spawner: PawnSpawner, soul: String) -> HeelKawnianData:
 	if soul.is_empty():
 		return null
 	for p in spawner.pawns:
@@ -85,7 +85,7 @@ static func _pawn_data_by_soul_id(spawner: PawnSpawner, soul: String) -> PawnDat
 	return null
 
 
-static func _lineage_tree_dict(spawner: PawnSpawner, pd: PawnData, depth: int) -> Dictionary:
+static func _lineage_tree_dict(spawner: PawnSpawner, pd: HeelKawnianData, depth: int) -> Dictionary:
 	var node: Dictionary = {
 		"soul_id": pd.unique_id,
 		"lineage_id": pd.lineage_id,
@@ -98,7 +98,7 @@ static func _lineage_tree_dict(spawner: PawnSpawner, pd: PawnData, depth: int) -
 		return node
 	if pd.lineage_id.is_empty():
 		return node
-	var par: PawnData = _pawn_data_by_soul_id(spawner, pd.lineage_id)
+	var par: HeelKawnianData = _pawn_data_by_soul_id(spawner, pd.lineage_id)
 	if par != null:
 		node["parent"] = _lineage_tree_dict(spawner, par, depth - 1)
 	else:

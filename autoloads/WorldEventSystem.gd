@@ -121,7 +121,7 @@ func _run_macro_step(tick: int) -> void:
 
 
 func _refresh_world_mood_from_pawns() -> void:
-	var nodes: Array[Pawn] = PawnSpawner.find_pawns()
+	var nodes: Array[HeelKawnian] = PawnSpawner.find_pawns()
 	if nodes.is_empty():
 		return
 	var sum: float = 0.0

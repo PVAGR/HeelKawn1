@@ -2,13 +2,13 @@ class_name PawnDecisionRuleMatrix
 extends RefCounted
 
 ## Readable if/then policy layer on top of the per-pawn neural forward pass.
-## Indices match WorldAI / Pawn job bias: 0 food, 1 rest, 2 social, 3 forage,
+## Indices match WorldAI / HeelKawnian job bias: 0 food, 1 rest, 2 social, 3 forage,
 ## 4 build, 5 mine, 6 defend, 7 idle.
 ## [method evaluate] mutates [param outs] in place and returns fired rules for UI / telemetry.
 
 const OUT_CLAMP_MIN: float = 0.0
 const OUT_CLAMP_MAX: float = 2.0
-## Keep in sync with [member Pawn.FOUNDING_PERIOD_TICKS].
+## Keep in sync with [member HeelKawnian.FOUNDING_PERIOD_TICKS].
 const FOUNDING_PERIOD_TICKS: int = 4500
 ## Twelve human-readable intent channels (8 action heads + 4 social/cognitive) for UI + parity utility.
 const HUMAN_CHANNEL_LABELS: Array[String] = [
@@ -37,7 +37,7 @@ func _empty_eval() -> Dictionary:
 	return {"fired": [], "human_channels": hc, "human_channel_labels": HUMAN_CHANNEL_LABELS}
 
 
-func _build_human_channels(pd: PawnData, ctx: Dictionary, outs: Array) -> Array:
+func _build_human_channels(pd: HeelKawnianData, ctx: Dictionary, outs: Array) -> Array:
 	var hc: Array = []
 	hc.resize(12)
 	for i in range(12):
@@ -78,7 +78,7 @@ func _apply_human_semantic_projection(outs: Array, hc: Array) -> void:
 	_bump(outs, 0, float(hc[11]) * 0.03)
 
 
-func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Dictionary:
+func evaluate(pd: HeelKawnianData, ctx: Dictionary, outs: Array) -> Dictionary:
 	var fired: Array = []
 	if pd == null or outs.size() < 8:
 		return _empty_eval()
@@ -170,7 +170,7 @@ func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump_many(outs, [0, 3], 0.12)
 		fired.append({"id": "colony_food_pressure", "line": "IF colony food pressure is high THEN bias toward feeding the pile (forage/seek).", "w": 0.70})
 
-	# --- Founding phase (matches Pawn founding blend) ---
+	# --- Founding phase (matches HeelKawnian founding blend) ---
 	if founding >= 0.35:
 		_bump_many(outs, [2, 3, 7], 0.10 * founding)
 		fired.append({"id": "phase_founding", "line": "IF world is in founding phase THEN wander-meet-forage-social slightly up.", "w": 0.45 + founding * 0.3})
@@ -284,22 +284,22 @@ func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Dictionary:
 	# --- Profession-driven rules (strong nudge so pawns act their role) ---
 	var prof: int = int(pd.current_profession) if pd != null else 0
 	match prof:
-		PawnData.Profession.FARMER:
+		HeelKawnianData.Profession.FARMER:
 			_bump_many(outs, [0, 3], 0.20)
 			_bump(outs, 4, -0.04)
 			fired.append({"id": "prof_farmer", "line": "IF farmer THEN strong food/forage bias; less building.", "w": 0.62})
-		PawnData.Profession.BUILDER:
+		HeelKawnianData.Profession.BUILDER:
 			_bump_many(outs, [4, 5], 0.20)
 			fired.append({"id": "prof_builder", "line": "IF builder THEN strong build/mine bias.", "w": 0.62})
-		PawnData.Profession.GATHERER:
+		HeelKawnianData.Profession.GATHERER:
 			_bump_many(outs, [0, 3], 0.18)
 			_bump(outs, 7, 0.06)
 			fired.append({"id": "prof_gatherer", "line": "IF gatherer THEN forage + food seeking; slight idle wander.", "w": 0.55})
-		PawnData.Profession.WARRIOR:
+		HeelKawnianData.Profession.WARRIOR:
 			_bump_many(outs, [6, 3], 0.20)
 			_bump(outs, 1, -0.04)
 			fired.append({"id": "prof_warrior", "line": "IF warrior THEN defend/hunt bias; less rest.", "w": 0.62})
-		PawnData.Profession.SCHOLAR:
+		HeelKawnianData.Profession.SCHOLAR:
 			_bump_many(outs, [2, 7], 0.18)
 			_bump(outs, 1, 0.06)
 			fired.append({"id": "prof_scholar", "line": "IF scholar THEN social + idle/observe; slight rest nudge.", "w": 0.55})
@@ -307,13 +307,13 @@ func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Dictionary:
 	# --- Life path rules (advisory, reinforces profession) ---
 	var lpath: int = int(pd.life_path) if pd != null else 0
 	match lpath:
-		PawnData.LifePath.FARMER:
+		HeelKawnianData.LifePath.FARMER:
 			_bump(outs, 3, 0.10)
 			fired.append({"id": "lpath_farmer", "line": "IF life path farmer THEN forage nudge.", "w": 0.35})
-		PawnData.LifePath.SOLDIER:
+		HeelKawnianData.LifePath.SOLDIER:
 			_bump(outs, 6, 0.10)
 			fired.append({"id": "lpath_soldier", "line": "IF life path soldier THEN defend nudge.", "w": 0.35})
-		PawnData.LifePath.WANDERER:
+		HeelKawnianData.LifePath.WANDERER:
 			_bump_many(outs, [7, 3], 0.08)
 			fired.append({"id": "lpath_wanderer", "line": "IF life path wanderer THEN idle + explore nudge.", "w": 0.30})
 
@@ -329,15 +329,15 @@ func evaluate(pd: PawnData, ctx: Dictionary, outs: Array) -> Dictionary:
 	if prof_overrep:
 		# Dampen the dominant profession's bias channels so other roles can emerge
 		match prof:
-			PawnData.Profession.FARMER:
+			HeelKawnianData.Profession.FARMER:
 				_bump_many(outs, [0, 3], -0.10)
 				_bump(outs, 4, 0.08)
 				fired.append({"id": "overrep_farmer", "line": "IF too many farmers THEN reduce food/forage bias; nudge build.", "w": 0.50})
-			PawnData.Profession.GATHERER:
+			HeelKawnianData.Profession.GATHERER:
 				_bump_many(outs, [0, 3], -0.08)
 				_bump(outs, 4, 0.06)
 				fired.append({"id": "overrep_gatherer", "line": "IF too many gatherers THEN reduce forage bias; nudge build.", "w": 0.45})
-			PawnData.Profession.WARRIOR:
+			HeelKawnianData.Profession.WARRIOR:
 				_bump(outs, 6, -0.06)
 				_bump_many(outs, [3, 4], 0.06)
 				fired.append({"id": "overrep_warrior", "line": "IF too many warriors THEN reduce defend bias; nudge work.", "w": 0.45})

@@ -67,7 +67,7 @@ func _ready() -> void:
 
 	# Simulation and inspection controls
 	_add_button_to(_content, "Reroll World", "_action_reroll")
-	_add_button_to(_content, "Print Pawn Stats", "_action_pawn_stats")
+	_add_button_to(_content, "Print HeelKawnian Stats", "_action_pawn_stats")
 	_add_button_to(_content, "Dump Jobs", "_action_dump_jobs")
 	_add_button_to(_content, "Print Stockpile", "_action_stockpile")
 	_add_button_to(_content, "Toggle Draft Mode", "_action_toggle_draft")

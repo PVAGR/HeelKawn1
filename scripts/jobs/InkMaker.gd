@@ -4,7 +4,7 @@ class_name InkMaker
 
 ## NPC job for making ink from berries + stone (coal).
 
-func perform_work(pawn: Pawn, job: Job) -> bool:
+func perform_work(pawn: HeelKawnian, job: Job) -> bool:
 	# Check for berry and stone (coal proxy)
 	var berries = pawn.data.carried_count if pawn.data.carrying == Item.Type.BERRY else 0
 	var stones = 0  # assume stockpile check

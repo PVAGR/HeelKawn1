@@ -23,7 +23,7 @@ static var _last_affiliation_tick_by_pawn: Dictionary = {}
 
 
 static func ensure_identity_for_pawn(pawn: Variant) -> String:
-	var data: PawnData = _pawn_data(pawn)
+	var data: HeelKawnianData = _pawn_data(pawn)
 	if data == null:
 		return ""
 	data.ensure_soul_identity()
@@ -43,7 +43,7 @@ static func get_identity_for_pawn(pawn: Variant) -> HeelKawnianIdentity:
 
 
 static func get_development_profile_for_pawn(pawn: Variant) -> Dictionary:
-	var data: PawnData = _pawn_data(pawn)
+	var data: HeelKawnianData = _pawn_data(pawn)
 	if data == null:
 		return {}
 	var soul_id: String = ensure_identity_for_pawn(pawn)
@@ -99,7 +99,7 @@ static func get_profiles_for_pawns(pawns: Array, max_items: int = 16) -> Array[D
 
 
 static func get_matrix_decision_for_pawn(pawn: Variant) -> Dictionary:
-	var data: PawnData = _pawn_data(pawn)
+	var data: HeelKawnianData = _pawn_data(pawn)
 	if data == null:
 		return {}
 	var profile: Dictionary = get_development_profile_for_pawn(pawn)
@@ -137,7 +137,7 @@ static func get_job_priority_bias_for_pawn(pawn: Variant, job_type: int) -> int:
 static func note_matrix_job_choice(pawn: Variant, job: Job) -> void:
 	if job == null:
 		return
-	var data: PawnData = _pawn_data(pawn)
+	var data: HeelKawnianData = _pawn_data(pawn)
 	if data == null:
 		return
 	var decision: Dictionary = get_matrix_decision_for_pawn(pawn)
@@ -176,7 +176,7 @@ static func note_matrix_job_choice(pawn: Variant, job: Job) -> void:
 
 
 static func get_social_action_for_pawn(pawn: Variant) -> Dictionary:
-	var data: PawnData = _pawn_data(pawn)
+	var data: HeelKawnianData = _pawn_data(pawn)
 	if data == null:
 		return {}
 	var profile: Dictionary = get_development_profile_for_pawn(pawn)
@@ -246,7 +246,7 @@ static func get_social_action_for_pawn(pawn: Variant) -> Dictionary:
 
 
 static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
-	var data: PawnData = _pawn_data(pawn)
+	var data: HeelKawnianData = _pawn_data(pawn)
 	if data == null:
 		return {}
 	var profile: Dictionary = get_development_profile_for_pawn(pawn)
@@ -351,7 +351,7 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 
 
 static func _worldbox_loop_job_for_pawn(
-		data: PawnData,
+		data: HeelKawnianData,
 		local_pop: int,
 		local_features: Dictionary,
 		tick: int
@@ -474,7 +474,7 @@ static func leader_direct_construction(settlement_id: int) -> int:
 	if ruler_id < 0:
 		return 0
 	# Find the ruler's tile position
-	var ruler_data: PawnData = _pawn_data_for_id(ruler_id)
+	var ruler_data: HeelKawnianData = _pawn_data_for_id(ruler_id)
 	if ruler_data == null:
 		return 0
 	var center: Vector2i = ruler_data.tile_pos
@@ -552,7 +552,7 @@ static func leader_direct_construction(settlement_id: int) -> int:
 
 
 static func get_affiliation_action_for_pawn(pawn: Variant) -> Dictionary:
-	var data: PawnData = _pawn_data(pawn)
+	var data: HeelKawnianData = _pawn_data(pawn)
 	if data == null:
 		return {}
 	var tick: int = _tick()
@@ -781,7 +781,7 @@ static func log_heelkawn_event(
 
 static func _nearby_pawn_candidates(pawn: Variant, max_items: int, radius_tiles: int) -> Array:
 	var out: Array = []
-	var data: PawnData = _pawn_data(pawn)
+	var data: HeelKawnianData = _pawn_data(pawn)
 	if data == null:
 		return out
 	var main_node: Node = _root_node("Main")
@@ -798,7 +798,7 @@ static func _nearby_pawn_candidates(pawn: Variant, max_items: int, radius_tiles:
 	for other in pawns:
 		if other == null or not is_instance_valid(other) or other == pawn:
 			continue
-		var other_data: PawnData = _pawn_data(other)
+		var other_data: HeelKawnianData = _pawn_data(other)
 		if other_data == null:
 			continue
 		var d2: int = data.tile_pos.distance_squared_to(other_data.tile_pos)
@@ -832,7 +832,7 @@ static func _reputation_for(pawn_id: int) -> float:
 	return 0.0
 
 
-static func _matrix_job_biases(profile: Dictionary, data: PawnData, identity: HeelKawnianIdentity) -> Dictionary:
+static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, identity: HeelKawnianIdentity) -> Dictionary:
 	var biases: Dictionary = {}
 	var drive: String = str(profile.get("development_drive", "serve_settlement"))
 	match drive:
@@ -880,7 +880,7 @@ static func _add_settlement_service_bias(biases: Dictionary, profile: Dictionary
 		_add_bias(biases, [Job.Type.CARVE_LEDGER_STONE, Job.Type.CARVE_KNOWLEDGE_STONE], 3)
 
 
-static func _add_human_scale_biases(biases: Dictionary, profile: Dictionary, data: PawnData) -> void:
+static func _add_human_scale_biases(biases: Dictionary, profile: Dictionary, data: HeelKawnianData) -> void:
 	var hs: Dictionary = profile.get("human_scale", {})
 	if hs.is_empty():
 		return
@@ -912,7 +912,7 @@ static func _add_human_scale_biases(biases: Dictionary, profile: Dictionary, dat
 
 	# If belonging is under pressure, de-prioritize isolation-heavy jobs slightly.
 	var belonging_pressure: int = int(round((100 - family_score + 100 - clan_score) / 2.0))
-	if belonging_pressure >= 50 and data.current_profession != PawnData.Profession.WARRIOR:
+	if belonging_pressure >= 50 and data.current_profession != HeelKawnianData.Profession.WARRIOR:
 		_add_bias(biases, [Job.Type.MINE, Job.Type.MINE_WALL], -1)
 
 
@@ -938,21 +938,21 @@ static func _add_skill_practice_bias(biases: Dictionary, profile: Dictionary, am
 
 static func _add_profession_practice_bias(biases: Dictionary, profession: int, amount: int) -> void:
 	match profession:
-		PawnData.Profession.FARMER:
+		HeelKawnianData.Profession.FARMER:
 			_add_bias(biases, [Job.Type.FORAGE, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS, Job.Type.GROW_FOOD, Job.Type.COOK_BERRIES], amount)
-		PawnData.Profession.BUILDER:
+		HeelKawnianData.Profession.BUILDER:
 			_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH], amount)
-		PawnData.Profession.GATHERER:
+		HeelKawnianData.Profession.GATHERER:
 			_add_bias(biases, [Job.Type.FORAGE, Job.Type.CHOP, Job.Type.GATHER_FLINT, Job.Type.GATHER_STICK], amount)
-		PawnData.Profession.WARRIOR:
+		HeelKawnianData.Profession.WARRIOR:
 			_add_bias(biases, [Job.Type.HUNT, Job.Type.PROTECT, Job.Type.DEFEND, Job.Type.CRAFT_SPEAR], amount)
-		PawnData.Profession.SCHOLAR:
+		HeelKawnianData.Profession.SCHOLAR:
 			_add_bias(biases, [Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP, Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.PAPER_MAKING, Job.Type.BOOK_BINDING], amount)
-		PawnData.Profession.TRADER:
+		HeelKawnianData.Profession.TRADER:
 			_add_bias(biases, [Job.Type.TRADE_HAUL, Job.Type.CARVE_LEDGER_STONE], amount)
-		PawnData.Profession.SMITH:
+		HeelKawnianData.Profession.SMITH:
 			_add_bias(biases, [Job.Type.TOOL_MAKING, Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR, Job.Type.MINE], amount)
-		PawnData.Profession.HEALER:
+		HeelKawnianData.Profession.HEALER:
 			_add_bias(biases, [Job.Type.BUILD_HEARTH, Job.Type.COOK_BERRIES, Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP], amount)
 
 
@@ -1045,7 +1045,7 @@ static func _matrix_inputs_snapshot(profile: Dictionary) -> Dictionary:
 
 
 static func _development_axes(
-		data: PawnData,
+		data: HeelKawnianData,
 		known: Array[int],
 		civ: Dictionary,
 		recent_events: Array[Dictionary],
@@ -1102,7 +1102,7 @@ static func _development_axes(
 	}
 
 
-static func _development_drive(data: PawnData, axes: Dictionary, known: Array[int], civ: Dictionary) -> String:
+static func _development_drive(data: HeelKawnianData, axes: Dictionary, known: Array[int], civ: Dictionary) -> String:
 	var human_scale: Dictionary = _human_scale_levels(data)
 	var human_next: String = str(human_scale.get("next_level", "world"))
 	if int(axes.get("survival", 0)) < 45:
@@ -1134,7 +1134,7 @@ static func _development_drive(data: PawnData, axes: Dictionary, known: Array[in
 
 static func _next_need_for_drive(
 		drive: String,
-		data: PawnData,
+		data: HeelKawnianData,
 		axes: Dictionary,
 		known: Array[int],
 		civ: Dictionary
@@ -1169,7 +1169,7 @@ static func _next_need_for_drive(
 	return "serve local needs in %s era" % str(civ.get("stage_name", "Primitive"))
 
 
-static func _human_scale_levels(data: PawnData) -> Dictionary:
+static func _human_scale_levels(data: HeelKawnianData) -> Dictionary:
 	# Human ladder: individual -> family -> clan -> nation -> world
 	var family_score: int = 0
 	family_score += mini(30, data.family_bonds.size() * 8)
@@ -1225,7 +1225,7 @@ static func _human_scale_levels(data: PawnData) -> Dictionary:
 	}
 
 
-static func _development_score(axes: Dictionary, known: Array[int], data: PawnData) -> int:
+static func _development_score(axes: Dictionary, known: Array[int], data: HeelKawnianData) -> int:
 	var score: int = 0
 	score += int(axes.get("survival", 0)) / 5
 	score += int(axes.get("practice", 0)) / 5
@@ -1253,13 +1253,13 @@ static func _development_phase(score: int, civ: Dictionary) -> String:
 	return "founder"
 
 
-static func _skill_summary(data: PawnData) -> Dictionary:
+static func _skill_summary(data: HeelKawnianData) -> Dictionary:
 	var levels: Dictionary = {}
 	var highest_level: int = 0
 	var highest_name: String = "none"
-	for skill in PawnData.Skill.values():
+	for skill in HeelKawnianData.Skill.values():
 		var level: int = data.get_skill_level(skill)
-		var name: String = PawnData.skill_name(skill)
+		var name: String = HeelKawnianData.skill_name(skill)
 		levels[name] = level
 		if level > highest_level:
 			highest_level = level
@@ -1341,7 +1341,7 @@ static func _identity_traits(soul_id: String) -> Dictionary:
 	return identity.traits.duplicate(true)
 
 
-static func _settlement_key_for_pawn(data: PawnData) -> int:
+static func _settlement_key_for_pawn(data: HeelKawnianData) -> int:
 	if int(data.settlement_id) >= 0:
 		return int(data.settlement_id)
 	var wm: Node = _root_node("WorldMemory")
@@ -1350,16 +1350,16 @@ static func _settlement_key_for_pawn(data: PawnData) -> int:
 	return -1
 
 
-static func _pawn_data(pawn: Variant) -> PawnData:
+static func _pawn_data(pawn: Variant) -> HeelKawnianData:
 	if pawn == null or not is_instance_valid(pawn):
 		return null
 	var data_v: Variant = pawn.get("data")
-	if data_v is PawnData:
-		return data_v as PawnData
+	if data_v is HeelKawnianData:
+		return data_v as HeelKawnianData
 	return null
 
 
-static func _pawn_data_for_id(pawn_id: int) -> PawnData:
+static func _pawn_data_for_id(pawn_id: int) -> HeelKawnianData:
 	var ps: Node = _root_node("Main/WorldViewport/PawnSpawner")
 	if ps == null or not ps.has_method("get_pawn_by_id"):
 		return null
@@ -1370,14 +1370,14 @@ static func _pawn_data_for_id(pawn_id: int) -> PawnData:
 
 
 static func _profession_name(profession: int) -> String:
-	var keys: Array = PawnData.Profession.keys()
+	var keys: Array = HeelKawnianData.Profession.keys()
 	if profession >= 0 and profession < keys.size():
 		return str(keys[profession]).to_lower()
 	return "unknown"
 
 
 static func _life_path_name(path: int) -> String:
-	var keys: Array = PawnData.LifePath.keys()
+	var keys: Array = HeelKawnianData.LifePath.keys()
 	if path >= 0 and path < keys.size():
 		return str(keys[path]).to_lower()
 	return "unknown"

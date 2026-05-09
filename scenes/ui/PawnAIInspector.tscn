@@ -36,7 +36,7 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 16
-text = "Pawn AI State"
+text = "HeelKawnian AI State"
 horizontal_alignment = 1
 
 [node name="CloseButton" type="Button" parent="Panel/Margin/VBox/Header"]

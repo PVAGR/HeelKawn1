@@ -103,8 +103,8 @@ func _get_pawn_info_text() -> String:
 		return ""
 	
 	# Try to get pawn from sprite
-	var pawn: Pawn = null
-	if target_sprite.get_parent() is Pawn:
+	var pawn: HeelKawnian = null
+	if target_sprite.get_parent() is HeelKawnian:
 		pawn = target_sprite.get_parent()
 	elif target_sprite.has_method("get_pawn"):
 		pawn = target_sprite.call("get_pawn")
@@ -258,7 +258,7 @@ func get_current_text() -> String:
 
 # === Static Helper Methods ===
 
-static func create_for_pawn(pawn: Pawn, parent: Node = null) -> DynamicSpriteText:
+static func create_for_pawn(pawn: HeelKawnian, parent: Node = null) -> DynamicSpriteText:
 	var text_node: DynamicSpriteText = DynamicSpriteText.new()
 	text_node.text_mode = TextMode.PAWN_INFO
 	

@@ -117,7 +117,7 @@ func _test_profession_diversity() -> void:
 	_record_test("Profession: 5+ different professions present", has_diversity)
 
 func _test_trader_profession_exists() -> void:
-	var pawn_data_class = load("res://scripts/pawn/PawnData.gd")
+	var pawn_data_class = load("res://scripts/pawn/HeelKawnianData.gd")
 	if pawn_data_class == null:
 		_record_test("Profession: Trader exists", false)
 		return
@@ -195,7 +195,7 @@ func _test_hunting_mechanics() -> void:
 func _test_pawn_biography_exists() -> void:
 	var world_mem: Node = get_node_or_null("/root/WorldMemory")
 	var result: bool = world_mem != null and world_mem.has_method("_generate_pawn_biography")
-	_record_test("Rich Text: Pawn biographies implemented", result)
+	_record_test("Rich Text: HeelKawnian biographies implemented", result)
 
 func _test_event_notifications_work() -> void:
 	var event_overlay: Node = get_node_or_null("/root/EventNotificationOverlay")

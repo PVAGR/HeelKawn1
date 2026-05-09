@@ -77,7 +77,7 @@ var _animal_spawner: AnimalSpawner = null
 var _designation_label: String = ""
 ## Current player mode label for badge display ("SPECTATOR", "INCARNATED", "OBSERVER")
 var _player_mode_label: String = "SPECTATOR"
-## Authority rank when incarnated ("Pawn", "Captain", "Elder", "Ruler")
+## Authority rank when incarnated ("HeelKawnian", "Captain", "Elder", "Ruler")
 var _player_authority_rank: String = ""
 var _wildlife_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
 var _wildlife_prev_snapshot: Dictionary = {"rabbit": 0, "deer": 0, "total": 0}
@@ -144,7 +144,7 @@ func bind(world: World, spawner: PawnSpawner) -> void:
 	_refresh()
 
 
-func set_player_control_refs(input_buffer: PlayerInputBuffer, player_pawn: Pawn) -> void:
+func set_player_control_refs(input_buffer: PlayerInputBuffer, player_pawn: HeelKawnian) -> void:
 	if _player_input_buffer != null and _player_input_buffer.intent_ready.is_connected(_on_intent_ready):
 		_player_input_buffer.intent_ready.disconnect(_on_intent_ready)
 	_player_input_buffer = input_buffer
@@ -188,8 +188,8 @@ func set_player_mode_badge(mode_label: String, authority_rank: String = "") -> v
 	_hud_dirty = true
 
 
-func _visible_pawns_for_hud() -> Array[Pawn]:
-	var out: Array[Pawn] = []
+func _visible_pawns_for_hud() -> Array[HeelKawnian]:
+	var out: Array[HeelKawnian] = []
 	if _spawner == null:
 		return out
 	var main_node: Main = _get_main()
@@ -419,7 +419,7 @@ func _mode_badge_line() -> String:
 		"OBSERVER":
 			return "[bgcolor=#3a2a08][color=#ffe082]  OBSERVER MODE  (Ctrl+G to exit · right-click pawns to command · Ctrl+Z zones)  [/color][/bgcolor]"
 		"INCARNATED":
-			var rank: String = _player_authority_rank if _player_authority_rank != "" else "Pawn"
+			var rank: String = _player_authority_rank if _player_authority_rank != "" else "HeelKawnian"
 			var hint: String = "Ctrl+T to exit"
 			if rank == "Captain":
 				hint = "right-click warriors to command · Ctrl+T to exit"
@@ -632,10 +632,10 @@ static func _phase_name(p: float) -> String:
 func _prune_freed_pawns_in_spawner() -> void:
 	if _spawner == null:
 		return
-	var list: Array[Pawn] = _spawner.pawns
+	var list: Array[HeelKawnian] = _spawner.pawns
 	var i: int = 0
 	while i < list.size():
-		var p: Pawn = list[i]
+		var p: HeelKawnian = list[i]
 		if p != null and is_instance_valid(p):
 			i += 1
 		else:
@@ -661,22 +661,22 @@ func _pawn_line() -> String:
 	var sleeping: int = 0
 	var children_total: int = 0
 	var n: int = 0
-	var lead: Pawn = null
+	var lead: HeelKawnian = null
 	for p in _visible_pawns_for_hud():
 		if not is_instance_valid(p) or p.data == null:
 			continue
 		if lead == null:
 			lead = p
 		n += 1
-		var d: PawnData = p.data
+		var d: HeelKawnianData = p.data
 		sum_h += d.hunger
 		sum_r += d.rest
 		sum_m += d.mood
 		children_total += int(d.children_count)
-		if d.hunger <= Pawn.THRESHOLD_WARN: hungry += 1
-		if d.rest   <= Pawn.THRESHOLD_WARN: tired  += 1
-		if d.mood   <= Pawn.THRESHOLD_WARN: sad    += 1
-		if p.get_state() == Pawn.State.SLEEPING: sleeping += 1
+		if d.hunger <= HeelKawnian.THRESHOLD_WARN: hungry += 1
+		if d.rest   <= HeelKawnian.THRESHOLD_WARN: tired  += 1
+		if d.mood   <= HeelKawnian.THRESHOLD_WARN: sad    += 1
+		if p.get_state() == HeelKawnian.State.SLEEPING: sleeping += 1
 	if n <= 0:
 		return "[color=#cccccc]Pawns:[/color] (none)"
 	var avg_h: float = sum_h / float(n)
@@ -686,7 +686,7 @@ func _pawn_line() -> String:
 	if lead != null and lead.data != null:
 		var top_aff: String = lead.data.highest_affinity_skill()
 		var top_xp: int = lead.data.affinity_xp_for(top_aff)
-		affinity_line = "   Pawn: [b]%s[/b] | Aff: [b]%s[/b] | XP: [b]%d[/b]" % [
+		affinity_line = "   HeelKawnian: [b]%s[/b] | Aff: [b]%s[/b] | XP: [b]%d[/b]" % [
 			lead.data.display_name, top_aff.capitalize(), top_xp
 		]
 	return "[color=#cccccc]Pawns:[/color] [b]%d[/b] (children %d)   H %s  R %s  M %s   %s%s%s%s%s" % [
@@ -732,12 +732,12 @@ func _profession_breakdown_line() -> String:
 	if _spawner == null:
 		return ""
 	var counts: Dictionary = {
-		PawnData.Profession.FARMER: 0,
-		PawnData.Profession.BUILDER: 0,
-		PawnData.Profession.GATHERER: 0,
-		PawnData.Profession.WARRIOR: 0,
-		PawnData.Profession.SCHOLAR: 0,
-		PawnData.Profession.NONE: 0,
+		HeelKawnianData.Profession.FARMER: 0,
+		HeelKawnianData.Profession.BUILDER: 0,
+		HeelKawnianData.Profession.GATHERER: 0,
+		HeelKawnianData.Profession.WARRIOR: 0,
+		HeelKawnianData.Profession.SCHOLAR: 0,
+		HeelKawnianData.Profession.NONE: 0,
 	}
 	for p in _visible_pawns_for_hud():
 		if p == null or not is_instance_valid(p) or p.data == null:
@@ -746,14 +746,14 @@ func _profession_breakdown_line() -> String:
 		if counts.has(prof):
 			counts[prof] = int(counts[prof]) + 1
 		else:
-			counts[PawnData.Profession.NONE] = int(counts[PawnData.Profession.NONE]) + 1
+			counts[HeelKawnianData.Profession.NONE] = int(counts[HeelKawnianData.Profession.NONE]) + 1
 	var parts: Array[String] = []
-	var farmer_n: int = int(counts[PawnData.Profession.FARMER])
-	var builder_n: int = int(counts[PawnData.Profession.BUILDER])
-	var gatherer_n: int = int(counts[PawnData.Profession.GATHERER])
-	var warrior_n: int = int(counts[PawnData.Profession.WARRIOR])
-	var scholar_n: int = int(counts[PawnData.Profession.SCHOLAR])
-	var none_n: int = int(counts[PawnData.Profession.NONE])
+	var farmer_n: int = int(counts[HeelKawnianData.Profession.FARMER])
+	var builder_n: int = int(counts[HeelKawnianData.Profession.BUILDER])
+	var gatherer_n: int = int(counts[HeelKawnianData.Profession.GATHERER])
+	var warrior_n: int = int(counts[HeelKawnianData.Profession.WARRIOR])
+	var scholar_n: int = int(counts[HeelKawnianData.Profession.SCHOLAR])
+	var none_n: int = int(counts[HeelKawnianData.Profession.NONE])
 	if farmer_n > 0:
 		parts.append("[color=#d9a832]Farm:%d[/color]" % farmer_n)
 	if builder_n > 0:
@@ -908,12 +908,12 @@ func _player_status_line() -> String:
 
 func _skill_line() -> String:
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
-		return "👤 Pawn [--]: Profession [None] | XP: 0/100"
-	var d: PawnData = _player_pawn.data
+		return "👤 HeelKawnian [--]: Profession [None] | XP: 0/100"
+	var d: HeelKawnianData = _player_pawn.data
 	var pawn_id: int = int(d.id)
 	var prof_name: String = d.profession_name()
 	var xp: int = d.profession_progress_xp()
-	return "👤 Pawn [%d]: Profession [%s] | XP: %d/100" % [pawn_id, prof_name, xp]
+	return "👤 HeelKawnian [%d]: Profession [%s] | XP: %d/100" % [pawn_id, prof_name, xp]
 
 
 func _export_status_line() -> String:
@@ -1424,9 +1424,9 @@ func _narrative_line_for_event(typ: String, e: Dictionary) -> String:
 static func _color_value(v: float) -> String:
 	# Same thresholds the pawn AI uses, so the HUD agrees with the warn / crit
 	# print spam.
-	if v <= Pawn.THRESHOLD_CRIT:
+	if v <= HeelKawnian.THRESHOLD_CRIT:
 		return "[color=#e57373][b]%2.0f[/b][/color]" % v   # red
-	if v <= Pawn.THRESHOLD_WARN:
+	if v <= HeelKawnian.THRESHOLD_WARN:
 		return "[color=#ffd54f][b]%2.0f[/b][/color]" % v   # amber
 	return "[color=#a5d6a7]%2.0f[/color]" % v               # green
 

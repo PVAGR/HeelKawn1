@@ -301,7 +301,7 @@ func from_dict(data: Dictionary) -> void:
 
 
 func _new_network(personality: Dictionary) -> Variant:
-	return PawnData.create_neural_network(personality)
+	return HeelKawnianData.create_neural_network(personality)
 
 
 func _network_to_dict(network: Variant) -> Dictionary:

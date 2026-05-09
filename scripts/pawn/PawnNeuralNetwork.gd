@@ -1,7 +1,7 @@
 class_name PawnNeuralNetwork
 extends RefCounted
 
-## Phase 2: Per-Pawn Neural Network for Decision Making
+## Phase 2: Per-HeelKawnian Neural Network for Decision Making
 ## Hidden internal state - opaque to players, only observable behaviors visible
 
 # Network structure
@@ -481,8 +481,8 @@ func _deserialize_connections(serialized: Dictionary) -> void:
 		connections[connection_key] = deobfuscated_conn
 
 
-## --- GOAP-lite: Maslow needs + memory + autonomy hints (throttled from [Pawn]) ---
-## GOAP-lite + Maslow: runs on a throttled tick from [Pawn]; does not replace weight-based forward pass.
+## --- GOAP-lite: Maslow needs + memory + autonomy hints (throttled from [HeelKawnian]) ---
+## GOAP-lite + Maslow: runs on a throttled tick from [HeelKawnian]; does not replace weight-based forward pass.
 const SHORT_MEM_CAP: int = 12
 const LONG_MEM_CAP: int = 28
 const MEMORY_DECAY: float = 0.9985
@@ -526,7 +526,7 @@ func _goap_from_dict(d: Dictionary) -> void:
 	last_autonomy_tick = int(d.get("last_autonomy_tick", -1))
 
 
-## Throttled entry from [Pawn] — one pass: sync needs, decay, plan hint.
+## Throttled entry from [HeelKawnian] — one pass: sync needs, decay, plan hint.
 func tick_autonomy(tick: int, pawn_id: int, ctx: Dictionary) -> void:
 	sync_maslow_from_context(ctx)
 	decay_memories(tick)

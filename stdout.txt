@@ -1,0 +1,52 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+[CrashTrap] CrashTrap initialized. trace_enabled=false trace_first_sim_tick=false (per-listener tick-1 trace when both true)
+[VALIDATION_SMOKETEST] marker=PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp source=SettlementMemory.autoload debug_build=true VALIDATION_SESSION_ENABLED_const=false clean_economy_armed=false settlement_truth_verify_armed=false specialization_log_armed=false
+[WorldAI] Neural world matrix initialized with 19 neural networks
+[WorldAI] Specialized neural networks initialized
+[AIAgentManager] Neural network matrix initialized with 4 layers
+[AIAgentManager] Learning algorithms initialized
+[AIAgentManager] Pattern recognition systems initialized
+[AIAgentManager] Predictive models initialized
+[AIAgentManager] Collective intelligence initialized
+[PlaytestRecorder] Started recording session 20260509_023835
+[INFO] PawnSpawner: pawn_scene loaded successfully: res://scenes/pawn/Pawn.tscn
+[VALIDATION_SMOKETEST] marker=PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp source=Main.gd debug_build=true VALIDATION_SESSION_ENABLED_const=false clean_economy_armed=false settlement_truth_verify_armed=false specialization_log_armed=false
+[CrashTrap] OK: Autoload 'SettlementMemory' (Node)
+[CrashTrap] OK: Autoload 'WorldAI' (Node)
+[Main] Scene ready. Tick interval: 1.00s
+[Main] Speed: 1.0x
+[Main] Speed: 1.0x
+[Main] Seed stockpile placed at (127, 127) (3x3, ALL)
+[Main] React: +32 MINE  +0 MINE_WALL  (active walls=0)
+[Pawn] #1 Vera: tick armed=true, tickable=true
+[Pawn] #2 Fiona: tick armed=true, tickable=true
+[Pawn] #3 Wren: tick armed=true, tickable=true
+[Pawn] #4 Petra: tick armed=true, tickable=true
+[Pawn] #5 Xara: tick armed=true, tickable=true
+[Pawn] #6 Dena: tick armed=true, tickable=true
+[Pawn] #7 Brenna: tick armed=true, tickable=true
+[Pawn] #8 Kenan: tick armed=true, tickable=true
+[Pawn] #9 Morven: tick armed=true, tickable=true
+[Pawn] #10 Silas: tick armed=true, tickable=true
+[Pawn] #11 Ivor: tick armed=true, tickable=true
+[Pawn] #12 Yorick: tick armed=true, tickable=true
+[Pawn] #13 Quinn: tick armed=true, tickable=true
+[Pawn] #14 Garrick: tick armed=true, tickable=true
+[Pawn] #15 Osric: tick armed=true, tickable=true
+[Pawn] #16 Lira: tick armed=true, tickable=true
+[Pawn] #17 Tess: tick armed=true, tickable=true
+[Pawn] #18 Elric: tick armed=true, tickable=true
+[Pawn] #19 Rhea: tick armed=true, tickable=true
+[Pawn] #20 Hilda: tick armed=true, tickable=true
+[VALIDATION_STATUS] debug_build=true VALIDATION_SESSION_ENABLED_const=false WorldEvents_VALIDATION_CLEAN_ECONOMY_EVENTS_const=false clean_economy_active=false settlement_truth_verify_active=false specialization_validation_log_active=false
+[Pawn] #21 Aldric: tick armed=true, tickable=true
+[Pawn] #22 Zella: tick armed=true, tickable=true
+[Pawn] #23 Jora: tick armed=true, tickable=true
+[Pawn] #24 Nessa: tick armed=true, tickable=true
+[Pawn] #25 Ulric: tick armed=true, tickable=true
+[Pawn] #26 Cormac: tick armed=true, tickable=true
+[MythAge] The HeelKawnians have entered the Age of Awakening
+[DayNight] Year 1 · Day 1/50 begins (tick 1)
+[WorldAI] Civilization advanced to age: DAWN
+[WorldAI] Civilization advanced to age: TRIBAL

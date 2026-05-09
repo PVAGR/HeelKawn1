@@ -192,7 +192,7 @@ func get_chunk_info(chunk_coord: Vector2i) -> Dictionary:
 
 
 ## Sync a pawn's chunk registration when it moves
-## Call this from Pawn._on_game_tick or whenever tile_pos changes significantly
+## Call this from HeelKawnian._on_game_tick or whenever tile_pos changes significantly
 func update_pawn_position(pawn_id: int, new_tile_pos: Vector2i) -> void:
 	if entity_chunks.has(pawn_id):
 		var old_chunk: Vector2i = entity_chunks[pawn_id]

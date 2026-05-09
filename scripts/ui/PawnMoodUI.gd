@@ -39,8 +39,8 @@ func _build_ui() -> void:
 	main_vbox.add_theme_constant_override("separation", 10)
 	add_child(main_vbox)
 	
-	# Pawn name header
-	var name_label: Label = _modern_theme.create_styled_label("Pawn Name", "large")
+	# HeelKawnian name header
+	var name_label: Label = _modern_theme.create_styled_label("HeelKawnian Name", "large")
 	name_label.name = "NameLabel"
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	main_vbox.add_child(name_label)
@@ -298,7 +298,7 @@ func clear() -> void:
 	
 	var name_label: Label = get_node_or_null("VBoxContainer/NameLabel")
 	if name_label != null:
-		name_label.text = "No Pawn Selected"
+		name_label.text = "No HeelKawnian Selected"
 	
 	if _mood_bar != null:
 		_mood_bar.value = 0

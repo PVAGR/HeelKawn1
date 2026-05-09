@@ -1,0 +1,9 @@
+SCRIPT ERROR: Invalid call. Nonexistent function 'get_primary_stockpile' in base 'Node (StockpileManager.gd)'.
+   at: _recalculate_needs (res://autoloads/FogOfDiscovery.gd:172)
+   GDScript backtrace (most recent call first):
+       [0] _recalculate_needs (res://autoloads/FogOfDiscovery.gd:172)
+       [1] _on_game_tick (res://autoloads/FogOfDiscovery.gd:119)
+       [2] _dispatch_game_tick (res://autoloads/GameManager.gd:283)
+       [3] _on_tick_manager_tick (res://autoloads/GameManager.gd:232)
+       [4] _dispatch_tick (res://autoloads/TickManager.gd:158)
+       [5] _process (res://autoloads/TickManager.gd:125)

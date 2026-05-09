@@ -5,7 +5,7 @@ extends Node
 ## - World seed (for regeneration)
 ## - All WorldMemory events (for history)
 ## - Settlement states
-## - Pawn data snapshots
+## - HeelKawnian data snapshots
 ## - Knowledge carriers
 ## - Current game state
 ##

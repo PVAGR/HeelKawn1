@@ -1,9 +1,9 @@
-class_name PawnData
+class_name HeelKawnianData
 extends RefCounted
 
-## Pure data for a single pawn. The Pawn Node2D reads from this; all future
-## systems (save/load, AI, macro view) will treat PawnData as the source of
-## truth and Pawn (the Node) as a visual representation.
+## Pure data for a single pawn. The HeelKawnian Node2D reads from this; all future
+## systems (save/load, AI, macro view) will treat HeelKawnianData as the source of
+## truth and HeelKawnian (the Node) as a visual representation.
 
 enum Gender { MALE, FEMALE, OTHER }
 enum BodyType { SLIM, AVERAGE, BROAD }
@@ -88,6 +88,10 @@ var pain: float = 0.0  # 0-100, affects work efficiency and mood
 var exposure_sickness: float = 0.0  # 0-100, from prolonged cold/wet
 var hypothermia_risk: float = 0.0  # 0-100, accumulates from cold exposure
 var heat_exhaustion_risk: float = 0.0  # 0-100, accumulates from heat exposure
+
+## DORMANT WORLD: Pioneer buff — first-generation pawns resist cold for 500 ticks
+var is_pioneer: bool = false
+var pioneer_ticks_remaining: int = 0
 
 ## Injury tracking: injury_type -> severity (0-100)
 ## Injury types: cut, burn, blunt, broken_bone, frostbite, heat_burn
@@ -378,7 +382,7 @@ var social_memory: Dictionary = {}
 ## Memory decay tracking: memory_type -> last_accessed_tick
 var memory_access: Dictionary = {}
 
-## Phase 2: Per-Pawn Neural Network (hidden internal state)
+## Phase 2: Per-HeelKawnian Neural Network (hidden internal state)
 var neural_network = null
 static var _pawn_neural_script_cache: Script = null
 
@@ -426,8 +430,8 @@ func get_max_health() -> float:
 func _initialize_personality(init_tick: int, parent_a: int, parent_b: int) -> void:
 	if parent_a >= 0 and parent_b >= 0:
 		# Inherit from parents with mutation
-		var parent_a_data: PawnData = _get_parent_data(parent_a)
-		var parent_b_data: PawnData = _get_parent_data(parent_b)
+		var parent_a_data: HeelKawnianData = _get_parent_data(parent_a)
+		var parent_b_data: HeelKawnianData = _get_parent_data(parent_b)
 		
 		if parent_a_data != null and parent_b_data != null:
 			# Blend parent personalities with mutation
@@ -477,8 +481,8 @@ func _initialize_likes_dislikes(init_tick: int, parent_a: int, parent_b: int) ->
 	# Generate raw values for each category
 	var raw_values: Dictionary = {}
 	if parent_a >= 0 and parent_b >= 0:
-		var parent_a_data: PawnData = _get_parent_data(parent_a)
-		var parent_b_data: PawnData = _get_parent_data(parent_b)
+		var parent_a_data: HeelKawnianData = _get_parent_data(parent_a)
+		var parent_b_data: HeelKawnianData = _get_parent_data(parent_b)
 		if parent_a_data != null and parent_b_data != null:
 			# Blend parent likes/dislikes with mutation
 			for cat in LIKE_CATEGORIES:
@@ -509,7 +513,7 @@ func _generate_random_likes(salt: int, out: Dictionary) -> void:
 		out[cat] = WorldRNG.range_for(StringName("likes:%s:%d" % [cat, salt]), 0.0, 1.0)
 
 
-func _get_parent_like_value(parent: PawnData, category: String) -> float:
+func _get_parent_like_value(parent: HeelKawnianData, category: String) -> float:
 	# If the parent explicitly likes/dislikes this category, use that value
 	if parent.likes.has(category):
 		return float(parent.likes[category])
@@ -588,7 +592,7 @@ static func job_category_for_type(job_type: int) -> String:
 static var _pawn_data_by_id: Dictionary = {}
 
 ## Register a pawn data instance for lineage lookup
-static func register_pawn_data(data: PawnData) -> void:
+static func register_pawn_data(data: HeelKawnianData) -> void:
 	if data != null:
 		_pawn_data_by_id[data.id] = data
 
@@ -597,7 +601,7 @@ static func unregister_pawn_data(pawn_id: int) -> void:
 	_pawn_data_by_id.erase(pawn_id)
 
 ## Get parent data from static registry
-func _get_parent_data(parent_id: int) -> PawnData:
+func _get_parent_data(parent_id: int) -> HeelKawnianData:
 	if parent_id < 0:
 		return null
 	return _pawn_data_by_id.get(parent_id, null)
@@ -612,7 +616,7 @@ func _initialize_neural_network() -> void:
 		"agreeableness": agreeableness,
 		"neuroticism": neuroticism
 	}
-	neural_network = PawnData.create_neural_network(personality_dict)
+	neural_network = HeelKawnianData.create_neural_network(personality_dict)
 
 
 ## Krond / Trait helpers
@@ -2052,7 +2056,7 @@ func _unlock_basic_skill_branch() -> void:
 		"description": "Basic specialization in " + primary_skill,
 	}
 	append_biography_line("Skill branch: Basic " + primary_skill + " (level 5)")
-	print("[PawnData] %s unlocked basic %s branch" % [display_name, primary_skill])
+	print("[HeelKawnianData] %s unlocked basic %s branch" % [display_name, primary_skill])
 
 
 ## Level 10: Intermediate skill branch unlocks
@@ -2088,7 +2092,7 @@ func _unlock_intermediate_skill_branch() -> void:
 				"description": "Foundation in " + secondary,
 			}
 	append_biography_line("Skill branch: Intermediate " + primary_skill + " (level 10)")
-	print("[PawnData] %s unlocked intermediate %s branch" % [display_name, primary_skill])
+	print("[HeelKawnianData] %s unlocked intermediate %s branch" % [display_name, primary_skill])
 
 
 ## Level 15: Advanced skill branch unlocks
@@ -2115,7 +2119,7 @@ func _unlock_advanced_skill_branch() -> void:
 			"description": "Can teach skills to others",
 		}
 	append_biography_line("Skill branch: Advanced " + primary_skill + " (level 15)")
-	print("[PawnData] %s unlocked advanced %s branch" % [display_name, primary_skill])
+	print("[HeelKawnianData] %s unlocked advanced %s branch" % [display_name, primary_skill])
 
 
 ## Level 20: Mastery skill branch unlocks
@@ -2142,7 +2146,7 @@ func _unlock_mastery_skill_branch() -> void:
 			"description": "Can discover new techniques",
 		}
 	append_biography_line("Skill branch: Mastery " + primary_skill + " (level 20)")
-	print("[PawnData] %s achieved MASTERY in %s" % [display_name, primary_skill])
+	print("[HeelKawnianData] %s achieved MASTERY in %s" % [display_name, primary_skill])
 
 
 ## Stage 1: Check for mastery perk unlocks at high skill levels
@@ -2241,7 +2245,7 @@ func harvest_quality_multiplier_for_job_skill(skill: int) -> float:
 	return skill_tree_bonus_product_for_category(cat, "quality_bonus")
 
 
-## Teaching branch: multiplies XP granted to students in [method Pawn.teach_skill].
+## Teaching branch: multiplies XP granted to students in [method HeelKawnian.teach_skill].
 func teach_efficiency_multiplier() -> float:
 	var entry: Variant = skill_trees.get("teaching", null)
 	if entry is Dictionary and bool((entry as Dictionary).get("unlocked", false)):
@@ -2298,7 +2302,7 @@ func _related_pawn_ids() -> PackedInt32Array:
 func kinship_mood_bonus() -> float:
 	var delta: float = bloodline_pride_mood_bonus()
 	for rid in _related_pawn_ids():
-		var rel: PawnData = _pawn_data_by_id.get(rid, null)
+		var rel: HeelKawnianData = _pawn_data_by_id.get(rid, null)
 		var bond: float = float(family_bonds.get(rid, 0.0))
 		if rel != null:
 			var health_ratio: float = clampf(rel.health / maxf(1.0, rel.max_health), 0.0, 1.0)
@@ -2314,7 +2318,7 @@ func kinship_mood_bonus() -> float:
 func kinship_work_speed_multiplier(work_tile: Vector2i, radius: int = 6) -> float:
 	var mult: float = 1.0
 	for rid in _related_pawn_ids():
-		var rel: PawnData = _pawn_data_by_id.get(rid, null)
+		var rel: HeelKawnianData = _pawn_data_by_id.get(rid, null)
 		if rel == null:
 			continue
 		if work_tile.distance_to(rel.tile_pos) > float(radius):
@@ -2327,7 +2331,7 @@ func kinship_work_speed_multiplier(work_tile: Vector2i, radius: int = 6) -> floa
 func kinship_job_priority_bonus(work_tile: Vector2i, radius: int = 6) -> int:
 	var bonus: int = 0
 	for rid in _related_pawn_ids():
-		var rel: PawnData = _pawn_data_by_id.get(rid, null)
+		var rel: HeelKawnianData = _pawn_data_by_id.get(rid, null)
 		if rel == null:
 			continue
 		if work_tile.distance_to(rel.tile_pos) > float(radius):
@@ -3347,8 +3351,8 @@ func to_save_dict() -> Dictionary:
 
 ## Rebuild from `to_save_dict`. Overrides the auto id from _init and bumps
 ## `_next_id` so future spawns don't collide.
-static func from_save_dict(d: Dictionary) -> PawnData:
-	var p := PawnData.new()
+static func from_save_dict(d: Dictionary) -> HeelKawnianData:
+	var p := HeelKawnianData.new()
 	p.id = int(d.get("id", p.id))
 	p.display_name = str(d.get("display_name", p.display_name))
 	p.age = int(d.get("age", p.age))
@@ -3484,7 +3488,7 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 			p.traits.append(Trait.new(int(trait_type)))
 	var nn_data: Variant = d.get("neural_network", {})
 	if nn_data is Dictionary and not (nn_data as Dictionary).is_empty():
-		var restored_network: Variant = PawnData.create_neural_network({
+		var restored_network: Variant = HeelKawnianData.create_neural_network({
 			"openness": p.openness,
 			"conscientiousness": p.conscientiousness,
 			"extraversion": p.extraversion,
@@ -3550,7 +3554,7 @@ static func from_save_dict(d: Dictionary) -> PawnData:
 		p.life_path_contributions = (d["life_path_contributions"] as Dictionary).duplicate(true)
 	if d.has("regions_visited") and d["regions_visited"] is Dictionary:
 		p.regions_visited = (d["regions_visited"] as Dictionary).duplicate(true)
-	# End neural network / trait restore block; always return constructed PawnData
+	# End neural network / trait restore block; always return constructed HeelKawnianData
 	return p
 
 

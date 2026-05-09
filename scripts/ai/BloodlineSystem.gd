@@ -28,7 +28,7 @@ extends Node
 var bloodlines: Array[Dictionary] = []
 var _next_bloodline_id: int = 1
 
-# Pawn family data
+# HeelKawnian family data
 ## {
 ##   "pawn_id": int,
 ##   "bloodline_id": int,
@@ -465,13 +465,13 @@ func _get_pawn_bloodline(pawn_id: int) -> int:
 
 func _get_pawn_name(pawn_id: int) -> String:
 	if _pawn_spawner == null or not _pawn_spawner.has_method("pawn_data_for_id"):
-		return "Pawn #%d" % pawn_id
+		return "HeelKawnian #%d" % pawn_id
 	
 	var data: Node = _pawn_spawner.call("pawn_data_for_id", pawn_id)
 	if data != null and data.has_method("get_display_name"):
 		return data.get_display_name()
 	
-	return "Pawn #%d" % pawn_id
+	return "HeelKawnian #%d" % pawn_id
 
 
 func _clean_old_bloodlines(tick: int) -> void:

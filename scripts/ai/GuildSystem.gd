@@ -818,7 +818,7 @@ func _get_pawn_name(pawn_id: int) -> String:
 		if data != null and data.has_method("get_display_name"):
 			return data.get_display_name()
 	
-	return "Pawn #%d" % pawn_id
+	return "HeelKawnian #%d" % pawn_id
 
 
 func _guild_type_to_string(guild_type: int) -> String:

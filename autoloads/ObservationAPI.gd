@@ -23,14 +23,14 @@ static func observe_pawn(pawn_id: int) -> Dictionary:
 		return {"error": "PawnSpawner not available"}
 
 	# Find pawn by ID
-	var target_pawn: Pawn = null
+	var target_pawn: HeelKawnian = null
 	for p in spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
 			target_pawn = p
 			break
 
 	if target_pawn == null:
-		return {"error": "Pawn not found", "pawn_id": pawn_id}
+		return {"error": "HeelKawnian not found", "pawn_id": pawn_id}
 
 	return _build_pawn_observation(target_pawn)
 
@@ -73,7 +73,7 @@ static func observe_at_world_position(world_pos: Vector2) -> Dictionary:
 		return {"error": "World not available"}
 	
 	# Check for pawn first
-	var mouse_pawn: Pawn = main._focus_pawn_under_world_pos(world_pos) if main.has_method("_focus_pawn_under_world_pos") else null
+	var mouse_pawn: HeelKawnian = main._focus_pawn_under_world_pos(world_pos) if main.has_method("_focus_pawn_under_world_pos") else null
 	if mouse_pawn != null and mouse_pawn.data != null:
 		var obs: Dictionary = _build_pawn_observation(mouse_pawn)
 		obs["focus_type"] = "pawn"
@@ -233,8 +233,8 @@ static func build_focus_snapshot_from_focus(focus: Dictionary, tick: int = -1) -
 
 # === Private helper methods ===
 
-static func _build_pawn_observation(pawn: Pawn) -> Dictionary:
-	var d: PawnData = pawn.data
+static func _build_pawn_observation(pawn: HeelKawnian) -> Dictionary:
+	var d: HeelKawnianData = pawn.data
 	var rk: int = _WM._region_key(d.tile_pos.x, d.tile_pos.y)
 	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(rk)
 	var war: Dictionary = SettlementMemory.get_war_profile_for_region(rk)
@@ -277,11 +277,11 @@ static func _build_pawn_observation(pawn: Pawn) -> Dictionary:
 
 static func _focus_lines_for_pawn(focus: Dictionary) -> PackedStringArray:
 	var out: PackedStringArray = PackedStringArray()
-	var p: Pawn = focus.get("pawn", null) as Pawn
+	var p: HeelKawnian = focus.get("pawn", null) as HeelKawnian
 	if p == null or p.data == null:
 		return PackedStringArray(["NO FOCUS", "Move cursor over a pawn, settlement, or tile"])
 	var obs: Dictionary = _build_pawn_observation(p)
-	var d: PawnData = p.data
+	var d: HeelKawnianData = p.data
 	var gov: Dictionary = obs.get("governance_profile", {})
 	var war: Dictionary = obs.get("war_profile", {})
 	var role: String = str(obs.get("governance_role", "Citizen"))
@@ -485,7 +485,7 @@ static func _build_settlement_observation(settlement: Dictionary, center_region:
 	
 	return obs
 
-static func _pawn_governance_role(pawn_data: PawnData, gov_profile: Dictionary) -> String:
+static func _pawn_governance_role(pawn_data: HeelKawnianData, gov_profile: Dictionary) -> String:
 	var ruler_id: int = int(gov_profile.get("ruler_id", -1))
 	if int(pawn_data.id) == ruler_id:
 		return "Ruler"

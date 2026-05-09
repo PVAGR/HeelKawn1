@@ -13,7 +13,7 @@ func _get_pawn_spawner() -> PawnSpawner:
 	return _main.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
 
 # OPTIMIZATION: Cached pawn array, updated only when pawns spawn/despawn
-var _pawn_cache: Array[Pawn] = []
+var _pawn_cache: Array[HeelKawnian] = []
 var _pawn_cache_dirty: bool = true
 
 enum KnowledgeType {
@@ -113,7 +113,7 @@ func _ready() -> void:
 	_refresh_pawn_cache()
 
 ## OPTIMIZATION: Get cached pawn array, refresh only when dirty
-func _get_pawns() -> Array[Pawn]:
+func _get_pawns() -> Array[HeelKawnian]:
 	if _pawn_cache_dirty:
 		_refresh_pawn_cache()
 	return _pawn_cache
@@ -144,7 +144,9 @@ func _on_game_tick(tick: int) -> void:
 	if GameManager.periodic_phase_due(tick, REDISCOVERY_CHECK_INTERVAL_TICKS, REDISCOVERY_CHECK_PHASE_OFFSET):
 		_check_rediscovery_opportunities()
 	if GameManager.periodic_phase_due(tick, INNOVATION_CHECK_INTERVAL_TICKS, INNOVATION_CHECK_PHASE_OFFSET):
-		_check_innovation_opportunities()
+		# DORMANT WORLD: Innovation checks only run after first knowledge is inscribed
+		if DiscoveryGate == null or DiscoveryGate.is_unlocked("first_knowledge"):
+			_check_innovation_opportunities()
 
 # === Knowledge Carrier Management ===
 
@@ -199,7 +201,7 @@ func get_carrier_count(knowledge_type: KnowledgeType) -> int:
 # === Discovery Mechanism ===
 
 func discover_knowledge(pawn_id: int, knowledge_type: KnowledgeType, source_type: String = "observation") -> void:
-	# Pawn discovers knowledge through observation or experience
+	# HeelKawnian discovers knowledge through observation or experience
 	if not has_knowledge(pawn_id, knowledge_type):
 		add_knowledge_carrier(pawn_id, knowledge_type)
 		_record_discovery_event(pawn_id, knowledge_type, source_type)
@@ -391,7 +393,7 @@ func inscribe_knowledge_on_stone(tile: Vector2i, knowledge_types: Array, inscrib
 		var pawn_name: String = "Unknown"
 		var ps: Node = _get_pawn_spawner()
 		if ps != null and ps.has_method("pawn_data_for_id"):
-			var pawn_data: PawnData = ps.call("pawn_data_for_id", inscriber_id)
+			var pawn_data: HeelKawnianData = ps.call("pawn_data_for_id", inscriber_id)
 			if pawn_data != null:
 				pawn_name = pawn_data.display_name
 		event_overlay.call("notify_knowledge_inscribed", pawn_name, knowledge_types)
@@ -433,7 +435,7 @@ func _spawn_knowledge_stone(tile: Vector2i, knowledge_types: Array, inscriber_id
 
 
 func read_knowledge_from_stone(pawn_id: int, tile: Vector2i) -> Array:
-	# Pawn reads knowledge from a record carrier, gaining any knowledge they don't have
+	# HeelKawnian reads knowledge from a record carrier, gaining any knowledge they don't have
 	var tile_key: String = "%d,%d" % [tile.x, tile.y]
 	if not record_carriers.has(tile_key):
 		return []
@@ -500,7 +502,7 @@ func get_knowledge_stone_text(tile: Vector2i) -> String:
 	var inscriber_name: String = "Unknown"
 	var ps: Node = _get_pawn_spawner()
 	if ps != null and ps.has_method("pawn_data_for_id"):
-		var pawn_data: PawnData = ps.call("pawn_data_for_id", inscriber_id)
+		var pawn_data: HeelKawnianData = ps.call("pawn_data_for_id", inscriber_id)
 		if pawn_data != null:
 			inscriber_name = pawn_data.display_name
 	
@@ -574,7 +576,7 @@ func _get_nearby_knowledge_carriers(_tile: Vector2i, knowledge_type: KnowledgeTy
 	
 	for pawn_id in knowledge_carriers:
 		if knowledge_type in knowledge_carriers[pawn_id]:
-			# Get pawn tile position from PawnData if available
+			# Get pawn tile position from HeelKawnianData if available
 			# This would need to be connected to the actual pawn system
 			nearby.append(pawn_id)
 	
@@ -935,7 +937,7 @@ func attempt_rediscovery(pawn_id: int, pawn_pos: Vector2i, knowledge_type: Knowl
 			continue
 		if int(data_v.id) != pawn_id:
 			continue
-		if data_v.current_profession == PawnData.Profession.SCHOLAR:
+		if data_v.current_profession == HeelKawnianData.Profession.SCHOLAR:
 			chance += 0.10  # Scholars are better at rediscovery
 		if data_v.openness > 0.7:
 			chance += 0.03  # Open-minded pawns notice more
@@ -1147,8 +1149,8 @@ func _try_innovate_for_pawn(pawn_id: int, known: Array, tick: int) -> void:
 				continue
 			# Calculate success chance
 			var chance: float = float(recipe.get("base_chance", 0.03))
-			# Intelligence bonus (from PawnData)
-			var pawn_data: PawnData = _get_pawn_data_by_id(pawn_id)
+			# Intelligence bonus (from HeelKawnianData)
+			var pawn_data: HeelKawnianData = _get_pawn_data_by_id(pawn_id)
 			if pawn_data != null:
 				chance += float(pawn_data.intelligence) * 0.008
 				# Higher skill level = better experimenter
@@ -1206,8 +1208,8 @@ func _succeed_innovation(pawn_id: int, recipe_key: String, recipe: Dictionary, t
 		add_research_points(sid, 15, "innovation_%s" % name)
 
 
-func _get_pawn_data_by_id(pawn_id: int) -> PawnData:
-	"""Look up PawnData by pawn ID."""
+func _get_pawn_data_by_id(pawn_id: int) -> HeelKawnianData:
+	"""Look up HeelKawnianData by pawn ID."""
 	for pawn in _get_pawns():
 		if pawn != null and is_instance_valid(pawn) and pawn.data != null:
 			if int(pawn.data.id) == pawn_id:
@@ -1237,7 +1239,7 @@ func _get_institution_bonus(pawn_id: int) -> float:
 	"""Bonus from nearby institutions (guilds, universities)."""
 	var bonus: float = 0.0
 	# Check if near a knowledge stone (proxy for institutional knowledge)
-	var pawn_data: PawnData = _get_pawn_data_by_id(pawn_id)
+	var pawn_data: HeelKawnianData = _get_pawn_data_by_id(pawn_id)
 	if pawn_data == null:
 		return 0.0
 	var tile: Vector2i = pawn_data.tile_pos

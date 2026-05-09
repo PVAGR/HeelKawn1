@@ -138,7 +138,7 @@ func score_to_stage(score: int) -> int:
 func _build_stage_snapshot(settlement_id: int) -> Dictionary:
 	var st: Dictionary = _settlement_for_id(settlement_id)
 	var center_region: int = int(st.get("center_region", settlement_id)) if not st.is_empty() else settlement_id
-	var pawns: Array[Pawn] = _pawns_for_settlement(st, settlement_id)
+	var pawns: Array[HeelKawnian] = _pawns_for_settlement(st, settlement_id)
 	var tech_score: int = _technology_score()
 	var knowledge_score: int = _knowledge_score(pawns)
 	var infrastructure_score: int = _infrastructure_score(st, center_region)
@@ -179,7 +179,7 @@ func _technology_score() -> int:
 	return mini(30, completed * 3 + int(research_points / 250))
 
 
-func _knowledge_score(pawns: Array[Pawn]) -> int:
+func _knowledge_score(pawns: Array[HeelKawnian]) -> int:
 	if KnowledgeSystem == null:
 		return 0
 	var carriers_v: Variant = KnowledgeSystem.get("knowledge_carriers")
@@ -233,20 +233,20 @@ func _infrastructure_score(st: Dictionary, center_region: int) -> int:
 	return mini(20, score)
 
 
-func _complexity_score(pawns: Array[Pawn]) -> int:
+func _complexity_score(pawns: Array[HeelKawnian]) -> int:
 	var professions: Dictionary = {}
 	var skill_branches: int = 0
 	for p in pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		var prof: int = int(p.data.current_profession)
-		if prof != PawnData.Profession.NONE:
+		if prof != HeelKawnianData.Profession.NONE:
 			professions[prof] = true
 		skill_branches += int(p.data.skill_trees.size())
 	return mini(20, professions.size() * 3 + mini(5, skill_branches))
 
 
-func _quality_of_life_score(pawns: Array[Pawn]) -> int:
+func _quality_of_life_score(pawns: Array[HeelKawnian]) -> int:
 	if pawns.is_empty():
 		return 0
 	var total_health: float = 0.0
@@ -270,11 +270,11 @@ func _quality_of_life_score(pawns: Array[Pawn]) -> int:
 	return mini(10, int(avg_health / 20.0) + int(avg_age / 20.0) + int(round(literacy * 3.0)))
 
 
-func _pawns_for_settlement(st: Dictionary, settlement_id: int) -> Array[Pawn]:
-	var all_pawns: Array[Pawn] = PawnSpawner.find_pawns()
+func _pawns_for_settlement(st: Dictionary, settlement_id: int) -> Array[HeelKawnian]:
+	var all_pawns: Array[HeelKawnian] = PawnSpawner.find_pawns()
 	if st.is_empty() and settlement_id < 0:
 		return all_pawns
-	var out: Array[Pawn] = []
+	var out: Array[HeelKawnian] = []
 	var center_region: int = int(st.get("center_region", settlement_id)) if not st.is_empty() else settlement_id
 	var regions: Dictionary = {}
 	var regs_v: Variant = st.get("regions", PackedInt32Array()) if not st.is_empty() else PackedInt32Array()

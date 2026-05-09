@@ -28,7 +28,7 @@ enum TraitType {
 ## }
 var trait_definitions: Dictionary = {}
 
-# Pawn traits
+# HeelKawnian traits
 ## {
 ##   "pawn_id": int,
 ##   "genetic_traits": Array[String],  # Inherited traits

@@ -55,8 +55,8 @@ const GRUDGE_WEIGHT: Dictionary = {
 ## Grudge data structure:
 ## {
 ##   "id": int,
-##   "holder_id": int,           # Pawn who holds the grudge
-##   "target_id": int,           # Pawn the grudge is against
+##   "holder_id": int,           # HeelKawnian who holds the grudge
+##   "target_id": int,           # HeelKawnian the grudge is against
 ##   "origin_id": int,           # Original wrongdoer (may differ from target if inherited)
 ##   "type": String,             # Type of wrong
 ##   "intensity": float,         # 0.0 to 1.0
@@ -516,7 +516,7 @@ func _process_memorial_grudges(memorial: Dictionary, tick: int) -> void:
 		
 		# Check if pawn is at memorial tile
 		if pawn_tile == memorial_tile:
-			# Pawn is visiting memorial — check for grudge closure
+			# HeelKawnian is visiting memorial — check for grudge closure
 			for associated_id in associated_pawns:
 				_try_grudge_closure(pawn_id, int(associated_id), memorial, tick)
 
@@ -568,7 +568,7 @@ func _closure_grudge(grudge: Dictionary, tick: int) -> void:
 	
 	# Optional: Log closure event
 	if GameManager != null and GameManager.verbose_logs():
-		print("[GrudgeManager] Pawn %d found closure at memorial — grudge intensity reduced to %.2f" % [
+		print("[GrudgeManager] HeelKawnian %d found closure at memorial — grudge intensity reduced to %.2f" % [
 			grudge.get("holder_id", -1), grudge.get("intensity", 0.0)
 		])
 

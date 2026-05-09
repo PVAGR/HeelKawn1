@@ -190,7 +190,7 @@ func get_state() -> Dictionary:
 		"tick_career_started": _tick_career_started,
 	}
 
-## Add XP based on job type (called from Pawn.gd on job completion)
+## Add XP based on job type (called from HeelKawnian.gd on job completion)
 func add_xp_for_job(job_type: int, base_xp: float) -> void:
 	if _career_track == CareerTrack.NONE:
 		return

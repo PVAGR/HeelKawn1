@@ -60,7 +60,7 @@ func _perform_full_system_check() -> void:
 	# Check ErrorTracker
 	_check_error_tracker(report)
 	
-	# Check Pawn system
+	# Check HeelKawnian system
 	_check_pawn_system(report)
 	
 	# Check Stockpile system
@@ -158,7 +158,7 @@ func _check_pawn_system(report: Dictionary) -> void:
 	var issues := []
 	
 	# Check for pawns in the scene
-	var pawns = Engine.get_main_loop().root.find_children("*", "Pawn", true, false)
+	var pawns = Engine.get_main_loop().root.find_children("*", "HeelKawnian", true, false)
 	
 	if pawns.size() == 0:
 		# Might be normal at game start
@@ -195,7 +195,7 @@ func _check_stockpile_system(report: Dictionary) -> void:
 		
 		if total_food == 0:
 			# Check if there are pawns that need food
-			var pawns = Engine.get_main_loop().root.find_children("*", "Pawn", true, false)
+			var pawns = Engine.get_main_loop().root.find_children("*", "HeelKawnian", true, false)
 			if pawns.size() > 0:
 				status = SystemStatus.DEGRADED
 				issues.append("No food in stockpiles but pawns exist")

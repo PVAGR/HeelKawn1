@@ -1,4 +1,4 @@
-## Trait.gd — Pawn trait system. Traits modify need decay, skill XP, work speed,
+## Trait.gd — HeelKawnian trait system. Traits modify need decay, skill XP, work speed,
 ## mood thresholds, and other gameplay multipliers.
 extends Resource
 class_name Trait
@@ -88,11 +88,11 @@ func _init_from_type() -> void:
 		Type.FOCUSED:
 			display_name = "Focused"
 			description = "Works best when well-rested."
-			# Special: handled in Pawn.effective_labor_mult()
+			# Special: handled in HeelKawnian.effective_labor_mult()
 		Type.EASILY_BORED:
 			display_name = "Easily Bored"
 			description = "Gets restless doing the same thing."
-			# Special: tracked in Pawn._same_job_tick_counter
+			# Special: tracked in HeelKawnian._same_job_tick_counter
 		Type.OPTIMIST:
 			display_name = "Optimist"
 			description = "Stays cheerful even in hardship."

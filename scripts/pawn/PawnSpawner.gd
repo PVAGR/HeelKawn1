@@ -70,7 +70,7 @@ const SPAWNABLE_BIOMES: Array[int] = [Biome.Type.PLAINS, Biome.Type.FOREST]
 
 @onready var SpatialManager = get_node_or_null("/root/SpatialManager") # ARCHITECT T006
 
-var pawns: Array[Pawn] = []
+var pawns: Array[HeelKawnian] = []
 
 # OPTIMIZATION: pawn_id → pawn instance dictionary for O(1) lookup
 var _pawn_by_id: Dictionary = {}
@@ -79,11 +79,11 @@ var _pawn_by_id_dirty: bool = true
 ## Return the cached pawn registry. This is the preferred way to iterate all pawns
 ## instead of get_nodes_in_group("pawns"), which traverses the entire scene tree.
 ## The array is maintained on spawn/death — no per-tick allocation.
-func get_all_pawns() -> Array[Pawn]:
+func get_all_pawns() -> Array[HeelKawnian]:
 	return pawns
 
 ## OPTIMIZATION: Get pawn by ID in O(1) time
-func get_pawn_by_id(pawn_id: int) -> Pawn:
+func get_pawn_by_id(pawn_id: int) -> HeelKawnian:
 	if _pawn_by_id_dirty:
 		_rebuild_pawn_dict()
 	return _pawn_by_id.get(pawn_id, null)
@@ -107,7 +107,7 @@ func invalidate_pawn_dict() -> void:
 ## Caches the spawner reference after first lookup to avoid repeated group queries.
 static var _cached_spawner: PawnSpawner = null
 
-static func find_pawns() -> Array[Pawn]:
+static func find_pawns() -> Array[HeelKawnian]:
 	if _cached_spawner != null and is_instance_valid(_cached_spawner):
 		return _cached_spawner.pawns
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
@@ -123,11 +123,11 @@ static func find_pawns() -> Array[Pawn]:
 	return ps.pawns
 
 ## OPTIMIZATION: Static O(1) pawn lookup by ID
-static func find_pawn_by_id(pawn_id: int) -> Pawn:
+static func find_pawn_by_id(pawn_id: int) -> HeelKawnian:
 	if _cached_spawner != null and is_instance_valid(_cached_spawner):
 		return _cached_spawner.get_pawn_by_id(pawn_id)
 	# Fallback to slow path if cache not warm
-	var pawns: Array[Pawn] = find_pawns()
+	var pawns: Array[HeelKawnian] = find_pawns()
 	for p in pawns:
 		if p != null and p.data != null and int(p.data.id) == pawn_id:
 			return p
@@ -162,7 +162,7 @@ func clear_pawns() -> void:
 
 
 ## Remove a pawn from the spawner (when it dies). Cleans up the reference.
-func remove_pawn(pawn: Pawn) -> void:
+func remove_pawn(pawn: HeelKawnian) -> void:
 	pawns.erase(pawn)
 	invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
 	if pawn != null and is_instance_valid(pawn):
@@ -172,7 +172,7 @@ func remove_pawn(pawn: Pawn) -> void:
 		pawn.queue_free()
 
 
-func pawn_data_for_id(pid: int) -> PawnData:
+func pawn_data_for_id(pid: int) -> HeelKawnianData:
 	if pid < 0:
 		return null
 	for p in pawns:
@@ -191,11 +191,11 @@ func print_stats() -> void:
 		if d.is_carrying():
 			carry_str = "%s x%d" % [Item.name_for(d.carrying), d.carrying_qty]
 		var skills_str: String = "%2d/%2d/%2d/%2d/%2d" % [
-			d.get_skill_level(PawnData.Skill.FORAGING),
-			d.get_skill_level(PawnData.Skill.MINING),
-			d.get_skill_level(PawnData.Skill.CHOPPING),
-			d.get_skill_level(PawnData.Skill.BUILDING),
-			d.get_skill_level(PawnData.Skill.HUNTING),
+			d.get_skill_level(HeelKawnianData.Skill.FORAGING),
+			d.get_skill_level(HeelKawnianData.Skill.MINING),
+			d.get_skill_level(HeelKawnianData.Skill.CHOPPING),
+			d.get_skill_level(HeelKawnianData.Skill.BUILDING),
+			d.get_skill_level(HeelKawnianData.Skill.HUNTING),
 		]
 		print("[Stats]   %-18s %3d  %5.1f   %5.1f  %5.1f  %-16s  %-25s (%d,%d)" %
 			[d.display_name, d.age, d.hunger, d.rest, d.mood, carry_str,
@@ -222,18 +222,25 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 			continue
 		used_tiles[tile] = true
 
-		var data := PawnData.new()
-		data.display_name = _pick_name(used_tiles, rng)
+		var data := HeelKawnianData.new()
+		# DEAD BRAIN REVIVED: NameGenerator generates culture-aware names
+		if NameGenerator != null:
+			data.display_name = NameGenerator.generate_full_name(int(data.id), "nordic", data.gender)
+		else:
+			data.display_name = _pick_name(used_tiles, rng)
 		data.age = rng.randi_range(18, 55)
 		data.gender = rng.randi_range(0, 1)
 		data.tile_pos = tile
 		data.color = PAWN_COLORS[placed % PAWN_COLORS.size()]
-		data.body_type = rng.randi_range(PawnData.BodyType.SLIM, PawnData.BodyType.BROAD)
-		data.hair_style = rng.randi_range(PawnData.HairStyle.NONE, PawnData.HairStyle.BUN)
+		data.body_type = rng.randi_range(HeelKawnianData.BodyType.SLIM, HeelKawnianData.BodyType.BROAD)
+		data.hair_style = rng.randi_range(HeelKawnianData.HairStyle.NONE, HeelKawnianData.HairStyle.BUN)
 		data.hair_color = HAIR_COLORS[rng.randi_range(0, HAIR_COLORS.size() - 1)]
 		data.apparel_color = APPAREL_COLORS[rng.randi_range(0, APPAREL_COLORS.size() - 1)]
 		_assign_random_traits(data, rng)
 		
+		# DORMANT WORLD: First-generation pawns are pioneers
+		data.is_pioneer = true
+		data.pioneer_ticks_remaining = 500
 		# PHASE 4: Assign heterogeneous profession (NOT all farmers!)
 		_assign_heterogeneous_profession(data, rng)
 
@@ -244,7 +251,7 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 			if typeof(result) == TYPE_INT:
 				data.bloodline_id = result
 
-		var pawn: Pawn = pawn_scene.instantiate() as Pawn
+		var pawn: HeelKawnian = pawn_scene.instantiate() as HeelKawnian
 		pawn.data = data
 		pawn.position = world.tile_to_world(tile)
 		pawn._world = world
@@ -293,12 +300,12 @@ func spawn_generational_pawn(
 	for p in pawns:
 		if p != null and is_instance_valid(p) and p.data != null and p.data.tile_pos == tile:
 			return false
-	var parent_data: PawnData = null
+	var parent_data: HeelKawnianData = null
 	if parent_id >= 0:
 		parent_data = pawn_data_for_id(parent_id)
 		if parent_data != null:
 			parent_data.ensure_soul_identity()
-	var data := PawnData.new()
+	var data := HeelKawnianData.new()
 	var naming_convention: String = "nordic"
 	var taboo_jobs: Array = []
 	var preferred_branch: String = ""
@@ -309,9 +316,13 @@ func spawn_generational_pawn(
 			naming_convention = str(tradition.get("naming_convention", "nordic")).to_lower()
 			taboo_jobs = (tradition.get("taboo_jobs", []) as Array).duplicate(true)
 			preferred_branch = str(tradition.get("preferred_tech_branch", "")).to_lower()
-	data.display_name = _pick_name_deterministic(naming_convention)
+	# DEAD BRAIN REVIVED: NameGenerator for birth names with culture awareness
+	if NameGenerator != null:
+		data.display_name = NameGenerator.generate_full_name(int(data.id), naming_convention, data.gender)
+	else:
+		data.display_name = _pick_name_deterministic(naming_convention)
 	data.age = 20 + (int(tick_seed) % 5)
-	data.gender = PawnData.Gender.MALE if (int(tick_seed) + pawns.size()) % 2 == 0 else PawnData.Gender.FEMALE
+	data.gender = HeelKawnianData.Gender.MALE if (int(tick_seed) + pawns.size()) % 2 == 0 else HeelKawnianData.Gender.FEMALE
 	data.tile_pos = tile
 	data.color = PAWN_COLORS[pawns.size() % PAWN_COLORS.size()]
 	data.body_type = (int(tick_seed) + pawns.size()) % 3
@@ -322,7 +333,7 @@ func spawn_generational_pawn(
 	
 	# PHASE 4: Assign heterogeneous profession (NOT all farmers!)
 	# Children have 70% chance to inherit parent's profession, 30% random
-	if parent_data != null and parent_data.current_profession != PawnData.Profession.NONE:
+	if parent_data != null and parent_data.current_profession != HeelKawnianData.Profession.NONE:
 		_inherit_profession_from_parents(data, parent_data, null, GameManager.tick_count)
 	else:
 		_assign_heterogeneous_profession(data, WorldRNG.rng_for(&"pawn_profession_assignment"))
@@ -340,7 +351,7 @@ func spawn_generational_pawn(
 			var rep: float = float(CulturalMemory.get_region_reputation(center_region))
 			data.settlement_reputation[str(center_region)] = rep
 			# Record birth settlement for lineage tracking and cultural revival naming
-			data.birth_settlement = center_region  # Already int, matches PawnData type
+			data.birth_settlement = center_region  # Already int, matches HeelKawnianData type
 		if not culture_name.is_empty():
 			data.cultural_affinity[culture_name] = 100.0
 	var taboo_job_names: Array[String] = []
@@ -352,7 +363,7 @@ func spawn_generational_pawn(
 	data.set_meta("tradition_preferred_tech_branch", preferred_branch)
 	data.set_meta("tradition_mood_bonus", 4.0)
 	data.set_meta("tradition_mood_penalty", -6.0)
-	var pawn: Pawn = pawn_scene.instantiate() as Pawn
+	var pawn: HeelKawnian = pawn_scene.instantiate() as HeelKawnian
 	pawn.data = data
 	pawn.position = world.tile_to_world(tile)
 	pawn._world = world
@@ -462,7 +473,7 @@ func _name_pool_for_convention(naming_convention: String) -> Array[String]:
 ## HETEROGENEOUS PROFESSION ASSIGNMENT
 ## Assign diverse professions at spawn based on weighted random (deterministic)
 ## This ensures pawns are NOT all farmers - they're HeelKawnians with diverse roles
-func _assign_heterogeneous_profession(data: PawnData, rng: RandomNumberGenerator) -> void:
+func _assign_heterogeneous_profession(data: HeelKawnianData, rng: RandomNumberGenerator) -> void:
 	# Weight distribution for starter pawns - diverse community (Phase 6: Added SMITH, HEALER)
 	# Builder: 18% (housing pressure relief)
 	# Gatherer: 18% (food diversity)
@@ -475,54 +486,54 @@ func _assign_heterogeneous_profession(data: PawnData, rng: RandomNumberGenerator
 	var roll: float = rng.randf()
 
 	if roll < 0.18:
-		data.current_profession = PawnData.Profession.BUILDER
+		data.current_profession = HeelKawnianData.Profession.BUILDER
 	elif roll < 0.36:
-		data.current_profession = PawnData.Profession.GATHERER
+		data.current_profession = HeelKawnianData.Profession.GATHERER
 	elif roll < 0.51:
-		data.current_profession = PawnData.Profession.WARRIOR
+		data.current_profession = HeelKawnianData.Profession.WARRIOR
 	elif roll < 0.61:
-		data.current_profession = PawnData.Profession.SCHOLAR
+		data.current_profession = HeelKawnianData.Profession.SCHOLAR
 	elif roll < 0.66:
-		data.current_profession = PawnData.Profession.TRADER
+		data.current_profession = HeelKawnianData.Profession.TRADER
 	elif roll < 0.71:
-		data.current_profession = PawnData.Profession.SMITH
+		data.current_profession = HeelKawnianData.Profession.SMITH
 	elif roll < 0.76:
-		data.current_profession = PawnData.Profession.HEALER
+		data.current_profession = HeelKawnianData.Profession.HEALER
 	else:
-		data.current_profession = PawnData.Profession.FARMER
+		data.current_profession = HeelKawnianData.Profession.FARMER
 
 	# Grant initial skill XP based on profession (deterministic bonus)
-	# Note: Using PawnData.Skill enum values - FORAGING, MINING, CHOPPING, BUILDING, HUNTING
+	# Note: Using HeelKawnianData.Skill enum values - FORAGING, MINING, CHOPPING, BUILDING, HUNTING
 	match data.current_profession:
-		PawnData.Profession.BUILDER:
-			data.add_skill_xp(PawnData.Skill.BUILDING, 50.0)
-		PawnData.Profession.GATHERER:
-			data.add_skill_xp(PawnData.Skill.FORAGING, 50.0)
-			data.add_skill_xp(PawnData.Skill.HUNTING, 30.0)
-		PawnData.Profession.WARRIOR:
-			data.add_skill_xp(PawnData.Skill.HUNTING, 50.0)
-		PawnData.Profession.SCHOLAR:
+		HeelKawnianData.Profession.BUILDER:
+			data.add_skill_xp(HeelKawnianData.Skill.BUILDING, 50.0)
+		HeelKawnianData.Profession.GATHERER:
+			data.add_skill_xp(HeelKawnianData.Skill.FORAGING, 50.0)
+			data.add_skill_xp(HeelKawnianData.Skill.HUNTING, 30.0)
+		HeelKawnianData.Profession.WARRIOR:
+			data.add_skill_xp(HeelKawnianData.Skill.HUNTING, 50.0)
+		HeelKawnianData.Profession.SCHOLAR:
 			# Scholars get bonus to all skills (no specific research skill exists)
-			data.add_skill_xp(PawnData.Skill.BUILDING, 30.0)
-			data.add_skill_xp(PawnData.Skill.FORAGING, 20.0)
-		PawnData.Profession.TRADER:
+			data.add_skill_xp(HeelKawnianData.Skill.BUILDING, 30.0)
+			data.add_skill_xp(HeelKawnianData.Skill.FORAGING, 20.0)
+		HeelKawnianData.Profession.TRADER:
 			# Traders get balanced skills for versatility
-			data.add_skill_xp(PawnData.Skill.FORAGING, 30.0)
-			data.add_skill_xp(PawnData.Skill.HUNTING, 30.0)
-		PawnData.Profession.SMITH:
+			data.add_skill_xp(HeelKawnianData.Skill.FORAGING, 30.0)
+			data.add_skill_xp(HeelKawnianData.Skill.HUNTING, 30.0)
+		HeelKawnianData.Profession.SMITH:
 			# Smiths get mining and building for metalworking
-			data.add_skill_xp(PawnData.Skill.MINING, 40.0)
-			data.add_skill_xp(PawnData.Skill.BUILDING, 20.0)
-		PawnData.Profession.HEALER:
+			data.add_skill_xp(HeelKawnianData.Skill.MINING, 40.0)
+			data.add_skill_xp(HeelKawnianData.Skill.BUILDING, 20.0)
+		HeelKawnianData.Profession.HEALER:
 			# Healers get foraging (herbs) and hunting (precision)
-			data.add_skill_xp(PawnData.Skill.FORAGING, 30.0)
-			data.add_skill_xp(PawnData.Skill.HUNTING, 20.0)
-		PawnData.Profession.FARMER:
-			data.add_skill_xp(PawnData.Skill.FORAGING, 50.0)
+			data.add_skill_xp(HeelKawnianData.Skill.FORAGING, 30.0)
+			data.add_skill_xp(HeelKawnianData.Skill.HUNTING, 20.0)
+		HeelKawnianData.Profession.FARMER:
+			data.add_skill_xp(HeelKawnianData.Skill.FORAGING, 50.0)
 
 
 ## PROFESSION INHERITANCE - children inherit profession tendencies from parents
-func _inherit_profession_from_parents(data: PawnData, parent_a: PawnData, parent_b: PawnData, birth_tick: int) -> void:
+func _inherit_profession_from_parents(data: HeelKawnianData, parent_a: HeelKawnianData, parent_b: HeelKawnianData, birth_tick: int) -> void:
 	# 70% chance to inherit one parent's profession, 30% random
 	var rng: RandomNumberGenerator = WorldRNG.rng_for(&"living_inherit_profession")
 	var inherit_roll: float = float((birth_tick * 31337) % 1000) / 1000.0  # Deterministic roll
@@ -530,19 +541,19 @@ func _inherit_profession_from_parents(data: PawnData, parent_a: PawnData, parent
 	if inherit_roll < 0.70:
 		# Inherit from one parent (50/50)
 		var parent_prof: int = parent_a.current_profession if (birth_tick % 2 == 0) else parent_b.current_profession
-		if parent_prof != PawnData.Profession.NONE:
+		if parent_prof != HeelKawnianData.Profession.NONE:
 			data.current_profession = parent_prof
 			# Grant 25 XP in profession-related skill
 			match parent_prof:
-				PawnData.Profession.BUILDER:
-					data.add_skill_xp(PawnData.Skill.BUILDING, 25.0)
-				PawnData.Profession.GATHERER, PawnData.Profession.FARMER:
-					data.add_skill_xp(PawnData.Skill.FORAGING, 25.0)
-				PawnData.Profession.WARRIOR:
-					data.add_skill_xp(PawnData.Skill.HUNTING, 25.0)
-				PawnData.Profession.SCHOLAR:
-					data.add_skill_xp(PawnData.Skill.BUILDING, 15.0)
-					data.add_skill_xp(PawnData.Skill.FORAGING, 10.0)
+				HeelKawnianData.Profession.BUILDER:
+					data.add_skill_xp(HeelKawnianData.Skill.BUILDING, 25.0)
+				HeelKawnianData.Profession.GATHERER, HeelKawnianData.Profession.FARMER:
+					data.add_skill_xp(HeelKawnianData.Skill.FORAGING, 25.0)
+				HeelKawnianData.Profession.WARRIOR:
+					data.add_skill_xp(HeelKawnianData.Skill.HUNTING, 25.0)
+				HeelKawnianData.Profession.SCHOLAR:
+					data.add_skill_xp(HeelKawnianData.Skill.BUILDING, 15.0)
+					data.add_skill_xp(HeelKawnianData.Skill.FORAGING, 10.0)
 	else:
 		# 30% - random heterogeneous assignment (community needs)
 		_assign_heterogeneous_profession(data, rng)
@@ -576,20 +587,20 @@ func spawn_pawn() -> void:
 		if world.pathfinder.component_of(tile) != required_component_id:
 			continue
 		used_tiles[tile] = true
-		var data := PawnData.new()
+		var data := HeelKawnianData.new()
 		data.display_name = _pick_name(used_tiles, rng)
 		data.age = rng.randi_range(18, 55)
 		data.gender = rng.randi_range(0, 1)
 		data.tile_pos = tile
 		data.color = PAWN_COLORS[pawns.size() % PAWN_COLORS.size()]
-		data.body_type = rng.randi_range(PawnData.BodyType.SLIM, PawnData.BodyType.BROAD)
-		data.hair_style = rng.randi_range(PawnData.HairStyle.NONE, PawnData.HairStyle.BUN)
+		data.body_type = rng.randi_range(HeelKawnianData.BodyType.SLIM, HeelKawnianData.BodyType.BROAD)
+		data.hair_style = rng.randi_range(HeelKawnianData.HairStyle.NONE, HeelKawnianData.HairStyle.BUN)
 		data.hair_color = HAIR_COLORS[rng.randi_range(0, HAIR_COLORS.size() - 1)]
 		data.apparel_color = APPAREL_COLORS[rng.randi_range(0, APPAREL_COLORS.size() - 1)]
 		_assign_random_traits(data, rng)
 		# HETEROGENEOUS PROFESSION - NOT all farmers!
 		_assign_heterogeneous_profession(data, rng)
-		var pawnc: Pawn = pawn_scene.instantiate() as Pawn
+		var pawnc: HeelKawnian = pawn_scene.instantiate() as HeelKawnian
 		pawnc.data = data
 		pawnc.position = world.tile_to_world(tile)
 		pawnc._world = world
@@ -603,10 +614,10 @@ func spawn_pawn() -> void:
 		push_warning("[PawnSpawner] spawn_pawn: could not place a pawn")
 
 
-## Reconstruct one pawn from `PawnData` (e.g. after `PawnData.from_save_dict`). Does
+## Reconstruct one pawn from `HeelKawnianData` (e.g. after `HeelKawnianData.from_save_dict`). Does
 ## not check component — caller must ensure the tile is passable.
-func spawn_from_data(d: PawnData, world: World) -> void:
-	var p: Pawn = pawn_scene.instantiate() as Pawn
+func spawn_from_data(d: HeelKawnianData, world: World) -> void:
+	var p: HeelKawnian = pawn_scene.instantiate() as HeelKawnian
 	p.data = d
 	p.position = world.tile_to_world(d.tile_pos)
 	p._world = world
@@ -620,10 +631,10 @@ func spawn_from_data(d: PawnData, world: World) -> void:
 func spawn_child_pawn(
 		world: World,
 		tile: Vector2i,
-		parent_a: PawnData,
-		parent_b: PawnData,
+		parent_a: HeelKawnianData,
+		parent_b: HeelKawnianData,
 		birth_tick: int
-) -> Pawn:
+) -> HeelKawnian:
 	if world == null or world.data == null or world.pathfinder == null or pawn_scene == null:
 		return null
 	var main_comp: int = world.pathfinder.largest_component_id()
@@ -658,12 +669,12 @@ func spawn_child_pawn(
 	if spawn_tile.x < 0:
 		return null
 	tile = spawn_tile
-	var data := PawnData.new()
+	var data := HeelKawnianData.new()
 	data.display_name = _pick_name_deterministic()
 	data.age = 0
 	data.age_years = 0.0
 	var morph_mix: int = int((birth_tick + parent_a.id * 13 + parent_b.id * 17) & 0x7FFFFFFF)
-	data.gender = PawnData.Gender.MALE if morph_mix % 2 == 0 else PawnData.Gender.FEMALE
+	data.gender = HeelKawnianData.Gender.MALE if morph_mix % 2 == 0 else HeelKawnianData.Gender.FEMALE
 	data.tile_pos = tile
 	data.color = parent_a.color.lerp(parent_b.color, 0.5)
 	data.body_type = morph_mix % 3
@@ -673,7 +684,7 @@ func spawn_child_pawn(
 	data.initialize_affinities(birth_tick, parent_a.id, parent_b.id)
 	data.parent_a_id = parent_a.id
 	data.parent_b_id = parent_b.id
-	Pawn._inherit_affinities(data, parent_a, parent_b, birth_tick)
+	HeelKawnian._inherit_affinities(data, parent_a, parent_b, birth_tick)
 	data.affinity_birth_snapshot = data.affinities.duplicate(true)
 	data._initialize_personality(birth_tick, parent_a.id, parent_b.id)
 	data._initialize_neural_network()
@@ -691,7 +702,7 @@ func spawn_child_pawn(
 	for sk in parent_a.skills.keys():
 		var inherited: int = int((int(parent_a.skills[sk]) + int(parent_b.skills.get(sk, 0))) * 0.2)
 		data.skills[sk] = inherited
-	var pawn: Pawn = pawn_scene.instantiate() as Pawn
+	var pawn: HeelKawnian = pawn_scene.instantiate() as HeelKawnian
 	pawn.data = data
 	pawn.position = world.tile_to_world(tile)
 	pawn._world = world
@@ -741,7 +752,7 @@ func _pick_name(used_tiles: Dictionary, rng: RandomNumberGenerator) -> String:
 
 
 ## Assign 0-2 random traits to a pawn. Called at spawn time.
-func _assign_random_traits(pawn_data: PawnData, rng: RandomNumberGenerator) -> void:
+func _assign_random_traits(pawn_data: HeelKawnianData, rng: RandomNumberGenerator) -> void:
 	var num_traits: int = rng.randi_range(0, 2)  # 0, 1, or 2 traits
 	var trait_types: Array = Trait.Type.values()
 	var assigned: Dictionary = {}

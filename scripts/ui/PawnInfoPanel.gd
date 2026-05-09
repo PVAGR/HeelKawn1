@@ -2,8 +2,8 @@ class_name PawnInfoPanel
 extends CanvasLayer
 
 ## Right-side **Heelkawnian** sheet (embodied citizen: NPC or player incarnation).
-## Same `Pawn` / `PawnData` surface for parity. Chunky portrait reads
-## from [PawnData] colors; coach lines are deterministic from likings + skills.
+## Same `HeelKawnian` / `HeelKawnianData` surface for parity. Chunky portrait reads
+## from [HeelKawnianData] colors; coach lines are deterministic from likings + skills.
 ##
 ## Built programmatically (no .tscn) to mirror the BuildToolbar style and so
 ## tweaks live in one place. Polls on a lightweight wall-clock interval and
@@ -35,7 +35,7 @@ const PORTRAIT_COLS:  int = 6
 const PORTRAIT_ROWS:  int = 8
 
 const NEED_BARS: Array = [
-	# (label, accessor name on PawnData, color)
+	# (label, accessor name on HeelKawnianData, color)
 	{"label": "Hunger", "field": "hunger", "color": Color8(230, 130, 100)},
 	{"label": "Rest",   "field": "rest",   "color": Color8(140, 170, 235)},
 	{"label": "Mood",   "field": "mood",   "color": Color8(180, 220, 130)},
@@ -43,7 +43,7 @@ const NEED_BARS: Array = [
 ]
 
 const SKILLS_ORDER: Array = [
-	# (label, PawnData.Skill enum value)
+	# (label, HeelKawnianData.Skill enum value)
 	{"label": "Foraging", "skill": 0},
 	{"label": "Mining",   "skill": 1},
 	{"label": "Chopping", "skill": 2},
@@ -51,7 +51,7 @@ const SKILLS_ORDER: Array = [
 	{"label": "Hunting",  "skill": 4},
 ]
 
-## (field on PawnData, checkbox label) — maps queue job categories to human text.
+## (field on HeelKawnianData, checkbox label) — maps queue job categories to human text.
 const WORK_CHECKS: Array = [
 	{"field": "work_forage", "text": "Forage / gather"},
 	{"field": "work_mine",   "text": "Mine / tunnel"},
@@ -74,7 +74,7 @@ var _carry_label: Label
 var _tile_label: Label
 var _hint_label: Label
 var _inspect_msg_label: Label = null
-## field name (e.g. "work_mine") -> CheckBox, kept in sync from PawnData.
+## field name (e.g. "work_mine") -> CheckBox, kept in sync from HeelKawnianData.
 var _work_checkboxes: Dictionary = {}
 ## TabContainer for organized sections
 var _tab_container: TabContainer = null
@@ -86,14 +86,19 @@ var _tab_matrix: VBoxContainer = null
 var _tab_neural: VBoxContainer = null
 var _tab_social: VBoxContainer = null
 var _tab_narrative: VBoxContainer = null  # Phase 5: Emergent Narrative
-var _tab_consciousness: VBoxContainer = null  # Phase 5: Pawn Consciousness
+var _tab_consciousness: VBoxContainer = null  # Phase 5: HeelKawnian Consciousness
 var _tab_gear: VBoxContainer = null  # Equipment System
+var _tab_talk: VBoxContainer = null  # Conversational AI
+## Talk tab UI elements
+var _talk_greeting: RichTextLabel = null
+var _talk_output: RichTextLabel = null
+var _talk_input: LineEdit = null
 ## Matrix/Neural display labels
 var _matrix_inputs_label: RichTextLabel = null
 var _neural_outputs_label: RichTextLabel = null
 var _neural_bias_label: Label = null
 
-var _pawn: Pawn = null
+var _pawn: HeelKawnian = null
 ## When true (map-only mode), hide sheet even if a pawn is selected.
 var _overlay_suppressed: bool = false
 var _player_context_mode_label: String = "SPECTATOR"
@@ -142,7 +147,7 @@ func set_overlay_suppressed(s: bool) -> void:
 
 
 ## Bind the panel to a specific pawn. Pass null to hide it.
-func bind_pawn(p: Pawn) -> void:
+func bind_pawn(p: HeelKawnian) -> void:
 	_pawn = p
 	if _pawn == null:
 		_set_visible(false)
@@ -321,7 +326,7 @@ func _build_ui() -> void:
 	_tab_container.add_child(_tab_narrative)
 	_populate_narrative_tab()
 
-	# Consciousness tab (Phase 5: Pawn Consciousness)
+	# Consciousness tab (Phase 5: HeelKawnian Consciousness)
 	_tab_consciousness = VBoxContainer.new()
 	_tab_consciousness.add_theme_constant_override("separation", 2)
 	_tab_container.add_child(_tab_consciousness)
@@ -333,6 +338,12 @@ func _build_ui() -> void:
 	_tab_container.add_child(_tab_gear)
 	_populate_gear_tab()
 
+	# Talk tab (Conversational AI — talk to HeelKawnians)
+	_tab_talk = VBoxContainer.new()
+	_tab_talk.add_theme_constant_override("separation", 2)
+	_tab_container.add_child(_tab_talk)
+	_populate_talk_tab()
+
 	# Set tab titles
 	_tab_container.set_tab_title(0, "ID")
 	_tab_container.set_tab_title(1, "Needs")
@@ -343,11 +354,13 @@ func _build_ui() -> void:
 		_tab_container.set_tab_title(5, "Narrative")
 		_tab_container.set_tab_title(6, "Mind")
 		_tab_container.set_tab_title(7, "Gear")
+		_tab_container.set_tab_title(8, "Talk")
 	else:
 		_tab_container.set_tab_title(2, "Social")
 		_tab_container.set_tab_title(3, "Narrative")
 		_tab_container.set_tab_title(4, "Mind")
 		_tab_container.set_tab_title(5, "Gear")
+		_tab_container.set_tab_title(6, "Talk")
 
 	# Footer hint
 	_hint_label = _make_label("[Esc] deselect", FONT_SMALL, Color(0.55, 0.55, 0.60))
@@ -705,11 +718,11 @@ func _on_copy_dump_pressed() -> void:
 	if _pawn == null or not is_instance_valid(_pawn) or _pawn.data == null:
 		return
 	
-	var d: PawnData = _pawn.data
+	var d: HeelKawnianData = _pawn.data
 	var tick: int = GameManager.tick_count
 	
 	var dump_lines: PackedStringArray = []
-	dump_lines.append("Pawn: %s | Tick: %d" % [d.display_name, tick])
+	dump_lines.append("HeelKawnian: %s | Tick: %d" % [d.display_name, tick])
 	dump_lines.append("ID: %d | Age: %d | Profession: %s" % [d.id, d.age, d.profession_label_from_enum(d.current_profession)])
 	dump_lines.append("Needs: Hunger=%.1f Rest=%.1f Mood=%.1f Health=%.1f" % [d.hunger, d.rest, d.mood, d.health])
 	dump_lines.append("Skills: Forage=%d Mine=%d Chop=%d Build=%d Hunt=%d" % [
@@ -803,7 +816,7 @@ func _add_work_checkbox(field: String, label_text: String) -> void:
 func _on_work_toggled(field: String, pressed: bool) -> void:
 	if _pawn == null or not is_instance_valid(_pawn) or _pawn.data == null:
 		return
-	var d: PawnData = _pawn.data
+	var d: HeelKawnianData = _pawn.data
 	match field:
 		"work_forage":
 			d.work_forage = pressed
@@ -817,7 +830,7 @@ func _on_work_toggled(field: String, pressed: bool) -> void:
 			d.work_build = pressed
 
 
-static func _read_work_field(d: PawnData, field: String) -> bool:
+static func _read_work_field(d: HeelKawnianData, field: String) -> bool:
 	match field:
 		"work_forage":
 			return d.work_forage
@@ -876,7 +889,7 @@ func _make_panel_style() -> StyleBoxFlat:
 	return style
 
 
-func _portrait_cell_color(cell_idx: int, d: PawnData) -> Color:
+func _portrait_cell_color(cell_idx: int, d: HeelKawnianData) -> Color:
 	var n: int = PORTRAIT_COLS * PORTRAIT_ROWS
 	if cell_idx < 0 or cell_idx >= n:
 		return Color(0.08, 0.09, 0.11)
@@ -893,7 +906,7 @@ func _portrait_cell_color(cell_idx: int, d: PawnData) -> Color:
 	return d.apparel_color.darkened(salt * 0.7)
 
 
-func _refresh_portrait_strip(d: PawnData) -> void:
+func _refresh_portrait_strip(d: HeelKawnianData) -> void:
 	var i: int = 0
 	for c in _portrait_cells:
 		if not (c is ColorRect):
@@ -946,7 +959,7 @@ func _process(delta: float) -> void:
 func _refresh() -> void:
 	if _pawn == null or _pawn.data == null:
 		return
-	var d: PawnData = _pawn.data
+	var d: HeelKawnianData = _pawn.data
 	_title_label.text = "%s (age %.1f)" % [d.display_name, d.age]
 	if _subtitle_label != null:
 		var prof: String = d.profession_name()
@@ -1175,7 +1188,7 @@ func _refresh() -> void:
 		else:
 			narrative_label.text = "[i][color=#666666]No narrative data available[/color][/i]"
 
-	# Consciousness tab updates (Phase 5: Pawn Consciousness)
+	# Consciousness tab updates (Phase 5: HeelKawnian Consciousness)
 	_update_consciousness_tab()
 
 	# Reposition each tick because the panel can grow/shrink with carry text.
@@ -1206,7 +1219,7 @@ func _peer_display_for_social(pid: int) -> String:
 		return ""
 	var spawner: PawnSpawner = _pawn_spawner()
 	if spawner != null:
-		var peer_data: PawnData = spawner.pawn_data_for_id(pid)
+		var peer_data: HeelKawnianData = spawner.pawn_data_for_id(pid)
 		if peer_data != null:
 			var nm0: String = str(peer_data.display_name).strip_edges()
 			if not nm0.is_empty():
@@ -1227,7 +1240,7 @@ func _parent_line(pid: int) -> String:
 		return "—"
 	var spawner: PawnSpawner = _pawn_spawner()
 	if spawner != null:
-		var pd: PawnData = spawner.pawn_data_for_id(pid)
+		var pd: HeelKawnianData = spawner.pawn_data_for_id(pid)
 		if pd != null:
 			var nm: String = str(pd.display_name).strip_edges()
 			if nm.is_empty():
@@ -1243,7 +1256,7 @@ func _parent_line(pid: int) -> String:
 			nm2 = "#%d" % pid
 		var line: String = "%s (#%d, departed)" % [nm2, pid]
 		var prof_i: int = int(fact.get("prof", -1))
-		var prof_l: String = PawnData.profession_label_from_enum(prof_i)
+		var prof_l: String = HeelKawnianData.profession_label_from_enum(prof_i)
 		if prof_i >= 0 and prof_l != "None":
 			line += " — was %s" % prof_l
 		return line
@@ -1258,7 +1271,7 @@ func _parent_profession_enum(pid: int) -> int:
 		return -1
 	var spawner: PawnSpawner = _pawn_spawner()
 	if spawner != null:
-		var pd: PawnData = spawner.pawn_data_for_id(pid)
+		var pd: HeelKawnianData = spawner.pawn_data_for_id(pid)
 		if pd != null:
 			return int(pd.current_profession)
 	var fact: Dictionary = WorldMemory.pawn_death_fact(pid)
@@ -1267,8 +1280,8 @@ func _parent_profession_enum(pid: int) -> int:
 	return int(fact.get("prof", -1))
 
 
-func _profession_inheritance_note(d: PawnData) -> String:
-	if d.current_profession == PawnData.Profession.NONE:
+func _profession_inheritance_note(d: HeelKawnianData) -> String:
+	if d.current_profession == HeelKawnianData.Profession.NONE:
 		return ""
 	var mine: int = int(d.current_profession)
 	for lbl in ["A", "B"]:
@@ -1281,7 +1294,7 @@ func _profession_inheritance_note(d: PawnData) -> String:
 	return ""
 
 
-func _lineage_block(d: PawnData) -> String:
+func _lineage_block(d: HeelKawnianData) -> String:
 	var lines: PackedStringArray = PackedStringArray()
 	if d.bloodline_id >= 0:
 		var bloodline_line: String = "Bloodline: #%d" % d.bloodline_id
@@ -1318,7 +1331,7 @@ func _lineage_block(d: PawnData) -> String:
 	return "\n".join(lines)
 
 
-func _build_identity_strip(d: PawnData) -> String:
+func _build_identity_strip(d: HeelKawnianData) -> String:
 	var rk: int = _WM._region_key(d.tile_pos.x, d.tile_pos.y)
 	var meaning_label: String = str(WorldMeaning.get_region_meaning_label(rk)).replace("_", " ")
 	var rep: int = int(CulturalMemory.get_region_reputation(rk))
@@ -1351,7 +1364,7 @@ func _build_identity_strip(d: PawnData) -> String:
 	) % [rk, meaning_label, rep_word, rep, st_state, culture_name, intent, rev_score, war_state, gov_type, center]
 
 
-func _build_likes_dislikes_text(d: PawnData) -> String:
+func _build_likes_dislikes_text(d: HeelKawnianData) -> String:
 	var like_parts: PackedStringArray = []
 	for cat in d.likes:
 		like_parts.append("%s (%d%%)" % [str(cat).capitalize(), int(float(d.likes[cat]) * 100)])
@@ -1370,7 +1383,7 @@ func _build_likes_dislikes_text(d: PawnData) -> String:
 	return text
 
 
-func _refresh_gear_tab(d: PawnData) -> void:
+func _refresh_gear_tab(d: HeelKawnianData) -> void:
 	# Update each gear slot label
 	for slot_idx in range(5):
 		var label: Label = _gear_labels.get(slot_idx, null) as Label
@@ -1408,7 +1421,7 @@ func _refresh_gear_tab(d: PawnData) -> void:
 		_gear_stats_label.text = " | ".join(parts)
 
 
-func _build_settlement_line(d: PawnData) -> String:
+func _build_settlement_line(d: HeelKawnianData) -> String:
 	var sid: int = int(d.settlement_id)
 	if sid < 0:
 		return "Unaffiliated — no settlement bond recorded."
@@ -1448,7 +1461,7 @@ func _count_settlement_members(settlement_idx: int) -> int:
 	if spawner == null:
 		return count
 	for pd in spawner.all_pawn_data():
-		if pd is PawnData and int(pd.settlement_id) == settlement_idx:
+		if pd is HeelKawnianData and int(pd.settlement_id) == settlement_idx:
 			count += 1
 	return count
 
@@ -1456,7 +1469,7 @@ func _count_settlement_members(settlement_idx: int) -> int:
 func _build_ui_signature() -> String:
 	if _pawn == null or not is_instance_valid(_pawn) or _pawn.data == null:
 		return ""
-	var d: PawnData = _pawn.data
+	var d: HeelKawnianData = _pawn.data
 	var rk: int = _WM._region_key(d.tile_pos.x, d.tile_pos.y)
 	var top_peer: Dictionary = d.top_social_rapport_peer()
 	var world_context_bucket: int = int(GameManager.tick_count / max(1, WORLD_CONTEXT_REFRESH_TICKS))
@@ -1501,9 +1514,9 @@ func _build_ui_signature() -> String:
 
 static func _body_type_label(body_type: int) -> String:
 	match body_type:
-		PawnData.BodyType.SLIM:
+		HeelKawnianData.BodyType.SLIM:
 			return "Slim"
-		PawnData.BodyType.BROAD:
+		HeelKawnianData.BodyType.BROAD:
 			return "Broad"
 		_:
 			return "Average"
@@ -1511,11 +1524,11 @@ static func _body_type_label(body_type: int) -> String:
 
 static func _hair_style_label(hair_style: int) -> String:
 	match hair_style:
-		PawnData.HairStyle.NONE:
+		HeelKawnianData.HairStyle.NONE:
 			return "No hair"
-		PawnData.HairStyle.MOHAWK:
+		HeelKawnianData.HairStyle.MOHAWK:
 			return "Mohawk"
-		PawnData.HairStyle.BUN:
+		HeelKawnianData.HairStyle.BUN:
 			return "Bun"
 		_:
 			return "Short hair"
@@ -1543,11 +1556,11 @@ static func _tier_color(tier: int) -> Color:
 # ==================== NARRATIVE SYSTEM (Phase 5: Emergent Narrative) ====================
 
 ## Generate Dwarf Fortress-style narrative text for a pawn based on their current state and history.
-func _generate_pawn_narrative(pawn: Pawn) -> String:
+func _generate_pawn_narrative(pawn: HeelKawnian) -> String:
 	if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 		return ""
 	
-	var d: PawnData = pawn.data
+	var d: HeelKawnianData = pawn.data
 	var text: String = ""
 	
 	# Header with pawn identity
@@ -1571,7 +1584,7 @@ func _generate_pawn_narrative(pawn: Pawn) -> String:
 		if d.carrying_qty > 1:
 			text += "s"
 		# Check if hauling to stockpile
-		if pawn._state == Pawn.State.HAULING or pawn._state == Pawn.State.FETCHING_MATERIAL:
+		if pawn._state == HeelKawnian.State.HAULING or pawn._state == HeelKawnian.State.FETCHING_MATERIAL:
 			text += " [color=#666666]→ heading to stockpile[/color]"
 		text += "\n\n"
 	
@@ -1616,66 +1629,66 @@ func _generate_pawn_narrative(pawn: Pawn) -> String:
 
 
 ## Get human-readable activity description from pawn state.
-func _get_activity_description(pawn: Pawn) -> String:
+func _get_activity_description(pawn: HeelKawnian) -> String:
 	if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 		return "Unknown"
 	
-	var d: PawnData = pawn.data
+	var d: HeelKawnianData = pawn.data
 	var state: int = pawn._state
 	var job: Job = pawn._current_job
 	
 	match state:
-		Pawn.State.IDLE:
+		HeelKawnian.State.IDLE:
 			return "Idle at %s" % _format_tile_pos(d.tile_pos)
 		
-		Pawn.State.WALKING_TO_JOB, Pawn.State.FETCHING_MATERIAL:
+		HeelKawnian.State.WALKING_TO_JOB, HeelKawnian.State.FETCHING_MATERIAL:
 			if job != null:
 				var job_type: String = Job.describe_type(job.type).to_lower()
 				return "%sing at %s" % [job_type.capitalize().left(-1), _format_tile_pos(job.work_tile)]
 			return "Walking to work"
 		
-		Pawn.State.WORKING:
+		HeelKawnian.State.WORKING:
 			if job != null:
 				var job_type: String = Job.describe_type(job.type)
 				return "%s at %s" % [job_type, _format_tile_pos(job.work_tile)]
 			return "Working"
 		
-		Pawn.State.HAULING:
+		HeelKawnian.State.HAULING:
 			return "Hauling to stockpile"
 		
-		Pawn.State.GOING_TO_EAT:
+		HeelKawnian.State.GOING_TO_EAT:
 			return "Going to eat at stockpile"
 		
-		Pawn.State.EATING:
+		HeelKawnian.State.EATING:
 			return "Eating at stockpile"
 		
-		Pawn.State.GOING_TO_BED:
+		HeelKawnian.State.GOING_TO_BED:
 			return "Going to bed"
 		
-		Pawn.State.SLEEPING:
+		HeelKawnian.State.SLEEPING:
 			return "Sleeping"
 		
-		Pawn.State.DRAFT_WALK:
+		HeelKawnian.State.DRAFT_WALK:
 			if job != null:
 				return "Moving to %s (drafted)" % _format_tile_pos(job.work_tile)
 			return "Moving (drafted)"
 		
-		Pawn.State.TEACHING:
+		HeelKawnian.State.TEACHING:
 			return "Teaching nearby"
 		
-		Pawn.State.CHALLENGE:
+		HeelKawnian.State.CHALLENGE:
 			return "Challenging authority"
 		
-		Pawn.State.GATHERING:
+		HeelKawnian.State.GATHERING:
 			return "Gathering items at %s" % _format_tile_pos(d.tile_pos)
 		
-		Pawn.State.CRAFTING:
+		HeelKawnian.State.CRAFTING:
 			return "Crafting at %s" % _format_tile_pos(d.tile_pos)
 		
-		Pawn.State.FLEEING:
+		HeelKawnian.State.FLEEING:
 			return "Fleeing from danger!"
 		
-		Pawn.State.HIDING:
+		HeelKawnian.State.HIDING:
 			return "Hiding from threats"
 		
 		_:
@@ -1784,7 +1797,7 @@ func _format_event(ev: Dictionary) -> String:
 			return "%s (%s)" % [event_type.capitalize(), time_str]
 
 
-# ==================== CONSCIOUSNESS SYSTEM (Phase 5: Pawn Consciousness) ====================
+# ==================== CONSCIOUSNESS SYSTEM (Phase 5: HeelKawnian Consciousness) ====================
 
 ## Update the Consciousness tab with pawn's mental state data.
 func _update_consciousness_tab() -> void:
@@ -2050,15 +2063,15 @@ func _get_settlement_name(settlement_id: int) -> String:
 
 
 ## Get skills summary as formatted string.
-func _get_skills_summary(d: PawnData) -> String:
+func _get_skills_summary(d: HeelKawnianData) -> String:
 	var skills: Array[String] = []
 	
 	# Get skill levels
-	var foraging: int = d.get_skill_level(PawnData.Skill.FORAGING)
-	var mining: int = d.get_skill_level(PawnData.Skill.MINING)
-	var chopping: int = d.get_skill_level(PawnData.Skill.CHOPPING)
-	var building: int = d.get_skill_level(PawnData.Skill.BUILDING)
-	var hunting: int = d.get_skill_level(PawnData.Skill.HUNTING)
+	var foraging: int = d.get_skill_level(HeelKawnianData.Skill.FORAGING)
+	var mining: int = d.get_skill_level(HeelKawnianData.Skill.MINING)
+	var chopping: int = d.get_skill_level(HeelKawnianData.Skill.CHOPPING)
+	var building: int = d.get_skill_level(HeelKawnianData.Skill.BUILDING)
+	var hunting: int = d.get_skill_level(HeelKawnianData.Skill.HUNTING)
 	
 	if foraging > 0:
 		skills.append("Foraging %d" % foraging)
@@ -2078,7 +2091,7 @@ func _get_skills_summary(d: PawnData) -> String:
 
 
 ## Get family summary as formatted string.
-func _get_family_summary(d: PawnData) -> String:
+func _get_family_summary(d: HeelKawnianData) -> String:
 	var parts: Array[String] = []
 	
 	if d.children_count > 0:

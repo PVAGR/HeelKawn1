@@ -196,17 +196,17 @@ static func _execute_move_pawn(command: Command) -> Dictionary:
 		return result
 	
 	# Find the pawn
-	var target_pawn: Pawn = null
+	var target_pawn: HeelKawnian = null
 	for p in spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == command.actor_id:
 			target_pawn = p
 			break
 	
 	if target_pawn == null:
-		result.error = "Pawn not found"
+		result.error = "HeelKawnian not found"
 		return result
 	
-	# Execute movement through Pawn's public pathing surface.
+	# Execute movement through HeelKawnian's public pathing surface.
 	if target_pawn.has_method("draft_goto"):
 		target_pawn.draft_goto(target_tile)
 		result.success = true
@@ -235,14 +235,14 @@ static func _execute_claim_job(command: Command) -> Dictionary:
 		return result
 	
 	# Find the pawn
-	var target_pawn: Pawn = null
+	var target_pawn: HeelKawnian = null
 	for p in spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == command.actor_id:
 			target_pawn = p
 			break
 	
 	if target_pawn == null:
-		result.error = "Pawn not found"
+		result.error = "HeelKawnian not found"
 		return result
 	
 	var job_manager = JobManager
@@ -304,14 +304,14 @@ static func _execute_perform_presence(command: Command) -> Dictionary:
 		return result
 	
 	# Find the pawn
-	var target_pawn: Pawn = null
+	var target_pawn: HeelKawnian = null
 	for p in spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == command.actor_id:
 			target_pawn = p
 			break
 	
 	if target_pawn == null:
-		result.error = "Pawn not found"
+		result.error = "HeelKawnian not found"
 		return result
 	
 	# Execute presence action
@@ -338,14 +338,14 @@ static func _execute_toggle_draft_mode(command: Command) -> Dictionary:
 		return result
 	
 	# Find the pawn
-	var target_pawn: Pawn = null
+	var target_pawn: HeelKawnian = null
 	for p in spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == command.actor_id:
 			target_pawn = p
 			break
 	
 	if target_pawn == null:
-		result.error = "Pawn not found"
+		result.error = "HeelKawnian not found"
 		return result
 	
 	# Execute draft mode toggle
@@ -437,7 +437,7 @@ static func _validate_move_pawn(command: Command) -> Dictionary:
 	# Check if pawn can move (not busy with critical actions)
 	var state: String = pawn_obs.get("state", "unknown")
 	if state == "SLEEPING" or state == "EATING":
-		result.error = "Pawn cannot move while %s" % state.to_lower()
+		result.error = "HeelKawnian cannot move while %s" % state.to_lower()
 		return result
 	
 	# Check if target tile is reachable
@@ -469,7 +469,7 @@ static func _validate_claim_job(command: Command) -> Dictionary:
 	# Check if pawn can claim jobs (not already working)
 	var state: String = pawn_obs.get("state", "unknown")
 	if state == "WORKING" or state == "WALKING_TO_JOB":
-		result.error = "Pawn already has a job"
+		result.error = "HeelKawnian already has a job"
 		return result
 	
 	result.valid = true
@@ -504,7 +504,7 @@ static func _validate_perform_presence(command: Command) -> Dictionary:
 	# Check if pawn can perform presence (not busy)
 	var state: String = pawn_obs.get("state", "unknown")
 	if state == "SLEEPING" or state == "EATING" or state == "HAULING":
-		result.error = "Pawn cannot perform presence while %s" % state.to_lower()
+		result.error = "HeelKawnian cannot perform presence while %s" % state.to_lower()
 		return result
 	
 	result.valid = true
@@ -533,7 +533,7 @@ static func _validate_request_incarnation(command: Command) -> Dictionary:
 		return result
 	
 	# Check if already incarnated
-	var player_pawn: Pawn = main.get_player_pawn() if main.has_method("get_player_pawn") else null
+	var player_pawn: HeelKawnian = main.get_player_pawn() if main.has_method("get_player_pawn") else null
 	if player_pawn != null and is_instance_valid(player_pawn):
 		result.error = "Already incarnated"
 		return result
@@ -584,7 +584,7 @@ static func _execute_share_gossip(command: Command) -> Dictionary:
 	var result: Dictionary = {"success": false, "error": "", "data": {}}
 	var pawn_obs: Dictionary = ObservationAPI.observe_pawn(command.actor_id)
 	if pawn_obs.has("error"):
-		result.error = "Pawn not found: %s" % pawn_obs.get("error", "Unknown")
+		result.error = "HeelKawnian not found: %s" % pawn_obs.get("error", "Unknown")
 		return result
 	var target_id: int = command.target_data.get("target_pawn_id", -1)
 	if target_id < 0:
@@ -595,18 +595,18 @@ static func _execute_share_gossip(command: Command) -> Dictionary:
 	if main == null:
 		result.error = "Main scene not available"
 		return result
-	var pawn: Pawn = null
+	var pawn: HeelKawnian = null
 	if main.has_method("get_pawn_by_id"):
 		pawn = main.get_pawn_by_id(command.actor_id)
 	if pawn == null or not is_instance_valid(pawn):
-		result.error = "Pawn instance not found"
+		result.error = "HeelKawnian instance not found"
 		return result
 	if "_gossip" in pawn and "share_gossip" in pawn:
 		var shared: int = pawn.share_gossip(target_id)
 		result.success = true
 		result.data["shared_count"] = shared
 	else:
-		result.error = "Pawn gossip system not initialized"
+		result.error = "HeelKawnian gossip system not initialized"
 	return result
 
 
@@ -616,11 +616,11 @@ static func _execute_set_goal(command: Command) -> Dictionary:
 	if main == null:
 		result.error = "Main scene not available"
 		return result
-	var pawn: Pawn = null
+	var pawn: HeelKawnian = null
 	if main.has_method("get_pawn_by_id"):
 		pawn = main.get_pawn_by_id(command.actor_id)
 	if pawn == null or not is_instance_valid(pawn):
-		result.error = "Pawn instance not found"
+		result.error = "HeelKawnian instance not found"
 		return result
 	var goal_key: String = command.target_data.get("goal_key", "")
 	var scope: int = command.target_data.get("scope", GoalEngine.GoalScope.TODAY)
@@ -642,11 +642,11 @@ static func _execute_record_memory(command: Command) -> Dictionary:
 	if main == null:
 		result.error = "Main scene not available"
 		return result
-	var pawn: Pawn = null
+	var pawn: HeelKawnian = null
 	if main.has_method("get_pawn_by_id"):
 		pawn = main.get_pawn_by_id(command.actor_id)
 	if pawn == null or not is_instance_valid(pawn):
-		result.error = "Pawn instance not found"
+		result.error = "HeelKawnian instance not found"
 		return result
 	if pawn._long_term_memory != null and "add_memory" in pawn._long_term_memory:
 		var mem_type: int = command.target_data.get("memory_type", LongTermMemory.MemoryType.EVENT)
@@ -666,11 +666,11 @@ static func _execute_trigger_story_beat(command: Command) -> Dictionary:
 	if main == null:
 		result.error = "Main scene not available"
 		return result
-	var pawn: Pawn = null
+	var pawn: HeelKawnian = null
 	if main.has_method("get_pawn_by_id"):
 		pawn = main.get_pawn_by_id(command.actor_id)
 	if pawn == null or not is_instance_valid(pawn):
-		result.error = "Pawn instance not found"
+		result.error = "HeelKawnian instance not found"
 		return result
 	if pawn._dramatic_engine != null and "attempt_story_beat" in pawn._dramatic_engine:
 		var world_state: Dictionary = pawn._build_world_state_for_ai() if "get_world_state_for_ai" in pawn else {}
@@ -688,11 +688,11 @@ static func _execute_change_career_track(command: Command) -> Dictionary:
 	if main == null:
 		result.error = "Main scene not available"
 		return result
-	var pawn: Pawn = null
+	var pawn: HeelKawnian = null
 	if main.has_method("get_pawn_by_id"):
 		pawn = main.get_pawn_by_id(command.actor_id)
 	if pawn == null or not is_instance_valid(pawn):
-		result.error = "Pawn instance not found"
+		result.error = "HeelKawnian instance not found"
 		return result
 	if pawn._career != null and "set_career" in pawn._career:
 		var track: int = command.target_data.get("career_track", CareerXP.CareerTrack.NONE)

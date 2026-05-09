@@ -355,7 +355,7 @@ func complete_farming_job(job_type: String, plot_id: int, pawn_id: int) -> Dicti
 	return result
 
 
-## Complete a farming job by tile position (used by Pawn._complete_current_job
+## Complete a farming job by tile position (used by HeelKawnian._complete_current_job
 ## when GROW_FOOD completes). Finds the plot at the tile, then delegates
 ## to complete_farming_job.
 func complete_farming_job_by_tile(tile: Vector2i, pawn_id: int) -> Dictionary:

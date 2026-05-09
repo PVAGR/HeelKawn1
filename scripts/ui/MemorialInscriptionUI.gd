@@ -102,7 +102,7 @@ func _get_pawn_name(pawn_id: int) -> String:
 	if pawn_data != null:
 		return pawn_data.display_name
 	
-	# Pawn may be dead, try WorldMemory
+	# HeelKawnian may be dead, try WorldMemory
 	var wm = get_node_or_null("/root/WorldMemory")
 	if wm != null and wm.has_method("last_known_name_from_death_record"):
 		return wm.call("last_known_name_from_death_record", pawn_id)

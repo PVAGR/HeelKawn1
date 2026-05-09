@@ -15,13 +15,13 @@ func recompute(spawner: PawnSpawner) -> void:
 	for p in spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null:
 			p.data.social_squad_anchor_id = -1
-	var pl: Array[Pawn] = []
+	var pl: Array[HeelKawnian] = []
 	for p in spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null:
 			pl.append(p)
 	if pl.size() < MIN_SQUAD_SIZE:
 		return
-	pl.sort_custom(func(a: Pawn, b: Pawn) -> bool: return a.data.id < b.data.id)
+	pl.sort_custom(func(a: HeelKawnian, b: HeelKawnian) -> bool: return a.data.id < b.data.id)
 	var claimed: Dictionary = {}
 	for seed_p in pl:
 		var sid: int = int(seed_p.data.id)
@@ -29,7 +29,7 @@ func recompute(spawner: PawnSpawner) -> void:
 			continue
 		if not seed_p.is_eligible_for_social_squad():
 			continue
-		var clique: Array[Pawn] = _greedy_clique_from_seed_pawn(seed_p, pl, claimed)
+		var clique: Array[HeelKawnian] = _greedy_clique_from_seed_pawn(seed_p, pl, claimed)
 		if clique.size() < MIN_SQUAD_SIZE:
 			continue
 		var all_idle: bool = true
@@ -46,14 +46,14 @@ func recompute(spawner: PawnSpawner) -> void:
 		active_squad_count += 1
 
 
-func _rapport_mutual(a: PawnData, b: PawnData) -> int:
+func _rapport_mutual(a: HeelKawnianData, b: HeelKawnianData) -> int:
 	var av: int = int(a.social_rapport.get(str(b.id), 0))
 	var bv: int = int(b.social_rapport.get(str(a.id), 0))
 	return mini(av, bv)
 
 
-func _greedy_clique_from_seed_pawn(clique_seed_pawn: Pawn, pl: Array[Pawn], claimed: Dictionary) -> Array[Pawn]:
-	var out: Array[Pawn] = [clique_seed_pawn]
+func _greedy_clique_from_seed_pawn(clique_seed_pawn: HeelKawnian, pl: Array[HeelKawnian], claimed: Dictionary) -> Array[HeelKawnian]:
+	var out: Array[HeelKawnian] = [clique_seed_pawn]
 	for p in pl:
 		if p == clique_seed_pawn:
 			continue
@@ -70,7 +70,7 @@ func _greedy_clique_from_seed_pawn(clique_seed_pawn: Pawn, pl: Array[Pawn], clai
 	return out
 
 
-func _leader_id(members: Array[Pawn]) -> int:
+func _leader_id(members: Array[HeelKawnian]) -> int:
 	var best: int = 1_000_000_000
 	for m in members:
 		best = mini(best, int(m.data.id))

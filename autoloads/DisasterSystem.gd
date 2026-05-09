@@ -181,7 +181,7 @@ func _spawn_plague(tick: int, rng: RandomNumberGenerator) -> void:
 	var affected_pawns: Array = []
 	
 	for i in range(infect_count):
-		var pawn: Pawn = pawns[rng.randi() % pawns.size()]
+		var pawn: HeelKawnian = pawns[rng.randi() % pawns.size()]
 		if pawn != null and is_instance_valid(pawn) and pawn.data != null:
 			affected_pawns.append(int(pawn.data.id))
 			# Apply sick status to pawn
@@ -192,7 +192,7 @@ func _spawn_plague(tick: int, rng: RandomNumberGenerator) -> void:
 		return
 	
 	# Find region where plague started
-	var first_pawn: Pawn = _pawn_spawner.pawns[affected_pawns[0]] if affected_pawns.size() > 0 else null
+	var first_pawn: HeelKawnian = _pawn_spawner.pawns[affected_pawns[0]] if affected_pawns.size() > 0 else null
 	var region: int = 0
 	if first_pawn != null and first_pawn.data != null:
 		region = _world_memory._region_key(first_pawn.data.tile_pos.x, first_pawn.data.tile_pos.y)
@@ -392,7 +392,7 @@ func _update_plague(disaster: Dictionary, tick: int) -> void:
 	if elapsed > disaster.duration_ticks:
 		# Cure infected pawns
 		for pawn_id in disaster.affected_pawns:
-			var pawn: Pawn = _get_pawn_by_id(pawn_id)
+			var pawn: HeelKawnian = _get_pawn_by_id(pawn_id)
 			if pawn != null and pawn.data != null:
 				pawn.data.set_meta("plague_infected", false)
 				pawn.data.set_meta("plague_start_tick", 0)
@@ -441,7 +441,7 @@ func _spread_plague(disaster: Dictionary, tick: int, rng: RandomNumberGenerator)
 	
 	# Find pawns near infected pawns
 	for infected_id in disaster.affected_pawns:
-		var infected_pawn: Pawn = _get_pawn_by_id(infected_id)
+		var infected_pawn: HeelKawnian = _get_pawn_by_id(infected_id)
 		if infected_pawn == null or not is_instance_valid(infected_pawn):
 			continue
 		
@@ -542,7 +542,7 @@ func _region_center(region: int) -> Vector2i:
 	return Vector2i((region * 32) % 256, (region / 32) * 32)
 
 
-func _get_pawn_by_id(pawn_id: int) -> Pawn:
+func _get_pawn_by_id(pawn_id: int) -> HeelKawnian:
 	if _pawn_spawner == null:
 		return null
 	

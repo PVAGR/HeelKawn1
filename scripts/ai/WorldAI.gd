@@ -1021,7 +1021,7 @@ func _update_authority_neurons(civ_neurons: Dictionary) -> void:
 	var pawn_count: int = 0
 	
 	# Get all pawns in the world
-	var pawns: Array[Pawn] = PawnSpawner.find_pawns()
+	var pawns: Array[HeelKawnian] = PawnSpawner.find_pawns()
 	for pawn in pawns:
 		if not is_instance_valid(pawn) or pawn.data == null:
 			continue
@@ -1061,7 +1061,7 @@ func _update_knowledge_neurons(cult_neurons: Dictionary) -> void:
 	# Get knowledge distribution metrics
 	var carrier_count: int = KnowledgeSystem.get_total_carrier_count()
 	var total_knowledge: int = KnowledgeSystem.get_total_knowledge_count()
-	var pawns: Array[Pawn] = PawnSpawner.find_pawns()
+	var pawns: Array[HeelKawnian] = PawnSpawner.find_pawns()
 	var pawn_count: int = pawns.size()
 	
 	if pawn_count > 0:
@@ -1814,6 +1814,9 @@ func get_neural_network_summary() -> Dictionary:
 	var health_neurons = neural_world_matrix.get("health_neurons", {})
 	summary["public_health"] = health_neurons.get("public_health", {}).get("value", 0.8)
 	summary["disease_resistance"] = health_neurons.get("disease_resistance", {}).get("value", 0.7)
+	# DORMANT WORLD: Disease resistance is 1.0 (immune) until era 1
+	if DiscoveryGate != null and not DiscoveryGate.is_unlocked("era_1"):
+		summary["disease_resistance"] = 1.0
 	summary["life_expectancy"] = health_neurons.get("life_expectancy", {}).get("value", 0.5)
 	summary["sanitation_level"] = health_neurons.get("sanitation_level", {}).get("value", 0.3)
 	summary["healthcare_access"] = health_neurons.get("healthcare_access", {}).get("value", 0.0)
@@ -1833,6 +1836,9 @@ func get_neural_network_summary() -> Dictionary:
 	summary["agricultural_innovation"] = ag_neurons.get("agricultural_innovation", {}).get("value", 0.0)
 	summary["soil_health"] = ag_neurons.get("soil_health", {}).get("value", 0.7)
 	summary["famine_risk"] = ag_neurons.get("famine_risk", {}).get("value", 0.0)
+	# DORMANT WORLD: Famine risk is 0 (immune) until era 1
+	if DiscoveryGate != null and not DiscoveryGate.is_unlocked("era_1"):
+		summary["famine_risk"] = 0.0
 
 	return summary
 
@@ -3039,6 +3045,14 @@ func _calculate_event_probability() -> float:
 
 func _generate_world_event() -> void:
 	var event_types = ["war", "peace", "discovery", "plague", "famine", "prosperity"]
+	# DORMANT WORLD: Plague only after era 2, famine only after era 1
+	if DiscoveryGate != null:
+		if not DiscoveryGate.is_unlocked("era_2"):
+			event_types.erase("plague")
+		if not DiscoveryGate.is_unlocked("era_1"):
+			event_types.erase("famine")
+	if event_types.is_empty():
+		return
 	var event_type = event_types[_deterministic_index("world_event_type", event_types.size(), _world_salt(47))]
 	var description = _generate_event_description(event_type)
 	var impact = _deterministic_index("world_event_impact", 5, _world_salt(53)) + 1
@@ -3222,7 +3236,7 @@ func get_pawn_neural_state(pawn_id: int) -> Dictionary:
 	var sp: PawnSpawner = _resolve_pawn_spawner_for_world_ai()
 	if sp == null:
 		return {}
-	var pd: PawnData = sp.pawn_data_for_id(pawn_id)
+	var pd: HeelKawnianData = sp.pawn_data_for_id(pawn_id)
 	if pd == null:
 		return {}
 	var tick_now: int = GameManager.tick_count if GameManager != null else 0
@@ -3273,7 +3287,7 @@ func _estimate_self_preservation_bias(outs: Array) -> float:
 	return clampf(float(outs[1]) + float(outs[7]) * 0.5 - float(outs[5]) * 0.25, 0.0, 1.0)
 
 
-func _apply_soul_society_output_nudge(pd: PawnData, outs: Array) -> void:
+func _apply_soul_society_output_nudge(pd: HeelKawnianData, outs: Array) -> void:
 	if outs.size() < 8:
 		return
 	var scar_n: float = clampf(float(pd.physical_scars.size()) * 0.14, 0.0, 0.55)
@@ -3343,7 +3357,7 @@ func build_idle_parity_context_for_pawn(pawn_id: int) -> Dictionary:
 	}
 
 
-func _pawn_decision_rule_context(pd: PawnData) -> Dictionary:
+func _pawn_decision_rule_context(pd: HeelKawnianData) -> Dictionary:
 	var tick: int = GameManager.tick_count if GameManager != null else 0
 	var founding: float = clampf(
 			1.0 - float(tick) / float(_pawn_decision_rule_matrix().FOUNDING_PERIOD_TICKS),
@@ -3443,7 +3457,7 @@ func _pawn_decision_rule_context(pd: PawnData) -> Dictionary:
 	}
 
 
-func _pawn_martial_settlement_context(pd: PawnData) -> float:
+func _pawn_martial_settlement_context(pd: HeelKawnianData) -> float:
 	if pd.settlement_id < 0:
 		return 0.0
 	var sm: Node = get_node_or_null("/root/SettlementMemory")
@@ -3464,8 +3478,8 @@ func _pawn_martial_settlement_context(pd: PawnData) -> float:
 
 
 ## Returns true if the pawn's profession is overrepresented (>40% of same-settlement pawns share it).
-func _pawn_profession_overrep(pd: PawnData) -> bool:
-	if pd.current_profession == PawnData.Profession.NONE:
+func _pawn_profession_overrep(pd: HeelKawnianData) -> bool:
+	if pd.current_profession == HeelKawnianData.Profession.NONE:
 		return false
 	var sp: PawnSpawner = _resolve_pawn_spawner_for_world_ai()
 	if sp == null:
@@ -3489,19 +3503,19 @@ func _pawn_profession_overrep(pd: PawnData) -> bool:
 
 # ==================== PawnConsciousness context helpers ====================
 
-func _pawn_consciousness_trauma(pd: PawnData) -> float:
+func _pawn_consciousness_trauma(pd: HeelKawnianData) -> float:
 	var pc: Node = get_node_or_null("/root/PawnConsciousness")
 	if pc == null or not pc.has_method("get_trauma_level"):
 		return 0.0
 	return pc.get_trauma_level(int(pd.id))
 
-func _pawn_consciousness_awareness(pd: PawnData) -> int:
+func _pawn_consciousness_awareness(pd: HeelKawnianData) -> int:
 	var pc: Node = get_node_or_null("/root/PawnConsciousness")
 	if pc == null or not pc.has_method("get_awareness_level"):
 		return 0
 	return pc.get_awareness_level(int(pd.id))
 
-func _pawn_consciousness_dream_theme(pd: PawnData) -> String:
+func _pawn_consciousness_dream_theme(pd: HeelKawnianData) -> String:
 	var pc: Node = get_node_or_null("/root/PawnConsciousness")
 	if pc == null or not pc.has_method("get_dreams"):
 		return ""
@@ -3510,13 +3524,13 @@ func _pawn_consciousness_dream_theme(pd: PawnData) -> String:
 		return ""
 	return str(dreams[0].get("theme", ""))
 
-func _pawn_consciousness_beliefs_count(pd: PawnData) -> int:
+func _pawn_consciousness_beliefs_count(pd: HeelKawnianData) -> int:
 	var pc: Node = get_node_or_null("/root/PawnConsciousness")
 	if pc == null or not pc.has_method("get_core_beliefs"):
 		return 0
 	return pc.get_core_beliefs(int(pd.id)).size()
 
-func _pawn_grudge_intensity(pd: PawnData) -> float:
+func _pawn_grudge_intensity(pd: HeelKawnianData) -> float:
 	var gm: Node = get_node_or_null("/root/GrudgeManager")
 	if gm == null or not gm.has_method("get_grudges_held_by"):
 		return 0.0
@@ -3529,7 +3543,7 @@ func _pawn_grudge_intensity(pd: PawnData) -> float:
 
 # ==================== HeelKawnianMind context helpers ====================
 
-func _pawn_mind_pursuit(pd: PawnData) -> String:
+func _pawn_mind_pursuit(pd: HeelKawnianData) -> String:
 	var hm: Node = get_node_or_null("/root/HeelKawnianMind")
 	if hm == null:
 		return ""
@@ -3540,7 +3554,7 @@ func _pawn_mind_pursuit(pd: PawnData) -> String:
 	return str(snapshot.get("pursuit", ""))
 
 
-func _pawn_mind_emotional(pd: PawnData) -> String:
+func _pawn_mind_emotional(pd: HeelKawnianData) -> String:
 	var hm: Node = get_node_or_null("/root/HeelKawnianMind")
 	if hm == null:
 		return ""
@@ -3551,7 +3565,7 @@ func _pawn_mind_emotional(pd: PawnData) -> String:
 	return str(snapshot.get("emotional_pressure", ""))
 
 
-func _pawn_mind_place_feeling(pd: PawnData) -> String:
+func _pawn_mind_place_feeling(pd: HeelKawnianData) -> String:
 	var hm: Node = get_node_or_null("/root/HeelKawnianMind")
 	if hm == null:
 		return ""
@@ -3576,7 +3590,7 @@ func _pawn_mind_place_feeling(pd: PawnData) -> String:
 	return ""
 
 
-func _pawn_mind_culture(pd: PawnData) -> String:
+func _pawn_mind_culture(pd: HeelKawnianData) -> String:
 	if pd.settlement_id < 0:
 		return ""
 	var cm: Node = get_node_or_null("/root/CulturalMemory")
@@ -3588,28 +3602,28 @@ func _pawn_mind_culture(pd: PawnData) -> String:
 	return str(tradition.get("type", ""))
 
 
-func _pawn_mind_reputation(pd: PawnData) -> float:
+func _pawn_mind_reputation(pd: HeelKawnianData) -> float:
 	var gm: Node = get_node_or_null("/root/GossipManager")
 	if gm == null or not gm.has_method("get_reputation_for"):
 		return 0.0
 	return gm.get_reputation_for(int(pd.id))
 
 
-func _resolve_pawn_for_data(pd: PawnData) -> Variant:
+func _resolve_pawn_for_data(pd: HeelKawnianData) -> Variant:
 	var sp: PawnSpawner = _resolve_pawn_spawner_for_world_ai()
 	if sp == null or not sp.has_method("get_pawn_by_id"):
 		return null
 	return sp.get_pawn_by_id(int(pd.id))
 
 
-func _pawn_mind_knowledge_count(pd: PawnData) -> int:
+func _pawn_mind_knowledge_count(pd: HeelKawnianData) -> int:
 	var ks: Node = get_node_or_null("/root/KnowledgeSystem")
 	if ks == null or not ks.has_method("get_pawn_knowledge"):
 		return 0
 	return ks.get_pawn_knowledge(int(pd.id)).size()
 
 
-func _pawn_mind_knowledge_at_risk(pd: PawnData) -> bool:
+func _pawn_mind_knowledge_at_risk(pd: HeelKawnianData) -> bool:
 	var ks: Node = get_node_or_null("/root/KnowledgeSystem")
 	if ks == null or not ks.has_method("get_pawn_knowledge"):
 		return false
@@ -3621,7 +3635,7 @@ func _pawn_mind_knowledge_at_risk(pd: PawnData) -> bool:
 	return false
 
 
-func _pawn_mind_conflict_count(pd: PawnData) -> int:
+func _pawn_mind_conflict_count(pd: HeelKawnianData) -> int:
 	var gm: Node = get_node_or_null("/root/GrudgeManager")
 	if gm == null or not gm.has_method("get_grudges_held_by"):
 		return 0
@@ -3915,7 +3929,7 @@ func _pawn_meaning_culture(region_key: int) -> float:
 
 ## Returns 0.0-1.0 knowledge risk level for this pawn's settlement.
 ## High risk = few carriers for skills this pawn knows = urgency to teach.
-func _pawn_knowledge_at_risk(pd: PawnData) -> float:
+func _pawn_knowledge_at_risk(pd: HeelKawnianData) -> float:
 	if KnowledgeSystem == null:
 		return 0.0
 	var sid: int = pd.settlement_id
@@ -3931,7 +3945,7 @@ func _pawn_knowledge_at_risk(pd: PawnData) -> float:
 
 ## Returns 0.0-1.0 teaching obligation weight for this pawn.
 ## High obligation = they carry knowledge but haven't taught recently.
-func _pawn_teaching_obligation(pd: PawnData) -> float:
+func _pawn_teaching_obligation(pd: HeelKawnianData) -> float:
 	if KnowledgeSystem == null:
 		return 0.0
 	var pid: int = int(pd.id)
@@ -3943,7 +3957,7 @@ func _pawn_teaching_obligation(pd: PawnData) -> float:
 	return 0.0
 
 
-func _pawn_neural_input_vector(pd: PawnData) -> Array[float]:
+func _pawn_neural_input_vector(pd: HeelKawnianData) -> Array[float]:
 	var hunger_n: float = clampf(pd.hunger / 100.0, 0.0, 1.0)
 	var rest_n: float = clampf(pd.rest / 100.0, 0.0, 1.0)
 	var mood_n: float = clampf(pd.mood / 100.0, 0.0, 1.0)

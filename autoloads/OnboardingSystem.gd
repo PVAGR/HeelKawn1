@@ -34,7 +34,7 @@ var tutorials: Array[Dictionary] = [
 	},
 	{
 		"id": "narrative",
-		"title": "Pawn Narratives",
+		"title": "HeelKawnian Narratives",
 		"description": "Every pawn has a unique life story.",
 		"steps": [
 			{"text": "Click the 'Narrative' tab to see their story.", "trigger": "narrative_view", "count": 1}
@@ -114,7 +114,7 @@ func _check_tutorial_triggers(tick: int) -> void:
 		
 		# Check if clicked on pawn
 		if _main != null:
-			var clicked_pawn: Pawn = _get_pawn_at_position(mouse_pos)
+			var clicked_pawn: HeelKawnian = _get_pawn_at_position(mouse_pos)
 			if clicked_pawn != null:
 				tutorial_state.pawns_clicked += 1
 				_trigger_tutorial_step("pawn_click")
@@ -133,7 +133,7 @@ func _check_tutorial_triggers(tick: int) -> void:
 		_on_ui_cancel()
 
 
-func _get_pawn_at_position(pos: Vector2) -> Pawn:
+func _get_pawn_at_position(pos: Vector2) -> HeelKawnian:
 	if _main == null or _main._pawn_spawner == null:
 		return null
 	

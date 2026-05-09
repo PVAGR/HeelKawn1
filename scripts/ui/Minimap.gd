@@ -8,7 +8,7 @@ extends CanvasLayer
 
 const MAP_SIZE_PX: int = 180
 const REFRESH_EVERY_N_TICKS: int = 30
-const OVERLAY_REFRESH_TICKS: int = 5  # Pawn dots / camera rect update more often
+const OVERLAY_REFRESH_TICKS: int = 5  # HeelKawnian dots / camera rect update more often
 const BORDER_COLOR: Color = Color(0.85, 0.78, 0.40, 0.50)
 const SETTLEMENT_COLOR: Color = Color(1.0, 0.85, 0.3, 1.0)
 const ENEMY_COLOR: Color = Color(1.0, 0.2, 0.15, 1.0)

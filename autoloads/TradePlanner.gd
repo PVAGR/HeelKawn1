@@ -7,6 +7,8 @@ const SURPLUS_THRESHOLD: int = 30
 const NEED_THRESHOLD: int = 10
 const MAX_TRADE_DISTANCE: int = 6
 const TRADE_BATCH: int = 5
+const MAX_CANDIDATES_PER_ITEM: int = 5  # Cap receiver candidates to avoid O(n²) pathfinder calls
+const MAX_PATHFINDER_CALLS_PER_PLAN: int = 8  # Pathfinder is the most expensive operation
 
 const _ITEM_ORDER: Array[int] = [
 	Item.Type.BERRY,
@@ -26,10 +28,13 @@ func plan(world: World, _main: Node, from_memory_flush: bool) -> void:
 		if t0 - _last_plan_tick < TRADE_INTERVAL_TICKS:
 			return
 	_last_plan_tick = GameManager.tick_count
+	var _pf_calls: Array = [0]  # Mutable counter for pathfinder call budget
 	if SettlementMemory.settlements.is_empty():
 		return
 	var settlements: Array = SettlementMemory.get_settlements()
 	settlements.sort_custom(_sort_settlements_by_intent_then_center)
+	# PERFORMANCE: Pre-compute zone→region mapping to avoid repeated stockpile scans
+	var _zone_region_map: Dictionary = _build_zone_region_map()
 	var used: Dictionary = {}
 	for a_any in settlements:
 		if not (a_any is Dictionary):
@@ -49,14 +54,17 @@ func plan(world: World, _main: Node, from_memory_flush: bool) -> void:
 		if a_regions.is_empty():
 			continue
 		var a_region_want: Dictionary = _region_set(a_regions)
+		# PERFORMANCE: Early exit if pathfinder budget exhausted
+		if _pf_calls[0] >= MAX_PATHFINDER_CALLS_PER_PLAN:
+			break
 		for R in _ITEM_ORDER:
-			if _settlement_item_total(a_region_want, R) <= SURPLUS_THRESHOLD:
+			if _settlement_item_total(a_region_want, R, _zone_region_map) <= SURPLUS_THRESHOLD:
 				continue
-			var from_sp: Stockpile = _first_source_zone(a_region_want, R, world)
+			var from_sp: Stockpile = _first_source_zone(a_region_want, R, world, _zone_region_map)
 			if from_sp == null:
 				continue
 			var b_pick: Dictionary = _find_best_receiver(
-					world, settlements, a, a_center, a_region_want, R, from_sp, used
+					world, settlements, a, a_center, a_region_want, R, from_sp, used, _pf_calls, _zone_region_map
 			)
 			if b_pick.is_empty():
 				continue
@@ -67,24 +75,24 @@ func plan(world: World, _main: Node, from_memory_flush: bool) -> void:
 			var work_tile: Vector2i = _first_passable_free_job_tile(world, from_sp)
 			if work_tile.x < 0:
 				continue
-				var j: Job = JobManager.post_trade_haul(
-						work_tile, from_sp, to_sp, R, TRADE_BATCH, 0, 3
-				)
-				if j != null:
-					used[a_center] = true
-					used[b_center] = true
-					# --- RelationalGraph integration: record trade relationship ---
-					if Engine.has_singleton("RelationalGraph"):
-						var rg = Engine.get_singleton("RelationalGraph")
-						var edge_data = {
-							"item": R,
-							"batch": TRADE_BATCH,
-							"from": a_center,
-							"to": b_center,
-							"tick": GameManager.tick_count
-						}
-						rg.add_edge(a_center, b_center, "trade", edge_data)
-				break
+			var j: Job = JobManager.post_trade_haul(
+					work_tile, from_sp, to_sp, R, TRADE_BATCH, 0, 3
+			)
+			if j != null:
+				used[a_center] = true
+				used[b_center] = true
+				# --- RelationalGraph integration: record trade relationship ---
+				if Engine.has_singleton("RelationalGraph"):
+					var rg = Engine.get_singleton("RelationalGraph")
+					var edge_data = {
+						"item": R,
+						"batch": TRADE_BATCH,
+						"from": a_center,
+						"to": b_center,
+						"tick": GameManager.tick_count
+					}
+					rg.add_edge(a_center, b_center, "trade", edge_data)
+			break
 
 
 static func _sort_settlements_by_intent_then_center(ka: Variant, kb: Variant) -> bool:
@@ -120,46 +128,62 @@ static func _region_set(regions: PackedInt32Array) -> Dictionary:
 	return d
 
 
-static func _settlement_item_total(region_want: Dictionary, item: int) -> int:
+static func _settlement_item_total(region_want: Dictionary, item: int, zone_region_map: Dictionary = {}) -> int:
 	var total: int = 0
 	for z in StockpileManager.zones():
 		if z == null or not is_instance_valid(z):
 			continue
-		if not _zone_overlaps_regions(z, region_want):
-			continue
+		# Use pre-computed map if available, otherwise fall back to sampling
+		if not zone_region_map.is_empty():
+			var zrk: Variant = zone_region_map.get(z.get_instance_id(), null)
+			if zrk == null or not region_want.has(int(zrk)):
+				continue
+		else:
+			if not _zone_overlaps_regions(z, region_want):
+				continue
 		total += z.count_of(item)
 	return total
 
 
-static func _settlement_item_total_by_dict(s: Dictionary, item: int) -> int:
+static func _settlement_item_total_by_dict(s: Dictionary, item: int, zone_region_map: Dictionary = {}) -> int:
 	var reg: Variant = s.get("regions", null)
 	if not (reg is PackedInt32Array):
 		return 0
-	return _settlement_item_total(_region_set(reg as PackedInt32Array), item)
+	return _settlement_item_total(_region_set(reg as PackedInt32Array), item, zone_region_map)
 
 
 static func _zone_overlaps_regions(z: Stockpile, region_want: Dictionary) -> bool:
+	# Fast check: sample corners + center of the zone rect instead of every tile
+	# A zone is typically 3x3 or 5x5, so 5 samples covers it
 	var r: Rect2i = z.rect
-	var y1: int = r.position.y + r.size.y
-	var x1: int = r.position.x + r.size.x
-	for y in range(r.position.y, y1):
-		for x in range(r.position.x, x1):
-			var rk: int = WorldMemory._region_key(x, y)
-			if region_want.has(rk):
-				return true
+	var samples: Array[Vector2i] = [
+		r.position,
+		Vector2i(r.position.x + r.size.x - 1, r.position.y),
+		Vector2i(r.position.x, r.position.y + r.size.y - 1),
+		Vector2i(r.position.x + r.size.x - 1, r.position.y + r.size.y - 1),
+		Vector2i(r.position.x + r.size.x / 2, r.position.y + r.size.y / 2),
+	]
+	for s in samples:
+		if region_want.has(WorldMemory._region_key(s.x, s.y)):
+			return true
 	return false
 
 
 ## Pick a stockpile in this settlement to pull from: settlement already has
 ## aggregate surplus; zone must have enough for a batch and a free work tile.
 static func _first_source_zone(
-		region_want: Dictionary, item: int, world: World
+		region_want: Dictionary, item: int, world: World, zone_region_map: Dictionary = {}
 ) -> Stockpile:
 	for z in StockpileManager.zones():
 		if z == null or not is_instance_valid(z):
 			continue
-		if not _zone_overlaps_regions(z, region_want):
-			continue
+		if not zone_region_map.is_empty():
+			var zrk: Variant = zone_region_map.get(z.get_instance_id(), null)
+			if zrk == null or not region_want.has(int(zrk)):
+				continue
+		else:
+			if not _zone_overlaps_regions(z, region_want):
+				continue
 		if z.count_of(item) < TRADE_BATCH:
 			continue
 		if not z.accepts(item):
@@ -170,12 +194,17 @@ static func _first_source_zone(
 	return null
 
 
-static func _first_dest_zone_for_item(region_want: Dictionary, item: int) -> Stockpile:
+static func _first_dest_zone_for_item(region_want: Dictionary, item: int, zone_region_map: Dictionary = {}) -> Stockpile:
 	for z in StockpileManager.zones():
 		if z == null or not is_instance_valid(z):
 			continue
-		if not _zone_overlaps_regions(z, region_want):
-			continue
+		if not zone_region_map.is_empty():
+			var zrk: Variant = zone_region_map.get(z.get_instance_id(), null)
+			if zrk == null or not region_want.has(int(zrk)):
+				continue
+		else:
+			if not _zone_overlaps_regions(z, region_want):
+				continue
 		if not z.accepts(item):
 			continue
 		return z
@@ -221,11 +250,16 @@ static func _find_best_receiver(
 		_a_region_want: Dictionary,
 		item: int,
 		from_sp: Stockpile,
-		used: Dictionary
+		used: Dictionary,
+		_pf_calls: Array,  # Mutable counter for pathfinder budget
+		_zone_region_map: Dictionary = {}  # Pre-computed zone→region mapping
 ) -> Dictionary:
 	var ac: Vector2i = SettlementPlanner._center_tile_of_region_key(a_center)
 	var cands: Array[Dictionary] = []
 	for b_any in settlements:
+		# PERFORMANCE: Early exit if pathfinder budget exhausted
+		if _pf_calls[0] >= MAX_PATHFINDER_CALLS_PER_PLAN:
+			break
 		if not (b_any is Dictionary):
 			continue
 		var st_b: Dictionary = b_any as Dictionary
@@ -242,19 +276,22 @@ static func _find_best_receiver(
 		var d: int = _region_grid_manhattan(a_center, b_center)
 		if d > MAX_TRADE_DISTANCE:
 			continue
-		if _settlement_item_total_by_dict(st_b, item) >= NEED_THRESHOLD:
+		if _settlement_item_total_by_dict(st_b, item, _zone_region_map) >= NEED_THRESHOLD:
 			continue
 		var reg: Variant = st_b.get("regions", null)
 		if not (reg is PackedInt32Array) or (reg as PackedInt32Array).is_empty():
 			continue
 		var to_sp: Stockpile = _first_dest_zone_for_item(
-				_region_set(reg as PackedInt32Array), item
+				_region_set(reg as PackedInt32Array), item, _zone_region_map
 		)
 		if to_sp == null:
 			continue
-		if not _path_trading_pair(world, from_sp, st_b, to_sp, ac):
+		if not _path_trading_pair(world, from_sp, st_b, to_sp, ac, _pf_calls):
 			continue
 		cands.append({"d": d, "ir": _intent_sort_rank(b_intent), "c": b_center, "to_sp": to_sp})
+		# PERFORMANCE: Cap candidates to avoid O(n²) pathfinder calls
+		if cands.size() >= MAX_CANDIDATES_PER_ITEM:
+			break
 	if cands.is_empty():
 		return {}
 	cands.sort_custom(func(x: Dictionary, y: Dictionary) -> bool:
@@ -277,8 +314,11 @@ static func _path_trading_pair(
 		from_sp: Stockpile,
 		st_b: Dictionary,
 		to_sp: Stockpile,
-		ac: Vector2i
+		ac: Vector2i,
+		pathfinder_calls: Array  # Mutable array [count] to track calls across static
 ) -> bool:
+	if pathfinder_calls[0] >= MAX_PATHFINDER_CALLS_PER_PLAN:
+		return false
 	if world.pathfinder == null:
 		return false
 	var b_r: Variant = st_b.get("regions", null)
@@ -290,7 +330,26 @@ static func _path_trading_pair(
 	var t_to: Vector2i = to_sp.nearest_tile_to(bcen)
 	if world.pathfinder.component_of(t_from) != world.pathfinder.component_of(t_to):
 		return false
+	pathfinder_calls[0] += 1
 	var p: Array[Vector2i] = world.pathfinder.find_path_pawn_historic_aversion(
 			t_from, t_to
 	)
 	return not p.is_empty()
+
+
+## Pre-compute which region each stockpile zone belongs to.
+## Returns: Dictionary[zone_instance_id, region_key] for fast lookup.
+func _build_zone_region_map() -> Dictionary:
+	var map: Dictionary = {}
+	if StockpileManager == null:
+		return map
+	for z in StockpileManager.zones():
+		if z == null or not is_instance_valid(z):
+			continue
+		var r: Rect2i = z.rect
+		# Sample center tile to determine the zone's region
+		var cx: int = r.position.x + r.size.x / 2
+		var cy: int = r.position.y + r.size.y / 2
+		var rk: int = WorldMemory._region_key(cx, cy)
+		map[z.get_instance_id()] = rk
+	return map

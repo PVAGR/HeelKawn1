@@ -1,6 +1,6 @@
 extends CanvasLayer
 
-## Cosmetic editor for the **selected / player pawn** — same `PawnData` fields NPCs use
+## Cosmetic editor for the **selected / player pawn** — same `HeelKawnianData` fields NPCs use
 ## (circle colors today; future sprite binds here). Does not grant build powers.
 
 signal panel_closed()
@@ -10,7 +10,7 @@ var _picker_hair: ColorPickerButton
 var _picker_apparel: ColorPickerButton
 var _opt_body: OptionButton
 var _opt_hair: OptionButton
-var _pawn: Pawn = null
+var _pawn: HeelKawnian = null
 
 
 func _ready() -> void:
@@ -19,7 +19,7 @@ func _ready() -> void:
 	_build_ui()
 
 
-func open_for_pawn(p: Pawn) -> void:
+func open_for_pawn(p: HeelKawnian) -> void:
 	_pawn = p
 	if p == null or not is_instance_valid(p) or p.data == null:
 		visible = false
@@ -34,7 +34,7 @@ func close_panel() -> void:
 	panel_closed.emit()
 
 
-func _fill_from_data(d: PawnData) -> void:
+func _fill_from_data(d: HeelKawnianData) -> void:
 	_picker_body.color = d.color
 	_picker_hair.color = d.hair_color
 	_picker_apparel.color = d.apparel_color
@@ -83,7 +83,7 @@ func _build_ui() -> void:
 	v.add_child(title)
 
 	var hint := Label.new()
-	hint.text = "Uses PawnData colors + body/hair enums. Select a pawn (yours is auto-picked at start)."
+	hint.text = "Uses HeelKawnianData colors + body/hair enums. Select a pawn (yours is auto-picked at start)."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.add_theme_color_override("font_color", Color(0.72, 0.74, 0.78))
@@ -130,7 +130,7 @@ func _on_apply_pressed() -> void:
 	if _pawn == null or not is_instance_valid(_pawn) or _pawn.data == null:
 		close_panel()
 		return
-	var d: PawnData = _pawn.data
+	var d: HeelKawnianData = _pawn.data
 	d.color = _picker_body.color
 	d.hair_color = _picker_hair.color
 	d.apparel_color = _picker_apparel.color

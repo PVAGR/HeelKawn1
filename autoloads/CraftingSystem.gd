@@ -272,7 +272,7 @@ func _update_crafting_progress(tick: int) -> void:
 		var progress_increment: float = 1.0 / float(recipe.craft_ticks)
 		
 		# Apply craftsman skill bonus
-		var craftsman: Pawn = _get_pawn_by_id(job.craftsman_id)
+		var craftsman: HeelKawnian = _get_pawn_by_id(job.craftsman_id)
 		if craftsman != null and craftsman.data != null:
 			var skill_level: int = craftsman.data.get_skill_level(recipe.required_skill)
 			progress_increment *= (1.0 + float(skill_level) * 0.05)  # +5% per level
@@ -298,8 +298,8 @@ func _complete_crafting_job(job: Dictionary, tick: int) -> void:
 
 	if is_equippable:
 		# Create a GearItem with quality from the crafter
-		var craftsman_data: PawnData = null
-		var craftsman: Pawn = _get_pawn_by_id(job.craftsman_id)
+		var craftsman_data: HeelKawnianData = null
+		var craftsman: HeelKawnian = _get_pawn_by_id(job.craftsman_id)
 		if craftsman != null and craftsman.data != null:
 			craftsman_data = craftsman.data
 		var _GearItem = load("res://scripts/items/GearItem.gd")
@@ -335,7 +335,7 @@ func _complete_crafting_job(job: Dictionary, tick: int) -> void:
 		print("[Crafting] Completed: %s x%d" % [recipe.name, recipe.output_quantity])
 
 
-func _get_pawn_by_id(pawn_id: int) -> Pawn:
+func _get_pawn_by_id(pawn_id: int) -> HeelKawnian:
 	if _pawn_spawner == null:
 		return null
 	
@@ -361,7 +361,7 @@ func get_recipes_by_category(category: String) -> Array:
 	return result
 
 ## Check if a pawn can craft a recipe
-func can_craft_recipe(pawn: Pawn, recipe_id: String) -> Dictionary:
+func can_craft_recipe(pawn: HeelKawnian, recipe_id: String) -> Dictionary:
 	var result: Dictionary = {
 		"can_craft": false,
 		"reason": ""
@@ -557,7 +557,7 @@ func remove_gear_from_inventory(item_id: String) -> Variant:
 
 ## Try to equip a pawn with better gear from the stockpile.
 ## Called periodically by the pawn AI.
-func try_equip_from_stockpile(pawn_data: PawnData) -> bool:
+func try_equip_from_stockpile(pawn_data: HeelKawnianData) -> bool:
 	if pawn_data == null:
 		return false
 	var equipped_any: bool = false

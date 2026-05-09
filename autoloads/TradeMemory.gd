@@ -108,7 +108,7 @@ func _try_create_trade_routes(tick: int) -> void:
 
 func _create_trade_route(from_settlement: int, to_settlement: int, tick: int) -> void:
 	# Find a pawn to be the trader
-	var trader_pawn: Pawn = _find_available_trader(from_settlement)
+	var trader_pawn: HeelKawnian = _find_available_trader(from_settlement)
 	if trader_pawn == null:
 		return  # No available traders
 	
@@ -153,7 +153,7 @@ func _create_trade_route(from_settlement: int, to_settlement: int, tick: int) ->
 		])
 
 
-func _find_available_trader(settlement_region: int) -> Pawn:
+func _find_available_trader(settlement_region: int) -> HeelKawnian:
 	var _ps: Node = _get_pawn_spawner()
 	if _ps == null:
 		return null
@@ -169,8 +169,8 @@ func _find_available_trader(settlement_region: int) -> Pawn:
 			continue
 		
 		# Check if pawn is idle or has Trader profession
-		if pawn.data.current_profession == PawnData.Profession.NONE or \
-		   pawn._state == Pawn.State.IDLE:
+		if pawn.data.current_profession == HeelKawnianData.Profession.NONE or \
+		   pawn._state == HeelKawnian.State.IDLE:
 			return pawn
 	
 	return null
@@ -384,7 +384,7 @@ func get_route_tier_at(x: int, y: int) -> int:
 ## Used by PathFinder.gd to determine if pawns should prefer trade paths
 func get_trade_path_weight_mul(x: int, y: int) -> float:
 	var route_tier: int = get_route_tier_at(x, y)
-	
+
 	match route_tier:
 		TIER_NONE:
 			return 1.0  # No route (default cost)
@@ -394,6 +394,18 @@ func get_trade_path_weight_mul(x: int, y: int) -> float:
 			return 0.5  # Major route (significantly faster - 50% bonus)
 		_:
 			return 1.0  # Default
+
+
+## PERFORMANCE: Return regions that have active trade routes.
+func get_regions_with_trade() -> Dictionary:
+	var result: Dictionary = {}
+	for route in trade_routes:
+		if route.status == "en_route":
+			var from_center: int = int(route.from_settlement)
+			var to_center: int = int(route.to_settlement)
+			result[from_center] = true
+			result[to_center] = true
+	return result
 
 
 ## Manually create a trade route (for testing)

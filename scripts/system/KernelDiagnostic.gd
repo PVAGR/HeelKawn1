@@ -201,9 +201,9 @@ func generate_session_log_summary() -> String:
 		if main_cam != null and main_cam.has_method("get_camera_revival_digest_plain"):
 			lines.append(str(main_cam.call("get_camera_revival_digest_plain")))
 	if str(player.get("pawn_id", "--")) == "--":
-		lines.append("Player Pawn: No Player Pawn")
+		lines.append("Player HeelKawnian: No Player HeelKawnian")
 	else:
-		lines.append("Player Pawn: ID=%s Profession=%s XP=%d/100" % [
+		lines.append("Player HeelKawnian: ID=%s Profession=%s XP=%d/100" % [
 			str(player.get("pawn_id", "--")),
 			str(player.get("profession", "None")),
 			int(player.get("xp", 0)),
@@ -299,7 +299,7 @@ func _print_settlement_verify_summary(tick: int) -> void:
 
 func _settlement_material_snapshot() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	var pawns: Array[Pawn] = PawnSpawner.find_pawns()
+	var pawns: Array[HeelKawnian] = PawnSpawner.find_pawns()
 	var jobs: Array[Job] = []
 	var open_v: Variant = JobManager.get("_open")
 	if open_v is Array:

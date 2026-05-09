@@ -94,7 +94,7 @@ func _on_game_tick(tick: int) -> void:
 # ==================== LEGACY SCORING ====================
 
 ## Record a pawn's legacy when they die
-func record_legacy(pawn_id: int, pawn_data: PawnData, death_cause: String) -> void:
+func record_legacy(pawn_id: int, pawn_data: HeelKawnianData, death_cause: String) -> void:
 	var entry: Dictionary = {
 		"pawn_id": pawn_id,
 		"player_incarnated": _is_former_player_pawn(pawn_id),
@@ -283,7 +283,7 @@ func _find_valid_heir(ancestor_id: int) -> int:
 ## Check if pawn meets succession requirements
 func _meets_succession_requirements(pawn_id: int) -> bool:
 	# Check age
-	var pawn_data: PawnData = _get_pawn_data(pawn_id)
+	var pawn_data: HeelKawnianData = _get_pawn_data(pawn_id)
 	if pawn_data == null or pawn_data.age < SUCCESSION_MIN_AGE:
 		return false
 	
@@ -369,7 +369,7 @@ func _is_pawn_alive(pawn_id: int) -> bool:
 
 
 ## Get pawn data
-func _get_pawn_data(pawn_id: int) -> PawnData:
+func _get_pawn_data(pawn_id: int) -> HeelKawnianData:
 	var pawn_spawner: PawnSpawner = _get_pawn_spawner()
 	if pawn_spawner == null:
 		return null

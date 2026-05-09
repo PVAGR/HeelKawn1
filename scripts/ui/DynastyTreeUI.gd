@@ -134,7 +134,7 @@ func _create_member_card(pawn_id: int) -> Control:
 	if ps == null or not ps.has_method("pawn_data_for_id"):
 		return null
 	
-	var pawn_data: PawnData = ps.call("pawn_data_for_id", pawn_id)
+	var pawn_data: HeelKawnianData = ps.call("pawn_data_for_id", pawn_id)
 	if pawn_data == null:
 		return null
 	
@@ -199,7 +199,7 @@ func _show_member_biography(pawn_id: int) -> void:
 	if ps == null:
 		return
 	
-	var pawn_data: PawnData = ps.call("pawn_data_for_id", pawn_id)
+	var pawn_data: HeelKawnianData = ps.call("pawn_data_for_id", pawn_id)
 	if pawn_data == null:
 		return
 	
@@ -230,7 +230,7 @@ func _get_pawn_generation(pawn_id: int) -> int:
 	if ps == null or not ps.has_method("pawn_data_for_id"):
 		return 0
 	
-	var pawn_data: PawnData = ps.call("pawn_data_for_id", pawn_id)
+	var pawn_data: HeelKawnianData = ps.call("pawn_data_for_id", pawn_id)
 	if pawn_data == null:
 		return 0
 	

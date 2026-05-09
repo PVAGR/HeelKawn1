@@ -83,7 +83,7 @@ func labor_pressure_stock_snapshot() -> Dictionary:
 
 
 ## Total of a specific item type across every zone. Used by the HUD + food-
-## emergency override in Pawn.
+## emergency override in HeelKawnian.
 func total_count_of(item_type: int) -> int:
 	var total: int = 0
 	for z in _zones:
@@ -92,7 +92,7 @@ func total_count_of(item_type: int) -> int:
 
 
 ## Total food across every zone, summing across all food item types. Used by
-## the food-emergency override in Pawn._tick_idle.
+## the food-emergency override in HeelKawnian._tick_idle.
 func total_food() -> int:
 	var total: int = 0
 	for z in _zones:

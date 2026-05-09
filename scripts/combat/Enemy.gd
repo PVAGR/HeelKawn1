@@ -47,7 +47,7 @@ var max_health: float = 30.0
 var age_ticks: int = 0
 var attack_cooldown: int = 0
 var _world: World = null
-var _target_pawn: Pawn = null
+var _target_pawn: HeelKawnian = null
 var _current_path: Array[Vector2i] = []
 var _path_index: int = 0
 var _dead: bool = false
@@ -161,7 +161,7 @@ func _select_target() -> void:
 	var range_sq: float = spec.vision_range * spec.vision_range
 	
 	# Target closest pawn
-	var closest_pawn: Pawn = null
+	var closest_pawn: HeelKawnian = null
 	var closest_dist_sq: float = INF
 	
 	for pawn in PawnSpawner.find_pawns():
@@ -175,7 +175,7 @@ func _select_target() -> void:
 	_target_pawn = closest_pawn
 
 
-func _attack_pawn(pawn: Pawn) -> void:
+func _attack_pawn(pawn: HeelKawnian) -> void:
 	if attack_cooldown > 0 or pawn == null or not is_instance_valid(pawn):
 		return
 

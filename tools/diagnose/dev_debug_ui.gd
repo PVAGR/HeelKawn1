@@ -239,7 +239,7 @@ func _on_dump_pawns() -> void:
 	if tree == null:
 		_append_log("No SceneTree")
 		return
-	var arr: Array[Pawn] = PawnSpawner.find_pawns()
+	var arr: Array[HeelKawnian] = PawnSpawner.find_pawns()
 	_append_log("Pawns: %d" % arr.size())
 	for p in arr:
 		var pos = "?"
@@ -253,7 +253,7 @@ func _on_count_moving_pressed() -> void:
 	if tree == null:
 		_append_log("No SceneTree")
 		return
-	var pawns: Array[Pawn] = PawnSpawner.find_pawns()
+	var pawns: Array[HeelKawnian] = PawnSpawner.find_pawns()
 	var moving = 0
 	for p in pawns:
 		if p == null or not is_instance_valid(p):

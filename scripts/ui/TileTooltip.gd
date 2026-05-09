@@ -204,7 +204,7 @@ func _refresh(tile: Vector2i) -> void:
 				if not struct_parts.is_empty():
 					lines.append("[color=%s]%s[/color]" % [STRUCTURE_COLOR.to_html(false), " · ".join(struct_parts)])
 
-	# Pawn at tile — with profession, job, mood, carrying
+	# HeelKawnian at tile — with profession, job, mood, carrying
 	var pawns_here: Array = []
 	if _world != null:
 		var tree: SceneTree = Engine.get_main_loop() as SceneTree
@@ -223,7 +223,7 @@ func _refresh(tile: Vector2i) -> void:
 	if not pawns_here.is_empty():
 		for p in pawns_here:
 			if p.data != null:
-				var nm: String = p.data.display_name if p.data.display_name != "" else "Pawn"
+				var nm: String = p.data.display_name if p.data.display_name != "" else "HeelKawnian"
 				var prof: String = p.data.profession_name() if p.data.has_method("profession_name") else ""
 				var mood: float = p.data.mood
 				var mood_tag: String = "calm"

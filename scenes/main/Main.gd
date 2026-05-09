@@ -27,7 +27,7 @@ const BUILD_DOOR_WORK_TICKS: int = 25  # quick, slots between two walls
 # MINE above the rest and it caused pawns to ignore food entirely -- they
 # starved while mining stone. Don't do that again.)
 # Food balance is enforced separately by the food-emergency override in
-# Pawn._tick_idle, which forces idle pawns onto FORAGE jobs when the
+# HeelKawnian._tick_idle, which forces idle pawns onto FORAGE jobs when the
 # stockpile is almost out.
 const FORAGE_PRIORITY: int = 3
 const MINE_PRIORITY: int = 3
@@ -131,7 +131,7 @@ func _can_player_place() -> bool:
 const ALLOW_SPEED_NUMBER_HOTKEYS: bool = true
 ## Keep load-in sessions predictable; speed only changes via explicit user action.
 const RESTORE_SPEED_FROM_SAVE: bool = false
-## World-level only; Pawn/Animal read via [code]Main._world_stabilization_until_tick[/code].
+## World-level only; HeelKawnian/Animal read via [code]Main._world_stabilization_until_tick[/code].
 ## -1 = not initialized yet (hunt/tick guards treat as: allow hunt once bootstrapped sets a non-negative window).
 static var _world_stabilization_until_tick: int = -1
 
@@ -193,7 +193,7 @@ var _player_pawn = null
 var _hotkeys_enabled: bool = true
 ## Two **shipped** perspectives (CK3-style map cam, first-person, etc. are later layers).
 ## - **SPECTATOR** — worldwide / chronicler / "observer or developer" flyover: same sim clock, free camera, inspection, time speed, no single-body embodiment (docs/HEELKAWN_STANDALONE_MASTER_PLAN.md: Spectator state).
-## - **INCARNATED** — you are one `Pawn` in the world (same class as NPCs): embodied input, shared needs/jobs; parity target = everything an NPC can do that is implemented (ibid.: Incarnation state).
+## - **INCARNATED** — you are one `HeelKawnian` in the world (same class as NPCs): embodied input, shared needs/jobs; parity target = everything an NPC can do that is implemented (ibid.: Incarnation state).
 ## - **OBSERVER** — full command authority over all pawns and structures (formerly "God mode").
 enum PlayerMode {
 	SPECTATOR = 0,
@@ -215,8 +215,8 @@ func _tile_chebyshev_dist(a: Vector2i, b: Vector2i) -> int:
 
 
 ## UI / observer: all pawns in spectator; only local pawns when [method is_player_incarnated].
-func get_visible_pawns() -> Array[Pawn]:
-	var out: Array[Pawn] = []
+func get_visible_pawns() -> Array[HeelKawnian]:
+	var out: Array[HeelKawnian] = []
 	if _pawn_spawner == null:
 		return out
 	if not is_player_incarnated():
@@ -259,52 +259,14 @@ var _chronicle_feed = null  # ChronicleFeed instance
 var _player_intent_pin_zone_id: String = ""
 var _player_intent_focus_center_region: int = -1
 var _avatar_panel: Node = null
-var _kernel_diagnostic: KernelDiagnostic = null
-## Player authority: pawn-local intents (WASD+E), cosmetic edit, draft/edicts when ruler,
-## selection, pause/speed, camera. Structures/zones: planner + jobs only (no human stamp).
-var _phase8_proof_overlay_layer: CanvasLayer = null
-var _phase8_proof_overlay_text: RichTextLabel = null
-var _performance_monitor: PerformanceMonitorUI = null
-var _spatial_profile_overlay_text: RichTextLabel = null
-var _research_particle_texture: Texture2D = null
-## Content signature for resource-balance console lines (never use snapshot_tick alone — it changes every refresh).
-var _resource_balance_audit_last_sig: String = ""
-## pawn_id -> last claimed job label (debug instrumentation only).
-var _pawn_divergence_last_job_by_pawn_id: Dictionary = {}
-var _pawn_divergence_total_claim_events_seen: int = 0
-var _pawn_divergence_scored_events: int = 0
-var _pawn_divergence_skip_no_bound_center: int = 0
-var _pawn_divergence_skip_pre_settlement_context: int = 0
-var _pawn_divergence_skip_no_specialization_context: int = 0
-var _pawn_divergence_aligned_total: int = 0
-var _pawn_divergence_divergent_total: int = 0
-var _pawn_divergence_neutral_total: int = 0
-## Bind provenance counters for claim-time center resolution.
-var _pawn_divergence_native_bound_events: int = 0
-var _pawn_divergence_fallback_bound_events: int = 0
-var _pawn_divergence_first_scored_center_region: int = -1
-## center_region -> {"scored": int, "aligned": int, "divergent": int, "neutral": int}
-var _pawn_divergence_by_center: Dictionary = {}
-## center_region -> no_specialization_context skip count
-var _pawn_divergence_no_spec_by_center: Dictionary = {}
-## spec_phase -> no_specialization_context skip count
-var _pawn_divergence_no_spec_by_phase: Dictionary = {}
-## settlement context source -> claim count
-var _pawn_divergence_context_source_counts: Dictionary = {}
-const PAWN_DIVERGENCE_PACKET_SCHEMA_VERSION: int = 1
-var _pawn_divergence_first20_scored_lines: PackedStringArray = PackedStringArray()
-## tick -> true (summary already printed at this checkpoint).
-var _pawn_divergence_summary_emitted_ticks: Dictionary = {}
-var _pawn_divergence_exit_summary_emitted: bool = false
-var _kill_count: int = 0
-## Pixel radius around a pawn that counts as a click hit. Pawns draw at
-## DRAW_RADIUS=3.5; we add a generous slop so moving targets are easy to grab.
-const SELECT_PICK_RADIUS_PX: float = 7.0
+var _consciousness_panel: Node = null
+var _dialogue_panel: Node = null
+
 
 # -------------------- draft mode (combat) --------------------
 ## Draft mode: select pawns to fight enemies. Pawns in draft mode stop normal work.
 var _draft_mode_active: bool = false
-var _drafted_pawns: Array[Pawn] = []
+var _drafted_pawns: Array[HeelKawnian] = []
 var _ambient_player: AudioStreamPlayer = null
 var _ambient_playback: AudioStreamGeneratorPlayback = null
 var _ambient_phase: float = 0.0
@@ -616,7 +578,7 @@ func _ready() -> void:
 		add_child(tick_manager)
 
 	# Connect to PlaytestRecorder for automated playtest logging
-	# (Pawn selection recording is now handled inside _set_selected_pawn)
+	# (HeelKawnian selection recording is now handled inside _set_selected_pawn)
 	var playtest_recorder: Node = get_node_or_null("/root/PlaytestRecorder")
 	if playtest_recorder != null:
 		# Log camera movement (sample every 10 ticks via _on_world_tick)
@@ -987,7 +949,7 @@ func _claim_center_fallback_from_zone_context(
 	return int(st.get("center_region", -1))
 
 
-func _on_job_claimed(job: Job, pawn: Pawn) -> void:
+func _on_job_claimed(job: Job, pawn: HeelKawnian) -> void:
 	# CLAIM-TIME BINDING VALIDATION TARGET
 	# PASS:
 	# - at least one claim resolves center_region >= 0
@@ -1713,7 +1675,7 @@ func _toggle_avatar_panel() -> void:
 	if _avatar_panel.visible:
 		_avatar_panel.close_panel()
 		return
-	var target: Pawn = _player_pawn
+	var target: HeelKawnian = _player_pawn
 	if target == null or not is_instance_valid(target):
 		target = _selected_pawn
 	if target != null and is_instance_valid(target) and target.data != null:
@@ -1721,6 +1683,54 @@ func _toggle_avatar_panel() -> void:
 	elif OS.is_debug_build():
 		print("[Main] Sprite panel: select a pawn first (click on map)")
 
+
+func _toggle_consciousness_panel() -> void:
+	_ensure_consciousness_panel()
+	if _consciousness_panel == null:
+		return
+	if _consciousness_panel.visible:
+		_consciousness_panel.close_panel()
+		return
+	_consciousness_panel.open_for_player("player")
+
+
+func _ensure_consciousness_panel() -> void:
+	if _consciousness_panel != null and is_instance_valid(_consciousness_panel):
+		return
+	var ui_vp: Node = get_node_or_null("UI_Viewport")
+	var scr = load("res://scripts/ui/PlayerConsciousnessPanel.gd")
+	_consciousness_panel = scr.new() as Node
+	_consciousness_panel.name = "PlayerConsciousnessPanel"
+	if ui_vp != null:
+		ui_vp.add_child(_consciousness_panel)
+	else:
+		add_child(_consciousness_panel)
+
+
+func _toggle_dialogue_panel() -> void:
+	if _selected_pawn == null or not is_instance_valid(_selected_pawn):
+		return
+	_ensure_dialogue_panel()
+	if _dialogue_panel == null:
+		return
+	if _dialogue_panel.visible:
+		_dialogue_panel.close_panel()
+		return
+	var pawn_id: int = int(_selected_pawn.data.id) if _selected_pawn.data != null else -1
+	var pawn_name: String = _selected_pawn.data.display_name if _selected_pawn.data != null and _selected_pawn.data.has("display_name") else "Pawn"
+	_dialogue_panel.open_for_pawn(pawn_id, pawn_name)
+
+func _ensure_dialogue_panel() -> void:
+	if _dialogue_panel != null and is_instance_valid(_dialogue_panel):
+		return
+	var ui_vp: Node = get_node_or_null("UI_Viewport")
+	var scr = load("res://scripts/ui/PawnDialoguePanel.gd")
+	_dialogue_panel = scr.new() as Node
+	_dialogue_panel.name = "PawnDialoguePanel"
+	if ui_vp != null:
+		ui_vp.add_child(_dialogue_panel)
+	else:
+		add_child(_dialogue_panel)
 
 func _ensure_incarnation_picker() -> void:
 	if _incarnation_picker != null and is_instance_valid(_incarnation_picker):
@@ -1762,7 +1772,7 @@ func _incarnation_candidates_snapshot() -> Array:
 	for p in _pawn_spawner.pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
-		var d: PawnData = p.data
+		var d: HeelKawnianData = p.data
 		var rk: int = _WM._region_key(d.tile_pos.x, d.tile_pos.y)
 		var center_region: int = SettlementMemory.get_center_region_for_region(rk)
 		var settlement_state: String = SettlementMemory.get_state_at_region(center_region if center_region >= 0 else rk)
@@ -1810,7 +1820,7 @@ func _incarnation_candidates_snapshot() -> Array:
 	return out
 
 
-func _incarnation_candidate_priority(d: PawnData, life_stage: String, settlement_state: String, region_reputation: int) -> int:
+func _incarnation_candidate_priority(d: HeelKawnianData, life_stage: String, settlement_state: String, region_reputation: int) -> int:
 	var score: int = 0
 	match life_stage:
 		"elder":
@@ -1837,7 +1847,7 @@ func _incarnation_candidate_priority(d: PawnData, life_stage: String, settlement
 		_:
 			score += 0
 	score += clampi(region_reputation, -3, 3) * 8
-	if int(d.current_profession) != PawnData.Profession.NONE:
+	if int(d.current_profession) != HeelKawnianData.Profession.NONE:
 		score += 6
 	if int(d.children_count) > 0:
 		score += 6
@@ -1853,7 +1863,7 @@ func _incarnation_candidate_reason(life_stage: String, settlement_state: String,
 		parts.append(settlement_state)
 	var rep: String = "rep %+d" % region_reputation
 	parts.append(rep)
-	if profession != PawnData.Profession.NONE:
+	if profession != HeelKawnianData.Profession.NONE:
 		parts.append("profession-tied")
 	if children_count > 0:
 		parts.append("has-children")
@@ -1866,7 +1876,7 @@ func _on_incarnation_entry_confirmed(pawn_id: int) -> void:
 	if pawn_id < 0:
 		request_spectator_return("picker_cancel")
 		return
-	var pawn: Pawn = _find_pawn_by_id(pawn_id)
+	var pawn: HeelKawnian = _find_pawn_by_id(pawn_id)
 	if pawn == null:
 		if OS.is_debug_build():
 			print("[Main] Incarnation picker: pawn %d not found" % pawn_id)
@@ -1878,6 +1888,8 @@ func _on_incarnation_entry_confirmed(pawn_id: int) -> void:
 	PlayerIntentQueue.request_incarnation_entry("picker_confirm", {"pawn_id": pawn_id})
 	if _incarnation_picker != null and is_instance_valid(_incarnation_picker):
 		_incarnation_picker.call("close_picker")
+	if IncarnationManager != null:
+		IncarnationManager.on_player_incarnated("player", pawn_id)
 
 
 func _on_incarnation_picker_closed() -> void:
@@ -1938,7 +1950,8 @@ func _toggle_observer_mode() -> void:
 			print("[Main] Observer mode OFF — returning to spectator")
 	else:
 		if _player_mode == PlayerMode.INCARNATED:
-			# Must exit incarnation first
+			if IncarnationManager != null:
+				IncarnationManager.on_player_returned("player")
 			_player_pawn = null
 			_set_selected_pawn(null)
 		_set_player_mode(PlayerMode.OBSERVER)
@@ -1950,6 +1963,8 @@ func _toggle_observer_mode() -> void:
 ## Ctrl+T: toggle between SPECTATOR and INCARNATED mode.
 func _toggle_incarnation_mode() -> void:
 	if _player_mode == PlayerMode.INCARNATED:
+		if IncarnationManager != null:
+			IncarnationManager.on_player_returned("player")
 		_set_player_mode(PlayerMode.SPECTATOR)
 		_player_pawn = null
 		_set_selected_pawn(null)
@@ -1966,7 +1981,7 @@ func request_incarnation_entry(note: String = "manual_entry", payload: Dictionar
 
 ## Can the player command a specific pawn?
 ## Observer mode = yes. Watch/Sprite modes = no.
-func _can_command_pawn(target: Pawn) -> bool:
+func _can_command_pawn(target: HeelKawnian) -> bool:
 	if target == null or not is_instance_valid(target) or target.data == null:
 		return false
 	return _player_mode == PlayerMode.OBSERVER
@@ -1979,7 +1994,7 @@ func _get_player_authority_rank() -> String:
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return ""
 	if AuthoritySystem == null:
-		return "Pawn"
+		return "HeelKawnian"
 	var pid: int = _player_pawn.data.id
 	var mil: float = AuthoritySystem.get_authority_level(pid, AuthoritySystem.AuthorityContext.MILITARY)
 	var civ: float = AuthoritySystem.get_authority_level(pid, AuthoritySystem.AuthorityContext.CIVIL)
@@ -1994,13 +2009,15 @@ func _get_player_authority_rank() -> String:
 		return "Captain"
 	if civ >= 0.3:
 		return "Elder"
-	return "Pawn"
+	return "HeelKawnian"
 
 
 func request_spectator_return(note: String = "manual_return", payload: Dictionary = {}) -> bool:
 	var ok: bool = PlayerIntentQueue.request_spectator_return(note, payload)
 	if _incarnation_picker != null and is_instance_valid(_incarnation_picker):
 		_incarnation_picker.call("close_picker")
+	if _player_mode == PlayerMode.INCARNATED and IncarnationManager != null:
+		IncarnationManager.on_player_returned("player")
 	_set_selected_pawn(null)
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		_player_pawn = _first_live_pawn()
@@ -2104,9 +2121,17 @@ func _bootstrap_colony() -> void:
 	_place_stockpile(main_component)
 	# Seed starting supplies so pawns don't die immediately
 	_seed_starting_supplies()
-	# Seed fire pits near the stockpile so pawns have warmth
-	_seed_initial_fire_pits(main_component)
+	# DEAD BRAIN REVIVED: WorldEventSeedManager initialized on boot
+	if WorldEventSeedManager != null:
+		WorldEventSeedManager.ensure_default_seeds()
+	# DORMANT WORLD: No pre-seeded fire pits or beds — HeelKawnians build their own
+	# Pioneer buff gives them 5000 ticks of cold resistance to survive
 	_pawn_spawner.spawn_starters(_world, main_component)
+	# DORMANT WORLD: Pre-discover stockpile area for FogOfDiscovery
+	if FogOfDiscovery != null:
+		FogOfDiscovery.set_world(_world)
+		var sp_center: Vector2i = _world.stockpile.rect.position
+		FogOfDiscovery.discover_area(sp_center.x, sp_center.y, FogOfDiscovery.STOCKPILE_DISCOVERY_RADIUS)
 	_player_pawn = _first_live_pawn()
 	_set_selected_pawn(null)
 	_set_player_mode(PlayerMode.SPECTATOR)
@@ -2131,7 +2156,9 @@ func _bootstrap_colony() -> void:
 	_animal_spawner.spawn_initial(_world)
 	_world.set_meta("animal_spawner", _animal_spawner)
 	Main._world_stabilization_until_tick = GameManager.tick_count + WORLD_STABILIZATION_TICKS
-	_seed_jobs_from_world()
+	# DORMANT WORLD: FogOfDiscovery handles job posting as pawns discover tiles
+	# Seed initial jobs only for the pre-discovered stockpile area
+	_seed_jobs_for_discovered_area()
 	_seed_construction_jobs()
 	# Seed initial tunneling toward sealed ore before the first logical tick.
 	_react_to_mining_progress()
@@ -2142,6 +2169,10 @@ func _bootstrap_colony() -> void:
 	_last_generation_tick = GameManager.tick_count
 	RemnantMemory.clear()
 	AgeMemory.clear()
+	if DiscoveryGate != null:
+		DiscoveryGate.clear()
+	if FogOfDiscovery != null:
+		FogOfDiscovery.clear()
 	if is_instance_valid(_world):
 		RemnantMemory.seed_births_from_current_world(_world)
 		IntentMemory.recompute(_world)
@@ -2197,15 +2228,14 @@ func _seed_starting_supplies() -> void:
 	if _world == null or _world.stockpile == null:
 		return
 	var sp: Stockpile = _world.stockpile
-	# Food: enough for 20 pawns for ~500 ticks
-	sp.add_item(Item.Type.BERRY, 40)
-	sp.add_item(Item.Type.MEAT, 20)
-	# Building materials: enough to get started
-	sp.add_item(Item.Type.WOOD, 30)
-	sp.add_item(Item.Type.STONE, 20)
-	# Basic tools: a few to get started
-	sp.add_item(Item.Type.FLINT, 10)
-	sp.add_item(Item.Type.STICK, 15)
+	# DORMANT WORLD: Minimal starting supplies — HeelKawnians forage the rest
+	# Food: just enough for 2-3 pawns for ~200 ticks
+	sp.add_item(Item.Type.BERRY, 10)
+	# Building materials: bare minimum
+	sp.add_item(Item.Type.WOOD, 5)
+	sp.add_item(Item.Type.STONE, 5)
+	# Basic tools: just a couple
+	sp.add_item(Item.Type.FLINT, 3)
 
 
 ## Place fire pits near the stockpile so pawns have warmth from tick 1.
@@ -2414,8 +2444,16 @@ func _on_game_tick(tick: int) -> void:
 	if is_instance_valid(MeaningAmbianceController):
 		MeaningAmbianceController._tick()
 	if _player_input != null and _player_mode == PlayerMode.INCARNATED:
-		if not is_instance_valid(_player_pawn):
-			_ensure_player_pawn_assigned()
+		var _player_pawn_death_detected: bool = false
+		if is_instance_valid(_player_pawn) and _player_pawn.data != null and bool(_player_pawn.data.is_dead):
+			_player_pawn_death_detected = true
+		if not is_instance_valid(_player_pawn) or _player_pawn_death_detected:
+			if _player_pawn_death_detected and IncarnationManager != null:
+				var _pid: int = int(_player_pawn.data.id)
+				IncarnationManager.on_player_pawn_died(_pid, "combat_or_age")
+			_set_player_mode(PlayerMode.SPECTATOR)
+			_player_pawn = null
+			_set_selected_pawn(null)
 		if is_instance_valid(_player_pawn):
 			_player_input.process_next_tick(_player_pawn)
 			_player_action_state = _player_input.get_last_action_state()
@@ -2440,6 +2478,7 @@ func _on_game_tick(tick: int) -> void:
 			t0 = Time.get_ticks_usec()
 			_animal_spawner.update_population_dynamics(_world)
 			section_us["animal_population"] = Time.get_ticks_usec() - t0
+	# DORMANT WORLD: FogOfDiscovery posts jobs as pawns discover tiles (no visual refresh needed)
 	# Regrowth + ambient are display/maintenance layers; they should not run
 	# every sim tick in normal mode or high speeds will hitch.
 	# AGGRESSIVE OPTIMIZATION: Even longer intervals for smooth FPS
@@ -2461,6 +2500,13 @@ func _on_game_tick(tick: int) -> void:
 			t0 = Time.get_ticks_usec()
 			_update_ambient_target()
 			section_us["ambient_target"] = Time.get_ticks_usec() - t0
+	# DEAD BRAIN REVIVED: WorldEventSeedManager advances seeds periodically
+	if WorldEventSeedManager != null and tick % 100 == 0:
+		var seed_events: Array = WorldEventSeedManager.advance_all(tick)
+		if not seed_events.is_empty() and WorldEvents != null:
+			for evt in seed_events:
+				if evt is Dictionary:
+					WorldEvents.record_pawn_action(str(evt.get("type", "seed_event")), -1)
 	# Post dynamic hunt jobs less aggressively than harvest loops.
 	var hunt_post_interval: int = _high_speed_interval(40, 150, 500)  # Was (30, 120, 400) - now 500 ticks at 100x
 	var hunt_phase_offset: int = maxi(1, hunt_post_interval / 2)
@@ -2481,7 +2527,8 @@ func _on_game_tick(tick: int) -> void:
 
 	# Settlement leader direct construction: rulers post build jobs based on
 	# settlement needs, bypassing the slow worldbox loop.
-	if SettlementMemory != null and tick % 50 == 0:
+	# DORMANT WORLD: Only runs after first settlement
+	if SettlementMemory != null and tick % 50 == 0 and DiscoveryGate.is_unlocked("first_settlement"):
 		var total_leader_posts: int = 0
 		for st_v in SettlementMemory.settlements:
 			if not (st_v is Dictionary):
@@ -2520,7 +2567,7 @@ func _on_game_tick(tick: int) -> void:
 		for p in _pawn_spawner.pawns:
 			if p != null and is_instance_valid(p):
 				p.sanity_check_impassable_tile()
-	# WorldMemory-derived recompute: defer once so Pawn/Animal (connected after Main) can record first.
+	# WorldMemory-derived recompute: defer once so HeelKawnian/Animal (connected after Main) can record first.
 	if is_instance_valid(_world) and not _world_memory_derivative_flush_queued:
 		# Derivative flush recomputes meaning/persistence/culture; too-frequent calls
 		# will hitch even when tick ordering is correct.
@@ -2531,8 +2578,9 @@ func _on_game_tick(tick: int) -> void:
 	if is_instance_valid(_world):
 		# Planning every tick at 1x causes severe frame-time spikes in large worlds.
 		# Keep planning frequent, but not per-tick. AGGRESSIVE OPTIMIZATION: Longer intervals
+		# DORMANT WORLD: Skip settlement-dependent systems until first settlement forms
 		var planner_interval: int = _planner_interval_for_speed()
-		if tick % planner_interval == 0:
+		if tick % planner_interval == 0 and DiscoveryGate.is_unlocked("first_settlement"):
 			# Check frame budget before heavy planning
 			if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
 				# Defer to next frame
@@ -2542,8 +2590,9 @@ func _on_game_tick(tick: int) -> void:
 				SettlementPlanner.plan(_world, self, false)
 				section_us["settlement_planner"] = Time.get_ticks_usec() - t0
 		# Spread heavy planning across adjacent ticks to reduce one-tick hitch spikes.
+		# DORMANT WORLD: Trade planner only runs after first trade route
 		var trade_offset: int = maxi(1, planner_interval / 3)
-		if (tick + trade_offset) % planner_interval == 0:
+		if (tick + trade_offset) % planner_interval == 0 and DiscoveryGate.is_unlocked("first_trade"):
 			# Check frame budget before heavy planning
 			if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
 				# Defer to next frame
@@ -2553,7 +2602,8 @@ func _on_game_tick(tick: int) -> void:
 				TradePlanner.plan(_world, self, false)
 				section_us["trade_planner"] = Time.get_ticks_usec() - t0
 		# OPTIMIZATION: Spread heavy settlement operations across ticks with frame budget check
-		if tick % REBIRTH_CHECK_INTERVAL_TICKS == 0:
+		# DORMANT WORLD: Settlement operations only run after first settlement forms
+		if tick % REBIRTH_CHECK_INTERVAL_TICKS == 0 and DiscoveryGate.is_unlocked("first_settlement"):
 			# Check frame budget before heavy recompute
 			if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
 				frame_budget_exceeded = true
@@ -2577,7 +2627,8 @@ func _on_game_tick(tick: int) -> void:
 				SettlementRebirth.process(_world, self, false)
 				section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
 		# Phase 4 Identity: visual decay for permanently abandoned settlements (infrequent)
-		if GameManager.periodic_phase_due(tick, SETTLEMENT_ARCHITECT_INTERVAL_TICKS, SETTLEMENT_ARCHITECT_PHASE_OFFSET_TICKS):
+		# DORMANT WORLD: Only runs after first settlement
+		if GameManager.periodic_phase_due(tick, SETTLEMENT_ARCHITECT_INTERVAL_TICKS, SETTLEMENT_ARCHITECT_PHASE_OFFSET_TICKS) and DiscoveryGate.is_unlocked("first_settlement"):
 			t0 = Time.get_ticks_usec()
 			SettlementArchitect.process(_world, self)
 			section_us["settlement_architect"] = Time.get_ticks_usec() - t0
@@ -2619,24 +2670,27 @@ func _on_game_tick(tick: int) -> void:
 		section_us["influence"] = Time.get_ticks_usec() - t0
 	_update_phase8_proof_bundle_preferred_center()
 	# Settlement intents: scale with speed like other settlement updates
+	# DORMANT WORLD: Only runs after first settlement
 	var settlement_intent_interval: int = _high_speed_interval(5, 15, 30)
-	if tick % settlement_intent_interval == 0:
+	if tick % settlement_intent_interval == 0 and DiscoveryGate.is_unlocked("first_settlement"):
 		t0 = Time.get_ticks_usec()
 		SettlementMemory.update_settlement_intents(tick)
 		section_us["settlement_intents"] = Time.get_ticks_usec() - t0
 	# Spread settlement updates across ticks to reduce hitch spikes
+	# DORMANT WORLD: Only runs after first settlement
 	var settlement_update_interval: int = _high_speed_interval(30, 45, 60)
-	if tick % settlement_update_interval == 0:
+	if tick % settlement_update_interval == 0 and DiscoveryGate.is_unlocked("first_settlement"):
 		t0 = Time.get_ticks_usec()
 		SettlementMemory.update_resource_pressures(tick)
 		section_us["settlement_resource_pressure"] = Time.get_ticks_usec() - t0
 	# Offset work fronts update to spread load
 	var work_fronts_offset: int = maxi(1, settlement_update_interval / 2)
-	if (tick + work_fronts_offset) % settlement_update_interval == 0:
+	if (tick + work_fronts_offset) % settlement_update_interval == 0 and DiscoveryGate.is_unlocked("first_settlement"):
 		t0 = Time.get_ticks_usec()
 		SettlementMemory.update_preferred_work_fronts(tick)
 		section_us["settlement_work_fronts"] = Time.get_ticks_usec() - t0
-	if tick % _social_rapport_interval_for_speed() == 0:
+	# DORMANT WORLD: Social rapport only runs after first settlement
+	if tick % _social_rapport_interval_for_speed() == 0 and DiscoveryGate.is_unlocked("first_settlement"):
 		t0 = Time.get_ticks_usec()
 		_accumulate_social_rapport()
 		if SquadCoordinator != null:
@@ -2939,7 +2993,7 @@ func _maybe_generational_turnover() -> void:
 	_pawn_spawner.spawn_generational_pawn(_world, sp, t)
 
 
-func _record_social_pair_events(a: PawnData, b: PawnData, max_events: int) -> int:
+func _record_social_pair_events(a: HeelKawnianData, b: HeelKawnianData, max_events: int) -> int:
 	var used: int = 0
 	if max_events <= 0:
 		return 0
@@ -3010,7 +3064,7 @@ func _accumulate_social_rapport() -> void:
 	const GAIN: int = 14
 	const OPINION_GAIN: int = 2
 	const CELL_SIZE: float = 160.0  # Grid cell size, slightly larger than proximity radius
-	var pl: Array[Pawn] = []
+	var pl: Array[HeelKawnian] = []
 	for p in _pawn_spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null:
 			pl.append(p)
@@ -3044,7 +3098,7 @@ func _accumulate_social_rapport() -> void:
 		var cx: int = cell_key / 10000
 		var cy: int = cell_key % 10000
 		# Gather pawns from this cell and 8 neighbors
-		var nearby: Array[Pawn] = []
+		var nearby: Array[HeelKawnian] = []
 		for dx in range(-1, 2):
 			for dy in range(-1, 2):
 				var nk: int = (cx + dx) * 10000 + (cy + dy)
@@ -3056,7 +3110,7 @@ func _accumulate_social_rapport() -> void:
 		
 		var cell_pawns: Array = grid[cell_key] as Array
 		for pa in cell_pawns:
-			var da: PawnData = pa.data
+			var da: HeelKawnianData = pa.data
 			if da == null or pa.is_sleeping():
 				continue
 			var da_id: int = int(da.id)
@@ -3067,7 +3121,7 @@ func _accumulate_social_rapport() -> void:
 			for pb in nearby:
 				if pb == pa:
 					continue
-				var db: PawnData = pb.data
+				var db: HeelKawnianData = pb.data
 				if db == null or pb.is_sleeping():
 					continue
 				var db_id: int = int(db.id)
@@ -3110,7 +3164,7 @@ func _process_reproduction_tick() -> void:
 func _update_pawn_influence_tick() -> void:
 	if _pawn_spawner == null:
 		return
-	var living: Array[Pawn] = []
+	var living: Array[HeelKawnian] = []
 	for p in _pawn_spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null:
 			living.append(p)
@@ -3698,6 +3752,10 @@ func _handle_key_input(key: InputEventKey) -> void:
 			_toggle_pawn_ai_inspector()
 		KEY_U:
 			_toggle_trait_shop()
+		KEY_C:
+			_toggle_consciousness_panel()
+		KEY_H:
+			_toggle_dialogue_panel()
 		Key.KEY_ESCAPE:
 			_handle_cancel_action()
 		KEY_F12:
@@ -3742,6 +3800,9 @@ func _toggle_debug_panel() -> void:
 
 
 func _handle_cancel_action() -> void:
+	if _dialogue_panel != null and is_instance_valid(_dialogue_panel) and _dialogue_panel.visible:
+		_dialogue_panel.close_panel()
+		return
 	if _is_dragging:
 		_cancel_drag()
 		return
@@ -3811,7 +3872,7 @@ func _on_structure_type_requested(structure_type: String) -> void:
 
 
 ## Visual feedback when a command is issued to a pawn
-func _on_command_issued(pawn: Pawn, order_type: String, target_tile: Vector2i) -> void:
+func _on_command_issued(pawn: HeelKawnian, order_type: String, target_tile: Vector2i) -> void:
 	if _command_indicator != null and _command_indicator.has_method("show_indicator"):
 		_command_indicator.show_indicator(target_tile, order_type)
 	var tick: int = 0
@@ -3906,7 +3967,7 @@ func _open_incarnation_picker() -> void:
 
 func _generate_incarnation_candidates() -> Array:
 	var candidates: Array = []
-	var pawns: Array[Pawn] = _pawn_spawner.get_all_pawns() if _pawn_spawner != null else PawnSpawner.find_pawns()
+	var pawns: Array[HeelKawnian] = _pawn_spawner.get_all_pawns() if _pawn_spawner != null else PawnSpawner.find_pawns()
 
 	for pawn in pawns:
 		if not is_instance_valid(pawn):
@@ -4479,7 +4540,7 @@ func _handle_select_click_at(world_pos: Vector2) -> void:
 	if _pawn_spawner == null:
 		_set_selected_pawn(null)
 		return
-	var best: Pawn = null
+	var best: HeelKawnian = null
 	var best_d_sq: float = SELECT_PICK_RADIUS_PX * SELECT_PICK_RADIUS_PX
 	for p in _pawn_spawner.pawns:
 		if p == null or not is_instance_valid(p):
@@ -4495,7 +4556,7 @@ func _handle_select_click_at(world_pos: Vector2) -> void:
 		_set_selected_pawn(best)
 
 
-func _set_selected_pawn(p: Pawn) -> void:
+func _set_selected_pawn(p: HeelKawnian) -> void:
 	if _player_mode == PlayerMode.INCARNATED and p != null and _player_pawn != null and p != _player_pawn:
 		if OS.is_debug_build():
 			print("[Main] Incarnation locked to pawn #%d; ignore selection of #%d" % [get_player_pawn_id(), int(p.data.id) if p.data != null else -1])
@@ -4574,7 +4635,7 @@ func _ensure_player_pawn_assigned(force: bool = false) -> void:
 		return
 
 
-func _find_pawn_by_id(pawn_id: int) -> Pawn:
+func _find_pawn_by_id(pawn_id: int) -> HeelKawnian:
 	if _pawn_spawner == null or pawn_id < 0:
 		return null
 	for p in _pawn_spawner.pawns:
@@ -4583,7 +4644,7 @@ func _find_pawn_by_id(pawn_id: int) -> Pawn:
 	return null
 
 
-func _first_live_pawn() -> Pawn:
+func _first_live_pawn() -> HeelKawnian:
 	if _pawn_spawner == null:
 		return null
 	for p in _pawn_spawner.pawns:
@@ -4597,7 +4658,7 @@ func _restore_player_state(player_mode_value: int, player_pawn_id: int) -> void:
 		_set_selected_pawn(null)
 		_set_player_mode(PlayerMode.SPECTATOR)
 		return
-	var restored: Pawn = _find_pawn_by_id(player_pawn_id)
+	var restored: HeelKawnian = _find_pawn_by_id(player_pawn_id)
 	if restored != null:
 		_set_selected_pawn(restored)
 		_camera_follow_selected = true
@@ -4626,14 +4687,14 @@ func get_chronicler_pin_zone_id() -> String:
 	return _player_intent_pin_zone_id
 
 
-func get_player_pawn() -> Pawn:
+func get_player_pawn() -> HeelKawnian:
 	if _player_pawn != null and is_instance_valid(_player_pawn):
 		return _player_pawn
 	return null
 
 
 ## HUD selection (clicked pawn). Not necessarily the incarnation body.
-func get_selected_pawn() -> Pawn:
+func get_selected_pawn() -> HeelKawnian:
 	if _selected_pawn != null and is_instance_valid(_selected_pawn):
 		return _selected_pawn
 	return null
@@ -5228,7 +5289,8 @@ func _reroll_world() -> void:
 	_pawn_spawner.respawn(_world, main_component)
 	_ensure_player_pawn_assigned()
 	Main._world_stabilization_until_tick = GameManager.tick_count + WORLD_STABILIZATION_TICKS
-	_seed_jobs_from_world()
+	# DORMANT WORLD: FogOfDiscovery handles job posting
+	_seed_jobs_for_discovered_area()
 	_react_to_mining_progress()
 	if _hud != null:
 		_hud.bind(_world, _pawn_spawner)
@@ -5252,6 +5314,45 @@ func _reroll_heavy_phase2() -> void:
 	if not is_instance_valid(_world):
 		return
 	_world.refresh_terrain_scar_tint()
+
+
+## DORMANT WORLD: Seed jobs only for the pre-discovered stockpile area.
+## Uses per-capita needs limits — not every resource gets a job.
+func _seed_jobs_for_discovered_area() -> void:
+	if FogOfDiscovery == null or _world == null or _world.data == null:
+		return
+	# Per-capita limits: enough jobs to sustain the population
+	var pop: int = PawnSpawner.find_pawns().size()
+	var max_forage: int = maxi(int(ceil(float(pop) * FogOfDiscovery.FOOD_JOBS_PER_PAWN * 0.7)), 3)
+	var max_hunt: int = maxi(int(ceil(float(pop) * FogOfDiscovery.FOOD_JOBS_PER_PAWN * 0.3)), 1)
+	var max_chop: int = maxi(int(ceil(float(pop) * FogOfDiscovery.WOOD_JOBS_PER_PAWN)), 2)
+	var max_mine: int = maxi(int(ceil(float(pop) * FogOfDiscovery.STONE_JOBS_PER_PAWN)), 1)
+	var forage_posted: int = 0
+	var hunt_posted: int = 0
+	var chop_posted: int = 0
+	var mine_posted: int = 0
+	for y in range(WorldData.HEIGHT):
+		for x in range(WorldData.WIDTH):
+			if not FogOfDiscovery.is_discovered(x, y):
+				continue
+			var feature: int = _world.data.get_feature(x, y)
+			var tile: Vector2i = Vector2i(x, y)
+			if feature == TileFeature.Type.FERTILE_SOIL:
+				if forage_posted < max_forage and not JobManager.has_job_at(tile):
+					if JobManager.post(Job.Type.FORAGE, tile) != null:
+						forage_posted += 1
+			elif feature == TileFeature.Type.ORE_VEIN:
+				if mine_posted < max_mine and not JobManager.has_job_at(tile):
+					if JobManager.post(Job.Type.MINE, tile) != null:
+						mine_posted += 1
+			elif feature == TileFeature.Type.TREE:
+				if chop_posted < max_chop and not JobManager.has_job_at(tile):
+					if JobManager.post(Job.Type.CHOP, tile) != null:
+						chop_posted += 1
+			elif TileFeature.is_wildlife(feature):
+				if hunt_posted < max_hunt and not JobManager.has_job_at(tile):
+					if JobManager.post(Job.Type.HUNT, tile) != null:
+						hunt_posted += 1
 
 
 ## Walk the world's feature grid and post initial jobs. Only features on the
@@ -6021,7 +6122,7 @@ func _on_job_completed(job: Job) -> void:
 		Job.Type.CHOP:
 			_queue_regrowth(job.tile, TileFeature.Type.TREE, TREE_REGROW_TICKS)
 		Job.Type.HUNT:
-			# By the time we get here Pawn._complete_current_job has already
+			# By the time we get here HeelKawnian._complete_current_job has already
 			# cleared the feature, so we can't read the species off the tile
 			# anymore. We use the job's planned work_ticks_needed as a proxy:
 			# deer hunts are scheduled longer than rabbit hunts, so >= the
@@ -6543,7 +6644,7 @@ func _designate_beds_near_stockpile() -> void:
 		if OS.is_debug_build():
 			print(
 					"[Main] B: designated %d new bed site(s) near (%d,%d). Pawns will fetch wood (%d each) and build." %
-					[posted, center.x, center.y, Pawn.BED_WOOD_COST]
+					[posted, center.x, center.y, HeelKawnian.BED_WOOD_COST]
 			)
 
 
@@ -6579,7 +6680,7 @@ func settlement_planner_count_pawns_in_regions(regions: PackedInt32Array) -> int
 	for p in _pawn_spawner.pawns:
 		if p == null or not is_instance_valid(p) or not p.has_method("get_pawn_data"):
 			continue
-		var pd: PawnData = p.get_pawn_data() as PawnData
+		var pd: HeelKawnianData = p.get_pawn_data() as HeelKawnianData
 		if pd == null:
 			continue
 		var rk: int = _WM._region_key(pd.tile_pos.x, pd.tile_pos.y)
@@ -7052,10 +7153,10 @@ func _apply_save_dict(s: Dictionary) -> void:
 		_restore_stockpiles_from_save(zlist)
 	else:
 		_place_stockpile(_world.pathfinder.largest_component_id())
-	PawnData._next_id = 1
+	HeelKawnianData._next_id = 1
 	for pd in s.get("pawns", []):
 		if pd is Dictionary:
-			var pdat: PawnData = PawnData.from_save_dict(pd)
+			var pdat: HeelKawnianData = HeelKawnianData.from_save_dict(pd)
 			_pawn_spawner.spawn_from_data(pdat, _world)
 	if KinshipSystem != null and KinshipSystem.has_method("rebuild_from_pawn_spawner"):
 		KinshipSystem.call("rebuild_from_pawn_spawner", _pawn_spawner)
@@ -7207,7 +7308,7 @@ func _resolve_focus_target() -> Dictionary:
 	if _world == null:
 		return {"type": "NONE", "source": "none"}
 	var mouse_world: Vector2 = get_global_mouse_position()
-	var mouse_pawn: Pawn = _focus_pawn_under_world_pos(mouse_world)
+	var mouse_pawn: HeelKawnian = _focus_pawn_under_world_pos(mouse_world)
 	if mouse_pawn != null and mouse_pawn.data != null:
 		return {"type": "PAWN", "source": "mouse_pawn", "pawn": mouse_pawn}
 	var mouse_tile: Vector2i = _world.world_to_tile(mouse_world)
@@ -7222,10 +7323,10 @@ func _resolve_focus_target() -> Dictionary:
 	return {"type": "NONE", "source": "none"}
 
 
-func _focus_pawn_under_world_pos(world_pos: Vector2) -> Pawn:
+func _focus_pawn_under_world_pos(world_pos: Vector2) -> HeelKawnian:
 	if _pawn_spawner == null:
 		return null
-	var best: Pawn = null
+	var best: HeelKawnian = null
 	var best_d_sq: float = SELECT_PICK_RADIUS_PX * SELECT_PICK_RADIUS_PX
 	for p in _pawn_spawner.pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
@@ -7239,10 +7340,10 @@ func _focus_pawn_under_world_pos(world_pos: Vector2) -> Pawn:
 
 func _focus_lines_for_pawn(focus: Dictionary) -> PackedStringArray:
 	var out: PackedStringArray = PackedStringArray()
-	var p: Pawn = focus.get("pawn", null) as Pawn
+	var p: HeelKawnian = focus.get("pawn", null) as HeelKawnian
 	if p == null or p.data == null:
 		return PackedStringArray(["NO FOCUS", "Move cursor over a pawn, settlement, or tile"])
-	var d: PawnData = p.data
+	var d: HeelKawnianData = p.data
 	var rk: int = _WM._region_key(d.tile_pos.x, d.tile_pos.y)
 	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(rk)
 	var role: String = _pawn_governance_role(d, gov)
@@ -7435,7 +7536,7 @@ func _focus_append_house_stub_lines(out: PackedStringArray, center_region: int) 
 	FactionRegistry.append_focus_house_lines(out, center_region)
 
 
-func _pawn_governance_role(d: PawnData, gov: Dictionary) -> String:
+func _pawn_governance_role(d: HeelKawnianData, gov: Dictionary) -> String:
 	var pid: int = int(d.id)
 	if int(gov.get("ruler_id", -1)) == pid:
 		return "Ruler"
@@ -8081,7 +8182,7 @@ func _toggle_draft_mode() -> void:
 		_drafted_pawns.clear()
 
 
-func _handle_draft_click(pawn: Pawn) -> void:
+func _handle_draft_click(pawn: HeelKawnian) -> void:
 	if not _draft_mode_active or pawn == null:
 		return
 	

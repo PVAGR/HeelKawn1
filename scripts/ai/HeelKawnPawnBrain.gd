@@ -1,7 +1,7 @@
 class_name HeelKawnPawnBrain
 extends RefCounted
 
-## The "One of One" Pawn Brain — WorldBox scale + Bannerlord RPG depth + Kenshi survival
+## The "One of One" HeelKawnian Brain — WorldBox scale + Bannerlord RPG depth + Kenshi survival
 ## Every pawn is as intelligent as a player, with full autonomy and agency.
 ##
 ## Combines:
@@ -24,7 +24,7 @@ signal social_interaction(pawn_id: int, target_id: int, interaction_type: String
 
 # === Core References ===
 var _pawn_id: int = -1
-var _pawn_data: PawnData = null
+var _pawn_data: HeelKawnianData = null
 var _world: Node2D = null
 
 # === AI Sub-Systems ===
@@ -65,7 +65,7 @@ var _ticks_processed: int = 0
 var _decisions_made: int = 0
 
 # === Initialization ===
-func _init(pawn_data: PawnData, world: Node2D) -> void:
+func _init(pawn_data: HeelKawnianData, world: Node2D) -> void:
 	_pawn_data = pawn_data
 	_pawn_id = int(pawn_data.id) if pawn_data != null else -1
 	_world = world
@@ -132,10 +132,10 @@ func _cache_world_references() -> void:
 	# SettlementAI is per-settlement, resolved on demand
 
 
-# === Main Brain Tick (called from Pawn._on_world_tick) ===
+# === Main Brain Tick (called from HeelKawnian._on_world_tick) ===
 ## Optimized for 39,000 ticks @ 100x speed with thousands of pawns.
 ## Uses stride-based throttling + lightweight path for distant pawns.
-func brain_tick(sim_tick: int, pawn: Pawn) -> Dictionary:
+func brain_tick(sim_tick: int, pawn: HeelKawnian) -> Dictionary:
 	_ticks_processed += 1
 
 	# Stride-based throttling: not every pawn runs full AI every tick.
@@ -223,7 +223,7 @@ func _compute_stride() -> int:
 
 
 # === Lightweight Tick (Kenshi survival — ultra-fast) ===
-func _lightweight_tick(sim_tick: int, pawn: Pawn) -> Dictionary:
+func _lightweight_tick(sim_tick: int, pawn: HeelKawnian) -> Dictionary:
 	# Only process critical survival needs + basic combat.
 	# Used for staggered ticks where full AI doesn't run.
 	if _pawn_data == null or pawn == null:
@@ -251,7 +251,7 @@ func _lightweight_tick(sim_tick: int, pawn: Pawn) -> Dictionary:
 	return result
 
 
-# === Decision Context: What the Pawn Knows ===
+# === Decision Context: What the HeelKawnian Knows ===
 ## Optimized: only rebuild dynamic parts; static parts cached via _ctx_initialized flag.
 var _ctx_initialized: bool = false
 var _ctx_static_dirty: bool = true
@@ -259,7 +259,7 @@ var _ctx_last_state: int = -1
 var _ctx_last_tile: Vector2i = Vector2i(-99999, -99999)
 var _ctx_last_settlement: int = -99999
 
-func _rebuild_decision_context(pawn: Pawn, sim_tick: int) -> void:
+func _rebuild_decision_context(pawn: HeelKawnian, sim_tick: int) -> void:
 	if _pawn_data == null:
 		return
 
@@ -290,7 +290,7 @@ func _rebuild_decision_context(pawn: Pawn, sim_tick: int) -> void:
 	_decision_context["pain"] = _pawn_data.pain
 	_decision_context["exposure_sickness"] = _pawn_data.exposure_sickness
 
-	# --- Pawn state (only update if changed) ---
+	# --- HeelKawnian state (only update if changed) ---
 	var cur_state: int = pawn._state if pawn != null else 0
 	if cur_state != _ctx_last_state:
 		_decision_context["state"] = cur_state
@@ -412,7 +412,7 @@ func _build_neural_input() -> Array[float]:
 
 
 # === Decision Matrix (PawnDecisionRuleMatrix) ===
-func _run_decision_matrix(_pawn: Pawn, _sim_tick: int) -> Dictionary:
+func _run_decision_matrix(_pawn: HeelKawnian, _sim_tick: int) -> Dictionary:
 	if decision_matrix == null or _pawn_data == null:
 		return {"action": "idle", "confidence": 0.0}
 
@@ -554,7 +554,7 @@ func _refresh_goals(_sim_tick: int) -> void:
 ## Uses SpatialGrid for O(n) lookups instead of O(n²) scans
 var _spatial_grid: RefCounted = null  # SpatialGrid instance
 
-func _scan_for_combat_threats(pawn: Pawn, _sim_tick: int) -> void:
+func _scan_for_combat_threats(pawn: HeelKawnian, _sim_tick: int) -> void:
 	if pawn == null or _combat_resolver == null:
 		return
 
@@ -595,13 +595,13 @@ func _scan_for_combat_threats(pawn: Pawn, _sim_tick: int) -> void:
 				[]
 			)
 
-func _find_nearby_enemies(pawn: Pawn) -> Array:
+func _find_nearby_enemies(pawn: HeelKawnian) -> Array:
 	## Uses SpatialGrid for O(n) lookup
 	if _spatial_grid == null:
 		_spatial_grid = SpatialGrid.new()
 	return []  # Placeholder until CombatResolver provides enemy positions
 
-func _find_nearby_pawns(pawn: Pawn, radius_px: float) -> Array:
+func _find_nearby_pawns(pawn: HeelKawnian, radius_px: float) -> Array:
 	## O(n) lookup via SpatialGrid — replaces O(n²) PawnSpawner scan
 	if _spatial_grid == null:
 		_spatial_grid = SpatialGrid.new()
@@ -614,7 +614,7 @@ func _find_nearby_pawns(pawn: Pawn, radius_px: float) -> Array:
 
 
 # === Social Scan (Crusader Kings diplomacy) ===
-func _scan_for_social_interactions(pawn: Pawn, _sim_tick: int) -> void:
+func _scan_for_social_interactions(pawn: HeelKawnian, _sim_tick: int) -> void:
 	if pawn == null or gossip == null:
 		return
 
@@ -647,7 +647,7 @@ func _scan_for_social_interactions(pawn: Pawn, _sim_tick: int) -> void:
 
 
 # === Dramatic Events (Narrative Engine) ===
-func _check_dramatic_events(_pawn: Pawn, _sim_tick: int) -> void:
+func _check_dramatic_events(_pawn: HeelKawnian, _sim_tick: int) -> void:
 	if dramatic_engine == null or _pawn_data == null:
 		return
 
@@ -670,11 +670,11 @@ func _check_dramatic_events(_pawn: Pawn, _sim_tick: int) -> void:
 
 
 # === Career Tracking (Bannerlord/Kenshi RPG) ===
-func _update_career_tracking(_pawn: Pawn, _sim_tick: int) -> void:
+func _update_career_tracking(_pawn: HeelKawnian, _sim_tick: int) -> void:
 	if career == null:
 		return
 
-	# Career XP is granted on job completion (in Pawn.gd)
+	# Career XP is granted on job completion (in HeelKawnian.gd)
 	# This function updates decision context with career progress
 	var career_info: Dictionary = career.get_career_info() if "get_career_info" in career else {}
 	_decision_context["career_track"] = career_info.get("track", -1)
@@ -689,7 +689,7 @@ func _update_career_tracking(_pawn: Pawn, _sim_tick: int) -> void:
 		_decision_context["work_gather"] = 1.0
 
 
-# === Public API for Pawn.gd ===
+# === Public API for HeelKawnian.gd ===
 func get_current_action() -> String:
 	return _decision_context.get("active_goal", "idle")
 
@@ -744,7 +744,7 @@ static func batch_tick(pawn_list: Array, sim_tick: int) -> Dictionary:
 		"errors": 0,
 	}
 	for entry in pawn_list:
-		var pawn: Pawn = entry if entry is Pawn else null
+		var pawn: HeelKawnian = entry if entry is HeelKawnian else null
 		if pawn == null or not is_instance_valid(pawn):
 			stats["errors"] = int(stats.get("errors", 0)) + 1
 			continue
@@ -767,7 +767,7 @@ static func batch_tick(pawn_list: Array, sim_tick: int) -> Dictionary:
 # === WorldBox-Scale: Lightweight Tick (Survival-Only) ===
 ## Ultra-fast tick for distant/thousands of NPCs — Kenshi survival style.
 ## Only processes critical survival needs + basic combat awareness.
-func lightweight_tick(sim_tick: int, pawn: Pawn) -> Dictionary:
+func lightweight_tick(sim_tick: int, pawn: HeelKawnian) -> Dictionary:
 	if _pawn_data == null or pawn == null:
 		return {"action": "idle", "confidence": 0.0}
 	# Only check critical needs (Kenshi survival)

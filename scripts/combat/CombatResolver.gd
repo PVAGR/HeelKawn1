@@ -10,8 +10,8 @@ const SKILL_DODGE_BONUS_PER_LEVEL: float = 0.02  # 2% dodge per rest level (endu
 const KROND_PER_KILL: float = 25.0
 
 static func _actor_seed_part(actor: Node) -> String:
-	if actor is Pawn:
-		var pawn: Pawn = actor as Pawn
+	if actor is HeelKawnian:
+		var pawn: HeelKawnian = actor as HeelKawnian
 		if pawn.data != null:
 			return "pawn:%d" % int(pawn.data.id)
 	if actor is Enemy:
@@ -43,14 +43,14 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 	var hit_chance: float = BASE_HIT_CHANCE
 	
 	# Apply attacker accuracy (for pawns, use skill levels)
-	if attacker is Pawn:
-		var pawn_attacker: Pawn = attacker as Pawn
+	if attacker is HeelKawnian:
+		var pawn_attacker: HeelKawnian = attacker as HeelKawnian
 		var avg_skill: float = _get_average_skill(pawn_attacker.data) / 100.0
 		hit_chance += SKILL_ACCURACY_BONUS_PER_LEVEL * avg_skill
 	
 	# Apply defender dodge (for pawns, use rest as endurance proxy)
-	if defender is Pawn:
-		var pawn_defender: Pawn = defender as Pawn
+	if defender is HeelKawnian:
+		var pawn_defender: HeelKawnian = defender as HeelKawnian
 		var dodge_chance: float = pawn_defender.data.rest * 0.002 + 0.1  # 10% base + 0.2% per rest
 		hit_chance = hit_chance * (1.0 - dodge_chance)
 	elif defender is Enemy:
@@ -69,11 +69,27 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 	var damage: float = _calculate_damage(attacker, defender)
 
 	# Apply damage
-	if defender is Pawn:
-		var pawn_defender: Pawn = defender as Pawn
+	if defender is HeelKawnian:
+		var pawn_defender: HeelKawnian = defender as HeelKawnian
 		pawn_defender.data.health = max(0.0, pawn_defender.data.health - damage)
 		pawn_defender.on_hit_feedback(damage)
 		pawn_defender.data.add_mood_event(MoodEvent.Type.STRESS, 60.0, 300)
+		
+		# DEAD BRAIN REVIVED: CombatNarrative generates Kenshi-style combat text
+		if CombatNarrative != null:
+			var attacker_name: String = _combat_name(attacker)
+			var defender_name: String = pawn_defender.data.display_name
+			var weapon_name: String = _weapon_name(attacker)
+			var narrative: String = CombatNarrative.generate_attack_narrative(attacker_name, defender_name, damage, weapon_name, damage > 20.0)
+			if not narrative.is_empty() and WorldMemory != null:
+				WorldMemory.record_event({
+					"type": "combat_narrative",
+					"category": "combat",
+					"severity": 2,
+					"narrative": narrative,
+					"tick": GameManager.tick_count,
+					"tile": {"x": int(pawn_defender.data.tile_pos.x), "y": int(pawn_defender.data.tile_pos.y)},
+				})
 		
 		# Injury check: small chance to get injured
 		if WorldRNG.chance_for(_combat_stream("injury", attacker, defender), 0.15, _combat_salt(5)):
@@ -81,9 +97,12 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 		
 		if pawn_defender.data.health <= 0:
 			pawn_defender._check_death_conditions()
+			# DEAD BRAIN REVIVED: BattleReporter records HeelKawnian death in combat
+			if BattleReporter != null:
+				BattleReporter.record_combat_death(int(pawn_defender.data.id), int(_combat_id(attacker)), pawn_defender.data.tile_pos)
 		
 		if GameManager.tick_count % 100 == 0:
-			print("[Combat] Pawn %s took %.1f damage (health %.1f)" %
+			print("[Combat] HeelKawnian %s took %.1f damage (health %.1f)" %
 				[pawn_defender.data.display_name, damage, pawn_defender.data.health])
 	
 	elif defender is Enemy:
@@ -99,13 +118,13 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 			print("[Combat] Enemy %s killed by %s" % [enemy_name, attacker_name])
 			
 			# PAWN-ACTIVATED EVENT: Record combat kill for event system
-			if attacker is Pawn and WorldEvents != null and WorldEvents.has_method("record_pawn_action"):
-				var pawn_attacker: Pawn = attacker as Pawn
+			if attacker is HeelKawnian and WorldEvents != null and WorldEvents.has_method("record_pawn_action"):
+				var pawn_attacker: HeelKawnian = attacker as HeelKawnian
 				WorldEvents.record_pawn_action("combat_kill", int(pawn_attacker.data.id))
 			
 			# Award krond to the pawn attacker (deterministic, fixed amount)
-			if attacker is Pawn:
-				var pawn_attacker: Pawn = attacker as Pawn
+			if attacker is HeelKawnian:
+				var pawn_attacker: HeelKawnian = attacker as HeelKawnian
 				if pawn_attacker.data != null and pawn_attacker.data.has_method("grant_krond"):
 					pawn_attacker.data.grant_krond(KROND_PER_KILL)
 			var main_node: Node = attacker.get_tree().get_root().get_node_or_null("Main") if attacker != null else null
@@ -120,11 +139,11 @@ static func _calculate_damage(attacker: Node, defender: Node) -> float:
 	var damage: float = BASE_DAMAGE
 
 	# Attacker modifiers
-	if attacker is Pawn:
-		var pawn_attacker: Pawn = attacker as Pawn
+	if attacker is HeelKawnian:
+		var pawn_attacker: HeelKawnian = attacker as HeelKawnian
 		# Skill-based damage: mining/hunting skills translate to combat
-		var combat_skill: float = (pawn_attacker.data.skill_xp.get(PawnData.Skill.HUNTING, 0.0) +
-									pawn_attacker.data.skill_xp.get(PawnData.Skill.MINING, 0.0)) / 200.0
+		var combat_skill: float = (pawn_attacker.data.skill_xp.get(HeelKawnianData.Skill.HUNTING, 0.0) +
+									pawn_attacker.data.skill_xp.get(HeelKawnianData.Skill.MINING, 0.0)) / 200.0
 		damage *= (1.0 + combat_skill * 0.5)  # Up to 50% damage increase from skills
 
 		# Gear-based attack bonus
@@ -143,8 +162,8 @@ static func _calculate_damage(attacker: Node, defender: Node) -> float:
 		damage = spec.get("melee_damage", BASE_DAMAGE)
 
 	# Defender reduction
-	if defender is Pawn:
-		var pawn_defender: Pawn = defender as Pawn
+	if defender is HeelKawnian:
+		var pawn_defender: HeelKawnian = defender as HeelKawnian
 		# Gear-based defense
 		var gear_stats: Dictionary = pawn_defender.data.get_gear_stats()
 		var gear_defense: float = float(gear_stats.get("defense", 0.0))
@@ -159,7 +178,7 @@ static func _calculate_damage(attacker: Node, defender: Node) -> float:
 
 
 ## Get average of all skill levels (for accuracy calculation)
-static func _get_average_skill(pawn_data: PawnData) -> float:
+static func _get_average_skill(pawn_data: HeelKawnianData) -> float:
 	var total: float = 0.0
 	var count: int = 0
 	for skill_xp in pawn_data.skill_xp.values():
@@ -171,15 +190,46 @@ static func _get_average_skill(pawn_data: PawnData) -> float:
 static func _combat_name(actor: Node) -> String:
 	if actor == null:
 		return "Unknown"
-	if actor is Pawn:
-		var p: Pawn = actor as Pawn
+	if actor is HeelKawnian:
+		var p: HeelKawnian = actor as HeelKawnian
 		if p.data != null:
 			return p.data.display_name
-		return "Pawn"
+		return "HeelKawnian"
 	if actor is Enemy:
 		var e: Enemy = actor as Enemy
 		return e.get_species_name()
 	return actor.name
+
+
+static func _weapon_name(actor: Node) -> String:
+	if actor == null:
+		return "fists"
+	if actor is HeelKawnian:
+		var p: HeelKawnian = actor as HeelKawnian
+		if p.data != null and p.data.is_carrying():
+			var carry: int = int(p.data.carrying)
+			match carry:
+				Item.Type.FLINT_KNIFE: return "flint knife"
+				Item.Type.WOODEN_SPEAR: return "wooden spear"
+				Item.Type.FLINT_PICK: return "flint pick"
+				Item.Type.TORCH: return "torch"
+				Item.Type.STONE: return "stone"
+				Item.Type.STICK: return "stick"
+				_: return "a weapon"
+	return "claws"
+
+
+static func _combat_id(actor: Node) -> int:
+	if actor == null:
+		return -1
+	if actor is HeelKawnian:
+		var p: HeelKawnian = actor as HeelKawnian
+		if p.data != null:
+			return int(p.data.id)
+	if actor is Enemy:
+		var e: Enemy = actor as Enemy
+		return e.get_instance_id()
+	return -1
 
 
 static func _rank_value(rank_name: String) -> int:
@@ -203,9 +253,9 @@ static func _is_anarchy_combat(attacker: Node, defender: Node) -> bool:
 
 
 static func _maybe_issue_attack_move(attacker: Node, defender: Node) -> void:
-	if not (attacker is Pawn):
+	if not (attacker is HeelKawnian):
 		return
-	var leader: Pawn = attacker as Pawn
+	var leader: HeelKawnian = attacker as HeelKawnian
 	if leader.data == null:
 		return
 	if _is_anarchy_combat(attacker, defender):
@@ -214,8 +264,8 @@ static func _maybe_issue_attack_move(attacker: Node, defender: Node) -> void:
 	if leader_rank == "grunt":
 		return
 	var target_pos: Vector2i = leader.data.tile_pos
-	if defender is Pawn and (defender as Pawn).data != null:
-		target_pos = (defender as Pawn).data.tile_pos
+	if defender is HeelKawnian and (defender as HeelKawnian).data != null:
+		target_pos = (defender as HeelKawnian).data.tile_pos
 	elif defender is Enemy:
 		target_pos = (defender as Enemy).tile_pos
 	var leader_score: int = _rank_value(leader_rank)
@@ -232,9 +282,9 @@ static func _maybe_issue_attack_move(attacker: Node, defender: Node) -> void:
 
 
 static func _pawn_below_anarchy_threshold(actor: Node) -> bool:
-	if not (actor is Pawn):
+	if not (actor is HeelKawnian):
 		return false
-	var p: Pawn = actor as Pawn
+	var p: HeelKawnian = actor as HeelKawnian
 	if p.data == null:
 		return false
 	if p.data.has_method("get_health_percentage"):
@@ -243,13 +293,13 @@ static func _pawn_below_anarchy_threshold(actor: Node) -> bool:
 
 
 static func _apply_anarchy_behavior(attacker: Node, defender: Node) -> void:
-	var attacker_pawn: Pawn = attacker as Pawn if attacker is Pawn else null
+	var attacker_pawn: HeelKawnian = attacker as HeelKawnian if attacker is HeelKawnian else null
 	if attacker_pawn == null or attacker_pawn.data == null:
 		return
 	var attacker_tile: Vector2i = attacker_pawn.data.tile_pos
 	var defender_tile: Vector2i = attacker_tile
-	if defender is Pawn and (defender as Pawn).data != null:
-		defender_tile = (defender as Pawn).data.tile_pos
+	if defender is HeelKawnian and (defender as HeelKawnian).data != null:
+		defender_tile = (defender as HeelKawnian).data.tile_pos
 	elif defender is Enemy:
 		defender_tile = (defender as Enemy).tile_pos
 	var retreat: bool = _pawn_below_anarchy_threshold(attacker_pawn)

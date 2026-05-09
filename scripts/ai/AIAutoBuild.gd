@@ -353,14 +353,14 @@ func _scan_for_new_pawns(_tick: int) -> void:
 		if pawn.has_method("get_state"):
 			pawn_state = int(pawn.get_state())
 
-		if pawn_state == 0 or pawn_state == -1:  # Pawn.State.IDLE = 0
+		if pawn_state == 0 or pawn_state == -1:  # HeelKawnian.State.IDLE = 0
 			var profession: int = -1
 			if data.has_method("profession_name"):
 				profession = int(data.get("current_profession"))
 			elif data.has_meta("current_profession"):
 				profession = int(data.get_meta("current_profession"))
 			
-			if profession == int(PawnData.Profession.BUILDER):
+			if profession == int(HeelKawnianData.Profession.BUILDER):
 				_direct_builder_pawn(pawn, data)
 
 

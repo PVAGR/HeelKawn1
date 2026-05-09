@@ -109,7 +109,7 @@ var work_ticks_needed: int = 20
 var work_ticks_done: int = 0
 
 var state: int = State.OPEN
-var assigned_pawn: Pawn = null
+var assigned_pawn: HeelKawnian = null
 
 ## [TRADE_HAUL] only: source / destination stockpiles and resource batch.
 var trade_from: Stockpile = null
@@ -272,37 +272,37 @@ static func tool_job_work_ticks(job_type: int) -> int:
 ## Which skill this job trains.
 static func tool_job_skill(job_type: int) -> int:
 	match job_type:
-		Type.GATHER_FLINT: return PawnData.Skill.MINING
-		Type.GATHER_STICK: return PawnData.Skill.FORAGING
-		Type.CRAFT_KNIFE:  return PawnData.Skill.BUILDING
-		Type.CRAFT_TORCH:  return PawnData.Skill.BUILDING
-		Type.CRAFT_PICK:   return PawnData.Skill.BUILDING
-		Type.CRAFT_SPEAR:  return PawnData.Skill.HUNTING
-		Type.COOK_MEAT:    return PawnData.Skill.BUILDING
-		Type.COOK_BERRIES: return PawnData.Skill.FORAGING
-		Type.DRY_MEAT:     return PawnData.Skill.BUILDING
-		Type.PLANT_SEEDS:  return PawnData.Skill.FORAGING
-		Type.HARVEST_CROPS:return PawnData.Skill.FORAGING
-		Type.CARVE_GRAVE_MARKER:    return PawnData.Skill.BUILDING  # Carving/inscription
-		Type.CARVE_KNOWLEDGE_STONE: return PawnData.Skill.BUILDING  # Knowledge inscription
-		Type.CARVE_LEDGER_STONE:    return PawnData.Skill.BUILDING  # Record-keeping
+		Type.GATHER_FLINT: return HeelKawnianData.Skill.MINING
+		Type.GATHER_STICK: return HeelKawnianData.Skill.FORAGING
+		Type.CRAFT_KNIFE:  return HeelKawnianData.Skill.BUILDING
+		Type.CRAFT_TORCH:  return HeelKawnianData.Skill.BUILDING
+		Type.CRAFT_PICK:   return HeelKawnianData.Skill.BUILDING
+		Type.CRAFT_SPEAR:  return HeelKawnianData.Skill.HUNTING
+		Type.COOK_MEAT:    return HeelKawnianData.Skill.BUILDING
+		Type.COOK_BERRIES: return HeelKawnianData.Skill.FORAGING
+		Type.DRY_MEAT:     return HeelKawnianData.Skill.BUILDING
+		Type.PLANT_SEEDS:  return HeelKawnianData.Skill.FORAGING
+		Type.HARVEST_CROPS:return HeelKawnianData.Skill.FORAGING
+		Type.CARVE_GRAVE_MARKER:    return HeelKawnianData.Skill.BUILDING  # Carving/inscription
+		Type.CARVE_KNOWLEDGE_STONE: return HeelKawnianData.Skill.BUILDING  # Knowledge inscription
+		Type.CARVE_LEDGER_STONE:    return HeelKawnianData.Skill.BUILDING  # Record-keeping
 		# Phase 6: new building skills
 		Type.BUILD_FARM_WHEAT, Type.BUILD_FARM_CORN, Type.BUILD_FARM_VEGETABLES, Type.BUILD_HERB_GARDEN:
-			return PawnData.Skill.FORAGING  # Agriculture
+			return HeelKawnianData.Skill.FORAGING  # Agriculture
 		Type.BUILD_WORKSHOP, Type.BUILD_LOOM, Type.BUILD_KILN, Type.BUILD_SMELTER:
-			return PawnData.Skill.BUILDING  # Production
+			return HeelKawnianData.Skill.BUILDING  # Production
 		Type.BUILD_BOATYARD, Type.BUILD_DOCK, Type.BUILD_FISHERMAN_HUT:
-			return PawnData.Skill.BUILDING  # Maritime construction
+			return HeelKawnianData.Skill.BUILDING  # Maritime construction
 		Type.BUILD_APOTHECARY:
-			return PawnData.Skill.BUILDING  # Medicine
+			return HeelKawnianData.Skill.BUILDING  # Medicine
 		Type.BUILD_LIBRARY, Type.BUILD_SCHOOL:
-			return PawnData.Skill.BUILDING  # Knowledge
+			return HeelKawnianData.Skill.BUILDING  # Knowledge
 		Type.BUILD_BARRACKS, Type.BUILD_WATCHTOWER:
-			return PawnData.Skill.BUILDING  # Military
+			return HeelKawnianData.Skill.BUILDING  # Military
 		Type.BUILD_MARKET, Type.BUILD_TRADING_POST:
-			return PawnData.Skill.BUILDING  # Trade
+			return HeelKawnianData.Skill.BUILDING  # Trade
 		Type.BUILD_ROAD:
-			return PawnData.Skill.BUILDING  # Infrastructure
+			return HeelKawnianData.Skill.BUILDING  # Infrastructure
 		Type.BUILD_GRANARY, Type.BUILD_CELLAR:
-			return PawnData.Skill.BUILDING  # Storage
-	return PawnData.Skill.FORAGING
+			return HeelKawnianData.Skill.BUILDING  # Storage
+	return HeelKawnianData.Skill.FORAGING

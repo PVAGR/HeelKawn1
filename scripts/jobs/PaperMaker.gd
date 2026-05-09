@@ -4,7 +4,7 @@ class_name PaperMaker
 
 ## NPC job for making paper from plant fibers (STICK proxy).
 
-func perform_work(pawn: Pawn, job: Job) -> bool:
+func perform_work(pawn: HeelKawnian, job: Job) -> bool:
 	if pawn.data.carrying != Item.Type.STICK or pawn.data.carried_count < 3:
 		# Need materials
 		return false

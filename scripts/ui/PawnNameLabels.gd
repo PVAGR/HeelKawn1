@@ -77,7 +77,7 @@ func _draw() -> void:
 			continue
 		# World-space position: pawn position relative to this node
 		var pos: Vector2 = pawn.global_position - global_position
-		var name: String = pawn.data.display_name if pawn.data.display_name != "" else "Pawn"
+		var name: String = pawn.data.display_name if pawn.data.display_name != "" else "HeelKawnian"
 		var prof: String = ""
 		if pawn.data.has_method("profession_label_from_enum"):
 			prof = pawn.data.profession_label_from_enum(pawn.data.current_profession)

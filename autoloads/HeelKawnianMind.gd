@@ -2,7 +2,7 @@ extends Node
 ## HeelKawnianMind — Deterministic mind snapshot engine
 ##
 ## Computes a readable mind snapshot for any pawn by composing data from
-## existing systems (PawnData, PawnConsciousness, KinshipSystem,
+## existing systems (HeelKawnianData, PawnConsciousness, KinshipSystem,
 ## GrudgeManager, GossipManager, WorldMemory, WorldMeaning, CulturalMemory,
 ## HeelKawnianManager). Every line in the snapshot comes from actual state —
 ## no invented text, no random flavor.
@@ -61,7 +61,7 @@ static func stable_randf(seed_a: int, seed_b: int, seed_c: int) -> float:
 func compute_mind_snapshot(pawn: Node) -> Dictionary:
 	if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 		return {}
-	var data: PawnData = pawn.data
+	var data: HeelKawnianData = pawn.data
 	var pawn_id: int = int(data.id)
 	var tick: int = GameManager.tick_count if GameManager != null else 0
 
@@ -151,7 +151,7 @@ func clear() -> void:
 
 # ==================== LAYER 1: BODY ====================
 
-func _compute_body(data: PawnData, pawn: Node) -> Dictionary:
+func _compute_body(data: HeelKawnianData, pawn: Node) -> Dictionary:
 	var pressures: PackedStringArray = []
 	var emotional: PackedStringArray = []
 
@@ -218,16 +218,16 @@ func _compute_body(data: PawnData, pawn: Node) -> Dictionary:
 	}
 
 
-func _estimate_warmth(data: PawnData, pawn: Node) -> float:
+func _estimate_warmth(data: HeelKawnianData, pawn: Node) -> float:
 	# Approximate warmth from pawn's current tile
-	# (Full warmth calc is in Pawn.gd — this is a simplified version for mind)
+	# (Full warmth calc is in HeelKawnian.gd — this is a simplified version for mind)
 	if pawn.has_method("_hearth_proxy_warmth_bonus"):
 		var bonus: float = pawn.call("_hearth_proxy_warmth_bonus", data.tile_pos)
 		return bonus
 	return 0.0
 
 
-func _dominant_need(data: PawnData) -> String:
+func _dominant_need(data: HeelKawnianData) -> String:
 	var min_val: float = 100.0
 	var dominant: String = "none"
 	if data.hunger < min_val:
@@ -247,7 +247,7 @@ func _dominant_need(data: PawnData) -> String:
 
 # ==================== LAYER 2: MEMORY ====================
 
-func _compute_memory(pawn_id: int, data: PawnData) -> Dictionary:
+func _compute_memory(pawn_id: int, data: HeelKawnianData) -> Dictionary:
 	var result: Dictionary = {
 		"summary": "No significant memories yet.",
 		"trauma": 0.0,
@@ -304,7 +304,7 @@ func _compute_memory(pawn_id: int, data: PawnData) -> Dictionary:
 
 # ==================== LAYER 3: RELATIONSHIPS ====================
 
-func _compute_relationships(pawn_id: int, data: PawnData) -> Dictionary:
+func _compute_relationships(pawn_id: int, data: HeelKawnianData) -> Dictionary:
 	var result: Dictionary = {
 		"family": "No family recorded.",
 		"summary": "No strong bonds recorded yet.",
@@ -383,7 +383,7 @@ func _compute_relationships(pawn_id: int, data: PawnData) -> Dictionary:
 
 # ==================== LAYER 4: DESIRE / PURSUIT ====================
 
-func _compute_desire(data: PawnData, pawn: Node, body: Dictionary, memory: Dictionary) -> Dictionary:
+func _compute_desire(data: HeelKawnianData, pawn: Node, body: Dictionary, memory: Dictionary) -> Dictionary:
 	var pursuit: String = "Seeking purpose"
 	var reason: String = ""
 
@@ -569,7 +569,7 @@ func _pursuit_for_drive(drive: String, next_need: String) -> String:
 
 # ==================== LAYER 5: CULTURE ====================
 
-func _compute_culture(data: PawnData) -> Dictionary:
+func _compute_culture(data: HeelKawnianData) -> Dictionary:
 	var result: Dictionary = {
 		"summary": "No cultural traditions yet.",
 	}
@@ -610,7 +610,7 @@ func _compute_culture(data: PawnData) -> Dictionary:
 
 # ==================== LAYER 6: MEANING ====================
 
-func _compute_meaning(data: PawnData) -> Dictionary:
+func _compute_meaning(data: HeelKawnianData) -> Dictionary:
 	var result: Dictionary = {
 		"place_feeling": "",
 		"tags": [],
@@ -652,7 +652,7 @@ func _compute_meaning(data: PawnData) -> Dictionary:
 
 # ==================== LAYER 7: THOUGHT COMPOSITION ====================
 
-func _compose_thought(body: Dictionary, memory: Dictionary, desire: Dictionary, meaning: Dictionary, data: PawnData) -> Dictionary:
+func _compose_thought(body: Dictionary, memory: Dictionary, desire: Dictionary, meaning: Dictionary, data: HeelKawnianData) -> Dictionary:
 	var thought: String = ""
 	var reason: String = desire.get("reason", "")
 
@@ -702,7 +702,7 @@ func _compose_thought(body: Dictionary, memory: Dictionary, desire: Dictionary, 
 	}
 
 
-func _idle_thought_from_personality(data: PawnData) -> String:
+func _idle_thought_from_personality(data: HeelKawnianData) -> String:
 	# Deterministic idle thought based on personality traits
 	# Uses stable_hash instead of randf
 	var h: int = stable_hash(int(data.id), GameManager.tick_count / 100, 42)
@@ -729,7 +729,7 @@ func _idle_thought_from_personality(data: PawnData) -> String:
 
 # ==================== LAYER 8: WORK INTENT ====================
 
-func _compute_work_intent(pawn: Node, data: PawnData) -> Dictionary:
+func _compute_work_intent(pawn: Node, data: HeelKawnianData) -> Dictionary:
 	var current_job = pawn.get("_current_job")
 	if current_job != null and is_instance_valid(current_job):
 		var job_type: int = int(current_job.type)
@@ -742,7 +742,7 @@ func _compute_work_intent(pawn: Node, data: PawnData) -> Dictionary:
 
 	# Not working — check state
 	var state: int = int(pawn.get_state()) if pawn.has_method("get_state") else 0
-	# Pawn.State enum: IDLE=0, WALKING=1, WORKING=2, EATING=3, SLEEPING=6
+	# HeelKawnian.State enum: IDLE=0, WALKING=1, WORKING=2, EATING=3, SLEEPING=6
 	match state:
 		0:
 			return {"text": "Idle — looking for work"}
@@ -758,7 +758,7 @@ func _compute_work_intent(pawn: Node, data: PawnData) -> Dictionary:
 
 # ==================== HELPERS ====================
 
-func _format_likes(data: PawnData) -> String:
+func _format_likes(data: HeelKawnianData) -> String:
 	if data.likes.is_empty():
 		return "No strong preferences yet."
 	var parts: PackedStringArray = []
@@ -771,7 +771,7 @@ func _format_likes(data: PawnData) -> String:
 	return ", ".join(parts)
 
 
-func _format_dislikes(data: PawnData) -> String:
+func _format_dislikes(data: HeelKawnianData) -> String:
 	if data.dislikes.is_empty():
 		return "No strong aversions yet."
 	var parts: PackedStringArray = []
@@ -787,14 +787,14 @@ func _format_dislikes(data: PawnData) -> String:
 func _pawn_name_for_id(pawn_id: int) -> String:
 	var ps: Node = _pawn_spawner()
 	if ps == null or not ps.has_method("get_pawn_by_id"):
-		return "Pawn #%d" % pawn_id
+		return "HeelKawnian #%d" % pawn_id
 	var pawn: Variant = ps.call("get_pawn_by_id", pawn_id)
 	if pawn == null or not is_instance_valid(pawn):
-		return "Pawn #%d" % pawn_id
+		return "HeelKawnian #%d" % pawn_id
 	var d = pawn.get("data")
-	if d != null and d is PawnData:
+	if d != null and d is HeelKawnianData:
 		return str(d.display_name)
-	return "Pawn #%d" % pawn_id
+	return "HeelKawnian #%d" % pawn_id
 
 
 func _pawn_spawner() -> Node:
@@ -808,7 +808,7 @@ func _job_class() -> Object:
 	return load("res://scripts/jobs/Job.gd")
 
 
-func _settlement_id_for_pawn(data: PawnData) -> int:
+func _settlement_id_for_pawn(data: HeelKawnianData) -> int:
 	if SettlementMemory == null:
 		return -1
 	return SettlementMemory.get_settlement_id_for_pawn(int(data.id))
@@ -822,7 +822,7 @@ func _region_key_for_tile(tile: Vector2i) -> int:
 
 # ==================== LAYER 9: KNOWLEDGE ====================
 
-func _compute_knowledge(pawn_id: int, data: PawnData) -> Dictionary:
+func _compute_knowledge(pawn_id: int, data: HeelKawnianData) -> Dictionary:
 	var result: Dictionary = {
 		"summary": "No knowledge recorded.",
 		"count": 0,
@@ -875,7 +875,7 @@ func _knowledge_name_for_type(kt: int) -> String:
 
 # ==================== LAYER 10: WAR/CONFLICT MEMORY ====================
 
-func _compute_war_memory(pawn_id: int, data: PawnData) -> Dictionary:
+func _compute_war_memory(pawn_id: int, data: HeelKawnianData) -> Dictionary:
 	var result: Dictionary = {
 		"summary": "No conflict memories.",
 		"conflict_count": 0,
@@ -934,7 +934,7 @@ func _compute_war_memory(pawn_id: int, data: PawnData) -> Dictionary:
 
 # ==================== LAYER 11: SETTLEMENT HISTORY ====================
 
-func _compute_settlement_history(data: PawnData) -> Dictionary:
+func _compute_settlement_history(data: HeelKawnianData) -> Dictionary:
 	var result: Dictionary = {
 		"summary": "No settlement history.",
 	}

@@ -31,7 +31,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_D or event.keycode == KEY_RIGHT:
 			action_id = ACTION_MOVE_EAST
 		elif event.keycode == KEY_E:
-			# Pickup / contextual interact (Pawn tries ground pickup first, then haul/eat/sleep).
+			# Pickup / contextual interact (HeelKawnian tries ground pickup first, then haul/eat/sleep).
 			action_id = ACTION_INTERACT
 		elif event.keycode == KEY_Q:
 			action_id = ACTION_DROP_ITEM
@@ -111,6 +111,8 @@ func _record_player_action(pawn: Node, action_type: String, executed: bool) -> v
 		"tick": GameManager.tick_count,
 		"pos": {"x": pos.x, "y": pos.y},
 	})
+	if pawn_id >= 0 and IncarnationManager != null:
+		IncarnationManager.on_player_action(pawn_id, action_type, "Player %s: %s (executed=%s)" % [action_type, action_type, str(executed)])
 
 
 func get_queue_size() -> int:
@@ -186,7 +188,7 @@ func _execute_command(pawn: Node, command: String) -> bool:
 	if command == "!pledge_loyalty":
 		if not pawn.has_method("pledge_loyalty"):
 			return false
-		var target: Pawn = _nearest_ruler(pawn as Pawn)
+		var target: HeelKawnian = _nearest_ruler(pawn as HeelKawnian)
 		if target == null:
 			return false
 		return bool(pawn.call("pledge_loyalty", target))
@@ -201,10 +203,10 @@ func _execute_command(pawn: Node, command: String) -> bool:
 	return false
 
 
-func _nearest_ruler(pawn: Pawn) -> Pawn:
+func _nearest_ruler(pawn: HeelKawnian) -> HeelKawnian:
 	if pawn == null:
 		return null
-	var best: Pawn = null
+	var best: HeelKawnian = null
 	var best_d2: float = INF
 	for p in PawnSpawner.find_pawns():
 		if p.data == null:

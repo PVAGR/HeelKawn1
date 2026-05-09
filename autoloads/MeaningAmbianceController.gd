@@ -5,7 +5,7 @@ extends Node
 ##
 ## Wires to:
 ## - WorldMeaning.recompute() via signal or poll-on-meaning-change
-## - Pawn behavior via global meaning_label accessor
+## - HeelKawnian behavior via global meaning_label accessor
 ## - SettlementPlanner via memorial spawn hooks
 
 const MEANING_TRANSITION_TICKS_AUDIO: int = 30   # 3 seconds at 10 ticks/sec
@@ -111,8 +111,8 @@ func _start_transition(region_key: int, from_label: String, to_label: String) ->
 
 
 func _notify_pawns_of_meaning_change(_region_key: int, _new_label: String) -> void:
-	# Placeholder: broadcast to Pawn instances via signal or direct call
-	# Implementation in Pawn.gd will poll MeaningAmbianceController.get_region_label()
+	# Placeholder: broadcast to HeelKawnian instances via signal or direct call
+	# Implementation in HeelKawnian.gd will poll MeaningAmbianceController.get_region_label()
 	pass
 
 

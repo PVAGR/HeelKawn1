@@ -4,7 +4,7 @@ class_name ToolMaker
 
 ## NPC job for crafting pens from stick + wood + meat (leather strip).
 
-func perform_work(pawn: Pawn, job: Job) -> bool:
+func perform_work(pawn: HeelKawnian, job: Job) -> bool:
 	# Check materials in inventory or stockpile
 	if pawn.data.carried_count < 3:  # stick, wood, meat
 		return false

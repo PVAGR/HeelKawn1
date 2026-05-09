@@ -188,7 +188,7 @@ func _apply_plague_effects(regions: Array[Vector2i], severity: int) -> void:
 			if pawn == null or not is_instance_valid(pawn):
 				continue
 
-			# Safe access for PawnData (RefCounted, not Dictionary)
+			# Safe access for HeelKawnianData (RefCounted, not Dictionary)
 			var tile: Vector2i = Vector2i(-1, -1)
 			if pawn.data != null:
 				if pawn.data.has_method("get"):

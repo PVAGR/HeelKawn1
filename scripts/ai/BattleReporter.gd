@@ -261,6 +261,30 @@ func _notify_family_of_death(pawn_id: int, battle: Dictionary) -> void:
 
 # ==================== UTILITY ====================
 
+## Record an individual combat death (not part of a formal battle).
+## Used by CombatResolver when a HeelKawnian dies in combat.
+func record_combat_death(victim_id: int, killer_id: int, location: Vector2i) -> void:
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	# Record to WorldMemory as a combat death event
+	if _world_memory != null and _world_memory.has_method("record_event"):
+		_world_memory.record_event({
+			"type": "combat_death",
+			"category": "combat",
+			"severity": 5,
+			"victim_id": victim_id,
+			"killer_id": killer_id,
+			"tick": tick,
+			"tile": {"x": int(location.x), "y": int(location.y)},
+		})
+	# Notify family
+	_notify_family_of_death(victim_id, {
+		"battle_id": -1,
+		"location": location,
+		"tick": tick,
+		"victor": "individual_combat",
+	})
+
+
 func _get_battle(battle_id: int) -> Dictionary:
 	for battle in battle_reports:
 		if battle.battle_id == battle_id:
@@ -328,13 +352,13 @@ func _record_full_battle_log(battle: Dictionary) -> void:
 	if battle.heroism.size() > 0:
 		log.append("HEROISM:")
 		for act in battle.heroism:
-			log.append("  - Pawn %d: %s" % [act.pawn_id, act.description])
+			log.append("  - HeelKawnian %d: %s" % [act.pawn_id, act.description])
 		log.append("")
 	
 	if battle.cowardice.size() > 0:
 		log.append("COWARDICE:")
 		for act in battle.cowardice:
-			log.append("  - Pawn %d: %s" % [act.pawn_id, act.description])
+			log.append("  - HeelKawnian %d: %s" % [act.pawn_id, act.description])
 		log.append("")
 	
 	log.append("Significance: %d/10" % battle.significance)

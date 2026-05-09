@@ -1,8 +1,6 @@
 extends Node
-class_name HeelKawnAIOrchestrator
-
 ## Master controller for HeelKawn's 5-layer AI architecture
-## Coordinates: Memory, Pawn, Settlement, Diplomacy, Ecosystem AI
+## Coordinates: Memory, HeelKawnian, Settlement, Diplomacy, Ecosystem AI
 ##
 ## Usage:
 ##   HeelKawnAIOrchestrator.initialize()
@@ -180,7 +178,7 @@ func _check_cross_layer_narratives(tick: int) -> void:
 				"type": "wildlife_threat",
 				"layers": ["pawn", "ecosystem"],
 				"tick": tick,
-				"description": "Pawn fear amplified by ecosystem wildlife boom"
+				"description": "HeelKawnian fear amplified by ecosystem wildlife boom"
 			})
 	
 	# Emit cross-layer narratives

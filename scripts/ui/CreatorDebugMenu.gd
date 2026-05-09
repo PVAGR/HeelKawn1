@@ -192,7 +192,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "memorial_system", "label": "47 · Memorial System (Phase 5/6 — memorials, sacred geography, pilgrimage)"},
 			{"id": "knowledge_system", "label": "48 · Knowledge Systems (Phase 5/6 — carriers, teaching, loss/rediscovery)"},
 			{"id": "heelkawnians", "label": "49 · HeelKawnians (individual development AI profiles)"},
-			{"id": "communication", "label": "50 · Pawn Communication Log (conversations, plans, clans)"},
+			{"id": "communication", "label": "50 · HeelKawnian Communication Log (conversations, plans, clans)"},
 			{"id": "force_building", "label": "51 · FORCE BUILDING — post 10 wall/bed/zone jobs NOW"},
 		],
 	},
@@ -1048,7 +1048,7 @@ func _report_pawns() -> void:
 	for p in ps.pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
-		var d: PawnData = p.data
+		var d: HeelKawnianData = p.data
 		var t: Vector2i = d.tile_pos
 		var rk: int = _WM._region_key(t.x, t.y)
 		var carry_s: String = "-"
@@ -1177,7 +1177,7 @@ func _report_portable_character() -> void:
 	if m == null:
 		print("[PORTABLE_CHARACTER] Main missing")
 		return
-	var p: Pawn = m.get_player_pawn()
+	var p: HeelKawnian = m.get_player_pawn()
 	if p == null or p.data == null:
 		print(
 				"[PORTABLE_CHARACTER] No pawn — select one on the map (selection = player pawn for export)."
@@ -1194,7 +1194,7 @@ func _report_portable_character() -> void:
 	print("=== HEELKAWN_PORTABLE_CHARACTER_JSON END ===")
 	print(
 			"[PORTABLE_CHARACTER] hint: paste between BEGIN/END; future MMO/website importers target schema=%s"
-			% PawnData.PORTABLE_CHARACTER_SCHEMA
+			% HeelKawnianData.PORTABLE_CHARACTER_SCHEMA
 	)
 
 
@@ -1294,9 +1294,9 @@ func _report_creator_session_digest() -> void:
 		print("• (Quiet moment — no fresh highlights in the last few events.)")
 	print("")
 	if main_node != null and main_node.has_method("get_selected_pawn"):
-		var sp: Pawn = main_node.call("get_selected_pawn") as Pawn
+		var sp: HeelKawnian = main_node.call("get_selected_pawn") as HeelKawnian
 		if sp != null and is_instance_valid(sp) and sp.data != null:
-			var dd: PawnData = sp.data
+			var dd: HeelKawnianData = sp.data
 			var rk_sel: int = _WM._region_key(dd.tile_pos.x, dd.tile_pos.y)
 			print(
 					"Your highlighted Heelkawnian on the right-hand sheet: %s — doing \"%s\" · hunger/rest snapshot %.0f / %.0f."
@@ -1458,7 +1458,7 @@ func _report_profession_liking() -> void:
 	for p in ps.pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
-		var d: PawnData = p.data
+		var d: HeelKawnianData = p.data
 		var aff: String = "farm=%.3f combat=%.3f build=%.3f craft=%.3f diplo=%.3f" % [
 			float(d.affinities.get("farming", 0.5)),
 			float(d.affinities.get("combat", 0.5)),
@@ -1544,7 +1544,7 @@ func _report_grudges() -> void:
 		if grudge_mgr.has_method("get_grudges_held_by"):
 			var grudges: Array = grudge_mgr.get_grudges_held_by(pawn_id)
 			if not grudges.is_empty():
-				print("Pawn %d (%s) holds %d grudges:" % [pawn_id, p.data.display_name, grudges.size()])
+				print("HeelKawnian %d (%s) holds %d grudges:" % [pawn_id, p.data.display_name, grudges.size()])
 				for g in grudges:
 					print("  → Target: %d | Type: %s | Intensity: %.2f | Gen: %d" % [
 						g.get("target_id", -1),
@@ -1606,7 +1606,7 @@ func _report_gossip_reputation() -> void:
 		if not notorious.is_empty():
 			print("--- NOTORIOUS PAWNS (bad reputation) ---")
 			for n in notorious:
-				print("  Pawn %d: Reputation %.2f (%s)" % [
+				print("  HeelKawnian %d: Reputation %.2f (%s)" % [
 					n.get("pawn_id", -1),
 					n.get("reputation", 0.0),
 					n.get("label", "Unknown")
@@ -1647,7 +1647,7 @@ func _report_gossip_reputation() -> void:
 		if gossip_mgr.has_method("get_reputation_for") and gossip_mgr.has_method("get_reputation_label"):
 			var rep: float = gossip_mgr.get_reputation_for(pawn_id)
 			var label: String = gossip_mgr.get_reputation_label(pawn_id)
-			print("  Pawn %d (%s): %.2f (%s)" % [pawn_id, p.data.display_name, rep, label])
+			print("  HeelKawnian %d (%s): %.2f (%s)" % [pawn_id, p.data.display_name, rep, label])
 			shown_pawns += 1
 	
 	print("")
@@ -1711,12 +1711,12 @@ func _report_avoidance_ai() -> void:
 		if grudge_mgr.has_method("get_enemies_for"):
 			var enemies: Array[int] = grudge_mgr.get_enemies_for(pawn_id, 0.4)
 			if not enemies.is_empty():
-				print("Pawn %d (%s) avoids %d enemies:" % [pawn_id, p.data.display_name, enemies.size()])
+				print("HeelKawnian %d (%s) avoids %d enemies:" % [pawn_id, p.data.display_name, enemies.size()])
 				for enemy_id in enemies:
 					var intensity: float = 0.0
 					if grudge_mgr.has_method("get_grudge_intensity"):
 						intensity = grudge_mgr.get_grudge_intensity(pawn_id, enemy_id)
-					print("  → Pawn %d (intensity: %.2f)" % [enemy_id, intensity])
+					print("  → HeelKawnian %d (intensity: %.2f)" % [enemy_id, intensity])
 				shown_pawns += 1
 	
 	# Count blood feuds (highest avoidance priority)
@@ -1881,7 +1881,7 @@ func _report_knowledge_carriers() -> void:
 		var pawn_id: int = int(entry.id)
 		var count: int = int(entry.count)
 		# Find pawn by ID
-		var pawn: Pawn = null
+		var pawn: HeelKawnian = null
 		for p in ps.pawns:
 			if p != null and is_instance_valid(p) and p.data != null and int(p.data.id) == pawn_id:
 				pawn = p
@@ -2203,7 +2203,7 @@ func _report_memorial_system() -> void:
 			print("    Associated pawns: %d" % associated_pawns.size())
 			if associated_pawns.size() > 0:
 				for pawn_id in associated_pawns:
-					print("      - Pawn #%d" % pawn_id)
+					print("      - HeelKawnian #%d" % pawn_id)
 			print("")
 			shown += 1
 
@@ -2411,7 +2411,7 @@ func _report_heelkawnians() -> void:
 		for pawn in ps.pawns:
 			if pawn == null or not is_instance_valid(pawn):
 				continue
-			var pdata: PawnData = pawn.get("data") as PawnData
+			var pdata: HeelKawnianData = pawn.get("data") as HeelKawnianData
 			if pdata != null and int(pdata.id) == int(profile.get("pawn_id", -1)):
 				matrix_decision = HeelKawnianManager.get_matrix_decision_for_pawn(pawn)
 				break
@@ -2937,8 +2937,8 @@ func _report_error_issues() -> void:
 	var error_count: int = 0
 	var files_to_check: Array[String] = [
 		"res://scripts/ui/AIControlPanel.gd",
-		"res://scripts/pawn/Pawn.gd", 
-		"res://scripts/pawn/PawnData.gd",
+		"res://scripts/pawn/HeelKawnian.gd", 
+		"res://scripts/pawn/HeelKawnianData.gd",
 		"res://scripts/pawn/PawnNeuralNetwork.gd",
 		"res://scripts/ai/SettlementAI.gd",
 		"res://scenes/main/Main.gd",
@@ -3363,7 +3363,7 @@ func _report_pathfinder_audit() -> void:
 		print("  PawnSpawner missing")
 		return
 
-	# Pawn components
+	# HeelKawnian components
 	var pawn_components: Dictionary = {}  # component_id -> count
 	var stranded_pawns: int = 0
 	var stockpile_components: Dictionary = {}  # component_id -> count of zones
@@ -3383,7 +3383,7 @@ func _report_pathfinder_audit() -> void:
 				stockpile_components[comp] += 1
 				stockpile_comp_set[comp] = true
 
-	# Pawn components
+	# HeelKawnian components
 	for p in ps.pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue

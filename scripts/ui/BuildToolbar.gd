@@ -20,7 +20,7 @@ signal reroll_requested()
 ## Legacy compatibility signal: retained so Main can connect safely.
 signal zone_filter_cycle_requested()
 
-## Open cosmetic editor for the selected pawn (same PawnData fields as NPCs).
+## Open cosmetic editor for the selected pawn (same HeelKawnianData fields as NPCs).
 signal appearance_edit_requested()
 
 ## Persist colony (F5) / restore last save (F8). Mirrors keyboard shortcuts.

@@ -4,7 +4,7 @@ class_name BookBinder
 
 ## NPC job for binding books from paper + leather + ink.
 
-func perform_work(pawn: Pawn, job: Job) -> bool:
+func perform_work(pawn: HeelKawnian, job: Job) -> bool:
 	# Check for 5 paper, 2 leather, 1 ink
 	# Consume from stockpile or carried
 	var book = BookItem.new("")  # empty content

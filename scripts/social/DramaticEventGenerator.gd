@@ -41,7 +41,7 @@ func _init(pawn_id: int) -> void:
 
 ## Attempt to start or advance a story beat for this pawn.
 ## Returns a Dictionary with the event if one fires, or empty Dictionary.
-func attempt_story_beat(pawn_data: PawnData, world_state: Dictionary) -> Dictionary:
+func attempt_story_beat(pawn_data: HeelKawnianData, world_state: Dictionary) -> Dictionary:
 	var tick: int = _current_tick()
 
 	# Cooldown check
@@ -69,7 +69,7 @@ func attempt_story_beat(pawn_data: PawnData, world_state: Dictionary) -> Diction
 	return {}
 
 
-func _try_start_story(pawn_data: PawnData, world_state: Dictionary) -> Dictionary:
+func _try_start_story(pawn_data: HeelKawnianData, world_state: Dictionary) -> Dictionary:
 	var rng_label: StringName = StringName("dramatic:%d:start" % _pawn_id)
 	var roll: float = WorldRNG.range_for(rng_label, 0.0, 1.0, _current_tick())
 
@@ -94,7 +94,7 @@ func _try_start_story(pawn_data: PawnData, world_state: Dictionary) -> Dictionar
 	return story
 
 
-func _pick_event_type(pawn_data: PawnData, world_state: Dictionary, rng_label: StringName) -> int:
+func _pick_event_type(pawn_data: HeelKawnianData, world_state: Dictionary, rng_label: StringName) -> int:
 	# Weight event types by pawn state
 	var hunger: float = pawn_data.hunger
 	var mood: float = pawn_data.mood
@@ -125,7 +125,7 @@ func _pick_event_type(pawn_data: PawnData, world_state: Dictionary, rng_label: S
 	return DramaticEvent.DISCOVERY
 
 
-func _advance_story(story: Dictionary, pawn_data: PawnData, world_state: Dictionary) -> Dictionary:
+func _advance_story(story: Dictionary, pawn_data: HeelKawnianData, world_state: Dictionary) -> Dictionary:
 	var next_beat: int = story.current_beat + 1
 	if next_beat > StoryBeat.CODA:
 		# Story complete
@@ -143,7 +143,7 @@ func _advance_story(story: Dictionary, pawn_data: PawnData, world_state: Diction
 	return {}
 
 
-func _fire_beat(story: Dictionary, beat: int, pawn_data: PawnData, world_state: Dictionary) -> Dictionary:
+func _fire_beat(story: Dictionary, beat: int, pawn_data: HeelKawnianData, world_state: Dictionary) -> Dictionary:
 	var event_type: int = story.event_type
 	var beat_name: String = _beat_to_string(beat)
 	var event_name: String = _event_to_string(event_type)
@@ -172,7 +172,7 @@ func _fire_beat(story: Dictionary, beat: int, pawn_data: PawnData, world_state: 
 	return event_dict
 
 
-func _fire_resolution(story: Dictionary, pawn_data: PawnData, world_state: Dictionary) -> Dictionary:
+func _fire_resolution(story: Dictionary, pawn_data: HeelKawnianData, world_state: Dictionary) -> Dictionary:
 	var event_name: String = _event_to_string(story.event_type)
 
 	# Determine outcome based on event type and pawn state
@@ -211,8 +211,8 @@ func _fire_resolution(story: Dictionary, pawn_data: PawnData, world_state: Dicti
 	return resolution
 
 
-func _generate_beat_description(event_type: int, beat: int, pawn_data: PawnData) -> String:
-	var pawn_name: String = "Pawn%d" % _pawn_id
+func _generate_beat_description(event_type: int, beat: int, pawn_data: HeelKawnianData) -> String:
+	var pawn_name: String = "HeelKawnian%d" % _pawn_id
 	var event_name: String = _event_to_string(event_type)
 	var beat_name: String = _beat_to_string(beat)
 

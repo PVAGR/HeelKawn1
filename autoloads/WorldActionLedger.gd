@@ -568,7 +568,7 @@ func _get_pawn_name(pawn_id: int) -> String:
 			if int(pawn.data.id) == pawn_id:
 				return pawn.data.get("display_name", "Unknown")
 	
-	return "Pawn #%d" % pawn_id
+	return "HeelKawnian #%d" % pawn_id
 
 
 # ==================== PUBLIC API ====================

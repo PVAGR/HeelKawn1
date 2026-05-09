@@ -24,7 +24,7 @@ var target_zoom_scale: float = 1.0
 const ZOOM_CONFIG: Dictionary = {
 	ZoomLevel.ZOOM_1_1: {
 		"scale": 1.0,
-		"name": "Pawn View",
+		"name": "HeelKawnian View",
 		"lod_distance": 0,
 		"info_density": "maximum"
 	},

@@ -1,9 +1,9 @@
 [gd_scene load_steps=3 format=3 uid="uid://heelkawn_pawn"]
 
-[ext_resource type="Script" path="res://scripts/pawn/Pawn.gd" id="1_pawn"]
+[ext_resource type="Script" path="res://scripts/pawn/HeelKawnian.gd" id="1_pawn"]
 [ext_resource type="Script" path="res://scripts/pawn/ActionPopupLabel.gd" id="2_popup"]
 
-[node name="Pawn" type="Node2D"]
+[node name="HeelKawnian" type="Node2D"]
 z_index = 10
 script = ExtResource("1_pawn")
 

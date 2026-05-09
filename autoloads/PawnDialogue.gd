@@ -145,7 +145,7 @@ func _get_activity_name(pawn_node: Node) -> String:
 func _get_pawn_name(pawn_id: int) -> String:
 	var pawn: Node = _find_pawn_node(pawn_id)
 	if pawn != null and is_instance_valid(pawn) and pawn.data != null:
-		var name: String = str(pawn.data.get("display_name", ""))
+		var name: String = str(pawn.data.display_name) if "display_name" in pawn.data else ""
 		if not name.is_empty():
 			return name
 	return "Pawn %d" % pawn_id
@@ -155,6 +155,6 @@ func _find_pawn_node(pawn_id: int):
 		return null
 	var pawns: Array[Node] = get_tree().get_nodes_in_group("pawns")
 	for p in pawns:
-		if is_instance_valid(p) and p.data != null and int(p.data.get("id", -1)) == pawn_id:
+		if is_instance_valid(p) and p.data != null and ("id" in p.data) and int(p.data.id) == pawn_id:
 			return p
 	return null

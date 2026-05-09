@@ -738,9 +738,12 @@ func get_guild_memory(guild_id: int, limit: int = 10) -> Array[Dictionary]:
 	var guild: Dictionary = _get_guild(guild_id)
 	if guild == null:
 		return []
-	
 	var start: int = max(0, guild.memory.size() - limit)
-	return guild.memory.slice(start)
+	var result: Array[Dictionary] = []
+	for i in range(start, guild.memory.size()):
+		if guild.memory[i] is Dictionary:
+			result.append(guild.memory[i])
+	return result
 
 
 # ==================== TREASURY SYSTEM ====================

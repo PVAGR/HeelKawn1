@@ -113,9 +113,11 @@ func pick_daily_goals(survival_importance: float = 0.7, neural_summary: Dictiona
 	_tick_last_daily_refresh = tick_now
 
 	# Keep completed goals, remove failed ones
-	_goals = _goals.filter(func(g):
-		return g.status == GoalStatus.ACTIVE or g.progress < 1.0
-	)
+	var filtered: Array[Dictionary] = []
+	for g in _goals:
+		if g.status == GoalStatus.ACTIVE or g.progress < 1.0:
+			filtered.append(g)
+	_goals = filtered
 
 	# Neural-driven goal bias
 	var collapse_risk: float = float(neural_summary.get("collapse_risk", 0.5))
@@ -176,7 +178,7 @@ func pick_daily_goals(survival_importance: float = 0.7, neural_summary: Dictiona
 
 ## Get active goals
 func get_active_goals() -> Array[Dictionary]:
-	var active: Array = []
+	var active: Array[Dictionary] = []
 	for g in _goals:
 		if g.status == GoalStatus.ACTIVE:
 			active.append(g)
@@ -261,9 +263,16 @@ func get_state() -> Dictionary:
 
 
 func load_state(state: Dictionary) -> void:
-	_goals = state.get("goals", [])
-	_tick_last_daily_refresh = state.get("tick_last_daily_refresh", 0)
-	_lifelong_aspirations = state.get("lifelong_aspirations", [])
+	var raw_goals = state.get("goals", [])
+	_goals.clear()
+	for g in raw_goals:
+		if g is Dictionary:
+			_goals.append(g)
+	_tick_last_daily_refresh = int(state.get("tick_last_daily_refresh", 0))
+	var raw_asp = state.get("lifelong_aspirations", [])
+	_lifelong_aspirations.clear()
+	for a in raw_asp:
+		_lifelong_aspirations.append(a)
 
 
 func active_goal_count() -> int:

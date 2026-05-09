@@ -199,8 +199,10 @@ func get_policy_effects(settlement_id: int) -> Dictionary:
 func get_available_policies(category: String) -> Array[String]:
 	if not POLICY_CATEGORIES.has(category):
 		return []
-	
-	return POLICY_CATEGORIES[category].keys()
+	var result: Array[String] = []
+	for k in POLICY_CATEGORIES[category].keys():
+		result.append(str(k))
+	return result
 
 
 # ==================== ZONE MANAGEMENT ====================

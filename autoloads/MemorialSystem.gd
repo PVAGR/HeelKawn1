@@ -164,8 +164,6 @@ func create_death_memorial(pawn_data: Variant, death_tile: Vector2i, violent: bo
 	var pawn_id: int = 0
 	if pawn_data is int:
 		pawn_id = pawn_data
-	elif pawn_data != null and pawn_data.has_method("get"):
-		pawn_id = int(pawn_data.get("id", 0))
 	elif pawn_data != null and "id" in pawn_data:
 		pawn_id = int(pawn_data.id)
 	
@@ -280,7 +278,7 @@ func _transmit_knowledge_at_gathering(gathering: Dictionary) -> void:
 	for pawn_id in gathering.attendees:
 		var pawn = _get_pawn_by_id(pawn_id)
 		if pawn != null and pawn.data != null:
-			var age: float = pawn.data.get("age", 0.0)
+			var age: float = float(pawn.data.age) if "age" in pawn.data else 0.0
 			if age > 40.0:
 				elders.append(pawn_id)
 			elif age < 20.0:

@@ -385,7 +385,10 @@ func _direct_builder_pawn(pawn: Node, data: RefCounted) -> void:
 
 ## Get all build intents
 func get_all_intents() -> Array[Dictionary]:
-	return build_intents.duplicate()
+	var result: Array[Dictionary] = []
+	for intent in build_intents:
+		result.append(intent.duplicate() if intent is Dictionary else intent)
+	return result
 
 ## Get intents by priority
 func get_intents_by_priority(priority: int) -> Array[Dictionary]:

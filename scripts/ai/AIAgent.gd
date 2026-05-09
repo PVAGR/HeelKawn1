@@ -550,7 +550,11 @@ func get_status() -> Dictionary:
 	}
 
 func get_active_goals() -> Array[Goal]:
-	return current_goals.filter(func(g: Goal) -> bool: return not g.completed)
+	var result: Array[Goal] = []
+	for g in current_goals:
+		if not g.completed:
+			result.append(g)
+	return result
 
 func add_goal(goal: Goal) -> void:
 	current_goals.append(goal)

@@ -339,7 +339,10 @@ func _clean_old_requests(tick: int) -> void:
 
 ## Get all requests
 func get_all_requests() -> Array[Dictionary]:
-	return cooperation_requests.duplicate()
+	var result: Array[Dictionary] = []
+	for r in cooperation_requests:
+		result.append(r.duplicate() if r is Dictionary else r)
+	return result
 
 ## Get request by ID
 func get_request(request_id: int) -> Dictionary:

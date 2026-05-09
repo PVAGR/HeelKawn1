@@ -12,6 +12,12 @@ func _leader_or_first_resident() -> int:
 		return resident_agents[0]
 	return -1
 
+## Safe enum key name lookup — returns "UNKNOWN" if out of range
+static func _safe_enum_name(keys: Array, value: int) -> String:
+	if value >= 0 and value < keys.size():
+		return keys[value]
+	return "UNKNOWN"
+
 # Autoload references (accessed via Engine.get_singleton or get_node)
 var CollapseSystem = null
 var AuthoritySystem = null
@@ -152,9 +158,12 @@ func _settlement_salt(extra: int = 0) -> int:
 func _pick_resident(label: String, extra: int = 0) -> int:
 	if resident_agents.is_empty():
 		return -1
-	var ordered: Array[int] = resident_agents.duplicate()
+	var ordered = resident_agents.duplicate()
 	ordered.sort()
-	return ordered[WorldRNG.index_for(_settlement_stream(label), ordered.size(), _settlement_salt(extra))]
+	var idx := WorldRNG.index_for(_settlement_stream(label), ordered.size(), _settlement_salt(extra))
+	if idx < 0 or idx >= ordered.size():
+		return -1
+	return ordered[idx]
 var technological_level: int = 0  # 0-100
 
 # Leadership properties
@@ -319,6 +328,8 @@ func propose_collective_goal(goal_type: String, proposer_id: int, base_priority:
 				current_support += 1
 	
 	# Check if goal has enough support
+	if resident_agents.is_empty():
+		return false
 	if float(current_support) / float(resident_agents.size()) >= support_threshold:
 		collective_goals.append(goal)
 		historical_events.append("Collective goal approved: %s (priority: %d, neural modifier: %d)" % [goal_type, adjusted_priority, neural_priority_modifier])
@@ -431,7 +442,7 @@ func enter_emergency_mode(reason: String) -> void:
 	var essential_goals = ["gather_food", "build_shelter", "defend_settlement"]
 	var i = collective_goals.size() - 1
 	while i >= 0:
-		if not collective_goals[i].type in essential_goals:
+		if collective_goals[i].goal_type not in essential_goals:
 			collective_goals.remove_at(i)
 		i -= 1
 	
@@ -693,7 +704,10 @@ func check_treaty_expiry() -> void:
 		if age >= treaty.get("duration", 5000):
 			# Treaty expired
 			active_treaties.remove_at(i)
-			historical_events.append("Peace treaty with settlement %d expired" % treaty["parties"][0] if treaty["parties"][0] != settlement_id else treaty["parties"][1])
+			var parties = treaty.get("parties", [])
+			if parties.size() >= 2:
+				var other_id = parties[0] if parties[0] != settlement_id else parties[1]
+				historical_events.append("Peace treaty with settlement %d expired" % other_id)
 		
 		i -= 1
 
@@ -808,11 +822,14 @@ func _develop_new_norms() -> void:
 				available_norms.append(candidate_norm)
 		if available_norms.is_empty():
 			return
-		var norm_name: String = available_norms[WorldRNG.index_for(
+		var norm_idx := WorldRNG.index_for(
 			_settlement_stream("new_norm"),
 			available_norms.size(),
 			_settlement_salt(cultural_norms.size() * 43)
-		)]
+		)
+		if norm_idx < 0 or norm_idx >= available_norms.size():
+			return
+		var norm_name: String = available_norms[norm_idx]
 		var norm: CulturalNorm = CulturalNorm.new(norm_name, "Emergent cultural practice")
 		cultural_norms.append(norm)
 
@@ -881,15 +898,15 @@ func _update_government_type() -> void:
 	
 	if population > 30 and government_type == GovernmentType.TRIBAL:
 		government_type = GovernmentType.CHIEFDOM
-		historical_events.append("Government evolved from %s to %s" % [GovernmentType.keys()[previous_government], GovernmentType.keys()[government_type]])
+		historical_events.append("Government evolved from %s to %s" % [_safe_enum_name(GovernmentType.keys(), previous_government), _safe_enum_name(GovernmentType.keys(), government_type)])
 	elif population > 60 and government_type == GovernmentType.CHIEFDOM:
 		previous_government = government_type
 		government_type = GovernmentType.MONARCHY
-		historical_events.append("Government evolved from %s to %s" % [GovernmentType.keys()[previous_government], GovernmentType.keys()[government_type]])
+		historical_events.append("Government evolved from %s to %s" % [_safe_enum_name(GovernmentType.keys(), previous_government), _safe_enum_name(GovernmentType.keys(), government_type)])
 	elif population > 120 and government_type == GovernmentType.MONARCHY:
 		previous_government = government_type
 		government_type = GovernmentType.REPUBLIC
-		historical_events.append("Government evolved from %s to %s" % [GovernmentType.keys()[previous_government], GovernmentType.keys()[government_type]])
+		historical_events.append("Government evolved from %s to %s" % [_safe_enum_name(GovernmentType.keys(), previous_government), _safe_enum_name(GovernmentType.keys(), government_type)])
 
 # === Economic Management ===
 
@@ -982,6 +999,8 @@ func _process_collective_goals() -> void:
 	
 	for i in range(collective_goals.size()):
 		var goal: CollectiveGoal = collective_goals[i]
+		if goal.expected_duration <= 0:
+			continue
 		goal.progress += 1.0 / float(goal.expected_duration)
 		
 		if goal.progress >= 1.0:
@@ -1058,7 +1077,7 @@ func get_settlement_status() -> Dictionary:
 	return {
 		"name": settlement_name,
 		"population": population,
-		"government": GovernmentType.keys()[government_type],
+		"government": _safe_enum_name(GovernmentType.keys(), government_type),
 		"focus": DevelopmentFocus.keys()[development_focus],
 		"technological_level": technological_level,
 		"active_goals": collective_goals.size(),

@@ -389,14 +389,17 @@ func _calculate_error(predicted: Array[float], target: Array[float]) -> Array[fl
 
 func _backpropagate_error(error: Array[float]) -> void:
 	# Simplified backpropagation
+	if error.is_empty():
+		return
 	var learning_rate = learning_algorithms.backpropagation.learning_rate
+	var error_val: float = error[0]
 	
 	for connection_key in neural_matrix.connections:
 		var connections = neural_matrix.connections[connection_key]
 		for connection_id in connections:
 			var connection = connections[connection_id]
 			# Update weights based on error gradient
-			connection.weight += learning_rate * error[0] * connection.strength
+			connection.weight += learning_rate * error_val * connection.strength
 			# Apply weight decay
 			connection.weight *= (1.0 - learning_algorithms.backpropagation.decay)
 

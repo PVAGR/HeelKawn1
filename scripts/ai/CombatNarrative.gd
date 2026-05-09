@@ -273,7 +273,11 @@ func _get_name(entity_id: int) -> String:
 ## Get cached narratives
 func get_cached_narratives(limit: int = 10) -> Array[Dictionary]:
 	var start: int = max(0, _narrative_cache.size() - limit)
-	return _narrative_cache.slice(start)
+	var result: Array[Dictionary] = []
+	for i in range(start, _narrative_cache.size()):
+		if _narrative_cache[i] is Dictionary:
+			result.append(_narrative_cache[i])
+	return result
 
 ## Clear cache (for memory management)
 func clear_cache() -> void:

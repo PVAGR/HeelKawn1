@@ -87,7 +87,11 @@ func _init(pawn_data: HeelKawnianData, world: Node2D) -> void:
 
 
 func _initialize_neural_network() -> void:
-	neural_network = load("res://scripts/pawn/PawnNeuralNetwork.gd").new()
+	var nn_script := load("res://scripts/pawn/PawnNeuralNetwork.gd")
+	if nn_script == null:
+		push_warning("PawnBrain: Failed to load PawnNeuralNetwork script")
+		return
+	neural_network = nn_script.new()
 	if neural_network == null:
 		push_warning("PawnBrain: Failed to load PawnNeuralNetwork")
 		return
@@ -126,7 +130,10 @@ func _initialize_dramatic_engine() -> void:
 
 
 func _cache_world_references() -> void:
-	var root: Node = Engine.get_main_loop().root
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	var root: Node = tree.root
 	_world_ai = root.get_node_or_null("/root/WorldAI")
 	_combat_resolver = root.get_node_or_null("/root/CombatResolver")
 	# SettlementAI is per-settlement, resolved on demand
@@ -295,7 +302,7 @@ func _rebuild_decision_context(pawn: HeelKawnian, sim_tick: int) -> void:
 	if cur_state != _ctx_last_state:
 		_decision_context["state"] = cur_state
 		_ctx_last_state = cur_state
-	if pawn != null:
+	if pawn != null and pawn.data != null:
 		_decision_context["is_carrying"] = pawn.data.is_carrying()
 		_decision_context["carrying_food"] = pawn.data.carrying == Item.Type.BERRY or pawn.data.carrying == Item.Type.MEAT
 	var cur_tile: Vector2i = _pawn_data.tile_pos
@@ -539,7 +546,7 @@ func _refresh_goals(_sim_tick: int) -> void:
 		neural_summary = _world_ai.get_neural_network_summary()
 
 	# Pick daily goals (includes survival + lifelong aspirations)
-	goal_engine.pick_daily_goals(_decision_context.get("hunger", 50.0) < 50.0, neural_summary)
+	goal_engine.pick_daily_goals(1.0 if _decision_context.get("hunger", 50.0) < 50.0 else 0.5, neural_summary)
 
 	# If we have an active goal, bias the decision context
 	var active_goals: Array = goal_engine.get_active_goals()

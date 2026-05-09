@@ -113,7 +113,7 @@ func get_gossip_to_share(target_pawn_id: int, relationship_strength: float) -> A
 	if relationship_strength < MIN_TRUST_THRESHOLD:
 		return []
 
-	var to_share: Array = []
+	var to_share: Array[Dictionary] = []
 	var tick_now: int = _current_tick()
 
 	for g in _received_gossip:
@@ -154,14 +154,19 @@ func tick_decay() -> void:
 	var tick_now: int = _current_tick()
 
 	# Remove old, stale gossip
-	_received_gossip = _received_gossip.filter(func(g):
+	var filtered: Array[Dictionary] = []
+	for g in _received_gossip:
 		var age: int = tick_now - g.tick_first_heard
-		return age < 10000  # Keep gossip for ~10000 ticks
-	)
+		if age < 10000:
+			filtered.append(g)
+	_received_gossip = filtered
 
 	# Limit total gossip entries
 	if _received_gossip.size() > 32:
-		_received_gossip = _received_gossip.slice(_received_gossip.size() - 32)
+		var trimmed: Array[Dictionary] = []
+		for i in range(_received_gossip.size() - 32, _received_gossip.size()):
+			trimmed.append(_received_gossip[i])
+		_received_gossip = trimmed
 
 
 ## Record that I shared gossip
@@ -174,13 +179,17 @@ func mark_shared(gossip_id: int) -> void:
 
 ## Get gossip for conversation
 func get_conversation_topics(min_importance: float = 0.4) -> Array[String]:
-	var topics: Array = []
+	var topics: Array[String] = []
 	for g in _received_gossip:
 		if g.reliability_score >= min_importance:
-			topics.append(g.content)
+			topics.append(str(g.content))
 
 	topics.shuffle()
-	return topics.slice(0, mini(3, topics.size()))
+	var count: int = mini(3, topics.size())
+	var result: Array[String] = []
+	for i in range(count):
+		result.append(topics[i])
+	return result
 
 
 ## Create new gossip about discovery

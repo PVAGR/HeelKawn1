@@ -34,7 +34,8 @@ func unregister(z: Stockpile) -> void:
 
 func clear_all() -> void:
 	# Defensive copy because listeners may reorder the list.
-	var snap: Array[Stockpile] = _zones.duplicate()
+	var snap: Array[Stockpile] = []
+	snap.assign(_zones)
 	_zones.clear()
 	for z in snap:
 		zone_unregistered.emit(z)

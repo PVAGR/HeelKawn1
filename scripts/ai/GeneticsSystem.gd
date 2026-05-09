@@ -334,7 +334,11 @@ func get_all_traits(pawn_id: int) -> Dictionary:
 func _get_pawn_genetic_traits(pawn_id: int) -> Array[String]:
 	if not pawn_traits.has(pawn_id):
 		return []
-	return pawn_traits[pawn_id].get("genetic_traits", [])
+	var raw = pawn_traits[pawn_id].get("genetic_traits", [])
+	var result: Array[String] = []
+	for t in raw:
+		result.append(str(t))
+	return result
 
 ## Get trait effects for a pawn
 func get_trait_effects(pawn_id: int) -> Dictionary:

@@ -298,7 +298,10 @@ func is_name_used(name: String) -> bool:
 ## Get name history
 func get_name_history(limit: int = 10) -> Array[String]:
 	var start: int = max(0, _name_history.size() - limit)
-	return _name_history.slice(start)
+	var result: Array[String] = []
+	for i in range(start, _name_history.size()):
+		result.append(str(_name_history[i]))
+	return result
 
 
 ## Clear name history (for world reroll)

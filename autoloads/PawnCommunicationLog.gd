@@ -28,13 +28,19 @@ func _ready() -> void:
 func _on_game_tick(tick: int) -> void:
 	# Expire old log entries
 	if communication_log.size() > MAX_LOG_ENTRIES:
-		communication_log = communication_log.slice(-MAX_LOG_ENTRIES)
+		var trimmed: Array[Dictionary] = []
+		for i in range(communication_log.size() - MAX_LOG_ENTRIES, communication_log.size()):
+			if communication_log[i] is Dictionary:
+				trimmed.append(communication_log[i])
+		communication_log = trimmed
 	
 	# Expire very old entries
 	var expiry_threshold: int = tick - LOG_EXPIRY_TICKS
-	communication_log = communication_log.filter(func(entry): 
-		return int(entry.get("tick", 0)) > expiry_threshold
-	)
+	var kept: Array[Dictionary] = []
+	for entry in communication_log:
+		if entry is Dictionary and int(entry.get("tick", 0)) > expiry_threshold:
+			kept.append(entry)
+	communication_log = kept
 
 
 ## Log pawn communication about job/work

@@ -566,7 +566,7 @@ func _get_pawn_name(pawn_id: int) -> String:
 	for pawn in _pawn_spawner.pawns:
 		if pawn != null and is_instance_valid(pawn) and pawn.data != null:
 			if int(pawn.data.id) == pawn_id:
-				return pawn.data.get("display_name", "Unknown")
+				return str(pawn.data.display_name) if "display_name" in pawn.data else "Unknown"
 	
 	return "HeelKawnian #%d" % pawn_id
 

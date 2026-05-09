@@ -115,7 +115,7 @@ func _update_display() -> void:
 	text += "[color=%s]Ticks/Frame: %.1f[/color]  (avg: %.1f)\n" % [tick_color, float(ticks_last_frame), avg_ticks]
 	text += "Speed: %.1fx  |  Accum: %.1f ticks\n" % [speed, accum_time]
 	text += "\n"
-	text += "Pawns: %d  |  Objects: %d  |  Mem: %.1f MB\n" % [pawn_count, obj_count, mem_mb]
+	text += "HeelKawnians: %d  |  Objects: %d  |  Mem: %.1f MB\n" % [pawn_count, obj_count, mem_mb]
 
 	# Performance grade
 	var grade: String = _calculate_grade(fps, avg_fps, ticks_last_frame, avg_ticks, speed)

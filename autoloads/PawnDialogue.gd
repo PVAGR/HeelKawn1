@@ -61,7 +61,7 @@ func clear_conversation(pawn_id: int) -> void:
 func _generate_response(pawn_id: int) -> Dictionary:
 	var pawn_node: Node = _find_pawn_node(pawn_id)
 	if pawn_node == null or not is_instance_valid(pawn_node):
-		return {"error": "Pawn not found"}
+		return {"error": "HeelKawnian not found"}
 	var context: Dictionary = _build_pawn_context(pawn_node)
 	var system_prompt: String = _build_system_prompt(pawn_node, context)
 	var conv: Array = _histories.get(pawn_id, [])
@@ -148,7 +148,7 @@ func _get_pawn_name(pawn_id: int) -> String:
 		var name: String = str(pawn.data.display_name) if "display_name" in pawn.data else ""
 		if not name.is_empty():
 			return name
-	return "Pawn %d" % pawn_id
+	return "HeelKawnian %d" % pawn_id
 
 func _find_pawn_node(pawn_id: int):
 	if not is_instance_valid(get_tree()):

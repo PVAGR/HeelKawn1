@@ -309,6 +309,26 @@ func clear_history() -> void:
 	_name_history.clear()
 
 
+## Generate a settlement name using cultural prefixes/suffixes
+func generate_settlement_name(region_key: int) -> String:
+	var prefixes: Array = [
+		"Oak", "Pine", "Stone", "Iron", "Ash", "Elm", "Birch", "Willow",
+		"Red", "White", "Dark", "Bright", "High", "Low", "Old", "New",
+		"North", "South", "East", "West", "Haven", "Thorn", "Moss", "Clay"
+	]
+	var suffixes: Array = [
+		"hold", "ford", "vale", "wick", "bury", "haven", "stead", "mere",
+		"ton", "field", "wood", "stone", "dale", "fell", "gate", "keep",
+		"reach", "mark", "holm", "thorp", "ham", "by", "wick", "croft"
+	]
+	var idx: int = abs(region_key) % (prefixes.size() * suffixes.size())
+	var pi: int = idx / suffixes.size()
+	var si: int = idx % suffixes.size()
+	var name: String = prefixes[pi] + suffixes[si]
+	_name_history.append("Settlement: " + name)
+	return name
+
+
 # ==================== PUBLIC API ====================
 
 ## Generate name for a specific pawn

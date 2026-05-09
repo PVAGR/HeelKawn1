@@ -82,12 +82,12 @@ func _create_ui() -> void:
 	v.add_child(btn_dump_tickables)
 
 	var btn_dump_pawns = Button.new()
-	btn_dump_pawns.text = "Dump Pawns"
+	btn_dump_pawns.text = "Dump HeelKawnians"
 	btn_dump_pawns.connect("pressed", Callable(self, "_on_dump_pawns"))
 	v.add_child(btn_dump_pawns)
 
 	var btn_dump_moving = Button.new()
-	btn_dump_moving.text = "Count Moving Pawns"
+	btn_dump_moving.text = "Count Moving HeelKawnians"
 	btn_dump_moving.connect("pressed", Callable(self, "_on_count_moving_pressed"))
 	v.add_child(btn_dump_moving)
 

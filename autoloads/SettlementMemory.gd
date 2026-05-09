@@ -216,6 +216,14 @@ func _capture_resource_truth(st: Dictionary) -> void:
     }
 
 
+## Refresh resource_truth for all settlements (called periodically from tick loop).
+## This ensures settlements know their actual stockpile state without a full recompute.
+func refresh_resource_truth() -> void:
+    for st in settlements:
+        if st is Dictionary:
+            _capture_resource_truth(st as Dictionary)
+
+
 func _balance_bucket_food(units: int) -> String:
     if units <= 0:
         return "DEFICIT"
@@ -429,13 +437,15 @@ func recompute(_world: World) -> void:
 ## from SettlementIdentity. Unnamed settlements show "Unnamed" until they've
 ## been lived in long enough to deserve a name.
 func _resolve_settlement_names() -> void:
-    if SettlementIdentity == null:
-        return
     for i in range(settlements.size()):
         if not (settlements[i] is Dictionary):
             continue
         var st: Dictionary = settlements[i] as Dictionary
         if bool(st.get("name_resolved", false)):
+            continue
+        var existing_name: String = str(st.get("name", ""))
+        if not existing_name.is_empty():
+            st["name_resolved"] = true
             continue
         var state: String = str(st.get("state", ""))
         # Only active/recovering settlements can earn a name
@@ -445,9 +455,17 @@ func _resolve_settlement_names() -> void:
         var pop: int = int(st.get("population", 0))
         if pop < 2:
             continue
-        # Resolve the name via SettlementIdentity
-        var identity: Dictionary = SettlementIdentity.resolve_for(st)
-        st["name"] = str(identity.get("name", ""))
+        # Generate a settlement name using NameGenerator if available
+        var name: String = ""
+        if NameGenerator != null:
+            name = NameGenerator.generate_settlement_name(int(st.get("center_region", 0)))
+        if name.is_empty():
+            # Fallback: region-based name
+            var crk: int = int(st.get("center_region", 0))
+            var rx: int = crk & 0xFFFF
+            var ry: int = (crk >> 16) & 0xFFFF
+            name = "Settlement %d-%d" % [rx, ry]
+        st["name"] = name
         st["name_resolved"] = true
         settlements[i] = st
 

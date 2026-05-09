@@ -965,10 +965,13 @@ func _refresh() -> void:
 		var prof: String = d.profession_name()
 		var hk: String = d.highest_affinity_skill()
 		var arc_bits: String = "children %d" % int(d.children_count)
+		var clan_bit: String = ""
+		if d.clan_id >= 0:
+			clan_bit = " · clan %d" % d.clan_id
 		if prof == "None":
-			_subtitle_label.text = "%s · no prof · bias %s" % [arc_bits, hk]
+			_subtitle_label.text = "%s · no prof · bias %s%s" % [arc_bits, hk, clan_bit]
 		else:
-			_subtitle_label.text = "%s · %s · bias %s" % [arc_bits, prof, hk]
+			_subtitle_label.text = "%s · %s · bias %s%s" % [arc_bits, prof, hk, clan_bit]
 		_refresh_portrait_strip(d)
 
 	# Update tier indicator from ProgressionSystem
@@ -1447,12 +1450,15 @@ func _build_settlement_line(d: HeelKawnianData) -> String:
 	var war_state: String = str(war.get("state", "peace")).replace("_", " ")
 	var gov: Dictionary = SettlementMemory.get_governance_profile_for_region(center_rk)
 	var gov_type: String = str(gov.get("type", "anarchy")).replace("_", " ")
+	var st_name: String = str(st.get("name", ""))
+	if st_name.is_empty():
+		st_name = "Settlement #%d" % sid
 	return (
-		"Settlement #%d · %d regions · center #%d\n"
+		"%s · %d regions · center #%d\n"
 		+ "State: %s · culture: %s · revival: %d\n"
 		+ "Members: %d · intent: %s · war: %s\n"
 		+ "Governance: %s"
-	) % [sid, region_count, center_rk, state, culture, revival, members, intent, war_state, gov_type]
+	) % [st_name, region_count, center_rk, state, culture, revival, members, intent, war_state, gov_type]
 
 
 func _count_settlement_members(settlement_idx: int) -> int:

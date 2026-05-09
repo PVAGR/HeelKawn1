@@ -338,7 +338,11 @@ func _get_pawn_spawner() -> Node:
 
 ## Get all active trade routes
 func get_active_routes() -> Array[Dictionary]:
-	return trade_routes.filter(func(r): return r.status == "en_route")
+	var result: Array[Dictionary] = []
+	for r in trade_routes:
+		if r.status == "en_route":
+			result.append(r)
+	return result
 
 
 ## Get trade statistics

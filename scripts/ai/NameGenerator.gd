@@ -105,12 +105,14 @@ func generate_given_name(culture: String = "common", gender: int = 0) -> String:
 		culture = "common"
 	
 	var culture_data: Dictionary = cultural_names[culture]
-	var name_pool: Array[String]
+	var name_pool: Array[String] = []
 	
 	if gender == 0:  # Male
-		name_pool = culture_data.male.duplicate()
+		for n in culture_data.male:
+			name_pool.append(str(n))
 	else:  # Female
-		name_pool = culture_data.female.duplicate()
+		for n in culture_data.female:
+			name_pool.append(str(n))
 	
 	if name_pool.size() == 0:
 		return "Unknown"

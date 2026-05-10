@@ -66,7 +66,7 @@ func _on_game_tick(_tick: int) -> void:
 
 
 ## Apply an injury to a pawn.
-func apply_injury(pawn: HeelKawnian, injury_type: int, severity: float, source: String = "unknown") -> void:
+func apply_injury(pawn: Node, injury_type: int, severity: float, source: String = "unknown") -> void:
 	var pd = pawn.get_pawn_data()
 	if pd == null:
 		return
@@ -120,7 +120,7 @@ func _tick_pawn_injuries() -> void:
 
 
 ## Process recovery for a single pawn's injuries.
-func _tick_pawn_injury_recovery(pawn: HeelKawnian) -> void:
+func _tick_pawn_injury_recovery(pawn: Node) -> void:
 	var pd = pawn.get_pawn_data()
 	if pd == null or pd.injuries.is_empty():
 		return
@@ -173,7 +173,7 @@ func _recalculate_pain(pd: HeelKawnianData) -> void:
 ## Check if there's a healer pawn nearby.
 ## Currently no healer profession exists, so this always returns false.
 ## Preserving the structure for when a healer profession is added.
-func _has_healer_nearby(pawn: HeelKawnian, radius: int = 12) -> bool:
+func _has_healer_nearby(pawn: Node, radius: int = 12) -> bool:
 	# No healer profession exists yet — skip the O(n²) scan entirely.
 	# TODO: Re-enable when HeelKawnianData.Profession.HEALER is added.
 	return false

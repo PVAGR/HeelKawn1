@@ -111,7 +111,7 @@ func _find_settlement(center_region: int, sm: Node) -> Dictionary:
 			var center_val = s.get("center_region")
 			var center_reg = int(center_val if center_val != null else -1)
 			if center_reg == center_region:
-			return s
+				return s
 	return {}
 
 func _state_color(state: String) -> String:

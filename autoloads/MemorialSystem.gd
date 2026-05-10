@@ -167,8 +167,8 @@ func create_death_memorial(pawn_data: Variant, death_tile: Vector2i, violent: bo
 	elif pawn_data != null and "id" in pawn_data:
 		pawn_id = int(pawn_data.id)
 	var last_words: String = ""
-	if pawn_data != null and not (pawn_data is int) and pawn_data.has_method("get"):
-		last_words = str(pawn_data.get("last_words", ""))
+	if pawn_data != null and not (pawn_data is int) and "last_words" in pawn_data:
+		last_words = str(pawn_data.last_words)
 	if last_words.is_empty():
 		last_words = "Resting at the edge of the world."
 	

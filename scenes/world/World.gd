@@ -920,14 +920,14 @@ func is_bed_free(tile: Vector2i) -> bool:
 
 ## True if the bed is currently reserved/occupied by `pawn` specifically. Used
 ## by HeelKawnian._decay_needs to grant the bed sleep bonus only to its rightful sleeper.
-func is_bed_owned_by(tile: Vector2i, pawn: HeelKawnian) -> bool:
+func is_bed_owned_by(tile: Vector2i, pawn: Node) -> bool:
 	return _bed_occupants.get(tile, null) == pawn
 
 
 ## Atomically reserve the given bed for `pawn`. Returns false if it's not a
 ## bed or someone else already holds it. Successful reserve survives the walk
 ## to the bed and the entire sleep, then must be released.
-func reserve_bed(tile: Vector2i, pawn: HeelKawnian) -> bool:
+func reserve_bed(tile: Vector2i, pawn: Node) -> bool:
 	if not _bed_occupants.has(tile):
 		return false
 	var current = _bed_occupants[tile]
@@ -937,7 +937,7 @@ func reserve_bed(tile: Vector2i, pawn: HeelKawnian) -> bool:
 	return true
 
 
-func release_bed(tile: Vector2i, pawn: HeelKawnian) -> void:
+func release_bed(tile: Vector2i, pawn: Node) -> void:
 	if not _bed_occupants.has(tile):
 		return
 	if _bed_occupants[tile] == pawn:
@@ -948,7 +948,7 @@ func release_bed(tile: Vector2i, pawn: HeelKawnian) -> void:
 ## by Chebyshev distance to keep this O(N_beds); reachability uses the connected-
 ## components map so we never propose a bed across an impassable wall. Returns
 ## Vector2i(-1,-1) if no bed qualifies.
-func find_free_bed_for(pawn: HeelKawnian, from_tile: Vector2i) -> Vector2i:
+func find_free_bed_for(pawn: Node, from_tile: Vector2i) -> Vector2i:
 	if _bed_tiles.is_empty() or pathfinder == null:
 		return Vector2i(-1, -1)
 	var my_component: int = pathfinder.component_of(from_tile)

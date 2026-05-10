@@ -252,7 +252,7 @@ func post_trade_haul(
 ## rejects ineligible jobs; `priority_bonus` can bias toward colony labor stance.
 ## Also applies WorldAI pawn obedience weight to influence job selection.
 func claim_next_for(
-		pawn: HeelKawnian, filter: Callable = Callable(), priority_bonus: Callable = Callable()
+		pawn: Node, filter: Callable = Callable(), priority_bonus: Callable = Callable()
 	) -> Job:
 	var pd = pawn.call("get_pawn_data") if pawn != null and pawn.has_method("get_pawn_data") else null
 	if _open.is_empty() or pawn == null or pd == null:

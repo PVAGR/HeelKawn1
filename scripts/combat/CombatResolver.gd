@@ -203,7 +203,7 @@ static func resolve_ranged_attack(attacker: Node, defender: Node, distance_tiles
 
 
 ## Check if attacker has ranged ammo (carrying ammo-type items)
-func _has_ranged_ammo(pawn_node: Node) -> bool:
+static func _has_ranged_ammo(pawn_node: Node) -> bool:
 	if not (pawn_node is HeelKawnian):
 		return true  # Enemies always have ammo
 	var p: HeelKawnian = pawn_node as HeelKawnian
@@ -218,7 +218,7 @@ func _has_ranged_ammo(pawn_node: Node) -> bool:
 
 
 ## Consume one unit of ammo from the pawn's carry slot
-func _consume_ranged_ammo(pawn_node: Node) -> void:
+static func _consume_ranged_ammo(pawn_node: Node) -> void:
 	if not (pawn_node is HeelKawnian):
 		return
 	var p: HeelKawnian = pawn_node as HeelKawnian
@@ -245,7 +245,7 @@ static func _apply_damage(attacker: Node, defender: Node, damage: float) -> bool
 		var before_hp: float = enemy_defender.health
 		enemy_defender.take_damage(damage)
 		# Check for capture opportunity when enemy HP drops to 0
-		if before_hp > 0.0 and enemy_defender.health <= 0.0 and not enemy_defender.get("_incapacitated", false):
+		if before_hp > 0.0 and enemy_defender.health <= 0.0 and not bool(enemy_defender.get("_incapacitated")):
 			if attacker is HeelKawnian and PrisonerManager != null:
 				var chance: float = _capture_chance(attacker as HeelKawnian, enemy_defender)
 				if WorldRNG.chance_for(_combat_stream("capture", attacker, defender), chance, _combat_salt(97)):
@@ -289,7 +289,9 @@ static func _calculate_armor_dr(defender: HeelKawnian) -> float:
 	var gear_stats: Dictionary = defender.data.get_gear_stats()
 	var defense: float = float(gear_stats.get("defense", 0.0))
 	# Quality multiplier from equipped gear
-	var gear: Dictionary = defender.data.get("equipped_gear", {})
+	var gear: Dictionary = {}
+	if defender.data != null and defender.data.equipped_gear is Dictionary:
+		gear = defender.data.equipped_gear
 	var equipped_weapon = gear.get(0, null)
 	if equipped_weapon != null and equipped_weapon is Dictionary:
 		defense += float(equipped_weapon.get("quality_mult", 1.0)) * 2.0

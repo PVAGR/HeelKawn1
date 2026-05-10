@@ -1087,7 +1087,7 @@ func _finish_autonomy_draft_walk(purpose: String, peer_id: int) -> void:
 	if data == null or GameManager == null:
 		return
 	var tick: int = GameManager.tick_count
-	var peer: Pawn = _find_pawn_by_id(peer_id)
+	var peer: HeelKawnian = _find_pawn_by_id(peer_id)
 	match purpose:
 		"social_seek":
 			if peer != null and is_instance_valid(peer) and peer.data != null:
@@ -1109,7 +1109,7 @@ func _finish_autonomy_draft_walk(purpose: String, peer_id: int) -> void:
 	_next_autonomy_social_seek_tick = tick + 50
 
 
-func _find_pawn_by_id(pid: int) -> Pawn:
+func _find_pawn_by_id(pid: int) -> HeelKawnian:
 	if pid < 0:
 		return null
 	# OPTIMIZATION: Use O(1) lookup instead of O(n) scan
@@ -1163,7 +1163,7 @@ func _try_autonomy_grudge_confront() -> bool:
 	var p_roll: float = clampf(0.06 + gmag * 0.22, 0.05, 0.38)
 	if not WorldRNG.chance_for(_pawn_stream("grudge_seek"), p_roll, _pawn_salt(71)):
 		return false
-	var target: Pawn = _find_pawn_by_id(gid)
+	var target: HeelKawnian = _find_pawn_by_id(gid)
 	if target == null or not is_instance_valid(target) or target.data == null:
 		return false
 	var near_tile: Vector2i = _pick_passable_near_tile(data.tile_pos, target.data.tile_pos)
@@ -1188,7 +1188,7 @@ func _try_autonomy_social_seek() -> bool:
 	var spawner: PawnSpawner = _resolve_pawn_spawner()
 	if spawner == null:
 		return false
-	var best_peer: Pawn = null
+	var best_peer: HeelKawnian = null
 	var best_score: float = -1.0
 	var seen: int = 0
 	for p in spawner.pawns:
@@ -3107,14 +3107,14 @@ func attempt_reproduction() -> bool:
 		has_shelter = true
 	if not has_shelter:
 		return false
-	var mate: Pawn = _find_compatible_mate()
+	var mate: HeelKawnian = _find_compatible_mate()
 	if mate == null or mate.data == null:
 		return false
 	if data.get_social_rapport(int(mate.data.id)) < REPRODUCTION_MIN_RAPPORT:
 		return false
 	if int(data.id) > int(mate.data.id):
 		return false
-	var child: Pawn = _spawn_child_pawn(int(data.id), int(mate.data.id))
+	var child: HeelKawnian = _spawn_child_pawn(int(data.id), int(mate.data.id))
 	if child != null:
 		_next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
 		mate._next_reproduction_tick = now + REPRODUCTION_COOLDOWN_TICKS
@@ -3146,7 +3146,7 @@ func _reproduction_mate_range_px() -> float:
 	return r
 
 
-func _find_compatible_mate() -> Pawn:
+func _find_compatible_mate() -> HeelKawnian:
 	# DISABLED for performance - iterates through all pawns
 	return null
 
@@ -4351,7 +4351,7 @@ func _maybe_start_teaching() -> bool:
 	var spawner: PawnSpawner = _resolve_pawn_spawner()
 	if spawner == null:
 		return false
-	var best_peer: Pawn = null
+	var best_peer: HeelKawnian = null
 	var best_d: int = 1_000_000
 	var seen: int = 0
 	for p in spawner.pawns:
@@ -4389,7 +4389,7 @@ func _maybe_start_teaching() -> bool:
 	return true
 
 
-func _record_teaching_memory_fact(student: Pawn, skill_taught: String) -> void:
+func _record_teaching_memory_fact(student: HeelKawnian, skill_taught: String) -> void:
 	if WorldMemory == null or GameManager == null or data == null:
 		return
 	if student == null or not is_instance_valid(student) or student.data == null:
@@ -4844,7 +4844,7 @@ func _observe_nearby_work() -> void:
 	return
 	
 
-func can_teach_skill(target_pawn: Pawn) -> bool:
+func can_teach_skill(target_pawn: HeelKawnian) -> bool:
 	# Check if teaching is allowed (cooldown, etc.)
 	if GameManager.tick_count - _last_teach_tick < _teach_cooldown_ticks:
 		return false
@@ -4852,7 +4852,7 @@ func can_teach_skill(target_pawn: Pawn) -> bool:
 	return true
 
 
-func teach_skill(target_pawn: Pawn, skill: int) -> bool:
+func teach_skill(target_pawn: HeelKawnian, skill: int) -> bool:
 	# Teach a skill to another pawn
 	# Requires: teacher has skill level >= 5, target has lower skill level
 	
@@ -5056,7 +5056,7 @@ func get_avoidance_tiles() -> Array[Vector2i]:
 		var enemies: Array[int] = get_grudge_enemies()
 		var _ps: PawnSpawner = _resolve_pawn_spawner()
 		for enemy_id in enemies:
-			var enemy_pawn: Pawn = _ps.get_pawn_by_id(enemy_id) if _ps != null else null
+			var enemy_pawn: HeelKawnian = _ps.get_pawn_by_id(enemy_id) if _ps != null else null
 			if enemy_pawn != null and is_instance_valid(enemy_pawn) and enemy_pawn.data != null:
 				_enemy_pawn_cache.append(enemy_pawn)
 		_enemy_pawn_cache_tick = GameManager.tick_count
@@ -5196,7 +5196,7 @@ func _track_co_presence_light() -> void:
 
 ## Share gossip with another pawn during social proximity (Phase 5)
 ## OPTIMIZATION: Early exits, limited gossip sharing
-func _share_gossip_with(other_pawn: Pawn) -> void:
+func _share_gossip_with(other_pawn: HeelKawnian) -> void:
 	if other_pawn == null or not is_instance_valid(other_pawn):
 		return
 	if GossipManager == null or not GossipManager.has_method("share_gossip_between"):
@@ -5231,7 +5231,7 @@ func _share_gossip_with(other_pawn: Pawn) -> void:
 		other_pawn.data.mood = min(100.0, other_pawn.data.mood + float(shared_count) * 0.05)
 
 
-func form_family_bond(other_pawn: Pawn, initial_strength: float = 20.0) -> void:
+func form_family_bond(other_pawn: HeelKawnian, initial_strength: float = 20.0) -> void:
 	# Form a family bond with another pawn
 	var other_id: int = int(other_pawn.data.id)
 	data.family_bonds[other_id] = clamp(initial_strength, 0.0, 100.0)
@@ -5243,7 +5243,7 @@ func form_family_bond(other_pawn: Pawn, initial_strength: float = 20.0) -> void:
 		])
 
 
-func marry(spouse: Pawn) -> void:
+func marry(spouse: HeelKawnian) -> void:
 	# Marry another pawn
 	if data.spouse_id != -1:
 		return  # Already married
@@ -5279,7 +5279,7 @@ func marry(spouse: Pawn) -> void:
 
 ## Spawn a child via [PawnSpawner] (bind, tile, lineage, [HeelKawnianData] registry). Not a raw scene instantiate:
 ## that would skip world placement, job safety, and [method HeelKawnianData.register_pawn_data].
-func _spawn_child_pawn(parent_pawn_id: int = -1, second_parent_id: int = -1) -> Pawn:
+func _spawn_child_pawn(parent_pawn_id: int = -1, second_parent_id: int = -1) -> HeelKawnian:
 	var spawner: PawnSpawner = _resolve_pawn_spawner()
 	if spawner == null or _world == null or GameManager == null or data == null:
 		return null
@@ -5342,7 +5342,7 @@ func have_child(partner: Pawn) -> int:
 		return -1
 	if data.spouse_id != int(partner.data.id):
 		return -1
-	var child: Pawn = _spawn_child_pawn(int(data.id), int(partner.data.id))
+	var child: HeelKawnian = _spawn_child_pawn(int(data.id), int(partner.data.id))
 	if child == null or child.data == null:
 		return -1
 	return int(child.data.id)
@@ -6647,7 +6647,7 @@ func _draw_social_bonds(body_origin: Vector2) -> void:
 	for other_id in data.family_bonds:
 		if bonds_drawn >= FAMILY_BOND_LIMIT:
 			break
-		var other_pawn: Pawn = _find_pawn_by_id(int(other_id))
+		var other_pawn: HeelKawnian = _find_pawn_by_id(int(other_id))
 		if other_pawn == null or not is_instance_valid(other_pawn):
 			continue
 		var dist_sq: float = global_position.distance_squared_to(other_pawn.global_position)
@@ -6661,7 +6661,7 @@ func _draw_social_bonds(body_origin: Vector2) -> void:
 
 	# Social squad — teal line to anchor
 	if data.social_squad_anchor_id >= 0 and data.social_squad_anchor_id != int(data.id):
-		var anchor_pawn: Pawn = _find_pawn_by_id(data.social_squad_anchor_id)
+		var anchor_pawn: HeelKawnian = _find_pawn_by_id(data.social_squad_anchor_id)
 		if anchor_pawn != null and is_instance_valid(anchor_pawn):
 			var dist_sq: float = global_position.distance_squared_to(anchor_pawn.global_position)
 			if dist_sq <= MAX_DIST_SQ:
@@ -6697,7 +6697,7 @@ func _draw_social_bonds(body_origin: Vector2) -> void:
 
 	var _ps: PawnSpawner = _resolve_pawn_spawner()
 	for enemy_id in enemies:
-		var enemy_pawn: Pawn = _ps.get_pawn_by_id(enemy_id) if _ps != null else null
+		var enemy_pawn: HeelKawnian = _ps.get_pawn_by_id(enemy_id) if _ps != null else null
 		if enemy_pawn == null or not is_instance_valid(enemy_pawn):
 			continue
 		var dist_sq: float = global_position.distance_squared_to(enemy_pawn.global_position)

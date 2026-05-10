@@ -75,17 +75,9 @@ var _pattern_update_interval: int = 120  # Only update patterns every 120 ticks
 var _prediction_update_interval: int = 180  # Only update predictions every 180 ticks
 
 
-## Get neural update interval scaled by game speed (longer intervals at high speed)
+## Get neural update interval - DISABLED speed scaling
+## All systems must run at max potential at all times (user requirement)
 func _neural_interval_for_speed(base_interval: int) -> int:
-	if GameManager == null:
-		return base_interval
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return base_interval * 4
-	if gs >= 50.0:
-		return base_interval * 3
-	if gs >= 26.0:
-		return base_interval * 2
 	return base_interval
 
 # Pre-allocated arrays for performance
@@ -870,63 +862,18 @@ func _on_world_tick(tick: int) -> void:
 
 
 func _world_ai_interval_for_speed() -> int:
-	if GameManager == null:
-		return 10
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 48
-	if gs >= 50.0:
-		return 32
-	if gs >= 26.0:
-		return 24
-	if gs >= 12.0:
-		return 16
-	if gs >= 6.0:
-		return 12
-	if gs >= 3.0:
-		return 8
+	# DISABLED speed scaling - all systems must run at max potential at all times
 	return 10
 
 
 func _settlement_ai_interval_for_speed() -> int:
-	if GameManager == null:
-		return 16
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 72
-	if gs >= 50.0:
-		return 48
-	if gs >= 26.0:
-		return 36
-	if gs >= 12.0:
-		return 24
-	if gs >= 6.0:
-		return 18
+	# DISABLED speed scaling - all systems must run at max potential at all times
 	return 16
 
 
 func _agent_update_budget_for_speed(total_agents: int) -> int:
-	if total_agents <= 1:
-		return total_agents
-	if GameManager == null:
-		return total_agents
-	var gs: float = GameManager.game_speed
-	var divisor: int = 1
-	if gs >= 100.0:
-		divisor = 6
-	elif gs >= 50.0:
-		divisor = 5
-	elif gs >= 26.0:
-		divisor = 4
-	elif gs >= 12.0:
-		divisor = 3
-	elif gs >= 6.0:
-		divisor = 3
-	elif gs >= 3.0:
-		divisor = 2
-	else:
-		divisor = 2
-	return maxi(1, int(ceil(float(total_agents) / float(divisor))))
+	# DISABLED speed scaling - all systems must run at max potential at all times
+	return total_agents
 
 func _spawn_initial_agents() -> void:
 	var AIAgentClass = preload("res://scripts/ai/AIAgent.gd")

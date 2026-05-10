@@ -2552,21 +2552,8 @@ func _fast_forward_tick_stride() -> int:
 
 
 func _job_claim_interval_for_speed() -> int:
-	if GameManager == null:
-		return 3
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 1  # Claim every tick at 100x - MAXIMUM BUILDING ACTIVITY
-	if gs >= 50.0:
-		return 1  # Claim every tick at 50x
-	if gs >= 26.0:
-		return 1  # Claim every tick at 26x
-	if gs >= 12.0:
-		return 2  # Every 2 ticks at 12x
-	if gs >= 3.0:
-		return 3  # Every 3 ticks at 3x
-	# 1x: claim often enough that pawns feel "busy" without scanning every tick.
-	return 3  # Reduced from 4
+	# DISABLED speed scaling - all systems must run at max potential at all times
+	return 1
 
 
 func _neural_priority_refresh_interval_for_speed() -> int:
@@ -2589,41 +2576,13 @@ func _neural_priority_refresh_interval_for_speed() -> int:
 
 
 func _idle_action_refresh_interval_for_speed() -> int:
-	if GameManager == null:
-		return 12
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 180
-	if gs >= 50.0:
-		return 120
-	if gs >= 26.0:
-		return 90
-	if gs >= 12.0:
-		return 60
-	if gs >= 6.0:
-		return 36
-	if gs >= 3.0:
-		return 24
+	# DISABLED speed scaling - all systems must run at max potential at all times
 	return 12
 
 
 func _work_step_interval_for_speed() -> int:
-	if GameManager == null:
-		return 1
-	var gs: float = GameManager.game_speed
-	# REDUCED intervals - pawns were working too infrequently (1 out of N ticks)
-	# At 100x: was 6 (16.7% work rate), now 2 (50% work rate)
-	if gs >= 100.0:
-		return 2  # Was 6 - pawns work 50% of ticks instead of 16.7%
-	if gs >= 50.0:
-		return 2  # Was 4
-	if gs >= 26.0:
-		return 2
-	if gs >= 12.0:
-		return 2
-	if gs >= 3.0:
-		return 2
-	return 1  # At 1x, every pawn works every tick
+	# DISABLED speed scaling - all systems must run at max potential at all times
+	return 1
 
 
 func _should_panic_sleep() -> bool:

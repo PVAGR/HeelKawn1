@@ -191,26 +191,9 @@ func periodic_phase_due(tick: int, interval: int, offset: int = 0) -> bool:
 
 
 func _adaptive_frame_tick_cap(base_cap: int) -> int:
-	if game_speed < 26.0:
-		return base_cap
-	if ticks_emitted_last_frame <= 0 or last_frame_game_tick_usecs <= 0:
-		return base_cap
-	var avg_tick_ms: float = (last_frame_game_tick_usecs / 1000.0) / float(maxi(1, ticks_emitted_last_frame))
-	if avg_tick_ms <= 0.0:
-		return base_cap
-	# Keep each rendered frame around this sim-listener budget.
-	var target_ms: float = 24.0
-	var allowed: int = int(floor(target_ms / avg_tick_ms))
-	allowed = maxi(1, allowed)
-	# Hard guardrails for smoothness at ultra speeds: avoid sudden "14 ticks in one frame" bursts.
-	var speed_guard_cap: int = base_cap
-	if game_speed >= 100.0:
-		speed_guard_cap = 6
-	elif game_speed >= 50.0:
-		speed_guard_cap = 8
-	elif game_speed >= 26.0:
-		speed_guard_cap = 10
-	return mini(mini(base_cap, speed_guard_cap), allowed)
+	# DISABLED: All systems must run at max potential at all times
+	# No adaptive throttling - user requirement: 50x and 100x with all systems active
+	return base_cap
 
 
 func _ready() -> void:

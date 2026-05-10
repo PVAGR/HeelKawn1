@@ -155,6 +155,7 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _timeline_controls: TimelineControls = $UI_Viewport/TimelineControls
 @onready var _incarnation_picker: Control = null  # IncarnationPicker instance (created on demand)
 @onready var _tutorial_hints: Node = null  # TutorialHints instance (created on demand)
+@onready var _trade_overview: TradeOverviewPanel = null  # TradeOverviewPanel instance (created on first open)
 @onready var _first_launch_welcome: Node = null  # FirstLaunchWelcome instance (created on demand)
 @onready var _map_mode_overlay: Node = $MapModeOverlay
 @onready var _creator_debug_menu: CreatorDebugMenu = $CreatorDebugMenu
@@ -407,46 +408,17 @@ func get_player_pawn_id() -> int:
 	return -1
 
 func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
-	if _is_ultra_speed():
-		return ultra_ticks
-	# Feel target: once the player presses to 3x, we must aggressively reduce
-	# expensive per-tick work to prevent rubber-band / stutter.
-	if GameManager.game_speed >= 3.0:
-		return fast_ticks
+	# DISABLED speed scaling - all systems must run at max potential at all times
 	return normal_ticks
 
 
 func _planner_interval_for_speed() -> int:
-	if GameManager == null:
-		return 90
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 3600
-	if gs >= 50.0:
-		return 1800
-	if gs >= 26.0:
-		return 900
-	if gs >= 12.0:
-		return 300
-	if gs >= 3.0:
-		return 120
+	# DISABLED speed scaling - all systems must run at max potential at all times
 	return 90
 
 
 func _heavy_planner_interval_for_speed() -> int:
-	if GameManager == null:
-		return 180
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 3000
-	if gs >= 50.0:
-		return 1800
-	if gs >= 26.0:
-		return 900
-	if gs >= 12.0:
-		return 480
-	if gs >= 3.0:
-		return 240
+	# DISABLED speed scaling - all systems must run at max potential at all times
 	return 180
 
 
@@ -2925,44 +2897,20 @@ func _maybe_log_tick_hotspots(tick: int, section_us: Dictionary) -> void:
 
 
 func _inspect_scan_interval_for_speed() -> int:
-	if GameManager == null:
-		return INSPECT_SCAN_INTERVAL_TICKS
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 120
-	if gs >= 50.0:
-		return 90
-	if gs >= 26.0:
-		return 60
+	# DISABLED speed scaling - all systems must run at max potential at all times
 	return INSPECT_SCAN_INTERVAL_TICKS
 
 
 ## Co-presence rapport is O(pawns²) in worst case; stretch interval at fast-forward.
 func _social_rapport_interval_for_speed() -> int:
-	if GameManager == null:
-		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 120
-	if gs >= 50.0:
-		return 80
-	if gs >= 26.0:
-		return 60
+	# DISABLED speed scaling - all systems must run at max potential at all times
 	return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS
 
 
 ## Fewer world rows per mining-react step at ultra speed = smaller per-tick spikes
 ## (pass completes over more sim ticks, which is fine under catch-up).
 func _mining_react_scan_rows_for_speed() -> int:
-	if GameManager == null:
-		return MINING_REACT_SCAN_ROWS_PER_STEP
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 1
-	if gs >= 50.0:
-		return 1
-	if gs >= 26.0:
-		return 3
+	# DISABLED speed scaling - all systems must run at max potential at all times
 	return MINING_REACT_SCAN_ROWS_PER_STEP
 
 
@@ -3888,6 +3836,8 @@ func _handle_key_input(key: InputEventKey) -> void:
 				_toggle_incarnation_mode()
 			else:
 				_toggle_timeline_controls()
+		KEY_R:
+			_toggle_trade_overview()
 		KEY_O:
 			_open_incarnation_picker()
 		KEY_L:
@@ -4101,6 +4051,13 @@ func _toggle_chronicle_ledger() -> void:
 		_chronicle_book._toggle_visibility()
 	elif _chronicle_ledger != null:
 		_chronicle_ledger._toggle_visibility()
+
+
+func _toggle_trade_overview() -> void:
+	if _trade_overview == null:
+		_trade_overview = TradeOverviewPanel.new()
+		add_child(_trade_overview)
+	_trade_overview.toggle()
 
 
 func _on_seed_gallery_seed_selected(seed: int) -> void:

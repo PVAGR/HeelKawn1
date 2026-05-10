@@ -17,19 +17,19 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 config/name="HeelKawn"
 config/description="The Grand Synthesis - hybrid colony/strategy/RPG simulation."
 run/main_scene="res://scenes/main/Main.tscn"
-config/features=PackedStringArray("4.6", "GL Compatibility")
+config/features=PackedStringArray("4.6", "GL Compatibility", "C#")
 
 [autoload]
 
 # === ESSENTIAL CORE AUTOLOADS (20 total) ===
 TickManager="*res://autoloads/TickManager.gd"
 GameManager="*res://autoloads/GameManager.gd"
-JobManager="*res://autoloads/JobManager.gd"
+JobManager="*res://dotnet/CJobManager.cs"
 StockpileManager="*res://autoloads/StockpileManager.gd"
 ZoneRegistry="*res://autoloads/ZoneRegistry.gd"
 BuildingRegistry="*res://autoloads/BuildingRegistry.gd"
 ColonySimServices="*res://autoloads/ColonySimServices.gd"
-WorldMemory="*res://autoloads/WorldMemory.gd"
+WorldMemory="*res://dotnet/CWorldMemory.cs"
 WorldMeaning="*res://autoloads/WorldMeaning.gd"
 WorldPersistence="*res://autoloads/WorldPersistence.gd"
 WorldRNG="*res://autoloads/WorldRNG.gd"
@@ -39,7 +39,7 @@ SettlementRegistry="*res://autoloads/SettlementRegistry.gd"
 CulturalMemory="*res://autoloads/CulturalMemory.gd"
 CulturalStyleManager="*res://autoloads/CulturalStyleManager.gd"
 SpatialManager="*res://autoloads/SpatialManager.gd"
-SpatialGrid="*res://autoloads/SpatialGrid.gd"
+SpatialGrid="*res://dotnet/CSpatialGrid.cs"
 GameSettings="*res://autoloads/GameSettings.gd"
 EventBus="*res://autoloads/EventBus.gd"
 

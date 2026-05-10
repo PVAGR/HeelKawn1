@@ -47,6 +47,18 @@ var _region_culture_tint_cache: Dictionary = {}
 ## Off-Main autoloads: coalesce at most one end-of-idle full [refresh_terrain_scar_tint] + [refresh_pawn_historic_path_weights] per [GameManager] tick.
 var _off_main_terrain_raster_defer_at_tick: int = -1
 
+# Track last-maintained tick for built features
+var _feature_last_touched: Dictionary = {}  # "x,y" -> tick
+
+# Footpath wearing: tile_key -> traffic count
+var _foot_traffic: Dictionary = {}  # "x,y" -> int traffic_count
+
+var _building_usage: Dictionary = {}  # "x,y" -> usage_count
+
+var _blood_stains: Dictionary = {}  # "x,y" -> { tick, intensity }
+
+var _door_open_tiles: Dictionary = {}  # "x,y" -> open_until_tick
+
 
 func _ready() -> void:
 	_sprite.centered = true
@@ -205,6 +217,24 @@ func _tile_color(x: int, y: int) -> Color:
 				var settlement_state: String = SettlementMemory.get_state_for_region(rk_ct)
 				if not settlement_state.is_empty():
 					base = TileFeature.apply_settlement_state_tint(base, settlement_state)
+		# Crop growth stages for farm tiles
+		if feature in [TileFeature.Type.FARM_WHEAT, TileFeature.Type.FARM_CORN, TileFeature.Type.FARM_VEGETABLES, TileFeature.Type.HERB_GARDEN]:
+			var _fs: Node = get_node_or_null("/root/FarmingSystem")
+			var stage: int = -1
+			if _fs != null and _fs.has_method("get_growth_stage"):
+				stage = int(_fs.call("get_growth_stage", Vector2i(x, y)))
+			match stage:
+				0:
+					base = Color8(180, 160, 80, 200)
+				1:
+					base = Color8(100, 180, 60, 200)
+				2:
+					base = Color8(200, 180, 40, 220)
+		# Door open animation: lighter when open
+		if feature == TileFeature.Type.DOOR:
+			var door_key: String = "%d,%d" % [x, y]
+			if _door_open_tiles.has(door_key):
+				base = base.lightened(0.3)
 		if feature == TileFeature.Type.RUIN:
 			# Further desaturate / drain rubble; land-recovery v1: ruin tint still uses max scar, not recovery_stage.
 			var g: float = (base.r + base.g + base.b) * 0.33
@@ -219,6 +249,24 @@ func _tile_color(x: int, y: int) -> Color:
 			# Water shimmer: subtle blue channel shift
 			var shimmer: float = sin(float(GameManager.tick_count) * 0.01 + noise_val * TAU) * 0.05
 			base = Color(base.r + shimmer * 0.3, base.g + shimmer * 0.5, base.b + shimmer, 1.0)
+			# Water reflection: reflect adjacent built features
+			var reflect_color: Color = Color.TRANSPARENT
+			for dx in [-1, 0, 1]:
+				for dy in [-1, 0, 1]:
+					if dx == 0 and dy == 0:
+						continue
+					var nx: int = x + dx
+					var ny: int = y + dy
+					if data.in_bounds(nx, ny):
+						var feat: int = data.get_feature(nx, ny)
+						if feat != TileFeature.Type.NONE and feat != TileFeature.Type.RIVER:
+							reflect_color = _tile_color_for_feature(feat, nx, ny)
+							break
+				if reflect_color.a > 0:
+					break
+			if reflect_color.a > 0:
+				reflect_color.a = 0.3
+				base = base.lerp(reflect_color, 0.2)
 		else:
 			# All other biomes: ±8% color variation
 			var variation: float = 0.92 + noise_val * 0.16  # 0.92..1.08
@@ -245,6 +293,16 @@ func _tile_color(x: int, y: int) -> Color:
 					y
 			)
 	)
+
+
+func _tile_color_for_feature(feat: int, x: int, y: int) -> Color:
+	if feat in [TileFeature.Type.WALL, TileFeature.Type.SHELTER]:
+		return Color8(120, 100, 80)
+	if feat in [TileFeature.Type.BED]:
+		return Color8(180, 120, 80)
+	if feat in [TileFeature.Type.DOOR]:
+		return Color8(100, 80, 60)
+	return Color8(150, 130, 110)
 
 
 ## Per-tile prior-Age desat + deterministic micro-shift (v1; read-only; after road/trade).
@@ -446,6 +504,43 @@ func refresh_trade_memory_terrain() -> void:
 	_texture.update(_image)
 
 
+func _tick_erosion(tick: int) -> void:
+	if tick % 2000 != 0:
+		return
+	var decay_count: int = 0
+	for key in _feature_last_touched.keys():
+		var last_tick: int = _feature_last_touched[key]
+		if tick - last_tick > 10000:
+			var parts: Array = key.split(",")
+			if parts.size() != 2:
+				continue
+			var x: int = int(parts[0])
+			var y: int = int(parts[1])
+			var feat: int = data.get_feature(x, y)
+			if feat in [TileFeature.Type.WALL, TileFeature.Type.DOOR, TileFeature.Type.FIRE_PIT,
+					TileFeature.Type.STORAGE_HUT, TileFeature.Type.SHELTER, TileFeature.Type.HEARTH]:
+				clear_feature(x, y)
+				decay_count += 1
+				if decay_count >= 5:
+					break
+	if decay_count > 0:
+		_cleanup_erosion_tracking()
+
+
+func _cleanup_erosion_tracking() -> void:
+	var to_remove: Array[String] = []
+	for key in _feature_last_touched.keys():
+		var parts: Array = key.split(",")
+		if parts.size() != 2:
+			continue
+		var x: int = int(parts[0])
+		var y: int = int(parts[1])
+		if data.get_feature(x, y) == TileFeature.Type.NONE:
+			to_remove.append(key)
+	for key in to_remove:
+		_feature_last_touched.erase(key)
+
+
 ## Deterministic ruins (v1): built structures in death-scarred, unoccupied
 ## regions become static `TileFeature.RUIN` (passable rubble, no use). No RNG.
 ## Call after `refresh_terrain_scar_tint()`; uses `WorldPersistence` + pawn positions only.
@@ -510,6 +605,9 @@ func set_feature(x: int, y: int, feature: int) -> bool:
 		return false
 	data.features[i] = feature
 	RemnantMemory.on_feature_set(self, x, y, feature)
+	# Track for erosion
+	if feature != TileFeature.Type.NONE and feature != TileFeature.Type.RIVER:
+		_feature_last_touched["%d,%d" % [x, y]] = GameManager.tick_count if GameManager != null else 0
 	# DORMANT WORLD: Unlock gates when HeelKawnians build key structures
 	if DiscoveryGate != null:
 		if feature == TileFeature.Type.FIRE_PIT:
@@ -570,6 +668,122 @@ func nudge_occupants_off_tile_for_construction(x: int, y: int) -> void:
 func notify_pawns_nav_changed() -> void:
 	for p in PawnSpawner.find_pawns():
 		p.on_world_nav_changed()
+
+
+# ==================== Footpath wearing ====================
+
+func record_footstep(tile: Vector2i) -> void:
+	var key: String = "%d,%d" % [tile.x, tile.y]
+	var count: int = int(_foot_traffic.get(key, 0))
+	_foot_traffic[key] = mini(count + 1, 100)
+	if count % 5 == 0 and count > 0:
+		_update_path_appearance(tile, count)
+	# Also clear snow on footstep
+	var _sa: Node = get_node_or_null("/root/SnowAccumulation")
+	if _sa != null and _sa.has_method("get_snow_depth"):
+		var sd: float = float(_sa.call("get_snow_depth", tile))
+		if sd > 0.0:
+			if _sa.has_method("clear"):
+				_sa.call("clear", tile)
+
+
+func _update_path_appearance(tile: Vector2i, traffic: int) -> void:
+	if _image == null:
+		return
+	var c: Color = _image.get_pixel(tile.x, tile.y)
+	var wear: float = mini(1.0, float(traffic) / 100.0)
+	var worn: Color = Color8(140, 120, 100)
+	c = c.lerp(worn, wear * 0.3)
+	_image.set_pixel(tile.x, tile.y, c)
+	_texture.update(_image)
+
+
+# ==================== Building wear ====================
+
+func record_building_usage(tile: Vector2i) -> void:
+	var key: String = "%d,%d" % [tile.x, tile.y]
+	var count: int = int(_building_usage.get(key, 0))
+	_building_usage[key] = mini(count + 1, 200)
+	_update_building_appearance(tile, _building_usage[key])
+
+
+func _update_building_appearance(tile: Vector2i, usage: int) -> void:
+	if _image == null:
+		return
+	var c: Color = _image.get_pixel(tile.x, tile.y)
+	var wear: float = mini(1.0, float(usage) / 200.0)
+	var soot: Color = Color8(60, 50, 40)
+	c = c.lerp(soot, wear * 0.15)
+	_image.set_pixel(tile.x, tile.y, c)
+	_texture.update(_image)
+
+
+# ==================== Blood stains ====================
+
+func add_blood_stain(tile: Vector2i, intensity: float = 0.5) -> void:
+	if not data.in_bounds(tile.x, tile.y):
+		return
+	var key: String = "%d,%d" % [tile.x, tile.y]
+	_blood_stains[key] = {
+		"tick": GameManager.tick_count if GameManager != null else 0,
+		"intensity": clampf(intensity, 0.1, 1.0),
+	}
+	_update_blood_stain(tile, _blood_stains[key])
+
+
+func _tick_blood_stains(tick: int) -> void:
+	if tick % 100 != 0:
+		return
+	var to_remove: Array[String] = []
+	for key in _blood_stains:
+		var bdata: Dictionary = _blood_stains[key]
+		var age: int = tick - int(bdata.get("tick", 0))
+		if age > 500:
+			to_remove.append(key)
+		elif age > 400:
+			var parts: Array = key.split(",")
+			_redraw_tile(int(parts[0]), int(parts[1]))
+	for key in to_remove:
+		_blood_stains.erase(key)
+		var parts: Array = key.split(",")
+		_redraw_tile(int(parts[0]), int(parts[1]))
+
+
+func _update_blood_stain(tile: Vector2i, bdata: Dictionary) -> void:
+	if _image == null:
+		return
+	var c: Color = _image.get_pixel(tile.x, tile.y)
+	var blood: Color = Color8(180, 30, 30)
+	var intensity: float = float(bdata.get("intensity", 0.5))
+	c = c.lerp(blood, intensity * 0.4)
+	_image.set_pixel(tile.x, tile.y, c)
+	_texture.update(_image)
+
+
+func _redraw_tile(x: int, y: int) -> void:
+	if _image == null or not data.in_bounds(x, y):
+		return
+	_image.set_pixel(x, y, _tile_color(x, y))
+	_texture.update(_image)
+
+
+# ==================== Door animation ====================
+
+func open_door(tile: Vector2i, duration_ticks: int = 10) -> void:
+	var key: String = "%d,%d" % [tile.x, tile.y]
+	_door_open_tiles[key] = (GameManager.tick_count if GameManager != null else 0) + duration_ticks
+	_redraw_tile(tile.x, tile.y)
+
+
+func _tick_doors(tick: int) -> void:
+	var to_close: Array[String] = []
+	for key in _door_open_tiles:
+		if int(_door_open_tiles[key]) <= tick:
+			to_close.append(key)
+	for key in to_close:
+		_door_open_tiles.erase(key)
+		var parts: Array = key.split(",")
+		_redraw_tile(int(parts[0]), int(parts[1]))
 
 
 ## `JobManager` only: release path reservations on full job **cancel** (the job

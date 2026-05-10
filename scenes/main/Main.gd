@@ -2643,6 +2643,16 @@ func _on_game_tick(tick: int) -> void:
 	# Flood events: rain near rivers deposits flood silt; dry weather fades it.
 	if tick % 200 == 0:
 		_tick_flood_events(tick)
+	# Erosion: decay abandoned buildings
+	if tick % 2000 == 0:
+		if _world != null and _world.has_method("_tick_erosion"):
+			_world._tick_erosion(tick)
+	# Blood stains: fade over time
+	if _world != null and _world.has_method("_tick_blood_stains"):
+		_world._tick_blood_stains(tick)
+	# Doors: close timed-out open doors
+	if _world != null and _world.has_method("_tick_doors"):
+		_world._tick_doors(tick)
 	# Settlement festivals: milestone-driven celebrations for growing colonies.
 	if SettlementMemory != null and tick % 200 == 0 and SettlementMemory.has_method("process_festival_milestones"):
 		SettlementMemory.process_festival_milestones(tick)

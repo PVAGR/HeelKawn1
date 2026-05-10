@@ -81,6 +81,14 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 	# Calculate damage
 	var damage: float = _calculate_damage(attacker, defender)
 
+	# Blood stain at combat position
+	var _defender_tile: Vector2i = _get_actor_tile(defender)
+	var _main_node: Node = (attacker.get_tree().get_root().get_node_or_null("Main") if attacker != null and attacker.get_tree() != null else null)
+	if _main_node != null:
+		var _world_node: Node = _main_node.get_node_or_null("World")
+		if _world_node != null and _world_node.has_method("add_blood_stain"):
+			_world_node.add_blood_stain(_defender_tile, 0.3 + float(damage) / 100.0)
+
 	# Apply damage
 	if defender is HeelKawnian:
 		var pawn_defender: HeelKawnian = defender as HeelKawnian
@@ -437,3 +445,14 @@ static func _apply_anarchy_behavior(attacker: Node, defender: Node) -> void:
 		target_tile = defender_tile
 	if attacker_pawn.has_method("draft_goto"):
 		attacker_pawn.call("draft_goto", target_tile)
+
+
+static func _get_actor_tile(actor: Node) -> Vector2i:
+	if actor is HeelKawnian:
+		var p: HeelKawnian = actor as HeelKawnian
+		if p.data != null:
+			return p.data.tile_pos
+	if actor is Enemy:
+		var e: Enemy = actor as Enemy
+		return e.tile_pos
+	return Vector2i(-1, -1)

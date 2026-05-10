@@ -295,6 +295,7 @@ var data: HeelKawnianData
 @onready var _sprite: Sprite2D = Sprite2D.new() # SPRITE_ART
 
 var _world: World
+var _brain_instance: HeelKawnPawnBrain = null
 var _state: int = State.IDLE
 var _current_job: Job = null
 var _cohort_id: int = -1
@@ -393,6 +394,7 @@ static var _job_type_name_cache: Dictionary = {}
 static var _job_type_name_cache_built: bool = false
 var _sfx: AudioStreamPlayer2D = null
 var _action_popup: ActionPopupLabel = null
+var _footstep_particles: GPUParticles2D = null
 var _hit_flash_ticks: int = 0
 ## `JobManager.claim_next_for` invokes priority_cb once per open job; neural forward
 ## propagation must not run hundreds of times in one claim scan (was freezing / hard-stopping).
@@ -901,6 +903,7 @@ func _request_redraw_throttled() -> void:
 func _ready() -> void:
 	## Spawner calls [method bind] before [code]add_child[/code] so [member data] / [member _world] exist here.
 	## [signal GameManager.game_tick] is deferred until after this node finishes [method _ready] (init order).
+	_init_footstep_particles()
 	_sfx = AudioStreamPlayer2D.new()
 	_sfx.max_distance = 320.0
 	_sfx.volume_db = -5.0
@@ -911,6 +914,61 @@ func _ready() -> void:
 	if TickManager != null:
 		TickManager.mark_tickable_cache_dirty()
 	call_deferred("_pawn_connect_sim_tick_deferred")
+
+	# HeelKawnian identity hook (deterministic per-soul profile bootstrap).
+	if ClassDB.class_exists("HeelKawnianManager"):
+		HeelKawnianManager.ensure_identity_for_pawn(self)
+
+
+func _set_brain_instance(brain: HeelKawnPawnBrain) -> void:
+	_brain_instance = brain
+
+
+func _init_footstep_particles() -> void:
+	_footstep_particles = GPUParticles2D.new()
+	_footstep_particles.one_shot = true
+	_footstep_particles.emitting = false
+	_footstep_particles.amount = 2
+	_footstep_particles.lifetime = 0.5
+	_footstep_particles.explosiveness = 0.0
+	_footstep_particles.randomness = 0.0
+	var biome_color: Color = Color8(180, 160, 130)
+	var _biome: int = _world.data.get_biome(data.tile_pos.x, data.tile_pos.y) if _world != null and data != null else -1
+	match _biome:
+		Biome.Type.DESERT:
+			biome_color = Color8(210, 180, 140)
+		Biome.Type.TUNDRA:
+			biome_color = Color8(200, 200, 210)
+		Biome.Type.PLAINS, Biome.Type.FOREST:
+			biome_color = Color8(160, 140, 100)
+	var mat: ParticleProcessMaterial = ParticleProcessMaterial.new()
+	mat.gravity = Vector3.ZERO
+	mat.initial_velocity_min = 5.0
+	mat.initial_velocity_max = 15.0
+	mat.angle_min = 0.0
+	mat.angle_max = 360.0
+	mat.scale_min = 0.3
+	mat.scale_max = 0.8
+	mat.color = biome_color
+	_footstep_particles.process_material = mat
+	add_child(_footstep_particles)
+
+
+func _emit_footstep_dust() -> void:
+	if _footstep_particles == null:
+		return
+	var _ws: Node = get_node_or_null("/root/WindSystem")
+	if _ws != null and _ws.has_method("get_wind_direction") and _footstep_particles.process_material != null:
+		var wind_dir: Vector2 = Vector2(_ws.get("_current_direction", Vector2.RIGHT))
+		var wind_str: float = float(_ws.get("_current_strength", 0.5))
+		_footstep_particles.process_material.initial_velocity_min = 5.0 + wind_str * 10.0
+		_footstep_particles.process_material.direction = Vector3(wind_dir.x, 0, wind_dir.y)
+	_footstep_particles.restart()
+	_footstep_particles.emitting = true
+
+
+func _get_brain() -> HeelKawnPawnBrain:
+	return _brain_instance
 
 
 func _pawn_connect_sim_tick_deferred() -> void:
@@ -980,6 +1038,7 @@ func _reset_neural_priority_cache() -> void:
 
 func _exit_tree() -> void:
 	_pawn_sim_tick_armed = false
+	_brain_instance = null
 	# Disconnect from TickManager if connected
 	var tick_manager = get_node_or_null("/root/TickManager")
 	if tick_manager != null and tick_manager.tick_processed.is_connected(_on_world_tick):
@@ -1521,6 +1580,39 @@ func _start_pilgrimage_to_memorial(memorial: Dictionary) -> void:
 		print("[HeelKawnian] %s starting pilgrimage to memorial at (%d,%d)" % [
 			data.display_name, target_tile.x, target_tile.y
 		])
+
+
+func _try_grave_pilgrimage() -> bool:
+	if data == null or _world == null:
+		return false
+	if data.mood > 50.0:
+		return false
+	var grave_tile: Vector2i = _find_family_grave()
+	if grave_tile.x < 0:
+		return false
+	var path: Array[Vector2i] = _world.pathfinder.find_path(data.tile_pos, grave_tile)
+	if path.is_empty():
+		return false
+	_current_job = Job.new()
+	_current_job.type = _Job.Type.VISIT_GRAVE
+	_current_job.tile = grave_tile
+	_current_job.work_tile = grave_tile
+	_current_job.work_ticks_needed = 30
+	_current_job.work_ticks_done = 0
+	_state = State.WALKING_TO_JOB
+	_start_path(path)
+	return true
+
+
+func _find_family_grave() -> Vector2i:
+	if WorldMemory == null:
+		return Vector2i(-1, -1)
+	for y in range(maxi(0, data.tile_pos.y - 20), mini(WorldData.HEIGHT, data.tile_pos.y + 20)):
+		for x in range(maxi(0, data.tile_pos.x - 20), mini(WorldData.WIDTH, data.tile_pos.x + 20)):
+			var feat: int = _world.data.get_feature(x, y)
+			if feat == TileFeature.Type.GRAVE_MARKER:
+				return Vector2i(x, y)
+	return Vector2i(-1, -1)
 
 
 ## Dream nudge: follow a recent dream impulse if it suggests wandering/socializing/resting.
@@ -2180,6 +2272,10 @@ func _process(delta: float) -> void:
 		data.tile_pos = _target_tile
 		if from_step != _target_tile:
 			RoadMemory.record_step(from_step, _target_tile, _world)
+		# Record footstep for path wearing and emit dust
+		if _world != null and _world.has_method("record_footstep"):
+			_world.record_footstep(data.tile_pos)
+		_emit_footstep_dust()
 		# Wanderer path: track region exploration.
 		_track_region_visit(_target_tile)
 		_advance_path()
@@ -2637,6 +2733,9 @@ func _tick_idle() -> void:
 		return
 	# 4c. Memorial pilgrimage: occasional desire to visit memorials (closure, remembrance)
 	if _try_start_pilgrimage():
+		return
+	# 4c1. Grave pilgrimage: visit family graves when mood is low
+	if _try_grave_pilgrimage():
 		return
 	# 4d. Dream nudge: dreams can push a pawn to wander, rest, or socialize.
 	if _maybe_follow_dream_nudge():
@@ -4396,6 +4495,15 @@ func _complete_current_job() -> void:
 			data.add_mood_event(MoodEvent.Type.HOPE, 70.0, 300)  # Planting is an act of faith
 		_Job.Type.HARVEST_CROPS:
 			data.add_mood_event(MoodEvent.Type.TRIUMPH, 75.0, 250)  # Harvest rewards patience
+		_Job.Type.VISIT_GRAVE:
+			data.add_mood_event(MoodEvent.Type.JOY, 40.0, 200)  # Comfort from remembrance
+			if WorldMemory != null:
+				WorldMemory.record_event({
+					"type": "grave_visit",
+					"pawn_id": int(data.id),
+					"tile": {"x": job.tile.x, "y": job.tile.y},
+					"tick": GameManager.tick_count
+				})
 	# If the pawn is re-fetching materials, skip job completion (already returned above).
 	JobManager.complete(job)
 	# Record job completion event for WorldMeaning pipeline
@@ -4426,6 +4534,18 @@ func _complete_current_job() -> void:
 	_request_redraw()
 	# Evaluate life-path contribution on every completed job.
 	_evaluate_life_path_on_job_complete(job.type)
+	# Track building usage and door animation
+	if _world != null and _world.has_method("record_building_usage") and job != null:
+		var built_features: Array = [
+			TileFeature.Type.BED, TileFeature.Type.WORKSHOP, TileFeature.Type.LOOM,
+			TileFeature.Type.KILN, TileFeature.Type.SMELTER, TileFeature.Type.FIRE_PIT,
+			TileFeature.Type.STORAGE_HUT, TileFeature.Type.SHELTER, TileFeature.Type.HEARTH,
+		]
+		var feat_at_tile: int = _world.data.get_feature(job.tile.x, job.tile.y) if _world.data != null else -1
+		if feat_at_tile in built_features:
+			_world.record_building_usage(job.tile)
+		if _world.has_method("open_door") and feat_at_tile == TileFeature.Type.DOOR:
+			_world.open_door(job.tile)
 	# Harvest jobs put a fresh item in the pawn's hands -- haul it to the stockpile.
 	# Build jobs don't produce anything haulable.
 	if produced_type != _Item.Type.NONE:
@@ -7284,6 +7404,22 @@ func _start_wander() -> void:
 			var dist_t: int = absi(t.x - squad_anchor.x) + absi(t.y - squad_anchor.y)
 			if dist_t < dist_now:
 				score += 5
+		# Seasonal migration bias
+		if _world != null and _world.data != null:
+			var _season_label: String = Biome.season_name(Biome.season_for_tick(GameManager.tick_count)).to_lower()
+			var _tile_biome: int = _world.data.get_biome(t.x, t.y)
+			match _season_label:
+				"winter":
+					if _tile_biome in [Biome.Type.TUNDRA, Biome.Type.MOUNTAIN]:
+						score -= 5
+					if _tile_biome in [Biome.Type.PLAINS, Biome.Type.FOREST]:
+						score -= 2
+				"summer":
+					if _tile_biome == Biome.Type.DESERT:
+						score -= 3
+				"spring":
+					if _tile_biome == Biome.Type.PLAINS:
+						score += 3
 		if score > best_score or (score == best_score and (s < best_sl or (s == best_sl and crep > best_cult))):
 			best_score = score
 			best_sl = s

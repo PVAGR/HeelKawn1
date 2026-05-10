@@ -239,6 +239,31 @@ func start_apprenticeship(teacher_id: int, apprentice_id: int, knowledge_type: K
 	
 	return false
 
+## Legacy compatibility: MemorialSystem (oral tradition) expects teach_knowledge.
+## This does a deterministic “successful transmission” when the teacher has the knowledge.
+## If the teacher lacks it, teaching fails silently.
+func teach_knowledge(a: int, b: int, knowledge_type: KnowledgeType) -> void:
+	# Compatibility teaching API.
+	#
+	# Different call sites use different argument order:
+	# - Pawn/Pawn.gd: teach_knowledge(teacher_id, student_id, knowledge_type)
+	# - MemorialSystem.gd: teach_knowledge(youth_id, elder_id, knowledge_type)
+	#
+	# We resolve deterministically by checking which id is actually a knowledge carrier.
+	if a < 0 or b < 0:
+		return
+	var first_knows: bool = has_knowledge(a, knowledge_type)
+	var second_knows: bool = has_knowledge(b, knowledge_type)
+	if not first_knows and not second_knows:
+		return  # no valid teacher
+	# If both know (rare), treat `a` as teacher to keep it stable.
+	var teacher_id: int = a if first_knows else b
+	var apprentice_id: int = b if teacher_id == a else a
+	if has_knowledge(apprentice_id, knowledge_type):
+		return
+	_record_apprenticeship_start(teacher_id, apprentice_id, knowledge_type)
+	complete_teaching(teacher_id, apprentice_id, knowledge_type, true)
+
 func complete_teaching(teacher_id: int, apprentice_id: int, knowledge_type: KnowledgeType, success: bool) -> void:
 	if success:
 		if WorldRNG.chance_for(StringName("knowledge_distortion:%d:%d:%d" % [teacher_id, apprentice_id, int(knowledge_type)]), 0.18, GameManager.tick_count + teacher_id + apprentice_id + int(knowledge_type)):
@@ -602,7 +627,10 @@ func get_echo_ruins_near(tile: Vector2i, radius: int) -> Array[Dictionary]:
 		var center_rk: int = int(d.get("center_region", -1))
 		if center_rk < 0:
 			continue
-		var center_tile: Vector2i = _region_key_to_tile(center_rk)
+		var sp: Node = get_node_or_null("/root/SettlementPlanner")
+		var center_tile: Vector2i = Vector2i.ZERO
+		if sp != null and sp.has_method("_center_tile_of_region_key"):
+			center_tile = sp._center_tile_of_region_key(center_rk)
 		var dist: float = Vector2i(tile - center_tile).length()
 		if dist <= float(radius):
 			result.append({

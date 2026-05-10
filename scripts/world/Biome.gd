@@ -90,6 +90,27 @@ const SEASON_NAMES: Dictionary = {
 	Season.WINTER: "Winter",
 }
 
+## Seasonal migration offset for wildlife: summer=hot areas, winter=warm areas
+static func seasonal_migration_bias(season: String, biome: int) -> float:
+	match biome:
+		Type.PLAINS, Type.FOREST:
+			if season == "winter": return -0.3
+			if season == "spring": return 0.2
+			if season == "summer": return 0.1
+			if season == "fall": return 0.0
+		Type.MOUNTAIN:
+			if season == "winter": return -0.5
+			if season == "spring": return 0.0
+			if season == "summer": return 0.3
+		Type.DESERT:
+			if season == "winter": return 0.3
+			if season == "summer": return -0.4
+		Type.TUNDRA:
+			if season == "summer": return 0.2
+			if season == "winter": return -0.6
+	return 0.0
+
+
 ## Movement cost multiplier. Biomes with IMPASSABLE must be cleared (mined,
 ## bridged, etc.) before they can be traversed. This is why the pawn
 ## pathfinder will refuse to route paths through mountains -- they're raw

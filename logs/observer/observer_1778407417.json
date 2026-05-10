@@ -1,0 +1,269 @@
+{
+	"canon_guards": [
+		{
+			"detail": "max_speed=100.0",
+			"name": "speed_cap_100x",
+			"pass": true
+		},
+		{
+			"detail": "gm=1.000 simtime=1.000",
+			"name": "simtime_tick_interval_match",
+			"pass": true
+		},
+		{
+			"detail": "present=false",
+			"name": "settlement_memory_autoload_present",
+			"pass": false
+		}
+	],
+	"created_unix": 1778407618,
+	"pass_ratio_threshold": 2.0,
+	"results": [
+		{
+			"elapsed_s": 119.863,
+			"expected_s": 120.0,
+			"ratio": 0.998858333333333,
+			"speed": 1.0,
+			"status": "PASS",
+			"ticks": 120
+		},
+		{
+			"elapsed_s": 39.995,
+			"expected_s": 40.0,
+			"ratio": 0.999875,
+			"speed": 3.0,
+			"status": "PASS",
+			"ticks": 120
+		},
+		{
+			"elapsed_s": 19.995,
+			"expected_s": 20.0,
+			"ratio": 0.99975,
+			"speed": 6.0,
+			"status": "PASS",
+			"ticks": 120
+		},
+		{
+			"elapsed_s": 10.0,
+			"expected_s": 10.0,
+			"ratio": 1.0,
+			"speed": 12.0,
+			"status": "PASS",
+			"ticks": 120
+		},
+		{
+			"elapsed_s": 4.612,
+			"expected_s": 4.61538461538462,
+			"ratio": 0.999266666666667,
+			"speed": 26.0,
+			"status": "PASS",
+			"ticks": 120
+		},
+		{
+			"elapsed_s": 2.396,
+			"expected_s": 2.4,
+			"ratio": 0.998333333333333,
+			"speed": 50.0,
+			"status": "PASS",
+			"ticks": 120
+		},
+		{
+			"elapsed_s": 1.198,
+			"expected_s": 1.2,
+			"ratio": 0.998333333333333,
+			"speed": 100.0,
+			"status": "PASS",
+			"ticks": 120
+		}
+	],
+	"session_id": "observer_1778407417",
+	"stall_timeout_ms": 30000,
+	"summary": {
+		"ended_at_tick": 840,
+		"failures": 0
+	},
+	"ticks_per_sample": 120,
+	"timeline": [
+		{
+			"payload": {
+				"speed": 1.0,
+				"start_tick": 0,
+				"target_ticks": 120
+			},
+			"tick": 0,
+			"time_ms": 10328,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"day_within_year": 1,
+				"tick": 1,
+				"year": 1
+			},
+			"tick": 1,
+			"time_ms": 11186,
+			"type": "calendar_day"
+		},
+		{
+			"payload": {
+				"elapsed_s": 119.863,
+				"expected_s": 120.0,
+				"ratio": 0.998858333333333,
+				"speed": 1.0,
+				"status": "PASS",
+				"ticks": 120
+			},
+			"tick": 120,
+			"time_ms": 130192,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 3.0,
+				"start_tick": 120,
+				"target_ticks": 120
+			},
+			"tick": 120,
+			"time_ms": 130196,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"elapsed_s": 39.995,
+				"expected_s": 40.0,
+				"ratio": 0.999875,
+				"speed": 3.0,
+				"status": "PASS",
+				"ticks": 120
+			},
+			"tick": 240,
+			"time_ms": 170191,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 6.0,
+				"start_tick": 240,
+				"target_ticks": 120
+			},
+			"tick": 240,
+			"time_ms": 170194,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"elapsed_s": 19.995,
+				"expected_s": 20.0,
+				"ratio": 0.99975,
+				"speed": 6.0,
+				"status": "PASS",
+				"ticks": 120
+			},
+			"tick": 360,
+			"time_ms": 190189,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 12.0,
+				"start_tick": 360,
+				"target_ticks": 120
+			},
+			"tick": 360,
+			"time_ms": 190194,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"elapsed_s": 10.0,
+				"expected_s": 10.0,
+				"ratio": 1.0,
+				"speed": 12.0,
+				"status": "PASS",
+				"ticks": 120
+			},
+			"tick": 480,
+			"time_ms": 200194,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 26.0,
+				"start_tick": 480,
+				"target_ticks": 120
+			},
+			"tick": 480,
+			"time_ms": 200199,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"day_within_year": 2,
+				"tick": 600,
+				"year": 1
+			},
+			"tick": 600,
+			"time_ms": 204810,
+			"type": "calendar_day"
+		},
+		{
+			"payload": {
+				"elapsed_s": 4.612,
+				"expected_s": 4.61538461538462,
+				"ratio": 0.999266666666667,
+				"speed": 26.0,
+				"status": "PASS",
+				"ticks": 120
+			},
+			"tick": 600,
+			"time_ms": 204810,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 50.0,
+				"start_tick": 600,
+				"target_ticks": 120
+			},
+			"tick": 600,
+			"time_ms": 204815,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"elapsed_s": 2.396,
+				"expected_s": 2.4,
+				"ratio": 0.998333333333333,
+				"speed": 50.0,
+				"status": "PASS",
+				"ticks": 120
+			},
+			"tick": 720,
+			"time_ms": 207211,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 100.0,
+				"start_tick": 720,
+				"target_ticks": 120
+			},
+			"tick": 720,
+			"time_ms": 207214,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"elapsed_s": 1.198,
+				"expected_s": 1.2,
+				"ratio": 0.998333333333333,
+				"speed": 100.0,
+				"status": "PASS",
+				"ticks": 120
+			},
+			"tick": 840,
+			"time_ms": 208412,
+			"type": "speed_end"
+		}
+	]
+}

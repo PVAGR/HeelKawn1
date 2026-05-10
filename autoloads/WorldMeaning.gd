@@ -1008,6 +1008,81 @@ func get_tracked_settlement_count() -> int:
 	return meaning_by_settlement.size()
 
 
+# === Landmark Naming ===
+
+## Generate a descriptive landmark name for a tile based on its meaning profile.
+## Uses deterministic hashing of region events to produce consistent, evocative names.
+func generate_landmark_name(tile: Vector2i) -> String:
+	var rk: int = _region_key(tile.x, tile.y)
+	if not meaning_by_region.has(rk):
+		return _fallback_landmark_name(tile)
+	var rec: Dictionary = meaning_by_region[rk]
+	# Determine primary thematic element from event counts
+	var death_count: int = int(rec.get("deaths", 0))
+	var building_count: int = int(rec.get("buildings", 0))
+	var fire_count: int = int(rec.get("fires", 0))
+	var conflict_count: int = int(rec.get("conflicts", 0))
+	var legacy_count: int = int(rec.get("legacies", 0))
+
+	var prefix: String = ""
+	var suffix: String = ""
+	var total: int = death_count + building_count + fire_count + conflict_count + legacy_count
+
+	if total == 0:
+		return _fallback_landmark_name(tile)
+
+	# Determine dominant theme
+	var max_count: int = max(death_count, building_count, fire_count, conflict_count, legacy_count)
+	match max_count:
+		death_count:
+			var death_prefixes: Array[String] = ["Bone", "Ghost", "Ash", "Silent", "Grey"]
+			var death_suffixes: Array[String] = ["Field", "Mound", "Glen", "Pass", "Hollow"]
+			prefix = death_prefixes[absi(rk * 7 + 3) % death_prefixes.size()]
+			suffix = death_suffixes[absi(rk * 13 + 5) % death_suffixes.size()]
+		building_count:
+			var build_prefixes: Array[String] = ["Old", "Stone", "Broken", "High", "Fallen"]
+			var build_suffixes: Array[String] = ["Wall", "Tower", "Gate", "Hall", "Bridge"]
+			prefix = build_prefixes[absi(rk * 11 + 7) % build_prefixes.size()]
+			suffix = build_suffixes[absi(rk * 17 + 9) % build_suffixes.size()]
+		fire_count:
+			var fire_prefixes: Array[String] = ["Scorched", "Ember", "Smoke", "Cinder", "Burnt"]
+			var fire_suffixes: Array[String] = ["Ridge", "Flat", "Copse", "Bank", "Fen"]
+			prefix = fire_prefixes[absi(rk * 5 + 11) % fire_prefixes.size()]
+			suffix = fire_suffixes[absi(rk * 19 + 13) % fire_suffixes.size()]
+		conflict_count:
+			var war_prefixes: Array[String] = ["Blood", "Spear", "War", "Iron", "Rust"]
+			var war_suffixes: Array[String] = ["Ground", "Rise", "Dale", "Heap", "Barrow"]
+			prefix = war_prefixes[absi(rk * 23 + 17) % war_prefixes.size()]
+			suffix = war_suffixes[absi(rk * 29 + 19) % war_suffixes.size()]
+		legacy_count:
+			var lore_prefixes: Array[String] = ["Moss", "Rune", "Elder", "Deep", "Lost"]
+			var lore_suffixes: Array[String] = ["Stone", "Well", "Cairn", "Shrine", "Grove"]
+			prefix = lore_prefixes[absi(rk * 31 + 23) % lore_prefixes.size()]
+			suffix = lore_suffixes[absi(rk * 37 + 27) % lore_suffixes.size()]
+
+	# Territorial suffix from settlement proximity
+	var sm: Node = get_node_or_null("/root/SettlementMemory")
+	if sm != null and sm.has_method("get_state_at_region"):
+		var nearby_state: String = sm.get_state_at_region(rk)
+		if nearby_state == "abandoned" or nearby_state == "permanently_abandoned":
+			suffix += " of Mourning"
+	return "%s %s" % [prefix, suffix]
+
+
+func _fallback_landmark_name(tile: Vector2i) -> String:
+	var fallbacks: Array[String] = [
+		"The Quiet Place", "The Lone Stone", "The Wanderer's Rest",
+		"The Forgotten Path", "The Edge of Maps", "The Nameless Spot",
+	]
+	return fallbacks[absi(tile.x * 41 + tile.y * 43) % fallbacks.size()]
+
+
+func _region_key(tx: int, ty: int) -> int:
+	if WorldMemory != null:
+		return WorldMemory._region_key(tx, ty)
+	return -1
+
+
 # === Phase 4: Settlement Cause Analysis ===
 
 func analyze_cause(data: SettlementData) -> String:

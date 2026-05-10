@@ -275,6 +275,7 @@ var data: PawnData
 @onready var _sprite: Sprite2D = Sprite2D.new() # SPRITE_ART
 
 var _world: World
+var _brain_instance: HeelKawnPawnBrain = null
 var _state: int = State.IDLE
 var _current_job: Job = null
 var _cohort_id: int = -1
@@ -887,6 +888,14 @@ func _ready() -> void:
 		HeelKawnianManager.ensure_identity_for_pawn(self)
 
 
+func _set_brain_instance(brain: HeelKawnPawnBrain) -> void:
+	_brain_instance = brain
+
+
+func _get_brain() -> HeelKawnPawnBrain:
+	return _brain_instance
+
+
 func _pawn_connect_sim_tick_deferred() -> void:
 	if not is_instance_valid(self):
 		return
@@ -939,6 +948,7 @@ func _reset_neural_priority_cache() -> void:
 
 func _exit_tree() -> void:
 	_pawn_sim_tick_armed = false
+	_brain_instance = null
 	# Disconnect from TickManager if connected
 	var tick_manager = get_node_or_null("/root/TickManager")
 	if tick_manager != null and tick_manager.tick_processed.is_connected(_on_world_tick):

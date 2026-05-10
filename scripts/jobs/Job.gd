@@ -87,6 +87,8 @@ enum Type {
 	BUILD_FORD,      # build a ford crossing on river tile
 	# --- Production (Phase 6) ---
 	BUILD_WATER_MILL,# build a water mill adjacent to river
+	# --- Social / Ritual ---
+	VISIT_GRAVE,     # internal: pawn visits a grave marker for mood recovery
 }
 
 enum State {

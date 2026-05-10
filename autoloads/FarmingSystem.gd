@@ -28,6 +28,79 @@ enum CropType { WHEAT, CORN, VEGETABLES, HERBS }
 var farm_plots: Array[Dictionary] = []
 var _next_plot_id: int = 1
 
+# Soil depletion: tile_key -> { harvest_count, last_harvest_tick, fallow_start_tick }
+var _soil_depletion: Dictionary = {}
+
+const FALLOW_RECOVERY_TICKS: int = 3000
+const MAX_SUSTAINABLE_HARVESTS: int = 3
+const HARVEST_DEPLETION_RATE: float = 0.2
+
+# Crop growth stages
+var _farm_growth: Dictionary = {}  # "x,y" -> { stage, planted_tick, harvest_ready }
+
+const GROWTH_STAGE_SEED: int = 0
+const GROWTH_STAGE_GROWING: int = 1
+const GROWTH_STAGE_MATURE: int = 2
+const GROWTH_STAGE_TICKS: int = 200
+const TOTAL_GROWTH_TICKS: int = GROWTH_STAGE_TICKS * 3
+
+func get_soil_yield_multiplier(tile: Vector2i) -> float:
+	var key: String = "%d,%d" % [tile.x, tile.y]
+	if not _soil_depletion.has(key):
+		return 1.0
+	var sdata: Dictionary = _soil_depletion[key]
+	var harvests: int = int(sdata.get("harvest_count", 0))
+	if harvests <= MAX_SUSTAINABLE_HARVESTS:
+		return 1.0
+	var last_harvest: int = int(sdata.get("last_harvest_tick", 0))
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	var fallow_ticks: int = tick - last_harvest
+	if fallow_ticks >= FALLOW_RECOVERY_TICKS:
+		sdata["harvest_count"] = 0
+		sdata["last_harvest_tick"] = 0
+		return 1.0
+	var recovery: float = float(fallow_ticks) / float(FALLOW_RECOVERY_TICKS)
+	var depletion: float = float(harvests - MAX_SUSTAINABLE_HARVESTS) * HARVEST_DEPLETION_RATE
+	depletion = mini(depletion, 0.8)
+	return 1.0 - depletion * (1.0 - recovery)
+
+
+func get_growth_stage(tile: Vector2i) -> int:
+	var key: String = "%d,%d" % [tile.x, tile.y]
+	if not _farm_growth.has(key):
+		return -1
+	var gdata: Dictionary = _farm_growth[key]
+	var planted: int = int(gdata.get("planted_tick", 0))
+	var tick: int = GameManager.tick_count if GameManager != nil else 0
+	var age: int = tick - planted
+	if age >= TOTAL_GROWTH_TICKS:
+		return GROWTH_STAGE_MATURE
+	elif age >= GROWTH_STAGE_TICKS * 2:
+		return GROWTH_STAGE_MATURE
+	elif age >= GROWTH_STAGE_TICKS:
+		return GROWTH_STAGE_GROWING
+	else:
+		return GROWTH_STAGE_SEED
+
+
+func on_farm_planted(tile: Vector2i) -> void:
+	var key: String = "%d,%d" % [tile.x, tile.y]
+	_farm_growth[key] = {
+		"planted_tick": GameManager.tick_count if GameManager != null else 0,
+		"stage": GROWTH_STAGE_SEED,
+	}
+
+
+func on_farm_harvested(tile: Vector2i) -> void:
+	var key: String = "%d,%d" % [tile.x, tile.y]
+	_farm_growth.erase(key)
+
+
+func is_farm_harvest_ready(tile: Vector2i) -> bool:
+	var stage: int = get_growth_stage(tile)
+	return stage == GROWTH_STAGE_MATURE
+
+
 # Crop configuration - BALANCED FOR FUN (Option C)
 const CROP_CONFIG: Dictionary = {
 	CropType.WHEAT: {
@@ -207,6 +280,9 @@ func create_farm_plot(tile: Vector2i, crop_type: int, planter_pawn_id: int = -1)
 	
 	farm_plots.append(plot)
 	
+	# Track growth stage
+	on_farm_planted(tile)
+	
 	# Start growth after planting delay
 	call_deferred("_start_crop_growth", plot)
 	
@@ -334,12 +410,24 @@ func complete_farming_job(job_type: String, plot_id: int, pawn_id: int) -> Dicti
 		
 		"harvest_crops":
 			if plot.status == "ready":
-				# Gain crops
+				# Gain crops with soil depletion modifier
 				var crop_name: String = _crop_type_to_string(plot.crop_type)
-				result.items_gained[crop_name] = plot.yield_quantity
+				var yield_mult: float = get_soil_yield_multiplier(plot.tile)
+				if yield_mult <= 0.0:
+					yield_mult = 0.1
+				var final_yield: int = maxi(1, int(float(plot.yield_quantity) * yield_mult))
+				result.items_gained[crop_name] = final_yield
+				
+				# Track soil depletion
+				var key: String = "%d,%d" % [plot.tile.x, plot.tile.y]
+				if not _soil_depletion.has(key):
+					_soil_depletion[key] = {"harvest_count": 0, "last_harvest_tick": 0}
+				_soil_depletion[key]["harvest_count"] = int(_soil_depletion[key].get("harvest_count", 0)) + 1
+				_soil_depletion[key]["last_harvest_tick"] = GameManager.tick_count if GameManager != null else 0
+				on_farm_harvested(plot.tile)
 				
 				# Gain seeds for replanting
-				result.items_gained[crop_name + "_seeds"] = max(1, plot.yield_quantity / 3)
+				result.items_gained[crop_name + "_seeds"] = max(1, final_yield / 3)
 				
 				# Clear the plot
 				plot.status = "harvested"
@@ -351,7 +439,7 @@ func complete_farming_job(job_type: String, plot_id: int, pawn_id: int) -> Dicti
 					_world_memory.record_event({
 						"type": "crop_harvested",
 						"crop_type": crop_name,
-						"yield": plot.yield_quantity,
+						"yield": final_yield,
 						"pawn_id": pawn_id,
 						"tick": GameManager.tick_count
 					})

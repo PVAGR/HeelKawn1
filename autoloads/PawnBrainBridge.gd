@@ -33,10 +33,15 @@ func _process_brains(tick: int) -> void:
 		var pid: int = pawn.data.id
 		alive_ids[pid] = true
 
+		if ClassDB.class_exists("HeelKawnianManager"):
+			HeelKawnianManager.ensure_identity_for_pawn(pawn)
+
 		if not _brains.has(pid):
 			var world = pawn.get("_world")
 			var brain = HeelKawnPawnBrain.new(pawn.data, world)
 			_brains[pid] = brain
+		if pawn.has_method("_set_brain_instance"):
+			pawn.call("_set_brain_instance", _brains[pid])
 
 		_brains[pid].brain_tick(tick, pawn)
 
@@ -49,3 +54,15 @@ func _process_brains(tick: int) -> void:
 			to_remove.append(pid)
 	for pid in to_remove:
 		_brains.erase(pid)
+
+
+func has_brain_for_pawn_id(pawn_id: int) -> bool:
+	return _brains.has(pawn_id)
+
+
+func get_brain_for_pawn_id(pawn_id: int) -> HeelKawnPawnBrain:
+	return _brains.get(pawn_id, null) as HeelKawnPawnBrain
+
+
+func get_active_brain_count() -> int:
+	return _brains.size()

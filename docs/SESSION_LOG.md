@@ -5,6 +5,62 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-05-10 - Autonomous Civilization AI Plan
+
+Date: 2026-05-10
+Goal: Translate full autonomy vision (independent HeelKawnian lives + spectator/incarnation + civilization from primitive to advanced domains) into executable architecture.
+
+Changes made:
+- Added `docs/AI_AUTONOMOUS_LIFE_EXECUTION_PLAN.md` as an implementation blueprint.
+- Plan includes:
+  - vision translation into deterministic simulation requirements,
+  - target architecture (individual life engine, institutions, civilization progression),
+  - staged execution from primitive survival to naval/space/arcane domains,
+  - observer/incarnation product model,
+  - measurable autonomy/determinism quality gates,
+  - 10-day immediate sprint.
+
+Why this matters:
+- Converts high-level vision into concrete, testable build order tied to existing HeelKawn systems.
+
+Suggested next session:
+- Begin Phase 1 implementation: life agendas + multi-step personal plans + active-brain diagnostics.
+
+---
+
+## 2026-05-10 - HeelKawnian Brain/Mind Wiring Pass
+
+Date: 2026-05-10
+Goal: Ensure every live HeelKawnian has deterministic identity + connected per-pawn brain ownership.
+
+Root cause found:
+- `PawnBrainBridge` was ticking brains internally, but pawns did not expose a stable per-pawn brain handle.
+- Active runtime pawn script `scripts/pawn/HeelKawnian.gd` did not bootstrap `HeelKawnianManager` identity in `_ready()`.
+
+Changes made:
+- Updated `scripts/pawn/HeelKawnian.gd`:
+  - Added `_brain_instance` field.
+  - Added `_set_brain_instance(...)` / `_get_brain()` helpers.
+  - Added identity bootstrap: `HeelKawnianManager.ensure_identity_for_pawn(self)` in `_ready()`.
+  - Clears brain reference in `_exit_tree()`.
+- Updated `autoloads/PawnBrainBridge.gd`:
+  - Ensures identity for each alive pawn before brain ticking.
+  - Attaches created brain to pawn via `_set_brain_instance(...)` when available.
+  - Added diagnostics helpers: `has_brain_for_pawn_id`, `get_brain_for_pawn_id`, `get_active_brain_count`.
+- Updated `scripts/pawn/Pawn.gd` parity path:
+  - Added `_brain_instance` field plus `_set_brain_instance(...)` / `_get_brain()` and cleanup.
+
+Validation:
+- `get_errors` reports no errors for:
+  - `autoloads/PawnBrainBridge.gd`
+  - `scripts/pawn/HeelKawnian.gd`
+  - `scripts/pawn/Pawn.gd`
+
+Suggested next session:
+- Add an F10 diagnostics row showing `PawnBrainBridge.get_active_brain_count()` vs live pawns to verify 1:1 at runtime.
+
+---
+
 ## 2026-05-06 - Phase 5 Knowledge Foundation
 
 Date: 2026-05-06

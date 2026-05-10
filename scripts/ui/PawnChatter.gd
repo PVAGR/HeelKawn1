@@ -200,8 +200,8 @@ func _build_llm_context(pawn) -> String:
 	parts.append("Hunger: %.0f%%" % d.hunger)
 	parts.append("Energy: %.0f%%" % d.rest)
 	parts.append("Mood: %.0f%%" % d.mood)
-	if d.current_activity != null:
-		parts.append("Current activity: %s" % str(d.current_activity))
+	if d.has_method("get") and d.get("current_activity") != null:
+		parts.append("Current activity: %s" % str(d.get("current_activity")))
 	var hour: int = 12
 	if GameManager != null:
 		hour = (GameManager.tick_count / 600) % 24 if GameManager.tick_count > 0 else 12

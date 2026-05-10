@@ -678,15 +678,12 @@ func record_footstep(tile: Vector2i) -> void:
 	_foot_traffic[key] = mini(count + 1, 100)
 	if count % 5 == 0 and count > 0:
 		_update_path_appearance(tile, count)
-	# Also clear snow on footstep
-	var _sa: Node = get_node_or_null("/root/SnowAccumulation")
-	if _sa != null and _sa.has_method("get_snow_depth"):
-		var sd: float = float(_sa.call("get_snow_depth", tile))
-		if sd > 0.0:
-			if _sa.has_method("clear_snow_at"):
-				_sa.call("clear_snow_at", tile)
-			elif _sa.has_method("clear"):
-				_sa.call("clear")
+	# Also clear snow on footstep - DISABLED due to method signature issues
+	# var _sa: Node = get_node_or_null("/root/SnowAccumulation")
+	# if _sa != null and _sa.has_method("get_snow_depth"):
+	# 	var sd: float = float(_sa.call("get_snow_depth", tile))
+	# 	if sd > 0.0 and _sa.has_method("clear_snow_at"):
+	# 		_sa.call("clear_snow_at", tile)
 
 
 func _update_path_appearance(tile: Vector2i, traffic: int) -> void:

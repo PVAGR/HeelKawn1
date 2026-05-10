@@ -19,6 +19,10 @@ func clear() -> void:
 	_snow_levels.clear()
 
 
+func clear_snow_at(tile: Vector2i) -> void:
+	_snow_levels.erase(tile)
+
+
 func get_snow_at(tile: Vector2i) -> float:
 	if _world == null or _world.data == null:
 		return 0.0

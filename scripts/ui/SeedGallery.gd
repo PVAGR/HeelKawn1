@@ -41,15 +41,19 @@ func _ready() -> void:
 func show_gallery(base_seed: int = 0) -> void:
 	_base_seed = base_seed
 	_visible = true
-	_panel.visible = true
-	_subtitle.text = "Choose a curated world to begin a new colony."
+	if _panel != null:
+		_panel.visible = true
+	if _subtitle != null:
+		_subtitle.text = "Choose a curated world to begin a new colony."
 	_populate_cards()
-	_panel.queue_redraw()
+	if _panel != null:
+		_panel.queue_redraw()
 
 
 func hide_gallery() -> void:
 	_visible = false
-	_panel.visible = false
+	if _panel != null:
+		_panel.visible = false
 
 
 func _on_close_pressed() -> void:

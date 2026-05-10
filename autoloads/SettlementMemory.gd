@@ -513,124 +513,124 @@ func _resolve_settlement_names() -> void:
 ## Count living pawns in each settlement's regions and write the "population" field.
 ## This is needed for name resolution and resource truth.
 func _count_pawns_per_settlement() -> void:
-	var living: Array[HeelKawnian] = _living_pawns()
-	# Build a region -> settlement index map
-	var region_to_idx: Dictionary = {}
-	for i in range(settlements.size()):
-		if not (settlements[i] is Dictionary):
-			continue
-		var st: Dictionary = settlements[i] as Dictionary
-		var regs_v: Variant = st.get("regions", null)
-		if regs_v is PackedInt32Array:
-			for rk in (regs_v as PackedInt32Array):
-				region_to_idx[int(rk)] = i
-		st["population"] = 0
-	# Count pawns per settlement
-	for p in living:
-		if p == null or not is_instance_valid(p) or p.data == null:
-			continue
-		var rk_p: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
-		if region_to_idx.has(rk_p):
-			var idx: int = int(region_to_idx[rk_p])
-			var st2: Dictionary = settlements[idx] as Dictionary
-			st2["population"] = int(st2.get("population", 0)) + 1
+    var living: Array[HeelKawnian] = _living_pawns()
+    # Build a region -> settlement index map
+    var region_to_idx: Dictionary = {}
+    for i in range(settlements.size()):
+        if not (settlements[i] is Dictionary):
+            continue
+        var st: Dictionary = settlements[i] as Dictionary
+        var regs_v: Variant = st.get("regions", null)
+        if regs_v is PackedInt32Array:
+            for rk in (regs_v as PackedInt32Array):
+                region_to_idx[int(rk)] = i
+        st["population"] = 0
+    # Count pawns per settlement
+    for p in living:
+        if p == null or not is_instance_valid(p) or p.data == null:
+            continue
+        var rk_p: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+        if region_to_idx.has(rk_p):
+            var idx: int = int(region_to_idx[rk_p])
+            var st2: Dictionary = settlements[idx] as Dictionary
+            st2["population"] = int(st2.get("population", 0)) + 1
 
 func _prune_settlement_state_truth_hysteresis() -> void:
-	var present: Dictionary = {}
-	for st_v in settlements:
-		if not (st_v is Dictionary):
-			continue
-		var c: int = int((st_v as Dictionary).get("center_region", -1))
-		if c >= 0:
-			present[c] = true
-	for k in _settlement_state_truth_hysteresis.keys():
-		if not present.has(int(k)):
-			if _settlement_truth_verify_active():
-				print(
-						"[SETTLEMENT_VERIFY] tick=%d reason=hysteresis_pruned hyst_key=center_region:%d (settlement absent this recompute)"
-						% [GameManager.tick_count, int(k)]
-				)
-			_settlement_state_truth_hysteresis.erase(k)
+    var present: Dictionary = {}
+    for st_v in settlements:
+        if not (st_v is Dictionary):
+            continue
+        var c: int = int((st_v as Dictionary).get("center_region", -1))
+        if c >= 0:
+            present[c] = true
+    for k in _settlement_state_truth_hysteresis.keys():
+        if not present.has(int(k)):
+            if _settlement_truth_verify_active():
+                print(
+                        "[SETTLEMENT_VERIFY] tick=%d reason=hysteresis_pruned hyst_key=center_region:%d (settlement absent this recompute)"
+                        % [GameManager.tick_count, int(k)]
+                )
+            _settlement_state_truth_hysteresis.erase(k)
 
 
 func process_festival_milestones(tick: int) -> void:
-	if WorldMemory == null:
-		return
-	for st_v in settlements:
-		if not (st_v is Dictionary):
-			continue
-		var st: Dictionary = st_v as Dictionary
-		var center_rk: int = int(st.get("center_region", -1))
-		if center_rk < 0:
-			continue
-		var buildings: int = int(st.get("buildings_constructed", 0))
-		var population: int = int(st.get("population", 0))
-		var milestone: int = 0
-		# Milestone 1: First birth, first building, or population >= 4
-		var first_birth: bool = _count_events_of_type(center_rk, "pawn_birth") >= 1
-		var first_building: bool = _count_events_of_type(center_rk, "building_constructed") >= 1
-		if first_birth or first_building or population >= 4:
-			milestone = 1
-		# Milestone 2: population >= 10 or buildings >= 10
-		if population >= 10 or buildings >= 10:
-			milestone = 2
-		# Milestone 3: population >= 20 or buildings >= 30
-		if buildings >= 30 or population >= 20:
-			milestone = 3
-		var center_key: String = str(center_rk)
-		var last_milestone: int = int(_festival_milestone_by_center.get(center_key, 0))
-		if milestone <= last_milestone:
-			continue
-		_festival_milestone_by_center[center_key] = milestone
-		WorldMemory.record_event({
-			"type": "settlement_festival",
-			"k": WorldMemory.Kind.FESTIVAL,
-			"r": center_rk,
-			"t": tick,
-			"center_region": center_rk,
-			"settlement_name": str(st.get("name", "Settlement")),
-			"milestone": milestone,
-			"buildings_constructed": buildings,
-			"population": population,
-			"category": "celebration",
-		})
-		# Apply mood boost to all pawns in this settlement
-		_apply_festival_mood_boost(center_rk)
+    if WorldMemory == null:
+        return
+    for st_v in settlements:
+        if not (st_v is Dictionary):
+            continue
+        var st: Dictionary = st_v as Dictionary
+        var center_rk: int = int(st.get("center_region", -1))
+        if center_rk < 0:
+            continue
+        var buildings: int = int(st.get("buildings_constructed", 0))
+        var population: int = int(st.get("population", 0))
+        var milestone: int = 0
+        # Milestone 1: First birth, first building, or population >= 4
+        var first_birth: bool = _count_events_of_type(center_rk, "pawn_birth") >= 1
+        var first_building: bool = _count_events_of_type(center_rk, "building_constructed") >= 1
+        if first_birth or first_building or population >= 4:
+            milestone = 1
+        # Milestone 2: population >= 10 or buildings >= 10
+        if population >= 10 or buildings >= 10:
+            milestone = 2
+        # Milestone 3: population >= 20 or buildings >= 30
+        if buildings >= 30 or population >= 20:
+            milestone = 3
+        var center_key: String = str(center_rk)
+        var last_milestone: int = int(_festival_milestone_by_center.get(center_key, 0))
+        if milestone <= last_milestone:
+            continue
+        _festival_milestone_by_center[center_key] = milestone
+        WorldMemory.record_event({
+            "type": "settlement_festival",
+            "k": WorldMemory.Kind.FESTIVAL,
+            "r": center_rk,
+            "t": tick,
+            "center_region": center_rk,
+            "settlement_name": str(st.get("name", "Settlement")),
+            "milestone": milestone,
+            "buildings_constructed": buildings,
+            "population": population,
+            "category": "celebration",
+        })
+        # Apply mood boost to all pawns in this settlement
+        _apply_festival_mood_boost(center_rk)
 
 func _count_events_of_type(center_region: int, event_type: String) -> int:
-	if WorldMemory == null:
-		return 0
-	var count: int = 0
-	for e in WorldMemory.get_events():
-		if str(e.get("type", "")) == event_type:
-			var tx: int = int(e.get("x", e.get("tile", {}).get("x", -1)))
-			var ty: int = int(e.get("y", e.get("tile", {}).get("y", -1)))
-			if tx >= 0:
-				var rk: int = WorldMemory._region_key(tx, ty)
-				if rk == center_region or _region_center.get(rk, -1) == center_region:
-					count += 1
-	return count
+    if WorldMemory == null:
+        return 0
+    var count: int = 0
+    for e in WorldMemory.get_events():
+        if str(e.get("type", "")) == event_type:
+            var tx: int = int(e.get("x", e.get("tile", {}).get("x", -1)))
+            var ty: int = int(e.get("y", e.get("tile", {}).get("y", -1)))
+            if tx >= 0:
+                var rk: int = WorldMemory._region_key(tx, ty)
+                if rk == center_region or _region_center.get(rk, -1) == center_region:
+                    count += 1
+    return count
 
 func _apply_festival_mood_boost(center_region: int) -> void:
-	var main_node: Node = get_tree().get_root().get_node_or_null("Main")
-	if main_node == null:
-		return
-	var spawner: Node = main_node.get_node_or_null("WorldViewport/PawnSpawner")
-	if spawner == null or not spawner.has_method("find_pawns"):
-		return
-	for p in spawner.find_pawns():
-		if p == null or not is_instance_valid(p) or p.data == null:
-			continue
-		var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
-		var sid: int = _region_center.get(rk, -1)
-		if sid == center_region:
-			p.data.mood = minf(p.data.mood + 25.0, 100.0)
-			if p.data.has_method("add_mood_event") and ClassDb.has_class("MoodEvent"):
-				var me: MoodEvent = MoodEvent.new()
-				me.type = MoodEvent.Type.JOY
-				me.intensity = 80.0
-				me.duration = 500
-				p.data.add_mood_event(me)
+    var main_node: Node = get_tree().get_root().get_node_or_null("Main")
+    if main_node == null:
+        return
+    var spawner: Node = main_node.get_node_or_null("WorldViewport/PawnSpawner")
+    if spawner == null or not spawner.has_method("find_pawns"):
+        return
+    for p in spawner.find_pawns():
+        if p == null or not is_instance_valid(p) or p.data == null:
+            continue
+        var rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+        var sid: int = _region_center.get(rk, -1)
+        if sid == center_region:
+            p.data.mood = minf(p.data.mood + 25.0, 100.0)
+            if p.data.has_method("add_mood_event") and ClassDB.class_exists("MoodEvent"):
+                var me: MoodEvent = MoodEvent.new()
+                me.type = MoodEvent.Type.JOY
+                me.intensity = 80.0
+                me.duration = 500
+                p.data.add_mood_event(me)
 
 
 func _settlement_truth_verify_active() -> bool:

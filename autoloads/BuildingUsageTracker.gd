@@ -1,4 +1,3 @@
-class_name BuildingUsageTracker
 extends Node
 
 const DECAY_INTERVAL_TICKS: int = 90

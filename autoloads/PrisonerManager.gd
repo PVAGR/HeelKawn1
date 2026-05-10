@@ -1,5 +1,4 @@
 extends Node
-class_name PrisonerManager
 
 ## Tracks incapacitated enemies that have been captured instead of killed.
 ## Prisoners can be guarded (preventing escape), recruited (converting to colonists),
@@ -66,7 +65,8 @@ func _has_guard_nearby(pos: Vector2i) -> bool:
 	for pawn in PawnSpawner.find_pawns():
 		if not is_instance_valid(pawn) or pawn.data == null:
 			continue
-		if not pawn.data.get("work_guard", true):
+		var work_guard_v: Variant = pawn.data.get("work_guard")
+		if work_guard_v != null and not bool(work_guard_v):
 			continue
 		if pawn.data.is_dead:
 			continue
@@ -88,7 +88,7 @@ func capture_enemy(enemy_node: Node) -> bool:
 		"capture_tick": GameManager.tick_count,
 		"recruit_progress": 0.0,
 		"escape_progress": 0.0,
-		"enemy_type": int(enemy_node.get("enemy_type", 0)),
+		"enemy_type": int(enemy_node.get("enemy_type") if enemy_node.get("enemy_type") != null else 0),
 		"species_name": enemy_node.get_species_name() if enemy_node.has_method("get_species_name") else "Prisoner",
 	}
 	_prisoners[pid] = entry
@@ -119,9 +119,10 @@ func _recruit_prisoner(pid: int) -> void:
 		var tile: Vector2i = node.tile_pos
 		node.queue_free()
 		var world: Node = get_node_or_null("/root/Main/WorldViewport/World")
-		if world != null and PawnSpawner != null:
+		var spawner: PawnSpawner = get_tree().get_first_node_in_group("pawn_spawner") as PawnSpawner
+		if world != null and spawner != null:
 			var tick_seed: int = GameManager.tick_count if GameManager != null else 0
-			PawnSpawner.spawn_pawn_at(world, tile, tick_seed)
+			spawner.spawn_pawn_at(world, tile, tick_seed)
 	entry.recruited = true
 	print("[Prisoner] Recruited %s into colony!" % entry.get("species_name", "Prisoner"))
 

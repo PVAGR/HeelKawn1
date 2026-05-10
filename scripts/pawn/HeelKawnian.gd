@@ -959,8 +959,10 @@ func _emit_footstep_dust() -> void:
 		return
 	var _ws: Node = get_node_or_null("/root/WindSystem")
 	if _ws != null and _ws.has_method("get_wind_direction") and _footstep_particles.process_material != null:
-		var wind_dir: Vector2 = Vector2(_ws.get("_current_direction", Vector2.RIGHT))
-		var wind_str: float = float(_ws.get("_current_strength", 0.5))
+		var wind_dir_v: Variant = _ws.get("_current_direction")
+		var wind_str_v: Variant = _ws.get("_current_strength")
+		var wind_dir: Vector2 = wind_dir_v if wind_dir_v is Vector2 else Vector2.RIGHT
+		var wind_str: float = float(wind_str_v) if wind_str_v != null else 0.5
 		_footstep_particles.process_material.initial_velocity_min = 5.0 + wind_str * 10.0
 		_footstep_particles.process_material.direction = Vector3(wind_dir.x, 0, wind_dir.y)
 	_footstep_particles.restart()
@@ -4448,6 +4450,7 @@ func _complete_current_job() -> void:
 		_Job.Type.BUILD_SHRINE:
 			data.add_mood_event(MoodEvent.Type.REVERENCE, 90.0, 350)  # Sacred act
 		_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH:
+			data.add_mood_event(MoodEvent.Type.CONTENTMENT, 45.0, 180)  # A cooked meal steadies the day
 		_Job.Type.DRY_MEAT:
 			data.add_mood_event(MoodEvent.Type.CONTENTMENT, 45.0, 180)  # Preservation feels prudent
 		_Job.Type.PLANT_SEEDS:
@@ -4498,7 +4501,7 @@ func _complete_current_job() -> void:
 		var built_features: Array = [
 			TileFeature.Type.BED, TileFeature.Type.WORKSHOP, TileFeature.Type.LOOM,
 			TileFeature.Type.KILN, TileFeature.Type.SMELTER, TileFeature.Type.FIRE_PIT,
-			TileFeature.Type.STORAGE_HUT, TileFeature.Type.SHELTER, TileFeature.Type.HEARTH,
+			TileFeature.Type.STORAGE_HUT,
 		]
 		var feat_at_tile: int = _world.data.get_feature(job.tile.x, job.tile.y) if _world.data != null else -1
 		if feat_at_tile in built_features:
@@ -7728,6 +7731,7 @@ func _get_profession_priority_bonus(job: Job) -> int:
 			Job.Type.FORAGE, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS:
 				return 10
 			Job.Type.HUNT, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH:
+				return 5
 
 	# Trader: +8 priority for trade/haul jobs
 	if data.current_profession == HeelKawnianData.Profession.TRADER:
@@ -7753,6 +7757,7 @@ func _get_profession_priority_bonus(job: Job) -> int:
 	if data.current_profession == HeelKawnianData.Profession.HEALER:
 		match job.type:
 			Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH:
+				return 6
 			Job.Type.BUILD_APOTHECARY:
 				return 8
 			Job.Type.FORAGE:

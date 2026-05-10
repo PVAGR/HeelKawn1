@@ -1,4 +1,3 @@
-class_name TimeLapseRecorder
 extends Node
 
 const MAX_SNAPSHOTS: int = 100

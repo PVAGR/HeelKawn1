@@ -213,6 +213,8 @@ func _wander() -> void:
 
 
 func take_damage(damage: float) -> void:
+	if _dead or _incapacitated:
+		return
 	health = max(0.0, health - damage)
 	_hit_flash_ticks = 4
 	if health <= 0:

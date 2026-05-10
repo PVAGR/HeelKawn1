@@ -259,7 +259,7 @@ func _advance_conversations() -> void:
 		if now < conv.next_time:
 			continue
 		var speaker = b if (conv.exchanges % 2 == 1) else a
-		var text: String = _generate_response(conv, speaker)
+		var text: String = await _generate_response(conv, speaker)
 		if not text.is_empty():
 			_bubbles.append({"pawn": speaker, "text": text, "born": now})
 			conv.exchanges += 1

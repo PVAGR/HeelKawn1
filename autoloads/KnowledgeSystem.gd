@@ -840,7 +840,6 @@ func _mutate_knowledge_type(kt: KnowledgeType, teacher_id: int, apprentice_id: i
 		var semantic_map: Dictionary = {
 			KnowledgeType.FIRE_KEEPING: KnowledgeType.FOOD_STORAGE,
 			KnowledgeType.FOOD_STORAGE: KnowledgeType.FARMING,
-			KnowledgeType.HUNTING: KnowledgeType.FARMING,
 			KnowledgeType.FARMING: KnowledgeType.FOOD_STORAGE,
 			KnowledgeType.TOOL_MAKING: KnowledgeType.CRAFTING,
 			KnowledgeType.CRAFTING: KnowledgeType.TOOL_MAKING,

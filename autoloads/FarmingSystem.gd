@@ -71,7 +71,7 @@ func get_growth_stage(tile: Vector2i) -> int:
 		return -1
 	var gdata: Dictionary = _farm_growth[key]
 	var planted: int = int(gdata.get("planted_tick", 0))
-	var tick: int = GameManager.tick_count if GameManager != nil else 0
+	var tick: int = GameManager.tick_count if GameManager != null else 0
 	var age: int = tick - planted
 	if age >= TOTAL_GROWTH_TICKS:
 		return GROWTH_STAGE_MATURE

@@ -1,4 +1,3 @@
-class_name SnowAccumulation
 extends Node
 
 const ACCUMULATION_STEP: float = 0.02

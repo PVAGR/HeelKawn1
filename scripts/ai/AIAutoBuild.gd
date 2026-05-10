@@ -335,12 +335,8 @@ func _has_required_resources(intent: Dictionary) -> bool:
 # ==================== PAWN SCANNING ====================
 
 func _scan_for_new_pawns(_tick: int) -> void:
-	var pawn_spawner: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
-	if pawn_spawner == null:
-		return
-	
 	# Check for pawns without assigned tasks
-	for pawn in pawn_spawner.pawns:
+	for pawn in PawnSpawner.find_pawns():
 		if pawn == null or not is_instance_valid(pawn):
 			continue
 

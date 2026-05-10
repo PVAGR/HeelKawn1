@@ -41,7 +41,7 @@ func _refresh_for_tick(tick: int) -> void:
 	_current_direction = Vector2.from_angle(angle).normalized()
 
 	var seasonal_bias: float = 0.0
-	if Biome != null and Biome.has_method("season_for_tick"):
+	if Biome != null:
 		var season: int = int(Biome.season_for_tick(tick))
 		match season:
 			Biome.Season.WINTER:

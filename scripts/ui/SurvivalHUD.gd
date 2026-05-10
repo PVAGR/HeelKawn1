@@ -186,11 +186,9 @@ func _get_player_pawn() -> Node:
 	var main: Node = get_node_or_null("/root/Main")
 	if main == null or not main.has_method("get_player_pawn"):
 		# Fallback: check PawnSpawner first pawn
-		var pawn_spawner: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
-		if pawn_spawner != null:
-			var pawns: Array = pawn_spawner.get("pawns")
-			if pawns.size() > 0:
-				return pawns[0]
+		var pawns: Array[HeelKawnian] = PawnSpawner.find_pawns()
+		if pawns.size() > 0:
+			return pawns[0]
 		return null
 	
 	return main.call("get_player_pawn")

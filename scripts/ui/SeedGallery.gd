@@ -42,7 +42,7 @@ func show_gallery(base_seed: int = 0) -> void:
 	_panel.visible = true
 	_subtitle.text = "Choose a curated world to begin a new colony."
 	_populate_cards()
-	queue_redraw()
+	_panel.queue_redraw()
 
 
 func hide_gallery() -> void:

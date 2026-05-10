@@ -313,13 +313,12 @@ static func _scatter_rivers(data: WorldData, world_seed: int) -> void:
 			# Don't carve through buildings
 			if data.features[idx] != TileFeature.Type.NONE and data.features[idx] < TileFeature.Type.RIVER:
 				break
-	# Mark as river
-	data.features[idx] = TileFeature.Type.RIVER
-	# Store river quality (deep pool vs shallow) in a deterministic way
-	# Quality 0.3-1.0 based on position hash; higher = better fishing
-	var quality: float = 0.3 + float((cx * 73856093 + cy * 19349663 + ri * 83492791) % 1000) / 1000.0 * 0.7
-	_river_quality_cache[Vector2i(cx, cy)] = quality
-	# Find lowest neighbor (flow downhill)
+			# Mark as river.
+			data.features[idx] = TileFeature.Type.RIVER
+			# Store river quality (deep pool vs shallow) in a deterministic way.
+			var quality: float = 0.3 + float((cx * 73856093 + cy * 19349663 + ri * 83492791) % 1000) / 1000.0 * 0.7
+			_river_quality_cache[Vector2i(cx, cy)] = quality
+			# Find lowest neighbor (flow downhill).
 			var best: Vector2i = Vector2i(-1, -1)
 			var best_elev: float = 1.0
 			for dx in [-1, 0, 1]:

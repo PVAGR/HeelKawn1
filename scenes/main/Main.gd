@@ -147,15 +147,15 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _hud: ColonyHUD = $UI_Viewport/ColonyHUD
 @onready var _observer_hud: ObserverHUD = $UI_Viewport/ObserverHUD
 @onready var _chronicle_ledger: ChronicleLedger = $UI_Viewport/ChronicleLedger
-@onready var _chronicle_book: ChronicleBook = $UI_Viewport/ChronicleBook
-@onready var _seed_gallery: SeedGallery = $UI_Viewport/SeedGallery
+@onready var _chronicle_book: Node = $UI_Viewport/ChronicleBook
+@onready var _seed_gallery: Node = $UI_Viewport/SeedGallery
 @onready var _pawn_ai_inspector = $UI_Viewport/PawnAIInspector
 @onready var _focus_inspector: FocusInspector = $UI_Viewport/FocusInspector
 @onready var _region_inspector: RegionInspector = $UI_Viewport/RegionInspector
 @onready var _timeline_controls: TimelineControls = $UI_Viewport/TimelineControls
 @onready var _incarnation_picker: Control = null  # IncarnationPicker instance (created on demand)
 @onready var _tutorial_hints: Node = null  # TutorialHints instance (created on demand)
-@onready var _trade_overview: TradeOverviewPanel = null  # TradeOverviewPanel instance (created on first open)
+@onready var _trade_overview: CanvasLayer = null  # TradeOverviewPanel instance (created on first open)
 @onready var _first_launch_welcome: Node = null  # FirstLaunchWelcome instance (created on demand)
 @onready var _map_mode_overlay: Node = $MapModeOverlay
 @onready var _creator_debug_menu: CreatorDebugMenu = $CreatorDebugMenu
@@ -4055,7 +4055,10 @@ func _toggle_chronicle_ledger() -> void:
 
 func _toggle_trade_overview() -> void:
 	if _trade_overview == null:
-		_trade_overview = TradeOverviewPanel.new()
+		var trade_overview_script: Script = load("res://scripts/ui/TradeOverviewPanel.gd") as Script
+		if trade_overview_script == null:
+			return
+		_trade_overview = trade_overview_script.new() as CanvasLayer
 		add_child(_trade_overview)
 	_trade_overview.toggle()
 
@@ -6481,7 +6484,7 @@ func _tick_flood_events(tick: int) -> void:
 				var tile: Vector2i = Vector2i(x, y)
 				# Deterministic offset so different tiles get scanned each call
 				var check_x: int = (x + _flood_scan_count) % WorldData.WIDTH
-				var check_y: int = (y + _flood_scan_count // WorldData.WIDTH) % WorldData.HEIGHT
+				var check_y: int = (y + int(_flood_scan_count / WorldData.WIDTH)) % WorldData.HEIGHT
 				if wd.get_feature(check_x, check_y) == TileFeature.Type.RIVER:
 					# Flood adjacent fertile tiles
 					for dx in [-1, 0, 1]:

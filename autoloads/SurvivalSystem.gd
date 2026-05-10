@@ -82,11 +82,12 @@ func _ready() -> void:
 
 
 func _on_game_tick(tick: int) -> void:
-	# Process survival for all pawns
-	if _pawn_spawner == null:
+	# Process survival for all pawns.
+	var pawns: Array[HeelKawnian] = PawnSpawner.find_pawns()
+	if pawns.is_empty():
 		return
-	
-	for pawn in _pawn_spawner.pawns:
+
+	for pawn in pawns:
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue
 		

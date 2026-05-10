@@ -296,7 +296,7 @@ func _tile_color(x: int, y: int) -> Color:
 
 
 func _tile_color_for_feature(feat: int, x: int, y: int) -> Color:
-	if feat in [TileFeature.Type.WALL, TileFeature.Type.SHELTER]:
+	if feat in [TileFeature.Type.WALL, TileFeature.Type.STORAGE_HUT]:
 		return Color8(120, 100, 80)
 	if feat in [TileFeature.Type.BED]:
 		return Color8(180, 120, 80)
@@ -518,7 +518,7 @@ func _tick_erosion(tick: int) -> void:
 			var y: int = int(parts[1])
 			var feat: int = data.get_feature(x, y)
 			if feat in [TileFeature.Type.WALL, TileFeature.Type.DOOR, TileFeature.Type.FIRE_PIT,
-					TileFeature.Type.STORAGE_HUT, TileFeature.Type.SHELTER, TileFeature.Type.HEARTH]:
+					TileFeature.Type.STORAGE_HUT]:
 				clear_feature(x, y)
 				decay_count += 1
 				if decay_count >= 5:

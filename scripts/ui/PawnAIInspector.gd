@@ -70,6 +70,20 @@ func _apply_panel_style() -> void:
 	_panel.add_theme_stylebox_override("panel", style)
 
 
+func _settlement_state_color(state: String) -> String:
+	match state:
+		"active":
+			return "#66bb6a"
+		"reviving", "revivable":
+			return "#ffd166"
+		"abandoned", "recovering":
+			return "#b0bec5"
+		"permanent_ruin", "permanently_abandoned":
+			return "#ef5350"
+		_:
+			return "#aaaaaa"
+
+
 func _refresh() -> void:
 	if _content == null or _selected_pawn == null or not is_instance_valid(_selected_pawn):
 		_content.text = "[color=#888888]No pawn selected.[/color]"
@@ -98,7 +112,8 @@ func _refresh() -> void:
 			lines.append("Settlement: [color=#66bb6a]%s[/color] ([color=%s]%s[/color])" % [st_name, _settlement_state_color(st_state), st_state])
 			var woai: Node = get_node_or_null("/root/WorldAI")
 			if woai != null:
-				var sai = woai.get("active_settlements", {}).get(st_center)
+				var active_settlements_v: Variant = woai.get("active_settlements")
+				var sai = active_settlements_v.get(st_center) if active_settlements_v is Dictionary else null
 				if sai != null:
 					var gov_names: Array = ["Tribal", "Chiefdom", "Monarchy", "Republic", "Theocracy", "Technocracy", "Anarchy"]
 					var focus_names: Array = ["Survival", "Expansion", "Trade", "Knowledge", "Military", "Artistic", "Balanced"]
@@ -242,9 +257,9 @@ func _refresh() -> void:
 		lines.append("  %s" % rl)
 
 	# Dream journal from consciousness
-	var pc: Node2 = get_node_or_null("/root/PawnConsciousness")
-	if pc != null:
-		var all_dreams: Array = pc.get_dreams(pid, 5)
+	var dream_pc: Node = get_node_or_null("/root/PawnConsciousness")
+	if dream_pc != null:
+		var all_dreams: Array = dream_pc.get_dreams(int(d.id), 5)
 		if all_dreams.size() > 0:
 			lines.append("")
 			lines.append("[b]--- DREAMS (last 5) ---[/b]")

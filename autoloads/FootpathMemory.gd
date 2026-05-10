@@ -1,4 +1,3 @@
-class_name FootpathMemory
 extends Node
 
 const DECAY_INTERVAL_TICKS: int = 60

@@ -5779,8 +5779,8 @@ func _seed_construction_jobs() -> void:
 	var budget_usec: int = 1_200  # small per-frame budget; scheduler continues next pass
 	var start_usec: int = Time.get_ticks_usec()
 	var pending_counts: Dictionary = JobManager.get_pending_counts() if JobManager != null and JobManager.has_method("get_pending_counts") else {}
-	var stock_wood: int = StockpileManager.total_wood() if StockpileManager != null else 0
-	var stock_stone: int = StockpileManager.total_stone() if StockpileManager != null else 0
+	var stock_wood: int = StockpileManager.total_count_of(Item.Type.WOOD) if StockpileManager != null else 0
+	var stock_stone: int = StockpileManager.total_count_of(Item.Type.STONE) if StockpileManager != null else 0
 	var materials_crisis: bool = stock_wood <= 2 or stock_stone <= 2
 
 	var posted: int = 0
@@ -7418,7 +7418,7 @@ func settlement_planner_post_fire_pit(t: Vector2i) -> bool:
 		return false
 	if not _world.data.is_passable(t.x, t.y):
 		return false
-	if StockpileManager.total_wood() < 1:
+	if StockpileManager.total_count_of(Item.Type.WOOD) < 1:
 		return false
 	var job: Job = JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 5, 35)
 	return job != null
@@ -7431,7 +7431,7 @@ func settlement_planner_post_storage_hut(t: Vector2i) -> bool:
 		return false
 	if not _world.data.is_passable(t.x, t.y):
 		return false
-	if StockpileManager.total_wood() < 2:
+	if StockpileManager.total_count_of(Item.Type.WOOD) < 2:
 		return false
 	var job: Job = JobManager.post(Job.Type.BUILD_STORAGE_HUT, t, 5, 40)
 	return job != null

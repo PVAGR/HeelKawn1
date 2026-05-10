@@ -717,7 +717,7 @@ func _pick_infrastructure_tile(
 				continue
 			if data.get_feature(t.x, t.y) != TileFeature.Type.NONE:
 				continue
-			if not data.is_passable(t.x, t.y):
+			if not Biome.is_passable(data.get_biome(t.x, t.y)):
 				continue
 			cands.append(t)
 	if cands.is_empty():
@@ -755,7 +755,7 @@ func _pick_defend_tile(
 				var t := Vector2i(w.x + dx, w.y + dy)
 				if not data.in_bounds(t.x, t.y):
 					continue
-				if not data.is_passable(t.x, t.y):
+				if not Biome.is_passable(data.get_biome(t.x, t.y)):
 					continue
 				if not _tile_belongs_to_lookup(t, region_lookup):
 					continue

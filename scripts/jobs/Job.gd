@@ -91,6 +91,8 @@ enum Type {
 	GUARD,           # guard prisoners to prevent escape and enable recruitment
 	# --- Social / Ritual ---
 	VISIT_GRAVE,     # internal: pawn visits a grave marker for mood recovery
+	# --- Living settlement upkeep ---
+	MAINTAIN_STRUCTURE, # repair / preserve homes, walls, roads, hearths before decay
 }
 
 enum State {
@@ -201,6 +203,8 @@ static func describe_type(t: int) -> String:
 		Type.BUILD_FORD:            return "BuildFord"
 		Type.BUILD_WATER_MILL:      return "BuildWaterMill"
 		Type.GUARD:                return "Guard"
+		Type.VISIT_GRAVE:          return "VisitGrave"
+		Type.MAINTAIN_STRUCTURE:   return "MaintainStructure"
 	return "Unknown"
 
 
@@ -284,6 +288,7 @@ static func tool_job_work_ticks(job_type: int) -> int:
 		Type.BUILD_ROAD:             return 15
 		Type.BUILD_GRANARY:          return 35
 		Type.BUILD_CELLAR:           return 40
+		Type.MAINTAIN_STRUCTURE:     return 8
 	return 10  # Faster default (was 20)
 
 
@@ -324,4 +329,6 @@ static func tool_job_skill(job_type: int) -> int:
 			return HeelKawnianData.Skill.BUILDING  # Infrastructure
 		Type.BUILD_GRANARY, Type.BUILD_CELLAR:
 			return HeelKawnianData.Skill.BUILDING  # Storage
+		Type.MAINTAIN_STRUCTURE:
+			return HeelKawnianData.Skill.BUILDING
 	return HeelKawnianData.Skill.FORAGING

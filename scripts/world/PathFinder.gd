@@ -86,6 +86,26 @@ func set_job_construction_reservation(x: int, y: int, on: bool, data: WorldData)
 	_compute_components(data)
 
 
+## Reserve / release many future construction cells and recompute components once.
+## This keeps autonomous wall blueprints from rebuilding the flood-fill for every tile.
+func set_job_construction_reservations_batch(tiles: Array, enabled: bool, data: WorldData, _source: String = "") -> void:
+	if data == null:
+		return
+	var touched: bool = false
+	for v in tiles:
+		if not (v is Vector2i):
+			continue
+		var t: Vector2i = v
+		if not _astar.region.has_point(t):
+			continue
+		var i: int = t.y * WorldData.WIDTH + t.x
+		_resv_job[i] = 1 if enabled else 0
+		_refresh_one_tile(t.x, t.y, data)
+		touched = true
+	if touched:
+		_compute_components(data)
+
+
 ## Update drag-preview for planned walls. Pass tile coords of cells that
 ## *would* get a valid wall job. Cleared when `tiles` is empty.
 func set_preview_wall_tiles(tiles: Array, data: WorldData) -> void:
@@ -251,6 +271,8 @@ func refresh_pawn_historic_scar_weights(p_world: World) -> void:
 				w *= RoadMemory.get_path_weight_mul(tx, ty)
 				w *= TradeMemory.get_trade_path_weight_mul(tx, ty)
 				if p_world != null and is_instance_valid(p_world) and p_world.data != null:
+					if int(p_world.data.get_feature(tx, ty)) == TileFeature.Type.ROAD:
+						w *= RoadMemory.PATH_W_T2
 					w *= RemnantMemory.get_remnant_path_mul(tx, ty, p_world)
 				_pawn_hist_scale[i] = w
 				if not is_equal_approx(w, 1.0):

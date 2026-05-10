@@ -707,6 +707,14 @@ func _update_building_appearance(tile: Vector2i, usage: int) -> void:
 	var wear: float = mini(1.0, float(usage) / 200.0)
 	var soot: Color = Color8(60, 50, 40)
 	c = c.lerp(soot, wear * 0.15)
+	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("get_visual_state"):
+		var state: String = str(BuildingUsageTracker.get_visual_state(tile))
+		if state == "worn":
+			c = c.lerp(Color8(190, 168, 55), 0.18)
+		elif state == "damaged":
+			c = c.lerp(Color8(156, 104, 50), 0.30)
+		elif state == "ruin":
+			c = c.lerp(Color8(95, 82, 72), 0.45)
 	_image.set_pixel(tile.x, tile.y, c)
 	_texture.update(_image)
 

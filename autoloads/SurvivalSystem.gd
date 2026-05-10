@@ -16,6 +16,8 @@ const HUNGER_DECAY_RATE: float = 0.003  # ~33,333 ticks to starve from full (~9 
 const THIRST_DECAY_RATE: float = 0.005  # ~20,000 ticks to dehydrate from full (~5.5 hours at 1 tick/sec)
 const ENERGY_DECAY_RATE: float = 0.002  # ~50,000 ticks to exhaust from full (~14 hours at 1 tick/sec)
 const STAMINA_DECAY_RATE: float = 0.004  # ~25,000 ticks to deplete from full (~7 hours at 1 tick/sec)
+const EARLY_SURVIVAL_PROTECTION_DAYS: int = 35
+const FIRST_YEAR_HARMFUL_SLOWDOWN: float = 300.0
 
 # Work multipliers (faster decay when working)
 const WORK_HUNGER_MULT: float = 1.5    # Working pawns get hungry 1.5x faster
@@ -231,7 +233,7 @@ func _regulate_temperature(pawn: Node, tick: int) -> void:
 	var birth_tick_g: int = int(birth_tick_g_val) if birth_tick_g_val != null else 0
 	var age_g: int = maxi(GameManager.tick_count - birth_tick_g, 0)
 	var is_pioneer_g: bool = data.is_pioneer if "is_pioneer" in data else false
-	var grace_dur: int = 5000 if is_pioneer_g else 2500
+	var grace_dur: int = maxi(5000 if is_pioneer_g else 2500, EARLY_SURVIVAL_PROTECTION_DAYS * SimTime.TICKS_PER_VISUAL_DAY)
 	var grace_frac: float = clampf(1.0 - float(age_g) / float(grace_dur), 0.0, 1.0)
 
 	# Get environmental temperature (from tile/weather)
@@ -255,7 +257,7 @@ func _regulate_temperature(pawn: Node, tick: int) -> void:
 		target_temp = lerpf(37.0, 39.0, clampf((env_temp - 35) / 10.0, 0.0, 1.0))
 
 	# Gradually adjust body temperature (slower during grace)
-	var lerp_rate: float = 0.01 * (1.0 - grace_frac * 0.8)
+	var lerp_rate: float = 0.01 * (1.0 - grace_frac * 0.8) * _harmful_pressure_scale(tick)
 	var temp_change: float = lerp(current_temp, target_temp, lerp_rate)
 	data.body_temperature = temp_change
 	
@@ -270,9 +272,10 @@ func _regulate_temperature(pawn: Node, tick: int) -> void:
 	var birth_tick_h: int = int(birth_tick_h_val) if birth_tick_h_val != null else 0
 	var age_h: int = maxi(GameManager.tick_count - birth_tick_h, 0)
 	var is_pio_h: bool = data.is_pioneer if "is_pioneer" in data else false
-	var grace_suppress: float = clampf(1.0 - float(age_h) / 5000.0, 0.0, 1.0) if is_pio_h else clampf(1.0 - float(age_h) / 2500.0, 0.0, 1.0)
+	var grace_damage_dur: int = maxi(5000 if is_pio_h else 2500, EARLY_SURVIVAL_PROTECTION_DAYS * SimTime.TICKS_PER_VISUAL_DAY)
+	var grace_suppress: float = clampf(1.0 - float(age_h) / float(grace_damage_dur), 0.0, 1.0)
 	if current_temp < TEMP_HYPOTHERMIA_SEVERE or current_temp > TEMP_HEATSTROKE_SEVERE:
-		var dmg: float = 0.1 * (1.0 - grace_suppress * 0.9)
+		var dmg: float = 0.1 * (1.0 - grace_suppress * 0.9) * _harmful_pressure_scale(tick)
 		data.health = maxf(0.0, data.health - dmg)
 
 
@@ -633,18 +636,18 @@ func _check_death_conditions(pawn: Node, tick: int) -> void:
 	if "is_dead" in data and bool(data.is_dead):
 		return  # HeelKawnian is already dead - skip all death processing
 
-	# GRACE PERIOD: Pawns under 1500 ticks old cannot die from survival causes.
-	# This matches HeelKawnian.gd _check_death_conditions grace period.
-	# Pioneers get 5000 ticks of cold resistance via their own grace system.
 	var birth_tick_val = data.birth_tick if "birth_tick" in data else 0
 	var birth_tick: int = int(birth_tick_val) if birth_tick_val != null else 0
 	var age: int = maxi(GameManager.tick_count - birth_tick, 0)
-	if age < 1500:
+	var protected_age: int = EARLY_SURVIVAL_PROTECTION_DAYS * SimTime.TICKS_PER_VISUAL_DAY
+	if age < protected_age:
 		# During grace: clamp health to minimum 20 so survival damage can't kill
 		if data.health != null and data.health < 20.0:
 			data.health = 20.0
 		if data.hunger != null and data.hunger < -3.0:
 			data.hunger = -3.0
+		if data.body_temperature != null:
+			data.body_temperature = clampf(float(data.body_temperature), TEMP_HYPOTHERMIA, TEMP_HEATSTROKE)
 		return
 
 	var cause: String = ""
@@ -696,6 +699,14 @@ func _apply_death(pawn: Node, cause: String) -> void:
 	# Kill pawn
 	if pawn.has_method("_die"):
 		pawn.call("_die", cause)
+
+
+func _harmful_pressure_scale(tick: int) -> float:
+	if tick < EARLY_SURVIVAL_PROTECTION_DAYS * SimTime.TICKS_PER_VISUAL_DAY:
+		return 0.0
+	if tick < SimTime.TICKS_PER_SIM_YEAR:
+		return 1.0 / FIRST_YEAR_HARMFUL_SLOWDOWN
+	return 1.0
 
 
 # ==================== PUBLIC API ====================

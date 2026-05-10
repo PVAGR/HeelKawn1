@@ -2,11 +2,11 @@ extends Node
 ## Roads & Path Memory v1: traversal from pawn steps only; not saved; no RNG.
 ## Stacked with [PathFinder] historic weights (roads ease travel slightly).
 
-const ROAD_T1: int = 40
-const ROAD_T2: int = 120
+const ROAD_T1: int = 3
+const ROAD_T2: int = 10
 const ROAD_DECAY_TICKS: int = 10_000
-const PATH_W_T1: float = 0.97
-const PATH_W_T2: float = 0.95
+const PATH_W_T1: float = 0.86
+const PATH_W_T2: float = 0.68
 const MAX_PATCH_PER_FLUSH: int = 256
 
 var _trav: PackedInt32Array = PackedInt32Array()

@@ -3027,6 +3027,8 @@ static func skill_for_job(job_type: int) -> int:
 			return Skill.BUILDING  # Infrastructure
 		Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR, Job.Type.BUILD_FORD, Job.Type.BUILD_WATER_MILL:
 			return Skill.BUILDING  # Storage / river / mill
+		Job.Type.MAINTAIN_STRUCTURE:
+			return Skill.BUILDING
 	return -1
 
 
@@ -3083,6 +3085,8 @@ func allows_job_type(job_type: int) -> bool:
 		Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR, \
 		Job.Type.BUILD_FORD, Job.Type.BUILD_WATER_MILL:
 			return work_build  # All construction = building skill
+		Job.Type.MAINTAIN_STRUCTURE:
+			return work_build
 	return true
 
 

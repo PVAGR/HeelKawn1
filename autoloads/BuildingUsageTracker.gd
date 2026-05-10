@@ -3,11 +3,19 @@ extends Node
 const DECAY_INTERVAL_TICKS: int = 90
 const DECAY_MULTIPLIER: float = 0.992
 const WORN_BUILDING_THRESHOLD: int = 36
+const EARLY_DECAY_PROTECTION_DAYS: int = 35
+const FIRST_WORN_AGE_TICKS: int = 45_000 # 1.5 sim years at current 30k tick years
+const CONDITION_DECAY_INTERVAL_TICKS: int = 600
+const CONDITION_HEALTHY_MIN: float = 70.0
+const CONDITION_WORN_MIN: float = 40.0
+const CONDITION_DAMAGED_MIN: float = 12.0
 
 var _world: World = null
 var _pawn_spawner: PawnSpawner = null
 var _usage: Dictionary = {}  # Vector2i -> {count: int, last_tick: int}
+var _condition: Dictionary = {} # Vector2i -> structure condition record
 var _last_decay_tick: int = 0
+var _last_condition_decay_tick: int = 0
 
 
 func _ready() -> void:
@@ -24,12 +32,18 @@ func bind_context(world_ref: World, pawn_spawner_ref: PawnSpawner) -> void:
 
 func clear() -> void:
 	_usage.clear()
+	_condition.clear()
 	_last_decay_tick = 0
+	_last_condition_decay_tick = 0
 
 
 func record_usage(tile: Vector2i, weight: int = 1, tick: int = -1) -> void:
 	if tile == Vector2i.ZERO and weight <= 0:
 		return
+	if _world != null and _world.data != null and _world.data.in_bounds(tile.x, tile.y):
+		var feature_type: int = int(_world.data.get_feature(tile.x, tile.y))
+		if _building_features.has(feature_type):
+			register_structure(tile, feature_type, -1, _settlement_for_tile(tile))
 	var entry: Dictionary = _usage.get(tile, {"count": 0, "last_tick": tick})
 	entry["count"] = maxi(0, int(entry.get("count", 0)) + maxi(1, weight))
 	entry["last_tick"] = tick if tick >= 0 else GameManager.tick_count
@@ -68,6 +82,105 @@ func _on_game_tick(tick: int) -> void:
 	if tick - _last_decay_tick >= DECAY_INTERVAL_TICKS:
 		_decay_usage()
 		_last_decay_tick = tick
+	if tick - _last_condition_decay_tick >= CONDITION_DECAY_INTERVAL_TICKS:
+		_decay_structure_conditions(tick)
+		_last_condition_decay_tick = tick
+
+
+func register_structure(tile: Vector2i, feature_type: int, builder_id: int = -1, settlement_id: int = -1) -> void:
+	if tile.x < 0 or tile.y < 0:
+		return
+	if not _building_features.has(feature_type):
+		return
+	var now: int = GameManager.tick_count if GameManager != null else 0
+	var entry: Dictionary = _condition.get(tile, {})
+	if entry.is_empty():
+		entry = {
+			"feature_type": int(feature_type),
+			"builder_id": int(builder_id),
+			"settlement_id": int(settlement_id),
+			"created_tick": now,
+			"last_maintained_tick": now,
+			"condition": 100.0,
+		}
+	else:
+		entry["feature_type"] = int(feature_type)
+		if builder_id >= 0:
+			entry["builder_id"] = int(builder_id)
+		if settlement_id >= 0:
+			entry["settlement_id"] = int(settlement_id)
+	_condition[tile] = entry
+
+
+func record_maintenance(tile: Vector2i, pawn_id: int = -1) -> void:
+	if _world == null or _world.data == null or not _world.data.in_bounds(tile.x, tile.y):
+		return
+	var feature_type: int = int(_world.data.get_feature(tile.x, tile.y))
+	register_structure(tile, feature_type, -1, _settlement_for_tile(tile))
+	var entry: Dictionary = _condition.get(tile, {})
+	if entry.is_empty():
+		return
+	entry["condition"] = 100.0
+	entry["last_maintained_tick"] = GameManager.tick_count if GameManager != null else 0
+	_condition[tile] = entry
+	if WorldMemory != null:
+		WorldMemory.record_event({
+			"type": "structure_maintained",
+			"k": WorldMemory.Kind.BUILDING_CONSTRUCTED,
+			"pawn_id": int(pawn_id),
+			"tile": {"x": tile.x, "y": tile.y},
+			"feature_type": int(feature_type),
+			"tick": GameManager.tick_count if GameManager != null else 0,
+			"r": WorldMemory._region_key(tile.x, tile.y),
+		})
+
+
+func get_condition(tile: Vector2i) -> float:
+	_refresh_condition_for_tile(tile)
+	var entry: Dictionary = _condition.get(tile, {})
+	if entry.is_empty():
+		return 100.0
+	return float(entry.get("condition", 100.0))
+
+
+func get_visual_state(tile: Vector2i) -> String:
+	var c: float = get_condition(tile)
+	if c >= CONDITION_HEALTHY_MIN:
+		return "healthy"
+	if c >= CONDITION_WORN_MIN:
+		return "worn"
+	if c >= CONDITION_DAMAGED_MIN:
+		return "damaged"
+	return "ruin"
+
+
+func get_due_maintenance_jobs(max_count: int = 8) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if _world == null or _world.data == null:
+		return out
+	if _early_protection_active():
+		return out
+	for tile_v in _condition.keys():
+		if out.size() >= max_count:
+			break
+		if not (tile_v is Vector2i):
+			continue
+		var tile: Vector2i = tile_v
+		if not _world.data.in_bounds(tile.x, tile.y):
+			continue
+		var feature_type: int = int(_world.data.get_feature(tile.x, tile.y))
+		if not _building_features.has(feature_type):
+			continue
+		var cond: float = get_condition(tile)
+		if cond >= CONDITION_HEALTHY_MIN:
+			continue
+		out.append({
+			"tile": tile,
+			"feature_type": feature_type,
+			"priority": 8 if cond < CONDITION_WORN_MIN else 5,
+			"condition": cond,
+		})
+	return out
 
 
 func _sample_building_usage(tick: int) -> void:
@@ -174,3 +287,50 @@ func _decay_usage() -> void:
 			_usage[tile] = entry
 	for tile in erase_tiles:
 		_usage.erase(tile)
+
+
+func _decay_structure_conditions(tick: int) -> void:
+	if _early_protection_active():
+		return
+	if _condition.is_empty():
+		return
+	for tile_v in _condition.keys():
+		if not (tile_v is Vector2i):
+			continue
+		var tile: Vector2i = tile_v
+		_refresh_condition_for_tile(tile, tick)
+
+
+func _refresh_condition_for_tile(tile: Vector2i, tick: int = -1) -> void:
+	if not _condition.has(tile):
+		return
+	var now: int = tick if tick >= 0 else (GameManager.tick_count if GameManager != null else 0)
+	var entry: Dictionary = _condition[tile]
+	var created: int = int(entry.get("created_tick", now))
+	if now - created < FIRST_WORN_AGE_TICKS:
+		entry["condition"] = maxf(float(entry.get("condition", 100.0)), CONDITION_HEALTHY_MIN)
+		_condition[tile] = entry
+		return
+	var maintained: int = int(entry.get("last_maintained_tick", created))
+	var unattended_ticks: int = maxi(now - max(created + FIRST_WORN_AGE_TICKS, maintained), 0)
+	var one_and_half_years: float = float(maxi(1, FIRST_WORN_AGE_TICKS))
+	var decay: float = float(unattended_ticks) / one_and_half_years * 30.0
+	var condition_now: float = clampf(100.0 - decay, 0.0, 100.0)
+	entry["condition"] = minf(float(entry.get("condition", 100.0)), condition_now)
+	_condition[tile] = entry
+
+
+func _early_protection_active() -> bool:
+	if GameManager == null:
+		return false
+	var day_ticks: int = 600
+	if ClassDB.class_exists("SimTime"):
+		day_ticks = SimTime.TICKS_PER_VISUAL_DAY
+	return GameManager.tick_count < EARLY_DECAY_PROTECTION_DAYS * day_ticks
+
+
+func _settlement_for_tile(tile: Vector2i) -> int:
+	if SettlementMemory == null or WorldMemory == null:
+		return -1
+	var rk: int = WorldMemory._region_key(tile.x, tile.y)
+	return SettlementMemory.get_center_region_for_region(rk)

@@ -951,6 +951,15 @@ func get_pawn_knowledge(pawn_id: int) -> Array:
 		return knowledge_carriers[pawn_id]
 	return []
 
+
+func get_at_risk_knowledge_types(max_carriers: int = 1) -> Array:
+	var out: Array = []
+	for k in KnowledgeType.values():
+		var carriers: int = get_carrier_count(k)
+		if carriers > 0 and carriers <= max_carriers:
+			out.append(k)
+	return out
+
 func clear() -> void:
 	knowledge_carriers.clear()
 	teaching_records.clear()

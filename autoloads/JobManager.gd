@@ -118,7 +118,7 @@ static func _is_construction_type(type: int) -> bool:
 		Job.Type.BUILD_MARKET, Job.Type.BUILD_TRADING_POST, \
 		Job.Type.BUILD_ROAD, \
 		Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR, \
-		Job.Type.BUILD_SHELTER:
+		Job.Type.BUILD_SHELTER, Job.Type.MAINTAIN_STRUCTURE:
 			return true
 		_:
 			return false
@@ -178,6 +178,8 @@ func _resolve_job_type(type_v: Variant, job_data: Dictionary) -> int:
 			return Job.Type.PROTECT
 		"teach_skill":
 			return Job.Type.TEACH_SKILL
+		"maintain_structure", "maintain", "repair":
+			return Job.Type.MAINTAIN_STRUCTURE
 		"apprenticeship":
 			return Job.Type.APPRENTICESHIP
 		"trade_haul":
@@ -379,6 +381,8 @@ func complete(job: Job) -> void:
 		impact_amount = 5
 	elif job.type == Job.Type.PROTECT or job.type == Job.Type.DEFEND:
 		impact_amount = 15
+	elif job.type == Job.Type.MAINTAIN_STRUCTURE:
+		impact_amount = 5
 	if impact_amount > 0 and get_tree() != null and get_tree().root.has_node("ProgressionSystem"):
 		var pawn_id: int = 0
 		if job.assigned_pawn != null and job.assigned_pawn.has_method("get_pawn_data"):

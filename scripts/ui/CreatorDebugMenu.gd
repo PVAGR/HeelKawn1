@@ -617,7 +617,15 @@ func _report_performance_snapshot() -> void:
 	# Settlement stats
 	var settlement_count: int = 0
 	if SettlementMemory != null:
-		settlement_count = SettlementMemory.get_settlement_count() if SettlementMemory.has_method("get_settlement_count") else 0
+		if SettlementMemory.has_method("get_settlements"):
+			for s in SettlementMemory.get_settlements():
+				if not (s is Dictionary):
+					continue
+				var state: String = str((s as Dictionary).get("state", "active"))
+				if state != "abandoned" and state != "permanently_abandoned":
+					settlement_count += 1
+		elif SettlementMemory.has_method("get_settlement_count"):
+			settlement_count = SettlementMemory.get_settlement_count()
 	
 	print("--- SETTLEMENT STATS ---")
 	print("Active Settlements: %d" % settlement_count)
@@ -3136,6 +3144,8 @@ func _report_ai_pipeline_health() -> void:
 	print("")
 	_report_job_pipeline()
 	print("")
+	_report_ai_integration_health()
+	print("")
 	_report_pathfinder_audit()
 	print("")
 	_report_resource_truth_audit()
@@ -3150,6 +3160,16 @@ func _report_ai_pipeline_health() -> void:
 	])
 	print("")
 	print("=== HEELKAWN_AI_PIPELINE_HEALTH:tick=%d END ===" % tick)
+
+
+func _report_ai_integration_health() -> void:
+	print("[ai_integration_health] tick=%d" % GameManager.tick_count)
+	if HeelKawnianManager == null:
+		print("  HeelKawnianManager health bridge missing")
+		return
+	var health: Dictionary = HeelKawnianManager.get_ai_integration_health()
+	for key in health.keys():
+		print("  %s=%s" % [str(key), str(health[key])])
 
 
 func _report_food_pipeline() -> void:

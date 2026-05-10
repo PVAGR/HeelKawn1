@@ -175,6 +175,30 @@ static func note_matrix_job_choice(pawn: Variant, job: Job) -> void:
 	)
 
 
+static func get_ai_integration_health() -> Dictionary:
+	var root: Window = null
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null:
+		root = tree.root
+	var job_manager: Node = root.get_node_or_null("JobManager") if root != null else null
+	var knowledge_system: Node = root.get_node_or_null("KnowledgeSystem") if root != null else null
+	var building_usage: Node = root.get_node_or_null("BuildingUsageTracker") if root != null else null
+	var pending: Dictionary = job_manager.call("get_pending_counts") if job_manager != null and job_manager.has_method("get_pending_counts") else {}
+	var at_risk: Array = knowledge_system.call("get_at_risk_knowledge_types") if knowledge_system != null and knowledge_system.has_method("get_at_risk_knowledge_types") else []
+	var maintenance_due: Array = building_usage.call("get_due_maintenance_jobs", 12) if building_usage != null and building_usage.has_method("get_due_maintenance_jobs") else []
+	return {
+		"matrix_to_job": "live: priority_cb + note_matrix_job_choice",
+		"survival_jobs": int(pending.get(Job.Type.FORAGE, 0)) + int(pending.get(Job.Type.HUNT, 0)) + int(pending.get(Job.Type.COOK_MEAT, 0)) + int(pending.get(Job.Type.COOK_BERRIES, 0)),
+		"construction_jobs": int(pending.get(Job.Type.BUILD_BED, 0)) + int(pending.get(Job.Type.BUILD_WALL, 0)) + int(pending.get(Job.Type.BUILD_FIRE_PIT, 0)) + int(pending.get(Job.Type.BUILD_STORAGE_HUT, 0)),
+		"maintenance_jobs": int(pending.get(Job.Type.MAINTAIN_STRUCTURE, 0)),
+		"maintenance_due": maintenance_due.size(),
+		"teaching_jobs": int(pending.get(Job.Type.TEACH_SKILL, 0)) + int(pending.get(Job.Type.APPRENTICESHIP, 0)),
+		"knowledge_at_risk": at_risk.size(),
+		"world_to_memory": "live: job_completed/structure_built/teaching_success/structure_maintained",
+		"memory_to_planner": "live: region meaning + local feature scans + settlement scheduler",
+	}
+
+
 static func get_social_action_for_pawn(pawn: Variant) -> Dictionary:
 	var data: HeelKawnianData = _pawn_data(pawn)
 	if data == null:
@@ -540,10 +564,13 @@ static func leader_direct_construction(settlement_id: int) -> int:
 	for entry in build_queue:
 		if posted >= max_posts:
 			break
+		var job_manager: Node = _root_node("JobManager")
+		if job_manager == null:
+			break
 		var job_type: int = int(entry.get("type", -1))
 		var priority: int = int(entry.get("priority", 5))
 		var work: int = int(entry.get("work", 20))
-		var pending: int = JobManager.count_pending_by_type(job_type)
+		var pending: int = int(job_manager.call("count_pending_by_type", job_type)) if job_manager.has_method("count_pending_by_type") else 0
 		if pending > 0:
 			continue  # Already has a pending job of this type
 		# Find a build tile near the ruler (settlement center)
@@ -553,9 +580,9 @@ static func leader_direct_construction(settlement_id: int) -> int:
 		var t: Vector2i = main_node.call("_find_build_tile_near", center, 6)
 		if t.x < 0:
 			continue
-		if JobManager.has_job_at(t):
+		if job_manager.has_method("has_job_at") and bool(job_manager.call("has_job_at", t)):
 			continue
-		var j: Job = JobManager.post(job_type, t, priority, work)
+		var j: Job = job_manager.call("post", job_type, t, priority, work) as Job if job_manager.has_method("post") else null
 		if j != null:
 			posted += 1
 	return posted
@@ -851,12 +878,12 @@ static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, ident
 			if data.hunger < 45.0:
 				_add_bias(biases, [Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH, Job.Type.HARVEST_CROPS, Job.Type.GROW_FOOD], 4)
 			if data.rest < 45.0 or data.health < 55.0:
-				_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH], 3)
+				_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH, Job.Type.MAINTAIN_STRUCTURE], 3)
 		"recover":
-			_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH, Job.Type.PROTECT, Job.Type.DEFEND, Job.Type.CARVE_GRAVE_MARKER], 7)
+			_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH, Job.Type.MAINTAIN_STRUCTURE, Job.Type.PROTECT, Job.Type.DEFEND, Job.Type.CARVE_GRAVE_MARKER], 7)
 			_add_bias(biases, [Job.Type.HUNT, Job.Type.MINE, Job.Type.MINE_WALL], -2)
 		"preserve":
-			_add_bias(biases, [Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.CARVE_LEDGER_STONE, Job.Type.CARVE_GRAVE_MARKER, Job.Type.BUILD_MARKER_STONE, Job.Type.PAPER_MAKING, Job.Type.INK_MAKING, Job.Type.BOOK_BINDING, Job.Type.TEACH_SKILL], 8)
+			_add_bias(biases, [Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.CARVE_LEDGER_STONE, Job.Type.CARVE_GRAVE_MARKER, Job.Type.BUILD_MARKER_STONE, Job.Type.PAPER_MAKING, Job.Type.INK_MAKING, Job.Type.BOOK_BINDING, Job.Type.TEACH_SKILL, Job.Type.MAINTAIN_STRUCTURE], 8)
 			_add_bias(biases, [Job.Type.BUILD_SHRINE, Job.Type.BUILD_HEARTH], 3)
 		"learn":
 			_add_bias(biases, [Job.Type.APPRENTICESHIP, Job.Type.TEACH_SKILL, Job.Type.GATHER_FLINT, Job.Type.GATHER_STICK, Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_TORCH, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR], 7)
@@ -902,11 +929,11 @@ static func _add_human_scale_biases(biases: Dictionary, profile: Dictionary, dat
 
 	match next_level:
 		"family":
-			_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_HEARTH, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH, Job.Type.TEACH_SKILL], 6)
+			_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_HEARTH, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH, Job.Type.TEACH_SKILL, Job.Type.MAINTAIN_STRUCTURE], 6)
 			if family_score < 25:
 				_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_HEARTH], 3)
 		"clan":
-			_add_bias(biases, [Job.Type.BUILD_MARKER_STONE, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.PROTECT, Job.Type.DEFEND], 6)
+			_add_bias(biases, [Job.Type.BUILD_MARKER_STONE, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_ROAD, Job.Type.PROTECT, Job.Type.DEFEND, Job.Type.MAINTAIN_STRUCTURE], 6)
 			if clan_score < 25:
 				_add_bias(biases, [Job.Type.BUILD_MARKER_STONE, Job.Type.PROTECT], 3)
 		"nation":

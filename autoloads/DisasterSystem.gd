@@ -41,6 +41,7 @@ var stats: Dictionary = {
 const DISASTER_CHECK_INTERVAL: int = 10000  # Check every 10000 ticks
 const BASE_DISASTER_CHANCE: float = 0.15  # 15% base chance per check
 const SEVERITY_SCALE: float = 1.0  # Scales with game progress
+const EARLY_PROTECTION_DAYS: int = 35
 
 # Disaster type probabilities
 const DISASTER_PROBABILITIES: Dictionary = {
@@ -90,6 +91,8 @@ func _on_game_tick(tick: int) -> void:
 
 
 func _try_spawn_disaster(tick: int) -> void:
+	if _early_protection_active(tick):
+		return
 	# Roll for disaster
 	var rng = RandomNumberGenerator.new()
 	rng.seed = tick + 719  # Deterministic seed
@@ -267,6 +270,8 @@ func _spawn_plague(tick: int, rng: RandomNumberGenerator) -> void:
 func _spawn_famine(tick: int, rng: RandomNumberGenerator) -> void:
 	if _stockpile_manager == null:
 		return
+	if _early_protection_active(tick):
+		return
 	
 	# Reduce food stockpiles
 	var total_food: int = _stockpile_manager.total_food()
@@ -318,6 +323,10 @@ func _spawn_famine(tick: int, rng: RandomNumberGenerator) -> void:
 	
 	if OS.is_debug_build():
 		print("[Disaster] Famine started: %d food spoiled" % spoiled_amount)
+
+
+func _early_protection_active(tick: int) -> bool:
+	return tick < EARLY_PROTECTION_DAYS * SimTime.TICKS_PER_VISUAL_DAY
 
 
 func _spawn_earthquake(tick: int, rng: RandomNumberGenerator) -> void:

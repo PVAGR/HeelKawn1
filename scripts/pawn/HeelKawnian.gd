@@ -56,6 +56,8 @@ const MIN_VISUAL_UPDATE_INTERVAL: int = 3
 const HUNGER_DECAY_PER_TICK: float = 0.03  # Reduced from 0.06 to prevent rapid starvation
 const REST_DECAY_PER_TICK:   float = 0.04  # Reduced from 0.05
 const MOOD_DECAY_PER_TICK:   float = 0.02  # Reduced from 0.03
+const EARLY_SURVIVAL_PROTECTION_DAYS: int = 35
+const FIRST_YEAR_HARMFUL_SLOWDOWN: float = 300.0
 const THRESHOLD_WARN: float = 50.0
 const THRESHOLD_CRIT: float = 25.0
 
@@ -2292,6 +2294,9 @@ func _process(delta: float) -> void:
 	_anim_t += delta * (0.5 + GameManager.game_speed * 0.25)
 	
 	var step: float = WALK_SPEED_WORLD_UNITS_PER_SEC * delta * GameManager.game_speed * _meaning_speed_multiplier
+	if _world != null and _world.data != null and _world.data.in_bounds(data.tile_pos.x, data.tile_pos.y):
+		if int(_world.data.get_feature(data.tile_pos.x, data.tile_pos.y)) == TileFeature.Type.ROAD:
+			step *= 1.35
 	# Apply injury mobility penalty
 	if not data.injuries.is_empty():
 		step *= (1.0 - BodyRiskManager.get_mobility_penalty(data))
@@ -3817,6 +3822,7 @@ func _tick_working() -> void:
 	# old constant-rate baseline). XP accrues only while actually working.
 	var skill: int = HeelKawnianData.skill_for_job(_current_job.type)
 	var speed: float = data.effective_labor_mult() * float(work_step_multiplier)
+	speed *= _work_rate_band_for_job(_current_job.type)
 	# Tool efficacy is applied inside _calculate_work_efficiency() â€” don't double-count.
 	speed *= data.kinship_work_speed_multiplier(_current_job.work_tile)
 	if skill >= 0:
@@ -3918,6 +3924,19 @@ func _calculate_work_efficiency() -> float:
 	return clamp(efficiency, 0.1, 2.0)
 
 
+func _work_rate_band_for_job(job_type: int) -> float:
+	match job_type:
+		_Job.Type.BUILD_ROAD, _Job.Type.PLANT_SEEDS, _Job.Type.HARVEST_CROPS, _Job.Type.GROW_FOOD:
+			return 3.0
+		_Job.Type.BUILD_BED, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH, _Job.Type.MAINTAIN_STRUCTURE:
+			return 1.75
+		_Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR:
+			return 0.9
+		_Job.Type.BUILD_WATCHTOWER, _Job.Type.BUILD_LIBRARY, _Job.Type.BUILD_SCHOOL, _Job.Type.BUILD_BARRACKS:
+			return 0.65
+	return 1.0
+
+
 func _apply_tradition_mood_for_job(job_type: int) -> void:
 	if data == null:
 		return
@@ -3973,6 +3992,45 @@ func _finish_teaching() -> void:
 	_teaching_ticks_left = 0
 	_teaching_knowledge_type = -1
 	_reset_to_idle()
+
+
+func _try_complete_knowledge_teaching() -> bool:
+	if KnowledgeSystem == null or not KnowledgeSystem.has_method("teach_knowledge"):
+		return false
+	var teacher_id: int = int(data.id)
+	var teacher_known: Array = KnowledgeSystem.get_pawn_knowledge(teacher_id) if KnowledgeSystem.has_method("get_pawn_knowledge") else []
+	if teacher_known.is_empty():
+		return false
+	var at_risk: Array = KnowledgeSystem.get_at_risk_knowledge_types() if KnowledgeSystem.has_method("get_at_risk_knowledge_types") else []
+	var best_student: HeelKawnian = null
+	var best_knowledge: int = -1
+	var best_score: int = -999999
+	for p in get_tree().get_nodes_in_group("pawns"):
+		if p == self or not is_instance_valid(p) or p.data == null:
+			continue
+		if position.distance_to(p.position) > 96.0:
+			continue
+		var student_id: int = int(p.data.id)
+		var student_known: Array = KnowledgeSystem.get_pawn_knowledge(student_id) if KnowledgeSystem.has_method("get_pawn_knowledge") else []
+		for kt_any in teacher_known:
+			var kt: int = int(kt_any)
+			if kt in student_known:
+				continue
+			var score: int = 10
+			if kt in at_risk:
+				score += 100
+			var rapport_v: Variant = data.get("social_rapport") if data.has_method("get") else null
+			if rapport_v is Dictionary:
+				score += int((rapport_v as Dictionary).get(student_id, 0))
+			if score > best_score:
+				best_score = score
+				best_student = p
+				best_knowledge = kt
+	if best_student == null or best_knowledge < 0:
+		return false
+	KnowledgeSystem.teach_knowledge(teacher_id, int(best_student.data.id), best_knowledge)
+	_record_teaching_memory_fact(best_student, "knowledge_%d" % best_knowledge)
+	return true
 
 
 func _tick_challenge() -> void:
@@ -4307,6 +4365,9 @@ func _is_job_tile_still_valid(job: Job) -> bool:
 			if f3 == TileFeature.Type.GRAVE_MARKER or f3 == TileFeature.Type.KNOWLEDGE_STONE or f3 == TileFeature.Type.LEDGER_STONE:
 				return false
 			return Biome.is_passable(_world.data.get_biome(job.tile.x, job.tile.y))
+		_Job.Type.MAINTAIN_STRUCTURE:
+			var f4: int = _world.data.get_feature(job.tile.x, job.tile.y)
+			return TileFeature.name_for(f4) != "None"
 	# Jobs without specific tile requirements (PROTECT, DEFEND, TEACH, etc.)
 	# are valid as long as the tile is in bounds and passable.
 	if _world.data.in_bounds(job.tile.x, job.tile.y):
@@ -4447,27 +4508,12 @@ func _complete_current_job() -> void:
 			if FarmingSystem != null and FarmingSystem.has_method("complete_farming_job_by_tile"):
 				FarmingSystem.complete_farming_job_by_tile(job.tile, int(data.id))
 			produced_type = _Item.Type.NONE
+		_Job.Type.MAINTAIN_STRUCTURE:
+			if BuildingUsageTracker != null and BuildingUsageTracker.has_method("record_maintenance"):
+				BuildingUsageTracker.record_maintenance(job.tile, int(data.id))
+			produced_type = _Item.Type.NONE
 		_Job.Type.TEACH_SKILL, _Job.Type.APPRENTICESHIP:
-			# Teaching jobs: find a nearby pawn with lower skill and transfer knowledge.
-			if KnowledgeSystem != null and KnowledgeSystem.has_method("teach_knowledge"):
-				var best_student: HeelKawnian = null
-				var best_skill_gap: int = 0
-				for p in get_tree().get_nodes_in_group("pawns"):
-					if p == self or not is_instance_valid(p) or p.data == null:
-						continue
-					if position.distance_to(p.position) > 80.0:
-						continue
-					var gap: int = 0
-					for sk in range(5):
-						var my_level: int = data.get_skill_level(sk)
-						var their_level: int = p.data.get_skill_level(sk)
-						if my_level > their_level:
-							gap += (my_level - their_level)
-					if gap > best_skill_gap:
-						best_skill_gap = gap
-						best_student = p
-				if best_student != null and best_skill_gap > 0:
-					KnowledgeSystem.teach_knowledge(int(data.id), int(best_student.data.id), 0)
+			_try_complete_knowledge_teaching()
 			produced_type = _Item.Type.NONE
 	# If the pawn is re-fetching materials (build failed material check), don't complete the job yet.
 	# The pawn will walk to the stockpile, fetch, walk back, and re-attempt the build.
@@ -4595,10 +4641,13 @@ func _finish_build(job: Job) -> void:
 		_Job.Type.BUILD_BED:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.BED)
 			_world.register_bed(job.tile)
+			_register_built_structure(job.tile, TileFeature.Type.BED)
 		_Job.Type.BUILD_WALL:
 			_world.build_wall(job.tile.x, job.tile.y)
+			_register_built_structure(job.tile, TileFeature.Type.WALL)
 		_Job.Type.BUILD_DOOR:
 			_world.build_door(job.tile.x, job.tile.y)
+			_register_built_structure(job.tile, TileFeature.Type.DOOR)
 
 
 func _current_settlement_center_region() -> int:
@@ -4606,6 +4655,11 @@ func _current_settlement_center_region() -> int:
 		return -1
 	var region_key: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
 	return SettlementMemory.get_center_region_for_region(region_key)
+
+
+func _register_built_structure(tile: Vector2i, feature_type: int) -> void:
+	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("register_structure"):
+		BuildingUsageTracker.register_structure(tile, feature_type, int(data.id), _current_settlement_center_region())
 
 
 ## Complete a tool-crafting job: consume materials from stockpile, equip the tool.
@@ -4717,6 +4771,7 @@ func _finish_shelter_build(job: Job) -> void:
 	match job.type:
 		_Job.Type.BUILD_FIRE_PIT:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.FIRE_PIT)
+			_register_built_structure(job.tile, TileFeature.Type.FIRE_PIT)
 			WorldMemory.record_event({
 				"type": "hearth_built",
 				"pawn_id": int(data.id),
@@ -4726,6 +4781,7 @@ func _finish_shelter_build(job: Job) -> void:
 			})
 		_Job.Type.BUILD_STORAGE_HUT:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.STORAGE_HUT)
+			_register_built_structure(job.tile, TileFeature.Type.STORAGE_HUT)
 			WorldMemory.record_event({
 				"type": "storage_built",
 				"pawn_id": int(data.id),
@@ -4735,6 +4791,7 @@ func _finish_shelter_build(job: Job) -> void:
 			})
 		_Job.Type.BUILD_MARKER_STONE:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.MARKER_STONE)
+			_register_built_structure(job.tile, TileFeature.Type.MARKER_STONE)
 			WorldMemory.record_event({
 				"type": "marker_built",
 				"pawn_id": int(data.id),
@@ -4744,6 +4801,7 @@ func _finish_shelter_build(job: Job) -> void:
 			})
 		_Job.Type.BUILD_SHRINE:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.SHRINE)
+			_register_built_structure(job.tile, TileFeature.Type.SHRINE)
 			WorldMemory.record_event({
 				"type": "shrine_built",
 				"pawn_id": int(data.id),
@@ -4754,6 +4812,7 @@ func _finish_shelter_build(job: Job) -> void:
 		_Job.Type.BUILD_SHELTER:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.BED)
 			_world.register_bed(job.tile)
+			_register_built_structure(job.tile, TileFeature.Type.BED)
 			WorldMemory.record_event({
 				"type": "structure_built",
 				"category": "construction",
@@ -4765,6 +4824,7 @@ func _finish_shelter_build(job: Job) -> void:
 			})
 		_Job.Type.BUILD_HEARTH:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.FIRE_PIT)
+			_register_built_structure(job.tile, TileFeature.Type.FIRE_PIT)
 			WorldMemory.record_event({
 				"type": "hearth_built",
 				"pawn_id": int(data.id),
@@ -4808,6 +4868,7 @@ func _finish_registry_build(job: Job) -> void:
 			data.clear_carry()
 	# Place the feature on the tile
 	_world.set_feature(job.tile.x, job.tile.y, feature_type)
+	_register_built_structure(job.tile, feature_type)
 	# Register beds if this is a shelter-type building
 	if feature_type == TileFeature.Type.BED:
 		_world.register_bed(job.tile)
@@ -5355,8 +5416,9 @@ func _decay_needs() -> void:
 	
 	var pace_h: float = lerpf(0.86, 1.15, _bp(0))
 	var pace_r: float = lerpf(0.86, 1.15, _bp(1))
+	var harmful_scale: float = _harmful_pressure_scale()
 	if _state == State.SLEEPING:
-		data.hunger = data.hunger - HUNGER_DECAY_PER_TICK_SLEEPING * hunger_mult * pace_h
+		data.hunger = data.hunger - HUNGER_DECAY_PER_TICK_SLEEPING * hunger_mult * pace_h * harmful_scale
 		var rate: float = REST_RECOVER_PER_TICK_SLEEP
 		if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed and _world != null and _world.is_bed_owned_by(_reserved_bed, self):
 			rate *= REST_RECOVER_BED_MULTIPLIER
@@ -5368,8 +5430,8 @@ func _decay_needs() -> void:
 		if data.health < data.max_health:
 			data.health = min(data.max_health, data.health + heal_rate)
 	else:
-		data.hunger = data.hunger - HUNGER_DECAY_PER_TICK * hunger_mult * pace_h
-		data.rest   = data.rest   - REST_DECAY_PER_TICK * rest_mult * pace_r
+		data.hunger = data.hunger - HUNGER_DECAY_PER_TICK * hunger_mult * pace_h * harmful_scale
+		data.rest   = data.rest   - REST_DECAY_PER_TICK * rest_mult * pace_r * harmful_scale
 	
 	# Mood: net loss when needs aren't met, net gain when they are.
 	# Passive contentment outpaces decay, so a pawn whose hunger AND rest are
@@ -5493,16 +5555,17 @@ func _trigger_crisis_strike() -> void:
 
 
 func _check_death_conditions() -> void:
-	# Grace period: newborn pawns can't die in first 1500 ticks
-	# This gives them time to find food, build shelter, get oriented
-	# At 100x speed, 1500 ticks = ~15 seconds real time
 	var age: int = maxi(GameManager.tick_count - data.birth_tick, 0)
-	if age < 1500:
+	var protected_age: int = EARLY_SURVIVAL_PROTECTION_DAYS * SimTime.TICKS_PER_VISUAL_DAY
+	if age < protected_age:
 		# During grace: clamp health to minimum 20, hunger to minimum -3
 		if data.health < 20.0:
 			data.health = 20.0
 		if data.hunger < -3.0:
 			data.hunger = -3.0
+		if data.rest < -3.0:
+			data.rest = -3.0
+		data.body_temperature = clampf(data.body_temperature, 35.0, 39.0)
 		return
 	
 	# Emergency food-seeking for AI agents
@@ -5538,6 +5601,17 @@ func _emergency_seek_food() -> void:
 		_begin_going_to_eat(stockpile)
 	else:
 		pass # No emergency food source found.
+
+
+func _harmful_pressure_scale() -> float:
+	if GameManager == null:
+		return 1.0
+	var protected_until: int = EARLY_SURVIVAL_PROTECTION_DAYS * SimTime.TICKS_PER_VISUAL_DAY
+	if GameManager.tick_count < protected_until:
+		return 0.0
+	if GameManager.tick_count < SimTime.TICKS_PER_SIM_YEAR:
+		return 1.0 / FIRST_YEAR_HARMFUL_SLOWDOWN
+	return 1.0
 
 
 func _decay_stamina() -> void:
@@ -5682,15 +5756,15 @@ func _check_temperature() -> void:
 	# DORMANT WORLD: Pioneer pawns (first generation) get extended grace (5000 ticks)
 	# Regular pawns get standard grace (2500 ticks)
 	var age: int = maxi(GameManager.tick_count - data.birth_tick, 0)
-	var grace_duration: int = 2500
+	var grace_duration: int = EARLY_SURVIVAL_PROTECTION_DAYS * SimTime.TICKS_PER_VISUAL_DAY
 	if data.is_pioneer:
-		grace_duration = 5000
+		grace_duration = maxi(grace_duration, 5000)
 		# Tick down pioneer counter
 		if data.pioneer_ticks_remaining > 0:
 			data.pioneer_ticks_remaining -= 1
 	var grace_remaining: float = clampf(1.0 - float(age) / float(grace_duration), 0.0, 1.0)
 	
-	var temp_change_rate: float = 0.05 if has_shelter else 0.1
+	var temp_change_rate: float = (0.05 if has_shelter else 0.1) * _harmful_pressure_scale()
 	if grace_remaining > 0.0:
 		# During grace: body temp drops 5x slower toward cold ambient
 		if ambient_temp < data.body_temperature:
@@ -5704,13 +5778,13 @@ func _check_temperature() -> void:
 	# Accumulate hypothermia/heat exhaustion risk
 	if data.body_temperature < 35.0:
 		# During grace period, hypothermia risk accumulates 4x slower
-		var hypo_rate: float = 0.2 * (1.0 - grace_remaining * 0.75)
+		var hypo_rate: float = 0.2 * (1.0 - grace_remaining * 0.75) * _harmful_pressure_scale()
 		# Wetness amplifies hypothermia risk
 		if is_wet:
 			hypo_rate *= 2.0
 		data.hypothermia_risk = min(100.0, data.hypothermia_risk + hypo_rate)
 	elif data.body_temperature > 38.0:
-		data.heat_exhaustion_risk = min(100.0, data.heat_exhaustion_risk + 0.2)
+		data.heat_exhaustion_risk = min(100.0, data.heat_exhaustion_risk + 0.2 * _harmful_pressure_scale())
 	else:
 		# Recover from temperature risks when in normal range
 		data.hypothermia_risk = max(0.0, data.hypothermia_risk - 0.1)
@@ -5719,7 +5793,7 @@ func _check_temperature() -> void:
 	# Hypothermia causes health damage and can lead to frostbite
 	# During grace period, damage is suppressed
 	if data.hypothermia_risk > 80.0:
-		var dmg: float = 0.1 * (1.0 - grace_remaining * 0.9)
+		var dmg: float = 0.1 * (1.0 - grace_remaining * 0.9) * _harmful_pressure_scale()
 		data.health = max(0.0, data.health - dmg)
 		data.exposure_sickness = min(100.0, data.exposure_sickness + 0.05 * (1.0 - grace_remaining * 0.8))
 		# Severe hypothermia causes frostbite (suppressed during grace)
@@ -5728,7 +5802,7 @@ func _check_temperature() -> void:
 	
 	# Heat exhaustion causes health damage
 	if data.heat_exhaustion_risk > 80.0:
-		data.health = max(0.0, data.health - 0.1)
+		data.health = max(0.0, data.health - 0.1 * _harmful_pressure_scale())
 
 
 func _process_injuries() -> void:

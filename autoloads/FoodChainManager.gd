@@ -11,6 +11,8 @@ extends Node
 
 const SPOILAGE_CHECK_INTERVAL: int = 100  # Check spoilage every N ticks
 const FAMINE_FOOD_THRESHOLD: int = 5      # Total food units below this = famine
+const EARLY_PROTECTION_DAYS: int = 35
+const FIRST_YEAR_HARMFUL_SLOWDOWN: int = 300
 
 var _crop_tiles: Dictionary = {}  # tile_key -> {planted_tick, growth_ticks, type}
 const CROP_GROWTH_TICKS: int = 5000  # Ticks for crops to mature
@@ -29,7 +31,8 @@ func _ready() -> void:
 func _on_game_tick(_tick: int) -> void:
 	# Periodic spoilage check
 	if GameManager.tick_count % SPOILAGE_CHECK_INTERVAL == 0:
-		_check_stockpile_spoilage()
+		if not _early_protection_active():
+			_check_stockpile_spoilage()
 	
 	# Periodic crop growth check
 	if GameManager.tick_count % 50 == 0:
@@ -37,7 +40,8 @@ func _on_game_tick(_tick: int) -> void:
 	
 	# Periodic famine check
 	if GameManager.tick_count % 500 == 0:
-		_check_famine_conditions()
+		if not _early_protection_active():
+			_check_famine_conditions()
 
 
 ## Check all stockpiles for spoiled food and remove it.
@@ -86,6 +90,8 @@ func _spoilage_check_zone(zone: Stockpile) -> void:
 			effective_ticks *= 2  # Cellar doubles shelf life
 		if item_type == Item.Type.DRIED_MEAT:
 			effective_ticks = int(float(effective_ticks) * 1.5)  # Dried lasts longer
+		if GameManager != null and GameManager.tick_count < SimTime.TICKS_PER_SIM_YEAR:
+			effective_ticks *= FIRST_YEAR_HARMFUL_SLOWDOWN
 		
 		# Deterministic spoilage: spoil 1 item per threshold crossed
 		var spoil_count: int = 0
@@ -209,6 +215,8 @@ func _tick_crop_growth() -> void:
 func _check_famine_conditions() -> void:
 	if StockpileManager == null:
 		return
+	if _early_protection_active():
+		return
 
 	var total_food: int = StockpileManager.total_food()
 
@@ -283,3 +291,9 @@ func _is_near_feature(tile: Vector2i, feature_type: int, radius: int) -> bool:
 			if world.data.get_feature(check.x, check.y) == feature_type:
 				return true
 	return false
+
+
+func _early_protection_active() -> bool:
+	if GameManager == null:
+		return false
+	return GameManager.tick_count < EARLY_PROTECTION_DAYS * SimTime.TICKS_PER_VISUAL_DAY

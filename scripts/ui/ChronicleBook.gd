@@ -77,6 +77,8 @@ func _refresh_stride_for_speed(speed: float) -> int:
 
 
 func _apply_panel_style() -> void:
+	if _panel == null:
+		return
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.08, 0.06, 0.04, 0.94)
 	style.border_color = Color(0.83, 0.74, 0.50, 0.85)

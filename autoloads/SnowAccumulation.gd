@@ -15,7 +15,7 @@ func bind_world(world_ref: World) -> void:
 	_world = world_ref
 
 
-func clear() -> void:
+func clear(_tile: Vector2i = Vector2i(-1, -1)) -> void:
 	_snow_levels.clear()
 
 

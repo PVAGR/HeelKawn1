@@ -408,17 +408,46 @@ func get_player_pawn_id() -> int:
 	return -1
 
 func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
-	# DISABLED speed scaling - all systems must run at max potential at all times
+	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
+	if GameManager == null:
+		return normal_ticks
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return ultra_ticks
+	if gs >= 50.0:
+		return fast_ticks
 	return normal_ticks
 
 
 func _planner_interval_for_speed() -> int:
-	# DISABLED speed scaling - all systems must run at max potential at all times
+	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
+	if GameManager == null:
+		return 90
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 360
+	if gs >= 50.0:
+		return 240
+	if gs >= 26.0:
+		return 180
+	if gs >= 12.0:
+		return 120
 	return 90
 
 
 func _heavy_planner_interval_for_speed() -> int:
-	# DISABLED speed scaling - all systems must run at max potential at all times
+	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
+	if GameManager == null:
+		return 180
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 720
+	if gs >= 50.0:
+		return 480
+	if gs >= 26.0:
+		return 360
+	if gs >= 12.0:
+		return 240
 	return 180
 
 
@@ -2897,20 +2926,53 @@ func _maybe_log_tick_hotspots(tick: int, section_us: Dictionary) -> void:
 
 
 func _inspect_scan_interval_for_speed() -> int:
-	# DISABLED speed scaling - all systems must run at max potential at all times
+	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
+	if GameManager == null:
+		return INSPECT_SCAN_INTERVAL_TICKS
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return INSPECT_SCAN_INTERVAL_TICKS * 6
+	if gs >= 50.0:
+		return INSPECT_SCAN_INTERVAL_TICKS * 4
+	if gs >= 26.0:
+		return INSPECT_SCAN_INTERVAL_TICKS * 3
+	if gs >= 12.0:
+		return INSPECT_SCAN_INTERVAL_TICKS * 2
 	return INSPECT_SCAN_INTERVAL_TICKS
 
 
 ## Co-presence rapport is O(pawns²) in worst case; stretch interval at fast-forward.
 func _social_rapport_interval_for_speed() -> int:
-	# DISABLED speed scaling - all systems must run at max potential at all times
+	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
+	if GameManager == null:
+		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 6
+	if gs >= 50.0:
+		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 4
+	if gs >= 26.0:
+		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 3
+	if gs >= 12.0:
+		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 2
 	return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS
 
 
 ## Fewer world rows per mining-react step at ultra speed = smaller per-tick spikes
 ## (pass completes over more sim ticks, which is fine under catch-up).
 func _mining_react_scan_rows_for_speed() -> int:
-	# DISABLED speed scaling - all systems must run at max potential at all times
+	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
+	if GameManager == null:
+		return MINING_REACT_SCAN_ROWS_PER_STEP
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return maxi(1, MINING_REACT_SCAN_ROWS_PER_STEP / 4)
+	if gs >= 50.0:
+		return maxi(1, MINING_REACT_SCAN_ROWS_PER_STEP / 3)
+	if gs >= 26.0:
+		return maxi(1, MINING_REACT_SCAN_ROWS_PER_STEP / 2)
+	if gs >= 12.0:
+		return maxi(1, MINING_REACT_SCAN_ROWS_PER_STEP / 1.5)
 	return MINING_REACT_SCAN_ROWS_PER_STEP
 
 

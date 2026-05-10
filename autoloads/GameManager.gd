@@ -191,8 +191,20 @@ func periodic_phase_due(tick: int, interval: int, offset: int = 0) -> bool:
 
 
 func _adaptive_frame_tick_cap(base_cap: int) -> int:
-	# DISABLED: All systems must run at max potential at all times
-	# No adaptive throttling - user requirement: 50x and 100x with all systems active
+	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
+	if GameManager == null:
+		return base_cap
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return maxi(1, base_cap / 8)
+	if gs >= 50.0:
+		return maxi(1, base_cap / 4)
+	if gs >= 26.0:
+		return maxi(1, base_cap / 2)
+	if gs >= 12.0:
+		return maxi(1, base_cap / 1.5)
+	if gs >= 6.0:
+		return maxi(1, base_cap / 1.2)
 	return base_cap
 
 

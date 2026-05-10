@@ -2554,7 +2554,20 @@ func _fast_forward_tick_stride() -> int:
 
 
 func _job_claim_interval_for_speed() -> int:
-	# DISABLED speed scaling - all systems must run at max potential at all times
+	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
+	if GameManager == null:
+		return 1
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 12
+	if gs >= 50.0:
+		return 8
+	if gs >= 26.0:
+		return 5
+	if gs >= 12.0:
+		return 3
+	if gs >= 6.0:
+		return 2
 	return 1
 
 
@@ -2578,12 +2591,36 @@ func _neural_priority_refresh_interval_for_speed() -> int:
 
 
 func _idle_action_refresh_interval_for_speed() -> int:
-	# DISABLED speed scaling - all systems must run at max potential at all times
+	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
+	if GameManager == null:
+		return 12
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 96
+	if gs >= 50.0:
+		return 64
+	if gs >= 26.0:
+		return 48
+	if gs >= 12.0:
+		return 32
+	if gs >= 6.0:
+		return 24
+	if gs >= 3.0:
+		return 16
 	return 12
 
 
 func _work_step_interval_for_speed() -> int:
-	# DISABLED speed scaling - all systems must run at max potential at all times
+	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
+	if GameManager == null:
+		return 1
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 3
+	if gs >= 50.0:
+		return 2
+	if gs >= 26.0:
+		return 2
 	return 1
 
 

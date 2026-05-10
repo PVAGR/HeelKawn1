@@ -479,13 +479,19 @@ func _decay_memorials(tick: int) -> void:
 ## Generate a rich textual memoir for a deceased pawn, recorded to WorldMemory
 ## and optionally inscribed on the pawn's memorial.
 func generate_pawn_memoir(pawn_data: Variant, cause: String) -> Dictionary:
+	var pd: HeelKawnianData = pawn_data as HeelKawnianData if pawn_data is HeelKawnianData else null
+	var pawn_id: int = int(pd.id) if pd != null else -1
+	var pawn_name: String = str(pd.display_name) if pd != null else "Unknown"
+	var pawn_age: int = int(pd.age) if pd != null else 0
+	var pawn_profession: int = int(pd.current_profession) if pd != null else 0
+	var pawn_settlement: String = str(pd.birth_settlement) if pd != null else "The Wilds"
 	var memoir: Dictionary = {
-		"pawn_id": int(pawn_data.id),
-		"pawn_name": str(pawn_data.get("display_name", "Unknown")),
+		"pawn_id": pawn_id,
+		"pawn_name": pawn_name,
 		"cause": cause,
-		"age": int(pawn_data.get("age", 0)),
-		"profession": int(pawn_data.get("current_profession", 0)),
-		"settlement": str(pawn_data.get("birth_settlement", "The Wilds")),
+		"age": pawn_age,
+		"profession": pawn_profession,
+		"settlement": pawn_settlement,
 		"achievements": [],
 		"relationships": [],
 		"legacy_sentence": "",
@@ -515,7 +521,7 @@ func generate_pawn_memoir(pawn_data: Variant, cause: String) -> Dictionary:
 					memoir["achievements"].append("Entered a union of partnership")
 
 	# Relationships
-	if pawn_data.get("parent_a_id", -1) >= 0 or pawn_data.get("parent_b_id", -1) >= 0:
+	if pd != null and (int(pd.parent_a_id) >= 0 or int(pd.parent_b_id) >= 0):
 		memoir["relationships"].append("Had family lineage")
 	# Check memorials for other pawns that share this pawn's id
 	var friend_count: int = 0

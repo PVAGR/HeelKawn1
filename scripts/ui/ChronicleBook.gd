@@ -17,8 +17,10 @@ var _last_refresh_tick: int = 0
 
 func _ready() -> void:
 	layer = 26
-	_panel.visible = false
-	_close_button.pressed.connect(_toggle_visibility)
+	if _panel != null:
+		_panel.visible = false
+	if _close_button != null:
+		_close_button.pressed.connect(_toggle_visibility)
 	if has_node("/root/GameManager"):
 		GameManager.game_tick.connect(_on_tick)
 		GameManager.speed_changed.connect(_on_speed_changed)

@@ -162,9 +162,21 @@ func _ready() -> void:
 
 
 func _on_game_tick(tick: int) -> void:
+	# Throttle: crop growth doesn't need per-tick updates at high speed
+	var interval: int = 1
+	if GameManager != null:
+		var gs: float = GameManager.game_speed
+		if gs >= 100.0:
+			interval = 8
+		elif gs >= 50.0:
+			interval = 4
+		elif gs >= 26.0:
+			interval = 2
+	if tick % interval != 0:
+		return
 	# Update crop growth
 	_update_crop_growth(tick)
-	
+
 	# Check for withered crops
 	_check_crop_health(tick)
 

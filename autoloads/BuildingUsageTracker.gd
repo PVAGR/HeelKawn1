@@ -12,6 +12,7 @@ var _last_decay_tick: int = 0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_build_building_feature_set()
 	if has_node("/root/GameManager"):
 		GameManager.game_tick.connect(_on_game_tick)
 
@@ -50,7 +51,20 @@ func get_wear_at(tile: Vector2i) -> float:
 func _on_game_tick(tick: int) -> void:
 	if _pawn_spawner == null or _world == null or _world.data == null:
 		return
-	_sample_building_usage(tick)
+	# Throttle: sample pawns less frequently at high speed
+	var sample_interval: int = 1
+	if GameManager != null:
+		var gs: float = GameManager.game_speed
+		if gs >= 100.0:
+			sample_interval = 10
+		elif gs >= 50.0:
+			sample_interval = 6
+		elif gs >= 26.0:
+			sample_interval = 4
+		elif gs >= 12.0:
+			sample_interval = 2
+	if tick % sample_interval == 0:
+		_sample_building_usage(tick)
 	if tick - _last_decay_tick >= DECAY_INTERVAL_TICKS:
 		_decay_usage()
 		_last_decay_tick = tick
@@ -94,20 +108,27 @@ func _is_valid_tile(tile: Vector2i) -> bool:
 	return _world.data.in_bounds(tile.x, tile.y)
 
 
-func _is_building_tile(tile: Vector2i) -> bool:
-	if _world == null or _world.data == null:
-		return false
-	if not _world.data.in_bounds(tile.x, tile.y):
-		return false
-	var idx: int = _world.data.index(tile.x, tile.y)
-	var feature: int = int(_world.data.features[idx])
-	return feature in [
+# Pre-built lookup set for building feature types (populated in _ready)
+var _building_features: Dictionary = {}
+
+
+func _build_building_feature_set() -> void:
+	var features: Array = [
+		TileFeature.Type.RUIN,
 		TileFeature.Type.BED,
 		TileFeature.Type.WALL,
 		TileFeature.Type.DOOR,
+		TileFeature.Type.FIRE_PIT,
 		TileFeature.Type.STORAGE_HUT,
-		TileFeature.Type.SHRINE,
 		TileFeature.Type.MARKER_STONE,
+		TileFeature.Type.SHRINE,
+		TileFeature.Type.GRAVE_MARKER,
+		TileFeature.Type.KNOWLEDGE_STONE,
+		TileFeature.Type.LEDGER_STONE,
+		TileFeature.Type.FARM_WHEAT,
+		TileFeature.Type.FARM_CORN,
+		TileFeature.Type.FARM_VEGETABLES,
+		TileFeature.Type.HERB_GARDEN,
 		TileFeature.Type.WORKSHOP,
 		TileFeature.Type.LOOM,
 		TileFeature.Type.KILN,
@@ -122,14 +143,22 @@ func _is_building_tile(tile: Vector2i) -> bool:
 		TileFeature.Type.WATCHTOWER,
 		TileFeature.Type.MARKET,
 		TileFeature.Type.TRADING_POST,
+		TileFeature.Type.ROAD,
 		TileFeature.Type.GRANARY,
 		TileFeature.Type.CELLAR,
-		TileFeature.Type.GRAVE_MARKER,
-		TileFeature.Type.KNOWLEDGE_STONE,
-		TileFeature.Type.LEDGER_STONE,
-		TileFeature.Type.RUIN,
-		TileFeature.Type.FIRE_PIT,
 	]
+	for f in features:
+		_building_features[f] = true
+
+
+func _is_building_tile(tile: Vector2i) -> bool:
+	if _world == null or _world.data == null:
+		return false
+	if not _world.data.in_bounds(tile.x, tile.y):
+		return false
+	var idx: int = _world.data.index(tile.x, tile.y)
+	var feature: int = int(_world.data.features[idx])
+	return _building_features.has(feature)
 
 
 func _decay_usage() -> void:

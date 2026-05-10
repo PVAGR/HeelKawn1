@@ -64,6 +64,18 @@ func _ready() -> void:
 
 
 func _on_game_tick(tick: int) -> void:
+	# Throttle: crafting progress doesn't need per-tick updates at high speed
+	var interval: int = 1
+	if GameManager != null:
+		var gs: float = GameManager.game_speed
+		if gs >= 100.0:
+			interval = 5
+		elif gs >= 50.0:
+			interval = 3
+		elif gs >= 26.0:
+			interval = 2
+	if tick % interval != 0:
+		return
 	# Update active crafting jobs
 	_update_crafting_progress(tick)
 

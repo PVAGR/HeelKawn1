@@ -140,9 +140,21 @@ func _ensure_references() -> void:
 
 
 func _on_game_tick(tick: int) -> void:
+	# Throttle: building queue and decay don't need per-tick updates at high speed
+	var interval: int = 1
+	if GameManager != null:
+		var gs: float = GameManager.game_speed
+		if gs >= 100.0:
+			interval = 10
+		elif gs >= 50.0:
+			interval = 5
+		elif gs >= 26.0:
+			interval = 3
+	if tick % interval != 0:
+		return
 	# Process building queue
 	_process_building_queue(tick)
-	
+
 	# Decay existing structures
 	_decay_structures(tick)
 

@@ -15,7 +15,7 @@ const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base; stable f
 
 ## SAFETY: Maximum ticks processed in one render frame (bounded burst).
 ## At 60fps target, each frame has 16ms. We cap ticks to fit within that.
-const MAX_TICKS_PER_FRAME: int = 200
+const MAX_TICKS_PER_FRAME: int = 500
 
 ## Adaptive Throttle: Target frame time budget (microseconds).
 ## 16ms = 16000 usec = 60fps target. The sim must yield to the renderer
@@ -95,18 +95,24 @@ func _process(delta: float) -> void:
 	# Accumulate scaled time
 	_accumulated_time += delta * _speed_multiplier
 	var current_fps: int = Engine.get_frames_per_second()
-	if current_fps < 55:
+	if current_fps < 30:
+		# Severe: cut aggressively to recover
 		_low_fps_frame_streak += 1
-		if _low_fps_frame_streak >= 2:
-			# Aggressive cut: halve ticks per frame to recover 60fps
-			var floor_ticks: int = maxi(2, _get_max_ticks_per_frame() / 8)
+		if _low_fps_frame_streak >= 3:
+			var floor_ticks: int = maxi(4, _get_max_ticks_per_frame() / 16)
 			_adaptive_max_ticks_per_frame = maxi(floor_ticks, _adaptive_max_ticks_per_frame / 2)
+			_low_fps_frame_streak = 0
+	elif current_fps < 50:
+		# Mild: gentle reduction
+		_low_fps_frame_streak += 1
+		if _low_fps_frame_streak >= 5:
+			_adaptive_max_ticks_per_frame = maxi(8, _adaptive_max_ticks_per_frame - 10)
 			_low_fps_frame_streak = 0
 	else:
 		_low_fps_frame_streak = 0
 		# Gradually restore cap when FPS is healthy
 		if _adaptive_max_ticks_per_frame < _get_max_ticks_per_frame():
-			_adaptive_max_ticks_per_frame = mini(_get_max_ticks_per_frame(), _adaptive_max_ticks_per_frame + 4)
+			_adaptive_max_ticks_per_frame = mini(_get_max_ticks_per_frame(), _adaptive_max_ticks_per_frame + 8)
 
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
@@ -124,8 +130,8 @@ func _process(delta: float) -> void:
 		ticks_this_frame += 1
 		_dispatch_tick(current_tick)
 
-		# Check time every 2 ticks to catch budget overruns quickly
-		if ticks_this_frame % 2 == 0:
+		# Check time every 4 ticks to reduce overhead while still catching budget overruns
+		if ticks_this_frame % 4 == 0:
 			var elapsed: int = Time.get_ticks_usec() - start_time
 			if elapsed > frame_budget_usec:
 				break  # Yield to renderer — remaining ticks deferred to next frame

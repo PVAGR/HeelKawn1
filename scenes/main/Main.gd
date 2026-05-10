@@ -2343,14 +2343,16 @@ func _seed_starting_supplies() -> void:
 	if _world == null or _world.stockpile == null:
 		return
 	var sp: Stockpile = _world.stockpile
-	# DORMANT WORLD: Minimal starting supplies — HeelKawnians forage the rest
-	# Food: just enough for 2-3 pawns for ~200 ticks
-	sp.add_item(Item.Type.BERRY, 10)
-	# Building materials: bare minimum
-	sp.add_item(Item.Type.WOOD, 5)
-	sp.add_item(Item.Type.STONE, 5)
-	# Basic tools: just a couple
-	sp.add_item(Item.Type.FLINT, 3)
+	# Starting supplies: enough for 20 pawns to survive the first days
+	# Food: berries + meat for ~500 ticks of 20 pawns
+	sp.add_item(Item.Type.BERRY, 40)
+	sp.add_item(Item.Type.MEAT, 20)
+	# Building materials: enough for initial shelters
+	sp.add_item(Item.Type.WOOD, 30)
+	sp.add_item(Item.Type.STONE, 20)
+	# Basic tools
+	sp.add_item(Item.Type.FLINT, 10)
+	sp.add_item(Item.Type.STICK, 15)
 
 
 ## Place fire pits near the stockpile so pawns have warmth from tick 1.
@@ -2361,32 +2363,9 @@ func _seed_initial_fire_pits(main_component: int) -> void:
 	if _world.stockpile == null:
 		return
 	var center: Vector2i = _world.stockpile.rect.position
-	# Place 3 fire pits near the stockpile
+	# Place 5 fire pits near the stockpile so all pioneers have warmth
 	var placed: int = 0
-	for r in range(2, 8):
-		for dx in range(-r, r + 1):
-			for dy in range(-r, r + 1):
-				if abs(dx) != r and abs(dy) != r:
-					continue
-				if placed >= 3:
-					break
-				var t: Vector2i = center + Vector2i(dx, dy)
-				if not _world.data.in_bounds(t.x, t.y):
-					continue
-				if not _world.pathfinder.is_passable(t):
-					continue
-				var feat: int = int(_world.data.get_feature(t.x, t.y))
-				if feat != TileFeature.Type.NONE and feat != TileFeature.Type.TREE:
-					continue
-				_world.data.features[_world.data.index(t.x, t.y)] = TileFeature.Type.FIRE_PIT
-				placed += 1
-			if placed >= 3:
-				break
-		if placed >= 3:
-			break
-	# Place 5 beds near the stockpile so pawns have shelter
-	placed = 0
-	for r in range(1, 6):
+	for r in range(1, 10):
 		for dx in range(-r, r + 1):
 			for dy in range(-r, r + 1):
 				if abs(dx) != r and abs(dy) != r:
@@ -2401,11 +2380,34 @@ func _seed_initial_fire_pits(main_component: int) -> void:
 				var feat: int = int(_world.data.get_feature(t.x, t.y))
 				if feat != TileFeature.Type.NONE and feat != TileFeature.Type.TREE:
 					continue
-				_world.data.features[_world.data.index(t.x, t.y)] = TileFeature.Type.BED
+				_world.data.features[_world.data.index(t.x, t.y)] = TileFeature.Type.FIRE_PIT
 				placed += 1
 			if placed >= 5:
 				break
 		if placed >= 5:
+			break
+	# Place 10 beds near the stockpile so pawns have shelter
+	placed = 0
+	for r in range(1, 8):
+		for dx in range(-r, r + 1):
+			for dy in range(-r, r + 1):
+				if abs(dx) != r and abs(dy) != r:
+					continue
+				if placed >= 10:
+					break
+				var t: Vector2i = center + Vector2i(dx, dy)
+				if not _world.data.in_bounds(t.x, t.y):
+					continue
+				if not _world.pathfinder.is_passable(t):
+					continue
+				var feat: int = int(_world.data.get_feature(t.x, t.y))
+				if feat != TileFeature.Type.NONE and feat != TileFeature.Type.TREE:
+					continue
+				_world.data.features[_world.data.index(t.x, t.y)] = TileFeature.Type.BED
+				placed += 1
+			if placed >= 10:
+				break
+		if placed >= 10:
 			break
 
 

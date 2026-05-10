@@ -224,6 +224,16 @@ func _regulate_temperature(pawn: Node, tick: int) -> void:
 	var current_temp: float = data.body_temperature
 	var target_temp: float = 37.0  # Normal body temperature
 
+	# Grace period: pioneers resist cold for 5000 ticks, others for 2500 ticks
+	# HeelKawnian.gd _check_temperature handles the detailed grace logic,
+	# but we must also respect it here to avoid pulling body temp down.
+	var birth_tick_g_val = data.birth_tick if "birth_tick" in data else 0
+	var birth_tick_g: int = int(birth_tick_g_val) if birth_tick_g_val != null else 0
+	var age_g: int = maxi(GameManager.tick_count - birth_tick_g, 0)
+	var is_pioneer_g: bool = data.is_pioneer if "is_pioneer" in data else false
+	var grace_dur: int = 5000 if is_pioneer_g else 2500
+	var grace_frac: float = clampf(1.0 - float(age_g) / float(grace_dur), 0.0, 1.0)
+
 	# Get environmental temperature (from tile/weather)
 	var env_temp: float = _get_environmental_temperature(pawn)
 
@@ -233,16 +243,20 @@ func _regulate_temperature(pawn: Node, tick: int) -> void:
 		var wetness_val = data.get("wetness")
 		if wetness_val != null and wetness_val > 50:
 			wet_mult = WET_COLD_MULT
-	
+
 	# Adjust towards environmental temperature
 	if env_temp < 10:  # Cold environment
 		target_temp = lerpf(35.0, 37.0, clampf((env_temp + 10) / 20.0, 0.0, 1.0))
 		target_temp *= wet_mult
+		# During grace: keep body temp closer to 37°C
+		if grace_frac > 0.0:
+			target_temp = lerpf(target_temp, 37.0, grace_frac * 0.6)
 	elif env_temp > 35:  # Hot environment
 		target_temp = lerpf(37.0, 39.0, clampf((env_temp - 35) / 10.0, 0.0, 1.0))
-	
-	# Gradually adjust body temperature
-	var temp_change: float = lerp(current_temp, target_temp, 0.01)
+
+	# Gradually adjust body temperature (slower during grace)
+	var lerp_rate: float = 0.01 * (1.0 - grace_frac * 0.8)
+	var temp_change: float = lerp(current_temp, target_temp, lerp_rate)
 	data.body_temperature = temp_change
 	
 	# Apply temperature moodlets
@@ -251,9 +265,15 @@ func _regulate_temperature(pawn: Node, tick: int) -> void:
 	elif current_temp > TEMP_HEATSTROKE:
 		_apply_moodlet(data, "heatstroke")
 	
-	# Temperature affects health
+	# Temperature affects health — suppressed during grace period
+	var birth_tick_h_val = data.birth_tick if "birth_tick" in data else 0
+	var birth_tick_h: int = int(birth_tick_h_val) if birth_tick_h_val != null else 0
+	var age_h: int = maxi(GameManager.tick_count - birth_tick_h, 0)
+	var is_pio_h: bool = data.is_pioneer if "is_pioneer" in data else false
+	var grace_suppress: float = clampf(1.0 - float(age_h) / 5000.0, 0.0, 1.0) if is_pio_h else clampf(1.0 - float(age_h) / 2500.0, 0.0, 1.0)
 	if current_temp < TEMP_HYPOTHERMIA_SEVERE or current_temp > TEMP_HEATSTROKE_SEVERE:
-		data.health = maxf(0.0, data.health - 0.1)
+		var dmg: float = 0.1 * (1.0 - grace_suppress * 0.9)
+		data.health = maxf(0.0, data.health - dmg)
 
 
 func _get_environmental_temperature(pawn: Node) -> float:
@@ -610,8 +630,22 @@ func _check_death_conditions(pawn: Node, tick: int) -> void:
 	var data: RefCounted = pawn.data
 
 	# CRITICAL: Skip death checks for already-dead pawns
-	if "is_dead" in data and bool(data.get("is_dead")):
+	if "is_dead" in data and bool(data.is_dead):
 		return  # HeelKawnian is already dead - skip all death processing
+
+	# GRACE PERIOD: Pawns under 1500 ticks old cannot die from survival causes.
+	# This matches HeelKawnian.gd _check_death_conditions grace period.
+	# Pioneers get 5000 ticks of cold resistance via their own grace system.
+	var birth_tick_val = data.birth_tick if "birth_tick" in data else 0
+	var birth_tick: int = int(birth_tick_val) if birth_tick_val != null else 0
+	var age: int = maxi(GameManager.tick_count - birth_tick, 0)
+	if age < 1500:
+		# During grace: clamp health to minimum 20 so survival damage can't kill
+		if data.health != null and data.health < 20.0:
+			data.health = 20.0
+		if data.hunger != null and data.hunger < -3.0:
+			data.hunger = -3.0
+		return
 
 	var cause: String = ""
 

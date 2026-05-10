@@ -240,7 +240,7 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		
 		# DORMANT WORLD: First-generation pawns are pioneers
 		data.is_pioneer = true
-		data.pioneer_ticks_remaining = 500
+		data.pioneer_ticks_remaining = 5000
 		# PHASE 4: Assign heterogeneous profession (NOT all farmers!)
 		_assign_heterogeneous_profession(data, rng)
 

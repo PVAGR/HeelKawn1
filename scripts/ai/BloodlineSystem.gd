@@ -583,3 +583,56 @@ func _calculate_average_reputation() -> float:
 			total += bloodline.reputation
 			count += 1
 	return float(total) / float(count) if count > 0 else 0.0
+
+
+## Serialize bloodline data for save/load
+func to_save_dict() -> Dictionary:
+	var bl_arr: Array = []
+	for bl in bloodlines:
+		bl_arr.append({
+			"bloodline_id": bl.bloodline_id,
+			"name": bl.name,
+			"founder_id": bl.founder_id,
+			"members": bl.members,
+			"living_members": bl.living_members,
+			"family_tree": bl.family_tree,
+			"reputation": bl.reputation,
+			"feuds": bl.feuds,
+			"alliances": bl.alliances,
+			"inherited_traits": bl.inherited_traits,
+			"skills_preserved": bl.skills_preserved,
+			"created_tick": bl.created_tick,
+			"status": bl.status,
+		})
+	return {
+		"bloodlines": bl_arr,
+		"next_bloodline_id": _next_bloodline_id,
+		"pawn_family_data": pawn_family_data,
+	}
+
+
+## Deserialize bloodline data from save
+func from_save_dict(d: Dictionary) -> void:
+	clear()
+	var bl_arr: Array = d.get("bloodlines", [])
+	for bl_data in bl_arr:
+		var bl: Dictionary = {
+			"bloodline_id": int(bl_data.get("bloodline_id", 0)),
+			"name": str(bl_data.get("name", "")),
+			"founder_id": int(bl_data.get("founder_id", -1)),
+			"members": bl_data.get("members", []),
+			"living_members": bl_data.get("living_members", []),
+			"family_tree": bl_data.get("family_tree", {}),
+			"reputation": int(bl_data.get("reputation", 0)),
+			"feuds": bl_data.get("feuds", []),
+			"alliances": bl_data.get("alliances", []),
+			"inherited_traits": bl_data.get("inherited_traits", []),
+			"skills_preserved": bl_data.get("skills_preserved", []),
+			"created_tick": int(bl_data.get("created_tick", 0)),
+			"status": str(bl_data.get("status", "active")),
+		}
+		bloodlines.append(bl)
+	_next_bloodline_id = int(d.get("next_bloodline_id", 1))
+	var pfd: Dictionary = d.get("pawn_family_data", {})
+	for key in pfd:
+		pawn_family_data[key] = pfd[key]

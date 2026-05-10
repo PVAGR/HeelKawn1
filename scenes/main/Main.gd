@@ -39,9 +39,9 @@ const MINE_WALL_PRIORITY: int = 2
 ## > doors just because walls usually frame what comes next. The materials
 ## filter prevents pawns from claiming a build with no wood in stockpile, so
 ## these don't actually starve out harvest work.
-const BUILD_BED_PRIORITY: int = 4
-const BUILD_WALL_PRIORITY: int = 5
-const BUILD_DOOR_PRIORITY: int = 4
+const BUILD_BED_PRIORITY: int = 6
+const BUILD_WALL_PRIORITY: int = 6
+const BUILD_DOOR_PRIORITY: int = 6
 
 ## When player presses B, designate this many beds in a tight ring around the
 ## stockpile (or as many as fit before we run out of slots / scan radius).
@@ -5549,7 +5549,7 @@ func _seed_construction_jobs() -> void:
 	var tick: int = GameManager.tick_count
 	if Main._world_stabilization_until_tick >= 0 and tick < Main._world_stabilization_until_tick:
 		return
-	var interval: int = _high_speed_interval(50, 100, 200)
+	var interval: int = _high_speed_interval(30, 60, 150)
 	if tick - _last_construction_seed_tick < interval:
 		return
 	_last_construction_seed_tick = tick
@@ -5600,14 +5600,14 @@ func _seed_construction_jobs() -> void:
 		var markets: int = int(features.get("market", 0))
 		var barracks: int = int(features.get("barracks", 0))
 		var cellars: int = int(features.get("cellar", 0))
-		# Post at most 12 build jobs per settlement per cycle
+		# Post at most 20 build jobs per settlement per cycle
 		var jobs_this_settlement: int = 0
 		# Priority 0: Beds when housing crisis is critical
-		if ColonySimServices != null and ColonySimServices.get_housing_pressure() > 0.8 and jobs_this_settlement < 12:
+		if ColonySimServices != null and ColonySimServices.get_housing_pressure() > 0.8 and jobs_this_settlement < 20:
 			var need_beds_crisis: int = maxi(3, int(round(local_pop / 1.5)))
 			var pending_beds_crisis: int = JobManager.count_pending_by_type(Job.Type.BUILD_BED)
 			var beds_posted_this_cycle: int = 0
-			while beds + pending_beds_crisis + beds_posted_this_cycle < need_beds_crisis and beds_posted_this_cycle < 3 and jobs_this_settlement < 12:
+			while beds + pending_beds_crisis + beds_posted_this_cycle < need_beds_crisis and beds_posted_this_cycle < 3 and jobs_this_settlement < 20:
 				var t: Vector2i = _find_build_tile_near(center_tile, 8)
 				if t.x >= 0 and not JobManager.has_job_at(t):
 					var j: Job = JobManager.post(Job.Type.BUILD_BED, t, 8, 10)
@@ -5620,7 +5620,7 @@ func _seed_construction_jobs() -> void:
 				else:
 					break
 		# Priority 1: Fire pit if no hearth
-		if hearths <= 0 and jobs_this_settlement < 12:
+		if hearths <= 0 and jobs_this_settlement < 20:
 			var pending_fire_pits: int = JobManager.count_pending_by_type(Job.Type.BUILD_FIRE_PIT)
 			if pending_fire_pits == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
@@ -5630,7 +5630,7 @@ func _seed_construction_jobs() -> void:
 						posted += 1
 						jobs_this_settlement += 1
 		# Priority 2: Storage hut if none
-		if storage_huts <= 0 and local_pop >= 1 and jobs_this_settlement < 12:
+		if storage_huts <= 0 and local_pop >= 1 and jobs_this_settlement < 20:
 			var pending_storage: int = JobManager.count_pending_by_type(Job.Type.BUILD_STORAGE_HUT)
 			if pending_storage == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
@@ -5643,7 +5643,7 @@ func _seed_construction_jobs() -> void:
 		var need_beds: int = maxi(2, int(round(local_pop / 2.2)))
 		var pending_beds: int = JobManager.count_pending_by_type(Job.Type.BUILD_BED)
 		var beds_posted_p3: int = 0
-		while beds + pending_beds + beds_posted_p3 < need_beds and beds_posted_p3 < 2 and jobs_this_settlement < 12:
+		while beds + pending_beds + beds_posted_p3 < need_beds and beds_posted_p3 < 2 and jobs_this_settlement < 20:
 			var t: Vector2i = _find_build_tile_near(center_tile, 8)
 			if t.x >= 0 and not JobManager.has_job_at(t):
 				var j: Job = JobManager.post(Job.Type.BUILD_BED, t, 6, 10)
@@ -5655,20 +5655,28 @@ func _seed_construction_jobs() -> void:
 					break
 			else:
 				break
-		# Priority 4: Walls + doors if population is large enough
+		# Priority 4: Connected wall perimeter ring + door
 		var pending_walls: int = JobManager.count_pending_by_type(Job.Type.BUILD_WALL)
 		var pending_doors: int = JobManager.count_pending_by_type(Job.Type.BUILD_DOOR)
-		if local_pop >= 3 and (walls + pending_walls < 4 or doors + pending_doors <= 0) and jobs_this_settlement < 12:
-			var build_type: int = Job.Type.BUILD_WALL if walls < 4 else Job.Type.BUILD_DOOR
-			var ring: int = 6 if build_type == Job.Type.BUILD_WALL else 4
-			var t: Vector2i = _find_build_tile_near(center_tile, ring)
-			if t.x >= 0 and not JobManager.has_job_at(t):
-				var j: Job = JobManager.post(build_type, t, 5, 10 if build_type == Job.Type.BUILD_WALL else 8)
-				if j != null:
-					posted += 1
-					jobs_this_settlement += 1
+		if local_pop >= 1 and jobs_this_settlement < 20:
+			# Scale ring radius and target walls with population
+			var ring_radius: int = 3 + mini(2, local_pop / 3)  # 3 for 1-2 pop, 4 for 3-5, 5 for 6+
+			var target_walls: int = 8 + local_pop * 2  # 10-20+ walls depending on pop
+			if walls + pending_walls < target_walls:
+				var max_walls_this_cycle: int = mini(4, target_walls - walls - pending_walls)
+				var ring_posted: int = _post_wall_ring_jobs(center_tile, ring_radius, max_walls_this_cycle, 20 - jobs_this_settlement)
+				posted += ring_posted
+				jobs_this_settlement += ring_posted
+			# Post a door if walls exist but no door yet
+			if walls + pending_walls >= 3 and doors + pending_doors <= 0 and jobs_this_settlement < 20:
+				var door_side: Vector2i = center_tile + Vector2i(0, ring_radius)
+				if _world.data.in_bounds(door_side.x, door_side.y) and not JobManager.has_job_at(door_side):
+					var dj: Job = JobManager.post(Job.Type.BUILD_DOOR, door_side, 5, 8)
+					if dj != null:
+						posted += 1
+						jobs_this_settlement += 1
 		# Priority 5: Plant seeds on nearby fertile soil
-		if jobs_this_settlement < 12:
+		if jobs_this_settlement < 20:
 			var ft: Vector2i = _find_fertile_tile_near(center_tile, 8)
 			if ft.x >= 0 and not JobManager.has_job_at(ft):
 				var j: Job = JobManager.post(Job.Type.PLANT_SEEDS, ft, 4, 6)
@@ -5676,7 +5684,7 @@ func _seed_construction_jobs() -> void:
 					posted += 1
 					jobs_this_settlement += 1
 		# Priority 6: Cook food if fire pit exists and raw food available
-		if hearths > 0 and jobs_this_settlement < 12:
+		if hearths > 0 and jobs_this_settlement < 20:
 			var meat_count: int = StockpileManager.total_count_of(Item.Type.MEAT)
 			var berry_count: int = StockpileManager.total_count_of(Item.Type.BERRY)
 			if meat_count > 0:
@@ -5694,7 +5702,7 @@ func _seed_construction_jobs() -> void:
 						posted += 1
 						jobs_this_settlement += 1
 		# Priority 7: Farm if none and enough population
-		if farms <= 0 and local_pop >= 4 and jobs_this_settlement < 12:
+		if farms <= 0 and local_pop >= 2 and jobs_this_settlement < 20:
 			var pending_farms: int = JobManager.count_pending_by_type(Job.Type.BUILD_FARM_WHEAT)
 			if pending_farms == 0:
 				var t: Vector2i = _find_fertile_tile_near(center_tile, 8)
@@ -5704,7 +5712,7 @@ func _seed_construction_jobs() -> void:
 						posted += 1
 						jobs_this_settlement += 1
 		# Priority 8: Workshop if none and enough population
-		if workshops <= 0 and local_pop >= 5 and jobs_this_settlement < 12:
+		if workshops <= 0 and local_pop >= 3 and jobs_this_settlement < 20:
 			var pending_workshops: int = JobManager.count_pending_by_type(Job.Type.BUILD_WORKSHOP)
 			if pending_workshops == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
@@ -5714,7 +5722,7 @@ func _seed_construction_jobs() -> void:
 						posted += 1
 						jobs_this_settlement += 1
 		# Priority 9: Granary if farms exist but no granary
-		if granaries <= 0 and farms >= 1 and local_pop >= 4 and jobs_this_settlement < 12:
+		if granaries <= 0 and farms >= 1 and local_pop >= 2 and jobs_this_settlement < 20:
 			var pending_granaries: int = JobManager.count_pending_by_type(Job.Type.BUILD_GRANARY)
 			if pending_granaries == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
@@ -5724,7 +5732,7 @@ func _seed_construction_jobs() -> void:
 						posted += 1
 						jobs_this_settlement += 1
 		# Priority 10: Apothecary if none and enough population
-		if apothecaries <= 0 and local_pop >= 5 and jobs_this_settlement < 12:
+		if apothecaries <= 0 and local_pop >= 3 and jobs_this_settlement < 20:
 			var pending_apothecaries: int = JobManager.count_pending_by_type(Job.Type.BUILD_APOTHECARY)
 			if pending_apothecaries == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
@@ -5734,77 +5742,77 @@ func _seed_construction_jobs() -> void:
 						posted += 1
 						jobs_this_settlement += 1
 		# Priority 11: Market if farms exist and enough population
-		if markets <= 0 and farms >= 1 and local_pop >= 6 and jobs_this_settlement < 12:
+		if markets <= 0 and farms >= 1 and local_pop >= 4 and jobs_this_settlement < 20:
 			var pending_markets: int = JobManager.count_pending_by_type(Job.Type.BUILD_MARKET)
 			if pending_markets == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_MARKET, t, 4, 40)
+					var j: Job = JobManager.post(Job.Type.BUILD_MARKET, t, 6, 40)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
 		# Priority 12: Library if enough population and writing exists
-		if libraries <= 0 and local_pop >= 6 and jobs_this_settlement < 12:
+		if libraries <= 0 and local_pop >= 4 and jobs_this_settlement < 20:
 			var pending_libraries: int = JobManager.count_pending_by_type(Job.Type.BUILD_LIBRARY)
 			if pending_libraries == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_LIBRARY, t, 4, 45)
+					var j: Job = JobManager.post(Job.Type.BUILD_LIBRARY, t, 6, 45)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
 		# Priority 13: Barracks if walled settlement with enough population
-		if barracks <= 0 and walls >= 4 and local_pop >= 6 and jobs_this_settlement < 12:
+		if barracks <= 0 and walls >= 4 and local_pop >= 4 and jobs_this_settlement < 20:
 			var pending_barracks: int = JobManager.count_pending_by_type(Job.Type.BUILD_BARRACKS)
 			if pending_barracks == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_BARRACKS, t, 4, 45)
+					var j: Job = JobManager.post(Job.Type.BUILD_BARRACKS, t, 6, 45)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
 		# Priority 14: Cellar if granary exists and enough population
-		if cellars <= 0 and granaries >= 1 and local_pop >= 5 and jobs_this_settlement < 12:
+		if cellars <= 0 and granaries >= 1 and local_pop >= 3 and jobs_this_settlement < 20:
 			var pending_cellars: int = JobManager.count_pending_by_type(Job.Type.BUILD_CELLAR)
 			if pending_cellars == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_CELLAR, t, 4, 35)
+					var j: Job = JobManager.post(Job.Type.BUILD_CELLAR, t, 6, 35)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
 		# Priority 15: Watchtower if enough population
-		if int(features.get("watchtower", 0)) <= 0 and local_pop >= 5 and jobs_this_settlement < 12:
+		if int(features.get("watchtower", 0)) <= 0 and local_pop >= 3 and jobs_this_settlement < 20:
 			var pending_watchtowers: int = JobManager.count_pending_by_type(Job.Type.BUILD_WATCHTOWER)
 			if pending_watchtowers == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_WATCHTOWER, t, 4, 40)
+					var j: Job = JobManager.post(Job.Type.BUILD_WATCHTOWER, t, 6, 40)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
 		# Priority 16: School if library exists
-		if int(features.get("school", 0)) <= 0 and libraries >= 1 and local_pop >= 6 and jobs_this_settlement < 12:
+		if int(features.get("school", 0)) <= 0 and libraries >= 1 and local_pop >= 4 and jobs_this_settlement < 20:
 			var pending_schools: int = JobManager.count_pending_by_type(Job.Type.BUILD_SCHOOL)
 			if pending_schools == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_SCHOOL, t, 4, 40)
+					var j: Job = JobManager.post(Job.Type.BUILD_SCHOOL, t, 6, 40)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
 		# Priority 17: Trading post if market exists
-		if int(features.get("trading_post", 0)) <= 0 and markets >= 1 and local_pop >= 6 and jobs_this_settlement < 12:
+		if int(features.get("trading_post", 0)) <= 0 and markets >= 1 and local_pop >= 4 and jobs_this_settlement < 20:
 			var pending_trading_posts: int = JobManager.count_pending_by_type(Job.Type.BUILD_TRADING_POST)
 			if pending_trading_posts == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_TRADING_POST, t, 3, 40)
+					var j: Job = JobManager.post(Job.Type.BUILD_TRADING_POST, t, 5, 40)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
 		# Priority 18: Local paths — post BUILD_ROAD along high-traffic tiles within settlement
-		if jobs_this_settlement < 12 and local_pop >= 2:
+		if jobs_this_settlement < 20 and local_pop >= 2:
 			var pending_roads: int = JobManager.count_pending_by_type(Job.Type.BUILD_ROAD)
 			if pending_roads < 3:
 				var roads_posted: int = 0
@@ -5823,7 +5831,7 @@ func _seed_construction_jobs() -> void:
 							continue
 						if JobManager.has_job_at(Vector2i(rx, ry)):
 							continue
-						var j: Job = JobManager.post(Job.Type.BUILD_ROAD, Vector2i(rx, ry), 3, 8)
+						var j: Job = JobManager.post(Job.Type.BUILD_ROAD, Vector2i(rx, ry), 5, 8)
 						if j != null:
 							posted += 1
 							jobs_this_settlement += 1
@@ -5869,6 +5877,55 @@ func _build_roads_from_trade_routes() -> void:
 	# Refresh world texture so roads appear on the map
 	if is_instance_valid(_world):
 		_world.refresh_terrain_scar_tint()
+
+
+## Find an empty passable tile near center for building.
+## Allows tiles with clearable features (TREE, FERTILE_SOIL, ORE_VEIN, RUIN)
+## since set_feature overwrites them on build completion.
+
+
+## Post walls in a connected rectangular ring around a settlement center.
+## Leaves a 1-tile gap on the south side for a door. Returns walls posted.
+func _post_wall_ring_jobs(center: Vector2i, ring_radius: int, max_walls: int, max_jobs: int) -> int:
+	if _world == null or _world.data == null or _world.pathfinder == null:
+		return 0
+	var posted_walls: int = 0
+	var total_jobs: int = 0
+	# Iterate all 4 sides of the rectangular ring
+	for side in range(4):
+		if posted_walls >= max_walls or total_jobs >= max_jobs:
+			break
+		for i in range(-ring_radius, ring_radius + 1):
+			if posted_walls >= max_walls or total_jobs >= max_jobs:
+				break
+			# Leave a 2-tile gap on the south side (side==1) for the door
+			if side == 1 and abs(i) <= 0:
+				continue
+			var dx: int = 0
+			var dy: int = 0
+			match side:
+				0: dx = i; dy = -ring_radius   # top
+				1: dx = i; dy = ring_radius     # bottom
+				2: dx = -ring_radius; dy = i    # left
+				3: dx = ring_radius; dy = i     # right
+			var t: Vector2i = center + Vector2i(dx, dy)
+			if not _world.data.in_bounds(t.x, t.y):
+				continue
+			if not _world.pathfinder.is_passable(t):
+				continue
+			var feat: int = _world.data.get_feature(t.x, t.y)
+			# Skip tiles with existing structures (allow clearable: tree, fertile, ore, ruin)
+			if feat != TileFeature.Type.NONE and feat != TileFeature.Type.TREE \
+				and feat != TileFeature.Type.FERTILE_SOIL and feat != TileFeature.Type.ORE_VEIN \
+				and feat != TileFeature.Type.RUIN:
+				continue
+			if JobManager.has_job_at(t):
+				continue
+			var j: Job = JobManager.post(Job.Type.BUILD_WALL, t, 5, 10)
+			if j != null:
+				posted_walls += 1
+				total_jobs += 1
+	return posted_walls
 
 
 ## Find an empty passable tile near center for building.
@@ -6884,7 +6941,7 @@ func settlement_planner_post_fire_pit(t: Vector2i) -> bool:
 		return false
 	if StockpileManager.total_wood() < 1:
 		return false
-	var job: Job = JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 3, 35)
+	var job: Job = JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 5, 35)
 	return job != null
 
 
@@ -6897,7 +6954,7 @@ func settlement_planner_post_storage_hut(t: Vector2i) -> bool:
 		return false
 	if StockpileManager.total_wood() < 2:
 		return false
-	var job: Job = JobManager.post(Job.Type.BUILD_STORAGE_HUT, t, 3, 40)
+	var job: Job = JobManager.post(Job.Type.BUILD_STORAGE_HUT, t, 5, 40)
 	return job != null
 
 

@@ -336,7 +336,12 @@ func claim_by_id_for(pawn: HeelKawnian, job_id: int) -> Job:
 
 ## HeelKawnian gave up on a job (couldn't reach it, or was freed). Puts it back in
 ## the open queue so another pawn can claim. Resets work progress.
-func abandon(job: Job) -> void:
+## Abandon counter (diagnostic). reason_string -> count.
+var _abandon_reasons: Dictionary = {}
+
+## Put a claimed job back in the open queue so another pawn can pick it up.
+## Optional reason: diagnostic string for abandon tracking (F10 report).
+func abandon(job: Job, reason: String = "") -> void:
 	if job == null:
 		return
 	if not _claimed.has(job):
@@ -347,6 +352,8 @@ func abandon(job: Job) -> void:
 	job.work_ticks_done = 0
 	_open.append(job)
 	_bump_jobs_data_generation()
+	if not reason.is_empty():
+		_abandon_reasons[reason] = int(_abandon_reasons.get(reason, 0)) + 1
 
 
 ## Mark a job finished. Removes it from the claimed list and drops its tile lock.
@@ -437,6 +444,10 @@ func claimed_count() -> int:
 func get_cancel_stats() -> Dictionary:
 	return _cancel_reasons.duplicate()
 
+## Diagnostic: abandon reason counts for F10 debug report.
+func get_abandon_stats() -> Dictionary:
+	return _abandon_reasons.duplicate()
+
 
 ## Count open (unclaimed) jobs of a specific type. Used by planners to avoid
 ## over-posting when the queue is already full.
@@ -486,6 +497,8 @@ func stats() -> Dictionary:
 		"posted":	 posted_count,
 		"completed":  completed_count,
 		"cancelled":  cancelled_count,
+		"cancel_reasons": _cancel_reasons.duplicate(),
+		"abandon_reasons": _abandon_reasons.duplicate(),
 	}
 
 

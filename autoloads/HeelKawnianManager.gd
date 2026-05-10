@@ -382,27 +382,37 @@ static func _worldbox_loop_job_for_pawn(
 	var phase: int = posmod(tick / 90 + int(data.id) * 3, phase_count)
 	# Beds needed: 1 per 2 pawns minimum
 	var need_beds: int = maxi(2, int(round(local_pop / 2.2)))
+	# Stockpile awareness: check if we have enough materials for building
+	var _sm: Node = _root_node("StockpileManager")
+	var stock_wood: int = 0
+	var stock_stone: int = 0
+	if _sm != null and _sm.has_method("total_count_of"):
+		# Item.Type.WOOD = 3, Item.Type.STONE = 2
+		stock_wood = int(_sm.call("total_count_of", 3))
+		stock_stone = int(_sm.call("total_count_of", 2))
+	# If materials are critically low, override build phases with gathering
+	var material_crisis: bool = stock_wood < 5 or stock_stone < 3
 	match phase:
 		0:
 			# CRITICAL: Build beds first if housing is insufficient
-			if beds < need_beds:
+			if beds < need_beds and not material_crisis:
 				return Job.Type.BUILD_BED
-			return Job.Type.FORAGE
+			return Job.Type.CHOP if stock_wood < 5 else Job.Type.FORAGE
 		1:
 			# CRITICAL: Fire pit for warmth
-			if hearths <= 0:
+			if hearths <= 0 and not material_crisis:
 				return Job.Type.BUILD_FIRE_PIT
-			return Job.Type.PLANT_SEEDS
+			return Job.Type.CHOP if stock_wood < 5 else Job.Type.PLANT_SEEDS
 		2:
 			# CRITICAL: Storage for stockpile
-			if storage_huts <= 0:
+			if storage_huts <= 0 and not material_crisis:
 				return Job.Type.BUILD_STORAGE_HUT
-			return Job.Type.HARVEST_CROPS
+			return Job.Type.MINE if stock_stone < 3 else Job.Type.HARVEST_CROPS
 		3:
 			# Walls for defense — lowered threshold from 6 to 3
-			if local_pop >= 3 and (walls < 4 or doors <= 0):
+			if local_pop >= 3 and (walls < 4 or doors <= 0) and not material_crisis:
 				return Job.Type.BUILD_WALL if walls < 4 else Job.Type.BUILD_DOOR
-			return Job.Type.COOK_MEAT
+			return Job.Type.MINE if stock_stone < 3 else Job.Type.COOK_MEAT
 		4:
 			return Job.Type.CHOP
 		5:
@@ -415,28 +425,28 @@ static func _worldbox_loop_job_for_pawn(
 			return Job.Type.TOOL_MAKING
 		# Phase 6: civilization building phases
 		8:
-			if farms <= 0 and local_pop >= 4:
+			if farms <= 0 and local_pop >= 4 and not material_crisis:
 				return Job.Type.BUILD_FARM_WHEAT
-			if granaries <= 0 and farms >= 1:
+			if granaries <= 0 and farms >= 1 and not material_crisis:
 				return Job.Type.BUILD_GRANARY
-			return Job.Type.FORAGE
+			return Job.Type.CHOP if stock_wood < 5 else Job.Type.FORAGE
 		9:
-			if workshops <= 0 and local_pop >= 5:
+			if workshops <= 0 and local_pop >= 5 and not material_crisis:
 				return Job.Type.BUILD_WORKSHOP
 			return Job.Type.CHOP
 		10:
-			if apothecaries <= 0 and local_pop >= 5:
+			if apothecaries <= 0 and local_pop >= 5 and not material_crisis:
 				return Job.Type.BUILD_APOTHECARY
 			return Job.Type.MINE
 		11:
-			if markets <= 0 and local_pop >= 6 and farms >= 1:
+			if markets <= 0 and local_pop >= 6 and farms >= 1 and not material_crisis:
 				return Job.Type.BUILD_MARKET
 			return Job.Type.HUNT
 		# Knowledge preservation phases (only when writing known)
 		12:
-			if markers <= 0:
+			if markers <= 0 and not material_crisis:
 				return Job.Type.CARVE_KNOWLEDGE_STONE
-			return Job.Type.PAPER_MAKING
+			return Job.Type.CHOP if stock_wood < 5 else Job.Type.PAPER_MAKING
 		13:
 			return Job.Type.INK_MAKING
 		14:
@@ -445,19 +455,19 @@ static func _worldbox_loop_job_for_pawn(
 			return Job.Type.TEACH_SKILL
 		# Phase 6: advanced civilization phases (only when writing known)
 		16:
-			if libraries <= 0 and local_pop >= 6:
+			if libraries <= 0 and local_pop >= 6 and not material_crisis:
 				return Job.Type.BUILD_LIBRARY
 			return Job.Type.TEACH_SKILL
 		17:
-			if barracks <= 0 and local_pop >= 6 and walls >= 4:
+			if barracks <= 0 and local_pop >= 6 and walls >= 4 and not material_crisis:
 				return Job.Type.BUILD_BARRACKS
 			return Job.Type.PROTECT
 		18:
-			if cellars <= 0 and local_pop >= 5 and granaries >= 1:
+			if cellars <= 0 and local_pop >= 5 and granaries >= 1 and not material_crisis:
 				return Job.Type.BUILD_CELLAR
 			return Job.Type.CHOP
 		19:
-			if boatyards <= 0 and local_pop >= 6:
+			if boatyards <= 0 and local_pop >= 6 and not material_crisis:
 				return Job.Type.BUILD_BOATYARD
 			return Job.Type.FORAGE
 	return -1

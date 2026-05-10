@@ -2741,7 +2741,7 @@ func _tick_idle() -> void:
 					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.PLANT_SEEDS or j.type == _Job.Type.HARVEST_CROPS:
 						base_bias += 5
 				HeelKawnianData.Profession.BUILDER:
-					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH:
+					if _is_structure_build_job(j.type):
 						base_bias += 5
 				HeelKawnianData.Profession.GATHERER:
 					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.GATHER_FLINT or j.type == _Job.Type.GATHER_STICK:
@@ -2770,8 +2770,15 @@ func _tick_idle() -> void:
 			match int(j.type):
 				_Job.Type.MINE, _Job.Type.MINE_WALL, _Job.Type.CHOP:
 					base_bias += 3  # Increased from 2
-				_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE:
-					base_bias += 6  # NEW: Strong priority for building
+				_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, \
+				_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN, \
+				_Job.Type.BUILD_WORKSHOP, _Job.Type.BUILD_LOOM, _Job.Type.BUILD_KILN, _Job.Type.BUILD_SMELTER, \
+				_Job.Type.BUILD_BOATYARD, _Job.Type.BUILD_DOCK, _Job.Type.BUILD_FISHERMAN_HUT, \
+				_Job.Type.BUILD_APOTHECARY, _Job.Type.BUILD_LIBRARY, _Job.Type.BUILD_SCHOOL, \
+				_Job.Type.BUILD_BARRACKS, _Job.Type.BUILD_WATCHTOWER, \
+				_Job.Type.BUILD_MARKET, _Job.Type.BUILD_TRADING_POST, _Job.Type.BUILD_ROAD, \
+				_Job.Type.BUILD_GRANARY, _Job.Type.BUILD_CELLAR:
+					base_bias += 6  # Strong priority for all building jobs
 				_Job.Type.FORAGE, _Job.Type.HUNT:
 					base_bias -= 1  # Slightly deprioritize foraging when not starving
 
@@ -3564,12 +3571,12 @@ func _tick_working() -> void:
 		_state = State.IDLE
 		return
 	if _current_job.type == _Job.Type.HUNT and HeelKawnian._world_hunt_stabilization_blocks():
-		_unclaim_current_job()
+		_unclaim_current_job("hunt_blocked")
 		return
 	# Starving: let go of non-harvest work so the next tick can path to food.
 	if data.hunger <= HUNGER_EMERGENCY and _current_job != null:
 		if _current_job.type != _Job.Type.FORAGE and _current_job.type != _Job.Type.HUNT:
-			_unclaim_current_job()
+			_unclaim_current_job("hunger_emergency")
 			return
 	# Hungry + autonomy wants food: release non-forage work so the pawn can eat sooner than emergency.
 	if (
@@ -3580,10 +3587,11 @@ func _tick_working() -> void:
 	):
 		if _current_job.type != _Job.Type.FORAGE and _current_job.type != _Job.Type.HUNT:
 			_notify_autonomy_feedback("need_eat (drop job)")
-			_unclaim_current_job()
+			_unclaim_current_job("neural_eat")
 			return
 	if not _is_job_tile_still_valid(_current_job):
-		_cancel_current_job()
+		JobManager.cancel(_current_job, "tile_invalid")
+		_reset_to_idle()
 		return
 	
 	# Stage 1: Calculate work efficiency based on proficiency, stamina, pain, injuries
@@ -3868,7 +3876,7 @@ func _walk_to_work_tile(job: Job) -> void:
 		return
 	var path: Array[Vector2i] = _path_for_pawn(job.work_tile)
 	if path.is_empty():
-		_unclaim_current_job()
+		_unclaim_current_job("no_path_to_job")
 		return
 	_state = State.WALKING_TO_JOB
 	_start_path(path)
@@ -3888,24 +3896,24 @@ func _return_trade_cargo_to_source_if_any(j: Job) -> void:
 func _complete_trade_pickup() -> void:
 	var job: Job = _current_job
 	if job == null or job.type != _Job.Type.TRADE_HAUL:
-		_unclaim_current_job()
+		_unclaim_current_job("trade_not_haul")
 		return
 	var from_sp: Stockpile = job.trade_from
 	var to_sp: Stockpile = job.trade_to
 	if from_sp == null or not is_instance_valid(from_sp) or to_sp == null or not is_instance_valid(to_sp):
-		_unclaim_current_job()
+		_unclaim_current_job("trade_sp_invalid")
 		return
 	var want: int = mini(job.trade_batch, from_sp.count_of(job.trade_item))
 	if want <= 0:
-		_unclaim_current_job()
+		_unclaim_current_job("trade_no_stock")
 		return
 	var taken: int = from_sp.take_item(job.trade_item, want)
 	if taken <= 0:
-		_unclaim_current_job()
+		_unclaim_current_job("trade_take_failed")
 		return
 	if not to_sp.accepts(job.trade_item):
 		from_sp.add_item(job.trade_item, taken)
-		_unclaim_current_job()
+		_unclaim_current_job("trade_rejected")
 		return
 	data.carrying = job.trade_item
 	data.carrying_qty = taken
@@ -3915,10 +3923,14 @@ func _complete_trade_pickup() -> void:
 
 func _begin_haul_to_forced_zone(sp: Stockpile) -> void:
 	if not data.is_carrying() or sp == null or not is_instance_valid(sp) or not sp.accepts(data.carrying):
-		_unclaim_current_job()
+		_unclaim_current_job("haul_rejected")
 		return
 	_target_zone = sp
-	var target_tile: Vector2i = sp.nearest_tile_to(data.tile_pos)
+	var target_tile: Vector2i = sp.nearest_reachable_tile_to(data.tile_pos, _world.pathfinder)
+	# Verify the target tile is actually reachable (same pathfinder component)
+	if _world.pathfinder != null and _world.pathfinder.component_of(target_tile) != _world.pathfinder.component_of(data.tile_pos):
+		_unclaim_current_job("stockpile_unreachable")
+		return
 	if data.tile_pos == target_tile:
 		_deposit_at_stockpile()
 		return
@@ -3926,7 +3938,7 @@ func _begin_haul_to_forced_zone(sp: Stockpile) -> void:
 	if path2.is_empty():
 		_log_haul_fail("no path")
 		_return_trade_cargo_to_source_if_any(_current_job)
-		_unclaim_current_job()
+		_unclaim_current_job("haul_no_path")
 		return
 	_state = State.HAULING
 	_start_path(path2)
@@ -3943,16 +3955,16 @@ func _begin_fetching_material(item_type: int, qty: int) -> void:
 		item_type, qty, data.tile_pos, _world.pathfinder
 	)
 	if sp == null:
-		_unclaim_current_job()
+		_unclaim_current_job("no_stockpile_source")
 		return
 	_target_zone = sp
-	var target_tile: Vector2i = sp.nearest_tile_to(data.tile_pos)
+	var target_tile: Vector2i = sp.nearest_reachable_tile_to(data.tile_pos, _world.pathfinder)
 	if data.tile_pos == target_tile:
 		_pickup_material(item_type, qty)
 		return
 	var path: Array[Vector2i] = _path_for_pawn(target_tile)
 	if path.is_empty():
-		_unclaim_current_job()
+		_unclaim_current_job("no_path_to_stockpile")
 		return
 	_state = State.FETCHING_MATERIAL
 	_start_path(path)
@@ -3995,7 +4007,7 @@ func _pickup_material(item_type: int, qty: int) -> void:
 		sp = StockpileManager.find_source_for(item_type, qty, data.tile_pos, _world.pathfinder)
 	if sp == null:
 		_target_zone = null
-		_unclaim_current_job()
+		_unclaim_current_job("stockpile_gone")
 		return
 	var taken: int = sp.take_item(item_type, qty)
 	if taken < qty:
@@ -4003,7 +4015,7 @@ func _pickup_material(item_type: int, qty: int) -> void:
 		if taken > 0:
 			sp.add_item(item_type, taken)
 		_target_zone = null
-		_unclaim_current_job()
+		_unclaim_current_job("stockpile_partial")
 		return
 	# Stack onto existing carry of the same type, otherwise replace.
 	if data.carrying == item_type:
@@ -4099,7 +4111,7 @@ func _complete_current_job() -> void:
 	if job != null and job.type == _Job.Type.TRADE_HAUL:
 		return
 	if job != null and job.type == _Job.Type.HUNT and HeelKawnian._world_hunt_stabilization_blocks():
-		_unclaim_current_job()
+		_unclaim_current_job("hunt_stabilization")
 		return
 
 	# PAWN-ACTIVATED EVENT: Record job completion for event system
@@ -4226,6 +4238,10 @@ func _complete_current_job() -> void:
 				if best_student != null and best_skill_gap > 0:
 					KnowledgeSystem.teach_knowledge(int(data.id), int(best_student.data.id), 0)
 			produced_type = _Item.Type.NONE
+	# If the pawn is re-fetching materials (build failed material check), don't complete the job yet.
+	# The pawn will walk to the stockpile, fetch, walk back, and re-attempt the build.
+	if _state == State.FETCHING_MATERIAL:
+		return
 	var yield_skill: int = HeelKawnianData.skill_for_job(job.type)
 	if yield_skill >= 0 and produced_type != _Item.Type.NONE:
 		var qmult: float = data.harvest_quality_multiplier_for_job_skill(yield_skill)
@@ -4261,6 +4277,7 @@ func _complete_current_job() -> void:
 			data.add_mood_event(MoodEvent.Type.HOPE, 70.0, 300)  # Planting is an act of faith
 		_Job.Type.HARVEST_CROPS:
 			data.add_mood_event(MoodEvent.Type.TRIUMPH, 75.0, 250)  # Harvest rewards patience
+	# If the pawn is re-fetching materials, skip job completion (already returned above).
 	JobManager.complete(job)
 	# Record job completion event for WorldMeaning pipeline
 	if WorldMemory != null:
@@ -4299,22 +4316,26 @@ func _complete_current_job() -> void:
 
 
 ## Place the right TileFeature for a build job, consuming the carried materials.
-## Bails out cleanly if we somehow arrived without the wood in hand.
+## If the pawn isn't carrying the right material, re-fetch instead of silently failing.
 func _finish_build(job: Job) -> void:
 	var mats: Dictionary = _materials_for_build(job.type)
 	if mats.is_empty():
 		return
 	var item_type: int = mats.item
 	var need_qty: int = mats.qty
-	# === Override material based on settlement's cultural style ===
-	var settlement_id: int = _current_settlement_center_region()
-	var material_family: String = "wood"
-	if settlement_id >= 0 and CulturalStyleManager != null:
-		item_type = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, job.type))
-		# material_family is not directly used by this pawn for logic, so no verbose logging here.
-	# === End style material override ===
+	# Re-fetch if not carrying the right material (instead of silent failure)
 	if data.carrying != item_type or data.carrying_qty < need_qty:
-		return
+		# Try to re-fetch the material; if no stockpile has it, cancel the job
+		if StockpileManager != null and StockpileManager.total_count_of(item_type) >= need_qty:
+			# Reset work ticks so the pawn works again after fetching
+			_current_job.work_ticks_done = 0
+			_begin_fetching_material(item_type, need_qty)
+			return
+		else:
+			if GameManager.verbose_logs():
+				print("[HeelKawnian] %s build %s failed: no %s in stockpile" % [data.display_name, Job.describe_type(job.type), Item.name_for(item_type)])
+			_unclaim_current_job("build_no_material")
+			return
 	data.carrying_qty -= need_qty
 	if data.carrying_qty <= 0:
 		data.clear_carry()
@@ -4422,9 +4443,18 @@ func _finish_shelter_build(job: Job) -> void:
 	var item_type: int = mats.item
 	var need_qty: int = mats.qty
 	
-	# Check if pawn is carrying the required material
+	# Re-fetch if not carrying the right material (instead of silent failure)
 	if data.carrying != item_type or data.carrying_qty < need_qty:
-		return
+		if StockpileManager != null and StockpileManager.total_count_of(item_type) >= need_qty:
+			# Reset work ticks so the pawn works again after fetching
+			_current_job.work_ticks_done = 0
+			_begin_fetching_material(item_type, need_qty)
+			return
+		else:
+			if GameManager.verbose_logs():
+				print("[HeelKawnian] %s shelter build %s failed: no %s in stockpile" % [data.display_name, Job.describe_type(job.type), Item.name_for(item_type)])
+			_unclaim_current_job("shelter_no_material")
+			return
 	
 	# Consume materials
 	data.carrying_qty -= need_qty
@@ -4494,6 +4524,7 @@ func _finish_shelter_build(job: Job) -> void:
 
 ## Data-driven building placement via BuildingRegistry.
 ## Looks up the building definition by job type, places the feature, records the event.
+## Consumes carried materials if available; re-fetches if not.
 func _finish_registry_build(job: Job) -> void:
 	if BuildingRegistry == null:
 		return
@@ -4503,6 +4534,26 @@ func _finish_registry_build(job: Job) -> void:
 	var feature_type: int = int(building.get("feature_type", TileFeature.Type.NONE))
 	if feature_type == TileFeature.Type.NONE:
 		return
+	# Consume materials (same pattern as _finish_build)
+	var mats: Dictionary = _materials_for_build(job.type)
+	if not mats.is_empty():
+		var item_type: int = mats.item
+		var need_qty: int = mats.qty
+		if data.carrying != item_type or data.carrying_qty < need_qty:
+			# Re-fetch instead of silent failure
+			if StockpileManager != null and StockpileManager.total_count_of(item_type) >= need_qty:
+				# Reset work ticks so the pawn works again after fetching
+				_current_job.work_ticks_done = 0
+				_begin_fetching_material(item_type, need_qty)
+				return
+			else:
+				if GameManager.verbose_logs():
+					print("[HeelKawnian] %s registry build %s failed: no %s in stockpile" % [data.display_name, Job.describe_type(job.type), Item.name_for(item_type)])
+				_unclaim_current_job("registry_no_material")
+				return
+		data.carrying_qty -= need_qty
+		if data.carrying_qty <= 0:
+			data.clear_carry()
 	# Place the feature on the tile
 	_world.set_feature(job.tile.x, job.tile.y, feature_type)
 	# Register beds if this is a shelter-type building
@@ -4544,11 +4595,11 @@ func _cancel_current_job() -> void:
 	_reset_to_idle()
 
 
-func _unclaim_current_job() -> void:
+func _unclaim_current_job(reason: String = "") -> void:
 	if _current_job != null:
 		var j0: Job = _current_job
 		_return_trade_cargo_to_source_if_any(j0)
-		JobManager.abandon(j0)
+		JobManager.abandon(j0, reason)
 	_reset_to_idle()
 
 
@@ -4607,7 +4658,7 @@ func _begin_haul_to_stockpile() -> void:
 		_state = State.IDLE
 		return
 	_target_zone = sp
-	var target_tile: Vector2i = sp.nearest_tile_to(data.tile_pos)
+	var target_tile: Vector2i = sp.nearest_reachable_tile_to(data.tile_pos, _world.pathfinder)
 	if data.tile_pos == target_tile:
 		_deposit_at_stockpile()
 		return

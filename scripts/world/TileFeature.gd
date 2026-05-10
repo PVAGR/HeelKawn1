@@ -63,7 +63,7 @@ const COLORS: Dictionary = {
 	Type.RUIN:         Color8(88,  72,  66),  # rubble / collapsed (proc + historical)
 	Type.TREE:         Color8( 27,  73,  29),  # very dark forest green
 	Type.BED:          Color8(220, 180, 120),  # warm wheat -- reads as built furniture
-	Type.WALL:         Color8( 90,  60,  35),  # dark wood-brown plank
+	Type.WALL:         Color8(120,  75,  40),  # visible wood-brown plank (brighter for perimeter visibility)
 	Type.DOOR:         Color8(160, 100,  45),  # lighter wood, slightly orange
 	Type.RABBIT:       Color8(245, 240, 230),  # off-white; reads against grass + sand
 	Type.DEER:         Color8(170, 110,  55),  # warm tan; obvious "animal" sprite

@@ -461,6 +461,7 @@ func recompute(_world: World) -> void:
             return false
         return pa[0] < pb[0]
     )
+    _merge_small_settlements()
     _prune_settlement_state_truth_hysteresis()
     _update_governance_state()
     _apply_persisted_governance_forms()
@@ -909,6 +910,96 @@ func _count_beds_in_region_set(world: World, region_set: Dictionary) -> int:
                 if world.data.get_feature(x, y) == TileFeature.Type.BED:
                     beds += 1
     return beds
+
+
+## Merge settlements with fewer than MIN_MERGE_POP pawns into the nearest
+## larger settlement, if within MAX_MERGE_REGION_DISTANCE regions. This prevents
+## the map from fragmenting into dozens of 1-2 pawn "settlements" that can't
+## build anything.
+const MIN_MERGE_POP: int = 3
+const MAX_MERGE_REGION_DISTANCE: int = 4  # in region units (each region = 16x16 tiles)
+
+func _merge_small_settlements() -> void:
+    if settlements.size() <= 1:
+        return
+    # Count pawns per settlement
+    var pawn_counts: Dictionary = {}
+    var living_pawns: Array[HeelKawnian] = _living_pawns()
+    for p in living_pawns:
+        if p == null or not is_instance_valid(p) or p.data == null:
+            continue
+        var sid: int = get_settlement_id_for_pawn(int(p.data.id))
+        if sid >= 0:
+            pawn_counts[sid] = int(pawn_counts.get(sid, 0)) + 1
+    # Find small settlements
+    var to_merge: Array[int] = []
+    for i in range(settlements.size()):
+        if not (settlements[i] is Dictionary):
+            continue
+        var st: Dictionary = settlements[i] as Dictionary
+        var sid: int = int(st.get("center_region", -1))
+        var pop: int = int(pawn_counts.get(sid, 0))
+        if pop < MIN_MERGE_POP:
+            to_merge.append(i)
+    if to_merge.is_empty():
+        return
+    # For each small settlement, find the nearest larger settlement
+    var merged: Dictionary = {}  # index -> target index
+    for idx in to_merge:
+        var st: Dictionary = settlements[idx] as Dictionary
+        var center_rk: int = int(st.get("center_region", -1))
+        var c_pos: Vector2i = _coords_from_region_key(center_rk)
+        var best_dist: int = 999999
+        var best_target: int = -1
+        for j in range(settlements.size()):
+            if j == idx or merged.has(j):
+                continue
+            if not (settlements[j] is Dictionary):
+                continue
+            var other: Dictionary = settlements[j] as Dictionary
+            var other_sid: int = int(other.get("center_region", -1))
+            var other_pop: int = int(pawn_counts.get(other_sid, 0))
+            if other_pop < MIN_MERGE_POP:
+                continue  # Don't merge into another small settlement
+            var other_rk: int = int(other.get("center_region", -1))
+            var o_pos: Vector2i = _coords_from_region_key(other_rk)
+            var dist: int = absi(c_pos.x - o_pos.x) + absi(c_pos.y - o_pos.y)
+            if dist <= MAX_MERGE_REGION_DISTANCE and dist < best_dist:
+                best_dist = dist
+                best_target = j
+        if best_target >= 0:
+            merged[idx] = best_target
+    # Apply merges: absorb small settlement's regions into target
+    var to_remove: Array[int] = []
+    for idx in merged.keys():
+        var target_idx: int = int(merged[idx])
+        var small: Dictionary = settlements[idx] as Dictionary
+        var target: Dictionary = settlements[target_idx] as Dictionary
+        var small_regions: Variant = small.get("regions", null)
+        var target_regions: Variant = target.get("regions", null)
+        if small_regions is PackedInt32Array and target_regions is PackedInt32Array:
+            var sr: PackedInt32Array = small_regions as PackedInt32Array
+            var tr: PackedInt32Array = target_regions as PackedInt32Array
+            var combined: PackedInt32Array = tr
+            for rk in sr:
+                if not tr.has(rk):
+                    combined.append(rk)
+            target["regions"] = combined
+            # Update population count
+            var small_pop: int = int(small.get("population", 0))
+            target["population"] = int(target.get("population", 0)) + small_pop
+            # Update building counts
+            var small_bld: int = int(small.get("buildings", 0))
+            target["buildings"] = int(target.get("buildings", 0)) + small_bld
+            # Update deaths
+            var small_deaths: int = int(small.get("deaths", 0))
+            target["deaths"] = int(target.get("deaths", 0)) + small_deaths
+        to_remove.append(idx)
+    # Remove merged settlements (reverse order to preserve indices)
+    to_remove.sort()
+    to_remove.reverse()
+    for idx in to_remove:
+        settlements.remove_at(idx)
 
 
 func _bfs_cluster(seed_value: int, in_eligible: Dictionary, visited: Dictionary) -> Array[int]:

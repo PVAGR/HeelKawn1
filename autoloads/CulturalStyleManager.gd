@@ -11,7 +11,7 @@ const BIOME_STYLES: Dictionary = {
 		"roof_material": "thatch",
 		"wall_material": "wood_log",
 		"layout_pattern": "clustered",
-		"base_build_material": 0,  # Item.Type.WOOD (see below for fallback)
+		"base_build_material": 3,  # Item.Type.WOOD
 	},
 	# FOREST: Also wood-based but with stone accents (wood plenty, stone for durability)
 	1: {  # Biome.Type.FOREST
@@ -19,7 +19,7 @@ const BIOME_STYLES: Dictionary = {
 		"roof_material": "thatch",
 		"wall_material": "wood_log",
 		"layout_pattern": "linear",
-		"base_build_material": 0,  # Item.Type.WOOD
+		"base_build_material": 3,  # Item.Type.WOOD
 	},
 	# DESERT: Mud brick and stone, linear for shade/trade routes
 	2: {  # Biome.Type.DESERT
@@ -27,7 +27,7 @@ const BIOME_STYLES: Dictionary = {
 		"roof_material": "mud_brick",
 		"wall_material": "mud_brick",
 		"layout_pattern": "linear",
-		"base_build_material": 3,  # Item.Type.STONE (substitute if no mud)
+		"base_build_material": 2,  # Item.Type.STONE (substitute if no mud)
 	},
 	# TUNDRA: Ice and stone, radial for thermal efficiency
 	3: {  # Biome.Type.TUNDRA
@@ -35,7 +35,7 @@ const BIOME_STYLES: Dictionary = {
 		"roof_material": "ice_block",
 		"wall_material": "snow_block",
 		"layout_pattern": "radial",
-		"base_build_material": 3,  # Item.Type.STONE (backup)
+		"base_build_material": 2,  # Item.Type.STONE (backup)
 	},
 	# MOUNTAIN: Pure stone, defensive radial or clustered
 	4: {  # Biome.Type.MOUNTAIN
@@ -43,7 +43,7 @@ const BIOME_STYLES: Dictionary = {
 		"roof_material": "stone_slab",
 		"wall_material": "stone_block",
 		"layout_pattern": "clustered",
-		"base_build_material": 3,  # Item.Type.STONE
+		"base_build_material": 2,  # Item.Type.STONE
 	},
 	# WATER: Not spawnable; fallback to plains
 	5: {  # Biome.Type.WATER
@@ -51,7 +51,7 @@ const BIOME_STYLES: Dictionary = {
 		"roof_material": "thatch",
 		"wall_material": "wood_log",
 		"layout_pattern": "linear",
-		"base_build_material": 0,  # Item.Type.WOOD
+		"base_build_material": 3,  # Item.Type.WOOD
 	},
 	# STONE_FLOOR (mined-out): Stone/cave dwelling aesthetic
 	6: {  # Biome.Type.STONE_FLOOR
@@ -59,7 +59,7 @@ const BIOME_STYLES: Dictionary = {
 		"roof_material": "stone_slab",
 		"wall_material": "stone_block",
 		"layout_pattern": "clustered",
-		"base_build_material": 3,  # Item.Type.STONE
+		"base_build_material": 2,  # Item.Type.STONE
 	},
 }
 
@@ -71,21 +71,21 @@ const HYBRID_STYLES: Array[Dictionary] = [
 		"roof_material": "thatch",
 		"wall_material": "wood_log",
 		"layout_pattern": "linear",
-		"base_build_material": 0,  # WOOD
+		"base_build_material": 3,  # WOOD
 	},
 	{
 		"style_name": "Trade Post",
 		"roof_material": "mud_brick",
 		"wall_material": "stone_block",
 		"layout_pattern": "linear",
-		"base_build_material": 3,  # STONE
+		"base_build_material": 2,  # STONE
 	},
 	{
 		"style_name": "Fortress Hybrid",
 		"roof_material": "stone_slab",
 		"wall_material": "stone_block",
 		"layout_pattern": "clustered",
-		"base_build_material": 3,  # STONE
+		"base_build_material": 2,  # STONE
 	},
 ]
 
@@ -163,17 +163,33 @@ func get_build_material_for_settlement(settlement_id: int, job_type: int) -> int
 	var style: Dictionary = settlement_styles.get(sid, {})
 	if style.is_empty():
 		# Fall back to default (WOOD)
-		return 0  # Item.Type.WOOD
+		return 3  # Item.Type.WOOD
 	
-	# For now, use base_build_material from the style
-	# Future: could differentiate by job type (e.g., WALL vs BED)
-	return int(style.get("base_build_material", 0))
+	# For now, use base_build_material from the style. Normalize legacy saves:
+	# older style dicts used 0 for wood and 3 for stone before Item.Type
+	# values were wired correctly.
+	var raw_material: int = int(style.get("base_build_material", 3))
+	if raw_material == 0:
+		return 3  # legacy WOOD -> Item.Type.WOOD
+	if raw_material == 2:
+		return 2  # Item.Type.STONE
+	if raw_material == 3:
+		var wall_material: String = str(style.get("wall_material", "")).to_lower()
+		if (
+			wall_material.find("stone") >= 0
+			or wall_material.find("mud") >= 0
+			or wall_material.find("snow") >= 0
+			or wall_material.find("ice") >= 0
+		):
+			return 2
+		return 3
+	return 3
 
 
 ## Return the human-visible material family for the style ("wood" or "stone").
 func get_build_material_family(settlement_id: int) -> String:
 	var material_type: int = get_build_material_for_settlement(settlement_id, 0)
-	if material_type == 3:
+	if material_type == 2:
 		return "stone"
 	return "wood"
 

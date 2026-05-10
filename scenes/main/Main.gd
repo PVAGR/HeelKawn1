@@ -5749,6 +5749,22 @@ var _last_construction_seed_tick: int = -10000
 var _construction_seed_posts_since_log: int = 0
 var _last_construction_seed_log_tick: int = -10000
 
+func _count_pending_jobs_near(job_type: int, center: Vector2i, radius: int) -> int:
+	if JobManager == null:
+		return 0
+	var n: int = 0
+	var jobs: Array = JobManager.get_active_jobs_union()
+	for jv in jobs:
+		if not (jv is Job):
+			continue
+		var j: Job = jv as Job
+		if j.type != job_type:
+			continue
+		if maxi(absi(j.tile.x - center.x), absi(j.tile.y - center.y)) <= radius:
+			n += 1
+	return n
+
+
 func _seed_construction_jobs() -> void:
 	if _world == null or _world.data == null:
 		return
@@ -5806,7 +5822,7 @@ func _seed_construction_jobs() -> void:
 		# Priority 0: Beds when housing crisis is critical
 		if ColonySimServices != null and ColonySimServices.get_housing_pressure() > 0.8 and jobs_this_settlement < 20:
 			var need_beds_crisis: int = maxi(3, int(round(local_pop / 1.5)))
-			var pending_beds_crisis: int = int(pending_counts.get(Job.Type.BUILD_BED, 0))
+			var pending_beds_crisis: int = _count_pending_jobs_near(Job.Type.BUILD_BED, center_tile, 10)
 			var beds_posted_this_cycle: int = 0
 			while beds + pending_beds_crisis + beds_posted_this_cycle < need_beds_crisis and beds_posted_this_cycle < 3 and jobs_this_settlement < 20:
 				var t: Vector2i = _find_build_tile_near(center_tile, 8)
@@ -5823,7 +5839,7 @@ func _seed_construction_jobs() -> void:
 					break
 		# Priority 1: Fire pit if no hearth
 		if hearths <= 0 and jobs_this_settlement < 20:
-			var pending_fire_pits: int = int(pending_counts.get(Job.Type.BUILD_FIRE_PIT, 0))
+			var pending_fire_pits: int = _count_pending_jobs_near(Job.Type.BUILD_FIRE_PIT, center_tile, 10)
 			if pending_fire_pits == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
@@ -5834,7 +5850,7 @@ func _seed_construction_jobs() -> void:
 						pending_counts[Job.Type.BUILD_FIRE_PIT] = int(pending_counts.get(Job.Type.BUILD_FIRE_PIT, 0)) + 1
 		# Priority 2: Storage hut if none
 		if storage_huts <= 0 and local_pop >= 1 and jobs_this_settlement < 20:
-			var pending_storage: int = int(pending_counts.get(Job.Type.BUILD_STORAGE_HUT, 0))
+			var pending_storage: int = _count_pending_jobs_near(Job.Type.BUILD_STORAGE_HUT, center_tile, 10)
 			if pending_storage == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
@@ -5845,7 +5861,7 @@ func _seed_construction_jobs() -> void:
 						pending_counts[Job.Type.BUILD_STORAGE_HUT] = int(pending_counts.get(Job.Type.BUILD_STORAGE_HUT, 0)) + 1
 		# Priority 3: Beds if not enough
 		var need_beds: int = maxi(2, int(round(local_pop / 2.2)))
-		var pending_beds: int = int(pending_counts.get(Job.Type.BUILD_BED, 0))
+		var pending_beds: int = _count_pending_jobs_near(Job.Type.BUILD_BED, center_tile, 10)
 		var beds_posted_p3: int = 0
 		while beds + pending_beds + beds_posted_p3 < need_beds and beds_posted_p3 < 2 and jobs_this_settlement < 20:
 			var t: Vector2i = _find_build_tile_near(center_tile, 8)
@@ -5861,8 +5877,8 @@ func _seed_construction_jobs() -> void:
 			else:
 				break
 		# Priority 4: Connected wall perimeter ring + door
-		var pending_walls: int = int(pending_counts.get(Job.Type.BUILD_WALL, 0))
-		var pending_doors: int = int(pending_counts.get(Job.Type.BUILD_DOOR, 0))
+		var pending_walls: int = _count_pending_jobs_near(Job.Type.BUILD_WALL, center_tile, 12)
+		var pending_doors: int = _count_pending_jobs_near(Job.Type.BUILD_DOOR, center_tile, 12)
 		if local_pop >= 1 and jobs_this_settlement < 20:
 			# Scale ring radius and target walls with population
 			var ring_radius: int = 3 + mini(2, local_pop / 3)  # 3 for 1-2 pop, 4 for 3-5, 5 for 6+
@@ -6157,8 +6173,7 @@ func _post_wall_ring_jobs(center: Vector2i, ring_radius: int, max_walls: int, ma
 				continue
 			if JobManager.has_job_at(t):
 				continue
-			var j: Job = JobManager.post(Job.Type.BUILD_WALL, t, 5, 10)
-			if j != null:
+			if settlement_planner_post_wall(t):
 				posted_walls += 1
 				total_jobs += 1
 	return posted_walls

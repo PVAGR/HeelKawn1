@@ -168,6 +168,30 @@ static func _materials_for_build(job_type: int) -> Dictionary:
 	return {}
 
 
+func _materials_for_active_build(job: Job) -> Dictionary:
+	if job == null:
+		return {}
+	var mats: Dictionary = _materials_for_build(job.type)
+	if mats.is_empty():
+		return mats
+	var item_type: int = int(mats.get("item", _Item.Type.NONE))
+	var need_qty: int = int(mats.get("qty", 0))
+	# Settlement wall material is cultural, but keep furniture/doors on their
+	# explicit recipes so a style cannot ask for invalid NONE materials.
+	if job.type == _Job.Type.BUILD_WALL:
+		var settlement_id: int = _current_settlement_center_region()
+		if settlement_id >= 0 and CulturalStyleManager != null:
+			var styled_item: int = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, job.type))
+			if styled_item == _Item.Type.WOOD or styled_item == _Item.Type.STONE:
+				item_type = styled_item
+		# If wood is exhausted but stone is available, let the defense plan
+		# proceed as a stone wall instead of leaving a paper settlement.
+		if item_type == _Item.Type.WOOD and StockpileManager != null:
+			if StockpileManager.total_count_of(_Item.Type.WOOD) < need_qty and StockpileManager.total_count_of(_Item.Type.STONE) >= need_qty:
+				item_type = _Item.Type.STONE
+	return {"item": item_type, "qty": need_qty}
+
+
 func _pawn_stream(label: String) -> StringName:
 	var pawn_id: int = int(data.id) if data != null else 0
 	return StringName("pawn:%d:%s" % [pawn_id, label])
@@ -2199,7 +2223,7 @@ func on_world_nav_changed() -> void:
 				_walk_to_work_tile(_current_job)
 		State.FETCHING_MATERIAL:
 			if _current_job != null:
-				var mm: Dictionary = _materials_for_build(_current_job.type)
+				var mm: Dictionary = _materials_for_active_build(_current_job)
 				if not mm.is_empty():
 					_begin_fetching_material(mm.item, mm.qty)
 		State.HAULING:
@@ -3208,22 +3232,12 @@ func _tick_idle() -> void:
 				return false
 		if int(resolve_component_for_work_tile.call(j.work_tile)) != my_component:
 			return false
-		var mats: Dictionary = _materials_for_build(j.type)
+		var mats: Dictionary = _materials_for_active_build(j)
 		if not mats.is_empty():
 			# Any zone with the material is fine -- the pawn will walk to
 			# the closest one in _begin_fetching_material.
 			if StockpileManager.total_count_of(mats.item) < mats.qty:
 				return false
-		# === Check cultural style material availability ===
-		if not mats.is_empty():
-			var settlement_id: int = int(from_center_region) if from_center_region >= 0 else -1
-			if settlement_id >= 0 and CulturalStyleManager != null:
-				var style_material: int = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, j.type))
-				if style_material != mats.item:
-					# Check if we have the style-specific material instead
-					if StockpileManager.total_count_of(style_material) < mats.qty:
-						return false
-		# === End style material check ===
 		# === CHECK TECH REQUIREMENT ===
 		# Only allow job claiming if the settlement has researched required technology
 		if TechnologySystem != null:
@@ -4050,16 +4064,10 @@ func _begin_job(job: Job) -> void:
 	# Build jobs need raw materials in hand before we walk to the build site.
 	# If we don't already have the right item in sufficient quantity, bounce
 	# to the stockpile first.
-	var mats: Dictionary = _materials_for_build(job.type)
+	var mats: Dictionary = _materials_for_active_build(job)
 	if not mats.is_empty():
 		var item_type: int = mats.item
 		var need_qty: int = mats.qty
-		# === Check for cultural style material override ===
-		var settlement_id: int = _current_settlement_center_region()
-		# material_family is not directly used by this pawn for logic, so no verbose logging here.
-		if settlement_id >= 0 and CulturalStyleManager != null:
-			item_type = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, job.type))
-		# === End style check ===
 		var have: int = data.carrying_qty if data.carrying == item_type else 0
 		if have < need_qty:
 			_begin_fetching_material(item_type, need_qty)
@@ -4180,7 +4188,7 @@ func _arrive_at_stockpile_for_material() -> void:
 	if _current_job == null:
 		_reset_to_idle()
 		return
-	var mats: Dictionary = _materials_for_build(_current_job.type)
+	var mats: Dictionary = _materials_for_active_build(_current_job)
 	if mats.is_empty():
 		_reset_to_idle()
 		return
@@ -4562,7 +4570,7 @@ func _complete_current_job() -> void:
 ## Place the right TileFeature for a build job, consuming the carried materials.
 ## If the pawn isn't carrying the right material, re-fetch instead of silently failing.
 func _finish_build(job: Job) -> void:
-	var mats: Dictionary = _materials_for_build(job.type)
+	var mats: Dictionary = _materials_for_active_build(job)
 	if mats.is_empty():
 		return
 	var item_type: int = mats.item
@@ -4681,7 +4689,7 @@ func _finish_shelter_build(job: Job) -> void:
 		
 		return
 	
-	var mats: Dictionary = _materials_for_build(job.type)
+	var mats: Dictionary = _materials_for_active_build(job)
 	if mats.is_empty():
 		return
 	var item_type: int = mats.item
@@ -4779,7 +4787,7 @@ func _finish_registry_build(job: Job) -> void:
 	if feature_type == TileFeature.Type.NONE:
 		return
 	# Consume materials (same pattern as _finish_build)
-	var mats: Dictionary = _materials_for_build(job.type)
+	var mats: Dictionary = _materials_for_active_build(job)
 	if not mats.is_empty():
 		var item_type: int = mats.item
 		var need_qty: int = mats.qty

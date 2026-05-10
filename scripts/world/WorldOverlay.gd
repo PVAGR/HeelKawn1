@@ -22,6 +22,7 @@ var _biome_tiles: Dictionary = {}  # biome_type -> Array[Vector2i]
 
 # Construction progress: job_id -> {tile: Vector2i, progress: float}
 var _build_progress: Dictionary = {}
+var _build_sites: Dictionary = {}
 
 # Smoke particle systems: persistent GPUParticles2D for fire pits and chimneys
 var _smoke_systems: Array[GPUParticles2D] = []
@@ -97,10 +98,11 @@ func _camera_viewport_tiles() -> Rect2i:
 
 func _refresh_build_progress() -> void:
 	_build_progress.clear()
+	_build_sites.clear()
 	if JobManager == null:
 		return
-	var claimed: Array = JobManager.get_claimed_jobs()
-	for job in claimed:
+	var jobs: Array = JobManager.get_active_jobs_union()
+	for job in jobs:
 		if job == null:
 			continue
 		# Only show progress for build jobs
@@ -110,7 +112,10 @@ func _refresh_build_progress() -> void:
 		var progress: float = 0.0
 		if job.work_ticks_needed > 0:
 			progress = clampf(float(job.work_ticks_done) / float(job.work_ticks_needed), 0.0, 1.0)
-		_build_progress[job.tile] = progress
+		var claimed: bool = int(job.state) == Job.State.CLAIMED
+		_build_sites[job.tile] = {"type": int(job.type), "progress": progress, "claimed": claimed}
+		if claimed:
+			_build_progress[job.tile] = progress
 
 
 func _is_build_job_type(t: int) -> bool:
@@ -129,7 +134,8 @@ func _is_build_job_type(t: int) -> bool:
 		or t == Job.Type.BUILD_BARRACKS or t == Job.Type.BUILD_WATCHTOWER
 		or t == Job.Type.BUILD_MARKET or t == Job.Type.BUILD_TRADING_POST
 		or t == Job.Type.BUILD_ROAD or t == Job.Type.BUILD_GRANARY
-		or t == Job.Type.BUILD_CELLAR
+		or t == Job.Type.BUILD_CELLAR or t == Job.Type.BUILD_FORD
+		or t == Job.Type.BUILD_WATER_MILL
 	)
 
 
@@ -160,6 +166,12 @@ func _draw() -> void:
 			var wp: Vector2 = _world.tile_to_world(tile_pos)
 			_draw_feature_sprite(wp, int(f_type))
 			drawn += 1
+
+	# --- Autonomous construction plans: make open jobs visible before completion ---
+	for tile_pos in _build_sites:
+		var site: Dictionary = _build_sites[tile_pos]
+		var wp: Vector2 = _world.tile_to_world(tile_pos)
+		_draw_build_plan(wp, int(site.get("type", -1)), bool(site.get("claimed", false)))
 
 	# --- Night window glow: warm light on occupied buildings ---
 	if is_night:
@@ -314,6 +326,28 @@ func _draw_door(p: Vector2) -> void:
 	draw_line(p + Vector2(-1.0, 0.5), p + Vector2(1.0, 0.5), plank_c, 0.5, true)
 	# Handle
 	draw_rect(Rect2(p + Vector2(0.5, -0.1), Vector2(0.2, 0.2)), Color8(200, 180, 100), true)
+
+
+func _draw_build_plan(p: Vector2, job_type: int, claimed: bool) -> void:
+	var alpha: int = 115 if claimed else 70
+	match job_type:
+		Job.Type.BUILD_WALL:
+			# Full-tile ghost so settlement borders read from zoomed-out play.
+			var fill_c: Color = Color8(150, 95, 48, alpha)
+			var edge_c: Color = Color8(255, 210, 110, 170 if claimed else 115)
+			draw_rect(Rect2(p + Vector2(-4.3, -4.3), Vector2(8.6, 8.6)), fill_c, true)
+			draw_rect(Rect2(p + Vector2(-4.3, -4.3), Vector2(8.6, 8.6)), edge_c, false, 0.9)
+			draw_line(p + Vector2(-3.4, 0.0), p + Vector2(3.4, 0.0), edge_c, 0.45, true)
+		Job.Type.BUILD_DOOR:
+			var door_c: Color = Color8(230, 150, 60, alpha + 35)
+			draw_rect(Rect2(p + Vector2(-3.0, -4.2), Vector2(6.0, 8.4)), door_c, true)
+			draw_rect(Rect2(p + Vector2(-3.0, -4.2), Vector2(6.0, 8.4)), Color8(255, 230, 140, 150), false, 0.9)
+		Job.Type.BUILD_BED, Job.Type.BUILD_SHELTER:
+			draw_rect(Rect2(p + Vector2(-3.8, -2.2), Vector2(7.6, 4.4)), Color8(230, 190, 120, alpha), true)
+			draw_rect(Rect2(p + Vector2(-3.8, -2.2), Vector2(7.6, 4.4)), Color8(255, 235, 170, 120), false, 0.7)
+		_:
+			draw_circle(p, 3.6, Color8(140, 190, 255, alpha))
+			draw_circle(p, 3.8, Color8(220, 240, 255, 95))
 
 
 func _draw_storage_hut(p: Vector2) -> void:

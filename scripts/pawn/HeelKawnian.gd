@@ -5579,6 +5579,25 @@ func _ambient_temperature_celsius_at_tile(tile: Vector2i) -> float:
 	base -= (moist - 0.5) * 2.0
 	if GameManager != null and DayNightCycle.is_night_for_tick(GameManager.tick_count):
 		base -= 4.5
+	# Weather effect on ambient temperature
+	if _world != null:
+		var weather_overlay: Node = get_node_or_null("/root/Main/WeatherOverlay")
+		if weather_overlay != null and weather_overlay.has_method("get_current_weather"):
+			var weather: String = weather_overlay.get_current_weather()
+			match weather:
+				"rain":
+					base -= 4.0
+				"snow":
+					base -= 10.0
+				"sand":
+					base += 5.0
+				"embers":
+					base += 3.0
+			# Wind chill in cold precipitation
+			if weather == "rain" or weather == "snow":
+				var wind_system: Node = get_node_or_null("/root/WindSystem")
+				if wind_system != null and wind_system.has_method("get_wind_strength"):
+					base -= wind_system.get_wind_strength() * 4.0
 	return base
 
 
@@ -5626,6 +5645,26 @@ func _check_temperature() -> void:
 	if has_shelter:
 		ambient_temp += 4.0
 	
+	# Wetness tracking from weather precipitation
+	var is_wet: bool = false
+	var weather_overlay: Node = get_node_or_null("/root/Main/WeatherOverlay")
+	if weather_overlay != null and weather_overlay.has_method("is_precipitating"):
+		if weather_overlay.is_precipitating():
+			data.wetness = minf(100.0, data.wetness + 1.0)
+			is_wet = data.wetness > 50.0
+		else:
+			# Shelter accelerates drying
+			var dry_rate: float = 0.5
+			if has_shelter:
+				dry_rate = 1.5
+			data.wetness = maxf(0.0, data.wetness - dry_rate)
+	elif data.wetness > 0.0:
+		data.wetness = maxf(0.0, data.wetness - 0.5)
+	
+	# When wet, cold ambient feels colder (wind chill amplification)
+	if is_wet and ambient_temp < 15.0:
+		ambient_temp -= 4.0
+	
 	# Grace period: first ticks of life, pawns resist cold
 	# DORMANT WORLD: Pioneer pawns (first generation) get extended grace (5000 ticks)
 	# Regular pawns get standard grace (2500 ticks)
@@ -5653,6 +5692,9 @@ func _check_temperature() -> void:
 	if data.body_temperature < 35.0:
 		# During grace period, hypothermia risk accumulates 4x slower
 		var hypo_rate: float = 0.2 * (1.0 - grace_remaining * 0.75)
+		# Wetness amplifies hypothermia risk
+		if is_wet:
+			hypo_rate *= 2.0
 		data.hypothermia_risk = min(100.0, data.hypothermia_risk + hypo_rate)
 	elif data.body_temperature > 38.0:
 		data.heat_exhaustion_risk = min(100.0, data.heat_exhaustion_risk + 0.2)

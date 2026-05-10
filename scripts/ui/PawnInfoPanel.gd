@@ -59,6 +59,7 @@ const WORK_CHECKS: Array = [
 	{"field": "work_chop",   "text": "Chop wood"},
 	{"field": "work_hunt",   "text": "Hunt animals"},
 	{"field": "work_build",  "text": "Build (bed/wall/door)"},
+	{"field": "work_guard",  "text": "Guard prisoners"},
 ]
 
 
@@ -831,6 +832,8 @@ func _on_work_toggled(field: String, pressed: bool) -> void:
 			d.work_hunt = pressed
 		"work_build":
 			d.work_build = pressed
+		"work_guard":
+			d.work_guard = pressed
 
 
 static func _read_work_field(d: HeelKawnianData, field: String) -> bool:
@@ -847,6 +850,8 @@ static func _read_work_field(d: HeelKawnianData, field: String) -> bool:
 			return d.work_hunt
 		"work_build":
 			return d.work_build
+		"work_guard":
+			return d.work_guard
 	return true
 
 

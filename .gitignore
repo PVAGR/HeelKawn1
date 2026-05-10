@@ -73,8 +73,3 @@ settlement_*_output.txt
 $null
 Command to Run
 Diff Summary
-return []
-return event_id in _recoverable_events
-return results
-WorldMemory.record_event(event)
-WorldPersistence.load_state(loaded_state)

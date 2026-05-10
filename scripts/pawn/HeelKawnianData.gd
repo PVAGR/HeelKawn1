@@ -88,6 +88,7 @@ var pain: float = 0.0  # 0-100, affects work efficiency and mood
 var exposure_sickness: float = 0.0  # 0-100, from prolonged cold/wet
 var hypothermia_risk: float = 0.0  # 0-100, accumulates from cold exposure
 var heat_exhaustion_risk: float = 0.0  # 0-100, accumulates from heat exposure
+var wetness: float = 0.0  # 0-100, from precipitation; amplifies cold exposure
 
 ## DORMANT WORLD: Pioneer buff — first-generation pawns resist cold for 500 ticks
 var is_pioneer: bool = false
@@ -339,6 +340,7 @@ var work_mine:   bool = true
 var work_chop:   bool = true
 var work_hunt:   bool = true
 var work_build:  bool = true
+var work_guard:  bool = true
 
 ## Traits: modifiers that affect need decay, skill XP, work speed, etc.
 ## Each pawn starts with 0-2 traits at spawn.
@@ -3066,6 +3068,8 @@ func allows_job_type(job_type: int) -> bool:
 			return work_forage
 		Job.Type.PROTECT, Job.Type.DEFEND:
 			return work_hunt
+		Job.Type.GUARD:
+			return work_guard
 		# Phase 6: new building job permissions
 		Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_FARM_CORN, Job.Type.BUILD_FARM_VEGETABLES, Job.Type.BUILD_HERB_GARDEN:
 			return work_forage  # Agriculture = foraging skill
@@ -3125,6 +3129,8 @@ func _allows_job_type_lightweight(job_type: int) -> bool:
 		return work_forage and profession_progress_xp() >= 50
 	if job_type == Job.Type.PROTECT or job_type == Job.Type.DEFEND:
 		return work_hunt and profession_progress_xp() >= 100
+	if job_type == Job.Type.GUARD:
+		return work_guard
 	return false
 
 
@@ -3349,6 +3355,7 @@ func to_save_dict() -> Dictionary:
 		"work_chop": work_chop,
 		"work_hunt": work_hunt,
 		"work_build": work_build,
+		"work_guard": work_guard,
 		"trait_types": trait_types,
 		"social_rapport": social_rapport.duplicate(true),
 		"character_opinions": character_opinions.duplicate(true),
@@ -3484,6 +3491,7 @@ static func from_save_dict(d: Dictionary) -> HeelKawnianData:
 	p.work_chop = bool(d.get("work_chop", true))
 	p.work_hunt = bool(d.get("work_hunt", true))
 	p.work_build = bool(d.get("work_build", true))
+	p.work_guard = bool(d.get("work_guard", true))
 	p.social_rapport = {}
 	if d.has("social_rapport") and d["social_rapport"] is Dictionary:
 		for sk in (d["social_rapport"] as Dictionary).keys():

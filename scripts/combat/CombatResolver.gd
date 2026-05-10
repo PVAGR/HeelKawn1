@@ -242,9 +242,44 @@ static func _apply_damage(attacker: Node, defender: Node, damage: float) -> bool
 		return true
 	elif defender is Enemy:
 		var enemy_defender: Enemy = defender as Enemy
+		var before_hp: float = enemy_defender.health
 		enemy_defender.take_damage(damage)
+		# Check for capture opportunity when enemy HP drops to 0
+		if before_hp > 0.0 and enemy_defender.health <= 0.0 and not enemy_defender.get("_incapacitated", false):
+			if attacker is HeelKawnian and PrisonerManager != null:
+				var chance: float = _capture_chance(attacker as HeelKawnian, enemy_defender)
+				if WorldRNG.chance_for(_combat_stream("capture", attacker, defender), chance, _combat_salt(97)):
+					# Capture succeeded — incapacitate instead of dying
+					print("[Combat] %s captured %s!" % [_combat_name(attacker), enemy_defender.get_species_name()])
+					enemy_defender._incapacitate()
+					# Award reduced krond for capture
+					if attacker is HeelKawnian:
+						var pawn_attacker: HeelKawnian = attacker as HeelKawnian
+						if pawn_attacker.data != null and pawn_attacker.data.has_method("grant_krond"):
+							pawn_attacker.data.grant_krond(KROND_PER_KILL * 0.5)
+					return true
 		return enemy_defender.health <= 0
 	return false
+
+
+## Capture chance based on attacker skill and enemy remaining health
+static func _capture_chance(attacker: HeelKawnian, enemy: Enemy) -> float:
+	if attacker == null or attacker.data == null:
+		return 0.0
+	# Base 30% chance
+	var chance: float = 0.3
+	# Hunting skill improves capture chance (up to +40%)
+	var hunting_xp: float = attacker.data.skill_xp.get(HeelKawnianData.Skill.HUNTING, 0.0)
+	chance += (hunting_xp / 500.0) * 0.4
+	# Enemy health below 10% improves chance
+	if enemy.health <= 0.0 and enemy.max_health > 0:
+		chance += 0.15
+	# Mood affects capture (confident pawns capture better)
+	if attacker.data.mood > 70.0:
+		chance += 0.1
+	elif attacker.data.mood < 30.0:
+		chance -= 0.1
+	return clampf(chance, 0.05, 0.75)
 
 
 ## Calculate effective armor damage reduction for a pawn

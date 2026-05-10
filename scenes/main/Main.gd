@@ -3089,7 +3089,6 @@ func _flush_world_memory_derivatives() -> void:
 		if is_instance_valid(_world):
 			_world.refresh_terrain_scar_tint()
 			_world.apply_ruins_from_persistence()
-			_world.refresh_pawn_historic_path_weights()
 	)
 	var heavy_planner_interval: int = _heavy_planner_interval_for_speed()
 	if GameManager.tick_count % heavy_planner_interval == 0:
@@ -3099,8 +3098,6 @@ func _flush_world_memory_derivatives() -> void:
 		if Time.get_ticks_usec() - flush_start <= FLUSH_BUDGET_USEC:
 			TradePlanner.plan(_world, self, true)
 	RoadMemory.flush_dirty_tiles(_world)
-
-
 # OPTIMIZATION: Deferred heavy operations for frame budget management
 func _deferred_settlement_memory_recompute(world: World) -> void:
 	if is_instance_valid(world):
@@ -3109,7 +3106,7 @@ func _deferred_settlement_memory_recompute(world: World) -> void:
 
 func _deferred_settlement_rebirth_process(world: World, main: Node) -> void:
 	if is_instance_valid(world) and is_instance_valid(main):
-		SettlementRebirth.process(world, main, false)
+		SettlementManager.process(world, main, false)
 
 
 # OPTIMIZATION: Deferred planning functions for frame budget management
@@ -5036,7 +5033,7 @@ func _revival_digest_for_cluster_region(world: World, region_key: int) -> Dictio
 	out1["revival_ready"] = bool(prof.get("revival_ready", false))
 	var sv: Variant = SettlementMemory.get_settlement_at_region(region_key)
 	if state_now == "revivable" and sv is Dictionary:
-		var gate: Dictionary = SettlementRebirth.get_rebirth_eligibility(world, sv as Dictionary)
+		var gate: Dictionary = SettlementManager.get_rebirth_eligibility(world, sv as Dictionary)
 		out1["rebirth_ok"] = bool(gate.get("ok", false))
 		out1["rebirth_reason"] = str(gate.get("reason", ""))
 	elif sv is not Dictionary:
@@ -7518,8 +7515,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 		return
 
 	JobManager.clear_all()
-	if KinshipSystem != null and KinshipSystem.has_method("clear"):
-		KinshipSystem.clear()
+	if SocialManager.get_kinship_system() != null and SocialManager.get_kinship_system().has_method("clear"):
+		SocialManager.get_kinship_system().clear()
 	if BloodlineSystem != null and BloodlineSystem.has_method("clear"):
 		BloodlineSystem.clear()
 	TradeMemory.clear()
@@ -7600,8 +7597,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 		if pd is Dictionary:
 			var pdat: HeelKawnianData = HeelKawnianData.from_save_dict(pd)
 			_pawn_spawner.spawn_from_data(pdat, _world)
-	if KinshipSystem != null and KinshipSystem.has_method("rebuild_from_pawn_spawner"):
-		KinshipSystem.call("rebuild_from_pawn_spawner", _pawn_spawner)
+	if SocialManager.get_kinship_system() != null and SocialManager.get_kinship_system().has_method("rebuild_from_pawn_spawner"):
+		SocialManager.get_kinship_system().call("rebuild_from_pawn_spawner", _pawn_spawner)
 	_restore_player_state(saved_player_mode, saved_player_pawn_id)
 	_world.set_meta("animal_spawner", _animal_spawner)
 	if is_instance_valid(_world):

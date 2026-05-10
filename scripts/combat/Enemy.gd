@@ -51,6 +51,7 @@ var _target_pawn: HeelKawnian = null
 var _current_path: Array[Vector2i] = []
 var _path_index: int = 0
 var _dead: bool = false
+var _incapacitated: bool = false
 var _anim_t: float = 0.0
 var _sfx: AudioStreamPlayer2D = null
 var _hit_flash_ticks: int = 0
@@ -86,7 +87,7 @@ func bind(p_enemy_type: Type, p_tile: Vector2i, p_world: World) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if _dead or _world == null:
+	if _dead or _incapacitated or _world == null:
 		return
 	
 	# Throttle physics updates to every 2 frames to reduce lag
@@ -117,7 +118,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _on_game_tick(_tick: int) -> void:
-	if _dead or _world == null:
+	if _dead or _incapacitated or _world == null:
 		return
 	if _hit_flash_ticks > 0:
 		_hit_flash_ticks -= 1
@@ -215,7 +216,24 @@ func take_damage(damage: float) -> void:
 	health = max(0.0, health - damage)
 	_hit_flash_ticks = 4
 	if health <= 0:
-		_die()
+		if not _incapacitate():
+			_die()
+
+
+## Attempt to incapacitate instead of kill. Returns true if successfully incapacitated.
+func _incapacitate() -> bool:
+	if PrisonerManager == null:
+		return false
+	if not PrisonerManager.capture_enemy(self):
+		return false
+	_incapacitated = true
+	_current_path.clear()
+	_target_pawn = null
+	remove_from_group("enemies")
+	add_to_group("prisoners")
+	queue_redraw()
+	print("[Enemy] %s incapacitated and taken prisoner" % get_species_name())
+	return true
 
 
 func _die() -> void:
@@ -256,6 +274,11 @@ func _draw() -> void:
 		return
 	var spec = SPECIES_DATA[enemy_type]
 	var color: Color = spec.color
+	if _incapacitated:
+		color = Color(0.5, 0.5, 0.5, 0.7)
+		draw_circle(Vector2.ZERO, spec.size * 0.8, color)
+		draw_circle(Vector2.ZERO, 1.5, Color(0.9, 0.5, 0.2))
+		return
 	var pulse: float = 0.2 + 0.2 * (sin(_anim_t) * 0.5 + 0.5)
 	# Health affects color brightness
 	var health_factor: float = clamp(health / max_health, 0.2, 1.0)

@@ -118,6 +118,9 @@ func _process_survival(pawn: Node, tick: int) -> void:
 	# decayed by HeelKawnian.gd, but moodlets are managed here).
 	_apply_condition_moodlets(data)
 	
+	# Update wetness from weather
+	_update_wetness(data)
+	
 	# Regulate body temperature
 	_regulate_temperature(pawn, tick)
 	
@@ -280,10 +283,70 @@ func _get_environmental_temperature(pawn: Node) -> float:
 			if feat == 3 or feat == 8:  # BED or FIRE_PIT
 				base_temp += 8.0  # Shelter/fire provides significant warmth
 
+	# Weather effect on environmental temperature
+	var weather_overlay: Node = get_node_or_null("/root/Main/WeatherOverlay")
+	if weather_overlay != null and weather_overlay.has_method("get_current_weather"):
+		var weather: String = weather_overlay.get_current_weather()
+		match weather:
+			"rain":
+				base_temp -= 4.0
+			"snow":
+				base_temp -= 10.0
+			"sand":
+				base_temp += 5.0
+			"embers":
+				base_temp += 3.0
+		# Wind chill amplifies cold weather
+		if weather == "rain" or weather == "snow":
+			var wind_system: Node = get_node_or_null("/root/WindSystem")
+			if wind_system != null and wind_system.has_method("get_wind_strength"):
+				var wind_str: float = wind_system.get_wind_strength()
+				base_temp -= wind_str * 4.0
+
 	# Apply grace period multiplier (new pawns are more resilient)
 	base_temp = lerp(base_temp, 37.0, grace_mult)
 
 	return base_temp
+
+
+# ==================== WETNESS SYSTEM ====================
+
+func _update_wetness(data: RefCounted) -> void:
+	# Wetness tracks exposure to precipitation; affects cold vulnerability
+	if data == null:
+		return
+	var wetness_val: float = 0.0
+	if data.has_method("get") and data.get("wetness") != null:
+		wetness_val = data.get("wetness")
+	
+	var weather_overlay: Node = get_node_or_null("/root/Main/WeatherOverlay")
+	var is_precipitating: bool = false
+	if weather_overlay != null and weather_overlay.has_method("is_precipitating"):
+		is_precipitating = weather_overlay.is_precipitating()
+	
+	if is_precipitating:
+		# Get wet under rain/snow — caps at 100
+		wetness_val = minf(100.0, wetness_val + 1.0)
+	else:
+		# Dry off when no precipitation
+		wetness_val = maxf(0.0, wetness_val - 0.5)
+	
+	# Shelter reduces wetness gain / speeds drying
+	var tile: Vector2i = Vector2i.ZERO
+	if data.has_method("get"):
+		tile = data.get("tile_pos")
+	if tile.x >= 0 and tile.y >= 0:
+		var world: Node = get_node_or_null("/root/Main/WorldViewport/World")
+		if world != null and world.has_method("get_feature"):
+			var feat: int = int(world.call("get_feature", tile.x, tile.y))
+			if feat == 3 or feat == 8:  # BED or FIRE_PIT — under cover
+				if is_precipitating:
+					wetness_val = maxf(0.0, wetness_val - 2.0)  # Shelter blocks rain
+				else:
+					wetness_val = maxf(0.0, wetness_val - 1.0)  # Faster drying by fire
+	
+	if data.has_method("set"):
+		data.set("wetness", wetness_val)
 
 
 # ==================== INJURY SYSTEM ====================

@@ -3439,8 +3439,11 @@ func _pawn_decision_rule_context(pd: HeelKawnianData) -> Dictionary:
 		"profession_overrep": _pawn_profession_overrep(pd),
 		# PawnConsciousness — trauma, awareness, dreams, beliefs
 		"trauma_level": _pawn_consciousness_trauma(pd),
+		"parental_trauma_level": _pawn_parental_trauma(pd),
 		"self_awareness": _pawn_consciousness_awareness(pd),
 		"recent_dream_theme": _pawn_consciousness_dream_theme(pd),
+		"dream_nudge_action": _pawn_consciousness_dream_nudge_action(pd),
+		"dream_nudge_target": _pawn_consciousness_dream_nudge_target(pd),
 		"core_beliefs_count": _pawn_consciousness_beliefs_count(pd),
 		# GrudgeManager — grudge intensity
 		"grudge_intensity": _pawn_grudge_intensity(pd),
@@ -3509,6 +3512,24 @@ func _pawn_consciousness_trauma(pd: HeelKawnianData) -> float:
 		return 0.0
 	return pc.get_trauma_level(int(pd.id))
 
+func _pawn_parental_trauma(pd: HeelKawnianData) -> float:
+	if pd == null:
+		return 0.0
+	var weights_v: Variant = pd.get("parental_trauma_weights") if pd.has_method("get") else null
+	if weights_v is not Dictionary:
+		return 0.0
+	var weights: Dictionary = weights_v as Dictionary
+	if weights.is_empty():
+		return 0.0
+	var total: float = 0.0
+	var count: int = 0
+	for k in weights.keys():
+		total += float(weights.get(k, 0.0))
+		count += 1
+	if count <= 0:
+		return 0.0
+	return clampf(total / float(count), 0.0, 100.0)
+
 func _pawn_consciousness_awareness(pd: HeelKawnianData) -> int:
 	var pc: Node = get_node_or_null("/root/PawnConsciousness")
 	if pc == null or not pc.has_method("get_awareness_level"):
@@ -3523,6 +3544,21 @@ func _pawn_consciousness_dream_theme(pd: HeelKawnianData) -> String:
 	if dreams.is_empty():
 		return ""
 	return str(dreams[0].get("theme", ""))
+
+func _pawn_consciousness_dream_nudge(pd: HeelKawnianData) -> Dictionary:
+	var pc: Node = get_node_or_null("/root/PawnConsciousness")
+	if pc == null or not pc.has_method("get_dream_nudge"):
+		return {}
+	var nudge_v: Variant = pc.get_dream_nudge(int(pd.id))
+	return nudge_v if nudge_v is Dictionary else {}
+
+func _pawn_consciousness_dream_nudge_action(pd: HeelKawnianData) -> String:
+	var nudge: Dictionary = _pawn_consciousness_dream_nudge(pd)
+	return str(nudge.get("action", ""))
+
+func _pawn_consciousness_dream_nudge_target(pd: HeelKawnianData) -> String:
+	var nudge: Dictionary = _pawn_consciousness_dream_nudge(pd)
+	return str(nudge.get("target", ""))
 
 func _pawn_consciousness_beliefs_count(pd: HeelKawnianData) -> int:
 	var pc: Node = get_node_or_null("/root/PawnConsciousness")

@@ -225,7 +225,7 @@ func _job_type_to_career_track(job_type: int) -> int:
 			return CareerTrack.BUILDER
 		Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_TORCH, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR:
 			return CareerTrack.CRAFTSMAN
-		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.DRY_MEAT:
+		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH, Job.Type.DRY_MEAT:
 			return CareerTrack.COOK
 		Job.Type.MINE, Job.Type.MINE_WALL:
 			return CareerTrack.NONE  # Mining doesn't map to a specific track yet

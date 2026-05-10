@@ -63,6 +63,10 @@ const MAX_HUNT_JOBS: int = 50
 const MAX_DYNAMIC_HUNT_JOBS_PER_PASS: int = 4
 const HUNT_JOB_PER_ANIMALS_DIVISOR: int = 6
 const HUNT_MEAT_STOCKPILE_SOFT_CAP: int = 18
+const FISH_PRIORITY: int = 3
+const FISH_WORK_TICKS: int = 30
+const MAX_FISH_JOBS: int = 30
+const FISH_COOLDOWN_TICKS: int = 300  # fish-specific respawn delay between catches
 ## Preserve a baseline wildlife population so hunting never hard-collapses fauna.
 const MIN_RABBIT_RESERVE: int = 16
 const MIN_DEER_RESERVE: int = 8
@@ -143,6 +147,8 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _hud: ColonyHUD = $UI_Viewport/ColonyHUD
 @onready var _observer_hud: ObserverHUD = $UI_Viewport/ObserverHUD
 @onready var _chronicle_ledger: ChronicleLedger = $UI_Viewport/ChronicleLedger
+@onready var _chronicle_book: ChronicleBook = $UI_Viewport/ChronicleBook
+@onready var _seed_gallery: SeedGallery = $UI_Viewport/SeedGallery
 @onready var _pawn_ai_inspector = $UI_Viewport/PawnAIInspector
 @onready var _focus_inspector: FocusInspector = $UI_Viewport/FocusInspector
 @onready var _region_inspector: RegionInspector = $UI_Viewport/RegionInspector
@@ -168,6 +174,9 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _weather_overlay = $WeatherOverlay
 @onready var _world_overlay = $WorldViewport/World/WorldOverlay
 @onready var _fire_glow = $WorldViewport/World/FireGlow
+@onready var _sun_moon = $WorldViewport/World/SunMoon
+@onready var _ambient_biome_particles = $WorldViewport/World/AmbientBiomeParticles
+@onready var _bloom_glow = $WorldViewport/World/BloomGlow
 @onready var _command_mode = $CommandMode
 @onready var _command_indicator = $WorldViewport/CommandIndicator
 @onready var _pawn_name_labels = $WorldViewport/PawnNameLabels
@@ -562,10 +571,11 @@ func _can_post_job_at(tile: Vector2i) -> bool:
 	var expiry: int = int(_job_post_cooldowns.get(_tile_job_key(tile), 0))
 	return expiry <= now
 
-func _set_job_post_cooldown(tile: Vector2i) -> void:
+func _set_job_post_cooldown(tile: Vector2i, override_ticks: int = -1) -> void:
 	if GameManager == null:
 		return
-	_job_post_cooldowns[_tile_job_key(tile)] = GameManager.tick_count + JOB_POST_COOLDOWN_TICKS
+	var ticks: int = JOB_POST_COOLDOWN_TICKS if override_ticks < 0 else override_ticks
+	_job_post_cooldowns[_tile_job_key(tile)] = GameManager.tick_count + ticks
 
 func _prune_job_post_cooldowns() -> void:
 	if GameManager == null:
@@ -663,6 +673,9 @@ func _ready() -> void:
 			_world_overlay.initialize(_world, _camera)
 		if _fire_glow != null and _fire_glow.has_method("initialize"):
 			_fire_glow.initialize(_world, _camera)
+			_sun_moon.initialize(_world)
+			_ambient_biome_particles.initialize(_world, _camera)
+			_bloom_glow.initialize(_world)
 		# Initialize command mode
 		if _command_mode != null and _command_mode.has_method("initialize"):
 			_command_mode.initialize(_world, _camera, _pawn_spawner)
@@ -714,6 +727,21 @@ func _ready() -> void:
 			_main_menu.load_game_pressed.connect(func(): if _save_load_menu != null: _save_load_menu.toggle())
 			_main_menu.settings_pressed.connect(func(): if _settings_panel != null: _settings_panel.toggle())
 			_main_menu.quit_pressed.connect(func(): get_tree().quit())
+		if _seed_gallery != null and not _seed_gallery.seed_selected.is_connected(_on_seed_gallery_seed_selected):
+			_seed_gallery.seed_selected.connect(_on_seed_gallery_seed_selected)
+			_seed_gallery.closed.connect(_on_seed_gallery_closed)
+		if _chronicle_ledger != null:
+			_chronicle_ledger.bind(_pawn_spawner)
+		if _chronicle_book != null:
+			_chronicle_book.bind(_pawn_spawner)
+		if FootpathMemory != null and FootpathMemory.has_method("bind_context"):
+			FootpathMemory.bind_context(_world, _pawn_spawner)
+		if BuildingUsageTracker != null and BuildingUsageTracker.has_method("bind_context"):
+			BuildingUsageTracker.bind_context(_world, _pawn_spawner)
+		if SnowAccumulation != null and SnowAccumulation.has_method("bind_world"):
+			SnowAccumulation.bind_world(_world)
+		if TimeLapseRecorder != null and TimeLapseRecorder.has_method("bind_context"):
+			TimeLapseRecorder.bind_context(_world, _pawn_spawner, _camera)
 		
 		# Wire BuildToolbar signals
 		if _toolbar != null:
@@ -888,7 +916,7 @@ func _job_channel_for_divergence_log(job_type: int) -> String:
 			return "wood"
 		Job.Type.MINE, Job.Type.MINE_WALL:
 			return "stone"
-		Job.Type.FORAGE, Job.Type.HUNT:
+		Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH:
 			return "food"
 		Job.Type.TRADE_HAUL:
 			return "trade"
@@ -2242,6 +2270,17 @@ func _bootstrap_colony() -> void:
 		_hud.bind(_world, _pawn_spawner)
 	if _chronicle_ledger != null:
 		_chronicle_ledger.bind(_pawn_spawner)
+	if _chronicle_book != null:
+		_chronicle_book.bind(_pawn_spawner)
+	if FootpathMemory != null and FootpathMemory.has_method("bind_context"):
+		FootpathMemory.bind_context(_world, _pawn_spawner)
+	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("bind_context"):
+		BuildingUsageTracker.bind_context(_world, _pawn_spawner)
+	if SnowAccumulation != null and SnowAccumulation.has_method("bind_world"):
+		SnowAccumulation.bind_world(_world)
+	if TimeLapseRecorder != null and TimeLapseRecorder.has_method("bind_context"):
+		TimeLapseRecorder.bind_context(_world, _pawn_spawner, _camera)
+		TimeLapseRecorder.record()
 	_last_generation_tick = GameManager.tick_count
 	RemnantMemory.clear()
 	AgeMemory.clear()
@@ -2601,6 +2640,13 @@ func _on_game_tick(tick: int) -> void:
 	_seed_construction_jobs()
 	section_us["construction_seed"] = Time.get_ticks_usec() - t0
 
+	# Flood events: rain near rivers deposits flood silt; dry weather fades it.
+	if tick % 200 == 0:
+		_tick_flood_events(tick)
+	# Settlement festivals: milestone-driven celebrations for growing colonies.
+	if SettlementMemory != null and tick % 200 == 0 and SettlementMemory.has_method("process_festival_milestones"):
+		SettlementMemory.process_festival_milestones(tick)
+
 	# Settlement leader direct construction: rulers post build jobs based on
 	# settlement needs, bypassing the slow worldbox loop.
 	# DORMANT WORLD: Only runs after first settlement
@@ -2820,6 +2866,14 @@ func _on_game_tick(tick: int) -> void:
 			call_deferred("_flush_road_memory_dirty_tiles")
 	if tick % 10 == 0:
 		_refresh_spatial_profile_overlay()
+	
+	# Auto-save every 6000 ticks (~10 in-game days at 1x)
+	if tick > 0 and tick % 6000 == 0:
+		var snapshot: Dictionary = _build_save_dict()
+		var err: Error = GameSave.write_file(GameSave.DEFAULT_PATH.trim_suffix(".sav") + "_autosave.sav", snapshot)
+		if err == OK and OS.is_debug_build():
+			print("[Main] Auto-saved at tick %d" % tick)
+	
 	_maybe_log_tick_hotspots(tick, section_us)
 
 
@@ -3692,7 +3746,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		Key.KEY_F5:
 			_colony_save()
 		Key.KEY_F8:
-			_colony_load()
+			if event.shift_pressed:
+				_colony_load()
+			elif TimeLapseRecorder != null and TimeLapseRecorder.has_method("toggle_mode"):
+				TimeLapseRecorder.toggle_mode()
+			else:
+				_colony_load()
 		Key.KEY_F9:
 			# PHASE 6: Observer HUD disabled when incarnated (pawns don't see omniscient HUD)
 			if _is_player_incarnated():
@@ -4031,8 +4090,35 @@ func _toggle_timeline_controls() -> void:
 
 
 func _toggle_chronicle_ledger() -> void:
-	if _chronicle_ledger != null:
+	if _chronicle_book != null:
+		_chronicle_book._toggle_visibility()
+	elif _chronicle_ledger != null:
 		_chronicle_ledger._toggle_visibility()
+
+
+func _on_seed_gallery_seed_selected(seed: int) -> void:
+	if WorldRNG != null and WorldRNG.has_method("configure_from_seed"):
+		WorldRNG.configure_from_seed(seed)
+	if FootpathMemory != null and FootpathMemory.has_method("clear"):
+		FootpathMemory.clear()
+	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("clear"):
+		BuildingUsageTracker.clear()
+	if SnowAccumulation != null and SnowAccumulation.has_method("clear"):
+		SnowAccumulation.clear()
+	if TimeLapseRecorder != null and TimeLapseRecorder.has_method("reset_session"):
+		TimeLapseRecorder.reset_session()
+	_reroll_world()
+	_set_player_mode(PlayerMode.SPECTATOR)
+	_update_hud_mode_badge()
+	if TimeLapseRecorder != null and TimeLapseRecorder.has_method("record"):
+		TimeLapseRecorder.record()
+	if _main_menu != null:
+		_main_menu.hide_menu()
+
+
+func _on_seed_gallery_closed() -> void:
+	if _main_menu != null:
+		_main_menu.show_menu()
 
 
 func _toggle_pawn_ai_inspector() -> void:
@@ -5338,6 +5424,14 @@ func _reroll_world() -> void:
 	MythMemory.clear()
 	SacredMemory.clear()
 	PlayerIntentQueue.clear()
+	if FootpathMemory != null and FootpathMemory.has_method("clear"):
+		FootpathMemory.clear()
+	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("clear"):
+		BuildingUsageTracker.clear()
+	if SnowAccumulation != null and SnowAccumulation.has_method("clear"):
+		SnowAccumulation.clear()
+	if TimeLapseRecorder != null and TimeLapseRecorder.has_method("clear"):
+		TimeLapseRecorder.clear()
 	_reset_player_intent_observer_routing()
 	FactionRegistry.clear()
 	ChronicleLog.clear()
@@ -5381,6 +5475,17 @@ func _reroll_world() -> void:
 		_hud.bind(_world, _pawn_spawner)
 	if _chronicle_ledger != null:
 		_chronicle_ledger.bind(_pawn_spawner)
+	if _chronicle_book != null:
+		_chronicle_book.bind(_pawn_spawner)
+	if FootpathMemory != null and FootpathMemory.has_method("bind_context"):
+		FootpathMemory.bind_context(_world, _pawn_spawner)
+	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("bind_context"):
+		BuildingUsageTracker.bind_context(_world, _pawn_spawner)
+	if SnowAccumulation != null and SnowAccumulation.has_method("bind_world"):
+		SnowAccumulation.bind_world(_world)
+	if TimeLapseRecorder != null and TimeLapseRecorder.has_method("bind_context"):
+		TimeLapseRecorder.bind_context(_world, _pawn_spawner, _camera)
+		TimeLapseRecorder.record()
 	_last_generation_tick = GameManager.tick_count
 	_world.set_meta("animal_spawner", _animal_spawner)
 	if is_instance_valid(_world):
@@ -5410,10 +5515,12 @@ func _seed_jobs_for_discovered_area() -> void:
 	var pop: int = PawnSpawner.find_pawns().size()
 	var max_forage: int = maxi(int(ceil(float(pop) * FogOfDiscovery.FOOD_JOBS_PER_PAWN * 0.7)), 3)
 	var max_hunt: int = maxi(int(ceil(float(pop) * FogOfDiscovery.FOOD_JOBS_PER_PAWN * 0.3)), 1)
+	var max_fish: int = maxi(int(ceil(float(pop) * FogOfDiscovery.FOOD_JOBS_PER_PAWN * 0.2)), 1)
 	var max_chop: int = maxi(int(ceil(float(pop) * FogOfDiscovery.WOOD_JOBS_PER_PAWN)), 2)
 	var max_mine: int = maxi(int(ceil(float(pop) * FogOfDiscovery.STONE_JOBS_PER_PAWN)), 1)
 	var forage_posted: int = 0
 	var hunt_posted: int = 0
+	var fish_posted: int = 0
 	var chop_posted: int = 0
 	var mine_posted: int = 0
 	for y in range(WorldData.HEIGHT):
@@ -5438,6 +5545,10 @@ func _seed_jobs_for_discovered_area() -> void:
 				if hunt_posted < max_hunt and not JobManager.has_job_at(tile):
 					if JobManager.post(Job.Type.HUNT, tile) != null:
 						hunt_posted += 1
+			elif feature == TileFeature.Type.RIVER:
+				if fish_posted < max_fish and not JobManager.has_job_at(tile):
+					if JobManager.post(Job.Type.FISH, tile) != null:
+						fish_posted += 1
 
 
 ## Walk the world's feature grid and post initial jobs. Only features on the
@@ -5451,6 +5562,7 @@ func _seed_jobs_from_world() -> void:
 	var mine_tiles: Array[Vector2i] = []
 	var chop_tiles: Array[Vector2i] = []
 	var hunt_tiles: Array[Vector2i] = []
+	var fishing_tiles: Array[Vector2i] = []
 	for y in range(WorldData.HEIGHT):
 		for x in range(WorldData.WIDTH):
 			var f: int = _world.data.get_feature(x, y)
@@ -5462,10 +5574,13 @@ func _seed_jobs_from_world() -> void:
 				chop_tiles.append(Vector2i(x, y))
 			elif TileFeature.is_wildlife(f):
 				hunt_tiles.append(Vector2i(x, y))
+			elif f == TileFeature.Type.RIVER:
+				fishing_tiles.append(Vector2i(x, y))
 	_sort_tiles_by_seeded_order(forage_tiles, &"seed_jobs:forage")
 	_sort_tiles_by_seeded_order(mine_tiles, &"seed_jobs:mine")
 	_sort_tiles_by_seeded_order(chop_tiles, &"seed_jobs:chop")
 	_sort_tiles_by_seeded_order(hunt_tiles, &"seed_jobs:hunt")
+	_sort_tiles_by_seeded_order(fishing_tiles, &"seed_jobs:fish")
 	var forage_posted: int = 0
 	var forage_skipped: int = 0
 	var mine_posted: int = 0
@@ -5474,6 +5589,7 @@ func _seed_jobs_from_world() -> void:
 	var chop_skipped: int = 0
 	var hunt_posted: int = 0
 	var hunt_skipped: int = 0
+	var fish_posted: int = 0
 	for tile in forage_tiles:
 		if forage_posted >= MAX_FORAGE_JOBS:
 			break
@@ -5566,11 +5682,22 @@ func _seed_jobs_from_world() -> void:
 					var expiry_hs: int = int(_job_post_cooldowns.get(_tile_job_key(tile), 0))
 					var rem_hs: int = expiry_hs - GameManager.tick_count
 					print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.HUNT), tile, rem_hs])
+	# FISH: river tiles -- pawn stands on or next to river
+	for tile in fishing_tiles:
+		if fish_posted >= MAX_FISH_JOBS:
+			break
+		if _world.pathfinder.component_of(tile) != main_component:
+			continue
+		if _can_post_job_at(tile):
+			var fj: Job = JobManager.post(Job.Type.FISH, tile, FISH_PRIORITY, FISH_WORK_TICKS)
+			if fj != null:
+				_set_job_post_cooldown(tile)
+				fish_posted += 1
 	if OS.is_debug_build():
 		print(
-				"[Main] Seeded jobs: %d forage, %d mine, %d chop, %d hunt  (pool: %d fertile / %d ore / %d tree / %d wildlife; skipped: F%d M%d C%d H%d off-mainland)" %
-				[forage_posted, mine_posted, chop_posted, hunt_posted,
-					forage_tiles.size(), mine_tiles.size(), chop_tiles.size(), hunt_tiles.size(),
+				"[Main] Seeded jobs: %d forage, %d mine, %d chop, %d hunt, %d fish  (pool: %d fertile / %d ore / %d tree / %d wildlife / %d river; skipped: F%d M%d C%d H%d off-mainland)" %
+				[forage_posted, mine_posted, chop_posted, hunt_posted, fish_posted,
+					forage_tiles.size(), mine_tiles.size(), chop_tiles.size(), hunt_tiles.size(), fishing_tiles.size(),
 					forage_skipped, mine_skipped, chop_skipped, hunt_skipped]
 		)
 
@@ -5733,11 +5860,19 @@ func _seed_construction_jobs() -> void:
 		# Priority 6: Cook food if fire pit exists and raw food available
 		if hearths > 0 and jobs_this_settlement < 20:
 			var meat_count: int = StockpileManager.total_count_of(Item.Type.MEAT)
+			var fish_count: int = StockpileManager.total_count_of(Item.Type.FISH)
 			var berry_count: int = StockpileManager.total_count_of(Item.Type.BERRY)
 			if meat_count > 0:
 				var t: Vector2i = _find_hearth_tile_near(center_tile, 8)
 				if t.x >= 0 and not JobManager.has_job_at(t):
 					var j: Job = JobManager.post(Job.Type.COOK_MEAT, t, 4, 8)
+					if j != null:
+						posted += 1
+						jobs_this_settlement += 1
+			elif fish_count > 0:
+				var t: Vector2i = _find_hearth_tile_near(center_tile, 8)
+				if t.x >= 0 and not JobManager.has_job_at(t):
+					var j: Job = JobManager.post(Job.Type.COOK_FISH, t, 4, 6)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -6350,6 +6485,72 @@ func _on_job_completed(job: Job) -> void:
 				if job.work_ticks_needed >= HUNT_DEER_WORK_TICKS \
 				else TileFeature.Type.RABBIT
 			_queue_regrowth(job.tile, species, _regrow_ticks_for(species))
+		Job.Type.FISH:
+			# RIVER tiles persist, cooldown prevents over-fishing
+			_set_job_post_cooldown(job.tile, FISH_COOLDOWN_TICKS)
+			pass
+
+
+# ==================== flood events ====================
+
+## Tick flood events: during rain, rivers can overflow onto adjacent tiles.
+## Flood deposits boost fertility temporarily and fade when dry.
+## Runs every 200 ticks to avoid per-tick cost.
+var _flood_scan_count: int = 0
+
+func _tick_flood_events(tick: int) -> void:
+	if _world == null or _world.data == null:
+		return
+	var wd = _world.data
+	var is_raining: bool = _weather_overlay != null and _weather_overlay._current_weather == "rain"
+	var is_dry: bool = _weather_overlay != null and _weather_overlay._current_weather == "none"
+	
+	# During rain: scan a limited number of river tiles for flood deposit
+	if is_raining:
+		# Only process a few tiles per tick to spread cost
+		var scan_budget: int = 20
+		var scanned: int = 0
+		for y in range(WorldData.HEIGHT):
+			for x in range(WorldData.WIDTH):
+				if scanned >= scan_budget:
+					break
+				var tile: Vector2i = Vector2i(x, y)
+				# Deterministic offset so different tiles get scanned each call
+				var check_x: int = (x + _flood_scan_count) % WorldData.WIDTH
+				var check_y: int = (y + _flood_scan_count // WorldData.WIDTH) % WorldData.HEIGHT
+				if wd.get_feature(check_x, check_y) == TileFeature.Type.RIVER:
+					# Flood adjacent fertile tiles
+					for dx in [-1, 0, 1]:
+						for dy in [-1, 0, 1]:
+							if dx == 0 and dy == 0:
+								continue
+							var nx: int = check_x + dx
+							var ny: int = check_y + dy
+							if not wd.in_bounds(nx, ny):
+								continue
+							# Only flood empty passable tiles (not buildings)
+							var nidx: int = wd.index(nx, ny)
+							if wd.features[nidx] == TileFeature.Type.NONE:
+								if wd.is_passable(nx, ny):
+									wd.features[nidx] = TileFeature.Type.FLOOD_DEPOSIT
+									scanned += 1
+									if scanned >= scan_budget:
+										break
+					if scanned >= scan_budget:
+						break
+			if scanned >= scan_budget:
+				break
+		_flood_scan_count = (_flood_scan_count + 1) % 256
+	else:
+		# Dry weather: gradually fade flood deposits
+		var fade_budget: int = 10
+		for y in range(WorldData.HEIGHT):
+			for x in range(WorldData.WIDTH):
+				if fade_budget <= 0:
+					break
+				if wd.get_feature(x, y) == TileFeature.Type.FLOOD_DEPOSIT:
+					wd.features[wd.index(x, y)] = TileFeature.Type.NONE
+					fade_budget -= 1
 
 
 # ==================== regrowth ====================
@@ -7164,6 +7365,11 @@ func _on_load_slot(slot: int) -> void:
 
 
 func _on_new_game() -> void:
+	if _seed_gallery != null:
+		_seed_gallery.show_gallery(WorldRNG.current_seed() if WorldRNG != null else 0)
+		if _main_menu != null:
+			_main_menu.hide_menu()
+		return
 	if OS.is_debug_build():
 		_reroll_world()
 	_set_player_mode(PlayerMode.SPECTATOR)
@@ -7312,6 +7518,14 @@ func _apply_save_dict(s: Dictionary) -> void:
 	AgeMemory.clear()
 	SacredMemory.clear()
 	PlayerIntentQueue.clear()
+	if FootpathMemory != null and FootpathMemory.has_method("clear"):
+		FootpathMemory.clear()
+	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("clear"):
+		BuildingUsageTracker.clear()
+	if SnowAccumulation != null and SnowAccumulation.has_method("clear"):
+		SnowAccumulation.clear()
+	if TimeLapseRecorder != null and TimeLapseRecorder.has_method("clear"):
+		TimeLapseRecorder.clear()
 	FactionRegistry.clear()
 	ChronicleLog.clear()
 	_set_designation_mode(DesignationMode.NONE)

@@ -109,6 +109,7 @@ static func generate(world_seed: int) -> WorldData:
 		)
 
 	_scatter_features(data, world_seed)
+	_scatter_rivers(data, world_seed)
 	return data
 
 
@@ -277,6 +278,110 @@ static func _scatter_single(
 		if pos.x < 0:
 			continue
 		data.features[data.index(pos.x, pos.y)] = feature
+
+
+## River quality cache: maps river tile -> quality (0.3-1.0) for fishing yield.
+## Populated during _scatter_rivers, read by fishing code for deep-pool bonuses.
+static var _river_quality_cache: Dictionary = {}
+
+## Get river quality for a tile, or 0.5 if not a river.
+static func river_quality(tile: Vector2i) -> float:
+	return float(_river_quality_cache.get(tile, 0.5))
+
+
+## Generate rivers flowing from mountain/highland areas toward the coast (WATER tiles).
+## Uses a simple flow model: start at mountain ridge, follow steepest descent.
+static func _scatter_rivers(data: WorldData, world_seed: int) -> void:
+	_river_quality_cache.clear()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = world_seed ^ 0xFEEDBEEF
+	var river_count: int = 4 + rng.randi() % 4  # 4-7 rivers
+
+	for ri in range(river_count):
+		# Find a starting point in mountains or high-elevation plains
+		var start: Vector2i = _find_river_start(data, rng)
+		if start.x < 0:
+			continue
+		var cx: int = start.x
+		var cy: int = start.y
+		var length: int = 0
+		var max_length: int = 60 + rng.randi() % 40
+		var avoid: Array = [start]
+		
+		while length < max_length:
+			var idx: int = data.index(cx, cy)
+			# Don't carve through buildings
+			if data.features[idx] != TileFeature.Type.NONE and data.features[idx] < TileFeature.Type.RIVER:
+				break
+	# Mark as river
+	data.features[idx] = TileFeature.Type.RIVER
+	# Store river quality (deep pool vs shallow) in a deterministic way
+	# Quality 0.3-1.0 based on position hash; higher = better fishing
+	var quality: float = 0.3 + float((cx * 73856093 + cy * 19349663 + ri * 83492791) % 1000) / 1000.0 * 0.7
+	_river_quality_cache[Vector2i(cx, cy)] = quality
+	# Find lowest neighbor (flow downhill)
+			var best: Vector2i = Vector2i(-1, -1)
+			var best_elev: float = 1.0
+			for dx in [-1, 0, 1]:
+				for dy in [-1, 0, 1]:
+					if dx == 0 and dy == 0:
+						continue
+					var nx: int = cx + dx
+					var ny: int = cy + dy
+					if not data.in_bounds(nx, ny):
+						continue
+					if Vector2i(nx, ny) in avoid:
+						continue
+					var nidx: int = data.index(nx, ny)
+					var elev: float = data.elevation[nidx]
+					if elev < best_elev:
+						best_elev = elev
+						best = Vector2i(nx, ny)
+			if best.x < 0 or best_elev >= 0.15:  # Flowing into water or reached coast
+				# At coast, set the last tile as river mouth
+				for dx in [-1, 0, 1]:
+					for dy in [-1, 0, 1]:
+						var nx: int = cx + dx
+						var ny: int = cy + dy
+						if not data.in_bounds(nx, ny):
+							continue
+						if data.biomes[data.index(nx, ny)] == Biome.Type.WATER:
+							data.features[data.index(nx, ny)] = TileFeature.Type.RIVER
+							length = max_length  # End
+							best = Vector2i(-1, -1)
+							break
+				if best.x < 0:
+					break
+			# Add some randomness - occasionally don't follow strict gradient
+			if rng.randf() < 0.15:
+				best = Vector2i(cx + rng.randi_range(-1, 1), cy + rng.randi_range(-1, 1))
+				if not data.in_bounds(best.x, best.y):
+					best = Vector2i(cx, cy + 1)
+			avoid.append(best)
+			cx = best.x
+			cy = best.y
+			length += 1
+
+
+## Find a good starting tile for a river (mountain edge or high elevation)
+static func _find_river_start(data: WorldData, rng: RandomNumberGenerator) -> Vector2i:
+	for _try in range(120):
+		var tx: int = rng.randi_range(5, WorldData.WIDTH - 6)
+		var ty: int = rng.randi_range(5, WorldData.HEIGHT - 6)
+		var idx: int = data.index(tx, ty)
+		if data.biomes[idx] == Biome.Type.MOUNTAIN or data.elevation[idx] > 0.75:
+			# Check that there's a lower-elevation neighbor (water or plains)
+			for dx in [-1, 0, 1]:
+				for dy in [-1, 0, 1]:
+					if dx == 0 and dy == 0:
+						continue
+					var nx: int = tx + dx
+					var ny: int = ty + dy
+					if not data.in_bounds(nx, ny):
+						continue
+					if data.elevation[data.index(nx, ny)] < data.elevation[idx] * 0.8:
+						return Vector2i(tx, ty)
+	return Vector2i(-1, -1)
 
 
 static func _find_random_tile_of_biomes(

@@ -256,7 +256,7 @@ func get_job_bubble_text(job_type: int) -> String:
 		Job.Type.HUNT: return "Hunting"
 		Job.Type.PLANT_SEEDS: return "Planting"
 		Job.Type.HARVEST_CROPS: return "Harvesting"
-		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES: return "Cooking"
+		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH: return "Cooking"
 		Job.Type.DRY_MEAT: return "Preserving"
 		Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_TORCH, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR: return "Crafting"
 		Job.Type.GATHER_FLINT, Job.Type.GATHER_STICK: return "Gathering"

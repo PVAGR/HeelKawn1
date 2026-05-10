@@ -847,9 +847,9 @@ static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, ident
 	var drive: String = str(profile.get("development_drive", "serve_settlement"))
 	match drive:
 		"survive":
-			_add_bias(biases, [Job.Type.FORAGE, Job.Type.HUNT, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.DRY_MEAT, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS, Job.Type.GROW_FOOD], 8)
+			_add_bias(biases, [Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH, Job.Type.DRY_MEAT, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS, Job.Type.GROW_FOOD], 8)
 			if data.hunger < 45.0:
-				_add_bias(biases, [Job.Type.FORAGE, Job.Type.HUNT, Job.Type.HARVEST_CROPS, Job.Type.GROW_FOOD], 4)
+				_add_bias(biases, [Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH, Job.Type.HARVEST_CROPS, Job.Type.GROW_FOOD], 4)
 			if data.rest < 45.0 or data.health < 55.0:
 				_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH], 3)
 		"recover":
@@ -865,7 +865,7 @@ static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, ident
 			_add_skill_practice_bias(biases, profile, 7)
 			_add_profession_practice_bias(biases, int(data.current_profession), 3)
 		"bond":
-			_add_bias(biases, [Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP, Job.Type.TRADE_HAUL, Job.Type.BUILD_HEARTH, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES], 6)
+			_add_bias(biases, [Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP, Job.Type.TRADE_HAUL, Job.Type.BUILD_HEARTH, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH], 6)
 		"innovate":
 			_add_bias(biases, [Job.Type.TOOL_MAKING, Job.Type.PAPER_MAKING, Job.Type.INK_MAKING, Job.Type.BOOK_BINDING, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_SHRINE], 8)
 			_add_bias(biases, [Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.CARVE_LEDGER_STONE], 3)
@@ -883,7 +883,7 @@ static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, ident
 static func _add_settlement_service_bias(biases: Dictionary, profile: Dictionary) -> void:
 	var axes: Dictionary = profile.get("axes", {})
 	if int(axes.get("survival", 100)) < 70:
-		_add_bias(biases, [Job.Type.FORAGE, Job.Type.HUNT, Job.Type.GROW_FOOD, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS], 4)
+		_add_bias(biases, [Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH, Job.Type.GROW_FOOD, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS], 4)
 	if int(axes.get("innovation", 0)) >= 50:
 		_add_bias(biases, [Job.Type.TOOL_MAKING, Job.Type.BUILD_STORAGE_HUT, Job.Type.BOOK_BINDING], 3)
 	if int(axes.get("preservation", 0)) < 45:
@@ -902,7 +902,7 @@ static func _add_human_scale_biases(biases: Dictionary, profile: Dictionary, dat
 
 	match next_level:
 		"family":
-			_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_HEARTH, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.TEACH_SKILL], 6)
+			_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_HEARTH, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH, Job.Type.TEACH_SKILL], 6)
 			if family_score < 25:
 				_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_HEARTH], 3)
 		"clan":
@@ -941,7 +941,7 @@ static func _add_skill_practice_bias(biases: Dictionary, profile: Dictionary, am
 		"healing":
 			_add_bias(biases, [Job.Type.COOK_BERRIES, Job.Type.BUILD_HEARTH, Job.Type.TEACH_SKILL], amount)
 		"hunting":
-			_add_bias(biases, [Job.Type.HUNT, Job.Type.CRAFT_SPEAR, Job.Type.PROTECT, Job.Type.DEFEND, Job.Type.DRY_MEAT, Job.Type.COOK_MEAT], amount)
+			_add_bias(biases, [Job.Type.HUNT, Job.Type.CRAFT_SPEAR, Job.Type.PROTECT, Job.Type.DEFEND, Job.Type.DRY_MEAT, Job.Type.COOK_MEAT, Job.Type.COOK_FISH], amount)
 		_:
 			_add_bias(biases, [Job.Type.FORAGE, Job.Type.CHOP, Job.Type.BUILD_BED], maxi(1, amount / 2))
 
@@ -989,7 +989,7 @@ static func _add_identity_trait_biases(biases: Dictionary, identity: HeelKawnian
 	if mentor_drive > 0:
 		_add_bias(biases, [Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP], mentor_drive)
 	if social_memory > 0:
-		_add_bias(biases, [Job.Type.TRADE_HAUL, Job.Type.BUILD_HEARTH, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES], social_memory)
+		_add_bias(biases, [Job.Type.TRADE_HAUL, Job.Type.BUILD_HEARTH, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH], social_memory)
 
 
 static func _add_bias(biases: Dictionary, job_types: Array, amount: int) -> void:

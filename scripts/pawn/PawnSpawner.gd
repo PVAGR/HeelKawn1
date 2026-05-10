@@ -702,6 +702,19 @@ func spawn_child_pawn(
 	for sk in parent_a.skills.keys():
 		var inherited: int = int((int(parent_a.skills[sk]) + int(parent_b.skills.get(sk, 0))) * 0.2)
 		data.skills[sk] = inherited
+	# Generational trauma inheritance: transfer 20-40% of parent trauma to child
+	data.parent_id = parent_a.id
+	var pc: Node = get_node_or_null("/root/PawnConsciousness")
+	if pc != null and pc.has_method("get_trauma_level"):
+		var parent_a_trauma: float = float(pc.call("get_trauma_level", int(parent_a.id)))
+		var parent_b_trauma: float = float(pc.call("get_trauma_level", int(parent_b.id)))
+		var avg_trauma: float = (parent_a_trauma + parent_b_trauma) / 2.0
+		var transfer_ratio: float = 0.2 + (absi(birth_tick * 13 + parent_a.id * 7 + parent_b.id * 11) % 21) / 100.0
+		transfer_ratio = clampf(transfer_ratio, 0.2, 0.4)
+		var child_trauma: float = avg_trauma * transfer_ratio
+		data.inherited_trauma["starvation_fear"] = clampf(child_trauma / 100.0, 0.0, 1.0)
+		data.inherited_trauma["violence_aversion"] = clampf((child_trauma * 0.8) / 100.0, 0.0, 1.0)
+		data.inherited_trauma["loss_grief"] = clampf((child_trauma * 1.2) / 100.0, 0.0, 1.0)
 	var pawn: HeelKawnian = pawn_scene.instantiate() as HeelKawnian
 	pawn.data = data
 	pawn.position = world.tile_to_world(tile)

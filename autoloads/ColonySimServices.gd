@@ -133,7 +133,7 @@ func job_priority_stance_bias(job: Job) -> int:
 		LaborStance.BALANCED:
 			return 0
 		LaborStance.FOOD_FIRST:
-			if job.type == Job.Type.FORAGE or job.type == Job.Type.HUNT:
+			if job.type == Job.Type.FORAGE or job.type == Job.Type.HUNT or job.type == Job.Type.FISH:
 				return 3
 			return 0
 		LaborStance.BUILD_FIRST:
@@ -145,7 +145,7 @@ func job_priority_stance_bias(job: Job) -> int:
 			# Pawns that already carry re-route in `_tick_idle`; this biases fetch jobs.
 			match job.type:
 				Job.Type.FORAGE, Job.Type.MINE, Job.Type.CHOP, Job.Type.MINE_WALL, \
-				Job.Type.HUNT, Job.Type.TRADE_HAUL:
+				Job.Type.HUNT, Job.Type.FISH, Job.Type.TRADE_HAUL:
 					return 2
 			return 0
 	return 0

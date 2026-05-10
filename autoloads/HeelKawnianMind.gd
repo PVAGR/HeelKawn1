@@ -501,8 +501,7 @@ func _pursuit_for_job(job_type: int) -> String:
 			return "Carve a marker stone"
 		_Job.Type.BUILD_SHRINE:
 			return "Build a shrine"
-		_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES:
-			return "Cook food"
+		_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH:
 		_Job.Type.DRY_MEAT:
 			return "Preserve meat"
 		_Job.Type.PLANT_SEEDS:

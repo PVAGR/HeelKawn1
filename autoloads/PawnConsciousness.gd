@@ -249,15 +249,33 @@ func _generate_dream(pawn: Node) -> void:
 	var dream_content: String = dream_themes[dream_idx]
 
 	# Create dream
+	var dream_nudge: Dictionary = _dream_nudge_from_theme(theme, dream_content, pawn_id, tick)
 	var dream: Dictionary = {
 		"tick": tick,
 		"theme": theme,
 		"content": dream_content,
 		"emotion": emotion_sum / float(recent_memories.size()),
-		"lucid": _stable_randf(pawn_id, tick, 1) < (float(consciousness.self_awareness) / 5.0)  # Higher awareness = more lucid dreams
+		"lucid": _stable_randf(pawn_id, tick, 1) < (float(consciousness.self_awareness) / 5.0),  # Higher awareness = more lucid dreams
+		"nudge": dream_nudge,
 	}
 	
+	# Prophetic dream: nudge toward exploration
+	if _stable_randf(pawn_id, tick, 7) < 0.15:
+		var dirs: Array[Vector2i] = [Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1)]
+		var dir_index: int = absi(pawn_id * 37 + 13) % dirs.size()
+		var dream_dir: Vector2i = dirs[dir_index]
+		var distance: int = 10 + (absi(pawn_id * 7) % 40)
+		var dir_names: Array[String] = ["east", "west", "south", "north"]
+		var prophetic: Dictionary = {
+			"type": "prophetic_dream",
+			"direction": {"x": dream_dir.x, "y": dream_dir.y},
+			"distance": distance,
+			"description": "A vision of open land to the %s" % dir_names[dir_index],
+		}
+		dream["prophetic"] = prophetic
+	
 	consciousness.dreams.append(dream)
+	consciousness.dream_nudge = dream_nudge
 	
 	# Record significant dreams
 	if abs(dream.emotion) > 50 or dream.lucid:
@@ -275,6 +293,20 @@ func get_dreams(pawn_id: int, limit: int = 5) -> Array:
 		return dreams.slice(0, limit)
 
 	return dreams
+
+
+func get_dream_nudge(pawn_id: int) -> Dictionary:
+	_init_consciousness(pawn_id)
+	var consciousness: Dictionary = pawn_consciousness[str(pawn_id)]
+	var dreams: Array = consciousness.dreams
+	if dreams.is_empty():
+		return {}
+	var latest: Variant = dreams[dreams.size() - 1]
+	if latest is not Dictionary:
+		return {}
+	var latest_dream: Dictionary = latest as Dictionary
+	var nudge: Variant = latest_dream.get("nudge", {})
+	return nudge if nudge is Dictionary else {}
 
 
 # ==================== TRAUMA SYSTEM ====================
@@ -422,6 +454,7 @@ func _init_consciousness(pawn_id: int) -> void:
 			"pawn_id": pawn_id,
 			"memories": [],
 			"dreams": [],
+			"dream_nudge": {},
 			"trauma_level": 0.0,
 			"growth_points": 0,
 			"self_awareness": 0,
@@ -458,8 +491,30 @@ func _record_dream_to_world(pawn_id: int, dream: Dictionary) -> void:
 		"content": dream.content,
 		"emotion": dream.emotion,
 		"lucid": dream.lucid,
+		"nudge": dream.get("nudge", {}),
 		"tick": dream.tick
 	})
+
+
+func _dream_nudge_from_theme(theme: String, dream_content: String, pawn_id: int, tick: int) -> Dictionary:
+	var action: String = "wander"
+	if theme == "trauma" or dream_content.findn("lost") >= 0:
+		action = "rest"
+	elif theme == "survival":
+		action = "forage"
+	elif theme == "social":
+		action = "socialize"
+	elif theme == "achievement":
+		action = "work"
+	elif theme == "desire":
+		action = "wander"
+	var intensity: float = 0.35 + (_stable_randf(pawn_id, tick, 2) * 0.45)
+	return {
+		"action": action,
+		"intensity": intensity,
+		"theme": theme,
+		"target": dream_content,
+	}
 
 
 # ==================== PUBLIC API ====================

@@ -80,6 +80,8 @@ func recompute(world: World) -> void:
 	var food_total: int = 0
 	food_total += StockpileManager.total_count_of(int(Item.Type.BERRY))
 	food_total += StockpileManager.total_count_of(int(Item.Type.MEAT))
+	food_total += StockpileManager.total_count_of(int(Item.Type.FISH))
+	food_total += StockpileManager.total_count_of(int(Item.Type.COOKED_FISH))
 	var need_food: float = float(1 + pawns_alive * 3)
 	var food_p: float = 0.0
 	if need_food > 0.0:

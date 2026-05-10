@@ -54,6 +54,7 @@ const SKILLS_ORDER: Array = [
 ## (field on HeelKawnianData, checkbox label) — maps queue job categories to human text.
 const WORK_CHECKS: Array = [
 	{"field": "work_forage", "text": "Forage / gather"},
+	{"field": "work_fish",   "text": "Fish"},
 	{"field": "work_mine",   "text": "Mine / tunnel"},
 	{"field": "work_chop",   "text": "Chop wood"},
 	{"field": "work_hunt",   "text": "Hunt animals"},
@@ -820,6 +821,8 @@ func _on_work_toggled(field: String, pressed: bool) -> void:
 	match field:
 		"work_forage":
 			d.work_forage = pressed
+		"work_fish":
+			d.work_fish = pressed
 		"work_mine":
 			d.work_mine = pressed
 		"work_chop":
@@ -834,6 +837,8 @@ static func _read_work_field(d: HeelKawnianData, field: String) -> bool:
 	match field:
 		"work_forage":
 			return d.work_forage
+		"work_fish":
+			return d.work_fish
 		"work_mine":
 			return d.work_mine
 		"work_chop":
@@ -1623,6 +1628,14 @@ func _generate_pawn_narrative(pawn: HeelKawnian) -> String:
 		text += "[color=#FF9F6B][b]👨‍👩‍👧‍👦 FAMILY:[/b][/color]\n"
 		text += "  %s\n\n" % family_text
 	
+	# Memoir / pilgrim memory
+	var memoir_text: String = _get_pawn_memoir_summary(int(d.id))
+	if memoir_text != "":
+		text += "[color=#9AD0FF][b]📖 MEMOIR:[/b][/color]\n"
+		for line in memoir_text.split("\n"):
+			text += "  [color=#888888]•[/color] %s\n" % line
+		text += "\n"
+	
 	# Legacy preview (Phase 7)
 	var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
 	if legacy_sys != null and legacy_sys.has_method("get_legacy_entry"):
@@ -1632,6 +1645,23 @@ func _generate_pawn_narrative(pawn: HeelKawnian) -> String:
 			text += "[color=#FFD166][b]⭐ LEGACY SCORE:[/b][/color] [color=#FFD166]%d[/color]\n" % score
 	
 	return text
+
+
+func _get_pawn_memoir_summary(pawn_id: int) -> String:
+	var lines: Array[String] = []
+	var events: Array = _get_pawn_events(pawn_id, 3)
+	for ev in events:
+		var event_text: String = _format_event(ev)
+		if event_text != "":
+			lines.append(event_text)
+	if MemorialSystem != null and MemorialSystem.has_method("get_memorial_for_pilgrimage"):
+		var memorial: Dictionary = MemorialSystem.get_memorial_for_pilgrimage(pawn_id)
+		if not memorial.is_empty():
+			var tile: Vector2i = memorial.get("tile", Vector2i.ZERO)
+			lines.append("Memorial pilgrimage: %s at %s" % [str(memorial.get("memorial_type", "memorial")), _format_tile_pos(tile)])
+	if lines.is_empty():
+		return ""
+	return "\n".join(lines)
 
 
 ## Get human-readable activity description from pawn state.
@@ -1799,6 +1829,16 @@ func _get_item_name(item_type: int) -> String:
 			return "cooked berries"
 		Item.Type.DRIED_MEAT:
 			return "dried meat"
+		Item.Type.FISH:
+			return "fish"
+		Item.Type.COOKED_FISH:
+			return "cooked fish"
+		Item.Type.BONE:
+			return "bone"
+		Item.Type.STONE_ARROW:
+			return "stone arrow"
+		Item.Type.BONE_ARROW:
+			return "bone arrow"
 		_:
 			return "item"
 

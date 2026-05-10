@@ -241,8 +241,14 @@ func start_apprenticeship(teacher_id: int, apprentice_id: int, knowledge_type: K
 
 func complete_teaching(teacher_id: int, apprentice_id: int, knowledge_type: KnowledgeType, success: bool) -> void:
 	if success:
-		add_knowledge_carrier(apprentice_id, knowledge_type)
-		_record_teaching_success(teacher_id, apprentice_id, knowledge_type)
+		if WorldRNG.chance_for(StringName("knowledge_distortion:%d:%d:%d" % [teacher_id, apprentice_id, int(knowledge_type)]), 0.18, GameManager.tick_count + teacher_id + apprentice_id + int(knowledge_type)):
+			var mutated_type: KnowledgeType = _mutate_knowledge_type(knowledge_type, teacher_id, apprentice_id)
+			add_knowledge_carrier(apprentice_id, mutated_type)
+			_record_teaching_success(teacher_id, apprentice_id, mutated_type)
+			_record_teaching_distortion(teacher_id, apprentice_id, mutated_type)
+		else:
+			add_knowledge_carrier(apprentice_id, knowledge_type)
+			_record_teaching_success(teacher_id, apprentice_id, knowledge_type)
 	else:
 		_record_teaching_failure(teacher_id, apprentice_id, knowledge_type)
 
@@ -364,14 +370,15 @@ func _check_rediscovery_opportunities() -> void:
 
 # === Record Carriers (Phase 5: Knowledge Preservation) ===
 
-func inscribe_knowledge_on_stone(tile: Vector2i, knowledge_types: Array, inscriber_id: int, carrier_type: String = "knowledge_stone") -> void:
+func inscribe_knowledge_on_stone(tile: Vector2i, knowledge_types: Array, inscriber_id: int, carrier_type: String = "knowledge_stone", last_words: String = "") -> void:
 	# Inscribe knowledge onto a physical record carrier (stone, grave, ledger)
 	var tile_key: String = "%d,%d" % [tile.x, tile.y]
 	record_carriers[tile_key] = {
 		"knowledge_types": knowledge_types.duplicate(),
 		"inscribed_tick": GameManager.tick_count,
 		"inscriber_id": inscriber_id,
-		"carrier_type": carrier_type
+		"carrier_type": carrier_type,
+		"last_words": last_words,
 	}
 	# Record inscription event
 	WorldMemory.record_event({
@@ -525,9 +532,12 @@ func get_knowledge_stone_text(tile: Vector2i) -> String:
 	text += "\n"
 	
 	# Epitaph based on carrier type
+	var last_words: String = str(carrier.get("last_words", ""))
 	match carrier_type:
 		"grave_marker":
-			text += "[color=#888888]\"Here rests %s. Their memory endures.\"[/color]" % inscriber_name
+			text += "[color=#888888]\"Here rests %s. Their memory endures.\"[/color]\n" % inscriber_name
+			if not last_words.is_empty():
+				text += "\n[color=#FF6B6B][i]\"%s\"[/i][/color]" % last_words
 		"knowledge_stone":
 			text += "[color=#888888]\"Knowledge preserved, that it might not be lost.\"[/color]"
 		"ledger_stone":
@@ -570,6 +580,40 @@ func _get_knowledge_type_name(kt: int) -> String:
 		_: return "Unknown Knowledge #%d" % kt
 
 # === Helper Functions ===
+
+## Find ruined/abandoned settlements near a tile within [param radius] tiles.
+func get_echo_ruins_near(tile: Vector2i, radius: int) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var sm: Node = get_node_or_null("/root/SettlementMemory")
+	if sm == null:
+		return result
+	if not sm.has_method("get_settlements"):
+		return result
+	if not sm.has_method("get_state_at_region"):
+		return result
+	var settlements: Array = sm.get_settlements()
+	for st in settlements:
+		if not (st is Dictionary):
+			continue
+		var d: Dictionary = st as Dictionary
+		var state: String = str(d.get("state", ""))
+		if state != "abandoned" and state != "permanently_abandoned":
+			continue
+		var center_rk: int = int(d.get("center_region", -1))
+		if center_rk < 0:
+			continue
+		var center_tile: Vector2i = _region_key_to_tile(center_rk)
+		var dist: float = Vector2i(tile - center_tile).length()
+		if dist <= float(radius):
+			result.append({
+				"center_region": center_rk,
+				"name": str(d.get("name", "Ruins")),
+				"state": state,
+				"position": center_tile,
+				"distance": int(dist),
+			})
+	return result
+
 
 func _get_nearby_knowledge_carriers(_tile: Vector2i, knowledge_type: KnowledgeType, _radius: int) -> Array[int]:
 	var nearby: Array[int] = []
@@ -676,6 +720,122 @@ func _record_teaching_failure(teacher_id: int, apprentice_id: int, knowledge_typ
 		"tick": GameManager.tick_count
 	}
 	WorldMemory.record_event(event)
+
+func _record_teaching_distortion(teacher_id: int, apprentice_id: int, knowledge_type: KnowledgeType) -> void:
+	var note: String = _teaching_distortion_phrase(knowledge_type, teacher_id, apprentice_id)
+	var record: Dictionary = {
+		"teacher_id": teacher_id,
+		"apprentice_id": apprentice_id,
+		"knowledge_type": knowledge_type,
+		"success": true,
+		"distorted": true,
+		"distortion": note,
+		"tick": GameManager.tick_count
+	}
+	teaching_records.append(record)
+	if not knowledge_genealogy.has(knowledge_type):
+		knowledge_genealogy[knowledge_type] = []
+	knowledge_genealogy[knowledge_type].append({
+		"teacher_id": teacher_id,
+		"student_id": apprentice_id,
+		"tick": GameManager.tick_count,
+		"distorted": true,
+		"distortion": note,
+	})
+	WorldMemory.record_event({
+		"type": "teaching_distortion",
+		"teacher_id": teacher_id,
+		"apprentice_id": apprentice_id,
+		"knowledge_type": knowledge_type,
+		"distortion": note,
+		"tick": GameManager.tick_count,
+	})
+
+func _teaching_distortion_phrase(knowledge_type: KnowledgeType, teacher_id: int, apprentice_id: int) -> String:
+	var settlement_culture: String = "generic"
+	var sid: int = _settlement_id_for_pawn(teacher_id)
+	if sid >= 0 and SettlementMemory != null:
+		var profile: Dictionary = SettlementMemory.get_settlement_profile(sid)
+		settlement_culture = str(profile.get("culture_name", "generic"))
+	var phrases: Array[String] = []
+	match settlement_culture:
+		"defensive":
+			phrases = [
+				"retold as a warning against outsiders",
+				"spoken only in whispers near the walls",
+				"twisted by fear of the unknown",
+				"remembered with clenched fists",
+				"passed down as a cautionary tale",
+			]
+		"open":
+			phrases = [
+				"embellished with generous detail",
+				"shared freely with newcomers",
+				"made warmer in the retelling",
+				"expanded to include everyone's version",
+				"softened by kindness",
+			]
+		"cautious":
+			phrases = [
+				"measured and carefully pruned",
+				"hedged with uncertainty",
+				"qualified with 'perhaps' and 'maybe'",
+				"preserved but doubted",
+				"held back for the right ears",
+			]
+		_:
+			phrases = [
+				"retold with sharper edges",
+				"remembered as a warning",
+				"folded into ritual language",
+				"shifted by the listener's fear",
+				"made gentler for the child",
+			]
+	var idx: int = abs(int(teacher_id) * 17 + int(apprentice_id) * 11 + int(knowledge_type) * 7 + GameManager.tick_count) % phrases.size()
+	return str(phrases[idx])
+
+func _mutate_knowledge_type(kt: KnowledgeType, teacher_id: int, apprentice_id: int) -> KnowledgeType:
+	var seed_val: int = absi(teacher_id * 1009 + apprentice_id * 131 + int(kt) * 37 + GameManager.tick_count)
+	var roll: int = seed_val % 100
+	
+	# 10% chance to shift to adjacent enum value
+	if roll < 10:
+		var values: Array = KnowledgeType.values()
+		var idx: int = int(kt)
+		var adj_idx: int = idx + (1 if (seed_val % 2) == 0 else -1)
+		adj_idx = clampi(adj_idx, 0, values.size() - 1)
+		if adj_idx != idx:
+			return values[adj_idx] as KnowledgeType
+	
+	# 5% chance to shift to semantically related type
+	if roll < 15:
+		var semantic_map: Dictionary = {
+			KnowledgeType.FIRE_KEEPING: KnowledgeType.FOOD_STORAGE,
+			KnowledgeType.FOOD_STORAGE: KnowledgeType.FARMING,
+			KnowledgeType.HUNTING: KnowledgeType.FARMING,
+			KnowledgeType.FARMING: KnowledgeType.FOOD_STORAGE,
+			KnowledgeType.TOOL_MAKING: KnowledgeType.CRAFTING,
+			KnowledgeType.CRAFTING: KnowledgeType.TOOL_MAKING,
+			KnowledgeType.SEASON_READING: KnowledgeType.ASTRONOMY,
+			KnowledgeType.ASTRONOMY: KnowledgeType.SEASON_READING,
+			KnowledgeType.SICKNESS_AVOIDANCE: KnowledgeType.MEDICINE,
+			KnowledgeType.MEDICINE: KnowledgeType.SICKNESS_AVOIDANCE,
+			KnowledgeType.SHELTER_BUILDING: KnowledgeType.ARCHITECTURE,
+			KnowledgeType.ARCHITECTURE: KnowledgeType.SHELTER_BUILDING,
+			KnowledgeType.COMBAT: KnowledgeType.HUNTING,
+			KnowledgeType.HUNTING: KnowledgeType.COMBAT,
+			KnowledgeType.MEMORY_PRESERVATION: KnowledgeType.WRITING,
+			KnowledgeType.WRITING: KnowledgeType.MEMORY_PRESERVATION,
+			KnowledgeType.NAVIGATION: KnowledgeType.ASTRONOMY,
+			KnowledgeType.DIPLOMACY: KnowledgeType.HOSPITALITY,
+			KnowledgeType.HOSPITALITY: KnowledgeType.DIPLOMACY,
+			KnowledgeType.METALLURGY: KnowledgeType.ENGINEERING,
+			KnowledgeType.ENGINEERING: KnowledgeType.METALLURGY,
+		}
+		if semantic_map.has(kt):
+			return semantic_map[kt] as KnowledgeType
+	
+	return kt
 
 func _record_knowledge_loss(knowledge_type: KnowledgeType, reason: String) -> void:
 	var record: Dictionary = {

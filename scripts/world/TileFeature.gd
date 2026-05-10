@@ -53,6 +53,14 @@ enum Type {
 	# --- Storage (Phase 6) ---
 	GRANARY,           # food storage: +4 food capacity, -50% spoilage
 	CELLAR,            # underground storage: +6 capacity, -75% spoilage
+	# --- Terrain Features ---
+	RIVER,             # river tile: enables fishing, fishing hut proximity, water movement
+	# --- River Crossings ---
+	FORD,              # shallow ford: passable water crossing, low movement cost
+	# --- Production (Phase 6) ---
+	WATER_MILL,        # water mill: +crafting speed when adjacent to river
+	# --- Transient terrain effects ---
+	FLOOD_DEPOSIT,     # flood nutrient deposit: temporary fertility boost after overflow
 }
 
 ## Colors used for the v1 pixel renderer. Chosen to pop against the biome below.
@@ -105,6 +113,10 @@ const COLORS: Dictionary = {
 	# Storage
 	Type.GRANARY:         Color8(180, 160,  80),  # grain gold
 	Type.CELLAR:          Color8(100,  90,  80),  # dark cellar
+	Type.RIVER:           Color8( 40,  80, 140),  # blue river
+	Type.FORD:            Color8( 60, 100, 120),  # shallow crossing
+	Type.WATER_MILL:      Color8(160, 140, 100),  # mill wood-brown
+	Type.FLOOD_DEPOSIT:   Color8( 90, 120,  70),  # fertile green-brown
 }
 
 const NAMES: Dictionary = {
@@ -156,6 +168,10 @@ const NAMES: Dictionary = {
 	# Storage
 	Type.GRANARY:         "Granary",
 	Type.CELLAR:          "Cellar",
+	Type.RIVER:           "River",
+	Type.FORD:            "Ford",
+	Type.WATER_MILL:      "Water Mill",
+	Type.FLOOD_DEPOSIT:   "Flood Deposit",
 }
 
 

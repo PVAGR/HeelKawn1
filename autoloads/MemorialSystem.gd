@@ -166,12 +166,18 @@ func create_death_memorial(pawn_data: Variant, death_tile: Vector2i, violent: bo
 		pawn_id = pawn_data
 	elif pawn_data != null and "id" in pawn_data:
 		pawn_id = int(pawn_data.id)
+	var last_words: String = ""
+	if pawn_data != null and pawn_data.has_method("get"):
+		last_words = str(pawn_data.get("last_words", ""))
+	if last_words.is_empty():
+		last_words = "Resting at the edge of the world."
 	
 	create_memorial({
 		"tile": death_tile,
 		"type": memorial_type,
 		"associated_pawns": [pawn_id],
-		"event_id": _get_event_id_for_death(pawn_id)
+		"event_id": _get_event_id_for_death(pawn_id),
+		"inscription": last_words
 	})
 
 
@@ -466,6 +472,88 @@ func _decay_memorials(tick: int) -> void:
 			# Memorial destroyed, remove it
 			memorials.erase(memorial)
 			break
+
+
+# ==================== MEMOIR GENERATION ====================
+
+## Generate a rich textual memoir for a deceased pawn, recorded to WorldMemory
+## and optionally inscribed on the pawn's memorial.
+func generate_pawn_memoir(pawn_data: Variant, cause: String) -> Dictionary:
+	var memoir: Dictionary = {
+		"pawn_id": int(pawn_data.id),
+		"pawn_name": str(pawn_data.get("display_name", "Unknown")),
+		"cause": cause,
+		"age": int(pawn_data.get("age", 0)),
+		"profession": int(pawn_data.get("current_profession", 0)),
+		"settlement": str(pawn_data.get("birth_settlement", "The Wilds")),
+		"achievements": [],
+		"relationships": [],
+		"legacy_sentence": "",
+		"generated_tick": GameManager.tick_count,
+	}
+	var prof_name: String = ""
+	match memoir["profession"]:
+		0: prof_name = "Warrior"
+		1: prof_name = "Scholar"
+		2: prof_name = "Farmer"
+		3: prof_name = "Builder"
+		4: prof_name = "Healer"
+		_: prof_name = "Wanderer"
+
+	# Gather achievements from WorldMemory events
+	if _world_memory != null and _world_memory.has_method("get_events"):
+		for e in _world_memory.get_events():
+			if str(e.get("pawn_id", "")) == str(memoir["pawn_id"]) or int(e.get("pawn", -1)) == memoir["pawn_id"]:
+				var etype: String = str(e.get("type", ""))
+				if etype == "building_constructed":
+					memoir["achievements"].append("Helped construct a building")
+				elif etype == "knowledge_inscribed":
+					memoir["achievements"].append("Contributed to recorded history")
+				elif etype == "gossip_dispelled":
+					memoir["achievements"].append("Resolved a community conflict")
+				elif etype == "marriage":
+					memoir["achievements"].append("Entered a union of partnership")
+
+	# Relationships
+	if pawn_data.get("parent_a_id", -1) >= 0 or pawn_data.get("parent_b_id", -1) >= 0:
+		memoir["relationships"].append("Had family lineage")
+	# Check memorials for other pawns that share this pawn's id
+	var friend_count: int = 0
+	for m in memorials:
+		if int(memoir["pawn_id"]) in m.associated_pawns:
+			friend_count += 1
+	if friend_count > 1:
+		memoir["relationships"].append("Remembered by %d memorials" % friend_count)
+
+	# Legacy sentence
+	var cause_phrases: Dictionary = {
+		"starvation": "succumbed to hunger in a time of scarcity",
+		"exhaustion": "gave their last strength to the community",
+		"injury": "fell to wounds sustained in service",
+		"combat": "died defending the settlement",
+		"violence": "was taken by violence",
+		"battle": "fell in battle",
+		"old_age": "passed peacefully after a long life",
+	}
+	var cause_text: String = str(cause_phrases.get(cause, "died under unknown circumstances"))
+	memoir["legacy_sentence"] = "%s was a %s from %s. They %s at the age of %d." % [
+		memoir["pawn_name"], prof_name, memoir["settlement"], cause_text, memoir["age"]
+	]
+	if not memoir["achievements"].is_empty():
+		memoir["legacy_sentence"] += " They %s." % memoir["achievements"][0].to_lower()
+
+	# Record to WorldMemory
+	if _world_memory != null and _world_memory.has_method("record_event"):
+		_world_memory.record_event({
+			"type": "pawn_memoir",
+			"pawn_id": memoir["pawn_id"],
+			"pawn_name": memoir["pawn_name"],
+			"tick": GameManager.tick_count,
+			"legacy": memoir["legacy_sentence"],
+			"profession": prof_name,
+		})
+
+	return memoir
 
 
 # ==================== DEBUG ====================

@@ -45,6 +45,7 @@ var _gear_inventory: Dictionary = {}
 
 # References
 @onready var _world_memory: Node = null
+@onready var _world: Node = null
 @onready var _job_manager: Node = null
 @onready var _stockpile_manager: Node = null
 @onready var _pawn_spawner: Node = null
@@ -53,6 +54,7 @@ var _gear_inventory: Dictionary = {}
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 	_world_memory = get_node_or_null("/root/WorldMemory")
+	_world = get_node_or_null("/root/Main/World")
 	_job_manager = get_node_or_null("/root/JobManager")
 	_stockpile_manager = get_node_or_null("/root/StockpileManager")
 	_pawn_spawner = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
@@ -67,6 +69,33 @@ func _on_game_tick(tick: int) -> void:
 
 
 func _initialize_recipes() -> void:
+	# ===== AMMUNITION =====
+	_add_recipe({
+		"recipe_id": "stone_arrow",
+		"name": "Stone Arrow",
+		"category": "ammunition",
+		"ingredients": {"flint": 1, "stick": 1},
+		"craft_ticks": 20,
+		"required_profession": -1,
+		"required_skill": 4,  # HUNTING
+		"min_skill_level": 1,
+		"output_item": Item.Type.STONE_ARROW,
+		"output_quantity": 5
+	})
+	
+	_add_recipe({
+		"recipe_id": "bone_arrow",
+		"name": "Bone Arrow",
+		"category": "ammunition",
+		"ingredients": {"bone": 1, "stick": 1},
+		"craft_ticks": 25,
+		"required_profession": -1,
+		"required_skill": 4,  # HUNTING
+		"min_skill_level": 2,
+		"output_item": Item.Type.BONE_ARROW,
+		"output_quantity": 5
+	})
+	
 	# ===== TOOLS =====
 	_add_recipe({
 		"recipe_id": "flint_knife",
@@ -277,6 +306,10 @@ func _update_crafting_progress(tick: int) -> void:
 			var skill_level: int = craftsman.data.get_skill_level(recipe.required_skill)
 			progress_increment *= (1.0 + float(skill_level) * 0.05)  # +5% per level
 		
+		# Water mill bonus: if a WATER_MILL is within 2 tiles of the workshop, +50% speed
+		if _is_near_water_mill(job.workshop_tile):
+			progress_increment *= 1.5
+		
 		# Update progress
 		job.progress += progress_increment
 		
@@ -412,16 +445,17 @@ func _has_ingredients(ingredients: Dictionary) -> bool:
 func _get_stockpile_quantity(resource: String) -> int:
 	# Map resource names to Item.Type enums
 	var resource_to_item: Dictionary = {
-		"flint": 1,  # Assuming Item.Type.FLINT = 1
-		"stick": 2,
-		"wood": 3,
+		"flint": Item.Type.FLINT,
+		"stick": Item.Type.STICK,
+		"wood": Item.Type.WOOD,
 		"iron": 4,
 		"herbs": 5,
 		"cloth": 6,
-		"meat": 7,
-		"berry": 8,
-		"paper": 9,
-		"leather": 10,
+		"meat": Item.Type.MEAT,
+		"berry": Item.Type.BERRY,
+		"paper": Item.Type.PAPER,
+		"leather": Item.Type.LEATHER,
+		"bone": Item.Type.BONE,
 	}
 	
 	var item_type: int = resource_to_item.get(resource, -1)
@@ -440,16 +474,17 @@ func _consume_ingredients(ingredients: Dictionary) -> bool:
 	
 	# Map resource names to Item.Type enums
 	var resource_to_item: Dictionary = {
-		"flint": 1,
-		"stick": 2,
-		"wood": 3,
+		"flint": Item.Type.FLINT,
+		"stick": Item.Type.STICK,
+		"wood": Item.Type.WOOD,
 		"iron": 4,
 		"herbs": 5,
 		"cloth": 6,
-		"meat": 7,
-		"berry": 8,
-		"paper": 9,
-		"leather": 10,
+		"meat": Item.Type.MEAT,
+		"berry": Item.Type.BERRY,
+		"paper": Item.Type.PAPER,
+		"leather": Item.Type.LEATHER,
+		"bone": Item.Type.BONE,
 	}
 	
 	# Consume each ingredient from stockpile
@@ -597,3 +632,21 @@ func _gear_score(gear: Variant) -> float:
 	if gear == null:
 		return -1.0
 	return float(gear.attack) + float(gear.defense) * 1.5 + float(gear.work_speed) * 10.0 + float(gear.warmth) * 2.0 + float(gear.quality) * 5.0
+
+
+## Check if a workshop tile has a WATER_MILL within 2 tiles.
+func _is_near_water_mill(workshop_tile: Vector2i) -> bool:
+	if _world == null or _world.data == null:
+		return false
+	var wd = _world.data
+	for dx in range(-2, 3):
+		for dy in range(-2, 3):
+			if dx == 0 and dy == 0:
+				continue
+			var nx: int = workshop_tile.x + dx
+			var ny: int = workshop_tile.y + dy
+			if not wd.in_bounds(nx, ny):
+				continue
+			if wd.get_feature(nx, ny) == TileFeature.Type.WATER_MILL:
+				return true
+	return false

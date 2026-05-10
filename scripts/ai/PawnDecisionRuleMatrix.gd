@@ -499,6 +499,18 @@ func evaluate(pd: HeelKawnianData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump(outs, 6, -0.04)  # slight defend avoidance
 		fired.append({"id": "trauma_mild", "line": "IF mild trauma THEN slight defend avoidance.", "w": 0.25})
 
+	# Parental trauma: inherited family stress makes pawns restive and cautious
+	var parental_trauma: float = float(ctx.get("parental_trauma_level", 0.0))
+	if parental_trauma >= 40.0:
+		_bump(outs, 1, 0.08)   # seek rest — inherited grief
+		_bump(outs, 6, -0.05)  # avoid combat — learned caution
+		_bump(outs, 7, 0.05)   # idle observe — hypervigilance
+		fired.append({"id": "parental_trauma_severe", "line": "IF inherited trauma is severe THEN rest + avoid danger.", "w": 0.40})
+	elif parental_trauma >= 15.0:
+		_bump(outs, 1, 0.03)
+		_bump(outs, 7, 0.02)
+		fired.append({"id": "parental_trauma_mild", "line": "IF inherited trauma is present THEN mild caution.", "w": 0.18})
+
 	# Self-awareness: aware pawns teach more, seek social, are less idle
 	var awareness: int = int(ctx.get("self_awareness", 0))
 	if awareness >= 4:
@@ -543,6 +555,25 @@ func evaluate(pd: HeelKawnianData, ctx: Dictionary, outs: Array) -> Dictionary:
 	elif dream_theme == "general":
 		_bump(outs, 1, 0.02)   # mild rest — neutral dream
 		fired.append({"id": "dream_general", "line": "IF general dream THEN mild restfulness.", "w": 0.10})
+
+	var dream_nudge_action: String = str(ctx.get("dream_nudge_action", ""))
+	if dream_nudge_action == "wander":
+		_bump(outs, 7, 0.08)
+		_bump(outs, 2, 0.03)
+		fired.append({"id": "dream_nudge_wander", "line": "IF dream nudges wandering THEN idle observe + social curiosity.", "w": 0.22})
+	elif dream_nudge_action == "rest":
+		_bump(outs, 1, 0.06)
+		fired.append({"id": "dream_nudge_rest", "line": "IF dream nudges rest THEN seek recovery.", "w": 0.22})
+	elif dream_nudge_action == "forage":
+		_bump(outs, 0, 0.05)
+		fired.append({"id": "dream_nudge_forage", "line": "IF dream nudges forage THEN seek food.", "w": 0.22})
+	elif dream_nudge_action == "work":
+		_bump(outs, 3, 0.04)
+		_bump(outs, 4, 0.03)
+		fired.append({"id": "dream_nudge_work", "line": "IF dream nudges work THEN gather + build.", "w": 0.22})
+	elif dream_nudge_action == "socialize":
+		_bump(outs, 2, 0.06)
+		fired.append({"id": "dream_nudge_social", "line": "IF dream nudges socializing THEN seek community.", "w": 0.22})
 
 	# Core beliefs: pawns with many beliefs are more community-oriented
 	var beliefs_n: int = int(ctx.get("core_beliefs_count", 0))

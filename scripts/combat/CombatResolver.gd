@@ -9,6 +9,19 @@ const SKILL_ACCURACY_BONUS_PER_LEVEL: float = 0.02  # 2% accuracy per skill leve
 const SKILL_DODGE_BONUS_PER_LEVEL: float = 0.02  # 2% dodge per rest level (endurance proxy)
 const KROND_PER_KILL: float = 25.0
 
+# Ranged combat constants
+const RANGED_BASE_HIT_CHANCE: float = 0.5
+const RANGED_MAX_RANGE: float = 12.0  # tiles
+const RANGED_MIN_RANGE: float = 2.0   # minimum range (can't shoot adjacent)
+const RANGED_DAMAGE_FALLOFF: float = 0.08  # -8% damage per tile beyond optimal
+const RANGED_OPTIMAL_RANGE: float = 5.0
+const RANGED_AMMO_PER_SHOT: int = 1
+
+# Armor DR constants
+const ARMOR_DR_PER_POINT: float = 0.06  # 6% DR per defense point
+const ARMOR_DR_CAP: float = 0.80       # 80% max DR
+const ARMOR_PIERCE_PER_SKILL: float = 0.005  # 0.5% armor pierce per skill level
+
 static func _actor_seed_part(actor: Node) -> String:
 	if actor is HeelKawnian:
 		var pawn: HeelKawnian = actor as HeelKawnian
@@ -136,7 +149,117 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 	return true
 
 
-## Calculate damage from attacker to defender
+## Execute one ranged attack from attacker to defender at given tile distance
+static func resolve_ranged_attack(attacker: Node, defender: Node, distance_tiles: float) -> bool:
+	if attacker == null or defender == null:
+		return false
+	if distance_tiles < RANGED_MIN_RANGE or distance_tiles > RANGED_MAX_RANGE:
+		return false
+	
+	# Check ammo if attacker is a pawn
+	if attacker is HeelKawnian:
+		var pawn: HeelKawnian = attacker as HeelKawnian
+		if not _has_ranged_ammo(pawn):
+			return false
+		_consume_ranged_ammo(pawn)
+	
+	# Hit chance based on distance (optimal range = best chance)
+	var range_factor: float = 1.0 - abs(distance_tiles - RANGED_OPTIMAL_RANGE) * 0.05
+	range_factor = clampf(range_factor, 0.3, 1.0)
+	var hit_chance: float = RANGED_BASE_HIT_CHANCE * range_factor
+	
+	# Attacker skill bonus
+	if attacker is HeelKawnian:
+		var pawn_a: HeelKawnian = attacker as HeelKawnian
+		var hunting_skill: float = pawn_a.data.skill_xp.get(HeelKawnianData.Skill.HUNTING, 0.0) / 100.0
+		hit_chance += hunting_skill * 0.15
+	
+	# Defender dodge
+	if defender is HeelKawnian:
+		var pawn_d: HeelKawnian = defender as HeelKawnian
+		hit_chance *= (1.0 - pawn_d.data.rest * 0.001)
+	
+	hit_chance = clampf(hit_chance, 0.1, 0.9)
+	
+	if not WorldRNG.chance_for(_combat_stream("ranged_hit", attacker, defender), hit_chance, _combat_salt(7)):
+		return false
+	
+	# Damage with distance falloff
+	var damage: float = BASE_DAMAGE * 0.7  # Ranged base is lower
+	if distance_tiles > RANGED_OPTIMAL_RANGE:
+		damage *= (1.0 - (distance_tiles - RANGED_OPTIMAL_RANGE) * RANGED_DAMAGE_FALLOFF)
+	damage = max(3.0, damage)
+	
+	# Apply damage (same as melee but without armor pierce from skills)
+	return _apply_damage(attacker, defender, damage)
+
+
+## Check if attacker has ranged ammo (carrying ammo-type items)
+	static func _has_ranged_ammo(pawn_node: Node) -> bool:
+	if not (pawn_node is HeelKawnian):
+		return true  # Enemies always have ammo
+	var p: HeelKawnian = pawn_node as HeelKawnian
+	if p.data == null:
+		return false
+	# Check if pawn is carrying a throwable/ammo item, or has nearby stockpile with ammo
+	var carry: int = int(p.data.carrying)
+	if carry == Item.Type.STONE or carry == Item.Type.STICK \
+			or carry == Item.Type.STONE_ARROW or carry == Item.Type.BONE_ARROW:
+		return true
+	return false
+
+
+## Consume one unit of ammo from the pawn's carry slot
+static func _consume_ranged_ammo(pawn_node: Node) -> void:
+	if not (pawn_node is HeelKawnian):
+		return
+	var p: HeelKawnian = pawn_node as HeelKawnian
+	if p.data == null:
+		return
+	var carry: int = int(p.data.carrying)
+	if carry == Item.Type.STONE or carry == Item.Type.STICK \
+			or carry == Item.Type.STONE_ARROW or carry == Item.Type.BONE_ARROW:
+		p.data.carrying = Item.Type.NONE
+
+
+## Apply damage to defender and return true if hit landed
+static func _apply_damage(attacker: Node, defender: Node, damage: float) -> bool:
+	if defender is HeelKawnian:
+		var pawn_defender: HeelKawnian = defender as HeelKawnian
+		pawn_defender.data.health = max(0.0, pawn_defender.data.health - damage)
+		pawn_defender.on_hit_feedback(damage)
+		pawn_defender.data.add_mood_event(MoodEvent.Type.STRESS, 60.0, 300)
+		if pawn_defender.data.health <= 0:
+			pawn_defender._check_death_conditions()
+		return true
+	elif defender is Enemy:
+		var enemy_defender: Enemy = defender as Enemy
+		enemy_defender.take_damage(damage)
+		return enemy_defender.health <= 0
+	return false
+
+
+## Calculate effective armor damage reduction for a pawn
+static func _calculate_armor_dr(defender: HeelKawnian) -> float:
+	if defender == null or defender.data == null:
+		return 0.0
+	var gear_stats: Dictionary = defender.data.get_gear_stats()
+	var defense: float = float(gear_stats.get("defense", 0.0))
+	# Quality multiplier from equipped gear
+	var gear: Dictionary = defender.data.get("equipped_gear", {})
+	var equipped_weapon = gear.get(0, null)
+	if equipped_weapon != null and equipped_weapon is Dictionary:
+		defense += float(equipped_weapon.get("quality_mult", 1.0)) * 2.0
+	var armor_dr: float = defense * ARMOR_DR_PER_POINT
+	# Trait-based reduction
+	var trait_mult: float = 1.0
+	if defender.data.has_method("get_trait_mult"):
+		trait_mult = defender.data.get_trait_mult("damage_taken_mult")
+	armor_dr += (trait_mult - 1.0) * 0.3
+	return clampf(armor_dr, 0.0, ARMOR_DR_CAP)
+
+
+## Calculate damage from attacker to defender (melee)
 static func _calculate_damage(attacker: Node, defender: Node) -> float:
 	var damage: float = BASE_DAMAGE
 
@@ -148,9 +271,9 @@ static func _calculate_damage(attacker: Node, defender: Node) -> float:
 									pawn_attacker.data.skill_xp.get(HeelKawnianData.Skill.MINING, 0.0)) / 200.0
 		damage *= (1.0 + combat_skill * 0.5)  # Up to 50% damage increase from skills
 
-		# Gear-based attack bonus
+		# Gear-based attack bonus (weapon + quality)
 		var gear_stats: Dictionary = pawn_attacker.data.get_gear_stats()
-		damage *= (float(gear_stats.get("attack", 1.0)) / 1.0)  # Normalize: 1.0 attack = 1.0x
+		damage *= (float(gear_stats.get("attack", 1.0)) / 1.0)
 
 		# Health/rest affects damage
 		damage *= pawn_attacker.data.effective_labor_mult()
@@ -163,18 +286,17 @@ static func _calculate_damage(attacker: Node, defender: Node) -> float:
 		var spec = Enemy.SPECIES_DATA.get(enemy.enemy_type, {})
 		damage = spec.get("melee_damage", BASE_DAMAGE)
 
-	# Defender reduction
+	# Defender armor reduction (only for pawn defenders)
 	if defender is HeelKawnian:
 		var pawn_defender: HeelKawnian = defender as HeelKawnian
-		# Gear-based defense
-		var gear_stats: Dictionary = pawn_defender.data.get_gear_stats()
-		var gear_defense: float = float(gear_stats.get("defense", 0.0))
-		# Each point of defense reduces damage by 5%, capped at 75%
-		var armor_factor: float = clampf(gear_defense * 0.05, 0.0, 0.75)
-		# Trait damage reduction
-		var trait_reduction: float = 1.0 - (pawn_defender.data.get_trait_mult("damage_taken_mult") - 1.0)
-		armor_factor = clampf(armor_factor + (1.0 - trait_reduction), 0.0, 0.75)
-		damage *= (1.0 - armor_factor)
+		var armor_dr: float = _calculate_armor_dr(pawn_defender)
+		# Attacker skill pierces armor
+		if attacker is HeelKawnian:
+			var a_pawn: HeelKawnian = attacker as HeelKawnian
+			var avg_skill: float = _get_average_skill(a_pawn.data) / 100.0
+			var pierce: float = avg_skill * ARMOR_PIERCE_PER_SKILL
+			armor_dr = max(0.0, armor_dr - pierce)
+		damage *= (1.0 - armor_dr)
 
 	return max(1.0, damage)
 

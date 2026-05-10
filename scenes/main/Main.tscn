@@ -29,6 +29,8 @@
 [ext_resource type="Script" path="res://scripts/ui/CreatorDebugMenu.gd" id="16_debug_menu"]
 [ext_resource type="PackedScene" path="res://scenes/ui/MapModeOverlay.tscn" id="17_map_overlay"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ChronicleLedger.tscn" id="21_ledger"]
+[ext_resource type="Script" path="res://scripts/ui/ChronicleBook.gd" id="47_chronicle_book"]
+[ext_resource type="Script" path="res://scripts/ui/SeedGallery.gd" id="48_seed_gallery"]
 [ext_resource type="PackedScene" path="res://scenes/ui/PawnAIInspector.tscn" id="22_ai_inspector"]
 [ext_resource type="PackedScene" path="res://scenes/ui/SettingsPanel.tscn" id="23_settings"]
 [ext_resource type="PackedScene" path="res://scenes/ui/EventToast.tscn" id="24_event_toast"]
@@ -123,6 +125,12 @@ script = ExtResource("8_toolbar")
 script = ExtResource("9_info")
 
 [node name="ChronicleLedger" parent="UI_Viewport" instance=ExtResource("21_ledger")]
+
+[node name="ChronicleBook" type="CanvasLayer" parent="UI_Viewport"]
+script = ExtResource("47_chronicle_book")
+
+[node name="SeedGallery" type="CanvasLayer" parent="UI_Viewport"]
+script = ExtResource("48_seed_gallery")
 
 [node name="PawnAIInspector" parent="UI_Viewport" instance=ExtResource("22_ai_inspector")]
 

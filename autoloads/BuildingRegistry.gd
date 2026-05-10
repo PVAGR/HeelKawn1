@@ -301,6 +301,32 @@ func _init_buildings() -> void:
 			"passable": true,
 			"requires_water": true,
 		},
+		"ford": {
+			"name": "Ford",
+			"description": "Shallow river crossing. Makes river tiles passable for pawns.",
+			"feature_type": TileFeature.Type.FORD,
+			"job_type": Job.Type.BUILD_FORD,
+			"cost": {"wood": 1, "stone": 1},
+			"buffs": {"enables_river_crossing": true},
+			"requires_tech": [],
+			"work_ticks": 15,
+			"category": CAT_INFRASTRUCTURE,
+			"passable": true,
+			"requires_water": false,
+		},
+		"water_mill": {
+			"name": "Water Mill",
+			"description": "Water-powered mill. +50% crafting speed for adjacent production buildings.",
+			"feature_type": TileFeature.Type.WATER_MILL,
+			"job_type": Job.Type.BUILD_WATER_MILL,
+			"cost": {"wood": 4, "stone": 2},
+			"buffs": {"crafting_speed_bonus": 1.5},
+			"requires_tech": ["milling"],
+			"work_ticks": 50,
+			"category": CAT_PRODUCTION,
+			"passable": true,
+			"requires_water": true,
+		},
 
 		# === MEDICINE ===
 		"apothecary": {

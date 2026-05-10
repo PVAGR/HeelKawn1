@@ -1,10 +1,13 @@
 extends Node2D
 ## Draws multi-pixel building sprites, tree/vegetation sprites, road autotiling,
-## and construction progress bars on top of the terrain Image.
-## This avoids changing the core 256×256 terrain pipeline.
+## construction progress bars, terrain micro-textures, fire pit smoke,
+## building chimney smoke, night window glow, and construction scaffolding
+## on top of the terrain Image.
 
 const REFRESH_EVERY_N_TICKS: int = 30
 const MAX_DRAW_TILES: int = 8000  # Performance cap: don't draw more than this per frame
+const MAX_TERRAIN_DETAIL_TILES: int = 4000  # Cap for terrain micro-texture drawing
+const TERRAIN_DETAIL_INTERVAL: int = 2  # Only draw every Nth tile for performance
 
 var _world: World = null
 var _camera: Camera2D = null
@@ -14,8 +17,16 @@ var _dirty: bool = true  # Redraw on first frame
 # Cache: which features exist and where (rebuilt every REFRESH_EVERY_N_TICKS)
 var _feature_tiles: Dictionary = {}  # feature_type -> Array[Vector2i]
 
+# Cache: biome tiles for terrain micro-textures (rebuilt every REFRESH_EVERY_N_TICKS)
+var _biome_tiles: Dictionary = {}  # biome_type -> Array[Vector2i]
+
 # Construction progress: job_id -> {tile: Vector2i, progress: float}
 var _build_progress: Dictionary = {}
+
+# Smoke particle systems: persistent GPUParticles2D for fire pits and chimneys
+var _smoke_systems: Array[GPUParticles2D] = []
+var _smoke_positions: Array[Vector2] = []  # World positions for each smoke system
+const MAX_SMOKE_SYSTEMS: int = 24
 
 
 func initialize(world_ref: World, camera_ref: Camera2D) -> void:
@@ -33,12 +44,14 @@ func _process(_delta: float) -> void:
 	if _tick_counter % REFRESH_EVERY_N_TICKS == 0 or _dirty:
 		_rebuild_feature_cache()
 		_refresh_build_progress()
+		_refresh_smoke_positions()
 		_dirty = false
 		queue_redraw()
 
 
 func _rebuild_feature_cache() -> void:
 	_feature_tiles.clear()
+	_biome_tiles.clear()
 	if _world == null or _world.data == null:
 		return
 	var data: WorldData = _world.data
@@ -48,12 +61,19 @@ func _rebuild_feature_cache() -> void:
 		for x in range(cam_rect.position.x, cam_rect.end.x):
 			if not data.in_bounds(x, y):
 				continue
-			var f: int = data.features[data.index(x, y)]
-			if f == TileFeature.Type.NONE:
-				continue
-			if not _feature_tiles.has(f):
-				_feature_tiles[f] = []
-			_feature_tiles[f].append(Vector2i(x, y))
+			var idx: int = data.index(x, y)
+			var f: int = data.features[idx]
+			if f != TileFeature.Type.NONE:
+				if not _feature_tiles.has(f):
+					_feature_tiles[f] = []
+				_feature_tiles[f].append(Vector2i(x, y))
+			else:
+				# Cache biome for terrain micro-textures (sparse sampling)
+				if (x + y) % TERRAIN_DETAIL_INTERVAL == 0:
+					var b: int = data.biomes[idx]
+					if not _biome_tiles.has(b):
+						_biome_tiles[b] = []
+					_biome_tiles[b].append(Vector2i(x, y))
 
 
 func _camera_viewport_tiles() -> Rect2i:
@@ -117,7 +137,21 @@ func _draw() -> void:
 	if _world == null or _world.data == null:
 		return
 	var drawn: int = 0
-	# Draw each feature type with its sprite
+	var is_night: bool = DayNightCycle.is_night_for_tick(GameManager.tick_count) if DayNightCycle != null else false
+
+	# --- Terrain micro-textures: per-biome detail pixels ---
+	drawn = 0
+	for b_type in _biome_tiles:
+		var tiles: Array = _biome_tiles[b_type]
+		for tile_pos in tiles:
+			if drawn >= MAX_TERRAIN_DETAIL_TILES:
+				break
+			var wp: Vector2 = _world.tile_to_world(tile_pos)
+			_draw_terrain_detail(wp, int(b_type), int(tile_pos.x), int(tile_pos.y))
+			drawn += 1
+
+	# --- Draw each feature type with its sprite ---
+	drawn = 0
 	for f_type in _feature_tiles:
 		var tiles: Array = _feature_tiles[f_type]
 		for tile_pos in tiles:
@@ -126,11 +160,25 @@ func _draw() -> void:
 			var wp: Vector2 = _world.tile_to_world(tile_pos)
 			_draw_feature_sprite(wp, int(f_type))
 			drawn += 1
-	# Draw construction progress bars
+
+	# --- Night window glow: warm light on occupied buildings ---
+	if is_night:
+		for f_type in _feature_tiles:
+			var ft: int = int(f_type)
+			if ft == TileFeature.Type.BED or ft == TileFeature.Type.LIBRARY or ft == TileFeature.Type.SCHOOL or ft == TileFeature.Type.APOTHECARY:
+				for tile_pos in _feature_tiles[f_type]:
+					var wp: Vector2 = _world.tile_to_world(tile_pos)
+					_draw_window_glow(wp, ft)
+
+	# --- Construction scaffolding: visual build stages ---
 	for tile_pos in _build_progress:
 		var progress: float = _build_progress[tile_pos]
 		var wp: Vector2 = _world.tile_to_world(tile_pos)
 		_draw_build_progress(wp, progress)
+		_draw_scaffolding(wp, progress)
+
+	# --- Update smoke particle positions ---
+	_update_smoke_particles()
 
 
 func _draw_feature_sprite(wp: Vector2, feature: int) -> void:
@@ -306,12 +354,41 @@ func _draw_marker_stone(p: Vector2) -> void:
 func _draw_tree(p: Vector2) -> void:
 	# Trunk: brown center pixel
 	draw_rect(Rect2(p + Vector2(-0.3, 0.0), Vector2(0.6, 1.0)), Color8(100, 65, 30), true)
-	# Canopy: dark green circle
-	draw_circle(p + Vector2(0.0, -0.5), 1.8, Color8(27, 73, 29))
-	# Canopy highlight: lighter green on top
-	draw_circle(p + Vector2(-0.3, -0.8), 1.0, Color8(40, 95, 35))
+	# Seasonal canopy color
+	var season: int = Biome.season_for_tick(GameManager.tick_count)
+	var canopy_c: Color
+	var highlight_c: Color
+	var shadow_c: Color
+	match season:
+		Biome.Season.SPRING:
+			canopy_c = Color8(40, 110, 35)
+			highlight_c = Color8(60, 140, 50)
+			shadow_c = Color8(25, 80, 25)
+		Biome.Season.SUMMER:
+			canopy_c = Color8(27, 73, 29)
+			highlight_c = Color8(40, 95, 35)
+			shadow_c = Color8(20, 55, 22)
+		Biome.Season.AUTUMN:
+			canopy_c = Color8(140, 90, 25)
+			highlight_c = Color8(180, 120, 30)
+			shadow_c = Color8(100, 65, 18)
+		Biome.Season.WINTER:
+			canopy_c = Color8(80, 90, 80)
+			highlight_c = Color8(110, 115, 105)
+			shadow_c = Color8(60, 65, 60)
+		_:
+			canopy_c = Color8(27, 73, 29)
+			highlight_c = Color8(40, 95, 35)
+			shadow_c = Color8(20, 55, 22)
+	# Canopy: dark circle
+	draw_circle(p + Vector2(0.0, -0.5), 1.8, canopy_c)
+	# Canopy highlight: lighter on top
+	draw_circle(p + Vector2(-0.3, -0.8), 1.0, highlight_c)
 	# Shadow under canopy
-	draw_circle(p + Vector2(0.3, 0.0), 0.8, Color8(20, 55, 22))
+	draw_circle(p + Vector2(0.3, 0.0), 0.8, shadow_c)
+	# Winter: snow cap on canopy
+	if season == Biome.Season.WINTER:
+		draw_circle(p + Vector2(0.0, -1.2), 0.8, Color8(230, 240, 245, 120))
 
 
 func _draw_fertile_soil(p: Vector2) -> void:
@@ -500,6 +577,200 @@ func _draw_build_progress(p: Vector2, progress: float) -> void:
 	draw_rect(Rect2(p.x - bar_w * 0.5, bar_y, fill_w, bar_h), fill_c, true)
 	# Border
 	draw_rect(Rect2(p.x - bar_w * 0.5, bar_y, bar_w, bar_h), Color8(200, 200, 200, 100), false)
+
+
+# ============================================================
+# Terrain Micro-Textures
+# ============================================================
+
+func _draw_terrain_detail(p: Vector2, biome: int, tx: int, ty: int) -> void:
+	# Deterministic per-tile hash for varied detail placement
+	var h: int = (tx * 19349663 + ty * 73856093) & 0xFFFF
+	var tick_phase: float = fmod(float(GameManager.tick_count) * 0.02, TAU)
+	match biome:
+		Biome.Type.PLAINS:
+			# Grass blades: tiny vertical lines
+			var blade_c: Color = Color8(90, 160, 50, 120)
+			if (h & 0x03) == 0:
+				draw_line(p + Vector2(-1.0, 1.0), p + Vector2(-1.0, -0.5), blade_c, 0.4, true)
+			if (h & 0x07) == 1:
+				draw_line(p + Vector2(1.5, 1.0), p + Vector2(1.5, 0.0), blade_c, 0.4, true)
+			if (h & 0x0F) == 3:
+				# Tiny flower dot
+				draw_rect(Rect2(p + Vector2(0.5, -0.5), Vector2(0.3, 0.3)), Color8(220, 180, 60, 100), true)
+		Biome.Type.FOREST:
+			# Forest floor: scattered leaf litter and undergrowth
+			var leaf_c: Color = Color8(35, 90, 30, 100)
+			if (h & 0x03) == 0:
+				draw_rect(Rect2(p + Vector2(-1.0, 0.5), Vector2(0.5, 0.3)), leaf_c, true)
+			if (h & 0x07) == 2:
+				draw_rect(Rect2(p + Vector2(0.5, -0.5), Vector2(0.4, 0.4)), Color8(50, 100, 35, 90), true)
+			if (h & 0x0F) == 5:
+				# Fern: tiny curved line
+				draw_line(p + Vector2(-0.5, 1.0), p + Vector2(-0.5, -0.3), Color8(30, 110, 25, 110), 0.3, true)
+		Biome.Type.DESERT:
+			# Sand ripples: horizontal wavy lines
+			var ripple_c: Color = Color8(240, 200, 80, 80)
+			if (h & 0x03) == 0:
+				draw_line(p + Vector2(-1.5, 0.3), p + Vector2(1.5, 0.3), ripple_c, 0.3, true)
+			if (h & 0x07) == 3:
+				draw_line(p + Vector2(-1.0, -0.5), p + Vector2(1.0, -0.5), ripple_c, 0.3, true)
+			if (h & 0x0F) == 7:
+				# Tiny sand dune curve
+				draw_line(p + Vector2(-1.0, 0.8), p + Vector2(0.0, 0.3), Color8(230, 190, 60, 90), 0.4, true)
+		Biome.Type.TUNDRA:
+			# Frost crystals: tiny bright dots
+			var frost_c: Color = Color8(200, 230, 240, 100)
+			if (h & 0x03) == 0:
+				draw_rect(Rect2(p + Vector2(-0.5, -0.5), Vector2(0.3, 0.3)), frost_c, true)
+			if (h & 0x07) == 2:
+				draw_rect(Rect2(p + Vector2(0.8, 0.3), Vector2(0.3, 0.3)), frost_c, true)
+			if (h & 0x0F) == 4:
+				# Ice crack line
+				draw_line(p + Vector2(-1.0, 0.0), p + Vector2(0.5, -0.5), Color8(180, 220, 235, 70), 0.3, true)
+		Biome.Type.MOUNTAIN:
+			# Stone grain: tiny dark specks
+			var grain_c: Color = Color8(80, 55, 45, 90)
+			if (h & 0x03) == 0:
+				draw_rect(Rect2(p + Vector2(-0.5, 0.0), Vector2(0.3, 0.3)), grain_c, true)
+			if (h & 0x07) == 1:
+				draw_rect(Rect2(p + Vector2(0.5, -0.5), Vector2(0.3, 0.3)), grain_c, true)
+			if (h & 0x0F) == 6:
+				# Moss patch
+				draw_rect(Rect2(p + Vector2(-0.8, 0.5), Vector2(0.5, 0.3)), Color8(60, 90, 45, 80), true)
+		Biome.Type.WATER:
+			# Water caustics: animated bright lines
+			var caustic_phase: float = tick_phase + float(h) * 0.01
+			var caustic_alpha: int = int(40 + 30 * sin(caustic_phase))
+			var caustic_c: Color = Color8(80, 160, 255, caustic_alpha)
+			if (h & 0x03) == 0:
+				draw_line(p + Vector2(-1.0, 0.0), p + Vector2(1.0, 0.3), caustic_c, 0.3, true)
+			if (h & 0x07) == 3:
+				draw_line(p + Vector2(0.0, -0.5), p + Vector2(0.5, 0.5), caustic_c, 0.3, true)
+		Biome.Type.STONE_FLOOR:
+			# Stone tile cracks
+			var crack_c: Color = Color8(130, 115, 100, 80)
+			if (h & 0x03) == 0:
+				draw_line(p + Vector2(-0.5, -0.5), p + Vector2(0.5, 0.5), crack_c, 0.3, true)
+
+
+# ============================================================
+# Night Window Glow
+# ============================================================
+
+func _draw_window_glow(p: Vector2, feature: int) -> void:
+	# Warm light emanating from building windows at night
+	var glow_c: Color = Color8(255, 200, 100, 60)  # Warm amber, subtle
+	var glow_r: float = 2.5
+	match feature:
+		TileFeature.Type.BED:
+			# Bed: small warm glow (someone sleeping)
+			glow_c = Color8(255, 180, 80, 50)
+			glow_r = 2.0
+		TileFeature.Type.LIBRARY:
+			# Library: cool blue glow (scholar studying)
+			glow_c = Color8(140, 160, 255, 55)
+			glow_r = 3.0
+		TileFeature.Type.SCHOOL:
+			# School: warm white glow
+			glow_c = Color8(255, 240, 200, 50)
+			glow_r = 2.5
+		TileFeature.Type.APOTHECARY:
+			# Apothecary: green glow
+			glow_c = Color8(100, 255, 140, 45)
+			glow_r = 2.0
+	# Draw soft glow circle
+	draw_circle(p, glow_r, glow_c)
+	# Bright center pixel
+	draw_rect(Rect2(p + Vector2(-0.3, -0.3), Vector2(0.6, 0.6)), Color8(glow_c.r8, glow_c.g8, glow_c.b8, int(glow_c.a8 * 1.5)), true)
+
+
+# ============================================================
+# Construction Scaffolding
+# ============================================================
+
+func _draw_scaffolding(p: Vector2, progress: float) -> void:
+	if progress >= 1.0:
+		return  # Complete, no scaffolding
+	# Scaffolding: wooden poles around the building site
+	var pole_c: Color = Color8(160, 120, 60, 180)
+	# Vertical poles: fade out as progress increases
+	var pole_alpha: float = 1.0 - progress
+	pole_c = Color8(pole_c.r8, pole_c.g8, pole_c.b8, int(pole_c.a8 * pole_alpha))
+	# Left pole
+	draw_line(p + Vector2(-2.0, 2.0), p + Vector2(-2.0, -2.5), pole_c, 0.5, true)
+	# Right pole
+	draw_line(p + Vector2(2.0, 2.0), p + Vector2(2.0, -2.5), pole_c, 0.5, true)
+	# Horizontal crossbar at top
+	draw_line(p + Vector2(-2.0, -2.0), p + Vector2(2.0, -2.0), pole_c, 0.4, true)
+	# Mid crossbar (only in early stages)
+	if progress < 0.5:
+		draw_line(p + Vector2(-2.0, 0.0), p + Vector2(2.0, 0.0), pole_c, 0.3, true)
+	# Diagonal brace (only in early stages)
+	if progress < 0.3:
+		draw_line(p + Vector2(-2.0, 2.0), p + Vector2(2.0, -2.0), pole_c, 0.3, true)
+
+
+# ============================================================
+# Smoke Particle System
+# ============================================================
+
+func _refresh_smoke_positions() -> void:
+	_smoke_positions.clear()
+	if _world == null or _world.data == null:
+		return
+	var data: WorldData = _world.data
+	var cam_rect: Rect2i = _camera_viewport_tiles()
+	# Fire pit smoke
+	if _feature_tiles.has(TileFeature.Type.FIRE_PIT):
+		for tile_pos in _feature_tiles[TileFeature.Type.FIRE_PIT]:
+			_smoke_positions.append(_world.tile_to_world(tile_pos) + Vector2(0.0, -2.0))
+	# Chimney smoke: workshops, kilns, smelters
+	var chimney_types: Array[int] = [TileFeature.Type.WORKSHOP, TileFeature.Type.KILN, TileFeature.Type.SMELTER]
+	for ct in chimney_types:
+		if _feature_tiles.has(ct):
+			for tile_pos in _feature_tiles[ct]:
+				_smoke_positions.append(_world.tile_to_world(tile_pos) + Vector2(0.0, -2.5))
+	# Ensure enough smoke systems exist
+	while _smoke_systems.size() < mini(_smoke_positions.size(), MAX_SMOKE_SYSTEMS):
+		var ps: GPUParticles2D = _make_smoke_system()
+		add_child(ps)
+		_smoke_systems.append(ps)
+
+
+func _make_smoke_system() -> GPUParticles2D:
+	var p: GPUParticles2D = GPUParticles2D.new()
+	p.name = "Smoke_%d" % _smoke_systems.size()
+	p.amount = 4
+	p.lifetime = 1.5
+	p.one_shot = false
+	p.emitting = false
+	p.explosiveness = 0.0
+	p.randomness = 0.7
+	p.local_coords = false
+	p.z_index = 6
+	var mat: ParticleProcessMaterial = ParticleProcessMaterial.new()
+	mat.direction = Vector3(0.0, -1.0, 0.0)
+	mat.spread = 15.0
+	mat.gravity = Vector3(0.0, -8.0, 0.0)
+	mat.initial_velocity_min = 3.0
+	mat.initial_velocity_max = 8.0
+	mat.scale_min = 0.3
+	mat.scale_max = 0.8
+	p.process_material = mat
+	p.modulate = Color8(180, 170, 160, 60)
+	return p
+
+
+func _update_smoke_particles() -> void:
+	# Position smoke systems at their targets, enable/disable
+	for i in range(_smoke_systems.size()):
+		var ps: GPUParticles2D = _smoke_systems[i]
+		if i < _smoke_positions.size():
+			ps.position = _smoke_positions[i]
+			ps.emitting = true
+		else:
+			ps.emitting = false
 
 
 # ============================================================

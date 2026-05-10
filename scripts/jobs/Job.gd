@@ -34,6 +34,7 @@ enum Type {
 	# --- Food chain ---
 	COOK_MEAT,         # cook raw meat at fire pit
 	COOK_BERRIES,      # cook berries at fire pit
+	COOK_FISH,         # cook fish at fire pit
 	DRY_MEAT,          # smoke/dry meat for preservation
 	PLANT_SEEDS,       # plant seeds on fertile soil for future harvest
 	HARVEST_CROPS,     # harvest planted crops
@@ -80,6 +81,12 @@ enum Type {
 	# --- Storage buildings (Phase 6) ---
 	BUILD_GRANARY,
 	BUILD_CELLAR,
+	# --- Fishing (Phase 6) ---
+	FISH,            # catch fish at RIVER tiles; yields FISH item
+	# --- River Crossings ---
+	BUILD_FORD,      # build a ford crossing on river tile
+	# --- Production (Phase 6) ---
+	BUILD_WATER_MILL,# build a water mill adjacent to river
 }
 
 enum State {
@@ -148,6 +155,7 @@ static func describe_type(t: int) -> String:
 		Type.CARVE_LEDGER_STONE:    return "CarveLedger"
 		Type.COOK_MEAT:         return "CookMeat"
 		Type.COOK_BERRIES:      return "CookBerries"
+		Type.COOK_FISH:         return "CookFish"
 		Type.DRY_MEAT:          return "DryMeat"
 		Type.PLANT_SEEDS:       return "PlantSeeds"
 		Type.HARVEST_CROPS:     return "HarvestCrops"
@@ -185,6 +193,9 @@ static func describe_type(t: int) -> String:
 		Type.BUILD_ROAD:             return "BuildRoad"
 		Type.BUILD_GRANARY:          return "BuildGranary"
 		Type.BUILD_CELLAR:           return "BuildCellar"
+		Type.FISH:                  return "Fish"
+		Type.BUILD_FORD:            return "BuildFord"
+		Type.BUILD_WATER_MILL:      return "BuildWaterMill"
 	return "Unknown"
 
 
@@ -217,6 +228,7 @@ static func tool_job_output(job_type: int) -> int:
 		Type.CRAFT_SPEAR:  return Item.Type.WOODEN_SPEAR
 		Type.COOK_MEAT:    return Item.Type.COOKED_MEAT
 		Type.COOK_BERRIES: return Item.Type.COOKED_BERRIES
+		Type.COOK_FISH:    return Item.Type.COOKED_FISH
 		Type.DRY_MEAT:     return Item.Type.DRIED_MEAT
 		Type.PLANT_SEEDS:  return Item.Type.NONE  # transforms tile, no carry output
 		Type.HARVEST_CROPS:return Item.Type.BERRY  # harvest yields berries (or better)
@@ -241,6 +253,7 @@ static func tool_job_work_ticks(job_type: int) -> int:
 		Type.CARVE_LEDGER_STONE:    return 30  # Faster (was 60)
 		Type.COOK_MEAT:         return 8   # Faster (was 15)
 		Type.COOK_BERRIES:      return 5   # Faster (was 10)
+		Type.COOK_FISH:         return 6
 		Type.DRY_MEAT:          return 12  # Faster (was 25)
 		Type.PLANT_SEEDS:       return 6   # Faster (was 12)
 		Type.HARVEST_CROPS:     return 8   # Faster (was 15)
@@ -280,6 +293,7 @@ static func tool_job_skill(job_type: int) -> int:
 		Type.CRAFT_SPEAR:  return HeelKawnianData.Skill.HUNTING
 		Type.COOK_MEAT:    return HeelKawnianData.Skill.BUILDING
 		Type.COOK_BERRIES: return HeelKawnianData.Skill.FORAGING
+		Type.COOK_FISH:    return HeelKawnianData.Skill.FORAGING
 		Type.DRY_MEAT:     return HeelKawnianData.Skill.BUILDING
 		Type.PLANT_SEEDS:  return HeelKawnianData.Skill.FORAGING
 		Type.HARVEST_CROPS:return HeelKawnianData.Skill.FORAGING

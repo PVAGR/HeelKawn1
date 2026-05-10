@@ -245,6 +245,8 @@ var avoidance_tick_timer: int = 0
 var unique_id: String = ""
 var lineage_id: String = ""
 var biography: Array[String] = []
+## Final words or deathbed phrases that can be carried into memorials.
+var last_words: String = ""
 var physical_scars: Array[String] = []
 ## Settlement key (string) -> standing score for trade / entry hooks.
 var settlement_reputation: Dictionary = {}
@@ -305,6 +307,15 @@ var birth_tick: int = 0
 var birth_settlement: int = -1
 var parent_a_id: int = -1
 var parent_b_id: int = -1
+## Inherited family trauma weights used by the decision rules.
+var parental_trauma_weights: Dictionary = {}
+# Generational trauma: inherited from parents, affects decision weights
+var inherited_trauma: Dictionary = {
+	"starvation_fear": 0.0,   # 0.0-1.0: hoard food more aggressively
+	"violence_aversion": 0.0, # 0.0-1.0: avoid dangerous tiles
+	"loss_grief": 0.0,        # 0.0-1.0: seek social bonds more
+}
+var parent_id: int = -1  # ID of the biological primary parent
 var children_count: int = 0
 ## Likes/dislikes: randomly assigned at birth, inherited by children with mutation.
 ## Key = category string, value = float 0.0-1.0 (>0.6 = liked, <0.4 = disliked).
@@ -323,6 +334,7 @@ var is_cohort_anchor: bool = false
 ## that class of open job. Eating, sleeping, and hauling are not jobs; they
 ## are always available. Toggled from the PawnInfoPanel when a pawn is selected.
 var work_forage: bool = true
+var work_fish:   bool = true
 var work_mine:   bool = true
 var work_chop:   bool = true
 var work_hunt:   bool = true
@@ -2982,6 +2994,7 @@ static func skill_for_job(job_type: int) -> int:
 		Job.Type.BUILD_SHRINE:      return Skill.BUILDING
 		Job.Type.COOK_MEAT:         return Skill.BUILDING
 		Job.Type.COOK_BERRIES:      return Skill.FORAGING
+		Job.Type.COOK_FISH:         return Skill.FORAGING
 		Job.Type.DRY_MEAT:          return Skill.BUILDING
 		Job.Type.PLANT_SEEDS:       return Skill.FORAGING
 		Job.Type.HARVEST_CROPS:     return Skill.FORAGING
@@ -3010,8 +3023,8 @@ static func skill_for_job(job_type: int) -> int:
 			return Skill.BUILDING  # Trade
 		Job.Type.BUILD_ROAD:
 			return Skill.BUILDING  # Infrastructure
-		Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR:
-			return Skill.BUILDING  # Storage
+		Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR, Job.Type.BUILD_FORD, Job.Type.BUILD_WATER_MILL:
+			return Skill.BUILDING  # Storage / river / mill
 	return -1
 
 
@@ -3028,7 +3041,8 @@ func allows_job_type(job_type: int) -> bool:
 			return work_chop
 		Job.Type.HUNT:
 			return work_hunt
-		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+		Job.Type.FISH:
+			return work_fish
 			return work_build
 		Job.Type.TRADE_HAUL:
 			return true
@@ -3040,7 +3054,7 @@ func allows_job_type(job_type: int) -> bool:
 			return work_build
 		Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, 		Job.Type.BUILD_MARKER_STONE, Job.Type.BUILD_SHRINE:
 			return work_build
-		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.DRY_MEAT:
+		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH, Job.Type.DRY_MEAT:
 			return work_forage
 		Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS:
 			return work_forage
@@ -3062,7 +3076,8 @@ func allows_job_type(job_type: int) -> bool:
 		Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, \
 		Job.Type.BUILD_MARKET, Job.Type.BUILD_TRADING_POST, \
 		Job.Type.BUILD_ROAD, \
-		Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR:
+		Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR, \
+		Job.Type.BUILD_FORD, Job.Type.BUILD_WATER_MILL:
 			return work_build  # All construction = building skill
 	return true
 
@@ -3074,6 +3089,8 @@ func _allows_job_type_lightweight(job_type: int) -> bool:
 		return work_chop
 	if job_type == Job.Type.HUNT:
 		return work_hunt
+	if job_type == Job.Type.FISH:
+		return work_fish
 	if job_type == Job.Type.MINE:
 		return work_mine and profession_progress_xp() >= 100
 	if job_type == Job.Type.BUILD_BED or job_type == Job.Type.BUILD_DOOR:
@@ -3094,7 +3111,7 @@ func _allows_job_type_lightweight(job_type: int) -> bool:
 		return work_build and profession_progress_xp() >= 200
 	if job_type == Job.Type.BUILD_MARKER_STONE or job_type == Job.Type.BUILD_SHRINE:
 		return work_build and profession_progress_xp() >= 400
-	if job_type == Job.Type.COOK_MEAT or job_type == Job.Type.COOK_BERRIES:
+	if job_type == Job.Type.COOK_MEAT or job_type == Job.Type.COOK_BERRIES or job_type == Job.Type.COOK_FISH:
 		return work_forage and profession_progress_xp() >= 100
 	if job_type == Job.Type.DRY_MEAT:
 		return work_forage and profession_progress_xp() >= 200
@@ -3221,6 +3238,7 @@ func to_portable_character_export(export_tick: int, world_seed: int, origin_regi
 		"birth_tick": birth_tick,
 		"parent_a_id": parent_a_id,
 		"parent_b_id": parent_b_id,
+		"parental_trauma_weights": parental_trauma_weights.duplicate(true),
 		"children_count": children_count,
 		"current_profession": current_profession,
 		"skills": skills.duplicate(true),
@@ -3238,6 +3256,7 @@ func to_portable_character_export(export_tick: int, world_seed: int, origin_regi
 		"soul_id": unique_id,
 		"lineage_id": lineage_id,
 		"biography_lines": biography.size(),
+		"last_words": last_words,
 		"physical_scars": physical_scars.duplicate(),
 	}
 
@@ -3315,6 +3334,7 @@ func to_save_dict() -> Dictionary:
 		"birth_tick": birth_tick,
 		"parent_a_id": parent_a_id,
 		"parent_b_id": parent_b_id,
+		"parental_trauma_weights": parental_trauma_weights.duplicate(true),
 		"children_count": children_count,
 		"bloodline_id": bloodline_id,
 		"influence": influence,
@@ -3324,7 +3344,8 @@ func to_save_dict() -> Dictionary:
 		"cohort_job_type": cohort_job_type,
 		"is_cohort_anchor": is_cohort_anchor,
 		"work_forage": work_forage,
-		"work_mine": work_mine,
+		"work_fish":   work_fish,
+		"work_mine":   work_mine,
 		"work_chop": work_chop,
 		"work_hunt": work_hunt,
 		"work_build": work_build,
@@ -3446,6 +3467,9 @@ static func from_save_dict(d: Dictionary) -> HeelKawnianData:
 	p.birth_tick = int(d.get("birth_tick", 0))
 	p.parent_a_id = int(d.get("parent_a_id", -1))
 	p.parent_b_id = int(d.get("parent_b_id", -1))
+	p.parental_trauma_weights = {}
+	if d.has("parental_trauma_weights") and d["parental_trauma_weights"] is Dictionary:
+		p.parental_trauma_weights = (d["parental_trauma_weights"] as Dictionary).duplicate(true)
 	p.children_count = int(d.get("children_count", 0))
 	p.bloodline_id = int(d.get("bloodline_id", -1))
 	p.influence = float(d.get("influence", 0.0))
@@ -3455,7 +3479,8 @@ static func from_save_dict(d: Dictionary) -> HeelKawnianData:
 	p.cohort_job_type = int(d.get("cohort_job_type", -1))
 	p.is_cohort_anchor = bool(d.get("is_cohort_anchor", false))
 	p.work_forage = bool(d.get("work_forage", true))
-	p.work_mine = bool(d.get("work_mine", true))
+	p.work_fish   = bool(d.get("work_fish", true))
+	p.work_mine   = bool(d.get("work_mine", true))
 	p.work_chop = bool(d.get("work_chop", true))
 	p.work_hunt = bool(d.get("work_hunt", true))
 	p.work_build = bool(d.get("work_build", true))
@@ -3473,6 +3498,7 @@ static func from_save_dict(d: Dictionary) -> HeelKawnianData:
 	if d.has("biography") and d["biography"] is Array:
 		for line in d["biography"]:
 			p.biography.append(str(line))
+	p.last_words = str(d.get("last_words", ""))
 	p.physical_scars = []
 	if d.has("physical_scars") and d["physical_scars"] is Array:
 		for sc in d["physical_scars"]:

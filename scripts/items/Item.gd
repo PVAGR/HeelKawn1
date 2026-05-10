@@ -29,6 +29,13 @@ enum Type {
 	PEN,
 	BOOK,
 	WRITTEN_BOOK,
+	# --- Fishing ---
+	FISH,            # caught by FISH job; good hunger restore
+	COOKED_FISH,     # cooked fish: better nutrition
+	# --- Ammo & crafting materials ---
+	BONE,            # hunting byproduct (crafting material)
+	STONE_ARROW,     # crafted: flint + stick → basic ranged ammo
+	BONE_ARROW,      # crafted: bone + stick → better ranged ammo
 }
 
 ## Display color for the carry-indicator above a pawn and for the stockpile icon.
@@ -54,6 +61,11 @@ const COLORS: Dictionary = {
 	Type.PEN: Color8(210, 180, 140), # tan feather shaft
 	Type.BOOK: Color8(101, 67, 33), # saddle brown cover
 	Type.WRITTEN_BOOK: Color8(101, 67, 33), # same as book
+	Type.FISH: Color8( 70, 130, 180), # steel blue
+	Type.COOKED_FISH: Color8(210, 140,  80), # cooked golden
+	Type.BONE: Color8(220, 210, 190), # off-white bone
+	Type.STONE_ARROW: Color8(140, 140, 150), # gray arrowhead
+	Type.BONE_ARROW: Color8(200, 185, 165), # bone arrowhead
 }
 
 const NAMES: Dictionary = {
@@ -78,6 +90,11 @@ const NAMES: Dictionary = {
 	Type.PEN: "Pen",
 	Type.BOOK: "Book",
 	Type.WRITTEN_BOOK: "Written Book",
+	Type.FISH: "Fish",
+	Type.COOKED_FISH: "Cooked Fish",
+	Type.BONE: "Bone",
+	Type.STONE_ARROW: "Stone Arrow",
+	Type.BONE_ARROW: "Bone Arrow",
 }
 
 ## Short single-letter label used in the stockpile's inventory readout.
@@ -103,6 +120,11 @@ const LABELS: Dictionary = {
 	Type.PEN: "N",
 	Type.BOOK: "B",
 	Type.WRITTEN_BOOK: "W",
+	Type.FISH: "F",
+	Type.COOKED_FISH: "C",
+	Type.BONE: "B",
+	Type.STONE_ARROW: "a",
+	Type.BONE_ARROW: "b",
 }
 
 ## Hunger restored per unit when a pawn consumes this item. Non-food items
@@ -131,6 +153,11 @@ const HUNGER_RESTORE: Dictionary = {
 	Type.PEN: 0,
 	Type.BOOK: 0,
 	Type.WRITTEN_BOOK: 0,
+	Type.FISH: 75.0,       # raw fish, between berry and meat
+	Type.COOKED_FISH: 110.0, # cooked, close to cooked meat
+	Type.BONE: 0.0,
+	Type.STONE_ARROW: 0.0,
+	Type.BONE_ARROW: 0.0,
 }
 
 
@@ -175,6 +202,11 @@ const IS_TOOL: Dictionary = {
 	Type.PEN: false,
 	Type.BOOK: false,
 	Type.WRITTEN_BOOK: false,
+	Type.FISH: false,
+	Type.COOKED_FISH: false,
+	Type.BONE: false,
+	Type.STONE_ARROW: false,
+	Type.BONE_ARROW: false,
 }
 
 ## Durability: max uses before the tool breaks. Each job completion consumes 1 use.
@@ -196,6 +228,11 @@ const TOOL_DURABILITY: Dictionary = {
 	Type.PEN: 0,
 	Type.BOOK: 0,
 	Type.WRITTEN_BOOK: 0,
+	Type.FISH: 0,
+	Type.COOKED_FISH: 0,
+	Type.BONE: 0,
+	Type.STONE_ARROW: 0,
+	Type.BONE_ARROW: 0,
 }
 
 ## Job efficacy multiplier per tool type. Maps Job.Type -> multiplier.
@@ -259,6 +296,17 @@ const CRAFTING_RECIPES: Dictionary = {
 		{"type": Type.INK, "qty": 1},
 	],
 	# WRITTEN_BOOK crafted post-placement/write
+	Type.BONE: [
+		{"type": Type.MEAT, "qty": 1},  # bones from meat processing
+	],
+	Type.STONE_ARROW: [
+		{"type": Type.FLINT, "qty": 1},
+		{"type": Type.STICK, "qty": 1},
+	],
+	Type.BONE_ARROW: [
+		{"type": Type.BONE, "qty": 1},
+		{"type": Type.STICK, "qty": 1},
+	],
 }
 
 
@@ -299,6 +347,11 @@ const FOOD_SPOILAGE_TICKS: Dictionary = {
 	Type.DRIED_MEAT:   20000,  # drying extends life even more
 	Type.COOKED_BERRIES:10000, # slightly better than raw
 	Type.SEEDS:        50000,  # seeds last longest (meant for planting)
+	Type.FISH:         2500,   # raw fish spoils fast
+	Type.COOKED_FISH:  12000,  # cooked fish lasts
+	Type.BONE:         0,
+	Type.STONE_ARROW:  0,
+	Type.BONE_ARROW:   0,
 }
 
 ## Cooking recipes: output_type -> [{input_type, qty}, ...]
@@ -315,6 +368,10 @@ const COOKING_RECIPES: Dictionary = {
 	Type.DRIED_MEAT: [
 		{"type": Type.MEAT, "qty": 2},
 		{"type": Type.WOOD, "qty": 1},  # fuel for smoking
+	],
+	Type.COOKED_FISH: [
+		{"type": Type.FISH, "qty": 1},
+		{"type": Type.WOOD, "qty": 1},  # fuel
 	],
 }
 

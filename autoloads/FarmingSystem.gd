@@ -121,6 +121,10 @@ func _update_crop_growth(tick: int) -> void:
 		plot.water_level -= config.water_need / 100.0
 		plot.water_level = maxf(0.0, plot.water_level)
 		
+		# Irrigation: river-adjacent plots get passive water replenishment
+		if _is_adjacent_to_river(plot.tile):
+			plot.water_level = minf(1.0, plot.water_level + 0.02)
+		
 		# Check if ready to harvest
 		if plot.growth_progress >= 1.0:
 			plot.status = "ready"
@@ -471,3 +475,20 @@ func debug_clear_all() -> void:
 	farm_plots.clear()
 	_next_plot_id = 1
 	print("[Farming] Debug: All plots cleared")
+
+
+## Check if a tile is adjacent to a river tile, for irrigation bonus.
+func _is_adjacent_to_river(tile: Vector2i) -> bool:
+	if _world == null or _world.data == null:
+		return false
+	for dx in [-1, 0, 1]:
+		for dy in [-1, 0, 1]:
+			if dx == 0 and dy == 0:
+				continue
+			var nx: int = tile.x + dx
+			var ny: int = tile.y + dy
+			if not _world.data.in_bounds(nx, ny):
+				continue
+			if _world.data.get_feature(nx, ny) == TileFeature.Type.RIVER:
+				return true
+	return false

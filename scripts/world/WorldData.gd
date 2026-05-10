@@ -71,6 +71,8 @@ static func is_tile_walkable(data: WorldData, x: int, y: int) -> bool:
 	if not data.in_bounds(x, y):
 		return false
 	var i: int = data.index(x, y)
+	if int(data.features[i]) == TileFeature.Type.FORD:
+		return true  # Ford makes any tile crossable
 	if not Biome.is_passable(data.biomes[i]):
 		return false
 	if int(data.features[i]) == TileFeature.Type.WALL:

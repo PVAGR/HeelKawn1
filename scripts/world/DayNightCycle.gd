@@ -15,6 +15,18 @@ const COLOR_DAWN:     Color = Color(1.00, 0.75, 0.60)
 const COLOR_NOON:     Color = Color(1.00, 1.00, 1.00)
 const COLOR_DUSK:     Color = Color(1.00, 0.55, 0.42)
 
+enum TimeBand {
+	NIGHT,
+	DAWN,
+	DAY,
+	DUSK,
+}
+
+const DAWN_START: float = 0.22
+const DAWN_END: float = 0.32
+const DUSK_START: float = 0.68
+const DUSK_END: float = 0.78
+
 var _last_day: int = -1
 
 
@@ -53,8 +65,12 @@ func sync_to_tick(tick: int) -> void:
 
 
 func _apply_for_tick(tick: int) -> void:
-	var phase: float = float(tick % TICKS_PER_DAY) / float(TICKS_PER_DAY)
+	var phase: float = phase_for_tick(tick)
 	color = _color_for_phase(phase)
+
+
+static func phase_for_tick(tick: int) -> float:
+	return float(tick % TICKS_PER_DAY) / float(TICKS_PER_DAY)
 
 
 ## Phase boundaries used by gameplay (sleep schedule, future: nocturnal mobs).
@@ -65,8 +81,32 @@ const NIGHT_END:   float = 0.22  # pre-dawn / early morning
 
 ## Static convenience: is the given tick during nighttime?
 static func is_night_for_tick(tick: int) -> bool:
-	var phase: float = float(tick % TICKS_PER_DAY) / float(TICKS_PER_DAY)
+	var phase: float = phase_for_tick(tick)
 	return phase >= NIGHT_START or phase < NIGHT_END
+
+
+static func is_dawn_for_tick(tick: int) -> bool:
+	var phase: float = phase_for_tick(tick)
+	return phase >= DAWN_START and phase < DAWN_END
+
+
+static func is_dusk_for_tick(tick: int) -> bool:
+	var phase: float = phase_for_tick(tick)
+	return phase >= DUSK_START and phase < DUSK_END
+
+
+static func is_day_for_tick(tick: int) -> bool:
+	return not is_night_for_tick(tick) and not is_dawn_for_tick(tick) and not is_dusk_for_tick(tick)
+
+
+static func time_band_for_tick(tick: int) -> int:
+	if is_night_for_tick(tick):
+		return TimeBand.NIGHT
+	if is_dawn_for_tick(tick):
+		return TimeBand.DAWN
+	if is_dusk_for_tick(tick):
+		return TimeBand.DUSK
+	return TimeBand.DAY
 
 
 ## Instance accessor: is "right now" nighttime, according to GameManager's clock?

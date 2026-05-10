@@ -184,6 +184,9 @@ func _tile_color(x: int, y: int) -> Color:
 			and feature != TileFeature.Type.TREE
 			and feature != TileFeature.Type.RABBIT
 			and feature != TileFeature.Type.DEER
+			and feature != TileFeature.Type.RIVER
+			and feature != TileFeature.Type.FORD
+			and feature != TileFeature.Type.FLOOD_DEPOSIT
 		)
 		if is_built_feature:
 			var rk_ct: int = WorldMemory._region_key(x, y) if WorldMemory != null else 0
@@ -207,7 +210,7 @@ func _tile_color(x: int, y: int) -> Color:
 			var g: float = (base.r + base.g + base.b) * 0.33
 			base = base.lerp(Color(g, g * 0.95, g * 0.9, 1.0), 0.22)
 	else:
-		base = Biome.color_for(data.biomes[i])
+		base = Biome.color_for_season(data.biomes[i], Biome.season_for_tick(GameManager.tick_count))
 		# Terrain noise: deterministic per-tile color variation for visual richness
 		var noise_hash: int = (x * 19349663 + y * 73856093) & 0xFF
 		var noise_val: float = float(noise_hash) / 255.0  # 0..1

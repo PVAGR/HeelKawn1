@@ -7,12 +7,18 @@ extends Node
 ## - Cooking job validation (requires fire pit nearby)
 ## - Famine detection and emergency food measures
 ## - Seed planting and crop growth tracking
+## - Preservation bonuses (cellar doubles shelf life, drying/smoking)
 
 const SPOILAGE_CHECK_INTERVAL: int = 100  # Check spoilage every N ticks
 const FAMINE_FOOD_THRESHOLD: int = 5      # Total food units below this = famine
 
 var _crop_tiles: Dictionary = {}  # tile_key -> {planted_tick, growth_ticks, type}
 const CROP_GROWTH_TICKS: int = 5000  # Ticks for crops to mature
+
+# Per-zone spoilage tracking: "zone_key" -> {"type": accumulated_ticks, ...}
+var _zone_spoilage: Dictionary = {}
+# Smoking/drying racks: tile_key -> tick_started
+var _drying_racks: Dictionary = {}
 
 
 func _ready() -> void:
@@ -48,25 +54,47 @@ func _spoilage_check_zone(zone: Stockpile) -> void:
 	if zone == null:
 		return
 	
+	var zone_key: String = _zone_key(zone)
+	var is_cellar: bool = _is_near_feature(zone.tile, TileFeature.Type.CELLAR, 3) if zone != null else false
+	
+	# Ensure zone tracking data exists
+	if not _zone_spoilage.has(zone_key):
+		_zone_spoilage[zone_key] = {}
+	
+	var zone_data: Dictionary = _zone_spoilage[zone_key]
+	
 	# Check each perishable item type
-	for item_type in [Item.Type.MEAT, Item.Type.BERRY, Item.Type.COOKED_MEAT, Item.Type.COOKED_BERRIES, Item.Type.DRIED_MEAT]:
+	for item_type in [Item.Type.MEAT, Item.Type.BERRY, Item.Type.FISH,
+			Item.Type.COOKED_MEAT, Item.Type.COOKED_FISH,
+			Item.Type.COOKED_BERRIES, Item.Type.DRIED_MEAT]:
 		var count: int = zone.count_of(item_type)
 		if count <= 0:
+			zone_data.erase(item_type)
 			continue
 		
 		var spoilage_ticks: int = Item.food_spoilage_ticks(item_type)
 		if spoilage_ticks <= 0:
 			continue  # Never spoils
 		
-		# Simplified spoilage: each checked item rolls from a named WorldRNG stream.
-		# In a full system, we'd track per-item age; this keeps decay replay-safe.
-		var spoil_chance: float = float(SPOILAGE_CHECK_INTERVAL) / float(spoilage_ticks)
-		var spoil_count: int = 0
+		# Accumulate ticks for this food type in this zone
+		var accumulated: int = zone_data.get(item_type, 0)
+		accumulated += SPOILAGE_CHECK_INTERVAL
 		
-		for i in range(count):
-			var salt: int = _spoilage_roll_salt(zone, item_type, i)
-			if WorldRNG.chance_for(&"food_chain:stockpile_spoilage", spoil_chance, salt):
-				spoil_count += 1
+		# Apply preservation bonuses
+		var effective_ticks: int = spoilage_ticks
+		if is_cellar:
+			effective_ticks *= 2  # Cellar doubles shelf life
+		if item_type == Item.Type.DRIED_MEAT:
+			effective_ticks = int(float(effective_ticks) * 1.5)  # Dried lasts longer
+		
+		# Deterministic spoilage: spoil 1 item per threshold crossed
+		var spoil_count: int = 0
+		while accumulated >= effective_ticks and count > 0:
+			spoil_count += 1
+			accumulated -= effective_ticks
+			count -= 1
+		
+		zone_data[item_type] = accumulated % effective_ticks
 		
 		if spoil_count > 0:
 			zone.take_item(item_type, spoil_count)
@@ -77,10 +105,10 @@ func _spoilage_check_zone(zone: Stockpile) -> void:
 				"item_name": Item.name_for(item_type),
 				"qty": spoil_count,
 				"tick": GameManager.tick_count,
-				"zone": {"x": zone.position.x, "y": zone.position.y},
+				"zone": {"x": zone.tile.x, "y": zone.tile.y},
 			})
 			if GameManager.verbose_logs():
-				print("[FoodChain] %d %s spoiled in stockpile" % [spoil_count, Item.name_for(item_type)])
+				print("[FoodChain] %d %s spoiled in stockpile (cellar=%s)" % [spoil_count, Item.name_for(item_type), is_cellar])
 
 
 ## Check if a fire pit exists near the given tile (for cooking jobs).
@@ -216,7 +244,9 @@ func get_total_nutrition() -> float:
 	
 	var total: float = 0.0
 	for zone in StockpileManager.zones():
-		for item_type in [Item.Type.BERRY, Item.Type.MEAT, Item.Type.COOKED_MEAT, Item.Type.DRIED_MEAT, Item.Type.COOKED_BERRIES]:
+		for item_type in [Item.Type.BERRY, Item.Type.MEAT, Item.Type.FISH,
+				Item.Type.COOKED_MEAT, Item.Type.COOKED_FISH,
+				Item.Type.DRIED_MEAT, Item.Type.COOKED_BERRIES]:
 			var count: int = zone.count_of(item_type)
 			total += float(count) * Item.hunger_restore(item_type)
 	
@@ -234,3 +264,22 @@ func _spoilage_roll_salt(zone: Stockpile, item_type: int, item_index: int) -> in
 	var tick: int = GameManager.tick_count if GameManager != null else 0
 	var anchor: Vector2i = zone.tile if zone != null else Vector2i.ZERO
 	return tick * 1000003 + anchor.x * 73856093 + anchor.y * 19349663 + item_type * 83492791 + item_index
+
+
+func _zone_key(zone: Stockpile) -> String:
+	return "%d,%d-%d,%d" % [zone.rect.position.x, zone.rect.position.y, zone.rect.size.x, zone.rect.size.y]
+
+
+## Check if a specific tile feature exists within radius of a tile
+func _is_near_feature(tile: Vector2i, feature_type: int, radius: int) -> bool:
+	var world: World = _get_world()
+	if world == null or world.data == null:
+		return false
+	for dx in range(-radius, radius + 1):
+		for dy in range(-radius, radius + 1):
+			var check: Vector2i = tile + Vector2i(dx, dy)
+			if not world.data.in_bounds(check.x, check.y):
+				continue
+			if world.data.get_feature(check.x, check.y) == feature_type:
+				return true
+	return false

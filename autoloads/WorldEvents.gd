@@ -230,10 +230,11 @@ func _should_trigger_trade_caravan() -> bool:
 		return false
 	
 	var z: Stockpile = zones[0]
-	var total_food: int = z.count_of(Item.Type.BERRY) + z.count_of(Item.Type.MEAT)
+	var total_food: int = z.count_of(Item.Type.BERRY) + z.count_of(Item.Type.MEAT) \
+			+ z.count_of(Item.Type.FISH) + z.count_of(Item.Type.COOKED_FISH)
 	var total_wood: int = z.count_of(Item.Type.WOOD)
 	var total_stone: int = z.count_of(Item.Type.STONE)
-	
+
 	# Trade caravan arrives when stockpiles are critically low
 	return total_food < 10 or total_wood < 5 or total_stone < 5
 
@@ -258,8 +259,9 @@ func _should_trigger_locust_swarm() -> bool:
 		return false
 	
 	var z: Stockpile = zones[0]
-	var total_food: int = z.count_of(Item.Type.BERRY) + z.count_of(Item.Type.MEAT)
-	
+	var total_food: int = z.count_of(Item.Type.BERRY) + z.count_of(Item.Type.MEAT) \
+			+ z.count_of(Item.Type.FISH) + z.count_of(Item.Type.COOKED_FISH)
+
 	# Locust swarm only when food stockpiles are high (attracts swarm)
 	return total_food > 50
 
@@ -318,6 +320,8 @@ func _should_trigger_regional_shortage() -> bool:
 	var total_resources: int = (
 			z.count_of(Item.Type.BERRY)
 			+ z.count_of(Item.Type.MEAT)
+			+ z.count_of(Item.Type.FISH)
+			+ z.count_of(Item.Type.COOKED_FISH)
 			+ z.count_of(Item.Type.WOOD)
 			+ z.count_of(Item.Type.STONE)
 	)
@@ -442,13 +446,15 @@ func _trigger_trade_caravan(tick: int) -> void:
 	var added_wood: int = 4
 	var added_stone: int = 3
 	var added_berry: int = 6
+	var added_fish: int = 2
 	var zones: Array[Stockpile] = StockpileManager.zones()
 	if not zones.is_empty():
 		var z: Stockpile = zones[0]
 		z.add_item(Item.Type.WOOD, added_wood)
 		z.add_item(Item.Type.STONE, added_stone)
 		z.add_item(Item.Type.BERRY, added_berry)
-	var caravan_payload: Dictionary = {"wood": added_wood, "stone": added_stone, "berry": added_berry}
+		z.add_item(Item.Type.FISH, added_fish)
+	var caravan_payload: Dictionary = {"wood": added_wood, "stone": added_stone, "berry": added_berry, "fish": added_fish}
 	if (
 			_last_regional_shortage_tick >= 0
 			and tick - _last_regional_shortage_tick <= WORLD_EVENT_CHECK_INTERVAL * 3
@@ -479,6 +485,8 @@ func _trigger_locust_swarm(_tick: int) -> void:
 			continue
 		drained += z.take_item(Item.Type.BERRY, LOCUST_FOOD_DRAIN)
 		drained += z.take_item(Item.Type.MEAT, LOCUST_FOOD_DRAIN)
+		drained += z.take_item(Item.Type.FISH, LOCUST_FOOD_DRAIN)
+		drained += z.take_item(Item.Type.COOKED_FISH, LOCUST_FOOD_DRAIN)
 	_record_world_event(
 		"Locust Swarm",
 		"A swarm consumed part of the food reserves.",

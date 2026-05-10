@@ -36,6 +36,7 @@ enum Kind {
 	CULTURE_EVENT = 21,
 	INJURY_EVENT = 22,
 	WORLD_EVENT = 23,
+	FESTIVAL = 24,
 }
 
 var _events: Array[Dictionary] = []

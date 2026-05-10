@@ -264,6 +264,7 @@ const COHORT_LOCUS_PERSIST_MAX_STEP: float = 0.22
 const RESOURCE_PRESSURE_BIAS_MAX: float = 1.12
 ## Social mentoring can happen often; WorldMemory facts stay sparse and auditable.
 const TEACHING_MEMORY_EVENT_MIN_INTERVAL_TICKS: int = 300
+const DREAM_NUDGE_CHECK_EVERY_TICKS: int = 45
 
 # -------------------- AI state --------------------
 
@@ -377,6 +378,7 @@ static var _s_discovered_regions: Dictionary = {}  # region_key -> true (rate-li
 var _cached_utility_context: Dictionary = {}
 var _cached_utility_context_tick: int = -1
 var _cached_utility_food_emergency: bool = false
+var _last_dream_nudge_check_tick: int = -DREAM_NUDGE_CHECK_EVERY_TICKS
 var _anim_t: float = 0.0
 var _draw_frame_counter: int = 0
 var _visual_frame_counter: int = 0  # PERFORMANCE: Adaptive visual update throttling
@@ -1621,6 +1623,10 @@ func _find_family_grave() -> Vector2i:
 func _maybe_follow_dream_nudge() -> bool:
 	if data == null or _world == null:
 		return false
+	var tick_now: int = GameManager.tick_count if GameManager != null else 0
+	if tick_now - _last_dream_nudge_check_tick < DREAM_NUDGE_CHECK_EVERY_TICKS:
+		return false
+	_last_dream_nudge_check_tick = tick_now
 	var pc: Node = get_node_or_null("/root/PawnConsciousness")
 	if pc == null or not pc.has_method("get_dream_nudge"):
 		return false
@@ -1647,8 +1653,8 @@ func _maybe_follow_dream_nudge() -> bool:
 						var dist: int = int(prop.get("distance", 10))
 						if dir_vec != Vector2i.ZERO:
 							var target: Vector2i = data.tile_pos + dir_vec * dist
-							target.x = clampi(target.x, 1, _world.data.get_size().x - 2)
-							target.y = clampi(target.y, 1, _world.data.get_size().y - 2)
+							target.x = clampi(target.x, 1, WorldData.WIDTH - 2)
+							target.y = clampi(target.y, 1, WorldData.HEIGHT - 2)
 							autonomy_draft_goto(target, "prophetic_dream", 2)
 							return true
 

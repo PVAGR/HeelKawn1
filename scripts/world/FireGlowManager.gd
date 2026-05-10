@@ -6,9 +6,10 @@ extends Node2D
 const MAX_LIGHTS: int = 20
 const REFRESH_EVERY_N_TICKS: int = 60
 const LIGHT_COLOR: Color = Color(1.0, 0.75, 0.35, 1.0)
-const LIGHT_ENERGY_DAY: float = 0.4
-const LIGHT_ENERGY_NIGHT: float = 1.2
-const LIGHT_RANGE: float = 40.0  # ~4 tiles at TILE_PIXELS=10
+const LIGHT_ENERGY_DAY: float = 0.08
+const LIGHT_ENERGY_NIGHT: float = 0.24
+const LIGHT_RANGE: float = 8.0  # 80% smaller than prior 40.0 (~0.8 tiles at TILE_PIXELS=10)
+const EMPTY_REFRESH_MULTIPLIER: int = 3
 
 var _world: World = null
 var _camera: Camera2D = null
@@ -17,6 +18,7 @@ var _active_lights: Array[PointLight2D] = []
 var _light_pool: Array[PointLight2D] = []
 var _fire_pit_tiles: Array[Vector2i] = []
 var _light_texture: GradientTexture2D
+var _last_is_night: bool = false
 
 
 func initialize(world_ref: World, camera_ref: Camera2D) -> void:
@@ -45,17 +47,23 @@ func initialize(world_ref: World, camera_ref: Camera2D) -> void:
 		light.visible = false
 		add_child(light)
 		_light_pool.append(light)
+	_last_is_night = DayNightCycle.is_night_for_tick(GameManager.tick_count) if DayNightCycle != null and GameManager != null else false
 
 
 func _process(_delta: float) -> void:
 	_tick_counter += 1
-	if _tick_counter % REFRESH_EVERY_N_TICKS == 0:
+	var refresh_mod: int = REFRESH_EVERY_N_TICKS
+	if _active_lights.is_empty():
+		refresh_mod *= EMPTY_REFRESH_MULTIPLIER
+	if _tick_counter % refresh_mod == 0:
 		_refresh_lights()
-	# Update light energy based on day/night
-	var is_night: bool = DayNightCycle.is_night_for_tick(GameManager.tick_count) if DayNightCycle != null else false
-	var target_energy: float = LIGHT_ENERGY_NIGHT if is_night else LIGHT_ENERGY_DAY
-	for light in _active_lights:
-		light.energy = target_energy
+	# Update energy only when day/night state changes.
+	var is_night: bool = DayNightCycle.is_night_for_tick(GameManager.tick_count) if DayNightCycle != null and GameManager != null else false
+	if is_night != _last_is_night:
+		var target_energy: float = LIGHT_ENERGY_NIGHT if is_night else LIGHT_ENERGY_DAY
+		for light in _active_lights:
+			light.energy = target_energy
+		_last_is_night = is_night
 
 
 func _refresh_lights() -> void:
@@ -95,6 +103,7 @@ func _refresh_lights() -> void:
 		light.position = world_pos
 		light.enabled = true
 		light.visible = true
+		light.energy = LIGHT_ENERGY_NIGHT if _last_is_night else LIGHT_ENERGY_DAY
 		_active_lights.append(light)
 
 

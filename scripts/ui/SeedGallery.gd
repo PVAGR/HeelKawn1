@@ -29,8 +29,10 @@ var _base_seed: int = 0
 
 func _ready() -> void:
 	layer = 80
-	_panel.visible = false
-	_close_button.pressed.connect(_on_close_pressed)
+	if _panel != null:
+		_panel.visible = false
+	if _close_button != null:
+		_close_button.pressed.connect(_on_close_pressed)
 	if has_node("/root/GameManager"):
 		GameManager.game_tick.connect(_on_tick)
 	_apply_panel_style()
@@ -72,6 +74,8 @@ func _on_tick(_tick: int) -> void:
 
 
 func _apply_panel_style() -> void:
+	if _panel == null:
+		return
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.04, 0.05, 0.07, 0.94)
 	style.border_color = Color(0.85, 0.78, 0.40, 0.85)

@@ -156,7 +156,7 @@ func _try_spawn_llm_chatter() -> void:
 		+ "that fits this pawn's current state. Do NOT use markdown or quotes. Return ONLY the line.\n\n"
 		+ context
 	)
-	var response = await _llm_client.request(prompt, {}, {})
+	var response = await _llm_client.request(prompt, {})
 	if response != null and typeof(response) == TYPE_DICTIONARY and response.has("content"):
 		var text: String = str(response.get("content", "")).strip_edges()
 		if not text.is_empty():
@@ -289,7 +289,7 @@ func _generate_response(conv: Dictionary, speaker) -> String:
 			+ "\nReply as %s: " % d.display_name
 		)
 		_llm_busy = true
-		var response = await _llm_client.request(prompt, {}, {}, "Generate one short line of dialogue. No markdown, no quotes.")
+		var response = await _llm_client.request(prompt, {}, "Generate one short line of dialogue. No markdown, no quotes.")
 		_llm_busy = false
 		if response != null and typeof(response) == TYPE_DICTIONARY and response.has("content"):
 			var text: String = str(response.get("content", "")).strip_edges()

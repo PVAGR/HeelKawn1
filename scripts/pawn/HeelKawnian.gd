@@ -7172,7 +7172,8 @@ func _die(_p_cause: String = "") -> void:
 
 		# Memorial obituary — record a eulogy event in WorldMemory
 		var _mcause: String = mem_cause if not mem_cause.is_empty() else _p_cause if not _p_cause.is_empty() else "unknown"
-		var _birth_years: float = data.age_years if data.has("age_years") else float(data.age)
+		var _age_years_val: Variant = data.get("age_years") if data.has_method("get") else null
+		var _birth_years: float = float(_age_years_val) if _age_years_val != null else float(data.age)
 		var _prof: String = "villager"
 		if data.has_method("profession_label_from_enum"):
 			_prof = data.profession_label_from_enum(int(data.current_profession)).to_lower()

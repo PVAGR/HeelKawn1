@@ -170,29 +170,48 @@ func _spawn_fire(tick: int, rng: RandomNumberGenerator) -> void:
 func _spawn_plague(tick: int, rng: RandomNumberGenerator) -> void:
 	if _pawn_spawner == null:
 		return
-	
-	# Find pawns to infect
-	var pawns: Array = _pawn_spawner.pawns
-	if pawns.size() < 3:
+
+	# Build fresh list of eligible living candidates
+	var candidates: Array = []
+	for pawn in _pawn_spawner.pawns:
+		if pawn == null or not is_instance_valid(pawn):
+			continue
+		if pawn.data == null:
+			continue
+		if pawn.data.is_dead:
+			continue
+		# Skip already infected
+		if pawn.data.get_meta("plague_infected", false):
+			continue
+		candidates.append(pawn)
+
+	if candidates.size() < 3:
 		return  # Need minimum population
-	
-	# Infect 1-3 random pawns
-	var infect_count: int = rng.randi_range(1, 3)
+
+	# Infect 1-3 random pawns, clamped to candidate count
+	var infect_count: int = mini(rng.randi_range(1, 3), candidates.size())
 	var affected_pawns: Array = []
-	
+
 	for i in range(infect_count):
-		var pawn: HeelKawnian = pawns[rng.randi() % pawns.size()]
-		if pawn != null and is_instance_valid(pawn) and pawn.data != null:
-			affected_pawns.append(int(pawn.data.id))
-			# Apply sick status to pawn
-			pawn.data.set_meta("plague_infected", true)
-			pawn.data.set_meta("plague_start_tick", tick)
-	
+		if candidates.is_empty():
+			break
+		# randi_range upper bound is inclusive, so size-1 is correct
+		var index: int = rng.randi_range(0, candidates.size() - 1)
+		var pawn: HeelKawnian = candidates[index]
+		candidates.remove_at(index)
+
+		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
+			continue
+
+		affected_pawns.append(int(pawn.data.id))
+		pawn.data.set_meta("plague_infected", true)
+		pawn.data.set_meta("plague_start_tick", tick)
+
 	if affected_pawns.is_empty():
 		return
-	
-	# Find region where plague started
-	var first_pawn: HeelKawnian = _pawn_spawner.pawns[affected_pawns[0]] if affected_pawns.size() > 0 else null
+
+	# Find region where plague started — resolve ID to pawn via lookup, NOT array index
+	var first_pawn: HeelKawnian = _get_pawn_by_id(affected_pawns[0])
 	var region: int = 0
 	if first_pawn != null and first_pawn.data != null:
 		region = _world_memory._region_key(first_pawn.data.tile_pos.x, first_pawn.data.tile_pos.y)
@@ -205,7 +224,7 @@ func _spawn_plague(tick: int, rng: RandomNumberGenerator) -> void:
 		"disaster_id": _next_disaster_id,
 		"type": "plague",
 		"region": region,
-		"tile": first_pawn.data.tile_pos if first_pawn else Vector2i.ZERO,
+		"tile": first_pawn.data.tile_pos if first_pawn != null and first_pawn.data != null else Vector2i.ZERO,
 		"severity": severity,
 		"start_tick": tick,
 		"duration_ticks": duration,

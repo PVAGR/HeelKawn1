@@ -476,6 +476,17 @@ func count_pending_by_type(job_type: int) -> int:
 	return n
 
 
+## Snapshot pending (open + claimed) counts by job type.
+## Useful for planners that need many type lookups in one pass.
+func get_pending_counts() -> Dictionary:
+	var counts: Dictionary = {}
+	for j in _open:
+		counts[j.type] = int(counts.get(j.type, 0)) + 1
+	for j in _claimed:
+		counts[j.type] = int(counts.get(j.type, 0)) + 1
+	return counts
+
+
 ## True if there is already a job (open or claimed) at this tile. Used by
 ## reactive job seeders to avoid duplicate posts.
 func has_job_at(tile: Vector2i) -> bool:

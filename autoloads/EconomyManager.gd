@@ -19,14 +19,17 @@ func _ready() -> void:
 func _load_subsystems() -> void:
 	if _subsystems_loaded:
 		return
+
+	# Reuse global autoloads when they already exist to avoid duplicate simulation work.
+	_trade_memory = get_node_or_null("/root/TradeMemory")
 	
 	# Load economy subsystems as children
 	if FileAccess.file_exists("res://autoloads/TradePlanner.gd"):
 		_trade_planner = load("res://autoloads/TradePlanner.gd").new()
 		_trade_planner.name = "TradePlanner"
 		add_child(_trade_planner)
-	
-	if FileAccess.file_exists("res://autoloads/TradeMemory.gd"):
+
+	if _trade_memory == null and FileAccess.file_exists("res://autoloads/TradeMemory.gd"):
 		_trade_memory = load("res://autoloads/TradeMemory.gd").new()
 		_trade_memory.name = "TradeMemory"
 		add_child(_trade_memory)

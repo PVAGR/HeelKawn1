@@ -440,6 +440,10 @@ func claimed_count() -> int:
 	return _claimed.size()
 
 
+func get_claimed_jobs() -> Array:
+	return _claimed
+
+
 ## Diagnostic: cancellation reason counts for F10 debug report.
 func get_cancel_stats() -> Dictionary:
 	return _cancel_reasons.duplicate()

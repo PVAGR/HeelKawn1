@@ -214,6 +214,43 @@ func _draw_overlay() -> void:
 			var py: float = tile.y * scale_y
 			_overlay.draw_rect(Rect2(px - 0.5, py - 0.5, 1.0, 1.0), PAWN_COLOR)
 
+	# Draw landmark building icons on minimap
+	if _world != null and _world.data != null:
+		var data: WorldData = _world.data
+		var landmark_features: Dictionary = {
+			TileFeature.Type.FIRE_PIT: Color8(255, 140, 30),
+			TileFeature.Type.MARKET: Color8(220, 180, 50),
+			TileFeature.Type.LIBRARY: Color8(100, 80, 140),
+			TileFeature.Type.BARRACKS: Color8(160, 60, 50),
+			TileFeature.Type.WATCHTOWER: Color8(140, 100, 70),
+			TileFeature.Type.SHRINE: Color8(180, 160, 200),
+			TileFeature.Type.WORKSHOP: Color8(160, 120, 80),
+			TileFeature.Type.APOTHECARY: Color8(60, 150, 80),
+			TileFeature.Type.SCHOOL: Color8(130, 110, 150),
+			TileFeature.Type.GRANARY: Color8(180, 160, 80),
+		}
+		# Only scan settlement regions for performance
+		if SettlementMemory != null:
+			var stt: Array = SettlementMemory.get_settlements()
+			for s in stt:
+				if not s is Dictionary:
+					continue
+				var regs: PackedInt32Array = s.get("regions", PackedInt32Array())
+				for rk in regs:
+					var rrx: int = (int(rk) & 0xFFFF) * 16
+					var rry: int = ((int(rk) >> 16) & 0xFFFF) * 16
+					for dy in range(16):
+						for dx in range(16):
+							var tx: int = rrx + dx
+							var ty: int = rry + dy
+							if not data.in_bounds(tx, ty):
+								continue
+							var feat: int = data.features[data.index(tx, ty)]
+							if landmark_features.has(feat):
+								var bpx: float = tx * scale_x
+								var bpy: float = ty * scale_y
+								_overlay.draw_rect(Rect2(bpx - 0.5, bpy - 0.5, 1.5, 1.5), landmark_features[feat])
+
 	# Draw camera viewport rectangle
 	if _camera != null:
 		var vp_size: Vector2 = _camera.get_viewport_rect().size

@@ -18,7 +18,7 @@ extends Node2D
 ## Radius of the pawn circle in world units. Kept <= TILE_PIXELS (8) so a
 ## pawn doesn't visually spill into neighboring tiles as it walks.
 const DRAW_RADIUS: float = 3.5
-## Tiny deterministic pixel figure (skin / hair / apparel from `HeelKawnianData`) — reads as a "sprite"
+## Tiny deterministic pixel figure (skin / hair / apparel from `HeelKawnianData`) â€” reads as a "sprite"
 ## before bespoke art ships; NPCs and player use the same path.
 const PROCEDURAL_PIXEL_PAWN: bool = true
 const OUTLINE_WIDTH: float = 1.0
@@ -101,7 +101,7 @@ const REST_PANIC_THRESHOLD: float = 12.0
 const STOCKPILE_FOOD_CRITICAL_UNITS: int = 3
 ## Colony food pressure at/above this triggers the forage-only pass together with critical units.
 const COLONY_FOOD_PRESSURE_FOR_EMERGENCY: float = 0.56
-## Added inside JobManager priority_cb only — not an exclusive job filter (see _tick_idle).
+## Added inside JobManager priority_cb only â€” not an exclusive job filter (see _tick_idle).
 const AFFINITY_JOB_PRIORITY_BONUS: int = 2
 const UTILITY_JOB_PRIORITY_BIAS_RANGE: int = 6
 const UTILITY_SCORE_NORMALIZER: float = 6.0
@@ -114,7 +114,7 @@ const REST_RECOVER_PER_TICK_SLEEP: float = 0.6
 ## Multiplier applied to REST_RECOVER_PER_TICK_SLEEP when the sleeping pawn is
 ## standing on a bed they own. Beds make sleep ~67% faster.
 const REST_RECOVER_BED_MULTIPLIER: float = 1.67
-## Health recovered per tick while sleeping. Slow but steady — a pawn with 50
+## Health recovered per tick while sleeping. Slow but steady â€” a pawn with 50
 ## health recovers in ~100 ticks of sleep (~1 sleep cycle). In a bed the rate
 ## is doubled, so the same pawn heals in ~50 ticks.
 const HEALTH_RECOVER_PER_TICK_SLEEP: float = 0.5
@@ -229,7 +229,7 @@ const HAUL_RETRY_COOLDOWN_TICKS: int = 10
 ## expensive weight toggles on every pawn path request.
 const FAST_PATHFIND_SPEED_THRESHOLD: float = 6.0
 const REPRODUCTION_COOLDOWN_TICKS: int = 5000
-## ~11.5 tiles at 10px/tile — cohabiting workers can still pair without pixel-perfect overlap.
+## ~11.5 tiles at 10px/tile â€” cohabiting workers can still pair without pixel-perfect overlap.
 const REPRODUCTION_MATE_RANGE_PX: float = 115.0
 ## When there are no bed tiles on the map, widen pairing distance so abandoned/collapse
 ## play can still repopulate (same path component + rapport gates still apply).
@@ -307,6 +307,7 @@ var is_selected: bool = false
 ## order. Empty means stationary.
 var _path: Array[Vector2i] = []
 var _path_index: int = 0
+var _facing_dir: Vector2 = Vector2(0.0, 1.0)  # Last movement direction for sprite rendering
 var _target_tile: Vector2i = Vector2i.ZERO
 var _target_world_pos: Vector2 = Vector2.ZERO
 
@@ -365,13 +366,13 @@ var _recruitment_signal_cache: Array[Dictionary] = []
 var _cohort_stability_ticks: int = 0
 var _cohort_locus_tile: Vector2i = Vector2i(-1, -1)
 var _cohort_stability_job_type: int = -1
-## Per-tick cache for global food queries — avoids every pawn calling StockpileManager.total_food()
+## Per-tick cache for global food queries â€” avoids every pawn calling StockpileManager.total_food()
 static var _s_food_units: int = 0
 static var _s_food_pressure: float = 0.0
 static var _s_food_emergency: bool = false
 static var _s_food_cache_tick: int = -1
 static var _s_discovered_regions: Dictionary = {}  # region_key -> true (rate-limit discovery events)
-## Per-tick cache for idle utility context — avoids rebuilding dict every idle tick
+## Per-tick cache for idle utility context â€” avoids rebuilding dict every idle tick
 var _cached_utility_context: Dictionary = {}
 var _cached_utility_context_tick: int = -1
 var _cached_utility_food_emergency: bool = false
@@ -383,10 +384,10 @@ var _cached_path: Array[Vector2i] = []  # PERFORMANCE: Pathfinding cache
 var _cached_path_target: Vector2i = Vector2i(-9999, -9999)  # PERFORMANCE: Path target cache
 var _cached_path_tick: int = -1  # PERFORMANCE: Path cache timestamp
 const PATH_CACHE_DURATION: int = 20  # PERFORMANCE: Ticks to cache path
-## Cached enemy list — refreshed every 30 ticks to avoid per-pawn scene tree scans.
+## Cached enemy list â€” refreshed every 30 ticks to avoid per-pawn scene tree scans.
 static var _cached_enemies: Array = []
 static var _cached_enemies_tick: int = -100
-## Cached job-type → upper-name lookup. Built once, avoids str()+to_upper()
+## Cached job-type â†’ upper-name lookup. Built once, avoids str()+to_upper()
 ## per pawn per job tick.
 static var _job_type_name_cache: Dictionary = {}
 static var _job_type_name_cache_built: bool = false
@@ -427,7 +428,7 @@ var _next_idle_action_refresh_tick: int = -1
 ## Prevents sim ticks from running before [method bind] + [method _ready] have finished.
 var _pawn_sim_tick_armed: bool = false
 
-## Autoloads (e.g. JobManager) should call these instead of `pawn.data` — the
+## Autoloads (e.g. JobManager) should call these instead of `pawn.data` â€” the
 ## parser can fail to resolve the `data` member on class_name HeelKawnian in autoload scripts.
 func get_pawn_data() -> HeelKawnianData:
 	return data
@@ -897,7 +898,7 @@ func _pawn_connect_sim_tick_deferred() -> void:
 	if not is_instance_valid(self):
 		return
 	if data == null or _world == null:
-		push_warning("HeelKawnian: deferred tick connect skipped — not bound")
+		push_warning("HeelKawnian: deferred tick connect skipped â€” not bound")
 		return
 	
 	# CRITICAL: Arm pawn simulation ticks FIRST
@@ -976,7 +977,7 @@ func _exit_tree() -> void:
 	_invalidate_avoidance_cache_for_pawn(int(data.id))
 
 
-## Re-read the spawn tile’s [CulturalMemory] entry (e.g. after load once ruins are applied). Does not run every tick.
+## Re-read the spawn tileâ€™s [CulturalMemory] entry (e.g. after load once ruins are applied). Does not run every tick.
 func refresh_inherited_cultural_reputation() -> void:
 	if data == null:
 		initial_region_reputation = 0
@@ -1358,7 +1359,7 @@ func _matrix_ambition_target_tile(job_type: int) -> Vector2i:
 	if job_type == _Job.Type.BUILD_WALL or job_type == _Job.Type.BUILD_DOOR:
 		prefer_ring = 8
 	elif job_type == _Job.Type.BUILD_BED or job_type == _Job.Type.BUILD_FIRE_PIT or job_type == _Job.Type.BUILD_STORAGE_HUT or job_type == _Job.Type.BUILD_SHELTER or job_type == _Job.Type.BUILD_HEARTH:
-		prefer_ring = 6  # Increased from 3 — critical infrastructure needs more space
+		prefer_ring = 6  # Increased from 3 â€” critical infrastructure needs more space
 	elif job_type == _Job.Type.GROW_FOOD or job_type == _Job.Type.PLANT_SEEDS:
 		prefer_ring = 6
 	# Phase 6: farms prefer fertile soil, larger search radius
@@ -1372,7 +1373,7 @@ func _matrix_ambition_target_tile(job_type: int) -> Vector2i:
 	elif job_type == _Job.Type.BUILD_ROAD:
 		prefer_ring = 7
 	# Two-pass search: first pass prefers empty tiles, second pass allows clearable features
-	# (TREE, FERTILE_SOIL, STICK, FLINT, RUIN) — set_feature overwrites them on completion.
+	# (TREE, FERTILE_SOIL, STICK, FLINT, RUIN) â€” set_feature overwrites them on completion.
 	for pass_n in range(2):
 		for r in range(1, prefer_ring + 1):
 			for y in range(-r, r + 1):
@@ -1508,7 +1509,7 @@ func _maybe_warrior_patrol() -> bool:
 	if data == null or _world == null or GameManager == null:
 		return false
 	var tick: int = GameManager.tick_count
-	# Don't patrol every tick — check every ~60 ticks
+	# Don't patrol every tick â€” check every ~60 ticks
 	if posmod(tick + int(data.id) * 7, 60) != 0:
 		return false
 	# Only patrol if no HUNT/DEFEND/PROTECT jobs are available
@@ -1583,7 +1584,7 @@ func _maybe_absorb_custom() -> void:
 	if region_settlement != null and region_settlement is Dictionary:
 		region_settlement_id = int((region_settlement as Dictionary).get("center_region", -1))
 	if pawn_settlement < 0 or region_settlement_id < 0 or pawn_settlement == region_settlement_id:
-		return  # Same settlement — no exposure effect
+		return  # Same settlement â€” no exposure effect
 	# Deterministic chance: 10% per check (every 100 ticks = ~1.8% per in-world day)
 	if not WorldRNG.chance_for(_pawn_stream("custom_absorb"), 0.10, _pawn_salt(17)):
 		return
@@ -1638,7 +1639,7 @@ func _maybe_diaspora_homesickness(tick: int) -> void:
 						origin_collapsed = true
 					break
 	if origin_collapsed:
-		# Origin settlement has collapsed — grief event
+		# Origin settlement has collapsed â€” grief event
 		data.mood = maxf(data.mood - 15.0, 0.0)
 		WorldMemory.record_event({
 			"type": "diaspora_grief",
@@ -1649,10 +1650,10 @@ func _maybe_diaspora_homesickness(tick: int) -> void:
 			"origin_settlement": origin_id,
 			"origin_state": "collapsed",
 		})
-		# Clear diaspora origin — grief is processed once
+		# Clear diaspora origin â€” grief is processed once
 		data._diaspora_origin = -1
 	elif not origin_exists:
-		# Origin settlement no longer exists at all — deeper grief
+		# Origin settlement no longer exists at all â€” deeper grief
 		data.mood = maxf(data.mood - 25.0, 0.0)
 		WorldMemory.record_event({
 			"type": "diaspora_grief",
@@ -1794,7 +1795,7 @@ func _perform_inspect_action() -> void:
 		"tile": {"x": data.tile_pos.x, "y": data.tile_pos.y},
 	})
 	# Record ephemeral inspect message for immediate HUD feedback
-	_last_inspect_msg = "%s — %s" % [meaning_label, (", ".join(tags) if tags.size() > 0 else "no notable tags")]
+	_last_inspect_msg = "%s â€” %s" % [meaning_label, (", ".join(tags) if tags.size() > 0 else "no notable tags")]
 	_last_inspect_tick = GameManager.tick_count
 	_request_redraw()
 
@@ -1951,7 +1952,7 @@ func _get_memory_context_for_job(job: Job) -> String:
 	return context
 
 
-## Called from World when a wall appears under this pawn — step off solid tiles.
+## Called from World when a wall appears under this pawn â€” step off solid tiles.
 func nudge_if_standing_on_solid() -> void:
 	if _world == null or _world.pathfinder == null or data == null:
 		return
@@ -2179,6 +2180,12 @@ func _advance_path() -> void:
 	if _path_index < _path.size():
 		_target_tile = _path[_path_index]
 		_target_world_pos = _world.tile_to_world(_target_tile)
+		# Update facing direction for sprite rendering
+		var next_pos: Vector2 = Vector2(_target_tile.x, _target_tile.y)
+		var cur_pos: Vector2 = Vector2(data.tile_pos.x, data.tile_pos.y)
+		var diff: Vector2 = (next_pos - cur_pos).normalized()
+		if diff.length_squared() > 0.01:
+			_facing_dir = diff
 	else:
 		_clear_path()
 		_on_path_complete()
@@ -2189,7 +2196,7 @@ func _clear_path() -> void:
 	_path_index = 0
 	_target_tile = data.tile_pos if data != null else Vector2i.ZERO
 	_target_world_pos = position
-	set_process(false)  # No movement needed — stop per-frame updates
+	set_process(false)  # No movement needed â€” stop per-frame updates
 
 
 func _on_path_complete() -> void:
@@ -2517,7 +2524,7 @@ func _tick_idle() -> void:
 		_eat_from_hand()
 		return
 	# 1b. Starving + carrying non-food: drop it and seek food. Hauling can
-	# wait — survival comes first.
+	# wait â€” survival comes first.
 	if data.hunger <= HUNGER_EMERGENCY and data.is_carrying():
 		data.clear_carry()
 		if _maybe_start_eating():
@@ -2725,7 +2732,7 @@ func _tick_idle() -> void:
 		region_history_offset_cache[region_key] = history_offset
 		return history_offset
 
-	# Simplified priority calculation for performance; affinity is a small nudge — not a separate queue pass — so build/mining jobs can compete with forage.
+	# Simplified priority calculation for performance; affinity is a small nudge â€” not a separate queue pass â€” so build/mining jobs can compete with forage.
 	var priority_cb: Callable = func(j: Job) -> int:
 		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j))
 		if not is_job_history_critical(j.type):
@@ -2865,7 +2872,7 @@ func _tick_idle() -> void:
 						meaning_bias += 1  # rebuild ruined places
 				# Ritual Echo System: custom tags from repeated actions
 				"burial_grove":
-					# Respect burial sites — don't build here, but defend them
+					# Respect burial sites â€” don't build here, but defend them
 					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
 						meaning_bias -= 2  # violation tension
 					if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
@@ -3426,7 +3433,7 @@ func attempt_reproduction() -> bool:
 		var bed: Vector2i = _world.find_free_bed_for(self, data.tile_pos)
 		has_shelter = bed.x >= 0
 	if not has_shelter and _world.bed_count() <= 0:
-		# No furniture anywhere — allow "ground" pairing instead of hard-blocking births.
+		# No furniture anywhere â€” allow "ground" pairing instead of hard-blocking births.
 		has_shelter = true
 	if not has_shelter:
 		return false
@@ -3602,7 +3609,7 @@ func _tick_working() -> void:
 	# old constant-rate baseline). XP accrues only while actually working.
 	var skill: int = HeelKawnianData.skill_for_job(_current_job.type)
 	var speed: float = data.effective_labor_mult() * float(work_step_multiplier)
-	# Tool efficacy is applied inside _calculate_work_efficiency() — don't double-count.
+	# Tool efficacy is applied inside _calculate_work_efficiency() â€” don't double-count.
 	speed *= data.kinship_work_speed_multiplier(_current_job.work_tile)
 	if skill >= 0:
 		speed *= data.work_speed_for(skill)
@@ -3624,7 +3631,7 @@ func _tick_working() -> void:
 		var tool_gear: Variant = data.equipped_gear.get(2, null)  # Slot.TOOL
 		if tool_gear != null and tool_gear.has_method("use"):
 			if not tool_gear.use():
-				# Tool broke — unequip and record event
+				# Tool broke â€” unequip and record event
 				data.unequip_gear(2)
 				WorldMemory.record_event({
 					"type": "gear_break",
@@ -3820,7 +3827,7 @@ func _apply_work_hazards(work_ticks_simulated: int = 1) -> void:
 		data.add_mood_event(MoodEvent.Type.STRESS, 60.0, 300)
 		# Record injury trauma to PawnConsciousness
 		_record_consciousness_event("injury", "Hurt while working (%s)" % Job.describe_type(_current_job.type), -60.0, 7, "survival")
-		# Record grudge against the job type (workplace hazard) — no specific target
+		# Record grudge against the job type (workplace hazard) â€” no specific target
 		# This creates a mild "workplace resentment" that affects job preference
 		
 		# Apply specific injury via BodyRiskManager
@@ -4077,7 +4084,7 @@ func _is_job_tile_still_valid(job: Job) -> bool:
 		_Job.Type.BUILD_ROAD, \
 		_Job.Type.BUILD_GRANARY, _Job.Type.BUILD_CELLAR:
 			# Build sites are valid if the tile doesn't already have a
-			# structure on it (TREE/FERTILE_SOIL are OK — set_feature overwrites
+			# structure on it (TREE/FERTILE_SOIL are OK â€” set_feature overwrites
 			# them on completion) and the underlying biome is passable.
 			var f1: int = _world.data.get_feature(job.tile.x, job.tile.y)
 			# Skip tiles with existing structures (any built feature)
@@ -4212,7 +4219,7 @@ func _complete_current_job() -> void:
 		_Job.Type.GROW_FOOD:
 			# Route into FarmingSystem so plot state (water, health) actually updates.
 			# Item grants are skipped because farm crops (wheat, corn, etc.) don't
-			# yet exist in Item.Type — only the plot mutation matters for now.
+			# yet exist in Item.Type â€” only the plot mutation matters for now.
 			if FarmingSystem != null and FarmingSystem.has_method("complete_farming_job_by_tile"):
 				FarmingSystem.complete_farming_job_by_tile(job.tile, int(data.id))
 			produced_type = _Item.Type.NONE
@@ -4863,11 +4870,11 @@ func _maybe_start_sleeping() -> bool:
 			autonomy_rest_lbl = ah2
 	if _try_walk_to_bed():
 		if not autonomy_rest_lbl.is_empty():
-			_notify_autonomy_feedback("rest → %s" % autonomy_rest_lbl)
+			_notify_autonomy_feedback("rest â†’ %s" % autonomy_rest_lbl)
 		return true
 	_begin_sleeping()
 	if not autonomy_rest_lbl.is_empty():
-		_notify_autonomy_feedback("rest → %s" % autonomy_rest_lbl)
+		_notify_autonomy_feedback("rest â†’ %s" % autonomy_rest_lbl)
 	return true
 
 
@@ -5109,7 +5116,7 @@ func _decay_needs() -> void:
 		if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed and _world != null and _world.is_bed_owned_by(_reserved_bed, self):
 			rate *= REST_RECOVER_BED_MULTIPLIER
 		data.rest = min(100.0, data.rest + rate)
-		# Health recovery while sleeping — injuries heal during rest
+		# Health recovery while sleeping â€” injuries heal during rest
 		var heal_rate: float = HEALTH_RECOVER_PER_TICK_SLEEP
 		if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed and _world != null and _world.is_bed_owned_by(_reserved_bed, self):
 			heal_rate *= HEALTH_RECOVER_BED_MULTIPLIER
@@ -5132,7 +5139,7 @@ func _decay_needs() -> void:
 		data.mood = clampf(data.mood + MOOD_GAIN_PER_TICK_CONTENT - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact + data.kinship_mood_bonus(), 0.0, 100.0)
 	else:
 		data.mood = clampf(data.mood - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact + data.kinship_mood_bonus(), 0.0, 100.0)
-	# Occasional uplift — same world rules, but some people notice small good moments more often.
+	# Occasional uplift â€” same world rules, but some people notice small good moments more often.
 	if posmod(GameManager.tick_count + int(data.id) * 5, 211) == 0:
 		var flutter: float = 0.1 + _bp(4) * 0.22
 		if WorldRNG.chance_for(StringName("pawn_natural_mood:%d" % int(data.id)), flutter, GameManager.tick_count / 200):
@@ -5255,14 +5262,14 @@ func _check_death_conditions() -> void:
 	
 	# Emergency food-seeking for AI agents
 	if data.hunger < 15.0 and _state != State.GOING_TO_EAT and _state != State.EATING:
-		# If carrying food, eat it right now — don't walk to a stockpile.
+		# If carrying food, eat it right now â€” don't walk to a stockpile.
 		if data.is_carrying() and Item.is_food(data.carrying):
 			_eat_from_hand()
 			return
 		_emergency_seek_food()
 		# Record near-death starvation to consciousness
 		if data.hunger < 10.0:
-			_record_consciousness_event("near_death", "Starving — hunger at %.0f" % data.hunger, -80.0, 9, "survival")
+			_record_consciousness_event("near_death", "Starving â€” hunger at %.0f" % data.hunger, -80.0, 9, "survival")
 	
 	# More lenient death conditions
 	if data.hunger <= -5.0:  # Allow some buffer before death
@@ -5404,7 +5411,7 @@ func _check_temperature() -> void:
 		# During grace: body temp drops 5x slower toward cold ambient
 		if ambient_temp < data.body_temperature:
 			temp_change_rate *= 0.2
-		# Grace warmth: body temp stays closer to 37°C
+		# Grace warmth: body temp stays closer to 37Â°C
 		var grace_target: float = lerp(ambient_temp, 37.0, grace_remaining * 0.6)
 		data.body_temperature = lerp(data.body_temperature, grace_target, temp_change_rate)
 	else:
@@ -5898,7 +5905,7 @@ func _spawn_child_pawn(parent_pawn_id: int = -1, second_parent_id: int = -1) -> 
 	return spawner.spawn_child_pawn(_world, data.tile_pos, parent_a, parent_b, GameManager.tick_count)
 
 
-## Single-parent affinity nudge: scale parent's values by 70–130% (deterministic) and lerp child's map.
+## Single-parent affinity nudge: scale parent's values by 70â€“130% (deterministic) and lerp child's map.
 static func _inherit_from_parent(
 		child_pd: HeelKawnianData, parent_id: int, birth_tick: int, pass_index: int = 0
 ) -> void:
@@ -6244,7 +6251,7 @@ static func _life_path_key_for_job(job_type: int) -> String:
 	# CHOP contributes to wanderer (scouting/clearing new ground).
 	if job_type == _Job.Type.CHOP:
 		return "wanderer"
-	# Default: harvest/build → farmer (food & shelter foundation).
+	# Default: harvest/build â†’ farmer (food & shelter foundation).
 	match job_type:
 		_Job.Type.MINE, _Job.Type.MINE_WALL:
 			return "farmer"
@@ -6842,6 +6849,23 @@ func _die(_p_cause: String = "") -> void:
 		if KnowledgeSystem != null:
 			KnowledgeSystem.remove_knowledge_carrier(int(data.id), data.tile_pos)
 
+		# Memorial obituary — record a eulogy event in WorldMemory
+		var _mcause: String = mem_cause if not mem_cause.is_empty() else _p_cause if not _p_cause.is_empty() else "unknown"
+		var _birth_years: float = data.age_years if data.has("age_years") else float(data.age)
+		var _prof: String = "villager"
+		if data.has_method("profession_label_from_enum"):
+			_prof = data.profession_label_from_enum(int(data.current_profession)).to_lower()
+		WorldMemory.record_event({
+			"type": "memorial_created",
+			"tick": GameManager.tick_count,
+			"pawn_id": int(data.id),
+			"pawn_name": data.display_name,
+			"age": _birth_years,
+			"profession": _prof,
+			"cause": _mcause,
+			"parent_a": data.parent_a_id,
+			"parent_b": data.parent_b_id,
+		})
 
 ## Trait / Krond convenience wrappers (delegates to HeelKawnianData)
 func can_afford_trait(trait_res: Resource) -> bool:
@@ -6902,7 +6926,7 @@ static func _level_for(value: float) -> int:
 
 # ==================== consciousness integration ====================
 
-## Record an event to PawnConsciousness. Lightweight — early-outs if system unavailable.
+## Record an event to PawnConsciousness. Lightweight â€” early-outs if system unavailable.
 func _record_consciousness_event(event_type: String, description: String, emotion: float, importance: int, category: String) -> void:
 	var pc: Node = get_node_or_null("/root/PawnConsciousness")
 	if pc == null or not pc.has_method("record_memory"):
@@ -7102,7 +7126,7 @@ func _draw() -> void:
 	if _state == State.SLEEPING:
 		body_color = data.color.darkened(0.25)
 
-	# Profession body tint — strong overlay so pawns of same role look alike
+	# Profession body tint â€” strong overlay so pawns of same role look alike
 	if data.current_profession != HeelKawnianData.Profession.NONE:
 		var prof_tint: Color = _profession_color(data.current_profession)
 		body_color = body_color.lerp(prof_tint, 0.30)
@@ -7113,8 +7137,32 @@ func _draw() -> void:
 		var armor_tint: Color = Color8(140, 160, 200)  # steel blue tint
 		body_color = body_color.lerp(armor_tint, 0.15)
 
-	# Simplified rendering for performance - just draw circle and outline
-	draw_circle(body_origin, body_radius, body_color)
+	# --- Shadow: dark ellipse below body for depth ---
+	_draw_ellipse_shape(body_origin + Vector2(1.5, 2.0), body_radius * 0.9, body_radius * 0.45, Color(0.0, 0.0, 0.0, 0.2))
+
+	# --- Directional body: teardrop when moving, ellipse when sleeping ---
+	if _state == State.SLEEPING:
+		# Horizontal ellipse (laying down)
+		_draw_ellipse_shape(body_origin, body_radius * 1.3, body_radius * 0.6, body_color)
+		# Blanket: lighter overlay
+		_draw_ellipse_shape(body_origin + Vector2(0.0, 0.15), body_radius * 1.1, body_radius * 0.4, body_color.lightened(0.15))
+	else:
+		# Teardrop body: circle + triangle tail pointing away from movement direction
+		var facing_angle: float = atan2(_facing_dir.y, _facing_dir.x)
+		# Body circle
+		draw_circle(body_origin, body_radius, body_color)
+		# Tail: small triangle behind the body (opposite to facing)
+		var tail_angle: float = facing_angle + PI  # opposite direction
+		var tail_tip: Vector2 = body_origin + Vector2(cos(tail_angle), sin(tail_angle)) * (body_radius + 1.2)
+		var tail_side_a: Vector2 = body_origin + Vector2(cos(tail_angle + 0.6), sin(tail_angle + 0.6)) * body_radius * 0.7
+		var tail_side_b: Vector2 = body_origin + Vector2(cos(tail_angle - 0.6), sin(tail_angle - 0.6)) * body_radius * 0.7
+		draw_colored_polygon(
+			PackedVector2Array([tail_tip, tail_side_a, tail_side_b]),
+			body_color.darkened(0.1)
+		)
+		# Head: small lighter circle at the front
+		var head_offset: Vector2 = Vector2(cos(facing_angle), sin(facing_angle)) * (body_radius * 0.5)
+		draw_circle(body_origin + head_offset, body_radius * 0.55, body_color.lightened(0.12))
 	
 	# Outline color communicates state (simplified)
 	var outline_c: Color = Color.BLACK
@@ -7147,6 +7195,13 @@ func _draw() -> void:
 		# Small weapon shape: 2px line + 1px crossguard
 		draw_line(w_pos, w_pos + Vector2(0.0, 4.0), weapon_color, 1.0, true)
 		draw_line(w_pos + Vector2(-1.0, 1.0), w_pos + Vector2(1.0, 1.0), weapon_color, 1.0, true)
+
+	# --- Carrying indicator: tiny colored square showing what pawn is hauling ---
+	if data.is_carrying():
+		var carry_c: Color = _carrying_color(data.carrying)
+		var carry_pos: Vector2 = body_origin + Vector2(body_radius + 1.0, 0.5)
+		draw_rect(Rect2(carry_pos, Vector2(1.5, 1.5)), carry_c, true)
+		draw_rect(Rect2(carry_pos, Vector2(1.5, 1.5)), Color(0, 0, 0, 0.4), false)
 
 	# Profession indicator: visible badge above the pawn
 	if data.current_profession != HeelKawnianData.Profession.NONE:
@@ -7208,22 +7263,11 @@ func _draw() -> void:
 		var c2: Vector2 = body_origin + Vector2(2.5, DRAFT_CHEVRON_Y)
 		draw_polyline([c0, c1, c2], Color(1.0, 0.35, 0.25), 1.0, true)
 
-	# Activity label below pawn — shows what they're doing at a glance
+	# --- Activity status icon: tiny pixel icon above pawn ---
 	if _state != State.IDLE:
-		var activity_text: String = _activity_label()
-		if not activity_text.is_empty():
-			var font: Font = ThemeDB.fallback_font
-			var font_size: int = 5
-			var label_color: Color = _activity_label_color()
-			var label_pos: Vector2 = body_origin + Vector2(0.0, body_radius + 5.0)
-			# Center the text horizontally
-			var str_size: Vector2 = font.get_string_size(activity_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
-			var centered: Vector2 = label_pos - Vector2(str_size.x * 0.5, 0.0)
-			# Shadow for readability
-			draw_string(font, centered + Vector2(0.5, 0.5), activity_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(0.0, 0.0, 0.0, 0.6))
-			draw_string(font, centered, activity_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, label_color)
+		_draw_activity_icon(body_origin, body_radius)
 
-	# Social bond lines — draw thin lines to bonded pawns when selected
+	# Social bond lines â€” draw thin lines to bonded pawns when selected
 	if is_selected and data != null:
 		_draw_social_bonds(body_origin)
 
@@ -7356,7 +7400,7 @@ func _draw_social_bonds(body_origin: Vector2) -> void:
 	const MAX_DIST_SQ: float = 10000.0  # ~100^2 tiles (reduced from 500^2)
 	const FAMILY_BOND_LIMIT: int = 8  # Limit family bonds drawn
 
-	# Family bonds — gold lines
+	# Family bonds â€” gold lines
 	var bonds_drawn: int = 0
 	for other_id in data.family_bonds:
 		if bonds_drawn >= FAMILY_BOND_LIMIT:
@@ -7373,7 +7417,7 @@ func _draw_social_bonds(body_origin: Vector2) -> void:
 		draw_line(body_origin, local_end, Color(1.0, 0.85, 0.3, alpha), 1.0, true)
 		bonds_drawn += 1
 
-	# Social squad — teal line to anchor
+	# Social squad â€” teal line to anchor
 	if data.social_squad_anchor_id >= 0 and data.social_squad_anchor_id != int(data.id):
 		var anchor_pawn: HeelKawnian = _find_pawn_by_id(data.social_squad_anchor_id)
 		if anchor_pawn != null and is_instance_valid(anchor_pawn):
@@ -7382,7 +7426,7 @@ func _draw_social_bonds(body_origin: Vector2) -> void:
 				var local_end: Vector2 = to_local(anchor_pawn.global_position)
 				draw_line(body_origin, local_end, Color(0.3, 0.8, 0.8, 0.5), 1.0, true)
 
-	# Phase 5: Enemy avoidance lines — red lines to grudge-enemies
+	# Phase 5: Enemy avoidance lines â€” red lines to grudge-enemies
 	# OPTIMIZATION: Use cached enemy pawns, limit to top 3 by intensity, stricter culling
 	const ENEMY_DIST_SQ: float = 6400.0  # ~80^2 tiles (stricter culling)
 	var enemies: Array[int] = get_grudge_enemies()
@@ -7431,7 +7475,7 @@ func _activity_label() -> String:
 	match _state:
 		State.WALKING_TO_JOB, State.FETCHING_MATERIAL:
 			if _current_job != null:
-				return "→ %s" % Job.describe_type(_current_job.type).to_lower()
+				return "â†’ %s" % Job.describe_type(_current_job.type).to_lower()
 			return "walking"
 		State.WORKING:
 			if _current_job != null:
@@ -7440,13 +7484,13 @@ func _activity_label() -> String:
 		State.HAULING:
 			return "hauling"
 		State.GOING_TO_EAT:
-			return "→ food"
+			return "â†’ food"
 		State.EATING:
 			return "eating"
 		State.SLEEPING:
 			return "zzz"
 		State.GOING_TO_BED:
-			return "→ bed"
+			return "â†’ bed"
 		State.TEACHING:
 			return "teaching"
 		State.CHALLENGE:
@@ -7505,7 +7549,7 @@ static func _get_enemies_cached() -> Array:
 	return HeelKawnian._cached_enemies
 
 
-## Cached job-type → upper-name string. Avoids str()+to_upper() per pawn per tick.
+## Cached job-type â†’ upper-name string. Avoids str()+to_upper() per pawn per tick.
 static func _cached_job_type_name(job_type: int) -> String:
 	if not HeelKawnian._job_type_name_cache_built:
 		var keys: Array = _Job.Type.keys()
@@ -7743,3 +7787,108 @@ static func _verb_for_job(job_type: int) -> String:
 		_Job.Type.TRADE_HAUL:
 			return "Trading"
 	return "Working"
+
+
+## Draw a tiny activity icon above the pawn showing what they're doing.
+## Replaces the text activity label with a visual icon for faster recognition.
+func _draw_activity_icon(body_origin: Vector2, body_radius: float) -> void:
+	var icon_pos: Vector2 = body_origin + Vector2(0.0, -body_radius - 6.5)
+	var icon_c: Color = _activity_label_color()
+	var s: float = 1.2
+	var job_type: int = _current_job.type if _current_job != null else -1
+	if _state == State.SLEEPING:
+		draw_line(icon_pos + Vector2(-s, -s), icon_pos + Vector2(s, -s), icon_c, 0.8, true)
+		draw_line(icon_pos + Vector2(s, -s), icon_pos + Vector2(-s, s), icon_c, 0.8, true)
+		draw_line(icon_pos + Vector2(-s, s), icon_pos + Vector2(s, s), icon_c, 0.8, true)
+	elif _state == State.EATING or _state == State.GOING_TO_EAT:
+		draw_line(icon_pos + Vector2(0.0, -s), icon_pos + Vector2(0.0, s), icon_c, 0.8, true)
+		draw_line(icon_pos + Vector2(-0.5, -s), icon_pos + Vector2(-0.5, -s + 0.8), icon_c, 0.6, true)
+		draw_line(icon_pos + Vector2(0.5, -s), icon_pos + Vector2(0.5, -s + 0.8), icon_c, 0.6, true)
+	elif _state == State.HAULING:
+		draw_rect(Rect2(icon_pos - Vector2(s, s), Vector2(s * 2, s * 2)), icon_c, false)
+		draw_line(icon_pos + Vector2(-s * 0.5, -s), icon_pos + Vector2(-s * 0.5, s), icon_c, 0.5, true)
+	elif _state == State.TEACHING:
+		draw_rect(Rect2(icon_pos - Vector2(s, s * 0.7), Vector2(s * 2, s * 1.4)), icon_c, false)
+		draw_line(icon_pos + Vector2(0.0, -s * 0.7), icon_pos + Vector2(0.0, s * 0.7), icon_c, 0.5, true)
+	elif _state == State.CHALLENGE:
+		draw_line(icon_pos + Vector2(-s, s), icon_pos + Vector2(s, -s), icon_c, 0.8, true)
+		draw_line(icon_pos + Vector2(s, s), icon_pos + Vector2(-s, -s), icon_c, 0.8, true)
+	elif _state == State.DRAFT_WALK:
+		draw_line(icon_pos + Vector2(0.0, s), icon_pos + Vector2(0.0, -s), icon_c, 0.8, true)
+		draw_line(icon_pos + Vector2(-s * 0.5, -s * 0.3), icon_pos + Vector2(0.0, -s), icon_c, 0.8, true)
+		draw_line(icon_pos + Vector2(s * 0.5, -s * 0.3), icon_pos + Vector2(0.0, -s), icon_c, 0.8, true)
+	elif _state == State.FLEEING:
+		draw_line(icon_pos + Vector2(0.0, -s), icon_pos + Vector2(0.0, s * 0.3), Color(1.0, 0.3, 0.2), 1.0, true)
+		draw_circle(icon_pos + Vector2(0.0, s * 0.7), 0.3, Color(1.0, 0.3, 0.2))
+	elif _state == State.WORKING or _state == State.WALKING_TO_JOB or _state == State.FETCHING_MATERIAL:
+		if job_type == _Job.Type.FORAGE or job_type == _Job.Type.GATHER_STICK or job_type == _Job.Type.GATHER_FLINT:
+			draw_colored_polygon(PackedVector2Array([icon_pos + Vector2(0, -s), icon_pos + Vector2(s, 0), icon_pos + Vector2(0, s), icon_pos + Vector2(-s, 0)]), icon_c)
+		elif job_type == _Job.Type.CHOP:
+			draw_line(icon_pos + Vector2(-s, s), icon_pos + Vector2(s, -s), icon_c, 1.0, true)
+			draw_line(icon_pos + Vector2(s * 0.3, -s), icon_pos + Vector2(s, -s * 0.3), icon_c, 1.0, true)
+		elif job_type == _Job.Type.MINE or job_type == _Job.Type.MINE_WALL:
+			draw_line(icon_pos + Vector2(0.0, s), icon_pos + Vector2(0.0, -s), icon_c, 0.8, true)
+			draw_line(icon_pos + Vector2(-s, -s), icon_pos + Vector2(s, -s), icon_c, 0.8, true)
+		elif job_type == _Job.Type.HUNT:
+			draw_line(icon_pos + Vector2(0.0, s), icon_pos + Vector2(0.0, -s), icon_c, 0.8, true)
+			draw_line(icon_pos + Vector2(-s * 0.4, -s * 0.5), icon_pos + Vector2(0.0, -s), icon_c, 0.8, true)
+			draw_line(icon_pos + Vector2(s * 0.4, -s * 0.5), icon_pos + Vector2(0.0, -s), icon_c, 0.8, true)
+		elif _is_structure_build_job_type(job_type):
+			draw_line(icon_pos + Vector2(0.0, s), icon_pos + Vector2(0.0, -s * 0.3), icon_c, 0.8, true)
+			draw_rect(Rect2(icon_pos + Vector2(-s, -s), Vector2(s * 2, s * 0.7)), icon_c, true)
+		elif job_type == _Job.Type.COOK_MEAT or job_type == _Job.Type.COOK_BERRIES or job_type == _Job.Type.DRY_MEAT:
+			draw_arc(icon_pos, s * 0.8, 0.0, PI, 8, icon_c, 0.8, true)
+			draw_line(icon_pos + Vector2(-s, 0.0), icon_pos + Vector2(s, 0.0), icon_c, 0.8, true)
+		elif job_type == _Job.Type.PROTECT or job_type == _Job.Type.DEFEND:
+			draw_colored_polygon(PackedVector2Array([icon_pos + Vector2(-s, -s), icon_pos + Vector2(s, -s), icon_pos + Vector2(s, 0), icon_pos + Vector2(0, s), icon_pos + Vector2(-s, 0)]), icon_c)
+		elif job_type == _Job.Type.CARVE_GRAVE_MARKER or job_type == _Job.Type.CARVE_KNOWLEDGE_STONE or job_type == _Job.Type.CARVE_LEDGER_STONE:
+			draw_line(icon_pos + Vector2(-s, s), icon_pos + Vector2(s, -s), icon_c, 0.8, true)
+			draw_line(icon_pos + Vector2(s * 0.5, -s * 0.5), icon_pos + Vector2(s, -s * 0.5), icon_c, 0.8, true)
+		elif job_type == _Job.Type.PLANT_SEEDS or job_type == _Job.Type.HARVEST_CROPS:
+			draw_line(icon_pos + Vector2(0.0, s), icon_pos + Vector2(0.0, -s * 0.3), icon_c, 0.8, true)
+			draw_line(icon_pos + Vector2(-s * 0.5, -s * 0.3), icon_pos + Vector2(0.0, 0.0), Color(0.3, 0.8, 0.3), 0.8, true)
+			draw_line(icon_pos + Vector2(s * 0.5, -s * 0.3), icon_pos + Vector2(0.0, 0.0), Color(0.3, 0.8, 0.3), 0.8, true)
+		elif job_type == _Job.Type.TRADE_HAUL:
+			draw_circle(icon_pos, s * 0.7, icon_c)
+			draw_circle(icon_pos, s * 0.4, icon_c.darkened(0.3))
+		else:
+			draw_circle(icon_pos, s * 0.5, icon_c)
+	elif _state == State.CRAFTING:
+		draw_circle(icon_pos, s * 0.6, icon_c)
+		draw_line(icon_pos + Vector2(0.0, -s), icon_pos + Vector2(0.0, s), icon_c, 0.6, true)
+		draw_line(icon_pos + Vector2(-s, 0.0), icon_pos + Vector2(s, 0.0), icon_c, 0.6, true)
+	elif _state == State.GATHERING:
+		draw_line(icon_pos + Vector2(-s * 0.5, s), icon_pos + Vector2(-s * 0.5, -s * 0.3), icon_c, 0.8, true)
+		draw_line(icon_pos + Vector2(0.0, s), icon_pos + Vector2(0.0, -s * 0.5), icon_c, 0.8, true)
+		draw_line(icon_pos + Vector2(s * 0.5, s), icon_pos + Vector2(s * 0.5, -s * 0.3), icon_c, 0.8, true)
+
+
+func _is_structure_build_job_type(t: int) -> bool:
+	return (t == _Job.Type.BUILD_BED or t == _Job.Type.BUILD_WALL or t == _Job.Type.BUILD_DOOR or t == _Job.Type.BUILD_FIRE_PIT or t == _Job.Type.BUILD_STORAGE_HUT or t == _Job.Type.BUILD_MARKER_STONE or t == _Job.Type.BUILD_SHRINE or t == _Job.Type.BUILD_SHELTER or t == _Job.Type.BUILD_HEARTH or t == _Job.Type.BUILD_FARM_WHEAT or t == _Job.Type.BUILD_FARM_CORN or t == _Job.Type.BUILD_FARM_VEGETABLES or t == _Job.Type.BUILD_HERB_GARDEN or t == _Job.Type.BUILD_WORKSHOP or t == _Job.Type.BUILD_LOOM or t == _Job.Type.BUILD_KILN or t == _Job.Type.BUILD_SMELTER or t == _Job.Type.BUILD_BOATYARD or t == _Job.Type.BUILD_DOCK or t == _Job.Type.BUILD_FISHERMAN_HUT or t == _Job.Type.BUILD_APOTHECARY or t == _Job.Type.BUILD_LIBRARY or t == _Job.Type.BUILD_SCHOOL or t == _Job.Type.BUILD_BARRACKS or t == _Job.Type.BUILD_WATCHTOWER or t == _Job.Type.BUILD_MARKET or t == _Job.Type.BUILD_TRADING_POST or t == _Job.Type.BUILD_ROAD or t == _Job.Type.BUILD_GRANARY or t == _Job.Type.BUILD_CELLAR)
+
+
+func _carrying_color(item_type: int) -> Color:
+	match item_type:
+		_Item.Type.WOOD: return Color8(139, 90, 43)
+		_Item.Type.STONE: return Color8(150, 150, 150)
+		_Item.Type.BERRY: return Color8(200, 50, 50)
+		_Item.Type.MEAT: return Color8(180, 80, 60)
+		_Item.Type.FLINT: return Color8(100, 100, 110)
+		_Item.Type.STICK: return Color8(170, 130, 70)
+		_Item.Type.SEEDS: return Color8(180, 160, 60)
+		_Item.Type.PAPER: return Color8(240, 235, 220)
+		_Item.Type.LEATHER: return Color8(160, 100, 60)
+		_Item.Type.INK: return Color8(40, 40, 60)
+		_: return Color8(200, 200, 200)
+
+
+func _draw_ellipse_shape(center: Vector2, rx: float, ry: float, color: Color) -> void:
+	draw_colored_polygon(_ellipse_points(center, rx, ry, 12), color)
+
+
+func _ellipse_points(center: Vector2, rx: float, ry: float, segments: int) -> PackedVector2Array:
+	var pts: PackedVector2Array = PackedVector2Array()
+	for i in range(segments):
+		var angle: float = TAU * float(i) / float(segments)
+		pts.append(center + Vector2(cos(angle) * rx, sin(angle) * ry))
+	return pts

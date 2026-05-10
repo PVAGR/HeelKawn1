@@ -166,6 +166,8 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _camera_bookmarks = $CameraBookmarks
 @onready var _event_particles = $EventParticles
 @onready var _weather_overlay = $WeatherOverlay
+@onready var _world_overlay = $WorldViewport/World/WorldOverlay
+@onready var _fire_glow = $WorldViewport/World/FireGlow
 @onready var _command_mode = $CommandMode
 @onready var _command_indicator = $WorldViewport/CommandIndicator
 @onready var _pawn_name_labels = $WorldViewport/PawnNameLabels
@@ -272,6 +274,7 @@ var _player_intent_focus_center_region: int = -1
 var _avatar_panel: Node = null
 var _consciousness_panel: Node = null
 var _dialogue_panel: Node = null
+var _settlement_mind_panel: Node = null
 
 
 # -------------------- draft mode (combat) --------------------
@@ -656,6 +659,10 @@ func _ready() -> void:
 			_event_particles.initialize(_world)
 		if _weather_overlay != null and _weather_overlay.has_method("initialize"):
 			_weather_overlay.initialize(_world, _camera)
+		if _world_overlay != null and _world_overlay.has_method("initialize"):
+			_world_overlay.initialize(_world, _camera)
+		if _fire_glow != null and _fire_glow.has_method("initialize"):
+			_fire_glow.initialize(_world, _camera)
 		# Initialize command mode
 		if _command_mode != null and _command_mode.has_method("initialize"):
 			_command_mode.initialize(_world, _camera, _pawn_spawner)
@@ -668,6 +675,10 @@ func _ready() -> void:
 			_pawn_name_labels.initialize(_world, _camera)
 		if _pawn_chatter != null and _pawn_chatter.has_method("initialize"):
 			_pawn_chatter.initialize(_world)
+			if _pawn_chatter.has_method("set_llm_client") and _pawn_chatter.get("_llm_client") == null:
+				var orch: Node = get_node_or_null("/root/HeelKawnAIOrchestrator")
+				if orch != null and orch.get("_llm_client") != null:
+					_pawn_chatter.set_llm_client(orch.get("_llm_client"))
 		if _settlement_banner != null and _settlement_banner.has_method("initialize"):
 			_settlement_banner.initialize(_world)
 		if _territory_overlay != null and _territory_overlay.has_method("initialize"):
@@ -1763,6 +1774,39 @@ func _ensure_dialogue_panel() -> void:
 		ui_vp.add_child(_dialogue_panel)
 	else:
 		add_child(_dialogue_panel)
+
+func _toggle_settlement_mind_panel() -> void:
+	if _selected_pawn == null or not is_instance_valid(_selected_pawn):
+		return
+	var d = _selected_pawn.data
+	if d == null:
+		return
+	_ensure_settlement_mind_panel()
+	if _settlement_mind_panel == null:
+		return
+	if _settlement_mind_panel.visible:
+		_settlement_mind_panel.close_panel()
+		return
+	var sm: Node = get_node_or_null("/root/SettlementMemory")
+	if sm == null:
+		return
+	var st_rk: int = WorldMemory._region_key(d.tile_pos.x, d.tile_pos.y) if WorldMemory != null else -1
+	var st_center: int = sm.get_center_region_for_region(st_rk) if sm.has_method("get_center_region_for_region") else -1
+	if st_center < 0:
+		return
+	_settlement_mind_panel.open_for_settlement(st_center)
+
+func _ensure_settlement_mind_panel() -> void:
+	if _settlement_mind_panel != null and is_instance_valid(_settlement_mind_panel):
+		return
+	var ui_vp: Node = get_node_or_null("UI_Viewport")
+	var scr = load("res://scripts/ui/SettlementMindPanel.gd")
+	_settlement_mind_panel = scr.new() as Node
+	_settlement_mind_panel.name = "SettlementMindPanel"
+	if ui_vp != null:
+		ui_vp.add_child(_settlement_mind_panel)
+	else:
+		add_child(_settlement_mind_panel)
 
 func _ensure_incarnation_picker() -> void:
 	if _incarnation_picker != null and is_instance_valid(_incarnation_picker):
@@ -3640,7 +3684,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		Key.KEY_T:
 			_pawn_spawner.print_stats()
 		Key.KEY_J:
-			JobManager.print_debug()
+			_toggle_settlement_mind_panel()
 		Key.KEY_I:
 			_print_stockpile()
 		Key.KEY_D:
@@ -3790,7 +3834,7 @@ func _handle_key_input(key: InputEventKey) -> void:
 			_toggle_pawn_ai_inspector()
 		KEY_U:
 			_toggle_trait_shop()
-		KEY_C:
+		KEY_N:
 			_toggle_consciousness_panel()
 		KEY_H:
 			_toggle_dialogue_panel()
@@ -3838,6 +3882,9 @@ func _toggle_debug_panel() -> void:
 
 
 func _handle_cancel_action() -> void:
+	if _settlement_mind_panel != null and is_instance_valid(_settlement_mind_panel) and _settlement_mind_panel.visible:
+		_settlement_mind_panel.close_panel()
+		return
 	if _dialogue_panel != null and is_instance_valid(_dialogue_panel) and _dialogue_panel.visible:
 		_dialogue_panel.close_panel()
 		return

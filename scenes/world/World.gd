@@ -208,6 +208,18 @@ func _tile_color(x: int, y: int) -> Color:
 			base = base.lerp(Color(g, g * 0.95, g * 0.9, 1.0), 0.22)
 	else:
 		base = Biome.color_for(data.biomes[i])
+		# Terrain noise: deterministic per-tile color variation for visual richness
+		var noise_hash: int = (x * 19349663 + y * 73856093) & 0xFF
+		var noise_val: float = float(noise_hash) / 255.0  # 0..1
+		var biome: int = data.biomes[i]
+		if biome == Biome.Type.WATER:
+			# Water shimmer: subtle blue channel shift
+			var shimmer: float = sin(float(GameManager.tick_count) * 0.01 + noise_val * TAU) * 0.05
+			base = Color(base.r + shimmer * 0.3, base.g + shimmer * 0.5, base.b + shimmer, 1.0)
+		else:
+			# All other biomes: ±8% color variation
+			var variation: float = 0.92 + noise_val * 0.16  # 0.92..1.08
+			base = Color(base.r * variation, base.g * variation, base.b * variation, 1.0)
 	# RUIN: full historical scar; meaning; road; trade; local Remnant patina; then epochal Age.
 	return _apply_age_tint(
 			_apply_remnant_patina(
@@ -504,6 +516,10 @@ func set_feature(x: int, y: int, feature: int) -> bool:
 	if _image != null:
 		_image.set_pixel(x, y, _tile_color(x, y))
 		_texture.update(_image)
+	# Notify WorldOverlay to redraw building sprites
+	var overlay: Node = get_node_or_null("WorldOverlay")
+	if overlay != null and overlay.has_method("mark_dirty"):
+		overlay.mark_dirty()
 	return true
 
 

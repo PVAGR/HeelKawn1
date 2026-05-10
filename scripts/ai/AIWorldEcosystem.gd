@@ -214,6 +214,13 @@ func _trigger_resource_depletion(event: Dictionary) -> void:
 		"resource": resource,
 		"region": region
 	}))
+	
+	if _world_memory != null:
+		_world_memory.record_event({
+			"type": "ai_resource_depletion",
+			"resource": resource,
+			"region": region
+		})
 
 
 func _trigger_climate_shift(event: Dictionary) -> void:
@@ -224,6 +231,13 @@ func _trigger_climate_shift(event: Dictionary) -> void:
 		"type": shift_type,
 		"severity": severity
 	}))
+	
+	if _world_memory != null:
+		_world_memory.record_event({
+			"type": "ai_climate_shift",
+			"shift_type": shift_type,
+			"severity": severity
+		})
 
 
 func _trigger_wildlife_boom(event: Dictionary) -> void:
@@ -236,6 +250,14 @@ func _trigger_wildlife_boom(event: Dictionary) -> void:
 		"region": region,
 		"reason": reason
 	}))
+	
+	if _world_memory != null:
+		_world_memory.record_event({
+			"type": "ai_wildlife_boom",
+			"species": species,
+			"region": region,
+			"reason": reason
+		})
 	
 	# Would increase wildlife population
 	if _wildlife_population != null:
@@ -252,6 +274,14 @@ func _trigger_wildlife_bust(event: Dictionary) -> void:
 		"region": region,
 		"reason": reason
 	}))
+	
+	if _world_memory != null:
+		_world_memory.record_event({
+			"type": "ai_wildlife_bust",
+			"species": species,
+			"region": region,
+			"reason": reason
+		})
 
 
 func _trigger_plague_outbreak(event: Dictionary) -> void:
@@ -264,6 +294,14 @@ func _trigger_plague_outbreak(event: Dictionary) -> void:
 		"region": region,
 		"severity": severity
 	}))
+	
+	if _world_memory != null:
+		_world_memory.record_event({
+			"type": "ai_plague_outbreak",
+			"plague_type": plague_type,
+			"region": region,
+			"severity": severity
+		})
 	
 	# Would trigger disease via DisasterSystem
 	if _disaster_system != null:
@@ -280,6 +318,14 @@ func _trigger_natural_disaster(event: Dictionary) -> void:
 		"region": region,
 		"severity": severity
 	}))
+	
+	if _world_memory != null:
+		_world_memory.record_event({
+			"type": "ai_natural_disaster",
+			"disaster_type": disaster_type,
+			"region": region,
+			"severity": severity
+		})
 	
 	# Would trigger disaster via DisasterSystem
 	if _disaster_system != null and _disaster_system.has_method("trigger_disaster"):

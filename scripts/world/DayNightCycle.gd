@@ -10,7 +10,7 @@ const TICKS_PER_DAY: int = SimTime.TICKS_PER_VISUAL_DAY
 
 ## Four key colors around the clock.
 ## Phase 0.00 = midnight, 0.25 = dawn, 0.50 = noon, 0.75 = dusk.
-const COLOR_MIDNIGHT: Color = Color(0.32, 0.38, 0.58)
+const COLOR_MIDNIGHT: Color = Color(0.18, 0.22, 0.38)
 const COLOR_DAWN:     Color = Color(1.00, 0.75, 0.60)
 const COLOR_NOON:     Color = Color(1.00, 1.00, 1.00)
 const COLOR_DUSK:     Color = Color(1.00, 0.55, 0.42)

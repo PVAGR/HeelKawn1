@@ -85,6 +85,29 @@ func _refresh() -> void:
 	# Header
 	lines.append("[b]=== %s (ID %d) ===[/b]" % [d.display_name, d.id])
 	lines.append("Age: %.1f · Profession: %s" % [d.age, d.profession_name()])
+
+	# Settlement mind
+	var st_rk: int = WorldMemory._region_key(d.tile_pos.x, d.tile_pos.y) if WorldMemory != null else -1
+	var st_sm: Node = get_node_or_null("/root/SettlementMemory")
+	if st_sm != null:
+		var st_center: int = st_sm.get_center_region_for_region(st_rk) if st_sm.has_method("get_center_region_for_region") else -1
+		if st_center >= 0:
+			var st_state: String = st_sm.get_state_at_region(st_center) if st_sm.has_method("get_state_at_region") else "unknown"
+			var st_profile: Dictionary = st_sm.get_settlement_profile(st_center) if st_sm.has_method("get_settlement_profile") else {}
+			var st_name: String = str(st_profile.get("name", st_profile.get("settlement_name", "Settlement")))
+			lines.append("Settlement: [color=#66bb6a]%s[/color] ([color=%s]%s[/color])" % [st_name, _settlement_state_color(st_state), st_state])
+			var woai: Node = get_node_or_null("/root/WorldAI")
+			if woai != null:
+				var sai = woai.get("active_settlements", {}).get(st_center)
+				if sai != null:
+					var gov_names: Array = ["Tribal", "Chiefdom", "Monarchy", "Republic", "Theocracy", "Technocracy", "Anarchy"]
+					var focus_names: Array = ["Survival", "Expansion", "Trade", "Knowledge", "Military", "Artistic", "Balanced"]
+					var gv: int = sai.get("government_type", 0)
+					var fc: int = sai.get("development_focus", 0)
+					lines.append("  Gov: [color=#bb77ee]%s[/color] · Focus: [color=#81c784]%s[/color]" % [
+						gov_names[gv] if gv >= 0 and gv < gov_names.size() else "?",
+						focus_names[fc] if fc >= 0 and fc < focus_names.size() else "?"
+					])
 	lines.append("")
 	
 	# Personality
@@ -159,6 +182,81 @@ func _refresh() -> void:
 		lines.append("Evolution Generation: %d" % d.neural_network.evolution_generation)
 		lines.append("")
 	
+	# Life timeline from PawnConsciousness
+	var pc: Node = get_node_or_null("/root/PawnConsciousness")
+	if pc != null:
+		var pid: int = d.id
+		var memories: Array = pc.get_memories(pid, "", 8)
+		if memories.size() > 0:
+			lines.append("")
+			lines.append("[b]--- LIFE TIMELINE (last 8 memories) ---[/b]")
+			for m in memories:
+				if m is Dictionary:
+					var tick: int = int(m.get("tick", 0))
+					var etype: String = str(m.get("event_type", "event"))
+					var desc: String = str(m.get("description", ""))
+					var imp: int = int(m.get("importance", 3))
+					var imp_color: String = "#888888"
+					if imp >= 8: imp_color = "#ff6b6b"
+					elif imp >= 5: imp_color = "#ffd93d"
+					elif imp >= 3: imp_color = "#6bcbff"
+					lines.append("  [color=%s][T%d][/color] [b]%s[/b] - %s" % [imp_color, tick, etype.capitalize(), desc])
+		
+		var dreams: Array = pc.get_dreams(pid, 3)
+		if dreams.size() > 0:
+			lines.append("")
+			lines.append("[b]--- RECENT DREAMS ---[/b]")
+			for dr in dreams:
+				if dr is Dictionary:
+					lines.append("  [color=#aa88ff]Dream:[/color] %s" % str(dr.get("description", "")))
+
+		var trauma: float = pc.get_trauma_level(pid)
+		if trauma > 0:
+			lines.append("")
+			lines.append("[b]--- TRAUMA ---[/b]")
+			var tcolor: String = "#ff6b6b" if trauma > 0.5 else "#ffd93d"
+			lines.append("  Trauma level: [color=%s]%.1f%%[/color]" % [tcolor, trauma * 100])
+
+	# Relationships
+	lines.append("")
+	lines.append("[b]--- RELATIONSHIPS ---[/b]")
+	var gm: Node = get_node_or_null("/root/GrudgeManager")
+	var km: Node = get_node_or_null("/root/KinshipSystem")
+	var pid2: int = d.id
+	var rels: Array[String] = []
+	if km != null and km.has_method("get_relationship_with"):
+		rels.append("Family: [color=#66bb6a]%s[/color]" % str(km.call("get_family_members", pid2) if km.has_method("get_family_members") else []))
+	if gm != null and gm.has_method("get_grudges_for"):
+		var grudges: Array = gm.call("get_grudges_for", pid2)
+		if grudges.size() > 0:
+			for g in grudges:
+				if g is Dictionary:
+					var target: String = str(g.get("target_name", "unknown"))
+					var reason: String = str(g.get("reason", ""))
+					rels.append("Grudge vs [color=#ef5350]%s[/color]: %s" % [target, reason])
+		else:
+			rels.append("[color=#888888]No active grudges[/color]")
+	if rels.is_empty():
+		rels.append("[color=#888888]No relationship data[/color]")
+	for rl in rels:
+		lines.append("  %s" % rl)
+
+	# Dream journal from consciousness
+	var pc: Node2 = get_node_or_null("/root/PawnConsciousness")
+	if pc != null:
+		var all_dreams: Array = pc.get_dreams(pid, 5)
+		if all_dreams.size() > 0:
+			lines.append("")
+			lines.append("[b]--- DREAMS (last 5) ---[/b]")
+			for dr in all_dreams:
+				if dr is Dictionary:
+					var desc: String = str(dr.get("description", str(dr.get("content", ""))))
+					var theme: String = str(dr.get("theme", ""))
+					if not desc.is_empty():
+						lines.append("  [color=#ce93d8]%s[/color]" % desc)
+					if not theme.is_empty():
+						lines.append("    [color=#888888](theme: %s)[/color]" % theme)
+
 	# Recent utility decisions
 	lines.append("[b]--- RECENT DECISION FACTORS ---[/b]")
 	if d.decision_history.is_empty():

@@ -62,11 +62,14 @@ func _refresh_banners() -> void:
 		var gov: String = str(d.get("governance_type", ""))
 		if pop <= 0:
 			continue
+		# Compute profession composition dots
+		var prof_dots: Array = _get_prof_dots_for_settlement(d)
 		_banners.append({
 			"pos": world_pos,
 			"name": name,
 			"pop": pop,
 			"gov": gov,
+			"prof_dots": prof_dots,
 		})
 
 
@@ -83,6 +86,11 @@ func _draw() -> void:
 		var name_pos: Vector2 = pos + Vector2(0.0, -20.0)
 		var name_size: Vector2 = font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, NAME_FONT_SIZE)
 		var name_centered: Vector2 = name_pos - Vector2(name_size.x * 0.5, 0.0)
+		# Background panel behind name
+		var bg_rect: Rect2 = Rect2(name_centered - Vector2(2.0, 1.0), name_size + Vector2(4.0, 2.0))
+		draw_rect(bg_rect, Color(0.0, 0.0, 0.0, 0.45), true)
+		draw_rect(bg_rect, Color(0.85, 0.78, 0.40, 0.15), false)
+		# Shadow + text
 		draw_string(font, name_centered + Vector2(0.5, 0.5), name, HORIZONTAL_ALIGNMENT_LEFT, -1, NAME_FONT_SIZE, SHADOW_COLOR)
 		draw_string(font, name_centered, name, HORIZONTAL_ALIGNMENT_LEFT, -1, NAME_FONT_SIZE, NAME_COLOR)
 
@@ -91,8 +99,20 @@ func _draw() -> void:
 		var pop_pos: Vector2 = name_pos + Vector2(0.0, 9.0)
 		var pop_size: Vector2 = font.get_string_size(pop_text, HORIZONTAL_ALIGNMENT_LEFT, -1, POP_FONT_SIZE)
 		var pop_centered: Vector2 = pop_pos - Vector2(pop_size.x * 0.5, 0.0)
+		# Background panel behind population
+		var pop_bg: Rect2 = Rect2(pop_centered - Vector2(2.0, 1.0), pop_size + Vector2(4.0, 2.0))
+		draw_rect(pop_bg, Color(0.0, 0.0, 0.0, 0.35), true)
 		draw_string(font, pop_centered + Vector2(0.5, 0.5), pop_text, HORIZONTAL_ALIGNMENT_LEFT, -1, POP_FONT_SIZE, SHADOW_COLOR)
 		draw_string(font, pop_centered, pop_text, HORIZONTAL_ALIGNMENT_LEFT, -1, POP_FONT_SIZE, POP_COLOR)
+
+		# Profession composition dots (1-3 colored dots showing dominant roles)
+		var prof_dots: Array = b.get("prof_dots", [])
+		if prof_dots.size() > 0:
+			var dot_x: float = pop_centered.x + pop_size.x + 3.0
+			var dot_y: float = pop_pos.y - 1.0
+			for dot_color in prof_dots:
+				draw_circle(Vector2(dot_x, dot_y), 1.5, dot_color)
+				dot_x += 4.0
 
 		# Governance type
 		if not gov.is_empty():
@@ -111,3 +131,44 @@ func _gov_short(gov: String) -> String:
 		"autocratic": return "Autocrat"
 		"military": return "Military"
 		_: return ""
+
+
+## Get up to 3 profession-colored dots for a settlement's dominant professions.
+func _get_prof_dots_for_settlement(s: Dictionary) -> Array:
+	var counts: Dictionary = {}
+	var pawns: Variant = s.get("pawns", null)
+	if pawns == null or not (pawns is Array):
+		return []
+	for p in pawns:
+		if p == null or not is_instance_valid(p):
+			continue
+		var data: Variant = p.get("data") if p.has_method("get") else null
+		if data == null:
+			continue
+		var prof: int = int(data.current_profession) if data.current_profession != null else 0
+		if prof == 0:
+			continue
+		if not counts.has(prof):
+			counts[prof] = 0
+		counts[prof] += 1
+	# Sort by count descending, take top 3
+	var sorted: Array = counts.keys()
+	sorted.sort_custom(func(a: int, b: int) -> bool: return counts[a] > counts[b])
+	var dots: Array = []
+	for i in range(mini(3, sorted.size())):
+		var prof: int = int(sorted[i])
+		dots.append(_profession_color(prof))
+	return dots
+
+
+func _profession_color(prof: int) -> Color:
+	match prof:
+		1: return Color(0.85, 0.65, 0.2)   # FARMER gold
+		2: return Color(0.6, 0.6, 0.6)     # BUILDER silver
+		3: return Color(0.2, 0.75, 0.3)    # GATHERER green
+		4: return Color(0.9, 0.2, 0.2)     # WARRIOR red
+		5: return Color(0.3, 0.5, 0.9)     # SCHOLAR blue
+		6: return Color(0.85, 0.75, 0.2)   # TRADER amber
+		7: return Color(0.55, 0.55, 0.6)   # SMITH steel
+		8: return Color(0.3, 0.75, 0.65)   # HEALER teal
+		_: return Color.WHITE

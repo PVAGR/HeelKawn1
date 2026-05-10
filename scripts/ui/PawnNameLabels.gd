@@ -9,6 +9,10 @@ const LABEL_FONT_SIZE: int = 7
 const STATUS_FONT_SIZE: int = 5
 const NAME_COLOR: Color = Color(1.0, 0.95, 0.8, 0.9)
 const STATUS_COLOR: Color = Color(0.7, 0.7, 0.65, 0.7)
+const MOOD_GREAT: Color = Color(0.5, 1.0, 0.5, 0.9)
+const MOOD_OK: Color = Color(1.0, 1.0, 0.5, 0.9)
+const MOOD_BAD: Color = Color(1.0, 0.6, 0.4, 0.9)
+const MOOD_CRITICAL: Color = Color(1.0, 0.2, 0.2, 0.9)
 const SHADOW_COLOR: Color = Color(0.0, 0.0, 0.0, 0.5)
 const Y_OFFSET: float = -16.0
 const HOVER_RADIUS: float = 20.0  # pixels
@@ -82,12 +86,24 @@ func _draw() -> void:
 		if pawn.data.has_method("profession_label_from_enum"):
 			prof = pawn.data.profession_label_from_enum(pawn.data.current_profession)
 
+		# Mood-based color
+		var mood: float = float(pawn.get("_mood_level", 50))
+		var name_color: Color = NAME_COLOR
+		if mood >= 75:
+			name_color = MOOD_GREAT
+		elif mood >= 45:
+			name_color = MOOD_OK
+		elif mood >= 25:
+			name_color = MOOD_BAD
+		else:
+			name_color = MOOD_CRITICAL
+
 		# Name
 		var name_pos: Vector2 = pos + Vector2(0.0, Y_OFFSET)
 		var name_size: Vector2 = font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE)
 		var name_centered: Vector2 = name_pos - Vector2(name_size.x * 0.5, 0.0)
 		draw_string(font, name_centered + Vector2(0.5, 0.5), name, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, SHADOW_COLOR)
-		draw_string(font, name_centered, name, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, NAME_COLOR)
+		draw_string(font, name_centered, name, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, name_color)
 
 		# Status line (profession)
 		if not prof.is_empty() and prof != "None":

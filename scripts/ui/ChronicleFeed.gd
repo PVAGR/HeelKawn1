@@ -239,6 +239,12 @@ func _color_for_type(typ: String) -> String:
 	# Trade
 	if typ in ["trade_route_started", "trade_route_completed", "macro_unrest"]:
 		return COLOR_TRADE
+	# AI Ecosystem
+	if typ in ["ai_migration_wave", "ai_wildlife_boom", "ai_wildlife_bust",
+			"ai_climate_shift", "ai_resource_depletion"]:
+		return COLOR_WORLD
+	if typ in ["ai_plague_outbreak", "ai_natural_disaster"]:
+		return COLOR_CONFLICT
 	return COLOR_DEFAULT
 
 
@@ -660,6 +666,37 @@ func _event_text(typ: String, e: Dictionary) -> String:
 			if not summary.is_empty():
 				return "[b]— %s —[/b]" % summary
 			return ""
+
+		# AI Ecosystem events
+		"ai_migration_wave":
+			var species: String = str(e.get("species", "wildlife")).strip_edges()
+			var region: String = str(e.get("region", "the region")).strip_edges()
+			var reason: String = str(e.get("reason", "seasonal shift")).strip_edges()
+			return "%s migrating to %s (%s)" % [species, region, reason]
+		"ai_resource_depletion":
+			var resource: String = str(e.get("resource", "resources")).strip_edges()
+			var region: String = str(e.get("region", "the region")).strip_edges()
+			return "%s depleted in %s" % [resource, region]
+		"ai_climate_shift":
+			var shift_type: String = str(e.get("shift_type", "climate shift")).strip_edges()
+			var severity: String = str(e.get("severity", "moderate")).strip_edges()
+			return "%s (%s)" % [shift_type, severity]
+		"ai_wildlife_boom":
+			var species: String = str(e.get("species", "wildlife")).strip_edges()
+			var region: String = str(e.get("region", "the region")).strip_edges()
+			return "%s population surging in %s" % [species, region]
+		"ai_wildlife_bust":
+			var species: String = str(e.get("species", "wildlife")).strip_edges()
+			var region: String = str(e.get("region", "the region")).strip_edges()
+			return "%s population crashing in %s" % [species, region]
+		"ai_plague_outbreak":
+			var plague_type: String = str(e.get("plague_type", "disease")).strip_edges()
+			var region: String = str(e.get("region", "the region")).strip_edges()
+			return "%s plague spreading in %s" % [plague_type, region]
+		"ai_natural_disaster":
+			var disaster_type: String = str(e.get("disaster_type", "disaster")).strip_edges()
+			var region: String = str(e.get("region", "the region")).strip_edges()
+			return "%s strikes %s" % [disaster_type, region]
 
 		_:
 			# Surface rare settlement/world events

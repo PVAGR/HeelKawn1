@@ -592,6 +592,12 @@ func _event_passes_significance_threshold(e: Dictionary) -> bool:
 			   "structure_built", "cooperative_build"]:
 		return true
 
+	# AI Ecosystem events: always record (world-scale phenomena)
+	if typ in ["ai_migration_wave", "ai_resource_depletion", "ai_climate_shift",
+			   "ai_wildlife_boom", "ai_wildlife_bust", "ai_plague_outbreak",
+			   "ai_natural_disaster"]:
+		return true
+
 	# Default: SKIP unknown event types (stricter than before)
 	return false
 

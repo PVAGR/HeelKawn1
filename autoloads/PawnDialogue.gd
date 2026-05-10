@@ -13,7 +13,7 @@ var _PawnConsciousness = null
 var _GameManager = null
 var _active_pawn_id: int = -1
 
-const SYSTEM_PROMPT_TEMPLATE: String = "You are {name}, a {age}-year-old pawn in the world of HeelKawn.\nProfession: {profession}\n\nCurrent state:\n- Hunger: {hunger}/100\n- Rest: {rest}/100\n- Mood: {mood}/100\n- Health: {health}/100\n- Current activity: {activity}\n\nRecent memories:\n{memories}\n\nCore beliefs:\n{beliefs}\n\nSubconscious desires:\n{desires}\n\nSelf-awareness level: {awareness}\n\nLocation: {location}\nWorld tick: {tick}\n\nYou are speaking with a visitor (the observer/player). Respond in character as a simple medieval tribal villager. Be conversational, natural, and react according to your mood and situation. Use simple language. Keep responses to 2-4 sentences unless asked a detailed question.\n\nIf you are hungry, tired, or in pain, let it show in how you speak. If you are happy, be warm. If you just experienced something traumatic, it should color your words."
+const SYSTEM_PROMPT_TEMPLATE: String = "You are {name}, a {age}-year-old pawn in the world of HeelKawn.\nProfession: {profession}\n\nCurrent state:\n- Hunger: {hunger}/100\n- Rest: {rest}/100\n- Mood: {mood}/100\n- Health: {health}/100\n- Current activity: {activity}\n\nRecent memories:\n{memories}\n\nCore beliefs:\n{beliefs}\n\nSubconscious desires:\n{desires}\n\nSelf-awareness level: {awareness}\n\n{incarnation_status}\n\nLocation: {location}\nWorld tick: {tick}\n\nYou are speaking with a visitor (the observer/player). Respond in character as a simple medieval tribal villager. Be conversational, natural, and react according to your mood and situation. Use simple language. Keep responses to 2-4 sentences unless asked a detailed question.\n\nIf you are hungry, tired, or in pain, let it show in how you speak. If you are happy, be warm. If you just experienced something traumatic, it should color your words."
 
 func _ready() -> void:
 	_llm_client = get_node_or_null("/root/HeelKawnAIOrchestrator/LLMClient")
@@ -94,6 +94,7 @@ func _build_pawn_context(pawn_node: Node) -> Dictionary:
 		"activity": _get_activity_name(pawn_node),
 		"tick": _GameManager.tick_count if _GameManager != null else 0,
 		"location": "(%d, %d)" % [tile_pos.x, tile_pos.y],
+		"is_player_incarnation": false,
 	}
 	if _PawnConsciousness != null:
 		var pid2: int = ctx.pawn_id
@@ -121,6 +122,13 @@ func _build_pawn_context(pawn_node: Node) -> Dictionary:
 		ctx["beliefs"] = "(unavailable)"
 		ctx["desires"] = "(unavailable)"
 		ctx["awareness"] = "Unknown"
+	# Incarnation check — is this pawn the player's vessel?
+	var main_node: Node = get_node_or_null("/root/Main")
+	if main_node != null:
+		var player_pawn: Node = main_node.get("_player_pawn") if main_node.get("_player_pawn") != null else null
+		if player_pawn != null and is_instance_valid(player_pawn):
+			ctx["is_player_incarnation"] = (player_pawn == pawn_node)
+	ctx["incarnation_status"] = "You are the player's vessel — they experience the world through you." if ctx.is_player_incarnation else "You are a regular pawn in the settlement."
 	return ctx
 
 func _build_system_prompt(pawn_node: Node, ctx: Dictionary) -> String:

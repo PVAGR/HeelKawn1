@@ -2778,7 +2778,10 @@ func _tick_idle() -> void:
 		# Crisis priority bonus (snapshot pressures once per claim pass).
 		# Boost BUILD_BED jobs during housing crisis
 		if crisis_housing_pressure > 0.8 and j.type == _Job.Type.BUILD_BED:
-			base_bias += 4
+			base_bias += 8
+		# Boost FIRE_PIT when warmth is scarce
+		if j.type == _Job.Type.BUILD_FIRE_PIT and crisis_housing_pressure > 0.5:
+			base_bias += 3
 		# Boost FORAGE/HUNT jobs during food crisis
 		if crisis_food_pressure > 0.7 and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT):
 			base_bias += 4
@@ -4537,7 +4540,7 @@ func _consume_tool_durability(job_type: int) -> void:
 func _cancel_current_job() -> void:
 	if _current_job != null:
 		_return_trade_cargo_to_source_if_any(_current_job)
-		JobManager.cancel(_current_job)
+		JobManager.cancel(_current_job, "pawn_cancel")
 	_reset_to_idle()
 
 
@@ -4566,7 +4569,7 @@ func release_job_if_any() -> void:
 	if _current_job != null:
 		var j1: Job = _current_job
 		_return_trade_cargo_to_source_if_any(j1)
-		JobManager.cancel(j1)
+		JobManager.cancel(j1, "release_job")
 		_current_job = null
 	_clear_cohort_state()
 	# If we held a bed reservation from a previous life (world reroll), drop
@@ -4652,15 +4655,14 @@ func _deposit_at_stockpile() -> void:
 	if is_trade:
 		if j_done.trade_to == null or not is_instance_valid(j_done.trade_to):
 			_return_trade_cargo_to_source_if_any(j_done)
-			JobManager.cancel(j_done)
+			JobManager.cancel(j_done, "trade_invalid")
 			_current_job = null
 			_target_zone = null
 			_reset_to_idle()
 			return
-		sp = j_done.trade_to
 		if not sp.accepts(data.carrying):
 			_return_trade_cargo_to_source_if_any(j_done)
-			JobManager.cancel(j_done)
+			JobManager.cancel(j_done, "trade_rejected")
 			_current_job = null
 			_target_zone = null
 			_reset_to_idle()

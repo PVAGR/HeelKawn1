@@ -187,13 +187,49 @@ func _capture_resource_truth(st: Dictionary) -> void:
     var stone: int = 0
     var ore_proxy: int = 0
     var total: int = 0
+    var source_label: String = "stockpile_manager_snapshot"
     if StockpileManager != null:
-        var snap: Dictionary = StockpileManager.labor_pressure_stock_snapshot()
-        food = int(snap.get("food", 0))
-        wood = int(snap.get("wood", 0))
-        stone = int(snap.get("stone", 0))
-        # ore_proxy: count FLINT as a rough ore stand-in
-        ore_proxy = StockpileManager.total_count_of(Item.Type.FLINT) if Item != null else 0
+        # Count stockpiles whose center tile falls within this settlement's regions
+        var regions_dict: Dictionary = {}
+        var regs_variant: Variant = st.get("regions", null)
+        if regs_variant is PackedInt32Array:
+            for rk in (regs_variant as PackedInt32Array):
+                regions_dict[int(rk)] = true
+        var has_local: bool = false
+        if not regions_dict.is_empty():
+            for z in StockpileManager.zones():
+                if z == null or not is_instance_valid(z):
+                    continue
+                var zt: Vector2i = z.tile
+                var rk_z: int = WorldMemory._region_key(zt.x, zt.y)
+                if not regions_dict.has(rk_z):
+                    continue
+                has_local = true
+                for t in z.inventory:
+                    var q: int = int(z.inventory[t])
+                    if Item.is_food(t):
+                        food += q
+                    elif t == Item.Type.WOOD:
+                        wood += q
+                    elif t == Item.Type.STONE:
+                        stone += q
+            if has_local:
+                ore_proxy = 0
+                for z in StockpileManager.zones():
+                    if z == null or not is_instance_valid(z):
+                        continue
+                    var zt2: Vector2i = z.tile
+                    var rk_z2: int = WorldMemory._region_key(zt2.x, zt2.y)
+                    if regions_dict.has(rk_z2):
+                        ore_proxy += z.count_of(Item.Type.FLINT) if Item != null else 0
+                source_label = "local_stockpile_snapshot"
+        # Fallback: if no local stockpiles found, use global snapshot
+        if not has_local:
+            var snap: Dictionary = StockpileManager.labor_pressure_stock_snapshot()
+            food = int(snap.get("food", 0))
+            wood = int(snap.get("wood", 0))
+            stone = int(snap.get("stone", 0))
+            ore_proxy = StockpileManager.total_count_of(Item.Type.FLINT) if Item != null else 0
         total = food + wood + stone + ore_proxy
     st["resource_truth"] = {
         "stock_food": food,
@@ -212,7 +248,7 @@ func _capture_resource_truth(st: Dictionary) -> void:
         "ore_proxy_balance": _balance_bucket_material(ore_proxy),
         "snapshot_tick": GameManager.tick_count if GameManager != null else -1,
         "center_region": int(st.get("center_region", -1)),
-        "source": "stockpile_manager_snapshot",
+        "source": source_label,
     }
 
 
@@ -429,6 +465,7 @@ func recompute(_world: World) -> void:
     _update_governance_state()
     _apply_persisted_governance_forms()
     _compute_dominant_clans()
+    _count_pawns_per_settlement()
     _resolve_settlement_names()
     _settlement_truth_verify_post_recompute_pass()
 
@@ -453,7 +490,7 @@ func _resolve_settlement_names() -> void:
             continue
         # Must have at least some buildings or population to deserve a name
         var pop: int = int(st.get("population", 0))
-        if pop < 2:
+        if pop < 1:
             continue
         # Generate a settlement name using NameGenerator if available
         var name: String = ""
@@ -468,6 +505,32 @@ func _resolve_settlement_names() -> void:
         st["name"] = name
         st["name_resolved"] = true
         settlements[i] = st
+
+
+## Count living pawns in each settlement's regions and write the "population" field.
+## This is needed for name resolution and resource truth.
+func _count_pawns_per_settlement() -> void:
+    var living: Array[HeelKawnian] = _living_pawns()
+    # Build a region -> settlement index map
+    var region_to_idx: Dictionary = {}
+    for i in range(settlements.size()):
+        if not (settlements[i] is Dictionary):
+            continue
+        var st: Dictionary = settlements[i] as Dictionary
+        var regs_v: Variant = st.get("regions", null)
+        if regs_v is PackedInt32Array:
+            for rk in (regs_v as PackedInt32Array):
+                region_to_idx[int(rk)] = i
+        st["population"] = 0
+    # Count pawns per settlement
+    for p in living:
+        if p == null or not is_instance_valid(p) or p.data == null:
+            continue
+        var rk_p: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+        if region_to_idx.has(rk_p):
+            var idx: int = int(region_to_idx[rk_p])
+            var st2: Dictionary = settlements[idx] as Dictionary
+            st2["population"] = int(st2.get("population", 0)) + 1
 
 func _prune_settlement_state_truth_hysteresis() -> void:
     var present: Dictionary = {}

@@ -5606,13 +5606,19 @@ func _seed_construction_jobs() -> void:
 		if ColonySimServices != null and ColonySimServices.get_housing_pressure() > 0.8 and jobs_this_settlement < 12:
 			var need_beds_crisis: int = maxi(3, int(round(local_pop / 1.5)))
 			var pending_beds_crisis: int = JobManager.count_pending_by_type(Job.Type.BUILD_BED)
-			if beds + pending_beds_crisis < need_beds_crisis:
-				var t: Vector2i = _find_build_tile_near(center_tile, 6)
+			var beds_posted_this_cycle: int = 0
+			while beds + pending_beds_crisis + beds_posted_this_cycle < need_beds_crisis and beds_posted_this_cycle < 3 and jobs_this_settlement < 12:
+				var t: Vector2i = _find_build_tile_near(center_tile, 8)
 				if t.x >= 0 and not JobManager.has_job_at(t):
 					var j: Job = JobManager.post(Job.Type.BUILD_BED, t, 8, 10)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
+						beds_posted_this_cycle += 1
+					else:
+						break
+				else:
+					break
 		# Priority 1: Fire pit if no hearth
 		if hearths <= 0 and jobs_this_settlement < 12:
 			var pending_fire_pits: int = JobManager.count_pending_by_type(Job.Type.BUILD_FIRE_PIT)
@@ -5636,13 +5642,19 @@ func _seed_construction_jobs() -> void:
 		# Priority 3: Beds if not enough
 		var need_beds: int = maxi(2, int(round(local_pop / 2.2)))
 		var pending_beds: int = JobManager.count_pending_by_type(Job.Type.BUILD_BED)
-		if beds + pending_beds < need_beds and jobs_this_settlement < 12:
-			var t: Vector2i = _find_build_tile_near(center_tile, 6)
+		var beds_posted_p3: int = 0
+		while beds + pending_beds + beds_posted_p3 < need_beds and beds_posted_p3 < 2 and jobs_this_settlement < 12:
+			var t: Vector2i = _find_build_tile_near(center_tile, 8)
 			if t.x >= 0 and not JobManager.has_job_at(t):
 				var j: Job = JobManager.post(Job.Type.BUILD_BED, t, 6, 10)
 				if j != null:
 					posted += 1
 					jobs_this_settlement += 1
+					beds_posted_p3 += 1
+				else:
+					break
+			else:
+				break
 		# Priority 4: Walls + doors if population is large enough
 		var pending_walls: int = JobManager.count_pending_by_type(Job.Type.BUILD_WALL)
 		var pending_doors: int = JobManager.count_pending_by_type(Job.Type.BUILD_DOOR)
@@ -5791,6 +5803,35 @@ func _seed_construction_jobs() -> void:
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
+		# Priority 18: Local paths — post BUILD_ROAD along high-traffic tiles within settlement
+		if jobs_this_settlement < 12 and local_pop >= 2:
+			var pending_roads: int = JobManager.count_pending_by_type(Job.Type.BUILD_ROAD)
+			if pending_roads < 3:
+				var roads_posted: int = 0
+				for ry in range(center_tile.y - 8, center_tile.y + 9):
+					for rx in range(center_tile.x - 8, center_tile.x + 9):
+						if not _world.data.in_bounds(rx, ry):
+							continue
+						var trav: int = RoadMemory.get_traversal(rx, ry)
+						if trav < RoadMemory.ROAD_T1:
+							continue
+						if _world.data.get_feature(rx, ry) == TileFeature.Type.ROAD:
+							continue
+						if _world.data.get_feature(rx, ry) != TileFeature.Type.NONE:
+							continue
+						if not _world.pathfinder.is_passable(Vector2i(rx, ry)):
+							continue
+						if JobManager.has_job_at(Vector2i(rx, ry)):
+							continue
+						var j: Job = JobManager.post(Job.Type.BUILD_ROAD, Vector2i(rx, ry), 3, 8)
+						if j != null:
+							posted += 1
+							jobs_this_settlement += 1
+							roads_posted += 1
+						if roads_posted >= 2:
+							break
+					if roads_posted >= 2:
+						break
 	if posted > 0:
 		print("[Main] Construction seed: posted %d build jobs" % posted)
 

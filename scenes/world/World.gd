@@ -383,8 +383,8 @@ func _apply_road_tint(c: Color, x: int, y: int) -> Color:
 	if t < RoadMemory.ROAD_T1:
 		return c
 	if t < RoadMemory.ROAD_T2:
-		return c.lerp(c * Color(1.05, 1.045, 1.04, 1.0), 0.1)
-	return c.lerp(c * Color(1.1, 1.08, 1.05, 1.0), 0.16)
+		return c.lerp(c * Color(1.08, 1.06, 1.03, 1.0), 0.2)
+	return c.lerp(c * Color(1.15, 1.12, 1.06, 1.0), 0.3)
 
 
 ## Recurring inter-settlement trade routes from [TradeMemory] (derived; stacks on roads / scar / meaning).
@@ -393,8 +393,8 @@ func _apply_trade_route_tint(c: Color, x: int, y: int) -> Color:
 	if tr == TradeMemory.TIER_NONE:
 		return c
 	if tr == TradeMemory.TIER_ROUTE_1:
-		return c.lerp(c * Color(1.06, 1.055, 1.04, 1.0), 0.1)
-	return c.lerp(c * Color(1.14, 1.09, 0.97, 1.0), 0.17)
+		return c.lerp(c * Color(1.08, 1.07, 1.05, 1.0), 0.15)
+	return c.lerp(c * Color(1.18, 1.12, 0.95, 1.0), 0.25)
 
 
 ## Single-tile update after a traversal increment (pawns only).

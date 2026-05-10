@@ -221,9 +221,11 @@ func _plan_one_settlement_culture(
 		match rid:
 			1:
 				var open_beds: int = JobManager.count_pending_by_type(Job.Type.BUILD_BED)
-				var need_bed: bool = pawns > bed_n + open_beds and pawns < bed_n + open_beds + 2
+				# Post beds whenever there's a deficit AND we don't already have
+				# too many pending bed jobs (cap prevents spam).
+				var need_bed: bool = pawns > bed_n + open_beds and open_beds < 3
 				if intent == IntentMemory.INTENT_GROW:
-					need_bed = pawns >= bed_n + open_beds and pawns < bed_n + open_beds + 3
+					need_bed = pawns > bed_n + open_beds and open_beds < 4
 				elif intent == IntentMemory.INTENT_ABANDON:
 					need_bed = pawns > bed_n + open_beds and pawns <= bed_n + open_beds + 1
 				if need_bed:
@@ -231,7 +233,7 @@ func _plan_one_settlement_culture(
 							world, main, center, regions, cult
 					)
 					if tbed.x >= 0 and bool(main.call("settlement_planner_post_bed", tbed)):
-						return
+						continue
 			2:
 				var open_walls: int = JobManager.count_pending_by_type(Job.Type.BUILD_WALL)
 				if bed_n > 0 and wall_n + open_walls == 0:
@@ -241,7 +243,7 @@ func _plan_one_settlement_culture(
 							world, main, center, regions, cult
 					)
 					if tw.x >= 0 and bool(main.call("settlement_planner_post_wall", tw)):
-						return
+						continue
 			3:
 				var open_doors: int = JobManager.count_pending_by_type(Job.Type.BUILD_DOOR)
 				if wall_n > 0 and door_n + open_doors == 0:
@@ -251,14 +253,14 @@ func _plan_one_settlement_culture(
 							world, main, data, center, regions, cult
 					)
 					if td.x >= 0 and bool(main.call("settlement_planner_post_door", td)):
-						return
+						continue
 			4:
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
 				if not _settlement_touched_by_any_zone(center, regions, data):
 					var r4: Rect2i = _zone_rect_3x3_anchored_at(center, data)
 					if r4.size.x > 0 and bool(main.call("settlement_planner_post_zone_rect", r4)):
-						return
+						continue
 			5:
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
@@ -272,14 +274,14 @@ func _plan_one_settlement_culture(
 							world, main, data, center, regions, cult, feature_summary
 					)
 					if texp.x >= 0 and bool(main.call("settlement_planner_post_wall", texp)):
-						return
+						continue
 			6:
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
 				var open_beds6: int = JobManager.count_pending_by_type(Job.Type.BUILD_BED)
-				var can_bed2: bool = pawns >= bed_n + open_beds6 + 2
+				var can_bed2: bool = pawns > bed_n + open_beds6 and open_beds6 < 3
 				if intent == IntentMemory.INTENT_GROW:
-					can_bed2 = pawns >= bed_n + open_beds6 + 1
+					can_bed2 = pawns > bed_n + open_beds6 and open_beds6 < 4
 				if can_bed2:
 					if cult == CULTURE_DEFENSIVE and door_n == 0 and wall_n > 0:
 						continue
@@ -287,7 +289,7 @@ func _plan_one_settlement_culture(
 							world, main, center, regions, cult
 					)
 					if tbed2.x >= 0 and bool(main.call("settlement_planner_post_bed", tbed2)):
-						return
+						continue
 			7:
 				if wall_n > 0 and bed_n > 0 and not _path_bed_to_center_exists(
 						world, data, center, regions
@@ -296,7 +298,7 @@ func _plan_one_settlement_culture(
 							world, main, data, center, regions, cult
 					)
 					if tdoor2.x >= 0 and bool(main.call("settlement_planner_post_door", tdoor2)):
-						return
+						continue
 			8:
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
@@ -312,7 +314,7 @@ func _plan_one_settlement_culture(
 							world, main, data, center, regions, cult, feature_summary
 					)
 					if t8.x >= 0 and bool(main.call("settlement_planner_post_wall", t8)):
-						return
+						continue
 			9:
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
@@ -338,7 +340,7 @@ func _plan_one_settlement_culture(
 							world, main, data, center, regions, cult, feature_summary
 					)
 					if t10.x >= 0 and bool(main.call("settlement_planner_post_door", t10)):
-						return
+						continue
 			11:
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
@@ -346,7 +348,7 @@ func _plan_one_settlement_culture(
 				if bed_n >= 2 and fire_pit_n + open_fire_pits == 0:
 					var t11: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
 					if t11.x >= 0 and bool(main.call("settlement_planner_post_fire_pit", t11)):
-						return
+						continue
 			12:
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
@@ -354,21 +356,21 @@ func _plan_one_settlement_culture(
 				if bed_n >= 4 and storage_hut_n + open_storage == 0:
 					var t12: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
 					if t12.x >= 0 and bool(main.call("settlement_planner_post_storage_hut", t12)):
-						return
+						continue
 			13:
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
 				if wall_n >= 4 and pawns >= 3:
 					var t13: Vector2i = _pick_defend_tile(world, main, data, center, regions)
 					if t13.x >= 0 and bool(main.call("settlement_planner_post_protect", t13)):
-						return
+						continue
 			14:
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
 				if stage >= 2 and pawns >= 4:
 					var t14: Vector2i = _pick_defend_tile(world, main, data, center, regions)
 					if t14.x >= 0 and bool(main.call("settlement_planner_post_defend", t14)):
-						return
+						continue
 			15:
 				# Territory expansion: growing settlements claim adjacent regions
 				# as TERRITORY zones so pawns prefer building/working there.

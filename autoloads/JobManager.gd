@@ -42,6 +42,9 @@ var posted_count: int = 0
 var completed_count: int = 0
 var cancelled_count: int = 0
 
+## Cancellation reason tracking (diagnostic). reason_string -> count.
+var _cancel_reasons: Dictionary = {}
+
 const MAX_OPEN_JOBS_DEFAULT: int = 256
 const MAX_OPEN_JOBS_LIGHTWEIGHT: int = 96
 ## Last N slots reserved for construction/build/cook/plant jobs.
@@ -387,7 +390,8 @@ func complete(job: Job) -> void:
 ## Abort a job. Useful if the target becomes invalid, the pawn dies, or the world
 ## is regenerated. Idempotent -- calling cancel() on an already-retired job is
 ## a no-op, so "two owners both call cancel" (clear_all + pawn.release) is safe.
-func cancel(job: Job) -> void:
+## Optional reason: diagnostic string for cancellation tracking (F10 report).
+func cancel(job: Job, reason: String = "") -> void:
 	if job == null or job.state == Job.State.CANCELLED or job.state == Job.State.COMPLETED:
 		return
 	_open.erase(job)
@@ -397,6 +401,8 @@ func cancel(job: Job) -> void:
 	job.state = Job.State.CANCELLED
 	job.assigned_pawn = null
 	cancelled_count += 1
+	if not reason.is_empty():
+		_cancel_reasons[reason] = int(_cancel_reasons.get(reason, 0)) + 1
 	_bump_jobs_data_generation()
 	job_cancelled.emit(job)
 
@@ -425,6 +431,11 @@ func open_count() -> int:
 
 func claimed_count() -> int:
 	return _claimed.size()
+
+
+## Diagnostic: cancellation reason counts for F10 debug report.
+func get_cancel_stats() -> Dictionary:
+	return _cancel_reasons.duplicate()
 
 
 ## Count open (unclaimed) jobs of a specific type. Used by planners to avoid

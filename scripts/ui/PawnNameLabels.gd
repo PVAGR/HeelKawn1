@@ -87,7 +87,7 @@ func _draw() -> void:
 			prof = pawn.data.profession_label_from_enum(pawn.data.current_profession)
 
 		# Mood-based color
-		var mood: float = float(pawn.get("_mood_level", 50))
+		var mood: float = pawn.data.mood
 		var name_color: Color = NAME_COLOR
 		if mood >= 75:
 			name_color = MOOD_GREAT

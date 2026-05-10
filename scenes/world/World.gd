@@ -683,8 +683,10 @@ func record_footstep(tile: Vector2i) -> void:
 	if _sa != null and _sa.has_method("get_snow_depth"):
 		var sd: float = float(_sa.call("get_snow_depth", tile))
 		if sd > 0.0:
-			if _sa.has_method("clear"):
-				_sa.call("clear", tile)
+			if _sa.has_method("clear_snow_at"):
+				_sa.call("clear_snow_at", tile)
+			elif _sa.has_method("clear"):
+				_sa.call("clear")
 
 
 func _update_path_appearance(tile: Vector2i, traffic: int) -> void:

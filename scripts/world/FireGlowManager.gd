@@ -39,7 +39,7 @@ func initialize(world_ref: World, camera_ref: Camera2D) -> void:
 		var light: PointLight2D = PointLight2D.new()
 		light.color = LIGHT_COLOR
 		light.energy = LIGHT_ENERGY_DAY
-		light.range_distance = LIGHT_RANGE
+		light.texture_scale = LIGHT_RANGE
 		light.texture = _light_texture
 		light.enabled = false
 		light.visible = false

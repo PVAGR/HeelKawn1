@@ -739,8 +739,7 @@ func _ready() -> void:
 			FootpathMemory.bind_context(_world, _pawn_spawner)
 		if BuildingUsageTracker != null and BuildingUsageTracker.has_method("bind_context"):
 			BuildingUsageTracker.bind_context(_world, _pawn_spawner)
-		if SnowAccumulation != null and SnowAccumulation.has_method("bind_world"):
-			SnowAccumulation.bind_world(_world)
+		# SnowAccumulation disabled due to persistent caching error
 		if TimeLapseRecorder != null and TimeLapseRecorder.has_method("bind_context"):
 			TimeLapseRecorder.bind_context(_world, _pawn_spawner, _camera)
 		

@@ -189,7 +189,7 @@ static func name_for(f: int) -> String:
 	return NAMES.get(f, "Unknown")
 
 
-## Subtle deterministic tint for built furniture (read-only render; [SettlementPlanner] branch ints).
+## Subtle deterministic tint for built furniture (read-only render; [SettlementManager] branch ints).
 ## Extended for cultural architectural styles: fire pits, markers, shrines get stronger tints.
 static func apply_culture_tint_to_built_color(base: Color, culture_type: int) -> Color:
 	var tint_strength: float = 0.075
@@ -201,7 +201,7 @@ static func apply_culture_tint_to_built_color(base: Color, culture_type: int) ->
 		mul = warm
 	elif culture_type == SettlementPlanner.CULTURE_DEFENSIVE:
 		mul = cool
-	elif culture_type == SettlementPlanner.CULTURE_CAUTIOUS:
+	elif culture_type == SettlementManager.CULTURE_CAUTIOUS:
 		mul = Color(1.01, 1.0, 0.995, 1.0)
 	return base.lerp(base * mul, tint_strength)
 
@@ -217,7 +217,7 @@ static func apply_culture_landmark_tint(base: Color, culture_type: int) -> Color
 		mul = warm
 	elif culture_type == SettlementPlanner.CULTURE_DEFENSIVE:
 		mul = cool
-	elif culture_type == SettlementPlanner.CULTURE_CAUTIOUS:
+	elif culture_type == SettlementManager.CULTURE_CAUTIOUS:
 		mul = Color(1.02, 1.0, 0.99, 1.0)
 	return base.lerp(base * mul, TINT)
 

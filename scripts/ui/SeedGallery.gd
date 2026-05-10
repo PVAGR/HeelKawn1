@@ -4,7 +4,19 @@ extends CanvasLayer
 signal seed_selected(seed: int)
 signal closed
 
-const CARD_COUNT: int = 6
+const CARD_COUNT: int = 8
+
+## Curated seeds: [seed, biome_name, description, climate_tag]
+const CURATED_SEEDS: Array = [
+	[42,        "Island Chain",      "Emerald isles ringed by shallow tides. Fish abound and invasion must come by sea.", "wet"],
+	[1701,      "Mountain Valley",   "A sheltered valley between two granite spines. Rich stone, limited farmland.", "mild"],
+	[3003,      "River Delta",       "Fertile floodplains where three rivers meet. Ideal for farming and trade.", "wet"],
+	[7777,      "Archipelago",       "Countless tiny islands scattered across warm shallows. Boats are essential.", "mild"],
+	[1313,      "Desert Oasis",      "A verdant spring hidden in endless dunes. Water is life; caravans are rare.", "dry"],
+	[2202,      "Tundra Fjord",      "Deep icy inlets carved by ancient glaciers. Seals and hardy moss sustain life.", "frigid"],
+	[5555,      "Volcanic Highlands","Black basalt ridges overlooking a restless caldera. Obsidian and hot springs.", "harsh"],
+	[9001,      "Great Lake",        "A freshwater sea stretching to every horizon. Endless fish and timber.", "mild"],
+]
 
 @onready var _panel: PanelContainer = $Panel
 @onready var _close_button: Button = $Panel/Margin/VBox/Header/CloseButton
@@ -28,7 +40,7 @@ func show_gallery(base_seed: int = 0) -> void:
 	_base_seed = base_seed
 	_visible = true
 	_panel.visible = true
-	_subtitle.text = "Choose a deterministic world seed to begin a new colony."
+	_subtitle.text = "Choose a curated world to begin a new colony."
 	_populate_cards()
 	queue_redraw()
 
@@ -55,9 +67,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _on_tick(_tick: int) -> void:
 	if not _visible:
 		return
-	# Keep the panel responsive and deterministic while the title screen idles.
 	if _subtitle != null:
-		_subtitle.text = "Choose a deterministic world seed to begin a new colony."
+		_subtitle.text = "Choose a curated world to begin a new colony."
 
 
 func _apply_panel_style() -> void:
@@ -74,24 +85,13 @@ func _populate_cards() -> void:
 		return
 	for child in _grid.get_children():
 		child.queue_free()
-	var seeds: Array[int] = _generate_candidate_seeds(_base_seed)
-	for seed in seeds:
-		_grid.add_child(_build_seed_card(seed))
+	for entry in CURATED_SEEDS:
+		_grid.add_child(_build_seed_card(entry[0], entry[1], entry[2], entry[3]))
 
 
-func _generate_candidate_seeds(base_seed: int) -> Array[int]:
-	var seeds: Array[int] = []
-	for i in range(CARD_COUNT):
-		var candidate_seed: int = int(hash("%d::%d::heelkawn" % [base_seed, i])) & 0x7FFFFFFF
-		if candidate_seed <= 0:
-			candidate_seed = (base_seed + i + 1) & 0x7FFFFFFF
-		seeds.append(candidate_seed)
-	return seeds
-
-
-func _build_seed_card(seed: int) -> Control:
+func _build_seed_card(seed: int, biome_name: String, desc: String, climate: String) -> Control:
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(220, 120)
+	card.custom_minimum_size = Vector2(220, 140)
 	var card_style := StyleBoxFlat.new()
 	card_style.bg_color = Color(0.09, 0.10, 0.13, 0.96)
 	card_style.border_color = Color(0.42, 0.36, 0.25, 0.85)
@@ -107,17 +107,23 @@ func _build_seed_card(seed: int) -> Control:
 	card.add_child(margin)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
+	vbox.add_theme_constant_override("separation", 3)
 	margin.add_child(vbox)
 
-	var title := Label.new()
-	title.text = "Seed %d" % seed
-	title.add_theme_font_size_override("font_size", 14)
-	title.add_theme_color_override("font_color", Color(0.94, 0.85, 0.63, 1.0))
-	vbox.add_child(title)
+	var biome_label := Label.new()
+	biome_label.text = biome_name
+	biome_label.add_theme_font_size_override("font_size", 13)
+	biome_label.add_theme_color_override("font_color", Color(0.94, 0.85, 0.63, 1.0))
+	vbox.add_child(biome_label)
+
+	var seed_line := Label.new()
+	seed_line.text = "Seed %d  ·  %s" % [seed, climate]
+	seed_line.add_theme_font_size_override("font_size", 9)
+	seed_line.add_theme_color_override("font_color", Color(0.65, 0.62, 0.58, 1.0))
+	vbox.add_child(seed_line)
 
 	var descriptor := Label.new()
-	descriptor.text = _seed_descriptor(seed)
+	descriptor.text = desc
 	descriptor.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	descriptor.add_theme_font_size_override("font_size", 10)
 	descriptor.add_theme_color_override("font_color", Color(0.82, 0.80, 0.76, 1.0))
@@ -134,18 +140,3 @@ func _build_seed_card(seed: int) -> Control:
 func _on_seed_button_pressed(seed: int) -> void:
 	seed_selected.emit(seed)
 	hide_gallery()
-
-
-func _seed_descriptor(seed: int) -> String:
-	var descriptors: Array[String] = [
-		"Ashen valley with hard winters and quiet rivers.",
-		"Mossy basin where the hills shelter the first fields.",
-		"Wind-battered coastlands and bright dawns.",
-		"A pale stone plain where roads matter more than walls.",
-		"A dense woodland seed with rich game and soft ground.",
-		"An old river-crossing favored by traders and pilgrims.",
-	]
-	var climate_tags: Array[String] = ["mild", "harsh", "wet", "dry", "windy", "frigid"]
-	var tag_index: int = int(hash("%d::tag" % seed)) % climate_tags.size()
-	var desc_index: int = int(hash("%d::desc" % seed)) % descriptors.size()
-	return "%s\nClimate: %s" % [descriptors[desc_index], climate_tags[tag_index]]

@@ -1703,7 +1703,7 @@ func _maybe_warrior_patrol() -> bool:
 		return false
 	# Pick a random wall tile from the settlement
 	var center_rk: int = int(st.get("center_region", packed[0]))
-	var center: Vector2i = SettlementPlanner._center_tile_of_region_key(center_rk)
+	var center: Vector2i = SettlementManager._center_tile_of_region_key(center_rk)
 	# Search for walls in a small radius
 	var wall_cands: Array[Vector2i] = []
 	for dy in range(-6, 7):
@@ -5880,26 +5880,26 @@ func remember_resources(tile: Vector2i, resource_type: String) -> void:
 
 ## Get grudge intensity toward another pawn (Phase 5: Emergent Life)
 func get_grudge_toward(other_pawn_id: int) -> float:
-	if GrudgeManager != null and GrudgeManager.has_method("get_grudge_intensity"):
-		return GrudgeManager.get_grudge_intensity(int(data.id), other_pawn_id)
+	if SocialManager.get_grudge_manager() != null and SocialManager.get_grudge_manager().has_method("get_grudge_intensity"):
+		return SocialManager.get_grudge_manager().get_grudge_intensity(int(data.id), other_pawn_id)
 	return 0.0
 
 ## Check if pawn has a grudge against another pawn
 func has_grudge_against(other_pawn_id: int, min_intensity: float = 0.3) -> bool:
-	if GrudgeManager != null and GrudgeManager.has_method("has_grudge"):
-		return GrudgeManager.has_grudge(int(data.id), other_pawn_id, min_intensity)
+	if SocialManager.get_grudge_manager() != null and SocialManager.get_grudge_manager().has_method("has_grudge"):
+		return SocialManager.get_grudge_manager().has_grudge(int(data.id), other_pawn_id, min_intensity)
 	return false
 
 ## Get trust penalty from grudges (0.0 to 0.9)
 func get_grudge_trust_penalty(other_pawn_id: int) -> float:
-	if GrudgeManager != null and GrudgeManager.has_method("get_trust_penalty"):
-		return GrudgeManager.get_trust_penalty(int(data.id), other_pawn_id)
+	if SocialManager.get_grudge_manager() != null and SocialManager.get_grudge_manager().has_method("get_trust_penalty"):
+		return SocialManager.get_grudge_manager().get_trust_penalty(int(data.id), other_pawn_id)
 	return 0.0
 
 ## Get list of pawns this pawn should avoid (grudge enemies)
 func get_grudge_enemies() -> Array[int]:
-	if GrudgeManager != null and GrudgeManager.has_method("get_enemies_for"):
-		return GrudgeManager.get_enemies_for(int(data.id), 0.4)
+	if SocialManager.get_grudge_manager() != null and SocialManager.get_grudge_manager().has_method("get_enemies_for"):
+		return SocialManager.get_grudge_manager().get_enemies_for(int(data.id), 0.4)
 	return []
 
 ## Check if pawn should seek revenge against target
@@ -5910,8 +5910,8 @@ func should_seek_revenge(other_pawn_id: int) -> bool:
 
 ## Get reputation score for another pawn (-1.0 to 1.0)
 func get_reputation_for(other_pawn_id: int) -> float:
-	if GossipManager != null and GossipManager.has_method("get_reputation_for"):
-		return GossipManager.get_reputation_for(other_pawn_id)
+	if SocialManager.get_gossip_manager() != null and SocialManager.get_gossip_manager().has_method("get_reputation_for"):
+		return SocialManager.get_gossip_manager().get_reputation_for(other_pawn_id)
 	return 0.0
 
 ## Get reputation label for another pawn (human-readable)
@@ -6084,7 +6084,7 @@ func _track_co_presence_light() -> void:
 func _share_gossip_with(other_pawn: HeelKawnian) -> void:
 	if other_pawn == null or not is_instance_valid(other_pawn):
 		return
-	if GossipManager == null or not GossipManager.has_method("share_gossip_between"):
+	if SocialManager.get_gossip_manager() == null or not SocialManager.get_gossip_manager().has_method("share_gossip_between"):
 		return
 	
 	# OPTIMIZATION: Skip if either pawn has no gossip
@@ -6104,7 +6104,7 @@ func _share_gossip_with(other_pawn: HeelKawnian) -> void:
 		return
 	
 	# Share gossip (bidirectional)
-	var shared_count: int = GossipManager.share_gossip_between(
+	var shared_count: int = SocialManager.get_gossip_manager().share_gossip_between(
 		int(data.id),
 		other_id,
 		trust_strength
@@ -7345,7 +7345,7 @@ func _record_witnessed_death_consciousness() -> void:
 
 ## Record kin_death grudges for family members of the dead pawn
 func _record_kin_death_grudges() -> void:
-	var gm: Node = get_node_or_null("/root/GrudgeManager")
+	var gm: Node = get_node_or_null("/root/SocialManager")
 	if gm == null or not gm.has_method("record_grudge"):
 		return
 	if data == null:

@@ -1301,7 +1301,7 @@ func _maybe_warrior_patrol() -> bool:
 		return false
 	# Pick a random wall tile from the settlement
 	var center_rk: int = int(st.get("center_region", packed[0]))
-	var center: Vector2i = SettlementPlanner._center_tile_of_region_key(center_rk)
+	var center: Vector2i = SettlementManager._center_tile_of_region_key(center_rk)
 	# Search for walls in a small radius
 	var wall_cands: Array[Vector2i] = []
 	for dy in range(-6, 7):
@@ -2462,6 +2462,12 @@ func _tick_idle() -> void:
 		region_history_offset_cache[region_key] = history_offset
 		return history_offset
 
+	var matrix_decision: Dictionary = {}
+	var matrix_biases: Dictionary = {}
+	if ClassDB.class_exists("HeelKawnianManager"):
+		matrix_decision = HeelKawnianManager.get_matrix_decision_for_pawn(self)
+		matrix_biases = matrix_decision.get("job_biases", {}) if not matrix_decision.is_empty() else {}
+
 	# Simplified priority calculation for performance; affinity is a small nudge — not a separate queue pass — so build/mining jobs can compete with forage.
 	var priority_cb: Callable = func(j: Job) -> int:
 		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j))
@@ -2528,6 +2534,8 @@ func _tick_idle() -> void:
 			neural_bias = _get_neural_job_priority_bias(j.type)
 			neural_bias_cache[j.type] = neural_bias
 		base_bias += neural_bias
+		if not matrix_biases.is_empty():
+			base_bias += clampi(int(matrix_biases.get(int(j.type), 0)), -8, 16)
 		# World-memory-driven job bias: meaning tags at the job's work tile
 		# shape whether pawns want to work there.
 		var meaning_bias: int = 0
@@ -2762,12 +2770,16 @@ func _tick_idle() -> void:
 			return base_passes.call(j)
 		var food_job: Job = JobManager.claim_next_for(self, food_only, priority_cb)
 		if food_job != null:
+			if ClassDB.class_exists("HeelKawnianManager"):
+				HeelKawnianManager.note_matrix_job_choice(self, food_job)
 			_begin_job(food_job)
 			return
 	# PROFESSION PRIORITY: Builders prioritize build jobs, Warriors prioritize hunt/combat
 	var profession_bonus: Callable = _get_profession_priority_bonus
 	var job: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(priority_cb, profession_bonus))
 	if job != null:
+		if ClassDB.class_exists("HeelKawnianManager"):
+			HeelKawnianManager.note_matrix_job_choice(self, job)
 		_begin_job(job)
 		return
 	# 7. Nothing to do: idle wander
@@ -4999,8 +5011,8 @@ func has_grudge_against(other_pawn_id: int, min_intensity: float = 0.3) -> bool:
 
 ## Get trust penalty from grudges (0.0 to 0.9)
 func get_grudge_trust_penalty(other_pawn_id: int) -> float:
-	if GrudgeManager != null and GrudgeManager.has_method("get_trust_penalty"):
-		return GrudgeManager.get_trust_penalty(int(data.id), other_pawn_id)
+	if SocialManager.get_grudge_manager() != null and SocialManager.get_grudge_manager().has_method("get_trust_penalty"):
+		return SocialManager.get_grudge_manager().get_trust_penalty(int(data.id), other_pawn_id)
 	return 0.0
 
 ## Get list of pawns this pawn should avoid (grudge enemies)
@@ -5343,7 +5355,7 @@ func have_child(partner: Pawn) -> int:
 func _create_household() -> int:
 	# Create via KinshipSystem when available; keep deterministic fallback for safety.
 	if data != null:
-		var kin: Node = get_node_or_null("/root/KinshipSystem")
+		var kin: Node = get_node_or_null("/root/SocialManager")
 		if kin != null and kin.has_method("create_household"):
 			var created: int = int(kin.call("create_household", int(data.id)))
 			if created >= 0:
@@ -5360,7 +5372,7 @@ func join_household(household_id: int) -> void:
 	if int(data.household_id) == household_id:
 		return
 	data.household_id = household_id
-	var kin: Node = get_node_or_null("/root/KinshipSystem")
+	var kin: Node = get_node_or_null("/root/SocialManager")
 	if kin != null:
 		if kin.has_method("add_to_household"):
 			var joined: bool = bool(kin.call("add_to_household", household_id, int(data.id)))
@@ -5379,7 +5391,7 @@ func leave_household() -> void:
 	var old_household: int = data.household_id
 	if old_household < 0:
 		return
-	var kin: Node = get_node_or_null("/root/KinshipSystem")
+	var kin: Node = get_node_or_null("/root/SocialManager")
 	var former_members: Array = []
 	if kin != null and kin.has_method("get_household_members"):
 		former_members = kin.call("get_household_members", old_household)
@@ -5407,7 +5419,7 @@ func get_household_stability() -> float:
 	
 	var stability: float = 0.0
 	var household_members: int = 0
-	var kin: Node = get_node_or_null("/root/KinshipSystem")
+	var kin: Node = get_node_or_null("/root/SocialManager")
 	if kin != null and kin.has_method("get_household_members"):
 		var members: Array = kin.call("get_household_members", int(data.household_id))
 		for other_id in members:

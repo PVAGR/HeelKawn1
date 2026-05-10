@@ -155,11 +155,11 @@ func _generate_culture_colors() -> void:
 		
 		var color: Color
 		match culture_type:
-			SettlementPlanner.CULTURE_OPEN:
+			SettlementManager.CULTURE_OPEN:
 				color = Color(0.2, 0.6, 0.9, 0.7)  # Blue
-			SettlementPlanner.CULTURE_CAUTIOUS:
+			SettlementManager.CULTURE_CAUTIOUS:
 				color = Color(0.6, 0.6, 0.6, 0.7)  # Gray
-			SettlementPlanner.CULTURE_DEFENSIVE:
+			SettlementManager.CULTURE_DEFENSIVE:
 				color = Color(0.9, 0.3, 0.3, 0.7)  # Red
 			_:
 				color = Color(0.5, 0.5, 0.5, 0.5)  # Gray

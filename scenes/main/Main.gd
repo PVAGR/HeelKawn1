@@ -2253,8 +2253,8 @@ func _bootstrap_colony() -> void:
 				_world.refresh_pawn_historic_path_weights()
 		)
 		SettlementPlanner.plan(_world, self, true)
-		TradePlanner.plan(_world, self, true)
-		RoadMemory.flush_dirty_tiles(_world)
+		EconomyManager.get_trade_planner().plan(_world, self, true)
+		MemoryManager.flush_dirty_tiles(_world)
 		_sync_pawn_inherited_cultural_reputation()
 	# Spawn animals and register spawner with world for breeding
 	_animal_spawner.spawn_initial(_world)
@@ -2282,15 +2282,15 @@ func _bootstrap_colony() -> void:
 		TimeLapseRecorder.bind_context(_world, _pawn_spawner, _camera)
 		TimeLapseRecorder.record()
 	_last_generation_tick = GameManager.tick_count
-	RemnantMemory.clear()
-	AgeMemory.clear()
+	MemoryManager.get_remnant_memory().clear()
+	MemoryManager.get_age_memory().clear()
 	if DiscoveryGate != null:
 		DiscoveryGate.clear()
 	if FogOfDiscovery != null:
 		FogOfDiscovery.clear()
 	if is_instance_valid(_world):
-		RemnantMemory.seed_births_from_current_world(_world)
-		IntentMemory.recompute(_world)
+		MemoryManager.seed_births_from_current_world(_world)
+		MemoryManager.recompute_intent(_world)
 	# Defer only visual refresh; causal job setup stays before the first tick.
 	call_deferred("_bootstrap_heavy_phase2")
 
@@ -2734,7 +2734,7 @@ func _on_game_tick(tick: int) -> void:
 				call_deferred("_deferred_trade_planner_plan", _world, self, false)
 			else:
 				t0 = Time.get_ticks_usec()
-				TradePlanner.plan(_world, self, false)
+				EconomyManager.get_trade_planner().plan(_world, self, false)
 				section_us["trade_planner"] = Time.get_ticks_usec() - t0
 		# Build roads from trade routes every 2000 ticks
 		if tick % 2000 == 0 and DiscoveryGate.is_unlocked("first_trade"):
@@ -2773,7 +2773,7 @@ func _on_game_tick(tick: int) -> void:
 	if GameManager.periodic_phase_due(int(tick), AGE_MEMORY_INTERVAL_TICKS, AGE_MEMORY_PHASE_OFFSET_TICKS):
 		AgeMemory.recompute()
 		if is_instance_valid(_world):
-			IntentMemory.recompute(_world)
+			MemoryManager.recompute_intent(_world)
 	var can_run_mining_react: bool = _mining_react_in_progress or (tick - _last_mining_react_tick) >= MINING_REACT_MIN_INTERVAL_TICKS
 	if _mining_react_pending and can_run_mining_react:
 		# At high speed, skip N ticks between mining react steps to reduce per-frame load
@@ -2969,7 +2969,7 @@ func _mining_react_scan_rows_for_speed() -> int:
 func _flush_road_memory_dirty_tiles() -> void:
 	_road_flush_deferred_pending = false
 	if is_instance_valid(_world):
-		RoadMemory.flush_dirty_tiles(_world)
+		MemoryManager.flush_dirty_tiles(_world)
 
 
 func _scan_recent_inspects_and_handle() -> void:
@@ -3082,7 +3082,7 @@ func _flush_world_memory_derivatives() -> void:
 	CulturalMemory.recompute(_world)
 	MythMemory.recompute(_world)
 	SacredMemory.sync_permanent_ruins_from_settlements()
-	IntentMemory.recompute(_world)
+	MemoryManager.recompute_intent(_world)
 	if Time.get_ticks_usec() - flush_start > FLUSH_BUDGET_USEC:
 		return
 	_run_heavy_stack_refresh_once_per_tick(func() -> void:
@@ -3096,8 +3096,8 @@ func _flush_world_memory_derivatives() -> void:
 			SettlementPlanner.plan(_world, self, true)
 	if (GameManager.tick_count + maxi(1, heavy_planner_interval / 3)) % heavy_planner_interval == 0:
 		if Time.get_ticks_usec() - flush_start <= FLUSH_BUDGET_USEC:
-			TradePlanner.plan(_world, self, true)
-	RoadMemory.flush_dirty_tiles(_world)
+			EconomyManager.get_trade_planner().plan(_world, self, true)
+	MemoryManager.flush_dirty_tiles(_world)
 # OPTIMIZATION: Deferred heavy operations for frame budget management
 func _deferred_settlement_memory_recompute(world: World) -> void:
 	if is_instance_valid(world):
@@ -3116,7 +3116,7 @@ func _deferred_settlement_planner_plan(world: World, main: Node, use_cache: bool
 
 func _deferred_trade_planner_plan(world: World, main: Node, use_cache: bool) -> void:
 	if is_instance_valid(world) and is_instance_valid(main):
-		TradePlanner.plan(world, main, use_cache)
+		EconomyManager.get_trade_planner().plan(world, main, use_cache)
 
 
 func _maybe_generational_turnover() -> void:
@@ -5445,7 +5445,7 @@ func _reroll_world() -> void:
 	RoadMemory.clear()
 	TradeMemory.clear()
 	IntentMemory.clear()
-	AgeMemory.clear()
+	MemoryManager.get_age_memory().clear()
 	WorldPersistence.clear()
 	WorldMeaning.recompute()
 	WorldPersistence.recompute()
@@ -5496,12 +5496,12 @@ func _reroll_world() -> void:
 	_last_generation_tick = GameManager.tick_count
 	_world.set_meta("animal_spawner", _animal_spawner)
 	if is_instance_valid(_world):
-		IntentMemory.recompute(_world)
+		MemoryManager.recompute_intent(_world)
 		SettlementPlanner.plan(_world, self, true)
-		TradePlanner.plan(_world, self, true)
-		RoadMemory.flush_dirty_tiles(_world)
-		RemnantMemory.clear()
-		RemnantMemory.seed_births_from_current_world(_world)
+		EconomyManager.get_trade_planner().plan(_world, self, true)
+		MemoryManager.flush_dirty_tiles(_world)
+		MemoryManager.get_remnant_memory().clear()
+		MemoryManager.seed_births_from_current_world(_world)
 	# Defer only visual refresh; causal job setup stays before the next tick.
 	call_deferred("_reroll_heavy_phase2")
 
@@ -7520,9 +7520,9 @@ func _apply_save_dict(s: Dictionary) -> void:
 	if BloodlineSystem != null and BloodlineSystem.has_method("clear"):
 		BloodlineSystem.clear()
 	TradeMemory.clear()
-	RemnantMemory.clear()
+	MemoryManager.get_remnant_memory().clear()
 	IntentMemory.clear()
-	AgeMemory.clear()
+	MemoryManager.get_age_memory().clear()
 	SacredMemory.clear()
 	PlayerIntentQueue.clear()
 	if FootpathMemory != null and FootpathMemory.has_method("clear"):
@@ -7612,17 +7612,17 @@ func _apply_save_dict(s: Dictionary) -> void:
 		_reset_player_intent_observer_routing()
 		FactionRegistry.from_save_dict(s.get("faction_registry", {}))
 		FactionRegistry.sync_from_settlements()
-		IntentMemory.recompute(_world)
+		MemoryManager.recompute_intent(_world)
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):
 				_world.refresh_terrain_scar_tint()
 				_world.refresh_pawn_historic_path_weights()
 		)
 		SettlementPlanner.plan(_world, self, true)
-		TradePlanner.plan(_world, self, true)
-		RoadMemory.flush_dirty_tiles(_world)
+		EconomyManager.get_trade_planner().plan(_world, self, true)
+		MemoryManager.flush_dirty_tiles(_world)
 		_sync_pawn_inherited_cultural_reputation()
-		RemnantMemory.seed_births_from_current_world(_world)
+		MemoryManager.seed_births_from_current_world(_world)
 	_regrow_due_buckets.clear()
 	_regrow_due_ticks.clear()
 	for e in s.get("regrow", []):

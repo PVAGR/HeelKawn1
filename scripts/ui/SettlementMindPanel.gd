@@ -40,47 +40,59 @@ func _refresh(center_region: int) -> void:
 	var center: int = int(st.get("center_region", -1))
 	var pop: int = 0
 	var sp: Node = get_node_or_null("/root/WorldAI")
-	var sai: Node = sp.get("active_settlements", {}).get(center) if sp != null else null
+	var active_settlements = sp.get("active_settlements") if sp != null else {}
+	var sai: Node = active_settlements.get(center) if active_settlements is Dictionary else null
 	lines.append("[b][color=#81c784]=== %s ===[/color][/b]" % [name])
 	lines.append("State: [color=%s]%s[/color] | ID: %d" % [_state_color(state), state, center])
+	var regions_val = st.get("regions")
+	var regions: Array = regions_val if regions_val != null else []
 	var total_regions: int = 0
-	for r in st.get("regions", []):
+	for r in regions:
 		if r is PackedInt32Array:
 			total_regions += r.size()
-	lines.append("Regions: %d clusters" % st.get("regions", []).size())
+	lines.append("Regions: %d clusters" % regions.size())
 
 	# SettlementAI mind
 	if sai != null:
-		var gov: int = sai.get("government_type", 0)
+		var gov_val = sai.get("government_type")
+		var gov: int = gov_val if gov_val != null else 0
 		var gov_names: Array = ["Tribal", "Chiefdom", "Monarchy", "Republic", "Theocracy", "Technocracy", "Anarchy"]
 		var gov_name: String = gov_names[gov] if gov >= 0 and gov < gov_names.size() else "Unknown"
-		var focus: int = sai.get("development_focus", 0)
+		var focus_val = sai.get("development_focus")
+		var focus: int = focus_val if focus_val != null else 0
 		var focus_names: Array = ["Survival", "Expansion", "Trade", "Knowledge", "Military", "Artistic", "Balanced"]
 		var focus_name: String = focus_names[focus] if focus >= 0 and focus < focus_names.size() else "Unknown"
 		lines.append("")
 		lines.append("[b]--- GOVERNMENT & FOCUS ---[/b]")
 		lines.append("Government: [color=#bb77ee]%s[/color]" % gov_name)
 		lines.append("Development Focus: [color=#66bb6a]%s[/color]" % focus_name)
-		var leader: int = sai.get("leader_id", -1)
+		var leader_val = sai.get("leader_id")
+		var leader: int = leader_val if leader_val != null else -1
 		if leader > 0:
 			lines.append("Leader ID: %d" % leader)
-		var goals: Array = sai.get("collective_goals", [])
+		var goals_val = sai.get("collective_goals")
+		var goals: Array = goals_val if goals_val != null else []
 		if goals.size() > 0:
 			lines.append("")
 			lines.append("[b]--- COLLECTIVE GOALS ---[/b]")
 			for g in goals:
-				var gt: String = str(g.get("goal_type", "unknown"))
-				var prio: int = int(g.get("priority", 0))
+				var gt_val = g.get("goal_type")
+				var gt: String = str(gt_val if gt_val != null else "unknown")
+				var prio_val = g.get("priority")
+				var prio: int = int(prio_val if prio_val != null else 0)
 				lines.append("  [color=#ffd54f]%s[/color] (priority: %d)" % [gt, prio])
-		var norms: Array = sai.get("cultural_norms", [])
+		var norms_val = sai.get("cultural_norms")
+		var norms: Array = norms_val if norms_val != null else []
 		if norms.size() > 0:
 			lines.append("")
 			lines.append("[b]--- CULTURAL NORMS ---[/b]")
 			for n in norms:
-				var nn: String = str(n.get("norm_name", ""))
+				var nn_val = n.get("norm_name")
+				var nn: String = str(nn_val if nn_val != null else "")
 				if not nn.is_empty():
 					lines.append("  • [color=#81c784]%s[/color]" % nn)
-		var treaties: Array = sai.get("active_treaties", [])
+		var treaties_val = sai.get("active_treaties")
+		var treaties: Array = treaties_val if treaties_val != null else []
 		if treaties.size() > 0:
 			lines.append("")
 			lines.append("[b]--- DIPLOMACY (%d treaties) ---[/b]" % treaties.size())
@@ -92,9 +104,13 @@ func _refresh(center_region: int) -> void:
 	_content.text = "\n".join(lines)
 
 func _find_settlement(center_region: int, sm: Node) -> Dictionary:
-	var settlements: Array = sm.get("settlements", [])
+	var settlements_val = sm.get("settlements") if sm != null else null
+	var settlements: Array = settlements_val if settlements_val != null else []
 	for s in settlements:
-		if s is Dictionary and int(s.get("center_region", -1)) == center_region:
+		if s is Dictionary:
+			var center_val = s.get("center_region")
+			var center_reg = int(center_val if center_val != null else -1)
+			if center_reg == center_region:
 			return s
 	return {}
 

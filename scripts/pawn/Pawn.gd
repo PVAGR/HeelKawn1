@@ -18,7 +18,7 @@ extends Node2D
 ## Radius of the pawn circle in world units. Kept <= TILE_PIXELS (8) so a
 ## pawn doesn't visually spill into neighboring tiles as it walks.
 const DRAW_RADIUS: float = 3.5
-## Tiny deterministic pixel figure (skin / hair / apparel from `PawnData`) — reads as a "sprite"
+## Tiny deterministic pixel figure (skin / hair / apparel from `HeelKawnianData`) — reads as a "sprite"
 ## before bespoke art ships; NPCs and player use the same path.
 const PROCEDURAL_PIXEL_PAWN: bool = true
 const OUTLINE_WIDTH: float = 1.0
@@ -217,7 +217,7 @@ const REPRODUCTION_MATE_RANGE_NO_BEDS_MIN_TILES: float = 22.0
 ## Softer than general job hunger gates so pairs can raise children under colony stress.
 const REPRODUCTION_MIN_HUNGER: float = 48.0
 const REPRODUCTION_MIN_REST: float = 42.0
-## Requires [member PawnData.social_rapport] built from co-presence (Main._accumulate_social_rapport).
+## Requires [member HeelKawnianData.social_rapport] built from co-presence (Main._accumulate_social_rapport).
 const REPRODUCTION_MIN_RAPPORT: int = 72
 const COHORT_UPDATE_TICKS: int = 200
 const COHORT_MATCH_RADIUS_TILES: int = 8
@@ -271,7 +271,7 @@ enum State {
 
 # -------------------- runtime --------------------
 
-var data: PawnData
+var data: HeelKawnianData
 @onready var _sprite: Sprite2D = Sprite2D.new() # SPRITE_ART
 
 var _world: World
@@ -401,14 +401,14 @@ var _pawn_sim_tick_armed: bool = false
 
 ## Autoloads (e.g. JobManager) should call these instead of `pawn.data` — the
 ## parser can fail to resolve the `data` member on class_name Pawn in autoload scripts.
-func get_pawn_data() -> PawnData:
+func get_pawn_data() -> HeelKawnianData:
 	return data
 
 
 ## PawnSpawner + other systems call `bind(...)` as the canonical pawn
 ## initialization hook before/around add_child.
 ## (Pawn previously lacked this method, causing runtime boot failure.)
-func bind(p_data: PawnData, world_position: Vector2, p_world: World) -> void:
+func bind(p_data: HeelKawnianData, world_position: Vector2, p_world: World) -> void:
 	data = p_data
 	_world = p_world
 
@@ -958,7 +958,7 @@ func _exit_tree() -> void:
 		GameManager.game_tick.disconnect(_on_world_tick)
 	# Unregister pawn data so static registry stays accurate
 	if data != null:
-		PawnData.unregister_pawn_data(int(data.id))
+		HeelKawnianData.unregister_pawn_data(int(data.id))
 		if SpatialManager != null: # ARCHITECT T006
 			SpatialManager.unregister_entity(int(data.id))
 	# OPTIMIZATION: Invalidate avoidance caches for all pawns when this pawn dies
@@ -986,15 +986,15 @@ func _grant_initial_knowledge() -> void:
 	
 	# Profession-specific knowledge
 	match int(data.current_profession):
-		PawnData.Profession.FARMER:
+		HeelKawnianData.Profession.FARMER:
 			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.SEASON_READING)
 			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.FIRE_KEEPING)
-		PawnData.Profession.BUILDER:
+		HeelKawnianData.Profession.BUILDER:
 			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.SHELTER_BUILDING)
 			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.TOOL_MAKING)
-		PawnData.Profession.GATHERER:
+		HeelKawnianData.Profession.GATHERER:
 			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.TOOL_MAKING)
-		PawnData.Profession.WARRIOR:
+		HeelKawnianData.Profession.WARRIOR:
 			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.NAVIGATION)
 			KnowledgeSystem.add_knowledge_carrier(pawn_id, KnowledgeSystem.KnowledgeType.SICKNESS_AVOIDANCE)
 
@@ -1204,7 +1204,7 @@ func _try_autonomy_social_seek() -> bool:
 		var rap: float = float(data.get_social_rapport(pid_i))
 		var score: float = rap / 3000.0 - float(d2) / 20000.0
 		# Profession clustering: same-profession pawns are slightly more attractive
-		if data.current_profession != PawnData.Profession.NONE and p.data.current_profession == data.current_profession:
+		if data.current_profession != HeelKawnianData.Profession.NONE and p.data.current_profession == data.current_profession:
 			score += 0.15
 		if score > best_score:
 			best_score = score
@@ -1371,7 +1371,7 @@ func _maybe_attempt_rediscovery() -> void:
 	if data == null or KnowledgeSystem == null or GameManager == null:
 		return
 	# Only scholars and high-openness pawns attempt rediscovery
-	if data.current_profession != PawnData.Profession.SCHOLAR and data.openness < 0.6:
+	if data.current_profession != HeelKawnianData.Profession.SCHOLAR and data.openness < 0.6:
 		return
 	var dormant_types: Array = KnowledgeSystem.get_dormant_knowledge_types()
 	if dormant_types.is_empty():
@@ -2308,7 +2308,7 @@ func _tick_idle() -> void:
 	# 5b. Warrior peacetime patrol: if this pawn is a WARRIOR and no
 	# combat/security jobs are available, path toward a settlement wall
 	# and idle there (visible presence, not stuck at stockpile).
-	if data != null and data.current_profession == PawnData.Profession.WARRIOR:
+	if data != null and data.current_profession == HeelKawnianData.Profession.WARRIOR:
 		if _maybe_warrior_patrol():
 			return
 	# 5c. Cultural exposure: outsiders near custom-tagged regions may adopt customs.
@@ -2436,22 +2436,22 @@ func _tick_idle() -> void:
 		if affinity_key != "" and _job_matches_affinity(j.type, affinity_key):
 			base_bias += AFFINITY_JOB_PRIORITY_BONUS
 		# Profession-specific job priority: pawns strongly prefer jobs matching their role
-		if data.current_profession != PawnData.Profession.NONE:
+		if data.current_profession != HeelKawnianData.Profession.NONE:
 			var prof: int = data.current_profession
 			match prof:
-				PawnData.Profession.FARMER:
+				HeelKawnianData.Profession.FARMER:
 					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.PLANT_SEEDS or j.type == _Job.Type.HARVEST_CROPS:
 						base_bias += 5
-				PawnData.Profession.BUILDER:
+				HeelKawnianData.Profession.BUILDER:
 					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH:
 						base_bias += 5
-				PawnData.Profession.GATHERER:
+				HeelKawnianData.Profession.GATHERER:
 					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.GATHER_FLINT or j.type == _Job.Type.GATHER_STICK:
 						base_bias += 5
-				PawnData.Profession.WARRIOR:
+				HeelKawnianData.Profession.WARRIOR:
 					if j.type == _Job.Type.HUNT or j.type == _Job.Type.PROTECT or j.type == _Job.Type.DEFEND:
 						base_bias += 5
-				PawnData.Profession.SCHOLAR:
+				HeelKawnianData.Profession.SCHOLAR:
 					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
 						base_bias += 5
 		var action_key: String = _utility_action_for_job(int(j.type))
@@ -3230,7 +3230,7 @@ func _tick_working() -> void:
 	# Skill-modulated work rate: progress per tick = work_speed_for(skill).
 	# Always at least 1 progress per tick (a fresh pawn isn't slower than the
 	# old constant-rate baseline). XP accrues only while actually working.
-	var skill: int = PawnData.skill_for_job(_current_job.type)
+	var skill: int = HeelKawnianData.skill_for_job(_current_job.type)
 	var speed: float = data.effective_labor_mult() * float(work_step_multiplier)
 	# Tool efficacy: equipped tools boost specific job types
 	speed *= data.get_tool_efficacy(_current_job.type)
@@ -3240,7 +3240,7 @@ func _tick_working() -> void:
 		# Apply efficiency modifier
 		speed *= efficiency
 		var leveled_up: bool = data.add_skill_xp(
-				skill, PawnData.XP_PER_WORK_TICK * float(work_step_multiplier)
+				skill, HeelKawnianData.XP_PER_WORK_TICK * float(work_step_multiplier)
 		)
 		var w: int = maxi(1, int(ceil(speed)))
 		data.add_profession_liking_for_job(_current_job.type, w)
@@ -3399,7 +3399,7 @@ func _apply_work_hazards(work_ticks_simulated: int = 1) -> void:
 	# Unskilled pawn (lvl 0): 2% per tick. Skilled (lvl 20): 0.2% per tick.
 	var hazard_chance: float = 0.0
 	if _current_job.type == _Job.Type.MINE or _current_job.type == _Job.Type.MINE_WALL:
-		var mining_level: int = data.get_skill_level(PawnData.Skill.MINING)
+		var mining_level: int = data.get_skill_level(HeelKawnianData.Skill.MINING)
 		hazard_chance = 0.02 * max(0.1, 1.0 - (mining_level / 20.0))
 		# Traits can modify injury chance
 		hazard_chance *= data.get_trait_mult("injury_chance_mult")
@@ -3746,7 +3746,7 @@ func _complete_current_job() -> void:
 		_Job.Type.HARVEST_CROPS:
 			produced_type = FoodChainManager.harvest_crop(job.tile)
 			produced_qty = 2 if produced_type != _Item.Type.NONE else 0  # Crops yield more
-	var yield_skill: int = PawnData.skill_for_job(job.type)
+	var yield_skill: int = HeelKawnianData.skill_for_job(job.type)
 	if yield_skill >= 0 and produced_type != _Item.Type.NONE:
 		var qmult: float = data.harvest_quality_multiplier_for_job_skill(yield_skill)
 		if qmult > 1.001:
@@ -4832,11 +4832,11 @@ func teach_skill(target_pawn: Pawn, skill: int) -> bool:
 	
 	# Grant XP to target (faster than self-learning); teaching branch boosts output.
 	var te: float = data.teach_efficiency_multiplier() * data.kinship_teach_efficiency_multiplier(int(target_pawn.data.id))
-	target_pawn.data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK * 2.0 * te)
+	target_pawn.data.add_skill_xp(skill, HeelKawnianData.XP_PER_WORK_TICK * 2.0 * te)
 	
 	# Small XP bonus to teacher for teaching
-	data.add_skill_xp(skill, PawnData.XP_PER_WORK_TICK * 0.5 * te)
-	_record_teaching_memory_fact(target_pawn, PawnData.skill_name(skill).to_lower())
+	data.add_skill_xp(skill, HeelKawnianData.XP_PER_WORK_TICK * 0.5 * te)
+	_record_teaching_memory_fact(target_pawn, HeelKawnianData.skill_name(skill).to_lower())
 	
 	# Update cooldown timestamp
 	_last_teach_tick = GameManager.tick_count
@@ -5240,8 +5240,8 @@ func marry(spouse: Pawn) -> void:
 		])
 
 
-## Spawn a child via [PawnSpawner] (bind, tile, lineage, [PawnData] registry). Not a raw scene instantiate:
-## that would skip world placement, job safety, and [method PawnData.register_pawn_data].
+## Spawn a child via [PawnSpawner] (bind, tile, lineage, [HeelKawnianData] registry). Not a raw scene instantiate:
+## that would skip world placement, job safety, and [method HeelKawnianData.register_pawn_data].
 func _spawn_child_pawn(parent_pawn_id: int = -1, second_parent_id: int = -1) -> Pawn:
 	var spawner: PawnSpawner = _resolve_pawn_spawner()
 	if spawner == null or _world == null or GameManager == null or data == null:
@@ -5250,8 +5250,8 @@ func _spawn_child_pawn(parent_pawn_id: int = -1, second_parent_id: int = -1) -> 
 	var pb_id: int = second_parent_id if second_parent_id >= 0 else int(data.spouse_id)
 	if pb_id < 0:
 		return null
-	var parent_a: PawnData = spawner.pawn_data_for_id(pa_id)
-	var parent_b: PawnData = spawner.pawn_data_for_id(pb_id)
+	var parent_a: HeelKawnianData = spawner.pawn_data_for_id(pa_id)
+	var parent_b: HeelKawnianData = spawner.pawn_data_for_id(pb_id)
 	if parent_a == null or parent_b == null:
 		return null
 	return spawner.spawn_child_pawn(_world, data.tile_pos, parent_a, parent_b, GameManager.tick_count)
@@ -5259,11 +5259,11 @@ func _spawn_child_pawn(parent_pawn_id: int = -1, second_parent_id: int = -1) -> 
 
 ## Single-parent affinity nudge: scale parent's values by 70–130% (deterministic) and lerp child's map.
 static func _inherit_from_parent(
-		child_pd: PawnData, parent_id: int, birth_tick: int, pass_index: int = 0
+		child_pd: HeelKawnianData, parent_id: int, birth_tick: int, pass_index: int = 0
 ) -> void:
 	if child_pd == null or parent_id < 0:
 		return
-	var parent_pd: PawnData = child_pd._get_parent_data(parent_id)
+	var parent_pd: HeelKawnianData = child_pd._get_parent_data(parent_id)
 	if parent_pd == null:
 		return
 	for k in child_pd.affinities.keys():
@@ -5289,9 +5289,9 @@ static func _inherit_from_parent(
 		child_pd.affinities[k] = clampf(lerpf(cur, target, w), 0.0, 1.0)
 
 
-## Apply both parents in order (after [method PawnData.initialize_affinities]).
+## Apply both parents in order (after [method HeelKawnianData.initialize_affinities]).
 static func _inherit_affinities(
-		child_pd: PawnData, parent_a: PawnData, parent_b: PawnData, birth_tick: int
+		child_pd: HeelKawnianData, parent_a: HeelKawnianData, parent_b: HeelKawnianData, birth_tick: int
 ) -> void:
 	if child_pd == null or parent_a == null or parent_b == null:
 		return
@@ -5602,7 +5602,7 @@ func _evaluate_life_path_on_job_complete(job_type: int) -> void:
 	data.life_path_progress += 1
 
 	# Ruler path: direct influence gain (leadership emergence).
-	if new_path == PawnData.LifePath.RULER:
+	if new_path == HeelKawnianData.LifePath.RULER:
 		data.influence += 1.0
 
 	# Milestone events at 10 / 25 / 50 / 100 on current path.
@@ -5618,7 +5618,7 @@ func _evaluate_life_path_on_job_complete(job_type: int) -> void:
 			"tick": GameManager.tick_count,
 		})
 		# Ruler path milestones trigger governance events.
-		if new_path == PawnData.LifePath.RULER:
+		if new_path == HeelKawnianData.LifePath.RULER:
 			_trigger_ruler_decision_event(prog)
 
 
@@ -5654,19 +5654,19 @@ static func _life_path_key_for_job(job_type: int) -> String:
 
 static func _life_path_enum(key: String) -> int:
 	match key:
-		"farmer":    return PawnData.LifePath.FARMER
-		"soldier":  return PawnData.LifePath.SOLDIER
-		"ruler":    return PawnData.LifePath.RULER
-		"wanderer": return PawnData.LifePath.WANDERER
-	return PawnData.LifePath.NONE
+		"farmer":    return HeelKawnianData.LifePath.FARMER
+		"soldier":  return HeelKawnianData.LifePath.SOLDIER
+		"ruler":    return HeelKawnianData.LifePath.RULER
+		"wanderer": return HeelKawnianData.LifePath.WANDERER
+	return HeelKawnianData.LifePath.NONE
 
 
 static func _life_path_label(path: int) -> String:
 	match path:
-		PawnData.LifePath.FARMER:    return "farmer"
-		PawnData.LifePath.SOLDIER:  return "soldier"
-		PawnData.LifePath.RULER:    return "ruler"
-		PawnData.LifePath.WANDERER: return "wanderer"
+		HeelKawnianData.LifePath.FARMER:    return "farmer"
+		HeelKawnianData.LifePath.SOLDIER:  return "soldier"
+		HeelKawnianData.LifePath.RULER:    return "ruler"
+		HeelKawnianData.LifePath.WANDERER: return "wanderer"
 	return "none"
 
 
@@ -5759,7 +5759,7 @@ func _reevaluate_life_path_from_contributions() -> void:
 	data.life_path_progress += 1
 
 	# Ruler path: direct influence gain (leadership emergence).
-	if new_path == PawnData.LifePath.RULER:
+	if new_path == HeelKawnianData.LifePath.RULER:
 		data.influence += 1.0
 
 	var prog: int = data.life_path_progress
@@ -6230,7 +6230,7 @@ func _die(_p_cause: String = "") -> void:
 			KnowledgeSystem.remove_knowledge_carrier(int(data.id), data.tile_pos)
 
 
-## Trait / Krond convenience wrappers (delegates to PawnData)
+## Trait / Krond convenience wrappers (delegates to HeelKawnianData)
 func can_afford_trait(trait_res: Resource) -> bool:
 	if data == null or trait_res == null:
 		return false
@@ -6307,7 +6307,7 @@ func _squad_anchor_tile() -> Vector2i:
 		return Vector2i(-1, -1)
 	var sp: Node = tree.root.find_child("PawnSpawner", true, false)
 	if sp != null and sp.has_method("pawn_data_for_id"):
-		var anchor: PawnData = sp.call("pawn_data_for_id", data.social_squad_anchor_id) as PawnData
+		var anchor: HeelKawnianData = sp.call("pawn_data_for_id", data.social_squad_anchor_id) as HeelKawnianData
 		if anchor != null:
 			return anchor.tile_pos
 	return Vector2i(-1, -1)
@@ -6419,7 +6419,7 @@ func _draw() -> void:
 		body_color = data.color.darkened(0.25)
 
 	# Profession body tint — subtle overlay so pawns of same role look alike
-	if data.current_profession != PawnData.Profession.NONE:
+	if data.current_profession != HeelKawnianData.Profession.NONE:
 		var prof_tint: Color = _profession_color(data.current_profession)
 		body_color = body_color.lerp(prof_tint, 0.12)
 
@@ -6448,37 +6448,37 @@ func _draw() -> void:
 		draw_arc(body_origin, body_radius + 6.0, 0.0, TAU, 28, Color(1.0, 0.92, 0.18, glow_alpha), 2.0, true)
 	
 	# Profession indicator: visible badge above the pawn
-	if data.current_profession != PawnData.Profession.NONE:
+	if data.current_profession != HeelKawnianData.Profession.NONE:
 		var prof_color: Color = _profession_color(data.current_profession)
 		var prof_pos: Vector2 = body_origin + Vector2(0.0, -body_radius - 3.5)
 		var badge_r: float = 2.0
 		draw_circle(prof_pos, badge_r, prof_color)
 		# Draw a small profession-specific shape inside the badge
 		match data.current_profession:
-			PawnData.Profession.FARMER:
+			HeelKawnianData.Profession.FARMER:
 				# Triangle (wheat)
 				var s: float = badge_r * 0.7
 				draw_colored_polygon(
 					PackedVector2Array([prof_pos + Vector2(0, -s), prof_pos + Vector2(-s, s), prof_pos + Vector2(s, s)]),
 					Color.WHITE
 				)
-			PawnData.Profession.BUILDER:
+			HeelKawnianData.Profession.BUILDER:
 				# Square (brick)
 				var s: float = badge_r * 0.55
 				draw_rect(Rect2(prof_pos - Vector2(s, s), Vector2(s * 2, s * 2)), Color.WHITE, true)
-			PawnData.Profession.GATHERER:
+			HeelKawnianData.Profession.GATHERER:
 				# Diamond (leaf)
 				var s: float = badge_r * 0.7
 				draw_colored_polygon(
 					PackedVector2Array([prof_pos + Vector2(0, -s), prof_pos + Vector2(s, 0), prof_pos + Vector2(0, s), prof_pos + Vector2(-s, 0)]),
 					Color.WHITE
 				)
-			PawnData.Profession.WARRIOR:
+			HeelKawnianData.Profession.WARRIOR:
 				# Sword chevron
 				var s: float = badge_r * 0.6
 				draw_line(prof_pos + Vector2(-s, s), prof_pos + Vector2(0, -s), Color.WHITE, 1.0, true)
 				draw_line(prof_pos + Vector2(s, s), prof_pos + Vector2(0, -s), Color.WHITE, 1.0, true)
-			PawnData.Profession.SCHOLAR:
+			HeelKawnianData.Profession.SCHOLAR:
 				# Star (knowledge)
 				var s: float = badge_r * 0.5
 				draw_circle(prof_pos, s, Color.WHITE)
@@ -6512,22 +6512,22 @@ func _draw() -> void:
 
 func _profession_color(prof: int) -> Color:
 	match prof:
-		PawnData.Profession.FARMER:   return Color(0.85, 0.65, 0.2)   # gold
-		PawnData.Profession.BUILDER:  return Color(0.6, 0.6, 0.6)     # silver
-		PawnData.Profession.GATHERER: return Color(0.2, 0.75, 0.3)    # green
-		PawnData.Profession.WARRIOR:  return Color(0.9, 0.2, 0.2)     # red
-		PawnData.Profession.SCHOLAR:  return Color(0.3, 0.5, 0.9)     # blue
+		HeelKawnianData.Profession.FARMER:   return Color(0.85, 0.65, 0.2)   # gold
+		HeelKawnianData.Profession.BUILDER:  return Color(0.6, 0.6, 0.6)     # silver
+		HeelKawnianData.Profession.GATHERER: return Color(0.2, 0.75, 0.3)    # green
+		HeelKawnianData.Profession.WARRIOR:  return Color(0.9, 0.2, 0.2)     # red
+		HeelKawnianData.Profession.SCHOLAR:  return Color(0.3, 0.5, 0.9)     # blue
 		_:                            return Color.WHITE
 
 
 ## PROFESSION PRIORITY BONUS - Builders prioritize build jobs, Warriors prioritize hunt
 ## INCREASED bonuses to ensure profession bias dominates over other job priority factors
 func _get_profession_priority_bonus(job: Job) -> int:
-	if data == null or data.current_profession == PawnData.Profession.NONE:
+	if data == null or data.current_profession == HeelKawnianData.Profession.NONE:
 		return 0
 	
 	# Builder: +10 priority for all build jobs (critical for housing strain fix)
-	if data.current_profession == PawnData.Profession.BUILDER:
+	if data.current_profession == HeelKawnianData.Profession.BUILDER:
 		match job.type:
 			Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
 				return 10  # VERY HIGH priority for builds
@@ -6539,7 +6539,7 @@ func _get_profession_priority_bonus(job: Job) -> int:
 				return 4
 	
 	# Warrior: +10 priority for hunt/combat jobs
-	if data.current_profession == PawnData.Profession.WARRIOR:
+	if data.current_profession == HeelKawnianData.Profession.WARRIOR:
 		match job.type:
 			Job.Type.HUNT:
 				return 10
@@ -6549,7 +6549,7 @@ func _get_profession_priority_bonus(job: Job) -> int:
 				return 5
 	
 	# Gatherer: +8 priority for foraging/gathering
-	if data.current_profession == PawnData.Profession.GATHERER:
+	if data.current_profession == HeelKawnianData.Profession.GATHERER:
 		match job.type:
 			Job.Type.FORAGE, Job.Type.CHOP:
 				return 8
@@ -6559,7 +6559,7 @@ func _get_profession_priority_bonus(job: Job) -> int:
 				return 4
 	
 	# Scholar: +8 priority for teaching/crafting
-	if data.current_profession == PawnData.Profession.SCHOLAR:
+	if data.current_profession == HeelKawnianData.Profession.SCHOLAR:
 		match job.type:
 			Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP:
 				return 10
@@ -6569,7 +6569,7 @@ func _get_profession_priority_bonus(job: Job) -> int:
 				return 8
 	
 	# Farmer: +8 priority for food jobs
-	if data.current_profession == PawnData.Profession.FARMER:
+	if data.current_profession == HeelKawnianData.Profession.FARMER:
 		match job.type:
 			Job.Type.FORAGE, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS:
 				return 10
@@ -6768,9 +6768,9 @@ func _body_radius() -> float:
 	if data == null:
 		return DRAW_RADIUS
 	match data.body_type:
-		PawnData.BodyType.SLIM:
+		HeelKawnianData.BodyType.SLIM:
 			return DRAW_RADIUS - 0.35
-		PawnData.BodyType.BROAD:
+		HeelKawnianData.BodyType.BROAD:
 			return DRAW_RADIUS + 0.45
 		_:
 			return DRAW_RADIUS
@@ -6781,13 +6781,13 @@ func _draw_hair(body_origin: Vector2, body_radius: float) -> void:
 		return
 	var hair_c: Color = data.hair_color
 	match data.hair_style:
-		PawnData.HairStyle.NONE:
+		HeelKawnianData.HairStyle.NONE:
 			return
-		PawnData.HairStyle.SHORT:
+		HeelKawnianData.HairStyle.SHORT:
 			draw_arc(body_origin + Vector2(0.0, -0.2), body_radius - 0.4, PI * 1.05, PI * 1.95, 10, hair_c, 1.0, true)
-		PawnData.HairStyle.MOHAWK:
+		HeelKawnianData.HairStyle.MOHAWK:
 			draw_line(body_origin + Vector2(0.0, -body_radius), body_origin + Vector2(0.0, body_radius * 0.2), hair_c, 1.1, true)
-		PawnData.HairStyle.BUN:
+		HeelKawnianData.HairStyle.BUN:
 			draw_circle(body_origin + Vector2(0.0, -body_radius - 0.75), 0.8, hair_c)
 
 

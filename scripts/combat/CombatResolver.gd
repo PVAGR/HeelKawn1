@@ -203,7 +203,7 @@ static func resolve_ranged_attack(attacker: Node, defender: Node, distance_tiles
 
 
 ## Check if attacker has ranged ammo (carrying ammo-type items)
-	static func _has_ranged_ammo(pawn_node: Node) -> bool:
+func _has_ranged_ammo(pawn_node: Node) -> bool:
 	if not (pawn_node is HeelKawnian):
 		return true  # Enemies always have ammo
 	var p: HeelKawnian = pawn_node as HeelKawnian
@@ -218,7 +218,7 @@ static func resolve_ranged_attack(attacker: Node, defender: Node, distance_tiles
 
 
 ## Consume one unit of ammo from the pawn's carry slot
-static func _consume_ranged_ammo(pawn_node: Node) -> void:
+func _consume_ranged_ammo(pawn_node: Node) -> void:
 	if not (pawn_node is HeelKawnian):
 		return
 	var p: HeelKawnian = pawn_node as HeelKawnian

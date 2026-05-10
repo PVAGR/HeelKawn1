@@ -26,7 +26,6 @@ func show_panel() -> void:
 	_visible = true
 	_panel.visible = true
 	_refresh()
-	queue_redraw()
 
 
 func hide_panel() -> void:

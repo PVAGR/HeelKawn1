@@ -329,6 +329,7 @@ var _cohort_id: int = -1
 var _sacred_geography_cache: Node = null
 var _cohort_role: int = -1
 var _carrying_spawn_item: bool = false
+var _nav_dirty: bool = false
 var draft_mode: bool = false
 var is_selected: bool = false
 ## Active path: list of tiles AFTER the current tile that must be visited in
@@ -2214,6 +2215,15 @@ func evict_to_neighbor_of_tile(stand_tile: Vector2i) -> void:
 ## World/navigation: tiles changed (walls, doors, mining). Re-nudge, then
 ## re-seek paths for movement states.
 func on_world_nav_changed() -> void:
+	# Lightweight: just set a flag. The actual path recalculation happens
+	# on the pawn's next tick via _process_nav_dirty(). This avoids a burst
+	# of 26+ pathfinder calls when multiple walls are reserved in one frame.
+	_nav_dirty = true
+
+
+## Process deferred nav change. Called at the start of _tick if _nav_dirty is true.
+func _process_nav_dirty() -> void:
+	_nav_dirty = false
 	if _world == null or _world.pathfinder == null or data == null:
 		return
 	if not _world.pathfinder.is_passable(data.tile_pos):
@@ -2452,7 +2462,12 @@ func _on_world_tick(_tick: int) -> void:
 	# CRITICAL: Dead pawns do NOT process ticks - prevents duplicate deaths, biography spam, legacy duplication
 	if data.is_dead:
 		return  # HeelKawnian is already dead - skip all processing
-	
+
+	# Process deferred nav change (from notify_pawns_nav_changed) — spread
+	# pathfinder recalculation cost across ticks instead of bursting in one frame.
+	if _nav_dirty:
+		_process_nav_dirty()
+
 	## Sync GameManager.tick_count for backward compatibility
 	if GameManager != null:
 		GameManager.tick_count = _tick

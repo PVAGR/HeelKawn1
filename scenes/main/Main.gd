@@ -5772,7 +5772,7 @@ func _seed_construction_jobs() -> void:
 	var tick: int = GameManager.tick_count
 	if Main._world_stabilization_until_tick >= 0 and tick < Main._world_stabilization_until_tick:
 		return
-	var interval: int = _high_speed_interval(60, 120, 300)
+	var interval: int = _high_speed_interval(30, 60, 150)
 	if tick - _last_construction_seed_tick < interval:
 		return
 	_last_construction_seed_tick = tick
@@ -5789,7 +5789,7 @@ func _seed_construction_jobs() -> void:
 	var settlements: Array = SettlementMemory.get_settlements()
 	if settlements.is_empty():
 		return
-	var max_settlements_this_pass: int = 2 if GameManager.game_speed >= 50.0 else 4
+	var max_settlements_this_pass: int = 1 if GameManager.game_speed >= 50.0 else 3
 	var settlements_seen: int = 0
 	var start_idx: int = _construction_seed_cursor % settlements.size()
 	for step in range(settlements.size()):
@@ -5861,6 +5861,9 @@ func _seed_construction_jobs() -> void:
 						break
 				else:
 					break
+		# Budget check after housing crisis (most expensive priority)
+		if Time.get_ticks_usec() - start_usec >= budget_usec:
+			break
 		# Priority 1: Fire pit — need 1 per 4 pawns for warmth
 		var hearths_needed: int = maxi(1, local_pop / 4)
 		if hearths < hearths_needed and jobs_this_settlement < job_cap:

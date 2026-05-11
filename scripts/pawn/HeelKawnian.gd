@@ -2942,6 +2942,8 @@ func _tick_idle() -> void:
 		return history_offset
 
 	# Simplified priority calculation for performance; affinity is a small nudge â€” not a separate queue pass â€” so build/mining jobs can compete with forage.
+	var _cached_stock_wood: int = StockpileManager.total_count_of(Item.Type.WOOD)
+	var _cached_stock_stone: int = StockpileManager.total_count_of(Item.Type.STONE)
 	var priority_cb: Callable = func(j: Job) -> int:
 		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j))
 		if not is_job_history_critical(j.type):
@@ -3216,6 +3218,11 @@ func _tick_idle() -> void:
 			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH or j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.MINE or j.type == _Job.Type.MINE_WALL:
 				zone_bias += 4
 		base_bias += zone_bias
+		# Materials crisis: penalize BUILD jobs when stockpiles are low so pawns
+		# gather resources instead of claiming build jobs they can't complete.
+		if _is_structure_build_job(j.type):
+			if _cached_stock_wood < 5 or _cached_stock_stone < 3:
+				base_bias -= 20
 		# Settlement proximity bias: pawns strongly prefer jobs in their own settlement.
 		# This keeps each settlement's workforce working locally instead of all pawns
 		# clustering at the central stockpile and ignoring outlying settlements.

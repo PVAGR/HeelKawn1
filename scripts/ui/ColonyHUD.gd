@@ -8,7 +8,7 @@ extends CanvasLayer
 ## Reads pawn list from PawnSpawner, stockpile from World, time + speed from
 ## GameManager, and job counts from JobManager (autoload).
 
-const REFRESH_EVERY_N_TICKS: int = 1
+const REFRESH_EVERY_N_TICKS: int = 15
 const REFRESH_EVERY_N_TICKS_FAST: int = 2
 const REFRESH_EVERY_N_TICKS_ULTRA: int = 4
 const REFRESH_EVERY_N_TICKS_EXTREME: int = 6
@@ -142,6 +142,7 @@ func bind(world: World, spawner: PawnSpawner) -> void:
 			_animal_spawner = m as AnimalSpawner
 	_hud_dirty = true
 	_refresh()
+	_hud_dirty = false
 
 
 func set_player_control_refs(input_buffer: PlayerInputBuffer, player_pawn: HeelKawnian) -> void:
@@ -180,12 +181,16 @@ func _on_intent_ready(_action_id: int) -> void:
 func set_designation_mode(label: String) -> void:
 	_designation_label = label
 	_hud_dirty = true
+	_refresh()
+	_hud_dirty = false
 
 
 func set_player_mode_badge(mode_label: String, authority_rank: String = "") -> void:
 	_player_mode_label = mode_label
 	_player_authority_rank = authority_rank
 	_hud_dirty = true
+	_refresh()
+	_hud_dirty = false
 
 
 func _visible_pawns_for_hud() -> Array[HeelKawnian]:
@@ -211,9 +216,7 @@ func _on_tick(tick: int) -> void:
 	var coarse: int = _coarse_gate_for_speed(GameManager.game_speed)
 	_last_refresh_stride = refresh_stride
 	_last_coarse_gate = coarse
-	if tick % coarse != 0 and not _hud_dirty:
-		return
-	if tick % refresh_stride == 0:
+	if _hud_dirty or tick % refresh_stride == 0:
 		_refresh()
 		_hud_dirty = false
 		_last_refresh_tick = tick
@@ -221,6 +224,8 @@ func _on_tick(tick: int) -> void:
 
 func _on_speed_changed(_s: float, _p: bool) -> void:
 	_hud_dirty = true
+	_refresh()
+	_hud_dirty = false
 
 
 func _on_jobs_changed(_job: Job) -> void:

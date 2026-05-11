@@ -12,6 +12,8 @@ enum LaborStance {
 	HAUL_FIRST,
 }
 
+const DEMAND_REFRESH_INTERVAL_TICKS: int = 30
+
 ## Emitted so HUD and future UIs can reflect demand without polling every item.
 signal demand_snapshot(
 		food: float, housing: float, materials: float, hauling: float)
@@ -38,12 +40,8 @@ func _bootstrap_demands_after_scene() -> void:
 
 
 func _on_tick(tick: int) -> void:
-	# Housing: macro cadence on sim time (every 60 ticks ≈ 1 minute at 1x), not game-speed throttling.
-	if tick % 60 == 0:
-		_refresh_housing_pressure()
-	# Food / materials / haul: every tick; cost is one `StockpileManager.labor_pressure_stock_snapshot` pass.
-	_refresh_food_mat_haul_pressures()
-	if tick % 30 == 0:
+	if tick % DEMAND_REFRESH_INTERVAL_TICKS == 0:
+		_refresh_all_demands_immediate()
 		demand_snapshot.emit(_food_press, _housing_press, _mat_press, _haul_press)
 
 
@@ -66,7 +64,7 @@ func _refresh_food_mat_haul_pressures() -> void:
 
 ## 0 = enough beds (or no pawns); 1 = many pawns share few beds. Uses `World` bed
 ## list vs pawns in group `pawns` (rough macro signal, not per-night scheduling).
-## Call from [_on_tick] when `tick % 60 == 0`, or from immediate refresh paths.
+## Call from [_on_tick] on DEMAND_REFRESH_INTERVAL_TICKS, or from immediate refresh paths.
 func _refresh_housing_pressure() -> void:
 	var scene_tree: SceneTree = get_tree()
 	if scene_tree == null:

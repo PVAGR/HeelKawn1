@@ -13,6 +13,7 @@ const REFRESH_EVERY_N_TICKS_FAST: int = 2
 const REFRESH_EVERY_N_TICKS_ULTRA: int = 4
 const REFRESH_EVERY_N_TICKS_EXTREME: int = 6
 const REFRESH_EVERY_N_TICKS_MAX: int = 8
+const EXPENSIVE_HUD_REFRESH_INTERVAL_TICKS: int = 120
 const WILDLIFE_SAMPLE_EVERY_TICKS: int = 20
 const WILDLIFE_HISTORY_SIZE: int = 8
 const WILDLIFE_NEARBY_RADIUS_TILES: int = 14
@@ -95,6 +96,10 @@ var _last_refresh_stride: int = REFRESH_EVERY_N_TICKS
 var _last_coarse_gate: int = 10
 var _last_refresh_tick: int = 0
 var _last_render_signature: String = ""
+var _cached_expensive_hud_lines: Array[String] = []
+var _last_expensive_hud_refresh_tick: int = -1
+var _expensive_hud_dirty: bool = true
+var _cached_expensive_hud_simple: bool = true
 ## Narrative rail cache — recomputes only when WorldMemory event count changes.
 var _narrative_cache: String = ""
 var _narrative_cache_event_count: int = -1
@@ -141,7 +146,8 @@ func bind(world: World, spawner: PawnSpawner) -> void:
 		if m is AnimalSpawner:
 			_animal_spawner = m as AnimalSpawner
 	_hud_dirty = true
-	_refresh()
+	_expensive_hud_dirty = true
+	_refresh(true)
 	_hud_dirty = false
 
 
@@ -170,6 +176,9 @@ func toggle_hud_verbose() -> void:
 		var current: bool = GameSettings.is_simple_hud()
 		GameSettings.set_value("hud_mode", 0 if current else 1)
 	_hud_dirty = true
+	_expensive_hud_dirty = true
+	_refresh(true)
+	_hud_dirty = false
 
 
 func _on_intent_ready(_action_id: int) -> void:
@@ -211,12 +220,14 @@ func _visible_pawns_for_hud() -> Array[HeelKawnian]:
 func _on_tick(tick: int) -> void:
 	if tick % WILDLIFE_SAMPLE_EVERY_TICKS == 0:
 		_sample_wildlife(tick)
+		_expensive_hud_dirty = true
 		_hud_dirty = true
 	var refresh_stride: int = _refresh_stride_for_speed(GameManager.game_speed)
 	var coarse: int = _coarse_gate_for_speed(GameManager.game_speed)
 	_last_refresh_stride = refresh_stride
 	_last_coarse_gate = coarse
-	if _hud_dirty or tick % refresh_stride == 0:
+	var expensive_due: bool = tick % EXPENSIVE_HUD_REFRESH_INTERVAL_TICKS == 0
+	if _hud_dirty or expensive_due or tick % refresh_stride == 0:
 		_refresh()
 		_hud_dirty = false
 		_last_refresh_tick = tick
@@ -229,14 +240,17 @@ func _on_speed_changed(_s: float, _p: bool) -> void:
 
 
 func _on_jobs_changed(_job: Job) -> void:
+	_expensive_hud_dirty = true
 	_hud_dirty = true
 
 
 func _on_zones_changed(_zone: Stockpile) -> void:
+	_expensive_hud_dirty = true
 	_hud_dirty = true
 
 
 func _on_colony_demand(_f: float, _h: float, _m: float, _ha: float) -> void:
+	_expensive_hud_dirty = true
 	_hud_dirty = true
 
 
@@ -276,21 +290,29 @@ func _on_setting_changed(key: String, _new_value: Variant) -> void:
 		_label.add_theme_font_size_override("normal_font_size", _get_font_size())
 		_label.add_theme_font_size_override("bold_font_size", _get_font_size())
 		_hotkeys.add_theme_font_size_override("font_size", max(8, _get_font_size() - 1))
+	if key == "hud_mode":
+		_expensive_hud_dirty = true
 	_hud_dirty = true
 
 
 # ==================== text ====================
 
-func _refresh() -> void:
+func _refresh(force_expensive_hud: bool = false) -> void:
 	if _label == null:
 		return
-	_prune_freed_pawns_in_spawner()
 	# Sync hotkey hints visibility from settings
 	if _hotkeys != null:
 		_hotkeys.visible = _is_show_hotkey_hints()
 	# Sync font size from settings
 	_label.add_theme_font_size_override("normal_font_size", _get_font_size())
 	_label.add_theme_font_size_override("bold_font_size", _get_font_size())
+	var simple_hud: bool = _is_simple_hud()
+	var tick: int = GameManager.tick_count
+	if _should_rebuild_expensive_hud(tick, simple_hud, force_expensive_hud):
+		_cached_expensive_hud_lines = _build_expensive_hud_lines(simple_hud)
+		_cached_expensive_hud_simple = simple_hud
+		_last_expensive_hud_refresh_tick = tick
+		_expensive_hud_dirty = false
 	var lines: Array[String] = []
 	# Mode badge
 	var badge: String = _mode_badge_line()
@@ -299,12 +321,52 @@ func _refresh() -> void:
 	if _designation_label != "":
 		lines.append("[bgcolor=#583a14][color=#ffe082]  BUILD MODE: %s   (click or click-drag to place · right-click / Esc to cancel)  [/color][/bgcolor]" %
 			_designation_label)
-	if _is_simple_hud():
+	if simple_hud:
 		var first_hint: String = _first_play_hint_line()
 		if not first_hint.is_empty():
 			lines.append(first_hint)
 		lines.append(_time_line())
 		lines.append(_colony_state_line())
+		lines.append(_krond_line_simple())
+		var body_simple: String = _player_body_needs_line_simple()
+		if body_simple != "":
+			lines.append(body_simple)
+		var intent_simple: String = _player_intent_hud_line()
+		if intent_simple != "":
+			lines.append(intent_simple)
+	else:
+		lines.append(_time_line())
+		lines.append(_colony_state_line())
+		lines.append(_player_status_line())
+		lines.append(_skill_line())
+		var intent_ln2: String = _player_intent_hud_line()
+		if intent_ln2 != "":
+			lines.append(intent_ln2)
+	for cached_line in _cached_expensive_hud_lines:
+		if cached_line != "":
+			lines.append(cached_line)
+	var next_text: String = "\n".join(lines)
+	var sig: String = str(next_text.hash())
+	if sig == _last_render_signature:
+		return
+	_last_render_signature = sig
+	_label.text = next_text
+
+
+func _should_rebuild_expensive_hud(tick: int, simple_hud: bool, force_expensive_hud: bool) -> bool:
+	if force_expensive_hud:
+		return true
+	if _cached_expensive_hud_lines.is_empty():
+		return true
+	if simple_hud != _cached_expensive_hud_simple:
+		return true
+	return tick % EXPENSIVE_HUD_REFRESH_INTERVAL_TICKS == 0
+
+
+func _build_expensive_hud_lines(simple_hud: bool) -> Array[String]:
+	_prune_freed_pawns_in_spawner()
+	var lines: Array[String] = []
+	if simple_hud:
 		lines.append(_settlement_identity_line())
 		lines.append(_stockpile_simple_line())
 		lines.append(_pawn_line_simple())
@@ -312,45 +374,26 @@ func _refresh() -> void:
 		var beds_ln: String = _beds_line_simple()
 		if beds_ln != "":
 			lines.append(beds_ln)
-		lines.append(_krond_line_simple())
-		var body_simple: String = _player_body_needs_line_simple()
-		if body_simple != "":
-			lines.append(body_simple)
 		var wildlife_ln: String = _wildlife_line_simple()
 		if wildlife_ln != "":
 			lines.append(wildlife_ln)
 		var meaning_ln: String = _region_meaning_line()
 		if meaning_ln != "":
 			lines.append(meaning_ln)
-		var intent_simple: String = _player_intent_hud_line()
-		if intent_simple != "":
-			lines.append(intent_simple)
 		lines.append(_narrative_rail_line())
 	else:
-		lines.append(_time_line())
-		lines.append(_colony_state_line())
 		lines.append(_settlement_identity_line())
 		lines.append(_pawn_line())
-		lines.append(_player_status_line())
 		lines.append(_politics_line())
 		lines.append(_war_status_line())
-		lines.append(_skill_line())
 		lines.append(_kill_line())
 		lines.append(_export_status_line())
 		lines.append(_stockpile_line())
 		lines.append(_jobs_line())
 		lines.append(_wildlife_line())
-		var intent_ln2: String = _player_intent_hud_line()
-		if intent_ln2 != "":
-			lines.append(intent_ln2)
 		lines.append(_narrative_rail_line())
 		lines.append(_session_diag_line())
-	var next_text: String = "\n".join(lines)
-	var sig: String = str(next_text.hash())
-	if sig == _last_render_signature:
-		return
-	_last_render_signature = sig
-	_label.text = next_text
+	return lines
 
 
 ## CanvasLayer is not drawable; intent marker rendering is temporarily disabled.

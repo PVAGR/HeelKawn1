@@ -2661,6 +2661,12 @@ func _on_game_tick(tick: int) -> void:
 	_seed_construction_jobs()
 	section_us["construction_seed"] = Time.get_ticks_usec() - t0
 
+	# Flush deferred pathfinder component computation (batched from sync_tile_from_data)
+	if _world != null and _world.pathfinder != null and _world.data != null:
+		t0 = Time.get_ticks_usec()
+		if _world.pathfinder.flush_component_dirty(_world.data):
+			section_us["pf_components"] = Time.get_ticks_usec() - t0
+
 	# Flood events: rain near rivers deposits flood silt; dry weather fades it.
 	if tick % 200 == 0:
 		_tick_flood_events(tick)
@@ -2677,11 +2683,15 @@ func _on_game_tick(tick: int) -> void:
 	# Settlement festivals: milestone-driven celebrations for growing colonies.
 	if SettlementMemory != null and tick % 200 == 0 and SettlementMemory.has_method("process_festival_milestones"):
 		SettlementMemory.process_festival_milestones(tick)
+	# Periodic settlement merge: collapse ghost settlements (0-pawn) into neighbors
+	if SettlementMemory != null and tick % 300 == 0 and SettlementMemory.has_method("merge_small_settlements"):
+		SettlementMemory.count_pawns_per_settlement()
+		SettlementMemory.merge_small_settlements()
 
 	# Settlement leader direct construction: rulers post build jobs based on
 	# settlement needs, bypassing the slow worldbox loop.
 	# DORMANT WORLD: Only runs after first settlement
-	if SettlementMemory != null and tick % 50 == 0 and DiscoveryGate.is_unlocked("first_settlement"):
+	if SettlementMemory != null and tick % _high_speed_interval(50, 100, 300) == 0 and DiscoveryGate.is_unlocked("first_settlement"):
 		var total_leader_posts: int = 0
 		for st_v in SettlementMemory.settlements:
 			if not (st_v is Dictionary):
@@ -5857,8 +5867,9 @@ func _seed_construction_jobs() -> void:
 		var barracks: int = int(features.get("barracks", 0))
 		var cellars: int = int(features.get("cellar", 0))
 		# Ensure settlement has a stockpile zone — pawns need a local drop point
+		# Deferred: stockpile creation (add_child) is expensive in rendered mode
 		if not _settlement_has_nearby_stockpile(center_tile):
-			_ensure_settlement_stockpile(center_tile)
+			call_deferred("_ensure_settlement_stockpile", center_tile)
 		# Post a handful of jobs per settlement per cycle; this is a scheduler, not a flood-fill.
 		var jobs_this_settlement: int = 0
 		var job_cap: int = 4 if materials_crisis else 7
@@ -5940,7 +5951,7 @@ func _seed_construction_jobs() -> void:
 			var ring_radius: int = 3 + mini(2, local_pop / 3)  # 3 for 1-2 pop, 4 for 3-5, 5 for 6+
 			var target_walls: int = 8 + local_pop * 2  # 10-20+ walls depending on pop
 			if walls + pending_walls < target_walls:
-				var max_walls_this_cycle: int = mini(2, target_walls - walls - pending_walls)
+				var max_walls_this_cycle: int = mini(1, target_walls - walls - pending_walls)
 				var ring_posted: int = _post_wall_ring_jobs(center_tile, ring_radius, max_walls_this_cycle, job_cap - jobs_this_settlement)
 				posted += ring_posted
 				jobs_this_settlement += ring_posted
@@ -6196,6 +6207,10 @@ func _seed_construction_jobs() -> void:
 					if roads_posted >= 2:
 						break
 	_construction_seed_cursor = (start_idx + max(1, settlements_seen)) % maxi(1, settlements.size())
+	# Micro-profile log: show which sections took the most time
+	var total_usec: int = Time.get_ticks_usec() - start_usec
+	if total_usec > 10000 and OS.is_debug_build():
+		print("[CONSTRUCTION_SEED] WARNING: took %dus (budget=%dus) settlements_seen=%d posted=%d" % [total_usec, budget_usec, settlements_seen, posted])
 	# Batched nav notification — only call once after all wall rings processed
 	if _nav_dirty and _world != null:
 		_world.notify_pawns_nav_changed()

@@ -463,12 +463,12 @@ func recompute(_world: World) -> void:
             return false
         return pa[0] < pb[0]
     )
-    _merge_small_settlements()
+    merge_small_settlements()
     _prune_settlement_state_truth_hysteresis()
     _update_governance_state()
     _apply_persisted_governance_forms()
     _compute_dominant_clans()
-    _count_pawns_per_settlement()
+    count_pawns_per_settlement()
     _resolve_settlement_names()
     _settlement_truth_verify_post_recompute_pass()
 
@@ -512,7 +512,7 @@ func _resolve_settlement_names() -> void:
 
 ## Count living pawns in each settlement's regions and write the "population" field.
 ## This is needed for name resolution and resource truth.
-func _count_pawns_per_settlement() -> void:
+func count_pawns_per_settlement() -> void:
     var living: Array[HeelKawnian] = _living_pawns()
     # Rebuild the cached region -> settlement index map
     _rebuild_region_to_settlement_idx()
@@ -996,7 +996,7 @@ func _count_beds_in_region_set(world: World, region_set: Dictionary) -> int:
 const MIN_MERGE_POP: int = 5
 const MAX_MERGE_REGION_DISTANCE: int = 6  # in region units (each region = 16x16 tiles)
 
-func _merge_small_settlements() -> void:
+func merge_small_settlements() -> void:
     if settlements.size() <= 1:
         return
     # Count pawns per settlement

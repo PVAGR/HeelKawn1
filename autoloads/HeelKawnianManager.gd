@@ -513,7 +513,7 @@ static func leader_direct_construction(settlement_id: int) -> int:
 		return 0
 	var center: Vector2i = ruler_data.tile_pos
 	# Scan local features
-	var features: Dictionary = _scan_local_features(center, 8)
+	var features: Dictionary = _scan_local_features(center, 4)
 	var local_pop: int = int(features.get("population", 0))
 	if local_pop < 1:
 		return 0

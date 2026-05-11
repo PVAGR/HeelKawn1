@@ -39,6 +39,11 @@ var _pawn_hist_scale: PackedFloat32Array = PackedFloat32Array()
 var _pawn_hist_dirty: Array[int] = []
 var _last_refresh_tick: int = -1
 
+## Dirty flag for deferred component computation.
+## sync_tile_from_data sets this instead of recomputing immediately.
+## Call flush_component_dirty() once per tick to batch the recompute.
+var _components_dirty: bool = false
+
 
 func _init() -> void:
 	_astar = AStarGrid2D.new()
@@ -70,9 +75,10 @@ func rebuild(data: WorldData) -> void:
 
 
 ## After changing terrain in `data` (wall, door, mine-out), re-sync A* for one tile.
+## Component computation is deferred — call flush_component_dirty() once per tick.
 func sync_tile_from_data(x: int, y: int, data: WorldData) -> void:
 	_refresh_one_tile(x, y, data)
-	_compute_components(data)
+	_components_dirty = true
 
 
 ## Reserve / release a future wall cell for the job queue. `on=true` when a
@@ -83,7 +89,7 @@ func set_job_construction_reservation(x: int, y: int, on: bool, data: WorldData)
 	var i: int = y * WorldData.WIDTH + x
 	_resv_job[i] = 1 if on else 0
 	_refresh_one_tile(x, y, data)
-	_compute_components(data)
+	_components_dirty = true
 
 
 ## Reserve / release many future construction cells and recompute components once.
@@ -103,7 +109,17 @@ func set_job_construction_reservations_batch(tiles: Array, enabled: bool, data: 
 		_refresh_one_tile(t.x, t.y, data)
 		touched = true
 	if touched:
-		_compute_components(data)
+		_components_dirty = true
+
+
+## Flush deferred component computation. Call once per tick (or once per frame).
+## Returns true if a recompute happened.
+func flush_component_dirty(data: WorldData) -> bool:
+	if not _components_dirty:
+		return false
+	_components_dirty = false
+	_compute_components(data)
+	return true
 
 
 ## Update drag-preview for planned walls. Pass tile coords of cells that
@@ -133,7 +149,7 @@ func set_preview_wall_tiles(tiles: Array, data: WorldData) -> void:
 ## Deprecated: use `WorldData` + `sync_tile_from_data`.
 func set_passable(x: int, y: int, passable: bool, data: WorldData) -> void:
 	_astar.set_point_solid(Vector2i(x, y), not passable)
-	_compute_components(data)
+	_components_dirty = true
 
 
 func _refresh_one_tile(x: int, y: int, data: WorldData) -> void:

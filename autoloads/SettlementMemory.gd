@@ -514,24 +514,19 @@ func _resolve_settlement_names() -> void:
 ## This is needed for name resolution and resource truth.
 func _count_pawns_per_settlement() -> void:
     var living: Array[HeelKawnian] = _living_pawns()
-    # Build a region -> settlement index map
-    var region_to_idx: Dictionary = {}
+    # Rebuild the cached region -> settlement index map
+    _rebuild_region_to_settlement_idx()
+    # Reset population counts
     for i in range(settlements.size()):
-        if not (settlements[i] is Dictionary):
-            continue
-        var st: Dictionary = settlements[i] as Dictionary
-        var regs_v: Variant = st.get("regions", null)
-        if regs_v is PackedInt32Array:
-            for rk in (regs_v as PackedInt32Array):
-                region_to_idx[int(rk)] = i
-        st["population"] = 0
+        if settlements[i] is Dictionary:
+            (settlements[i] as Dictionary)["population"] = 0
     # Count pawns per settlement
     for p in living:
         if p == null or not is_instance_valid(p) or p.data == null:
             continue
         var rk_p: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
-        if region_to_idx.has(rk_p):
-            var idx: int = int(region_to_idx[rk_p])
+        if _region_to_settlement_idx.has(rk_p):
+            var idx: int = int(_region_to_settlement_idx[rk_p])
             var st2: Dictionary = settlements[idx] as Dictionary
             st2["population"] = int(st2.get("population", 0)) + 1
 
@@ -1561,6 +1556,30 @@ func get_settlement_at_region(region_key: int) -> Variant:
                     if (reg as PackedInt32Array)[i] == region_key:
                         return (s as Dictionary).duplicate(true)
     return null
+
+
+## Cached region-key → settlement-index map. Rebuilt on every recompute().
+var _region_to_settlement_idx: Dictionary = {}
+
+## Return the settlement array index for a given region key, or -1 if not in any settlement.
+## Uses a cached map rebuilt on every recompute() for O(1) lookups.
+func get_settlement_id_for_region(region_key: int) -> int:
+    if _region_to_settlement_idx.is_empty():
+        _rebuild_region_to_settlement_idx()
+    if _region_to_settlement_idx.has(region_key):
+        return int(_region_to_settlement_idx[region_key])
+    return -1
+
+func _rebuild_region_to_settlement_idx() -> void:
+    _region_to_settlement_idx.clear()
+    for i in range(settlements.size()):
+        if not (settlements[i] is Dictionary):
+            continue
+        var st: Dictionary = settlements[i] as Dictionary
+        var regs_v: Variant = st.get("regions", null)
+        if regs_v is PackedInt32Array:
+            for rk in (regs_v as PackedInt32Array):
+                _region_to_settlement_idx[int(rk)] = i
 
 
 func _update_governance_state() -> void:

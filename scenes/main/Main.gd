@@ -5750,11 +5750,11 @@ var _construction_seed_posts_since_log: int = 0
 var _last_construction_seed_log_tick: int = -10000
 var _construction_seed_cursor: int = 0
 
-func _count_pending_jobs_near(job_type: int, center: Vector2i, radius: int) -> int:
+func _count_pending_jobs_near(job_type: int, center: Vector2i, radius: int, cached_jobs: Array = []) -> int:
 	if JobManager == null:
 		return 0
 	var n: int = 0
-	var jobs: Array = JobManager.get_active_jobs_union()
+	var jobs: Array = cached_jobs if cached_jobs.size() > 0 else (JobManager.get_active_jobs_union() if JobManager.has_method("get_active_jobs_union") else [])
 	for jv in jobs:
 		if not (jv is Job):
 			continue
@@ -5776,9 +5776,11 @@ func _seed_construction_jobs() -> void:
 	if tick - _last_construction_seed_tick < interval:
 		return
 	_last_construction_seed_tick = tick
-	var budget_usec: int = 1_200  # small per-frame budget; scheduler continues next pass
+	var budget_usec: int = 2_000  # small per-frame budget; scheduler continues next pass
 	var start_usec: int = Time.get_ticks_usec()
 	var pending_counts: Dictionary = JobManager.get_pending_counts() if JobManager != null and JobManager.has_method("get_pending_counts") else {}
+	# Cache active jobs union once — avoids re-scanning all jobs per _count_pending_jobs_near call
+	var _cached_active_jobs: Array = JobManager.get_active_jobs_union() if JobManager != null and JobManager.has_method("get_active_jobs_union") else []
 	var stock_wood: int = StockpileManager.total_count_of(Item.Type.WOOD) if StockpileManager != null else 0
 	var stock_stone: int = StockpileManager.total_count_of(Item.Type.STONE) if StockpileManager != null else 0
 	var materials_crisis: bool = stock_wood <= 2 or stock_stone <= 2
@@ -5787,7 +5789,7 @@ func _seed_construction_jobs() -> void:
 	var settlements: Array = SettlementMemory.get_settlements()
 	if settlements.is_empty():
 		return
-	var max_settlements_this_pass: int = 3 if GameManager.game_speed >= 50.0 else 5
+	var max_settlements_this_pass: int = 2 if GameManager.game_speed >= 50.0 else 4
 	var settlements_seen: int = 0
 	var start_idx: int = _construction_seed_cursor % settlements.size()
 	for step in range(settlements.size()):
@@ -5815,7 +5817,7 @@ func _seed_construction_jobs() -> void:
 			continue
 		settlements_seen += 1
 		# Scan local features (beds, walls, hearths, etc.) — reduced radius for budget
-		var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 6)
+		var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 4)
 		var beds: int = int(features.get("bed", 0))
 		var walls: int = int(features.get("wall", 0))
 		var doors: int = int(features.get("door", 0))
@@ -5836,7 +5838,7 @@ func _seed_construction_jobs() -> void:
 		# Priority 0: Beds when housing crisis is critical
 		if ColonySimServices != null and ColonySimServices.get_housing_pressure() > 0.8 and jobs_this_settlement < job_cap:
 			var need_beds_crisis: int = maxi(3, int(ceil(float(local_pop) * 0.75)))
-			var pending_beds_crisis: int = _count_pending_jobs_near(Job.Type.BUILD_BED, center_tile, 10)
+			var pending_beds_crisis: int = _count_pending_jobs_near(Job.Type.BUILD_BED, center_tile, 10, _cached_active_jobs)
 			var beds_posted_this_cycle: int = 0
 			if beds + pending_beds_crisis < need_beds_crisis:
 				var house_posts: int = _post_house_blueprint_jobs(center_tile, mini(4, need_beds_crisis - beds - pending_beds_crisis), job_cap - jobs_this_settlement)
@@ -5858,7 +5860,7 @@ func _seed_construction_jobs() -> void:
 					break
 		# Priority 1: Fire pit if no hearth
 		if hearths <= 0 and jobs_this_settlement < job_cap:
-			var pending_fire_pits: int = _count_pending_jobs_near(Job.Type.BUILD_FIRE_PIT, center_tile, 10)
+			var pending_fire_pits: int = _count_pending_jobs_near(Job.Type.BUILD_FIRE_PIT, center_tile, 10, _cached_active_jobs)
 			if pending_fire_pits == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
@@ -5869,7 +5871,7 @@ func _seed_construction_jobs() -> void:
 						pending_counts[Job.Type.BUILD_FIRE_PIT] = int(pending_counts.get(Job.Type.BUILD_FIRE_PIT, 0)) + 1
 		# Priority 2: Storage hut if none
 		if storage_huts <= 0 and local_pop >= 1 and jobs_this_settlement < job_cap:
-			var pending_storage: int = _count_pending_jobs_near(Job.Type.BUILD_STORAGE_HUT, center_tile, 10)
+			var pending_storage: int = _count_pending_jobs_near(Job.Type.BUILD_STORAGE_HUT, center_tile, 10, _cached_active_jobs)
 			if pending_storage == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 6)
 				if t.x >= 0 and not JobManager.has_job_at(t):
@@ -5880,7 +5882,7 @@ func _seed_construction_jobs() -> void:
 						pending_counts[Job.Type.BUILD_STORAGE_HUT] = int(pending_counts.get(Job.Type.BUILD_STORAGE_HUT, 0)) + 1
 		# Priority 3: Beds if not enough
 		var need_beds: int = maxi(2, int(ceil(float(local_pop) * 0.75)))
-		var pending_beds: int = _count_pending_jobs_near(Job.Type.BUILD_BED, center_tile, 10)
+		var pending_beds: int = _count_pending_jobs_near(Job.Type.BUILD_BED, center_tile, 10, _cached_active_jobs)
 		var beds_posted_p3: int = 0
 		while beds + pending_beds + beds_posted_p3 < need_beds and beds_posted_p3 < 2 and jobs_this_settlement < job_cap:
 			var t: Vector2i = _find_build_tile_near(center_tile, 8)
@@ -5896,8 +5898,8 @@ func _seed_construction_jobs() -> void:
 			else:
 				break
 		# Priority 4: Connected wall perimeter ring + door
-		var pending_walls: int = _count_pending_jobs_near(Job.Type.BUILD_WALL, center_tile, 12)
-		var pending_doors: int = _count_pending_jobs_near(Job.Type.BUILD_DOOR, center_tile, 12)
+		var pending_walls: int = _count_pending_jobs_near(Job.Type.BUILD_WALL, center_tile, 12, _cached_active_jobs)
+		var pending_doors: int = _count_pending_jobs_near(Job.Type.BUILD_DOOR, center_tile, 12, _cached_active_jobs)
 		if local_pop >= 1 and not materials_crisis and jobs_this_settlement < job_cap:
 			# Scale ring radius and target walls with population
 			var ring_radius: int = 3 + mini(2, local_pop / 3)  # 3 for 1-2 pop, 4 for 3-5, 5 for 6+
@@ -5918,6 +5920,9 @@ func _seed_construction_jobs() -> void:
 						posted += 1
 						jobs_this_settlement += 1
 						pending_counts[Job.Type.BUILD_DOOR] = int(pending_counts.get(Job.Type.BUILD_DOOR, 0)) + 1
+		# Budget check: break early if we've exceeded time budget
+		if Time.get_ticks_usec() - start_usec >= budget_usec:
+			break
 		# Priority 5: Plant seeds on nearby fertile soil
 		if jobs_this_settlement < job_cap:
 			var ft: Vector2i = _find_fertile_tile_near(center_tile, 8)
@@ -6104,13 +6109,16 @@ func _seed_construction_jobs() -> void:
 						posted += 1
 						jobs_this_settlement += 1
 						pending_counts[Job.Type.BUILD_TRADING_POST] = int(pending_counts.get(Job.Type.BUILD_TRADING_POST, 0)) + 1
+		# Budget check before expensive road scan
+		if Time.get_ticks_usec() - start_usec >= budget_usec:
+			break
 		# Priority 18: Local paths — post BUILD_ROAD along high-traffic tiles within settlement
 		if jobs_this_settlement < job_cap and local_pop >= 2:
 			var pending_roads: int = int(pending_counts.get(Job.Type.BUILD_ROAD, 0))
 			if pending_roads < 3:
 				var roads_posted: int = 0
-				for ry in range(center_tile.y - 8, center_tile.y + 9):
-					for rx in range(center_tile.x - 8, center_tile.x + 9):
+				for ry in range(center_tile.y - 4, center_tile.y + 5):
+					for rx in range(center_tile.x - 4, center_tile.x + 5):
 						if not _world.data.in_bounds(rx, ry):
 							continue
 						var trav: int = RoadMemory.get_traversal(rx, ry)

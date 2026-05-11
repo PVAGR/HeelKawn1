@@ -3216,6 +3216,16 @@ func _tick_idle() -> void:
 			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH or j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.MINE or j.type == _Job.Type.MINE_WALL:
 				zone_bias += 4
 		base_bias += zone_bias
+		# Settlement proximity bias: pawns strongly prefer jobs in their own settlement.
+		# This keeps each settlement's workforce working locally instead of all pawns
+		# clustering at the central stockpile and ignoring outlying settlements.
+		var my_sid: int = SettlementMemory.get_settlement_id_for_region(from_region_key)
+		if my_sid >= 0:
+			var job_sid: int = SettlementMemory.get_settlement_id_for_region(job_rk)
+			if job_sid >= 0 and job_sid == my_sid:
+				base_bias += 5  # work for own settlement
+			elif job_sid >= 0 and job_sid != my_sid:
+				base_bias -= 3  # avoid working for other settlements
 		# Personal whim: same queue, slightly different ordering per pawn (still deterministic).
 		base_bias += clampi(int(floor((_bp(5) - 0.5) * 6.0)), -2, 2)
 

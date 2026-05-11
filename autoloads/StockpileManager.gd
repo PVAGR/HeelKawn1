@@ -139,6 +139,90 @@ func find_drop_zone(item_type: int, from_tile: Vector2i, pathfinder: PathFinder 
 	return best
 
 
+## Settlement-scoped food source: prefer own settlement's stockpile, fall back to global.
+func find_food_source_for_settlement(sid: int, from_tile: Vector2i, pathfinder: PathFinder = null) -> Stockpile:
+	var best_own: Stockpile = null
+	var best_own_d: int = 0x7FFFFFFF
+	var best_any: Stockpile = null
+	var best_any_d: int = 0x7FFFFFFF
+	var my_comp: int = -1
+	if pathfinder != null:
+		my_comp = pathfinder.component_of(from_tile)
+	for z in _zones:
+		if not z.has_any_food():
+			continue
+		if pathfinder != null:
+			var near: Vector2i = z.nearest_reachable_tile_to(from_tile, pathfinder)
+			if pathfinder.component_of(near) != my_comp:
+				continue
+		var d: int = z.chebyshev_distance_from(from_tile)
+		if z.settlement_id == sid:
+			if d < best_own_d:
+				best_own = z
+				best_own_d = d
+		else:
+			if d < best_any_d:
+				best_any = z
+				best_any_d = d
+	return best_own if best_own != null else best_any
+
+
+## Settlement-scoped source for materials: prefer own settlement's stockpile, fall back to global.
+func find_source_for_settlement(sid: int, item_type: int, qty: int, from_tile: Vector2i, pathfinder: PathFinder = null) -> Stockpile:
+	var best_own: Stockpile = null
+	var best_own_d: int = 0x7FFFFFFF
+	var best_any: Stockpile = null
+	var best_any_d: int = 0x7FFFFFFF
+	var my_comp: int = -1
+	if pathfinder != null:
+		my_comp = pathfinder.component_of(from_tile)
+	for z in _zones:
+		if z.count_of(item_type) < qty:
+			continue
+		if pathfinder != null:
+			var near: Vector2i = z.nearest_reachable_tile_to(from_tile, pathfinder)
+			if pathfinder.component_of(near) != my_comp:
+				continue
+		var d: int = z.chebyshev_distance_from(from_tile)
+		if z.settlement_id == sid:
+			if d < best_own_d:
+				best_own = z
+				best_own_d = d
+		else:
+			if d < best_any_d:
+				best_any = z
+				best_any_d = d
+	return best_own if best_own != null else best_any
+
+
+## Settlement-scoped drop zone: prefer own settlement's stockpile, fall back to global.
+func find_drop_zone_for_settlement(sid: int, item_type: int, from_tile: Vector2i, pathfinder: PathFinder = null) -> Stockpile:
+	var best_own: Stockpile = null
+	var best_own_d: int = 0x7FFFFFFF
+	var best_any: Stockpile = null
+	var best_any_d: int = 0x7FFFFFFF
+	var my_comp: int = -1
+	if pathfinder != null:
+		my_comp = pathfinder.component_of(from_tile)
+	for z in _zones:
+		if not z.accepts(item_type):
+			continue
+		if pathfinder != null:
+			var near: Vector2i = z.nearest_reachable_tile_to(from_tile, pathfinder)
+			if pathfinder.component_of(near) != my_comp:
+				continue
+		var d: int = z.chebyshev_distance_from(from_tile)
+		if z.settlement_id == sid:
+			if d < best_own_d:
+				best_own = z
+				best_own_d = d
+		else:
+			if d < best_any_d:
+				best_any = z
+				best_any_d = d
+	return best_own if best_own != null else best_any
+
+
 ## Closest zone that currently has any food AND accepts food. Hungry pawns
 ## call this to pick where to eat.
 func find_food_source(from_tile: Vector2i, pathfinder: PathFinder = null) -> Stockpile:

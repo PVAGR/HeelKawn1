@@ -67,6 +67,9 @@ var rect: Rect2i = Rect2i(0, 0, 1, 1)
 ## What this zone accepts. Drives pawn hauling and the zone tint.
 var filter: int = Filter.ALL
 
+## Settlement this stockpile belongs to (-1 = global/any settlement can use it)
+var settlement_id: int = -1
+
 ## item Type -> int quantity. Aggregated across the whole zone (we don't
 ## track per-tile placement yet -- that's a visual polish step for later).
 var inventory: Dictionary = {}

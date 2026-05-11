@@ -377,6 +377,8 @@ var initial_region_reputation: int = 0
 ## Failsafe log once: pawn standing on a tile A* now marks as solid.
 var _reported_stuck: bool = false
 var _woke_tick: int = -9999  # tick when pawn last woke; prevents sleep oscillation
+var _consecutive_abandons: int = 0  # claim/abort loop detector
+var _last_abandon_tick: int = -9999
 var _next_reproduction_tick: int = 0
 var _active_edict: String = ""
 var _rest_level: int = 0
@@ -2861,6 +2863,15 @@ func _tick_idle() -> void:
 	# 6. Job queue: take the best reachable job. We additionally skip build
 	# jobs whose required materials aren't on hand at the stockpile -- this
 	# prevents pawns from claim/abort looping when wood is empty.
+	# ANTI-LOOP: If pawn has abandoned 3+ jobs in the last 10 ticks, force a wander
+	# to break the cycle instead of immediately re-claiming.
+	if _consecutive_abandons >= 3:
+		var n: int = _consecutive_abandons
+		_consecutive_abandons = 0
+		if GameManager.verbose_logs():
+			print("[HeelKawnian] %s forcing wander after %d consecutive abandons" % [data.display_name, n])
+		_start_wander()
+		return
 	#
 	# Food-emergency override: if the stockpile is almost out of food, do
 	# *one* preferential pass restricted to FORAGE jobs, then fall back to the
@@ -4250,9 +4261,13 @@ func _begin_haul_to_forced_zone(sp: Stockpile) -> void:
 ## pick up `qty` of `item_type` for the active job. Aborts the job (with a
 ## one-line log) if no reachable zone has enough.
 func _begin_fetching_material(item_type: int, qty: int) -> void:
-	var sp: Stockpile = StockpileManager.find_source_for(
-		item_type, qty, data.tile_pos, _world.pathfinder
-	)
+	var sp: Stockpile = null
+	if data.settlement_id >= 0:
+		sp = StockpileManager.find_source_for_settlement(data.settlement_id, item_type, qty, data.tile_pos, _world.pathfinder)
+	if sp == null:
+		sp = StockpileManager.find_source_for(
+			item_type, qty, data.tile_pos, _world.pathfinder
+		)
 	if sp == null:
 		_unclaim_current_job("no_stockpile_source")
 		return
@@ -4303,7 +4318,10 @@ func _pickup_material(item_type: int, qty: int) -> void:
 	# material -- saves the trip if there's still wood elsewhere.
 	var sp: Stockpile = _target_zone
 	if sp == null or not is_instance_valid(sp) or sp.count_of(item_type) < qty:
-		sp = StockpileManager.find_source_for(item_type, qty, data.tile_pos, _world.pathfinder)
+		if data.settlement_id >= 0:
+			sp = StockpileManager.find_source_for_settlement(data.settlement_id, item_type, qty, data.tile_pos, _world.pathfinder)
+		if sp == null:
+			sp = StockpileManager.find_source_for(item_type, qty, data.tile_pos, _world.pathfinder)
 	if sp == null:
 		_target_zone = null
 		_unclaim_current_job("stockpile_gone")
@@ -4410,6 +4428,7 @@ func _is_job_tile_still_valid(job: Job) -> bool:
 ## Work finished successfully. Produce the item into the pawn's hands and
 ## transition to HAULING (walk it to the stockpile).
 func _complete_current_job() -> void:
+	_consecutive_abandons = 0  # Successful completion resets loop detector
 	var job: Job = _current_job
 	if job != null and job.type == _Job.Type.TRADE_HAUL:
 		return
@@ -4945,6 +4964,13 @@ func _unclaim_current_job(reason: String = "") -> void:
 		var j0: Job = _current_job
 		_return_trade_cargo_to_source_if_any(j0)
 		JobManager.abandon(j0, reason)
+		# Track consecutive abandons to detect claim/abort loops
+		var now_tick: int = GameManager.tick_count if GameManager != null else 0
+		if now_tick - _last_abandon_tick < 10:
+			_consecutive_abandons += 1
+		else:
+			_consecutive_abandons = 1
+		_last_abandon_tick = now_tick
 	_reset_to_idle()
 
 
@@ -4992,9 +5018,13 @@ func _begin_haul_to_stockpile() -> void:
 	# Find the closest zone that accepts what we're carrying. "Accepts" also
 	# covers the seed ALL pile, so old saves / worlds without specialized
 	# zones keep working unchanged.
-	var sp: Stockpile = StockpileManager.find_drop_zone(
-		data.carrying, data.tile_pos, _world.pathfinder
-	)
+	var sp: Stockpile = null
+	if data.settlement_id >= 0:
+		sp = StockpileManager.find_drop_zone_for_settlement(data.settlement_id, data.carrying, data.tile_pos, _world.pathfinder)
+	if sp == null:
+		sp = StockpileManager.find_drop_zone(
+			data.carrying, data.tile_pos, _world.pathfinder
+		)
 	if sp == null:
 		# No zone exists that will take this item. Hold onto it and stay idle;
 		# next tick we'll try again (maybe the player designated a zone).
@@ -5068,9 +5098,12 @@ func _deposit_at_stockpile() -> void:
 		# if that one somehow vanished (reroll, player deleted it mid-walk).
 		sp = _target_zone
 		if sp == null or not is_instance_valid(sp) or not sp.accepts(data.carrying):
-			sp = StockpileManager.find_drop_zone(
-					data.carrying, data.tile_pos, _world.pathfinder
-			)
+			if data.settlement_id >= 0:
+				sp = StockpileManager.find_drop_zone_for_settlement(data.settlement_id, data.carrying, data.tile_pos, _world.pathfinder)
+			if sp == null:
+				sp = StockpileManager.find_drop_zone(
+						data.carrying, data.tile_pos, _world.pathfinder
+				)
 	if sp != null and data.is_carrying():
 		# If carrying a tool, auto-equip it instead of depositing
 		if Item.is_tool_type(data.carrying) and not data.is_equipped_tool_valid():
@@ -5104,7 +5137,11 @@ func _maybe_start_eating() -> bool:
 	if data.is_carrying():
 		# Carrying something -- finish that errand first.
 		return false
-	var sp: Stockpile = StockpileManager.find_food_source(data.tile_pos, _world.pathfinder)
+	var sp: Stockpile = null
+	if data.settlement_id >= 0:
+		sp = StockpileManager.find_food_source_for_settlement(data.settlement_id, data.tile_pos, _world.pathfinder)
+	if sp == null:
+		sp = StockpileManager.find_food_source(data.tile_pos, _world.pathfinder)
 	if sp == null:
 		return false
 	if data.neural_network != null and str(data.neural_network.get_autonomy_hint()) == "eat":
@@ -5131,7 +5168,10 @@ func _begin_eating() -> void:
 	var sp: Stockpile = _target_zone
 	if sp == null or not is_instance_valid(sp) or not sp.has_any_food():
 		# The zone we planned for got emptied; try another.
-		sp = StockpileManager.find_food_source(data.tile_pos, _world.pathfinder)
+		if data.settlement_id >= 0:
+			sp = StockpileManager.find_food_source_for_settlement(data.settlement_id, data.tile_pos, _world.pathfinder)
+		if sp == null:
+			sp = StockpileManager.find_food_source(data.tile_pos, _world.pathfinder)
 	if sp == null:
 		_target_zone = null
 		_reset_to_idle()
@@ -5147,7 +5187,10 @@ func _finish_eating() -> void:
 	var food_type: int = _Item.Type.NONE
 	var gain: float = 0.0
 	if sp == null or not is_instance_valid(sp):
-		sp = StockpileManager.find_food_source(data.tile_pos, _world.pathfinder)
+		if data.settlement_id >= 0:
+			sp = StockpileManager.find_food_source_for_settlement(data.settlement_id, data.tile_pos, _world.pathfinder)
+		if sp == null:
+			sp = StockpileManager.find_food_source(data.tile_pos, _world.pathfinder)
 	if sp != null:
 		food_type = sp.pick_food()
 		if food_type != _Item.Type.NONE:
@@ -5628,7 +5671,11 @@ func _emergency_seek_food() -> void:
 		_unclaim_current_job()
 	
 	var pathfinder: PathFinder = _world.pathfinder if _world != null else null
-	var stockpile: Stockpile = StockpileManager.find_food_source(data.tile_pos, pathfinder)
+	var stockpile: Stockpile = null
+	if data.settlement_id >= 0:
+		stockpile = StockpileManager.find_food_source_for_settlement(data.settlement_id, data.tile_pos, pathfinder)
+	if stockpile == null:
+		stockpile = StockpileManager.find_food_source(data.tile_pos, pathfinder)
 	if stockpile != null:
 		_begin_going_to_eat(stockpile)
 	else:
@@ -7233,7 +7280,11 @@ func _die(_p_cause: String = "") -> void:
 
 	# Drop any carried items into the nearest stockpile
 	if data.is_carrying() and _world != null:
-		var sp: Stockpile = StockpileManager.find_drop_zone(data.carrying, data.tile_pos, _world.pathfinder)
+		var sp: Stockpile = null
+		if data.settlement_id >= 0:
+			sp = StockpileManager.find_drop_zone_for_settlement(data.settlement_id, data.carrying, data.tile_pos, _world.pathfinder)
+		if sp == null:
+			sp = StockpileManager.find_drop_zone(data.carrying, data.tile_pos, _world.pathfinder)
 		if sp != null:
 			sp.add_item(data.carrying, data.carrying_qty)
 	data.clear_carry()

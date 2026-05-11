@@ -298,6 +298,8 @@ var _ambient_freq_current: float = 112.0
 var _trace_redraw_timer: float = 0.0
 var _ambient_freq_target: float = 112.0
 var _ambient_audio_last_update_ms: int = 0
+var _frame_time_samples: int = 0
+var _frame_time_accum: float = 0.0
 const AMBIENT_AUDIO_UPDATE_INTERVAL_MS: int = 200
 const MAX_AMBIENT_AUDIO_FRAMES_PER_UPDATE: int = 64
 ## 0 = dead/empty, 1 = open/living. Drives crossfade; current region at camera.
@@ -1687,6 +1689,22 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 func _process(delta: float) -> void:
 	if _is_simulation_worker_mode():
 		return
+	# Frame-time monitor: log every 5 seconds if FPS drops below 50
+	_frame_time_samples += 1
+	_frame_time_accum += delta
+	if _frame_time_accum >= 5.0:
+		var avg_fps: float = float(_frame_time_samples) / _frame_time_accum
+		if avg_fps < 50.0 and OS.is_debug_build():
+			var tick_batch_ms: float = float(TickManager.debug_last_tick_batch_usec) / 1000.0
+			var job_count: int = JobManager.stats().get("active", 0) if JobManager != null else 0
+			print("[PERF] avg_fps=%.0f over %.1fs | tick_batch=%.1fms | pawns=%d jobs=%d settlements=%d" % [
+				avg_fps, _frame_time_accum, tick_batch_ms,
+				_pawn_spawner.pawns.size() if _pawn_spawner != null else 0,
+				job_count,
+				SettlementMemory.get_settlements().size() if SettlementMemory != null else 0
+			])
+		_frame_time_samples = 0
+		_frame_time_accum = 0.0
 	_meaning_ambient_mood = lerpf(
 		_meaning_ambient_mood, _get_meaning_ambient_mood_target(), minf(1.0, delta * MEANING_AMBIENT_SMOOTH)
 	)
@@ -2327,6 +2345,7 @@ func _place_stockpile(main_component: int) -> void:
 	sp.set_filter(Stockpile.Filter.ALL)
 	sp.set_rect_tiles(seed_rect)
 	sp.position = _world.tile_to_world(seed_rect.position)
+	sp.settlement_id = 0  # Belongs to the first settlement
 	add_child(sp)
 	_world.stockpile = sp
 	StockpileManager.register(sp)
@@ -5746,6 +5765,7 @@ func _sort_tiles_by_seeded_order(tiles: Array[Vector2i], stream_name: StringName
 ## what each settlement actually needs. Runs every ~200 ticks so pawns
 ## build farms, walls, hearths, beds, etc. instead of only foraging.
 var _last_construction_seed_tick: int = -10000
+var _nav_dirty: bool = false  # batched nav notification for construction seed
 var _construction_seed_posts_since_log: int = 0
 var _last_construction_seed_log_tick: int = -10000
 var _construction_seed_cursor: int = 0
@@ -5759,7 +5779,7 @@ func _count_pending_jobs_near(job_type: int, center: Vector2i, radius: int, cach
 		if not (jv is Job):
 			continue
 		var j: Job = jv as Job
-		if j.type != job_type:
+		if job_type >= 0 and j.type != job_type:
 			continue
 		if maxi(absi(j.tile.x - center.x), absi(j.tile.y - center.y)) <= radius:
 			n += 1
@@ -5772,11 +5792,11 @@ func _seed_construction_jobs() -> void:
 	var tick: int = GameManager.tick_count
 	if Main._world_stabilization_until_tick >= 0 and tick < Main._world_stabilization_until_tick:
 		return
-	var interval: int = _high_speed_interval(30, 60, 150)
+	var interval: int = _high_speed_interval(60, 120, 300)
 	if tick - _last_construction_seed_tick < interval:
 		return
 	_last_construction_seed_tick = tick
-	var budget_usec: int = 4_000  # small per-frame budget; scheduler continues next pass
+	var budget_usec: int = 6_000  # small per-frame budget; scheduler continues next pass
 	var start_usec: int = Time.get_ticks_usec()
 	var pending_counts: Dictionary = JobManager.get_pending_counts() if JobManager != null and JobManager.has_method("get_pending_counts") else {}
 	# Cache active jobs union once — avoids re-scanning all jobs per _count_pending_jobs_near call
@@ -5789,7 +5809,7 @@ func _seed_construction_jobs() -> void:
 	var settlements: Array = SettlementMemory.get_settlements()
 	if settlements.is_empty():
 		return
-	var max_settlements_this_pass: int = 1 if GameManager.game_speed >= 50.0 else 3
+	var max_settlements_this_pass: int = 1 if GameManager.game_speed >= 50.0 else 2
 	var settlements_seen: int = 0
 	var start_idx: int = _construction_seed_cursor % settlements.size()
 	for step in range(settlements.size()):
@@ -5816,6 +5836,10 @@ func _seed_construction_jobs() -> void:
 		if local_pop < 1:
 			continue
 		settlements_seen += 1
+		# Quick check: if this settlement already has many pending jobs, skip the expensive scan
+		var nearby_pending: int = _count_pending_jobs_near(-1, center_tile, 8, _cached_active_jobs)
+		if nearby_pending >= 5:
+			continue
 		# Scan local features (beds, walls, hearths, etc.) — reduced radius for budget
 		var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 4)
 		var beds: int = int(features.get("bed", 0))
@@ -5905,6 +5929,9 @@ func _seed_construction_jobs() -> void:
 					break
 			else:
 				break
+		# Budget check after P3
+		if Time.get_ticks_usec() - start_usec >= budget_usec:
+			break
 		# Priority 4: Connected wall perimeter ring + door
 		var pending_walls: int = _count_pending_jobs_near(Job.Type.BUILD_WALL, center_tile, 12, _cached_active_jobs)
 		var pending_doors: int = _count_pending_jobs_near(Job.Type.BUILD_DOOR, center_tile, 12, _cached_active_jobs)
@@ -5940,6 +5967,9 @@ func _seed_construction_jobs() -> void:
 					posted += 1
 					jobs_this_settlement += 1
 					pending_counts[Job.Type.PLANT_SEEDS] = int(pending_counts.get(Job.Type.PLANT_SEEDS, 0)) + 1
+		# Budget check after P5
+		if Time.get_ticks_usec() - start_usec >= budget_usec:
+			break
 		# Priority 6: Cook food if fire pit exists and raw food available
 		if hearths > 0 and jobs_this_settlement < job_cap:
 			var meat_count: int = StockpileManager.total_count_of(Item.Type.MEAT)
@@ -6032,6 +6062,9 @@ func _seed_construction_jobs() -> void:
 						posted += 1
 						jobs_this_settlement += 1
 						pending_counts[Job.Type.BUILD_GRANARY] = int(pending_counts.get(Job.Type.BUILD_GRANARY, 0)) + 1
+		# Budget check after P9
+		if Time.get_ticks_usec() - start_usec >= budget_usec:
+			break
 		# Priority 10: Apothecary if none and enough population
 		if apothecaries <= 0 and local_pop >= 3 and jobs_this_settlement < job_cap:
 			var pending_apothecaries: int = int(pending_counts.get(Job.Type.BUILD_APOTHECARY, 0))
@@ -6079,6 +6112,9 @@ func _seed_construction_jobs() -> void:
 						posted += 1
 						jobs_this_settlement += 1
 						pending_counts[Job.Type.BUILD_BARRACKS] = int(pending_counts.get(Job.Type.BUILD_BARRACKS, 0)) + 1
+		# Budget check after P13
+		if Time.get_ticks_usec() - start_usec >= budget_usec:
+			break
 		# Priority 14: Cellar if granary exists and enough population
 		if cellars <= 0 and granaries >= 1 and local_pop >= 3 and jobs_this_settlement < job_cap:
 			var pending_cellars: int = int(pending_counts.get(Job.Type.BUILD_CELLAR, 0))
@@ -6102,6 +6138,9 @@ func _seed_construction_jobs() -> void:
 						jobs_this_settlement += 1
 						pending_counts[Job.Type.BUILD_WATCHTOWER] = int(pending_counts.get(Job.Type.BUILD_WATCHTOWER, 0)) + 1
 		# Priority 16: School if library exists
+			# Budget check after P15
+		if Time.get_ticks_usec() - start_usec >= budget_usec:
+			break
 		if int(features.get("school", 0)) <= 0 and libraries >= 1 and local_pop >= 4 and jobs_this_settlement < job_cap:
 			var pending_schools: int = int(pending_counts.get(Job.Type.BUILD_SCHOOL, 0))
 			if pending_schools == 0:
@@ -6157,6 +6196,10 @@ func _seed_construction_jobs() -> void:
 					if roads_posted >= 2:
 						break
 	_construction_seed_cursor = (start_idx + max(1, settlements_seen)) % maxi(1, settlements.size())
+	# Batched nav notification — only call once after all wall rings processed
+	if _nav_dirty and _world != null:
+		_world.notify_pawns_nav_changed()
+		_nav_dirty = false
 	if posted > 0:
 		_construction_seed_posts_since_log += posted
 		if tick - _last_construction_seed_log_tick >= 1000:
@@ -6247,7 +6290,8 @@ func _post_wall_ring_jobs(center: Vector2i, ring_radius: int, max_walls: int, ma
 		_world.pathfinder.set_job_construction_reservations_batch(reserved_tiles, true, _world.data, "settlement_wall_ring")
 		for wt in reserved_tiles:
 			_world.kick_occupants_off_reserved_build_tile(wt.x, wt.y)
-		_world.notify_pawns_nav_changed()
+		# Defer nav notification — caller batches it at end of seed pass
+		_nav_dirty = true
 	return posted_walls
 
 
@@ -6462,10 +6506,19 @@ func _ensure_settlement_stockpile(center: Vector2i) -> void:
 	sp.set_filter(Stockpile.Filter.ALL)
 	sp.set_rect_tiles(rect)
 	sp.position = _world.tile_to_world(rect.position)
+	# Assign settlement ownership so pawns prefer their own stockpile
+	var rk: int = _WM._region_key(center.x, center.y)
+	var sid: int = SettlementMemory.get_settlement_id_for_region(rk)
+	if sid >= 0:
+		sp.settlement_id = sid
 	add_child(sp)
 	StockpileManager.register(sp)
+	# Bootstrap supplies for new settlement stockpile
+	sp.add_item(Item.Type.BERRY, 5)
+	sp.add_item(Item.Type.WOOD, 3)
+	sp.add_item(Item.Type.STONE, 2)
 	if OS.is_debug_build():
-		print("[Main] Auto-created stockpile zone at %s for settlement near %s" % [rect.position, center])
+		print("[Main] Auto-created stockpile zone at %s for settlement near %s (sid=%d)" % [rect.position, center, sid])
 
 
 func _tile_seeded_order_key(tile: Vector2i, stream_name: StringName) -> int:

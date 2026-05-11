@@ -993,8 +993,8 @@ func _count_beds_in_region_set(world: World, region_set: Dictionary) -> int:
 ## larger settlement, if within MAX_MERGE_REGION_DISTANCE regions. This prevents
 ## the map from fragmenting into dozens of 1-2 pawn "settlements" that can't
 ## build anything.
-const MIN_MERGE_POP: int = 3
-const MAX_MERGE_REGION_DISTANCE: int = 4  # in region units (each region = 16x16 tiles)
+const MIN_MERGE_POP: int = 5
+const MAX_MERGE_REGION_DISTANCE: int = 6  # in region units (each region = 16x16 tiles)
 
 func _merge_small_settlements() -> void:
     if settlements.size() <= 1:

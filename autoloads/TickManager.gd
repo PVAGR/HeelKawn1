@@ -130,8 +130,13 @@ func _process(delta: float) -> void:
 		ticks_this_frame += 1
 		_dispatch_tick(current_tick)
 
-		# Check time every 4 ticks to reduce overhead while still catching budget overruns
-		if ticks_this_frame % 4 == 0:
+		# Critical: if this single tick exceeded the frame budget, yield immediately
+		var single_tick_elapsed: int = Time.get_ticks_usec() - start_time
+		if single_tick_elapsed > frame_budget_usec and ticks_this_frame >= 1:
+			break
+
+		# Check time every 2 ticks — single tick can exceed budget (e.g. construction_seed)
+		if ticks_this_frame % 2 == 0:
 			var elapsed: int = Time.get_ticks_usec() - start_time
 			if elapsed > frame_budget_usec:
 				break  # Yield to renderer — remaining ticks deferred to next frame

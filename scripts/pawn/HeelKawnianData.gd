@@ -327,6 +327,10 @@ var dislikes: Dictionary = {}
 var job_ticks_by_category: Dictionary = {}
 var influence: float = 0.0
 var military_rank_legacy: String = "grunt"  # Legacy string rank, replaced by int military_rank in Stage 6
+## Combat progression: XP earned through combat (synced from AICombatProgression)
+var combat_xp: int = 0
+## Combat progression: enemies killed (synced from AICombatProgression)
+var enemies_killed: int = 0
 var cohort_anchor_id: int = -1
 var cohort_job_type: int = -1
 var is_cohort_anchor: bool = false
@@ -3350,6 +3354,8 @@ func to_save_dict() -> Dictionary:
 		"influence": influence,
 		"military_rank": military_rank_legacy,  # Use legacy string for save compatibility
 		"military_rank_int": military_rank,  # Stage 6 int-based rank
+		"combat_xp": combat_xp,
+		"enemies_killed": enemies_killed,
 		"cohort_anchor_id": cohort_anchor_id,
 		"cohort_job_type": cohort_job_type,
 		"is_cohort_anchor": is_cohort_anchor,
@@ -3486,6 +3492,8 @@ static func from_save_dict(d: Dictionary) -> HeelKawnianData:
 	p.influence = float(d.get("influence", 0.0))
 	p.military_rank_legacy = str(d.get("military_rank_legacy", "grunt"))
 	p.military_rank = int(d.get("military_rank_int", 0))
+	p.combat_xp = int(d.get("combat_xp", 0))
+	p.enemies_killed = int(d.get("enemies_killed", 0))
 	p.cohort_anchor_id = int(d.get("cohort_anchor_id", -1))
 	p.cohort_job_type = int(d.get("cohort_job_type", -1))
 	p.is_cohort_anchor = bool(d.get("is_cohort_anchor", false))

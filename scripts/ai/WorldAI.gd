@@ -3457,6 +3457,10 @@ func _pawn_decision_rule_context(pd: HeelKawnianData) -> Dictionary:
 		"mind_knowledge_count": _pawn_mind_knowledge_count(pd),
 		"mind_knowledge_at_risk": _pawn_mind_knowledge_at_risk(pd),
 		"mind_conflict_count": _pawn_mind_conflict_count(pd),
+		# Combat rank from AICombatProgression
+		"combat_rank": _pawn_combat_rank(pd),
+		# Warrior threat level from AICombatProgression
+		"warrior_threat": _pawn_warrior_threat(pd),
 	}
 
 
@@ -3676,6 +3680,20 @@ func _pawn_mind_conflict_count(pd: HeelKawnianData) -> int:
 	if gm == null or not gm.has_method("get_grudges_held_by"):
 		return 0
 	return gm.get_grudges_held_by(int(pd.id)).size()
+
+
+## Returns combat rank from AICombatProgression (0=NOBODY..5=GENERAL)
+func _pawn_combat_rank(pd: HeelKawnianData) -> int:
+	if AICombatProgression != null and AICombatProgression.has_method("get_rank_for_pawn"):
+		return AICombatProgression.get_rank_for_pawn(int(pd.id))
+	return pd.military_rank
+
+
+## Returns warrior threat level from AICombatProgression
+func _pawn_warrior_threat(pd: HeelKawnianData) -> String:
+	if AICombatProgression != null and AICombatProgression.has_method("get_threat_level"):
+		return AICombatProgression.get_threat_level(int(pd.id))
+	return ""
 
 
 ## Returns 0.0-1.0 danger level from WorldMeaning tags (repeated_death, blood_soaked, graveyard, famine_stricken, fire_prone, ruined, ancient/old myth tags).

@@ -1581,7 +1581,16 @@ func _generate_pawn_narrative(pawn: HeelKawnian) -> String:
 	
 	# Header with pawn identity
 	text += "[color=#FFD166][b]━━━ %s the %s ━━━[/b][/color]\n" % [d.display_name.to_upper(), d.profession_name().to_upper()]
-	text += "[color=#888888]Age: %.1f years | Level: %d | Mood: %s[/color]\n\n" % [d.age / 360.0, d.level, d.mood_state_display()]
+	text += "[color=#888888]Age: %.1f years | Level: %d | Mood: %s[/color]\n" % [d.age / 360.0, d.level, d.mood_state_display()]
+	# Combat rank display
+	if AICombatProgression != null and d.military_rank > 0:
+		var rank_name: String = AICombatProgression.get_rank_name(int(d.id))
+		var rank_color: String = "#CC4444" if d.military_rank >= 5 else "#DD8844" if d.military_rank >= 3 else "#AAAAAA"
+		text += "[color=%s][b]%s[/b][/color]  " % [rank_color, rank_name.to_upper()]
+		if d.enemies_killed > 0:
+			text += "[color=#666666]%d kills | %d XP[/color]" % [d.enemies_killed, d.combat_xp]
+		text += "\n"
+	text += "\n"
 	
 	# Current activity with location
 	text += "[color=#FFD166][b]📍 CURRENTLY:[/b][/color]\n"

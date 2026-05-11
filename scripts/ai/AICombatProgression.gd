@@ -81,6 +81,17 @@ const RANK_CONFIG: Dictionary = {
 ## }
 var pawn_combat_data: Dictionary = {}
 
+# Warrior threat: pawns who fight too long without civilian life become dangerous
+# combat_addiction grows per kill/damage, decays per civilian tick
+# Thresholds: 50 = restless, 80 = threatening, 100 = menace
+const COMBAT_ADDICTION_PER_KILL: float = 8.0
+const COMBAT_ADDICTION_PER_DAMAGE_DEALT: float = 0.15
+const COMBAT_ADDICTION_DECAY_PER_CIVILIAN_TICK: float = 0.05
+const COMBAT_ADDICTION_RESTLESS: float = 50.0
+const COMBAT_ADDICTION_THREATENING: float = 80.0
+const COMBAT_ADDICTION_MENACE: float = 100.0
+var _combat_addiction: Dictionary = {}  # pawn_id -> float
+
 # References
 @onready var _world_memory: Node = null
 @onready var _pawn_spawner: Node = null
@@ -96,6 +107,9 @@ func _on_game_tick(tick: int) -> void:
 	# Auto-check rank promotions
 	if tick % 100 == 0:
 		_check_rank_promotions()
+	# Decay combat addiction for pawns not in combat
+	if tick % 50 == 0:
+		_decay_combat_addiction()
 
 
 # ==================== XP AWARDING ====================
@@ -104,10 +118,10 @@ func _on_game_tick(tick: int) -> void:
 func award_xp(pawn_id: int, amount: int, reason: String = "") -> void:
 	if not pawn_combat_data.has(pawn_id):
 		_initialize_pawn_data(pawn_id)
-	
+
 	var data: Dictionary = pawn_combat_data[pawn_id]
 	data.combat_xp += amount
-	
+
 	# Record XP gain
 	if _world_memory != null and amount >= 10:  # Only record significant XP gains
 		_world_memory.record_event({
@@ -119,14 +133,22 @@ func award_xp(pawn_id: int, amount: int, reason: String = "") -> void:
 			"tick": GameManager.tick_count
 		})
 
+	# Sync XP to HeelKawnianData for persistence
+	_sync_to_pawn_data(pawn_id)
+
 
 ## Award XP for damage dealt
 func award_damage_xp(pawn_id: int, damage: int) -> void:
 	var xp: int = damage  # 1 XP per damage
 	award_xp(pawn_id, xp, "damage_dealt")
-	
+
 	if pawn_combat_data.has(pawn_id):
 		pawn_combat_data[pawn_id].damage_dealt += damage
+
+	# Warrior threat: combat addiction grows from dealing damage
+	if not _combat_addiction.has(pawn_id):
+		_combat_addiction[pawn_id] = 0.0
+	_combat_addiction[pawn_id] = minf(COMBAT_ADDICTION_MENACE + 20.0, _combat_addiction[pawn_id] + float(damage) * COMBAT_ADDICTION_PER_DAMAGE_DEALT)
 
 
 ## Award XP for enemy killed
@@ -140,6 +162,18 @@ func award_kill_xp(pawn_id: int, enemy_rank: int = 0) -> void:
 	
 	if pawn_combat_data.has(pawn_id):
 		pawn_combat_data[pawn_id].enemies_killed += 1
+
+	# Warrior threat: combat addiction grows from kills
+	if not _combat_addiction.has(pawn_id):
+		_combat_addiction[pawn_id] = 0.0
+	_combat_addiction[pawn_id] = minf(COMBAT_ADDICTION_MENACE + 20.0, _combat_addiction[pawn_id] + COMBAT_ADDICTION_PER_KILL)
+
+
+## Record damage taken by a pawn (no XP, just tracking)
+func _record_damage_taken(pawn_id: int, damage: int) -> void:
+	if not pawn_combat_data.has(pawn_id):
+		_initialize_pawn_data(pawn_id)
+	pawn_combat_data[pawn_id].damage_taken += damage
 
 
 ## Award XP for surviving battle
@@ -199,10 +233,10 @@ func _calculate_rank(xp: int, data: Dictionary) -> int:
 func _promote_pawn(pawn_id: int, old_rank: int, new_rank: int) -> void:
 	var old_name: String = RANK_CONFIG[old_rank].name
 	var new_name: String = RANK_CONFIG[new_rank].name
-	
+
 	# Get pawn name for logging
 	var pawn_name: String = _get_pawn_name(pawn_id)
-	
+
 	# Record promotion
 	if _world_memory != null:
 		_world_memory.record_event({
@@ -213,7 +247,10 @@ func _promote_pawn(pawn_id: int, old_rank: int, new_rank: int) -> void:
 			"new_rank": new_name,
 			"tick": GameManager.tick_count
 		})
-	
+
+	# Sync rank to HeelKawnianData for persistence
+	_sync_to_pawn_data(pawn_id)
+
 	# Award legacy trait for high ranks
 	if new_rank >= CombatRank.VETERAN:
 		_award_legacy_trait(pawn_id, new_rank)
@@ -287,9 +324,16 @@ func get_rank_name(pawn_id: int) -> String:
 func get_rank_description(pawn_id: int) -> String:
 	if not pawn_combat_data.has(pawn_id):
 		return RANK_CONFIG[CombatRank.NOBODY].description
-	
+
 	var rank: int = pawn_combat_data[pawn_id].rank
 	return RANK_CONFIG[rank].description
+
+
+## Get combat rank int for a pawn (for decision context)
+func get_rank_for_pawn(pawn_id: int) -> int:
+	if not pawn_combat_data.has(pawn_id):
+		return CombatRank.NOBODY
+	return int(pawn_combat_data[pawn_id].rank)
 
 
 # ==================== UTILITY ====================
@@ -349,3 +393,99 @@ func get_stats() -> Dictionary:
 			stats.generals += 1
 	
 	return stats
+
+
+# ==================== WARRIOR THREAT SYSTEM ====================
+
+## Get combat addiction level for a pawn (0.0 to ~120.0)
+func get_combat_addiction(pawn_id: int) -> float:
+	return float(_combat_addiction.get(pawn_id, 0.0))
+
+
+## Get threat level string for a pawn
+func get_threat_level(pawn_id: int) -> String:
+	var addiction: float = get_combat_addiction(pawn_id)
+	if addiction >= COMBAT_ADDICTION_MENACE:
+		return "menace"
+	elif addiction >= COMBAT_ADDICTION_THREATENING:
+		return "threatening"
+	elif addiction >= COMBAT_ADDICTION_RESTLESS:
+		return "restless"
+	return "stable"
+
+
+## Decay combat addiction for pawns doing civilian work
+func _decay_combat_addiction() -> void:
+	var to_remove: Array = []
+	for pawn_id in _combat_addiction:
+		var pd: RefCounted = _get_pawn_data(int(pawn_id))
+		if pd == null:
+			# Dead pawn — clean up
+			to_remove.append(pawn_id)
+			continue
+		# Only decay if pawn is NOT in a combat job (DEFEND, PROTECT, HUNT, PATROL)
+		var is_combat_job: bool = false
+		var prof: int = int(pd.get("current_profession"))
+		if prof == HeelKawnianData.Profession.WARRIOR:
+			is_combat_job = true
+		if not is_combat_job:
+			_combat_addiction[pawn_id] = maxf(0.0, _combat_addiction[pawn_id] - COMBAT_ADDICTION_DECAY_PER_CIVILIAN_TICK * 50.0)
+			if _combat_addiction[pawn_id] <= 0.0:
+				to_remove.append(pawn_id)
+		# Check for threat escalation
+		var addiction: float = _combat_addiction[pawn_id]
+		if addiction >= COMBAT_ADDICTION_MENACE:
+			_record_threat_escalation(int(pawn_id), "menace")
+		elif addiction >= COMBAT_ADDICTION_THREATENING:
+			_record_threat_escalation(int(pawn_id), "threatening")
+	for pid in to_remove:
+		_combat_addiction.erase(pid)
+
+
+## Record threat escalation to WorldMemory (only once per level per pawn)
+var _threat_escalation_recorded: Dictionary = {}  # pawn_id -> highest level recorded
+func _record_threat_escalation(pawn_id: int, level: String) -> void:
+	var prev: String = str(_threat_escalation_recorded.get(pawn_id, ""))
+	if prev == level or (prev == "menace" and level == "threatening"):
+		return  # Already recorded at this or higher level
+	_threat_escalation_recorded[pawn_id] = level
+	if _world_memory != null:
+		var pawn_name: String = _get_pawn_name(pawn_id)
+		_world_memory.record_event({
+			"type": "warrior_threat",
+			"pawn_id": pawn_id,
+			"pawn_name": pawn_name,
+			"threat_level": level,
+			"combat_addiction": get_combat_addiction(pawn_id),
+			"tick": GameManager.tick_count
+		})
+
+
+# ==================== DATA SYNC ====================
+
+## Sync combat data from this autoload into HeelKawnianData for save/load persistence.
+## Called on rank promotion and periodically.
+func _sync_to_pawn_data(pawn_id: int) -> void:
+	if not pawn_combat_data.has(pawn_id):
+		return
+	var data: Dictionary = pawn_combat_data[pawn_id]
+	var pd: RefCounted = _get_pawn_data(pawn_id)
+	if pd == null:
+		return
+	# Use set() to avoid type issues with RefCounted
+	pd.set("combat_xp", int(data.combat_xp))
+	pd.set("enemies_killed", int(data.enemies_killed))
+	pd.set("military_rank", int(data.rank))
+
+
+## Sync all combat data to pawn data (called before save)
+func sync_all_to_pawn_data() -> void:
+	for pawn_id in pawn_combat_data:
+		_sync_to_pawn_data(pawn_id)
+
+
+## Get HeelKawnianData for a pawn id
+func _get_pawn_data(pawn_id: int) -> RefCounted:
+	if _pawn_spawner != null and _pawn_spawner.has_method("pawn_data_for_id"):
+		return _pawn_spawner.call("pawn_data_for_id", pawn_id)
+	return null

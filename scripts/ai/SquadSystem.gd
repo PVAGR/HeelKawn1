@@ -442,6 +442,16 @@ func clear() -> void:
 	squads.clear()
 	_next_squad_id = 1
 
+
+## Find which squad a pawn belongs to. Returns -1 if not in any squad.
+func get_squad_id_for_pawn(pawn_id: int) -> int:
+	for squad in squads:
+		if squad.status != "active":
+			continue
+		if pawn_id in squad.members or pawn_id == squad.leader_id:
+			return int(squad.squad_id)
+	return -1
+
 ## Get statistics
 func get_stats() -> Dictionary:
 	var active: int = 0

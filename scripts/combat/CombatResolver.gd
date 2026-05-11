@@ -95,7 +95,19 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 		pawn_defender.data.health = max(0.0, pawn_defender.data.health - damage)
 		pawn_defender.on_hit_feedback(damage)
 		pawn_defender.data.add_mood_event(MoodEvent.Type.STRESS, 60.0, 300)
-		
+
+		# COMBAT PROGRESSION: Award damage XP to attacker, track damage taken by defender
+		if AICombatProgression != null:
+			if attacker is HeelKawnian:
+				AICombatProgression.award_damage_xp(int((attacker as HeelKawnian).data.id), int(damage))
+			AICombatProgression._record_damage_taken(int(pawn_defender.data.id), int(damage))
+
+		# SQUAD SYSTEM: Morale penalty when squad member takes heavy damage
+		if SquadSystem != null and damage > 8.0:
+			var def_squad: int = SquadSystem.get_squad_id_for_pawn(int(pawn_defender.data.id))
+			if def_squad >= 0:
+				SquadSystem.apply_morale_penalty(def_squad, damage * 0.3)
+
 		# DEAD BRAIN REVIVED: CombatNarrative generates Kenshi-style combat text
 		if CombatNarrative != null:
 			var attacker_name: String = _combat_name(attacker)
@@ -123,6 +135,15 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 			# DEAD BRAIN REVIVED: BattleReporter records HeelKawnian death in combat
 			if BattleReporter != null:
 				BattleReporter.record_combat_death(int(pawn_defender.data.id), int(_combat_id(attacker)), pawn_defender.data.tile_pos)
+			# COMBAT PROGRESSION: Attacker survived a lethal encounter
+			if AICombatProgression != null and attacker is HeelKawnian:
+				AICombatProgression.award_survival_xp(int((attacker as HeelKawnian).data.id), true)
+			# SQUAD SYSTEM: Heavy morale penalty when squad member dies
+			if SquadSystem != null:
+				var dead_squad: int = SquadSystem.get_squad_id_for_pawn(int(pawn_defender.data.id))
+				if dead_squad >= 0:
+					SquadSystem.apply_morale_penalty(dead_squad, 25.0)
+					SquadSystem.remove_member(dead_squad, int(pawn_defender.data.id))
 		
 		if GameManager.tick_count % 100 == 0:
 			print("[Combat] HeelKawnian %s took %.1f damage (health %.1f)" %
@@ -150,6 +171,15 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 				var pawn_attacker: HeelKawnian = attacker as HeelKawnian
 				if pawn_attacker.data != null and pawn_attacker.data.has_method("grant_krond"):
 					pawn_attacker.data.grant_krond(KROND_PER_KILL)
+				# COMBAT PROGRESSION: Award kill XP to attacker
+				if AICombatProgression != null:
+					AICombatProgression.award_kill_xp(int(pawn_attacker.data.id), 0)
+				# SQUAD SYSTEM: Award squad XP and morale boost
+				if SquadSystem != null:
+					var atk_squad: int = SquadSystem.get_squad_id_for_pawn(int(pawn_attacker.data.id))
+					if atk_squad >= 0:
+						SquadSystem.award_squad_xp(atk_squad, 10, "enemy_kill")
+						SquadSystem.award_morale(atk_squad, 5.0)
 			var main_node: Node = attacker.get_tree().get_root().get_node_or_null("Main") if attacker != null else null
 			if main_node != null and main_node.has_method("register_enemy_kill"):
 				main_node.call("register_enemy_kill", enemy_name, attacker_name, enemy_defender.tile_pos)

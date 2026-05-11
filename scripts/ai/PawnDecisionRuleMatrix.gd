@@ -711,6 +711,57 @@ func evaluate(pd: HeelKawnianData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump(outs, 6, 0.04)   # mild defend
 		fired.append({"id": "mind_conflict_aware", "line": "IF some conflicts THEN mild defensiveness.", "w": 0.25})
 
+	# ==================== Combat Rank rules ====================
+	# Combat rank from AICombatProgression — soldiers lead, defend, and patrol
+	var combat_rank: int = int(ctx.get("combat_rank", pd.military_rank))
+	if combat_rank >= 5:
+		# GENERAL: strong leadership, defend, social authority
+		_bump(outs, 6, 0.18)   # defend — leads military
+		_bump(outs, 2, 0.12)   # social — commands, organizes
+		_bump(outs, 7, -0.10)  # less idle — duty-bound
+		fired.append({"id": "rank_general", "line": "IF general THEN lead + defend + social authority.", "w": 0.70})
+	elif combat_rank >= 4:
+		# CHAMPION: elite defender, inspires others
+		_bump(outs, 6, 0.14)   # defend — champion warrior
+		_bump(outs, 2, 0.08)   # social — inspires troops
+		_bump(outs, 7, -0.06)  # less idle — vigilant
+		fired.append({"id": "rank_champion", "line": "IF champion THEN defend + inspire.", "w": 0.60})
+	elif combat_rank >= 3:
+		# VETERAN: experienced, defensive, watchful
+		_bump(outs, 6, 0.10)   # defend — battle-tested
+		_bump(outs, 7, 0.04)   # observe — experienced caution
+		fired.append({"id": "rank_veteran", "line": "IF veteran THEN defend + watchful.", "w": 0.50})
+	elif combat_rank >= 2:
+		# SOLDIER: combat-ready, defend bias
+		_bump(outs, 6, 0.08)   # defend — trained fighter
+		fired.append({"id": "rank_soldier", "line": "IF soldier THEN defend bias.", "w": 0.40})
+	elif combat_rank >= 1:
+		# RECRUIT: mild defend, still learning
+		_bump(outs, 6, 0.04)   # mild defend — basic training
+		fired.append({"id": "rank_recruit", "line": "IF recruit THEN mild defend.", "w": 0.25})
+
+	# ==================== Warrior Threat rules ====================
+	# Warriors who never relinquish force become threats
+	var threat: String = str(ctx.get("warrior_threat", ""))
+	if threat == "menace":
+		# Menace: aggressive, antisocial, dangerous
+		_bump(outs, 6, 0.20)   # defend — seeks violence
+		_bump(outs, 2, -0.15)  # less social — alienated
+		_bump(outs, 7, -0.10)  # less idle — can't stop
+		_bump(outs, 3, -0.08)  # less forage — contempt for civilian work
+		fired.append({"id": "threat_menace", "line": "IF menace THEN aggressive + antisocial + contempt for civilian life.", "w": 0.75})
+	elif threat == "threatening":
+		# Threatening: drawn to combat, withdrawing from community
+		_bump(outs, 6, 0.12)   # defend — combat-seeking
+		_bump(outs, 2, -0.08)  # less social — withdrawing
+		_bump(outs, 7, -0.04)  # less idle — restless
+		fired.append({"id": "threat_threatening", "line": "IF threatening THEN combat-seeking + withdrawing from community.", "w": 0.55})
+	elif threat == "restless":
+		# Restless: mild combat preference, slight social distance
+		_bump(outs, 6, 0.06)   # mild defend — edgy
+		_bump(outs, 2, -0.03)  # mild social withdrawal
+		fired.append({"id": "threat_restless", "line": "IF restless THEN mild combat preference + slight withdrawal.", "w": 0.35})
+
 	fired.sort_custom(func(a, b): return float(a.get("w", 0.0)) > float(b.get("w", 0.0)))
 	var human_ch: Array = _build_human_channels(pd, ctx, outs)
 	_apply_human_semantic_projection(outs, human_ch)

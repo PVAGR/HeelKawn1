@@ -4877,14 +4877,6 @@ func select_pawn_from_pickable(pawn: HeelKawnian) -> void:
 		_handle_draft_click(pawn)
 	else:
 		_set_selected_pawn(pawn)
-
-
-func select_pawn_from_pickable(pawn: HeelKawnian) -> void:
-	if pawn == null or not is_instance_valid(pawn):
-		return
-	if _draft_mode_active:
-		_handle_draft_click(pawn)
-	else:
 		_record_pawn_click_selection(pawn, "area_input_event", get_global_mouse_position(), get_global_mouse_position(), 1)
 
 

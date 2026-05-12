@@ -30,7 +30,14 @@ func _get_player_pawn_id() -> int:
 	if player_pawn != null and is_instance_valid(player_pawn):
 		var pawn_data: Variant = player_pawn.get("data")
 		if pawn_data != null:
-			return int(pawn_data.get("id", -1))
+			if typeof(pawn_data) == TYPE_DICTIONARY:
+				var _pd_dict: Dictionary = pawn_data
+				return int(_pd_dict.get("id", -1))
+			else:
+				if pawn_data.has_method("get"):
+					return int(pawn_data.get("id"))
+				elif pawn_data.has_member("id"):
+					return int(pawn_data.id)
 	return -1
 
 func _get_player_pawn_tile() -> Vector2i:
@@ -40,12 +47,22 @@ func _get_player_pawn_tile() -> Vector2i:
 	var player_pawn: Variant = main_node.get("_player_pawn")
 	if player_pawn != null and is_instance_valid(player_pawn):
 		var pawn_data: Variant = player_pawn.get("data")
-		if pawn_data != null and pawn_data.has("tile_pos"):
-			var tile_pos: Variant = pawn_data.get("tile_pos")
-			if tile_pos is Vector2i:
-				return tile_pos
-			elif tile_pos is Vector2:
-				return Vector2i(int(tile_pos.x), int(tile_pos.y))
+		if pawn_data != null:
+			if typeof(pawn_data) == TYPE_DICTIONARY:
+				var _pd_dict2: Dictionary = pawn_data
+				if _pd_dict2.has("tile_pos"):
+					var tile_pos: Variant = _pd_dict2.get("tile_pos")
+					if tile_pos is Vector2i:
+						return tile_pos
+					elif tile_pos is Vector2:
+						return Vector2i(int(tile_pos.x), int(tile_pos.y))
+			else:
+				if pawn_data.has_method("get") and pawn_data.get("tile_pos") != null:
+					var tile_pos2: Variant = pawn_data.get("tile_pos")
+					if tile_pos2 is Vector2i:
+						return tile_pos2
+					elif tile_pos2 is Vector2:
+						return Vector2i(int(tile_pos2.x), int(tile_pos2.y))
 	return Vector2i(-1, -1)
 
 func _is_region_known_to_player(region_key: int) -> bool:
@@ -963,8 +980,18 @@ func _report_authority_job_audit() -> void:
 		for p in ps.pawns:
 			if p == null or not is_instance_valid(p):
 				continue
-			var pid: int = int(p.get("data").get("id", -1))
-			var lvl: int = AuthoritySystem.get_authority_level(pid) if AuthoritySystem.has_method("get_authority_level") else 0
+			var pdata = p.get("data")
+			var pid: int = -1
+			if typeof(pdata) == TYPE_DICTIONARY:
+				var _pdata_dict: Dictionary = pdata
+				pid = int(_pdata_dict.get("id", -1))
+			else:
+				if pdata != null:
+					if pdata.has_method("get"):
+						pid = int(pdata.get("id"))
+					elif pdata.has_member("id"):
+						pid = int(pdata.id)
+			var lvl: int = AuthoritySystem.get_authority_level(pid, AuthoritySystem.AuthorityContext.CIVIL) if AuthoritySystem != null and AuthoritySystem.has_method("get_authority_level") else 0
 			if lvl >= 3:
 				leaders.append(pid)
 			elif lvl == 2:

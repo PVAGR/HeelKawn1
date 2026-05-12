@@ -2923,9 +2923,13 @@ func _audit_claim_failure_reason(visible_candidates: Array) -> String:
 	var current_carry: Variant = null
 	if data != null:
 		if typeof(data) == TYPE_DICTIONARY:
-			current_carry = data.get("current_carry", null)
+			var _data_dict: Dictionary = data
+			current_carry = _data_dict.get("current_carry", null)
 		else:
-			current_carry = data.get("current_carry")
+			if data.has_method("get"):
+				current_carry = data.get("current_carry")
+			elif data.has_member("current_carry"):
+				current_carry = data.current_carry
 	if current_carry != null and str(current_carry).length() > 0:
 		# Pawn is carrying something; may need deposit location
 		# Check if any job is a deposit/storage job

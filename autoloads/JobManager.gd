@@ -358,11 +358,13 @@ func _job_visible_to_pawn(j: Job, pawn: Node, pd: Variant) -> bool:
 		var pid: int = int(pd.id)
 		return int(j.issuer_pawn_id) == pid
 	# Immediate emergency acceptance for nearby pawns
-	var pawn_tile: Vector2i = null
+	var pawn_tile: Vector2i = Vector2i(-1, -1)
 	if typeof(pd) == TYPE_DICTIONARY:
-		pawn_tile = pd.get("tile_pos", Vector2i(-1, -1))
+		var _pd_dict: Dictionary = pd
+		pawn_tile = _pd_dict.get("tile_pos", Vector2i(-1, -1))
 	else:
-		pawn_tile = pd.get("tile_pos") if pd != null else Vector2i(-1, -1)
+		if pd != null:
+			pawn_tile = pd.get("tile_pos")
 	var d: int = _chebyshev(pawn_tile, j.work_tile)
 	if str(j.issuer_role).to_lower() == "emergency" and d <= 48:
 		return true

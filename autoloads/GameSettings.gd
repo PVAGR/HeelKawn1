@@ -72,7 +72,7 @@ const SCHEMA: Array[Dictionary] = [
 		"section": "Simulation",
 		"type": "int",
 		"min": 10,
-		"max": 200,
+		"max": 100,
 		"step": 10,
 		"default": 100,
 	},

@@ -14,8 +14,9 @@ signal tick_processed(tick_number: int)
 const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base; stable for HeelKawn)
 
 ## SAFETY: Maximum ticks processed in one render frame (bounded burst).
-## At 60fps target, each frame has 16ms. We cap ticks to fit within that.
-const MAX_TICKS_PER_FRAME: int = 500
+## At 100x, every tick fans out to all tickable systems and pawns, so keep the
+## burst cap low enough that input/UI can breathe between catch-up batches.
+const MAX_TICKS_PER_FRAME: int = 100
 
 ## Adaptive Throttle: Target frame time budget (microseconds).
 ## 16ms = 16000 usec = 60fps target. The sim must yield to the renderer
@@ -26,7 +27,7 @@ const TARGET_FRAME_TIME_USEC: int = 16_000  # 16ms = 60fps
 ## Read max ticks/frame from GameSettings if available, else fall back to constant.
 func _get_max_ticks_per_frame() -> int:
 	if GameSettings != null:
-		return int(GameSettings.get_value("max_ticks_per_frame"))
+		return clampi(int(GameSettings.get_value("max_ticks_per_frame")), 1, MAX_TICKS_PER_FRAME)
 	return MAX_TICKS_PER_FRAME
 
 ## Read frame budget from GameSettings if available, else fall back to constant.
@@ -58,7 +59,7 @@ var _current_speed_index: int = 0  # Start at 1x (index 0)
 
 var _ticks_behind: int = 0
 var _last_frame_ticks: int = 0
-var _adaptive_max_ticks_per_frame: int = 500  # initialized from _get_max_ticks_per_frame() in _ready
+var _adaptive_max_ticks_per_frame: int = MAX_TICKS_PER_FRAME  # initialized from _get_max_ticks_per_frame() in _ready
 var _low_fps_frame_streak: int = 0
 ## Debug-only: microseconds spent in the tick batch last frame (0 when not a debug build).
 var debug_last_tick_batch_usec: int = 0
@@ -183,7 +184,7 @@ func _dispatch_tick(tick: int) -> void:
 func _call_tick_on_tickables(tick: int) -> int:
 	## PERFORMANCE OPTIMIZATION: Cached tickable nodes.
 	## Instead of calling get_nodes_in_group() + sort every tick (O(n) traversal
-	## + O(n log n) sort × 500 ticks/frame at 100x), we cache the sorted list and
+	## + O(n log n) sort × many ticks/frame at 100x), we cache the sorted list and
 	## only rebuild when dirty or every TICKABLE_CACHE_REBUILD_INTERVAL ticks.
 	var needs_rebuild: bool = _tickable_cache_dirty
 	if not needs_rebuild:

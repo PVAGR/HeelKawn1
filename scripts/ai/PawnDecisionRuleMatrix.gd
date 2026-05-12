@@ -762,6 +762,41 @@ func evaluate(pd: HeelKawnianData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump(outs, 2, -0.03)  # mild social withdrawal
 		fired.append({"id": "threat_restless", "line": "IF restless THEN mild combat preference + slight withdrawal.", "w": 0.35})
 
+	# ==================== Learned world experience ====================
+	# AILearning feeds this context from WorldMemory so the colony can adapt
+	# instead of repeating the same failures.
+	var learned_food_weight: float = float(ctx.get("learning_food_weight", 1.0))
+	var learned_resource_weight: float = float(ctx.get("learning_resource_weight", 1.0))
+	var learned_military_weight: float = float(ctx.get("learning_military_weight", 1.0))
+	var learned_defense_weight: float = float(ctx.get("learning_defense_weight", 1.0))
+	var learned_construction_weight: float = float(ctx.get("learning_construction_weight", 1.0))
+
+	if learned_food_weight != 1.0:
+		var food_bias: float = clampf((learned_food_weight - 1.0) * 0.12, -0.18, 0.30)
+		_bump_many(outs, [0, 3], food_bias)
+		fired.append({"id": "learn_food", "line": "IF learning says food matters more THEN seek food and forage harder.", "w": abs(food_bias)})
+
+	if learned_resource_weight != 1.0:
+		var resource_bias: float = clampf((learned_resource_weight - 1.0) * 0.10, -0.15, 0.24)
+		_bump(outs, 3, resource_bias)
+		_bump(outs, 5, resource_bias * 0.8)
+		fired.append({"id": "learn_resources", "line": "IF learning says resources are scarce THEN gather and mine more.", "w": abs(resource_bias)})
+
+	if learned_military_weight != 1.0:
+		var military_bias: float = clampf((learned_military_weight - 1.0) * 0.10, -0.14, 0.24)
+		_bump(outs, 6, military_bias)
+		fired.append({"id": "learn_military", "line": "IF learning says military pressure is rising THEN defend more.", "w": abs(military_bias)})
+
+	if learned_defense_weight != 1.0:
+		var defense_bias: float = clampf((learned_defense_weight - 1.0) * 0.10, -0.14, 0.24)
+		_bump_many(outs, [6, 4], defense_bias)
+		fired.append({"id": "learn_defense", "line": "IF learning says defense matters then defend and build fortifications.", "w": abs(defense_bias)})
+
+	if learned_construction_weight != 1.0:
+		var construction_bias: float = clampf((learned_construction_weight - 1.0) * 0.10, -0.14, 0.24)
+		_bump(outs, 4, construction_bias)
+		fired.append({"id": "learn_construction", "line": "IF learning says construction works then build more.", "w": abs(construction_bias)})
+
 	fired.sort_custom(func(a, b): return float(a.get("w", 0.0)) > float(b.get("w", 0.0)))
 	var human_ch: Array = _build_human_channels(pd, ctx, outs)
 	_apply_human_semantic_projection(outs, human_ch)

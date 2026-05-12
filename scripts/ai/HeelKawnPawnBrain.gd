@@ -37,6 +37,8 @@ var career: CareerXP = null
 var dramatic_engine: DramaticEventGenerator = null
 
 # === World References (cached) ===
+var _ai_manager: Node = null
+var _learning_system: Node = null
 var _world_ai: Node = null
 var _settlement_ai: Node = null
 var _combat_resolver: Node = null
@@ -134,6 +136,9 @@ func _cache_world_references() -> void:
 	if tree == null:
 		return
 	var root: Node = tree.root
+	_ai_manager = root.get_node_or_null("/root/AIManager")
+	if _ai_manager != null and _ai_manager.has_method("get_learning"):
+		_learning_system = _ai_manager.get_learning()
 	_world_ai = root.get_node_or_null("/root/WorldAI")
 	_combat_resolver = root.get_node_or_null("/root/CombatResolver")
 	# SettlementAI is per-settlement, resolved on demand
@@ -326,6 +331,8 @@ func _rebuild_decision_context(pawn: HeelKawnian, sim_tick: int) -> void:
 		var rk: int = ((int(cur_tile.x) >> 4) & 0xFFFF) | (((int(cur_tile.y) >> 4) & 0xFFFF) << 16)
 		_decision_context["region_key"] = rk
 
+	_update_learning_context()
+
 
 func _update_world_state_cache(sim_tick: int) -> void:
 	if sim_tick - _world_state_cache_tick < WORLD_STATE_CACHE_TICKS and not _current_world_state.is_empty():
@@ -345,6 +352,23 @@ func _update_world_state_cache(sim_tick: int) -> void:
 
 	_world_state_cache_tick = sim_tick
 	_decision_context.merge(_current_world_state, false)
+
+
+func _update_learning_context() -> void:
+	if _learning_system == null:
+		return
+
+	if _learning_system.has_method("get_weight"):
+		_decision_context["learning_food_weight"] = float(_learning_system.get_weight("food_production"))
+		_decision_context["learning_resource_weight"] = float(_learning_system.get_weight("resource_gathering"))
+		_decision_context["learning_military_weight"] = float(_learning_system.get_weight("military_training"))
+		_decision_context["learning_defense_weight"] = float(_learning_system.get_weight("defense_building"))
+		_decision_context["learning_construction_weight"] = float(_learning_system.get_weight("construction"))
+
+	if _learning_system.has_method("get_stats"):
+		var stats: Dictionary = _learning_system.get_stats()
+		_decision_context["learning_patterns_learned"] = int(stats.get("patterns_learned", 0))
+		_decision_context["learning_weights_adjusted"] = int(stats.get("weights_adjusted", 0))
 
 
 # === Neural Forward Pass ===

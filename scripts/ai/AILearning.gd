@@ -105,7 +105,9 @@ func _identify_patterns(events: Array, tick: int) -> Dictionary:
 		"building_success": {"count": 0, "severity": 0},
 		"resource_scarcity": {"count": 0, "severity": 0},
 		"trade_success": {"count": 0, "severity": 0},
-		"disaster_impact": {"count": 0, "severity": 0}
+		"disaster_impact": {"count": 0, "severity": 0},
+		"social_success": {"count": 0, "severity": 0},
+		"teaching_success": {"count": 0, "severity": 0}
 	}
 	
 	for event in events:
@@ -209,6 +211,21 @@ func _adjust_weights_from_patterns(patterns: Dictionary, tick: int) -> void:
 	if patterns.building_success.severity >= 5:
 		_adjust_weight("construction", 0.05, "Building success rate high", tick)
 
+	# Trade success → encourage commerce/social exchange
+	if patterns.trade_success.severity >= MIN_SEVERITY_FOR_LEARNING:
+		_adjust_weight("trade_exchange", patterns.trade_success.severity * 0.08,
+			"Trade completed successfully (%d events)" % patterns.trade_success.count, tick)
+
+	# Social success → encourage bonding and household cohesion
+	if patterns.social_success.severity >= MIN_SEVERITY_FOR_LEARNING:
+		_adjust_weight("social_bonding", patterns.social_success.severity * 0.08,
+			"Social meetings and bonds reinforced (%d events)" % patterns.social_success.count, tick)
+
+	# Teaching success → encourage knowledge exchange and apprenticeships
+	if patterns.teaching_success.severity >= MIN_SEVERITY_FOR_LEARNING:
+		_adjust_weight("knowledge_exchange", patterns.teaching_success.severity * 0.08,
+			"Teaching succeeded (%d events)" % patterns.teaching_success.count, tick)
+
 
 func _adjust_weight(decision_type: String, adjustment: float, reason: String, tick: int) -> void:
 	if not weight_adjustments.has(decision_type):
@@ -273,6 +290,12 @@ func _generate_lesson(pattern_name: String, pattern: Dictionary) -> String:
 			return "Resource gathering needs attention. %d scarcity events recorded." % pattern.count
 		"building_success":
 			return "Construction methods are effective. Continue current practices."
+		"trade_success":
+			return "Trade and exchange help the settlement stay connected."
+		"social_success":
+			return "Social bonds and meetings strengthen the community."
+		"teaching_success":
+			return "Teaching works; knowledge should keep flowing."
 		_:
 			return "Pattern observed: %s occurred %d times." % [pattern_name, pattern.count]
 

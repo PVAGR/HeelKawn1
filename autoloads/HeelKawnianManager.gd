@@ -25,6 +25,8 @@ static var _last_matrix_log_tick_by_soul: Dictionary = {}
 static var _last_ambition_tick_by_settlement: Dictionary = {}
 static var _last_ambition_tick_by_pawn: Dictionary = {}
 static var _last_affiliation_tick_by_pawn: Dictionary = {}
+static var _learning_weight_cache: Dictionary = {}
+static var _learning_weight_cache_tick: int = -1000000
 
 ## Pressure biases: pawn_id -> { "bias_type": String, "intensity": float, "tick": int }
 ## Applied to intent selection for pawns in pressurized regions
@@ -379,6 +381,9 @@ static func get_social_action_for_pawn(pawn: Variant) -> Dictionary:
 	var target_tile: Vector2i = Vector2i(-1, -1)
 	var best_score: float = -99999.0
 	var teach_knowledge_type: int = -1
+	var learned_bonding: float = _learning_weight_for_key("social_bonding")
+	var learned_teaching: float = _learning_weight_for_key("knowledge_exchange")
+	var learned_trade: float = _learning_weight_for_key("trade_exchange")
 
 	# Check for pressure bias influence on social actions
 	var pressure: Dictionary = get_pressure_bias_for_pawn(int(data.id))
@@ -399,6 +404,20 @@ static func get_social_action_for_pawn(pawn: Variant) -> Dictionary:
 		var ally_score: float = rapport / 900.0 + trust / 75.0 - grudge * 2.2 + reputation * 0.4 - d2 / 4500.0
 		var rival_score: float = grudge * 2.6 + (1.0 - trust / 100.0) + (-reputation) * 0.25 - d2 / 6000.0
 		var teach_score: float = ally_score + 0.65 + (0.2 if same_settlement else 0.0)
+
+		if learned_bonding != 1.0:
+			var bond_delta: float = clampf((learned_bonding - 1.0) * 0.18, -0.20, 0.35)
+			ally_score += bond_delta
+			rival_score -= bond_delta * 0.55
+			teach_score += bond_delta * 0.35
+		if learned_teaching != 1.0:
+			var teach_delta: float = clampf((learned_teaching - 1.0) * 0.20, -0.18, 0.40)
+			teach_score += teach_delta
+			ally_score += teach_delta * 0.35
+		if learned_trade != 1.0:
+			var trade_delta: float = clampf((learned_trade - 1.0) * 0.12, -0.12, 0.24)
+			ally_score += trade_delta * 0.30
+			teach_score += trade_delta * 0.18
 
 		# Pressure bias influences social action scores
 		if pressure_bias_type == "fight" and pressure_intensity > 0.0:
@@ -567,6 +586,9 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 
 	if ambition.is_empty():
 		return {}
+	var learned_bonus: int = _learning_priority_bonus_for_job(int(ambition.get("job_type", -1)))
+	if learned_bonus != 0:
+		ambition["priority"] = clampi(int(ambition.get("priority", 5)) + learned_bonus, 1, 10)
 	ambition["settlement_id"] = settlement_id
 	ambition["settlement_key"] = settlement_key
 	ambition["soul_id"] = str(profile.get("soul_id", ""))
@@ -578,6 +600,62 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 	_last_ambition_tick_by_pawn[pawn_id] = tick
 	_last_ambition_tick_by_settlement[settlement_key] = tick
 	return ambition
+
+
+static func _refresh_learning_weight_cache() -> void:
+	var tick: int = _tick()
+	if tick - _learning_weight_cache_tick < 60 and not _learning_weight_cache.is_empty():
+		return
+	_learning_weight_cache_tick = tick
+	_learning_weight_cache.clear()
+	var ai_manager: Node = _root_node("AIManager")
+	if ai_manager == null or not ai_manager.has_method("get_learning"):
+		return
+	var learning: Node = ai_manager.call("get_learning")
+	if learning == null or not learning.has_method("get_weight"):
+		return
+	_learning_weight_cache["food_production"] = float(learning.call("get_weight", "food_production"))
+	_learning_weight_cache["resource_gathering"] = float(learning.call("get_weight", "resource_gathering"))
+	_learning_weight_cache["military_training"] = float(learning.call("get_weight", "military_training"))
+	_learning_weight_cache["defense_building"] = float(learning.call("get_weight", "defense_building"))
+	_learning_weight_cache["construction"] = float(learning.call("get_weight", "construction"))
+	_learning_weight_cache["trade_exchange"] = float(learning.call("get_weight", "trade_exchange"))
+	_learning_weight_cache["social_bonding"] = float(learning.call("get_weight", "social_bonding"))
+	_learning_weight_cache["knowledge_exchange"] = float(learning.call("get_weight", "knowledge_exchange"))
+
+
+static func _learning_weight_for_job(job_type: int) -> float:
+	_refresh_learning_weight_cache()
+	match job_type:
+		Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH,
+		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH,
+		Job.Type.DRY_MEAT, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS,
+		Job.Type.GROW_FOOD:
+			return float(_learning_weight_cache.get("food_production", 1.0))
+		Job.Type.CHOP, Job.Type.MINE, Job.Type.MINE_WALL,
+		Job.Type.GATHER_FLINT, Job.Type.GATHER_STICK:
+			return float(_learning_weight_cache.get("resource_gathering", 1.0))
+		Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_WATCHTOWER,
+		Job.Type.BUILD_BARRACKS, Job.Type.BUILD_FORD:
+			return float(_learning_weight_cache.get("defense_building", 1.0))
+		Job.Type.DEFEND, Job.Type.PROTECT, Job.Type.GUARD:
+			return float(_learning_weight_cache.get("military_training", 1.0))
+		_:
+			if _is_structure_build_job(job_type):
+				return float(_learning_weight_cache.get("construction", 1.0))
+	return 1.0
+
+
+static func _learning_priority_bonus_for_job(job_type: int) -> int:
+	var learned_weight: float = _learning_weight_for_job(job_type)
+	if learned_weight <= 0.0:
+		return 0
+	return clampi(int(round((learned_weight - 1.0) * 3.0)), -2, 3)
+
+
+static func _learning_weight_for_key(key: String) -> float:
+	_refresh_learning_weight_cache()
+	return float(_learning_weight_cache.get(key, 1.0))
 
 
 static func _worldbox_loop_job_for_pawn(
@@ -813,13 +891,40 @@ static func get_affiliation_action_for_pawn(pawn: Variant) -> Dictionary:
 		return {}
 
 	if next_level == "family":
+		if int(data.household_id) >= 0:
+			return {}
+		var kin: Node = _root_node("KinshipSystem")
+		var family_ids: Dictionary = {}
+		if kin != null:
+			if kin.has_method("get_lineage_parents"):
+				for rel_id in kin.call("get_lineage_parents", pawn_id):
+					family_ids[int(rel_id)] = true
+			if kin.has_method("get_lineage_children"):
+				for rel_id in kin.call("get_lineage_children", pawn_id):
+					family_ids[int(rel_id)] = true
+			if kin.has_method("get_lineage_siblings"):
+				for rel_id in kin.call("get_lineage_siblings", pawn_id):
+					family_ids[int(rel_id)] = true
+		var ordered_candidates: Array = []
 		for c in candidates:
+			if family_ids.has(int(c.get("id", -1))):
+				ordered_candidates.append(c)
+		for c in candidates:
+			if not ordered_candidates.has(c):
+				ordered_candidates.append(c)
+		for c in ordered_candidates:
 			var pid: int = int(c.get("id", -1))
 			if pid < 0:
 				continue
 			var trust: float = float(c.get("trust", 50.0))
 			var rapport: float = float(c.get("rapport", 0.0))
-			if trust < 60.0 and rapport < 450.0:
+			var is_family: bool = family_ids.has(pid)
+			if is_family:
+				if trust < 50.0 and rapport < 250.0:
+					continue
+			elif trust < 60.0 and rapport < 450.0:
+				continue
+			if learned_bonding > 1.0 and trust < 55.0:
 				continue
 			var other_hid: int = int(c.get("household_id", -1))
 			var chosen_hid: int = other_hid
@@ -834,6 +939,8 @@ static func get_affiliation_action_for_pawn(pawn: Variant) -> Dictionary:
 			}
 	elif next_level == "clan":
 		var clan_id: int = _deterministic_clan_id(data.settlement_id, data.household_id, pawn_id)
+		if learned_bonding > 1.0:
+			clan_id = _deterministic_clan_id(data.settlement_id, data.household_id + int(round(learned_bonding)), pawn_id)
 		_last_affiliation_tick_by_pawn[pawn_id] = tick
 		return {
 			"action": "join_clan",
@@ -842,6 +949,8 @@ static func get_affiliation_action_for_pawn(pawn: Variant) -> Dictionary:
 		}
 	elif next_level == "nation":
 		var nation_id: int = _deterministic_nation_id(data.settlement_id, data.clan_id)
+		if learned_trade > 1.0:
+			nation_id = _deterministic_nation_id(data.settlement_id + int(round(learned_trade)), data.clan_id)
 		_last_affiliation_tick_by_pawn[pawn_id] = tick
 		return {
 			"action": "join_nation",
@@ -1108,6 +1217,7 @@ static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, ident
 			_add_bias(biases, [Job.Type.TRADE_HAUL, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR], 3)
 			_add_settlement_service_bias(biases, profile)
 	_add_human_scale_biases(biases, profile, data)
+	_apply_learning_biases(biases, profile, data)
 	_add_identity_trait_biases(biases, identity)
 	_apply_pressure_bias_to_biases(biases, int(data.id))
 	_clamp_biases(biases, -8, 16)
@@ -1158,6 +1268,25 @@ static func _add_human_scale_biases(biases: Dictionary, profile: Dictionary, dat
 	var belonging_pressure: int = int(round((100 - family_score + 100 - clan_score) / 2.0))
 	if belonging_pressure >= 50 and data.current_profession != HeelKawnianData.Profession.WARRIOR:
 		_add_bias(biases, [Job.Type.MINE, Job.Type.MINE_WALL], -1)
+
+
+static func _apply_learning_biases(biases: Dictionary, profile: Dictionary, data: HeelKawnianData) -> void:
+	if biases.is_empty() or data == null:
+		return
+
+	var food_bias: int = int(round((_learning_weight_for_job(Job.Type.FORAGE) - 1.0) * 3.0))
+	var resource_bias: int = int(round((_learning_weight_for_job(Job.Type.CHOP) - 1.0) * 3.0))
+	var defense_bias: int = int(round((_learning_weight_for_job(Job.Type.DEFEND) - 1.0) * 3.0))
+	var construction_bias: int = int(round((_learning_weight_for_job(Job.Type.BUILD_WALL) - 1.0) * 3.0))
+
+	if food_bias != 0:
+		_add_bias(biases, [Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH, Job.Type.GROW_FOOD, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS], food_bias)
+	if resource_bias != 0:
+		_add_bias(biases, [Job.Type.CHOP, Job.Type.MINE, Job.Type.MINE_WALL, Job.Type.GATHER_FLINT, Job.Type.GATHER_STICK], resource_bias)
+	if defense_bias != 0:
+		_add_bias(biases, [Job.Type.PROTECT, Job.Type.DEFEND, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER], defense_bias)
+	if construction_bias != 0:
+		_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH, Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_APOTHECARY, Job.Type.BUILD_LIBRARY, Job.Type.BUILD_MARKET, Job.Type.BUILD_CELLAR], construction_bias)
 
 
 static func _add_skill_practice_bias(biases: Dictionary, profile: Dictionary, amount: int) -> void:

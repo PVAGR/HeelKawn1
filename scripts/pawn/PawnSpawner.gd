@@ -793,6 +793,26 @@ func spawn_child_pawn(
 	var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
 	if bloodline_sys != null and bloodline_sys.has_method("assign_birth_bloodline"):
 		data.bloodline_id = int(bloodline_sys.call("assign_birth_bloodline", data.id, data.display_name, int(parent_a.id), int(parent_b.id), ""))
+
+	# HOUSEHOLD ASSIGNMENT - keep newborns inside a real family unit when possible
+	var kinship_sys: Node = get_node_or_null("/root/KinshipSystem")
+	if kinship_sys != null and kinship_sys.has_method("add_to_household"):
+		var parent_a_household: int = int(parent_a.data.household_id)
+		var parent_b_household: int = int(parent_b.data.household_id)
+		var chosen_household: int = -1
+		if parent_a_household >= 0:
+			chosen_household = parent_a_household
+		elif parent_b_household >= 0:
+			chosen_household = parent_b_household
+		else:
+			chosen_household = int(kinship_sys.call("create_household", int(parent_a.id)))
+		if chosen_household >= 0:
+			data.household_id = chosen_household
+			kinship_sys.call("add_to_household", chosen_household, int(data.id))
+			if parent_a_household < 0 and chosen_household == parent_b_household:
+				kinship_sys.call("add_to_household", chosen_household, int(parent_a.id))
+			elif parent_b_household < 0 and chosen_household == parent_a_household:
+				kinship_sys.call("add_to_household", chosen_household, int(parent_b.id))
 	
 	var inbreeding_penalty: float = 0.0
 	if bloodline_sys != null and bloodline_sys.has_method("get_inbreeding_penalty"):
@@ -841,6 +861,7 @@ func spawn_child_pawn(
 		"pawn_name": data.display_name,
 		"parent_a_id": int(parent_a.id),
 		"parent_b_id": int(parent_b.id),
+		"household_id": int(data.household_id),
 		"inbreeding_penalty": inbreeding_penalty,
 		"tile": {"x": tile.x, "y": tile.y},
 		"region": WorldMemory._region_key(tile.x, tile.y),

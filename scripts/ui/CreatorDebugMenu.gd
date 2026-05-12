@@ -2678,6 +2678,7 @@ func _report_heelkawnians() -> void:
 	var drive_counts: Dictionary = {}
 	var phase_counts: Dictionary = {}
 	var total_score: int = 0
+	var kin: Node = get_node_or_null("/root/KinshipSystem")
 	for profile in profiles:
 		var drive: String = str(profile.get("development_drive", "unknown"))
 		var phase: String = str(profile.get("development_phase", "unknown"))
@@ -2711,14 +2712,30 @@ func _report_heelkawnians() -> void:
 				str(profile.get("soul_id", "")).left(12),
 			]
 		)
+		var household_id: int = int(profile.get("household_id", -1))
+		var household_members: int = 0
+		var lineage_parents: int = 0
+		var lineage_children: int = 0
+		if kin != null:
+			if household_id >= 0 and kin.has_method("get_household_members"):
+				var members: Array = kin.call("get_household_members", household_id)
+				household_members = members.size()
+			if kin.has_method("get_lineage_parents"):
+				lineage_parents = (kin.call("get_lineage_parents", int(profile.get("pawn_id", -1))) as Array).size()
+			if kin.has_method("get_lineage_children"):
+				lineage_children = (kin.call("get_lineage_children", int(profile.get("pawn_id", -1))) as Array).size()
 		print(
-			"  phase=%s drive=%s next=%s era=%s dev=%d"
+			"  phase=%s drive=%s next=%s era=%s dev=%d household=%d members=%d parents=%d children=%d"
 			% [
 				str(profile.get("development_phase", "")),
 				str(profile.get("development_drive", "")),
 				str(profile.get("next_need", "")),
 				str(profile.get("era", "")),
 				int(profile.get("development_score", 0)),
+				household_id,
+				household_members,
+				lineage_parents,
+				lineage_children,
 			]
 		)
 		print(
@@ -2761,6 +2778,23 @@ func _report_heelkawnians() -> void:
 				matrix_parts.append("%s+%d" % [str(item.get("job_name", "Job")), int(item.get("bias", 0))])
 			print("  matrix=%s" % (", ".join(matrix_parts) if not matrix_parts.is_empty() else "no strong bias"))
 			print("  rationale=%s" % str(matrix_decision.get("rationale", "")))
+		var learning: Node = get_node_or_null("/root/AIManager")
+		if learning != null and learning.has_method("get_learning"):
+			var learn_node: Node = learning.call("get_learning")
+			if learn_node != null and learn_node.has_method("get_weight"):
+				print(
+					"  learning food=%.2f resource=%.2f military=%.2f defense=%.2f construction=%.2f social=%.2f teach=%.2f trade=%.2f"
+					% [
+						float(learn_node.call("get_weight", "food_production")),
+						float(learn_node.call("get_weight", "resource_gathering")),
+						float(learn_node.call("get_weight", "military_training")),
+						float(learn_node.call("get_weight", "defense_building")),
+						float(learn_node.call("get_weight", "construction")),
+						float(learn_node.call("get_weight", "social_bonding")),
+						float(learn_node.call("get_weight", "knowledge_exchange")),
+						float(learn_node.call("get_weight", "trade_exchange")),
+					]
+				)
 	print("=== END HEELKAWNIAN DEVELOPMENT AI ===")
 
 

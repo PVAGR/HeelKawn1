@@ -24,6 +24,7 @@ var _food_press: float = 0.0
 var _housing_press: float = 0.0
 var _mat_press: float = 0.0
 var _haul_press: float = 0.0
+var _cached_colony_world: World = null
 
 
 func _ready() -> void:
@@ -70,19 +71,29 @@ func _refresh_housing_pressure() -> void:
 	if scene_tree == null:
 		_housing_press = 0.0
 		return
-	var pawns: int = PawnSpawner.find_pawns().size()
+	var pawns: int = PawnSpawner.find_alive_pawns().size()
 	if pawns <= 0:
 		_housing_press = 0.0
 		return
-	var beds: int = 0
-	for n in scene_tree.get_nodes_in_group("colony_world"):
-		if n is World:
-			beds = (n as World).bed_count()
-			break
+	var world: World = _get_colony_world()
+	var beds: int = world.bed_count() if world != null else 0
 	if beds >= pawns:
 		_housing_press = 0.0
 	else:
 		_housing_press = clamp(float(pawns - beds) / float(pawns), 0.0, 1.0)
+
+
+func _get_colony_world() -> World:
+	if _cached_colony_world != null and is_instance_valid(_cached_colony_world):
+		return _cached_colony_world
+	var scene_tree: SceneTree = get_tree()
+	if scene_tree == null:
+		return null
+	for n in scene_tree.get_nodes_in_group("colony_world"):
+		if n is World:
+			_cached_colony_world = n as World
+			return _cached_colony_world
+	return null
 
 
 func get_stance_display() -> String:

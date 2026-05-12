@@ -7,6 +7,7 @@ extends Node
 # Autoload references
 @onready var WorldAI = get_node_or_null("/root/WorldAI")
 @onready var TickManager = get_node_or_null("/root/TickManager")
+var _cached_colony_world: World = null
 
 signal job_posted(job: Job)
 signal job_claimed(job: Job, pawn: HeelKawnian)
@@ -36,6 +37,10 @@ var _jobs_by_tile: Dictionary = {}
 var _jobs_data_generation: int = 0
 var _active_jobs_union_gen_built: int = -1
 var _active_jobs_union_cached: Array[Job] = []
+var _open_counts_by_type_gen_built: int = -1
+var _open_counts_by_type_cached: Dictionary = {}
+var _pending_counts_by_type_gen_built: int = -1
+var _pending_counts_by_type_cached: Dictionary = {}
 
 ## Lifetime counters (stats only).
 var posted_count: int = 0
@@ -460,35 +465,19 @@ func get_abandon_stats() -> Dictionary:
 ## Count open (unclaimed) jobs of a specific type. Used by planners to avoid
 ## over-posting when the queue is already full.
 func count_open_by_type(job_type: int) -> int:
-	var n: int = 0
-	for j in _open:
-		if j.type == job_type:
-			n += 1
-	return n
+	return int(_get_open_counts_by_type().get(job_type, 0))
 
 
 ## Count both open and claimed jobs of a specific type. Gives a fuller picture
 ## of how much work is queued for a given build type.
 func count_pending_by_type(job_type: int) -> int:
-	var n: int = 0
-	for j in _open:
-		if j.type == job_type:
-			n += 1
-	for j in _claimed:
-		if j.type == job_type:
-			n += 1
-	return n
+	return int(_get_pending_counts_by_type().get(job_type, 0))
 
 
 ## Snapshot pending (open + claimed) counts by job type.
 ## Useful for planners that need many type lookups in one pass.
 func get_pending_counts() -> Dictionary:
-	var counts: Dictionary = {}
-	for j in _open:
-		counts[j.type] = int(counts.get(j.type, 0)) + 1
-	for j in _claimed:
-		counts[j.type] = int(counts.get(j.type, 0)) + 1
-	return counts
+	return _get_pending_counts_by_type().duplicate()
 
 
 ## True if there is already a job (open or claimed) at this tile. Used by
@@ -499,14 +488,29 @@ func has_job_at(tile: Vector2i) -> bool:
 
 ## Count of currently-active (open + claimed) jobs of a given type.
 func active_count_of_type(type: int) -> int:
-	var n: int = 0
+	return int(_get_pending_counts_by_type().get(type, 0))
+
+
+func _get_open_counts_by_type() -> Dictionary:
+	if _open_counts_by_type_gen_built == _jobs_data_generation:
+		return _open_counts_by_type_cached
+	_open_counts_by_type_cached.clear()
 	for j in _open:
-		if j.type == type:
-			n += 1
+		_open_counts_by_type_cached[j.type] = int(_open_counts_by_type_cached.get(j.type, 0)) + 1
+	_open_counts_by_type_gen_built = _jobs_data_generation
+	return _open_counts_by_type_cached
+
+
+func _get_pending_counts_by_type() -> Dictionary:
+	if _pending_counts_by_type_gen_built == _jobs_data_generation:
+		return _pending_counts_by_type_cached
+	_pending_counts_by_type_cached.clear()
+	for j in _open:
+		_pending_counts_by_type_cached[j.type] = int(_pending_counts_by_type_cached.get(j.type, 0)) + 1
 	for j in _claimed:
-		if j.type == type:
-			n += 1
-	return n
+		_pending_counts_by_type_cached[j.type] = int(_pending_counts_by_type_cached.get(j.type, 0)) + 1
+	_pending_counts_by_type_gen_built = _jobs_data_generation
+	return _pending_counts_by_type_cached
 
 
 func stats() -> Dictionary:
@@ -570,10 +574,19 @@ func _on_world_tick(_tick_number: int) -> void:
 func _notify_path_reservation_released(j: Job) -> void:
 	if j == null or j.type != Job.Type.BUILD_WALL:
 		return
+	var world: World = _get_colony_world()
+	if world != null:
+		world.on_construction_path_job_ended(j)
+
+
+func _get_colony_world() -> World:
+	if _cached_colony_world != null and is_instance_valid(_cached_colony_world):
+		return _cached_colony_world
 	var scene_tree: SceneTree = get_tree()
 	if scene_tree == null:
-		return
+		return null
 	for w in scene_tree.get_nodes_in_group("colony_world"):
 		if w is World:
-			(w as World).on_construction_path_job_ended(j)
-			return
+			_cached_colony_world = w as World
+			return _cached_colony_world
+	return null

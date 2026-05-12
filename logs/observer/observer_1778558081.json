@@ -1,0 +1,683 @@
+{
+	"canon_guards": [
+		{
+			"detail": "max_speed=100.0",
+			"name": "speed_cap_100x",
+			"pass": true
+		},
+		{
+			"detail": "gm=1.000 simtime=1.000",
+			"name": "simtime_tick_interval_match",
+			"pass": true
+		},
+		{
+			"detail": "present=true",
+			"name": "settlement_memory_autoload_present",
+			"pass": true
+		}
+	],
+	"created_unix": 1778558119,
+	"pass_ratio_threshold": 2.0,
+	"results": [
+		{
+			"elapsed_s": 22.397,
+			"expected_s": 20.0,
+			"perf": {
+				"pathfinder": {
+					"historic_paths_solved_total": 26,
+					"max_paths_solved_in_tick": 9,
+					"path_cache_hits": 0,
+					"path_cache_misses": 4,
+					"plain_paths_solved_total": 4,
+					"total_paths_solved": 30
+				},
+				"tick_manager": {
+					"backlog_protection_hits": 0,
+					"max_ticks_processed_seen": 1,
+					"tickables_called_last_frame": 0,
+					"ticks_processed_last_frame": 0
+				}
+			},
+			"ratio": 1.11985,
+			"speed": 1.0,
+			"status": "PASS",
+			"ticks": 20
+		},
+		{
+			"elapsed_s": 6.652,
+			"expected_s": 6.66666666666667,
+			"perf": {
+				"pathfinder": {
+					"historic_paths_solved_total": 26,
+					"max_paths_solved_in_tick": 9,
+					"path_cache_hits": 0,
+					"path_cache_misses": 13,
+					"plain_paths_solved_total": 13,
+					"total_paths_solved": 39
+				},
+				"tick_manager": {
+					"backlog_protection_hits": 0,
+					"max_ticks_processed_seen": 1,
+					"tickables_called_last_frame": 0,
+					"ticks_processed_last_frame": 0
+				}
+			},
+			"ratio": 0.9978,
+			"speed": 3.0,
+			"status": "PASS",
+			"ticks": 20
+		},
+		{
+			"elapsed_s": 3.416,
+			"expected_s": 3.33333333333333,
+			"perf": {
+				"pathfinder": {
+					"historic_paths_solved_total": 26,
+					"max_paths_solved_in_tick": 9,
+					"path_cache_hits": 0,
+					"path_cache_misses": 28,
+					"plain_paths_solved_total": 28,
+					"total_paths_solved": 54
+				},
+				"tick_manager": {
+					"backlog_protection_hits": 0,
+					"max_ticks_processed_seen": 1,
+					"tickables_called_last_frame": 0,
+					"ticks_processed_last_frame": 0
+				}
+			},
+			"ratio": 1.0248,
+			"speed": 6.0,
+			"status": "PASS",
+			"ticks": 20
+		},
+		{
+			"elapsed_s": 1.665,
+			"expected_s": 1.66666666666667,
+			"perf": {
+				"pathfinder": {
+					"historic_paths_solved_total": 26,
+					"max_paths_solved_in_tick": 9,
+					"path_cache_hits": 0,
+					"path_cache_misses": 48,
+					"plain_paths_solved_total": 48,
+					"total_paths_solved": 74
+				},
+				"tick_manager": {
+					"backlog_protection_hits": 0,
+					"max_ticks_processed_seen": 1,
+					"tickables_called_last_frame": 34,
+					"ticks_processed_last_frame": 1
+				}
+			},
+			"ratio": 0.999,
+			"speed": 12.0,
+			"status": "PASS",
+			"ticks": 20
+		},
+		{
+			"elapsed_s": 0.739,
+			"expected_s": 0.769230769230769,
+			"perf": {
+				"pathfinder": {
+					"historic_paths_solved_total": 26,
+					"max_paths_solved_in_tick": 9,
+					"path_cache_hits": 0,
+					"path_cache_misses": 58,
+					"plain_paths_solved_total": 58,
+					"total_paths_solved": 84
+				},
+				"tick_manager": {
+					"backlog_protection_hits": 0,
+					"max_ticks_processed_seen": 1,
+					"tickables_called_last_frame": 0,
+					"ticks_processed_last_frame": 0
+				}
+			},
+			"ratio": 0.9607,
+			"speed": 26.0,
+			"status": "PASS",
+			"ticks": 20
+		},
+		{
+			"elapsed_s": 0.391,
+			"expected_s": 0.4,
+			"perf": {
+				"pathfinder": {
+					"historic_paths_solved_total": 26,
+					"max_paths_solved_in_tick": 9,
+					"path_cache_hits": 0,
+					"path_cache_misses": 72,
+					"plain_paths_solved_total": 71,
+					"total_paths_solved": 97
+				},
+				"tick_manager": {
+					"backlog_protection_hits": 0,
+					"max_ticks_processed_seen": 3,
+					"tickables_called_last_frame": 0,
+					"ticks_processed_last_frame": 0
+				}
+			},
+			"ratio": 0.9775,
+			"speed": 50.0,
+			"status": "PASS",
+			"ticks": 20
+		},
+		{
+			"elapsed_s": 0.194,
+			"expected_s": 0.2,
+			"perf": {
+				"pathfinder": {
+					"historic_paths_solved_total": 26,
+					"max_paths_solved_in_tick": 9,
+					"path_cache_hits": 0,
+					"path_cache_misses": 79,
+					"plain_paths_solved_total": 78,
+					"total_paths_solved": 104
+				},
+				"tick_manager": {
+					"backlog_protection_hits": 0,
+					"max_ticks_processed_seen": 3,
+					"tickables_called_last_frame": 34,
+					"ticks_processed_last_frame": 1
+				}
+			},
+			"ratio": 0.97,
+			"speed": 100.0,
+			"status": "PASS",
+			"ticks": 20
+		}
+	],
+	"session_id": "observer_1778558081",
+	"stall_timeout_ms": 30000,
+	"summary": {
+		"ended_at_tick": 140,
+		"failures": 0
+	},
+	"ticks_per_sample": 20,
+	"timeline": [
+		{
+			"payload": {
+				"speed": 1.0,
+				"start_tick": 0,
+				"target_ticks": 20
+			},
+			"tick": 0,
+			"time_ms": 7801,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"day_within_year": 1,
+				"tick": 1,
+				"year": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "calendar_day"
+		},
+		{
+			"payload": {
+				"center_region": 0,
+				"snapshot": "active|council|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"center_region": 5,
+				"snapshot": "active|anarchy|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"center_region": 196617,
+				"snapshot": "active|anarchy|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"center_region": 262158,
+				"snapshot": "active|anarchy|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"center_region": 327685,
+				"snapshot": "active|anarchy|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"center_region": 393222,
+				"snapshot": "active|anarchy|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"center_region": 393228,
+				"snapshot": "active|anarchy|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"center_region": 458752,
+				"snapshot": "active|anarchy|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"center_region": 524296,
+				"snapshot": "active|anarchy|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"center_region": 589826,
+				"snapshot": "active|anarchy|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"center_region": 655368,
+				"snapshot": "active|anarchy|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"center_region": 655370,
+				"snapshot": "active|anarchy|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"center_region": 786438,
+				"snapshot": "active|anarchy|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"center_region": 917515,
+				"snapshot": "active|anarchy|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"center_region": 917518,
+				"snapshot": "active|anarchy|peace",
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "settlement_state_change"
+		},
+		{
+			"payload": {
+				"bucket": 1,
+				"open_jobs": 48,
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 9259,
+			"type": "job_pressure_bucket"
+		},
+		{
+			"payload": {
+				"bucket": 0,
+				"open_jobs": 24,
+				"tick": 4
+			},
+			"tick": 4,
+			"time_ms": 12770,
+			"type": "job_pressure_bucket"
+		},
+		{
+			"payload": {
+				"elapsed_s": 22.397,
+				"expected_s": 20.0,
+				"perf": {
+					"pathfinder": {
+						"historic_paths_solved_total": 26,
+						"max_paths_solved_in_tick": 9,
+						"path_cache_hits": 0,
+						"path_cache_misses": 4,
+						"plain_paths_solved_total": 4,
+						"total_paths_solved": 30
+					},
+					"tick_manager": {
+						"backlog_protection_hits": 0,
+						"max_ticks_processed_seen": 1,
+						"tickables_called_last_frame": 0,
+						"ticks_processed_last_frame": 0
+					}
+				},
+				"ratio": 1.11985,
+				"speed": 1.0,
+				"status": "PASS",
+				"ticks": 20
+			},
+			"tick": 20,
+			"time_ms": 30199,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 3.0,
+				"start_tick": 20,
+				"target_ticks": 20
+			},
+			"tick": 20,
+			"time_ms": 30219,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"bucket": 1,
+				"open_jobs": 33,
+				"tick": 21
+			},
+			"tick": 21,
+			"time_ms": 30531,
+			"type": "job_pressure_bucket"
+		},
+		{
+			"payload": {
+				"elapsed_s": 6.652,
+				"expected_s": 6.66666666666667,
+				"perf": {
+					"pathfinder": {
+						"historic_paths_solved_total": 26,
+						"max_paths_solved_in_tick": 9,
+						"path_cache_hits": 0,
+						"path_cache_misses": 13,
+						"plain_paths_solved_total": 13,
+						"total_paths_solved": 39
+					},
+					"tick_manager": {
+						"backlog_protection_hits": 0,
+						"max_ticks_processed_seen": 1,
+						"tickables_called_last_frame": 0,
+						"ticks_processed_last_frame": 0
+					}
+				},
+				"ratio": 0.9978,
+				"speed": 3.0,
+				"status": "PASS",
+				"ticks": 20
+			},
+			"tick": 40,
+			"time_ms": 36872,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 6.0,
+				"start_tick": 40,
+				"target_ticks": 20
+			},
+			"tick": 40,
+			"time_ms": 36886,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"elapsed_s": 3.416,
+				"expected_s": 3.33333333333333,
+				"perf": {
+					"pathfinder": {
+						"historic_paths_solved_total": 26,
+						"max_paths_solved_in_tick": 9,
+						"path_cache_hits": 0,
+						"path_cache_misses": 28,
+						"plain_paths_solved_total": 28,
+						"total_paths_solved": 54
+					},
+					"tick_manager": {
+						"backlog_protection_hits": 0,
+						"max_ticks_processed_seen": 1,
+						"tickables_called_last_frame": 0,
+						"ticks_processed_last_frame": 0
+					}
+				},
+				"ratio": 1.0248,
+				"speed": 6.0,
+				"status": "PASS",
+				"ticks": 20
+			},
+			"tick": 60,
+			"time_ms": 40302,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 12.0,
+				"start_tick": 60,
+				"target_ticks": 20
+			},
+			"tick": 60,
+			"time_ms": 40320,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"elapsed_s": 1.665,
+				"expected_s": 1.66666666666667,
+				"perf": {
+					"pathfinder": {
+						"historic_paths_solved_total": 26,
+						"max_paths_solved_in_tick": 9,
+						"path_cache_hits": 0,
+						"path_cache_misses": 48,
+						"plain_paths_solved_total": 48,
+						"total_paths_solved": 74
+					},
+					"tick_manager": {
+						"backlog_protection_hits": 0,
+						"max_ticks_processed_seen": 1,
+						"tickables_called_last_frame": 34,
+						"ticks_processed_last_frame": 1
+					}
+				},
+				"ratio": 0.999,
+				"speed": 12.0,
+				"status": "PASS",
+				"ticks": 20
+			},
+			"tick": 80,
+			"time_ms": 41984,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 26.0,
+				"start_tick": 80,
+				"target_ticks": 20
+			},
+			"tick": 80,
+			"time_ms": 41999,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"bucket": 2,
+				"open_jobs": 55,
+				"tick": 81
+			},
+			"tick": 81,
+			"time_ms": 42016,
+			"type": "job_pressure_bucket"
+		},
+		{
+			"payload": {
+				"elapsed_s": 0.739,
+				"expected_s": 0.769230769230769,
+				"perf": {
+					"pathfinder": {
+						"historic_paths_solved_total": 26,
+						"max_paths_solved_in_tick": 9,
+						"path_cache_hits": 0,
+						"path_cache_misses": 58,
+						"plain_paths_solved_total": 58,
+						"total_paths_solved": 84
+					},
+					"tick_manager": {
+						"backlog_protection_hits": 0,
+						"max_ticks_processed_seen": 1,
+						"tickables_called_last_frame": 0,
+						"ticks_processed_last_frame": 0
+					}
+				},
+				"ratio": 0.9607,
+				"speed": 26.0,
+				"status": "PASS",
+				"ticks": 20
+			},
+			"tick": 100,
+			"time_ms": 42737,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 50.0,
+				"start_tick": 100,
+				"target_ticks": 20
+			},
+			"tick": 100,
+			"time_ms": 42753,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"bucket": 1,
+				"open_jobs": 48,
+				"tick": 116
+			},
+			"tick": 116,
+			"time_ms": 43120,
+			"type": "job_pressure_bucket"
+		},
+		{
+			"payload": {
+				"elapsed_s": 0.391,
+				"expected_s": 0.4,
+				"perf": {
+					"pathfinder": {
+						"historic_paths_solved_total": 26,
+						"max_paths_solved_in_tick": 9,
+						"path_cache_hits": 0,
+						"path_cache_misses": 72,
+						"plain_paths_solved_total": 71,
+						"total_paths_solved": 97
+					},
+					"tick_manager": {
+						"backlog_protection_hits": 0,
+						"max_ticks_processed_seen": 3,
+						"tickables_called_last_frame": 0,
+						"ticks_processed_last_frame": 0
+					}
+				},
+				"ratio": 0.9775,
+				"speed": 50.0,
+				"status": "PASS",
+				"ticks": 20
+			},
+			"tick": 120,
+			"time_ms": 43144,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 100.0,
+				"start_tick": 120,
+				"target_ticks": 20
+			},
+			"tick": 120,
+			"time_ms": 43163,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"elapsed_s": 0.194,
+				"expected_s": 0.2,
+				"perf": {
+					"pathfinder": {
+						"historic_paths_solved_total": 26,
+						"max_paths_solved_in_tick": 9,
+						"path_cache_hits": 0,
+						"path_cache_misses": 79,
+						"plain_paths_solved_total": 78,
+						"total_paths_solved": 104
+					},
+					"tick_manager": {
+						"backlog_protection_hits": 0,
+						"max_ticks_processed_seen": 3,
+						"tickables_called_last_frame": 34,
+						"ticks_processed_last_frame": 1
+					}
+				},
+				"ratio": 0.97,
+				"speed": 100.0,
+				"status": "PASS",
+				"ticks": 20
+			},
+			"tick": 140,
+			"time_ms": 43358,
+			"type": "speed_end"
+		}
+	]
+}

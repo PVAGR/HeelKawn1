@@ -80,7 +80,25 @@ var _pawn_by_id_dirty: bool = true
 ## instead of get_nodes_in_group("pawns"), which traverses the entire scene tree.
 ## The array is maintained on spawn/death — no per-tick allocation.
 func get_all_pawns() -> Array[HeelKawnian]:
+	_prune_invalid_pawns()
 	return pawns
+
+
+func get_pawns() -> Array[HeelKawnian]:
+	_prune_invalid_pawns()
+	var out: Array[HeelKawnian] = []
+	out.append_array(pawns)
+	return out
+
+
+func get_alive_pawns() -> Array[HeelKawnian]:
+	_prune_invalid_pawns()
+	var alive: Array[HeelKawnian] = []
+	for p in pawns:
+		if p != null and is_instance_valid(p) and p.data != null and not bool(p.data.is_dead):
+			alive.append(p)
+	return alive
+
 
 ## OPTIMIZATION: Get pawn by ID in O(1) time
 func get_pawn_by_id(pawn_id: int) -> HeelKawnian:
@@ -101,6 +119,19 @@ func invalidate_pawn_dict() -> void:
 	_pawn_by_id_dirty = true
 
 
+func _prune_invalid_pawns() -> void:
+	var changed: bool = false
+	var i: int = pawns.size() - 1
+	while i >= 0:
+		var p: HeelKawnian = pawns[i]
+		if p == null or not is_instance_valid(p):
+			pawns.remove_at(i)
+			changed = true
+		i -= 1
+	if changed:
+		invalidate_pawn_dict()
+
+
 ## Static: find the PawnSpawner and return its cached pawn list.
 ## Returns empty array if PawnSpawner not found (e.g. during early boot).
 ## Use this from autoloads that don't have a direct reference to PawnSpawner.
@@ -109,6 +140,7 @@ static var _cached_spawner: PawnSpawner = null
 
 static func find_pawns() -> Array[HeelKawnian]:
 	if _cached_spawner != null and is_instance_valid(_cached_spawner):
+		_cached_spawner._prune_invalid_pawns()
 		return _cached_spawner.pawns
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	if tree == null:
@@ -120,7 +152,17 @@ static func find_pawns() -> Array[HeelKawnian]:
 	if ps == null:
 		return []
 	_cached_spawner = ps
+	ps._prune_invalid_pawns()
 	return ps.pawns
+
+
+static func find_alive_pawns() -> Array[HeelKawnian]:
+	if _cached_spawner != null and is_instance_valid(_cached_spawner):
+		return _cached_spawner.get_alive_pawns()
+	find_pawns()
+	if _cached_spawner != null and is_instance_valid(_cached_spawner):
+		return _cached_spawner.get_alive_pawns()
+	return []
 
 ## OPTIMIZATION: Static O(1) pawn lookup by ID
 static func find_pawn_by_id(pawn_id: int) -> HeelKawnian:

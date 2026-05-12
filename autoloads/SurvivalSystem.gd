@@ -18,6 +18,7 @@ const ENERGY_DECAY_RATE: float = 0.002  # ~50,000 ticks to exhaust from full (~1
 const STAMINA_DECAY_RATE: float = 0.004  # ~25,000 ticks to deplete from full (~7 hours at 1 tick/sec)
 const EARLY_SURVIVAL_PROTECTION_DAYS: int = 35
 const FIRST_YEAR_HARMFUL_SLOWDOWN: float = 300.0
+const SURVIVAL_PAWN_BATCH_COUNT: int = 4
 
 # Work multipliers (faster decay when working)
 const WORK_HUNGER_MULT: float = 1.5    # Working pawns get hungry 1.5x faster
@@ -74,6 +75,7 @@ const MOODLETS: Dictionary = {
 @onready var _world_memory: Node = null
 @onready var _pawn_spawner: Node = null
 @onready var _body_risk_manager: Node = null
+var _last_survival_processed_tick_by_pawn_id: Dictionary = {}
 
 
 func _ready() -> void:
@@ -97,21 +99,66 @@ func _on_game_tick(tick: int) -> void:
 	if tick % interval != 0:
 		return
 	# Process survival for all pawns.
-	var pawns: Array[HeelKawnian] = PawnSpawner.find_pawns()
+	var pawns: Array[HeelKawnian] = PawnSpawner.find_alive_pawns()
 	if pawns.is_empty():
 		return
 
+	var alive_ids: Dictionary = {}
 	for pawn in pawns:
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue
-		
-		_process_survival(pawn, tick)
+		var data: RefCounted = pawn.data
+		var pawn_id: int = int(data.id)
+		alive_ids[pawn_id] = true
+
+		# Keep fatal-state and duplicate-death protection frequent; batch the
+		# expensive body/mood/injury upkeep below.
+		_check_death_conditions(pawn, tick)
+		if "is_dead" in data and bool(data.is_dead):
+			continue
+		if not _pawn_in_batch(pawn, tick, SURVIVAL_PAWN_BATCH_COUNT):
+			continue
+
+		var last_processed_tick: int = int(_last_survival_processed_tick_by_pawn_id.get(pawn_id, tick - interval))
+		var elapsed_ticks: int = maxi(1, tick - last_processed_tick)
+		_last_survival_processed_tick_by_pawn_id[pawn_id] = tick
+		_process_survival(pawn, tick, elapsed_ticks)
+
+	var stale_ids: Array = []
+	for pid in _last_survival_processed_tick_by_pawn_id.keys():
+		if not alive_ids.has(pid):
+			stale_ids.append(pid)
+	for pid in stale_ids:
+		_last_survival_processed_tick_by_pawn_id.erase(pid)
+
+
+func _pawn_stable_batch_id(pawn: Node) -> int:
+	if pawn == null:
+		return 0
+	if pawn.has_method("get_stable_id"):
+		return int(pawn.call("get_stable_id"))
+	var data = pawn.get("data")
+	if data != null and "id" in data:
+		return int(data.id)
+	var stable_id = pawn.get("stable_id")
+	if stable_id != null:
+		return int(stable_id)
+	var pawn_id = pawn.get("pawn_id")
+	if pawn_id != null:
+		return int(pawn_id)
+	return int(pawn.get_instance_id())
+
+
+func _pawn_in_batch(pawn: Node, tick: int, batch_count: int) -> bool:
+	var safe_batch_count: int = maxi(1, batch_count)
+	return posmod(_pawn_stable_batch_id(pawn), safe_batch_count) == posmod(tick, safe_batch_count)
 
 
 # ==================== MAIN SURVIVAL PROCESS ====================
 
-func _process_survival(pawn: Node, tick: int) -> void:
+func _process_survival(pawn: Node, tick: int, elapsed_ticks: int = 1) -> void:
 	var data: RefCounted = pawn.data
+	var tick_delta: int = maxi(1, elapsed_ticks)
 
 	# Safety: clamp mood to valid range (guards against legacy corruption)
 	if data.mood != null and (data.mood < 0.0 or data.mood > 100.0):
@@ -127,20 +174,20 @@ func _process_survival(pawn: Node, tick: int) -> void:
 	# Decay needs — HeelKawnian.gd _decay_needs already handles hunger/rest/thirst
 	# with sleeping rates and personality multipliers. Only decay stamina here
 	# (HeelKawnian.gd doesn't handle stamina). Moodlets are still applied below.
-	_decay_stamina(data, work_mult)
+	_decay_stamina(data, work_mult, tick_delta)
 
 	# Apply moodlets from current conditions (hunger/thirst/etc are
 	# decayed by HeelKawnian.gd, but moodlets are managed here).
 	_apply_condition_moodlets(data)
 	
 	# Update wetness from weather
-	_update_wetness(data)
+	_update_wetness(data, tick_delta)
 	
 	# Regulate body temperature
-	_regulate_temperature(pawn, tick)
+	_regulate_temperature(pawn, tick, tick_delta)
 	
 	# Process injuries
-	_process_injuries(data, tick)
+	_process_injuries(data, tick, tick_delta)
 	
 	# Apply moodlets from conditions
 	_apply_moodlets(pawn, tick)
@@ -208,17 +255,17 @@ func _decay_energy(data: RefCounted, work_mult: float) -> void:
 		_apply_moodlet(data, "rested")
 
 
-func _decay_stamina(data: RefCounted, work_mult: float) -> void:
+func _decay_stamina(data: RefCounted, work_mult: float, tick_delta: int = 1) -> void:
 	if data.stamina == null:
 		return
 
-	var decay: float = STAMINA_DECAY_RATE * work_mult
+	var decay: float = STAMINA_DECAY_RATE * work_mult * float(maxi(1, tick_delta))
 	data.stamina = maxf(0.0, data.stamina - decay)
 
 
 # ==================== TEMPERATURE REGULATION ====================
 
-func _regulate_temperature(pawn: Node, tick: int) -> void:
+func _regulate_temperature(pawn: Node, tick: int, tick_delta: int = 1) -> void:
 	var data: RefCounted = pawn.data
 	if data.body_temperature == null:
 		return
@@ -258,7 +305,9 @@ func _regulate_temperature(pawn: Node, tick: int) -> void:
 
 	# Gradually adjust body temperature (slower during grace)
 	var lerp_rate: float = 0.01 * (1.0 - grace_frac * 0.8) * _harmful_pressure_scale(tick)
-	var temp_change: float = lerp(current_temp, target_temp, lerp_rate)
+	var tick_delta_f: float = float(maxi(1, tick_delta))
+	var adjusted_lerp_rate: float = 1.0 - pow(1.0 - clampf(lerp_rate, 0.0, 1.0), tick_delta_f)
+	var temp_change: float = lerp(current_temp, target_temp, adjusted_lerp_rate)
 	data.body_temperature = temp_change
 	
 	# Apply temperature moodlets
@@ -275,7 +324,7 @@ func _regulate_temperature(pawn: Node, tick: int) -> void:
 	var grace_damage_dur: int = maxi(5000 if is_pio_h else 2500, EARLY_SURVIVAL_PROTECTION_DAYS * SimTime.TICKS_PER_VISUAL_DAY)
 	var grace_suppress: float = clampf(1.0 - float(age_h) / float(grace_damage_dur), 0.0, 1.0)
 	if current_temp < TEMP_HYPOTHERMIA_SEVERE or current_temp > TEMP_HEATSTROKE_SEVERE:
-		var dmg: float = 0.1 * (1.0 - grace_suppress * 0.9) * _harmful_pressure_scale(tick)
+		var dmg: float = 0.1 * (1.0 - grace_suppress * 0.9) * _harmful_pressure_scale(tick) * tick_delta_f
 		data.health = maxf(0.0, data.health - dmg)
 
 
@@ -347,7 +396,7 @@ func _get_environmental_temperature(pawn: Node) -> float:
 
 # ==================== WETNESS SYSTEM ====================
 
-func _update_wetness(data: RefCounted) -> void:
+func _update_wetness(data: RefCounted, tick_delta: int = 1) -> void:
 	# Wetness tracks exposure to precipitation; affects cold vulnerability
 	if data == null:
 		return
@@ -362,10 +411,10 @@ func _update_wetness(data: RefCounted) -> void:
 	
 	if is_precipitating:
 		# Get wet under rain/snow — caps at 100
-		wetness_val = minf(100.0, wetness_val + 1.0)
+		wetness_val = minf(100.0, wetness_val + 1.0 * float(maxi(1, tick_delta)))
 	else:
 		# Dry off when no precipitation
-		wetness_val = maxf(0.0, wetness_val - 0.5)
+		wetness_val = maxf(0.0, wetness_val - 0.5 * float(maxi(1, tick_delta)))
 	
 	# Shelter reduces wetness gain / speeds drying
 	var tile: Vector2i = Vector2i.ZERO
@@ -377,9 +426,9 @@ func _update_wetness(data: RefCounted) -> void:
 			var feat: int = int(world.call("get_feature", tile.x, tile.y))
 			if feat == 3 or feat == 8:  # BED or FIRE_PIT — under cover
 				if is_precipitating:
-					wetness_val = maxf(0.0, wetness_val - 2.0)  # Shelter blocks rain
+					wetness_val = maxf(0.0, wetness_val - 2.0 * float(maxi(1, tick_delta)))  # Shelter blocks rain
 				else:
-					wetness_val = maxf(0.0, wetness_val - 1.0)  # Faster drying by fire
+					wetness_val = maxf(0.0, wetness_val - 1.0 * float(maxi(1, tick_delta)))  # Faster drying by fire
 	
 	if data.has_method("set"):
 		data.set("wetness", wetness_val)
@@ -387,7 +436,7 @@ func _update_wetness(data: RefCounted) -> void:
 
 # ==================== INJURY SYSTEM ====================
 
-func _process_injuries(data: RefCounted, tick: int) -> void:
+func _process_injuries(data: RefCounted, tick: int, tick_delta: int = 1) -> void:
 	if data.injuries == null or not data.injuries is Dictionary:
 		data.injuries = {}
 		return
@@ -399,7 +448,7 @@ func _process_injuries(data: RefCounted, tick: int) -> void:
 		var severity: float = data.injuries[injury_type]
 
 		# Natural healing (1 severity per 100 ticks)
-		severity -= 0.01
+		severity -= 0.01 * float(maxi(1, tick_delta))
 		data.injuries[injury_type] = maxf(0.0, severity)
 
 		# Mark for removal if healed
@@ -408,7 +457,7 @@ func _process_injuries(data: RefCounted, tick: int) -> void:
 
 		# Injuries affect pain
 		if data.pain != null:
-			data.pain = minf(100.0, data.pain + severity * 0.1)
+			data.pain = minf(100.0, data.pain + severity * 0.1 * float(maxi(1, tick_delta)))
 	
 	# Remove healed injuries
 	for injury_type in injuries_to_remove:

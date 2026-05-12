@@ -5,9 +5,8 @@ extends Node
 ##
 ## BURST TICK PATTERN:
 ## At high speeds (100x, 1000x), multiple simulation ticks accumulate in one frame.
-## The `while` loop processes all pending ticks, but is capped by MAX_TICKS_PER_FRAME
-## to prevent hanging. If the cap is hit, we drop the remaining backlog so the
-## sim can recover instead of spiraling forever.
+## The `while` loop processes pending ticks with a per-frame cap, then carries
+## remaining backlog forward honestly. No accumulated simulation time is dropped.
 
 signal tick_processed(tick_number: int)
 
@@ -39,6 +38,7 @@ func _get_frame_budget_usec() -> int:
 ## How often (in ticks) to force-rebuild the tickable cache.
 ## A low value ensures dead nodes are pruned; a high value minimizes overhead.
 const TICKABLE_CACHE_REBUILD_INTERVAL: int = 300
+const BACKLOG_WARNING_INTERVAL_MS: int = 2500
 
 var current_tick: int = 0
 var _accumulated_time: float = 0.0
@@ -65,6 +65,12 @@ var _low_fps_frame_streak: int = 0
 var debug_last_tick_batch_usec: int = 0
 ## Once per backlog spike: warn when accumulated time exceeds 2× target interval until recovered.
 var _backlog_degrade_warned: bool = false
+var _last_backlog_warning_ms: int = -1_000_000
+
+var ticks_processed_last_frame: int = 0
+var tickables_called_last_frame: int = 0
+var backlog_protection_hits: int = 0
+var max_ticks_processed_seen: int = 0
 
 ## Batch processing statistics (for performance monitoring)
 var batch_stats: Dictionary = {
@@ -88,35 +94,25 @@ func mark_tickable_cache_dirty() -> void:
 
 func _process(delta: float) -> void:
 	if _is_paused:
+		ticks_processed_last_frame = 0
+		tickables_called_last_frame = 0
 		return
 	if delta <= 0.0 or _speed_multiplier <= 0.0:
 		_last_frame_ticks = 0
+		ticks_processed_last_frame = 0
+		tickables_called_last_frame = 0
 		return
 
 	# Accumulate scaled time
 	_accumulated_time += delta * _speed_multiplier
-	var current_fps: int = Engine.get_frames_per_second()
-	if current_fps < 30:
-		# Severe: cut aggressively to recover
-		_low_fps_frame_streak += 1
-		if _low_fps_frame_streak >= 3:
-			var floor_ticks: int = maxi(4, _get_max_ticks_per_frame() / 16)
-			_adaptive_max_ticks_per_frame = maxi(floor_ticks, _adaptive_max_ticks_per_frame / 2)
-			_low_fps_frame_streak = 0
-	elif current_fps < 50:
-		# Mild: gentle reduction
-		_low_fps_frame_streak += 1
-		if _low_fps_frame_streak >= 5:
-			_adaptive_max_ticks_per_frame = maxi(8, _adaptive_max_ticks_per_frame - 10)
-			_low_fps_frame_streak = 0
-	else:
-		_low_fps_frame_streak = 0
-		# Gradually restore cap when FPS is healthy
-		if _adaptive_max_ticks_per_frame < _get_max_ticks_per_frame():
-			_adaptive_max_ticks_per_frame = mini(_get_max_ticks_per_frame(), _adaptive_max_ticks_per_frame + 8)
+	# True-speed policy: do not lower the tick cap based on FPS. If the sim falls
+	# behind, carry backlog honestly and make the per-tick workload cheaper.
+	_adaptive_max_ticks_per_frame = _get_max_ticks_per_frame()
+	_low_fps_frame_streak = 0
 
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
+	var tickables_this_frame: int = 0
 
 	# Frame budget: 50ms at normal speeds, 100ms at high speeds.
 	# 100ms keeps the window responsive (well under Windows' 5s kill threshold)
@@ -129,7 +125,7 @@ func _process(delta: float) -> void:
 		_accumulated_time -= TICK_STEP
 		current_tick += 1
 		ticks_this_frame += 1
-		_dispatch_tick(current_tick)
+		tickables_this_frame += _dispatch_tick(current_tick)
 
 		# Critical: if this single tick exceeded the frame budget, yield immediately
 		var single_tick_elapsed: int = Time.get_ticks_usec() - start_time
@@ -142,19 +138,23 @@ func _process(delta: float) -> void:
 			if elapsed > frame_budget_usec:
 				break  # Yield to renderer — remaining ticks deferred to next frame
 
-	# SAFETY: If backlog grows dangerously large (>5x cap),
-	# drop the excess to prevent death spiral. The sim will lose
-	# some ticks but recover instead of hanging forever.
+	# True 100x policy: never clamp backlog by discarding simulation time.
+	# If this warning appears often, the tick workload still needs reduction.
 	var max_backlog: float = TICK_STEP * float(_get_max_ticks_per_frame()) * 5.0
-	if _accumulated_time > max_backlog:
-		if OS.is_debug_build():
-			push_warning("[TickManager] Backlog overflow (%.1f ticks). Dropping excess to prevent hang." % (_accumulated_time / TICK_STEP))
-		_accumulated_time = max_backlog
+	if _accumulated_time > max_backlog and OS.is_debug_build():
+		var now_ms: int = Time.get_ticks_msec()
+		if now_ms - _last_backlog_warning_ms >= BACKLOG_WARNING_INTERVAL_MS:
+			_last_backlog_warning_ms = now_ms
+			push_warning("[TickManager] Backlog %.1f ticks behind; no ticks dropped. Reduce tick workload for true-speed recovery." % (_accumulated_time / TICK_STEP))
 
 	_last_frame_ticks = ticks_this_frame
+	ticks_processed_last_frame = ticks_this_frame
+	tickables_called_last_frame = tickables_this_frame
+	max_ticks_processed_seen = maxi(max_ticks_processed_seen, ticks_this_frame)
+	debug_last_tick_batch_usec = Time.get_ticks_usec() - start_time
 
 
-func _dispatch_tick(tick: int) -> void:
+func _dispatch_tick(tick: int) -> int:
 	## PERFORMANCE NOTE: This is the CRITICAL tick loop.
 	## Expensive operations that should be MOVED out:
 	## 1. Complex pathfinding → use deferred worker or cache results
@@ -179,6 +179,7 @@ func _dispatch_tick(tick: int) -> void:
 	# Keep GameManager in sync for systems that still read tick_count
 	if GameManager != null:
 		GameManager.tick_count = tick
+	return node_count + refcounted_count
 
 
 func _call_tick_on_tickables(tick: int) -> int:
@@ -296,7 +297,12 @@ func reset() -> void:
 	_ticks_behind = 0
 	_last_frame_ticks = 0
 	_backlog_degrade_warned = false
+	_last_backlog_warning_ms = -1_000_000
 	debug_last_tick_batch_usec = 0
+	ticks_processed_last_frame = 0
+	tickables_called_last_frame = 0
+	backlog_protection_hits = 0
+	max_ticks_processed_seen = 0
 	_tickable_cache.clear()
 	_tickable_cache_dirty = true
 	_tickable_cache_last_rebuild_tick = -TICKABLE_CACHE_REBUILD_INTERVAL

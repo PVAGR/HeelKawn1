@@ -2786,12 +2786,9 @@ func _tick_idle() -> void:
 	# Record obey score if available
 	if WorldAI != null and WorldAI.has_method("get_pawn_obedience_weight") and data != null:
 		data.obey_score = WorldAI.get_pawn_obedience_weight(int(data.id))
-	# Simple failure reason: no visible orders vs candidates present but none claimed
+	# Granular failure reason audit after claim attempt
 	if job == null:
-		if visible_candidates.size() == 0:
-			data.last_claim_failure_reason = "no_visible_jobs"
-		else:
-			data.last_claim_failure_reason = "candidates_but_not_chosen"
+		data.last_claim_failure_reason = _audit_claim_failure_reason(visible_candidates)
 	# 7. Nothing to do: idle wander
 	var wanderlust2: float = lerpf(0.52, 1.68, _bp(3))
 	var wander_score: float = _utility_score_normalized("wander", utility_context)
@@ -2911,6 +2908,36 @@ func _utility_action_for_job(job_type: int) -> String:
 			return "trade"
 		_:
 			return "work"
+
+
+func _audit_claim_failure_reason(visible_candidates: Array) -> String:
+	"""Granular audit of why claim failed. Returns specific reason for F10 diagnostics."""
+	# No jobs at all in the queue
+	if JobManager == null or (JobManager.has_member("jobs") and JobManager.jobs.is_empty()):
+		return "no_open_jobs"
+	# Queue has jobs but none visible to this pawn
+	if visible_candidates.is_empty():
+		return "no_visible_orders"
+	# Have visible candidates but none were claimed; check high-priority blockers
+	# Check if carrying item that needs deposit
+	var current_carry: Variant = data.get("current_carry", null) if data != null else null
+	if current_carry != null and str(current_carry).length() > 0:
+		# Pawn is carrying something; may need deposit location
+		# Check if any job is a deposit/storage job
+		var has_storage_job: bool = false
+		for j in visible_candidates:
+			if j is Object and (str(j.type).to_lower().contains("stockpile") or str(j.type).to_lower().contains("store")):
+				has_storage_job = true
+				break
+		if not has_storage_job:
+			return "carrying_item_needs_deposit"
+	# Still have candidates but didn't claim any; could be:
+	# - not meeting skill/profession requirements
+	# - all are reserved by higher-priority pawns
+	# - job targets unreachable
+	# - missing required materials
+	# For now, return generic "candidates_but_not_chosen"
+	return "candidates_but_not_chosen"
 
 
 func _utility_score_normalized(action_type: String, context: Dictionary, cache: Dictionary = {}) -> float:

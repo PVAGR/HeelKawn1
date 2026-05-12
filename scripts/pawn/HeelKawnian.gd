@@ -1,6 +1,6 @@
 
 class_name HeelKawnian
-extends Pawn
+extends Node2D
 
 ## A pawn: data container, tick-driven needs, AI state machine, and
 ## waypoint-following movement. Ticks happen on GameManager.game_tick;

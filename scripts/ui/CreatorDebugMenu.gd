@@ -941,13 +941,13 @@ func _report_colony_truth() -> void:
 	next_action = next_override
 
 	_report_runtime_truth_summary(
-			visual_ok=true, # visual_ok is already gated in selection report; keep summary consistent via conservative manual-click only below
-			selection_ok=selection_ok,
-			colony_ok=colony_ok,
-			food_ok=food_ok,
-			ui_ok=ui_ok,
-			manual_click_ok=manual_click_ok,
-			next_action=next_action
+			true,   # visual_ok (already gated in selection report)
+			selection_ok,
+			colony_ok,
+			food_ok,
+			ui_ok,
+			manual_click_ok,
+			next_action
 	)
 
 

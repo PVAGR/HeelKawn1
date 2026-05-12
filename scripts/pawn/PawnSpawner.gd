@@ -245,46 +245,97 @@ func print_stats() -> void:
 
 
 func spawn_starters(world: World, required_component_id: int = -1) -> void:
-	var rng: RandomNumberGenerator = WorldRNG.rng_for(&"starter_pawns_v1")
+	# Use the largest connected component if no specific component required
+	var target_component_id: int = required_component_id
+	if target_component_id < 0:
+		target_component_id = world.pathfinder.largest_component_id()
+	
 	var used_tiles: Dictionary = {}
 	var placed: int = 0
-	for attempt in range(MAX_PLACEMENT_ATTEMPTS):
-		if placed >= STARTER_COUNT:
+	
+	# Generate candidate tiles distributed across the component
+	var candidate_tiles: Array[Vector2i] = []
+	var world_rng: RandomNumberGenerator = WorldRNG.rng_for(&"pawn_spawn_candidates")
+	
+	# Sample 20 random passable tiles from the component as candidates
+	for i in range(20):
+		var attempts: int = 0
+		while attempts < 100:
+			var tile := Vector2i(
+				world_rng.randi_range(0, WorldData.WIDTH - 1),
+				world_rng.randi_range(0, WorldData.HEIGHT - 1),
+			)
+			attempts += 1
+			
+			# Check if tile is in target component and spawnable
+			if world.pathfinder.component_of(tile) != target_component_id:
+				continue
+			var biome: int = world.data.get_biome(tile.x, tile.y)
+			if not SPAWNABLE_BIOMES.has(biome):
+				continue
+			
+			candidate_tiles.append(tile)
 			break
-		var tile := Vector2i(
-			rng.randi_range(0, WorldData.WIDTH - 1),
-			rng.randi_range(0, WorldData.HEIGHT - 1),
-		)
-		if used_tiles.has(tile):
-			continue
-		var biome: int = world.data.get_biome(tile.x, tile.y)
-		if not SPAWNABLE_BIOMES.has(biome):
-			continue
-		if required_component_id >= 0 and world.pathfinder.component_of(tile) != required_component_id:
-			continue
-		used_tiles[tile] = true
+	
+	# Place each pawn using pawn-specific RNG for determinism
+	for pawn_id in range(STARTER_COUNT):
+		if pawn_id >= candidate_tiles.size():
+			break  # Not enough candidates for all pawns
+		
+		var pawn_rng: RandomNumberGenerator = WorldRNG.rng_for("pawn_spawn_" + str(pawn_id))
+		var best_tile: Vector2i = candidate_tiles[pawn_id % candidate_tiles.size()]
+		
+		# Try to find a tile at least 15 tiles away from other pawns
+		var found_tile: bool = false
+		for attempt in range(50):
+			var test_tile := Vector2i(
+				pawn_rng.randi_range(maxi(0, best_tile.x - 15), mini(WorldData.WIDTH - 1, best_tile.x + 15)),
+				pawn_rng.randi_range(maxi(0, best_tile.y - 15), mini(WorldData.HEIGHT - 1, best_tile.y + 15)),
+			)
+			
+			# Check if this tile is valid and far enough from other pawns
+			if world.pathfinder.component_of(test_tile) != target_component_id:
+				continue
+			var biome: int = world.data.get_biome(test_tile.x, test_tile.y)
+			if not SPAWNABLE_BIOMES.has(biome):
+				continue
+			
+			# Check distance from already placed pawns
+			var too_close: bool = false
+			for other_tile in used_tiles.keys():
+				var distance: int = abs(test_tile.x - other_tile.x) + abs(test_tile.y - other_tile.y)
+				if distance < 15:
+					too_close = true
+					break
+			
+			if not too_close:
+				best_tile = test_tile
+				found_tile = true
+				break
+		
+		used_tiles[best_tile] = true
 
 		var data := HeelKawnianData.new()
 		# DEAD BRAIN REVIVED: NameGenerator generates culture-aware names
 		if NameGenerator != null:
 			data.display_name = NameGenerator.generate_full_name(int(data.id), "nordic", data.gender)
 		else:
-			data.display_name = _pick_name(used_tiles, rng)
-		data.age = rng.randi_range(18, 55)
-		data.gender = rng.randi_range(0, 1)
-		data.tile_pos = tile
+			data.display_name = _pick_name(used_tiles, pawn_rng)
+		data.age = pawn_rng.randi_range(18, 55)
+		data.gender = pawn_rng.randi_range(0, 1)
+		data.tile_pos = best_tile
 		data.color = PAWN_COLORS[placed % PAWN_COLORS.size()]
-		data.body_type = rng.randi_range(HeelKawnianData.BodyType.SLIM, HeelKawnianData.BodyType.BROAD)
-		data.hair_style = rng.randi_range(HeelKawnianData.HairStyle.NONE, HeelKawnianData.HairStyle.BUN)
-		data.hair_color = HAIR_COLORS[rng.randi_range(0, HAIR_COLORS.size() - 1)]
-		data.apparel_color = APPAREL_COLORS[rng.randi_range(0, APPAREL_COLORS.size() - 1)]
-		_assign_random_traits(data, rng)
+		data.body_type = pawn_rng.randi_range(HeelKawnianData.BodyType.SLIM, HeelKawnianData.BodyType.BROAD)
+		data.hair_style = pawn_rng.randi_range(HeelKawnianData.HairStyle.NONE, HeelKawnianData.HairStyle.BUN)
+		data.hair_color = HAIR_COLORS[pawn_rng.randi_range(0, HAIR_COLORS.size() - 1)]
+		data.apparel_color = APPAREL_COLORS[pawn_rng.randi_range(0, APPAREL_COLORS.size() - 1)]
+		_assign_random_traits(data, pawn_rng)
 		
 		# DORMANT WORLD: First-generation pawns are pioneers
 		data.is_pioneer = true
 		data.pioneer_ticks_remaining = 5000
 		# PHASE 4: Assign heterogeneous profession (NOT all farmers!)
-		_assign_heterogeneous_profession(data, rng)
+		_assign_heterogeneous_profession(data, pawn_rng)
 
 		var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
 		if bloodline_sys != null and bloodline_sys.has_method("create_bloodline"):
@@ -295,7 +346,7 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 
 		var pawn: HeelKawnian = pawn_scene.instantiate() as HeelKawnian
 		pawn.data = data
-		pawn.position = world.tile_to_world(tile)
+		pawn.position = world.tile_to_world(best_tile)
 		pawn._world = world
 		add_child(pawn)
 		pawns.append(pawn)

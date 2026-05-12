@@ -2250,9 +2250,8 @@ func _bootstrap_colony() -> void:
 		return
 	WorldMeaning.recompute()
 	WorldPersistence.recompute()
-	_place_stockpile(main_component)
-	# Seed starting supplies so pawns don't die immediately
-	_seed_starting_supplies()
+	# Stockpiles will be created organically by pawns through the StockpileManager
+	# Starting supplies will be gathered organically by pawns from the environment
 	# DEAD BRAIN REVIVED: WorldEventSeedManager initialized on boot
 	if WorldEventSeedManager != null:
 		WorldEventSeedManager.ensure_default_seeds()
@@ -2262,8 +2261,7 @@ func _bootstrap_colony() -> void:
 	# DORMANT WORLD: Pre-discover stockpile area for FogOfDiscovery
 	if FogOfDiscovery != null:
 		FogOfDiscovery.set_world(_world)
-		var sp_center: Vector2i = _world.stockpile.rect.position
-		FogOfDiscovery.discover_area(sp_center.x, sp_center.y, FogOfDiscovery.STOCKPILE_DISCOVERY_RADIUS)
+		# Stockpiles will be created organically, so no initial discovery area needed
 	_player_pawn = _first_live_pawn()
 	_set_selected_pawn(null)
 	_set_player_mode(PlayerMode.SPECTATOR)

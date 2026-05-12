@@ -643,6 +643,7 @@ func build_wall(x: int, y: int) -> bool:
 	# from `data` as non-walkable.
 	if pathfinder != null:
 		pathfinder.set_job_construction_reservation(x, y, false, data)
+		pathfinder.sync_tile_from_data(x, y, data)
 	_bump_occupants_off_tile(x, y)
 	notify_pawns_nav_changed()
 	return true

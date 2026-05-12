@@ -844,7 +844,7 @@ func _report_settlements() -> void:
 		print("[_report_settlements] SettlementMemory.settlements not available")
 		return
 	
-	var settlements_array: Array = settlements as Array
+	var settlements_array: Array = SettlementMemory.get_formal_settlements()
 	var formal_count: int = SettlementMemory.get_formal_settlement_count()
 	var proto_count: int = SettlementMemory.get_proto_sites().size()
 	print("settlement_count=%d formal_settlements=%d proto_sites=%d" % [settlements_array.size(), formal_count, proto_count])
@@ -855,20 +855,20 @@ func _report_settlements() -> void:
 		var st: Dictionary = s as Dictionary
 		print(
 				(
-	var settlements_array: Array = SettlementMemory.get_formal_settlements()
-	var formal_count: int = SettlementMemory.get_formal_settlement_count()
-	var proto_count: int = SettlementMemory.get_proto_sites().size()
-	print("settlement_count=%d formal_settlements=%d proto_sites=%d" % [settlements_array.size(), formal_count, proto_count])
+					"[%d] formal=%s kind=%s state=%s center=%d culture=%s scar_max=%d rev_score=%d peace_thr=%d last_death=%s intent=%s"
+					% [
+						i,
+						str(bool(st.get("is_formal_settlement", false))),
 						str(st.get("settlement_kind", "proto_site")),
-							str(st.get("state", "")),
-							int(st.get("center_region", -1)),
-							str(st.get("culture_name", "")),
-							int(st.get("scar_max", 0)),
-							int(st.get("revival_score", 0)),
-							int(st.get("peace_threshold_ticks", 0)),
-							str(st.get("last_pawn_death_tick", -1)),
-							str(st.get("current_intent", "")),
-						]
+						str(st.get("state", "")),
+						int(st.get("center_region", -1)),
+						str(st.get("culture_name", "")),
+						int(st.get("scar_max", 0)),
+						int(st.get("revival_score", 0)),
+						int(st.get("peace_threshold_ticks", 0)),
+						str(st.get("last_pawn_death_tick", -1)),
+						str(st.get("current_intent", "")),
+					]
 				)
 		)
 		i += 1

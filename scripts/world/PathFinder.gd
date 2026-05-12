@@ -211,7 +211,7 @@ func set_passable(x: int, y: int, passable: bool, data: WorldData) -> void:
 	_bump_nav_version()
 
 
-func _refresh_one_tile(x: int, y: int, data: WorldData) -> void:
+func _refresh_one_tile(x: int, y: int, data: WorldData) -> bool:
 	var p := Vector2i(x, y)
 	if not _astar.region.has_point(p):
 		return false

@@ -71,7 +71,7 @@ func stop() -> void:
 	var should_unpause: bool = _mode == Mode.PLAYBACK and not _paused_before_playback
 	_mode = Mode.IDLE
 	if should_unpause and has_node("/root/GameManager") and GameManager.is_paused:
-		GameManager.unpause()
+		GameManager.resume()
 	mode_changed.emit(_mode_name())
 
 

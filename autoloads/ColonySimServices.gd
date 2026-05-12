@@ -191,7 +191,7 @@ func get_colony_truth() -> Dictionary:
 	
 	# Get stockpile food
 	if StockpileManager != null:
-		stockpile_food = StockpileManager.count_of("food")
+		stockpile_food = StockpileManager.total_food()
 	
 	# Get carried food from living pawns
 	if PawnSpawner != null:

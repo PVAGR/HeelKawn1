@@ -336,6 +336,18 @@ func get_active_gossip() -> Array[Dictionary]:
 	return result
 
 
+## Get recent gossip about a specific pawn (by subject_pawn_id).
+## Returns up to `max_count` gossip dictionaries, newest first.
+func get_gossip_about(pawn_id: int, max_count: int = 3) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for g in _global_gossip:
+		if g.get("subject_pawn_id") == pawn_id:
+			result.append(g)
+			if result.size() >= max_count:
+				break
+	return result
+
+
 ## Debug: get notorious pawns with their reputation
 func get_notorious_report() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []

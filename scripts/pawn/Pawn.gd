@@ -3815,6 +3815,9 @@ func _complete_current_job() -> void:
 			_world.clear_feature(job.tile.x, job.tile.y)
 		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR:
 			_finish_build(job)
+			# If _finish_build triggered a re-fetch, don't complete the job
+			if _state == State.FETCHING_MATERIAL:
+				return
 		_Job.Type.GATHER_FLINT:
 			produced_type = _Item.Type.FLINT
 		_Job.Type.GATHER_STICK:
@@ -3824,6 +3827,9 @@ func _complete_current_job() -> void:
 			produced_type = _Item.Type.NONE  # tool is equipped, not carried
 		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE:
 			_finish_shelter_build(job)
+			# If _finish_shelter_build triggered a re-fetch, don't complete the job
+			if _state == State.FETCHING_MATERIAL:
+				return
 			produced_type = _Item.Type.NONE
 		_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.DRY_MEAT:
 			produced_type = Job.tool_job_output(job.type)
@@ -4048,6 +4054,14 @@ func _finish_shelter_build(job: Job) -> void:
 	
 	# Check if pawn is carrying the required material
 	if data.carrying != item_type or data.carrying_qty < need_qty:
+		# Re-fetch instead of silently failing
+		if GameManager.verbose_logs():
+			print("[Pawn] %s missing material at completion — re-fetching %d %s for %s @(%d,%d)" % [
+				data.display_name, need_qty, Item.name_for(item_type),
+				Job.describe_type(job.type), job.tile.x, job.tile.y
+			])
+		job.work_ticks_done = 0
+		_begin_fetching_material(item_type, need_qty)
 		return
 	
 	# Consume materials

@@ -434,6 +434,17 @@ func set_speed_index(i: int) -> void:
 	set_speed(SPEED_STEPS[i])
 
 
+func get_speed_index() -> int:
+	var best_idx: int = 0
+	var best_dist: float = 999999.0
+	for i in range(SPEED_STEPS.size()):
+		var d: float = absf(SPEED_STEPS[i] - game_speed)
+		if d < best_dist:
+			best_dist = d
+			best_idx = i
+	return best_idx
+
+
 func pause() -> void:
 	if is_paused:
 		return

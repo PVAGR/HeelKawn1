@@ -312,6 +312,10 @@ func get_available_technologies() -> Array:
 			available.append(tech_id)
 	return available
 
+## Compatibility alias used by KnowledgeSystem.get_researchable_techs()
+func get_available_research(_settlement_id: int = -1) -> Array:
+	return get_available_technologies()
+
 ## Get current researching technology
 func get_current_research() -> String:
 	for tech_id in technologies:

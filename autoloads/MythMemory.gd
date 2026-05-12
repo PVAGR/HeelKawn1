@@ -63,6 +63,24 @@ func get_regions_with_myth_state() -> Dictionary:
 	return result
 
 
+## Conflict intensity for a region: derived from WorldMeaning war/conflict tags.
+## Returns 0.0 (peaceful) to 1.0 (intense conflict).
+func get_conflict_intensity(region_key: int) -> float:
+	var meaning: Dictionary = WorldMeaning.get_region_meaning(region_key)
+	var war_tags: int = 0
+	var total_tags: int = 0
+	var tags: Variant = meaning.get("dominant_tags")
+	if tags is Dictionary:
+		for tag in tags:
+			total_tags += 1
+			var tag_str: String = str(tag).to_lower()
+			if tag_str.find("war") >= 0 or tag_str.find("conflict") >= 0 or tag_str.find("battle") >= 0 or tag_str.find("grudge") >= 0:
+				war_tags += 1
+	if total_tags == 0:
+		return 0.0
+	return float(war_tags) / float(total_tags)
+
+
 func recompute(_w: World) -> void:
 	_region_myth.clear()
 	for s in SettlementMemory.settlements:

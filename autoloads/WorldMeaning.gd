@@ -1,4 +1,6 @@
 extends Node
+## Emitted after recompute() finishes updating all region meanings.
+signal meaning_changed
 ## Phase 2.2: deterministic, derived metrics from WorldMemory only.
 ## No writes to WorldMemory, no world mutation, no UI. Interpretation only (RNG allowed only for labeled non-canonical presentation tiers — default paths stay deterministic-from-facts).
 ##
@@ -197,6 +199,7 @@ func recompute() -> void:
 			rec["last_death_tick"] = t
 
 	_last_recompute_event_index = ev_count
+	meaning_changed.emit()
 
 	# Derive total_deaths and death_density (only for regions that got new events)
 	for rk in meaning_by_region.keys():

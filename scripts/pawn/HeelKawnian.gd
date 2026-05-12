@@ -4756,6 +4756,9 @@ func _complete_current_job() -> void:
 					produced_qty = maxi(1, produced_qty - 1)  # Winter scarcity
 		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR:
 			_finish_build(job)
+			# If _finish_build triggered a re-fetch, don't complete the job
+			if _state == State.FETCHING_MATERIAL:
+				return
 		_Job.Type.GATHER_FLINT:
 			produced_type = _Item.Type.FLINT
 		_Job.Type.GATHER_STICK:
@@ -4765,6 +4768,9 @@ func _complete_current_job() -> void:
 			produced_type = _Item.Type.NONE  # tool is equipped, not carried
 		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH:
 			_finish_shelter_build(job)
+			# If _finish_shelter_build triggered a re-fetch, don't complete the job
+			if _state == State.FETCHING_MATERIAL:
+				return
 			produced_type = _Item.Type.NONE
 		# Phase 6: Data-driven building placement via BuildingRegistry
 		_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN, \
@@ -4778,6 +4784,9 @@ func _complete_current_job() -> void:
 		_Job.Type.BUILD_GRANARY, _Job.Type.BUILD_CELLAR, \
 		_Job.Type.BUILD_FORD, _Job.Type.BUILD_WATER_MILL:
 			_finish_registry_build(job)
+			# If _finish_registry_build triggered a re-fetch, don't complete the job
+			if _state == State.FETCHING_MATERIAL:
+				return
 			produced_type = _Item.Type.NONE
 		_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH, _Job.Type.DRY_MEAT:
 			produced_type = Job.tool_job_output(job.type)
@@ -4816,6 +4825,18 @@ func _complete_current_job() -> void:
 			produced_type = _Item.Type.NONE
 		_Job.Type.TEACH_SKILL, _Job.Type.APPRENTICESHIP:
 			_try_complete_knowledge_teaching()
+			produced_type = _Item.Type.NONE
+		_Job.Type.PROTECT, _Job.Type.DEFEND:
+			# Guard duty: record event and mood
+			if WorldMemory != null:
+				WorldMemory.record_event({
+					"type": "guard_duty",
+					"pawn_id": int(data.id),
+					"pawn_name": data.display_name,
+					"job_type": "defend" if job.type == _Job.Type.DEFEND else "protect",
+					"tile": {"x": job.tile.x, "y": job.tile.y},
+					"tick": GameManager.tick_count
+				})
 			produced_type = _Item.Type.NONE
 	# If the pawn is re-fetching materials (build failed material check), don't complete the job yet.
 	# The pawn will walk to the stockpile, fetch, walk back, and re-attempt the build.
@@ -4858,6 +4879,8 @@ func _complete_current_job() -> void:
 			data.add_mood_event(MoodEvent.Type.TRIUMPH, 75.0, 250)  # Harvest rewards patience
 		_Job.Type.VISIT_GRAVE:
 			data.add_mood_event(MoodEvent.Type.JOY, 40.0, 200)  # Comfort from remembrance
+		_Job.Type.PROTECT, _Job.Type.DEFEND:
+			data.add_mood_event(MoodEvent.Type.PRIDE, 55.0, 220)  # Guard duty feels meaningful
 			if WorldMemory != null:
 				WorldMemory.record_event({
 					"type": "grave_visit",

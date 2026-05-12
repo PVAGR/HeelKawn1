@@ -120,8 +120,8 @@ func process(world: World, main: Node2D) -> void:
 		_load_subsystems()
 	
 	# WorldAI is the core AI system and should always run
-	if WorldAI != null and WorldAI.has_method("process"):
-		WorldAI.process(world, main)
+	if WorldAI != null and WorldAI.has_method("update"):
+		WorldAI.update()
 
 ## Generate a name (delegates to NameGenerator if available)
 func generate_name() -> String:

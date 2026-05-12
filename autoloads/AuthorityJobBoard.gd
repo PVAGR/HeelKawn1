@@ -49,8 +49,7 @@ func _on_game_tick(tick: int) -> void:
 		var jobs_to_post: Array = []
 		jobs_to_post.append({
 			"type": Job.Type.BUILD_FIRE_PIT,
-			"tile_x": int(center_tile.x),
-			"tile_y": int(center_tile.y),
+			"tile": Vector2i(int(center_tile.x), int(center_tile.y)),
 			"priority": 80,
 			"work_ticks": 40,
 			"issuer_pawn_id": leader_id,
@@ -62,8 +61,7 @@ func _on_game_tick(tick: int) -> void:
 		})
 		jobs_to_post.append({
 			"type": Job.Type.GATHER_STICK,
-			"tile_x": int(center_tile.x),
-			"tile_y": int(center_tile.y),
+			"tile": Vector2i(int(center_tile.x), int(center_tile.y)),
 			"priority": 40,
 			"work_ticks": 10,
 			"issuer_pawn_id": leader_id,
@@ -75,8 +73,7 @@ func _on_game_tick(tick: int) -> void:
 		})
 		jobs_to_post.append({
 			"type": Job.Type.FORAGE,
-			"tile_x": int(center_tile.x + 2),
-			"tile_y": int(center_tile.y),
+			"tile": Vector2i(int(center_tile.x + 2), int(center_tile.y)),
 			"priority": 60,
 			"work_ticks": 8,
 			"issuer_pawn_id": leader_id,

@@ -158,7 +158,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "registry", "label": "07 · SettlementRegistry"},
 			{"id": "intent", "label": "04 · IntentMemory"},
 			{"id": "jobs_stock", "label": "11 · Jobs + stockpile zones"},
-            {"id": "authority_job_audit", "label": "AUTHORITY JOB AUDIT · authority_job_audit"},
+			{"id": "authority_job_audit", "label": "AUTHORITY JOB AUDIT · authority_job_audit"},
 			{"id": "trade", "label": "12 · TradeMemory"},
 			{"id": "world_events", "label": "13 · WorldEvents"},
 			{"id": "cultural", "label": "18 · CulturalMemory"},

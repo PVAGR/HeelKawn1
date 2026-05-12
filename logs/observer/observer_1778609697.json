@@ -1,0 +1,493 @@
+{
+	"canon_guards": [
+		{
+			"detail": "max_speed=100.0",
+			"name": "speed_cap_100x",
+			"pass": true
+		},
+		{
+			"detail": "gm=1.000 simtime=1.000",
+			"name": "simtime_tick_interval_match",
+			"pass": true
+		},
+		{
+			"detail": "present=true",
+			"name": "settlement_memory_autoload_present",
+			"pass": true
+		}
+	],
+	"created_unix": 1778609702,
+	"pass_ratio_threshold": 2.0,
+	"results": [
+		{
+			"elapsed_s": 1.984,
+			"expected_s": 2.0,
+			"perf": {
+				"pathfinder": {
+					"historic_paths_solved_total": 0,
+					"max_paths_solved_in_tick": 0,
+					"path_cache_hits": 0,
+					"path_cache_misses": 0,
+					"plain_paths_solved_total": 0,
+					"total_paths_solved": 0
+				},
+				"tick_manager": {
+					"backlog_protection_hits": 0,
+					"max_ticks_processed_seen": 1,
+					"tickables_called_last_frame": 0,
+					"ticks_processed_last_frame": 0
+				}
+			},
+			"ratio": 0.992,
+			"speed": 1.0,
+			"status": "PASS",
+			"ticks": 2
+		},
+		{
+			"elapsed_s": 0.665,
+			"expected_s": 0.666666666666667,
+			"perf": {
+				"pathfinder": {
+					"historic_paths_solved_total": 0,
+					"max_paths_solved_in_tick": 0,
+					"path_cache_hits": 0,
+					"path_cache_misses": 0,
+					"plain_paths_solved_total": 0,
+					"total_paths_solved": 0
+				},
+				"tick_manager": {
+					"backlog_protection_hits": 0,
+					"max_ticks_processed_seen": 1,
+					"tickables_called_last_frame": 0,
+					"ticks_processed_last_frame": 0
+				}
+			},
+			"ratio": 0.9975,
+			"speed": 3.0,
+			"status": "PASS",
+			"ticks": 2
+		},
+		{
+			"elapsed_s": 0.18,
+			"expected_s": 0.333333333333333,
+			"perf": {
+				"pathfinder": {
+					"historic_paths_solved_total": 0,
+					"max_paths_solved_in_tick": 0,
+					"path_cache_hits": 0,
+					"path_cache_misses": 0,
+					"plain_paths_solved_total": 0,
+					"total_paths_solved": 0
+				},
+				"tick_manager": {
+					"backlog_protection_hits": 0,
+					"max_ticks_processed_seen": 1,
+					"tickables_called_last_frame": 0,
+					"ticks_processed_last_frame": 0
+				}
+			},
+			"ratio": 0.54,
+			"speed": 6.0,
+			"status": "PASS",
+			"ticks": 2
+		},
+		{
+			"elapsed_s": 0.167,
+			"expected_s": 0.166666666666667,
+			"perf": {
+				"pathfinder": {
+					"historic_paths_solved_total": 0,
+					"max_paths_solved_in_tick": 0,
+					"path_cache_hits": 0,
+					"path_cache_misses": 0,
+					"plain_paths_solved_total": 0,
+					"total_paths_solved": 0
+				},
+				"tick_manager": {
+					"backlog_protection_hits": 0,
+					"max_ticks_processed_seen": 1,
+					"tickables_called_last_frame": 0,
+					"ticks_processed_last_frame": 0
+				}
+			},
+			"ratio": 1.002,
+			"speed": 12.0,
+			"status": "PASS",
+			"ticks": 2
+		},
+		{
+			"elapsed_s": 0.157,
+			"expected_s": 0.0769230769230769,
+			"perf": {
+				"pathfinder": {
+					"historic_paths_solved_total": 0,
+					"max_paths_solved_in_tick": 0,
+					"path_cache_hits": 0,
+					"path_cache_misses": 0,
+					"plain_paths_solved_total": 0,
+					"total_paths_solved": 0
+				},
+				"tick_manager": {
+					"backlog_protection_hits": 0,
+					"max_ticks_processed_seen": 1,
+					"tickables_called_last_frame": 12,
+					"ticks_processed_last_frame": 1
+				}
+			},
+			"ratio": 2.041,
+			"speed": 26.0,
+			"status": "SLOW",
+			"ticks": 2
+		},
+		{
+			"elapsed_s": 0.002,
+			"expected_s": 0.04,
+			"perf": {
+				"pathfinder": {
+					"historic_paths_solved_total": 0,
+					"max_paths_solved_in_tick": 0,
+					"path_cache_hits": 0,
+					"path_cache_misses": 0,
+					"plain_paths_solved_total": 0,
+					"total_paths_solved": 0
+				},
+				"tick_manager": {
+					"backlog_protection_hits": 0,
+					"max_ticks_processed_seen": 1,
+					"tickables_called_last_frame": 12,
+					"ticks_processed_last_frame": 1
+				}
+			},
+			"ratio": 0.05,
+			"speed": 50.0,
+			"status": "PASS",
+			"ticks": 2
+		},
+		{
+			"elapsed_s": 0.088,
+			"expected_s": 0.02,
+			"perf": {
+				"pathfinder": {
+					"historic_paths_solved_total": 0,
+					"max_paths_solved_in_tick": 0,
+					"path_cache_hits": 0,
+					"path_cache_misses": 0,
+					"plain_paths_solved_total": 0,
+					"total_paths_solved": 0
+				},
+				"tick_manager": {
+					"backlog_protection_hits": 0,
+					"max_ticks_processed_seen": 3,
+					"tickables_called_last_frame": 14,
+					"ticks_processed_last_frame": 1
+				}
+			},
+			"ratio": 4.4,
+			"speed": 100.0,
+			"status": "SLOW",
+			"ticks": 2
+		}
+	],
+	"session_id": "observer_1778609697",
+	"stall_timeout_ms": 30000,
+	"summary": {
+		"ended_at_tick": 19,
+		"failures": 2
+	},
+	"ticks_per_sample": 2,
+	"timeline": [
+		{
+			"payload": {
+				"speed": 1.0,
+				"start_tick": 0,
+				"target_ticks": 2
+			},
+			"tick": 0,
+			"time_ms": 7313,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"day_within_year": 1,
+				"tick": 1,
+				"year": 1
+			},
+			"tick": 1,
+			"time_ms": 8281,
+			"type": "calendar_day"
+		},
+		{
+			"payload": {
+				"bucket": 0,
+				"open_jobs": 0,
+				"tick": 1
+			},
+			"tick": 1,
+			"time_ms": 8281,
+			"type": "job_pressure_bucket"
+		},
+		{
+			"payload": {
+				"elapsed_s": 1.984,
+				"expected_s": 2.0,
+				"perf": {
+					"pathfinder": {
+						"historic_paths_solved_total": 0,
+						"max_paths_solved_in_tick": 0,
+						"path_cache_hits": 0,
+						"path_cache_misses": 0,
+						"plain_paths_solved_total": 0,
+						"total_paths_solved": 0
+					},
+					"tick_manager": {
+						"backlog_protection_hits": 0,
+						"max_ticks_processed_seen": 1,
+						"tickables_called_last_frame": 0,
+						"ticks_processed_last_frame": 0
+					}
+				},
+				"ratio": 0.992,
+				"speed": 1.0,
+				"status": "PASS",
+				"ticks": 2
+			},
+			"tick": 2,
+			"time_ms": 9297,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 3.0,
+				"start_tick": 2,
+				"target_ticks": 2
+			},
+			"tick": 2,
+			"time_ms": 9301,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"elapsed_s": 0.665,
+				"expected_s": 0.666666666666667,
+				"perf": {
+					"pathfinder": {
+						"historic_paths_solved_total": 0,
+						"max_paths_solved_in_tick": 0,
+						"path_cache_hits": 0,
+						"path_cache_misses": 0,
+						"plain_paths_solved_total": 0,
+						"total_paths_solved": 0
+					},
+					"tick_manager": {
+						"backlog_protection_hits": 0,
+						"max_ticks_processed_seen": 1,
+						"tickables_called_last_frame": 0,
+						"ticks_processed_last_frame": 0
+					}
+				},
+				"ratio": 0.9975,
+				"speed": 3.0,
+				"status": "PASS",
+				"ticks": 2
+			},
+			"tick": 4,
+			"time_ms": 9966,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 6.0,
+				"start_tick": 4,
+				"target_ticks": 2
+			},
+			"tick": 4,
+			"time_ms": 10127,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"elapsed_s": 0.18,
+				"expected_s": 0.333333333333333,
+				"perf": {
+					"pathfinder": {
+						"historic_paths_solved_total": 0,
+						"max_paths_solved_in_tick": 0,
+						"path_cache_hits": 0,
+						"path_cache_misses": 0,
+						"plain_paths_solved_total": 0,
+						"total_paths_solved": 0
+					},
+					"tick_manager": {
+						"backlog_protection_hits": 0,
+						"max_ticks_processed_seen": 1,
+						"tickables_called_last_frame": 0,
+						"ticks_processed_last_frame": 0
+					}
+				},
+				"ratio": 0.54,
+				"speed": 6.0,
+				"status": "PASS",
+				"ticks": 2
+			},
+			"tick": 6,
+			"time_ms": 10307,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 12.0,
+				"start_tick": 6,
+				"target_ticks": 2
+			},
+			"tick": 6,
+			"time_ms": 10312,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"elapsed_s": 0.167,
+				"expected_s": 0.166666666666667,
+				"perf": {
+					"pathfinder": {
+						"historic_paths_solved_total": 0,
+						"max_paths_solved_in_tick": 0,
+						"path_cache_hits": 0,
+						"path_cache_misses": 0,
+						"plain_paths_solved_total": 0,
+						"total_paths_solved": 0
+					},
+					"tick_manager": {
+						"backlog_protection_hits": 0,
+						"max_ticks_processed_seen": 1,
+						"tickables_called_last_frame": 0,
+						"ticks_processed_last_frame": 0
+					}
+				},
+				"ratio": 1.002,
+				"speed": 12.0,
+				"status": "PASS",
+				"ticks": 2
+			},
+			"tick": 8,
+			"time_ms": 10480,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 26.0,
+				"start_tick": 8,
+				"target_ticks": 2
+			},
+			"tick": 8,
+			"time_ms": 10484,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"elapsed_s": 0.157,
+				"expected_s": 0.0769230769230769,
+				"perf": {
+					"pathfinder": {
+						"historic_paths_solved_total": 0,
+						"max_paths_solved_in_tick": 0,
+						"path_cache_hits": 0,
+						"path_cache_misses": 0,
+						"plain_paths_solved_total": 0,
+						"total_paths_solved": 0
+					},
+					"tick_manager": {
+						"backlog_protection_hits": 0,
+						"max_ticks_processed_seen": 1,
+						"tickables_called_last_frame": 12,
+						"ticks_processed_last_frame": 1
+					}
+				},
+				"ratio": 2.041,
+				"speed": 26.0,
+				"status": "SLOW",
+				"ticks": 2
+			},
+			"tick": 10,
+			"time_ms": 10642,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 50.0,
+				"start_tick": 10,
+				"target_ticks": 2
+			},
+			"tick": 10,
+			"time_ms": 10665,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"elapsed_s": 0.002,
+				"expected_s": 0.04,
+				"perf": {
+					"pathfinder": {
+						"historic_paths_solved_total": 0,
+						"max_paths_solved_in_tick": 0,
+						"path_cache_hits": 0,
+						"path_cache_misses": 0,
+						"plain_paths_solved_total": 0,
+						"total_paths_solved": 0
+					},
+					"tick_manager": {
+						"backlog_protection_hits": 0,
+						"max_ticks_processed_seen": 1,
+						"tickables_called_last_frame": 12,
+						"ticks_processed_last_frame": 1
+					}
+				},
+				"ratio": 0.05,
+				"speed": 50.0,
+				"status": "PASS",
+				"ticks": 2
+			},
+			"tick": 12,
+			"time_ms": 10667,
+			"type": "speed_end"
+		},
+		{
+			"payload": {
+				"speed": 100.0,
+				"start_tick": 13,
+				"target_ticks": 2
+			},
+			"tick": 13,
+			"time_ms": 10670,
+			"type": "speed_begin"
+		},
+		{
+			"payload": {
+				"elapsed_s": 0.088,
+				"expected_s": 0.02,
+				"perf": {
+					"pathfinder": {
+						"historic_paths_solved_total": 0,
+						"max_paths_solved_in_tick": 0,
+						"path_cache_hits": 0,
+						"path_cache_misses": 0,
+						"plain_paths_solved_total": 0,
+						"total_paths_solved": 0
+					},
+					"tick_manager": {
+						"backlog_protection_hits": 0,
+						"max_ticks_processed_seen": 3,
+						"tickables_called_last_frame": 14,
+						"ticks_processed_last_frame": 1
+					}
+				},
+				"ratio": 4.4,
+				"speed": 100.0,
+				"status": "SLOW",
+				"ticks": 2
+			},
+			"tick": 15,
+			"time_ms": 10759,
+			"type": "speed_end"
+		}
+	]
+}

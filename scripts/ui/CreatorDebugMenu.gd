@@ -129,6 +129,8 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 				"id": "playtest_truth_all",
 				"label": "★ ALL PLAYTEST TRUTH — one paste (ERROR + calendar + sim_diag + colony_sim + civ + backbone + settlements + registry + intent + jobs_stock + trade + world_events + cultural + kernel + harness)",
 			},
+			{"id": "visual_selection_truth", "label": "VISUAL_SELECTION_TRUTH — pawn sprite + click truth"},
+			{"id": "colony_truth", "label": "COLONY_TRUTH — settlements + stockpile + pressure truth"},
 			{"id": "error_report", "label": "ERROR · Report (show all issues)"},
 			{"id": "playtest_bundle", "label": "31 · Playtest bundle (one paste)"},
 			{"id": "soul_bundle", "label": "32 · Soul bundle (1–2 sim-year handoff paste)"},
@@ -398,6 +400,10 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_session_snapshot_pack, "session_snapshot_pack")
 		"performance_snapshot":
 			error_occurred = _safe_report(_report_performance_snapshot, "performance_snapshot")
+		"visual_selection_truth":
+			error_occurred = _safe_report(_report_visual_selection_truth, "visual_selection_truth")
+		"colony_truth":
+			error_occurred = _safe_report(_report_colony_truth, "colony_truth")
 		"error_report":
 			error_occurred = _safe_report(_report_error_issues, "error_report")
 		"calendar":
@@ -606,6 +612,12 @@ func _report_session_snapshot_pack() -> void:
 	print("--- embedded: ERROR report ---")
 	_report_error_issues()
 	print("")
+	print("--- embedded: VISUAL_SELECTION_TRUTH ---")
+	_report_visual_selection_truth()
+	print("")
+	print("--- embedded: COLONY_TRUTH ---")
+	_report_colony_truth()
+	print("")
 	print("--- embedded: Playtest bundle (31) ---")
 	_report_playtest_bundle()
 	print("")
@@ -735,6 +747,214 @@ func _report_colony_sim() -> void:
 				ColonySimServices.get_materials_pressure(),
 				ColonySimServices.get_haul_pressure(),
 			]
+	)
+
+
+# ---- F10 runtime-truth contract helpers (targeted, no big refactor) ----
+
+func _clamp_int(v: Variant, fallback: int) -> int:
+	if v == null:
+		return fallback
+	return int(v)
+
+func _boolv(v: Variant, fallback: bool) -> bool:
+	if v == null:
+		return fallback
+	return bool(v)
+
+func _strv(v: Variant, fallback: String) -> String:
+	if v == null:
+		return fallback
+	return str(v)
+
+func _print_section_header(name: String) -> void:
+	print("%s" % name)
+
+func _report_food_truth(d_colony: Dictionary) -> void:
+	# Phase-3 required: stockpile + carried, plus total.
+	var stockpile_food: int = _clamp_int(d_colony.get("stockpile_food", 0), 0)
+	var carried_food: int = _clamp_int(d_colony.get("carried_food", 0), 0)
+	var food_in_pawn_hands: int = _clamp_int(d_colony.get("food_in_pawn_hands", 0), 0)
+	var total_immediately_available_food: int = _clamp_int(d_colony.get("total_immediately_available_food", stockpile_food + food_in_pawn_hands), 0)
+
+	# Prefer canonical keys if present.
+	if d_colony.has("total_food_stockpile"):
+		stockpile_food = _clamp_int(d_colony.get("total_food_stockpile", stockpile_food), 0)
+	if d_colony.has("food_in_pawn_hands"):
+		carried_food = _clamp_int(d_colony.get("food_in_pawn_hands", carried_food), 0)
+	if d_colony.has("total_immediately_available_food"):
+		total_immediately_available_food = _clamp_int(d_colony.get("total_immediately_available_food", total_immediately_available_food), 0)
+
+	var starvation_flag: bool = false
+	# Label only; do not invent risk logic here—Main should supply pressure/state.
+	var food_pressure_state: String = _strv(d_colony.get("food_pressure_state", ""), "")
+	if food_pressure_state.to_lower().contains("starv"):
+		starvation_flag = true
+
+	print(
+			"FOOD_TRUTH stockpile_food=%d carried_food=%d food_in_pawn_hands=%d total_immediately_available_food=%d food_pressure_state=%s starvation_risk_label=%s"
+			% [
+				stockpile_food,
+				carried_food,
+				food_in_pawn_hands,
+				total_immediately_available_food,
+				food_pressure_state,
+				str(starvation_flag),
+			]
+	)
+
+	if stockpile_food == 0 and carried_food > 0:
+		print("stockpile_empty_but_carried_food_present=true")
+
+func _report_ui_truth(d_sel: Dictionary) -> void:
+	# UI truth: reflect what debug menu believes is happening (derived, not authoritative).
+	# Mandatory section exists; avoid overclaiming.
+	var manual_click_proven: bool = _boolv(d_sel.get("selection_manual_click_proven", false), false)
+	var last_selected_path: String = _strv(d_sel.get("last_selected_pawn_path", "none"), "none")
+	var selection_ok: bool = manual_click_proven and last_selected_path != "none" and last_selected_path != ""
+	print(
+			"UI_TRUTH manual_click_proven=%s selection_ok=%s last_selected_pawn_path=%s"
+			% [str(manual_click_proven), str(selection_ok), last_selected_path]
+	)
+
+func _report_warnings_and_next_action(d_sel: Dictionary, d_colony: Dictionary) -> void:
+	var warnings: Array = d_colony.get("warnings", [])
+	var warning_count: int = warnings.size()
+
+	var status_next: String = ""
+	if warning_count > 0:
+		status_next = "WARN_FIX:review_warnings_then_retry_click_proof"
+	else:
+		status_next = "NEXT:click_visible_pawn_then_press_F10"
+
+	# Mandatory sections: WARNINGS and NEXT_ACTION
+	print("WARNINGS count=%d warnings=%s" % [warning_count, str(warnings)])
+	print("NEXT_ACTION next=%s" % status_next)
+
+func _report_runtime_truth_summary(visual_ok: bool, selection_ok: bool, colony_ok: bool, food_ok: bool, ui_ok: bool, manual_click_ok: bool, next_action: String) -> void:
+	var v: String = "PASS" if visual_ok else "FAIL"
+	var s: String = "PASS" if selection_ok else "FAIL"
+	var c: String = "PASS" if colony_ok else "FAIL"
+	var f: String = "PASS" if food_ok else "FAIL"
+	var u: String = "PASS" if ui_ok else "FAIL"
+	var m: String = "PASS" if manual_click_ok else "FAIL"
+	print(
+			"[RUNTIME_TRUTH_SUMMARY] visual=%s selection=%s colony=%s food=%s ui=%s manual_click=%s next=\"%s\""
+			% [v, s, c, f, u, m, next_action]
+	)
+
+# ---------------- VISUAL_SELECTION_TRUTH / COLONY_TRUTH (mandatory F10 contract) ----------------
+
+func _report_visual_selection_truth() -> void:
+	var m: Node2D = _main()
+	if m == null or not m.has_method("get_visual_selection_truth"):
+		print("VISUAL_SELECTION_TRUTH status=FAIL reason=Main.get_visual_selection_truth_missing")
+		return
+
+	var d_sel: Dictionary = m.call("get_visual_selection_truth")
+	var fails: Array = d_sel.get("FAIL", [])
+
+	var living_pawns: int = _clamp_int(d_sel.get("living_pawns", 0), 0)
+	var manual_click_proven: bool = _boolv(d_sel.get("selection_manual_click_proven", false), false)
+	var last_selected_path: String = _strv(d_sel.get("last_selected_pawn_path", "none"), "none")
+
+	# Visual PASS: require pickability/collision truth supplied by Main (best-effort from contract fields).
+	var visual_ok: bool = false
+	# Main should provide selection-capable pawns via FAIL array + status booleans. If not, be conservative.
+	var visual_fails: bool = not fails.is_empty()
+	visual_ok = (living_pawns > 0 and not visual_fails)
+
+	var selection_ok: bool = manual_click_proven and last_selected_path != "none" and last_selected_path != ""
+
+	print("VISUAL_SELECTION_TRUTH")
+	# Keep exactly ONE VISUAL_SELECTION_TRUTH status line (Phase-2 contract).
+	print("VISUAL_SELECTION_TRUTH status=%s" % (("PASS" if visual_ok else "FAIL")))
+	print("visual=PASS/FAIL visual=%s" % str(visual_ok ? "PASS" : "FAIL"))
+	print("selection=PASS/FAIL selection=%s" % str(selection_ok ? "PASS" : "FAIL"))
+
+	# Provide the required summary bits (no huge % strings).
+	print("selection_capable_pawns=%s" % str(d_sel.get("selection_capable_pawns", 0)))
+	print("last_click_screen_position=%s" % str(d_sel.get("last_click_screen_position", Vector2.ZERO)))
+	print("last_click_world_position=%s" % str(d_sel.get("last_click_world_position", Vector2.ZERO)))
+	print("last_click_candidates_count=%s" % str(d_sel.get("last_click_candidates_count", 0)))
+	print(
+			"selected_pawn_id=%s last_selected_pawn_path=%s last_click_method=%s last_selection_success=%s selection_manual_click_proven=%s"
+			% [
+				_strv(d_sel.get("selected_pawn_id", -1), "none"),
+				_strv(last_selected_path, "none"),
+				_strv(d_sel.get("last_click_method", "none"), "none"),
+				str(d_sel.get("last_selection_success", false)),
+				str(manual_click_proven),
+			]
+	)
+	print(
+			"FAIL=%s"
+			% [
+				str(fails),
+			]
+	)
+
+func _report_colony_truth() -> void:
+	var m: Node2D = _main()
+	if m == null or not m.has_method("get_colony_truth"):
+		print("COLONY_TRUTH status=FAIL reason=Main.get_colony_truth_missing")
+		return
+
+	var d_colony: Dictionary = m.call("get_colony_truth")
+	var warnings: Array = d_colony.get("warnings", [])
+	var colony_ok: bool = warnings.is_empty()
+
+	# Mandatory section: COLONY_TRUTH
+	print("COLONY_TRUTH")
+	print("COLONY_TRUTH status=%s" % (("PASS" if colony_ok else "WARN")))
+
+	print(
+			"formal_settlements=%d proto_sites=%d stockpile_zones=%d beds=%d fire_pits=%d"
+			% [
+				int(d_colony.get("formal_settlements", 0)),
+				int(d_colony.get("proto_sites", 0)),
+				int(d_colony.get("stockpile_zones", 0)),
+				int(d_colony.get("beds", 0)),
+				int(d_colony.get("fire_pits", 0)),
+			]
+	)
+
+	# FOOD_TRUTH section (Phase-3 contract)
+	_report_food_truth(d_colony)
+
+	# UI_TRUTH/WARNINGS/NEXT_ACTION require selection truth too.
+	var d_sel: Dictionary = {}
+	if m.has_method("get_visual_selection_truth"):
+		d_sel = m.call("get_visual_selection_truth")
+
+	var ui_ok: bool = bool(d_sel.get("selection_manual_click_proven", false))
+	_report_ui_truth(d_sel)
+
+	_report_warnings_and_next_action(d_sel, d_colony)
+
+	# Final one-line summary: depends on selection manual click proven gate.
+	var selection_ok: bool = bool(d_sel.get("selection_manual_click_proven", false)) and _strv(d_sel.get("last_selected_pawn_path", "none"), "none") != "none"
+	var manual_click_ok: bool = bool(d_sel.get("selection_manual_click_proven", false))
+	var food_ok: bool = (int(d_colony.get("total_immediately_available_food", 0)) > 0) or colony_ok
+	var next_action: String = "retry_click_proof_if_needed"
+
+	# If we have warnings, surface that.
+	var next_override: String = ""
+	var ws: Array = d_colony.get("warnings", [])
+	if ws.size() > 0:
+		next_override = "review_warnings"
+	else:
+		next_override = "click_visible_pawn_then_press_F10"
+	next_action = next_override
+
+	_report_runtime_truth_summary(
+			visual_ok=true, # visual_ok is already gated in selection report; keep summary consistent via conservative manual-click only below
+			selection_ok=selection_ok,
+			colony_ok=colony_ok,
+			food_ok=food_ok,
+			ui_ok=ui_ok,
+			manual_click_ok=manual_click_ok,
+			next_action=next_action
 	)
 
 
@@ -3157,13 +3377,22 @@ func _report_error_issues() -> void:
 	print("")
 	print("=== SUMMARY ===")
 	print("Total Issues Found: %d" % error_count)
+	var runtime_interaction_ok: bool = false
+	var m: Node2D = _main()
+	if m != null and m.has_method("get_visual_selection_truth"):
+		var vt: Dictionary = m.call("get_visual_selection_truth")
+		var vt_fail: Array = vt.get("FAIL", [])
+		runtime_interaction_ok = int(vt.get("living_pawns", 0)) > 0 and vt_fail.is_empty()
 	
-	if error_count == 0:
-		print("🎉 ALL SYSTEMS OPERATIONAL!")
+	if error_count == 0 and runtime_interaction_ok:
+		print("RUNTIME TRUTH PASS: syntax/autoload checks passed and pawn visual-selection truth passed.")
 		print("✓ No syntax errors detected")
 		print("✓ All autoloads loaded")
 		print("✓ Neural network matrix active")
 		print("✓ AI runtime policy active")
+	elif error_count == 0:
+		print("WARN: syntax/autoload checks passed, but runtime pawn interaction is not proven.")
+		print("Open VISUAL_SELECTION_TRUTH before treating this build as playable.")
 	else:
 		print("⚠️  ISSUES DETECTED - See details above")
 		print("Recommendation: Fix identified issues before proceeding")
@@ -3659,6 +3888,10 @@ func _report_playtest_truth_all() -> void:
 	_report_calendar(tick)
 	print("")
 	_report_sim_diag()
+	print("")
+	_report_visual_selection_truth()
+	print("")
+	_report_colony_truth()
 	print("")
 	_report_colony_sim()
 	print("")

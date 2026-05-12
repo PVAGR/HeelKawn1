@@ -54,13 +54,23 @@ func _refresh_all_demands_immediate() -> void:
 
 func _refresh_food_mat_haul_pressures() -> void:
 	var snap: Dictionary = StockpileManager.labor_pressure_stock_snapshot()
-	var food_total: int = int(snap.get("food", 0))
+	var food_total: int = int(snap.get("food", 0)) + _food_carried_by_pawns()
 	var wood: int = int(snap.get("wood", 0))
 	var stone: int = int(snap.get("stone", 0))
 	_food_press = clamp(1.0 - float(food_total) / 30.0, 0.0, 1.0)
 	_mat_press = clamp(1.0 - float(mini(wood, 24) + mini(stone, 12)) / 40.0, 0.0, 1.0)
 	var open_harvest: int = JobManager.open_count()
 	_haul_press = clamp(float(open_harvest) / 120.0, 0.0, 1.0)
+
+
+func _food_carried_by_pawns() -> int:
+	var total: int = 0
+	for p in PawnSpawner.find_alive_pawns():
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		if p.data.is_carrying() and Item.is_food(int(p.data.carrying)):
+			total += int(p.data.carrying_qty)
+	return total
 
 
 ## 0 = enough beds (or no pawns); 1 = many pawns share few beds. Uses `World` bed
@@ -167,3 +177,62 @@ static func need_urgency_hunger(hunger: float) -> float:
 
 static func need_urgency_rest(rest: float) -> float:
 	return clamp(1.0 - rest / 100.0, 0.0, 1.0)
+
+
+func get_colony_truth() -> Dictionary:
+	var stockpile_food: int = 0
+	var carried_food: int = 0
+	var food_in_pawn_hands: int = 0
+	var total_immediately_available_food: int = 0
+	var population: int = 0
+	var food_pressure_state: String = "unknown"
+	var contradiction_flags: Array[String] = []
+	var warnings: Array[String] = []
+	
+	# Get stockpile food
+	if StockpileManager != null:
+		stockpile_food = StockpileManager.count_of("food")
+	
+	# Get carried food from living pawns
+	if PawnSpawner != null:
+		for pawn in PawnSpawner.pawns:
+			if pawn != null and is_instance_valid(pawn) and pawn.data != null and not bool(pawn.data.is_dead):
+				population += 1
+				if pawn.data != null and pawn.data.has("carrying"):
+					var carrying = pawn.data.carrying
+					if carrying != null and carrying.has("item_type") and carrying.item_type == "food":
+						carried_food += int(carrying.get("quantity", 0))
+						food_in_pawn_hands += int(carrying.get("quantity", 0))
+	
+	total_immediately_available_food = stockpile_food + carried_food
+	
+	# Determine food pressure state
+	if total_immediately_available_food <= 0:
+		food_pressure_state = "starvation"
+	elif total_immediately_available_food < population * 2:
+		food_pressure_state = "shortage"
+	elif total_immediately_available_food < population * 10:
+		food_pressure_state = "low"
+	else:
+		food_pressure_state = "adequate"
+	
+	# Check for contradictions
+	if stockpile_food == 0 and carried_food > 0:
+		contradiction_flags.append("stockpile_empty_but_carried_food_present")
+	
+	# Add warnings
+	if total_immediately_available_food <= 0 and population > 0:
+		warnings.append("no_food_available")
+	elif stockpile_food == 0:
+		warnings.append("stockpile_empty")
+	
+	return {
+		"stockpile_food": stockpile_food,
+		"carried_food": carried_food,
+		"food_in_pawn_hands": food_in_pawn_hands,
+		"total_immediately_available_food": total_immediately_available_food,
+		"population": population,
+		"food_pressure_state": food_pressure_state,
+		"contradiction_flags": contradiction_flags,
+		"warnings": warnings,
+	}

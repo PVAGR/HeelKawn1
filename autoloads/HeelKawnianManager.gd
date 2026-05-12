@@ -627,15 +627,15 @@ static func _refresh_learning_weight_cache() -> void:
 static func _learning_weight_for_job(job_type: int) -> float:
 	_refresh_learning_weight_cache()
 	match job_type:
-		Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH,
-		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH,
-		Job.Type.DRY_MEAT, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS,
+		Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH, \
+		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH, \
+		Job.Type.DRY_MEAT, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS, \
 		Job.Type.GROW_FOOD:
 			return float(_learning_weight_cache.get("food_production", 1.0))
-		Job.Type.CHOP, Job.Type.MINE, Job.Type.MINE_WALL,
+		Job.Type.CHOP, Job.Type.MINE, Job.Type.MINE_WALL, \
 		Job.Type.GATHER_FLINT, Job.Type.GATHER_STICK:
 			return float(_learning_weight_cache.get("resource_gathering", 1.0))
-		Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_WATCHTOWER,
+		Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_WATCHTOWER, \
 		Job.Type.BUILD_BARRACKS, Job.Type.BUILD_FORD:
 			return float(_learning_weight_cache.get("defense_building", 1.0))
 		Job.Type.DEFEND, Job.Type.PROTECT, Job.Type.GUARD:
@@ -656,6 +656,27 @@ static func _learning_priority_bonus_for_job(job_type: int) -> int:
 static func _learning_weight_for_key(key: String) -> float:
 	_refresh_learning_weight_cache()
 	return float(_learning_weight_cache.get(key, 1.0))
+
+
+static func _is_structure_build_job(jtype: int) -> bool:
+	match jtype:
+		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, \
+		Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_MARKER_STONE, \
+		Job.Type.BUILD_SHRINE, Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH, \
+		Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_FARM_CORN, Job.Type.BUILD_FARM_VEGETABLES, Job.Type.BUILD_HERB_GARDEN, \
+		Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_LOOM, Job.Type.BUILD_KILN, Job.Type.BUILD_SMELTER, \
+		Job.Type.BUILD_BOATYARD, Job.Type.BUILD_DOCK, Job.Type.BUILD_FISHERMAN_HUT, \
+		Job.Type.BUILD_APOTHECARY, \
+		Job.Type.BUILD_LIBRARY, Job.Type.BUILD_SCHOOL, \
+		Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, \
+		Job.Type.BUILD_MARKET, Job.Type.BUILD_TRADING_POST, \
+		Job.Type.BUILD_ROAD, \
+		Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR, \
+		Job.Type.BUILD_FORD, Job.Type.BUILD_WATER_MILL:
+			return true
+		_:
+			return false
+	return false
 
 
 static func _worldbox_loop_job_for_pawn(
@@ -889,6 +910,8 @@ static func get_affiliation_action_for_pawn(pawn: Variant) -> Dictionary:
 	var candidates: Array = _nearby_pawn_candidates(pawn, 40, 24)
 	if candidates.is_empty():
 		return {}
+	var learned_bonding: float = _learning_weight_for_key("social_bonding")
+	var learned_trade: float = _learning_weight_for_key("trade_exchange")
 
 	if next_level == "family":
 		if int(data.household_id) >= 0:

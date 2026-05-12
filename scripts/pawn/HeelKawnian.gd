@@ -354,6 +354,9 @@ var data: HeelKawnianData
 var _pick_area: Area2D = null
 var _pick_shape: CollisionShape2D = null
 static var _s_visual_sprite_texture: Texture2D = null
+var _pick_area: Area2D = null
+var _pick_shape: CollisionShape2D = null
+static var _s_visual_sprite_texture: Texture2D = null
 
 var _world: World
 var _brain_instance: HeelKawnPawnBrain = null
@@ -1086,6 +1089,149 @@ func visual_truth_snapshot() -> Dictionary:
 	var sprite: Sprite2D = get_visual_sprite_node()
 	var area: Area2D = get_click_area_node()
 	var shape_ok: bool = false
+	if area != null and is_instance_valid(area):
+		for child in area.get_children():
+			if child is CollisionShape2D:
+				var cs: CollisionShape2D = child as CollisionShape2D
+				if not cs.disabled and cs.shape != null:
+					shape_ok = true
+					break
+	var sprite_path: String = ""
+	if sprite != null and is_instance_valid(sprite):
+		sprite_path = str(sprite.get_path())
+	return {
+		"pawn_id": int(data.id) if data != null else -1,
+		"sprite_path": sprite_path,
+		"sprite_node_exists": sprite != null and is_instance_valid(sprite),
+		"texture_non_null": sprite != null and is_instance_valid(sprite) and sprite.texture != null,
+		"visible": visible and is_visible_in_tree() and sprite != null and sprite.is_visible_in_tree(),
+		"effective_alpha": get_effective_visual_alpha(),
+		"world_position_valid": has_valid_world_position(),
+		"world_position": global_position,
+		"canvas_layer": get_effective_canvas_layer(),
+		"z_index": z_index,
+		"clickable": area != null and is_instance_valid(area) and area.input_pickable and area.collision_layer != 0 and shape_ok,
+		"click_area_path": str(area.get_path()) if area != null and is_instance_valid(area) else "",
+	}
+
+
+func _ensure_visual_sprite() -> void:
+	if _sprite == null:
+		_sprite = Sprite2D.new()
+	if _sprite.get_parent() == null:
+		_sprite.name = "VisualSprite"
+		_sprite.centered = true
+		_sprite.z_index = 1
+		_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_sprite.visible = true
+		add_child(_sprite)
+	if _sprite.texture == null:
+		_sprite.texture = _build_visual_sprite_texture()
+	_sprite.modulate = data.color if data != null else Color.WHITE
+	_sprite.self_modulate = Color(1, 1, 1, 1)
+	_sprite.visible = true
+
+
+func _build_visual_sprite_texture() -> Texture2D:
+	if _s_visual_sprite_texture != null:
+		return _s_visual_sprite_texture
+	var img: Image = Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var mask: Array = _pixel_sprite_mask()
+	var y0: int = 3
+	var x0: int = 4
+	for y in range(mask.size()):
+		var row: Array = mask[y] as Array
+		for x in range(row.size()):
+			var cell: int = int(row[x])
+			if cell == 0:
+				continue
+			var c: Color = Color(1, 1, 1, 1)
+			var px: int = x0 + x
+			var py: int = y0 + y
+			if px >= 0 and px < 16 and py >= 0 and py < 16:
+				img.set_pixel(px, py, c)
+	for ox in range(3, 12):
+		img.set_pixel(ox, 12, Color(0, 0, 0, 0.20))
+	_s_visual_sprite_texture = ImageTexture.create_from_image(img)
+	return _s_visual_sprite_texture
+
+
+func _ensure_click_area() -> void:
+	if _pick_area == null or not is_instance_valid(_pick_area):
+		_pick_area = Area2D.new()
+		_pick_area.name = "ClickArea"
+		_pick_area.input_pickable = true
+		_pick_area.collision_layer = 1
+		_pick_area.collision_mask = 0
+		add_child(_pick_area)
+		_pick_area.input_event.connect(_on_click_area_input_event)
+	if _pick_shape == null or not is_instance_valid(_pick_shape):
+		_pick_shape = CollisionShape2D.new()
+		_pick_shape.name = "CollisionShape2D"
+		var circle := CircleShape2D.new()
+		circle.radius = 8.0
+		_pick_shape.shape = circle
+		_pick_shape.disabled = false
+		_pick_area.add_child(_pick_shape)
+	_pick_area.visible = true
+	_pick_area.input_pickable = true
+	_pick_area.collision_layer = 1
+	_pick_shape.disabled = false
+
+
+func _on_click_area_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
+	if event is InputEventMouseButton:
+		var mb: InputEventMouseButton = event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+			var main: Node = get_node_or_null("/root/Main")
+			if main != null and main.has_method("select_pawn_from_pickable"):
+				main.call("select_pawn_from_pickable", self)
+				get_viewport().set_input_as_handled()
+
+
+func get_visual_sprite_node() -> Sprite2D:
+	if _sprite != null and is_instance_valid(_sprite):
+		return _sprite
+	return get_node_or_null("VisualSprite") as Sprite2D
+
+
+func get_click_area_node() -> Area2D:
+	if _pick_area != null and is_instance_valid(_pick_area):
+		return _pick_area
+	return get_node_or_null("ClickArea") as Area2D
+
+
+func get_effective_visual_alpha() -> float:
+	var alpha: float = 1.0
+	var n: Node = self
+	while n != null:
+		if n is CanvasItem:
+			var ci: CanvasItem = n as CanvasItem
+			alpha *= ci.modulate.a
+			alpha *= ci.self_modulate.a
+		n = n.get_parent()
+	return alpha
+
+
+func has_valid_world_position() -> bool:
+	var gp: Vector2 = global_position
+	return not is_nan(gp.x) and not is_nan(gp.y) and not is_inf(gp.x) and not is_inf(gp.y)
+
+
+func get_effective_canvas_layer() -> int:
+	var n: Node = self
+	while n != null:
+		if n is CanvasLayer:
+			return int((n as CanvasLayer).layer)
+		n = n.get_parent()
+	return 0
+
+
+func visual_truth_snapshot() -> Dictionary:
+	var sprite: Sprite2D = get_visual_sprite_node()
+	var area: Area2D = get_click_area_node()
+	var shape_ok: bool = false
 	var shape_disabled: bool = true
 	var shape_non_null: bool = false
 	if area != null and is_instance_valid(area):
@@ -1170,6 +1316,8 @@ func visual_truth_snapshot() -> Dictionary:
 func _ready() -> void:
 	## Spawner calls [method bind] before [code]add_child[/code] so [member data] / [member _world] exist here.
 	## [signal GameManager.game_tick] is deferred until after this node finishes [method _ready] (init order).
+	_ensure_visual_sprite()
+	_ensure_click_area()
 	_ensure_visual_sprite()
 	_ensure_click_area()
 	_init_footstep_particles()

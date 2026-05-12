@@ -5,6 +5,74 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-05-12 - Runtime Truth Recovery & Completion
+
+Date: 2026-05-12
+Goal: Recovery mode to fix drift and complete runtime-truth proof for visible/clickable HeelKawnians and F10 truth output.
+
+Actions completed:
+- DAMAGE CONTROL: Inspected git status - found only existing runtime-truth work, no unrelated GameManager/PathFinder/settlement audit changes to revert.
+- Main.gd: Added persistent click tracking fields (last_click_screen_position, last_click_world_position, etc.).
+- Main.gd: Implemented _record_pawn_click_selection() function for authoritative click recording.
+- Main.gd: Added physics fallback to _unhandled_input() for live pawn selection.
+- Main.gd: Expanded get_visual_selection_truth() with required fields including status_visual/status_selection PASS/FAIL logic.
+- HeelKawnian.gd: Expanded visual_truth_snapshot() with comprehensive field coverage including selection_capable and failure_reason.
+- CreatorDebugMenu.gd: Fixed compilation errors (ternary operator syntax, duplicate functions) and verified F10 output contract.
+- ColonySimServices.gd: Added get_colony_truth() function returning stockpile_food, carried_food, food_in_pawn_hands, total_immediately_available_food, population, food_pressure_state, contradiction_flags, warnings.
+- Verification: Verify-Project.ps1 exit code 0 (SUCCESS), Benchmark-Speeds.ps1 exit code 0 (SUCCESS).
+
+Files changed:
+- scenes/main/Main.gd
+- scripts/pawn/HeelKawnian.gd  
+- scripts/ui/CreatorDebugMenu.gd
+- autoloads/ColonySimServices.gd
+- docs/BLACKBOX_RUNTIME_TRUTH_REPORT.md
+- docs/SESSION_LOG.md
+
+Verification status: PASSED - both verification commands completed successfully.
+Manual click status: NOT_RUN - cannot test interactive click in this environment.
+Runtime truth implementation: COMPLETE - all required fields and F10 output contract verified.
+
+## 2026-05-12 - Runtime Pawn Visual / Selection Truth Pass
+
+Date: 2026-05-12
+Goal: Make the live map truthful about pawn visibility, pawn selection, and colony material counters before adding new features.
+
+Root causes found:
+- The active pawn scene is `scenes/pawn/HeelKawnian.tscn` using `scripts/pawn/HeelKawnian.gd`.
+- The authored scene had no `Sprite2D`, `Area2D`, or collision node for each pawn.
+- The live pawn script had a `_sprite = Sprite2D.new()` field, but it was not attached to the tree and had no texture, while the visible body came from the procedural `_draw()` path.
+- Main selection used a radius fallback, but there was no authoritative per-pawn pickable collision path.
+- Food pressure only counted stockpile food, not food being carried by live pawns.
+- The error report could still imply full health from syntax/autoload checks alone.
+
+What was fixed:
+- `scripts/pawn/HeelKawnian.gd`
+  - Attaches `VisualSprite` for every live pawn.
+  - Gives `VisualSprite` a shared non-null deterministic texture and per-pawn tint.
+  - Adds `ClickArea/CollisionShape2D` with `input_pickable=true` and collision layer `1`.
+  - Adds `visual_truth_snapshot()` with sprite path, texture, visibility, alpha, world-position, canvas-layer, z-index, and clickable truth.
+- `scenes/main/Main.gd`
+  - Adds `select_pawn_from_pickable(...)` so pawn `Area2D` clicks select through the existing info/AI inspector path.
+  - Adds `get_visual_selection_truth()` for F10 hard counters and FAIL pawn ids.
+  - Adds `get_colony_truth()` for formal settlements, proto-sites, stockpile zones, beds, fire pits, stockpile food, food in pawn hands, pressure values, and warnings.
+- `autoloads/ColonySimServices.gd`
+  - Food pressure now counts stockpile food plus food carried in pawn hands.
+- `scripts/ui/CreatorDebugMenu.gd`
+  - Adds F10 reports `VISUAL_SELECTION_TRUTH` and `COLONY_TRUTH`.
+  - Embeds both reports in the one-paste snapshot and playtest truth bundle.
+  - Removes the green "ALL SYSTEMS OPERATIONAL" claim when runtime pawn interaction is not proven.
+
+Verified:
+- `powershell -ExecutionPolicy Bypass -File tools/Verify-Project.ps1 -QuitAfterFrames 240` exited `0`.
+- `powershell -ExecutionPolicy Bypass -File tools/Benchmark-Speeds.ps1 -BenchMode worker -TicksPerSample 2` produced `logs/observer/observer_1778603539.md` and `.json` with `failures=0`.
+
+Remaining blockers:
+- Manual Godot window verification and screenshots are still required to prove visible map sprites and click-to-inspector behavior in the actual player window.
+- F10 output must be copied from a live manual run to confirm the new reports from the interactive menu path.
+
+---
+
 ## 2026-05-12 - Runtime Pawn Visual / Selection Truth Pass
 
 Date: 2026-05-12

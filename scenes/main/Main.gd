@@ -4876,6 +4876,15 @@ func select_pawn_from_pickable(pawn: HeelKawnian) -> void:
 	if _draft_mode_active:
 		_handle_draft_click(pawn)
 	else:
+		_set_selected_pawn(pawn)
+
+
+func select_pawn_from_pickable(pawn: HeelKawnian) -> void:
+	if pawn == null or not is_instance_valid(pawn):
+		return
+	if _draft_mode_active:
+		_handle_draft_click(pawn)
+	else:
 		_record_pawn_click_selection(pawn, "area_input_event", get_global_mouse_position(), get_global_mouse_position(), 1)
 
 
@@ -5059,6 +5068,147 @@ func get_selected_pawn() -> HeelKawnian:
 	if _selected_pawn != null and is_instance_valid(_selected_pawn):
 		return _selected_pawn
 	return null
+
+
+func get_visual_selection_truth() -> Dictionary:
+	var living: Array[HeelKawnian] = []
+	if _pawn_spawner != null:
+		if _pawn_spawner.has_method("get_alive_pawns"):
+			living = _pawn_spawner.get_alive_pawns()
+		else:
+			for p in _pawn_spawner.pawns:
+				if p != null and is_instance_valid(p) and p.data != null and not bool(p.data.is_dead):
+					living.append(p)
+	var with_sprite: int = 0
+	var with_texture: int = 0
+	var visible_count: int = 0
+	var clickable_count: int = 0
+	var fail_ids: Array[int] = []
+	var sample_paths: Array[String] = []
+	for p in living:
+		if p == null or not is_instance_valid(p):
+			continue
+		var snap: Dictionary = p.visual_truth_snapshot() if p.has_method("visual_truth_snapshot") else {}
+		var pawn_id: int = int(snap.get("pawn_id", int(p.data.id) if p.data != null else -1))
+		var ok_sprite: bool = bool(snap.get("sprite_node_exists", false))
+		var ok_texture: bool = bool(snap.get("texture_non_null", false))
+		var ok_visible: bool = bool(snap.get("visible", false)) and float(snap.get("effective_alpha", 0.0)) > 0.0
+		var ok_position: bool = bool(snap.get("world_position_valid", false))
+		var ok_clickable: bool = bool(snap.get("clickable", false))
+		var canvas_ok: bool = int(snap.get("canvas_layer", -999)) == 0
+		var z_ok: bool = int(snap.get("z_index", -999)) >= 0
+		if ok_sprite:
+			with_sprite += 1
+			if sample_paths.size() < 4:
+				sample_paths.append(str(snap.get("sprite_path", "")))
+		if ok_texture:
+			with_texture += 1
+		if ok_visible and ok_position and z_ok:
+			visible_count += 1
+		if ok_clickable:
+			clickable_count += 1
+		if not (ok_sprite and ok_texture and ok_visible and ok_position and ok_clickable and canvas_ok and z_ok):
+			fail_ids.append(pawn_id)
+	var selected_id: int = -1
+	if _selected_pawn != null and is_instance_valid(_selected_pawn) and _selected_pawn.data != null:
+		selected_id = int(_selected_pawn.data.id)
+	return {
+		"report": "VISUAL_SELECTION_TRUTH",
+		"living_pawns": living.size(),
+		"pawns_with_sprite_node": with_sprite,
+		"pawns_with_texture": with_texture,
+		"pawns_visible": visible_count,
+		"pawns_clickable": clickable_count,
+		"selected_pawn_id": selected_id,
+		"topmost_control_blocking_mouse": _topmost_control_blocking_mouse_label(),
+		"FAIL": fail_ids,
+		"sample_sprite_paths": sample_paths,
+		"pick_radius_px": SELECT_PICK_RADIUS_PX,
+	}
+
+
+func _topmost_control_blocking_mouse_label() -> String:
+	var vp: Viewport = get_viewport()
+	if vp == null:
+		return "no_viewport"
+	var c: Control = vp.gui_get_hovered_control()
+	while c != null:
+		if c.visible and c.is_visible_in_tree() and c.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+			var filter_name: String = "STOP" if c.mouse_filter == Control.MOUSE_FILTER_STOP else "PASS"
+			return "%s mouse_filter=%s" % [str(c.get_path()), filter_name]
+		c = c.get_parent_control()
+	return "none"
+
+
+func get_colony_truth() -> Dictionary:
+	var formal: int = SettlementMemory.get_formal_settlement_count() if SettlementMemory != null else 0
+	var proto: int = SettlementMemory.get_proto_sites().size() if SettlementMemory != null else 0
+	var zones: int = StockpileManager.zone_count() if StockpileManager != null and StockpileManager.has_method("zone_count") else 0
+	var total_food_stockpile: int = StockpileManager.total_food() if StockpileManager != null and StockpileManager.has_method("total_food") else 0
+	var food_hands: int = _food_in_pawn_hands()
+	var beds: int = _world.bed_count() if _world != null and _world.has_method("bed_count") else 0
+	var fire_pits: int = _feature_count(TileFeature.Type.FIRE_PIT)
+	var housing_pressure: float = ColonySimServices.get_housing_pressure() if ColonySimServices != null else 0.0
+	var food_pressure: float = ColonySimServices.get_food_pressure() if ColonySimServices != null else 0.0
+	var warnings: Array[String] = []
+	var living: int = PawnSpawner.find_alive_pawns().size()
+	if living > 0 and beds <= 0 and housing_pressure < 0.75:
+		warnings.append("housing_pressure_low_with_no_beds")
+	if living > 0 and beds >= living and housing_pressure > 0.05:
+		warnings.append("housing_pressure_high_despite_enough_beds")
+	var all_food: int = total_food_stockpile + food_hands
+	if living > 0 and all_food <= 0 and food_pressure < 0.90:
+		warnings.append("food_pressure_low_with_no_food_material")
+	if all_food >= living * 2 and food_pressure > 0.75:
+		warnings.append("food_pressure_high_despite_food_material")
+	var civ_warn: String = _civilization_material_warning(formal, zones, beds, fire_pits)
+	if not civ_warn.is_empty():
+		warnings.append(civ_warn)
+	return {
+		"report": "COLONY_TRUTH",
+		"formal_settlements": formal,
+		"proto_sites": proto,
+		"stockpile_zones": zones,
+		"beds": beds,
+		"fire_pits": fire_pits,
+		"total_food_stockpile": total_food_stockpile,
+		"food_in_pawn_hands": food_hands,
+		"housing_pressure": housing_pressure,
+		"food_pressure": food_pressure,
+		"warnings": warnings,
+	}
+
+
+func _food_in_pawn_hands() -> int:
+	var total: int = 0
+	if _pawn_spawner == null:
+		return total
+	for p in _pawn_spawner.get_alive_pawns():
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		if p.data.is_carrying() and Item.is_food(int(p.data.carrying)):
+			total += int(p.data.carrying_qty)
+	return total
+
+
+func _feature_count(feature_type: int) -> int:
+	if _world == null or not _world.has_method("get_feature_counts"):
+		return 0
+	var counts: Dictionary = _world.get_feature_counts()
+	return int(counts.get(feature_type, 0))
+
+
+func _civilization_material_warning(formal: int, zones: int, beds: int, fire_pits: int) -> String:
+	if CivilizationStage == null:
+		return ""
+	var snap: Dictionary = CivilizationStage.get_world_stage_snapshot()
+	var stage: int = int(snap.get("stage", 0))
+	if stage >= CivilizationStage.STAGE_IRON_AGE and formal <= 0 and zones <= 0 and beds <= 0 and fire_pits <= 0:
+		return "civilization_stage_material_mismatch: stage=%s score=%d but settlements=0 stockpile_zones=0 beds=0 fire_pits=0" % [
+			str(snap.get("stage_name", "Unknown")),
+			int(snap.get("score", 0)),
+		]
+	return ""
 
 
 func get_visual_selection_truth() -> Dictionary:

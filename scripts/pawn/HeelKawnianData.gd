@@ -1335,6 +1335,52 @@ func calculate_action_utility(action_type: String, context: Dictionary = {}) -> 
 	if context.has("parity_utility") and context["parity_utility"] is Dictionary:
 		var pu: Dictionary = context["parity_utility"] as Dictionary
 		utility += float(pu.get(action_type, 0.0)) * 1.15
+
+	# Factor 10: World learning weights (colony adapts after crises)
+	if context.has("learning_weights") and context["learning_weights"] is Dictionary:
+		var lw: Dictionary = context["learning_weights"] as Dictionary
+		var lane: String = ""
+		match action_type:
+			"eat", "forage", "hunt", "cook", "cook_meat", "cook_fish", "cook_berries", "dry_meat", "plant", "harvest", "grow_food":
+				lane = "food_production"
+			"gather", "mine", "chop", "gather_flint", "gather_stick":
+				lane = "resource_gathering"
+			"build", "build_shelter", "fortify", "construct", "repair":
+				lane = "construction"
+			"defend", "protect", "guard", "train", "fight":
+				lane = "military_training"
+		if lane != "":
+			var w: float = float(lw.get(lane, 1.0))
+			utility += (w - 1.0) * 0.8
+
+	# Factor 11: Active goals (top goal gets a utility nudge)
+	if context.has("active_goal"):
+		var goal_type: String = str(context.get("active_goal", ""))
+		var goal_priority: float = float(context.get("active_goal_priority", 0.0))
+		var goal_bias: float = clampf(goal_priority, 0.0, 3.0) * 0.6
+		if goal_bias > 0.0:
+			match goal_type:
+				"find_food":
+					if action_type in ["eat", "forage", "hunt", "cook", "cook_meat", "cook_fish", "cook_berries", "dry_meat", "plant", "harvest", "grow_food"]:
+						utility += goal_bias
+				"find_rest":
+					if action_type in ["rest", "sleep", "build_shelter", "build", "repair"]:
+						utility += goal_bias * 0.6
+				"improve_safety":
+					if action_type in ["defend", "protect", "guard", "build", "fortify", "construct"]:
+						utility += goal_bias * 0.6
+				"improve_mood":
+					if action_type in ["socialize", "talk", "rest", "wander"]:
+						utility += goal_bias * 0.5
+				"build_reputation", "seek_leadership":
+					if action_type in ["teach", "help", "cooperate", "work", "build"]:
+						utility += goal_bias * 0.4
+				"master_skill":
+					if action_type in ["work", "craft", "build", "gather", "mine", "chop"]:
+						utility += goal_bias * 0.4
+				"leave_legacy":
+					if action_type in ["build", "work", "teach", "craft"]:
+						utility += goal_bias * 0.3
 	
 	return utility
 

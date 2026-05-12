@@ -497,6 +497,16 @@ var _perception_scan_cursor: int = 0
 var _cached_idle_action: String = "work"
 var _cached_idle_action_food_emergency: bool = false
 var _next_idle_action_refresh_tick: int = -1
+var _learning_weight_cache_tick: int = -1
+var _learning_weight_cache: Dictionary = {}
+var _next_goal_refresh_tick: int = -1
+var _cached_active_goal: Dictionary = {}
+var _cached_active_goal_priority: float = 0.0
+var _last_failed_job_type: int = -1
+var _last_failed_job_tile: Vector2i = Vector2i(-9999, -9999)
+var _last_failed_job_tick: int = -999999
+var _short_fail_tiles: Dictionary = {} # tile_key -> {tick, job_type, reason}
+var _short_success_tiles: Dictionary = {} # tile_key -> {tick, job_type}
 ## Set true only after [method _pawn_connect_sim_tick_deferred] connects [signal GameManager.game_tick].
 ## Prevents sim ticks from running before [method bind] + [method _ready] have finished.
 var _pawn_sim_tick_armed: bool = false
@@ -2990,6 +3000,8 @@ func _tick_idle() -> void:
 		)
 		HeelKawnian._s_food_cache_tick = now_tick
 	var food_emergency: bool = HeelKawnian._s_food_emergency
+	_refresh_learning_weight_cache()
+	_refresh_active_goal_cache()
 	# BUNDLE 4: Medium/social/narrative lanes — non-critical autonomy
 	# work is phased by stable pawn id so idle ticks stay cheap at high speed.
 	# These are non-critical for survival; urgent eating/sleeping gates above are unaffected.
@@ -3262,6 +3274,11 @@ func _tick_idle() -> void:
 			utility_bias_cache[action_key] = utility_bias
 		base_bias += utility_bias
 		base_bias += data.kinship_job_priority_bonus(j.work_tile)
+		base_bias += _goal_priority_bias_for_job(j.type)
+		base_bias += _short_horizon_bias_for_job(j)
+		var learning_weight: float = _learning_weight_for_job(j.type)
+		if absf(learning_weight - 1.0) >= 0.01:
+			base_bias += int(round((learning_weight - 1.0) * 4.0))
 		if preferred_idle_action == "forage" and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
 			base_bias += 2
 		# When the pantry is not in emergency, nudge non-food labor so the colony
@@ -3316,6 +3333,7 @@ func _tick_idle() -> void:
 			neural_bias_cache[j.type] = neural_bias
 		base_bias += neural_bias
 		base_bias += _get_heelkawnian_matrix_job_bias(j.type)
+		base_bias = _apply_social_influence_bias(j, base_bias)
 		# World-memory-driven job bias: meaning tags at the job's work tile
 		# shape whether pawns want to work there.
 		var meaning_bias: int = 0
@@ -3630,11 +3648,197 @@ func _build_idle_utility_context(food_emergency: bool) -> Dictionary:
 		"role_affinity": _idle_role_affinity(),
 		"memory_confidence": _idle_memory_confidence(),
 		"food_emergency": food_emergency,
+		"learning_weights": _learning_weight_cache,
+		"active_goal": str(_cached_active_goal.get("type", "")),
+		"active_goal_priority": _cached_active_goal_priority,
 		"parity_utility": parity_utility,
 	}
 	_cached_utility_context_tick = t
 	_cached_utility_food_emergency = food_emergency
 	return _cached_utility_context
+
+
+func _refresh_learning_weight_cache() -> void:
+	var t: int = GameManager.tick_count if GameManager != null else 0
+	if _learning_weight_cache_tick == t and not _learning_weight_cache.is_empty():
+		return
+	_learning_weight_cache_tick = t
+	_learning_weight_cache = {
+		"food_production": 1.0,
+		"resource_gathering": 1.0,
+		"construction": 1.0,
+		"defense_building": 1.0,
+		"military_training": 1.0,
+	}
+	var ai_mgr: Node = get_node_or_null("/root/AIManager")
+	if ai_mgr == null or not ai_mgr.has_method("get_learning"):
+		return
+	var learning: Node = ai_mgr.get_learning()
+	if learning == null or not learning.has_method("get_weight"):
+		return
+	for k in _learning_weight_cache.keys():
+		_learning_weight_cache[k] = float(learning.get_weight(str(k)))
+
+
+func _goal_refresh_interval_for_speed() -> int:
+	if GameManager == null:
+		return 120
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 220
+	if gs >= 50.0:
+		return 170
+	if gs >= 25.0:
+		return 130
+	return 90
+
+
+func _refresh_active_goal_cache() -> void:
+	if data == null:
+		return
+	var t: int = GameManager.tick_count if GameManager != null else 0
+	if _next_goal_refresh_tick >= 0 and t < _next_goal_refresh_tick:
+		return
+	data.cleanup_goals()
+	data.generate_goals_from_needs()
+	_cached_active_goal = data.get_highest_priority_goal()
+	_cached_active_goal_priority = float(_cached_active_goal.get("priority", 0.0)) if not _cached_active_goal.is_empty() else 0.0
+	_next_goal_refresh_tick = t + _goal_refresh_interval_for_speed()
+
+
+func _goal_priority_bias_for_job(job_type: int) -> int:
+	if _cached_active_goal.is_empty():
+		return 0
+	var goal_type: String = str(_cached_active_goal.get("type", ""))
+	if goal_type.is_empty():
+		return 0
+	var p: float = clampf(_cached_active_goal_priority, 0.0, 3.0)
+	var p_bias: int = int(round(p * 2.0))
+	match goal_type:
+		"find_food":
+			if job_type in [
+				_Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH,
+				_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH,
+				_Job.Type.DRY_MEAT, _Job.Type.PLANT_SEEDS, _Job.Type.HARVEST_CROPS,
+				_Job.Type.GROW_FOOD,
+			]:
+				return 2 + p_bias
+		"find_rest":
+			if job_type in [
+				_Job.Type.BUILD_BED, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_FIRE_PIT,
+				_Job.Type.MAINTAIN_STRUCTURE,
+			]:
+				return 1 + p_bias
+		"improve_safety":
+			if job_type in [
+				_Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_WATCHTOWER,
+				_Job.Type.BUILD_BARRACKS, _Job.Type.PROTECT, _Job.Type.DEFEND, _Job.Type.GUARD,
+			]:
+				return 1 + p_bias
+		"improve_mood":
+			if job_type in [_Job.Type.VISIT_GRAVE, _Job.Type.BUILD_SHRINE]:
+				return 1 + int(round(p * 1.5))
+		"build_reputation", "seek_leadership":
+			if job_type in [_Job.Type.TEACH_SKILL, _Job.Type.APPRENTICESHIP, _Job.Type.BUILD_MARKER_STONE]:
+				return 1 + int(round(p * 1.5))
+		"master_skill":
+			return 1 + int(round(p))
+		"leave_legacy":
+			if job_type in [_Job.Type.CARVE_LEDGER_STONE, _Job.Type.CARVE_KNOWLEDGE_STONE, _Job.Type.CARVE_GRAVE_MARKER]:
+				return 1 + int(round(p * 1.5))
+	return 0
+
+
+func _short_horizon_bias_for_job(job: Job) -> int:
+	if job == null or data == null:
+		return 0
+	var now_tick: int = GameManager.tick_count if GameManager != null else 0
+	# Avoid repeating a failed job type/location for a short window.
+	if _last_failed_job_type >= 0:
+		var since_fail: int = now_tick - _last_failed_job_tick
+		if since_fail >= 0 and since_fail <= 160:
+			if job.type == _last_failed_job_type:
+				var dist: int = absi(job.work_tile.x - _last_failed_job_tile.x) + absi(job.work_tile.y - _last_failed_job_tile.y)
+				if dist <= 6:
+					return -4
+				return -2
+	# Tile-level short-term avoid/seek.
+	var tile_key: String = "%d,%d" % [job.work_tile.x, job.work_tile.y]
+	if _short_fail_tiles.has(tile_key):
+		var rec: Dictionary = _short_fail_tiles[tile_key]
+		var age: int = now_tick - int(rec.get("tick", now_tick))
+		if age <= 220:
+			return -3
+		_short_fail_tiles.erase(tile_key)
+	if _short_success_tiles.has(tile_key):
+		var srec: Dictionary = _short_success_tiles[tile_key]
+		var sage: int = now_tick - int(srec.get("tick", now_tick))
+		if sage <= 260:
+			return 2
+		_short_success_tiles.erase(tile_key)
+	# Prefer jobs with recent success confidence.
+	var action_key: String = _utility_action_for_job(int(job.type))
+	var fact: Dictionary = data.recall_semantic_fact("action_success:" + action_key)
+	if not fact.is_empty():
+		var conf: float = clampf(float(fact.get("confidence", 0.5)), 0.0, 1.0)
+		return int(round((conf - 0.5) * 2.0))
+	return 0
+
+
+func _apply_social_influence_bias(job: Job, base_bias: int) -> int:
+	if job == null or data == null:
+		return base_bias
+	var authority_hint: float = 0.0
+	var influence_bias: int = 0
+	var issuer_id: int = int(job.issuer_pawn_id)
+	if issuer_id >= 0:
+		var issuer_data: HeelKawnianData = HeelKawnianManager._pawn_data_for_id(issuer_id)
+		if issuer_data != null:
+			authority_hint = clampf(issuer_data.influence / 100.0, 0.0, 1.0)
+			if data.trust.has(issuer_id):
+				authority_hint += clampf(float(data.trust[issuer_id]) / 120.0, 0.0, 0.8)
+			if data.family_bonds.has(issuer_id):
+				authority_hint += clampf(float(data.family_bonds[issuer_id]) / 150.0, 0.0, 0.7)
+	var obedience_weight: float = 1.0
+	if WorldAI != null and WorldAI.has_method("get_pawn_obedience_weight"):
+		obedience_weight = clampf(float(WorldAI.get_pawn_obedience_weight(int(data.id))), 0.5, 2.0)
+	if job.social_weight > 0.01:
+		authority_hint += clampf(float(job.social_weight), 0.0, 1.0) * 0.6
+	if authority_hint > 0.0:
+		influence_bias += int(round(authority_hint * obedience_weight * 3.0))
+	# Leader proximity bonus: soft influence, no hard control.
+	var my_sid: int = SettlementMemory.get_settlement_id_for_pawn(int(data.id))
+	if my_sid >= 0:
+		var ruler_id: int = SettlementMemory.get_ruler_pawn_id(my_sid)
+		if ruler_id >= 0 and ruler_id != int(data.id):
+			var ruler_data: HeelKawnianData = HeelKawnianManager._pawn_data_for_id(ruler_id)
+			if ruler_data != null:
+				var dist_to_ruler: int = absi(data.tile_pos.x - ruler_data.tile_pos.x) + absi(data.tile_pos.y - ruler_data.tile_pos.y)
+				if dist_to_ruler <= 10:
+					var proximity_bonus: int = int(round(clampf(ruler_data.influence / 100.0, 0.0, 1.0) * 3.0))
+					influence_bias += proximity_bonus
+	return base_bias + influence_bias
+
+
+func _learning_weight_for_job(job_type: int) -> float:
+	match job_type:
+		_Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH,
+		_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH,
+		_Job.Type.DRY_MEAT, _Job.Type.PLANT_SEEDS, _Job.Type.HARVEST_CROPS,
+		_Job.Type.GROW_FOOD:
+			return float(_learning_weight_cache.get("food_production", 1.0))
+		_Job.Type.CHOP, _Job.Type.MINE, _Job.Type.MINE_WALL,
+		_Job.Type.GATHER_FLINT, _Job.Type.GATHER_STICK:
+			return float(_learning_weight_cache.get("resource_gathering", 1.0))
+		_Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_WATCHTOWER,
+		_Job.Type.BUILD_BARRACKS, _Job.Type.BUILD_FORD:
+			return float(_learning_weight_cache.get("defense_building", 1.0))
+		_Job.Type.DEFEND, _Job.Type.PROTECT, _Job.Type.GUARD:
+			return float(_learning_weight_cache.get("military_training", 1.0))
+		_:
+			if _is_structure_build_job(job_type):
+				return float(_learning_weight_cache.get("construction", 1.0))
+	return 1.0
 
 
 func _idle_settlement_pressure() -> float:
@@ -4940,6 +5144,17 @@ func _complete_current_job() -> void:
 				})
 	# If the pawn is re-fetching materials, skip job completion (already returned above).
 	JobManager.complete(job)
+	# Short-horizon learning: record a success for the action type and tile.
+	var _succ_action: String = _utility_action_for_job(int(job.type))
+	data.record_action_outcome(_succ_action, true, {
+		"location": job.work_tile,
+		"job_type": int(job.type),
+	})
+	_short_success_tiles["%d,%d" % [job.work_tile.x, job.work_tile.y]] = {
+		"tick": GameManager.tick_count if GameManager != null else 0,
+		"job_type": int(job.type),
+	}
+	_update_goal_progress_for_job(job.type, true)
 	# Record job completion event for WorldMeaning pipeline
 	if WorldMemory != null:
 		var job_kind: int = WorldMemory.Kind.WORK_EVENT
@@ -5288,6 +5503,7 @@ func _consume_tool_durability(job_type: int) -> void:
 func _cancel_current_job() -> void:
 	if _current_job != null:
 		_return_trade_cargo_to_source_if_any(_current_job)
+		_record_short_horizon_failure(_current_job, "cancel")
 		JobManager.cancel(_current_job, "pawn_cancel")
 	_reset_to_idle()
 
@@ -5296,6 +5512,7 @@ func _unclaim_current_job(reason: String = "") -> void:
 	if _current_job != null:
 		var j0: Job = _current_job
 		_return_trade_cargo_to_source_if_any(j0)
+		_record_short_horizon_failure(j0, reason)
 		JobManager.abandon(j0, reason)
 		# Track consecutive abandons to detect claim/abort loops
 		var now_tick: int = GameManager.tick_count if GameManager != null else 0
@@ -5305,6 +5522,68 @@ func _unclaim_current_job(reason: String = "") -> void:
 			_consecutive_abandons = 1
 		_last_abandon_tick = now_tick
 	_reset_to_idle()
+
+
+func _record_short_horizon_failure(job: Job, reason: String) -> void:
+	if job == null or data == null:
+		return
+	_last_failed_job_type = int(job.type)
+	_last_failed_job_tile = job.work_tile
+	_last_failed_job_tick = GameManager.tick_count if GameManager != null else 0
+	var fail_action: String = _utility_action_for_job(int(job.type))
+	data.record_action_outcome(fail_action, false, {
+		"location": job.work_tile,
+		"job_type": int(job.type),
+		"reason": reason,
+	})
+	_short_fail_tiles["%d,%d" % [job.work_tile.x, job.work_tile.y]] = {
+		"tick": _last_failed_job_tick,
+		"job_type": int(job.type),
+		"reason": reason,
+	}
+	_update_goal_progress_for_job(job.type, false)
+
+
+func _update_goal_progress_for_job(job_type: int, success: bool) -> void:
+	if data == null or data.active_goals.is_empty():
+		return
+	var progress_delta: float = 6.0 if success else -3.0
+	for goal_id in data.active_goals:
+		var goal = data.active_goals[goal_id]
+		var gtype: String = str(goal.get("type", ""))
+		match gtype:
+			"find_food":
+				if job_type in [
+					_Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH,
+					_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH,
+					_Job.Type.DRY_MEAT, _Job.Type.PLANT_SEEDS, _Job.Type.HARVEST_CROPS,
+					_Job.Type.GROW_FOOD,
+				]:
+					data.update_goal_progress(goal_id, progress_delta)
+			"find_rest":
+				if job_type in [
+					_Job.Type.BUILD_BED, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_FIRE_PIT,
+					_Job.Type.MAINTAIN_STRUCTURE,
+				]:
+					data.update_goal_progress(goal_id, progress_delta)
+			"improve_safety":
+				if job_type in [
+					_Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_WATCHTOWER,
+					_Job.Type.BUILD_BARRACKS, _Job.Type.PROTECT, _Job.Type.DEFEND, _Job.Type.GUARD,
+				]:
+					data.update_goal_progress(goal_id, progress_delta)
+			"improve_mood":
+				if job_type in [_Job.Type.VISIT_GRAVE, _Job.Type.BUILD_SHRINE]:
+					data.update_goal_progress(goal_id, progress_delta)
+			"build_reputation", "seek_leadership":
+				if job_type in [_Job.Type.TEACH_SKILL, _Job.Type.APPRENTICESHIP, _Job.Type.BUILD_MARKER_STONE]:
+					data.update_goal_progress(goal_id, progress_delta)
+			"master_skill":
+				# Any successful job advances mastery; failure slows it.
+				data.update_goal_progress(goal_id, progress_delta * 0.6)
+			"leave_legacy":
+				if job_type in [_Job.Type.CARVE_LEDGER_STONE, _Job.Type.CARVE_KNOWLEDGE_STONE, _Job.Type.CARVE_GRAVE_MARKER]:
+					data.update_goal_progress(goal_id, progress_delta)
 
 
 func _reset_to_idle() -> void:

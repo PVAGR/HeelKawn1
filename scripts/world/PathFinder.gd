@@ -158,8 +158,8 @@ func set_preview_wall_tiles(tiles: Array, data: WorldData) -> void:
 			_last_preview_tiles.append(t)
 	for t2 in _last_preview_tiles:
 		_refresh_one_tile(t2.x, t2.y, data)
-	# Also recompute neighbors? Full recompute is fine at preview rate.
-	_compute_components(data)
+	# Use dirty flag system instead of direct recompute for performance
+	_components_dirty = true
 	_bump_nav_version()
 
 

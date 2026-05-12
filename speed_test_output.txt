@@ -1,0 +1,7 @@
+
+[Main] Speed: 1.0x
+[Main] Speed: 1.0x
+[Main] Speed: 100.0x
+[Main] Speed: 100.0x
+[MAIN_TICK_HOTSPOT] tick=79 speed=100x total=53.81ms top=pf_components=53.27ms, construction_seed=0.53ms, enemy_tick=0.00ms, generational_turnover=0.00ms
+

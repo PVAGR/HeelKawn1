@@ -27,10 +27,10 @@ const VERBOSE_SIM_LOGS: bool = false
 ## and is processed over subsequent frames.
 ## Keep caps modest at 26x–100x: each tick runs full colony AI + settlement passes;
 ## a catch-up frame with 32 ticks was freezing the renderer at extreme speeds.
-const MAX_TICKS_PER_FRAME: int = 6
-const MAX_TICKS_PER_FRAME_FAST: int = 10
-const MAX_TICKS_PER_FRAME_ULTRA: int = 14
-const MAX_TICKS_PER_FRAME_EXTREME: int = 16
+const MAX_TICKS_PER_FRAME: int = 3
+const MAX_TICKS_PER_FRAME_FAST: int = 6
+const MAX_TICKS_PER_FRAME_ULTRA: int = 10
+const MAX_TICKS_PER_FRAME_EXTREME: int = 14
 ## At 1x we preserve "real-life cadence" feel: never run more than one
 ## deterministic tick inside a single rendered frame.
 const MAX_TICKS_PER_FRAME_AT_1X: int = 1
@@ -155,27 +155,25 @@ func _maybe_log_sim_hitch(ticks_this_frame: int, frame_tick_cap: int, tick_chain
 
 
 func _max_ticks_per_frame_for_speed() -> int:
-	if game_speed <= 1.0:
-		return MAX_TICKS_PER_FRAME_AT_1X
-	if game_speed >= 100.0:
-		return MAX_TICKS_PER_FRAME_EXTREME
-	if game_speed >= 50.0:
-		return MAX_TICKS_PER_FRAME_ULTRA
-	if game_speed >= 26.0:
-		return MAX_TICKS_PER_FRAME_FAST
-	return MAX_TICKS_PER_FRAME
+	var spd: float = game_speed
+	if spd <= 1.0:   return 1
+	if spd <= 3.0:   return 3
+	if spd <= 6.0:   return 5
+	if spd <= 12.0:  return 8
+	if spd <= 26.0:  return 12
+	if spd <= 50.0:  return 18
+	return 28  # 100x
 
 
 func _max_accumulated_ticks_for_speed() -> int:
-	if game_speed <= 1.0:
-		return MAX_ACCUMULATED_TICKS_AT_1X
-	if game_speed <= 3.0:
-		return MAX_ACCUMULATED_TICKS_LOW
-	if game_speed >= 50.0:
-		return MAX_ACCUMULATED_TICKS_FAST
-	if game_speed >= 26.0:
-		return max(MAX_ACCUMULATED_TICKS, 48)
-	return MAX_ACCUMULATED_TICKS
+	var spd: float = game_speed
+	if spd <= 1.0:   return 2
+	if spd <= 3.0:   return 8
+	if spd <= 6.0:   return 16
+	if spd <= 12.0:  return 32
+	if spd <= 26.0:  return 64
+	if spd <= 50.0:  return 96
+	return 128  # 100x
 
 
 ## Deterministic phase helper for maintenance systems. A positive offset runs
@@ -191,20 +189,20 @@ func periodic_phase_due(tick: int, interval: int, offset: int = 0) -> bool:
 
 
 func _adaptive_frame_tick_cap(base_cap: int) -> int:
-	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
+	# Reduced throttling since pf_components performance issue is fixed
 	if GameManager == null:
 		return base_cap
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return maxi(1, base_cap / 8)
+		return maxi(1, base_cap / 2)  # Reduced from /8 to /2
 	if gs >= 50.0:
-		return maxi(1, base_cap / 4)
+		return maxi(1, base_cap / 1.5)  # Reduced from /4 to /1.5
 	if gs >= 26.0:
-		return maxi(1, base_cap / 2)
+		return maxi(1, base_cap / 1.2)  # Reduced from /2 to /1.2
 	if gs >= 12.0:
-		return maxi(1, base_cap / 1.5)
+		return maxi(1, base_cap / 1.1)  # Reduced from /1.5 to /1.1
 	if gs >= 6.0:
-		return maxi(1, base_cap / 1.2)
+		return maxi(1, base_cap / 1.1)  # Reduced from /1.2 to /1.1
 	return base_cap
 
 

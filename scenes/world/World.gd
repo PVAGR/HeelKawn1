@@ -582,8 +582,14 @@ func apply_ruins_from_persistence() -> void:
 				_image.set_pixel(x, y, _tile_color(x, y))
 	if any_change and _texture != null:
 		_texture.update(_image)
+		# Use dirty flag system instead of full rebuild for performance
 		if pathfinder != null:
-			pathfinder.rebuild(data)
+			# Sync tiles that were changed to RUIN feature
+			for y in range(WorldData.HEIGHT):
+				for x in range(WorldData.WIDTH):
+					var f: int = data.get_feature(x, y)
+					if f == TileFeature.Type.RUIN:
+						pathfinder.sync_tile_from_data(x, y, data)
 		notify_pawns_nav_changed()
 
 

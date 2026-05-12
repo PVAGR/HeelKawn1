@@ -2778,6 +2778,20 @@ func _tick_idle() -> void:
 			HeelKawnianManager.note_matrix_job_choice(self, job)
 		_begin_job(job)
 		return
+	# Record claim diagnostics for debugging and CreatorDebugMenu (F10)
+	var visible_candidates: Array = []
+	if JobManager != null and JobManager.has_method("visible_jobs_for_pawn"):
+		visible_candidates = JobManager.visible_jobs_for_pawn(self, data)
+	data.visible_orders_count = visible_candidates.size()
+	# Record obey score if available
+	if WorldAI != null and WorldAI.has_method("get_pawn_obedience_weight") and data != null:
+		data.obey_score = WorldAI.get_pawn_obedience_weight(int(data.id))
+	# Simple failure reason: no visible orders vs candidates present but none claimed
+	if job == null:
+		if visible_candidates.size() == 0:
+			data.last_claim_failure_reason = "no_visible_jobs"
+		else:
+			data.last_claim_failure_reason = "candidates_but_not_chosen"
 	# 7. Nothing to do: idle wander
 	var wanderlust2: float = lerpf(0.52, 1.68, _bp(3))
 	var wander_score: float = _utility_score_normalized("wander", utility_context)

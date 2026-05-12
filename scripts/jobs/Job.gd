@@ -134,6 +134,19 @@ var trade_batch: int = 0
 ## Pawns must have the required tool equipped or nearby to perform the job
 var required_tool: int = 0
 
+## === Authority / social metadata ===
+var issuer_pawn_id: int = -1
+var issuer_role: String = "" # leader, architect, elder, household_head, self, emergency, player_intent, debug
+var authority_scope: String = "nearby" # self, household, band, proto_camp, formal_settlement, guild, faction, nearby, all
+var settlement_id: int = -1
+var proto_camp_id: int = -1
+var region_key: int = -1
+var eligible_member_ids: Array = []
+var reason: String = "" # hunger, shelter, wall_plan, repair, harvest, defense, teaching, ritual, exploration
+var plan_id: int = -1
+var visible_to: String = "nearby" # local, settlement, nearby, all, self
+var social_weight: float = 1.0
+
 
 static func describe_type(t: int) -> String:
 	match t:

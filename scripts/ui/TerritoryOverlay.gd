@@ -65,7 +65,9 @@ func _process(_delta: float) -> void:
 func _refresh_territories() -> void:
 	if SettlementMemory == null:
 		return
-	var settlements: Array = SettlementMemory.get_settlements()
+	# Use only formal settlements for territory rendering — proto-sites should
+	# not be treated as authoritative territory or register territory zones.
+	var settlements: Array = SettlementMemory.get_formal_settlements()
 	# Quick check: only rebuild if settlement data changed
 	var current_hash: int = settlements.size()
 	for s in settlements:

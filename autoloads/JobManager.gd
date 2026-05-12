@@ -145,7 +145,24 @@ func post_from_dict(job_data: Dictionary) -> Job:
 		return null
 	var priority: int = int(job_data.get("priority", 0))
 	var work_ticks: int = int(job_data.get("work_ticks", 20))
-	return post(resolved_type, tile, priority, work_ticks)
+	var job: Job = post(resolved_type, tile, priority, work_ticks)
+	if job == null:
+		return null
+	# Carry authority/social metadata if present in the dict
+	job.issuer_pawn_id = int(job_data.get("issuer_pawn_id", job.issuer_pawn_id))
+	job.issuer_role = str(job_data.get("issuer_role", job.issuer_role))
+	job.authority_scope = str(job_data.get("authority_scope", job.authority_scope))
+	job.settlement_id = int(job_data.get("settlement_id", job.settlement_id))
+	job.proto_camp_id = int(job_data.get("proto_camp_id", job.proto_camp_id))
+	job.region_key = int(job_data.get("region_key", job.region_key))
+	var eligible: Variant = job_data.get("eligible_member_ids", null)
+	if eligible is Array:
+		job.eligible_member_ids = eligible
+	job.reason = str(job_data.get("reason", job.reason))
+	job.plan_id = int(job_data.get("plan_id", job.plan_id))
+	job.visible_to = str(job_data.get("visible_to", job.visible_to))
+	job.social_weight = float(job_data.get("social_weight", job.social_weight))
+	return job
 
 
 func _resolve_job_type(type_v: Variant, job_data: Dictionary) -> int:
@@ -251,6 +268,9 @@ func post_trade_haul(
 	posted_count += 1
 	_bump_jobs_data_generation()
 	job_posted.emit(job)
+	# Carry optional authority metadata from trade args (compat)
+	job.issuer_pawn_id = int(int(job.trade_from.get("issuer_pawn_id", job.issuer_pawn_id))) if job.trade_from != null else job.issuer_pawn_id
+	return job
 	return job
 
 
@@ -278,7 +298,11 @@ func claim_next_for(
 	var use_bonus: bool = priority_bonus.is_valid()
 	for i in range(_open.size()):
 		var j: Job = _open[i]
+		# Enforce filter if provided
 		if use_filter and not filter.call(j):
+			continue
+		# Authority / visibility guard: skip jobs not visible to this pawn under social rules
+		if not _job_visible_to_pawn(j, pawn, pd):
 			continue
 		var bonus: int = 0
 		if use_bonus:
@@ -305,6 +329,55 @@ func claim_next_for(
 	_bump_jobs_data_generation()
 	job_claimed.emit(job, pawn)
 	return job
+
+
+## Determine if a job is visible/eligible to a pawn under authority rules.
+func _job_visible_to_pawn(j: Job, pawn: Node, pd: Variant) -> bool:
+	# Trivial checks
+	if j == null or pawn == null or pd == null:
+		return false
+	# Always-visible override
+	if str(j.visible_to).to_lower() == "all":
+		return true
+	# Self-only
+	if str(j.visible_to).to_lower() == "self":
+		var pid: int = int(pd.id)
+		return int(j.issuer_pawn_id) == pid
+	# Immediate emergency acceptance for nearby pawns
+	var pawn_tile: Vector2i = pd.tile_pos
+	var d: int = _chebyshev(pawn_tile, j.work_tile)
+	if str(j.issuer_role).to_lower() == "emergency" and d <= 48:
+		return true
+	# Settlement / proto scope: require shared center region
+	var rk_job: int = WorldMemory._region_key(int(j.work_tile.x), int(j.work_tile.y)) if WorldMemory != null else -1
+	var job_center: int = SettlementMemory.get_center_region_for_region(rk_job) if SettlementMemory != null else -1
+	var rk_pawn: int = WorldMemory._region_key(int(pawn_tile.x), int(pawn_tile.y)) if WorldMemory != null else -1
+	var pawn_center: int = SettlementMemory.get_center_region_for_region(rk_pawn) if SettlementMemory != null else -1
+	var scope: String = str(j.authority_scope).to_lower()
+	if scope == "formal_settlement" or scope == "settlement":
+		if pawn_center >= 0 and pawn_center == job_center:
+			return true
+		return false
+	if scope == "proto_camp" or scope == "band":
+		# allow if within moderate range or same region
+		if pawn_center >= 0 and pawn_center == job_center:
+			return true
+		if d <= 24:
+			return true
+		return false
+	if scope == "household":
+		# household match if pawn data has household_id and job has eligible_member_ids or household id
+		var hid: int = int(pd.household_id) if pd.has("household_id") else -1
+		if hid >= 0 and (int(j.settlement_id) == hid or j.eligible_member_ids.has(hid)):
+			return true
+		return false
+	# Nearby visibility default
+	if str(j.visible_to).to_lower() == "nearby" or scope == "nearby":
+		if d <= 32:
+			return true
+		return false
+	# Fallback conservative: reject
+	return false
 
 
 func claim_by_id_for(pawn: HeelKawnian, job_id: int) -> Job:
@@ -451,6 +524,16 @@ func claimed_count() -> int:
 
 func get_claimed_jobs() -> Array:
 	return _claimed
+
+
+## Return visible open jobs for a given pawn (applies same visibility rules
+## used when claiming). Useful for diagnostics and Pawn-side failure reporting.
+func visible_jobs_for_pawn(pawn: Node, pawn_data: Dictionary) -> Array:
+	var res: Array = []
+	for j in _open:
+		if _job_visible_to_pawn(j, pawn, pawn_data):
+			res.append(j)
+	return res
 
 
 ## Diagnostic: cancellation reason counts for F10 debug report.

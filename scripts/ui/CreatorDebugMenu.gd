@@ -139,6 +139,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "registry", "label": "07 · SettlementRegistry"},
 			{"id": "intent", "label": "04 · IntentMemory"},
 			{"id": "jobs_stock", "label": "11 · Jobs + stockpile zones"},
+            {"id": "authority_job_audit", "label": "AUTHORITY JOB AUDIT · authority_job_audit"},
 			{"id": "trade", "label": "12 · TradeMemory"},
 			{"id": "world_events", "label": "13 · WorldEvents"},
 			{"id": "cultural", "label": "18 · CulturalMemory"},
@@ -506,6 +507,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_structure_inventory, "structure_inventory")
 		"job_pipeline":
 			error_occurred = _safe_report(_report_job_pipeline, "job_pipeline")
+			"authority_job_audit":
+				error_occurred = _safe_report(_report_authority_job_audit, "authority_job_audit")
 		"pathfinder_audit":
 			error_occurred = _safe_report(_report_pathfinder_audit, "pathfinder_audit")
 		"resource_truth_audit":
@@ -931,6 +934,70 @@ func _report_jobs_stock() -> void:
 		if z == null:
 			continue
 		print("  zone @%s items=%s" % [str(z.rect.position), str(z.inventory)])
+
+
+func _report_authority_job_audit() -> void:
+	print("=== AUTHORITY JOB AUDIT ===")
+	print("tick=%d" % GameManager.tick_count)
+	# Settlements
+	var formal_n: int = SettlementMemory.get_formal_settlement_count() if SettlementMemory != null else 0
+	var proto_n: int = SettlementMemory.get_proto_sites().size() if SettlementMemory != null else 0
+	print("formal_settlements=%d proto_sites=%d" % [formal_n, proto_n])
+
+	# Jobs
+	if JobManager != null:
+		var s: Dictionary = JobManager.stats()
+		print("jobs_open=%d jobs_claimed=%d jobs_posted=%d jobs_completed=%d jobs_cancelled=%d" % [s.open, s.claimed, s.posted, s.completed, s.cancelled])
+		print("cancel_reasons=%s" % str(s.cancel_reasons))
+	else:
+		print("JobManager missing")
+
+	# Authority system summary: sample leaders/architects
+	var leaders: Array = []
+	var architects: Array = []
+	var ps: PawnSpawner = null
+	var m: Node = _main()
+	if m != null:
+		ps = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+	if ps != null and AuthoritySystem != null:
+		for p in ps.pawns:
+			if p == null or not is_instance_valid(p):
+				continue
+			var pid: int = int(p.get("data").get("id", -1))
+			var lvl: int = AuthoritySystem.get_authority_level(pid) if AuthoritySystem.has_method("get_authority_level") else 0
+			if lvl >= 3:
+				leaders.append(pid)
+			elif lvl == 2:
+				architects.append(pid)
+	print("leaders_count=%d leaders_sample=%s" % [leaders.size(), str(leaders.slice(0, 6))])
+	print("architects_count=%d architects_sample=%s" % [architects.size(), str(architects.slice(0, 8))])
+
+	# Idle pawns sample with claim diagnostics
+	var idle_sample: Array = []
+	if ps != null:
+		for p in ps.pawns:
+			if p == null or not is_instance_valid(p):
+				continue
+			if p.has_method("get_state") and p.get_state() == p.State.IDLE:
+				var pd: Dictionary = p.get("data")
+				idle_sample.append({"id": int(pd.get("id", -1)), "visible_orders": int(pd.get("visible_orders_count", 0)), "last_claim_fail": str(pd.get("last_claim_failure_reason", ""))})
+				if idle_sample.size() >= 12:
+					break
+	print("idle_sample=%s" % str(idle_sample))
+
+	# Carried item blockers: sample pawns carrying items with no deposit destination
+	var carriers: Array = []
+	if ps != null:
+		for p in ps.pawns:
+			if p == null or not is_instance_valid(p):
+				continue
+			if p.has_method("is_carrying") and p.is_carrying():
+				var pd: Dictionary = p.get("data")
+				carriers.append({"id": int(pd.get("id", -1)), "carried": str(p.get("carried_item")), "last_claim_fail": str(pd.get("last_claim_failure_reason", ""))})
+				if carriers.size() >= 12:
+					break
+	print("carried_blockers_sample=%s" % str(carriers))
+	print("=== END AUTHORITY JOB AUDIT ===")
 
 
 func _report_trade() -> void:

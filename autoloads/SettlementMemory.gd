@@ -371,14 +371,18 @@ func recompute(_world: World) -> void:
     _war_battle_spawned.clear()
     var living_pawns: Array[HeelKawnian] = _living_pawns()
     var active_jobs: Array[Job] = _active_jobs_snapshot()
+    
+    # HEELKAWN START LAW: Do not auto-create settlements from pawn presence alone.
+    # Settlements must be founded by actual pawn actions (buildings, deaths, stockpiles).
+    # At game start, there should be zero formal settlements and zero proto_sites.
     var eligible: Array[int] = []
     for rk_any in WorldMeaning.meaning_by_region.keys():
         var rk: int = int(rk_any)
         var m: Dictionary = WorldMeaning.get_region_meaning(rk)
-        # A region is eligible for settlement if it has EITHER:
-        # - Deaths (original criterion — scarred regions are settled)
+        # A region is eligible for settlement ONLY if it has:
+        # - Deaths AND scar (original criterion — scarred regions are settled)
         # - Buildings constructed (HeelKawnians actively building homes)
-        # - Active pawns living there (population presence)
+        # NOT just pawn presence — pawns living somewhere does not make it a settlement.
         var has_deaths: bool = int(m.get("total_deaths", 0)) > 0
         var has_buildings: bool = int(m.get("buildings_constructed", 0)) > 0
         var has_scar: bool = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0)) >= 1
@@ -386,72 +390,47 @@ func recompute(_world: World) -> void:
             eligible.append(rk)
         elif has_buildings:
             eligible.append(rk)
-    # Also include regions where pawns are actively living (even if no events yet)
-    for p in living_pawns:
-        if p == null or not is_instance_valid(p) or p.data == null:
-            continue
-        var rk_p: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
-        if not eligible.has(rk_p):
-            eligible.append(rk_p)
+    # Do NOT add regions just because pawns are there — that creates fake civilization at tick 0.
+    
     eligible.sort()
     if eligible.is_empty():
-        var bootstrap_cluster: Array = _bootstrap_presettlement_cluster(living_pawns)
-        if bootstrap_cluster.is_empty():
-            return
-        var st0: Dictionary = _build_settlement_from_regions(bootstrap_cluster)
-        var base_state0: String = str(st0.get("state", "recovering"))
-        var raw_state0: String = _material_activity_state_override(
-                st0, _world, living_pawns, active_jobs, base_state0
+        # No real settlements yet — world begins free with only living HeelKawnians.
+        # Do not bootstrap proto_sites from stockpile zones or pawn tiles.
+        return
+    
+    # Process eligible regions into settlements
+    var in_eligible: Dictionary = {}
+    for e in eligible:
+        in_eligible[int(e)] = true
+    var visited: Dictionary = {}
+    for seed_value in eligible:
+        if visited.has(seed_value):
+            continue
+        var cluster: Array[int] = _bfs_cluster(seed_value, in_eligible, visited)
+        cluster.sort()
+        var st: Dictionary = _build_settlement_from_regions(cluster)
+        var base_state: String = str(st.get("state", "recovering"))
+        var raw_state: String = _material_activity_state_override(
+                st, _world, living_pawns, active_jobs, base_state
         )
-        var center_id0: int = int(st0.get("center_region", -1))
-        st0["state"] = _apply_settlement_state_truth_hysteresis(center_id0, raw_state0, base_state0, st0)
+        var center_id: int = int(st.get("center_region", -1))
+        st["state"] = _apply_settlement_state_truth_hysteresis(center_id, raw_state, base_state, st)
         # OPTIMIZATION: Force new settlements active for better early game
-        st0 = _force_settlement_active_on_founding(st0)
-        _apply_diaspora_founding(st0, center_id0)
-        _capture_resource_truth(st0)
-        settlements.append(st0)
-        var st_name0: String = str(st0.get("state", ""))
-        var ckr0: int = int(st0.get("center_region", -1))
-        var preg0: Variant = st0.get("regions", null)
-        if preg0 is PackedInt32Array:
-            var pa0: PackedInt32Array = preg0 as PackedInt32Array
-            for i in range(pa0.size()):
-                var rk0: int = int(pa0[i])
-                _region_state[rk0] = st_name0
-                _region_center[rk0] = ckr0
-    elif not eligible.is_empty():
-        var in_eligible: Dictionary = {}
-        for e in eligible:
-            in_eligible[int(e)] = true
-        var visited: Dictionary = {}
-        for seed_value in eligible:
-            if visited.has(seed_value):
-                continue
-            var cluster: Array[int] = _bfs_cluster(seed_value, in_eligible, visited)
-            cluster.sort()
-            var st: Dictionary = _build_settlement_from_regions(cluster)
-            var base_state: String = str(st.get("state", "recovering"))
-            var raw_state: String = _material_activity_state_override(
-                    st, _world, living_pawns, active_jobs, base_state
-            )
-            var center_id: int = int(st.get("center_region", -1))
-            st["state"] = _apply_settlement_state_truth_hysteresis(center_id, raw_state, base_state, st)
-            # OPTIMIZATION: Force new settlements active for better early game
-            st = _force_settlement_active_on_founding(st)
-            _apply_diaspora_founding(st, center_id)
-            _capture_resource_truth(st)
-            settlements.append(st)
-            # DEAD BRAIN REVIVED: Auto-appoint governor for new settlements
-            _appoint_initial_governor(st)
-            var st_name: String = str(st.get("state", ""))
-            var ckr: int = int(st.get("center_region", -1))
-            var preg: Variant = st.get("regions", null)
-            if preg is PackedInt32Array:
-                var pa: PackedInt32Array = preg as PackedInt32Array
-                for i in range(pa.size()):
-                    var rk2: int = int(pa[i])
-                    _region_state[rk2] = st_name
-                    _region_center[rk2] = ckr
+        st = _force_settlement_active_on_founding(st)
+        _apply_diaspora_founding(st, center_id)
+        _capture_resource_truth(st)
+        settlements.append(st)
+        # DEAD BRAIN REVIVED: Auto-appoint governor for new settlements
+        _appoint_initial_governor(st)
+        var st_name: String = str(st.get("state", ""))
+        var ckr: int = int(st.get("center_region", -1))
+        var preg: Variant = st.get("regions", null)
+        if preg is PackedInt32Array:
+            var pa: PackedInt32Array = preg as PackedInt32Array
+            for i in range(pa.size()):
+                var rk2: int = int(pa[i])
+                _region_state[rk2] = st_name
+                _region_center[rk2] = ckr
     settlements.sort_custom(func(a, b) -> bool:
         var ap: Variant = (a as Dictionary).get("regions", null)
         var bp: Variant = (b as Dictionary).get("regions", null)

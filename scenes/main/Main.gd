@@ -340,6 +340,7 @@ const MINING_REACT_SCAN_ROWS_PER_STEP: int = 4
 var _mining_react_step_skip_counter: int = 0
 const MINING_REACT_WORK_BUDGET_PER_TICK: int = 2048
 const INSPECT_SCAN_INTERVAL_TICKS: int = 30
+const CONSTRUCTION_JOB_SEED_INTERVAL_TICKS: int = 30
 var _last_inspect_event_tick_shown: int = -1
 var _inspect_tooltip_node: Control = null
 var _inspect_audio_player: AudioStreamPlayer = null
@@ -2556,6 +2557,16 @@ func _on_world_tick(tick_number: int) -> void:
 const FRAME_BUDGET_USEC: int = 10000  # 10ms = 100 FPS target (aggressive optimization)
 const FRAME_BUDGET_SOFT_USEC: int = 8000  # 8ms soft target for 125 FPS
 const DEFERRABLE_OPERATIONS: Array[String] = ["regrowth", "ambient_target", "animal_population", "observer_snapshot"]
+const MAIN_FAST_MAINT_INTERVAL_TICKS: int = 10
+const MAIN_MEDIUM_MAINT_INTERVAL_TICKS: int = 30
+const MAIN_SLOW_MAINT_INTERVAL_TICKS: int = 120
+const MAIN_DAILY_MAINT_INTERVAL_TICKS: int = 600
+
+
+func _is_main_lane_tick(tick: int, interval: int, salt: int = 0) -> bool:
+	if interval <= 1:
+		return true
+	return posmod(tick + salt, interval) == 0
 
 func _on_game_tick(tick: int) -> void:
 	if CrashTrap.trace_enabled and tick == 1:
@@ -2605,7 +2616,7 @@ func _on_game_tick(tick: int) -> void:
 		_post_wildlife_hunt_jobs_after_stabilization()
 	if (
 			_animal_spawner != null
-			and (int(tick) + ANIMAL_POPULATION_PHASE_TICKS) % AnimalSpawner.POPULATION_CHECK_TICKS == 0
+			and _is_main_lane_tick(int(tick), AnimalSpawner.POPULATION_CHECK_TICKS, ANIMAL_POPULATION_PHASE_TICKS)
 	):
 		# OPTIMIZATION: Skip if over budget (deferrable operation)
 		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
@@ -2619,7 +2630,7 @@ func _on_game_tick(tick: int) -> void:
 	# every sim tick in normal mode or high speeds will hitch.
 	# AGGRESSIVE OPTIMIZATION: Even longer intervals for smooth FPS
 	var regrowth_interval: int = _high_speed_interval(8, 30, 80)  # Was (6, 20, 60) - now 80 ticks at 100x
-	if tick % regrowth_interval == 0:
+	if _is_main_lane_tick(tick, regrowth_interval, 3):
 		# OPTIMIZATION: Skip if over budget (deferrable operation)
 		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
 			frame_budget_exceeded = true
@@ -2628,7 +2639,7 @@ func _on_game_tick(tick: int) -> void:
 			_process_regrowth(tick)
 			section_us["regrowth"] = Time.get_ticks_usec() - t0
 	var ambient_interval: int = _high_speed_interval(3, 12, 50)  # Was (2, 8, 40) - now 50 ticks at 100x
-	if tick % ambient_interval == 0:
+	if _is_main_lane_tick(tick, ambient_interval, 13):
 		# OPTIMIZATION: Skip if over budget (deferrable operation)
 		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
 			frame_budget_exceeded = true
@@ -2647,7 +2658,7 @@ func _on_game_tick(tick: int) -> void:
 	var hunt_post_interval: int = _high_speed_interval(40, 150, 500)  # Was (30, 120, 400) - now 500 ticks at 100x
 	var hunt_phase_offset: int = maxi(1, hunt_post_interval / 2)
 	if (
-			(tick + hunt_phase_offset) % hunt_post_interval == 0
+			_is_main_lane_tick(tick, hunt_post_interval, hunt_phase_offset)
 			and Main._world_stabilization_until_tick >= 0
 			and tick >= Main._world_stabilization_until_tick
 	):
@@ -2657,9 +2668,10 @@ func _on_game_tick(tick: int) -> void:
 
 	# Settlement construction seeder: post build/cook/plant jobs based on
 	# what each settlement actually needs (beds, walls, hearths, farms, etc.)
-	t0 = Time.get_ticks_usec()
-	_seed_construction_jobs()
-	section_us["construction_seed"] = Time.get_ticks_usec() - t0
+	if _is_main_lane_tick(tick, CONSTRUCTION_JOB_SEED_INTERVAL_TICKS, 11):
+		t0 = Time.get_ticks_usec()
+		_seed_construction_jobs()
+		section_us["construction_seed"] = Time.get_ticks_usec() - t0
 
 	# Flush deferred pathfinder component computation (batched from sync_tile_from_data)
 	if _world != null and _world.pathfinder != null and _world.data != null:
@@ -2668,10 +2680,10 @@ func _on_game_tick(tick: int) -> void:
 			section_us["pf_components"] = Time.get_ticks_usec() - t0
 
 	# Flood events: rain near rivers deposits flood silt; dry weather fades it.
-	if tick % 200 == 0:
+	if _is_main_lane_tick(tick, 200, 19):
 		_tick_flood_events(tick)
 	# Erosion: decay abandoned buildings
-	if tick % 2000 == 0:
+	if _is_main_lane_tick(tick, 2000, 29):
 		if _world != null and _world.has_method("_tick_erosion"):
 			_world._tick_erosion(tick)
 	# Blood stains: fade over time
@@ -2681,17 +2693,17 @@ func _on_game_tick(tick: int) -> void:
 	if _world != null and _world.has_method("_tick_doors"):
 		_world._tick_doors(tick)
 	# Settlement festivals: milestone-driven celebrations for growing colonies.
-	if SettlementMemory != null and tick % 200 == 0 and SettlementMemory.has_method("process_festival_milestones"):
+	if SettlementMemory != null and _is_main_lane_tick(tick, 200, 37) and SettlementMemory.has_method("process_festival_milestones"):
 		SettlementMemory.process_festival_milestones(tick)
 	# Periodic settlement merge: collapse ghost settlements (0-pawn) into neighbors
-	if SettlementMemory != null and tick % 300 == 0 and SettlementMemory.has_method("merge_small_settlements"):
+	if SettlementMemory != null and _is_main_lane_tick(tick, 300, 53) and SettlementMemory.has_method("merge_small_settlements"):
 		SettlementMemory.count_pawns_per_settlement()
 		SettlementMemory.merge_small_settlements()
 
 	# Settlement leader direct construction: rulers post build jobs based on
 	# settlement needs, bypassing the slow worldbox loop.
 	# DORMANT WORLD: Only runs after first settlement
-	if SettlementMemory != null and tick % _high_speed_interval(50, 100, 300) == 0 and DiscoveryGate.is_unlocked("first_settlement"):
+	if SettlementMemory != null and _is_main_lane_tick(tick, _high_speed_interval(50, 100, 300), 67) and DiscoveryGate.is_unlocked("first_settlement"):
 		var total_leader_posts: int = 0
 		for st_v in SettlementMemory.settlements:
 			if not (st_v is Dictionary):
@@ -2717,16 +2729,15 @@ func _on_game_tick(tick: int) -> void:
 	if GameManager != null and GameManager.verbose_logs():
 		if tick % 1000 == 0:
 			print("[JobCooldown] Suppressed this session: %d" % [_jobs_suppressed_this_session])
-	# Enemy AI and raid spawning - OPTIMIZATION: Skip at 100x or run less frequently
-	if GameManager.game_speed < 100.0:
-		t0 = Time.get_ticks_usec()
-		_on_enemy_tick(tick, _enemy_spawner)
-		section_us["enemy_tick"] = Time.get_ticks_usec() - t0
+	# Enemy AI and raid spawning. Keep real 100x honest; the spawner no-ops when empty.
+	t0 = Time.get_ticks_usec()
+	_on_enemy_tick(tick, _enemy_spawner)
+	section_us["enemy_tick"] = Time.get_ticks_usec() - t0
 	# Suppress hot-loop tick spam; this is a major source of debug-mode stutter.
 	# Failsafe: pawns that slipped into solid tiles (rare) get nudged; log once per pawn.
 	# OPTIMIZATION: Less frequent at 100x
 	var sanity_interval: int = _high_speed_interval(60, 200, 600)  # Was 60 always
-	if tick % sanity_interval == 0 and _pawn_spawner != null:
+	if _is_main_lane_tick(tick, sanity_interval, 71) and _pawn_spawner != null:
 		for p in _pawn_spawner.pawns:
 			if p != null and is_instance_valid(p):
 				p.sanity_check_impassable_tile()
@@ -2735,7 +2746,7 @@ func _on_game_tick(tick: int) -> void:
 		# Derivative flush recomputes meaning/persistence/culture; too-frequent calls
 		# will hitch even when tick ordering is correct.
 		var derivative_flush_interval: int = _high_speed_interval(8, 40, 150)  # Was (8, 12, 20) - now 150 at 100x
-		if tick % derivative_flush_interval == 0:
+		if _is_main_lane_tick(tick, derivative_flush_interval, 83):
 			_world_memory_derivative_flush_queued = true
 			call_deferred("_flush_world_memory_derivatives")
 	if is_instance_valid(_world):
@@ -2743,7 +2754,7 @@ func _on_game_tick(tick: int) -> void:
 		# Keep planning frequent, but not per-tick. AGGRESSIVE OPTIMIZATION: Longer intervals
 		# DORMANT WORLD: Skip settlement-dependent systems until first settlement forms
 		var planner_interval: int = _planner_interval_for_speed()
-		if tick % planner_interval == 0 and DiscoveryGate.is_unlocked("first_settlement"):
+		if _is_main_lane_tick(tick, planner_interval, 97) and DiscoveryGate.is_unlocked("first_settlement"):
 			# Check frame budget before heavy planning
 			if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
 				# Defer to next frame
@@ -2753,12 +2764,12 @@ func _on_game_tick(tick: int) -> void:
 				SettlementPlanner.plan(_world, self, false)
 				section_us["settlement_planner"] = Time.get_ticks_usec() - t0
 		# Periodic resource truth refresh — settlements need to know their stockpile state
-		if tick % 500 == 0:
+		if _is_main_lane_tick(tick, 500, 109):
 			SettlementMemory.refresh_resource_truth()
 		# Spread heavy planning across adjacent ticks to reduce one-tick hitch spikes.
 		# DORMANT WORLD: Trade planner only runs after first trade route
 		var trade_offset: int = maxi(1, planner_interval / 3)
-		if (tick + trade_offset) % planner_interval == 0 and DiscoveryGate.is_unlocked("first_trade"):
+		if _is_main_lane_tick(tick, planner_interval, trade_offset) and DiscoveryGate.is_unlocked("first_trade"):
 			# Check frame budget before heavy planning
 			if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
 				# Defer to next frame
@@ -2768,7 +2779,7 @@ func _on_game_tick(tick: int) -> void:
 				EconomyManager.get_trade_planner().plan(_world, self, false)
 				section_us["trade_planner"] = Time.get_ticks_usec() - t0
 		# Build roads from trade routes every 2000 ticks
-		if tick % 2000 == 0 and DiscoveryGate.is_unlocked("first_trade"):
+		if _is_main_lane_tick(tick, 2000, 113) and DiscoveryGate.is_unlocked("first_trade"):
 			_build_roads_from_trade_routes()
 		# OPTIMIZATION: Spread heavy settlement operations across ticks with frame budget check
 		# DORMANT WORLD: Settlement operations only run after first settlement forms
@@ -2841,25 +2852,25 @@ func _on_game_tick(tick: int) -> void:
 	# Settlement intents: scale with speed like other settlement updates
 	# DORMANT WORLD: Only runs after first settlement
 	var settlement_intent_interval: int = _high_speed_interval(5, 15, 30)
-	if tick % settlement_intent_interval == 0 and DiscoveryGate.is_unlocked("first_settlement"):
+	if _is_main_lane_tick(tick, settlement_intent_interval, 127) and DiscoveryGate.is_unlocked("first_settlement"):
 		t0 = Time.get_ticks_usec()
 		SettlementMemory.update_settlement_intents(tick)
 		section_us["settlement_intents"] = Time.get_ticks_usec() - t0
 	# Spread settlement updates across ticks to reduce hitch spikes
 	# DORMANT WORLD: Only runs after first settlement
 	var settlement_update_interval: int = _high_speed_interval(30, 45, 60)
-	if tick % settlement_update_interval == 0 and DiscoveryGate.is_unlocked("first_settlement"):
+	if _is_main_lane_tick(tick, settlement_update_interval, 137) and DiscoveryGate.is_unlocked("first_settlement"):
 		t0 = Time.get_ticks_usec()
 		SettlementMemory.update_resource_pressures(tick)
 		section_us["settlement_resource_pressure"] = Time.get_ticks_usec() - t0
 	# Offset work fronts update to spread load
 	var work_fronts_offset: int = maxi(1, settlement_update_interval / 2)
-	if (tick + work_fronts_offset) % settlement_update_interval == 0 and DiscoveryGate.is_unlocked("first_settlement"):
+	if _is_main_lane_tick(tick, settlement_update_interval, work_fronts_offset) and DiscoveryGate.is_unlocked("first_settlement"):
 		t0 = Time.get_ticks_usec()
 		SettlementMemory.update_preferred_work_fronts(tick)
 		section_us["settlement_work_fronts"] = Time.get_ticks_usec() - t0
 	# DORMANT WORLD: Social rapport only runs after first settlement
-	if tick % _social_rapport_interval_for_speed() == 0 and DiscoveryGate.is_unlocked("first_settlement"):
+	if _is_main_lane_tick(tick, _social_rapport_interval_for_speed(), 149) and DiscoveryGate.is_unlocked("first_settlement"):
 		t0 = Time.get_ticks_usec()
 		_accumulate_social_rapport()
 		if SquadCoordinator != null:
@@ -2868,7 +2879,7 @@ func _on_game_tick(tick: int) -> void:
 	_emit_pawn_divergence_summary_if_needed(tick)
 	# AI observer state export: write lightweight snapshot for external tools.
 	var ai_export_interval: int = _high_speed_interval(30, 60, 120)
-	if tick % ai_export_interval == 0:
+	if _is_main_lane_tick(tick, ai_export_interval, 157):
 		ObservationAPI.export_ai_state()
 	if _is_simulation_worker_mode():
 		_maybe_log_tick_hotspots(tick, section_us)
@@ -2878,7 +2889,7 @@ func _on_game_tick(tick: int) -> void:
 	if (
 			_observer_hud != null
 			and _observer_hud.is_visible_state()
-			and tick % obs_iv == 0
+			and _is_main_lane_tick(tick, obs_iv, 163)
 	):
 		# OPTIMIZATION: Skip if over budget (deferrable operation)
 		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
@@ -2888,7 +2899,7 @@ func _on_game_tick(tick: int) -> void:
 			_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
 			section_us["observer_snapshot"] = Time.get_ticks_usec() - t0
 	# Handle recent player_inspect events for tooltip + audio feedback
-	if tick % _inspect_scan_interval_for_speed() == 0:
+	if _is_main_lane_tick(tick, _inspect_scan_interval_for_speed(), 167):
 		# OPTIMIZATION: Skip if over budget
 		if Time.get_ticks_usec() - frame_start <= FRAME_BUDGET_USEC:
 			t0 = Time.get_ticks_usec()
@@ -2896,16 +2907,16 @@ func _on_game_tick(tick: int) -> void:
 			section_us["inspect_scan"] = Time.get_ticks_usec() - t0
 	# FocusInspector snapshotting is another large allocation hotspot (see ObservationAPI — programmatic reads must stay on-demand, not per-frame).
 	var focus_iv: int = _high_speed_interval(30, 24, 48)
-	if _focus_inspector != null and _focus_inspector.is_visible_state() and tick % focus_iv == 0:
+	if _focus_inspector != null and _focus_inspector.is_visible_state() and _is_main_lane_tick(tick, focus_iv, 173):
 		t0 = Time.get_ticks_usec()
 		_focus_inspector.apply_snapshot(_build_focus_snapshot(tick))
 		section_us["focus_snapshot"] = Time.get_ticks_usec() - t0
 	if is_instance_valid(_world):
 		var road_flush_interval: int = _high_speed_interval(2, 4, 8)
-		if tick % road_flush_interval == 0 and not _road_flush_deferred_pending:
+		if _is_main_lane_tick(tick, road_flush_interval, 181) and not _road_flush_deferred_pending:
 			_road_flush_deferred_pending = true
 			call_deferred("_flush_road_memory_dirty_tiles")
-	if tick % 10 == 0:
+	if _is_main_lane_tick(tick, MAIN_FAST_MAINT_INTERVAL_TICKS, 191):
 		_refresh_spatial_profile_overlay()
 	
 	# Auto-save every 6000 ticks (~10 in-game days at 1x)

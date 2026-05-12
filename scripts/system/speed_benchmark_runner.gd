@@ -14,6 +14,8 @@ var _last_tick_ms: int = 0
 var _results: Array[Dictionary] = []
 var _finished: bool = false
 var _gm: Node = null
+var _tick_manager: Node = null
+var _main_node: Node = null
 var _settlement_memory: Node = null
 var _job_manager: Node = null
 var _last_heartbeat_bucket: int = -1
@@ -39,6 +41,7 @@ func _initialize() -> void:
 		push_error("[SPEED_BENCH] GameManager autoload not found.")
 		quit(2)
 		return
+	_tick_manager = root.get_node_or_null("TickManager")
 	_gm.call("set_simulation_worker_mode", _bench_mode == "worker")
 	if _gm.has_method("set_lightweight_simulation_mode"):
 		_gm.call("set_lightweight_simulation_mode", _bench_mode == "worker")
@@ -50,6 +53,7 @@ func _initialize() -> void:
 		return
 	var main_node: Node = packed.instantiate()
 	root.add_child(main_node)
+	_main_node = main_node
 	_settlement_memory = root.get_node_or_null("SettlementMemory")
 	_job_manager = root.get_node_or_null("JobManager")
 	_session_id = _build_session_id()
@@ -82,6 +86,7 @@ func _process(_delta: float) -> bool:
 			"ratio": -1.0,
 			"status": "STALL",
 			"ticks": progressed_ticks,
+			"perf": _collect_perf_counters(),
 		})
 		print("[SPEED_BENCH] speed=%.1fx status=STALL ticks=%d timeout_ms=%d" % [speed, progressed_ticks, STALL_TIMEOUT_MS])
 		call_deferred("_advance_to_next_speed")
@@ -128,6 +133,7 @@ func _on_game_tick(tick: int) -> void:
 	var ratio: float = elapsed_s / maxf(0.001, expected_s)
 	var status: String = "PASS" if ratio <= REPORT_PASS_RATIO else "SLOW"
 	_sample_active = false
+	var perf: Dictionary = _collect_perf_counters()
 	_results.append({
 		"speed": speed,
 		"elapsed_s": elapsed_s,
@@ -135,10 +141,12 @@ func _on_game_tick(tick: int) -> void:
 		"ratio": ratio,
 		"status": status,
 		"ticks": progressed,
+		"perf": perf,
 	})
 	print("[SPEED_BENCH] speed=%.1fx ticks=%d elapsed=%.3fs expected=%.3fs ratio=%.2f status=%s" % [
 		speed, progressed, elapsed_s, expected_s, ratio, status
 	])
+	_print_perf_counters_for_speed(speed, perf)
 	_timeline_event("speed_end", {
 		"speed": speed,
 		"ticks": progressed,
@@ -146,6 +154,7 @@ func _on_game_tick(tick: int) -> void:
 		"expected_s": expected_s,
 		"ratio": ratio,
 		"status": status,
+		"perf": perf,
 	})
 	call_deferred("_advance_to_next_speed")
 
@@ -154,8 +163,70 @@ func _expected_seconds_for(speed: float) -> float:
 	return (float(_ticks_per_sample) * float(_gm.get("TICK_INTERVAL_SECONDS"))) / maxf(0.001, speed)
 
 
+func _resolve_pathfinder() -> Object:
+	if _main_node == null or not is_instance_valid(_main_node):
+		return null
+	var world: Node = _main_node.get_node_or_null("WorldViewport/World")
+	if world == null:
+		return null
+	var pf: Variant = world.get("pathfinder")
+	if pf is Object:
+		return pf as Object
+	return null
+
+
+func _counter_value(source: Object, property_name: String) -> int:
+	if source == null:
+		return 0
+	var value: Variant = source.get(property_name)
+	if value == null:
+		return 0
+	return int(value)
+
+
+func _collect_perf_counters() -> Dictionary:
+	var tick_manager: Object = _tick_manager as Object
+	if tick_manager == null:
+		tick_manager = _gm as Object
+	var pathfinder: Object = _resolve_pathfinder()
+	return {
+		"tick_manager": {
+			"ticks_processed_last_frame": _counter_value(tick_manager, "ticks_processed_last_frame"),
+			"tickables_called_last_frame": _counter_value(tick_manager, "tickables_called_last_frame"),
+			"max_ticks_processed_seen": _counter_value(tick_manager, "max_ticks_processed_seen"),
+			"backlog_protection_hits": _counter_value(tick_manager, "backlog_protection_hits"),
+		},
+		"pathfinder": {
+			"max_paths_solved_in_tick": _counter_value(pathfinder, "max_paths_solved_in_tick"),
+			"total_paths_solved": _counter_value(pathfinder, "total_paths_solved"),
+			"plain_paths_solved_total": _counter_value(pathfinder, "plain_paths_solved_total"),
+			"historic_paths_solved_total": _counter_value(pathfinder, "historic_paths_solved_total"),
+			"path_cache_hits": _counter_value(pathfinder, "path_cache_hits"),
+			"path_cache_misses": _counter_value(pathfinder, "path_cache_misses"),
+		},
+	}
+
+
+func _print_perf_counters_for_speed(speed: float, perf: Dictionary) -> void:
+	var tm: Dictionary = perf.get("tick_manager", {}) as Dictionary
+	var pf: Dictionary = perf.get("pathfinder", {}) as Dictionary
+	print("[SPEED_BENCH][COUNTERS] speed=%.1fx tick_last_frame=%d tickables_last_frame=%d max_ticks_frame=%d backlog_hits=%d paths_max_tick=%d paths_total=%d paths_plain=%d paths_historic=%d path_cache_hits=%d path_cache_misses=%d" % [
+		speed,
+		int(tm.get("ticks_processed_last_frame", 0)),
+		int(tm.get("tickables_called_last_frame", 0)),
+		int(tm.get("max_ticks_processed_seen", 0)),
+		int(tm.get("backlog_protection_hits", 0)),
+		int(pf.get("max_paths_solved_in_tick", 0)),
+		int(pf.get("total_paths_solved", 0)),
+		int(pf.get("plain_paths_solved_total", 0)),
+		int(pf.get("historic_paths_solved_total", 0)),
+		int(pf.get("path_cache_hits", 0)),
+		int(pf.get("path_cache_misses", 0)),
+	])
+
+
 func _parse_bench_mode() -> String:
-	var args: PackedStringArray = OS.get_cmdline_args()
+	var args: PackedStringArray = _benchmark_args()
 	# Godot passes script args separately; accept both:
 	#  --bench-mode normal
 	#  --bench_mode=normal
@@ -171,7 +242,7 @@ func _parse_bench_mode() -> String:
 
 
 func _parse_ticks_per_sample() -> int:
-	var args: PackedStringArray = OS.get_cmdline_args()
+	var args: PackedStringArray = _benchmark_args()
 	for i in range(args.size()):
 		var a: String = str(args[i])
 		if a == "--ticks-per-sample" and i + 1 < args.size():
@@ -181,6 +252,13 @@ func _parse_ticks_per_sample() -> int:
 			if eq >= 0 and eq + 1 < a.length():
 				return maxi(1, int(a.substr(eq + 1)))
 	return TICKS_PER_SAMPLE_DEFAULT
+
+
+func _benchmark_args() -> PackedStringArray:
+	var args: PackedStringArray = OS.get_cmdline_args()
+	for user_arg in OS.get_cmdline_user_args():
+		args.append(user_arg)
+	return args
 
 
 func _emit_summary_and_quit() -> void:
@@ -198,6 +276,9 @@ func _emit_summary_and_quit() -> void:
 			float(row.get("ratio", -1.0)),
 			int(row.get("ticks", 0)),
 		])
+		var perf: Dictionary = row.get("perf", {}) as Dictionary
+		if not perf.is_empty():
+			_print_perf_counters_for_speed(float(row.get("speed", 0.0)), perf)
 		var st: String = str(row.get("status", "UNKNOWN"))
 		if st != "PASS":
 			failures += 1
@@ -360,6 +441,25 @@ func _build_markdown_report(report: Dictionary) -> String:
 				float(row.get("ratio", -1.0)),
 			]
 		)
+		var perf: Dictionary = row.get("perf", {}) as Dictionary
+		if not perf.is_empty():
+			var tm: Dictionary = perf.get("tick_manager", {}) as Dictionary
+			var pf: Dictionary = perf.get("pathfinder", {}) as Dictionary
+			lines.append(
+				"  - counters: tick_last_frame=%d, tickables_last_frame=%d, max_ticks_frame=%d, backlog_hits=%d, paths_max_tick=%d, paths_total=%d, paths_plain=%d, paths_historic=%d, path_cache_hits=%d, path_cache_misses=%d"
+				% [
+					int(tm.get("ticks_processed_last_frame", 0)),
+					int(tm.get("tickables_called_last_frame", 0)),
+					int(tm.get("max_ticks_processed_seen", 0)),
+					int(tm.get("backlog_protection_hits", 0)),
+					int(pf.get("max_paths_solved_in_tick", 0)),
+					int(pf.get("total_paths_solved", 0)),
+					int(pf.get("plain_paths_solved_total", 0)),
+					int(pf.get("historic_paths_solved_total", 0)),
+					int(pf.get("path_cache_hits", 0)),
+					int(pf.get("path_cache_misses", 0)),
+				]
+			)
 	lines.append("")
 	lines.append("## Canon Guards")
 	for guard_any in report.get("canon_guards", []):

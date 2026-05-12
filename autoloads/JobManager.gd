@@ -269,9 +269,23 @@ func post_trade_haul(
 	_bump_jobs_data_generation()
 	job_posted.emit(job)
 	# Carry optional authority metadata from trade args (compat)
-	job.issuer_pawn_id = int(int(job.trade_from.get("issuer_pawn_id", job.issuer_pawn_id))) if job.trade_from != null else job.issuer_pawn_id
+	job.issuer_pawn_id = int(int(_get_with_default(job.trade_from, "issuer_pawn_id", job.issuer_pawn_id))) if job.trade_from != null else job.issuer_pawn_id
 	return job
 	return job
+
+
+## Safe accessor that accepts either Dictionary or Object and returns a default
+static func _get_with_default(obj: Variant, key: String, default: Variant) -> Variant:
+	if obj == null:
+		return default
+	if typeof(obj) == TYPE_DICTIONARY:
+		return obj.get(key, default)
+	# If object supports metadata, prefer that
+	if obj.has_method("get_meta") and obj.has_meta(key):
+		return obj.get_meta(key)
+	# Fallback to single-arg get() on Object (no default supported)
+	var val = obj.get(key)
+	return val if val != null else default
 
 
 ## Return the best open job for this pawn, or null. "Best" = highest priority
@@ -344,7 +358,11 @@ func _job_visible_to_pawn(j: Job, pawn: Node, pd: Variant) -> bool:
 		var pid: int = int(pd.id)
 		return int(j.issuer_pawn_id) == pid
 	# Immediate emergency acceptance for nearby pawns
-	var pawn_tile: Vector2i = pd.tile_pos
+	var pawn_tile: Vector2i = null
+	if typeof(pd) == TYPE_DICTIONARY:
+		pawn_tile = pd.get("tile_pos", Vector2i(-1, -1))
+	else:
+		pawn_tile = pd.get("tile_pos") if pd != null else Vector2i(-1, -1)
 	var d: int = _chebyshev(pawn_tile, j.work_tile)
 	if str(j.issuer_role).to_lower() == "emergency" and d <= 48:
 		return true
@@ -367,7 +385,12 @@ func _job_visible_to_pawn(j: Job, pawn: Node, pd: Variant) -> bool:
 		return false
 	if scope == "household":
 		# household match if pawn data has household_id and job has eligible_member_ids or household id
-		var hid: int = int(pd.household_id) if pd.has("household_id") else -1
+		var hid_val: Variant = null
+		if typeof(pd) == TYPE_DICTIONARY:
+			hid_val = pd.get("household_id", null)
+		else:
+			hid_val = pd.get("household_id") if pd != null else null
+		var hid: int = int(hid_val) if hid_val != null else -1
 		if hid >= 0 and (int(j.settlement_id) == hid or j.eligible_member_ids.has(hid)):
 			return true
 		return false
@@ -528,7 +551,7 @@ func get_claimed_jobs() -> Array:
 
 ## Return visible open jobs for a given pawn (applies same visibility rules
 ## used when claiming). Useful for diagnostics and Pawn-side failure reporting.
-func visible_jobs_for_pawn(pawn: Node, pawn_data: Dictionary) -> Array:
+func visible_jobs_for_pawn(pawn: Node, pawn_data: Variant) -> Array:
 	var res: Array = []
 	for j in _open:
 		if _job_visible_to_pawn(j, pawn, pawn_data):

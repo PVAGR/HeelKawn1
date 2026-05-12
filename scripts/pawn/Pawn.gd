@@ -2920,7 +2920,12 @@ func _audit_claim_failure_reason(visible_candidates: Array) -> String:
 		return "no_visible_orders"
 	# Have visible candidates but none were claimed; check high-priority blockers
 	# Check if carrying item that needs deposit
-	var current_carry: Variant = data.get("current_carry", null) if data != null else null
+	var current_carry: Variant = null
+	if data != null:
+		if typeof(data) == TYPE_DICTIONARY:
+			current_carry = data.get("current_carry", null)
+		else:
+			current_carry = data.get("current_carry")
 	if current_carry != null and str(current_carry).length() > 0:
 		# Pawn is carrying something; may need deposit location
 		# Check if any job is a deposit/storage job

@@ -507,8 +507,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_structure_inventory, "structure_inventory")
 		"job_pipeline":
 			error_occurred = _safe_report(_report_job_pipeline, "job_pipeline")
-			"authority_job_audit":
-				error_occurred = _safe_report(_report_authority_job_audit, "authority_job_audit")
+		"authority_job_audit":
+			error_occurred = _safe_report(_report_authority_job_audit, "authority_job_audit")
 		"pathfinder_audit":
 			error_occurred = _safe_report(_report_pathfinder_audit, "pathfinder_audit")
 		"resource_truth_audit":

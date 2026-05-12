@@ -67,12 +67,12 @@ func _on_game_tick(tick: int) -> void:
 
 
 func _try_create_trade_routes(tick: int) -> void:
-	if SettlementMemory == null or SettlementMemory.settlements.is_empty():
+	if SettlementMemory == null or SettlementMemory.get_formal_settlement_count() <= 0:
 		return
 	
 	# Get all active settlements
 	var active_settlements: Array = []
-	for st in SettlementMemory.settlements:
+	for st in SettlementMemory.get_formal_settlements():
 		if st is Dictionary:
 			var state: String = str(st.get("state", ""))
 			if state == "active" or state == "revivable":

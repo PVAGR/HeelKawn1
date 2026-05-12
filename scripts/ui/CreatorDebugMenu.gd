@@ -84,6 +84,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "job_pipeline", "label": "84 · Job pipeline (posted→claimed→completed→cancelled)"},
 			{"id": "pathfinder_audit", "label": "85 · Pathfinder audit (connectivity, components)"},
 			{"id": "resource_truth_audit", "label": "86 · Resource truth audit (stockpile vs settlement)"},
+			{"id": "guild_settlement_audit", "label": "88 · Guild settlement audit (formal vs proto)"},
 			{"id": "save_dump", "label": "87 · Save dump (read latest PlaytestRecorder save)"},
 		],
 	},
@@ -509,6 +510,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_pathfinder_audit, "pathfinder_audit")
 		"resource_truth_audit":
 			error_occurred = _safe_report(_report_resource_truth_audit, "resource_truth_audit")
+		"guild_settlement_audit":
+			error_occurred = _safe_report(_report_guild_settlement_audit, "guild_settlement_audit")
 		"save_dump":
 			_report_save_dump()
 		"playtest_bundle":
@@ -618,7 +621,7 @@ func _report_performance_snapshot() -> void:
 	var settlement_count: int = 0
 	if SettlementMemory != null:
 		if SettlementMemory.has_method("get_settlements"):
-			for s in SettlementMemory.get_settlements():
+			for s in SettlementMemory.get_formal_settlements():
 				if not (s is Dictionary):
 					continue
 				var state: String = str((s as Dictionary).get("state", "active"))
@@ -772,8 +775,8 @@ func _report_backbone_status() -> void:
 	print("— SIM CORE —")
 	var spd: float = GameManager.game_speed if GameManager != null else 0.0
 	print("  GameManager            %s  speed=%.1f" % [LIVE, spd])
-	var n_set: int = SettlementMemory.settlements.size() if SettlementMemory != null else 0
-	print("  SettlementMemory       %s  settlements=%d" % [LIVE, n_set])
+	var n_set: int = SettlementMemory.get_formal_settlement_count() if SettlementMemory != null else 0
+	print("  SettlementMemory       %s  formal_settlements=%d" % [LIVE, n_set])
 	var open_j: int = JobManager.open_count() if JobManager != null else -1
 	print("  JobManager             %s  open_jobs=%d" % [LIVE, open_j])
 	var wm_ct: int = WorldMemory.event_count() if WorldMemory != null else -1
@@ -842,7 +845,9 @@ func _report_settlements() -> void:
 		return
 	
 	var settlements_array: Array = settlements as Array
-	print("settlement_count=%d" % settlements_array.size())
+	var formal_count: int = SettlementMemory.get_formal_settlement_count()
+	var proto_count: int = SettlementMemory.get_proto_sites().size()
+	print("settlement_count=%d formal_settlements=%d proto_sites=%d" % [settlements_array.size(), formal_count, proto_count])
 	var i: int = 0
 	for s in settlements_array:
 		if not (s is Dictionary):
@@ -850,9 +855,11 @@ func _report_settlements() -> void:
 		var st: Dictionary = s as Dictionary
 		print(
 				(
-						"[%d] state=%s center=%d culture=%s scar_max=%d rev_score=%d peace_thr=%d last_death=%s intent=%s"
-						% [
-							i,
+	var settlements_array: Array = SettlementMemory.get_formal_settlements()
+	var formal_count: int = SettlementMemory.get_formal_settlement_count()
+	var proto_count: int = SettlementMemory.get_proto_sites().size()
+	print("settlement_count=%d formal_settlements=%d proto_sites=%d" % [settlements_array.size(), formal_count, proto_count])
+						str(st.get("settlement_kind", "proto_site")),
 							str(st.get("state", "")),
 							int(st.get("center_region", -1)),
 							str(st.get("culture_name", "")),
@@ -865,6 +872,17 @@ func _report_settlements() -> void:
 				)
 		)
 		i += 1
+
+
+func _report_guild_settlement_audit() -> void:
+	var m: Node2D = _main()
+	var w: World = null
+	if m != null:
+		w = m.get_node_or_null("WorldViewport/World") as World
+	if SettlementMemory == null:
+		print("[guild_settlement_audit] SettlementMemory not available")
+		return
+	print(SettlementMemory.guild_settlement_audit(w))
 
 
 func _report_registry() -> void:
@@ -1258,13 +1276,15 @@ func _report_creator_session_digest() -> void:
 			% [stance, food_p * 100.0, house_p * 100.0, mat_p * 100.0]
 	)
 	print(_creator_digest_pressure_sentence(food_p, house_p, mat_p))
-	var st_count: int = SettlementMemory.settlements.size()
+	var formal_count: int = SettlementMemory.get_formal_settlement_count()
+	var proto_count: int = SettlementMemory.get_proto_sites().size()
 	print(
-			"Clusters we call settlements right now: %d (they carry culture, intent, and revival score)."
-			% st_count
+			"Formal settlements right now: %d · proto sites: %d."
+			% [formal_count, proto_count]
 	)
-	if st_count > 0:
-		var st0: Variant = SettlementMemory.settlements[0]
+	if formal_count > 0:
+		var formal_settlements: Array = SettlementMemory.get_formal_settlements()
+		var st0: Variant = formal_settlements[0]
 		if st0 is Dictionary:
 			var st: Dictionary = st0 as Dictionary
 			print(
@@ -1329,7 +1349,8 @@ func _report_creator_session_digest() -> void:
 		var z0s: Stockpile = zlist[0] as Stockpile
 		if z0s != null:
 			print("[stockpile_first_zone_items] %s" % str(z0s.inventory))
-	print("[settlements_n] %d" % SettlementMemory.settlements.size())
+	print("[settlements_n] %d" % formal_count)
+	print("[proto_sites_n] %d" % proto_count)
 	print("[intent_memory_global] %.6f" % IntentMemory.global_pressure)
 	print(PlayerIntentQueue.debug_summary_block())
 	print("[faction_registry]")
@@ -1420,13 +1441,14 @@ func _report_playtest_bundle() -> void:
 	print("[PLAYTEST_BUNDLE] tick=%d" % GameManager.tick_count)
 	print("[PLAYTEST_BUNDLE] sim_diag=%s" % str(GameManager.sim_diag()))
 	print(
-			"[PLAYTEST_BUNDLE] pawns=%d settlements=%d wm_events=%d"
+			"[PLAYTEST_BUNDLE] pawns=%d formal_settlements=%d wm_events=%d"
 			% [
 				_get_playtest_pawn_count(),
-				SettlementMemory.settlements.size(),
+				SettlementMemory.get_formal_settlement_count(),
 				WorldMemory.event_count(),
 			]
 	)
+	print("[PLAYTEST_BUNDLE] proto_sites=%d" % SettlementMemory.get_proto_sites().size())
 	print("[PLAYTEST_BUNDLE] --- PlayerIntentQueue ---")
 	print(PlayerIntentQueue.debug_summary_block())
 	print("[PLAYTEST_BUNDLE] --- FactionRegistry ---")
@@ -2506,7 +2528,7 @@ func _force_building_now() -> void:
 	
 	# Force settlement state to active
 	if SettlementMemory != null and SettlementMemory.has_method("get_settlements"):
-		var settlements: Array = SettlementMemory.get_settlements()
+		var settlements: Array = SettlementMemory.get_formal_settlements()
 		for s in settlements:
 			if s is Dictionary:
 				var current_state: String = str(s.get("state", "unknown"))
@@ -3438,35 +3460,37 @@ func _report_resource_truth_audit() -> void:
 	])
 
 	# Per-settlement resource truth
-	var settlements: Array = SettlementMemory.settlements
+	var settlements: Array = SettlementMemory.get_formal_settlements()
 	for i in range(settlements.size()):
 		var s_any: Variant = settlements[i]
 		if not (s_any is Dictionary):
 			continue
 		var st: Dictionary = s_any as Dictionary
 		var center: int = int(st.get("center_region", -1))
+		var formal: bool = bool(st.get("is_formal_settlement", false))
+		var kind: String = str(st.get("settlement_kind", "proto_site"))
 		var rt: Variant = st.get("resource_truth")
 		var rb: Variant = st.get("resource_balance")
 		if rt is Dictionary:
-			print("  settlement[%d] center=%d resource_truth: food=%d wood=%d stone=%d total=%d" % [
-				i, center,
+			print("  settlement[%d] formal=%s kind=%s center=%d resource_truth: food=%d wood=%d stone=%d total=%d" % [
+				i, str(formal), kind, center,
 				int(rt.get("stock_food", -1)),
 				int(rt.get("stock_wood", -1)),
 				int(rt.get("stock_stone", -1)),
 				int(rt.get("total_stock_units", -1)),
 			])
 		else:
-			print("  settlement[%d] center=%d resource_truth: MISSING" % [i, center])
+			print("  settlement[%d] formal=%s kind=%s center=%d resource_truth: MISSING" % [i, str(formal), kind, center])
 		if rb is Dictionary:
-			print("  settlement[%d] center=%d resource_balance: food=%s wood=%s stone=%s source=%s" % [
-				i, center,
+			print("  settlement[%d] formal=%s kind=%s center=%d resource_balance: food=%s wood=%s stone=%s source=%s" % [
+				i, str(formal), kind, center,
 				str(rb.get("food_balance", "?")),
 				str(rb.get("wood_balance", "?")),
 				str(rb.get("stone_balance", "?")),
 				str(rb.get("source", "?")),
 			])
 		else:
-			print("  settlement[%d] center=%d resource_balance: MISSING" % [i, center])
+			print("  settlement[%d] formal=%s kind=%s center=%d resource_balance: MISSING" % [i, str(formal), kind, center])
 
 
 func _report_save_dump() -> void:

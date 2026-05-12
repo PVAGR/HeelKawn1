@@ -62,7 +62,7 @@ func plan(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 	_last_plan_tick = GameManager.tick_count
 	if not main.has_method("settlement_planner_count_pawns_in_regions"):
 		return
-	var settlements: Array = SettlementMemory.settlements
+	var settlements: Array = SettlementMemory.get_formal_settlements()
 	var total: int = settlements.size()
 	if total <= 0:
 		return

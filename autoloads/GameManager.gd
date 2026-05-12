@@ -75,6 +75,7 @@ var last_frame_tick_cap_backlog: bool = false
 var adaptive_ticks_cap_last_frame: int = 0
 var _last_slow_tick_log_msec: int = -1_000_000
 var _last_catchup_hint_log_msec: int = -1_000_000
+var _guild_audit_last_tick: int = -1
 
 ## GDScript has no try/catch for runtime faults. When true, each [signal game_tick] slot is
 ## invoked in order with a console line naming the target — the **last line printed** before

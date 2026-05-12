@@ -52,9 +52,11 @@ func describe_settlement_zone(zone_id: String) -> Dictionary:
 func digest_settlements(max_entries: int = 10) -> String:
 	FactionRegistry.sync_from_settlements()
 	var lines: PackedStringArray = PackedStringArray()
-	lines.append("ReligionLens (read-only overlay)")
+	var formal_settlements: Array = SettlementMemory.get_formal_settlements()
+	var proto_sites: int = SettlementMemory.get_proto_sites().size()
+	lines.append("ReligionLens (read-only overlay) formal=%d proto=%d" % [formal_settlements.size(), proto_sites])
 	var n: int = 0
-	for st_any in SettlementMemory.settlements:
+	for st_any in formal_settlements:
 		if n >= max_entries:
 			break
 		if not (st_any is Dictionary):
@@ -115,7 +117,7 @@ func get_harmony_index() -> float:
 	# Dynamic neural network matrix calculation of religious harmony
 	var base_harmony: float = 0.6
 	var sacred_count: int = SacredMemory.site_count()
-	var settlement_count: int = SettlementMemory.settlements.size()
+	var settlement_count: int = SettlementMemory.get_formal_settlement_count()
 	
 	if settlement_count == 0:
 		return base_harmony

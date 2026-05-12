@@ -29,7 +29,7 @@ func from_save_dict(d: Variant) -> void:
 
 
 func sync_from_settlements() -> void:
-	for st_any in SettlementMemory.settlements:
+	for st_any in SettlementMemory.get_formal_settlements():
 		if not (st_any is Dictionary):
 			continue
 		var st: Dictionary = st_any

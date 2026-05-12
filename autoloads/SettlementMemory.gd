@@ -52,6 +52,9 @@ const SPECIALIZATION_EXIT_THRESHOLD: float = 0.22
 const SPECIALIZATION_MIN_MARGIN: float = 0.12
 const SPECIALIZATION_ENTER_STABILITY_TICKS: int = 2000
 const SPECIALIZATION_EXIT_STABILITY_TICKS: int = 2500
+const MIN_GUILD_SIZE_FOR_SETTLEMENT: int = 10
+const GUILD_CLUSTER_RADIUS_TILES: int = 32
+const GUILD_STABILITY_TICKS: int = 1200
 const INTENT_GROW: String = "GROW"
 const INTENT_HOARD: String = "HOARD"
 const INTENT_DEFEND: String = "DEFEND"
@@ -105,6 +108,8 @@ var _governance_snapshot: Dictionary = {}
 var _war_command_announced: Dictionary = {}
 ## center_region -> whether battle spawn bridge fired for current war state.
 var _war_battle_spawned: Dictionary = {}
+## center_region -> guild stability cache for formal settlement founding.
+var _guild_foundation_state: Dictionary = {}
 var _validation_smoketest_autoload_printed: bool = false
 var _validation_smoketest_main_printed: bool = false
 
@@ -225,13 +230,8 @@ func _capture_resource_truth(st: Dictionary) -> void:
                     if regions_dict.has(rk_z2):
                         ore_proxy += z.count_of(Item.Type.FLINT) if Item != null else 0
                 source_label = "local_stockpile_snapshot"
-        # Fallback: if no local stockpiles found, use global snapshot
         if not has_local:
-            var snap: Dictionary = StockpileManager.labor_pressure_stock_snapshot()
-            food = int(snap.get("food", 0))
-            wood = int(snap.get("wood", 0))
-            stone = int(snap.get("stone", 0))
-            ore_proxy = StockpileManager.total_count_of(Item.Type.FLINT) if Item != null else 0
+            source_label = "no_local_stockpile"
         total = food + wood + stone + ore_proxy
     st["resource_truth"] = {
         "stock_food": food,
@@ -469,6 +469,7 @@ func recompute(_world: World) -> void:
     _apply_persisted_governance_forms()
     _compute_dominant_clans()
     count_pawns_per_settlement()
+    _apply_guild_settlement_gate(_world)
     _resolve_settlement_names()
     _settlement_truth_verify_post_recompute_pass()
 
@@ -529,6 +530,188 @@ func count_pawns_per_settlement() -> void:
             var idx: int = int(_region_to_settlement_idx[rk_p])
             var st2: Dictionary = settlements[idx] as Dictionary
             st2["population"] = int(st2.get("population", 0)) + 1
+
+
+func get_formal_settlements() -> Array:
+    var out: Array = []
+    for st_any in settlements:
+        if st_any is Dictionary and bool((st_any as Dictionary).get("is_formal_settlement", false)):
+            out.append((st_any as Dictionary).duplicate(true))
+    return out
+
+
+func get_proto_sites() -> Array:
+    var out: Array = []
+    for st_any in settlements:
+        if st_any is Dictionary and not bool((st_any as Dictionary).get("is_formal_settlement", false)):
+            out.append((st_any as Dictionary).duplicate(true))
+    return out
+
+
+func get_formal_settlement_count() -> int:
+    return get_formal_settlements().size()
+
+
+func is_formal_settlement_dict(st: Dictionary) -> bool:
+    return bool(st.get("is_formal_settlement", false))
+
+
+func can_found_formal_settlement(candidate_center: Vector2i, candidate_pawns: Array, world: World = null) -> bool:
+    return bool(describe_formal_settlement_gate(candidate_center, candidate_pawns, world).get("allowed", false))
+
+
+func describe_formal_settlement_gate(candidate_center: Vector2i, candidate_pawns: Array, world: World = null) -> Dictionary:
+    var gate: Dictionary = {
+        "allowed": false,
+        "reason": "unknown",
+        "member_count": 0,
+        "path_component": -1,
+        "stability_ticks": 0,
+        "candidate_center": candidate_center,
+    }
+    if candidate_center.x < 0 or candidate_center.y < 0:
+        gate["reason"] = "invalid_center"
+        return gate
+    var effective_world: World = world
+    if effective_world == null:
+        var world_node: Node = get_node_or_null("/root/Main/WorldViewport/World")
+        if world_node is World:
+            effective_world = world_node as World
+    var pathfinder: PathFinder = effective_world.pathfinder if effective_world != null and is_instance_valid(effective_world) else null
+    if pathfinder == null:
+        gate["reason"] = "no_pathfinder"
+        return gate
+    var center_component: int = pathfinder.component_of(candidate_center)
+    if center_component < 0:
+        gate["reason"] = "center_not_walkable"
+        return gate
+    var radius_sq: int = GUILD_CLUSTER_RADIUS_TILES * GUILD_CLUSTER_RADIUS_TILES
+    var qualified_ids: Array = []
+    var qualified_names: Array = []
+    var invalid_reason: String = ""
+    for p_any in candidate_pawns:
+        if not (p_any is HeelKawnian):
+            continue
+        var p: HeelKawnian = p_any as HeelKawnian
+        if p == null or not is_instance_valid(p) or p.data == null:
+            if invalid_reason.is_empty():
+                invalid_reason = "invalid_pawn"
+            continue
+        var pawn_tile: Vector2i = p.data.tile_pos
+        var dx: int = candidate_center.x - pawn_tile.x
+        var dy: int = candidate_center.y - pawn_tile.y
+        if dx * dx + dy * dy > radius_sq:
+            if invalid_reason.is_empty():
+                invalid_reason = "cluster_too_spread"
+            continue
+        if pathfinder.component_of(pawn_tile) != center_component:
+            if invalid_reason.is_empty():
+                invalid_reason = "component_mismatch"
+            continue
+        qualified_ids.append(int(p.data.id))
+        qualified_names.append(str(p.data.display_name))
+    gate["member_count"] = qualified_ids.size()
+    gate["path_component"] = center_component
+    gate["member_ids"] = qualified_ids.duplicate(true)
+    gate["member_names"] = qualified_names.duplicate(true)
+    if not invalid_reason.is_empty():
+        gate["reason"] = invalid_reason
+        return gate
+    if qualified_ids.size() < MIN_GUILD_SIZE_FOR_SETTLEMENT:
+        gate["reason"] = "insufficient_members"
+        return gate
+    var ids_sorted: Array = qualified_ids.duplicate(true)
+    ids_sorted.sort()
+    var signature: String = "%d|%s" % [center_component, str(ids_sorted)]
+    var center_region: int = WorldMemory._region_key(candidate_center.x, candidate_center.y)
+    var key: String = str(center_region)
+    var now: int = GameManager.tick_count if GameManager != null else 0
+    var entry_v: Variant = _guild_foundation_state.get(key, {})
+    var entry: Dictionary = entry_v as Dictionary if entry_v is Dictionary else {}
+    if str(entry.get("signature", "")) != signature:
+        entry = {
+            "signature": signature,
+            "since_tick": now,
+            "founding_tick": int(entry.get("founding_tick", -1)),
+        }
+    var since_tick: int = int(entry.get("since_tick", now))
+    var stable_ticks: int = maxi(0, now - since_tick)
+    gate["stability_ticks"] = stable_ticks
+    if stable_ticks < GUILD_STABILITY_TICKS:
+        entry["signature"] = signature
+        entry["since_tick"] = since_tick
+        entry["last_members"] = qualified_ids.duplicate(true)
+        entry["last_member_names"] = qualified_names.duplicate(true)
+        entry["formal"] = false
+        _guild_foundation_state[key] = entry
+        gate["reason"] = "insufficient_stability"
+        return gate
+    if int(entry.get("founding_tick", -1)) < 0:
+        entry["founding_tick"] = since_tick + GUILD_STABILITY_TICKS
+    entry["signature"] = signature
+    entry["since_tick"] = since_tick
+    entry["last_members"] = qualified_ids.duplicate(true)
+    entry["last_member_names"] = qualified_names.duplicate(true)
+    entry["formal"] = true
+    _guild_foundation_state[key] = entry
+    gate["allowed"] = true
+    gate["reason"] = "guild_settlement"
+    gate["founding_tick"] = int(entry.get("founding_tick", -1))
+    return gate
+
+
+func _apply_guild_settlement_gate(world: World) -> void:
+    for i in range(settlements.size()):
+        if not (settlements[i] is Dictionary):
+            continue
+        var st: Dictionary = settlements[i] as Dictionary
+        var center_rk: int = int(st.get("center_region", -1))
+        if center_rk < 0:
+            st["is_formal_settlement"] = false
+            st["settlement_kind"] = "region"
+            settlements[i] = st
+            continue
+        var center_tile: Vector2i = SettlementPlanner._center_tile_of_region_key(center_rk)
+        var guild_pawns: Array = _pawns_in_settlement_indexed(st)
+        var gate: Dictionary = describe_formal_settlement_gate(center_tile, guild_pawns, world)
+        var allowed: bool = bool(gate.get("allowed", false))
+        st["member_pawn_ids"] = _array_to_packed_int32(gate.get("member_ids", []))
+        st["guild_member_count"] = int(gate.get("member_count", 0))
+        st["guild_candidate_center_tile"] = center_tile
+        st["guild_candidate_path_component"] = int(gate.get("path_component", -1))
+        st["guild_candidate_stability_ticks"] = int(gate.get("stability_ticks", 0))
+        st["guild_candidate_reason"] = str(gate.get("reason", "unknown"))
+        st["is_formal_settlement"] = allowed
+        if allowed:
+            st["settlement_kind"] = "formal_settlement"
+            st["founding_reason"] = "guild_settlement"
+            st["founding_tick"] = int(gate.get("founding_tick", -1))
+            st["guild_id"] = "guild_%d_%d" % [center_rk, int(st.get("founding_tick", -1))]
+        else:
+            st["settlement_kind"] = _proto_site_kind_for_settlement(st)
+            st["founding_reason"] = "guild_gate:%s" % str(gate.get("reason", "unknown"))
+            st["founding_tick"] = -1
+            st["guild_id"] = ""
+        settlements[i] = st
+
+
+func _proto_site_kind_for_settlement(st: Dictionary) -> String:
+    var pop: int = int(st.get("population", 0))
+    var buildings: int = int(st.get("buildings_constructed", 0))
+    if pop >= 1 and buildings >= 1:
+        return "camp"
+    if pop >= 1:
+        return "outpost"
+    if buildings >= 1:
+        return "proto_site"
+    return "region"
+
+
+func _array_to_packed_int32(values: Array) -> PackedInt32Array:
+    var packed: PackedInt32Array = PackedInt32Array()
+    for v in values:
+        packed.append(int(v))
+    return packed
 
 func _prune_settlement_state_truth_hysteresis() -> void:
     var present: Dictionary = {}
@@ -1185,6 +1368,16 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
         "founding_tick": -1,         # Diaspora: tick when this settlement was founded
         "dominant_clan_id": -1,      # Most common clan among pawns in this settlement
         "dominant_nation_id": -1,    # Most common nation among pawns in this settlement
+        "is_formal_settlement": false,
+        "settlement_kind": "proto_site",
+        "guild_id": "",
+        "member_pawn_ids": PackedInt32Array(),
+        "guild_member_count": 0,
+        "guild_candidate_center_tile": Vector2i(-1, -1),
+        "guild_candidate_path_component": -1,
+        "guild_candidate_stability_ticks": 0,
+        "guild_candidate_reason": "not_evaluated",
+        "founding_reason": "",
     }
 
 
@@ -1337,6 +1530,113 @@ func _default_profile(region_key: int) -> Dictionary:
         "revival_score": 0,
         "revival_ready": false,
     }
+
+
+func guild_settlement_audit(world: World = null) -> String:
+    var lines: PackedStringArray = PackedStringArray()
+    var living: Array[HeelKawnian] = _living_pawns()
+    var formal: Array = get_formal_settlements()
+    var proto: Array = get_proto_sites()
+    lines.append(
+            "[guild_settlement_audit] tick=%d living_pawns=%d guild_candidates=%d formal_settlements=%d proto_sites=%d"
+            % [GameManager.tick_count if GameManager != null else -1, living.size(), settlements.size(), formal.size(), proto.size()]
+    )
+    lines.append("  candidate_summary:")
+    var downgraded: Array = []
+    for st_any in settlements:
+        if not (st_any is Dictionary):
+            continue
+        var st: Dictionary = st_any as Dictionary
+        var center_rk: int = int(st.get("center_region", -1))
+        if center_rk < 0:
+            continue
+        var center_tile: Vector2i = SettlementPlanner._center_tile_of_region_key(center_rk)
+        var candidate_pawns: Array = _pawns_in_settlement_indexed(st)
+        var gate: Dictionary = describe_formal_settlement_gate(center_tile, candidate_pawns, world)
+        var member_ids_v: Variant = gate.get("member_ids", [])
+        var member_names_v: Variant = gate.get("member_names", [])
+        var member_ids_s: String = str(member_ids_v)
+        var member_names_s: String = str(member_names_v)
+        lines.append(
+                "    center=%d kind=%s member_count=%d component=%d stability=%d can_found=%s reason=%s ids=%s names=%s"
+                % [
+                    center_rk,
+                    str(st.get("settlement_kind", "proto_site")),
+                    int(gate.get("member_count", 0)),
+                    int(gate.get("path_component", -1)),
+                    int(gate.get("stability_ticks", 0)),
+                    bool(gate.get("allowed", false)),
+                    str(gate.get("reason", "unknown")),
+                    member_ids_s,
+                    member_names_s,
+                ]
+        )
+        if not bool(st.get("is_formal_settlement", false)):
+            var state_here: String = str(st.get("state", ""))
+            if state_here == "active" or state_here == "recovering" or state_here == "revivable":
+                downgraded.append("%d:%s" % [center_rk, str(gate.get("reason", "unknown"))])
+    lines.append("  formal_settlements:")
+    if formal.is_empty():
+        lines.append("    (none)")
+    else:
+        for st_any in formal:
+            if not (st_any is Dictionary):
+                continue
+            var st: Dictionary = st_any as Dictionary
+            var center_rk: int = int(st.get("center_region", -1))
+            var rt_v: Variant = st.get("resource_truth", {})
+            var rt: Dictionary = rt_v as Dictionary if rt_v is Dictionary else {}
+            var region_set: Dictionary = {}
+            var regs_v: Variant = st.get("regions", PackedInt32Array())
+            if regs_v is PackedInt32Array:
+                for rk in regs_v as PackedInt32Array:
+                    region_set[int(rk)] = true
+            var stockpile_zones: int = 0
+            if StockpileManager != null:
+                for z in StockpileManager.zones():
+                    if z == null or not is_instance_valid(z):
+                        continue
+                    var rk_z: int = WorldMemory._region_key(z.tile.x, z.tile.y)
+                    if region_set.has(rk_z):
+                        stockpile_zones += 1
+            lines.append(
+                    "    center=%d name=%s guild_id=%s members=%d stockpile_zones=%d resource_truth=food:%d wood:%d stone:%d total:%d source=%s"
+                    % [
+                        center_rk,
+                        str(st.get("name", "Unnamed")),
+                        str(st.get("guild_id", "")),
+                        int(st.get("guild_member_count", 0)),
+                        stockpile_zones,
+                        int(rt.get("stock_food", 0)),
+                        int(rt.get("stock_wood", 0)),
+                        int(rt.get("stock_stone", 0)),
+                        int(rt.get("total_stock_units", 0)),
+                        str(((st.get("resource_balance", {}) as Dictionary).get("source", "")) if st.get("resource_balance", {}) is Dictionary else ""),
+                    ]
+            )
+    lines.append("  proto_sites:")
+    lines.append("    count=%d" % proto.size())
+    var shown: int = 0
+    for st_any in proto:
+        if shown >= 10:
+            break
+        if not (st_any is Dictionary):
+            continue
+        var stp: Dictionary = st_any as Dictionary
+        lines.append(
+                "    center=%d kind=%s state=%s members=%d reason=%s"
+                % [
+                    int(stp.get("center_region", -1)),
+                    str(stp.get("settlement_kind", "proto_site")),
+                    str(stp.get("state", "")),
+                    int(stp.get("guild_member_count", 0)),
+                    str(stp.get("guild_candidate_reason", "unknown")),
+                ]
+        )
+        shown += 1
+    if not downgraded.is_empty():
+        lines.append("  downgraded_this_run=%s" % str(downgraded))
+    return "\n".join(lines)
 
 
 ## ARCHITECT TASK 2: Get the settlement ID a pawn belongs to.
@@ -1555,6 +1855,14 @@ func get_settlement_at_region(region_key: int) -> Variant:
                 for i in range((reg as PackedInt32Array).size()):
                     if (reg as PackedInt32Array)[i] == region_key:
                         return (s as Dictionary).duplicate(true)
+    return null
+
+
+## Duplicated settlement dict only if the region belongs to a formal guild-founded settlement.
+func get_formal_settlement_at_region(region_key: int) -> Variant:
+    var st_v: Variant = get_settlement_at_region(region_key)
+    if st_v is Dictionary and bool((st_v as Dictionary).get("is_formal_settlement", false)):
+        return (st_v as Dictionary).duplicate(true)
     return null
 
 

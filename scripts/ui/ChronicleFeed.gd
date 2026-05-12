@@ -789,7 +789,7 @@ func _compose_world_summary(tick: int) -> void:
 	# Settlement count
 	var settlement_count: int = 0
 	if SettlementMemory != null and SettlementMemory.has_method("get_settlements"):
-		settlement_count = SettlementMemory.get_settlements().size()
+		settlement_count = SettlementMemory.get_formal_settlement_count()
 
 	# Knowledge at risk
 	var at_risk_count: int = 0

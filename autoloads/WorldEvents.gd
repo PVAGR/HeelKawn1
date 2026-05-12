@@ -553,7 +553,7 @@ func _calculate_alliance_potential() -> float:
 	# Dynamic neural network matrix calculation of alliance potential
 	var base_potential: float = 0.5
 	var world_age_factor: float = min(GameManager.tick_count / 10000.0, 1.0)
-	var settlement_count: int = SettlementMemory.settlements.size() if SettlementMemory else 0
+	var settlement_count: int = SettlementMemory.get_formal_settlement_count() if SettlementMemory else 0
 	var settlement_factor: float = min(settlement_count / 10.0, 1.0)
 	
 	# Connect to neural network matrix for world state analysis

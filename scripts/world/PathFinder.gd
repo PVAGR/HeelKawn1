@@ -42,8 +42,33 @@ var _last_refresh_tick: int = -1
 
 ## Dirty flag for deferred component computation.
 ## sync_tile_from_data sets this instead of recomputing immediately.
-## Call flush_component_dirty() once per tick to batch the recompute.
+## Call flush_component_dirty() once per tick to batch recompute.
 var _components_dirty: bool = false
+## Detailed tracking for performance debugging
+var _components_dirty_reason: String = ""
+var _components_dirty_detail: Dictionary = {}
+var _components_dirty_tick: int = -1
+var _components_dirty_callsite: String = ""
+var _dirty_reason_counts: Dictionary = {}
+var _last_compute_tick: int = -1
+var _last_dirty_flush_report_tick: int = -1
+
+## Helper to mark components dirty with detailed tracking
+func _mark_components_dirty(reason: String, detail: Dictionary = {}) -> void:
+	if _components_dirty:
+		var dirty_count: int = int(_dirty_reason_counts.get(reason, 0))
+		_dirty_reason_counts[reason] = dirty_count + 1
+		return # Already dirty, don't overwrite tracking info
+	_components_dirty = true
+	_components_dirty_reason = reason
+	_components_dirty_detail = detail.duplicate(true)
+	_components_dirty_tick = GameManager.tick_count if GameManager != null else -1
+	if OS.is_debug_build():
+		var stack = get_stack()
+		_components_dirty_callsite = "%s:%d" % [stack[1].source, stack[1].line] if stack.size() > 1 else "unknown"
+	# Count by reason for debugging
+	var count = _dirty_reason_counts.get(reason, 0)
+	_dirty_reason_counts[reason] = count + 1
 
 var _path_cache: Dictionary = {}
 var _path_cache_order: Array[String] = []
@@ -92,9 +117,9 @@ func rebuild(data: WorldData) -> void:
 ## After changing terrain in `data` (wall, door, mine-out), re-sync A* for one tile.
 ## Component computation is deferred — call flush_component_dirty() once per tick.
 func sync_tile_from_data(x: int, y: int, data: WorldData) -> void:
-	_refresh_one_tile(x, y, data)
-	_components_dirty = true
-	_bump_nav_version()
+	if _refresh_one_tile(x, y, data):
+		_mark_components_dirty("sync_tile_from_data", {"tile": Vector2i(x, y)})
+		_bump_nav_version()
 
 
 ## Reserve / release a future wall cell for the job queue. `on=true` when a
@@ -103,31 +128,33 @@ func set_job_construction_reservation(x: int, y: int, on: bool, data: WorldData)
 	if not _astar.region.has_point(Vector2i(x, y)):
 		return
 	var i: int = y * WorldData.WIDTH + x
-	_resv_job[i] = 1 if on else 0
-	_refresh_one_tile(x, y, data)
-	_components_dirty = true
-	_bump_nav_version()
+	var old_val: int = _resv_job[i]
+	var new_val: int = 1 if on else 0
+	if old_val == new_val:
+		return # No change, don't dirty anything
+	_resv_job[i] = new_val
+	# Job reservations are metadata only. Navigation passability comes from
+	# actual world terrain, not temporary build intent.
 
 
 ## Reserve / release many future construction cells and recompute components once.
-## This keeps autonomous wall blueprints from rebuilding the flood-fill for every tile.
+## Construction reservations are metadata only and must not dirty components.
 func set_job_construction_reservations_batch(tiles: Array, enabled: bool, data: WorldData, _source: String = "") -> void:
 	if data == null:
 		return
-	var touched: bool = false
+	var changed_tiles: Array[Vector2i] = []
 	for v in tiles:
-		if not (v is Vector2i):
-			continue
-		var t: Vector2i = v
-		if not _astar.region.has_point(t):
-			continue
-		var i: int = t.y * WorldData.WIDTH + t.x
-		_resv_job[i] = 1 if enabled else 0
-		_refresh_one_tile(t.x, t.y, data)
-		touched = true
-	if touched:
-		_components_dirty = true
-		_bump_nav_version()
+		if v is Vector2i:
+			var t: Vector2i = v
+			if not _astar.region.has_point(t):
+				continue
+			var i: int = t.y * WorldData.WIDTH + t.x
+			var old_val: int = _resv_job[i]
+			var new_val: int = 1 if enabled else 0
+			if old_val != new_val:
+				_resv_job[i] = new_val
+				changed_tiles.append(t)
+	# No dirtying here: reservations no longer change passability.
 
 
 ## Flush deferred component computation. Call once per tick (or once per frame).
@@ -135,6 +162,17 @@ func set_job_construction_reservations_batch(tiles: Array, enabled: bool, data: 
 func flush_component_dirty(data: WorldData) -> bool:
 	if not _components_dirty:
 		return false
+	# Diagnostic output when recompute actually occurs
+	if OS.is_debug_build() and _components_dirty_tick != _last_dirty_flush_report_tick:
+		_last_dirty_flush_report_tick = _components_dirty_tick
+		var age: int = (GameManager.tick_count if GameManager != null else -1) - _components_dirty_tick
+		print("[PF_DIRTY_FLUSH] tick=%d reason=%s age=%s detail=%s caller=%s" % [
+			GameManager.tick_count if GameManager != null else -1,
+			_components_dirty_reason,
+			str(age) if _components_dirty_tick >= 0 else "unknown",
+			str(_components_dirty_detail),
+			_components_dirty_callsite
+		])
 	_components_dirty = false
 	_compute_components(data)
 	return true
@@ -156,30 +194,34 @@ func set_preview_wall_tiles(tiles: Array, data: WorldData) -> void:
 			if _resv_job[i2] == 0:
 				_resv_preview[i2] = 1
 			_last_preview_tiles.append(t)
-	for t2 in _last_preview_tiles:
-		_refresh_one_tile(t2.x, t2.y, data)
-	# Use dirty flag system instead of direct recompute for performance
-	_components_dirty = true
-	_bump_nav_version()
+	# Preview walls are UI-only and must not alter passability or dirty the
+	# connected-component cache.
 
 
 ## Legacy entry point: prefer `sync_tile_from_data` after data edits.
 ## Forces one tile from explicit passability (used by older call sites only).
 ## Deprecated: use `WorldData` + `sync_tile_from_data`.
 func set_passable(x: int, y: int, passable: bool, data: WorldData) -> void:
+	var old_passable: bool = _astar.is_point_solid(Vector2i(x, y))
+	var new_passable: bool = not passable
+	if old_passable == new_passable:
+		return # No change, don't dirty components
 	_astar.set_point_solid(Vector2i(x, y), not passable)
-	_components_dirty = true
+	_mark_components_dirty("set_passable", {"tile": Vector2i(x, y), "old": old_passable, "new": new_passable})
 	_bump_nav_version()
 
 
 func _refresh_one_tile(x: int, y: int, data: WorldData) -> void:
 	var p := Vector2i(x, y)
 	if not _astar.region.has_point(p):
-		return
-	var i3: int = y * WorldData.WIDTH + x
+		return false
 	var base_walk: bool = WorldData.is_tile_walkable(data, x, y)
-	var block: bool = (not base_walk) or (_resv_job[i3] > 0) or (_resv_preview[i3] > 0)
+	var block: bool = not base_walk
+	var old_block: bool = _astar.is_point_solid(p)
+	if old_block == block:
+		return false
 	_astar.set_point_solid(p, block)
+	return true
 
 
 ## Return the list of tiles to visit AFTER start to reach goal. Empty if:
@@ -456,7 +498,7 @@ func find_tile_in_component_near(comp_id: int, center: Vector2i, max_radius: int
 func _compute_components(data: WorldData) -> void:
 	var stack = get_stack()
 	if stack.size() > 2:
-		print("[PF_STACK] ", stack[1].source, ":", stack[1].line, " -> ", stack[2].source, ":", stack[2].line)
+		print("[PF_STACK] flusher=", stack[1].source, ":", stack[1].line, " -> ", stack[2].source, ":", stack[2].line, " (dirty setter not shown)")
 	_component_id.resize(WorldData.TILE_COUNT)
 	for i in range(_component_id.size()):
 		_component_id[i] = -1

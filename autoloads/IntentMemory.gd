@@ -57,7 +57,7 @@ func recompute(world: World) -> void:
 		_age_index_last_seen = aidx
 	var n_sett: int = 0
 	var collapse_score: float = 0.0
-	for s_any2 in SettlementMemory.get_settlements():
+	for s_any2 in SettlementMemory.get_formal_settlements():
 		if not (s_any2 is Dictionary):
 			continue
 		var st: Dictionary = s_any2
@@ -96,7 +96,7 @@ func recompute(world: World) -> void:
 	var aspn: Node = null
 	if world.has_meta("animal_spawner"):
 		aspn = world.get_meta("animal_spawner", null) as Node
-	for s_any in SettlementMemory.get_settlements():
+	for s_any in SettlementMemory.get_formal_settlements():
 		if not (s_any is Dictionary):
 			continue
 		var sd: Dictionary = s_any

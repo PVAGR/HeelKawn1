@@ -103,7 +103,7 @@ func get_all_stage_snapshots(max_items: int = 12) -> Array[Dictionary]:
 	if SettlementMemory == null or not SettlementMemory.has_method("get_settlements"):
 		out.append(get_world_stage_snapshot())
 		return out
-	var settlements: Array = SettlementMemory.get_settlements()
+	var settlements: Array = SettlementMemory.get_formal_settlements()
 	for i in range(mini(max_items, settlements.size())):
 		out.append(get_stage_snapshot(i))
 	if settlements.is_empty():
@@ -294,7 +294,7 @@ func _pawns_for_settlement(st: Dictionary, settlement_id: int) -> Array[HeelKawn
 func _settlement_for_id(settlement_id: int) -> Dictionary:
 	if SettlementMemory == null or not SettlementMemory.has_method("get_settlements"):
 		return {}
-	var settlements: Array = SettlementMemory.get_settlements()
+	var settlements: Array = SettlementMemory.get_formal_settlements()
 	if settlement_id >= 0 and settlement_id < settlements.size() and settlements[settlement_id] is Dictionary:
 		return (settlements[settlement_id] as Dictionary).duplicate(true)
 	for st_v in settlements:

@@ -261,11 +261,11 @@ func get_visible_pawns() -> Array[HeelKawnian]:
 
 func get_visible_settlement_count() -> int:
 	if not is_player_incarnated() or _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
-		return SettlementMemory.settlements.size()
+		return SettlementMemory.get_formal_settlement_count()
 	var pt: Vector2i = _player_pawn.data.tile_pos
 	var r: int = INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES
 	var n: int = 0
-	for st_any in SettlementMemory.settlements:
+	for st_any in SettlementMemory.get_formal_settlements():
 		if not (st_any is Dictionary):
 			continue
 		var ckr: int = int((st_any as Dictionary).get("center_region", -1))
@@ -1707,11 +1707,12 @@ func _process(delta: float) -> void:
 		if avg_fps < 50.0 and OS.is_debug_build():
 			var tick_batch_ms: float = float(TickManager.debug_last_tick_batch_usec) / 1000.0
 			var job_count: int = JobManager.stats().get("active", 0) if JobManager != null else 0
-			print("[PERF] avg_fps=%.0f over %.1fs | tick_batch=%.1fms | pawns=%d jobs=%d settlements=%d" % [
+			print("[PERF] avg_fps=%.0f over %.1fs | tick_batch=%.1fms | pawns=%d jobs=%d settlements=%d proto_sites=%d" % [
 				avg_fps, _frame_time_accum, tick_batch_ms,
 				_pawn_spawner.pawns.size() if _pawn_spawner != null else 0,
 				job_count,
-				SettlementMemory.get_settlements().size() if SettlementMemory != null else 0
+				SettlementMemory.get_formal_settlement_count() if SettlementMemory != null else 0,
+				SettlementMemory.get_proto_sites().size() if SettlementMemory != null else 0
 			])
 		_frame_time_samples = 0
 		_frame_time_accum = 0.0
@@ -5834,7 +5835,7 @@ func _seed_construction_jobs() -> void:
 	var materials_crisis: bool = stock_wood <= 2 or stock_stone <= 2
 
 	var posted: int = 0
-	var settlements: Array = SettlementMemory.get_settlements()
+	var settlements: Array = SettlementMemory.get_formal_settlements()
 	if settlements.is_empty():
 		return
 	var max_settlements_this_pass: int = 1 if GameManager.game_speed >= 50.0 else 2
@@ -7837,7 +7838,7 @@ func _build_save_dict() -> Dictionary:
 
 func _get_primary_settlement_name() -> String:
 	if SettlementMemory != null:
-		var settlements: Array = SettlementMemory.get_settlements()
+		var settlements: Array = SettlementMemory.get_formal_settlements()
 		if not settlements.is_empty():
 			var s: Dictionary = settlements[0] as Dictionary
 			return str(s.get("name", s.get("intent", "Settlement")))
@@ -8382,9 +8383,10 @@ func _pawn_counts_by_region_key() -> Dictionary:
 func _build_realm_crown_view_text() -> String:
 	## Macro strip: settlements × proto-houses × myth/sacred tone (read-only facts).
 	var max_settlements: int = _realm_crown_max_settlements
+	var proto_sites: int = SettlementMemory.get_proto_sites().size()
 	FactionRegistry.sync_from_settlements()
 	var rows: Array = []
-	for st_any in SettlementMemory.settlements:
+	for st_any in SettlementMemory.get_formal_settlements():
 		if not (st_any is Dictionary):
 			continue
 		var st: Dictionary = st_any
@@ -8453,8 +8455,8 @@ func _build_realm_crown_view_text() -> String:
 	var total_pawns: int = _observer_total_pawns()
 	var head: String = (
 			"[b]REALM (crown view)[/b]\n"
-			+ "Places %d · Heelkawnians %d · Houses %d · Sacred sites %d · Harmony %.2f\n"
-			% [place_count, total_pawns, houses_n, sac_n, harm]
+			+ "Formal settlements %d · Proto sites %d · Heelkawnians %d · Houses %d · Sacred sites %d · Harmony %.2f\n"
+			% [place_count, proto_sites, total_pawns, houses_n, sac_n, harm]
 	)
 	if place_count == 0:
 		return (

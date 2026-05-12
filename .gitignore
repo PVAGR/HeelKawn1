@@ -1,3 +1,4 @@
+```
 # Compiled and build artifacts
 *.pyc
 __pycache__/
@@ -10,13 +11,18 @@ __pycache__/
 *.out
 
 # Dependencies
-.venv/
-venv/
 node_modules/
-target/
-build/
+venv/
+.venv/
+.env
+.env.local
+.env.*
+
+# Build directories
 dist/
-*.egg-info/
+build/
+target/
+.gradle/
 
 # Logs and temp files
 *.log
@@ -24,20 +30,9 @@ dist/
 *.swp
 *.swo
 
-# Environment
-.env
-.env.local
-.env.*
-
 # Editors
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# OS generated files
-.DS_Store
-Thumbs.db
 
 # Coverage reports
 coverage/
@@ -47,30 +42,9 @@ htmlcov/
 # Cache directories
 .mypy_cache/
 .pytest_cache/
-.gradle/
+__pycache__/
 
-.aider*
-
-# Local AI/editor state
-.letta/
-.godot/
-.godot/
-.qwen/
-.roo/
-.cursor/
-.agents_tmp/
-.aider.tags.cache.v4/
-
-# Local bundled tools and generated diagnostics
-.tools/
-autoload_audit*.json*
-*_compare_out.txt
-*_compare_err.txt
-smoke_errors.txt
-settlement_*_output.txt
-
-# Accidental shell/transcript artifacts
-$null
-Command to Run
-Diff Summary
-output.txt
+# System files
+.DS_Store
+Thumbs.db
+```

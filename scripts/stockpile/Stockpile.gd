@@ -1,6 +1,8 @@
 class_name Stockpile
 extends Node2D
 
+signal inventory_changed(stockpile: Stockpile)
+
 ## A rectangular stockpile zone with an item filter. Pawns haul accepted
 ## items here and eat from zones whose filter admits food. The colony can
 ## have many zones simultaneously -- StockpileManager knows about all of
@@ -96,6 +98,7 @@ func add_item(type: int, qty: int = 1) -> void:
 	if type == Item.Type.NONE or qty <= 0:
 		return
 	inventory[type] = inventory.get(type, 0) + qty
+	inventory_changed.emit(self)
 	queue_redraw()
 
 
@@ -109,6 +112,7 @@ func take_item(type: int, qty: int = 1) -> int:
 	inventory[type] = have - taken
 	if inventory[type] <= 0:
 		inventory.erase(type)
+	inventory_changed.emit(self)
 	queue_redraw()
 	return taken
 

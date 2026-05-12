@@ -3822,15 +3822,15 @@ func _apply_social_influence_bias(job: Job, base_bias: int) -> int:
 
 func _learning_weight_for_job(job_type: int) -> float:
 	match job_type:
-		_Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH,
-		_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH,
-		_Job.Type.DRY_MEAT, _Job.Type.PLANT_SEEDS, _Job.Type.HARVEST_CROPS,
+		_Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH, \
+		_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH, \
+		_Job.Type.DRY_MEAT, _Job.Type.PLANT_SEEDS, _Job.Type.HARVEST_CROPS, \
 		_Job.Type.GROW_FOOD:
 			return float(_learning_weight_cache.get("food_production", 1.0))
-		_Job.Type.CHOP, _Job.Type.MINE, _Job.Type.MINE_WALL,
+		_Job.Type.CHOP, _Job.Type.MINE, _Job.Type.MINE_WALL, \
 		_Job.Type.GATHER_FLINT, _Job.Type.GATHER_STICK:
 			return float(_learning_weight_cache.get("resource_gathering", 1.0))
-		_Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_WATCHTOWER,
+		_Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_WATCHTOWER, \
 		_Job.Type.BUILD_BARRACKS, _Job.Type.BUILD_FORD:
 			return float(_learning_weight_cache.get("defense_building", 1.0))
 		_Job.Type.DEFEND, _Job.Type.PROTECT, _Job.Type.GUARD:

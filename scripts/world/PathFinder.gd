@@ -14,6 +14,7 @@ const NEIGHBOR_OFFSETS: Array[Vector2i] = [
 	Vector2i( 1,  0), Vector2i(-1,  0), Vector2i( 0,  1), Vector2i( 0, -1),
 	Vector2i( 1,  1), Vector2i(-1,  1), Vector2i( 1, -1), Vector2i(-1, -1),
 ]
+const PATH_CACHE_MAX_ENTRIES: int = 512
 
 const _WM = preload("res://autoloads/WorldMemory.gd")
 
@@ -44,6 +45,19 @@ var _last_refresh_tick: int = -1
 ## Call flush_component_dirty() once per tick to batch the recompute.
 var _components_dirty: bool = false
 
+var _path_cache: Dictionary = {}
+var _path_cache_order: Array[String] = []
+var _nav_version: int = 0
+var path_cache_hits: int = 0
+var path_cache_misses: int = 0
+var paths_solved_this_tick: int = 0
+var paths_solved_last_tick: int = 0
+var max_paths_solved_in_tick: int = 0
+var total_paths_solved: int = 0
+var historic_paths_solved_total: int = 0
+var plain_paths_solved_total: int = 0
+var _path_solve_counter_tick: int = -1
+
 
 func _init() -> void:
 	_astar = AStarGrid2D.new()
@@ -72,6 +86,7 @@ func rebuild(data: WorldData) -> void:
 		for x in range(WorldData.WIDTH):
 			_refresh_one_tile(x, y, data)
 	_compute_components(data)
+	_bump_nav_version()
 
 
 ## After changing terrain in `data` (wall, door, mine-out), re-sync A* for one tile.
@@ -79,6 +94,7 @@ func rebuild(data: WorldData) -> void:
 func sync_tile_from_data(x: int, y: int, data: WorldData) -> void:
 	_refresh_one_tile(x, y, data)
 	_components_dirty = true
+	_bump_nav_version()
 
 
 ## Reserve / release a future wall cell for the job queue. `on=true` when a
@@ -90,6 +106,7 @@ func set_job_construction_reservation(x: int, y: int, on: bool, data: WorldData)
 	_resv_job[i] = 1 if on else 0
 	_refresh_one_tile(x, y, data)
 	_components_dirty = true
+	_bump_nav_version()
 
 
 ## Reserve / release many future construction cells and recompute components once.
@@ -110,6 +127,7 @@ func set_job_construction_reservations_batch(tiles: Array, enabled: bool, data: 
 		touched = true
 	if touched:
 		_components_dirty = true
+		_bump_nav_version()
 
 
 ## Flush deferred component computation. Call once per tick (or once per frame).
@@ -142,6 +160,7 @@ func set_preview_wall_tiles(tiles: Array, data: WorldData) -> void:
 		_refresh_one_tile(t2.x, t2.y, data)
 	# Also recompute neighbors? Full recompute is fine at preview rate.
 	_compute_components(data)
+	_bump_nav_version()
 
 
 ## Legacy entry point: prefer `sync_tile_from_data` after data edits.
@@ -150,6 +169,7 @@ func set_preview_wall_tiles(tiles: Array, data: WorldData) -> void:
 func set_passable(x: int, y: int, passable: bool, data: WorldData) -> void:
 	_astar.set_point_solid(Vector2i(x, y), not passable)
 	_components_dirty = true
+	_bump_nav_version()
 
 
 func _refresh_one_tile(x: int, y: int, data: WorldData) -> void:
@@ -168,6 +188,17 @@ func _refresh_one_tile(x: int, y: int, data: WorldData) -> void:
 ##   - goal is solid,
 ##   - no path exists.
 func find_path(start: Vector2i, goal: Vector2i) -> Array[Vector2i]:
+	var cache_key: String = _path_cache_key(start, goal, &"plain")
+	if _path_cache.has(cache_key):
+		path_cache_hits += 1
+		return _duplicate_path(_path_cache[cache_key])
+	path_cache_misses += 1
+	var out: Array[Vector2i] = _find_path_uncached(start, goal, &"plain")
+	_store_path_cache(cache_key, out)
+	return _duplicate_path(out)
+
+
+func _find_path_uncached(start: Vector2i, goal: Vector2i, mode: StringName = &"plain") -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	if start == goal:
 		return out
@@ -178,6 +209,7 @@ func find_path(start: Vector2i, goal: Vector2i) -> Array[Vector2i]:
 	# Fast reject: different components means no hope of a path.
 	if component_of(start) != component_of(goal):
 		return out
+	_record_path_solve(mode)
 	var packed: PackedVector2Array = _astar.get_id_path(start, goal)
 	if packed.size() <= 1:
 		return out
@@ -194,7 +226,7 @@ func find_path_pawn_historic_aversion(start: Vector2i, goal: Vector2i) -> Array[
 		var p: Vector2i = _idx_to_point(idx)
 		if _astar.region.has_point(p):
 			_astar.set_point_weight_scale(p, _pawn_hist_scale[idx])
-	var out: Array[Vector2i] = find_path(start, goal)
+	var out: Array[Vector2i] = _find_path_uncached(start, goal, &"historic")
 	for idx2 in _pawn_hist_dirty:
 		var p2: Vector2i = _idx_to_point(idx2)
 		if _astar.region.has_point(p2):
@@ -301,6 +333,59 @@ func _idx_to_point(i: int) -> Vector2i:
 		i % WorldData.WIDTH,
 		int(i / float(WorldData.WIDTH))
 	)
+
+
+func _clear_path_cache() -> void:
+	_path_cache.clear()
+	_path_cache_order.clear()
+
+
+func _bump_nav_version() -> void:
+	_nav_version += 1
+	_clear_path_cache()
+
+
+func _roll_path_solve_tick() -> void:
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	if tick == _path_solve_counter_tick:
+		return
+	if _path_solve_counter_tick >= 0:
+		paths_solved_last_tick = paths_solved_this_tick
+	paths_solved_this_tick = 0
+	_path_solve_counter_tick = tick
+
+
+func _record_path_solve(mode: StringName) -> void:
+	_roll_path_solve_tick()
+	paths_solved_this_tick += 1
+	max_paths_solved_in_tick = maxi(max_paths_solved_in_tick, paths_solved_this_tick)
+	total_paths_solved += 1
+	if mode == &"historic":
+		historic_paths_solved_total += 1
+	else:
+		plain_paths_solved_total += 1
+
+
+func _path_cache_key(start: Vector2i, goal: Vector2i, mode: StringName) -> String:
+	return "%s:%d:%d:%d:%d:%d" % [str(mode), _nav_version, start.x, start.y, goal.x, goal.y]
+
+
+func _store_path_cache(cache_key: String, path: Array[Vector2i]) -> void:
+	if _path_cache.has(cache_key):
+		return
+	if _path_cache_order.size() >= PATH_CACHE_MAX_ENTRIES:
+		var old_key: String = _path_cache_order.pop_front()
+		_path_cache.erase(old_key)
+	_path_cache[cache_key] = _duplicate_path(path)
+	_path_cache_order.append(cache_key)
+
+
+func _duplicate_path(path: Array) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for v in path:
+		if v is Vector2i:
+			out.append(v)
+	return out
 
 
 ## Find a passable tile next to `tile` (8-way). Used to park a pawn next to

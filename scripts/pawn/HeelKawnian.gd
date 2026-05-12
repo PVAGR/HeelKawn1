@@ -447,6 +447,7 @@ var _cached_path: Array[Vector2i] = []  # PERFORMANCE: Pathfinding cache
 var _cached_path_target: Vector2i = Vector2i(-9999, -9999)  # PERFORMANCE: Path target cache
 var _cached_path_tick: int = -1  # PERFORMANCE: Path cache timestamp
 const PATH_CACHE_DURATION: int = 20  # PERFORMANCE: Ticks to cache path
+const NONURGENT_PATH_RETRY_TICKS: int = 60
 ## Cached enemy list â€” refreshed every 30 ticks to avoid per-pawn scene tree scans.
 static var _cached_enemies: Array = []
 static var _cached_enemies_tick: int = -100
@@ -481,6 +482,8 @@ var _autonomy_draft_peer_id: int = -1
 var _last_autonomy_feedback: String = ""
 var _next_autonomy_grudge_tick: int = 0
 var _next_autonomy_social_seek_tick: int = 0
+var _last_nonurgent_path_fail_target: Vector2i = Vector2i(-999999, -999999)
+var _next_nonurgent_path_retry_tick: int = -1
 ## One [WorldAI.build_idle_parity_context_for_pawn] snapshot per pawn per tick (NPC / player parity).
 var _parity_context_tick: int = -1
 var _parity_context: Dictionary = {}
@@ -1191,6 +1194,8 @@ func autonomy_draft_goto(world_tile: Vector2i, purpose: String, peer_id: int = -
 		return
 	if not _world.pathfinder.is_passable(world_tile):
 		return
+	if not _nonurgent_path_request_allowed(world_tile):
+		return
 	_autonomy_draft_purpose = purpose
 	_autonomy_draft_peer_id = peer_id
 	release_job_if_any()
@@ -1206,11 +1211,13 @@ func autonomy_draft_goto(world_tile: Vector2i, purpose: String, peer_id: int = -
 		return
 	var path: Array[Vector2i] = _path_for_pawn(world_tile)
 	if path.is_empty():
+		_note_nonurgent_path_result(world_tile, false)
 		_autonomy_draft_purpose = ""
 		_autonomy_draft_peer_id = -1
 		_state = State.IDLE
 		_request_redraw()
 		return
+	_note_nonurgent_path_result(world_tile, true)
 	_notify_autonomy_feedback(purpose)
 	_start_path(path)
 	_request_redraw()
@@ -1636,11 +1643,15 @@ func _try_start_pilgrimage() -> bool:
 
 func _start_pilgrimage_to_memorial(memorial: Dictionary) -> void:
 	var target_tile: Vector2i = memorial.tile
+	if not _nonurgent_path_request_allowed(target_tile):
+		return
 	
 	# Pathfind to memorial tile (use cached pathfinding, no historic aversion for pilgrimage)
 	var path = _get_cached_path(data.tile_pos, target_tile, false)
 	if path.is_empty():
+		_note_nonurgent_path_result(target_tile, false)
 		return  # No valid path
+	_note_nonurgent_path_result(target_tile, true)
 	
 	# Set state to PILGRIMAGE
 	_state = State.PILGRIMAGE
@@ -1665,9 +1676,13 @@ func _try_grave_pilgrimage() -> bool:
 	var grave_tile: Vector2i = _find_family_grave()
 	if grave_tile.x < 0:
 		return false
+	if not _nonurgent_path_request_allowed(grave_tile):
+		return false
 	var path: Array[Vector2i] = _world.pathfinder.find_path(data.tile_pos, grave_tile)
 	if path.is_empty():
+		_note_nonurgent_path_result(grave_tile, false)
 		return false
+	_note_nonurgent_path_result(grave_tile, true)
 	_current_job = Job.new()
 	_current_job.type = _Job.Type.VISIT_GRAVE
 	_current_job.tile = grave_tile
@@ -5447,6 +5462,27 @@ func _alive_pawns_from_spawner(spawner: PawnSpawner) -> Array:
 	else:
 		candidates.assign(spawner.pawns)
 	return candidates
+
+
+func _nonurgent_path_request_allowed(target_tile: Vector2i) -> bool:
+	if data == null or GameManager == null:
+		return false
+	if target_tile == data.tile_pos:
+		return false
+	var tick: int = GameManager.tick_count
+	if target_tile == _last_nonurgent_path_fail_target and tick < _next_nonurgent_path_retry_tick:
+		return false
+	return true
+
+
+func _note_nonurgent_path_result(target_tile: Vector2i, success: bool) -> void:
+	if success:
+		_last_nonurgent_path_fail_target = Vector2i(-999999, -999999)
+		_next_nonurgent_path_retry_tick = -1
+		return
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	_last_nonurgent_path_fail_target = target_tile
+	_next_nonurgent_path_retry_tick = tick + NONURGENT_PATH_RETRY_TICKS
 
 
 func _try_walk_to_bed() -> bool:

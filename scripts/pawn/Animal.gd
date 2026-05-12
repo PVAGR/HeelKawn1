@@ -5,6 +5,10 @@ class_name Animal
 
 enum Type { RABBIT, DEER }
 
+const ANIMAL_AI_INTERVAL_TICKS: int = 3
+const ANIMAL_WANDER_PATH_INTERVAL_TICKS: int = 12
+const ANIMAL_WANDER_RETRY_TICKS: int = 45
+
 const SPECIES_DATA: Dictionary = {
 	Type.RABBIT: {
 		"name": "Rabbit",
@@ -47,6 +51,9 @@ var _current_path: Array[Vector2i] = []
 var _path_index: int = 0
 var _nearby_animals: Array[Animal] = []
 var _dead: bool = false
+var _stable_animal_id: int = 0
+var _last_wander_path_fail_target: Vector2i = Vector2i(-999999, -999999)
+var _next_wander_path_retry_tick: int = -1
 
 func _animal_stream(label: String) -> StringName:
 	return StringName("animal:%d:%d:%d:%s" % [int(animal_type), tile_pos.x, tile_pos.y, label])
@@ -69,6 +76,7 @@ func bind(p_animal_type: Type, p_tile: Vector2i, p_world: World) -> void:
 	hunger = 100.0
 	age_ticks = 0
 	breeding_cooldown = 0
+	_stable_animal_id = _make_stable_animal_id(p_animal_type, p_tile)
 	# Once per instance: do not connect from _process (would duplicate every frame).
 	if not GameManager.game_tick.is_connected(_on_game_tick):
 		GameManager.game_tick.connect(_on_game_tick)
@@ -104,12 +112,12 @@ func _exit_tree() -> void:
 		GameManager.game_tick.disconnect(_on_game_tick)
 
 
-func _on_game_tick(_tick: int) -> void:
+func _on_game_tick(tick: int) -> void:
 	if _dead or _world == null:
 		return
 	
-	# Throttle animal AI to every 3 ticks to reduce lag
-	if GameManager.tick_count % 3 != 0:
+	# Keep the same per-animal cadence, but spread phases by stable animal id.
+	if not _animal_ai_due(tick):
 		return
 	
 	var spec = SPECIES_DATA[animal_type]
@@ -146,6 +154,11 @@ func _on_game_tick(_tick: int) -> void:
 
 
 func _wander() -> void:
+	if _has_active_path():
+		return
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	if not _animal_wander_path_due(tick):
+		return
 	# Pick a random nearby tile and pathfind to it
 	var spec = SPECIES_DATA[animal_type]
 	var range_tiles: int = int(spec.vision_range / 8.0)  # Convert to tile distance
@@ -156,10 +169,20 @@ func _wander() -> void:
 	target_x = clampi(target_x, 0, WorldData.WIDTH - 1)
 	target_y = clampi(target_y, 0, WorldData.HEIGHT - 1)
 	_target_tile = Vector2i(target_x, target_y)
+	if _target_tile == tile_pos:
+		return
+	if _target_tile == _last_wander_path_fail_target and tick < _next_wander_path_retry_tick:
+		return
 	
 	# Simple pathfinding
 	_current_path = _world.pathfinder.find_path(tile_pos, _target_tile)
 	_path_index = 0
+	if _current_path.is_empty():
+		_last_wander_path_fail_target = _target_tile
+		_next_wander_path_retry_tick = tick + ANIMAL_WANDER_RETRY_TICKS
+	else:
+		_last_wander_path_fail_target = Vector2i(-999999, -999999)
+		_next_wander_path_retry_tick = -1
 
 
 func _forage() -> void:
@@ -179,6 +202,22 @@ func _forage() -> void:
 	else:
 		# Move to find forage
 		_wander()
+
+
+func _has_active_path() -> bool:
+	return not _current_path.is_empty() and _path_index < _current_path.size()
+
+
+func _make_stable_animal_id(p_animal_type: Type, p_tile: Vector2i) -> int:
+	return abs((p_tile.y * WorldData.WIDTH + p_tile.x) * 8 + int(p_animal_type))
+
+
+func _animal_ai_due(tick: int) -> bool:
+	return posmod(tick + _stable_animal_id, ANIMAL_AI_INTERVAL_TICKS) == 0
+
+
+func _animal_wander_path_due(tick: int) -> bool:
+	return posmod(tick + _stable_animal_id, ANIMAL_WANDER_PATH_INTERVAL_TICKS) == 0
 
 
 func _try_breed() -> void:

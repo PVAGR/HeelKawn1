@@ -5,6 +5,13 @@ class_name Enemy
 
 enum Type { RAIDER, BRIGAND, WARLORD }
 
+const ENEMY_AI_INTERVAL_TICKS: int = 2
+const TARGET_SCAN_INTERVAL_TICKS: int = 30
+const CHASE_REPATH_INTERVAL_TICKS: int = 10
+const ENEMY_WANDER_PATH_INTERVAL_TICKS: int = 12
+const ENEMY_WANDER_RETRY_TICKS: int = 45
+const ENEMY_CHASE_RETRY_TICKS: int = 15
+
 const SPECIES_DATA: Dictionary = {
 	Type.RAIDER: {
 		"name": "Raider",
@@ -55,6 +62,14 @@ var _incapacitated: bool = false
 var _anim_t: float = 0.0
 var _sfx: AudioStreamPlayer2D = null
 var _hit_flash_ticks: int = 0
+var _stable_enemy_id: int = 0
+var _last_target_scan_tick: int = -TARGET_SCAN_INTERVAL_TICKS
+var _last_chase_repath_tick: int = -CHASE_REPATH_INTERVAL_TICKS
+var _last_chase_target_tile: Vector2i = Vector2i(-999999, -999999)
+var _last_wander_path_fail_target: Vector2i = Vector2i(-999999, -999999)
+var _next_wander_path_retry_tick: int = -1
+var _last_chase_path_fail_target: Vector2i = Vector2i(-999999, -999999)
+var _next_chase_path_retry_tick: int = -1
 
 func _enemy_stream(label: String) -> StringName:
 	return StringName("enemy:%d:%d:%d:%s" % [int(enemy_type), tile_pos.x, tile_pos.y, label])
@@ -84,6 +99,7 @@ func bind(p_enemy_type: Type, p_tile: Vector2i, p_world: World) -> void:
 	max_health = spec.health
 	age_ticks = 0
 	attack_cooldown = 0
+	_stable_enemy_id = _make_stable_enemy_id(p_enemy_type, p_tile)
 
 
 func _physics_process(delta: float) -> void:
@@ -117,14 +133,14 @@ func _physics_process(delta: float) -> void:
 			_path_index += 1
 
 
-func _on_game_tick(_tick: int) -> void:
+func _on_game_tick(tick: int) -> void:
 	if _dead or _incapacitated or _world == null:
 		return
 	if _hit_flash_ticks > 0:
 		_hit_flash_ticks -= 1
 	
-	# Throttle enemy AI to every 2 ticks to reduce lag
-	if GameManager.tick_count % 2 != 0:
+	# Keep the same per-enemy cadence, but spread phases by stable enemy id.
+	if not _enemy_ai_due(tick):
 		return
 	
 	age_ticks += 1
@@ -132,7 +148,7 @@ func _on_game_tick(_tick: int) -> void:
 		attack_cooldown -= 1
 	
 	# Look for target pawn
-	_select_target()
+	_select_target(tick)
 	
 	# If we have a target, attack or move toward it
 	if _target_pawn != null and is_instance_valid(_target_pawn):
@@ -142,21 +158,20 @@ func _on_game_tick(_tick: int) -> void:
 		if dist_to_target < spec.size * 3 + 8:  # Melee range
 			_attack_pawn(_target_pawn)
 		else:
-			# Path to target - throttle to every 5 ticks
-			if GameManager.tick_count % 5 == 0:
-				var target_tile: Vector2i = _world.world_to_tile(_target_pawn.position)
-				_current_path = _world.pathfinder.find_path(tile_pos, target_tile)
-				_path_index = 0
+			var target_tile: Vector2i = _world.world_to_tile(_target_pawn.position)
+			_maybe_repath_to_target(target_tile, tick)
 	else:
 		# Random wander
 		if WorldRNG.chance_for(_enemy_stream("idle_wander"), 0.05, _enemy_salt(3)):
 			_wander()
 
 
-func _select_target() -> void:
-	# Throttle to every 30 ticks to avoid lag
-	if GameManager.tick_count % 30 != 0:
+func _select_target(tick: int) -> void:
+	if _has_valid_target() and tick - _last_target_scan_tick < TARGET_SCAN_INTERVAL_TICKS:
 		return
+	if not _target_scan_due(tick):
+		return
+	_last_target_scan_tick = tick
 	
 	var spec = SPECIES_DATA[enemy_type]
 	var range_sq: float = spec.vision_range * spec.vision_range
@@ -165,7 +180,7 @@ func _select_target() -> void:
 	var closest_pawn: HeelKawnian = null
 	var closest_dist_sq: float = INF
 	
-	for pawn in PawnSpawner.find_pawns():
+	for pawn in PawnSpawner.find_alive_pawns():
 		if not is_instance_valid(pawn):
 			continue
 		var dist_sq: float = (pawn.position - position).length_squared()
@@ -190,8 +205,9 @@ func _attack_pawn(pawn: HeelKawnian) -> void:
 	attack_cooldown = spec.attack_cooldown
 	_play_sfx("res://assets/audio/enemy_attack.ogg", WorldRNG.range_for(_enemy_stream("attack_pitch"), 0.9, 1.05, _enemy_salt(7)))
 
-	print("[Enemy] %s attacked %s for %.1f damage (health %.1f)" %
-		[spec.name, pawn.data.display_name, damage, pawn.data.health])
+	if GameManager.verbose_logs():
+		print("[Enemy] %s attacked %s for %.1f damage (health %.1f)" %
+			[spec.name, pawn.data.display_name, damage, pawn.data.health])
 
 	# If pawn dies from this hit, trigger despair cascade
 	if pawn.data.health <= 0:
@@ -199,6 +215,11 @@ func _attack_pawn(pawn: HeelKawnian) -> void:
 
 
 func _wander() -> void:
+	if _has_active_path():
+		return
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	if not _enemy_wander_path_due(tick):
+		return
 	var spec = SPECIES_DATA[enemy_type]
 	var range_tiles: int = int(spec.vision_range / 8.0)
 
@@ -207,9 +228,68 @@ func _wander() -> void:
 	var target_y: int = tile_pos.y + WorldRNG.index_for(_enemy_stream("wander_y"), spread, _enemy_salt(13)) - range_tiles
 	target_x = clampi(target_x, 0, WorldData.WIDTH - 1)
 	target_y = clampi(target_y, 0, WorldData.HEIGHT - 1)
+	var target_tile: Vector2i = Vector2i(target_x, target_y)
+	if target_tile == tile_pos:
+		return
+	if target_tile == _last_wander_path_fail_target and tick < _next_wander_path_retry_tick:
+		return
 
-	_current_path = _world.pathfinder.find_path(tile_pos, Vector2i(target_x, target_y))
+	_current_path = _world.pathfinder.find_path(tile_pos, target_tile)
 	_path_index = 0
+	if _current_path.is_empty():
+		_last_wander_path_fail_target = target_tile
+		_next_wander_path_retry_tick = tick + ENEMY_WANDER_RETRY_TICKS
+	else:
+		_last_wander_path_fail_target = Vector2i(-999999, -999999)
+		_next_wander_path_retry_tick = -1
+
+
+func _maybe_repath_to_target(target_tile: Vector2i, tick: int) -> void:
+	var target_changed: bool = target_tile != _last_chase_target_tile
+	var path_stale: bool = not _has_active_path()
+	var interval_due: bool = tick - _last_chase_repath_tick >= CHASE_REPATH_INTERVAL_TICKS and _chase_repath_due(tick)
+	if not path_stale and not interval_due and not (target_changed and _chase_repath_due(tick)):
+		return
+	if target_tile == _last_chase_path_fail_target and tick < _next_chase_path_retry_tick:
+		return
+	_current_path = _world.pathfinder.find_path(tile_pos, target_tile)
+	_path_index = 0
+	_last_chase_target_tile = target_tile
+	_last_chase_repath_tick = tick
+	if _current_path.is_empty():
+		_last_chase_path_fail_target = target_tile
+		_next_chase_path_retry_tick = tick + ENEMY_CHASE_RETRY_TICKS
+	else:
+		_last_chase_path_fail_target = Vector2i(-999999, -999999)
+		_next_chase_path_retry_tick = -1
+
+
+func _has_valid_target() -> bool:
+	return _target_pawn != null and is_instance_valid(_target_pawn) and _target_pawn.data != null and not bool(_target_pawn.data.is_dead)
+
+
+func _has_active_path() -> bool:
+	return not _current_path.is_empty() and _path_index < _current_path.size()
+
+
+func _make_stable_enemy_id(p_enemy_type: Type, p_tile: Vector2i) -> int:
+	return abs((p_tile.y * WorldData.WIDTH + p_tile.x) * 8 + int(p_enemy_type))
+
+
+func _enemy_ai_due(tick: int) -> bool:
+	return posmod(tick + _stable_enemy_id, ENEMY_AI_INTERVAL_TICKS) == 0
+
+
+func _target_scan_due(tick: int) -> bool:
+	return posmod(tick + _stable_enemy_id, TARGET_SCAN_INTERVAL_TICKS) == 0
+
+
+func _chase_repath_due(tick: int) -> bool:
+	return posmod(tick + _stable_enemy_id, CHASE_REPATH_INTERVAL_TICKS) == 0
+
+
+func _enemy_wander_path_due(tick: int) -> bool:
+	return posmod(tick + _stable_enemy_id, ENEMY_WANDER_PATH_INTERVAL_TICKS) == 0
 
 
 func take_damage(damage: float) -> void:
@@ -234,7 +314,8 @@ func _incapacitate() -> bool:
 	remove_from_group("enemies")
 	add_to_group("prisoners")
 	queue_redraw()
-	print("[Enemy] %s incapacitated and taken prisoner" % get_species_name())
+	if GameManager.verbose_logs():
+		print("[Enemy] %s incapacitated and taken prisoner" % get_species_name())
 	return true
 
 
@@ -268,7 +349,8 @@ func _drop_loot() -> void:
 		var sp: Stockpile = StockpileManager.find_drop_zone(loot_type, tile_pos, _world.pathfinder)
 		if sp != null:
 			sp.add_item(loot_type, loot_qty)
-			print("[Enemy] %s dropped %d %s" % [SPECIES_DATA[enemy_type].name, loot_qty, Item.name_for(loot_type)])
+			if GameManager.verbose_logs():
+				print("[Enemy] %s dropped %d %s" % [SPECIES_DATA[enemy_type].name, loot_qty, Item.name_for(loot_type)])
 
 
 func _draw() -> void:

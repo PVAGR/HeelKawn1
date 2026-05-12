@@ -453,7 +453,10 @@ func find_tile_in_component_near(comp_id: int, center: Vector2i, max_radius: int
 ## that flips passability after generation -- mined-out walls, built walls,
 ## bridges -- shows up in the component map. Otherwise pawns would happily
 ## try to path through a wall they just built.
-func _compute_components(_data: WorldData) -> void:
+func _compute_components(data: WorldData) -> void:
+	var stack = get_stack()
+	if stack.size() > 2:
+		print("[PF_STACK] ", stack[1].source, ":", stack[1].line, " -> ", stack[2].source, ":", stack[2].line)
 	_component_id.resize(WorldData.TILE_COUNT)
 	for i in range(_component_id.size()):
 		_component_id[i] = -1

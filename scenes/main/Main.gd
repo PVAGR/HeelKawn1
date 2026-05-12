@@ -233,7 +233,7 @@ enum PlayerMode {
 	INCARNATED = 1,
 	OBSERVER = 2,
 }
-var _player_mode: int = PlayerMode.SPECTATOR
+var _player_mode: int = PlayerMode.OBSERVER
 
 ## Incarnated players only "know" pawns / nearby places within this Chebyshev tile radius (spectator: worldwide).
 const INCARNATE_KNOWLEDGE_FOG_RADIUS_TILES: int = 18
@@ -8002,7 +8002,7 @@ func _on_new_game() -> void:
 		return
 	if OS.is_debug_build():
 		_reroll_world()
-	_set_player_mode(PlayerMode.SPECTATOR)
+	_set_player_mode(PlayerMode.OBSERVER)
 	_update_hud_mode_badge()
 	if _main_menu != null:
 		_main_menu.hide_menu()
@@ -8012,7 +8012,7 @@ func _on_new_game() -> void:
 func _on_play_mode() -> void:
 	if OS.is_debug_build():
 		_reroll_world()
-	_set_player_mode(PlayerMode.SPECTATOR)
+	_set_player_mode(PlayerMode.OBSERVER)
 	_update_hud_mode_badge()
 	if _main_menu != null:
 		_main_menu.hide_menu()

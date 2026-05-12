@@ -36,6 +36,10 @@ enum Type {
 	BONE,            # hunting byproduct (crafting material)
 	STONE_ARROW,     # crafted: flint + stick → basic ranged ammo
 	BONE_ARROW,      # crafted: bone + stick → better ranged ammo
+	# --- Harvest byproducts (chance drops) ---
+	RESIN,           # rare: chopping trees may yield resin (crafting, waterproofing, torches)
+	GEM,             # rare: mining may yield gem (jewelry, trade, cultural value)
+	HIDE,            # hunting byproduct: used for leather, armor, clothing
 }
 
 ## Display color for the carry-indicator above a pawn and for the stockpile icon.
@@ -66,6 +70,9 @@ const COLORS: Dictionary = {
 	Type.BONE: Color8(220, 210, 190), # off-white bone
 	Type.STONE_ARROW: Color8(140, 140, 150), # gray arrowhead
 	Type.BONE_ARROW: Color8(200, 185, 165), # bone arrowhead
+	Type.RESIN: Color8(200, 160, 30),  # amber gold
+	Type.GEM: Color8(100, 200, 255),   # crystal blue
+	Type.HIDE: Color8(160, 120, 80),   # tanned leather
 }
 
 const NAMES: Dictionary = {
@@ -95,6 +102,9 @@ const NAMES: Dictionary = {
 	Type.BONE: "Bone",
 	Type.STONE_ARROW: "Stone Arrow",
 	Type.BONE_ARROW: "Bone Arrow",
+	Type.RESIN: "Resin",
+	Type.GEM: "Gem",
+	Type.HIDE: "Hide",
 }
 
 ## Short single-letter label used in the stockpile's inventory readout.
@@ -125,6 +135,9 @@ const LABELS: Dictionary = {
 	Type.BONE: "B",
 	Type.STONE_ARROW: "a",
 	Type.BONE_ARROW: "b",
+	Type.RESIN: "R",
+	Type.GEM: "G",
+	Type.HIDE: "H",
 }
 
 ## Hunger restored per unit when a pawn consumes this item. Non-food items
@@ -158,6 +171,9 @@ const HUNGER_RESTORE: Dictionary = {
 	Type.BONE: 0.0,
 	Type.STONE_ARROW: 0.0,
 	Type.BONE_ARROW: 0.0,
+	Type.RESIN: 0.0,
+	Type.GEM: 0.0,
+	Type.HIDE: 0.0,
 }
 
 
@@ -207,6 +223,9 @@ const IS_TOOL: Dictionary = {
 	Type.BONE: false,
 	Type.STONE_ARROW: false,
 	Type.BONE_ARROW: false,
+	Type.RESIN: false,
+	Type.GEM: false,
+	Type.HIDE: false,
 }
 
 ## Durability: max uses before the tool breaks. Each job completion consumes 1 use.
@@ -233,6 +252,9 @@ const TOOL_DURABILITY: Dictionary = {
 	Type.BONE: 0,
 	Type.STONE_ARROW: 0,
 	Type.BONE_ARROW: 0,
+	Type.RESIN: 0,
+	Type.GEM: 0,
+	Type.HIDE: 0,
 }
 
 ## Job efficacy multiplier per tool type. Maps Job.Type -> multiplier.
@@ -279,7 +301,8 @@ const CRAFTING_RECIPES: Dictionary = {
 		{"type": Type.STICK, "qty": 3},  # plant fibers proxy
 	],
 	Type.LEATHER: [
-		{"type": Type.MEAT, "qty": 2},  # hides proxy
+		{"type": Type.HIDE, "qty": 2},
+		{"type": Type.WOOD, "qty": 1},  # tanning rack/fuel
 	],
 	Type.INK: [
 		{"type": Type.BERRY, "qty": 1},
@@ -352,6 +375,9 @@ const FOOD_SPOILAGE_TICKS: Dictionary = {
 	Type.BONE:         0,
 	Type.STONE_ARROW:  0,
 	Type.BONE_ARROW:   0,
+	Type.RESIN:        0,
+	Type.GEM:          0,
+	Type.HIDE:         15000,  # raw hide spoils if not tanned
 }
 
 ## Cooking recipes: output_type -> [{input_type, qty}, ...]

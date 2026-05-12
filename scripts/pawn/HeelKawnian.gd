@@ -345,6 +345,7 @@ enum State {
 	FLEEING,            # running from danger
 	HIDING,             # taking cover from threats
 	PILGRIMAGE,         # visiting memorial site (reverence, closure)
+	DIRECT_FORAGING,    # hungry, walking to FERTILE_SOIL to eat directly (no job system)
 }
 
 # -------------------- runtime --------------------
@@ -413,6 +414,7 @@ var _reported_stuck: bool = false
 var _woke_tick: int = -9999  # tick when pawn last woke; prevents sleep oscillation
 var _consecutive_abandons: int = 0  # claim/abort loop detector
 var _last_abandon_tick: int = -9999
+var _direct_forage_target: Vector2i = Vector2i(-1, -1)
 var _next_reproduction_tick: int = 0
 var _active_edict: String = ""
 var _rest_level: int = 0
@@ -539,6 +541,8 @@ func get_state_name() -> String:
 			return "FetchingMaterial"
 		State.DRAFT_WALK:
 			return "DraftWalk"
+		State.DIRECT_FORAGING:
+			return "DirectForaging"
 		_:
 			return "Unknown"
 
@@ -2081,7 +2085,7 @@ func _maybe_diaspora_homesickness(tick: int) -> void:
 
 func _can_use_manual_ground_item_actions() -> bool:
 	match _state:
-		State.WORKING, State.WALKING_TO_JOB, State.HAULING, State.GOING_TO_EAT, State.EATING, State.SLEEPING, State.FETCHING_MATERIAL, State.GOING_TO_BED, State.TEACHING, State.CHALLENGE, State.CRAFTING:
+		State.WORKING, State.WALKING_TO_JOB, State.HAULING, State.GOING_TO_EAT, State.EATING, State.SLEEPING, State.FETCHING_MATERIAL, State.GOING_TO_BED, State.TEACHING, State.CHALLENGE, State.CRAFTING, State.DIRECT_FORAGING:
 			return false
 		_:
 			return true
@@ -2181,7 +2185,7 @@ func inspect() -> bool:
 	if data == null:
 		return false
 	# Do not inspect while busy hauling/eating/sleeping
-	if _state == State.HAULING or _state == State.EATING or _state == State.SLEEPING:
+	if _state == State.HAULING or _state == State.EATING or _state == State.SLEEPING or _state == State.DIRECT_FORAGING:
 		return false
 	_perform_inspect_action()
 	return true
@@ -2652,6 +2656,8 @@ func _on_path_complete() -> void:
 			_arrive_at_stockpile_for_material()
 		State.GOING_TO_BED:
 			_arrive_at_bed()
+		State.DIRECT_FORAGING:
+			_arrive_at_fertile_soil_and_eat()
 		State.IDLE:
 			pass
 
@@ -2759,6 +2765,8 @@ func _on_world_tick(_tick: int) -> void:
 				_tick_teaching()
 			State.CHALLENGE:
 				_tick_challenge()
+			State.DIRECT_FORAGING:
+				pass  # movement handled in _process
 			_:
 				pass
 		if _trace_ai_slice:
@@ -2779,7 +2787,7 @@ func _on_world_tick(_tick: int) -> void:
 				CrashTrap.exit_system("pawn_tick:%d:movement" % pid)
 		State.WORKING:
 			_tick_working()
-		State.HAULING, State.GOING_TO_EAT, State.FETCHING_MATERIAL, State.GOING_TO_BED, State.DRAFT_WALK:
+		State.HAULING, State.GOING_TO_EAT, State.FETCHING_MATERIAL, State.GOING_TO_BED, State.DRAFT_WALK, State.DIRECT_FORAGING:
 			# movement handled in _process; state exits on arrival
 			pass
 		State.EATING:
@@ -3005,6 +3013,11 @@ func _tick_idle() -> void:
 	# 3. Need-driven: hungry + food nearby -> go eat
 	if _maybe_start_eating():
 		return
+	# 3b. Hungry but no stockpile food -> walk to nearest FERTILE_SOIL and eat directly.
+	# No job system, no hauling. Need drives action. The pawn forages and eats on the spot.
+	if data.hunger <= HUNGER_EAT_THRESHOLD:
+		if _maybe_direct_forage():
+			return
 	# 4. Tired -> sleep. Skipped if we're starving (food first, sleep when full).
 	if _maybe_start_sleeping():
 		return
@@ -3101,10 +3114,19 @@ func _tick_idle() -> void:
 	# normal filter if no forage is available. Stops the colony from happily
 	# mining stone while everyone starves.
 	
-	# Job claiming is one of the hottest paths at ultra speed; spread claims so
-	# not every pawn rescans the full queue on the same tick burst.
-	var claim_iv: int = maxi(1, _job_claim_interval_for_speed())
-	claim_iv += int(round(_founding_blend() * 2.0))
+	# Job claiming: pawns act when they need to, not when a scheduler says they can.
+	# Hungry pawns or pawns with no other options claim every tick.
+	# Well-fed pawns spread claims to reduce CPU at ultra speed.
+	var claim_iv: int = 1  # Default: claim every tick (need-driven, not scheduler-driven)
+	if data.hunger > HUNGER_EAT_THRESHOLD and GameManager != null:
+		# Well-fed pawn at high speed: spread claims to reduce CPU
+		var gs: float = GameManager.game_speed
+		if gs >= 100.0:
+			claim_iv = 4
+		elif gs >= 50.0:
+			claim_iv = 3
+		elif gs >= 26.0:
+			claim_iv = 2
 	var claim_phase: int = 0
 	if data != null:
 		claim_phase = posmod(int(data.id), claim_iv)
@@ -4072,7 +4094,11 @@ func _tick_walking() -> void:
 		_clear_path()
 		return
 	if not _is_job_tile_still_valid(_current_job):
-		_cancel_current_job()
+		# Harvest jobs: resource gone, cancel permanently. Build jobs: unclaim so they can be retried.
+		if _current_job.type == _Job.Type.FORAGE or _current_job.type == _Job.Type.CHOP or _current_job.type == _Job.Type.MINE or _current_job.type == _Job.Type.MINE_WALL or _current_job.type == _Job.Type.HUNT or _current_job.type == _Job.Type.FISH:
+			JobManager.cancel(_current_job, "tile_invalid_walk")
+		else:
+			_unclaim_current_job("tile_invalid_walk")
 
 
 func _tick_working() -> void:
@@ -4104,7 +4130,14 @@ func _tick_working() -> void:
 			_unclaim_current_job("neural_eat")
 			return
 	if not _is_job_tile_still_valid(_current_job):
-		JobManager.cancel(_current_job, "tile_invalid")
+		# Harvest jobs (FORAGE, CHOP, MINE, HUNT) are genuinely invalid once the
+		# resource is gone — cancel them so they stop appearing in the queue.
+		# Build jobs may be temporarily blocked (another pawn built there first);
+		# unclaim instead of cancel so the job can be reposted or retried.
+		if _current_job.type == _Job.Type.FORAGE or _current_job.type == _Job.Type.CHOP or _current_job.type == _Job.Type.MINE or _current_job.type == _Job.Type.MINE_WALL or _current_job.type == _Job.Type.HUNT or _current_job.type == _Job.Type.FISH:
+			JobManager.cancel(_current_job, "tile_invalid")
+		else:
+			_unclaim_current_job("tile_invalid")
 		_reset_to_idle()
 		return
 	
@@ -4701,30 +4734,48 @@ func _complete_current_job() -> void:
 	data.job_proficiency[job_type_str] = min(100.0, current_proficiency + 2.0)  # +2 proficiency per job
 	
 	var produced_type: int = _Item.Type.NONE
-	# Most harvests yield 1; only HUNT (deer) yields more, but plumbing it as a
-	# variable keeps room for future high-yield jobs without re-plumbing again.
 	var produced_qty: int = 1
+	# Byproducts: deposited directly to stockpile (pawn can only carry one type)
+	var _byproducts: Array = []  # [{type: int, qty: int}, ...]
 	match job.type:
 		_Job.Type.FORAGE:
 			produced_type = _Item.Type.BERRY
+			produced_qty = 5  # Pick a handful, not one berry at a time
 			_world.clear_feature(job.tile.x, job.tile.y)
 		_Job.Type.MINE:
 			produced_type = _Item.Type.STONE
+			produced_qty = 5  # Mine a proper load, not one stone
+			_byproducts.append({"type": _Item.Type.FLINT, "qty": 2})  # Flint chips from mining
+			# Chance gem drop (10%)
+			if WorldRNG.chance_for(_pawn_stream("mine_gem"), 0.10, _pawn_salt(7)):
+				_byproducts.append({"type": _Item.Type.GEM, "qty": 1})
 			_world.clear_feature(job.tile.x, job.tile.y)
 		_Job.Type.MINE_WALL:
 			produced_type = _Item.Type.STONE
+			produced_qty = 5
+			_byproducts.append({"type": _Item.Type.FLINT, "qty": 2})
+			if WorldRNG.chance_for(_pawn_stream("minewall_gem"), 0.10, _pawn_salt(8)):
+				_byproducts.append({"type": _Item.Type.GEM, "qty": 1})
 			# This converts MOUNTAIN -> STONE_FLOOR and rebuilds the components
 			# map, which can cascade-unlock sealed ore veins.
 			_world.mine_out_wall(job.tile.x, job.tile.y)
 		_Job.Type.CHOP:
 			produced_type = _Item.Type.WOOD
+			produced_qty = 5  # Chop a proper load, not one log
+			_byproducts.append({"type": _Item.Type.STICK, "qty": 3})  # Branches and sticks
+			# Chance resin drop (15%)
+			if WorldRNG.chance_for(_pawn_stream("chop_resin"), 0.15, _pawn_salt(9)):
+				_byproducts.append({"type": _Item.Type.RESIN, "qty": 1})
 			_world.clear_feature(job.tile.x, job.tile.y)
 		_Job.Type.HUNT:
 			produced_type = _Item.Type.MEAT
 			# Read the species off the tile BEFORE we clear it, so we know
 			# whether to grant 1 (rabbit) or 2 (deer) meat.
 			var animal_feat: int = _world.data.get_feature(job.tile.x, job.tile.y)
-			produced_qty = 2 if animal_feat == TileFeature.Type.DEER else 1
+			produced_qty = 3 if animal_feat == TileFeature.Type.DEER else 1
+			# Hunting byproducts: hide + bone
+			_byproducts.append({"type": _Item.Type.HIDE, "qty": 1})
+			_byproducts.append({"type": _Item.Type.BONE, "qty": 1})
 			var htile: Vector2i = Vector2i(job.tile.x, job.tile.y)
 			if TileFeature.is_wildlife(animal_feat) and not _hunt_has_live_animal_node_at(htile):
 				WorldMemory.record_animal_death(
@@ -4733,20 +4784,19 @@ func _complete_current_job() -> void:
 						_hunt_species_int_from_wildlife_feature(animal_feat),
 						TileFeature.name_for(animal_feat),
 				)
-			# Also produce a bone as a hunting byproduct
-			var bone_sp: Stockpile = StockpileManager.find_drop_zone(_Item.Type.BONE, job.tile, _world.pathfinder)
-			if bone_sp != null:
-				bone_sp.add_item(_Item.Type.BONE, 1)
 			_world.clear_feature(job.tile.x, job.tile.y)
 		_Job.Type.FISH:
 			produced_type = _Item.Type.FISH
 			# RIVER features persist (don't clear) - fish regenerate naturally
-			# Base yield 1; fisherman hut adds 1; deep pools (high quality) add 1
-			produced_qty = 1
+			# Base yield 2; fisherman hut adds 1; deep pools (high quality) add 1
+			produced_qty = 2
 			if _has_fisherman_hut_nearby(job.tile):
 				produced_qty += 1
 			if WorldGenerator.river_quality(job.tile) > 0.7:
 				produced_qty += 1  # Deep pool bonus
+			# Chance bone from fish (5%)
+			if WorldRNG.chance_for(_pawn_stream("fish_bone"), 0.05, _pawn_salt(12)):
+				_byproducts.append({"type": _Item.Type.BONE, "qty": 1})
 			# Seasonal fish migration: spring = spawning, best yield; winter = lowest
 			var season: int = Biome.season_for_tick(GameManager.tick_count)
 			match season:
@@ -4935,6 +4985,15 @@ func _complete_current_job() -> void:
 	if produced_type != _Item.Type.NONE:
 		data.carrying = produced_type
 		data.carrying_qty = produced_qty
+		# Deposit byproducts directly to stockpile (pawn can only carry one type)
+		if not _byproducts.is_empty():
+			for bp in _byproducts:
+				var bp_type: int = int(bp.get("type", _Item.Type.NONE))
+				var bp_qty: int = int(bp.get("qty", 0))
+				if bp_type != _Item.Type.NONE and bp_qty > 0:
+					var bp_sp: Stockpile = StockpileManager.find_drop_zone(bp_type, job.tile, _world.pathfinder)
+					if bp_sp != null:
+						bp_sp.add_item(bp_type, bp_qty)
 		_begin_haul_to_stockpile()
 
 
@@ -5256,6 +5315,7 @@ func _reset_to_idle() -> void:
 	# Drop any zone handle so the GC isn't rooted on a freed node after a
 	# reroll. Each state that needs a zone re-picks one when it starts.
 	_target_zone = null
+	_direct_forage_target = Vector2i(-1, -1)
 	_state = State.IDLE
 	_clear_path()
 	_request_redraw()
@@ -5435,6 +5495,81 @@ func _begin_going_to_eat(sp: Stockpile) -> void:
 		return
 	_state = State.GOING_TO_EAT
 	_start_path(path)
+	_request_redraw()
+
+
+## Direct forage: hungry pawn walks to nearest FERTILE_SOIL and eats berries on the spot.
+## No job system, no hauling. Need drives action. The pawn is free.
+func _maybe_direct_forage() -> bool:
+	if _world == null or _world.data == null:
+		return false
+	# Don't direct-forage if we're already carrying something (finish that first)
+	if data.is_carrying():
+		return false
+	# Find nearest FERTILE_SOIL tile within search radius
+	var best_tile: Vector2i = Vector2i(-1, -1)
+	var best_dist: int = 999999
+	var search_radius: int = 24  # tiles
+	var my_comp: int = _world.pathfinder.component_of(data.tile_pos)
+	for dy in range(-search_radius, search_radius + 1, 2):
+		for dx in range(-search_radius, search_radius + 1, 2):
+			var tx: int = data.tile_pos.x + dx
+			var ty: int = data.tile_pos.y + dy
+			if not _world.data.in_bounds(tx, ty):
+				continue
+			if _world.data.get_feature(tx, ty) == TileFeature.Type.FERTILE_SOIL:
+				var dist: int = absi(dx) + absi(dy)  # Manhattan distance
+				if dist < best_dist:
+					if _world.pathfinder.component_of(Vector2i(tx, ty)) == my_comp:
+						best_dist = dist
+						best_tile = Vector2i(tx, ty)
+	if best_tile.x < 0:
+		return false
+	# Walk to the fertile soil tile
+	var path: Array[Vector2i] = _path_for_pawn(best_tile)
+	if path.is_empty():
+		return false
+	_direct_forage_target = best_tile
+	_state = State.DIRECT_FORAGING
+	_start_path(path)
+	_request_redraw()
+	return true
+
+
+## Arrived at FERTILE_SOIL. Forage it and eat the berries directly.
+func _arrive_at_fertile_soil_and_eat() -> void:
+	if _direct_forage_target.x < 0:
+		_reset_to_idle()
+		return
+	var tx: int = _direct_forage_target.x
+	var ty: int = _direct_forage_target.y
+	_direct_forage_target = Vector2i(-1, -1)
+	# Check the tile still has FERTILE_SOIL (another pawn may have cleared it)
+	if not _world.data.in_bounds(tx, ty) or _world.data.get_feature(tx, ty) != TileFeature.Type.FERTILE_SOIL:
+		# Tile was cleared by someone else. Go back to idle — the next tick
+		# will try again or find a different tile.
+		_reset_to_idle()
+		return
+	# Forage: clear the feature and eat berries directly
+	_world.clear_feature(tx, ty)
+	# Eat 5 berries worth of hunger restoration directly
+	var berry_restore: float = 60.0  # matches Item.gd BERRY_HUNGER_RESTORE
+	data.hunger = min(100.0, data.hunger + berry_restore * 5.0)
+	# Record the event
+	WorldMemory.record_event({
+		"kind": WorldMemory.Kind.FOOD_EVENT,
+		"tick": GameManager.tick_count,
+		"x": tx, "y": ty,
+		"pawn_id": int(data.id),
+		"name": data.display_name,
+		"direct_forage": true,
+		"berries": 5
+	})
+	# Queue regrowth
+	var main: Node = get_node_or_null("/root/Main")
+	if main != null and main.has_method("_queue_regrowth"):
+		main._queue_regrowth(Vector2i(tx, ty), TileFeature.Type.FERTILE_SOIL, 2400)
+	_reset_to_idle()
 	_request_redraw()
 
 

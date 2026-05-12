@@ -14,13 +14,12 @@ const CHECK_INTERVAL: int = 64
 
 func _ready() -> void:
 	set_process(false)
-	# Listen to global game tick for periodic checks
-	if GameManager != null and GameManager.has_signal("game_tick"):
-		GameManager.connect("game_tick", Callable(self, "_on_game_tick"))
+	# DISABLED: HeelKawnians work independently, not through authority-issued orders.
+	# Each pawn follows its own needs (hunger → forage, cold → build hearth, etc.)
+	# No synchronized proto-camp orders. The job system is organic and need-driven.
 
 func _on_game_tick(tick: int) -> void:
-	if tick % CHECK_INTERVAL != 0:
-		return
+	return  # Disabled — no authority-issued orders
 	# If there are already formal settlements, no proto work needed
 	if SettlementMemory != null and SettlementMemory.get_formal_settlement_count() > 0:
 		return

@@ -267,6 +267,7 @@ enum State {
 	FLEEING,            # running from danger
 	HIDING,             # taking cover from threats
 	PILGRIMAGE,         # visiting memorial site (reverence, closure)
+	DIRECT_FORAGING,    # hungry, walking to FERTILE_SOIL to eat directly (no job system)
 }
 
 # -------------------- runtime --------------------

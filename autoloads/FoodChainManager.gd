@@ -227,8 +227,8 @@ func _check_famine_conditions() -> void:
 		if zones.size() > 0 and zones[0] != null and is_instance_valid(zones[0]):
 			var z_pos: Vector2i = zones[0].tile_pos if zones[0].get("tile_pos") != null else Vector2i.ZERO
 			region_key = WorldMemory._region_key(z_pos.x, z_pos.y)
-		elif SettlementMemory != null and SettlementMemory.get_settlements().size() > 0:
-			var s: Dictionary = SettlementMemory.get_settlements()[0] as Dictionary
+		elif SettlementMemory != null and SettlementMemory.get_formal_settlements().size() > 0:
+			var s: Dictionary = SettlementMemory.get_formal_settlements()[0] as Dictionary
 			var cv: Variant = s.get("center_tile")
 			if cv is Dictionary:
 				region_key = WorldMemory._region_key(int(cv.get("x", 0)), int(cv.get("y", 0)))

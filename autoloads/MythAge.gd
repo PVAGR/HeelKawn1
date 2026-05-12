@@ -111,7 +111,7 @@ func _count_active_settlements() -> int:
 	if SettlementMemory == null:
 		return 0
 	var count: int = 0
-	var settlements: Array = SettlementMemory.get_settlements()
+	var settlements: Array = SettlementMemory.get_formal_settlements()
 	for st in settlements:
 		if st is Dictionary:
 			var state: String = str((st as Dictionary).get("state", ""))

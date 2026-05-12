@@ -105,9 +105,9 @@ func _draw_overlay() -> void:
 	var scale_x: float = MAP_SIZE_PX / float(WorldData.WIDTH)
 	var scale_y: float = MAP_SIZE_PX / float(WorldData.HEIGHT)
 
-	# Draw territory fills (colored regions per settlement)
+	# Draw territory fills (colored regions per settlement — formal settlements only)
 	if SettlementMemory != null:
-		var settlements: Array = SettlementMemory.get_settlements()
+		var settlements: Array = SettlementMemory.get_formal_settlements()
 		for s in settlements:
 			if not s is Dictionary:
 				continue
@@ -166,9 +166,9 @@ func _draw_overlay() -> void:
 					elif off.x == -1:  # West edge
 						_overlay.draw_line(Vector2(px, py), Vector2(px, py + rh), border_color_minimap, 1.0)
 
-	# Draw settlements
+	# Draw settlements (formal only)
 	if SettlementMemory != null:
-		var settlements: Array = SettlementMemory.get_settlements()
+		var settlements: Array = SettlementMemory.get_formal_settlements()
 		for s in settlements:
 			if not s is Dictionary:
 				continue

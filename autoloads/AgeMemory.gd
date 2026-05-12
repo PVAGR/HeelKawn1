@@ -79,7 +79,7 @@ func _all_transition_conditions(_tick: int) -> bool:
 func _cond_settlement_stagnation() -> bool:
 	var n: int = 0
 	var da: int = 0
-	for s_any in SettlementMemory.get_settlements():
+	for s_any in SettlementMemory.get_formal_settlements():
 		if not (s_any is Dictionary):
 			continue
 		var s: Dictionary = s_any as Dictionary
@@ -110,7 +110,7 @@ func _cond_pressure() -> bool:
 func _cond_myth_feared_dominant() -> bool:
 	var feared: int = 0
 	var revered: int = 0
-	for s_any2 in SettlementMemory.get_settlements():
+	for s_any2 in SettlementMemory.get_formal_settlements():
 		if not (s_any2 is Dictionary):
 			continue
 		var s2: Dictionary = s_any2 as Dictionary
@@ -151,7 +151,7 @@ func _build_signature() -> void:
 	var nopen: int = 0
 	var ncau: int = 0
 	var ndef: int = 0
-	for s3_any in SettlementMemory.get_settlements():
+	for s3_any in SettlementMemory.get_formal_settlements():
 		if not (s3_any is Dictionary):
 			continue
 		var s3: Dictionary = s3_any as Dictionary

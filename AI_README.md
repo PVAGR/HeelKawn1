@@ -6,6 +6,43 @@ This file is the **single source of truth** for all AI agents working on HeelKaw
 
 ---
 
+## UNIVERSE ARCHITECTURE DOCTRINE
+
+**HeelKawn is a Persistent Simulation Universe, not a global colony sim.**
+
+1. **Deterministic ≠ Centralized**
+   - Determinism means auditable cause/effect and replayable history, not centralized control.
+   - Systems can exist as world rules, but actions must pass through people: households, proto-camps, guilds, settlements, leaders, architects, elders, and local authority.
+
+2. **Every HeelKawnian is an Autonomous Person**
+   - Location, memory, needs, profession, knowledge, trust, fear, ambition, relationships, and local belonging.
+   - Pawns make decisions based on what they can see, who they trust, what they need, their role, and their obedience to local authority.
+   - Jobs are not invisible universal commands; jobs come from people and are claimed based on visibility, trust, proximity, role, and need.
+
+3. **Access and Visibility are Earned**
+   - Systems can exist in code before anyone sees them.
+   - The world should not expose them until HeelKawnians or players discover, build, organize, teach, or unlock them through lived history.
+   - A proto-site is not a formal settlement. A settlement only becomes formal once real authority, survival infrastructure (hearth/storage/shelter), and stable population/leadership emerge.
+
+4. **No UI Lies**
+   - No formal settlement overlays, active settlement labels, or territory boxes from proto-sites.
+   - No reports saying settlements exist or are active when the formal settlement count is zero.
+   - Visuals are truthful: proto-sites may exist internally but remain invisible until authority and infrastructure are established.
+
+5. **Observer / Incarnation Inspection is Core v1 Functionality**
+   - Clicking any HeelKawnian should show: current state, current job, job issuer, visible orders, last claim failure reason, carried item, needs, region/settlement/proto-camp, nearby resources, what they can see, and why they are not working.
+   - Player can follow a pawn to understand their world, decisions, constraints, and agency.
+
+6. **Jobs Must Have Source and Visibility**
+   - Every job must have an issuer (pawn_id, role), reason (hunger, shelter, defense, teaching, ritual), authority_scope (household, band, proto_camp, formal_settlement), and visible_to (self, settlement, nearby, all).
+   - Pawns see only jobs they are eligible for and that are visible to them (within settlement, trusted leader, nearby region, or emergency override).
+
+7. **The Game Must Play Itself First**
+   - Before players build empires, HeelKawnians must survive, gather, store, build shelter, make fire, assign work, teach, reproduce, mourn, migrate, and form authority without player babysitting.
+   - Fresh sim must bootstrap from wanderers → proto-camp → household networks → provisional leader → local authority orders → first survival jobs → hearth/storage/shelter → formal settlement emergence.
+
+---
+
 ## THE FOUNDATIONAL CHOICE: DETERMINISTIC KERNEL
 
 By choosing **A (deterministic)**, HeelKawn's deepest rule was defined:

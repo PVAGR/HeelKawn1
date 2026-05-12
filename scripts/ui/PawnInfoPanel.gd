@@ -1529,7 +1529,7 @@ func _build_settlement_line(d: HeelKawnianData) -> String:
 	var sid: int = int(d.settlement_id)
 	if sid < 0:
 		return "Unaffiliated — no settlement bond recorded."
-	var all_settlements: Array = SettlementMemory.get_settlements()
+	var all_settlements: Array = SettlementMemory.get_formal_settlements()
 	if sid >= all_settlements.size():
 		return "Affiliation stale — settlement #%d no longer exists." % sid
 	var st: Dictionary = all_settlements[sid] as Dictionary

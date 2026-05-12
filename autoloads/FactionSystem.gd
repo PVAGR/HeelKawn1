@@ -118,9 +118,10 @@ func _try_form_new_factions(tick: int) -> void:
 	if _settlement_memory == null or _settlement_memory.settlements.is_empty():
 		return
 	
-	# Get all active settlements
+	# Get all active settlements (formal only, no proto-sites)
 	var active_settlements: Array = []
-	for st in _settlement_memory.settlements:
+	var formal_settlements: Array = _settlement_memory.get_formal_settlements() if _settlement_memory.has_method("get_formal_settlements") else []
+	for st in formal_settlements:
 		if st is Dictionary:
 			var state: String = str(st.get("state", ""))
 			if state == "active" or state == "revivable":

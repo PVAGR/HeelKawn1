@@ -317,7 +317,7 @@ func _settlement_material_snapshot() -> Array[Dictionary]:
 		var wv: Variant = main_node.get("_world")
 		if wv is World:
 			world = wv as World
-	for st_v in SettlementMemory.get_settlements():
+	for st_v in SettlementMemory.get_formal_settlements():
 		if not (st_v is Dictionary):
 			continue
 		var st: Dictionary = st_v as Dictionary

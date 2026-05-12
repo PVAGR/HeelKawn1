@@ -104,7 +104,7 @@ func mark_permanent_collapse_from_center_rk(center_rk: int) -> void:
 
 ## After [SettlementMemory] + [MythMemory] recompute, ensure permanent collapse centers read as sacred.
 func sync_permanent_ruins_from_settlements() -> void:
-	for s_any in SettlementMemory.get_settlements():
+	for s_any in SettlementMemory.get_formal_settlements():
 		if not (s_any is Dictionary):
 			continue
 		var sd: Dictionary = s_any

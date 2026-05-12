@@ -469,12 +469,15 @@ func _pawn_divergence_detail_logs_enabled() -> bool:
 func _pawn_divergence_validation_logs_enabled() -> bool:
 	if not OS.is_debug_build():
 		return false
-	if OS.get_environment("HEELKAWN_VALIDATION_LOGS") == "1":
+	var env_value: String = OS.get_environment("HEELKAWN_VALIDATION_LOGS")
+	if env_value == "1" or env_value.to_lower() == "true":
 		return true
-	return (
-			SettlementMemory.VALIDATION_SESSION_ENABLED
-			or SettlementMemory.SPECIALIZATION_VALIDATION_LOG_ENABLED
-	)
+	if SettlementMemory != null:
+		if bool(SettlementMemory.VALIDATION_SESSION_ENABLED):
+			return true
+		if bool(SettlementMemory.SPECIALIZATION_VALIDATION_LOG_ENABLED):
+			return true
+	return false
 
 
 func _should_post_more_hunt_jobs() -> bool:
@@ -1258,8 +1261,6 @@ func _on_job_claimed(job: Job, pawn: HeelKawnian) -> void:
 
 
 func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false) -> void:
-	if not OS.is_debug_build():
-		return
 	if not _pawn_divergence_validation_logs_enabled():
 		return
 	if force_exit:

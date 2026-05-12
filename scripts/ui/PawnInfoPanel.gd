@@ -27,6 +27,8 @@ const TOP_INSET:      float = 8.0
 ## UI refresh is state-driven (signature diff), polled on wall-clock cadence.
 ## This keeps presentation dynamic without hard-binding repaint cadence to ticks.
 const UI_POLL_INTERVAL_SEC: float = 0.35
+const EXPENSIVE_DETAILS_REFRESH_SEC: float = 0.75
+const HIGH_SPEED_EXPENSIVE_DETAILS_REFRESH_SEC: float = 1.5
 ## Settlement/governance identity is allowed to refresh on a coarse tick bucket
 ## instead of every UI poll. This keeps observer mode smooth while preserving
 ## living-world updates in the sheet.
@@ -126,6 +128,10 @@ var _tier_bar: ProgressBar = null
 var _portrait_cells: Array[ColorRect] = []
 var _poll_accum_sec: float = 0.0
 var _last_ui_signature: String = ""
+var _expensive_poll_accum_sec: float = HIGH_SPEED_EXPENSIVE_DETAILS_REFRESH_SEC
+var _last_expensive_signature: String = ""
+var _expensive_dirty: bool = true
+var _last_gear_signature: String = ""
 
 
 func _ready() -> void:
@@ -154,6 +160,7 @@ func bind_pawn(p: HeelKawnian) -> void:
 	if _pawn == null:
 		_set_visible(false)
 		_last_ui_signature = ""
+		_reset_expensive_detail_cache()
 		return
 	if _overlay_suppressed:
 		_set_visible(false)
@@ -161,7 +168,9 @@ func bind_pawn(p: HeelKawnian) -> void:
 		_set_visible(true)
 	_poll_accum_sec = UI_POLL_INTERVAL_SEC
 	_last_ui_signature = ""
-	_refresh()
+	_expensive_poll_accum_sec = _expensive_refresh_interval()
+	_expensive_dirty = true
+	_refresh(true)
 
 
 func set_player_context(mode_label: String, player_pawn_id: int, picker_visible: bool) -> void:
@@ -172,7 +181,8 @@ func set_player_context(mode_label: String, player_pawn_id: int, picker_visible:
 	_player_context_pawn_id = player_pawn_id
 	_player_context_picker_visible = picker_visible
 	if _pawn != null and is_instance_valid(_pawn):
-		_refresh()
+		_expensive_dirty = true
+		_refresh(true)
 
 
 # ==================== layout ====================
@@ -954,19 +964,23 @@ func _process(delta: float) -> void:
 		_pawn = null
 		_set_visible(false)
 		_last_ui_signature = ""
+		_reset_expensive_detail_cache()
 		return
 	_poll_accum_sec += delta
-	if _poll_accum_sec < UI_POLL_INTERVAL_SEC:
+	_expensive_poll_accum_sec += delta
+	if _poll_accum_sec < UI_POLL_INTERVAL_SEC and not _expensive_dirty:
 		return
-	_poll_accum_sec = 0.0
-	var sig: String = _build_ui_signature()
-	if sig == _last_ui_signature:
+	if _poll_accum_sec >= UI_POLL_INTERVAL_SEC:
+		_poll_accum_sec = 0.0
+	var refresh_expensive: bool = _should_refresh_expensive_details()
+	var sig: String = _build_cheap_ui_signature()
+	if sig == _last_ui_signature and not refresh_expensive:
 		return
 	_last_ui_signature = sig
-	_refresh()
+	_refresh(refresh_expensive)
 
 
-func _refresh() -> void:
+func _refresh(refresh_expensive_details: bool = false) -> void:
 	if _pawn == null or _pawn.data == null:
 		return
 	var d: HeelKawnianData = _pawn.data
@@ -982,7 +996,8 @@ func _refresh() -> void:
 			_subtitle_label.text = "%s · no prof · bias %s%s" % [arc_bits, hk, clan_bit]
 		else:
 			_subtitle_label.text = "%s · %s · bias %s%s" % [arc_bits, prof, hk, clan_bit]
-		_refresh_portrait_strip(d)
+		if refresh_expensive_details:
+			_refresh_portrait_strip(d)
 
 	# Update tier indicator from ProgressionSystem
 	if _tier_bar != null and _tier_label != null:
@@ -1009,39 +1024,8 @@ func _refresh() -> void:
 	
 	_state_label.text = _pawn.describe_state()
 	
-	# Identity tab updates
-	if _traits_label != null:
-		_traits_label.text = "Traits: %s" % d.traits_display()
-	if _lineage_label != null:
-		_lineage_label.text = _lineage_block(d)
-	if _simple_lineage_label != null:
-		var parent_name: String = "Unknown"
-		if d.parent_a_id >= 0:
-			var parent_pd = d._get_parent_data(d.parent_a_id)
-			if parent_pd != null:
-				parent_name = parent_pd.display_name
-		
-		var household_info: String = "None"
-		if d.household_id >= 0:
-			household_info = "Household #" + str(d.household_id)
-		
-		_simple_lineage_label.text = "Born: " + parent_name + " | " + household_info
-	if _appearance_label != null:
-		_appearance_label.text = "Appearance: %s, %s" % [_body_type_label(d.body_type), _hair_style_label(d.hair_style)]
-	if _liking_label != null:
-		_liking_label.text = d.profession_liking_digest_line()
-	if _likes_dislikes_label != null:
-		_likes_dislikes_label.text = _build_likes_dislikes_text(d)
-	if _coach_label != null:
-		var hints: PackedStringArray = d.progression_coach_lines(3)
-		_coach_label.text = "\n".join(hints)
-	if _identity_label != null:
-		_identity_label.text = _build_identity_strip(d)
-	if _settlement_label != null:
-		_settlement_label.text = _build_settlement_line(d)
-
-	# Gear tab updates
-	_refresh_gear_tab(d)
+	if refresh_expensive_details:
+		_refresh_expensive_details(d)
 
 	# Needs tab updates
 	for field in _need_bars:
@@ -1050,9 +1034,7 @@ func _refresh() -> void:
 		entry.bar.value = clampf(v, 0.0, 100.0)
 		entry.label.text = "%d" % int(round(v))
 
-	# Matrix tab updates — explicit if/then policy (see PawnDecisionRuleMatrix)
-	# DEBUG ONLY: Hidden in release builds
-	if OS.is_debug_build() and _matrix_inputs_label != null:
+	if refresh_expensive_details and OS.is_debug_build() and _matrix_inputs_label != null:
 		var matrix_lines: PackedStringArray = []
 		matrix_lines.append("[b]If / then matrix[/b] (colony + body + bonds + permissions)")
 		if WorldAI != null and WorldAI.has_method("get_pawn_neural_state"):
@@ -1118,8 +1100,7 @@ func _refresh() -> void:
 			matrix_lines.append("  %s: %.2f" % [ak, d.affinities.get(ak, 0.5)])
 		_matrix_inputs_label.text = "\n".join(matrix_lines)
 
-	# Neural tab updates (DEBUG ONLY - hidden in release builds)
-	if OS.is_debug_build():
+	if refresh_expensive_details and OS.is_debug_build():
 		if _neural_bias_label != null:
 			var bias: String = d.highest_affinity_skill()
 			_neural_bias_label.text = "Current Bias: %s" % bias
@@ -1142,8 +1123,7 @@ func _refresh() -> void:
 				neural_lines.append("[i]WorldAI not available[/i]")
 			_neural_outputs_label.text = "\n".join(neural_lines)
 
-	# Social tab updates
-	if _social_label != null:
+	if refresh_expensive_details and _social_label != null:
 		var top_peer: Dictionary = d.top_social_rapport_peer()
 		var pid: int = int(top_peer.get("peer_id", -1))
 		var peer_disp: String = _peer_display_for_social(pid)
@@ -1192,20 +1172,131 @@ func _refresh() -> void:
 		else:
 			_hint_label.text = "Observer/chronicler · %s · F9 · F10 → 35 · Backbone" % esc
 
-	# Narrative tab updates (Phase 5: Emergent Narrative)
-	var narrative_label: RichTextLabel = _tab_narrative.get_node_or_null("NarrativeLabel") as RichTextLabel
-	if narrative_label != null:
-		var narrative_text: String = _generate_pawn_narrative(_pawn)
-		if narrative_text != "":
-			narrative_label.text = narrative_text
-		else:
-			narrative_label.text = "[i][color=#666666]No narrative data available[/color][/i]"
-
-	# Consciousness tab updates (Phase 5: HeelKawnian Consciousness)
-	_update_consciousness_tab()
+	if refresh_expensive_details:
+		_refresh_narrative_tab()
+		_update_consciousness_tab()
+		_last_expensive_signature = _build_ui_signature()
+		_expensive_dirty = false
+		_expensive_poll_accum_sec = 0.0
 
 	# Reposition each tick because the panel can grow/shrink with carry text.
 	_reposition()
+
+
+func _reset_expensive_detail_cache() -> void:
+	_expensive_poll_accum_sec = HIGH_SPEED_EXPENSIVE_DETAILS_REFRESH_SEC
+	_last_expensive_signature = ""
+	_expensive_dirty = true
+	_last_gear_signature = ""
+
+
+func _expensive_refresh_interval() -> float:
+	if GameManager != null and GameManager.game_speed >= 10.0:
+		return HIGH_SPEED_EXPENSIVE_DETAILS_REFRESH_SEC
+	return EXPENSIVE_DETAILS_REFRESH_SEC
+
+
+func _should_refresh_expensive_details() -> bool:
+	if _expensive_dirty:
+		return true
+	if _expensive_poll_accum_sec < _expensive_refresh_interval():
+		return false
+	var sig: String = _build_ui_signature()
+	if sig == _last_expensive_signature:
+		_expensive_poll_accum_sec = 0.0
+		return false
+	return true
+
+
+func _build_cheap_ui_signature() -> String:
+	if _pawn == null or not is_instance_valid(_pawn) or _pawn.data == null:
+		return ""
+	var d: HeelKawnianData = _pawn.data
+	return "%d|%d|%d|%d|%s|%d|%d|%d|%d|%s|%s|%s|%d|%s|%d|%s" % [
+		int(d.id),
+		int(d.age),
+		d.tile_pos.x,
+		d.tile_pos.y,
+		_pawn.describe_state(),
+		int(round(d.hunger)),
+		int(round(d.rest)),
+		int(round(d.mood)),
+		int(round(d.health)),
+		str(d.carrying),
+		str(d.carrying_qty),
+		_player_context_mode_label,
+		_player_context_pawn_id,
+		str(_player_context_picker_visible),
+		int(d.current_profession),
+		str(d.display_name),
+	]
+
+
+func _refresh_expensive_details(d: HeelKawnianData) -> void:
+	if _traits_label != null:
+		_traits_label.text = "Traits: %s" % d.traits_display()
+	if _lineage_label != null:
+		_lineage_label.text = _lineage_block(d)
+	if _simple_lineage_label != null:
+		var parent_name: String = "Unknown"
+		if d.parent_a_id >= 0:
+			var parent_pd = d._get_parent_data(d.parent_a_id)
+			if parent_pd != null:
+				parent_name = parent_pd.display_name
+		var household_info: String = "None"
+		if d.household_id >= 0:
+			household_info = "Household #" + str(d.household_id)
+		_simple_lineage_label.text = "Born: " + parent_name + " | " + household_info
+	if _appearance_label != null:
+		_appearance_label.text = "Appearance: %s, %s" % [_body_type_label(d.body_type), _hair_style_label(d.hair_style)]
+	if _liking_label != null:
+		_liking_label.text = d.profession_liking_digest_line()
+	if _likes_dislikes_label != null:
+		_likes_dislikes_label.text = _build_likes_dislikes_text(d)
+	if _coach_label != null:
+		var hints: PackedStringArray = d.progression_coach_lines(3)
+		_coach_label.text = "\n".join(hints)
+	if _identity_label != null:
+		_identity_label.text = _build_identity_strip(d)
+	if _settlement_label != null:
+		_settlement_label.text = _build_settlement_line(d)
+	_refresh_gear_tab_if_changed(d)
+
+
+func _refresh_gear_tab_if_changed(d: HeelKawnianData) -> void:
+	var sig: String = _gear_signature(d)
+	if sig == _last_gear_signature:
+		return
+	_last_gear_signature = sig
+	_refresh_gear_tab(d)
+
+
+func _gear_signature(d: HeelKawnianData) -> String:
+	var parts: PackedStringArray = PackedStringArray()
+	for slot_idx in range(5):
+		var gear: Variant = d.equipped_gear.get(slot_idx, null)
+		if gear == null:
+			parts.append("%d:empty" % slot_idx)
+		else:
+			parts.append("%d:%s:%d:%d:%d" % [
+				slot_idx,
+				str(gear.name),
+				int(gear.durability),
+				int(gear.max_durability),
+				int(gear.quality),
+			])
+	return "|".join(parts)
+
+
+func _refresh_narrative_tab() -> void:
+	var narrative_label: RichTextLabel = _tab_narrative.get_node_or_null("NarrativeLabel") as RichTextLabel
+	if narrative_label == null:
+		return
+	var narrative_text: String = _generate_pawn_narrative(_pawn)
+	if narrative_text != "":
+		narrative_label.text = narrative_text
+	else:
+		narrative_label.text = "[i][color=#666666]No narrative data available[/color][/i]"
 
 
 func _pawn_spawner() -> PawnSpawner:

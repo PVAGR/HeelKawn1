@@ -5,18 +5,23 @@ const REFRESH_EVERY_N_TICKS: int = 20
 const REFRESH_EVERY_N_TICKS_FAST: int = 40
 const REFRESH_EVERY_N_TICKS_ULTRA: int = 60
 
-@onready var _panel: PanelContainer = $Panel
-@onready var _close_button: Button = $Panel/Margin/VBox/Header/CloseButton
-@onready var _text: RichTextLabel = $Panel/Margin/VBox/Scroll/ChronicleText
+@onready var _panel: PanelContainer = get_node_or_null("Panel") as PanelContainer
+@onready var _close_button: Button = get_node_or_null("Panel/Margin/VBox/Header/CloseButton") as Button
+@onready var _text: RichTextLabel = get_node_or_null("Panel/Margin/VBox/Scroll/ChronicleText") as RichTextLabel
 
 var _spawner: PawnSpawner = null
 var _visible: bool = false
 var _hud_dirty: bool = true
 var _last_refresh_tick: int = 0
+var _missing_ui_warning_shown: bool = false
 
 
 func _ready() -> void:
 	layer = 26
+	if not _has_required_ui():
+		_warn_missing_ui_once()
+		set_process(false)
+		return
 	if _panel != null:
 		_panel.visible = false
 	if _close_button != null:
@@ -30,11 +35,14 @@ func _ready() -> void:
 func bind(spawner: PawnSpawner) -> void:
 	_spawner = spawner
 	_hud_dirty = true
-	if _visible:
+	if _visible and _has_required_ui():
 		_refresh()
 
 
 func _toggle_visibility() -> void:
+	if not _has_required_ui():
+		_warn_missing_ui_once()
+		return
 	_visible = not _visible
 	_panel.visible = _visible
 	if _visible:
@@ -55,7 +63,7 @@ func hide_book() -> void:
 
 
 func _on_tick(tick: int) -> void:
-	if not _visible:
+	if not _visible or not _has_required_ui():
 		return
 	var refresh_stride: int = _refresh_stride_for_speed(GameManager.game_speed)
 	if tick % refresh_stride == 0 or _hud_dirty:
@@ -88,7 +96,8 @@ func _apply_panel_style() -> void:
 
 
 func _refresh() -> void:
-	if _text == null:
+	if not _has_required_ui():
+		_warn_missing_ui_once()
 		return
 	var lines: Array[String] = []
 	lines.append("[b][color=#F2D6A2]CHRONICLE BOOK[/color][/b]")
@@ -139,6 +148,17 @@ func _refresh() -> void:
 				shown += 1
 	_text.clear()
 	_text.append_text("\n".join(lines))
+
+
+func _has_required_ui() -> bool:
+	return _panel != null and _text != null
+
+
+func _warn_missing_ui_once() -> void:
+	if _missing_ui_warning_shown:
+		return
+	_missing_ui_warning_shown = true
+	push_warning("ChronicleBook disabled: missing Panel or ChronicleText nodes.")
 
 
 func _format_event(ev: Dictionary) -> String:

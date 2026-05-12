@@ -18,17 +18,22 @@ const CURATED_SEEDS: Array = [
 	[9001,      "Great Lake",        "A freshwater sea stretching to every horizon. Endless fish and timber.", "mild"],
 ]
 
-@onready var _panel: PanelContainer = $Panel
-@onready var _close_button: Button = $Panel/Margin/VBox/Header/CloseButton
-@onready var _subtitle: Label = $Panel/Margin/VBox/SubTitle
-@onready var _grid: GridContainer = $Panel/Margin/VBox/Scroll/Grid
+@onready var _panel: PanelContainer = get_node_or_null("Panel") as PanelContainer
+@onready var _close_button: Button = get_node_or_null("Panel/Margin/VBox/Header/CloseButton") as Button
+@onready var _subtitle: Label = get_node_or_null("Panel/Margin/VBox/SubTitle") as Label
+@onready var _grid: GridContainer = get_node_or_null("Panel/Margin/VBox/Scroll/Grid") as GridContainer
 
 var _visible: bool = false
 var _base_seed: int = 0
+var _missing_ui_warning_shown: bool = false
 
 
 func _ready() -> void:
 	layer = 80
+	if not _has_required_ui():
+		_warn_missing_ui_once()
+		set_process(false)
+		return
 	if _panel != null:
 		_panel.visible = false
 	if _close_button != null:
@@ -39,6 +44,9 @@ func _ready() -> void:
 
 
 func show_gallery(base_seed: int = 0) -> void:
+	if not _has_required_ui():
+		_warn_missing_ui_once()
+		return
 	_base_seed = base_seed
 	_visible = true
 	if _panel != null:
@@ -89,7 +97,8 @@ func _apply_panel_style() -> void:
 
 
 func _populate_cards() -> void:
-	if _grid == null:
+	if not _has_required_ui():
+		_warn_missing_ui_once()
 		return
 	for child in _grid.get_children():
 		child.queue_free()
@@ -148,3 +157,14 @@ func _build_seed_card(seed: int, biome_name: String, desc: String, climate: Stri
 func _on_seed_button_pressed(seed: int) -> void:
 	seed_selected.emit(seed)
 	hide_gallery()
+
+
+func _has_required_ui() -> bool:
+	return _panel != null and _grid != null
+
+
+func _warn_missing_ui_once() -> void:
+	if _missing_ui_warning_shown:
+		return
+	_missing_ui_warning_shown = true
+	push_warning("SeedGallery disabled: missing Panel or Grid nodes.")

@@ -817,6 +817,17 @@ func record_pawn_death(
 		e["sid"] = settlement_id
 	_append(e)
 
+	# Emit EventBus signal so other systems (GrudgeManager) can react to death
+	if EventBus != null:
+		EventBus.emit(EventBus.EVENT_PAWN_DIED, {
+			"pawn_id": pawn_id,
+			"pawn_name": pawn_name,
+			"cause": cause,
+			"tile": tile,
+			"region_key": WorldMemory._region_key(tile.x, tile.y),
+			"tick": tick,
+		})
+
 	# PHASE 7: Record legacy for this pawn
 	# Get pawn data first (needed for legacy, notification, and biography)
 	var pawn_data: HeelKawnianData = null

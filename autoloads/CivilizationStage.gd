@@ -54,7 +54,14 @@ const STAGE_DESCRIPTIONS: Dictionary = {
 const CACHE_TICKS: int = 120
 const WRITING_KNOWLEDGE_ID: int = 24
 
+## Era score penalty applied when knowledge is lost in a settlement.
+## The penalty decays over time as the settlement adapts.
+const KNOWLEDGE_LOSS_ERA_PENALTY: int = 3
+const KNOWLEDGE_LOSS_PENALTY_DECAY_INTERVAL_TICKS: int = 360
+
 var _snapshot_cache: Dictionary = {}
+## Per-settlement era score penalties from knowledge loss (settlement_id(str) -> penalty amount)
+var _knowledge_loss_penalties: Dictionary = {}
 
 
 func get_civilization_stage(settlement_id: int = -1) -> int:

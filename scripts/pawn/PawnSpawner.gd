@@ -351,6 +351,7 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		add_child(pawn)
 		pawns.append(pawn)
 		invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
+		HeelKawnianData.register_pawn_data(data)
 		if SpatialManager != null: # ARCHITECT T006
 			SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 		placed += 1
@@ -463,6 +464,7 @@ func spawn_generational_pawn(
 	add_child(pawn)
 	pawns.append(pawn)
 	invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
+	HeelKawnianData.register_pawn_data(data)
 	if SpatialManager != null: # ARCHITECT T006
 		SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 	
@@ -700,6 +702,7 @@ func spawn_pawn() -> void:
 		add_child(pawnc)
 		pawns.append(pawnc)
 		invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
+		HeelKawnianData.register_pawn_data(data)
 		if SpatialManager != null: # ARCHITECT T006
 			SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 		return
@@ -717,6 +720,7 @@ func spawn_from_data(d: HeelKawnianData, world: World) -> void:
 	add_child(p)
 	pawns.append(p)
 	invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
+	HeelKawnianData.register_pawn_data(d)
 	if SpatialManager != null: # ARCHITECT T006
 		SpatialManager.register_entity(int(d.id), "pawn", d.tile_pos)
 
@@ -785,8 +789,12 @@ func spawn_child_pawn(
 	# PROFESSION INHERITANCE - children tend toward parent professions but with variation
 	_inherit_profession_from_parents(data, parent_a, parent_b, birth_tick)
 	
-	var inbreeding_penalty: float = 0.0
+	# BLOODLINE ASSIGNMENT - child inherits from both parents
 	var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
+	if bloodline_sys != null and bloodline_sys.has_method("assign_birth_bloodline"):
+		data.bloodline_id = int(bloodline_sys.call("assign_birth_bloodline", data.id, data.display_name, int(parent_a.id), int(parent_b.id), ""))
+	
+	var inbreeding_penalty: float = 0.0
 	if bloodline_sys != null and bloodline_sys.has_method("get_inbreeding_penalty"):
 		inbreeding_penalty = float(bloodline_sys.call("get_inbreeding_penalty", int(parent_a.id), int(parent_b.id)))
 	if inbreeding_penalty > 0.0:
@@ -815,6 +823,7 @@ func spawn_child_pawn(
 	add_child(pawn)
 	pawns.append(pawn)
 	invalidate_pawn_dict()  # OPTIMIZATION: Mark dict dirty
+	HeelKawnianData.register_pawn_data(data)
 	if SpatialManager != null: # ARCHITECT T006
 		SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 	parent_a.children_count += 1

@@ -15,11 +15,177 @@ const MATRIX_AMBITION_SETTLEMENT_COOLDOWN_TICKS: int = 90
 const MATRIX_AMBITION_PAWN_COOLDOWN_TICKS: int = 90
 const MATRIX_AFFILIATION_COOLDOWN_TICKS: int = 240
 
+## Pressure event bias tuning
+const PRESSURE_FLEE_BIAS: int = 5
+const PRESSURE_FIGHT_BIAS: int = 5
+const PRESSURE_HOARD_BIAS: int = 4
+
 static var _identity_by_soul: Dictionary = {}
 static var _last_matrix_log_tick_by_soul: Dictionary = {}
 static var _last_ambition_tick_by_settlement: Dictionary = {}
 static var _last_ambition_tick_by_pawn: Dictionary = {}
 static var _last_affiliation_tick_by_pawn: Dictionary = {}
+
+## Pressure biases: pawn_id -> { "bias_type": String, "intensity": float, "tick": int }
+## Applied to intent selection for pawns in pressurized regions
+static var _pressure_bias_by_pawn: Dictionary = {}
+
+
+func _ready() -> void:
+	# Subscribe to pressure_event from EventBus
+	if EventBus != null:
+		EventBus.subscribe(EventBus.EVENT_PRESSURE_EVENT, self, "_on_pressure_event")
+
+
+func _exit_tree() -> void:
+	# Unsubscribe from EventBus
+	if EventBus != null:
+		EventBus.unsubscribe(EventBus.EVENT_PRESSURE_EVENT, self, "_on_pressure_event")
+
+
+## EventBus handler: apply personality-based biases when pressure fires
+func _on_pressure_event(payload: Dictionary) -> void:
+	var region_id: int = int(payload.get("region_id", -1))
+	var pressure_type: String = str(payload.get("pressure_type", ""))
+	var intensity: float = float(payload.get("intensity", 0.0))
+	var tick: int = int(payload.get("tick", 0))
+
+	if region_id < 0 or intensity <= 0.0:
+		return
+
+	# Find pawns in the affected region and apply bias based on personality
+	var pawns_in_region: Array = _get_pawns_in_region(region_id)
+	for pawn_data in pawns_in_region:
+		var pawn_id: int = int(pawn_data.get("id", -1))
+		if pawn_id < 0:
+			continue
+
+		# Determine bias type from personality traits
+		var bias_type: String = _determine_pressure_bias(pawn_data, pressure_type)
+
+		# Store pressure bias for this pawn
+		_pressure_bias_by_pawn[pawn_id] = {
+			"bias_type": bias_type,
+			"intensity": intensity,
+			"tick": tick,
+			"pressure_type": pressure_type,
+			"region_id": region_id,
+		}
+
+
+## Get pawns currently in a region (tile-based lookup)
+static func _get_pawns_in_region(region_id: int) -> Array:
+	var result: Array = []
+	var ps: Node = _root_node("Main/WorldViewport/PawnSpawner")
+	if ps == null:
+		return result
+	var pawns_v: Variant = ps.get("pawns")
+	if not (pawns_v is Array):
+		return result
+	var pawns: Array = pawns_v as Array
+
+	for pawn in pawns:
+		if pawn == null or not is_instance_valid(pawn):
+			continue
+		var data: HeelKawnianData = _pawn_data(pawn)
+		if data == null:
+			continue
+
+		# Check if pawn is in this region
+		var pawn_region: int = _fallback_region_key(data.tile_pos)
+		if pawn_region == region_id:
+			# Collect personality info for bias determination
+			var soul_id: String = ensure_identity_for_pawn(pawn)
+			var identity: HeelKawnianIdentity = get_identity_for_pawn(pawn)
+			var traits: Dictionary = identity.traits if identity != null else {}
+
+			result.append({
+				"id": int(data.id),
+				"caution": float(traits.get("caution", 0.0)),
+				"aggression": float(traits.get("aggression", 0.0)),
+				"greed": float(traits.get("greed", 0.0)),
+				"survival_instinct": float(traits.get("survival_instinct", 0.0)),
+				"data": data,
+			})
+	return result
+
+
+## Determine what behavioral bias a pawn should have under pressure
+static func _determine_pressure_bias(pawn_data: Dictionary, pressure_type: String) -> String:
+	var caution: float = float(pawn_data.get("caution", 0.0))
+	var aggression: float = float(pawn_data.get("aggression", 0.0))
+	var greed: float = float(pawn_data.get("greed", 0.0))
+	var survival_instinct: float = float(pawn_data.get("survival_instinct", 0.0))
+
+	# Personality-driven bias selection
+	# Cautious/fearful pawns → flee (exodus)
+	if caution > 0.5 and caution > aggression:
+		return "flee"
+
+	# Aggressive pawns → fight (conflict)
+	if aggression > 0.5 and aggression > caution:
+		return "fight"
+
+	# Greedy/survival pawns → hoard (resource hoarding)
+	if greed > 0.3 or survival_instinct > 0.6:
+		return "hoard"
+
+	# Default: pressure type determines response
+	match pressure_type:
+		"famine":
+			return "hoard"
+		"conflict":
+			return "fight"
+		"exodus":
+			return "flee"
+
+	return "hoard"
+
+
+## Get the current pressure bias for a pawn (returns {} if none)
+static func get_pressure_bias_for_pawn(pawn_id: int) -> Dictionary:
+	if not _pressure_bias_by_pawn.has(pawn_id):
+		return {}
+	var bias: Dictionary = _pressure_bias_by_pawn[pawn_id]
+
+	# Expire stale biases (older than 1000 ticks)
+	var tick: int = _tick()
+	if tick - int(bias.get("tick", 0)) > 1000:
+		_pressure_bias_by_pawn.erase(pawn_id)
+		return {}
+
+	return bias
+
+
+## Apply pressure bias to job biases
+static func _apply_pressure_bias_to_biases(biases: Dictionary, pawn_id: int) -> void:
+	var pressure: Dictionary = get_pressure_bias_for_pawn(pawn_id)
+	if pressure.is_empty():
+		return
+
+	var bias_type: String = str(pressure.get("bias_type", ""))
+	var intensity: float = float(pressure.get("intensity", 0.0))
+	var pressure_type: String = str(pressure.get("pressure_type", ""))
+
+	# Scale bias amount by pressure intensity
+	var flee_amount: int = int(round(PRESSURE_FLEE_BIAS * intensity))
+	var fight_amount: int = int(round(PRESSURE_FIGHT_BIAS * intensity))
+	var hoard_amount: int = int(round(PRESSURE_HOARD_BIAS * intensity))
+
+	match bias_type:
+		"flee":
+			# Exodus: prefer migration, exploration, foraging far away
+			_add_bias(biases, [Job.Type.FORAGE, Job.Type.GROW_FOOD, Job.Type.HARVEST_CROPS], flee_amount)
+			_add_bias(biases, [Job.Type.PROTECT, Job.Type.DEFEND, Job.Type.HUNT], -flee_amount)
+		"fight":
+			# Conflict: prefer combat, defense, aggression
+			_add_bias(biases, [Job.Type.PROTECT, Job.Type.DEFEND, Job.Type.HUNT, Job.Type.CRAFT_SPEAR], fight_amount)
+			_add_bias(biases, [Job.Type.FORAGE, Job.Type.GROW_FOOD], -fight_amount)
+		"hoard":
+			# Resource hoarding: prefer gathering, storage, food production
+			_add_bias(biases, [Job.Type.CHOP, Job.Type.MINE, Job.Type.FORAGE, Job.Type.HUNT, Job.Type.GROW_FOOD], hoard_amount)
+			_add_bias(biases, [Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR], hoard_amount)
+			_add_bias(biases, [Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP], -hoard_amount)
 
 
 static func ensure_identity_for_pawn(pawn: Variant) -> String:
@@ -212,6 +378,13 @@ static func get_social_action_for_pawn(pawn: Variant) -> Dictionary:
 	var target_id: int = -1
 	var target_tile: Vector2i = Vector2i(-1, -1)
 	var best_score: float = -99999.0
+	var teach_knowledge_type: int = -1
+
+	# Check for pressure bias influence on social actions
+	var pressure: Dictionary = get_pressure_bias_for_pawn(int(data.id))
+	var pressure_bias_type: String = str(pressure.get("bias_type", ""))
+	var pressure_intensity: float = float(pressure.get("intensity", 0.0))
+
 	for c in candidates:
 		var other_id: int = int(c.get("id", -1))
 		if other_id < 0:
@@ -226,6 +399,16 @@ static func get_social_action_for_pawn(pawn: Variant) -> Dictionary:
 		var ally_score: float = rapport / 900.0 + trust / 75.0 - grudge * 2.2 + reputation * 0.4 - d2 / 4500.0
 		var rival_score: float = grudge * 2.6 + (1.0 - trust / 100.0) + (-reputation) * 0.25 - d2 / 6000.0
 		var teach_score: float = ally_score + 0.65 + (0.2 if same_settlement else 0.0)
+
+		# Pressure bias influences social action scores
+		if pressure_bias_type == "fight" and pressure_intensity > 0.0:
+			rival_score += pressure_intensity * 1.5  # Aggressive pressure amplifies rival scores
+		elif pressure_bias_type == "flee" and pressure_intensity > 0.0:
+			ally_score += pressure_intensity * 0.5  # Fear pressure amplifies ally-seeking (safety in numbers)
+			rival_score -= pressure_intensity * 0.8  # Cautious pawns avoid confrontation under pressure
+		elif pressure_bias_type == "hoard" and pressure_intensity > 0.0:
+			ally_score -= pressure_intensity * 0.3  # Hoarders are less social under pressure
+
 		match drive:
 			"bond", "serve_settlement", "recover":
 				if ally_score > best_score:
@@ -259,6 +442,9 @@ static func get_social_action_for_pawn(pawn: Variant) -> Dictionary:
 			"rationale": "no nearby social candidate",
 			"drive": drive,
 		}
+	# If teach_seek was selected, attempt knowledge transfer immediately
+	if action == "teach_seek" and target_id >= 0:
+		teach_knowledge_type = execute_teach_seek(int(data.id), target_id)
 	return {
 		"action": action,
 		"target_id": target_id,
@@ -266,7 +452,27 @@ static func get_social_action_for_pawn(pawn: Variant) -> Dictionary:
 		"score": best_score,
 		"rationale": "drive=%s target=%d score=%.2f action=%s" % [drive, target_id, best_score, action],
 		"drive": drive,
+		"knowledge_type": teach_knowledge_type,
 	}
+
+
+## Execute teach_seek: find a knowledge type the teacher knows but the student doesn't,
+## then call KnowledgeSystem.teach_knowledge() to transfer it.
+## Returns the knowledge_type that was taught, or -1 if nothing to teach.
+static func execute_teach_seek(teacher_id: int, student_id: int) -> int:
+	var ks: Node = _root_node("KnowledgeSystem")
+	if ks == null or not ks.has_method("teach_knowledge"):
+		return -1
+	var teacher_known: Array = ks.call("get_pawn_knowledge", teacher_id) if ks.has_method("get_pawn_knowledge") else []
+	var student_known: Array = ks.call("get_pawn_knowledge", student_id) if ks.has_method("get_pawn_knowledge") else []
+	if teacher_known.is_empty():
+		return -1
+	# Find the first knowledge type the teacher knows but the student doesn't
+	for kt in teacher_known:
+		if not (kt in student_known):
+			ks.call("teach_knowledge", teacher_id, student_id, int(kt))
+			return int(kt)
+	return -1
 
 
 static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
@@ -903,6 +1109,7 @@ static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, ident
 			_add_settlement_service_bias(biases, profile)
 	_add_human_scale_biases(biases, profile, data)
 	_add_identity_trait_biases(biases, identity)
+	_apply_pressure_bias_to_biases(biases, int(data.id))
 	_clamp_biases(biases, -8, 16)
 	return biases
 

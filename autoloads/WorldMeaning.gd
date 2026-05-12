@@ -1,6 +1,10 @@
 extends Node
 ## Phase 2.2: deterministic, derived metrics from WorldMemory only.
 ## No writes to WorldMemory, no world mutation, no UI. Interpretation only (RNG allowed only for labeled non-canonical presentation tiers — default paths stay deterministic-from-facts).
+##
+## Phase 5+: Pressure event detection — monitors regional death concentration
+## and emits pressure_event signals via EventBus when thresholds are crossed.
+## This drives emergent behavior (famine → conflict, exodus, hoarding).
 
 ## Matches WorldMemory Kind enum (keep in sync; literal ints avoid autoload class timing).
 const KIND_PAWN_DEATH: int = 0
@@ -25,6 +29,16 @@ const KIND_CULTURE_EVENT: int = 21
 const KIND_INJURY_EVENT: int = 22
 const KIND_WORLD_EVENT: int = 23
 
+## Pressure event tuning
+const PRESSURE_CHECK_INTERVAL_TICKS: int = 500
+const PRESSURE_DEATH_THRESHOLD: int = 5
+const PRESSURE_DEATH_WINDOW_TICKS: int = 1000
+const PRESSURE_PHASE_OFFSET_TICKS: int = 73  # Offset to avoid clustering with other periodic checks
+
+## Track which regions have already emitted pressure events (to avoid spam)
+## region_key -> last pressure tick
+var _pressure_emitted_by_region: Dictionary = {}
+
 ## region_key (int) -> aggregated entry Dictionary
 var meaning_by_region: Dictionary = {}
 
@@ -39,6 +53,18 @@ var meaning_by_period: Dictionary = {}
 
 ## Cursor for incremental recompute: index of last processed event.
 var _last_recompute_event_index: int = 0
+
+
+func _ready() -> void:
+	add_to_group("tickable")
+	if TickManager != null:
+		TickManager.mark_tickable_cache_dirty()
+
+
+func _on_world_tick(tick_number: int) -> void:
+	# Periodic pressure check for regional stress detection
+	if GameManager != null and GameManager.periodic_phase_due(tick_number, PRESSURE_CHECK_INTERVAL_TICKS, PRESSURE_PHASE_OFFSET_TICKS):
+		_check_regional_pressure(tick_number)
 
 
 func recompute() -> void:
@@ -1006,6 +1032,141 @@ func get_tracked_region_count() -> int:
 
 func get_tracked_settlement_count() -> int:
 	return meaning_by_settlement.size()
+
+
+# ==================== PRESSURE EVENT DETECTION ====================
+
+## Check all regions for pressure conditions (death concentration)
+## Called every PRESSURE_CHECK_INTERVAL_TICKS ticks via _on_world_tick
+func _check_regional_pressure(tick: int) -> void:
+	# Recompute meanings first to ensure data is fresh
+	recompute()
+
+	# Scan all tracked regions for death concentration
+	for region_key in meaning_by_region.keys():
+		var rec: Dictionary = meaning_by_region[region_key]
+
+		# Count recent pawn deaths in this region within the window
+		var recent_deaths: int = _count_recent_pawn_deaths_in_region(int(region_key), tick, PRESSURE_DEATH_WINDOW_TICKS)
+
+		if recent_deaths < PRESSURE_DEATH_THRESHOLD:
+			continue
+
+		# Check cooldown — don't spam pressure events for the same region
+		var last_pressure_tick: int = int(_pressure_emitted_by_region.get(region_key, -999999))
+		if tick - last_pressure_tick < PRESSURE_CHECK_INTERVAL_TICKS:
+			continue
+
+		# Determine pressure type based on death causes and regional context
+		var pressure_type: String = _determine_pressure_type(int(region_key), rec, recent_deaths)
+		var intensity: float = _calculate_pressure_intensity(recent_deaths, rec)
+
+		# Mark this region as pressure-emitted
+		_pressure_emitted_by_region[region_key] = tick
+
+		# Emit pressure_event via EventBus
+		var payload: Dictionary = {
+			"region_id": int(region_key),
+			"pressure_type": pressure_type,
+			"intensity": intensity,
+			"tick": tick,
+			"recent_deaths": recent_deaths,
+		}
+		if EventBus != null:
+			EventBus.emit("pressure_event", payload)
+
+		# Record PRESSURE_EVENT in WorldMemory
+		if WorldMemory != null:
+			WorldMemory.record_event({
+				"type": "pressure_event",
+				"region_id": int(region_key),
+				"pressure_type": pressure_type,
+				"intensity": intensity,
+				"tick": tick,
+				"recent_deaths": recent_deaths,
+			})
+
+
+## Count pawn deaths in a region within the last N ticks
+func _count_recent_pawn_deaths_in_region(region_key: int, current_tick: int, window_ticks: int) -> int:
+	# Fast path: use cumulative pawn_deaths from meaning_by_region
+	# If total deaths are below threshold, no need to scan events
+	var rec: Dictionary = meaning_by_region.get(region_key, {})
+	var total_pawn_deaths: int = int(rec.get("pawn_deaths", 0))
+	if total_pawn_deaths < PRESSURE_DEATH_THRESHOLD:
+		return 0  # Not enough deaths in this region even cumulatively
+
+	var count: int = 0
+	if WorldMemory == null:
+		return 0
+	var events: Array[Dictionary] = WorldMemory.get_events()
+	var cutoff_tick: int = current_tick - window_ticks
+	# Scan backwards from newest events for early exit
+	for i in range(events.size() - 1, -1, -1):
+		var e: Dictionary = events[i]
+		var event_tick: int = int(e.get("t", 0))
+
+		# Early exit: events are roughly time-ordered; once we're past the window, stop
+		if event_tick < cutoff_tick:
+			break
+
+		# Check for pawn death events (Kind-based or type-based)
+		var is_pawn_death: bool = false
+		if e.has("k") and int(e["k"]) == KIND_PAWN_DEATH:
+			is_pawn_death = true
+		elif str(e.get("type", "")) == "pawn_death":
+			is_pawn_death = true
+
+		if not is_pawn_death:
+			continue
+
+		var event_region: int = int(e.get("r", -1))
+		if event_region == region_key:
+			count += 1
+	return count
+
+
+## Determine the type of pressure based on regional context
+func _determine_pressure_type(region_key: int, rec: Dictionary, recent_deaths: int) -> String:
+	# Starvation events indicate famine
+	var starvation_events: int = int(rec.get("starvation_events", 0))
+	# Conflict events indicate conflict
+	var conflict_events: int = int(rec.get("conflict_events", 0))
+	# Migration events indicate exodus
+	var migrations_started: int = int(rec.get("migrations_started", 0))
+
+	# Primary pressure type from dominant cause
+	if starvation_events >= 2 and conflict_events < 2:
+		return "famine"
+	if conflict_events >= 2 and starvation_events < 2:
+		return "conflict"
+	if migrations_started >= 2:
+		return "exodus"
+
+	# Composite: multiple causes → classify by dominant
+	if starvation_events >= conflict_events and starvation_events >= migrations_started:
+		return "famine"
+	if conflict_events >= migrations_started:
+		return "conflict"
+	return "exodus"
+
+
+## Calculate pressure intensity (0.0 to 1.0) based on death count and context
+func _calculate_pressure_intensity(recent_deaths: int, rec: Dictionary) -> float:
+	# Base intensity from death count
+	var intensity: float = clampf(float(recent_deaths) / 15.0, 0.0, 1.0)
+
+	# Amplify for starvation (famine is more severe)
+	var starvation_events: int = int(rec.get("starvation_events", 0))
+	if starvation_events >= 3:
+		intensity = minf(1.0, intensity * 1.3)
+
+	# Amplify for conflict escalation
+	var conflict_events: int = int(rec.get("conflict_events", 0))
+	if conflict_events >= 3:
+		intensity = minf(1.0, intensity * 1.2)
+
+	return clampf(intensity, 0.0, 1.0)
 
 
 # === Landmark Naming ===

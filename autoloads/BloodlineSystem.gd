@@ -5,6 +5,8 @@ extends Node
 @onready var WorldMemory = get_node_or_null("/root/WorldMemory")
 @onready var WorldPersistence = get_node_or_null("/root/WorldPersistence")
 @onready var GameManager = get_node_or_null("/root/GameManager")
+@onready var EventBus = get_node_or_null("/root/EventBus")
+@onready var KnowledgeSystem = get_node_or_null("/root/KnowledgeSystem")
 
 const BLOODLINE_CLEANUP_INTERVAL_TICKS: int = 10000
 const BLOODLINE_CLEANUP_PHASE_OFFSET_TICKS: int = 1151
@@ -26,6 +28,8 @@ func _ready() -> void:
 	_refresh_next_bloodline_id()
 	if GameManager != null:
 		GameManager.game_tick.connect(_on_game_tick)
+	if EventBus != null:
+		EventBus.subscribe("pawn_birth", self, "_on_pawn_birth")
 
 func _on_game_tick(tick: int) -> void:
 	# Periodic cleanup of empty bloodlines
@@ -465,6 +469,93 @@ func _cleanup_empty_bloodlines() -> void:
 	for bloodline_id in to_remove:
 		bloodlines.erase(bloodline_id)
 		generation_data.erase(bloodline_id)
+
+# === Skill Inheritance ===
+
+## Called via EventBus when a pawn is born (via PawnSpawner.spawn_child_pawn).
+## Transfers 25% of each parent's top 2 skill XP to the child, with deterministic
+## variance from WorldRNG. If both parents share a knowledge type, the child
+## begins with that knowledge at novice level via KnowledgeSystem.
+func _on_pawn_birth(payload: Dictionary) -> void:
+	var child_id: int = int(payload.get("pawn_id", -1))
+	var parent_a_id: int = int(payload.get("parent_a_id", -1))
+	var parent_b_id: int = int(payload.get("parent_b_id", -1))
+	
+	# Only process births with two known parents (actual child spawn)
+	if child_id < 0 or parent_a_id < 0 or parent_b_id < 0:
+		return
+	
+	var parent_a_data: HeelKawnianData = PawnData.get_pawn_data(parent_a_id)
+	var parent_b_data: HeelKawnianData = PawnData.get_pawn_data(parent_b_id)
+	var child_data: HeelKawnianData = PawnData.get_pawn_data(child_id)
+	
+	if parent_a_data == null or parent_b_data == null or child_data == null:
+		return
+	
+	var inherited_skills: Dictionary = {}
+	
+	# Inherit from parent A's top 2 skills
+	var parent_a_top: Array[int] = _get_top_skills(parent_a_data, 2)
+	for skill in parent_a_top:
+		var parent_xp: float = parent_a_data.get_skill_xp(skill)
+		var inherited: float = _compute_inherited_xp(parent_xp, child_id, skill)
+		child_data.skill_xp[skill] = child_data.get_skill_xp(skill) + inherited
+		inherited_skills[HeelKawnianData.skill_name(skill)] = snappedf(inherited, 0.01)
+	
+	# Inherit from parent B's top 2 skills
+	var parent_b_top: Array[int] = _get_top_skills(parent_b_data, 2)
+	for skill in parent_b_top:
+		var parent_xp: float = parent_b_data.get_skill_xp(skill)
+		var inherited: float = _compute_inherited_xp(parent_xp, child_id, skill + 1000)
+		child_data.skill_xp[skill] = child_data.get_skill_xp(skill) + inherited
+		var skill_name: String = HeelKawnianData.skill_name(skill)
+		if inherited_skills.has(skill_name):
+			inherited_skills[skill_name] = snappedf(float(inherited_skills[skill_name]) + inherited, 0.01)
+		else:
+			inherited_skills[skill_name] = snappedf(inherited, 0.01)
+	
+	# Knowledge inheritance: if both parents carry the same knowledge, child gets it
+	var shared_knowledge: Array = []
+	if KnowledgeSystem != null:
+		var parent_a_knowledge: Array = KnowledgeSystem.get_pawn_knowledge(parent_a_id)
+		var parent_b_knowledge: Array = KnowledgeSystem.get_pawn_knowledge(parent_b_id)
+		for kt in parent_a_knowledge:
+			if kt in parent_b_knowledge:
+				if not KnowledgeSystem.has_knowledge(child_id, kt):
+					KnowledgeSystem.add_knowledge_carrier(child_id, kt)
+					shared_knowledge.append(kt)
+	
+	# Record the inheritance event in WorldMemory
+	if WorldMemory != null:
+		WorldMemory.record_event({
+			"type": "SKILL_INHERITED",
+			"pawn_id": child_id,
+			"parent_ids": [parent_a_id, parent_b_id],
+			"skills_inherited": inherited_skills,
+			"knowledge_inherited": shared_knowledge,
+			"tick": GameManager.tick_count,
+		})
+
+
+## Return the top N skills for a pawn, sorted by descending XP.
+func _get_top_skills(pawn_data: HeelKawnianData, count: int) -> Array[int]:
+	var entries: Array = []
+	for skill_key in pawn_data.skill_xp.keys():
+		var skill: int = int(skill_key)
+		var xp: float = float(pawn_data.skill_xp[skill_key])
+		entries.append({"skill": skill, "xp": xp})
+	entries.sort_custom(func(a, b): return a.xp > b.xp)
+	var result: Array[int] = []
+	for i in range(mini(count, entries.size())):
+		result.append(entries[i].skill)
+	return result
+
+
+## Compute inherited XP: 25% of parent XP with deterministic WorldRNG variance.
+func _compute_inherited_xp(parent_xp: float, child_id: int, salt: int) -> float:
+	var variance: float = WorldRNG.range_for(&"bloodline:skill_inherit", 0.85, 1.15, child_id + salt)
+	return parent_xp * 0.25 * variance
+
 
 # === Save/Load ===
 

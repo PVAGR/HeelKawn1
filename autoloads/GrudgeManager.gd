@@ -88,10 +88,16 @@ func _ready() -> void:
 	if TickManager != null:
 		TickManager.mark_tickable_cache_dirty()
 		_tick_connected = true
+	# Subscribe to pawn death for grudge inheritance
+	if EventBus != null:
+		EventBus.subscribe(EventBus.EVENT_PAWN_DIED, self, "_on_pawn_died")
 
 
 func _exit_tree() -> void:
 	_tick_connected = false
+	# Unsubscribe from EventBus
+	if EventBus != null:
+		EventBus.unsubscribe(EventBus.EVENT_PAWN_DIED, self, "_on_pawn_died")
 
 
 func _on_world_tick(tick_number: int) -> void:
@@ -161,6 +167,126 @@ func record_grudge(
 ## Inherit grudges from parent to child
 ## Called when a pawn is born (via KinshipSystem integration)
 func inherit_grudges(parent_id: int, child_id: int, tick: int) -> void:
+	_inherit_grudges_from_parent(parent_id, child_id, tick)
+
+
+## EventBus handler: when a pawn dies, inherit their grudges to living children
+func _on_pawn_died(payload: Dictionary) -> void:
+	var deceased_id: int = int(payload.get("pawn_id", -1))
+	var tick: int = int(payload.get("tick", 0))
+	if deceased_id < 0:
+		return
+
+	# Get the deceased's children via BloodlineSystem
+	var children: Array[int] = _get_living_children(deceased_id)
+	if children.is_empty():
+		return
+
+	# Get the deceased's active grudges
+	var deceased_grudges: Array[Dictionary] = get_grudges_held_by(deceased_id)
+	if deceased_grudges.is_empty():
+		return
+
+	# For each living child, inherit grudges at 50% intensity with generation decay
+	for child_id in children:
+		for grudge in deceased_grudges:
+			var target_id: int = int(grudge.get("target_id", -1))
+			if target_id < 0 or child_id == target_id:
+				continue  # Don't inherit grudge against self
+
+			var grudge_type: String = str(grudge.get("type", ""))
+			var parent_generation: int = int(grudge.get("generation", 0))
+			var child_generation: int = parent_generation + 1
+
+			# Calculate inherited intensity: base * INHERITANCE_FACTOR * (1 - INHERITANCE_DECAY)^generation
+			# Gen 1 (child): 50%, Gen 2 (grandchild): 25%, Gen 3: 12.5%
+			var inherited_intensity: float = float(grudge.get("intensity", 0.0)) * INHERITANCE_FACTOR
+			inherited_intensity *= pow(1.0 - INHERITANCE_DECAY_GENERATION, parent_generation)
+
+			if inherited_intensity < INTENSITY_GRUDGE:
+				continue  # Too weak to carry forward
+
+			# Check if child already has this grudge
+			var existing_idx: int = _find_grudge_index(child_id, target_id, grudge_type)
+			if existing_idx >= 0:
+				continue  # Already inherited/recorded
+
+			# Create inherited grudge
+			var new_grudge: Dictionary = {
+				"id": _next_grudge_id,
+				"holder_id": child_id,
+				"target_id": target_id,
+				"origin_id": int(grudge.get("origin_id", target_id)),
+				"type": grudge_type,
+				"intensity": inherited_intensity,
+				"tick_created": tick,
+				"tick_last_updated": tick,
+				"event_id": int(grudge.get("event_id", 0)),
+				"generation": child_generation,
+				"source_event_type": str(grudge.get("source_event_type", "")),
+			}
+
+			_grudges.append(new_grudge)
+			_index_grudge(_grudges.size() - 1, child_id, target_id)
+			_next_grudge_id += 1
+
+			# Record inheritance to WorldMemory
+			_record_inheritance_event(child_id, deceased_id, target_id, grudge_type, inherited_intensity, tick)
+
+	_mark_dirty()
+
+	# Record GRUDGE_INHERITED event in WorldMemory for the overall batch
+	if WorldMemory != null:
+		WorldMemory.record_event({
+			"type": "grudge_inherited",
+			"deceased_id": deceased_id,
+			"children_count": children.size(),
+			"grudges_inherited_count": deceased_grudges.size(),
+			"tick": tick,
+		})
+
+
+## Get living children of a pawn via BloodlineSystem and HeelKawnianData
+func _get_living_children(pawn_id: int) -> Array[int]:
+	var children: Array[int] = []
+
+	# Try BloodlineSystem first for descendant lookup
+	var bs: Node = get_node_or_null("/root/BloodlineSystem")
+	if bs != null and bs.has_method("get_descendants"):
+		var descendants: Array[int] = bs.call("get_descendants", pawn_id, 1)  # Only direct children (1 generation)
+		for child_id in descendants:
+			if _is_pawn_alive(child_id):
+				children.append(child_id)
+		return children
+
+	# Fallback: look up children via HeelKawnianData.children_ids
+	var ps: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
+	if ps == null:
+		return children
+	for pawn in ps.pawns:
+		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
+			continue
+		if int(pawn.data.id) == pawn_id:
+			for child_id in pawn.data.children_ids:
+				if _is_pawn_alive(int(child_id)):
+					children.append(int(child_id))
+			break
+	return children
+
+
+## Check if a pawn is currently alive
+func _is_pawn_alive(pawn_id: int) -> bool:
+	var ps: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
+	if ps == null or not ps.has_method("pawn_data_for_id"):
+		return false
+	var data = ps.call("pawn_data_for_id", pawn_id)
+	if data == null:
+		return false
+	return float(data.health) > 0.0
+
+
+## Internal: inherit grudges from a parent to a child (used by both birth and death paths)
+func _inherit_grudges_from_parent(parent_id: int, child_id: int, tick: int) -> void:
 	var parent_grudge_indices: Array = _grudges_by_holder.get(parent_id, [])
 	
 	for idx in parent_grudge_indices:

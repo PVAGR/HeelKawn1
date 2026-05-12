@@ -60,11 +60,19 @@ var _next_gossip_id: int = 1
 var _reputation_cache: Dictionary = {}
 var _cache_dirty: bool = false
 
+## Cross-settlement gossip: track diaspora migrants until they arrive
+## pawn_id -> {origin_settlement_id: int, target_region: int, exile_tick: int}
+var _pending_migrants: Dictionary = {}
+
 
 func _ready() -> void:
 	add_to_group("tickable")
 	if TickManager != null:
 		TickManager.mark_tickable_cache_dirty()
+	
+	# Subscribe to diaspora exile events for cross-settlement gossip propagation
+	if EventBus != null:
+		EventBus.subscribe("diaspora_exile", self, "_on_diaspora_exile")
 
 
 func _on_world_tick(tick_number: int) -> void:
@@ -76,6 +84,10 @@ func _on_world_tick(tick_number: int) -> void:
 	# MEMORIAL SYSTEM: Gossip spreads faster at commemoration gatherings
 	if tick_number % 1000 == 0:  # Check every 1000 ticks for gatherings
 		_process_memorial_gossip_spread(tick_number)
+	
+	# CROSS-SETTLEMENT GOSSIP: Check if diaspora migrants have arrived
+	if tick_number % 50 == 0 and not _pending_migrants.is_empty():
+		_check_arrived_migrants(tick_number)
 
 
 ## Get or create GossipPropagation for a pawn
@@ -373,16 +385,39 @@ func _process_memorial_gossip_spread(tick: int) -> void:
 
 ## Spread gossip among pawns at memorial gathering
 func _spread_gossip_at_memorial(pawn_ids: Array[int], memorial: Dictionary, tick: int) -> void:
-	# Pawns at memorial share gossip with 2x normal chance
-	var enhanced_share_chance: float = GOSSIP_SHARE_CHANCE_BASE * 2.0
+	# Determine memorial settlement
+	var memorial_tile: Vector2i = memorial.get("tile", Vector2i.ZERO)
+	var memorial_rk: int = WorldMemory._region_key(memorial_tile.x, memorial_tile.y)
+	var memorial_settlement_id: int = SettlementMemory.get_center_region_for_region(memorial_rk)
+	
+	# Build settlement lookup for attendees
+	var pawn_settlements: Dictionary = {}
+	for pid in pawn_ids:
+		var pawn: Node = _find_pawn_by_id(pid)
+		pawn_settlements[pid] = _get_pawn_settlement_id(pawn)
 	
 	for i in range(pawn_ids.size()):
 		for j in range(i + 1, pawn_ids.size()):
 			var pawn_a: int = pawn_ids[i]
 			var pawn_b: int = pawn_ids[j]
 			
-			# Share gossip between these pawns with enhanced chance
-			if WorldRNG != null and WorldRNG.chance_for(StringName("gossip_memorial:%d:%d:%d" % [pawn_a, pawn_b, tick]), enhanced_share_chance, 1.0):
+			# Check if either pawn is a visitor from another settlement
+			var has_visitor: bool = false
+			if memorial_settlement_id >= 0:
+				var a_settlement: int = pawn_settlements.get(pawn_a, -1)
+				var b_settlement: int = pawn_settlements.get(pawn_b, -1)
+				if a_settlement >= 0 and a_settlement != memorial_settlement_id:
+					has_visitor = true
+				if b_settlement >= 0 and b_settlement != memorial_settlement_id:
+					has_visitor = true
+			
+			# Apply 2x multiplier when visitors from other settlements are present
+			var share_chance: float = GOSSIP_SHARE_CHANCE_BASE
+			if has_visitor:
+				share_chance *= 2.0
+			
+			# Share gossip between these pawns
+			if WorldRNG != null and WorldRNG.chance_for(StringName("gossip_memorial:%d:%d:%d" % [pawn_a, pawn_b, tick]), share_chance, 1.0):
 				_share_gossip_between(pawn_a, pawn_b, tick)
 
 
@@ -438,3 +473,173 @@ func clear() -> void:
 	_reputation_cache.clear()
 	_next_gossip_id = 1
 	_cache_dirty = true
+	_pending_migrants.clear()
+
+
+# ==================== CROSS-SETTLEMENT GOSSIP PROPAGATION ====================
+
+## EventBus callback: diaspora exile started — track migrating pawns
+func _on_diaspora_exile(payload: Dictionary) -> void:
+	var exile_ids: Array = payload.get("exile_pawn_ids", [])
+	var origin_settlement: int = payload.get("parent_settlement", -1)
+	var to_region: int = payload.get("to_region", -1)
+	var tick: int = payload.get("tick", GameManager.tick_count)
+	
+	for pawn_id in exile_ids:
+		_pending_migrants[int(pawn_id)] = {
+			"origin_settlement_id": origin_settlement,
+			"target_region": to_region,
+			"exile_tick": tick,
+		}
+
+
+## Check if tracked migrants have arrived at their destination settlement
+func _check_arrived_migrants(tick: int) -> void:
+	var to_remove: Array[int] = []
+	
+	for pawn_id in _pending_migrants.keys():
+		var migrant_info: Dictionary = _pending_migrants[pawn_id]
+		var origin_id: int = migrant_info["origin_settlement_id"]
+		
+		var pawn: Node = _find_pawn_by_id(pawn_id)
+		if pawn == null or pawn.data == null:
+			to_remove.append(pawn_id)
+			continue
+		
+		var tile: Vector2i = pawn.data.tile_pos
+		var rk: int = WorldMemory._region_key(tile.x, tile.y)
+		
+		# Arrived if they reached the target region or are in a different settlement
+		var arrived: bool = false
+		var dest_settlement_id: int = -1
+		
+		if rk == migrant_info["target_region"]:
+			arrived = true
+			dest_settlement_id = migrant_info["target_region"]
+		else:
+			var current_settlement_id: int = SettlementMemory.get_center_region_for_region(rk)
+			if current_settlement_id >= 0 and current_settlement_id != origin_id:
+				arrived = true
+				dest_settlement_id = current_settlement_id
+		
+		if not arrived:
+			continue
+		
+		# Propagate gossip from migrant to destination settlement
+		var gossip_count: int = _propagate_migrant_gossip(pawn_id, origin_id, dest_settlement_id, tick)
+		
+		# Record cross-settlement gossip spread event
+		_record_cross_settlement_gossip_spread(origin_id, dest_settlement_id, pawn_id, gossip_count, tick)
+		
+		to_remove.append(pawn_id)
+	
+	for pid in to_remove:
+		_pending_migrants.erase(pid)
+
+
+## Propagate a migrant's gossip to pawns in the destination settlement
+func _propagate_migrant_gossip(pawn_id: int, source_settlement_id: int, dest_settlement_id: int, tick: int) -> int:
+	var migrant_gossip: GossipPropagation = _get_gossip_for_pawn(pawn_id)
+	if migrant_gossip == null:
+		return 0
+	
+	var gossip_items: Array[Dictionary] = migrant_gossip.get_stored_gossip()
+	if gossip_items.is_empty():
+		return 0
+	
+	# Find pawns in destination settlement
+	var dest_pawns: Array[int] = _get_pawns_in_settlement(dest_settlement_id)
+	if dest_pawns.is_empty():
+		return 0
+	
+	var total_shared: int = 0
+	
+	for dest_pawn_id in dest_pawns:
+		if dest_pawn_id == pawn_id:
+			continue
+		
+		var dest_gossip: GossipPropagation = _get_gossip_for_pawn(dest_pawn_id)
+		if dest_gossip == null:
+			continue
+		
+		for g in gossip_items:
+			# Apply cross-settlement accuracy decay (+1 extra hop for crossing settlement boundary)
+			var base_accuracy: float = g.get("accuracy", 0.8)
+			var accuracy_after_hop: float = maxf(0.1, base_accuracy - ACCURACY_DECAY_PER_HOP * 2.0)
+			
+			dest_gossip.receive_gossip(
+				g.get("content", ""),
+				pawn_id,
+				g.get("original_source", pawn_id),
+				accuracy_after_hop,
+				0.5,  # neutral trust for outsider
+				g.get("hot", false),
+				g.get("importance", 0.5),
+				g.get("type", "general")
+			)
+			total_shared += 1
+		
+		_cache_dirty = true
+	
+	return total_shared
+
+
+## Get all living pawn IDs currently in a settlement (by region membership)
+func _get_pawns_in_settlement(settlement_id: int) -> Array[int]:
+	var result: Array[int] = []
+	var sp: PawnSpawner = _get_pawn_spawner()
+	if sp == null:
+		return result
+	
+	var pawns: Array = sp.call("find_pawns")
+	for p in pawns:
+		if p == null or p.data == null:
+			continue
+		
+		var tile: Vector2i = p.data.tile_pos
+		var rk: int = WorldMemory._region_key(tile.x, tile.y)
+		var pawn_settlement: int = SettlementMemory.get_center_region_for_region(rk)
+		
+		if pawn_settlement == settlement_id:
+			result.append(int(p.data.id))
+	
+	return result
+
+
+## Find a pawn node by ID
+func _find_pawn_by_id(pawn_id: int) -> Node:
+	var sp: PawnSpawner = _get_pawn_spawner()
+	if sp == null or not sp.has_method("find_pawn_by_id"):
+		return null
+	return sp.call("find_pawn_by_id", pawn_id)
+
+
+## Get the settlement ID a pawn currently belongs to (by tile region)
+func _get_pawn_settlement_id(pawn: Node) -> int:
+	if pawn == null or pawn.data == null:
+		return -1
+	var tile: Vector2i = pawn.data.tile_pos
+	var rk: int = WorldMemory._region_key(tile.x, tile.y)
+	return SettlementMemory.get_center_region_for_region(rk)
+
+
+## Record cross-settlement gossip spread to WorldMemory
+func _record_cross_settlement_gossip_spread(
+	source_settlement_id: int,
+	dest_settlement_id: int,
+	pawn_id: int,
+	gossip_count: int,
+	tick: int
+) -> void:
+	var WorldMem: Node = get_node_or_null("/root/WorldMemory")
+	if WorldMem == null:
+		return
+	
+	WorldMem.record_event({
+		"type": "gossip_spread",
+		"source_settlement_id": source_settlement_id,
+		"dest_settlement_id": dest_settlement_id,
+		"pawn_id": pawn_id,
+		"gossip_count": gossip_count,
+		"tick": tick,
+	})

@@ -111,6 +111,10 @@ func _ready() -> void:
 	_initialize_degradation()
 	# OPTIMIZATION: Connect to pawn spawn/despawn for cache invalidation
 	_refresh_pawn_cache()
+	# Subscribe to pawn death via EventBus for settlement-level knowledge loss
+	var _eb: Node = get_node_or_null("/root/EventBus")
+	if _eb != null:
+		_eb.subscribe(EventBus.EVENT_PAWN_DIED, self, "_on_pawn_died")
 
 ## OPTIMIZATION: Get cached pawn array, refresh only when dirty
 func _get_pawns() -> Array[HeelKawnian]:
@@ -167,6 +171,15 @@ func remove_knowledge_carrier(pawn_id: int, last_pos: Vector2i = Vector2i(-1, -1
 			_last_dying_carrier_pos = last_pos
 			_last_dying_carrier_id = pawn_id
 			_check_knowledge_loss(knowledge_type)
+		# Emit pawn_died on EventBus for settlement-level knowledge loss checks
+		# Include known types in payload so subscribers can check per-settlement loss
+		var _eb: Node = get_node_or_null("/root/EventBus")
+		if _eb != null:
+			_eb.emit(EventBus.EVENT_PAWN_DIED, {
+				"pawn_id": pawn_id,
+				"tile_pos": {"x": last_pos.x, "y": last_pos.y},
+				"knowledge_types": known.duplicate(),
+			})
 		knowledge_carriers.erase(pawn_id)
 	# Remove teaching debt for dead pawn
 	if teaching_debt.has(pawn_id):
@@ -274,6 +287,17 @@ func complete_teaching(teacher_id: int, apprentice_id: int, knowledge_type: Know
 		else:
 			add_knowledge_carrier(apprentice_id, knowledge_type)
 			_record_teaching_success(teacher_id, apprentice_id, knowledge_type)
+		# Award skill XP to the student for learning
+		_award_student_xp(apprentice_id, knowledge_type)
+		# Emit teaching_completed on EventBus for other systems
+		var _eb: Node = get_node_or_null("/root/EventBus")
+		if _eb != null:
+			_eb.emit("teaching_completed", {
+				"teacher_id": teacher_id,
+				"student_id": apprentice_id,
+				"knowledge_type": int(knowledge_type),
+				"tick": GameManager.tick_count,
+			})
 	else:
 		_record_teaching_failure(teacher_id, apprentice_id, knowledge_type)
 
@@ -318,6 +342,8 @@ func _check_knowledge_loss(knowledge_type: KnowledgeType) -> void:
 		}
 		_record_knowledge_loss(knowledge_type, "no_carriers")
 		_notify_world_ai_knowledge_loss(knowledge_type)
+		# Emit knowledge_lost signal for CivilizationStage and other consumers
+		knowledge_lost.emit(int(knowledge_type), -1)
 	elif carrier_count <= 2:
 		# Knowledge is at risk — few carriers remain
 		_record_knowledge_risk(knowledge_type, carrier_count)
@@ -678,6 +704,87 @@ func _notify_world_ai_knowledge_risk(knowledge_type: KnowledgeType, carrier_coun
 
 # === Event Recording ===
 
+## EventBus handler: fired when a pawn dies.
+## Checks settlement-level knowledge loss (distinct from global _check_knowledge_loss).
+func _on_pawn_died(payload: Dictionary) -> void:
+	var pawn_id: int = int(payload.get("pawn_id", -1))
+	if pawn_id < 0:
+		return
+	var tile_v: Dictionary = payload.get("tile_pos", {})
+	var last_pos: Vector2i = Vector2i(int(tile_v.get("x", -1)), int(tile_v.get("y", -1)))
+	var knowledge_types: Array = payload.get("knowledge_types", [])
+	if knowledge_types.is_empty():
+		return
+	# Determine settlement of the deceased
+	var settlement_id: int = -1
+	if last_pos.x >= 0 and SettlementMemory != null:
+		var rk: int = WorldMemory._region_key(last_pos.x, last_pos.y)
+		settlement_id = SettlementMemory.get_center_region_for_region(rk)
+	if settlement_id < 0:
+		return  # No settlement association
+	# Check each knowledge type the deceased carried for settlement-level loss
+	for kt in knowledge_types:
+		var kt_int: int = int(kt)
+		if _count_settlement_carriers(kt_int, settlement_id) == 0:
+			# This knowledge is now lost in this settlement
+			_mark_settlement_knowledge_lost(kt_int, settlement_id)
+
+
+## Count how many living carriers of a knowledge type exist in a settlement.
+func _count_settlement_carriers(knowledge_type: int, settlement_id: int) -> int:
+	var count: int = 0
+	for n in _get_pawns():
+		if n == null or not is_instance_valid(n):
+			continue
+		if not n.has_method("get"):
+			continue
+		var data_v: Variant = n.get("data")
+		if data_v == null:
+			continue
+		var pid: int = int(data_v.id)
+		if not knowledge_carriers.has(pid):
+			continue
+		if not (knowledge_type in knowledge_carriers[pid]):
+			continue
+		var pos: Vector2i = data_v.tile_pos
+		var rk: int = WorldMemory._region_key(pos.x, pos.y)
+		var pawn_sid: int = SettlementMemory.get_center_region_for_region(rk) if SettlementMemory != null else -1
+		if pawn_sid == settlement_id:
+			count += 1
+	return count
+
+
+## Mark a knowledge type as lost/dormant within a specific settlement.
+func _mark_settlement_knowledge_lost(knowledge_type: int, settlement_id: int) -> void:
+	var sid_key: String = str(settlement_id)
+	# Update knowledge_security registry
+	if not knowledge_security.has(sid_key):
+		knowledge_security[sid_key] = {"secure": [], "at_risk": [], "lost": []}
+	var sec: Dictionary = knowledge_security[sid_key]
+	var lost_arr: Array = sec.get("lost", [])
+	if not (knowledge_type in lost_arr):
+		lost_arr.append(knowledge_type)
+	sec["lost"] = lost_arr
+	# Remove from secure/at_risk if present
+	var secure_arr: Array = sec.get("secure", [])
+	secure_arr.erase(knowledge_type)
+	sec["secure"] = secure_arr
+	var risk_arr: Array = sec.get("at_risk", [])
+	risk_arr.erase(knowledge_type)
+	sec["at_risk"] = risk_arr
+	# Record KNOWLEDGE_LOST event in WorldMemory
+	WorldMemory.record_event({
+		"type": "KNOWLEDGE_LOST",
+		"k": WorldMemory.Kind.TEACHING_EVENT,
+		"r": settlement_id,
+		"t": GameManager.tick_count,
+		"knowledge_type": knowledge_type,
+		"settlement_id": settlement_id,
+		"reason": "last_settlement_carrier_died",
+	})
+	# Emit signal for CivilizationStage to consume
+	knowledge_lost.emit(knowledge_type, settlement_id)
+
 func _record_knowledge_acquisition(pawn_id: int, knowledge_type: KnowledgeType) -> void:
 	var event: Dictionary = {
 		"type": "knowledge_acquisition",
@@ -1019,6 +1126,17 @@ func _update_teaching_debt() -> void:
 		var mood_penalty: float = float(debt.get("obligation_weight", 0.0)) * TEACHING_DEBT_MOOD_PENALTY
 		if mood_penalty > 0.1:
 			data_v.mood = maxf(data_v.mood - mood_penalty, 0.0)
+			# Record teaching debt penalty in WorldMemory for chronicle visibility
+			var was_penalized: bool = bool(debt.get("penalty_recorded", false))
+			if not was_penalized and float(debt.get("obligation_weight", 0.0)) >= 0.3:
+				debt["penalty_recorded"] = true
+				WorldMemory.record_event({
+					"type": "teaching_debt_penalty",
+					"pawn_id": pid,
+					"obligation_weight": float(debt.get("obligation_weight", 0.0)),
+					"mood_penalty": mood_penalty,
+					"tick": GameManager.tick_count,
+				})
 
 
 ## Record that a pawn taught successfully (reduces their debt)
@@ -1027,6 +1145,9 @@ func on_teaching_success(teacher_id: int, knowledge_type: int) -> void:
 		teaching_debt[teacher_id]["last_taught_tick"] = GameManager.tick_count
 		teaching_debt[teacher_id]["obligation_weight"] = maxf(
 			float(teaching_debt[teacher_id].get("obligation_weight", 0.0)) - 0.15, 0.0)
+		# Reset penalty flag when obligation is reduced below threshold
+		if float(teaching_debt[teacher_id].get("obligation_weight", 0.0)) < 0.3:
+			teaching_debt[teacher_id]["penalty_recorded"] = false
 	# Record genealogy
 	if not knowledge_genealogy.has(knowledge_type):
 		knowledge_genealogy[knowledge_type] = []
@@ -1039,6 +1160,45 @@ func on_teaching_success(teacher_id: int, knowledge_type: int) -> void:
 				"tick": int(rec.get("tick", 0)),
 			})
 			break
+
+
+# === Student XP Award ===
+
+## Award skill XP to a student who just learned a knowledge type.
+func _award_student_xp(student_id: int, knowledge_type: KnowledgeType) -> void:
+	var skill: int = _skill_for_knowledge_type(knowledge_type)
+	if skill < 0:
+		return
+	var student_data: HeelKawnianData = _get_pawn_data_by_id(student_id)
+	if student_data == null:
+		return
+	student_data.add_skill_xp(skill, HeelKawnianData.XP_PER_WORK_TICK * 3.0)
+
+
+## Map a KnowledgeType to the closest HeelKawnianData.Skill.
+## Returns -1 if no meaningful mapping exists.
+func _skill_for_knowledge_type(kt: KnowledgeType) -> int:
+	match kt:
+		KnowledgeType.FIRE_KEEPING, KnowledgeType.SHELTER_BUILDING, \
+		KnowledgeType.TOOL_MAKING, KnowledgeType.CRAFTING, \
+		KnowledgeType.ARCHITECTURE, KnowledgeType.ENGINEERING, \
+		KnowledgeType.WRITING, KnowledgeType.MEMORY_PRESERVATION:
+			return HeelKawnianData.Skill.BUILDING
+		KnowledgeType.FOOD_STORAGE, KnowledgeType.SEASON_READING, \
+		KnowledgeType.SICKNESS_AVOIDANCE, KnowledgeType.NAVIGATION, \
+		KnowledgeType.HOSPITALITY, KnowledgeType.WINTER_SURVIVAL, \
+		KnowledgeType.FARMING, KnowledgeType.ANIMAL_HUSBANDRY, \
+		KnowledgeType.MEDICINE, KnowledgeType.ASTRONOMY:
+			return HeelKawnianData.Skill.FORAGING
+		KnowledgeType.HUNTING, KnowledgeType.COMBAT:
+			return HeelKawnianData.Skill.HUNTING
+		KnowledgeType.METALLURGY:
+			return HeelKawnianData.Skill.MINING
+		KnowledgeType.TEACHING, KnowledgeType.RUIN_INTERPRETATION, \
+		KnowledgeType.DIPLOMACY, KnowledgeType.LEADERSHIP, \
+		KnowledgeType.PHILOSOPHY:
+			return HeelKawnianData.Skill.BUILDING  # Scholarship/leadership → building (same as TEACH_SKILL job)
+	return -1
 
 
 # === Knowledge Security ===
@@ -1279,6 +1439,7 @@ func _knowledge_carrier_counts_by_settlement() -> Dictionary:
 # This is the engine that drives civilization from primitive to post-scarcity.
 
 signal innovation_discovered(pawn_id: int, result_knowledge: int, recipe_name: String)
+signal knowledge_lost(knowledge_type: int, settlement_id: int)
 
 # Combination recipes: key = sorted pair of knowledge types, value = result
 # Format: "{lo,hi}" -> {"result": KnowledgeType, "name": String, "base_chance": float}

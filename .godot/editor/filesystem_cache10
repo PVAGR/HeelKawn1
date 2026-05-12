@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1778611996
+::res://::1778612772
 .aider.chat.history.md::TextFile::-1::1778404677::0::1::::<><><>0<>0<><>::
 AI_AUTONOMOUS_INNOVATION.md::TextFile::-1::1778107181::0::1::::<><><>0<>0<><>::
 AI_BUG_REPORTS.md::TextFile::-1::1778108695::0::1::::<><><>0<>0<><>::
@@ -29,7 +29,6 @@ HEELKAWN_INTEGRATION.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 HEELKAWN_KERNEL.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 HEELKAWN_STATE.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 JOB_TECH_INTEGRATION.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
-output.txt::TextFile::-1::1778559997::0::1::::<><><>0<>0<><>::
 PERFORMANCE_OPTIMIZATIONS.md::TextFile::-1::1777994075::0::1::::<><><>0<>0<><>::
 performance_test.txt::TextFile::-1::1778563633::0::1::::<><><>0<>0<><>::
 PLAYTEST_CHECKLIST.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
@@ -189,7 +188,7 @@ door.png::CompressedTexture2D::4142856041344568916::1777971615::1778417117::1:::
 tree.png::CompressedTexture2D::2389156156575278385::1777971448::1778417117::1::::<><><>0<>0<>5fb83ad2402bae2aec6e4562927a022d<>res://.godot/imported/tree.png-1272070f95f6cffffd0fe51159239f22.ctex::
 wall.png::CompressedTexture2D::5625700477737538922::1777971615::1778417117::1::::<><><>0<>0<>4aab1d5a487300cd9189921708537b6f<>res://.godot/imported/wall.png-65f788789b9046a626a2b3a58cc8bb94.ctex::
 ::res://assets/sprites/world/::1777971496
-::res://autoloads/::1778570769
+::res://autoloads/::1778612722
 AgeMemory.gd::GDScript::3623017377226678626::1778570754::0::1::::<>Node<><>0<>0<><>::
 AIAgentManager.gd::GDScript::4954939857757967540::1778415838::0::1::::<>Node<><>0<>0<><>::
 AIManager.gd::GDScript::8390453645687965822::1778410247::0::1::::<>Node<><>0<>0<><>::
@@ -275,7 +274,7 @@ SchismManager.gd::GDScript::810131285511513470::1777694600::0::1::::<>Node<><>0<
 SettlementAIBridge.gd::GDScript::5898724979801919398::1778321437::0::1::::<>Node<><>0<>0<><>::
 SettlementArchitect.gd::GDScript::8965997991269203430::1777694600::0::1::::<>Node<><>0<>0<><>::
 SettlementManager.gd::GDScript::8092329135591298813::1778410406::0::1::::<>Node<><>0<>0<><>::
-SettlementMemory.gd::GDScript::3014913635517556679::1778567924::0::1::::<>Node<><>0<>0<><>::
+SettlementMemory.gd::GDScript::3014913635517556679::1778612722::0::1::::<>Node<><>0<>0<><>::
 SettlementPersistenceManager.gd::GDScript::1742009134159448662::1778145430::0::1::::<>Node<><>0<>0<><>::
 SettlementPlanner.gd::GDScript::6005194213945483152::1778567924::0::1::::<>Node<><>0<>0<><>::
 SettlementRebirth.gd::GDScript::7428695576235804400::1777776915::0::1::::<>Node<><>0<>0<><>::
@@ -640,7 +639,7 @@ TestPhase4Kernel.gd::GDScript::4541286713475473953::1777694600::0::1::::<>Node<>
 TestSkillTreeBonuses.gd::GDScript::5261734312154252569::1778320772::0::1::::<>Node<><>0<>0<><>::
 TestTraitSystem.gd::GDScript::8176838439313492610::1778320772::0::1::::<>Node<><>0<>0<><>::
 test_kinship_api.gd::GDScript::5816937099531489306::1777802574::0::1::::<>Node<><>0<>0<><>::
-::res://scripts/ui/::1778414008
+::res://scripts/ui/::1778612006
 ActionMenu.gd::GDScript::8591061599762165760::1778215319::0::1::::<>PanelContainer<><>0<>0<><>::
 AIAgentDebugPanel.gd::GDScript::2909754586514078780::1778320772::0::1::::<>Control<><>0<>0<><>::
 AIControlPanel.gd::GDScript::3304511088348402013::1778146909::0::1::::AIControlPanel<>Control<><>0<>0<><>::
@@ -660,7 +659,7 @@ ColonyHUD.gd::GDScript::1234358239209808226::1778551446::0::1::::ColonyHUD<>Canv
 CommandIndicator.gd::GDScript::8015270626704609722::1778146860::0::1::::CommandIndicator<>Node2D<><>0<>0<><>::
 CommandMode.gd::GDScript::7970988480991765280::1778320772::0::1::::CommandMode<>Node<><>0<>0<><>::
 CraftingMenu.gd::GDScript::264922245055118195::1778113482::0::1::::<>PanelContainer<><>0<>0<><>::
-CreatorDebugMenu.gd::GDScript::2571068876045846871::1778611570::0::1::::CreatorDebugMenu<>CanvasLayer<><>0<>0<><>::
+CreatorDebugMenu.gd::GDScript::2571068876045846871::1778612006::0::1::::CreatorDebugMenu<>CanvasLayer<><>0<>0<><>::
 DebugControlPanel.gd::GDScript::5220637974334766322::1778320772::0::1::::DebugControlPanel<>Control<><>0<>0<><>::
 DynamicSpriteText.gd::GDScript::5775588346636683544::1778320772::0::1::::DynamicSpriteText<>Node2D<><>0<>0<><>::
 DynastyTreeUI.gd::GDScript::2720543352043603021::1778320772::0::1::::DynastyTreeUI<>CanvasLayer<><>0<>0<><>::

@@ -304,3 +304,6 @@ const EVENT_RELATIONSHIP_CHANGED: String = "relationship_changed"
 const EVENT_FACTION_FORMED: String = "faction_formed"
 const EVENT_FACTION_DISSOLVED: String = "faction_dissolved"
 const EVENT_TRADE_ROUTE_ESTABLISHED: String = "trade_route_established"
+
+# Pressure Events (emergent behavior from regional stress)
+const EVENT_PRESSURE_EVENT: String = "pressure_event"

@@ -354,9 +354,6 @@ var data: HeelKawnianData
 var _pick_area: Area2D = null
 var _pick_shape: CollisionShape2D = null
 static var _s_visual_sprite_texture: Texture2D = null
-var _pick_area: Area2D = null
-var _pick_shape: CollisionShape2D = null
-static var _s_visual_sprite_texture: Texture2D = null
 
 var _world: World
 var _brain_instance: HeelKawnPawnBrain = null

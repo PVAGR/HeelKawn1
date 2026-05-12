@@ -65,7 +65,7 @@ func _refresh_food_mat_haul_pressures() -> void:
 
 func _food_carried_by_pawns() -> int:
 	var total: int = 0
-	for p in PawnSpawner.find_alive_pawns():
+	for p in PawnSpawner.get_alive_pawns():
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		if p.data.is_carrying() and Item.is_food(int(p.data.carrying)):

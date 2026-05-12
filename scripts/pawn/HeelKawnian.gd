@@ -47,6 +47,37 @@ const _Item = preload("res://scripts/items/Item.gd")
 ## This dramatically reduces draw calls while maintaining visual smoothness.
 const MIN_VISUAL_UPDATE_INTERVAL: int = 3
 
+# -------------------- BUNDLE 4: Deterministic Lane Scheduling --------------------
+## Stable tick ID for deterministic lane gating. Computed once per pawn lifetime.
+var _stable_pawn_tick_id: int = -1
+
+## Lane interval constants for pawn tick shell reduction
+const PAWN_MEDIUM_AI_INTERVAL_TICKS: int = 5
+const PAWN_NEARBY_SCAN_INTERVAL_TICKS: int = 30
+const PAWN_SOCIAL_REFRESH_INTERVAL_TICKS: int = 60
+const PAWN_NARRATIVE_REFRESH_INTERVAL_TICKS: int = 120
+
+## Get a stable tick ID for this pawn (deterministic, computed once).
+## Used for lane gating so each pawn runs on a consistent offset.
+## NOTE: Uses pawn data.id for replay stability. Falls back to 0 before bind.
+func _stable_tick_id() -> int:
+	if _stable_pawn_tick_id >= 0:
+		return _stable_pawn_tick_id
+	if data != null:
+		_stable_pawn_tick_id = abs(int(data.id))
+		return _stable_pawn_tick_id
+	_stable_pawn_tick_id = 0
+	return _stable_pawn_tick_id
+
+## Check if this tick should run a specific lane interval.
+## Uses stable pawn ID modulo to distribute work evenly across ticks.
+## No pawn is ever skipped forever — each runs exactly once per interval.
+func _is_lane_tick(tick: int, interval: int, salt: int = 0) -> bool:
+	if interval <= 1:
+		return true
+	var id: int = _stable_tick_id() + salt
+	return tick % interval == id % interval
+
 # -------------------- need decay tuning --------------------
 
 # Survival drain rates. Tuned so a 5-pawn colony with realistic forage travel
@@ -437,6 +468,7 @@ var _neural_priority_next_refresh_tick: int = -1
 ## for every open job.
 var _matrix_priority_fetch_tick: int = -1
 var _matrix_priority_decision: Dictionary = {}
+var _matrix_priority_next_refresh_tick: int = -1
 ## Prevent per-job scan event spam from turning priority evaluation into a hitch source.
 var _last_neural_decision_log_tick: int = -1000000
 var _last_inspect_msg: String = ""
@@ -1297,6 +1329,8 @@ func _pick_passable_near_tile(origin: Vector2i, goal: Vector2i) -> Vector2i:
 func _try_autonomy_grudge_confront() -> bool:
 	if data == null or _world == null or GameManager == null:
 		return false
+	if _state != State.IDLE or not _path.is_empty():
+		return false
 	if data.neural_network == null:
 		return false
 	var nn: Variant = data.neural_network
@@ -1328,6 +1362,8 @@ func _try_autonomy_grudge_confront() -> bool:
 
 func _try_heelkawnian_matrix_social_action() -> bool:
 	if data == null or _world == null or GameManager == null:
+		return false
+	if _state != State.IDLE or not _path.is_empty():
 		return false
 	var tick: int = GameManager.tick_count
 	if posmod(tick + int(data.id) * 9, 29) != 0:
@@ -1524,6 +1560,8 @@ func _matrix_ambition_target_tile(job_type: int) -> Vector2i:
 func _try_autonomy_social_seek() -> bool:
 	if data == null or _world == null or GameManager == null:
 		return false
+	if _state != State.IDLE or not _path.is_empty():
+		return false
 	if data.neural_network == null:
 		return false
 	if str(data.neural_network.get_autonomy_hint()) != "social":
@@ -1539,7 +1577,7 @@ func _try_autonomy_social_seek() -> bool:
 	var best_peer: HeelKawnian = null
 	var best_score: float = -1.0
 	var seen: int = 0
-	for p in spawner.pawns:
+	for p in _alive_pawns_from_spawner(spawner):
 		seen += 1
 		if seen > 28:
 			break
@@ -1569,6 +1607,8 @@ func _try_autonomy_social_seek() -> bool:
 ## Memorial pilgrimage: pawn feels desire to visit memorial (closure, remembrance, family)
 func _try_start_pilgrimage() -> bool:
 	if data == null or _world == null or GameManager == null:
+		return false
+	if _state != State.IDLE or not _path.is_empty():
 		return false
 	var ms: Node = get_node_or_null("/root/MemorialSystem")
 	if ms == null:
@@ -1618,6 +1658,8 @@ func _start_pilgrimage_to_memorial(memorial: Dictionary) -> void:
 func _try_grave_pilgrimage() -> bool:
 	if data == null or _world == null:
 		return false
+	if _state != State.IDLE or not _path.is_empty():
+		return false
 	if data.mood > 50.0:
 		return false
 	var grave_tile: Vector2i = _find_family_grave()
@@ -1651,6 +1693,8 @@ func _find_family_grave() -> Vector2i:
 ## Dream nudge: follow a recent dream impulse if it suggests wandering/socializing/resting.
 func _maybe_follow_dream_nudge() -> bool:
 	if data == null or _world == null:
+		return false
+	if _state != State.IDLE or not _path.is_empty():
 		return false
 	var tick_now: int = GameManager.tick_count if GameManager != null else 0
 	if tick_now - _last_dream_nudge_check_tick < DREAM_NUDGE_CHECK_EVERY_TICKS:
@@ -1710,6 +1754,8 @@ func _maybe_follow_dream_nudge() -> bool:
 ## Gives warriors visible presence around the perimeter instead of clustering at stockpile.
 func _maybe_warrior_patrol() -> bool:
 	if data == null or _world == null or GameManager == null:
+		return false
+	if _state != State.IDLE or not _path.is_empty():
 		return false
 	var tick: int = GameManager.tick_count
 	# Don't patrol every tick â€” check every ~60 ticks
@@ -2760,36 +2806,6 @@ func _tick_idle() -> void:
 	if GameManager.tick_count % 200 == int(data.id) % 200:
 		if CraftingSystem != null and CraftingSystem.has_method("try_equip_from_stockpile"):
 			CraftingSystem.try_equip_from_stockpile(data)
-	# 2b. HeelKawnian Matrix social intent: ally-seek, mentor-seek, or confrontation.
-	if _try_heelkawnian_matrix_social_action():
-		return
-	# 2c. Human ladder affiliation: household -> clan -> nation.
-	if _try_heelkawnian_affiliation_action():
-		return
-	# Fallback autonomy paths.
-	if _try_autonomy_grudge_confront():
-		return
-	# 3. Need-driven: hungry + food nearby -> go eat
-	if _maybe_start_eating():
-		return
-	# 4. Tired -> sleep. Skipped if we're starving (food first, sleep when full).
-	if _maybe_start_sleeping():
-		return
-	# 4a. Matrix ambition seed: post one strategic household/settlement job.
-	# This does not force movement; it injects world-building work into the queue.
-	_try_heelkawnian_matrix_ambition_seed()
-	# 4b. Neural "social" hint: path toward a high-rapport nearby pawn if not already eating/sleeping.
-	if _try_autonomy_social_seek():
-		return
-	# 4c. Memorial pilgrimage: occasional desire to visit memorials (closure, remembrance)
-	if _try_start_pilgrimage():
-		return
-	# 4c1. Grave pilgrimage: visit family graves when mood is low
-	if _try_grave_pilgrimage():
-		return
-	# 4d. Dream nudge: dreams can push a pawn to wander, rest, or socialize.
-	if _maybe_follow_dream_nudge():
-		return
 	# Cache global food queries once per tick across all pawns
 	var now_tick: int = GameManager.tick_count if GameManager != null else 0
 	if now_tick != HeelKawnian._s_food_cache_tick:
@@ -2803,25 +2819,78 @@ func _tick_idle() -> void:
 		)
 		HeelKawnian._s_food_cache_tick = now_tick
 	var food_emergency: bool = HeelKawnian._s_food_emergency
-	var utility_context: Dictionary = _build_idle_utility_context(food_emergency)
-	var available_idle_actions: Array = [
-		{"type": "work"},
-		{"type": "wander"},
-	]
-	if data != null:
-		available_idle_actions.append({"type": "teach"})
-	if data != null:
-		available_idle_actions.append({"type": "challenge"})
-	if food_emergency:
-		available_idle_actions.append({"type": "forage"})
+	# BUNDLE 4: Medium/social/narrative lanes — non-critical autonomy
+	# work is phased by stable pawn id so idle ticks stay cheap at high speed.
+	# These are non-critical for survival; urgent eating/sleeping gates above are unaffected.
+	var run_medium_lane := _is_lane_tick(now_tick, PAWN_MEDIUM_AI_INTERVAL_TICKS, 11)
+	var run_social_lane := _is_lane_tick(now_tick, PAWN_SOCIAL_REFRESH_INTERVAL_TICKS, 17)
+	var run_nearby_lane := _is_lane_tick(now_tick, PAWN_NEARBY_SCAN_INTERVAL_TICKS, 23)
+	var run_narrative_lane := _is_lane_tick(now_tick, PAWN_NARRATIVE_REFRESH_INTERVAL_TICKS, 31)
+	if run_medium_lane:
+		# 2b. HeelKawnian Matrix social intent: ally-seek, mentor-seek, or confrontation.
+		if _try_heelkawnian_matrix_social_action():
+			return
+		# Fallback autonomy paths.
+		if _try_autonomy_grudge_confront():
+			return
+		# Matrix ambition seed: post one strategic household/settlement job.
+		_try_heelkawnian_matrix_ambition_seed()
+	if run_social_lane:
+		# 2c. Human ladder affiliation: household -> clan -> nation.
+		if _try_heelkawnian_affiliation_action():
+			return
+	# 3. Need-driven: hungry + food nearby -> go eat
+	if _maybe_start_eating():
+		return
+	# 4. Tired -> sleep. Skipped if we're starving (food first, sleep when full).
+	if _maybe_start_sleeping():
+		return
+	# BUNDLE 4: Slow/narrative lane — pilgrimage, cultural, rediscovery, diaspora.
+	# These are non-critical narrative side-effects; already have internal tick gates
+	# but the function-call chain itself is now gated to reduce call overhead.
+	if run_narrative_lane:
+		# 4c. Memorial pilgrimage: occasional desire to visit memorials
+		if _try_start_pilgrimage():
+			return
+		# 4c1. Grave pilgrimage: visit family graves when mood is low
+		if _try_grave_pilgrimage():
+			return
+		# 4d. Dream nudge: dreams can push a pawn to wander, rest, or socialize.
+		if _maybe_follow_dream_nudge():
+			return
+		# 5c. Cultural exposure: outsiders near custom-tagged regions may adopt customs.
+		if data != null:
+			_maybe_absorb_custom()
+		# 5d. Knowledge rediscovery: scholars and curious pawns near dormant knowledge sites.
+		if data != null:
+			_maybe_attempt_rediscovery()
+		# 5e. Diaspora homesickness: exiled pawns check origin settlement status.
+		if data != null and data._diaspora_origin >= 0:
+			_maybe_diaspora_homesickness(now_tick)
+	# 4b. Neural "social" hint: path toward a high-rapport nearby pawn if not already eating/sleeping.
+	# BUNDLE 4: Gated to medium lane — not critical for survival.
+	if run_medium_lane:
+		if _try_autonomy_social_seek():
+			return
 	var preferred_idle_action: String = "work"
+	var should_refresh_idle_action: bool = false
+	var utility_context: Dictionary = _cached_utility_context
 	if data != null:
-		var should_refresh_idle_action: bool = (
+		should_refresh_idle_action = (
 			_next_idle_action_refresh_tick < 0
 			or now_tick >= _next_idle_action_refresh_tick
 			or _cached_idle_action_food_emergency != food_emergency
 		)
 		if should_refresh_idle_action:
+			utility_context = _build_idle_utility_context(food_emergency)
+			var available_idle_actions: Array = [
+				{"type": "work"},
+				{"type": "wander"},
+			]
+			available_idle_actions.append({"type": "teach"})
+			available_idle_actions.append({"type": "challenge"})
+			if food_emergency:
+				available_idle_actions.append({"type": "forage"})
 			var best_idle_action: Dictionary = data.choose_best_action(available_idle_actions, utility_context)
 			_cached_idle_action = "work"
 			if not best_idle_action.is_empty() and best_idle_action.has("type"):
@@ -2830,36 +2899,27 @@ func _tick_idle() -> void:
 			_next_idle_action_refresh_tick = now_tick + _idle_action_refresh_interval_for_speed()
 		preferred_idle_action = _cached_idle_action
 	# 5. Social cognition: choose one social action first, then fall back.
-	if preferred_idle_action == "teach":
-		if _maybe_start_teaching():
-			return
-	elif preferred_idle_action == "challenge":
-		if _maybe_start_challenge():
-			return
-	else:
-		# Keep prior behavior continuity if utility favored non-social actions.
-		if _maybe_start_teaching():
-			return
-		if _maybe_start_challenge():
-			return
+	# Teaching/challenge can scan nearby pawns; run them only on the social lane.
+	if run_social_lane:
+		if preferred_idle_action == "teach":
+			if _maybe_start_teaching():
+				return
+		elif preferred_idle_action == "challenge":
+			if _maybe_start_challenge():
+				return
+		else:
+			# Keep prior behavior continuity if utility favored non-social actions.
+			if _maybe_start_teaching():
+				return
+			if _maybe_start_challenge():
+				return
 	# 5b. Warrior peacetime patrol: if this pawn is a WARRIOR and no
 	# combat/security jobs are available, path toward a settlement wall
 	# and idle there (visible presence, not stuck at stockpile).
-	if data != null and data.current_profession == HeelKawnianData.Profession.WARRIOR:
+	if run_nearby_lane and data != null and data.current_profession == HeelKawnianData.Profession.WARRIOR:
 		if _maybe_warrior_patrol():
 			return
-	# 5c. Cultural exposure: outsiders near custom-tagged regions may adopt customs.
-	# Runs every ~100 ticks to stay cheap.
-	if data != null and posmod(now_tick + int(data.id), 100) == 0:
-		_maybe_absorb_custom()
-	# 5d. Knowledge rediscovery: scholars and curious pawns near dormant
-	# knowledge sites may rediscover lost knowledge.
-	if data != null and posmod(now_tick + int(data.id) * 3, 200) == 0:
-		_maybe_attempt_rediscovery()
-	# 5e. Diaspora homesickness: exiled pawns periodically check their
-	# origin settlement's status. If origin collapsed, grief event.
-	if data != null and data._diaspora_origin >= 0 and posmod(now_tick + int(data.id) * 7, 500) == 0:
-		_maybe_diaspora_homesickness(now_tick)
+	# (Cultural exposure, rediscovery, diaspora moved to narrative lane above)
 	# 6. Job queue: take the best reachable job. We additionally skip build
 	# jobs whose required materials aren't on hand at the stockpile -- this
 	# prevents pawns from claim/abort looping when wood is empty.
@@ -2886,6 +2946,8 @@ func _tick_idle() -> void:
 	if data != null:
 		claim_phase = posmod(int(data.id), claim_iv)
 	if posmod(GameManager.tick_count + claim_phase, claim_iv) != 0:
+		if utility_context.is_empty():
+			utility_context = _build_idle_utility_context(food_emergency)
 		var wanderlust: float = lerpf(0.52, 1.68, _bp(3))
 		var early_wander_chance: float = WANDER_CHANCE_PER_TICK * wanderlust * (1.0 + 0.55 * _founding_blend())
 		if preferred_idle_action == "wander":
@@ -2893,6 +2955,8 @@ func _tick_idle() -> void:
 		if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(early_wander_chance, 0.0, 0.35), _pawn_salt(11)):
 			_start_wander()
 		return
+	if utility_context.is_empty() or _cached_utility_food_emergency != food_emergency:
+		utility_context = _build_idle_utility_context(food_emergency)
 	
 	var my_component: int = _world.pathfinder.component_of(data.tile_pos)
 	# Treat the whole pantry (berries + meat + any future food) as one number
@@ -2966,6 +3030,14 @@ func _tick_idle() -> void:
 		var history_offset: int = scar_offset + inherited_history_offset + intent_delta
 		region_history_offset_cache[region_key] = history_offset
 		return history_offset
+
+	var region_tags_cache: Dictionary = {}
+	var resolve_region_tags: Callable = func(region_key: int) -> PackedStringArray:
+		if region_tags_cache.has(region_key):
+			return PackedStringArray(region_tags_cache[region_key])
+		var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
+		region_tags_cache[region_key] = tags
+		return tags
 
 	# Simplified priority calculation for performance; affinity is a small nudge â€” not a separate queue pass â€” so build/mining jobs can compete with forage.
 	var _cached_stock_wood: int = StockpileManager.total_count_of(Item.Type.WOOD)
@@ -3063,7 +3135,7 @@ func _tick_idle() -> void:
 		# shape whether pawns want to work there.
 		var meaning_bias: int = 0
 		var job_rk: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
-		var job_tags: PackedStringArray = WorldMeaning.get_region_tags(job_rk)
+		var job_tags: PackedStringArray = resolve_region_tags.call(job_rk)
 		for _mt in job_tags:
 			match _mt:
 				"repeated_death", "blood_soaked", "graveyard":
@@ -3590,6 +3662,21 @@ func _get_neural_job_priority_bias(job_type: int) -> int:
 ## HeelKawnian Matrix AI priority bias. This is the "sprite soul" layer:
 ## survival, memory, learned traits, phase, and era nudge the pawn toward
 ## work that fits its current development drive.
+func _matrix_priority_refresh_interval_for_speed() -> int:
+	if GameManager == null:
+		return 30
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 120
+	if gs >= 50.0:
+		return 90
+	if gs >= 26.0:
+		return 60
+	if gs >= 12.0:
+		return 45
+	return 30
+
+
 func _get_heelkawnian_matrix_job_bias(job_type: int) -> int:
 	if data == null:
 		return 0
@@ -3599,9 +3686,10 @@ func _get_heelkawnian_matrix_job_bias(job_type: int) -> int:
 		if GameManager.game_speed >= 200.0:
 			return 0
 	var tick: int = GameManager.tick_count if GameManager != null else -1
-	if _matrix_priority_fetch_tick != tick:
+	if _matrix_priority_next_refresh_tick < 0 or tick >= _matrix_priority_next_refresh_tick:
 		_matrix_priority_fetch_tick = tick
 		_matrix_priority_decision = HeelKawnianManager.get_matrix_decision_for_pawn(self)
+		_matrix_priority_next_refresh_tick = tick + _matrix_priority_refresh_interval_for_speed()
 	if _matrix_priority_decision.is_empty():
 		return 0
 	var biases: Dictionary = _matrix_priority_decision.get("job_biases", {})
@@ -5279,7 +5367,7 @@ func _maybe_start_teaching() -> bool:
 	var best_peer: HeelKawnian = null
 	var best_d: int = 1_000_000
 	var seen: int = 0
-	for p in spawner.pawns:
+	for p in _alive_pawns_from_spawner(spawner):
 		seen += 1
 		if seen > 24:
 			break
@@ -5348,6 +5436,17 @@ func _resolve_pawn_spawner() -> PawnSpawner:
 	if main_node == null:
 		return null
 	return main_node.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
+
+
+func _alive_pawns_from_spawner(spawner: PawnSpawner) -> Array:
+	var candidates: Array = []
+	if spawner == null:
+		return candidates
+	if spawner.has_method("get_alive_pawns"):
+		candidates = spawner.get_alive_pawns()
+	else:
+		candidates.assign(spawner.pawns)
+	return candidates
 
 
 func _try_walk_to_bed() -> bool:
@@ -6223,7 +6322,7 @@ func _track_co_presence_light() -> void:
 	if sp == null:
 		return
 	var seen: int = 0
-	for p in sp.pawns:
+	for p in _alive_pawns_from_spawner(sp):
 		seen += 1
 		if seen > 22:
 			break
@@ -7503,7 +7602,7 @@ func _record_witnessed_death_consciousness() -> void:
 	if sp == null:
 		return
 	var dead_name: String = str(data.display_name)
-	for p in sp.pawns:
+	for p in _alive_pawns_from_spawner(sp):
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		if p == self:
@@ -7526,7 +7625,7 @@ func _record_kin_death_grudges() -> void:
 		return
 	var dead_id: int = int(data.id)
 	# Parents hold grudge against whoever caused the death
-	for p in sp.pawns:
+	for p in _alive_pawns_from_spawner(sp):
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		if p == self:

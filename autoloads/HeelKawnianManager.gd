@@ -1,5 +1,4 @@
 extends Node
-class_name HeelKawnianManager
 
 ## Derived per-pawn development intelligence.
 ##

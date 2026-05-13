@@ -154,3 +154,4 @@ func get_stair_layer(tile: Vector2i) -> int:
 	return stair_tiles.get("%d,%d" % [tile.x, tile.y], -1)
 
 func _on_game_tick(_tick: int) -> void:
+	pass

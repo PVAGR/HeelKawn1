@@ -39,3 +39,4 @@ func register_player_pawn(player_id: int, pawn_id: int) -> void:
 	player_pawns[player_id] = pawn_id
 
 func _on_game_tick(_tick: int) -> void:
+	pass

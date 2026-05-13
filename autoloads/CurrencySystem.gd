@@ -79,3 +79,4 @@ func get_approximate_value(item_type: int) -> int:
 		_: return 1
 
 func _on_game_tick(_tick: int) -> void:
+	pass

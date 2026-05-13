@@ -10,6 +10,7 @@ enum Type {
 	TUNDRA,
 	MOUNTAIN,
 	WATER,
+	OCEAN,
 	STONE_FLOOR,  # mined-out mountain rock; passable, slow, leaves a visible scar
 }
 

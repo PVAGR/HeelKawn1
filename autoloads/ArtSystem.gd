@@ -67,25 +67,22 @@ func create_art(art_type: int, creator_id: int, subject: String = "", settlement
 		"quality_label": quality_label,
 	})
 	return art_id
-}
 
-func get_art_for_settlement(settlement_id: int) -> Array {
+func get_art_for_settlement(settlement_id: int) -> Array:
 	var result: Array = []
 	for aid in artworks:
 		var a: Dictionary = artworks[aid]
 		if int(a.get("settlement_id", -1)) == settlement_id:
 			result.append(a)
 	return result
-}
 
-func get_masterworks() -> Array {
+func get_masterworks() -> Array:
 	var result: Array = []
 	for aid in artworks:
 		var a: Dictionary = artworks[aid]
 		if a.get("quality_label") == "masterwork":
 			result.append(a)
 	return result
-}
 
-func _on_game_tick(tick: int) -> void:
-	_ = tick
+func _on_game_tick(_tick: int) -> void:
+	pass

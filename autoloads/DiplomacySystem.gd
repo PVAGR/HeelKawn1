@@ -44,9 +44,8 @@ func get_relation(settlement_a: int, settlement_b: int) -> int:
 func modify_relation(settlement_a: int, settlement_b: int, delta: int) -> void:
 	var key: String = _pair_key(settlement_a, settlement_b)
 	relations[key] = clampi(relations.get(key, 0) + delta, -100, 100)
-}
 
-func propose_treaty(type: int, proposer: int, acceptor: int, terms: Dictionary = {}) -> int {
+func propose_treaty(type: int, proposer: int, acceptor: int, terms: Dictionary = {}) -> int:
 	var tid: int = _next_treaty_id
 	_next_treaty_id += 1
 	treaties[tid] = {
@@ -69,9 +68,8 @@ func propose_treaty(type: int, proposer: int, acceptor: int, terms: Dictionary =
 		"acceptor": acceptor,
 	})
 	return tid
-}
 
-func accept_treaty(treaty_id: int) -> bool {
+func accept_treaty(treaty_id: int) -> bool:
 	if not treaties.has(treaty_id):
 		return false
 	var t: Dictionary = treaties[treaty_id]
@@ -90,9 +88,8 @@ func accept_treaty(treaty_id: int) -> bool {
 		"acceptor": acceptor,
 	})
 	return true
-}
 
-func break_treaty(treaty_id: int, breaker: int) -> void {
+func break_treaty(treaty_id: int, breaker: int) -> void:
 	if not treaties.has(treaty_id):
 		return
 	var t: Dictionary = treaties[treaty_id]
@@ -105,9 +102,8 @@ func break_treaty(treaty_id: int, breaker: int) -> void {
 		"treaty_broken": true,
 		"breacher": breaker,
 	})
-}
 
-func get_active_treaties_for_settlement(settlement_id: int) -> Array {
+func get_active_treaties_for_settlement(settlement_id: int) -> Array:
 	var result: Array = []
 	for tid in treaties:
 		var t: Dictionary = treaties[tid]
@@ -116,7 +112,6 @@ func get_active_treaties_for_settlement(settlement_id: int) -> Array {
 		if int(t.get("proposer", -1)) == settlement_id or int(t.get("acceptor", -1)) == settlement_id:
 			result.append(t)
 	return result
-}
 
 func _pair_key(a: int, b: int) -> String:
 	return "%d_%d" % [mini(a, b), maxi(a, b)]

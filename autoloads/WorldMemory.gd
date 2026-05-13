@@ -42,6 +42,8 @@ enum Kind {
 	LIFE_EVENT = 25,
 	INJURY = 26,
 	MIGRATION = 27,
+	BUILD_EVENT = 28,
+	DEATH_EVENT = 29,
 }
 
 var _events: Array[Dictionary] = []

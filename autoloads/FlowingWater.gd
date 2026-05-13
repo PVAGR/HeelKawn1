@@ -18,12 +18,13 @@ func _ready() -> void:
 	_initialize_water()
 
 func _initialize_water() -> void:
-	if WorldData == null:
+	var _wd = WorldData.current
+	if _wd == null:
 		return
 	for x in range(WorldData.WIDTH):
 		for y in range(WorldData.HEIGHT):
-			var biome: int = WorldData.get_biome(x, y)
-			var feature: int = WorldData.get_feature(x, y)
+			var biome: int = _wd.get_biome(x, y)
+			var feature: int = _wd.get_feature(x, y)
 			if biome == Biome.Type.WATER or feature == TileFeature.Type.RIVER:
 				water_levels["%d,%d" % [x, y]] = MAX_WATER_LEVEL
 			elif biome == Biome.Type.OCEAN or feature == TileFeature.Type.OCEAN:
@@ -56,8 +57,9 @@ func _flow_water(_tick: int) -> void:
 		if level <= 0.0:
 			continue
 		var feat: int = 0
-		if WorldData != null:
-			feat = WorldData.get_feature(x, y)
+		var _wd2 = WorldData.current
+		if _wd2 != null:
+			feat = _wd2.get_feature(x, y)
 		if feat == TileFeature.Type.DAM:
 			continue
 		var neighbors: Array = [

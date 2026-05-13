@@ -78,3 +78,4 @@ func get_dialect_word(settlement_id: int, meaning: String) -> String:
 	return dialect.get("words", {}).get(meaning, meaning)
 
 func _on_game_tick(_tick: int) -> void:
+	pass

@@ -56,6 +56,9 @@ enum Type {
 	BREWERY,           # brewing: produces mead and ale
 	TAVERN,            # social: drinking, stories, companionship
 	# --- Terrain Features ---
+	FLINT,             # flint resource: used for early tools and fire-starting
+	OCEAN,             # ocean tile: deep water, impassable without boats
+	DAM,               # dam: blocks water flow, can be built by pawns
 	RIVER,             # river tile: enables fishing, fishing hut proximity, water movement
 	# --- River Crossings ---
 	FORD,              # shallow ford: passable water crossing, low movement cost

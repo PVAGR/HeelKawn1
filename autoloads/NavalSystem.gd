@@ -88,10 +88,11 @@ func is_water_travel_possible(from_tile: Vector2i, to_tile: Vector2i) -> bool:
 	return _is_navigable_water(from_tile) and _is_navigable_water(to_tile)
 
 func _is_navigable_water(tile: Vector2i) -> bool:
-	if WorldData == null:
+	var _wd = WorldData.current
+	if _wd == null:
 		return false
-	var biome: int = WorldData.get_biome(tile.x, tile.y)
-	var feature: int = WorldData.get_feature(tile.x, tile.y)
+	var biome: int = _wd.get_biome(tile.x, tile.y)
+	var feature: int = _wd.get_feature(tile.x, tile.y)
 	return biome == Biome.Type.WATER or feature == TileFeature.Type.RIVER or feature == TileFeature.Type.OCEAN
 
 func get_boat_at(tile: Vector2i) -> Dictionary:

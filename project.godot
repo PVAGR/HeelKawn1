@@ -170,6 +170,7 @@ DiplomacySystem="*res://autoloads/DiplomacySystem.gd"
 ArtSystem="*res://autoloads/ArtSystem.gd"
 LanguageSystem="*res://autoloads/LanguageSystem.gd"
 MultiplayerSystem="*res://autoloads/MultiplayerSystem.gd"
+FactionManager="*res://autoloads/FactionManager.gd"
 TickRateDecoupler="*res://autoloads/TickRateDecoupler.gd"
 
 [display]

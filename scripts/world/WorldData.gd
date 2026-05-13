@@ -23,6 +23,7 @@ var moisture: PackedFloat32Array
 
 var world_seed: int = 0
 
+static var current: WorldData = null
 
 func _init() -> void:
 	biomes.resize(TILE_COUNT)

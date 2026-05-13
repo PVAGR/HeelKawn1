@@ -100,10 +100,3 @@ func get_authority_context(pawn_id: int) -> Dictionary:
 		return _authority_system.get_authority_context(pawn_id)
 	return {}
 
-## Expose AuthorityContext enum values for callers
-enum AuthorityContext {
-	MILITARY = 0,
-	CIVIL = 1,
-	RELIGIOUS = 2,
-	KNOWLEDGE = 3
-}

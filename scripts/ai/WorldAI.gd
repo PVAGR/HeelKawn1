@@ -22,7 +22,7 @@ signal world_event_dispatched(event: WorldEvent)
 # Autoload references
 @onready var CollapseSystem = get_node_or_null("/root/CollapseSystem")
 @onready var PersistenceSystem = get_node_or_null("/root/PersistenceSystem")
-@onready var AuthoritySystem = get_node_or_null("/root/AuthoritySystem")
+@onready var FactionManager = get_node_or_null("/root/FactionManager")
 @onready var KnowledgeSystem = get_node_or_null("/root/KnowledgeSystem")
 @onready var WorldMeaning = get_node_or_null("/root/WorldMeaning")
 @onready var WorldMemory = get_node_or_null("/root/WorldMemory")
@@ -982,7 +982,7 @@ func get_teaching_priority_weight() -> float:
 
 
 func get_pawn_obedience_weight(pawn_id: int) -> float:
-	if AuthoritySystem == null:
+	if FactionManager == null:
 		return 1.0
 	if not neural_world_matrix.has("civilization_neurons"):
 		return 1.0
@@ -997,8 +997,8 @@ func get_pawn_obedience_weight(pawn_id: int) -> float:
 	var military_auth: float = float((military_entry as Dictionary).get("value", 0.0))
 	
 	# Get pawn's authority level
-	var pawn_civil = AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.CIVIL)
-	var pawn_military = AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.MILITARY)
+	var pawn_civil = FactionManager.get_authority_level(pawn_id, FactionManager.AuthorityContext.CIVIL)
+	var pawn_military = FactionManager.get_authority_level(pawn_id, FactionManager.AuthorityContext.MILITARY)
 	
 	# Obedience weight: how much authority this pawn has relative to average
 	# Higher authority = higher obedience from others
@@ -1008,7 +1008,7 @@ func get_pawn_obedience_weight(pawn_id: int) -> float:
 
 
 func _update_authority_neurons(civ_neurons: Dictionary) -> void:
-	if AuthoritySystem == null:
+	if FactionManager == null:
 		return
 	
 	# Get average authority levels across all pawns
@@ -1025,10 +1025,10 @@ func _update_authority_neurons(civ_neurons: Dictionary) -> void:
 			continue
 		var pawn_id: int = int(pawn.data.id)
 		
-		total_civil += AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.CIVIL)
-		total_military += AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.MILITARY)
-		total_religious += AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.RELIGIOUS)
-		total_knowledge += AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.KNOWLEDGE)
+		total_civil += FactionManager.get_authority_level(pawn_id, FactionManager.AuthorityContext.CIVIL)
+		total_military += FactionManager.get_authority_level(pawn_id, FactionManager.AuthorityContext.MILITARY)
+		total_religious += FactionManager.get_authority_level(pawn_id, FactionManager.AuthorityContext.RELIGIOUS)
+		total_knowledge += FactionManager.get_authority_level(pawn_id, FactionManager.AuthorityContext.KNOWLEDGE)
 		pawn_count += 1
 	
 	if pawn_count > 0:
@@ -1049,7 +1049,7 @@ func _update_civilization_neurons() -> void:
 	civ_neurons["educational_systems"].value = _calculate_educational_development()
 	civ_neurons["infrastructure_development"].value = _calculate_infrastructure_level()
 	
-	# Update authority metrics from AuthoritySystem
+	# Update authority metrics from FactionManager
 	_update_authority_neurons(civ_neurons)
 
 func _update_knowledge_neurons(cult_neurons: Dictionary) -> void:
@@ -3443,7 +3443,7 @@ func _pawn_decision_rule_context(pd: HeelKawnianData) -> Dictionary:
 		"dream_nudge_action": _pawn_consciousness_dream_nudge_action(pd),
 		"dream_nudge_target": _pawn_consciousness_dream_nudge_target(pd),
 		"core_beliefs_count": _pawn_consciousness_beliefs_count(pd),
-		# GrudgeManager — grudge intensity
+		# SocialManager — grudge intensity
 		"grudge_intensity": _pawn_grudge_intensity(pd),
 		# HeelKawnianMind — composed mind snapshot fields
 		"mind_pursuit": _pawn_mind_pursuit(pd),
@@ -3574,7 +3574,7 @@ func _pawn_consciousness_beliefs_count(pd: HeelKawnianData) -> int:
 	return pc.get_core_beliefs(int(pd.id)).size()
 
 func _pawn_grudge_intensity(pd: HeelKawnianData) -> float:
-	var gm: Node = get_node_or_null("/root/GrudgeManager")
+	var gm: Node = get_node_or_null("/root/SocialManager")
 	if gm == null or not gm.has_method("get_grudges_held_by"):
 		return 0.0
 	var grudges: Array = gm.get_grudges_held_by(int(pd.id))
@@ -3646,7 +3646,7 @@ func _pawn_mind_culture(pd: HeelKawnianData) -> String:
 
 
 func _pawn_mind_reputation(pd: HeelKawnianData) -> float:
-	var gm: Node = get_node_or_null("/root/GossipManager")
+	var gm: Node = get_node_or_null("/root/SocialManager")
 	if gm == null or not gm.has_method("get_reputation_for"):
 		return 0.0
 	return gm.get_reputation_for(int(pd.id))
@@ -3679,7 +3679,7 @@ func _pawn_mind_knowledge_at_risk(pd: HeelKawnianData) -> bool:
 
 
 func _pawn_mind_conflict_count(pd: HeelKawnianData) -> int:
-	var gm: Node = get_node_or_null("/root/GrudgeManager")
+	var gm: Node = get_node_or_null("/root/SocialManager")
 	if gm == null or not gm.has_method("get_grudges_held_by"):
 		return 0
 	return gm.get_grudges_held_by(int(pd.id)).size()
@@ -4104,3 +4104,4 @@ func get_technological_progress() -> float:
 			discovered_count += 1
 	
 	return float(discovered_count) / float(technological_discoveries.size())
+

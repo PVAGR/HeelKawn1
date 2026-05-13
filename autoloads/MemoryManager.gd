@@ -27,49 +27,50 @@ func _load_subsystems() -> void:
 	if _subsystems_loaded:
 		return
 	
-	# Load niche memory subsystems as children
-	if FileAccess.file_exists("res://autoloads/AgeMemory.gd"):
+	_age_memory = get_node_or_null("/root/AgeMemory")
+	_intent_memory = get_node_or_null("/root/IntentMemory")
+	_remnant_memory = get_node_or_null("/root/RemnantMemory")
+	_myth_memory = get_node_or_null("/root/MythMemory")
+	_road_memory = get_node_or_null("/root/RoadMemory")
+	_sacred_memory = get_node_or_null("/root/SacredMemory")
+	_footpath_memory = get_node_or_null("/root/FootpathMemory")
+	_chronicle_log = get_node_or_null("/root/ChronicleLog")
+	
+	# Fallback: load from file if singleton not present
+	if _age_memory == null and FileAccess.file_exists("res://autoloads/AgeMemory.gd"):
 		_age_memory = load("res://autoloads/AgeMemory.gd").new()
 		_age_memory.name = "AgeMemory"
 		add_child(_age_memory)
-	
-	if FileAccess.file_exists("res://autoloads/IntentMemory.gd"):
+	if _intent_memory == null and FileAccess.file_exists("res://autoloads/IntentMemory.gd"):
 		_intent_memory = load("res://autoloads/IntentMemory.gd").new()
 		_intent_memory.name = "IntentMemory"
 		add_child(_intent_memory)
-	
-	if FileAccess.file_exists("res://autoloads/RemnantMemory.gd"):
+	if _remnant_memory == null and FileAccess.file_exists("res://autoloads/RemnantMemory.gd"):
 		_remnant_memory = load("res://autoloads/RemnantMemory.gd").new()
 		_remnant_memory.name = "RemnantMemory"
 		add_child(_remnant_memory)
-	
-	if FileAccess.file_exists("res://autoloads/MythMemory.gd"):
+	if _myth_memory == null and FileAccess.file_exists("res://autoloads/MythMemory.gd"):
 		_myth_memory = load("res://autoloads/MythMemory.gd").new()
 		_myth_memory.name = "MythMemory"
 		add_child(_myth_memory)
-	
-	if FileAccess.file_exists("res://autoloads/RoadMemory.gd"):
+	if _road_memory == null and FileAccess.file_exists("res://autoloads/RoadMemory.gd"):
 		_road_memory = load("res://autoloads/RoadMemory.gd").new()
 		_road_memory.name = "RoadMemory"
 		add_child(_road_memory)
-	
-	if FileAccess.file_exists("res://autoloads/SacredMemory.gd"):
+	if _sacred_memory == null and FileAccess.file_exists("res://autoloads/SacredMemory.gd"):
 		_sacred_memory = load("res://autoloads/SacredMemory.gd").new()
 		_sacred_memory.name = "SacredMemory"
 		add_child(_sacred_memory)
-	
-	if FileAccess.file_exists("res://autoloads/FootpathMemory.gd"):
+	if _footpath_memory == null and FileAccess.file_exists("res://autoloads/FootpathMemory.gd"):
 		_footpath_memory = load("res://autoloads/FootpathMemory.gd").new()
 		_footpath_memory.name = "FootpathMemory"
 		add_child(_footpath_memory)
-	
-	if FileAccess.file_exists("res://autoloads/ChronicleLog.gd"):
+	if _chronicle_log == null and FileAccess.file_exists("res://autoloads/ChronicleLog.gd"):
 		_chronicle_log = load("res://autoloads/ChronicleLog.gd").new()
 		_chronicle_log.name = "ChronicleLog"
 		add_child(_chronicle_log)
 	
 	_subsystems_loaded = true
-	print("[MemoryManager] Niche memory subsystems loaded")
 
 ## Get a specific memory subsystem (loads if not already loaded)
 func get_subsystem(name: String) -> Node:

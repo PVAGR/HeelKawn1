@@ -93,6 +93,12 @@ enum Type {
 	VISIT_GRAVE,     # internal: pawn visits a grave marker for mood recovery
 	# --- Living settlement upkeep ---
 	MAINTAIN_STRUCTURE, # repair / preserve homes, walls, roads, hearths before decay
+	# --- Brewing & Social (Phase 7) ---
+	BUILD_BREWERY,   # build a brewery near water
+	BUILD_TAVERN,    # build a tavern for social drinking
+	BREW_MEAD,       # brew mead at brewery
+	BREW_ALE,        # brew ale at brewery
+	DRINK,           # drink at tavern (mood boost, intoxication)
 }
 
 enum State {
@@ -218,6 +224,11 @@ static func describe_type(t: int) -> String:
 		Type.GUARD:                return "Guard"
 		Type.VISIT_GRAVE:          return "VisitGrave"
 		Type.MAINTAIN_STRUCTURE:   return "MaintainStructure"
+		Type.BUILD_BREWERY:         return "BuildBrewery"
+		Type.BUILD_TAVERN:          return "BuildTavern"
+		Type.BREW_MEAD:            return "BrewMead"
+		Type.BREW_ALE:             return "BrewAle"
+		Type.DRINK:                return "Drink"
 	return "Unknown"
 
 
@@ -301,6 +312,11 @@ static func tool_job_work_ticks(job_type: int) -> int:
 		Type.BUILD_ROAD:             return 15
 		Type.BUILD_GRANARY:          return 35
 		Type.BUILD_CELLAR:           return 40
+		Type.BUILD_BREWERY:         return 50
+		Type.BUILD_TAVERN:          return 60
+		Type.BREW_MEAD:            return 30
+		Type.BREW_ALE:             return 25
+		Type.DRINK:                return 5
 		Type.MAINTAIN_STRUCTURE:     return 8
 	return 10  # Faster default (was 20)
 

@@ -27,7 +27,7 @@ const LAYER_CONFIG: Dictionary = {
 		"interval": 120,
 		"priority": 2,
 		"enabled": true,
-		"class": "AISettlementPlanner"
+		"class": "AISettlementManager"
 	},
 	"diplomacy": {
 		"interval": 300,
@@ -262,8 +262,8 @@ func _get_sample_pawn_states(count: int) -> Array:
 
 
 func _get_social_network_summary() -> Dictionary:
-	var gossip_manager: Node = get_node_or_null("/root/GossipManager")
-	var grudge_manager: Node = get_node_or_null("/root/GrudgeManager")
+	var gossip_manager: Node = get_node_or_null("/root/SocialManager")
+	var grudge_manager: Node = get_node_or_null("/root/SocialManager")
 
 	var active_gossip: int = 0
 	var active_grudges: int = 0
@@ -304,7 +304,7 @@ func _get_resource_trends() -> Dictionary:
 
 
 func _get_settlement_relations() -> Array:
-	var grudge_manager: Node = get_node_or_null("/root/GrudgeManager")
+	var grudge_manager: Node = get_node_or_null("/root/SocialManager")
 	if grudge_manager == null:
 		return []
 	
@@ -313,7 +313,7 @@ func _get_settlement_relations() -> Array:
 
 
 func _get_active_grudges() -> Array:
-	var grudge_manager: Node = get_node_or_null("/root/GrudgeManager")
+	var grudge_manager: Node = get_node_or_null("/root/SocialManager")
 	if grudge_manager == null:
 		return []
 	
@@ -386,8 +386,8 @@ func reset_counters() -> void:
 
 func _initialize_layers() -> void:
 	# Get shared references
-	var grudge_manager: Node = get_node_or_null("/root/GrudgeManager")
-	var gossip_manager: Node = get_node_or_null("/root/GossipManager")
+	var grudge_manager: Node = get_node_or_null("/root/SocialManager")
+	var gossip_manager: Node = get_node_or_null("/root/SocialManager")
 	var settlement_memory: Node = get_node_or_null("/root/SettlementMemory")
 	var stockpile_manager: Node = get_node_or_null("/root/StockpileManager")
 	var wildlife_population: Node = get_node_or_null("/root/WildlifePopulation")
@@ -427,3 +427,4 @@ func _load_layer_script(layer_name: String) -> GDScript:
 
 	var script: GDScript = load(script_path)
 	return script
+

@@ -11,31 +11,24 @@ var _authority_system: Node
 var _subsystems_loaded: bool = false
 
 func _ready() -> void:
-	print("[FactionManager] Initialized")
-
-## Load faction subsystems on-demand (not at startup)
-func _load_subsystems() -> void:
-	if _subsystems_loaded:
-		return
+	_faction_registry = get_node_or_null("/root/FactionRegistry")
+	_faction_system = get_node_or_null("/root/FactionSystem")
+	_authority_system = get_node_or_null("/root/AuthoritySystem")
 	
-	# Load faction subsystems as children
-	if FileAccess.file_exists("res://autoloads/FactionRegistry.gd"):
+	if _faction_registry == null and FileAccess.file_exists("res://autoloads/FactionRegistry.gd"):
 		_faction_registry = load("res://autoloads/FactionRegistry.gd").new()
 		_faction_registry.name = "FactionRegistry"
 		add_child(_faction_registry)
-	
-	if FileAccess.file_exists("res://autoloads/FactionSystem.gd"):
+	if _faction_system == null and FileAccess.file_exists("res://autoloads/FactionSystem.gd"):
 		_faction_system = load("res://autoloads/FactionSystem.gd").new()
 		_faction_system.name = "FactionSystem"
 		add_child(_faction_system)
-	
-	if FileAccess.file_exists("res://autoloads/AuthoritySystem.gd"):
+	if _authority_system == null and FileAccess.file_exists("res://autoloads/AuthoritySystem.gd"):
 		_authority_system = load("res://autoloads/AuthoritySystem.gd").new()
 		_authority_system.name = "AuthoritySystem"
 		add_child(_authority_system)
 	
 	_subsystems_loaded = true
-	print("[FactionManager] Faction subsystems loaded")
 
 ## Get a specific faction subsystem (loads if not already loaded)
 func get_subsystem(name: String) -> Node:

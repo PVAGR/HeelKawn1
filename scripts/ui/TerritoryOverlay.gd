@@ -100,10 +100,10 @@ func _refresh_territories() -> void:
 		var color: Color = _color_for_settlement(center_region)
 		var dominant_nation: int = int(s.get("dominant_nation_id", -1))
 		var dominant_clan: int = int(s.get("dominant_clan_id", -1))
-		if dominant_nation >= 0 and KinshipSystem != null:
-			color = KinshipSystem.get_color_for_nation(dominant_nation)
-		elif dominant_clan >= 0 and KinshipSystem != null:
-			color = KinshipSystem.get_color_for_clan(dominant_clan)
+		if dominant_nation >= 0 and SocialManager != null:
+			color = SocialManager.get_color_for_nation(dominant_nation)
+		elif dominant_clan >= 0 and SocialManager != null:
+			color = SocialManager.get_color_for_clan(dominant_clan)
 		# Build set of region keys for fast lookup
 		var region_set: Dictionary = {}
 		for rk in regions:
@@ -229,3 +229,4 @@ static func _color_for_settlement(center_region_key: int) -> Color:
 	# Golden ratio hash for well-distributed hues
 	var hue: float = fmod(float(abs(center_region_key)) * 0.618033988749895, 1.0)
 	return Color.from_hsv(hue, 0.55, 0.85, 1.0)
+

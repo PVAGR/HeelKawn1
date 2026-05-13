@@ -474,6 +474,26 @@ func toggle_pause() -> void:
 		pause()
 
 
+enum StartState {
+	NAKED,       # alone, no tools, no shelter — pure survival
+	PIONEER,     # small group, basic tools, some food
+	ESTABLISHED, # larger group, full tools, shelter, stockpile
+	LEGACY,      # existing world continuation
+}
+
+var start_state: int = StartState.PIONEER
+
+func set_start_state(state: int) -> void:
+	start_state = state
+	WorldMemory.record_event({
+		"kind": WorldMemory.Kind.LIFE_EVENT,
+		"tick": tick_count,
+		"start_state": state,
+	})
+
+func get_start_state() -> int:
+	return start_state
+
 func add_global_stress(amount: int) -> void:
 	global_stress = clampi(global_stress + amount, 0, 1_000_000)
 

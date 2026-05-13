@@ -53,6 +53,8 @@ enum Type {
 	# --- Storage (Phase 6) ---
 	GRANARY,           # food storage: +4 food capacity, -50% spoilage
 	CELLAR,            # underground storage: +6 capacity, -75% spoilage
+	BREWERY,           # brewing: produces mead and ale
+	TAVERN,            # social: drinking, stories, companionship
 	# --- Terrain Features ---
 	RIVER,             # river tile: enables fishing, fishing hut proximity, water movement
 	# --- River Crossings ---
@@ -113,6 +115,8 @@ const COLORS: Dictionary = {
 	# Storage
 	Type.GRANARY:         Color8(180, 160,  80),  # grain gold
 	Type.CELLAR:          Color8(100,  90,  80),  # dark cellar
+	Type.BREWERY:         Color8(180, 140,  40),  # golden amber
+	Type.TAVERN:          Color8(160, 100,  50),  # warm brown
 	Type.RIVER:           Color8( 40,  80, 140),  # blue river
 	Type.FORD:            Color8( 60, 100, 120),  # shallow crossing
 	Type.WATER_MILL:      Color8(160, 140, 100),  # mill wood-brown
@@ -168,6 +172,8 @@ const NAMES: Dictionary = {
 	# Storage
 	Type.GRANARY:         "Granary",
 	Type.CELLAR:          "Cellar",
+	Type.BREWERY:         "Brewery",
+	Type.TAVERN:          "Tavern",
 	Type.RIVER:           "River",
 	Type.FORD:            "Ford",
 	Type.WATER_MILL:      "Water Mill",
@@ -197,9 +203,9 @@ static func apply_culture_tint_to_built_color(base: Color, culture_type: int) ->
 	var cool: Color = Color(0.94, 0.97, 1.04, 1.0)
 	var neut: Color = Color(1.0, 1.0, 1.0, 1.0)
 	var mul: Color = neut
-	if culture_type == SettlementPlanner.CULTURE_OPEN:
+	if culture_type == SettlementManager.CULTURE_OPEN:
 		mul = warm
-	elif culture_type == SettlementPlanner.CULTURE_DEFENSIVE:
+	elif culture_type == SettlementManager.CULTURE_DEFENSIVE:
 		mul = cool
 	elif culture_type == SettlementManager.CULTURE_CAUTIOUS:
 		mul = Color(1.01, 1.0, 0.995, 1.0)
@@ -213,9 +219,9 @@ static func apply_culture_landmark_tint(base: Color, culture_type: int) -> Color
 	var cool: Color = Color(0.88, 0.92, 1.08, 1.0)   # steely cool
 	var neut: Color = Color(1.0, 1.0, 1.0, 1.0)
 	var mul: Color = neut
-	if culture_type == SettlementPlanner.CULTURE_OPEN:
+	if culture_type == SettlementManager.CULTURE_OPEN:
 		mul = warm
-	elif culture_type == SettlementPlanner.CULTURE_DEFENSIVE:
+	elif culture_type == SettlementManager.CULTURE_DEFENSIVE:
 		mul = cool
 	elif culture_type == SettlementManager.CULTURE_CAUTIOUS:
 		mul = Color(1.02, 1.0, 0.99, 1.0)
@@ -247,3 +253,4 @@ static func apply_settlement_state_tint(base: Color, settlement_state: String) -
 			return base
 	
 	return base.lerp(base * state_mul, STATE_TINT)
+

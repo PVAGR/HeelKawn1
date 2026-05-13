@@ -2261,18 +2261,23 @@ func _bootstrap_colony() -> void:
 		return
 	WorldMeaning.recompute()
 	WorldPersistence.recompute()
-	# Stockpiles will be created organically by pawns through the StockpileManager
-	# Starting supplies will be gathered organically by pawns from the environment
+	# DORMANT WORLD: No pre-seeded stockpile, supplies, or fire pits.
+	# Pawns explore, socialize, cluster together, and form a settlement
+	# organically. The stockpile comes AS A CONSEQUENCE of settlement,
+	# not before it. Pawns gather materials directly from the environment
+	# (chop trees for wood, mine ore for stone) until a stockpile exists.
+	# DIRECT_FORAGING handles food — pawns eat berries on the spot.
 	# DEAD BRAIN REVIVED: WorldEventSeedManager initialized on boot
 	if WorldEventSeedManager != null:
 		WorldEventSeedManager.ensure_default_seeds()
-	# DORMANT WORLD: No pre-seeded fire pits or beds — HeelKawnians build their own
-	# Pioneer buff gives them 5000 ticks of cold resistance to survive
+	# Wizard gives them some resilience at boot
 	_pawn_spawner.spawn_starters(_world, main_component)
-	# DORMANT WORLD: Pre-discover stockpile area for FogOfDiscovery
+	# Apply starting state effects after pawns are spawned
+	_apply_start_state_effects()
+	# FogOfDiscovery: pawns discover tiles naturally as they walk.
+	# No pre-discovered area — the world is truly dormant at boot.
 	if FogOfDiscovery != null:
 		FogOfDiscovery.set_world(_world)
-		# Stockpiles will be created organically, so no initial discovery area needed
 	_player_pawn = _first_live_pawn()
 	_set_selected_pawn(null)
 	_set_player_mode(PlayerMode.SPECTATOR)
@@ -2282,9 +2287,9 @@ func _bootstrap_colony() -> void:
 		CulturalMemory.recompute(_world)
 		SettlementMemory.recompute(_world)
 		_ensure_validation_session_seed_stockpile_overlaps_settlement()
-		MythMemory.recompute(_world)
-		SacredMemory.sync_permanent_ruins_from_settlements()
-		FactionRegistry.sync_from_settlements()
+		MemoryManager.get_myth_memory().recompute(_world)
+		MemoryManager.get_sacred_memory().sync_permanent_ruins_from_settlements()
+		FactionManager.get_faction_registry().sync_from_settlements()
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):
 				_world.refresh_pawn_historic_path_weights()
@@ -2297,9 +2302,9 @@ func _bootstrap_colony() -> void:
 	_animal_spawner.spawn_initial(_world)
 	_world.set_meta("animal_spawner", _animal_spawner)
 	Main._world_stabilization_until_tick = GameManager.tick_count + WORLD_STABILIZATION_TICKS
-	# DORMANT WORLD: FogOfDiscovery handles job posting as pawns discover tiles
-	# Seed initial jobs only for the pre-discovered stockpile area
-	_seed_jobs_for_discovered_area()
+	# DORMANT WORLD: No pre-discovered area, so no harvest jobs at boot.
+	# Pawns discover tiles as they walk. Harvest jobs are posted periodically
+	# for newly discovered tiles via _seed_jobs_for_discovered_area in the tick loop.
 	_seed_construction_jobs()
 	# Seed initial tunneling toward sealed ore before the first logical tick.
 	_react_to_mining_progress()
@@ -2330,6 +2335,59 @@ func _bootstrap_colony() -> void:
 		MemoryManager.recompute_intent(_world)
 	# Defer only visual refresh; causal job setup stays before the first tick.
 	call_deferred("_bootstrap_heavy_phase2")
+
+
+## Apply starting state effects to pawns and world.
+func _apply_start_state_effects() -> void:
+	if GameManager == null:
+		return
+	var state: int = GameManager.get_start_state()
+	var pawns: Array = PawnSpawner.find_alive_pawns()
+	match state:
+		GameManager.StartState.NAKED:
+			# Single pawn, no tools, no food, no shelter. Pure survival.
+			# Remove excess pawns, keep only one
+			for i in range(1, pawns.size()):
+				var p = pawns[i]
+				if p != null and is_instance_valid(p):
+					p.queue_free()
+			if pawns.size() > 0 and pawns[0] != null and pawns[0].data != null:
+				pawns[0].data.carrying = -1
+				pawns[0].data.carrying_count = 0
+				pawns[0].data.health = 80.0  # Start injured
+				pawns[0].data.hunger = 30.0  # Start hungry
+				pawns[0].data.thirst = 50.0
+			# Also clear stockpile
+			_tear_down_all_zones()
+			if WorldMemory != null:
+				WorldMemory.record_event({
+					"kind": WorldMemory.Kind.LIFE_EVENT,
+					"tick": GameManager.tick_count,
+					"start_state": "naked",
+				})
+		GameManager.StartState.PIONEER:
+			# 3-5 pawns, basic tools, some food. Standard start.
+			WorldMemory.record_event({
+				"kind": WorldMemory.Kind.LIFE_EVENT,
+				"tick": GameManager.tick_count,
+				"start_state": "pioneer",
+			})
+		GameManager.StartState.ESTABLISHED:
+			# Larger group, tools, shelter, stockpile already placed.
+			# Also give each pawn extra starting skills
+			for p in pawns:
+				if p != null and is_instance_valid(p) and p.data != null:
+					p.data.max_health = 120.0
+					p.data.health = 120.0
+					p.data.hunger = 80.0
+			WorldMemory.record_event({
+				"kind": WorldMemory.Kind.LIFE_EVENT,
+				"tick": GameManager.tick_count,
+				"start_state": "established",
+			})
+		GameManager.StartState.LEGACY:
+			# Already loaded from save, nothing to do
+			pass
 
 
 ## Heavy bootstrap phase 2: visual-only terrain tint refresh.
@@ -2707,6 +2765,17 @@ func _on_game_tick(tick: int) -> void:
 		_seed_construction_jobs()
 		section_us["construction_seed"] = Time.get_ticks_usec() - t0
 
+	# DORMANT WORLD: Periodically post harvest jobs for newly discovered tiles.
+	# Pawns discover tiles as they walk; this seeds FORAGE/CHOP/MINE/HUNT/FISH
+	# jobs for those tiles so other pawns can claim them.
+	if _is_main_lane_tick(tick, 200, 17):
+		_seed_jobs_for_discovered_area()
+
+	# Migrant arrivals: every 5000 ticks, a new HeelKawnian may arrive from the wilderness.
+	# Population grows from without. Rate depends on existing population.
+	if _is_main_lane_tick(tick, 5000, 31):
+		_maybe_spawn_migrant()
+
 	# Flush deferred pathfinder component computation (batched from sync_tile_from_data)
 	if _world != null and _world.pathfinder != null and _world.data != null:
 		t0 = Time.get_ticks_usec()
@@ -2847,7 +2916,7 @@ func _on_game_tick(tick: int) -> void:
 			SettlementArchitect.process(_world, self)
 			section_us["settlement_architect"] = Time.get_ticks_usec() - t0
 	if GameManager.periodic_phase_due(int(tick), AGE_MEMORY_INTERVAL_TICKS, AGE_MEMORY_PHASE_OFFSET_TICKS):
-		AgeMemory.recompute()
+		MemoryManager.recompute_age()
 		if is_instance_valid(_world):
 			MemoryManager.recompute_intent(_world)
 	var can_run_mining_react: bool = _mining_react_in_progress or (tick - _last_mining_react_tick) >= MINING_REACT_MIN_INTERVAL_TICKS
@@ -2959,6 +3028,22 @@ func _on_game_tick(tick: int) -> void:
 		var err: Error = GameSave.write_file(GameSave.DEFAULT_PATH.trim_suffix(".sav") + "_autosave.sav", snapshot)
 		if err == OK and OS.is_debug_build():
 			print("[Main] Auto-saved at tick %d" % tick)
+		# Ironman auto-save
+		if WorldPersistence != null and WorldPersistence.is_ironman():
+			WorldPersistence.auto_save()
+	
+	# --- NEW SYSTEM TICKS ---
+	# Ritual magic: process active rituals every 100 ticks (handled by its own tick)
+	# Flowing water: process water flow (handled by its own tick)
+	# Currency: track trade volume (passively collected)
+	# Diplomacy: process treaties (handled by its own tick)
+	# Art: passive creation (handled via events)
+	# Language: passive generation (handled via events)
+	# Underground: caves persist (no per-tick work needed)
+	# Terraforming: results are immediate (no per-tick work needed)
+	# Naval: boat movement processed by NavalSystem._on_game_tick
+	# Mount: taming processed by MountSystem._on_game_tick
+	# Multiplayer: connection state (passive)
 	
 	_maybe_log_tick_hotspots(tick, section_us)
 
@@ -3165,8 +3250,8 @@ func _flush_world_memory_derivatives() -> void:
 	if Time.get_ticks_usec() - flush_start > FLUSH_BUDGET_USEC:
 		return
 	CulturalMemory.recompute(_world)
-	MythMemory.recompute(_world)
-	SacredMemory.sync_permanent_ruins_from_settlements()
+	MemoryManager.get_myth_memory().recompute(_world)
+	MemoryManager.get_sacred_memory().sync_permanent_ruins_from_settlements()
 	MemoryManager.recompute_intent(_world)
 	if Time.get_ticks_usec() - flush_start > FLUSH_BUDGET_USEC:
 		return
@@ -3537,7 +3622,7 @@ func _init_ambient_audio() -> void:
 func _update_ambient_target() -> void:
 	var is_night: bool = DayNightCycle.is_night_for_tick(GameManager.tick_count)
 	_ambient_freq_target = 76.0 if is_night else 112.0
-	_ambient_freq_target += AgeMemory.get_ambient_freq_shift()
+	_ambient_freq_target += MemoryManager.get_ambient_freq_shift()
 	if _enemy_spawner != null:
 		var threat: float = float(_enemy_spawner.get_enemy_count())
 		_ambient_freq_target += min(28.0, threat * 1.8)
@@ -3570,12 +3655,12 @@ func _get_meaning_ambient_mood_target() -> float:
 	var m: float
 	var sv: Variant = SettlementMemory.get_settlement_at_region(rk)
 	var st_here: String = ""
-	var intent_here: int = IntentMemory.INTENT_HOLD
+	var intent_here: int = MemoryManager.get_intent_hold()
 	if sv is Dictionary:
 		_meaning_style_bias = SettlementPlanner.get_culture_audio_bias_for_settlement(sv as Dictionary)
 		st_here = str((sv as Dictionary).get("state", ""))
 		var ckr_here: int = int((sv as Dictionary).get("center_region", -1))
-		intent_here = int(IntentMemory.settlement_intent.get(ckr_here, IntentMemory.INTENT_HOLD))
+		intent_here = int(MemoryManager.get_settlement_intent().get(ckr_here, MemoryManager.get_intent_hold()))
 		
 		# Settlement identity depth: mood reflects settlement vitality
 		var work_focus: String = str((sv as Dictionary).get("work_focus_phase", "unknown"))
@@ -3617,14 +3702,14 @@ func _get_meaning_ambient_mood_target() -> float:
 		else:
 			m = 0.4
 	if st_here != "permanently_abandoned":
-		if intent_here == IntentMemory.INTENT_GROW:
+		if intent_here == MemoryManager.get_intent_grow():
 			m = lerpf(m, 1.0, 0.08)
-		elif intent_here == IntentMemory.INTENT_ABANDON:
+		elif intent_here == MemoryManager.get_intent_abandon():
 			m = lerpf(m, 0.0, 0.12)
 	var rep: int = CulturalMemory.get_region_reputation(rk)
 	if rep <= -2:
 		m = lerpf(m, 0.1, 0.38)
-	var myth_s: int = MythMemory.get_region_myth_state(rk)
+	var myth_s: int = MemoryManager.get_region_myth_state(rk)
 	if myth_s == 1:
 		m = lerpf(m, 0.0, 0.1)
 	elif myth_s == -1:
@@ -3657,24 +3742,24 @@ func _update_camera_meaning_bias(delta: float) -> void:
 		var tcy: int = ((ckr >> 16) & 0xFFFF) * 16 + 8
 		var target: Vector2 = _world.tile_to_world(Vector2i(tcx, tcy))
 		var to_t: Vector2 = target - _camera.global_position
-		var intent_s: int = int(IntentMemory.settlement_intent.get(ckr, IntentMemory.INTENT_HOLD))
+		var intent_s: int = int(MemoryManager.get_settlement_intent().get(ckr, MemoryManager.get_intent_hold()))
 		if st == "revivable":
 			var attract: float = MEANING_CAM_REVIV_P
-			if intent_s == IntentMemory.INTENT_GROW:
+			if intent_s == MemoryManager.get_intent_grow():
 				attract *= 1.14
-			elif intent_s == IntentMemory.INTENT_ABANDON:
+			elif intent_s == MemoryManager.get_intent_abandon():
 				attract *= 0.88
 			vel += to_t * attract
 		elif st == "permanently_abandoned":
 			var repel_perm: float = MEANING_CAM_PERM_ABAND_P
-			if intent_s == IntentMemory.INTENT_ABANDON:
+			if intent_s == MemoryManager.get_intent_abandon():
 				repel_perm *= 1.12
 			vel -= to_t * repel_perm
 		else:
 			var repel_ab: float = MEANING_CAM_ABAND_P
-			if intent_s == IntentMemory.INTENT_ABANDON:
+			if intent_s == MemoryManager.get_intent_abandon():
 				repel_ab *= 1.1
-			elif intent_s == IntentMemory.INTENT_GROW:
+			elif intent_s == MemoryManager.get_intent_grow():
 				repel_ab *= 0.92
 			vel -= to_t * repel_ab
 	var t0: Vector2i = _world.world_to_tile(_camera.global_position)
@@ -3692,7 +3777,7 @@ func _update_camera_meaning_bias(delta: float) -> void:
 		var cr: int = CulturalMemory.get_region_reputation(rk0)
 		if cr <= -2:
 			vel += (cam0 - rcenter) * (0.0002 * (float(mini(8, -2 - cr)) / 6.0))
-		var msc: int = MythMemory.get_region_myth_state(rk0)
+		var msc: int = MemoryManager.get_region_myth_state(rk0)
 		if msc == 1:
 			vel += (cam0 - rcenter) * 0.00011
 		elif msc == -1:
@@ -5773,8 +5858,8 @@ func _reroll_world() -> void:
 	FragmentationManager.clear()
 	SchismManager.clear()
 	WorldMemory.clear()
-	MythMemory.clear()
-	SacredMemory.clear()
+	MemoryManager.get_myth_memory().clear()
+	MemoryManager.get_sacred_memory().clear()
 	PlayerIntentQueue.clear()
 	if FootpathMemory != null and FootpathMemory.has_method("clear"):
 		FootpathMemory.clear()
@@ -5785,11 +5870,11 @@ func _reroll_world() -> void:
 	if TimeLapseRecorder != null and TimeLapseRecorder.has_method("clear"):
 		TimeLapseRecorder.clear()
 	_reset_player_intent_observer_routing()
-	FactionRegistry.clear()
+	FactionManager.get_faction_registry().clear()
 	ChronicleLog.clear()
-	RoadMemory.clear()
+	MemoryManager.get_road_memory().clear()
 	TradeMemory.clear()
-	IntentMemory.clear()
+	MemoryManager.get_intent_memory().clear()
 	MemoryManager.get_age_memory().clear()
 	WorldPersistence.clear()
 	WorldMeaning.recompute()
@@ -5807,11 +5892,22 @@ func _reroll_world() -> void:
 		_world.apply_ruins_from_persistence()
 		CulturalMemory.recompute(_world)
 		SettlementMemory.recompute(_world)
-		MythMemory.recompute(_world)
+		MemoryManager.get_myth_memory().recompute(_world)
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):
 				_world.refresh_pawn_historic_path_weights()
 		)
+	# Clear new systems on world reroll
+	if RitualMagicSystem != null and RitualMagicSystem.has_method("clear"):
+		RitualMagicSystem.clear()
+	if MountSystem != null and MountSystem.has_method("clear"):
+		MountSystem.clear()
+	if NavalSystem != null and NavalSystem.has_method("clear"):
+		NavalSystem.clear()
+	if TerraformingSystem != null and TerraformingSystem.has_method("clear"):
+		TerraformingSystem.clear()
+	if CurrencySystem != null:
+		CurrencySystem._phase = 0
 	var main_component: int = _world.pathfinder.largest_component_id()
 	# Place the stockpile BEFORE respawning pawns, so every pawn sees a valid
 	# stockpile reference the first time it ticks.
@@ -5858,13 +5954,35 @@ func _reroll_heavy_phase2() -> void:
 	_world.refresh_terrain_scar_tint()
 
 
-## DORMANT WORLD: Seed jobs only for the pre-discovered stockpile area.
+## Migrant arrival: a new HeelKawnian arrives from the wilderness.
+## Rate depends on existing population — more pawns = fewer migrants.
+## Natural limits. No hard cap.
+func _maybe_spawn_migrant() -> void:
+	if _world == null or _pawn_spawner == null:
+		return
+	var living: Array = PawnSpawner.find_alive_pawns()
+	var pop: int = living.size()
+	# Migration rate: fewer pawns = more likely. 20 pawns = 50% chance, 40+ = 10%.
+	var chance: float = clampf(1.0 - float(pop) / 40.0, 0.1, 0.8)
+	if not WorldRNG.chance_for(&"migrant_arrival", chance, GameManager.tick_count):
+		return
+	var migrant: HeelKawnian = _pawn_spawner.spawn_migrant(_world)
+	if migrant == null:
+		return
+	# The migrant walks toward the nearest settlement naturally —
+	# their idle tick will claim jobs and they'll integrate organically.
+
+
+## DORMANT WORLD: Seed harvest jobs for discovered tiles near living pawns.
 ## Uses per-capita needs limits — not every resource gets a job.
+## Only scans tiles within a radius of each living pawn (not the whole 256x256 map).
 func _seed_jobs_for_discovered_area() -> void:
 	if FogOfDiscovery == null or _world == null or _world.data == null:
 		return
+	if _pawn_spawner == null:
+		return
 	# Per-capita limits: enough jobs to sustain the population
-	var pop: int = PawnSpawner.find_pawns().size()
+	var pop: int = _pawn_spawner.pawns.size()
 	var max_forage: int = maxi(int(ceil(float(pop) * FogOfDiscovery.FOOD_JOBS_PER_PAWN * 0.7)), 3)
 	var max_hunt: int = maxi(int(ceil(float(pop) * FogOfDiscovery.FOOD_JOBS_PER_PAWN * 0.3)), 1)
 	var max_fish: int = maxi(int(ceil(float(pop) * FogOfDiscovery.FOOD_JOBS_PER_PAWN * 0.2)), 1)
@@ -5875,32 +5993,48 @@ func _seed_jobs_for_discovered_area() -> void:
 	var fish_posted: int = 0
 	var chop_posted: int = 0
 	var mine_posted: int = 0
-	for y in range(WorldData.HEIGHT):
-		for x in range(WorldData.WIDTH):
-			if not FogOfDiscovery.is_discovered(x, y):
-				continue
-			var feature: int = _world.data.get_feature(x, y)
-			var tile: Vector2i = Vector2i(x, y)
-			if feature == TileFeature.Type.FERTILE_SOIL:
-				if forage_posted < max_forage and not JobManager.has_job_at(tile):
-					if JobManager.post(Job.Type.FORAGE, tile) != null:
-						forage_posted += 1
-			elif feature == TileFeature.Type.ORE_VEIN:
-				if mine_posted < max_mine and not JobManager.has_job_at(tile):
-					if JobManager.post(Job.Type.MINE, tile) != null:
-						mine_posted += 1
-			elif feature == TileFeature.Type.TREE:
-				if chop_posted < max_chop and not JobManager.has_job_at(tile):
-					if JobManager.post(Job.Type.CHOP, tile) != null:
-						chop_posted += 1
-			elif TileFeature.is_wildlife(feature):
-				if hunt_posted < max_hunt and not JobManager.has_job_at(tile):
-					if JobManager.post(Job.Type.HUNT, tile) != null:
-						hunt_posted += 1
-			elif feature == TileFeature.Type.RIVER:
-				if fish_posted < max_fish and not JobManager.has_job_at(tile):
-					if JobManager.post(Job.Type.FISH, tile) != null:
-						fish_posted += 1
+	# Only scan tiles near living pawns (radius 12), not the entire map
+	var scanned: Dictionary = {}
+	var SCAN_RADIUS: int = 12
+	for p in _pawn_spawner.pawns:
+		if not is_instance_valid(p) or not ("data" in p):
+			continue
+		var px: int = int(p.data.tile_pos.x)
+		var py: int = int(p.data.tile_pos.y)
+		for dy in range(-SCAN_RADIUS, SCAN_RADIUS + 1):
+			for dx in range(-SCAN_RADIUS, SCAN_RADIUS + 1):
+				var x: int = px + dx
+				var y: int = py + dy
+				if x < 0 or x >= WorldData.WIDTH or y < 0 or y >= WorldData.HEIGHT:
+					continue
+				var key: int = y * WorldData.WIDTH + x
+				if scanned.has(key):
+					continue
+				scanned[key] = true
+				if not FogOfDiscovery.is_discovered(x, y):
+					continue
+				var feature: int = _world.data.get_feature(x, y)
+				var tile: Vector2i = Vector2i(x, y)
+				if feature == TileFeature.Type.FERTILE_SOIL:
+					if forage_posted < max_forage and not JobManager.has_job_at(tile):
+						if JobManager.post(Job.Type.FORAGE, tile) != null:
+							forage_posted += 1
+				elif feature == TileFeature.Type.ORE_VEIN:
+					if mine_posted < max_mine and not JobManager.has_job_at(tile):
+						if JobManager.post(Job.Type.MINE, tile) != null:
+							mine_posted += 1
+				elif feature == TileFeature.Type.TREE:
+					if chop_posted < max_chop and not JobManager.has_job_at(tile):
+						if JobManager.post(Job.Type.CHOP, tile) != null:
+							chop_posted += 1
+				elif TileFeature.is_wildlife(feature):
+					if hunt_posted < max_hunt and not JobManager.has_job_at(tile):
+						if JobManager.post(Job.Type.HUNT, tile) != null:
+							hunt_posted += 1
+				elif feature == TileFeature.Type.RIVER:
+					if fish_posted < max_fish and not JobManager.has_job_at(tile):
+						if JobManager.post(Job.Type.FISH, tile) != null:
+							fish_posted += 1
 
 
 ## Walk the world's feature grid and post initial jobs. Only features on the
@@ -6089,6 +6223,58 @@ func _count_pending_jobs_near(job_type: int, center: Vector2i, radius: int, cach
 	return n
 
 
+## Post basic build jobs near the pawn cluster when no formal settlements exist yet.
+## This bootstraps the colony: fire pits for warmth, beds for shelter, storage
+## for supplies. Pawns gather materials directly from the environment (chop trees
+## for wood, mine ore for stone) until a stockpile exists.
+func _seed_bootstrap_jobs_near_pawn_cluster() -> void:
+	if _world == null or _world.data == null or _pawn_spawner == null:
+		return
+	# Find the center of the largest pawn cluster
+	var pawns: Array = _pawn_spawner.pawns
+	if pawns.is_empty():
+		return
+	var center_x: int = 0
+	var center_y: int = 0
+	var count: int = 0
+	for p in pawns:
+		if not is_instance_valid(p) or not ("data" in p):
+			continue
+		center_x += int(p.data.tile_pos.x)
+		center_y += int(p.data.tile_pos.y)
+		count += 1
+	if count == 0:
+		return
+	center_x = int(center_x / count)
+	center_y = int(center_y / count)
+	var center: Vector2i = Vector2i(center_x, center_y)
+	var features: Dictionary = HeelKawnianManager._scan_local_features(center, 6)
+	var beds: int = int(features.get("bed", 0))
+	var hearths: int = int(features.get("hearth", 0))  # FIRE_PIT features counted as "hearth"
+	var storage_huts: int = int(features.get("storage_hut", 0))
+	var nearby_pending: int = _count_pending_jobs_near(-1, center, 8, [])
+	# Don't spam jobs if there are already enough pending
+	if nearby_pending >= 8:
+		return
+	# Fire pits: 1 per 4 pawns, minimum 2
+	var needed_fire_pits: int = max(2, int(ceil(float(count) / 4.0)))
+	if hearths < needed_fire_pits:
+		var t: Vector2i = _find_build_tile_near(center, 4)
+		if t.x >= 0:
+			JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 5)
+	# Beds: 1 per 2 pawns, minimum 4
+	var needed_beds: int = max(4, int(ceil(float(count) / 2.0)))
+	if beds < needed_beds:
+		var t: Vector2i = _find_build_tile_near(center, 4)
+		if t.x >= 0:
+			JobManager.post(Job.Type.BUILD_BED, t, 4)
+	# Storage hut: at least 1
+	if storage_huts < 1:
+		var t: Vector2i = _find_build_tile_near(center, 4)
+		if t.x >= 0:
+			JobManager.post(Job.Type.BUILD_STORAGE_HUT, t, 3)
+
+
 func _seed_construction_jobs() -> void:
 	if _world == null or _world.data == null:
 		return
@@ -6111,6 +6297,10 @@ func _seed_construction_jobs() -> void:
 	var posted: int = 0
 	var settlements: Array = SettlementMemory.get_formal_settlements()
 	if settlements.is_empty():
+		# No formal settlements yet — seed basic build jobs near the pawn cluster
+		# so pawns can build fire pits, beds, and shelters. Pawns gather materials
+		# directly from the environment (no stockpile needed).
+		_seed_bootstrap_jobs_near_pawn_cluster()
 		return
 	var max_settlements_this_pass: int = 1 if GameManager.game_speed >= 50.0 else 2
 	var settlements_seen: int = 0
@@ -6478,8 +6668,8 @@ func _seed_construction_jobs() -> void:
 					for rx in range(center_tile.x - 4, center_tile.x + 5):
 						if not _world.data.in_bounds(rx, ry):
 							continue
-						var trav: int = RoadMemory.get_traversal(rx, ry)
-						if trav < RoadMemory.ROAD_T1:
+						var trav: int = MemoryManager.get_traversal(rx, ry)
+						if trav < MemoryManager.get_road_t1():
 							continue
 						if _world.data.get_feature(rx, ry) == TileFeature.Type.ROAD:
 							continue
@@ -6821,10 +7011,11 @@ func _ensure_settlement_stockpile(center: Vector2i) -> void:
 		sp.settlement_id = sid
 	add_child(sp)
 	StockpileManager.register(sp)
-	# Bootstrap supplies for new settlement stockpile
-	sp.add_item(Item.Type.BERRY, 5)
-	sp.add_item(Item.Type.WOOD, 3)
-	sp.add_item(Item.Type.STONE, 2)
+	# Bootstrap supplies for new settlement stockpile — enough to start building
+	sp.add_item(Item.Type.BERRY, 10)
+	sp.add_item(Item.Type.WOOD, 5)
+	sp.add_item(Item.Type.STONE, 3)
+	sp.add_item(Item.Type.FLINT, 2)
 	if OS.is_debug_build():
 		print("[Main] Auto-created stockpile zone at %s for settlement near %s (sid=%d)" % [rect.position, center, sid])
 
@@ -8089,16 +8280,16 @@ func _build_save_dict() -> Dictionary:
 		"regrow": _save_regrow_queue(),
 		"zone_filter": _zone_next_filter,
 		"world_memory": WorldMemory.to_save_dict(),
-		"bloodline_system": BloodlineSystem.to_save_dict(),
+		"bloodline_system": SocialManager.get_bloodline_system().to_save_dict(),
 		"settlement_registry": SettlementRegistry.to_save_dict(),
 		"settlement_memory": SettlementMemory.to_save_dict(),
 		"world_persistence": WorldPersistence.to_save_dict(),
-		"myth": MythMemory.to_save_dict(),
-		"sacred": SacredMemory.to_save_dict(),
+		"myth": MemoryManager.get_myth_memory().to_save_dict(),
+		"sacred": MemoryManager.get_sacred_memory().to_save_dict(),
 		"chronicle": ChronicleLog.to_save_dict(),
 		"cultural_memory": CulturalMemory.to_save_dict(),
 		"player_intent_queue": PlayerIntentQueue.to_save_dict(),
-		"faction_registry": FactionRegistry.to_save_dict(),
+		"faction_registry": FactionManager.get_faction_registry().to_save_dict(),
 		"grudge_manager": GrudgeManager.to_save_dict(),
 		"gossip_manager": GossipManager.to_save_dict(),
 		"myth_age": MythAge.to_save_dict(),
@@ -8159,12 +8350,12 @@ func _apply_save_dict(s: Dictionary) -> void:
 	if SocialManager.get_kinship_system() != null and SocialManager.get_kinship_system().has_method("clear"):
 		SocialManager.get_kinship_system().clear()
 	if BloodlineSystem != null and BloodlineSystem.has_method("clear"):
-		BloodlineSystem.clear()
+		SocialManager.get_bloodline_system().clear()
 	TradeMemory.clear()
 	MemoryManager.get_remnant_memory().clear()
-	IntentMemory.clear()
+	MemoryManager.get_intent_memory().clear()
 	MemoryManager.get_age_memory().clear()
-	SacredMemory.clear()
+	MemoryManager.get_sacred_memory().clear()
 	PlayerIntentQueue.clear()
 	if FootpathMemory != null and FootpathMemory.has_method("clear"):
 		FootpathMemory.clear()
@@ -8174,7 +8365,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 		SnowAccumulation.clear()
 	if TimeLapseRecorder != null and TimeLapseRecorder.has_method("clear"):
 		TimeLapseRecorder.clear()
-	FactionRegistry.clear()
+	FactionManager.get_faction_registry().clear()
 	ChronicleLog.clear()
 	_set_designation_mode(DesignationMode.NONE)
 	_cancel_drag()
@@ -8211,11 +8402,11 @@ func _apply_save_dict(s: Dictionary) -> void:
 	_last_generation_tick = int(s.get("last_generation_tick", loaded_tick))
 	_zone_next_filter = int(s.get("zone_filter", 0))
 	WorldMemory.from_save_dict(s.get("world_memory", {}))
-	BloodlineSystem.from_save_dict(s.get("bloodline_system", {}))
+	SocialManager.get_bloodline_system().from_save_dict(s.get("bloodline_system", {}))
 	SettlementRegistry.from_save_dict(s.get("settlement_registry", {}))
 	SettlementMemory.from_save_dict(s.get("settlement_memory", {}))
-	MythMemory.from_save_dict(s.get("myth", {}))
-	SacredMemory.from_save_dict(s.get("sacred", {}))
+	MemoryManager.get_myth_memory().from_save_dict(s.get("myth", {}))
+	MemoryManager.get_sacred_memory().from_save_dict(s.get("sacred", {}))
 	ChronicleLog.from_save_dict(s.get("chronicle", {}))
 	CulturalMemory.from_save_dict(s.get("cultural_memory", {}))
 	WorldMeaning.recompute()
@@ -8247,12 +8438,12 @@ func _apply_save_dict(s: Dictionary) -> void:
 		CulturalMemory.recompute(_world)
 		SettlementMemory.recompute(_world)
 		_ensure_validation_session_seed_stockpile_overlaps_settlement()
-		MythMemory.recompute(_world)
-		SacredMemory.sync_permanent_ruins_from_settlements()
+		MemoryManager.get_myth_memory().recompute(_world)
+		MemoryManager.get_sacred_memory().sync_permanent_ruins_from_settlements()
 		PlayerIntentQueue.from_save_dict(s.get("player_intent_queue", {}))
 		_reset_player_intent_observer_routing()
-		FactionRegistry.from_save_dict(s.get("faction_registry", {}))
-		FactionRegistry.sync_from_settlements()
+		FactionManager.get_faction_registry().from_save_dict(s.get("faction_registry", {}))
+		FactionManager.get_faction_registry().sync_from_settlements()
 		MemoryManager.recompute_intent(_world)
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):
@@ -8613,7 +8804,7 @@ func _tradition_narrative_tooltip_line(tradition: Dictionary) -> String:
 
 ## FactionRegistry: deterministic house line for settlement zone (focus / observer readout).
 func _focus_append_house_stub_lines(out: PackedStringArray, center_region: int) -> void:
-	FactionRegistry.append_focus_house_lines(out, center_region)
+	FactionManager.get_faction_registry().append_focus_house_lines(out, center_region)
 
 
 func _pawn_governance_role(d: HeelKawnianData, gov: Dictionary) -> String:
@@ -8658,7 +8849,7 @@ func _build_realm_crown_view_text() -> String:
 	## Macro strip: settlements × proto-houses × myth/sacred tone (read-only facts).
 	var max_settlements: int = _realm_crown_max_settlements
 	var proto_sites: int = SettlementMemory.get_proto_sites().size()
-	FactionRegistry.sync_from_settlements()
+	FactionManager.get_faction_registry().sync_from_settlements()
 	var rows: Array = []
 	for st_any in SettlementMemory.get_formal_settlements():
 		if not (st_any is Dictionary):
@@ -8716,15 +8907,15 @@ func _build_realm_crown_view_text() -> String:
 					continue
 				seen_rk[rk] = true
 				pop += int(pop_by_rk.get(rk, 0))
-		var house: Dictionary = FactionRegistry.get_house_for_zone(zid)
+		var house: Dictionary = FactionManager.get_faction_registry().get_house_for_zone(zid)
 		var house_disp: String = str(house.get("house_display", "—"))
 		var rel: Dictionary = ReligionLens.describe_settlement_zone(zid)
 		var st_state: String = str(rel.get("state", ""))
 		var voice: String = str(rel.get("voice", ""))
 		lines.append("• %s — pop %d · %s · %s · %s" % [nm, pop, house_disp, st_state, voice])
 		listed += 1
-	var houses_n: int = FactionRegistry.get_synced_house_count()
-	var sac_n: int = SacredMemory.site_count() if SacredMemory != null else 0
+	var houses_n: int = FactionManager.get_faction_registry().get_synced_house_count()
+	var sac_n: int = MemoryManager.site_count() if SacredMemory != null else 0
 	var harm: float = ReligionLens.get_harmony_index() if ReligionLens != null else 0.0
 	var total_pawns: int = _observer_total_pawns()
 	var head: String = (
@@ -9091,11 +9282,11 @@ func _observer_intent_summary() -> String:
 	var grow: int = 0
 	var hold: int = 0
 	var abandon: int = 0
-	for v in IntentMemory.settlement_intent.values():
+	for v in MemoryManager.get_settlement_intent().values():
 		match int(v):
-			IntentMemory.INTENT_GROW:
+			MemoryManager.get_intent_grow():
 				grow += 1
-			IntentMemory.INTENT_ABANDON:
+			MemoryManager.get_intent_abandon():
 				abandon += 1
 			_:
 				hold += 1
@@ -9282,3 +9473,4 @@ func _handle_draft_click(pawn: HeelKawnian) -> void:
 					"[Draft] %s drafted (now %d drafted)" % [pawn.data.display_name, _drafted_pawns.size()]
 			)
 	pawn.queue_redraw()
+

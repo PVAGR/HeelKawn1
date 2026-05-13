@@ -14,46 +14,39 @@ var _legacy_system: Node
 var _subsystems_loaded: bool = false
 
 func _ready() -> void:
-	print("[SocialManager] Initialized")
-
-## Load social subsystems on-demand (not at startup)
-func _load_subsystems() -> void:
-	if _subsystems_loaded:
-		return
+	_kinship_system = get_node_or_null("/root/KinshipSystem")
+	_grudge_manager = get_node_or_null("/root/GrudgeManager")
+	_gossip_manager = get_node_or_null("/root/GossipManager")
+	_relational_graph = get_node_or_null("/root/RelationalGraph")
+	_bloodline_system = get_node_or_null("/root/BloodlineSystem")
+	_legacy_system = get_node_or_null("/root/LegacySystem")
 	
-	# Load social subsystems as children
-	if FileAccess.file_exists("res://autoloads/KinshipSystem.gd"):
+	if _kinship_system == null and FileAccess.file_exists("res://autoloads/KinshipSystem.gd"):
 		_kinship_system = load("res://autoloads/KinshipSystem.gd").new()
 		_kinship_system.name = "KinshipSystem"
 		add_child(_kinship_system)
-	
-	if FileAccess.file_exists("res://autoloads/GrudgeManager.gd"):
+	if _grudge_manager == null and FileAccess.file_exists("res://autoloads/GrudgeManager.gd"):
 		_grudge_manager = load("res://autoloads/GrudgeManager.gd").new()
 		_grudge_manager.name = "GrudgeManager"
 		add_child(_grudge_manager)
-	
-	if FileAccess.file_exists("res://autoloads/GossipManager.gd"):
+	if _gossip_manager == null and FileAccess.file_exists("res://autoloads/GossipManager.gd"):
 		_gossip_manager = load("res://autoloads/GossipManager.gd").new()
 		_gossip_manager.name = "GossipManager"
 		add_child(_gossip_manager)
-	
-	if FileAccess.file_exists("res://autoloads/RelationalGraph.gd"):
+	if _relational_graph == null and FileAccess.file_exists("res://autoloads/RelationalGraph.gd"):
 		_relational_graph = load("res://autoloads/RelationalGraph.gd").new()
 		_relational_graph.name = "RelationalGraph"
 		add_child(_relational_graph)
-	
-	if FileAccess.file_exists("res://autoloads/BloodlineSystem.gd"):
+	if _bloodline_system == null and FileAccess.file_exists("res://autoloads/BloodlineSystem.gd"):
 		_bloodline_system = load("res://autoloads/BloodlineSystem.gd").new()
 		_bloodline_system.name = "BloodlineSystem"
 		add_child(_bloodline_system)
-	
-	if FileAccess.file_exists("res://autoloads/LegacySystem.gd"):
+	if _legacy_system == null and FileAccess.file_exists("res://autoloads/LegacySystem.gd"):
 		_legacy_system = load("res://autoloads/LegacySystem.gd").new()
 		_legacy_system.name = "LegacySystem"
 		add_child(_legacy_system)
 	
 	_subsystems_loaded = true
-	print("[SocialManager] Social subsystems loaded")
 
 ## Get a specific social subsystem (loads if not already loaded)
 func get_subsystem(name: String) -> Node:

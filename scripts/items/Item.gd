@@ -40,6 +40,9 @@ enum Type {
 	RESIN,           # rare: chopping trees may yield resin (crafting, waterproofing, torches)
 	GEM,             # rare: mining may yield gem (jewelry, trade, cultural value)
 	HIDE,            # hunting byproduct: used for leather, armor, clothing
+	# --- Alcohol & brewing ---
+	MEAD,            # brewed: honey + water = mead (mood boost, intoxication)
+	ALE,             # brewed: grain + water = ale (mood boost, intoxication)
 }
 
 ## Display color for the carry-indicator above a pawn and for the stockpile icon.
@@ -73,6 +76,8 @@ const COLORS: Dictionary = {
 	Type.RESIN: Color8(200, 160, 30),  # amber gold
 	Type.GEM: Color8(100, 200, 255),   # crystal blue
 	Type.HIDE: Color8(160, 120, 80),   # tanned leather
+	Type.MEAD: Color8(218, 165, 32),   # golden honey
+	Type.ALE: Color8(180, 120, 40),    # amber ale
 }
 
 const NAMES: Dictionary = {
@@ -105,6 +110,8 @@ const NAMES: Dictionary = {
 	Type.RESIN: "Resin",
 	Type.GEM: "Gem",
 	Type.HIDE: "Hide",
+	Type.MEAD: "Mead",
+	Type.ALE: "Ale",
 }
 
 ## Short single-letter label used in the stockpile's inventory readout.
@@ -174,6 +181,8 @@ const HUNGER_RESTORE: Dictionary = {
 	Type.RESIN: 0.0,
 	Type.GEM: 0.0,
 	Type.HIDE: 0.0,
+	Type.MEAD: 40.0,    # mild food value, main benefit is mood
+	Type.ALE: 35.0,     # mild food value, main benefit is mood
 }
 
 

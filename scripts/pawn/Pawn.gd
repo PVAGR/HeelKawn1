@@ -2718,7 +2718,7 @@ func _tick_idle() -> void:
 		base_bias += clampi(int(floor((_bp(5) - 0.5) * 6.0)), -2, 2)
 
 		# Keep bias math cheap and deterministic on hot claim path.
-		return AuthoritySystem.apply_authority_bonus(base_bias, int(data.id))
+		return FactionManager.apply_authority_bonus(base_bias, int(data.id))
 	var base_passes: Callable = func(j: Job) -> bool:
 		if Pawn._world_hunt_stabilization_blocks() and j.type == _Job.Type.HUNT:
 			return false
@@ -3458,11 +3458,11 @@ func _tick_challenge() -> void:
 		return
 	
 	if _challenge_ticks_left <= 0:
-		# Challenge complete - resolve through AuthoritySystem
-		if AuthoritySystem != null and _challenge_context >= 0:
+		# Challenge complete - resolve through FactionManager
+		if FactionManager != null and _challenge_context >= 0:
 			var challenger_id: int = int(data.id)
 			var defender_id: int = int(_challenge_target.data.id)
-			AuthoritySystem.resolve_conflict(challenger_id, defender_id, _challenge_context)
+			FactionManager.resolve_conflict(challenger_id, defender_id, _challenge_context)
 		_finish_challenge()
 
 
@@ -5056,14 +5056,14 @@ func remember_resources(tile: Vector2i, resource_type: String) -> void:
 
 ## Get grudge intensity toward another pawn (Phase 5: Emergent Life)
 func get_grudge_toward(other_pawn_id: int) -> float:
-	if GrudgeManager != null and GrudgeManager.has_method("get_grudge_intensity"):
-		return GrudgeManager.get_grudge_intensity(int(data.id), other_pawn_id)
+	if SocialManager != null and SocialManager.has_method("get_grudge_intensity"):
+		return SocialManager.get_grudge_intensity(int(data.id), other_pawn_id)
 	return 0.0
 
 ## Check if pawn has a grudge against another pawn
 func has_grudge_against(other_pawn_id: int, min_intensity: float = 0.3) -> bool:
-	if GrudgeManager != null and GrudgeManager.has_method("has_grudge"):
-		return GrudgeManager.has_grudge(int(data.id), other_pawn_id, min_intensity)
+	if SocialManager != null and SocialManager.has_method("has_grudge"):
+		return SocialManager.has_grudge(int(data.id), other_pawn_id, min_intensity)
 	return false
 
 ## Get trust penalty from grudges (0.0 to 0.9)
@@ -5074,26 +5074,26 @@ func get_grudge_trust_penalty(other_pawn_id: int) -> float:
 
 ## Get list of pawns this pawn should avoid (grudge enemies)
 func get_grudge_enemies() -> Array[int]:
-	if GrudgeManager != null and GrudgeManager.has_method("get_enemies_for"):
-		return GrudgeManager.get_enemies_for(int(data.id), 0.4)
+	if SocialManager != null and SocialManager.has_method("get_enemies_for"):
+		return SocialManager.get_enemies_for(int(data.id), 0.4)
 	return []
 
 ## Check if pawn should seek revenge against target
 func should_seek_revenge(other_pawn_id: int) -> bool:
-	if GrudgeManager != null and GrudgeManager.has_method("should_seek_revenge"):
-		return GrudgeManager.should_seek_revenge(int(data.id), other_pawn_id)
+	if SocialManager != null and SocialManager.has_method("should_seek_revenge"):
+		return SocialManager.should_seek_revenge(int(data.id), other_pawn_id)
 	return false
 
 ## Get reputation score for another pawn (-1.0 to 1.0)
 func get_reputation_for(other_pawn_id: int) -> float:
-	if GossipManager != null and GossipManager.has_method("get_reputation_for"):
-		return GossipManager.get_reputation_for(other_pawn_id)
+	if SocialManager != null and SocialManager.has_method("get_reputation_for"):
+		return SocialManager.get_reputation_for(other_pawn_id)
 	return 0.0
 
 ## Get reputation label for another pawn (human-readable)
 func get_reputation_label_for(other_pawn_id: int) -> String:
-	if GossipManager != null and GossipManager.has_method("get_reputation_label"):
-		return GossipManager.get_reputation_label_for(other_pawn_id)
+	if SocialManager != null and SocialManager.has_method("get_reputation_label"):
+		return SocialManager.get_reputation_label_for(other_pawn_id)
 	return "Unknown"
 
 ## Get tiles to avoid due to grudge-enemies (Phase 5: Avoidance AI)
@@ -5260,12 +5260,12 @@ func _track_co_presence_light() -> void:
 func _share_gossip_with(other_pawn: HeelKawnian) -> void:
 	if other_pawn == null or not is_instance_valid(other_pawn):
 		return
-	if GossipManager == null or not GossipManager.has_method("share_gossip_between"):
+	if SocialManager == null or not SocialManager.has_method("share_gossip_between"):
 		return
 	
 	# OPTIMIZATION: Skip if either pawn has no gossip
-	var my_gossip: GossipPropagation = GossipManager._get_gossip_for_pawn(int(data.id)) if GossipManager.has_method("_get_gossip_for_pawn") else null
-	var other_gossip: GossipPropagation = GossipManager._get_gossip_for_pawn(int(other_pawn.data.id)) if GossipManager.has_method("_get_gossip_for_pawn") else null
+	var my_gossip: GossipPropagation = SocialManager._get_gossip_for_pawn(int(data.id)) if SocialManager.has_method("_get_gossip_for_pawn") else null
+	var other_gossip: GossipPropagation = SocialManager._get_gossip_for_pawn(int(other_pawn.data.id)) if SocialManager.has_method("_get_gossip_for_pawn") else null
 	
 	if my_gossip == null and other_gossip == null:
 		return  # Nothing to share
@@ -5280,7 +5280,7 @@ func _share_gossip_with(other_pawn: HeelKawnian) -> void:
 		return
 	
 	# Share gossip (bidirectional)
-	var shared_count: int = GossipManager.share_gossip_between(
+	var shared_count: int = SocialManager.share_gossip_between(
 		int(data.id),
 		other_id,
 		trust_strength
@@ -5410,7 +5410,7 @@ func have_child(partner: Pawn) -> int:
 
 
 func _create_household() -> int:
-	# Create via KinshipSystem when available; keep deterministic fallback for safety.
+	# Create via SocialManager when available; keep deterministic fallback for safety.
 	if data != null:
 		var kin: Node = get_node_or_null("/root/SocialManager")
 		if kin != null and kin.has_method("create_household"):
@@ -5491,7 +5491,7 @@ func get_household_stability() -> float:
 		if kin.has_method("get_household_labor"):
 			stability += min(25.0, float(kin.call("get_household_labor", int(data.household_id))) * 0.05)
 	else:
-		# Fallback path when KinshipSystem is unavailable.
+		# Fallback path when SocialManager is unavailable.
 		for other_id in data.family_bonds:
 			stability += float(data.family_bonds[other_id])
 			household_members += 1
@@ -5565,7 +5565,7 @@ func set_leadership_role(role: int) -> void:
 
 func challenge_for_leadership(_target_leader: Pawn) -> void:
 	# Challenge another pawn for leadership
-	# Placeholder - needs AuthoritySystem integration
+	# Placeholder - needs FactionManager integration
 	# TODO: Implement leadership challenge mechanics
 	pass
 
@@ -7090,3 +7090,4 @@ static func _verb_for_job(job_type: int) -> String:
 		_Job.Type.TRADE_HAUL:
 			return "Trading"
 	return "Working"
+

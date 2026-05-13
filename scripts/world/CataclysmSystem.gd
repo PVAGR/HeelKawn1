@@ -13,7 +13,10 @@ enum CataclysmType {
 	INVASION,    # Enemy forces
 	EARTHQUAKE,  # Terrain destruction
 	METEOR,      # Impact event
-	FAMINE       # Food shortage
+	FAMINE,      # Food shortage
+	TORNADO,     # Wind destruction
+	VOLCANIC_ERUPTION, # Magma + ash cloud
+	TSUNAMI,     # Coastal flooding
 }
 
 # Active cataclysm data
@@ -63,6 +66,24 @@ const CATACLYSM_CONFIG: Dictionary = {
 		"base_duration": 8000,
 		"casualty_rate": 0.15,
 		"recovery_rate": 0.4
+	},
+	CataclysmType.TORNADO: {
+		"name": "Tornado",
+		"base_duration": 200,
+		"casualty_rate": 0.08,
+		"recovery_rate": 1.0
+	},
+	CataclysmType.VOLCANIC_ERUPTION: {
+		"name": "Volcanic Eruption",
+		"base_duration": 4000,
+		"casualty_rate": 0.25,
+		"recovery_rate": 0.15
+	},
+	CataclysmType.TSUNAMI: {
+		"name": "Tsunami",
+		"base_duration": 1000,
+		"casualty_rate": 0.2,
+		"recovery_rate": 0.5
 	}
 }
 
@@ -203,8 +224,8 @@ func _apply_plague_effects(regions: Array[Vector2i], severity: int) -> void:
 				if randf() * 100.0 < severity * 2.0:
 					casualties += 1
 					# Apply disease to pawn
-					if pawn.data.has_method("add_disease"):
-						pawn.data.call("add_disease", "plague", severity)
+					if DiseaseSystem != null:
+						DiseaseSystem.add_disease(pawn.data, DiseaseSystem.DiseaseType.PLAGUE, float(severity), "cataclysm")
 
 	# Update casualties
 	for cataclysm in active_cataclysms:

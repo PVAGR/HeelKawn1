@@ -582,7 +582,7 @@ func evaluate(pd: HeelKawnianData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump(outs, 6, 0.04)   # defend — protect what they believe in
 		fired.append({"id": "beliefs_strong", "line": "IF many core beliefs THEN social + defend community.", "w": 0.35})
 
-	# ==================== GrudgeManager rules ====================
+	# ==================== SocialManager rules ====================
 	# Grudges make pawns withdrawn, avoidant, and potentially vengeful
 	var grudge_i: float = float(ctx.get("grudge_intensity", 0.0))
 	if grudge_i >= 1.5:
@@ -665,7 +665,7 @@ func evaluate(pd: HeelKawnianData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump(outs, 2, 0.04)  # social — trade requires contact
 		fired.append({"id": "mind_culture_mercantile", "line": "IF mercantile culture THEN gather + socialize.", "w": 0.35})
 
-	# Reputation from GossipManager — high reputation pawns lead
+	# Reputation from SocialManager — high reputation pawns lead
 	var reputation: float = float(ctx.get("mind_reputation", 0.0))
 	if reputation >= 0.7:
 		_bump(outs, 2, 0.08)  # social — respected, sought out
@@ -832,3 +832,4 @@ func evaluate(pd: HeelKawnianData, ctx: Dictionary, outs: Array) -> Dictionary:
 	for i in range(mini(8, outs.size())):
 		human_ch[i] = float(outs[i])
 	return {"fired": fired, "human_channels": human_ch, "human_channel_labels": HUMAN_CHANNEL_LABELS}
+

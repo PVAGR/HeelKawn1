@@ -58,6 +58,43 @@ var display_name: String = ""
 var age: int = 25
 ## Cumulative in-game years lived (float for fractional aging between ticks).
 var age_years: float = 0.0
+
+## Life stages: Infant → Child → Youth → Adult → Elder → Ancient
+## Each stage has different capabilities. Very Dwarf Fortress.
+enum LifeStage {
+	INFANT,   # 0-5 years: carried by parent, no work
+	CHILD,    # 6-12 years: light tasks, learning
+	YOUTH,    # 13-20 years: full work, fast learning
+	ADULT,    # 21-50 years: full capability, stable
+	ELDER,    # 51-70 years: slower, wisdom bonuses
+	ANCIENT,  # 71+ years: very slow, revered
+}
+
+## Age thresholds for each life stage (in years)
+const LIFE_STAGE_THRESHOLDS: Dictionary = {
+	LifeStage.INFANT: 0,
+	LifeStage.CHILD: 6,
+	LifeStage.YOUTH: 13,
+	LifeStage.ADULT: 21,
+	LifeStage.ELDER: 51,
+	LifeStage.ANCIENT: 71,
+}
+
+const LIFE_STAGE_NAMES: Dictionary = {
+	LifeStage.INFANT: "Infant",
+	LifeStage.CHILD: "Child",
+	LifeStage.YOUTH: "Youth",
+	LifeStage.ADULT: "Adult",
+	LifeStage.ELDER: "Elder",
+	LifeStage.ANCIENT: "Ancient",
+}
+
+## Current life stage (computed from age_years)
+var life_stage: int = LifeStage.ADULT
+
+## Ticks per in-game year. 5000 ticks = ~83 seconds at 1x, ~5 minutes at 100x.
+const TICKS_PER_YEAR: int = 5000
+
 var gender: int = Gender.OTHER
 var tile_pos: Vector2i = Vector2i.ZERO
 
@@ -85,6 +122,7 @@ var max_health: float = 100.0
 var stamina: float = 100.0  # Depletes with work, recovers with rest
 var body_temperature: float = 37.0  # Celsius, normal range 36-38
 var pain: float = 0.0  # 0-100, affects work efficiency and mood
+var intoxication: float = 0.0  # 0-100, from alcohol. Mood boost but reduced accuracy/speed
 var exposure_sickness: float = 0.0  # 0-100, from prolonged cold/wet
 var hypothermia_risk: float = 0.0  # 0-100, accumulates from cold exposure
 var heat_exhaustion_risk: float = 0.0  # 0-100, accumulates from heat exposure
@@ -260,6 +298,12 @@ var social_squad_anchor_id: int = -1
 var carrying: int = 0  # Item.Type.NONE
 var carrying_qty: int = 0
 var carrying_capacity: int = 20  # OPTIMIZATION: Increased from default - pawns can carry more before returning to stockpile
+
+## Personal inventory: multi-slot carry system.
+## Each slot = {item_type: int, quantity: int}
+## Max slots = 6 (hands + belt + pouch + backpack + side + back)
+const INVENTORY_SLOTS: int = 6
+var inventory: Array = []  # Array of {item_type: int, quantity: int}
 
 ## Equipped tool (Item.Type). None means bare-handed.
 var equipped_tool: int = 0  # Item.Type.NONE
@@ -1550,7 +1594,7 @@ func _get_reputation_trust_modifier() -> float:
 	if trust.is_empty():
 		return 0.0
 	
-	var GossipMgr: Node = Engine.get_main_loop().get_root().get_node_or_null("GossipManager")
+	var GossipMgr: Node = Engine.get_main_loop().get_root().get_node_or_null("SocialManager")
 	if GossipMgr == null or not GossipMgr.has_method("get_reputation_for"):
 		return 0.0
 	
@@ -1574,7 +1618,7 @@ func _get_reputation_trust_modifier() -> float:
 ## Get grudge penalty for a peer (helper for social calculations)
 func _get_grudge_penalty_for_peer(peer_id: int) -> float:
 	# Check if anyone holds a grudge against this peer
-	var GrudgeMgr: Node = Engine.get_main_loop().get_root().get_node_or_null("GrudgeManager")
+	var GrudgeMgr: Node = Engine.get_main_loop().get_root().get_node_or_null("SocialManager")
 	if GrudgeMgr == null:
 		return 0.0
 	
@@ -1859,6 +1903,103 @@ func get_health_percentage() -> float:
 	if max_health <= 0.0:
 		return 0.0
 	return clamp(health / max_health, 0.0, 1.0)
+
+
+## Compute life stage from current age_years.
+func compute_life_stage() -> int:
+	if age_years >= 71.0:
+		return LifeStage.ANCIENT
+	elif age_years >= 51.0:
+		return LifeStage.ELDER
+	elif age_years >= 21.0:
+		return LifeStage.ADULT
+	elif age_years >= 13.0:
+		return LifeStage.YOUTH
+	elif age_years >= 6.0:
+		return LifeStage.CHILD
+	else:
+		return LifeStage.INFANT
+
+
+## Get the name of the current life stage.
+func get_life_stage_name() -> String:
+	return LIFE_STAGE_NAMES.get(life_stage, "Unknown")
+
+
+## Age the pawn by one tick. Call from the tick loop.
+func age_one_tick() -> void:
+	age_years += 1.0 / float(TICKS_PER_YEAR)
+	var old_stage: int = life_stage
+	life_stage = compute_life_stage()
+	age = int(age_years)
+	# Life stage transition events
+	if life_stage != old_stage:
+		var stage_name: String = get_life_stage_name()
+		WorldMemory.record_event({
+			"kind": WorldMemory.Kind.LIFE_EVENT,
+			"tick": GameManager.tick_count if GameManager != null else 0,
+			"pawn_id": int(id),
+			"pawn_name": display_name,
+			"life_stage": stage_name,
+			"age": int(age_years),
+		})
+		add_mood_event(MoodEvent.Type.JOY, 30.0, 500)
+		# Infants can't work. Children do light tasks. Elders slow down.
+		if life_stage == LifeStage.INFANT:
+			# Infants are carried — no work, no movement
+			pass
+		elif life_stage == LifeStage.ELDER:
+			# Elders get wisdom bonuses but physical decline
+			max_health = maxf(50.0, max_health - 10.0)
+		elif life_stage == LifeStage.ANCIENT:
+			# Ancients are revered but fragile
+			max_health = maxf(30.0, max_health - 15.0)
+
+
+## Work speed multiplier based on life stage.
+func life_stage_work_mult() -> float:
+	match life_stage:
+		LifeStage.INFANT: return 0.0   # Can't work
+		LifeStage.CHILD: return 0.4    # Light tasks only
+		LifeStage.YOUTH: return 0.9    # Almost full, fast learner
+		LifeStage.ADULT: return 1.0    # Full capability
+		LifeStage.ELDER: return 0.7    # Slower, wiser
+		LifeStage.ANCIENT: return 0.4  # Very slow
+		_: return 1.0
+
+
+## Movement speed multiplier based on life stage.
+func life_stage_move_mult() -> float:
+	match life_stage:
+		LifeStage.INFANT: return 0.0   # Carried
+		LifeStage.CHILD: return 0.7    # Shorter legs
+		LifeStage.YOUTH: return 1.0    # Full speed
+		LifeStage.ADULT: return 1.0    # Full speed
+		LifeStage.ELDER: return 0.6    # Slower
+		LifeStage.ANCIENT: return 0.3  # Very slow
+		_: return 1.0
+
+
+## Learning speed multiplier based on life stage.
+func life_stage_learn_mult() -> float:
+	match life_stage:
+		LifeStage.INFANT: return 0.0   # Can't learn skills
+		LifeStage.CHILD: return 1.5    # Fast learner
+		LifeStage.YOUTH: return 1.3    # Still fast
+		LifeStage.ADULT: return 1.0    # Normal
+		LifeStage.ELDER: return 0.8    # Slower but wise
+		LifeStage.ANCIENT: return 0.5  # Very slow
+		_: return 1.0
+
+
+## Can this pawn work at all?
+func can_work() -> bool:
+	return life_stage != LifeStage.INFANT
+
+
+## Can this pawn claim jobs?
+func can_claim_jobs() -> bool:
+	return life_stage >= LifeStage.CHILD
 
 
 ## Phase 4: Update historical memory for settlements
@@ -2409,7 +2550,7 @@ func _root_node_or_null(node_name: String) -> Node:
 func bloodline_pride_mood_bonus() -> float:
 	if bloodline_id < 0:
 		return 0.0
-	var bloodline_sys: Node = _root_node_or_null("BloodlineSystem")
+	var bloodline_sys: Node = _root_node_or_null("SocialManager")
 	if bloodline_sys != null and bloodline_sys.has_method("get_bloodline_pride_mood_bonus"):
 		return clampf(float(bloodline_sys.call("get_bloodline_pride_mood_bonus", bloodline_id)), 0.0, 0.08)
 	return 0.0
@@ -2418,7 +2559,7 @@ func bloodline_pride_mood_bonus() -> float:
 func bloodline_specialization_multiplier(skill: int) -> float:
 	if bloodline_id < 0:
 		return 1.0
-	var bloodline_sys: Node = _root_node_or_null("BloodlineSystem")
+	var bloodline_sys: Node = _root_node_or_null("SocialManager")
 	if bloodline_sys != null and bloodline_sys.has_method("get_bloodline_specialization_multiplier"):
 		return maxf(0.85, float(bloodline_sys.call("get_bloodline_specialization_multiplier", bloodline_id, skill)))
 	return 1.0
@@ -3740,6 +3881,64 @@ func clear_carry() -> void:
 	carrying_qty = 0
 
 
+## Add an item to personal inventory. Returns true if added.
+func inventory_add(item_type: int, quantity: int = 1) -> bool:
+	# Try to stack with existing slot
+	for slot in inventory:
+		if int(slot.get("item_type", -1)) == item_type:
+			slot["quantity"] = int(slot.get("quantity", 0)) + quantity
+			return true
+	# New slot
+	if inventory.size() >= INVENTORY_SLOTS:
+		return false  # No room
+	inventory.append({"item_type": item_type, "quantity": quantity})
+	return true
+
+
+## Remove items from personal inventory. Returns quantity actually removed.
+func inventory_remove(item_type: int, quantity: int = 1) -> int:
+	var removed: int = 0
+	var to_erase: Array = []
+	for i in range(inventory.size()):
+		var slot: Dictionary = inventory[i]
+		if int(slot.get("item_type", -1)) == item_type:
+			var have: int = int(slot.get("quantity", 0))
+			var take: int = mini(quantity - removed, have)
+			slot["quantity"] = have - take
+			removed += take
+			if int(slot.get("quantity", 0)) <= 0:
+				to_erase.append(i)
+			if removed >= quantity:
+				break
+	# Remove empty slots (reverse order)
+	for i in range(to_erase.size() - 1, -1, -1):
+		inventory.remove_at(to_erase[i])
+	return removed
+
+
+## Check if inventory has at least `quantity` of item_type.
+func inventory_has(item_type: int, quantity: int = 1) -> bool:
+	var total: int = 0
+	for slot in inventory:
+		if int(slot.get("item_type", -1)) == item_type:
+			total += int(slot.get("quantity", 0))
+	return total >= quantity
+
+
+## Count total items in inventory.
+func inventory_count(item_type: int) -> int:
+	var total: int = 0
+	for slot in inventory:
+		if int(slot.get("item_type", -1)) == item_type:
+			total += int(slot.get("quantity", 0))
+	return total
+
+
+## Is inventory full?
+func inventory_full() -> bool:
+	return inventory.size() >= INVENTORY_SLOTS
+
+
 # --- Tool system ---
 
 func equip_tool(tool_type: int) -> void:
@@ -3903,3 +4102,4 @@ func compose_life_arc() -> String:
 	lines.append("  Mood: %.0f" % mood)
 
 	return "\n".join(lines)
+

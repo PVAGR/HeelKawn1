@@ -15,21 +15,24 @@ var _architect: Node
 @onready var CulturalStyleManager = get_node_or_null("/root/CulturalStyleManager")
 
 func _ready() -> void:
-
-	# Load the three settlement systems as children
-	_planner = load("res://autoloads/SettlementPlanner.gd").new()
-	_planner.name = "Planner"
-	add_child(_planner)
+	_planner = get_node_or_null("/root/SettlementPlanner")
+	_rebirth = get_node_or_null("/root/SettlementRebirth")
+	_architect = get_node_or_null("/root/SettlementArchitect")
 	
-	_rebirth = load("res://autoloads/SettlementRebirth.gd").new()
-	_rebirth.name = "Rebirth"
-	add_child(_rebirth)
+	if _planner == null:
+		_planner = load("res://autoloads/SettlementPlanner.gd").new()
+		_planner.name = "Planner"
+		add_child(_planner)
+	if _rebirth == null:
+		_rebirth = load("res://autoloads/SettlementRebirth.gd").new()
+		_rebirth.name = "Rebirth"
+		add_child(_rebirth)
+	if _architect == null:
+		_architect = load("res://autoloads/SettlementArchitect.gd").new()
+		_architect.name = "Architect"
+		add_child(_architect)
 	
-	_architect = load("res://autoloads/SettlementArchitect.gd").new()
-	_architect.name = "Architect"
-	add_child(_architect)
-	
-	print("[SettlementManager] Initialized with Planner, Rebirth, Architect subsystems")
+	print("[SettlementManager] Initialized")
 
 ## Main process method called by tick system
 func process(world: World, main: Node2D, from_memory_dirty: bool) -> void:

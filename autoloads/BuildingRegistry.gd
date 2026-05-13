@@ -470,6 +470,34 @@ func _init_buildings() -> void:
 			"requires_water": false,
 		},
 
+		# === BREWING & SOCIAL ===
+		"brewery": {
+			"name": "Brewery",
+			"description": "Brews mead and ale from local ingredients. +mood for settlement.",
+			"feature_type": TileFeature.Type.BREWERY,
+			"job_type": Job.Type.BUILD_BREWERY,
+			"cost": {"wood": 3, "stone": 2},
+			"buffs": {"mood_boost": 5, "brewing": true},
+			"requires_tech": ["fermentation"],
+			"work_ticks": 50,
+			"category": CAT_PRODUCTION,
+			"passable": true,
+			"requires_water": true,
+		},
+		"tavern": {
+			"name": "Tavern",
+			"description": "Social gathering place. HeelKawnians drink, share stories, and find company.",
+			"feature_type": TileFeature.Type.TAVERN,
+			"job_type": Job.Type.BUILD_TAVERN,
+			"cost": {"wood": 4, "stone": 2},
+			"buffs": {"mood_boost": 10, "social": true},
+			"requires_tech": ["fermentation"],
+			"work_ticks": 60,
+			"category": CAT_CULTURAL,
+			"passable": true,
+			"requires_water": false,
+		},
+
 		# === RECORD CARRIERS (original) ===
 		"grave_marker": {
 			"name": "Grave Marker",

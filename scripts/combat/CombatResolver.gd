@@ -96,6 +96,15 @@ static func resolve_attack(attacker: Node, defender: Node) -> bool:
 		pawn_defender.on_hit_feedback(damage)
 		pawn_defender.data.add_mood_event(MoodEvent.Type.STRESS, 60.0, 300)
 
+		# BODY PART WOUNDS: Target a specific body part with the hit
+		if BodyPartWounds != null:
+			var body_part: int = BodyPartWounds.select_body_part(
+				_combat_stream("body_part", attacker, defender), _combat_salt(7))
+			var wound_type: int = BodyPartWounds.wound_type_for_damage(
+				_weapon_damage_type(attacker))
+			var severity: float = damage * 0.8  # 80% of damage goes to body part
+			BodyPartWounds.apply_wound(pawn_defender.data, body_part, wound_type, severity, "combat")
+
 		# COMBAT PROGRESSION: Award damage XP to attacker, track damage taken by defender
 		if AICombatProgression != null:
 			if attacker is HeelKawnian:
@@ -416,6 +425,24 @@ static func _weapon_name(actor: Node) -> String:
 				Item.Type.STICK: return "stick"
 				_: return "a weapon"
 	return "claws"
+
+
+static func _weapon_damage_type(actor: Node) -> String:
+	if actor == null:
+		return "blunt"
+	if actor is HeelKawnian:
+		var p: HeelKawnian = actor as HeelKawnian
+		if p.data != null and p.data.is_carrying():
+			var carry: int = int(p.data.carrying)
+			match carry:
+				Item.Type.FLINT_KNIFE: return "cut"
+				Item.Type.WOODEN_SPEAR: return "puncture"
+				Item.Type.FLINT_PICK: return "puncture"
+				Item.Type.TORCH: return "burn"
+				Item.Type.STONE: return "blunt"
+				Item.Type.STICK: return "blunt"
+				_: return "cut"
+	return "blunt"
 
 
 static func _combat_id(actor: Node) -> int:

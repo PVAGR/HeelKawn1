@@ -4,7 +4,7 @@ class_name AIPawnPsychologist
 ## Layer 2: RimWorld Spirit - HeelKawnian Psychology AI
 ## Manages individual pawn needs, moods, social dynamics, psychological states
 ##
-## Reads from: HeelKawnianData, GrudgeManager, GossipManager
+## Reads from: HeelKawnianData, SocialManager, SocialManager
 ## Writes to: HeelKawnian mood modifiers, social desires, fear states
 
 var _llm_client: LLMClient = null
@@ -188,3 +188,4 @@ func get_stats() -> Dictionary:
 		"profiles_generated": 0,
 		"last_update_tick": -1
 	}
+

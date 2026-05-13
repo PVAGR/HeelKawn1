@@ -235,12 +235,12 @@ func _check_at_risk_knowledge() -> bool:
 
 
 func _check_grudge_closure() -> bool:
-	var gm: Node = get_node_or_null("/root/GrudgeManager")
+	var gm: Node = get_node_or_null("/root/SocialManager")
 	if gm == null:
 		return false
 	
 	# Check if any grudge was recently closed
-	# (Would need GrudgeManager to track this — TODO)
+	# (Would need SocialManager to track this — TODO)
 	return false
 
 
@@ -306,3 +306,4 @@ func reset_hints() -> void:
 func toggle_hints(enabled: bool) -> void:
 	_hints_enabled = enabled
 	print("[OrientationHints] Hints %s" % ("enabled" if enabled else "disabled"))
+

@@ -25,12 +25,50 @@ var ruins: Dictionary = {}
 var placed_items: Dictionary = {}
 
 
+var ironman_mode: bool = false
+var _save_slot: String = ""
+
 func clear() -> void:
 	persistent_regions.clear()
 	named_landmarks.clear()
 	family_memory.clear()
 	road_traces.clear()
 	ruins.clear()
+
+func set_ironman(enabled: bool, slot: String = "ironman") -> void:
+	ironman_mode = enabled
+	_save_slot = slot
+
+func is_ironman() -> bool:
+	return ironman_mode
+
+func auto_save() -> void:
+	if not ironman_mode:
+		return
+	if _save_slot.is_empty():
+		_save_slot = "ironman"
+	var save_data: Dictionary = to_save_dict()
+	var file_path: String = "user://%s.save" % _save_slot
+	var file: FileAccess = FileAccess.open(file_path, FileAccess.WRITE)
+	if file != null:
+		file.store_var(save_data)
+		file.close()
+
+func load_ironman() -> Dictionary:
+	if not ironman_mode:
+		return {}
+	if _save_slot.is_empty():
+		_save_slot = "ironman"
+	var file_path: String = "user://%s.save" % _save_slot
+	if not FileAccess.file_exists(file_path):
+		return {}
+	var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
+	if file == null:
+		return {}
+	var data: Dictionary = file.get_var()
+	file.close()
+	from_save_dict(data)
+	return data
 
 
 func to_save_dict() -> Dictionary:

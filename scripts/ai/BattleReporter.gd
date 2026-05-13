@@ -37,7 +37,7 @@ var _next_battle_id: int = 1
 func _ready() -> void:
 	_world_memory = get_node_or_null("/root/WorldMemory")
 	_settlement_memory = get_node_or_null("/root/SettlementMemory")
-	_grudge_manager = get_node_or_null("/root/GrudgeManager")
+	_grudge_manager = get_node_or_null("/root/SocialManager")
 	_pawn_spawner = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
 
 
@@ -441,3 +441,4 @@ func get_stats() -> Dictionary:
 		"significant_battles": significant_battles,
 		"memorials": battle_reports.filter(func(b): return b.memorial_marker).size()
 	}
+

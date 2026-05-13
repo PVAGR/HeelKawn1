@@ -4,7 +4,7 @@ class_name AIDiplomacyDirector
 ## Layer 4: Crusader Kings Spirit - Diplomacy AI
 ## Manages inter-settlement relations, dynasties, wars, alliances, trade agreements
 ##
-## Reads from: GrudgeManager, GossipManager, SettlementMemory, TradeMemory
+## Reads from: SocialManager, SocialManager, SettlementMemory, TradeMemory
 ## Writes to: Diplomatic actions, war declarations, alliance proposals
 
 var _llm_client: LLMClient = null
@@ -256,3 +256,4 @@ func get_stats() -> Dictionary:
 		"alliances_formed": 0,
 		"last_update_tick": -1
 	}
+

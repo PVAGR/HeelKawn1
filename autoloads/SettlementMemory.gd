@@ -374,30 +374,55 @@ func recompute(_world: World) -> void:
     var living_pawns: Array[HeelKawnian] = _living_pawns()
     var active_jobs: Array[Job] = _active_jobs_snapshot()
     
-    # HEELKAWN START LAW: Do not auto-create settlements from pawn presence alone.
-    # Settlements must be founded by actual pawn actions (buildings, deaths, stockpiles).
-    # At game start, there should be zero formal settlements and zero proto_sites.
+    # Settlements form from community, not just infrastructure.
+    # A region is eligible for settlement if it has:
+    # - Deaths AND scar (scarred regions are settled)
+    # - Buildings constructed (HeelKawnians actively building homes)
+    # - 3+ pawns living there (community presence — they chose to be here)
+    # Pawn presence alone IS a valid reason — people gathering together
+    # IS the beginning of a settlement. The stockpile follows.
+    var pawn_per_region: Dictionary = {}
+    for p in living_pawns:
+        if p == null or not is_instance_valid(p):
+            continue
+        var p_data = p.data if "data" in p else null
+        if p_data == null:
+            continue
+        var rx: int = int(p_data.tile_pos.x) >> 4
+        var ry: int = int(p_data.tile_pos.y) >> 4
+        var rk_p: int = (rx & 0xFFFF) | ((ry & 0xFFFF) << 16)
+        if not pawn_per_region.has(rk_p):
+            pawn_per_region[rk_p] = 0
+        pawn_per_region[rk_p] = int(pawn_per_region[rk_p]) + 1
     var eligible: Array[int] = []
     for rk_any in WorldMeaning.meaning_by_region.keys():
         var rk: int = int(rk_any)
         var m: Dictionary = WorldMeaning.get_region_meaning(rk)
-        # A region is eligible for settlement ONLY if it has:
-        # - Deaths AND scar (original criterion — scarred regions are settled)
-        # - Buildings constructed (HeelKawnians actively building homes)
-        # NOT just pawn presence — pawns living somewhere does not make it a settlement.
         var has_deaths: bool = int(m.get("total_deaths", 0)) > 0
         var has_buildings: bool = int(m.get("buildings_constructed", 0)) > 0
         var has_scar: bool = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0)) >= 1
+        var has_community: bool = pawn_per_region.has(rk) and int(pawn_per_region[rk]) >= 3
         if has_deaths and has_scar:
             eligible.append(rk)
         elif has_buildings:
             eligible.append(rk)
-    # Do NOT add regions just because pawns are there — that creates fake civilization at tick 0.
-    
+        elif has_community:
+            eligible.append(rk)
+    # Also check pawn-only regions not in WorldMeaning yet.
+    # A cluster of 3+ pawns in a region IS a community, even if
+    # WorldMeaning hasn't recorded anything there yet.
+    var eligible_set: Dictionary = {}
+    for e in eligible:
+        eligible_set[int(e)] = true
+    for rk_p in pawn_per_region.keys():
+        var rk_int: int = int(rk_p)
+        if not eligible_set.has(rk_int) and int(pawn_per_region[rk_int]) >= 3:
+            eligible.append(rk_int)
+            eligible_set[rk_int] = true
+
     eligible.sort()
     if eligible.is_empty():
-        # No real settlements yet — world begins free with only living HeelKawnians.
-        # Do not bootstrap proto_sites from stockpile zones or pawn tiles.
+        # No communities yet — HeelKawnians are still exploring and finding each other.
         return
     
     # Process eligible regions into settlements

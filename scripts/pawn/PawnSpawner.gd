@@ -337,7 +337,7 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		# PHASE 4: Assign heterogeneous profession (NOT all farmers!)
 		_assign_heterogeneous_profession(data, pawn_rng)
 
-		var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
+		var bloodline_sys: Node = get_node_or_null("/root/SocialManager")
 		if bloodline_sys != null and bloodline_sys.has_method("create_bloodline"):
 			var bloodline_name: String = "Bloodline_%s" % str(data.id)
 			var result: Variant = bloodline_sys.callv("create_bloodline", [data.id, bloodline_name])
@@ -356,7 +356,7 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 			SpatialManager.register_entity(int(data.id), "pawn", data.tile_pos)
 		placed += 1
 
-		var kin: Node = get_node_or_null("/root/KinshipSystem")
+		var kin: Node = get_node_or_null("/root/SocialManager")
 		if kin != null and kin.has_method("add_person"):
 			kin.call("add_person", data.id, {"display_name": data.display_name, "age": data.age, "gender": data.gender})
 
@@ -434,7 +434,7 @@ func spawn_generational_pawn(
 	
 	if parent_data != null:
 		data.lineage_id = parent_data.unique_id
-	var bloodline_sys_birth: Node = get_node_or_null("/root/BloodlineSystem")
+	var bloodline_sys_birth: Node = get_node_or_null("/root/SocialManager")
 	if bloodline_sys_birth != null and bloodline_sys_birth.has_method("assign_birth_bloodline"):
 		var spec_hint: String = parent_data.highest_affinity_skill() if parent_data != null else data.highest_affinity_skill()
 		data.bloodline_id = int(bloodline_sys_birth.call("assign_birth_bloodline", data.id, data.display_name, parent_id, -1, spec_hint))
@@ -510,7 +510,7 @@ func spawn_generational_pawn(
 			"culture_name": str(settlement_context.get("culture_name", "")),
 			"birth_settlement": str(data.birth_settlement),
 		})
-	var kin: Node = get_node_or_null("/root/KinshipSystem")
+	var kin: Node = get_node_or_null("/root/SocialManager")
 	if kin != null:
 		if kin.has_method("add_person"):
 			kin.call("add_person", data.id, {"display_name": data.display_name, "age": data.age, "gender": data.gender})
@@ -790,12 +790,12 @@ func spawn_child_pawn(
 	_inherit_profession_from_parents(data, parent_a, parent_b, birth_tick)
 	
 	# BLOODLINE ASSIGNMENT - child inherits from both parents
-	var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
+	var bloodline_sys: Node = get_node_or_null("/root/SocialManager")
 	if bloodline_sys != null and bloodline_sys.has_method("assign_birth_bloodline"):
 		data.bloodline_id = int(bloodline_sys.call("assign_birth_bloodline", data.id, data.display_name, int(parent_a.id), int(parent_b.id), ""))
 
 	# HOUSEHOLD ASSIGNMENT - keep newborns inside a real family unit when possible
-	var kinship_sys: Node = get_node_or_null("/root/KinshipSystem")
+	var kinship_sys: Node = get_node_or_null("/root/SocialManager")
 	if kinship_sys != null and kinship_sys.has_method("add_to_household"):
 		var parent_a_household: int = int(parent_a.data.household_id)
 		var parent_b_household: int = int(parent_b.data.household_id)
@@ -902,3 +902,61 @@ func _assign_random_traits(pawn_data: HeelKawnianData, rng: RandomNumberGenerato
 			assigned[trait_type] = true
 			var trait_item := Trait.new(trait_type)
 			pawn_data.add_trait(trait_item)
+
+
+## Spawn a migrant HeelKawnian at the edge of the map.
+## They walk toward the nearest settlement. Population grows from without.
+func spawn_migrant(world: World) -> HeelKawnian:
+	if world == null:
+		return null
+	# Find a passable tile at the map edge
+	var rng: RandomNumberGenerator = WorldRNG.rng_for(&"migrant_spawn")
+	var edge_tiles: Array[Vector2i] = []
+	# Try edges: top, bottom, left, right
+	for x in range(0, WorldData.WIDTH, 4):
+		if world.pathfinder.is_passable(Vector2i(x, 0)):
+			edge_tiles.append(Vector2i(x, 0))
+		if world.pathfinder.is_passable(Vector2i(x, WorldData.HEIGHT - 1)):
+			edge_tiles.append(Vector2i(x, WorldData.HEIGHT - 1))
+	for y in range(0, WorldData.HEIGHT, 4):
+		if world.pathfinder.is_passable(Vector2i(0, y)):
+			edge_tiles.append(Vector2i(0, y))
+		if world.pathfinder.is_passable(Vector2i(WorldData.WIDTH - 1, y)):
+			edge_tiles.append(Vector2i(WorldData.WIDTH - 1, y))
+	if edge_tiles.is_empty():
+		return null
+	# Pick a random edge tile
+	var spawn_tile: Vector2i = edge_tiles[rng.randi() % edge_tiles.size()]
+	# Create the pawn
+	var pawn_data: HeelKawnianData = HeelKawnianData.new()
+	pawn_data.id = _next_pawn_id
+	_next_pawn_id += 1
+	pawn_data.display_name = _pick_name({}, rng)
+	pawn_data.gender = rng.randi_range(0, 2)  # MALE, FEMALE, OTHER
+	pawn_data.tile_pos = spawn_tile
+	pawn_data.birth_tick = GameManager.tick_count if GameManager != null else 0
+	pawn_data.age_years = float(rng.randi_range(18, 40))  # Adult migrant
+	pawn_data.life_stage = pawn_data.compute_life_stage()
+	pawn_data.age = int(pawn_data.age_years)
+	pawn_data.is_pioneer = false
+	_assign_random_traits(pawn_data, rng)
+	# Create the pawn scene
+	var pawn_scene: PackedScene = load("res://scenes/pawn/HeelKawnian.tscn")
+	var pawn: HeelKawnian = pawn_scene.instantiate()
+	pawn.data = pawn_data
+	pawn.position = world.tile_to_world(spawn_tile)
+	pawns.append(pawn)
+	add_child(pawn)
+	# Record migration event
+	WorldMemory.record_event({
+		"kind": WorldMemory.Kind.MIGRATION,
+		"tick": GameManager.tick_count if GameManager != null else 0,
+		"pawn_id": int(pawn_data.id),
+		"pawn_name": pawn_data.display_name,
+		"migrant": true,
+		"tile": {"x": spawn_tile.x, "y": spawn_tile.y},
+	})
+	if GameManager != null and GameManager.verbose_logs():
+		print("[Migrant] %s arrived at (%d, %d)" % [pawn_data.display_name, spawn_tile.x, spawn_tile.y])
+	return pawn
+

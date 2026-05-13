@@ -172,7 +172,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 				"label": "★ ALL WORLD+CAMERA — one paste (revival + rebirth + wildlife + road + remnant + main_world)",
 			},
 			{"id": "revival", "label": "08 · Camera / revival digest"},
-			{"id": "rebirth", "label": "09 · SettlementRebirth constants"},
+			{"id": "rebirth", "label": "09 · SettlementManager constants"},
 			{"id": "wildlife", "label": "10 · Wildlife snapshot"},
 			{"id": "road", "label": "20 · RoadMemory"},
 			{"id": "remnant", "label": "21 · RemnantMemory"},
@@ -241,7 +241,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			},
 			{"id": "vision_scope", "label": "27 · Vision scope (SimVision stub)"},
 			{"id": "player_intents", "label": "28 · PlayerIntentQueue"},
-			{"id": "factions", "label": "29 · FactionRegistry"},
+			{"id": "factions", "label": "29 · FactionManager"},
 			{"id": "religion_lens", "label": "30 · ReligionLens"},
 		],
 	},
@@ -1015,10 +1015,10 @@ func _report_backbone_status() -> void:
 	var wm_ct: int = WorldMemory.event_count() if WorldMemory != null else -1
 	print("  WorldMemory            %s  event_count=%d" % [LIVE, wm_ct])
 	var houses: int = -1
-	if FactionRegistry != null:
-		FactionRegistry.sync_from_settlements()
-		houses = FactionRegistry.get_synced_house_count()
-	print("  FactionRegistry        %s  houses=%d" % [LIVE, houses])
+	if FactionManager != null:
+		FactionManager.sync_from_settlements()
+		houses = FactionManager.get_synced_house_count()
+	print("  FactionManager        %s  houses=%d" % [LIVE, houses])
 	var living: int = 0
 	var m: Node2D = _main()
 	if m != null:
@@ -1134,16 +1134,16 @@ func _report_revival() -> void:
 
 func _report_rebirth_consts() -> void:
 	print(
-			"SettlementRebirth: CHECK_INTERVAL=%d REBIRTH_PEACE=%d REBIRTH_INTERVAL=%d TILE_SCORES struct=%d scar=%d road=%d trade=%d dist=%d"
+			"SettlementManager: CHECK_INTERVAL=%d REBIRTH_PEACE=%d REBIRTH_INTERVAL=%d TILE_SCORES struct=%d scar=%d road=%d trade=%d dist=%d"
 			% [
-				SettlementRebirth.CHECK_INTERVAL_TICKS,
-				SettlementRebirth.REBIRTH_PEACE_TICKS,
-				SettlementRebirth.REBIRTH_INTERVAL_TICKS,
-				SettlementRebirth.TILE_SCORE_STRUCT_NEIGHBOR,
-				SettlementRebirth.TILE_SCORE_SCAR_WEIGHT,
-				SettlementRebirth.TILE_SCORE_ROAD_WEIGHT,
-				SettlementRebirth.TILE_SCORE_TRADE_WEIGHT,
-				SettlementRebirth.TILE_SCORE_DISTANCE_WEIGHT,
+				SettlementManager.CHECK_INTERVAL_TICKS,
+				SettlementManager.REBIRTH_PEACE_TICKS,
+				SettlementManager.REBIRTH_INTERVAL_TICKS,
+				SettlementManager.TILE_SCORE_STRUCT_NEIGHBOR,
+				SettlementManager.TILE_SCORE_SCAR_WEIGHT,
+				SettlementManager.TILE_SCORE_ROAD_WEIGHT,
+				SettlementManager.TILE_SCORE_TRADE_WEIGHT,
+				SettlementManager.TILE_SCORE_DISTANCE_WEIGHT,
 			]
 	)
 
@@ -1189,7 +1189,7 @@ func _report_authority_job_audit() -> void:
 	var m: Node = _main()
 	if m != null:
 		ps = m.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
-	if ps != null and AuthoritySystem != null:
+	if ps != null and FactionManager != null:
 		for p in ps.pawns:
 			if p == null or not is_instance_valid(p):
 				continue
@@ -1204,7 +1204,7 @@ func _report_authority_job_audit() -> void:
 						pid = int(pdata.get("id"))
 					elif pdata.has_member("id"):
 						pid = int(pdata.id)
-			var lvl: int = AuthoritySystem.get_authority_level(pid, AuthoritySystem.AuthorityContext.CIVIL) if AuthoritySystem != null and AuthoritySystem.has_method("get_authority_level") else 0
+			var lvl: int = FactionManager.get_authority_level(pid, FactionManager.AuthorityContext.CIVIL) if FactionManager != null and FactionManager.has_method("get_authority_level") else 0
 			if lvl >= 3:
 				leaders.append(pid)
 			elif lvl == 2:
@@ -1491,7 +1491,7 @@ func _report_player_intents() -> void:
 
 
 func _report_factions() -> void:
-	print(FactionRegistry.debug_summary_block())
+	print(FactionManager.debug_summary_block())
 
 
 func _report_religion_lens() -> void:
@@ -1661,7 +1661,7 @@ func _report_creator_session_digest() -> void:
 	print("[intent_memory_global] %.6f" % IntentMemory.global_pressure)
 	print(PlayerIntentQueue.debug_summary_block())
 	print("[faction_registry]")
-	print(FactionRegistry.debug_summary_block())
+	print(FactionManager.debug_summary_block())
 	print("[observation_ambient] %s" % str(ObservationAPI.observe_sim_ambient(-1)))
 	if main_node != null:
 		if main_node.has_method("get_camera_settlement_revival_digest"):
@@ -1758,8 +1758,8 @@ func _report_playtest_bundle() -> void:
 	print("[PLAYTEST_BUNDLE] proto_sites=%d" % SettlementMemory.get_proto_sites().size())
 	print("[PLAYTEST_BUNDLE] --- PlayerIntentQueue ---")
 	print(PlayerIntentQueue.debug_summary_block())
-	print("[PLAYTEST_BUNDLE] --- FactionRegistry ---")
-	print(FactionRegistry.debug_summary_block())
+	print("[PLAYTEST_BUNDLE] --- FactionManager ---")
+	print(FactionManager.debug_summary_block())
 	print("[PLAYTEST_BUNDLE] --- ReligionLens (6 settlements max) ---")
 	print(ReligionLens.digest_settlements(6))
 	print(
@@ -1814,9 +1814,9 @@ func _report_grudges() -> void:
 	print("Game Tick: %d" % GameManager.tick_count)
 	print("")
 	
-	var grudge_mgr: Node = get_node_or_null("/root/GrudgeManager")
+	var grudge_mgr: Node = get_node_or_null("/root/SocialManager")
 	if grudge_mgr == null:
-		print("GrudgeManager not found - system not loaded")
+		print("SocialManager not found - system not loaded")
 		return
 	
 	# Get grudge statistics
@@ -1903,9 +1903,9 @@ func _report_gossip_reputation() -> void:
 	print("Game Tick: %d" % GameManager.tick_count)
 	print("")
 	
-	var gossip_mgr: Node = get_node_or_null("/root/GossipManager")
+	var gossip_mgr: Node = get_node_or_null("/root/SocialManager")
 	if gossip_mgr == null:
-		print("GossipManager not found - system not loaded")
+		print("SocialManager not found - system not loaded")
 		return
 	
 	# Get gossip statistics
@@ -1999,9 +1999,9 @@ func _report_avoidance_ai() -> void:
 	print("Game Tick: %d" % GameManager.tick_count)
 	print("")
 	
-	var grudge_mgr: Node = get_node_or_null("/root/GrudgeManager")
+	var grudge_mgr: Node = get_node_or_null("/root/SocialManager")
 	if grudge_mgr == null:
-		print("GrudgeManager not found - system not loaded")
+		print("SocialManager not found - system not loaded")
 		return
 	
 	# Get grudge statistics
@@ -2678,7 +2678,7 @@ func _report_heelkawnians() -> void:
 	var drive_counts: Dictionary = {}
 	var phase_counts: Dictionary = {}
 	var total_score: int = 0
-	var kin: Node = get_node_or_null("/root/KinshipSystem")
+	var kin: Node = get_node_or_null("/root/SocialManager")
 	for profile in profiles:
 		var drive: String = str(profile.get("development_drive", "unknown"))
 		var phase: String = str(profile.get("development_phase", "unknown"))
@@ -2890,9 +2890,9 @@ func _report_legacy_dynasty() -> void:
 	print("Game Tick: %d" % GameManager.tick_count)
 	print("")
 
-	var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
+	var legacy_sys: Node = get_node_or_null("/root/SocialManager")
 	if legacy_sys == null:
-		print("LegacySystem not found - system not loaded")
+		print("SocialManager not found - system not loaded")
 		return
 
 		# Get legacy milestone status
@@ -3210,9 +3210,9 @@ func _report_read_knowledge_stone() -> void:
 func _show_dynasty_tree_ui() -> void:
 	print("Opening Dynasty Tree UI...")
 	
-	var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
+	var legacy_sys: Node = get_node_or_null("/root/SocialManager")
 	if legacy_sys == null:
-		print("LegacySystem not found")
+		print("SocialManager not found")
 		return
 	
 	# Get first dynasty (or current player's dynasty)
@@ -3247,9 +3247,9 @@ func _report_endgame_status() -> void:
 	print("Game Tick: %d" % GameManager.tick_count)
 	print("")
 
-	var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
+	var legacy_sys: Node = get_node_or_null("/root/SocialManager")
 	if legacy_sys == null:
-		print("LegacySystem not found")
+		print("SocialManager not found")
 		return
 
 	# Get legacy milestone status
@@ -4067,3 +4067,4 @@ func _report_stubs_all() -> void:
 	_report_religion_lens()
 	print("")
 	print("=== HEELKAWN_STUBS_ALL:tick=%d END ===" % tick)
+

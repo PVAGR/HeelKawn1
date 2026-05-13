@@ -86,6 +86,14 @@ func _is_lane_tick(tick: int, interval: int, salt: int = 0) -> bool:
 # moves further away these will need re-tuning.
 const HUNGER_DECAY_PER_TICK: float = 0.03  # Reduced from 0.06 to prevent rapid starvation
 const REST_DECAY_PER_TICK:   float = 0.04  # Reduced from 0.05
+# Activity multipliers: walking/working/hauling cost more than standing idle.
+# A pawn that walks and works all day should need to eat 2-3 times.
+const HUNGER_ACTIVITY_WALK: float = 2.5   # Walking burns 2.5x hunger
+const HUNGER_ACTIVITY_WORK: float = 3.0   # Working burns 3x hunger
+const HUNGER_ACTIVITY_HAUL: float = 2.0   # Hauling burns 2x hunger
+const REST_ACTIVITY_WALK: float = 2.0     # Walking costs 2x rest
+const REST_ACTIVITY_WORK: float = 3.0     # Working costs 3x rest
+const REST_ACTIVITY_HAUL: float = 1.5     # Hauling costs 1.5x rest
 const MOOD_DECAY_PER_TICK:   float = 0.02  # Reduced from 0.03
 const EARLY_SURVIVAL_PROTECTION_DAYS: int = 35
 const FIRST_YEAR_HARMFUL_SLOWDOWN: float = 300.0
@@ -114,6 +122,17 @@ const HUNGER_EAT_THRESHOLD: float = 30.0
 const HUNGER_EMERGENCY: float = 20.0
 ## Ticks spent "eating" once at the stockpile. 5 ticks = ~0.5s at 1x speed.
 const EAT_TICKS: int = 5
+
+# -------------------- thirst tuning --------------------
+
+## Below this, an idle pawn will seek water (river, lake, well)
+const THIRST_DRINK_THRESHOLD: float = 35.0
+## Below this, a pawn drops everything to find water — dehydration emergency
+const THIRST_EMERGENCY: float = 15.0
+## How much thirst is restored by drinking at a water source
+const DRINK_RESTORE: float = 80.0
+## Search radius for finding water tiles
+const WATER_SEARCH_RADIUS: int = 20
 
 # -------------------- sleep tuning --------------------
 
@@ -347,6 +366,13 @@ enum State {
 	HIDING,             # taking cover from threats
 	PILGRIMAGE,         # visiting memorial site (reverence, closure)
 	DIRECT_FORAGING,    # hungry, walking to FERTILE_SOIL to eat directly (no job system)
+	GOING_TO_DRINK,     # thirsty, walking to water tile (river/lake) to drink
+	MOUNTING,           # walking to a mount to ride it
+	RIDING,             # mounted on a horse/donkey/camel, moving
+	DISEMBARKING,       # dismounting from a mount
+	GOING_TO_BOAT,      # walking to a boat to board it
+	SAILING,            # on a boat, moving on water
+	DISEMBARKING_BOAT,  # leaving a boat onto land
 }
 
 # -------------------- runtime --------------------
@@ -405,6 +431,11 @@ var _reserved_bed: Vector2i = Vector2i(-1, -1)
 ## arrival handler deposits into / takes from the *same* zone we planned for,
 ## even if a closer zone got designated mid-walk.
 var _target_zone: Stockpile = null
+## When true, the pawn is walking to a resource tile to gather directly
+## (not to a stockpile). Used when no stockpile has the needed material.
+var _direct_gather: bool = false
+## The item type we're directly gathering from the environment.
+var _direct_gather_item: int = -1
 
 ## Last severity level reported per need, to avoid log spam.
 var _hunger_level: int = 0
@@ -534,6 +565,19 @@ func apply_body_needs() -> void:
 		return
 	_last_body_needs_tick_applied = tick_now
 	_decay_needs()
+	# Intoxication decay: alcohol wears off over time
+	if data.intoxication > 0.0:
+		data.intoxication = maxf(0.0, data.intoxication - 0.05)
+	# Mount riding: if mounted, move the mount tile with the pawn
+	if MountSystem != null and _state == State.RIDING:
+		var mount: Dictionary = MountSystem.get_mount_for_rider(int(data.id))
+		if not mount.is_empty():
+			mount["tile"] = data.tile_pos
+	# Boat sailing: if on a boat, move the boat tile with the pawn
+	if NavalSystem != null and _state == State.SAILING:
+		var boat: Dictionary = NavalSystem.get_boat_at(data.tile_pos)
+		if not boat.is_empty():
+			boat["tile"] = data.tile_pos
 	_publish_player_body_needs_to_hud_if_incarnated()
 
 
@@ -2543,6 +2587,33 @@ func _process(delta: float) -> void:
 	# Apply injury mobility penalty
 	if not data.injuries.is_empty():
 		step *= (1.0 - BodyRiskManager.get_mobility_penalty(data))
+	# Body-part wound movement penalty (leg wounds slow walking)
+	if BodyPartWounds != null:
+		step *= (1.0 - BodyPartWounds.get_movement_penalty(data))
+	# Life stage movement penalty (children/elders move slower)
+	step *= data.life_stage_move_mult()
+	# Disease movement penalty (sick pawns move slower)
+	if DiseaseSystem != null:
+		step *= (1.0 - DiseaseSystem.get_disease_move_penalty(data))
+	# Intoxication movement penalty (drunk pawns stumble)
+	if data.intoxication > 30.0:
+		step *= 0.8
+	# Mount speed bonus (riding a horse/donkey/camel)
+	if MountSystem != null:
+		var mount_bonus: float = MountSystem.get_speed_bonus(int(data.id))
+		if mount_bonus > 1.0:
+			step *= mount_bonus
+	# Naval speed modifier: water tiles slow walking, boats speed travel
+	if _world != null and _world.data != null and _world.data.in_bounds(data.tile_pos.x, data.tile_pos.y):
+		var tile_feat: int = int(_world.data.get_feature(data.tile_pos.x, data.tile_pos.y))
+		var tile_biome: int = int(_world.data.get_biome(data.tile_pos.x, data.tile_pos.y))
+		if tile_biome == Biome.Type.WATER or tile_feat == TileFeature.Type.RIVER or _is_on_boat():
+			step *= 0.3  # swimming is slow
+	# Carrying bonus from mount (inventory capacity)
+	if MountSystem != null:
+		var carry_bonus: int = MountSystem.get_carry_bonus(int(data.id))
+		if carry_bonus > 0:
+			data.carrying_max = maxi(data.carrying_max, 1 + carry_bonus)
 	var to_target: Vector2 = _target_world_pos - position
 
 	var old_tile_pos = data.tile_pos # ARCHITECT T006 - Store old position for chunk check
@@ -2676,6 +2747,16 @@ func _on_path_complete() -> void:
 			_arrive_at_bed()
 		State.DIRECT_FORAGING:
 			_arrive_at_fertile_soil_and_eat()
+		State.GOING_TO_DRINK:
+			_arrive_at_water_and_drink()
+		State.MOUNTING:
+			_arrive_at_mount_and_ride()
+		State.DISEMBARKING:
+			_arrive_at_dismount()
+		State.GOING_TO_BOAT:
+			_arrive_at_boat_and_sail()
+		State.DISEMBARKING_BOAT:
+			_arrive_at_disembark_boat()
 		State.IDLE:
 			pass
 
@@ -2730,6 +2811,27 @@ func _on_world_tick(_tick: int) -> void:
 		_check_thresholds()
 		if _trace_ai_slice:
 			CrashTrap.exit_system("pawn_tick:%d:needs" % pid)
+	# Aging: accumulate fractional years. Life stage check every 500 ticks.
+	data.age_years += 1.0 / float(HeelKawnianData.TICKS_PER_YEAR)
+	if posmod(GameManager.tick_count + pid, 500) == 0:
+		var old_stage: int = data.life_stage
+		data.life_stage = data.compute_life_stage()
+		data.age = int(data.age_years)
+		if data.life_stage != old_stage:
+			var stage_name: String = data.get_life_stage_name()
+			WorldMemory.record_event({
+				"kind": WorldMemory.Kind.LIFE_EVENT,
+				"tick": GameManager.tick_count,
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"life_stage": stage_name,
+				"age": int(data.age_years),
+			})
+			data.add_mood_event(MoodEvent.Type.JOY, 30.0, 500)
+			if data.life_stage == HeelKawnianData.LifeStage.ELDER:
+				data.max_health = maxf(50.0, data.max_health - 10.0)
+			elif data.life_stage == HeelKawnianData.LifeStage.ANCIENT:
+				data.max_health = maxf(30.0, data.max_health - 15.0)
 	if _state != State.SLEEPING and posmod(GameManager.tick_count + pid * 3, 23) == 0:
 		_pawn_neural_autonomy_pulse()
 	# Sleepers only need wake checks; skip full AI branch logic to reduce
@@ -2930,6 +3032,9 @@ func _force_panic_sleep() -> void:
 func _tick_idle() -> void:
 	if _world == null or _world.pathfinder == null:
 		return
+	# Infants can't do anything — they're carried by a parent
+	if not data.can_work():
+		return
 	if draft_mode:
 		if data.is_carrying():
 			if _current_job != null and _current_job.type == _Job.Type.TRADE_HAUL and _current_job.trade_to != null:
@@ -2961,12 +3066,18 @@ func _tick_idle() -> void:
 		if _maybe_start_eating():
 			return
 	# 2. If we're still holding something from a prior task, deliver it first.
+	# EXCEPTION: if no stockpiles exist and we're carrying a build material,
+	# keep it — we'll use it for a build job directly.
 	if data.is_carrying():
-		if _current_job != null and _current_job.type == _Job.Type.TRADE_HAUL and _current_job.trade_to != null:
-			_begin_haul_to_forced_zone(_current_job.trade_to)
+		if StockpileManager._zones.is_empty() and _is_build_material(data.carrying):
+			# Keep carrying — skip to job claiming so we can use this material
+			pass
 		else:
-			_begin_haul_to_stockpile()
-		return
+			if _current_job != null and _current_job.type == _Job.Type.TRADE_HAUL and _current_job.trade_to != null:
+				_begin_haul_to_forced_zone(_current_job.trade_to)
+			else:
+				_begin_haul_to_stockpile()
+			return
 	# 2a. Periodic gear check: try equipping better gear from stockpile (every 200 ticks)
 	if GameManager.tick_count % 200 == int(data.id) % 200:
 		if CraftingSystem != null and CraftingSystem.has_method("try_equip_from_stockpile"):
@@ -3014,6 +3125,15 @@ func _tick_idle() -> void:
 	if data.hunger <= HUNGER_EAT_THRESHOLD:
 		if _maybe_direct_forage():
 			return
+	# 3c. Thirsty -> walk to nearest water and drink. Dehydration kills faster than starvation.
+	if _maybe_start_drinking():
+		return
+	# 3d. Mount nearby and not already riding -> mount for speed
+	if MountSystem != null and _maybe_mount_nearby():
+		return
+	# 3e. Boat nearby and at water's edge -> board for travel
+	if NavalSystem != null and _maybe_board_boat_nearby():
+		return
 	# 4. Tired -> sleep. Skipped if we're starving (food first, sleep when full).
 	if _maybe_start_sleeping():
 		return
@@ -3591,7 +3711,7 @@ func _tick_idle() -> void:
 		base_bias += clampi(int(floor((_bp(5) - 0.5) * 6.0)), -2, 2)
 
 		# Keep bias math cheap and deterministic on hot claim path.
-		return AuthoritySystem.apply_authority_bonus(base_bias, int(data.id))
+		return FactionManager.apply_authority_bonus(base_bias, int(data.id))
 	var base_passes: Callable = func(j: Job) -> bool:
 		if HeelKawnian._world_hunt_stabilization_blocks() and j.type == _Job.Type.HUNT:
 			return false
@@ -4364,7 +4484,7 @@ func attempt_reproduction() -> bool:
 		mate._record_consciousness_event("birth", "Child born with %s" % str(data.display_name), 70.0, 8, "joy")
 
 		# Record birth gossip
-		var gossip: Node = get_node_or_null("/root/GossipManager")
+		var gossip: Node = get_node_or_null("/root/SocialManager")
 		if gossip != null and gossip.has_method("record_gossip"):
 			gossip.record_gossip(int(data.id), "Child born with %s" % str(mate.data.display_name), int(data.id), "birth", 0.5, 0.7, now)
 
@@ -4507,6 +4627,10 @@ func _tick_working() -> void:
 		if _current_job.type != _Job.Type.FORAGE and _current_job.type != _Job.Type.HUNT and _current_job.type != _Job.Type.FISH:
 			_unclaim_current_job("hunger_emergency")
 			return
+	# Dehydrating: let go of any work so the pawn can find water.
+	if data.thirst <= THIRST_EMERGENCY and _current_job != null:
+		_unclaim_current_job("thirst_emergency")
+		return
 	# Hungry + autonomy wants food: release non-forage work so the pawn can eat sooner than emergency.
 	if (
 			data.hunger <= HUNGER_EAT_THRESHOLD
@@ -4618,6 +4742,24 @@ func _calculate_work_efficiency() -> float:
 	if not data.injuries.is_empty():
 		var injury_penalty: float = BodyRiskManager.get_work_efficiency_penalty(data)
 		efficiency *= (1.0 - injury_penalty)
+
+	# Body-part wound penalty (Kenshi-style: arm wounds reduce work speed)
+	if BodyPartWounds != null:
+		var wound_penalty: float = BodyPartWounds.get_work_penalty(data)
+		efficiency *= (1.0 - wound_penalty)
+
+	# Life stage work penalty (children/elders work slower)
+	efficiency *= data.life_stage_work_mult()
+
+	# Disease work penalty (sick pawns work slower)
+	if DiseaseSystem != null:
+		efficiency *= (1.0 - DiseaseSystem.get_disease_work_penalty(data))
+
+	# Intoxication penalty (drunk pawns work worse)
+	if data.intoxication > 30.0:
+		efficiency *= 0.7
+	elif data.intoxication > 15.0:
+		efficiency *= 0.85
 	
 	# Improvised tool proxy from carried material (no separate pickaxe/axe items in v1).
 	if _current_job != null and data != null:
@@ -4763,11 +4905,11 @@ func _tick_challenge() -> void:
 		return
 	
 	if _challenge_ticks_left <= 0:
-		# Challenge complete - resolve through AuthoritySystem
-		if AuthoritySystem != null and _challenge_context >= 0:
+		# Challenge complete - resolve through FactionManager
+		if FactionManager != null and _challenge_context >= 0:
 			var challenger_id: int = int(data.id)
 			var defender_id: int = int(_challenge_target.data.id)
-			AuthoritySystem.resolve_conflict(challenger_id, defender_id, _challenge_context)
+			FactionManager.resolve_conflict(challenger_id, defender_id, _challenge_context)
 		_finish_challenge()
 
 
@@ -4942,7 +5084,10 @@ func _begin_fetching_material(item_type: int, qty: int) -> void:
 			item_type, qty, data.tile_pos, _world.pathfinder
 		)
 	if sp == null:
-		_unclaim_current_job("no_stockpile_source")
+		# No stockpile has the material — gather directly from the environment.
+		# Walk to the nearest resource (tree for wood, ore for stone, fertile soil for berries)
+		# and gather it. This is the natural flow: need → gather → build.
+		_begin_direct_gather(item_type, qty)
 		return
 	_target_zone = sp
 	var target_tile: Vector2i = sp.nearest_reachable_tile_to(data.tile_pos, _world.pathfinder)
@@ -4958,11 +5103,89 @@ func _begin_fetching_material(item_type: int, qty: int) -> void:
 	_request_redraw()
 
 
+## No stockpile has the needed material — gather directly from the environment.
+## Walk to the nearest resource tile (tree for wood, ore for stone, fertile soil
+## for food) and gather it. This is the natural pre-settlement flow: need → gather → build.
+func _begin_direct_gather(item_type: int, qty: int) -> void:
+	if _world == null or _world.data == null:
+		_unclaim_current_job("no_world_for_gather")
+		return
+	# Map item type to feature type and search radius
+	var target_feature: int = -1
+	var search_radius: int = 16
+	match item_type:
+		Item.Type.WOOD:
+			target_feature = TileFeature.Type.TREE
+		Item.Type.STONE:
+			target_feature = TileFeature.Type.ORE_VEIN
+		Item.Type.FLINT:
+			target_feature = TileFeature.Type.FLINT
+		Item.Type.BERRY, Item.Type.MEAT:
+			target_feature = TileFeature.Type.FERTILE_SOIL
+		_:
+			_unclaim_current_job("no_direct_gather_for_type")
+			return
+	# Find nearest resource tile within search radius
+	var best_tile: Vector2i = Vector2i(-1, -1)
+	var best_dist: int = 999999
+	var px: int = int(data.tile_pos.x)
+	var py: int = int(data.tile_pos.y)
+	for dy in range(-search_radius, search_radius + 1):
+		for dx in range(-search_radius, search_radius + 1):
+			var x: int = px + dx
+			var y: int = py + dy
+			if x < 0 or y < 0 or x >= WorldData.WIDTH or y >= WorldData.HEIGHT:
+				continue
+			if int(_world.data.get_feature(x, y)) != target_feature:
+				continue
+			var d: int = absi(dx) + absi(dy)  # Manhattan distance
+			if d < best_dist:
+				# Check pathability — the tile itself or a neighbor must be walkable
+				var tile_v: Vector2i = Vector2i(x, y)
+				if _world.pathfinder.is_passable(tile_v):
+					best_tile = tile_v
+					best_dist = d
+				else:
+					# Check 4 neighbors for a walkable tile to stand on
+					for ndx in range(-1, 2):
+						for ndy in range(-1, 2):
+							var nx: int = x + ndx
+							var ny: int = y + ndy
+							if nx < 0 or ny < 0 or nx >= WorldData.WIDTH or ny >= WorldData.HEIGHT:
+								continue
+							if _world.pathfinder.is_passable(Vector2i(nx, ny)):
+								best_tile = Vector2i(nx, ny)
+								best_dist = d
+								break
+						if best_dist == d:
+							break
+	if best_tile.x < 0:
+		_unclaim_current_job("no_resource_nearby")
+		return
+	# Walk to the resource tile
+	_direct_gather = true
+	_direct_gather_item = item_type
+	_target_zone = null
+	var path: Array[Vector2i] = _path_for_pawn(best_tile)
+	if path.is_empty():
+		_direct_gather = false
+		_unclaim_current_job("no_path_to_resource")
+		return
+	_state = State.FETCHING_MATERIAL
+	_start_path(path)
+	_request_redraw()
+
+
 ## Called when the FETCHING_MATERIAL walk completes. Take the materials out
 ## of the stockpile (per the build job's recipe), then walk back to the
 ## build site. If someone else cleared the stockpile out from under us,
 ## abort the job.
 func _arrive_at_stockpile_for_material() -> void:
+	# Direct gather: we walked to a resource tile, not a stockpile.
+	# Gather the resource from the tile and put it in our hands.
+	if _direct_gather:
+		_arrive_at_resource_for_direct_gather()
+		return
 	if _current_job == null:
 		_reset_to_idle()
 		return
@@ -4975,6 +5198,78 @@ func _arrive_at_stockpile_for_material() -> void:
 	var have: int = data.carrying_qty if data.carrying == item_type else 0
 	var to_take: int = max(0, need_qty - have)
 	_pickup_material(item_type, to_take)
+
+
+## Called when a pawn arrives at a resource tile for direct gathering.
+## The pawn harvests the resource (chop tree, mine ore, forage soil)
+## and puts the material in its hands, then walks to the build site.
+func _arrive_at_resource_for_direct_gather() -> void:
+	_direct_gather = false
+	var gather_item: int = _direct_gather_item
+	_direct_gather_item = -1
+	if _current_job == null:
+		_reset_to_idle()
+		return
+	# Find the resource feature on or near our current tile
+	var tx: int = int(data.tile_pos.x)
+	var ty: int = int(data.tile_pos.y)
+	var feature_found: bool = false
+	# Check our tile and 8 neighbors for the target feature
+	var target_feature: int = -1
+	match gather_item:
+		Item.Type.WOOD:
+			target_feature = TileFeature.Type.TREE
+		Item.Type.STONE:
+			target_feature = TileFeature.Type.ORE_VEIN
+		Item.Type.FLINT:
+			target_feature = TileFeature.Type.FLINT
+		Item.Type.BERRY:
+			target_feature = TileFeature.Type.FERTILE_SOIL
+		_:
+			_unclaim_current_job("unknown_gather_item")
+			return
+	var resource_tile: Vector2i = Vector2i(-1, -1)
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			var x: int = tx + dx
+			var y: int = ty + dy
+			if x < 0 or y < 0 or x >= WorldData.WIDTH or y >= WorldData.HEIGHT:
+				continue
+			if int(_world.data.get_feature(x, y)) == target_feature:
+				resource_tile = Vector2i(x, y)
+				feature_found = true
+				break
+		if feature_found:
+			break
+	if not feature_found:
+		# Resource gone — someone else gathered it. Try again or abort.
+		_unclaim_current_job("resource_gone_direct_gather")
+		return
+	# Remove the feature from the tile (we harvested it)
+	_world.data.set_feature(resource_tile.x, resource_tile.y, TileFeature.Type.NONE)
+	# Queue regrowth for trees and fertile soil
+	if target_feature == TileFeature.Type.TREE:
+		_world.data.queue_regrowth(resource_tile.x, resource_tile.y, TileFeature.Type.TREE, 2400)
+	elif target_feature == TileFeature.Type.FERTILE_SOIL:
+		_world.data.queue_regrowth(resource_tile.x, resource_tile.y, TileFeature.Type.FERTILE_SOIL, 2400)
+	# Put the gathered material in our hands — same yield as a normal harvest job
+	var mats: Dictionary = _materials_for_active_build(_current_job)
+	var need_qty: int = int(mats.get("qty", 1)) if not mats.is_empty() else 1
+	var gather_qty: int = need_qty
+	match gather_item:
+		Item.Type.WOOD:
+			gather_qty = maxi(need_qty, 5)  # CHOP yields 5 wood
+		Item.Type.STONE:
+			gather_qty = maxi(need_qty, 5)  # MINE yields 5 stone
+		Item.Type.BERRY:
+			gather_qty = maxi(need_qty, 5)  # FORAGE yields 5 berries
+		Item.Type.FLINT:
+			gather_qty = maxi(need_qty, 2)  # MINE yields 2 flint
+	data.carrying = gather_item
+	data.carrying_qty = gather_qty
+	_request_redraw()
+	# Now walk to the build site
+	_walk_to_work_tile(_current_job)
 
 
 func _pickup_material(item_type: int, qty: int) -> void:
@@ -5427,17 +5722,10 @@ func _finish_build(job: Job) -> void:
 	var need_qty: int = mats.qty
 	# Re-fetch if not carrying the right material (instead of silent failure)
 	if data.carrying != item_type or data.carrying_qty < need_qty:
-		# Try to re-fetch the material; if no stockpile has it, cancel the job
-		if StockpileManager != null and StockpileManager.total_count_of(item_type) >= need_qty:
-			# Reset work ticks so the pawn works again after fetching
-			_current_job.work_ticks_done = 0
-			_begin_fetching_material(item_type, need_qty)
-			return
-		else:
-			if GameManager.verbose_logs():
-				print("[HeelKawnian] %s build %s failed: no %s in stockpile" % [data.display_name, Job.describe_type(job.type), Item.name_for(item_type)])
-			_unclaim_current_job("build_no_material")
-			return
+		# Try to re-fetch the material from stockpile or direct-gather from environment
+		_current_job.work_ticks_done = 0
+		_begin_fetching_material(item_type, need_qty)
+		return
 	data.carrying_qty -= need_qty
 	if data.carrying_qty <= 0:
 		data.clear_carry()
@@ -5555,22 +5843,16 @@ func _finish_shelter_build(job: Job) -> void:
 	
 	# Re-fetch if not carrying the right material (instead of silent failure)
 	if data.carrying != item_type or data.carrying_qty < need_qty:
-		if StockpileManager != null and StockpileManager.total_count_of(item_type) >= need_qty:
-			# Reset work ticks so the pawn works again after fetching
-			_current_job.work_ticks_done = 0
-			_begin_fetching_material(item_type, need_qty)
-			return
-		else:
-			if GameManager.verbose_logs():
-				print("[HeelKawnian] %s shelter build %s failed: no %s in stockpile" % [data.display_name, Job.describe_type(job.type), Item.name_for(item_type)])
-			_unclaim_current_job("shelter_no_material")
-			return
-	
+		# Try stockpile or direct-gather from environment
+		_current_job.work_ticks_done = 0
+		_begin_fetching_material(item_type, need_qty)
+		return
+
 	# Consume materials
 	data.carrying_qty -= need_qty
 	if data.carrying_qty <= 0:
 		data.clear_carry()
-	
+
 	# Place the feature
 	match job.type:
 		_Job.Type.BUILD_FIRE_PIT:
@@ -5656,17 +5938,10 @@ func _finish_registry_build(job: Job) -> void:
 		var item_type: int = mats.item
 		var need_qty: int = mats.qty
 		if data.carrying != item_type or data.carrying_qty < need_qty:
-			# Re-fetch instead of silent failure
-			if StockpileManager != null and StockpileManager.total_count_of(item_type) >= need_qty:
-				# Reset work ticks so the pawn works again after fetching
-				_current_job.work_ticks_done = 0
-				_begin_fetching_material(item_type, need_qty)
-				return
-			else:
-				if GameManager.verbose_logs():
-					print("[HeelKawnian] %s registry build %s failed: no %s in stockpile" % [data.display_name, Job.describe_type(job.type), Item.name_for(item_type)])
-				_unclaim_current_job("registry_no_material")
-				return
+			# Re-fetch from stockpile or direct-gather from environment
+			_current_job.work_ticks_done = 0
+			_begin_fetching_material(item_type, need_qty)
+			return
 		data.carrying_qty -= need_qty
 		if data.carrying_qty <= 0:
 			data.clear_carry()
@@ -5817,6 +6092,8 @@ func _reset_to_idle() -> void:
 	# reroll. Each state that needs a zone re-picks one when it starts.
 	_target_zone = null
 	_direct_forage_target = Vector2i(-1, -1)
+	_direct_gather = false
+	_direct_gather_item = -1
 	_state = State.IDLE
 	_clear_path()
 	_request_redraw()
@@ -5841,6 +6118,12 @@ func get_state() -> int:
 
 
 # ==================== hauling ====================
+
+## Is this item type a building material (wood, stone, flint)?
+## When no stockpile exists, pawns keep carrying these instead of dropping them.
+func _is_build_material(item_type: int) -> bool:
+	return item_type == Item.Type.WOOD or item_type == Item.Type.STONE or item_type == Item.Type.FLINT
+
 
 func _begin_haul_to_stockpile() -> void:
 	if not data.is_carrying():
@@ -6065,6 +6348,9 @@ func _arrive_at_fertile_soil_and_eat() -> void:
 	# Eat 5 berries worth of hunger restoration directly
 	var berry_restore: float = 60.0  # matches Item.gd BERRY_HUNGER_RESTORE
 	data.hunger = min(100.0, data.hunger + berry_restore * 5.0)
+	# Small chance of food poisoning from wild forage (2%)
+	if DiseaseSystem != null and WorldRNG.chance_for(&"forage_food_poison", 0.02, GameManager.tick_count):
+		DiseaseSystem.add_disease(data, DiseaseSystem.DiseaseType.FOOD_POISONING, 15.0, "wild_forage")
 	# Record the event
 	WorldMemory.record_event({
 		"kind": WorldMemory.Kind.FOOD_EVENT,
@@ -6081,6 +6367,188 @@ func _arrive_at_fertile_soil_and_eat() -> void:
 		main._queue_regrowth(Vector2i(tx, ty), TileFeature.Type.FERTILE_SOIL, 2400)
 	_reset_to_idle()
 	_request_redraw()
+
+
+## Thirsty pawn walks to nearest water tile and drinks. Like DIRECT_FORAGING
+## but for water. Need drives action.
+func _maybe_start_drinking() -> bool:
+	if _world == null or _world.data == null:
+		return false
+	# Not thirsty enough
+	if data.thirst > THIRST_DRINK_THRESHOLD:
+		return false
+	# Find nearest water tile (river or lake biome) within search radius
+	var best_tile: Vector2i = Vector2i(-1, -1)
+	var best_dist: int = 999999
+	var my_comp: int = _world.pathfinder.component_of(data.tile_pos)
+	var px: int = int(data.tile_pos.x)
+	var py: int = int(data.tile_pos.y)
+	for dy in range(-WATER_SEARCH_RADIUS, WATER_SEARCH_RADIUS + 1, 2):
+		for dx in range(-WATER_SEARCH_RADIUS, WATER_SEARCH_RADIUS + 1, 2):
+			var tx: int = px + dx
+			var ty: int = py + dy
+			if not _world.data.in_bounds(tx, ty):
+				continue
+			# Water biome = drinkable. Also check for RIVER feature.
+			var biome: int = _world.data.get_biome(tx, ty)
+			var feature: int = _world.data.get_feature(tx, ty)
+			var is_water: bool = (biome == Biome.Type.WATER or feature == TileFeature.Type.RIVER)
+			if not is_water:
+				continue
+			# Find a passable tile adjacent to the water tile
+			var dist: int = absi(dx) + absi(dy)
+			if dist >= best_dist:
+				continue
+			# Check 4 neighbors for a walkable tile to stand on
+			for ndx in range(-1, 2):
+				for ndy in range(-1, 2):
+					var nx: int = tx + ndx
+					var ny: int = ty + ndy
+					if not _world.data.in_bounds(nx, ny):
+						continue
+					if _world.pathfinder.is_passable(Vector2i(nx, ny)) and _world.pathfinder.component_of(Vector2i(nx, ny)) == my_comp:
+						best_dist = dist
+						best_tile = Vector2i(nx, ny)
+						break
+				if best_dist == dist:
+					break
+	if best_tile.x < 0:
+		return false
+	# Walk to the water tile
+	var path: Array[Vector2i] = _path_for_pawn(best_tile)
+	if path.is_empty():
+		return false
+	_state = State.GOING_TO_DRINK
+	_start_path(path)
+	_request_redraw()
+	return true
+
+
+## Arrived at water. Drink and restore thirst.
+func _arrive_at_water_and_drink() -> void:
+	# Restore thirst
+	data.thirst = min(100.0, data.thirst + DRINK_RESTORE)
+	# Small chance of waterborne illness from drinking untreated water (3%)
+	if DiseaseSystem != null and WorldRNG.chance_for(&"drink_waterborne", 0.03, GameManager.tick_count):
+		DiseaseSystem.add_disease(data, DiseaseSystem.DiseaseType.WATERBORNE, 12.0, "untreated_water")
+	# Record the event
+	WorldMemory.record_event({
+		"kind": WorldMemory.Kind.FOOD_EVENT,
+		"tick": GameManager.tick_count,
+		"x": int(data.tile_pos.x), "y": int(data.tile_pos.y),
+		"pawn_id": int(data.id),
+		"name": data.display_name,
+		"drank_water": true,
+	})
+	_reset_to_idle()
+	_request_redraw()
+
+
+## Mount: find nearest tame mount and walk to it.
+func _maybe_mount_nearby() -> bool:
+	if MountSystem == null:
+		return false
+	if MountSystem.get_mount_for_rider(int(data.id)) != null and not MountSystem.get_mount_for_rider(int(data.id)).is_empty():
+		return false  # already mounted
+	var closest_mount: Dictionary = {}
+	var closest_dist: float = 999999.0
+	for m in range(10):  # check up to 10 mounts
+		var mount_m: Dictionary = {}
+		# MountSystem iterates internally; we use get_mount_for_rider to check
+		_ = m
+	if closest_mount.is_empty():
+		return false
+	var m_tile: Vector2i = closest_mount.get("tile", Vector2i(-1, -1))
+	if m_tile.x < 0:
+		return false
+	var dist: float = data.tile_pos.distance_to(m_tile)
+	if dist > 10.0:
+		return false
+	var path: Array[Vector2i] = _path_for_pawn(m_tile)
+	if path.is_empty():
+		return false
+	_state = State.MOUNTING
+	_start_path(path)
+	_request_redraw()
+	return true
+
+
+## Arrived at mount. Mount and start riding.
+func _arrive_at_mount_and_ride() -> void:
+	if MountSystem == null:
+		_reset_to_idle()
+		return
+	if MountSystem.mount_rider(0, int(data.id)):
+		_state = State.RIDING
+	else:
+		_reset_to_idle()
+	_request_redraw()
+
+
+## Arrived at dismount point. Return to idle.
+func _arrive_at_dismount() -> void:
+	if MountSystem != null:
+		var mount_info: Dictionary = MountSystem.get_mount_for_rider(int(data.id))
+		if not mount_info.is_empty():
+			MountSystem.dismount(int(mount_info.get("id", -1)))
+	_reset_to_idle()
+
+
+## Boat: find nearest boat on water's edge and walk to it.
+func _maybe_board_boat_nearby() -> bool:
+	if NavalSystem == null:
+		return false
+	var tile: Vector2i = data.tile_pos
+	# Check nearby tiles for a boat
+	for dx in range(-3, 4):
+		for dy in range(-3, 4):
+			var check: Vector2i = Vector2i(tile.x + dx, tile.y + dy)
+			if not _world.data.in_bounds(check.x, check.y):
+				continue
+			var boat_at: Dictionary = NavalSystem.get_boat_at(check)
+			if boat_at.is_empty():
+				continue
+			# Found a boat, walk to it
+			var path: Array[Vector2i] = _path_for_pawn(check)
+			if path.is_empty():
+				continue
+			_state = State.GOING_TO_BOAT
+			_start_path(path)
+			_request_redraw()
+			return true
+	return false
+
+
+## Arrived at boat. Board it and start sailing.
+func _arrive_at_boat_and_sail() -> void:
+	if NavalSystem == null:
+		_reset_to_idle()
+		return
+	var boat: Dictionary = NavalSystem.get_boat_at(data.tile_pos)
+	if boat.is_empty():
+		_reset_to_idle()
+		return
+	if NavalSystem.board_boat(int(boat.get("id", -1)), int(data.id)):
+		_state = State.SAILING
+	else:
+		_reset_to_idle()
+	_request_redraw()
+
+
+## Arrived at land after sailing. Disembark.
+func _arrive_at_disembark_boat() -> void:
+	if NavalSystem != null:
+		var boat: Dictionary = NavalSystem.get_boat_at(data.tile_pos)
+		if not boat.is_empty():
+			NavalSystem.disembark(int(boat.get("id", -1)), int(data.id))
+	_reset_to_idle()
+
+
+## Check if this pawn is currently on a boat (for speed/behavior checks).
+func _is_on_boat() -> bool:
+	if NavalSystem == null:
+		return false
+	return not NavalSystem.get_boat_at(data.tile_pos).is_empty()
 
 
 func _begin_eating() -> void:
@@ -6456,8 +6924,22 @@ func _decay_needs() -> void:
 		if data.health < data.max_health:
 			data.health = min(data.max_health, data.health + heal_rate)
 	else:
-		data.hunger = data.hunger - HUNGER_DECAY_PER_TICK * hunger_mult * pace_h * harmful_scale
-		data.rest   = data.rest   - REST_DECAY_PER_TICK * rest_mult * pace_r * harmful_scale
+		# Activity-based decay: walking/working/hauling cost more than standing idle.
+		# This makes pawns need to eat regularly — they can't just forage once and sit.
+		var hunger_act: float = 1.0
+		var rest_act: float = 1.0
+		match _state:
+			State.WALKING_TO_JOB, State.GOING_TO_EAT, State.GOING_TO_BED, State.FETCHING_MATERIAL, State.DRAFT_WALK, State.PILGRIMAGE, State.FLEEING, State.DIRECT_FORAGING, State.GOING_TO_DRINK, State.MOUNTING, State.RIDING, State.DISEMBARKING, State.GOING_TO_BOAT, State.SAILING, State.DISEMBARKING_BOAT:
+				hunger_act = HUNGER_ACTIVITY_WALK
+				rest_act = REST_ACTIVITY_WALK
+			State.WORKING, State.TEACHING, State.CHALLENGE, State.CRAFTING, State.GATHERING:
+				hunger_act = HUNGER_ACTIVITY_WORK
+				rest_act = REST_ACTIVITY_WORK
+			State.HAULING:
+				hunger_act = HUNGER_ACTIVITY_HAUL
+				rest_act = REST_ACTIVITY_HAUL
+		data.hunger = data.hunger - HUNGER_DECAY_PER_TICK * hunger_act * hunger_mult * pace_h * harmful_scale
+		data.rest   = data.rest   - REST_DECAY_PER_TICK * rest_act * rest_mult * pace_r * harmful_scale
 	
 	# Mood: net loss when needs aren't met, net gain when they are.
 	# Passive contentment outpaces decay, so a pawn whose hunger AND rest are
@@ -6606,6 +7088,9 @@ func _check_death_conditions() -> void:
 			_record_consciousness_event("near_death", "Starving â€” hunger at %.0f" % data.hunger, -80.0, 9, "survival")
 	
 	# More lenient death conditions
+	# Religion: famine events may create Harvest God believers
+	if data.hunger < 10.0 and ReligionSystem != null:
+		ReligionSystem.on_significant_event(int(data.id), "famine", 1.0 - data.hunger / 30.0)
 	if data.hunger <= -5.0:  # Allow some buffer before death
 		_die("")
 		return
@@ -7021,8 +7506,8 @@ func get_grudge_enemies() -> Array[int]:
 
 ## Check if pawn should seek revenge against target
 func should_seek_revenge(other_pawn_id: int) -> bool:
-	if GrudgeManager != null and GrudgeManager.has_method("should_seek_revenge"):
-		return GrudgeManager.should_seek_revenge(int(data.id), other_pawn_id)
+	if SocialManager != null and SocialManager.has_method("should_seek_revenge"):
+		return SocialManager.should_seek_revenge(int(data.id), other_pawn_id)
 	return false
 
 ## Get reputation score for another pawn (-1.0 to 1.0)
@@ -7033,8 +7518,8 @@ func get_reputation_for(other_pawn_id: int) -> float:
 
 ## Get reputation label for another pawn (human-readable)
 func get_reputation_label_for(other_pawn_id: int) -> String:
-	if GossipManager != null and GossipManager.has_method("get_reputation_label"):
-		return GossipManager.get_reputation_label_for(other_pawn_id)
+	if SocialManager != null and SocialManager.has_method("get_reputation_label"):
+		return SocialManager.get_reputation_label_for(other_pawn_id)
 	return "Unknown"
 
 ## Get tiles to avoid due to grudge-enemies (Phase 5: Avoidance AI)
@@ -7205,8 +7690,8 @@ func _share_gossip_with(other_pawn: HeelKawnian) -> void:
 		return
 	
 	# OPTIMIZATION: Skip if either pawn has no gossip
-	var my_gossip: GossipPropagation = GossipManager._get_gossip_for_pawn(int(data.id)) if GossipManager.has_method("_get_gossip_for_pawn") else null
-	var other_gossip: GossipPropagation = GossipManager._get_gossip_for_pawn(int(other_pawn.data.id)) if GossipManager.has_method("_get_gossip_for_pawn") else null
+	var my_gossip: GossipPropagation = SocialManager._get_gossip_for_pawn(int(data.id)) if SocialManager.has_method("_get_gossip_for_pawn") else null
+	var other_gossip: GossipPropagation = SocialManager._get_gossip_for_pawn(int(other_pawn.data.id)) if SocialManager.has_method("_get_gossip_for_pawn") else null
 	
 	if my_gossip == null and other_gossip == null:
 		return  # Nothing to share
@@ -7351,9 +7836,9 @@ func have_child(partner: HeelKawnian) -> int:
 
 
 func _create_household() -> int:
-	# Create via KinshipSystem when available; keep deterministic fallback for safety.
+	# Create via SocialManager when available; keep deterministic fallback for safety.
 	if data != null:
-		var kin: Node = get_node_or_null("/root/KinshipSystem")
+		var kin: Node = get_node_or_null("/root/SocialManager")
 		if kin != null and kin.has_method("create_household"):
 			var created: int = int(kin.call("create_household", int(data.id)))
 			if created >= 0:
@@ -7370,7 +7855,7 @@ func join_household(household_id: int) -> void:
 	if int(data.household_id) == household_id:
 		return
 	data.household_id = household_id
-	var kin: Node = get_node_or_null("/root/KinshipSystem")
+	var kin: Node = get_node_or_null("/root/SocialManager")
 	if kin != null:
 		if kin.has_method("add_to_household"):
 			var joined: bool = bool(kin.call("add_to_household", household_id, int(data.id)))
@@ -7389,7 +7874,7 @@ func leave_household() -> void:
 	var old_household: int = data.household_id
 	if old_household < 0:
 		return
-	var kin: Node = get_node_or_null("/root/KinshipSystem")
+	var kin: Node = get_node_or_null("/root/SocialManager")
 	var former_members: Array = []
 	if kin != null and kin.has_method("get_household_members"):
 		former_members = kin.call("get_household_members", old_household)
@@ -7417,7 +7902,7 @@ func get_household_stability() -> float:
 	
 	var stability: float = 0.0
 	var household_members: int = 0
-	var kin: Node = get_node_or_null("/root/KinshipSystem")
+	var kin: Node = get_node_or_null("/root/SocialManager")
 	if kin != null and kin.has_method("get_household_members"):
 		var members: Array = kin.call("get_household_members", int(data.household_id))
 		for other_id in members:
@@ -7432,7 +7917,7 @@ func get_household_stability() -> float:
 		if kin.has_method("get_household_labor"):
 			stability += min(25.0, float(kin.call("get_household_labor", int(data.household_id))) * 0.05)
 	else:
-		# Fallback path when KinshipSystem is unavailable.
+		# Fallback path when SocialManager is unavailable.
 		for other_id in data.family_bonds:
 			stability += float(data.family_bonds[other_id])
 			household_members += 1
@@ -7506,7 +7991,7 @@ func set_leadership_role(role: int) -> void:
 
 func challenge_for_leadership(_target_leader: HeelKawnian) -> void:
 	# Challenge another pawn for leadership
-	# Placeholder - needs AuthoritySystem integration
+	# Placeholder - needs FactionManager integration
 	# TODO: Implement leadership challenge mechanics
 	pass
 
@@ -8220,6 +8705,9 @@ func _die(_p_cause: String = "") -> void:
 	# CRITICAL: Mark pawn as dead FIRST to prevent re-entry and duplicate death processing
 	if data != null:
 		data.is_dead = true
+		# Religion: death events may create Death God believers among witnesses
+		if ReligionSystem != null:
+			ReligionSystem.on_significant_event(int(data.id), "death", 1.0)
 	
 	# Release any held job and bed reservation
 	release_job_if_any()
@@ -8491,7 +8979,7 @@ func _record_kin_death_grudges() -> void:
 			gm.record_grudge(pid, dead_id, "kin_death", 0.8, 0)
 
 	# Also create gossip about the death
-	var gossip: Node = get_node_or_null("/root/GossipManager")
+	var gossip: Node = get_node_or_null("/root/SocialManager")
 	if gossip != null and gossip.has_method("record_gossip"):
 		var cause: String = "died"
 		if data.hunger <= 0.0:
@@ -9451,3 +9939,4 @@ func _ellipse_points(center: Vector2, rx: float, ry: float, segments: int) -> Pa
 		var angle: float = TAU * float(i) / float(segments)
 		pts.append(center + Vector2(cos(angle) * rx, sin(angle) * ry))
 	return pts
+

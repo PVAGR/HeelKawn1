@@ -12,39 +12,29 @@ var _tool_manager: Node
 var _subsystems_loaded: bool = false
 
 func _ready() -> void:
-	print("[EconomyManager] Initialized")
-
-## Load economy subsystems on-demand (not at startup)
-func _load_subsystems() -> void:
-	if _subsystems_loaded:
-		return
-
-	# Reuse global autoloads when they already exist to avoid duplicate simulation work.
+	_trade_planner = get_node_or_null("/root/TradePlanner")
 	_trade_memory = get_node_or_null("/root/TradeMemory")
+	_food_chain_manager = get_node_or_null("/root/FoodChainManager")
+	_tool_manager = get_node_or_null("/root/ToolManager")
 	
-	# Load economy subsystems as children
-	if FileAccess.file_exists("res://autoloads/TradePlanner.gd"):
+	if _trade_planner == null and FileAccess.file_exists("res://autoloads/TradePlanner.gd"):
 		_trade_planner = load("res://autoloads/TradePlanner.gd").new()
 		_trade_planner.name = "TradePlanner"
 		add_child(_trade_planner)
-
 	if _trade_memory == null and FileAccess.file_exists("res://autoloads/TradeMemory.gd"):
 		_trade_memory = load("res://autoloads/TradeMemory.gd").new()
 		_trade_memory.name = "TradeMemory"
 		add_child(_trade_memory)
-	
-	if FileAccess.file_exists("res://autoloads/FoodChainManager.gd"):
+	if _food_chain_manager == null and FileAccess.file_exists("res://autoloads/FoodChainManager.gd"):
 		_food_chain_manager = load("res://autoloads/FoodChainManager.gd").new()
 		_food_chain_manager.name = "FoodChainManager"
 		add_child(_food_chain_manager)
-	
-	if FileAccess.file_exists("res://autoloads/ToolManager.gd"):
+	if _tool_manager == null and FileAccess.file_exists("res://autoloads/ToolManager.gd"):
 		_tool_manager = load("res://autoloads/ToolManager.gd").new()
 		_tool_manager.name = "ToolManager"
 		add_child(_tool_manager)
 	
 	_subsystems_loaded = true
-	print("[EconomyManager] Economy subsystems loaded")
 
 ## Get a specific economy subsystem (loads if not already loaded)
 func get_subsystem(name: String) -> Node:

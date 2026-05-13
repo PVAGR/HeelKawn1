@@ -1,11 +1,11 @@
 extends RefCounted
-class_name AISettlementPlanner
+class_name AISettlementManager
 
 ## Layer 3: Songs of Syx Spirit - Settlement AI
 ## Manages settlement development, resource logistics, expansion
 ##
 ## Reads from: SettlementMemory, StockpileManager, TradePlanner
-## Writes to: SettlementPlanner, JobManager (via strategic decisions)
+## Writes to: SettlementManager, JobManager (via strategic decisions)
 
 var _llm_client: LLMClient = null
 var _settlement_memory: Node = null
@@ -99,7 +99,7 @@ RESPOND JSON:
 		if strat_var is Array:
 			strategies = strat_var
 
-	# Execute strategies (would integrate with SettlementPlanner.plan())
+	# Execute strategies (would integrate with SettlementManager.plan())
 	for strategy in strategies:
 		_execute_strategy(settlement, strategy)
 
@@ -147,7 +147,7 @@ func _execute_strategy(settlement: Dictionary, strategy: Dictionary) -> void:
 	
 	match strategy_type:
 		"expand_housing":
-			# Would call SettlementPlanner.plan() to zone new housing
+			# Would call SettlementManager.plan() to zone new housing
 			pass
 		
 		"specialize_economy":
@@ -174,3 +174,4 @@ func get_stats() -> Dictionary:
 		"strategies_generated": 0,
 		"last_update_tick": -1
 	}
+

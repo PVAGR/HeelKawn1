@@ -235,8 +235,8 @@ func _refresh() -> void:
 	# Relationships
 	lines.append("")
 	lines.append("[b]--- RELATIONSHIPS ---[/b]")
-	var gm: Node = get_node_or_null("/root/GrudgeManager")
-	var km: Node = get_node_or_null("/root/KinshipSystem")
+	var gm: Node = get_node_or_null("/root/SocialManager")
+	var km: Node = get_node_or_null("/root/SocialManager")
 	var pid2: int = d.id
 	var rels: Array[String] = []
 	if km != null and km.has_method("get_relationship_with"):
@@ -311,3 +311,4 @@ func _need_color(value: float) -> String:
 	elif value < 0.6:
 		return "#ffd54f"  # Warning - yellow
 	return "#81c784"  # Good - green
+

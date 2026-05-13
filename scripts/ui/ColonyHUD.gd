@@ -17,7 +17,7 @@ const EXPENSIVE_HUD_REFRESH_INTERVAL_TICKS: int = 120
 const WILDLIFE_SAMPLE_EVERY_TICKS: int = 120
 const WILDLIFE_HISTORY_SIZE: int = 8
 const WILDLIFE_NEARBY_RADIUS_TILES: int = 14
-const SHOW_REFRESH_DIAG: bool = true
+const SHOW_REFRESH_DIAG: bool = false
 
 const PANEL_BG: Color = Color(0.05, 0.06, 0.08, 0.88)
 const PANEL_BORDER: Color = Color(0.85, 0.78, 0.40, 0.75)
@@ -31,9 +31,9 @@ const PANEL_PAD_Y: int = 8
 ## Readability mode: bigger, simpler HUD for at-a-glance play.
 const SIMPLE_READABLE_HUD: bool = true
 ## Max width for HUD panel (prevents it from taking over screen)
-const PANEL_MAX_WIDTH: int = 380
+const PANEL_MAX_WIDTH: int = 420
 ## Max height (prevents vertical overflow)
-const PANEL_MAX_HEIGHT: int = 240
+const PANEL_MAX_HEIGHT: int = 600
 ## Show only essential info in spectator mode
 const SPECTATOR_MODE: bool = true
 
@@ -68,7 +68,7 @@ const HOTKEY_HINTS: String = "SPACE pause · F5 save · F8 load · F9 realm · S
 @onready var _hotkeys: Label = $Panel/Margin/VBox/Hotkeys
 var _history_panel: PopupPanel = null
 var _history_text: RichTextLabel = null
-var _collapsed: bool = true  # Start collapsed — click header to expand
+var _collapsed: bool = false  # Start expanded — all info visible
 
 var _world = null
 var _spawner = null
@@ -159,7 +159,7 @@ func _apply_collapse_state() -> void:
 	if collapse_btn != null:
 		collapse_btn.text = "▼ Colony" if _collapsed else "▲ Colony"
 	_label.visible = not _collapsed
-	_hotkeys.visible = not _collapsed and _is_show_hotkey_hints()
+	_hotkeys.visible = not _collapsed
 
 ## Cached Main node lookup — avoids repeated get_node_or_null tree traversals.
 ## Re-fetches if the cached reference becomes invalid (e.g. scene reload).
@@ -426,7 +426,6 @@ func _build_expensive_hud_lines(simple_hud: bool) -> Array[String]:
 		lines.append(_jobs_line())
 		lines.append(_wildlife_line())
 		lines.append(_narrative_rail_line())
-		lines.append(_session_diag_line())
 	return lines
 
 

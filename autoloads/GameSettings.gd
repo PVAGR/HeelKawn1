@@ -46,7 +46,7 @@ const SCHEMA: Array[Dictionary] = [
 		"section": "Display",
 		"type": "enum",
 		"options": ["Simple", "Debug"],
-		"default": 0,  # 0 = Simple
+		"default": 1,  # 1 = Debug (full info)
 	},
 	{
 		"key": "hud_font_size",

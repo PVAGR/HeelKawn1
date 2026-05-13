@@ -6,12 +6,21 @@
 export_presets.cfg
 godot_vcs_addon/
 
-# Build artifacts
+# Godot editor cache (never commit these)
+.godot/
+.godot/editor/
+.godot/mono/
+
+# Build artifacts and exports
+*.exe
+*.pck
+*.zip
+*.bin
 *.so
 *.dylib
 *.dll
-*.exe
-*.bin
+builds/
+exports/
 
 # Dependencies
 res://.godot/
@@ -19,4 +28,15 @@ user://*
 
 # Logs
 *.log
+debug_output.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
 ```

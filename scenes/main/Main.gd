@@ -2136,11 +2136,11 @@ func _get_player_authority_rank() -> String:
 		return ""
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return ""
-	if AuthoritySystem == null:
+	if FactionManager == null:
 		return "HeelKawnian"
 	var pid: int = _player_pawn.data.id
-	var mil: float = AuthoritySystem.get_authority_level(pid, AuthoritySystem.AuthorityContext.MILITARY)
-	var civ: float = AuthoritySystem.get_authority_level(pid, AuthoritySystem.AuthorityContext.CIVIL)
+	var mil: float = FactionManager.get_authority_level(pid, FactionManager.AuthorityContext.MILITARY)
+	var civ: float = FactionManager.get_authority_level(pid, FactionManager.AuthorityContext.CIVIL)
 	var high_contexts: int = 0
 	if mil >= 0.5:
 		high_contexts += 1

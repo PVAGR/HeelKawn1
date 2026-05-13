@@ -33,7 +33,7 @@ func _on_game_tick(tick: int) -> void:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		var pid: int = int(p.data.id)
-		var civ: float = AuthoritySystem.get_authority_level(pid, AuthoritySystem.AuthorityContext.CIVIL) if AuthoritySystem != null else 0.0
+		var civ: float = FactionManager.get_authority_level(pid, FactionManager.AuthorityContext.CIVIL) if FactionManager != null else 0.0
 		if civ > best_score:
 			best_score = civ
 			best_pawn = p

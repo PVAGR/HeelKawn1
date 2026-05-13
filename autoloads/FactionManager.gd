@@ -75,3 +75,35 @@ func get_faction_system() -> Node:
 
 func get_authority_system() -> Node:
 	return get_subsystem("authority_system")
+
+## Forward AuthoritySystem API for authority-related calls
+func apply_authority_bonus(base_priority: int, pawn_id: int) -> int:
+	_load_subsystems()
+	if _authority_system != null and _authority_system.has_method("apply_authority_bonus"):
+		return _authority_system.apply_authority_bonus(base_priority, pawn_id)
+	return base_priority
+
+func get_authority_level(pawn_id: int, context: int) -> float:
+	_load_subsystems()
+	if _authority_system != null and _authority_system.has_method("get_authority_level"):
+		return _authority_system.get_authority_level(pawn_id, context)
+	return 0.0
+
+func grant_authority(pawn_id: int, context: int, amount: float, source: String) -> void:
+	_load_subsystems()
+	if _authority_system != null and _authority_system.has_method("grant_authority"):
+		_authority_system.grant_authority(pawn_id, context, amount, source)
+
+func get_authority_context(pawn_id: int) -> Dictionary:
+	_load_subsystems()
+	if _authority_system != null and _authority_system.has_method("get_authority_context"):
+		return _authority_system.get_authority_context(pawn_id)
+	return {}
+
+## Expose AuthorityContext enum values for callers
+enum AuthorityContext {
+	MILITARY = 0,
+	CIVIL = 1,
+	RELIGIOUS = 2,
+	KNOWLEDGE = 3
+}

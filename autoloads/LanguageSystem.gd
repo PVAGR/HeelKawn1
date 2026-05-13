@@ -67,7 +67,7 @@ func generate_name(settlement_id: int, length: int = 4) -> String:
 func generate_word(settlement_id: int, meaning: String) -> String:
 	var dialect: Dictionary = get_or_create_dialect(settlement_id)
 	if not dialect.get("words", {}).has(meaning):
-		var word: String = generate_name(settlement_id, WorldRNG.rangei(&"word_len_%s" % meaning, 3, 6, settlement_id))
+		var word: String = generate_name(settlement_id, WorldRNG.rangei(3, 6, settlement_id, &"word_len_%s" % meaning))
 		dialect["words"][meaning] = word
 	return dialect["words"][meaning]
 
@@ -77,5 +77,4 @@ func get_dialect_word(settlement_id: int, meaning: String) -> String:
 		return meaning
 	return dialect.get("words", {}).get(meaning, meaning)
 
-func _on_game_tick(tick: int) -> void:
-	_ = tick
+func _on_game_tick(_tick: int) -> void:

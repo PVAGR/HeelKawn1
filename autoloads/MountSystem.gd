@@ -134,8 +134,7 @@ func _process_taming(tick: int) -> void:
 				"owner_id": int(m.get("owner_id", -1)),
 			})
 
-func _process_mount_decay(tick: int) -> void:
-	_ = tick
+func _process_mount_decay(_tick: int) -> void:
 	for mid in mounts:
 		var m: Dictionary = mounts[mid]
 		m["hunger"] = maxf(0.0, float(m.get("hunger", 100.0)) - 0.1)

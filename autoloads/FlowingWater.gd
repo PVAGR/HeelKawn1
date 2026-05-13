@@ -44,8 +44,7 @@ func _on_game_tick(tick: int) -> void:
 		return
 	_flow_water(tick)
 
-func _flow_water(tick: int) -> void:
-	_ = tick
+func _flow_water(_tick: int) -> void:
 	var changes: Dictionary = {}
 	var all_keys: Array = water_levels.keys()
 	all_keys.sort()

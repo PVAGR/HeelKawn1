@@ -13,6 +13,11 @@ var _legacy_system: Node
 
 var _subsystems_loaded: bool = false
 
+func _load_subsystems() -> void:
+	if _subsystems_loaded:
+		return
+	_ready()
+
 func _ready() -> void:
 	_kinship_system = get_node_or_null("/root/KinshipSystem")
 	_grudge_manager = get_node_or_null("/root/GrudgeManager")

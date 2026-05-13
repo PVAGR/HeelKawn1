@@ -1,7 +1,7 @@
 # WorldEventSeed.gd
 # Lightweight representation of a deterministic event seed
 extends RefCounted
-class_name WorldEventSeed
+class_name WorldEventSeedData
 
 var seed_id: String
 var seed_type: String
@@ -31,5 +31,5 @@ func next_event(current_tick: int) -> Dictionary:
         "timestamp": current_tick
     }
 
-static func new_seed(seed_id: String, seed_type: String, seed_value: int, params: Dictionary = {}) -> WorldEventSeed:
-    return WorldEventSeed.new(seed_id, seed_type, seed_value, params)
+static func new_seed(seed_id: String, seed_type: String, seed_value: int, params: Dictionary = {}) -> WorldEventSeedData:
+    return WorldEventSeedData.new(seed_id, seed_type, seed_value, params)

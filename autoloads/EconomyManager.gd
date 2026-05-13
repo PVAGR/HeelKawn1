@@ -11,6 +11,11 @@ var _tool_manager: Node
 
 var _subsystems_loaded: bool = false
 
+func _load_subsystems() -> void:
+	if _subsystems_loaded:
+		return
+	_ready()
+
 func _ready() -> void:
 	_trade_planner = get_node_or_null("/root/TradePlanner")
 	_trade_memory = get_node_or_null("/root/TradeMemory")

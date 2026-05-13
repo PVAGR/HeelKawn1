@@ -41,7 +41,7 @@ func get_relation(settlement_a: int, settlement_b: int) -> int:
 	var key: String = _pair_key(settlement_a, settlement_b)
 	return relations.get(key, 0)
 
-func modify_relation(settlement_a: int, settlement_b: int, delta: int) -> void {
+func modify_relation(settlement_a: int, settlement_b: int, delta: int) -> void:
 	var key: String = _pair_key(settlement_a, settlement_b)
 	relations[key] = clampi(relations.get(key, 0) + delta, -100, 100)
 }

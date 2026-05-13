@@ -113,8 +113,7 @@ func _process_boat_movement(tick: int) -> void:
 			continue
 		_apply_current(b, tick)
 
-func _apply_current(b: Dictionary, tick: int) -> void:
-	_ = tick
+func _apply_current(b: Dictionary, _tick: int) -> void:
 	var tile: Vector2i = b.get("tile", Vector2i())
 	if WindSystem != null:
 		var wind_dir: Vector2 = WindSystem.get_wind_direction()

@@ -52,10 +52,10 @@ func _generate_ley_lines() -> void:
 		return
 	var seed_val: int = GameManager.tick_count if GameManager != null else 0
 	for i in range(6):
-		var start_x: int = WorldRNG.rangei(&"ley_start_x", 5, WorldData.WIDTH - 5, i * 2)
-		var start_y: int = WorldRNG.rangei(&"ley_start_y", 5, WorldData.HEIGHT - 5, i * 2 + 1)
-		var end_x: int = WorldRNG.rangei(&"ley_end_x", 5, WorldData.WIDTH - 5, i * 3)
-		var end_y: int = WorldRNG.rangei(&"ley_end_y", 5, WorldData.HEIGHT - 5, i * 3 + 1)
+		var start_x: int = WorldRNG.rangei(5, WorldData.WIDTH - 5, i * 2, &"ley_start_x")
+		var start_y: int = WorldRNG.rangei(5, WorldData.HEIGHT - 5, i * 2 + 1, &"ley_start_y")
+		var end_x: int = WorldRNG.rangei(5, WorldData.WIDTH - 5, i * 3, &"ley_end_x")
+		var end_y: int = WorldRNG.rangei(5, WorldData.HEIGHT - 5, i * 3 + 1, &"ley_end_y")
 		var ltype: int = i % 4
 		ley_lines.append({
 			"start": Vector2i(start_x, start_y),
@@ -110,7 +110,7 @@ func start_ritual(ritual_type: int, tile: Vector2i, participants: Array) -> bool
 	var cost: Dictionary = RITUAL_COST.get(ritual_type, {})
 	if participants.size() < int(cost.get("participants", 3)):
 		return false
-	var ritual_id: int = int(WorldRNG.rangei(&"ritual_id", 1, 99999, GameManager.tick_count if GameManager != null else 0))
+	var ritual_id: int = int(WorldRNG.rangei(1, 99999, GameManager.tick_count if GameManager != null else 0, &"ritual_id"))
 	active_rituals[ritual_id] = {
 		"type": ritual_type,
 		"tile": tile,

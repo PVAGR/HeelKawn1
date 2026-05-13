@@ -20,7 +20,7 @@ func register_seed(seed_id: String, seed_type: String, seed_value: int, params: 
     var s = SeedClass.new(seed_id, seed_type, seed_value, params)
     _seeds[seed_id] = s
 
-func get_seed(seed_id: String) -> WorldEventSeed:
+func get_seed(seed_id: String) -> WorldEventSeedData:
     return _seeds.get(seed_id, null)
 
 func advance_all(current_tick: int) -> Array:

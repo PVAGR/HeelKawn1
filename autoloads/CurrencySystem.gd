@@ -78,5 +78,4 @@ func get_approximate_value(item_type: int) -> int:
 		Item.Type.MEAD, Item.Type.ALE: return 6
 		_: return 1
 
-func _on_game_tick(tick: int) -> void:
-	_ = tick
+func _on_game_tick(_tick: int) -> void:

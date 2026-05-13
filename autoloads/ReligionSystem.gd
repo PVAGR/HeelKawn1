@@ -153,7 +153,7 @@ func _find_or_create_god(domain: int, first_believer_id: int) -> int:
 	var god_id: int = _next_god_id
 	_next_god_id += 1
 	var prefixes: Array = GOD_NAME_PREFIXES.get(domain, ["Unknown"])
-	var name: String = prefixes[WorldRNG.rangei(&"god_name", 0, prefixes.size() - 1, god_id)]
+	var name: String = prefixes[WorldRNG.rangei(0, prefixes.size() - 1, god_id, &"god_name")]
 	_gods[god_id] = {
 		"domain": domain,
 		"name": name,

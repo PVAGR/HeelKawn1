@@ -6452,10 +6452,6 @@ func _maybe_mount_nearby() -> bool:
 		return false  # already mounted
 	var closest_mount: Dictionary = {}
 	var closest_dist: float = 999999.0
-	for m in range(10):  # check up to 10 mounts
-		var mount_m: Dictionary = {}
-		# MountSystem iterates internally; we use get_mount_for_rider to check
-		_ = m
 	if closest_mount.is_empty():
 		return false
 	var m_tile: Vector2i = closest_mount.get("tile", Vector2i(-1, -1))

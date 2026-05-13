@@ -75,6 +75,7 @@ var pawns: Array[HeelKawnian] = []
 # OPTIMIZATION: pawn_id → pawn instance dictionary for O(1) lookup
 var _pawn_by_id: Dictionary = {}
 var _pawn_by_id_dirty: bool = true
+var _next_pawn_id: int = 1
 
 ## Return the cached pawn registry. This is the preferred way to iterate all pawns
 ## instead of get_nodes_in_group("pawns"), which traverses the entire scene tree.

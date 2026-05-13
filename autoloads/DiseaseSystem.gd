@@ -103,7 +103,8 @@ func add_disease(pawn_data: RefCounted, disease_type: int, initial_severity: flo
 func remove_disease(pawn_data: RefCounted, disease_type: int) -> void:
 	if pawn_data == null:
 		return
-	var diseases: Dictionary = pawn_data.get("diseases", {})
+	var _dis_val = pawn_data.get("diseases")
+	var diseases: Dictionary = {} if _dis_val == null else _dis_val
 	diseases.erase(str(disease_type))
 
 
@@ -111,7 +112,8 @@ func remove_disease(pawn_data: RefCounted, disease_type: int) -> void:
 func has_disease(pawn_data: RefCounted, disease_type: int) -> bool:
 	if pawn_data == null:
 		return false
-	var diseases: Dictionary = pawn_data.get("diseases", {})
+	var _dis2_val = pawn_data.get("diseases")
+	var diseases: Dictionary = {} if _dis2_val == null else _dis2_val
 	return diseases.has(str(disease_type))
 
 
@@ -119,14 +121,16 @@ func has_disease(pawn_data: RefCounted, disease_type: int) -> bool:
 func get_diseases(pawn_data: RefCounted) -> Dictionary:
 	if pawn_data == null:
 		return {}
-	return pawn_data.get("diseases", {})
+	var _dis3_val = pawn_data.get("diseases")
+	return {} if _dis3_val == null else _dis3_val
 
 
 ## Get total disease severity (affects work speed, movement).
 func get_total_disease_severity(pawn_data: RefCounted) -> float:
 	if pawn_data == null:
 		return 0.0
-	var diseases: Dictionary = pawn_data.get("diseases", {})
+	var _dis4_val = pawn_data.get("diseases")
+	var diseases: Dictionary = {} if _dis4_val == null else _dis4_val
 	var total: float = 0.0
 	for key in diseases:
 		total += float(diseases[key].get("severity", 0.0))
@@ -149,7 +153,8 @@ func get_disease_move_penalty(pawn_data: RefCounted) -> float:
 func treat_disease(pawn_data: RefCounted, disease_type: int, healer_skill: float = 0.5) -> bool:
 	if pawn_data == null:
 		return false
-	var diseases: Dictionary = pawn_data.get("diseases", {})
+	var _dis5_val = pawn_data.get("diseases")
+	var diseases: Dictionary = {} if _dis5_val == null else _dis5_val
 	var disease_key: String = str(disease_type)
 	if not diseases.has(disease_key):
 		return false
@@ -177,7 +182,8 @@ func _on_game_tick(tick: int) -> void:
 
 func _process_pawn_diseases(pawn: HeelKawnian, tick: int) -> void:
 	var data: RefCounted = pawn.data
-	var diseases: Dictionary = data.get("diseases", {})
+	var _dis6_val = data.get("diseases")
+	var diseases: Dictionary = {} if _dis6_val == null else _dis6_val
 	if diseases.is_empty():
 		return
 	var diseases_to_remove: Array = []
@@ -261,7 +267,8 @@ func get_disease_summary(pawn_data: RefCounted) -> Dictionary:
 	if pawn_data == null:
 		return {}
 	var result: Dictionary = {}
-	var diseases: Dictionary = pawn_data.get("diseases", {})
+	var _dis7_val = pawn_data.get("diseases")
+	var diseases: Dictionary = {} if _dis7_val == null else _dis7_val
 	for disease_key in diseases:
 		var disease: Dictionary = diseases[disease_key]
 		var disease_type: int = int(disease.get("type", 0))

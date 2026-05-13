@@ -9282,14 +9282,16 @@ func _observer_intent_summary() -> String:
 	var grow: int = 0
 	var hold: int = 0
 	var abandon: int = 0
+	var intent_grow: int = MemoryManager.get_intent_grow()
+	var intent_abandon: int = MemoryManager.get_intent_abandon()
 	for v in MemoryManager.get_settlement_intent().values():
-		match int(v):
-			MemoryManager.get_intent_grow():
-				grow += 1
-			MemoryManager.get_intent_abandon():
-				abandon += 1
-			_:
-				hold += 1
+		var iv: int = int(v)
+		if iv == intent_grow:
+			grow += 1
+		elif iv == intent_abandon:
+			abandon += 1
+		else:
+			hold += 1
 	return "Grow %d | Hold %d | Abandon %d" % [grow, hold, abandon]
 
 

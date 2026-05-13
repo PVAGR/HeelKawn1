@@ -38,5 +38,4 @@ func get_player_count() -> int:
 func register_player_pawn(player_id: int, pawn_id: int) -> void:
 	player_pawns[player_id] = pawn_id
 
-func _on_game_tick(tick: int) -> void:
-	_ = tick
+func _on_game_tick(_tick: int) -> void:

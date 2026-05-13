@@ -33,14 +33,14 @@ func _ready() -> void:
 	if GameManager != null:
 		GameManager.game_tick.connect(_on_game_tick)
 
-func create_art(art_type: int, creator_id: int, subject: String = "", settlement_id: int = -1, quality_mod: float = 1.0) -> int {
+func create_art(art_type: int, creator_id: int, subject: String = "", settlement_id: int = -1, quality_mod: float = 1.0) -> int:
 	var art_id: int = _next_art_id
 	_next_art_id += 1
 	var skill: int = 1
 	if HeelKawnianManager != null:
 		skill = HeelKawnianManager.get_skill(creator_id, "art") if HeelKawnianManager.has_method("get_skill") else 1
 	var base_quality: float = float(skill) * 0.2 + quality_mod * 0.3
-	var quality_roll: float = float(WorldRNG.rangei(&"art_quality", 0, 100, art_id)) / 100.0
+	var quality_roll: float = float(WorldRNG.rangei(0, 100, art_id, &"art_quality")) / 100.0
 	var quality: float = clampf(base_quality + quality_roll * 0.5, 0.0, 1.0)
 	var quality_label: String = "crude"
 	if quality >= 0.9: quality_label = "masterwork"

@@ -1,1 +1,14 @@
-res://tools/sim_pawn_diagnostic.gd
+res://autoloads/ArtSystem.gd
+res://autoloads/BodyPartWounds.gd
+res://autoloads/DiplomacySystem.gd
+res://autoloads/EconomyManager.gd
+res://autoloads/FactionManager.gd
+res://autoloads/LanguageSystem.gd
+res://autoloads/PlayerGathering.gd
+res://autoloads/ReligionSystem.gd
+res://autoloads/RitualMagicSystem.gd
+res://autoloads/SocialManager.gd
+res://autoloads/UndergroundSystem.gd
+res://autoloads/WorldMemory.gd
+res://autoloads/WorldRNG.gd
+res://scripts/pawn/HeelKawnian.gd

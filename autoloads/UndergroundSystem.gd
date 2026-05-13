@@ -65,9 +65,9 @@ func _generate_cave_tunnels(layer_int: int, iterations: int) -> void:
 	if data.is_empty():
 		return
 	for i in range(iterations):
-		var cx: int = WorldRNG.rangei(&"cave_x_%d" % layer_int, 3, WorldData.WIDTH - 3, i * 2)
-		var cy: int = WorldRNG.rangei(&"cave_y_%d" % layer_int, 3, WorldData.HEIGHT - 3, i * 2 + 1)
-		var radius: int = WorldRNG.rangei(&"cave_r_%d" % layer_int, 2, 6, i)
+		var cx: int = WorldRNG.rangei(3, WorldData.WIDTH - 3, i * 2, &"cave_x_%d" % layer_int)
+		var cy: int = WorldRNG.rangei(3, WorldData.HEIGHT - 3, i * 2 + 1, &"cave_y_%d" % layer_int)
+		var radius: int = WorldRNG.rangei(2, 6, i, &"cave_r_%d" % layer_int)
 		for dx in range(-radius, radius + 1):
 			for dy in range(-radius, radius + 1):
 				var tx: int = cx + dx
@@ -86,26 +86,26 @@ func _generate_cave_tunnels(layer_int: int, iterations: int) -> void:
 		_place_deposits(data, layer_int, i)
 
 func _place_deposits(data: Array, layer_int: int, seed_offset: int) -> void:
-	var deposit_count: int = WorldRNG.rangei(&"deposit_count_%d" % layer_int, 3, 8, seed_offset)
+	var deposit_count: int = WorldRNG.rangei(3, 8, seed_offset, &"deposit_count_%d" % layer_int)
 	for d in range(deposit_count):
-		var dx: int = WorldRNG.rangei(&"dep_x_%d_%d" % [layer_int, d], 1, WorldData.WIDTH - 1, seed_offset)
-		var dy: int = WorldRNG.rangei(&"dep_y_%d_%d" % [layer_int, d], 1, WorldData.HEIGHT - 1, seed_offset + 1)
+		var dx: int = WorldRNG.rangei(1, WorldData.WIDTH - 1, seed_offset, &"dep_x_%d_%d" % [layer_int, d])
+		var dy: int = WorldRNG.rangei(1, WorldData.HEIGHT - 1, seed_offset + 1, &"dep_y_%d_%d" % [layer_int, d])
 		if data[dx][dy] == UGTile.EMPTY:
 			var deposit_type: int
 			match layer_int:
 				Layer.SHALLOW:
-					deposit_type = WorldRNG.rangei(&"dep_type_shallow", 1, 3, d)
+					deposit_type = WorldRNG.rangei(1, 3, d, &"dep_type_shallow")
 					if deposit_type == 1: data[dx][dy] = UGTile.CLAY
 					elif deposit_type == 2: data[dx][dy] = UGTile.GRAVEL
 					else: data[dx][dy] = UGTile.COAL
 				Layer.DEEP:
-					deposit_type = WorldRNG.rangei(&"dep_type_deep", 1, 4, d)
+					deposit_type = WorldRNG.rangei(1, 4, d, &"dep_type_deep")
 					if deposit_type == 1: data[dx][dy] = UGTile.IRON_ORE
 					elif deposit_type == 2: data[dx][dy] = UGTile.COAL
 					elif deposit_type == 3: data[dx][dy] = UGTile.GOLD_ORE
 					else: data[dx][dy] = UGTile.GEM
 				Layer.DEEPER:
-					deposit_type = WorldRNG.rangei(&"dep_type_deeper", 1, 3, d)
+					deposit_type = WorldRNG.rangei(1, 3, d, &"dep_type_deeper")
 					if deposit_type == 1: data[dx][dy] = UGTile.GOLD_ORE
 					elif deposit_type == 2: data[dx][dy] = UGTile.GEM
 					else: data[dx][dy] = UGTile.MAGMA
@@ -114,8 +114,8 @@ func _place_stairs() -> void:
 	if WorldRNG == null:
 		return
 	for i in range(5):
-		var sx: int = WorldRNG.rangei(&"stair_x", 5, WorldData.WIDTH - 5, i)
-		var sy: int = WorldRNG.rangei(&"stair_y", 5, WorldData.HEIGHT - 5, i + 1)
+		var sx: int = WorldRNG.rangei(5, WorldData.WIDTH - 5, i, &"stair_x")
+		var sy: int = WorldRNG.rangei(5, WorldData.HEIGHT - 5, i + 1, &"stair_y")
 		stair_tiles["%d,%d" % [sx, sy]] = Layer.SHALLOW
 
 func _record_entrances() -> void:
@@ -153,5 +153,4 @@ func is_stair_at(tile: Vector2i) -> bool:
 func get_stair_layer(tile: Vector2i) -> int:
 	return stair_tiles.get("%d,%d" % [tile.x, tile.y], -1)
 
-func _on_game_tick(tick: int) -> void:
-	_ = tick
+func _on_game_tick(_tick: int) -> void:

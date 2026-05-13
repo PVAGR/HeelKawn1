@@ -69,8 +69,7 @@ func get_terraformed_tile(tile: Vector2i) -> Dictionary:
 func is_terraformed(tile: Vector2i) -> bool:
 	return not get_terraformed_tile(tile).is_empty()
 
-func _on_game_tick(tick: int) -> void:
-	_ = tick
+func _on_game_tick(_tick: int) -> void:
 
 func clear() -> void:
 	terraformed_tiles.clear()

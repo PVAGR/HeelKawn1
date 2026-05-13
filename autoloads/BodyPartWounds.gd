@@ -104,7 +104,7 @@ func _ready() -> void:
 
 ## Select a random body part weighted by hit probability.
 func select_body_part(seed_name: StringName, salt: int) -> int:
-	var roll: int = WorldRNG.rangei(seed_name, 0, _total_weight - 1, salt)
+	var roll: int = WorldRNG.rangei(0, _total_weight - 1, salt, seed_name)
 	var cumulative: int = 0
 	for part in HIT_WEIGHTS.keys():
 		cumulative += int(HIT_WEIGHTS[part])
@@ -149,7 +149,8 @@ func apply_wound(pawn_data: RefCounted, body_part: int, wound_type: int, severit
 	wounds[part_key].append(wound)
 	# Reduce body part health
 	var part_health_key: String = "part_health_%d" % body_part
-	var current_health: float = float(pawn_data.get(part_health_key, PART_MAX_HEALTH))
+	var _ch_val = pawn_data.get(part_health_key)
+	var current_health: float = PART_MAX_HEALTH if _ch_val == null else float(_ch_val)
 	pawn_data.set(part_health_key, maxf(0.0, current_health - severity))
 	# Pain from wound
 	var pain: float = severity * 0.5
@@ -176,7 +177,8 @@ func apply_wound(pawn_data: RefCounted, body_part: int, wound_type: int, severit
 func get_wounds_for_part(pawn_data: RefCounted, body_part: int) -> Array:
 	if pawn_data == null:
 		return []
-	var wounds: Dictionary = pawn_data.get("body_wounds", {})
+	var _bw_val = pawn_data.get("body_wounds")
+	var wounds: Dictionary = {} if _bw_val == null else _bw_val
 	var part_key: String = str(body_part)
 	if not wounds.has(part_key):
 		return []
@@ -197,7 +199,8 @@ func get_part_health(pawn_data: RefCounted, body_part: int) -> float:
 	if pawn_data == null:
 		return PART_MAX_HEALTH
 	var key: String = "part_health_%d" % body_part
-	return float(pawn_data.get(key, PART_MAX_HEALTH))
+	var _ph_val = pawn_data.get(key)
+	return PART_MAX_HEALTH if _ph_val == null else float(_ph_val)
 
 
 ## Is a body part crippled (health <= 0)?
@@ -268,7 +271,8 @@ func get_carry_penalty(pawn_data: RefCounted) -> float:
 func get_total_bleed_rate(pawn_data: RefCounted) -> float:
 	if pawn_data == null:
 		return 0.0
-	var wounds: Dictionary = pawn_data.get("body_wounds", {})
+	var _bw2_val = pawn_data.get("body_wounds")
+	var wounds: Dictionary = {} if _bw2_val == null else _bw2_val
 	var total: float = 0.0
 	for part_key in wounds:
 		var part_wounds: Array = wounds[part_key]
@@ -301,7 +305,8 @@ func _on_game_tick(tick: int) -> void:
 
 
 func _process_pawn_wounds(pawn_data: RefCounted, tick: int) -> void:
-	var wounds: Dictionary = pawn_data.get("body_wounds", {})
+	var _bw3_val = pawn_data.get("body_wounds")
+	var wounds: Dictionary = {} if _bw3_val == null else _bw3_val
 	if wounds.is_empty():
 		return
 	# Process bleeding
@@ -348,7 +353,8 @@ func _process_pawn_wounds(pawn_data: RefCounted, tick: int) -> void:
 	# Heal body part health
 	for part_int in range(BodyPart.BACK + 1):
 		var key: String = "part_health_%d" % part_int
-		var current: float = float(pawn_data.get(key, PART_MAX_HEALTH))
+		var _ph2_val = pawn_data.get(key)
+		var current: float = PART_MAX_HEALTH if _ph2_val == null else float(_ph2_val)
 		if current < PART_MAX_HEALTH:
 			var part_wounds_arr: Array = wounds.get(str(part_int), [])
 			var has_active_wounds: bool = part_wounds_arr.size() > 0
@@ -398,7 +404,8 @@ func get_wound_summary(pawn_data: RefCounted) -> Dictionary:
 	if pawn_data == null:
 		return {}
 	var result: Dictionary = {}
-	var wounds: Dictionary = pawn_data.get("body_wounds", {})
+	var _bw4_val = pawn_data.get("body_wounds")
+	var wounds: Dictionary = {} if _bw4_val == null else _bw4_val
 	for part_key in wounds:
 		var part_int: int = int(part_key)
 		var part_name: String = BODY_PART_NAMES.get(part_int, "unknown")

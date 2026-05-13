@@ -4105,4 +4105,3 @@ func get_technological_progress() -> float:
 			discovered_count += 1
 	
 	return float(discovered_count) / float(technological_discoveries.size())
-

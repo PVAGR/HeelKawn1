@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1778692150
+::res://::1778693296
 .aider.chat.history.md::TextFile::-1::1778404677::0::1::::<><><>0<>0<><>::
 AI_AUTONOMOUS_INNOVATION.md::TextFile::-1::1778107181::0::1::::<><><>0<>0<><>::
 AI_BUG_REPORTS.md::TextFile::-1::1778108695::0::1::::<><><>0<>0<><>::
@@ -17,6 +17,7 @@ blackbox_mcp_settings.json::JSON::-1::1777694600::0::1::::<><><>0<>0<><>::
 boot_compare_err.txt::TextFile::-1::1777818723::0::1::::<><><>0<>0<><>::
 boot_compare_out.txt::TextFile::-1::1777818736::0::1::::<><><>0<>0<><>::
 CHANGELOG.md::TextFile::-1::1778015279::0::1::::<><><>0<>0<><>::
+debug_lines.txt::TextFile::-1::1778692534::0::1::::<><><>0<>0<><>::
 debug_output.txt::TextFile::-1::1778563562::0::1::::<><><>0<>0<><>::
 export_presets.cfg::TextFile::-1::1778018567::0::1::::<><><>0<>0<><>::
 final_test.txt::TextFile::-1::1778563607::0::1::::<><><>0<>0<><>::
@@ -221,7 +222,7 @@ DiseaseSystem.gd::GDScript::5176942498259955416::1778652268::0::1::::<>Node<><>0
 EconomyManager.gd::GDScript::600062380472312883::1778652099::0::1::::<>Node<><>0<>0<><>::
 EventBus.gd::GDScript::17816675561125202::1778616814::0::1::::<>Node<><>0<>0<><>::
 EventManager.gd::GDScript::7814471383146393468::1778633804::0::1::::<>Node<><>0<>0<><>::
-FactionManager.gd::GDScript::3854887585585149382::1778692072::0::1::::<>Node<><>0<>0<><>::
+FactionManager.gd::GDScript::3854887585585149382::1778693288::0::1::::<>Node<><>0<>0<><>::
 FactionRegistry.gd::GDScript::4416904286542695183::1778567924::0::1::::<>Node<><>0<>0<><>::
 FactionSystem.gd::GDScript::4206641617627097322::1778570754::0::1::::<>Node<><>0<>0<><>::
 FarmingSystem.gd::GDScript::4043429106894168777::1778438992::0::1::::<>Node<><>0<>0<><>::
@@ -657,7 +658,7 @@ TestPhase4Kernel.gd::GDScript::4541286713475473953::1777694600::0::1::::<>Node<>
 TestSkillTreeBonuses.gd::GDScript::5261734312154252569::1778320772::0::1::::<>Node<><>0<>0<><>::
 TestTraitSystem.gd::GDScript::8176838439313492610::1778320772::0::1::::<>Node<><>0<>0<><>::
 test_kinship_api.gd::GDScript::5816937099531489306::1777802574::0::1::::<>Node<><>0<>0<><>::
-::res://scripts/ui/::1778692072
+::res://scripts/ui/::1778692707
 ActionMenu.gd::GDScript::8591061599762165760::1778215319::0::1::::<>PanelContainer<><>0<>0<><>::
 AIAgentDebugPanel.gd::GDScript::2909754586514078780::1778320772::0::1::::<>Control<><>0<>0<><>::
 AIControlPanel.gd::GDScript::3304511088348402013::1778146909::0::1::::AIControlPanel<>Control<><>0<>0<><>::
@@ -677,7 +678,7 @@ ColonyHUD.gd::GDScript::1234358239209808226::1778641100::0::1::::ColonyHUD<>Canv
 CommandIndicator.gd::GDScript::8015270626704609722::1778146860::0::1::::CommandIndicator<>Node2D<><>0<>0<><>::
 CommandMode.gd::GDScript::7970988480991765280::1778320772::0::1::::CommandMode<>Node<><>0<>0<><>::
 CraftingMenu.gd::GDScript::264922245055118195::1778113482::0::1::::<>PanelContainer<><>0<>0<><>::
-CreatorDebugMenu.gd::GDScript::2571068876045846871::1778692072::0::1::::CreatorDebugMenu<>CanvasLayer<><>0<>0<><>::
+CreatorDebugMenu.gd::GDScript::2571068876045846871::1778693288::0::1::::CreatorDebugMenu<>CanvasLayer<><>0<>0<><>::
 DebugControlPanel.gd::GDScript::5220637974334766322::1778320772::0::1::::DebugControlPanel<>Control<><>0<>0<><>::
 DynamicSpriteText.gd::GDScript::5775588346636683544::1778320772::0::1::::DynamicSpriteText<>Node2D<><>0<>0<><>::
 DynastyTreeUI.gd::GDScript::2720543352043603021::1778320772::0::1::::DynastyTreeUI<>CanvasLayer<><>0<>0<><>::

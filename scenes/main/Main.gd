@@ -9475,4 +9475,3 @@ func _handle_draft_click(pawn: HeelKawnian) -> void:
 					"[Draft] %s drafted (now %d drafted)" % [pawn.data.display_name, _drafted_pawns.size()]
 			)
 	pawn.queue_redraw()
-

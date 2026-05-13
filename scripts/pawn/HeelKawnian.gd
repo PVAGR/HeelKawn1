@@ -9935,4 +9935,3 @@ func _ellipse_points(center: Vector2, rx: float, ry: float, segments: int) -> Pa
 		var angle: float = TAU * float(i) / float(segments)
 		pts.append(center + Vector2(cos(angle) * rx, sin(angle) * ry))
 	return pts
-

@@ -10,6 +10,13 @@ var _authority_system: Node
 
 var _subsystems_loaded: bool = false
 
+enum AuthorityContext {
+	MILITARY = 0,
+	CIVIL = 1,
+	RELIGIOUS = 2,
+	KNOWLEDGE = 3,
+}
+
 func _load_subsystems() -> void:
 	if _subsystems_loaded:
 		return

@@ -4070,4 +4070,3 @@ func _report_stubs_all() -> void:
 	_report_religion_lens()
 	print("")
 	print("=== HEELKAWN_STUBS_ALL:tick=%d END ===" % tick)
-

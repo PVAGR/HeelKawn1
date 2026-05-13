@@ -1,6 +1,6 @@
 extends Node
 ## Emitted when a new settlement is created during recompute.
-signal settlement_founded
+signal settlement_founded(settlement_id: int, tile: Vector2i, culture_name: String)
 ## v1: Settlement identity — 4-adjacent clusters of scarred, historically
 ## active regions. Derived only; read WorldMeaning, WorldPersistence, CulturalMemory.
 ## Does not keep references to [World] ([recompute] takes it for API symmetry with peers).
@@ -422,7 +422,10 @@ func recompute(_world: World) -> void:
         _apply_diaspora_founding(st, center_id)
         _capture_resource_truth(st)
         settlements.append(st)
-        settlement_founded.emit()
+        var st_id: int = int(st.get("id", -1))
+        var st_center: Vector2i = Vector2i(int(st.get("center_x", 0)), int(st.get("center_y", 0)))
+        var st_culture: String = str(st.get("culture_name", ""))
+        settlement_founded.emit(st_id, st_center, st_culture)
         # DEAD BRAIN REVIVED: Auto-appoint governor for new settlements
         _appoint_initial_governor(st)
         var st_name: String = str(st.get("state", ""))

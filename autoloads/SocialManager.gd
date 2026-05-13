@@ -14,7 +14,6 @@ var _legacy_system: Node
 var _subsystems_loaded: bool = false
 
 func _ready() -> void:
-	add_to_group("tickable")
 	print("[SocialManager] Initialized")
 
 ## Load social subsystems on-demand (not at startup)

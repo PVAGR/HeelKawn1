@@ -2357,7 +2357,10 @@ func _place_stockpile(main_component: int) -> void:
 	var center := Vector2i(int(WorldData.WIDTH / 2.0), int(WorldData.HEIGHT / 2.0))
 	var tile: Vector2i = _world.pathfinder.find_tile_in_component_near(main_component, center)
 	if tile.x < 0:
-		push_error("[Main] Could not find a tile on the main component to place the stockpile.")
+		push_warning("[Main] Could not find tile near center for stockpile - searching entire component...")
+		tile = _find_any_tile_in_component(main_component)
+	if tile.x < 0:
+		push_error("[Main] Could not find ANY tile on the main component to place the stockpile.")
 		return
 	var seed_rect: Rect2i = _fit_seed_stockpile_rect(tile, main_component, 3, 3)
 	var sp: Stockpile = STOCKPILE_SCENE.instantiate()
@@ -2373,6 +2376,19 @@ func _place_stockpile(main_component: int) -> void:
 				"[Main] Seed stockpile placed at %s (%dx%d, ALL)" %
 				[seed_rect.position, seed_rect.size.x, seed_rect.size.y]
 		)
+
+
+func _find_any_tile_in_component(comp_id: int) -> Vector2i:
+	# Fallback: find any passable tile in the given pathfinder component
+	if _world == null or _world.pathfinder == null:
+		return Vector2i(-1, -1)
+	var pf = _world.pathfinder
+	for tx in range(WorldData.WIDTH):
+		for ty in range(WorldData.HEIGHT):
+			var t = Vector2i(tx, ty)
+			if pf.component_of(t) == comp_id and Biome.is_passable(t):
+				return t
+	return Vector2i(-1, -1)
 
 
 ## Seed the stockpile with starting supplies so pawns don't starve or freeze

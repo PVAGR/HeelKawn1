@@ -16,7 +16,6 @@ signal job_cancelled(job: Job)
 
 
 func _ready() -> void:
-	add_to_group("tickable")
 	if TickManager != null:
 		TickManager.mark_tickable_cache_dirty()
 

@@ -15,8 +15,7 @@ var _architect: Node
 @onready var CulturalStyleManager = get_node_or_null("/root/CulturalStyleManager")
 
 func _ready() -> void:
-	add_to_group("tickable")
-	
+
 	# Load the three settlement systems as children
 	_planner = load("res://autoloads/SettlementPlanner.gd").new()
 	_planner.name = "Planner"

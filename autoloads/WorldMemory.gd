@@ -1,6 +1,6 @@
 extends Node
 ## Emitted when a new event is appended to the world fact log.
-signal event_appended
+signal event_appended(event: Dictionary)
 ## Deterministic append-only world fact log (Phase 2.1). No RNG; no UI.
 ## Events are plain Dictionaries for trivial save/load via Main snapshot.
 ## Connected to HeelKawn Universe Neural Network Matrix
@@ -328,7 +328,7 @@ func _append(e: Dictionary) -> void:
 	_on_event_added_to_indexes(e)
 	# Phase 5: Generate grudges from events
 	_on_event_appended(e)
-	event_appended.emit()
+	event_appended.emit(e)
 
 
 func _load_constitution_text() -> void:

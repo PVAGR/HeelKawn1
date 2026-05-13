@@ -28,7 +28,6 @@ var _state_transitions: Array[Dictionary] = []
 
 
 func _ready() -> void:
-	add_to_group("tickable")
 	if TickManager != null:
 		TickManager.mark_tickable_cache_dirty()
 

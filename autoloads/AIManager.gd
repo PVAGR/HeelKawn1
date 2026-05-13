@@ -23,7 +23,6 @@ var _ai_orchestrator: Node
 var _subsystems_loaded: bool = false
 
 func _ready() -> void:
-	add_to_group("tickable")
 	print("[AIManager] Initialized")
 
 ## Load AI subsystems on-demand (not at startup)

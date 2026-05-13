@@ -12,7 +12,6 @@ var _incarnation_manager: Node
 var _subsystems_loaded: bool = false
 
 func _ready() -> void:
-	add_to_group("tickable")
 	print("[PlayerManager] Initialized")
 
 ## Load player subsystems on-demand (not at startup)

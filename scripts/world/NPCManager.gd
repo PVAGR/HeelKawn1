@@ -26,7 +26,9 @@ func _ready() -> void:
 
 
 func _on_world_tick(tick_number: int) -> void:
-	# Process mood consistency for all NPCs
+	# Process mood consistency for all NPCs — throttled to every 50 ticks
+	if tick_number % 50 != 0:
+		return
 	for npc_id in _npcs.keys():
 		var npc_data: Dictionary = _npcs.get(npc_id, {})
 		if npc_data.is_empty():

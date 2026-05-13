@@ -183,11 +183,9 @@ func _ready():
 
 
 func _on_world_tick(tick_number: int) -> void:
-	# Forward tick to all SettlementAI instances
-	for settlement_id in active_settlements:
-		var settlement_ai = active_settlements[settlement_id]
-		if settlement_ai != null and settlement_ai.has_method("_on_world_tick"):
-			settlement_ai._on_world_tick(tick_number)
+	# Settlement AI updates are handled by AIAgentManager with proper throttling.
+	# Do NOT double-dispatch here — that was causing double execution every tick.
+	pass
 
 func _world_stream(label: String) -> StringName:
 	return StringName("world_ai:%s" % label)
@@ -3461,6 +3459,11 @@ func _pawn_decision_rule_context(pd: HeelKawnianData) -> Dictionary:
 		"combat_rank": _pawn_combat_rank(pd),
 		# Warrior threat level from AICombatProgression
 		"warrior_threat": _pawn_warrior_threat(pd),
+		# Situational awareness (from pawn's nearby scan)
+		"awareness_danger_zone": _pawn_awareness_danger(pd),
+		"awareness_fire_nearby": _pawn_awareness_fire(pd),
+		"awareness_bed_nearby": _pawn_awareness_bed(pd),
+		"awareness_pawns_nearby": _pawn_awareness_pawns(pd),
 	}
 
 
@@ -3694,6 +3697,45 @@ func _pawn_warrior_threat(pd: HeelKawnianData) -> String:
 	if AICombatProgression != null and AICombatProgression.has_method("get_threat_level"):
 		return AICombatProgression.get_threat_level(int(pd.id))
 	return ""
+
+
+## Situational awareness helpers — read from the pawn's cached awareness scan
+func _pawn_awareness_danger(pd: HeelKawnianData) -> bool:
+	var pawn = _find_pawn_by_id(int(pd.id))
+	if pawn == null or not pawn.has_method("_refresh_awareness"):
+		return false
+	var aw: Dictionary = pawn._refresh_awareness()
+	return bool(aw.get("is_in_danger_zone", false))
+
+func _pawn_awareness_fire(pd: HeelKawnianData) -> bool:
+	var pawn = _find_pawn_by_id(int(pd.id))
+	if pawn == null or not pawn.has_method("_refresh_awareness"):
+		return false
+	var aw: Dictionary = pawn._refresh_awareness()
+	return bool(aw.get("has_fire_nearby", false))
+
+func _pawn_awareness_bed(pd: HeelKawnianData) -> bool:
+	var pawn = _find_pawn_by_id(int(pd.id))
+	if pawn == null or not pawn.has_method("_refresh_awareness"):
+		return false
+	var aw: Dictionary = pawn._refresh_awareness()
+	return bool(aw.get("has_bed_nearby", false))
+
+func _pawn_awareness_pawns(pd: HeelKawnianData) -> int:
+	var pawn = _find_pawn_by_id(int(pd.id))
+	if pawn == null or not pawn.has_method("_refresh_awareness"):
+		return 0
+	var aw: Dictionary = pawn._refresh_awareness()
+	return int(aw.get("pawns_nearby_count", 0))
+
+## Helper to find a pawn node by ID (for awareness lookups)
+func _find_pawn_by_id(pawn_id: int) -> Node:
+	var ps = get_node_or_null("/root/Main")
+	if ps != null:
+		ps = ps.get_node_or_null("WorldViewport/PawnSpawner")
+	if ps != null and ps.has_method("get_pawn_by_id"):
+		return ps.get_pawn_by_id(pawn_id)
+	return null
 
 
 ## Returns 0.0-1.0 danger level from WorldMeaning tags (repeated_death, blood_soaked, graveyard, famine_stricken, fire_prone, ruined, ancient/old myth tags).

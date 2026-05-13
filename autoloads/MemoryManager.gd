@@ -20,7 +20,6 @@ var _chronicle_log: Node
 var _subsystems_loaded: bool = false
 
 func _ready() -> void:
-	add_to_group("tickable")
 	print("[MemoryManager] Initialized")
 
 ## Load memory subsystems on-demand (not at startup)

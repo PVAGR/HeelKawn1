@@ -15,7 +15,6 @@ var _heelkawnian_voice: Node
 var _subsystems_loaded: bool = false
 
 func _ready() -> void:
-	add_to_group("tickable")
 	print("[PawnManager] Initialized")
 
 ## Load pawn subsystems on-demand (not at startup)

@@ -118,8 +118,14 @@ func _process(delta: float) -> void:
 	# 100ms keeps the window responsive (well under Windows' 5s kill threshold)
 	# while allowing ~10 ticks/frame for backlog catch-up at 10ms/tick.
 	var frame_budget_usec: int = _get_frame_budget_usec()
-	# Never exceed 16ms regardless of speed — 60fps is the target
-	frame_budget_usec = mini(frame_budget_usec, TARGET_FRAME_TIME_USEC)
+	# At high speed, allow larger frame budget to process more ticks per frame.
+	# 60fps at 1x, but at 100x we accept lower FPS to get more sim ticks through.
+	if _speed_multiplier >= 100.0:
+		frame_budget_usec = mini(frame_budget_usec, 50_000)  # 50ms = 20fps at 100x
+	elif _speed_multiplier >= 26.0:
+		frame_budget_usec = mini(frame_budget_usec, 33_000)  # 33ms = 30fps at 26x+
+	else:
+		frame_budget_usec = mini(frame_budget_usec, TARGET_FRAME_TIME_USEC)  # 16ms = 60fps at 1x
 
 	while _accumulated_time >= TICK_STEP and ticks_this_frame < _adaptive_max_ticks_per_frame:
 		_accumulated_time -= TICK_STEP

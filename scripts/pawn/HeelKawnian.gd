@@ -507,6 +507,12 @@ var _last_failed_job_tile: Vector2i = Vector2i(-9999, -9999)
 var _last_failed_job_tick: int = -999999
 var _short_fail_tiles: Dictionary = {} # tile_key -> {tick, job_type, reason}
 var _short_success_tiles: Dictionary = {} # tile_key -> {tick, job_type}
+## Situational awareness: cached scan of nearby tiles for threats, food, shelter.
+## Refreshed every AWARENESS_REFRESH_INTERVAL ticks.
+var _awareness: Dictionary = {}
+var _awareness_tick: int = -999999
+const AWARENESS_REFRESH_INTERVAL: int = 30  # Refresh every 30 ticks
+const AWARENESS_SCAN_RADIUS: int = 6  # Scan radius for nearby features
 ## Set true only after [method _pawn_connect_sim_tick_deferred] connects [signal GameManager.game_tick].
 ## Prevents sim ticks from running before [method bind] + [method _ready] have finished.
 var _pawn_sim_tick_armed: bool = false
@@ -2679,19 +2685,29 @@ func _on_world_tick(_tick: int) -> void:
 	if not is_instance_valid(self):
 		return
 	if not _pawn_sim_tick_armed:
-		# DEBUG: This should not happen after deferred connect runs
-		# If it does, the pawn wasn't properly initialized
 		return
 	if data == null:
-		push_warning("HeelKawnian: game_tick skipped - data not ready (path=%s)" % str(get_path()))
 		return
-	
-	# CRITICAL: Dead pawns do NOT process ticks - prevents duplicate deaths, biography spam, legacy duplication
-	if data.is_dead:
-		return  # HeelKawnian is already dead - skip all processing
 
-	# Process deferred nav change (from notify_pawns_nav_changed) — spread
-	# pathfinder recalculation cost across ticks instead of bursting in one frame.
+	# CRITICAL: Dead pawns do NOT process ticks
+	if data.is_dead:
+		return
+
+	# FAST PATH: At high speed, skip non-critical ticks for pawns in
+	# movement states. Their movement is handled in _process, and state
+	# transitions happen on arrival. Only IDLE/WORKING/SLEEPING pawns
+	# need per-tick AI logic.
+	var stride: int = maxi(1, _fast_forward_tick_stride())
+	if stride > 1:
+		var pid: int = int(data.id)
+		if posmod(_tick + pid, stride) != 0:
+			# Skip this tick — pawn is in a non-AI phase
+			# Still process nav dirty if needed (path recalculation)
+			if _nav_dirty:
+				_process_nav_dirty()
+			return
+
+	# Process deferred nav change
 	if _nav_dirty:
 		_process_nav_dirty()
 
@@ -2726,27 +2742,21 @@ func _on_world_tick(_tick: int) -> void:
 
 	if _trace_ai_slice:
 		CrashTrap.enter_system("pawn_tick:%d:ai" % pid)
+	# NOTE: stride-based skipping already handled at top of _on_world_tick.
+	# If we reach here, this pawn is on its AI tick.
 	if _trace_ai_slice:
-		CrashTrap.enter_system("pawn_tick:%d:ai:stride" % pid)
-	var stride: int = maxi(1, _fast_forward_tick_stride())
-	var ai_phase: int = pid
-	var run_full_ai: bool = stride <= 1 or (posmod(_tick + ai_phase, stride) == 0)
+		CrashTrap.enter_system("pawn_tick:%d:ai:cohort_draft" % pid)
+	# Throttled cohort system calls for performance
+	if GameManager.tick_count % COHORT_UPDATE_TICKS == 0:
+		update_cohort_membership()
+		_validate_or_dissolve_cohort()
+		_refresh_or_decay_cohort_stability()
+	# Apply meaning-based behavior density modifiers (Phase 4)
+	_apply_meaning_behavior_modifiers()
+	if draft_mode:
+		_engage_enemies()
 	if _trace_ai_slice:
-		CrashTrap.exit_system("pawn_tick:%d:ai:stride" % pid)
-	if run_full_ai:
-		if _trace_ai_slice:
-			CrashTrap.enter_system("pawn_tick:%d:ai:cohort_draft" % pid)
-		# Throttled cohort system calls for performance
-		if GameManager.tick_count % COHORT_UPDATE_TICKS == 0:
-			update_cohort_membership()
-			_validate_or_dissolve_cohort()
-			_refresh_or_decay_cohort_stability()
-		# Apply meaning-based behavior density modifiers (Phase 4)
-		_apply_meaning_behavior_modifiers()
-		if draft_mode:
-			_engage_enemies()
-		if _trace_ai_slice:
-			CrashTrap.exit_system("pawn_tick:%d:ai:cohort_draft" % pid)
+		CrashTrap.exit_system("pawn_tick:%d:ai:cohort_draft" % pid)
 	# Panic-sleep interrupt: if rest is critically low and we're not already
 	# resolving a true emergency (asleep, eating, or fed/in-hand), abandon
 	# what we're doing and collapse. Beats the eat/haul cycle that otherwise
@@ -2761,29 +2771,6 @@ func _on_world_tick(_tick: int) -> void:
 		return
 	if _trace_ai_slice:
 		CrashTrap.exit_system("pawn_tick:%d:ai:panic" % pid)
-	if not run_full_ai:
-		if _trace_ai_slice:
-			CrashTrap.enter_system("pawn_tick:%d:ai:throttled_state" % pid)
-		match _state:
-			State.WORKING:
-				_tick_working()
-			State.EATING:
-				_tick_eating()
-			State.SLEEPING:
-				_tick_sleeping()
-			State.TEACHING:
-				_tick_teaching()
-			State.CHALLENGE:
-				_tick_challenge()
-			State.DIRECT_FORAGING:
-				pass  # movement handled in _process
-			_:
-				pass
-		if _trace_ai_slice:
-			CrashTrap.exit_system("pawn_tick:%d:ai:throttled_state" % pid)
-		if _trace_ai_slice:
-			CrashTrap.exit_system("pawn_tick:%d:ai" % pid)
-		return
 	if _trace_ai_slice:
 		CrashTrap.enter_system("pawn_tick:%d:ai:full_state" % pid)
 	match _state:
@@ -3033,6 +3020,20 @@ func _tick_idle() -> void:
 	# 4. Tired -> sleep. Skipped if we're starving (food first, sleep when full).
 	if _maybe_start_sleeping():
 		return
+	# 4a. SITUATIONAL AWARENESS: if cold and fire nearby, walk to it.
+	# This is smarter than just sleeping — actively seek warmth.
+	if data != null and data.body_temperature < 36.5:
+		var aw: Dictionary = _refresh_awareness()
+		var fire: Vector2i = aw.get("nearest_fire", Vector2i(-9999, -9999))
+		if fire.x >= 0 and (fire.x != data.tile_pos.x or fire.y != data.tile_pos.y):
+			var fire_dist: int = absi(fire.x - data.tile_pos.x) + absi(fire.y - data.tile_pos.y)
+			if fire_dist <= AWARENESS_SCAN_RADIUS:
+				var path: Array[Vector2i] = _path_for_pawn(fire)
+				if not path.is_empty():
+					_state = State.GOING_TO_EAT  # Reuse walking state — will arrive at fire
+					_target_tile = fire
+					_start_path(path)
+					return
 	# BUNDLE 4: Slow/narrative lane — pilgrimage, cultural, rediscovery, diaspora.
 	# These are non-critical narrative side-effects; already have internal tick gates
 	# but the function-call chain itself is now gated to reduce call overhead.
@@ -3107,6 +3108,27 @@ func _tick_idle() -> void:
 	if run_nearby_lane and data != null and data.current_profession == HeelKawnianData.Profession.WARRIOR:
 		if _maybe_warrior_patrol():
 			return
+	# 5c. SITUATIONAL AWARENESS: if in danger zone and not a warrior, flee to shelter.
+	# Non-combat HeelKawnians should not idle in dangerous areas.
+	if run_nearby_lane and data != null and data.current_profession != HeelKawnianData.Profession.WARRIOR:
+		var aw: Dictionary = _refresh_awareness()
+		if aw.get("is_in_danger_zone", false):
+			# In a danger zone — try to move to safety
+			var shelter: Vector2i = aw.get("nearest_shelter", Vector2i(-9999, -9999))
+			var fire: Vector2i = aw.get("nearest_fire", Vector2i(-9999, -9999))
+			var safe_target: Vector2i = Vector2i(-9999, -9999)
+			if shelter.x >= 0:
+				safe_target = shelter
+			elif fire.x >= 0:
+				safe_target = fire
+			if safe_target.x >= 0 and (safe_target.x != data.tile_pos.x or safe_target.y != data.tile_pos.y):
+				var path: Array[Vector2i] = _path_for_pawn(safe_target)
+				if not path.is_empty():
+					_state = State.FLEEING
+					_start_path(path)
+					if GameManager.verbose_logs():
+						print("[HeelKawnian] %s fleeing danger zone → %s" % [data.display_name, safe_target])
+					return
 	# (Cultural exposure, rediscovery, diaspora moved to narrative lane above)
 	# 6. Job queue: take the best reachable job. We additionally skip build
 	# jobs whose required materials aren't on hand at the stockpile -- this
@@ -3128,17 +3150,16 @@ func _tick_idle() -> void:
 	
 	# Job claiming: pawns act when they need to, not when a scheduler says they can.
 	# Hungry pawns or pawns with no other options claim every tick.
-	# Well-fed pawns spread claims to reduce CPU at ultra speed.
+	# Well-fed pawns spread claims slightly to reduce CPU at ultra speed.
 	var claim_iv: int = 1  # Default: claim every tick (need-driven, not scheduler-driven)
 	if data.hunger > HUNGER_EAT_THRESHOLD and GameManager != null:
-		# Well-fed pawn at high speed: spread claims to reduce CPU
+		# Well-fed pawn at high speed: spread claims slightly to reduce CPU
 		var gs: float = GameManager.game_speed
 		if gs >= 100.0:
-			claim_iv = 4
+			claim_iv = 2  # Reduced from 4 to 2 - more aggressive claiming
 		elif gs >= 50.0:
-			claim_iv = 3
-		elif gs >= 26.0:
-			claim_iv = 2
+			claim_iv = 2  # Reduced from 3 to 2
+		# No increase for 26x+ - keep at 1
 	var claim_phase: int = 0
 	if data != null:
 		claim_phase = posmod(int(data.id), claim_iv)
@@ -3241,30 +3262,59 @@ func _tick_idle() -> void:
 	var _cached_stock_stone: int = StockpileManager.total_count_of(Item.Type.STONE)
 	var priority_cb: Callable = func(j: Job) -> int:
 		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j))
+		# ── URGENCY GATES: survival overrides profession/role preference ──
+		# When a need is critical, non-survival jobs get heavy penalties.
+		# A starving HeelKawnian should NEVER claim a build job.
+		var _is_food_job_type: bool = j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH or j.type == _Job.Type.COOK_MEAT or j.type == _Job.Type.COOK_FISH or j.type == _Job.Type.COOK_BERRIES or j.type == _Job.Type.HARVEST_CROPS or j.type == _Job.Type.PLANT_SEEDS
+		var _is_rest_job_type: bool = j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH or j.type == _Job.Type.BUILD_FIRE_PIT
+		if data.hunger <= HUNGER_EMERGENCY:
+			if not _is_food_job_type:
+				return -999  # Don't even consider non-food when starving
+		elif data.hunger <= HUNGER_EAT_THRESHOLD:
+			if not _is_food_job_type:
+				base_bias -= 12  # Heavy penalty for non-food when hungry
+		if data.rest <= REST_PANIC_THRESHOLD:
+			if not _is_rest_job_type and not _is_food_job_type:
+				base_bias -= 10  # Heavy penalty for non-rest when exhausted (but food still wins)
+		# Scale profession bonuses by need satisfaction — a builder at 10% hunger
+		# should care more about eating than building
+		var _need_urgency_scale: float = 1.0
+		if data.hunger <= HUNGER_EAT_THRESHOLD:
+			_need_urgency_scale = clampf(data.hunger / HUNGER_EAT_THRESHOLD, 0.0, 1.0)
+		elif data.rest <= REST_SLEEP_THRESHOLD:
+			_need_urgency_scale = clampf(data.rest / REST_SLEEP_THRESHOLD, 0.0, 1.0)
 		if not is_job_history_critical(j.type):
 			var rk_hist: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
 			base_bias += int(resolve_history_offset_for_region.call(rk_hist))
 		if affinity_key != "" and _job_matches_affinity(j.type, affinity_key):
 			base_bias += AFFINITY_JOB_PRIORITY_BONUS
 		# Profession-specific job priority: pawns strongly prefer jobs matching their role
+		# BUT: profession bonus scales down with need urgency. A starving builder
+		# should care more about food than building.
 		if data.current_profession != HeelKawnianData.Profession.NONE:
 			var prof: int = data.current_profession
+			var prof_bonus: int = 5
+			# Scale profession bonus: full at 100% needs, fading to 0 at critical
+			if _need_urgency_scale < 1.0:
+				prof_bonus = int(round(float(prof_bonus) * _need_urgency_scale))
+				if prof_bonus < 1 and _need_urgency_scale > 0.2:
+					prof_bonus = 1  # Minimum 1 if not completely critical
 			match prof:
 				HeelKawnianData.Profession.FARMER:
 					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.PLANT_SEEDS or j.type == _Job.Type.HARVEST_CROPS:
-						base_bias += 5
+						base_bias += prof_bonus
 				HeelKawnianData.Profession.BUILDER:
 					if _is_structure_build_job(j.type):
-						base_bias += 5
+						base_bias += prof_bonus
 				HeelKawnianData.Profession.GATHERER:
 					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.GATHER_FLINT or j.type == _Job.Type.GATHER_STICK:
-						base_bias += 5
+						base_bias += prof_bonus
 				HeelKawnianData.Profession.WARRIOR:
 					if j.type == _Job.Type.HUNT or j.type == _Job.Type.PROTECT or j.type == _Job.Type.DEFEND:
-						base_bias += 5
+						base_bias += prof_bonus
 				HeelKawnianData.Profession.SCHOLAR:
 					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
-						base_bias += 5
+						base_bias += prof_bonus
 		var action_key: String = _utility_action_for_job(int(j.type))
 		var utility_bias: int = 0
 		if utility_bias_cache.has(action_key):
@@ -3276,6 +3326,12 @@ func _tick_idle() -> void:
 		base_bias += data.kinship_job_priority_bonus(j.work_tile)
 		base_bias += _goal_priority_bias_for_job(j.type)
 		base_bias += _short_horizon_bias_for_job(j)
+		# PERSONAL LEARNING: confidence from own success/failure history
+		var personal_conf: float = data.personal_confidence_for_job(int(j.type))
+		if personal_conf < 0.3:
+			base_bias -= 3  # Bad personal track record → avoid
+		elif personal_conf > 0.7:
+			base_bias += 2  # Good personal track record → prefer
 		var learning_weight: float = _learning_weight_for_job(j.type)
 		if absf(learning_weight - 1.0) >= 0.01:
 			base_bias += int(round((learning_weight - 1.0) * 4.0))
@@ -3584,25 +3640,74 @@ func _tick_idle() -> void:
 		if food_job != null:
 			_begin_job(food_job)
 			return
+	# GOAL-DIRECTED FILTERING: When a goal has high priority (> 0.7),
+	# restrict job claiming to only goal-relevant jobs. Goals become plans,
+	# not just nudges. A HeelKawnian with "find_food" goal at priority 2.0
+	# should ONLY consider food jobs, not build or mine.
+	var goal_type: String = str(_cached_active_goal.get("type", ""))
+	var goal_priority: float = _cached_active_goal_priority
+	var goal_filter: Callable = base_passes  # Default: no filtering
+	if goal_priority > 0.7 and not goal_type.is_empty():
+		match goal_type:
+			"find_food":
+				goal_filter = func(j: Job) -> bool:
+					if j.type != _Job.Type.FORAGE and j.type != _Job.Type.HUNT and j.type != _Job.Type.FISH and j.type != _Job.Type.COOK_MEAT and j.type != _Job.Type.COOK_FISH and j.type != _Job.Type.COOK_BERRIES and j.type != _Job.Type.PLANT_SEEDS and j.type != _Job.Type.HARVEST_CROPS:
+						return false
+					return base_passes.call(j)
+			"find_rest":
+				goal_filter = func(j: Job) -> bool:
+					if j.type != _Job.Type.BUILD_BED and j.type != _Job.Type.BUILD_SHELTER and j.type != _Job.Type.BUILD_HEARTH and j.type != _Job.Type.BUILD_FIRE_PIT:
+						return false
+					return base_passes.call(j)
+			"improve_safety":
+				goal_filter = func(j: Job) -> bool:
+					if j.type != _Job.Type.BUILD_WALL and j.type != _Job.Type.BUILD_DOOR and j.type != _Job.Type.BUILD_WATCHTOWER and j.type != _Job.Type.BUILD_BARRACKS and j.type != _Job.Type.PROTECT and j.type != _Job.Type.DEFEND:
+						return false
+					return base_passes.call(j)
+			"build_reputation", "seek_leadership":
+				goal_filter = func(j: Job) -> bool:
+					if j.type != _Job.Type.TEACH_SKILL and j.type != _Job.Type.APPRENTICESHIP and j.type != _Job.Type.BUILD_MARKER_STONE:
+						return false
+					return base_passes.call(j)
+			"leave_legacy":
+				goal_filter = func(j: Job) -> bool:
+					if j.type != _Job.Type.CARVE_LEDGER_STONE and j.type != _Job.Type.CARVE_KNOWLEDGE_STONE and j.type != _Job.Type.CARVE_GRAVE_MARKER:
+						return false
+					return base_passes.call(j)
 	# PROFESSION PRIORITY: Builders prioritize build jobs, Warriors prioritize hunt/combat
 	var profession_bonus: Callable = _get_profession_priority_bonus
-	var job: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(priority_cb, profession_bonus))
+	var job: Job = JobManager.claim_next_for(self, goal_filter, _merge_priority_callbacks(priority_cb, profession_bonus))
 	if job != null:
 		_begin_job(job)
+		# If we got a job through goal filtering, we're on plan. If not, fall through
+		# to an unfiltered claim on the next tick (goal filter only applies when
+		# the goal is high priority, so missing one tick is fine).
+		return
+	# GOAL FALLBACK: If goal-directed filtering found nothing, try unfiltered
+	# (but only if goal priority isn't critical — critical goals mean we wait)
+	if goal_priority > 0.7 and not goal_type.is_empty():
+		# Don't fall through — we're committed to this goal. Wander and try again.
+		_start_wander()
+		return
+	# Unfiltered claim: no strong goal, take whatever's available
+	var profession_bonus2: Callable = _get_profession_priority_bonus
+	var job2: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(priority_cb, profession_bonus2))
+	if job2 != null:
+		_begin_job(job2)
 
 		# LOG COMMUNICATION: Announce work to nearby pawns
 		if data != null and PawnCommunicationLog != null:
 			PawnCommunicationLog.log_work_announcement(
 				int(data.id),
 				data.display_name,
-				job.type,
-				job.work_tile,
-				"Priority: %d" % job.priority
+				job2.type,
+				job2.work_tile,
+				"Priority: %d" % job2.priority
 			)
 
 		# SHOW CHATTER BUBBLE: Visible speech bubble above pawn
 		if data != null and PawnChatterBubbles != null:
-			PawnChatterBubbles.show_work_bubble(int(data.id), self, job.type)
+			PawnChatterBubbles.show_work_bubble(int(data.id), self, job2.type)
 
 		return
 	# 7. Nothing to do: idle wander
@@ -3892,6 +3997,90 @@ func _idle_danger_level() -> float:
 		var mem: Dictionary = data.location_memory[tile_key]
 		memory_danger = clampf(float(mem.get("danger_level", 0.0)), 0.0, 1.0)
 	return maxf(scar_danger, memory_danger)
+
+
+## Situational awareness: scan nearby tiles for threats, food sources, shelter.
+## Returns a dictionary with: nearest_threat, nearest_food_source, nearest_shelter,
+## nearest_fire, has_fire_nearby, has_bed_nearby, pawns_nearby_count, is_in_danger_zone
+func _refresh_awareness() -> Dictionary:
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	if tick - _awareness_tick < AWARENESS_REFRESH_INTERVAL and not _awareness.is_empty():
+		return _awareness
+	_awareness_tick = tick
+	var result: Dictionary = {
+		"nearest_threat": Vector2i(-9999, -9999),
+		"nearest_food_source": Vector2i(-9999, -9999),
+		"nearest_shelter": Vector2i(-9999, -9999),
+		"nearest_fire": Vector2i(-9999, -9999),
+		"has_fire_nearby": false,
+		"has_bed_nearby": false,
+		"pawns_nearby_count": 0,
+		"is_in_danger_zone": false,
+	}
+	if data == null or _world == null:
+		_awareness = result
+		return result
+	var px: int = data.tile_pos.x
+	var py: int = data.tile_pos.y
+	var r: int = AWARENESS_SCAN_RADIUS
+	var best_threat_dist: int = 9999
+	var best_food_dist: int = 9999
+	var best_shelter_dist: int = 9999
+	var best_fire_dist: int = 9999
+	# Scan nearby tiles
+	for dx in range(-r, r + 1):
+		for dy in range(-r, r + 1):
+			var tx: int = px + dx
+			var ty: int = py + dy
+			if tx < 0 or ty < 0 or tx >= WorldData.WIDTH or ty >= WorldData.HEIGHT:
+				continue
+			var dist: int = absi(dx) + absi(dy)
+			if dist == 0:
+				continue
+			var tile: Vector2i = Vector2i(tx, ty)
+			var feat: int = _world.data.get_feature(tx, ty)
+			# Fire pit = warmth source
+			if feat == TileFeature.Type.FIRE_PIT:
+				if dist < best_fire_dist:
+					best_fire_dist = dist
+					result.nearest_fire = tile
+				if dist <= 3:
+					result.has_fire_nearby = true
+			# Bed = shelter
+			if feat == TileFeature.Type.BED:
+				if dist < best_shelter_dist:
+					best_shelter_dist = dist
+					result.nearest_shelter = tile
+				if dist <= 3:
+					result.has_bed_nearby = true
+			# Fertile soil = food source
+			if feat == TileFeature.Type.FERTILE_SOIL:
+				if dist < best_food_dist:
+					best_food_dist = dist
+					result.nearest_food_source = tile
+	# Check for nearby pawns (for social/teaching) — cheap O(n) scan, only every 30 ticks
+	var pawns: Array = get_tree().get_nodes_in_group("pawns") if get_tree() != null else []
+	for p in pawns:
+		if p == self or not is_instance_valid(p) or p.data == null:
+			continue
+		var pdx: int = absi(p.data.tile_pos.x - px)
+		if pdx > r:
+			continue  # Quick reject before computing full distance
+		var pdy: int = absi(p.data.tile_pos.y - py)
+		if pdy > r:
+			continue
+		if pdx + pdy <= r:
+			result.pawns_nearby_count += 1
+	# Check danger zone from meaning tags
+	if WorldMeaning != null and WorldMeaning.has_method("get_region_tags"):
+		var rk: int = (px >> 4) | ((py >> 4) << 16)
+		var tags: PackedStringArray = WorldMeaning.get_region_tags(rk)
+		for tag in tags:
+			if tag == "danger" or tag == "death" or tag == "conflict":
+				result.is_in_danger_zone = true
+				break
+	_awareness = result
+	return result
 
 
 func _utility_action_for_job(job_type: int) -> String:
@@ -4924,6 +5113,26 @@ func _complete_current_job() -> void:
 		_unclaim_current_job("hunt_stabilization")
 		return
 
+	# PERSONAL LEARNING: Record successful job completion
+	if job != null and data != null:
+		# Record success for the job's action category
+		var _paction: String = ""
+		match int(job.type):
+			_Job.Type.FORAGE: _paction = "forage"
+			_Job.Type.CHOP: _paction = "chop"
+			_Job.Type.MINE, _Job.Type.MINE_WALL: _paction = "mine"
+			_Job.Type.HUNT: _paction = "hunt"
+			_Job.Type.FISH: _paction = "fish"
+			_Job.Type.GATHER_FLINT, _Job.Type.GATHER_STICK: _paction = "gather"
+			_Job.Type.COOK_MEAT, _Job.Type.COOK_FISH, _Job.Type.COOK_BERRIES: _paction = "cook"
+			_Job.Type.PLANT_SEEDS: _paction = "plant"
+			_Job.Type.HARVEST_CROPS: _paction = "harvest"
+			_Job.Type.TEACH_SKILL, _Job.Type.APPRENTICESHIP: _paction = "teach"
+			_Job.Type.PROTECT, _Job.Type.DEFEND: _paction = "defend"
+			_Job.Type.CARVE_GRAVE_MARKER, _Job.Type.CARVE_KNOWLEDGE_STONE, _Job.Type.CARVE_LEDGER_STONE: _paction = "carve"
+		if _paction != "":
+			data.record_personal_outcome(_paction, true)
+
 	# PAWN-ACTIVATED EVENT: Record job completion for event system
 	if WorldEvents != null and WorldEvents.has_method("record_pawn_action"):
 		WorldEvents.record_pawn_action("job_complete", int(data.id))
@@ -5513,6 +5722,23 @@ func _unclaim_current_job(reason: String = "") -> void:
 		var j0: Job = _current_job
 		_return_trade_cargo_to_source_if_any(j0)
 		_record_short_horizon_failure(j0, reason)
+		# PERSONAL LEARNING: Record job failure
+		if data != null:
+			var _paction: String = ""
+			match int(j0.type):
+				_Job.Type.FORAGE: _paction = "forage"
+				_Job.Type.CHOP: _paction = "chop"
+				_Job.Type.MINE, _Job.Type.MINE_WALL: _paction = "mine"
+				_Job.Type.HUNT: _paction = "hunt"
+				_Job.Type.FISH: _paction = "fish"
+				_Job.Type.GATHER_FLINT, _Job.Type.GATHER_STICK: _paction = "gather"
+				_Job.Type.COOK_MEAT, _Job.Type.COOK_FISH, _Job.Type.COOK_BERRIES: _paction = "cook"
+				_Job.Type.PLANT_SEEDS: _paction = "plant"
+				_Job.Type.HARVEST_CROPS: _paction = "harvest"
+				_Job.Type.TEACH_SKILL, _Job.Type.APPRENTICESHIP: _paction = "teach"
+				_Job.Type.PROTECT, _Job.Type.DEFEND: _paction = "defend"
+			if _paction != "":
+				data.record_personal_outcome(_paction, false)
 		JobManager.abandon(j0, reason)
 		# Track consecutive abandons to detect claim/abort loops
 		var now_tick: int = GameManager.tick_count if GameManager != null else 0

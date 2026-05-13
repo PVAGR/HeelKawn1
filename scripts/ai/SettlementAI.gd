@@ -992,6 +992,10 @@ func update() -> void:
 
 ## Called by TickManager via AIAgentManager forwarding
 func _on_world_tick(tick_number: int) -> void:
+	# Throttle: settlement AI doesn't need to run every tick.
+	# Culture/economy/goals evolve on longer timescales.
+	if tick_number % 10 != 0:
+		return
 	update()
 
 func _process_collective_goals() -> void:

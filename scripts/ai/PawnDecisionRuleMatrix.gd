@@ -797,6 +797,35 @@ func evaluate(pd: HeelKawnianData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump(outs, 4, construction_bias)
 		fired.append({"id": "learn_construction", "line": "IF learning says construction works then build more.", "w": abs(construction_bias)})
 
+	# ==================== Situational Awareness rules ====================
+	# These use awareness data from the pawn's nearby scan
+	var aw_danger: bool = bool(ctx.get("awareness_danger_zone", false))
+	var aw_fire_nearby: bool = bool(ctx.get("awareness_fire_nearby", false))
+	var aw_bed_nearby: bool = bool(ctx.get("awareness_bed_nearby", false))
+	var aw_pawns_nearby: int = int(ctx.get("awareness_pawns_nearby", 0))
+
+	# Danger zone: non-warriors should avoid and seek shelter
+	if aw_danger and combat_af < 0.55:
+		_bump_many(outs, [1, 7], 0.14)  # rest + observe — cautious
+		_bump(outs, 3, -0.10)  # avoid foraging in danger
+		_bump(outs, 6, 0.08)   # mild defend — stay alert
+		fired.append({"id": "awareness_danger", "line": "IF in danger zone AND not combat-affine THEN cautious + avoid forage.", "w": 0.65})
+
+	# Fire nearby + cold: strong seek-rest (warmth drive)
+	if aw_fire_nearby and hunger > 38.0:
+		_bump(outs, 1, 0.10)  # rest — warmth is available
+		fired.append({"id": "awareness_warmth", "line": "IF fire nearby AND not hungry THEN seek warmth/rest.", "w": 0.45})
+
+	# Bed nearby + tired: stronger sleep drive
+	if aw_bed_nearby and rest < 55.0:
+		_bump(outs, 1, 0.08)  # rest — bed is available
+		fired.append({"id": "awareness_shelter", "line": "IF bed nearby AND tired THEN seek rest.", "w": 0.40})
+
+	# Pawns nearby: social opportunity
+	if aw_pawns_nearby >= 2:
+		_bump(outs, 2, 0.06)  # social — community is present
+		fired.append({"id": "awareness_community", "line": "IF pawns nearby THEN social opportunity.", "w": 0.30})
+
 	fired.sort_custom(func(a, b): return float(a.get("w", 0.0)) > float(b.get("w", 0.0)))
 	var human_ch: Array = _build_human_channels(pd, ctx, outs)
 	_apply_human_semantic_projection(outs, human_ch)

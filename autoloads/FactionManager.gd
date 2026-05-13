@@ -11,7 +11,6 @@ var _authority_system: Node
 var _subsystems_loaded: bool = false
 
 func _ready() -> void:
-	add_to_group("tickable")
 	print("[FactionManager] Initialized")
 
 ## Load faction subsystems on-demand (not at startup)

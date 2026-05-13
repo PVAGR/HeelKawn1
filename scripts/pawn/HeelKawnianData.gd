@@ -391,6 +391,9 @@ var episodic_memory: Dictionary = {}
 ## Semantic memory: learned facts (locations, recipes, social relationships)
 ## fact_key -> {learned_tick, confidence, source, details}
 var semantic_memory: Dictionary = {}
+## Personal outcomes: each HeelKawnian tracks their own success/failure rate
+## action_type -> {successes: int, failures: int, last_tick: int}
+var _personal_outcomes: Dictionary = {}
 ## Spatial memory: map of explored areas with resource locations
 ## tile_key -> {last_seen_tick, resource_type, danger_level, terrain_type}
 var spatial_memory: Dictionary = {}
@@ -1773,6 +1776,83 @@ func record_action_outcome(action_type: String, success: bool, context: Dictiona
 		var fact_key: String = "action_success:" + action_type
 		var current_confidence: float = recall_semantic_fact(fact_key).get("confidence", 0.5)
 		learn_semantic_fact(fact_key, {"action_type": action_type}, clamp(current_confidence - 0.15, 0.0, 1.0), "experience")
+
+
+## Record a personal outcome for this specific HeelKawnian.
+## action_type: e.g. "forage", "mine", "build", "chop", "hunt", "fish"
+## success: whether the action succeeded
+func record_personal_outcome(action_type: String, success: bool) -> void:
+	if not _personal_outcomes.has(action_type):
+		_personal_outcomes[action_type] = {"successes": 0, "failures": 0, "last_tick": 0}
+	var entry: Dictionary = _personal_outcomes[action_type]
+	if success:
+		entry.successes = min(entry.successes + 1, 50)  # Cap to prevent runaway
+	else:
+		entry.failures = min(entry.failures + 1, 50)
+	entry.last_tick = GameManager.tick_count if GameManager != null else 0
+
+
+## Get personal confidence (0.0-1.0) for an action type based on own experience.
+## 0.5 = no experience (neutral). Higher = more success. Lower = more failure.
+func personal_confidence_for(action_type: String) -> float:
+	if not _personal_outcomes.has(action_type):
+		return 0.5  # No experience = neutral
+	var entry: Dictionary = _personal_outcomes[action_type]
+	var total: int = entry.successes + entry.failures
+	if total == 0:
+		return 0.5
+	# Weight recent outcomes more: if last_tick is recent, confidence matters more
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	var recency: float = 1.0
+	if entry.last_tick > 0:
+		var age: int = tick - int(entry.last_tick)
+		if age > 5000:
+			recency = 0.5  # Old outcomes matter less
+		elif age > 2000:
+			recency = 0.75
+	# Calculate confidence with recency weighting
+	var raw: float = float(entry.successes) / float(total)
+	return lerpf(0.5, raw, recency)  # Blend toward 0.5 for old outcomes
+
+
+## Get a job-type-mapped personal confidence.
+## Maps Job.Type integers to action strings for personal learning.
+func personal_confidence_for_job(job_type: int) -> float:
+	var action: String = ""
+	match job_type:
+		0: action = "forage"       # FORAGE
+		1: action = "chop"         # CHOP
+		2: action = "mine"         # MINE
+		3: action = "build"        # BUILD_BED
+		4: action = "build"        # BUILD_WALL
+		5: action = "build"        # BUILD_DOOR
+		6: action = "gather"       # GATHER_FLINT
+		7: action = "gather"       # GATHER_STICK
+		8: action = "hunt"         # HUNT
+		9: action = "fish"         # FISH
+		10: action = "build"       # BUILD_FIRE_PIT
+		11: action = "build"       # BUILD_STORAGE_HUT
+		12: action = "cook"        # COOK_MEAT
+		13: action = "cook"        # COOK_FISH
+		14: action = "cook"        # COOK_BERRIES
+		15: action = "carve"       # CARVE_GRAVE_MARKER
+		16: action = "carve"       # CARVE_KNOWLEDGE_STONE
+		17: action = "carve"       # CARVE_LEDGER_STONE
+		18: action = "plant"       # PLANT_SEEDS
+		19: action = "harvest"     # HARVEST_CROPS
+		20: action = "build"       # BUILD_SHELTER
+		21: action = "build"       # BUILD_HEARTH
+		22: action = "build"       # BUILD_MARKER_STONE
+		23: action = "build"       # BUILD_SHRINE
+		24: action = "teach"       # TEACH_SKILL
+		25: action = "teach"       # APPRENTICESHIP
+		26: action = "protect"     # PROTECT
+		27: action = "defend"      # DEFEND
+		28: action = "mine"        # MINE_WALL
+		_: action = "work"        # Generic fallback
+	if action == "":
+		return 0.5
+	return personal_confidence_for(action)
 
 
 func get_health_percentage() -> float:

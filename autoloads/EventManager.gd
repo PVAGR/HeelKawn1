@@ -11,7 +11,6 @@ var _world_event_seed_manager: Node
 var _subsystems_loaded: bool = false
 
 func _ready() -> void:
-	add_to_group("tickable")
 	print("[EventManager] Initialized")
 
 ## Load event subsystems on-demand (not at startup)

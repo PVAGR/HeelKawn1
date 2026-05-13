@@ -79,13 +79,17 @@ func _ready() -> void:
 
 
 func _on_game_tick(tick: int) -> void:
+	# Throttle: auto-build doesn't need to run every tick.
+	# Build intents and pawn scanning are not time-critical.
+	if tick % 10 != 0:
+		return
 	# Clear old resource cache periodically
 	if tick - _cache_tick > CACHE_DURATION_TICKS:
 		_resource_cache.clear()
-	
+
 	# Process build intents
 	_process_build_intents(tick)
-	
+
 	# Scan for new pawns that need direction
 	_scan_for_new_pawns(tick)
 

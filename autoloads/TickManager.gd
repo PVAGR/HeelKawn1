@@ -121,9 +121,9 @@ func _process(delta: float) -> void:
 	# At high speed, allow larger frame budget to process more ticks per frame.
 	# 60fps at 1x, but at 100x we accept lower FPS to get more sim ticks through.
 	if _speed_multiplier >= 100.0:
-		frame_budget_usec = mini(frame_budget_usec, 50_000)  # 50ms = 20fps at 100x
+		frame_budget_usec = mini(frame_budget_usec, 100_000)  # 100ms = 10fps at 100x
 	elif _speed_multiplier >= 26.0:
-		frame_budget_usec = mini(frame_budget_usec, 33_000)  # 33ms = 30fps at 26x+
+		frame_budget_usec = mini(frame_budget_usec, 50_000)  # 50ms = 20fps at 26x+
 	else:
 		frame_budget_usec = mini(frame_budget_usec, TARGET_FRAME_TIME_USEC)  # 16ms = 60fps at 1x
 

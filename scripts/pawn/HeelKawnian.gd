@@ -282,6 +282,7 @@ const WANDER_CHANCE_PER_TICK: float = 0.08
 const HAUL_FAIL_LOG_EVERY_N_TICKS: int = 300
 ## If a haul target is unreachable/missing, wait a few ticks before trying again.
 const HAUL_RETRY_COOLDOWN_TICKS: int = 10
+const MAX_HAUL_RETRIES: int = 30
 ## At high sim speeds, skip historical aversion weighting path pass to avoid
 ## expensive weight toggles on every pawn path request.
 const FAST_PATHFIND_SPEED_THRESHOLD: float = 6.0
@@ -424,6 +425,7 @@ var _mood_level: int = 0
 ## retry loop doesn't flood the console.
 var _last_haul_fail_log_tick: int = -HAUL_FAIL_LOG_EVERY_N_TICKS
 var _next_haul_retry_tick: int = 0
+var _haul_retry_count: int = 0
 var _next_cohort_update_tick: int = 0
 var _cohort_anchor_ref: WeakRef = null
 var _next_recruitment_cache_tick: int = 0
@@ -2693,16 +2695,16 @@ func _on_world_tick(_tick: int) -> void:
 	if data.is_dead:
 		return
 
-	# FAST PATH: At high speed, skip non-critical ticks for pawns in
-	# movement states. Their movement is handled in _process, and state
-	# transitions happen on arrival. Only IDLE/WORKING/SLEEPING pawns
-	# need per-tick AI logic.
+	# FAST PATH: At high speed, skip the expensive IDLE AI (job claiming,
+	# utility scoring, etc.) for pawns that aren't on their AI tick.
+	# WORKING/SLEEPING/EATING pawns ALWAYS need their tick — work progress,
+	# sleep recovery, and eating all tick-count.
+	# Movement states (WALKING/HAULING/GOING) are handled in _process.
 	var stride: int = maxi(1, _fast_forward_tick_stride())
-	if stride > 1:
+	if stride > 1 and _state == State.IDLE:
 		var pid: int = int(data.id)
 		if posmod(_tick + pid, stride) != 0:
-			# Skip this tick — pawn is in a non-AI phase
-			# Still process nav dirty if needed (path recalculation)
+			# Skip this tick — pawn is idle and not on its AI phase
 			if _nav_dirty:
 				_process_nav_dirty()
 			return
@@ -2804,35 +2806,30 @@ func _fast_forward_tick_stride() -> int:
 	if GameManager == null:
 		return 1
 	var gs: float = GameManager.game_speed
-	## Match toolbar tiers (12 / 26 / 50 / 100): fewer expensive idle/job scans per sim tick.
+	## Stride only applies to IDLE pawns (expensive job claiming).
+	## WORKING/SLEEPING/EATING pawns always tick.
 	if gs >= 100.0:
-		return 14
+		return 6
 	if gs >= 50.0:
-		return 10
-	if gs >= 26.0:
-		return 8
-	if gs >= 12.0:
 		return 4
-	if gs >= 4.0:
+	if gs >= 26.0:
+		return 3
+	if gs >= 12.0:
 		return 2
-	# At baseline play speed, run full AI every tick for responsive behavior.
 	return 1
 
 
 func _job_claim_interval_for_speed() -> int:
-	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
+	# Hungry pawns always claim every tick. Well-fed pawns spread claims
+	# to reduce CPU at high speed, but not so much that they sit idle.
 	if GameManager == null:
 		return 1
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 12
+		return 4
 	if gs >= 50.0:
-		return 8
-	if gs >= 26.0:
-		return 5
-	if gs >= 12.0:
 		return 3
-	if gs >= 6.0:
+	if gs >= 26.0:
 		return 2
 	return 1
 
@@ -3683,13 +3680,12 @@ func _tick_idle() -> void:
 		# to an unfiltered claim on the next tick (goal filter only applies when
 		# the goal is high priority, so missing one tick is fine).
 		return
-	# GOAL FALLBACK: If goal-directed filtering found nothing, try unfiltered
-	# (but only if goal priority isn't critical — critical goals mean we wait)
+	# GOAL FALLBACK: If goal-directed filtering found nothing, try unfiltered.
+	# Goals are plans, not death sentences. A hungry pawn with no food jobs
+	# should still chop wood or build — not wander forever waiting for food.
 	if goal_priority > 0.7 and not goal_type.is_empty():
-		# Don't fall through — we're committed to this goal. Wander and try again.
 		_start_wander()
-		return
-	# Unfiltered claim: no strong goal, take whatever's available
+	# Unfiltered claim: take whatever's available
 	var profession_bonus2: Callable = _get_profession_priority_bonus
 	var job2: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(priority_cb, profession_bonus2))
 	if job2 != null:
@@ -5865,8 +5861,16 @@ func _begin_haul_to_stockpile() -> void:
 			data.carrying, data.tile_pos, _world.pathfinder
 		)
 	if sp == null:
-		# No zone exists that will take this item. Hold onto it and stay idle;
-		# next tick we'll try again (maybe the player designated a zone).
+		# No zone exists that will take this item. After enough retries,
+		# emergency-drop it so the pawn doesn't stay stuck forever.
+		_haul_retry_count += 1
+		if _haul_retry_count >= MAX_HAUL_RETRIES:
+			if GameManager.verbose_logs():
+				print("[HeelKawnian] %s emergency-dropping %s after %d haul retries" % [data.display_name, data.carrying, _haul_retry_count])
+			data.clear_carry()
+			_haul_retry_count = 0
+			_state = State.IDLE
+			return
 		_log_haul_fail("no accepting zone")
 		_next_haul_retry_tick = tick_now + HAUL_RETRY_COOLDOWN_TICKS
 		_state = State.IDLE
@@ -5883,6 +5887,7 @@ func _begin_haul_to_stockpile() -> void:
 		_state = State.IDLE
 		return
 	_next_haul_retry_tick = 0
+	_haul_retry_count = 0
 	_state = State.HAULING
 	_start_path(path)
 	_request_redraw()

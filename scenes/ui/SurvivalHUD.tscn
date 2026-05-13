@@ -7,9 +7,9 @@ script = ExtResource("1_survival_hud")
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 offset_left = 10.0
-offset_top = 10.0
+offset_top = 260.0
 offset_right = 290.0
-offset_bottom = 230.0
+offset_bottom = 480.0
 
 [node name="Panel" type="PanelContainer" parent="MarginContainer"]
 layout_mode = 2

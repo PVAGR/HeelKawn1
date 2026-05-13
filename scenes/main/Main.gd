@@ -3921,10 +3921,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		if key.pressed:
 			_handle_key_input(key)
 			return
-	# Watch mode is intentionally non-interactive with the simulation layer.
-	# Camera/navigation can still work in dedicated camera scripts.
+	# Watch mode: camera/navigation works, and clicking a HeelKawnian
+	# shows their info panel. Only simulation-affecting clicks are blocked.
 	if _is_watch_mode():
 		if event is InputEventMouseButton:
+			if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+				_handle_select_click_at(get_global_mouse_position())
 			get_viewport().set_input_as_handled()
 		return
 	if event is InputEventMouseMotion:

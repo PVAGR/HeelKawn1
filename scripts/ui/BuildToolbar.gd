@@ -44,6 +44,7 @@ const ACCENT_SAVE:  Color = Color8(100, 200, 140)  # save (disk)
 const ACCENT_LOAD:  Color = Color8(200, 160, 100)  # load / recall
 const ACCENT_YOU:  Color = Color8(200, 140, 220)
 const ACCENT_BUILD: Color = Color8(220, 180, 100)
+const ACCENT_VIEW:  Color = Color8(160, 200, 220)
 
 const FONT_SIZE_BUTTON: int = 11
 const FONT_SIZE_LABEL:  int = 9
@@ -53,6 +54,7 @@ var _speed_buttons: Array = []        # parallel to GameManager.SPEED_STEPS
 var _pause_button: Button = null
 
 var _active_mode: int = MODE_NONE
+var _view_buttons: Dictionary = {}  # panel_name -> Button
 
 
 func _ready() -> void:
@@ -96,6 +98,8 @@ func _build_ui() -> void:
 	_build_appearance_cluster(row)
 	row.add_child(_make_separator())
 	_build_build_cluster(row)
+	row.add_child(_make_separator())
+	_build_view_cluster(row)
 
 	_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	# Defer position so layout settles and we can read the actual minimum size.
@@ -142,6 +146,50 @@ func _build_build_cluster(row: HBoxContainer) -> void:
 
 func _on_build_item_pressed(type: String) -> void:
 	structure_type_requested.emit(type)
+
+
+func _build_view_cluster(row: HBoxContainer) -> void:
+	var label := _make_cluster_label("View")
+	row.add_child(label)
+	# Each button toggles a UI panel. Default state: ColonyHUD on, others off.
+	var panels: Array = [
+		{"name": "ColonyHUD", "label": "Colony", "default_on": true},
+		{"name": "SurvivalHUD", "label": "Survival", "default_on": false},
+		{"name": "ObserverHUD", "label": "Realm", "default_on": false},
+		{"name": "Minimap", "label": "Map", "default_on": true},
+		{"name": "PawnInfoPanel", "label": "Info", "default_on": true},
+	]
+	for p in panels:
+		var btn := _make_button(p["label"], ACCENT_VIEW)
+		btn.toggle_mode = true
+		var panel_name: String = p["name"]
+		var default_on: bool = p["default_on"]
+		btn.set_pressed_no_signal(default_on)
+		btn.pressed.connect(_on_view_toggle.bind(panel_name, btn))
+		_view_buttons[panel_name] = btn
+		row.add_child(btn)
+		# Apply initial state
+		_set_panel_visible(panel_name, default_on)
+
+
+func _on_view_toggle(panel_name: String, btn: Button) -> void:
+	_set_panel_visible(panel_name, btn.is_pressed())
+
+
+func _set_panel_visible(panel_name: String, visible: bool) -> void:
+	# Find the panel in the UI_Viewport
+	var ui_viewport = get_tree().get_root().get_node_or_null("Main/UI_Viewport")
+	if ui_viewport == null:
+		return
+	var panel = ui_viewport.get_node_or_null(panel_name)
+	if panel == null:
+		return
+	panel.visible = visible
+	# Also handle PawnInfoPanel which is a CanvasLayer
+	if panel is CanvasLayer:
+		for child in panel.get_children():
+			if child is Control:
+				child.visible = visible
 
 
 func _build_save_load_cluster(row: HBoxContainer) -> void:

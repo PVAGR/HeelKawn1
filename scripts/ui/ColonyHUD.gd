@@ -68,6 +68,7 @@ const HOTKEY_HINTS: String = "SPACE pause · F5 save · F8 load · F9 realm · S
 @onready var _hotkeys: Label = $Panel/Margin/VBox/Hotkeys
 var _history_panel: PopupPanel = null
 var _history_text: RichTextLabel = null
+var _collapsed: bool = true  # Start collapsed — click header to expand
 
 var _world = null
 var _spawner = null
@@ -124,8 +125,41 @@ func _ready() -> void:
 	_apply_panel_style()
 	_ensure_history_panel()
 	_hotkeys.text = HOTKEY_HINTS
+	# Add collapse toggle button
+	var collapse_btn := Button.new()
+	collapse_btn.name = "CollapseBtn"
+	collapse_btn.text = "▼ Colony"
+	collapse_btn.add_theme_font_size_override("font_size", 10)
+	collapse_btn.add_theme_color_override("font_color", Color(0.85, 0.78, 0.40))
+	collapse_btn.add_theme_color_override("font_hover_color", Color.WHITE)
+	collapse_btn.focus_mode = Control.FOCUS_NONE
+	var btn_style := StyleBoxFlat.new()
+	btn_style.bg_color = Color(0.05, 0.06, 0.08, 0.9)
+	btn_style.set_border_width_all(1)
+	btn_style.border_color = Color(0.85, 0.78, 0.40, 0.5)
+	btn_style.set_corner_radius_all(3)
+	collapse_btn.add_theme_stylebox_override("normal", btn_style)
+	var hover_style := btn_style.duplicate()
+	hover_style.bg_color = Color(0.08, 0.09, 0.12, 0.95)
+	collapse_btn.add_theme_stylebox_override("hover", hover_style)
+	collapse_btn.pressed.connect(_toggle_collapse)
+	_panel.get_node("Margin/VBox").add_child(collapse_btn)
+	_panel.get_node("Margin/VBox").move_child(collapse_btn, 0)
+	_apply_collapse_state()
 	_refresh()
 
+
+## Toggle colony HUD between collapsed (header only) and expanded.
+func _toggle_collapse() -> void:
+	_collapsed = not _collapsed
+	_apply_collapse_state()
+
+func _apply_collapse_state() -> void:
+	var collapse_btn: Button = _panel.get_node_or_null("Margin/VBox/CollapseBtn")
+	if collapse_btn != null:
+		collapse_btn.text = "▼ Colony" if _collapsed else "▲ Colony"
+	_label.visible = not _collapsed
+	_hotkeys.visible = not _collapsed and _is_show_hotkey_hints()
 
 ## Cached Main node lookup — avoids repeated get_node_or_null tree traversals.
 ## Re-fetches if the cached reference becomes invalid (e.g. scene reload).

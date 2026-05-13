@@ -2930,8 +2930,8 @@ func _on_game_tick(tick: int) -> void:
 		if _is_main_lane_tick(tick, 2000, 113) and DiscoveryGate.is_unlocked("first_trade"):
 			_build_roads_from_trade_routes()
 		# OPTIMIZATION: Spread heavy settlement operations across ticks with frame budget check
-		# DORMANT WORLD: Settlement operations only run after first settlement forms
-		if tick % REBIRTH_CHECK_INTERVAL_TICKS == 0 and DiscoveryGate.is_unlocked("first_settlement"):
+		# DORMANT WORLD: Let recompute run periodically so pawn clusters can be detected
+		if tick % REBIRTH_CHECK_INTERVAL_TICKS == 0:
 			# Check frame budget before heavy recompute
 			if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
 				frame_budget_exceeded = true
@@ -6318,6 +6318,17 @@ func _seed_bootstrap_jobs_near_pawn_cluster() -> void:
 		var t: Vector2i = _find_build_tile_near(center, 4)
 		if t.x >= 0:
 			JobManager.post(Job.Type.BUILD_STORAGE_HUT, t, 3)
+	# Stockpile: ensure at least one zone exists for item deposits
+	if StockpileManager != null and StockpileManager.zones().is_empty():
+		var st: Vector2i = _find_build_tile_near(center, 3)
+		if st.x >= 0:
+			var rect: Rect2i = Rect2i(st.x, st.y, 3, 3)
+			var sp: Stockpile = STOCKPILE_SCENE.instantiate()
+			sp.set_filter(Stockpile.Filter.ALL)
+			sp.set_rect_tiles(rect)
+			sp.position = _world.tile_to_world(rect.position)
+			add_child(sp)
+			StockpileManager.register(sp)
 
 
 func _seed_construction_jobs() -> void:

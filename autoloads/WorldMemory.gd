@@ -492,7 +492,7 @@ func _check_discovery_gates(payload: Dictionary) -> void:
 		DiscoveryGate.unlock("first_death")
 	elif typ == "birth":
 		DiscoveryGate.unlock("first_birth")
-	elif typ == "settlement":
+	elif typ == "settlement" or typ == "settlement_founded":
 		DiscoveryGate.unlock("first_settlement")
 	elif typ == "teaching" or typ == "knowledge_inscribed":
 		DiscoveryGate.unlock("first_teaching")

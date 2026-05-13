@@ -365,6 +365,63 @@ func get_grudges_against(pawn_id: int) -> Array[Dictionary]:
 	return result
 
 
+## Compatibility API for legacy callers (CrimeSystem, older scripts).
+## Returns the strongest grudge intensity this pawn currently holds.
+func get_highest_grudge_level(holder_id: int) -> float:
+	var indices: Array = _grudges_by_holder.get(holder_id, [])
+	var best: float = 0.0
+	for idx in indices:
+		if idx < _grudges.size():
+			var g: Dictionary = _grudges[idx]
+			best = maxf(best, float(g.get("intensity", 0.0)))
+	return best
+
+
+## Compatibility API for legacy callers.
+## Returns the target id with the strongest active grudge, or -1 if none.
+func get_grudge_target(holder_id: int) -> int:
+	var indices: Array = _grudges_by_holder.get(holder_id, [])
+	var best_target: int = -1
+	var best: float = -1.0
+	for idx in indices:
+		if idx < _grudges.size():
+			var g: Dictionary = _grudges[idx]
+			var intensity: float = float(g.get("intensity", 0.0))
+			if intensity > best:
+				best = intensity
+				best_target = int(g.get("target_id", -1))
+	return best_target
+
+
+## Compatibility API: map severity-based legacy calls into deterministic record_grudge.
+func add_grudge(holder_id: int, target_id: int, reason: String = "crime", severity: int = 1) -> void:
+	if holder_id < 0 or target_id < 0 or holder_id == target_id:
+		return
+	var grudge_type: String = "minor_harm"
+	if reason == "murder":
+		grudge_type = "kin_death"
+	elif reason == "assault":
+		grudge_type = "major_harm"
+	elif reason == "theft":
+		grudge_type = "theft"
+	elif reason == "betrayal":
+		grudge_type = "betrayal"
+	elif reason == "abandonment":
+		grudge_type = "abandonment"
+	elif severity >= 4:
+		grudge_type = "major_harm"
+	elif severity >= 2:
+		grudge_type = "theft"
+	record_grudge(
+		holder_id,
+		target_id,
+		grudge_type,
+		0,
+		reason,
+		GameManager.tick_count if GameManager != null else 0
+	)
+
+
 ## Get pawns that this pawn should avoid (grudge > threshold)
 func get_enemies_for(holder_id: int, min_intensity: float = AVOIDANCE_DISTANCE_THRESHOLD) -> Array[int]:
 	var enemies: Array[int] = []

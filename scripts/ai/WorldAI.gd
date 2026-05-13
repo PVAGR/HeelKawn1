@@ -998,8 +998,8 @@ func get_pawn_obedience_weight(pawn_id: int) -> float:
 	var military_auth: float = float((military_entry as Dictionary).get("value", 0.0))
 	
 	# Get pawn's authority level
-	var pawn_civil = AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.CIVIL)
-	var pawn_military = AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.MILITARY)
+	var pawn_civil = FactionManager.get_authority_level(pawn_id, FactionManager.AuthorityContext.CIVIL)
+	var pawn_military = FactionManager.get_authority_level(pawn_id, FactionManager.AuthorityContext.MILITARY)
 	
 	# Obedience weight: how much authority this pawn has relative to average
 	# Higher authority = higher obedience from others
@@ -1026,10 +1026,10 @@ func _update_authority_neurons(civ_neurons: Dictionary) -> void:
 			continue
 		var pawn_id: int = int(pawn.data.id)
 		
-		total_civil += AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.CIVIL)
-		total_military += AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.MILITARY)
-		total_religious += AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.RELIGIOUS)
-		total_knowledge += AuthoritySystem.get_authority_level(pawn_id, AuthoritySystem.AuthorityContext.KNOWLEDGE)
+		total_civil += FactionManager.get_authority_level(pawn_id, FactionManager.AuthorityContext.CIVIL)
+		total_military += FactionManager.get_authority_level(pawn_id, FactionManager.AuthorityContext.MILITARY)
+		total_religious += FactionManager.get_authority_level(pawn_id, FactionManager.AuthorityContext.RELIGIOUS)
+		total_knowledge += FactionManager.get_authority_level(pawn_id, FactionManager.AuthorityContext.KNOWLEDGE)
 		pawn_count += 1
 	
 	if pawn_count > 0:

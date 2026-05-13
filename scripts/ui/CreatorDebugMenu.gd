@@ -1207,8 +1207,7 @@ func _report_authority_job_audit() -> void:
 						pid = int(pdata.get("id"))
 					elif pdata.has_member("id"):
 						pid = int(pdata.id)
-			var AuthoritySystem: Node = _get_authority_system()
-			var lvl: int = AuthoritySystem.get_authority_level(pid, AuthoritySystem.AuthorityContext.CIVIL) if AuthoritySystem != null and AuthoritySystem.has_method("get_authority_level") else 0
+		var lvl: int = FactionManager.get_authority_level(pid, FactionManager.AuthorityContext.CIVIL) if FactionManager != null and FactionManager.has_method("get_authority_level") else 0
 			if lvl >= 3:
 				leaders.append(pid)
 			elif lvl == 2:

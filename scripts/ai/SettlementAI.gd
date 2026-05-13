@@ -257,8 +257,8 @@ func _chieftain_selection() -> void:
 	decision_making_process = "authoritarian"
 	
 	# AuthoritySystem: grant military authority to chief
-	if AuthoritySystem != null and leader_id >= 0:
-		AuthoritySystem.grant_authority(leader_id, AuthoritySystem.AuthorityContext.MILITARY, 0.3, "chieftain_selection")
+	if FactionManager != null and leader_id >= 0:
+		FactionManager.grant_authority(leader_id, FactionManager.AuthorityContext.MILITARY, 0.3, "chieftain_selection")
 
 func _monarch_selection() -> void:
 	# Similar to chief but with more formal structure
@@ -266,8 +266,8 @@ func _monarch_selection() -> void:
 	decision_making_process = "decrees"
 	
 	# AuthoritySystem: grant civil authority to monarch
-	if AuthoritySystem != null and leader_id >= 0:
-		AuthoritySystem.grant_authority(leader_id, AuthoritySystem.AuthorityContext.CIVIL, 0.4, "monarch_selection")
+	if FactionManager != null and leader_id >= 0:
+		FactionManager.grant_authority(leader_id, FactionManager.AuthorityContext.CIVIL, 0.4, "monarch_selection")
 
 func _republic_election() -> void:
 	# Most respected agent
@@ -275,8 +275,8 @@ func _republic_election() -> void:
 	decision_making_process = "voting"
 	
 	# AuthoritySystem: grant civil authority through election
-	if AuthoritySystem != null and leader_id >= 0:
-		AuthoritySystem.grant_authority(leader_id, AuthoritySystem.AuthorityContext.CIVIL, 0.35, "republic_election")
+	if FactionManager != null and leader_id >= 0:
+		FactionManager.grant_authority(leader_id, FactionManager.AuthorityContext.CIVIL, 0.35, "republic_election")
 
 func _theocratic_selection() -> void:
 	# Most spiritually-influential agent
@@ -284,8 +284,8 @@ func _theocratic_selection() -> void:
 	decision_making_process = "divine_guidance"
 	
 	# AuthoritySystem: grant religious authority
-	if AuthoritySystem != null and leader_id >= 0:
-		AuthoritySystem.grant_authority(leader_id, AuthoritySystem.AuthorityContext.RELIGIOUS, 0.4, "theocratic_selection")
+	if FactionManager != null and leader_id >= 0:
+		FactionManager.grant_authority(leader_id, FactionManager.AuthorityContext.RELIGIOUS, 0.4, "theocratic_selection")
 
 func _technocratic_selection() -> void:
 	# Most skilled/knowledgeable agent
@@ -293,8 +293,8 @@ func _technocratic_selection() -> void:
 	decision_making_process = "expert_consensus"
 	
 	# AuthoritySystem: grant knowledge authority
-	if AuthoritySystem != null and leader_id >= 0:
-		AuthoritySystem.grant_authority(leader_id, AuthoritySystem.AuthorityContext.KNOWLEDGE, 0.35, "technocratic_selection")
+	if FactionManager != null and leader_id >= 0:
+		FactionManager.grant_authority(leader_id, FactionManager.AuthorityContext.KNOWLEDGE, 0.35, "technocratic_selection")
 
 # === Collective Decision Making ===
 

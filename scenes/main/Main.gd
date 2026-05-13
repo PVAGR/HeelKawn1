@@ -11,6 +11,7 @@ const INCARNATION_PICKER_SCRIPT: Script = preload("res://scripts/ui/IncarnationP
 const _WM = preload("res://autoloads/WorldMemory.gd")
 const TRAIT_SHOP_PATH: String = "res://scripts/ui/TraitShop.gd"
 const DEBUG_PANEL_PATH: String = "res://scripts/ui/DebugControlPanel.gd"
+const UI_ADJUST_MANAGER_SCRIPT: Script = preload("res://scripts/ui/UIAdjustManager.gd")
 
 ## Tuning for initial job generation.
 const FORAGE_WORK_TICKS: int = 20
@@ -187,6 +188,7 @@ static var _world_stabilization_until_tick: int = -1
 @onready var _ambient_audio = $AmbientAudio
 @onready var _trait_shop: Control = null
 @onready var _debug_panel: Control = null
+@onready var _ui_adjust_manager: Node = null
 @onready var _day_night: DayNightCycle = $DayNight
 @onready var _camera: Camera2D = $WorldViewport/Camera
 
@@ -792,8 +794,11 @@ func _ready() -> void:
 			_toolbar.save_requested.connect(_colony_save)
 			_toolbar.load_requested.connect(_colony_load)
 			_toolbar.appearance_edit_requested.connect(_toggle_avatar_panel)
+			if _toolbar.has_signal("ui_layout_edit_toggled"):
+				_toolbar.ui_layout_edit_toggled.connect(_on_ui_layout_edit_toggled)
 			if _toolbar.has_signal("structure_type_requested"):
 				_toolbar.structure_type_requested.connect(_on_structure_type_selected)
+		_setup_adjustable_ui()
 		call_deferred("_ensure_avatar_panel")
 	if OS.is_debug_build():
 		print("[Main] Scene ready. Tick interval: %.2fs" % GameManager.TICK_INTERVAL_SECONDS)
@@ -818,6 +823,46 @@ func _ready() -> void:
 		_configure_simulation_worker_mode()
 	call_deferred("_log_validation_harness_observability_once")
 	CrashTrap.exit_system("Main._ready")
+
+
+func _setup_adjustable_ui() -> void:
+	if _ui_adjust_manager != null and is_instance_valid(_ui_adjust_manager):
+		return
+	if UI_ADJUST_MANAGER_SCRIPT == null:
+		return
+	_ui_adjust_manager = UI_ADJUST_MANAGER_SCRIPT.new()
+	_ui_adjust_manager.name = "UIAdjustManager"
+	add_child(_ui_adjust_manager)
+	var ui_vp: Node = get_node_or_null("UI_Viewport")
+	if ui_vp != null:
+		for child in ui_vp.get_children():
+			_register_adjustable_node(child)
+		if not ui_vp.child_entered_tree.is_connected(_on_ui_viewport_child_entered):
+			ui_vp.child_entered_tree.connect(_on_ui_viewport_child_entered)
+	_register_adjustable_node(_creator_debug_menu)
+
+
+func _on_ui_layout_edit_toggled(enabled: bool) -> void:
+	if _ui_adjust_manager == null or not is_instance_valid(_ui_adjust_manager):
+		return
+	_ui_adjust_manager.call("set_edit_mode", enabled)
+
+
+func _on_ui_viewport_child_entered(node: Node) -> void:
+	_register_adjustable_node(node)
+
+
+func _register_adjustable_node(node: Node) -> void:
+	if _ui_adjust_manager == null or not is_instance_valid(_ui_adjust_manager):
+		return
+	if node == null or not is_instance_valid(node):
+		return
+	if node is Control:
+		_ui_adjust_manager.call("register_container", node)
+	elif node is CanvasLayer:
+		for c in node.get_children():
+			if c is Control:
+				_ui_adjust_manager.call("register_container", c)
 
 
 func _ensure_debug_panel() -> void:

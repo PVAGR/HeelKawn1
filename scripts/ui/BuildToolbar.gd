@@ -26,6 +26,7 @@ signal appearance_edit_requested()
 ## Persist colony (F5) / restore last save (F8). Mirrors keyboard shortcuts.
 signal save_requested()
 signal load_requested()
+signal ui_layout_edit_toggled(enabled: bool)
 
 ## Emitted when building type is selected.
 signal structure_type_requested(type: String)
@@ -55,6 +56,7 @@ var _pause_button: Button = null
 
 var _active_mode: int = MODE_NONE
 var _view_buttons: Dictionary = {}  # panel_name -> Button
+var _ui_edit_button: Button = null
 
 
 func _ready() -> void:
@@ -151,6 +153,11 @@ func _on_build_item_pressed(type: String) -> void:
 func _build_view_cluster(row: HBoxContainer) -> void:
 	var label := _make_cluster_label("View")
 	row.add_child(label)
+	_ui_edit_button = _make_button("UI Edit", ACCENT_VIEW)
+	_ui_edit_button.toggle_mode = true
+	_ui_edit_button.set_pressed_no_signal(false)
+	_ui_edit_button.pressed.connect(_on_ui_layout_edit_toggle)
+	row.add_child(_ui_edit_button)
 	# Each button toggles a UI panel. Default state: ColonyHUD on, others off.
 	var panels: Array = [
 		{"name": "ColonyHUD", "label": "Colony", "default_on": true},
@@ -170,6 +177,12 @@ func _build_view_cluster(row: HBoxContainer) -> void:
 		row.add_child(btn)
 		# Apply initial state
 		_set_panel_visible(panel_name, default_on)
+
+
+func _on_ui_layout_edit_toggle() -> void:
+	if _ui_edit_button == null:
+		return
+	ui_layout_edit_toggled.emit(_ui_edit_button.is_pressed())
 
 
 func _on_view_toggle(panel_name: String, btn: Button) -> void:

@@ -5,6 +5,47 @@ Each session adds one entry at the top.
 
 ---
 
+## 2026-05-13 - Disease Natural Start + Adjustable UI Containers
+
+Date: 2026-05-13
+Goal: Stop early-tick disease spikes/crashes and add player-driven UI container adjustment controls (minimize + resize) via a toggle workflow.
+
+Root causes found:
+- `DiseaseSystem._spread_diseases()` called `pawn.data.get("diseases", {})` on `HeelKawnianData` (`RefCounted`), but this data object accepts a single-arg `get` only.
+- Disease processing was always active from tick 0 and could create hostile first-day behavior, conflicting with natural progression goals.
+- UI had many independent panels but no shared in-game mechanism for users to directly adjust panel size/minimize state.
+
+What was changed:
+- `autoloads/DiseaseSystem.gd`
+  - Added `DISEASE_SYSTEM_START_TICK = 300` to delay disease processing until the world has stabilized.
+  - Added early-world gate in `add_disease(...)` (with cataclysm/debug exceptions) so non-critical disease sources do not trigger immediately.
+  - Replaced two-arg `get` on pawn data with safe one-arg retrieval + null fallback in `_spread_diseases(...)`.
+  - Kept deterministic behavior and existing disease model intact; only timing/compat safety was changed.
+- `scripts/ui/UIAdjustManager.gd` (new)
+  - Added reusable runtime manager for UI container controls.
+  - Supports edit-mode chrome per container with `Drag`, `Size`, `_` (minimize), and `R` (reset).
+  - Provides consistent behavior for current and future registered containers.
+- `scripts/ui/BuildToolbar.gd`
+  - Added `ui_layout_edit_toggled(enabled: bool)` signal.
+  - Added `UI Edit` toggle button in the View cluster to enable/disable container adjustment mode.
+- `scenes/main/Main.gd`
+  - Added `UI_ADJUST_MANAGER_SCRIPT` preload and `_ui_adjust_manager` runtime node.
+  - Wires toolbar `UI Edit` toggle to `_on_ui_layout_edit_toggled(...)`.
+  - Registers top-level gameplay UI containers with the adjust manager during startup.
+
+Verification notes:
+- No compile errors in edited files:
+  - `autoloads/DiseaseSystem.gd`
+  - `scripts/ui/UIAdjustManager.gd`
+  - `scripts/ui/BuildToolbar.gd`
+  - `scenes/main/Main.gd`
+- Existing pre-session parse issues in `scripts/ui/CreatorDebugMenu.gd` persist and are unrelated to the disease/UI-adjust manager changes in this session.
+
+Next:
+- Validate in live play: toggle `UI Edit`, drag/resize/minimize active panels, confirm persistent usability across paused/unpaused gameplay.
+- Tune `DISEASE_SYSTEM_START_TICK` from playtest feedback if progression feels too delayed or too abrupt.
+
+
 ## 2026-05-12 - Runtime Pawn Visual / Selection Truth Pass
 
 Date: 2026-05-12

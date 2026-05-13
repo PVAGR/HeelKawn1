@@ -54,6 +54,7 @@ const CONTAGION_RADIUS: int = 3
 const HERB_TREATMENT_REDUCTION: float = 0.5  # 50% severity reduction
 const HEALER_TREATMENT_REDUCTION: float = 0.8  # 80% severity reduction
 const REST_RECOVERY_BONUS: float = 2.0  # Resting pawns recover 2x faster
+const DISEASE_SYSTEM_START_TICK: int = 300  # Avoid first-day disease pressure; let the colony stabilize.
 
 func _ready() -> void:
 	if GameManager != null:
@@ -63,6 +64,10 @@ func _ready() -> void:
 ## Add a disease to a pawn. Called by DisasterSystem, CataclysmSystem, etc.
 func add_disease(pawn_data: RefCounted, disease_type: int, initial_severity: float = 20.0, source: String = "unknown") -> void:
 	if pawn_data == null:
+		return
+	var tick_now: int = GameManager.tick_count if GameManager != null else 0
+	var allow_early: bool = source.begins_with("cataclysm") or source.begins_with("debug")
+	if tick_now < DISEASE_SYSTEM_START_TICK and not allow_early:
 		return
 	# Initialize disease tracking
 	if not pawn_data.get("diseases"):
@@ -79,7 +84,7 @@ func add_disease(pawn_data: RefCounted, disease_type: int, initial_severity: flo
 	diseases[disease_key] = {
 		"type": disease_type,
 		"severity": initial_severity,
-		"tick_started": GameManager.tick_count if GameManager != null else 0,
+		"tick_started": tick_now,
 		"tick_duration": int(params.get("duration", 1000)),
 		"is_treated": false,
 		"source": source,
@@ -90,7 +95,7 @@ func add_disease(pawn_data: RefCounted, disease_type: int, initial_severity: flo
 	# Record disease event
 	WorldMemory.record_event({
 		"kind": WorldMemory.Kind.INJURY,
-		"tick": GameManager.tick_count if GameManager != null else 0,
+		"tick": tick_now,
 		"pawn_id": int(pawn_data.id),
 		"pawn_name": str(pawn_data.display_name),
 		"disease": DISEASE_NAMES.get(disease_type, "unknown"),
@@ -168,6 +173,8 @@ func treat_disease(pawn_data: RefCounted, disease_type: int, healer_skill: float
 
 ## Process diseases for all pawns every tick.
 func _on_game_tick(tick: int) -> void:
+	if tick < DISEASE_SYSTEM_START_TICK:
+		return
 	if tick % 20 != 0:  # Process every 20 ticks
 		return
 	var pawns: Array = PawnSpawner.find_alive_pawns()
@@ -237,7 +244,8 @@ func _spread_diseases(pawns: Array, tick: int) -> void:
 	for pawn in pawns:
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue
-		var diseases: Dictionary = pawn.data.get("diseases", {})
+		var dis_val: Variant = pawn.data.get("diseases")
+		var diseases: Dictionary = {} if dis_val == null else dis_val
 		if diseases.is_empty():
 			continue
 		for disease_key in diseases:

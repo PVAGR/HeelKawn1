@@ -14,6 +14,9 @@ const LOCAL_KNOWLEDGE_RADIUS_TILES: int = 50  # Incarnated player only knows eve
 ## PHASE 6: Myth vs Truth - player sees facts, pawns believe distorted versions
 const MYTH_DISTORTION_FACTOR: float = 0.6  # Myths are 60% more extreme than facts
 
+func _get_authority_system() -> Node:
+	return get_node_or_null("/root/AuthoritySystem")
+
 func _is_player_incarnated() -> bool:
 	var main_node: Node = get_node_or_null("/root/Main")
 	if main_node == null:
@@ -1204,7 +1207,8 @@ func _report_authority_job_audit() -> void:
 						pid = int(pdata.get("id"))
 					elif pdata.has_member("id"):
 						pid = int(pdata.id)
-			var lvl: int = FactionManager.get_authority_level(pid, FactionManager.AuthorityContext.CIVIL) if FactionManager != null and FactionManager.has_method("get_authority_level") else 0
+			var AuthoritySystem: Node = _get_authority_system()
+			var lvl: int = AuthoritySystem.get_authority_level(pid, AuthoritySystem.AuthorityContext.CIVIL) if AuthoritySystem != null and AuthoritySystem.has_method("get_authority_level") else 0
 			if lvl >= 3:
 				leaders.append(pid)
 			elif lvl == 2:

@@ -11,6 +11,8 @@ enum Type {
 	MOUNTAIN,
 	WATER,
 	OCEAN,
+	FERTILE_SOIL,  # irrigated/fertile land for farming
+	GRASS,          # grass-covered land
 	STONE_FLOOR,  # mined-out mountain rock; passable, slow, leaves a visible scar
 }
 

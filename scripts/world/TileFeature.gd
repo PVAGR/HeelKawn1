@@ -66,6 +66,8 @@ enum Type {
 	WATER_MILL,        # water mill: +crafting speed when adjacent to river
 	# --- Transient terrain effects ---
 	FLOOD_DEPOSIT,     # flood nutrient deposit: temporary fertility boost after overflow
+	# --- Terraforming ---
+	TERRACE,           # flattened terrain for building
 }
 
 ## Colors used for the v1 pixel renderer. Chosen to pop against the biome below.

@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1778654583
+::res://::1778656564
 .aider.chat.history.md::TextFile::-1::1778404677::0::1::::<><><>0<>0<><>::
 AI_AUTONOMOUS_INNOVATION.md::TextFile::-1::1778107181::0::1::::<><><>0<>0<><>::
 AI_BUG_REPORTS.md::TextFile::-1::1778108695::0::1::::<><><>0<>0<><>::
@@ -193,7 +193,7 @@ wall.png::CompressedTexture2D::5625700477737538922::1777971615::1778417117::1:::
 AgeMemory.gd::GDScript::3623017377226678626::1778570754::0::1::::<>Node<><>0<>0<><>::
 AIAgentManager.gd::GDScript::4954939857757967540::1778415838::0::1::::<>Node<><>0<>0<><>::
 AIManager.gd::GDScript::8390453645687965822::1778633781::0::1::::<>Node<><>0<>0<><>::
-ArtSystem.gd::GDScript::8334783542866444256::1778652102::0::1::::<>Node<><>0<>0<><>::
+ArtSystem.gd::GDScript::8334783542866444256::1778655002::0::1::::<>Node<><>0<>0<><>::
 AuthorityJobBoard.gd::GDScript::3607624428311843175::1778622756::0::1::::<>Node<><>0<>0<><>::
 AuthoritySystem.gd::GDScript::662900908174916362::1777694600::0::1::::<>Node<><>0<>0<><>::
 BloodlineSystem.gd::GDScript::5827355367358250544::1778616815::0::1::::<>Node<><>0<>0<><>::
@@ -213,8 +213,8 @@ CrashTrap.gd::GDScript::2561925334866226631::1777694600::0::1::::<>Node<><>0<>0<
 CrimeSystem.gd::GDScript::8124533145431937429::1778649514::0::1::::<>Node<><>0<>0<><>::
 CulturalMemory.gd::GDScript::4379229180744210081::1778208530::0::1::::<>Node<><>0<>0<><>::
 CulturalStyleManager.gd::GDScript::6734428572572920136::1778452161::0::1::::<>Node<><>0<>0<><>::
-CurrencySystem.gd::GDScript::8830021071979701416::1778652116::0::1::::<>Node<><>0<>0<><>::
-DiplomacySystem.gd::GDScript::7370753064401601751::1778652101::0::1::::<>Node<><>0<>0<><>::
+CurrencySystem.gd::GDScript::8830021071979701416::1778654949::0::1::::<>Node<><>0<>0<><>::
+DiplomacySystem.gd::GDScript::7370753064401601751::1778654987::0::1::::<>Node<><>0<>0<><>::
 DisasterSystem.gd::GDScript::3533735953280705894::1778453307::0::1::::<>Node<><>0<>0<><>::
 DiscoveryGate.gd::GDScript::2584224234650357656::1778316521::0::1::::<>Node<><>0<>0<><>::
 DiseaseSystem.gd::GDScript::5176942498259955416::1778652268::0::1::::<>Node<><>0<>0<><>::
@@ -225,7 +225,7 @@ FactionManager.gd::GDScript::3854887585585149382::1778652100::0::1::::<>Node<><>
 FactionRegistry.gd::GDScript::4416904286542695183::1778567924::0::1::::<>Node<><>0<>0<><>::
 FactionSystem.gd::GDScript::4206641617627097322::1778570754::0::1::::<>Node<><>0<>0<><>::
 FarmingSystem.gd::GDScript::4043429106894168777::1778438992::0::1::::<>Node<><>0<>0<><>::
-FlowingWater.gd::GDScript::8187021937268328513::1778652114::0::1::::<>Node<><>0<>0<><>::
+FlowingWater.gd::GDScript::8187021937268328513::1778654947::0::1::::<>Node<><>0<>0<><>::
 FogOfDiscovery.gd::GDScript::5610568208239195859::1778320772::0::1::::<>Node<><>0<>0<><>::
 FoodChainManager.gd::GDScript::7376747890299068317::1778570754::0::1::::<>Node<><>0<>0<><>::
 FootpathMemory.gd::GDScript::6069898222571078308::1778438593::0::1::::<>Node<><>0<>0<><>::
@@ -246,17 +246,17 @@ IntentMemory.gd::GDScript::7523474435381960454::1778567924::0::1::::<>Node<><>0<
 JobManager.gd::GDScript::338930026156234980::1778633822::0::1::::<>Node<><>0<>0<><>::
 KinshipSystem.gd::GDScript::2683721610511728833::1778273280::0::1::::<>Node<><>0<>0<><>::
 KnowledgeSystem.gd::GDScript::2224485433782550535::1778616815::0::1::::<>Node<><>0<>0<><>::
-LanguageSystem.gd::GDScript::604465475289050266::1778652117::0::1::::<>Node<><>0<>0<><>::
+LanguageSystem.gd::GDScript::604465475289050266::1778654950::0::1::::<>Node<><>0<>0<><>::
 LegacySystem.gd::GDScript::5052780570551209685::1778320772::0::1::::<>Node<><>0<>0<><>::
 MeaningAmbianceController.gd::GDScript::7214985866489669453::1778320772::0::1::::<>Node<><>0<>0<><>::
 MeaningAudioCue.gd::GDScript::5620932537113232199::1777694600::0::1::::<>Node<><>0<>0<><>::
 MemorialSystem.gd::GDScript::4764855101832161455::1778434165::0::1::::<>Node<><>0<>0<><>::
 MemoryManager.gd::GDScript::487222660348734524::1778651452::0::1::::<>Node<><>0<>0<><>::
 MountSystem.gd::GDScript::537224167628726879::1778652113::0::1::::<>Node<><>0<>0<><>::
-MultiplayerSystem.gd::GDScript::127062482425223206::1778652118::0::1::::<>Node<><>0<>0<><>::
+MultiplayerSystem.gd::GDScript::127062482425223206::1778654950::0::1::::<>Node<><>0<>0<><>::
 MythAge.gd::GDScript::8629846448700599580::1778570754::0::1::::<>Node<><>0<>0<><>::
 MythMemory.gd::GDScript::5075132017038102145::1778618598::0::1::::<>Node<><>0<>0<><>::
-NavalSystem.gd::GDScript::3944988097343027324::1778652112::0::1::::<>Node<><>0<>0<><>::
+NavalSystem.gd::GDScript::3944988097343027324::1778654944::0::1::::<>Node<><>0<>0<><>::
 ObjectPool.gd::GDScript::5290334352068325487::1778041940::0::1::::<>Node<><>0<>0<><>::
 ObservationAPI.gd::GDScript::1973396630319049042::1778320772::0::1::::<>Node<><>0<>0<><>::
 ObserverManager.gd::GDScript::6831482111159099135::1778633847::0::1::::<>Node<><>0<>0<><>::
@@ -302,7 +302,7 @@ SquadCoordinator.gd::GDScript::6749140353094337295::1778320772::0::1::::<>Node<>
 StockpileManager.gd::GDScript::215983093589793156::1778556430::0::1::::<>Node<><>0<>0<><>::
 SurvivalSystem.gd::GDScript::9164301206852135979::1778554264::0::1::::<>Node<><>0<>0<><>::
 TechnologySystem.gd::GDScript::1479520665738386352::1778618506::0::1::::<>Node<><>0<>0<><>::
-TerraformingSystem.gd::GDScript::895228937679888329::1778652114::0::1::::<>Node<><>0<>0<><>::
+TerraformingSystem.gd::GDScript::895228937679888329::1778654948::0::1::::<>Node<><>0<>0<><>::
 TickManager.gd::GDScript::5792076579507672326::1778639548::0::1::::<>Node<><>0<>0<><>::
 TickRateDecoupler.gd::GDScript::2900207393109439075::1778035714::0::1::::<>Node<><>0<>0<><>::
 TimeLapseRecorder.gd::GDScript::6434325121625872981::1778618622::0::1::::<>Node<><>0<>0<><>::
@@ -311,7 +311,7 @@ TradeMemory.gd::GDScript::5248539327593372606::1778567924::0::1::::<>Node<><>0<>
 TradePlanner.gd::GDScript::8396858183117698797::1778315607::0::1::::<>Node<><>0<>0<><>::
 UILayoutManager.gd::GDScript::7391518460782770688::1778320772::0::1::::<>Node<><>0<>0<><>::
 UIManager.gd::GDScript::1959618447068391785::1778633959::0::1::::<>Node<><>0<>0<><>::
-UndergroundSystem.gd::GDScript::2006997177991284016::1778652115::0::1::::<>Node<><>0<>0<><>::
+UndergroundSystem.gd::GDScript::2006997177991284016::1778654948::0::1::::<>Node<><>0<>0<><>::
 VictorySystem.gd::GDScript::8136839613232613595::1778153413::0::1::::<>Node<><>0<>0<><>::
 WildlifePopulation.gd::GDScript::2396512953879973527::1778032017::0::1::::<>Node<><>0<>0<><>::
 WindSystem.gd::GDScript::5170607214381822721::1778413021::0::1::::<>Node<><>0<>0<><>::
@@ -322,7 +322,7 @@ WorldEventSeed.gd::GDScript::7671466336481265854::1778652196::0::1::::WorldEvent
 WorldEventSeedManager.gd::GDScript::8651966595902598019::1778652197::0::1::::<>Node<><>0<>0<><>::
 WorldEventSystem.gd::GDScript::2240822361188270874::1778320772::0::1::::<>Node<><>0<>0<><>::
 WorldMeaning.gd::GDScript::7565976206211732807::1778618707::0::1::::<>Node<><>0<>0<><>::
-WorldMemory.gd::GDScript::3156246899067335515::1778652029::0::1::::<>Node<><>0<>0<><>::
+WorldMemory.gd::GDScript::3156246899067335515::1778654916::0::1::::<>Node<><>0<>0<><>::
 WorldPersistence.gd::GDScript::2908562363029369037::1778651452::0::1::::<>Node<><>0<>0<><>::
 WorldRNG.gd::GDScript::450310579566985166::1778652050::0::1::::<>Node<><>0<>0<><>::
 WorldSeedExport.gd::GDScript::1077297571086035291::1778320772::0::1::::<>Node<><>0<>0<><>::
@@ -544,7 +544,7 @@ WeatherOverlay.tscn::PackedScene::-1::1777961533::0::1::::<><><>0<>0<><>::res://
 FireParticles.gd::GDScript::2082329777621998110::1778034358::0::1::::<>GPUParticles2D<><>0<>0<><>::
 FireParticles.tscn::PackedScene::-1::1778034357::0::1::::<><><>0<>0<><>::res://assets/sprites/decor/fire_smoke.png<>res://scenes/world/FireParticles.gd
 Weather.gd::GDScript::6639444511292649852::1778034288::0::1::::<>Node<><>0<>0<><>::
-World.gd::GDScript::6420505296756273027::1778563398::0::1::::World<>Node2D<><>0<>0<><>::
+World.gd::GDScript::6420505296756273027::1778654937::0::1::::World<>Node2D<><>0<>0<><>::
 World.tscn::PackedScene::-1::1778412704::0::1::::<><><>0<>0<><>::res://scenes/world/World.gd<>res://scripts/world/WorldOverlay.gd<>res://scripts/world/FireGlowManager.gd<>res://scripts/world/SunMoonLight.gd<>res://scripts/world/AmbientBiomeParticles.gd<>res://scripts/world/BloomGlow.gd
 ::res://scripts/::1778036069
 ::res://scripts/ai/::1778651452
@@ -734,7 +734,7 @@ ProceduresPawnVisualizer.gd::GDScript::8288317706476345824::1778320772::0::1::::
 ::res://scripts/world/::1778651452
 AmbientBiomeParticles.gd::GDScript::867947974587804646::1778399576::0::1::::<>Node2D<><>0<>0<><>::
 AnimalPopulation.gd::GDScript::61149111132183682::1777694600::0::1::::AnimalPopulation<>Object<><>0<>0<><>::
-Biome.gd::GDScript::6183281367665276893::1778407778::0::1::::Biome<>RefCounted<><>0<>0<><>::
+Biome.gd::GDScript::6183281367665276893::1778654918::0::1::::Biome<>RefCounted<><>0<>0<><>::
 BloomGlow.gd::GDScript::8015042890184764745::1778399631::0::1::::<>WorldEnvironment<><>0<>0<><>::
 CataclysmSystem.gd::GDScript::7579621636360858336::1778651452::0::1::::<>Node<><>0<>0<><>::
 DayNightCycle.gd::GDScript::6053095043197458244::1778403225::0::1::::DayNightCycle<>CanvasModulate<><>0<>0<><>::
@@ -748,8 +748,8 @@ SettlementData.gd::GDScript::5123683025715549347::1777694600::0::1::::Settlement
 SettlementLegend.gd::GDScript::4704495302267836758::1778013500::0::1::::SettlementLegend<>RefCounted<><>0<>0<><>::
 SunMoonLight.gd::GDScript::7564683693505892680::1778399447::0::1::::<>DirectionalLight2D<><>0<>0<><>::
 TickSystem.gd::GDScript::4628482632824824488::1777790754::0::1::::TickSystem<>Node<><>0<>0<><>::
-TileFeature.gd::GDScript::1099491373035086690::1778651452::0::1::::TileFeature<>RefCounted<><>0<>0<><>::
-WorldData.gd::GDScript::5042201326975947076::1778402784::0::1::::WorldData<>RefCounted<><>0<>0<><>::
+TileFeature.gd::GDScript::1099491373035086690::1778654917::0::1::::TileFeature<>RefCounted<><>0<>0<><>::
+WorldData.gd::GDScript::5042201326975947076::1778654925::0::1::::WorldData<>RefCounted<><>0<>0<><>::
 WorldEvolution.gd::GDScript::6842439889485202590::1777694600::0::1::::WorldEvolution<>Node<><>0<>0<><>::
 WorldGenerator.gd::GDScript::1657685340012154500::1778413073::0::1::::WorldGenerator<>RefCounted<><>0<>0<><>::
 WorldOverlay.gd::GDScript::5537764357850478732::1778452100::0::1::::<>Node2D<><>0<>0<><>::

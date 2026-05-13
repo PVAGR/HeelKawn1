@@ -46,21 +46,22 @@ func perform_terraforming(action: int, tile: Vector2i, pawn_id: int) -> bool:
 	return true
 
 func _apply_terraforming(action: int, tile: Vector2i) -> void:
-	if WorldData == null:
+	var _wd = WorldData.current
+	if _wd == null:
 		return
 	match action:
 		TerraformAction.DIG_CHANNEL:
-			WorldData.set_feature(tile.x, tile.y, TileFeature.Type.RIVER)
-			WorldData.set_biome(tile.x, tile.y, Biome.Type.WATER)
+			_wd.set_feature(tile.x, tile.y, TileFeature.Type.RIVER)
+			_wd.set_biome(tile.x, tile.y, Biome.Type.WATER)
 		TerraformAction.BUILD_DAM:
-			WorldData.set_feature(tile.x, tile.y, TileFeature.Type.DAM)
+			_wd.set_feature(tile.x, tile.y, TileFeature.Type.DAM)
 		TerraformAction.IRRIGATE:
-			WorldData.set_biome(tile.x, tile.y, Biome.Type.FERTILE_SOIL)
+			_wd.set_biome(tile.x, tile.y, Biome.Type.FERTILE_SOIL)
 		TerraformAction.FILL_LAND:
-			WorldData.set_biome(tile.x, tile.y, Biome.Type.GRASS)
-			WorldData.set_feature(tile.x, tile.y, TileFeature.Type.NONE)
+			_wd.set_biome(tile.x, tile.y, Biome.Type.GRASS)
+			_wd.set_feature(tile.x, tile.y, TileFeature.Type.NONE)
 		TerraformAction.TERRACE:
-			WorldData.set_feature(tile.x, tile.y, TileFeature.Type.TERRACE)
+			_wd.set_feature(tile.x, tile.y, TileFeature.Type.TERRACE)
 
 func get_terraformed_tile(tile: Vector2i) -> Dictionary:
 	var key: String = "%d,%d" % [tile.x, tile.y]

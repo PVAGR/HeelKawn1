@@ -43,6 +43,12 @@ enum Type {
 	# --- Alcohol & brewing ---
 	MEAD,            # brewed: honey + water = mead (mood boost, intoxication)
 	ALE,             # brewed: grain + water = ale (mood boost, intoxication)
+	# --- Resources ---
+	FOOD,            # generic food item
+	RAW_FOOD,        # unprepared food ingredient
+	COAL,            # fuel for smelting, forging
+	IRON_ORE,        # raw iron for smelting
+	GOLD_ORE,        # raw gold for smelting
 }
 
 ## Display color for the carry-indicator above a pawn and for the stockpile icon.

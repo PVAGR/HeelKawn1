@@ -4040,6 +4040,17 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				_set_designation_mode(DesignationMode.NONE)
 			elif _selected_pawn != null:
 				_set_selected_pawn(null)
+			else:
+				# Toggle pause menu when nothing else to cancel
+				if _main_menu != null:
+					if _main_menu._visible:
+						_main_menu.hide_menu()
+						if GameManager != null:
+							GameManager.resume()
+					else:
+						_main_menu.show_menu(true)
+						if GameManager != null:
+							GameManager.pause()
 		Key.KEY_HOME:
 			if _camera != null and _camera.has_method("reset_to_world_bounds"):
 				_camera.call("reset_to_world_bounds", _world)
@@ -6318,17 +6329,6 @@ func _seed_bootstrap_jobs_near_pawn_cluster() -> void:
 		var t: Vector2i = _find_build_tile_near(center, 4)
 		if t.x >= 0:
 			JobManager.post(Job.Type.BUILD_STORAGE_HUT, t, 3)
-	# Stockpile: ensure at least one zone exists for item deposits
-	if StockpileManager != null and StockpileManager.zones().is_empty():
-		var st: Vector2i = _find_build_tile_near(center, 3)
-		if st.x >= 0:
-			var rect: Rect2i = Rect2i(st.x, st.y, 3, 3)
-			var sp: Stockpile = STOCKPILE_SCENE.instantiate()
-			sp.set_filter(Stockpile.Filter.ALL)
-			sp.set_rect_tiles(rect)
-			sp.position = _world.tile_to_world(rect.position)
-			add_child(sp)
-			StockpileManager.register(sp)
 
 
 func _seed_construction_jobs() -> void:

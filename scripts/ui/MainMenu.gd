@@ -96,6 +96,18 @@ func _ready() -> void:
 	quit_btn.pressed.connect(func(): quit_pressed.emit())
 	btn_vbox.add_child(quit_btn)
 
+	# Spacer before version
+	var spacer2: Control = Control.new()
+	spacer2.custom_minimum_size = Vector2(0, 4)
+	btn_vbox.add_child(spacer2)
+
+	# Continue button (hidden until game is running)
+	var continue_btn: Button = _make_menu_button("Continue")
+	continue_btn.name = "ContinueButton"
+	continue_btn.visible = false
+	continue_btn.pressed.connect(func(): hide_menu(); if GameManager != null and GameManager.is_paused: GameManager.resume())
+	btn_vbox.add_child(continue_btn)
+
 	center.add_child(btn_vbox)
 
 	# Version
@@ -112,13 +124,17 @@ func _ready() -> void:
 const MUTED_COLOR: Color = Color(0.4, 0.4, 0.4, 0.5)
 
 
-func show_menu() -> void:
+func show_menu(from_pause: bool = false) -> void:
 	_visible = true
 	_bg.visible = true
 	# Show all children except bg
 	for child in get_children():
 		if child != _bg:
 			child.visible = true
+	# Show Continue button only when pausing mid-game
+	var continue_btn = find_child("ContinueButton", true, false)
+	if continue_btn != null:
+		continue_btn.visible = from_pause
 
 
 func hide_menu() -> void:
@@ -131,8 +147,8 @@ func hide_menu() -> void:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_ESCAPE and not _visible:
-			show_menu()
+		if event.keycode == KEY_ESCAPE and _visible:
+			hide_menu()
 			get_viewport().set_input_as_handled()
 
 

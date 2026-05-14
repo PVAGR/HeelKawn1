@@ -530,12 +530,9 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 	var cellars: int = int(local_features.get("cellar", 0))
 	var drive: String = str(profile.get("development_drive", "serve_settlement"))
 	var next_need: String = str(profile.get("next_need", "serve local needs"))
-	var loop_job: int = _worldbox_loop_job_for_pawn(data, local_pop, local_features, tick)
 
 	var ambition: Dictionary = {}
-	if loop_job >= 0:
-		ambition = _ambition_result(loop_job, 6, "worldbox-loop: autonomous daily labor/defense cycle")
-	elif hearths <= 0:
+	if hearths <= 0:
 		ambition = _ambition_result(Job.Type.BUILD_FIRE_PIT, 9, "no hearth in local settlement core")
 	elif storage_huts <= 0 and local_pop >= 3:
 		ambition = _ambition_result(Job.Type.BUILD_STORAGE_HUT, 8, "storage is missing for current population")
@@ -676,129 +673,6 @@ static func _is_structure_build_job(jtype: int) -> bool:
 		_:
 			return false
 	return false
-
-
-static func _worldbox_loop_job_for_pawn(
-		data: HeelKawnianData,
-		local_pop: int,
-		local_features: Dictionary,
-		tick: int
-) -> int:
-	var walls: int = int(local_features.get("wall", 0))
-	var doors: int = int(local_features.get("door", 0))
-	var hearths: int = int(local_features.get("hearth", 0))
-	var storage_huts: int = int(local_features.get("storage_hut", 0))
-	var markers: int = int(local_features.get("marker", 0))
-	var beds: int = int(local_features.get("bed", 0))
-	# Phase 6: new building counts
-	var farms: int = int(local_features.get("farm", 0))
-	var workshops: int = int(local_features.get("workshop", 0))
-	var granaries: int = int(local_features.get("granary", 0))
-	var apothecaries: int = int(local_features.get("apothecary", 0))
-	var libraries: int = int(local_features.get("library", 0))
-	var markets: int = int(local_features.get("market", 0))
-	var barracks: int = int(local_features.get("barracks", 0))
-	var boatyards: int = int(local_features.get("boatyard", 0))
-	var cellars: int = int(local_features.get("cellar", 0))
-	# Knowledge preservation phase: if settlement has writing, expand the loop
-	var has_writing: bool = false
-	var ks: Node = _root_node("KnowledgeSystem")
-	if ks != null and ks.has_method("has_knowledge"):
-		has_writing = bool(ks.call("has_knowledge", int(data.id), 24))  # WRITING
-	# Phase 6: civilization progression — more phases for advanced settlements
-	var phase_count: int = 20 if has_writing else 12
-	var phase: int = posmod(tick / 90 + int(data.id) * 3, phase_count)
-	# Beds needed: 1 per 2 pawns minimum
-	var need_beds: int = maxi(2, int(round(local_pop / 2.2)))
-	# Stockpile awareness: check if we have enough materials for building
-	var _sm: Node = _root_node("StockpileManager")
-	var stock_wood: int = 0
-	var stock_stone: int = 0
-	if _sm != null and _sm.has_method("total_count_of"):
-		# Item.Type.WOOD = 3, Item.Type.STONE = 2
-		stock_wood = int(_sm.call("total_count_of", 3))
-		stock_stone = int(_sm.call("total_count_of", 2))
-	# If materials are critically low, override build phases with gathering
-	var material_crisis: bool = stock_wood < 5 or stock_stone < 3
-	match phase:
-		0:
-			# CRITICAL: Build beds first if housing is insufficient
-			if beds < need_beds and not material_crisis:
-				return Job.Type.BUILD_BED
-			return Job.Type.CHOP if stock_wood < 5 else Job.Type.FORAGE
-		1:
-			# CRITICAL: Fire pit for warmth
-			if hearths <= 0 and not material_crisis:
-				return Job.Type.BUILD_FIRE_PIT
-			return Job.Type.CHOP if stock_wood < 5 else Job.Type.PLANT_SEEDS
-		2:
-			# CRITICAL: Storage for stockpile
-			if storage_huts <= 0 and not material_crisis:
-				return Job.Type.BUILD_STORAGE_HUT
-			return Job.Type.MINE if stock_stone < 3 else Job.Type.HARVEST_CROPS
-		3:
-			# Walls for defense — lowered threshold from 6 to 3
-			if local_pop >= 3 and (walls < 4 or doors <= 0) and not material_crisis:
-				return Job.Type.BUILD_WALL if walls < 4 else Job.Type.BUILD_DOOR
-			return Job.Type.MINE if stock_stone < 3 else Job.Type.COOK_MEAT
-		4:
-			return Job.Type.CHOP
-		5:
-			return Job.Type.MINE
-		6:
-			if local_pop >= 5:
-				return Job.Type.PROTECT
-			return Job.Type.HUNT
-		7:
-			return Job.Type.TOOL_MAKING
-		# Phase 6: civilization building phases
-		8:
-			if farms <= 0 and local_pop >= 4 and not material_crisis:
-				return Job.Type.BUILD_FARM_WHEAT
-			if granaries <= 0 and farms >= 1 and not material_crisis:
-				return Job.Type.BUILD_GRANARY
-			return Job.Type.CHOP if stock_wood < 5 else Job.Type.FORAGE
-		9:
-			if workshops <= 0 and local_pop >= 5 and not material_crisis:
-				return Job.Type.BUILD_WORKSHOP
-			return Job.Type.CHOP
-		10:
-			if apothecaries <= 0 and local_pop >= 5 and not material_crisis:
-				return Job.Type.BUILD_APOTHECARY
-			return Job.Type.MINE
-		11:
-			if markets <= 0 and local_pop >= 6 and farms >= 1 and not material_crisis:
-				return Job.Type.BUILD_MARKET
-			return Job.Type.HUNT
-		# Knowledge preservation phases (only when writing known)
-		12:
-			if markers <= 0 and not material_crisis:
-				return Job.Type.CARVE_KNOWLEDGE_STONE
-			return Job.Type.CHOP if stock_wood < 5 else Job.Type.PAPER_MAKING
-		13:
-			return Job.Type.INK_MAKING
-		14:
-			return Job.Type.BOOK_BINDING
-		15:
-			return Job.Type.TEACH_SKILL
-		# Phase 6: advanced civilization phases (only when writing known)
-		16:
-			if libraries <= 0 and local_pop >= 6 and not material_crisis:
-				return Job.Type.BUILD_LIBRARY
-			return Job.Type.TEACH_SKILL
-		17:
-			if barracks <= 0 and local_pop >= 6 and walls >= 4 and not material_crisis:
-				return Job.Type.BUILD_BARRACKS
-			return Job.Type.PROTECT
-		18:
-			if cellars <= 0 and local_pop >= 5 and granaries >= 1 and not material_crisis:
-				return Job.Type.BUILD_CELLAR
-			return Job.Type.CHOP
-		19:
-			if boatyards <= 0 and local_pop >= 6 and not material_crisis:
-				return Job.Type.BUILD_BOATYARD
-			return Job.Type.FORAGE
-	return -1
 
 
 ## Settlement leader directs construction by posting build jobs directly.

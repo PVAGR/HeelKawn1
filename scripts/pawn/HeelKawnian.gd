@@ -3692,11 +3692,8 @@ func _tick_idle() -> void:
 			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH or j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.MINE or j.type == _Job.Type.MINE_WALL:
 				zone_bias += 4
 		base_bias += zone_bias
-		# Materials crisis: penalize BUILD jobs when stockpiles are low so pawns
-		# gather resources instead of claiming build jobs they can't complete.
-		if _is_structure_build_job(j.type):
-			if _cached_stock_wood < 5 or _cached_stock_stone < 3:
-				base_bias -= 20
+		# Materials: HeelKawnians build when they have materials and gather when they don't.
+		# No hard penalty — the natural job priority system handles the balance.
 		# Settlement proximity bias: pawns strongly prefer jobs in their own settlement.
 		# This keeps each settlement's workforce working locally instead of all pawns
 		# clustering at the central stockpile and ignoring outlying settlements.

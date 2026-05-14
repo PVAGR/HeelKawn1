@@ -94,7 +94,10 @@ func _process(delta: float) -> void:
 	ticks_processed_last_frame = ticks_this_frame
 	tickables_called_last_frame = tickables_this_frame
 	max_ticks_processed_seen = maxi(max_ticks_processed_seen, ticks_this_frame)
-	debug_last_tick_batch_usec = Time.get_ticks_usec() - start_time
+	var batch_usec: int = Time.get_ticks_usec() - start_time
+	debug_last_tick_batch_usec = batch_usec
+	if _speed_multiplier >= 10.0 and batch_usec > 50000 and OS.is_debug_build():
+		print("[TICK_BATCH] speed=%.0fx ticks=%d accum_before=%.2f elapsed_us=%d delta_ms=%.1f" % [_speed_multiplier, ticks_this_frame, _accumulated_time + TICK_STEP * ticks_this_frame, batch_usec, delta * 1000.0])
 
 
 func _dispatch_tick(tick: int) -> int:

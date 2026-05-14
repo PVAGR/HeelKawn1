@@ -247,7 +247,9 @@ func _key_to_tile(key: String) -> Vector2i:
 # ==================== DEBUG ====================
 
 func get_all_sacred_tiles() -> Array[Dictionary]:
-	return sacred_tiles.values()
+	var result: Array[Dictionary] = []
+	result.assign(sacred_tiles.values())
+	return result
 
 
 func get_sacred_tile_at(tile: Vector2i) -> Dictionary:

@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1778752985
+::res://::1778753309
 .aider.chat.history.md::TextFile::-1::1778404677::0::1::::<><><>0<>0<><>::
 AI_AUTONOMOUS_INNOVATION.md::TextFile::-1::1778107181::0::1::::<><><>0<>0<><>::
 AI_BUG_REPORTS.md::TextFile::-1::1778108695::0::1::::<><><>0<>0<><>::
@@ -621,12 +621,12 @@ sim_time.gd::GDScript::4781232912047051919::1777694600::0::1::::SimTime<>RefCoun
 world_meaning_safe.gd::GDScript::364407411864143448::1777694600::0::1::::<>RefCounted<><>0<>0<><>::
 ::res://scripts/memory/::1777765505
 LongTermMemory.gd::GDScript::5974671399758704568::1777694762::0::1::::LongTermMemory<>RefCounted<><>0<>0<><>::
-::res://scripts/pawn/::1778751894
+::res://scripts/pawn/::1778752990
 ActionPopupLabel.gd::GDScript::5174978775249392183::1777694600::0::1::::ActionPopupLabel<>Label<><>0<>0<><>::
 Animal.gd::GDScript::3893107784844328532::1778556983::0::1::::Animal<>Node2D<><>0<>0<><>::
 AnimalSpawner.gd::GDScript::8350566320011331673::1777694600::0::1::::AnimalSpawner<>Node<><>0<>0<><>::
-HeelKawnian.gd::GDScript::7989372192867881187::1778752707::0::1::::HeelKawnian<>Node2D<><>0<>0<><>::
-HeelKawnianData.gd::GDScript::4502026540089827843::1778749671::0::1::::HeelKawnianData<>RefCounted<><>0<>0<><>::
+HeelKawnian.gd::GDScript::7989372192867881187::1778753171::0::1::::HeelKawnian<>Node2D<><>0<>0<><>::
+HeelKawnianData.gd::GDScript::4502026540089827843::1778753134::0::1::::HeelKawnianData<>RefCounted<><>0<>0<><>::
 HeelKawnianDecision.gd::GDScript::5995801159740043007::1778751071::0::1::::HeelKawnianDecision<>RefCounted<><>0<>0<><>::
 MoodEvent.gd::GDScript::919426344482337370::1777694600::0::1::::MoodEvent<>Resource<><>0<>0<><>::
 Pawn.gd::GDScript::6658654347304257201::1778651452::0::1::::Pawn<>Node2D<><>0<>0<><>::
@@ -637,11 +637,11 @@ PlayerInputBuffer.gd::GDScript::7019315646774504164::1778320772::0::1::::PlayerI
 Trait.gd::GDScript::7833256235114228491::1778320772::0::1::::Trait<>Resource<><>0<>0<><>::
 Urge.gd::GDScript::6032469957200911032::1778751875::0::1::::Urge<>RefCounted<><>0<>0<><>::
 UrgeQueue.gd::GDScript::380637535889674339::1778751894::0::1::::UrgeQueue<>RefCounted<><>0<>0<><>::
-::res://scripts/pawn/drives/::1778752051
+::res://scripts/pawn/drives/::1778752990
 AmbitionDrive.gd::GDScript::7936666797174367556::1778752024::0::1::::AmbitionDrive<>RefCounted<><>0<>0<><>::
 BodyDrive.gd::GDScript::1028380050750172712::1778751932::0::1::::BodyDrive<>RefCounted<><>0<>0<><>::
 CuriosityDrive.gd::GDScript::6975429827624924570::1778752462::0::1::::CuriosityDrive<>RefCounted<><>0<>0<><>::
-MemoryDrive.gd::GDScript::3589426523131902552::1778752511::0::1::::MemoryDrive<>RefCounted<><>0<>0<><>::
+MemoryDrive.gd::GDScript::3589426523131902552::1778753126::0::1::::MemoryDrive<>RefCounted<><>0<>0<><>::
 SocialDrive.gd::GDScript::8669582299855900724::1778752318::0::1::::SocialDrive<>RefCounted<><>0<>0<><>::
 ::res://scripts/performance/::1777694600
 NeuralOptimizer.gd::GDScript::4108091249902905373::1777694600::0::1::::NeuralOptimizer<>Node<><>0<>0<><>::

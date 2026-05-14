@@ -9,25 +9,33 @@
 ## What We're Working On Now
 
 ### Active Tasks
-- Autoload consolidation — continue migrating old autoloads to 11 new managers
-  - ✅ DONE: SettlementPlanner → SettlementManager (removed from project.godot)
-  - ✅ DONE: SettlementRebirth → SettlementManager.process() (removed from project.godot)
-  - ✅ DONE: SettlementArchitect → SettlementManager.process_architect() (removed)
-  - ✅ DONE: FactionRegistry → FactionManager (removed from project.godot)
-  - 🔶 PENDING: GrudgeManager, GossipManager, BloodlineSystem → SocialManager (needs forwarding methods in 8+ files)
-  - 🔶 PENDING: ChronicleLog, IntentMemory, AgeMemory → MemoryManager (needs save/load forwarding)
-  - 🔶 PENDING: PlayerIntentQueue → PlayerManager (API mismatch—needs redesign)
-  - 🔶 PENDING: WorldEvents, WorldEventSeedManager → EventManager (constant refs)
-  - 🔶 PENDING: FogOfDiscovery, DiscoveryGate → ObserverManager (field refs)
+- Autoload consolidation — migrating old autoloads to 11 new managers
+  - ✅ DONE (15 removed): SettlementPlanner, SettlementRebirth, SettlementArchitect, FactionRegistry, BloodlineSystem, GrudgeManager, GossipManager, FootpathMemory, AIAutoBuild, AILearning, AICooperation, PawnBrainBridge, SettlementAIBridge, ChronicleExport, WorldSeedExport
+  - 🔶 PENDING: ChronicleLog → MemoryManager (needs signal forwarding + save/load)
+  - 🔶 PENDING: IntentMemory, AgeMemory, RemnantMemory, MythMemory, SacredMemory → MemoryManager
+  - 🔶 PENDING: TradeMemory, TradePlanner, FoodChainManager, ToolManager → EconomyManager
+  - 🔶 PENDING: PlayerIntentQueue, PlayerGathering, PlayerBuilding, IncarnationManager → PlayerManager
+  - 🔶 PENDING: WorldEvents, WorldEventSeedManager, WorldEventSystem → EventManager
+  - 🔶 PENDING: FogOfDiscovery, DiscoveryGate, ObservationAPI, ObserverLens → ObserverManager
+  - 🔶 PENDING: RoadMemory → MemoryManager (complex API, many files)
 - Phase 5A integration testing — CivilizationStage, HeelKawnian profiles, Matrix AI
 - Headless smoke test verification (passed May 7 — confirm stable)
 
 ### Completed This Session (May 14, 2026)
 - Documentation truth sweep: fixed phase numbering, completion %, autoload counts across 35+ files
-- Autoload consolidation: 4 old autoloads removed from project.godot (164→160), Main.gd refs updated
-- HeelKawnian terminology sweep: standardized "HeelKawnian" across docs (README, AI_README, etc.)
+- Autoload consolidation: 15 old autoloads removed from project.godot (164→149)
+  - SettlementPlanner/Rebirth/Architect → SettlementManager
+  - FactionRegistry → FactionManager
+  - BloodlineSystem, GrudgeManager, GossipManager → SocialManager
+  - FootpathMemory → MemoryManager
+  - AIAutoBuild, AILearning, AICooperation → AIManager (lazy-load)
+  - PawnBrainBridge → PawnManager (lazy-load)
+  - SettlementAIBridge, ChronicleExport, WorldSeedExport (unused)
+- Added forwarding methods to SocialManager (12), MemoryManager (3), SettlementManager (6)
+- Updated 10+ script files (Main.gd, CrimeSystem, HeelKawnianMind, HeelKawnianVoice, HeelKawnian, WorldOverlay, NameGenerator, PawnInfoPanel, GrudgeManager)
+- HeelKawnian terminology sweep: standardized across docs
 - Moved FREE_LLM_SETUP.md → brain/plans/ (aspirational design doc)
-- Updated brain memory files to reflect current state
+- Updated brain memory files
 - Resolved internal contradictions in GODOT_LIMITATION_ANALYSIS.md, CHANGELOG.md, QWEN.md
 
 ---
@@ -55,7 +63,7 @@
 - Faction and religion stubs
 - Observer HUD (F9)
 - Creator debug menu (F10)
-- 11 consolidated managers (pending integration)
+- 11 consolidated managers (SettlementManager live, others with lazy-load forwarding)
 
 ### DEFERRED Systems
 - Full SimVision grand-strategy map
@@ -67,7 +75,7 @@
 
 ## Next Targets (from HEELKAWN.txt)
 
-1. Complete autoload consolidation (164 → ~30 autoloads)
+1. Complete autoload consolidation (149 → ~30 autoloads; 15 removed so far)
 2. Phase 5A integration and testing
 3. Continue toward playable prototype (v1 readiness, NOT release candidate)
 

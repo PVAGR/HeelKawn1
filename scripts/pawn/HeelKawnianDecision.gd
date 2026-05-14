@@ -208,7 +208,7 @@ static func _is_build_job(jt: int) -> bool:
 
 
 static func _root_node(name: String) -> Node:
-	var n: Node = Engine.get_main_loop()
-	if n != null and n.has_node("/root/" + name):
-		return n.get_node("/root/" + name)
+	var ml = Engine.get_main_loop()
+	if ml != null and ml.has_node("/root/" + name):
+		return ml.get_node("/root/" + name)
 	return null

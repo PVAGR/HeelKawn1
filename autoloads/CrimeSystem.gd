@@ -192,7 +192,7 @@ func _check_crime_opportunities(tick: int) -> void:
 				continue
 		# Assault: pawns with strong grudges may attack
 		var grudge_level: float = SocialManager.get_highest_grudge_level(int(pawn.data.id))
-			if grudge_level > 0.7:
+		if grudge_level > 0.7:
 				if WorldRNG.chance_for(&"crime_assault", 0.02, tick + int(pawn.data.id)):
 					_commit_assault(pawn, tick)
 					continue

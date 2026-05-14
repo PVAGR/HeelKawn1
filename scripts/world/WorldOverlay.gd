@@ -215,7 +215,7 @@ func _draw() -> void:
 			if drawn >= 500:
 				break
 			var wear: float = MemoryManager.footpath_get_wear_at(Vector2i(x, y))
-				if wear > 0.1:
+			if wear > 0.1:
 					var wp: Vector2 = _world.tile_to_world(Vector2i(x, y))
 					var alpha: float = clampf(wear, 0.1, 0.6)
 					var path_c: Color = Color(0.45, 0.35, 0.2, alpha)

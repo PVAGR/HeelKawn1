@@ -2969,7 +2969,19 @@ func _on_game_tick(tick: int) -> void:
 	if _is_main_lane_tick(tick, ai_export_interval, 157):
 		ObservationAPI.export_ai_state()
 	if _is_simulation_worker_mode():
-		_maybe_log_tick_hotspots(tick, section_us)
+	_maybe_log_tick_hotspots(tick, section_us)
+	if GameManager != null and GameManager.game_speed >= 50.0 and tick % 100 == 0:
+		var total_us: int = 0
+		var parts: String = ""
+		var keys: Array = section_us.keys()
+		keys.sort_cab(func(a, b): return int(section_us.get(a, 0)) > int(section_us.get(b, 0)))
+		for k in keys:
+			var us: int = int(section_us.get(k, 0))
+			if us > 100:
+				total_us += us
+				parts += " %s=%.1fms" % [k, us / 1000.0]
+		if total_us > 500:
+			print("[TICK_PROFILE] tick=%d speed=%.0fx total=%.2fms%s" % [tick, GameManager.game_speed, total_us / 1000.0, parts])
 		return
 	# HUD snapshots are CPU-expensive — only when the realm/observer panel is open.
 	var obs_iv: int = _high_speed_interval(60, 45, 90)

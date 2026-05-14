@@ -2973,7 +2973,7 @@ func _on_game_tick(tick: int) -> void:
 		var total_us: int = 0
 		var parts: String = ""
 		var keys: Array = section_us.keys()
-		keys.sort_cab(func(a, b): return int(section_us.get(a, 0)) > int(section_us.get(b, 0)))
+		keys.sort_custom(func(a, b): return int(section_us.get(a, 0)) > int(section_us.get(b, 0)))
 		for k in keys:
 			var us: int = int(section_us.get(k, 0))
 			if us > 100:

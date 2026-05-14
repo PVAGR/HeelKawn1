@@ -107,3 +107,32 @@ func get_authority_context(pawn_id: int) -> Dictionary:
 		return _authority_system.get_authority_context(pawn_id)
 	return {}
 
+
+## Compatibility / debug shims used by CreatorDebugMenu and other reporters
+func debug_summary_block() -> String:
+	_load_subsystems()
+	# Prefer authority/faction system debug implementations if present
+	if _faction_system != null and _faction_system.has_method("debug_summary_block"):
+		return str(_faction_system.call("debug_summary_block"))
+	if _faction_registry != null and _faction_registry.has_method("debug_summary_block"):
+		return str(_faction_registry.call("debug_summary_block"))
+	# Fallback: small printable summary
+	return "FactionManager: subsystems not loaded or no debug summary available"
+
+
+func sync_from_settlements() -> void:
+	_load_subsystems()
+	if _faction_system != null and _faction_system.has_method("sync_from_settlements"):
+		_faction_system.call("sync_from_settlements")
+	# else no-op
+
+
+func get_synced_house_count() -> int:
+	_load_subsystems()
+	if _faction_system != null and _faction_system.has_method("get_synced_house_count"):
+		return int(_faction_system.call("get_synced_house_count"))
+	# Try registry fallback
+	if _faction_registry != null and _faction_registry.has_method("get_house_count"):
+		return int(_faction_registry.call("get_house_count"))
+	return 0
+

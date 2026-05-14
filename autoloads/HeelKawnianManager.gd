@@ -274,6 +274,32 @@ static func get_matrix_decision_for_pawn(pawn: Variant) -> Dictionary:
 		return {}
 	var identity: HeelKawnianIdentity = get_identity_for_pawn(pawn)
 	var biases: Dictionary = _matrix_job_biases(profile, data, identity)
+	
+	# Matrix deepening: let unlocked skill-tree/work-speed influence job biases.
+	# This is deterministic and only nudges priorities; it does not override
+	# survival gates or legality checks in Pawn._tick_idle.
+	#
+	# We scale the bias amount (integer) by a small factor derived from
+	# work_speed_for(skill).
+	if biases is Dictionary:
+		for job_type_any in biases.keys():
+			var job_type: int = int(job_type_any)
+			var bias: int = int(biases.get(job_type_any, 0))
+			if bias == 0:
+				continue
+			var skill: int = HeelKawnianData.skill_for_job(job_type)
+			if skill < 0:
+				continue
+			var ws: float = data.work_speed_for(skill)
+			# ws ~ [1.0 .. ~2.0]; keep within a mild multiplier range.
+			var ws_mult: float = clampf(ws / 1.0, 0.85, 1.35)
+			# Apply only to positive biases (negative biases already mean avoid).
+			if bias > 0:
+				var scaled: int = int(round(float(bias) * ws_mult))
+				biases[job_type] = scaled
+			# (negative biases left unchanged to avoid changing avoid behavior)
+
+	
 	var top_jobs: Array[Dictionary] = _top_matrix_jobs(biases, 8)
 	var rationale: String = _matrix_rationale(profile, top_jobs)
 	return {
@@ -291,6 +317,7 @@ static func get_matrix_decision_for_pawn(pawn: Variant) -> Dictionary:
 		"rationale": rationale,
 		"inputs_snapshot": _matrix_inputs_snapshot(profile),
 	}
+
 
 
 static func get_job_priority_bias_for_pawn(pawn: Variant, job_type: int) -> int:

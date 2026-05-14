@@ -62,12 +62,12 @@ func _ensure_legacy() -> void:
 
 func get_subsystem(name: String) -> Node:
 	match name:
-		"kinship_system": return _kinship_system
-		"grudge_manager": return _grudge_manager
-		"gossip_manager": return _gossip_manager
-		"relational_graph": return _relational_graph
-		"bloodline_system": return _bloodline_system
-		"legacy_system": return _legacy_system
+		"kinship_system": _ensure_kinship(); return _kinship_system
+		"grudge_manager": _ensure_grudge(); return _grudge_manager
+		"gossip_manager": _ensure_gossip(); return _gossip_manager
+		"relational_graph": _ensure_relational(); return _relational_graph
+		"bloodline_system": _ensure_bloodline(); return _bloodline_system
+		"legacy_system": _ensure_legacy(); return _legacy_system
 		_: return null
 
 ## Record kinship relationship (delegates to KinshipSystem if available)

@@ -80,14 +80,14 @@ func _ensure_chronicle() -> void:
 
 func get_subsystem(name: String) -> Node:
 	match name:
-		"age_memory": return _age_memory
-		"intent_memory": return _intent_memory
-		"remnant_memory": return _remnant_memory
-		"myth_memory": return _myth_memory
-		"road_memory": return _road_memory
-		"sacred_memory": return _sacred_memory
-		"footpath_memory": return _footpath_memory
-		"chronicle_log": return _chronicle_log
+		"age_memory": _ensure_age(); return _age_memory
+		"intent_memory": _ensure_intent(); return _intent_memory
+		"remnant_memory": _ensure_remnant(); return _remnant_memory
+		"myth_memory": _ensure_myth(); return _myth_memory
+		"road_memory": _ensure_road(); return _road_memory
+		"sacred_memory": _ensure_sacred(); return _sacred_memory
+		"footpath_memory": _ensure_footpath(); return _footpath_memory
+		"chronicle_log": _ensure_chronicle(); return _chronicle_log
 		_: return null
 
 ## Record age-related event (delegates to AgeMemory if available)

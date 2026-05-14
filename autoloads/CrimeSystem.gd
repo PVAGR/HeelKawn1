@@ -104,8 +104,8 @@ func record_crime(criminal_id: int, crime_type: int, victim_id: int = -1, settle
 		"settlement_id": settlement_id,
 	})
 	# Create grudge from victim toward criminal
-	if victim_id >= 0 and GrudgeManager != null:
-		GrudgeManager.add_grudge(victim_id, criminal_id, CRIME_NAMES.get(crime_type, "crime"), CRIME_SEVERITY.get(crime_type, 1))
+	if victim_id >= 0:
+		SocialManager.record_grudge(victim_id, criminal_id, CRIME_NAMES.get(crime_type, "crime"), CRIME_SEVERITY.get(crime_type, 1))
 
 
 ## Get criminal record for a pawn.
@@ -191,8 +191,7 @@ func _check_crime_opportunities(tick: int) -> void:
 				_commit_theft(pawn, tick)
 				continue
 		# Assault: pawns with strong grudges may attack
-		if GrudgeManager != null:
-			var grudge_level: float = GrudgeManager.get_highest_grudge_level(int(pawn.data.id))
+		var grudge_level: float = SocialManager.get_highest_grudge_level(int(pawn.data.id))
 			if grudge_level > 0.7:
 				if WorldRNG.chance_for(&"crime_assault", 0.02, tick + int(pawn.data.id)):
 					_commit_assault(pawn, tick)
@@ -223,9 +222,7 @@ func _commit_theft(pawn: HeelKawnian, tick: int) -> void:
 
 func _commit_assault(pawn: HeelKawnian, tick: int) -> void:
 	# Find the target of the strongest grudge
-	if GrudgeManager == null:
-		return
-	var target_id: int = GrudgeManager.get_grudge_target(int(pawn.data.id))
+	var target_id: int = SocialManager.get_grudge_target(int(pawn.data.id))
 	if target_id < 0:
 		return
 	# Find the target pawn

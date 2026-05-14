@@ -3410,8 +3410,7 @@ func _scan_unexplored_tiles() -> Array:
 			# Check if this tile has been visited by checking FootpathMemory wear
 			# (tiles with no wear haven't been walked on)
 			var visited: bool = false
-			if FootpathMemory != null and FootpathMemory.has_method("get_wear_at"):
-				visited = FootpathMemory.get_wear_at(Vector2i(tx, ty)) > 0.0
+			visited = MemoryManager.footpath_get_wear_at(Vector2i(tx, ty)) > 0.0
 			if not visited:
 				result.append(Vector2i(tx, ty))
 				if result.size() >= 5:

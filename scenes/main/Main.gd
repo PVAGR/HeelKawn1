@@ -744,8 +744,7 @@ func _ready() -> void:
 			_chronicle_ledger.bind(_pawn_spawner)
 		if _chronicle_book != null:
 			_chronicle_book.bind(_pawn_spawner)
-		if FootpathMemory != null and FootpathMemory.has_method("bind_context"):
-			FootpathMemory.bind_context(_world, _pawn_spawner)
+		MemoryManager.footpath_bind_context(_world, _pawn_spawner)
 		if BuildingUsageTracker != null and BuildingUsageTracker.has_method("bind_context"):
 			BuildingUsageTracker.bind_context(_world, _pawn_spawner)
 		# SnowAccumulation disabled due to persistent caching error
@@ -2342,8 +2341,7 @@ func _bootstrap_colony() -> void:
 		_chronicle_ledger.bind(_pawn_spawner)
 	if _chronicle_book != null:
 		_chronicle_book.bind(_pawn_spawner)
-	if FootpathMemory != null and FootpathMemory.has_method("bind_context"):
-		FootpathMemory.bind_context(_world, _pawn_spawner)
+	MemoryManager.footpath_bind_context(_world, _pawn_spawner)
 	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("bind_context"):
 		BuildingUsageTracker.bind_context(_world, _pawn_spawner)
 	if SnowAccumulation != null and SnowAccumulation.has_method("bind_world"):
@@ -4314,8 +4312,7 @@ func _toggle_trade_overview() -> void:
 func _on_seed_gallery_seed_selected(seed: int) -> void:
 	if WorldRNG != null and WorldRNG.has_method("configure_from_seed"):
 		WorldRNG.configure_from_seed(seed)
-	if FootpathMemory != null and FootpathMemory.has_method("clear"):
-		FootpathMemory.clear()
+	MemoryManager.footpath_clear()
 	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("clear"):
 		BuildingUsageTracker.clear()
 	if SnowAccumulation != null and SnowAccumulation.has_method("clear"):
@@ -5830,8 +5827,7 @@ func _reroll_world() -> void:
 	MemoryManager.get_myth_memory().clear()
 	MemoryManager.get_sacred_memory().clear()
 	PlayerIntentQueue.clear()
-	if FootpathMemory != null and FootpathMemory.has_method("clear"):
-		FootpathMemory.clear()
+	MemoryManager.footpath_clear()
 	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("clear"):
 		BuildingUsageTracker.clear()
 	if SnowAccumulation != null and SnowAccumulation.has_method("clear"):
@@ -5894,8 +5890,7 @@ func _reroll_world() -> void:
 		_chronicle_ledger.bind(_pawn_spawner)
 	if _chronicle_book != null:
 		_chronicle_book.bind(_pawn_spawner)
-	if FootpathMemory != null and FootpathMemory.has_method("bind_context"):
-		FootpathMemory.bind_context(_world, _pawn_spawner)
+	MemoryManager.footpath_bind_context(_world, _pawn_spawner)
 	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("bind_context"):
 		BuildingUsageTracker.bind_context(_world, _pawn_spawner)
 	if SnowAccumulation != null and SnowAccumulation.has_method("bind_world"):
@@ -8259,8 +8254,8 @@ func _build_save_dict() -> Dictionary:
 		"cultural_memory": CulturalMemory.to_save_dict(),
 		"player_intent_queue": PlayerIntentQueue.to_save_dict(),
 		"faction_registry": FactionManager.get_faction_registry().to_save_dict(),
-		"grudge_manager": GrudgeManager.to_save_dict(),
-		"gossip_manager": GossipManager.to_save_dict(),
+		"grudge_manager": SocialManager.grudges_to_save_dict(),
+		"gossip_manager": SocialManager.gossip_to_save_dict(),
 		"myth_age": MythAge.to_save_dict(),
 		"last_generation_tick": _last_generation_tick,
 		# Metadata for save/load menu
@@ -8326,8 +8321,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 	MemoryManager.get_age_memory().clear()
 	MemoryManager.get_sacred_memory().clear()
 	PlayerIntentQueue.clear()
-	if FootpathMemory != null and FootpathMemory.has_method("clear"):
-		FootpathMemory.clear()
+	MemoryManager.footpath_clear()
 	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("clear"):
 		BuildingUsageTracker.clear()
 	if SnowAccumulation != null and SnowAccumulation.has_method("clear"):
@@ -8381,10 +8375,10 @@ func _apply_save_dict(s: Dictionary) -> void:
 	WorldMeaning.recompute()
 	WorldPersistence.from_save_dict(s.get("world_persistence", {}))
 	WorldPersistence.recompute()
-	if GrudgeManager != null and GrudgeManager.has_method("from_save_dict"):
-		GrudgeManager.from_save_dict(s.get("grudge_manager", {}))
-	if GossipManager != null and GossipManager.has_method("from_save_dict"):
-		GossipManager.from_save_dict(s.get("gossip_manager", {}))
+	if SocialManager.has_method("grudges_from_save_dict"):
+		SocialManager.grudges_from_save_dict(s.get("grudge_manager", {}))
+	if SocialManager.has_method("gossip_from_save_dict"):
+		SocialManager.gossip_from_save_dict(s.get("gossip_manager", {}))
 	if MythAge != null and MythAge.has_method("from_save_dict"):
 		MythAge.from_save_dict(s.get("myth_age", {}))
 	_push_zone_filter_label_to_toolbar()

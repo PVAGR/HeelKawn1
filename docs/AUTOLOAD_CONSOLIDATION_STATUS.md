@@ -1,8 +1,8 @@
 # Autoload Consolidation Status
 
 **Date:** May 14, 2026  
-**Status:** ~12% Complete — 11 consolidated managers created, 4 old autoloads removed from project.godot  
-**Autoload Count:** 160 autoloads (11 consolidated managers created, 4 removed from project.godot)
+**Status:** ~15% Complete — 11 consolidated managers created, 15 old autoloads removed from project.godot  
+**Autoload Count:** 149 autoloads (11 consolidated managers created, 15 removed from project.godot)
 
 ---
 
@@ -22,19 +22,18 @@
 - ✅ ObserverManager.gd - Consolidates observer and vision systems
 
 ### 2. Updated project.godot
-- ✅ SettlementManager.gd and FactionManager.gd wired into project.godot
-- ✅ SettlementPlanner, SettlementRebirth, SettlementArchitect removed from project.godot
-- ✅ FactionRegistry removed from project.godot
-- ❌ 9 other consolidated managers not yet wired into project.godot
-- ❌ 88 autoloads still need consolidation and removal
+- ✅ SettlementManager, SocialManager, FactionManager, MemoryManager, EconomyManager, FactionManager wired into project.godot
+- ✅ 15 old autoloads removed: SettlementPlanner, SettlementRebirth, SettlementArchitect, FactionRegistry, BloodlineSystem, GrudgeManager, GossipManager, FootpathMemory, AIAutoBuild, AILearning, AICooperation, PawnBrainBridge, SettlementAIBridge, ChronicleExport, WorldSeedExport
+- ✅ All 6 other new managers (AIManager, UIManager, EventManager, PlayerManager, PawnManager, ObserverManager) registered in project.godot
+- 🔶 ~75 autoloads still need consolidation and removal
 
 ### 3. Updated Main.gd References (Partial)
 - ✅ SettlementPlanner → SettlementManager (7 occurrences)
 - ✅ SettlementRebirth → SettlementManager (4 occurrences)
 - ✅ SettlementArchitect → SettlementManager (1 occurrence)
 - ✅ KinshipSystem → SocialManager (3 occurrences)
-- ✅ GrudgeManager → SocialManager (2 occurrences)
-- ✅ GossipManager → SocialManager (2 occurrences)
+- ✅ GrudgeManager → SocialManager (6 occurrences)
+- ✅ GossipManager → SocialManager (4 occurrences)
 - ✅ BloodlineSystem → SocialManager (2 occurrences in Main.gd, forwarding methods added)
 - ✅ Added get_culture_audio_bias_for_settlement method to SettlementManager
 - ✅ Added forwarding methods to MemoryManager
@@ -205,6 +204,17 @@ The following files also have references to removed autoloads that need updating
 
 ## Consolidation Progress Log
 
+### 2026-05-14 — FootpathMemory consolidated into MemoryManager, removed from project.godot
+
+**Changes:**
+- Added `footpath_get_wear_at()`, `footpath_bind_context()`, `footpath_clear()` forwarding methods to MemoryManager
+- Updated Main.gd (6 references: 3 bind_context, 3 clear)
+- Updated HeelKawnian.gd (1 reference: get_wear_at)
+- Updated WorldOverlay.gd (1 reference: get_wear_at)
+- Removed FootpathMemory from project.godot
+
+**Result:** FootpathMemory is no longer an autoload. All references now go through MemoryManager.
+
 ### 2026-05-14 — BloodlineSystem consolidated into SocialManager, removed from project.godot
 
 **Changes:**
@@ -228,3 +238,15 @@ The following files also have references to removed autoloads that need updating
 | FactionRegistry | FactionManager | ✅ Removed from project.godot |
 
 **Result:** project.godot now has 160 active autoloads (164 − 4 removed). SettlementManager and FactionManager are registered as autoloads. Main.gd references have been updated for SettlementPlanner/Rebirth/Architect → SettlementManager (12 occurrences) and FactionRegistry → FactionManager (10 occurrences still pending in Main.gd).
+
+### 2026-05-14 — GrudgeManager and GossipManager consolidated into SocialManager, removed from project.godot
+
+**Changes:**
+- Added 10 forwarding methods to SocialManager (get_grudges_held_by, get_grudges_against, get_grudge_target, get_highest_grudge_level, grudges_to_save_dict, grudges_from_save_dict, get_gossip_about, get_reputation_for, get_reputation_label, gossip_to_save_dict, gossip_from_save_dict)
+- Updated Main.gd (4 references: save/load for grudge_manager and gossip_manager)
+- Updated CrimeSystem.gd (4 GrudgeManager references: add_grudge, get_highest_grudge_level, get_grudge_target, null checks)
+- Updated HeelKawnianMind.gd (5 references: get_grudges_held_by, get_grudges_against, get_reputation_for, get_reputation_label)
+- Updated HeelKawnianVoice.gd (1 reference: get_gossip_about)
+- Removed GrudgeManager and GossipManager from project.godot
+
+**Result:** GrudgeManager and GossipManager are no longer autoloads. All references now go through SocialManager.

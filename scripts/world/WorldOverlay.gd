@@ -208,14 +208,13 @@ func _draw() -> void:
 		_draw_scaffolding(wp, progress)
 
 	# --- Footpaths: worn trails from foot traffic ---
-	if FootpathMemory != null and FootpathMemory.has_method("get_wear_at"):
-		drawn = 0
-		var cam_rect: Rect2i = _camera_viewport_tiles()
-		for y in range(cam_rect.position.y, cam_rect.end.y, 3):
-			for x in range(cam_rect.position.x, cam_rect.end.x, 3):
-				if drawn >= 500:
-					break
-				var wear: float = FootpathMemory.get_wear_at(Vector2i(x, y))
+	drawn = 0
+	var cam_rect: Rect2i = _camera_viewport_tiles()
+	for y in range(cam_rect.position.y, cam_rect.end.y, 3):
+		for x in range(cam_rect.position.x, cam_rect.end.x, 3):
+			if drawn >= 500:
+				break
+			var wear: float = MemoryManager.footpath_get_wear_at(Vector2i(x, y))
 				if wear > 0.1:
 					var wp: Vector2 = _world.tile_to_world(Vector2i(x, y))
 					var alpha: float = clampf(wear, 0.1, 0.6)

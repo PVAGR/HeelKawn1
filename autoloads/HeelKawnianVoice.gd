@@ -249,7 +249,7 @@ func _compose_knowledge(name: String, mind: Dictionary, data) -> String:
 
 func _compose_gossip(name: String, mind: Dictionary, data) -> String:
 	var pawn_id: int = int(data.id)
-	var gossip: Array = GossipManager.get_gossip_about(pawn_id, 3) if GossipManager != null else []
+	var gossip: Array = SocialManager.get_gossip_about(pawn_id)
 	if gossip.is_empty():
 		# Try recent world events instead
 		var memory_summary: String = str(mind.get("memory_summary", ""))

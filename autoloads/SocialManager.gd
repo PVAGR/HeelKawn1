@@ -139,3 +139,89 @@ func clear_bloodline() -> void:
 		_load_subsystems()
 	if _bloodline_system != null and _bloodline_system.has_method("clear"):
 		_bloodline_system.clear()
+
+## Get all grudges held by a pawn (delegates to GrudgeManager)
+func get_grudges_held_by(pawn_id: int) -> Array:
+	if _grudge_manager == null:
+		_load_subsystems()
+	if _grudge_manager != null and _grudge_manager.has_method("get_grudges_held_by"):
+		return _grudge_manager.get_grudges_held_by(pawn_id)
+	return []
+
+## Get all grudges against a pawn (delegates to GrudgeManager)
+func get_grudges_against(pawn_id: int) -> Array:
+	if _grudge_manager == null:
+		_load_subsystems()
+	if _grudge_manager != null and _grudge_manager.has_method("get_grudges_against"):
+		return _grudge_manager.get_grudges_against(pawn_id)
+	return []
+
+## Get grudge target for a crime (delegates to GrudgeManager)
+func get_grudge_target(pawn_id: int) -> int:
+	if _grudge_manager == null:
+		_load_subsystems()
+	if _grudge_manager != null and _grudge_manager.has_method("get_grudge_target"):
+		return _grudge_manager.get_grudge_target(pawn_id)
+	return -1
+
+## Get highest grudge level (delegates to GrudgeManager)
+func get_highest_grudge_level(pawn_id: int) -> float:
+	if _grudge_manager == null:
+		_load_subsystems()
+	if _grudge_manager != null and _grudge_manager.has_method("get_highest_grudge_level"):
+		return _grudge_manager.get_highest_grudge_level(pawn_id)
+	return 0.0
+
+## Serialize grudges for save (delegates to GrudgeManager)
+func grudges_to_save_dict() -> Dictionary:
+	if _grudge_manager == null:
+		_load_subsystems()
+	if _grudge_manager != null and _grudge_manager.has_method("to_save_dict"):
+		return _grudge_manager.to_save_dict()
+	return {}
+
+## Deserialize grudges from save (delegates to GrudgeManager)
+func grudges_from_save_dict(data: Dictionary) -> void:
+	if _grudge_manager == null:
+		_load_subsystems()
+	if _grudge_manager != null and _grudge_manager.has_method("from_save_dict"):
+		_grudge_manager.from_save_dict(data)
+
+## Get gossip about a pawn (delegates to GossipManager)
+func get_gossip_about(pawn_id: int) -> Array:
+	if _gossip_manager == null:
+		_load_subsystems()
+	if _gossip_manager != null and _gossip_manager.has_method("get_gossip_about"):
+		return _gossip_manager.get_gossip_about(pawn_id)
+	return []
+
+## Get reputation for a pawn (delegates to GossipManager)
+func get_reputation_for(pawn_id: int) -> float:
+	if _gossip_manager == null:
+		_load_subsystems()
+	if _gossip_manager != null and _gossip_manager.has_method("get_reputation_for"):
+		return _gossip_manager.get_reputation_for(pawn_id)
+	return 0.0
+
+## Get reputation label for a pawn (delegates to GossipManager)
+func get_reputation_label(pawn_id: int) -> String:
+	if _gossip_manager == null:
+		_load_subsystems()
+	if _gossip_manager != null and _gossip_manager.has_method("get_reputation_label"):
+		return _gossip_manager.get_reputation_label(pawn_id)
+	return "Unknown"
+
+## Serialize gossip for save (delegates to GossipManager)
+func gossip_to_save_dict() -> Dictionary:
+	if _gossip_manager == null:
+		_load_subsystems()
+	if _gossip_manager != null and _gossip_manager.has_method("to_save_dict"):
+		return _gossip_manager.to_save_dict()
+	return {}
+
+## Deserialize gossip from save (delegates to GossipManager)
+func gossip_from_save_dict(data: Dictionary) -> void:
+	if _gossip_manager == null:
+		_load_subsystems()
+	if _gossip_manager != null and _gossip_manager.has_method("from_save_dict"):
+		_gossip_manager.from_save_dict(data)

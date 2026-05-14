@@ -266,3 +266,22 @@ func get_footpath_memory() -> Node:
 
 func get_chronicle_log() -> Node:
 	return get_subsystem("chronicle_log")
+
+func footpath_get_wear_at(tile: Vector2i) -> float:
+	if _footpath_memory == null:
+		_load_subsystems()
+	if _footpath_memory != null and _footpath_memory.has_method("get_wear_at"):
+		return _footpath_memory.get_wear_at(tile)
+	return 0.0
+
+func footpath_bind_context(world: Node, pawn_spawner: Node) -> void:
+	if _footpath_memory == null:
+		_load_subsystems()
+	if _footpath_memory != null and _footpath_memory.has_method("bind_context"):
+		_footpath_memory.bind_context(world, pawn_spawner)
+
+func footpath_clear() -> void:
+	if _footpath_memory == null:
+		_load_subsystems()
+	if _footpath_memory != null and _footpath_memory.has_method("clear"):
+		_footpath_memory.clear()

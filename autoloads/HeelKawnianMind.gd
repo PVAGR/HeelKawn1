@@ -338,45 +338,43 @@ func _compute_relationships(pawn_id: int, data: HeelKawnianData) -> Dictionary:
 		if not family_parts.is_empty():
 			result.family = ", ".join(family_parts)
 
-	# Grudges and trust from GrudgeManager
-	if GrudgeManager != null:
-		var grudges: Array = GrudgeManager.get_grudges_held_by(pawn_id)
-		result.grudge_count = grudges.size()
+	# Grudges and trust from SocialManager
+	var grudges: Array = SocialManager.get_grudges_held_by(pawn_id)
+	result.grudge_count = grudges.size()
 
-		var rel_parts: PackedStringArray = []
-		if not grudges.is_empty():
-			for g in grudges:
-				if not g is Dictionary:
-					continue
-				var target_id: int = int(g.get("target_id", -1))
-				var intensity: float = float(g.get("intensity", 0.0))
-				var target_name: String = _pawn_name_for_id(target_id)
-				if intensity >= 0.7:
-					rel_parts.append("Hates %s" % target_name)
-				elif intensity >= 0.4:
-					rel_parts.append("Distrusts %s" % target_name)
-				else:
-					rel_parts.append("Wary of %s" % target_name)
-
-		# Also check who trusts this pawn
-		var grudges_against: Array = GrudgeManager.get_grudges_against(pawn_id)
-		if not grudges_against.is_empty():
-			rel_parts.append("Disliked by %d others" % grudges_against.size())
-
-		if not rel_parts.is_empty():
-			result.summary = ", ".join(rel_parts)
-		elif result.grudge_count == 0:
-			result.summary = "No conflicts recorded."
-
-	# Reputation from GossipManager
-	if GossipManager != null:
-		result.reputation = GossipManager.get_reputation_for(pawn_id)
-		var rep_label: String = GossipManager.get_reputation_label(pawn_id)
-		if rep_label != "unknown" and not rep_label.is_empty():
-			if result.summary == "No strong bonds recorded yet.":
-				result.summary = "Reputation: %s" % rep_label.to_lower()
+	var rel_parts: PackedStringArray = []
+	if not grudges.is_empty():
+		for g in grudges:
+			if not g is Dictionary:
+				continue
+			var target_id: int = int(g.get("target_id", -1))
+			var intensity: float = float(g.get("intensity", 0.0))
+			var target_name: String = _pawn_name_for_id(target_id)
+			if intensity >= 0.7:
+				rel_parts.append("Hates %s" % target_name)
+			elif intensity >= 0.4:
+				rel_parts.append("Distrusts %s" % target_name)
 			else:
-				result.summary += "; reputation: %s" % rep_label.to_lower()
+				rel_parts.append("Wary of %s" % target_name)
+
+	# Also check who trusts this pawn
+	var grudges_against: Array = SocialManager.get_grudges_against(pawn_id)
+	if not grudges_against.is_empty():
+		rel_parts.append("Disliked by %d others" % grudges_against.size())
+
+	if not rel_parts.is_empty():
+		result.summary = ", ".join(rel_parts)
+	elif result.grudge_count == 0:
+		result.summary = "No conflicts recorded."
+
+	# Reputation from SocialManager
+	result.reputation = SocialManager.get_reputation_for(pawn_id)
+	var rep_label: String = SocialManager.get_reputation_label(pawn_id)
+	if rep_label != "unknown" and not rep_label.is_empty():
+		if result.summary == "No strong bonds recorded yet.":
+			result.summary = "Reputation: %s" % rep_label.to_lower()
+		else:
+			result.summary += "; reputation: %s" % rep_label.to_lower()
 
 	return result
 
@@ -923,8 +921,8 @@ func _compute_war_memory(pawn_id: int, data: HeelKawnianData) -> Dictionary:
 
 	if not parts.is_empty():
 		result.summary = ", ".join(parts)
-	elif GrudgeManager != null:
-		var grudges: Array = GrudgeManager.get_grudges_held_by(pawn_id)
+	else:
+		var grudges: Array = SocialManager.get_grudges_held_by(pawn_id)
 		if not grudges.is_empty():
 			result.summary = "Carries %d grudge%s" % [grudges.size(), "s" if grudges.size() > 1 else ""]
 			result.conflict_count = grudges.size()

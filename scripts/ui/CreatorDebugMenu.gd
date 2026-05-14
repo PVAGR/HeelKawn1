@@ -123,6 +123,10 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 				"id": "performance_snapshot",
 				"label": "01 · PERFORMANCE SNAPSHOT — copy this for lag debugging",
 			},
+			{
+				"id": "ai_diagnostic",
+				"label": "01b · AI DIAGNOSTIC — one button gives AI everything it needs",
+			},
 		],
 	},
 	{
@@ -403,6 +407,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_session_snapshot_pack, "session_snapshot_pack")
 		"performance_snapshot":
 			error_occurred = _safe_report(_report_performance_snapshot, "performance_snapshot")
+		"ai_diagnostic":
+			error_occurred = _safe_report(_report_ai_diagnostic, "ai_diagnostic")
 		"visual_selection_truth":
 			error_occurred = _safe_report(_report_visual_selection_truth, "visual_selection_truth")
 		"colony_truth":
@@ -692,6 +698,73 @@ func _report_performance_snapshot() -> void:
 	print("4. Copy the output above and send to AI")
 	print("")
 	print("=== END PERFORMANCE SNAPSHOT ===")
+
+
+func _report_ai_diagnostic() -> void:
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	var speed: float = GameManager.game_speed if GameManager != null else 1.0
+	var paused: bool = GameManager.is_paused if GameManager != null else false
+	var fps: float = Engine.get_frames_per_second()
+	
+	print("=== HEELKAWN AI DIAGNOSTIC ===")
+	print("Time: %s" % Time.get_datetime_string_from_system())
+	print("")
+	print("--- CORE STATE ---")
+	print("Tick: %d | Speed: %.1fx | Paused: %s | FPS: %.0f" % [tick, speed, str(paused), fps])
+	
+	var main_node: Node = _main()
+	
+	print("")
+	print("--- SECTION TIMINGS (last tick) ---")
+	print("This tick's 20+ timed operations. Large values = bottleneck.")
+	var sd: Dictionary = GameManager.call("sim_diag") if GameManager != null and GameManager.has_method("sim_diag") else {}
+	if sd.has("section_us"):
+		var su: Dictionary = sd["section_us"] as Dictionary
+		var keys: Array = su.keys()
+		keys.sort_cab(func(a, b): return int(su.get(a, 0)) > int(su.get(b, 0)))
+		for k in keys:
+			var us: int = int(su.get(k, 0))
+			if us > 50:
+				print("  %s: %.2f ms" % [k, us / 1000.0])
+	
+	print("")
+	print("--- COUNTS ---")
+	var pawn_count: int = 0
+	var ps: Node = main_node.get_node_or_null("WorldViewport/PawnSpawner") if main_node != null else null
+	if ps != null and ps.has_method("find_pawns"):
+		pawn_count = ps.call("find_pawns").size()
+	var open_jobs: int = JobManager.open_count() if JobManager != null and JobManager.has_method("open_count") else -1
+	print("Pawns: %d | Jobs Open: %d | Memory: %.0f MB | Objects: %d" % [
+		pawn_count, open_jobs,
+		Performance.get_monitor(Performance.MEMORY_STATIC) / (1024.0 * 1024.0),
+		Performance.get_monitor(Performance.OBJECT_COUNT)
+	])
+	
+	print("")
+	print("--- AUTOLOAD HEALTH ---")
+	for al in ["GameManager", "TickManager", "WorldMemory", "SettlementMemory", "JobManager", "WorldAI", "FactionManager", "StockpileManager"]:
+		var node: Node = get_node_or_null("/root/" + al)
+		print("  %s: %s" % [al, "LOADED" if node != null else "MISSING"])
+	
+	print("")
+	print("--- MINING REACT ---")
+	var wr: Node = main_node.get_node_or_null("WorldViewport/WorldReact") if main_node != null else null
+	if wr != null:
+		print("  Pending: %s | In Progress: %s" % [str(wr.get("_mine_scan_pending", false)), str(wr.get("_mine_scan_in_progress", false))])
+	else:
+		print("  WorldReact not found on Main")
+	
+	print("")
+	print("--- RECOMMENDATION ---")
+	if speed >= 50.0:
+		print("RUNNING AT HIGH SPEED. Check TICK_PROFILE lines (printed every 100 ticks at 50x+).")
+		print("  Paste TICK_PROFILE lines to AI to identify per-tick bottleneck.")
+	elif speed <= 1.0 and fps < 30:
+		print("LOW FPS AT 1x: Rendering or UI bottleneck. Try F4 performance overlay.")
+	else:
+		print("Performance looks acceptable. If stutter persists, capture TICK_PROFILE output.")
+	print("")
+	print("=== END AI DIAGNOSTIC ===")
 
 
 func _main() -> Node2D:

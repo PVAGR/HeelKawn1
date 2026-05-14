@@ -1,5 +1,7 @@
 # HeelKawn Universe Brain
 
+**Last updated:** 2026-05-14
+
 The local-first AI development brain for the HeelKawn project. It remembers lore, design decisions, code changes, and tasks across sessions so any AI assistant can pick up where the last one left off.
 
 ---
@@ -49,6 +51,7 @@ The AI will automatically load the brain's memory, understand the current state,
 ```
 brain/
 ├── README.md              ← You are here
+├── OWNERS_GUIDE.md        ← Configuration and maintenance guide
 ├── memory/                ← The AI's long-term memory
 │   ├── active_context.md  ← What we're working on RIGHT NOW
 │   ├── knowledge/         ← Permanent facts about the project
@@ -84,7 +87,8 @@ When you are loaded into this project, follow this order:
 5. Read `brain/lore/canonical.md` (universe truth)
 6. Read `docs/HEELKAWN_STATE.md` (project state — always wins on conflicts)
 7. Read `HEELKAWN.txt` (session handoff)
-8. Then begin work
+8. Read `AI_README.md` (master AI instructions)
+9. Then begin work
 
 **After completing work:**
 1. Update `brain/memory/active_context.md` with new status

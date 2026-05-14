@@ -4,7 +4,7 @@
 >
 > Before working on this repository, you MUST read `AI_README.md` at the repository root. It contains the canonical source of truth for:
 > - The deterministic kernel choice
-> - Current development phase (Phase 2: The Kernel)
+> - Current development phase (Phase 5A: Emergent Life foundation)
 > - Core world laws and philosophy
 > - Implementation rules and forbidden patterns
 >
@@ -23,13 +23,13 @@
 
 HeelKawn Universe is a fully integrated neural network matrix-driven world simulation system with real-time monitoring, error tracking, and automatic health checks.
 
-**Version:** 2.6.1  
+**Version:** v1.0.0  
 **Status:** ✅ Fully Operational  
-**Last Updated:** 2026-04-27
+**Last Updated:** 2026-05-14
 
 ## 🔗 GitHub Integration
 
-### Repository Structure
+### Repository Structure (Historical Snapshot — directory layout may be outdated)
 ```
 HeelKawn1/
 ├── .github/workflows/          # CI/CD automation
@@ -310,7 +310,7 @@ If system becomes unresponsive:
 
 ---
 
-**HeelKawn Universe v2.6.1**  
+**HeelKawn Universe v1.0.0**  
 **Status**: ✅ Fully Operational  
 **Neural Matrix**: ✅ Active  
 **Monitoring**: ✅ Live  

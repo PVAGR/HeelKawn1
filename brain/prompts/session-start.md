@@ -1,11 +1,13 @@
 # Session Start Prompt
 
+**Last updated:** 2026-05-14
+
 Copy this prompt when starting a new AI session:
 
 ---
 
 ```
-I'm working on HeelKawn, a deterministic Godot 4.6 world simulation.
+I'm working on HeelKawn, a deterministic Godot 4.6.2 world simulation.
 
 Please follow this read order before doing any work:
 

@@ -62,7 +62,7 @@ HeelKawn is **not** a game with an end state. It is a **living simulation** wher
 - This is a read-only lens, not a full era simulation yet
 
 **HeelKawnian Development Profiles:**
-- `HeelKawnianIdentity.gd` gives pawns deterministic soul anchors, profile history, and evolving traits
+- `HeelKawnianIdentity.gd` (a `class_name` Resource, not an autoload) gives pawns deterministic soul anchors, profile history, and evolving traits
 - `HeelKawnianManager.gd` derives each pawn's development phase, drive, next need, skills, knowledge, social signal, preservation pressure, trauma pressure, and era context
 - F10 `49 · HeelKawnians` prints sample individual sprite profiles
 - This is a read-only intelligence profile layer; it does not yet command pawn actions

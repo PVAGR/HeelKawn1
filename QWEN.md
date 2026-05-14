@@ -1,9 +1,9 @@
 # QWEN.md — HeelKawn Project Context for AI Agents
 
-**Last Updated:** May 6, 2026  
+**Last Updated:** May 14, 2026  
 **Project:** HeelKawn v1.0 (Deterministic 2D World Simulation)  
 **Engine:** Godot 4.6.2  
-**Current Phase:** Phase 6 Complete — Ready for v1.0 Release
+**Current Phase:** Phase 5A — Emergent Life foundation (Consolidation)
 
 ---
 
@@ -17,7 +17,7 @@
 
 ---
 
-## ✅ COMPLETED PHASES (v1.0 READY)
+## ✅ COMPLETED PHASES
 
 ### Phase 0-4: Foundation Complete
 - **Phase 0:** Engine survival, Godot lifecycle stable
@@ -26,7 +26,7 @@
 - **Phase 3:** Historical continuity (ruins, scars, settlement lifecycle)
 - **Phase 4:** Civilization & identity (personality, lineages, factions, culture, authority, collapse)
 
-### Phase 5: Emergent Life (~80% Complete)
+### Phase 5A: Emergent Life (~10% — Work in Progress)
 - **Grudge System:** Multi-generational social memory with inheritance, decay, behavioral effects
 - **Gossip & Reputation:** Information propagation during proximity, emergent reputation
 - **Avoidance AI:** Enemy avoidance in pathfinding, proximity stress, visual indicators
@@ -34,13 +34,13 @@
 - **Pawn Narrative System:** Dwarf Fortress-style storytelling, activity/carrying/history display
 - **Text-Rich Features:** Pawn biographies on death, settlement legends, readable knowledge stones
 
-### Phase 6: Player Meaning Layer (Complete — May 5-6, 2026)
-- **Incarnation UI:** Spectator UI hides when incarnated (distinct survival mode experience)
+### Phase 5B-6: Future (planned, not yet started)
+- **Incarnation UI:** Spectator UI hides when incarnated (planned)
 - **Knowledge Expansion:** 18 knowledge types (Hunting, Farming, Combat, Diplomacy, Crafting, Leadership)
-- **Trade System:** Inter-settlement caravans, TRADER profession (5% spawn), knowledge spread
-- **Wildlife & Hunting:** Deer/rabbit populations, biome spawning, hunting jobs, meat resource
-- **Performance Optimization:** 100 FPS target, adaptive throttling (80-100 FPS at 1x, 60-80 FPS at 100x)
-- **Test Suite:** 25 automated tests (performance, professions, trade, wildlife, rich text, legacy, core systems)
+- **Trade System:** Inter-settlement caravans, TRADER profession (foundation in place)
+- **Wildlife & Hunting:** Deer/rabbit populations, biome spawning (foundation in place)
+- **Performance Optimization:** Aspirational target of 55-60 FPS at 1x, adaptive throttling
+- **Test Suite:** 25+ automated tests
 
 ---
 
@@ -106,7 +106,7 @@
 ### 3. Memory System
 - **WorldMemory:** Append-only record of objective events
 - **WorldMeaning:** Derived interpretations computed from facts
-- Events become "myth" (distorted, emotional memory) affecting pawn mood/reputation
+- Events become "myth" (distorted, emotional memory) affecting HeelKawnian mood/reputation
 
 ### 4. Player Role
 - Players begin as **ordinary humans** (no chosen one, no prophecy)
@@ -226,20 +226,20 @@ HeelKawn1/
 
 ---
 
-## 📊 CURRENT PROJECT STATE (May 6, 2026)
+## 📊 CURRENT PROJECT STATE (May 14, 2026)
 
 ### Completion Status
-- **Overall:** ~80% complete (Phase 6 done, Phase 5 at ~80%)
-- **v1.0 Readiness:** Ready for release candidate
-- **Playtest Status:** Comprehensive 2-hour playtest complete (all 23 features verified working)
+- **Overall:** ~55-60% complete
+- **v1.0 Readiness:** Playable prototype under consolidation, not yet a release candidate
+- **Playtest Status:** Playtest in progress
 
-### Recent Commits (May 5-6, 2026)
-- `e48797d`, `59d3e9d` — Three Pillars complete (2,550+ lines, 5 systems)
-- `c907691` — Phase 6 Incarnation UI, Knowledge Expansion
-- `c42a409` — Phase 6 Trade System (caravans, TRADER profession)
-- `0268906` — Phase 6 Wildlife & Hunting (deer/rabbit, biome spawning)
-- `2429b30` — Phase 6 Performance Optimization (100 FPS target)
-- `13d6957` — Phase 6 Test Suite (25 automated tests)
+### Recent Commits (May 5-10, 2026)
+- `e48797d`, `59d3e9d` — Three Pillars implementation
+- `c907691` — Knowledge Expansion, UI work
+- `c42a409` — Trade System foundation (caravans, TRADER profession)
+- `0268906` — Wildlife & Hunting (deer/rabbit, biome spawning)
+- `2429b30` — Performance Optimization
+- `13d6957` — Test Suite additions
 - `696507b`, `9b6d130` — Compile error resolution (30+ errors from 3 root causes)
 
 ### Active Development Focus

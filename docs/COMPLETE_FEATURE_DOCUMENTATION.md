@@ -1,7 +1,7 @@
 # HeelKawn - Complete Feature Documentation
 
 **Version:** 1.0 "Emergent Life"  
-**Last Updated:** May 5, 2026  
+**Last Updated:** May 14, 2026  
 **Status:** Feature Complete
 
 ---
@@ -37,7 +37,7 @@
 
 ## 👥 **PAWN SYSTEM**
 
-### **7 Professions**
+### **6 Professions**
 | Profession | Spawn % | Role | Starting Skills |
 |------------|---------|------|-----------------|
 | **Builder** | 20% | Construction | Building +50 |
@@ -97,7 +97,7 @@
 
 ---
 
-## 📚 **KNOWLEDGE SYSTEM (26 Types)**
+## 📚 **KNOWLEDGE SYSTEM (18 Types)**
 
 ### **Tier 1: Survival**
 1. Fire Keeping
@@ -124,16 +124,6 @@
 16. Diplomacy
 17. Crafting
 18. Leadership
-19. Metallurgy
-20. Animal Husbandry
-
-### **Tier 5: High Culture**
-21. Architecture
-22. Medicine
-23. Astronomy
-24. Engineering
-25. Writing
-26. Philosophy
 
 ### **Knowledge Preservation**
 - **Inscribe on Stone** - Carve knowledge for permanence
@@ -250,7 +240,7 @@
 - **Time:** Multi-generational effort
 
 #### **Knowledge Victory**
-- **Goal:** Preserve all 26 knowledge types
+- **Goal:** Preserve all 18 knowledge types
 - **How:** Inscribe on stones, teach, trade
 - **Challenge:** Prevent knowledge death
 
@@ -427,7 +417,7 @@
 
 ```
 HeelKawn1/
-├── autoloads/           # 130+ autoload systems
+├── autoloads/           # 164 autoload systems
 │   ├── WorldMemory.gd   # Event storage (source of truth)
 │   ├── SettlementMemory.gd
 │   ├── KnowledgeSystem.gd
@@ -470,8 +460,8 @@ HeelKawn1/
 ### **For Developers**
 1. **docs/HEELKAWN_STATE.md** - Authoritative current state
 2. **docs/MASTER_DEVELOPMENT_PLAN.md** - Full roadmap
-3. **AI_README.md** - Core kernel philosophy
-4. **CHANGELOG.md** - Version history
+3. **../AI_README.md** - Core kernel philosophy
+4. **../CHANGELOG.md** - Version history
 
 ---
 
@@ -494,7 +484,7 @@ HeelKawn1/
 
 ---
 
-**This documentation covers 100% of implemented features.**
+**This documentation covers the major implemented systems.**
 
 **For questions, issues, or suggestions:**
 - GitHub: https://github.com/PVAGR/HeelKawn1

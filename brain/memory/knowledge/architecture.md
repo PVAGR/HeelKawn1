@@ -1,8 +1,10 @@
 # Architecture
 
+**Last updated:** 2026-05-14
+
 ## System Overview
 
-HeelKawn is a deterministic Godot 4.6 world simulation with ~75 autoload systems.
+HeelKawn is a deterministic Godot 4.6.2 world simulation with ~164 autoload systems (pre-consolidation).
 
 ### Core Architecture Layers
 
@@ -37,7 +39,7 @@ HeelKawn is a deterministic Godot 4.6 world simulation with ~75 autoload systems
 └─────────────────────────────────────────────┘
 ```
 
-### Key Autoloads (the core 11)
+### Key Autoloads (pre-consolidation — ~164 total)
 
 | Autoload | Purpose |
 |----------|---------|
@@ -52,6 +54,31 @@ HeelKawn is a deterministic Godot 4.6 world simulation with ~75 autoload systems
 | `SettlementPlanner` | Settlement autonomous decision-making |
 | `WorldClock` | Time tracking (ticks → hours → seasons → ages) |
 | `WorldRNG` | Seeded randomness (deterministic variety) |
+
+### Phase 5A / New Consolidated Managers
+
+| Autoload | Purpose |
+|----------|---------|
+| `SettlementManager` | Central settlement orchestration |
+| `AIManager` | AI system coordination |
+| `MemoryManager` | Memory subsystem management |
+| `SocialManager` | Social interaction and bond management |
+| `FactionManager` | Faction and group management |
+| `UIManager` | Unified UI system controller |
+| `EventManager` | World event dispatching |
+| `EconomyManager` | Resource and trade economy |
+| `PlayerManager` | Player state and interaction |
+| `PawnManager` | Pawn lifecycle and registry |
+| `ObserverManager` | Observer/chronicler system |
+
+### Phase 5A Feature Systems
+
+| System | Purpose |
+|--------|---------|
+| `CivilizationStage.gd` | Civilization development stage lens |
+| `HeelKawnianManager.gd` | HeelKawnian pawn identity and development profiles |
+| `HeelKawnianIdentity.gd` | Per-pawn cultural and personal identity tracking |
+| `HeelKawnianMind.gd` | Matrix AI behavior wiring for HeelKawnian pawns |
 
 ### Tick Architecture
 

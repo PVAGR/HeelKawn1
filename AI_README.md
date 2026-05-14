@@ -6,6 +6,10 @@ This file is the **single source of truth** for all AI agents working on HeelKaw
 
 ---
 
+**Last Updated**: May 14, 2026
+
+---
+
 ## UNIVERSE ARCHITECTURE DOCTRINE
 
 **HeelKawn is a Persistent Simulation Universe, not a global colony sim.**
@@ -16,7 +20,7 @@ This file is the **single source of truth** for all AI agents working on HeelKaw
 
 2. **Every HeelKawnian is an Autonomous Person**
    - Location, memory, needs, profession, knowledge, trust, fear, ambition, relationships, and local belonging.
-   - Pawns make decisions based on what they can see, who they trust, what they need, their role, and their obedience to local authority.
+   - HeelKawnians make decisions based on what they can see, who they trust, what they need, their role, and their obedience to local authority.
    - Jobs are not invisible universal commands; jobs come from people and are claimed based on visibility, trust, proximity, role, and need.
 
 3. **Access and Visibility are Earned**
@@ -35,7 +39,7 @@ This file is the **single source of truth** for all AI agents working on HeelKaw
 
 6. **Jobs Must Have Source and Visibility**
    - Every job must have an issuer (pawn_id, role), reason (hunger, shelter, defense, teaching, ritual), authority_scope (household, band, proto_camp, formal_settlement), and visible_to (self, settlement, nearby, all).
-   - Pawns see only jobs they are eligible for and that are visible to them (within settlement, trusted leader, nearby region, or emergency override).
+   - HeelKawnians see only jobs they are eligible for and that are visible to them (within settlement, trusted leader, nearby region, or emergency override).
 
 7. **The Game Must Play Itself First**
    - Before players build empires, HeelKawnians must survive, gather, store, build shelter, make fire, assign work, teach, reproduce, mourn, migrate, and form authority without player babysitting.
@@ -118,7 +122,7 @@ Percentages are **world-completeness**, not polish.
 - SettlementRebirth: deterministic revival gates (food, pawn presence, cooldown)
 - Graves accumulate, roads form from repeated use
 
-### ✅ Phase 4 — Civilization & Identity (COMPLETE - 100%)
+### 🔶 Phase 4 — Civilization & Identity (~85% — mostly implemented, some stubs)
 - Roles beyond jobs (Big Five personality, life paths, affinities)
 - Lineages / continuity (KinshipSystem, BloodlineSystem)
 - Factions (emergent, FactionRegistry, SchismManager, FragmentationManager)
@@ -133,28 +137,30 @@ Percentages are **world-completeness**, not polish.
 - Knowledge transmission and loss (KnowledgeSystem, TechnologySystem)
 - Gossip propagation, dramatic event generation, goal engine
 - Display settings (resolution, window mode, vsync)
-- Profession reassignment (pawns can change roles based on skill growth)
+- Profession reassignment (HeelKawnians can change roles based on skill growth)
 - Colony role balance (diversity pressure when one profession dominates)
 - Neural bias active at all normal play speeds (gate moved from 50x to 200x)
 - Settlement planner posts infrastructure + security jobs (fire pit, storage hut, protect, defend)
 - Warrior peacetime patrol (visible perimeter presence instead of stockpile clustering)
 
+> **Stubs / gaps**: FactionRegistry is stubbed (not fully wired), ReligionLens has SacredMemory/MythMemory/DRUJ/Asha interpretation paths unimplemented. SchismManager and FragmentationManager exist but need integration.
+
 ### 🔶 Phase 5 — Emergent Life (WE ARE HERE - ~10% complete)
 The Truman phase. The goal: NPCs and the world live so richly and unpredictably that neither the player nor AI can predict what will happen after a few years in-world. Emergence, not scripting.
 
 **What this means:**
-- Pawns develop unique life stories that no one authored
+- HeelKawnians develop unique life stories that no one authored
 - Settlements diverge in ways that surprise even the system architect
 - Social bonds, feuds, and traditions form organically from repeated interaction
 - The world produces stories worth telling — not because we wrote them, but because the simulation lived them
-- A pawn's 30-year life arc should be as unpredictable as a real person's
+- A HeelKawnian's 30-year life arc should be as unpredictable as a real person's
 
 **What still must be built:**
 
 #### 5.1 Deep Social Dynamics (~0%)
 - Multi-generational grudges and alliances that persist beyond individuals
 - Social norms that emerge from repeated behavior, not rules
-- Gossip that actually changes how pawns treat each other
+- Gossip that actually changes how HeelKawnians treat each other
 - Reputation that spreads between settlements via travelers and traders
 - Pawn-driven law: taboos and obligations that form from crisis response
 
@@ -167,23 +173,23 @@ The Truman phase. The goal: NPCs and the world live so richly and unpredictably 
 
 #### 5.3 Emergent Narrative (~0%)
 - Situations that arise from pressure, not scripts (famine → hoarding → conflict → exile → diaspora)
-- Pawn life arcs that are readable as stories without authoring
+- HeelKawnian life arcs that are readable as stories without authoring
 - Generational change: the same town feels different 50 years later
 - Silence as outcome: sometimes nothing survives, and that's meaningful
 
 #### 5.4 World-Memory-Driven Behavior (~15%)
-- Pawns react to regional meaning tags (avoid death places, seek safe hearths)
+- HeelKawnians react to regional meaning tags (avoid death places, seek safe hearths)
 - Settlement policy shaped by historical events (famine survivors hoard differently)
 - Cultural drift: customs change over generations without anyone deciding
 - Myth formation: after enough time, facts become legends, legends become religion
 
 #### 5.5 Embodied Unpredictability (~5%)
 - Body risk creates individual stories (injury → career change → teaching path)
-- Personality-driven divergence: same situation, different pawn, different outcome
+- Personality-driven divergence: same situation, different HeelKawnian, different outcome
 - Neural matrix produces genuinely different behavior per pawn
 - Stochastic resonance: small events cascade into settlement-scale change
 
-📍 **Current overall project completion: ~80%**
+📍 **Current overall project completion: ~55-60%**
 
 ### 🔶 Phase 6 — Player Meaning Layer (0%)
 - What the *player* understands vs what the world knows
@@ -222,7 +228,7 @@ This is exactly how serious long‑term projects work.
 
 ## WHAT IS HEELKAWN?
 
-HeelKawn is a **deterministic 2D world simulation** built in Godot 4.6. It is:
+HeelKawn is a **deterministic 2D world simulation** built in Godot 4.6.2. It is:
 
 - A **persistent myth engine** — a memory and consequence simulator
 - A **living world** where history is written by actions, not scripts
@@ -258,7 +264,7 @@ This means:
 ### 3. Memory System
 - **WorldMemory**: Append-only record of objective events (births, deaths, migrations, fires, ruins, famines, wars, teachings, settlement changes)
 - **WorldMeaning**: Derived interpretations computed from facts (e.g., "this valley is feared because repeated winter deaths happened here")
-- Events become "myth" (distorted, emotional memory) that affects pawn mood and regional reputation
+- Events become "myth" (distorted, emotional memory) that affects HeelKawnian mood and regional reputation
 
 ### 4. Player Role
 - Players begin as **ordinary humans**
@@ -376,7 +382,7 @@ HeelKawn draws from these influences — preserve their spirit:
 ## TECHNICAL ARCHITECTURE
 
 ### Engine
-- **Godot 4.6** (deterministic kernel/stable)
+- **Godot 4.6.2** (deterministic kernel/stable)
 
 ### Current Development Lane
 - Identity/culture behavior in a deterministic world
@@ -394,7 +400,7 @@ HeelKawn draws from these influences — preserve their spirit:
 - Compact UI with tabbed inspect panels
 - Crisis response mechanism (wake builders/gatherers during crises)
 
-### Core Autoloads
+### Core Autoloads (consolidation in progress)
 - WorldMemory: Event recording
 - WorldMeaning: Derived interpretations
 - SettlementMemory: Settlement state and intent
@@ -406,6 +412,8 @@ HeelKawn draws from these influences — preserve their spirit:
 - PawnSpawner: Pawn lifecycle
 - StockpileManager: Resource management
 - ColonySimServices: Colony-wide metrics
+
+> **Note**: Consolidation is in progress. These 11 core managers exist, but 164 autoloads are still registered in project.godot. Old autoloads have NOT been removed yet — removing them is the next consolidation step.
 
 ---
 
@@ -501,13 +509,13 @@ HeelKawn draws from these influences — preserve their spirit:
 
 ## CURRENT PROJECT STATUS
 
-**Phase**: Phase 5 (Emergent Life)
-**Next Target**: Deep social dynamics — multi-generational grudges, emergent norms, reputation spread
+**Phase**: Consolidation + Phase 5A foundation
+**Next Target**: Complete autoload consolidation (remove old autoloads, finalize 11-manager structure), then Phase 5A deep social dynamics
 **Engine**: Godot 4.6.2
-**Development Lane**: Making NPCs live unpredictable, unique lives that neither player nor AI can predict
+**Development Lane**: Playable prototype under consolidation — stabilizing architecture, refactoring autoloads, building toward v1
 
 **Recently Completed**:
-- Profession reassignment (pawns can change roles based on skill growth)
+- Profession reassignment (HeelKawnians can change roles based on skill growth)
 - Colony role balance (diversity pressure when one profession dominates)
 - Neural bias active at all normal play speeds (gate moved from 50x to 200x)
 - Settlement planner posts infrastructure + security jobs (fire pit, storage hut, protect, defend)
@@ -557,13 +565,14 @@ HeelKawn draws from these influences — preserve their spirit:
 ```
 HeelKawn1/
 ├── AI_README.md (THIS FILE — READ FIRST)
-├── docs/
-│   ├── HEELKAWN_STATE.md (Current project state)
+├── HEELKAWN_STATE.md (Redirect → docs/HEELKAWN_STATE.md)
+├── HEELKAWN_CANON_BIBLE.md (Lore canon)
+├── docs/ (Planning, specs, logs, reports)
 │   ├── WORLD_BIBLE/
-│   │   └── GAME_VISION.md (Game vision and influences)
-│   ├── CURSOR_MASTER_PLANNING_SPEC.md (Planning specifications)
-│   └── HEELKAWN_STANDALONE_MASTER_PLAN.md (Standalone plan)
-├── autoloads/ (Core systems)
+│   ├── AUTOLOAD_CONSOLIDATION_PLAN.md
+│   ├── CURSOR_MASTER_PLANNING_SPEC.md
+│   └── ...
+├── autoloads/ (164 registered autoloads in project.godot; ~276 .gd files total in folder including non-autoload scripts)
 │   ├── WorldMemory.gd
 │   ├── WorldMeaning.gd
 │   ├── SettlementMemory.gd
@@ -573,12 +582,25 @@ HeelKawn1/
 │   ├── WorldAI.gd
 │   ├── JobManager.gd
 │   └── ...
-├── scripts/ (Game logic)
-│   ├── pawn/
-│   ├── world/
-│   ├── ui/
-│   └── ...
-└── scenes/ (Scene files)
+├── scripts/ (Game logic by domain)
+│   ├── ai/  camera/  career/  combat/
+│   ├── data/  debug/  export/  future/
+│   ├── interfaces/  items/  jobs/  kernel/
+│   ├── memory/  pawn/  performance/  persistence/
+│   ├── player/  save/  social/  stockpile/
+│   ├── system/  testing/  tests/  ui/  utils/  world/
+├── scenes/ (Scene files)
+│   ├── main/  pawn/  stockpile/  tests/  ui/  world/
+├── tests/ (Test scripts)
+├── assets/ (Game assets)
+├── addons/ (Godot plugins)
+├── builds/ (Export builds)
+├── brain/ (AI/neural data)
+├── logs/ (Runtime logs)
+├── rules/ (Development rules)
+├── tools/ (Utility scripts)
+├── project.godot
+└── ...
 ```
 
 ---

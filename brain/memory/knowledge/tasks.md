@@ -1,18 +1,27 @@
 # Task Queue
 
+**Last updated:** 2026-05-14
+
 ## Pending
+- [ ] Complete autoload consolidation — integrate 11 managers into project.godot
+- [ ] Phase 5A integration testing (CivilizationStage, HeelKawnian profiles, Matrix AI)
 - [ ] Wildlife HUD trend validation
-- [ ] Phase 4 rebirth threshold tuning
 - [ ] Player-readable meaning refinement (audio + settlement identity depth)
 - [ ] PVABazaar export adapter (stub complete, implementation pending)
 - [ ] Vector memory for semantic lore search (future)
 
 ## In Progress
-- [x] Universe Brain Phase 1 — Foundation (folder structure, README, memory init)
 - [ ] Universe Brain Phase 2 — Memory automation (index updater, session logging)
 - [ ] Universe Brain Phase 3 — Automation (edit runner, code review, task execution)
+- [ ] Autoload consolidation — 11 managers created, pending integration into project.godot
+- [ ] Consolidation Phase 1: merge 164 autoloads down to ~30
 
 ## Completed
+- [x] 2026-05-14: May 12 Letta disconnection audit — 15 critical bugs fixed across 12 files
+- [x] 2026-05-14: Phase 5A features implemented (CivilizationStage, HeelKawnian profiles, Matrix AI, Literature)
+- [x] 2026-05-14: Autoload consolidation Phase 1 — 11 managers created
+- [x] 2026-05-12: Headless smoke test passed
+- [x] 2026-05-01: Universe Brain Phase 1 — Foundation (folder structure, README, memory init)
 - [x] 2026-05-01: Repository audit
 - [x] 2026-05-01: Ollama detected on system
 - [x] 2026-05-01: brain/ folder structure created

@@ -1,6 +1,6 @@
 # HeelKawn Living Crafting World - BLACKBOXAI Progress
 
-Current phase: PHASE 1 Foundation - Book System
+Current phase: PHASE 1 Foundation - Book System (internal task tracking; see AI_README.md for main project phases)
 
 ## Steps:
 

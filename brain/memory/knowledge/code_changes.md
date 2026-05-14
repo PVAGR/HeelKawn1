@@ -7,6 +7,13 @@ Changelog of all AI-assisted edits made through the Universe Brain system.
 YYYY-MM-DD | System | What changed | Why
 ```
 
+## 2026-05-14 | Multiple | May 12 Letta disconnection audit — 15 critical bugs fixed across 12 files | Fixed disconnection-related crashes and logic errors following Letta API changes
+## 2026-05-14 | Autoload | 11 consolidated managers created | SettlementManager, AIManager, MemoryManager, SocialManager, FactionManager, UIManager, EventManager, EconomyManager, PlayerManager, PawnManager, ObserverManager — first pass of autoload consolidation
+## 2026-05-14 | Phase 5A | CivilizationStage.gd added | Civilization development stage lens for tracking settlement progress
+## 2026-05-14 | Phase 5A | HeelKawnianManager.gd created | Central manager for HeelKawnian pawn identity and development profiles
+## 2026-05-14 | Phase 5A | HeelKawnianIdentity.gd created | Per-pawn identity tracking with cultural and personal development
+## 2026-05-14 | Phase 5A | HeelKawnianMind.gd created | Matrix AI behavior wiring for HeelKawnian pawns
+## 2026-05-12 | Build | Headless smoke test | Godot 4.6.2 headless mode verified — project loads without errors
 ## 2026-05-01 | Universe Brain | Created brain/ folder structure and memory system | Foundation for persistent AI memory and cross-session continuity
 
 ---

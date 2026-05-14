@@ -234,7 +234,7 @@ GossipManager.clear()  # For testing
 ## Forbidden Patterns
 
 - ❌ `randi()` in gossip spread decisions (use WorldRNG)
-- ❌ Instant gossip传播 (must require proximity)
+- ❌ Instant gossip (must require proximity)
 - ❌ Perfect accuracy after hops (must decay)
 - ❌ Reputation without behavioral consequences
 - ❌ Gossip from nowhere (must originate from events)

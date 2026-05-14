@@ -1,8 +1,8 @@
 # Autoload Consolidation Status
 
-**Date:** May 10, 2026  
-**Status:** Partially Complete  
-**Autoload Count:** 128 → 40 (69% reduction)
+**Date:** May 14, 2026  
+**Status:** ~12% Complete — 11 consolidated managers created, 4 old autoloads removed from project.godot  
+**Autoload Count:** 160 autoloads (11 consolidated managers created, 4 removed from project.godot)
 
 ---
 
@@ -22,12 +22,11 @@
 - ✅ ObserverManager.gd - Consolidates observer and vision systems
 
 ### 2. Updated project.godot
-- ✅ Reduced autoloads from 128 to 40
-- ✅ Kept 20 essential core autoloads
-- ✅ Kept 5 core features (KnowledgeSystem, TechnologySystem, etc.)
-- ✅ Kept 4 gameplay systems (FarmingSystem, WildlifePopulation, Weather, ObjectPool)
-- ✅ Added 11 consolidated managers
-- ✅ Removed 88 autoloads (consolidated or non-essential)
+- ✅ SettlementManager.gd and FactionManager.gd wired into project.godot
+- ✅ SettlementPlanner, SettlementRebirth, SettlementArchitect removed from project.godot
+- ✅ FactionRegistry removed from project.godot
+- ❌ 9 other consolidated managers not yet wired into project.godot
+- ❌ 88 autoloads still need consolidation and removal
 
 ### 3. Updated Main.gd References (Partial)
 - ✅ SettlementPlanner → SettlementManager (7 occurrences)
@@ -183,16 +182,14 @@ The following files also have references to removed autoloads that need updating
 ## Expected Results
 
 **Before:**
-- 128 autoloads
+- 164 autoloads
 - Slow startup
 - High memory usage
 - Complex dependencies
 
 **After (when complete):**
-- 40 autoloads (69% reduction)
-- Expected 50-70% faster startup
-- Expected 30-40% lower memory usage
-- Clearer architecture
+- ~40 autoloads (target)
+- Startup, memory, and architecture improvements TBD — not yet measured
 
 ---
 
@@ -202,3 +199,20 @@ The following files also have references to removed autoloads that need updating
 - Backward compatibility methods are provided in each manager
 - Some autoloads were removed entirely (non-essential for v1)
 - Export utilities and debug tools can be loaded on-demand via code instead of autoloads
+
+---
+
+## Consolidation Progress Log
+
+### 2026-05-14 — project.godot updated: 4 old autoloads removed, 2 consolidated managers wired
+
+**Changes made to project.godot:**
+
+| Removed Autoload | Consolidated Into | Status |
+|---|---|---|
+| SettlementPlanner | SettlementManager | ✅ Removed from project.godot |
+| SettlementRebirth | SettlementManager | ✅ Removed from project.godot |
+| SettlementArchitect | SettlementManager | ✅ Removed from project.godot |
+| FactionRegistry | FactionManager | ✅ Removed from project.godot |
+
+**Result:** project.godot now has 160 active autoloads (164 − 4 removed). SettlementManager and FactionManager are registered as autoloads. Main.gd references have been updated for SettlementPlanner/Rebirth/Architect → SettlementManager (12 occurrences) and FactionRegistry → FactionManager (10 occurrences still pending in Main.gd).

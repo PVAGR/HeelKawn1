@@ -18,13 +18,14 @@ It is superseded by docs/HEELKAWN_STATE.md, which is the authoritative project s
 | Phase | Name | World-completeness (not polish) |
 |-------|------|---------------------------------|
 | 0 | Engine survival | **100%** — done |
-| 1 | Living world baseline | **~85%** — allowed to move on |
-| 2 | **The kernel** (here) | **~30%** — core build-out |
-| 3 | Historical continuity | 0% |
-| 4 | Civilization & identity | 0% |
-| 5 | Player meaning layer | 0% |
+| 1 | Living world baseline | **100%** — done |
+| 2 | **The kernel** | **100%** — done |
+| 3 | Historical continuity | **100%** — done |
+| 4 | Civilization & identity | **~85%** — has stubs |
+| 5 | Emergent life | **~10%** — current focus (Consolidation + Phase 5A foundation) |
+| 6 | Player meaning layer | 0% |
 
-**Overall project (rough): ~55%** world-completeness.
+**Overall project (rough): ~55-60%** world-completeness.
 
 ### Phase 2 — The kernel (deterministic world memory + meaning + persistence)
 
@@ -64,10 +65,10 @@ It is superseded by docs/HEELKAWN_STATE.md, which is the authoritative project s
 
 ---
 
-## Last observed state (update when you ship or hit milestones)
+## Last observed state (update when you ship or hit milestones) — Last updated: 2026-05-14
 
 - Long-run sim stable; deaths/signals/HUD no longer fragile.
-- WorldTrace + WorldMemory v1 (death log + persist); WorldMeaning / persistence rules not implemented yet.
+- WorldTrace + WorldMemory v1 (death log + persist); WorldMeaning + persistence rules implemented.
 - (Fill in: e.g. “stable past Day N”, “food pressure …”, “job pressure high — tune later”.)
 
 ---

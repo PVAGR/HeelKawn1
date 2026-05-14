@@ -7,19 +7,6 @@ This is the central coordination point for all AI assistants working on HeelKawn
 > **Philosophy:** HeelKawn is a living simulation that outlives any single developer or AI session. Continuity, transparency, and collective intelligence make it great.
 
 ---
-## OPENCLAW Coordination (Inter-AI Sync)
-
-Status: Awaiting cross-track inputs from all active tracks. We will synthesize responses and propose a consolidated path before the next execution cycle.
-
-- TRACK 1 UI: Please share any blocking UI issues observed during runtime tests and any UI-001/UI-002/UI-003 readiness gaps.
-- TRACK 2 Performance: Provide current bottlenecks, hot paths, and a plan to stabilize 60+ FPS at 1x across scenes.
-- TRACK 3 World Richness: Propose seed-driven event types you want exercised first and how they should feed WorldMemory/WorldMeaning.
-- TRACK 4 Polish: Identify any edge-case polish items that affect stability (grudges, gossip, momentum) and coupling risks.
-- TRACK 5 Building: Outline minimal scaffolds to test building placement UI without breaking memory/state.
-- TRACK 6 Knowledge: Suggest any cross-track knowledge flows that could impact seeds or memory.
-
-When a track responds, we will summarize the inputs here and align on next steps as a single plan.
-
 ## 📖 How This Works
 
 ### For AI Assistants (Every Session)
@@ -107,19 +94,6 @@ When a track responds, we will summarize the inputs here and align on next steps
 **Current Rule:** Every AI introduces themselves to the human and confirms they understand this protocol.
 
 ---
-## OPENCLAW Coordination (Inter-AI Sync)
-
-Status: Awaiting cross-track inputs from all active tracks. We will synthesize responses and propose a consolidated path before the next execution cycle.
-
-- TRACK 1 UI: Please share any blocking UI issues observed during runtime tests and any UI-001/UI-002/UI-003 readiness gaps.
-- TRACK 2 Performance: Provide current bottlenecks, hot paths, and a plan to stabilize 60+ FPS at 1x across scenes.
-- TRACK 3 World Richness: Propose seed-driven event types you want exercised first and how they should feed WorldMemory/WorldMeaning.
-- TRACK 4 Polish: Identify any edge-case polish items that affect stability (grudges, gossip, momentum) and coupling risks.
-- TRACK 5 Building: Outline minimal scaffolds to test building placement UI without breaking memory/state.
-- TRACK 6 Knowledge: Suggest any cross-track knowledge flows that could impact seeds or memory.
-
-When a track responds, we will summarize the inputs here and align on next steps as a single plan.
-
 ## 🧭 Post-Action Menu (Human Input)
 After an AI completes its current action, it MUST:
 1. **Rescan** — `git pull`, read hub, check other AIs' recent changes
@@ -171,7 +145,7 @@ AI responds: "Rescanning... I see no other AIs active. All collaboration files c
 
 ## 🎯 Current Project State (Live)
 
-**Last Updated:** May 6, 2026 10:35 PM  
+**Last Updated:** May 14, 2026  
 **Current Phase:** Phase 5 — OPTIMIZATION & WORLD BUILDING FOCUS  
 **Active Agents:** Letta Code 🟢 + Qwen Code 🟢
 
@@ -187,7 +161,7 @@ AI responds: "Rescanning... I see no other AIs active. All collaboration files c
 
 ---
 
-### 🟢 AI Status Updates (LIVE — Who's Doing What)
+### 🟢 AI Status Updates (Snapshot — May 10, 2026; may not reflect current state)
 
 | AI | Track | Working On | Status | Next |
 |----|-------|------------|--------|------|
@@ -198,8 +172,6 @@ AI responds: "Rescanning... I see no other AIs active. All collaboration files c
 | [Open] | TRACK 4 | System Polish (Grudges/Gossip) | ✅ COMPLETE — Memorial integration done | Done |
 | [Open] | TRACK 5 | Building/Crafting UI | ✅ COMPLETE — All player UI done | Done |
 | [Open] | TRACK 6 | Knowledge visualization | ✅ COMPLETE — KnowledgePanel + F10 #48 | Done |
-
-**How to update:** Every AI updates this table when they start/finish work. Keeps everyone in sync.
 
 **How to update:** Every AI updates this table when they start/finish work. Keeps everyone in sync.
 

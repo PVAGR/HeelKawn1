@@ -126,7 +126,7 @@ const ANIMAL_POPULATION_PHASE_TICKS: int = 500
 ## Ecosystems (hunt) stay inert until this tick (world gen / reroll / load).
 const WORLD_STABILIZATION_TICKS: int = 50
 ## Player does not architect the colony: no manual walls/beds/doors/stockpile zones.
-## Construction remains `SettlementPlanner` + pawn job claims (NPC-equivalent sim path).
+## Construction remains `SettlementManager` + pawn job claims (NPC-equivalent sim path).
 ## Now dynamic: Observer mode enables placement; other modes disable it.
 const PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES: bool = false  # Legacy — use _can_player_place() instead
 
@@ -2322,7 +2322,7 @@ func _bootstrap_colony() -> void:
 			if is_instance_valid(_world):
 				_world.refresh_pawn_historic_path_weights()
 		)
-		SettlementPlanner.plan(_world, self, true)
+		SettlementManager.plan(_world, self, true)
 		EconomyManager.get_trade_planner().plan(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		_sync_pawn_inherited_cultural_reputation()
@@ -2868,7 +2868,7 @@ func _on_game_tick(tick: int) -> void:
 		var planner_interval: int = _planner_interval_for_speed()
 		if _is_main_lane_tick(tick, planner_interval, 97) and DiscoveryGate.is_unlocked("first_settlement"):
 			t0 = Time.get_ticks_usec()
-			SettlementPlanner.plan(_world, self, false)
+			SettlementManager.plan(_world, self, false)
 			section_us["settlement_planner"] = Time.get_ticks_usec() - t0
 		# Periodic resource truth refresh — settlements need to know their stockpile state
 		if _is_main_lane_tick(tick, 500, 109):
@@ -2889,17 +2889,17 @@ func _on_game_tick(tick: int) -> void:
 			SettlementMemory.recompute(_world)
 			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
 
-		# Offset SettlementRebirth.process to a different tick to spread the load
+		# Offset SettlementManager.process to a different tick to spread the load
 		var rebirth_offset_tick: int = (tick + REBIRTH_CHECK_INTERVAL_TICKS / 2) % REBIRTH_CHECK_INTERVAL_TICKS
 		if rebirth_offset_tick == 0:
 			t0 = Time.get_ticks_usec()
-			SettlementRebirth.process(_world, self, false)
+			SettlementManager.process(_world, self, false)
 			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
 		# Phase 4 Identity: visual decay for permanently abandoned settlements (infrequent)
 		# DORMANT WORLD: Only runs after first settlement
 		if GameManager.periodic_phase_due(tick, SETTLEMENT_ARCHITECT_INTERVAL_TICKS, SETTLEMENT_ARCHITECT_PHASE_OFFSET_TICKS) and DiscoveryGate.is_unlocked("first_settlement"):
 			t0 = Time.get_ticks_usec()
-			SettlementArchitect.process(_world, self)
+			SettlementManager.process_architect(_world, self)
 			section_us["settlement_architect"] = Time.get_ticks_usec() - t0
 	if GameManager.periodic_phase_due(int(tick), AGE_MEMORY_INTERVAL_TICKS, AGE_MEMORY_PHASE_OFFSET_TICKS):
 		MemoryManager.recompute_age()
@@ -3221,7 +3221,7 @@ func _flush_world_memory_derivatives() -> void:
 	var heavy_planner_interval: int = _heavy_planner_interval_for_speed()
 	if GameManager.tick_count % heavy_planner_interval == 0:
 		if Time.get_ticks_usec() - flush_start <= FLUSH_BUDGET_USEC:
-			SettlementPlanner.plan(_world, self, true)
+			SettlementManager.plan(_world, self, true)
 	if (GameManager.tick_count + maxi(1, heavy_planner_interval / 3)) % heavy_planner_interval == 0:
 		if Time.get_ticks_usec() - flush_start <= FLUSH_BUDGET_USEC:
 			EconomyManager.get_trade_planner().plan(_world, self, true)
@@ -3240,7 +3240,7 @@ func _deferred_settlement_rebirth_process(world: World, main: Node) -> void:
 # OPTIMIZATION: Deferred planning functions for frame budget management
 func _deferred_settlement_planner_plan(world: World, main: Node, use_cache: bool) -> void:
 	if is_instance_valid(world) and is_instance_valid(main):
-		SettlementPlanner.plan(world, main, use_cache)
+		SettlementManager.plan(world, main, use_cache)
 
 func _deferred_trade_planner_plan(world: World, main: Node, use_cache: bool) -> void:
 	if is_instance_valid(world) and is_instance_valid(main):
@@ -3615,7 +3615,7 @@ func _get_meaning_ambient_mood_target() -> float:
 	var st_here: String = ""
 	var intent_here: int = MemoryManager.get_intent_hold()
 	if sv is Dictionary:
-		_meaning_style_bias = SettlementPlanner.get_culture_audio_bias_for_settlement(sv as Dictionary)
+		_meaning_style_bias = SettlementManager.get_culture_audio_bias_for_settlement(sv as Dictionary)
 		st_here = str((sv as Dictionary).get("state", ""))
 		var ckr_here: int = int((sv as Dictionary).get("center_region", -1))
 		intent_here = int(MemoryManager.get_settlement_intent().get(ckr_here, MemoryManager.get_intent_hold()))
@@ -5907,7 +5907,7 @@ func _reroll_world() -> void:
 	_world.set_meta("animal_spawner", _animal_spawner)
 	if is_instance_valid(_world):
 		MemoryManager.recompute_intent(_world)
-		SettlementPlanner.plan(_world, self, true)
+		SettlementManager.plan(_world, self, true)
 		EconomyManager.get_trade_planner().plan(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		MemoryManager.get_remnant_memory().clear()
@@ -8419,7 +8419,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 				_world.refresh_terrain_scar_tint()
 				_world.refresh_pawn_historic_path_weights()
 		)
-		SettlementPlanner.plan(_world, self, true)
+		SettlementManager.plan(_world, self, true)
 		EconomyManager.get_trade_planner().plan(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		_sync_pawn_inherited_cultural_reputation()

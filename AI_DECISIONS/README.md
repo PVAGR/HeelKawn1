@@ -1,4 +1,4 @@
-# 🏛️ AI Architectural Decions
+# 🏛️ AI Architectural Decisions
 
 **Record of significant architectural decisions made by AI assistants.** These constrain future work and explain why systems are built certain ways.
 

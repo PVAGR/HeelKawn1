@@ -27,7 +27,7 @@ All autoloads initialize:
 **Screen shows:**
 - Empty world viewport
 - Colony HUD (bottom): Shows speed controls (1x), tick count (0), population (0)
-- No pawns yet
+- No HeelKawnians yet
 
 ---
 
@@ -35,7 +35,7 @@ All autoloads initialize:
 **What I see:**
 - Terrain generates with biomes (plains, forest, mountains)
 - Stockpile auto-spawns in center
-- **20 starter pawns spawn** with heterogeneous professions:
+- **20 starter HeelKawnians spawn** with heterogeneous professions:
   ```
   F10 → #44 Knowledge Carriers shows:
   - 4 Builders (20%)
@@ -58,7 +58,7 @@ All autoloads initialize:
 
 ### **01:00 - First Jobs Claimed (Tick 100)**
 **What I see:**
-- Pawns claim jobs based on profession priority
+- HeelKawnians claim jobs based on profession priority
 - Builders head to build sites
 - Farmers head to forage
 - **Profession bonus working:** Builders claim BUILD jobs first
@@ -91,7 +91,7 @@ All autoloads initialize:
 ### **02:00 - First Speed Test (Tick 200)**
 **I press 3 (6x speed):**
 - HUD updates to show "6x"
-- Pawns move faster
+- HeelKawnians move faster
 - **No lag or stutter**
 - Notifications still appear but faster
 
@@ -333,7 +333,7 @@ OVERALL RUN COMPLETION: 52.3%
 - ⚠️ Dynasty tree generations may be inaccurate (uses estimated calculation)
 
 ### **Minor (Polish):**
-- ⚠️ Death notifications can overlap when multiple pawns die simultaneously
+- ⚠️ Death notifications can overlap when multiple HeelKawnians die simultaneously
 - ⚠️ Biography dialog is large (600x500) - consider scrollbar for long biographies
 - ⚠️ No visual indicator that stones are clickable (cursor doesn't change)
 

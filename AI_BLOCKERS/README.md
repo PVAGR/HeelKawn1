@@ -6,7 +6,11 @@
 
 ## Current Blockers
 
-*No blockers currently.*
+### BLK-C001: Main.gd edit access blocked (Autoload Consolidation)
+- **Raised:** May 10, 2026
+- **Raised By:** Cascade
+- **Status:** 🟡 AWAITING HUMAN DECISION
+- **Issue:** Cascade was banned from editing `Main.gd` after multiple edit failures due to content changes between attempts. 60+ autoload references in Main.gd still need updating. Options: (1) Use sed/bash commands, (2) Manual edit by user, (3) Update 20+ other script files first.
 
 ---
 
@@ -15,6 +19,7 @@
 | ID | Blocker | Raised | Resolved | Resolution |
 |----|---------|--------|----------|------------|
 | BLK-001 | N/A | - | - | - |
+| BLK-C001 | Main.gd edit access blocked | May 10, 2026 | - | Pending decision on approach |
 
 ---
 
@@ -88,4 +93,4 @@ AI assistants **should ask** for:
 
 ---
 
-*Last Updated: May 6, 2026*
+*Last Updated: May 14, 2026*

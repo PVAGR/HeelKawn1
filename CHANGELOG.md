@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - 2026-05-05
 
+> **Note:** v1.0.0 is an initial milestone release. The project remains under active consolidation toward a stable v1.1 foundation. See `README.md` for current status.
+
 ### ✨ **Added**
 
 #### **Phase 5: Emergent Life**
@@ -32,18 +34,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Interactive knowledge stones (right-click to read)
 - Record carriers (grave markers, knowledge stones, ledger stones)
 
-#### **Phase 6: Player Meaning Layer**
-- Incarnation mode (UI hides when incarnated)
-- Local knowledge fog (limited to pawn's knowledge)
+#### **Phase 6: Player Meaning Layer (initial/partial)**
+- Incarnation mode (UI hides when incarnated) — needs runtime truth pass
+- Local knowledge fog (limited to pawn's knowledge) — initial implementation
 - Knowledge type expansion (12 → 18 types)
   * Added: Hunting, Farming, Combat, Diplomacy, Crafting, Leadership
 
-#### **Phase 7: Endgame**
+#### **Phase 5: Narrative Tools (Emergent Life)**
 - Legacy system (track pawn impact across generations)
 - Dynasty tracking (visual family tree UI)
 - Succession notifications (heirs can inherit)
-- Endgame conditions (4 goals for completing a run)
 - Endgame status display (F10 #75)
+- Endgame conditions (4 milestone goals for completing a run)
 
 #### **Interactive Features**
 - Clickable death notifications (click → full biography)
@@ -62,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Incarnation mode now hides spectator UI
 
 ### 🐛 **Fixed**
-- All compile errors from Phase 5-7 implementation
+- All compile errors from Phase 5-6 implementation
 - Knowledge stone spawning integration
 - Death notification integration with biography system
 

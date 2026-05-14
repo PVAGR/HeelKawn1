@@ -2,7 +2,7 @@
 ## Complete Verification and Troubleshooting Instructions
 
 Observer automation for speed sweeps, timeline capture, and canon guards:
-`docs/OBSERVER_TOOLKIT.md`
+(Reference: ObserverLens at `scripts/kernel/observer_lens.gd`; see `tools/test/` for test scripts)
 
 Quick commands:
 
@@ -27,7 +27,7 @@ Note: the script exits with code `1` whenever any speed tier is marked `SLOW` in
    - ✅ Look for: `[DayNight] Day 1 begins (tick 1)`
    - ✅ Game window opens with world view
    - ✅ No red error messages in console
-   - ✅ Pawns spawn and move around
+   - ✅ HeelKawnians spawn and move around
 
 3. **Check AI Agents**
    - Look for right-side AI Agent Debug Panel
@@ -64,7 +64,7 @@ Note: the script exits with code `1` whenever any speed tier is marked `SLOW` in
 ### **AI Agent Framework**
 - [ ] **Agent Population**
   - 8 initial agents should spawn
-  - Agents should remain managed without crashes; automatic pawn incarnation is currently disabled
+   - Agents should remain managed without crashes; automatic HeelKawnian incarnation is currently disabled
   - Dead agents should be replaced
 - [ ] **Decision Making**
   - Agents should set goals (survival, work, social)
@@ -93,7 +93,7 @@ Note: the script exits with code `1` whenever any speed tier is marked `SLOW` in
 1. Check if AIAgentManager autoload is enabled
 2. Verify `AIAgentManager.enabled = true`
 3. Look for agent spawn errors in console
-4. Ensure pawns are available for incarnation
+4. Ensure HeelKawnians are available for incarnation
 
 ### **Map Mode Overlay Issues**
 **Problem**: Pressing M does nothing
@@ -200,12 +200,12 @@ ObservationAPI.observe_camera_view()
 
 ### **Human Player Tests**
 1. **Incarnation System**
-   - Press I to open incarnation menu
-   - Select a pawn to incarnate
+   - Press P to open incarnation menu
+   - Select a HeelKawnian to incarnate
    - Verify control transfer works
 
 2. **Command System**
-   - Move pawn with mouse clicks
+   - Move HeelKawnian with mouse clicks
    - Try to claim jobs
    - Test inspect actions
 
@@ -222,7 +222,7 @@ ObservationAPI.observe_camera_view()
 
 2. **Agent Interaction**
    - Spawn new agents with debug panel
-   - Force incarnation into specific pawns
+   - Force incarnation into specific HeelKawnians
    - Add custom goals for testing
 
 ---
@@ -271,7 +271,7 @@ ObservationAPI.observe_camera_view()
 
 ### **System Working Correctly When**
 ✅ Game boots with "Day 1 begins (tick 1)"
-✅ Pawns spawn and move autonomously
+✅ HeelKawnians spawn and move autonomously
 ✅ Cultural divergence visible (colored buildings)
 ✅ Wildlife HUD shows population trends
 ✅ AI agents make decisions and execute actions

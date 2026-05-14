@@ -1,6 +1,6 @@
 # HeelKawn - Final Status Report
 
-**Date:** May 5, 2026  
+**Date:** May 14, 2026  
 **Status:** ✅ **COMPLETE & READY TO SHIP**  
 **Build:** Post-Architecture Merge (All Errors Fixed)
 
@@ -70,7 +70,7 @@
 ✅ scripts/pawn/PawnSpawner.gd (+5 lines)
 ✅ scripts/pawn/Pawn.gd (+50 lines)
 ✅ autoloads/WorldMemory.gd (+5 lines)
-✅ autoloads/FoliageSystem.gd (fixed)
+✅ scripts/world/FoliageSystem.gd (fixed, not an autoload)
 ```
 
 ### **Documentation:**
@@ -151,8 +151,8 @@ if TickRateDecoupler.should_update("AI"):
     _update_ai()
 
 # Check ObjectPool
-ObjectPoolSystem.register_pool("Test", test_scene)
-var obj = ObjectPoolSystem.get_object("Test")
+ObjectPool.register_pool("Test", test_scene)
+var obj = ObjectPool.get_object("Test")
 ```
 
 ---
@@ -162,7 +162,7 @@ var obj = ObjectPoolSystem.get_object("Test")
 ### **Debug Commands:**
 ```gdscript
 # View system stats:
-ObjectPoolSystem.debug_print_stats()
+ObjectPool.debug_print_stats()
 TickRateDecoupler.debug_print_stats()
 SpatialGrid.debug_print_stats()
 EventBus.debug_print_stats()

@@ -18,7 +18,7 @@ HeelKawn is NOT:
 
 HeelKawn IS:
 - ✅ A **living world** that continues without you
-- ✅ A **story generator** where every pawn has a life story
+- ✅ A **story generator** where every HeelKawnian has a life story
 - ✅ A **legacy builder** where knowledge outlives its carriers
 - ✅ A **deterministic simulation** where same inputs = same history
 - ✅ An **ongoing project** — always evolving, never complete
@@ -63,7 +63,7 @@ HeelKawn IS:
 ## 🏆 **KEY FEATURES**
 
 ### **📖 Text-Rich Storytelling**
-- **Pawn Narratives** - Every pawn has a readable life story
+- **HeelKawnian Narratives** - Every HeelKawnian has a readable life story
 - **Settlement Legends** - Each settlement develops unique myths
 - **Chronicle View** - Settlement history told as a story
 - **Full Biographies** - Click death notifications to read complete life stories
@@ -75,8 +75,8 @@ HeelKawn IS:
 - **Knowledge Death** - If last carrier dies without inscribing, knowledge is lost forever
 
 ### **HeelKawnian Development AI**
-- **Stable Soul Identity** - Pawns receive deterministic identity anchors that can carry memory and traits
-- **Development Profiles** - Each pawn gets a derived phase, drive, next need, knowledge summary, and skill summary
+- **Stable Soul Identity** - HeelKawnians receive deterministic identity anchors that can carry memory and traits
+- **Development Profiles** - Each HeelKawnian gets a derived phase, drive, next need, knowledge summary, and skill summary
 - **Era Context** - Individual profiles include the current civilization stage so personal growth stays rooted in the world
 - **Debug Visibility** - F10 #49 prints sample HeelKawnian profiles for inspection
 
@@ -88,15 +88,15 @@ HeelKawn IS:
 
 ### **🎭 Incarnation Mode Roadmap**
 - **Spectator Mode** - Omniscient view with full UI
-- **Incarnated Mode** - Target experience is world-through-a-pawn perception
-- **Knowledge Fog** - Target experience is only knowing what the pawn knows
+- **Incarnated Mode** - Target experience is world-through-a-HeelKawnian perception
+- **Knowledge Fog** - Target experience is only knowing what the HeelKawnian knows
 - **Multiple Lives** - Target experience is moving through generations without owning the world
 
 ### **⚔️ Emergent Social Dynamics**
-- **Grudges** - Pawns remember wrongs, inherit family feuds
+- **Grudges** - HeelKawnians remember wrongs, inherit family feuds
 - **Gossip** - Information spreads through proximity
 - **Reputation** - Emerges from aggregated gossip
-- **Avoidance AI** - Pawns physically avoid enemies
+- **Avoidance AI** - HeelKawnians physically avoid enemies
 
 ---
 
@@ -172,7 +172,7 @@ Track progress in **F10 #75**.
 
 **Key Principles:**
 - **Deterministic Kernel:** History is computed, not scripted. Same inputs = same history.
-- **Pawn-Activated:** Events trigger from pawn actions, NOT global timers.
+- **Pawn-Activated:** Events trigger from HeelKawnian actions, NOT global timers.
 - **No Random Decay:** Memory does not decay randomly. Persistence by impact only.
 - **Ongoing Project:** HeelKawn is never finished. We are always building.
 
@@ -293,6 +293,6 @@ HeelKawn should be described as a deep playable prototype with a stable kernel, 
 
 ---
 
-**HeelKawn is a "persistent myth engine" where every pawn tells a story, every settlement has legends, and knowledge is preserved in stone.**
+**HeelKawn is a "persistent myth engine" where every HeelKawnian tells a story, every settlement has legends, and knowledge is preserved in stone.**
 
 **Build. Teach. Preserve. Leave your legacy.**

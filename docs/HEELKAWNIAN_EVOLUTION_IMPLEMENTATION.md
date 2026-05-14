@@ -1,6 +1,6 @@
 # 🚀 HeelKawnian Evolution - Implementation Plan
 
-**Created:** May 7, 2026  
+**Created:** May 14, 2026  
 **Priority:** CRITICAL - Core to HeelKawn vision  
 **Timeline:** 2 weeks for Phase 5A foundation
 
@@ -113,7 +113,7 @@ func get_average_lifespan(settlement_id: int) -> int:
 
 ### Task 1B: HeelKawnian Development Profiles + Matrix Job Bias ✅ INITIAL LIVE
 
-**Files:** `autoloads/HeelKawnianIdentity.gd`, `autoloads/HeelKawnianManager.gd`, `scripts/pawn/Pawn.gd`, `scripts/ui/CreatorDebugMenu.gd`
+**Files:** `scripts/core/HeelKawnianIdentity.gd` (class_name Resource, not an autoload), `autoloads/HeelKawnianManager.gd`, `scripts/pawn/Pawn.gd`, `scripts/ui/CreatorDebugMenu.gd`
 
 **Purpose:** Give every sprite a deterministic, inspectable development profile and use that profile as a real job-choice influence layer.
 

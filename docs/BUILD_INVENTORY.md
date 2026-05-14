@@ -2,7 +2,7 @@
 
 > Comprehensive analysis of what is built vs. what the master plan requires
 
-**Last Updated:** 2026-05-07
+**Last Updated:** 2026-05-14
 **Analysis Scope:** All autoloads, scripts, docs, and feature specs
 **Authority:** This is the repo's built-vs-missing reality check. See `HEELKAWN_PROJECT_COMPASS.md` for the full truth hierarchy.
 
@@ -26,7 +26,7 @@
 | Settlement Rebirth | `autoloads/SettlementRebirth.gd` | Implemented but Needs Runtime Verification | Revival with gates |
 | Animal Spawner/Population | `autoloads/AnimalSpawner.gd`, `autoloads/AnimalPopulation.gd` | Implemented but Needs Runtime Verification | Seeded ecology |
 | Pawn Behavior | `scripts/pawn/Pawn.gd`, `scripts/pawn/PawnData.gd` | Implemented but Needs Runtime Verification | Jobs, pathfinding, needs |
-| HeelKawnian Matrix AI | `autoloads/HeelKawnianManager.gd`, `autoloads/HeelKawnianIdentity.gd`, `scripts/pawn/Pawn.gd` | Implemented but Needs Runtime Verification | Derived per-pawn phase/drive/next need now biases real job choice; includes initial social intent bridge (`social_seek` / `teach_seek` / `grudge_confront`); strong decisions log back to WorldMemory |
+| HeelKawnian Matrix AI | `autoloads/HeelKawnianManager.gd`, `scripts/pawn/Pawn.gd` | Implemented but Needs Runtime Verification | Derived per-pawn phase/drive/next need now biases real job choice; includes initial social intent bridge (`social_seek` / `teach_seek` / `grudge_confront`); strong decisions log back to WorldMemory. `HeelKawnianIdentity.gd` is a `class_name` Resource (not an autoload) — accessed via `HeelKawnianIdentity.new()` |
 | Job Manager | `autoloads/JobManager.gd` | Implemented but Needs Runtime Verification | Job queue system with dict compatibility adapter (`post_from_dict`) for legacy callers |
 | Stockpile System | `autoloads/StockpileManager.gd` | Implemented but Needs Runtime Verification | Resource storage |
 | Trade Planner | `autoloads/TradePlanner.gd` | Implemented but Needs Runtime Verification | Trade routes |
@@ -43,7 +43,7 @@
 | Feature | Implementation | Status |
 |---------|----------------|--------|
 | Cultural divergence (OPEN/CAUTIOUS/DEFENSIVE) | `SettlementPlanner` constants | Implemented but Needs Runtime Verification |
-| Architecture signature constants | GLOSSARY.md table | Implemented but Needs Runtime Verification |
+| Architecture signature constants | (table — docs/GLOSSARY.md does not exist) | Implemented but Needs Runtime Verification |
 | Revival/rebirth system | `SettlementRebirth.gd` + gates | Implemented but Needs Runtime Verification |
 | Player-readable meaning (audio) | `MeaningAudioCue.gd` | Implemented but Needs Runtime Verification |
 | Settlement identity depth | `SettlementMemory` state curve | Implemented but Needs Runtime Verification |

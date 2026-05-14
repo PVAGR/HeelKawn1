@@ -52,8 +52,8 @@
 ---
 
 ### PawnInfoPanel (Select a Pawn)
-- [ ] Panel appears on right side when pawn selected
-- [ ] Shows pawn name, age, profession
+- [ ] Panel appears on right side when a HeelKawnian is selected
+- [ ] Shows HeelKawnian name, age, profession
 - [ ] Has tabs: ID, Needs, Social, Narrative, **Consciousness**
 - [ ] Click "Consciousness" tab → Shows:
   - Self-Awareness level
@@ -72,13 +72,13 @@
 - [ ] Shows memorial type (Grave Marker, Battle Monument, etc.)
 - [ ] Shows inscription text
 - [ ] Shows year (Year X.X)
-- [ ] Lists associated pawn names
+- [ ] Lists associated HeelKawnian names
 - [ ] "Read [Pawn]'s Story" buttons clickable
 - [ ] "Close" button works
 
 **If no memorials exist:**
 - Spawn one via F10 → 47 → Check report prints
-- Or wait for pawn death → Memorial should auto-create
+- Or wait for a HeelKawnian death → Memorial should auto-create
 
 ---
 
@@ -113,19 +113,19 @@ Holy Ground tiles: [number]
 ## ✅ Memorial System Tests
 
 ### Auto-Creation on Events
-- [ ] Let a pawn die (starvation, enemy, etc.)
+- [ ] Let a HeelKawnian die (starvation, enemy, etc.)
 - [ ] Check death tile → Grave marker should appear
 - [ ] Press F10 → 47 → Memorial count should increase by 1
 
 ### Sacred Geography
 - [ ] Wait for multiple deaths at same location (battle)
 - [ ] Tile should become "sacred" (3-4 memorials) or "holy ground" (5+)
-- [ ] Pawns crossing tile should slow down (reverence)
+- [ ] HeelKawnians crossing tile should slow down (reverence)
 
 ### Pilgrimage AI
-- [ ] Select a pawn with family deaths
-- [ ] Wait while pawn is IDLE
-- [ ] Pawn should occasionally pathfind to memorial tile
+- [ ] Select a HeelKawnian with family deaths
+- [ ] Wait while HeelKawnian is IDLE
+- [ ] HeelKawnian should occasionally pathfind to memorial tile
 - [ ] On arrival: stands still briefly, then continues
 
 ---

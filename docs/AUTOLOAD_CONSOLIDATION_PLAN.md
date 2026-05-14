@@ -1,13 +1,14 @@
 # Autoload Consolidation Plan
 
 **Created:** May 10, 2026  
-**Current Autoload Count:** 128 (CRITICAL - way too many)  
+**Last Updated:** May 14, 2026  
+**Current Autoload Count:** 164 (CRITICAL - way too many)  
 **Target:** 15-20 essential autoloads  
 **Impact:** Reduce startup time, memory usage, complexity, and potential circular dependencies
 
 ---
 
-## Current Autoload Inventory (128 total)
+## Current Autoload Inventory (164 total)
 
 ### **Core Memory & Persistence (8)** - KEEP ESSENTIAL
 1. WorldMemory - Deterministic append-only fact log (ESSENTIAL)
@@ -101,7 +102,7 @@
 61. SacredGeography - Sacred geography
 62. MythAge - Myth age
 
-**Action:** Consolidate into ReligionManager. Mark as non-essential for v1.
+**Action:** Consolidate into ReligionManager. **NOTE: ReligionManager.gd does not exist yet — planned but not implemented.** Mark as non-essential for v1.
 
 ### **Civilization & Progression (4)** - KEEP
 63. ProgressionSystem - Progression tracking (KEEP - core feature)
@@ -118,7 +119,7 @@
 70. CombatNarrative - Combat narrative (scripts/ai)
 71. SquadSystem - Squad system (scripts/ai)
 
-**Action:** Consolidate into CombatManager. Mark as non-essential for v1.
+**Action:** Consolidate into CombatManager. **NOTE: CombatManager.gd does not exist yet — planned but not implemented.** Mark as non-essential for v1.
 
 ### **Export & Data (4)** - CONVERT TO ON-DEMAND
 72. ChronicleExport - Chronicle export
@@ -175,7 +176,7 @@
 99. CollapseSystem - Collapse system
 100. CataclysmSystem - Cataclysm system (scripts/world)
 
-**Action:** Consolidate into DisasterManager. Mark as non-essential for v1.
+**Action:** Consolidate into DisasterManager. **NOTE: DisasterManager.gd does not exist yet — planned but not implemented.** Mark as non-essential for v1.
 
 ### **Farming & Wildlife (2)** - KEEP
 101. FarmingSystem - Farming system
@@ -211,7 +212,7 @@
 115. FragmentationManager - Fragmentation manager
 116. SchismManager - Schism manager
 
-**Action:** Consolidate into PoliticsManager. Mark as non-essential for v1.
+**Action:** Consolidate into PoliticsManager. **NOTE: PoliticsManager.gd does not exist yet — planned but not implemented.** Mark as non-essential for v1.
 
 ### **Pawn Systems (3)** - CONSOLIDATE TO 1
 117. PawnConsciousness - Pawn consciousness
@@ -229,7 +230,7 @@
 125. MemorialSystem - Memorial system
 126. WorldActionLedger - Already listed above
 
-**Action:** Consolidate into RecordingManager. Mark as non-essential for v1.
+**Action:** Consolidate into RecordingManager. **NOTE: RecordingManager.gd does not exist yet — planned but not implemented.** Mark as non-essential for v1.
 
 ### **Victory & Onboarding (2)** - CONVERT TO ON-DEMAND
 127. VictorySystem - Victory system
@@ -363,23 +364,18 @@ For each removed autoload:
 ## Expected Results
 
 **Before:**
-- 128 autoloads
+- 164 autoloads
 - Slow startup (all autoloads load at start)
 - High memory usage (all autoloads in memory)
 - Complex dependencies
 - Risk of circular dependencies
 
-**After:**
+**After (target):**
 - 20 essential autoloads + 12 consolidated managers = 32 total
 - Fast startup (only essential systems load)
 - Lower memory usage (non-essential loaded on-demand)
 - Clearer architecture
 - Reduced dependency complexity
-
-**Performance Improvement:**
-- Startup time: Unknown → Expected 50-70% reduction
-- Memory usage: Unknown → Expected 30-40% reduction
-- Compile time: Unknown → Expected 20-30% reduction
 
 ---
 
@@ -398,7 +394,7 @@ For each removed autoload:
 
 ## Success Criteria
 
-- [ ] Autoload count reduced from 128 to ≤32
+- [ ] Autoload count reduced from 164 to ≤32
 - [ ] Game launches without errors
 - [ ] Core gameplay loop works
 - [ ] Save/load functions correctly

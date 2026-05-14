@@ -1,6 +1,6 @@
 # HeelKawn Godot Limitation Analysis
 
-**Date:** May 10, 2026  
+**Date:** May 14, 2026  
 **Purpose:** Identify what was put in HeelKawn that Godot cannot handle, and assess whether migration is necessary
 
 **User Requirements:**
@@ -14,14 +14,9 @@
 
 **Finding:** Godot 4.6.2 with GDScript **CANNOT achieve 100x speed with all 45+ systems active at all times**. The current implementation already uses adaptive throttling and feature reduction to maintain performance, which violates the user's requirement that "all systems should be online at all times."
 
-**Recommendation:** **MIGRATE PERFORMANCE-CRITICAL SYSTEMS TO C#** (within Godot) OR **MIGRATE TO UNITY**.
+**Recommendation:** **Migration is NOT recommended.** The cost and risk of migrating to another engine far outweigh the potential benefits. The real challenges are simulation complexity and determinism requirements, which would exist in any engine.
 
-**Why:**
-- Current system: "stable at 26x, playable at 100x" (already using throttling)
-- User requirement: 100x with ALL systems active at ALL times (no throttling)
-- This is a 4-10x performance gap that GDScript cannot bridge
-- C# is compiled and can provide 2-5x performance improvement
-- Unity with C# could provide 5-10x improvement for critical systems
+**Best path forward:** Continue with Godot, move critical systems to C# for performance, and accept realistic performance targets for high-speed simulation.
 
 ---
 
@@ -48,14 +43,14 @@
 **Why This Challenges Godot:**
 - **Tick Processing Overhead:** Every system needs to process every game tick (or on staggered cadence)
 - **Cross-System Dependencies:** Systems call each other extensively, creating O(n²) or worse complexity
-- **Memory Footprint:** 128 autoloads initially (reduced to 40) indicates massive state management
+- **Memory Footprint:** 164 autoloads (consolidation ~10% complete, 11 managers created but project.godot not yet updated)
 - **Event Storm Risk:** Pawn-activated events can trigger cascading updates across all systems
 
 **Evidence:**
-- Extensive performance optimization documentation (PERFORMANCE_OPTIMIZATIONS.md)
+- Extensive performance optimization documentation (PERFORMANCE_OPTIMIZATIONS.md at root level)
 - SIM_HITCH logging (25-55ms tick times, target <16ms)
 - Adaptive frame tick caps at high speeds (26x/50x/100x)
-- Autoload consolidation from 128 to 40 (69% reduction) specifically for startup performance
+- Autoload consolidation (11 consolidated managers created, 164 autoloads still in project.godot)
 
 ---
 
@@ -103,7 +98,7 @@
 - **State Tracking:** Extensive per-pawn state (needs, skills, relationships, memories)
 
 **Evidence:**
-- SPATIAL_MANAGER_ARCHITECTURE.md: "Performance expectations" for neighbor queries
+- SPATIAL_MANAGER_ARCHITECTURE.md (root level): "Performance expectations" for neighbor queries
 - docs/SESSION_LOG.md: "Social rapport interval scales at 26x/50x/100x"
 - Spatial partitioning implemented to reduce O(n²) social checks
 - Pawn AI stride increased at high speeds (100x/50x/26x → 14/10/8)
@@ -152,7 +147,7 @@
 - **Terrain Queries:** Per-tile traversal cost lookups
 
 **Evidence:**
-- SPATIAL_MANAGER_IMPLEMENTATION.md: "Performance stress test (30 minutes)"
+- SPATIAL_MANAGER_IMPLEMENTATION.md (root level): "Performance stress test (30 minutes)"
 - RoadMemory.flush_dirty_tiles() called periodically
 - Pathfinding optimization with road memory caching
 - Mining-react incremental scanning to prevent one-tick bursts
@@ -186,7 +181,7 @@
 
 ### Autoload Consolidation
 
-**What:** Reduced autoloads from 128 to 40 (69% reduction)
+**What:** 164 autoloads, 11 consolidated managers created, project.godot not yet updated (~10% complete)
 
 **Why:** Autoloads load at game startup, increasing memory footprint and initialization time
 
@@ -194,11 +189,11 @@
 - Export utilities (load on-demand via code)
 - Debug tools (load on-demand via code)
 - Non-essential systems (marked for v1.1)
-- 88 autoloads consolidated into 11 managers
+- 11 consolidated managers created (files exist, not yet wired into project.godot)
 
 **Evidence:**
-- project.godot autoload section shows 40 autoloads (down from 128)
-- docs/AUTOLOAD_CONSOLIDATION_STATUS.md: "Expected 50-70% startup time reduction"
+- project.godot autoload section still shows 164 autoloads
+- docs/AUTOLOAD_CONSOLIDATION_STATUS.md: ~10% complete, no autoloads removed yet
 - Lazy loading architecture in consolidated managers
 
 ---
@@ -395,34 +390,20 @@
 
 ## Recommendation
 
-### MIGRATE PERFORMANCE-CRITICAL SYSTEMS TO C# WITHIN GODOT (PRIMARY RECOMMENDATION)
+### CONTINUE WITH GODOT, OPTIMIZE WITHIN GDScript (PRIMARY RECOMMENDATION)
 
 **Reasoning:**
 
-1. **User Requirements Cannot Be Met with GDScript Alone**
-   - Requirement: 100x speed with ALL systems active at ALL times
-   - Current reality: System uses throttling and feature reduction to maintain performance
-   - GDScript is fundamentally limited by interpretation overhead
-   - Even with extensive optimization, 100x with all systems is not achievable in GDScript
+1. **Migration is NOT Recommended**
+   - The cost and risk of migrating to another engine far outweigh the potential benefits
+   - The real challenges are simulation complexity and determinism requirements, which would exist in any engine
+   - Godot 4.6.2 is capable of running HeelKawn with continued optimization
 
-2. **C# Migration is Feasible and Low-Risk**
-   - Godot supports mixed GDScript/C# projects natively
-   - Can migrate incrementally (system by system)
-   - 2-5x performance improvement for migrated systems
-   - Estimated effort: 2-4 months
-   - Lower risk than full engine migration
-
-3. **C# Can Bridge the Performance Gap**
-   - C# is compiled (2-5x faster than GDScript)
-   - Performance-critical systems can be rewritten in C#
-   - Non-critical systems can stay in GDScript
-   - Expected outcome: 50x with all systems ACHIEVABLE, 100x POSSIBLE
-
-4. **Unity Migration is High-Risk Backup Option**
-   - Full migration would take 6-12 months
-   - High risk of introducing bugs
-   - Different architecture (scene tree vs node system)
-   - Should only be considered if C# migration fails to meet requirements
+2. **Continue with Godot, Optimize Within GDScript**
+   - GDScript optimization can still yield improvements
+   - Consolidation from 164 autoloads to ~32 will significantly reduce startup overhead
+   - Continued profiling and targeted optimization of hot paths
+   - Mixed GDScript/C# is possible but not a requirement for stability
 
 ### Recommended Next Steps
 

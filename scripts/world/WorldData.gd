@@ -57,6 +57,10 @@ func get_feature(x: int, y: int) -> int:
 	return features[index(x, y)]
 
 
+func set_feature(x: int, y: int, val: int) -> void:
+	features[index(x, y)] = val
+
+
 func get_elevation(x: int, y: int) -> float:
 	return elevation[index(x, y)]
 

@@ -10,68 +10,71 @@ var _observation_api: Node
 var _discovery_gate: Node
 var _fog_of_discovery: Node
 
-var _subsystems_loaded: bool = false
+var _observer_lens_loaded: bool = false
+var _sim_vision_loaded: bool = false
+var _observation_api_loaded: bool = false
+var _discovery_gate_loaded: bool = false
+var _fog_of_discovery_loaded: bool = false
 
 func _ready() -> void:
-	print("[ObserverManager] Initialized")
+	pass
 
-## Load observer subsystems on-demand (not at startup)
-func _load_subsystems() -> void:
-	if _subsystems_loaded:
-		return
-	
-	# Load observer subsystems as children
-	if FileAccess.file_exists("res://scripts/kernel/observer_lens.gd"):
-		_observer_lens = load("res://scripts/kernel/observer_lens.gd").new()
-		_observer_lens.name = "ObserverLens"
-		add_child(_observer_lens)
-	
-	if FileAccess.file_exists("res://autoloads/SimVision.gd"):
-		_sim_vision = load("res://autoloads/SimVision.gd").new()
-		_sim_vision.name = "SimVision"
-		add_child(_sim_vision)
-	
-	if FileAccess.file_exists("res://autoloads/ObservationAPI.gd"):
-		_observation_api = load("res://autoloads/ObservationAPI.gd").new()
-		_observation_api.name = "ObservationAPI"
-		add_child(_observation_api)
-	
-	if FileAccess.file_exists("res://autoloads/DiscoveryGate.gd"):
-		_discovery_gate = load("res://autoloads/DiscoveryGate.gd").new()
-		_discovery_gate.name = "DiscoveryGate"
-		add_child(_discovery_gate)
-	
-	if FileAccess.file_exists("res://autoloads/FogOfDiscovery.gd"):
-		_fog_of_discovery = load("res://autoloads/FogOfDiscovery.gd").new()
-		_fog_of_discovery.name = "FogOfDiscovery"
-		add_child(_fog_of_discovery)
-	
-	_subsystems_loaded = true
-	print("[ObserverManager] Observer subsystems loaded")
+func _load_sub(name: String, path: String) -> Node:
+	var existing: Node = get_node_or_null("/root/" + name)
+	if existing != null:
+		return existing
+	if FileAccess.file_exists(path):
+		var loaded: Node = load(path).new()
+		loaded.name = name
+		add_child(loaded)
+		return loaded
+	return null
+
+func _ensure_observer_lens() -> void:
+	if not _observer_lens_loaded:
+		_observer_lens = _load_sub("ObserverLens", "res://scripts/kernel/observer_lens.gd")
+		_observer_lens_loaded = true
+
+func _ensure_sim_vision() -> void:
+	if not _sim_vision_loaded:
+		_sim_vision = _load_sub("SimVision", "res://autoloads/SimVision.gd")
+		_sim_vision_loaded = true
+
+func _ensure_observation_api() -> void:
+	if not _observation_api_loaded:
+		_observation_api = _load_sub("ObservationAPI", "res://autoloads/ObservationAPI.gd")
+		_observation_api_loaded = true
+
+func _ensure_discovery_gate() -> void:
+	if not _discovery_gate_loaded:
+		_discovery_gate = _load_sub("DiscoveryGate", "res://autoloads/DiscoveryGate.gd")
+		_discovery_gate_loaded = true
+
+func _ensure_fog_of_discovery() -> void:
+	if not _fog_of_discovery_loaded:
+		_fog_of_discovery = _load_sub("FogOfDiscovery", "res://autoloads/FogOfDiscovery.gd")
+		_fog_of_discovery_loaded = true
 
 ## Get a specific observer subsystem (loads if not already loaded)
 func get_subsystem(name: String) -> Node:
-	_load_subsystems()
 	match name:
-		"observer_lens": return _observer_lens
-		"sim_vision": return _sim_vision
-		"observation_api": return _observation_api
-		"discovery_gate": return _discovery_gate
-		"fog_of_discovery": return _fog_of_discovery
+		"observer_lens": _ensure_observer_lens(); return _observer_lens
+		"sim_vision": _ensure_sim_vision(); return _sim_vision
+		"observation_api": _ensure_observation_api(); return _observation_api
+		"discovery_gate": _ensure_discovery_gate(); return _discovery_gate
+		"fog_of_discovery": _ensure_fog_of_discovery(); return _fog_of_discovery
 		_: return null
 
 ## Observe region (delegates to ObservationAPI if available)
 func observe_region(region_id: int) -> Dictionary:
-	if _observation_api == null:
-		_load_subsystems()
+	_ensure_observation_api()
 	if _observation_api != null and _observation_api.has_method("observe_region"):
 		return _observation_api.observe_region(region_id)
 	return {}
 
 ## Update fog of discovery (delegates to FogOfDiscovery if available)
 func update_fog(world: World, player_position: Vector2i) -> void:
-	if _fog_of_discovery == null:
-		_load_subsystems()
+	_ensure_fog_of_discovery()
 	if _fog_of_discovery != null and _fog_of_discovery.has_method("update"):
 		_fog_of_discovery.update(world, player_position)
 

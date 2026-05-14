@@ -127,36 +127,12 @@ static func _planner_pass_settlement_limit() -> int:
 
 
 static func _planner_pass_budget_usec() -> int:
-	if GameManager == null:
-		return 4_000
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 2_000
-	if gs >= 50.0:
-		return 2_000
-	if gs >= 26.0:
-		return 3_000
-	if gs >= 12.0:
-		return 4_000
-	if gs >= 3.0:
-		return 6_000
+	# No throttle. Give the planner as much time as it needs.
 	return 8_000
 
 
 static func _planner_open_job_backpressure_limit() -> int:
-	if GameManager == null:
-		return -1
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 80
-	if gs >= 50.0:
-		return 96
-	if gs >= 26.0:
-		return 112
-	if gs >= 12.0:
-		return 128
-	if gs >= 3.0:
-		return 160
+	# No throttle. No backpressure limit.
 	return -1
 
 

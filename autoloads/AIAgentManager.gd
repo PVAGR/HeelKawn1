@@ -844,19 +844,14 @@ func _on_world_tick(tick: int) -> void:
 	if not enabled:
 		return
 	
-	var stride: int = 1
-	if GameManager.game_speed >= 26.0:
-		stride = 4
-	elif GameManager.game_speed >= 12.0:
-		stride = 2
-	
-	# Update enhanced AI systems on a cadence tuned for frame pacing.
-	if civilization_mode and tick % stride == 0:
-		var world_ai_interval: int = _world_ai_interval_for_speed() * stride
+	# No throttle. The speed setting IS the speed.
+	# Update enhanced AI systems every tick.
+	if civilization_mode:
+		var world_ai_interval: int = _world_ai_interval_for_speed()
 		if world_ai and (_last_world_ai_update_tick < 0 or tick - _last_world_ai_update_tick >= world_ai_interval):
 			world_ai.update()
 			_last_world_ai_update_tick = tick
-		var settlement_ai_interval: int = _settlement_ai_interval_for_speed() * stride
+		var settlement_ai_interval: int = _settlement_ai_interval_for_speed()
 		if _last_settlement_ai_update_tick < 0 or tick - _last_settlement_ai_update_tick >= settlement_ai_interval:
 			for settlement_id in settlement_ai_system:
 				var settlement = settlement_ai_system[settlement_id]
@@ -875,64 +870,18 @@ func _on_world_tick(tick: int) -> void:
 
 
 func _world_ai_interval_for_speed() -> int:
-	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
-	if GameManager == null:
-		return 10
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 48
-	if gs >= 50.0:
-		return 32
-	if gs >= 26.0:
-		return 24
-	if gs >= 12.0:
-		return 16
-	if gs >= 6.0:
-		return 12
-	if gs >= 3.0:
-		return 8
+	# No throttle. The speed setting IS the speed.
 	return 10
 
 
 func _settlement_ai_interval_for_speed() -> int:
-	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
-	if GameManager == null:
-		return 16
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 72
-	if gs >= 50.0:
-		return 48
-	if gs >= 26.0:
-		return 36
-	if gs >= 12.0:
-		return 24
+	# No throttle. The speed setting IS the speed.
 	return 16
 
 
 func _agent_update_budget_for_speed(total_agents: int) -> int:
-	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
-	if total_agents <= 1:
-		return total_agents
-	if GameManager == null:
-		return total_agents
-	var gs: float = GameManager.game_speed
-	var divisor: int = 1
-	if gs >= 100.0:
-		divisor = 6
-	elif gs >= 50.0:
-		divisor = 5
-	elif gs >= 26.0:
-		divisor = 4
-	elif gs >= 12.0:
-		divisor = 3
-	elif gs >= 6.0:
-		divisor = 3
-	elif gs >= 3.0:
-		divisor = 2
-	else:
-		divisor = 2
-	return maxi(1, int(ceil(float(total_agents) / float(divisor))))
+	# No throttle. All agents update every tick.
+	return total_agents
 
 func _spawn_initial_agents() -> void:
 	var AIAgentClass = preload("res://scripts/ai/AIAgent.gd")

@@ -423,30 +423,13 @@ func get_player_pawn_id() -> int:
 	return -1
 
 func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
-	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
-	if GameManager == null:
-		return normal_ticks
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return ultra_ticks
-	if gs >= 50.0:
-		return fast_ticks
+	# No throttle. The speed setting IS the speed.
+	# Always use the normal (1x) interval regardless of game speed.
 	return normal_ticks
 
 
 func _planner_interval_for_speed() -> int:
-	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
-	if GameManager == null:
-		return 90
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 360
-	if gs >= 50.0:
-		return 240
-	if gs >= 26.0:
-		return 180
-	if gs >= 12.0:
-		return 120
+	# No throttle. The speed setting IS the speed.
 	return 90
 
 
@@ -2690,10 +2673,6 @@ func _on_world_tick(tick_number: int) -> void:
 	_on_game_tick(tick_number)
 
 
-# OPTIMIZATION: Frame time budget constants - higher at 100x to prevent defer pileup
-const FRAME_BUDGET_USEC: int = 10000  # 10ms = 100 FPS target (aggressive optimization)
-const FRAME_BUDGET_SOFT_USEC: int = 8000  # 8ms soft target for 125 FPS
-const DEFERRABLE_OPERATIONS: Array[String] = ["regrowth", "ambient_target", "animal_population", "observer_snapshot"]
 const MAIN_FAST_MAINT_INTERVAL_TICKS: int = 10
 const MAIN_MEDIUM_MAINT_INTERVAL_TICKS: int = 30
 const MAIN_SLOW_MAINT_INTERVAL_TICKS: int = 120
@@ -2716,10 +2695,6 @@ func _on_game_tick(tick: int) -> void:
 		_playtest_last_cam_tick = tick
 		_playtest_recorder_ref.call("record_camera_movement", _camera.position, _camera.zoom.x)
 
-	# OPTIMIZATION: Frame budget tracking - exit early if we're over budget
-	var frame_start: int = Time.get_ticks_usec()
-	var frame_budget_exceeded: bool = false
-	
 	var section_us: Dictionary = {}
 	var t0: int = Time.get_ticks_usec()
 	_process_player_intent_dispatch_tick()
@@ -2755,35 +2730,23 @@ func _on_game_tick(tick: int) -> void:
 			_animal_spawner != null
 			and _is_main_lane_tick(int(tick), AnimalSpawner.POPULATION_CHECK_TICKS, ANIMAL_POPULATION_PHASE_TICKS)
 	):
-		# OPTIMIZATION: Skip if over budget (deferrable operation)
-		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
-			frame_budget_exceeded = true
-		if not frame_budget_exceeded:
-			t0 = Time.get_ticks_usec()
-			_animal_spawner.update_population_dynamics(_world)
-			section_us["animal_population"] = Time.get_ticks_usec() - t0
+		t0 = Time.get_ticks_usec()
+		_animal_spawner.update_population_dynamics(_world)
+		section_us["animal_population"] = Time.get_ticks_usec() - t0
 	# DORMANT WORLD: FogOfDiscovery posts jobs as pawns discover tiles (no visual refresh needed)
 	# Regrowth + ambient are display/maintenance layers; they should not run
 	# every sim tick in normal mode or high speeds will hitch.
 	# AGGRESSIVE OPTIMIZATION: Even longer intervals for smooth FPS
 	var regrowth_interval: int = _high_speed_interval(8, 30, 80)  # Was (6, 20, 60) - now 80 ticks at 100x
 	if _is_main_lane_tick(tick, regrowth_interval, 3):
-		# OPTIMIZATION: Skip if over budget (deferrable operation)
-		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
-			frame_budget_exceeded = true
-		if not frame_budget_exceeded:
-			t0 = Time.get_ticks_usec()
-			_process_regrowth(tick)
-			section_us["regrowth"] = Time.get_ticks_usec() - t0
+		t0 = Time.get_ticks_usec()
+		_process_regrowth(tick)
+		section_us["regrowth"] = Time.get_ticks_usec() - t0
 	var ambient_interval: int = _high_speed_interval(3, 12, 50)  # Was (2, 8, 40) - now 50 ticks at 100x
 	if _is_main_lane_tick(tick, ambient_interval, 13):
-		# OPTIMIZATION: Skip if over budget (deferrable operation)
-		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
-			frame_budget_exceeded = true
-		if not frame_budget_exceeded:
-			t0 = Time.get_ticks_usec()
-			_update_ambient_target()
-			section_us["ambient_target"] = Time.get_ticks_usec() - t0
+		t0 = Time.get_ticks_usec()
+		_update_ambient_target()
+		section_us["ambient_target"] = Time.get_ticks_usec() - t0
 	# DEAD BRAIN REVIVED: WorldEventSeedManager advances seeds periodically
 	if WorldEventSeedManager != null and tick % 100 == 0:
 		var seed_events: Array = WorldEventSeedManager.advance_all(tick)
@@ -2822,13 +2785,10 @@ func _on_game_tick(tick: int) -> void:
 		_maybe_spawn_migrant()
 
 	# Flush deferred pathfinder component computation (batched from sync_tile_from_data)
-	# Throttled at high speed — stale component data is safe, worst case a pawn
-	# claims an unreachable job and abandons it next tick.
 	if _world != null and _world.pathfinder != null and _world.data != null:
-		if _is_main_lane_tick(tick, _high_speed_interval(10, 30, 100), 47):
-			t0 = Time.get_ticks_usec()
-			if _world.pathfinder.flush_component_dirty(_world.data):
-				section_us["pf_components"] = Time.get_ticks_usec() - t0
+		t0 = Time.get_ticks_usec()
+		if _world.pathfinder.flush_component_dirty(_world.data):
+			section_us["pf_components"] = Time.get_ticks_usec() - t0
 
 	# Flood events: rain near rivers deposits flood silt; dry weather fades it.
 	if _is_main_lane_tick(tick, 200, 19):
@@ -2837,11 +2797,11 @@ func _on_game_tick(tick: int) -> void:
 	if _is_main_lane_tick(tick, 2000, 29):
 		if _world != null and _world.has_method("_tick_erosion"):
 			_world._tick_erosion(tick)
-	# Blood stains: fade over time (throttled at high speed)
-	if _world != null and _world.has_method("_tick_blood_stains") and _is_main_lane_tick(tick, _high_speed_interval(5, 20, 60), 41):
+	# Blood stains: fade over time
+	if _world != null and _world.has_method("_tick_blood_stains"):
 		_world._tick_blood_stains(tick)
-	# Doors: close timed-out open doors (throttled at high speed)
-	if _world != null and _world.has_method("_tick_doors") and _is_main_lane_tick(tick, _high_speed_interval(5, 20, 60), 43):
+	# Doors: close timed-out open doors
+	if _world != null and _world.has_method("_tick_doors"):
 		_world._tick_doors(tick)
 	# Settlement festivals: milestone-driven celebrations for growing colonies.
 	if SettlementMemory != null and _is_main_lane_tick(tick, 200, 37) and SettlementMemory.has_method("process_festival_milestones"):
@@ -2907,14 +2867,9 @@ func _on_game_tick(tick: int) -> void:
 		# DORMANT WORLD: Skip settlement-dependent systems until first settlement forms
 		var planner_interval: int = _planner_interval_for_speed()
 		if _is_main_lane_tick(tick, planner_interval, 97) and DiscoveryGate.is_unlocked("first_settlement"):
-			# Check frame budget before heavy planning
-			if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
-				# Defer to next frame
-				call_deferred("_deferred_settlement_planner_plan", _world, self, false)
-			else:
-				t0 = Time.get_ticks_usec()
-				SettlementPlanner.plan(_world, self, false)
-				section_us["settlement_planner"] = Time.get_ticks_usec() - t0
+			t0 = Time.get_ticks_usec()
+			SettlementPlanner.plan(_world, self, false)
+			section_us["settlement_planner"] = Time.get_ticks_usec() - t0
 		# Periodic resource truth refresh — settlements need to know their stockpile state
 		if _is_main_lane_tick(tick, 500, 109):
 			SettlementMemory.refresh_resource_truth()
@@ -2922,42 +2877,24 @@ func _on_game_tick(tick: int) -> void:
 		# DORMANT WORLD: Trade planner only runs after first trade route
 		var trade_offset: int = maxi(1, planner_interval / 3)
 		if _is_main_lane_tick(tick, planner_interval, trade_offset) and DiscoveryGate.is_unlocked("first_trade"):
-			# Check frame budget before heavy planning
-			if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
-				# Defer to next frame
-				call_deferred("_deferred_trade_planner_plan", _world, self, false)
-			else:
-				t0 = Time.get_ticks_usec()
-				EconomyManager.get_trade_planner().plan(_world, self, false)
-				section_us["trade_planner"] = Time.get_ticks_usec() - t0
+			t0 = Time.get_ticks_usec()
+			EconomyManager.get_trade_planner().plan(_world, self, false)
+			section_us["trade_planner"] = Time.get_ticks_usec() - t0
 		# Build roads from trade routes every 2000 ticks
 		if _is_main_lane_tick(tick, 2000, 113) and DiscoveryGate.is_unlocked("first_trade"):
 			_build_roads_from_trade_routes()
-		# OPTIMIZATION: Spread heavy settlement operations across ticks with frame budget check
 		# DORMANT WORLD: Let recompute run periodically so pawn clusters can be detected
 		if tick % REBIRTH_CHECK_INTERVAL_TICKS == 0:
-			# Check frame budget before heavy recompute
-			if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
-				frame_budget_exceeded = true
-				# Defer to next frame
-				call_deferred("_deferred_settlement_memory_recompute", _world)
-			else:
-				t0 = Time.get_ticks_usec()
-				SettlementMemory.recompute(_world)
-				section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
+			t0 = Time.get_ticks_usec()
+			SettlementMemory.recompute(_world)
+			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
 
 		# Offset SettlementRebirth.process to a different tick to spread the load
 		var rebirth_offset_tick: int = (tick + REBIRTH_CHECK_INTERVAL_TICKS / 2) % REBIRTH_CHECK_INTERVAL_TICKS
 		if rebirth_offset_tick == 0:
-			# Check frame budget before heavy process
-			if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
-				frame_budget_exceeded = true
-				# Defer to next frame
-				call_deferred("_deferred_settlement_rebirth_process", _world, self)
-			else:
-				t0 = Time.get_ticks_usec()
-				SettlementRebirth.process(_world, self, false)
-				section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
+			t0 = Time.get_ticks_usec()
+			SettlementRebirth.process(_world, self, false)
+			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
 		# Phase 4 Identity: visual decay for permanently abandoned settlements (infrequent)
 		# DORMANT WORLD: Only runs after first settlement
 		if GameManager.periodic_phase_due(tick, SETTLEMENT_ARCHITECT_INTERVAL_TICKS, SETTLEMENT_ARCHITECT_PHASE_OFFSET_TICKS) and DiscoveryGate.is_unlocked("first_settlement"):
@@ -3043,20 +2980,14 @@ func _on_game_tick(tick: int) -> void:
 			and _observer_hud.is_visible_state()
 			and _is_main_lane_tick(tick, obs_iv, 163)
 	):
-		# OPTIMIZATION: Skip if over budget (deferrable operation)
-		if Time.get_ticks_usec() - frame_start > FRAME_BUDGET_USEC:
-			frame_budget_exceeded = true
-		if not frame_budget_exceeded:
-			t0 = Time.get_ticks_usec()
-			_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
-			section_us["observer_snapshot"] = Time.get_ticks_usec() - t0
+		t0 = Time.get_ticks_usec()
+		_observer_hud.apply_snapshot(_build_observer_snapshot(tick))
+		section_us["observer_snapshot"] = Time.get_ticks_usec() - t0
 	# Handle recent player_inspect events for tooltip + audio feedback
 	if _is_main_lane_tick(tick, _inspect_scan_interval_for_speed(), 167):
-		# OPTIMIZATION: Skip if over budget
-		if Time.get_ticks_usec() - frame_start <= FRAME_BUDGET_USEC:
-			t0 = Time.get_ticks_usec()
-			_scan_recent_inspects_and_handle()
-			section_us["inspect_scan"] = Time.get_ticks_usec() - t0
+		t0 = Time.get_ticks_usec()
+		_scan_recent_inspects_and_handle()
+		section_us["inspect_scan"] = Time.get_ticks_usec() - t0
 	# FocusInspector snapshotting is another large allocation hotspot (see ObservationAPI — programmatic reads must stay on-demand, not per-frame).
 	var focus_iv: int = _high_speed_interval(30, 24, 48)
 	if _focus_inspector != null and _focus_inspector.is_visible_state() and _is_main_lane_tick(tick, focus_iv, 173):
@@ -3135,35 +3066,13 @@ func _maybe_log_tick_hotspots(tick: int, section_us: Dictionary) -> void:
 
 
 func _inspect_scan_interval_for_speed() -> int:
-	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
-	if GameManager == null:
-		return INSPECT_SCAN_INTERVAL_TICKS
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return INSPECT_SCAN_INTERVAL_TICKS * 6
-	if gs >= 50.0:
-		return INSPECT_SCAN_INTERVAL_TICKS * 4
-	if gs >= 26.0:
-		return INSPECT_SCAN_INTERVAL_TICKS * 3
-	if gs >= 12.0:
-		return INSPECT_SCAN_INTERVAL_TICKS * 2
+	# No throttle. The speed setting IS the speed.
 	return INSPECT_SCAN_INTERVAL_TICKS
 
 
 ## Co-presence rapport is O(pawns²) in worst case; stretch interval at fast-forward.
 func _social_rapport_interval_for_speed() -> int:
-	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
-	if GameManager == null:
-		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 6
-	if gs >= 50.0:
-		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 4
-	if gs >= 26.0:
-		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 3
-	if gs >= 12.0:
-		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 2
+	# No throttle. The speed setting IS the speed.
 	return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS
 
 

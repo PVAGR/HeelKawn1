@@ -52,10 +52,10 @@ const MIN_VISUAL_UPDATE_INTERVAL: int = 3
 var _stable_pawn_tick_id: int = -1
 
 ## Lane interval constants for pawn tick shell reduction
-const PAWN_MEDIUM_AI_INTERVAL_TICKS: int = 5
-const PAWN_NEARBY_SCAN_INTERVAL_TICKS: int = 30
-const PAWN_SOCIAL_REFRESH_INTERVAL_TICKS: int = 15
-const PAWN_NARRATIVE_REFRESH_INTERVAL_TICKS: int = 120
+const PAWN_MEDIUM_AI_INTERVAL_TICKS: int = 1
+const PAWN_NEARBY_SCAN_INTERVAL_TICKS: int = 1
+const PAWN_SOCIAL_REFRESH_INTERVAL_TICKS: int = 1
+const PAWN_NARRATIVE_REFRESH_INTERVAL_TICKS: int = 1
 
 ## Get a stable tick ID for this pawn (deterministic, computed once).
 ## Used for lane gating so each pawn runs on a consistent offset.
@@ -2894,9 +2894,7 @@ func _on_world_tick(_tick: int) -> void:
 		_validate_or_dissolve_cohort()
 		_refresh_or_decay_cohort_stability()
 	# Apply meaning-based behavior density modifiers (Phase 4)
-	# Throttled: only refresh every 10 ticks to reduce per-tick cost
-	if posmod(GameManager.tick_count + pid, 10) == 0:
-		_apply_meaning_behavior_modifiers()
+	_apply_meaning_behavior_modifiers()
 	if draft_mode:
 		_engage_enemies()
 	if _trace_ai_slice:
@@ -2945,63 +2943,22 @@ func _on_world_tick(_tick: int) -> void:
 
 
 func _fast_forward_tick_stride() -> int:
-	if GameManager == null:
-		return 1
-	var gs: float = GameManager.game_speed
-	## Stride only applies to IDLE pawns (expensive job claiming).
-	## WORKING/SLEEPING/EATING pawns always tick.
-	if gs >= 100.0:
-		return 3
-	if gs >= 50.0:
-		return 2
-	if gs >= 26.0:
-		return 2
-	if gs >= 12.0:
-		return 1
+	# No stride. Every pawn ticks every tick. Speed is the speed.
 	return 1
 
 
 func _job_claim_interval_for_speed() -> int:
-	# Hungry pawns always claim every tick. Well-fed pawns spread claims
-	# to reduce CPU at high speed, but not so much that they sit idle.
-	if GameManager == null:
-		return 1
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 2
-	if gs >= 50.0:
-		return 2
-	if gs >= 26.0:
-		return 1
+	# No throttle. Every pawn claims every tick. Speed is the speed.
 	return 1
 
 
 func _idle_action_refresh_interval_for_speed() -> int:
-	if GameManager == null:
-		return 3
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 12
-	if gs >= 50.0:
-		return 8
-	if gs >= 26.0:
-		return 6
-	if gs >= 12.0:
-		return 4
-	return 3
+	# No throttle. Pawns reconsider their idle action every tick.
+	return 1
 
 
 func _work_step_interval_for_speed() -> int:
-	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
-	if GameManager == null:
-		return 1
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 3
-	if gs >= 50.0:
-		return 2
-	if gs >= 26.0:
-		return 2
+	# No throttle. Work steps process every tick.
 	return 1
 
 
@@ -3722,25 +3679,8 @@ func _tick_idle() -> void:
 	# normal filter if no forage is available. Stops the colony from happily
 	# mining stone while everyone starves.
 	
-	# Job claiming: pawns act when they need to, not when a scheduler says they can.
-	# Hungry pawns ALWAYS claim every tick — need drives action.
-	# Well-fed pawns spread claims slightly to reduce CPU at ultra speed.
-	var claim_iv: int = _job_claim_interval_for_speed()
-	if data != null and data.hunger <= HUNGER_EAT_THRESHOLD:
-		claim_iv = 1  # Hungry pawns never wait
-	var claim_phase: int = 0
-	if data != null:
-		claim_phase = posmod(int(data.id), claim_iv)
-	if posmod(GameManager.tick_count + claim_phase, claim_iv) != 0:
-		if utility_context.is_empty():
-			utility_context = _build_idle_utility_context(food_emergency)
-		var wanderlust: float = lerpf(0.52, 1.68, _bp(3))
-		var early_wander_chance: float = WANDER_CHANCE_PER_TICK * wanderlust * (1.0 + 0.55 * _founding_blend())
-		if preferred_idle_action == "wander":
-			early_wander_chance *= 1.7
-		if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(early_wander_chance, 0.0, 0.35), _pawn_salt(11)):
-			_start_wander()
-		return
+	# Job claiming: every pawn claims every tick. No throttle.
+	# Hungry pawns always claim — need drives action.
 	if utility_context.is_empty() or (_decision._cached_utility_food_emergency if _decision != null else _cached_utility_food_emergency) != food_emergency:
 		utility_context = _build_idle_utility_context(food_emergency)
 	
@@ -3851,11 +3791,9 @@ func _tick_idle() -> void:
 			_need_urgency_scale = clampf(data.hunger / HUNGER_EAT_THRESHOLD, 0.0, 1.0)
 		elif data.rest <= REST_SLEEP_THRESHOLD:
 			_need_urgency_scale = clampf(data.rest / REST_SLEEP_THRESHOLD, 0.0, 1.0)
-		# Job history bias: skip at high speed (minor bonus, per-job region lookup)
-		if GameManager.game_speed < 50.0:
-			if not is_job_history_critical(j.type):
-				var rk_hist: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
-				base_bias += int(resolve_history_offset_for_region.call(rk_hist))
+		if not is_job_history_critical(j.type):
+			var rk_hist: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
+			base_bias += int(resolve_history_offset_for_region.call(rk_hist))
 		if affinity_key != "" and _job_matches_affinity(j.type, affinity_key):
 			base_bias += AFFINITY_JOB_PRIORITY_BONUS
 		# Profession-specific job priority: pawns strongly prefer jobs matching their role
@@ -3893,20 +3831,15 @@ func _tick_idle() -> void:
 			utility_bias = int(round((_utility_score_normalized(action_key, utility_context, utility_cache) - 0.5) * float(UTILITY_JOB_PRIORITY_BIAS_RANGE)))
 			utility_bias_cache[action_key] = utility_bias
 		base_bias += utility_bias
-		# Kinship bonus: skip at high speed (max +3, negligible at 100x)
-		if GameManager.game_speed < 50.0:
-			base_bias += data.kinship_job_priority_bonus(j.work_tile)
+		base_bias += data.kinship_job_priority_bonus(j.work_tile)
 		base_bias += _goal_priority_bias_for_job(j.type)
-		# Short horizon bias: skip at high speed (minor bonus, expensive per-job lookup)
-		if GameManager.game_speed < 50.0:
-			base_bias += _short_horizon_bias_for_job(j)
-		# PERSONAL LEARNING: skip at high speed (minor bonus, per-job lookup)
-		if GameManager.game_speed < 50.0:
-			var personal_conf: float = data.personal_confidence_for_job(int(j.type))
-			if personal_conf < 0.3:
-				base_bias -= 3  # Bad personal track record → avoid
-			elif personal_conf > 0.7:
-				base_bias += 2  # Good personal track record → prefer
+		base_bias += _short_horizon_bias_for_job(j)
+		# PERSONAL LEARNING: confidence from own success/failure history
+		var personal_conf: float = data.personal_confidence_for_job(int(j.type))
+		if personal_conf < 0.3:
+			base_bias -= 3  # Bad personal track record → avoid
+		elif personal_conf > 0.7:
+			base_bias += 2  # Good personal track record → prefer
 		var learning_weight: float = _learning_weight_for_job(j.type)
 		if absf(learning_weight - 1.0) >= 0.01:
 			base_bias += int(round((learning_weight - 1.0) * 4.0))

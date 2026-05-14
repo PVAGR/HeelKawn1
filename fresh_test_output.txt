@@ -110,3 +110,79 @@ Recorded after 4100 ticks (11.4 years)
 [PlaytestRecorder] Auto-saved backup at tick 0: user://logs/playtest/20260514_014332_backup_tick_0.json (3.03 MB)
 [HeelKawnianData] Emma Walkerson unlocked basic building branch
 [HeelKawnianData] Emma Taylorman unlocked basic gathering branch
+[DayNight] Year 1 · Day 10/50 begins (tick 5400)
+[HeelKawnianData] Osric unlocked basic farming branch
+[HeelKawnianData] Ivor unlocked basic combat branch
+[HeelKawnianData] Margaret Bakerman unlocked basic movement branch
+[ChronicleExport] Saved chronicle: chronicle_20260514T035500_tick_6000.txt (429 events)
+[DayNight] Year 1 · Day 11/50 begins (tick 6000)
+[Main] Auto-saved at tick 6000
+[DayNight] Year 1 · Day 12/50 begins (tick 6600)
+WARNING: [EventBus] Slow event 'ai_layer_decision': 1529 µs
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] emit (res://autoloads/EventBus.gd:118)
+       [1] record_event (res://autoloads/WorldMemory.gd:480)
+       [2] _process_layer_output (res://scripts/ai/HeelKawnAIOrchestrator.gd:138)
+       [3] _queue_layer_update (res://scripts/ai/HeelKawnAIOrchestrator.gd:125)
+       [4] _on_game_tick (res://scripts/ai/HeelKawnAIOrchestrator.gd:102)
+       [5] _dispatch_game_tick (res://autoloads/GameManager.gd:277)
+       [6] _on_tick_manager_tick (res://autoloads/GameManager.gd:226)
+       [7] _dispatch_tick (res://autoloads/TickManager.gd:176)
+       [8] _process (res://autoloads/TickManager.gd:134)
+WARNING: [EventBus] Slow event 'ai_layer_decision': 8747 µs
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] emit (res://autoloads/EventBus.gd:118)
+       [1] record_event (res://autoloads/WorldMemory.gd:480)
+       [2] _process_layer_output (res://scripts/ai/HeelKawnAIOrchestrator.gd:138)
+       [3] _queue_layer_update (res://scripts/ai/HeelKawnAIOrchestrator.gd:125)
+       [4] _on_game_tick (res://scripts/ai/HeelKawnAIOrchestrator.gd:102)
+       [5] _dispatch_game_tick (res://autoloads/GameManager.gd:277)
+       [6] _on_tick_manager_tick (res://autoloads/GameManager.gd:226)
+       [7] _dispatch_tick (res://autoloads/TickManager.gd:176)
+       [8] _process (res://autoloads/TickManager.gd:134)
+[DayNight] Year 1 · Day 13/50 begins (tick 7200)
+WARNING: [EventBus] Slow event 'ai_layer_decision': 9238 µs
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] emit (res://autoloads/EventBus.gd:118)
+       [1] record_event (res://autoloads/WorldMemory.gd:480)
+       [2] _process_layer_output (res://scripts/ai/HeelKawnAIOrchestrator.gd:138)
+       [3] _queue_layer_update (res://scripts/ai/HeelKawnAIOrchestrator.gd:125)
+       [4] _on_game_tick (res://scripts/ai/HeelKawnAIOrchestrator.gd:102)
+       [5] _dispatch_game_tick (res://autoloads/GameManager.gd:277)
+       [6] _on_tick_manager_tick (res://autoloads/GameManager.gd:226)
+       [7] _dispatch_tick (res://autoloads/TickManager.gd:176)
+       [8] _process (res://autoloads/TickManager.gd:134)
+[DayNight] Year 1 · Day 14/50 begins (tick 7800)
+[PlaytestRecorder] Auto-saved backup at tick 5000: user://logs/playtest/20260514_014332_backup_tick_5000.json (4.37 MB)
+[DayNight] Year 1 · Day 15/50 begins (tick 8400)
+ERROR: BUG: Unreferenced static string to 0: servers
+   at: unref (core/string/string_name.cpp:116)
+ERROR: BUG: Unreferenced static string to 0: Physics2DConstraintSolveIslands
+   at: unref (core/string/string_name.cpp:116)
+ERROR: BUG: Unreferenced static string to 0: Physics2DConstraintSetup
+   at: unref (core/string/string_name.cpp:116)
+ERROR: BUG: Unreferenced static string to 0: valign
+   at: unref (core/string/string_name.cpp:116)
+ERROR: BUG: Unreferenced static string to 0: @warning_ignore_restore
+   at: unref (core/string/string_name.cpp:116)
+ERROR: BUG: Unreferenced static string to 0: @warning_ignore_start
+   at: unref (core/string/string_name.cpp:116)
+ERROR: BUG: Unreferenced static string to 0: @warning_ignore
+   at: unref (core/string/string_name.cpp:116)
+ERROR: BUG: Unreferenced static string to 0: @export_range
+   at: unref (core/string/string_name.cpp:116)
+ERROR: BUG: Unreferenced static string to 0: @export_multiline
+   at: unref (core/string/string_name.cpp:116)
+ERROR: BUG: Unreferenced static string to 0: @icon
+   at: unref (core/string/string_name.cpp:116)
+WARNING: A Thread object is being destroyed without its completion having been realized.
+Please call wait_to_finish() on it to ensure correct cleanup.
+   at: ~Thread (core/os/thread.cpp:102)
+ERROR: 7 RID allocations of type '23NavMeshGeometryParser2D' were leaked at exit.
+ERROR: 6 RID allocations of type '23NavMeshGeometryParser3D' were leaked at exit.
+ERROR: Pages in use exist at exit in PagedAllocator: N7Variant5Pools11BucketLargeE
+   at: ~PagedAllocator (./core/templates/paged_allocator.h:169)
+^C

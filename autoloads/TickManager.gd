@@ -3,30 +3,21 @@ extends Node
 ## accumulation. Emits `tick_processed` and calls `_on_world_tick()` on all
 ## nodes in the "tickable" group.
 ##
-## SMOOTH FRAME POLICY:
-## The frame budget is ALWAYS 16ms (60fps). At high speeds, we process as many
-## ticks as fit within that budget. Excess backlog is drained so it never
-## accumulates beyond a small window. This ensures:
-## - No visible freezing or stuttering at any speed
-## - Maximum sim throughput per frame (limited by per-tick cost)
-## - Smooth 60fps rendering at all times
-##
-## At 100x with 5ms/tick, we get ~3 ticks/frame × 60fps = 180 ticks/sec.
-## That's 180x effective speed — well above the 100x target.
-## If ticks are cheaper (1ms), we get ~16 ticks/frame × 60fps = 960 ticks/sec.
+## NO THROTTLE POLICY:
+## The speed setting IS the speed. 100x means 100 ticks per second.
+## No frame budgets, no caps, no throttling. Process every accumulated tick.
+## If the sim can't keep up, frames run longer — but the speed is honest.
 
 signal tick_processed(tick_number: int)
 
 const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base)
-const MAX_TICKS_PER_FRAME: int = 500  # Hard safety cap
 
-## Frame budget: ALWAYS 16ms for 60fps. No exceptions.
-## At high speed we process MORE ticks per 16ms, not longer frames.
-const FRAME_BUDGET_USEC: int = 16_000  # 16ms = 60fps ALWAYS
+## Safety cap only — prevents infinite loop if something goes wrong.
+## 1000 ticks/frame at 100x = 10 seconds of sim per frame at 60fps.
+const MAX_TICKS_PER_FRAME: int = 1000
 
 ## How often (in ticks) to force-rebuild the tickable cache.
 const TICKABLE_CACHE_REBUILD_INTERVAL: int = 300
-const BACKLOG_WARNING_INTERVAL_MS: int = 5000
 
 var current_tick: int = 0
 var _accumulated_time: float = 0.0
@@ -47,15 +38,10 @@ var _current_speed_index: int = 0
 
 var _last_frame_ticks: int = 0
 var debug_last_tick_batch_usec: int = 0
-var _last_backlog_warning_ms: int = -1_000_000
 
 var ticks_processed_last_frame: int = 0
 var tickables_called_last_frame: int = 0
 var max_ticks_processed_seen: int = 0
-
-## Measured average tick cost (microseconds), updated each frame
-var _avg_tick_usec: int = 5000  # Start assuming 5ms/tick
-var _measured_tick_usec: int = 0
 
 var batch_stats: Dictionary = {
 	"total_ticks": 0,
@@ -85,57 +71,26 @@ func _process(delta: float) -> void:
 		tickables_called_last_frame = 0
 		return
 
-	# Accumulate scaled time
+	# Accumulate scaled time — every tick is honest, nothing dropped
 	_accumulated_time += delta * _speed_multiplier
-
-	# BACKLOG DRAIN: Cap accumulated time to prevent freeze spirals.
-	# At high speed, if the sim can't keep up, we drain excess rather than
-	# letting it accumulate into multi-second freezes. The cap is generous:
-	# enough for 2 frames worth of ticks at the measured rate.
-	var max_backlog: float = maxf(2.0, float(_avg_tick_usec) * float(MAX_TICKS_PER_FRAME) / 1_000_000.0)
-	if _accumulated_time > max_backlog:
-		_accumulated_time = max_backlog
 
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
 	var tickables_this_frame: int = 0
 
-	# Process ticks within the 16ms frame budget
+	# Process ALL accumulated ticks. No frame budget. No throttle.
+	# The speed setting IS the speed.
 	while _accumulated_time >= TICK_STEP and ticks_this_frame < MAX_TICKS_PER_FRAME:
 		_accumulated_time -= TICK_STEP
 		current_tick += 1
 		ticks_this_frame += 1
 		tickables_this_frame += _dispatch_tick(current_tick)
 
-		# Check budget every 2 ticks (low overhead, responsive)
-		if ticks_this_frame % 2 == 0:
-			var elapsed: int = Time.get_ticks_usec() - start_time
-			if elapsed > FRAME_BUDGET_USEC:
-				break
-
-	# Update measured tick cost (exponential moving average)
-	var total_frame_usec: int = Time.get_ticks_usec() - start_time
-	if ticks_this_frame > 0:
-		var measured: int = total_frame_usec / ticks_this_frame
-		_avg_tick_usec = (_avg_tick_usec * 3 + measured) / 4  # 75% old, 25% new
-
-	# Backlog warning (debug only)
-	if _accumulated_time > 10.0 and OS.is_debug_build():
-		var now_ms: int = Time.get_ticks_msec()
-		if now_ms - _last_backlog_warning_ms >= BACKLOG_WARNING_INTERVAL_MS:
-			_last_backlog_warning_ms = now_ms
-			push_warning("[TickManager] Backlog %.1f ticks; avg_tick=%.1fms speed=%.0fx effective=%.0fx" % [
-				_accumulated_time / TICK_STEP,
-				float(_avg_tick_usec) / 1000.0,
-				_speed_multiplier,
-				float(ticks_this_frame) / maxf(delta, 0.001)
-			])
-
 	_last_frame_ticks = ticks_this_frame
 	ticks_processed_last_frame = ticks_this_frame
 	tickables_called_last_frame = tickables_this_frame
 	max_ticks_processed_seen = maxi(max_ticks_processed_seen, ticks_this_frame)
-	debug_last_tick_batch_usec = total_frame_usec
+	debug_last_tick_batch_usec = Time.get_ticks_usec() - start_time
 
 
 func _dispatch_tick(tick: int) -> int:
@@ -256,12 +211,10 @@ func reset() -> void:
 	current_tick = 0
 	_accumulated_time = 0.0
 	_last_frame_ticks = 0
-	_last_backlog_warning_ms = -1_000_000
 	debug_last_tick_batch_usec = 0
 	ticks_processed_last_frame = 0
 	tickables_called_last_frame = 0
 	max_ticks_processed_seen = 0
-	_avg_tick_usec = 5000
 	_tickable_cache.clear()
 	_tickable_cache_dirty = true
 	_tickable_cache_last_rebuild_tick = -TICKABLE_CACHE_REBUILD_INTERVAL

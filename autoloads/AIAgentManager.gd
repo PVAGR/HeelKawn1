@@ -860,12 +860,13 @@ func _on_world_tick(tick: int) -> void:
 			_last_settlement_ai_update_tick = tick
 	
 	# Update agents at specified frequency
-	if tick - last_update_tick >= update_frequency * stride:
+	var _stride: int = maxi(1, int(gs))
+	if tick - last_update_tick >= update_frequency * _stride:
 		_update_all_agents()
 		last_update_tick = tick
 	
 	# Spawn new agents if under limit and conditions are met
-	if tick % (600 * stride) == 0:  # Check every 600 ticks at base cadence
+	if tick % (600 * _stride) == 0:  # Check every 600 ticks at base cadence
 		_maintain_agent_population()
 
 

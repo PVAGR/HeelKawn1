@@ -208,7 +208,10 @@ static func _is_build_job(jt: int) -> bool:
 
 
 static func _root_node(name: String) -> Node:
-	var ml = Engine.get_main_loop()
-	if ml != null and ml.has_node("/root/" + name):
-		return ml.get_node("/root/" + name)
-	return null
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return null
+	var root := tree.root
+	if root == null:
+		return null
+	return root.get_node_or_null("/root/" + name)

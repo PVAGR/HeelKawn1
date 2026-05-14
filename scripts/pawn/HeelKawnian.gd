@@ -2894,7 +2894,9 @@ func _on_world_tick(_tick: int) -> void:
 		_validate_or_dissolve_cohort()
 		_refresh_or_decay_cohort_stability()
 	# Apply meaning-based behavior density modifiers (Phase 4)
-	_apply_meaning_behavior_modifiers()
+	# Throttled: only refresh every 10 ticks to reduce per-tick cost
+	if posmod(GameManager.tick_count + pid, 10) == 0:
+		_apply_meaning_behavior_modifiers()
 	if draft_mode:
 		_engage_enemies()
 	if _trace_ai_slice:
@@ -2949,13 +2951,13 @@ func _fast_forward_tick_stride() -> int:
 	## Stride only applies to IDLE pawns (expensive job claiming).
 	## WORKING/SLEEPING/EATING pawns always tick.
 	if gs >= 100.0:
-		return 6
-	if gs >= 50.0:
-		return 4
-	if gs >= 26.0:
 		return 3
-	if gs >= 12.0:
+	if gs >= 50.0:
 		return 2
+	if gs >= 26.0:
+		return 2
+	if gs >= 12.0:
+		return 1
 	return 1
 
 
@@ -2966,11 +2968,11 @@ func _job_claim_interval_for_speed() -> int:
 		return 1
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 4
-	if gs >= 50.0:
-		return 3
-	if gs >= 26.0:
 		return 2
+	if gs >= 50.0:
+		return 2
+	if gs >= 26.0:
+		return 1
 	return 1
 
 
@@ -3721,9 +3723,11 @@ func _tick_idle() -> void:
 	# mining stone while everyone starves.
 	
 	# Job claiming: pawns act when they need to, not when a scheduler says they can.
-	# Hungry pawns or pawns with no other options claim every tick.
+	# Hungry pawns ALWAYS claim every tick — need drives action.
 	# Well-fed pawns spread claims slightly to reduce CPU at ultra speed.
-	var claim_iv: int = 1  # Always claim every tick — pawns act on their needs
+	var claim_iv: int = _job_claim_interval_for_speed()
+	if data != null and data.hunger <= HUNGER_EAT_THRESHOLD:
+		claim_iv = 1  # Hungry pawns never wait
 	var claim_phase: int = 0
 	if data != null:
 		claim_phase = posmod(int(data.id), claim_iv)
@@ -3847,9 +3851,11 @@ func _tick_idle() -> void:
 			_need_urgency_scale = clampf(data.hunger / HUNGER_EAT_THRESHOLD, 0.0, 1.0)
 		elif data.rest <= REST_SLEEP_THRESHOLD:
 			_need_urgency_scale = clampf(data.rest / REST_SLEEP_THRESHOLD, 0.0, 1.0)
-		if not is_job_history_critical(j.type):
-			var rk_hist: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
-			base_bias += int(resolve_history_offset_for_region.call(rk_hist))
+		# Job history bias: skip at high speed (minor bonus, per-job region lookup)
+		if GameManager.game_speed < 50.0:
+			if not is_job_history_critical(j.type):
+				var rk_hist: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
+				base_bias += int(resolve_history_offset_for_region.call(rk_hist))
 		if affinity_key != "" and _job_matches_affinity(j.type, affinity_key):
 			base_bias += AFFINITY_JOB_PRIORITY_BONUS
 		# Profession-specific job priority: pawns strongly prefer jobs matching their role
@@ -3887,15 +3893,20 @@ func _tick_idle() -> void:
 			utility_bias = int(round((_utility_score_normalized(action_key, utility_context, utility_cache) - 0.5) * float(UTILITY_JOB_PRIORITY_BIAS_RANGE)))
 			utility_bias_cache[action_key] = utility_bias
 		base_bias += utility_bias
-		base_bias += data.kinship_job_priority_bonus(j.work_tile)
+		# Kinship bonus: skip at high speed (max +3, negligible at 100x)
+		if GameManager.game_speed < 50.0:
+			base_bias += data.kinship_job_priority_bonus(j.work_tile)
 		base_bias += _goal_priority_bias_for_job(j.type)
-		base_bias += _short_horizon_bias_for_job(j)
-		# PERSONAL LEARNING: confidence from own success/failure history
-		var personal_conf: float = data.personal_confidence_for_job(int(j.type))
-		if personal_conf < 0.3:
-			base_bias -= 3  # Bad personal track record → avoid
-		elif personal_conf > 0.7:
-			base_bias += 2  # Good personal track record → prefer
+		# Short horizon bias: skip at high speed (minor bonus, expensive per-job lookup)
+		if GameManager.game_speed < 50.0:
+			base_bias += _short_horizon_bias_for_job(j)
+		# PERSONAL LEARNING: skip at high speed (minor bonus, per-job lookup)
+		if GameManager.game_speed < 50.0:
+			var personal_conf: float = data.personal_confidence_for_job(int(j.type))
+			if personal_conf < 0.3:
+				base_bias -= 3  # Bad personal track record → avoid
+			elif personal_conf > 0.7:
+				base_bias += 2  # Good personal track record → prefer
 		var learning_weight: float = _learning_weight_for_job(j.type)
 		if absf(learning_weight - 1.0) >= 0.01:
 			base_bias += int(round((learning_weight - 1.0) * 4.0))

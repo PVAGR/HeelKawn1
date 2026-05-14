@@ -105,3 +105,4 @@ Recorded after 4100 ticks (11.4 years)
 [HeelKawnianData] Rhea unlocked basic gathering branch
 [DayNight] Year 1 · Day 8/50 begins (tick 4200)
 [HeelKawnianData] Mary Wrighter unlocked basic combat branch
+[DayNight] Year 1 · Day 9/50 begins (tick 4800)

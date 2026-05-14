@@ -15,7 +15,7 @@ const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base; stable f
 ## SAFETY: Maximum ticks processed in one render frame (bounded burst).
 ## At 100x, every tick fans out to all tickable systems and pawns, so keep the
 ## burst cap low enough that input/UI can breathe between catch-up batches.
-const MAX_TICKS_PER_FRAME: int = 100
+const MAX_TICKS_PER_FRAME: int = 200
 
 ## Adaptive Throttle: Target frame time budget (microseconds).
 ## 16ms = 16000 usec = 60fps target. The sim must yield to the renderer
@@ -114,16 +114,19 @@ func _process(delta: float) -> void:
 	var ticks_this_frame: int = 0
 	var tickables_this_frame: int = 0
 
-	# Frame budget: 50ms at normal speeds, 100ms at high speeds.
-	# 100ms keeps the window responsive (well under Windows' 5s kill threshold)
-	# while allowing ~10 ticks/frame for backlog catch-up at 10ms/tick.
+	# Frame budget: allow more time at higher speeds to process more ticks.
+	# At 100x we accept 5fps (200ms) to get maximum sim throughput.
+	# At 26x+ we accept 12fps (83ms).
+	# At 1x we target 60fps (16ms).
 	var frame_budget_usec: int = _get_frame_budget_usec()
-	# At high speed, allow larger frame budget to process more ticks per frame.
-	# 60fps at 1x, but at 100x we accept lower FPS to get more sim ticks through.
 	if _speed_multiplier >= 100.0:
-		frame_budget_usec = mini(frame_budget_usec, 100_000)  # 100ms = 10fps at 100x
+		frame_budget_usec = mini(frame_budget_usec, 200_000)  # 200ms = 5fps at 100x
+	elif _speed_multiplier >= 50.0:
+		frame_budget_usec = mini(frame_budget_usec, 100_000)  # 100ms = 10fps at 50x
 	elif _speed_multiplier >= 26.0:
-		frame_budget_usec = mini(frame_budget_usec, 50_000)  # 50ms = 20fps at 26x+
+		frame_budget_usec = mini(frame_budget_usec, 83_000)  # 83ms = 12fps at 26x+
+	elif _speed_multiplier >= 12.0:
+		frame_budget_usec = mini(frame_budget_usec, 50_000)  # 50ms = 20fps at 12x+
 	else:
 		frame_budget_usec = mini(frame_budget_usec, TARGET_FRAME_TIME_USEC)  # 16ms = 60fps at 1x
 
@@ -133,13 +136,14 @@ func _process(delta: float) -> void:
 		ticks_this_frame += 1
 		tickables_this_frame += _dispatch_tick(current_tick)
 
-		# Critical: if this single tick exceeded the frame budget, yield immediately
+		# If this single tick exceeded the entire frame budget, yield immediately.
+		# Only break on truly catastrophic single-tick spikes (e.g. construction_seed).
 		var single_tick_elapsed: int = Time.get_ticks_usec() - start_time
-		if single_tick_elapsed > frame_budget_usec and ticks_this_frame >= 1:
+		if single_tick_elapsed > frame_budget_usec * 2 and ticks_this_frame >= 1:
 			break
 
-		# Check time every 2 ticks — single tick can exceed budget (e.g. construction_seed)
-		if ticks_this_frame % 2 == 0:
+		# Check time every 4 ticks — balances responsiveness vs overhead
+		if ticks_this_frame % 4 == 0:
 			var elapsed: int = Time.get_ticks_usec() - start_time
 			if elapsed > frame_budget_usec:
 				break  # Yield to renderer — remaining ticks deferred to next frame

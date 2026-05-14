@@ -72,9 +72,9 @@ const SCHEMA: Array[Dictionary] = [
 		"section": "Simulation",
 		"type": "int",
 		"min": 10,
-		"max": 100,
+		"max": 200,
 		"step": 10,
-		"default": 100,
+		"default": 200,
 	},
 	{
 		"key": "frame_budget_ms",

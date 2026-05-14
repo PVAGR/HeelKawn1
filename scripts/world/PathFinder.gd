@@ -15,6 +15,7 @@ const NEIGHBOR_OFFSETS: Array[Vector2i] = [
 	Vector2i( 1,  1), Vector2i(-1,  1), Vector2i( 1, -1), Vector2i(-1, -1),
 ]
 const PATH_CACHE_MAX_ENTRIES: int = 512
+const COMPONENT_FLUSH_INTERVAL: int = 5  # Min ticks between component recomputes
 
 const _WM = preload("res://autoloads/WorldMemory.gd")
 
@@ -158,16 +159,21 @@ func set_job_construction_reservations_batch(tiles: Array, enabled: bool, data: 
 
 
 ## Flush deferred component computation. Call once per tick (or once per frame).
+## Throttled: at most once per COMPONENT_FLUSH_INTERVAL ticks.
 ## Returns true if a recompute happened.
 func flush_component_dirty(data: WorldData) -> bool:
 	if not _components_dirty:
 		return false
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	if _last_compute_tick >= 0 and tick - _last_compute_tick < COMPONENT_FLUSH_INTERVAL:
+		return false
+	_last_compute_tick = tick
 	# Diagnostic output when recompute actually occurs
 	if OS.is_debug_build() and _components_dirty_tick != _last_dirty_flush_report_tick:
 		_last_dirty_flush_report_tick = _components_dirty_tick
-		var age: int = (GameManager.tick_count if GameManager != null else -1) - _components_dirty_tick
+		var age: int = tick - _components_dirty_tick
 		print("[PF_DIRTY_FLUSH] tick=%d reason=%s age=%s detail=%s caller=%s" % [
-			GameManager.tick_count if GameManager != null else -1,
+			tick,
 			_components_dirty_reason,
 			str(age) if _components_dirty_tick >= 0 else "unknown",
 			str(_components_dirty_detail),

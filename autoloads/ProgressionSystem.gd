@@ -3,6 +3,7 @@ extends Node
 ## Cumulative impact from completed jobs (deterministic). Used for reputation / tier labels.
 
 var impact_by_pawn: Dictionary = {}
+var _last_print_tick: int = -1
 
 
 func record_impact(pawn_id: int, amount: int, job_type_name: String) -> void:
@@ -11,10 +12,13 @@ func record_impact(pawn_id: int, amount: int, job_type_name: String) -> void:
 	var cur: int = int(impact_by_pawn.get(pawn_id, 0))
 	impact_by_pawn[pawn_id] = cur + amount
 	if OS.is_debug_build():
-		print(
-				"[Progression] pawn=%d +%d (%s) total=%d"
-				% [pawn_id, amount, job_type_name, cur + amount]
-		)
+		var tick: int = GameManager.tick_count if GameManager != null else -1
+		if _last_print_tick < 0 or tick - _last_print_tick >= 60:
+			_last_print_tick = tick
+			print(
+					"[Progression] pawn=%d +%d (%s) total=%d"
+					% [pawn_id, amount, job_type_name, cur + amount]
+			)
 
 
 func get_impact(pawn_id: int) -> int:

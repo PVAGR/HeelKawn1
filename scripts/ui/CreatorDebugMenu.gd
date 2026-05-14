@@ -721,7 +721,7 @@ func _report_ai_diagnostic() -> void:
 	if sd.has("section_us"):
 		var su: Dictionary = sd["section_us"] as Dictionary
 		var keys: Array = su.keys()
-		keys.sort_cab(func(a, b): return int(su.get(a, 0)) > int(su.get(b, 0)))
+		keys.sort_custom(func(a, b): return int(su.get(a, 0)) > int(su.get(b, 0)))
 		for k in keys:
 			var us: int = int(su.get(k, 0))
 			if us > 50:
@@ -750,7 +750,9 @@ func _report_ai_diagnostic() -> void:
 	print("--- MINING REACT ---")
 	var wr: Node = main_node.get_node_or_null("WorldViewport/WorldReact") if main_node != null else null
 	if wr != null:
-		print("  Pending: %s | In Progress: %s" % [str(wr.get("_mine_scan_pending", false)), str(wr.get("_mine_scan_in_progress", false))])
+		var mp: bool = wr.get("_mine_scan_pending") if "_mine_scan_pending" in wr else false
+		var mi: bool = wr.get("_mine_scan_in_progress") if "_mine_scan_in_progress" in wr else false
+		print("  Pending: %s | In Progress: %s" % [str(mp), str(mi)])
 	else:
 		print("  WorldReact not found on Main")
 	

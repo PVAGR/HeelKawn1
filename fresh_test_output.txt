@@ -89,3 +89,19 @@ WARNING: SeedGallery disabled: missing Panel or Grid nodes.
 [DayNight] Year 1 · Day 3/50 begins (tick 1200)
 [DayNight] Year 1 · Day 4/50 begins (tick 1800)
 [DayNight] Year 1 · Day 5/50 begins (tick 2400)
+[ChronicleExport] Saved chronicle: chronicle_20260514T023835_tick_3000.txt (296 events)
+[DayNight] Year 1 · Day 6/50 begins (tick 3000)
+[HeelKawnianData] Catherine Bakerton unlocked basic farming branch
+[DayNight] Year 1 · Day 7/50 begins (tick 3600)
+[WorldAI] Civilization advanced to age: DAWN
+[WorldAI] Civilization advanced to age: TRIBAL
+[HeelKawnianData] Alice Fisherville unlocked basic gathering branch
+
+CULTURE MILESTONE: Influence hardened into history.
+Milestone Score: 8/5
+Recorded after 4100 ticks (11.4 years)
+
+[Legacy] Historical milestone reached via culture condition.
+[HeelKawnianData] Rhea unlocked basic gathering branch
+[DayNight] Year 1 · Day 8/50 begins (tick 4200)
+[HeelKawnianData] Mary Wrighter unlocked basic combat branch

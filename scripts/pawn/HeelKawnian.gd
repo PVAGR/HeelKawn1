@@ -384,6 +384,18 @@ var _pick_shape: CollisionShape2D = null
 static var _s_visual_sprite_texture: Texture2D = null
 var _decision: HeelKawnianDecision = null  # Delegated decision engine
 
+## ── Urge Architecture ──
+## Feature flag: when true, _tick_idle uses the urge-driven architecture.
+## When false, uses the legacy procedural checklist.
+const USE_URGE_ARCHITECTURE: bool = false
+var _urge_queue: UrgeQueue = null
+var _body_drive: BodyDrive = null
+var _memory_drive: MemoryDrive = null
+var _social_drive: SocialDrive = null
+var _ambition_drive: AmbitionDrive = null
+var _curiosity_drive: CuriosityDrive = null
+var _last_urge_log_tick: int = -999999
+
 var _world: World
 var _brain_instance: HeelKawnPawnBrain = null
 var _state: int = State.IDLE
@@ -1183,6 +1195,14 @@ func _ready() -> void:
 	## Spawner calls [method bind] before [code]add_child[/code] so [member data] / [member _world] exist here.
 	## [signal GameManager.game_tick] is deferred until after this node finishes [method _ready] (init order).
 	_decision = HeelKawnianDecision.new()
+	# Urge architecture initialization
+	if USE_URGE_ARCHITECTURE:
+		_urge_queue = UrgeQueue.new()
+		_body_drive = BodyDrive.new()
+		_memory_drive = MemoryDrive.new()
+		_social_drive = SocialDrive.new()
+		_ambition_drive = AmbitionDrive.new()
+		_curiosity_drive = CuriosityDrive.new()
 	_ensure_visual_sprite()
 	_ensure_click_area()
 	_init_footstep_particles()
@@ -3039,7 +3059,439 @@ func _force_panic_sleep() -> void:
 	_begin_sleeping()
 
 
+## ── Urge-Driven Idle Tick ──
+## When USE_URGE_ARCHITECTURE is true, this replaces the procedural _tick_idle.
+## Drives push urges → queue resolves → body acts on the strongest.
+func _tick_idle_urge() -> void:
+	if _world == null or _world.pathfinder == null:
+		return
+	if not data.can_work():
+		return
+	if _urge_queue == null:
+		return
+
+	var now_tick: int = GameManager.tick_count if GameManager != null else 0
+
+	# 1. Emergency interrupts (same as legacy — body drive handles these,
+	#    but we also need to handle carrying constraints)
+	if data.hunger <= HUNGER_EMERGENCY and data.is_carrying() and Item.is_food(data.carrying):
+		_eat_from_hand()
+		return
+	if data.hunger <= HUNGER_EMERGENCY and data.is_carrying():
+		data.clear_carry()
+
+	# 2. Haul carried item (physical constraint, not urge-driven)
+	if data.is_carrying():
+		if StockpileManager._zones.is_empty() and _is_build_material(data.carrying):
+			pass  # Keep carrying — skip to job claiming
+		else:
+			if _current_job != null and _current_job.type == _Job.Type.TRADE_HAUL and _current_job.trade_to != null:
+				_begin_haul_to_forced_zone(_current_job.trade_to)
+			else:
+				_begin_haul_to_stockpile()
+			return
+
+	# 3. Periodic gear check (every 200 ticks, same as legacy)
+	if now_tick % 200 == int(data.id) % 200:
+		if CraftingSystem != null and CraftingSystem.has_method("try_equip_from_stockpile"):
+			CraftingSystem.try_equip_from_stockpile(data)
+
+	# 4. Drive pulse: generate urges from all drives
+	_pulse_drives(now_tick)
+
+	# 5. Resolve: strongest urge wins
+	var urge: Urge = _urge_queue.resolve(now_tick)
+	if urge == null:
+		_start_wander()
+		return
+
+	# 6. Log urge resolution (throttled)
+	if now_tick - _last_urge_log_tick >= 100:
+		_last_urge_log_tick = now_tick
+		if GameManager.verbose_logs():
+			print("[Urge] %s → %s" % [data.display_name, urge.describe()])
+
+	# 7. Execute urge
+	_execute_urge(urge)
+
+
+## Pulse all drives and push their urges into the queue.
+func _pulse_drives(tick: int) -> void:
+	_urge_queue.clear()
+	var game_speed: float = GameManager.game_speed if GameManager != null else 1.0
+
+	# BodyDrive: every tick (survival is always checked)
+	if _body_drive != null:
+		var awareness: Dictionary = _refresh_awareness()
+		var body_urges: Array[Urge] = _body_drive.pulse(data, awareness, tick)
+		for u in body_urges:
+			_urge_queue.push(u)
+
+	# MemoryDrive: throttled
+	if _memory_drive != null and _memory_drive.should_pulse(tick, game_speed):
+		var consciousness: Node = get_node_or_null("/root/PawnConsciousness")
+		var memory_urges: Array[Urge] = _memory_drive.pulse(data, tick, consciousness)
+		for u in memory_urges:
+			_urge_queue.push(u)
+
+	# SocialDrive: throttled
+	if _social_drive != null and _social_drive.should_pulse(tick, game_speed):
+		var nearby: Array = _scan_nearby_pawns_for_social()
+		var social_urges: Array[Urge] = _social_drive.pulse(data, nearby, tick)
+		for u in social_urges:
+			_urge_queue.push(u)
+
+	# AmbitionDrive: throttled
+	if _ambition_drive != null and _ambition_drive.should_pulse(tick, game_speed):
+		var ambition_urges: Array[Urge] = _ambition_drive.pulse(data, tick)
+		for u in ambition_urges:
+			_urge_queue.push(u)
+
+	# CuriosityDrive: throttled
+	if _curiosity_drive != null and _curiosity_drive.should_pulse(tick, game_speed):
+		var unexplored: Array = _scan_unexplored_tiles()
+		var curiosity_urges: Array[Urge] = _curiosity_drive.pulse(data, unexplored, tick)
+		for u in curiosity_urges:
+			_urge_queue.push(u)
+
+
+## Execute a resolved urge — dispatch to the appropriate action.
+func _execute_urge(urge: Urge) -> void:
+	match urge.type:
+		# ── Survival ──
+		Urge.Type.EAT_FROM_HAND:
+			_eat_from_hand()
+		Urge.Type.EAT:
+			if not _maybe_start_eating():
+				if not _maybe_direct_forage():
+					_urge_queue.release_commitment()
+					_start_wander()
+		Urge.Type.DRINK:
+			if not _maybe_start_drinking():
+				_urge_queue.release_commitment()
+				_start_wander()
+		Urge.Type.SLEEP:
+			if not _maybe_start_sleeping():
+				_urge_queue.release_commitment()
+				_start_wander()
+		Urge.Type.WARM:
+			_seek_warmth_from_urge(urge)
+		Urge.Type.HEAL:
+			# Heal urge → try apothecary, else rest
+			if not _maybe_start_sleeping():
+				_urge_queue.release_commitment()
+		Urge.Type.FLEE:
+			_flee_to_safety_from_urge(urge)
+		Urge.Type.FORAGE:
+			if not _maybe_direct_forage():
+				_urge_queue.release_commitment()
+				_start_wander()
+
+		# ── Emotional ──
+		Urge.Type.MOURN:
+			if not _try_grave_pilgrimage():
+				_urge_queue.release_commitment()
+		Urge.Type.CONFRONT:
+			if urge.target_pawn_id >= 0:
+				var target: HeelKawnian = _find_pawn_by_id(urge.target_pawn_id)
+				if target != null and is_instance_valid(target) and target.data != null:
+					var near_tile: Vector2i = _pick_passable_near_tile(data.tile_pos, target.data.tile_pos)
+					if near_tile.x >= 0:
+						autonomy_draft_goto(near_tile, "grudge_confront", urge.target_pawn_id)
+						return
+			_urge_queue.release_commitment()
+		Urge.Type.AVOID:
+			_flee_to_safety_from_urge(urge)
+		Urge.Type.PILGRIMAGE:
+			if not _try_start_pilgrimage():
+				_urge_queue.release_commitment()
+		Urge.Type.REMEMBER:
+			if urge.context.has("origin_settlement"):
+				_maybe_diaspora_homesickness(GameManager.tick_count if GameManager != null else 0)
+			elif not _maybe_follow_dream_nudge():
+				_urge_queue.release_commitment()
+		Urge.Type.DREAM_NUDGE:
+			if not _maybe_follow_dream_nudge():
+				_urge_queue.release_commitment()
+
+		# ── Social ──
+		Urge.Type.SOCIALIZE:
+			if not _try_autonomy_social_seek():
+				_urge_queue.release_commitment()
+		Urge.Type.TEACH:
+			if not _maybe_start_teaching():
+				_urge_queue.release_commitment()
+		Urge.Type.CHALLENGE:
+			if not _maybe_start_challenge():
+				_urge_queue.release_commitment()
+		Urge.Type.AFFILIATE:
+			if not _try_heelkawnian_affiliation_action():
+				_urge_queue.release_commitment()
+		Urge.Type.GUARD:
+			if data.current_profession == HeelKawnianData.Profession.WARRIOR:
+				if not _maybe_warrior_patrol():
+					_urge_queue.release_commitment()
+			else:
+				_urge_queue.release_commitment()
+
+		# ── Growth ──
+		Urge.Type.WORK, Urge.Type.BUILD, Urge.Type.MASTER, Urge.Type.LEGACY, Urge.Type.FORGE, Urge.Type.INNOVATE:
+			_claim_job_matching_urge(urge)
+		Urge.Type.LEAD:
+			if not _maybe_warrior_patrol():
+				_claim_job_matching_urge(urge)
+
+		# ── Discovery ──
+		Urge.Type.EXPLORE:
+			if urge.target_tile.x >= -999000:
+				_start_wander_toward(urge.target_tile)
+			else:
+				_start_wander()
+		Urge.Type.REDISCOVER:
+			_maybe_attempt_rediscovery()
+		Urge.Type.WANDER:
+			_start_wander()
+
+
+## Seek warmth from a WARM urge (target_tile from awareness).
+func _seek_warmth_from_urge(urge: Urge) -> void:
+	if data == null:
+		return
+	var target: Vector2i = urge.target_tile
+	if target.x < -999000:
+		# No specific target — just wander
+		_start_wander()
+		return
+	if target.x == data.tile_pos.x and target.y == data.tile_pos.y:
+		# Already at fire
+		return
+	var path: Array[Vector2i] = _path_for_pawn(target)
+	if not path.is_empty():
+		_state = State.GOING_TO_EAT  # Reuse walking state
+		_target_tile = target
+		_start_path(path)
+
+
+## Flee to safety from a FLEE/AVOID urge.
+func _flee_to_safety_from_urge(urge: Urge) -> void:
+	if data == null:
+		return
+	var target: Vector2i = urge.target_tile
+	if target.x < -999000:
+		# No specific target — wander away
+		_start_wander()
+		return
+	# For AVOID urges, the target is the DANGER — flee AWAY from it
+	var flee_dir: Vector2i = Vector2i(
+		data.tile_pos.x + (1 if data.tile_pos.x > target.x else -1),
+		data.tile_pos.y + (1 if data.tile_pos.y > target.y else -1)
+	)
+	var path: Array[Vector2i] = _path_for_pawn(flee_dir)
+	if not path.is_empty():
+		_state = State.FLEEING
+		_start_path(path)
+	else:
+		_start_wander()
+
+
+## Claim a job matching the urge type.
+func _claim_job_matching_urge(urge: Urge) -> void:
+	var filter: Callable = _job_filter_for_urge(urge)
+	var priority_bonus: Callable = _simplified_priority_cb(urge)
+	var job: Job = null
+	if JobManager != null:
+		job = JobManager.claim_next_for(self, filter, priority_bonus)
+	if job != null:
+		_begin_job(job)
+	else:
+		# No matching job — release commitment and try next urge
+		_urge_queue.release_commitment()
+		var next: Urge = _urge_queue.resolve(GameManager.tick_count if GameManager != null else 0)
+		if next != null and next != urge:
+			_execute_urge(next)
+		else:
+			_start_wander()
+
+
+## Build a job filter that matches the urge type.
+func _job_filter_for_urge(urge: Urge) -> Callable:
+	var base_passes: Callable = func(j: Job) -> bool: return true
+	match urge.type:
+		Urge.Type.WORK:
+			if urge.context.has("job_category"):
+				var cat: String = str(urge.context["job_category"])
+				if cat == "food":
+					return func(j: Job) -> bool:
+						return j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH or j.type == _Job.Type.COOK_MEAT or j.type == _Job.Type.COOK_FISH or j.type == _Job.Type.COOK_BERRIES or j.type == _Job.Type.HARVEST_CROPS or j.type == _Job.Type.PLANT_SEEDS
+				elif cat == "gathering":
+					return func(j: Job) -> bool:
+						return j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.GATHER_FLINT or j.type == _Job.Type.GATHER_STICK or j.type == _Job.Type.MINE or j.type == _Job.Type.MINE_WALL
+				elif cat == "healing":
+					return func(j: Job) -> bool:
+						return j.type == _Job.Type.BUILD_APOTHECARY or j.type == _Job.Type.TEACH_SKILL
+		Urge.Type.BUILD:
+			if urge.context.has("job_category") and str(urge.context["job_category"]) == "housing":
+				return func(j: Job) -> bool:
+					return j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH or j.type == _Job.Type.BUILD_FIRE_PIT
+			else:
+				return func(j: Job) -> bool:
+					return _is_structure_build_job(j.type)
+		Urge.Type.MASTER:
+			# Practice = any job matching highest skill
+			return base_passes
+		Urge.Type.LEGACY:
+			return base_passes
+		Urge.Type.FORGE:
+			return base_passes
+		Urge.Type.INNOVATE:
+			return base_passes
+	return base_passes
+
+
+## Simplified priority callback that uses urge context instead of recomputing everything.
+func _simplified_priority_cb(urge: Urge) -> Callable:
+	var food_emergency: bool = HeelKawnian._s_food_emergency
+	return func(j: Job) -> int:
+		var base: int = 0
+		# Urgency gates (same as legacy)
+		if data.hunger <= HUNGER_EMERGENCY:
+			if not _is_food_job(j.type):
+				return -999
+		elif data.hunger <= HUNGER_EAT_THRESHOLD:
+			if not _is_food_job(j.type):
+				base -= 12
+		# Profession bonus
+		if data.current_profession != HeelKawnianData.Profession.NONE:
+			base += _profession_bonus_for_job(j.type)
+		# Urge alignment bonus: if the job matches the urge, +3
+		if _job_matches_urge(j, urge):
+			base += 3
+		# Settlement bias
+		base += data.kinship_job_priority_bonus(j.work_tile)
+		# Material crisis
+		if not food_emergency and _is_structure_build_job(j.type):
+			base += 6
+		return base
+
+
+func _is_food_job(jtype: int) -> bool:
+	return jtype == _Job.Type.FORAGE or jtype == _Job.Type.HUNT or jtype == _Job.Type.FISH or jtype == _Job.Type.COOK_MEAT or jtype == _Job.Type.COOK_FISH or jtype == _Job.Type.COOK_BERRIES or jtype == _Job.Type.HARVEST_CROPS or jtype == _Job.Type.PLANT_SEEDS
+
+
+func _profession_bonus_for_job(jtype: int) -> int:
+	if data == null:
+		return 0
+	var prof: int = data.current_profession
+	if prof == HeelKawnianData.Profession.NONE:
+		return 0
+	var bonus: int = 5
+	match prof:
+		HeelKawnianData.Profession.FARMER:
+			if jtype == _Job.Type.FORAGE or jtype == _Job.Type.PLANT_SEEDS or jtype == _Job.Type.HARVEST_CROPS:
+				return bonus
+		HeelKawnianData.Profession.BUILDER:
+			if _is_structure_build_job(jtype):
+				return bonus
+		HeelKawnianData.Profession.GATHERER:
+			if jtype == _Job.Type.FORAGE or jtype == _Job.Type.CHOP or jtype == _Job.Type.GATHER_FLINT or jtype == _Job.Type.GATHER_STICK:
+				return bonus
+		HeelKawnianData.Profession.WARRIOR:
+			if jtype == _Job.Type.HUNT or jtype == _Job.Type.PROTECT or jtype == _Job.Type.DEFEND:
+				return bonus
+		HeelKawnianData.Profession.SCHOLAR:
+			if jtype == _Job.Type.TEACH_SKILL or jtype == _Job.Type.APPRENTICESHIP:
+				return bonus
+	return 0
+
+
+func _job_matches_urge(j: Job, urge: Urge) -> bool:
+	match urge.type:
+		Urge.Type.WORK:
+			if urge.context.has("job_category"):
+				var cat: String = str(urge.context["job_category"])
+				if cat == "food":
+					return _is_food_job(j.type)
+				elif cat == "gathering":
+					return j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.GATHER_FLINT or j.type == _Job.Type.GATHER_STICK or j.type == _Job.Type.MINE or j.type == _Job.Type.MINE_WALL
+			return true
+		Urge.Type.BUILD:
+			return _is_structure_build_job(j.type)
+		Urge.Type.MASTER, Urge.Type.LEGACY, Urge.Type.FORGE, Urge.Type.INNOVATE:
+			return true
+		_:
+			return false
+
+
+## Scan nearby pawns for social drive input.
+func _scan_nearby_pawns_for_social() -> Array:
+	var result: Array = []
+	var spawner = _resolve_pawn_spawner()
+	if spawner == null:
+		return result
+	var seen: int = 0
+	for p in _alive_pawns_from_spawner(spawner):
+		seen += 1
+		if seen > 28:
+			break
+		if p == null or not is_instance_valid(p) or p == self or p.data == null:
+			continue
+		var d2: int = data.tile_pos.distance_squared_to(p.data.tile_pos)
+		if d2 > 400:
+			continue
+		var pid: int = int(p.data.id)
+		var rapport: float = float(data.get_social_rapport(pid))
+		var dist: int = int(sqrt(d2))
+		result.append({
+			"pawn_id": pid,
+			"rapport": rapport,
+			"profession": int(p.data.current_profession),
+			"distance": dist,
+		})
+	return result
+
+
+## Scan for unexplored tiles near the pawn.
+func _scan_unexplored_tiles() -> Array:
+	var result: Array = []
+	if data == null:
+		return result
+	var px: int = data.tile_pos.x
+	var py: int = data.tile_pos.y
+	var r: int = 8  # Search radius
+	for dx in range(-r, r + 1, 2):  # Step by 2 for performance
+		for dy in range(-r, r + 1, 2):
+			var tx: int = px + dx
+			var ty: int = py + dy
+			if tx < 0 or ty < 0 or tx >= 256 or ty >= 256:
+				continue
+			# Check if this tile has been visited by checking FootpathMemory wear
+			# (tiles with no wear haven't been walked on)
+			var visited: bool = false
+			if FootpathMemory != null and FootpathMemory.has_method("get_wear_at"):
+				visited = FootpathMemory.get_wear_at(Vector2i(tx, ty)) > 0.0
+			if not visited:
+				result.append(Vector2i(tx, ty))
+				if result.size() >= 5:
+					return result
+	return result
+
+
+## Wander toward a specific target tile (for EXPLORE urges).
+func _start_wander_toward(target: Vector2i) -> void:
+	var path: Array[Vector2i] = _path_for_pawn(target)
+	if not path.is_empty():
+		_state = State.DRAFT_WALK
+		_target_tile = target
+		_start_path(path)
+	else:
+		_start_wander()
+
+
 func _tick_idle() -> void:
+	# Route to urge-driven architecture when flag is enabled
+	if USE_URGE_ARCHITECTURE:
+		_tick_idle_urge()
+		return
 	if _world == null or _world.pathfinder == null:
 		return
 	# Infants can't do anything — they're carried by a parent

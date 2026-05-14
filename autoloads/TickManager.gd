@@ -101,12 +101,16 @@ func _process(delta: float) -> void:
 
 
 func _dispatch_tick(tick: int) -> int:
+	var t0: int = Time.get_ticks_usec()
 	var node_count: int = 0
 	var refcounted_count: int = 0
 
 	tick_processed.emit(tick)
+	var t1: int = Time.get_ticks_usec()
 	node_count = _call_tick_on_tickables(tick)
+	var t2: int = Time.get_ticks_usec()
 	refcounted_count = _call_tick_on_refcounted(tick)
+	var t3: int = Time.get_ticks_usec()
 
 	batch_stats["total_ticks"] = int(batch_stats.get("total_ticks", 0)) + 1
 	batch_stats["total_nodes_called"] = int(batch_stats.get("total_nodes_called", 0)) + node_count
@@ -114,6 +118,8 @@ func _dispatch_tick(tick: int) -> int:
 
 	if GameManager != null:
 		GameManager.tick_count = tick
+	if t3 - t0 > 50000 and OS.is_debug_build() and _speed_multiplier >= 10.0:
+		print("[TICK_COST] tick=%d total=%.1fms signal=%.1fms nodes(%d)=%.1fms refcounted(%d)=%.1fms" % [tick, (t3 - t0) / 1000.0, (t1 - t0) / 1000.0, node_count, (t2 - t1) / 1000.0, refcounted_count, (t3 - t2) / 1000.0])
 	return node_count + refcounted_count
 
 

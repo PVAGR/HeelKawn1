@@ -3,21 +3,18 @@ extends Node
 ## accumulation. Emits `tick_processed` and calls `_on_world_tick()` on all
 ## nodes in the "tickable" group.
 ##
-## FRAME BUDGET POLICY:
-## Caps the number of ticks processed per frame based on measured cost.
-## At most 2 ticks per frame. If ticks become faster (e.g. < 1ms), cap
-## allows more. Excess ticks carry over — keeps FPS smooth.
+## NO THROTTLE POLICY:
+## The speed setting IS the speed. 100x means 100 ticks per second.
+## No frame budgets, no caps, no throttling. Process every accumulated tick.
+## If the sim can't keep up, frames run longer — but the speed is honest.
 
 signal tick_processed(tick_number: int)
 
 const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base)
 
-## Hard cap: at most 3 ticks per frame, regardless of speed.
-## This prevents any single frame from freezing.
-const MAX_TICKS_PER_FRAME: int = 3
-
-## Hard safety cap: at most 5 seconds of ticks in the accumulator.
-const MAX_ACCUMULATED_SECONDS: float = 5.0
+## Safety cap only — prevents infinite loop if something goes wrong.
+## 1000 ticks/frame at 100x = 10 seconds of sim per frame at 60fps.
+const MAX_TICKS_PER_FRAME: int = 1000
 
 ## How often (in ticks) to force-rebuild the tickable cache.
 const TICKABLE_CACHE_REBUILD_INTERVAL: int = 300
@@ -74,16 +71,15 @@ func _process(delta: float) -> void:
 		tickables_called_last_frame = 0
 		return
 
-	# Accumulate scaled time
+	# Accumulate scaled time — every tick is honest, nothing dropped
 	_accumulated_time += delta * _speed_multiplier
-	# Cap accumulator to prevent death spiral
-	_accumulated_time = min(_accumulated_time, MAX_ACCUMULATED_SECONDS)
 
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
 	var tickables_this_frame: int = 0
 
-	# Process at most MAX_TICKS_PER_FRAME ticks. Extra ticks carry to next frame.
+	# Process ALL accumulated ticks. No frame budget. No throttle.
+	# The speed setting IS the speed.
 	while _accumulated_time >= TICK_STEP and ticks_this_frame < MAX_TICKS_PER_FRAME:
 		_accumulated_time -= TICK_STEP
 		current_tick += 1
@@ -94,23 +90,16 @@ func _process(delta: float) -> void:
 	ticks_processed_last_frame = ticks_this_frame
 	tickables_called_last_frame = tickables_this_frame
 	max_ticks_processed_seen = maxi(max_ticks_processed_seen, ticks_this_frame)
-	var batch_usec: int = Time.get_ticks_usec() - start_time
-	debug_last_tick_batch_usec = batch_usec
-	if _speed_multiplier >= 10.0 and batch_usec > 50000 and OS.is_debug_build():
-		print("[TICK_BATCH] speed=%.0fx ticks=%d accum_before=%.2f elapsed_us=%d delta_ms=%.1f" % [_speed_multiplier, ticks_this_frame, _accumulated_time + TICK_STEP * ticks_this_frame, batch_usec, delta * 1000.0])
+	debug_last_tick_batch_usec = Time.get_ticks_usec() - start_time
 
 
 func _dispatch_tick(tick: int) -> int:
-	var t0: int = Time.get_ticks_usec()
 	var node_count: int = 0
 	var refcounted_count: int = 0
 
 	tick_processed.emit(tick)
-	var t1: int = Time.get_ticks_usec()
 	node_count = _call_tick_on_tickables(tick)
-	var t2: int = Time.get_ticks_usec()
 	refcounted_count = _call_tick_on_refcounted(tick)
-	var t3: int = Time.get_ticks_usec()
 
 	batch_stats["total_ticks"] = int(batch_stats.get("total_ticks", 0)) + 1
 	batch_stats["total_nodes_called"] = int(batch_stats.get("total_nodes_called", 0)) + node_count
@@ -118,8 +107,6 @@ func _dispatch_tick(tick: int) -> int:
 
 	if GameManager != null:
 		GameManager.tick_count = tick
-	if t3 - t0 > 50000 and OS.is_debug_build() and _speed_multiplier >= 10.0:
-		print("[TICK_COST] tick=%d total=%.1fms signal=%.1fms nodes(%d)=%.1fms refcounted(%d)=%.1fms" % [tick, (t3 - t0) / 1000.0, (t1 - t0) / 1000.0, node_count, (t2 - t1) / 1000.0, refcounted_count, (t3 - t2) / 1000.0])
 	return node_count + refcounted_count
 
 

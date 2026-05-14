@@ -15,8 +15,6 @@ const NEIGHBOR_OFFSETS: Array[Vector2i] = [
 	Vector2i( 1,  1), Vector2i(-1,  1), Vector2i( 1, -1), Vector2i(-1, -1),
 ]
 const PATH_CACHE_MAX_ENTRIES: int = 512
-const COMPONENT_FLUSH_INTERVAL: int = 50  # Min ticks between component recomputes
-const COMPONENT_BUDGET_USEC: int = 5000  # Max 5ms per recompute — stops early if exceeded
 
 const _WM = preload("res://autoloads/WorldMemory.gd")
 
@@ -160,21 +158,16 @@ func set_job_construction_reservations_batch(tiles: Array, enabled: bool, data: 
 
 
 ## Flush deferred component computation. Call once per tick (or once per frame).
-## Throttled: at most once per COMPONENT_FLUSH_INTERVAL ticks.
 ## Returns true if a recompute happened.
 func flush_component_dirty(data: WorldData) -> bool:
 	if not _components_dirty:
 		return false
-	var tick: int = GameManager.tick_count if GameManager != null else -1
-	if _last_compute_tick >= 0 and tick - _last_compute_tick < COMPONENT_FLUSH_INTERVAL:
-		return false
-	_last_compute_tick = tick
 	# Diagnostic output when recompute actually occurs
 	if OS.is_debug_build() and _components_dirty_tick != _last_dirty_flush_report_tick:
 		_last_dirty_flush_report_tick = _components_dirty_tick
-		var age: int = tick - _components_dirty_tick
+		var age: int = (GameManager.tick_count if GameManager != null else -1) - _components_dirty_tick
 		print("[PF_DIRTY_FLUSH] tick=%d reason=%s age=%s detail=%s caller=%s" % [
-			tick,
+			GameManager.tick_count if GameManager != null else -1,
 			_components_dirty_reason,
 			str(age) if _components_dirty_tick >= 0 else "unknown",
 			str(_components_dirty_detail),
@@ -513,7 +506,6 @@ func _compute_components(data: WorldData) -> void:
 	var best_id: int = -1
 	var best_size: int = 0
 	var queue: Array[Vector2i] = []
-	var deadline: int = Time.get_ticks_usec() + COMPONENT_BUDGET_USEC
 	for y in range(WorldData.HEIGHT):
 		for x in range(WorldData.WIDTH):
 			var idx: int = y * WorldData.WIDTH + x
@@ -527,10 +519,6 @@ func _compute_components(data: WorldData) -> void:
 			_component_id[idx] = current_id
 			var comp_size: int = 1
 			while not queue.is_empty():
-				if Time.get_ticks_usec() > deadline:
-					_components_dirty = true
-					_largest_component_id_cached = _find_current_largest_component()
-					return
 				var t: Vector2i = queue.pop_back()
 				for offset in NEIGHBOR_OFFSETS:
 					var nx: int = t.x + offset.x
@@ -543,6 +531,10 @@ func _compute_components(data: WorldData) -> void:
 					var n := Vector2i(nx, ny)
 					if _astar.is_point_solid(n):
 						continue
+					# Diagonal step: mirror AStarGrid2D DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES.
+					# Both cardinal neighbors must also be walkable, otherwise A*
+					# will refuse this diagonal and the two tiles are really in
+					# different components for path purposes.
 					if offset.x != 0 and offset.y != 0:
 						if _astar.is_point_solid(Vector2i(nx, t.y)):
 							continue
@@ -556,18 +548,3 @@ func _compute_components(data: WorldData) -> void:
 				best_id = current_id
 			current_id += 1
 	_largest_component_id_cached = best_id
-
-func _find_current_largest_component() -> int:
-	var sizes: Dictionary = {}
-	for i in _component_id.size():
-		var cid: int = _component_id[i]
-		if cid >= 0:
-			sizes[cid] = sizes.get(cid, 0) + 1
-	var best: int = -1
-	var best_sz: int = 0
-	for cid in sizes:
-		var sz: int = sizes[cid]
-		if sz > best_sz:
-			best_sz = sz
-			best = cid
-	return best

@@ -860,7 +860,7 @@ func _on_world_tick(tick: int) -> void:
 			_last_settlement_ai_update_tick = tick
 	
 	# Update agents at specified frequency
-	var _stride: int = maxi(1, int(gs))
+	var _stride: int = maxi(1, int(GameManager.game_speed)) if GameManager != null else 1
 	if tick - last_update_tick >= update_frequency * _stride:
 		_update_all_agents()
 		last_update_tick = tick

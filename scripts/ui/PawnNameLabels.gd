@@ -113,3 +113,31 @@ func _draw() -> void:
 			var status_centered: Vector2 = status_pos - Vector2(status_size.x * 0.5, 0.0)
 			draw_string(font, status_centered + Vector2(0.5, 0.5), status_text, HORIZONTAL_ALIGNMENT_LEFT, -1, STATUS_FONT_SIZE, SHADOW_COLOR)
 			draw_string(font, status_centered, status_text, HORIZONTAL_ALIGNMENT_LEFT, -1, STATUS_FONT_SIZE, STATUS_COLOR)
+		# Matrix drive line
+		var drive_text: String = ""
+		var profile: Dictionary = HeelKawnianManager.get_development_profile_for_pawn(pawn) if is_instance_valid(pawn) else {}
+		if not profile.is_empty():
+			var drive: String = str(profile.get("development_drive", ""))
+			var next_need: String = str(profile.get("next_need", ""))
+			if drive == "survive":
+				drive_text = "Surviving"
+			elif drive == "preserve":
+				drive_text = "Preserving"
+			elif drive == "innovate":
+				drive_text = "Innovating"
+			elif drive == "bond":
+				drive_text = "Bonding"
+			else:
+				drive_text = "Serving"
+			if not next_need.is_empty() and next_need != "serve local needs":
+				var short_need: String = next_need
+				if short_need.length() > 20:
+					short_need = short_need.substr(0, 20)
+				drive_text += " · " + short_need
+		if not drive_text.is_empty():
+			var drive_pos: Vector2 = name_pos + Vector2(0.0, 14.0)
+			var drive_size: Vector2 = font.get_string_size(drive_text, HORIZONTAL_ALIGNMENT_LEFT, -1, STATUS_FONT_SIZE)
+			var drive_centered: Vector2 = drive_pos - Vector2(drive_size.x * 0.5, 0.0)
+			var drive_color: Color = Color(0.6, 0.8, 1.0, 0.7)
+			draw_string(font, drive_centered + Vector2(0.5, 0.5), drive_text, HORIZONTAL_ALIGNMENT_LEFT, -1, STATUS_FONT_SIZE, SHADOW_COLOR)
+			draw_string(font, drive_centered, drive_text, HORIZONTAL_ALIGNMENT_LEFT, -1, STATUS_FONT_SIZE, drive_color)

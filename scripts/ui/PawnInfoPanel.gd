@@ -1429,6 +1429,13 @@ func _lineage_block(d: HeelKawnianData) -> String:
 			lines.append(
 				"Profession: not locked — action skills toward first lock (%d/100 on leading track)" % prog
 			)
+	# Matrix drive from HeelKawnianManager development profile
+	var _hk_profile: Dictionary = HeelKawnianManager.get_development_profile_for_pawn(_pawn) if is_instance_valid(_pawn) else {}
+	if not _hk_profile.is_empty():
+		var drive: String = str(_hk_profile.get("development_drive", ""))
+		var next_need: String = str(_hk_profile.get("next_need", ""))
+		if not drive.is_empty():
+			lines.append("Matrix drive: %s · next: %s" % [drive.capitalize(), next_need.capitalize()])
 	var inh: String = _profession_inheritance_note(d)
 	if not inh.is_empty():
 		lines.append(inh)

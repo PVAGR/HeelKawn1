@@ -10,8 +10,8 @@ extends Node
 const MAX_MEMORY_EVENTS: int = 8
 const MATRIX_LOG_MIN_BIAS: int = 5
 const MATRIX_LOG_COOLDOWN_TICKS: int = 240
-const MATRIX_AMBITION_SETTLEMENT_COOLDOWN_TICKS: int = 90
-const MATRIX_AMBITION_PAWN_COOLDOWN_TICKS: int = 90
+const MATRIX_AMBITION_SETTLEMENT_COOLDOWN_TICKS: int = 30
+const MATRIX_AMBITION_PAWN_COOLDOWN_TICKS: int = 30
 const MATRIX_AFFILIATION_COOLDOWN_TICKS: int = 240
 
 ## Pressure event bias tuning
@@ -581,7 +581,10 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 		ambition = _ambition_result(Job.Type.TEACH_SKILL, 5, "development need requests teaching continuity")
 
 	if ambition.is_empty():
-		return {}
+		# No build needed — gather resources naturally based on local need
+		var gather_job: int = _natural_gather_job(data, local_features, tick)
+		if gather_job >= 0:
+			ambition = _ambition_result(gather_job, 4, "natural gathering cycle")
 	var learned_bonus: int = _learning_priority_bonus_for_job(int(ambition.get("job_type", -1)))
 	if learned_bonus != 0:
 		ambition["priority"] = clampi(int(ambition.get("priority", 5)) + learned_bonus, 1, 10)
@@ -855,6 +858,41 @@ static func get_affiliation_action_for_pawn(pawn: Variant) -> Dictionary:
 		}
 	return {}
 
+
+## Natural gathering — when no build is needed, pawns gather what's most useful
+static func _natural_gather_job(data: HeelKawnianData, local_features: Dictionary, tick: int) -> int:
+	var _sm: Node = _root_node("StockpileManager")
+	var stock_wood: int = 0
+	var stock_stone: int = 0
+	var stock_food: int = 0
+	if _sm != null and _sm.has_method("total_count_of"):
+		stock_wood = int(_sm.call("total_count_of", 3))  # Item.Type.WOOD
+		stock_stone = int(_sm.call("total_count_of", 2))  # Item.Type.STONE
+	if _sm != null and _sm.has_method("total_food"):
+		stock_food = int(_sm.call("total_food"))
+	var pawn_id: int = int(data.id)
+	# Check what's most needed and gather that
+	if stock_wood < 20:
+		return Job.Type.CHOP
+	if stock_stone < 12:
+		return Job.Type.MINE
+	if stock_food < 30:
+		# Split between forage and hunt
+		var r: int = posmod(tick + pawn_id, 5)
+		return Job.Type.HUNT if r == 0 else Job.Type.FORAGE
+	# Everything is abundant — pawn picks by personality (skill-based)
+	var skill_forage: int = int(data.skill_levels.get(HeelKawnianData.Skill.FORAGING, 0)) if "skill_levels" in data else 1
+	var skill_chop: int = int(data.skill_levels.get(HeelKawnianData.Skill.CHOPPING, 0)) if "skill_levels" in data else 1
+	var skill_mine: int = int(data.skill_levels.get(HeelKawnianData.Skill.MINING, 0)) if "skill_levels" in data else 1
+	var best: int = Job.Type.FORAGE
+	var best_skill: int = skill_forage
+	if skill_chop > best_skill:
+		best = Job.Type.CHOP
+		best_skill = skill_chop
+	if skill_mine > best_skill:
+		best = Job.Type.MINE
+		best_skill = skill_mine
+	return best
 
 static func _ambition_result(job_type: int, priority: int, reason: String) -> Dictionary:
 	return {

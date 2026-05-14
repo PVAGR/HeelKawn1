@@ -54,7 +54,7 @@ var _stable_pawn_tick_id: int = -1
 ## Lane interval constants for pawn tick shell reduction
 const PAWN_MEDIUM_AI_INTERVAL_TICKS: int = 5
 const PAWN_NEARBY_SCAN_INTERVAL_TICKS: int = 30
-const PAWN_SOCIAL_REFRESH_INTERVAL_TICKS: int = 60
+const PAWN_SOCIAL_REFRESH_INTERVAL_TICKS: int = 15
 const PAWN_NARRATIVE_REFRESH_INTERVAL_TICKS: int = 120
 
 ## Get a stable tick ID for this pawn (deterministic, computed once).
@@ -1616,19 +1616,17 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 	var tick: int = GameManager.tick_count
 	if tick < _next_matrix_ambition_tick:
 		return false
-	if posmod(tick + int(data.id) * 7, 23) != 0:
-		return false
 	var ambition: Dictionary = HeelKawnianManager.get_settlement_ambition_for_pawn(self)
 	if ambition.is_empty():
-		_next_matrix_ambition_tick = tick + 40
+		_next_matrix_ambition_tick = tick + 10
 		return false
 	var job_type: int = int(ambition.get("job_type", -1))
 	if job_type < 0:
-		_next_matrix_ambition_tick = tick + 55
+		_next_matrix_ambition_tick = tick + 10
 		return false
 	var target_tile: Vector2i = _matrix_ambition_target_tile(job_type)
 	if target_tile.x < 0:
-		_next_matrix_ambition_tick = tick + 65
+		_next_matrix_ambition_tick = tick + 10
 		return false
 	var priority: int = clampi(int(ambition.get("priority", 5)), 1, 10)
 	var work_ticks: int = Job.tool_job_work_ticks(job_type)
@@ -1636,7 +1634,7 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 		work_ticks = 20
 	var posted: Job = JobManager.post(job_type, target_tile, priority, work_ticks)
 	if posted == null:
-		_next_matrix_ambition_tick = tick + 70
+		_next_matrix_ambition_tick = tick + 10
 		return false
 	var payload: Dictionary = {
 		"pawn_id": int(data.id),
@@ -1656,7 +1654,7 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 		ambition,
 		tick
 	)
-	_next_matrix_ambition_tick = tick + 110
+	_next_matrix_ambition_tick = tick + 15
 	return true
 
 
@@ -1717,6 +1715,34 @@ func _try_heelkawnian_affiliation_action() -> bool:
 		tick
 	)
 	return true
+
+
+## Matrix-driven job decision. Uses the HeelKawnianDecision system
+## to determine what this pawn should do based on their Matrix profile
+## and local conditions. Directly claims the best matching job.
+func _maybe_matrix_decide_job(priority_cb: Callable = Callable()) -> bool:
+	if data == null or _world == null or _world.data == null or GameManager == null:
+		return false
+	var tick: int = GameManager.tick_count
+	var profile: Dictionary = HeelKawnianManager.get_development_profile_for_pawn(self)
+	var decision: HeelKawnianDecision = HeelKawnianDecision.decide(data, profile, _world, tick)
+	if decision == null or decision.job_type < 0:
+		return false
+	# Try to claim a job matching the Matrix decision
+	var jt: int = decision.job_type
+	var matrix_filter: Callable = func(j: Job) -> bool: return j.type == jt
+	var cb: Callable = priority_cb if priority_cb.is_valid() else func(_j: Job) -> int: return 0
+	var job: Job = JobManager.claim_next_for(self, matrix_filter, cb)
+	if job != null:
+		if GameManager.verbose_logs():
+			print("[Matrix] %s → %s (%s)" % [data.display_name, Job.describe_type(jt), decision.reason])
+		return true
+	# If direct claim failed, post the job and it'll be claimed next tick
+	HeelKawnianManager.get_settlement_ambition_for_pawn(self)
+	var target: Vector2i = decision.target_tile
+	if target.x >= 0 and not JobManager.has_job_at(target):
+		JobManager.post(jt, target, decision.priority, 30)
+	return false
 
 
 func _matrix_ambition_target_tile(job_type: int) -> Vector2i:
@@ -2938,41 +2964,36 @@ func _job_claim_interval_for_speed() -> int:
 
 func _neural_priority_refresh_interval_for_speed() -> int:
 	if GameManager == null:
-		return 45
+		return 10
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 420
+		return 40
 	if gs >= 50.0:
-		return 260
+		return 25
 	if gs >= 26.0:
-		return 180
+		return 18
 	if gs >= 12.0:
-		return 130
+		return 12
 	if gs >= 6.0:
-		return 90
+		return 10
 	if gs >= 3.0:
-		return 60
-	return 45
+		return 10
+	return 8
 
 
 func _idle_action_refresh_interval_for_speed() -> int:
-	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
 	if GameManager == null:
-		return 12
+		return 3
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 96
+		return 12
 	if gs >= 50.0:
-		return 64
+		return 8
 	if gs >= 26.0:
-		return 48
+		return 6
 	if gs >= 12.0:
-		return 32
-	if gs >= 6.0:
-		return 24
-	if gs >= 3.0:
-		return 16
-	return 12
+		return 4
+	return 3
 
 
 func _work_step_interval_for_speed() -> int:
@@ -3268,15 +3289,7 @@ func _tick_idle() -> void:
 	# Job claiming: pawns act when they need to, not when a scheduler says they can.
 	# Hungry pawns or pawns with no other options claim every tick.
 	# Well-fed pawns spread claims slightly to reduce CPU at ultra speed.
-	var claim_iv: int = 1  # Default: claim every tick (need-driven, not scheduler-driven)
-	if data.hunger > HUNGER_EAT_THRESHOLD and GameManager != null:
-		# Well-fed pawn at high speed: spread claims slightly to reduce CPU
-		var gs: float = GameManager.game_speed
-		if gs >= 100.0:
-			claim_iv = 2  # Reduced from 4 to 2 - more aggressive claiming
-		elif gs >= 50.0:
-			claim_iv = 2  # Reduced from 3 to 2
-		# No increase for 26x+ - keep at 1
+	var claim_iv: int = 1  # Always claim every tick — pawns act on their needs
 	var claim_phase: int = 0
 	if data != null:
 		claim_phase = posmod(int(data.id), claim_iv)
@@ -3740,6 +3753,10 @@ func _tick_idle() -> void:
 					return false
 		# === END TECH CHECK ===
 		return true
+	# MATRIX DECISION: Primary action driver. The HeelKawnian Matrix
+	# (development profile + drive + needs) decides the best job.
+	if _maybe_matrix_decide_job(priority_cb):
+		return
 	if food_emergency:
 		# Either harvest type fills the pantry; let pawns pick whichever is
 		# nearest by deferring to JobManager's distance tiebreak. `base_passes`

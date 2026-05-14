@@ -3,18 +3,22 @@ extends Node
 ## accumulation. Emits `tick_processed` and calls `_on_world_tick()` on all
 ## nodes in the "tickable" group.
 ##
-## NO THROTTLE POLICY:
-## The speed setting IS the speed. 100x means 100 ticks per second.
-## No frame budgets, no caps, no throttling. Process every accumulated tick.
-## If the sim can't keep up, frames run longer — but the speed is honest.
+## FRAME TIME BUDGET POLICY:
+## Uses a fixed per-frame time budget for tick processing. At most 12ms per
+## frame is spent on sim ticks; excess ticks carry over to the next frame.
+## This ensures smooth 60 FPS even when the sim can't keep up with 100x speed.
 
 signal tick_processed(tick_number: int)
 
 const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base)
 
-## Safety cap only — prevents infinite loop if something goes wrong.
-## 1000 ticks/frame at 100x = 10 seconds of sim per frame at 60fps.
-const MAX_TICKS_PER_FRAME: int = 1000
+## Max microseconds per frame spent on tick processing (12ms = ~80% of 16ms
+## frame budget at 60 FPS, leaving ~4ms for rendering).
+const FRAME_TIME_BUDGET_USEC: int = 12_000
+
+## Hard safety cap: at most 5 seconds of ticks in the accumulator to prevent
+## death spirals (e.g., a 1-second frame at 100x would add 100 ticks max).
+const MAX_ACCUMULATED_SECONDS: float = 5.0
 
 ## How often (in ticks) to force-rebuild the tickable cache.
 const TICKABLE_CACHE_REBUILD_INTERVAL: int = 300
@@ -71,16 +75,18 @@ func _process(delta: float) -> void:
 		tickables_called_last_frame = 0
 		return
 
-	# Accumulate scaled time — every tick is honest, nothing dropped
+	# Accumulate scaled time
 	_accumulated_time += delta * _speed_multiplier
+	# Cap accumulator to prevent death spiral
+	_accumulated_time = min(_accumulated_time, MAX_ACCUMULATED_SECONDS)
 
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
 	var tickables_this_frame: int = 0
 
-	# Process ALL accumulated ticks. No frame budget. No throttle.
-	# The speed setting IS the speed.
-	while _accumulated_time >= TICK_STEP and ticks_this_frame < MAX_TICKS_PER_FRAME:
+	# Process ticks within the frame time budget. If the sim can't keep up,
+	# remaining ticks carry over to the next frame — keeps FPS smooth.
+	while _accumulated_time >= TICK_STEP and (Time.get_ticks_usec() - start_time) < FRAME_TIME_BUDGET_USEC:
 		_accumulated_time -= TICK_STEP
 		current_tick += 1
 		ticks_this_frame += 1

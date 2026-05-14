@@ -106,3 +106,7 @@ Recorded after 4100 ticks (11.4 years)
 [DayNight] Year 1 · Day 8/50 begins (tick 4200)
 [HeelKawnianData] Mary Wrighter unlocked basic combat branch
 [DayNight] Year 1 · Day 9/50 begins (tick 4800)
+[WorldEvents] tick=4999 total_actions=1483 discovery:429 | job:956 | SeasonalSeed:49 | SocialSeed:49
+[PlaytestRecorder] Auto-saved backup at tick 0: user://logs/playtest/20260514_014332_backup_tick_0.json (3.03 MB)
+[HeelKawnianData] Emma Walkerson unlocked basic building branch
+[HeelKawnianData] Emma Taylorman unlocked basic gathering branch

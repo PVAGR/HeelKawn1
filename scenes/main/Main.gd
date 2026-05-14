@@ -2822,10 +2822,13 @@ func _on_game_tick(tick: int) -> void:
 		_maybe_spawn_migrant()
 
 	# Flush deferred pathfinder component computation (batched from sync_tile_from_data)
+	# Throttled at high speed — stale component data is safe, worst case a pawn
+	# claims an unreachable job and abandons it next tick.
 	if _world != null and _world.pathfinder != null and _world.data != null:
-		t0 = Time.get_ticks_usec()
-		if _world.pathfinder.flush_component_dirty(_world.data):
-			section_us["pf_components"] = Time.get_ticks_usec() - t0
+		if _is_main_lane_tick(tick, _high_speed_interval(10, 30, 100), 47):
+			t0 = Time.get_ticks_usec()
+			if _world.pathfinder.flush_component_dirty(_world.data):
+				section_us["pf_components"] = Time.get_ticks_usec() - t0
 
 	# Flood events: rain near rivers deposits flood silt; dry weather fades it.
 	if _is_main_lane_tick(tick, 200, 19):
@@ -2834,11 +2837,11 @@ func _on_game_tick(tick: int) -> void:
 	if _is_main_lane_tick(tick, 2000, 29):
 		if _world != null and _world.has_method("_tick_erosion"):
 			_world._tick_erosion(tick)
-	# Blood stains: fade over time
-	if _world != null and _world.has_method("_tick_blood_stains"):
+	# Blood stains: fade over time (throttled at high speed)
+	if _world != null and _world.has_method("_tick_blood_stains") and _is_main_lane_tick(tick, _high_speed_interval(5, 20, 60), 41):
 		_world._tick_blood_stains(tick)
-	# Doors: close timed-out open doors
-	if _world != null and _world.has_method("_tick_doors"):
+	# Doors: close timed-out open doors (throttled at high speed)
+	if _world != null and _world.has_method("_tick_doors") and _is_main_lane_tick(tick, _high_speed_interval(5, 20, 60), 43):
 		_world._tick_doors(tick)
 	# Settlement festivals: milestone-driven celebrations for growing colonies.
 	if SettlementMemory != null and _is_main_lane_tick(tick, 200, 37) and SettlementMemory.has_method("process_festival_milestones"):
@@ -2877,10 +2880,11 @@ func _on_game_tick(tick: int) -> void:
 	if GameManager != null and GameManager.verbose_logs():
 		if tick % 1000 == 0:
 			print("[JobCooldown] Suppressed this session: %d" % [_jobs_suppressed_this_session])
-	# Enemy AI and raid spawning. Keep real 100x honest; the spawner no-ops when empty.
-	t0 = Time.get_ticks_usec()
-	_on_enemy_tick(tick, _enemy_spawner)
-	section_us["enemy_tick"] = Time.get_ticks_usec() - t0
+	# Enemy AI and raid spawning. Skip when no enemies exist.
+	if _enemy_spawner != null and not _enemy_spawner.enemies.is_empty():
+		t0 = Time.get_ticks_usec()
+		_on_enemy_tick(tick, _enemy_spawner)
+		section_us["enemy_tick"] = Time.get_ticks_usec() - t0
 	# Suppress hot-loop tick spam; this is a major source of debug-mode stutter.
 	# Failsafe: pawns that slipped into solid tiles (rare) get nudged; log once per pawn.
 	# OPTIMIZATION: Less frequent at 100x

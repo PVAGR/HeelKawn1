@@ -254,7 +254,8 @@
       "Bash((Get-Content \"C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\scripts\\world\\WorldOverlay.gd\").Count)",
       "Bash((Get-Content \"C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\scripts\\pawn\\HeelKawnianData.gd\").Count)",
       "Bash((Get-Content \"C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\scripts\\pawn\\HeelKawnian.gd\").Count)",
-      "Bash(mkdir \"C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\scripts\\pawn\\drives\")"
+      "Bash(mkdir \"C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\scripts\\pawn\\drives\")",
+      "Bash(cd /d \"C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\" & git diff --stat)"
     ]
   }
 }

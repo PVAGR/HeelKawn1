@@ -125,3 +125,17 @@ func get_bloodline_system() -> Node:
 
 func get_legacy_system() -> Node:
 	return get_subsystem("legacy_system")
+
+## Record pawn death in bloodline system (delegates to BloodlineSystem if available)
+func record_pawn_death(pawn_id: int) -> void:
+	if _bloodline_system == null:
+		_load_subsystems()
+	if _bloodline_system != null and _bloodline_system.has_method("record_pawn_death"):
+		_bloodline_system.call("record_pawn_death", pawn_id, 1)
+
+## Clear bloodline system (delegates to BloodlineSystem if available)
+func clear_bloodline() -> void:
+	if _bloodline_system == null:
+		_load_subsystems()
+	if _bloodline_system != null and _bloodline_system.has_method("clear"):
+		_bloodline_system.clear()

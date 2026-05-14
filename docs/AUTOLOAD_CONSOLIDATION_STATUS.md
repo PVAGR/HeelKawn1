@@ -35,6 +35,7 @@
 - ✅ KinshipSystem → SocialManager (3 occurrences)
 - ✅ GrudgeManager → SocialManager (2 occurrences)
 - ✅ GossipManager → SocialManager (2 occurrences)
+- ✅ BloodlineSystem → SocialManager (2 occurrences in Main.gd, forwarding methods added)
 - ✅ Added get_culture_audio_bias_for_settlement method to SettlementManager
 - ✅ Added forwarding methods to MemoryManager
 
@@ -203,6 +204,17 @@ The following files also have references to removed autoloads that need updating
 ---
 
 ## Consolidation Progress Log
+
+### 2026-05-14 — BloodlineSystem consolidated into SocialManager, removed from project.godot
+
+**Changes:**
+- Added `record_pawn_death()` and `clear_bloodline()` forwarding methods to SocialManager
+- Updated Main.gd (2 references: clear, record_pawn_death)
+- Updated NameGenerator.gd (1 reference: get_bloodline_system())
+- Updated PawnInfoPanel.gd (1 reference: get_bloodline_system())
+- Removed BloodlineSystem from project.godot
+
+**Result:** BloodlineSystem is no longer an autoload. All references now go through SocialManager.
 
 ### 2026-05-14 — project.godot updated: 4 old autoloads removed, 2 consolidated managers wired
 

@@ -230,7 +230,7 @@ func add_cultural_names(culture: String, male_names: Array[String],
 # ==================== FAMILY NAMING ====================
 
 func _get_bloodline_name(pawn_id: int) -> String:
-	var bloodline_sys: Node = get_node_or_null("/root/BloodlineSystem")
+	var bloodline_sys: Node = SocialManager.get_bloodline_system()
 	if bloodline_sys == null or not bloodline_sys.has_method("get_pawn_bloodline"):
 		return ""
 	

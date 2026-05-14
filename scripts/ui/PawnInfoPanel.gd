@@ -1402,16 +1402,15 @@ func _lineage_block(d: HeelKawnianData) -> String:
 	var lines: PackedStringArray = PackedStringArray()
 	if d.bloodline_id >= 0:
 		var bloodline_line: String = "Bloodline: #%d" % d.bloodline_id
-		if has_node("/root/BloodlineSystem"):
-			var bloodline_sys: Node = get_node("/root/BloodlineSystem")
-			if bloodline_sys != null and bloodline_sys.has_method("get_bloodline_info"):
-				var info: Dictionary = bloodline_sys.call("get_bloodline_info", d.bloodline_id)
-				if not info.is_empty():
-					bloodline_line += " · founder %s · members %d · deaths %d" % [
-						str(info.get("founder_name", "unknown")),
-						int(info.get("living_members", 0)),
-						int(info.get("historical_deaths", 0)),
-					]
+		var bloodline_sys: Node = SocialManager.get_bloodline_system()
+		if bloodline_sys != null and bloodline_sys.has_method("get_bloodline_info"):
+			var info: Dictionary = bloodline_sys.call("get_bloodline_info", d.bloodline_id)
+			if not info.is_empty():
+				bloodline_line += " · founder %s · members %d · deaths %d" % [
+					str(info.get("founder_name", "unknown")),
+					int(info.get("living_members", 0)),
+					int(info.get("historical_deaths", 0)),
+				]
 		lines.append(bloodline_line)
 	if d.parent_a_id >= 0 or d.parent_b_id >= 0:
 		lines.append("Parent A: %s" % _parent_line(d.parent_a_id))

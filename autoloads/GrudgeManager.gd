@@ -250,8 +250,8 @@ func _on_pawn_died(payload: Dictionary) -> void:
 func _get_living_children(pawn_id: int) -> Array[int]:
 	var children: Array[int] = []
 
-	# Try BloodlineSystem first for descendant lookup
-	var bs: Node = get_node_or_null("/root/BloodlineSystem")
+	# Try SocialManager (BloodlineSystem) first for descendant lookup
+	var bs: Node = SocialManager.get_bloodline_system()
 	if bs != null and bs.has_method("get_descendants"):
 		var descendants: Array[int] = bs.call("get_descendants", pawn_id, 1)  # Only direct children (1 generation)
 		for child_id in descendants:

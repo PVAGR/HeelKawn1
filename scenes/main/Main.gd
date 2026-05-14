@@ -8318,8 +8318,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 	JobManager.clear_all()
 	if SocialManager.get_kinship_system() != null and SocialManager.get_kinship_system().has_method("clear"):
 		SocialManager.get_kinship_system().clear()
-	if BloodlineSystem != null and BloodlineSystem.has_method("clear"):
-		SocialManager.get_bloodline_system().clear()
+	if SocialManager.has_method("clear_bloodline"):
+		SocialManager.clear_bloodline()
 	TradeMemory.clear()
 	MemoryManager.get_remnant_memory().clear()
 	MemoryManager.get_intent_memory().clear()
@@ -8508,8 +8508,7 @@ func register_enemy_kill(enemy_name: String, attacker_name: String, tile: Vector
 
 func register_pawn_death(_pawn_id: int) -> void:
 	_kill_count += 1
-	if BloodlineSystem != null and BloodlineSystem.has_method("record_pawn_death"):
-		BloodlineSystem.call("record_pawn_death", int(_pawn_id))
+	SocialManager.record_pawn_death(int(_pawn_id))
 
 
 func get_kill_count() -> int:

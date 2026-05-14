@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "O0of5LLcITA=",
+  "dgSpecHash": "28KEr+qs+Ps=",
   "success": false,
-  "projectFilePath": "C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\HeelKawn.csproj",
+  "projectFilePath": "c:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\HeelKawn.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\user\\.nuget\\packages\\godot.sourcegenerators\\4.6.0\\godot.sourcegenerators.4.6.0.nupkg.sha512",
     "C:\\Users\\user\\.nuget\\packages\\godotsharp\\4.6.0\\godotsharp.4.6.0.nupkg.sha512",
@@ -16,8 +16,8 @@
       "code": "NU1202",
       "level": "Error",
       "message": "Package GodotSharp 4.6.0 is not compatible with net6.0 (.NETCoreApp,Version=v6.0). Package GodotSharp 4.6.0 supports: net8.0 (.NETCoreApp,Version=v8.0)",
-      "projectPath": "C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\HeelKawn.csproj",
-      "filePath": "C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\HeelKawn.csproj",
+      "projectPath": "c:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\HeelKawn.csproj",
+      "filePath": "c:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\HeelKawn.csproj",
       "libraryId": "GodotSharp",
       "targetGraphs": [
         "net6.0"
@@ -27,8 +27,8 @@
       "code": "NU1202",
       "level": "Error",
       "message": "Package GodotSharpEditor 4.6.0 is not compatible with net6.0 (.NETCoreApp,Version=v6.0). Package GodotSharpEditor 4.6.0 supports: net8.0 (.NETCoreApp,Version=v8.0)",
-      "projectPath": "C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\HeelKawn.csproj",
-      "filePath": "C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\HeelKawn.csproj",
+      "projectPath": "c:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\HeelKawn.csproj",
+      "filePath": "c:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\HeelKawn.csproj",
       "libraryId": "GodotSharpEditor",
       "targetGraphs": [
         "net6.0"

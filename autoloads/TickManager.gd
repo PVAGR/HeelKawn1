@@ -3,21 +3,20 @@ extends Node
 ## accumulation. Emits `tick_processed` and calls `_on_world_tick()` on all
 ## nodes in the "tickable" group.
 ##
-## FRAME TIME BUDGET POLICY:
-## Uses a fixed per-frame time budget for tick processing. At most 12ms per
-## frame is spent on sim ticks; excess ticks carry over to the next frame.
-## This ensures smooth 60 FPS even when the sim can't keep up with 100x speed.
+## FRAME BUDGET POLICY:
+## Caps the number of ticks processed per frame based on measured cost.
+## At most 2 ticks per frame. If ticks become faster (e.g. < 1ms), cap
+## allows more. Excess ticks carry over — keeps FPS smooth.
 
 signal tick_processed(tick_number: int)
 
 const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base)
 
-## Max microseconds per frame spent on tick processing (12ms = ~80% of 16ms
-## frame budget at 60 FPS, leaving ~4ms for rendering).
-const FRAME_TIME_BUDGET_USEC: int = 12_000
+## Hard cap: at most 3 ticks per frame, regardless of speed.
+## This prevents any single frame from freezing.
+const MAX_TICKS_PER_FRAME: int = 3
 
-## Hard safety cap: at most 5 seconds of ticks in the accumulator to prevent
-## death spirals (e.g., a 1-second frame at 100x would add 100 ticks max).
+## Hard safety cap: at most 5 seconds of ticks in the accumulator.
 const MAX_ACCUMULATED_SECONDS: float = 5.0
 
 ## How often (in ticks) to force-rebuild the tickable cache.
@@ -84,9 +83,8 @@ func _process(delta: float) -> void:
 	var ticks_this_frame: int = 0
 	var tickables_this_frame: int = 0
 
-	# Process ticks within the frame time budget. If the sim can't keep up,
-	# remaining ticks carry over to the next frame — keeps FPS smooth.
-	while _accumulated_time >= TICK_STEP and (Time.get_ticks_usec() - start_time) < FRAME_TIME_BUDGET_USEC:
+	# Process at most MAX_TICKS_PER_FRAME ticks. Extra ticks carry to next frame.
+	while _accumulated_time >= TICK_STEP and ticks_this_frame < MAX_TICKS_PER_FRAME:
 		_accumulated_time -= TICK_STEP
 		current_tick += 1
 		ticks_this_frame += 1

@@ -82,7 +82,7 @@ func pulse(data: HeelKawnianData, current_tick: int, consciousness: Node = null)
 	if WorldMemory != null and WorldMemory.has_method("get_recent_events_for_pawn"):
 		var recent_events: Array = WorldMemory.get_recent_events_for_pawn(pawn_id, 10)
 		for evt in recent_events:
-			if int(evt.get("kind", -1)) == WorldMemory.Kind.DEATH:
+			if int(evt.get("kind", -1)) == WorldMemory.Kind.PAWN_DEATH:
 				var mourn_urge: Urge = Urge.new(Urge.Type.MOURN, 4.0, Urge.Source.MEMORY, current_tick)
 				var grave_loc: Vector2i = Vector2i(int(evt.get("x", -999999)), int(evt.get("y", -999999)))
 				if grave_loc.x >= 0:

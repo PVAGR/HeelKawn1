@@ -4155,16 +4155,16 @@ func get_visual_indicators() -> Array:
 			result.append({"type": "dot", "color": Color8(60, 40, 60, int(alpha * 200)), "offset": Vector2(2, 3), "size": 1.0})
 
 	# --- Profession indicator (small colored dot) ---
-	var prof: int = profession
+	var prof: int = current_profession
 	if prof == Profession.BUILDER:
 		result.append({"type": "dot", "color": Color8(160, 120, 60), "offset": Vector2(3, -4), "size": 0.8})
-	elif prof == Profession.HUNTER:
+	elif prof == Profession.WARRIOR:
 		result.append({"type": "dot", "color": Color8(200, 80, 40), "offset": Vector2(3, -4), "size": 0.8})
-	elif prof == Profession.MINER:
+	elif prof == Profession.GATHERER:
 		result.append({"type": "dot", "color": Color8(140, 140, 150), "offset": Vector2(3, -4), "size": 0.8})
 	elif prof == Profession.FARMER:
 		result.append({"type": "dot", "color": Color8(80, 160, 60), "offset": Vector2(3, -4), "size": 0.8})
-	elif prof == Profession.FISHER:
+	elif prof == Profession.TRADER:
 		result.append({"type": "dot", "color": Color8(60, 120, 180), "offset": Vector2(3, -4), "size": 0.8})
 	elif prof == Profession.HEALER:
 		result.append({"type": "dot", "color": Color8(60, 200, 80), "offset": Vector2(3, -4), "size": 0.8})

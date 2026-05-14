@@ -1751,25 +1751,9 @@ func _try_heelkawnian_affiliation_action() -> bool:
 func _maybe_matrix_decide_job(priority_cb: Callable = Callable()) -> bool:
 	if data == null or _world == null or _world.data == null or GameManager == null:
 		return false
-	var tick: int = GameManager.tick_count
-	var profile: Dictionary = HeelKawnianManager.get_development_profile_for_pawn(self)
-	var decision: HeelKawnianDecision = HeelKawnianDecision.decide(data, profile, _world, tick)
-	if decision == null or decision.job_type < 0:
-		return false
-	# Try to claim a job matching the Matrix decision
-	var jt: int = decision.job_type
-	var matrix_filter: Callable = func(j: Job) -> bool: return j.type == jt
-	var cb: Callable = priority_cb if priority_cb.is_valid() else func(_j: Job) -> int: return 0
-	var job: Job = JobManager.claim_next_for(self, matrix_filter, cb)
-	if job != null:
-		if GameManager.verbose_logs():
-			print("[Matrix] %s → %s (%s)" % [data.display_name, Job.describe_type(jt), decision.reason])
-		return true
-	# If direct claim failed, post the job and it'll be claimed next tick
-	HeelKawnianManager.get_settlement_ambition_for_pawn(self)
-	var target: Vector2i = decision.target_tile
-	if target.x >= 0 and not JobManager.has_job_at(target):
-		JobManager.post(jt, target, decision.priority, 30)
+	# HeelKawnianDecision.decide() was never implemented.
+	# The urge architecture replaces this concept — drives push urges,
+	# the queue resolves them. This function is dead code.
 	return false
 
 
@@ -5697,12 +5681,12 @@ func _complete_current_job() -> void:
 			produced_qty = 2
 		_Job.Type.DRINK:
 			# Drink at tavern: consume carried alcohol, boost mood, add intoxication
-			if carrying != 0 and (carrying == _Item.Type.MEAD or carrying == _Item.Type.ALE):
-				var drink_restore: int = 40 if carrying == _Item.Type.MEAD else 35
+			if data.carrying != 0 and (data.carrying == _Item.Type.MEAD or data.carrying == _Item.Type.ALE):
+				var drink_restore: int = 40 if data.carrying == _Item.Type.MEAD else 35
 				data.hunger = minf(100.0, data.hunger + float(drink_restore))
 				data.intoxication = minf(100.0, data.intoxication + 25.0)
 				data.add_mood_event(MoodEvent.Type.JOY, 80.0, 300)
-				clear_carry()
+				data.clear_carry()
 			else:
 				# No drink in hand — just mood boost from being at tavern
 				data.add_mood_event(MoodEvent.Type.JOY, 40.0, 150)

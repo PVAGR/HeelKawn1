@@ -4,6 +4,8 @@
 
 **HUMAN DIRECTIVE (May 6, 2026):** ALL AIs work in PARALLEL on different tracks. Each AI owns a track, collaborates with others, innovates together. MACRO progress across EVERYTHING.
 
+**HUMAN DIRECTIVE (May 14, 2026):** NEW TOP PRIORITY — "Make the Invisible Visible." Full spec in `docs/MAKE_THE_INVISIBLE_VISIBLE.md`. The 137 autoloads exist but most are invisible to spectators. The revolutionary edge is making culture, history, death, language, and economy RENDER ON THE MAP. Letta is starting on Pillar 1 (Cultural Architecture Rendering).
+
 ---
 
 ## 🎯 DEVELOPMENT TRACKS (PARALLEL WORK)
@@ -12,12 +14,44 @@
 
 | Track | Focus | Priority | Assigned To | Status |
 |-------|-------|----------|-------------|--------|
+| **TRACK 0** | Make the Invisible Visible | 🔴🔴 CRITICAL | Letta | 🔄 IN PROGRESS |
 | **TRACK 1** | UI Integration & Testing | 🔴 HIGH | Open | ⏳ Available |
 | **TRACK 2** | Performance Optimization | 🔴 HIGH | Open | ⏳ Available |
 | **TRACK 3** | World Richness (Events) | 🔴 HIGH | Open | ⏳ Available |
 | **TRACK 4** | System Polish (Grudges/Gossip) | 🟡 MEDIUM | Open | ⏳ Available |
 | **TRACK 5** | Building/Crafting UI | 🟡 MEDIUM | Open | ⏳ Available |
 | **TRACK 6** | Knowledge Systems | 🟢 LOW | Open | ⏳ Available |
+
+---
+
+## 🔴🔴 TRACK 0: Make the Invisible Visible
+
+**Full spec:** `docs/MAKE_THE_INVISIBLE_VISIBLE.md`
+
+### [VIS-001] Cultural Architecture Rendering — PRIORITY 1
+**Status:** 🔄 IN PROGRESS (Letta)
+**What:** Settlements get visible cultural colors on buildings. Two settlements look different.
+**Depends on:** CulturalStyleManager (exists), WorldOverlay (exists), SettlementMemory (exists)
+
+### [VIS-002] The Land Remembers — PRIORITY 2
+**What:** Footpaths render on terrain. Sacred tiles glow. Battlefields tint red. Ruins appear.
+**Depends on:** FootpathMemory (exists), SacredGeography (exists), WorldOverlay (exists)
+
+### [VIS-003] Death Becomes the Landscape — PRIORITY 3
+**What:** Grave markers render on map. Memorial fields glow. Unfinished buildings decay into ruins.
+**Depends on:** MemorialSystem (exists), SacredGeography (exists), WorldPersistence (exists)
+
+### [VIS-004] Physical History on Pawns — PRIORITY 4
+**What:** Wound scars visible on sprite. Elders have gray hair. Children are smaller. Grieving tokens.
+**Depends on:** BodyPartWounds (exists), HeelKawnianData (exists), WorldOverlay (exists)
+
+### [VIS-005] Audible Language Divergence — PRIORITY 5
+**What:** Settlements develop different speech patterns in PawnChatter. Dialects drift over time.
+**Depends on:** LanguageSystem (exists), PawnChatterBubbles (exists), CulturalMemory (exists)
+
+### [VIS-006] The Economy is a Living River — PRIORITY 6
+**What:** Trade routes visible on minimap. Caravans walk between settlements. Stockpiles pulse.
+**Depends on:** TradePlanner (exists), TradeMemory (exists), Minimap (exists)
 
 ---
 

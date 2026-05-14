@@ -358,6 +358,12 @@ static func tool_job_skill(job_type: int) -> int:
 			return HeelKawnianData.Skill.BUILDING  # Infrastructure
 		Type.BUILD_GRANARY, Type.BUILD_CELLAR:
 			return HeelKawnianData.Skill.BUILDING  # Storage
+		Type.BUILD_BREWERY, Type.BUILD_TAVERN:
+			return HeelKawnianData.Skill.BUILDING  # Brewing & social
+		Type.BREW_MEAD, Type.BREW_ALE:
+			return HeelKawnianData.Skill.BUILDING  # Brewing
+		Type.DRINK:
+			return HeelKawnianData.Skill.FORAGING  # Drinking is easy
 		Type.MAINTAIN_STRUCTURE:
 			return HeelKawnianData.Skill.BUILDING
 	return HeelKawnianData.Skill.FORAGING

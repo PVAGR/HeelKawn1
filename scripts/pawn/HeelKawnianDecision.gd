@@ -1,217 +1,664 @@
+## HeelKawnianDecision — Extracted decision engine from HeelKawnian.gd
+##
+## Encapsulates all idle decision logic: utility scoring, goal caching,
+## bias stacking, neural priority, matrix bias, resource pressure,
+## settlement pressure, role affinity, danger level, memory confidence,
+## short-horizon failure tracking, and awareness scanning.
+##
+## This is a RefCounted helper — it does NOT live on the scene tree.
+## HeelKawnian.gd creates one and delegates decision computations to it.
+##
+## Architecture: HeelKawnian.gd owns the state machine and actions.
+## HeelKawnianDecision.gd owns the reasoning. The pawn asks "what should
+## I prioritize?" and the decision engine returns a bias/score.
 class_name HeelKawnianDecision
 extends RefCounted
 
-## Central decision system for HeelKawnian pawns.
-## Each pawn consults this system to decide what to do next.
-## Decisions are driven by: Matrix profile (drive, next_need, phase),
-## local conditions (features, stockpiles, population), and needs.
-## All deterministic — uses WorldRNG for any variance.
+## --- Constants (mirrored from HeelKawnian.gd for self-containment) ---
+const UTILITY_SCORE_NORMALIZER: float = 100.0
+const AWARENESS_SCAN_RADIUS: int = 6
+const AWARENESS_REFRESH_INTERVAL: int = 40
+const DREAM_NUDGE_CHECK_EVERY_TICKS: int = 600
 
-## Result of a decision: what job to pursue and why.
-var job_type: int = -1
-var target_tile: Vector2i = Vector2i(-1, -1)
-var priority: int = 5
-var reason: String = ""
-var drive: String = ""
+## --- Internal caches ---
+var _cached_utility_context: Dictionary = {}
+var _cached_utility_context_tick: int = -1
+var _cached_utility_food_emergency: bool = false
+
+var _parity_context: Dictionary = {}
+var _parity_context_tick: int = -1
+
+var _cached_idle_action: String = "work"
+var _cached_idle_action_food_emergency: bool = false
+
+var _learning_weight_cache: Dictionary = {}
+var _learning_weight_cache_tick: int = -1
+
+var _next_goal_refresh_tick: int = -1
+var _cached_active_goal: Dictionary = {}
+var _cached_active_goal_priority: float = 0.0
+
+var _awareness: Dictionary = {}
+var _awareness_tick: int = -999999
+
+var _neural_priority_fetch_tick: int = -1
+var _neural_priority_outputs: Array = []
+var _neural_priority_next_refresh_tick: int = -1
+
+var _matrix_priority_fetch_tick: int = -1
+var _matrix_priority_decision: Dictionary = {}
+var _matrix_priority_next_refresh_tick: int = -1
+
+var _last_neural_decision_log_tick: int = -1000000
+
+var _last_dream_nudge_check_tick: int = -DREAM_NUDGE_CHECK_EVERY_TICKS
+
+## --- Speed-scaled intervals ---
+func _goal_refresh_interval_for_speed() -> int:
+	if GameManager == null:
+		return 120
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 220
+	if gs >= 50.0:
+		return 170
+	if gs >= 25.0:
+		return 130
+	return 90
 
 
-## Compute a decision for the given pawn context.
-## Returns a populated HeelKawnianDecision or null if no action is needed.
-static func decide(
-	pawn_data: HeelKawnianData,
-	profile: Dictionary,
-	world,
-	tick: int
-) -> HeelKawnianDecision:
-	if pawn_data == null or profile.is_empty():
-		return null
-	var d: HeelKawnianDecision = HeelKawnianDecision.new()
-	d.drive = str(profile.get("development_drive", "serve_settlement"))
-	var next_need: String = str(profile.get("next_need", "serve local needs"))
-	var local_features: Dictionary = HeelKawnianManager._scan_local_features(pawn_data.tile_pos, 10)
-	var hearths: int = int(local_features.get("hearth", 0))
-	var beds: int = int(local_features.get("bed", 0))
-	var storage_huts: int = int(local_features.get("storage_hut", 0))
-	var walls: int = int(local_features.get("wall", 0))
-	var doors: int = int(local_features.get("door", 0))
-	var local_pop: int = int(local_features.get("population", 1))
-	var stock_wood: int = 0
-	var stock_stone: int = 0
-	var stock_food: int = 0
-	var _sm = _root_node("StockpileManager")
-	if _sm != null:
-		if _sm.has_method("total_count_of"):
-			stock_wood = int(_sm.call("total_count_of", 3))
-			stock_stone = int(_sm.call("total_count_of", 2))
-		if _sm.has_method("total_food"):
-			stock_food = int(_sm.call("total_food"))
-	# Survival first: if starving or food critically low
-	var hunger: float = float(pawn_data.hunger)
-	if hunger <= 20.0 or stock_food < 10:
-		d.job_type = Job.Type.FORAGE if WorldRNG.rangei(0, 100, tick, &"decide_food") < 70 else Job.Type.HUNT
-		d.priority = 10
-		d.reason = "survival: food critical"
-		return d
-	# Drive-based decisions
-	match d.drive:
-		"survive":
-			if hearths <= 0:
-				d.job_type = Job.Type.BUILD_FIRE_PIT
-				d.priority = 9
-				d.reason = "drive=survive: no hearth"
-			elif beds < maxi(2, int(round(local_pop / 2.2))):
-				d.job_type = Job.Type.BUILD_BED
-				d.priority = 8
-				d.reason = "drive=survive: need beds"
-			elif stock_food < 30:
-				d.job_type = Job.Type.FORAGE
-				d.priority = 7
-				d.reason = "drive=survive: stock food low"
-			elif stock_wood < 10:
-				d.job_type = Job.Type.CHOP
-				d.priority = 6
-				d.reason = "drive=survive: need wood"
+func _neural_priority_refresh_interval_for_speed() -> int:
+	if GameManager == null:
+		return 30
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 120
+	if gs >= 50.0:
+		return 90
+	if gs >= 26.0:
+		return 60
+	if gs >= 12.0:
+		return 45
+	return 30
+
+
+func _matrix_priority_refresh_interval_for_speed() -> int:
+	if GameManager == null:
+		return 30
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 120
+	if gs >= 50.0:
+		return 90
+	if gs >= 26.0:
+		return 60
+	if gs >= 12.0:
+		return 45
+	return 30
+
+
+## --- Parity context (NPC/player parity) ---
+func parity_idle_context(data: HeelKawnianData) -> Dictionary:
+	var t: int = GameManager.tick_count if GameManager != null else 0
+	if _parity_context_tick == t and not _parity_context.is_empty():
+		return _parity_context
+	_parity_context_tick = t
+	_parity_context = {}
+	if data != null and WorldAI != null and WorldAI.has_method("build_idle_parity_context_for_pawn"):
+		_parity_context = WorldAI.build_idle_parity_context_for_pawn(int(data.id))
+	return _parity_context
+
+
+## --- Utility context builder ---
+func build_idle_utility_context(data: HeelKawnianData, food_emergency: bool) -> Dictionary:
+	var t: int = GameManager.tick_count if GameManager != null else 0
+	if t == _cached_utility_context_tick and food_emergency == _cached_utility_food_emergency and not _cached_utility_context.is_empty():
+		return _cached_utility_context
+	var weather: String = "clear"
+	if WorldAI != null and WorldAI.has_method("get_weather_tag_for_sim"):
+		weather = WorldAI.get_weather_tag_for_sim()
+	var pc: Dictionary = parity_idle_context(data)
+	var parity_utility: Dictionary = {}
+	if pc.has("utility_bias") and pc["utility_bias"] is Dictionary:
+		parity_utility = pc["utility_bias"] as Dictionary
+	if pc.has("weather"):
+		weather = str(pc["weather"])
+	_cached_utility_context = {
+		"is_night": DayNightCycle.is_night_for_tick(t),
+		"food_emergency": food_emergency,
+		"weather": weather,
+		"parity_utility": parity_utility,
+		"tick": t,
+	}
+	_cached_utility_context_tick = t
+	_cached_utility_food_emergency = food_emergency
+	return _cached_utility_context
+
+
+## --- Learning weight cache ---
+func refresh_learning_weight_cache(data: HeelKawnianData) -> void:
+	if data == null:
+		return
+	var t: int = GameManager.tick_count if GameManager != null else 0
+	if t == _learning_weight_cache_tick and not _learning_weight_cache.is_empty():
+		return
+	_learning_weight_cache_tick = t
+	_learning_weight_cache = {
+		"food_production": data.calculate_action_utility("food_production", {}),
+		"resource_gathering": data.calculate_action_utility("resource_gathering", {}),
+		"defense_building": data.calculate_action_utility("defense_building", {}),
+		"military_training": data.calculate_action_utility("military_training", {}),
+		"construction": data.calculate_action_utility("construction", {}),
+	}
+
+
+## --- Goal cache ---
+func refresh_active_goal_cache(data: HeelKawnianData) -> void:
+	if data == null:
+		return
+	var t: int = GameManager.tick_count if GameManager != null else 0
+	if _next_goal_refresh_tick >= 0 and t < _next_goal_refresh_tick:
+		return
+	data.cleanup_goals()
+	data.generate_goals_from_needs()
+	_cached_active_goal = data.get_highest_priority_goal()
+	_cached_active_goal_priority = float(_cached_active_goal.get("priority", 0.0)) if not _cached_active_goal.is_empty() else 0.0
+	_next_goal_refresh_tick = t + _goal_refresh_interval_for_speed()
+
+
+func goal_priority_bias_for_job(job_type: int) -> int:
+	if _cached_active_goal.is_empty():
+		return 0
+	var goal_type: String = str(_cached_active_goal.get("type", ""))
+	if goal_type.is_empty():
+		return 0
+	var p: float = clampf(_cached_active_goal_priority, 0.0, 3.0)
+	var p_bias: int = int(round(p * 2.0))
+	var _Job = load("res://scripts/jobs/Job.gd")
+	match goal_type:
+		"find_food":
+			if job_type in [
+				_Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH,
+				_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH,
+				_Job.Type.DRY_MEAT, _Job.Type.PLANT_SEEDS, _Job.Type.HARVEST_CROPS,
+				_Job.Type.GROW_FOOD,
+			]:
+				return p_bias
+		"find_shelter":
+			if job_type in [
+				_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR,
+				_Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH,
+				_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT,
+			]:
+				return p_bias
+		"find_warmth":
+			if job_type in [
+				_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_HEARTH,
+				_Job.Type.BUILD_SHELTER, _Job.Type.BUILD_BED,
+			]:
+				return p_bias
+		"build":
+			if job_type in [
+				_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR,
+				_Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH,
+				_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT,
+				_Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE,
+			]:
+				return p_bias
+		"rest":
+			if job_type == _Job.Type.FORAGE or job_type == _Job.Type.FISH:
+				return -p_bias  # Rest goal penalizes food work slightly
+	return 0
+
+
+## --- Short-horizon bias (recent success/failure) ---
+func short_horizon_bias_for_job(data: HeelKawnianData, job: Job) -> int:
+	if data == null or job == null:
+		return 0
+	var recent: Dictionary = data.get_recent_job_outcomes(10)
+	if recent.is_empty():
+		return 0
+	var success_count: int = 0
+	var fail_count: int = 0
+	for outcome in recent:
+		var otype: int = int(outcome.get("job_type", -1))
+		if otype == job.type:
+			if outcome.get("success", false):
+				success_count += 1
 			else:
-				d.job_type = Job.Type.FORAGE
-				d.priority = 5
-				d.reason = "drive=survive: gather"
-		"preserve":
-			if storage_huts <= 0 and local_pop >= 3:
-				d.job_type = Job.Type.BUILD_STORAGE_HUT
-				d.priority = 9
-				d.reason = "drive=preserve: need storage"
-			elif int(local_features.get("marker", 0)) <= 0:
-				d.job_type = Job.Type.BUILD_MARKER_STONE
-				d.priority = 8
-				d.reason = "drive=preserve: need marker"
-			else:
-				d.job_type = Job.Type.CARVE_KNOWLEDGE_STONE
-				d.priority = 7
-				d.reason = "drive=preserve: record knowledge"
-		"innovate":
-			if int(local_features.get("workshop", 0)) <= 0 and local_pop >= 3:
-				d.job_type = Job.Type.BUILD_WORKSHOP
-				d.priority = 9
-				d.reason = "drive=innovate: need workshop"
-			elif stock_wood < 5 or stock_stone < 3:
-				d.job_type = Job.Type.CHOP if stock_wood < 5 else Job.Type.MINE
-				d.priority = 7
-				d.reason = "drive=innovate: gather materials"
-			else:
-				d.job_type = Job.Type.TOOL_MAKING
-				d.priority = 8
-				d.reason = "drive=innovate: craft tools"
-		"bond":
-			if hearths <= 0:
-				d.job_type = Job.Type.BUILD_FIRE_PIT
-				d.priority = 9
-				d.reason = "drive=bond: no hearth"
-			elif int(local_features.get("hearth", 0)) <= 1:
-				d.job_type = Job.Type.BUILD_HEARTH
-				d.priority = 8
-				d.reason = "drive=bond: social hearth"
-			elif int(local_features.get("tavern", 0)) <= 0 and local_pop >= 4:
-				d.job_type = Job.Type.BUILD_MARKER_STONE
-				d.priority = 7
-				d.reason = "drive=bond: community space"
-			else:
-				d.job_type = Job.Type.TEACH_SKILL
-				d.priority = 6
-				d.reason = "drive=bond: teach"
+				fail_count += 1
+	if fail_count > success_count + 2:
+		return -3  # Avoid repeating failures
+	if success_count > 2:
+		return 2  # Lean into what works
+	return 0
+
+
+## --- Social influence bias ---
+func apply_social_influence_bias(data: HeelKawnianData, job: Job, base_bias: int) -> int:
+	if data == null or job == null:
+		return base_bias
+	# Squad/cohort members bias toward same job type
+	if data.current_squad_id >= 0:
+		var squad: Dictionary = SocialManager.get_squad_data(data.current_squad_id) if SocialManager != null else {}
+		if not squad.is_empty():
+			var squad_job_type: int = int(squad.get("active_job_type", -1))
+			if squad_job_type == job.type:
+				return base_bias + 3
+	return base_bias
+
+
+## --- Learning weight for job type ---
+func learning_weight_for_job(job_type: int) -> float:
+	var _Job = load("res://scripts/jobs/Job.gd")
+	match job_type:
+		_Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH, \
+		_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH, \
+		_Job.Type.DRY_MEAT, _Job.Type.PLANT_SEEDS, _Job.Type.HARVEST_CROPS, \
+		_Job.Type.GROW_FOOD:
+			return float(_learning_weight_cache.get("food_production", 1.0))
+		_Job.Type.CHOP, _Job.Type.MINE, _Job.Type.MINE_WALL, \
+		_Job.Type.GATHER_FLINT, _Job.Type.GATHER_STICK:
+			return float(_learning_weight_cache.get("resource_gathering", 1.0))
+		_Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_WATCHTOWER, \
+		_Job.Type.BUILD_BARRACKS, _Job.Type.BUILD_FORD:
+			return float(_learning_weight_cache.get("defense_building", 1.0))
+		_Job.Type.DEFEND, _Job.Type.PROTECT, _Job.Type.GUARD:
+			return float(_learning_weight_cache.get("military_training", 1.0))
 		_:
-			# serve_settlement or unknown — scan local needs
-			if hearths <= 0:
-				d.job_type = Job.Type.BUILD_FIRE_PIT
-				d.priority = 9
-				d.reason = "settlement need: no hearth"
-			elif storage_huts <= 0 and local_pop >= 3:
-				d.job_type = Job.Type.BUILD_STORAGE_HUT
-				d.priority = 8
-				d.reason = "settlement need: no storage"
-			elif beds < maxi(2, int(round(local_pop / 2.2))):
-				d.job_type = Job.Type.BUILD_BED
-				d.priority = 7
-				d.reason = "settlement need: more beds"
-			elif walls < 4 and local_pop >= 4:
-				d.job_type = Job.Type.BUILD_WALL
-				d.priority = 6
-				d.reason = "settlement need: walls"
-			elif stock_wood < 5:
-				d.job_type = Job.Type.CHOP
-				d.priority = 5
-				d.reason = "gather: need wood"
-			elif stock_stone < 3:
-				d.job_type = Job.Type.MINE
-				d.priority = 5
-				d.reason = "gather: need stone"
-			elif stock_food < 20:
-				d.job_type = Job.Type.FORAGE
-				d.priority = 5
-				d.reason = "gather: need food"
-			else:
-				d.job_type = Job.Type.FORAGE
-				d.priority = 3
-				d.reason = "default: gather"
-	# Find target tile for the job
-	if d.job_type >= 0:
-		d.target_tile = _find_target_tile(pawn_data, d.job_type, world, tick)
-	return d
+			# Check if it's a structure build job via BuildingRegistry
+			if BuildingRegistry != null and BuildingRegistry.has_method("get_building_for_job_type"):
+				var entry = BuildingRegistry.get_building_for_job_type(job_type)
+				if entry != null and not entry.is_empty():
+					return float(_learning_weight_cache.get("construction", 1.0))
+	return 1.0
 
 
-## Find the best tile for a given job type near the pawn.
-static func _find_target_tile(pawn_data: HeelKawnianData, job_type: int, world, tick: int) -> Vector2i:
-	var origin: Vector2i = pawn_data.tile_pos
-	var radius: int = 8
-	if job_type == Job.Type.BUILD_WALL or job_type == Job.Type.BUILD_DOOR:
-		radius = 12
-	elif job_type == Job.Type.CHOP or job_type == Job.Type.MINE or job_type == Job.Type.FORAGE:
-		radius = 15
-	elif job_type == Job.Type.HUNT:
-		radius = 20
-	# Try to find a valid tile near the pawn
-	for r in range(1, radius + 1):
-		for dx in range(-r, r + 1):
-			for dy in range(-r, r + 1):
-				if absi(dx) != r and absi(dy) != r:
-					continue
-				var tx: int = origin.x + dx
-				var ty: int = origin.y + dy
-				if tx < 0 or ty < 0 or tx >= WorldData.WIDTH or ty >= WorldData.HEIGHT:
-					continue
-				if world != null and world.data != null:
-					var feat: int = world.data.get_feature(tx, ty)
-					if job_type == Job.Type.CHOP and feat == TileFeature.Type.TREE:
-						return Vector2i(tx, ty)
-					if job_type == Job.Type.MINE and feat == TileFeature.Type.ORE_VEIN:
-						return Vector2i(tx, ty)
-					if job_type == Job.Type.FORAGE and feat == TileFeature.Type.FERTILE_SOIL:
-						return Vector2i(tx, ty)
-					if job_type == Job.Type.HUNT:
-						return Vector2i(tx, ty)
-				# Build jobs: find empty passable tile
-				if _is_build_job(job_type):
-					if world != null and world.data != null and world.pathfinder != null:
-						if WorldData.is_tile_walkable(world.data, tx, ty):
-							return Vector2i(tx, ty)
-	return Vector2i(-1, -1)
+## --- Settlement pressure ---
+func idle_settlement_pressure(data: HeelKawnianData) -> float:
+	if data == null:
+		return 0.5
+	var rk: int = _region_key(data.tile_pos.x, data.tile_pos.y)
+	var center_region: int = SettlementMemory.get_center_region_for_region(rk)
+	if center_region < 0:
+		return 0.5
+	return clampf(float(IntentMemory.settlement_pressure.get(center_region, 0.5)), 0.0, 1.0)
 
 
-static func _is_build_job(jt: int) -> bool:
-	return jt in [
-		Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_BED, Job.Type.BUILD_WALL,
-		Job.Type.BUILD_DOOR, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_SHELTER,
-		Job.Type.BUILD_HEARTH, Job.Type.BUILD_MARKER_STONE, Job.Type.BUILD_WORKSHOP,
-		Job.Type.BUILD_LIBRARY, Job.Type.BUILD_APOTHECARY, Job.Type.BUILD_MARKET,
-		Job.Type.BUILD_BARRACKS, Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR,
-		Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_ROAD, Job.Type.CARVE_KNOWLEDGE_STONE,
+## --- Role affinity ---
+func idle_role_affinity(data: HeelKawnianData) -> float:
+	if data == null:
+		return 0.5
+	var affinity_key: String = data.highest_affinity_skill()
+	return clampf(float(data.affinities.get(affinity_key, 0.5)), 0.0, 1.0)
+
+
+## --- Memory confidence ---
+func idle_memory_confidence(data: HeelKawnianData) -> float:
+	if data == null:
+		return 0.5
+	var keys: Array[String] = [
+		"action_success:work",
+		"action_success:forage",
+		"action_success:hunt",
+		"action_success:build",
+		"action_success:trade",
+		"action_success:teach",
 	]
+	var total: float = 0.0
+	var count: int = 0
+	for key in keys:
+		var fact: Dictionary = data.recall_semantic_fact(key)
+		if fact.is_empty():
+			continue
+		total += clampf(float(fact.get("confidence", 0.5)), 0.0, 1.0)
+		count += 1
+	if count <= 0:
+		return 0.5
+	return total / float(count)
 
 
-static func _root_node(name: String) -> Node:
-	var tree := Engine.get_main_loop() as SceneTree
-	if tree == null:
-		return null
-	var root := tree.root
-	if root == null:
-		return null
-	return root.get_node_or_null("/root/" + name)
+## --- Danger level ---
+func idle_danger_level(data: HeelKawnianData, scar_level_at_tile: Callable) -> float:
+	if data == null:
+		return 0.0
+	var scar_danger: float = clampf(float(scar_level_at_tile.call(data.tile_pos)) / 3.0, 0.0, 1.0)
+	var tile_key: String = "%d,%d" % [data.tile_pos.x, data.tile_pos.y]
+	var memory_danger: float = 0.0
+	if data.location_memory.has(tile_key):
+		var mem: Dictionary = data.location_memory[tile_key]
+		memory_danger = clampf(float(mem.get("danger_level", 0.0)), 0.0, 1.0)
+	return maxf(scar_danger, memory_danger)
+
+
+## --- Awareness scan ---
+func refresh_awareness(data: HeelKawnianData, world: Node) -> Dictionary:
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	if tick - _awareness_tick < AWARENESS_REFRESH_INTERVAL and not _awareness.is_empty():
+		return _awareness
+	_awareness_tick = tick
+	var result: Dictionary = {
+		"nearest_threat": Vector2i(-9999, -9999),
+		"nearest_food_source": Vector2i(-9999, -9999),
+		"nearest_shelter": Vector2i(-9999, -9999),
+		"nearest_fire": Vector2i(-9999, -9999),
+		"has_fire_nearby": false,
+		"has_bed_nearby": false,
+		"pawns_nearby_count": 0,
+		"is_in_danger_zone": false,
+	}
+	if data == null or world == null or world.data == null:
+		_awareness = result
+		return result
+	var px: int = data.tile_pos.x
+	var py: int = data.tile_pos.y
+	var r: int = AWARENESS_SCAN_RADIUS
+	var best_threat_dist: int = 9999
+	var best_food_dist: int = 9999
+	var best_shelter_dist: int = 9999
+	var best_fire_dist: int = 9999
+	for dx in range(-r, r + 1):
+		for dy in range(-r, r + 1):
+			var tx: int = px + dx
+			var ty: int = py + dy
+			if tx < 0 or ty < 0 or tx >= WorldData.WIDTH or ty >= WorldData.HEIGHT:
+				continue
+			var dist: int = absi(dx) + absi(dy)
+			if dist == 0:
+				continue
+			var tile: Vector2i = Vector2i(tx, ty)
+			var feat: int = world.data.get_feature(tx, ty)
+			if feat == TileFeature.Type.FIRE_PIT:
+				if dist < best_fire_dist:
+					best_fire_dist = dist
+					result.nearest_fire = tile
+				if dist <= 3:
+					result.has_fire_nearby = true
+			if feat == TileFeature.Type.BED:
+				if dist < best_shelter_dist:
+					best_shelter_dist = dist
+					result.nearest_shelter = tile
+				if dist <= 3:
+					result.has_bed_nearby = true
+			if feat == TileFeature.Type.FERTILE_SOIL:
+				if dist < best_food_dist:
+					best_food_dist = dist
+					result.nearest_food_source = tile
+			if feat == TileFeature.Type.WALL or feat == TileFeature.Type.DOOR:
+				if dist < best_shelter_dist:
+					best_shelter_dist = dist
+					result.nearest_shelter = tile
+			if TileFeature.is_wildlife(feat):
+				if dist < best_threat_dist:
+					best_threat_dist = dist
+					result.nearest_threat = tile
+	# Check scar level for danger zone
+	if WorldPersistence != null and WorldPersistence.has_method("get_region_scar_level"):
+		var rk: int = _region_key(px, py)
+		var scar: int = WorldPersistence.get_region_scar_level(rk)
+		if scar >= 2:
+			result.is_in_danger_zone = true
+	_awareness = result
+	return result
+
+
+## --- Utility action mapping ---
+func utility_action_for_job(job_type: int) -> String:
+	var _Job = load("res://scripts/jobs/Job.gd")
+	match job_type:
+		_Job.Type.FORAGE:
+			return "forage"
+		_Job.Type.HUNT:
+			return "hunt"
+		_Job.Type.FISH:
+			return "forage"
+		_Job.Type.CHOP:
+			return "gather"
+		_Job.Type.MINE, _Job.Type.MINE_WALL:
+			return "mine"
+		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE:
+			return "build"
+		_Job.Type.TRADE_HAUL:
+			return "trade"
+		_:
+			return "work"
+
+
+## --- Utility score normalization ---
+func utility_score_normalized(data: HeelKawnianData, action_type: String, context: Dictionary, cache: Dictionary = {}) -> float:
+	if data == null:
+		return 0.5
+	if cache.has(action_type):
+		return float(cache[action_type])
+	var raw_score: float = data.calculate_action_utility(action_type, context)
+	var normalized: float = clampf(raw_score / UTILITY_SCORE_NORMALIZER, 0.0, 1.0)
+	cache[action_type] = normalized
+	return normalized
+
+
+## --- Job-affinity matching ---
+func job_matches_affinity(job_type: int, affinity_key: String) -> bool:
+	var _Job = load("res://scripts/jobs/Job.gd")
+	match affinity_key:
+		"building":
+			return job_type == _Job.Type.BUILD_BED or job_type == _Job.Type.BUILD_WALL or job_type == _Job.Type.BUILD_DOOR
+		"farming":
+			return job_type == _Job.Type.FORAGE or job_type == _Job.Type.CHOP
+		"combat":
+			return job_type == _Job.Type.HUNT
+		"crafting":
+			return job_type == _Job.Type.CHOP or job_type == _Job.Type.MINE or job_type == _Job.Type.MINE_WALL
+		"diplomacy":
+			return job_type == _Job.Type.TRADE_HAUL
+		"gathering":
+			return job_type == _Job.Type.FORAGE or job_type == _Job.Type.CHOP or job_type == _Job.Type.MINE
+		"construction":
+			return job_type == _Job.Type.BUILD_BED or job_type == _Job.Type.BUILD_WALL or job_type == _Job.Type.BUILD_DOOR or job_type == _Job.Type.BUILD_FIRE_PIT or job_type == _Job.Type.BUILD_STORAGE_HUT or job_type == _Job.Type.BUILD_SHELTER or job_type == _Job.Type.BUILD_HEARTH or job_type == _Job.Type.MINE_WALL
+		_:
+			return false
+
+
+## --- Settlement intent job multiplier ---
+func get_settlement_intent_job_multiplier(data: HeelKawnianData, job: Job) -> float:
+	if data == null or job == null:
+		return 1.0
+	var intent: String = SettlementMemory.get_settlement_intent_for_tile(data.tile_pos)
+	var _Job = load("res://scripts/jobs/Job.gd")
+	match intent:
+		SettlementMemory.INTENT_HOARD:
+			if job.type == _Job.Type.FORAGE or job.type == _Job.Type.HUNT or job.type == _Job.Type.FISH or job.type == _Job.Type.TRADE_HAUL:
+				return 1.2
+			if job.type == _Job.Type.CHOP or job.type == _Job.Type.MINE or job.type == _Job.Type.MINE_WALL:
+				return 1.05
+		SettlementMemory.INTENT_DEFEND:
+			if job.type == _Job.Type.HUNT:
+				return 1.2
+			if job.type == _Job.Type.BUILD_WALL or job.type == _Job.Type.BUILD_DOOR:
+				return 1.1
+		SettlementMemory.INTENT_RECOVER:
+			if job.type == _Job.Type.BUILD_BED or job.type == _Job.Type.BUILD_WALL or job.type == _Job.Type.BUILD_DOOR or job.type == _Job.Type.BUILD_FIRE_PIT or job.type == _Job.Type.BUILD_SHELTER or job.type == _Job.Type.BUILD_HEARTH:
+				return 1.15
+			if job.type == _Job.Type.TRADE_HAUL:
+				return 1.1
+		SettlementMemory.INTENT_GROW:
+			if job.type == _Job.Type.FORAGE or job.type == _Job.Type.CHOP:
+				return 1.05
+	return 1.0
+
+
+## --- Preferred front bias ---
+func get_preferred_front_bias(data: HeelKawnianData, job: Job) -> float:
+	if data == null or job == null:
+		return 1.0
+	return float(SettlementMemory.get_preferred_front_bias_for_job(data.tile_pos, job))
+
+
+## --- Neural job priority bias ---
+func get_neural_job_priority_bias(pawn: Node, data: HeelKawnianData, job_type: int) -> int:
+	if data == null:
+		return 0
+	if GameManager != null:
+		if GameManager.tick_count < 1200:
+			return 0
+		if GameManager.game_speed >= 200.0:
+			return 0
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	var should_refresh: bool = (_neural_priority_next_refresh_tick < 0 or tick >= _neural_priority_next_refresh_tick)
+	if should_refresh:
+		_neural_priority_fetch_tick = tick
+		var refreshed_outputs: Array = []
+		var world_ai: Node = pawn.get_node_or_null("/root/WorldAI") if pawn != null else null
+		if world_ai != null and world_ai.has_method("get_pawn_neural_state"):
+			var neural_state: Dictionary = world_ai.get_pawn_neural_state(int(data.id))
+			if not neural_state.is_empty():
+				var outs: Variant = neural_state.get("outputs", [])
+				if outs is Array and (outs as Array).size() >= 8:
+					refreshed_outputs = outs as Array
+		if refreshed_outputs.size() >= 8:
+			_neural_priority_outputs = refreshed_outputs
+			_neural_priority_next_refresh_tick = tick + _neural_priority_refresh_interval_for_speed()
+		else:
+			_neural_priority_next_refresh_tick = tick + 10
+
+	if _neural_priority_outputs.size() < 8:
+		return 0
+	var outputs: Array = _neural_priority_outputs
+	var _Job = load("res://scripts/jobs/Job.gd")
+	var neural_bias: int = 0
+
+	match job_type:
+		_Job.Type.FORAGE:
+			neural_bias = int((outputs[0] + outputs[3]) * 6.0)
+		_Job.Type.HUNT:
+			neural_bias = int((outputs[0] + outputs[3] + outputs[6]) * 5.0)
+		_Job.Type.FISH:
+			neural_bias = int((outputs[0] + outputs[3]) * 5.0)
+		_Job.Type.CHOP:
+			neural_bias = int(outputs[3] * 4.0)
+		_Job.Type.MINE, _Job.Type.MINE_WALL:
+			neural_bias = int(outputs[5] * 4.0)
+		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE:
+			neural_bias = int(outputs[4] * 5.0)
+		_Job.Type.TRADE_HAUL:
+			neural_bias = int((outputs[2] + outputs[3]) * 3.0)
+		_:
+			neural_bias = 0
+
+	if neural_bias >= 4 and _should_log_neural_decision_tick(tick):
+		_log_neural_decision(data, job_type, neural_bias, outputs)
+
+	return neural_bias
+
+
+## --- Matrix job bias ---
+func get_heelkawnian_matrix_job_bias(pawn: Node, data: HeelKawnianData, job_type: int) -> int:
+	if data == null:
+		return 0
+	if GameManager != null:
+		if GameManager.tick_count < 300:
+			return 0
+		if GameManager.game_speed >= 200.0:
+			return 0
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	if _matrix_priority_next_refresh_tick < 0 or tick >= _matrix_priority_next_refresh_tick:
+		_matrix_priority_fetch_tick = tick
+		if HeelKawnianManager != null and HeelKawnianManager.has_method("get_matrix_decision_for_pawn"):
+			_matrix_priority_decision = HeelKawnianManager.get_matrix_decision_for_pawn(pawn)
+		else:
+			_matrix_priority_decision = {}
+		_matrix_priority_next_refresh_tick = tick + _matrix_priority_refresh_interval_for_speed()
+	if _matrix_priority_decision.is_empty():
+		return 0
+	var biases: Dictionary = _matrix_priority_decision.get("job_biases", {})
+	return clampi(int(biases.get(int(job_type), 0)), -8, 16)
+
+
+## --- Resource pressure bias ---
+func get_resource_pressure_bias(data: HeelKawnianData, job: Job) -> float:
+	if data == null or job == null:
+		return 1.0
+	var rp: Dictionary = SettlementMemory.get_resource_pressure_for_tile(data.tile_pos)
+	if rp.is_empty():
+		return 1.0
+	var wood_p: float = clampf(float(rp.get("wood", 0.0)), 0.0, 1.0)
+	var stone_p: float = clampf(float(rp.get("stone", 0.0)), 0.0, 1.0)
+	var ore_p: float = clampf(float(rp.get("ore_proxy", 0.0)), 0.0, 1.0)
+	var food_p: float = clampf(float(rp.get("food", 0.0)), 0.0, 1.0)
+	var trade_p: float = clampf(float(rp.get("trade", 0.0)), 0.0, 1.0)
+	if wood_p > 0.9 or stone_p > 0.9 or ore_p > 0.9 or food_p > 0.9 or trade_p > 0.9:
+		return 1.0
+	var _Job = load("res://scripts/jobs/Job.gd")
+	var intensity: float = 0.0
+	match int(job.type):
+		_Job.Type.CHOP, _Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_SHRINE:
+			intensity = wood_p
+		_Job.Type.MINE_WALL:
+			intensity = stone_p
+		_Job.Type.MINE:
+			intensity = ore_p
+		_Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH:
+			intensity = food_p
+		_Job.Type.TRADE_HAUL:
+			intensity = trade_p
+		_:
+			intensity = 0.0
+	if intensity <= 0.0:
+		return 1.0
+	# Amplify: high pressure = higher priority (1.0 → 1.5)
+	return 1.0 + intensity * 0.5
+
+
+## --- Neural decision logging ---
+func _should_log_neural_decision_tick(tick: int) -> bool:
+	if GameManager == null or not GameManager.verbose_logs():
+		return false
+	if tick - _last_neural_decision_log_tick < 120:
+		return false
+	_last_neural_decision_log_tick = tick
+	return true
+
+
+func _log_neural_decision(data: HeelKawnianData, job_type: int, bias: int, outputs: Array) -> void:
+	if WorldMemory == null:
+		return
+	var _Job = load("res://scripts/jobs/Job.gd")
+	var job_name: String = _Job.Type.keys()[job_type] if job_type >= 0 and job_type < _Job.Type.size() else "Unknown"
+	WorldMemory.record_event({
+		"type": "neural_decision",
+		"pawn_id": int(data.id) if data != null else -1,
+		"pawn_name": data.display_name if data != null else "Unknown",
+		"job_type": job_type,
+		"job_name": job_name,
+		"neural_bias": bias,
+		"neural_outputs": str(outputs),
+		"tick": GameManager.tick_count
+	})
+
+
+## --- Region key helper (mirrors WorldPersistence._region_key) ---
+static func _region_key(tx: int, ty: int) -> int:
+	var rx: int = tx >> 4
+	var ry: int = ty >> 4
+	return (rx & 0xFFFF) | ((ry & 0xFFFF) << 16)
+
+
+## --- Reset all caches (call on pawn death or major state change) ---
+func reset_caches() -> void:
+	_cached_utility_context.clear()
+	_cached_utility_context_tick = -1
+	_parity_context.clear()
+	_parity_context_tick = -1
+	_cached_idle_action = "work"
+	_learning_weight_cache.clear()
+	_learning_weight_cache_tick = -1
+	_next_goal_refresh_tick = -1
+	_cached_active_goal.clear()
+	_cached_active_goal_priority = 0.0
+	_awareness.clear()
+	_awareness_tick = -999999
+	_neural_priority_outputs.clear()
+	_neural_priority_fetch_tick = -1
+	_neural_priority_next_refresh_tick = -1
+	_matrix_priority_decision.clear()
+	_matrix_priority_fetch_tick = -1
+	_matrix_priority_next_refresh_tick = -1

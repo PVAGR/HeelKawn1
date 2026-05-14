@@ -29,6 +29,10 @@ var _smoke_systems: Array[GPUParticles2D] = []
 var _smoke_positions: Array[Vector2] = []  # World positions for each smoke system
 const MAX_SMOKE_SYSTEMS: int = 24
 
+# Cultural tint cache: tile -> settlement_id (rebuilt with feature cache)
+var _tile_settlement: Dictionary = {}  # Vector2i -> int (settlement_id)
+var _settlement_color_cache: Dictionary = {}  # int (settlement_id) -> Color
+
 
 func initialize(world_ref: World, camera_ref: Camera2D) -> void:
 	_world = world_ref
@@ -53,6 +57,8 @@ func _process(_delta: float) -> void:
 func _rebuild_feature_cache() -> void:
 	_feature_tiles.clear()
 	_biome_tiles.clear()
+	_tile_settlement.clear()
+	_settlement_color_cache.clear()
 	if _world == null or _world.data == null:
 		return
 	var data: WorldData = _world.data
@@ -68,6 +74,17 @@ func _rebuild_feature_cache() -> void:
 				if not _feature_tiles.has(f):
 					_feature_tiles[f] = []
 				_feature_tiles[f].append(Vector2i(x, y))
+				# Cultural tint: look up settlement for this tile
+				if SettlementMemory != null and SettlementMemory.has_method("get_settlement_id_for_region"):
+					var rx: int = x >> 4
+					var ry: int = y >> 4
+					var rkey: int = (rx & 0xFFFF) | ((ry & 0xFFFF) << 16)
+					var sid: int = SettlementMemory.get_settlement_id_for_region(rkey)
+					if sid >= 0:
+						_tile_settlement[Vector2i(x, y)] = sid
+						if not _settlement_color_cache.has(sid):
+							if CulturalStyleManager != null and CulturalStyleManager.has_method("get_cultural_color_for_settlement"):
+								_settlement_color_cache[sid] = CulturalStyleManager.get_cultural_color_for_settlement(sid)
 			else:
 				# Cache biome for terrain micro-textures (sparse sampling)
 				if (x + y) % TERRAIN_DETAIL_INTERVAL == 0:
@@ -156,7 +173,7 @@ func _draw() -> void:
 			_draw_terrain_detail(wp, int(b_type), int(tile_pos.x), int(tile_pos.y))
 			drawn += 1
 
-	# --- Draw each feature type with its sprite ---
+	# --- Draw each feature type with its sprite + cultural tint ---
 	drawn = 0
 	for f_type in _feature_tiles:
 		var tiles: Array = _feature_tiles[f_type]
@@ -164,7 +181,8 @@ func _draw() -> void:
 			if drawn >= MAX_DRAW_TILES:
 				return
 			var wp: Vector2 = _world.tile_to_world(tile_pos)
-			_draw_feature_sprite(wp, int(f_type))
+			var cultural_tint: Color = _get_cultural_tint(tile_pos)
+			_draw_feature_sprite(wp, int(f_type), cultural_tint)
 			drawn += 1
 
 	# --- Autonomous construction plans: make open jobs visible before completion ---
@@ -189,22 +207,74 @@ func _draw() -> void:
 		_draw_build_progress(wp, progress)
 		_draw_scaffolding(wp, progress)
 
+	# --- Footpaths: worn trails from foot traffic ---
+	if FootpathMemory != null and FootpathMemory.has_method("get_wear_at"):
+		drawn = 0
+		var cam_rect: Rect2i = _camera_viewport_tiles()
+		for y in range(cam_rect.position.y, cam_rect.end.y, 3):
+			for x in range(cam_rect.position.x, cam_rect.end.x, 3):
+				if drawn >= 500:
+					break
+				var wear: float = FootpathMemory.get_wear_at(Vector2i(x, y))
+				if wear > 0.1:
+					var wp: Vector2 = _world.tile_to_world(Vector2i(x, y))
+					var alpha: float = clampf(wear, 0.1, 0.6)
+					var path_c: Color = Color(0.45, 0.35, 0.2, alpha)
+					draw_rect(Rect2(wp + Vector2(-1.5, -1.5), Vector2(3.0, 3.0)), path_c, true)
+					drawn += 1
+
+	# --- Sacred glow: tiles with memorial significance ---
+	if SacredGeography != null and SacredGeography.has_method("get_all_sacred_tiles"):
+		var sacred_list: Array = SacredGeography.get_all_sacred_tiles()
+		for sacred_data in sacred_list:
+			var tile: Variant = sacred_data.get("tile", null)
+			if tile == null:
+				continue
+			var significance: String = str(sacred_data.get("significance", ""))
+			if significance == "":
+				continue
+			var wp: Vector2 = _world.tile_to_world(tile)
+			var glow_color: Color
+			if significance == "holy_ground":
+				glow_color = Color(0.5, 0.7, 1.0, 0.35)
+			elif significance == "sacred":
+				glow_color = Color(0.7, 0.8, 1.0, 0.2)
+			else:
+				glow_color = Color(0.9, 0.9, 1.0, 0.1)
+			draw_rect(Rect2(wp + Vector2(-2.0, -2.0), Vector2(4.0, 4.0)), glow_color, true)
+
 	# --- Update smoke particle positions ---
 	_update_smoke_particles()
 
 
-func _draw_feature_sprite(wp: Vector2, feature: int) -> void:
+## Get cultural tint color for a tile. Returns Color.WHITE if no settlement.
+func _get_cultural_tint(tile_pos: Vector2i) -> Color:
+	var sid: int = _tile_settlement.get(tile_pos, -1)
+	if sid < 0:
+		return Color.WHITE
+	return _settlement_color_cache.get(sid, Color.WHITE)
+
+
+## Apply a subtle cultural tint to a base color. The tint is blended at 25% strength
+## so the building's original color is still recognizable but shifted toward the settlement's hue.
+func _apply_cultural_tint(base: Color, tint: Color) -> Color:
+	if tint == Color.WHITE:
+		return base
+	return base.lerp(tint, 0.25)
+
+
+func _draw_feature_sprite(wp: Vector2, feature: int, cultural_tint: Color = Color.WHITE) -> void:
 	match feature:
 		TileFeature.Type.FIRE_PIT:
 			_draw_fire_pit(wp)
 		TileFeature.Type.BED:
 			_draw_bed(wp)
 		TileFeature.Type.WALL:
-			_draw_wall(wp)
+			_draw_wall(wp, cultural_tint)
 		TileFeature.Type.DOOR:
 			_draw_door(wp)
 		TileFeature.Type.STORAGE_HUT:
-			_draw_storage_hut(wp)
+			_draw_storage_hut(wp, cultural_tint)
 		TileFeature.Type.SHRINE:
 			_draw_shrine(wp)
 		TileFeature.Type.MARKER_STONE:
@@ -228,39 +298,43 @@ func _draw_feature_sprite(wp: Vector2, feature: int) -> void:
 		TileFeature.Type.HERB_GARDEN:
 			_draw_farm(wp, Color8(80, 140, 60))
 		TileFeature.Type.WORKSHOP:
-			_draw_workshop(wp)
+			_draw_workshop(wp, cultural_tint)
 		TileFeature.Type.LOOM:
-			_draw_building_3x3(wp, Color8(180, 150, 170), Color8(140, 110, 130))
+			_draw_building_3x3(wp, _apply_cultural_tint(Color8(180, 150, 170), cultural_tint), _apply_cultural_tint(Color8(140, 110, 130), cultural_tint))
 		TileFeature.Type.KILN:
-			_draw_building_3x3(wp, Color8(200, 100, 50), Color8(160, 70, 30))
+			_draw_building_3x3(wp, _apply_cultural_tint(Color8(200, 100, 50), cultural_tint), _apply_cultural_tint(Color8(160, 70, 30), cultural_tint))
 		TileFeature.Type.SMELTER:
-			_draw_building_3x3(wp, Color8(140, 80, 60), Color8(100, 50, 35))
+			_draw_building_3x3(wp, _apply_cultural_tint(Color8(140, 80, 60), cultural_tint), _apply_cultural_tint(Color8(100, 50, 35), cultural_tint))
 		TileFeature.Type.BOATYARD:
-			_draw_building_3x3(wp, Color8(120, 80, 40), Color8(80, 50, 25))
+			_draw_building_3x3(wp, _apply_cultural_tint(Color8(120, 80, 40), cultural_tint), _apply_cultural_tint(Color8(80, 50, 25), cultural_tint))
 		TileFeature.Type.DOCK:
-			_draw_building_3x3(wp, Color8(100, 70, 35), Color8(70, 45, 20))
+			_draw_building_3x3(wp, _apply_cultural_tint(Color8(100, 70, 35), cultural_tint), _apply_cultural_tint(Color8(70, 45, 20), cultural_tint))
 		TileFeature.Type.FISHERMAN_HUT:
-			_draw_building_3x3(wp, Color8(90, 120, 140), Color8(60, 85, 100))
+			_draw_building_3x3(wp, _apply_cultural_tint(Color8(90, 120, 140), cultural_tint), _apply_cultural_tint(Color8(60, 85, 100), cultural_tint))
 		TileFeature.Type.APOTHECARY:
-			_draw_building_3x3(wp, Color8(60, 150, 80), Color8(40, 110, 55))
+			_draw_building_3x3(wp, _apply_cultural_tint(Color8(60, 150, 80), cultural_tint), _apply_cultural_tint(Color8(40, 110, 55), cultural_tint))
 		TileFeature.Type.LIBRARY:
-			_draw_library(wp)
+			_draw_library(wp, cultural_tint)
 		TileFeature.Type.SCHOOL:
-			_draw_building_3x3(wp, Color8(130, 110, 150), Color8(95, 80, 115))
+			_draw_building_3x3(wp, _apply_cultural_tint(Color8(130, 110, 150), cultural_tint), _apply_cultural_tint(Color8(95, 80, 115), cultural_tint))
 		TileFeature.Type.BARRACKS:
-			_draw_barracks(wp)
+			_draw_barracks(wp, cultural_tint)
 		TileFeature.Type.WATCHTOWER:
-			_draw_watchtower(wp)
+			_draw_watchtower(wp, cultural_tint)
 		TileFeature.Type.MARKET:
-			_draw_market(wp)
+			_draw_market(wp, cultural_tint)
 		TileFeature.Type.TRADING_POST:
-			_draw_building_3x3(wp, Color8(180, 150, 80), Color8(140, 115, 55))
+			_draw_building_3x3(wp, _apply_cultural_tint(Color8(180, 150, 80), cultural_tint), _apply_cultural_tint(Color8(140, 115, 55), cultural_tint))
 		TileFeature.Type.ROAD:
 			_draw_road(wp)
 		TileFeature.Type.GRANARY:
-			_draw_building_3x3(wp, Color8(180, 160, 80), Color8(140, 120, 55))
+			_draw_building_3x3(wp, _apply_cultural_tint(Color8(180, 160, 80), cultural_tint), _apply_cultural_tint(Color8(140, 120, 55), cultural_tint))
 		TileFeature.Type.CELLAR:
 			_draw_cellar(wp)
+		TileFeature.Type.BREWERY:
+			_draw_building_3x3(wp, _apply_cultural_tint(Color8(180, 140, 40), cultural_tint), _apply_cultural_tint(Color8(140, 100, 20), cultural_tint))
+		TileFeature.Type.TAVERN:
+			_draw_building_3x3(wp, _apply_cultural_tint(Color8(160, 100, 50), cultural_tint), _apply_cultural_tint(Color8(120, 65, 30), cultural_tint))
 		TileFeature.Type.GRAVE_MARKER:
 			_draw_grave_marker(wp)
 		TileFeature.Type.KNOWLEDGE_STONE:
@@ -302,12 +376,12 @@ func _draw_bed(p: Vector2) -> void:
 	draw_rect(Rect2(p + Vector2(0.8, -0.3), Vector2(0.5, 0.6)), Color8(240, 235, 220), true)
 
 
-func _draw_wall(p: Vector2) -> void:
+func _draw_wall(p: Vector2, cultural_tint: Color = Color.WHITE) -> void:
 	# Solid brown rectangle with darker border
-	var wall_c: Color = Color8(120, 75, 40)
+	var wall_c: Color = _apply_cultural_tint(Color8(120, 75, 40), cultural_tint)
 	draw_rect(Rect2(p + Vector2(-1.5, -1.5), Vector2(3.0, 3.0)), wall_c, true)
 	# Brick lines
-	var brick_c: Color = Color8(90, 55, 30)
+	var brick_c: Color = _apply_cultural_tint(Color8(90, 55, 30), cultural_tint)
 	draw_line(p + Vector2(-1.5, -0.5), p + Vector2(1.5, -0.5), brick_c, 0.5, true)
 	draw_line(p + Vector2(-1.5, 0.5), p + Vector2(1.5, 0.5), brick_c, 0.5, true)
 	# Vertical mortar
@@ -350,12 +424,12 @@ func _draw_build_plan(p: Vector2, job_type: int, claimed: bool) -> void:
 			draw_circle(p, 3.8, Color8(220, 240, 255, 95))
 
 
-func _draw_storage_hut(p: Vector2) -> void:
+func _draw_storage_hut(p: Vector2, cultural_tint: Color = Color.WHITE) -> void:
 	# Base: tan rectangle
-	var base_c: Color = Color8(150, 120, 70)
+	var base_c: Color = _apply_cultural_tint(Color8(150, 120, 70), cultural_tint)
 	draw_rect(Rect2(p + Vector2(-1.5, -1.5), Vector2(3.0, 3.0)), base_c, true)
 	# Roof line: darker
-	var roof_c: Color = Color8(110, 85, 45)
+	var roof_c: Color = _apply_cultural_tint(Color8(110, 85, 45), cultural_tint)
 	draw_rect(Rect2(p + Vector2(-1.5, -1.5), Vector2(3.0, 0.8)), roof_c, true)
 	# Door: dark opening
 	draw_rect(Rect2(p + Vector2(-0.3, 0.0), Vector2(0.6, 1.5)), Color8(60, 45, 25), true)
@@ -472,14 +546,14 @@ func _draw_farm(p: Vector2, crop_c: Color) -> void:
 	draw_line(p + Vector2(-1.2, 0.8), p + Vector2(1.2, 0.8), crop_c, 0.6, true)
 
 
-func _draw_workshop(p: Vector2) -> void:
-	_draw_building_3x3(p, Color8(160, 120, 80), Color8(120, 85, 50))
+func _draw_workshop(p: Vector2, cultural_tint: Color = Color.WHITE) -> void:
+	_draw_building_3x3(p, _apply_cultural_tint(Color8(160, 120, 80), cultural_tint), _apply_cultural_tint(Color8(120, 85, 50), cultural_tint))
 	# Anvil: darker center shape
 	draw_rect(Rect2(p + Vector2(-0.5, -0.3), Vector2(1.0, 0.6)), Color8(80, 80, 90), true)
 
 
-func _draw_library(p: Vector2) -> void:
-	_draw_building_3x3(p, Color8(100, 80, 140), Color8(70, 55, 100))
+func _draw_library(p: Vector2, cultural_tint: Color = Color.WHITE) -> void:
+	_draw_building_3x3(p, _apply_cultural_tint(Color8(100, 80, 140), cultural_tint), _apply_cultural_tint(Color8(70, 55, 100), cultural_tint))
 	# Book lines on shelf
 	var book_c: Color = Color8(200, 180, 160)
 	draw_line(p + Vector2(-0.8, -0.5), p + Vector2(-0.8, 0.5), book_c, 0.3, true)
@@ -488,26 +562,28 @@ func _draw_library(p: Vector2) -> void:
 	draw_line(p + Vector2(0.8, -0.5), p + Vector2(0.8, 0.5), book_c, 0.3, true)
 
 
-func _draw_barracks(p: Vector2) -> void:
-	_draw_building_3x3(p, Color8(160, 60, 50), Color8(120, 40, 35))
+func _draw_barracks(p: Vector2, cultural_tint: Color = Color.WHITE) -> void:
+	_draw_building_3x3(p, _apply_cultural_tint(Color8(160, 60, 50), cultural_tint), _apply_cultural_tint(Color8(120, 40, 35), cultural_tint))
 	# Chevron: military mark
 	var chev_c: Color = Color8(220, 200, 160)
 	draw_line(p + Vector2(-0.6, -0.3), p + Vector2(0.0, -0.8), chev_c, 0.5, true)
 	draw_line(p + Vector2(0.0, -0.8), p + Vector2(0.6, -0.3), chev_c, 0.5, true)
 
 
-func _draw_watchtower(p: Vector2) -> void:
+func _draw_watchtower(p: Vector2, cultural_tint: Color = Color.WHITE) -> void:
 	# Tall narrow tower
-	draw_rect(Rect2(p + Vector2(-0.5, -1.5), Vector2(1.0, 3.0)), Color8(140, 100, 70), true)
+	var tower_c: Color = _apply_cultural_tint(Color8(140, 100, 70), cultural_tint)
+	draw_rect(Rect2(p + Vector2(-0.5, -1.5), Vector2(1.0, 3.0)), tower_c, true)
 	# Platform at top
-	draw_rect(Rect2(p + Vector2(-0.8, -1.5), Vector2(1.6, 0.5)), Color8(160, 120, 80), true)
+	var plat_c: Color = _apply_cultural_tint(Color8(160, 120, 80), cultural_tint)
+	draw_rect(Rect2(p + Vector2(-0.8, -1.5), Vector2(1.6, 0.5)), plat_c, true)
 	# Flag
 	draw_rect(Rect2(p + Vector2(0.3, -2.0), Vector2(0.2, 0.5)), Color8(100, 70, 45), true)
 	draw_rect(Rect2(p + Vector2(0.5, -1.9), Vector2(0.5, 0.3)), Color8(200, 50, 50), true)
 
 
-func _draw_market(p: Vector2) -> void:
-	_draw_building_3x3(p, Color8(220, 180, 50), Color8(180, 145, 35))
+func _draw_market(p: Vector2, cultural_tint: Color = Color.WHITE) -> void:
+	_draw_building_3x3(p, _apply_cultural_tint(Color8(220, 180, 50), cultural_tint), _apply_cultural_tint(Color8(180, 145, 35), cultural_tint))
 	# Awning: triangular top
 	draw_colored_polygon(
 		PackedVector2Array([

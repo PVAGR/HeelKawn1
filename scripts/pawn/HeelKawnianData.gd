@@ -3354,8 +3354,13 @@ func allows_job_type(job_type: int) -> bool:
 		Job.Type.BUILD_MARKET, Job.Type.BUILD_TRADING_POST, \
 		Job.Type.BUILD_ROAD, \
 		Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR, \
+		Job.Type.BUILD_BREWERY, Job.Type.BUILD_TAVERN, \
 		Job.Type.BUILD_FORD, Job.Type.BUILD_WATER_MILL:
 			return work_build  # All construction = building skill
+		Job.Type.BREW_MEAD, Job.Type.BREW_ALE:
+			return work_build  # Brewing = building skill
+		Job.Type.DRINK:
+			return true  # Anyone can drink
 		Job.Type.MAINTAIN_STRUCTURE:
 			return work_build
 	return true
@@ -4102,4 +4107,77 @@ func compose_life_arc() -> String:
 	lines.append("  Mood: %.0f" % mood)
 
 	return "\n".join(lines)
+
+
+## Return visual indicators for rendering on the pawn sprite.
+## Each indicator is a dict with: type ("dot"/"ring"/"line"), color, offset, size.
+func get_visual_indicators() -> Array:
+	var result: Array = []
+
+	# --- Wound indicators (red dots) ---
+	if BodyPartWounds != null and BodyPartWounds.has_method("get_wound_summary"):
+		var wounds: Dictionary = BodyPartWounds.get_wound_summary(self)
+		if not wounds.is_empty():
+			var wound_count: int = 0
+			for body_part in wounds:
+				var severity: float = float(wounds[body_part])
+				if severity > 0.0:
+					# Red dot at different positions for different body parts
+					var part_name: String = str(body_part).to_lower()
+					var offset: Vector2 = Vector2(-3, -4)  # default: left shoulder
+					if part_name.find("leg") >= 0:
+						offset = Vector2(-3, 2)  # left leg
+					elif part_name.find("arm") >= 0:
+						offset = Vector2(3, -2)  # right arm
+					elif part_name.find("head") >= 0:
+						offset = Vector2(0, -6)  # head
+					elif part_name.find("torso") >= 0:
+						offset = Vector2(0, -1)  # torso
+					var dot_size: float = clampf(severity * 1.5, 0.5, 2.0)
+					result.append({"type": "dot", "color": Color8(220, 40, 30), "offset": offset, "size": dot_size})
+					wound_count += 1
+					if wound_count >= 4:
+						break  # Max 4 wound indicators
+
+	# --- Age indicators ---
+	if life_stage == LifeStage.ELDER or life_stage == LifeStage.ANCIENT:
+		# Gray hair: white ring above head
+		result.append({"type": "ring", "color": Color8(200, 200, 210, 180), "offset": Vector2(0, -7), "size": 1.5})
+	elif life_stage == LifeStage.CHILD or life_stage == LifeStage.INFANT:
+		# Small size indicator: yellow ring above head
+		result.append({"type": "ring", "color": Color8(255, 220, 100, 150), "offset": Vector2(0, -5), "size": 1.0})
+
+	# --- Grief/trauma token (dark circle below) ---
+	if PawnConsciousness != null and PawnConsciousness.has_method("get_trauma_level"):
+		var trauma: float = PawnConsciousness.get_trauma_level(int(id))
+		if trauma > 25.0:
+			var alpha: float = clampf(trauma / 100.0, 0.3, 1.0)
+			result.append({"type": "dot", "color": Color8(60, 40, 60, int(alpha * 200)), "offset": Vector2(2, 3), "size": 1.0})
+
+	# --- Profession indicator (small colored dot) ---
+	var prof: int = profession
+	if prof == Profession.BUILDER:
+		result.append({"type": "dot", "color": Color8(160, 120, 60), "offset": Vector2(3, -4), "size": 0.8})
+	elif prof == Profession.HUNTER:
+		result.append({"type": "dot", "color": Color8(200, 80, 40), "offset": Vector2(3, -4), "size": 0.8})
+	elif prof == Profession.MINER:
+		result.append({"type": "dot", "color": Color8(140, 140, 150), "offset": Vector2(3, -4), "size": 0.8})
+	elif prof == Profession.FARMER:
+		result.append({"type": "dot", "color": Color8(80, 160, 60), "offset": Vector2(3, -4), "size": 0.8})
+	elif prof == Profession.FISHER:
+		result.append({"type": "dot", "color": Color8(60, 120, 180), "offset": Vector2(3, -4), "size": 0.8})
+	elif prof == Profession.HEALER:
+		result.append({"type": "dot", "color": Color8(60, 200, 80), "offset": Vector2(3, -4), "size": 0.8})
+	elif prof == Profession.GATHERER:
+		result.append({"type": "dot", "color": Color8(180, 160, 60), "offset": Vector2(3, -4), "size": 0.8})
+	elif prof == Profession.WARRIOR:
+		result.append({"type": "dot", "color": Color8(180, 40, 40), "offset": Vector2(3, -4), "size": 0.8})
+	elif prof == Profession.SCHOLAR:
+		result.append({"type": "dot", "color": Color8(100, 80, 180), "offset": Vector2(3, -4), "size": 0.8})
+	elif prof == Profession.TRADER:
+		result.append({"type": "dot", "color": Color8(200, 180, 60), "offset": Vector2(3, -4), "size": 0.8})
+	elif prof == Profession.SMITH:
+		result.append({"type": "dot", "color": Color8(160, 100, 50), "offset": Vector2(3, -4), "size": 0.8})
+
+	return result
 

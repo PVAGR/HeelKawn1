@@ -211,6 +211,48 @@ func describe_settlement_style(settlement_id: int) -> String:
 ## Clear all stored styles (call on new game or reload).
 func clear() -> void:
 	settlement_styles.clear()
+	_cultural_colors.clear()
+
+
+## --- Cultural Color Rendering ---
+
+## Per-settlement cultural colors. Deterministic from settlement_id + style.
+var _cultural_colors: Dictionary = {}  # settlement_id (String) -> Color
+
+## Get the cultural color for a settlement. This is the visible tint applied
+## to all buildings in that settlement's territory. Deterministic from style.
+func get_cultural_color_for_settlement(settlement_id: int) -> Color:
+	var sid: String = str(settlement_id)
+	if _cultural_colors.has(sid):
+		return _cultural_colors[sid]
+	var style: Dictionary = settlement_styles.get(sid, {})
+	var color: Color
+	if style.is_empty():
+		# No style assigned yet — use a deterministic hue from settlement_id
+		color = Color.from_hsv(fmod(float(settlement_id) * 0.618033988749895, 1.0), 0.3, 0.85)
+	else:
+		# Derive color from style materials
+		var wall: String = str(style.get("wall_material", "wood_log")).to_lower()
+		var roof: String = str(style.get("roof_material", "thatch")).to_lower()
+		if wall.find("stone") >= 0 or wall.find("mud") >= 0:
+			# Stone/mud cultures: warm earth tones
+			color = Color.from_hsv(0.08 + fmod(float(settlement_id) * 0.07, 0.12), 0.35, 0.75)
+		elif wall.find("ice") >= 0 or wall.find("snow") >= 0:
+			# Ice/snow cultures: cool blue-white
+			color = Color.from_hsv(0.55 + fmod(float(settlement_id) * 0.05, 0.15), 0.2, 0.8)
+		elif wall.find("wood") >= 0:
+			# Wood cultures: warm amber-brown
+			color = Color.from_hsv(0.08 + fmod(float(settlement_id) * 0.13, 0.15), 0.4, 0.8)
+		else:
+			# Default: deterministic hue
+			color = Color.from_hsv(fmod(float(settlement_id) * 0.618033988749895, 1.0), 0.3, 0.85)
+	_cultural_colors[sid] = color
+	return color
+
+
+## Blend two settlement colors (for border regions or merged settlements).
+func blend_cultural_colors(color_a: Color, color_b: Color, ratio: float = 0.5) -> Color:
+	return color_a.lerp(color_b, ratio)
 
 
 ## Save/load for persistence.

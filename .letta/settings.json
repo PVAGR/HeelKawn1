@@ -248,7 +248,12 @@
       "Bash($g = \"C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\tools\\godot\\Godot_v4.6.2-stable_win64.exe\")",
       "Bash($g = \"C:\\Users\\user\\Downloads\\Inventory\\Sopstone\\Blue elrphanant\\Godot_v4.6.2-stable_win64.exe\\Godot_v4.6.2-stable_win64_console.exe\")",
       "Bash($g = \"C:\\Users\\user\\hk\\tools\\godot\\Godot_v4.6.2-stable_win64_console.exe\")",
-      "Edit(AI_SESSIONS/**)"
+      "Edit(AI_SESSIONS/**)",
+      "Bash((Get-ChildItem -Recurse -Filter *.gd)",
+      "Bash(Get-ChildItem -Recurse -Filter *.gd)",
+      "Bash((Get-Content \"C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\scripts\\world\\WorldOverlay.gd\").Count)",
+      "Bash((Get-Content \"C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\scripts\\pawn\\HeelKawnianData.gd\").Count)",
+      "Bash((Get-Content \"C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\scripts\\pawn\\HeelKawnian.gd\").Count)"
     ]
   }
 }

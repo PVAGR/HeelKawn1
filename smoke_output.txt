@@ -1,0 +1,85 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+[CrashTrap] CrashTrap initialized. trace_enabled=false trace_first_sim_tick=false (per-listener tick-1 trace when both true)
+[MemoryManager] Initialized
+[VALIDATION_SMOKETEST] marker=PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp source=SettlementMemory.autoload debug_build=true VALIDATION_SESSION_ENABLED_const=false clean_economy_armed=false settlement_truth_verify_armed=false specialization_log_armed=false
+[SettlementManager] Initialized
+[WorldAI] Neural world matrix initialized with 19 neural networks
+[WorldAI] Specialized neural networks initialized
+[AIAgentManager] Neural network matrix initialized with 4 layers
+[AIAgentManager] Learning algorithms initialized
+[AIAgentManager] Pattern recognition systems initialized
+[AIAgentManager] Predictive models initialized
+[AIAgentManager] Collective intelligence initialized
+[EventBus] Subscribed: pawn_died → KnowledgeSystem._on_pawn_died
+[EventBus] Subscribed: pawn_died → GrudgeManager._on_pawn_died
+[EventBus] Subscribed: diaspora_exile → GossipManager._on_diaspora_exile
+[PlaytestRecorder] Started recording session 20260514_013741
+WARNING: [AIOrchestrator] Layer script not found: res://scripts/ai/AISettlementManager.gd
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] _load_layer_script (res://scripts/ai/HeelKawnAIOrchestrator.gd:425)
+       [1] _initialize_layers (res://scripts/ai/HeelKawnAIOrchestrator.gd:399)
+       [2] _ready (res://scripts/ai/HeelKawnAIOrchestrator.gd:79)
+[EventBus] Subscribed: pressure_event → HeelKawnianManager._on_pressure_event
+[TickDecoupler] Registered system: Input (interval: 1 ticks)
+[TickDecoupler] Registered system: Camera (interval: 1 ticks)
+[TickDecoupler] Registered system: UI (interval: 1 ticks)
+[TickDecoupler] Registered system: Physics (interval: 2 ticks)
+[TickDecoupler] Registered system: Pathfinding (interval: 2 ticks)
+[TickDecoupler] Registered system: AI (interval: 5 ticks)
+[TickDecoupler] Registered system: Economy (interval: 5 ticks)
+[TickDecoupler] Registered system: Social (interval: 5 ticks)
+[TickDecoupler] Registered system: Weather (interval: 10 ticks)
+[TickDecoupler] Registered system: Foliage (interval: 10 ticks)
+[TickDecoupler] Registered system: AmbientAudio (interval: 10 ticks)
+[TickDecoupler] Registered system: MemoryCleanup (interval: 60 ticks)
+[TickDecoupler] Registered system: StatsCollection (interval: 60 ticks)
+[PF_STACK] flusher=res://scripts/world/PathFinder.gd:113 -> res://scenes/world/World.gd:100 (dirty setter not shown)
+[INFO] PawnSpawner: pawn_scene loaded successfully: res://scenes/pawn/HeelKawnian.tscn
+WARNING: ChronicleBook disabled: missing Panel or ChronicleText nodes.
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] _warn_missing_ui_once (res://scripts/ui/ChronicleBook.gd:161)
+       [1] _ready (res://scripts/ui/ChronicleBook.gd:22)
+WARNING: SeedGallery disabled: missing Panel or Grid nodes.
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] _warn_missing_ui_once (res://scripts/ui/SeedGallery.gd:170)
+       [1] _ready (res://scripts/ui/SeedGallery.gd:34)
+[VALIDATION_SMOKETEST] marker=PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp source=Main.gd debug_build=true VALIDATION_SESSION_ENABLED_const=false clean_economy_armed=false settlement_truth_verify_armed=false specialization_log_armed=false
+[CrashTrap] OK: Autoload 'SettlementMemory' (Node)
+[CrashTrap] OK: Autoload 'WorldAI' (Node)
+[Main] Scene ready. Tick interval: 1.00s
+[Main] Speed: 1.0x
+[Main] Speed: 1.0x
+[Main] Watch mode: world runs fully autonomous; you observe without commanding.
+[Main] Player mode: WATCH
+[Main] React: +32 MINE  +0 MINE_WALL  (active walls=0)
+[HeelKawnian] #1 Sarah Hunterer: tick armed=true, tickable=true
+[HeelKawnian] #2 Elizabeth Taylorford: tick armed=true, tickable=true
+[HeelKawnian] #3 Catherine Bakerford: tick armed=true, tickable=true
+[HeelKawnian] #4 Jane Wrightville: tick armed=true, tickable=true
+[HeelKawnian] #5 Sarah Walkerer: tick armed=true, tickable=true
+[HeelKawnian] #6 Alice Smithville: tick armed=true, tickable=true
+[HeelKawnian] #7 Anne Walkerford: tick armed=true, tickable=true
+[HeelKawnian] #8 Emma Millerson: tick armed=true, tickable=true
+[HeelKawnian] #9 Emma Wrightville: tick armed=true, tickable=true
+[HeelKawnian] #10 Alice Hunterman: tick armed=true, tickable=true
+[HeelKawnian] #11 Alice Walkerville: tick armed=true, tickable=true
+[HeelKawnian] #12 Sarah Walkerman: tick armed=true, tickable=true
+[HeelKawnian] #13 Alice Hunterman: tick armed=true, tickable=true
+[HeelKawnian] #14 Jane Taylorson: tick armed=true, tickable=true
+[HeelKawnian] #15 Sarah Millerer: tick armed=true, tickable=true
+[HeelKawnian] #16 Emma Smithville: tick armed=true, tickable=true
+[HeelKawnian] #17 Mary Fisherton: tick armed=true, tickable=true
+[HeelKawnian] #18 Rose Wrightman: tick armed=true, tickable=true
+[HeelKawnian] #19 Rose Smithman: tick armed=true, tickable=true
+[HeelKawnian] #20 Rose Bakerman: tick armed=true, tickable=true
+[VALIDATION_STATUS] debug_build=true VALIDATION_SESSION_ENABLED_const=false WorldEvents_VALIDATION_CLEAN_ECONOMY_EVENTS_const=false clean_economy_active=false settlement_truth_verify_active=false specialization_validation_log_active=false
+[HeelKawnian] #21 Ivor: tick armed=true, tickable=true
+[HeelKawnian] #22 Petra: tick armed=true, tickable=true
+[HeelKawnian] #23 Osric: tick armed=true, tickable=true
+[HeelKawnian] #24 Kenan: tick armed=true, tickable=true
+[HeelKawnian] #25 Fiona: tick armed=true, tickable=true
+[HeelKawnian] #26 Rhea: tick armed=true, tickable=true

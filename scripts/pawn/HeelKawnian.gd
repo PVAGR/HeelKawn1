@@ -1863,6 +1863,61 @@ func _try_autonomy_social_seek() -> bool:
 	return _state == State.DRAFT_WALK
 
 
+func _maybe_seek_trusted_companion() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	if _state != State.IDLE or not _path.is_empty():
+		return false
+	# Comfort-seeking should not override survival pressure.
+	if data.mood >= 44.0:
+		return false
+	if data.hunger <= HUNGER_EAT_THRESHOLD + 6.0:
+		return false
+	if data.rest <= REST_SLEEP_THRESHOLD + 6.0:
+		return false
+	var tick: int = GameManager.tick_count
+	if tick < _next_autonomy_social_seek_tick:
+		return false
+	if posmod(tick + int(data.id) * 13, 29) != 0:
+		return false
+	var spawner: PawnSpawner = _resolve_pawn_spawner()
+	if spawner == null:
+		return false
+	var best_peer: HeelKawnian = null
+	var best_score: float = -999999.0
+	var seen: int = 0
+	for p in _alive_pawns_from_spawner(spawner):
+		seen += 1
+		if seen > 24:
+			break
+		if p == null or not is_instance_valid(p) or p == self or p.data == null:
+			continue
+		var d2: int = data.tile_pos.distance_squared_to(p.data.tile_pos)
+		if d2 > 625:
+			continue
+		var peer_id: int = int(p.data.id)
+		var trust_v: float = float(data.trust.get(peer_id, 50.0))
+		var rapport_v: float = float(data.get_social_rapport(peer_id))
+		if trust_v < 58.0 and rapport_v < 120.0:
+			continue
+		var score: float = trust_v * 0.62 + rapport_v * 0.015 + float(p.data.mood) * 0.08 - float(d2) * 0.06
+		if data.current_profession != HeelKawnianData.Profession.NONE and p.data.current_profession == data.current_profession:
+			score += 6.0
+		if score > best_score:
+			best_score = score
+			best_peer = p
+	if best_peer == null:
+		return false
+	var near_tile: Vector2i = _pick_passable_near_tile(data.tile_pos, best_peer.data.tile_pos)
+	if near_tile.x < 0:
+		return false
+	var best_peer_id: int = int(best_peer.data.id)
+	data.update_social_memory(best_peer_id, 0.12, 0.0, -0.05, 0.16, "seeking_support")
+	_next_autonomy_social_seek_tick = tick + 80
+	autonomy_draft_goto(near_tile, "social_seek", best_peer_id)
+	return _state == State.DRAFT_WALK
+
+
 ## Memorial pilgrimage: pawn feels desire to visit memorial (closure, remembrance, family)
 func _try_start_pilgrimage() -> bool:
 	if data == null or _world == null or GameManager == null:
@@ -2943,23 +2998,81 @@ func _on_world_tick(_tick: int) -> void:
 
 
 func _fast_forward_tick_stride() -> int:
-	# No stride. Every pawn ticks every tick. Speed is the speed.
+	if GameManager == null:
+		return 1
+	var gs: float = GameManager.game_speed
+	# Keep low-speed behavior unchanged; throttle only in fast-forward tiers.
+	if gs >= 100.0:
+		return 10
+	if gs >= 50.0:
+		return 7
+	if gs >= 26.0:
+		return 5
+	if gs >= 12.0:
+		return 3
+	if gs >= 6.0:
+		return 2
 	return 1
 
 
 func _job_claim_interval_for_speed() -> int:
-	# No throttle. Every pawn claims every tick. Speed is the speed.
+	if GameManager == null:
+		return 1
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 6
+	if gs >= 50.0:
+		return 5
+	if gs >= 26.0:
+		return 3
+	if gs >= 12.0:
+		return 2
 	return 1
 
 
 func _idle_action_refresh_interval_for_speed() -> int:
-	# No throttle. Pawns reconsider their idle action every tick.
-	return 1
+	if GameManager == null:
+		return 8
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 72
+	if gs >= 50.0:
+		return 48
+	if gs >= 26.0:
+		return 32
+	if gs >= 12.0:
+		return 20
+	if gs >= 6.0:
+		return 14
+	return 8
 
 
 func _work_step_interval_for_speed() -> int:
-	# No throttle. Work steps process every tick.
+	if GameManager == null:
+		return 1
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 3
+	if gs >= 50.0:
+		return 2
+	if gs >= 26.0:
+		return 2
 	return 1
+
+
+func _lane_interval_for_speed(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
+	if GameManager == null:
+		return maxi(1, normal_ticks)
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return maxi(1, ultra_ticks)
+	if gs >= 50.0:
+		return maxi(1, maxi(fast_ticks, int(round(float(ultra_ticks) * 0.75))))
+	if gs >= 26.0:
+		return maxi(1, fast_ticks)
+	if gs >= 12.0:
+		return maxi(1, maxi(normal_ticks, int(round(float(fast_ticks) * 0.6))))
+	return maxi(1, normal_ticks)
 
 
 func _should_panic_sleep() -> bool:
@@ -3504,10 +3617,14 @@ func _tick_idle() -> void:
 	# BUNDLE 4: Medium/social/narrative lanes — non-critical autonomy
 	# work is phased by stable pawn id so idle ticks stay cheap at high speed.
 	# These are non-critical for survival; urgent eating/sleeping gates above are unaffected.
-	var run_medium_lane := _is_lane_tick(now_tick, PAWN_MEDIUM_AI_INTERVAL_TICKS, 11)
-	var run_social_lane := _is_lane_tick(now_tick, PAWN_SOCIAL_REFRESH_INTERVAL_TICKS, 17)
-	var run_nearby_lane := _is_lane_tick(now_tick, PAWN_NEARBY_SCAN_INTERVAL_TICKS, 23)
-	var run_narrative_lane := _is_lane_tick(now_tick, PAWN_NARRATIVE_REFRESH_INTERVAL_TICKS, 31)
+	var medium_lane_interval: int = _lane_interval_for_speed(PAWN_MEDIUM_AI_INTERVAL_TICKS, 2, 4)
+	var social_lane_interval: int = _lane_interval_for_speed(PAWN_SOCIAL_REFRESH_INTERVAL_TICKS, 3, 6)
+	var nearby_lane_interval: int = _lane_interval_for_speed(PAWN_NEARBY_SCAN_INTERVAL_TICKS, 3, 7)
+	var narrative_lane_interval: int = _lane_interval_for_speed(PAWN_NARRATIVE_REFRESH_INTERVAL_TICKS, 4, 9)
+	var run_medium_lane: bool = _is_lane_tick(now_tick, medium_lane_interval, 11)
+	var run_social_lane: bool = _is_lane_tick(now_tick, social_lane_interval, 17)
+	var run_nearby_lane: bool = _is_lane_tick(now_tick, nearby_lane_interval, 23)
+	var run_narrative_lane: bool = _is_lane_tick(now_tick, narrative_lane_interval, 31)
 	if run_medium_lane:
 		# 2b. HeelKawnian Matrix social intent: ally-seek, mentor-seek, or confrontation.
 		if _try_heelkawnian_matrix_social_action():
@@ -3620,6 +3737,8 @@ func _tick_idle() -> void:
 	# 5. Social cognition: choose one social action first, then fall back.
 	# Teaching/challenge can scan nearby pawns; run them only on the social lane.
 	if run_social_lane:
+		if _maybe_seek_trusted_companion():
+			return
 		if preferred_idle_action == "teach":
 			if _maybe_start_teaching():
 				return
@@ -3678,8 +3797,13 @@ func _tick_idle() -> void:
 	# normal filter if no forage is available. Stops the colony from happily
 	# mining stone while everyone starves.
 	
-	# Job claiming: every pawn claims every tick. No throttle.
-	# Hungry pawns always claim — need drives action.
+	# High-speed throttle: healthy idle pawns do not need a full job scan every tick.
+	# Survival gates above still run every eligible idle tick.
+	var job_claim_interval: int = _job_claim_interval_for_speed()
+	if job_claim_interval > 1:
+		if posmod(now_tick + int(data.id) * 37, job_claim_interval) != 0:
+			return
+
 	if utility_context.is_empty() or (_decision._cached_utility_food_emergency if _decision != null else _cached_utility_food_emergency) != food_emergency:
 		utility_context = _build_idle_utility_context(food_emergency)
 	

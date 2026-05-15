@@ -198,6 +198,7 @@ static func _materials_for_build(job_type: int) -> Dictionary:
 		_Job.Type.BUILD_DOOR: return {"item": _Item.Type.WOOD, "qty": DOOR_WOOD_COST}
 		_Job.Type.BUILD_FIRE_PIT:     return {"item": _Item.Type.WOOD, "qty": 2}  # wood + stone (stone tracked separately)
 		_Job.Type.BUILD_STORAGE_HUT:  return {"item": _Item.Type.WOOD, "qty": 3}
+		_Job.Type.BUILD_STOCKPILE:    return {"item": _Item.Type.WOOD, "qty": 10}  # + 5 sticks tracked separately
 		_Job.Type.BUILD_MARKER_STONE: return {"item": _Item.Type.STONE, "qty": 2}
 		_Job.Type.BUILD_SHRINE:       return {"item": _Item.Type.WOOD, "qty": 2}  # + stone tracked separately
 		_Job.Type.BUILD_SHELTER:      return {"item": _Item.Type.WOOD, "qty": BED_WOOD_COST}
@@ -1552,7 +1553,7 @@ func _find_pawn_by_id(pid: int) -> HeelKawnian:
 func _is_structure_build_job(jtype: int) -> bool:
 	match jtype:
 		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, \
-		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_MARKER_STONE, \
+		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_STOCKPILE, _Job.Type.BUILD_MARKER_STONE, \
 		_Job.Type.BUILD_SHRINE, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, \
 		_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN, \
 		_Job.Type.BUILD_WORKSHOP, _Job.Type.BUILD_LOOM, _Job.Type.BUILD_KILN, _Job.Type.BUILD_SMELTER, \
@@ -1704,6 +1705,83 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 	return true
 
 
+## Autonomous stockpile posting: if no stockpiles exist (or very few) and
+## the pawn has gathered enough wood + sticks, post a BUILD_STOCKPILE job.
+func _try_post_stockpile_job() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	var tick: int = GameManager.tick_count
+	# Throttle: each pawn checks once every 100 ticks (staggered by id)
+	if posmod(tick + int(data.id) * 13, 100) != 0:
+		return false
+	# Only post if survival needs are met
+	if data.hunger < HUNGER_EAT_THRESHOLD or data.rest < REST_SLEEP_THRESHOLD:
+		return false
+	# Count existing stockpiles
+	var spawner: Node = get_node_or_null("/root/PawnAccess")
+	var stockpile_count: int = 0
+	if StockpileManager != null and StockpileManager.has_method("zone_count"):
+		stockpile_count = int(StockpileManager.call("zone_count"))
+	# Only post if fewer than 3 stockpiles exist
+	if stockpile_count >= 3:
+		return false
+	# Check if pawn has enough wood (10) and sticks (5)
+	var has_wood: int = 0
+	var has_sticks: int = 0
+	if data.is_carrying() and data.carrying == _Item.Type.WOOD:
+		has_wood = data.carrying_qty
+	if data.is_carrying() and data.carrying == _Item.Type.STICK:
+		has_sticks = data.carrying_qty
+	# Also check stockpile inventory
+	if StockpileManager != null:
+		has_wood += StockpileManager.total_of(_Item.Type.WOOD)
+		has_sticks += StockpileManager.total_of(_Item.Type.STICK)
+	if has_wood < 10 or has_sticks < 5:
+		return false
+	# Find a valid tile near the pawn to build the stockpile
+	var target_tile: Vector2i = _find_stockpile_site_tile()
+	if target_tile.x < 0:
+		return false
+	# Post the job
+	var job: Job = JobManager.post(Job.Type.BUILD_STOCKPILE, target_tile, 7, 20)
+	if job == null:
+		return false
+	WorldMemory.record_event({
+		"type": "stockpile_job_posted",
+		"pawn_id": int(data.id),
+		"pawn_name": data.display_name,
+		"tick": tick,
+		"tile": {"x": target_tile.x, "y": target_tile.y},
+	})
+	return true
+
+
+## Find a suitable tile for building a stockpile near the pawn's current position.
+func _find_stockpile_site_tile() -> Vector2i:
+	if _world == null or _world.data == null or _world.pathfinder == null:
+		return Vector2i(-1, -1)
+	var center: Vector2i = data.tile_pos
+	var radius: int = 8
+	for r in range(1, radius + 1):
+		for dx in range(-r, r + 1):
+			for dy in range(-r, r + 1):
+				if absi(dx) != r and absi(dy) != r:
+					continue
+				var t: Vector2i = Vector2i(center.x + dx, center.y + dy)
+				if not _world.data.in_bounds(t.x, t.y):
+					continue
+				if not _world.pathfinder.is_passable(t):
+					continue
+				var feat: int = int(_world.data.get_feature(t.x, t.y))
+				if feat != TileFeature.Type.NONE and feat != TileFeature.Type.FERTILE_SOIL:
+					continue
+				if JobManager != null and JobManager.has_method("_jobs_by_tile"):
+					if JobManager._jobs_by_tile.has(t):
+						continue
+				return t
+	return Vector2i(-1, -1)
+
+
 func _try_heelkawnian_affiliation_action() -> bool:
 	if data == null or _world == null or GameManager == null:
 		return false
@@ -1783,7 +1861,7 @@ func _matrix_ambition_target_tile(job_type: int) -> Vector2i:
 	var allow_fertile: bool = false  # Farms can go on fertile soil
 	if job_type == _Job.Type.BUILD_WALL or job_type == _Job.Type.BUILD_DOOR:
 		prefer_ring = 8
-	elif job_type == _Job.Type.BUILD_BED or job_type == _Job.Type.BUILD_FIRE_PIT or job_type == _Job.Type.BUILD_STORAGE_HUT or job_type == _Job.Type.BUILD_SHELTER or job_type == _Job.Type.BUILD_HEARTH:
+	elif job_type == _Job.Type.BUILD_BED or job_type == _Job.Type.BUILD_FIRE_PIT or job_type == _Job.Type.BUILD_STORAGE_HUT or job_type == _Job.Type.BUILD_STOCKPILE or job_type == _Job.Type.BUILD_SHELTER or job_type == _Job.Type.BUILD_HEARTH:
 		prefer_ring = 6  # Increased from 3 â€” critical infrastructure needs more space
 	elif job_type == _Job.Type.GROW_FOOD or job_type == _Job.Type.PLANT_SEEDS:
 		prefer_ring = 6
@@ -3671,6 +3749,8 @@ func _tick_idle() -> void:
 			return
 		# Matrix ambition seed: post one strategic household/settlement job.
 		_try_heelkawnian_matrix_ambition_seed()
+		# Autonomous stockpile: if no stockpiles exist and pawn has materials, post one.
+		_try_post_stockpile_job()
 	if run_social_lane:
 		# 2c. Human ladder affiliation: household -> clan -> nation.
 		if _try_heelkawnian_affiliation_action():
@@ -4025,7 +4105,7 @@ func _tick_idle() -> void:
 			match int(j.type):
 				_Job.Type.MINE, _Job.Type.MINE_WALL, _Job.Type.CHOP:
 					base_bias += 3  # Increased from 2
-				_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, \
+				_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_STOCKPILE, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, \
 				_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN, \
 				_Job.Type.BUILD_WORKSHOP, _Job.Type.BUILD_LOOM, _Job.Type.BUILD_KILN, _Job.Type.BUILD_SMELTER, \
 				_Job.Type.BUILD_BOATYARD, _Job.Type.BUILD_DOCK, _Job.Type.BUILD_FISHERMAN_HUT, \
@@ -4247,14 +4327,14 @@ func _tick_idle() -> void:
 			if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.PLANT_SEEDS or j.type == _Job.Type.HARVEST_CROPS or j.type == _Job.Type.FISH:
 				zone_bias += 6
 		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.BUILD):
-			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH:
+			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_STOCKPILE or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH:
 				zone_bias += 6
 		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.DEFEND):
 			if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
 				zone_bias += 6
 		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.TERRITORY):
 			# Territory zones: pawns prefer building and working inside their own territory
-			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH or j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.MINE or j.type == _Job.Type.MINE_WALL:
+			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_STOCKPILE or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH or j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.MINE or j.type == _Job.Type.MINE_WALL:
 				zone_bias += 4
 		base_bias += zone_bias
 		# Materials: HeelKawnians build when they have materials and gather when they don't.
@@ -4974,7 +5054,7 @@ func _work_rate_band_for_job(job_type: int) -> float:
 	match job_type:
 		_Job.Type.BUILD_ROAD, _Job.Type.PLANT_SEEDS, _Job.Type.HARVEST_CROPS, _Job.Type.GROW_FOOD:
 			return 3.0
-		_Job.Type.BUILD_BED, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH, _Job.Type.MAINTAIN_STRUCTURE:
+		_Job.Type.BUILD_BED, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_STOCKPILE, _Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH, _Job.Type.MAINTAIN_STRUCTURE:
 			return 1.75
 		_Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR:
 			return 0.9
@@ -5580,7 +5660,7 @@ func _is_job_tile_still_valid(job: Job) -> bool:
 				return false
 			return tf.count_of(job.trade_item) > 0
 		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, \
-		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, \
+		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_STOCKPILE, \
 		_Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, \
 		_Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, \
 		# Phase 6: new buildings via BuildingRegistry
@@ -5761,7 +5841,7 @@ func _complete_current_job() -> void:
 		_Job.Type.CRAFT_KNIFE, _Job.Type.CRAFT_TORCH, _Job.Type.CRAFT_PICK, _Job.Type.CRAFT_SPEAR:
 			_finish_craft(job)
 			produced_type = _Item.Type.NONE  # tool is equipped, not carried
-		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH:
+		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_STOCKPILE, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH:
 			_finish_shelter_build(job)
 			# If _finish_shelter_build triggered a re-fetch, don't complete the job
 			if _state == State.FETCHING_MATERIAL:
@@ -5880,6 +5960,8 @@ func _complete_current_job() -> void:
 			data.add_mood_event(MoodEvent.Type.JOY, 80.0, 300)  # Fire brings warmth and hope
 		_Job.Type.BUILD_STORAGE_HUT:
 			data.add_mood_event(MoodEvent.Type.CONTENTMENT, 55.0, 200)  # Security feels good
+		_Job.Type.BUILD_STOCKPILE:
+			data.add_mood_event(MoodEvent.Type.CONTENTMENT, 60.0, 220)  # Organized storage feels productive
 		_Job.Type.BUILD_MARKER_STONE:
 			data.add_mood_event(MoodEvent.Type.PRIDE, 65.0, 280)  # Marking territory feels significant
 		_Job.Type.BUILD_SHRINE:
@@ -5925,7 +6007,7 @@ func _complete_current_job() -> void:
 			job_kind = WorldMemory.Kind.FOOD_EVENT
 		elif job.type == _Job.Type.COOK_MEAT or job.type == _Job.Type.COOK_BERRIES or job.type == _Job.Type.COOK_FISH or job.type == _Job.Type.DRY_MEAT:
 			job_kind = WorldMemory.Kind.FOOD_EVENT
-		elif job.type == _Job.Type.BUILD_BED or job.type == _Job.Type.BUILD_WALL or job.type == _Job.Type.BUILD_DOOR or job.type == _Job.Type.BUILD_FIRE_PIT or job.type == _Job.Type.BUILD_STORAGE_HUT or job.type == _Job.Type.BUILD_SHELTER or job.type == _Job.Type.BUILD_HEARTH:
+		elif job.type == _Job.Type.BUILD_BED or job.type == _Job.Type.BUILD_WALL or job.type == _Job.Type.BUILD_DOOR or job.type == _Job.Type.BUILD_FIRE_PIT or job.type == _Job.Type.BUILD_STORAGE_HUT or job.type == _Job.Type.BUILD_STOCKPILE or job.type == _Job.Type.BUILD_SHELTER or job.type == _Job.Type.BUILD_HEARTH:
 			job_kind = WorldMemory.Kind.BUILDING_CONSTRUCTED
 		WorldMemory.record_event({
 			"type": "job_completed",
@@ -6013,6 +6095,38 @@ func _current_settlement_center_region() -> int:
 func _register_built_structure(tile: Vector2i, feature_type: int) -> void:
 	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("register_structure"):
 		BuildingUsageTracker.register_structure(tile, feature_type, int(data.id), _current_settlement_center_region())
+
+
+## Create a stockpile zone at the given tile after BUILD_STOCKPILE job completes.
+func _create_stockpile_at_tile(tile: Vector2i) -> void:
+	if _world == null or _world.data == null:
+		return
+	# Create a new Stockpile node and add it to the scene tree
+	var sp: Stockpile = Stockpile.new()
+	sp.tile = tile
+	sp.rect = Rect2i(tile.x, tile.y, 3, 3)  # 3x3 zone
+	sp.filter = Stockpile.Filter.ALL
+	sp.settlement_id = data.settlement_id
+	sp.position = _world.tile_to_world(tile)
+	sp.name = "Stockpile_%d" % int(data.id)
+	# Add to the WorldViewport so it renders
+	var viewport: Node = _world.get_parent()
+	if viewport != null:
+		viewport.add_child(sp)
+	# Register with StockpileManager
+	if StockpileManager != null and StockpileManager.has_method("add_zone"):
+		StockpileManager.call("add_zone", sp)
+	# Consume 5 sticks from inventory (wood already consumed via material cost)
+	if StockpileManager != null:
+		StockpileManager.take_item(_Item.Type.STICK, 5, data.tile_pos)
+	WorldMemory.record_event({
+		"type": "stockpile_created",
+		"pawn_id": int(data.id),
+		"pawn_name": data.display_name,
+		"tick": GameManager.tick_count,
+		"tile": {"x": tile.x, "y": tile.y},
+		"settlement_id": data.settlement_id,
+	})
 
 
 ## Complete a tool-crafting job: consume materials from stockpile, equip the tool.
@@ -6131,6 +6245,16 @@ func _finish_shelter_build(job: Job) -> void:
 			_register_built_structure(job.tile, TileFeature.Type.STORAGE_HUT)
 			WorldMemory.record_event({
 				"type": "storage_built",
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"tick": GameManager.tick_count,
+				"tile": {"x": job.tile.x, "y": job.tile.y},
+			})
+		_Job.Type.BUILD_STOCKPILE:
+			_create_stockpile_at_tile(job.tile)
+			_register_built_structure(job.tile, -1)
+			WorldMemory.record_event({
+				"type": "stockpile_built",
 				"pawn_id": int(data.id),
 				"pawn_name": data.display_name,
 				"tick": GameManager.tick_count,

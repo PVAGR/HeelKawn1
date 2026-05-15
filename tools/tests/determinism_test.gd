@@ -13,7 +13,7 @@ const TEST_TICKS: int = 30
 const SEED: int = 12345
 
 var _root: Node
-var _run: int = 0
+var _run_count: int = 0
 var _fingerprints: Array[String] = []
 var _tick_count: int = 0
 var _game_manager: Node
@@ -24,16 +24,21 @@ func _init() -> void:
 	print("seed=%d  ticks_per_run=%d  runs=2" % [SEED, TEST_TICKS])
 
 
-func _run() -> void:
+func _ready() -> void:
+	await _execute_test()
+
+
+func _execute_test() -> void:
 	_root = get_root()
 
 	# Run 1
 	print("\n--- Run 1 ---")
-	if not _wait_for_boot():
+	var boot_ok: bool = await _wait_for_boot()
+	if not boot_ok:
 		print("[FAIL] Boot timed out")
 		quit(2)
 		return
-	_run_ticks_and_capture()
+	await _run_ticks_and_capture()
 	var fp1: String = _fingerprints[0]
 	print("Fingerprint 1: %s" % fp1)
 

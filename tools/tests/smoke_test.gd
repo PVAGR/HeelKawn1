@@ -35,6 +35,7 @@ func _process(_delta: float) -> bool:
 		2: _run_ticks()
 		3: _check_world_memory()
 		4: _finish()
+	return false
 
 
 func _check_boot() -> void:

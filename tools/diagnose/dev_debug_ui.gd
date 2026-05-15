@@ -13,9 +13,9 @@ var _panel: Panel = null
 func _ready() -> void:
 	_create_ui()
 	if _autostart_monitor:
-		# best-effort call: start TickMonitor if autoloaded
-		if typeof(TickMonitor) != TYPE_NIL and TickMonitor != null:
-			TickMonitor.monitor_start(1.0)
+		var tm: Node = get_node_or_null("/root/TickMonitor")
+		if tm != null and tm.has_method("monitor_start"):
+			tm.call("monitor_start", 1.0)
 
 func _create_ui() -> void:
 	var layer = CanvasLayer.new()
@@ -172,8 +172,9 @@ func _on_speed_pressed(multiplier: float) -> void:
 
 func _on_start_pressed() -> void:
 	_append_log("Start Monitor pressed")
-	if typeof(TickMonitor) != TYPE_NIL and TickMonitor != null:
-		TickMonitor.monitor_start(1.0)
+	var tm: Node = get_node_or_null("/root/TickMonitor")
+	if tm != null and tm.has_method("monitor_start"):
+		tm.call("monitor_start", 1.0)
 		_append_log("TickMonitor.monitor_start() called")
 	else:
 		_append_log("TickMonitor not available")
@@ -181,8 +182,9 @@ func _on_start_pressed() -> void:
 
 func _on_stop_pressed() -> void:
 	_append_log("Stop Monitor pressed")
-	if typeof(TickMonitor) != TYPE_NIL and TickMonitor != null:
-		TickMonitor.monitor_stop()
+	var tm: Node = get_node_or_null("/root/TickMonitor")
+	if tm != null and tm.has_method("monitor_stop"):
+		tm.call("monitor_stop")
 		_append_log("TickMonitor.monitor_stop() called")
 	else:
 		_append_log("TickMonitor not available")

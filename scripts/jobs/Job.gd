@@ -25,6 +25,7 @@ enum Type {
 	# --- Shelter / Storage / Hearth / Marker ---
 	BUILD_FIRE_PIT,    # craft fire pit: wood + stone = warmth/cooking hub
 	BUILD_STORAGE_HUT, # expand storage: wood + wood = higher capacity
+	BUILD_STOCKPILE,   # build stockpile zone: 10 wood + 5 sticks = haul target
 	BUILD_MARKER_STONE,# carve marker: stone + stick = territorial marker
 	BUILD_SHRINE,      # build shrine: wood + stone + stone = ritual site
 	# --- Record Carriers (Phase 5: Knowledge Preservation) ---
@@ -173,6 +174,7 @@ static func describe_type(t: int) -> String:
 		Type.CRAFT_SPEAR:  return "CraftSpear"
 		Type.BUILD_FIRE_PIT:    return "BuildFirePit"
 		Type.BUILD_STORAGE_HUT: return "BuildStorageHut"
+		Type.BUILD_STOCKPILE:   return "BuildStockpile"
 		Type.BUILD_MARKER_STONE:return "BuildMarker"
 		Type.BUILD_SHRINE:      return "BuildShrine"
 		Type.CARVE_GRAVE_MARKER:    return "CarveGrave"
@@ -279,6 +281,7 @@ static func tool_job_work_ticks(job_type: int) -> int:
 		Type.CRAFT_SPEAR:  return 8   # Faster (was 18)
 		Type.BUILD_FIRE_PIT:    return 12  # Much faster (was 30)
 		Type.BUILD_STORAGE_HUT: return 15  # Much faster (was 35)
+		Type.BUILD_STOCKPILE:   return 20  # Building a stockpile zone
 		Type.BUILD_MARKER_STONE:return 10  # Much faster (was 25)
 		Type.BUILD_SHRINE:      return 20  # Much faster (was 45)
 		Type.CARVE_GRAVE_MARKER:    return 15  # Faster (was 30)

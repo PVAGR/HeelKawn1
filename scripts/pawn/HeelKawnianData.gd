@@ -1893,6 +1893,7 @@ func personal_confidence_for_job(job_type: int) -> float:
 		26: action = "protect"     # PROTECT
 		27: action = "defend"      # DEFEND
 		28: action = "mine"        # MINE_WALL
+		29: action = "build"       # BUILD_STOCKPILE
 		_: action = "work"        # Generic fallback
 	if action == "":
 		return 0.5
@@ -3263,6 +3264,7 @@ static func skill_for_job(job_type: int) -> int:
 		Job.Type.CRAFT_SPEAR:  return Skill.HUNTING
 		Job.Type.BUILD_FIRE_PIT:    return Skill.BUILDING
 		Job.Type.BUILD_STORAGE_HUT: return Skill.BUILDING
+		Job.Type.BUILD_STOCKPILE:   return Skill.BUILDING
 		Job.Type.BUILD_MARKER_STONE:return Skill.BUILDING
 		Job.Type.BUILD_SHRINE:      return Skill.BUILDING
 		Job.Type.COOK_MEAT:         return Skill.BUILDING

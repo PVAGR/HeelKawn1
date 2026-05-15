@@ -72,7 +72,7 @@ func add_disease(pawn_data: RefCounted, disease_type: int, initial_severity: flo
 	# Initialize disease tracking
 	if not pawn_data.get("diseases"):
 		pawn_data.set("diseases", {})
-	var diseases: Dictionary = pawn_data.diseases
+	var diseases: Dictionary = pawn_data.get("diseases", {})
 	var disease_key: String = str(disease_type)
 	# If already has this disease, increase severity
 	if diseases.has(disease_key):

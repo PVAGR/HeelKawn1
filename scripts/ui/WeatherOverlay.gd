@@ -16,6 +16,7 @@ const SNOW_AMOUNT: int = 40
 const SAND_AMOUNT: int = 25
 const EMBER_AMOUNT: int = 15
 const REFRESH_EVERY_N_TICKS: int = 60
+const MOBILE_REFRESH_EVERY_N_TICKS: int = 90
 
 var _world: World = null
 var _camera: Camera2D = null
@@ -31,15 +32,20 @@ var _fog_image: Image = null
 var _fog_texture: ImageTexture = null
 var _fog_sprite: Sprite2D = null
 var _fog_dirty: bool = false
+var _refresh_interval: int = REFRESH_EVERY_N_TICKS
+var _mobile_runtime: bool = false
 
 
 func _ready() -> void:
 	layer = 3
+	_mobile_runtime = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	_refresh_interval = MOBILE_REFRESH_EVERY_N_TICKS if _mobile_runtime else REFRESH_EVERY_N_TICKS
+	var amount_scale: float = 0.6 if _mobile_runtime else 1.0
 	# Create all particle systems upfront, disabled
-	_rain = _make_weather_system("Rain", RAIN_COLOR, RAIN_AMOUNT, 1.2, Vector3(0.0, 200.0, 0.0), Vector3(0.0, 1.0, 0.0), 5.0, 80.0, 120.0, 0.5, 1.5, 10.0)
-	_snow = _make_weather_system("Snow", SNOW_COLOR, SNOW_AMOUNT, 2.5, Vector3(-5.0, 40.0, 0.0), Vector3(0.0, 1.0, 0.0), 2.0, 15.0, 30.0, 0.8, 2.0, 5.0)
-	_sand = _make_weather_system("Sand", SAND_COLOR, SAND_AMOUNT, 1.5, Vector3(50.0, 5.0, 0.0), Vector3(1.0, 0.0, 0.0), 15.0, 30.0, 60.0, 0.3, 0.8, 0.0)
-	_embers = _make_weather_system("Embers", EMBER_COLOR, EMBER_AMOUNT, 2.0, Vector3(0.0, -30.0, 0.0), Vector3(0.0, -1.0, 0.0), 5.0, 10.0, 25.0, 0.2, 0.5, -5.0)
+	_rain = _make_weather_system("Rain", RAIN_COLOR, maxi(8, int(round(float(RAIN_AMOUNT) * amount_scale))), 1.2, Vector3(0.0, 200.0, 0.0), Vector3(0.0, 1.0, 0.0), 5.0, 80.0, 120.0, 0.5, 1.5, 10.0)
+	_snow = _make_weather_system("Snow", SNOW_COLOR, maxi(6, int(round(float(SNOW_AMOUNT) * amount_scale))), 2.5, Vector3(-5.0, 40.0, 0.0), Vector3(0.0, 1.0, 0.0), 2.0, 15.0, 30.0, 0.8, 2.0, 5.0)
+	_sand = _make_weather_system("Sand", SAND_COLOR, maxi(4, int(round(float(SAND_AMOUNT) * amount_scale))), 1.5, Vector3(50.0, 5.0, 0.0), Vector3(1.0, 0.0, 0.0), 15.0, 30.0, 60.0, 0.3, 0.8, 0.0)
+	_embers = _make_weather_system("Embers", EMBER_COLOR, maxi(4, int(round(float(EMBER_AMOUNT) * amount_scale))), 2.0, Vector3(0.0, -30.0, 0.0), Vector3(0.0, -1.0, 0.0), 5.0, 10.0, 25.0, 0.2, 0.5, -5.0)
 
 	add_child(_rain)
 	add_child(_snow)
@@ -64,7 +70,7 @@ func initialize(world_ref: World, camera_ref: Camera2D) -> void:
 
 func _process(_delta: float) -> void:
 	_tick_counter += 1
-	if _tick_counter % REFRESH_EVERY_N_TICKS == 0:
+	if _tick_counter % _refresh_interval == 0:
 		_update_weather()
 		_update_fog()
 
@@ -147,14 +153,15 @@ func _update_fog() -> void:
 		return
 	if _fog_image == null:
 		return
-	if not _fog_dirty and _tick_counter % (REFRESH_EVERY_N_TICKS * 10) != 0:
+	var fog_refresh_mod: int = _refresh_interval * (15 if _mobile_runtime else 10)
+	if not _fog_dirty and _tick_counter % fog_refresh_mod != 0:
 		return
 	_fog_dirty = false
 	var fog: Node = get_node_or_null("/root/FogOfDiscovery")
 	if fog == null:
 		return
 	var cam_tile: Vector2i = _world.world_to_tile(_camera.global_position) if _camera != null else Vector2i(128, 128)
-	var view_radius: int = 15
+	var view_radius: int = 10 if _mobile_runtime else 15
 	# Only update tiles near camera for performance
 	for dx in range(-view_radius, view_radius + 1):
 		for dy in range(-view_radius, view_radius + 1):

@@ -71,6 +71,9 @@ jobs:
           export/android/debug_keystore_pass = "android"
           export/android/shutdown_adb_on_exit = true
           EOF
+          sed -i 's#^keystore/debug=.*#keystore/debug="/home/runner/.android/debug.keystore"#' export_presets.cfg
+          sed -i 's#^keystore/debug_user=.*#keystore/debug_user="androiddebugkey"#' export_presets.cfg
+          sed -i 's#^keystore/debug_password=.*#keystore/debug_password="android"#' export_presets.cfg
 
       - name: Prime project import cache
         continue-on-error: true

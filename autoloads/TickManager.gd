@@ -55,6 +55,15 @@ func _is_mobile_runtime() -> bool:
 	return OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
 
 
+func _is_frame_stressed() -> bool:
+	var fps: float = float(Engine.get_frames_per_second())
+	if fps <= 0.0:
+		return false
+	if _is_mobile_runtime():
+		return fps < 42.0
+	return fps < 32.0
+
+
 func _frame_tick_cap_for_speed(speed: float) -> int:
 	if _is_mobile_runtime():
 		if speed <= 1.0: return 1
@@ -116,6 +125,8 @@ func _process(delta: float) -> void:
 	_accumulated_time += delta * _speed_multiplier
 	dropped_ticks_last_frame = 0
 	var accumulated_tick_cap: int = _accumulated_tick_cap_for_speed(_speed_multiplier)
+	if _is_frame_stressed():
+		accumulated_tick_cap = maxi(1, int(floor(float(accumulated_tick_cap) * 0.5)))
 	var max_accumulated_time: float = float(accumulated_tick_cap) * TICK_STEP
 	if _accumulated_time > max_accumulated_time:
 		var dropped_ticks: int = int(floor((_accumulated_time - max_accumulated_time) / TICK_STEP))
@@ -126,6 +137,8 @@ func _process(delta: float) -> void:
 	var ticks_this_frame: int = 0
 	var tickables_this_frame: int = 0
 	var frame_cap: int = mini(MAX_TICKS_PER_FRAME, _frame_tick_cap_for_speed(_speed_multiplier))
+	if _is_frame_stressed():
+		frame_cap = maxi(1, int(floor(float(frame_cap) * 0.5)))
 
 	# Process with adaptive frame cap so render thread stays responsive.
 	while _accumulated_time >= TICK_STEP and ticks_this_frame < frame_cap:

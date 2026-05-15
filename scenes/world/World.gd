@@ -550,7 +550,7 @@ func apply_ruins_from_persistence() -> void:
 	if data == null:
 		return
 	var region_has_pawn: Dictionary = {}
-	for p in PawnSpawner.find_pawns():
+	for p in PawnAccess.find_pawns():
 		if not is_instance_valid(p):
 			continue
 		if p.data == null:
@@ -666,7 +666,7 @@ func nudge_occupants_off_tile_for_construction(x: int, y: int) -> void:
 	var here := Vector2i(x, y)
 	for _i in range(4):
 		var any: bool = false
-		for p in PawnSpawner.find_pawns():
+		for p in PawnAccess.find_pawns():
 			if p.data != null and p.data.tile_pos == here:
 				p.evict_to_neighbor_of_tile(here)
 				any = true
@@ -675,7 +675,7 @@ func nudge_occupants_off_tile_for_construction(x: int, y: int) -> void:
 
 
 func notify_pawns_nav_changed() -> void:
-	for p in PawnSpawner.find_pawns():
+	for p in PawnAccess.find_pawns():
 		p.on_world_nav_changed()
 
 
@@ -813,7 +813,7 @@ func _bump_occupants_off_tile(x: int, y: int) -> void:
 	var target: Vector2i = Vector2i(x, y)
 	for _i in range(8):
 		var any: bool = false
-		for pawn in PawnSpawner.find_pawns():
+		for pawn in PawnAccess.find_pawns():
 			if pawn.data != null and pawn.data.tile_pos == target:
 				pawn.nudge_if_standing_on_solid()
 				any = true

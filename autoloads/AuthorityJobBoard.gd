@@ -24,7 +24,7 @@ func _on_game_tick(tick: int) -> void:
 	if SettlementMemory != null and SettlementMemory.get_formal_settlement_count() > 0:
 		return
 	# Find alive pawns and pick a provisional leader via AuthoritySystem or fallback
-	var pawns: Array = PawnSpawner.find_alive_pawns()
+	var pawns: Array = PawnAccess.find_alive_pawns()
 	if pawns.size() == 0:
 		return
 	var best_pawn: Node = null

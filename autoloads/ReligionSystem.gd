@@ -211,7 +211,7 @@ func _check_belief_formation(tick: int) -> void:
 
 
 func _prune_dead_believers() -> void:
-	var all_pawns: Array = PawnSpawner.find_alive_pawns()
+	var all_pawns: Array = PawnAccess.find_alive_pawns()
 	var alive_ids: Dictionary = {}
 	for pawn in all_pawns:
 		if pawn != null and is_instance_valid(pawn) and pawn.data != null:
@@ -292,7 +292,7 @@ func record_prayer(pawn_id: int, god_id: int) -> void:
 
 
 func _find_pawn_by_id(pawn_id: int) -> HeelKawnian:
-	var all_pawns: Array = PawnSpawner.find_alive_pawns()
+	var all_pawns: Array = PawnAccess.find_alive_pawns()
 	for pawn in all_pawns:
 		if pawn != null and is_instance_valid(pawn) and pawn.data != null and int(pawn.data.id) == pawn_id:
 			return pawn

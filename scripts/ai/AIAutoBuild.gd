@@ -340,7 +340,7 @@ func _has_required_resources(intent: Dictionary) -> bool:
 
 func _scan_for_new_pawns(_tick: int) -> void:
 	# Check for pawns without assigned tasks
-	for pawn in PawnSpawner.find_pawns():
+	for pawn in PawnAccess.find_pawns():
 		if pawn == null or not is_instance_valid(pawn):
 			continue
 

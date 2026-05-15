@@ -1943,7 +1943,7 @@ func _living_pawns() -> Array[HeelKawnian]:
     var t: int = GameManager.tick_count if GameManager != null else 0
     if t == _living_pawns_cache_tick:
         return _living_pawns_cache
-    _living_pawns_cache = PawnSpawner.find_pawns()
+    _living_pawns_cache = PawnAccess.find_pawns()
     _living_pawns_cache_tick = t
     # Build region→pawns index in the same pass
     _pawns_by_region_cache.clear()
@@ -2761,7 +2761,7 @@ func _check_diaspora_pressure(tick: int) -> void:
         # Count living pawns in this settlement
         var settlement_pawns: Array = []
         var grudge_pawns: Array = []
-        for n in PawnSpawner.find_pawns():
+        for n in PawnAccess.find_pawns():
             if n == null or not is_instance_valid(n):
                 continue
             if not n.has_method("get"):
@@ -3792,7 +3792,7 @@ func _check_pressure_situations(tick: int) -> void:
         var elder_count: int = 0
         var youth_count: int = 0
         var grudge_count: int = 0
-        for n in PawnSpawner.find_pawns():
+        for n in PawnAccess.find_pawns():
             if n == null or not is_instance_valid(n):
                 continue
             if not n.has_method("get"):
@@ -3901,7 +3901,7 @@ func _check_generational_shift(tick: int) -> void:
         if founding_tick < 0:
             # Use birth_tick of oldest living pawn as proxy
             var oldest_tick: int = 999999999
-            for n in PawnSpawner.find_pawns():
+            for n in PawnAccess.find_pawns():
                 if n == null or not is_instance_valid(n):
                     continue
                 if not n.has_method("get"):
@@ -3920,7 +3920,7 @@ func _check_generational_shift(tick: int) -> void:
         # Identify founding generation: pawns born within 2000 ticks of founding
         if not _founding_generation.has(center_rk):
             var founders: Array = []
-            for n in PawnSpawner.find_pawns():
+            for n in PawnAccess.find_pawns():
                 if n == null or not is_instance_valid(n):
                     continue
                 if not n.has_method("get"):
@@ -3939,7 +3939,7 @@ func _check_generational_shift(tick: int) -> void:
             var founders: Array = _founding_generation[center_rk]
             var alive_count: int = 0
             for fid in founders:
-                for n in PawnSpawner.find_pawns():
+                for n in PawnAccess.find_pawns():
                     if n == null or not is_instance_valid(n):
                         continue
                     if not n.has_method("get"):

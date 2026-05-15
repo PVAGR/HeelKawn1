@@ -235,7 +235,7 @@ static func import_pawn_from_file(file_path: String, target_pawn: HeelKawnian) -
 static func export_all_pawns(directory: String, tree: Node) -> int:
 	var exported_count: int = 0
 	
-	for pawn in PawnSpawner.find_pawns():
+	for pawn in PawnAccess.find_pawns():
 		if not is_instance_valid(pawn):
 			continue
 		
@@ -291,7 +291,7 @@ static func export_promotion_bundle() -> Dictionary:
 	if mk_err != OK and mk_err != ERR_ALREADY_EXISTS:
 		push_warning("[ExportSystem] promotion bundle mkdir failed: %s err=%d" % [abs_folder, mk_err])
 		return {"ok": false, "error": "mkdir %d" % mk_err, "path": rel_folder, "absolute_path": abs_folder}
-	var pawn_n: int = PawnSpawner.find_pawns().size()
+	var pawn_n: int = PawnAccess.find_pawns().size()
 	var set_n: int = 0
 	if SettlementMemory != null:
 		set_n = SettlementMemory.get_settlements().size()

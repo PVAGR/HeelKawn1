@@ -62,7 +62,7 @@ func _tick_prisoners(tick: int) -> void:
 
 
 func _has_guard_nearby(pos: Vector2i) -> bool:
-	for pawn in PawnSpawner.find_pawns():
+	for pawn in PawnAccess.find_pawns():
 		if not is_instance_valid(pawn) or pawn.data == null:
 			continue
 		var work_guard_v: Variant = pawn.data.get("work_guard")

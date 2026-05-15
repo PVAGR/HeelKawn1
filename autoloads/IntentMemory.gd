@@ -47,7 +47,7 @@ func recompute(world: World) -> void:
 		return
 	var now: int = GameManager.tick_count
 	var pawns_alive: int = 0
-	for n in PawnSpawner.find_pawns():
+	for n in PawnAccess.find_pawns():
 		if n.data != null:
 			pawns_alive += 1
 	var aidx: int = AgeMemory.get_current_age_index()

@@ -61,7 +61,7 @@ func _process_brains(tick: int) -> void:
 
 func _get_pawns() -> Array[Node]:
 	var out: Array[Node] = []
-	var typed_pawns: Array[HeelKawnian] = PawnSpawner.find_alive_pawns()
+	var typed_pawns: Array[HeelKawnian] = PawnAccess.find_alive_pawns()
 	if not typed_pawns.is_empty():
 		for pawn in typed_pawns:
 			if pawn != null:

@@ -289,7 +289,7 @@ HeelKawn should be described as a deep playable prototype with a stable kernel, 
 
 ## 📜 **LICENSE**
 
-[Add your license here]
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ---
 

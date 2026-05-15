@@ -780,9 +780,7 @@ func _ready() -> void:
 		MemoryManager.footpath_bind_context(_world, _pawn_spawner)
 		if BuildingUsageTracker != null and BuildingUsageTracker.has_method("bind_context"):
 			BuildingUsageTracker.bind_context(_world, _pawn_spawner)
-		# SnowAccumulation disabled due to persistent caching error
-		if TimeLapseRecorder != null and TimeLapseRecorder.has_method("bind_context"):
-			TimeLapseRecorder.bind_context(_world, _pawn_spawner, _camera)
+		# SnowAccumulation and TimeLapseRecorder removed during autoload consolidation
 		
 		# Wire BuildToolbar signals
 		if _toolbar != null:
@@ -2371,7 +2369,7 @@ func _bootstrap_colony() -> void:
 				_world.refresh_pawn_historic_path_weights()
 		)
 		SettlementManager.plan(_world, self, true)
-		EconomyManager.get_trade_planner().plan(_world, self, true)
+		TradePlanner.plan(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		_sync_pawn_inherited_cultural_reputation()
 	# Spawn animals and register spawner with world for breeding
@@ -2383,7 +2381,9 @@ func _bootstrap_colony() -> void:
 	# for newly discovered tiles via _seed_jobs_for_discovered_area in the tick loop.
 	_seed_construction_jobs()
 	# Seed initial tunneling toward sealed ore before the first logical tick.
-	_react_to_mining_progress()
+	# Guard: only run if mining-related jobs exist or ore is discoverable.
+	if JobManager != null and JobManager.has_method("open_count") and JobManager.open_count() > 0:
+		_react_to_mining_progress()
 	if _hud != null:
 		_hud.bind(_world, _pawn_spawner)
 	if _chronicle_ledger != null:
@@ -2393,11 +2393,7 @@ func _bootstrap_colony() -> void:
 	MemoryManager.footpath_bind_context(_world, _pawn_spawner)
 	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("bind_context"):
 		BuildingUsageTracker.bind_context(_world, _pawn_spawner)
-	if SnowAccumulation != null and SnowAccumulation.has_method("bind_world"):
-		SnowAccumulation.bind_world(_world)
-	if TimeLapseRecorder != null and TimeLapseRecorder.has_method("bind_context"):
-		TimeLapseRecorder.bind_context(_world, _pawn_spawner, _camera)
-		TimeLapseRecorder.record()
+	# SnowAccumulation and TimeLapseRecorder removed during autoload consolidation
 	_last_generation_tick = GameManager.tick_count
 	MemoryManager.get_remnant_memory().clear()
 	MemoryManager.get_age_memory().clear()
@@ -2417,7 +2413,7 @@ func _apply_start_state_effects() -> void:
 	if GameManager == null:
 		return
 	var state: int = GameManager.get_start_state()
-	var pawns: Array = PawnSpawner.find_alive_pawns()
+	var pawns: Array = PawnAccess.find_alive_pawns()
 	match state:
 		GameManager.StartState.NAKED:
 			# Single pawn, no tools, no food, no shelter. Pure survival.
@@ -2925,7 +2921,7 @@ func _on_game_tick(tick: int) -> void:
 		var trade_offset: int = maxi(1, planner_interval / 3)
 		if _is_main_lane_tick(tick, planner_interval, trade_offset) and DiscoveryGate.is_unlocked("first_trade"):
 			t0 = Time.get_ticks_usec()
-			EconomyManager.get_trade_planner().plan(_world, self, false)
+			TradePlanner.plan(_world, self, false)
 			section_us["trade_planner"] = Time.get_ticks_usec() - t0
 		# Build roads from trade routes every 2000 ticks
 		if _is_main_lane_tick(tick, 2000, 113) and DiscoveryGate.is_unlocked("first_trade"):
@@ -3266,7 +3262,12 @@ func _play_inspect_tone() -> void:
 
 func _flush_world_memory_derivatives() -> void:
 	_world_memory_derivative_flush_queued = false
-	if not is_instance_valid(_world) or not WorldMemory.consume_dirty():
+	var has_dirty: bool = is_instance_valid(_world) and WorldMemory.consume_dirty()
+	if not has_dirty:
+		# No new events, but still recompute meaning periodically to capture
+		# state changes that don't generate events (e.g., pawn movement, temperature)
+		if is_instance_valid(_world) and GameManager.tick_count % 50 == 0:
+			WorldMeaning.recompute()
 		return
 	var flush_start: int = Time.get_ticks_usec()
 	const FLUSH_BUDGET_USEC: int = 4_000  # 4ms max for derivative flush
@@ -3291,7 +3292,7 @@ func _flush_world_memory_derivatives() -> void:
 			SettlementManager.plan(_world, self, true)
 	if (GameManager.tick_count + maxi(1, heavy_planner_interval / 3)) % heavy_planner_interval == 0:
 		if Time.get_ticks_usec() - flush_start <= FLUSH_BUDGET_USEC:
-			EconomyManager.get_trade_planner().plan(_world, self, true)
+			TradePlanner.plan(_world, self, true)
 	MemoryManager.flush_dirty_tiles(_world)
 # OPTIMIZATION: Deferred heavy operations for frame budget management
 func _deferred_settlement_memory_recompute(world: World) -> void:
@@ -3311,7 +3312,7 @@ func _deferred_settlement_planner_plan(world: World, main: Node, use_cache: bool
 
 func _deferred_trade_planner_plan(world: World, main: Node, use_cache: bool) -> void:
 	if is_instance_valid(world) and is_instance_valid(main):
-		EconomyManager.get_trade_planner().plan(world, main, use_cache)
+		TradePlanner.plan(world, main, use_cache)
 
 
 func _maybe_generational_turnover() -> void:
@@ -4115,8 +4116,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		Key.KEY_F8:
 			if event.shift_pressed:
 				_colony_load()
-			elif TimeLapseRecorder != null and TimeLapseRecorder.has_method("toggle_mode"):
-				TimeLapseRecorder.toggle_mode()
+	# TimeLapseRecorder removed during autoload consolidation
 			else:
 				_colony_load()
 		Key.KEY_F9:
@@ -4581,15 +4581,11 @@ func _on_seed_gallery_seed_selected(seed: int) -> void:
 	MemoryManager.footpath_clear()
 	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("clear"):
 		BuildingUsageTracker.clear()
-	if SnowAccumulation != null and SnowAccumulation.has_method("clear"):
-		SnowAccumulation.clear()
-	if TimeLapseRecorder != null and TimeLapseRecorder.has_method("reset_session"):
-		TimeLapseRecorder.reset_session()
+	# SnowAccumulation and TimeLapseRecorder removed during autoload consolidation
 	_reroll_world()
 	_set_player_mode(PlayerMode.SPECTATOR)
 	_update_hud_mode_badge()
-	if TimeLapseRecorder != null and TimeLapseRecorder.has_method("record"):
-		TimeLapseRecorder.record()
+	# TimeLapseRecorder removed during autoload consolidation
 	if _main_menu != null:
 		_main_menu.hide_menu()
 
@@ -4616,7 +4612,7 @@ func _open_incarnation_picker() -> void:
 
 func _generate_incarnation_candidates() -> Array:
 	var candidates: Array = []
-	var pawns: Array[HeelKawnian] = _pawn_spawner.get_all_pawns() if _pawn_spawner != null else PawnSpawner.find_pawns()
+	var pawns: Array[HeelKawnian] = _pawn_spawner.get_all_pawns() if _pawn_spawner != null else PawnAccess.find_pawns()
 
 	for pawn in pawns:
 		if not is_instance_valid(pawn):
@@ -5478,7 +5474,7 @@ func get_colony_truth() -> Dictionary:
 	var housing_pressure: float = ColonySimServices.get_housing_pressure() if ColonySimServices != null else 0.0
 	var food_pressure: float = ColonySimServices.get_food_pressure() if ColonySimServices != null else 0.0
 	var warnings: Array[String] = []
-	var living: int = PawnSpawner.find_alive_pawns().size()
+	var living: int = PawnAccess.find_alive_pawns().size()
 	if living > 0 and beds <= 0 and housing_pressure < 0.75:
 		warnings.append("housing_pressure_low_with_no_beds")
 	if living > 0 and beds >= living and housing_pressure > 0.05:
@@ -6094,7 +6090,7 @@ func _reroll_world() -> void:
 	SettlementRegistry.clear()
 	SettlementMemory.clear_persisted_governance_forms()
 	FragmentationManager.clear()
-	SchismManager.clear()
+	# SchismManager removed during autoload consolidation
 	WorldMemory.clear()
 	MemoryManager.get_myth_memory().clear()
 	MemoryManager.get_sacred_memory().clear()
@@ -6102,10 +6098,7 @@ func _reroll_world() -> void:
 	MemoryManager.footpath_clear()
 	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("clear"):
 		BuildingUsageTracker.clear()
-	if SnowAccumulation != null and SnowAccumulation.has_method("clear"):
-		SnowAccumulation.clear()
-	if TimeLapseRecorder != null and TimeLapseRecorder.has_method("clear"):
-		TimeLapseRecorder.clear()
+	# SnowAccumulation and TimeLapseRecorder removed during autoload consolidation
 	_reset_player_intent_observer_routing()
 	FactionManager.get_faction_registry().clear()
 	ChronicleLog.clear()
@@ -6165,17 +6158,13 @@ func _reroll_world() -> void:
 	MemoryManager.footpath_bind_context(_world, _pawn_spawner)
 	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("bind_context"):
 		BuildingUsageTracker.bind_context(_world, _pawn_spawner)
-	if SnowAccumulation != null and SnowAccumulation.has_method("bind_world"):
-		SnowAccumulation.bind_world(_world)
-	if TimeLapseRecorder != null and TimeLapseRecorder.has_method("bind_context"):
-		TimeLapseRecorder.bind_context(_world, _pawn_spawner, _camera)
-		TimeLapseRecorder.record()
+	# SnowAccumulation and TimeLapseRecorder removed during autoload consolidation
 	_last_generation_tick = GameManager.tick_count
 	_world.set_meta("animal_spawner", _animal_spawner)
 	if is_instance_valid(_world):
 		MemoryManager.recompute_intent(_world)
 		SettlementManager.plan(_world, self, true)
-		EconomyManager.get_trade_planner().plan(_world, self, true)
+		TradePlanner.plan(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		MemoryManager.get_remnant_memory().clear()
 		MemoryManager.seed_births_from_current_world(_world)
@@ -6196,7 +6185,7 @@ func _reroll_heavy_phase2() -> void:
 func _maybe_spawn_migrant() -> void:
 	if _world == null or _pawn_spawner == null:
 		return
-	var living: Array = PawnSpawner.find_alive_pawns()
+	var living: Array = PawnAccess.find_alive_pawns()
 	var pop: int = living.size()
 	# Migration rate: fewer pawns = more likely. 20 pawns = 50% chance, 40+ = 10%.
 	var chance: float = clampf(1.0 - float(pop) / 40.0, 0.1, 0.8)
@@ -8596,10 +8585,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 	MemoryManager.footpath_clear()
 	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("clear"):
 		BuildingUsageTracker.clear()
-	if SnowAccumulation != null and SnowAccumulation.has_method("clear"):
-		SnowAccumulation.clear()
-	if TimeLapseRecorder != null and TimeLapseRecorder.has_method("clear"):
-		TimeLapseRecorder.clear()
+	# SnowAccumulation and TimeLapseRecorder removed during autoload consolidation
 	FactionManager.get_faction_registry().clear()
 	ChronicleLog.clear()
 	_set_designation_mode(DesignationMode.NONE)
@@ -8686,7 +8672,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 				_world.refresh_pawn_historic_path_weights()
 		)
 		SettlementManager.plan(_world, self, true)
-		EconomyManager.get_trade_planner().plan(_world, self, true)
+		TradePlanner.plan(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		_sync_pawn_inherited_cultural_reputation()
 		MemoryManager.seed_births_from_current_world(_world)

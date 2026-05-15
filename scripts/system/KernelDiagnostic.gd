@@ -299,7 +299,7 @@ func _print_settlement_verify_summary(tick: int) -> void:
 
 func _settlement_material_snapshot() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	var pawns: Array[HeelKawnian] = PawnSpawner.find_pawns()
+	var pawns: Array[HeelKawnian] = PawnAccess.find_pawns()
 	var jobs: Array[Job] = []
 	var open_v: Variant = JobManager.get("_open")
 	if open_v is Array:

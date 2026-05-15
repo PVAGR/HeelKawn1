@@ -70,7 +70,7 @@ func _tick_macro_if_due(tick: int) -> void:
 
 
 func _pawn_count() -> int:
-	return maxi(1, PawnSpawner.find_pawns().size())
+	return maxi(1, PawnAccess.find_pawns().size())
 
 
 func _run_macro_step(tick: int) -> void:
@@ -121,7 +121,7 @@ func _run_macro_step(tick: int) -> void:
 
 
 func _refresh_world_mood_from_pawns() -> void:
-	var nodes: Array[HeelKawnian] = PawnSpawner.find_pawns()
+	var nodes: Array[HeelKawnian] = PawnAccess.find_pawns()
 	if nodes.is_empty():
 		return
 	var sum: float = 0.0

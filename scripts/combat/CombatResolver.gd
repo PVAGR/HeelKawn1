@@ -495,7 +495,7 @@ static func _maybe_issue_attack_move(attacker: Node, defender: Node) -> void:
 	elif defender is Enemy:
 		target_pos = (defender as Enemy).tile_pos
 	var leader_score: int = _rank_value(leader_rank)
-	for ally in PawnSpawner.find_pawns():
+	for ally in PawnAccess.find_pawns():
 		if ally == leader or ally.data == null:
 			continue
 		if ally.position.distance_squared_to(leader.position) > 22.0 * 22.0:

@@ -114,7 +114,7 @@ func apply_injury(pawn: Node, injury_type: int, severity: float, source: String 
 
 ## Tick all pawn injuries: recover, check for complications.
 func _tick_pawn_injuries() -> void:
-	var pawns: Array[HeelKawnian] = PawnSpawner.find_pawns()
+	var pawns: Array[HeelKawnian] = PawnAccess.find_pawns()
 	for p in pawns:
 		_tick_pawn_injury_recovery(p)
 

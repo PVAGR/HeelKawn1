@@ -297,7 +297,7 @@ func treat_wound(pawn_data: RefCounted, body_part: int, wound_index: int) -> boo
 func _on_game_tick(tick: int) -> void:
 	if tick % 10 != 0:  # Process every 10 ticks
 		return
-	var pawns: Array = PawnSpawner.find_alive_pawns()
+	var pawns: Array = PawnAccess.find_alive_pawns()
 	for pawn in pawns:
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue

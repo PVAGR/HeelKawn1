@@ -208,7 +208,7 @@ func _nearest_ruler(pawn: HeelKawnian) -> HeelKawnian:
 		return null
 	var best: HeelKawnian = null
 	var best_d2: float = INF
-	for p in PawnSpawner.find_pawns():
+	for p in PawnAccess.find_pawns():
 		if p.data == null:
 			continue
 		if not SettlementMemory.is_pawn_current_ruler(int(p.data.id)):

@@ -3678,14 +3678,16 @@ func _tick_idle() -> void:
 	# 3. Need-driven: hungry + food nearby -> go eat
 	if _maybe_start_eating():
 		return
-	# 3b. Hungry but no stockpile food -> walk to nearest FERTILE_SOIL and eat directly.
-	# No job system, no hauling. Need drives action. The pawn forages and eats on the spot.
-	if data.hunger <= HUNGER_EAT_THRESHOLD:
-		if _maybe_direct_forage():
-			return
-	# 3c. Thirsty -> walk to nearest water and drink. Dehydration kills faster than starvation.
+	# 3b. Thirsty -> walk to nearest water and drink. Dehydration kills faster than starvation.
+	# Moved BEFORE forage check — a thirsty pawn should drink even if hungry.
 	if _maybe_start_drinking():
 		return
+	# 3c. Hungry but no stockpile food -> walk to nearest FERTILE_SOIL and eat directly.
+	# No job system, no hauling. Need drives action. The pawn forages and eats on the spot.
+	# Expanded threshold: also forage if stockpile is empty (survival fallback).
+	if data.hunger <= HUNGER_EAT_THRESHOLD or (StockpileManager != null and StockpileManager.total_food() <= 0):
+		if _maybe_direct_forage():
+			return
 	# 3d. Mount nearby and not already riding -> mount for speed
 	if MountSystem != null and _maybe_mount_nearby():
 		return
@@ -3707,6 +3709,17 @@ func _tick_idle() -> void:
 				if not path.is_empty():
 					_state = State.GOING_TO_EAT  # Reuse walking state — will arrive at fire
 					_target_tile = fire
+					_start_path(path)
+					return
+		# No fire reachable: seek shelter (bed/wall) or huddle with other pawns
+		var shelter: Vector2i = aw.get("nearest_shelter", Vector2i(-9999, -9999))
+		if shelter.x >= 0 and (shelter.x != data.tile_pos.x or shelter.y != data.tile_pos.y):
+			var shelter_dist: int = absi(shelter.x - data.tile_pos.x) + absi(shelter.y - data.tile_pos.y)
+			if shelter_dist <= AWARENESS_SCAN_RADIUS:
+				var path: Array[Vector2i] = _path_for_pawn(shelter)
+				if not path.is_empty():
+					_state = State.GOING_TO_BED
+					_target_tile = shelter
 					_start_path(path)
 					return
 	# BUNDLE 4: Slow/narrative lane — pilgrimage, cultural, rediscovery, diaspora.

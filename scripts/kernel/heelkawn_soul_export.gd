@@ -47,7 +47,7 @@ func print_bundle(main: Node) -> void:
 		print(hist_lines[i])
 	if hist_lines.size() > cap:
 		print("... (%d more lines; full export via F10 report 15)" % (hist_lines.size() - cap))
-	print("SimVision: %s" % SimVision.feature_inventory_line())
+	print("sim_vision: roadmap autoload removed; see docs/HEELKAWN_PROJECT_COMPASS.md for current priorities.")
 	print("=== HEELKAWN_SOUL_BUNDLE v=%s tick=%d END ===" % [BUNDLE_VERSION, tick])
 
 

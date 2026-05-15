@@ -98,7 +98,7 @@ func clear() -> void:
 func _on_game_tick(tick: int) -> void:
 	if tick % DISCOVERY_CHECK_INTERVAL != 0:
 		return
-	var pawns: Array = PawnSpawner.find_pawns()
+	var pawns: Array = PawnAccess.find_pawns()
 	# Discover tiles around each pawn
 	for pawn in pawns:
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:

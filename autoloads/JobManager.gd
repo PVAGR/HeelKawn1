@@ -400,7 +400,13 @@ func _job_visible_to_pawn(j: Job, pawn: Node, pd: Variant) -> bool:
 		if d <= 32:
 			return true
 		return false
-	# Fallback conservative: reject
+	# Fallback: unaffiliated pawns (no settlement context) can see jobs within
+	# moderate range. This is critical for the pre-settlement bootstrap phase —
+	# without this, pawns can't claim jobs because they're not in a settlement,
+	# but they can't form a settlement because they can't claim jobs.
+	if rk_pawn < 0 or pawn_center < 0:
+		# Unaffiliated pawn: allow jobs within reasonable distance
+		return d <= 40
 	return false
 
 

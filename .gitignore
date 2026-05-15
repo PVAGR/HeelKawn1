@@ -1,4 +1,3 @@
-```
 # Godot-specific ignores
 *.import
 *.pid
@@ -39,5 +38,16 @@ debug_output.txt
 # OS files
 .DS_Store
 Thumbs.db
-```
+
+# AI tool artifacts (not meant for version control)
 .aider*
+.cursor/
+.roo/
+.qwen/
+.sixth/
+.letta/
+.agents_tmp/
+
+# Temporary / accidental files
+$null
+*.tmp

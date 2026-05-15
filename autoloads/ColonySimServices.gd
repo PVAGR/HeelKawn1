@@ -65,7 +65,7 @@ func _refresh_food_mat_haul_pressures() -> void:
 
 func _food_carried_by_pawns() -> int:
 	var total: int = 0
-	for p in PawnSpawner.find_alive_pawns():
+	for p in PawnAccess.find_alive_pawns():
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		if p.data.is_carrying() and Item.is_food(int(p.data.carrying)):
@@ -81,7 +81,7 @@ func _refresh_housing_pressure() -> void:
 	if scene_tree == null:
 		_housing_press = 0.0
 		return
-	var pawns: int = PawnSpawner.find_alive_pawns().size()
+	var pawns: int = PawnAccess.find_alive_pawns().size()
 	if pawns <= 0:
 		_housing_press = 0.0
 		return
@@ -195,7 +195,7 @@ func get_colony_truth() -> Dictionary:
 	
 	# Get carried food from living pawns
 	if PawnSpawner != null:
-		for pawn in PawnSpawner.find_pawns():
+		for pawn in PawnAccess.find_pawns():
 			if pawn != null and is_instance_valid(pawn) and pawn.data != null and not bool(pawn.data.is_dead):
 				population += 1
 				if pawn.data != null and pawn.data.has("carrying"):

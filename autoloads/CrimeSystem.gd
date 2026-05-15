@@ -179,7 +179,7 @@ func _on_game_tick(tick: int) -> void:
 
 ## Check if any pawns are driven to crime by need.
 func _check_crime_opportunities(tick: int) -> void:
-	var pawns: Array = PawnSpawner.find_alive_pawns()
+	var pawns: Array = PawnAccess.find_alive_pawns()
 	for pawn in pawns:
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue
@@ -332,7 +332,7 @@ func _process_imprisonment(tick: int) -> void:
 ## Find witnesses (pawns within radius who can see the crime).
 func _find_witnesses(pawn: HeelKawnian, radius: int) -> Array:
 	var witnesses: Array = []
-	var all_pawns: Array = PawnSpawner.find_alive_pawns()
+	var all_pawns: Array = PawnAccess.find_alive_pawns()
 	for other in all_pawns:
 		if other == pawn or other == null or not is_instance_valid(other) or other.data == null:
 			continue
@@ -344,7 +344,7 @@ func _find_witnesses(pawn: HeelKawnian, radius: int) -> Array:
 
 
 func _find_pawn_by_id(pawn_id: int) -> HeelKawnian:
-	var all_pawns: Array = PawnSpawner.find_alive_pawns()
+	var all_pawns: Array = PawnAccess.find_alive_pawns()
 	for pawn in all_pawns:
 		if pawn != null and is_instance_valid(pawn) and pawn.data != null and int(pawn.data.id) == pawn_id:
 			return pawn

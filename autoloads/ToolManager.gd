@@ -118,7 +118,7 @@ func _spawn_tool_jobs_if_needed() -> void:
 	var toolless_count: int = 0
 	var total_pawns: int = 0
 	
-	var pawns: Array[HeelKawnian] = PawnSpawner.find_pawns()
+	var pawns: Array[HeelKawnian] = PawnAccess.find_pawns()
 	for p in pawns:
 		total_pawns += 1
 		var pd = p.get_pawn_data()

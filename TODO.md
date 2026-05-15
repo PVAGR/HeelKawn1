@@ -1,37 +1,87 @@
-# HeelKawn Living Crafting World - BLACKBOXAI Progress
+# HeelKawn — Living TODO
 
-Current phase: PHASE 1 Foundation - Book System (internal task tracking; see AI_README.md for main project phases)
+**Last Updated:** May 15, 2026
+**Source of truth:** `docs/HEELKAWN_STATE.md` and `docs/HEELKAWN_PROJECT_COMPASS.md`
 
-## Steps:
+> HeelKawn is **never finished**. This file tracks active work, not a destination.
 
-### 1. Update Item.gd
-- [x] Add new Item.Type: PAPER, LEATHER, INK, PEN, BOOK, WRITTEN_BOOK
-- [x] Add COLORS, NAMES, LABELS entries
-- [x] Add CRAFTING_RECIPES for paper, leather, ink, pen, book (Implemented in CraftingSystem.gd)
+---
 
-### 2. Update Job.gd
-- [x] Add Job.Type: PAPER_MAKING, LEATHER_MAKING, INK_MAKING, TOOL_MAKING, BOOK_BINDING
+## Immediate Path (Consolidation Sequence)
 
-### 3. Create new item scripts
-- [x] scripts/items/Book.gd (content: String, is_placeable: true)
-- [x] scripts/items/PlaceableItem.gd (base class: position, rotation, placed_by)
+### 1. Runtime Truth Pass
+- [ ] Run in Godot editor, verify all F10 diagnostic panels render without errors
+- [ ] Confirm OnboardingSystem RichTextLabel fix holds at runtime
+- [ ] Capture and fix any red errors in Output panel
+- [ ] Verify HUD identity strip shows civilization stage correctly
+- [ ] Verify F10 #49 prints valid HeelKawnian development profiles
 
-### 4. Update CraftingSystem.gd
-- [x] Add _initialize_recipes for new items (paper=STICK x3, leather=MEAT x2? , etc.)
+### 2. HeelKawnian Matrix AI Deepening
+- [ ] Extend profile-to-job-bias into learning target selection
+- [ ] Add teaching target selection (who teaches whom, what knowledge)
+- [ ] Add preservation choices (what knowledge to inscribe vs keep oral)
+- [ ] Add recovery behavior (what to do after disaster/famine/collapse)
+- [ ] Add household intent logic (coordinated group plans)
+- [ ] Add settlement ambition chains (longer-horizon objectives)
 
-### 5. Create job scripts
-- [x] scripts/jobs/PaperMaker.gd
-- [x] scripts/jobs/LeatherWorker.gd
-- [x] scripts/jobs/InkMaker.gd
-- [x] scripts/jobs/ToolMaker.gd
-- [x] scripts/jobs/BookBinder.gd
+### 3. Lineage & Progression
+- [ ] Finish parent lookup (reliable, not stubbed)
+- [ ] Finish child creation with inherited traits
+- [ ] Add skill tree branch effects
+- [ ] Add inheritance hooks (knowledge, reputation, grudges)
 
-### 6. Test PHASE 1
-- [ ] Manual craft paper/book
-- [ ] NPC crafts book
-- [ ] Place book, verify persistence
+### 4. Material Reality
+- [ ] Connect crafting consumption to inventory/stockpile
+- [ ] Add tool requirements to crafting recipes
+- [ ] Verify resources are actually consumed (not just checked)
 
-Next: PHASE 2 Item Placement after PHASE 1 complete + test.
-Next: PHASE 5 WorldMeaning expansion - Literature tags (COMPLETED: great_library, scriptorium, literate tags derived from WorldMemory).
+### 5. Knowledge Preservation Loop
+- [ ] Unify stones, books, teaching, literacy into one system
+- [ ] Add lost/rediscovered knowledge mechanics
+- [ ] Verify knowledge death when last carrier dies untaught
 
-Updated on completion.
+### 6. Civilization Stage Deepening
+- [ ] Add per-settlement tech diffusion tracking
+- [ ] Add literacy rate tracking
+- [ ] Add lifespan/quality-of-life metrics
+- [ ] Add institution emergence data
+
+### 7. Readable Exports
+- [ ] Chronicle export (world history as readable text)
+- [ ] World seed/state export (share worlds)
+
+### 8. Governance / Faction / Religion (after core loop is reliable)
+- [ ] FactionRegistry: move beyond stub, wire to SchismManager/FragmentationManager
+- [ ] ReligionLens: implement SacredMemory/MythMemory/DRUJ/Asha interpretation
+- [ ] AuthoritySystem: deepen emergence and decay logic
+
+---
+
+## Autoload Consolidation (Ongoing)
+
+- [ ] Reduce 164 autoloads to ~11 core managers
+- [ ] Identify and remove duplicate/unused autoloads
+- [ ] Convert non-essential autoloads to regular scripts or service objects
+- [ ] Verify headless smoke passes after each removal batch
+
+---
+
+## Documentation Hygiene (Ongoing)
+
+- [x] Archive old/overlapping docs to `docs/archive/`
+- [ ] Keep core five docs current: Compass, Blueprint, State, Build Inventory, Player Guide
+- [ ] Update completion language: "complete" = compiles, runs, verified — not just "file exists"
+
+---
+
+## Technical Debt
+
+- [ ] Set proper LICENSE (currently placeholder)
+- [ ] Add basic deterministic smoke tests (same seed → same output)
+- [ ] Clean up root directory of accidental files
+- [ ] Fix .gitignore (remove markdown code fence wrappers)
+- [ ] Consider adding CI for headless Godot validation
+
+---
+
+*Updated after each work session. Stale items get removed, not ignored.*

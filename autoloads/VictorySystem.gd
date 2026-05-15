@@ -85,11 +85,7 @@ func _update_victory_progress(tick: int) -> void:
 	victory_progress["knowledge"] = preserved_knowledge
 	
 	# Population milestone
-	var pawn_spawner: Node = _pawn_spawner
-	if pawn_spawner == null:
-		pawn_spawner = _get_pawn_spawner()
-	if pawn_spawner != null:
-		victory_progress["population"] = pawn_spawner.pawns.size()
+	victory_progress["population"] = PawnAccess.count_total()
 	
 	# Culture milestone
 	var active_settlements: int = 0

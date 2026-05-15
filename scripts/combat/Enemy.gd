@@ -180,7 +180,7 @@ func _select_target(tick: int) -> void:
 	var closest_pawn: HeelKawnian = null
 	var closest_dist_sq: float = INF
 	
-	for pawn in PawnSpawner.find_alive_pawns():
+	for pawn in PawnAccess.find_alive_pawns():
 		if not is_instance_valid(pawn):
 			continue
 		var dist_sq: float = (pawn.position - position).length_squared()

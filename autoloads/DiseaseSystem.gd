@@ -177,7 +177,7 @@ func _on_game_tick(tick: int) -> void:
 		return
 	if tick % 20 != 0:  # Process every 20 ticks
 		return
-	var pawns: Array = PawnSpawner.find_alive_pawns()
+	var pawns: Array = PawnAccess.find_alive_pawns()
 	for pawn in pawns:
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue

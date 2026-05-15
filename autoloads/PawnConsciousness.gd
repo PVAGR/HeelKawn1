@@ -186,11 +186,7 @@ func get_joyful_memories(pawn_id: int) -> Array:
 # ==================== DREAM SYSTEM ====================
 
 func _process_dreams(tick: int) -> void:
-	var sp: Node = _get_pawn_spawner()
-	if sp == null:
-		return
-	
-	for pawn in sp.pawns:
+	for pawn in PawnAccess.find_pawns():
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue
 

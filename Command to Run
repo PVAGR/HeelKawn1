@@ -1,1 +1,0 @@
-godot --headless --path . -s res://tools/sim_settlement_public_state_smoke.gd

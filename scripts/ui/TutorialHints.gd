@@ -245,7 +245,7 @@ func _check_grudge_closure() -> bool:
 
 
 func _check_pawn_hunger_low() -> bool:
-	var ps: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
+	var ps: PawnSpawner = get_node_or_null("/root/Main/WorldViewport/PawnSpawner") as PawnSpawner
 	if ps == null:
 		return false
 

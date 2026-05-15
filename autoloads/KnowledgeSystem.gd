@@ -147,6 +147,8 @@ func _on_game_tick(tick: int) -> void:
 		_update_knowledge_security()
 	if GameManager.periodic_phase_due(tick, REDISCOVERY_CHECK_INTERVAL_TICKS, REDISCOVERY_CHECK_PHASE_OFFSET):
 		_check_rediscovery_opportunities()
+	if GameManager.periodic_phase_due(tick, 150, 73):
+		_try_autonomous_teaching()
 	if GameManager.periodic_phase_due(tick, INNOVATION_CHECK_INTERVAL_TICKS, INNOVATION_CHECK_PHASE_OFFSET):
 		# DORMANT WORLD: Innovation checks only run after first knowledge is inscribed
 		if DiscoveryGate == null or DiscoveryGate.is_unlocked("first_knowledge"):
@@ -419,6 +421,60 @@ func _check_rediscovery_opportunities() -> void:
 					break  # One rediscovery per check
 
 
+## Autonomous teaching: periodically find master+apprentice pairs in proximity
+## and initiate knowledge transfer. This ensures knowledge spreads without
+## requiring explicit player or pawn triggers.
+func _try_autonomous_teaching() -> void:
+	var pawns: Array[HeelKawnian] = _get_pawns()
+	if pawns.size() < 2:
+		return
+	
+	# Build a map of pawn_id -> tile for distance checks
+	var pawn_tiles: Dictionary = {}
+	for p in pawns:
+		if is_instance_valid(p) and "data" in p:
+			pawn_tiles[int(p.data.id)] = p.data.tile_pos
+	
+	# For each knowledge type, find masters and potential apprentices
+	for kt in KnowledgeType.values():
+		var carriers: Array[int] = []
+		for pawn_id in knowledge_carriers:
+			if kt in knowledge_carriers[pawn_id]:
+				carriers.append(pawn_id)
+		
+		if carriers.is_empty():
+			continue
+		
+		# Find pawns who don't know this knowledge but are near a carrier
+		for p in pawns:
+			if not is_instance_valid(p) or not ("data" in p):
+				continue
+			var pawn_id: int = int(p.data.id)
+			if has_knowledge(pawn_id, kt):
+				continue  # Already knows it
+			
+			var pawn_tile: Vector2i = p.data.tile_pos
+			var nearest_carrier: int = -1
+			var nearest_dist: int = 9999
+			
+			for carrier_id in carriers:
+				if carrier_id in pawn_tiles:
+					var carrier_tile: Vector2i = pawn_tiles[carrier_id]
+					var dist: int = absi(carrier_tile.x - pawn_tile.x) + absi(carrier_tile.y - pawn_tile.y)
+					if dist < nearest_dist and dist <= 8:  # Within 8 tiles
+						nearest_dist = dist
+						nearest_carrier = carrier_id
+			
+			if nearest_carrier >= 0:
+				# Deterministic chance based on tick and pawn ids
+				var teach_chance: float = 0.15  # 15% per check
+				if WorldRNG.chance_for(StringName("auto_teach:%d:%d:%d" % [nearest_carrier, pawn_id, int(kt)]), teach_chance, GameManager.tick_count + pawn_id):
+					teach_knowledge(nearest_carrier, pawn_id, kt)
+					if GameManager.verbose_logs():
+						print("[KnowledgeSystem] Autonomous teaching: pawn %d → %d, type %d" % [nearest_carrier, pawn_id, int(kt)])
+					break  # One teaching per check to avoid spam
+
+
 # === Record Carriers (Phase 5: Knowledge Preservation) ===
 
 func inscribe_knowledge_on_stone(tile: Vector2i, knowledge_types: Array, inscriber_id: int, carrier_type: String = "knowledge_stone", last_words: String = "") -> void:
@@ -669,14 +725,23 @@ func get_echo_ruins_near(tile: Vector2i, radius: int) -> Array[Dictionary]:
 	return result
 
 
-func _get_nearby_knowledge_carriers(_tile: Vector2i, knowledge_type: KnowledgeType, _radius: int) -> Array[int]:
+func _get_nearby_knowledge_carriers(tile: Vector2i, knowledge_type: KnowledgeType, radius: int) -> Array[int]:
 	var nearby: Array[int] = []
+	var pawn_spawner: Node = _get_pawn_spawner()
 	
 	for pawn_id in knowledge_carriers:
 		if knowledge_type in knowledge_carriers[pawn_id]:
-			# Get pawn tile position from HeelKawnianData if available
-			# This would need to be connected to the actual pawn system
-			nearby.append(pawn_id)
+			# Get pawn tile position from PawnSpawner if available
+			if pawn_spawner != null and pawn_spawner.has_method("get_pawn_by_id"):
+				var pawn: Node = pawn_spawner.call("get_pawn_by_id", pawn_id)
+				if pawn != null and is_instance_valid(pawn) and "data" in pawn:
+					var pawn_tile: Vector2i = pawn.data.tile_pos
+					var dist: int = absi(pawn_tile.x - tile.x) + absi(pawn_tile.y - tile.y)
+					if dist <= radius:
+						nearby.append(pawn_id)
+			else:
+				# Fallback: include all carriers if we can't check distance
+				nearby.append(pawn_id)
 	
 	return nearby
 

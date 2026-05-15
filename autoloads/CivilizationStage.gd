@@ -278,7 +278,7 @@ func _quality_of_life_score(pawns: Array[HeelKawnian]) -> int:
 
 
 func _pawns_for_settlement(st: Dictionary, settlement_id: int) -> Array[HeelKawnian]:
-	var all_pawns: Array[HeelKawnian] = PawnSpawner.find_pawns()
+	var all_pawns: Array[HeelKawnian] = PawnAccess.find_pawns()
 	if st.is_empty() and settlement_id < 0:
 		return all_pawns
 	var out: Array[HeelKawnian] = []

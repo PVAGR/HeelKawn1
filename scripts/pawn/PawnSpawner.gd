@@ -13,6 +13,7 @@ extends Node
 @onready var _spatial_grid: Node = get_node_or_null("/root/SpatialGrid")
 
 const STARTER_COUNT: int = 20
+const MOBILE_STARTER_COUNT: int = 12
 const MAX_PLACEMENT_ATTEMPTS: int = 2000
 
 const FIRST_NAMES: Array[String] = [
@@ -246,6 +247,9 @@ func print_stats() -> void:
 
 
 func spawn_starters(world: World, required_component_id: int = -1) -> void:
+	var target_starter_count: int = STARTER_COUNT
+	if OS.has_feature("mobile") or DisplayServer.is_touchscreen_available():
+		target_starter_count = MOBILE_STARTER_COUNT
 	# Use the largest connected component if no specific component required
 	var target_component_id: int = required_component_id
 	if target_component_id < 0:
@@ -258,8 +262,9 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 	var candidate_tiles: Array[Vector2i] = []
 	var world_rng: RandomNumberGenerator = WorldRNG.rng_for(&"pawn_spawn_candidates")
 	
-	# Sample 20 random passable tiles from the component as candidates
-	for i in range(20):
+	# Sample enough passable candidates for the current spawn target.
+	var candidate_sample_count: int = maxi(20, target_starter_count * 2)
+	for i in range(candidate_sample_count):
 		var attempts: int = 0
 		while attempts < 100:
 			var tile := Vector2i(
@@ -279,7 +284,7 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 			break
 	
 	# Place each pawn using pawn-specific RNG for determinism
-	for pawn_id in range(STARTER_COUNT):
+	for pawn_id in range(target_starter_count):
 		if pawn_id >= candidate_tiles.size():
 			break  # Not enough candidates for all pawns
 		
@@ -361,10 +366,10 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		if kin != null and kin.has_method("add_person"):
 			kin.call("add_person", data.id, {"display_name": data.display_name, "age": data.age, "gender": data.gender})
 
-	if placed < STARTER_COUNT and OS.is_debug_build():
+	if placed < target_starter_count and OS.is_debug_build():
 		push_warning(
 			"[PawnSpawner] Only placed %d / %d pawns (component=%d)" %
-			[placed, STARTER_COUNT, required_component_id]
+			[placed, target_starter_count, required_component_id]
 		)
 
 
@@ -960,4 +965,3 @@ func spawn_migrant(world: World) -> HeelKawnian:
 	if GameManager != null and GameManager.verbose_logs():
 		print("[Migrant] %s arrived at (%d, %d)" % [pawn_data.display_name, spawn_tile.x, spawn_tile.y])
 	return pawn
-

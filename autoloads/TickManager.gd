@@ -51,6 +51,9 @@ var batch_stats: Dictionary = {
 	"last_frame_time_usec": 0,
 }
 
+## LOD tick counter for staggering pawn processing at high speeds
+var _lod_tick_counter: int = 0
+
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -130,18 +133,47 @@ func _call_tick_on_tickables(tick: int) -> int:
 		_tickable_cache_dirty = false
 		_tickable_cache_last_rebuild_tick = tick
 
+	var lod_rate: int = _lod_rate_for_speed()
 	var valid_count: int = 0
+	if lod_rate > 1:
+		_lod_tick_counter = (_lod_tick_counter + 1) % lod_rate
 	var i: int = _tickable_cache.size() - 1
 	while i >= 0:
 		var node: Node = _tickable_cache[i]
 		if is_instance_valid(node):
-			node._on_world_tick(tick)
-			valid_count += 1
+			if not _should_skip_tick_for_lod(node, lod_rate):
+				node._on_world_tick(tick)
+				valid_count += 1
 		else:
 			_tickable_cache.remove_at(i)
 			_tickable_cache_dirty = true
 		i -= 1
 	return valid_count
+
+
+func _lod_rate_for_speed() -> int:
+	# At high speeds, stagger pawn processing across ticks
+	# to reduce per-frame simulation load
+	if GameManager == null:
+		return 1
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 4  # 1/4 of pawns per tick
+	if gs >= 50.0:
+		return 3  # 1/3 of pawns per tick
+	if gs >= 26.0:
+		return 2  # 1/2 of pawns per tick
+	return 1  # All pawns every tick
+
+
+func _should_skip_tick_for_lod(node: Node, lod_rate: int) -> bool:
+	if lod_rate <= 1:
+		return false
+	# Only LOD pawns (nodes with 'data' property indicating a pawn)
+	if not "data" in node:
+		return false
+	var bucket: int = node.get_instance_id() % lod_rate
+	return bucket != _lod_tick_counter
 
 
 func _call_tick_on_refcounted(tick: int) -> int:

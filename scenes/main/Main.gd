@@ -423,8 +423,13 @@ func get_player_pawn_id() -> int:
 	return -1
 
 func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
-	# No throttle. The speed setting IS the speed.
-	# Always use the normal (1x) interval regardless of game speed.
+	if GameManager == null:
+		return normal_ticks
+	var gs: float = GameManager.game_speed
+	if gs >= 50.0:
+		return ultra_ticks
+	if gs >= 12.0:
+		return fast_ticks
 	return normal_ticks
 
 
@@ -447,6 +452,24 @@ func _heavy_planner_interval_for_speed() -> int:
 	if gs >= 12.0:
 		return 240
 	return 180
+
+
+func _pf_component_flush_interval_for_speed() -> int:
+	# Full-grid BFS over 65k tiles is expensive — throttle to prevent frame spikes
+	if GameManager == null:
+		return 5
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 30
+	if gs >= 50.0:
+		return 20
+	if gs >= 26.0:
+		return 15
+	if gs >= 12.0:
+		return 10
+	if gs >= 6.0:
+		return 7
+	return 5
 
 
 func _pawn_divergence_detail_logs_enabled() -> bool:
@@ -2783,7 +2806,9 @@ func _on_game_tick(tick: int) -> void:
 		_maybe_spawn_migrant()
 
 	# Flush deferred pathfinder component computation (batched from sync_tile_from_data)
-	if _world != null and _world.pathfinder != null and _world.data != null:
+	# THROTTLED: Full-grid BFS over 65k tiles — don't run every tick
+	var pf_flush_interval: int = _pf_component_flush_interval_for_speed()
+	if _is_main_lane_tick(tick, pf_flush_interval, 3) and _world != null and _world.pathfinder != null and _world.data != null:
 		t0 = Time.get_ticks_usec()
 		if _world.pathfinder.flush_component_dirty(_world.data):
 			section_us["pf_components"] = Time.get_ticks_usec() - t0

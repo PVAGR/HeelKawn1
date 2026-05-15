@@ -356,6 +356,7 @@ var _cached_utility_food_emergency: bool = false
 var _anim_t: float = 0.0
 var _draw_frame_counter: int = 0
 var _visual_frame_counter: int = 0  # PERFORMANCE: Adaptive visual update throttling
+var _cached_pulse_phase: float = 0.0  # PERFORMANCE: Avoid Time.get_ticks_msec() in _draw()
 var _last_sacred_check_tile: Vector2i = Vector2i(-9999, -9999)  # PERFORMANCE: SacredGeography tile cache
 var _cached_path: Array[Vector2i] = []  # PERFORMANCE: Pathfinding cache
 var _cached_path_target: Vector2i = Vector2i(-9999, -9999)  # PERFORMANCE: Path target cache
@@ -1841,6 +1842,9 @@ func sanity_check_impassable_tile() -> void:
 func _process(delta: float) -> void:
 	if data == null or GameManager.is_paused:
 		return
+	
+	# PERFORMANCE: Update cached pulse phase before any early return
+	_cached_pulse_phase += delta * (0.5 + GameManager.game_speed * 0.25)
 	
 	# PERFORMANCE: Skip movement interpolation if no path
 	if _path.is_empty():
@@ -6538,7 +6542,8 @@ func _draw() -> void:
 	
 	# Selection ring with pulsing glow
 	if is_selected:
-		var pulse: float = 0.6 + 0.4 * sin(Time.get_ticks_msec() * 0.005)
+		_cached_pulse_phase += 0.05
+		var pulse: float = 0.6 + 0.4 * sin(_cached_pulse_phase)
 		var sel_color := Color(1.0, 0.92, 0.18, pulse)
 		draw_arc(body_origin, body_radius + 3.5, 0.0, TAU, 28, sel_color, 1.4, true)
 		# Outer glow ring

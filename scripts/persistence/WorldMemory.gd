@@ -57,6 +57,8 @@ func set_settlement_state(
 		"details": details,
 	}
 	_state_transitions.append(transition)
+	if _state_transitions.size() > 1000:
+		_state_transitions.pop_front()
 	
 	# Update state
 	if not _settlement_states.has(settlement_id):

@@ -58,6 +58,12 @@ jobs:
           set -e
           mkdir -p ~/.android
           mkdir -p ~/.config/godot
+          ANDROID_PATH="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          JAVA_PATH="${JAVA_HOME:-}"
+          if [ -z "$ANDROID_PATH" ] || [ -z "$JAVA_PATH" ]; then
+            echo "ANDROID_PATH or JAVA_PATH missing"
+            exit 1
+          fi
           keytool -genkeypair \
             -v \
             -keystore "$HOME/.android/debug.keystore" \
@@ -68,11 +74,12 @@ jobs:
             -keysize 2048 \
             -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
-          cat > ~/.config/godot/editor_settings-4.tres << 'EOF'
+          cat > ~/.config/godot/editor_settings-4.tres << EOF
           [gd_resource type="EditorSettings" format=3]
           
           [resource]
-          export/android/android_sdk_path = "/usr/local/lib/android/sdk"
+          export/android/android_sdk_path = "${ANDROID_PATH}"
+          export/android/java_sdk_path = "${JAVA_PATH}"
           export/android/debug_keystore = "/home/runner/.android/debug.keystore"
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"

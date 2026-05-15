@@ -49,6 +49,7 @@ jobs:
       - name: Prepare Godot Android editor settings
         run: |
           set -e
+          mkdir -p ~/.android
           mkdir -p ~/.config/godot
           keytool -genkeypair \
             -v \
@@ -65,7 +66,7 @@ jobs:
           
           [resource]
           export/android/android_sdk_path = "/usr/local/lib/android/sdk"
-          export/android/debug_keystore = ""
+          export/android/debug_keystore = "/home/runner/.android/debug.keystore"
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
           export/android/shutdown_adb_on_exit = true

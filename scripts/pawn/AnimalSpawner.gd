@@ -6,6 +6,9 @@ extends Node
 const INITIAL_RABBITS: int = 8
 const INITIAL_DEER: int = 4
 const MAX_ANIMALS: int = 50
+const MOBILE_INITIAL_RABBITS: int = 5
+const MOBILE_INITIAL_DEER: int = 2
+const MOBILE_MAX_ANIMALS: int = 24
 const _WM = preload("res://autoloads/WorldMemory.gd")
 
 ## Interval for [method update_population_dynamics] (not every tick).
@@ -29,6 +32,12 @@ var _last_system_spawn_tick: Dictionary = {}
 
 static func _rsk(rk: int, species: int) -> String:
 	return "%d#%d" % [rk, species]
+
+
+func _max_animals_cap() -> int:
+	if OS.has_feature("mobile") or DisplayServer.is_touchscreen_available():
+		return MOBILE_MAX_ANIMALS
+	return MAX_ANIMALS
 
 
 static func _live_count_in_region(animals_arr: Array, world: World, rk: int, species: int) -> int:
@@ -101,12 +110,15 @@ func reset_population_derived_state() -> void:
 
 func spawn_initial(world: World) -> void:
 	reset_population_derived_state()
-	_spawn_group_scan(world, int(Animal.Type.RABBIT), INITIAL_RABBITS, true)
-	_spawn_group_scan(world, int(Animal.Type.DEER), INITIAL_DEER, true)
+	var mobile_runtime: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	var initial_rabbits: int = MOBILE_INITIAL_RABBITS if mobile_runtime else INITIAL_RABBITS
+	var initial_deer: int = MOBILE_INITIAL_DEER if mobile_runtime else INITIAL_DEER
+	_spawn_group_scan(world, int(Animal.Type.RABBIT), initial_rabbits, true)
+	_spawn_group_scan(world, int(Animal.Type.DEER), initial_deer, true)
 	if GameManager.verbose_logs():
 		print(
 				"[AnimalSpawner] Initial: %d rabbits, %d deer (deterministic, max %d)"
-				% [INITIAL_RABBITS, INITIAL_DEER, MAX_ANIMALS]
+				% [initial_rabbits, initial_deer, _max_animals_cap()]
 		)
 
 
@@ -116,7 +128,7 @@ func _spawn_group_scan(world: World, species: int, need: int, initial: bool) -> 
 		return
 	for y in range(WorldData.HEIGHT):
 		for x in range(WorldData.WIDTH):
-			if left <= 0 or animals.size() >= MAX_ANIMALS:
+			if left <= 0 or animals.size() >= _max_animals_cap():
 				return
 			var t := Vector2i(x, y)
 			if not _is_valid_tile_for_spawn(world, t, species, initial):
@@ -152,7 +164,7 @@ func _is_valid_tile_for_spawn(world: World, t: Vector2i, species: int, initial: 
 
 
 func _spawn_node_at(t: Vector2i, species: int, world: World) -> void:
-	if animals.size() >= MAX_ANIMALS:
+	if animals.size() >= _max_animals_cap():
 		return
 	var animal: Animal = Animal.new()
 	add_child(animal)
@@ -162,7 +174,7 @@ func _spawn_node_at(t: Vector2i, species: int, world: World) -> void:
 
 ## Population rules: +1; increments [member _system_births]; deterministic tile in region.
 func _spawn_from_population_system(world: World, rk: int, species: int) -> bool:
-	if animals.size() >= MAX_ANIMALS:
+	if animals.size() >= _max_animals_cap():
 		return false
 	var t: Vector2i = _find_first_valid_tile_in_region(world, rk, species, false)
 	if t.x < 0:
@@ -326,7 +338,7 @@ func get_animal_count_by_type(animal_type: int) -> int:
 func describe() -> String:
 	var rabbits: int = get_animal_count_by_type(Animal.Type.RABBIT)
 	var deer: int = get_animal_count_by_type(Animal.Type.DEER)
-	return "Animals: %d rabbits, %d deer (total %d / %d)" % [rabbits, deer, animals.size(), MAX_ANIMALS]
+	return "Animals: %d rabbits, %d deer (total %d / %d)" % [rabbits, deer, animals.size(), _max_animals_cap()]
 
 
 ## Deterministic live wildlife snapshot for HUD sampling.

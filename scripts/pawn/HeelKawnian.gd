@@ -46,6 +46,8 @@ const _Item = preload("res://scripts/items/Item.gd")
 ## At 1x: update every 3rd frame. At 26x: every 8th frame. At 100x: every 15th frame.
 ## This dramatically reduces draw calls while maintaining visual smoothness.
 const MIN_VISUAL_UPDATE_INTERVAL: int = 3
+const MOBILE_VISUAL_INTERVAL_BONUS: int = 2
+const MOBILE_REDRAW_INTERVAL_BONUS: int = 3
 
 # -------------------- BUNDLE 4: Deterministic Lane Scheduling --------------------
 ## Stable tick ID for deterministic lane gating. Computed once per pawn lifetime.
@@ -53,9 +55,9 @@ var _stable_pawn_tick_id: int = -1
 
 ## Lane interval constants for pawn tick shell reduction
 const PAWN_MEDIUM_AI_INTERVAL_TICKS: int = 1
-const PAWN_NEARBY_SCAN_INTERVAL_TICKS: int = 1
-const PAWN_SOCIAL_REFRESH_INTERVAL_TICKS: int = 1
-const PAWN_NARRATIVE_REFRESH_INTERVAL_TICKS: int = 1
+const PAWN_NEARBY_SCAN_INTERVAL_TICKS: int = 2
+const PAWN_SOCIAL_REFRESH_INTERVAL_TICKS: int = 3
+const PAWN_NARRATIVE_REFRESH_INTERVAL_TICKS: int = 4
 
 ## Get a stable tick ID for this pawn (deterministic, computed once).
 ## Used for lane gating so each pawn runs on a consistent offset.
@@ -77,6 +79,10 @@ func _is_lane_tick(tick: int, interval: int, salt: int = 0) -> bool:
 		return true
 	var id: int = _stable_tick_id() + salt
 	return tick % interval == id % interval
+
+
+func _is_mobile_runtime() -> bool:
+	return OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
 
 # -------------------- need decay tuning --------------------
 
@@ -342,6 +348,13 @@ const RESOURCE_PRESSURE_BIAS_MAX: float = 1.12
 ## Social mentoring can happen often; WorldMemory facts stay sparse and auditable.
 const TEACHING_MEMORY_EVENT_MIN_INTERVAL_TICKS: int = 300
 const DREAM_NUDGE_CHECK_EVERY_TICKS: int = 45
+const CHALLENGE_RANGE_PX: float = 92.0
+const CHALLENGE_SCAN_RADIUS_TILES: int = 7
+const CHALLENGE_MIN_INFLUENCE_DELTA: float = 6.0
+const CHALLENGE_TICKS_BASE: int = 14
+const CHALLENGE_COOLDOWN_TICKS: int = 240
+const CRAFTING_TICKS_BASE: int = 24
+const CRAFTING_COOLDOWN_TICKS: int = 140
 
 # -------------------- AI state --------------------
 
@@ -431,6 +444,11 @@ var _students_taught: Dictionary = {}
 var _challenge_target: HeelKawnian = null
 var _challenge_ticks_left: int = 0
 var _challenge_context: int = -1
+var _next_challenge_tick: int = 0
+var _crafting_job_id: int = -1
+var _crafting_ticks_left: int = 0
+var _next_craft_tick: int = 0
+var _crafting_output_item: int = _Item.Type.NONE
 
 ## Bed currently reserved by this pawn (Vector2i(-1,-1) = none). Set when we
 ## start walking to a bed, cleared on wake or panic-abort. World holds the
@@ -2666,6 +2684,9 @@ func _process(delta: float) -> void:
 	# But we need to show SOME movement so pawns don't appear frozen
 	_visual_frame_counter += 1
 	var visual_interval: int = MIN_VISUAL_UPDATE_INTERVAL + int(GameManager.game_speed * 0.15)  # Reduced from 0.4 for better visibility
+	if _is_mobile_runtime():
+		visual_interval += MOBILE_VISUAL_INTERVAL_BONUS
+	visual_interval = clampi(visual_interval, 2, 36)
 	var should_update_visuals: bool = (_visual_frame_counter >= visual_interval)
 	
 	if should_update_visuals:
@@ -2753,6 +2774,9 @@ func _process(delta: float) -> void:
 	# At 100x: redraw every 25th frame
 	# This is the BIGGEST performance win - reduces draw calls by 80-95%
 	var redraw_threshold: int = 5 + int(GameManager.game_speed * 0.2)
+	if _is_mobile_runtime():
+		redraw_threshold += MOBILE_REDRAW_INTERVAL_BONUS
+	redraw_threshold = clampi(redraw_threshold, 4, 42)
 	_draw_frame_counter += 1
 	if _draw_frame_counter >= redraw_threshold:
 		_draw_frame_counter = 0
@@ -2850,6 +2874,10 @@ func _on_path_complete() -> void:
 			_arrive_at_boat_and_sail()
 		State.DISEMBARKING_BOAT:
 			_arrive_at_disembark_boat()
+		State.FLEEING:
+			_tick_fleeing()
+		State.HIDING:
+			_tick_hiding()
 		State.IDLE:
 			pass
 
@@ -2992,6 +3020,14 @@ func _on_world_tick(_tick: int) -> void:
 			_tick_teaching()
 		State.CHALLENGE:
 			_tick_challenge()
+		State.CRAFTING:
+			_tick_crafting()
+		State.GATHERING:
+			_tick_gathering()
+		State.FLEEING:
+			_tick_fleeing()
+		State.HIDING:
+			_tick_hiding()
 	if _trace_ai_slice:
 		CrashTrap.exit_system("pawn_tick:%d:ai:full_state" % pid)
 		CrashTrap.exit_system("pawn_tick:%d:ai" % pid)
@@ -3064,15 +3100,16 @@ func _lane_interval_for_speed(normal_ticks: int, fast_ticks: int, ultra_ticks: i
 	if GameManager == null:
 		return maxi(1, normal_ticks)
 	var gs: float = GameManager.game_speed
+	var mobile_mul: int = 2 if _is_mobile_runtime() else 1
 	if gs >= 100.0:
-		return maxi(1, ultra_ticks)
+		return maxi(1, ultra_ticks * mobile_mul)
 	if gs >= 50.0:
-		return maxi(1, maxi(fast_ticks, int(round(float(ultra_ticks) * 0.75))))
+		return maxi(1, maxi(fast_ticks, int(round(float(ultra_ticks) * 0.75))) * mobile_mul)
 	if gs >= 26.0:
-		return maxi(1, fast_ticks)
+		return maxi(1, fast_ticks * mobile_mul)
 	if gs >= 12.0:
-		return maxi(1, maxi(normal_ticks, int(round(float(fast_ticks) * 0.6))))
-	return maxi(1, normal_ticks)
+		return maxi(1, maxi(normal_ticks, int(round(float(fast_ticks) * 0.6))) * mobile_mul)
+	return maxi(1, normal_ticks * mobile_mul)
 
 
 func _should_panic_sleep() -> bool:
@@ -5038,16 +5075,12 @@ func _tick_challenge() -> void:
 		return
 	
 	var dist: float = position.distance_to(_challenge_target.position)
-	if dist > 50.0:  # Challenge range
+	if dist > CHALLENGE_RANGE_PX:
 		_finish_challenge()
 		return
 	
 	if _challenge_ticks_left <= 0:
-		# Challenge complete - resolve through FactionManager
-		if FactionManager != null and _challenge_context >= 0:
-			var challenger_id: int = int(data.id)
-			var defender_id: int = int(_challenge_target.data.id)
-			FactionManager.resolve_conflict(challenger_id, defender_id, _challenge_context)
+		_resolve_leadership_challenge(_challenge_target, _challenge_context)
 		_finish_challenge()
 
 
@@ -5055,7 +5088,51 @@ func _finish_challenge() -> void:
 	_challenge_target = null
 	_challenge_ticks_left = 0
 	_challenge_context = -1
+	if GameManager != null:
+		_next_challenge_tick = maxi(_next_challenge_tick, GameManager.tick_count + 40)
 	_reset_to_idle()
+
+
+func _resolve_leadership_challenge(target: HeelKawnian, context: int = -1) -> void:
+	if target == null or not is_instance_valid(target) or target.data == null or data == null:
+		return
+	var challenger_id: int = int(data.id)
+	var defender_id: int = int(target.data.id)
+	var context_id: int = context if context >= 0 else 0
+	var resolved_by_faction: bool = false
+	if FactionManager != null and FactionManager.has_method("resolve_conflict"):
+		FactionManager.call("resolve_conflict", challenger_id, defender_id, context_id)
+		resolved_by_faction = true
+	else:
+		var my_score: float = float(data.reputation_score) + float(data.clan_influence) + float(data.influence)
+		var target_score: float = float(target.data.reputation_score) + float(target.data.clan_influence) + float(target.data.influence)
+		var swing: float = 8.0 + _bp(6) * 6.0
+		var challenger_wins: bool = (my_score + swing) >= target_score
+		if challenger_wins:
+			data.reputation_score = min(100.0, data.reputation_score + 1.8)
+			data.clan_influence = min(100.0, data.clan_influence + 1.4)
+			data.influence += 1.1
+			target.data.reputation_score = max(0.0, target.data.reputation_score - 1.2)
+			target.data.clan_influence = max(0.0, target.data.clan_influence - 1.0)
+			target.data.influence = max(0.0, target.data.influence - 0.7)
+		else:
+			target.data.reputation_score = min(100.0, target.data.reputation_score + 1.0)
+			target.data.clan_influence = min(100.0, target.data.clan_influence + 0.8)
+			target.data.influence += 0.6
+			data.reputation_score = max(0.0, data.reputation_score - 0.8)
+			data.clan_influence = max(0.0, data.clan_influence - 0.7)
+			data.influence = max(0.0, data.influence - 0.45)
+	if WorldMemory != null:
+		WorldMemory.record_event({
+			"type": "leadership_challenge",
+			"tick": GameManager.tick_count if GameManager != null else 0,
+			"challenger_id": challenger_id,
+			"challenger_name": data.display_name,
+			"defender_id": defender_id,
+			"defender_name": target.data.display_name,
+			"context": context_id,
+			"resolved_by_faction_manager": resolved_by_faction,
+		})
 
 
 func _apply_work_hazards(work_ticks_simulated: int = 1) -> void:
@@ -5268,8 +5345,12 @@ func _begin_direct_gather(item_type: int, qty: int) -> void:
 	var best_dist: int = 999999
 	var px: int = int(data.tile_pos.x)
 	var py: int = int(data.tile_pos.y)
-	for dy in range(-search_radius, search_radius + 1):
-		for dx in range(-search_radius, search_radius + 1):
+	var urgent_need: bool = (data.hunger <= HUNGER_EMERGENCY or data.rest <= REST_PANIC_THRESHOLD)
+	var scan_stride: int = 1
+	if _is_mobile_runtime() and not urgent_need:
+		scan_stride = 2
+	for dy in range(-search_radius, search_radius + 1, scan_stride):
+		for dx in range(-search_radius, search_radius + 1, scan_stride):
 			var x: int = px + dx
 			var y: int = py + dy
 			if x < 0 or y < 0 or x >= WorldData.WIDTH or y >= WorldData.HEIGHT:
@@ -6552,8 +6633,11 @@ func _maybe_start_drinking() -> bool:
 	var my_comp: int = _world.pathfinder.component_of(data.tile_pos)
 	var px: int = int(data.tile_pos.x)
 	var py: int = int(data.tile_pos.y)
-	for dy in range(-WATER_SEARCH_RADIUS, WATER_SEARCH_RADIUS + 1, 2):
-		for dx in range(-WATER_SEARCH_RADIUS, WATER_SEARCH_RADIUS + 1, 2):
+	var scan_stride: int = 2
+	if _is_mobile_runtime() and data.thirst > THIRST_EMERGENCY:
+		scan_stride = 3
+	for dy in range(-WATER_SEARCH_RADIUS, WATER_SEARCH_RADIUS + 1, scan_stride):
+		for dx in range(-WATER_SEARCH_RADIUS, WATER_SEARCH_RADIUS + 1, scan_stride):
 			var tx: int = px + dx
 			var ty: int = py + dy
 			if not _world.data.in_bounds(tx, ty):
@@ -6892,7 +6976,60 @@ func _record_teaching_memory_fact(student: HeelKawnian, skill_taught: String) ->
 
 ## Check if pawn can challenge nearby pawn's authority
 func _maybe_start_challenge() -> bool:
-	return false
+	if data == null or _world == null:
+		return false
+	if _state != State.IDLE or not _path.is_empty():
+		return false
+	if GameManager != null and GameManager.tick_count < _next_challenge_tick:
+		return false
+	if data.hunger <= HUNGER_EMERGENCY or data.rest <= REST_PANIC_THRESHOLD:
+		return false
+	var spawner: PawnSpawner = _resolve_pawn_spawner()
+	var candidates: Array = _alive_pawns_from_spawner(spawner)
+	var best_target: HeelKawnian = null
+	var best_score: float = -INF
+	var my_id: int = int(data.id)
+	var my_comp: int = _world.pathfinder.component_of(data.tile_pos)
+	for p_any in candidates:
+		var p: HeelKawnian = p_any as HeelKawnian
+		if p == null or p == self or not is_instance_valid(p) or p.data == null:
+			continue
+		if p.data.is_dead:
+			continue
+		if _world.pathfinder.component_of(p.data.tile_pos) != my_comp:
+			continue
+		var dist_t: int = absi(p.data.tile_pos.x - data.tile_pos.x) + absi(p.data.tile_pos.y - data.tile_pos.y)
+		if dist_t > CHALLENGE_SCAN_RADIUS_TILES:
+			continue
+		var rapport: float = float(data.get_social_rapport(int(p.data.id)))
+		var grudge: float = float(data.get_grudge_strength(int(p.data.id))) if data.has_method("get_grudge_strength") else 0.0
+		var influence_gap: float = (float(p.data.reputation_score) + float(p.data.clan_influence) + float(p.data.influence)) - (float(data.reputation_score) + float(data.clan_influence) + float(data.influence))
+		if influence_gap < CHALLENGE_MIN_INFLUENCE_DELTA and grudge < 6.0:
+			continue
+		var score: float = influence_gap * 1.1 + grudge * 0.7 - rapport * 0.22 - float(dist_t) * 0.9
+		if score > best_score:
+			best_score = score
+			best_target = p
+	if best_target == null:
+		_next_challenge_tick = (GameManager.tick_count if GameManager != null else 0) + CHALLENGE_COOLDOWN_TICKS
+		return false
+	var target_tile: Vector2i = best_target.data.tile_pos
+	if target_tile != data.tile_pos:
+		var path: Array[Vector2i] = _path_for_pawn(target_tile)
+		if path.is_empty():
+			_next_challenge_tick = (GameManager.tick_count if GameManager != null else 0) + CHALLENGE_COOLDOWN_TICKS
+			return false
+		_start_path(path)
+	_challenge_target = best_target
+	_challenge_context = 0
+	var skill_lead: int = data.get_skill_level(HeelKawnianData.Skill.BUILDING)
+	_challenge_ticks_left = CHALLENGE_TICKS_BASE + maxi(0, 8 - skill_lead)
+	_state = State.CHALLENGE
+	_next_challenge_tick = (GameManager.tick_count if GameManager != null else 0) + CHALLENGE_COOLDOWN_TICKS
+	data.add_social_rapport(int(best_target.data.id), -2)
+	best_target.data.add_social_rapport(my_id, -1)
+	_request_redraw()
+	return true
 
 
 func _resolve_pawn_spawner() -> PawnSpawner:
@@ -8154,11 +8291,18 @@ func set_leadership_role(role: int) -> void:
 		print("[HeelKawnian] %s became %s of clan %d" % [data.display_name, role_name, data.clan_id])
 
 
-func challenge_for_leadership(_target_leader: HeelKawnian) -> void:
-	# Challenge another pawn for leadership
-	# Placeholder - needs FactionManager integration
-	# TODO: Implement leadership challenge mechanics
-	pass
+func challenge_for_leadership(target_leader: HeelKawnian) -> void:
+	if target_leader == null or not is_instance_valid(target_leader) or target_leader.data == null:
+		return
+	if data == null:
+		return
+	if _state != State.IDLE and _state != State.CHALLENGE:
+		return
+	_challenge_target = target_leader
+	_challenge_context = 0
+	_challenge_ticks_left = CHALLENGE_TICKS_BASE + maxi(0, 6 - data.get_skill_level(HeelKawnianData.Skill.BUILDING))
+	_state = State.CHALLENGE
+	_next_challenge_tick = (GameManager.tick_count if GameManager != null else 0) + CHALLENGE_COOLDOWN_TICKS
 
 
 func get_clan_influence() -> float:
@@ -8703,12 +8847,50 @@ func gather() -> bool:
 	return try_pickup_item()
 
 
-func craft_simple_tool(_tool_type: int) -> bool:
-	# Create a simple tool from materials
-	# Requires: pawn has materials, has crafting skill
-	# Placeholder - needs crafting system
-	# TODO: Implement crafting
-	return false
+func craft_simple_tool(tool_type: int) -> bool:
+	if data == null or CraftingSystem == null:
+		return false
+	if _state != State.IDLE or not _path.is_empty():
+		return false
+	var now_tick: int = GameManager.tick_count if GameManager != null else 0
+	if now_tick < _next_craft_tick:
+		return false
+	var recipes: Dictionary = CraftingSystem.get_all_recipes() if CraftingSystem.has_method("get_all_recipes") else {}
+	if recipes.is_empty():
+		return false
+	var recipe_id: String = ""
+	var recipe_data: Dictionary = {}
+	for rid in recipes:
+		var r: Dictionary = recipes[rid]
+		if int(r.get("output_item", _Item.Type.NONE)) != tool_type:
+			continue
+		var cat: String = str(r.get("category", ""))
+		if cat != "tool" and cat != "weapon":
+			continue
+		recipe_id = str(rid)
+		recipe_data = r
+		break
+	if recipe_id.is_empty():
+		return false
+	if CraftingSystem.has_method("can_craft_recipe"):
+		var verdict: Dictionary = CraftingSystem.can_craft_recipe(self, recipe_id)
+		if not bool(verdict.get("can_craft", false)):
+			_next_craft_tick = now_tick + CRAFTING_COOLDOWN_TICKS
+			return false
+	var job_id: int = int(CraftingSystem.start_crafting(recipe_id, int(data.id), data.tile_pos))
+	if job_id < 0:
+		_next_craft_tick = now_tick + CRAFTING_COOLDOWN_TICKS
+		return false
+	_crafting_job_id = job_id
+	_crafting_output_item = tool_type
+	var base_ticks: int = int(recipe_data.get("craft_ticks", CRAFTING_TICKS_BASE))
+	var skill_bonus: int = data.get_skill_level(int(recipe_data.get("required_skill", HeelKawnianData.Skill.BUILDING)))
+	_crafting_ticks_left = maxi(8, base_ticks - skill_bonus * 2)
+	_next_craft_tick = now_tick + CRAFTING_COOLDOWN_TICKS
+	_state = State.CRAFTING
+	_record_consciousness_event("crafting", "Began crafting %s" % Item.name_for(tool_type), 14.0, 3, "achievement")
+	_request_redraw()
+	return true
 
 
 func flee_from_danger() -> bool:
@@ -8777,9 +8959,29 @@ func _tick_gathering() -> void:
 
 
 func _tick_crafting() -> void:
-	# Tick while crafting
-	# Placeholder - needs crafting system
-	# For now, just return to idle
+	if _crafting_job_id < 0:
+		_state = State.IDLE
+		return
+	var active: Array = CraftingSystem.get_active_jobs() if CraftingSystem != null and CraftingSystem.has_method("get_active_jobs") else []
+	var still_active: bool = false
+	for j_any in active:
+		if not (j_any is Dictionary):
+			continue
+		var j: Dictionary = j_any as Dictionary
+		if int(j.get("job_id", -1)) == _crafting_job_id:
+			still_active = true
+			break
+	if still_active:
+		var interval: int = _work_step_interval_for_speed()
+		_crafting_ticks_left = maxi(0, _crafting_ticks_left - interval)
+		return
+	_crafting_job_id = -1
+	_crafting_ticks_left = 0
+	if _crafting_output_item != _Item.Type.NONE and not data.is_equipped_tool_valid():
+		data.equip_tool(_crafting_output_item)
+	_crafting_output_item = _Item.Type.NONE
+	data.mood = min(100.0, data.mood + 1.5)
+	_record_consciousness_event("craft_complete", "Finished hand-crafted tool", 18.0, 3, "achievement")
 	_state = State.IDLE
 
 
@@ -9301,6 +9503,10 @@ func _draw() -> void:
 	var body_color: Color = data.color
 	if _state == State.SLEEPING:
 		body_color = data.color.darkened(0.25)
+	if data.health <= 35.0:
+		body_color = body_color.lerp(Color(0.92, 0.24, 0.22), 0.35)
+	if data.thirst <= THIRST_EMERGENCY:
+		body_color = body_color.lerp(Color(0.38, 0.62, 0.95), 0.2)
 
 	# Profession body tint â€” strong overlay so pawns of same role look alike
 	if data.current_profession != HeelKawnianData.Profession.NONE:
@@ -9368,6 +9574,9 @@ func _draw() -> void:
 		elif _state == State.IDLE:
 			# Idle fidget: subtle body sway (already handled by bob)
 			pass
+
+	if PROCEDURAL_PIXEL_PAWN:
+		_draw_procedural_pixel_figure(body_origin, body_radius)
 	
 	# Outline color communicates state (simplified)
 	var outline_c: Color = Color.BLACK

@@ -222,7 +222,19 @@ func unregister_refcounted_tickable(obj: RefCounted) -> void:
 	_refcounted_tickables.erase(obj)
 
 func set_speed(multiplier: float) -> void:
-	_speed_multiplier = max(multiplier, 0.0001)
+	var next_speed: float = max(multiplier, 0.0001)
+	# Mobile thermal/fps guardrail: avoid runaway 50x/100x simulation bursts on phones.
+	if _is_mobile_runtime():
+		next_speed = minf(next_speed, 26.0)
+	_speed_multiplier = next_speed
+	var nearest_idx: int = 0
+	var nearest_dist: float = 1.0e20
+	for i in range(SPEED_PRESETS.size()):
+		var d: float = absf(float(SPEED_PRESETS[i]) - _speed_multiplier)
+		if d < nearest_dist:
+			nearest_dist = d
+			nearest_idx = i
+	_current_speed_index = nearest_idx
 	if GameManager != null:
 		GameManager.game_speed = _speed_multiplier
 		GameManager.speed_changed.emit(_speed_multiplier, _is_paused)
@@ -230,8 +242,11 @@ func set_speed(multiplier: float) -> void:
 func set_speed_index(index: int) -> void:
 	if index < 0 or index >= SPEED_PRESETS.size():
 		return
-	_current_speed_index = index
-	set_speed(SPEED_PRESETS[index])
+	var clamped_index: int = index
+	if _is_mobile_runtime():
+		clamped_index = mini(index, 4) # up to 26x on mobile
+	_current_speed_index = clamped_index
+	set_speed(SPEED_PRESETS[clamped_index])
 
 func next_speed() -> void:
 	var next: int = (_current_speed_index + 1) % SPEED_PRESETS.size()

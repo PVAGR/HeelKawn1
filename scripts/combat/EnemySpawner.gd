@@ -4,6 +4,8 @@ extends Node
 
 const INITIAL_RAID_SIZE: int = 3
 const MAX_ENEMIES: int = 20
+const MOBILE_INITIAL_RAID_SIZE: int = 2
+const MOBILE_MAX_ENEMIES: int = 10
 const RAID_INTERVAL_TICKS: int = 3000  # ~5 minutes at 1x speed = one raid every 5 in-game days
 const SPAWN_INTERVAL_TICKS: int = RAID_INTERVAL_TICKS
 const DIFFICULTY_SCALE: float = 1.1  # Increase difficulty by 10% each raid
@@ -24,6 +26,12 @@ var _encounter_kind: String = "none"
 var _war_source_settlement_id: int = -1
 var _war_target_settlement_id: int = -1
 var _war_strength: float = 0.0
+
+
+func _max_enemies_cap() -> int:
+	if OS.has_feature("mobile") or DisplayServer.is_touchscreen_available():
+		return MOBILE_MAX_ENEMIES
+	return MAX_ENEMIES
 
 
 func _ready() -> void:
@@ -64,8 +72,9 @@ func process_tick(world: World, tick: int) -> void:
 func spawn_raid(world: World) -> void:
 	_raid_number += 1
 	_difficulty = pow(DIFFICULTY_SCALE, _raid_number)
-	var raid_size: int = int(INITIAL_RAID_SIZE * _difficulty)
-	raid_size = clampi(raid_size, 1, MAX_ENEMIES - enemies.size())
+	var base_size: int = MOBILE_INITIAL_RAID_SIZE if (OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()) else INITIAL_RAID_SIZE
+	var raid_size: int = int(base_size * _difficulty)
+	raid_size = clampi(raid_size, 1, _max_enemies_cap() - enemies.size())
 	var spawn_edge: int = int((_raid_number + GameManager.tick_count / SPAWN_INTERVAL_TICKS) % 4)  # deterministic
 	var spawned_count: int = _spawn_forces_internal(world, raid_size, spawn_edge, "raid", -1, -1, 0.0)
 	if GameManager.tick_count % 100 == 0:
@@ -81,7 +90,7 @@ func spawn_war_forces(
 	if world == null or _is_battle_active or enemies.size() > 0:
 		return false
 	var norm_strength: float = maxf(0.0, strength)
-	var war_size: int = clampi(2 + int(norm_strength / 60.0), 2, MAX_ENEMIES)
+	var war_size: int = clampi(2 + int(norm_strength / 60.0), 2, _max_enemies_cap())
 	var edge_mix: int = int((source_settlement_id * 73856093) ^ (target_settlement_id * 19349663) ^ int(norm_strength * 100.0))
 	var spawn_edge: int = abs(edge_mix) % 4
 	var spawned_count: int = _spawn_forces_internal(
@@ -151,6 +160,8 @@ func _spawn_forces_internal(
 	for tile in spawn_tiles:
 		if spawned >= force_size:
 			break
+		if enemies.size() >= _max_enemies_cap():
+			break
 
 		if not world.pathfinder.is_passable(tile):
 			continue
@@ -205,5 +216,5 @@ func despawn_all() -> void:
 
 func describe() -> String:
 	return "Enemies: %d active / %d max (raid #%d, difficulty %.1fx)" % [
-		get_enemy_count(), MAX_ENEMIES, _raid_number, _difficulty
+		get_enemy_count(), _max_enemies_cap(), _raid_number, _difficulty
 	]

@@ -137,9 +137,16 @@ const WORLD_STABILIZATION_TICKS: int = 50
 ## Now dynamic: Observer mode enables placement; other modes disable it.
 const PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES: bool = false  # Legacy — use _can_player_place() instead
 const TOUCH_TAP_THRESHOLD_PX: float = 18.0
+const TOUCH_TAP_THRESHOLD_MOBILE_PX: float = 28.0
 
 func _can_player_place() -> bool:
 	return _player_mode == PlayerMode.OBSERVER
+
+
+func _touch_tap_threshold_px() -> float:
+	if OS.has_feature("mobile") or DisplayServer.is_touchscreen_available():
+		return TOUCH_TAP_THRESHOLD_MOBILE_PX
+	return TOUCH_TAP_THRESHOLD_PX
 ## Toolbar + keys 1–7 match GameManager.SPEED_STEPS (F10 creator menu still steals digit keys while open).
 const ALLOW_SPEED_NUMBER_HOTKEYS: bool = true
 ## Keep load-in sessions predictable; speed only changes via explicit user action.
@@ -3437,6 +3444,7 @@ func _accumulate_social_rapport() -> void:
 	var wm_budget: int = SOCIAL_WM_RECORD_BUDGET_PER_PASS
 	var consciousness_budget: int = SOCIAL_CONSCIOUSNESS_RECORDS_PER_PASS
 	var pair_budget: int = SOCIAL_MAX_PAIRS_PER_PASS
+	var mobile_runtime: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
 	if GameManager != null:
 		var gs: float = GameManager.game_speed
 		if gs >= 100.0:
@@ -3445,6 +3453,10 @@ func _accumulate_social_rapport() -> void:
 			pair_budget = maxi(96, int(round(float(SOCIAL_MAX_PAIRS_PER_PASS) * 0.5)))
 		elif gs >= 26.0:
 			pair_budget = maxi(128, int(round(float(SOCIAL_MAX_PAIRS_PER_PASS) * 0.7)))
+	if mobile_runtime:
+		pair_budget = maxi(56, int(round(float(pair_budget) * 0.62)))
+		wm_budget = maxi(12, int(round(float(wm_budget) * 0.55)))
+		consciousness_budget = maxi(3, int(round(float(consciousness_budget) * 0.5)))
 	var consciousness: Node = get_node_or_null("/root/PawnConsciousness")
 	var comp_by_id: Dictionary = {}
 	for p in pl:
@@ -3453,7 +3465,10 @@ func _accumulate_social_rapport() -> void:
 	
 	# Process only a rotating subset of crowded cells each pass. This caps
 	# worst-case spikes while still giving every hotspot regular updates.
-	var cells_this_pass: int = mini(SOCIAL_MAX_CELLS_PER_PASS, crowded_cells.size())
+	var max_cells_per_pass: int = SOCIAL_MAX_CELLS_PER_PASS
+	if mobile_runtime:
+		max_cells_per_pass = maxi(6, int(round(float(SOCIAL_MAX_CELLS_PER_PASS) * 0.6)))
+	var cells_this_pass: int = mini(max_cells_per_pass, crowded_cells.size())
 	var start_cursor: int = posmod(_social_cell_cursor, crowded_cells.size())
 	var exhausted: bool = false
 	for step in range(cells_this_pass):
@@ -3467,11 +3482,14 @@ func _accumulate_social_rapport() -> void:
 		var cy: int = int(parts[1])
 		# Gather pawns from this cell and 8 neighbors
 		var nearby: Array[HeelKawnian] = []
+		var nearby_cap: int = SOCIAL_MAX_NEARBY_PER_CELL
+		if mobile_runtime:
+			nearby_cap = maxi(24, int(round(float(SOCIAL_MAX_NEARBY_PER_CELL) * 0.6)))
 		for dx in range(-1, 2):
-			if nearby.size() >= SOCIAL_MAX_NEARBY_PER_CELL:
+			if nearby.size() >= nearby_cap:
 				break
 			for dy in range(-1, 2):
-				if nearby.size() >= SOCIAL_MAX_NEARBY_PER_CELL:
+				if nearby.size() >= nearby_cap:
 					break
 				var nk: String = "%d,%d" % [cx + dx, cy + dy]
 				if not grid.has(nk):
@@ -3481,7 +3499,7 @@ func _accumulate_social_rapport() -> void:
 					continue
 				for n in neighbor_v as Array:
 					nearby.append(n)
-					if nearby.size() >= SOCIAL_MAX_NEARBY_PER_CELL:
+					if nearby.size() >= nearby_cap:
 						break
 		# OPTIMIZATION: Skip if still not enough pawns for interaction
 		if nearby.size() < 2:
@@ -4289,7 +4307,7 @@ func _handle_screen_touch(event: InputEventScreenTouch) -> void:
 		return
 	var start_pos: Vector2 = _touch_start_positions.get(event.index, event.position)
 	_touch_start_positions.erase(event.index)
-	if start_pos.distance_to(event.position) > TOUCH_TAP_THRESHOLD_PX:
+	if start_pos.distance_to(event.position) > _touch_tap_threshold_px():
 		return
 	var world_pos: Vector2 = _screen_to_world_position(event.position)
 	var tile: Vector2i = _world.world_to_tile(world_pos) if _world != null else Vector2i(-1, -1)

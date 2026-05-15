@@ -75,6 +75,16 @@ var _pattern_update_interval: int = 120  # Only update patterns every 120 ticks
 var _prediction_update_interval: int = 180  # Only update predictions every 180 ticks
 
 
+func _is_frame_stressed() -> bool:
+	var fps: float = float(Engine.get_frames_per_second())
+	if fps <= 0.0:
+		return false
+	var mobile: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	if mobile:
+		return fps < 42.0
+	return fps < 32.0
+
+
 ## Get neural update interval - Re-enabled for smooth gameplay
 ## Game was lagging too hard without throttling
 func _neural_interval_for_speed(base_interval: int) -> int:
@@ -844,8 +854,7 @@ func _on_world_tick(tick: int) -> void:
 	if not enabled:
 		return
 	
-	# No throttle. The speed setting IS the speed.
-	# Update enhanced AI systems every tick.
+	# Speed-aware cadence for heavy strategic AI systems.
 	if civilization_mode:
 		var world_ai_interval: int = _world_ai_interval_for_speed()
 		if world_ai and (_last_world_ai_update_tick < 0 or tick - _last_world_ai_update_tick >= world_ai_interval):
@@ -871,18 +880,90 @@ func _on_world_tick(tick: int) -> void:
 
 
 func _world_ai_interval_for_speed() -> int:
-	# No throttle. The speed setting IS the speed.
-	return 10
+	var mobile: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	var stressed: bool = _is_frame_stressed()
+	if GameManager == null:
+		if stressed:
+			return 22 if mobile else 16
+		return 14 if mobile else 10
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		if stressed:
+			return 120 if mobile else 84
+		return 96 if mobile else 72
+	if gs >= 50.0:
+		if stressed:
+			return 80 if mobile else 56
+		return 64 if mobile else 48
+	if gs >= 26.0:
+		if stressed:
+			return 56 if mobile else 40
+		return 42 if mobile else 32
+	if gs >= 12.0:
+		if stressed:
+			return 36 if mobile else 26
+		return 28 if mobile else 20
+	if gs >= 6.0:
+		if stressed:
+			return 28 if mobile else 20
+		return 20 if mobile else 14
+	if stressed:
+		return 22 if mobile else 16
+	return 14 if mobile else 10
 
 
 func _settlement_ai_interval_for_speed() -> int:
-	# No throttle. The speed setting IS the speed.
-	return 16
+	var mobile: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	var stressed: bool = _is_frame_stressed()
+	if GameManager == null:
+		if stressed:
+			return 30 if mobile else 22
+		return 20 if mobile else 16
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		if stressed:
+			return 156 if mobile else 116
+		return 132 if mobile else 100
+	if gs >= 50.0:
+		if stressed:
+			return 110 if mobile else 80
+		return 90 if mobile else 68
+	if gs >= 26.0:
+		if stressed:
+			return 72 if mobile else 52
+		return 56 if mobile else 44
+	if gs >= 12.0:
+		if stressed:
+			return 46 if mobile else 34
+		return 36 if mobile else 28
+	if gs >= 6.0:
+		if stressed:
+			return 34 if mobile else 28
+		return 26 if mobile else 22
+	if stressed:
+		return 30 if mobile else 22
+	return 20 if mobile else 16
 
 
 func _agent_update_budget_for_speed(total_agents: int) -> int:
-	# No throttle. All agents update every tick.
-	return total_agents
+	var budget: int = total_agents
+	var mobile: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	if GameManager != null:
+		var gs: float = GameManager.game_speed
+		if gs >= 100.0:
+			budget = maxi(1, int(ceil(float(total_agents) * (0.4 if mobile else 0.55))))
+		elif gs >= 50.0:
+			budget = maxi(1, int(ceil(float(total_agents) * (0.5 if mobile else 0.65))))
+		elif gs >= 26.0:
+			budget = maxi(1, int(ceil(float(total_agents) * (0.65 if mobile else 0.8))))
+		elif gs >= 12.0:
+			budget = maxi(1, int(ceil(float(total_agents) * (0.8 if mobile else 0.9))))
+	if _is_frame_stressed():
+		budget = maxi(1, int(floor(float(budget) * (0.65 if mobile else 0.75))))
+	if mobile and GameManager != null and GameManager.game_speed <= 6.0:
+		# Keep mobile stable even at low speed spikes.
+		budget = mini(budget, 12)
+	return mini(total_agents, budget)
 
 func _spawn_initial_agents() -> void:
 	var AIAgentClass = preload("res://scripts/ai/AIAgent.gd")

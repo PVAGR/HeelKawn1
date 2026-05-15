@@ -3,18 +3,16 @@ extends Node
 ## accumulation. Emits `tick_processed` and calls `_on_world_tick()` on all
 ## nodes in the "tickable" group.
 ##
-## NO THROTTLE POLICY:
-## The speed setting IS the speed. 100x means 100 ticks per second.
-## No frame budgets, no caps, no throttling. Process every accumulated tick.
-## If the sim can't keep up, frames run longer — but the speed is honest.
+## PLAYABILITY POLICY:
+## Keep simulation deterministic, but never allow catch-up storms to freeze
+## rendering. Process ticks with adaptive frame caps + bounded backlog.
 
 signal tick_processed(tick_number: int)
 
 const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base)
 
-## Safety cap only — prevents infinite loop if something goes wrong.
-## 1000 ticks/frame at 100x = 10 seconds of sim per frame at 60fps.
-const MAX_TICKS_PER_FRAME: int = 1000
+## Hard safety cap.
+const MAX_TICKS_PER_FRAME: int = 48
 
 ## How often (in ticks) to force-rebuild the tickable cache.
 const TICKABLE_CACHE_REBUILD_INTERVAL: int = 300
@@ -50,6 +48,56 @@ var batch_stats: Dictionary = {
 	"avg_ticks_per_frame": 0.0,
 	"last_frame_time_usec": 0,
 }
+var dropped_ticks_last_frame: int = 0
+
+
+func _is_mobile_runtime() -> bool:
+	return OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+
+
+func _is_frame_stressed() -> bool:
+	var fps: float = float(Engine.get_frames_per_second())
+	if fps <= 0.0:
+		return false
+	if _is_mobile_runtime():
+		return fps < 42.0
+	return fps < 32.0
+
+
+func _frame_tick_cap_for_speed(speed: float) -> int:
+	if _is_mobile_runtime():
+		if speed <= 1.0: return 1
+		if speed <= 3.0: return 2
+		if speed <= 6.0: return 3
+		if speed <= 12.0: return 4
+		if speed <= 26.0: return 6
+		if speed <= 50.0: return 8
+		return 10
+	if speed <= 1.0: return 1
+	if speed <= 3.0: return 3
+	if speed <= 6.0: return 5
+	if speed <= 12.0: return 7
+	if speed <= 26.0: return 10
+	if speed <= 50.0: return 14
+	return 18
+
+
+func _accumulated_tick_cap_for_speed(speed: float) -> int:
+	if _is_mobile_runtime():
+		if speed <= 1.0: return 2
+		if speed <= 3.0: return 6
+		if speed <= 6.0: return 12
+		if speed <= 12.0: return 20
+		if speed <= 26.0: return 32
+		if speed <= 50.0: return 48
+		return 64
+	if speed <= 1.0: return 2
+	if speed <= 3.0: return 10
+	if speed <= 6.0: return 20
+	if speed <= 12.0: return 32
+	if speed <= 26.0: return 48
+	if speed <= 50.0: return 72
+	return 96
 
 ## LOD tick counter for staggering pawn processing at high speeds
 var _lod_tick_counter: int = 0
@@ -67,23 +115,36 @@ func _process(delta: float) -> void:
 	if _is_paused:
 		ticks_processed_last_frame = 0
 		tickables_called_last_frame = 0
+		dropped_ticks_last_frame = 0
 		return
 	if delta <= 0.0 or _speed_multiplier <= 0.0:
 		_last_frame_ticks = 0
 		ticks_processed_last_frame = 0
 		tickables_called_last_frame = 0
+		dropped_ticks_last_frame = 0
 		return
 
-	# Accumulate scaled time — every tick is honest, nothing dropped
+	# Accumulate scaled time; cap backlog to prevent catch-up storms.
 	_accumulated_time += delta * _speed_multiplier
+	dropped_ticks_last_frame = 0
+	var accumulated_tick_cap: int = _accumulated_tick_cap_for_speed(_speed_multiplier)
+	if _is_frame_stressed():
+		accumulated_tick_cap = maxi(1, int(floor(float(accumulated_tick_cap) * 0.5)))
+	var max_accumulated_time: float = float(accumulated_tick_cap) * TICK_STEP
+	if _accumulated_time > max_accumulated_time:
+		var dropped_ticks: int = int(floor((_accumulated_time - max_accumulated_time) / TICK_STEP))
+		dropped_ticks_last_frame = maxi(0, dropped_ticks)
+		_accumulated_time = max_accumulated_time
 
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
 	var tickables_this_frame: int = 0
+	var frame_cap: int = mini(MAX_TICKS_PER_FRAME, _frame_tick_cap_for_speed(_speed_multiplier))
+	if _is_frame_stressed():
+		frame_cap = maxi(1, int(floor(float(frame_cap) * 0.5)))
 
-	# Process ALL accumulated ticks. No frame budget. No throttle.
-	# The speed setting IS the speed.
-	while _accumulated_time >= TICK_STEP and ticks_this_frame < MAX_TICKS_PER_FRAME:
+	# Process with adaptive frame cap so render thread stays responsive.
+	while _accumulated_time >= TICK_STEP and ticks_this_frame < frame_cap:
 		_accumulated_time -= TICK_STEP
 		current_tick += 1
 		ticks_this_frame += 1
@@ -193,7 +254,19 @@ func unregister_refcounted_tickable(obj: RefCounted) -> void:
 	_refcounted_tickables.erase(obj)
 
 func set_speed(multiplier: float) -> void:
-	_speed_multiplier = max(multiplier, 0.0001)
+	var next_speed: float = max(multiplier, 0.0001)
+	# Mobile thermal/fps guardrail: avoid runaway 50x/100x simulation bursts on phones.
+	if _is_mobile_runtime():
+		next_speed = minf(next_speed, 26.0)
+	_speed_multiplier = next_speed
+	var nearest_idx: int = 0
+	var nearest_dist: float = 1.0e20
+	for i in range(SPEED_PRESETS.size()):
+		var d: float = absf(float(SPEED_PRESETS[i]) - _speed_multiplier)
+		if d < nearest_dist:
+			nearest_dist = d
+			nearest_idx = i
+	_current_speed_index = nearest_idx
 	if GameManager != null:
 		GameManager.game_speed = _speed_multiplier
 		GameManager.speed_changed.emit(_speed_multiplier, _is_paused)
@@ -201,8 +274,11 @@ func set_speed(multiplier: float) -> void:
 func set_speed_index(index: int) -> void:
 	if index < 0 or index >= SPEED_PRESETS.size():
 		return
-	_current_speed_index = index
-	set_speed(SPEED_PRESETS[index])
+	var clamped_index: int = index
+	if _is_mobile_runtime():
+		clamped_index = mini(index, 4) # up to 26x on mobile
+	_current_speed_index = clamped_index
+	set_speed(SPEED_PRESETS[clamped_index])
 
 func next_speed() -> void:
 	var next: int = (_current_speed_index + 1) % SPEED_PRESETS.size()

@@ -4,12 +4,15 @@ extends Camera2D
 @export var max_zoom: float = 4.0
 @export var zoom_step: float = 1.1
 @export var pan_sensitivity: float = 1.0
+@export var touch_pan_sensitivity: float = 1.0
 
 ## Emitted when zoom level changes. Listeners use this for zoom-dependent
 ## visibility (territory borders, name labels, etc.).
 signal zoom_changed(new_zoom: float)
 
 var _is_panning: bool = false
+var _touch_points: Dictionary = {}
+var _touch_last_pinch_distance: float = -1.0
 
 func _ready() -> void:
 	make_current()
@@ -19,6 +22,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_handle_mouse_button(event)
 	elif event is InputEventMouseMotion and _is_panning:
 		position -= event.relative * pan_sensitivity / zoom.x
+	elif event is InputEventScreenTouch:
+		_handle_touch(event)
+	elif event is InputEventScreenDrag:
+		_handle_touch_drag(event)
 
 func _handle_mouse_button(event: InputEventMouseButton) -> void:
 	match event.button_index:
@@ -31,6 +38,37 @@ func _handle_mouse_button(event: InputEventMouseButton) -> void:
 			if event.pressed:
 				_zoom_toward(1.0 / zoom_step, event.position)
 
+func _handle_touch(event: InputEventScreenTouch) -> void:
+	if event.pressed:
+		_touch_points[event.index] = event.position
+		if _touch_points.size() >= 2:
+			var keys: Array = _touch_points.keys()
+			var p1: Vector2 = _touch_points[keys[0]]
+			var p2: Vector2 = _touch_points[keys[1]]
+			_touch_last_pinch_distance = p1.distance_to(p2)
+	else:
+		_touch_points.erase(event.index)
+		if _touch_points.size() < 2:
+			_touch_last_pinch_distance = -1.0
+
+func _handle_touch_drag(event: InputEventScreenDrag) -> void:
+	_touch_points[event.index] = event.position
+	if _touch_points.size() == 1:
+		position -= event.relative * touch_pan_sensitivity / zoom.x
+		return
+	if _touch_points.size() < 2:
+		return
+	var keys: Array = _touch_points.keys()
+	if keys.size() < 2:
+		return
+	var p1: Vector2 = _touch_points[keys[0]]
+	var p2: Vector2 = _touch_points[keys[1]]
+	var midpoint: Vector2 = (p1 + p2) * 0.5
+	var distance: float = p1.distance_to(p2)
+	if _touch_last_pinch_distance > 0.0 and distance > 0.0:
+		_zoom_toward(clampf(distance / _touch_last_pinch_distance, 0.8, 1.25), midpoint)
+	_touch_last_pinch_distance = distance
+
 func _zoom_toward(factor: float, screen_pos: Vector2) -> void:
 	var new_zoom_value: float = clamp(zoom.x * factor, min_zoom, max_zoom)
 	var actual_factor: float = new_zoom_value / zoom.x
@@ -41,6 +79,12 @@ func _zoom_toward(factor: float, screen_pos: Vector2) -> void:
 	var world_after: Vector2 = get_screen_center_to_world(screen_pos)
 	position += world_before - world_after
 	zoom_changed.emit(new_zoom_value)
+
+func zoom_in(screen_pos: Vector2 = Vector2.INF) -> void:
+	_zoom_toward(zoom_step, screen_pos if screen_pos != Vector2.INF else get_viewport_rect().size * 0.5)
+
+func zoom_out(screen_pos: Vector2 = Vector2.INF) -> void:
+	_zoom_toward(1.0 / zoom_step, screen_pos if screen_pos != Vector2.INF else get_viewport_rect().size * 0.5)
 
 func get_screen_center_to_world(screen_pos: Vector2) -> Vector2:
 	var viewport_size: Vector2 = get_viewport_rect().size

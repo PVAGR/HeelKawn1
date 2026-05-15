@@ -12,7 +12,9 @@ extends Node
 # PERFORMANCE: SpatialGrid integration for O(1) neighbor queries
 @onready var _spatial_grid: Node = get_node_or_null("/root/SpatialGrid")
 
-const STARTER_COUNT: int = 20
+const STARTER_COUNT: int = 18
+const MOBILE_STARTER_COUNT: int = 8
+const MOBILE_LOW_END_STARTER_COUNT: int = 6
 const MAX_PLACEMENT_ATTEMPTS: int = 2000
 
 const FIRST_NAMES: Array[String] = [
@@ -246,6 +248,13 @@ func print_stats() -> void:
 
 
 func spawn_starters(world: World, required_component_id: int = -1) -> void:
+	var target_starter_count: int = STARTER_COUNT
+	var mobile_runtime: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	if mobile_runtime:
+		target_starter_count = MOBILE_STARTER_COUNT
+		var vp: Vector2i = DisplayServer.window_get_size()
+		if vp.x <= 1280 or vp.y <= 720:
+			target_starter_count = MOBILE_LOW_END_STARTER_COUNT
 	# Use the largest connected component if no specific component required
 	var target_component_id: int = required_component_id
 	if target_component_id < 0:
@@ -258,8 +267,9 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 	var candidate_tiles: Array[Vector2i] = []
 	var world_rng: RandomNumberGenerator = WorldRNG.rng_for(&"pawn_spawn_candidates")
 	
-	# Sample 20 random passable tiles from the component as candidates
-	for i in range(20):
+	# Sample enough passable candidates for the current spawn target.
+	var candidate_sample_count: int = maxi(20, target_starter_count * 2)
+	for i in range(candidate_sample_count):
 		var attempts: int = 0
 		while attempts < 100:
 			var tile := Vector2i(
@@ -279,14 +289,17 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 			break
 	
 	# Place each pawn using pawn-specific RNG for determinism
-	for pawn_id in range(STARTER_COUNT):
+	var min_spawn_distance: int = 15
+	if mobile_runtime:
+		min_spawn_distance = 9
+	for pawn_id in range(target_starter_count):
 		if pawn_id >= candidate_tiles.size():
 			break  # Not enough candidates for all pawns
 		
 		var pawn_rng: RandomNumberGenerator = WorldRNG.rng_for("pawn_spawn_" + str(pawn_id))
 		var best_tile: Vector2i = candidate_tiles[pawn_id % candidate_tiles.size()]
 		
-		# Try to find a tile at least 15 tiles away from other pawns
+		# Try to find a tile at least N tiles away from other pawns
 		var found_tile: bool = false
 		for attempt in range(50):
 			var test_tile := Vector2i(
@@ -305,7 +318,7 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 			var too_close: bool = false
 			for other_tile in used_tiles.keys():
 				var distance: int = abs(test_tile.x - other_tile.x) + abs(test_tile.y - other_tile.y)
-				if distance < 15:
+				if distance < min_spawn_distance:
 					too_close = true
 					break
 			
@@ -361,10 +374,10 @@ func spawn_starters(world: World, required_component_id: int = -1) -> void:
 		if kin != null and kin.has_method("add_person"):
 			kin.call("add_person", data.id, {"display_name": data.display_name, "age": data.age, "gender": data.gender})
 
-	if placed < STARTER_COUNT and OS.is_debug_build():
+	if placed < target_starter_count and OS.is_debug_build():
 		push_warning(
 			"[PawnSpawner] Only placed %d / %d pawns (component=%d)" %
-			[placed, STARTER_COUNT, required_component_id]
+			[placed, target_starter_count, required_component_id]
 		)
 
 
@@ -960,4 +973,3 @@ func spawn_migrant(world: World) -> HeelKawnian:
 	if GameManager != null and GameManager.verbose_logs():
 		print("[Migrant] %s arrived at (%d, %d)" % [pawn_data.display_name, spawn_tile.x, spawn_tile.y])
 	return pawn
-

@@ -9,6 +9,7 @@ extends Node
 signal setting_changed(key: String, new_value: Variant)
 
 const SAVE_PATH: String = "user://settings.json"
+const MOBILE_PROFILE_VERSION: int = 1
 
 ## Schema: defines every setting the UI can expose.
 ## type: "bool" | "int" | "float" | "enum"
@@ -180,9 +181,29 @@ func _ready() -> void:
 		_values[entry["key"]] = entry["default"]
 	# Then overlay persisted values (if any)
 	_load()
+	_apply_mobile_defaults_if_needed()
 	# Apply display settings on startup
 	_apply_display_settings()
 	setting_changed.connect(_on_setting_changed)
+
+
+func _apply_mobile_defaults_if_needed() -> void:
+	if not (OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()):
+		return
+	var applied_ver: int = int(_values.get("_mobile_profile_version", 0))
+	if applied_ver >= MOBILE_PROFILE_VERSION:
+		return
+	_values["hud_mode"] = 0
+	_values["hud_font_size"] = maxi(int(_values.get("hud_font_size", 11)), 12)
+	_values["max_ticks_per_frame"] = mini(int(_values.get("max_ticks_per_frame", 200)), 80)
+	_values["frame_budget_ms"] = maxi(int(_values.get("frame_budget_ms", 16)), 24)
+	_values["hud_refresh_fast"] = maxi(int(_values.get("hud_refresh_fast", 2)), 3)
+	_values["hud_refresh_ultra"] = maxi(int(_values.get("hud_refresh_ultra", 4)), 6)
+	_values["hud_refresh_extreme"] = maxi(int(_values.get("hud_refresh_extreme", 6)), 8)
+	_values["hud_refresh_max"] = maxi(int(_values.get("hud_refresh_max", 8)), 10)
+	_values["show_hotkey_hints"] = false
+	_values["_mobile_profile_version"] = MOBILE_PROFILE_VERSION
+	save()
 
 
 func _on_setting_changed(key: String, _new_value: Variant) -> void:

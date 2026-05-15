@@ -112,6 +112,13 @@ const SOCIAL_RAPPORT_MILESTONES: Array[int] = [56, 140, 280, 560]
 ## Cap chronicle writes per rapport pass. Co-located crowds (night at one stockpile)
 ## are O(n²) pairs; unconstrained WorldMemory spam tanks frames and inflates event counts.
 const SOCIAL_WM_RECORD_BUDGET_PER_PASS: int = 48
+## Social simulation work budgets. Keep interaction quality high while avoiding
+## worst-case O(n²) spikes when many pawns cluster in one area.
+const SOCIAL_MAX_CELLS_PER_PASS: int = 14
+const SOCIAL_MAX_PAIRS_PER_PASS: int = 220
+const SOCIAL_MAX_NEARBY_PER_CELL: int = 56
+const SOCIAL_CONSCIOUSNESS_RECORDS_PER_PASS: int = 8
+const SOCIAL_FRICTION_COOLDOWN_TICKS: int = 300
 const INFLUENCE_UPDATE_INTERVAL_TICKS: int = 500
 const OBSERVER_HUD_REFRESH_TICKS: int = 30
 const FOCUS_INSPECTOR_REFRESH_TICKS: int = 15
@@ -129,9 +136,17 @@ const WORLD_STABILIZATION_TICKS: int = 50
 ## Construction remains `SettlementManager` + pawn job claims (NPC-equivalent sim path).
 ## Now dynamic: Observer mode enables placement; other modes disable it.
 const PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES: bool = false  # Legacy — use _can_player_place() instead
+const TOUCH_TAP_THRESHOLD_PX: float = 18.0
+const TOUCH_TAP_THRESHOLD_MOBILE_PX: float = 28.0
 
 func _can_player_place() -> bool:
 	return _player_mode == PlayerMode.OBSERVER
+
+
+func _touch_tap_threshold_px() -> float:
+	if OS.has_feature("mobile") or DisplayServer.is_touchscreen_available():
+		return TOUCH_TAP_THRESHOLD_MOBILE_PX
+	return TOUCH_TAP_THRESHOLD_PX
 ## Toolbar + keys 1–7 match GameManager.SPEED_STEPS (F10 creator menu still steals digit keys while open).
 const ALLOW_SPEED_NUMBER_HOTKEYS: bool = true
 ## Keep load-in sessions predictable; speed only changes via explicit user action.
@@ -223,6 +238,8 @@ var _play_chrome_visible: bool = true
 var _camera_follow_selected: bool = false
 var _playtest_recorder_ref: Node = null
 var _playtest_last_cam_tick: int = 0
+var _mobile_controls: Node = null
+var _touch_start_positions: Dictionary = {}
 ## Deterministic local-control pawn. Defaults to current selection.
 var _player_pawn = null
 var _hotkeys_enabled: bool = true
@@ -381,6 +398,10 @@ const HUNT_CANDIDATE_SCAN_LIMIT_MIN: int = 18
 var _social_meeting_last_tick_by_pair: Dictionary = {}
 ## pair key ("low-high") -> highest rapport milestone already logged.
 var _social_rapport_milestone_by_pair: Dictionary = {}
+## Rotating cursor through crowded social cells to spread heavy pair checks.
+var _social_cell_cursor: int = 0
+## pair key ("low-high") -> last tick a social_friction event was logged.
+var _social_friction_last_tick_by_pair: Dictionary = {}
 
 const PAWN_DIVERGENCE_PACKET_SCHEMA_VERSION: int = 1
 var _pawn_divergence_by_center: Dictionary = {}
@@ -423,13 +444,20 @@ func get_player_pawn_id() -> int:
 	return -1
 
 func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
+	# Adaptive cadence for fast-forward:
+	# 1x/3x keep normal feel; 12x+ stretches non-critical intervals to reduce
+	# frame-time spikes while preserving deterministic ordering.
 	if GameManager == null:
 		return normal_ticks
 	var gs: float = GameManager.game_speed
-	if gs >= 50.0:
+	if gs >= 100.0:
 		return ultra_ticks
-	if gs >= 12.0:
+	if gs >= 50.0:
+		return maxi(fast_ticks, int(round(float(ultra_ticks) * 0.85)))
+	if gs >= 26.0:
 		return fast_ticks
+	if gs >= 12.0:
+		return maxi(normal_ticks, int(round(float(fast_ticks) * 0.7)))
 	return normal_ticks
 
 
@@ -452,24 +480,6 @@ func _heavy_planner_interval_for_speed() -> int:
 	if gs >= 12.0:
 		return 240
 	return 180
-
-
-func _pf_component_flush_interval_for_speed() -> int:
-	# Full-grid BFS over 65k tiles is expensive — throttle to prevent frame spikes
-	if GameManager == null:
-		return 5
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 30
-	if gs >= 50.0:
-		return 20
-	if gs >= 26.0:
-		return 15
-	if gs >= 12.0:
-		return 10
-	if gs >= 6.0:
-		return 7
-	return 5
 
 
 func _pawn_divergence_detail_logs_enabled() -> bool:
@@ -826,6 +836,7 @@ func _ready() -> void:
 	else:
 		_disconnect_worker_ui_signal_receivers()
 		_configure_simulation_worker_mode()
+	_ensure_mobile_controls()
 	call_deferred("_log_validation_harness_observability_once")
 	CrashTrap.exit_system("Main._ready")
 
@@ -845,6 +856,21 @@ func _setup_adjustable_ui() -> void:
 		if not ui_vp.child_entered_tree.is_connected(_on_ui_viewport_child_entered):
 			ui_vp.child_entered_tree.connect(_on_ui_viewport_child_entered)
 	_register_adjustable_node(_creator_debug_menu)
+
+
+func _ensure_mobile_controls() -> void:
+	if _mobile_controls != null and is_instance_valid(_mobile_controls):
+		return
+	if not (OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()):
+		return
+	var script: Script = load("res://scripts/ui/MobileControls.gd")
+	if script == null:
+		return
+	_mobile_controls = script.new()
+	_mobile_controls.name = "MobileControls"
+	add_child(_mobile_controls)
+	if _mobile_controls.has_method("bind"):
+		_mobile_controls.call("bind", self)
 
 
 func _on_ui_layout_edit_toggled(enabled: bool) -> void:
@@ -2806,9 +2832,7 @@ func _on_game_tick(tick: int) -> void:
 		_maybe_spawn_migrant()
 
 	# Flush deferred pathfinder component computation (batched from sync_tile_from_data)
-	# THROTTLED: Full-grid BFS over 65k tiles — don't run every tick
-	var pf_flush_interval: int = _pf_component_flush_interval_for_speed()
-	if _is_main_lane_tick(tick, pf_flush_interval, 3) and _world != null and _world.pathfinder != null and _world.data != null:
+	if _world != null and _world.pathfinder != null and _world.data != null:
 		t0 = Time.get_ticks_usec()
 		if _world.pathfinder.flush_component_dirty(_world.data):
 			section_us["pf_components"] = Time.get_ticks_usec() - t0
@@ -2993,20 +3017,9 @@ func _on_game_tick(tick: int) -> void:
 	var ai_export_interval: int = _high_speed_interval(30, 60, 120)
 	if _is_main_lane_tick(tick, ai_export_interval, 157):
 		ObservationAPI.export_ai_state()
-	_maybe_log_tick_hotspots(tick, section_us)
-	if GameManager != null and GameManager.game_speed >= 50.0 and tick % 100 == 0:
-		var total_us: int = 0
-		var parts: String = ""
-		var keys: Array = section_us.keys()
-		keys.sort_custom(func(a, b): return int(section_us.get(a, 0)) > int(section_us.get(b, 0)))
-		for k in keys:
-			var us: int = int(section_us.get(k, 0))
-			if us > 100:
-				total_us += us
-				parts += " %s=%.1fms" % [k, us / 1000.0]
-		if total_us > 500:
-			print("[TICK_PROFILE] tick=%d speed=%.0fx total=%.2fms%s" % [tick, GameManager.game_speed, total_us / 1000.0, parts])
-	
+	if _is_simulation_worker_mode():
+		_maybe_log_tick_hotspots(tick, section_us)
+		return
 	# HUD snapshots are CPU-expensive — only when the realm/observer panel is open.
 	var obs_iv: int = _high_speed_interval(60, 45, 90)
 	if (
@@ -3100,13 +3113,33 @@ func _maybe_log_tick_hotspots(tick: int, section_us: Dictionary) -> void:
 
 
 func _inspect_scan_interval_for_speed() -> int:
-	# No throttle. The speed setting IS the speed.
+	if GameManager == null:
+		return INSPECT_SCAN_INTERVAL_TICKS
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return INSPECT_SCAN_INTERVAL_TICKS * 5
+	if gs >= 50.0:
+		return INSPECT_SCAN_INTERVAL_TICKS * 4
+	if gs >= 26.0:
+		return INSPECT_SCAN_INTERVAL_TICKS * 3
+	if gs >= 12.0:
+		return INSPECT_SCAN_INTERVAL_TICKS * 2
 	return INSPECT_SCAN_INTERVAL_TICKS
 
 
 ## Co-presence rapport is O(pawns²) in worst case; stretch interval at fast-forward.
 func _social_rapport_interval_for_speed() -> int:
-	# No throttle. The speed setting IS the speed.
+	if GameManager == null:
+		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 8
+	if gs >= 50.0:
+		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 6
+	if gs >= 26.0:
+		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 4
+	if gs >= 12.0:
+		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 2
 	return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS
 
 
@@ -3362,12 +3395,26 @@ func _social_pair_key(a_id: int, b_id: int) -> String:
 	return "%d-%d" % [lo, hi]
 
 
+func _social_personality_chemistry(a: HeelKawnianData, b: HeelKawnianData) -> float:
+	if a == null or b == null:
+		return 0.0
+	var agree_term: float = 1.0 - absf(float(a.agreeableness) - float(b.agreeableness))
+	var extra_term: float = 1.0 - absf(float(a.extraversion) - float(b.extraversion))
+	var open_term: float = 1.0 - absf(float(a.openness) - float(b.openness))
+	var neuro_term: float = 1.0 - absf(float(a.neuroticism) - float(b.neuroticism))
+	var compatibility_01: float = (
+		agree_term * 0.45
+		+ extra_term * 0.20
+		+ open_term * 0.15
+		+ neuro_term * 0.20
+	)
+	return clampf(compatibility_01 * 2.0 - 1.0, -1.0, 1.0)
+
+
 func _accumulate_social_rapport() -> void:
 	if _pawn_spawner == null or _world == null or _world.pathfinder == null:
 		return
 	const R2: float = 128.0 * 128.0
-	const GAIN: int = 14
-	const OPINION_GAIN: int = 2
 	const CELL_SIZE: float = 160.0  # Grid cell size, slightly larger than proximity radius
 	var pl: Array[HeelKawnian] = []
 	for p in _pawn_spawner.pawns:
@@ -3380,41 +3427,92 @@ func _accumulate_social_rapport() -> void:
 	for p in pl:
 		var cx: int = int(p.position.x / CELL_SIZE)
 		var cy: int = int(p.position.y / CELL_SIZE)
-		var key: int = cx * 10000 + cy
+		var key: String = "%d,%d" % [cx, cy]
 		if not grid.has(key):
 			grid[key] = []
 		grid[key].append(p)
 	# OPTIMIZATION: Early exit if grid is sparse (no cell has 2+ pawns)
-	var crowded_cells: Array = []
+	var crowded_cells: Array[String] = []
 	for cell_key in grid:
-		if (grid[cell_key] as Array).size() >= 2:
-			crowded_cells.append(cell_key)
+		var arr_v: Variant = grid[cell_key]
+		if arr_v is Array and (arr_v as Array).size() >= 2:
+			crowded_cells.append(str(cell_key))
 	if crowded_cells.is_empty():
 		return  # No cells with multiple pawns, no social interactions possible
+	crowded_cells.sort()
 	
 	var wm_budget: int = SOCIAL_WM_RECORD_BUDGET_PER_PASS
+	var consciousness_budget: int = SOCIAL_CONSCIOUSNESS_RECORDS_PER_PASS
+	var pair_budget: int = SOCIAL_MAX_PAIRS_PER_PASS
+	var mobile_runtime: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	if GameManager != null:
+		var gs: float = GameManager.game_speed
+		if gs >= 100.0:
+			pair_budget = maxi(64, int(round(float(SOCIAL_MAX_PAIRS_PER_PASS) * 0.35)))
+		elif gs >= 50.0:
+			pair_budget = maxi(96, int(round(float(SOCIAL_MAX_PAIRS_PER_PASS) * 0.5)))
+		elif gs >= 26.0:
+			pair_budget = maxi(128, int(round(float(SOCIAL_MAX_PAIRS_PER_PASS) * 0.7)))
+	if mobile_runtime:
+		pair_budget = maxi(56, int(round(float(pair_budget) * 0.62)))
+		wm_budget = maxi(12, int(round(float(wm_budget) * 0.55)))
+		consciousness_budget = maxi(3, int(round(float(consciousness_budget) * 0.5)))
+	var consciousness: Node = get_node_or_null("/root/PawnConsciousness")
 	var comp_by_id: Dictionary = {}
 	for p in pl:
 		comp_by_id[int(p.data.id)] = _world.pathfinder.component_of(p.data.tile_pos)
 	var checked_pairs: Dictionary = {}
 	
-	# OPTIMIZATION: Only process crowded cells and their neighbors
-	for cell_key in crowded_cells:
-		var cx: int = cell_key / 10000
-		var cy: int = cell_key % 10000
+	# Process only a rotating subset of crowded cells each pass. This caps
+	# worst-case spikes while still giving every hotspot regular updates.
+	var max_cells_per_pass: int = SOCIAL_MAX_CELLS_PER_PASS
+	if mobile_runtime:
+		max_cells_per_pass = maxi(6, int(round(float(SOCIAL_MAX_CELLS_PER_PASS) * 0.6)))
+	var cells_this_pass: int = mini(max_cells_per_pass, crowded_cells.size())
+	var start_cursor: int = posmod(_social_cell_cursor, crowded_cells.size())
+	var exhausted: bool = false
+	for step in range(cells_this_pass):
+		if exhausted:
+			break
+		var cell_key: String = crowded_cells[(start_cursor + step) % crowded_cells.size()]
+		var parts: PackedStringArray = cell_key.split(",")
+		if parts.size() != 2:
+			continue
+		var cx: int = int(parts[0])
+		var cy: int = int(parts[1])
 		# Gather pawns from this cell and 8 neighbors
 		var nearby: Array[HeelKawnian] = []
+		var nearby_cap: int = SOCIAL_MAX_NEARBY_PER_CELL
+		if mobile_runtime:
+			nearby_cap = maxi(24, int(round(float(SOCIAL_MAX_NEARBY_PER_CELL) * 0.6)))
 		for dx in range(-1, 2):
+			if nearby.size() >= nearby_cap:
+				break
 			for dy in range(-1, 2):
-				var nk: int = (cx + dx) * 10000 + (cy + dy)
-				if grid.has(nk):
-					nearby.append_array(grid[nk])
+				if nearby.size() >= nearby_cap:
+					break
+				var nk: String = "%d,%d" % [cx + dx, cy + dy]
+				if not grid.has(nk):
+					continue
+				var neighbor_v: Variant = grid[nk]
+				if neighbor_v is not Array:
+					continue
+				for n in neighbor_v as Array:
+					nearby.append(n)
+					if nearby.size() >= nearby_cap:
+						break
 		# OPTIMIZATION: Skip if still not enough pawns for interaction
 		if nearby.size() < 2:
 			continue
 		
-		var cell_pawns: Array = grid[cell_key] as Array
+		var cell_pawns_v: Variant = grid[cell_key]
+		if cell_pawns_v is not Array:
+			continue
+		var cell_pawns: Array = cell_pawns_v as Array
 		for pa in cell_pawns:
+			if pair_budget <= 0:
+				exhausted = true
+				break
 			var da: HeelKawnianData = pa.data
 			if da == null or pa.is_sleeping():
 				continue
@@ -3433,10 +3531,11 @@ func _accumulate_social_rapport() -> void:
 				# Avoid double-processing: only process if pa.id < pb.id
 				if da_id >= db_id:
 					continue
-				var pair_key: int = da_id * 100000 + db_id
+				var pair_key: String = _social_pair_key(da_id, db_id)
 				if checked_pairs.has(pair_key):
 					continue
 				checked_pairs[pair_key] = true
+				pair_budget -= 1
 				# OPTIMIZATION: Early exit checks before expensive operations
 				if da.hunger <= 38.0 or db.hunger <= 38.0:
 					continue
@@ -3446,13 +3545,112 @@ func _accumulate_social_rapport() -> void:
 				# Distance check is already squared, no sqrt needed
 				if pa.position.distance_squared_to(pb.position) > R2:
 					continue
-				da.add_social_rapport(db_id, GAIN)
-				db.add_social_rapport(da_id, GAIN)
-				da.modify_character_opinion(db_id, OPINION_GAIN)
-				db.modify_character_opinion(da_id, OPINION_GAIN)
+				var chemistry: float = _social_personality_chemistry(da, db)
+				var shared_mood: float = (float(da.mood) + float(db.mood)) * 0.5
+				var rapport_gain: int = clampi(
+					int(round(10.0 + chemistry * 6.0 + (shared_mood - 50.0) / 28.0)),
+					3,
+					24
+				)
+				var opinion_gain: int = clampi(
+					int(round(1.0 + chemistry * 2.5 + (float(da.agreeableness) + float(db.agreeableness) - 1.0) * 1.5)),
+					0,
+					5
+				)
+				da.add_social_rapport(db_id, rapport_gain)
+				db.add_social_rapport(da_id, rapport_gain)
+				if opinion_gain > 0:
+					da.modify_character_opinion(db_id, opinion_gain)
+					db.modify_character_opinion(da_id, opinion_gain)
+				var trust_delta: float = clampf(0.7 + chemistry * 1.1 + (shared_mood - 50.0) / 90.0, 0.1, 2.4)
+				var friendship_delta: float = clampf(0.2 + chemistry * 0.85, 0.05, 1.6)
+				da.trust[db_id] = clampf(float(da.trust.get(db_id, 50.0)) + trust_delta, 0.0, 100.0)
+				db.trust[da_id] = clampf(float(db.trust.get(da_id, 50.0)) + trust_delta, 0.0, 100.0)
+				da.update_social_memory(db_id, trust_delta * 0.35, 0.0, 0.0, friendship_delta, "social_contact")
+				db.update_social_memory(da_id, trust_delta * 0.35, 0.0, 0.0, friendship_delta, "social_contact")
+				var low_mood: float = minf(float(da.mood), float(db.mood))
+				if chemistry < -0.35 and low_mood < 45.0:
+					var last_friction_tick: int = int(_social_friction_last_tick_by_pair.get(pair_key, -1))
+					var friction_ready: bool = last_friction_tick < 0 or (GameManager.tick_count - last_friction_tick) >= SOCIAL_FRICTION_COOLDOWN_TICKS
+					if friction_ready:
+						var friction_p: float = clampf(
+							(-chemistry - 0.35) * 0.55 + maxf(0.0, 45.0 - low_mood) / 120.0,
+							0.04,
+							0.30
+						)
+						var roll_seed: int = absi(int((da_id * 73856093) ^ (db_id * 19349663) ^ (GameManager.tick_count * 83492791)))
+						var roll: float = float(roll_seed % 1000) / 1000.0
+						if roll < friction_p:
+							_social_friction_last_tick_by_pair[pair_key] = GameManager.tick_count
+							da.modify_character_opinion(db_id, -2)
+							db.modify_character_opinion(da_id, -2)
+							da.trust[db_id] = clampf(float(da.trust.get(db_id, 50.0)) - 1.6, 0.0, 100.0)
+							db.trust[da_id] = clampf(float(db.trust.get(da_id, 50.0)) - 1.6, 0.0, 100.0)
+							da.update_social_memory(db_id, -0.45, 0.0, 0.14, -0.08, "social_friction")
+							db.update_social_memory(da_id, -0.45, 0.0, 0.14, -0.08, "social_friction")
+							if wm_budget > 0:
+								WorldMemory.record_event({
+									"type": "social_friction",
+									"category": "social",
+									"severity": 2,
+									"tick": GameManager.tick_count,
+									"a": da_id,
+									"b": db_id,
+									"a_name": da.display_name,
+									"b_name": db.display_name,
+									"chemistry": chemistry,
+									"mood_floor": low_mood,
+									"region": _WM._region_key(da.tile_pos.x, da.tile_pos.y),
+									"tile": {"x": da.tile_pos.x, "y": da.tile_pos.y},
+								})
+								wm_budget -= 1
+							if consciousness != null and consciousness_budget > 0 and consciousness.has_method("record_memory"):
+								var a_assoc: Array = [db_id]
+								consciousness.call(
+									"record_memory",
+									da_id,
+									"social_friction",
+									"Tension with %s" % db.display_name,
+									-22.0,
+									5,
+									"social",
+									a_assoc,
+									da.tile_pos
+								)
+								consciousness_budget -= 1
 				if wm_budget > 0:
 					var n: int = _record_social_pair_events(da, db, wm_budget)
 					wm_budget -= n
+				if consciousness != null and consciousness_budget > 1 and chemistry >= 0.65 and rapport_gain >= 16:
+					var a_assoc2: Array = [db_id]
+					var b_assoc2: Array = [da_id]
+					consciousness.call(
+						"record_memory",
+						da_id,
+						"social_bonding",
+						"Felt close to %s" % db.display_name,
+						14.0 + chemistry * 10.0,
+						5,
+						"social",
+						a_assoc2,
+						da.tile_pos
+					)
+					consciousness.call(
+						"record_memory",
+						db_id,
+						"social_bonding",
+						"Felt close to %s" % da.display_name,
+						14.0 + chemistry * 10.0,
+						5,
+						"social",
+						b_assoc2,
+						db.tile_pos
+					)
+					consciousness_budget -= 2
+				if pair_budget <= 0:
+					exhausted = true
+					break
+	_social_cell_cursor = (_social_cell_cursor + cells_this_pass) % crowded_cells.size()
 
 
 func _process_reproduction_tick() -> void:
@@ -4009,6 +4207,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if key.pressed:
 			_handle_key_input(key)
 			return
+	if event is InputEventScreenTouch:
+		_handle_screen_touch(event)
+		return
 	# Watch mode: camera/navigation works, and clicking a HeelKawnian
 	# shows their info panel. Only simulation-affecting clicks are blocked.
 	if _is_watch_mode():
@@ -4098,6 +4299,35 @@ func _unhandled_input(event: InputEvent) -> void:
 		last_selected_pawn_id = -1
 		last_selected_pawn_path = "none"
 		last_selection_failure_reason = "no_live_physics_candidate"
+
+
+func _handle_screen_touch(event: InputEventScreenTouch) -> void:
+	if event.pressed:
+		_touch_start_positions[event.index] = event.position
+		return
+	var start_pos: Vector2 = _touch_start_positions.get(event.index, event.position)
+	_touch_start_positions.erase(event.index)
+	if start_pos.distance_to(event.position) > _touch_tap_threshold_px():
+		return
+	var world_pos: Vector2 = _screen_to_world_position(event.position)
+	var tile: Vector2i = _world.world_to_tile(world_pos) if _world != null else Vector2i(-1, -1)
+	if _designation_mode != DesignationMode.NONE:
+		if tile.x >= 0:
+			_try_apply_designation_at(tile)
+			get_viewport().set_input_as_handled()
+		return
+	if _command_mode != null and _command_mode._zone_type != 0 and tile.x >= 0:
+		if _command_mode._zone_type == 4:
+			_commit_zone_rect(Rect2i(tile, Vector2i.ONE))
+		else:
+			_command_mode._paint_start = tile
+			_command_mode._paint_current = tile
+			_command_mode.commit_zone_paint()
+			_command_mode.set_zone_type(0)
+		get_viewport().set_input_as_handled()
+		return
+	_handle_select_click_at(world_pos)
+	get_viewport().set_input_as_handled()
 
 
 func _handle_key_input(key: InputEventKey) -> void:
@@ -5586,14 +5816,20 @@ func is_kernel_diagnostic_complete() -> bool:
 func _update_hover_tile(_screen_pos: Vector2) -> void:
 	if _world == null:
 		return
-	# Built-in handles camera transform + zoom for us.
-	var t: Vector2i = _world.world_to_tile(get_global_mouse_position())
+	# Use the active camera so both mouse and touch taps resolve to the same tile.
+	var t: Vector2i = _world.world_to_tile(_screen_to_world_position(_screen_pos))
 	if t == _hover_tile:
 		return
 	_hover_tile = t
 	_update_wall_path_preview()
 	if _designation_mode != DesignationMode.NONE:
 		_queue_designation_redraw()
+
+
+func _screen_to_world_position(screen_pos: Vector2) -> Vector2:
+	if _camera != null and _camera.has_method("get_screen_center_to_world"):
+		return _camera.call("get_screen_center_to_world", screen_pos)
+	return get_global_mouse_position()
 
 
 ## While wall mode is active, mark preview cells as A* solid so pawns detour

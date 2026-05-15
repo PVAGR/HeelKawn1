@@ -1,0 +1,126 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - "project.godot"
+      - "export_presets.cfg"
+      - "scenes/**"
+      - "scripts/**"
+      - "autoloads/**"
+      - ".github/workflows/android-apk.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        run: |
+          set -e
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          sdkmanager --list_installed | grep -E "build-tools;34.0.0|platforms;android-34|platform-tools"
+
+      - name: Setup Godot
+        uses: chickensoft-games/setup-godot@v1
+        with:
+          version: 4.6.2
+          use-dotnet: false
+
+      - name: Install Godot export templates
+        run: |
+          set -e
+          mkdir -p ~/.local/share/godot/export_templates/4.6.2.stable
+          wget -q "https://github.com/godotengine/godot-builds/releases/download/4.6.2-stable/Godot_v4.6.2-stable_export_templates.tpz" -O /tmp/export_templates.tpz
+          unzip -q /tmp/export_templates.tpz -d /tmp/godot_templates
+          cp -r /tmp/godot_templates/templates/* ~/.local/share/godot/export_templates/4.6.2.stable/
+
+      - name: Remove .NET project files for non-.NET Android export
+        run: |
+          rm -rf dotnet
+
+      - name: Prepare Godot Android editor settings
+        run: |
+          set -e
+          mkdir -p ~/.android
+          mkdir -p ~/.config/godot
+          ANDROID_PATH="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          JAVA_PATH="${JAVA_HOME:-}"
+          if [ -z "$ANDROID_PATH" ] || [ -z "$JAVA_PATH" ]; then
+            echo "ANDROID_PATH or JAVA_PATH missing"
+            exit 1
+          fi
+          keytool -genkeypair \
+            -v \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+          cat > ~/.config/godot/editor_settings-4.tres << EOF
+          [gd_resource type="EditorSettings" format=3]
+          
+          [resource]
+          export/android/android_sdk_path = "${ANDROID_PATH}"
+          export/android/java_sdk_path = "${JAVA_PATH}"
+          export/android/debug_keystore = "/home/runner/.android/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          export/android/shutdown_adb_on_exit = true
+          EOF
+          sed -i 's#^keystore/debug=.*#keystore/debug="/home/runner/.android/debug.keystore"#' export_presets.cfg
+          sed -i 's#^keystore/debug_user=.*#keystore/debug_user="androiddebugkey"#' export_presets.cfg
+          sed -i 's#^keystore/debug_password=.*#keystore/debug_password="android"#' export_presets.cfg
+
+      - name: Prime project import cache
+        continue-on-error: true
+        run: |
+          timeout 30 godot --headless --path . -e
+
+      - name: Export Android debug APK
+        run: |
+          set -e
+          mkdir -p build/android
+          godot --verbose --headless --path . --export-debug "Android" "build/android/HeelKawn-android.apk"
+          ls -lah build/android
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HeelKawn-android-apk
+          path: build/android/HeelKawn-android.apk
+
+      - name: Publish/update Android latest release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: android-latest
+          name: HeelKawn Android Latest
+          body: |
+            Automated Android APK build from main branch.
+            Download and install on Android:
+            HeelKawn-android.apk
+          artifacts: build/android/HeelKawn-android.apk
+          allowUpdates: true
+          replacesArtifacts: true
+          removeArtifacts: true

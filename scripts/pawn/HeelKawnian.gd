@@ -1734,8 +1734,8 @@ func _try_post_stockpile_job() -> bool:
 		has_sticks = data.carrying_qty
 	# Also check stockpile inventory
 	if StockpileManager != null:
-		has_wood += StockpileManager.total_of(_Item.Type.WOOD)
-		has_sticks += StockpileManager.total_of(_Item.Type.STICK)
+		has_wood += StockpileManager.total_count_of(_Item.Type.WOOD)
+		has_sticks += StockpileManager.total_count_of(_Item.Type.STICK)
 	if has_wood < 10 or has_sticks < 5:
 		return false
 	# Find a valid tile near the pawn to build the stockpile

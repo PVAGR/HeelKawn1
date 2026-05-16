@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1778918736
+::res://::1778923856
 .aider.chat.history.md::TextFile::-1::1778789129::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1778793865::0::1::::<><><>0<>0<><>::
 CHANGELOG.md::TextFile::-1::1778793280::0::1::::<><><>0<>0<><>::
@@ -10,6 +10,7 @@ HEELKAWN_CANON_BIBLE.md::TextFile::-1::1777765505::0::1::::<><><>0<>0<><>::
 HEELKAWN_INTEGRATION.md::TextFile::-1::1778793118::0::1::::<><><>0<>0<><>::
 HEELKAWN_KERNEL.md::TextFile::-1::1778793060::0::1::::<><><>0<>0<><>::
 HEELKAWN_STATE.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
+README.md::TextFile::-1::1778919041::0::1::::<><><>0<>0<><>::
 README_DEV.md::TextFile::-1::1777765505::0::1::::<><><>0<>0<><>::
 TASKS.md::TextFile::-1::1777777054::0::1::::<><><>0<>0<><>::
 TESTING_CHECKLIST.md::TextFile::-1::1778793905::0::1::::<><><>0<>0<><>::
@@ -151,7 +152,7 @@ CurrencySystem.gd::GDScript::8830021071979701416::1778654949::0::1::::<>Node<><>
 DiplomacySystem.gd::GDScript::7370753064401601751::1778654987::0::1::::<>Node<><>0<>0<><>::
 DisasterSystem.gd::GDScript::3533735953280705894::1778453307::0::1::::<>Node<><>0<>0<><>::
 DiscoveryGate.gd::GDScript::2584224234650357656::1778316521::0::1::::<>Node<><>0<>0<><>::
-DiseaseSystem.gd::GDScript::5176942498259955416::1778885993::0::1::::<>Node<><>0<>0<><>::
+DiseaseSystem.gd::GDScript::5176942498259955416::1778923718::0::1::::<>Node<><>0<>0<><>::
 EconomyManager.gd::GDScript::600062380472312883::1778796523::0::1::::<>Node<><>0<>0<><>::
 EventBus.gd::GDScript::17816675561125202::1778616814::0::1::::<>Node<><>0<>0<><>::
 EventManager.gd::GDScript::7814471383146393468::1778796531::0::1::::<>Node<><>0<>0<><>::

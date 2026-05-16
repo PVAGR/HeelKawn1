@@ -1,6 +1,7 @@
 extends Node
 
 const _ZoneTags := preload("res://scripts/kernel/world_meaning_safe.gd")
+const SettlementIdentity := preload("res://scripts/kernel/settlement_identity.gd")
 
 # Autoload references
 @onready var PersistenceSystem = get_node_or_null("/root/PersistenceSystem")

@@ -13,6 +13,16 @@ const MATRIX_LOG_COOLDOWN_TICKS: int = 240
 const MATRIX_AMBITION_SETTLEMENT_COOLDOWN_TICKS: int = 30
 const MATRIX_AMBITION_PAWN_COOLDOWN_TICKS: int = 30
 const MATRIX_AFFILIATION_COOLDOWN_TICKS: int = 240
+const MATRIX_HOUSEHOLD_PLAN_COOLDOWN_TICKS: int = 600
+const MATRIX_PLAN_SPOKE_COOLDOWN_TICKS: int = 120
+
+const HOUSEHOLD_GOALS = {
+	"Settle Hearth": [Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_BED, Job.Type.BUILD_BED],
+	"Fortify Home": [Job.Type.BUILD_WALL, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR],
+	"Expand Storage": [Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_STORAGE_HUT],
+	"Preserve Legacy": [Job.Type.BUILD_MARKER_STONE, Job.Type.BUILD_LIBRARY],
+	"Sustain Family": [Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_GRANARY],
+}
 
 ## Pressure event bias tuning
 const PRESSURE_FLEE_BIAS: int = 5
@@ -24,6 +34,8 @@ static var _last_matrix_log_tick_by_soul: Dictionary = {}
 static var _last_ambition_tick_by_settlement: Dictionary = {}
 static var _last_ambition_tick_by_pawn: Dictionary = {}
 static var _last_affiliation_tick_by_pawn: Dictionary = {}
+static var _active_household_plans: Dictionary = {}
+static var _last_plan_tick_by_household: Dictionary = {}
 static var _learning_weight_cache: Dictionary = {}
 static var _learning_weight_cache_tick: int = -1000000
 
@@ -274,6 +286,19 @@ static func get_matrix_decision_for_pawn(pawn: Variant) -> Dictionary:
 		return {}
 	var identity: HeelKawnianIdentity = get_identity_for_pawn(pawn)
 	var biases: Dictionary = _matrix_job_biases(profile, data, identity)
+	
+	# Household Coordination: check if pawn is part of a coordinated plan
+	var hh_ambition: Dictionary = get_household_ambition_for_pawn(pawn)
+	if not hh_ambition.is_empty():
+		var jtype: int = int(hh_ambition.get("job_type", -1))
+		if jtype >= 0:
+			# Strong bias for coordinated goals (12 is high priority)
+			biases[jtype] = 12
+			# Log the rationale in the decision for debugging/F10
+			var current_rationale: String = _matrix_rationale(profile, _top_matrix_jobs(biases, 8))
+			var hh_reason: String = str(hh_ambition.get("reason", "coordinated goal"))
+			# We'll update the rationale later in the function's return block, 
+			# but let's ensure it's tracked.
 	
 	# Matrix deepening: let unlocked skill-tree/work-speed influence job biases.
 	# This is deterministic and only nudges priorities; it does not override
@@ -623,9 +648,84 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 	ambition["next_need"] = next_need
 	ambition["features"] = local_features
 
-	_last_ambition_tick_by_pawn[pawn_id] = tick
-	_last_ambition_tick_by_settlement[settlement_key] = tick
 	return ambition
+
+static func get_household_ambition_for_pawn(pawn: Variant) -> Dictionary:
+	var data: HeelKawnianData = _pawn_data(pawn)
+	if data == null or int(data.household_id) < 0:
+		return {}
+	
+	var hid: int = int(data.household_id)
+	var tick: int = _tick()
+	
+	# 1. Check if there's an active plan
+	if _active_household_plans.has(hid):
+		var plan: Dictionary = _active_household_plans[hid]
+		var tasks: Array = plan.get("tasks", [])
+		var index: int = plan.get("current_task_index", 0)
+		
+		if index < tasks.size():
+			var job_type: int = tasks[index]
+			# Check for plan-specific cooldown (don't spam jobs)
+			var last_tick: int = int(_last_plan_tick_by_household.get(hid, -1000000))
+			if tick - last_tick < MATRIX_PLAN_SPOKE_COOLDOWN_TICKS:
+				return {}
+			
+			_last_plan_tick_by_household[hid] = tick
+			return _ambition_result(job_type, 8, "coordinated household goal: %s (task %d/%d)" % [plan.goal, index + 1, tasks.size()])
+		else:
+			# Plan completed
+			_active_household_plans.erase(hid)
+	
+	# 2. Determine if we should start a new plan
+	var last_plan_tick: int = int(_last_plan_tick_by_household.get(hid, -1000000))
+	if tick - last_plan_tick < MATRIX_HOUSEHOLD_PLAN_COOLDOWN_TICKS:
+		return {}
+	
+	# Deterministically pick a goal based on settlement and stability
+	var goal_name: String = _determine_household_goal(hid, pawn)
+	if goal_name == "":
+		return {}
+	
+	var tasks: Array = HOUSEHOLD_GOALS.get(goal_name, [])
+	if tasks.is_empty():
+		return {}
+	
+	_active_household_plans[hid] = {
+		"goal": goal_name,
+		"tasks": tasks,
+		"current_task_index": 0,
+		"tick_started": tick
+	}
+	_last_plan_tick_by_household[hid] = tick
+	
+	return _ambition_result(tasks[0], 8, "starting new household goal: %s" % goal_name)
+
+static func _determine_household_goal(hid: int, pawn: Variant) -> String:
+	var data: HeelKawnianData = _pawn_data(pawn)
+	var local_features: Dictionary = _scan_local_features(data.tile_pos, 12)
+	var rng_val: int = WorldRNG.stream_seed(_pawn_stream(int(data.id)), hid + 99) % 100
+	
+	# Priority needs based on settlement features
+	if int(local_features.get("hearth", 0)) <= 0:
+		return "Settle Hearth" if rng_val < 60 else ""
+	if int(local_features.get("bed", 0)) < 2:
+		return "Settle Hearth" if rng_val < 40 else ""
+	if int(local_features.get("wall", 0)) < 4:
+		return "Fortify Home" if rng_val < 50 else ""
+	if int(local_features.get("storage_hut", 0)) <= 0:
+		return "Expand Storage" if rng_val < 50 else ""
+	if int(local_features.get("farm", 0)) <= 0:
+		return "Sustain Family" if rng_val < 40 else ""
+		
+	# Fallback to legacy/preservation goals
+	var profile: Dictionary = get_development_profile_for_pawn(pawn)
+	var drive: String = str(profile.get("development_drive", ""))
+	if drive == "preserve":
+		return "Preserve Legacy"
+		
+	return ""
+
 
 
 static func _refresh_learning_weight_cache() -> void:

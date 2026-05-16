@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1778885765
+::res://::1778886694
 .aider.chat.history.md::TextFile::-1::1778789129::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1778793865::0::1::::<><><>0<>0<><>::
 CHANGELOG.md::TextFile::-1::1778793280::0::1::::<><><>0<>0<><>::
@@ -152,7 +152,7 @@ CurrencySystem.gd::GDScript::8830021071979701416::1778654949::0::1::::<>Node<><>
 DiplomacySystem.gd::GDScript::7370753064401601751::1778654987::0::1::::<>Node<><>0<>0<><>::
 DisasterSystem.gd::GDScript::3533735953280705894::1778453307::0::1::::<>Node<><>0<>0<><>::
 DiscoveryGate.gd::GDScript::2584224234650357656::1778316521::0::1::::<>Node<><>0<>0<><>::
-DiseaseSystem.gd::GDScript::5176942498259955416::1778884561::0::1::::<>Node<><>0<>0<><>::
+DiseaseSystem.gd::GDScript::5176942498259955416::1778885993::0::1::::<>Node<><>0<>0<><>::
 EconomyManager.gd::GDScript::600062380472312883::1778796523::0::1::::<>Node<><>0<>0<><>::
 EventBus.gd::GDScript::17816675561125202::1778616814::0::1::::<>Node<><>0<>0<><>::
 EventManager.gd::GDScript::7814471383146393468::1778796531::0::1::::<>Node<><>0<>0<><>::
@@ -606,7 +606,7 @@ PlaceableItem.gd::GDScript::6024600624090341032::1777845966::0::1::::PlaceableIt
 ::res://scripts/jobs/::1778651452
 BookBinder.gd::GDScript::2600588248301581734::1778320772::0::1::::BookBinder<>RefCounted<><>0<>0<><>::
 InkMaker.gd::GDScript::5787533862575548445::1778320772::0::1::::InkMaker<>RefCounted<><>0<>0<><>::
-Job.gd::GDScript::6147013609662520702::1778749433::0::1::::Job<>RefCounted<><>0<>0<><>::
+Job.gd::GDScript::6147013609662520702::1778886131::0::1::::Job<>RefCounted<><>0<>0<><>::
 LeatherWorker.gd::GDScript::1738505541274823346::1778320772::0::1::::LeatherWorker<>RefCounted<><>0<>0<><>::
 PaperMaker.gd::GDScript::2650061041347009668::1778320772::0::1::::PaperMaker<>RefCounted<><>0<>0<><>::
 ToolMaker.gd::GDScript::7367390682426513711::1778320772::0::1::::ToolMaker<>RefCounted<><>0<>0<><>::
@@ -624,8 +624,8 @@ LongTermMemory.gd::GDScript::5974671399758704568::1777694762::0::1::::LongTermMe
 ActionPopupLabel.gd::GDScript::5174978775249392183::1777694600::0::1::::ActionPopupLabel<>Label<><>0<>0<><>::
 Animal.gd::GDScript::3893107784844328532::1778556983::0::1::::Animal<>Node2D<><>0<>0<><>::
 AnimalSpawner.gd::GDScript::8350566320011331673::1778866624::0::1::::AnimalSpawner<>Node<><>0<>0<><>::
-HeelKawnian.gd::GDScript::7989372192867881187::1778884988::0::1::::HeelKawnian<>Node2D<><>0<>0<><>::
-HeelKawnianData.gd::GDScript::4502026540089827843::1778753134::0::1::::HeelKawnianData<>RefCounted<><>0<>0<><>::
+HeelKawnian.gd::GDScript::7989372192867881187::1778886471::0::1::::HeelKawnian<>Node2D<><>0<>0<><>::
+HeelKawnianData.gd::GDScript::4502026540089827843::1778886624::0::1::::HeelKawnianData<>RefCounted<><>0<>0<><>::
 HeelKawnianDecision.gd::GDScript::5995801159740043007::1778751071::0::1::::HeelKawnianDecision<>RefCounted<><>0<>0<><>::
 MoodEvent.gd::GDScript::919426344482337370::1777694600::0::1::::MoodEvent<>Resource<><>0<>0<><>::
 Pawn.gd::GDScript::6658654347304257201::1778866412::0::1::::Pawn<>Node2D<><>0<>0<><>::

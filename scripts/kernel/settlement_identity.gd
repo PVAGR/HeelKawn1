@@ -15,7 +15,7 @@ const TRAIT_TAGS: Dictionary = {
 
 
 ## Deterministic name + tags from [param settlement] and [WorldMeaning] / [WorldMemory] (no RNG).
-func resolve_for(settlement: Dictionary) -> Dictionary:
+static func resolve_for(settlement: Dictionary) -> Dictionary:
 	var ckr: int = int(settlement.get("center_region", -1))
 	var zone_id: String = str(settlement.get("zone_id", ""))
 	if zone_id.is_empty():
@@ -41,7 +41,7 @@ func resolve_for(settlement: Dictionary) -> Dictionary:
 	var new_name: String = _derive_name(zone_id, reocc_tick, traits.size())
 	var new_id: String = "set_%s_%d" % [zone_id, reocc_tick]
 
-	identity_resolved.emit(new_id, new_name, traits, lineage_parent)
+	# Note: Cannot emit signal from static function, caller should handle notification
 	return {
 		"id": new_id,
 		"name": new_name,
@@ -51,7 +51,7 @@ func resolve_for(settlement: Dictionary) -> Dictionary:
 	}
 
 
-func _derive_name(zone_id: String, era: int, trait_count: int) -> String:
+static func _derive_name(zone_id: String, era: int, trait_count: int) -> String:
 	var name_hash: int = 0
 	for i in range(zone_id.length()):
 		name_hash = (name_hash * 31 + zone_id.unicode_at(i)) & 0x7FFFFFFF

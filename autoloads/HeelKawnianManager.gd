@@ -704,7 +704,11 @@ static func get_household_ambition_for_pawn(pawn: Variant) -> Dictionary:
 static func _determine_household_goal(hid: int, pawn: Variant) -> String:
 	var data: HeelKawnianData = _pawn_data(pawn)
 	var local_features: Dictionary = _scan_local_features(data.tile_pos, 12)
-	var rng_val: int = WorldRNG.stream_seed(_pawn_stream(int(data.id)), hid + 99) % 100
+	
+	# Use a deterministic stream name and salt based on pawn id and position
+	var stream_name: StringName = StringName("pawn:%d:household_goal" % [int(data.id)])
+	var salt: int = _tick() + int(data.id) * 1009 + data.tile_pos.x * 131 + data.tile_pos.y * 17 + 99
+	var rng_val: int = WorldRNG.stream_seed(stream_name, salt) % 100
 	
 	# Priority needs based on settlement features
 	if int(local_features.get("hearth", 0)) <= 0:

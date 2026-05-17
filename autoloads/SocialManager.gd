@@ -135,7 +135,7 @@ func get_legacy_system() -> Node:
 func record_pawn_death(pawn_id: int) -> void:
 	_ensure_bloodline()
 	if _bloodline_system != null and _bloodline_system.has_method("record_pawn_death"):
-		_bloodline_system.call("record_pawn_death", pawn_id, 1)
+		_bloodline_system.record_pawn_death(pawn_id)
 
 ## Clear bloodline system (delegates to BloodlineSystem if available)
 func clear_bloodline() -> void:

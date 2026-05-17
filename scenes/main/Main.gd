@@ -9,6 +9,7 @@ const STOCKPILE_SCENE: PackedScene = preload("res://scenes/stockpile/Stockpile.t
 const INCARNATION_PICKER_SCRIPT: Script = preload("res://scripts/ui/IncarnationPicker.gd")
 ## Static `_region_key` helper lives on the script; reuse instead of per-call preload in hot paths.
 const _WM = preload("res://autoloads/WorldMemory.gd")
+const _AUTHORITY_JOB_BOARD = preload("res://autoloads/AuthorityJobBoard.gd")
 const TRAIT_SHOP_PATH: String = "res://scripts/ui/TraitShop.gd"
 const DEBUG_PANEL_PATH: String = "res://scripts/ui/DebugControlPanel.gd"
 const UI_ADJUST_MANAGER_SCRIPT: Script = preload("res://scripts/ui/UIAdjustManager.gd")
@@ -336,6 +337,7 @@ var _meaning_ambient_mood: float = 0.5
 var _meaning_cam_bias_timer: float = 0.0
 ## Settlement style expression (derived): open -> positive, defensive -> negative.
 var _meaning_style_bias: float = 0.0
+var _meaning_vignette_rect: ColorRect = null
 
 ## Due-tick buckets for regrowth: ready_tick -> Array[{tile, feature, ready_tick}].
 var _regrow_due_buckets: Dictionary = {}
@@ -6574,14 +6576,13 @@ func _seed_bootstrap_jobs_near_pawn_cluster() -> void:
 		var t: Vector2i = _find_build_tile_near(center, 4)
 		if t.x >= 0:
 			_stamp_seeder_job(JobManager.post(Job.Type.BUILD_STORAGE_HUT, t, 3), "storage_pressure")
-	if AuthorityJobBoard != null and AuthorityJobBoard.has_method("post_critical_proto_survival_if_needed"):
-		var leader: Node = null
-		for p in pawns:
-			if p != null and is_instance_valid(p) and p.data != null:
-				leader = p
-				break
-		if leader != null:
-			AuthorityJobBoard.call("post_critical_proto_survival_if_needed", leader, center)
+	var leader: Node = null
+	for p in pawns:
+		if p != null and is_instance_valid(p) and p.data != null:
+			leader = p
+			break
+	if leader != null:
+		_AUTHORITY_JOB_BOARD.post_critical_proto_survival_if_needed(leader, center)
 
 
 func _seed_construction_jobs() -> void:

@@ -585,7 +585,8 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 
 	var ambition: Dictionary = {}
 	if hearths <= 0:
-		ambition = _ambition_result(Job.Type.BUILD_FIRE_PIT, 9, "no hearth in local settlement core")
+		# Reduce aggressive fire-pit ambition to avoid mass-building spam
+		ambition = _ambition_result(Job.Type.BUILD_FIRE_PIT, 7, "no hearth in local settlement core")
 	elif storage_huts <= 0 and local_pop >= 3:
 		ambition = _ambition_result(Job.Type.BUILD_STORAGE_HUT, 8, "storage is missing for current population")
 	elif beds < maxi(2, int(round(local_pop / 2.2))):

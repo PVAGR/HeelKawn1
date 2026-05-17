@@ -6484,9 +6484,17 @@ func _seed_bootstrap_jobs_near_pawn_cluster() -> void:
 	# Fire pits: 1 per 4 pawns, minimum 2
 	var needed_fire_pits: int = max(2, int(ceil(float(count) / 4.0)))
 	if hearths < needed_fire_pits:
-		var t: Vector2i = _find_build_tile_near(center, 4)
-		if t.x >= 0:
-			JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 5)
+		# Avoid posting fire-pit build jobs when raw materials are not available
+		var stock_wood: int = StockpileManager.total_count_of(Item.Type.WOOD) if StockpileManager != null else 0
+		var stock_stone: int = StockpileManager.total_count_of(Item.Type.STONE) if StockpileManager != null else 0
+		var allow_fire_post: bool = true
+		# If there are no stored materials and the cluster is large, skip posting to avoid spam
+		if stock_wood + stock_stone == 0 and count > 8:
+			allow_fire_post = false
+		if allow_fire_post:
+			var t: Vector2i = _find_build_tile_near(center, 4)
+			if t.x >= 0:
+				JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 5)
 	# Beds: 1 per 2 pawns, minimum 4
 	var needed_beds: int = max(4, int(ceil(float(count) / 2.0)))
 	if beds < needed_beds:
@@ -6612,13 +6620,15 @@ func _seed_construction_jobs() -> void:
 		if hearths < hearths_needed and jobs_this_settlement < job_cap:
 			var pending_fire_pits: int = _count_pending_jobs_near(Job.Type.BUILD_FIRE_PIT, center_tile, 10, _cached_active_jobs)
 			if pending_fire_pits == 0:
-				var t: Vector2i = _find_build_tile_near(center_tile, 4)
-				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 7, 12)
-					if j != null:
-						posted += 1
-						jobs_this_settlement += 1
-						pending_counts[Job.Type.BUILD_FIRE_PIT] = int(pending_counts.get(Job.Type.BUILD_FIRE_PIT, 0)) + 1
+				# Require some local materials before posting a new fire pit job for larger settlements
+				if stock_wood + stock_stone > 0 or local_pop <= 6:
+					var t: Vector2i = _find_build_tile_near(center_tile, 4)
+					if t.x >= 0 and not JobManager.has_job_at(t):
+						var j: Job = JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 7, 12)
+						if j != null:
+							posted += 1
+							jobs_this_settlement += 1
+							pending_counts[Job.Type.BUILD_FIRE_PIT] = int(pending_counts.get(Job.Type.BUILD_FIRE_PIT, 0)) + 1
 		# Priority 2: Storage hut if none
 		var storage_needed: int = maxi(1, local_pop / 5)
 		if storage_huts < storage_needed and local_pop >= 1 and jobs_this_settlement < job_cap:

@@ -662,3 +662,139 @@ func reset_caches() -> void:
 	_matrix_priority_decision.clear()
 	_matrix_priority_fetch_tick = -1
 	_matrix_priority_next_refresh_tick = -1
+
+
+## --- Core decision engine: score and select best job from available pool ---
+## Returns the best Job for this pawn based on utility, personality, needs,
+## neural state, matrix bias, and settlement context. Replaces hardcoded
+## priority waterfall with emergent need-driven scoring.
+func decide_best_job(
+	pawn: Node,
+	data: HeelKawnianData,
+	jobs: Array,
+	base_passes: Callable,
+	priority_cb: Callable,
+	food_emergency: bool,
+	utility_context: Dictionary,
+	my_component: int,
+	from_region_key: int
+) -> Job:
+	if jobs.is_empty() or data == null:
+		return null
+
+	var best_job: Job = null
+	var best_score: float = -999999.0
+	var _Job = load("res://scripts/jobs/Job.gd")
+
+	# Cache personality traits once per decision pass
+	var bp: Callable = func(i: int) -> float:
+		if pawn != null and pawn.has_method("_bp"):
+			return float(pawn.call("_bp", i))
+		return 0.5
+
+	for j in jobs:
+		var job: Job = j as Job
+		if job == null:
+			continue
+
+		# Hard filters first (component, materials, tech, etc.)
+		if base_passes.is_valid() and not base_passes.call(job):
+			continue
+
+		# Start with base priority from callback
+		var score: float = 0.0
+		if priority_cb.is_valid():
+			score = float(priority_cb.call(job))
+
+		# If priority_cb already returned a hard reject, skip
+		if score <= -900.0:
+			continue
+
+		# ── PERSONALITY INTEGRATION: Big Five traits shape job preference ──
+		# Slot 0: Openness → prefer novel/exploratory jobs (forage, hunt, trade)
+		var openness: float = bp.call(0)
+		if job.type in [_Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH, _Job.Type.TRADE_HAUL]:
+			score += (openness - 0.5) * 8.0
+
+		# Slot 1: Conscientiousness → prefer structured/building jobs
+		var conscientiousness: float = bp.call(1)
+		if _is_build_job(job.type):
+			score += (conscientiousness - 0.5) * 10.0
+
+		# Slot 2: Extraversion → prefer social/teaching jobs, avoid isolation
+		var extraversion: float = bp.call(2)
+		if job.type in [_Job.Type.TEACH_SKILL, _Job.Type.APPRENTICESHIP, _Job.Type.PROTECT, _Job.Type.DEFEND]:
+			score += (extraversion - 0.5) * 6.0
+		if job.type in [_Job.Type.FORAGE, _Job.Type.HUNT]:
+			score += (extraversion - 0.5) * -4.0  # Introverts prefer solo work
+
+		# Slot 3: Agreeableness → prefer helping/cooperative jobs
+		var agreeableness: float = bp.call(3)
+		if job.issuer_pawn_id >= 0:
+			score += (agreeableness - 0.5) * 5.0  # Follow orders more
+		if job.type in [_Job.Type.TEACH_SKILL, _Job.Type.BUILD_BED, _Job.Type.BUILD_SHELTER]:
+			score += (agreeableness - 0.5) * 4.0
+
+		# Slot 4: Neuroticism → avoid danger, prefer safety
+		var neuroticism: float = bp.call(4)
+		var job_rk: int = _region_key(job.work_tile.x, job.work_tile.y)
+		var scar_level: int = 0
+		if WorldPersistence != null and WorldPersistence.has_method("get_region_scar_level"):
+			scar_level = int(WorldPersistence.get_region_scar_level(job_rk))
+		if scar_level >= 2:
+			score += (neuroticism - 0.5) * -12.0  # High neuroticism avoids danger
+		if job.type in [_Job.Type.DEFEND, _Job.Type.PROTECT]:
+			score += (neuroticism - 0.5) * -6.0
+
+		# Slot 5: Wanderlust (existing) → already used in wander chance
+		# Slot 6: Risk tolerance → prefer high-reward/high-risk jobs
+		var risk_tolerance: float = bp.call(6)
+		if job.type in [_Job.Type.HUNT, _Job.Type.MINE, _Job.Type.MINE_WALL]:
+			score += (risk_tolerance - 0.5) * 8.0
+
+		# Slot 7: Tradition → prefer established/customary jobs
+		var tradition: float = bp.call(7)
+		if job.social_weight > 0.01:
+			score += (tradition - 0.5) * 4.0  # Follow social norms
+
+		# ── DISTANCE PENALTY: closer jobs are easier to claim ──
+		if pawn != null and data.tile_pos != job.work_tile:
+			var dist: int = absi(data.tile_pos.x - job.work_tile.x) + absi(data.tile_pos.y - job.work_tile.y)
+			score -= float(dist) * 0.15  # Small penalty per tile
+
+		# ── URGENCY MULTIPLIER: critical needs amplify relevant jobs ──
+		if food_emergency and job.type in [_Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH]:
+			score *= 1.5
+		if data.hunger <= 30.0 and job.type in [_Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH]:
+			score *= 1.3
+		if data.rest <= 20.0 and _is_rest_job(job.type):
+			score *= 1.4
+
+		if score > best_score:
+			best_score = score
+			best_job = job
+
+	return best_job
+
+
+static func _is_build_job(job_type: int) -> bool:
+	var _Job = load("res://scripts/jobs/Job.gd")
+	return job_type in [
+		_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR,
+		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_STOCKPILE,
+		_Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_MARKER_STONE,
+		_Job.Type.BUILD_SHRINE, _Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN,
+		_Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN,
+		_Job.Type.BUILD_WORKSHOP, _Job.Type.BUILD_LOOM, _Job.Type.BUILD_KILN,
+		_Job.Type.BUILD_SMELTER, _Job.Type.BUILD_BOATYARD, _Job.Type.BUILD_DOCK,
+		_Job.Type.BUILD_FISHERMAN_HUT, _Job.Type.BUILD_APOTHECARY, _Job.Type.BUILD_LIBRARY,
+		_Job.Type.BUILD_SCHOOL, _Job.Type.BUILD_BARRACKS, _Job.Type.BUILD_WATCHTOWER,
+		_Job.Type.BUILD_MARKET, _Job.Type.BUILD_TRADING_POST, _Job.Type.BUILD_ROAD,
+		_Job.Type.BUILD_GRANARY, _Job.Type.BUILD_CELLAR, _Job.Type.BUILD_BREWERY,
+		_Job.Type.BUILD_TAVERN, _Job.Type.BUILD_FORD, _Job.Type.BUILD_WATER_MILL,
+	]
+
+
+static func _is_rest_job(job_type: int) -> bool:
+	var _Job = load("res://scripts/jobs/Job.gd")
+	return job_type in [_Job.Type.BUILD_BED, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_FIRE_PIT]

@@ -198,7 +198,7 @@ static func _materials_for_build(job_type: int) -> Dictionary:
 		_Job.Type.BUILD_DOOR: return {"item": _Item.Type.WOOD, "qty": DOOR_WOOD_COST}
 		_Job.Type.BUILD_FIRE_PIT:     return {"item": _Item.Type.WOOD, "qty": 2}  # wood + stone (stone tracked separately)
 		_Job.Type.BUILD_STORAGE_HUT:  return {"item": _Item.Type.WOOD, "qty": 3}
-		_Job.Type.BUILD_STOCKPILE:    return {"item": _Item.Type.WOOD, "qty": 10}  # + 5 sticks tracked separately
+		_Job.Type.BUILD_STOCKPILE:    return {"item": _Item.Type.WOOD, "qty": 5}  # Lowered for early-game accessibility
 		_Job.Type.BUILD_MARKER_STONE: return {"item": _Item.Type.STONE, "qty": 2}
 		_Job.Type.BUILD_SHRINE:       return {"item": _Item.Type.WOOD, "qty": 2}  # + stone tracked separately
 		_Job.Type.BUILD_SHELTER:      return {"item": _Item.Type.WOOD, "qty": BED_WOOD_COST}
@@ -1725,7 +1725,8 @@ func _try_post_stockpile_job() -> bool:
 	# Only post if fewer than 3 stockpiles exist
 	if stockpile_count >= 3:
 		return false
-	# Check if pawn has enough wood (10) and sticks (5)
+	# Check if pawn has enough wood (5) or sticks (3) for first stockpile
+	# Lowered thresholds to break startup deadlock
 	var has_wood: int = 0
 	var has_sticks: int = 0
 	if data.is_carrying() and data.carrying == _Item.Type.WOOD:
@@ -1736,7 +1737,7 @@ func _try_post_stockpile_job() -> bool:
 	if StockpileManager != null:
 		has_wood += StockpileManager.total_count_of(_Item.Type.WOOD)
 		has_sticks += StockpileManager.total_count_of(_Item.Type.STICK)
-	if has_wood < 10 or has_sticks < 5:
+	if has_wood < 5 and has_sticks < 3:
 		return false
 	# Find a valid tile near the pawn to build the stockpile
 	var target_tile: Vector2i = _find_stockpile_site_tile()
@@ -1847,9 +1848,58 @@ func _try_heelkawnian_affiliation_action() -> bool:
 func _maybe_matrix_decide_job(priority_cb: Callable = Callable()) -> bool:
 	if data == null or _world == null or _world.data == null or GameManager == null:
 		return false
-	# HeelKawnianDecision.decide() was never implemented.
-	# The urge architecture replaces this concept — drives push urges,
-	# the queue resolves them. This function is dead code.
+	if _state != State.IDLE:
+		return false
+	if not data.can_work():
+		return false
+	if _decision == null:
+		return false
+	# Only run matrix decision periodically to avoid overhead
+	var now_tick: int = GameManager.tick_count
+	var matrix_interval: int = _decision._matrix_priority_refresh_interval_for_speed()
+	if now_tick % matrix_interval != int(data.id) % matrix_interval:
+		return false
+	# Get matrix decision from HeelKawnianManager
+	var matrix_decision: Dictionary = {}
+	if HeelKawnianManager != null and HeelKawnianManager.has_method("get_matrix_decision_for_pawn"):
+		matrix_decision = HeelKawnianManager.get_matrix_decision_for_pawn(self)
+	if matrix_decision.is_empty():
+		return false
+	# Get top suggested jobs from matrix
+	var top_jobs: Array = matrix_decision.get("top_jobs", [])
+	if top_jobs.is_empty():
+		return false
+	# Try to claim the top-suggested job type
+	var top_job: Dictionary = top_jobs.front() as Dictionary
+	var suggested_job_type: int = int(top_job.get("job_type", -1))
+	if suggested_job_type < 0:
+		return false
+	var matrix_confidence: float = float(top_job.get("bias", 0.0)) / 16.0  # Normalize to 0-1
+	# Try to claim the suggested job type with a strong bias
+	var matrix_filter: Callable = func(j: Job) -> bool:
+		if j.type != suggested_job_type:
+			return false
+		if not data.allows_job_type(j.type):
+			return false
+		var job_comp: int = _world.pathfinder.component_of(j.work_tile)
+		if job_comp != _world.pathfinder.component_of(data.tile_pos):
+			return false
+		return true
+	var matrix_priority: Callable = func(j: Job) -> int:
+		var base: int = 100  # Strong base priority for matrix-suggested jobs
+		if priority_cb.is_valid():
+			base += priority_cb.call(j)
+		# Add matrix confidence bonus
+		base += int(round(matrix_confidence * 20.0))
+		return base
+	var matrix_job: Job = JobManager.claim_next_for(self, matrix_filter, matrix_priority)
+	if matrix_job != null:
+		_begin_job(matrix_job)
+		if GameManager.verbose_logs():
+			print("[Matrix] %s claimed matrix-suggested job: %s (confidence: %.2f)" % [
+				data.display_name, _Job.Type.keys()[matrix_job.type], matrix_confidence
+			])
+		return true
 	return false
 
 
@@ -4349,7 +4399,32 @@ func _tick_idle() -> void:
 				base_bias += 5  # work for own settlement
 			elif job_sid >= 0 and job_sid != my_sid:
 				base_bias -= 3  # avoid working for other settlements
-		# Personal whim: same queue, slightly different ordering per pawn (still deterministic).
+		# ── BIG FIVE PERSONALITY: emergent behavior from stable traits ──
+		# Slot 0: Openness → prefer novel/exploratory jobs
+		if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH or j.type == _Job.Type.TRADE_HAUL:
+			base_bias += int(round((_bp(0) - 0.5) * 8.0))
+		# Slot 1: Conscientiousness → prefer structured/building jobs
+		if _is_structure_build_job(j.type):
+			base_bias += int(round((_bp(1) - 0.5) * 10.0))
+		# Slot 2: Extraversion → prefer social jobs, introverts prefer solo work
+		if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP or j.type == _Job.Type.PROTECT or j.type == _Job.Type.DEFEND:
+			base_bias += int(round((_bp(2) - 0.5) * 6.0))
+		if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT:
+			base_bias += int(round((_bp(2) - 0.5) * -4.0))
+		# Slot 3: Agreeableness → follow orders, prefer cooperative jobs
+		if j.issuer_pawn_id >= 0:
+			base_bias += int(round((_bp(3) - 0.5) * 5.0))
+		# Slot 4: Neuroticism → avoid danger zones
+		var job_scar: int = int(resolve_region_scar_level.call(job_rk))
+		if job_scar >= 2:
+			base_bias += int(round((_bp(4) - 0.5) * -12.0))
+		# Slot 6: Risk tolerance → prefer high-risk/high-reward jobs
+		if j.type == _Job.Type.HUNT or j.type == _Job.Type.MINE or j.type == _Job.Type.MINE_WALL:
+			base_bias += int(round((_bp(6) - 0.5) * 8.0))
+		# Slot 7: Tradition → prefer socially customary jobs
+		if j.social_weight > 0.01:
+			base_bias += int(round((_bp(7) - 0.5) * 4.0))
+		# Slot 5: Personal whim (legacy)
 		base_bias += clampi(int(floor((_bp(5) - 0.5) * 6.0)), -2, 2)
 
 		# Keep bias math cheap and deterministic on hot claim path.
@@ -4372,13 +4447,27 @@ func _tick_idle() -> void:
 			return false
 		var mats: Dictionary = _materials_for_active_build(j)
 		if not mats.is_empty():
-			# Any zone with the material is fine -- the pawn will walk to
-			# the closest one in _begin_fetching_material.
-			if StockpileManager.total_count_of(mats.item) < mats.qty:
-				return false
+			# If no stockpiles exist, allow claiming build jobs so pawns can
+			# gather materials from the environment first, then build.
+			# This breaks the startup deadlock completely.
+			if StockpileManager._zones.is_empty():
+				pass  # Allow claim - pawn will gather materials from environment
+			else:
+				# Any zone with the material is fine -- the pawn will walk to
+				# the closest one in _begin_fetching_material.
+				if StockpileManager.total_count_of(mats.item) < mats.qty:
+					return false
 		# === CHECK TECH REQUIREMENT ===
-		# Only allow job claiming if the settlement has researched required technology
-		if TechnologySystem != null:
+		# Allow primitive survival jobs to bypass tech requirements
+		# so early-game pawns can build basic shelters without research
+		var is_primitive_job: bool = j.type in [
+			_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_BED, _Job.Type.BUILD_SHELTER,
+			_Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_HEARTH,
+			_Job.Type.BUILD_STOCKPILE, _Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH,
+			_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH,
+			_Job.Type.CHOP, _Job.Type.MINE, _Job.Type.GATHER_FLINT, _Job.Type.GATHER_STICK
+		]
+		if TechnologySystem != null and not is_primitive_job:
 			var settle_center: int = int(from_center_region)
 			if settle_center >= 0:
 				if not bool(TechnologySystem.call("can_settle_perform_job_type", settle_center, int(j.type))):

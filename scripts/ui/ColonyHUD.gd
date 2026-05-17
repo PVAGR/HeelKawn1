@@ -1001,11 +1001,11 @@ func _export_status_line() -> String:
 	var main_node: Main = _get_main()
 	var milestone: int = SimTime.KERNEL_DIAGNOSTIC_TICK
 	if main_node == null:
-		return "📜 Export / kernel checkpoint: tick %d | Status: Waiting" % milestone
+		return "EXPORT / kernel checkpoint: tick %d | Status: Waiting" % milestone
 	var status: String = "Complete" if main_node.is_kernel_diagnostic_complete() else "Waiting"
 	if GameManager.tick_count >= milestone:
-		return "📜 Export / kernel checkpoint: tick %d | Status: %s" % [milestone, status]
-	return "📜 Export / kernel checkpoint: tick %d | Status: Waiting" % milestone
+		return "EXPORT / kernel checkpoint: tick %d | Status: %s" % [milestone, status]
+	return "EXPORT / kernel checkpoint: tick %d | Status: Waiting" % milestone
 
 
 ## One-line snapshot for AI/debug sessions (HUD copy-paste; reduces need for console spam).
@@ -1080,14 +1080,14 @@ func _coarse_gate_for_speed(speed: float) -> int:
 func _kill_line() -> String:
 	var main_node: Main = _get_main()
 	if main_node == null:
-		return "💀 Kills: 0"
-	return "💀 Kills: %d" % int(main_node.get_kill_count())
+		return "Kills: 0"
+	return "Kills: %d" % int(main_node.get_kill_count())
 
 
 func _politics_line() -> String:
 	var main_node: Main = _get_main()
 	if main_node == null:
-		return "🏛 Settlement State: Anarchy | Ruler: None | Player Status: None"
+		return "Settlement State: Anarchy | Ruler: None | Player Status: None"
 	var gp: Dictionary = main_node.get_player_governance_profile()
 	var gtype_raw: String = str(gp.get("type", "anarchy"))
 	var gtype: String = "Anarchy"
@@ -1095,7 +1095,7 @@ func _politics_line() -> String:
 		gtype = "Monarchy"
 	elif gtype_raw == "council":
 		gtype = "Council"
-	var base: String = "🏛 Settlement State: %s | Ruler: %s | Player Status: %s" % [
+	var base: String = "Settlement State: %s | Ruler: %s | Player Status: %s" % [
 		gtype,
 		str(gp.get("ruler_name", "None")),
 		str(gp.get("player_status", "None")),
@@ -1108,7 +1108,7 @@ func _politics_line() -> String:
 func _war_status_line() -> String:
 	var main_node: Main = _get_main()
 	if main_node == null:
-		return "⚔ WAR STATUS: Peace | RANK: Grunt"
+		return "WAR STATUS: Peace | RANK: Grunt"
 	var wp: Dictionary = main_node.get_player_war_profile()
 	var ws: String = String(wp.get("state", "peace")).to_lower()
 	var ws_label: String = "Peace"
@@ -1124,7 +1124,7 @@ func _war_status_line() -> String:
 	var rank_label: String = rank_raw.capitalize()
 	if rank_raw == "battlemaster":
 		rank_label = "BattleMaster"
-	var out: String = "⚔ WAR STATUS: %s | RANK: %s" % [ws_label, rank_label]
+	var out: String = "WAR STATUS: %s | RANK: %s" % [ws_label, rank_label]
 	if rank_raw == "battlemaster":
 		out += " | TACTICAL MODE: Issue Orders"
 	return out
@@ -1332,7 +1332,7 @@ func _narrative_rail_line() -> String:
 	if ev.is_empty():
 		ev = WorldMemory.get_recent_events(64)
 	if ev.is_empty():
-		_narrative_cache = "📜 Chronicle: world is quiet"
+		_narrative_cache = "Chronicle: world is quiet"
 		return _narrative_cache
 	var entries: PackedStringArray = PackedStringArray()
 	for i in range(ev.size() - 1, -1, -1):
@@ -1349,9 +1349,9 @@ func _narrative_rail_line() -> String:
 			continue
 		entries.append("[t%d] %s" % [tick, line])
 	if entries.is_empty():
-		_narrative_cache = "📜 Chronicle: no major shifts"
+		_narrative_cache = "Chronicle: no major shifts"
 		return _narrative_cache
-	_narrative_cache = "📜 Chronicle: %s" % "  •  ".join(entries)
+	_narrative_cache = "Chronicle: %s" % "  •  ".join(entries)
 	return _narrative_cache
 
 

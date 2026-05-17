@@ -6856,9 +6856,6 @@ func _seed_construction_jobs() -> void:
 						pending_counts[Job.Type.COOK_BERRIES] = int(pending_counts.get(Job.Type.COOK_BERRIES, 0)) + 1
 		# Priority 6a: Haul loose food/material on the ground into stockpiles.
 		if _world != null and _world.has_method("sum_ground_resources") and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
-			var ground_res: Dictionary = _world.sum_ground_resources(center_rk)
-			var ground_food: int = int(ground_res.get("food", 0))
-			var ground_wood: int = int(ground_res.get("wood", 0))
 			if ground_food >= 2 or (ground_wood >= 4 and storage_press > 0.2):
 				var pending_hauls: int = _count_pending_jobs_near(Job.Type.TRADE_HAUL, center_tile, 10, _cached_active_jobs)
 				if pending_hauls == 0 and not JobManager.has_job_at(center_tile):

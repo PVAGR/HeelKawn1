@@ -4,23 +4,28 @@ extends SceneTree
 
 const SEED: int = 7
 
+var _failed: int = 0
+var _passed: int = 0
+var _done: bool = false
+var _colony_sim: Node = null
+
 
 func _init() -> void:
 	print("\n=== COLONY BUILD PRIORITIES TEST ===")
 
 
-func _ready() -> void:
-	await get_tree().create_timer(0.5).timeout
+func _process(_delta: float) -> bool:
+	if _done:
+		return true
+	_done = true
 	_run_checks()
 	quit(0 if _failed == 0 else 1)
-
-
-var _failed: int = 0
-var _passed: int = 0
+	return true
 
 
 func _run_checks() -> void:
-	if ColonySimServices == null:
+	_colony_sim = get_root().get_node_or_null("ColonySimServices")
+	if _colony_sim == null:
 		print("[FAIL] ColonySimServices autoload missing")
 		_failed += 1
 		return
@@ -39,15 +44,15 @@ func _assert_true(cond: bool, label: String) -> void:
 
 
 func _test_estimate_farm_cap() -> void:
-	var low: int = ColonySimServices.estimate_farm_cap(10, 0.2, 0)
-	var high: int = ColonySimServices.estimate_farm_cap(10, 0.85, 0)
+	var low: int = _colony_sim.estimate_farm_cap(10, 0.2, 0)
+	var high: int = _colony_sim.estimate_farm_cap(10, 0.85, 0)
 	_assert_true(low >= 2, "farm_cap baseline for pop 10")
 	_assert_true(high >= low, "farm_cap rises with food pressure")
 
 
 func _test_compute_priorities_shape() -> void:
 	var features: Dictionary = {"hearth": 0, "bed": 0, "storage_hut": 0, "farm": 0}
-	var pri: Dictionary = ColonySimServices.compute_settlement_build_priorities(-1, 6, features, false)
+	var pri: Dictionary = _colony_sim.compute_settlement_build_priorities(-1, 6, features, false)
 	_assert_true(pri.has("ranked_needs"), "priorities include ranked_needs")
 	_assert_true(pri.has("job_cap"), "priorities include job_cap")
 	_assert_true(pri.has("farm_cap"), "priorities include farm_cap")
@@ -57,5 +62,5 @@ func _test_compute_priorities_shape() -> void:
 
 
 func _test_can_seed_fire_pit_shape() -> void:
-	var ok: bool = ColonySimServices.can_seed_fire_pit(-1, Vector2i(64, 64), 0, 1)
+	var ok: bool = _colony_sim.can_seed_fire_pit(-1, Vector2i(64, 64), 0, 1)
 	_assert_true(ok is bool, "can_seed_fire_pit returns bool")

@@ -2,7 +2,7 @@
 
 > Comprehensive analysis of what is built vs. what the master plan requires
 
-**Last Updated:** 2026-05-14
+**Last Updated:** 2026-05-17
 **Analysis Scope:** All autoloads, scripts, docs, and feature specs
 **Authority:** This is the repo's built-vs-missing reality check. See `HEELKAWN_PROJECT_COMPASS.md` for the full truth hierarchy.
 
@@ -152,7 +152,7 @@ From `docs/HEELKAWN_STANDALONE_MASTER_PLAN.md` **Section 7** (Must-have v1):
 | Birth and death | ⚠️ Basic | No lineage depth |
 | Basic kinship | ⚠️ Stub | No full tree |
 | Food and storage | ✅ DONE | — |
-| Fire and shelter | ⚠️ Stub | No heating system |
+| Fire and shelter | ✅ Partial (verify runtime) | `BuildingRegistry` fire pit/hearth warmth + cooking; `ColonySimServices` warmth/light pressure; formal settlement gate requires hearth or warmth |
 | Trade and travel | ⚠️ Stub | No travel system |
 | Conflict and raids | ⚠️ Basic | — |
 | Local reputation | ⚠️ Partial | — |

@@ -557,17 +557,33 @@ func _colony_state_line() -> String:
 	var stance: String = ColonySimServices.get_stance_display()
 	var fp: float = ColonySimServices.get_food_pressure()
 	var hp: float = ColonySimServices.get_housing_pressure()
+	var wp: float = ColonySimServices.get_warmth_pressure()
+	var sp: float = ColonySimServices.get_storage_pressure()
+	var cp: float = ColonySimServices.get_cooking_pressure()
+	var lp: float = ColonySimServices.get_light_pressure()
 	if not is_finite(fp):
 		fp = 0.0
 	if not is_finite(hp):
 		hp = 0.0
+	if not is_finite(wp):
+		wp = 0.0
+	if not is_finite(sp):
+		sp = 0.0
+	if not is_finite(cp):
+		cp = 0.0
+	if not is_finite(lp):
+		lp = 0.0
 	var stance3: String = stance
 	if stance3.length() > 3:
 		stance3 = stance3.substr(0, 3)
-	return "[color=#c9b37c]C:[/color]%s F%d%% H%d%%" % [
+	return "[color=#c9b37c]C:[/color]%s F%d H%d W%d S%d K%d L%d" % [
 		stance3,
 		int(round(fp * 100.0)),
 		int(round(hp * 100.0)),
+		int(round(wp * 100.0)),
+		int(round(sp * 100.0)),
+		int(round(cp * 100.0)),
+		int(round(lp * 100.0)),
 	]
 
 

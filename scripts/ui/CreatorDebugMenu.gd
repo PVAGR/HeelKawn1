@@ -811,15 +811,22 @@ func _report_sim_diag() -> void:
 
 func _report_colony_sim() -> void:
 	print(
-			"stance=%s food=%.3f housing=%.3f materials=%.3f haul=%.3f"
+			"stance=%s food=%.3f housing=%.3f materials=%.3f haul=%.3f warmth=%.3f cook=%.3f storage=%.3f light=%.3f contentment=%s streak=%d"
 			% [
 				ColonySimServices.get_stance_display(),
 				ColonySimServices.get_food_pressure(),
 				ColonySimServices.get_housing_pressure(),
 				ColonySimServices.get_materials_pressure(),
 				ColonySimServices.get_haul_pressure(),
+				ColonySimServices.get_warmth_pressure(),
+				ColonySimServices.get_cooking_pressure(),
+				ColonySimServices.get_storage_pressure(),
+				ColonySimServices.get_light_pressure(),
+				str(ColonySimServices.colony_contentment_period()),
+				ColonySimServices.get_contentment_streak_ticks(),
 			]
 	)
+	_report_settlement_pressure_rows()
 
 
 # ---- F10 runtime-truth contract helpers (targeted, no big refactor) ----
@@ -1137,6 +1144,39 @@ func _report_age() -> void:
 			% [AgeMemory.get_current_age_index(), AgeMemory.age_start_tick, AgeMemory.get_global_age_tint_strength()]
 	)
 	print("AgeMemory.age_signature: %s" % str(AgeMemory.age_signature))
+
+
+func _report_settlement_pressure_rows() -> void:
+	if SettlementMemory == null or ColonySimServices == null:
+		return
+	print("SETTLEMENT_PRESSURES (formal)")
+	for s in SettlementMemory.get_formal_settlements():
+		if not (s is Dictionary):
+			continue
+		var st: Dictionary = s as Dictionary
+		var center_rk: int = int(st.get("center_region", -1))
+		if center_rk < 0:
+			continue
+		var local_pop: int = int(st.get("population", 0))
+		var center_tile: Vector2i = Vector2i((center_rk & 0xFFFF) * 16 + 8, ((center_rk >> 16) & 0xFFFF) * 16 + 8)
+		var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 12)
+		var pri: Dictionary = ColonySimServices.compute_settlement_build_priorities(center_rk, local_pop, features, false)
+		print(
+				"  rk=%d pop=%d ranked=%s farm_cap=%d job_cap=%d w=%.2f f=%.2f h=%.2f st=%.2f ck=%.2f lt=%.2f"
+				% [
+					center_rk,
+					local_pop,
+					str(pri.get("ranked_needs", [])),
+					int(pri.get("farm_cap", 0)),
+					int(pri.get("job_cap", 0)),
+					float(pri.get("warmth_press", 0.0)),
+					float(pri.get("food_press", 0.0)),
+					float(pri.get("housing_press", 0.0)),
+					float(pri.get("storage_press", 0.0)),
+					float(pri.get("cooking_press", 0.0)),
+					float(pri.get("light_press", 0.0)),
+				]
+		)
 
 
 func _report_settlements() -> void:

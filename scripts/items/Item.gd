@@ -208,6 +208,28 @@ static func hunger_restore(t: int) -> float:
 	return HUNGER_RESTORE.get(t, 0.0)
 
 
+## Uncooked harvestables — always edible but less nourishing (see effective_hunger_restore).
+static func is_raw_food(t: int) -> bool:
+	return t == Type.MEAT or t == Type.BERRY or t == Type.FISH
+
+
+static func is_cooked_food(t: int) -> bool:
+	return t == Type.COOKED_MEAT or t == Type.COOKED_BERRIES or t == Type.COOKED_FISH \
+			or t == Type.DRIED_MEAT
+
+
+const RAW_FOOD_NUTRITION_MULT: float = 0.62
+const RAW_FOOD_MOOD_PENALTY: float = 8.0
+const RAW_FOOD_SICKNESS_CHANCE: float = 0.14
+
+
+static func effective_hunger_restore(t: int) -> float:
+	var base: float = hunger_restore(t)
+	if is_raw_food(t):
+		return base * RAW_FOOD_NUTRITION_MULT
+	return base
+
+
 static func is_food(t: int) -> bool:
 	return HUNGER_RESTORE.get(t, 0.0) > 0.0
 

@@ -1671,6 +1671,21 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 	if job_type < 0:
 		_next_matrix_ambition_tick = tick + 10
 		return false
+	if ColonySimServices != null:
+		if ColonySimServices.should_block_ambition_tier_build() and not _is_survival_matrix_ambition(job_type):
+			_next_matrix_ambition_tick = tick + 30
+			return false
+		var center_rk: int = SettlementMemory.get_center_region_for_region(
+				WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)) if SettlementMemory != null else -1
+		if ColonySimServices.is_hearth_build_job(job_type):
+			var feats: Dictionary = HeelKawnianManager._scan_local_features(data.tile_pos, 12)
+			var lh: int = int(feats.get("hearth", 0))
+			var cold: int = ColonySimServices.count_cold_uncovered_pawns(center_rk) if center_rk >= 0 else 0
+			var needed: int = lh + 1 if lh <= 0 else lh + int(ceil(float(cold) / 4.0))
+			if not ColonySimServices.can_seed_fire_pit(center_rk, data.tile_pos, lh, needed):
+				_next_matrix_ambition_tick = tick + 20
+				return false
+			job_type = ColonySimServices.resolve_hearth_post_job_type(job_type)
 	var target_tile: Vector2i = _matrix_ambition_target_tile(job_type)
 	if target_tile.x < 0:
 		_next_matrix_ambition_tick = tick + 10
@@ -1703,6 +1718,17 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 	)
 	_next_matrix_ambition_tick = tick + 15
 	return true
+
+
+func _is_survival_matrix_ambition(job_type: int) -> bool:
+	match job_type:
+		_Job.Type.BUILD_BED, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_HEARTH, \
+		_Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_SHELTER, \
+		_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH, \
+		_Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH, _Job.Type.PLANT_SEEDS, \
+		_Job.Type.GROW_FOOD, _Job.Type.TRADE_HAUL:
+			return true
+	return false
 
 
 ## Autonomous stockpile posting: if no stockpiles exist (or very few) and
@@ -1845,7 +1871,7 @@ func _try_heelkawnian_affiliation_action() -> bool:
 ## Matrix-driven job decision. Uses the HeelKawnianDecision system
 ## to determine what this pawn should do based on their Matrix profile
 ## and local conditions. Directly claims the best matching job.
-func _maybe_matrix_decide_job(priority_cb: Callable = Callable()) -> bool:
+func _maybe_matrix_decide_job(priority_cb: Callable = Callable(), base_passes: Callable = Callable()) -> bool:
 	if data == null or _world == null or _world.data == null or GameManager == null:
 		return false
 	if _state != State.IDLE:
@@ -1879,6 +1905,8 @@ func _maybe_matrix_decide_job(priority_cb: Callable = Callable()) -> bool:
 	var matrix_filter: Callable = func(j: Job) -> bool:
 		if j.type != suggested_job_type:
 			return false
+		if base_passes.is_valid():
+			return base_passes.call(j)
 		if not data.allows_job_type(j.type):
 			return false
 		var job_comp: int = _world.pathfinder.component_of(j.work_tile)
@@ -3799,6 +3827,8 @@ func _tick_idle() -> void:
 			return
 		# Matrix ambition seed: post one strategic household/settlement job.
 		_try_heelkawnian_matrix_ambition_seed()
+		if ColonySimServices != null and ColonySimServices.colony_contentment_period():
+			_try_post_hobby_build_job()
 		# Autonomous stockpile: if no stockpiles exist and pawn has materials, post one.
 		_try_post_stockpile_job()
 	if run_social_lane:
@@ -3982,6 +4012,12 @@ func _tick_idle() -> void:
 	var job_claim_interval: int = _job_claim_interval_for_speed()
 	if job_claim_interval > 1:
 		if posmod(now_tick + int(data.id) * 37, job_claim_interval) != 0:
+			var wanderlust_skip: float = lerpf(0.52, 1.68, _bp(3))
+			var skip_wander_chance: float = WANDER_CHANCE_PER_TICK * wanderlust_skip
+			if preferred_idle_action == "wander":
+				skip_wander_chance *= 1.6
+			if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(skip_wander_chance, 0.0, 0.35), _pawn_salt(11)):
+				_start_wander()
 			return
 
 	if utility_context.is_empty() or (_decision._cached_utility_food_emergency if _decision != null else _cached_utility_food_emergency) != food_emergency:
@@ -4004,9 +4040,13 @@ func _tick_idle() -> void:
 	var inherited_history_offset: int = _culture_inherited_job_offset()
 	var crisis_housing_pressure: float = 0.0
 	var crisis_food_pressure: float = 0.0
+	var crisis_warmth_pressure: float = 0.0
+	var crisis_cooking_pressure: float = 0.0
 	if ColonySimServices != null:
 		crisis_housing_pressure = ColonySimServices.get_housing_pressure()
 		crisis_food_pressure = ColonySimServices.get_food_pressure()
+		crisis_warmth_pressure = ColonySimServices.get_warmth_pressure()
+		crisis_cooking_pressure = ColonySimServices.get_cooking_pressure()
 	var from_region_key: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
 	var from_center_region: int = SettlementMemory.get_center_region_for_region(from_region_key)
 	var from_intent: int = int(IntentMemory.settlement_intent.get(from_center_region, IntentMemory.INTENT_HOLD))
@@ -4071,6 +4111,7 @@ func _tick_idle() -> void:
 	# Simplified priority calculation for performance; affinity is a small nudge â€” not a separate queue pass â€” so build/mining jobs can compete with forage.
 	var _cached_stock_wood: int = StockpileManager.total_count_of(Item.Type.WOOD)
 	var _cached_stock_stone: int = StockpileManager.total_count_of(Item.Type.STONE)
+	var pawn_cold: bool = data != null and float(data.body_temperature) < 36.5
 	var priority_cb: Callable = func(j: Job) -> int:
 		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j))
 		# ── URGENCY GATES: survival overrides profession/role preference ──
@@ -4148,37 +4189,87 @@ func _tick_idle() -> void:
 			base_bias += int(round((learning_weight - 1.0) * 4.0))
 		if preferred_idle_action == "forage" and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
 			base_bias += 2
-		# When the pantry is not in emergency, nudge non-food labor so the colony
-		# visibly diversifies (stone, wood, planned builds) instead of idle wandering.
-		# OPTIMIZATION: Strong bias toward BUILD jobs to get settlement started
+		# When fed, nudge build/gather only if the pawn or colony has a real need.
 		if not food_emergency:
-			match int(j.type):
-				_Job.Type.MINE, _Job.Type.MINE_WALL, _Job.Type.CHOP:
-					base_bias += 3  # Increased from 2
-				_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_STOCKPILE, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, \
-				_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN, \
-				_Job.Type.BUILD_WORKSHOP, _Job.Type.BUILD_LOOM, _Job.Type.BUILD_KILN, _Job.Type.BUILD_SMELTER, \
-				_Job.Type.BUILD_BOATYARD, _Job.Type.BUILD_DOCK, _Job.Type.BUILD_FISHERMAN_HUT, \
-				_Job.Type.BUILD_APOTHECARY, _Job.Type.BUILD_LIBRARY, _Job.Type.BUILD_SCHOOL, \
-				_Job.Type.BUILD_BARRACKS, _Job.Type.BUILD_WATCHTOWER, \
-				_Job.Type.BUILD_MARKET, _Job.Type.BUILD_TRADING_POST, _Job.Type.BUILD_ROAD, \
-				_Job.Type.BUILD_GRANARY, _Job.Type.BUILD_CELLAR, \
-				_Job.Type.BUILD_BREWERY, _Job.Type.BUILD_TAVERN, \
-				_Job.Type.BUILD_FORD, _Job.Type.BUILD_WATER_MILL:
-					base_bias += 6  # Strong priority for all building jobs
-				_Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH:
-					base_bias -= 1  # Slightly deprioritize foraging when not starving
+			var colony_needs_build: bool = crisis_warmth_pressure > 0.25 \
+					or crisis_housing_pressure > 0.5 \
+					or crisis_cooking_pressure > 0.3
+			if pawn_cold or colony_needs_build:
+				match int(j.type):
+					_Job.Type.MINE, _Job.Type.MINE_WALL, _Job.Type.CHOP:
+						base_bias += 3
+					_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_STOCKPILE, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, \
+					_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN, \
+					_Job.Type.BUILD_WORKSHOP, _Job.Type.BUILD_LOOM, _Job.Type.BUILD_KILN, _Job.Type.BUILD_SMELTER, \
+					_Job.Type.BUILD_BOATYARD, _Job.Type.BUILD_DOCK, _Job.Type.BUILD_FISHERMAN_HUT, \
+					_Job.Type.BUILD_APOTHECARY, _Job.Type.BUILD_LIBRARY, _Job.Type.BUILD_SCHOOL, \
+					_Job.Type.BUILD_BARRACKS, _Job.Type.BUILD_WATCHTOWER, \
+					_Job.Type.BUILD_MARKET, _Job.Type.BUILD_TRADING_POST, _Job.Type.BUILD_ROAD, \
+					_Job.Type.BUILD_GRANARY, _Job.Type.BUILD_CELLAR, \
+					_Job.Type.BUILD_BREWERY, _Job.Type.BUILD_TAVERN, \
+					_Job.Type.BUILD_FORD, _Job.Type.BUILD_WATER_MILL:
+						base_bias += 6
+					_Job.Type.BUILD_FIRE_PIT:
+						if pawn_cold or crisis_warmth_pressure > 0.2:
+							base_bias += 6
+					_Job.Type.COOK_MEAT, _Job.Type.COOK_FISH, _Job.Type.COOK_BERRIES:
+						var cook_boost: int = 4
+						if data.is_carrying() and Item.is_food(data.carrying):
+							if data.carrying == _Item.Type.MEAT or data.carrying == _Item.Type.BERRY:
+								if ColonySimServices != null and ColonySimServices.tile_has_hearth_coverage(data.tile_pos):
+									cook_boost += 3
+								else:
+									cook_boost += 1
+						if crisis_cooking_pressure > 0.2 or cook_boost > 4:
+							base_bias += cook_boost
+				if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH:
+					base_bias -= 1
 
 		# Crisis priority bonus (snapshot pressures once per claim pass).
 		# Boost BUILD_BED jobs during housing crisis
 		if crisis_housing_pressure > 0.8 and j.type == _Job.Type.BUILD_BED:
 			base_bias += 8
-		# Boost FIRE_PIT when warmth is scarce
-		if j.type == _Job.Type.BUILD_FIRE_PIT and crisis_housing_pressure > 0.5:
-			base_bias += 3
-		# Boost FORAGE/HUNT jobs during food crisis
-		if crisis_food_pressure > 0.7 and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
+		# Boost FIRE_PIT when cold or warmth pressure is high (not housing).
+		if j.type == _Job.Type.BUILD_FIRE_PIT:
+			if pawn_cold or crisis_warmth_pressure > 0.5:
+				base_bias += 5
+			elif crisis_warmth_pressure > 0.25:
+				base_bias += 2
+		# Boost FORAGE/HUNT/FISH when colony food pressure is elevated
+		if crisis_food_pressure > 0.50 and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
 			base_bias += 4
+		var survival_not_met: bool = crisis_food_pressure > 0.55 \
+				or crisis_housing_pressure > 0.70 \
+				or crisis_warmth_pressure > 0.40
+		if survival_not_met:
+			match int(j.type):
+				_Job.Type.PLANT_SEEDS, _Job.Type.GROW_FOOD, _Job.Type.HARVEST_CROPS, \
+				_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, \
+				_Job.Type.BUILD_HERB_GARDEN:
+					base_bias -= 10
+		elif crisis_food_pressure <= 0.40 and ColonySimServices != null \
+				and ColonySimServices.colony_contentment_period():
+			match int(j.type):
+				_Job.Type.PLANT_SEEDS, _Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, \
+				_Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN:
+					base_bias += 2
+		if crisis_food_pressure > 0.35 and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
+			base_bias += 3
+		if ColonySimServices != null:
+			var haul_p: float = ColonySimServices.get_haul_pressure()
+			var store_p: float = ColonySimServices.get_storage_pressure()
+			if haul_p > 0.35 or store_p > 0.3:
+				if j.type == _Job.Type.TRADE_HAUL:
+					base_bias += clampi(int(ceil(maxf(haul_p, store_p) * 4.0)), 2, 5)
+			if _world != null and _world.has_method("sum_ground_resources"):
+				var center_rk: int = SettlementMemory.get_center_region_for_region(
+						WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)) if SettlementMemory != null else -1
+				var ground: Dictionary = _world.sum_ground_resources(center_rk)
+				var ground_food: int = int(ground.get("food", 0))
+				if ground_food >= 2 and j.type == _Job.Type.TRADE_HAUL:
+					base_bias += clampi(mini(5, ground_food / 2), 2, 5)
+				if ground_food >= 1 and crisis_food_pressure > 0.4 and j.type == _Job.Type.TRADE_HAUL:
+					base_bias += 2
 		# Leader proximity bonus: if the settlement ruler is nearby and this
 		# is a build job, the pawn gets +3 priority (leader directs construction)
 		if _is_structure_build_job(j.type):
@@ -4474,9 +4565,8 @@ func _tick_idle() -> void:
 					return false
 		# === END TECH CHECK ===
 		return true
-	# MATRIX DECISION: Primary action driver. The HeelKawnian Matrix
-	# (development profile + drive + needs) decides the best job.
-	if _maybe_matrix_decide_job(priority_cb):
+	# MATRIX DECISION: after base_passes exists so matrix claims respect materials/tech/path.
+	if _maybe_matrix_decide_job(priority_cb, base_passes):
 		return
 	if food_emergency:
 		# Either harvest type fills the pantry; let pawns pick whichever is
@@ -4538,9 +4628,6 @@ func _tick_idle() -> void:
 	# GOAL FALLBACK: If goal-directed filtering found nothing, try unfiltered.
 	# Goals are plans, not death sentences. A hungry pawn with no food jobs
 	# should still chop wood or build — not wander forever waiting for food.
-	if goal_priority > 0.7 and not goal_type.is_empty():
-		_start_wander()
-	# Unfiltered claim: take whatever's available
 	var profession_bonus2: Callable = _get_profession_priority_bonus
 	var job2: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(priority_cb, profession_bonus2))
 	if job2 != null:
@@ -4561,6 +4648,14 @@ func _tick_idle() -> void:
 			PawnChatterBubbles.show_work_bubble(int(data.id), self, job2.type)
 
 		return
+	# Claim diagnostics (F10 idle / ignore-jobs audit).
+	var visible_candidates: Array = []
+	if JobManager != null and JobManager.has_method("visible_jobs_for_pawn"):
+		visible_candidates = JobManager.visible_jobs_for_pawn(self, data)
+	data.visible_orders_count = visible_candidates.size()
+	if WorldAI != null and WorldAI.has_method("get_pawn_obedience_weight"):
+		data.obey_score = WorldAI.get_pawn_obedience_weight(int(data.id))
+	data.last_claim_failure_reason = _audit_claim_failure_reason(visible_candidates)
 	# 7. Nothing to do: idle wander
 	var wanderlust2: float = lerpf(0.52, 1.68, _bp(3))
 	var wander_score: float = _utility_score_normalized("wander", utility_context)
@@ -5022,6 +5117,11 @@ func _tick_working() -> void:
 	speed *= _work_rate_band_for_job(_current_job.type)
 	# Tool efficacy is applied inside _calculate_work_efficiency() â€” don't double-count.
 	speed *= data.kinship_work_speed_multiplier(_current_job.work_tile)
+	if DayNightCycle != null and DayNightCycle.is_night_for_tick(tick_now):
+		if ColonySimServices != null and not ColonySimServices.tile_has_hearth_coverage(data.tile_pos):
+			speed *= 0.72
+			if posmod(tick_now + int(data.id), 18) == 0:
+				data.mood = maxf(0.0, data.mood - 0.35)
 	if skill >= 0:
 		speed *= data.work_speed_for(skill)
 		# Apply efficiency modifier
@@ -6385,6 +6485,7 @@ func _finish_shelter_build(job: Job) -> void:
 				"tick": GameManager.tick_count,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
+		# BUILD_HEARTH is the social/matrix job id; world feature is always FIRE_PIT (same as BUILD_FIRE_PIT).
 		_Job.Type.BUILD_HEARTH:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.FIRE_PIT)
 			_register_built_structure(job.tile, TileFeature.Type.FIRE_PIT)
@@ -6778,6 +6879,12 @@ func _maybe_direct_forage() -> bool:
 	# Don't direct-forage if we're already carrying something (finish that first)
 	if data.is_carrying():
 		return false
+	if ColonySimServices != null and data.hunger > HUNGER_EMERGENCY:
+		if ColonySimServices.get_food_pressure() > 0.45:
+			return false
+		if ColonySimServices.get_cooking_pressure() > 0.22 \
+				and ColonySimServices.tile_has_hearth_coverage(data.tile_pos):
+			return false
 	# Find nearest FERTILE_SOIL tile within search radius
 	var best_tile: Vector2i = Vector2i(-1, -1)
 	var best_dist: int = 999999
@@ -6824,9 +6931,10 @@ func _arrive_at_fertile_soil_and_eat() -> void:
 		return
 	# Forage: clear the feature and eat berries directly
 	_world.clear_feature(tx, ty)
-	# Eat 5 berries worth of hunger restoration directly
-	var berry_restore: float = 60.0  # matches Item.gd BERRY_HUNGER_RESTORE
-	data.hunger = min(100.0, data.hunger + berry_restore * 5.0)
+	# Eat 5 berries worth of hunger restoration directly (raw forage penalty).
+	var berry_restore: float = Item.effective_hunger_restore(_Item.Type.BERRY) * 5.0
+	data.hunger = min(100.0, data.hunger + berry_restore)
+	data.mood = maxf(0.0, data.mood - Item.RAW_FOOD_MOOD_PENALTY * 0.5)
 	# Small chance of food poisoning from wild forage (2%)
 	if DiseaseSystem != null and WorldRNG.chance_for(&"forage_food_poison", 0.02, GameManager.tick_count):
 		DiseaseSystem.add_disease(data, DiseaseSystem.DiseaseType.FOOD_POISONING, 15.0, "wild_forage")
@@ -7061,7 +7169,7 @@ func _finish_eating() -> void:
 		if food_type != _Item.Type.NONE:
 			var taken: int = sp.take_item(food_type, 1)
 			if taken > 0:
-				gain = Item.hunger_restore(food_type)
+				gain = _apply_food_consumption_effects(food_type)
 				data.hunger = min(100.0, data.hunger + gain)
 				data.mood = min(100.0, data.mood + MOOD_BONUS_ATE)
 				_play_sfx("res://assets/audio/pawn_eat.ogg", 1.0)
@@ -7411,11 +7519,25 @@ func _release_bed_if_reserved() -> void:
 ## Emergency food path: consume one unit of whatever food the pawn is
 ## carrying, then drop back to IDLE. No stockpile interaction, no eating
 ## state -- the pawn just wolfs it down on the spot.
+func _should_defer_raw_eat_for_cook() -> bool:
+	# Raw food is always edible (penalty applied in _apply_food_consumption_effects).
+	return false
+
+
+func _apply_food_consumption_effects(food_type: int) -> float:
+	var gain: float = Item.effective_hunger_restore(food_type)
+	if Item.is_raw_food(food_type):
+		data.mood = maxf(0.0, data.mood - Item.RAW_FOOD_MOOD_PENALTY)
+		if WorldRNG.chance_for(_pawn_stream("raw_food_sick"), Item.RAW_FOOD_SICKNESS_CHANCE, _pawn_salt(44)):
+			data.add_mood_event(MoodEvent.Type.STRESS, 25.0, 400)
+	return gain
+
+
 func _eat_from_hand() -> void:
 	if not data.is_carrying() or not Item.is_food(data.carrying):
 		return
 	var food_type: int = data.carrying
-	var gain: float = Item.hunger_restore(food_type)
+	var gain: float = _apply_food_consumption_effects(food_type)
 	data.hunger = min(100.0, data.hunger + gain)
 	data.mood = min(100.0, data.mood + MOOD_BONUS_ATE)
 	data.carrying_qty -= 1
@@ -7510,6 +7632,9 @@ func _decay_needs() -> void:
 	# Stage 1: Check temperature exposure - throttled to every 10 ticks
 	if GameManager.tick_count % 10 == 0:
 		_check_temperature()
+	# Night exposure away from hearth: mood + rare predator pressure (minimal night danger).
+	if GameManager.tick_count % 20 == int(data.id) % 20:
+		_apply_night_exposure_effects()
 	
 	# Stage 1: Process injuries and pain - throttled to every 5 ticks
 	if GameManager.tick_count % 5 == 0:
@@ -7609,8 +7734,8 @@ func _check_death_conditions() -> void:
 	
 	# Emergency food-seeking for AI agents
 	if data.hunger < 15.0 and _state != State.GOING_TO_EAT and _state != State.EATING:
-		# If carrying food, eat it right now â€” don't walk to a stockpile.
-		if data.is_carrying() and Item.is_food(data.carrying):
+		# If carrying food, eat it right now — don't walk to a stockpile (unless cook is viable).
+		if data.is_carrying() and Item.is_food(data.carrying) and not _should_defer_raw_eat_for_cook():
 			_eat_from_hand()
 			return
 		_emergency_seek_food()
@@ -10037,6 +10162,62 @@ func _get_profession_priority_bonus(job: Job) -> int:
 				return 5  # gather herbs
 
 	return 0
+
+
+func _audit_claim_failure_reason(visible_candidates: Array) -> String:
+	if JobManager == null or JobManager.open_count() <= 0:
+		return "no_open_jobs"
+	if visible_candidates.is_empty():
+		return "no_visible_orders"
+	if data != null and data.is_carrying():
+		return "carrying_item_needs_deposit"
+	return "candidates_but_not_chosen"
+
+
+func _try_post_hobby_build_job() -> void:
+	if data == null or _world == null or JobManager == null or ColonySimServices == null:
+		return
+	if not ColonySimServices.colony_contentment_period():
+		return
+	if data.mood < 55.0:
+		return
+	if data.hunger <= HUNGER_EAT_THRESHOLD or data.rest <= REST_SLEEP_THRESHOLD:
+		return
+	if JobManager.open_count() > 48:
+		return
+	if posmod(GameManager.tick_count + int(data.id) * 13, 240) != 0:
+		return
+	var tile: Vector2i = _matrix_ambition_target_tile(_Job.Type.BUILD_WALL)
+	if tile.x < 0:
+		return
+	if JobManager.has_job_at(tile):
+		return
+	var j: Job = JobManager.post(_Job.Type.BUILD_WALL, tile, 1, 12)
+	if j == null:
+		return
+	j.visible_to = "all"
+	j.authority_scope = "nearby"
+	j.reason = "hobby_build"
+	j.issuer_pawn_id = int(data.id)
+	j.issuer_role = "self"
+
+
+func _apply_night_exposure_effects() -> void:
+	if data == null or GameManager == null or DayNightCycle == null:
+		return
+	if not DayNightCycle.is_night_for_tick(GameManager.tick_count):
+		return
+	if ColonySimServices == null or ColonySimServices.tile_has_hearth_coverage(data.tile_pos):
+		return
+	data.mood = maxf(0.0, data.mood - 0.2)
+	if _state != State.IDLE:
+		return
+	if data.current_profession == HeelKawnianData.Profession.WARRIOR:
+		return
+	if WorldRNG.chance_for(_pawn_stream("night_predator"), 0.04, _pawn_salt(52)):
+		data.add_mood_event(MoodEvent.Type.DREAD, 35.0, 300)
+		if GameManager.verbose_logs():
+			print("[HeelKawnian] %s startled by night movement in the dark" % data.display_name)
 
 
 ## Merge two priority callbacks into one

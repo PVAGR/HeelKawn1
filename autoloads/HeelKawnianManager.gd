@@ -15,6 +15,7 @@ const MATRIX_AMBITION_PAWN_COOLDOWN_TICKS: int = 30
 const MATRIX_AFFILIATION_COOLDOWN_TICKS: int = 240
 const MATRIX_HOUSEHOLD_PLAN_COOLDOWN_TICKS: int = 600
 const MATRIX_PLAN_SPOKE_COOLDOWN_TICKS: int = 120
+const NEED_SATISFACTION_INTERVAL_TICKS: int = 30
 
 const HOUSEHOLD_GOALS = {
 	"Settle Hearth": [Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_BED, Job.Type.BUILD_BED],
@@ -45,15 +46,31 @@ static var _pressure_bias_by_pawn: Dictionary = {}
 
 
 func _ready() -> void:
+	if GameManager != null and not GameManager.game_tick.is_connected(_on_need_satisfaction_tick):
+		GameManager.game_tick.connect(_on_need_satisfaction_tick)
 	# Subscribe to pressure_event from EventBus
 	if EventBus != null:
 		EventBus.subscribe(EventBus.EVENT_PRESSURE_EVENT, self, "_on_pressure_event")
 
 
 func _exit_tree() -> void:
+	if GameManager != null and GameManager.game_tick.is_connected(_on_need_satisfaction_tick):
+		GameManager.game_tick.disconnect(_on_need_satisfaction_tick)
 	# Unsubscribe from EventBus
 	if EventBus != null:
 		EventBus.unsubscribe(EventBus.EVENT_PRESSURE_EVENT, self, "_on_pressure_event")
+
+
+func _on_need_satisfaction_tick(tick: int) -> void:
+	if tick % NEED_SATISFACTION_INTERVAL_TICKS != 0:
+		return
+	for pawn in PawnAccess.find_alive_pawns():
+		if pawn == null or not is_instance_valid(pawn):
+			continue
+		var data: HeelKawnianData = _pawn_data(pawn)
+		if data == null:
+			continue
+		data.update_need_satisfaction()
 
 
 ## EventBus handler: apply personality-based biases when pressure fires
@@ -281,6 +298,7 @@ static func get_matrix_decision_for_pawn(pawn: Variant) -> Dictionary:
 	var data: HeelKawnianData = _pawn_data(pawn)
 	if data == null:
 		return {}
+	data.update_need_satisfaction()
 	var profile: Dictionary = get_development_profile_for_pawn(pawn)
 	if profile.is_empty():
 		return {}
@@ -570,6 +588,14 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 	var walls: int = int(local_features.get("wall", 0))
 	var doors: int = int(local_features.get("door", 0))
 	var markers: int = int(local_features.get("marker", 0))
+	var center_rk: int = SettlementMemory.get_center_region_for_region(
+			WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y))
+	var warmth_press: float = ColonySimServices.get_warmth_pressure(center_rk) if ColonySimServices != null else 0.0
+	var cooking_press: float = ColonySimServices.get_cooking_pressure(center_rk) if ColonySimServices != null else 0.0
+	var storage_press: float = ColonySimServices.get_storage_pressure(center_rk) if ColonySimServices != null else 0.0
+	var food_press: float = ColonySimServices.get_food_pressure() if ColonySimServices != null else 0.0
+	var housing_press: float = ColonySimServices.get_housing_pressure() if ColonySimServices != null else 0.0
+	var cold_uncovered: int = ColonySimServices.count_cold_uncovered_pawns(center_rk) if ColonySimServices != null else 0
 	# Phase 6: new building counts
 	var farms: int = int(local_features.get("farm", 0))
 	var workshops: int = int(local_features.get("workshop", 0))
@@ -584,18 +610,33 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 	var next_need: String = str(profile.get("next_need", "serve local needs"))
 
 	var ambition: Dictionary = {}
-	if hearths <= 0:
-		# Reduce aggressive fire-pit ambition to avoid mass-building spam
-		ambition = _ambition_result(Job.Type.BUILD_FIRE_PIT, 7, "no hearth in local settlement core")
-	elif storage_huts <= 0 and local_pop >= 3:
-		ambition = _ambition_result(Job.Type.BUILD_STORAGE_HUT, 8, "storage is missing for current population")
-	elif beds < maxi(2, int(round(local_pop / 2.2))):
-		ambition = _ambition_result(Job.Type.BUILD_BED, 7, "household pressure requires more beds")
-	elif (walls < 4 or doors <= 0) and local_pop >= 6:
+	var hearths_needed: int = 0
+	if hearths <= 0 and local_pop > 0:
+		hearths_needed = 1
+	elif cold_uncovered > 0:
+		hearths_needed = hearths + int(ceil(float(cold_uncovered) / 4.0))
+	var warmth_satisfied: bool = hearths > 0 and cold_uncovered <= 0 and warmth_press < 0.12
+	if not warmth_satisfied and warmth_press > 0.15:
+		ambition = _ambition_result(Job.Type.BUILD_FIRE_PIT, 7, "warmth coverage gap in settlement core")
+	elif cooking_press > 0.25 and hearths > 0:
+		ambition = _ambition_result(Job.Type.COOK_MEAT, 6, "raw food backlog at hearths")
+	elif storage_press > 0.35:
+		var storage_target: int = maxi(1, int(ceil(float(local_pop) * storage_press * 0.35)))
+		if granaries <= 0 and farms >= 1 and food_press <= 0.55:
+			ambition = _ambition_result(Job.Type.BUILD_GRANARY, 7, "food spill needs granary capacity")
+		elif storage_huts < storage_target:
+			ambition = _ambition_result(Job.Type.BUILD_STORAGE_HUT, 8, "wood spill needs wood-pile capacity")
+	elif housing_press > 0.45:
+		var bed_target: int = maxi(2, int(ceil(float(local_pop) * maxf(housing_press, 0.5))))
+		if beds < bed_target:
+			ambition = _ambition_result(Job.Type.BUILD_BED, 7, "housing pressure requires more beds")
+	elif (walls < 4 or doors <= 0) and local_pop >= 6 and food_press <= 0.55 and housing_press <= 0.55:
 		ambition = _ambition_result(Job.Type.BUILD_WALL if walls < 4 else Job.Type.BUILD_DOOR, 6, "settlement perimeter is underdeveloped")
-	# Phase 6: farm ambition — food production for growing settlements
-	elif farms <= 0 and local_pop >= 4:
-		ambition = _ambition_result(Job.Type.BUILD_FARM_WHEAT, 7, "no farms — settlement needs food production")
+	# Farms only when colony is stable (forage/hunt/fish first during shortages).
+	elif food_press <= 0.45 and housing_press <= 0.70 and warmth_press <= 0.40:
+		var farm_cap: int = ColonySimServices.estimate_farm_cap(local_pop, food_press, farms) if ColonySimServices != null else maxi(1, int(ceil(float(local_pop) / 5.0)))
+		if farms < farm_cap and ColonySimServices != null and ColonySimServices.colony_contentment_period():
+			ambition = _ambition_result(Job.Type.BUILD_FARM_WHEAT, 5, "stable colony — expand cultivation")
 	# Phase 6: granary — food storage for settlements with farms
 	elif granaries <= 0 and farms >= 1 and local_pop >= 4:
 		ambition = _ambition_result(Job.Type.BUILD_GRANARY, 6, "farms exist but no granary — food spoilage risk")
@@ -629,7 +670,10 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 	elif drive == "innovate":
 		ambition = _ambition_result(Job.Type.TOOL_MAKING, 6, "innovation drive requests production throughput")
 	elif drive == "bond":
-		ambition = _ambition_result(Job.Type.BUILD_HEARTH, 5, "bond drive requests social hearth space")
+		# BUILD_HEARTH completes as FIRE_PIT; regional cap matches BUILD_FIRE_PIT (not a bypass).
+		if ColonySimServices != null and not ColonySimServices.colony_contentment_period() \
+				and ColonySimServices.can_seed_fire_pit(center_rk, data.tile_pos, hearths, hearths_needed):
+			ambition = _ambition_result(Job.Type.BUILD_FIRE_PIT, 5, "bond drive — hearth gathering space (fire pit)")
 	elif next_need.find("teach") >= 0:
 		ambition = _ambition_result(Job.Type.TEACH_SKILL, 5, "development need requests teaching continuity")
 
@@ -705,20 +749,28 @@ static func get_household_ambition_for_pawn(pawn: Variant) -> Dictionary:
 static func _determine_household_goal(hid: int, pawn: Variant) -> String:
 	var data: HeelKawnianData = _pawn_data(pawn)
 	var local_features: Dictionary = _scan_local_features(data.tile_pos, 12)
+	var center_rk: int = -1
+	if SettlementMemory != null:
+		center_rk = SettlementMemory.get_center_region_for_region(
+				WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y))
+	var warmth_press: float = ColonySimServices.get_warmth_pressure(center_rk) if ColonySimServices != null else 0.0
+	var cooking_press: float = ColonySimServices.get_cooking_pressure(center_rk) if ColonySimServices != null else 0.0
+	var housing_press: float = ColonySimServices.get_housing_pressure() if ColonySimServices != null else 0.0
+	var storage_press: float = ColonySimServices.get_storage_pressure(center_rk) if ColonySimServices != null else 0.0
 	
 	# Use a deterministic stream name and salt based on pawn id and position
 	var stream_name: StringName = StringName("pawn:%d:household_goal" % [int(data.id)])
 	var salt: int = _tick() + int(data.id) * 1009 + data.tile_pos.x * 131 + data.tile_pos.y * 17 + 99
 	var rng_val: int = WorldRNG.stream_seed(stream_name, salt) % 100
 	
-	# Priority needs based on settlement features
-	if int(local_features.get("hearth", 0)) <= 0:
+	# Priority needs — pressure-driven, not blind hearth/bed counts
+	if int(local_features.get("hearth", 0)) <= 0 and (warmth_press > 0.12 or cooking_press > 0.1):
 		return "Settle Hearth" if rng_val < 60 else ""
-	if int(local_features.get("bed", 0)) < 2:
+	if housing_press > 0.35 and int(local_features.get("bed", 0)) < 2:
 		return "Settle Hearth" if rng_val < 40 else ""
 	if int(local_features.get("wall", 0)) < 4:
 		return "Fortify Home" if rng_val < 50 else ""
-	if int(local_features.get("storage_hut", 0)) <= 0:
+	if storage_press > 0.25 and int(local_features.get("storage_hut", 0)) <= 0:
 		return "Expand Storage" if rng_val < 50 else ""
 	if int(local_features.get("farm", 0)) <= 0:
 		return "Sustain Family" if rng_val < 40 else ""
@@ -843,37 +895,68 @@ static func leader_direct_construction(settlement_id: int) -> int:
 	var libraries: int = int(features.get("library", 0))
 	var barracks: int = int(features.get("barracks", 0))
 	var cellars: int = int(features.get("cellar", 0))
-	var need_beds: int = maxi(2, int(round(local_pop / 2.2)))
+	var center_rk: int = SettlementMemory.get_center_region_for_region(
+			WorldMemory._region_key(center.x, center.y))
+	var warmth_press: float = ColonySimServices.get_warmth_pressure(center_rk) if ColonySimServices != null else 0.0
+	var cooking_press: float = ColonySimServices.get_cooking_pressure(center_rk) if ColonySimServices != null else 0.0
+	var storage_press: float = ColonySimServices.get_storage_pressure(center_rk) if ColonySimServices != null else 0.0
+	var food_press: float = ColonySimServices.get_food_pressure() if ColonySimServices != null else 0.0
+	var housing_press: float = ColonySimServices.get_housing_pressure() if ColonySimServices != null else 0.0
+	var cold_uncovered: int = ColonySimServices.count_cold_uncovered_pawns(center_rk) if ColonySimServices != null else 0
+	var hearths_needed: int = 0
+	if hearths <= 0 and local_pop > 0:
+		hearths_needed = 1
+	elif cold_uncovered > 0:
+		hearths_needed = hearths + int(ceil(float(cold_uncovered) / 4.0))
+	var warmth_satisfied: bool = hearths > 0 and cold_uncovered <= 0 and warmth_press < 0.12
+	var survival_met: bool = food_press <= 0.60 and housing_press <= 0.70 and warmth_press <= 0.40
+	var need_beds: int = 0
+	if housing_press > 0.35:
+		need_beds = maxi(2, int(ceil(float(local_pop) * maxf(housing_press, 0.5))))
+	var storage_target: int = 0
+	if storage_press > 0.25:
+		storage_target = maxi(1, int(ceil(float(local_pop) * storage_press * 0.4)))
+	elif storage_huts <= 0 and local_pop >= 2:
+		storage_target = 1
+	var farm_cap: int = ColonySimServices.estimate_farm_cap(local_pop, food_press, farms) if ColonySimServices != null else maxi(1, int(ceil(float(local_pop) / 5.0)))
+	if ColonySimServices != null:
+		ColonySimServices.begin_settlement_construction_pass()
 	var posted: int = 0
-	var max_posts: int = 3
+	var build_priorities: Dictionary = {}
+	if ColonySimServices != null:
+		build_priorities = ColonySimServices.compute_settlement_build_priorities(
+				center_rk, local_pop, features, false)
+	var max_posts: int = int(build_priorities.get("job_cap", 3))
+	if ColonySimServices != null and ColonySimServices.should_block_ambition_tier_build():
+		max_posts = mini(max_posts, 2)
 	# Priority order: beds > fire pit > storage > walls > farms > granary > workshop > apothecary > market > library > barracks > cellar
 	var build_queue: Array[Dictionary] = []
 	if beds < need_beds:
-		build_queue.append({"type": Job.Type.BUILD_BED, "priority": 8, "work": 10})
-	if hearths <= 0:
-		build_queue.append({"type": Job.Type.BUILD_FIRE_PIT, "priority": 7, "work": 12})
-	if storage_huts <= 0:
-		build_queue.append({"type": Job.Type.BUILD_STORAGE_HUT, "priority": 6, "work": 20})
-	if walls < 4 and local_pop >= 3:
-		build_queue.append({"type": Job.Type.BUILD_WALL, "priority": 5, "work": 25})
-	if doors <= 0 and walls >= 2:
-		build_queue.append({"type": Job.Type.BUILD_DOOR, "priority": 5, "work": 15})
-	if farms <= 0 and local_pop >= 4:
-		build_queue.append({"type": Job.Type.BUILD_FARM_WHEAT, "priority": 5, "work": 40})
-	if granaries <= 0 and farms >= 1:
-		build_queue.append({"type": Job.Type.BUILD_GRANARY, "priority": 5, "work": 35})
-	if workshops <= 0 and local_pop >= 5:
-		build_queue.append({"type": Job.Type.BUILD_WORKSHOP, "priority": 5, "work": 40})
-	if apothecaries <= 0 and local_pop >= 5:
-		build_queue.append({"type": Job.Type.BUILD_APOTHECARY, "priority": 4, "work": 40})
-	if markets <= 0 and local_pop >= 6 and farms >= 1:
-		build_queue.append({"type": Job.Type.BUILD_MARKET, "priority": 4, "work": 40})
-	if libraries <= 0 and local_pop >= 6:
-		build_queue.append({"type": Job.Type.BUILD_LIBRARY, "priority": 4, "work": 45})
-	if barracks <= 0 and local_pop >= 6 and walls >= 4:
-		build_queue.append({"type": Job.Type.BUILD_BARRACKS, "priority": 4, "work": 45})
-	if cellars <= 0 and local_pop >= 5 and granaries >= 1:
-		build_queue.append({"type": Job.Type.BUILD_CELLAR, "priority": 4, "work": 35})
+		build_queue.append({"type": Job.Type.BUILD_BED, "priority": 8, "work": 10, "reason": "housing_pressure"})
+	if not warmth_satisfied and hearths < hearths_needed:
+		build_queue.append({"type": Job.Type.BUILD_FIRE_PIT, "priority": 7, "work": 12, "reason": "warmth_coverage"})
+	if storage_huts < storage_target:
+		build_queue.append({"type": Job.Type.BUILD_STORAGE_HUT, "priority": 6, "work": 20, "reason": "storage_pressure"})
+	if survival_met and walls < 4 and local_pop >= 3:
+		build_queue.append({"type": Job.Type.BUILD_WALL, "priority": 5, "work": 25, "reason": "perimeter"})
+	if survival_met and doors <= 0 and walls >= 2:
+		build_queue.append({"type": Job.Type.BUILD_DOOR, "priority": 5, "work": 15, "reason": "perimeter"})
+	if food_press > 0.50 and farms < farm_cap and local_pop >= 3:
+		build_queue.append({"type": Job.Type.BUILD_FARM_WHEAT, "priority": 5, "work": 40, "reason": "food_pressure"})
+	if survival_met and granaries <= 0 and farms >= 1:
+		build_queue.append({"type": Job.Type.BUILD_GRANARY, "priority": 5, "work": 35, "reason": "food_storage"})
+	if survival_met and workshops <= 0 and local_pop >= 5:
+		build_queue.append({"type": Job.Type.BUILD_WORKSHOP, "priority": 5, "work": 40, "reason": "crafting"})
+	if survival_met and apothecaries <= 0 and local_pop >= 5:
+		build_queue.append({"type": Job.Type.BUILD_APOTHECARY, "priority": 4, "work": 40, "reason": "healing"})
+	if survival_met and markets <= 0 and local_pop >= 6 and farms >= 1:
+		build_queue.append({"type": Job.Type.BUILD_MARKET, "priority": 4, "work": 40, "reason": "trade"})
+	if survival_met and libraries <= 0 and local_pop >= 6:
+		build_queue.append({"type": Job.Type.BUILD_LIBRARY, "priority": 4, "work": 45, "reason": "knowledge"})
+	if survival_met and barracks <= 0 and local_pop >= 6 and walls >= 4:
+		build_queue.append({"type": Job.Type.BUILD_BARRACKS, "priority": 4, "work": 45, "reason": "defense"})
+	if survival_met and cellars <= 0 and local_pop >= 5 and granaries >= 1:
+		build_queue.append({"type": Job.Type.BUILD_CELLAR, "priority": 4, "work": 35, "reason": "storage"})
 	for entry in build_queue:
 		if posted >= max_posts:
 			break
@@ -883,9 +966,23 @@ static func leader_direct_construction(settlement_id: int) -> int:
 		var job_type: int = int(entry.get("type", -1))
 		var priority: int = int(entry.get("priority", 5))
 		var work: int = int(entry.get("work", 20))
-		var pending: int = int(job_manager.call("count_pending_by_type", job_type)) if job_manager.has_method("count_pending_by_type") else 0
-		if pending > 0:
-			continue  # Already has a pending job of this type
+		if ColonySimServices != null and ColonySimServices.is_hearth_build_job(job_type):
+			if not ColonySimServices.can_seed_fire_pit(center_rk, center, hearths, hearths_needed):
+				continue
+			job_type = ColonySimServices.resolve_hearth_post_job_type(job_type)
+		elif ColonySimServices != null and ColonySimServices.should_block_ambition_tier_build():
+			if job_type not in [Job.Type.BUILD_BED, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, \
+					Job.Type.BUILD_FARM_WHEAT, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH]:
+				continue
+		if ColonySimServices != null and not ColonySimServices.try_consume_settlement_build_slot(center_rk, max_posts):
+			break
+		elif JobManager != null and JobManager.has_method("count_pending_jobs_near"):
+			if JobManager.count_pending_jobs_near(center, job_type, 10) > 0:
+				continue
+		else:
+			var pending: int = int(job_manager.call("count_pending_by_type", job_type)) if job_manager.has_method("count_pending_by_type") else 0
+			if pending > 0:
+				continue
 		# Find a build tile near the ruler (settlement center)
 		var main_node: Node = _root_node("Main")
 		if main_node == null or not main_node.has_method("_find_build_tile_near"):
@@ -897,6 +994,16 @@ static func leader_direct_construction(settlement_id: int) -> int:
 			continue
 		var j: Job = job_manager.call("post", job_type, t, priority, work) as Job if job_manager.has_method("post") else null
 		if j != null:
+			if job_manager.has_method("stamp_seeder_metadata"):
+				job_manager.call(
+						"stamp_seeder_metadata",
+						j,
+						str(entry.get("reason", "leader_direct")),
+						"settlement",
+						ruler_id)
+			else:
+				j.issuer_pawn_id = ruler_id
+				j.issuer_role = "leader"
 			posted += 1
 	return posted
 
@@ -1286,8 +1393,47 @@ static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, ident
 	_apply_learning_biases(biases, profile, data)
 	_add_identity_trait_biases(biases, identity)
 	_apply_pressure_bias_to_biases(biases, int(data.id))
+	_apply_colony_pressure_biases(biases, data)
+	_apply_light_need_biases(biases, data)
+	_apply_survival_contentment_dampen(biases, data)
 	_clamp_biases(biases, -8, 16)
 	return biases
+
+
+static func _apply_light_need_biases(biases: Dictionary, data: HeelKawnianData) -> void:
+	if data == null or ColonySimServices == null or GameManager == null:
+		return
+	if not DayNightCycle.is_night_for_tick(GameManager.tick_count):
+		return
+	var tile: Vector2i = data.tile_pos
+	var center_rk: int = SettlementMemory.get_center_region_for_region(
+			WorldMemory._region_key(tile.x, tile.y)) if SettlementMemory != null else -1
+	var light_press: float = ColonySimServices.get_light_pressure(center_rk)
+	if light_press < 0.2:
+		return
+	if ColonySimServices.tile_has_hearth_coverage(tile):
+		return
+	var amount: int = clampi(int(ceil(light_press * 6.0)), 2, 6)
+	_add_bias(biases, [Job.Type.CRAFT_TORCH, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_SHRINE], amount)
+
+
+static func _apply_survival_contentment_dampen(biases: Dictionary, data: HeelKawnianData) -> void:
+	if data == null:
+		return
+	var survival_sat: float = float(data.need_satisfaction.get("survival", 0.0))
+	if survival_sat < 72.0:
+		return
+	var dampen: int = clampi(int(floor((survival_sat - 70.0) / 6.0)), 1, 5)
+	_add_bias(
+			biases,
+			[
+				Job.Type.BUILD_BED, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT,
+				Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH, Job.Type.BUILD_WALL,
+				Job.Type.BUILD_DOOR, Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_GRANARY,
+				Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_LIBRARY, Job.Type.BUILD_MARKET,
+				Job.Type.BUILD_CELLAR, Job.Type.BUILD_BARRACKS,
+			],
+			-dampen)
 
 
 static func _add_settlement_service_bias(biases: Dictionary, profile: Dictionary) -> void:
@@ -1352,7 +1498,46 @@ static func _apply_learning_biases(biases: Dictionary, profile: Dictionary, data
 	if defense_bias != 0:
 		_add_bias(biases, [Job.Type.PROTECT, Job.Type.DEFEND, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER], defense_bias)
 	if construction_bias != 0:
-		_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH, Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_APOTHECARY, Job.Type.BUILD_LIBRARY, Job.Type.BUILD_MARKET, Job.Type.BUILD_CELLAR], construction_bias)
+		var dampened: int = construction_bias
+		if ColonySimServices != null:
+			if ColonySimServices.colony_contentment_period() and construction_bias > 0:
+				dampened = maxi(1, int(round(float(construction_bias) * 0.35)))
+			var survival_ok: bool = ColonySimServices.get_food_pressure() <= 0.55 \
+					and ColonySimServices.get_housing_pressure() <= 0.65 \
+					and ColonySimServices.get_warmth_pressure() <= 0.35
+			if survival_ok and construction_bias > 0:
+				dampened = maxi(1, int(round(float(construction_bias) * 0.45)))
+			elif not survival_ok and construction_bias < 0:
+				dampened = mini(-1, construction_bias)
+		_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH, Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_APOTHECARY, Job.Type.BUILD_LIBRARY, Job.Type.BUILD_MARKET, Job.Type.BUILD_CELLAR], dampened)
+
+
+static func _apply_colony_pressure_biases(biases: Dictionary, data: HeelKawnianData) -> void:
+	if data == null or ColonySimServices == null:
+		return
+	var center_rk: int = -1
+	if SettlementMemory != null:
+		center_rk = SettlementMemory.get_center_region_for_region(
+				WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y))
+	var warmth_p: float = ColonySimServices.get_warmth_pressure(center_rk)
+	var cook_p: float = ColonySimServices.get_cooking_pressure(center_rk)
+	var store_p: float = ColonySimServices.get_storage_pressure(center_rk)
+	var haul_p: float = ColonySimServices.get_haul_pressure()
+	var house_p: float = ColonySimServices.get_housing_pressure()
+	if warmth_p > 0.15:
+		_add_bias(biases, [Job.Type.BUILD_FIRE_PIT, Job.Type.CRAFT_TORCH], clampi(int(ceil(warmth_p * 6.0)), 1, 5))
+	if cook_p > 0.12:
+		_add_bias(biases, [Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH], clampi(int(ceil(cook_p * 5.0)), 1, 4))
+	if store_p > 0.2 or haul_p > 0.35:
+		var haul_amt: int = clampi(int(ceil(maxf(store_p, haul_p) * 5.0)), 1, 4)
+		_add_bias(biases, [Job.Type.TRADE_HAUL, Job.Type.BUILD_STORAGE_HUT], haul_amt)
+		_add_bias(biases, [Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR], maxi(1, haul_amt - 1))
+	var food_p: float = ColonySimServices.get_food_pressure() if ColonySimServices != null else 0.0
+	if food_p > 0.45:
+		_add_bias(biases, [Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH, Job.Type.COOK_MEAT, Job.Type.COOK_FISH, Job.Type.COOK_BERRIES], clampi(int(ceil(food_p * 6.0)), 2, 6))
+		_add_bias(biases, [Job.Type.PLANT_SEEDS, Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_FARM_CORN, Job.Type.BUILD_FARM_VEGETABLES, Job.Type.GROW_FOOD], -clampi(int(ceil(food_p * 5.0)), 2, 5))
+	if house_p > 0.35:
+		_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_SHELTER], clampi(int(ceil(house_p * 4.0)), 1, 4))
 
 
 static func _add_skill_practice_bias(biases: Dictionary, profile: Dictionary, amount: int) -> void:

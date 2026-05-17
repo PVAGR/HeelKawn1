@@ -219,12 +219,16 @@ func _compute_body(data: HeelKawnianData, pawn: Node) -> Dictionary:
 
 
 func _estimate_warmth(data: HeelKawnianData, pawn: Node) -> float:
-	# Approximate warmth from pawn's current tile
-	# (Full warmth calc is in HeelKawnian.gd — this is a simplified version for mind)
-	if pawn.has_method("_hearth_proxy_warmth_bonus"):
-		var bonus: float = pawn.call("_hearth_proxy_warmth_bonus", data.tile_pos)
-		return bonus
-	return 0.0
+	# Align mind readout with body temp + hearth proxy (HeelKawnian._check_temperature).
+	if data == null:
+		return 0.0
+	var body_delta: float = float(data.body_temperature) - ColonySimServices.COMFORT_BODY_TEMP_C
+	if pawn != null and pawn.has_method("_hearth_proxy_warmth_bonus"):
+		var proxy: float = float(pawn.call("_hearth_proxy_warmth_bonus", data.tile_pos))
+		return body_delta + proxy * 0.35
+	if ColonySimServices != null and ColonySimServices.tile_has_hearth_coverage(data.tile_pos):
+		return body_delta + 2.0
+	return body_delta
 
 
 func _dominant_need(data: HeelKawnianData) -> String:

@@ -101,6 +101,26 @@ func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) ->
 	return job
 
 
+## Optional metadata for settlement schedulers / seeders (AI_README issuer fields).
+func stamp_seeder_metadata(
+		job: Job,
+		reason: String,
+		visible_to: String = "settlement",
+		issuer_pawn_id: int = -1,
+) -> void:
+	if job == null:
+		return
+	if not reason.is_empty():
+		job.reason = reason
+	job.visible_to = visible_to
+	if issuer_pawn_id >= 0:
+		job.issuer_pawn_id = issuer_pawn_id
+		job.issuer_role = "leader"
+	else:
+		job.issuer_role = "settlement_scheduler"
+	job.authority_scope = "formal_settlement"
+
+
 ## Returns true if the job type is a construction/build/cook/plant type
 ## that is allowed to use the reserved construction slots.
 static func _is_construction_type(type: int) -> bool:
@@ -367,14 +387,27 @@ func _job_visible_to_pawn(j: Job, pawn: Node, pd: Variant) -> bool:
 	var d: int = _chebyshev(pawn_tile, j.work_tile)
 	if str(j.issuer_role).to_lower() == "emergency" and d <= 48:
 		return true
-	# Settlement / proto scope: require shared center region
 	var rk_job: int = WorldMemory._region_key(int(j.work_tile.x), int(j.work_tile.y)) if WorldMemory != null else -1
 	var job_center: int = SettlementMemory.get_center_region_for_region(rk_job) if SettlementMemory != null else -1
 	var rk_pawn: int = WorldMemory._region_key(int(pawn_tile.x), int(pawn_tile.y)) if WorldMemory != null else -1
 	var pawn_center: int = SettlementMemory.get_center_region_for_region(rk_pawn) if SettlementMemory != null else -1
+	# Shared settlement membership (center region OR formal settlement id).
+	if SettlementMemory != null and pawn_tile.x >= 0:
+		var pawn_sid: int = SettlementMemory.get_settlement_id_for_region(rk_pawn)
+		var job_sid: int = SettlementMemory.get_settlement_id_for_region(rk_job)
+		if pawn_sid >= 0 and pawn_sid == job_sid:
+			return true
+	if pawn_center >= 0 and job_center >= 0 and pawn_center == job_center:
+		return true
+	var vis: String = str(j.visible_to).to_lower()
+	if vis == "settlement" and d <= 48:
+		return true
 	var scope: String = str(j.authority_scope).to_lower()
 	if scope == "formal_settlement" or scope == "settlement":
 		if pawn_center >= 0 and pawn_center == job_center:
+			return true
+		# Pre-settlement / fringe pawns: still see nearby settlement work.
+		if d <= 40:
 			return true
 		return false
 	if scope == "proto_camp" or scope == "band":
@@ -597,6 +630,21 @@ func get_pending_counts() -> Dictionary:
 ## reactive job seeders to avoid duplicate posts.
 func has_job_at(tile: Vector2i) -> bool:
 	return _jobs_by_tile.has(tile)
+
+
+## Count open+claimed jobs near [param center_tile] (Chebyshev [param radius]).
+func count_pending_jobs_near(center_tile: Vector2i, job_type: int, radius: int) -> int:
+	if center_tile.x < 0:
+		return 0
+	var n: int = 0
+	for j in get_active_jobs_union():
+		if j == null:
+			continue
+		if job_type >= 0 and int(j.type) != job_type:
+			continue
+		if maxi(absi(j.tile.x - center_tile.x), absi(j.tile.y - center_tile.y)) <= radius:
+			n += 1
+	return n
 
 
 ## Count of currently-active (open + claimed) jobs of a given type.

@@ -41,9 +41,12 @@ func pulse(data: HeelKawnianData, awareness: Dictionary, current_tick: int) -> A
 	# ── HUNGER ──
 	# Emergency: starving — eat anything, anywhere, immediately
 	if data.hunger <= HUNGER_EMERGENCY:
-		# If carrying food, eat from hand first
+		# If carrying food, eat from hand first (defer raw meat/berries when hearth+cook pressure)
 		if data.is_carrying() and Item.is_food(data.carrying):
-			urges.append(Urge.new(Urge.Type.EAT_FROM_HAND, 10.0, Urge.Source.BODY, current_tick))
+			var eat_hand_priority: float = 10.0
+			if _should_defer_raw_eat_for_cook(data):
+				eat_hand_priority = 4.0
+			urges.append(Urge.new(Urge.Type.EAT_FROM_HAND, eat_hand_priority, Urge.Source.BODY, current_tick))
 		else:
 			# Try stockpile first, then direct forage
 			urges.append(Urge.new(Urge.Type.EAT, 10.0, Urge.Source.BODY, current_tick))
@@ -118,3 +121,7 @@ func pulse(data: HeelKawnianData, awareness: Dictionary, current_tick: int) -> A
 				urges.append(flee_urge)
 
 	return urges
+
+
+static func _should_defer_raw_eat_for_cook(_data: HeelKawnianData) -> bool:
+	return false

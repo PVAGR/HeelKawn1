@@ -60,7 +60,7 @@ const BUILD_TO_JOB_TYPE: Dictionary = {
 	"shelter": Job.Type.BUILD_SHELTER,
 	"expand_shelter": Job.Type.BUILD_SHELTER,
 	"storage": Job.Type.BUILD_STORAGE_HUT,
-	"hearth": Job.Type.BUILD_HEARTH,
+	"hearth": Job.Type.BUILD_FIRE_PIT,
 	"workshop": Job.Type.TOOL_MAKING,
 	"wall": Job.Type.BUILD_WALL,
 	"bed": Job.Type.BUILD_BED,
@@ -157,31 +157,39 @@ func create_build_intents(_pawn_id: int, tile: Vector2i, settlement_id: int = -1
 	# Check what already exists
 	_check_existing_structures(tile, resources, settlement_id)
 
+	var survival_met: bool = _colony_survival_needs_met()
+
 	# Create intents in priority order
 
 	# 1. SURVIVAL - Immediate threats
 	if not resources.shelter_exists:
 		_create_build_intent(BuildPriority.SURVIVAL, "shelter", tile, settlement_id)
 
-	# 2. SHELTER - Protection
-	if resources.shelter_exists and resources.wood > 0:
-		_create_build_intent(BuildPriority.SHELTER, "expand_shelter", tile, settlement_id)
-
 	# 3. STORAGE - Preserve resources
 	if not resources.storage_exists and resources.food > 0:
 		_create_build_intent(BuildPriority.STORAGE, "storage", tile, settlement_id)
 
-	# 4. HEARTH - Cooking, warmth
+	# 4. HEARTH - Cooking, warmth (need-driven)
 	if not resources.hearth_exists and resources.stone > 0:
-		_create_build_intent(BuildPriority.HEARTH, "hearth", tile, settlement_id)
+		var needs_hearth: bool = true
+		if ColonySimServices != null:
+			needs_hearth = ColonySimServices.get_warmth_pressure() > 0.15 \
+					or ColonySimServices.get_cooking_pressure() > 0.1
+		if needs_hearth:
+			_create_build_intent(BuildPriority.HEARTH, "hearth", tile, settlement_id)
+
+	if not survival_met:
+		return
+	if ColonySimServices != null and ColonySimServices.should_block_ambition_tier_build():
+		return
+
+	# 2. SHELTER - expansion only after survival needs met
+	if resources.shelter_exists and resources.wood > 0:
+		_create_build_intent(BuildPriority.SHELTER, "expand_shelter", tile, settlement_id)
 
 	# 5. TOOLS - Efficiency
 	if resources.wood > 5 and resources.stone > 3:
 		_create_build_intent(BuildPriority.TOOLS, "workshop", tile, settlement_id)
-
-	# 6. DEFENSE - Protection
-	if resources.wood > 10:
-		_create_build_intent(BuildPriority.DEFENSE, "wall", tile, settlement_id)
 
 	# 7. COMFORT - Quality of life
 	if resources.shelter_exists and resources.storage_exists:
@@ -191,7 +199,10 @@ func create_build_intents(_pawn_id: int, tile: Vector2i, settlement_id: int = -1
 	if settlement_id >= 0 and resources.stone > 20:
 		_create_build_intent(BuildPriority.IDENTITY, "monument", tile, settlement_id)
 
-	# 9. AMBITION - Long-term projects
+	# 6. DEFENSE / 9. AMBITION — defer until fed, housed, and warm
+	if resources.wood > 10:
+		_create_build_intent(BuildPriority.DEFENSE, "wall", tile, settlement_id)
+
 	if resources.wood > 50 and resources.stone > 50:
 		_create_build_intent(BuildPriority.AMBITION, "great_hall", tile, settlement_id)
 
@@ -226,6 +237,22 @@ func _check_existing_structures(tile: Vector2i, resources: Dictionary, _settleme
 
 
 func _create_build_intent(priority: int, build_type: String, tile: Vector2i, settlement_id: int) -> void:
+	# Skip if this structure type already exists nearby.
+	var probe: Dictionary = scan_resources(tile, 12)
+	_check_existing_structures(tile, probe, settlement_id)
+	match build_type:
+		"shelter", "expand_shelter":
+			if probe.shelter_exists and build_type == "expand_shelter":
+				return
+		"storage":
+			if probe.storage_exists:
+				return
+		"hearth":
+			if probe.hearth_exists:
+				return
+		"great_hall", "wall":
+			if priority >= BuildPriority.DEFENSE and not _colony_survival_needs_met():
+				return
 	# Check if intent already exists for this type
 	for intent in build_intents:
 		if intent.build_type == build_type and int(intent.get("settlement_id", -9999)) == settlement_id and not bool(intent.get("completed", false)):
@@ -311,7 +338,11 @@ func _assign_pawn_to_intent(intent: Dictionary) -> void:
 	# Find nearby builder pawns
 	if _job_manager == null:
 		return
+	if not _has_required_resources(intent):
+		return
 	var build_type: String = str(intent.get("build_type", ""))
+	if build_type in ["expand_shelter", "wall", "great_hall"] and not _colony_survival_needs_met():
+		return
 	var job_type: int = int(BUILD_TO_JOB_TYPE.get(build_type, -1))
 	if job_type < 0:
 		return
@@ -327,12 +358,37 @@ func _assign_pawn_to_intent(intent: Dictionary) -> void:
 
 
 func _has_required_resources(intent: Dictionary) -> bool:
-	# Check stockpile for required resources
 	var stockpile: Node = get_node_or_null("/root/StockpileManager")
-	if stockpile == null:
-		return true  # Assume yes if we can't check
-	
-	# TODO: Implement actual stockpile checking
+	if stockpile == null or not stockpile.has_method("total_count_of"):
+		return false
+	var required: Dictionary = intent.get("required_resources", {})
+	for key in required:
+		var item_type: int = _resource_key_to_item_type(str(key))
+		if item_type < 0:
+			continue
+		if int(stockpile.total_count_of(item_type)) < int(required[key]):
+			return false
+	return true
+
+
+func _resource_key_to_item_type(key: String) -> int:
+	match key:
+		"wood":  return Item.Type.WOOD
+		"stone": return Item.Type.STONE
+		"food":  return Item.Type.BERRY
+		"metal": return Item.Type.IRON_ORE
+	return -1
+
+
+func _colony_survival_needs_met() -> bool:
+	if ColonySimServices == null:
+		return true
+	if ColonySimServices.get_food_pressure() > 0.65:
+		return false
+	if ColonySimServices.get_housing_pressure() > 0.75:
+		return false
+	if ColonySimServices.get_warmth_pressure() > 0.45:
+		return false
 	return true
 
 

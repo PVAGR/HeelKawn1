@@ -3366,9 +3366,21 @@ func _pawn_decision_rule_context(pd: HeelKawnianData) -> Dictionary:
 	var food_u: int = 999
 	if StockpileManager != null:
 		food_u = StockpileManager.total_food()
+	var rk_ctx: int = WorldMemory._region_key(pd.tile_pos.x, pd.tile_pos.y)
 	var food_p: float = 0.0
+	var housing_p: float = 0.0
+	var warmth_p: float = 0.0
+	var storage_p: float = 0.0
+	var cooking_p: float = 0.0
+	var haul_p: float = 0.0
 	if ColonySimServices != null:
 		food_p = ColonySimServices.get_food_pressure()
+		housing_p = ColonySimServices.get_housing_pressure()
+		haul_p = ColonySimServices.get_haul_pressure()
+		var center_rk: int = SettlementMemory.get_center_region_for_region(rk_ctx) if SettlementMemory != null else -1
+		warmth_p = ColonySimServices.get_warmth_pressure(center_rk)
+		storage_p = ColonySimServices.get_storage_pressure(center_rk)
+		cooking_p = ColonySimServices.get_cooking_pressure(center_rk)
 	var tr: Dictionary = pd.top_social_rapport_peer()
 	var top_r: int = int(tr.get("score", 0))
 	var top_rapport_peer: int = int(tr.get("peer_id", -1))
@@ -3382,7 +3394,6 @@ func _pawn_decision_rule_context(pd: HeelKawnianData) -> Dictionary:
 	var carrying_food: bool = false
 	if pd.is_carrying():
 		carrying_food = Item.is_food(pd.carrying)
-	var rk_ctx: int = WorldMemory._region_key(pd.tile_pos.x, pd.tile_pos.y)
 	var danger_hint: float = clampf(float(WorldPersistence.get_region_scar_level(rk_ctx)) / 3.0, 0.0, 1.0)
 	return {
 		"tick": tick,
@@ -3395,6 +3406,11 @@ func _pawn_decision_rule_context(pd: HeelKawnianData) -> Dictionary:
 		"pain": pd.pain,
 		"food_stockpile_units": food_u,
 		"food_pressure": food_p,
+		"housing_pressure": housing_p,
+		"warmth_pressure": warmth_p,
+		"storage_pressure": storage_p,
+		"cooking_pressure": cooking_p,
+		"haul_pressure": haul_p,
 		"scar_count": pd.physical_scars.size(),
 		"crisis_level": pd.get_crisis_level(),
 		"children_count": pd.children_count,

@@ -411,7 +411,22 @@ HeelKawn draws from these influences — preserve their spirit:
 - JobManager: Global job queue
 - PawnSpawner: Pawn lifecycle
 - StockpileManager: Resource management
-- ColonySimServices: Colony-wide metrics
+- ColonySimServices: Colony-wide metrics (food/housing/materials/haul plus warmth, storage, cooking, light pressures)
+
+### Pressure-driven construction (P2+)
+
+Settlement seeders (`Main._seed_bootstrap_jobs`), ruler posts (`HeelKawnianManager.leader_direct_construction`), and Matrix job bias read `ColonySimServices` pressures instead of blind `pop/4` hearth counts or housing-only fire-pit nudges.
+
+- `compute_settlement_build_priorities()` ranks warmth, cook, storage, housing, farm, ambition.
+- `can_seed_fire_pit()` applies a **regional** cap so multiple formal settlements in one center region do not each queue duplicate fire pits.
+- Job posts should carry `JobManager.stamp_seeder_metadata(reason, …)` (e.g. `warmth_coverage`, `storage_pressure`).
+- HUD colony line: `F` food, `H` housing, `W` warmth, `S` storage, `K` cooking, `L` light (night hearth coverage).
+- **Job visibility**: settlement-scoped jobs match by shared `settlement_id` or center region (not only exact center tile).
+- **Raw food**: `Item.RAW_FOOD_NUTRITION_MULT` (0.62), mood penalty 8, ~14% stress event — always edible, never hard-blocked.
+- **Storage split**: `BUILD_STORAGE_HUT` = wood pile; `BUILD_GRANARY` = food — seeder routes by ground spill (`wood` vs `food`).
+- **Farms**: seed only when `food_press <= 0.45` and survival met; forage/hunt/fish biased when `food_press > 0.45`.
+- **Contentment**: `CONTENTMENT_STREAK_TICKS` (90) @ `CONTENTMENT_MAX_PRESSURE` (0.15) gates ambition-tier builds; high-drive leaders may skip via `leader_may_skip_contentment_gate`.
+- **Night**: work speed ×0.72 without hearth at night; rare `DREAD` mood when exposed.
 
 > **Note**: Consolidation is in progress. These 11 core managers exist, but 164 autoloads are still registered in project.godot. Old autoloads have NOT been removed yet — removing them is the next consolidation step.
 

@@ -57,6 +57,8 @@ const SPECIALIZATION_EXIT_STABILITY_TICKS: int = 2500
 const MIN_GUILD_SIZE_FOR_SETTLEMENT: int = 10
 const GUILD_CLUSTER_RADIUS_TILES: int = 32
 const GUILD_STABILITY_TICKS: int = 1200
+## After guild stability, allow formal founding without a hearth briefly (proto camp bootstrap).
+const FORMAL_WARMTH_GRACE_TICKS: int = 600
 const INTENT_GROW: String = "GROW"
 const INTENT_HOARD: String = "HOARD"
 const INTENT_DEFEND: String = "DEFEND"
@@ -658,6 +660,23 @@ func describe_formal_settlement_gate(candidate_center: Vector2i, candidate_pawns
         return gate
     if int(entry.get("founding_tick", -1)) < 0:
         entry["founding_tick"] = since_tick + GUILD_STABILITY_TICKS
+    var warmth_gate: Dictionary = _formal_settlement_warmth_gate(candidate_center)
+    gate["warmth_met"] = bool(warmth_gate.get("met", false))
+    gate["warmth_reason"] = str(warmth_gate.get("reason", ""))
+    gate["hearths_in_region"] = int(warmth_gate.get("hearths", 0))
+    if not bool(warmth_gate.get("met", false)):
+        var in_grace: bool = stable_ticks < GUILD_STABILITY_TICKS + FORMAL_WARMTH_GRACE_TICKS
+        entry["signature"] = signature
+        entry["since_tick"] = since_tick
+        entry["last_members"] = qualified_ids.duplicate(true)
+        entry["last_member_names"] = qualified_names.duplicate(true)
+        entry["formal"] = false
+        _guild_foundation_state[key] = entry
+        if in_grace:
+            gate["reason"] = "warmth_grace"
+        else:
+            gate["reason"] = str(warmth_gate.get("reason", "warmth_unsatisfied"))
+        return gate
     entry["signature"] = signature
     entry["since_tick"] = since_tick
     entry["last_members"] = qualified_ids.duplicate(true)
@@ -668,6 +687,29 @@ func describe_formal_settlement_gate(candidate_center: Vector2i, candidate_pawns
     gate["reason"] = "guild_settlement"
     gate["founding_tick"] = int(entry.get("founding_tick", -1))
     return gate
+
+
+func _formal_settlement_warmth_gate(candidate_center: Vector2i) -> Dictionary:
+    var out: Dictionary = {"met": false, "reason": "warmth_unsatisfied", "hearths": 0}
+    if candidate_center.x < 0 or candidate_center.y < 0:
+        out["reason"] = "invalid_center"
+        return out
+    var features: Dictionary = HeelKawnianManager._scan_local_features(candidate_center, 12)
+    var hearths: int = int(features.get("hearth", 0))
+    out["hearths"] = hearths
+    if hearths > 0:
+        out["met"] = true
+        out["reason"] = "hearth_present"
+        return out
+    var center_rk: int = WorldMemory._region_key(candidate_center.x, candidate_center.y)
+    if ColonySimServices != null:
+        var cold_uncovered: int = ColonySimServices.count_cold_uncovered_pawns(center_rk)
+        var warmth_press: float = ColonySimServices.get_warmth_pressure(center_rk)
+        if cold_uncovered <= 0 and warmth_press < 0.12:
+            out["met"] = true
+            out["reason"] = "warmth_satisfied"
+            return out
+    return out
 
 
 func _apply_guild_settlement_gate(world: World) -> void:

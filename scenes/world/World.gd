@@ -1053,6 +1053,31 @@ func has_any_ground_item_at(tile: Vector2i) -> bool:
 	return false
 
 
+## Sum loose wood/food on the ground. [param center_region] < 0 = entire map.
+func sum_ground_resources(center_region: int = -1) -> Dictionary:
+	var wood: int = 0
+	var food: int = 0
+	for tile_v in _ground_items.keys():
+		if not (tile_v is Vector2i):
+			continue
+		var tile: Vector2i = tile_v as Vector2i
+		if center_region >= 0:
+			var rk: int = WorldMemory._region_key(tile.x, tile.y)
+			if SettlementMemory.get_center_region_for_region(rk) != center_region:
+				continue
+		var inv: Dictionary = _ground_items[tile_v]
+		for item_type_v in inv.keys():
+			var item_type: int = int(item_type_v)
+			var qty: int = int(inv[item_type_v])
+			if qty <= 0:
+				continue
+			if item_type == Item.Type.WOOD:
+				wood += qty
+			elif Item.is_food(item_type):
+				food += qty
+	return {"wood": wood, "food": food}
+
+
 ## After loading a world from save (or any bulk feature change), rescan the
 ## map for BED features and repopulate `_bed_tiles` / free slots in
 ## `_bed_occupants`. No occupants carry over a regen, but load keeps data.

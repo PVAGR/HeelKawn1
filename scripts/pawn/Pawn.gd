@@ -2407,9 +2407,14 @@ func _tick_idle() -> void:
 	var inherited_history_offset: int = _culture_inherited_job_offset()
 	var crisis_housing_pressure: float = 0.0
 	var crisis_food_pressure: float = 0.0
+	var crisis_warmth_pressure: float = 0.0
+	var crisis_cooking_pressure: float = 0.0
 	if ColonySimServices != null:
 		crisis_housing_pressure = ColonySimServices.get_housing_pressure()
 		crisis_food_pressure = ColonySimServices.get_food_pressure()
+		crisis_warmth_pressure = ColonySimServices.get_warmth_pressure()
+		crisis_cooking_pressure = ColonySimServices.get_cooking_pressure()
+	var pawn_cold: bool = data != null and float(data.body_temperature) < 36.5
 	var from_region_key: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
 	var from_center_region: int = SettlementMemory.get_center_region_for_region(from_region_key)
 	var from_intent: int = int(IntentMemory.settlement_intent.get(from_center_region, IntentMemory.INTENT_HOLD))
@@ -2507,25 +2512,53 @@ func _tick_idle() -> void:
 		base_bias += data.kinship_job_priority_bonus(j.work_tile)
 		if preferred_idle_action == "forage" and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT):
 			base_bias += 2
-		# When the pantry is not in emergency, nudge non-food labor so the colony
-		# visibly diversifies (stone, wood, planned builds) instead of idle wandering.
-		# OPTIMIZATION: Strong bias toward BUILD jobs to get settlement started
+		# When fed, nudge build/gather only if the pawn or colony has a real need.
 		if not food_emergency:
-			match int(j.type):
-				_Job.Type.MINE, _Job.Type.MINE_WALL, _Job.Type.CHOP:
-					base_bias += 3  # Increased from 2
-				_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT:
-					base_bias += 6  # NEW: Strong priority for building
-				_Job.Type.FORAGE, _Job.Type.HUNT:
-					base_bias -= 1  # Slightly deprioritize foraging when not starving
+			var colony_needs_build: bool = crisis_warmth_pressure > 0.25 \
+					or crisis_housing_pressure > 0.5 \
+					or crisis_cooking_pressure > 0.3
+			if pawn_cold or colony_needs_build:
+				match int(j.type):
+					_Job.Type.MINE, _Job.Type.MINE_WALL, _Job.Type.CHOP:
+						base_bias += 3
+					_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, \
+					_Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_SHELTER, \
+					_Job.Type.BUILD_HEARTH:
+						base_bias += 6
+					_Job.Type.BUILD_FIRE_PIT:
+						if pawn_cold or crisis_warmth_pressure > 0.2:
+							base_bias += 6
+					_Job.Type.COOK_MEAT, _Job.Type.COOK_FISH, _Job.Type.COOK_BERRIES:
+						var cook_boost: int = 4
+						if data.is_carrying() and Item.is_food(data.carrying):
+							if data.carrying == _Item.Type.MEAT or data.carrying == _Item.Type.BERRY:
+								cook_boost += 2
+						if crisis_cooking_pressure > 0.2 or cook_boost > 4:
+							base_bias += cook_boost
+				if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT:
+					base_bias -= 1
 
 		# Crisis priority bonus (snapshot pressures once per claim pass).
-		# Boost BUILD_BED jobs during housing crisis
 		if crisis_housing_pressure > 0.8 and j.type == _Job.Type.BUILD_BED:
 			base_bias += 4
-		# Boost FORAGE/HUNT jobs during food crisis
-		if crisis_food_pressure > 0.7 and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT):
+		if j.type == _Job.Type.BUILD_FIRE_PIT:
+			if pawn_cold or crisis_warmth_pressure > 0.5:
+				base_bias += 5
+			elif crisis_warmth_pressure > 0.25:
+				base_bias += 2
+		if crisis_food_pressure > 0.50 and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT):
 			base_bias += 4
+		if ColonySimServices != null:
+			var haul_p: float = ColonySimServices.get_haul_pressure()
+			var store_p: float = ColonySimServices.get_storage_pressure()
+			if haul_p > 0.35 or store_p > 0.3:
+				if j.type == _Job.Type.TRADE_HAUL:
+					base_bias += clampi(int(ceil(maxf(haul_p, store_p) * 4.0)), 2, 5)
+			if _world != null and _world.has_method("sum_ground_resources"):
+				var ground: Dictionary = _world.sum_ground_resources(-1)
+				var ground_food: int = int(ground.get("food", 0))
+				if ground_food >= 2 and j.type == _Job.Type.TRADE_HAUL:
+					base_bias += clampi(mini(5, ground_food / 2), 2, 5)
 
 		# Neural AI priority bonus from WorldAI matrix (once per job type/tick).
 		var neural_bias: int = 0
@@ -4341,7 +4374,7 @@ func _finish_eating() -> void:
 		if food_type != _Item.Type.NONE:
 			var taken: int = sp.take_item(food_type, 1)
 			if taken > 0:
-				gain = Item.hunger_restore(food_type)
+				gain = _apply_food_consumption_effects(food_type)
 				data.hunger = min(100.0, data.hunger + gain)
 				data.mood = min(100.0, data.mood + MOOD_BONUS_ATE)
 				_play_sfx("res://assets/audio/pawn_eat.ogg", 1.0)
@@ -4593,11 +4626,24 @@ func _release_bed_if_reserved() -> void:
 ## Emergency food path: consume one unit of whatever food the pawn is
 ## carrying, then drop back to IDLE. No stockpile interaction, no eating
 ## state -- the pawn just wolfs it down on the spot.
+func _should_defer_raw_eat_for_cook() -> bool:
+	return false
+
+
+func _apply_food_consumption_effects(food_type: int) -> float:
+	var gain: float = Item.effective_hunger_restore(food_type)
+	if Item.is_raw_food(food_type):
+		data.mood = maxf(0.0, data.mood - Item.RAW_FOOD_MOOD_PENALTY)
+		if WorldRNG.chance_for(_pawn_stream("raw_food_sick"), Item.RAW_FOOD_SICKNESS_CHANCE, _pawn_salt(44)):
+			data.add_mood_event(MoodEvent.Type.STRESS, 25.0, 400)
+	return gain
+
+
 func _eat_from_hand() -> void:
 	if not data.is_carrying() or not Item.is_food(data.carrying):
 		return
 	var food_type: int = data.carrying
-	var gain: float = Item.hunger_restore(food_type)
+	var gain: float = _apply_food_consumption_effects(food_type)
 	data.hunger = min(100.0, data.hunger + gain)
 	data.mood = min(100.0, data.mood + MOOD_BONUS_ATE)
 	data.carrying_qty -= 1
@@ -4853,8 +4899,11 @@ func _hearth_proxy_warmth_bonus(tile: Vector2i) -> float:
 			var t: Vector2i = tile + Vector2i(dx, dy)
 			if not _world.data.in_bounds(t.x, t.y):
 				continue
-			if int(_world.data.get_feature(t.x, t.y)) == TileFeature.Type.BED:
-				bonus = maxf(bonus, 5.5)
+			var feat: int = int(_world.data.get_feature(t.x, t.y))
+			if feat == TileFeature.Type.FIRE_PIT:
+				bonus = maxf(bonus, 8.0)
+			elif feat == TileFeature.Type.BED:
+				bonus = maxf(bonus, 3.0)
 	return bonus
 
 

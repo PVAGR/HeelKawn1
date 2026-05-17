@@ -14,9 +14,54 @@ const CHECK_INTERVAL: int = 64
 
 func _ready() -> void:
 	set_process(false)
-	# DISABLED: HeelKawnians work independently, not through authority-issued orders.
+	# DISABLED (P2): Re-enabling _on_game_tick would duplicate Main._seed_bootstrap_jobs /
+	# ColonySimServices pressure seeding. Organic path: Main seeder + HeelKawnianManager
+	# leader_direct_construction + matrix light/warmth biases. Keep file for issuer dict
+	# reference and future authority-scoped orders only.
 	# Each pawn follows its own needs (hunger → forage, cold → build hearth, etc.)
-	# No synchronized proto-camp orders. The job system is organic and need-driven.
+
+## Thin critical proto orders — only when no formal settlements and Main seeder is quiet.
+## Call from Main._seed_bootstrap_jobs_near_pawn_cluster when pending survival jobs are absent.
+static func post_critical_proto_survival_if_needed(leader_pawn: Node, center_tile: Vector2i) -> int:
+	if SettlementMemory != null and SettlementMemory.get_formal_settlement_count() > 0:
+		return 0
+	if ColonySimServices == null or JobManager == null or leader_pawn == null or not is_instance_valid(leader_pawn):
+		return 0
+	if leader_pawn.data == null:
+		return 0
+	var posted: int = 0
+	var leader_id: int = int(leader_pawn.data.id)
+	if ColonySimServices.get_food_pressure() > 0.65:
+		if JobManager.count_pending_jobs_near(center_tile, Job.Type.FORAGE, 12) <= 0:
+			var fj: Job = JobManager.post_from_dict({
+				"type": Job.Type.FORAGE,
+				"tile": center_tile + Vector2i(1, 0),
+				"priority": 70,
+				"work_ticks": 8,
+				"issuer_pawn_id": leader_id,
+				"issuer_role": "leader",
+				"authority_scope": "proto_camp",
+				"reason": "critical_food",
+			})
+			if fj != null:
+				posted += 1
+	if ColonySimServices.get_warmth_pressure() > 0.35 \
+			and ColonySimServices.can_seed_fire_pit(-1, center_tile, 0, 1):
+		if JobManager.count_pending_jobs_near(center_tile, Job.Type.BUILD_FIRE_PIT, 12) <= 0:
+			var pj: Job = JobManager.post_from_dict({
+				"type": Job.Type.BUILD_FIRE_PIT,
+				"tile": center_tile,
+				"priority": 75,
+				"work_ticks": 12,
+				"issuer_pawn_id": leader_id,
+				"issuer_role": "leader",
+				"authority_scope": "proto_camp",
+				"reason": "critical_warmth",
+			})
+			if pj != null:
+				posted += 1
+	return posted
+
 
 func _on_game_tick(tick: int) -> void:
 	return  # Disabled — no authority-issued orders

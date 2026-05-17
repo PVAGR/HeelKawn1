@@ -9,6 +9,9 @@ const CONDITION_DECAY_INTERVAL_TICKS: int = 600
 const CONDITION_HEALTHY_MIN: float = 70.0
 const CONDITION_WORN_MIN: float = 40.0
 const CONDITION_DAMAGED_MIN: float = 12.0
+## Usage count below this on an existing fire pit → regional duplicate posts are dampened.
+const HEARTH_UNDERUSE_USAGE: int = 8
+const HEARTH_SCAN_RADIUS: int = 14
 
 var _world: World = null
 var _pawn_spawner: PawnSpawner = null
@@ -334,3 +337,32 @@ func _settlement_for_tile(tile: Vector2i) -> int:
 		return -1
 	var rk: int = WorldMemory._region_key(tile.x, tile.y)
 	return SettlementMemory.get_center_region_for_region(rk)
+
+
+## True when every fire pit in [param center_region] sees little foot traffic — skip new hearth posts.
+func should_dampen_additional_hearth_post(center_region: int) -> bool:
+	if center_region < 0 or _world == null or _world.data == null:
+		return false
+	var crx: int = center_region & 0xFFFF
+	var cry: int = (center_region >> 16) & 0xFFFF
+	var center: Vector2i = Vector2i(crx * 16 + 8, cry * 16 + 8)
+	var underused: int = 0
+	var total: int = 0
+	for dy in range(-HEARTH_SCAN_RADIUS, HEARTH_SCAN_RADIUS + 1):
+		for dx in range(-HEARTH_SCAN_RADIUS, HEARTH_SCAN_RADIUS + 1):
+			var tx: int = center.x + dx
+			var ty: int = center.y + dy
+			if not _world.data.in_bounds(tx, ty):
+				continue
+			if int(_world.data.get_feature(tx, ty)) != TileFeature.Type.FIRE_PIT:
+				continue
+			var tile: Vector2i = Vector2i(tx, ty)
+			var rk: int = WorldMemory._region_key(tx, ty)
+			if SettlementMemory != null and SettlementMemory.get_center_region_for_region(rk) != center_region:
+				continue
+			total += 1
+			if get_usage_at(tile) < HEARTH_UNDERUSE_USAGE:
+				underused += 1
+	if total <= 0:
+		return false
+	return underused >= total

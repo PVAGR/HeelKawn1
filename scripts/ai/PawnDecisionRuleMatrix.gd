@@ -170,6 +170,29 @@ func evaluate(pd: HeelKawnianData, ctx: Dictionary, outs: Array) -> Dictionary:
 		_bump_many(outs, [0, 3], 0.12)
 		fired.append({"id": "colony_food_pressure", "line": "IF colony food pressure is high THEN bias toward feeding the pile (forage/seek).", "w": 0.70})
 
+	var housing_pressure: float = float(ctx.get("housing_pressure", 0.0))
+	var warmth_pressure: float = float(ctx.get("warmth_pressure", 0.0))
+	var storage_pressure: float = float(ctx.get("storage_pressure", 0.0))
+	var cooking_pressure: float = float(ctx.get("cooking_pressure", 0.0))
+	var haul_pressure: float = float(ctx.get("haul_pressure", 0.0))
+	if warmth_pressure >= 0.25:
+		_bump(outs, 4, clampf(warmth_pressure * 0.14, 0.05, 0.18))
+		fired.append({"id": "colony_warmth_pressure", "line": "IF warmth pressure is high THEN bias build/fire work.", "w": 0.62})
+	if housing_pressure >= 0.45:
+		_bump(outs, 4, clampf(housing_pressure * 0.12, 0.05, 0.16))
+		fired.append({"id": "colony_housing_pressure", "line": "IF housing pressure is high THEN bias shelter/bed work.", "w": 0.58})
+	if storage_pressure >= 0.3 or haul_pressure >= 0.4:
+		var haul_w: float = clampf(maxf(storage_pressure, haul_pressure) * 0.12, 0.05, 0.16)
+		_bump_many(outs, [4, 3], haul_w)
+		fired.append({"id": "colony_storage_haul_pressure", "line": "IF storage/haul pressure is high THEN bias haul and storage builds.", "w": 0.55})
+	if cooking_pressure >= 0.2:
+		_bump(outs, 0, clampf(cooking_pressure * 0.10, 0.04, 0.14))
+		fired.append({"id": "colony_cooking_pressure", "line": "IF cooking pressure is high THEN bias cook/food prep.", "w": 0.50})
+	if carrying_food and cooking_pressure >= 0.12 and ColonySimServices != null:
+		if ColonySimServices.tile_has_hearth_coverage(pd.tile_pos):
+			_bump(outs, 0, 0.08)
+			fired.append({"id": "carry_raw_near_hearth", "line": "IF carrying raw food near hearth THEN prefer cook over idle eat.", "w": 0.42})
+
 	# --- Founding phase (matches HeelKawnian founding blend) ---
 	if founding >= 0.35:
 		_bump_many(outs, [2, 3, 7], 0.10 * founding)
@@ -794,6 +817,12 @@ func evaluate(pd: HeelKawnianData, ctx: Dictionary, outs: Array) -> Dictionary:
 
 	if learned_construction_weight != 1.0:
 		var construction_bias: float = clampf((learned_construction_weight - 1.0) * 0.10, -0.14, 0.24)
+		if ColonySimServices != null:
+			var survival_ok: bool = ColonySimServices.get_food_pressure() <= 0.55 \
+					and ColonySimServices.get_housing_pressure() <= 0.65 \
+					and ColonySimServices.get_warmth_pressure() <= 0.35
+			if survival_ok and construction_bias > 0.0:
+				construction_bias *= 0.45
 		_bump(outs, 4, construction_bias)
 		fired.append({"id": "learn_construction", "line": "IF learning says construction works then build more.", "w": abs(construction_bias)})
 

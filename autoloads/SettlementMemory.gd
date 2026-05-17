@@ -401,7 +401,7 @@ func recompute(_world: World) -> void:
         var has_deaths: bool = int(m.get("total_deaths", 0)) > 0
         var has_buildings: bool = int(m.get("buildings_constructed", 0)) > 0
         var has_scar: bool = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0)) >= 1
-	var has_community: bool = pawn_per_region.has(rk) and int(pawn_per_region[rk]) >= 2
+        var has_community: bool = pawn_per_region.has(rk) and int(pawn_per_region[rk]) >= 2
         if has_deaths and has_scar:
             eligible.append(rk)
         elif has_buildings:
@@ -416,7 +416,7 @@ func recompute(_world: World) -> void:
         eligible_set[int(e)] = true
     for rk_p in pawn_per_region.keys():
         var rk_int: int = int(rk_p)
-	if not eligible_set.has(rk_int) and int(pawn_per_region[rk_int]) >= 2:
+        if not eligible_set.has(rk_int) and int(pawn_per_region[rk_int]) >= 2:
             eligible.append(rk_int)
             eligible_set[rk_int] = true
 

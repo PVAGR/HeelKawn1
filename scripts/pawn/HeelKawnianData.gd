@@ -473,6 +473,11 @@ var need_urgency: Dictionary = {
 	"self_actualization": 0.5
 }
 
+## Transient job-claim diagnostics (F10 idle audit / CreatorDebugMenu). Not saved.
+var visible_orders_count: int = 0
+var last_claim_failure_reason: String = ""
+var obey_score: float = 1.0
+
 
 func _init() -> void:
 	id = _next_id

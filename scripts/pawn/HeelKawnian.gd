@@ -5649,10 +5649,13 @@ func _arrive_at_resource_for_direct_gather() -> void:
 	# Remove the feature from the tile (we harvested it)
 	_world.data.set_feature(resource_tile.x, resource_tile.y, TileFeature.Type.NONE)
 	# Queue regrowth for trees and fertile soil
+	var main: Node = get_node_or_null("/root/Main")
 	if target_feature == TileFeature.Type.TREE:
-		_world.data.queue_regrowth(resource_tile.x, resource_tile.y, TileFeature.Type.TREE, 2400)
+		if main != null and main.has_method("_queue_regrowth"):
+			main._queue_regrowth(resource_tile, TileFeature.Type.TREE, 2400)
 	elif target_feature == TileFeature.Type.FERTILE_SOIL:
-		_world.data.queue_regrowth(resource_tile.x, resource_tile.y, TileFeature.Type.FERTILE_SOIL, 2400)
+		if main != null and main.has_method("_queue_regrowth"):
+			main._queue_regrowth(resource_tile, TileFeature.Type.FERTILE_SOIL, 2400)
 	# Put the gathered material in our hands — same yield as a normal harvest job
 	var mats: Dictionary = _materials_for_active_build(_current_job)
 	var need_qty: int = int(mats.get("qty", 1)) if not mats.is_empty() else 1

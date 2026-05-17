@@ -2546,8 +2546,28 @@ func _tick_idle() -> void:
 				base_bias += 5
 			elif crisis_warmth_pressure > 0.25:
 				base_bias += 2
-		if crisis_food_pressure > 0.50 and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT):
+		if crisis_food_pressure > 0.50 and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
 			base_bias += 4
+		var survival_not_met: bool = crisis_food_pressure > 0.55 \
+				or crisis_housing_pressure > 0.70 \
+				or crisis_warmth_pressure > 0.40
+		if survival_not_met:
+			match int(j.type):
+				_Job.Type.PLANT_SEEDS, _Job.Type.GROW_FOOD, _Job.Type.HARVEST_CROPS, \
+				_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, \
+				_Job.Type.BUILD_HERB_GARDEN:
+					base_bias -= 10
+		elif crisis_food_pressure <= 0.40 and ColonySimServices != null \
+				and ColonySimServices.colony_contentment_period():
+			match int(j.type):
+				_Job.Type.PLANT_SEEDS, _Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, \
+				_Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN:
+					base_bias += 2
+		if crisis_food_pressure > 0.35 and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
+			base_bias += 3
+		if j.type == _Job.Type.BUILD_HEARTH:
+			if pawn_cold or crisis_warmth_pressure > 0.2:
+				base_bias += 6
 		if ColonySimServices != null:
 			var haul_p: float = ColonySimServices.get_haul_pressure()
 			var store_p: float = ColonySimServices.get_storage_pressure()
@@ -2559,6 +2579,8 @@ func _tick_idle() -> void:
 				var ground_food: int = int(ground.get("food", 0))
 				if ground_food >= 2 and j.type == _Job.Type.TRADE_HAUL:
 					base_bias += clampi(mini(5, ground_food / 2), 2, 5)
+				if ground_food >= 1 and crisis_food_pressure > 0.4 and j.type == _Job.Type.TRADE_HAUL:
+					base_bias += 2
 
 		# Neural AI priority bonus from WorldAI matrix (once per job type/tick).
 		var neural_bias: int = 0
@@ -4103,10 +4125,12 @@ func _finish_shelter_build(job: Job) -> void:
 	if data.carrying_qty <= 0:
 		data.clear_carry()
 	
+	var placed_feature: int = TileFeature.Type.NONE
 	# Place the feature
 	match job.type:
-		_Job.Type.BUILD_FIRE_PIT:
-			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.FIRE_PIT)
+		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_HEARTH:
+			placed_feature = TileFeature.Type.FIRE_PIT
+			_world.set_feature(job.tile.x, job.tile.y, placed_feature)
 			WorldMemory.record_event({
 				"type": "hearth_built",
 				"pawn_id": int(data.id),
@@ -4114,6 +4138,10 @@ func _finish_shelter_build(job: Job) -> void:
 				"tick": GameManager.tick_count,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
+		_Job.Type.BUILD_SHELTER:
+			placed_feature = TileFeature.Type.BED
+			_world.set_feature(job.tile.x, job.tile.y, placed_feature)
+			_world.register_bed(job.tile)
 		_Job.Type.BUILD_STORAGE_HUT:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.STORAGE_HUT)
 			WorldMemory.record_event({
@@ -4141,6 +4169,14 @@ func _finish_shelter_build(job: Job) -> void:
 				"tick": GameManager.tick_count,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
+	if placed_feature != TileFeature.Type.NONE:
+		var on_map: int = _world.data.get_feature(job.tile.x, job.tile.y)
+		if on_map != placed_feature:
+			push_warning(
+					"[Pawn] %s build %s at %s failed to commit (got %s)"
+					% [data.display_name, TileFeature.name_for(placed_feature), job.tile, TileFeature.name_for(on_map)]
+			)
+			return
 
 
 ## Consume 1 durability from the equipped tool if the job benefits from a tool.

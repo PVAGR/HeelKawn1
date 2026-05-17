@@ -53,6 +53,13 @@ func initialize(world_ref: World, camera_ref: Camera2D) -> void:
 	z_index = 2  # Above WorldTrace (1), below UI
 
 
+## Force rebuild on next refresh (building completed, settlement promoted, etc.).
+func invalidate_territories() -> void:
+	_last_settlement_hash = -1
+	_last_settlement_count = -1
+	_refresh_territories()
+
+
 func _process(_delta: float) -> void:
 	_tick_counter += 1
 	if _tick_counter % UPDATE_EVERY_N_TICKS == 0:
@@ -65,14 +72,22 @@ func _process(_delta: float) -> void:
 func _refresh_territories() -> void:
 	if SettlementMemory == null:
 		return
-	# Use only formal settlements for territory rendering — proto-sites should
-	# not be treated as authoritative territory or register territory zones.
+	# Formal settlements get fill + borders; proto camps get emergent borders only
+	# (activity-weighted edges, no static grey region blocks).
 	var settlements: Array = SettlementMemory.get_formal_settlements()
+	var proto_only: bool = settlements.is_empty()
+	if proto_only:
+		settlements = SettlementMemory.get_proto_sites()
 	# Quick check: only rebuild if settlement data changed
 	var current_hash: int = settlements.size()
 	for s in settlements:
 		if s is Dictionary:
-			current_hash = current_hash * 31 + int(s.get("center_region", 0))
+			var sd: Dictionary = s as Dictionary
+			current_hash = current_hash * 31 + int(sd.get("center_region", 0))
+			current_hash = current_hash * 31 + int(sd.get("buildings_constructed", 0))
+			current_hash = current_hash * 31 + int(sd.get("population", 0))
+			if bool(sd.get("is_formal_settlement", false)):
+				current_hash += 17
 	if current_hash == _last_settlement_hash and settlements.size() == _last_settlement_count:
 		return
 	_last_settlement_count = settlements.size()
@@ -124,16 +139,65 @@ func _refresh_territories() -> void:
 						"region_key": int(rk),
 						"dir": dir_idx,
 					})
+		var is_formal: bool = bool(s.get("is_formal_settlement", false))
 		_territories.append({
 			"color": color,
 			"region_set": region_set,
 			"regions": regions,
 			"border_segments": border_segments,
 			"center_region": center_region,
+			"proto_only": proto_only,
+			"is_formal": is_formal,
+			"activity_segments": _activity_border_segments_for_regions(regions, region_set),
 		})
-	# Register territory zones in ZoneRegistry so pawns get zone bias
-	_register_territory_zones()
+	# Register territory zones in ZoneRegistry so pawns get zone bias (formal only)
+	if not proto_only:
+		_register_territory_zones()
 	queue_redraw()
+
+
+## Extra border segments along worn paths / building footprints at the settlement edge.
+func _activity_border_segments_for_regions(regions: PackedInt32Array, region_set: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if _world == null or _world.data == null:
+		return out
+	var region_tiles: int = 16
+	for rk in regions:
+		var rx: int = int(rk) & 0xFFFF
+		var ry: int = (int(rk) >> 16) & 0xFFFF
+		var base_x: int = rx * region_tiles
+		var base_y: int = ry * region_tiles
+		for ly in range(region_tiles):
+			for lx in range(region_tiles):
+				var tx: int = base_x + lx
+				var ty: int = base_y + ly
+				if not _world.data.in_bounds(tx, ty):
+					continue
+				var feat: int = int(_world.data.get_feature(tx, ty))
+				var worn: bool = RoadMemory.get_traversal(tx, ty) >= RoadMemory.ROAD_T1
+				var built: bool = feat == TileFeature.Type.FIRE_PIT or feat == TileFeature.Type.BED \
+					or feat == TileFeature.Type.STORAGE_HUT or feat == TileFeature.Type.WALL \
+					or feat == TileFeature.Type.DOOR
+				if not worn and not built:
+					continue
+				for offset in NEIGHBOR_OFFSETS:
+					var nrx: int = (rx + offset.x) & 0xFFFF
+					var nry: int = (ry + offset.y) & 0xFFFF
+					var nkey: int = nrx | (nry << 16)
+					if region_set.has(nkey):
+						continue
+					var dir_idx: int = 0
+					if offset.y < 0:
+						dir_idx = 0
+					elif offset.y > 0:
+						dir_idx = 1
+					elif offset.x > 0:
+						dir_idx = 2
+					else:
+						dir_idx = 3
+					out.append({"region_key": int(rk), "dir": dir_idx})
+					break
+	return out
 
 
 ## Register each settlement's regions as TERRITORY zones in ZoneRegistry.
@@ -178,22 +242,40 @@ func _draw() -> void:
 	var region_tiles: int = 16  # 16x16 tiles per region
 	for territory in _territories:
 		var color: Color = territory["color"]
-		var fill_color: Color = Color(color.r, color.g, color.b, fill_alpha)
-		var border_color: Color = Color(color.r, color.g, color.b, 0.85)
+		var proto_only_draw: bool = bool(territory.get("proto_only", false))
+		var is_formal_draw: bool = bool(territory.get("is_formal", not proto_only_draw))
+		var fill_alpha_use: float = 0.0 if proto_only_draw else fill_alpha
+		var fill_color: Color = Color(color.r, color.g, color.b, fill_alpha_use)
+		var border_color: Color
+		if is_formal_draw:
+			border_color = Color(color.r, color.g, color.b, 0.92)
+		else:
+			border_color = Color(
+					clampf(color.r * 0.82 + 0.12, 0.0, 1.0),
+					clampf(color.g * 0.82 + 0.10, 0.0, 1.0),
+					clampf(color.b * 0.85 + 0.08, 0.0, 1.0),
+					0.68,
+			)
 		# Draw fill for each region
 		var regions: PackedInt32Array = territory["regions"]
-		for rk in regions:
-			var rx: int = int(rk) & 0xFFFF
-			var ry: int = (int(rk) >> 16) & 0xFFFF
-			# Region top-left tile in world coords
-			var tile_x: int = rx * region_tiles
-			var tile_y: int = ry * region_tiles
-			var world_pos: Vector2 = _world.tile_to_world(Vector2i(tile_x, tile_y))
-			var rect_pos: Vector2 = world_pos - Vector2(half_tile, half_tile)
-			var rect_size: Vector2 = Vector2(region_tiles * TILE_PX, region_tiles * TILE_PX)
-			draw_rect(Rect2(rect_pos, rect_size), fill_color, true)
-		# Draw border segments
+		if fill_alpha_use > 0.0:
+			for rk in regions:
+				var rx: int = int(rk) & 0xFFFF
+				var ry: int = (int(rk) >> 16) & 0xFFFF
+				var tile_x: int = rx * region_tiles
+				var tile_y: int = ry * region_tiles
+				var world_pos: Vector2 = _world.tile_to_world(Vector2i(tile_x, tile_y))
+				var rect_pos: Vector2 = world_pos - Vector2(half_tile, half_tile)
+				var rect_size: Vector2 = Vector2(region_tiles * TILE_PX, region_tiles * TILE_PX)
+				draw_rect(Rect2(rect_pos, rect_size), fill_color, true)
+		# Draw border segments (region edges + activity-weighted proto outline)
 		var segments: Array[Dictionary] = territory["border_segments"]
+		if proto_only_draw:
+			var activity_segs: Variant = territory.get("activity_segments", [])
+			if activity_segs is Array:
+				for act_seg in activity_segs as Array:
+					if act_seg is Dictionary:
+						segments.append(act_seg as Dictionary)
 		for seg in segments:
 			var rk: int = int(seg["region_key"])
 			var dir: int = int(seg["dir"])

@@ -1149,8 +1149,12 @@ func _report_age() -> void:
 func _report_settlement_pressure_rows() -> void:
 	if SettlementMemory == null or ColonySimServices == null:
 		return
-	print("SETTLEMENT_PRESSURES (formal)")
-	for s in SettlementMemory.get_formal_settlements():
+	_print_settlement_pressure_block("formal", SettlementMemory.get_formal_settlements())
+
+
+func _print_settlement_pressure_block(label: String, settlements: Array) -> void:
+	print("SETTLEMENT_PRESSURES (%s)" % label)
+	for s in settlements:
 		if not (s is Dictionary):
 			continue
 		var st: Dictionary = s as Dictionary
@@ -1177,6 +1181,8 @@ func _report_settlement_pressure_rows() -> void:
 					float(pri.get("light_press", 0.0)),
 				]
 		)
+	if label == "formal":
+		_print_settlement_pressure_block("proto", SettlementMemory.get_proto_sites())
 
 
 func _report_settlements() -> void:
@@ -3781,11 +3787,13 @@ func _report_survival_audit() -> void:
 	# Warmth coverage
 	var w: World = m.get_node_or_null("WorldViewport/World") as World
 	var beds: int = 0
-	var fire_pits: int = 0
+	var fire_pits: int = ColonySimServices.get_colony_fire_pit_count() \
+			if ColonySimServices != null and ColonySimServices.has_method("get_colony_fire_pit_count") else 0
 	if w != null:
 		beds = w.bed_count()
-		var fc: Dictionary = w.get_feature_counts()
-		fire_pits = int(fc.get(TileFeature.Type.FIRE_PIT, 0))
+		if fire_pits <= 0:
+			var fc: Dictionary = w.get_feature_counts()
+			fire_pits = int(fc.get(TileFeature.Type.FIRE_PIT, 0))
 	var pawn_count: int = _get_playtest_pawn_count()
 	print("  warmth: beds=%d fire_pits=%d living_pawns=%d" % [beds, fire_pits, pawn_count])
 	if pawn_count > 0:

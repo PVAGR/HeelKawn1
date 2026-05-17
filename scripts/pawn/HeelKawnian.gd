@@ -475,6 +475,9 @@ var _hunger_level: int = 0
 var initial_region_reputation: int = 0
 ## Failsafe log once: pawn standing on a tile A* now marks as solid.
 var _reported_stuck: bool = false
+var _logged_stuck_walking: bool = false
+var _job_walk_path_fails: int = 0
+const JOB_WALK_PATH_FAIL_MAX: int = 3
 var _woke_tick: int = -9999  # tick when pawn last woke; prevents sleep oscillation
 var _consecutive_abandons: int = 0  # claim/abort loop detector
 var _last_abandon_tick: int = -9999
@@ -2883,7 +2886,7 @@ func _process(delta: float) -> void:
 	if MountSystem != null:
 		var carry_bonus: int = MountSystem.get_carry_bonus(int(data.id))
 		if carry_bonus > 0:
-			data.carrying_max = maxi(data.carrying_max, 1 + carry_bonus)
+			data.carrying_capacity = maxi(data.carrying_capacity, 1 + carry_bonus)
 	var to_target: Vector2 = _target_world_pos - position
 
 	var old_tile_pos = data.tile_pos # ARCHITECT T006 - Store old position for chunk check
@@ -4230,7 +4233,7 @@ func _tick_idle() -> void:
 		if crisis_housing_pressure > 0.8 and j.type == _Job.Type.BUILD_BED:
 			base_bias += 8
 		# Boost FIRE_PIT when cold or warmth pressure is high (not housing).
-		if j.type == _Job.Type.BUILD_FIRE_PIT:
+		if j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_HEARTH:
 			if pawn_cold or crisis_warmth_pressure > 0.5:
 				base_bias += 5
 			elif crisis_warmth_pressure > 0.25:
@@ -5469,6 +5472,7 @@ func _apply_work_hazards(work_ticks_simulated: int = 1) -> void:
 
 func _begin_job(job: Job) -> void:
 	_current_job = job
+	_job_walk_path_fails = 0
 	HeelKawnianManager.note_matrix_job_choice(self, job)
 	# Throttled cohort system calls for performance
 	_invalidate_recruitment_signal_cache()
@@ -5498,11 +5502,37 @@ func _walk_to_work_tile(job: Job) -> void:
 		return
 	var path: Array[Vector2i] = _path_for_pawn(job.work_tile)
 	if path.is_empty():
-		_unclaim_current_job("no_path_to_job")
-		return
+		_job_walk_path_fails += 1
+		if _try_reassign_job_work_tile(job):
+			path = _path_for_pawn(job.work_tile)
+		if path.is_empty():
+			var reason: String = "no_path_to_job"
+			if _job_walk_path_fails >= JOB_WALK_PATH_FAIL_MAX:
+				reason = "stuck_walking_no_path"
+				if not _logged_stuck_walking and OS.is_debug_build() and data != null:
+					_logged_stuck_walking = true
+					print(
+							"[HeelKawnian] stuck_walking pawn=%s job=%s work_tile=%s fails=%d"
+							% [data.display_name, Job.describe_type(job.type), job.work_tile, _job_walk_path_fails]
+					)
+			_unclaim_current_job(reason)
+			return
+	_job_walk_path_fails = 0
 	_state = State.WALKING_TO_JOB
 	_start_path(path)
 	_request_redraw()
+
+
+func _try_reassign_job_work_tile(job: Job) -> bool:
+	if job == null or _world == null or _world.pathfinder == null:
+		return false
+	var alt: Vector2i = _world.pathfinder.find_adjacent_passable(job.work_tile)
+	if alt.x < 0 and job.tile != job.work_tile:
+		alt = _world.pathfinder.find_adjacent_passable(job.tile)
+	if alt.x < 0:
+		return false
+	job.work_tile = alt
+	return true
 
 
 func _return_trade_cargo_to_source_if_any(j: Job) -> void:
@@ -5874,7 +5904,11 @@ func _is_job_tile_still_valid(job: Job) -> bool:
 			# Skip tiles with existing structures (any built feature)
 			if TileFeature.name_for(f1) != "None" and f1 != TileFeature.Type.TREE and f1 != TileFeature.Type.FERTILE_SOIL and f1 != TileFeature.Type.ORE_VEIN and f1 != TileFeature.Type.RUIN:
 				return false
-			return Biome.is_passable(_world.data.get_biome(job.tile.x, job.tile.y))
+			if not Biome.is_passable(_world.data.get_biome(job.tile.x, job.tile.y)):
+				return false
+			if _world.pathfinder != null and not _world.pathfinder.is_passable(job.tile):
+				return false
+			return true
 		_Job.Type.BUILD_DOOR:
 			# Fresh door: empty tile. Replace-door: still a WALL (worker stands
 			# on a neighbor; job completes into build_door swap).
@@ -6034,9 +6068,7 @@ func _complete_current_job() -> void:
 			_finish_craft(job)
 			produced_type = _Item.Type.NONE  # tool is equipped, not carried
 		_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_STOCKPILE, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH:
-			_finish_shelter_build(job)
-			# If _finish_shelter_build triggered a re-fetch, don't complete the job
-			if _state == State.FETCHING_MATERIAL:
+			if not _finish_shelter_build(job):
 				return
 			produced_type = _Item.Type.NONE
 		# Phase 6: Data-driven building placement via BuildingRegistry
@@ -6287,6 +6319,11 @@ func _current_settlement_center_region() -> int:
 func _register_built_structure(tile: Vector2i, feature_type: int) -> void:
 	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("register_structure"):
 		BuildingUsageTracker.register_structure(tile, feature_type, int(data.id), _current_settlement_center_region())
+	var main_node: Node = get_tree().root.get_node_or_null("Main") if get_tree() != null else null
+	if main_node != null:
+		var overlay: Node = main_node.get_node_or_null("WorldViewport/TerritoryOverlay")
+		if overlay != null and overlay.has_method("invalidate_territories"):
+			overlay.call("invalidate_territories")
 
 
 ## Create a stockpile zone at the given tile after BUILD_STOCKPILE job completes.
@@ -6305,9 +6342,8 @@ func _create_stockpile_at_tile(tile: Vector2i) -> void:
 	var viewport: Node = _world.get_parent()
 	if viewport != null:
 		viewport.add_child(sp)
-	# Register with StockpileManager
-	if StockpileManager != null and StockpileManager.has_method("add_zone"):
-		StockpileManager.call("add_zone", sp)
+	if StockpileManager != null:
+		StockpileManager.register(sp)
 	# Consume 5 sticks from inventory (wood already consumed via material cost)
 	if StockpileManager != null:
 		StockpileManager.take_item(_Item.Type.STICK, 5, data.tile_pos)
@@ -6369,14 +6405,15 @@ func _finish_craft(job: Job) -> void:
 
 
 ## Complete a shelter/hearth/marker build job: consume materials, place feature.
-## Also handles cooking/preservation jobs.
-func _finish_shelter_build(job: Job) -> void:
+## Also handles cooking/preservation jobs. Returns false if materials missing,
+## re-fetch started, or the world feature was not committed.
+func _finish_shelter_build(job: Job) -> bool:
 	# Cooking jobs: consume materials and produce food
 	if job.type == _Job.Type.COOK_MEAT or job.type == _Job.Type.COOK_BERRIES or job.type == _Job.Type.COOK_FISH or job.type == _Job.Type.DRY_MEAT:
 		var output_type: int = Job.tool_job_output(job.type)
 		var recipe: Array = Item.get_cooking_recipe(output_type)
 		if recipe.is_empty():
-			return
+			return false
 		
 		# Verify and consume materials from carried items or stockpile
 		for ingredient in recipe:
@@ -6400,11 +6437,11 @@ func _finish_shelter_build(job: Job) -> void:
 			"tile": {"x": job.tile.x, "y": job.tile.y},
 		})
 		
-		return
+		return true
 	
 	var mats: Dictionary = _materials_for_active_build(job)
 	if mats.is_empty():
-		return
+		return false
 	var item_type: int = mats.item
 	var need_qty: int = mats.qty
 	
@@ -6413,18 +6450,20 @@ func _finish_shelter_build(job: Job) -> void:
 		# Try stockpile or direct-gather from environment
 		_current_job.work_ticks_done = 0
 		_begin_fetching_material(item_type, need_qty)
-		return
+		return false
 
 	# Consume materials
 	data.carrying_qty -= need_qty
 	if data.carrying_qty <= 0:
 		data.clear_carry()
 
+	var placed_feature: int = TileFeature.Type.NONE
 	# Place the feature
 	match job.type:
 		_Job.Type.BUILD_FIRE_PIT:
-			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.FIRE_PIT)
-			_register_built_structure(job.tile, TileFeature.Type.FIRE_PIT)
+			placed_feature = TileFeature.Type.FIRE_PIT
+			_world.set_feature(job.tile.x, job.tile.y, placed_feature)
+			_register_built_structure(job.tile, placed_feature)
 			WorldMemory.record_event({
 				"type": "hearth_built",
 				"pawn_id": int(data.id),
@@ -6433,8 +6472,12 @@ func _finish_shelter_build(job: Job) -> void:
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
 		_Job.Type.BUILD_STORAGE_HUT:
-			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.STORAGE_HUT)
-			_register_built_structure(job.tile, TileFeature.Type.STORAGE_HUT)
+			placed_feature = TileFeature.Type.STORAGE_HUT
+			_world.set_feature(job.tile.x, job.tile.y, placed_feature)
+			_register_built_structure(job.tile, placed_feature)
+			var main_sp: Node = get_tree().root.get_node_or_null("Main")
+			if main_sp != null and main_sp.has_method("_ensure_settlement_stockpile"):
+				main_sp.call_deferred("_ensure_settlement_stockpile", job.tile)
 			WorldMemory.record_event({
 				"type": "storage_built",
 				"pawn_id": int(data.id),
@@ -6487,8 +6530,9 @@ func _finish_shelter_build(job: Job) -> void:
 			})
 		# BUILD_HEARTH is the social/matrix job id; world feature is always FIRE_PIT (same as BUILD_FIRE_PIT).
 		_Job.Type.BUILD_HEARTH:
-			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.FIRE_PIT)
-			_register_built_structure(job.tile, TileFeature.Type.FIRE_PIT)
+			placed_feature = TileFeature.Type.FIRE_PIT
+			_world.set_feature(job.tile.x, job.tile.y, placed_feature)
+			_register_built_structure(job.tile, placed_feature)
 			WorldMemory.record_event({
 				"type": "hearth_built",
 				"pawn_id": int(data.id),
@@ -6496,6 +6540,16 @@ func _finish_shelter_build(job: Job) -> void:
 				"tick": GameManager.tick_count,
 				"tile": {"x": job.tile.x, "y": job.tile.y},
 			})
+
+	if placed_feature != TileFeature.Type.NONE:
+		var on_map: int = _world.data.get_feature(job.tile.x, job.tile.y)
+		if on_map != placed_feature:
+			push_warning(
+					"[HeelKawnian] %s build %s at %s failed to commit (got %s)"
+					% [data.display_name, TileFeature.name_for(placed_feature), job.tile, TileFeature.name_for(on_map)]
+			)
+			return false
+	return true
 
 
 ## Data-driven building placement via BuildingRegistry.

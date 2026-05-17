@@ -31,12 +31,17 @@ static func post_critical_proto_survival_if_needed(leader_pawn: Node, center_til
 		return 0
 	var posted: int = 0
 	var leader_id: int = int(leader_pawn.data.id)
-	if ColonySimServices.get_food_pressure() > 0.65:
+	var zones: int = StockpileManager.zone_count() if StockpileManager != null else 0
+	var stock_food: int = StockpileManager.total_food() if StockpileManager != null else 0
+	var food_press: float = ColonySimServices.get_food_pressure()
+	var food_critical: bool = food_press > 0.65 or (zones <= 0 and stock_food <= 0)
+	if food_critical:
+		var food_prio: int = 80 if food_press >= 0.90 or stock_food <= 0 else 70
 		if JobManager.count_pending_jobs_near(center_tile, Job.Type.FORAGE, 12) <= 0:
 			var fj: Job = JobManager.post_from_dict({
 				"type": Job.Type.FORAGE,
 				"tile": center_tile + Vector2i(1, 0),
-				"priority": 70,
+				"priority": food_prio,
 				"work_ticks": 8,
 				"issuer_pawn_id": leader_id,
 				"issuer_role": "leader",
@@ -45,21 +50,55 @@ static func post_critical_proto_survival_if_needed(leader_pawn: Node, center_til
 			})
 			if fj != null:
 				posted += 1
+		if food_press >= 0.85 or stock_food <= 0:
+			if JobManager.count_pending_jobs_near(center_tile, Job.Type.HUNT, 12) <= 0:
+				var hj: Job = JobManager.post_from_dict({
+					"type": Job.Type.HUNT,
+					"tile": center_tile + Vector2i(-1, 0),
+					"priority": food_prio - 5,
+					"work_ticks": 12,
+					"issuer_pawn_id": leader_id,
+					"issuer_role": "leader",
+					"authority_scope": "proto_camp",
+					"reason": "critical_food",
+				})
+				if hj != null:
+					posted += 1
+			if JobManager.count_pending_jobs_near(center_tile, Job.Type.FISH, 12) <= 0:
+				var fishj: Job = JobManager.post_from_dict({
+					"type": Job.Type.FISH,
+					"tile": center_tile + Vector2i(0, 1),
+					"priority": food_prio - 8,
+					"work_ticks": 10,
+					"issuer_pawn_id": leader_id,
+					"issuer_role": "leader",
+					"authority_scope": "proto_camp",
+					"reason": "critical_food",
+				})
+				if fishj != null:
+					posted += 1
 	if ColonySimServices.get_warmth_pressure() > 0.35 \
 			and ColonySimServices.can_seed_fire_pit(-1, center_tile, 0, 1):
 		if JobManager.count_pending_jobs_near(center_tile, Job.Type.BUILD_FIRE_PIT, 12) <= 0:
-			var pj: Job = JobManager.post_from_dict({
-				"type": Job.Type.BUILD_FIRE_PIT,
-				"tile": center_tile,
-				"priority": 75,
-				"work_ticks": 12,
-				"issuer_pawn_id": leader_id,
-				"issuer_role": "leader",
-				"authority_scope": "proto_camp",
-				"reason": "critical_warmth",
-			})
-			if pj != null:
-				posted += 1
+			var fire_tile: Vector2i = center_tile
+			var main_node: Node = leader_pawn.get_tree().root.get_node_or_null("Main")
+			if main_node != null and main_node.has_method("_find_build_tile_near"):
+				var found: Variant = main_node.call("_find_build_tile_near", center_tile, 5)
+				if found is Vector2i and (found as Vector2i).x >= 0:
+					fire_tile = found as Vector2i
+			if not JobManager.has_job_at(fire_tile):
+				var pj: Job = JobManager.post_from_dict({
+					"type": Job.Type.BUILD_FIRE_PIT,
+					"tile": fire_tile,
+					"priority": 75,
+					"work_ticks": 12,
+					"issuer_pawn_id": leader_id,
+					"issuer_role": "leader",
+					"authority_scope": "proto_camp",
+					"reason": "critical_warmth",
+				})
+				if pj != null:
+					posted += 1
 	return posted
 
 

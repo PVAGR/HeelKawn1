@@ -136,6 +136,14 @@ func get_stance_display() -> String:
 	return _stance_name(current_labor_stance)
 
 
+## World truth for HUD/debug — always from tile feature scan, not local settlement scan.
+func get_colony_fire_pit_count() -> int:
+	var world: World = _get_colony_world()
+	if world == null or not world.has_method("get_feature_counts"):
+		return 0
+	return int(world.get_feature_counts().get(TileFeature.Type.FIRE_PIT, 0))
+
+
 func get_food_pressure() -> float:
 	return _food_press
 
@@ -746,7 +754,8 @@ func count_pending_fire_pits_in_region(center_region: int, radius: int = 16) -> 
 	var center_tile: Vector2i = _center_tile_for_region(center_region)
 	if center_tile.x < 0:
 		return 0
-	return count_pending_jobs_near(center_tile, Job.Type.BUILD_FIRE_PIT, radius)
+	return count_pending_jobs_near(center_tile, Job.Type.BUILD_FIRE_PIT, radius) \
+			+ count_pending_jobs_near(center_tile, Job.Type.BUILD_HEARTH, radius)
 
 
 ## How many hearths the region still needs (cold coverage, not pop/4 per hamlet).

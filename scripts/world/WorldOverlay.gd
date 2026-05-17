@@ -418,6 +418,13 @@ func _draw_build_plan(p: Vector2, job_type: int, claimed: bool) -> void:
 		Job.Type.BUILD_BED, Job.Type.BUILD_SHELTER:
 			draw_rect(Rect2(p + Vector2(-3.8, -2.2), Vector2(7.6, 4.4)), Color8(230, 190, 120, alpha), true)
 			draw_rect(Rect2(p + Vector2(-3.8, -2.2), Vector2(7.6, 4.4)), Color8(255, 235, 170, 120), false, 0.7)
+		Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_HEARTH:
+			var hearth_c: Color = Color8(255, 140, 40, alpha + 40)
+			draw_rect(Rect2(p + Vector2(-2.2, -2.2), Vector2(4.4, 4.4)), hearth_c, true)
+			draw_rect(Rect2(p + Vector2(-2.2, -2.2), Vector2(4.4, 4.4)), Color8(255, 220, 120, 150), false, 0.8)
+		Job.Type.BUILD_STORAGE_HUT:
+			draw_rect(Rect2(p + Vector2(-2.5, -2.5), Vector2(5.0, 5.0)), Color8(180, 140, 70, alpha + 25), true)
+			draw_rect(Rect2(p + Vector2(-2.5, -2.5), Vector2(5.0, 5.0)), Color8(255, 230, 160, 130), false, 0.7)
 		_:
 			draw_circle(p, 3.6, Color8(140, 190, 255, alpha))
 			draw_circle(p, 3.8, Color8(220, 240, 255, 95))

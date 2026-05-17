@@ -91,6 +91,9 @@ func _on_game_tick(tick: int) -> void:
 		_clear_temporary_event()
 	if _suppress_economy_distorting_world_events() and _active_event_until_tick >= 0:
 		_clear_temporary_event()
+	# Survival-first: defer ambient world events while the colony is starving.
+	if ColonySimServices != null and ColonySimServices.get_food_pressure() >= 0.85:
+		return
 
 	# ENFORCE MINIMUM TIME BETWEEN EVENTS
 	if tick - _last_event_tick < MIN_TICKS_BETWEEN_EVENTS:

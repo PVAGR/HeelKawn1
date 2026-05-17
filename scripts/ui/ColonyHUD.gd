@@ -607,9 +607,12 @@ func _world_pulse_line() -> String:
 	var open_j: int = int(js.get("open", 0))
 	var claimed_j: int = int(js.get("claimed", 0))
 	var done_j: int = int(js.get("completed", 0))
-	return "[color=#aed581]W:[/color]%dst %dchrk · Work: %d/%d/%d" % [
+	var fire_pits: int = ColonySimServices.get_colony_fire_pit_count() \
+			if ColonySimServices != null and ColonySimServices.has_method("get_colony_fire_pit_count") else 0
+	return "[color=#aed581]W:[/color]%dst %dchrk · %dfire · Work: %d/%d/%d" % [
 		settlements_n,
 		facts,
+		fire_pits,
 		open_j,
 		claimed_j,
 		done_j,
@@ -677,6 +680,13 @@ func _settlement_identity_line() -> String:
 	elif rep >= 1:
 		rep_word = "respected"
 	var state_txt: String = str(prof.get("state", "unknown")).replace("_", " ")
+	var kind_txt: String = "wilds"
+	if st_any is Dictionary:
+		var st_d: Dictionary = st_any as Dictionary
+		if bool(st_d.get("is_formal_settlement", false)):
+			kind_txt = "formal"
+		else:
+			kind_txt = str(st_d.get("settlement_kind", "proto_site")).replace("_", " ")
 	var culture_txt: String = str(prof.get("culture_name", "cautious")).replace("_", " ")
 	var revival_score: int = int(prof.get("revival_score", 0))
 	var war: Dictionary = SettlementMemory.get_war_profile_for_region(profile_rk)
@@ -696,13 +706,13 @@ func _settlement_identity_line() -> String:
 		if myth_name != "—":
 			myth_age_txt = " · [color=#e8c170]%s[/color]" % myth_name
 	if _is_simple_hud():
-		return "[color=#c9b37c]Identity:[/color] [b]%s[/b] · %s · %s · era %s%s · war %s · gov %s" % [
-			state_txt.capitalize(), culture_txt.capitalize(), meaning, era_txt, myth_age_txt, war_state, gov_txt,
+		return "[color=#c9b37c]Identity:[/color] [b]%s[/b] · %s · %s · %s · era %s%s · war %s · gov %s" % [
+			state_txt.capitalize(), kind_txt, culture_txt.capitalize(), meaning, era_txt, myth_age_txt, war_state, gov_txt,
 		]
 	return (
-		"[color=#c9b37c]Identity:[/color] #%d  [b]%s[/b] · %s · era %s%s · intent %s · rev %d  "
+		"[color=#c9b37c]Identity:[/color] #%d  [b]%s[/b] · %s · %s · era %s%s · intent %s · rev %d  "
 		+ "| meaning %s · rep %s(%d) · war %s · gov %s"
-	) % [profile_rk, state_txt, culture_txt, era_txt, myth_age_txt, intent, revival_score, meaning, rep_word, rep, war_state, gov_txt]
+	) % [profile_rk, state_txt, kind_txt, culture_txt, era_txt, myth_age_txt, intent, revival_score, meaning, rep_word, rep, war_state, gov_txt]
 
 
 static func _demand_tier(p: float) -> String:

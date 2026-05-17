@@ -666,17 +666,17 @@ func describe_formal_settlement_gate(candidate_center: Vector2i, candidate_pawns
     gate["hearths_in_region"] = int(warmth_gate.get("hearths", 0))
     if not bool(warmth_gate.get("met", false)):
         var in_grace: bool = stable_ticks < GUILD_STABILITY_TICKS + FORMAL_WARMTH_GRACE_TICKS
-        entry["signature"] = signature
-        entry["since_tick"] = since_tick
-        entry["last_members"] = qualified_ids.duplicate(true)
-        entry["last_member_names"] = qualified_names.duplicate(true)
-        entry["formal"] = false
-        _guild_foundation_state[key] = entry
-        if in_grace:
-            gate["reason"] = "warmth_grace"
-        else:
+        if not in_grace:
+            entry["signature"] = signature
+            entry["since_tick"] = since_tick
+            entry["last_members"] = qualified_ids.duplicate(true)
+            entry["last_member_names"] = qualified_names.duplicate(true)
+            entry["formal"] = false
+            _guild_foundation_state[key] = entry
             gate["reason"] = str(warmth_gate.get("reason", "warmth_unsatisfied"))
-        return gate
+            return gate
+        gate["reason"] = "warmth_grace"
+        gate["warmth_reason"] = "warmth_grace"
     entry["signature"] = signature
     entry["since_tick"] = since_tick
     entry["last_members"] = qualified_ids.duplicate(true)
@@ -694,7 +694,7 @@ func _formal_settlement_warmth_gate(candidate_center: Vector2i) -> Dictionary:
     if candidate_center.x < 0 or candidate_center.y < 0:
         out["reason"] = "invalid_center"
         return out
-    var features: Dictionary = HeelKawnianManager._scan_local_features(candidate_center, 12)
+    var features: Dictionary = HeelKawnianManager._scan_local_features(candidate_center, 14)
     var hearths: int = int(features.get("hearth", 0))
     out["hearths"] = hearths
     if hearths > 0:
@@ -725,6 +725,9 @@ func _apply_guild_settlement_gate(world: World) -> void:
             continue
         var center_tile: Vector2i = SettlementPlanner._center_tile_of_region_key(center_rk)
         var guild_pawns: Array = _pawns_in_settlement_indexed(st)
+        if guild_pawns.size() < MIN_GUILD_SIZE_FOR_SETTLEMENT:
+            guild_pawns = _guild_pawns_near_center(center_tile, guild_pawns)
+        var was_formal: bool = bool(st.get("is_formal_settlement", false))
         var gate: Dictionary = describe_formal_settlement_gate(center_tile, guild_pawns, world)
         var allowed: bool = bool(gate.get("allowed", false))
         st["member_pawn_ids"] = _array_to_packed_int32(gate.get("member_ids", []))
@@ -739,12 +742,47 @@ func _apply_guild_settlement_gate(world: World) -> void:
             st["founding_reason"] = "guild_settlement"
             st["founding_tick"] = int(gate.get("founding_tick", -1))
             st["guild_id"] = "guild_%d_%d" % [center_rk, int(st.get("founding_tick", -1))]
+            if not was_formal and WorldMemory != null:
+                WorldMemory.record_event({
+                    "type": "settlement_formalized",
+                    "center_region": center_rk,
+                    "tick": GameManager.tick_count if GameManager != null else 0,
+                    "reason": str(gate.get("reason", "guild_settlement")),
+                    "member_count": int(gate.get("member_count", 0)),
+                    "hearths": int(gate.get("hearths_in_region", 0)),
+                })
         else:
             st["settlement_kind"] = _proto_site_kind_for_settlement(st)
             st["founding_reason"] = "guild_gate:%s" % str(gate.get("reason", "unknown"))
             st["founding_tick"] = -1
             st["guild_id"] = ""
         settlements[i] = st
+
+
+## Supplement region-indexed pawns with anyone in guild cluster radius (playtest clusters spread across region edges).
+func _guild_pawns_near_center(center_tile: Vector2i, indexed: Array) -> Array:
+    var out: Array = indexed.duplicate(true)
+    var seen: Dictionary = {}
+    for p_any in out:
+        if p_any is HeelKawnian and (p_any as HeelKawnian).data != null:
+            seen[int((p_any as HeelKawnian).data.id)] = true
+    var radius_sq: int = GUILD_CLUSTER_RADIUS_TILES * GUILD_CLUSTER_RADIUS_TILES
+    for p_any in PawnAccess.find_alive_pawns():
+        if not (p_any is HeelKawnian):
+            continue
+        var p: HeelKawnian = p_any as HeelKawnian
+        if p == null or not is_instance_valid(p) or p.data == null:
+            continue
+        var pid: int = int(p.data.id)
+        if seen.has(pid):
+            continue
+        var dx: int = center_tile.x - p.data.tile_pos.x
+        var dy: int = center_tile.y - p.data.tile_pos.y
+        if dx * dx + dy * dy > radius_sq:
+            continue
+        seen[pid] = true
+        out.append(p)
+    return out
 
 
 func _proto_site_kind_for_settlement(st: Dictionary) -> String:

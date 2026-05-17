@@ -93,6 +93,7 @@ func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) ->
 	job.priority = priority
 	job.work_ticks_needed = work_ticks
 	job.state = Job.State.OPEN
+	job.posted_tick = GameManager.tick_count if GameManager != null else 0
 	_open.append(job)
 	_jobs_by_tile[tile] = job
 	posted_count += 1
@@ -575,6 +576,83 @@ func clear_all() -> void:
 		j.assigned_pawn = null
 		cancelled_count += 1
 		job_cancelled.emit(j)
+
+
+const STALE_OPEN_JOB_TICKS: int = 200
+
+
+## Cancel open jobs that sat unclaimed on invalid tiles for [param max_unclaimed_ticks]+.
+func prune_stale_open_jobs(world: World, max_unclaimed_ticks: int = STALE_OPEN_JOB_TICKS) -> int:
+	if world == null or world.data == null:
+		return 0
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	var pruned: int = 0
+	var doomed: Array[Job] = []
+	for j in _open:
+		if j == null or j.state != Job.State.OPEN:
+			continue
+		var posted: int = int(j.posted_tick)
+		if posted > 0 and tick - posted < max_unclaimed_ticks:
+			continue
+		if is_job_target_still_valid(world, j):
+			continue
+		doomed.append(j)
+	for j in doomed:
+		cancel(j, "stale_invalid_tile")
+		pruned += 1
+	return pruned
+
+
+## Shared validity check for open-job pruning (harvest + build targets).
+func is_job_target_still_valid(world: World, job: Job) -> bool:
+	if world == null or world.data == null or job == null:
+		return false
+	if not world.data.in_bounds(job.tile.x, job.tile.y):
+		return false
+	match job.type:
+		Job.Type.FORAGE, Job.Type.PLANT_SEEDS:
+			return int(world.data.get_feature(job.tile.x, job.tile.y)) == TileFeature.Type.FERTILE_SOIL
+		Job.Type.MINE:
+			return int(world.data.get_feature(job.tile.x, job.tile.y)) == TileFeature.Type.ORE_VEIN
+		Job.Type.MINE_WALL:
+			return int(world.data.get_biome(job.tile.x, job.tile.y)) == Biome.Type.MOUNTAIN
+		Job.Type.CHOP:
+			return int(world.data.get_feature(job.tile.x, job.tile.y)) == TileFeature.Type.TREE
+		Job.Type.HUNT:
+			return TileFeature.is_wildlife(int(world.data.get_feature(job.tile.x, job.tile.y)))
+		Job.Type.FISH:
+			var feat_f: int = int(world.data.get_feature(job.tile.x, job.tile.y))
+			return feat_f == TileFeature.Type.RIVER \
+					or int(world.data.get_biome(job.tile.x, job.tile.y)) == Biome.Type.WATER
+		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH, Job.Type.DRY_MEAT:
+			return int(world.data.get_feature(job.tile.x, job.tile.y)) == TileFeature.Type.FIRE_PIT
+		Job.Type.TRADE_HAUL:
+			var tf: Stockpile = job.trade_from
+			var tt: Stockpile = job.trade_to
+			if tf == null or not is_instance_valid(tf) or tt == null or not is_instance_valid(tt):
+				return false
+			if world.pathfinder != null and not world.pathfinder.is_passable(job.work_tile):
+				return false
+			if not tt.accepts(job.trade_item):
+				return false
+			return tf.count_of(job.trade_item) > 0
+		Job.Type.BUILD_DOOR:
+			var f_door: int = int(world.data.get_feature(job.tile.x, job.tile.y))
+			if f_door == TileFeature.Type.WALL or f_door == TileFeature.Type.NONE:
+				return Biome.is_passable(world.data.get_biome(job.tile.x, job.tile.y))
+			return false
+		_:
+			if not Biome.is_passable(world.data.get_biome(job.tile.x, job.tile.y)):
+				return false
+			var f: int = int(world.data.get_feature(job.tile.x, job.tile.y))
+			if f == TileFeature.Type.NONE:
+				return true
+			if f == TileFeature.Type.TREE or f == TileFeature.Type.FERTILE_SOIL \
+					or f == TileFeature.Type.ORE_VEIN or f == TileFeature.Type.RUIN:
+				return true
+			if ColonySimServices != null and ColonySimServices.is_hearth_build_job(job.type):
+				return f != TileFeature.Type.FIRE_PIT
+			return false
 
 
 func open_count() -> int:

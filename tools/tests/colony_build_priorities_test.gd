@@ -32,6 +32,7 @@ func _run_checks() -> void:
 	_test_estimate_farm_cap()
 	_test_compute_priorities_shape()
 	_test_can_seed_fire_pit_shape()
+	_test_colony_fire_pit_count_shape()
 
 
 func _assert_true(cond: bool, label: String) -> void:
@@ -64,3 +65,12 @@ func _test_compute_priorities_shape() -> void:
 func _test_can_seed_fire_pit_shape() -> void:
 	var ok: bool = _colony_sim.can_seed_fire_pit(-1, Vector2i(64, 64), 0, 1)
 	_assert_true(ok is bool, "can_seed_fire_pit returns bool")
+
+
+func _test_colony_fire_pit_count_shape() -> void:
+	if not _colony_sim.has_method("get_colony_fire_pit_count"):
+		_failed += 1
+		print("[FAIL] get_colony_fire_pit_count missing")
+		return
+	var n: int = int(_colony_sim.get_colony_fire_pit_count())
+	_assert_true(n >= 0, "get_colony_fire_pit_count non-negative")

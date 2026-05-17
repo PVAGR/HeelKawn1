@@ -1790,7 +1790,7 @@ func _process(delta: float) -> void:
 		var avg_fps: float = float(_frame_time_samples) / _frame_time_accum
 		if avg_fps < 50.0 and OS.is_debug_build():
 			var tick_batch_ms: float = float(TickManager.debug_last_tick_batch_usec) / 1000.0
-			var job_count: int = JobManager.stats().get("active", 0) if JobManager != null else 0
+			var job_count: int = JobManager.open_count() if JobManager != null else 0
 			print("[PERF] avg_fps=%.0f over %.1fs | tick_batch=%.1fms | pawns=%d jobs=%d settlements=%d proto_sites=%d" % [
 				avg_fps, _frame_time_accum, tick_batch_ms,
 				_pawn_spawner.pawns.size() if _pawn_spawner != null else 0,
@@ -2821,6 +2821,8 @@ func _on_game_tick(tick: int) -> void:
 	# jobs for those tiles so other pawns can claim them.
 	if _is_main_lane_tick(tick, 200, 17):
 		_seed_jobs_for_discovered_area()
+		if JobManager != null and _world != null:
+			JobManager.prune_stale_open_jobs(_world, 200)
 
 	# Migrant arrivals: every 5000 ticks, a new HeelKawnian may arrive from the wilderness.
 	# Population grows from without. Rate depends on existing population.
@@ -5470,7 +5472,9 @@ func get_colony_truth() -> Dictionary:
 	var total_food_stockpile: int = StockpileManager.total_food() if StockpileManager != null and StockpileManager.has_method("total_food") else 0
 	var food_hands: int = _food_in_pawn_hands()
 	var beds: int = _world.bed_count() if _world != null and _world.has_method("bed_count") else 0
-	var fire_pits: int = _feature_count(TileFeature.Type.FIRE_PIT)
+	var fire_pits: int = ColonySimServices.get_colony_fire_pit_count() \
+			if ColonySimServices != null and ColonySimServices.has_method("get_colony_fire_pit_count") \
+			else _feature_count(TileFeature.Type.FIRE_PIT)
 	var housing_pressure: float = ColonySimServices.get_housing_pressure() if ColonySimServices != null else 0.0
 	var food_pressure: float = ColonySimServices.get_food_pressure() if ColonySimServices != null else 0.0
 	var warnings: Array[String] = []
@@ -6201,6 +6205,25 @@ func _maybe_spawn_migrant() -> void:
 	# their idle tick will claim jobs and they'll integrate organically.
 
 
+## Cancel unclaimed chop jobs while the colony is starving so forage/hunt can win claims.
+func _trim_open_chop_jobs_under_food_crisis() -> void:
+	if JobManager == null or ColonySimServices == null:
+		return
+	if ColonySimServices.get_food_pressure() < 0.85:
+		return
+	var trimmed: int = 0
+	for jv in JobManager.get_active_jobs_union():
+		if not (jv is Job):
+			continue
+		var j: Job = jv as Job
+		if j.type != Job.Type.CHOP or j.state != Job.State.OPEN:
+			continue
+		JobManager.cancel(j, "food_crisis_reprieve")
+		trimmed += 1
+		if trimmed >= 24:
+			break
+
+
 ## DORMANT WORLD: Seed harvest jobs for discovered tiles near living pawns.
 ## Uses per-capita needs limits — not every resource gets a job.
 ## Only scans tiles within a radius of each living pawn (not the whole 256x256 map).
@@ -6216,6 +6239,13 @@ func _seed_jobs_for_discovered_area() -> void:
 	var max_fish: int = maxi(int(ceil(float(pop) * FogOfDiscovery.FOOD_JOBS_PER_PAWN * 0.2)), 1)
 	var max_chop: int = maxi(int(ceil(float(pop) * FogOfDiscovery.WOOD_JOBS_PER_PAWN)), 2)
 	var max_mine: int = maxi(int(ceil(float(pop) * FogOfDiscovery.STONE_JOBS_PER_PAWN)), 1)
+	var food_press: float = ColonySimServices.get_food_pressure() if ColonySimServices != null else 0.0
+	if food_press > 0.85:
+		max_chop = mini(max_chop, maxi(2, pop / 4))
+		max_forage = maxi(max_forage, maxi(6, int(ceil(float(pop) * 1.2))))
+		max_hunt = maxi(max_hunt, maxi(3, int(ceil(float(pop) * 0.5))))
+		max_fish = maxi(max_fish, maxi(2, int(ceil(float(pop) * 0.35))))
+		_trim_open_chop_jobs_under_food_crisis()
 	var forage_posted: int = 0
 	var hunt_posted: int = 0
 	var fish_posted: int = 0
@@ -6536,8 +6566,10 @@ func _seed_bootstrap_jobs_near_pawn_cluster() -> void:
 	var hearths: int = int(features.get("hearth", 0))  # FIRE_PIT features counted as "hearth"
 	var storage_huts: int = int(features.get("storage_hut", 0))
 	var nearby_pending: int = _count_pending_jobs_near(-1, center, 8, [])
-	# Don't spam jobs if there are already enough pending
-	if nearby_pending >= 8:
+	var needs_survival_bootstrap: bool = hearths <= 0 \
+			or (StockpileManager != null and StockpileManager.zone_count() <= 0)
+	# Don't spam jobs if there are already enough pending (unless hearth/stockpile missing).
+	if nearby_pending >= 8 and not needs_survival_bootstrap:
 		return
 	# Fire pits: warmth coverage — ~1 per 4 cold uncovered pawns; at least 1 when none exist.
 	var cold_uncovered: int = ColonySimServices.count_cold_uncovered_pawns() if ColonySimServices != null else 0
@@ -6548,17 +6580,21 @@ func _seed_bootstrap_jobs_near_pawn_cluster() -> void:
 		needed_fire_pits = hearths + int(ceil(float(cold_uncovered) / 4.0))
 	var warmth_satisfied: bool = hearths > 0 and cold_uncovered <= 0
 	if not warmth_satisfied and hearths < needed_fire_pits:
-		# Avoid posting fire-pit build jobs when raw materials are not available
 		var stock_wood: int = StockpileManager.total_count_of(Item.Type.WOOD) if StockpileManager != null else 0
 		var stock_stone: int = StockpileManager.total_count_of(Item.Type.STONE) if StockpileManager != null else 0
-		var allow_fire_post: bool = true
-		# If there are no stored materials and the cluster is large, skip posting to avoid spam
-		if stock_wood + stock_stone == 0 and count > 8:
-			allow_fire_post = false
+		var carried_wood: int = 0
+		for p in pawns:
+			if p != null and is_instance_valid(p) and p.data != null and int(p.data.carrying) == Item.Type.WOOD:
+				carried_wood += int(p.data.carrying_qty)
+		# Post when stockpiles, carried wood, or a small cluster can chop for fuel.
+		var allow_fire_post: bool = stock_wood + stock_stone > 0 or carried_wood >= 2 or count <= 8
 		if allow_fire_post:
 			var t: Vector2i = _find_build_tile_near(center, 4)
-			if t.x >= 0:
-				_stamp_seeder_job(JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 5), "warmth_coverage")
+			if t.x >= 0 and not JobManager.has_job_at(t):
+				_stamp_seeder_job(JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 5, 12), "warmth_coverage")
+	# First stockpile zone near the living cluster (proto camps have no formal settlement pass).
+	if StockpileManager != null and StockpileManager.zone_count() <= 0:
+		call_deferred("_ensure_settlement_stockpile", center)
 	# Beds: only when macro housing pressure warrants (not blind pop/2).
 	var housing_press: float = ColonySimServices.get_housing_pressure() if ColonySimServices != null else 0.0
 	if housing_press > 0.35:
@@ -6583,6 +6619,60 @@ func _seed_bootstrap_jobs_near_pawn_cluster() -> void:
 			break
 	if leader != null:
 		_AUTHORITY_JOB_BOARD.post_critical_proto_survival_if_needed(leader, center)
+	_seed_bootstrap_survival_food_jobs(center, count)
+
+
+func _seed_bootstrap_survival_food_jobs(center: Vector2i, pop: int) -> void:
+	if JobManager == null or _world == null or _world.data == null:
+		return
+	var food_press: float = ColonySimServices.get_food_pressure() if ColonySimServices != null else 0.0
+	var stock_food: int = StockpileManager.total_food() if StockpileManager != null else 0
+	var zones: int = StockpileManager.zone_count() if StockpileManager != null else 0
+	if food_press < 0.70 and stock_food > pop:
+		return
+	var max_forage: int = maxi(6, int(ceil(float(pop) * 1.4)))
+	var max_hunt: int = maxi(3, int(ceil(float(pop) * 0.5)))
+	var max_fish: int = maxi(2, int(ceil(float(pop) * 0.35)))
+	if food_press >= 0.95 or (zones <= 0 and stock_food <= 0):
+		max_forage = maxi(max_forage, maxi(10, pop))
+		max_hunt = maxi(max_hunt, maxi(4, pop / 3))
+		max_fish = maxi(max_fish, 3)
+	var posted_forage: int = 0
+	var posted_hunt: int = 0
+	var posted_fish: int = 0
+	var radius: int = 14
+	for dy in range(-radius, radius + 1):
+		for dx in range(-radius, radius + 1):
+			if abs(dx) != radius and abs(dy) != radius:
+				continue
+			var t: Vector2i = center + Vector2i(dx, dy)
+			if not _world.data.in_bounds(t.x, t.y):
+				continue
+			if JobManager.has_job_at(t):
+				continue
+			var feat: int = int(_world.data.get_feature(t.x, t.y))
+			if feat == TileFeature.Type.FERTILE_SOIL and posted_forage < max_forage:
+				if JobManager.post(Job.Type.FORAGE, t, 8, 8) != null:
+					posted_forage += 1
+			elif feat == TileFeature.Type.DEER and posted_hunt < max_hunt:
+				if JobManager.post(Job.Type.HUNT, t, 8, 12) != null:
+					posted_hunt += 1
+			elif (feat == TileFeature.Type.RIVER or int(_world.data.get_biome(t.x, t.y)) == Biome.Type.WATER) \
+					and posted_fish < max_fish:
+				if JobManager.post(Job.Type.FISH, t, 7, 10) != null:
+					posted_fish += 1
+			if posted_forage >= max_forage and posted_hunt >= max_hunt and posted_fish >= max_fish:
+				return
+	var features: Dictionary = HeelKawnianManager._scan_local_features(center, 12)
+	if int(features.get("hearth", 0)) > 0:
+		var cook_tile: Vector2i = _find_hearth_tile_near(center, 6)
+		if cook_tile.x >= 0 and not JobManager.has_job_at(cook_tile):
+			if stock_food <= 0 and JobManager.post(Job.Type.FORAGE, center, 9, 6) != null:
+				pass
+			elif StockpileManager.total_count_of(Item.Type.MEAT) > 0:
+				JobManager.post(Job.Type.COOK_MEAT, cook_tile, 6, 8)
+			elif StockpileManager.total_count_of(Item.Type.BERRY) >= 2:
+				JobManager.post(Job.Type.COOK_BERRIES, cook_tile, 5, 5)
 
 
 func _seed_construction_jobs() -> void:
@@ -6603,17 +6693,23 @@ func _seed_construction_jobs() -> void:
 	var stock_wood: int = StockpileManager.total_count_of(Item.Type.WOOD) if StockpileManager != null else 0
 	var stock_stone: int = StockpileManager.total_count_of(Item.Type.STONE) if StockpileManager != null else 0
 	var materials_crisis: bool = stock_wood <= 2 or stock_stone <= 2
+	var food_crit: bool = ColonySimServices != null and ColonySimServices.get_food_pressure() >= 0.85
+	if food_crit:
+		materials_crisis = true
 	if ColonySimServices != null:
 		ColonySimServices.begin_settlement_construction_pass()
 
 	var posted: int = 0
 	var settlements: Array = SettlementMemory.get_formal_settlements()
+	var seeding_proto: bool = false
 	if settlements.is_empty():
-		# No formal settlements yet — seed basic build jobs near the pawn cluster
-		# so pawns can build fire pits, beds, and shelters. Pawns gather materials
-		# directly from the environment (no stockpile needed).
-		_seed_bootstrap_jobs_near_pawn_cluster()
-		return
+		# Proto-site clusters still need hearths/stockpiles — run the per-settlement
+		# scheduler against proto camps, not only a single pawn centroid.
+		settlements = SettlementMemory.get_proto_sites()
+		seeding_proto = not settlements.is_empty()
+		if settlements.is_empty():
+			_seed_bootstrap_jobs_near_pawn_cluster()
+			return
 	var max_settlements_this_pass: int = 1 if GameManager.game_speed >= 50.0 else 2
 	var settlements_seen: int = 0
 	var start_idx: int = _construction_seed_cursor % settlements.size()
@@ -6643,7 +6739,9 @@ func _seed_construction_jobs() -> void:
 		settlements_seen += 1
 		# Quick check: if this settlement already has many pending jobs, skip the expensive scan
 		var nearby_pending: int = _count_pending_jobs_near(-1, center_tile, 8, _cached_active_jobs)
-		if nearby_pending >= 5:
+		var cold_uncovered_site: int = ColonySimServices.count_cold_uncovered_pawns(center_rk) \
+				if ColonySimServices != null else 0
+		if nearby_pending >= 5 and cold_uncovered_site <= 0:
 			continue
 		# Scan local features (beds, walls, hearths, etc.) — wide enough to see hearths
 		var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 12)
@@ -6672,9 +6770,13 @@ func _seed_construction_jobs() -> void:
 		# Post a handful of jobs per settlement per cycle; this is a scheduler, not a flood-fill.
 		var jobs_this_settlement: int = 0
 		var job_cap: int = int(build_priorities.get("job_cap", 4 if materials_crisis else 7))
+		if seeding_proto:
+			job_cap = mini(job_cap, 4)
 		var ambition_blocked: bool = _seeder_ambition_blocked(center_rk)
-		# Priority 0: Beds when housing crisis is critical
-		if ColonySimServices != null and ColonySimServices.get_housing_pressure() > 0.8 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
+		if seeding_proto:
+			ambition_blocked = true
+		# Priority 0: Beds when housing crisis is critical (formal only — avoid wall-ring grey boxes on proto camps)
+		if not seeding_proto and ColonySimServices != null and ColonySimServices.get_housing_pressure() > 0.8 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			var need_beds_crisis: int = maxi(3, int(ceil(float(local_pop) * 0.75)))
 			var pending_beds_crisis: int = _count_pending_jobs_near(Job.Type.BUILD_BED, center_tile, 10, _cached_active_jobs)
 			var beds_posted_this_cycle: int = 0
@@ -6704,7 +6806,8 @@ func _seed_construction_jobs() -> void:
 		var hearths_needed: int = int(build_priorities.get("hearths_needed", 0))
 		var warmth_satisfied: bool = bool(build_priorities.get("warmth_satisfied", false))
 		var warmth_press: float = float(build_priorities.get("warmth_press", 0.0))
-		var pending_fire_pits: int = _count_pending_jobs_near(Job.Type.BUILD_FIRE_PIT, center_tile, 10, _cached_active_jobs)
+		var pending_fire_pits: int = ColonySimServices.count_pending_fire_pits_in_region(center_rk, 10) \
+				if ColonySimServices != null else _count_pending_jobs_near(Job.Type.BUILD_FIRE_PIT, center_tile, 10, _cached_active_jobs)
 		if not warmth_satisfied and hearths + pending_fire_pits < hearths_needed and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			var may_post_fire: bool = pending_fire_pits == 0
 			if ColonySimServices != null:
@@ -6782,7 +6885,8 @@ func _seed_construction_jobs() -> void:
 		# Priority 4: Connected wall perimeter ring + door (after survival basics)
 		var pending_walls: int = _count_pending_jobs_near(Job.Type.BUILD_WALL, center_tile, 12, _cached_active_jobs)
 		var pending_doors: int = _count_pending_jobs_near(Job.Type.BUILD_DOOR, center_tile, 12, _cached_active_jobs)
-		if survival_met and local_pop >= 1 and not materials_crisis and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
+		if survival_met and local_pop >= 1 and not materials_crisis and not food_crit \
+				and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			# Scale ring radius and target walls with population
 			var ring_radius: int = 3 + mini(2, local_pop / 3)  # 3 for 1-2 pop, 4 for 3-5, 5 for 6+
 			var target_walls: int = 8 + local_pop * 2  # 10-20+ walls depending on pop
@@ -7077,6 +7181,14 @@ func _seed_construction_jobs() -> void:
 							break
 					if roads_posted >= 2:
 						break
+	if seeding_proto and ColonySimServices != null and ColonySimServices.get_food_pressure() > 0.75:
+		var proto_sd: Dictionary = settlements[start_idx % settlements.size()] as Dictionary
+		var proto_rk: int = int(proto_sd.get("center_region", -1))
+		if proto_rk >= 0:
+			var prx: int = proto_rk & 0xFFFF
+			var pry: int = (proto_rk >> 16) & 0xFFFF
+			var proto_center: Vector2i = Vector2i(prx * 16 + 8, pry * 16 + 8)
+			_seed_bootstrap_survival_food_jobs(proto_center, maxi(1, int(proto_sd.get("population", 0))))
 	_construction_seed_cursor = (start_idx + max(1, settlements_seen)) % maxi(1, settlements.size())
 	# Micro-profile log: show which sections took the most time
 	var total_usec: int = Time.get_ticks_usec() - start_usec
@@ -7296,9 +7408,12 @@ func _find_feature_tile_near(center: Vector2i, feature_type: int, radius: int) -
 ## Find an empty passable tile near center for building.
 ## Allows tiles with clearable features (TREE, FERTILE_SOIL, ORE_VEIN, RUIN)
 ## since set_feature overwrites them on build completion.
-func _find_build_tile_near(center: Vector2i, radius: int) -> Vector2i:
+## [param main_component] pathfinder component id; -1 uses largest landmass.
+func _find_build_tile_near(center: Vector2i, radius: int, main_component: int = -1) -> Vector2i:
 	if _world == null or _world.data == null or _world.pathfinder == null:
 		return Vector2i(-1, -1)
+	if main_component < 0:
+		main_component = _world.pathfinder.largest_component_id()
 	# Prefer feature-free tiles first, then allow clearable features
 	for pass_n in range(2):
 		for r in range(1, radius + 1):
@@ -7307,25 +7422,42 @@ func _find_build_tile_near(center: Vector2i, radius: int) -> Vector2i:
 					if abs(x) != r and abs(y) != r:
 						continue
 					var t: Vector2i = center + Vector2i(x, y)
-					if not _world.data.in_bounds(t.x, t.y):
+					if not _is_valid_seeder_build_tile(t, main_component, pass_n == 0):
 						continue
-					if not _world.pathfinder.is_passable(t):
-						continue
-					var feat: int = int(_world.data.get_feature(t.x, t.y))
-					if pass_n == 0:
-						# First pass: only feature-free tiles
-						if feat != TileFeature.Type.NONE:
-							continue
-					else:
-						# Second pass: allow clearable features (tree, fertile soil, sticks, flint)
-						if feat == TileFeature.Type.WALL or feat == TileFeature.Type.DOOR \
-							or feat == TileFeature.Type.BED or feat == TileFeature.Type.FIRE_PIT \
-							or feat == TileFeature.Type.STORAGE_HUT or feat == TileFeature.Type.MARKER_STONE \
-							or feat == TileFeature.Type.SHRINE or feat == TileFeature.Type.GRAVE_MARKER \
-							or feat == TileFeature.Type.KNOWLEDGE_STONE or feat == TileFeature.Type.LEDGER_STONE:
-							continue  # Don't build over existing structures
 					return t
 	return Vector2i(-1, -1)
+
+
+## Shared predicate for autonomous seeders: walkable on main landmass, no duplicate job,
+## and either empty or clearable (trees/soil/ore) when [param require_empty] is false.
+func _is_valid_seeder_build_tile(t: Vector2i, main_component: int, require_empty: bool) -> bool:
+	if _world == null or _world.data == null or _world.pathfinder == null:
+		return false
+	if not _world.data.in_bounds(t.x, t.y):
+		return false
+	if _tile_covered_by_any_stockpile(t):
+		return false
+	if not _world.pathfinder.is_passable(t):
+		return false
+	if _world.pathfinder.component_of(t) != main_component:
+		return false
+	if JobManager.has_job_at(t):
+		return false
+	if not Biome.is_passable(_world.data.get_biome(t.x, t.y)):
+		return false
+	var feat: int = int(_world.data.get_feature(t.x, t.y))
+	if require_empty:
+		return feat == TileFeature.Type.NONE
+	if feat == TileFeature.Type.NONE:
+		return true
+	if feat == TileFeature.Type.TREE or feat == TileFeature.Type.FERTILE_SOIL \
+			or feat == TileFeature.Type.ORE_VEIN or feat == TileFeature.Type.RUIN:
+		return true
+	return feat != TileFeature.Type.WALL and feat != TileFeature.Type.DOOR \
+		and feat != TileFeature.Type.BED and feat != TileFeature.Type.FIRE_PIT \
+		and feat != TileFeature.Type.STORAGE_HUT and feat != TileFeature.Type.MARKER_STONE \
+		and feat != TileFeature.Type.SHRINE and feat != TileFeature.Type.GRAVE_MARKER \
+		and feat != TileFeature.Type.KNOWLEDGE_STONE and feat != TileFeature.Type.LEDGER_STONE
 
 
 ## Find a fertile soil tile near center for planting.
@@ -7376,7 +7508,10 @@ func _settlement_has_nearby_stockpile(center: Vector2i) -> bool:
 
 ## Create a small (2x2) stockpile zone near a settlement center.
 func _ensure_settlement_stockpile(center: Vector2i) -> void:
-	var t: Vector2i = _find_build_tile_near(center, 4)
+	if _world == null or _world.pathfinder == null:
+		return
+	var main_component: int = _world.pathfinder.largest_component_id()
+	var t: Vector2i = _find_build_tile_near(center, 4, main_component)
 	if t.x < 0:
 		return
 	# Try 2x2 rect anchored at the found tile
@@ -7399,6 +7534,8 @@ func _ensure_settlement_stockpile(center: Vector2i) -> void:
 		sp.settlement_id = sid
 	add_child(sp)
 	StockpileManager.register(sp)
+	if _world.pathfinder != null and _world.data != null:
+		_world.pathfinder.flush_component_dirty(_world.data)
 	# Bootstrap supplies for new settlement stockpile — enough to start building
 	sp.add_item(Item.Type.BERRY, 10)
 	sp.add_item(Item.Type.WOOD, 5)

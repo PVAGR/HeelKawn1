@@ -129,6 +129,8 @@ var work_ticks_needed: int = 20
 var work_ticks_done: int = 0
 
 var state: int = State.OPEN
+## Tick when JobManager.post() created this job (stale-open pruning).
+var posted_tick: int = 0
 var assigned_pawn: HeelKawnian = null
 
 ## [TRADE_HAUL] only: source / destination stockpiles and resource batch.

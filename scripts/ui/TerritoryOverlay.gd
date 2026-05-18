@@ -45,6 +45,8 @@ var _current_zoom: float = 1.0
 
 # Cached territory data: settlement_index -> { color, regions_set, border_segments }
 var _territories: Array[Dictionary] = []
+var _skirmish_flash_tile: Vector2i = Vector2i(-1, -1)
+var _skirmish_flash_until_tick: int = -1
 
 
 func initialize(world_ref: World, camera_ref: Camera2D) -> void:
@@ -58,6 +60,13 @@ func invalidate_territories() -> void:
 	_last_settlement_hash = -1
 	_last_settlement_count = -1
 	_refresh_territories()
+
+
+## Brief red flash on a tile when a skirmish is recorded (Bannerlord stub).
+func flash_skirmish_tile(tile: Vector2i, duration_ticks: int = 90) -> void:
+	_skirmish_flash_tile = tile
+	_skirmish_flash_until_tick = (GameManager.tick_count if GameManager != null else 0) + duration_ticks
+	queue_redraw()
 
 
 func _process(_delta: float) -> void:
@@ -86,6 +95,7 @@ func _refresh_territories() -> void:
 			current_hash = current_hash * 31 + int(sd.get("center_region", 0))
 			current_hash = current_hash * 31 + int(sd.get("buildings_constructed", 0))
 			current_hash = current_hash * 31 + int(sd.get("population", 0))
+			current_hash = current_hash * 31 + int(sd.get("polity_id", 0))
 			if bool(sd.get("is_formal_settlement", false)):
 				current_hash += 17
 	if current_hash == _last_settlement_hash and settlements.size() == _last_settlement_count:
@@ -111,8 +121,17 @@ func _refresh_territories() -> void:
 		var regions: PackedInt32Array = s.get("regions", PackedInt32Array())
 		if regions.is_empty():
 			continue
-		# Color: prefer clan/nation color, fall back to settlement hash
-		var color: Color = _color_for_settlement(center_region)
+		# Color: polity hash (stable per settlement), then clan/nation if assigned.
+		var polity_id: int = int(s.get("polity_id", center_region))
+		var color: Color = SettlementMemory.color_for_polity_id(polity_id)
+		var bc_v: Variant = s.get("border_color", null)
+		if bc_v is PackedFloat32Array:
+			var bc: PackedFloat32Array = bc_v as PackedFloat32Array
+			if bc.size() >= 3:
+				color = Color(bc[0], bc[1], bc[2], 1.0)
+		elif bc_v is Array and (bc_v as Array).size() >= 3:
+			var ba: Array = bc_v as Array
+			color = Color(float(ba[0]), float(ba[1]), float(ba[2]), 1.0)
 		var dominant_nation: int = int(s.get("dominant_nation_id", -1))
 		var dominant_clan: int = int(s.get("dominant_clan_id", -1))
 		if dominant_nation >= 0 and SocialManager != null:
@@ -140,12 +159,18 @@ func _refresh_territories() -> void:
 						"dir": dir_idx,
 					})
 		var is_formal: bool = bool(s.get("is_formal_settlement", false))
+		var label_nm: String = str(s.get("polity_display_name", s.get("name", ""))).strip_edges()
+		if label_nm.is_empty():
+			label_nm = "Camp" if proto_only else "Realm"
 		_territories.append({
 			"color": color,
 			"region_set": region_set,
 			"regions": regions,
 			"border_segments": border_segments,
 			"center_region": center_region,
+			"center_tile": SettlementPlanner._center_tile_of_region_key(center_region),
+			"polity_id": polity_id,
+			"label": label_nm,
 			"proto_only": proto_only,
 			"is_formal": is_formal,
 			"activity_segments": _activity_border_segments_for_regions(regions, region_set),
@@ -303,6 +328,62 @@ func _draw() -> void:
 					from = corner_world
 					to = corner_world + Vector2(0.0, region_size)
 			draw_line(from, to, border_color, border_width, true)
+	_draw_trade_route_lines(border_width)
+	_draw_polity_labels(zoom, half_tile)
+	if _skirmish_flash_tile.x >= 0 and GameManager != null:
+		if GameManager.tick_count <= _skirmish_flash_until_tick:
+			var flash_pos: Vector2 = _world.tile_to_world(_skirmish_flash_tile)
+			var a: Vector2 = flash_pos - Vector2(half_tile, half_tile)
+			var b: Vector2 = flash_pos + Vector2(half_tile, half_tile)
+			draw_line(a, b, Color(0.95, 0.25, 0.2, 0.95), maxf(2.0, border_width + 1.0), true)
+		else:
+			_skirmish_flash_tile = Vector2i(-1, -1)
+
+
+func _draw_trade_route_lines(line_width: float) -> void:
+	if TradeMemory == null or not TradeMemory.has_method("get_routes_for_map_draw"):
+		return
+	var routes: Array = TradeMemory.get_routes_for_map_draw()
+	if routes.is_empty():
+		return
+	var center_by_region: Dictionary = {}
+	for territory in _territories:
+		var cr: int = int(territory.get("center_region", -1))
+		if cr >= 0:
+			center_by_region[cr] = territory.get("center_tile", Vector2i.ZERO)
+	for route_any in routes:
+		if route_any is not Dictionary:
+			continue
+		var route: Dictionary = route_any as Dictionary
+		var from_rk: int = int(route.get("from_settlement", -1))
+		var to_rk: int = int(route.get("to_settlement", -1))
+		if from_rk < 0 or to_rk < 0:
+			continue
+		var from_tile: Vector2i = center_by_region.get(from_rk, SettlementPlanner._center_tile_of_region_key(from_rk))
+		var to_tile: Vector2i = center_by_region.get(to_rk, SettlementPlanner._center_tile_of_region_key(to_rk))
+		var a: Vector2 = _world.tile_to_world(from_tile)
+		var b: Vector2 = _world.tile_to_world(to_tile)
+		var trade_col: Color = Color(0.92, 0.82, 0.35, 0.55)
+		draw_line(a, b, trade_col, maxf(1.0, line_width * 0.65), true)
+
+
+func _draw_polity_labels(zoom: float, half_tile: float) -> void:
+	if zoom > ZOOM_DETAIL:
+		return
+	var font: Font = ThemeDB.fallback_font
+	var font_size: int = 11 if zoom < ZOOM_STRATEGY else 9
+	for territory in _territories:
+		var label: String = str(territory.get("label", "")).strip_edges()
+		if label.is_empty():
+			continue
+		var ct: Vector2i = territory.get("center_tile", Vector2i.ZERO) as Vector2i
+		if ct == Vector2i.ZERO:
+			continue
+		var pos: Vector2 = _world.tile_to_world(ct) + Vector2(0.0, -half_tile * 2.0)
+		var col: Color = territory["color"] as Color
+		var shadow: Color = Color(0.05, 0.05, 0.08, 0.85)
+		draw_string(font, pos + Vector2(1.0, 1.0), label, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, shadow)
+		draw_string(font, pos, label, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, col.lightened(0.15))
 
 
 ## Deterministic color for a settlement based on its center region key.

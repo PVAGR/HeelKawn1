@@ -322,6 +322,12 @@ func _plan_one_settlement_culture(
 					continue
 				var open_fire_pits: int = JobManager.count_pending_by_type(Job.Type.BUILD_FIRE_PIT)
 				if bed_n >= 2 and fire_pit_n + open_fire_pits == 0:
+					var center_rk: int = WorldMemory._region_key(center.x, center.y) if WorldMemory != null else -1
+					var hearths_needed: int = 1
+					if ColonySimServices != null and center_rk >= 0:
+						hearths_needed = ColonySimServices.regional_hearths_needed(center_rk)
+						if not ColonySimServices.can_seed_fire_pit(center_rk, center, fire_pit_n, hearths_needed):
+							continue
 					var t11: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
 					if t11.x >= 0 and bool(main.call("settlement_planner_post_fire_pit", t11)):
 						continue

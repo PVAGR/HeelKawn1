@@ -564,11 +564,15 @@ func _event_passes_significance_threshold(e: Dictionary) -> bool:
 		return true
 
 	# Trade events: always record (economic infrastructure)
-	if typ in ["trade_route_started", "trade_route_completed"]:
+	if typ in ["trade_route_started", "trade_route_completed", "trade_route_opened"]:
 		return true
 
 	# Conflict events: always record (wars and grudges shape the world)
-	if typ in ["war_proposed", "war_battle_spawned", "grudge_formed", "grudge_inherited"]:
+	if typ in ["war_proposed", "war_battle_spawned", "skirmish_started", "battle_resolved", "grudge_formed", "grudge_inherited",
+			"diplomatic_incident", "profession_mastered", "dynasty_line", "officer_promoted"]:
+		return true
+
+	if typ in ["polity_merged", "polity_founded", "territorial_growth"]:
 		return true
 
 	# Legacy events: always record (lineage and life arcs are core history)
@@ -593,7 +597,8 @@ func _event_passes_significance_threshold(e: Dictionary) -> bool:
 
 	# Settlement events: always record (civilizational milestones)
 	if typ in ["settlement_collapse", "settlement_revival", "settlement_revival_with_lineage",
-			   "settlement_new_foundation", "famine_warning", "food_spoiled"]:
+			   "settlement_new_foundation", "settlement_abandoned", "first_hearth_in_polity",
+			   "famine_warning", "food_spoiled"]:
 		return true
 
 	# Building subtypes: always record (infrastructure is visible)
@@ -687,10 +692,13 @@ func _infer_kind_from_type(typ: String) -> int:
 			return Kind.AUTHORITY_EVENT
 		"pledge_loyalty", "edict_issued", "law_added", "law_removed", "ruler_decision":
 			return Kind.AUTHORITY_EVENT
-		"trade_route_started", "trade_route_completed":
+		"trade_route_started", "trade_route_completed", "trade_route_opened":
 			return Kind.TRADE_EVENT
-		"war_proposed", "war_battle_spawned", "grudge_formed", "grudge_inherited":
+		"war_proposed", "war_battle_spawned", "skirmish_started", "battle_resolved", "grudge_formed", "grudge_inherited",
+		"diplomatic_incident", "profession_mastered", "dynasty_line", "officer_promoted":
 			return Kind.CONFLICT_EVENT
+		"first_hearth_in_polity", "settlement_abandoned", "polity_merged", "polity_founded", "territorial_growth":
+			return Kind.SETTLEMENT_EVENT
 		"legacy_record", "life_path_milestone", "life_path_switch", "bloodline_extinct":
 			return Kind.LEGACY_EVENT
 		"cultural_exposure", "cultural_building", "ritual_performed", "sacred_site_established":
@@ -781,6 +789,94 @@ func _region_from_event_payload(payload: Dictionary) -> int:
 	return -1
 
 
+static func _profession_label(prof: int) -> String:
+	if HeelKawnianData == null:
+		return ""
+	match prof:
+		HeelKawnianData.Profession.FARMER:
+			return "Farmer"
+		HeelKawnianData.Profession.BUILDER:
+			return "Builder"
+		HeelKawnianData.Profession.GATHERER:
+			return "Gatherer"
+		HeelKawnianData.Profession.WARRIOR:
+			return "Warrior"
+		HeelKawnianData.Profession.SCHOLAR:
+			return "Scholar"
+		HeelKawnianData.Profession.TRADER:
+			return "Trader"
+		HeelKawnianData.Profession.SMITH:
+			return "Smith"
+		HeelKawnianData.Profession.HEALER:
+			return "Healer"
+		_:
+			return ""
+
+
+static func _killer_from_death_cause(cause: String) -> String:
+	var c: String = cause.strip_edges().to_lower()
+	if c.is_empty():
+		return ""
+	if c.begins_with("killed_by:"):
+		return c.substr(10).strip_edges()
+	if c.contains(" by "):
+		var parts: PackedStringArray = c.split(" by ", false, 1)
+		if parts.size() >= 2:
+			return parts[1].strip_edges()
+	if c in ["combat", "battle", "war", "raid", "enemy"]:
+		return "an enemy"
+	return ""
+
+
+func _pawn_name_for_obituary(pawn_id: int) -> String:
+	if pawn_id < 0:
+		return ""
+	var ps: Node = _get_pawn_spawner()
+	if ps != null and ps.has_method("pawn_data_for_id"):
+		var pd: Variant = ps.call("pawn_data_for_id", pawn_id)
+		if pd is HeelKawnianData:
+			var nm: String = str((pd as HeelKawnianData).display_name).strip_edges()
+			if not nm.is_empty():
+				return nm
+	return last_known_name_from_death_record(pawn_id)
+
+
+## Dwarf Fortress–style deterministic obituary from live pawn facts at death.
+func _compose_pawn_obituary(
+		pawn_data: HeelKawnianData,
+		pawn_name: String,
+		cause: String,
+		settle_nm: String,
+		killer: String,
+) -> String:
+	var prof: String = _profession_label(int(pawn_data.current_profession))
+	var age_y: int = maxi(0, int(pawn_data.age) / 360)
+	var lead: String = pawn_name
+	if not prof.is_empty() and prof != "None":
+		lead = "%s, a %s" % [pawn_name, prof.to_lower()]
+	var where: String = settle_nm if not settle_nm.is_empty() else "the wilds"
+	var cause_p: String = cause.replace("_", " ")
+	var body: String = ""
+	if not killer.is_empty():
+		body = "%s fell in %s at age %d, slain by %s." % [lead, where, age_y, killer]
+	elif cause_p == "hypothermia":
+		body = "%s froze in %s at age %d, far from any hearth." % [lead, where, age_y]
+	elif cause_p == "starvation":
+		body = "%s starved in %s at age %d while the stores ran dry." % [lead, where, age_y]
+	else:
+		body = "%s died in %s at age %d — %s." % [lead, where, age_y, cause_p]
+	var pa_n: String = _pawn_name_for_obituary(int(pawn_data.parent_a_id))
+	var pb_n: String = _pawn_name_for_obituary(int(pawn_data.parent_b_id))
+	if not pa_n.is_empty() and not pb_n.is_empty():
+		body += " Child of %s and %s." % [pa_n, pb_n]
+	elif not pa_n.is_empty():
+		body += " Child of %s." % pa_n
+	var lw: String = str(pawn_data.last_words).strip_edges()
+	if not lw.is_empty():
+		body += " \"%s\"" % lw
+	return body
+
+
 ## Record after `data` is still valid; use primitive fields only.
 ## Record a pawn death event. The [param settlement_id] is the center_region of the settlement
 ## where the pawn was born (used for lineage-based cultural memory and revival naming).
@@ -823,9 +919,46 @@ func record_pawn_death(
 		e["pb"] = parent_b_snapshot
 	if settlement_id >= 0:
 		e["sid"] = settlement_id
+	var pawn_data: HeelKawnianData = null
+	var ps: Node = _get_pawn_spawner()
+	if ps != null and ps.has_method("pawn_data_for_id"):
+		pawn_data = ps.call("pawn_data_for_id", pawn_id)
+	e["type"] = "pawn_death"
+	e["cause"] = cause
+	e["name"] = pawn_name
+	e["pawn_id"] = pawn_id
+	if pawn_data != null:
+		e["age_years"] = int(int(pawn_data.age) / 360)
+		e["profession"] = _profession_label(int(pawn_data.current_profession))
+	elif prof_at_death >= 0:
+		e["profession"] = _profession_label(prof_at_death)
+	var settle_nm: String = ""
+	if settlement_id >= 0 and SettlementMemory != null:
+		for s_any in SettlementMemory.settlements:
+			if s_any is Dictionary and int((s_any as Dictionary).get("center_region", -1)) == settlement_id:
+				settle_nm = str((s_any as Dictionary).get("polity_display_name", (s_any as Dictionary).get("name", "")))
+				break
+	if settle_nm.is_empty() and SettlementMemory != null:
+		var death_rk: int = WorldMemory._region_key(tile.x, tile.y)
+		for s2_any in SettlementMemory.settlements:
+			if s2_any is not Dictionary:
+				continue
+			var s2: Dictionary = s2_any as Dictionary
+			var regs: Variant = s2.get("regions", PackedInt32Array())
+			if regs is PackedInt32Array and (regs as PackedInt32Array).find(death_rk) >= 0:
+				settle_nm = str(s2.get("polity_display_name", s2.get("name", "")))
+				break
+	if not settle_nm.is_empty():
+		e["settlement_name"] = settle_nm
+	var killer: String = _killer_from_death_cause(cause)
+	if not killer.is_empty():
+		e["killer_name"] = killer
+	if pawn_data != null:
+		if not str(pawn_data.last_words).strip_edges().is_empty():
+			e["last_words"] = str(pawn_data.last_words)
+		e["obituary_narrative"] = _compose_pawn_obituary(pawn_data, pawn_name, cause, settle_nm, killer)
 	_append(e)
 
-	# Emit EventBus signal so other systems (GrudgeManager) can react to death
 	if EventBus != null:
 		EventBus.emit(EventBus.EVENT_PAWN_DIED, {
 			"pawn_id": pawn_id,
@@ -837,11 +970,6 @@ func record_pawn_death(
 		})
 
 	# PHASE 7: Record legacy for this pawn
-	# Get pawn data first (needed for legacy, notification, and biography)
-	var pawn_data: HeelKawnianData = null
-	var ps: Node = _get_pawn_spawner()
-	if ps != null and ps.has_method("pawn_data_for_id"):
-		pawn_data = ps.call("pawn_data_for_id", pawn_id)
 
 	var legacy_sys: Node = get_node_or_null("/root/LegacySystem")
 	if legacy_sys != null and legacy_sys.has_method("record_legacy"):
@@ -1789,6 +1917,23 @@ func record_settlement_state_transition(center_id: int, old_state: String, new_s
 		"peace_ticks": peace_ticks,
 	}
 	_append(e)
+	if new_state == "abandoned" or new_state == "permanently_abandoned":
+		var settle_nm: String = ""
+		if SettlementMemory != null:
+			for s_any in SettlementMemory.settlements:
+				if s_any is Dictionary and int((s_any as Dictionary).get("center_region", -1)) == center_id:
+					var st: Dictionary = s_any as Dictionary
+					settle_nm = str(st.get("polity_display_name", st.get("name", "")))
+					break
+		record_event({
+			"type": "settlement_abandoned",
+			"k": Kind.SETTLEMENT_EVENT,
+			"r": center_id,
+			"t": GameManager.tick_count,
+			"settlement_name": settle_nm if not settle_nm.is_empty() else "settlement %d" % center_id,
+			"reason": new_state,
+			"revival_score": score,
+		})
 
 
 # === Grudge Generation (Phase 5: Emergent Life) ===

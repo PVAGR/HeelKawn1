@@ -211,7 +211,9 @@ func _color_for_type(typ: String) -> String:
 			"settlement_abandon", "settlement_revival", "settlement_rebirth",
 			"settlement_collapse", "settlement_new_foundation", "settlement_revival_with_lineage",
 			"hearth_built", "storage_built", "shrine_built", "marker_built",
-			"diaspora_exile", "migration_started", "migration_completed"]:
+			"first_hearth_in_polity", "settlement_abandoned",
+			"diaspora_exile", "migration_started", "migration_completed",
+			"polity_founded", "settlement_formalized", "territorial_growth"]:
 		return COLOR_SETTLEMENT
 	# World
 	if typ in ["collapse_warning", "environmental_degradation", "economic_boom", "market_crash",
@@ -220,7 +222,7 @@ func _color_for_type(typ: String) -> String:
 			"entity_decay", "entity_loss", "chronicle_summary"]:
 		return COLOR_WORLD
 	# Conflict
-	if typ in ["war_battle_spawned", "war_proposed", "injury", "social_fragment", "social_schism",
+	if typ in ["war_battle_spawned", "war_proposed", "skirmish_started", "battle_resolved", "injury", "social_fragment", "social_schism",
 			"grudge_formed", "grudge_inherited"]:
 		return COLOR_CONFLICT
 	# Food
@@ -237,7 +239,7 @@ func _color_for_type(typ: String) -> String:
 			"paper_made", "leather_tanned", "pen_crafted"]:
 		return COLOR_CRAFT
 	# Trade
-	if typ in ["trade_route_started", "trade_route_completed", "macro_unrest"]:
+	if typ in ["trade_route_started", "trade_route_completed", "trade_route_opened", "macro_unrest"]:
 		return COLOR_TRADE
 	# AI Ecosystem
 	if typ in ["ai_migration_wave", "ai_wildlife_boom", "ai_wildlife_bust",
@@ -283,25 +285,7 @@ func _event_text(typ: String, e: Dictionary) -> String:
 			return "%s was born" % child_name
 
 		"pawn_death":
-			var nm: String = str(e.get("n", e.get("name", "someone"))).strip_edges()
-			if nm.is_empty(): nm = "someone"
-			var cause: String = str(e.get("cause", "")).strip_edges()
-			var cause_text: String = ""
-			if not cause.is_empty():
-				cause_text = " of %s" % cause.replace("_", " ")
-			# Compose narrative death text
-			var profession: String = str(e.get("profession", "")).strip_edges()
-			var prof_prefix: String = ""
-			if not profession.is_empty() and profession != "None":
-				prof_prefix = "%s " % profession.to_lower()
-			# Check if this was a knowledge carrier
-			var knowledge_lost: bool = bool(e.get("knowledge_lost", false))
-			var lost_knowledge: String = str(e.get("lost_knowledge_type", "")).strip_edges()
-			if knowledge_lost and not lost_knowledge.is_empty():
-				return "%s%s died%s — and with them, the knowledge of %s" % [prof_prefix, nm, cause_text, lost_knowledge.replace("_", " ")]
-			if not prof_prefix.is_empty():
-				return "%s%s perished%s" % [prof_prefix, nm, cause_text]
-			return "%s died%s" % [nm, cause_text]
+			return _pawn_death_chronicle_line(e)
 
 		"animal_death":
 			return "wildlife was culled"
@@ -545,8 +529,11 @@ func _event_text(typ: String, e: Dictionary) -> String:
 
 		# Authority events
 		"succession":
-			var nm: String = str(e.get("new_leader_name", "someone")).strip_edges()
-			return "%s assumed leadership" % nm
+			var nm: String = str(e.get("new_leader_name", "")).strip_edges()
+			var pol: String = str(e.get("polity_name", "the realm")).strip_edges()
+			if nm.is_empty():
+				return "new leadership in %s" % pol
+			return "%s assumed leadership of %s" % [nm, pol]
 		"abdicate":
 			var nm: String = str(e.get("pawn_name", "the leader")).strip_edges()
 			return "%s abdicated" % nm
@@ -557,7 +544,11 @@ func _event_text(typ: String, e: Dictionary) -> String:
 			return "an edict was issued"
 		"law_added":
 			var law: String = str(e.get("law_type", "a law")).replace("_", " ")
-			return "a new law was enacted: %s" % law
+			var desc: String = str(e.get("law_description", "")).strip_edges()
+			var pol: String = str(e.get("polity_name", "the realm")).strip_edges()
+			if not desc.is_empty():
+				return "%s enacted: %s — %s" % [pol, law, desc]
+			return "%s enacted: %s" % [pol, law]
 		"law_removed":
 			return "a law was repealed"
 		"ruler_decision":
@@ -606,6 +597,20 @@ func _event_text(typ: String, e: Dictionary) -> String:
 			var custom: String = str(e.get("custom_tag", "a custom")).replace("_", " ")
 			return "%s absorbed a new custom: %s" % [nm, custom]
 
+		# Settlement / map polity events
+		"polity_founded", "settlement_formalized":
+			var founding_narr: String = str(e.get("narrative", "")).strip_edges()
+			if not founding_narr.is_empty():
+				return founding_narr
+			var polity_nm: String = str(e.get("polity_name", "a people")).strip_edges()
+			return "the %s declared themselves a realm" % polity_nm
+		"territorial_growth":
+			var growth_narr: String = str(e.get("narrative", "")).strip_edges()
+			if not growth_narr.is_empty():
+				return growth_narr
+			var grow_nm: String = str(e.get("polity_name", "a realm")).strip_edges()
+			return "the borders of %s grew" % grow_nm
+
 		# Settlement events
 		"settlement_collapse":
 			return "a settlement collapsed"
@@ -614,7 +619,89 @@ func _event_text(typ: String, e: Dictionary) -> String:
 		"settlement_revival_with_lineage":
 			return "a settlement was revived with lineage memory"
 		"famine_warning":
-			return "famine warning — food reserves critical"
+			var fp: float = float(e.get("food_pressure", 0.0))
+			var sf: int = int(e.get("stock_food", -1))
+			if sf >= 0:
+				return "famine warning — food pressure %.0f%% (%d in stockpiles)" % [fp * 100.0, sf]
+			return "famine warning — food pressure %.0f%%" % [fp * 100.0]
+		"first_hearth_in_polity":
+			var pol: String = str(e.get("polity_name", "the realm")).strip_edges()
+			var who: String = str(e.get("pawn_name", "someone")).strip_edges()
+			return "%s lit the first hearth of %s" % [who, pol]
+		"settlement_abandoned":
+			var sn: String = str(e.get("settlement_name", e.get("polity_name", "a settlement"))).strip_edges()
+			var why: String = str(e.get("reason", "")).replace("_", " ").strip_edges()
+			if not why.is_empty():
+				return "%s was abandoned — %s" % [sn, why]
+			return "%s was abandoned" % sn
+		"profession_mastered":
+			var who: String = str(e.get("pawn_name", "someone")).strip_edges()
+			var prof: String = str(e.get("profession", "laborer")).strip_edges()
+			var branch: String = str(e.get("branch_skill", "")).strip_edges().replace("_", " ")
+			var tier: String = str(e.get("tier", "skill")).strip_edges()
+			if not branch.is_empty():
+				return "%s mastered %s %s as a %s" % [who, tier, branch, prof]
+			return "%s reached %s mastery as a %s" % [who, tier, prof]
+
+		"dynasty_line":
+			var line: String = str(e.get("narrative", "")).strip_edges()
+			if not line.is_empty():
+				return line
+			var child: String = str(e.get("pawn_name", "a child")).strip_edges()
+			var pa: String = str(e.get("parent_a_name", "")).strip_edges()
+			var pb: String = str(e.get("parent_b_name", "")).strip_edges()
+			if not pa.is_empty() and not pb.is_empty():
+				return "%s was born to %s and %s" % [child, pa, pb]
+			return "%s joined the dynasty" % child
+
+		"diplomatic_incident":
+			var na: String = str(e.get("polity_a_name", "one realm")).strip_edges()
+			var nb: String = str(e.get("polity_b_name", "another")).strip_edges()
+			return "diplomatic incident — %s and %s cross into open hostility" % [na, nb]
+
+		"skirmish_started":
+			var nar: String = str(e.get("narrative", "")).strip_edges()
+			if not nar.is_empty():
+				return nar
+			var fa: String = str(e.get("faction_a_name", "one band")).strip_edges()
+			var fb: String = str(e.get("faction_b_name", "another")).strip_edges()
+			var pc: int = int(e.get("pawn_count", 0))
+			var tile_d: Dictionary = e.get("tile", {}) as Dictionary
+			var loc: String = ""
+			if tile_d.has("x") and tile_d.has("y"):
+				loc = " at (%d,%d)" % [int(tile_d.get("x", 0)), int(tile_d.get("y", 0))]
+			if pc > 0:
+				return "skirmish%s — %s vs %s (%d warriors)" % [loc, fa, fb, pc]
+			return "skirmish%s — %s vs %s" % [loc, fa, fb]
+
+		"battle_resolved":
+			var ba: String = str(e.get("faction_a_name", "one band")).strip_edges()
+			var bb: String = str(e.get("faction_b_name", "another")).strip_edges()
+			var ca: int = int(e.get("casualties_a", 0))
+			var cb: int = int(e.get("casualties_b", 0))
+			var wounded_n: int = (e.get("wounded_pawn_ids", []) as Array).size()
+			var win: String = str(e.get("winner_name", "")).strip_edges()
+			if not win.is_empty():
+				return "aftermath — %s held the field against %s (%d wounded)" % [win, bb if win == ba else ba, wounded_n]
+			return "aftermath — %s vs %s (%d hurt on each side, %d wounded)" % [ba, bb, ca + cb, wounded_n]
+
+		"trade_route_opened":
+			var ta: String = str(e.get("polity_a_name", "one realm")).strip_edges()
+			var tb: String = str(e.get("polity_b_name", "another")).strip_edges()
+			return "trade opens between %s and %s" % [ta, tb]
+
+		"officer_promoted":
+			var pn: String = str(e.get("pawn_name", "a warrior")).strip_edges()
+			var nr: String = str(e.get("new_rank", "officer")).strip_edges()
+			return "%s rose to %s after the clash" % [pn, nr]
+
+		"polity_merged":
+			var nar: String = str(e.get("narrative", "")).strip_edges()
+			if not nar.is_empty():
+				return nar
+			var keep: String = str(e.get("polity_name", "one realm")).strip_edges()
+			var lost: String = str(e.get("absorbed_name", "another")).strip_edges()
+			return "%s absorbed %s" % [keep, lost]
 
 		# Building subtypes
 		"hearth_built":
@@ -845,6 +932,48 @@ func _compose_world_summary(tick: int) -> void:
 			"tick": tick,
 			"summary": summary_text,
 		})
+
+
+## Deterministic pawn_death line from recorded facts (WorldMemory.record_pawn_death).
+static func _pawn_death_chronicle_line(e: Dictionary) -> String:
+	var nm: String = str(e.get("n", e.get("name", "someone"))).strip_edges()
+	if nm.is_empty():
+		nm = "someone"
+	var cause: String = str(e.get("cause", e.get("c", ""))).strip_edges()
+	var age_y: int = int(e.get("age_years", -1))
+	var settlement: String = str(e.get("settlement_name", "")).strip_edges()
+	var killer: String = str(e.get("killer_name", "")).strip_edges()
+	var profession: String = str(e.get("profession", "")).strip_edges()
+	var knowledge_lost: bool = bool(e.get("knowledge_lost", false))
+	var lost_knowledge: String = str(e.get("lost_knowledge_type", "")).strip_edges()
+	var lead: String = nm
+	if not profession.is_empty() and profession != "None":
+		lead = "%s the %s" % [nm, profession]
+	var tail_parts: PackedStringArray = PackedStringArray()
+	if age_y >= 0:
+		tail_parts.append("age %d" % age_y)
+	if not settlement.is_empty():
+		tail_parts.append("of %s" % settlement)
+	var tail: String = ""
+	if not tail_parts.is_empty():
+		tail = " (%s)" % ", ".join(tail_parts)
+	var obit: String = str(e.get("obituary_narrative", "")).strip_edges()
+	if not obit.is_empty():
+		return obit
+	var lw: String = str(e.get("last_words", "")).strip_edges()
+	if not killer.is_empty():
+		var line: String = "%s was slain by %s%s" % [lead, killer, tail]
+		if not lw.is_empty():
+			line += " — \"%s\"" % lw
+		return line
+	if not cause.is_empty():
+		var line2: String = "%s died of %s%s" % [lead, cause.replace("_", " "), tail]
+		if not lw.is_empty():
+			line2 += " — \"%s\"" % lw
+		return line2
+	if knowledge_lost and not lost_knowledge.is_empty():
+		return "%s died%s — knowledge of %s was lost" % [lead, tail, lost_knowledge.replace("_", " ")]
+	return "%s died%s" % [lead, tail]
 
 
 func _spawn_toast(text: String) -> void:

@@ -141,9 +141,9 @@ func _spawn_tool_jobs_if_needed() -> void:
 		var sp: Stockpile = _get_primary_stockpile()
 		if sp != null:
 			if sp.count_of(Item.Type.FLINT) >= 1 and sp.count_of(Item.Type.STICK) >= 1:
-				JobManager.post(Job.Type.CRAFT_KNIFE, Vector2i.ZERO, 5, Job.tool_job_work_ticks(Job.Type.CRAFT_KNIFE))
+				JobManager.post_stamped(Job.Type.CRAFT_KNIFE, Vector2i.ZERO, 5, Job.tool_job_work_ticks(Job.Type.CRAFT_KNIFE), "tool_bootstrap", "settlement")
 			if sp.count_of(Item.Type.WOOD) >= 1 and sp.count_of(Item.Type.STICK) >= 1:
-				JobManager.post(Job.Type.CRAFT_TORCH, Vector2i.ZERO, 4, Job.tool_job_work_ticks(Job.Type.CRAFT_TORCH))
+				JobManager.post_stamped(Job.Type.CRAFT_TORCH, Vector2i.ZERO, 4, Job.tool_job_work_ticks(Job.Type.CRAFT_TORCH), "tool_bootstrap", "settlement")
 
 
 ## Spawn gather jobs for flint/stick on appropriate tiles.
@@ -172,7 +172,7 @@ func _spawn_gather_jobs(job_type: int, _feature_type: int) -> void:
 		if not world.pathfinder.is_passable(tile):
 			continue
 		
-		JobManager.post(job_type, tile, 3, Job.tool_job_work_ticks(job_type))
+		JobManager.post_stamped(job_type, tile, 3, Job.tool_job_work_ticks(job_type), "tool_gather", "nearby")
 		jobs_spawned += 1
 
 

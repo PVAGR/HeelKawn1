@@ -926,6 +926,8 @@ static func leader_direct_construction(settlement_id: int) -> int:
 	if ColonySimServices != null:
 		build_priorities = ColonySimServices.compute_settlement_build_priorities(
 				center_rk, local_pop, features, false)
+	if ColonyBayesTree != null and ColonyBayesTree.has_method("get_build_priority_bonus"):
+		storage_target = maxi(0, storage_target + int(ColonyBayesTree.get_build_priority_bonus(Job.Type.BUILD_STORAGE_HUT, center_rk, features, local_pop, build_priorities)))
 	var max_posts: int = int(build_priorities.get("job_cap", 3))
 	if ColonySimServices != null and ColonySimServices.should_block_ambition_tier_build():
 		max_posts = mini(max_posts, 2)
@@ -970,7 +972,9 @@ static func leader_direct_construction(settlement_id: int) -> int:
 			if not ColonySimServices.can_seed_fire_pit(center_rk, center, hearths, hearths_needed):
 				continue
 			job_type = ColonySimServices.resolve_hearth_post_job_type(job_type)
-		elif ColonySimServices != null and ColonySimServices.should_block_ambition_tier_build():
+		if ColonyBayesTree != null and ColonyBayesTree.has_method("get_build_priority_bonus"):
+			priority = clampi(priority + int(ColonyBayesTree.get_build_priority_bonus(job_type, center_rk, features, local_pop, build_priorities)), 1, 10)
+		if ColonySimServices != null and ColonySimServices.should_block_ambition_tier_build():
 			if job_type not in [Job.Type.BUILD_BED, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, \
 					Job.Type.BUILD_FARM_WHEAT, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH]:
 				continue

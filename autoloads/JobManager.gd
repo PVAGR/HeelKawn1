@@ -18,6 +18,8 @@ signal job_cancelled(job: Job)
 func _ready() -> void:
 	if TickManager != null:
 		TickManager.mark_tickable_cache_dirty()
+	if GameManager != null and not GameManager.game_tick.is_connected(_on_game_tick_prune):
+		GameManager.game_tick.connect(_on_game_tick_prune)
 
 
 
@@ -51,6 +53,10 @@ var _cancel_reasons: Dictionary = {}
 
 const MAX_OPEN_JOBS_DEFAULT: int = 256
 const MAX_OPEN_JOBS_LIGHTWEIGHT: int = 96
+## Global cap on open CHOP jobs (harvest spam control).
+const MAX_OPEN_CHOP_JOBS: int = 50
+const STALE_PRUNE_INTERVAL_TICKS: int = 200
+const STALE_PRUNE_PHASE_OFFSET: int = 17
 ## Last N slots reserved for construction/build/cook/plant jobs.
 ## Basic forage/mine/chop jobs cannot fill these slots, ensuring
 ## build jobs always have room in the queue.
@@ -77,6 +83,8 @@ func get_active_jobs_union() -> Array[Job]:
 func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) -> Job:
 	if _jobs_by_tile.has(tile):
 		return null
+	if type == Job.Type.CHOP and count_open_by_type(Job.Type.CHOP) >= MAX_OPEN_CHOP_JOBS:
+		return null
 	var max_jobs: int = _max_open_jobs_allowed()
 	var is_construction: bool = _is_construction_type(type)
 	# Basic forage/mine/chop can't fill the reserved construction slots.
@@ -99,6 +107,22 @@ func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) ->
 	posted_count += 1
 	_bump_jobs_data_generation()
 	job_posted.emit(job)
+	return job
+
+
+## Post + stamp reason/visibility in one call (settlement schedulers, player tools).
+func post_stamped(
+		type: int,
+		tile: Vector2i,
+		priority: int,
+		work_ticks: int,
+		reason: String,
+		visible_to: String = "nearby",
+		issuer_pawn_id: int = -1,
+) -> Job:
+	var job: Job = post(type, tile, priority, work_ticks)
+	if job != null and not reason.is_empty():
+		stamp_seeder_metadata(job, reason, visible_to, issuer_pawn_id)
 	return job
 
 
@@ -692,6 +716,31 @@ func count_open_by_type(job_type: int) -> int:
 	return int(_get_open_counts_by_type().get(job_type, 0))
 
 
+## Top N open job types by count (for HUD). Returns [{type, count, label}, ...].
+func get_top_open_job_types(max_types: int = 3) -> Array[Dictionary]:
+	if max_types <= 0:
+		return []
+	var counts: Dictionary = _get_open_counts_by_type()
+	if counts.is_empty():
+		return []
+	var pairs: Array = []
+	for t in counts.keys():
+		pairs.append({"type": int(t), "count": int(counts[t])})
+	pairs.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("count", 0)) > int(b.get("count", 0))
+	)
+	var out: Array[Dictionary] = []
+	for i in range(mini(max_types, pairs.size())):
+		var p: Dictionary = pairs[i] as Dictionary
+		var jt: int = int(p.get("type", 0))
+		out.append({
+			"type": jt,
+			"count": int(p.get("count", 0)),
+			"label": Job.describe_type(jt),
+		})
+	return out
+
+
 ## Count both open and claimed jobs of a specific type. Gives a fuller picture
 ## of how much work is queued for a given build type.
 func count_pending_by_type(job_type: int) -> int:
@@ -809,6 +858,15 @@ func _notify_world_ai_job_completion(job: Job) -> void:
 func _on_world_tick(_tick_number: int) -> void:
 	# JobManager is event-driven; no per-tick state changes required.
 	pass
+
+
+func _on_game_tick_prune(tick: int) -> void:
+	if GameManager == null or not GameManager.periodic_phase_due(
+			tick, STALE_PRUNE_INTERVAL_TICKS, STALE_PRUNE_PHASE_OFFSET):
+		return
+	var world: World = _get_colony_world()
+	if world != null:
+		prune_stale_open_jobs(world, STALE_OPEN_JOB_TICKS)
 
 func _notify_path_reservation_released(j: Job) -> void:
 	if j == null or j.type != Job.Type.BUILD_WALL:

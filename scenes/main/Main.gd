@@ -2933,6 +2933,8 @@ func _on_game_tick(tick: int) -> void:
 			t0 = Time.get_ticks_usec()
 			SettlementMemory.recompute(_world)
 			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
+		_maybe_record_regional_skirmish(tick)
+		_resolve_pending_skirmishes(tick)
 
 		# Offset SettlementManager.process to a different tick to spread the load
 		var rebirth_offset_tick: int = (tick + REBIRTH_CHECK_INTERVAL_TICKS / 2) % REBIRTH_CHECK_INTERVAL_TICKS
@@ -6275,23 +6277,23 @@ func _seed_jobs_for_discovered_area() -> void:
 				var tile: Vector2i = Vector2i(x, y)
 				if feature == TileFeature.Type.FERTILE_SOIL:
 					if forage_posted < max_forage and not JobManager.has_job_at(tile):
-						if JobManager.post(Job.Type.FORAGE, tile) != null:
+						if _post_seeded_job(Job.Type.FORAGE, tile, FORAGE_PRIORITY, FORAGE_WORK_TICKS, "pawn_harvest_scan") != null:
 							forage_posted += 1
 				elif feature == TileFeature.Type.ORE_VEIN:
 					if mine_posted < max_mine and not JobManager.has_job_at(tile):
-						if JobManager.post(Job.Type.MINE, tile) != null:
+						if _post_seeded_job(Job.Type.MINE, tile, MINE_PRIORITY, MINE_WORK_TICKS, "pawn_harvest_scan") != null:
 							mine_posted += 1
 				elif feature == TileFeature.Type.TREE:
 					if chop_posted < max_chop and not JobManager.has_job_at(tile):
-						if JobManager.post(Job.Type.CHOP, tile) != null:
+						if _post_seeded_job(Job.Type.CHOP, tile, CHOP_PRIORITY, CHOP_WORK_TICKS, "pawn_harvest_scan") != null:
 							chop_posted += 1
 				elif TileFeature.is_wildlife(feature):
 					if hunt_posted < max_hunt and not JobManager.has_job_at(tile):
-						if JobManager.post(Job.Type.HUNT, tile) != null:
+						if _post_seeded_job(Job.Type.HUNT, tile, HUNT_PRIORITY, HUNT_WORK_TICKS, "pawn_harvest_scan") != null:
 							hunt_posted += 1
 				elif feature == TileFeature.Type.RIVER:
 					if fish_posted < max_fish and not JobManager.has_job_at(tile):
-						if JobManager.post(Job.Type.FISH, tile) != null:
+						if _post_seeded_job(Job.Type.FISH, tile, FISH_PRIORITY, FISH_WORK_TICKS, "pawn_harvest_scan") != null:
 							fish_posted += 1
 
 
@@ -6348,7 +6350,7 @@ func _seed_jobs_from_world() -> void:
 				var rem_f: int = expiry_f - GameManager.tick_count
 				print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.FORAGE), tile, rem_f])
 			continue
-		var fj: Job = JobManager.post(Job.Type.FORAGE, tile, FORAGE_PRIORITY, FORAGE_WORK_TICKS)
+		var fj: Job = _post_seeded_job(Job.Type.FORAGE, tile, FORAGE_PRIORITY, FORAGE_WORK_TICKS, "world_feature_seed")
 		if fj != null:
 			_set_job_post_cooldown(tile)
 			forage_posted += 1
@@ -6367,7 +6369,7 @@ func _seed_jobs_from_world() -> void:
 				var rem_m: int = expiry_m - GameManager.tick_count
 				print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.MINE), tile, rem_m])
 			continue
-		var job: Job = JobManager.post(Job.Type.MINE, tile, MINE_PRIORITY, MINE_WORK_TICKS)
+		var job: Job = _post_seeded_job(Job.Type.MINE, tile, MINE_PRIORITY, MINE_WORK_TICKS, "world_feature_seed")
 		if job == null:
 			continue
 		job.work_tile = work_tile
@@ -6382,7 +6384,7 @@ func _seed_jobs_from_world() -> void:
 			chop_skipped += 1
 			continue
 		if _can_post_job_at(tile):
-			var cj: Job = JobManager.post(Job.Type.CHOP, tile, CHOP_PRIORITY, CHOP_WORK_TICKS)
+			var cj: Job = _post_seeded_job(Job.Type.CHOP, tile, CHOP_PRIORITY, CHOP_WORK_TICKS, "world_feature_seed")
 			if cj != null:
 				_set_job_post_cooldown(tile)
 				chop_posted += 1
@@ -6414,7 +6416,7 @@ func _seed_jobs_from_world() -> void:
 			if live_now_seed <= _hunt_reserve_for_species(species_seed):
 				continue
 			if _can_post_job_at(tile):
-				var hj: Job = JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, _hunt_ticks_for(feat))
+				var hj: Job = _post_seeded_job(Job.Type.HUNT, tile, HUNT_PRIORITY, _hunt_ticks_for(feat), "world_feature_seed")
 				if hj != null:
 					_set_job_post_cooldown(tile)
 					live_seed[species_seed] = maxi(0, live_now_seed - 1)
@@ -6433,7 +6435,7 @@ func _seed_jobs_from_world() -> void:
 		if _world.pathfinder.component_of(tile) != main_component:
 			continue
 		if _can_post_job_at(tile):
-			var fj: Job = JobManager.post(Job.Type.FISH, tile, FISH_PRIORITY, FISH_WORK_TICKS)
+			var fj: Job = _post_seeded_job(Job.Type.FISH, tile, FISH_PRIORITY, FISH_WORK_TICKS, "world_feature_seed")
 			if fj != null:
 				_set_job_post_cooldown(tile)
 				fish_posted += 1
@@ -6459,6 +6461,11 @@ func _sort_tiles_by_seeded_order(tiles: Array[Vector2i], stream_name: StringName
 ## Periodic construction job seeder: posts build/cook/plant jobs based on
 ## what each settlement actually needs. Runs every ~200 ticks so pawns
 ## build farms, walls, hearths, beds, etc. instead of only foraging.
+const SKIRMISH_RESOLVE_TICKS: int = 240
+const _SKIRMISH_BATTLE_PLANS: PackedStringArray = PackedStringArray([
+	"hold_the_line", "flank_at_dawn", "shield_wall", "feint_and_charge",
+])
+var _pending_skirmishes: Array[Dictionary] = []
 var _last_construction_seed_tick: int = -10000
 var _nav_dirty: bool = false  # batched nav notification for construction seed
 var _construction_seed_posts_since_log: int = 0
@@ -6522,18 +6529,34 @@ func _seeder_consume_build_slot(center_rk: int, job_cap: int) -> bool:
 func _stamp_player_designation_job(job: Job) -> void:
 	if job == null:
 		return
+	job.reason = "player_designation"
 	job.visible_to = "all"
 	job.authority_scope = "nearby"
 	job.issuer_role = "player_intent"
 
 
-func _stamp_seeder_job(job: Job, reason: String, settlement_id: int = -1) -> void:
+func _stamp_seeder_job(job: Job, reason: String, settlement_id: int = -1, visible_to: String = "settlement") -> void:
 	if job == null or JobManager == null:
 		return
 	var issuer_id: int = -1
 	if settlement_id >= 0 and SettlementMemory != null:
 		issuer_id = SettlementMemory.get_ruler_pawn_id(settlement_id)
-	JobManager.stamp_seeder_metadata(job, reason, "settlement", issuer_id)
+	JobManager.stamp_seeder_metadata(job, reason, visible_to, issuer_id)
+
+
+func _post_seeded_job(
+		jtype: int,
+		tile: Vector2i,
+		priority: int = 0,
+		work_ticks: int = 20,
+		reason: String = "world_seed",
+		visible_to: String = "nearby",
+		settlement_id: int = -1,
+) -> Job:
+	var job: Job = JobManager.post(jtype, tile, priority, work_ticks)
+	if job != null:
+		_stamp_seeder_job(job, reason, settlement_id, visible_to)
+	return job
 
 
 ## Post basic build jobs near the pawn cluster when no formal settlements exist yet.
@@ -6591,7 +6614,7 @@ func _seed_bootstrap_jobs_near_pawn_cluster() -> void:
 		if allow_fire_post:
 			var t: Vector2i = _find_build_tile_near(center, 4)
 			if t.x >= 0 and not JobManager.has_job_at(t):
-				_stamp_seeder_job(JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 5, 12), "warmth_coverage")
+				_post_seeded_job(Job.Type.BUILD_FIRE_PIT, t, 5, 12, "warmth_coverage")
 	# First stockpile zone near the living cluster (proto camps have no formal settlement pass).
 	if StockpileManager != null and StockpileManager.zone_count() <= 0:
 		call_deferred("_ensure_settlement_stockpile", center)
@@ -6602,7 +6625,7 @@ func _seed_bootstrap_jobs_near_pawn_cluster() -> void:
 		if beds < needed_beds:
 			var t: Vector2i = _find_build_tile_near(center, 4)
 			if t.x >= 0:
-				_stamp_seeder_job(JobManager.post(Job.Type.BUILD_BED, t, 4), "housing_pressure")
+				_post_seeded_job(Job.Type.BUILD_BED, t, 4, 10, "housing_pressure")
 	# Storage hut when storage pressure is elevated
 	var storage_press: float = ColonySimServices.get_storage_pressure() if ColonySimServices != null else 0.0
 	var storage_needed: int = 1 if storage_press > 0.2 or storage_huts <= 0 else 0
@@ -6611,7 +6634,7 @@ func _seed_bootstrap_jobs_near_pawn_cluster() -> void:
 	if storage_huts < storage_needed:
 		var t: Vector2i = _find_build_tile_near(center, 4)
 		if t.x >= 0:
-			_stamp_seeder_job(JobManager.post(Job.Type.BUILD_STORAGE_HUT, t, 3), "storage_pressure")
+			_post_seeded_job(Job.Type.BUILD_STORAGE_HUT, t, 3, 15, "storage_pressure")
 	var leader: Node = null
 	for p in pawns:
 		if p != null and is_instance_valid(p) and p.data != null:
@@ -6652,14 +6675,14 @@ func _seed_bootstrap_survival_food_jobs(center: Vector2i, pop: int) -> void:
 				continue
 			var feat: int = int(_world.data.get_feature(t.x, t.y))
 			if feat == TileFeature.Type.FERTILE_SOIL and posted_forage < max_forage:
-				if JobManager.post(Job.Type.FORAGE, t, 8, 8) != null:
+				if _post_seeded_job(Job.Type.FORAGE, t, 8, 8, "bootstrap_food_pressure") != null:
 					posted_forage += 1
 			elif feat == TileFeature.Type.DEER and posted_hunt < max_hunt:
-				if JobManager.post(Job.Type.HUNT, t, 8, 12) != null:
+				if _post_seeded_job(Job.Type.HUNT, t, 8, 12, "bootstrap_food_pressure") != null:
 					posted_hunt += 1
 			elif (feat == TileFeature.Type.RIVER or int(_world.data.get_biome(t.x, t.y)) == Biome.Type.WATER) \
 					and posted_fish < max_fish:
-				if JobManager.post(Job.Type.FISH, t, 7, 10) != null:
+				if _post_seeded_job(Job.Type.FISH, t, 7, 10, "bootstrap_food_pressure") != null:
 					posted_fish += 1
 			if posted_forage >= max_forage and posted_hunt >= max_hunt and posted_fish >= max_fish:
 				return
@@ -6667,12 +6690,12 @@ func _seed_bootstrap_survival_food_jobs(center: Vector2i, pop: int) -> void:
 	if int(features.get("hearth", 0)) > 0:
 		var cook_tile: Vector2i = _find_hearth_tile_near(center, 6)
 		if cook_tile.x >= 0 and not JobManager.has_job_at(cook_tile):
-			if stock_food <= 0 and JobManager.post(Job.Type.FORAGE, center, 9, 6) != null:
+			if stock_food <= 0 and _post_seeded_job(Job.Type.FORAGE, center, 9, 6, "bootstrap_food_pressure") != null:
 				pass
 			elif StockpileManager.total_count_of(Item.Type.MEAT) > 0:
-				JobManager.post(Job.Type.COOK_MEAT, cook_tile, 6, 8)
+				_post_seeded_job(Job.Type.COOK_MEAT, cook_tile, 6, 8, "bootstrap_cook_pressure")
 			elif StockpileManager.total_count_of(Item.Type.BERRY) >= 2:
-				JobManager.post(Job.Type.COOK_BERRIES, cook_tile, 5, 5)
+				_post_seeded_job(Job.Type.COOK_BERRIES, cook_tile, 5, 5, "bootstrap_cook_pressure")
 
 
 func _seed_construction_jobs() -> void:
@@ -6788,7 +6811,7 @@ func _seed_construction_jobs() -> void:
 			while beds + pending_beds_crisis + beds_posted_this_cycle < need_beds_crisis and beds_posted_this_cycle < 2 and jobs_this_settlement < job_cap:
 				var t: Vector2i = _find_build_tile_near(center_tile, 4)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_BED, t, 8, 10)
+					var j: Job = _post_seeded_job(Job.Type.BUILD_BED, t, 8, 10, "housing_crisis", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -6818,9 +6841,8 @@ func _seed_construction_jobs() -> void:
 				if stock_wood + stock_stone > 0 or local_pop <= 6:
 					var t: Vector2i = _find_build_tile_near(center_tile, 4)
 					if t.x >= 0 and not JobManager.has_job_at(t):
-						var j: Job = JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 7, 12)
+						var j: Job = _post_seeded_job(Job.Type.BUILD_FIRE_PIT, t, 7, 12, "warmth_coverage", "settlement", center_rk)
 						if j != null:
-							_stamp_seeder_job(j, "warmth_coverage", center_rk)
 							posted += 1
 							jobs_this_settlement += 1
 							_seeder_track_post(center_rk, job_cap)
@@ -6828,6 +6850,8 @@ func _seed_construction_jobs() -> void:
 		# Priority 2: Wood pile (storage hut) vs food granary — route by ground spill type.
 		var storage_press: float = float(build_priorities.get("storage_press", 0.0))
 		var storage_needed: int = int(build_priorities.get("storage_needed", 0))
+		if ColonyBayesTree != null and ColonyBayesTree.has_method("get_build_priority_bonus"):
+			storage_needed = maxi(0, storage_needed + int(ColonyBayesTree.get_build_priority_bonus(Job.Type.BUILD_STORAGE_HUT, center_rk, features, local_pop, build_priorities)))
 		var ground_spill: Dictionary = _world.sum_ground_resources(center_rk) if _world != null and _world.has_method("sum_ground_resources") else {}
 		var ground_wood: int = int(ground_spill.get("wood", 0))
 		var ground_food: int = int(ground_spill.get("food", 0))
@@ -6839,9 +6863,8 @@ func _seed_construction_jobs() -> void:
 				if pending_storage == 0:
 					var t: Vector2i = _find_build_tile_near(center_tile, 4)
 					if t.x >= 0 and not JobManager.has_job_at(t):
-						var j: Job = JobManager.post(Job.Type.BUILD_STORAGE_HUT, t, 6, 15)
+						var j: Job = _post_seeded_job(Job.Type.BUILD_STORAGE_HUT, t, 6, 15, "wood_pile_pressure", "settlement", center_rk)
 						if j != null:
-							_stamp_seeder_job(j, "wood_pile_pressure", center_rk)
 							posted += 1
 							jobs_this_settlement += 1
 							_seeder_track_post(center_rk, job_cap)
@@ -6851,9 +6874,8 @@ func _seed_construction_jobs() -> void:
 				if pending_granaries == 0:
 					var gt: Vector2i = _find_build_tile_near(center_tile, 4)
 					if gt.x >= 0 and not JobManager.has_job_at(gt):
-						var gj: Job = JobManager.post(Job.Type.BUILD_GRANARY, gt, 6, 35)
+						var gj: Job = _post_seeded_job(Job.Type.BUILD_GRANARY, gt, 6, 35, "granary_pressure", "settlement", center_rk)
 						if gj != null:
-							_stamp_seeder_job(gj, "granary_pressure", center_rk)
 							posted += 1
 							jobs_this_settlement += 1
 							_seeder_track_post(center_rk, job_cap)
@@ -6866,9 +6888,8 @@ func _seed_construction_jobs() -> void:
 		while beds + pending_beds + beds_posted_p3 < need_beds and beds_posted_p3 < 2 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			var t: Vector2i = _find_build_tile_near(center_tile, 4)
 			if t.x >= 0 and not JobManager.has_job_at(t):
-				var j: Job = JobManager.post(Job.Type.BUILD_BED, t, 6, 10)
+				var j: Job = _post_seeded_job(Job.Type.BUILD_BED, t, 6, 10, "housing_pressure", "settlement", center_rk)
 				if j != null:
-					_stamp_seeder_job(j, "housing_pressure", center_rk)
 					posted += 1
 					jobs_this_settlement += 1
 					_seeder_track_post(center_rk, job_cap)
@@ -6903,7 +6924,7 @@ func _seed_construction_jobs() -> void:
 			if walls + pending_walls >= 3 and doors + pending_doors <= 0 and jobs_this_settlement < job_cap:
 				var door_side: Vector2i = center_tile + Vector2i(0, ring_radius)
 				if _world.data.in_bounds(door_side.x, door_side.y) and not JobManager.has_job_at(door_side):
-					var dj: Job = JobManager.post(Job.Type.BUILD_DOOR, door_side, 5, 8)
+					var dj: Job = _post_seeded_job(Job.Type.BUILD_DOOR, door_side, 5, 8, "perimeter_door", "settlement", center_rk)
 					if dj != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -6917,7 +6938,7 @@ func _seed_construction_jobs() -> void:
 		if food_press > 0.45 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			var ft: Vector2i = _find_fertile_tile_near(center_tile, 5)
 			if ft.x >= 0 and not JobManager.has_job_at(ft):
-				var j: Job = JobManager.post(Job.Type.PLANT_SEEDS, ft, 4, 6)
+				var j: Job = _post_seeded_job(Job.Type.PLANT_SEEDS, ft, 4, 6, "food_pressure", "settlement", center_rk)
 				if j != null:
 					posted += 1
 					jobs_this_settlement += 1
@@ -6935,7 +6956,7 @@ func _seed_construction_jobs() -> void:
 			if meat_count > 0:
 				var t: Vector2i = _find_hearth_tile_near(center_tile, 5)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.COOK_MEAT, t, 4, 8)
+					var j: Job = _post_seeded_job(Job.Type.COOK_MEAT, t, 4, 8, "cooking_pressure", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -6944,7 +6965,7 @@ func _seed_construction_jobs() -> void:
 			elif fish_count > 0:
 				var t: Vector2i = _find_hearth_tile_near(center_tile, 5)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.COOK_FISH, t, 4, 6)
+					var j: Job = _post_seeded_job(Job.Type.COOK_FISH, t, 4, 6, "cooking_pressure", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -6953,7 +6974,7 @@ func _seed_construction_jobs() -> void:
 			elif berry_count >= 2:
 				var t: Vector2i = _find_hearth_tile_near(center_tile, 5)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.COOK_BERRIES, t, 3, 5)
+					var j: Job = _post_seeded_job(Job.Type.COOK_BERRIES, t, 3, 5, "cooking_pressure", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -6964,9 +6985,8 @@ func _seed_construction_jobs() -> void:
 			if ground_food >= 2 or (ground_wood >= 4 and storage_press > 0.2):
 				var pending_hauls: int = _count_pending_jobs_near(Job.Type.TRADE_HAUL, center_tile, 10, _cached_active_jobs)
 				if pending_hauls == 0 and not JobManager.has_job_at(center_tile):
-					var hj: Job = JobManager.post(Job.Type.TRADE_HAUL, center_tile, 5, 6)
+					var hj: Job = _post_seeded_job(Job.Type.TRADE_HAUL, center_tile, 5, 6, "ground_haul", "settlement", center_rk)
 					if hj != null:
-						_stamp_seeder_job(hj, "ground_haul", center_rk)
 						posted += 1
 						jobs_this_settlement += 1
 						_seeder_track_post(center_rk, job_cap)
@@ -6980,7 +7000,7 @@ func _seed_construction_jobs() -> void:
 					continue
 				if JobManager.has_job_at(mt):
 					continue
-				var mj: Job = JobManager.post(Job.Type.MAINTAIN_STRUCTURE, mt, int(due.get("priority", 5)), 8)
+				var mj: Job = _post_seeded_job(Job.Type.MAINTAIN_STRUCTURE, mt, int(due.get("priority", 5)), 8, "structure_maintenance", "settlement", center_rk)
 				if mj != null:
 					posted += 1
 					jobs_this_settlement += 1
@@ -6988,7 +7008,7 @@ func _seed_construction_jobs() -> void:
 		if _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap) and KnowledgeSystem != null and KnowledgeSystem.has_method("get_at_risk_knowledge_types"):
 			var at_risk_knowledge: Array = KnowledgeSystem.get_at_risk_knowledge_types()
 			if not at_risk_knowledge.is_empty() and int(pending_counts.get(Job.Type.TEACH_SKILL, 0)) < 2:
-				var tj: Job = JobManager.post(Job.Type.TEACH_SKILL, center_tile, 7, 10)
+				var tj: Job = _post_seeded_job(Job.Type.TEACH_SKILL, center_tile, 7, 10, "knowledge_preservation", "settlement", center_rk)
 				if tj != null:
 					posted += 1
 					jobs_this_settlement += 1
@@ -7009,7 +7029,7 @@ func _seed_construction_jobs() -> void:
 			if pending_farms == 0:
 				var t: Vector2i = _find_fertile_tile_near(center_tile, 5)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_FARM_WHEAT, t, 5, 30)
+					var j: Job = _post_seeded_job(Job.Type.BUILD_FARM_WHEAT, t, 5, 30, "ambition_farm", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -7021,7 +7041,7 @@ func _seed_construction_jobs() -> void:
 			if pending_workshops == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 4)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_WORKSHOP, t, 5, 40)
+					var j: Job = _post_seeded_job(Job.Type.BUILD_WORKSHOP, t, 5, 40, "ambition_workshop", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -7033,7 +7053,7 @@ func _seed_construction_jobs() -> void:
 			if pending_granaries == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 4)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_GRANARY, t, 5, 35)
+					var j: Job = _post_seeded_job(Job.Type.BUILD_GRANARY, t, 5, 35, "ambition_granary", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -7048,7 +7068,7 @@ func _seed_construction_jobs() -> void:
 			if pending_apothecaries == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 4)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_APOTHECARY, t, 5, 40)
+					var j: Job = _post_seeded_job(Job.Type.BUILD_APOTHECARY, t, 5, 40, "ambition_apothecary", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -7060,7 +7080,7 @@ func _seed_construction_jobs() -> void:
 			if pending_markets == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 4)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_MARKET, t, 6, 40)
+					var j: Job = _post_seeded_job(Job.Type.BUILD_MARKET, t, 6, 40, "ambition_market", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -7075,7 +7095,7 @@ func _seed_construction_jobs() -> void:
 			if pending_libraries == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 4)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_LIBRARY, t, 6, 45)
+					var j: Job = _post_seeded_job(Job.Type.BUILD_LIBRARY, t, 6, 45, "ambition_library", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -7087,7 +7107,7 @@ func _seed_construction_jobs() -> void:
 			if pending_barracks == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 4)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_BARRACKS, t, 6, 45)
+					var j: Job = _post_seeded_job(Job.Type.BUILD_BARRACKS, t, 6, 45, "ambition_barracks", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -7102,7 +7122,7 @@ func _seed_construction_jobs() -> void:
 			if pending_cellars == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 4)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_CELLAR, t, 6, 35)
+					var j: Job = _post_seeded_job(Job.Type.BUILD_CELLAR, t, 6, 35, "ambition_cellar", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -7114,7 +7134,7 @@ func _seed_construction_jobs() -> void:
 			if pending_watchtowers == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 4)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_WATCHTOWER, t, 6, 40)
+					var j: Job = _post_seeded_job(Job.Type.BUILD_WATCHTOWER, t, 6, 40, "ambition_watchtower", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -7129,7 +7149,7 @@ func _seed_construction_jobs() -> void:
 			if pending_schools == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 4)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_SCHOOL, t, 6, 40)
+					var j: Job = _post_seeded_job(Job.Type.BUILD_SCHOOL, t, 6, 40, "ambition_school", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -7141,7 +7161,7 @@ func _seed_construction_jobs() -> void:
 			if pending_trading_posts == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 4)
 				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = JobManager.post(Job.Type.BUILD_TRADING_POST, t, 5, 40)
+					var j: Job = _post_seeded_job(Job.Type.BUILD_TRADING_POST, t, 5, 40, "ambition_trading_post", "settlement", center_rk)
 					if j != null:
 						posted += 1
 						jobs_this_settlement += 1
@@ -7170,7 +7190,7 @@ func _seed_construction_jobs() -> void:
 							continue
 						if JobManager.has_job_at(Vector2i(rx, ry)):
 							continue
-						var j: Job = JobManager.post(Job.Type.BUILD_ROAD, Vector2i(rx, ry), 5, 8)
+						var j: Job = _post_seeded_job(Job.Type.BUILD_ROAD, Vector2i(rx, ry), 5, 8, "ambition_road", "settlement", center_rk)
 						if j != null:
 							posted += 1
 							jobs_this_settlement += 1
@@ -7278,7 +7298,7 @@ func _post_wall_ring_jobs(center: Vector2i, ring_radius: int, max_walls: int, ma
 				continue
 			if JobManager.has_job_at(t):
 				continue
-			var job: Job = JobManager.post(Job.Type.BUILD_WALL, t, BUILD_WALL_PRIORITY, BUILD_WALL_WORK_TICKS)
+			var job: Job = _post_seeded_job(Job.Type.BUILD_WALL, t, BUILD_WALL_PRIORITY, BUILD_WALL_WORK_TICKS, "perimeter_wall", "settlement")
 			if job != null:
 				job.work_tile = work_tile
 				reserved_tiles.append(t)
@@ -7313,14 +7333,14 @@ func _post_house_blueprint_jobs(center: Vector2i, needed_beds: int, max_jobs: in
 			return posted
 		var bt: Vector2i = interior[i]
 		if _world.data.in_bounds(bt.x, bt.y) and not JobManager.has_job_at(bt):
-			var bj: Job = JobManager.post(Job.Type.BUILD_BED, bt, 8, 8)
+			var bj: Job = _post_seeded_job(Job.Type.BUILD_BED, bt, 8, 8, "house_blueprint")
 			if bj != null:
 				posted += 1
 	if posted >= max_jobs:
 		return posted
 	var hearth_tile: Vector2i = anchor + Vector2i(2, 1)
 	if _world.data.in_bounds(hearth_tile.x, hearth_tile.y) and not JobManager.has_job_at(hearth_tile):
-		var hj: Job = JobManager.post(Job.Type.BUILD_FIRE_PIT, hearth_tile, 7, 12)
+		var hj: Job = _post_seeded_job(Job.Type.BUILD_FIRE_PIT, hearth_tile, 7, 12, "world_bootstrap_hearth")
 		if hj != null:
 			posted += 1
 	if posted >= max_jobs:
@@ -7335,7 +7355,7 @@ func _post_house_blueprint_jobs(center: Vector2i, needed_beds: int, max_jobs: in
 	posted += _post_wall_tiles_batch(wall_tiles, wall_budget)
 	var door_tile: Vector2i = anchor + Vector2i(1, 2)
 	if posted < max_jobs and _world.data.in_bounds(door_tile.x, door_tile.y) and not JobManager.has_job_at(door_tile):
-		var dj: Job = JobManager.post(Job.Type.BUILD_DOOR, door_tile, 7, 6)
+		var dj: Job = _post_seeded_job(Job.Type.BUILD_DOOR, door_tile, 7, 6, "house_blueprint")
 		if dj != null:
 			posted += 1
 	return posted
@@ -7354,7 +7374,7 @@ func _post_wall_tiles_batch(tiles: Array[Vector2i], max_jobs: int) -> int:
 			continue
 		if JobManager.has_job_at(t):
 			continue
-		var job: Job = JobManager.post(Job.Type.BUILD_WALL, t, BUILD_WALL_PRIORITY, BUILD_WALL_WORK_TICKS)
+		var job: Job = _post_seeded_job(Job.Type.BUILD_WALL, t, BUILD_WALL_PRIORITY, BUILD_WALL_WORK_TICKS, "house_blueprint")
 		if job == null:
 			continue
 		job.work_tile = work_tile
@@ -7373,7 +7393,7 @@ func _post_material_recovery_jobs(center: Vector2i, max_jobs: int) -> int:
 	var posted: int = 0
 	var tree_tile: Vector2i = _find_feature_tile_near(center, TileFeature.Type.TREE, 5)
 	if tree_tile.x >= 0 and not JobManager.has_job_at(tree_tile):
-		if JobManager.post(Job.Type.CHOP, tree_tile, 7, CHOP_WORK_TICKS) != null:
+		if _post_seeded_job(Job.Type.CHOP, tree_tile, 7, CHOP_WORK_TICKS, "material_recovery") != null:
 			posted += 1
 	if posted >= max_jobs:
 		return posted
@@ -7382,7 +7402,7 @@ func _post_material_recovery_jobs(center: Vector2i, max_jobs: int) -> int:
 		var work_tile: Vector2i = _world.pathfinder.find_adjacent_passable(ore_tile)
 		if work_tile.x < 0:
 			return posted
-		var mj: Job = JobManager.post(Job.Type.MINE, ore_tile, 7, MINE_WORK_TICKS)
+		var mj: Job = _post_seeded_job(Job.Type.MINE, ore_tile, 7, MINE_WORK_TICKS, "material_recovery")
 		if mj != null:
 			mj.work_tile = work_tile
 			posted += 1
@@ -7600,7 +7620,7 @@ func _post_wildlife_hunt_jobs_after_stabilization() -> void:
 		if live_now_bootstrap <= _hunt_reserve_for_species(species_bootstrap):
 			continue
 		if _can_post_job_at(t):
-			var hj_boot: Job = JobManager.post(Job.Type.HUNT, t, HUNT_PRIORITY, _hunt_ticks_for(feat2))
+			var hj_boot: Job = _post_seeded_job(Job.Type.HUNT, t, HUNT_PRIORITY, _hunt_ticks_for(feat2), "dynamic_hunt_seed")
 			if hj_boot != null:
 				_set_job_post_cooldown(t)
 				live_bootstrap[species_bootstrap] = maxi(0, live_now_bootstrap - 1)
@@ -7661,7 +7681,7 @@ func _post_hunting_jobs_for_animals() -> void:
 			continue
 		var work_ticks: int = HUNT_RABBIT_WORK_TICKS if species == Animal.Type.RABBIT else HUNT_DEER_WORK_TICKS
 		if _can_post_job_at(tile):
-			var hj2: Job = JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, work_ticks)
+			var hj2: Job = _post_seeded_job(Job.Type.HUNT, tile, HUNT_PRIORITY, work_ticks, "dynamic_hunt_seed")
 			if hj2 != null:
 				_set_job_post_cooldown(tile)
 				hunt_jobs_posted += 1
@@ -8004,7 +8024,7 @@ func _restore_feature(tile: Vector2i, feature: int, main_component: int = -1) ->
 	match feature:
 		TileFeature.Type.FERTILE_SOIL:
 			if _can_post_job_at(tile):
-				var rfj: Job = JobManager.post(Job.Type.FORAGE, tile, FORAGE_PRIORITY, FORAGE_WORK_TICKS)
+				var rfj: Job = _post_seeded_job(Job.Type.FORAGE, tile, FORAGE_PRIORITY, FORAGE_WORK_TICKS, "resource_reseed")
 				if rfj != null:
 					_set_job_post_cooldown(tile)
 			else:
@@ -8015,7 +8035,7 @@ func _restore_feature(tile: Vector2i, feature: int, main_component: int = -1) ->
 					print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.FORAGE), tile, rem_rgf])
 		TileFeature.Type.TREE:
 			if _can_post_job_at(tile):
-				var rcj: Job = JobManager.post(Job.Type.CHOP, tile, CHOP_PRIORITY, CHOP_WORK_TICKS)
+				var rcj: Job = _post_seeded_job(Job.Type.CHOP, tile, CHOP_PRIORITY, CHOP_WORK_TICKS, "resource_reseed")
 				if rcj != null:
 					_set_job_post_cooldown(tile)
 			else:
@@ -8031,7 +8051,7 @@ func _restore_feature(tile: Vector2i, feature: int, main_component: int = -1) ->
 			):
 				return
 			if _can_post_job_at(tile):
-				var rhj: Job = JobManager.post(Job.Type.HUNT, tile, HUNT_PRIORITY, _hunt_ticks_for(feature))
+				var rhj: Job = _post_seeded_job(Job.Type.HUNT, tile, HUNT_PRIORITY, _hunt_ticks_for(feature), "resource_reseed")
 				if rhj != null:
 					_set_job_post_cooldown(tile)
 			else:
@@ -8119,7 +8139,7 @@ func _react_to_mining_progress_step() -> bool:
 					var rem_mr: int = expiry_mr - GameManager.tick_count
 					print("[JobCooldown] Suppressed %s at tile %s (cooldown remaining: %d)" % [Job.describe_type(Job.Type.MINE), ore_tile, rem_mr])
 				continue
-			var job: Job = JobManager.post(Job.Type.MINE, ore_tile, MINE_PRIORITY, MINE_WORK_TICKS)
+			var job: Job = _post_seeded_job(Job.Type.MINE, ore_tile, MINE_PRIORITY, MINE_WORK_TICKS, "resource_reseed")
 			if job == null:
 				continue
 			job.work_tile = work_tile
@@ -8145,7 +8165,7 @@ func _react_to_mining_progress_step() -> bool:
 			var work_tile: Vector2i = _find_main_component_neighbor(wall_tile, main_component)
 			if work_tile.x >= 0:
 				if _can_post_job_at(wall_tile):
-					var job: Job = JobManager.post(Job.Type.MINE_WALL, wall_tile, MINE_WALL_PRIORITY, MINE_WALL_WORK_TICKS)
+					var job: Job = _post_seeded_job(Job.Type.MINE_WALL, wall_tile, MINE_WALL_PRIORITY, MINE_WALL_WORK_TICKS, "resource_reseed")
 					if job != null:
 						job.work_tile = work_tile
 						_set_job_post_cooldown(wall_tile)
@@ -8418,10 +8438,11 @@ func _designate_beds_near_stockpile() -> void:
 	for c in candidates:
 		if posted >= BEDS_PER_DESIGNATION:
 			break
-		var job: Job = JobManager.post(Job.Type.BUILD_BED, c.tile,
-			BUILD_BED_PRIORITY, BUILD_BED_WORK_TICKS)
+		var job: Job = _post_seeded_job(Job.Type.BUILD_BED, c.tile,
+			BUILD_BED_PRIORITY, BUILD_BED_WORK_TICKS, "player_bed_batch", "all")
 		if job == null:
 			continue
+		_stamp_player_designation_job(job)
 		posted += 1
 	if posted == 0:
 		if OS.is_debug_build():
@@ -8493,7 +8514,8 @@ func settlement_planner_is_valid_door_site(t: Vector2i) -> bool:
 func settlement_planner_post_bed(t: Vector2i) -> bool:
 	if not _is_valid_bed_site(t, _world.pathfinder.largest_component_id()):
 		return false
-	return JobManager.post(Job.Type.BUILD_BED, t, BUILD_BED_PRIORITY, BUILD_BED_WORK_TICKS) != null
+	var job: Job = _post_seeded_job(Job.Type.BUILD_BED, t, BUILD_BED_PRIORITY, BUILD_BED_WORK_TICKS, "settlement_planner", "settlement")
+	return job != null
 
 
 func settlement_planner_post_wall(t: Vector2i) -> bool:
@@ -8501,7 +8523,7 @@ func settlement_planner_post_wall(t: Vector2i) -> bool:
 	var work_tile: Vector2i = _find_main_component_neighbor(t, main_component)
 	if work_tile.x < 0 or not _is_valid_build_site(t, main_component):
 		return false
-	var job: Job = JobManager.post(Job.Type.BUILD_WALL, t, BUILD_WALL_PRIORITY, BUILD_WALL_WORK_TICKS)
+	var job: Job = _post_seeded_job(Job.Type.BUILD_WALL, t, BUILD_WALL_PRIORITY, BUILD_WALL_WORK_TICKS, "settlement_planner", "settlement")
 	if job == null:
 		return false
 	job.work_tile = work_tile
@@ -8523,7 +8545,7 @@ func settlement_planner_post_door(t: Vector2i) -> bool:
 			return false
 	else:
 		wtd = t
-	var jdoor: Job = JobManager.post(Job.Type.BUILD_DOOR, t, BUILD_DOOR_PRIORITY, BUILD_DOOR_WORK_TICKS)
+	var jdoor: Job = _post_seeded_job(Job.Type.BUILD_DOOR, t, BUILD_DOOR_PRIORITY, BUILD_DOOR_WORK_TICKS, "settlement_planner", "settlement")
 	if jdoor == null:
 		return false
 	jdoor.work_tile = wtd
@@ -8559,7 +8581,16 @@ func settlement_planner_post_fire_pit(t: Vector2i) -> bool:
 		return false
 	if StockpileManager.total_count_of(Item.Type.WOOD) < 1:
 		return false
-	var job: Job = JobManager.post(Job.Type.BUILD_FIRE_PIT, t, 5, 35)
+	var center_rk: int = WorldMemory._region_key(t.x, t.y) if WorldMemory != null else -1
+	if ColonySimServices != null and center_rk >= 0:
+		var features: Dictionary = HeelKawnianManager._scan_local_features(t, 8)
+		var hearths: int = int(features.get("hearth", 0))
+		var needed: int = ColonySimServices.regional_hearths_needed(center_rk)
+		if not ColonySimServices.can_seed_fire_pit(center_rk, t, hearths, needed):
+			return false
+		if not ColonySimServices.try_consume_settlement_build_slot(center_rk, 4):
+			return false
+	var job: Job = _post_seeded_job(Job.Type.BUILD_FIRE_PIT, t, 5, 35, "settlement_planner", "settlement", center_rk)
 	return job != null
 
 
@@ -8572,7 +8603,11 @@ func settlement_planner_post_storage_hut(t: Vector2i) -> bool:
 		return false
 	if StockpileManager.total_count_of(Item.Type.WOOD) < 2:
 		return false
-	var job: Job = JobManager.post(Job.Type.BUILD_STORAGE_HUT, t, 5, 40)
+	var center_rk: int = WorldMemory._region_key(t.x, t.y) if WorldMemory != null else -1
+	if ColonySimServices != null and center_rk >= 0:
+		if not ColonySimServices.try_consume_settlement_build_slot(center_rk, 4):
+			return false
+	var job: Job = _post_seeded_job(Job.Type.BUILD_STORAGE_HUT, t, 5, 40, "settlement_planner", "settlement", center_rk)
 	return job != null
 
 
@@ -8581,7 +8616,7 @@ func settlement_planner_post_protect(t: Vector2i) -> bool:
 		return false
 	if not _world.data.is_passable(t.x, t.y):
 		return false
-	var job: Job = JobManager.post(Job.Type.PROTECT, t, 6, 60)
+	var job: Job = JobManager.post_stamped(Job.Type.PROTECT, t, 6, 60, "settlement_planner", "settlement")
 	return job != null
 
 
@@ -8590,7 +8625,7 @@ func settlement_planner_post_defend(t: Vector2i) -> bool:
 		return false
 	if not _world.data.is_passable(t.x, t.y):
 		return false
-	var job: Job = JobManager.post(Job.Type.DEFEND, t, 7, 80)
+	var job: Job = JobManager.post_stamped(Job.Type.DEFEND, t, 7, 80, "settlement_planner", "settlement")
 	return job != null
 
 
@@ -8607,7 +8642,11 @@ func settlement_planner_post_job(t: Vector2i, job_type: int) -> bool:
 		var building: Dictionary = BuildingRegistry.get_building_by_job_type(job_type)
 		if not building.is_empty():
 			work_ticks = int(building.get("work_ticks", 30))
-	var job: Job = JobManager.post(job_type, t, 5, work_ticks)
+	var center_rk: int = WorldMemory._region_key(t.x, t.y) if WorldMemory != null else -1
+	if ColonySimServices != null and center_rk >= 0:
+		if not ColonySimServices.try_consume_settlement_build_slot(center_rk, 4):
+			return false
+	var job: Job = _post_seeded_job(job_type, t, 5, work_ticks, "settlement_planner", "settlement", center_rk)
 	return job != null
 
 
@@ -8797,7 +8836,11 @@ func _build_save_dict() -> Dictionary:
 	var pawns_s: Array = []
 	for p in _pawn_spawner.pawns:
 		if p != null and is_instance_valid(p):
-			pawns_s.append(p.data.to_save_dict())
+			var pdict: Dictionary = p.data.to_save_dict()
+			# If pawn has a live AgentBayesTree, serialize it into the save payload
+			if p._agent_bayes != null and p._agent_bayes.has_method("to_dict"):
+				pdict["agent_bayes"] = p._agent_bayes.to_dict()
+			pawns_s.append(pdict)
 	return {
 		"v": GameSave.SAVE_VERSION,
 		"tick": GameManager.tick_count,
@@ -8811,6 +8854,7 @@ func _build_save_dict() -> Dictionary:
 		"regrow": _save_regrow_queue(),
 		"zone_filter": _zone_next_filter,
 		"world_memory": WorldMemory.to_save_dict(),
+		"colony_bayes_tree": ColonyBayesTree.to_save_dict(),
 		"bloodline_system": SocialManager.get_bloodline_system().to_save_dict(),
 		"settlement_registry": SettlementRegistry.to_save_dict(),
 		"settlement_memory": SettlementMemory.to_save_dict(),
@@ -8929,6 +8973,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 	_last_generation_tick = int(s.get("last_generation_tick", loaded_tick))
 	_zone_next_filter = int(s.get("zone_filter", 0))
 	WorldMemory.from_save_dict(s.get("world_memory", {}))
+	ColonyBayesTree.from_save_dict(s.get("colony_bayes_tree", {}))
 	SocialManager.get_bloodline_system().from_save_dict(s.get("bloodline_system", {}))
 	SettlementRegistry.from_save_dict(s.get("settlement_registry", {}))
 	SettlementMemory.from_save_dict(s.get("settlement_memory", {}))
@@ -9046,7 +9091,317 @@ func trigger_war_battle_spawn(src_settlement_id: int, target_settlement_id: int,
 		return false
 	if _enemy_spawner.get_enemy_count() > 0:
 		return false
-	return bool(_enemy_spawner.spawn_war_forces(_world, src_settlement_id, target_settlement_id, strength))
+	var ok: bool = bool(_enemy_spawner.spawn_war_forces(_world, src_settlement_id, target_settlement_id, strength))
+	if ok:
+		_record_skirmish_started(src_settlement_id, target_settlement_id, "war_mobilization")
+	return ok
+
+
+func _record_skirmish_started(faction_a: int, faction_b: int, reason: String = "border_clash") -> void:
+	if WorldMemory == null or SettlementMemory == null:
+		return
+	var tile: Vector2i = Vector2i.ZERO
+	var pawn_count: int = 0
+	var name_a: String = _settlement_label_for_skirmish(faction_a)
+	var name_b: String = _settlement_label_for_skirmish(faction_b)
+	for s_any in SettlementMemory.get_formal_settlements():
+		if s_any is not Dictionary:
+			continue
+		var st: Dictionary = s_any as Dictionary
+		var cr: int = int(st.get("center_region", -1))
+		if cr == faction_a or cr == faction_b:
+			pawn_count += int(st.get("population", 0))
+			if tile == Vector2i.ZERO:
+				var cv: Variant = st.get("center_tile")
+				if cv is Dictionary:
+					tile = Vector2i(int(cv.get("x", 0)), int(cv.get("y", 0)))
+				elif cv is Vector2i:
+					tile = cv as Vector2i
+	if tile == Vector2i.ZERO:
+		tile = Vector2i(int(WorldData.WIDTH / 2), int(WorldData.HEIGHT / 2))
+	var tick_now: int = GameManager.tick_count if GameManager != null else 0
+	var plan_a: String = _pick_skirmish_battle_plan(faction_a, faction_b, tick_now, 0)
+	var plan_b: String = _pick_skirmish_battle_plan(faction_b, faction_a, tick_now, 1)
+	WorldMemory.record_event({
+		"type": "skirmish_started",
+		"k": WorldMemory.Kind.CONFLICT_EVENT,
+		"r": WorldMemory._region_key(tile.x, tile.y),
+		"tick": tick_now,
+		"tile": {"x": tile.x, "y": tile.y},
+		"faction_a_id": faction_a,
+		"faction_b_id": faction_b,
+		"faction_a_name": name_a,
+		"faction_b_name": name_b,
+		"pawn_count": pawn_count,
+		"reason": reason,
+		"battle_plan_a": plan_a,
+		"battle_plan_b": plan_b,
+		"narrative": "%s (%s) faces %s (%s) at the border." % [
+			name_a, plan_a.replace("_", " "), name_b, plan_b.replace("_", " "),
+		],
+	})
+	_pending_skirmishes.append({
+		"faction_a_id": faction_a,
+		"faction_b_id": faction_b,
+		"faction_a_name": name_a,
+		"faction_b_name": name_b,
+		"tile": tile,
+		"start_tick": tick_now,
+		"resolve_tick": tick_now + SKIRMISH_RESOLVE_TICKS,
+		"reason": reason,
+		"battle_plan_a": plan_a,
+		"battle_plan_b": plan_b,
+	})
+	var overlay: Node = get_node_or_null("WorldViewport/TerritoryOverlay")
+	if overlay != null and overlay.has_method("flash_skirmish_tile"):
+		overlay.call("flash_skirmish_tile", tile)
+
+
+func _pick_skirmish_battle_plan(faction_id: int, enemy_id: int, tick: int, salt: int) -> String:
+	var stream: StringName = StringName("skirmish_plan:%d:%d:%d" % [faction_id, enemy_id, tick])
+	if _SKIRMISH_BATTLE_PLANS.is_empty():
+		return "hold_the_line"
+	var idx: int = WorldRNG.index_for(stream, _SKIRMISH_BATTLE_PLANS.size(), salt)
+	return _SKIRMISH_BATTLE_PLANS[idx]
+
+
+func _skirmish_plan_casualty_bonus(plan: String, is_winner: bool) -> int:
+	if not is_winner:
+		return 0
+	match plan:
+		"flank_at_dawn":
+			return 1
+		"feint_and_charge":
+			return 1
+		"shield_wall":
+			return 1
+		_:
+			return 0
+
+
+func _resolve_pending_skirmishes(tick: int) -> void:
+	if _pending_skirmishes.is_empty() or WorldMemory == null:
+		return
+	var remaining: Array[Dictionary] = []
+	for sk_any in _pending_skirmishes:
+		if sk_any is not Dictionary:
+			continue
+		var sk: Dictionary = sk_any as Dictionary
+		if tick < int(sk.get("resolve_tick", tick + 1)):
+			remaining.append(sk)
+			continue
+		_apply_skirmish_resolution(sk, tick)
+	_pending_skirmishes = remaining
+
+
+func _pawn_ids_in_center_region(center_rk: int) -> Array[int]:
+	var ids: Array[int] = []
+	if center_rk < 0 or _pawn_spawner == null or SettlementMemory == null:
+		return ids
+	var regions: PackedInt32Array = PackedInt32Array()
+	for st_any in SettlementMemory.settlements:
+		if st_any is Dictionary and int((st_any as Dictionary).get("center_region", -1)) == center_rk:
+			var rv: Variant = (st_any as Dictionary).get("regions", null)
+			if rv is PackedInt32Array:
+				regions = rv as PackedInt32Array
+			break
+	if regions.is_empty():
+		regions = PackedInt32Array([center_rk])
+	var region_set: Dictionary = {}
+	for rk in regions:
+		region_set[int(rk)] = true
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or not ("data" in p):
+			continue
+		var pd = p.data
+		if pd == null:
+			continue
+		var prk: int = WorldMemory._region_key(int(pd.tile_pos.x), int(pd.tile_pos.y))
+		if region_set.has(prk):
+			ids.append(int(pd.id))
+	return ids
+
+
+func _apply_skirmish_resolution(sk: Dictionary, tick: int) -> void:
+	var fa: int = int(sk.get("faction_a_id", -1))
+	var fb: int = int(sk.get("faction_b_id", -1))
+	var tile: Vector2i = sk.get("tile", Vector2i.ZERO) as Vector2i
+	var ids_a: Array[int] = _pawn_ids_in_center_region(fa)
+	var ids_b: Array[int] = _pawn_ids_in_center_region(fb)
+	var stream: StringName = StringName("skirmish_resolve:%d:%d:%d" % [fa, fb, int(sk.get("start_tick", tick))])
+	var max_casualties: int = mini(3, maxi(1, (ids_a.size() + ids_b.size()) / 8))
+	var casualties_a: int = 0
+	var casualties_b: int = 0
+	var wounded_ids: Array[int] = []
+	var plan_a: String = str(sk.get("battle_plan_a", "hold_the_line"))
+	var plan_b: String = str(sk.get("battle_plan_b", "hold_the_line"))
+	for side_idx in range(max_casualties):
+		var pick_a: bool = WorldRNG.chance_for(stream, 0.5, side_idx * 2)
+		var pool: Array[int] = ids_a if pick_a else ids_b
+		if pool.is_empty():
+			pool = ids_b if pick_a else ids_a
+		if pool.is_empty():
+			continue
+		var pick_i: int = WorldRNG.index_for(stream, pool.size(), side_idx * 2 + 1)
+		var victim_id: int = int(pool[pick_i])
+		wounded_ids.append(victim_id)
+		if pick_a:
+			casualties_a += 1
+		else:
+			casualties_b += 1
+		_apply_skirmish_casualty_to_pawn(victim_id, stream, side_idx)
+	var winner_is_a: bool = casualties_a <= casualties_b
+	var bonus_a: int = _skirmish_plan_casualty_bonus(plan_a, winner_is_a)
+	var bonus_b: int = _skirmish_plan_casualty_bonus(plan_b, not winner_is_a)
+	casualties_a = maxi(0, casualties_a - bonus_a)
+	casualties_b = maxi(0, casualties_b - bonus_b)
+	WorldMemory.record_event({
+		"type": "battle_resolved",
+		"k": WorldMemory.Kind.CONFLICT_EVENT,
+		"r": WorldMemory._region_key(tile.x, tile.y),
+		"tick": tick,
+		"tile": {"x": tile.x, "y": tile.y},
+		"faction_a_id": fa,
+		"faction_b_id": fb,
+		"faction_a_name": str(sk.get("faction_a_name", "")),
+		"faction_b_name": str(sk.get("faction_b_name", "")),
+		"casualties_a": casualties_a,
+		"casualties_b": casualties_b,
+		"wounded_pawn_ids": wounded_ids,
+		"reason": str(sk.get("reason", "border_clash")),
+		"battle_plan_a": plan_a,
+		"battle_plan_b": plan_b,
+		"winner_name": str(sk.get("faction_a_name", "")) if winner_is_a else str(sk.get("faction_b_name", "")),
+	})
+	_promote_skirmish_veteran(ids_a, ids_b, casualties_a, casualties_b, sk, tick)
+
+
+const _MILITARY_RANKS: PackedStringArray = PackedStringArray([
+	"grunt", "sarj", "captain", "commander", "battlemaster",
+])
+
+
+func _promote_skirmish_veteran(
+		ids_a: Array[int],
+		ids_b: Array[int],
+		casualties_a: int,
+		casualties_b: int,
+		sk: Dictionary,
+		tick: int,
+) -> void:
+	if _pawn_spawner == null:
+		return
+	var winner_ids: Array[int] = ids_a if casualties_a <= casualties_b else ids_b
+	if winner_ids.is_empty():
+		winner_ids = ids_b if casualties_b < casualties_a else ids_a
+	if winner_ids.is_empty():
+		return
+	var best_pawn: HeelKawnian = null
+	var best_score: float = -1.0
+	for pid in winner_ids:
+		for p in _pawn_spawner.pawns:
+			if p == null or not is_instance_valid(p) or not (p is HeelKawnian):
+				continue
+			var hk: HeelKawnian = p as HeelKawnian
+			if hk.data == null or int(hk.data.id) != pid:
+				continue
+			var score: float = float(hk.data.affinities.get("combat", 0.5)) * 100.0 \
+					+ float(hk.data.influence) \
+					+ float(hk.data.military_rank) * 8.0
+			if score > best_score:
+				best_score = score
+				best_pawn = hk
+			break
+	if best_pawn == null or best_pawn.data == null:
+		return
+	var old_rank: String = str(best_pawn.data.military_rank_legacy)
+	var rank_idx: int = _MILITARY_RANKS.find(old_rank)
+	if rank_idx < 0:
+		rank_idx = 0
+	if rank_idx >= _MILITARY_RANKS.size() - 1:
+		return
+	var new_rank: String = _MILITARY_RANKS[rank_idx + 1]
+	best_pawn.data.military_rank_legacy = new_rank
+	best_pawn.data.military_rank = rank_idx + 1
+	if WorldMemory != null:
+		WorldMemory.record_event({
+			"type": "officer_promoted",
+			"k": WorldMemory.Kind.CONFLICT_EVENT,
+			"tick": tick,
+			"pawn_id": int(best_pawn.data.id),
+			"pawn_name": str(best_pawn.data.display_name),
+			"old_rank": old_rank,
+			"new_rank": new_rank,
+			"faction_a_name": str(sk.get("faction_a_name", "")),
+			"faction_b_name": str(sk.get("faction_b_name", "")),
+		})
+
+
+func _apply_skirmish_casualty_to_pawn(pawn_id: int, stream: StringName, salt: int) -> void:
+	if _pawn_spawner == null:
+		return
+	for p in _pawn_spawner.pawns:
+		if p == null or not is_instance_valid(p) or not ("data" in p):
+			continue
+		if int(p.data.id) != pawn_id:
+			continue
+		var lethal: bool = WorldRNG.chance_for(stream, 0.22, salt + 900)
+		if lethal and p.has_method("die"):
+			p.call("die", "skirmish")
+			return
+		if "data" in p and p.data != null:
+			var dmg: float = WorldRNG.range_for(stream, 12.0, 28.0, salt + 901)
+			p.data.health = maxf(1.0, float(p.data.health) - dmg)
+			if BodyRiskManager != null:
+				BodyRiskManager.apply_injury(p, BodyRiskManager.InjuryType.BLUNT, dmg, "skirmish")
+		return
+
+
+func _settlement_label_for_skirmish(center_region: int) -> String:
+	if center_region < 0 or SettlementMemory == null:
+		return "unknown"
+	for s_any in SettlementMemory.settlements:
+		if s_any is Dictionary and int((s_any as Dictionary).get("center_region", -1)) == center_region:
+			var st: Dictionary = s_any as Dictionary
+			var nm: String = str(st.get("polity_display_name", st.get("name", ""))).strip_edges()
+			return nm if not nm.is_empty() else "camp %d" % center_region
+	return "camp %d" % center_region
+
+
+func _maybe_record_regional_skirmish(tick: int) -> void:
+	if tick % 120 != 0 or SettlementMemory == null or FactionSystem == null:
+		return
+	var formal: Array = SettlementMemory.get_formal_settlements()
+	if formal.size() < 2:
+		return
+	for i in range(formal.size()):
+		var sa: Dictionary = formal[i] as Dictionary
+		var id_a: int = int(sa.get("center_region", -1))
+		if id_a < 0:
+			continue
+		for j in range(i + 1, formal.size()):
+			var sb: Dictionary = formal[j] as Dictionary
+			var id_b: int = int(sb.get("center_region", -1))
+			if id_b < 0:
+				continue
+			var rel: String = FactionSystem.get_relation(id_a, id_b)
+			if rel != "war" and rel != "hostile":
+				continue
+			var regs_a: PackedInt32Array = sa.get("regions", PackedInt32Array()) as PackedInt32Array
+			var regs_b: PackedInt32Array = sb.get("regions", PackedInt32Array()) as PackedInt32Array
+			var adjacent: bool = false
+			for ra in regs_a:
+				for rb in regs_b:
+					var dx: int = absi((int(ra) & 0xFFFF) - (int(rb) & 0xFFFF))
+					var dy: int = absi(((int(ra) >> 16) & 0xFFFF) - ((int(rb) >> 16) & 0xFFFF))
+					if dx <= 1 and dy <= 1:
+						adjacent = true
+						break
+				if adjacent:
+					break
+			if adjacent:
+				_record_skirmish_started(id_a, id_b, "hostile_neighbors")
+				return
 
 
 func _living_pawn_count() -> int:

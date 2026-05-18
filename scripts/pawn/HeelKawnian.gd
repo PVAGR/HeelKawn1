@@ -53,6 +53,9 @@ const MOBILE_REDRAW_INTERVAL_BONUS: int = 3
 ## Stable tick ID for deterministic lane gating. Computed once per pawn lifetime.
 var _stable_pawn_tick_id: int = -1
 
+# Per-agent learner instance (lightweight). Created on _ready().
+var _agent_bayes: AgentBayesTree = null
+
 ## Lane interval constants for pawn tick shell reduction
 const PAWN_MEDIUM_AI_INTERVAL_TICKS: int = 1
 const PAWN_NEARBY_SCAN_INTERVAL_TICKS: int = 2
@@ -188,6 +191,14 @@ const BED_WOOD_COST: int = 1
 const WALL_WOOD_COST: int = 2
 const DOOR_WOOD_COST: int = 1
 
+## Materials staged on-site while fetching the next ingredient (wood then stone, etc.).
+var _staged_build_materials: Dictionary = {}
+
+const _BUILD_MATERIAL_FETCH_ORDER: Array[int] = [
+	_Item.Type.WOOD, _Item.Type.STICK, _Item.Type.STONE, _Item.Type.FLINT,
+	_Item.Type.SEEDS, _Item.Type.BERRY, _Item.Type.LEATHER, _Item.Type.PAPER,
+]
+
 
 ## Map of build-job type -> (item_type, qty) needed at the build site. Anything
 ## listed here triggers the FETCHING_MATERIAL bounce in _begin_job.
@@ -196,7 +207,7 @@ static func _materials_for_build(job_type: int) -> Dictionary:
 		_Job.Type.BUILD_BED:  return {"item": _Item.Type.WOOD, "qty": BED_WOOD_COST}
 		_Job.Type.BUILD_WALL: return {"item": _Item.Type.WOOD, "qty": WALL_WOOD_COST}
 		_Job.Type.BUILD_DOOR: return {"item": _Item.Type.WOOD, "qty": DOOR_WOOD_COST}
-		_Job.Type.BUILD_FIRE_PIT:     return {"item": _Item.Type.WOOD, "qty": 2}  # wood + stone (stone tracked separately)
+		_Job.Type.BUILD_FIRE_PIT:     return {"item": _Item.Type.WOOD, "qty": 1}  # stone via BuildingRegistry / multi-fetch
 		_Job.Type.BUILD_STORAGE_HUT:  return {"item": _Item.Type.WOOD, "qty": 3}
 		_Job.Type.BUILD_STOCKPILE:    return {"item": _Item.Type.WOOD, "qty": 5}  # Lowered for early-game accessibility
 		_Job.Type.BUILD_MARKER_STONE: return {"item": _Item.Type.STONE, "qty": 2}
@@ -249,6 +260,131 @@ func _materials_for_active_build(job: Job) -> Dictionary:
 			if StockpileManager.total_count_of(_Item.Type.WOOD) < need_qty and StockpileManager.total_count_of(_Item.Type.STONE) >= need_qty:
 				item_type = _Item.Type.STONE
 	return {"item": item_type, "qty": need_qty}
+
+
+static func _cost_key_to_item(cost_key: String) -> int:
+	match cost_key:
+		"wood": return _Item.Type.WOOD
+		"stone": return _Item.Type.STONE
+		"seeds": return _Item.Type.SEEDS
+		"stick": return _Item.Type.STICK
+		"flint": return _Item.Type.FLINT
+		"herbs": return _Item.Type.BERRY
+		"paper": return _Item.Type.PAPER
+		"leather": return _Item.Type.LEATHER
+		"ink": return _Item.Type.INK
+		"meat": return _Item.Type.MEAT
+		_: return _Item.Type.NONE
+
+
+static func _cost_entries_for_build(job_type: int) -> Array:
+	var entries: Array = []
+	if BuildingRegistry != null:
+		var cost: Dictionary = BuildingRegistry.cost_for_job(job_type)
+		for cost_key in cost:
+			var item_type: int = _cost_key_to_item(str(cost_key))
+			if item_type != _Item.Type.NONE:
+				entries.append({"item": item_type, "qty": int(cost[cost_key])})
+	if entries.is_empty():
+		var legacy: Dictionary = _materials_for_build(job_type)
+		if not legacy.is_empty():
+			entries.append({"item": int(legacy.get("item", _Item.Type.NONE)), "qty": int(legacy.get("qty", 0))})
+		match job_type:
+			_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_HEARTH:
+				entries.append({"item": _Item.Type.STONE, "qty": 1})
+			_Job.Type.BUILD_SHRINE:
+				entries.append({"item": _Item.Type.STONE, "qty": 2})
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ia: int = int(a.get("item", _Item.Type.NONE))
+		var ib: int = int(b.get("item", _Item.Type.NONE))
+		var pa: int = _BUILD_MATERIAL_FETCH_ORDER.find(ia)
+		var pb: int = _BUILD_MATERIAL_FETCH_ORDER.find(ib)
+		if pa < 0:
+			pa = 99
+		if pb < 0:
+			pb = 99
+		return pa < pb
+	)
+	return entries
+
+
+func _carried_plus_staged_qty(item_type: int) -> int:
+	var n: int = data.carrying_qty if data != null and data.carrying == item_type else 0
+	return n + int(_staged_build_materials.get(item_type, 0))
+
+
+func _has_all_build_materials(job: Job) -> bool:
+	if job == null:
+		return true
+	for entry in _cost_entries_for_build(job.type):
+		var it: int = int(entry.get("item", _Item.Type.NONE))
+		var q: int = int(entry.get("qty", 0))
+		if it == _Item.Type.NONE or q <= 0:
+			continue
+		if _carried_plus_staged_qty(it) < q:
+			return false
+	return true
+
+
+func _next_missing_build_material(job: Job) -> Dictionary:
+	if job == null:
+		return {}
+	for entry in _cost_entries_for_build(job.type):
+		var it: int = int(entry.get("item", _Item.Type.NONE))
+		var q: int = int(entry.get("qty", 0))
+		if it == _Item.Type.NONE or q <= 0:
+			continue
+		var have: int = _carried_plus_staged_qty(it)
+		if have < q:
+			return {"item": it, "qty": q - have}
+	return {}
+
+
+func _stage_carried_build_materials() -> void:
+	if data == null or data.carrying == _Item.Type.NONE or data.carrying_qty <= 0:
+		return
+	var it: int = data.carrying
+	_staged_build_materials[it] = int(_staged_build_materials.get(it, 0)) + data.carrying_qty
+	data.clear_carry()
+
+
+func _consume_all_build_materials(job: Job) -> void:
+	if job == null:
+		return
+	for entry in _cost_entries_for_build(job.type):
+		var it: int = int(entry.get("item", _Item.Type.NONE))
+		var need: int = int(entry.get("qty", 0))
+		if it == _Item.Type.NONE or need <= 0:
+			continue
+		var from_staged: int = mini(need, int(_staged_build_materials.get(it, 0)))
+		if from_staged > 0:
+			_staged_build_materials[it] = int(_staged_build_materials.get(it, 0)) - from_staged
+			if int(_staged_build_materials.get(it, 0)) <= 0:
+				_staged_build_materials.erase(it)
+			need -= from_staged
+		if need > 0 and data != null and data.carrying == it:
+			var from_carry: int = mini(need, data.carrying_qty)
+			data.carrying_qty -= from_carry
+			need -= from_carry
+			if data.carrying_qty <= 0:
+				data.clear_carry()
+		if need > 0:
+			_take_from_any_stockpile(it, need)
+
+
+func _begin_fetching_build_materials(job: Job) -> void:
+	var next_m: Dictionary = _next_missing_build_material(job)
+	if next_m.is_empty():
+		_walk_to_work_tile(job)
+		return
+	var item_type: int = int(next_m.get("item", _Item.Type.NONE))
+	var need_qty: int = int(next_m.get("qty", 0))
+	if item_type == _Item.Type.NONE or need_qty <= 0:
+		_walk_to_work_tile(job)
+		return
+	if data.carrying != _Item.Type.NONE and data.carrying != item_type and data.carrying_qty > 0:
+		_stage_carried_build_materials()
+	_begin_fetching_material(item_type, need_qty)
 
 
 func _pawn_stream(label: String) -> StringName:
@@ -1243,6 +1379,23 @@ func _ready() -> void:
 	if ClassDB.class_exists("HeelKawnianManager"):
 		HeelKawnianManager.ensure_identity_for_pawn(self)
 
+	# Per-agent Bayes learner
+	if ClassDB.class_exists("AgentBayesTree"):
+		_agent_bayes = AgentBayesTree.new()
+		# Restore any serialized state provided by the spawn data
+		var saved: Dictionary = {}
+		if typeof(data) == TYPE_DICTIONARY:
+			saved = data.get("agent_bayes", {})
+		elif data is HeelKawnianData:
+			saved = data.agent_bayes_data if data.agent_bayes_data != null else {}
+		if saved != null and saved is Dictionary:
+			_agent_bayes.from_dict(saved)
+	# Connect to job completion global signal so the pawn learns from its own work
+	if JobManager != null and JobManager.has_signal("job_completed"):
+		JobManager.job_completed.connect(Callable(self, "_on_global_job_completed"))
+	if JobManager != null and JobManager.has_signal("job_cancelled"):
+		JobManager.job_cancelled.connect(Callable(self, "_on_global_job_cancelled"))
+
 
 func _set_brain_instance(brain: HeelKawnPawnBrain) -> void:
 	_brain_instance = brain
@@ -1307,6 +1460,24 @@ func _pawn_connect_sim_tick_deferred() -> void:
 	# CRITICAL: Arm pawn simulation ticks FIRST
 	# This flag gates ALL pawn behavior in _on_world_tick
 	_pawn_sim_tick_armed = true
+
+
+func _on_global_job_completed(job: Job) -> void:
+	if job == null:
+		return
+	# If this pawn completed the job, record as a success
+	if job.assigned_pawn == self:
+		if _agent_bayes != null and _agent_bayes.has_method("record_job_outcome"):
+			_agent_bayes.record_job_outcome(job, true)
+
+
+func _on_global_job_cancelled(job: Job) -> void:
+	if job == null:
+		return
+	# If this pawn had the job cancelled, record as a failure
+	if job.assigned_pawn == self:
+		if _agent_bayes != null and _agent_bayes.has_method("record_job_outcome"):
+			_agent_bayes.record_job_outcome(job, false)
 
 	# Try to equip starting gear from stockpile (if available)
 	if CraftingSystem != null and CraftingSystem.has_method("try_equip_from_stockpile"):
@@ -1384,6 +1555,11 @@ func _exit_tree() -> void:
 			SpatialManager.unregister_entity(int(data.id))
 	# OPTIMIZATION: Invalidate avoidance caches for all pawns when this pawn dies
 	_invalidate_avoidance_cache_for_pawn(int(data.id))
+	# Disconnect job signals
+	if JobManager != null and JobManager.has_signal("job_completed") and JobManager.job_completed.is_connected(Callable(self, "_on_global_job_completed")):
+		JobManager.job_completed.disconnect(Callable(self, "_on_global_job_completed"))
+	if JobManager != null and JobManager.has_signal("job_cancelled") and JobManager.job_cancelled.is_connected(Callable(self, "_on_global_job_cancelled")):
+		JobManager.job_cancelled.disconnect(Callable(self, "_on_global_job_cancelled"))
 
 
 ## Re-read the spawn tileâ€™s [CulturalMemory] entry (e.g. after load once ruins are applied). Does not run every tick.
@@ -1701,6 +1877,9 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 	if posted == null:
 		_next_matrix_ambition_tick = tick + 10
 		return false
+	var amb_reason: String = str(ambition.get("reason", "matrix_ambition"))
+	if JobManager != null:
+		JobManager.stamp_seeder_metadata(posted, amb_reason, "settlement", int(data.id))
 	var payload: Dictionary = {
 		"pawn_id": int(data.id),
 		"pawn_name": data.display_name,
@@ -1774,7 +1953,7 @@ func _try_post_stockpile_job() -> bool:
 	if target_tile.x < 0:
 		return false
 	# Post the job
-	var job: Job = JobManager.post(Job.Type.BUILD_STOCKPILE, target_tile, 7, 20)
+	var job: Job = JobManager.post_stamped(Job.Type.BUILD_STOCKPILE, target_tile, 7, 20, "pawn_stockpile_bootstrap", "settlement", int(data.id))
 	if job == null:
 		return false
 	WorldMemory.record_event({
@@ -4147,17 +4326,15 @@ func _tick_idle() -> void:
 		# Profession-specific job priority: pawns strongly prefer jobs matching their role
 		# BUT: profession bonus scales down with need urgency. A starving builder
 		# should care more about food than building.
-		if data.current_profession != HeelKawnianData.Profession.NONE:
+		if not food_emergency and data.current_profession != HeelKawnianData.Profession.NONE:
 			var prof: int = data.current_profession
-			var prof_bonus: int = 5
-			# Scale profession bonus: full at 100% needs, fading to 0 at critical
+			var prof_bonus: int = 3
 			if _need_urgency_scale < 1.0:
-				prof_bonus = int(round(float(prof_bonus) * _need_urgency_scale))
-				if prof_bonus < 1 and _need_urgency_scale > 0.2:
-					prof_bonus = 1  # Minimum 1 if not completely critical
+				prof_bonus = clampi(int(round(float(prof_bonus) * _need_urgency_scale)), 2, 4)
 			match prof:
 				HeelKawnianData.Profession.FARMER:
-					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.PLANT_SEEDS or j.type == _Job.Type.HARVEST_CROPS:
+					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.PLANT_SEEDS or j.type == _Job.Type.HARVEST_CROPS \
+							or j.type == _Job.Type.COOK_MEAT or j.type == _Job.Type.COOK_BERRIES or j.type == _Job.Type.COOK_FISH:
 						base_bias += prof_bonus
 				HeelKawnianData.Profession.BUILDER:
 					if _is_structure_build_job(j.type):
@@ -5482,13 +5659,9 @@ func _begin_job(job: Job) -> void:
 	# Build jobs need raw materials in hand before we walk to the build site.
 	# If we don't already have the right item in sufficient quantity, bounce
 	# to the stockpile first.
-	var mats: Dictionary = _materials_for_active_build(job)
-	if not mats.is_empty():
-		var item_type: int = mats.item
-		var need_qty: int = mats.qty
-		var have: int = data.carrying_qty if data.carrying == item_type else 0
-		if have < need_qty:
-			_begin_fetching_material(item_type, need_qty)
+	if not _cost_entries_for_build(job.type).is_empty():
+		if not _has_all_build_materials(job):
+			_begin_fetching_build_materials(job)
 			return
 	_walk_to_work_tile(job)
 
@@ -5721,15 +5894,15 @@ func _arrive_at_stockpile_for_material() -> void:
 	if _current_job == null:
 		_reset_to_idle()
 		return
-	var mats: Dictionary = _materials_for_active_build(_current_job)
-	if mats.is_empty():
-		_reset_to_idle()
+	var next_m: Dictionary = _next_missing_build_material(_current_job)
+	if next_m.is_empty():
+		_pickup_material(_Item.Type.NONE, 0)
 		return
-	var item_type: int = mats.item
-	var need_qty: int = mats.qty
-	var have: int = data.carrying_qty if data.carrying == item_type else 0
-	var to_take: int = max(0, need_qty - have)
-	_pickup_material(item_type, to_take)
+	var item_type: int = int(next_m.get("item", _Item.Type.NONE))
+	var need_qty: int = int(next_m.get("qty", 0))
+	if data.carrying != _Item.Type.NONE and data.carrying != item_type and data.carrying_qty > 0:
+		_stage_carried_build_materials()
+	_pickup_material(item_type, need_qty)
 
 
 ## Called when a pawn arrives at a resource tile for direct gathering.
@@ -5807,11 +5980,72 @@ func _arrive_at_resource_for_direct_gather() -> void:
 	_walk_to_work_tile(_current_job)
 
 
+## Pull build materials from a nearby stockpile when already at the work site (not only from carry).
+func _try_take_build_material_from_nearby_stockpile(item_type: int, need_qty: int) -> bool:
+	if _world == null or StockpileManager == null or need_qty <= 0:
+		return false
+	var have: int = _carried_plus_staged_qty(item_type)
+	if have >= need_qty:
+		return true
+	var still_need: int = need_qty - have
+	var sp: Stockpile = null
+	if data.settlement_id >= 0:
+		sp = StockpileManager.find_source_for_settlement(data.settlement_id, item_type, still_need, data.tile_pos, _world.pathfinder)
+	if sp == null:
+		sp = StockpileManager.find_source_for(item_type, still_need, data.tile_pos, _world.pathfinder)
+	if sp == null:
+		return false
+	var taken: int = sp.take_item(item_type, still_need)
+	if taken <= 0:
+		return false
+	if data.carrying == item_type:
+		data.carrying_qty += taken
+	elif data.carrying == _Item.Type.NONE:
+		data.carrying = item_type
+		data.carrying_qty = taken
+	else:
+		_staged_build_materials[item_type] = int(_staged_build_materials.get(item_type, 0)) + taken
+	return _carried_plus_staged_qty(item_type) >= need_qty
+
+
+func _try_take_build_materials_from_nearby_stockpile(job: Job) -> bool:
+	if job == null:
+		return false
+	for entry in _cost_entries_for_build(job.type):
+		var it: int = int(entry.get("item", _Item.Type.NONE))
+		var q: int = int(entry.get("qty", 0))
+		if it == _Item.Type.NONE or q <= 0:
+			continue
+		if not _try_take_build_material_from_nearby_stockpile(it, q):
+			return false
+	return true
+
+
+func _take_from_any_stockpile(item_type: int, qty: int) -> bool:
+	if StockpileManager == null or qty <= 0:
+		return false
+	var remaining: int = qty
+	for zone in StockpileManager.zones():
+		if zone == null or not is_instance_valid(zone):
+			continue
+		if remaining <= 0:
+			break
+		remaining -= zone.take_item(item_type, remaining)
+	return remaining <= 0
+
+
+func _consume_secondary_build_materials(job: Job) -> void:
+	_consume_all_build_materials(job)
+
+
 func _pickup_material(item_type: int, qty: int) -> void:
 	# qty <= 0 means we already have enough on hand; just walk to the build
 	# site without bothering the stockpile.
 	if qty <= 0:
 		if _current_job != null:
+			if not _has_all_build_materials(_current_job):
+				_begin_fetching_build_materials(_current_job)
+				return
 			_walk_to_work_tile(_current_job)
 		else:
 			_reset_to_idle()
@@ -5846,6 +6080,9 @@ func _pickup_material(item_type: int, qty: int) -> void:
 	_target_zone = null
 	_request_redraw()
 	if _current_job != null:
+		if not _has_all_build_materials(_current_job):
+			_begin_fetching_build_materials(_current_job)
+			return
 		_walk_to_work_tile(_current_job)
 	else:
 		_reset_to_idle()
@@ -6283,20 +6520,13 @@ func _complete_current_job() -> void:
 ## Place the right TileFeature for a build job, consuming the carried materials.
 ## If the pawn isn't carrying the right material, re-fetch instead of silently failing.
 func _finish_build(job: Job) -> void:
-	var mats: Dictionary = _materials_for_active_build(job)
-	if mats.is_empty():
-		return
-	var item_type: int = mats.item
-	var need_qty: int = mats.qty
-	# Re-fetch if not carrying the right material (instead of silent failure)
-	if data.carrying != item_type or data.carrying_qty < need_qty:
-		# Try to re-fetch the material from stockpile or direct-gather from environment
-		_current_job.work_ticks_done = 0
-		_begin_fetching_material(item_type, need_qty)
-		return
-	data.carrying_qty -= need_qty
-	if data.carrying_qty <= 0:
-		data.clear_carry()
+	if not _cost_entries_for_build(job.type).is_empty():
+		if not _has_all_build_materials(job):
+			if not _try_take_build_materials_from_nearby_stockpile(job):
+				_current_job.work_ticks_done = 0
+				_begin_fetching_build_materials(job)
+				return
+		_consume_all_build_materials(job)
 	match job.type:
 		_Job.Type.BUILD_BED:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.BED)
@@ -6315,6 +6545,41 @@ func _current_settlement_center_region() -> int:
 		return -1
 	var region_key: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
 	return SettlementMemory.get_center_region_for_region(region_key)
+
+
+func _record_hearth_chronicle_events(job: Job, is_fire_pit: bool) -> void:
+	if not is_fire_pit or WorldMemory == null or job == null:
+		return
+	var center_rk: int = _current_settlement_center_region()
+	if center_rk < 0:
+		return
+	var polity_nm: String = ""
+	var polity_id: int = center_rk
+	if SettlementMemory != null:
+		for s_any in SettlementMemory.settlements:
+			if s_any is not Dictionary:
+				continue
+			var st: Dictionary = s_any as Dictionary
+			if int(st.get("center_region", -1)) != center_rk:
+				continue
+			polity_nm = str(st.get("polity_display_name", st.get("name", "")))
+			polity_id = int(st.get("polity_id", center_rk))
+			var had_hearth: bool = int(st.get("hearths_in_region", 0)) > 0
+			if had_hearth:
+				return
+			break
+	if polity_nm.is_empty():
+		polity_nm = "the camp"
+	WorldMemory.record_event({
+		"type": "first_hearth_in_polity",
+		"k": WorldMemory.Kind.SETTLEMENT_EVENT,
+		"r": center_rk,
+		"tick": GameManager.tick_count if GameManager != null else 0,
+		"tile": {"x": job.tile.x, "y": job.tile.y},
+		"polity_id": polity_id,
+		"polity_name": polity_nm,
+		"pawn_name": data.display_name if data != null else "someone",
+	})
 
 
 func _register_built_structure(tile: Vector2i, feature_type: int) -> void:
@@ -6440,31 +6705,21 @@ func _finish_shelter_build(job: Job) -> bool:
 		
 		return true
 	
-	var mats: Dictionary = _materials_for_active_build(job)
-	if mats.is_empty():
-		return false
-	var item_type: int = mats.item
-	var need_qty: int = mats.qty
-	
-	# Re-fetch if not carrying the right material (instead of silent failure)
-	if data.carrying != item_type or data.carrying_qty < need_qty:
-		# Try stockpile or direct-gather from environment
-		_current_job.work_ticks_done = 0
-		_begin_fetching_material(item_type, need_qty)
-		return false
-
-	# Consume materials
-	data.carrying_qty -= need_qty
-	if data.carrying_qty <= 0:
-		data.clear_carry()
+	if not _cost_entries_for_build(job.type).is_empty():
+		if not _has_all_build_materials(job):
+			if not _try_take_build_materials_from_nearby_stockpile(job):
+				_current_job.work_ticks_done = 0
+				_begin_fetching_build_materials(job)
+				return false
+		_consume_all_build_materials(job)
 
 	var placed_feature: int = TileFeature.Type.NONE
-	# Place the feature
 	match job.type:
 		_Job.Type.BUILD_FIRE_PIT:
 			placed_feature = TileFeature.Type.FIRE_PIT
 			_world.set_feature(job.tile.x, job.tile.y, placed_feature)
 			_register_built_structure(job.tile, placed_feature)
+			_record_hearth_chronicle_events(job, true)
 			WorldMemory.record_event({
 				"type": "hearth_built",
 				"pawn_id": int(data.id),
@@ -6534,6 +6789,7 @@ func _finish_shelter_build(job: Job) -> bool:
 			placed_feature = TileFeature.Type.FIRE_PIT
 			_world.set_feature(job.tile.x, job.tile.y, placed_feature)
 			_register_built_structure(job.tile, placed_feature)
+			_record_hearth_chronicle_events(job, true)
 			WorldMemory.record_event({
 				"type": "hearth_built",
 				"pawn_id": int(data.id),
@@ -6565,19 +6821,13 @@ func _finish_registry_build(job: Job) -> void:
 	var feature_type: int = int(building.get("feature_type", TileFeature.Type.NONE))
 	if feature_type == TileFeature.Type.NONE:
 		return
-	# Consume materials (same pattern as _finish_build)
-	var mats: Dictionary = _materials_for_active_build(job)
-	if not mats.is_empty():
-		var item_type: int = mats.item
-		var need_qty: int = mats.qty
-		if data.carrying != item_type or data.carrying_qty < need_qty:
-			# Re-fetch from stockpile or direct-gather from environment
-			_current_job.work_ticks_done = 0
-			_begin_fetching_material(item_type, need_qty)
-			return
-		data.carrying_qty -= need_qty
-		if data.carrying_qty <= 0:
-			data.clear_carry()
+	if not _cost_entries_for_build(job.type).is_empty():
+		if not _has_all_build_materials(job):
+			if not _try_take_build_materials_from_nearby_stockpile(job):
+				_current_job.work_ticks_done = 0
+				_begin_fetching_build_materials(job)
+				return
+		_consume_all_build_materials(job)
 	# Place the feature on the tile
 	_world.set_feature(job.tile.x, job.tile.y, feature_type)
 	_register_built_structure(job.tile, feature_type)
@@ -6728,6 +6978,7 @@ func _reset_to_idle() -> void:
 	_target_zone = null
 	_direct_forage_target = Vector2i(-1, -1)
 	_direct_gather = false
+	_staged_build_materials.clear()
 	_direct_gather_item = -1
 	_state = State.IDLE
 	_clear_path()
@@ -10134,6 +10385,8 @@ func _profession_color(prof: int) -> Color:
 ## INCREASED bonuses to ensure profession bias dominates over other job priority factors
 func _get_profession_priority_bonus(job: Job) -> int:
 	if data == null or data.current_profession == HeelKawnianData.Profession.NONE:
+		return 0
+	if HeelKawnian._s_food_emergency or data.hunger <= HUNGER_EMERGENCY:
 		return 0
 	
 	# Builder: +10 priority for all build jobs (critical for housing strain fix)

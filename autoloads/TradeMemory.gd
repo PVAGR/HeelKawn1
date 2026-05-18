@@ -306,6 +306,35 @@ func _route_exists(from: int, to: int) -> bool:
 	return false
 
 
+## Diplomatic / map link when FactionManager opens formal trade (caravan optional).
+func ensure_route_between(from_settlement: int, to_settlement: int, tick: int) -> void:
+	if from_settlement < 0 or to_settlement < 0 or from_settlement == to_settlement:
+		return
+	if _route_exists(from_settlement, to_settlement):
+		return
+	trade_routes.append({
+		"route_id": _next_route_id,
+		"from_settlement": from_settlement,
+		"to_settlement": to_settlement,
+		"caravan_pawn_id": -1,
+		"goods": {},
+		"progress": 0.0,
+		"status": "en_route",
+		"created_tick": tick,
+		"last_updated_tick": tick,
+	})
+	_next_route_id += 1
+
+
+## Routes visible on strategy map (includes diplomatic links without caravan).
+func get_routes_for_map_draw() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for r in trade_routes:
+		if str(r.get("status", "")) in ["en_route", "returning", "delivered"]:
+			out.append(r)
+	return out
+
+
 func _count_routes_for_settlement(settlement: int) -> int:
 	var count: int = 0
 	for route in trade_routes:

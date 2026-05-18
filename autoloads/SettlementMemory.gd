@@ -59,6 +59,14 @@ const GUILD_CLUSTER_RADIUS_TILES: int = 32
 const GUILD_STABILITY_TICKS: int = 1200
 ## After guild stability, allow formal founding without a hearth briefly (proto camp bootstrap).
 const FORMAL_WARMTH_GRACE_TICKS: int = 600
+## Map polity: population delta before a territorial-growth chronicle fires.
+const POLITY_BORDER_GROWTH_POP_DELTA: int = 3
+## Approximate in-game "winter" length for founding chronicles (day = tick/600).
+const TICKS_PER_WINTER: int = 18000
+## Deferred merge stub: formal settlements within this tile distance may merge (same house).
+const POLITY_MERGE_DISTANCE_TILES: int = 48
+## Same-house formal neighbors must stay merge-eligible this long before union.
+const POLITY_MERGE_STUB_TICKS: int = 900
 const INTENT_GROW: String = "GROW"
 const INTENT_HOARD: String = "HOARD"
 const INTENT_DEFEND: String = "DEFEND"
@@ -116,6 +124,12 @@ var _war_battle_spawned: Dictionary = {}
 var _guild_foundation_state: Dictionary = {}
 var _validation_smoketest_autoload_printed: bool = false
 var _validation_smoketest_main_printed: bool = false
+## center_region -> last region count (territorial growth chronicles).
+var _polity_last_region_count: Dictionary = {}
+## pair_key -> tick when merge_eligible_stub first became true for both.
+var _polity_merge_stub_since: Dictionary = {}
+## center_region -> formal founding chronicle already written.
+var _polity_formal_announced: Dictionary = {}
 
 ## Phase 8 HUD overlay: bundle lines for proof observability ([Main] listens in debug builds).
 signal phase8_proof_bundle_emitted(bundle_line: String)
@@ -483,6 +497,11 @@ func recompute(_world: World) -> void:
     count_pawns_per_settlement()
     _apply_guild_settlement_gate(_world)
     _resolve_settlement_names()
+    _apply_polity_identity()
+    _chronicle_polity_events()
+    _evaluate_polity_merge_stubs()
+    _process_polity_house_merges(GameManager.tick_count if GameManager != null else 0)
+    _seed_emergent_community_laws(GameManager.tick_count if GameManager != null else 0)
     _settlement_truth_verify_post_recompute_pass()
 
 
@@ -548,8 +567,21 @@ func get_formal_settlements() -> Array:
     var out: Array = []
     for st_any in settlements:
         if st_any is Dictionary and bool((st_any as Dictionary).get("is_formal_settlement", false)):
-            out.append((st_any as Dictionary).duplicate(true))
+            var st: Dictionary = (st_any as Dictionary).duplicate(true)
+            _ensure_polity_fields_compat(st)
+            out.append(st)
     return out
+
+
+func _ensure_polity_fields_compat(st: Dictionary) -> void:
+    if not st.has("polity_display_name") or str(st.get("polity_display_name", "")).is_empty():
+        st["polity_display_name"] = str(st.get("name", ""))
+    var bc_v: Variant = st.get("border_color", null)
+    if bc_v == null or (bc_v is PackedFloat32Array and (bc_v as PackedFloat32Array).is_empty()):
+        var pid: int = int(st.get("polity_id", int(st.get("center_region", -1))))
+        st["border_color"] = border_color_array_for_polity(pid)
+    if not st.has("polity_id"):
+        st["polity_id"] = int(st.get("center_region", -1))
 
 
 func get_proto_sites() -> Array:
@@ -743,14 +775,37 @@ func _apply_guild_settlement_gate(world: World) -> void:
             st["founding_tick"] = int(gate.get("founding_tick", -1))
             st["guild_id"] = "guild_%d_%d" % [center_rk, int(st.get("founding_tick", -1))]
             if not was_formal and WorldMemory != null:
+                var tick_now: int = GameManager.tick_count if GameManager != null else 0
+                var polity_nm: String = str(st.get("polity_display_name", st.get("name", "")))
+                if polity_nm.is_empty():
+                    polity_nm = str(st.get("culture_name", "the people"))
+                var region_lbl: String = _region_label_from_key(center_rk)
+                var winters: int = _ticks_to_winters(int(st.get("founding_tick", tick_now)))
+                var narrative: String = (
+                        "The [b]%s[/b] confederacy declared itself at %s after %d winters of "
+                        + "camp-fires and shared bread (%d souls sworn to the hearth)."
+                        % [polity_nm, region_lbl, winters, int(gate.get("member_count", 0))]
+                )
                 WorldMemory.record_event({
-                    "type": "settlement_formalized",
+                    "type": "polity_founded",
+                    "k": WorldMemory.Kind.SETTLEMENT_EVENT,
+                    "r": center_rk,
+                    "t": tick_now,
                     "center_region": center_rk,
-                    "tick": GameManager.tick_count if GameManager != null else 0,
+                    "polity_id": int(st.get("polity_id", center_rk)),
+                    "polity_name": polity_nm,
                     "reason": str(gate.get("reason", "guild_settlement")),
                     "member_count": int(gate.get("member_count", 0)),
                     "hearths": int(gate.get("hearths_in_region", 0)),
+                    "winters": winters,
+                    "narrative": narrative,
                 })
+                _polity_formal_announced[center_rk] = true
+                st["polity_formal_registered"] = true
+                if FactionManager != null and FactionManager.has_method("register_faction"):
+                    FactionManager.register_faction(center_rk, polity_nm, center_rk)
+                if FactionRegistry != null and FactionRegistry.has_method("sync_from_settlements"):
+                    FactionRegistry.sync_from_settlements()
         else:
             st["settlement_kind"] = _proto_site_kind_for_settlement(st)
             st["founding_reason"] = "guild_gate:%s" % str(gate.get("reason", "unknown"))
@@ -1468,6 +1523,13 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
         "guild_candidate_stability_ticks": 0,
         "guild_candidate_reason": "not_evaluated",
         "founding_reason": "",
+        "polity_id": -1,
+        "polity_display_name": "",
+        "border_color": PackedFloat32Array(),
+        "polity_proto_stable": false,
+        "polity_formal_registered": false,
+        "polity_region_count": 0,
+        "merge_eligible_stub": false,
     }
 
 
@@ -1594,6 +1656,11 @@ func get_settlement_profile(region_key: int) -> Dictionary:
         "peace_threshold_ticks": int(d.get("peace_threshold_ticks", get_peace_ticks_for_culture_branch(int(d.get("culture_type", SettlementPlanner.CULTURE_CAUTIOUS))))),
         "revival_score": int(d.get("revival_score", 0)),
         "revival_ready": false,
+        "polity_id": int(d.get("polity_id", -1)),
+        "polity_display_name": str(d.get("polity_display_name", d.get("name", ""))),
+        "border_color": d.get("border_color", PackedFloat32Array()),
+        "is_formal_settlement": bool(d.get("is_formal_settlement", false)),
+        "polity_proto_stable": bool(d.get("polity_proto_stable", false)),
     }
     var state_now: String = str(profile.get("state", ""))
     profile["revival_ready"] = state_now == "revivable"
@@ -1779,6 +1846,22 @@ func _set_settlement_ruler_and_type(settlement_id: int, new_ruler_id: int, new_g
                 "new_governance_type": new_governance_type,
                 "tick": GameManager.tick_count,
             })
+            if old_ruler_id != new_ruler_id and new_ruler_id >= 0:
+                var settle_nm: String = str(st.get("polity_display_name", st.get("name", ""))).strip_edges()
+                if settle_nm.is_empty():
+                    settle_nm = "the settlement"
+                WorldMemory.record_event({
+                    "type": "succession",
+                    "k": WorldMemory.Kind.AUTHORITY_EVENT,
+                    "settlement_id": settlement_id,
+                    "center_region": settlement_id,
+                    "old_ruler_id": old_ruler_id,
+                    "new_ruler_id": new_ruler_id,
+                    "old_leader_name": _pawn_display_name_for_id(old_ruler_id),
+                    "new_leader_name": _pawn_display_name_for_id(new_ruler_id),
+                    "polity_name": settle_nm,
+                    "tick": GameManager.tick_count,
+                })
 
             return true
     return false
@@ -3746,11 +3829,18 @@ func add_law(settlement_id: int, law_data: Dictionary) -> int:
     
     ## Record in WorldMemory
     if WorldMemory != null and WorldMemory.has_method("record_event"):
+        var pol_nm: String = ""
+        for s_any in settlements:
+            if s_any is Dictionary and int((s_any as Dictionary).get("center_region", -1)) == settlement_id:
+                pol_nm = str((s_any as Dictionary).get("polity_display_name", (s_any as Dictionary).get("name", "")))
+                break
         WorldMemory.record_event({
             "type": "law_added",
             "settlement_id": settlement_id,
             "law_id": law_id,
             "law_type": law.get("type", "custom"),
+            "law_description": str(law.get("description", "")),
+            "polity_name": pol_nm,
             "tick": GameManager.tick_count if (GameManager != null) else 0,
         })
     
@@ -4042,3 +4132,404 @@ func _check_generational_shift(tick: int) -> void:
                 })
                 # Clear founding generation — shift recorded once
                 _founding_generation.erase(center_rk)
+
+
+# === Map polity identity (CK / Ages of Conflict style emergent borders) ===
+
+static func polity_id_for_center(center_rk: int) -> int:
+    return center_rk if center_rk >= 0 else -1
+
+
+static func color_for_polity_id(polity_id: int) -> Color:
+    if polity_id < 0:
+        return Color(0.55, 0.55, 0.55, 1.0)
+    var hue: float = fmod(
+            float(abs(polity_id)) * 0.618033988749895 + float((polity_id >> 10) & 0x3F) * 0.011,
+            1.0,
+    )
+    return Color.from_hsv(hue, 0.58, 0.88, 1.0)
+
+
+static func border_color_array_for_polity(polity_id: int) -> PackedFloat32Array:
+    var c: Color = color_for_polity_id(polity_id)
+    return PackedFloat32Array([c.r, c.g, c.b])
+
+
+func get_active_polity_count() -> int:
+    var seen: Dictionary = {}
+    for st_any in settlements:
+        if not (st_any is Dictionary):
+            continue
+        var st: Dictionary = st_any as Dictionary
+        if not _is_polity_visible(st):
+            continue
+        var pid: int = int(st.get("polity_id", -1))
+        if pid < 0:
+            continue
+        seen[pid] = true
+    return seen.size()
+
+
+func get_polity_at_region(region_key: int) -> Dictionary:
+    var st_v: Variant = get_settlement_at_region(region_key)
+    if st_v is not Dictionary:
+        return {}
+    return get_polity_summary(st_v as Dictionary)
+
+
+func get_polity_summary(st: Dictionary) -> Dictionary:
+    var pid: int = int(st.get("polity_id", -1))
+    var formal: bool = bool(st.get("is_formal_settlement", false))
+    var nm: String = str(st.get("polity_display_name", st.get("name", "")))
+    var bc: PackedFloat32Array = st.get("border_color", PackedFloat32Array()) as PackedFloat32Array
+    return {
+        "polity_id": pid,
+        "display_name": nm,
+        "border_color": bc,
+        "is_formal": formal,
+        "proto_stable": bool(st.get("polity_proto_stable", false)),
+        "center_region": int(st.get("center_region", -1)),
+    }
+
+
+func is_polity_visible(st: Dictionary) -> bool:
+    if bool(st.get("is_formal_settlement", false)):
+        return true
+    return bool(st.get("polity_proto_stable", false))
+
+
+func _is_polity_visible(st: Dictionary) -> bool:
+    return is_polity_visible(st)
+
+
+func _settlement_buildings_count(st: Dictionary) -> int:
+    var total: int = int(st.get("buildings_constructed", 0))
+    if total > 0:
+        return total
+    var regions_v: Variant = st.get("regions", null)
+    if regions_v is PackedInt32Array:
+        for rk in regions_v as PackedInt32Array:
+            var m: Dictionary = WorldMeaning.get_region_meaning(int(rk))
+            total += int(m.get("buildings_constructed", 0))
+    return total
+
+
+func _is_proto_polity_stable(st: Dictionary) -> bool:
+    if bool(st.get("is_formal_settlement", false)):
+        return true
+    var pop: int = int(st.get("population", 0))
+    if pop < 1:
+        return false
+    var buildings: int = _settlement_buildings_count(st)
+    if buildings >= 1:
+        return true
+    var kind: String = str(st.get("settlement_kind", "proto_site"))
+    return kind == "camp" or kind == "outpost"
+
+
+func _region_label_from_key(region_key: int) -> String:
+    if region_key < 0:
+        return "the wilds"
+    var rx: int = region_key & 0xFFFF
+    var ry: int = (region_key >> 16) & 0xFFFF
+    return "the %d·%d marches" % [rx, ry]
+
+
+func _ticks_to_winters(from_tick: int) -> int:
+    var now: int = GameManager.tick_count if GameManager != null else 0
+    var elapsed: int = maxi(0, now - from_tick) if from_tick >= 0 else now
+    return maxi(1, elapsed / TICKS_PER_WINTER)
+
+
+func _assign_polity_display_name(st: Dictionary) -> String:
+    var existing: String = str(st.get("name", "")).strip_edges()
+    if not existing.is_empty():
+        return existing
+    var center_rk: int = int(st.get("center_region", -1))
+    if NameGenerator != null and NameGenerator.has_method("generate_settlement_name"):
+        var gen: String = NameGenerator.generate_settlement_name(center_rk)
+        if not gen.is_empty():
+            return gen
+    return _region_label_from_key(center_rk).capitalize()
+
+
+func _apply_polity_identity() -> void:
+    for i in range(settlements.size()):
+        if not (settlements[i] is Dictionary):
+            continue
+        var st: Dictionary = settlements[i] as Dictionary
+        var center_rk: int = int(st.get("center_region", -1))
+        if center_rk < 0:
+            continue
+        var pid: int = polity_id_for_center(center_rk)
+        st["polity_id"] = pid
+        st["border_color"] = border_color_array_for_polity(pid)
+        var regions_v: Variant = st.get("regions", null)
+        var region_n: int = 0
+        if regions_v is PackedInt32Array:
+            region_n = (regions_v as PackedInt32Array).size()
+        st["polity_region_count"] = region_n
+        st["buildings_constructed"] = _settlement_buildings_count(st)
+        var stable: bool = _is_proto_polity_stable(st)
+        st["polity_proto_stable"] = stable
+        if stable:
+            var display: String = _assign_polity_display_name(st)
+            st["polity_display_name"] = display
+            if str(st.get("name", "")).is_empty():
+                st["name"] = display
+                st["name_resolved"] = true
+        else:
+            st["polity_display_name"] = ""
+        settlements[i] = st
+
+
+func _chronicle_polity_events() -> void:
+    if WorldMemory == null:
+        return
+    var tick_now: int = GameManager.tick_count if GameManager != null else 0
+    for st_any in settlements:
+        if not (st_any is Dictionary):
+            continue
+        var st: Dictionary = st_any as Dictionary
+        var center_rk: int = int(st.get("center_region", -1))
+        if center_rk < 0 or not _is_polity_visible(st):
+            continue
+        var region_n: int = int(st.get("polity_region_count", 0))
+        var prev_n: int = int(_polity_last_region_count.get(center_rk, region_n))
+        var pop: int = int(st.get("population", 0))
+        var prev_pop_key: String = "pop_%d" % center_rk
+        var prev_pop: int = int(_polity_last_region_count.get(prev_pop_key, pop))
+        if region_n > prev_n and pop >= prev_pop + POLITY_BORDER_GROWTH_POP_DELTA:
+            var polity_nm: String = str(st.get("polity_display_name", st.get("name", "Unnamed")))
+            var narrative: String = (
+                    "The borders of [b]%s[/b] swelled as families crossed into %s "
+                    + "(%d regions now hold their hearths)."
+                    % [polity_nm, _region_label_from_key(center_rk), region_n]
+            )
+            WorldMemory.record_event({
+                "type": "territorial_growth",
+                "k": WorldMemory.Kind.SETTLEMENT_EVENT,
+                "r": center_rk,
+                "t": tick_now,
+                "polity_id": int(st.get("polity_id", center_rk)),
+                "polity_name": polity_nm,
+                "regions_before": prev_n,
+                "regions_after": region_n,
+                "population": pop,
+                "narrative": narrative,
+            })
+        _polity_last_region_count[center_rk] = region_n
+        _polity_last_region_count[prev_pop_key] = pop
+
+
+## Deferred: flag formal neighbors sharing a ruler house for future merge resolution.
+func _evaluate_polity_merge_stubs() -> void:
+    var formal_indices: Array[int] = []
+    for i in range(settlements.size()):
+        if not (settlements[i] is Dictionary):
+            continue
+        var st0: Dictionary = settlements[i] as Dictionary
+        st0["merge_eligible_stub"] = false
+        settlements[i] = st0
+        if bool(st0.get("is_formal_settlement", false)):
+            formal_indices.append(i)
+    for ii in range(formal_indices.size()):
+        var idx_a: int = formal_indices[ii]
+        var a: Dictionary = settlements[idx_a] as Dictionary
+        var ckr_a: int = int(a.get("center_region", -1))
+        if ckr_a < 0:
+            continue
+        var tile_a: Vector2i = SettlementPlanner._center_tile_of_region_key(ckr_a)
+        var house_a: String = _ruler_house_key_for_settlement(a)
+        for jj in range(ii + 1, formal_indices.size()):
+            var idx_b: int = formal_indices[jj]
+            var b: Dictionary = settlements[idx_b] as Dictionary
+            var ckr_b: int = int(b.get("center_region", -1))
+            if ckr_b < 0:
+                continue
+            if house_a.is_empty() or house_a != _ruler_house_key_for_settlement(b):
+                continue
+            var tile_b: Vector2i = SettlementPlanner._center_tile_of_region_key(ckr_b)
+            var dx: int = tile_a.x - tile_b.x
+            var dy: int = tile_a.y - tile_b.y
+            if dx * dx + dy * dy > POLITY_MERGE_DISTANCE_TILES * POLITY_MERGE_DISTANCE_TILES:
+                continue
+            a["merge_eligible_stub"] = true
+            b["merge_eligible_stub"] = true
+            settlements[idx_a] = a
+            settlements[idx_b] = b
+
+
+func _seed_emergent_community_laws(tick: int) -> void:
+    if tick % 400 != 0:
+        return
+    if ColonySimServices == null:
+        return
+    var food_p: float = ColonySimServices.get_food_pressure()
+    var warm_p: float = ColonySimServices.get_warmth_pressure()
+    for st_v in settlements:
+        if st_v is not Dictionary:
+            continue
+        var st: Dictionary = st_v as Dictionary
+        if not bool(st.get("is_formal_settlement", false)):
+            continue
+        var ckr: int = int(st.get("center_region", -1))
+        if ckr < 0:
+            continue
+        var existing: Array = get_laws(ckr)
+        if existing.size() >= 4:
+            continue
+        var has_types: Dictionary = {}
+        for law_v in existing:
+            if law_v is Dictionary:
+                has_types[str((law_v as Dictionary).get("type", ""))] = true
+        if food_p >= 0.55 and not has_types.has("share_food_in_crisis"):
+            add_law(ckr, {
+                "type": "share_food_in_crisis",
+                "description": "Households must bring surplus food to the common store when hunger rises.",
+                "penalties": ["withhold_food"],
+                "rewards": ["community_trust"],
+            })
+        if warm_p >= 0.35 and not has_types.has("maintain_hearth"):
+            add_law(ckr, {
+                "type": "maintain_hearth",
+                "description": "Every camp must keep a living fire for cooks and the freezing.",
+                "penalties": ["neglect_hearth"],
+                "rewards": ["warmth_safety"],
+            })
+        if int(st.get("population", 0)) >= 12 and not has_types.has("no_theft"):
+            add_law(ckr, {
+                "type": "no_theft",
+                "description": "Taking from another's carry or stockpile without leave is outlawed.",
+                "penalties": ["theft"],
+                "rewards": ["order"],
+            })
+
+
+func _pawn_display_name_for_id(pawn_id: int) -> String:
+    if pawn_id < 0:
+        return "no one"
+    for p_any in PawnAccess.find_alive_pawns():
+        if not (p_any is HeelKawnian):
+            continue
+        var p: HeelKawnian = p_any as HeelKawnian
+        if p == null or p.data == null or int(p.data.id) != pawn_id:
+            continue
+        var nm: String = str(p.data.display_name).strip_edges()
+        if not nm.is_empty():
+            return nm
+        return "HeelKawnian #%d" % pawn_id
+    return "a heir"
+
+
+func _process_polity_house_merges(tick: int) -> void:
+    var active_pairs: Dictionary = {}
+    for i in range(settlements.size()):
+        if not (settlements[i] is Dictionary):
+            continue
+        var st_a: Dictionary = settlements[i] as Dictionary
+        if not bool(st_a.get("merge_eligible_stub", false)):
+            continue
+        if not bool(st_a.get("is_formal_settlement", false)):
+            continue
+        var ckr_a: int = int(st_a.get("center_region", -1))
+        for j in range(i + 1, settlements.size()):
+            if not (settlements[j] is Dictionary):
+                continue
+            var st_b: Dictionary = settlements[j] as Dictionary
+            if not bool(st_b.get("merge_eligible_stub", false)):
+                continue
+            if not bool(st_b.get("is_formal_settlement", false)):
+                continue
+            var ckr_b: int = int(st_b.get("center_region", -1))
+            if ckr_a < 0 or ckr_b < 0:
+                continue
+            var pk: String = "%d|%d" % [mini(ckr_a, ckr_b), maxi(ckr_a, ckr_b)]
+            active_pairs[pk] = {"a": i, "b": j}
+    var stale: Array = []
+    for pk in _polity_merge_stub_since.keys():
+        if not active_pairs.has(pk):
+            stale.append(pk)
+    for pk in stale:
+        _polity_merge_stub_since.erase(pk)
+    for pk in active_pairs.keys():
+        var pair: Dictionary = active_pairs[pk] as Dictionary
+        var idx_a: int = int(pair.get("a", -1))
+        var idx_b: int = int(pair.get("b", -1))
+        if idx_a < 0 or idx_b < 0:
+            continue
+        if not _polity_merge_stub_since.has(pk):
+            _polity_merge_stub_since[pk] = tick
+            continue
+        var since: int = int(_polity_merge_stub_since[pk])
+        if tick - since < POLITY_MERGE_STUB_TICKS:
+            continue
+        _execute_polity_house_merge(idx_a, idx_b, tick)
+        _polity_merge_stub_since.erase(pk)
+
+
+func _execute_polity_house_merge(idx_a: int, idx_b: int, tick: int) -> void:
+    if idx_a < 0 or idx_b < 0 or idx_a >= settlements.size() or idx_b >= settlements.size():
+        return
+    var st_a: Dictionary = settlements[idx_a] as Dictionary
+    var st_b: Dictionary = settlements[idx_b] as Dictionary
+    var pop_a: int = int(st_a.get("population", 0))
+    var pop_b: int = int(st_b.get("population", 0))
+    var absorb_idx: int = idx_a
+    var keep_idx: int = idx_b
+    if pop_b > pop_a:
+        absorb_idx = idx_b
+        keep_idx = idx_a
+    var absorb: Dictionary = settlements[absorb_idx] as Dictionary
+    var keep: Dictionary = settlements[keep_idx] as Dictionary
+    var sr_v: Variant = absorb.get("regions", null)
+    var tr_v: Variant = keep.get("regions", null)
+    if sr_v is PackedInt32Array and tr_v is PackedInt32Array:
+        var sr: PackedInt32Array = sr_v as PackedInt32Array
+        var tr: PackedInt32Array = tr_v as PackedInt32Array
+        for rk in sr:
+            if not tr.has(rk):
+                tr.append(rk)
+        keep["regions"] = tr
+    keep["population"] = int(keep.get("population", 0)) + int(absorb.get("population", 0))
+    keep["buildings"] = int(keep.get("buildings", 0)) + int(absorb.get("buildings", 0))
+    keep["merge_eligible_stub"] = false
+    settlements[keep_idx] = keep
+    settlements.remove_at(absorb_idx)
+    var nm_keep: String = str(keep.get("polity_display_name", keep.get("name", "realm")))
+    var nm_abs: String = str(absorb.get("polity_display_name", absorb.get("name", "camp")))
+    if WorldMemory != null:
+        WorldMemory.record_event({
+            "type": "polity_merged",
+            "k": WorldMemory.Kind.SETTLEMENT_EVENT,
+            "tick": tick,
+            "polity_name": nm_keep,
+            "absorbed_name": nm_abs,
+            "center_region": int(keep.get("center_region", -1)),
+            "narrative": "%s absorbed the kindred realm of %s under one banner." % [nm_keep, nm_abs],
+        })
+    var main: Node = Engine.get_main_loop().root.get_node_or_null("Main") if Engine.get_main_loop() != null else null
+    if main != null:
+        var overlay: Node = main.get_node_or_null("WorldViewport/TerritoryOverlay")
+        if overlay != null and overlay.has_method("invalidate_territories"):
+            overlay.call("invalidate_territories")
+
+
+func _ruler_house_key_for_settlement(st: Dictionary) -> String:
+    var center_rk: int = int(st.get("center_region", -1))
+    if FactionRegistry != null and FactionRegistry.has_method("get_house_for_zone"):
+        var house: Dictionary = FactionRegistry.get_house_for_zone(str(center_rk))
+        if not house.is_empty():
+            return str(house.get("house_id", ""))
+    var ruler_id: int = int(st.get("current_ruler_id", -1))
+    if ruler_id < 0:
+        return ""
+    for p_any in PawnAccess.find_alive_pawns():
+        if not (p_any is HeelKawnian):
+            continue
+        var p: HeelKawnian = p_any as HeelKawnian
+        if p == null or not is_instance_valid(p) or p.data == null:
+            continue
+        if int(p.data.id) == ruler_id:
+            return "household_%d" % int(p.data.household_id)
+    return ""

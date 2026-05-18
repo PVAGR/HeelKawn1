@@ -117,6 +117,7 @@ var rest: float = 100.0
 var mood: float = 100.0
 var health: float = 100.0
 var max_health: float = 100.0
+var agent_bayes_data: Dictionary = {}
 
 ## Stage 1 survival enhancements
 var stamina: float = 100.0  # Depletes with work, recovers with rest
@@ -2315,6 +2316,22 @@ func _check_level_up() -> void:
 				_unlock_skill_branches(m)
 
 
+func _record_profession_mastered_chronicle(tier: String, branch_skill: String, tier_level: int) -> void:
+	if WorldMemory == null or branch_skill.is_empty():
+		return
+	var prof_name: String = profession_name() if current_profession != Profession.NONE else "laborer"
+	WorldMemory.record_event({
+		"type": "profession_mastered",
+		"tick": GameManager.tick_count if GameManager != null else 0,
+		"pawn_id": int(id),
+		"pawn_name": display_name,
+		"profession": prof_name,
+		"branch_skill": branch_skill,
+		"tier": tier,
+		"tier_level": tier_level,
+	})
+
+
 ## Stage 1: Unlock skill branches at certain levels
 func _unlock_skill_branches(new_level: int) -> void:
 	# Level 5: Basic specialization unlocks
@@ -2347,6 +2364,7 @@ func _unlock_basic_skill_branch() -> void:
 		"description": "Basic specialization in " + primary_skill,
 	}
 	append_biography_line("Skill branch: Basic " + primary_skill + " (level 5)")
+	_record_profession_mastered_chronicle("basic", primary_skill, 5)
 	print("[HeelKawnianData] %s unlocked basic %s branch" % [display_name, primary_skill])
 
 
@@ -2383,6 +2401,7 @@ func _unlock_intermediate_skill_branch() -> void:
 				"description": "Foundation in " + secondary,
 			}
 	append_biography_line("Skill branch: Intermediate " + primary_skill + " (level 10)")
+	_record_profession_mastered_chronicle("intermediate", primary_skill, 10)
 	print("[HeelKawnianData] %s unlocked intermediate %s branch" % [display_name, primary_skill])
 
 
@@ -2410,6 +2429,7 @@ func _unlock_advanced_skill_branch() -> void:
 			"description": "Can teach skills to others",
 		}
 	append_biography_line("Skill branch: Advanced " + primary_skill + " (level 15)")
+	_record_profession_mastered_chronicle("advanced", primary_skill, 15)
 	print("[HeelKawnianData] %s unlocked advanced %s branch" % [display_name, primary_skill])
 
 
@@ -2437,6 +2457,7 @@ func _unlock_mastery_skill_branch() -> void:
 			"description": "Can discover new techniques",
 		}
 	append_biography_line("Skill branch: Mastery " + primary_skill + " (level 20)")
+	_record_profession_mastered_chronicle("mastery", primary_skill, 20)
 	print("[HeelKawnianData] %s achieved MASTERY in %s" % [display_name, primary_skill])
 
 
@@ -3649,6 +3670,7 @@ func to_save_dict() -> Dictionary:
 		"social_rapport": social_rapport.duplicate(true),
 		"character_opinions": character_opinions.duplicate(true),
 		"neural_network": neural_network.to_dict() if neural_network != null and neural_network.has_method("to_dict") else {},
+		"agent_bayes": agent_bayes_data,
 		"unique_id": unique_id,
 		"lineage_id": lineage_id,
 		"biography": biography.duplicate(),
@@ -3879,6 +3901,8 @@ static func from_save_dict(d: Dictionary) -> HeelKawnianData:
 		p.life_path_contributions = (d["life_path_contributions"] as Dictionary).duplicate(true)
 	if d.has("regions_visited") and d["regions_visited"] is Dictionary:
 		p.regions_visited = (d["regions_visited"] as Dictionary).duplicate(true)
+	# Restore agent bayes data if present
+	p.agent_bayes_data = d.get("agent_bayes", {}) if d.has("agent_bayes") else {}
 	# End neural network / trait restore block; always return constructed HeelKawnianData
 	return p
 

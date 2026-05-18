@@ -13,6 +13,9 @@ enum LaborStance {
 }
 
 const DEMAND_REFRESH_INTERVAL_TICKS: int = 30
+const FAMINE_WARNING_PRESSURE: float = 0.9
+const FAMINE_WARNING_STREAK_TICKS: int = 30
+const FAMINE_WARNING_COOLDOWN_TICKS: int = 1200
 ## All macro pressures below this for CONTENTMENT_STREAK_TICKS → colony_contentment_period().
 const CONTENTMENT_MAX_PRESSURE: float = 0.15
 const CONTENTMENT_STREAK_TICKS: int = 90
@@ -24,6 +27,8 @@ signal demand_snapshot(
 var current_labor_stance: int = LaborStance.BALANCED
 
 var _food_press: float = 0.0
+var _famine_pressure_streak_ticks: int = 0
+var _last_famine_warning_tick: int = -1
 var _housing_press: float = 0.0
 var _mat_press: float = 0.0
 var _haul_press: float = 0.0
@@ -67,6 +72,7 @@ func _on_tick(tick: int) -> void:
 	if tick % DEMAND_REFRESH_INTERVAL_TICKS == 0:
 		_refresh_all_demands_immediate()
 		_update_contentment_streak()
+		_maybe_record_famine_warning(tick)
 		demand_snapshot.emit(_food_press, _housing_press, _mat_press, _haul_press)
 
 
@@ -97,6 +103,37 @@ func _food_carried_by_pawns() -> int:
 		if p.data.is_carrying() and Item.is_food(int(p.data.carrying)):
 			total += int(p.data.carrying_qty)
 	return total
+
+
+## Record a deterministic famine_warning after food_pressure stays above 0.9 for 30 ticks.
+func _maybe_record_famine_warning(tick: int) -> void:
+	if _food_press >= FAMINE_WARNING_PRESSURE:
+		_famine_pressure_streak_ticks += DEMAND_REFRESH_INTERVAL_TICKS
+	else:
+		_famine_pressure_streak_ticks = 0
+		return
+	if _famine_pressure_streak_ticks < FAMINE_WARNING_STREAK_TICKS:
+		return
+	if WorldMemory == null:
+		return
+	if _last_famine_warning_tick >= 0 and tick - _last_famine_warning_tick < FAMINE_WARNING_COOLDOWN_TICKS:
+		return
+	_last_famine_warning_tick = tick
+	_famine_pressure_streak_ticks = 0
+	var region_key: int = 0
+	if SettlementMemory != null:
+		var formal: Array = SettlementMemory.get_formal_settlements()
+		if not formal.is_empty() and formal[0] is Dictionary:
+			region_key = int((formal[0] as Dictionary).get("center_region", 0))
+	var snap: Dictionary = StockpileManager.labor_pressure_stock_snapshot() if StockpileManager != null else {}
+	WorldMemory.record_event({
+		"type": "famine_warning",
+		"k": WorldMemory.Kind.STARVATION_EVENT,
+		"r": region_key,
+		"tick": tick,
+		"food_pressure": _food_press,
+		"stock_food": int(snap.get("food", 0)),
+	})
 
 
 ## 0 = enough beds (or no pawns); 1 = many pawns share few beds. Uses `World` bed

@@ -202,17 +202,25 @@ func _post_job_for_feature(x: int, y: int) -> void:
 	var feature: int = int(w.data.get_feature(x, y))
 	if feature == TileFeature.Type.FERTILE_SOIL:
 		if _cached_food_jobs_needed > 0:
-			JobManager.post(Job.Type.FORAGE, tile)
+			var fj: Job = JobManager.post(Job.Type.FORAGE, tile)
+			if fj != null:
+				JobManager.stamp_seeder_metadata(fj, "fog_discovery_seed", "nearby")
 			_cached_food_jobs_needed -= 1
 	elif feature == TileFeature.Type.ORE_VEIN:
 		if _cached_stone_jobs_needed > 0:
-			JobManager.post(Job.Type.MINE, tile)
+			var mj: Job = JobManager.post(Job.Type.MINE, tile)
+			if mj != null:
+				JobManager.stamp_seeder_metadata(mj, "fog_discovery_seed", "nearby")
 			_cached_stone_jobs_needed -= 1
 	elif feature == TileFeature.Type.TREE:
 		if _cached_wood_jobs_needed > 0:
-			JobManager.post(Job.Type.CHOP, tile)
+			var cj: Job = JobManager.post(Job.Type.CHOP, tile)
+			if cj != null:
+				JobManager.stamp_seeder_metadata(cj, "fog_discovery_seed", "nearby")
 			_cached_wood_jobs_needed -= 1
 	elif TileFeature.is_wildlife(feature):
 		if _cached_hunt_jobs_needed > 0:
-			JobManager.post(Job.Type.HUNT, tile)
+			var hj: Job = JobManager.post(Job.Type.HUNT, tile)
+			if hj != null:
+				JobManager.stamp_seeder_metadata(hj, "fog_discovery_seed", "nearby")
 			_cached_hunt_jobs_needed -= 1

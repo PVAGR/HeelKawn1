@@ -130,6 +130,14 @@ const BED_WOOD_COST: int = 1
 const WALL_WOOD_COST: int = 2
 const DOOR_WOOD_COST: int = 1
 
+## Materials staged on-site while fetching the next ingredient (wood then stone, etc.).
+var _staged_build_materials: Dictionary = {}
+
+const _BUILD_MATERIAL_FETCH_ORDER: Array[int] = [
+	_Item.Type.WOOD, _Item.Type.STICK, _Item.Type.STONE, _Item.Type.FLINT,
+	_Item.Type.SEEDS, _Item.Type.BERRY, _Item.Type.LEATHER, _Item.Type.PAPER,
+]
+
 
 ## Map of build-job type -> (item_type, qty) needed at the build site. Anything
 ## listed here triggers the FETCHING_MATERIAL bounce in _begin_job.
@@ -145,7 +153,161 @@ static func _materials_for_build(job_type: int) -> Dictionary:
 		_Job.Type.COOK_MEAT:          return {"item": _Item.Type.MEAT, "qty": 1}
 		_Job.Type.COOK_BERRIES:       return {"item": _Item.Type.BERRY, "qty": 2}
 		_Job.Type.DRY_MEAT:           return {"item": _Item.Type.MEAT, "qty": 2}
+	# Phase 6: new buildings use BuildingRegistry for cost lookup.
+	if BuildingRegistry != null:
+		var building: Dictionary = BuildingRegistry.get_building_by_job_type(job_type)
+		if not building.is_empty():
+			var cost: Dictionary = building.get("cost", {})
+			if not cost.is_empty():
+				var item_map: Dictionary = {
+					"wood": _Item.Type.WOOD, "stone": _Item.Type.STONE,
+					"seeds": _Item.Type.SEEDS, "stick": _Item.Type.STICK,
+					"flint": _Item.Type.FLINT, "herbs": _Item.Type.BERRY,
+					"paper": _Item.Type.PAPER, "leather": _Item.Type.LEATHER,
+					"ink": _Item.Type.INK, "meat": _Item.Type.MEAT,
+				}
+				for cost_key in cost:
+					if item_map.has(cost_key):
+						return {"item": int(item_map[cost_key]), "qty": int(cost[cost_key])}
 	return {}
+
+
+static func _cost_key_to_item(cost_key: String) -> int:
+	match cost_key:
+		"wood": return _Item.Type.WOOD
+		"stone": return _Item.Type.STONE
+		"seeds": return _Item.Type.SEEDS
+		"stick": return _Item.Type.STICK
+		"flint": return _Item.Type.FLINT
+		"herbs": return _Item.Type.BERRY
+		"paper": return _Item.Type.PAPER
+		"leather": return _Item.Type.LEATHER
+		"ink": return _Item.Type.INK
+		"meat": return _Item.Type.MEAT
+		_: return _Item.Type.NONE
+
+
+static func _cost_entries_for_build(job_type: int) -> Array:
+	var entries: Array = []
+	if BuildingRegistry != null:
+		var cost: Dictionary = BuildingRegistry.cost_for_job(job_type)
+		for cost_key in cost:
+			var item_type: int = _cost_key_to_item(str(cost_key))
+			if item_type != _Item.Type.NONE:
+				entries.append({"item": item_type, "qty": int(cost[cost_key])})
+	if entries.is_empty():
+		var legacy: Dictionary = _materials_for_build(job_type)
+		if not legacy.is_empty():
+			entries.append({"item": int(legacy.get("item", _Item.Type.NONE)), "qty": int(legacy.get("qty", 0))})
+		match job_type:
+			_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_HEARTH:
+				entries.append({"item": _Item.Type.STONE, "qty": 1})
+			_Job.Type.BUILD_SHRINE:
+				entries.append({"item": _Item.Type.STONE, "qty": 2})
+	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ia: int = int(a.get("item", _Item.Type.NONE))
+		var ib: int = int(b.get("item", _Item.Type.NONE))
+		var pa: int = _BUILD_MATERIAL_FETCH_ORDER.find(ia)
+		var pb: int = _BUILD_MATERIAL_FETCH_ORDER.find(ib)
+		if pa < 0:
+			pa = 99
+		if pb < 0:
+			pb = 99
+		return pa < pb
+	)
+	return entries
+
+
+func _carried_plus_staged_qty(item_type: int) -> int:
+	var n: int = data.carrying_qty if data != null and data.carrying == item_type else 0
+	return n + int(_staged_build_materials.get(item_type, 0))
+
+
+func _has_all_build_materials(job: Job) -> bool:
+	if job == null:
+		return true
+	for entry in _cost_entries_for_build(job.type):
+		var it: int = int(entry.get("item", _Item.Type.NONE))
+		var q: int = int(entry.get("qty", 0))
+		if it == _Item.Type.NONE or q <= 0:
+			continue
+		if _carried_plus_staged_qty(it) < q:
+			return false
+	return true
+
+
+func _next_missing_build_material(job: Job) -> Dictionary:
+	if job == null:
+		return {}
+	for entry in _cost_entries_for_build(job.type):
+		var it: int = int(entry.get("item", _Item.Type.NONE))
+		var q: int = int(entry.get("qty", 0))
+		if it == _Item.Type.NONE or q <= 0:
+			continue
+		var have: int = _carried_plus_staged_qty(it)
+		if have < q:
+			return {"item": it, "qty": q - have}
+	return {}
+
+
+func _stage_carried_build_materials() -> void:
+	if data == null or data.carrying == _Item.Type.NONE or data.carrying_qty <= 0:
+		return
+	var it: int = data.carrying
+	_staged_build_materials[it] = int(_staged_build_materials.get(it, 0)) + data.carrying_qty
+	data.clear_carry()
+
+
+func _consume_all_build_materials(job: Job) -> void:
+	if job == null:
+		return
+	for entry in _cost_entries_for_build(job.type):
+		var it: int = int(entry.get("item", _Item.Type.NONE))
+		var need: int = int(entry.get("qty", 0))
+		if it == _Item.Type.NONE or need <= 0:
+			continue
+		var from_staged: int = mini(need, int(_staged_build_materials.get(it, 0)))
+		if from_staged > 0:
+			_staged_build_materials[it] = int(_staged_build_materials.get(it, 0)) - from_staged
+			if int(_staged_build_materials.get(it, 0)) <= 0:
+				_staged_build_materials.erase(it)
+			need -= from_staged
+		if need > 0 and data != null and data.carrying == it:
+			var from_carry: int = mini(need, data.carrying_qty)
+			data.carrying_qty -= from_carry
+			need -= from_carry
+			if data.carrying_qty <= 0:
+				data.clear_carry()
+		if need > 0:
+			_take_from_any_stockpile(it, need)
+
+
+func _begin_fetching_build_materials(job: Job) -> void:
+	var next_m: Dictionary = _next_missing_build_material(job)
+	if next_m.is_empty():
+		_walk_to_work_tile(job)
+		return
+	var item_type: int = int(next_m.get("item", _Item.Type.NONE))
+	var need_qty: int = int(next_m.get("qty", 0))
+	if item_type == _Item.Type.NONE or need_qty <= 0:
+		_walk_to_work_tile(job)
+		return
+	if data.carrying != _Item.Type.NONE and data.carrying != item_type and data.carrying_qty > 0:
+		_stage_carried_build_materials()
+	_begin_fetching_material(item_type, need_qty)
+
+
+func _take_from_any_stockpile(item_type: int, qty: int) -> bool:
+	if StockpileManager == null or qty <= 0:
+		return false
+	var remaining: int = qty
+	for zone in StockpileManager.zones():
+		if zone == null or not is_instance_valid(zone):
+			continue
+		if remaining <= 0:
+			break
+		remaining -= zone.take_item(item_type, remaining)
+	return remaining <= 0
 
 
 func _pawn_stream(label: String) -> StringName:
@@ -3585,21 +3747,9 @@ func _begin_job(job: Job) -> void:
 	update_cohort_membership(true)
 	_refresh_or_decay_cohort_stability(true)
 	# Build jobs need raw materials in hand before we walk to the build site.
-	# If we don't already have the right item in sufficient quantity, bounce
-	# to the stockpile first.
-	var mats: Dictionary = _materials_for_build(job.type)
-	if not mats.is_empty():
-		var item_type: int = mats.item
-		var need_qty: int = mats.qty
-		# === Check for cultural style material override ===
-		var settlement_id: int = _current_settlement_center_region()
-		# material_family is not directly used by this pawn for logic, so no verbose logging here.
-		if settlement_id >= 0 and CulturalStyleManager != null:
-			item_type = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, job.type))
-		# === End style check ===
-		var have: int = data.carrying_qty if data.carrying == item_type else 0
-		if have < need_qty:
-			_begin_fetching_material(item_type, need_qty)
+	if not _cost_entries_for_build(job.type).is_empty():
+		if not _has_all_build_materials(job):
+			_begin_fetching_build_materials(job)
 			return
 	_walk_to_work_tile(job)
 
@@ -3713,13 +3863,13 @@ func _arrive_at_stockpile_for_material() -> void:
 	if _current_job == null:
 		_reset_to_idle()
 		return
-	var mats: Dictionary = _materials_for_build(_current_job.type)
-	if mats.is_empty():
-		_reset_to_idle()
+	var next_m: Dictionary = _next_missing_build_material(_current_job)
+	if next_m.is_empty():
+		_walk_to_work_tile(_current_job)
 		return
-	var item_type: int = mats.item
-	var need_qty: int = mats.qty
-	var have: int = data.carrying_qty if data.carrying == item_type else 0
+	var item_type: int = int(next_m.get("item", _Item.Type.NONE))
+	var need_qty: int = int(next_m.get("qty", 0))
+	var have: int = _carried_plus_staged_qty(item_type)
 	var to_take: int = max(0, need_qty - have)
 	_pickup_material(item_type, to_take)
 
@@ -3729,6 +3879,9 @@ func _pickup_material(item_type: int, qty: int) -> void:
 	# site without bothering the stockpile.
 	if qty <= 0:
 		if _current_job != null:
+			if not _has_all_build_materials(_current_job):
+				_begin_fetching_build_materials(_current_job)
+				return
 			_walk_to_work_tile(_current_job)
 		else:
 			_reset_to_idle()
@@ -3760,6 +3913,9 @@ func _pickup_material(item_type: int, qty: int) -> void:
 	_target_zone = null
 	_request_redraw()
 	if _current_job != null:
+		if not _has_all_build_materials(_current_job):
+			_begin_fetching_build_materials(_current_job)
+			return
 		_walk_to_work_tile(_current_job)
 	else:
 		_reset_to_idle()
@@ -3970,23 +4126,13 @@ func _complete_current_job() -> void:
 ## Place the right TileFeature for a build job, consuming the carried materials.
 ## Bails out cleanly if we somehow arrived without the wood in hand.
 func _finish_build(job: Job) -> void:
-	var mats: Dictionary = _materials_for_build(job.type)
-	if mats.is_empty():
+	if _cost_entries_for_build(job.type).is_empty():
 		return
-	var item_type: int = mats.item
-	var need_qty: int = mats.qty
-	# === Override material based on settlement's cultural style ===
-	var settlement_id: int = _current_settlement_center_region()
-	var material_family: String = "wood"
-	if settlement_id >= 0 and CulturalStyleManager != null:
-		item_type = int(CulturalStyleManager.call("get_build_material_for_settlement", settlement_id, job.type))
-		# material_family is not directly used by this pawn for logic, so no verbose logging here.
-	# === End style material override ===
-	if data.carrying != item_type or data.carrying_qty < need_qty:
+	if not _has_all_build_materials(job):
+		job.work_ticks_done = 0
+		_begin_fetching_build_materials(job)
 		return
-	data.carrying_qty -= need_qty
-	if data.carrying_qty <= 0:
-		data.clear_carry()
+	_consume_all_build_materials(job)
 	match job.type:
 		_Job.Type.BUILD_BED:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.BED)
@@ -4102,28 +4248,17 @@ func _finish_shelter_build(job: Job) -> void:
 		
 		return
 	
-	var mats: Dictionary = _materials_for_build(job.type)
-	if mats.is_empty():
+	if _cost_entries_for_build(job.type).is_empty():
 		return
-	var item_type: int = mats.item
-	var need_qty: int = mats.qty
-	
-	# Check if pawn is carrying the required material
-	if data.carrying != item_type or data.carrying_qty < need_qty:
-		# Re-fetch instead of silently failing
+	if not _has_all_build_materials(job):
 		if GameManager.verbose_logs():
-			print("[Pawn] %s missing material at completion — re-fetching %d %s for %s @(%d,%d)" % [
-				data.display_name, need_qty, Item.name_for(item_type),
-				Job.describe_type(job.type), job.tile.x, job.tile.y
+			print("[Pawn] %s missing build materials at completion — re-fetching for %s @(%d,%d)" % [
+				data.display_name, Job.describe_type(job.type), job.tile.x, job.tile.y
 			])
 		job.work_ticks_done = 0
-		_begin_fetching_material(item_type, need_qty)
+		_begin_fetching_build_materials(job)
 		return
-	
-	# Consume materials
-	data.carrying_qty -= need_qty
-	if data.carrying_qty <= 0:
-		data.clear_carry()
+	_consume_all_build_materials(job)
 	
 	var placed_feature: int = TileFeature.Type.NONE
 	# Place the feature

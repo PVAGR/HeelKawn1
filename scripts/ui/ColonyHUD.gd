@@ -402,6 +402,7 @@ func _build_expensive_hud_lines(simple_hud: bool) -> Array[String]:
 	var lines: Array[String] = []
 	if simple_hud:
 		lines.append(_settlement_identity_line())
+		lines.append(_polities_realm_line())
 		lines.append(_stockpile_simple_line())
 		lines.append(_pawn_line_simple())
 		lines.append(_profession_breakdown_line())
@@ -417,6 +418,7 @@ func _build_expensive_hud_lines(simple_hud: bool) -> Array[String]:
 		lines.append(_narrative_rail_line())
 	else:
 		lines.append(_settlement_identity_line())
+		lines.append(_polities_realm_line())
 		lines.append(_pawn_line())
 		lines.append(_politics_line())
 		lines.append(_war_status_line())
@@ -705,14 +707,110 @@ func _settlement_identity_line() -> String:
 		var myth_name: String = MythAge.get_current_age_name()
 		if myth_name != "—":
 			myth_age_txt = " · [color=#e8c170]%s[/color]" % myth_name
+	var polity_line: String = _polity_focus_line(st_any if st_any is Dictionary else {})
+	var laws_line: String = _laws_focus_line(profile_rk)
 	if _is_simple_hud():
-		return "[color=#c9b37c]Identity:[/color] [b]%s[/b] · %s · %s · %s · era %s%s · war %s · gov %s" % [
+		var base_simple: String = "[color=#c9b37c]Identity:[/color] [b]%s[/b] · %s · %s · %s · era %s%s · war %s · gov %s" % [
 			state_txt.capitalize(), kind_txt, culture_txt.capitalize(), meaning, era_txt, myth_age_txt, war_state, gov_txt,
 		]
-	return (
+		if not polity_line.is_empty():
+			base_simple += " · %s" % polity_line
+		if not laws_line.is_empty():
+			base_simple += " · %s" % laws_line
+		return base_simple
+	var base_full: String = (
 		"[color=#c9b37c]Identity:[/color] #%d  [b]%s[/b] · %s · %s · era %s%s · intent %s · rev %d  "
 		+ "| meaning %s · rep %s(%d) · war %s · gov %s"
 	) % [profile_rk, state_txt, kind_txt, culture_txt, era_txt, myth_age_txt, intent, revival_score, meaning, rep_word, rep, war_state, gov_txt]
+	if not polity_line.is_empty():
+		base_full += " · %s" % polity_line
+	if not laws_line.is_empty():
+		base_full += " · %s" % laws_line
+	return base_full
+
+
+func _laws_focus_line(center_rk: int) -> String:
+	if center_rk < 0 or SettlementMemory == null:
+		return ""
+	var laws: Array = SettlementMemory.get_laws(center_rk)
+	if laws.is_empty():
+		return ""
+	var types: PackedStringArray = PackedStringArray()
+	for law_v in laws:
+		if law_v is Dictionary:
+			var t: String = str((law_v as Dictionary).get("type", "")).replace("_", " ")
+			if not t.is_empty():
+				types.append(t)
+	if types.is_empty():
+		return "[color=#a8c8e8]Laws:[/color] %d" % laws.size()
+	return "[color=#a8c8e8]Laws:[/color] %s" % ", ".join(types.slice(0, 3))
+
+
+func _polity_swatch_bbcode(st: Dictionary) -> String:
+	var bc_v: Variant = st.get("border_color", null)
+	var r8: int = 200
+	var g8: int = 160
+	var b8: int = 90
+	if bc_v is PackedFloat32Array:
+		var bc: PackedFloat32Array = bc_v as PackedFloat32Array
+		if bc.size() >= 3:
+			r8 = int(clampf(bc[0], 0.0, 1.0) * 255.0)
+			g8 = int(clampf(bc[1], 0.0, 1.0) * 255.0)
+			b8 = int(clampf(bc[2], 0.0, 1.0) * 255.0)
+	elif bc_v is Array and (bc_v as Array).size() >= 3:
+		var ba: Array = bc_v as Array
+		r8 = int(clampf(float(ba[0]), 0.0, 1.0) * 255.0)
+		g8 = int(clampf(float(ba[1]), 0.0, 1.0) * 255.0)
+		b8 = int(clampf(float(ba[2]), 0.0, 1.0) * 255.0)
+	else:
+		var pid: int = int(st.get("polity_id", -1))
+		if pid >= 0 and SettlementMemory != null:
+			var c: Color = SettlementMemory.color_for_polity_id(pid)
+			r8 = int(c.r * 255.0)
+			g8 = int(c.g * 255.0)
+			b8 = int(c.b * 255.0)
+	return "[color=#%02x%02x%02x]■[/color]" % [r8, g8, b8]
+
+
+func _polity_focus_line(st: Dictionary) -> String:
+	if st.is_empty() or SettlementMemory == null:
+		return ""
+	if not SettlementMemory.is_polity_visible(st):
+		return ""
+	var nm: String = str(st.get("polity_display_name", st.get("name", ""))).strip_edges()
+	if nm.is_empty():
+		return ""
+	var formal_tag: String = "realm" if bool(st.get("is_formal_settlement", false)) else "proto"
+	return "%s [b]%s[/b] (%s)" % [_polity_swatch_bbcode(st), nm, formal_tag]
+
+
+func _polities_realm_line() -> String:
+	if SettlementMemory == null:
+		return ""
+	var formal: int = SettlementMemory.get_formal_settlement_count()
+	var proto: int = SettlementMemory.get_proto_sites().size()
+	var polities: int = SettlementMemory.get_active_polity_count()
+	var base: String = "[color=#c9b37c]Realms:[/color] [b]%d[/b] polities · %d formal · %d proto camps" % [polities, formal, proto]
+	if formal < 2 or FactionManager == null:
+		return base
+	var focus_rk: int = _focus_center_region()
+	if focus_rk < 0:
+		return base
+	var rel_lines: Array[String] = FactionManager.get_nearest_polity_relation_lines(focus_rk, 3)
+	if rel_lines.is_empty():
+		return base
+	return base + "\n[color=#c9b37c]Diplomacy:[/color] " + " · ".join(rel_lines)
+
+
+func _focus_center_region() -> int:
+	if _spawner == null or _spawner.pawns.is_empty():
+		return -1
+	var p: HeelKawnian = _spawner.pawns[0]
+	if p == null or not is_instance_valid(p) or p.data == null:
+		return -1
+	return SettlementMemory.get_center_region_for_region(
+			WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+	) if SettlementMemory != null and WorldMemory != null else -1
 
 
 static func _demand_tier(p: float) -> String:
@@ -958,12 +1056,63 @@ func _jobs_line() -> String:
 func _jobs_line_simple() -> String:
 	var s: Dictionary = JobManager.stats()
 	var beds_built: int = _world.bed_count() if _world != null else 0
-	return "[color=#cccccc]Work:[/color] open [b]%d[/b] · claimed [b]%d[/b] · done [b]%d[/b] · beds [b]%d[/b]" % [
+	var top_jobs: String = _top_open_jobs_summary(3)
+	var role_hint: String = _colony_role_hint_line()
+	var extra: String = ""
+	if not top_jobs.is_empty():
+		extra += " · top %s" % top_jobs
+	if not role_hint.is_empty():
+		extra += " · %s" % role_hint
+	return "[color=#cccccc]Work:[/color] open [b]%d[/b] · claimed [b]%d[/b] · done [b]%d[/b] · beds [b]%d[/b]%s" % [
 		int(s.get("open", 0)),
 		int(s.get("claimed", 0)),
 		int(s.get("completed", 0)),
 		beds_built,
+		extra,
 	]
+
+
+func _top_open_jobs_summary(max_types: int) -> String:
+	if JobManager == null:
+		return ""
+	var tops: Array[Dictionary] = JobManager.get_top_open_job_types(max_types)
+	if tops.is_empty():
+		return ""
+	var parts: PackedStringArray = PackedStringArray()
+	for entry in tops:
+		var label: String = str(entry.get("label", "?"))
+		var count: int = int(entry.get("count", 0))
+		if count > 0:
+			parts.append("%s×%d" % [label, count])
+	return ", ".join(parts)
+
+
+func _colony_role_hint_line() -> String:
+	if _spawner == null:
+		return ""
+	var farmers: int = 0
+	var builders: int = 0
+	var gatherers: int = 0
+	for p in _spawner.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		match int(p.data.current_profession):
+			HeelKawnianData.Profession.FARMER:
+				farmers += 1
+			HeelKawnianData.Profession.BUILDER:
+				builders += 1
+			HeelKawnianData.Profession.GATHERER:
+				gatherers += 1
+	var best: int = maxi(farmers, maxi(builders, gatherers))
+	if best <= 0:
+		return ""
+	if farmers == best and farmers >= builders and farmers >= gatherers:
+		return "[color=#a5d6a7]role: foragers/farmers[/color]"
+	if builders == best and builders >= gatherers:
+		return "[color=#dcb478]role: builders[/color]"
+	if gatherers == best:
+		return "[color=#90caf9]role: gatherers[/color]"
+	return ""
 
 
 ## Simple beds-only line for readable HUD — players care about shelter, not job queue internals.
@@ -1422,10 +1571,45 @@ func _narrative_line_for_event(typ: String, e: Dictionary) -> String:
 		"player_intent":
 			return "chronicler note recorded"
 		"pawn_death":
-			var nm: String = str(e.get("n", e.get("name", "someone"))).strip_edges()
-			if nm.is_empty():
-				nm = "someone"
-			return "%s died" % nm
+			return ChronicleFeed._pawn_death_chronicle_line(e)
+		"famine_warning":
+			var fp: float = float(e.get("food_pressure", 0.0))
+			if fp > 0.0:
+				return "famine — food pressure %.0f%%" % [fp * 100.0]
+			return "famine — reserves critical"
+		"first_hearth_in_polity":
+			var pol: String = str(e.get("polity_name", "the realm")).strip_edges()
+			return "first hearth of %s" % pol
+		"settlement_abandoned":
+			var sn: String = str(e.get("settlement_name", "a settlement")).strip_edges()
+			return "%s abandoned" % sn
+		"profession_mastered":
+			var who_m: String = str(e.get("pawn_name", "someone")).strip_edges()
+			var branch_m: String = str(e.get("branch_skill", "")).strip_edges()
+			return "%s mastered %s" % [who_m, branch_m if not branch_m.is_empty() else str(e.get("tier", "skill"))]
+		"dynasty_line":
+			var dyn: String = str(e.get("narrative", "")).strip_edges()
+			if not dyn.is_empty():
+				return dyn
+			return "a dynasty line continued"
+		"diplomatic_incident":
+			var da: String = str(e.get("polity_a_name", "realm")).strip_edges()
+			var db: String = str(e.get("polity_b_name", "realm")).strip_edges()
+			return "diplomatic incident: %s vs %s" % [da, db]
+		"skirmish_started":
+			return "skirmish — hostile bands clash"
+		"battle_resolved":
+			return "skirmish ended — casualties counted"
+		"trade_route_opened":
+			return "formal trade route opened"
+		"polity_founded", "settlement_formalized":
+			var narr: String = str(e.get("narrative", "")).strip_edges()
+			if not narr.is_empty():
+				return narr.replace("[b]", "").replace("[/b]", "")
+			var pn: String = str(e.get("polity_name", "")).strip_edges()
+			if not pn.is_empty():
+				return "realm: %s" % pn
+			return "a realm was founded"
 		"animal_death":
 			return "wildlife was culled"
 		"teaching_success":

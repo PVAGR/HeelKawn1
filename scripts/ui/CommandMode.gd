@@ -156,7 +156,7 @@ func _post_job_for_pawn(job_type: int, tile: Vector2i) -> void:
 	# Use JobManager.post() which handles dedup, ID assignment, and registration
 	var work_tile: Vector2i = _find_work_tile(tile, job_type)
 	var ticks: int = _work_ticks_for_type(job_type)
-	var job: Job = JobManager.post(job_type, tile, 10, ticks)
+	var job: Job = JobManager.post_stamped(job_type, tile, 10, ticks, "player_designation", "all")
 	if job == null:
 		# Tile already has a job — just move the pawn there
 		_selected_pawn.draft_goto(work_tile)

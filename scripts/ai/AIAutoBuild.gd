@@ -347,11 +347,28 @@ func _assign_pawn_to_intent(intent: Dictionary) -> void:
 	if job_type < 0:
 		return
 	# Post a concrete deterministic job for this build intent.
-	var posted: Job = _job_manager.post(
+	if ColonySimServices != null and ColonySimServices.is_hearth_build_job(job_type):
+		var center_rk: int = -1
+		if _settlement_memory != null:
+			var tile: Vector2i = intent.tile
+			center_rk = SettlementMemory.get_center_region_for_region(
+					WorldMemory._region_key(tile.x, tile.y)
+			) if WorldMemory != null else -1
+		if center_rk >= 0 and not ColonySimServices.can_seed_fire_pit(center_rk, intent.tile, 0, 1):
+			return
+	if ColonySimServices != null:
+		var slot_rk: int = SettlementMemory.get_center_region_for_region(
+				WorldMemory._region_key(intent.tile.x, intent.tile.y)
+		) if WorldMemory != null and SettlementMemory != null else -1
+		if slot_rk >= 0 and not ColonySimServices.try_consume_settlement_build_slot(slot_rk, 3):
+			return
+	var posted: Job = _job_manager.post_stamped(
 		job_type,
 		intent.tile,
-		10 - int(intent.priority),  # higher intent priority becomes stronger job priority
-		20
+		10 - int(intent.priority),
+		20,
+		"auto_build_%s" % build_type,
+		"settlement",
 	)
 	if posted != null:
 		intent.assigned_pawn_id = -2  # queued marker (claimed pawn id comes later in JobManager)

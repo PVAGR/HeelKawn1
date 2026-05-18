@@ -875,10 +875,23 @@ func spawn_child_pawn(
 		"pawn_name": data.display_name,
 		"parent_a_id": int(parent_a.id),
 		"parent_b_id": int(parent_b.id),
+		"parent_a_name": str(parent_a.display_name),
+		"parent_b_name": str(parent_b.display_name),
 		"household_id": int(data.household_id),
 		"inbreeding_penalty": inbreeding_penalty,
 		"tile": {"x": tile.x, "y": tile.y},
 		"region": WorldMemory._region_key(tile.x, tile.y),
+	})
+	WorldMemory.record_event({
+		"type": "dynasty_line",
+		"tick": GameManager.tick_count,
+		"pawn_id": int(data.id),
+		"pawn_name": data.display_name,
+		"parent_a_name": str(parent_a.display_name),
+		"parent_b_name": str(parent_b.display_name),
+		"parent_a_id": int(parent_a.id),
+		"parent_b_id": int(parent_b.id),
+		"narrative": "%s born to %s and %s" % [data.display_name, parent_a.display_name, parent_b.display_name],
 	})
 	if GameManager.verbose_logs():
 		print("[Spawn] child: %s at (%d,%d) from #%d + #%d" % [

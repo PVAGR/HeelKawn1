@@ -54,9 +54,9 @@ const SPECIALIZATION_EXIT_THRESHOLD: float = 0.22
 const SPECIALIZATION_MIN_MARGIN: float = 0.12
 const SPECIALIZATION_ENTER_STABILITY_TICKS: int = 2000
 const SPECIALIZATION_EXIT_STABILITY_TICKS: int = 2500
-const MIN_GUILD_SIZE_FOR_SETTLEMENT: int = 10
-const GUILD_CLUSTER_RADIUS_TILES: int = 32
-const GUILD_STABILITY_TICKS: int = 1200
+const MIN_GUILD_SIZE_FOR_SETTLEMENT: int = 6
+const GUILD_CLUSTER_RADIUS_TILES: int = 48
+const GUILD_STABILITY_TICKS: int = 600
 ## After guild stability, allow formal founding without a hearth briefly (proto camp bootstrap).
 const FORMAL_WARMTH_GRACE_TICKS: int = 600
 ## Map polity: population delta before a territorial-growth chronicle fires.
@@ -721,6 +721,38 @@ func describe_formal_settlement_gate(candidate_center: Vector2i, candidate_pawns
     return gate
 
 
+## Proto camps with real infrastructure can formalize without waiting for a 10-pawn guild cluster.
+func describe_infrastructure_formal_gate(st: Dictionary, center_tile: Vector2i) -> Dictionary:
+    var gate: Dictionary = {
+        "allowed": false,
+        "reason": "infrastructure_incomplete",
+        "member_count": int(st.get("population", 0)),
+        "founding_tick": GameManager.tick_count if GameManager != null else 0,
+    }
+    var pop: int = int(st.get("population", 0))
+    if pop < 5:
+        gate["reason"] = "population_too_small"
+        return gate
+    var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 14)
+    var beds: int = int(features.get("bed", 0))
+    var hearths: int = int(features.get("hearth", 0))
+    var storage_huts: int = int(features.get("storage_hut", 0))
+    var has_stockpile: bool = StockpileManager != null and StockpileManager.zone_count() > 0
+    if beds < 2:
+        gate["reason"] = "needs_beds"
+        return gate
+    if hearths < 1:
+        gate["reason"] = "needs_hearth"
+        return gate
+    if storage_huts < 1 and not has_stockpile:
+        gate["reason"] = "needs_storage"
+        return gate
+    gate["allowed"] = true
+    gate["reason"] = "infrastructure_milestone"
+    gate["hearths_in_region"] = hearths
+    return gate
+
+
 func _formal_settlement_warmth_gate(candidate_center: Vector2i) -> Dictionary:
     var out: Dictionary = {"met": false, "reason": "warmth_unsatisfied", "hearths": 0}
     if candidate_center.x < 0 or candidate_center.y < 0:
@@ -762,6 +794,11 @@ func _apply_guild_settlement_gate(world: World) -> void:
         var was_formal: bool = bool(st.get("is_formal_settlement", false))
         var gate: Dictionary = describe_formal_settlement_gate(center_tile, guild_pawns, world)
         var allowed: bool = bool(gate.get("allowed", false))
+        if not allowed:
+            var infra_gate: Dictionary = describe_infrastructure_formal_gate(st, center_tile)
+            if bool(infra_gate.get("allowed", false)):
+                allowed = true
+                gate = infra_gate
         st["member_pawn_ids"] = _array_to_packed_int32(gate.get("member_ids", []))
         st["guild_member_count"] = int(gate.get("member_count", 0))
         st["guild_candidate_center_tile"] = center_tile
@@ -771,7 +808,7 @@ func _apply_guild_settlement_gate(world: World) -> void:
         st["is_formal_settlement"] = allowed
         if allowed:
             st["settlement_kind"] = "formal_settlement"
-            st["founding_reason"] = "guild_settlement"
+            st["founding_reason"] = str(gate.get("reason", "guild_settlement"))
             st["founding_tick"] = int(gate.get("founding_tick", -1))
             st["guild_id"] = "guild_%d_%d" % [center_rk, int(st.get("founding_tick", -1))]
             if not was_formal and WorldMemory != null:

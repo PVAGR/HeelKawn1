@@ -1290,6 +1290,48 @@ func _report_jobs_stock() -> void:
 		print("  zone @%s items=%s" % [str(z.rect.position), str(z.inventory)])
 
 
+## Pawn `data` is HeelKawnianData at runtime; keep debug reports dict-shaped for printing.
+func _pawn_data_fields(pawn: Node) -> Dictionary:
+	var out: Dictionary = {
+		"id": -1,
+		"visible_orders_count": 0,
+		"last_claim_failure_reason": "",
+		"carrying": Item.Type.NONE,
+		"carrying_qty": 0,
+	}
+	if pawn == null:
+		return out
+	var pd_v: Variant = pawn.get("data")
+	if pd_v is HeelKawnianData:
+		var pd: HeelKawnianData = pd_v as HeelKawnianData
+		out["id"] = int(pd.id)
+		out["visible_orders_count"] = int(pd.visible_orders_count)
+		out["last_claim_failure_reason"] = str(pd.last_claim_failure_reason)
+		out["carrying"] = int(pd.carrying)
+		out["carrying_qty"] = int(pd.carrying_qty)
+	elif pd_v is Dictionary:
+		var pd_d: Dictionary = pd_v as Dictionary
+		out["id"] = int(pd_d.get("id", -1))
+		out["visible_orders_count"] = int(pd_d.get("visible_orders_count", 0))
+		out["last_claim_failure_reason"] = str(pd_d.get("last_claim_failure_reason", ""))
+		out["carrying"] = int(pd_d.get("carrying", Item.Type.NONE))
+		out["carrying_qty"] = int(pd_d.get("carrying_qty", 0))
+	return out
+
+
+func _pawn_is_carrying(pawn: Node) -> bool:
+	if pawn == null:
+		return false
+	var pd_v: Variant = pawn.get("data")
+	if pd_v is HeelKawnianData:
+		return (pd_v as HeelKawnianData).is_carrying()
+	if pd_v is Dictionary:
+		var c: int = int((pd_v as Dictionary).get("carrying", Item.Type.NONE))
+		var q: int = int((pd_v as Dictionary).get("carrying_qty", 0))
+		return c != Item.Type.NONE and q > 0
+	return false
+
+
 func _report_authority_job_audit() -> void:
 	print("=== AUTHORITY JOB AUDIT ===")
 	print("tick=%d" % GameManager.tick_count)
@@ -1345,8 +1387,12 @@ func _report_authority_job_audit() -> void:
 			if p == null or not is_instance_valid(p):
 				continue
 			if p.has_method("get_state") and p.get_state() == p.State.IDLE:
-				var pd: Dictionary = p.get("data")
-				idle_sample.append({"id": int(pd.get("id", -1)), "visible_orders": int(pd.get("visible_orders_count", 0)), "last_claim_fail": str(pd.get("last_claim_failure_reason", ""))})
+				var fields: Dictionary = _pawn_data_fields(p)
+				idle_sample.append({
+					"id": int(fields.get("id", -1)),
+					"visible_orders": int(fields.get("visible_orders_count", 0)),
+					"last_claim_fail": str(fields.get("last_claim_failure_reason", "")),
+				})
 				if idle_sample.size() >= 12:
 					break
 	print("idle_sample=%s" % str(idle_sample))
@@ -1357,9 +1403,15 @@ func _report_authority_job_audit() -> void:
 		for p in ps.pawns:
 			if p == null or not is_instance_valid(p):
 				continue
-			if p.has_method("is_carrying") and p.is_carrying():
-				var pd: Dictionary = p.get("data")
-				carriers.append({"id": int(pd.get("id", -1)), "carried": str(p.get("carried_item")), "last_claim_fail": str(pd.get("last_claim_failure_reason", ""))})
+			if _pawn_is_carrying(p):
+				var fields: Dictionary = _pawn_data_fields(p)
+				var carry_type: int = int(fields.get("carrying", Item.Type.NONE))
+				var carry_name: String = str(Item.NAMES.get(carry_type, "?"))
+				carriers.append({
+					"id": int(fields.get("id", -1)),
+					"carried": "%s x%d" % [carry_name, int(fields.get("carrying_qty", 0))],
+					"last_claim_fail": str(fields.get("last_claim_failure_reason", "")),
+				})
 				if carriers.size() >= 12:
 					break
 	print("carried_blockers_sample=%s" % str(carriers))

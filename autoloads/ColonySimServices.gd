@@ -72,6 +72,7 @@ func _on_tick(tick: int) -> void:
 	if tick % DEMAND_REFRESH_INTERVAL_TICKS == 0:
 		_refresh_all_demands_immediate()
 		_update_contentment_streak()
+		_update_labor_stance_from_pressures()
 		_maybe_record_famine_warning(tick)
 		demand_snapshot.emit(_food_press, _housing_press, _mat_press, _haul_press)
 
@@ -91,8 +92,18 @@ func _refresh_food_mat_haul_pressures() -> void:
 	var stone: int = int(snap.get("stone", 0))
 	_food_press = clamp(1.0 - float(food_total) / 30.0, 0.0, 1.0)
 	_mat_press = clamp(1.0 - float(mini(wood, 24) + mini(stone, 12)) / 40.0, 0.0, 1.0)
-	var open_harvest: int = JobManager.open_count()
-	_haul_press = clamp(float(open_harvest) / 120.0, 0.0, 1.0)
+	var open_harvest: int = 0
+	if JobManager != null:
+		open_harvest = JobManager.count_open_by_type(Job.Type.CHOP) \
+				+ JobManager.count_open_by_type(Job.Type.FORAGE) \
+				+ JobManager.count_open_by_type(Job.Type.MINE) \
+				+ JobManager.count_open_by_type(Job.Type.HUNT)
+	var open_haul: int = JobManager.count_open_by_type(Job.Type.TRADE_HAUL) if JobManager != null else 0
+	_haul_press = clamp(float(open_haul) / 24.0, 0.0, 1.0)
+	if open_harvest > 40 and (_food_press > 0.35 or _mat_press > 0.35):
+		_haul_press = maxf(_haul_press, clampf(float(open_harvest - 40) / 80.0, 0.0, 0.45))
+	elif _food_press < 0.15 and _mat_press < 0.15:
+		_haul_press = mini(_haul_press, 0.12)
 
 
 func _food_carried_by_pawns() -> int:
@@ -173,6 +184,17 @@ func get_stance_display() -> String:
 	return _stance_name(current_labor_stance)
 
 
+func _update_labor_stance_from_pressures() -> void:
+	if _food_press > 0.55:
+		current_labor_stance = LaborStance.FOOD_FIRST
+	elif _warmth_press > 0.22 or _housing_press > 0.55:
+		current_labor_stance = LaborStance.BUILD_FIRST
+	elif _haul_press > 0.45 and _food_press > 0.25:
+		current_labor_stance = LaborStance.HAUL_FIRST
+	else:
+		current_labor_stance = LaborStance.BALANCED
+
+
 ## World truth for HUD/debug — always from tile feature scan, not local settlement scan.
 func get_colony_fire_pit_count() -> int:
 	var world: World = _get_colony_world()
@@ -206,9 +228,16 @@ func get_contentment_streak_ticks() -> int:
 
 
 func _update_contentment_streak() -> void:
+	# Full stockpiles are success, not misery — do not block hobby/exploration on storage alone.
+	var storage_for_mood: float = _storage_press
+	if _food_press < 0.20:
+		storage_for_mood = mini(storage_for_mood, 0.10)
+	var haul_for_mood: float = _haul_press
+	if _food_press < 0.20 and _mat_press < 0.20:
+		haul_for_mood = mini(haul_for_mood, 0.10)
 	var peak: float = maxf(
 			_food_press,
-			maxf(_housing_press, maxf(_mat_press, maxf(_haul_press, maxf(_warmth_press, maxf(_cooking_press, _storage_press))))))
+			maxf(_housing_press, maxf(_mat_press, maxf(haul_for_mood, maxf(_warmth_press, maxf(_cooking_press, storage_for_mood))))))
 	if peak < CONTENTMENT_MAX_PRESSURE:
 		_low_pressure_streak_ticks += DEMAND_REFRESH_INTERVAL_TICKS
 	else:
@@ -583,8 +612,13 @@ func job_priority_stance_bias(job: Job) -> int:
 			return 0
 		LaborStance.BUILD_FIRST:
 			if job.type == Job.Type.BUILD_BED or job.type == Job.Type.BUILD_WALL \
-					or job.type == Job.Type.BUILD_DOOR or job.type == Job.Type.MINE_WALL:
-				return 3
+					or job.type == Job.Type.BUILD_DOOR or job.type == Job.Type.BUILD_FIRE_PIT \
+					or job.type == Job.Type.BUILD_STORAGE_HUT or job.type == Job.Type.BUILD_GRANARY \
+					or job.type == Job.Type.COOK_MEAT or job.type == Job.Type.COOK_BERRIES \
+					or job.type == Job.Type.PLANT_SEEDS or job.type == Job.Type.MINE_WALL:
+				return 4
+			if job.type == Job.Type.CHOP or job.type == Job.Type.FORAGE:
+				return -2
 			return 0
 		LaborStance.HAUL_FIRST:
 			# Pawns that already carry re-route in `_tick_idle`; this biases fetch jobs.
@@ -706,6 +740,8 @@ func compute_settlement_build_priorities(
 		hearths_needed = 1
 	elif cold_uncovered > 0:
 		hearths_needed = hearths + int(ceil(float(cold_uncovered) / 4.0))
+	elif warmth_press >= 0.12 and local_pop > 0:
+		hearths_needed = maxi(hearths_needed, hearths + 1)
 	var warmth_satisfied: bool = hearths > 0 and cold_uncovered <= 0 and warmth_press < 0.12
 	var survival_met: bool = food_press <= 0.60 and housing_press <= 0.70 and warmth_press <= 0.40
 	var need_beds: int = 0

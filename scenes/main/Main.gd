@@ -6242,11 +6242,18 @@ func _seed_jobs_for_discovered_area() -> void:
 	var max_chop: int = maxi(int(ceil(float(pop) * FogOfDiscovery.WOOD_JOBS_PER_PAWN)), 2)
 	var max_mine: int = maxi(int(ceil(float(pop) * FogOfDiscovery.STONE_JOBS_PER_PAWN)), 1)
 	var food_press: float = ColonySimServices.get_food_pressure() if ColonySimServices != null else 0.0
+	var warmth_press: float = ColonySimServices.get_warmth_pressure() if ColonySimServices != null else 0.0
 	if food_press > 0.85:
 		max_chop = mini(max_chop, maxi(2, pop / 4))
 		max_forage = maxi(max_forage, maxi(6, int(ceil(float(pop) * 1.2))))
 		max_hunt = maxi(max_hunt, maxi(3, int(ceil(float(pop) * 0.5))))
 		max_fish = maxi(max_fish, maxi(2, int(ceil(float(pop) * 0.35))))
+		_trim_open_chop_jobs_under_food_crisis()
+	elif food_press < 0.20 and warmth_press > 0.15:
+		# Fed colony with cold camps: stop flooding the queue with endless chop/forage.
+		max_chop = mini(max_chop, maxi(2, int(pop / 5)))
+		max_forage = mini(max_forage, maxi(4, int(pop / 2)))
+		max_mine = mini(max_mine, maxi(2, int(pop / 4)))
 		_trim_open_chop_jobs_under_food_crisis()
 	var forage_posted: int = 0
 	var hunt_posted: int = 0
@@ -6488,6 +6495,40 @@ func _count_pending_jobs_near(job_type: int, center: Vector2i, radius: int, cach
 	return n
 
 
+func _count_pending_build_jobs_near(center: Vector2i, radius: int, cached_jobs: Array = []) -> int:
+	if JobManager == null:
+		return 0
+	var n: int = 0
+	var jobs: Array = cached_jobs if cached_jobs.size() > 0 else (JobManager.get_active_jobs_union() if JobManager.has_method("get_active_jobs_union") else [])
+	for jv in jobs:
+		if not (jv is Job):
+			continue
+		var j: Job = jv as Job
+		if not _is_construction_or_craft_job_type(j.type):
+			continue
+		if maxi(absi(j.tile.x - center.x), absi(j.tile.y - center.y)) <= radius:
+			n += 1
+	return n
+
+
+func _is_construction_or_craft_job_type(job_type: int) -> bool:
+	match job_type:
+		Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT, \
+		Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_STOCKPILE, Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH, \
+		Job.Type.BUILD_MARKER_STONE, Job.Type.BUILD_SHRINE, Job.Type.BUILD_GRANARY, Job.Type.BUILD_FARM_WHEAT, \
+		Job.Type.BUILD_FARM_CORN, Job.Type.BUILD_FARM_VEGETABLES, Job.Type.BUILD_HERB_GARDEN, \
+		Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_LOOM, Job.Type.BUILD_KILN, Job.Type.BUILD_SMELTER, \
+		Job.Type.BUILD_BOATYARD, Job.Type.BUILD_DOCK, Job.Type.BUILD_FISHERMAN_HUT, \
+		Job.Type.BUILD_APOTHECARY, Job.Type.BUILD_LIBRARY, Job.Type.BUILD_SCHOOL, \
+		Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, Job.Type.BUILD_MARKET, Job.Type.BUILD_TRADING_POST, \
+		Job.Type.BUILD_ROAD, Job.Type.BUILD_CELLAR, Job.Type.BUILD_FORD, \
+		Job.Type.COOK_MEAT, Job.Type.COOK_FISH, Job.Type.COOK_BERRIES, Job.Type.PLANT_SEEDS, \
+		Job.Type.TEACH_SKILL, Job.Type.MAINTAIN_STRUCTURE:
+			return true
+		_:
+			return false
+
+
 ## Stricter than AIAutoBuild._colony_survival_needs_met — gates ambition-phase seeding.
 func _seeder_survival_needs_met(center_rk: int = -1) -> bool:
 	if ColonySimServices == null:
@@ -6708,7 +6749,7 @@ func _seed_construction_jobs() -> void:
 	if tick - _last_construction_seed_tick < interval:
 		return
 	_last_construction_seed_tick = tick
-	var budget_usec: int = 6_000  # small per-frame budget; scheduler continues next pass
+	var budget_usec: int = 14_000  # per-pass budget; harvest backlog used to starve this before
 	var start_usec: int = Time.get_ticks_usec()
 	var pending_counts: Dictionary = JobManager.get_pending_counts() if JobManager != null and JobManager.has_method("get_pending_counts") else {}
 	# Cache active jobs union once — avoids re-scanning all jobs per _count_pending_jobs_near call
@@ -6733,7 +6774,7 @@ func _seed_construction_jobs() -> void:
 		if settlements.is_empty():
 			_seed_bootstrap_jobs_near_pawn_cluster()
 			return
-	var max_settlements_this_pass: int = 1 if GameManager.game_speed >= 50.0 else 2
+	var max_settlements_this_pass: int = 2 if GameManager.game_speed >= 50.0 else 4
 	var settlements_seen: int = 0
 	var start_idx: int = _construction_seed_cursor % settlements.size()
 	for step in range(settlements.size()):
@@ -6761,10 +6802,11 @@ func _seed_construction_jobs() -> void:
 			continue
 		settlements_seen += 1
 		# Quick check: if this settlement already has many pending jobs, skip the expensive scan
-		var nearby_pending: int = _count_pending_jobs_near(-1, center_tile, 8, _cached_active_jobs)
+		var nearby_pending_builds: int = _count_pending_build_jobs_near(center_tile, 10, _cached_active_jobs)
 		var cold_uncovered_site: int = ColonySimServices.count_cold_uncovered_pawns(center_rk) \
 				if ColonySimServices != null else 0
-		if nearby_pending >= 5 and cold_uncovered_site <= 0:
+		var site_warmth_press: float = ColonySimServices.get_warmth_pressure(center_rk) if ColonySimServices != null else 0.0
+		if nearby_pending_builds >= 4 and cold_uncovered_site <= 0 and site_warmth_press < 0.35:
 			continue
 		# Scan local features (beds, walls, hearths, etc.) — wide enough to see hearths
 		var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 12)
@@ -6794,10 +6836,11 @@ func _seed_construction_jobs() -> void:
 		var jobs_this_settlement: int = 0
 		var job_cap: int = int(build_priorities.get("job_cap", 4 if materials_crisis else 7))
 		if seeding_proto:
-			job_cap = mini(job_cap, 4)
+			job_cap = mini(job_cap, 6)
 		var ambition_blocked: bool = _seeder_ambition_blocked(center_rk)
 		if seeding_proto:
-			ambition_blocked = true
+			# Proto still gets survival builds (hearth/storage/beds); block only fancy tier.
+			ambition_blocked = site_warmth_press < 0.20 and float(build_priorities.get("storage_press", 0.0)) < 0.35
 		# Priority 0: Beds when housing crisis is critical (formal only — avoid wall-ring grey boxes on proto camps)
 		if not seeding_proto and ColonySimServices != null and ColonySimServices.get_housing_pressure() > 0.8 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			var need_beds_crisis: int = maxi(3, int(ceil(float(local_pop) * 0.75)))
@@ -6841,7 +6884,7 @@ func _seed_construction_jobs() -> void:
 				if stock_wood + stock_stone > 0 or local_pop <= 6:
 					var t: Vector2i = _find_build_tile_near(center_tile, 4)
 					if t.x >= 0 and not JobManager.has_job_at(t):
-						var j: Job = _post_seeded_job(Job.Type.BUILD_FIRE_PIT, t, 7, 12, "warmth_coverage", "settlement", center_rk)
+						var j: Job = _post_seeded_job(Job.Type.BUILD_FIRE_PIT, t, 9, 12, "warmth_coverage", "settlement", center_rk)
 						if j != null:
 							posted += 1
 							jobs_this_settlement += 1
@@ -6863,7 +6906,7 @@ func _seed_construction_jobs() -> void:
 				if pending_storage == 0:
 					var t: Vector2i = _find_build_tile_near(center_tile, 4)
 					if t.x >= 0 and not JobManager.has_job_at(t):
-						var j: Job = _post_seeded_job(Job.Type.BUILD_STORAGE_HUT, t, 6, 15, "wood_pile_pressure", "settlement", center_rk)
+						var j: Job = _post_seeded_job(Job.Type.BUILD_STORAGE_HUT, t, 8, 15, "wood_pile_pressure", "settlement", center_rk)
 						if j != null:
 							posted += 1
 							jobs_this_settlement += 1

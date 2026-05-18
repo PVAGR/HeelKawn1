@@ -4418,7 +4418,15 @@ func _tick_idle() -> void:
 			base_bias += 2
 		# When fed, nudge build/gather only if the pawn or colony has a real need.
 		if not food_emergency:
-			var colony_needs_build: bool = crisis_warmth_pressure > 0.25 \
+			var local_warmth_press: float = 0.0
+			if ColonySimServices != null and data != null and SettlementMemory != null:
+				var pawn_rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
+				var center_rk: int = SettlementMemory.get_center_region_for_region(pawn_rk)
+				if center_rk >= 0:
+					local_warmth_press = ColonySimServices.get_warmth_pressure(center_rk)
+			var warmth_need: float = maxf(crisis_warmth_pressure, local_warmth_press)
+			var colony_needs_build: bool = pawn_cold \
+					or warmth_need > 0.20 \
 					or crisis_housing_pressure > 0.5 \
 					or crisis_cooking_pressure > 0.3
 			if pawn_cold or colony_needs_build:
@@ -4450,7 +4458,17 @@ func _tick_idle() -> void:
 						if crisis_cooking_pressure > 0.2 or cook_boost > 4:
 							base_bias += cook_boost
 				if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH:
-					base_bias -= 1
+					if warmth_need > 0.25 or crisis_housing_pressure > 0.45:
+						base_bias -= 4
+					elif crisis_food_pressure < 0.15:
+						base_bias -= 2
+					else:
+						base_bias -= 1
+			if crisis_food_pressure < 0.12 and warmth_need > 0.18:
+				match int(j.type):
+					_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_BED, \
+					_Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES:
+						base_bias += 5
 
 		# Crisis priority bonus (snapshot pressures once per claim pass).
 		# Boost BUILD_BED jobs during housing crisis
@@ -4889,7 +4907,11 @@ func _tick_idle() -> void:
 	var wander_chance: float = WANDER_CHANCE_PER_TICK * wanderlust2 * (1.0 + maxf(0.0, wander_score - UTILITY_WANDER_THRESHOLD))
 	if preferred_idle_action == "wander":
 		wander_chance *= 1.6
-	if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(wander_chance, 0.0, 0.35), _pawn_salt(11)):
+	if ColonySimServices != null and ColonySimServices.get_food_pressure() < 0.22:
+		wander_chance *= 2.2
+	if data != null and data.mood >= 55.0:
+		wander_chance *= 1.35
+	if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(wander_chance, 0.0, 0.42), _pawn_salt(11)):
 		_start_wander()
 
 
@@ -10531,9 +10553,11 @@ func _audit_claim_failure_reason(visible_candidates: Array) -> String:
 func _try_post_hobby_build_job() -> void:
 	if data == null or _world == null or JobManager == null or ColonySimServices == null:
 		return
-	if not ColonySimServices.colony_contentment_period():
+	var relaxed: bool = ColonySimServices.colony_contentment_period() \
+			or (ColonySimServices.get_food_pressure() < 0.20 and data.mood >= 50.0)
+	if not relaxed:
 		return
-	if data.mood < 55.0:
+	if data.mood < 48.0:
 		return
 	if data.hunger <= HUNGER_EAT_THRESHOLD or data.rest <= REST_SLEEP_THRESHOLD:
 		return

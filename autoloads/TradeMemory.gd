@@ -67,10 +67,10 @@ func _on_game_tick(tick: int) -> void:
 
 
 func _try_create_trade_routes(tick: int) -> void:
-	if SettlementMemory == null or SettlementMemory.get_formal_settlement_count() <= 0:
+	if SettlementMemory == null:
 		return
 	
-	# Get all active settlements
+	# Get all active settlements (formal first, then well-developed proto camps).
 	var active_settlements: Array = []
 	for st in SettlementMemory.get_formal_settlements():
 		if st is Dictionary:
@@ -79,6 +79,16 @@ func _try_create_trade_routes(tick: int) -> void:
 				var center: int = int(st.get("center_region", -1))
 				if center >= 0:
 					active_settlements.append(center)
+	if active_settlements.size() < 2:
+		for st in SettlementMemory.get_proto_sites():
+			if st is not Dictionary:
+				continue
+			var sd: Dictionary = st as Dictionary
+			if int(sd.get("population", 0)) < 5:
+				continue
+			var center_proto: int = int(sd.get("center_region", -1))
+			if center_proto >= 0 and not active_settlements.has(center_proto):
+				active_settlements.append(center_proto)
 	
 	# Need at least 2 settlements for trade
 	if active_settlements.size() < 2:
@@ -312,18 +322,28 @@ func ensure_route_between(from_settlement: int, to_settlement: int, tick: int) -
 		return
 	if _route_exists(from_settlement, to_settlement):
 		return
+	var goods: Dictionary = _generate_trade_goods(from_settlement)
+	if goods.is_empty():
+		goods = {"food": TRADE_GOODS_PER_ROUTE}
 	trade_routes.append({
 		"route_id": _next_route_id,
 		"from_settlement": from_settlement,
 		"to_settlement": to_settlement,
 		"caravan_pawn_id": -1,
-		"goods": {},
-		"progress": 0.0,
+		"goods": goods,
+		"progress": 0.05,
 		"status": "en_route",
 		"created_tick": tick,
 		"last_updated_tick": tick,
 	})
 	_next_route_id += 1
+	if WorldMemory != null:
+		WorldMemory.record_event({
+			"type": "trade_route_started",
+			"tick": tick,
+			"from": from_settlement,
+			"to": to_settlement,
+		})
 
 
 func _goods_key_to_item_type(key: String) -> int:

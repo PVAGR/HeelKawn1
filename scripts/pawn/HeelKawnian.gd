@@ -5604,26 +5604,45 @@ func _try_complete_knowledge_teaching() -> bool:
 	if teacher_known.is_empty():
 		return false
 	var at_risk: Array = KnowledgeSystem.get_at_risk_knowledge_types() if KnowledgeSystem.has_method("get_at_risk_knowledge_types") else []
+	var teacher_drive: String = _teaching_drive_for_pawn(self)
+	var spawner: PawnSpawner = _resolve_pawn_spawner()
+	var candidates: Array = _alive_pawns_from_spawner(spawner)
 	var best_student: HeelKawnian = null
 	var best_knowledge: int = -1
-	var best_score: int = -999999
-	for p in get_tree().get_nodes_in_group("pawns"):
+	var best_score: float = -INF
+	var scan_count: int = 0
+	for p in candidates:
+		scan_count += 1
+		if scan_count > 48:
+			break
 		if p == self or not is_instance_valid(p) or p.data == null:
 			continue
-		if position.distance_to(p.position) > 96.0:
+		var dist_sq: float = position.distance_squared_to(p.position)
+		if dist_sq > 96.0 * 96.0:
 			continue
 		var student_id: int = int(p.data.id)
 		var student_known: Array = KnowledgeSystem.get_pawn_knowledge(student_id) if KnowledgeSystem.has_method("get_pawn_knowledge") else []
+		var peer_drive: String = _teaching_drive_for_pawn(p)
+		var rapport: float = float(data.get_social_rapport(student_id))
 		for kt_any in teacher_known:
 			var kt: int = int(kt_any)
 			if kt in student_known:
 				continue
-			var score: int = 10
+			var score: float = 10.0
 			if kt in at_risk:
-				score += 100
-			var rapport_v: Variant = data.get("social_rapport") if data.has_method("get") else null
-			if rapport_v is Dictionary:
-				score += int((rapport_v as Dictionary).get(student_id, 0))
+				score += 110.0
+			if teacher_drive in ["teach", "preserve"] and kt in at_risk:
+				score += 25.0
+			score += rapport * 0.35
+			score -= sqrt(dist_sq) * 0.05
+			if int(data.household_id) >= 0 and int(data.household_id) == int(p.data.household_id):
+				score += 6.0
+			if int(data.settlement_id) >= 0 and int(data.settlement_id) == int(p.data.settlement_id):
+				score += 4.0
+			if peer_drive in ["learn", "practice", "recover", "survive"]:
+				score += 8.0
+			elif peer_drive == "teach":
+				score -= 4.0
 			if score > best_score:
 				best_score = score
 				best_student = p
@@ -7661,8 +7680,11 @@ func _maybe_start_teaching() -> bool:
 	var spawner: PawnSpawner = _resolve_pawn_spawner()
 	if spawner == null:
 		return false
+	var my_drive: String = _teaching_drive_for_pawn(self)
+	var sk: String = data.highest_affinity_skill()
+	var my_xp: int = data.tracked_skill_xp(sk)
 	var best_peer: HeelKawnian = null
-	var best_d: int = 1_000_000
+	var best_score: float = -INF
 	var seen: int = 0
 	for p in _alive_pawns_from_spawner(spawner):
 		seen += 1
@@ -7673,17 +7695,32 @@ func _maybe_start_teaching() -> bool:
 		var d2: int = data.tile_pos.distance_squared_to(p.data.tile_pos)
 		if d2 > 81:
 			continue
-		if d2 < best_d:
-			best_d = d2
+		var peer_xp: int = p.data.tracked_skill_xp(sk)
+		var gap: int = my_xp - peer_xp
+		if gap < 6:
+			continue
+		var score: float = float(gap)
+		score -= sqrt(float(d2)) * 0.35
+		score += float(data.get_social_rapport(int(p.data.id))) * 0.25
+		if int(data.household_id) >= 0 and int(data.household_id) == int(p.data.household_id):
+			score += 5.0
+		if int(data.settlement_id) >= 0 and int(data.settlement_id) == int(p.data.settlement_id):
+			score += 3.0
+		if my_drive == "teach" or my_drive == "preserve":
+			var peer_drive: String = _teaching_drive_for_pawn(p)
+			if peer_drive in ["learn", "practice", "survive", "recover"]:
+				score += 7.0
+			elif peer_drive == "teach":
+				score -= 3.0
+		if score > best_score:
+			best_score = score
 			best_peer = p
 	if best_peer == null:
 		return false
-	var sk: String = data.highest_affinity_skill()
-	var my_xp: int = data.tracked_skill_xp(sk)
 	var peer_xp: int = best_peer.data.tracked_skill_xp(sk)
-	if my_xp + 6 <= peer_xp:
-		return false
-	var student_learned: bool = best_peer.data.gain_skill_xp(sk, 2)
+	var mentor_bonus: int = 1 if (my_drive == "teach" or my_drive == "preserve") else 0
+	var xp_gain: int = clampi(2 + int((my_xp - peer_xp) / 24) + mentor_bonus, 2, 5)
+	var student_learned: bool = best_peer.data.gain_skill_xp(sk, xp_gain)
 	data.add_social_rapport(int(best_peer.data.id), 2)
 	best_peer.data.add_social_rapport(int(data.id), 2)
 	data.mood = min(100.0, data.mood + 0.4)
@@ -7697,6 +7734,15 @@ func _maybe_start_teaching() -> bool:
 	if student_learned:
 		_record_teaching_memory_fact(best_peer, sk)
 	return true
+
+
+func _teaching_drive_for_pawn(pawn: HeelKawnian) -> String:
+	if pawn == null or not is_instance_valid(pawn):
+		return ""
+	if HeelKawnianManager == null or not HeelKawnianManager.has_method("get_development_profile_for_pawn"):
+		return ""
+	var profile: Dictionary = HeelKawnianManager.get_development_profile_for_pawn(pawn)
+	return str(profile.get("development_drive", ""))
 
 
 func _record_teaching_memory_fact(student: HeelKawnian, skill_taught: String) -> void:

@@ -10389,6 +10389,23 @@ func _draw() -> void:
 
 	if PROCEDURAL_PIXEL_PAWN:
 		_draw_procedural_pixel_figure(body_origin, body_radius)
+
+	# Clothing + limbs pass so pawns read as full little people (top/bottom/hands/shoes).
+	var apparel_tint: Color = data.apparel_color
+	var top_color: Color = apparel_tint.lightened(0.08)
+	var bottom_color: Color = apparel_tint.darkened(0.12)
+	draw_rect(Rect2(body_origin + Vector2(-body_radius * 0.52, -body_radius * 0.22), Vector2(body_radius * 1.04, body_radius * 0.5)), top_color, true)
+	draw_rect(Rect2(body_origin + Vector2(-body_radius * 0.45, body_radius * 0.12), Vector2(body_radius * 0.9, body_radius * 0.45)), bottom_color, true)
+	var hand_color: Color = data.color.lightened(0.03)
+	draw_circle(body_origin + Vector2(-body_radius * 0.88, -0.05), body_radius * 0.18, hand_color)
+	draw_circle(body_origin + Vector2(body_radius * 0.88, -0.05), body_radius * 0.18, hand_color)
+	var shoe_color: Color = Color(0.12, 0.10, 0.09, 0.95)
+	draw_rect(Rect2(body_origin + Vector2(-body_radius * 0.48, body_radius * 0.72), Vector2(body_radius * 0.33, body_radius * 0.16)), shoe_color, true)
+	draw_rect(Rect2(body_origin + Vector2(body_radius * 0.15, body_radius * 0.72), Vector2(body_radius * 0.33, body_radius * 0.16)), shoe_color, true)
+	var head_gear: Variant = data.equipped_gear.get(3, null)  # Slot.ACCESSORY
+	if head_gear != null:
+		draw_arc(body_origin + Vector2(0.0, -body_radius * 0.62), body_radius * 0.56, PI, TAU, 10, Color(0.16, 0.14, 0.12, 0.95), 1.1, true)
+		draw_line(body_origin + Vector2(-body_radius * 0.55, -body_radius * 0.45), body_origin + Vector2(body_radius * 0.55, -body_radius * 0.45), Color(0.16, 0.14, 0.12, 0.95), 0.9, true)
 	
 	# Outline color communicates state (simplified)
 	var outline_c: Color = Color.BLACK
@@ -10421,6 +10438,16 @@ func _draw() -> void:
 		# Small weapon shape: 2px line + 1px crossguard
 		draw_line(w_pos, w_pos + Vector2(0.0, 4.0), weapon_color, 1.0, true)
 		draw_line(w_pos + Vector2(-1.0, 1.0), w_pos + Vector2(1.0, 1.0), weapon_color, 1.0, true)
+	var offhand_gear: Variant = data.equipped_gear.get(4, null)  # Slot.OFFHAND
+	if offhand_gear != null and (not offhand_gear.has_method("is_broken") or not offhand_gear.is_broken()):
+		var offhand_pos: Vector2 = body_origin + Vector2(-body_radius - 2.0, -0.5)
+		draw_rect(Rect2(offhand_pos, Vector2(2.0, 2.0)), Color(0.54, 0.62, 0.78, 0.95), true)
+		draw_rect(Rect2(offhand_pos + Vector2(0.45, 0.45), Vector2(1.1, 1.1)), Color(0.22, 0.26, 0.34, 0.9), false)
+	var tool_gear: Variant = data.equipped_gear.get(2, null)  # Slot.TOOL
+	if tool_gear != null and (not tool_gear.has_method("is_broken") or not tool_gear.is_broken()):
+		var tool_pos: Vector2 = body_origin + Vector2(body_radius + 1.0, 2.2)
+		draw_line(tool_pos, tool_pos + Vector2(0.0, 2.8), Color(0.72, 0.62, 0.46, 0.95), 0.9, true)
+		draw_line(tool_pos + Vector2(-1.0, 0.8), tool_pos + Vector2(1.2, 0.8), Color(0.72, 0.62, 0.46, 0.95), 0.9, true)
 
 	# --- Carrying indicator: tiny colored square showing what pawn is hauling ---
 	if data.is_carrying():
@@ -10428,6 +10455,12 @@ func _draw() -> void:
 		var carry_pos: Vector2 = body_origin + Vector2(body_radius + 1.0, 0.5)
 		draw_rect(Rect2(carry_pos, Vector2(1.5, 1.5)), carry_c, true)
 		draw_rect(Rect2(carry_pos, Vector2(1.5, 1.5)), Color(0, 0, 0, 0.4), false)
+	var inv_slots_used: int = data.inventory.size() if data.inventory != null else 0
+	if inv_slots_used > 0:
+		var inv_pos: Vector2 = body_origin + Vector2(-body_radius - 2.3, 1.1)
+		var inv_h: float = clampf(float(inv_slots_used) * 0.45, 0.8, 2.4)
+		draw_rect(Rect2(inv_pos, Vector2(1.4, 2.6)), Color(0.16, 0.13, 0.10, 0.95), true)
+		draw_rect(Rect2(inv_pos + Vector2(0.2, 2.4 - inv_h), Vector2(1.0, inv_h)), Color(0.74, 0.58, 0.30, 0.95), true)
 
 	# Profession indicator: visible badge above the pawn
 	if data.current_profession != HeelKawnianData.Profession.NONE:

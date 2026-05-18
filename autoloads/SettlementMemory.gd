@@ -467,6 +467,8 @@ func recompute(_world: World) -> void:
         var st_center: Vector2i = Vector2i(int(st.get("center_x", 0)), int(st.get("center_y", 0)))
         var st_culture: String = str(st.get("culture_name", ""))
         settlement_founded.emit(st_id, st_center, st_culture)
+        if DiscoveryGate != null:
+            DiscoveryGate.unlock("first_settlement")
         # DEAD BRAIN REVIVED: Auto-appoint governor for new settlements
         _appoint_initial_governor(st)
         var st_name: String = str(st.get("state", ""))
@@ -729,8 +731,10 @@ func describe_infrastructure_formal_gate(st: Dictionary, center_tile: Vector2i) 
         "member_count": int(st.get("population", 0)),
         "founding_tick": GameManager.tick_count if GameManager != null else 0,
     }
-    var pop: int = int(st.get("population", 0))
-    if pop < 5:
+    var indexed: Array[HeelKawnian] = _pawns_in_settlement_indexed(st)
+    var pop: int = maxi(int(st.get("population", 0)), indexed.size())
+    gate["member_count"] = pop
+    if pop < 3:
         gate["reason"] = "population_too_small"
         return gate
     var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 14)
@@ -738,7 +742,8 @@ func describe_infrastructure_formal_gate(st: Dictionary, center_tile: Vector2i) 
     var hearths: int = int(features.get("hearth", 0))
     var storage_huts: int = int(features.get("storage_hut", 0))
     var has_stockpile: bool = StockpileManager != null and StockpileManager.zone_count() > 0
-    if beds < 2:
+    var beds_needed: int = 2 if pop >= 6 else 1
+    if beds < beds_needed:
         gate["reason"] = "needs_beds"
         return gate
     if hearths < 1:
@@ -1358,7 +1363,7 @@ func _count_beds_in_region_set(world: World, region_set: Dictionary) -> int:
 ## larger settlement, if within MAX_MERGE_REGION_DISTANCE regions. This prevents
 ## the map from fragmenting into dozens of 1-2 pawn "settlements" that can't
 ## build anything.
-const MIN_MERGE_POP: int = 5
+const MIN_MERGE_POP: int = 4
 const MAX_MERGE_REGION_DISTANCE: int = 6  # in region units (each region = 16x16 tiles)
 
 func merge_small_settlements() -> void:
@@ -1852,6 +1857,41 @@ func get_ruler_pawn_id(settlement_id: int) -> int:
         if int(st.get("center_region", -1)) == settlement_id:
             return int(st.get("current_ruler_id", -1))
     return -1
+
+
+## Pawn who should post/direct survival construction (monarch, council head, or top influence).
+func get_construction_chief_pawn_id(settlement_id: int) -> int:
+    var ruler_id: int = get_ruler_pawn_id(settlement_id)
+    if ruler_id >= 0:
+        return ruler_id
+    for st_v in settlements:
+        if not (st_v is Dictionary):
+            continue
+        var st: Dictionary = st_v as Dictionary
+        if int(st.get("center_region", -1)) != settlement_id:
+            continue
+        var council_v: Variant = st.get("council_ids", PackedInt32Array())
+        if council_v is PackedInt32Array:
+            var council: PackedInt32Array = council_v as PackedInt32Array
+            if council.size() > 0:
+                return int(council[0])
+        var set_pawns: Array[HeelKawnian] = _pawns_in_settlement_indexed(st)
+        if set_pawns.is_empty():
+            return -1
+        var best_id: int = -1
+        var best_inf: float = -1.0
+        for p in set_pawns:
+            if p == null or p.data == null:
+                continue
+            var inf: float = float(p.data.influence)
+            if int(p.data.life_path) == 3:
+                inf += float(int(p.data.life_path_progress)) * 0.5
+            if inf > best_inf:
+                best_inf = inf
+                best_id = int(p.data.id)
+        return best_id
+    return -1
+
 
 ## ARCHITECT TASK 2: Internal method to set a settlement's ruler and governance type.
 ## This function is called by AuthoritySystem to finalize leadership changes.
@@ -3996,8 +4036,8 @@ func _pawn_neglects_hearth_duty(
     var cold: int = ColonySimServices.count_cold_uncovered_pawns(settlement_id)
     if cold <= 0 or hearths + pending > 0:
         return false
-    var ruler_id: int = get_ruler_pawn_id(settlement_id)
-    if pawn_id != ruler_id:
+    var chief_id: int = get_construction_chief_pawn_id(settlement_id)
+    if pawn_id != chief_id:
         return false
     var carrying: int = int(pawn_data.get("carrying", Item.Type.NONE))
     if carrying != Item.Type.WOOD:

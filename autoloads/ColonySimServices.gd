@@ -311,7 +311,7 @@ func leader_may_skip_contentment_gate(center_region: int) -> bool:
 	var sid: int = SettlementMemory.get_settlement_id_for_region(rk)
 	if sid < 0:
 		return false
-	var ruler_id: int = SettlementMemory.get_ruler_pawn_id(sid)
+	var ruler_id: int = SettlementMemory.get_construction_chief_pawn_id(sid)
 	if ruler_id < 0:
 		return false
 	if HeelKawnianManager == null:
@@ -326,6 +326,29 @@ func leader_may_skip_contentment_gate(center_region: int) -> bool:
 	var profile: Dictionary = HeelKawnianManager.get_development_profile_for_pawn(ruler_pawn)
 	var drive: String = str(profile.get("development_drive", "")).to_lower()
 	return drive in ["innovate", "expand", "lead", "preserve", "bond"]
+
+
+## Fed colony with survival pressure: throttle endless chop/forage seeding.
+func should_throttle_harvest_seeding() -> bool:
+	if _food_press >= 0.85:
+		return false
+	if _food_press < 0.22:
+		return false
+	if _warmth_press > 0.12 or _housing_press > 0.35 or _storage_press > 0.25:
+		return true
+	return false
+
+
+func get_open_chop_job_cap() -> int:
+	if should_throttle_harvest_seeding():
+		return 18
+	return 50
+
+
+func harvest_chop_cap_for_discovered_seed(pop: int) -> int:
+	if should_throttle_harvest_seeding():
+		return maxi(6, int(pop / 3))
+	return maxi(12, int(ceil(float(pop) * 1.2)))
 
 
 ## 0 = pawns warm enough near hearths; 1 = many cold pawns lack fire coverage.

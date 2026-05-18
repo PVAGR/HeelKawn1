@@ -2856,10 +2856,15 @@ func _on_game_tick(tick: int) -> void:
 		SettlementMemory.count_pawns_per_settlement()
 		SettlementMemory.merge_small_settlements()
 
-	# Settlement leader direct construction: rulers post build jobs based on
+	# Settlement leader direct construction: chiefs post build jobs based on
 	# settlement needs, bypassing the slow worldbox loop.
-	# DORMANT WORLD: Only runs after first settlement
-	if SettlementMemory != null and _is_main_lane_tick(tick, _high_speed_interval(50, 100, 300), 67) and DiscoveryGate.is_unlocked("first_settlement"):
+	var leader_construction_ok: bool = SettlementMemory != null and SettlementMemory.settlements.size() > 0
+	if DiscoveryGate != null and DiscoveryGate.is_unlocked("first_settlement"):
+		leader_construction_ok = true
+	if SettlementMemory != null and SettlementMemory.get_proto_sites().size() > 0:
+		leader_construction_ok = true
+	if SettlementMemory != null and leader_construction_ok \
+			and _is_main_lane_tick(tick, _high_speed_interval(50, 100, 300), 67):
 		var total_leader_posts: int = 0
 		for st_v in SettlementMemory.settlements:
 			if not (st_v is Dictionary):
@@ -2921,7 +2926,11 @@ func _on_game_tick(tick: int) -> void:
 		# Spread heavy planning across adjacent ticks to reduce one-tick hitch spikes.
 		# DORMANT WORLD: Trade planner only runs after first trade route
 		var trade_offset: int = maxi(1, planner_interval / 3)
-		if _is_main_lane_tick(tick, planner_interval, trade_offset) and DiscoveryGate.is_unlocked("first_trade"):
+		var trade_ok: bool = DiscoveryGate != null and (
+				DiscoveryGate.is_unlocked("first_trade")
+				or DiscoveryGate.is_unlocked("first_settlement")
+				or (SettlementMemory != null and SettlementMemory.get_proto_sites().size() >= 2))
+		if _is_main_lane_tick(tick, planner_interval, trade_offset) and trade_ok:
 			t0 = Time.get_ticks_usec()
 			TradePlanner.plan(_world, self, false)
 			section_us["trade_planner"] = Time.get_ticks_usec() - t0
@@ -6226,6 +6235,26 @@ func _trim_open_chop_jobs_under_food_crisis() -> void:
 			break
 
 
+func _trim_excess_open_chop_when_prioritizing_builds() -> void:
+	if JobManager == null or ColonySimServices == null:
+		return
+	var cap: int = ColonySimServices.get_open_chop_job_cap()
+	var open_chop: int = JobManager.count_open_by_type(Job.Type.CHOP)
+	if open_chop <= cap:
+		return
+	var trimmed: int = 0
+	for jv in JobManager.get_active_jobs_union():
+		if not (jv is Job):
+			continue
+		var j: Job = jv as Job
+		if j.type != Job.Type.CHOP or j.state != Job.State.OPEN:
+			continue
+		JobManager.cancel(j, "build_priority_reprieve")
+		trimmed += 1
+		if open_chop - trimmed <= cap:
+			break
+
+
 ## DORMANT WORLD: Seed harvest jobs for discovered tiles near living pawns.
 ## Uses per-capita needs limits — not every resource gets a job.
 ## Only scans tiles within a radius of each living pawn (not the whole 256x256 map).
@@ -6240,6 +6269,8 @@ func _seed_jobs_for_discovered_area() -> void:
 	var max_hunt: int = maxi(int(ceil(float(pop) * FogOfDiscovery.FOOD_JOBS_PER_PAWN * 0.3)), 1)
 	var max_fish: int = maxi(int(ceil(float(pop) * FogOfDiscovery.FOOD_JOBS_PER_PAWN * 0.2)), 1)
 	var max_chop: int = maxi(int(ceil(float(pop) * FogOfDiscovery.WOOD_JOBS_PER_PAWN)), 2)
+	if ColonySimServices != null:
+		max_chop = mini(max_chop, ColonySimServices.harvest_chop_cap_for_discovered_seed(pop))
 	var max_mine: int = maxi(int(ceil(float(pop) * FogOfDiscovery.STONE_JOBS_PER_PAWN)), 1)
 	var food_press: float = ColonySimServices.get_food_pressure() if ColonySimServices != null else 0.0
 	var warmth_press: float = ColonySimServices.get_warmth_pressure() if ColonySimServices != null else 0.0
@@ -6254,7 +6285,10 @@ func _seed_jobs_for_discovered_area() -> void:
 		max_chop = mini(max_chop, maxi(2, int(pop / 5)))
 		max_forage = mini(max_forage, maxi(4, int(pop / 2)))
 		max_mine = mini(max_mine, maxi(2, int(pop / 4)))
-		_trim_open_chop_jobs_under_food_crisis()
+		_trim_excess_open_chop_when_prioritizing_builds()
+	elif ColonySimServices != null and ColonySimServices.should_throttle_harvest_seeding():
+		max_chop = mini(max_chop, ColonySimServices.harvest_chop_cap_for_discovered_seed(pop))
+		_trim_excess_open_chop_when_prioritizing_builds()
 	var forage_posted: int = 0
 	var hunt_posted: int = 0
 	var fish_posted: int = 0
@@ -6581,7 +6615,7 @@ func _stamp_seeder_job(job: Job, reason: String, settlement_id: int = -1, visibl
 		return
 	var issuer_id: int = -1
 	if settlement_id >= 0 and SettlementMemory != null:
-		issuer_id = SettlementMemory.get_ruler_pawn_id(settlement_id)
+		issuer_id = SettlementMemory.get_construction_chief_pawn_id(settlement_id)
 	JobManager.stamp_seeder_metadata(job, reason, visible_to, issuer_id)
 
 
@@ -6594,6 +6628,13 @@ func _post_seeded_job(
 		visible_to: String = "nearby",
 		settlement_id: int = -1,
 ) -> Job:
+	if _world != null and _world.data != null:
+		if jtype == Job.Type.CHOP and _world.data.get_feature(tile.x, tile.y) != TileFeature.Type.TREE:
+			return null
+		if jtype == Job.Type.FORAGE and _world.data.get_feature(tile.x, tile.y) != TileFeature.Type.FERTILE_SOIL:
+			return null
+		if jtype == Job.Type.MINE and _world.data.get_feature(tile.x, tile.y) != TileFeature.Type.ORE_VEIN:
+			return null
 	var job: Job = JobManager.post(jtype, tile, priority, work_ticks)
 	if job != null:
 		_stamp_seeder_job(job, reason, settlement_id, visible_to)

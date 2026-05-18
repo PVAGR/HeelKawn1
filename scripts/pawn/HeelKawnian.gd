@@ -313,10 +313,26 @@ func _carried_plus_staged_qty(item_type: int) -> int:
 	return n + int(_staged_build_materials.get(item_type, 0))
 
 
+func _resolved_cost_entries_for_build(job_type: int) -> Array:
+	var entries: Array = _cost_entries_for_build(job_type)
+	if job_type != _Job.Type.BUILD_FIRE_PIT and job_type != _Job.Type.BUILD_HEARTH:
+		return entries
+	var stone_available: bool = _carried_plus_staged_qty(_Item.Type.STONE) > 0
+	if StockpileManager != null and StockpileManager.total_count_of(_Item.Type.STONE) > 0:
+		stone_available = true
+	if stone_available:
+		return entries
+	var wood_only: Array = []
+	for entry in entries:
+		if int(entry.get("item", _Item.Type.NONE)) != _Item.Type.STONE:
+			wood_only.append(entry)
+	return wood_only
+
+
 func _has_all_build_materials(job: Job) -> bool:
 	if job == null:
 		return true
-	for entry in _cost_entries_for_build(job.type):
+	for entry in _resolved_cost_entries_for_build(job.type):
 		var it: int = int(entry.get("item", _Item.Type.NONE))
 		var q: int = int(entry.get("qty", 0))
 		if it == _Item.Type.NONE or q <= 0:
@@ -329,7 +345,7 @@ func _has_all_build_materials(job: Job) -> bool:
 func _next_missing_build_material(job: Job) -> Dictionary:
 	if job == null:
 		return {}
-	for entry in _cost_entries_for_build(job.type):
+	for entry in _resolved_cost_entries_for_build(job.type):
 		var it: int = int(entry.get("item", _Item.Type.NONE))
 		var q: int = int(entry.get("qty", 0))
 		if it == _Item.Type.NONE or q <= 0:
@@ -351,7 +367,7 @@ func _stage_carried_build_materials() -> void:
 func _consume_all_build_materials(job: Job) -> void:
 	if job == null:
 		return
-	for entry in _cost_entries_for_build(job.type):
+	for entry in _resolved_cost_entries_for_build(job.type):
 		var it: int = int(entry.get("item", _Item.Type.NONE))
 		var need: int = int(entry.get("qty", 0))
 		if it == _Item.Type.NONE or need <= 0:
@@ -5727,7 +5743,7 @@ func _begin_job(job: Job) -> void:
 	# Build jobs need raw materials in hand before we walk to the build site.
 	# If we don't already have the right item in sufficient quantity, bounce
 	# to the stockpile first.
-	if not _cost_entries_for_build(job.type).is_empty():
+	if not _resolved_cost_entries_for_build(job.type).is_empty():
 		if not _has_all_build_materials(job):
 			_begin_fetching_build_materials(job)
 			return
@@ -6079,7 +6095,7 @@ func _try_take_build_material_from_nearby_stockpile(item_type: int, need_qty: in
 func _try_take_build_materials_from_nearby_stockpile(job: Job) -> bool:
 	if job == null:
 		return false
-	for entry in _cost_entries_for_build(job.type):
+	for entry in _resolved_cost_entries_for_build(job.type):
 		var it: int = int(entry.get("item", _Item.Type.NONE))
 		var q: int = int(entry.get("qty", 0))
 		if it == _Item.Type.NONE or q <= 0:
@@ -6588,7 +6604,7 @@ func _complete_current_job() -> void:
 ## Place the right TileFeature for a build job, consuming the carried materials.
 ## If the pawn isn't carrying the right material, re-fetch instead of silently failing.
 func _finish_build(job: Job) -> void:
-	if not _cost_entries_for_build(job.type).is_empty():
+	if not _resolved_cost_entries_for_build(job.type).is_empty():
 		if not _has_all_build_materials(job):
 			if not _try_take_build_materials_from_nearby_stockpile(job):
 				_current_job.work_ticks_done = 0
@@ -6773,7 +6789,7 @@ func _finish_shelter_build(job: Job) -> bool:
 		
 		return true
 	
-	if not _cost_entries_for_build(job.type).is_empty():
+	if not _resolved_cost_entries_for_build(job.type).is_empty():
 		if not _has_all_build_materials(job):
 			if not _try_take_build_materials_from_nearby_stockpile(job):
 				_current_job.work_ticks_done = 0
@@ -6889,7 +6905,7 @@ func _finish_registry_build(job: Job) -> void:
 	var feature_type: int = int(building.get("feature_type", TileFeature.Type.NONE))
 	if feature_type == TileFeature.Type.NONE:
 		return
-	if not _cost_entries_for_build(job.type).is_empty():
+	if not _resolved_cost_entries_for_build(job.type).is_empty():
 		if not _has_all_build_materials(job):
 			if not _try_take_build_materials_from_nearby_stockpile(job):
 				_current_job.work_ticks_done = 0
@@ -10896,7 +10912,8 @@ func describe_state() -> String:
 			return "Moving"
 		State.WORKING:
 			if _current_job != null:
-				return _verb_for_job(_current_job.type)
+				var prog: String = "%d/%d" % [_current_job.work_ticks_done, _current_job.work_ticks_needed]
+				return "%s (%s)" % [_verb_for_job(_current_job.type), prog]
 			return "Working"
 		State.HAULING:
 			if data != null and data.is_carrying():

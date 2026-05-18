@@ -84,7 +84,7 @@ func _try_create_trade_routes(tick: int) -> void:
 			if st is not Dictionary:
 				continue
 			var sd: Dictionary = st as Dictionary
-			if int(sd.get("population", 0)) < 5:
+			if int(sd.get("population", 0)) < 3:
 				continue
 			var center_proto: int = int(sd.get("center_region", -1))
 			if center_proto >= 0 and not active_settlements.has(center_proto):
@@ -117,73 +117,108 @@ func _try_create_trade_routes(tick: int) -> void:
 
 
 func _create_trade_route(from_settlement: int, to_settlement: int, tick: int) -> void:
-	# Find a pawn to be the trader
 	var trader_pawn: HeelKawnian = _find_available_trader(from_settlement)
-	if trader_pawn == null:
-		return  # No available traders
-	
-	# Create goods based on settlement surplus
+	var trader_id: int = -1
+	if trader_pawn != null and trader_pawn.data != null:
+		trader_id = int(trader_pawn.data.id)
+
 	var goods: Dictionary = _generate_trade_goods(from_settlement)
-	
-	# Calculate total goods count
+	if goods.is_empty():
+		goods = {"food": TRADE_GOODS_PER_ROUTE}
+
 	var goods_count: int = 0
 	for value in goods.values():
 		goods_count += int(value)
-	
-	# Create route
+
+	var from_tile: Vector2i = SettlementPlanner._center_tile_of_region_key(from_settlement)
+	var to_tile: Vector2i = SettlementPlanner._center_tile_of_region_key(to_settlement)
+	var path: Array = _route_path_tiles(from_tile, to_tile)
+
 	var route: Dictionary = {
 		"route_id": _next_route_id,
 		"from_settlement": from_settlement,
 		"to_settlement": to_settlement,
-		"caravan_pawn_id": int(trader_pawn.data.id),
+		"caravan_pawn_id": trader_id,
 		"goods": goods,
-		"progress": 0.0,
+		"progress": 0.05,
 		"status": "en_route",
 		"created_tick": tick,
-		"last_updated_tick": tick
+		"last_updated_tick": tick,
+		"path": path,
+		"tiles": path,
 	}
-	
+
 	trade_routes.append(route)
 	_next_route_id += 1
-	
-	# Record trade event
+
+	if DiscoveryGate != null:
+		DiscoveryGate.unlock("first_trade")
+
 	if WorldMemory != null:
 		WorldMemory.record_event({
 			"type": "trade_route_started",
 			"from": from_settlement,
 			"to": to_settlement,
-			"pawn_id": int(trader_pawn.data.id),
+			"pawn_id": trader_id,
 			"goods_count": goods_count,
-			"tick": tick
+			"tick": tick,
 		})
 
 	if OS.is_debug_build():
-		print("[TradeMemory] Created route %d: %d → %d (%d goods)" % [
-			route.route_id, from_settlement, to_settlement, goods_count
+		print("[TradeMemory] Created route %d: %d → %d (%d goods, path=%d)" % [
+			route.route_id, from_settlement, to_settlement, goods_count, path.size()
 		])
 
 
-func _find_available_trader(settlement_region: int) -> HeelKawnian:
+func _route_path_tiles(from_tile: Vector2i, to_tile: Vector2i) -> Array:
+	var path: Array = []
+	var steps: int = maxi(absi(to_tile.x - from_tile.x), absi(to_tile.y - from_tile.y))
+	steps = maxi(steps, 1)
+	for i in range(steps + 1):
+		var t: float = float(i) / float(steps)
+		var tile: Vector2i = Vector2i(
+				int(lerpf(float(from_tile.x), float(to_tile.x), t)),
+				int(lerpf(float(from_tile.y), float(to_tile.y), t)),
+		)
+		if path.is_empty() or path[path.size() - 1] != tile:
+			path.append(tile)
+	return path
+
+
+func _pawn_in_settlement(pawn: HeelKawnian, settlement_center_rk: int) -> bool:
+	if pawn == null or pawn.data == null or settlement_center_rk < 0:
+		return false
+	var pawn_rk: int = _WM._region_key(pawn.data.tile_pos.x, pawn.data.tile_pos.y)
+	if pawn_rk == settlement_center_rk:
+		return true
+	if SettlementMemory != null:
+		return SettlementMemory.get_center_region_for_region(pawn_rk) == settlement_center_rk
+	return false
+
+
+func _find_available_trader(settlement_center_rk: int) -> HeelKawnian:
 	var _ps: Node = _get_pawn_spawner()
 	if _ps == null:
 		return null
-	
-	# Find pawns in or near the settlement
+
+	var best: HeelKawnian = null
+	var best_score: int = -1
 	for pawn in _ps.pawns:
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue
-		
-		# Check if pawn is in the settlement region
-		var pawn_region: int = _WM._region_key(pawn.data.tile_pos.x, pawn.data.tile_pos.y)
-		if pawn_region != settlement_region:
+		if not _pawn_in_settlement(pawn, settlement_center_rk):
 			continue
-		
-		# Check if pawn is idle or has Trader profession
-		if pawn.data.current_profession == HeelKawnianData.Profession.NONE or \
-		   pawn._state == HeelKawnian.State.IDLE:
-			return pawn
-	
-	return null
+		var score: int = 0
+		if pawn.data.current_profession == HeelKawnianData.Profession.TRADER:
+			score += 4
+		if pawn._state == HeelKawnian.State.IDLE:
+			score += 2
+		elif pawn._state == HeelKawnian.State.WALKING_TO_JOB:
+			score += 1
+		if score > best_score:
+			best_score = score
+			best = pawn
+	return best
 
 
 func _generate_trade_goods(settlement_region: int) -> Dictionary:
@@ -249,7 +284,15 @@ func _complete_trade_route(route_index: int, tick: int) -> void:
 			"from": route.from_settlement,
 			"to": route.to_settlement,
 			"goods_count": goods_total,
-			"tick": tick
+			"tick": tick,
+		})
+		WorldMemory.record_event({
+			"type": "trade_goods_arrived",
+			"from": route.from_settlement,
+			"to": route.to_settlement,
+			"goods": route.get("goods", {}),
+			"goods_count": goods_total,
+			"tick": tick,
 		})
 	
 	if OS.is_debug_build():
@@ -325,6 +368,9 @@ func ensure_route_between(from_settlement: int, to_settlement: int, tick: int) -
 	var goods: Dictionary = _generate_trade_goods(from_settlement)
 	if goods.is_empty():
 		goods = {"food": TRADE_GOODS_PER_ROUTE}
+	var from_tile: Vector2i = SettlementPlanner._center_tile_of_region_key(from_settlement)
+	var to_tile: Vector2i = SettlementPlanner._center_tile_of_region_key(to_settlement)
+	var path: Array = _route_path_tiles(from_tile, to_tile)
 	trade_routes.append({
 		"route_id": _next_route_id,
 		"from_settlement": from_settlement,
@@ -335,8 +381,12 @@ func ensure_route_between(from_settlement: int, to_settlement: int, tick: int) -
 		"status": "en_route",
 		"created_tick": tick,
 		"last_updated_tick": tick,
+		"path": path,
+		"tiles": path,
 	})
 	_next_route_id += 1
+	if DiscoveryGate != null:
+		DiscoveryGate.unlock("first_trade")
 	if WorldMemory != null:
 		WorldMemory.record_event({
 			"type": "trade_route_started",

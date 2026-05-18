@@ -866,20 +866,21 @@ static func _is_structure_build_job(jtype: int) -> bool:
 ## Called every 50 ticks for the ruler of each settlement.
 ## The leader scans settlement needs and posts up to 3 build jobs per cycle.
 static func leader_direct_construction(settlement_id: int) -> int:
-	var sm: Node = _root_node("SettlementMemory")
-	if sm == null or not sm.has_method("get_ruler_pawn_id"):
+	if SettlementMemory == null:
 		return 0
-	var ruler_id: int = int(sm.call("get_ruler_pawn_id", settlement_id))
-	if ruler_id < 0:
+	var chief_id: int = SettlementMemory.get_construction_chief_pawn_id(settlement_id)
+	if chief_id < 0:
 		return 0
-	# Find the ruler's tile position
-	var ruler_data: HeelKawnianData = _pawn_data_for_id(ruler_id)
-	if ruler_data == null:
-		return 0
-	var center: Vector2i = ruler_data.tile_pos
-	# Scan local features
-	var features: Dictionary = _scan_local_features(center, 4)
-	var local_pop: int = int(features.get("population", 0))
+	var center: Vector2i = SettlementPlanner._center_tile_of_region_key(settlement_id)
+	var local_pop: int = 0
+	for st_v in SettlementMemory.settlements:
+		if st_v is Dictionary and int((st_v as Dictionary).get("center_region", -1)) == settlement_id:
+			local_pop = int((st_v as Dictionary).get("population", 0))
+			break
+	# Scan local features at settlement center (not wherever the chief is standing).
+	var features: Dictionary = _scan_local_features(center, 12)
+	if local_pop < 1:
+		local_pop = int(features.get("population", 0))
 	if local_pop < 1:
 		return 0
 	var beds: int = int(features.get("bed", 0))
@@ -908,6 +909,10 @@ static func leader_direct_construction(settlement_id: int) -> int:
 		hearths_needed = 1
 	elif cold_uncovered > 0:
 		hearths_needed = hearths + int(ceil(float(cold_uncovered) / 4.0))
+	if warmth_press >= 0.12:
+		hearths_needed = maxi(
+				hearths_needed,
+				maxi(1, int(ceil(float(local_pop) / 4.0))))
 	var warmth_satisfied: bool = hearths > 0 and cold_uncovered <= 0 and warmth_press < 0.12
 	var survival_met: bool = food_press <= 0.60 and housing_press <= 0.70 and warmth_press <= 0.40
 	var need_beds: int = 0
@@ -936,7 +941,12 @@ static func leader_direct_construction(settlement_id: int) -> int:
 	if beds < need_beds:
 		build_queue.append({"type": Job.Type.BUILD_BED, "priority": 8, "work": 10, "reason": "housing_pressure"})
 	if not warmth_satisfied and hearths < hearths_needed:
-		build_queue.append({"type": Job.Type.BUILD_FIRE_PIT, "priority": 7, "work": 12, "reason": "warmth_coverage"})
+		build_queue.append({"type": Job.Type.BUILD_FIRE_PIT, "priority": 9, "work": 12, "reason": "warmth_coverage"})
+	if cooking_press > 0.22 and hearths > 0:
+		if StockpileManager != null and StockpileManager.total_count_of(Item.Type.MEAT) > 0:
+			build_queue.append({"type": Job.Type.COOK_MEAT, "priority": 7, "work": 8, "reason": "cooking_pressure"})
+		elif StockpileManager != null and StockpileManager.total_count_of(Item.Type.BERRY) >= 2:
+			build_queue.append({"type": Job.Type.COOK_BERRIES, "priority": 6, "work": 5, "reason": "cooking_pressure"})
 	if storage_huts < storage_target:
 		build_queue.append({"type": Job.Type.BUILD_STORAGE_HUT, "priority": 6, "work": 20, "reason": "storage_pressure"})
 	if survival_met and walls < 4 and local_pop >= 3:
@@ -980,6 +990,9 @@ static func leader_direct_construction(settlement_id: int) -> int:
 				continue
 		if ColonySimServices != null and not ColonySimServices.try_consume_settlement_build_slot(center_rk, max_posts):
 			break
+		elif job_type in [Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH]:
+			if JobManager != null and JobManager.count_open_by_type(job_type) > 0:
+				continue
 		elif JobManager != null and JobManager.has_method("count_pending_jobs_near"):
 			if JobManager.count_pending_jobs_near(center, job_type, 10) > 0:
 				continue
@@ -987,11 +1000,15 @@ static func leader_direct_construction(settlement_id: int) -> int:
 			var pending: int = int(job_manager.call("count_pending_by_type", job_type)) if job_manager.has_method("count_pending_by_type") else 0
 			if pending > 0:
 				continue
-		# Find a build tile near the ruler (settlement center)
 		var main_node: Node = _root_node("Main")
-		if main_node == null or not main_node.has_method("_find_build_tile_near"):
+		if main_node == null:
 			continue
-		var t: Vector2i = main_node.call("_find_build_tile_near", center, 6)
+		var t: Vector2i = Vector2i(-1, -1)
+		if job_type in [Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH]:
+			if main_node.has_method("_find_hearth_tile_near"):
+				t = main_node.call("_find_hearth_tile_near", center, 8)
+		elif main_node.has_method("_find_build_tile_near"):
+			t = main_node.call("_find_build_tile_near", center, 6)
 		if t.x < 0:
 			continue
 		if job_manager.has_method("has_job_at") and bool(job_manager.call("has_job_at", t)):
@@ -1004,9 +1021,9 @@ static func leader_direct_construction(settlement_id: int) -> int:
 						j,
 						str(entry.get("reason", "leader_direct")),
 						"settlement",
-						ruler_id)
+						chief_id)
 			else:
-				j.issuer_pawn_id = ruler_id
+				j.issuer_pawn_id = chief_id
 				j.issuer_role = "leader"
 			posted += 1
 	return posted

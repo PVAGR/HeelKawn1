@@ -83,7 +83,10 @@ func get_active_jobs_union() -> Array[Job]:
 func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) -> Job:
 	if _jobs_by_tile.has(tile):
 		return null
-	if type == Job.Type.CHOP and count_open_by_type(Job.Type.CHOP) >= MAX_OPEN_CHOP_JOBS:
+	var chop_cap: int = MAX_OPEN_CHOP_JOBS
+	if ColonySimServices != null:
+		chop_cap = ColonySimServices.get_open_chop_job_cap()
+	if type == Job.Type.CHOP and count_open_by_type(Job.Type.CHOP) >= chop_cap:
 		return null
 	var max_jobs: int = _max_open_jobs_allowed()
 	var is_construction: bool = _is_construction_type(type)

@@ -560,7 +560,7 @@ func _event_passes_significance_threshold(e: Dictionary) -> bool:
 
 	# Authority events: always record (governance changes are historical)
 	if typ in ["authority_change", "governance_change", "succession", "abdicate",
-			   "pledge_loyalty", "edict_issued", "law_added", "law_removed", "ruler_decision"]:
+			   "pledge_loyalty", "edict_issued", "law_added", "law_removed", "law_breach", "ruler_decision"]:
 		return true
 
 	# Trade events: always record (economic infrastructure)
@@ -690,12 +690,11 @@ func _infer_kind_from_type(typ: String) -> int:
 			return Kind.CRAFT_EVENT
 		"authority_change", "governance_change", "succession", "abdicate":
 			return Kind.AUTHORITY_EVENT
-		"pledge_loyalty", "edict_issued", "law_added", "law_removed", "ruler_decision":
+		"pledge_loyalty", "edict_issued", "law_added", "law_removed", "law_breach", "ruler_decision":
 			return Kind.AUTHORITY_EVENT
 		"trade_route_started", "trade_route_completed", "trade_route_opened":
 			return Kind.TRADE_EVENT
-		"war_proposed", "war_battle_spawned", "skirmish_started", "battle_resolved", "grudge_formed", "grudge_inherited",
-		"diplomatic_incident", "profession_mastered", "dynasty_line", "officer_promoted":
+		"war_proposed", "war_battle_spawned", "skirmish_started", "battle_resolved", "grudge_formed", "grudge_inherited", "diplomatic_incident", "profession_mastered", "dynasty_line", "officer_promoted":
 			return Kind.CONFLICT_EVENT
 		"first_hearth_in_polity", "settlement_abandoned", "polity_merged", "polity_founded", "territorial_growth":
 			return Kind.SETTLEMENT_EVENT

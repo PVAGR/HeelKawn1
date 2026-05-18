@@ -1,5 +1,4 @@
 extends Node
-class_name ColonyBayesTree
 
 ## Deterministic Bayesian-style decision tree for colony build choices.
 ## It learns from completed and cancelled jobs, then nudges future build

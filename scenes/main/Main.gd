@@ -6289,7 +6289,7 @@ func _seed_jobs_for_discovered_area() -> void:
 							chop_posted += 1
 				elif TileFeature.is_wildlife(feature):
 					if hunt_posted < max_hunt and not JobManager.has_job_at(tile):
-						if _post_seeded_job(Job.Type.HUNT, tile, HUNT_PRIORITY, HUNT_WORK_TICKS, "pawn_harvest_scan") != null:
+						if _post_seeded_job(Job.Type.HUNT, tile, HUNT_PRIORITY, _hunt_ticks_for(feature), "pawn_harvest_scan") != null:
 							hunt_posted += 1
 				elif feature == TileFeature.Type.RIVER:
 					if fish_posted < max_fish and not JobManager.has_job_at(tile):
@@ -6462,9 +6462,9 @@ func _sort_tiles_by_seeded_order(tiles: Array[Vector2i], stream_name: StringName
 ## what each settlement actually needs. Runs every ~200 ticks so pawns
 ## build farms, walls, hearths, beds, etc. instead of only foraging.
 const SKIRMISH_RESOLVE_TICKS: int = 240
-const _SKIRMISH_BATTLE_PLANS: PackedStringArray = PackedStringArray([
+const _SKIRMISH_BATTLE_PLANS: Array = [
 	"hold_the_line", "flank_at_dawn", "shield_wall", "feint_and_charge",
-])
+]
 var _pending_skirmishes: Array[Dictionary] = []
 var _last_construction_seed_tick: int = -10000
 var _nav_dirty: bool = false  # batched nav notification for construction seed
@@ -9276,9 +9276,9 @@ func _apply_skirmish_resolution(sk: Dictionary, tick: int) -> void:
 	_promote_skirmish_veteran(ids_a, ids_b, casualties_a, casualties_b, sk, tick)
 
 
-const _MILITARY_RANKS: PackedStringArray = PackedStringArray([
+const _MILITARY_RANKS: Array = [
 	"grunt", "sarj", "captain", "commander", "battlemaster",
-])
+]
 
 
 func _promote_skirmish_veteran(

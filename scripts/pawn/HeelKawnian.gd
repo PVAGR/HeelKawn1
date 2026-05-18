@@ -1384,9 +1384,7 @@ func _ready() -> void:
 		_agent_bayes = AgentBayesTree.new()
 		# Restore any serialized state provided by the spawn data
 		var saved: Dictionary = {}
-		if typeof(data) == TYPE_DICTIONARY:
-			saved = data.get("agent_bayes", {})
-		elif data is HeelKawnianData:
+		if data is HeelKawnianData:
 			saved = data.agent_bayes_data if data.agent_bayes_data != null else {}
 		if saved != null and saved is Dictionary:
 			_agent_bayes.from_dict(saved)

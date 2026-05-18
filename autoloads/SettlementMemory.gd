@@ -3939,7 +3939,7 @@ func _pawn_withholds_food_in_crisis(pawn_data: Dictionary) -> bool:
     if not bool(pawn_data.get("food_emergency", false)):
         return false
     var job_type: int = int(pawn_data.get("current_job_type", -1))
-    if job_type == Job.Type.HAUL or job_type == Job.Type.TRADE_HAUL:
+    if job_type == Job.Type.TRADE_HAUL:
         return false
     return true
 

@@ -462,7 +462,14 @@ func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) 
 
 
 func _planner_interval_for_speed() -> int:
-	# No throttle. The speed setting IS the speed.
+	# Scale planner interval at high speeds to reduce frame-time spikes.
+	if GameManager == null:
+		return 90
+	var gs: float = GameManager.game_speed
+	if gs >= 100.0:
+		return 180
+	if gs >= 50.0:
+		return 150
 	return 90
 
 
@@ -2916,10 +2923,13 @@ func _on_game_tick(tick: int) -> void:
 		# Keep planning frequent, but not per-tick. AGGRESSIVE OPTIMIZATION: Longer intervals
 		# DORMANT WORLD: Skip settlement-dependent systems until first settlement forms
 		var planner_interval: int = _planner_interval_for_speed()
-		if _is_main_lane_tick(tick, planner_interval, 97) and DiscoveryGate.is_unlocked("first_settlement"):
+		# Budget gate: if last planner pass was too slow, defer this one to spread the load
+		var planner_ok: bool = _last_planner_us < _planner_budget_gate_us
+		if _is_main_lane_tick(tick, planner_interval, 97) and DiscoveryGate.is_unlocked("first_settlement") and planner_ok:
 			t0 = Time.get_ticks_usec()
 			SettlementManager.plan(_world, self, false)
-			section_us["settlement_planner"] = Time.get_ticks_usec() - t0
+			_last_planner_us = Time.get_ticks_usec() - t0
+			section_us["settlement_planner"] = _last_planner_us
 		# Periodic resource truth refresh — settlements need to know their stockpile state
 		if _is_main_lane_tick(tick, 500, 109):
 			SettlementMemory.refresh_resource_truth()
@@ -6513,6 +6523,8 @@ var _nav_dirty: bool = false  # batched nav notification for construction seed
 var _construction_seed_posts_since_log: int = 0
 var _last_construction_seed_log_tick: int = -10000
 var _construction_seed_cursor: int = 0
+var _last_planner_us: int = 0  # microseconds taken by last settlement planner pass
+var _planner_budget_gate_us: int = 40_000  # if last pass exceeded this, skip next pass (100x speedup optimization)
 
 func _count_pending_jobs_near(job_type: int, center: Vector2i, radius: int, cached_jobs: Array = []) -> int:
 	if JobManager == null:
@@ -6816,7 +6828,7 @@ func _seed_construction_jobs() -> void:
 		if settlements.is_empty():
 			_seed_bootstrap_jobs_near_pawn_cluster()
 			return
-	var max_settlements_this_pass: int = 2 if GameManager.game_speed >= 50.0 else 4
+	var max_settlements_this_pass: int = 1 if GameManager.game_speed >= 100.0 else (2 if GameManager.game_speed >= 50.0 else 4)
 	var settlements_seen: int = 0
 	var start_idx: int = _construction_seed_cursor % settlements.size()
 	for step in range(settlements.size()):
@@ -6850,8 +6862,9 @@ func _seed_construction_jobs() -> void:
 		var site_warmth_press: float = ColonySimServices.get_warmth_pressure(center_rk) if ColonySimServices != null else 0.0
 		if nearby_pending_builds >= 4 and cold_uncovered_site <= 0 and site_warmth_press < 0.35:
 			continue
-		# Scan local features (beds, walls, hearths, etc.) — wide enough to see hearths
-		var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, 12)
+		# Scan local features (beds, walls, hearths, etc.) — reduce radius at 100x+ for speed
+		var scan_radius: int = 8 if GameManager.game_speed >= 100.0 else 12
+		var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, scan_radius)
 		var build_priorities: Dictionary = {}
 		if ColonySimServices != null:
 			build_priorities = ColonySimServices.compute_settlement_build_priorities(

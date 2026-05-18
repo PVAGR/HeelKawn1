@@ -12,6 +12,8 @@ var _vbox: VBoxContainer = null
 var _stats_labels: Dictionary = {}
 var _update_timer: float = 0.0
 const UPDATE_INTERVAL: float = 0.5  # Update every 0.5 seconds
+const MOBILE_UPDATE_INTERVAL: float = 1.5
+var _update_interval: float = UPDATE_INTERVAL
 
 # References
 @onready var _pawn_spawner: Node = null
@@ -25,6 +27,8 @@ const UPDATE_INTERVAL: float = 0.5  # Update every 0.5 seconds
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(280, 400)
+	if OS.has_feature("mobile") or DisplayServer.is_touchscreen_available():
+		_update_interval = MOBILE_UPDATE_INTERVAL
 	
 	# Get autoloads
 	_pawn_spawner = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
@@ -39,8 +43,12 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if not visible:
+		return
+	if not is_visible_in_tree():
+		return
 	_update_timer += delta
-	if _update_timer >= UPDATE_INTERVAL:
+	if _update_timer >= _update_interval:
 		_update_timer = 0.0
 		_update_statistics()
 
@@ -215,3 +223,5 @@ func refresh() -> void:
 ## Toggle visibility
 func toggle_visibility() -> void:
 	visible = not visible
+	if visible:
+		_update_timer = _update_interval

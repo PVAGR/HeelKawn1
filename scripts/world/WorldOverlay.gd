@@ -8,11 +8,19 @@ const REFRESH_EVERY_N_TICKS: int = 30
 const MAX_DRAW_TILES: int = 8000  # Performance cap: don't draw more than this per frame
 const MAX_TERRAIN_DETAIL_TILES: int = 4000  # Cap for terrain micro-texture drawing
 const TERRAIN_DETAIL_INTERVAL: int = 2  # Only draw every Nth tile for performance
+const MOBILE_REFRESH_EVERY_N_TICKS: int = 55
+const MOBILE_MAX_DRAW_TILES: int = 4200
+const MOBILE_MAX_TERRAIN_DETAIL_TILES: int = 1400
+const MOBILE_TERRAIN_DETAIL_INTERVAL: int = 4
 
 var _world: World = null
 var _camera: Camera2D = null
 var _tick_counter: int = 0
 var _dirty: bool = true  # Redraw on first frame
+var _refresh_every_n_ticks: int = REFRESH_EVERY_N_TICKS
+var _max_draw_tiles: int = MAX_DRAW_TILES
+var _max_terrain_detail_tiles: int = MAX_TERRAIN_DETAIL_TILES
+var _terrain_detail_interval: int = TERRAIN_DETAIL_INTERVAL
 
 # Cache: which features exist and where (rebuilt every REFRESH_EVERY_N_TICKS)
 var _feature_tiles: Dictionary = {}  # feature_type -> Array[Vector2i]
@@ -38,6 +46,11 @@ func initialize(world_ref: World, camera_ref: Camera2D) -> void:
 	_world = world_ref
 	_camera = camera_ref
 	z_index = 5  # Above terrain (0), below pawns (10)
+	if OS.has_feature("mobile") or DisplayServer.is_touchscreen_available():
+		_refresh_every_n_ticks = MOBILE_REFRESH_EVERY_N_TICKS
+		_max_draw_tiles = MOBILE_MAX_DRAW_TILES
+		_max_terrain_detail_tiles = MOBILE_MAX_TERRAIN_DETAIL_TILES
+		_terrain_detail_interval = MOBILE_TERRAIN_DETAIL_INTERVAL
 
 
 func mark_dirty() -> void:
@@ -46,7 +59,7 @@ func mark_dirty() -> void:
 
 func _process(_delta: float) -> void:
 	_tick_counter += 1
-	if _tick_counter % REFRESH_EVERY_N_TICKS == 0 or _dirty:
+	if _tick_counter % _refresh_every_n_ticks == 0 or _dirty:
 		_rebuild_feature_cache()
 		_refresh_build_progress()
 		_refresh_smoke_positions()
@@ -87,7 +100,7 @@ func _rebuild_feature_cache() -> void:
 								_settlement_color_cache[sid] = CulturalStyleManager.get_cultural_color_for_settlement(sid)
 			else:
 				# Cache biome for terrain micro-textures (sparse sampling)
-				if (x + y) % TERRAIN_DETAIL_INTERVAL == 0:
+				if (x + y) % _terrain_detail_interval == 0:
 					var b: int = data.biomes[idx]
 					if not _biome_tiles.has(b):
 						_biome_tiles[b] = []
@@ -167,7 +180,7 @@ func _draw() -> void:
 	for b_type in _biome_tiles:
 		var tiles: Array = _biome_tiles[b_type]
 		for tile_pos in tiles:
-			if drawn >= MAX_TERRAIN_DETAIL_TILES:
+			if drawn >= _max_terrain_detail_tiles:
 				break
 			var wp: Vector2 = _world.tile_to_world(tile_pos)
 			_draw_terrain_detail(wp, int(b_type), int(tile_pos.x), int(tile_pos.y))
@@ -178,7 +191,7 @@ func _draw() -> void:
 	for f_type in _feature_tiles:
 		var tiles: Array = _feature_tiles[f_type]
 		for tile_pos in tiles:
-			if drawn >= MAX_DRAW_TILES:
+			if drawn >= _max_draw_tiles:
 				return
 			var wp: Vector2 = _world.tile_to_world(tile_pos)
 			var cultural_tint: Color = _get_cultural_tint(tile_pos)

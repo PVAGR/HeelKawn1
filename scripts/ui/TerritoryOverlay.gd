@@ -14,6 +14,7 @@ extends Node2D
 ## Update cadence: every 60 ticks, only redraws when settlement data changes.
 
 const UPDATE_EVERY_N_TICKS: int = 60
+const MOBILE_UPDATE_EVERY_N_TICKS: int = 120
 const TILE_PX: int = 10  # Must match World.TILE_PIXELS
 
 # Zoom-dependent rendering thresholds
@@ -42,6 +43,8 @@ var _tick_counter: int = 0
 var _last_settlement_count: int = -1
 var _last_settlement_hash: int = -1
 var _current_zoom: float = 1.0
+var _mobile_runtime: bool = false
+var _update_every_n_ticks: int = UPDATE_EVERY_N_TICKS
 
 # Cached territory data: settlement_index -> { color, regions_set, border_segments }
 var _territories: Array[Dictionary] = []
@@ -53,6 +56,9 @@ func initialize(world_ref: World, camera_ref: Camera2D) -> void:
 	_world = world_ref
 	_camera = camera_ref
 	z_index = 2  # Above WorldTrace (1), below UI
+	_mobile_runtime = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	if _mobile_runtime:
+		_update_every_n_ticks = MOBILE_UPDATE_EVERY_N_TICKS
 
 
 ## Force rebuild on next refresh (building completed, settlement promoted, etc.).
@@ -71,7 +77,7 @@ func flash_skirmish_tile(tile: Vector2i, duration_ticks: int = 90) -> void:
 
 func _process(_delta: float) -> void:
 	_tick_counter += 1
-	if _tick_counter % UPDATE_EVERY_N_TICKS == 0:
+	if _tick_counter % _update_every_n_ticks == 0:
 		_refresh_territories()
 	# Track zoom for rendering
 	if _camera != null:
@@ -184,6 +190,10 @@ func _refresh_territories() -> void:
 ## Extra border segments along worn paths / building footprints at the settlement edge.
 func _activity_border_segments_for_regions(regions: PackedInt32Array, region_set: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
+	if _mobile_runtime:
+		return out
+	if GameManager != null and int(GameManager.game_speed) >= 50:
+		return out
 	if _world == null or _world.data == null:
 		return out
 	var region_tiles: int = 16
@@ -414,4 +424,3 @@ static func _color_for_settlement(center_region_key: int) -> Color:
 	# Golden ratio hash for well-distributed hues
 	var hue: float = fmod(float(abs(center_region_key)) * 0.618033988749895, 1.0)
 	return Color.from_hsv(hue, 0.55, 0.85, 1.0)
-

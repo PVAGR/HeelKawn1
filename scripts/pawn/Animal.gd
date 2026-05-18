@@ -54,6 +54,8 @@ var _dead: bool = false
 var _stable_animal_id: int = 0
 var _last_wander_path_fail_target: Vector2i = Vector2i(-999999, -999999)
 var _next_wander_path_retry_tick: int = -1
+var _cached_speed: float = 40.0
+var _cached_reach_dist_sq: float = 64.0
 
 func _animal_stream(label: String) -> StringName:
 	return StringName("animal:%d:%d:%d:%s" % [int(animal_type), tile_pos.x, tile_pos.y, label])
@@ -76,6 +78,11 @@ func bind(p_animal_type: Type, p_tile: Vector2i, p_world: World) -> void:
 	hunger = 100.0
 	age_ticks = 0
 	breeding_cooldown = 0
+	var spec: Dictionary = SPECIES_DATA.get(animal_type, {})
+	_cached_speed = float(spec.get("speed", 40.0))
+	var size: float = float(spec.get("size", 4.0))
+	var reach_dist: float = size * 2.0
+	_cached_reach_dist_sq = reach_dist * reach_dist
 	_stable_animal_id = _make_stable_animal_id(p_animal_type, p_tile)
 	# Once per instance: do not connect from _process (would duplicate every frame).
 	if not GameManager.game_tick.is_connected(_on_game_tick):
@@ -93,12 +100,19 @@ func _physics_process(delta: float) -> void:
 	# Move along current path
 	if not _current_path.is_empty() and _path_index < _current_path.size():
 		var target_world: Vector2 = _world.tile_to_world(_current_path[_path_index])
-		var direction: Vector2 = (target_world - position).normalized()
-		var spec = SPECIES_DATA[animal_type]
-		position += direction * spec.speed * delta
+		var to_target: Vector2 = target_world - position
+		var dist_sq: float = to_target.length_squared()
+		if dist_sq > 0.000001:
+			var step: float = _cached_speed * delta
+			var step_sq: float = step * step
+			if step_sq >= dist_sq:
+				position = target_world
+			else:
+				position += to_target * (step / sqrt(dist_sq))
 		
 		# Check if reached tile
-		if position.distance_to(target_world) < spec.size * 2:
+		var rem: Vector2 = target_world - position
+		if rem.length_squared() <= _cached_reach_dist_sq:
 			tile_pos = _current_path[_path_index]
 			position = target_world
 			_path_index += 1

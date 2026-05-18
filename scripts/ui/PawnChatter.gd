@@ -31,10 +31,25 @@ const CONV_PAIR_RADIUS: float = 50.0
 const CONV_EXCHANGE_MS: float = 2000.0  # 2s between exchanges
 const CONV_MAX_EXCHANGES: int = 4       # total bubble count per pair
 const CONV_EVERY_N_TICKS: int = 360    # ~6 seconds
+const MOBILE_CHECK_EVERY_N_TICKS: int = 110
+const MOBILE_CONV_ADVANCE_EVERY_N_TICKS: int = 24
+const DESKTOP_CONV_ADVANCE_EVERY_N_TICKS: int = 12
+const MOBILE_MAX_IDLE_SCAN: int = 20
+const DESKTOP_MAX_IDLE_SCAN: int = 48
+
+var _mobile_runtime: bool = false
+var _bubble_check_interval: int = CHECK_EVERY_N_TICKS
+var _conv_advance_interval: int = DESKTOP_CONV_ADVANCE_EVERY_N_TICKS
+var _max_idle_scan: int = DESKTOP_MAX_IDLE_SCAN
 
 
 func initialize(world_ref: World) -> void:
 	_world = world_ref
+	_mobile_runtime = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	if _mobile_runtime:
+		_bubble_check_interval = MOBILE_CHECK_EVERY_N_TICKS
+		_conv_advance_interval = MOBILE_CONV_ADVANCE_EVERY_N_TICKS
+		_max_idle_scan = MOBILE_MAX_IDLE_SCAN
 
 
 func set_llm_client(client: Node) -> void:
@@ -43,7 +58,7 @@ func set_llm_client(client: Node) -> void:
 
 func _process(_delta: float) -> void:
 	_tick_counter += 1
-	if _tick_counter % CHECK_EVERY_N_TICKS == 0:
+	if _tick_counter % _bubble_check_interval == 0:
 		_try_spawn_bubbles()
 
 	# Async LLM chatter (slower cadence)
@@ -51,7 +66,8 @@ func _process(_delta: float) -> void:
 		_try_spawn_llm_chatter()
 
 	# Advance pawn-to-pawn conversations
-	_advance_conversations()
+	if _tick_counter % _conv_advance_interval == 0:
+		_advance_conversations()
 
 	# Remove expired bubbles
 	var now: float = Time.get_ticks_msec()
@@ -98,7 +114,11 @@ func _try_spawn_bubbles() -> void:
 
 	# Collect idle pawns
 	var idle_pawns: Array = []
-	for p in all_pawns:
+	var start_idx: int = int(Time.get_ticks_msec()) % maxi(1, all_pawns.size())
+	var scan_count: int = mini(all_pawns.size(), _max_idle_scan)
+	for i in range(scan_count):
+		var idx: int = (start_idx + i) % all_pawns.size()
+		var p = all_pawns[idx]
 		if p == null or not is_instance_valid(p):
 			continue
 		if p._state != p.State.IDLE:

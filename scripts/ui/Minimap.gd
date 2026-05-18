@@ -9,6 +9,7 @@ extends CanvasLayer
 const MAP_SIZE_PX: int = 180
 const REFRESH_EVERY_N_TICKS: int = 30
 const OVERLAY_REFRESH_TICKS: int = 15  # HeelKawnian dots / camera rect update (was 5, too frequent)
+const MOBILE_OVERLAY_REFRESH_TICKS: int = 30
 const BORDER_COLOR: Color = Color(0.85, 0.78, 0.40, 0.50)
 const SETTLEMENT_COLOR: Color = Color(1.0, 0.85, 0.3, 1.0)
 const ENEMY_COLOR: Color = Color(1.0, 0.2, 0.15, 1.0)
@@ -25,10 +26,14 @@ var _tick_counter: int = 0
 var _world: World = null
 var _camera: Camera2D = null
 var _spawner: PawnSpawner = null
+var _mobile_runtime: bool = false
+var _overlay_refresh_ticks: int = OVERLAY_REFRESH_TICKS
 
 
 func _ready() -> void:
 	layer = 10
+	_mobile_runtime = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	_overlay_refresh_ticks = MOBILE_OVERLAY_REFRESH_TICKS if _mobile_runtime else OVERLAY_REFRESH_TICKS
 
 	_minimap_image = Image.create(WorldData.WIDTH, WorldData.HEIGHT, false, Image.FORMAT_RGB8)
 	_minimap_texture = ImageTexture.new()
@@ -84,7 +89,7 @@ func _process(_delta: float) -> void:
 	_tick_counter += 1
 	if _tick_counter % REFRESH_EVERY_N_TICKS == 0:
 		_refresh_terrain()
-	if _tick_counter % OVERLAY_REFRESH_TICKS == 0:
+	if _tick_counter % _overlay_refresh_ticks == 0:
 		_overlay.queue_redraw()
 
 
@@ -104,9 +109,10 @@ func _draw_overlay() -> void:
 
 	var scale_x: float = MAP_SIZE_PX / float(WorldData.WIDTH)
 	var scale_y: float = MAP_SIZE_PX / float(WorldData.HEIGHT)
+	var draw_heavy_layers: bool = _should_draw_heavy_layers()
 
-	# Draw territory fills (colored regions per settlement — formal settlements only)
-	if SettlementMemory != null:
+	# Draw territory fills/borders only when heavy layers are enabled.
+	if draw_heavy_layers and SettlementMemory != null:
 		var settlements: Array = SettlementMemory.get_formal_settlements()
 		for s in settlements:
 			if not s is Dictionary:
@@ -214,8 +220,8 @@ func _draw_overlay() -> void:
 			var py: float = tile.y * scale_y
 			_overlay.draw_rect(Rect2(px - 0.5, py - 0.5, 1.0, 1.0), PAWN_COLOR)
 
-	# Draw landmark building icons on minimap
-	if _world != null and _world.data != null:
+	# Draw landmark building icons on minimap (expensive, optional on low-end/high speed).
+	if draw_heavy_layers and _world != null and _world.data != null:
 		var data: WorldData = _world.data
 		var landmark_features: Dictionary = {
 			TileFeature.Type.FIRE_PIT: Color8(255, 140, 30),
@@ -263,6 +269,14 @@ func _draw_overlay() -> void:
 		var w: float = half_view_w * 2.0 * scale_x
 		var h: float = half_view_h * 2.0 * scale_y
 		_overlay.draw_rect(Rect2(left, top, w, h), CAMERA_RECT_COLOR, false, 1.0)
+
+
+func _should_draw_heavy_layers() -> bool:
+	if _mobile_runtime:
+		return false
+	if GameManager == null:
+		return true
+	return GameManager.game_speed < 50.0
 
 
 func _on_overlay_input(event: InputEvent) -> void:

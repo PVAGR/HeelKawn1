@@ -21,11 +21,18 @@ var _world: World = null
 var _camera: Camera2D = null
 var _hovered_pawn = null
 var _selected_pawn = null
+var _cached_spawner: Node = null
+var _last_mouse_world: Vector2 = Vector2.INF
+var _is_mobile_runtime: bool = false
+var _hover_check_every_frames: int = 5
 
 
 func initialize(world_ref: World, camera_ref: Camera2D) -> void:
 	_world = world_ref
 	_camera = camera_ref
+	_is_mobile_runtime = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	# On touch devices hover is mostly irrelevant; reduce work aggressively.
+	_hover_check_every_frames = 10 if _is_mobile_runtime else 5
 
 
 func set_selected_pawn(pawn) -> void:
@@ -35,26 +42,48 @@ func set_selected_pawn(pawn) -> void:
 var _hover_throttle_frames: int = 0
 
 func _process(_delta: float) -> void:
-	_hover_throttle_frames += 1
-	if _hover_throttle_frames >= 5:  # Check hover every 5 frames instead of every frame
-		_hover_throttle_frames = 0
-		_hovered_pawn = _find_pawn_under_cursor()
-		queue_redraw()  # Only redraw when hover state changes
-
-
-func _find_pawn_under_cursor():
 	if _camera == null:
-		return null
-	var mouse_world: Vector2 = _camera.get_global_mouse_position()
-	var best = null
-	var best_dist: float = HOVER_RADIUS * HOVER_RADIUS
+		return
+	# Mobile/touch: no hover cursor intent, so skip expensive nearest-pawn scans.
+	if _is_mobile_runtime:
+		if _hovered_pawn != null:
+			_hovered_pawn = null
+			queue_redraw()
+		return
+
+	_hover_throttle_frames += 1
+	if _hover_throttle_frames >= _hover_check_every_frames:
+		_hover_throttle_frames = 0
+		var mouse_world: Vector2 = _camera.get_global_mouse_position()
+		# Skip full pawn scan if the cursor barely moved.
+		if _last_mouse_world != Vector2.INF and mouse_world.distance_squared_to(_last_mouse_world) < 2.0:
+			return
+		_last_mouse_world = mouse_world
+		var next_hover = _find_pawn_under_cursor(mouse_world)
+		if next_hover != _hovered_pawn:
+			_hovered_pawn = next_hover
+			queue_redraw()
+
+
+func _resolve_spawner() -> Node:
+	if _cached_spawner != null and is_instance_valid(_cached_spawner):
+		return _cached_spawner
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	if tree == null:
 		return null
 	var spawners: Array = tree.get_nodes_in_group("pawn_spawner")
 	if spawners.is_empty():
 		return null
-	var spawner = spawners[0]
+	_cached_spawner = spawners[0]
+	return _cached_spawner
+
+
+func _find_pawn_under_cursor(mouse_world: Vector2):
+	if _camera == null:
+		return null
+	var best = null
+	var best_dist: float = HOVER_RADIUS * HOVER_RADIUS
+	var spawner = _resolve_spawner()
 	if spawner == null or not spawner.has_method("get_all_pawns"):
 		return null
 	for p in spawner.get_all_pawns():

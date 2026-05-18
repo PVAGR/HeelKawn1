@@ -3471,7 +3471,6 @@ func _accumulate_social_rapport() -> void:
 		pair_budget = maxi(56, int(round(float(pair_budget) * 0.62)))
 		wm_budget = maxi(12, int(round(float(wm_budget) * 0.55)))
 		consciousness_budget = maxi(3, int(round(float(consciousness_budget) * 0.5)))
-	var consciousness: Node = get_node_or_null("/root/PawnConsciousness")
 	var comp_by_id: Dictionary = {}
 	for p in pl:
 		comp_by_id[int(p.data.id)] = _world.pathfinder.component_of(p.data.tile_pos)
@@ -3618,47 +3617,44 @@ func _accumulate_social_rapport() -> void:
 									"tile": {"x": da.tile_pos.x, "y": da.tile_pos.y},
 								})
 								wm_budget -= 1
-							if consciousness != null and consciousness_budget > 0 and consciousness.has_method("record_memory"):
-								var a_assoc: Array = [db_id]
-								consciousness.call(
-									"record_memory",
-									da_id,
-									"social_friction",
-									"Tension with %s" % db.display_name,
-									-22.0,
-									5,
-									"social",
-									a_assoc,
-									da.tile_pos
+							if PawnConsciousness != null and consciousness_budget > 0:
+								var a_assoc: Array[int] = [db_id]
+								PawnConsciousness.record_memory(
+										da_id,
+										"social_friction",
+										"Tension with %s" % db.display_name,
+										-22.0,
+										5,
+										"social",
+										a_assoc,
+										da.tile_pos,
 								)
 								consciousness_budget -= 1
 				if wm_budget > 0:
 					var n: int = _record_social_pair_events(da, db, wm_budget)
 					wm_budget -= n
-				if consciousness != null and consciousness_budget > 1 and chemistry >= 0.65 and rapport_gain >= 16:
-					var a_assoc2: Array = [db_id]
-					var b_assoc2: Array = [da_id]
-					consciousness.call(
-						"record_memory",
-						da_id,
-						"social_bonding",
-						"Felt close to %s" % db.display_name,
-						14.0 + chemistry * 10.0,
-						5,
-						"social",
-						a_assoc2,
-						da.tile_pos
+				if PawnConsciousness != null and consciousness_budget > 1 and chemistry >= 0.65 and rapport_gain >= 16:
+					var a_assoc2: Array[int] = [db_id]
+					var b_assoc2: Array[int] = [da_id]
+					PawnConsciousness.record_memory(
+							da_id,
+							"social_bonding",
+							"Felt close to %s" % db.display_name,
+							14.0 + chemistry * 10.0,
+							5,
+							"social",
+							a_assoc2,
+							da.tile_pos,
 					)
-					consciousness.call(
-						"record_memory",
-						db_id,
-						"social_bonding",
-						"Felt close to %s" % da.display_name,
-						14.0 + chemistry * 10.0,
-						5,
-						"social",
-						b_assoc2,
-						db.tile_pos
+					PawnConsciousness.record_memory(
+							db_id,
+							"social_bonding",
+							"Felt close to %s" % da.display_name,
+							14.0 + chemistry * 10.0,
+							5,
+							"social",
+							b_assoc2,
+							db.tile_pos,
 					)
 					consciousness_budget -= 2
 				if pair_budget <= 0:
@@ -7338,7 +7334,7 @@ func _build_roads_from_trade_routes() -> void:
 				if _world.data.in_bounds(tile.x, tile.y):
 					var idx: int = _world.data.index(tile.x, tile.y)
 					var feat: int = _world.data.features[idx]
-					if feat == TileFeature.Type.NONE and Biome.is_passable(_world.data.biome_at(tile.x, tile.y)):
+					if feat == TileFeature.Type.NONE and Biome.is_passable(_world.data.get_biome(tile.x, tile.y)):
 						_world.data.features[idx] = TileFeature.Type.ROAD
 	# Refresh world texture so roads appear on the map
 	if is_instance_valid(_world):

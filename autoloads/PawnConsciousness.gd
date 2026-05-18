@@ -100,8 +100,11 @@ func _on_game_tick(tick: int) -> void:
 ## Record a memory for a pawn
 func record_memory(pawn_id: int, event_type: String, description: String, 
  emotion: float = 0.0, importance: int = 5, category: String = "general",
- associated_pawns: Array[int] = [], location: Vector2i = Vector2i.ZERO) -> int:
-	
+ associated_pawns: Array = [], location: Vector2i = Vector2i.ZERO) -> int:
+	var assoc_ids: Array[int] = []
+	for pid_v in associated_pawns:
+		assoc_ids.append(int(pid_v))
+
 	# Initialize consciousness if needed
 	_init_consciousness(pawn_id)
 	
@@ -115,7 +118,7 @@ func record_memory(pawn_id: int, event_type: String, description: String,
 		"emotion": clampf(emotion, -100.0, 100.0),
 		"importance": clampi(importance, 1, 10),
 		"category": category,
-		"associated_pawns": associated_pawns.duplicate(),
+		"associated_pawns": assoc_ids,
 		"location": location,
 		"suppressed": false
 	}

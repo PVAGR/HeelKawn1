@@ -7496,11 +7496,15 @@ func _find_hearth_tile_near(center: Vector2i, radius: int) -> Vector2i:
 	return Vector2i(-1, -1)
 
 
-## Check if any stockpile zone covers a tile within 16 tiles of center.
-func _settlement_has_nearby_stockpile(center: Vector2i) -> bool:
+## Check if a settlement already has a stockpile zone near its center.
+## Prefer settlement ownership when available so a shifting center does not
+## cause duplicate bootstrap stockpiles for the same camp.
+func _settlement_has_nearby_stockpile(center: Vector2i, settlement_id: int = -1) -> bool:
 	for z in StockpileManager.zones():
 		if z == null or not is_instance_valid(z):
 			continue
+		if settlement_id >= 0 and int(z.settlement_id) == settlement_id:
+			return true
 		if z.chebyshev_distance_from(center) <= 16:
 			return true
 	return false
@@ -7509,6 +7513,10 @@ func _settlement_has_nearby_stockpile(center: Vector2i) -> bool:
 ## Create a small (2x2) stockpile zone near a settlement center.
 func _ensure_settlement_stockpile(center: Vector2i) -> void:
 	if _world == null or _world.pathfinder == null:
+		return
+	var rk: int = _WM._region_key(center.x, center.y)
+	var sid: int = SettlementMemory.get_settlement_id_for_region(rk)
+	if _settlement_has_nearby_stockpile(center, sid):
 		return
 	var main_component: int = _world.pathfinder.largest_component_id()
 	var t: Vector2i = _find_build_tile_near(center, 4, main_component)
@@ -7528,8 +7536,6 @@ func _ensure_settlement_stockpile(center: Vector2i) -> void:
 	sp.set_rect_tiles(rect)
 	sp.position = _world.tile_to_world(rect.position)
 	# Assign settlement ownership so pawns prefer their own stockpile
-	var rk: int = _WM._region_key(center.x, center.y)
-	var sid: int = SettlementMemory.get_settlement_id_for_region(rk)
 	if sid >= 0:
 		sp.settlement_id = sid
 	add_child(sp)

@@ -1751,8 +1751,9 @@ func _try_post_stockpile_job() -> bool:
 	var stockpile_count: int = 0
 	if StockpileManager != null and StockpileManager.has_method("zone_count"):
 		stockpile_count = int(StockpileManager.call("zone_count"))
-	# Only post if fewer than 3 stockpiles exist
-	if stockpile_count >= 3:
+	# One bootstrap stockpile is enough; after that the colony should shift
+	# surplus labor toward real buildings instead of spawning more piles.
+	if stockpile_count >= 1:
 		return false
 	# Check if pawn has enough wood (5) or sticks (3) for first stockpile
 	# Lowered thresholds to break startup deadlock

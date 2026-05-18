@@ -24,10 +24,12 @@ var _world: World = null
 var _camera: Camera2D = null
 var _frame_counter: int = 0
 var _last_tile: Vector2i = Vector2i(-1, -1)
+var _mobile_runtime: bool = false
 
 
 func _ready() -> void:
 	layer = 12
+	_mobile_runtime = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
 
 	_panel = PanelContainer.new()
 	_panel.add_theme_stylebox_override("panel", _make_style())
@@ -45,6 +47,12 @@ func _ready() -> void:
 	_panel.add_child(_label)
 	add_child(_panel)
 
+	# Hover tooltips are desktop affordances. On touch/mobile there is no stable
+	# hover cursor, so disable per-frame polling work entirely.
+	if _mobile_runtime:
+		_panel.visible = false
+		set_process(false)
+
 
 func initialize(world_ref: World, camera_ref: Camera2D) -> void:
 	_world = world_ref
@@ -52,6 +60,8 @@ func initialize(world_ref: World, camera_ref: Camera2D) -> void:
 
 
 func _process(_delta: float) -> void:
+	if _mobile_runtime:
+		return
 	_frame_counter += 1
 	if _frame_counter % REFRESH_EVERY_N_FRAMES != 0:
 		return

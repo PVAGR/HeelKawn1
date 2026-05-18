@@ -85,7 +85,9 @@ func _is_lane_tick(tick: int, interval: int, salt: int = 0) -> bool:
 
 
 func _is_mobile_runtime() -> bool:
-	return OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	if not _mobile_runtime_cached:
+		_mobile_runtime_cached = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
+	return _mobile_runtime_cached
 
 # -------------------- need decay tuning --------------------
 
@@ -652,6 +654,10 @@ var _anim_t: float = 0.0
 var _draw_frame_counter: int = 0
 var _visual_frame_counter: int = 0  # PERFORMANCE: Adaptive visual update throttling
 var _last_sacred_check_tile: Vector2i = Vector2i(-9999, -9999)  # PERFORMANCE: SacredGeography tile cache
+var _mobile_runtime_cached: bool = false
+var _movement_terrain_tile_cache: Vector2i = Vector2i(-9999, -9999)
+var _movement_terrain_speed_mult: float = 1.0
+var _movement_terrain_is_liquidish: bool = false
 var _cached_path: Array[Vector2i] = []  # PERFORMANCE: Pathfinding cache
 var _cached_path_target: Vector2i = Vector2i(-9999, -9999)  # PERFORMANCE: Path target cache
 var _cached_path_tick: int = -1  # PERFORMANCE: Path cache timestamp
@@ -1371,6 +1377,7 @@ func _ready() -> void:
 	_action_popup = $ActionPopup
 	add_to_group("tickable")
 	set_process(false)
+	_mobile_runtime_cached = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
 	if TickManager != null:
 		TickManager.mark_tickable_cache_dirty()
 	call_deferred("_pawn_connect_sim_tick_deferred")
@@ -3077,11 +3084,11 @@ func _process(delta: float) -> void:
 		_visual_frame_counter = 0
 	
 	_anim_t += delta * (0.5 + GameManager.game_speed * 0.25)
-	
+		
 	var step: float = WALK_SPEED_WORLD_UNITS_PER_SEC * delta * GameManager.game_speed * _meaning_speed_multiplier
-	if _world != null and _world.data != null and _world.data.in_bounds(data.tile_pos.x, data.tile_pos.y):
-		if int(_world.data.get_feature(data.tile_pos.x, data.tile_pos.y)) == TileFeature.Type.ROAD:
-			step *= 1.35
+	if data.tile_pos != _movement_terrain_tile_cache:
+		_refresh_movement_terrain_cache(data.tile_pos)
+	step *= _movement_terrain_speed_mult
 	# Apply injury mobility penalty
 	if not data.injuries.is_empty():
 		step *= (1.0 - BodyRiskManager.get_mobility_penalty(data))
@@ -3102,20 +3109,19 @@ func _process(delta: float) -> void:
 		if mount_bonus > 1.0:
 			step *= mount_bonus
 	# Naval speed modifier: water tiles slow walking, boats speed travel
-	if _world != null and _world.data != null and _world.data.in_bounds(data.tile_pos.x, data.tile_pos.y):
-		var tile_feat: int = int(_world.data.get_feature(data.tile_pos.x, data.tile_pos.y))
-		var tile_biome: int = int(_world.data.get_biome(data.tile_pos.x, data.tile_pos.y))
-		if tile_biome == Biome.Type.WATER or tile_feat == TileFeature.Type.RIVER or _is_on_boat():
-			step *= 0.3  # swimming is slow
+	if _movement_terrain_is_liquidish or _is_on_boat():
+		step *= 0.3  # swimming is slow
 	# Carrying bonus from mount (inventory capacity)
 	if MountSystem != null:
 		var carry_bonus: int = MountSystem.get_carry_bonus(int(data.id))
 		if carry_bonus > 0:
 			data.carrying_capacity = maxi(data.carrying_capacity, 1 + carry_bonus)
 	var to_target: Vector2 = _target_world_pos - position
+	var to_target_dist_sq: float = to_target.length_squared()
+	var step_sq: float = step * step
 
 	var old_tile_pos = data.tile_pos # ARCHITECT T006 - Store old position for chunk check
-	if to_target.length() <= step:
+	if to_target_dist_sq <= step_sq:
 		position = _target_world_pos
 		var from_step: Vector2i = data.tile_pos
 		data.tile_pos = _target_tile
@@ -3129,7 +3135,8 @@ func _process(delta: float) -> void:
 		_track_region_visit(_target_tile)
 		_advance_path()
 	else:
-		position += to_target.normalized() * step
+		if to_target_dist_sq > 0.000001:
+			position += to_target * (step / sqrt(to_target_dist_sq))
 
 	# ARCHITECT T006: Update SpatialManager if pawn moved to a new chunk
 	if SpatialManager != null and data != null and old_tile_pos != data.tile_pos:
@@ -3165,6 +3172,21 @@ func _process(delta: float) -> void:
 	if _draw_frame_counter >= redraw_threshold:
 		_draw_frame_counter = 0
 		queue_redraw()
+
+
+func _refresh_movement_terrain_cache(tile: Vector2i) -> void:
+	_movement_terrain_tile_cache = tile
+	_movement_terrain_speed_mult = 1.0
+	_movement_terrain_is_liquidish = false
+	if _world == null or _world.data == null:
+		return
+	if not _world.data.in_bounds(tile.x, tile.y):
+		return
+	var tile_feat: int = int(_world.data.get_feature(tile.x, tile.y))
+	var tile_biome: int = int(_world.data.get_biome(tile.x, tile.y))
+	if tile_feat == TileFeature.Type.ROAD:
+		_movement_terrain_speed_mult = 1.35
+	_movement_terrain_is_liquidish = (tile_biome == Biome.Type.WATER or tile_feat == TileFeature.Type.RIVER)
 
 
 func _start_path(path: Array[Vector2i]) -> void:

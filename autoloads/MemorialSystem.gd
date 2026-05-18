@@ -171,7 +171,12 @@ func create_death_memorial(pawn_data: Variant, death_tile: Vector2i, violent: bo
 		last_words = str(pawn_data.last_words)
 	if last_words.is_empty():
 		last_words = "Resting at the edge of the world."
-	
+	if WorldMemory != null and WorldMemory.has_method("pawn_death_fact"):
+		var death_fact: Dictionary = WorldMemory.pawn_death_fact(pawn_id)
+		var obituary: String = str(death_fact.get("obituary_narrative", "")).strip_edges()
+		if not obituary.is_empty():
+			last_words = obituary.substr(0, 240)
+
 	create_memorial({
 		"tile": death_tile,
 		"type": memorial_type,

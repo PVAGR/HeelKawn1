@@ -203,7 +203,7 @@ func _color_for_type(typ: String) -> String:
 		return COLOR_KNOWLEDGE
 	# Authority
 	if typ in ["authority_change", "authority_points_added", "authority_vacuum", "governance_change",
-			"succession", "abdicate", "pledge_loyalty", "edict_issued", "law_added", "law_removed",
+			"succession", "abdicate", "pledge_loyalty", "edict_issued", "law_added", "law_removed", "law_breach",
 			"ruler_decision"]:
 		return COLOR_AUTHORITY
 	# Settlement
@@ -551,6 +551,10 @@ func _event_text(typ: String, e: Dictionary) -> String:
 			return "%s enacted: %s" % [pol, law]
 		"law_removed":
 			return "a law was repealed"
+		"law_breach":
+			var nm: String = str(e.get("pawn_name", "someone")).strip_edges()
+			var law: String = str(e.get("law_type", "a law")).replace("_", " ")
+			return "%s breached %s" % [nm, law]
 		"ruler_decision":
 			var decision: String = str(e.get("decision", "")).replace("_", " ")
 			if not decision.is_empty():

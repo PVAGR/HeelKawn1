@@ -992,10 +992,21 @@ func _refresh(refresh_expensive_details: bool = false) -> void:
 		var clan_bit: String = ""
 		if d.clan_id >= 0:
 			clan_bit = " · clan %d" % d.clan_id
+		var rank_bit: String = ""
+		var rank_legacy: String = str(d.military_rank_legacy).strip_edges()
+		if not rank_legacy.is_empty() and rank_legacy.to_lower() != "none":
+			rank_bit = " · %s" % rank_legacy.capitalize()
+		var job_diag: String = ""
+		if d.visible_orders_count > 0 or not str(d.last_claim_failure_reason).is_empty():
+			var fail: String = str(d.last_claim_failure_reason).strip_edges()
+			if fail.is_empty():
+				job_diag = " · jobs vis %d" % int(d.visible_orders_count)
+			else:
+				job_diag = " · jobs %d · %s" % [int(d.visible_orders_count), fail]
 		if prof == "None":
-			_subtitle_label.text = "%s · no prof · bias %s%s" % [arc_bits, hk, clan_bit]
+			_subtitle_label.text = "%s · no prof · bias %s%s%s%s" % [arc_bits, hk, clan_bit, rank_bit, job_diag]
 		else:
-			_subtitle_label.text = "%s · %s · bias %s%s" % [arc_bits, prof, hk, clan_bit]
+			_subtitle_label.text = "%s · %s · bias %s%s%s%s" % [arc_bits, prof, hk, clan_bit, rank_bit, job_diag]
 		if refresh_expensive_details:
 			_refresh_portrait_strip(d)
 

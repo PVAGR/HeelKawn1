@@ -108,6 +108,24 @@ func record_crime(criminal_id: int, crime_type: int, victim_id: int = -1, settle
 		SocialManager.record_grudge(victim_id, criminal_id, CRIME_NAMES.get(crime_type, "crime"), CRIME_SEVERITY.get(crime_type, 1))
 
 
+## Recent crime on record (for community law checks).
+func has_recent_crime(pawn_id: int, crime_name: String, max_age_ticks: int = 600) -> bool:
+	if pawn_id < 0 or not _criminal_records.has(pawn_id):
+		return false
+	var now_tick: int = GameManager.tick_count if GameManager != null else 0
+	var want: String = crime_name.to_lower()
+	for crime_any in _criminal_records[pawn_id]:
+		if crime_any is not Dictionary:
+			continue
+		var crime: Dictionary = crime_any as Dictionary
+		if str(crime.get("crime_name", "")).to_lower() != want:
+			continue
+		var age: int = now_tick - int(crime.get("tick", 0))
+		if age >= 0 and age <= max_age_ticks:
+			return true
+	return false
+
+
 ## Get criminal record for a pawn.
 func get_criminal_record(pawn_id: int) -> Array:
 	return _criminal_records.get(pawn_id, [])

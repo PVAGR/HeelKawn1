@@ -329,6 +329,7 @@ func _draw() -> void:
 					to = corner_world + Vector2(0.0, region_size)
 			draw_line(from, to, border_color, border_width, true)
 	_draw_trade_route_lines(border_width)
+	_draw_caravan_markers(half_tile)
 	_draw_polity_labels(zoom, half_tile)
 	if _skirmish_flash_tile.x >= 0 and GameManager != null:
 		if GameManager.tick_count <= _skirmish_flash_until_tick:
@@ -365,6 +366,27 @@ func _draw_trade_route_lines(line_width: float) -> void:
 		var b: Vector2 = _world.tile_to_world(to_tile)
 		var trade_col: Color = Color(0.92, 0.82, 0.35, 0.55)
 		draw_line(a, b, trade_col, maxf(1.0, line_width * 0.65), true)
+
+
+func _draw_caravan_markers(half_tile: float) -> void:
+	if TradeMemory == null or not TradeMemory.has_method("get_caravan_markers"):
+		return
+	var markers: Array = TradeMemory.get_caravan_markers()
+	if markers.is_empty():
+		return
+	var r: float = maxf(3.0, half_tile * 0.55)
+	for marker_any in markers:
+		if marker_any is not Dictionary:
+			continue
+		var marker: Dictionary = marker_any as Dictionary
+		var tile: Vector2i = marker.get("tile", Vector2i.ZERO) as Vector2i
+		if tile == Vector2i.ZERO:
+			continue
+		var center: Vector2 = _world.tile_to_world(tile)
+		var fill: Color = Color(0.98, 0.78, 0.22, 0.92)
+		var outline: Color = Color(0.12, 0.08, 0.02, 0.9)
+		draw_circle(center, r, fill)
+		draw_arc(center, r + 1.0, 0.0, TAU, 16, outline, 1.5, true)
 
 
 func _draw_polity_labels(zoom: float, half_tile: float) -> void:

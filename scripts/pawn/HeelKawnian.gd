@@ -1992,6 +1992,53 @@ func _find_stockpile_site_tile() -> Vector2i:
 	return Vector2i(-1, -1)
 
 
+func _tick_community_law_check() -> void:
+	if data == null or SettlementMemory == null or GameManager == null:
+		return
+	var tick: int = GameManager.tick_count
+	if tick - data.last_law_breach_tick < 220:
+		return
+	if posmod(tick + int(data.id) * 13, 89) != 0:
+		return
+	var sid: int = int(data.settlement_id)
+	if sid < 0 and SettlementMemory.has_method("get_settlement_id_for_pawn"):
+		sid = SettlementMemory.get_settlement_id_for_pawn(int(data.id))
+	if sid < 0:
+		return
+	var job_type: int = -1
+	if _current_job != null:
+		job_type = int(_current_job.type)
+	var pawn_snapshot: Dictionary = {
+		"pawn_id": int(data.id),
+		"carrying": int(data.carrying),
+		"carrying_count": int(data.carrying_qty),
+		"hunger": float(data.hunger),
+		"food_emergency": HeelKawnian._s_food_emergency,
+		"current_job_type": job_type,
+	}
+	var violations: Array = SettlementMemory.check_law_violations(sid, pawn_snapshot)
+	if violations.is_empty():
+		return
+	data.last_law_breach_tick = tick
+	for law_id_any in violations:
+		var law_id: int = int(law_id_any)
+		var law: Dictionary = SettlementMemory.get_law(sid, law_id)
+		if law.is_empty():
+			continue
+		data.add_mood_event(MoodEvent.Type.STRESS, 14.0, 180)
+		if WorldMemory != null and WorldMemory.has_method("record_event"):
+			WorldMemory.record_event({
+				"type": "law_breach",
+				"tick": tick,
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"settlement_id": sid,
+				"law_id": law_id,
+				"law_type": str(law.get("type", "")),
+				"law_description": str(law.get("description", "")),
+			})
+
+
 func _try_heelkawnian_affiliation_action() -> bool:
 	if data == null or _world == null or GameManager == null:
 		return false
@@ -4015,6 +4062,7 @@ func _tick_idle() -> void:
 		# Autonomous stockpile: if no stockpiles exist and pawn has materials, post one.
 		_try_post_stockpile_job()
 	if run_social_lane:
+		_tick_community_law_check()
 		# 2c. Human ladder affiliation: household -> clan -> nation.
 		if _try_heelkawnian_affiliation_action():
 			return

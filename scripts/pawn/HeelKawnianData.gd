@@ -477,6 +477,7 @@ var need_urgency: Dictionary = {
 ## Transient job-claim diagnostics (F10 idle audit / CreatorDebugMenu). Not saved.
 var visible_orders_count: int = 0
 var last_claim_failure_reason: String = ""
+var last_law_breach_tick: int = -99999
 var obey_score: float = 1.0
 
 

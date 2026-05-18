@@ -224,7 +224,7 @@ func _update_trade_routes(tick: int) -> void:
 func _complete_trade_route(route_index: int, tick: int) -> void:
 	var route: Dictionary = trade_routes[route_index]
 	route.status = "delivered"
-	
+	_deliver_route_goods(route)
 	# Spread knowledge from origin to destination
 	_spread_knowledge(route.from_settlement, route.to_settlement, route.goods)
 
@@ -324,6 +324,72 @@ func ensure_route_between(from_settlement: int, to_settlement: int, tick: int) -
 		"last_updated_tick": tick,
 	})
 	_next_route_id += 1
+
+
+func _goods_key_to_item_type(key: String) -> int:
+	match key:
+		"food", "berry":
+			return Item.Type.BERRY
+		"wood":
+			return Item.Type.WOOD
+		"stone":
+			return Item.Type.STONE
+		"fish":
+			return Item.Type.FISH
+		"meat":
+			return Item.Type.MEAT
+		_:
+			return Item.Type.BERRY
+
+
+func _deliver_route_goods(route: Dictionary) -> void:
+	if StockpileManager == null:
+		return
+	var dest_rk: int = int(route.get("to_settlement", -1))
+	if dest_rk < 0:
+		return
+	var dest_tile: Vector2i = SettlementPlanner._center_tile_of_region_key(dest_rk)
+	var goods: Dictionary = route.get("goods", {}) as Dictionary
+	for key in goods:
+		var qty: int = int(goods[key])
+		if qty <= 0:
+			continue
+		var item_type: int = _goods_key_to_item_type(str(key))
+		var zone: Stockpile = StockpileManager.find_drop_zone_for_settlement(dest_rk, item_type, dest_tile, null)
+		if zone == null:
+			zone = StockpileManager.find_drop_zone(item_type, dest_tile, null)
+		if zone != null:
+			zone.add_item(item_type, qty)
+
+
+## Moving caravan markers for map overlay (interpolated along route progress).
+func get_caravan_markers() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for route_any in trade_routes:
+		if route_any is not Dictionary:
+			continue
+		var route: Dictionary = route_any as Dictionary
+		if str(route.get("status", "")) != "en_route":
+			continue
+		var from_rk: int = int(route.get("from_settlement", -1))
+		var to_rk: int = int(route.get("to_settlement", -1))
+		if from_rk < 0 or to_rk < 0:
+			continue
+		var from_tile: Vector2i = SettlementPlanner._center_tile_of_region_key(from_rk)
+		var to_tile: Vector2i = SettlementPlanner._center_tile_of_region_key(to_rk)
+		var prog: float = clampf(float(route.get("progress", 0.0)), 0.0, 1.0)
+		var tile: Vector2i = Vector2i(
+				int(lerpf(float(from_tile.x), float(to_tile.x), prog)),
+				int(lerpf(float(from_tile.y), float(to_tile.y), prog)),
+		)
+		out.append({
+			"tile": tile,
+			"from_settlement": from_rk,
+			"to_settlement": to_rk,
+			"progress": prog,
+			"caravan_pawn_id": int(route.get("caravan_pawn_id", -1)),
+		})
+	return out
 
 
 ## Routes visible on strategy map (includes diplomatic links without caravan).

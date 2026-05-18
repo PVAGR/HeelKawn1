@@ -3896,7 +3896,12 @@ func check_law_violations(settlement_id: int, pawn_data: Dictionary) -> Array:
     var violations: Array = []
     if not _laws.has(settlement_id):
         return violations
-    
+    var pawn_id: int = int(pawn_data.get("pawn_id", -1))
+    var food_pressure: float = 0.0
+    var warm_pressure: float = 0.0
+    if ColonySimServices != null:
+        food_pressure = ColonySimServices.get_food_pressure()
+        warm_pressure = ColonySimServices.get_warmth_pressure(settlement_id)
     var laws_array: Array = _laws[settlement_id] as Array
     for law_v in laws_array:
         if law_v is not Dictionary:
@@ -3904,14 +3909,63 @@ func check_law_violations(settlement_id: int, pawn_data: Dictionary) -> Array:
         var law: Dictionary = law_v as Dictionary
         if not law.get("active", true):
             continue
-        
-        ## Check penalties (simplified check)
-        var penalties = law.get("penalties", [])
-        ## This is where you'd check pawn_data against penalties
-        ## For now, just return the law ID if active
-        violations.append(int(law.get("id", -1)))
-    
+        var law_id: int = int(law.get("id", -1))
+        if law_id < 0:
+            continue
+        var law_type: String = str(law.get("type", ""))
+        match law_type:
+            "share_food_in_crisis":
+                if food_pressure >= 0.55 and _pawn_withholds_food_in_crisis(pawn_data):
+                    violations.append(law_id)
+            "maintain_hearth":
+                if _pawn_neglects_hearth_duty(settlement_id, pawn_id, pawn_data, warm_pressure):
+                    violations.append(law_id)
+            "no_theft":
+                if CrimeSystem != null and CrimeSystem.has_recent_crime(pawn_id, "theft", 600):
+                    violations.append(law_id)
+            _:
+                pass
     return violations
+
+
+func _pawn_withholds_food_in_crisis(pawn_data: Dictionary) -> bool:
+    var carrying: int = int(pawn_data.get("carrying", Item.Type.NONE))
+    if not Item.is_food(carrying):
+        return false
+    if int(pawn_data.get("carrying_count", 0)) <= 0:
+        return false
+    if float(pawn_data.get("hunger", 100.0)) <= 32.0:
+        return false
+    if not bool(pawn_data.get("food_emergency", false)):
+        return false
+    var job_type: int = int(pawn_data.get("current_job_type", -1))
+    if job_type == Job.Type.HAUL or job_type == Job.Type.TRADE_HAUL:
+        return false
+    return true
+
+
+func _pawn_neglects_hearth_duty(
+        settlement_id: int,
+        pawn_id: int,
+        pawn_data: Dictionary,
+        warm_pressure: float,
+) -> bool:
+    if warm_pressure < 0.35:
+        return false
+    if ColonySimServices == null:
+        return false
+    var hearths: int = ColonySimServices._hearth_count_for_scope(settlement_id)
+    var pending: int = ColonySimServices.count_pending_fire_pits_in_region(settlement_id)
+    var cold: int = ColonySimServices.count_cold_uncovered_pawns(settlement_id)
+    if cold <= 0 or hearths + pending > 0:
+        return false
+    var ruler_id: int = get_ruler_pawn_id(settlement_id)
+    if pawn_id != ruler_id:
+        return false
+    var carrying: int = int(pawn_data.get("carrying", Item.Type.NONE))
+    if carrying != Item.Type.WOOD:
+        return false
+    return int(pawn_data.get("current_job_type", -1)) < 0
 
 
 ## Save/Load support

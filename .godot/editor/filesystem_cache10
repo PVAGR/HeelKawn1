@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779136254
+::res://::1779138090
 .aider.chat.history.md::TextFile::-1::1778789129::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779121146::0::1::::<><><>0<>0<><>::
 CHANGELOG.md::TextFile::-1::1778793280::0::1::::<><><>0<>0<><>::
@@ -501,7 +501,7 @@ reference_ai_collaboration_system.md::TextFile::-1::1778108637::0::1::::<><><>0<
 ::res://scenes/::1777694600
 ::res://scenes/main/::1778866645
 BuildPreviewOverlay.gd::GDScript::3548897851576038098::1777694600::0::1::::<>Node2D<><>0<>0<><>::
-Main.gd::GDScript::758714108225959060::1779127399::0::1::::Main<>Node2D<><>0<>0<><>::
+Main.gd::GDScript::758714108225959060::1779138069::0::1::::Main<>Node2D<><>0<>0<><>::
 Main.tscn::PackedScene::-1::1778403066::0::1::::<><><>0<>0<><>::res://scenes/main/Main.gd<>res://scenes/main/BuildPreviewOverlay.gd<>res://scripts/camera/CameraController.gd<>res://scenes/world/World.tscn<>res://scripts/world/DayNightCycle.gd<>res://scripts/pawn/PawnSpawner.gd<>res://scenes/pawn/HeelKawnian.tscn<>res://scenes/ui/ColonyHUD.tscn<>res://scenes/ui/SurvivalHUD.tscn<>res://scenes/ui/PlayerInventoryUI.tscn<>res://scenes/ui/PawnMoodUI.tscn<>res://scenes/ui/MemorialInscriptionUI.tscn<>res://scenes/ui/BuildingToolbar.tscn<>res://scenes/ui/CraftingMenu.tscn<>res://scenes/ui/KnowledgePanel.tscn<>res://scenes/ui/ObserverHUD.tscn<>res://scenes/ui/FocusInspector.tscn<>res://scenes/ui/RegionInspector.tscn<>res://scenes/ui/TimelineControls.tscn<>res://scenes/ui/IncarnationPicker.tscn<>res://scripts/ui/BuildToolbar.gd<>res://scripts/ui/PawnInfoPanel.gd<>res://scripts/pawn/AnimalSpawner.gd<>res://scripts/combat/EnemySpawner.gd<>res://scripts/world/LivingWorldController.gd<>res://scripts/world/WorldTrace.gd<>res://scripts/ui/CreatorDebugMenu.gd<>res://scenes/ui/MapModeOverlay.tscn<>res://scenes/ui/ChronicleLedger.tscn<>res://scripts/ui/ChronicleBook.gd<>res://scripts/ui/SeedGallery.gd<>res://scenes/ui/PawnAIInspector.tscn<>res://scenes/ui/SettingsPanel.tscn<>res://scenes/ui/EventToast.tscn<>res://scenes/ui/Minimap.tscn<>res://scenes/ui/UrgentAlert.tscn<>res://scenes/ui/AudioController.tscn<>res://scenes/ui/SaveLoadMenu.tscn<>res://scenes/ui/MainMenu.tscn<>res://scenes/ui/TileTooltip.tscn<>res://scenes/ui/CameraBookmarks.tscn<>res://scenes/ui/EventParticles.tscn<>res://scenes/ui/WeatherOverlay.tscn<>res://scenes/ui/CommandMode.tscn<>res://scenes/ui/CommandIndicator.tscn<>res://scenes/ui/PawnNameLabels.tscn<>res://scenes/ui/PawnChatter.tscn<>res://scenes/ui/SettlementBanner.tscn<>res://scenes/ui/AmbientAudio.tscn<>res://scripts/ui/TerritoryOverlay.gd
 ::res://scenes/pawn/::1778320730
 HeelKawnian.tscn::PackedScene::-1::1778620308::0::1::::<><><>0<>0<><>::res://scripts/pawn/HeelKawnian.gd<>res://scripts/pawn/ActionPopupLabel.gd
@@ -622,12 +622,12 @@ sim_time.gd::GDScript::4781232912047051919::1777694600::0::1::::SimTime<>RefCoun
 world_meaning_safe.gd::GDScript::364407411864143448::1777694600::0::1::::<>RefCounted<><>0<>0<><>::
 ::res://scripts/memory/::1777765505
 LongTermMemory.gd::GDScript::5974671399758704568::1777694762::0::1::::LongTermMemory<>RefCounted<><>0<>0<><>::
-::res://scripts/pawn/::1779126680
+::res://scripts/pawn/::1779138076
 ActionPopupLabel.gd::GDScript::5174978775249392183::1777694600::0::1::::ActionPopupLabel<>Label<><>0<>0<><>::
 AgentBayesTree.gd::GDScript::6169819672790835832::1779124336::0::1::::AgentBayesTree<>RefCounted<><>0<>0<><>::
-Animal.gd::GDScript::3893107784844328532::1778556983::0::1::::Animal<>Node2D<><>0<>0<><>::
+Animal.gd::GDScript::3893107784844328532::1779138076::0::1::::Animal<>Node2D<><>0<>0<><>::
 AnimalSpawner.gd::GDScript::8350566320011331673::1778866624::0::1::::AnimalSpawner<>Node<><>0<>0<><>::
-HeelKawnian.gd::GDScript::7989372192867881187::1779126680::0::1::::HeelKawnian<>Node2D<><>0<>0<><>::
+HeelKawnian.gd::GDScript::7989372192867881187::1779138076::0::1::::HeelKawnian<>Node2D<><>0<>0<><>::
 HeelKawnianData.gd::GDScript::4502026540089827843::1779124072::0::1::::HeelKawnianData<>RefCounted<><>0<>0<><>::
 HeelKawnianDecision.gd::GDScript::5995801159740043007::1778936968::0::1::::HeelKawnianDecision<>RefCounted<><>0<>0<><>::
 MoodEvent.gd::GDScript::919426344482337370::1777694600::0::1::::MoodEvent<>Resource<><>0<>0<><>::
@@ -672,7 +672,7 @@ TestPhase4Kernel.gd::GDScript::4541286713475473953::1777694600::0::1::::<>Node<>
 TestSkillTreeBonuses.gd::GDScript::5261734312154252569::1778320772::0::1::::<>Node<><>0<>0<><>::
 TestTraitSystem.gd::GDScript::8176838439313492610::1778320772::0::1::::<>Node<><>0<>0<><>::
 test_kinship_api.gd::GDScript::5816937099531489306::1777802574::0::1::::<>Node<><>0<>0<><>::
-::res://scripts/ui/::1779126680
+::res://scripts/ui/::1779138076
 ActionMenu.gd::GDScript::8591061599762165760::1778215319::0::1::::<>PanelContainer<><>0<>0<><>::
 AIAgentDebugPanel.gd::GDScript::2909754586514078780::1778320772::0::1::::<>Control<><>0<>0<><>::
 AIControlPanel.gd::GDScript::3304511088348402013::1778146909::0::1::::AIControlPanel<>Control<><>0<>0<><>::
@@ -715,7 +715,7 @@ ModernTheme.gd::GDScript::3902355807693955108::1778057283::0::1::::<>Node<><>0<>
 ObserverHUD.gd::GDScript::948590416549376643::1778320772::0::1::::ObserverHUD<>CanvasLayer<><>0<>0<><>::
 observer_lens_panel.gd::GDScript::7758710406776762680::1777694600::0::1::::ObserverLensPanel<>PanelContainer<><>0<>0<><>::
 PawnAIInspector.gd::GDScript::4582259285785959029::1778651452::0::1::::PawnAIInspector<>CanvasLayer<><>0<>0<><>::
-PawnChatter.gd::GDScript::994654664356517239::1778417291::0::1::::PawnChatter<>Node2D<><>0<>0<><>::
+PawnChatter.gd::GDScript::994654664356517239::1779138076::0::1::::PawnChatter<>Node2D<><>0<>0<><>::
 PawnDialoguePanel.gd::GDScript::861488275105953627::1778321221::0::1::::PawnDialoguePanel<>Control<><>0<>0<><>::
 PawnInfoPanel.gd::GDScript::422338802411255888::1779124088::0::1::::PawnInfoPanel<>CanvasLayer<><>0<>0<><>::
 PawnMoodUI.gd::GDScript::58727109208690070::1778320772::0::1::::<>PanelContainer<><>0<>0<><>::
@@ -732,9 +732,9 @@ SettingsPanel.gd::GDScript::316232498876757383::1778153209::0::1::::<>CanvasLaye
 SettlementBanner.gd::GDScript::9140255368177390998::1778397689::0::1::::SettlementBanner<>Node2D<><>0<>0<><>::
 SettlementMindPanel.gd::GDScript::5725843346425937815::1778434008::0::1::::SettlementMindPanel<>CanvasLayer<><>0<>0<><>::
 SpeedControlUI.gd::GDScript::1336406938522421461::1777780365::0::1::::<>Control<><>0<>0<><>::
-StatisticsPanel.gd::GDScript::3211918285523082367::1778153058::0::1::::<>PanelContainer<><>0<>0<><>::
+StatisticsPanel.gd::GDScript::3211918285523082367::1779138076::0::1::::<>PanelContainer<><>0<>0<><>::
 SurvivalHUD.gd::GDScript::8078811467556358024::1778884580::0::1::::<>CanvasLayer<><>0<>0<><>::
-TerritoryOverlay.gd::GDScript::4104062370064090541::1779124061::0::1::::TerritoryOverlay<>Node2D<><>0<>0<><>::
+TerritoryOverlay.gd::GDScript::4104062370064090541::1779138076::0::1::::TerritoryOverlay<>Node2D<><>0<>0<><>::
 TileTooltip.gd::GDScript::8463246441767180968::1779126680::0::1::::TileTooltip<>CanvasLayer<><>0<>0<><>::
 TimelineControls.gd::GDScript::8499596691581927892::1778146892::0::1::::TimelineControls<>HBoxContainer<><>0<>0<><>::
 TradeOverviewPanel.gd::GDScript::3957855049127493365::1778414304::0::1::::TradeOverviewPanel<>CanvasLayer<><>0<>0<><>::
@@ -749,7 +749,7 @@ WeatherOverlay.gd::GDScript::6187163600906225762::1778866625::0::1::::WeatherOve
 ::res://scripts/utils/::1778030866
 BuildingsVisualizer.gd::GDScript::7930289766593082615::1778033074::0::1::::BuildingsVisualizer<>RefCounted<><>0<>0<><>::
 ProceduresPawnVisualizer.gd::GDScript::8288317706476345824::1778320772::0::1::::ProceduresPawnVisualizer<>RefCounted<><>0<>0<><>::
-::res://scripts/world/::1778799611
+::res://scripts/world/::1779138076
 AmbientBiomeParticles.gd::GDScript::867947974587804646::1778399576::0::1::::<>Node2D<><>0<>0<><>::
 AnimalPopulation.gd::GDScript::61149111132183682::1777694600::0::1::::AnimalPopulation<>Object<><>0<>0<><>::
 Biome.gd::GDScript::6183281367665276893::1778656676::0::1::::Biome<>RefCounted<><>0<>0<><>::
@@ -770,7 +770,7 @@ TileFeature.gd::GDScript::1099491373035086690::1778656677::0::1::::TileFeature<>
 WorldData.gd::GDScript::5042201326975947076::1778796454::0::1::::WorldData<>RefCounted<><>0<>0<><>::
 WorldEvolution.gd::GDScript::6842439889485202590::1777694600::0::1::::WorldEvolution<>Node<><>0<>0<><>::
 WorldGenerator.gd::GDScript::1657685340012154500::1778413073::0::1::::WorldGenerator<>RefCounted<><>0<>0<><>::
-WorldOverlay.gd::GDScript::5537764357850478732::1779121146::0::1::::<>Node2D<><>0<>0<><>::
+WorldOverlay.gd::GDScript::5537764357850478732::1779138076::0::1::::<>Node2D<><>0<>0<><>::
 WorldTrace.gd::GDScript::443262576821968164::1777694600::0::1::::WorldTrace<>Node2D<><>0<>0<><>::
 ZoomSystem.gd::GDScript::3900187557396311665::1778320772::0::1::::<>Node<><>0<>0<><>::
 ::res://tests/::1778108662

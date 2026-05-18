@@ -846,6 +846,11 @@ func _strv(v: Variant, fallback: String) -> String:
 		return fallback
 	return str(v)
 
+func _clip_for_console(text: String, max_chars: int = 320) -> String:
+	if text.length() <= max_chars:
+		return text
+	return text.substr(0, max_chars) + "... [truncated]"
+
 func _print_section_header(name: String) -> void:
 	print("%s" % name)
 
@@ -899,10 +904,13 @@ func _report_ui_truth(d_sel: Dictionary) -> void:
 func _report_warnings_and_next_action(d_sel: Dictionary, d_colony: Dictionary) -> void:
 	var warnings: Array = d_colony.get("warnings", [])
 	var warning_count: int = warnings.size()
+	var manual_click_proven: bool = _boolv(d_sel.get("selection_manual_click_proven", false), false)
 
 	var status_next: String = ""
 	if warning_count > 0:
 		status_next = "WARN_FIX:review_warnings_then_retry_click_proof"
+	elif manual_click_proven:
+		status_next = "NEXT:selection_click_proof_complete"
 	else:
 		status_next = "NEXT:click_visible_pawn_then_press_F10"
 
@@ -1021,6 +1029,8 @@ func _report_colony_truth() -> void:
 	var ws: Array = d_colony.get("warnings", [])
 	if ws.size() > 0:
 		next_override = "review_warnings"
+	elif manual_click_ok:
+		next_override = "selection_click_proof_complete"
 	else:
 		next_override = "click_visible_pawn_then_press_F10"
 	next_action = next_override
@@ -1441,14 +1451,14 @@ func _report_world_memory() -> void:
 	var ev: Variant = mem.get("events", [])
 	if ev is Array:
 		var arr: Array = ev as Array
-		var start: int = maxi(0, arr.size() - 25)
+		var start: int = maxi(0, arr.size() - 12)
 		for j in range(start, arr.size()):
-			print("  event[%d]: %s" % [j, str(arr[j])])
+			print("  event[%d]: %s" % [j, _clip_for_console(str(arr[j]), 280)])
 
 
 func _report_history_snip() -> void:
 	var s: String = WorldMemory.get_history_export_string(false)
-	var maxl: int = 12000
+	var maxl: int = 4000
 	if s.length() > maxl:
 		s = s.substr(0, maxl) + "\n... [truncated at %d chars]" % maxl
 	print(s)
@@ -1459,10 +1469,22 @@ func _report_world_meaning() -> void:
 	print("WorldMeaning.meaning_by_region regions=%d" % m.size())
 	var keys: Array = m.keys()
 	keys.sort()
-	var cap: int = mini(18, keys.size())
+	var cap: int = mini(10, keys.size())
 	for i in range(cap):
 		var rk: int = int(keys[i])
-		print("  rk=%d summary=%s" % [rk, str(WorldMeaning.get_region_meaning_summary(rk))])
+		var summary: Dictionary = WorldMeaning.get_region_meaning_summary(rk)
+		var tags: Variant = summary.get("tags", [])
+		print(
+			"  rk=%d label=%s deaths=%d builds=%d trade=%d tags=%s"
+			% [
+				rk,
+				str(summary.get("meaning_label", "")),
+				int(summary.get("total_deaths", 0)),
+				int(summary.get("buildings_constructed", 0)),
+				int(summary.get("trade_events", 0)),
+				_clip_for_console(str(tags), 120),
+			]
+		)
 
 
 func _report_world_persist() -> void:

@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779162458
+::res://::1779162843
 .aider.chat.history.md::TextFile::-1::1778789129::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779121146::0::1::::<><><>0<>0<><>::
 CHANGELOG.md::TextFile::-1::1778793280::0::1::::<><><>0<>0<><>::
@@ -128,7 +128,7 @@ wall.png::CompressedTexture2D::5625700477737538922::1777971615::1778417117::1:::
 AgeMemory.gd::GDScript::3623017377226678626::1778570754::0::1::::<>Node<><>0<>0<><>::
 AIAgentManager.gd::GDScript::4954939857757967540::1778866624::0::1::::<>Node<><>0<>0<><>::
 AIManager.gd::GDScript::8390453645687965822::1778796562::0::1::::<>Node<><>0<>0<><>::
-ArmyBattleSystem.gd::GDScript::8839768029893734654::1779157506::0::1::::<>Node<><>0<>0<><>::
+ArmyBattleSystem.gd::GDScript::8839768029893734654::1779162828::0::1::::<>Node<><>0<>0<><>::
 ArtSystem.gd::GDScript::8334783542866444256::1778655002::0::1::::<>Node<><>0<>0<><>::
 AuthorityJobBoard.gd::GDScript::3607624428311843175::1779121146::0::1::::<>Node<><>0<>0<><>::
 AuthoritySystem.gd::GDScript::662900908174916362::1777694600::0::1::::<>Node<><>0<>0<><>::
@@ -138,7 +138,7 @@ BodyRiskManager.gd::GDScript::9035867343056244085::1778884561::0::1::::<>Node<><
 BuildingRegistry.gd::GDScript::6026745172161523404::1778651452::0::1::::<>Node<><>0<>0<><>::
 BuildingUsageTracker.gd::GDScript::2715926842069818093::1779121146::0::1::::<>Node<><>0<>0<><>::
 CharacterExport.gd::GDScript::4930929248496104877::1778320772::0::1::::<>Node<><>0<>0<><>::
-CharacterProgressionSystem.gd::GDScript::7147558137091390793::1779157601::0::1::::<>Node<><>0<>0<><>::
+CharacterProgressionSystem.gd::GDScript::7147558137091390793::1779162828::0::1::::<>Node<><>0<>0<><>::
 ChronicleExport.gd::GDScript::7089405843585298919::1778174044::0::1::::<>Node<><>0<>0<><>::
 ChronicleLog.gd::GDScript::6047009701702638617::1777694600::0::1::::<>Node<><>0<>0<><>::
 ChronicleNarrativeSystem.gd::GDScript::8738193980524847579::1779158016::0::1::::<>Node<><>0<>0<><>::
@@ -153,12 +153,12 @@ CrimeSystem.gd::GDScript::8124533145431937429::1779154388::0::1::::<>Node<><>0<>
 CulturalMemory.gd::GDScript::4379229180744210081::1778208530::0::1::::<>Node<><>0<>0<><>::
 CulturalStyleManager.gd::GDScript::6734428572572920136::1778749112::0::1::::<>Node<><>0<>0<><>::
 CurrencySystem.gd::GDScript::8830021071979701416::1778654949::0::1::::<>Node<><>0<>0<><>::
-DailyRoutineSystem.gd::GDScript::3370075390017137319::1779159322::0::1::::<>Node<><>0<>0<><>::
+DailyRoutineSystem.gd::GDScript::3370075390017137319::1779162828::0::1::::<>Node<><>0<>0<><>::
 DiplomacySystem.gd::GDScript::7370753064401601751::1778654987::0::1::::<>Node<><>0<>0<><>::
 DisasterSystem.gd::GDScript::3533735953280705894::1778453307::0::1::::<>Node<><>0<>0<><>::
 DiscoveryGate.gd::GDScript::2584224234650357656::1778316521::0::1::::<>Node<><>0<>0<><>::
 DiseaseSystem.gd::GDScript::5176942498259955416::1778923718::0::1::::<>Node<><>0<>0<><>::
-DynastyFamilySystem.gd::GDScript::9096165783105137273::1779159084::0::1::::<>Node<><>0<>0<><>::
+DynastyFamilySystem.gd::GDScript::9096165783105137273::1779162828::0::1::::<>Node<><>0<>0<><>::
 EcologySystem.gd::GDScript::7356293288449483685::1779157936::0::1::::<>Node<><>0<>0<><>::
 EconomyManager.gd::GDScript::600062380472312883::1778796523::0::1::::<>Node<><>0<>0<><>::
 EventBus.gd::GDScript::17816675561125202::1778616814::0::1::::<>Node<><>0<>0<><>::
@@ -203,7 +203,7 @@ NavalSystem.gd::GDScript::3944988097343027324::1778654944::0::1::::<>Node<><>0<>
 ObjectPool.gd::GDScript::5290334352068325487::1778041940::0::1::::<>Node<><>0<>0<><>::
 ObservationAPI.gd::GDScript::1973396630319049042::1778320772::0::1::::<>Node<><>0<>0<><>::
 ObserverManager.gd::GDScript::6831482111159099135::1778796600::0::1::::<>Node<><>0<>0<><>::
-OfficerRankSystem.gd::GDScript::6611019577017134017::1779157381::0::1::::<>Node<><>0<>0<><>::
+OfficerRankSystem.gd::GDScript::6611019577017134017::1779162828::0::1::::<>Node<><>0<>0<><>::
 OnboardingSystem.gd::GDScript::5953302748132994725::1778320772::0::1::::<>Node<><>0<>0<><>::
 PawnAccess.gd::GDScript::1233675323454121489::1778884775::0::1::::<>Node<><>0<>0<><>::
 PawnBrainBridge.gd::GDScript::2635129942762813229::1778884561::0::1::::<>Node<><>0<>0<><>::

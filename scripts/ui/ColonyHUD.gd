@@ -791,6 +791,9 @@ func _polities_realm_line() -> String:
 	var proto: int = SettlementMemory.get_proto_sites().size()
 	var polities: int = SettlementMemory.get_active_polity_count()
 	var base: String = "[color=#c9b37c]Realms:[/color] [b]%d[/b] polities · %d formal · %d proto camps" % [polities, formal, proto]
+	var n: String = _nations_hud_line()
+	if n != "":
+		base += "\n" + n
 	if formal < 2 or FactionManager == null:
 		return base
 	var focus_rk: int = _focus_center_region()
@@ -800,6 +803,46 @@ func _polities_realm_line() -> String:
 	if rel_lines.is_empty():
 		return base
 	return base + "\n[color=#c9b37c]Diplomacy:[/color] " + " · ".join(rel_lines)
+
+
+## Nations HUD line: shows nation count, wars, alliances, and contested borders.
+## Appears as a sub-line under the Realms line. Reads from NationBorderSystem.
+func _nations_hud_line() -> String:
+	if NationBorderSystem == null:
+		return ""
+	var nations: Array[Dictionary] = NationBorderSystem.get_all_nations()
+	if nations.is_empty():
+		# No nations yet — show when settlements exist as a hint they can form
+		var formal: int = SettlementMemory.get_formal_settlement_count() if SettlementMemory != null else 0
+		if formal >= 2:
+			return "[color=#c9b37c]Nations:[/color] [color=#888888]forming... (2+ settlements may ally)[/color]"
+		return ""
+	var total_war: int = 0
+	var total_allies: int = 0
+	var total_pop: int = 0
+	var govs: Dictionary = {}
+	for nation in nations:
+		total_pop += int(nation.get("population", 0))
+		total_war += nation.get("at_war_with", []).size()
+		total_allies += nation.get("allied_with", []).size()
+		var gov: String = str(nation.get("government_type", "tribal"))
+		govs[gov] = int(govs.get(gov, 0)) + 1
+	var contested: Dictionary = NationBorderSystem.get_contested_regions()
+	var contested_count: int = contested.size()
+	var gov_summary: PackedStringArray = PackedStringArray()
+	for g in govs:
+		gov_summary.append("%s×%d" % [g.capitalize(), int(govs[g])])
+	var parts: Array[String] = []
+	parts.append("nations=%d pop=%d" % [nations.size(), total_pop])
+	if total_war > 0:
+		parts.append("[color=#e57373]wars=%d[/color]" % total_war)
+	if total_allies > 0:
+		parts.append("[color=#81c784]alliances=%d[/color]" % total_allies)
+	if contested_count > 0:
+		parts.append("[color=#ff8a65]contested=%d[/color]" % contested_count)
+	if not gov_summary.is_empty():
+		parts.append("gov=%s" % ", ".join(gov_summary))
+	return "[color=#c9b37c]Nations:[/color] %s" % " · ".join(parts)
 
 
 func _focus_center_region() -> int:

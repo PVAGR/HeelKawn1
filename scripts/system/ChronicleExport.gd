@@ -118,7 +118,8 @@ func generate_world_seed() -> Dictionary:
 
 	# Core state from autoloads
 	if WorldMemory != null:
-		seed_data["event_count"] = WorldMemory.get("events", []).size() if WorldMemory.has_method("get") else 0
+		var events: Variant = WorldMemory.get("_events")
+		seed_data["event_count"] = (events as Array).size() if events is Array else 0
 
 	if SettlementMemory != null and SettlementMemory.has_method("get_formal_settlements"):
 		var settlements: Array = SettlementMemory.get_formal_settlements()

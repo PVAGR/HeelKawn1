@@ -290,11 +290,10 @@ static func create_for_agent(agent_id: int, parent: Node = null) -> DynamicSprit
 		pawn_id = agent_status.get("controlled_pawn_id", -1)
 	
 	if pawn_id >= 0:
-		# Find pawn in world
-		var pawn_spawner: PawnSpawner = GameManager.get_node("/root/Main/PawnSpawner")
-		if pawn_spawner:
-			for pawn in pawn_spawner.pawns:
-				if pawn != null and pawn.data != null and pawn.data.id == pawn_id:
-					return create_for_pawn(pawn, parent)
+		# Find pawn via PawnAccess to avoid cyclic reference
+		if PawnAccess != null and PawnAccess.has_method("find_pawn_by_id"):
+			var pawn: HeelKawnian = PawnAccess.call("find_pawn_by_id", pawn_id)
+			if pawn != null and is_instance_valid(pawn) and pawn.data != null:
+				return create_for_pawn(pawn, parent)
 	
 	return text_node

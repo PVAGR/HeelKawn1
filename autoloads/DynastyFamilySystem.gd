@@ -212,7 +212,7 @@ func _find_eligible_partners(tick: int) -> Array[Dictionary]:
 			"id": int(p.data.id),
 			"age": age,
 			"family_id": _get_family_for_pawn(int(p.data.id)),
-			"prestige": float(p.data.get("prestige") != null ? p.data.get("prestige") : 0.0),
+			"prestige": float(p.data.get("prestige") if p.data.has("prestige") else 0.0),
 		})
 	return eligible
 

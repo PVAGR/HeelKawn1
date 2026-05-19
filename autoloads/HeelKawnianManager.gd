@@ -630,8 +630,8 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 		var bed_target: int = maxi(2, int(ceil(float(local_pop) * maxf(housing_press, 0.5))))
 		if beds < bed_target:
 			ambition = _ambition_result(Job.Type.BUILD_BED, 7, "housing pressure requires more beds")
-	elif (walls < 4 or doors <= 0) and local_pop >= 6 and food_press <= 0.55 and housing_press <= 0.55:
-		ambition = _ambition_result(Job.Type.BUILD_WALL if walls < 4 else Job.Type.BUILD_DOOR, 6, "settlement perimeter is underdeveloped")
+	elif (walls < 2 or doors <= 0) and local_pop >= 6 and food_press <= 0.55 and housing_press <= 0.55:
+		ambition = _ambition_result(Job.Type.BUILD_WALL if walls < 2 else Job.Type.BUILD_DOOR, 6, "settlement perimeter is underdeveloped")
 	# Farms only when colony is stable (forage/hunt/fish first during shortages).
 	elif food_press <= 0.45 and housing_press <= 0.70 and warmth_press <= 0.40:
 		var farm_cap: int = ColonySimServices.estimate_farm_cap(local_pop, food_press, farms) if ColonySimServices != null else maxi(1, int(ceil(float(local_pop) / 5.0)))
@@ -653,7 +653,7 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 	elif libraries <= 0 and local_pop >= 8:
 		ambition = _ambition_result(Job.Type.BUILD_LIBRARY, 5, "advanced settlement needs knowledge infrastructure")
 	# Phase 6: barracks — military for large settlements
-	elif barracks <= 0 and local_pop >= 6 and walls >= 4:
+	elif barracks <= 0 and local_pop >= 6 and walls >= 2:
 		ambition = _ambition_result(Job.Type.BUILD_BARRACKS, 5, "walled settlement needs military capacity")
 	# Phase 6: cellar — advanced storage for mature settlements
 	elif cellars <= 0 and local_pop >= 7 and granaries >= 1:
@@ -873,9 +873,11 @@ static func leader_direct_construction(settlement_id: int) -> int:
 		return 0
 	var center: Vector2i = SettlementPlanner._center_tile_of_region_key(settlement_id)
 	var local_pop: int = 0
+	var settlement: Dictionary = {}
 	for st_v in SettlementMemory.settlements:
 		if st_v is Dictionary and int((st_v as Dictionary).get("center_region", -1)) == settlement_id:
-			local_pop = int((st_v as Dictionary).get("population", 0))
+			settlement = st_v as Dictionary
+			local_pop = int(settlement.get("population", 0))
 			break
 	# Scan local features at settlement center (not wherever the chief is standing).
 	var features: Dictionary = _scan_local_features(center, 12)
@@ -949,25 +951,41 @@ static func leader_direct_construction(settlement_id: int) -> int:
 			build_queue.append({"type": Job.Type.COOK_BERRIES, "priority": 6, "work": 5, "reason": "cooking_pressure"})
 	if storage_huts < storage_target:
 		build_queue.append({"type": Job.Type.BUILD_STORAGE_HUT, "priority": 6, "work": 20, "reason": "storage_pressure"})
-	if survival_met and walls < 4 and local_pop >= 3:
-		build_queue.append({"type": Job.Type.BUILD_WALL, "priority": 5, "work": 25, "reason": "perimeter"})
-	if survival_met and doors <= 0 and walls >= 2:
+	var defense_press: float = float(build_priorities.get("defense_press", 0.0))
+	var workshop_press: float = float(build_priorities.get("workshop_press", 0.0))
+	var granary_press: float = float(build_priorities.get("granary_press", 0.0))
+	var apothecary_press: float = float(build_priorities.get("apothecary_press", 0.0))
+	var library_press: float = float(build_priorities.get("library_press", 0.0))
+	var market_press: float = float(build_priorities.get("market_press", 0.0))
+	var barracks_press: float = float(build_priorities.get("barracks_press", 0.0))
+	var cellar_press: float = float(build_priorities.get("cellar_press", 0.0))
+	var target_walls: int = 8 + local_pop * 2
+	var pending_walls_leader: int = 0
+	if JobManager != null and JobManager.has_method("count_pending_jobs_near"):
+		pending_walls_leader = JobManager.count_pending_jobs_near(center, Job.Type.BUILD_WALL, 12)
+	var culture_type: int = SettlementPlanner.get_culture_type_for_settlement(settlement) if SettlementPlanner != null else 0
+	if culture_type == SettlementPlanner.CULTURE_DEFENSIVE:
+		target_walls = 12 + local_pop * 3
+	var wall_post_pri: int = 5 + int(defense_press * 3)
+	if (survival_met or defense_press > 0.5) and walls + pending_walls_leader < target_walls and local_pop >= 3:
+		build_queue.append({"type": Job.Type.BUILD_WALL, "priority": wall_post_pri, "work": 25, "reason": "perimeter"})
+	if (survival_met or defense_press > 0.5) and doors <= 0 and walls >= 2:
 		build_queue.append({"type": Job.Type.BUILD_DOOR, "priority": 5, "work": 15, "reason": "perimeter"})
-	if food_press > 0.50 and farms < farm_cap and local_pop >= 3:
+	if food_press > 0.35 and farms < farm_cap and local_pop >= 3:
 		build_queue.append({"type": Job.Type.BUILD_FARM_WHEAT, "priority": 5, "work": 40, "reason": "food_pressure"})
-	if survival_met and granaries <= 0 and farms >= 1:
+	if survival_met and granary_press > 0.2 and farms >= 1:
 		build_queue.append({"type": Job.Type.BUILD_GRANARY, "priority": 5, "work": 35, "reason": "food_storage"})
-	if survival_met and workshops <= 0 and local_pop >= 5:
+	if survival_met and workshop_press > 0.2:
 		build_queue.append({"type": Job.Type.BUILD_WORKSHOP, "priority": 5, "work": 40, "reason": "crafting"})
-	if survival_met and apothecaries <= 0 and local_pop >= 5:
+	if survival_met and apothecary_press > 0.15:
 		build_queue.append({"type": Job.Type.BUILD_APOTHECARY, "priority": 4, "work": 40, "reason": "healing"})
-	if survival_met and markets <= 0 and local_pop >= 6 and farms >= 1:
+	if survival_met and market_press > 0.15:
 		build_queue.append({"type": Job.Type.BUILD_MARKET, "priority": 4, "work": 40, "reason": "trade"})
-	if survival_met and libraries <= 0 and local_pop >= 6:
+	if survival_met and library_press > 0.15:
 		build_queue.append({"type": Job.Type.BUILD_LIBRARY, "priority": 4, "work": 45, "reason": "knowledge"})
-	if survival_met and barracks <= 0 and local_pop >= 6 and walls >= 4:
+	if survival_met and barracks_press > 0.2:
 		build_queue.append({"type": Job.Type.BUILD_BARRACKS, "priority": 4, "work": 45, "reason": "defense"})
-	if survival_met and cellars <= 0 and local_pop >= 5 and granaries >= 1:
+	if survival_met and cellar_press > 0.15:
 		build_queue.append({"type": Job.Type.BUILD_CELLAR, "priority": 4, "work": 35, "reason": "storage"})
 	for entry in build_queue:
 		if posted >= max_posts:

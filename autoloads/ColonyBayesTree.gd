@@ -170,8 +170,8 @@ func _need_score_for_job(job_type: int, center_region: int, features: Dictionary
 			var barracks: int = int(features.get("barracks", 0))
 			var watchtowers: int = int(features.get("watchtower", 0))
 			var defense_gap: float = 0.0
-			if walls < 4:
-				defense_gap = 0.55
+		if walls < 2:
+			defense_gap = 0.55
 			if doors <= 0 and walls >= 2:
 				defense_gap = maxf(defense_gap, 0.35)
 			if barracks <= 0 and watchtowers <= 0 and local_pop >= 4:

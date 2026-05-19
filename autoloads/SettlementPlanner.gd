@@ -342,7 +342,7 @@ func _plan_one_settlement_culture(
 			13:
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
-				if wall_n >= 4 and pawns >= 3:
+				if wall_n >= 2 and pawns >= 3:
 					var t13: Vector2i = _pick_defend_tile(world, main, data, center, regions)
 					if t13.x >= 0 and bool(main.call("settlement_planner_post_protect", t13)):
 						continue
@@ -1344,7 +1344,7 @@ static func _derive_settlement_stage(
 	var path_ok: bool = _path_bed_to_center_exists(world, data, center, regions)
 	if bed_n > 0 and wall_n >= 6 and door_n >= 2 and span7 and path_ok:
 		return 2
-	if bed_n >= 2 and wall_n >= 4 and door_n >= 1:
+	if bed_n >= 2 and wall_n >= 2 and door_n >= 1:
 		return 1
 	return 0
 

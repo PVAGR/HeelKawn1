@@ -740,6 +740,21 @@ func get_light_pressure(center_region: int = -1) -> float:
 	return clamp(float(dark_uncovered) / float(total), 0.0, 1.0)
 
 
+## Compute defense pressure for a settlement — 0.0 (safe) to 1.0 (exposed).
+func _compute_defense_pressure_for_settlement(walls: int, local_pop: int) -> float:
+	if walls == 0:
+		return 1.0
+	var target_walls: int = 8 + local_pop * 2
+	var coverage: float = float(walls) / float(maxi(1, target_walls))
+	if coverage >= 1.0:
+		return 0.0
+	if coverage >= 0.5:
+		return 0.3
+	if coverage >= 0.25:
+		return 0.6
+	return 0.85
+
+
 ## Ranked settlement build needs for seeders / leader posts. [param center_region] is
 ## settlement center region key; [param local_pop] and [param features] come from local scan.
 func compute_settlement_build_priorities(
@@ -752,6 +767,14 @@ func compute_settlement_build_priorities(
 	var beds: int = int(features.get("bed", 0))
 	var storage_huts: int = int(features.get("storage_hut", 0))
 	var farms: int = int(features.get("farm", 0))
+	var walls: int = int(features.get("wall", 0))
+	var workshops: int = int(features.get("workshop", 0))
+	var granaries: int = int(features.get("granary", 0))
+	var apothecaries: int = int(features.get("apothecary", 0))
+	var libraries: int = int(features.get("library", 0))
+	var markets: int = int(features.get("market", 0))
+	var barracks: int = int(features.get("barracks", 0))
+	var cellars: int = int(features.get("cellar", 0))
 	var cold_uncovered: int = count_cold_uncovered_pawns(center_region) if center_region >= 0 else count_cold_uncovered_pawns()
 	var warmth_press: float = get_warmth_pressure(center_region)
 	var food_press: float = get_food_pressure()
@@ -776,12 +799,28 @@ func compute_settlement_build_priorities(
 	elif storage_huts <= 0 and local_pop >= 2:
 		storage_needed = 1
 	var farm_cap: int = estimate_farm_cap(local_pop, food_press, farms) if local_pop > 0 else 0
+	var defense_press: float = _compute_defense_pressure_for_settlement(walls, local_pop)
+	var workshop_press: float = 0.0 if workshops > 0 else (0.5 if local_pop >= 3 else 0.2)
+	var granary_press: float = 0.0 if granaries > 0 else (0.4 if farms >= 1 and local_pop >= 2 else 0.15)
+	var apothecary_press: float = 0.0 if apothecaries > 0 else (0.35 if local_pop >= 3 else 0.1)
+	var library_press: float = 0.0 if libraries > 0 else (0.3 if local_pop >= 4 else 0.1)
+	var market_press: float = 0.0 if markets > 0 else (0.3 if farms >= 1 and local_pop >= 4 else 0.1)
+	var barracks_press: float = 0.0 if barracks > 0 else (0.4 if walls >= 2 and local_pop >= 4 else 0.0)
+	var cellar_press: float = 0.0 if cellars > 0 else (0.25 if granaries >= 1 and local_pop >= 3 else 0.0)
 	var scored: Array = []
 	_add_build_priority_score(scored, "warmth", 1.0 - (0.15 if warmth_satisfied else maxf(warmth_press, 0.35)))
 	_add_build_priority_score(scored, "cook", cooking_press if hearths > 0 else cooking_press * 0.5)
 	_add_build_priority_score(scored, "storage", storage_press)
 	_add_build_priority_score(scored, "housing", housing_press)
 	_add_build_priority_score(scored, "farm", food_press if farms < farm_cap else food_press * 0.35)
+	_add_build_priority_score(scored, "defense", defense_press)
+	_add_build_priority_score(scored, "workshop", workshop_press)
+	_add_build_priority_score(scored, "granary", granary_press)
+	_add_build_priority_score(scored, "apothecary", apothecary_press)
+	_add_build_priority_score(scored, "library", library_press)
+	_add_build_priority_score(scored, "market", market_press)
+	_add_build_priority_score(scored, "barracks", barracks_press)
+	_add_build_priority_score(scored, "cellar", cellar_press)
 	var ambition_score: float = 0.0
 	if survival_met and not materials_crisis:
 		ambition_score = clampf(float(local_pop) / 12.0, 0.15, 1.0)
@@ -793,6 +832,9 @@ func compute_settlement_build_priorities(
 	for entry in scored:
 		ranked.append(str(entry.get("need", "")))
 	var job_cap: int = 4 if materials_crisis else 7
+	var maturity_bonus: int = mini(4, local_pop / 4)
+	var structure_bonus: int = mini(2, (beds + walls + hearths + farms) / 4)
+	job_cap += maturity_bonus + structure_bonus
 	if warmth_press > 0.5 or housing_press > 0.8:
 		job_cap = mini(job_cap, 5)
 	return {
@@ -809,6 +851,14 @@ func compute_settlement_build_priorities(
 		"housing_press": housing_press,
 		"storage_press": storage_press,
 		"cooking_press": cooking_press,
+		"defense_press": defense_press,
+		"workshop_press": workshop_press,
+		"granary_press": granary_press,
+		"apothecary_press": apothecary_press,
+		"library_press": library_press,
+		"market_press": market_press,
+		"barracks_press": barracks_press,
+		"cellar_press": cellar_press,
 		"light_press": get_light_pressure(center_region),
 		"contentment": colony_contentment_period(),
 	}

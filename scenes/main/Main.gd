@@ -5947,6 +5947,7 @@ func _tile_covered_by_any_stockpile(t: Vector2i) -> bool:
 ## Same predicate used by every player-stampable build (walls, doors, ad-hoc
 ## beds outside the auto-placer). Tile must be on the main landmass, passable
 ## right now, empty of other features, and not already in the job queue.
+## Walls can be built on TREE tiles since construction clears them.
 func _is_valid_build_site(t: Vector2i, main_component: int) -> bool:
 	if not _world.data.in_bounds(t.x, t.y):
 		return false
@@ -5956,7 +5957,8 @@ func _is_valid_build_site(t: Vector2i, main_component: int) -> bool:
 		return false
 	if _world.pathfinder.component_of(t) != main_component:
 		return false
-	if _world.data.get_feature(t.x, t.y) != TileFeature.Type.NONE:
+	var feat: int = _world.data.get_feature(t.x, t.y)
+	if feat != TileFeature.Type.NONE and feat != TileFeature.Type.TREE:
 		return false
 	if JobManager.has_job_at(t):
 		return false
@@ -6589,6 +6591,66 @@ func _seeder_survival_needs_met(center_rk: int = -1) -> bool:
 	return true
 
 
+## Compute defense pressure for a settlement — drives wall/fortification urgency.
+## Returns 0.0 (fully defended) to 1.0 (critically exposed).
+func _compute_defense_pressure(center_rk: int, walls: int, pending_walls: int, local_pop: int) -> float:
+	var total_walls: int = walls + pending_walls
+	if total_walls == 0:
+		return 1.0
+	var target_walls: int = 8 + local_pop * 2
+	var coverage: float = float(total_walls) / float(maxi(1, target_walls))
+	if coverage >= 1.0:
+		return 0.0
+	if coverage >= 0.5:
+		return 0.3
+	if coverage >= 0.25:
+		return 0.6
+	return 0.85
+
+
+## Derive settlement culture type from settlement dict for construction decisions.
+func _get_settlement_culture_for_construction(sd: Dictionary) -> int:
+	if SettlementPlanner == null:
+		return 0
+	return SettlementPlanner.get_culture_type_for_settlement(sd)
+
+
+## Culture-specific wall posting boost.
+func _culture_wall_post_boost(culture_type: int) -> int:
+	match culture_type:
+		SettlementPlanner.CULTURE_DEFENSIVE:
+			return 3
+		SettlementPlanner.CULTURE_CAUTIOUS:
+			return 1
+		_:
+			return 0
+
+
+## Threat-level boost for wall posting — checks DEFEND_ZONE density and enemy proximity.
+func _threat_level_wall_boost(center_rk: int, center_tile: Vector2i) -> int:
+	var boost: int = 0
+	if ZoneRegistry != null and ZoneRegistry.has_method("zones_of_type"):
+		var defend_zones = ZoneRegistry.zones_of_type(ZoneRegistry.ZoneType.DEFEND)
+		for z in defend_zones:
+			if z is Rect2:
+				var zr: Rect2 = z as Rect2
+				if zr.has_point(Vector2(center_tile.x, center_tile.y)):
+					boost += 2
+					break
+	if _enemy_spawner != null and is_instance_valid(_enemy_spawner):
+		var enemy_count: int = 0
+		for e in _enemy_spawner.get_children():
+			if e != null and is_instance_valid(e) and e.get("data") != null:
+				var e_tile: Vector2i = e.data.tile_pos
+				if maxi(absi(e_tile.x - center_tile.x), absi(e_tile.y - center_tile.y)) <= 20:
+					enemy_count += 1
+		if enemy_count >= 3:
+			boost += 2
+		elif enemy_count >= 1:
+			boost += 1
+	return boost
+
+
 func _seeder_ambition_blocked(center_rk: int = -1) -> bool:
 	if ColonySimServices == null:
 		return false
@@ -6883,13 +6945,21 @@ func _seed_construction_jobs() -> void:
 		var markets: int = int(features.get("market", 0))
 		var barracks: int = int(features.get("barracks", 0))
 		var cellars: int = int(features.get("cellar", 0))
+		# Single-pass pending job count dictionary — replaces 8+ separate scans
+		var pending_by_type: Dictionary = {}
+		if JobManager != null and JobManager.has_method("count_pending_jobs_near"):
+			for jt in [Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_APOTHECARY, Job.Type.BUILD_MARKET, Job.Type.BUILD_LIBRARY, Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, Job.Type.BUILD_SCHOOL, Job.Type.BUILD_TRADING_POST, Job.Type.BUILD_ROAD, Job.Type.BUILD_CELLAR, Job.Type.TRADE_HAUL, Job.Type.TEACH_SKILL, Job.Type.MAINTAIN_STRUCTURE]:
+				pending_by_type[jt] = JobManager.count_pending_jobs_near(center_tile, jt, 12)
 		# Ensure settlement has a stockpile zone — pawns need a local drop point
 		# Deferred: stockpile creation (add_child) is expensive in rendered mode
 		if not _settlement_has_nearby_stockpile(center_tile):
 			call_deferred("_ensure_settlement_stockpile", center_tile)
 		# Post a handful of jobs per settlement per cycle; this is a scheduler, not a flood-fill.
 		var jobs_this_settlement: int = 0
-		var job_cap: int = int(build_priorities.get("job_cap", 4 if materials_crisis else 7))
+		var base_job_cap: int = 4 if materials_crisis else 7
+		var maturity_bonus: int = mini(4, local_pop / 4)
+		var structure_bonus: int = mini(2, (beds + walls + hearths + farms) / 4)
+		var job_cap: int = int(build_priorities.get("job_cap", base_job_cap + maturity_bonus + structure_bonus))
 		if seeding_proto:
 			job_cap = mini(job_cap, 6)
 		var ambition_blocked: bool = _seeder_ambition_blocked(center_rk)
@@ -6899,7 +6969,7 @@ func _seed_construction_jobs() -> void:
 		# Priority 0: Beds when housing crisis is critical (formal only — avoid wall-ring grey boxes on proto camps)
 		if not seeding_proto and ColonySimServices != null and ColonySimServices.get_housing_pressure() > 0.8 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			var need_beds_crisis: int = maxi(3, int(ceil(float(local_pop) * 0.75)))
-			var pending_beds_crisis: int = _count_pending_jobs_near(Job.Type.BUILD_BED, center_tile, 10, _cached_active_jobs)
+			var pending_beds_crisis: int = int(pending_by_type.get(Job.Type.BUILD_BED, 0))
 			var beds_posted_this_cycle: int = 0
 			if beds + pending_beds_crisis < need_beds_crisis:
 				var house_posts: int = _post_house_blueprint_jobs(center_tile, mini(4, need_beds_crisis - beds - pending_beds_crisis), job_cap - jobs_this_settlement)
@@ -6928,7 +6998,7 @@ func _seed_construction_jobs() -> void:
 		var warmth_satisfied: bool = bool(build_priorities.get("warmth_satisfied", false))
 		var warmth_press: float = float(build_priorities.get("warmth_press", 0.0))
 		var pending_fire_pits: int = ColonySimServices.count_pending_fire_pits_in_region(center_rk, 10) \
-				if ColonySimServices != null else _count_pending_jobs_near(Job.Type.BUILD_FIRE_PIT, center_tile, 10, _cached_active_jobs)
+				if ColonySimServices != null else int(pending_by_type.get(Job.Type.BUILD_FIRE_PIT, 0))
 		if not warmth_satisfied and hearths + pending_fire_pits < hearths_needed and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			var may_post_fire: bool = pending_fire_pits == 0
 			if ColonySimServices != null:
@@ -6957,7 +7027,7 @@ func _seed_construction_jobs() -> void:
 		var want_granary: bool = ground_food >= 2 or (granaries <= 0 and farms >= 1)
 		if storage_press > 0.25 and local_pop >= 1 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			if want_wood_pile and storage_huts < storage_needed:
-				var pending_storage: int = _count_pending_jobs_near(Job.Type.BUILD_STORAGE_HUT, center_tile, 10, _cached_active_jobs)
+				var pending_storage: int = int(pending_by_type.get(Job.Type.BUILD_STORAGE_HUT, 0))
 				if pending_storage == 0:
 					var t: Vector2i = _find_build_tile_near(center_tile, 4)
 					if t.x >= 0 and not JobManager.has_job_at(t):
@@ -6981,7 +7051,7 @@ func _seed_construction_jobs() -> void:
 		# Priority 3: Beds when housing pressure warrants (crisis block above handles >0.8)
 		var housing_press: float = float(build_priorities.get("housing_press", 0.0))
 		var need_beds: int = int(build_priorities.get("need_beds", 0))
-		var pending_beds: int = _count_pending_jobs_near(Job.Type.BUILD_BED, center_tile, 10, _cached_active_jobs)
+		var pending_beds: int = int(pending_by_type.get(Job.Type.BUILD_BED, 0))
 		var beds_posted_p3: int = 0
 		while beds + pending_beds + beds_posted_p3 < need_beds and beds_posted_p3 < 2 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			var t: Vector2i = _find_build_tile_near(center_tile, 4)
@@ -7002,15 +7072,24 @@ func _seed_construction_jobs() -> void:
 			break
 		var survival_met: bool = bool(build_priorities.get("survival_met", _seeder_survival_needs_met(center_rk)))
 		# Priority 4: Connected wall perimeter ring + door (after survival basics)
-		var pending_walls: int = _count_pending_jobs_near(Job.Type.BUILD_WALL, center_tile, 12, _cached_active_jobs)
-		var pending_doors: int = _count_pending_jobs_near(Job.Type.BUILD_DOOR, center_tile, 12, _cached_active_jobs)
-		if survival_met and local_pop >= 1 and not materials_crisis and not food_crit \
+		var pending_walls: int = int(pending_by_type.get(Job.Type.BUILD_WALL, 0))
+		var pending_doors: int = int(pending_by_type.get(Job.Type.BUILD_DOOR, 0))
+		var defense_pressure: float = _compute_defense_pressure(center_rk, walls, pending_walls, local_pop)
+		var culture_type: int = _get_settlement_culture_for_construction(sd)
+		var culture_wall_boost: int = _culture_wall_post_boost(culture_type)
+		var threat_boost: int = _threat_level_wall_boost(center_rk, center_tile)
+		var defense_met: bool = defense_pressure < 0.3
+		var wall_gate_relaxed: bool = culture_type == SettlementPlanner.CULTURE_DEFENSIVE or defense_pressure > 0.5
+		if local_pop >= 1 and not materials_crisis and not food_crit \
+				and (defense_met or wall_gate_relaxed) \
 				and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
-			# Scale ring radius and target walls with population
-			var ring_radius: int = 3 + mini(2, local_pop / 3)  # 3 for 1-2 pop, 4 for 3-5, 5 for 6+
-			var target_walls: int = 8 + local_pop * 2  # 10-20+ walls depending on pop
+			var ring_radius: int = 3 + mini(2, local_pop / 3)
+			var target_walls: int = 8 + local_pop * 2
+			if culture_type == SettlementPlanner.CULTURE_DEFENSIVE:
+				target_walls = 12 + local_pop * 3
 			if walls + pending_walls < target_walls:
-				var max_walls_this_cycle: int = mini(1, target_walls - walls - pending_walls)
+				var wall_post_rate: int = mini(3 + local_pop / 8 + culture_wall_boost + threat_boost, target_walls - walls - pending_walls)
+				var max_walls_this_cycle: int = maxi(1, wall_post_rate)
 				var ring_posted: int = _post_wall_ring_jobs(center_tile, ring_radius, max_walls_this_cycle, job_cap - jobs_this_settlement)
 				posted += ring_posted
 				jobs_this_settlement += ring_posted
@@ -7018,8 +7097,10 @@ func _seed_construction_jobs() -> void:
 					_seeder_track_post(center_rk, job_cap)
 				if ring_posted > 0:
 					pending_counts[Job.Type.BUILD_WALL] = int(pending_counts.get(Job.Type.BUILD_WALL, 0)) + ring_posted
-			# Post a door if walls exist but no door yet
-			if walls + pending_walls >= 3 and doors + pending_doors <= 0 and jobs_this_settlement < job_cap:
+			var door_wall_threshold: int = 3
+			if culture_type == SettlementPlanner.CULTURE_DEFENSIVE:
+				door_wall_threshold = 2
+			if walls + pending_walls >= door_wall_threshold and doors + pending_doors <= 0 and jobs_this_settlement < job_cap:
 				var door_side: Vector2i = center_tile + Vector2i(0, ring_radius)
 				if _world.data.in_bounds(door_side.x, door_side.y) and not JobManager.has_job_at(door_side):
 					var dj: Job = _post_seeded_job(Job.Type.BUILD_DOOR, door_side, 5, 8, "perimeter_door", "settlement", center_rk)
@@ -7081,7 +7162,7 @@ func _seed_construction_jobs() -> void:
 		# Priority 6a: Haul loose food/material on the ground into stockpiles.
 		if _world != null and _world.has_method("sum_ground_resources") and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			if ground_food >= 2 or (ground_wood >= 4 and storage_press > 0.2):
-				var pending_hauls: int = _count_pending_jobs_near(Job.Type.TRADE_HAUL, center_tile, 10, _cached_active_jobs)
+				var pending_hauls: int = int(pending_by_type.get(Job.Type.TRADE_HAUL, 0))
 				if pending_hauls == 0 and not JobManager.has_job_at(center_tile):
 					var hj: Job = _post_seeded_job(Job.Type.TRADE_HAUL, center_tile, 5, 6, "ground_haul", "settlement", center_rk)
 					if hj != null:
@@ -7089,16 +7170,29 @@ func _seed_construction_jobs() -> void:
 						jobs_this_settlement += 1
 						_seeder_track_post(center_rk, job_cap)
 		# Priority 6b: Preserve built life and at-risk knowledge.
+		# Walls/doors get higher maintenance priority than decorative structures.
 		if _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap) and BuildingUsageTracker != null and BuildingUsageTracker.has_method("get_due_maintenance_jobs"):
-			for due in BuildingUsageTracker.get_due_maintenance_jobs(2):
-				if jobs_this_settlement >= job_cap:
-					break
+			var structural_maintenance: Array = []
+			var decorative_maintenance: Array = []
+			for due in BuildingUsageTracker.get_due_maintenance_jobs(4):
 				var mt: Vector2i = due.get("tile", Vector2i(-1, -1))
 				if mt.x < 0 or maxi(absi(mt.x - center_tile.x), absi(mt.y - center_tile.y)) > 12:
 					continue
 				if JobManager.has_job_at(mt):
 					continue
-				var mj: Job = _post_seeded_job(Job.Type.MAINTAIN_STRUCTURE, mt, int(due.get("priority", 5)), 8, "structure_maintenance", "settlement", center_rk)
+				var mfeat: int = _world.data.get_feature(mt.x, mt.y) if _world != null and _world.data != null else -1
+				if mfeat in [TileFeature.Type.WALL, TileFeature.Type.DOOR, TileFeature.Type.FIRE_PIT, TileFeature.Type.BED]:
+					structural_maintenance.append(due)
+				else:
+					decorative_maintenance.append(due)
+			for due in structural_maintenance + decorative_maintenance:
+				if jobs_this_settlement >= job_cap:
+					break
+				var mt: Vector2i = due.get("tile", Vector2i(-1, -1))
+				var base_pri: int = int(due.get("priority", 5))
+				var mfeat: int = _world.data.get_feature(mt.x, mt.y) if _world != null and _world.data != null else -1
+				var maint_pri: int = base_pri + (2 if mfeat in [TileFeature.Type.WALL, TileFeature.Type.DOOR] else 0)
+				var mj: Job = _post_seeded_job(Job.Type.MAINTAIN_STRUCTURE, mt, maint_pri, 8, "structure_maintenance", "settlement", center_rk)
 				if mj != null:
 					posted += 1
 					jobs_this_settlement += 1
@@ -7120,19 +7214,24 @@ func _seed_construction_jobs() -> void:
 		# Budget check before Phase 6 building priorities
 		if Time.get_ticks_usec() - start_usec >= budget_usec:
 			break
-		# Priority 7: Farms only when colony is stable (low food pressure + survival met).
-		var farm_cap: int = int(build_priorities.get("farm_cap", maxi(1, int(ceil(float(local_pop) / 5.0)))))
-		if survival_met and food_press <= 0.45 and farms < farm_cap and local_pop >= 2 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
+		# Priority 7: Farms — scale with population and food consumption rate.
+		var farm_cap: int = int(build_priorities.get("farm_cap", maxi(1, int(ceil(float(local_pop) / 4.0)))))
+		var farm_food_threshold: float = 0.30 if local_pop >= 6 else 0.45
+		if survival_met and food_press <= farm_food_threshold and farms < farm_cap and local_pop >= 2 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			var pending_farms: int = int(pending_counts.get(Job.Type.BUILD_FARM_WHEAT, 0))
-			if pending_farms == 0:
+			var farms_to_post: int = mini(2, farm_cap - farms - pending_farms)
+			for _fi in range(farms_to_post):
+				if not _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
+					break
 				var t: Vector2i = _find_fertile_tile_near(center_tile, 5)
-				if t.x >= 0 and not JobManager.has_job_at(t):
-					var j: Job = _post_seeded_job(Job.Type.BUILD_FARM_WHEAT, t, 5, 30, "ambition_farm", "settlement", center_rk)
-					if j != null:
-						posted += 1
-						jobs_this_settlement += 1
-						_seeder_track_post(center_rk, job_cap)
-						pending_counts[Job.Type.BUILD_FARM_WHEAT] = int(pending_counts.get(Job.Type.BUILD_FARM_WHEAT, 0)) + 1
+				if t.x < 0 or JobManager.has_job_at(t):
+					break
+				var j: Job = _post_seeded_job(Job.Type.BUILD_FARM_WHEAT, t, 5, 30, "ambition_farm", "settlement", center_rk)
+				if j != null:
+					posted += 1
+					jobs_this_settlement += 1
+					_seeder_track_post(center_rk, job_cap)
+					pending_counts[Job.Type.BUILD_FARM_WHEAT] = int(pending_counts.get(Job.Type.BUILD_FARM_WHEAT, 0)) + 1
 		# Priority 8: Workshop if none and enough population (after survival)
 		if survival_met and not ambition_blocked and workshops <= 0 and local_pop >= 3 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			var pending_workshops: int = int(pending_counts.get(Job.Type.BUILD_WORKSHOP, 0))
@@ -7200,7 +7299,7 @@ func _seed_construction_jobs() -> void:
 						_seeder_track_post(center_rk, job_cap)
 						pending_counts[Job.Type.BUILD_LIBRARY] = int(pending_counts.get(Job.Type.BUILD_LIBRARY, 0)) + 1
 		# Priority 13: Barracks if walled settlement with enough population
-		if survival_met and not ambition_blocked and barracks <= 0 and walls >= 4 and local_pop >= 4 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
+		if survival_met and not ambition_blocked and barracks <= 0 and walls >= 2 and local_pop >= 4 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			var pending_barracks: int = int(pending_counts.get(Job.Type.BUILD_BARRACKS, 0))
 			if pending_barracks == 0:
 				var t: Vector2i = _find_build_tile_near(center_tile, 4)

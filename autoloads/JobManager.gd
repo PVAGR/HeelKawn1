@@ -619,7 +619,11 @@ func prune_stale_open_jobs(world: World, max_unclaimed_ticks: int = STALE_OPEN_J
 		if j == null or j.state != Job.State.OPEN:
 			continue
 		var posted: int = int(j.posted_tick)
-		if posted > 0 and tick - posted < max_unclaimed_ticks:
+		# Construction jobs get double the stale threshold — they wait for materials
+		var effective_max: int = max_unclaimed_ticks
+		if _is_construction_type(j.type):
+			effective_max = max_unclaimed_ticks * 2
+		if posted > 0 and tick - posted < effective_max:
 			continue
 		if is_job_target_still_valid(world, j):
 			continue

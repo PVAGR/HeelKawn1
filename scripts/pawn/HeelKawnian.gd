@@ -635,6 +635,7 @@ const JOB_WALK_PATH_FAIL_MAX: int = 3
 var _woke_tick: int = -9999  # tick when pawn last woke; prevents sleep oscillation
 var _consecutive_abandons: int = 0  # claim/abort loop detector
 var _last_abandon_tick: int = -9999
+var _job_claim_cooldowns: Dictionary = {}  # job_id -> tick when cooldown expires (prevents re-claim loops)
 var _direct_forage_target: Vector2i = Vector2i(-1, -1)
 var _next_reproduction_tick: int = 0
 var _active_edict: String = ""
@@ -4422,7 +4423,8 @@ func _tick_idle() -> void:
 						base_bias += prof_bonus
 				HeelKawnianData.Profession.BUILDER:
 					if _is_structure_build_job(j.type):
-						base_bias += prof_bonus
+						var build_skill_bonus: int = 2 + int(data.get_skill_level(HeelKawnianData.Skill.BUILDING) / 5)
+						base_bias += clampi(build_skill_bonus, 2, 6)
 				HeelKawnianData.Profession.GATHERER:
 					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.GATHER_FLINT or j.type == _Job.Type.GATHER_STICK:
 						base_bias += prof_bonus
@@ -4806,6 +4808,13 @@ func _tick_idle() -> void:
 	var base_passes: Callable = func(j: Job) -> bool:
 		if HeelKawnian._world_hunt_stabilization_blocks() and j.type == _Job.Type.HUNT:
 			return false
+		# Skip jobs on this pawn's claim cooldown (prevents tile_invalid re-claim loops)
+		if _job_claim_cooldowns.has(int(j.id)):
+			var now_tick: int = GameManager.tick_count if GameManager != null else 0
+			if int(_job_claim_cooldowns[int(j.id)]) > now_tick:
+				return false
+			else:
+				_job_claim_cooldowns.erase(int(j.id))
 		if not data.allows_job_type(j.type):
 			return false
 
@@ -7021,6 +7030,17 @@ func _unclaim_current_job(reason: String = "") -> void:
 			if _paction != "":
 				data.record_personal_outcome(_paction, false)
 		JobManager.abandon(j0, reason)
+		# Add per-job claim cooldown for build jobs unclaimed due to tile issues
+		if reason == "tile_invalid_walk" or reason == "tile_invalid":
+			var now_tick: int = GameManager.tick_count if GameManager != null else 0
+			_job_claim_cooldowns[int(j0.id)] = now_tick + 30  # 30-tick cooldown
+			# Prune old entries (>60 ticks)
+			var keys_to_remove: Array = []
+			for k in _job_claim_cooldowns.keys():
+				if int(_job_claim_cooldowns[k]) < now_tick - 60:
+					keys_to_remove.append(k)
+			for k in keys_to_remove:
+				_job_claim_cooldowns.erase(k)
 		# Track consecutive abandons to detect claim/abort loops
 		var now_tick: int = GameManager.tick_count if GameManager != null else 0
 		if now_tick - _last_abandon_tick < 10:

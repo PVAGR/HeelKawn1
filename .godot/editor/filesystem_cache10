@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779158495
+::res://::1779158979
 .aider.chat.history.md::TextFile::-1::1778789129::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779121146::0::1::::<><><>0<>0<><>::
 CHANGELOG.md::TextFile::-1::1778793280::0::1::::<><><>0<>0<><>::
@@ -158,7 +158,7 @@ DiplomacySystem.gd::GDScript::7370753064401601751::1778654987::0::1::::<>Node<><
 DisasterSystem.gd::GDScript::3533735953280705894::1778453307::0::1::::<>Node<><>0<>0<><>::
 DiscoveryGate.gd::GDScript::2584224234650357656::1778316521::0::1::::<>Node<><>0<>0<><>::
 DiseaseSystem.gd::GDScript::5176942498259955416::1778923718::0::1::::<>Node<><>0<>0<><>::
-DynastyFamilySystem.gd::GDScript::9096165783105137273::1779158431::0::1::::<>Node<><>0<>0<><>::
+DynastyFamilySystem.gd::GDScript::9096165783105137273::1779158898::0::1::::<>Node<><>0<>0<><>::
 EcologySystem.gd::GDScript::7356293288449483685::1779157936::0::1::::<>Node<><>0<>0<><>::
 EconomyManager.gd::GDScript::600062380472312883::1778796523::0::1::::<>Node<><>0<>0<><>::
 EventBus.gd::GDScript::17816675561125202::1778616814::0::1::::<>Node<><>0<>0<><>::
@@ -186,7 +186,7 @@ HistoricalSimulation.gd::GDScript::5001299926847266409::1777694600::0::1::::<>No
 IncarnationManager.gd::GDScript::2946522282863610422::1778319049::0::1::::<>Node<><>0<>0<><>::
 IntentMemory.gd::GDScript::7523474435381960454::1778884561::0::1::::<>Node<><>0<>0<><>::
 JobManager.gd::GDScript::338930026156234980::1779148299::0::1::::<>Node<><>0<>0<><>::
-KinshipSystem.gd::GDScript::2683721610511728833::1779158419::0::1::::<>Node<><>0<>0<><>::
+KinshipSystem.gd::GDScript::2683721610511728833::1779158702::0::1::::<>Node<><>0<>0<><>::
 KnowledgeSystem.gd::GDScript::2224485433782550535::1778871340::0::1::::<>Node<><>0<>0<><>::
 LanguageSystem.gd::GDScript::604465475289050266::1778654950::0::1::::<>Node<><>0<>0<><>::
 LegacySystem.gd::GDScript::5052780570551209685::1778320772::0::1::::<>Node<><>0<>0<><>::

@@ -371,34 +371,34 @@ func _inherit_traits(mother: Node, father: Node) -> Dictionary:
 	if mother_data == null and father_data == null:
 		return child_traits
 	# Inherit physical traits (use base 50.0 since HeelKawnianData uses skill/affinity system)
-	var physical_traits: Array[String] = ["strength", "agility", "endurance", "intelligence", "charisma"]
-	for trait in physical_traits:
+	var physical_traits = ["strength", "agility", "endurance", "intelligence", "charisma"]
+	for t in physical_traits:
 		var avg: float = 50.0
 		var variation: float = avg * 0.1
 		if WorldRNG != null:
-			variation = WorldRNG.range_for(StringName("trait_%s" % trait), -variation, variation, GameManager.tick_count)
-		child_traits[trait] = clampf(avg + variation, 0.0, 100.0)
+			variation = WorldRNG.range_for(StringName("trait_%s" % t), -variation, variation, GameManager.tick_count)
+		child_traits[t] = clampf(avg + variation, 0.0, 100.0)
 	# Inherit personality traits (use Big Five from HeelKawnianData)
-	var personality_traits: Array[String] = ["bravery", "curiosity", "loyalty", "ambition", "empathy"]
-	var stat_keys: Array[String] = ["neuroticism", "openness", "agreeableness", "conscientiousness", "extraversion"]
-	for i in personality_traits.size():
-		var trait: String = personality_traits[i]
-		var stat_key: String = stat_keys[i]
+	var personality_traits = ["bravery", "curiosity", "loyalty", "ambition", "empathy"]
+	var stat_keys = ["neuroticism", "openness", "agreeableness", "conscientiousness", "extraversion"]
+	for idx in personality_traits.size():
+		var t: String = personality_traits[idx]
+		var sk: String = stat_keys[idx]
 		var m_val: float = 50.0
 		var f_val: float = 50.0
 		if mother_data != null:
-			var mv = mother_data.get(stat_key)
+			var mv = mother_data.get(sk)
 			if mv != null:
 				m_val = float(mv) * 100.0
 		if father_data != null:
-			var fv = father_data.get(stat_key)
+			var fv = father_data.get(sk)
 			if fv != null:
 				f_val = float(fv) * 100.0
 		var avg: float = (m_val + f_val) / 2.0
 		var variation: float = avg * 0.15
 		if WorldRNG != null:
-			variation = WorldRNG.range_for(StringName("personality_%s" % trait), -variation, variation, GameManager.tick_count + 100)
-		child_traits[trait] = clampf(avg + variation, 0.0, 100.0)
+			variation = WorldRNG.range_for(StringName("personality_%s" % t), -variation, variation, GameManager.tick_count + 100)
+		child_traits[t] = clampf(avg + variation, 0.0, 100.0)
 	return child_traits
 
 

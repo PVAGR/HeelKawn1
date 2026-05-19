@@ -273,6 +273,7 @@ HeelKawn should be described as a deep playable prototype with a stable kernel, 
 - *Crusader Kings* - Dynasty mechanics, succession
 - *WorldBox* - Living world, civilization simulation
 - *Kenshi* - Emergent gameplay, player as observer
+- *Vintage Story* - Slow, rewarding progression and tactile building
 
 **Core Philosophy:**
 > *"Memory does not decay randomly. History does not lie. Persistence is earned strictly by impact."*

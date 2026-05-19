@@ -358,6 +358,7 @@ HeelKawn draws from these influences — preserve their spirit:
 - **Dwarf Fortress**: Deep history, simulation weight, remembered catastrophe
 - **Kenshi**: Powerless beginnings, harsh world, earned significance
 - **Songs of Syx**: Large-scale settlement divergence
+- **Vintage Story**: Slow progression, tactile building, and rewarding material development
 - **Stonehearth**: Crafting, profession progression
 - **The Sims**: Mood, relationships, daily life
 - **Eco**: Ecology as consequence, not decoration

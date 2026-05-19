@@ -1163,17 +1163,25 @@ func _report_backbone_status() -> void:
 
 
 func _report_intent() -> void:
-	print("IntentMemory.global_pressure=%.4f" % IntentMemory.global_pressure)
-	_print_dict_sample("IntentMemory.settlement_pressure", IntentMemory.settlement_pressure, 24)
-	_print_dict_sample("IntentMemory.settlement_intent (0=GROW 1=HOLD 2=ABANDON)", IntentMemory.settlement_intent, 24)
+	var intent_mem: Node = MemoryManager.get_intent_memory()
+	if intent_mem == null:
+		print("IntentMemory not loaded")
+		return
+	print("IntentMemory.global_pressure=%.4f" % float(intent_mem.global_pressure))
+	_print_dict_sample("IntentMemory.settlement_pressure", intent_mem.settlement_pressure, 24)
+	_print_dict_sample("IntentMemory.settlement_intent (0=GROW 1=HOLD 2=ABANDON)", intent_mem.settlement_intent, 24)
 
 
 func _report_age() -> void:
+	var age_mem: Node = MemoryManager.get_age_memory()
+	if age_mem == null:
+		print("AgeMemory not loaded")
+		return
 	print(
 			"AgeMemory: current_age_index=%d age_start_tick=%d tint_strength=%.4f"
-			% [AgeMemory.get_current_age_index(), AgeMemory.age_start_tick, AgeMemory.get_global_age_tint_strength()]
+			% [age_mem.get_current_age_index(), age_mem.age_start_tick, age_mem.get_global_age_tint_strength()]
 	)
-	print("AgeMemory.age_signature: %s" % str(AgeMemory.age_signature))
+	print("AgeMemory.age_signature: %s" % str(age_mem.age_signature))
 
 
 func _report_settlement_pressure_rows() -> void:
@@ -1449,9 +1457,13 @@ func _report_authority_job_audit() -> void:
 
 
 func _report_trade() -> void:
-	var t2: int = TradeMemory.count_t2_tiles() if TradeMemory.has_method("count_t2_tiles") else 0
-	var rt: int = TradeMemory.count_route_tiles() if TradeMemory.has_method("count_route_tiles") else 0
-	var last_t2: int = TradeMemory.get_last_tick_t2_existed() if TradeMemory.has_method("get_last_tick_t2_existed") else 0
+	var trade_mem: Node = EconomyManager.get_trade_memory()
+	if trade_mem == null:
+		print("TradeMemory not loaded")
+		return
+	var t2: int = trade_mem.count_t2_tiles() if trade_mem.has_method("count_t2_tiles") else 0
+	var rt: int = trade_mem.count_route_tiles() if trade_mem.has_method("count_route_tiles") else 0
+	var last_t2: int = trade_mem.get_last_tick_t2_existed() if trade_mem.has_method("get_last_tick_t2_existed") else 0
 	print(
 			"TradeMemory: count_t2_tiles=%d count_route_tiles=%d last_tick_t2_existed=%d"
 			% [t2, rt, last_t2]
@@ -1534,7 +1546,11 @@ func _report_cultural() -> void:
 
 
 func _report_myth() -> void:
-	print("MythMemory.to_save_dict: %s" % str(MythMemory.to_save_dict()))
+	var myth_mem: Node = MemoryManager.get_myth_memory()
+	if myth_mem == null:
+		print("MythMemory not loaded")
+		return
+	print("MythMemory.to_save_dict: %s" % str(myth_mem.to_save_dict()))
 	var seen: Dictionary = {}
 	for s in SettlementMemory.settlements:
 		if s is not Dictionary:
@@ -1545,13 +1561,17 @@ func _report_myth() -> void:
 		seen[c] = true
 		print(
 				"  center=%d myth_state=%d rebirths=%d"
-				% [c, MythMemory.get_region_myth_state(c), MythMemory.get_rebirth_success_count_for_center(c)]
+				% [c, myth_mem.get_region_myth_state(c), myth_mem.get_rebirth_success_count_for_center(c)]
 		)
 		if seen.size() >= 16:
 			break
 
 
 func _report_road() -> void:
+	var road_mem: Node = MemoryManager.get_road_memory()
+	if road_mem == null:
+		print("RoadMemory not loaded")
+		return
 	var m: Node2D = _main()
 	var sx: int = 127
 	var sy: int = 127
@@ -1563,17 +1583,21 @@ func _report_road() -> void:
 	print(
 			"RoadMemory traversal: (127,127)=%d (64,64)=%d mid(%d,%d)=%d path_mul_mid=%.3f"
 			% [
-				RoadMemory.get_traversal(127, 127),
-				RoadMemory.get_traversal(64, 64),
+				road_mem.get_traversal(127, 127),
+				road_mem.get_traversal(64, 64),
 				sx,
 				sy,
-				RoadMemory.get_traversal(sx, sy),
-				RoadMemory.get_path_weight_mul(sx, sy),
+				road_mem.get_traversal(sx, sy),
+				road_mem.get_path_weight_mul(sx, sy),
 			]
 	)
 
 
 func _report_remnant() -> void:
+	var rem_mem: Node = MemoryManager.get_remnant_memory()
+	if rem_mem == null:
+		print("RemnantMemory not loaded")
+		return
 	var m: Node2D = _main()
 	if m == null:
 		print("Main missing")
@@ -1583,8 +1607,8 @@ func _report_remnant() -> void:
 		print("World missing")
 		return
 	print("RemnantMemory deltas: tile(0,0)=%d tile(64,64)=%d" % [
-		RemnantMemory.get_tile_rem_delta(0, 0, w),
-		RemnantMemory.get_tile_rem_delta(64, 64, w),
+		rem_mem.get_tile_rem_delta(0, 0, w),
+		rem_mem.get_tile_rem_delta(64, 64, w),
 	])
 
 

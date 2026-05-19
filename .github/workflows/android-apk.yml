@@ -118,9 +118,18 @@ jobs:
           name: HeelKawn Android Latest
           body: |
             Automated Android APK build from main branch.
-            Download and install on Android:
-            HeelKawn-android.apk
+            Playtest: https://pvabazaar.org/#/download-app
+            Direct APK: https://pvabazaar.org/downloads/HeelKawn-android.apk
           artifacts: build/android/HeelKawn-android.apk
           allowUpdates: true
           replacesArtifacts: true
           removeArtifacts: true
+
+      - name: Trigger pvabazaar.org frontend redeploy (optional)
+        if: success()
+        continue-on-error: true
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.PVA_BAZAAR_DEPLOY_TOKEN }}
+          repository: PVAGR/pva-bazaar-app
+          event-type: heelkawn-apk-published

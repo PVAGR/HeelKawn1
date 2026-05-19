@@ -2423,7 +2423,9 @@ func _bootstrap_colony() -> void:
 				_world.refresh_pawn_historic_path_weights()
 		)
 		SettlementManager.plan(_world, self, true)
-		TradePlanner.plan(_world, self, true)
+		var trade_planner: Node = EconomyManager.get_trade_planner()
+		if trade_planner != null and trade_planner.has_method("plan"):
+			trade_planner.plan(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		_sync_pawn_inherited_cultural_reputation()
 	# Spawn animals and register spawner with world for breeding
@@ -3048,7 +3050,9 @@ func _on_game_tick(tick: int) -> void:
 				or (SettlementMemory != null and SettlementMemory.get_proto_sites().size() >= 2))
 		if _is_main_lane_tick(tick, planner_interval, trade_offset) and trade_ok:
 			t0 = Time.get_ticks_usec()
-			TradePlanner.plan(_world, self, false)
+			var trade_planner: Node = EconomyManager.get_trade_planner()
+			if trade_planner != null and trade_planner.has_method("plan"):
+				trade_planner.plan(_world, self, false)
 			section_us["trade_planner"] = Time.get_ticks_usec() - t0
 		# Build roads from trade routes every 2000 ticks
 		if _is_main_lane_tick(tick, 2000, 113) and DiscoveryGate.is_unlocked("first_trade"):
@@ -3421,7 +3425,9 @@ func _flush_world_memory_derivatives() -> void:
 			SettlementManager.plan(_world, self, true)
 	if (GameManager.tick_count + maxi(1, heavy_planner_interval / 3)) % heavy_planner_interval == 0:
 		if Time.get_ticks_usec() - flush_start <= FLUSH_BUDGET_USEC:
-			TradePlanner.plan(_world, self, true)
+			var trade_planner: Node = EconomyManager.get_trade_planner()
+			if trade_planner != null and trade_planner.has_method("plan"):
+				trade_planner.plan(_world, self, true)
 	MemoryManager.flush_dirty_tiles(_world)
 # OPTIMIZATION: Deferred heavy operations for frame budget management
 func _deferred_settlement_memory_recompute(world: World) -> void:
@@ -3441,7 +3447,9 @@ func _deferred_settlement_planner_plan(world: World, main: Node, use_cache: bool
 
 func _deferred_trade_planner_plan(world: World, main: Node, use_cache: bool) -> void:
 	if is_instance_valid(world) and is_instance_valid(main):
-		TradePlanner.plan(world, main, use_cache)
+		var trade_planner: Node = EconomyManager.get_trade_planner()
+		if trade_planner != null and trade_planner.has_method("plan"):
+			trade_planner.plan(world, main, use_cache)
 
 
 func _maybe_generational_turnover() -> void:
@@ -6253,7 +6261,9 @@ func _reroll_world() -> void:
 	FactionManager.get_faction_registry().clear()
 	ChronicleLog.clear()
 	MemoryManager.get_road_memory().clear()
-	TradeMemory.clear()
+	var trade_memory: Node = EconomyManager.get_trade_memory()
+	if trade_memory != null and trade_memory.has_method("clear"):
+		trade_memory.clear()
 	MemoryManager.get_intent_memory().clear()
 	MemoryManager.get_age_memory().clear()
 	WorldPersistence.clear()
@@ -6314,7 +6324,9 @@ func _reroll_world() -> void:
 	if is_instance_valid(_world):
 		MemoryManager.recompute_intent(_world)
 		SettlementManager.plan(_world, self, true)
-		TradePlanner.plan(_world, self, true)
+		var trade_planner: Node = EconomyManager.get_trade_planner()
+		if trade_planner != null and trade_planner.has_method("plan"):
+			trade_planner.plan(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		MemoryManager.get_remnant_memory().clear()
 		MemoryManager.seed_births_from_current_world(_world)
@@ -7553,9 +7565,10 @@ func _seed_construction_jobs() -> void:
 func _build_roads_from_trade_routes() -> void:
 	if _world == null or _world.data == null:
 		return
-	if TradeMemory == null:
+	var trade_memory: Node = EconomyManager.get_trade_memory()
+	if trade_memory == null:
 		return
-	var routes: Array[Dictionary] = TradeMemory.get_active_routes()
+	var routes: Array[Dictionary] = trade_memory.get_active_routes()
 	for r in routes:
 		var from_rk: int = int(r.get("from_settlement", -1))
 		var to_rk: int = int(r.get("to_settlement", -1))
@@ -9248,7 +9261,9 @@ func _apply_save_dict(s: Dictionary) -> void:
 		SocialManager.get_kinship_system().clear()
 	if SocialManager.has_method("clear_bloodline"):
 		SocialManager.clear_bloodline()
-	TradeMemory.clear()
+	var trade_memory: Node = EconomyManager.get_trade_memory()
+	if trade_memory != null and trade_memory.has_method("clear"):
+		trade_memory.clear()
 	MemoryManager.get_remnant_memory().clear()
 	MemoryManager.get_intent_memory().clear()
 	MemoryManager.get_age_memory().clear()
@@ -9345,7 +9360,9 @@ func _apply_save_dict(s: Dictionary) -> void:
 				_world.refresh_pawn_historic_path_weights()
 		)
 		SettlementManager.plan(_world, self, true)
-		TradePlanner.plan(_world, self, true)
+		var trade_planner: Node = EconomyManager.get_trade_planner()
+		if trade_planner != null and trade_planner.has_method("plan"):
+			trade_planner.plan(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		_sync_pawn_inherited_cultural_reputation()
 		MemoryManager.seed_births_from_current_world(_world)
@@ -10118,7 +10135,7 @@ func _build_realm_crown_view_text() -> String:
 		lines.append("• %s — pop %d · %s · %s · %s" % [nm, pop, house_disp, st_state, voice])
 		listed += 1
 	var houses_n: int = FactionManager.get_faction_registry().get_synced_house_count()
-	var sac_n: int = MemoryManager.site_count() if SacredMemory != null else 0
+	var sac_n: int = MemoryManager.site_count() if MemoryManager.get_sacred_memory() != null else 0
 	var harm: float = ReligionLens.get_harmony_index() if ReligionLens != null else 0.0
 	var total_pawns: int = _observer_total_pawns()
 	var head: String = (

@@ -2,7 +2,7 @@
 *.import
 *.pid
 *.tmpt
-export_presets.cfg
+# export_presets.cfg — tracked for CI/Android export (no secrets; keystores are local/CI-only)
 godot_vcs_addon/
 
 # Godot editor cache (never commit these)

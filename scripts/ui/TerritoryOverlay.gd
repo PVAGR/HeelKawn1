@@ -341,6 +341,7 @@ func _draw() -> void:
 	_draw_trade_route_lines(border_width)
 	_draw_caravan_markers(half_tile)
 	_draw_polity_labels(zoom, half_tile)
+	_draw_nation_borders(zoom, border_width, half_tile)
 	if _skirmish_flash_tile.x >= 0 and GameManager != null:
 		if GameManager.tick_count <= _skirmish_flash_until_tick:
 			var flash_pos: Vector2 = _world.tile_to_world(_skirmish_flash_tile)
@@ -416,6 +417,104 @@ func _draw_polity_labels(zoom: float, half_tile: float) -> void:
 		var shadow: Color = Color(0.05, 0.05, 0.08, 0.85)
 		draw_string(font, pos + Vector2(1.0, 1.0), label, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, shadow)
 		draw_string(font, pos, label, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, col.lightened(0.15))
+
+
+func _draw_nation_borders(zoom: float, border_width: float, half_tile: float) -> void:
+	"""Draw nation-level borders on top of settlement territories."""
+	if NationBorderSystem == null:
+		return
+	if zoom > ZOOM_DETAIL:
+		return  # Only show at strategy/transition zoom
+	var nations: Array[Dictionary] = NationBorderSystem.get_all_nations()
+	if nations.is_empty():
+		return
+	var region_tiles: int = 16
+	# Draw nation fills first (subtle tint over settlement fills)
+	var fill_alpha: float = 0.08 if zoom < ZOOM_STRATEGY else 0.04
+	for nation in nations:
+		var color_hex: String = str(nation.get("color", "#888888"))
+		var nation_color: Color = NationBorderSystem._hex_to_color(color_hex)
+		nation_color.a = fill_alpha
+		var territory: Dictionary = nation.get("territory", {})
+		for rk in territory.keys():
+			var rx: int = int(rk) & 0xFFFF
+			var ry: int = (int(rk) >> 16) & 0xFFFF
+			var tile_x: int = rx * region_tiles
+			var tile_y: int = ry * region_tiles
+			var world_pos: Vector2 = _world.tile_to_world(Vector2i(tile_x, tile_y)) - Vector2(half_tile, half_tile)
+			var rect_size: Vector2 = Vector2(region_tiles * TILE_PX, region_tiles * TILE_PX)
+			draw_rect(Rect2(world_pos, rect_size), nation_color, true)
+	# Draw nation borders (thicker lines at nation edges)
+	var nation_border_width: float = border_width * 1.5
+	for nation in nations:
+		var nation_id: int = int(nation.get("id", -1))
+		var color_hex: String = str(nation.get("color", "#888888"))
+		var nation_color: Color = NationBorderSystem._hex_to_color(color_hex)
+		nation_color.a = 0.85
+		var territory: Dictionary = nation.get("territory", {})
+		if territory.is_empty():
+			continue
+		# Find border edges: regions where neighbor belongs to different nation or is unclaimed
+		for rk in territory.keys():
+			var rx: int = int(rk) & 0xFFFF
+			var ry: int = (int(rk) >> 16) & 0xFFFF
+			for dir_idx in range(4):
+				var offset: Vector2i = NEIGHBOR_OFFSETS[dir_idx]
+				var nrx: int = rx + offset.x
+				var nry: int = ry + offset.y
+				var neighbor_key: int = (nrx & 0xFFFF) | ((nry & 0xFFFF) << 16)
+				var neighbor_nation: int = NationBorderSystem.get_nation_at_region(neighbor_key)
+				if neighbor_nation != nation_id:
+					# This is a nation border edge
+					var tile_x: int = rx * region_tiles
+					var tile_y: int = ry * region_tiles
+					var corner_world: Vector2 = _world.tile_to_world(Vector2i(tile_x, tile_y)) - Vector2(half_tile, half_tile)
+					var region_size: float = float(region_tiles * TILE_PX)
+					var from: Vector2
+					var to: Vector2
+					match dir_idx:
+						0:  # North
+							from = corner_world
+							to = corner_world + Vector2(region_size, 0.0)
+						1:  # South
+							from = corner_world + Vector2(0.0, region_size)
+							to = corner_world + Vector2(region_size, region_size)
+						2:  # East
+							from = corner_world + Vector2(region_size, 0.0)
+							to = corner_world + Vector2(region_size, region_size)
+						3:  # West
+							from = corner_world
+							to = corner_world + Vector2(0.0, region_size)
+					# Contested borders get dashed effect (draw shorter segments)
+					var is_contested: bool = NationBorderSystem.is_region_contested(rk)
+					var line_color: Color = nation_color
+					if is_contested:
+						line_color = Color(1.0, 0.3, 0.2, 0.9)  # Red for contested
+					draw_line(from, to, line_color, nation_border_width, true)
+	# Draw nation labels at strategy zoom
+	if zoom < ZOOM_STRATEGY:
+		var font: Font = ThemeDB.fallback_font
+		var font_size: int = 13
+		for nation in nations:
+			var name: String = str(nation.get("name", ""))
+			if name.is_empty():
+				continue
+			var capital_rk: int = int(nation.get("capital_region", -1))
+			if capital_rk < 0:
+				continue
+			var cx: int = capital_rk & 0xFFFF
+			var cy: int = (capital_rk >> 16) & 0xFFFF
+			var center_tile: Vector2i = Vector2i(cx * 16 + 8, cy * 16 + 8)
+			var pos: Vector2 = _world.tile_to_world(center_tile) + Vector2(0.0, -half_tile * 3.0)
+			var color_hex: String = str(nation.get("color", "#888888"))
+			var label_color: Color = NationBorderSystem._hex_to_color(color_hex)
+			label_color.a = 0.95
+			var gov: String = str(nation.get("government_type", ""))
+			if gov != "":
+				name = name + " (" + gov.capitalize() + ")"
+			var shadow: Color = Color(0.05, 0.05, 0.08, 0.9)
+			draw_string(font, pos + Vector2(1.0, 1.0), name, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, shadow)
+			draw_string(font, pos, name, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, label_color.lightened(0.2))
 
 
 ## Deterministic color for a settlement based on its center region key.

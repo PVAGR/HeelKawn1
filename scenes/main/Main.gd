@@ -2929,6 +2929,45 @@ func _on_game_tick(tick: int) -> void:
 	if SettlementMemory != null and _is_main_lane_tick(tick, 300, 53) and SettlementMemory.has_method("merge_small_settlements"):
 		SettlementMemory.count_pawns_per_settlement()
 		SettlementMemory.merge_small_settlements()
+	# Nation/Border: recompute territories and check for nation formation
+	if NationBorderSystem != null and _is_main_lane_tick(tick, 2000, 47):
+		NationBorderSystem._recompute_borders(tick)
+	if NationBorderSystem != null and _is_main_lane_tick(tick, 5000, 71):
+		NationBorderSystem._check_nation_state_changes(tick)
+	# Dynasty/Family: process marriages, births, dynasty formation
+	if DynastyFamilySystem != null and _is_main_lane_tick(tick, 3000, 59):
+		DynastyFamilySystem._process_marriages(tick)
+	if DynastyFamilySystem != null and _is_main_lane_tick(tick, 5000, 83):
+		DynastyFamilySystem._process_births(tick)
+	if DynastyFamilySystem != null and _is_main_lane_tick(tick, 10000, 97):
+		DynastyFamilySystem._update_dynasties(tick)
+	# Daily Routines: update pawn activities and schedules
+	if DailyRoutineSystem != null and _is_main_lane_tick(tick, 60, 11):
+		DailyRoutineSystem._update_current_activities(tick)
+	if DailyRoutineSystem != null and _is_main_lane_tick(tick, 2400, 37):
+		DailyRoutineSystem._recompute_all_routines(tick)
+	# Supply Chain: update markets, caravans, trade routes
+	if SupplyChainSystem != null and _is_main_lane_tick(tick, 600, 17):
+		SupplyChainSystem._update_market_prices(tick)
+	if SupplyChainSystem != null and _is_main_lane_tick(tick, 1200, 43):
+		SupplyChainSystem._spawn_caravans(tick)
+	if SupplyChainSystem != null and _is_main_lane_tick(tick, 300, 79):
+		SupplyChainSystem._check_supply_chains(tick)
+	# Officer Rank: check promotions, update influence
+	if OfficerRankSystem != null and _is_main_lane_tick(tick, 500, 23):
+		OfficerRankSystem._check_promotions(tick)
+	if OfficerRankSystem != null and _is_main_lane_tick(tick, 120, 61):
+		OfficerRankSystem._update_officer_influence(tick)
+	# Army Battle: update battles, check encounters
+	if ArmyBattleSystem != null and _is_main_lane_tick(tick, 30, 7):
+		ArmyBattleSystem._update_battles(tick)
+	if ArmyBattleSystem != null and _is_main_lane_tick(tick, 500, 89):
+		ArmyBattleSystem._check_battle_encounters(tick)
+	# Character Progression: check skill atrophy, achievements
+	if CharacterProgressionSystem != null and _is_main_lane_tick(tick, 10000, 97):
+		CharacterProgressionSystem._check_skill_atrophy(tick)
+	if CharacterProgressionSystem != null and _is_main_lane_tick(tick, 2000, 53):
+		CharacterProgressionSystem._check_achievements(tick)
 
 	# Settlement leader direct construction: chiefs post build jobs based on
 	# settlement needs, bypassing the slow worldbox loop.

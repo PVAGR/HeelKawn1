@@ -6373,6 +6373,8 @@ func _complete_current_job() -> void:
 			_world.clear_feature(job.tile.x, job.tile.y)
 			if EcologySystem != null:
 				EcologySystem.on_tile_harvested(job.tile.x, job.tile.y)
+			if CharacterProgressionSystem != null:
+				CharacterProgressionSystem.record_action(int(data.id), "forage", GameManager.tick_count if GameManager != null else 0)
 		_Job.Type.MINE:
 			produced_type = _Item.Type.STONE
 			produced_qty = 5  # Mine a proper load, not one stone
@@ -6381,6 +6383,8 @@ func _complete_current_job() -> void:
 			if WorldRNG.chance_for(_pawn_stream("mine_gem"), 0.10, _pawn_salt(7)):
 				_byproducts.append({"type": _Item.Type.GEM, "qty": 1})
 			_world.clear_feature(job.tile.x, job.tile.y)
+			if CharacterProgressionSystem != null:
+				CharacterProgressionSystem.record_action(int(data.id), "mine_stone", GameManager.tick_count if GameManager != null else 0)
 		_Job.Type.MINE_WALL:
 			produced_type = _Item.Type.STONE
 			produced_qty = 5
@@ -6400,6 +6404,8 @@ func _complete_current_job() -> void:
 			_world.clear_feature(job.tile.x, job.tile.y)
 			if EcologySystem != null:
 				EcologySystem.on_tree_chopped(job.tile.x, job.tile.y)
+			if CharacterProgressionSystem != null:
+				CharacterProgressionSystem.record_action(int(data.id), "chop_wood", GameManager.tick_count if GameManager != null else 0)
 		_Job.Type.HUNT:
 			produced_type = _Item.Type.MEAT
 			# Read the species off the tile BEFORE we clear it, so we know

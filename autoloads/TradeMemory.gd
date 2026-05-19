@@ -35,6 +35,8 @@ var trade_routes: Array[Dictionary] = []
 var _next_route_id: int = 1
 var _route_tile_tiers: Dictionary = {}  # region_key -> tier
 var _route_roles_by_region: Dictionary = {}  # center_region -> role
+var _route_incoming_by_center: Dictionary = {}
+var _route_outgoing_by_center: Dictionary = {}
 var _last_tick_t2_existed: int = 0
 
 # Trade statistics for diagnostics
@@ -609,6 +611,12 @@ func count_route_tiles() -> int:
 ## Required by IntentMemory.recompute for trade intent calculation.
 func get_role(region_key: Variant) -> String:
 	var rk: int = int(region_key)
+	var incoming: int = int(_route_incoming_by_center.get(rk, 0))
+	var outgoing: int = int(_route_outgoing_by_center.get(rk, 0))
+	if incoming >= 2 and outgoing == 0:
+		return ROLE_DEPENDENT
+	if incoming > outgoing * 2 and incoming >= 3:
+		return ROLE_DEPENDENT
 	return str(_route_roles_by_region.get(rk, ROLE_NONE))
 
 
@@ -618,8 +626,27 @@ func clear() -> void:
 	_next_route_id = 1
 	_route_tile_tiers.clear()
 	_route_roles_by_region.clear()
+	_route_incoming_by_center.clear()
+	_route_outgoing_by_center.clear()
 	_last_tick_t2_existed = 0
 	# Reset any other trade data as needed
+
+
+func has_active_route_between(from_settlement: int, to_settlement: int) -> bool:
+	if from_settlement < 0 or to_settlement < 0:
+		return false
+	for route_any in trade_routes:
+		if route_any is not Dictionary:
+			continue
+		var route: Dictionary = route_any as Dictionary
+		if str(route.get("status", "")) != "en_route":
+			continue
+		var from_rk: int = int(route.get("from_settlement", -1))
+		var to_rk: int = int(route.get("to_settlement", -1))
+		if (from_rk == from_settlement and to_rk == to_settlement) \
+				or (from_rk == to_settlement and to_rk == from_settlement):
+			return true
+	return false
 
 
 func _classify_route_tier(route: Dictionary) -> int:
@@ -639,6 +666,8 @@ func _classify_route_tier(route: Dictionary) -> int:
 func _rebuild_route_caches(tick: int = -1) -> void:
 	_route_tile_tiers.clear()
 	_route_roles_by_region.clear()
+	_route_incoming_by_center.clear()
+	_route_outgoing_by_center.clear()
 	var saw_t2: bool = false
 	for route_any in trade_routes:
 		if route_any is not Dictionary:
@@ -651,8 +680,10 @@ func _rebuild_route_caches(tick: int = -1) -> void:
 		var to_rk: int = int(route.get("to_settlement", -1))
 		if from_rk >= 0:
 			_route_roles_by_region[from_rk] = ROLE_SOURCE
+			_route_outgoing_by_center[from_rk] = int(_route_outgoing_by_center.get(from_rk, 0)) + 1
 		if to_rk >= 0:
 			_route_roles_by_region[to_rk] = ROLE_DESTINATION
+			_route_incoming_by_center[to_rk] = int(_route_incoming_by_center.get(to_rk, 0)) + 1
 		var tier: int = int(route.get("tier", TIER_ROUTE_1))
 		if tier >= TIER_ROUTE_2:
 			saw_t2 = true

@@ -218,7 +218,7 @@ func _check_crime_opportunities(tick: int) -> void:
 
 func _commit_theft(pawn: HeelKawnian, tick: int) -> void:
 	# Find nearest stockpile with food
-	var sp: Node = StockpileManager.find_food_source(pawn.data.tile_pos)
+	var sp: Stockpile = StockpileManager.find_food_source(pawn.data.tile_pos)
 	if sp == null:
 		return
 	# Take food from stockpile

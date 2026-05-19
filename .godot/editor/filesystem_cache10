@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779151029
+::res://::1779151378
 .aider.chat.history.md::TextFile::-1::1778789129::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779121146::0::1::::<><><>0<>0<><>::
 CHANGELOG.md::TextFile::-1::1778793280::0::1::::<><><>0<>0<><>::
@@ -141,7 +141,7 @@ ChronicleExport.gd::GDScript::7089405843585298919::1778174044::0::1::::<>Node<><
 ChronicleLog.gd::GDScript::6047009701702638617::1777694600::0::1::::<>Node<><>0<>0<><>::
 CivilizationStage.gd::GDScript::5203753771432363116::1778884561::0::1::::<>Node<><>0<>0<><>::
 CollapseSystem.gd::GDScript::4193314518011134177::1778112698::0::1::::<>Node<><>0<>0<><>::
-ColonyBayesTree.gd::GDScript::1787375941918886495::1779147803::0::1::::<>Node<><>0<>0<><>::
+ColonyBayesTree.gd::GDScript::1787375941918886495::1779151143::0::1::::<>Node<><>0<>0<><>::
 ColonySimServices.gd::GDScript::6953689380105976491::1779147776::0::1::::<>Node<><>0<>0<><>::
 CommandAPI.gd::GDScript::833607537914591027::1778320772::0::1::::<>Node<><>0<>0<><>::
 CraftingSystem.gd::GDScript::5489168312616156576::1778439008::0::1::::<>Node<><>0<>0<><>::
@@ -627,7 +627,7 @@ ActionPopupLabel.gd::GDScript::5174978775249392183::1777694600::0::1::::ActionPo
 AgentBayesTree.gd::GDScript::6169819672790835832::1779124336::0::1::::AgentBayesTree<>RefCounted<><>0<>0<><>::
 Animal.gd::GDScript::3893107784844328532::1779138076::0::1::::Animal<>Node2D<><>0<>0<><>::
 AnimalSpawner.gd::GDScript::8350566320011331673::1778866624::0::1::::AnimalSpawner<>Node<><>0<>0<><>::
-HeelKawnian.gd::GDScript::7989372192867881187::1779148270::0::1::::HeelKawnian<>Node2D<><>0<>0<><>::
+HeelKawnian.gd::GDScript::7989372192867881187::1779151120::0::1::::HeelKawnian<>Node2D<><>0<>0<><>::
 HeelKawnianData.gd::GDScript::4502026540089827843::1779124072::0::1::::HeelKawnianData<>RefCounted<><>0<>0<><>::
 HeelKawnianDecision.gd::GDScript::5995801159740043007::1778936968::0::1::::HeelKawnianDecision<>RefCounted<><>0<>0<><>::
 MoodEvent.gd::GDScript::919426344482337370::1777694600::0::1::::MoodEvent<>Resource<><>0<>0<><>::

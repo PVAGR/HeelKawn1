@@ -161,6 +161,17 @@ func pick_food() -> int:
 	return best_type
 
 
+## Remove one food item from inventory and return its type. Returns NONE if no food.
+func take_any_food() -> int:
+	var food_type: int = pick_food()
+	if food_type == Item.Type.NONE:
+		return Item.Type.NONE
+	inventory[food_type] = int(inventory[food_type]) - 1
+	if inventory[food_type] <= 0:
+		inventory.erase(food_type)
+	return food_type
+
+
 # ---------- zone geometry ----------
 
 ## Does this zone's filter allow the given item to be deposited? Fed in from

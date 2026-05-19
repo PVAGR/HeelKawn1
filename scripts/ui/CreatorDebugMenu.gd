@@ -1902,7 +1902,11 @@ func _report_creator_session_digest() -> void:
 			print("[stockpile_first_zone_items] %s" % str(z0s.inventory))
 	print("[settlements_n] %d" % formal_count)
 	print("[proto_sites_n] %d" % proto_count)
-	print("[intent_memory_global] %.6f" % IntentMemory.global_pressure)
+	var intent_mem: Node = MemoryManager.get_intent_memory()
+	if intent_mem != null:
+		print("[intent_memory_global] %.6f" % float(intent_mem.global_pressure))
+	else:
+		print("[intent_memory_global] not loaded")
 	print(PlayerIntentQueue.debug_summary_block())
 	print("[faction_registry]")
 	print(FactionManager.debug_summary_block())
@@ -2483,7 +2487,7 @@ func _report_myth_formation() -> void:
 	print("Game Tick: %d" % GameManager.tick_count)
 	print("")
 
-	var mm: Node = get_node_or_null("/root/MythMemory")
+	var mm: Node = MemoryManager.get_myth_memory()
 	if mm == null:
 		print("MythMemory not found - system not loaded")
 		return

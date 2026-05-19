@@ -315,6 +315,8 @@ var _avatar_panel: Node = null
 var _consciousness_panel: Node = null
 var _dialogue_panel: Node = null
 var _settlement_mind_panel: Node = null
+## Country UI Mode: when true, clicking on the map opens settlement details panel.
+var _country_view_mode: bool = false
 
 
 # -------------------- draft mode (combat) --------------------
@@ -1944,6 +1946,48 @@ func _toggle_settlement_mind_panel() -> void:
 		return
 	_settlement_mind_panel.open_for_settlement(st_center)
 
+func _toggle_country_view_mode() -> void:
+	_country_view_mode = not _country_view_mode
+	if _country_view_mode:
+		print("[Main] Country View Mode: ON - Click on map to view settlement details")
+	else:
+		print("[Main] Country View Mode: OFF")
+		if _settlement_mind_panel != null and is_instance_valid(_settlement_mind_panel):
+			_settlement_mind_panel.close_panel()
+
+func _handle_country_view_click(tile: Vector2i) -> void:
+	if not _country_view_mode:
+		return
+	if SettlementMemory == null:
+		return
+	var rk: int = WorldMemory._region_key(tile.x, tile.y) if WorldMemory != null else -1
+	if rk < 0:
+		return
+	# Try formal settlements first, then proto sites
+	var st: Variant = SettlementMemory.get_formal_settlement_at_region(rk)
+	if st == null:
+		st = SettlementMemory.get_settlement_at_region(rk)
+	if st == null or not (st is Dictionary):
+		# Check if this region belongs to any settlement's regions array
+		for s in SettlementMemory.settlements:
+			if s is Dictionary:
+				var regions: Variant = (s as Dictionary).get("regions", null)
+				if regions is PackedInt32Array:
+					for i in range((regions as PackedInt32Array).size()):
+						if (regions as PackedInt32Array)[i] == rk:
+							st = s
+							break
+				if st != null:
+					break
+	if st == null or not (st is Dictionary):
+		return
+	var center_rk: int = int((st as Dictionary).get("center_region", -1))
+	if center_rk < 0:
+		return
+	_ensure_settlement_mind_panel()
+	if _settlement_mind_panel != null and is_instance_valid(_settlement_mind_panel):
+		_settlement_mind_panel.open_for_settlement(center_rk)
+
 func _ensure_settlement_mind_panel() -> void:
 	if _settlement_mind_panel != null and is_instance_valid(_settlement_mind_panel):
 		return
@@ -2342,6 +2386,9 @@ func _bootstrap_colony() -> void:
 		return
 	WorldMeaning.recompute()
 	WorldPersistence.recompute()
+	# Initialize ecology system for the world
+	if EcologySystem != null and _world != null:
+		EcologySystem.initialize_for_world(_world)
 	# DORMANT WORLD: No pre-seeded stockpile, supplies, or fire pits.
 	# Pawns explore, socialize, cluster together, and form a settlement
 	# organically. The stockpile comes AS A CONSEQUENCE of settlement,
@@ -2431,7 +2478,7 @@ func _apply_start_state_effects() -> void:
 					p.queue_free()
 			if pawns.size() > 0 and pawns[0] != null and pawns[0].data != null:
 				pawns[0].data.carrying = -1
-				pawns[0].data.carrying_count = 0
+				pawns[0].data.carrying_qty = 0
 				pawns[0].data.health = 80.0  # Start injured
 				pawns[0].data.hunger = 30.0  # Start hungry
 				pawns[0].data.thirst = 50.0
@@ -2845,6 +2892,26 @@ func _on_game_tick(tick: int) -> void:
 	# Flood events: rain near rivers deposits flood silt; dry weather fades it.
 	if _is_main_lane_tick(tick, 200, 19):
 		_tick_flood_events(tick)
+	# Ecology: process pending events (wildfires, droughts, floods)
+	if EcologySystem != null and _is_main_lane_tick(tick, 500, 41):
+		var eco_events: Array = EcologySystem.get_pending_events()
+		for evt in eco_events:
+			if evt.get("type") == "wildfire":
+				ChronicleLog.log_event("wildfire", {"tick": tick, "fires": evt.get("total_active", 0), "reason": "wildfire spread"})
+	# Ecology: settlement pollution tracking
+	if EcologySystem != null and _is_main_lane_tick(tick, 1000, 73):
+		if SettlementMemory != null:
+			for st_v in SettlementMemory.settlements:
+				if st_v is Dictionary:
+					var st: Dictionary = st_v as Dictionary
+					var pop: int = int(st.get("population", 0))
+					var crk: int = int(st.get("center_region", -1))
+					if pop > 0 and crk >= 0:
+						var rx: int = crk & 0xFFFF
+						var ry: int = (crk >> 16) & 0xFFFF
+						var cx: int = rx * 16 + 8
+						var cy: int = ry * 16 + 8
+						EcologySystem.on_settlement_activity(cx, cy, pop)
 	# Erosion: decay abandoned buildings
 	if _is_main_lane_tick(tick, 2000, 29):
 		if _world != null and _world.has_method("_tick_erosion"):
@@ -4385,6 +4452,8 @@ func _handle_key_input(key: InputEventKey) -> void:
 			_toggle_consciousness_panel()
 		KEY_H:
 			_toggle_dialogue_panel()
+		KEY_V:
+			_toggle_country_view_mode()
 		Key.KEY_ESCAPE:
 			_handle_cancel_action()
 		KEY_F12:
@@ -4429,6 +4498,12 @@ func _toggle_debug_panel() -> void:
 
 
 func _handle_cancel_action() -> void:
+	if _country_view_mode:
+		_country_view_mode = false
+		if _settlement_mind_panel != null and is_instance_valid(_settlement_mind_panel):
+			_settlement_mind_panel.close_panel()
+		print("[Main] Country View Mode: OFF")
+		return
 	if _settlement_mind_panel != null and is_instance_valid(_settlement_mind_panel) and _settlement_mind_panel.visible:
 		_settlement_mind_panel.close_panel()
 		return
@@ -4875,6 +4950,11 @@ func _on_left_press() -> void:
 	if _hud != null:
 		_hud.hide_tile_history()
 	_update_hover_tile(get_viewport().get_mouse_position())
+	# Country View Mode: click to open settlement details
+	if _country_view_mode and _hover_tile.x >= 0:
+		_handle_country_view_click(_hover_tile)
+		get_viewport().set_input_as_handled()
+		return
 	if _designation_mode != DesignationMode.NONE:
 		if _hover_tile.x < 0:
 			return
@@ -6959,7 +7039,13 @@ func _seed_construction_jobs() -> void:
 		var base_job_cap: int = 4 if materials_crisis else 7
 		var maturity_bonus: int = mini(4, local_pop / 4)
 		var structure_bonus: int = mini(2, (beds + walls + hearths + farms) / 4)
-		var job_cap: int = int(build_priorities.get("job_cap", base_job_cap + maturity_bonus + structure_bonus))
+		# Surplus bonus: when resources are abundant, post more jobs to reduce hoarding
+		var surplus_bonus: int = 0
+		if stock_wood > 100 and stock_stone > 5:
+			surplus_bonus = mini(3, stock_wood / 100)
+		elif stock_wood > 50:
+			surplus_bonus = 1
+		var job_cap: int = int(build_priorities.get("job_cap", base_job_cap + maturity_bonus + structure_bonus + surplus_bonus))
 		if seeding_proto:
 			job_cap = mini(job_cap, 6)
 		var ambition_blocked: bool = _seeder_ambition_blocked(center_rk)

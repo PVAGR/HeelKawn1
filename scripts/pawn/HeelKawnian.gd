@@ -1491,6 +1491,11 @@ func _on_global_job_completed(job: Job) -> void:
 	if job.assigned_pawn == self:
 		if _agent_bayes != null and _agent_bayes.has_method("record_job_outcome"):
 			_agent_bayes.record_job_outcome(job, true)
+		
+		# Notify household of completion for coordinated goal progression
+		if data != null and int(data.household_id) >= 0:
+			HeelKawnianManager.notify_household_task_complete(int(data.household_id), int(job.type))
+
 
 
 func _on_global_job_cancelled(job: Job) -> void:
@@ -6366,6 +6371,8 @@ func _complete_current_job() -> void:
 			produced_type = _Item.Type.BERRY
 			produced_qty = 5  # Pick a handful, not one berry at a time
 			_world.clear_feature(job.tile.x, job.tile.y)
+			if EcologySystem != null:
+				EcologySystem.on_tile_harvested(job.tile.x, job.tile.y)
 		_Job.Type.MINE:
 			produced_type = _Item.Type.STONE
 			produced_qty = 5  # Mine a proper load, not one stone
@@ -6391,6 +6398,8 @@ func _complete_current_job() -> void:
 			if WorldRNG.chance_for(_pawn_stream("chop_resin"), 0.15, _pawn_salt(9)):
 				_byproducts.append({"type": _Item.Type.RESIN, "qty": 1})
 			_world.clear_feature(job.tile.x, job.tile.y)
+			if EcologySystem != null:
+				EcologySystem.on_tree_chopped(job.tile.x, job.tile.y)
 		_Job.Type.HUNT:
 			produced_type = _Item.Type.MEAT
 			# Read the species off the tile BEFORE we clear it, so we know

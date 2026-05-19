@@ -226,7 +226,7 @@ func _commit_theft(pawn: HeelKawnian, tick: int) -> void:
 		var item_type: int = sp.take_any_food()
 		if item_type >= 0:
 			pawn.data.carrying = item_type
-			pawn.data.carrying_count = 1
+			pawn.data.carrying_qty = 1
 			# Find witnesses (pawns within 5 tiles)
 			var witnesses: Array = _find_witnesses(pawn, 5)
 			var settlement_id: int = SettlementMemory.get_settlement_id_for_pawn(int(pawn.data.id)) if SettlementMemory != null else -1

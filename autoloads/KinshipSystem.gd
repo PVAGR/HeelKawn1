@@ -77,8 +77,15 @@ func _ensure_household_record(household_id: int, leader_pawn_id: int = -1) -> Di
 	elif leader_pawn_id >= 0 and int(_households[household_id].get("leader_id", -1)) < 0:
 		_households[household_id]["leader_id"] = leader_pawn_id
 	if not household_data.has(household_id):
-		household_data[household_id] = {"food": 0.0, "labor_contribution": 0.0}
-	return _households[household_id]
+		household_data[household_id] = {
+			"food": 0.0, 
+			"labor_contribution": 0.0,
+			"name": "Unnamed Household",
+			"stability": 100.0,
+			"reputation": 50.0,
+			"wealth": 0.0,
+			"active_plan": null
+		}
 
 
 func _add_household_member_record(household_id: int, pawn_id: int) -> bool:
@@ -212,6 +219,18 @@ func get_household_members(household_id: int) -> Array:
 	return _sorted_ids(members)
 
 
+func set_household_name(hhid: int, name: String) -> void:
+	if household_data.has(hhid):
+		household_data[hhid]["name"] = name
+
+
+func get_household_info(hhid: int) -> Dictionary:
+	if household_data.has(hhid):
+		return household_data[hhid].duplicate(true)
+	return {}
+
+
+
 func get_siblings(person_id: int) -> Array:
 	var siblings: Array = []
 	if RelationalGraph == null:
@@ -285,6 +304,35 @@ func add_household_member(person_id: int, household_id: int):
 	var graph_id: String = _household_node_id(household_id)
 	if not _has_relation(person_id, graph_id, "household_member"):
 		add_kinship(person_id, graph_id, "household_member")
+	
+	# UPDATE: Calculate stability and reputation impact
+	_update_household_stats(household_id)
+
+func _update_household_stats(hhid: int) -> void:
+	if not household_data.has(hhid): return
+	
+	var members = get_household_members(hhid)
+	if members.is_empty(): return
+	
+	var total_rep = 0.0
+	var total_stability = 0.0
+	var member_count = 0
+	
+	for mid in members:
+		# We access pawn data via HeelKawnianData (the canon registry)
+		var d = HeelKawnianData.get_pawn_data(mid)
+		if d:
+			total_rep += float(d.get("reputation_score", 50.0))
+			# Stability increases if they have high rapport with other members
+			for other_id in members:
+				if mid == other_id: continue
+				total_stability += float(d.get("trust", {}).get(other_id, 50.0)) * 0.1
+			member_count += 1
+	
+	if member_count > 0:
+		household_data[hhid]["reputation"] = total_rep / member_count
+		household_data[hhid]["stability"] = clamp(total_stability / member_count, 0.0, 100.0)
+
 
 
 func rebuild_from_pawn_spawner(spawner) -> void:

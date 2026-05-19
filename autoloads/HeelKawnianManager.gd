@@ -2065,3 +2065,28 @@ static func _tick() -> int:
 	if gm != null:
 		return int(gm.get("tick_count"))
 	return 0
+
+
+# --- Household Coordination Extensions ---
+
+static func notify_household_task_complete(hid: int, job_type: int) -> void:
+if not _active_household_plans.has(hid):
+return
+
+var plan: Dictionary = _active_household_plans[hid]
+var tasks: Array = plan.get('tasks', [])
+var index: int = plan.get('current_task_index', 0)
+
+if index < tasks.size() and tasks[index] == job_type:
+plan['current_task_index'] = index + 1
+_active_household_plans[hid] = plan
+
+# Log the milestone
+if EventBus != null:
+EventBus.emit_signal('household_goal_progress', {
+'household_id': hid,
+'goal': plan.get('goal', 'unknown'),
+'task_index': index + 1,
+'total_tasks': tasks.size()
+})
+

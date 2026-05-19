@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779151378
+::res://::1779153342
 .aider.chat.history.md::TextFile::-1::1778789129::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779121146::0::1::::<><><>0<>0<><>::
 CHANGELOG.md::TextFile::-1::1778793280::0::1::::<><><>0<>0<><>::
@@ -146,7 +146,7 @@ ColonySimServices.gd::GDScript::6953689380105976491::1779147776::0::1::::<>Node<
 CommandAPI.gd::GDScript::833607537914591027::1778320772::0::1::::<>Node<><>0<>0<><>::
 CraftingSystem.gd::GDScript::5489168312616156576::1778439008::0::1::::<>Node<><>0<>0<><>::
 CrashTrap.gd::GDScript::2561925334866226631::1777694600::0::1::::<>Node<><>0<>0<><>::
-CrimeSystem.gd::GDScript::8124533145431937429::1779124071::0::1::::<>Node<><>0<>0<><>::
+CrimeSystem.gd::GDScript::8124533145431937429::1779153289::0::1::::<>Node<><>0<>0<><>::
 CulturalMemory.gd::GDScript::4379229180744210081::1778208530::0::1::::<>Node<><>0<>0<><>::
 CulturalStyleManager.gd::GDScript::6734428572572920136::1778749112::0::1::::<>Node<><>0<>0<><>::
 CurrencySystem.gd::GDScript::8830021071979701416::1778654949::0::1::::<>Node<><>0<>0<><>::
@@ -658,7 +658,7 @@ DramaticEventGenerator.gd::GDScript::7685796658771720821::1778320772::0::1::::Dr
 GoalEngine.gd::GDScript::1230104234702065493::1778355728::0::1::::GoalEngine<>RefCounted<><>0<>0<><>::
 GossipPropagation.gd::GDScript::2986089948788778048::1778362956::0::1::::GossipPropagation<>RefCounted<><>0<>0<><>::
 ::res://scripts/stockpile/::1777694600
-Stockpile.gd::GDScript::5932442841318338198::1778556388::0::1::::Stockpile<>Node2D<><>0<>0<><>::
+Stockpile.gd::GDScript::5932442841318338198::1779153268::0::1::::Stockpile<>Node2D<><>0<>0<><>::
 ::res://scripts/system/::1778558453
 ExportSystem.gd::GDScript::8457678107044099638::1778884580::0::1::::ExportSystem<>Node<><>0<>0<><>::
 IncarnationSystem.gd::GDScript::4961914532450866111::1778320772::0::1::::IncarnationSystem<>Node<><>0<>0<><>::

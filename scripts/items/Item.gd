@@ -398,23 +398,23 @@ static func get_recipe(t: int) -> Array:
 # --- Food chain properties ---
 
 ## Spoilage rate: ticks until the item spoils (becomes unusable). 0 = never spoils.
-## Raw meat spoils quickly; cooked/dried lasts much longer.
+## DISABLED: Stockpile items must not spoil per user requirement.
 const FOOD_SPOILAGE_TICKS: Dictionary = {
 	Type.NONE:         0,
-	Type.BERRY:        8000,   # berries last a while
-	Type.MEAT:         3000,   # raw meat spoils fast
-	Type.COOKED_MEAT:  12000,  # cooking extends life significantly
-	Type.DRIED_MEAT:   20000,  # drying extends life even more
-	Type.COOKED_BERRIES:10000, # slightly better than raw
-	Type.SEEDS:        50000,  # seeds last longest (meant for planting)
-	Type.FISH:         2500,   # raw fish spoils fast
-	Type.COOKED_FISH:  12000,  # cooked fish lasts
+	Type.BERRY:        0,   # disabled: no spoilage
+	Type.MEAT:         0,   # disabled: no spoilage
+	Type.COOKED_MEAT:  0,   # disabled: no spoilage
+	Type.DRIED_MEAT:   0,   # disabled: no spoilage
+	Type.COOKED_BERRIES:0,  # disabled: no spoilage
+	Type.SEEDS:        0,   # disabled: no spoilage
+	Type.FISH:         0,   # disabled: no spoilage
+	Type.COOKED_FISH:  0,   # disabled: no spoilage
 	Type.BONE:         0,
 	Type.STONE_ARROW:  0,
 	Type.BONE_ARROW:   0,
 	Type.RESIN:        0,
 	Type.GEM:          0,
-	Type.HIDE:         15000,  # raw hide spoils if not tanned
+	Type.HIDE:         0,   # disabled: no spoilage
 }
 
 ## Cooking recipes: output_type -> [{input_type, qty}, ...]

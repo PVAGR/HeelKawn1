@@ -384,7 +384,8 @@ func _move_caravans(tick: int) -> void:
 		var route: Dictionary = trade_routes.get(route_id, {})
 		if not route.is_empty():
 			var distance: float = float(route.get("distance", 1.0))
-			var traveled: float = new_pos.distance_to(Vector2(route.get("from_region", 0)))
+			var from_tile: Vector2 = _region_to_tile(int(route.get("from_region", 0)))
+			var traveled: float = new_pos.distance_to(from_tile)
 			route["progress"] = clampf(traveled / distance, 0.0, 1.0)
 			route["caravan_pos"] = new_pos
 		# Check if arrived

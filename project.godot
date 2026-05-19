@@ -160,6 +160,7 @@ LanguageSystem="*res://autoloads/LanguageSystem.gd"
 MultiplayerSystem="*res://autoloads/MultiplayerSystem.gd"
 FactionManager="*res://autoloads/FactionManager.gd"
 TickRateDecoupler="*res://autoloads/TickRateDecoupler.gd"
+RuntimeWatchdog="*res://autoloads/RuntimeWatchdog.gd"
 
 [display]
 

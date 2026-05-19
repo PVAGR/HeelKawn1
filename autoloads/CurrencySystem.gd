@@ -16,6 +16,8 @@ var _phase: int = CurrencyPhase.BARTER
 var _mints: Dictionary = {}
 var _exchange_rates: Dictionary = {}
 var _trade_volume: int = 0
+const MAX_RATE_SAMPLES_PER_PAIR: int = 64
+const RATE_RETENTION_TICKS: int = 5000
 
 func _ready() -> void:
 	if GameManager != null:
@@ -29,7 +31,11 @@ func record_trade(item_a: int, item_b: int, qty_a: int, qty_b: int) -> void:
 	var key: String = "%d_%d" % [mini(item_a, item_b), maxi(item_a, item_b)]
 	if not _exchange_rates.has(key):
 		_exchange_rates[key] = []
-	_exchange_rates[key].append({"a": qty_a, "b": qty_b, "tick": GameManager.tick_count if GameManager != null else 0})
+	var samples: Array = _exchange_rates[key]
+	samples.append({"a": qty_a, "b": qty_b, "tick": GameManager.tick_count if GameManager != null else 0})
+	if samples.size() > MAX_RATE_SAMPLES_PER_PAIR:
+		samples.remove_at(0)
+	_exchange_rates[key] = samples
 	if _trade_volume >= 50 and _phase == CurrencyPhase.BARTER:
 		_advance_phase(CurrencyPhase.COMMODITY)
 	if _trade_volume >= 200 and _phase == CurrencyPhase.COMMODITY:
@@ -78,5 +84,22 @@ func get_approximate_value(item_type: int) -> int:
 		Item.Type.MEAD, Item.Type.ALE: return 6
 		_: return 1
 
-func _on_game_tick(_tick: int) -> void:
-	pass
+func _on_game_tick(tick: int) -> void:
+	if tick <= 0:
+		return
+	# Periodic compaction avoids unbounded per-pair history growth in long simulations.
+	if tick % 500 != 0:
+		return
+	var min_tick: int = tick - RATE_RETENTION_TICKS
+	for key in _exchange_rates.keys():
+		var samples: Array = _exchange_rates.get(key, [])
+		if samples.is_empty():
+			continue
+		var filtered: Array = []
+		for sample in samples:
+			if int(sample.get("tick", 0)) >= min_tick:
+				filtered.append(sample)
+		if filtered.size() > MAX_RATE_SAMPLES_PER_PAIR:
+			var start: int = filtered.size() - MAX_RATE_SAMPLES_PER_PAIR
+			filtered = filtered.slice(start, filtered.size())
+		_exchange_rates[key] = filtered

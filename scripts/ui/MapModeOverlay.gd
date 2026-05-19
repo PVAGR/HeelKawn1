@@ -9,6 +9,7 @@ enum DisplayMode {
 	CULTURE = 2,
 	SCAR_LEVEL = 3,
 	GOVERNANCE = 4,
+	NATIONS = 5,
 }
 
 const _WM = preload("res://autoloads/WorldMemory.gd")
@@ -86,7 +87,7 @@ func _cycle_mode() -> void:
 	_update_info_label()
 	
 	if mode_button:
-		var mode_names = ["Regions", "Settlements", "Culture", "Scar Level", "Governance"]
+		var mode_names = ["Regions", "Settlements", "Culture", "Scar Level", "Governance", "Nations"]
 		mode_button.text = "Mode: %s (TAB)" % mode_names[current_mode]
 
 func _update_region_colors() -> void:
@@ -103,6 +104,8 @@ func _update_region_colors() -> void:
 			_generate_scar_colors()
 		DisplayMode.GOVERNANCE:
 			_generate_governance_colors()
+		DisplayMode.NATIONS:
+			_generate_nation_colors()
 
 func _generate_region_colors() -> void:
 	# Generate distinct colors for each 16x16 region
@@ -219,45 +222,78 @@ func _generate_governance_colors() -> void:
 		
 		region_colors[center_region] = color
 
+
+## NATIONS mode: color every region by its nation owner (CK-style).
+## Uses NationBorderSystem.get_nation_at_region() to map region_key -> nation_id,
+## then NationBorderSystem's 20-color palette for consistent nation colors.
+## Unclaimed regions stay transparent (no overlay tint).
+## Contested regions get a pulsing red tint when NationBorderSystem tracks them.
+func _generate_nation_colors() -> void:
+	if NationBorderSystem == null:
+		return
+	
+	var nrx: int = int((WorldData.WIDTH + 15) / 16)
+	var nry: int = int((WorldData.HEIGHT + 15) / 16)
+	
+	for ry in range(nry):
+		for rx in range(nrx):
+			var region_key: int = rx | (ry << 16)
+			var nation_id: int = NationBorderSystem.get_nation_at_region(region_key)
+			if nation_id < 0:
+				continue  # Unclaimed — leave transparent
+			
+			var nation: Dictionary = NationBorderSystem.get_nation_by_id(nation_id)
+			if nation.is_empty():
+				continue
+			
+			var hex_color: String = str(nation.get("color", "#888888"))
+			var nation_color: Color = NationBorderSystem._hex_to_color(hex_color)
+			
+			# Contested regions: pulse red over nation color
+			if NationBorderSystem.is_region_contested(region_key):
+				var pulse: float = 0.3 + 0.4 * (sin(float(region_key + ry * 7 + rx * 13) * 0.5 + 1.0))
+				nation_color = nation_color.lerp(Color(1.0, 0.2, 0.1, 1.0), pulse * 0.5)
+				nation_color.a = 0.85
+			else:
+				nation_color.a = 0.65
+			
+			region_colors[region_key] = nation_color
+
 func _update_overlay() -> void:
 	if overlay_image == null or world == null or canvas_layer == null:
 		return
 	
-	# Clear the image
 	overlay_image.fill(Color.TRANSPARENT)
 	
-	# Draw region overlays
 	for y in range(WorldData.HEIGHT):
 		for x in range(WorldData.WIDTH):
 			var region_key: int = _WM._region_key(x, y)
 			if region_colors.has(region_key):
 				overlay_image.set_pixel(x, y, region_colors[region_key])
 	
-	# Update texture
 	overlay_texture.set_image(overlay_image)
 	
-	# Clear existing overlay sprites
 	for child in canvas_layer.get_children():
 		child.queue_free()
 	
-	# Create sprite to display overlay
 	var sprite: Sprite2D = Sprite2D.new()
 	sprite.texture = overlay_texture
-	sprite.position = Vector2(WorldData.WIDTH * 5, WorldData.HEIGHT * 5)  # Center the overlay
-	sprite.scale = Vector2(10, 10)  # Scale to match world tiles
+	sprite.position = Vector2(WorldData.WIDTH * 5, WorldData.HEIGHT * 5)
+	sprite.scale = Vector2(10, 10)
 	canvas_layer.add_child(sprite)
 
 func _update_info_label() -> void:
 	if info_label == null:
 		return
 	
-	var mode_names = ["Regions", "Settlements", "Culture", "Scar Level", "Governance"]
+	var mode_names = ["Regions", "Settlements", "Culture", "Scar Level", "Governance", "Nations"]
 	var mode_descriptions = [
 		"Shows 16x16 region boundaries",
 		"Shows settlement states (active/recovering/abandoned)",
 		"Shows cultural types (open/cautious/defensive)",
 		"Shows scar levels (0-3+)",
-		"Shows governance types (monarchy/council/anarchy)"
+		"Shows governance types (monarchy/council/anarchy)",
+		"Shows nation territories and contested borders (CK-style)",
 	]
 	
 	var mode_index: int = current_mode as int
@@ -267,7 +303,6 @@ func draw_overlay(canvas_item: CanvasItem) -> void:
 	if not overlay_visible or overlay_texture == null:
 		return
 	
-	# Draw the overlay texture
 	canvas_item.draw_texture(overlay_texture, Vector2.ZERO)
 
 func get_overlay_texture() -> ImageTexture:

@@ -512,13 +512,11 @@ func _get_pawn_personality(pawn: Node) -> Dictionary:
 	"""Get the pawn's personality profile."""
 	if pawn.data == null:
 		return {"early_riser": 0.5, "social": 0.5, "work_ethic": 0.5}
-	var personality: Variant = pawn.data.get("personality", {})
-	if personality == null or not (personality is Dictionary):
-		personality = {}
+	var data: HeelKawnianData = pawn.data
 	return {
-		"early_riser": float((personality as Dictionary).get("early_riser", 0.5)),
-		"social": float((personality as Dictionary).get("social", 0.5)),
-		"work_ethic": float((personality as Dictionary).get("work_ethic", 0.5)),
+		"early_riser": float(data.conscientiousness),
+		"social": float(data.extraversion),
+		"work_ethic": float(data.openness),
 	}
 
 

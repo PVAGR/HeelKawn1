@@ -187,6 +187,18 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 		],
 	},
 	{
+		"heading": "NATIONS · realm view (CK-style politics)",
+		"rows": [
+			{
+				"id": "nations_all",
+				"label": "★ ALL NATIONS — one paste (nations + wars + diplomacy + territory)",
+			},
+			{"id": "nations", "label": "90 · Nations overview (CK-style realm list)"},
+			{"id": "nation_details", "label": "91 · Nation details (wars, allies, territory size)"},
+			{"id": "contested_regions", "label": "92 · Contested regions (active border conflicts)"},
+		],
+	},
+	{
 		"heading": "Memory layers (heavy dumps)",
 		"rows": [
 			{
@@ -4269,3 +4281,156 @@ func _report_stubs_all() -> void:
 	_report_religion_lens()
 	print("")
 	print("=== HEELKAWN_STUBS_ALL:tick=%d END ===" % tick)
+
+
+# ============================================================
+# NATIONS REPORTS (F10 buttons 90-92)
+# ============================================================
+
+func _report_nations_all() -> void:
+	var tick: int = GameManager.tick_count
+	print("=== HEELKAWN_NATIONS_ALL:tick=%d BEGIN ===" % tick)
+	print("")
+	_report_nations()
+	print("")
+	_report_nation_details()
+	print("")
+	_report_contested_regions()
+	print("")
+	print("=== HEELKAWN_NATIONS_ALL:tick=%d END ===" % tick)
+
+
+func _report_nations() -> void:
+	print("=== HEELKAWN NATIONS OVERVIEW (CK-style Realm List) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+	if NationBorderSystem == null:
+		print("NationBorderSystem not loaded.")
+		return
+	var nations: Array[Dictionary] = NationBorderSystem.get_all_nations()
+	if nations.is_empty():
+		print("No nations have formed yet. Settlements must grow and ally to form nations.")
+		return
+	print("━━━ REALM LIST (CK-style) ━━━")
+	print("total_nations=%d" % nations.size())
+	for nation in nations:
+		var nid: int = int(nation.get("id", -1))
+		var name: String = str(nation.get("name", "Unnamed"))
+		var gov: String = str(nation.get("government_type", "tribal"))
+		var pop: int = int(nation.get("population", 0))
+		var territory_size: int = nation.get("territory", {}).size()
+		var settlements: int = nation.get("settlements", []).size()
+		var prestige: float = float(nation.get("prestige", 0.0))
+		var stability: float = float(nation.get("stability", 1.0))
+		var color: String = str(nation.get("color", "#888888"))
+		var at_war: int = nation.get("at_war_with", []).size()
+		var allies: int = nation.get("allied_with", []).size()
+		var leader_id: int = int(nation.get("leader_id", -1))
+		print(
+			"  [%s] %s (gov: %s, territories: %d)" % [color, name, gov.capitalize(), territory_size]
+		)
+		print("    pop=%d settlements=%d prestige=%.1f stability=%.2f" % [pop, settlements, prestige, stability])
+		print("    at_war_with=%d allies=%d leader_id=%s" % [at_war, allies, str(leader_id) if leader_id >= 0 else "none"])
+		if at_war > 0:
+			print("    ⚔ WAR: %s" % str(nation.get("at_war_with", [])))
+		if allies > 0:
+			print("    🤝 ALLIES: %s" % str(nation.get("allied_with", [])))
+		print("")
+	print("=== END NATIONS OVERVIEW ===")
+
+
+func _report_nation_details() -> void:
+	print("=== HEELKAWN NATION DETAILS (Wars, Allies, Territory) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+	if NationBorderSystem == null:
+		print("NationBorderSystem not loaded.")
+		return
+	var nations: Array[Dictionary] = NationBorderSystem.get_all_nations()
+	if nations.is_empty():
+		print("No nations have formed yet.")
+		return
+	for nation in nations:
+		var nid: int = int(nation.get("id", -1))
+		var name: String = str(nation.get("name", "Unnamed"))
+		print("━━━ %s (ID %d) ━━━" % [name, nid])
+		print("  Government: %s" % str(nation.get("government_type", "tribal")).capitalize())
+		print("  Culture: %s" % str(nation.get("culture", "unknown")))
+		print("  Capital Region: %d" % int(nation.get("capital_region", -1)))
+		print("  Leader Pawn ID: %d" % int(nation.get("leader_id", -1)))
+		print("  Formed Tick: %d" % int(nation.get("formed_tick", 0)))
+		print("")
+		print("  --- TERRITORY ---")
+		var territory: Dictionary = nation.get("territory", {})
+		print("  Claimed regions: %d" % territory.size())
+		var region_keys: Array = territory.keys()
+		if region_keys.size() > 0:
+			print("  Region range: %s ... %s" % [str(region_keys[0]), str(region_keys[region_keys.size() - 1])])
+		print("")
+		print("  --- MEMBER SETTLEMENTS ---")
+		var member_regions: Array = nation.get("settlements", [])
+		print("  Settlement count: %d" % member_regions.size())
+		for srk in member_regions:
+			var s_name: String = "Settlement #%d" % int(srk)
+			if SettlementMemory != null:
+				var st: Variant = SettlementMemory.get_settlement_at_region(int(srk))
+				if st is Dictionary:
+					s_name = str((st as Dictionary).get("polity_display_name", (st as Dictionary).get("name", s_name)))
+			print("    • %s (region %d)" % [s_name, int(srk)])
+		print("")
+		print("  --- WARS ---")
+		var wars: Array = nation.get("at_war_with", [])
+		if wars.is_empty():
+			print("  (At peace)")
+		else:
+			for war_nid in wars:
+				var war_nation: Dictionary = NationBorderSystem.get_nation_by_id(int(war_nid))
+				print("  ⚔ vs %s" % str(war_nation.get("name", "Unknown")))
+		print("")
+		print("  --- ALLIANCES ---")
+		var allies: Array = nation.get("allied_with", [])
+		if allies.is_empty():
+			print("  (No alliances)")
+		else:
+			for ally_nid in allies:
+				var ally_nation: Dictionary = NationBorderSystem.get_nation_by_id(int(ally_nid))
+				print("  🤝 with %s" % str(ally_nation.get("name", "Unknown")))
+		print("")
+	print("=== END NATION DETAILS ===")
+
+
+func _report_contested_regions() -> void:
+	print("=== HEELKAWN CONTESTED REGIONS (Active Border Conflicts) ===")
+	print("Generated: %s" % Time.get_datetime_string_from_system())
+	print("Game Tick: %d" % GameManager.tick_count)
+	print("")
+	if NationBorderSystem == null:
+		print("NationBorderSystem not loaded.")
+		return
+	var contested: Dictionary = NationBorderSystem.get_contested_regions()
+	if contested.is_empty():
+		print("No contested border regions. The map is at peace.")
+		return
+	print("━━━ ACTIVE BORDER CONFLICTS ━━━")
+	print("total_contested=%d" % contested.size())
+	for rk in contested:
+		var contest: Dictionary = contested[rk]
+		var na_id: int = int(contest.get("nation_a", -1))
+		var nb_id: int = int(contest.get("nation_b", -1))
+		var intensity: float = float(contest.get("contest_intensity", 0.0))
+		var na: Dictionary = NationBorderSystem.get_nation_by_id(na_id)
+		var nb: Dictionary = NationBorderSystem.get_nation_by_id(nb_id)
+		var na_name: String = str(na.get("name", "Unknown"))
+		var nb_name: String = str(nb.get("name", "Unknown"))
+		var rx: int = int(rk) & 0xFFFF
+		var ry: int = (int(rk) >> 16) & 0xFFFF
+		print("  Region (%d,%d): %s ⚔ %s (intensity=%.2f)" % [rx, ry, na_name, nb_name, intensity])
+		# Check if at war
+		if na.has("at_war_with") and nb_id in na.get("at_war_with", []):
+			print("    ⚔ ACTIVE WAR - borders shifting")
+		else:
+			print("    Diplomatic tension - border negotiation pending")
+	print("")
+	print("=== END CONTESTED REGIONS ===")

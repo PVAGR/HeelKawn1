@@ -304,13 +304,22 @@ func _apply_emergency_overrides(planned_activity: int, pawn: Node, tick: int) ->
 	if pawn.data == null:
 		return planned_activity
 	# Hunger override
-	if float(pawn.data.get("hunger", 100.0)) < 20.0:
+	var _hunger_val = pawn.data.get("hunger")
+	if _hunger_val == null:
+		_hunger_val = 100.0
+	if float(_hunger_val) < 20.0:
 		return int(1)
 	# Exhaustion override
-	if float(pawn.data.get("rest", 100.0)) < 10.0:
+	var _rest_val = pawn.data.get("rest")
+	if _rest_val == null:
+		_rest_val = 100.0
+	if float(_rest_val) < 10.0:
 		return int(2)
 	# Injury override
-	if float(pawn.data.get("health", 100.0)) < 30.0:
+	var _health_val = pawn.data.get("health")
+	if _health_val == null:
+		_health_val = 100.0
+	if float(_health_val) < 30.0:
 		return int(2)
 	# Emergency: fire, attack, etc.
 	if _is_emergency_situation(pawn, tick):
@@ -327,7 +336,10 @@ func _is_emergency_situation(pawn: Node, tick: int) -> bool:
 			return true
 	# Check for combat
 	if pawn.data != null:
-		var in_combat: bool = bool(pawn.data.get("in_combat", false))
+		var _in_combat_val = pawn.data.get("in_combat")
+		if _in_combat_val == null:
+			_in_combat_val = false
+		var in_combat: bool = bool(_in_combat_val)
 		if in_combat:
 			return true
 	return false
@@ -390,7 +402,9 @@ func _find_home_tile(pawn: Node) -> Vector2i:
 	if pawn.data == null:
 		return Vector2i.ZERO
 	# Check for reserved bed
-	var reserved_bed: Vector2i = pawn.data.get("reserved_bed", Vector2i(-1, -1))
+	var reserved_bed = pawn.data.get("reserved_bed")
+	if reserved_bed == null:
+		reserved_bed = Vector2i(-1, -1)
 	if reserved_bed.x >= 0:
 		return reserved_bed
 	# Fall back to current position
@@ -498,7 +512,9 @@ func _get_pawn_personality(pawn: Node) -> Dictionary:
 	"""Get the pawn's personality profile."""
 	if pawn.data == null:
 		return {"early_riser": 0.5, "social": 0.5, "work_ethic": 0.5}
-	var personality: Dictionary = pawn.data.get("personality", {})
+	var personality: Dictionary = pawn.data.get("personality")
+	if personality == null:
+		personality = {}
 	return {
 		"early_riser": float(personality.get("early_riser", 0.5)),
 		"social": float(personality.get("social", 0.5)),

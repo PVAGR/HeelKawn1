@@ -193,7 +193,10 @@ func _find_eligible_partners(tick: int) -> Array[Dictionary]:
 			continue
 		if p.data == null:
 			continue
-		var age: int = int(p.data.get("age_ticks", 0))
+		var _age_ticks = p.data.get("age_ticks")
+		if _age_ticks == null:
+			_age_ticks = 0
+		var age: int = int(_age_ticks)
 		if age < MARRIAGE_MIN_AGE:
 			continue
 		# Check if already married
@@ -209,7 +212,7 @@ func _find_eligible_partners(tick: int) -> Array[Dictionary]:
 			"id": int(p.data.id),
 			"age": age,
 			"family_id": _get_family_for_pawn(int(p.data.id)),
-			"prestige": float(p.data.get("prestige", 0.0)),
+			"prestige": float(p.data.get("prestige") != null ? p.data.get("prestige") : 0.0),
 		})
 	return eligible
 
@@ -355,7 +358,10 @@ func _process_birth(mother_id: int, preg: Dictionary, tick: int) -> void:
 			fam["prestige"] = float(fam.get("prestige", 0.0)) + 3.0
 	# Log birth
 	if ChronicleLog != null:
-		ChronicleLog.append_entry(tick, "world", "%s gave birth to %s." % [str(mother_pawn.data.get("name", "Unknown")), child_name],
+		var _mother_name = mother_pawn.data.get("name")
+		if _mother_name == null:
+			_mother_name = "Unknown"
+		ChronicleLog.append_entry(tick, "world", "%s gave birth to %s." % [str(_mother_name), child_name],
 			PackedStringArray(["birth", child_name, surname]))
 
 
@@ -552,9 +558,13 @@ func _get_child_surname(mother: Node, father: Node) -> String:
 	var father_surname: String = ""
 	var mother_surname: String = ""
 	if father != null and father.data != null:
-		father_surname = str(father.data.get("surname", ""))
+		var _fs = father.data.get("surname")
+		if _fs != null:
+			father_surname = str(_fs)
 	if mother != null and mother.data != null:
-		mother_surname = str(mother.data.get("surname", ""))
+		var _ms = mother.data.get("surname")
+		if _ms != null:
+			mother_surname = str(_ms)
 	if father_surname != "":
 		return father_surname
 	if mother_surname != "":

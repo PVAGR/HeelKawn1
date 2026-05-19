@@ -405,7 +405,10 @@ func _get_pawn_name(pawn_id: int) -> String:
 	var pawn: Node = _get_pawn_by_id(pawn_id)
 	if pawn == null or pawn.data == null:
 		return "Unknown"
-	return str(pawn.data.get("name", "Unknown"))
+	var _name = pawn.data.get("name")
+	if _name == null:
+		return "Unknown"
+	return str(_name)
 
 
 func _get_pawn_by_id(pawn_id: int) -> Node:

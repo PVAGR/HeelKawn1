@@ -86,6 +86,7 @@ func _ensure_household_record(household_id: int, leader_pawn_id: int = -1) -> Di
 			"wealth": 0.0,
 			"active_plan": null
 		}
+	return _households.get(household_id, {})
 
 
 func _add_household_member_record(household_id: int, pawn_id: int) -> bool:
@@ -319,8 +320,8 @@ func _update_household_stats(hhid: int) -> void:
 	var member_count = 0
 	
 	for mid in members:
-		# We access pawn data via HeelKawnianData (the canon registry)
-		var d = HeelKawnianData.get_pawn_data(mid)
+		# We access pawn data via PawnData (the canon registry)
+		var d = PawnData.get_pawn_data(mid)
 		if d:
 			total_rep += float(d.get("reputation_score", 50.0))
 			# Stability increases if they have high rapport with other members

@@ -371,8 +371,8 @@ func _inherit_traits(mother: Node, father: Node) -> Dictionary:
 	if mother_data == null and father_data == null:
 		return child_traits
 	# Inherit physical traits
-	var physical_traits: Array = ["strength", "agility", "endurance", "intelligence", "charisma"]
-	for trait in physical_traits:
+	var physical_traits: Array[String] = ["strength", "agility", "endurance", "intelligence", "charisma"]
+	for trait: String in physical_traits:
 		var m_val: float = float(mother_data.get(trait, 50.0)) if mother_data != null else 50.0
 		var f_val: float = float(father_data.get(trait, 50.0)) if father_data != null else 50.0
 		# Average with variation (+/- 10%)

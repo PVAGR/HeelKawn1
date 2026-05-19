@@ -209,7 +209,11 @@ func _activity_border_segments_for_regions(regions: PackedInt32Array, region_set
 				if not _world.data.in_bounds(tx, ty):
 					continue
 				var feat: int = int(_world.data.get_feature(tx, ty))
-				var worn: bool = RoadMemory.get_traversal(tx, ty) >= RoadMemory.ROAD_T1
+				var road_mem: Node = MemoryManager.get_road_memory()
+				var worn: bool = false
+				if road_mem != null:
+					var road_t1: int = road_mem.ROAD_T1 if road_mem.has_method("ROAD_T1") else 0
+					worn = road_mem.get_traversal(tx, ty) >= road_t1
 				var built: bool = feat == TileFeature.Type.FIRE_PIT or feat == TileFeature.Type.BED \
 					or feat == TileFeature.Type.STORAGE_HUT or feat == TileFeature.Type.WALL \
 					or feat == TileFeature.Type.DOOR
@@ -353,9 +357,10 @@ func _draw() -> void:
 
 
 func _draw_trade_route_lines(line_width: float) -> void:
-	if TradeMemory == null or not TradeMemory.has_method("get_routes_for_map_draw"):
+	var trade_mem: Node = EconomyManager.get_trade_memory()
+	if trade_mem == null or not trade_mem.has_method("get_routes_for_map_draw"):
 		return
-	var routes: Array = TradeMemory.get_routes_for_map_draw()
+	var routes: Array = trade_mem.get_routes_for_map_draw()
 	if routes.is_empty():
 		return
 	var center_by_region: Dictionary = {}
@@ -380,9 +385,10 @@ func _draw_trade_route_lines(line_width: float) -> void:
 
 
 func _draw_caravan_markers(half_tile: float) -> void:
-	if TradeMemory == null or not TradeMemory.has_method("get_caravan_markers"):
+	var trade_mem: Node = EconomyManager.get_trade_memory()
+	if trade_mem == null or not trade_mem.has_method("get_caravan_markers"):
 		return
-	var markers: Array = TradeMemory.get_caravan_markers()
+	var markers: Array = trade_mem.get_caravan_markers()
 	if markers.is_empty():
 		return
 	var r: float = maxf(3.0, half_tile * 0.55)

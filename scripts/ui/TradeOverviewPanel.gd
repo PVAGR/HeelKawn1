@@ -117,9 +117,10 @@ func _on_close_pressed() -> void:
 
 
 func _refresh() -> void:
-	if TradeMemory == null:
+	var trade_mem: Node = EconomyManager.get_trade_memory()
+	if trade_mem == null:
 		return
-	var s: Dictionary = TradeMemory.get_stats()
+	var s: Dictionary = trade_mem.get_stats()
 	_stats_label.text = "Routes created: %d  |  Active: %d  |  Completed: %d  |  Goods traded: %d  |  Knowledge spread: %d" % [
 		s.get("total_routes", 0),
 		s.get("active_routes", 0),
@@ -131,7 +132,7 @@ func _refresh() -> void:
 	for child in _routes_container.get_children():
 		child.queue_free()
 
-	var routes: Array[Dictionary] = TradeMemory.get_active_routes()
+	var routes: Array[Dictionary] = trade_mem.get_active_routes()
 	if routes.is_empty():
 		var empty_label := Label.new()
 		empty_label.text = "No active trade routes. Build a Trading Post and establish settlements to begin trade."

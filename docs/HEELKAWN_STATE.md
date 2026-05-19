@@ -4,7 +4,7 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** May 7, 2026
+**Last Updated:** May 19, 2026
 **Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
@@ -71,6 +71,10 @@ We are always building, always refining, always expanding. This document capture
     - Replaced the bad `Label.bbcode_enabled` path with an attached `RichTextLabel` in `OnboardingSystem.gd`.
     - Updated visible language from tutorial rewards to first-body orientation.
     - Verified Godot headless smoke passes after the fix on May 7, 2026.
+- **FEAT: Need-driven build gating (May 19, 2026)**:
+  - `SettlementPlanner.gd`: `_build_pressure_ok`, per-settlement+type cooldown (`BUILD_INTENT_COOLDOWN_TICKS` = 1200), `can_post_build_intent` / `mark_build_intent_posted` gate bed, fire pit, storage hut, and farm planner posts from `ColonySimServices` pressure signals.
+  - `AIAutoBuild.gd`: delegates to planner gating before creating intents and before posting jobs; uses `JobManager.post_build_deduped`.
+  - `JobManager.gd`: `has_pending_build_near` and `post_build_deduped` for settlement-scoped construction dedupe.
 - Next Task: deepen from first ambition seeding into true household membership logic, coordinated group plans, and longer-horizon settlement objective chains while continuing the v1 consolidation loop.
 
 ## Blockers

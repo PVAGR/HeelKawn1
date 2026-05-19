@@ -237,6 +237,8 @@ func _check_existing_structures(tile: Vector2i, resources: Dictionary, _settleme
 
 
 func _create_build_intent(priority: int, build_type: String, tile: Vector2i, settlement_id: int) -> void:
+	if not _auto_build_post_allowed(build_type, tile, settlement_id):
+		return
 	# Skip if this structure type already exists nearby.
 	var probe: Dictionary = scan_resources(tile, 12)
 	_check_existing_structures(tile, probe, settlement_id)
@@ -362,16 +364,33 @@ func _assign_pawn_to_intent(intent: Dictionary) -> void:
 		) if WorldMemory != null and SettlementMemory != null else -1
 		if slot_rk >= 0 and not ColonySimServices.try_consume_settlement_build_slot(slot_rk, 3):
 			return
-	var posted: Job = _job_manager.post_stamped(
-		job_type,
-		intent.tile,
-		10 - int(intent.priority),
-		20,
-		"auto_build_%s" % build_type,
-		"settlement",
-	)
+	if not _auto_build_post_allowed(build_type, intent.tile, int(intent.get("settlement_id", -1))):
+		return
+	var posted: Job = null
+	if _job_manager.has_method("post_build_deduped"):
+		posted = _job_manager.post_build_deduped(
+			job_type,
+			intent.tile,
+			10 - int(intent.priority),
+			20,
+			intent.tile,
+		)
+		if posted != null and _job_manager.has_method("stamp_seeder_metadata"):
+			_job_manager.stamp_seeder_metadata(
+				posted, "auto_build_%s" % build_type, "settlement"
+			)
+	else:
+		posted = _job_manager.post_stamped(
+			job_type,
+			intent.tile,
+			10 - int(intent.priority),
+			20,
+			"auto_build_%s" % build_type,
+			"settlement",
+		)
 	if posted != null:
 		intent.assigned_pawn_id = -2  # queued marker (claimed pawn id comes later in JobManager)
+		_mark_auto_build_intent_posted(build_type, intent.tile, int(intent.get("settlement_id", -1)))
 
 
 func _has_required_resources(intent: Dictionary) -> bool:
@@ -395,6 +414,39 @@ func _resource_key_to_item_type(key: String) -> int:
 		"food":  return Item.Type.BERRY
 		"metal": return Item.Type.IRON_ORE
 	return -1
+
+
+func _settlement_dict_for_id(settlement_id: int, tile: Vector2i) -> Dictionary:
+	if settlement_id < 0:
+		return {}
+	if _settlement_memory != null and _settlement_memory.has_method("get_formal_settlements"):
+		for st in _settlement_memory.get_formal_settlements():
+			if st is Dictionary and int(st.get("id", -1)) == settlement_id:
+				return st as Dictionary
+			if st is Dictionary and int(st.get("center_region", -1)) == settlement_id:
+				return st as Dictionary
+	var center_rk: int = settlement_id
+	if center_rk < 0 and WorldMemory != null:
+		center_rk = WorldMemory._region_key(tile.x, tile.y)
+	if center_rk >= 0:
+		return {"center_region": center_rk}
+	return {}
+
+
+func _auto_build_post_allowed(build_type: String, tile: Vector2i, settlement_id: int) -> bool:
+	var planner: Node = get_node_or_null("/root/SettlementPlanner")
+	var settlement: Dictionary = _settlement_dict_for_id(settlement_id, tile)
+	if planner != null and planner.has_method("can_post_build_intent"):
+		var job_type: int = int(BUILD_TO_JOB_TYPE.get(build_type, -1))
+		return bool(planner.call("can_post_build_intent", settlement, build_type, job_type, tile))
+	return true
+
+
+func _mark_auto_build_intent_posted(build_type: String, tile: Vector2i, settlement_id: int) -> void:
+	var planner: Node = get_node_or_null("/root/SettlementPlanner")
+	if planner == null or not planner.has_method("mark_build_intent_posted"):
+		return
+	planner.call("mark_build_intent_posted", _settlement_dict_for_id(settlement_id, tile), build_type)
 
 
 func _colony_survival_needs_met() -> bool:

@@ -282,7 +282,10 @@ func idle_settlement_pressure(data: HeelKawnianData) -> float:
 	var center_region: int = SettlementMemory.get_center_region_for_region(rk)
 	if center_region < 0:
 		return 0.5
-	return clampf(float(IntentMemory.settlement_pressure.get(center_region, 0.5)), 0.0, 1.0)
+	var intent_mem: Node = MemoryManager.get_intent_memory()
+	if intent_mem == null:
+		return 0.5
+	return clampf(float(intent_mem.settlement_pressure.get(center_region, 0.5)), 0.0, 1.0)
 
 
 ## --- Role affinity ---

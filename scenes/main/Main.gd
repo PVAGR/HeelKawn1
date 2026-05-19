@@ -2423,9 +2423,7 @@ func _bootstrap_colony() -> void:
 				_world.refresh_pawn_historic_path_weights()
 		)
 		SettlementManager.plan(_world, self, true)
-		var trade_planner: Node = EconomyManager.get_trade_planner()
-		if trade_planner != null and trade_planner.has_method("plan"):
-			trade_planner.plan(_world, self, true)
+		TradePlanner.plan(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		_sync_pawn_inherited_cultural_reputation()
 	# Spawn animals and register spawner with world for breeding
@@ -3050,9 +3048,7 @@ func _on_game_tick(tick: int) -> void:
 				or (SettlementMemory != null and SettlementMemory.get_proto_sites().size() >= 2))
 		if _is_main_lane_tick(tick, planner_interval, trade_offset) and trade_ok:
 			t0 = Time.get_ticks_usec()
-			var trade_planner: Node = EconomyManager.get_trade_planner()
-			if trade_planner != null and trade_planner.has_method("plan"):
-				trade_planner.plan(_world, self, false)
+			TradePlanner.plan(_world, self, false)
 			section_us["trade_planner"] = Time.get_ticks_usec() - t0
 		# Build roads from trade routes every 2000 ticks
 		if _is_main_lane_tick(tick, 2000, 113) and DiscoveryGate.is_unlocked("first_trade"):
@@ -3425,9 +3421,7 @@ func _flush_world_memory_derivatives() -> void:
 			SettlementManager.plan(_world, self, true)
 	if (GameManager.tick_count + maxi(1, heavy_planner_interval / 3)) % heavy_planner_interval == 0:
 		if Time.get_ticks_usec() - flush_start <= FLUSH_BUDGET_USEC:
-			var trade_planner: Node = EconomyManager.get_trade_planner()
-			if trade_planner != null and trade_planner.has_method("plan"):
-				trade_planner.plan(_world, self, true)
+			TradePlanner.plan(_world, self, true)
 	MemoryManager.flush_dirty_tiles(_world)
 # OPTIMIZATION: Deferred heavy operations for frame budget management
 func _deferred_settlement_memory_recompute(world: World) -> void:
@@ -3447,9 +3441,7 @@ func _deferred_settlement_planner_plan(world: World, main: Node, use_cache: bool
 
 func _deferred_trade_planner_plan(world: World, main: Node, use_cache: bool) -> void:
 	if is_instance_valid(world) and is_instance_valid(main):
-		var trade_planner: Node = EconomyManager.get_trade_planner()
-		if trade_planner != null and trade_planner.has_method("plan"):
-			trade_planner.plan(world, main, use_cache)
+		TradePlanner.plan(world, main, use_cache)
 
 
 func _maybe_generational_turnover() -> void:
@@ -6261,9 +6253,7 @@ func _reroll_world() -> void:
 	FactionManager.get_faction_registry().clear()
 	ChronicleLog.clear()
 	MemoryManager.get_road_memory().clear()
-	var trade_memory: Node = EconomyManager.get_trade_memory()
-	if trade_memory != null and trade_memory.has_method("clear"):
-		trade_memory.clear()
+	TradeMemory.clear()
 	MemoryManager.get_intent_memory().clear()
 	MemoryManager.get_age_memory().clear()
 	WorldPersistence.clear()
@@ -6324,9 +6314,7 @@ func _reroll_world() -> void:
 	if is_instance_valid(_world):
 		MemoryManager.recompute_intent(_world)
 		SettlementManager.plan(_world, self, true)
-		var trade_planner: Node = EconomyManager.get_trade_planner()
-		if trade_planner != null and trade_planner.has_method("plan"):
-			trade_planner.plan(_world, self, true)
+		TradePlanner.plan(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		MemoryManager.get_remnant_memory().clear()
 		MemoryManager.seed_births_from_current_world(_world)
@@ -6819,9 +6807,16 @@ func _stamp_player_designation_job(job: Job) -> void:
 func _stamp_seeder_job(job: Job, reason: String, settlement_id: int = -1, visible_to: String = "settlement") -> void:
 	if job == null or JobManager == null:
 		return
+	var sid: int = settlement_id
+	if sid < 0 and WorldMemory != null and job.tile.x >= 0:
+		sid = SettlementMemory.get_settlement_id_for_region(WorldMemory._region_key(job.tile.x, job.tile.y)) if SettlementMemory != null else -1
+	if sid >= 0:
+		job.settlement_id = sid
+		if WorldMemory != null:
+			job.region_key = WorldMemory._region_key(job.tile.x, job.tile.y)
 	var issuer_id: int = -1
-	if settlement_id >= 0 and SettlementMemory != null:
-		issuer_id = SettlementMemory.get_construction_chief_pawn_id(settlement_id)
+	if sid >= 0 and SettlementMemory != null:
+		issuer_id = SettlementMemory.get_construction_chief_pawn_id(sid)
 	JobManager.stamp_seeder_metadata(job, reason, visible_to, issuer_id)
 
 
@@ -7565,10 +7560,9 @@ func _seed_construction_jobs() -> void:
 func _build_roads_from_trade_routes() -> void:
 	if _world == null or _world.data == null:
 		return
-	var trade_memory: Node = EconomyManager.get_trade_memory()
-	if trade_memory == null:
+	if TradeMemory == null:
 		return
-	var routes: Array[Dictionary] = trade_memory.get_active_routes()
+	var routes: Array[Dictionary] = TradeMemory.get_active_routes()
 	for r in routes:
 		var from_rk: int = int(r.get("from_settlement", -1))
 		var to_rk: int = int(r.get("to_settlement", -1))
@@ -8846,14 +8840,91 @@ func settlement_planner_is_valid_door_site(t: Vector2i) -> bool:
 	return _is_valid_door_site(t, _world.pathfinder.largest_component_id())
 
 
+const SETTLEMENT_PLANNER_BUILD_COOLDOWN_TICKS: int = 1000
+var _settlement_planner_build_cooldowns: Dictionary = {}
+
+
+func _planner_settlement_build_key(settlement_id: int, job_type: int) -> int:
+	return settlement_id * 10000 + job_type
+
+
+func _planner_settlement_build_on_cooldown(settlement_id: int, job_type: int) -> bool:
+	if settlement_id < 0 or GameManager == null:
+		return false
+	var expiry: int = int(_settlement_planner_build_cooldowns.get(_planner_settlement_build_key(settlement_id, job_type), 0))
+	return expiry > GameManager.tick_count
+
+
+func _planner_mark_settlement_build_posted(settlement_id: int, job_type: int) -> void:
+	if settlement_id < 0 or GameManager == null:
+		return
+	_settlement_planner_build_cooldowns[_planner_settlement_build_key(settlement_id, job_type)] = (
+			GameManager.tick_count + SETTLEMENT_PLANNER_BUILD_COOLDOWN_TICKS
+	)
+
+
+func _planner_pressure_allows_build(job_type: int, center_rk: int) -> bool:
+	if ColonySimServices == null:
+		return true
+	match job_type:
+		Job.Type.BUILD_BED, Job.Type.BUILD_SHELTER:
+			return ColonySimServices.get_housing_pressure() > 0.20
+		Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_HEARTH:
+			return ColonySimServices.get_warmth_pressure(center_rk) > 0.12
+		Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_CELLAR:
+			return ColonySimServices.get_storage_pressure() > 0.15
+		Job.Type.BUILD_GRANARY, Job.Type.PLANT_SEEDS, Job.Type.GROW_FOOD, \
+		Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_FARM_CORN, Job.Type.BUILD_FARM_VEGETABLES, \
+		Job.Type.BUILD_HERB_GARDEN:
+			return ColonySimServices.get_food_pressure() > 0.25
+		Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.PROTECT, Job.Type.DEFEND, \
+		Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, Job.Type.BUILD_WORKSHOP, \
+		Job.Type.BUILD_LIBRARY, Job.Type.BUILD_MARKET, Job.Type.BUILD_ROAD, \
+		Job.Type.BUILD_BOATYARD, Job.Type.BUILD_APOTHECARY:
+			return _seeder_survival_needs_met(center_rk)
+		_:
+			return _seeder_survival_needs_met(center_rk)
+
+
+func _planner_can_post_settlement_build(tile: Vector2i, job_type: int) -> bool:
+	if WorldMemory == null or SettlementMemory == null or JobManager == null:
+		return true
+	var center_rk: int = WorldMemory._region_key(tile.x, tile.y)
+	var sid: int = SettlementMemory.get_settlement_id_for_region(center_rk)
+	if sid < 0:
+		return true
+	if JobManager.has_pending_for_settlement(sid, job_type):
+		return false
+	if _planner_settlement_build_on_cooldown(sid, job_type):
+		return false
+	if not _planner_pressure_allows_build(job_type, center_rk):
+		return false
+	return true
+
+
+func _planner_note_settlement_build_posted(tile: Vector2i, job_type: int) -> void:
+	if WorldMemory == null or SettlementMemory == null:
+		return
+	var sid: int = SettlementMemory.get_settlement_id_for_region(WorldMemory._region_key(tile.x, tile.y))
+	if sid < 0:
+		return
+	_planner_mark_settlement_build_posted(sid, job_type)
+
+
 func settlement_planner_post_bed(t: Vector2i) -> bool:
+	if not _planner_can_post_settlement_build(t, Job.Type.BUILD_BED):
+		return false
 	if not _is_valid_bed_site(t, _world.pathfinder.largest_component_id()):
 		return false
 	var job: Job = _post_seeded_job(Job.Type.BUILD_BED, t, BUILD_BED_PRIORITY, BUILD_BED_WORK_TICKS, "settlement_planner", "settlement")
+	if job != null:
+		_planner_note_settlement_build_posted(t, Job.Type.BUILD_BED)
 	return job != null
 
 
 func settlement_planner_post_wall(t: Vector2i) -> bool:
+	if not _planner_can_post_settlement_build(t, Job.Type.BUILD_WALL):
+		return false
 	var main_component: int = _world.pathfinder.largest_component_id()
 	var work_tile: Vector2i = _find_main_component_neighbor(t, main_component)
 	if work_tile.x < 0 or not _is_valid_build_site(t, main_component):
@@ -8865,10 +8936,13 @@ func settlement_planner_post_wall(t: Vector2i) -> bool:
 	_world.pathfinder.set_job_construction_reservation(t.x, t.y, true, _world.data)
 	_world.kick_occupants_off_reserved_build_tile(t.x, t.y)
 	_world.notify_pawns_nav_changed()
+	_planner_note_settlement_build_posted(t, Job.Type.BUILD_WALL)
 	return true
 
 
 func settlement_planner_post_door(t: Vector2i) -> bool:
+	if not _planner_can_post_settlement_build(t, Job.Type.BUILD_DOOR):
+		return false
 	var main_component2: int = _world.pathfinder.largest_component_id()
 	if not _is_valid_door_site(t, main_component2):
 		return false
@@ -8884,6 +8958,7 @@ func settlement_planner_post_door(t: Vector2i) -> bool:
 	if jdoor == null:
 		return false
 	jdoor.work_tile = wtd
+	_planner_note_settlement_build_posted(t, Job.Type.BUILD_DOOR)
 	return true
 
 
@@ -8908,6 +8983,8 @@ func settlement_planner_post_zone_rect(rect: Rect2i) -> bool:
 
 
 func settlement_planner_post_fire_pit(t: Vector2i) -> bool:
+	if not _planner_can_post_settlement_build(t, Job.Type.BUILD_FIRE_PIT):
+		return false
 	if not _world.data.in_bounds(t.x, t.y):
 		return false
 	if _world.data.get_feature(t.x, t.y) != TileFeature.Type.NONE:
@@ -8926,10 +9003,14 @@ func settlement_planner_post_fire_pit(t: Vector2i) -> bool:
 		if not ColonySimServices.try_consume_settlement_build_slot(center_rk, 4):
 			return false
 	var job: Job = _post_seeded_job(Job.Type.BUILD_FIRE_PIT, t, 5, 35, "settlement_planner", "settlement", center_rk)
+	if job != null:
+		_planner_note_settlement_build_posted(t, Job.Type.BUILD_FIRE_PIT)
 	return job != null
 
 
 func settlement_planner_post_storage_hut(t: Vector2i) -> bool:
+	if not _planner_can_post_settlement_build(t, Job.Type.BUILD_STORAGE_HUT):
+		return false
 	if not _world.data.in_bounds(t.x, t.y):
 		return false
 	if _world.data.get_feature(t.x, t.y) != TileFeature.Type.NONE:
@@ -8943,30 +9024,44 @@ func settlement_planner_post_storage_hut(t: Vector2i) -> bool:
 		if not ColonySimServices.try_consume_settlement_build_slot(center_rk, 4):
 			return false
 	var job: Job = _post_seeded_job(Job.Type.BUILD_STORAGE_HUT, t, 5, 40, "settlement_planner", "settlement", center_rk)
+	if job != null:
+		_planner_note_settlement_build_posted(t, Job.Type.BUILD_STORAGE_HUT)
 	return job != null
 
 
 func settlement_planner_post_protect(t: Vector2i) -> bool:
+	if not _planner_can_post_settlement_build(t, Job.Type.PROTECT):
+		return false
 	if not _world.data.in_bounds(t.x, t.y):
 		return false
 	if not _world.data.is_passable(t.x, t.y):
 		return false
 	var job: Job = JobManager.post_stamped(Job.Type.PROTECT, t, 6, 60, "settlement_planner", "settlement")
+	if job != null:
+		_stamp_seeder_job(job, "settlement_planner")
+		_planner_note_settlement_build_posted(t, Job.Type.PROTECT)
 	return job != null
 
 
 func settlement_planner_post_defend(t: Vector2i) -> bool:
+	if not _planner_can_post_settlement_build(t, Job.Type.DEFEND):
+		return false
 	if not _world.data.in_bounds(t.x, t.y):
 		return false
 	if not _world.data.is_passable(t.x, t.y):
 		return false
 	var job: Job = JobManager.post_stamped(Job.Type.DEFEND, t, 7, 80, "settlement_planner", "settlement")
+	if job != null:
+		_stamp_seeder_job(job, "settlement_planner")
+		_planner_note_settlement_build_posted(t, Job.Type.DEFEND)
 	return job != null
 
 
 ## Generic job posting for Phase 6 buildings via BuildingRegistry.
 ## Posts a build job of any type at the given tile.
 func settlement_planner_post_job(t: Vector2i, job_type: int) -> bool:
+	if not _planner_can_post_settlement_build(t, job_type):
+		return false
 	if not _world.data.in_bounds(t.x, t.y):
 		return false
 	if not _world.data.is_passable(t.x, t.y):
@@ -8982,6 +9077,8 @@ func settlement_planner_post_job(t: Vector2i, job_type: int) -> bool:
 		if not ColonySimServices.try_consume_settlement_build_slot(center_rk, 4):
 			return false
 	var job: Job = _post_seeded_job(job_type, t, 5, work_ticks, "settlement_planner", "settlement", center_rk)
+	if job != null:
+		_planner_note_settlement_build_posted(t, job_type)
 	return job != null
 
 
@@ -9261,9 +9358,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 		SocialManager.get_kinship_system().clear()
 	if SocialManager.has_method("clear_bloodline"):
 		SocialManager.clear_bloodline()
-	var trade_memory: Node = EconomyManager.get_trade_memory()
-	if trade_memory != null and trade_memory.has_method("clear"):
-		trade_memory.clear()
+	TradeMemory.clear()
 	MemoryManager.get_remnant_memory().clear()
 	MemoryManager.get_intent_memory().clear()
 	MemoryManager.get_age_memory().clear()
@@ -9360,9 +9455,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 				_world.refresh_pawn_historic_path_weights()
 		)
 		SettlementManager.plan(_world, self, true)
-		var trade_planner: Node = EconomyManager.get_trade_planner()
-		if trade_planner != null and trade_planner.has_method("plan"):
-			trade_planner.plan(_world, self, true)
+		TradePlanner.plan(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		_sync_pawn_inherited_cultural_reputation()
 		MemoryManager.seed_births_from_current_world(_world)
@@ -10135,7 +10228,7 @@ func _build_realm_crown_view_text() -> String:
 		lines.append("• %s — pop %d · %s · %s · %s" % [nm, pop, house_disp, st_state, voice])
 		listed += 1
 	var houses_n: int = FactionManager.get_faction_registry().get_synced_house_count()
-	var sac_n: int = MemoryManager.site_count() if MemoryManager.get_sacred_memory() != null else 0
+	var sac_n: int = MemoryManager.site_count() if SacredMemory != null else 0
 	var harm: float = ReligionLens.get_harmony_index() if ReligionLens != null else 0.0
 	var total_pawns: int = _observer_total_pawns()
 	var head: String = (

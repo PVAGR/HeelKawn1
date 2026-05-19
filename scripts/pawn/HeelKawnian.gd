@@ -1143,30 +1143,22 @@ func _job_intent_priority_offset(j: Job) -> int:
 	var to_center: int = SettlementMemory.get_center_region_for_region(to_rk)
 	if from_center < 0 and to_center < 0:
 		return 0
-	var intent_mem: Node = MemoryManager.get_intent_memory()
-	if intent_mem == null:
-		return 0
-	var hold: int = MemoryManager.get_intent_hold()
-	var abandon: int = MemoryManager.get_intent_abandon()
-	var grow: int = MemoryManager.get_intent_grow()
-	var settlement_intent: Dictionary = MemoryManager.get_settlement_intent()
-	var settlement_pressure: Dictionary = intent_mem.settlement_pressure if intent_mem.has_method("settlement_pressure") else {}
-	var from_intent: int = int(settlement_intent.get(from_center, hold))
-	var to_intent: int = int(settlement_intent.get(to_center, hold))
-	var from_pressure: float = float(settlement_pressure.get(from_center, 0.5))
-	var to_pressure: float = float(settlement_pressure.get(to_center, 0.5))
+	var from_intent: int = int(IntentMemory.settlement_intent.get(from_center, IntentMemory.INTENT_HOLD))
+	var to_intent: int = int(IntentMemory.settlement_intent.get(to_center, IntentMemory.INTENT_HOLD))
+	var from_pressure: float = float(IntentMemory.settlement_pressure.get(from_center, 0.5))
+	var to_pressure: float = float(IntentMemory.settlement_pressure.get(to_center, 0.5))
 	var delta: int = 0
-	if to_intent == grow:
+	if to_intent == IntentMemory.INTENT_GROW:
 		delta += 3
-	elif to_intent == abandon:
+	elif to_intent == IntentMemory.INTENT_ABANDON:
 		delta -= 4
 	if to_pressure < from_pressure:
 		delta += 1
 	elif to_pressure > from_pressure + 0.12:
 		delta -= 1
-	if from_intent == abandon and to_intent != abandon:
+	if from_intent == IntentMemory.INTENT_ABANDON and to_intent != IntentMemory.INTENT_ABANDON:
 		delta += 2
-	elif from_intent != abandon and to_intent == abandon:
+	elif from_intent != IntentMemory.INTENT_ABANDON and to_intent == IntentMemory.INTENT_ABANDON:
 		delta -= 2
 	return delta
 
@@ -1739,6 +1731,8 @@ func _finish_autonomy_draft_walk(purpose: String, peer_id: int) -> void:
 				peer.data.add_social_rapport(int(data.id), 3)
 				data.update_social_memory(peer_id, 0.08, 0.0, -0.02, 0.07, "autonomy_teach_seek")
 				data.mood = min(100.0, data.mood + 0.25)
+				if HeelKawnianManager != null:
+					HeelKawnianManager.execute_teach_seek(int(data.id), peer_id)
 				if data.neural_network != null and data.neural_network.has_method("record_memory_event"):
 					data.neural_network.record_memory_event(tick, "teach_seek", peer_id, 0.25)
 		"grudge_confront":
@@ -2983,9 +2977,7 @@ func nudge_if_standing_on_solid() -> void:
 	var from_n: Vector2i = data.tile_pos
 	data.tile_pos = dest
 	if from_n != dest:
-	var road_mem: Node = MemoryManager.get_road_memory()
-	if road_mem != null and road_mem.has_method("record_step"):
-		road_mem.record_step(from_n, dest, _world)
+		RoadMemory.record_step(from_n, dest, _world)
 	position = _world.tile_to_world(dest)
 	_target_tile = dest
 	_target_world_pos = position
@@ -3016,9 +3008,7 @@ func evict_to_neighbor_of_tile(stand_tile: Vector2i) -> void:
 	var from_e: Vector2i = stand_tile
 	data.tile_pos = dest
 	if from_e != dest:
-	var road_mem: Node = MemoryManager.get_road_memory()
-	if road_mem != null and road_mem.has_method("record_step"):
-		road_mem.record_step(from_e, dest, _world)
+		RoadMemory.record_step(from_e, dest, _world)
 	position = _world.tile_to_world(dest)
 	_target_tile = dest
 	_target_world_pos = position
@@ -3159,10 +3149,8 @@ func _process(delta: float) -> void:
 		position = _target_world_pos
 		var from_step: Vector2i = data.tile_pos
 		data.tile_pos = _target_tile
-	if from_step != _target_tile:
-		var road_mem: Node = MemoryManager.get_road_memory()
-		if road_mem != null and road_mem.has_method("record_step"):
-			road_mem.record_step(from_step, _target_tile, _world)
+		if from_step != _target_tile:
+			RoadMemory.record_step(from_step, _target_tile, _world)
 		# Record footstep for path wearing and emit dust
 		if _world != null and _world.has_method("record_footstep"):
 			_world.record_footstep(data.tile_pos)
@@ -4336,16 +4324,8 @@ func _tick_idle() -> void:
 		crisis_cooking_pressure = ColonySimServices.get_cooking_pressure()
 	var from_region_key: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
 	var from_center_region: int = SettlementMemory.get_center_region_for_region(from_region_key)
-	var intent_mem: Node = MemoryManager.get_intent_memory()
-	if intent_mem == null:
-		return
-	var hold: int = MemoryManager.get_intent_hold()
-	var abandon: int = MemoryManager.get_intent_abandon()
-	var grow: int = MemoryManager.get_intent_grow()
-	var settlement_intent: Dictionary = MemoryManager.get_settlement_intent()
-	var settlement_pressure: Dictionary = intent_mem.settlement_pressure if intent_mem.has_method("settlement_pressure") else {}
-	var from_intent: int = int(settlement_intent.get(from_center_region, hold))
-	var from_pressure: float = float(settlement_pressure.get(from_center_region, 0.5))
+	var from_intent: int = int(IntentMemory.settlement_intent.get(from_center_region, IntentMemory.INTENT_HOLD))
+	var from_pressure: float = float(IntentMemory.settlement_pressure.get(from_center_region, 0.5))
 	var scar_priority_for_level: Dictionary = {0: 0, 1: -5, 2: -24}
 	
 	var resolve_region_key_for_work_tile: Callable = func(work_tile: Vector2i) -> int:
@@ -4377,19 +4357,19 @@ func _tick_idle() -> void:
 		var to_center: int = SettlementMemory.get_center_region_for_region(region_key)
 		var intent_delta: int = 0
 		if not (from_center_region < 0 and to_center < 0):
-			var to_intent: int = int(settlement_intent.get(to_center, hold))
-			var to_pressure: float = float(settlement_pressure.get(to_center, 0.5))
-			if to_intent == grow:
+			var to_intent: int = int(IntentMemory.settlement_intent.get(to_center, IntentMemory.INTENT_HOLD))
+			var to_pressure: float = float(IntentMemory.settlement_pressure.get(to_center, 0.5))
+			if to_intent == IntentMemory.INTENT_GROW:
 				intent_delta += 3
-			elif to_intent == abandon:
+			elif to_intent == IntentMemory.INTENT_ABANDON:
 				intent_delta -= 4
 			if to_pressure < from_pressure:
 				intent_delta += 1
 			elif to_pressure > from_pressure + 0.12:
 				intent_delta -= 1
-			if from_intent == abandon and to_intent != abandon:
+			if from_intent == IntentMemory.INTENT_ABANDON and to_intent != IntentMemory.INTENT_ABANDON:
 				intent_delta += 2
-			elif from_intent != abandon and to_intent == abandon:
+			elif from_intent != IntentMemory.INTENT_ABANDON and to_intent == IntentMemory.INTENT_ABANDON:
 				intent_delta -= 2
 		var history_offset: int = scar_offset + inherited_history_offset + intent_delta
 		region_history_offset_cache[region_key] = history_offset
@@ -6501,14 +6481,10 @@ func _complete_current_job() -> void:
 		_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH, _Job.Type.DRY_MEAT:
 			produced_type = Job.tool_job_output(job.type)
 		_Job.Type.PLANT_SEEDS:
-			var food_chain: Node = EconomyManager.get_food_chain_manager()
-			if food_chain != null and food_chain.has_method("plant_seeds"):
-				food_chain.plant_seeds(job.tile)
+			FoodChainManager.plant_seeds(job.tile)
 			produced_type = _Item.Type.NONE
 		_Job.Type.HARVEST_CROPS:
-			var food_chain: Node = EconomyManager.get_food_chain_manager()
-			if food_chain != null and food_chain.has_method("harvest_crop"):
-				produced_type = food_chain.harvest_crop(job.tile)
+			produced_type = FoodChainManager.harvest_crop(job.tile)
 			produced_qty = 2 if produced_type != _Item.Type.NONE else 0  # Crops yield more
 		_Job.Type.CARVE_GRAVE_MARKER:
 			_world.set_feature(job.tile.x, job.tile.y, TileFeature.Type.GRAVE_MARKER)
@@ -10267,15 +10243,7 @@ func _start_wander() -> void:
 	var best_cult: int = -100
 	var from_rk: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
 	var from_center: int = SettlementMemory.get_center_region_for_region(from_rk)
-	var intent_mem: Node = MemoryManager.get_intent_memory()
-	if intent_mem == null:
-		return
-	var hold: int = MemoryManager.get_intent_hold()
-	var abandon: int = MemoryManager.get_intent_abandon()
-	var grow: int = MemoryManager.get_intent_grow()
-	var settlement_intent: Dictionary = MemoryManager.get_settlement_intent()
-	var settlement_pressure: Dictionary = intent_mem.settlement_pressure if intent_mem.has_method("settlement_pressure") else {}
-	var from_p: float = float(settlement_pressure.get(from_center, 0.5))
+	var from_p: float = float(IntentMemory.settlement_pressure.get(from_center, 0.5))
 	var squad_anchor: Vector2i = _squad_anchor_tile()
 	var dist_now: int = -1
 	if squad_anchor.x >= 0:
@@ -10288,12 +10256,12 @@ func _start_wander() -> void:
 		var rk2: int = _WM._region_key(t.x, t.y)
 		var crep: int = CulturalMemory.get_region_reputation(rk2)
 		var ckr2: int = SettlementMemory.get_center_region_for_region(rk2)
-		var intent2: int = int(settlement_intent.get(ckr2, hold))
-		var p2: float = float(settlement_pressure.get(ckr2, 0.5))
+		var intent2: int = int(IntentMemory.settlement_intent.get(ckr2, IntentMemory.INTENT_HOLD))
+		var p2: float = float(IntentMemory.settlement_pressure.get(ckr2, 0.5))
 		var score: int = 0
-		if intent2 == grow:
+		if intent2 == IntentMemory.INTENT_GROW:
 			score += 7
-		elif intent2 == abandon:
+		elif intent2 == IntentMemory.INTENT_ABANDON:
 			score -= 8
 		if p2 < from_p:
 			score += 2

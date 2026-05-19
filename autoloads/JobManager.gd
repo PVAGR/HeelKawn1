@@ -766,6 +766,25 @@ func has_job_at(tile: Vector2i) -> bool:
 	return _jobs_by_tile.has(tile)
 
 
+## True when a build job of [param job_type] is already open or claimed near [param center_tile].
+func has_pending_build_near(center_tile: Vector2i, job_type: int, radius: int = 14) -> bool:
+	return count_pending_jobs_near(center_tile, job_type, radius) > 0
+
+
+## Post helper: skips construction jobs when the same type is already queued near a settlement center.
+func post_build_deduped(
+		type: int,
+		tile: Vector2i,
+		priority: int = 0,
+		work_ticks: int = 20,
+		settlement_center: Vector2i = Vector2i(-99999, -99999),
+) -> Job:
+	if _is_construction_type(type) and settlement_center.x > -99990:
+		if has_pending_build_near(settlement_center, type, 14):
+			return null
+	return post(type, tile, priority, work_ticks)
+
+
 ## Count open+claimed jobs near [param center_tile] (Chebyshev [param radius]).
 func count_pending_jobs_near(center_tile: Vector2i, job_type: int, radius: int) -> int:
 	if center_tile.x < 0:
@@ -784,6 +803,25 @@ func count_pending_jobs_near(center_tile: Vector2i, job_type: int, radius: int) 
 ## Count of currently-active (open + claimed) jobs of a given type.
 func active_count_of_type(type: int) -> int:
 	return int(_get_pending_counts_by_type().get(type, 0))
+
+
+## Pending (open + claimed) jobs for one formal settlement and build type.
+func count_pending_for_settlement(settlement_id: int, job_type: int) -> int:
+	if settlement_id < 0:
+		return 0
+	var n: int = 0
+	for j in get_active_jobs_union():
+		if j == null:
+			continue
+		if job_type >= 0 and int(j.type) != job_type:
+			continue
+		if int(j.settlement_id) == settlement_id:
+			n += 1
+	return n
+
+
+func has_pending_for_settlement(settlement_id: int, job_type: int) -> bool:
+	return count_pending_for_settlement(settlement_id, job_type) > 0
 
 
 func _get_open_counts_by_type() -> Dictionary:

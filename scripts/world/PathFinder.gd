@@ -295,23 +295,27 @@ func refresh_pawn_historic_scar_weights(p_world: World) -> void:
 		for rk in scar_regions:
 			dirty_regions[int(rk)] = true
 	# Collect regions with myth states
-	if MythMemory != null:
-		var myth_regions: Dictionary = MythMemory.get_regions_with_myth_state()
+	var myth_mem: Node = MemoryManager.get_myth_memory()
+	if myth_mem != null:
+		var myth_regions: Dictionary = myth_mem.get_regions_with_myth_state()
 		for rk in myth_regions:
 			dirty_regions[int(rk)] = true
 	# Collect regions with roads
-	if RoadMemory != null:
-		var road_regions: Dictionary = RoadMemory.get_regions_with_roads()
+	var road_mem: Node = MemoryManager.get_road_memory()
+	if road_mem != null:
+		var road_regions: Dictionary = road_mem.get_regions_with_roads()
 		for rk in road_regions:
 			dirty_regions[int(rk)] = true
 	# Collect regions with trade routes
-	if TradeMemory != null:
-		var trade_regions: Dictionary = TradeMemory.get_regions_with_trade()
+	var trade_mem: Node = EconomyManager.get_trade_memory()
+	if trade_mem != null:
+		var trade_regions: Dictionary = trade_mem.get_regions_with_trade()
 		for rk in trade_regions:
 			dirty_regions[int(rk)] = true
 	# Collect regions with remnants
-	if RemnantMemory != null and p_world != null and is_instance_valid(p_world) and p_world.data != null:
-		var remnant_regions: Dictionary = RemnantMemory.get_regions_with_remnants()
+	var remnant_mem: Node = MemoryManager.get_remnant_memory()
+	if remnant_mem != null and p_world != null and is_instance_valid(p_world) and p_world.data != null:
+		var remnant_regions: Dictionary = remnant_mem.get_regions_with_remnants()
 		for rk in remnant_regions:
 			dirty_regions[int(rk)] = true
 	# Collect regions with abandoned settlements
@@ -353,17 +357,20 @@ func refresh_pawn_historic_scar_weights(p_world: World) -> void:
 							w = 1.78
 						_:
 							w = 1.0
-					var mst: int = MythMemory.get_region_myth_state(tile_rk)
-					if mst == 1:
-						w *= 1.08
-					elif mst == -1:
-						w *= 0.95
-				w *= RoadMemory.get_path_weight_mul(tx, ty)
-				w *= TradeMemory.get_trade_path_weight_mul(tx, ty)
-				if p_world != null and is_instance_valid(p_world) and p_world.data != null:
-					if int(p_world.data.get_feature(tx, ty)) == TileFeature.Type.ROAD:
-						w *= RoadMemory.PATH_W_T2
-					w *= RemnantMemory.get_remnant_path_mul(tx, ty, p_world)
+				var mst: int = myth_mem.get_region_myth_state(tile_rk) if myth_mem != null else 0
+				if mst == 1:
+					w *= 1.08
+				elif mst == -1:
+					w *= 0.95
+			if road_mem != null:
+				w *= road_mem.get_path_weight_mul(tx, ty)
+			if trade_mem != null:
+				w *= trade_mem.get_trade_path_weight_mul(tx, ty)
+			if p_world != null and is_instance_valid(p_world) and p_world.data != null:
+				if int(p_world.data.get_feature(tx, ty)) == TileFeature.Type.ROAD:
+					w *= road_mem.PATH_W_T2 if road_mem != null else 1.0
+				if remnant_mem != null:
+					w *= remnant_mem.get_remnant_path_mul(tx, ty, p_world)
 				_pawn_hist_scale[i] = w
 				if not is_equal_approx(w, 1.0):
 					_pawn_hist_dirty.append(i)

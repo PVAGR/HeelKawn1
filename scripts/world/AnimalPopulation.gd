@@ -32,10 +32,13 @@ static func get_food_availability_at(world: World, tile: Vector2i) -> float:
 
 static func _pressure_for_animal_at(world: World, tile: Vector2i) -> float:
 	var rk: int = _WM._region_key(tile.x, tile.y)
-	var pr: float = IntentMemory.global_pressure
+	var intent_mem: Node = MemoryManager.get_intent_memory()
+	if intent_mem == null:
+		return 0.5
+	var pr: float = float(intent_mem.global_pressure)
 	var ckr: int = SettlementMemory.get_center_region_for_region(rk)
-	if ckr >= 0 and IntentMemory.settlement_pressure.has(ckr):
-		pr = maxf(pr, float(IntentMemory.settlement_pressure[ckr]))
+	if ckr >= 0 and intent_mem.settlement_pressure.has(ckr):
+		pr = maxf(pr, float(intent_mem.settlement_pressure[ckr]))
 	return clampf(pr, 0.0, 1.0)
 
 

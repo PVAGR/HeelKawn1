@@ -50,7 +50,8 @@ func recompute(world: World) -> void:
 	for n in PawnAccess.find_pawns():
 		if n.data != null:
 			pawns_alive += 1
-	var aidx: int = AgeMemory.get_current_age_index()
+	var age_mem: Node = MemoryManager.get_age_memory()
+	var aidx: int = age_mem.get_current_age_index() if age_mem != null else 0
 	var age_bump: float = 0.0
 	if aidx > _age_index_last_seen:
 		age_bump = mini(0.25, 0.08 * float(aidx - _age_index_last_seen))
@@ -73,8 +74,9 @@ func recompute(world: World) -> void:
 	if n_sett > 0:
 		frac_da = collapse_score / (float(n_sett) * 1.8)
 	var trade_collapse: float = 0.0
-	if TradeMemory.count_t2_tiles() <= 0 and TradeMemory.get_last_tick_t2_existed() >= 0:
-		var dt: int = now - int(TradeMemory.get_last_tick_t2_existed())
+	var trade_mem: Node = EconomyManager.get_trade_memory()
+	if trade_mem != null and trade_mem.count_t2_tiles() <= 0 and trade_mem.get_last_tick_t2_existed() >= 0:
+		var dt: int = now - int(trade_mem.get_last_tick_t2_existed())
 		if dt >= 1000:
 			trade_collapse = mini(0.4, 0.00001 * float(dt))
 	var food_total: int = 0
@@ -111,17 +113,18 @@ func recompute(world: World) -> void:
 			pr += 0.08
 		elif st_now == "permanently_abandoned":
 			pr += 0.16
-		if TradeMemory.get_role(ck) == TradeMemory.ROLE_DEPENDENT:
+		if trade_mem != null and trade_mem.get_role(ck) == trade_mem.ROLE_DEPENDENT:
 			pr += 0.18
 		var scmax: int = int(sd.get("scar_max", 0))
 		if scmax >= 2:
 			pr += 0.15
-		if MythMemory.get_region_myth_state(ck) == 1:
+		var myth_mem: Node = MemoryManager.get_myth_memory()
+		if myth_mem != null and myth_mem.get_region_myth_state(ck) == 1:
 			pr += 0.12
 		var lat: int = int(sd.get("last_activity_tick", -1))
 		if lat >= 0 and (now - lat) > 40000:
 			pr += 0.1
-		if st_now == "revivable" and MythMemory.get_rebirth_success_count_for_center(ck) < 1:
+		if st_now == "revivable" and myth_mem != null and myth_mem.get_rebirth_success_count_for_center(ck) < 1:
 			pr += 0.05
 		var p_sum: int = 0
 		if aspn is AnimalSpawner:

@@ -846,8 +846,8 @@ func _apply_guild_settlement_gate(world: World) -> void:
                 st["polity_formal_registered"] = true
                 if FactionManager != null and FactionManager.has_method("register_faction"):
                     FactionManager.register_faction(center_rk, polity_nm, center_rk)
-                if FactionRegistry != null and FactionRegistry.has_method("sync_from_settlements"):
-                    FactionRegistry.sync_from_settlements()
+                if FactionManager != null and FactionManager.has_method("sync_from_settlements"):
+                    FactionManager.sync_from_settlements()
         else:
             st["settlement_kind"] = _proto_site_kind_for_settlement(st)
             st["founding_reason"] = "guild_gate:%s" % str(gate.get("reason", "unknown"))
@@ -4648,8 +4648,8 @@ func _execute_polity_house_merge(idx_a: int, idx_b: int, tick: int) -> void:
 
 func _ruler_house_key_for_settlement(st: Dictionary) -> String:
     var center_rk: int = int(st.get("center_region", -1))
-    if FactionRegistry != null and FactionRegistry.has_method("get_house_for_zone"):
-        var house: Dictionary = FactionRegistry.get_house_for_zone(str(center_rk))
+    if FactionManager != null and FactionManager.has_method("get_house_for_zone"):
+        var house: Dictionary = FactionManager.get_house_for_zone(str(center_rk))
         if not house.is_empty():
             return str(house.get("house_id", ""))
     var ruler_id: int = int(st.get("current_ruler_id", -1))

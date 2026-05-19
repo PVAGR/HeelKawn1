@@ -302,8 +302,9 @@ func _recent_skirmish_between(ckr_a: int, ckr_b: int, tick: int) -> bool:
 func _trade_route_stub_between(a: Dictionary, b: Dictionary) -> bool:
 	var ckr_a: int = int(a.get("center_region", -1))
 	var ckr_b: int = int(b.get("center_region", -1))
-	if TradeMemory != null and TradeMemory.has_method("has_active_route_between"):
-		if bool(TradeMemory.has_active_route_between(ckr_a, ckr_b)):
+	var trade_mem: Node = EconomyManager.get_trade_memory()
+	if trade_mem != null and trade_mem.has_method("has_active_route_between"):
+		if bool(trade_mem.has_active_route_between(ckr_a, ckr_b)):
 			return true
 	if _polity_pair_has_trade_supplies(a, b):
 		return true
@@ -371,8 +372,9 @@ func _maybe_open_formal_trade_route(
 	var nm_b: String = str(st_b.get("polity_display_name", st_b.get("name", "realm")))
 	var bonus_key: String = _polity_pair_key(pid_a, pid_b)
 	_polity_relation_scores[bonus_key] = int(_polity_relation_scores.get(bonus_key, 0)) + POLITY_TRADE_RELATION_BONUS
-	if TradeMemory != null and TradeMemory.has_method("ensure_route_between"):
-		TradeMemory.ensure_route_between(ckr_a, ckr_b, tick)
+	var trade_mem: Node = EconomyManager.get_trade_memory()
+	if trade_mem != null and trade_mem.has_method("ensure_route_between"):
+		trade_mem.ensure_route_between(ckr_a, ckr_b, tick)
 	if WorldMemory != null:
 		WorldMemory.record_event({
 			"type": "trade_route_opened",

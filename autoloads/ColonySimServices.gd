@@ -40,6 +40,11 @@ var _low_pressure_streak_ticks: int = 0
 ## Per formal settlement center_region — posts consumed during one construction seed pass (per tick).
 var _settlement_posts_this_pass: Dictionary = {}
 var _construction_pass_tick: int = -1
+## Per settlement + build kind — prevents duplicate planner/auto-build spam (500–2000 ticks).
+var _settlement_build_kind_last_tick: Dictionary = {}
+const SETTLEMENT_BUILD_COOLDOWN_MIN_TICKS: int = 500
+const SETTLEMENT_BUILD_COOLDOWN_DEFAULT_TICKS: int = 1000
+const SETTLEMENT_BUILD_COOLDOWN_MAX_TICKS: int = 2000
 
 ## Per stockpile zone tile and per STORAGE_HUT feature (matches BuildingRegistry buffs).
 const STOCKPILE_TILE_CAPACITY: int = 8
@@ -293,6 +298,30 @@ func try_consume_settlement_build_slot(center_region: int, job_cap: int) -> bool
 
 func settlement_posts_used(center_region: int) -> int:
 	return int(_settlement_posts_this_pass.get(center_region, 0))
+
+
+func settlement_build_cooldown_ticks(build_kind: String, pressure: float = 0.0) -> int:
+	if pressure >= 0.75:
+		return SETTLEMENT_BUILD_COOLDOWN_MIN_TICKS
+	if pressure >= 0.4:
+		return SETTLEMENT_BUILD_COOLDOWN_DEFAULT_TICKS
+	return SETTLEMENT_BUILD_COOLDOWN_MAX_TICKS
+
+
+func can_post_settlement_build_kind(center_region: int, build_kind: String, pressure: float = 0.0) -> bool:
+	if center_region < 0 or build_kind.is_empty():
+		return true
+	var key: String = "%d|%s" % [center_region, build_kind]
+	var last: int = int(_settlement_build_kind_last_tick.get(key, -1_000_000))
+	var now: int = GameManager.tick_count if GameManager != null else 0
+	return now - last >= settlement_build_cooldown_ticks(build_kind, pressure)
+
+
+func mark_settlement_build_kind_posted(center_region: int, build_kind: String) -> void:
+	if center_region < 0 or build_kind.is_empty():
+		return
+	var key: String = "%d|%s" % [center_region, build_kind]
+	_settlement_build_kind_last_tick[key] = GameManager.tick_count if GameManager != null else 0
 
 
 ## Ambition-tier optional buildings (workshop, library, …) wait out contentment streaks.

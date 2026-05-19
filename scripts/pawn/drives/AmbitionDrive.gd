@@ -89,12 +89,15 @@ func pulse(data: HeelKawnianData, current_tick: int) -> Array[Urge]:
 	# Settlements with GROW intent push build urges.
 	if SettlementMemory != null and SettlementMemory.has_method("get_settlement_id_for_pawn"):
 		var sid: int = SettlementMemory.get_settlement_id_for_pawn(pawn_id)
-		if sid >= 0 and IntentMemory != null:
+		if sid >= 0:
 			var center: int = SettlementMemory.get_center_region_for_region(sid) if SettlementMemory.has_method("get_center_region_for_region") else -1
 			if center >= 0:
-				var intent: int = int(IntentMemory.settlement_intent.get(center, 0))
-				if intent == 2:  # INTENT_GROW
-					urges.append(Urge.new(Urge.Type.BUILD, 2.5, Urge.Source.AMBITION, current_tick))
+				var intent_mem: Node = MemoryManager.get_intent_memory()
+				if intent_mem != null:
+					var settlement_intent: Dictionary = intent_mem.settlement_intent if intent_mem.has_method("settlement_intent") else {}
+					var intent: int = int(settlement_intent.get(center, MemoryManager.get_intent_hold()))
+					if intent == MemoryManager.get_intent_grow():
+						urges.append(Urge.new(Urge.Type.BUILD, 2.5, Urge.Source.AMBITION, current_tick))
 
 	# ── SKILL MASTERY ──
 	# Pawns with high skill but not yet maxed feel the urge to practice.

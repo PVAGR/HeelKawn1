@@ -662,6 +662,15 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 		ambition = _ambition_result(Job.Type.BUILD_MARKER_STONE, 6, "memory anchor missing for preservation-focused population")
 	elif drive == "survive":
 		ambition = _ambition_result(Job.Type.GROW_FOOD, 7, "survival drive requests stronger food loop")
+	elif drive == "recover":
+		if beds < maxi(1, int(ceil(float(local_pop) * 0.5))):
+			ambition = _ambition_result(Job.Type.BUILD_BED, 8, "recovery drive: restore shelter capacity")
+		elif hearths <= 0 and (warmth_press > 0.1 or cold_uncovered > 0):
+			ambition = _ambition_result(Job.Type.BUILD_FIRE_PIT, 8, "recovery drive: restore hearth warmth")
+		elif storage_huts <= 0 and storage_press > 0.15:
+			ambition = _ambition_result(Job.Type.BUILD_STORAGE_HUT, 7, "recovery drive: restore storage")
+		else:
+			ambition = _ambition_result(Job.Type.MAINTAIN_STRUCTURE, 6, "recovery drive: mend settlement structures")
 	elif drive == "preserve":
 		if markers <= 0:
 			ambition = _ambition_result(Job.Type.CARVE_KNOWLEDGE_STONE, 7, "preservation drive: no knowledge markers in settlement")

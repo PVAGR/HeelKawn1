@@ -1,6 +1,6 @@
 # HeelKawn — Living TODO
 
-**Last Updated:** May 18, 2026
+**Last Updated:** May 19, 2026
 **Source of truth:** `docs/HEELKAWN_STATE.md` and `docs/HEELKAWN_PROJECT_COMPASS.md`
 
 > HeelKawn is **never finished**. This file tracks active work, not a destination.
@@ -17,6 +17,8 @@
 - [ ] Verify F10 #49 prints valid HeelKawnian development profiles
 
 ### 2. HeelKawnian Matrix AI Deepening
+- [x] Settlement planner infra gates: pressure + per-settlement/type cooldown (1000t) + pending dedupe (`Main.gd`, `JobManager.gd`)
+- [x] `HeelKawnianDecision.idle_settlement_pressure` reads `IntentMemory` via `MemoryManager` (not stale autoload refs)
 - [x] Job-bias bridge: profile-to-job-bias drives real job choice
 - [x] Social intent bridge: `social_seek` / `teach_seek` / `grudge_confront`
 - [x] Settlement ambition seeding: periodic local ambitions from drive + pressure
@@ -98,6 +100,13 @@
 - [ ] Clean up root directory of accidental files (`$null`)
 - [ ] Fix .gitignore (remove markdown code fence wrappers)
 - [ ] Consider adding CI for headless Godot validation
+
+---
+
+## May 19, 2026 session
+
+- [x] Need-driven build gating: `SettlementPlanner` + `AIAutoBuild` use `_build_pressure_ok`, 1200-tick cooldown per settlement+type, and `JobManager.has_pending_build_near` / `post_build_deduped` to skip duplicate construction posts (bed, hearth, storage, farm).
+- [ ] Wire `post_build_deduped` into `Main._post_seeded_job` for bootstrap seeders.
 
 ---
 

@@ -717,7 +717,8 @@ func _test_religion_lens_initialization() -> Dictionary:
 		return test_result
 
 		# Test ReligionLens properties
-		test_result.details["sacred_sites_count"] = SacredMemory.site_count() if SacredMemory else 0
+		var sacred_mem: Node = MemoryManager.get_sacred_memory()
+		test_result.details["sacred_sites_count"] = sacred_mem.site_count() if sacred_mem != null else 0
 
 		print("[NeuralIntegrationTester] ✓ Religion Lens initialization test passed")
 

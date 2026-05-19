@@ -18,6 +18,7 @@
 
 ### 2. HeelKawnian Matrix AI Deepening
 - [x] Settlement planner infra gates: pressure + per-settlement/type cooldown (1000t) + pending dedupe (`Main.gd`, `JobManager.gd`)
+- [x] AIAutoBuild shelter/storage intents gated on colony pressure (May 19)
 - [x] `HeelKawnianDecision.idle_settlement_pressure` reads `IntentMemory` via `MemoryManager` (not stale autoload refs)
 - [x] Job-bias bridge: profile-to-job-bias drives real job choice
 - [x] Social intent bridge: `social_seek` / `teach_seek` / `grudge_confront`

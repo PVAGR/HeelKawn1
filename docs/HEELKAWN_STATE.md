@@ -52,6 +52,9 @@ We are always building, always refining, always expanding. This document capture
     - `Pawn.gd` consumes those Matrix biases during normal `JobManager` claiming, so identity/memory/development drive nudges actual work without overriding job legality.
     - Strong Matrix-influenced job choices are logged back through `heelkawnian_development` events for auditability and replay-facing inspection.
     - F10 `49 · HeelKawnians` now prints top Matrix job pulls and rationale for sampled sprites.
+  - **FEAT: AIAutoBuild need gates (May 19, 2026)**:
+    - Shelter/storage intents now require `ColonySimServices` housing/storage/food pressure (same thresholds as `SettlementPlanner.can_post_build_intent`).
+    - Reduces autonomous build spam before formal settlement pressures exist.
   - **FEAT: Matrix Social Intent Bridge + AutoBuild Job Wiring (Phase 5A extension)**:
     - `HeelKawnianManager.gd` now exposes deterministic social intent suggestions (`social_seek`, `teach_seek`, `grudge_confront`) based on trust/rapport, grudge intensity, reputation, proximity, and settlement.
     - `Pawn.gd` now checks the Matrix social intent layer during idle autonomy, including `teach_seek` handling that writes rapport/social/neural memory traces.

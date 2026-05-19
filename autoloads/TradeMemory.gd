@@ -33,6 +33,9 @@ const ROLE_DEPENDENT: String = "dependent"
 ## }
 var trade_routes: Array[Dictionary] = []
 var _next_route_id: int = 1
+var _route_tile_tiers: Dictionary = {}  # region_key -> tier
+var _route_roles_by_region: Dictionary = {}  # center_region -> role
+var _last_tick_t2_existed: int = 0
 
 # Trade statistics for diagnostics
 var stats: Dictionary = {
@@ -61,6 +64,7 @@ func _on_game_tick(tick: int) -> void:
 	
 	# Update existing routes
 	_update_trade_routes(tick)
+	_rebuild_route_caches(tick)
 	
 	# Update stats
 	_update_stats()
@@ -147,6 +151,7 @@ func _create_trade_route(from_settlement: int, to_settlement: int, tick: int) ->
 		"path": path,
 		"tiles": path,
 	}
+	route["tier"] = _classify_route_tier(route)
 
 	trade_routes.append(route)
 	_next_route_id += 1
@@ -302,6 +307,7 @@ func _complete_trade_route(route_index: int, tick: int) -> void:
 	
 	# Remove route after completion (could keep for history)
 	trade_routes.remove_at(route_index)
+	_rebuild_route_caches(tick)
 
 
 func _spread_knowledge(from_region: int, to_region: int, goods: Dictionary) -> void:
@@ -371,7 +377,7 @@ func ensure_route_between(from_settlement: int, to_settlement: int, tick: int) -
 	var from_tile: Vector2i = SettlementPlanner._center_tile_of_region_key(from_settlement)
 	var to_tile: Vector2i = SettlementPlanner._center_tile_of_region_key(to_settlement)
 	var path: Array = _route_path_tiles(from_tile, to_tile)
-	trade_routes.append({
+	var route: Dictionary = {
 		"route_id": _next_route_id,
 		"from_settlement": from_settlement,
 		"to_settlement": to_settlement,
@@ -383,7 +389,9 @@ func ensure_route_between(from_settlement: int, to_settlement: int, tick: int) -
 		"last_updated_tick": tick,
 		"path": path,
 		"tiles": path,
-	})
+	}
+	route["tier"] = _classify_route_tier(route)
+	trade_routes.append(route)
 	_next_route_id += 1
 	if DiscoveryGate != null:
 		DiscoveryGate.unlock("first_trade")
@@ -394,6 +402,7 @@ func ensure_route_between(from_settlement: int, to_settlement: int, tick: int) -
 			"from": from_settlement,
 			"to": to_settlement,
 		})
+	_rebuild_route_caches(tick)
 
 
 func _goods_key_to_item_type(key: String) -> int:
@@ -527,26 +536,10 @@ func get_goods_in_transit(settlement: int) -> Dictionary:
 
 ## Get trade route tier at a tile (for World rendering)
 func get_route_tier_at(x: int, y: int) -> int:
-	# Simplified: check if tile is on a trade route path
-	# In full implementation, would track actual route paths
-	for route in trade_routes:
-		if route.status == "en_route":
-			# Check if tile is near route endpoints (simplified)
-			# Full implementation would interpolate along path
-			var from_settlement: Variant = SettlementMemory.get_settlement_at_region(route.from_settlement)
-			var to_settlement: Variant = SettlementMemory.get_settlement_at_region(route.to_settlement)
-			
-			if from_settlement is Dictionary:
-				var from_center: int = int(from_settlement.get("center_region", -1))
-				if from_center >= 0:
-					# Simplified: just check distance to endpoints
-					var dist_from: int = abs(x - (from_center % 256)) + abs(y - (from_center / 256))
-					var dist_to: int = abs(x - (route.to_settlement % 256)) + abs(y - (route.to_settlement / 256))
-					
-					if dist_from < 8 or dist_to < 8:
-						return TIER_ROUTE_1
-	
-	return TIER_NONE
+	if _WM == null:
+		return TIER_NONE
+	var rk: int = _WM._region_key(x, y)
+	return int(_route_tile_tiers.get(rk, TIER_NONE))
 
 
 ## Get pathfinding weight multiplier for trade route at tile
@@ -585,17 +578,17 @@ func debug_create_route(from: int, to: int) -> void:
 ## Returns the count of T2 (Tier 2 / Advanced) trade route tiles.
 ## Required by IntentMemory.recompute to assess trade capabilities.
 func count_t2_tiles() -> int:
-	# TODO: Implement actual trade route logic.
-	# Currently returns 0 to prevent IntentMemory crash.
-	return 0
+	var total: int = 0
+	for rk_any in _route_tile_tiers.keys():
+		if int(_route_tile_tiers.get(rk_any, TIER_NONE)) >= TIER_ROUTE_2:
+			total += 1
+	return total
 
 
 ## Returns the last tick when T2 trade routes existed.
 ## Required by IntentMemory for trade history assessment.
 func get_last_tick_t2_existed() -> int:
-	# TODO: Implement actual trade route tracking.
-	# Currently returns 0 (no trade routes yet).
-	return 0
+	return _last_tick_t2_existed
 
 
 ## Count total tiles across all active trade route paths.
@@ -615,13 +608,70 @@ func count_route_tiles() -> int:
 ## Returns the trade role at a given tile/region key.
 ## Required by IntentMemory.recompute for trade intent calculation.
 func get_role(region_key: Variant) -> String:
-	# TODO: Implement actual trade route role tracking.
-	# Currently returns empty string (no trade role).
-	return ""
+	var rk: int = int(region_key)
+	return str(_route_roles_by_region.get(rk, ROLE_NONE))
 
 
 ## Clear all trade data (for world reroll/new game)
 func clear() -> void:
 	trade_routes.clear()
 	_next_route_id = 1
+	_route_tile_tiers.clear()
+	_route_roles_by_region.clear()
+	_last_tick_t2_existed = 0
 	# Reset any other trade data as needed
+
+
+func _classify_route_tier(route: Dictionary) -> int:
+	var goods_v: Variant = route.get("goods", {})
+	var goods: Dictionary = goods_v as Dictionary if goods_v is Dictionary else {}
+	var goods_total: int = 0
+	for g in goods.values():
+		goods_total += int(g)
+	var path_v: Variant = route.get("path", [])
+	var path: Array = path_v as Array if path_v is Array else []
+	# Tier-2 routes represent higher-throughput or long-haul links.
+	if goods_total >= TRADE_GOODS_PER_ROUTE * 2 or path.size() >= 30:
+		return TIER_ROUTE_2
+	return TIER_ROUTE_1
+
+
+func _rebuild_route_caches(tick: int = -1) -> void:
+	_route_tile_tiers.clear()
+	_route_roles_by_region.clear()
+	var saw_t2: bool = false
+	for route_any in trade_routes:
+		if route_any is not Dictionary:
+			continue
+		var route: Dictionary = route_any as Dictionary
+		var status: String = str(route.get("status", ""))
+		if status != "en_route":
+			continue
+		var from_rk: int = int(route.get("from_settlement", -1))
+		var to_rk: int = int(route.get("to_settlement", -1))
+		if from_rk >= 0:
+			_route_roles_by_region[from_rk] = ROLE_SOURCE
+		if to_rk >= 0:
+			_route_roles_by_region[to_rk] = ROLE_DESTINATION
+		var tier: int = int(route.get("tier", TIER_ROUTE_1))
+		if tier >= TIER_ROUTE_2:
+			saw_t2 = true
+		var tiles_v: Variant = route.get("tiles", route.get("path", []))
+		var tiles: Array = tiles_v as Array if tiles_v is Array else []
+		for tile_any in tiles:
+			if tile_any is not Vector2i:
+				continue
+			var tile: Vector2i = tile_any as Vector2i
+			if _WM == null:
+				continue
+			var rk: int = _WM._region_key(tile.x, tile.y)
+			var existing: int = int(_route_tile_tiers.get(rk, TIER_NONE))
+			if tier > existing:
+				_route_tile_tiers[rk] = tier
+				if existing == TIER_NONE and not _route_roles_by_region.has(rk):
+					_route_roles_by_region[rk] = ROLE_WAYPOINT
+	if saw_t2:
+		if tick < 0 and GameManager != null:
+			_last_tick_t2_existed = GameManager.tick_count
+		elif tick >= 0:
+			_last_tick_t2_existed = tick

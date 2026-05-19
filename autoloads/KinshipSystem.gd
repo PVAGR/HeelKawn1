@@ -321,13 +321,16 @@ func _update_household_stats(hhid: int) -> void:
 	
 	for mid in members:
 		# We access pawn data via PawnData (the canon registry)
-		var d = PawnData.get_pawn_data(mid)
+		var d: HeelKawnianData = PawnData.get_pawn_data(mid)
 		if d:
-			total_rep += float(d.get("reputation_score", 50.0))
+			total_rep += float(d.reputation_score)
 			# Stability increases if they have high rapport with other members
 			for other_id in members:
 				if mid == other_id: continue
-				total_stability += float(d.get("trust", {}).get(other_id, 50.0)) * 0.1
+				var peer_trust: float = 50.0
+				if d.trust.has(other_id):
+					peer_trust = float(d.trust[other_id])
+				total_stability += peer_trust * 0.1
 			member_count += 1
 	
 	if member_count > 0:

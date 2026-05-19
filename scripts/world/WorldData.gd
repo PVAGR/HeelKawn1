@@ -85,6 +85,11 @@ static func is_tile_walkable(data: WorldData, x: int, y: int) -> bool:
 	return true
 
 
+## Instance helper used by planners, farming, and building placement.
+func is_passable(x: int, y: int) -> bool:
+	return is_tile_walkable(self, x, y)
+
+
 ## For `GameSave` / `store_var`. Packed arrays round-trip in the snapshot dict.
 func to_save_dict() -> Dictionary:
 	return {

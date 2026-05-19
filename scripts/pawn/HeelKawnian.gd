@@ -4810,8 +4810,9 @@ func _tick_idle() -> void:
 			return false
 		# Skip jobs on this pawn's claim cooldown (prevents tile_invalid re-claim loops)
 		if _job_claim_cooldowns.has(int(j.id)):
-			var now_tick: int = GameManager.tick_count if GameManager != null else 0
-			if int(_job_claim_cooldowns[int(j.id)]) > now_tick:
+			var cooldown_until: int = int(_job_claim_cooldowns[int(j.id)])
+			var cur_tick: int = GameManager.tick_count if GameManager != null else 0
+			if cooldown_until > cur_tick:
 				return false
 			else:
 				_job_claim_cooldowns.erase(int(j.id))

@@ -482,38 +482,16 @@ func get_activity_name(activity: int) -> String:
 # ============================================================
 
 func _get_pawn_profession(pawn: Node) -> String:
-	"""Get the pawn's primary profession."""
+	"""Get the pawn's organic profession (developed via skill XP & liking lanes)."""
 	if pawn.data == null:
 		return "unassigned"
-	# Check job proficiency for dominant skill
-	var proficiencies: Dictionary = pawn.data.get("job_proficiency", {})
-	var best_prof: String = "unassigned"
-	var best_val: float = 0.0
-	for job_type in proficiencies.keys():
-		var val: float = float(proficiencies[job_type])
-		if val > best_val:
-			best_val = val
-			best_prof = job_type
-	# Map job types to professions
-	var profession_map: Dictionary = {
-		"forage": "hunter",
-		"chop": "builder",
-		"mine": "builder",
-		"build_bed": "builder",
-		"build_wall": "builder",
-		"build_fire_pit": "builder",
-		"build_storage_hut": "builder",
-		"cook_meat": "healer",
-		"cook_berries": "healer",
-		"cook_fish": "healer",
-		"plant_seeds": "farmer",
-		"harvest_crops": "farmer",
-		"fish": "fisher",
-		"hunt": "hunter",
-		"teach_skill": "scholar",
-		"trade_haul": "trader",
-	}
-	return profession_map.get(best_prof, "unassigned")
+	# HeelKawnianData already tracks organic profession via current_profession enum
+	# and profession_name() returns the human-readable label.
+	if pawn.data.has_method("profession_name"):
+		var prof: String = pawn.data.profession_name()
+		if prof != "" and prof != "none":
+			return prof
+	return "unassigned"
 
 
 func _get_pawn_personality(pawn: Node) -> Dictionary:

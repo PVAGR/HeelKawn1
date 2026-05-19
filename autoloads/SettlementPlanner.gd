@@ -181,6 +181,26 @@ func _plan_one_settlement_culture(
 ) -> void:
 	var fire_pit_n: int = int(feature_summary.get("fire_pit_n", 0))
 	var storage_hut_n: int = int(feature_summary.get("storage_hut_n", 0))
+	var center_rk: int = int(settlement.get("center_region", -1))
+	var build_priorities: Dictionary = {}
+	if ColonySimServices != null and center_rk >= 0:
+		var features_for_pri: Dictionary = {
+			"bed": bed_n,
+			"wall": wall_n,
+			"door": door_n,
+			"hearth": fire_pit_n,
+			"storage_hut": storage_hut_n,
+			"farm": int(feature_summary.get("farm_n", 0)),
+			"workshop": int(feature_summary.get("workshop_n", 0)),
+			"granary": int(feature_summary.get("granary_n", 0)),
+			"apothecary": int(feature_summary.get("apothecary_n", 0)),
+			"library": int(feature_summary.get("library_n", 0)),
+			"market": int(feature_summary.get("market_n", 0)),
+			"barracks": int(feature_summary.get("barracks_n", 0)),
+			"cellar": int(feature_summary.get("cellar_n", 0)),
+		}
+		build_priorities = ColonySimServices.compute_settlement_build_priorities(
+				center_rk, pawns, features_for_pri, false)
 	var order: Array[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
 	if cult == CULTURE_OPEN:
 		# Beds + zone before fortifying; sprawl (tile picks below). Farms early.
@@ -333,12 +353,19 @@ func _plan_one_settlement_culture(
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
 				var open_fire_pits: int = JobManager.count_pending_by_type(Job.Type.BUILD_FIRE_PIT)
-				if bed_n >= 1 and fire_pit_n + open_fire_pits == 0:
-					var center_rk: int = WorldMemory._region_key(center.x, center.y) if WorldMemory != null else -1
+				var warmth_press_rule: float = float(build_priorities.get("warmth_press", 0.0))
+				var warmth_ok: bool = bool(build_priorities.get("warmth_satisfied", false))
+				var need_hearth: bool = (
+						not warmth_ok
+						and warmth_press_rule > 0.08
+						and (bed_n >= 1 or pawns <= 2)
+				)
+				if need_hearth and fire_pit_n + open_fire_pits == 0:
+					var center_rk_fire: int = WorldMemory._region_key(center.x, center.y) if WorldMemory != null else -1
 					var hearths_needed: int = 1
-					if ColonySimServices != null and center_rk >= 0:
-						hearths_needed = ColonySimServices.regional_hearths_needed(center_rk)
-						if not ColonySimServices.can_seed_fire_pit(center_rk, center, fire_pit_n, hearths_needed):
+					if ColonySimServices != null and center_rk_fire >= 0:
+						hearths_needed = ColonySimServices.regional_hearths_needed(center_rk_fire)
+						if not ColonySimServices.can_seed_fire_pit(center_rk_fire, center, fire_pit_n, hearths_needed):
 							continue
 					if not can_post_build_intent(settlement, "fire_pit", Job.Type.BUILD_FIRE_PIT, center):
 						continue
@@ -350,7 +377,9 @@ func _plan_one_settlement_culture(
 				if intent == IntentMemory.INTENT_ABANDON:
 					continue
 				var open_storage: int = JobManager.count_pending_by_type(Job.Type.BUILD_STORAGE_HUT)
-				if bed_n >= 2 and storage_hut_n + open_storage == 0:
+				var storage_press_rule: float = float(build_priorities.get("storage_press", 0.0))
+				var storage_need_n: int = int(build_priorities.get("storage_needed", 0))
+				if (storage_press_rule > 0.18 or storage_need_n > 0) and storage_hut_n + open_storage == 0:
 					if not can_post_build_intent(settlement, "storage_hut", Job.Type.BUILD_STORAGE_HUT, center):
 						continue
 					var t12: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
@@ -1570,10 +1599,40 @@ func can_post_build_intent(
 	var center_rk: int = int(settlement.get("center_region", -1))
 	if center_rk < 0 and WorldMemory != null:
 		center_rk = WorldMemory._region_key(center_tile.x, center_tile.y)
+	if ColonySimServices == null:
+		var tick_only: int = GameManager.tick_count if GameManager != null else 0
+		var key_only: String = _build_intent_key(center_rk, build_type)
+		if tick_only - int(_last_build_intent_tick.get(key_only, -1_000_000_000)) < BUILD_INTENT_COOLDOWN_TICKS:
+			return false
+		if job_type >= 0 and JobManager != null and center_tile.x >= 0:
+			if JobManager.has_pending_build_near(center_tile, job_type, 14):
+				return false
+		return true
+	var food_p: float = ColonySimServices.get_food_pressure()
+	var housing_p: float = ColonySimServices.get_housing_pressure()
+	var warmth_p: float = ColonySimServices.get_warmth_pressure(center_rk)
+	var storage_p: float = ColonySimServices.get_storage_pressure(center_rk)
+	var pressure_for_cd: float = 0.0
+	match build_type:
+		"bed", "shelter":
+			pressure_for_cd = housing_p
+		"fire_pit", "hearth":
+			pressure_for_cd = warmth_p
+		"storage_hut", "storage":
+			pressure_for_cd = storage_p
+		"farm", "granary":
+			pressure_for_cd = food_p
+		_:
+			pressure_for_cd = maxf(food_p, maxf(housing_p, warmth_p))
+	var cooldown_ticks: int = BUILD_INTENT_COOLDOWN_TICKS
+	if ColonySimServices != null:
+		cooldown_ticks = ColonySimServices.settlement_build_cooldown_ticks(build_type, pressure_for_cd)
 	var tick: int = GameManager.tick_count if GameManager != null else 0
 	var key: String = _build_intent_key(center_rk, build_type)
 	var last_tick: int = int(_last_build_intent_tick.get(key, -1_000_000_000))
-	if tick - last_tick < BUILD_INTENT_COOLDOWN_TICKS:
+	if tick - last_tick < cooldown_ticks:
+		return false
+	if ColonySimServices != null and not ColonySimServices.can_post_settlement_build_kind(center_rk, build_type, pressure_for_cd):
 		return false
 	if job_type >= 0 and JobManager != null and center_tile.x >= 0:
 		if JobManager.has_pending_build_near(center_tile, job_type, 14):
@@ -1587,3 +1646,5 @@ func mark_build_intent_posted(settlement: Dictionary, build_type: String) -> voi
 		return
 	var tick: int = GameManager.tick_count if GameManager != null else 0
 	_last_build_intent_tick[_build_intent_key(center_rk, build_type)] = tick
+	if ColonySimServices != null:
+		ColonySimServices.mark_settlement_build_kind_posted(center_rk, build_type)

@@ -1,6 +1,6 @@
 # Active Context
 
-**Last updated:** 2026-05-14
+**Last updated:** 2026-05-19
 **Current phase:** Phase 5A — Emergent Life foundation (Consolidation)
 **Kernel status:** Complete
 
@@ -21,7 +21,13 @@
 - Phase 5A integration testing — CivilizationStage, HeelKawnian profiles, Matrix AI
 - Headless smoke test verification (passed May 7 — confirm stable)
 
-### Completed This Session (May 14, 2026)
+### Completed This Session (May 19, 2026)
+- Needs-driven construction: `SettlementPlanner` uses `compute_settlement_build_priorities` for hearth/storage gates; `ColonySimServices` 500–2000 tick build-kind cooldowns; `AIAutoBuild` shares planner dedupe
+- Matrix AI: recovery-drive ambitions; `teach_seek` transfers knowledge on arrival
+- Settlement truth: formal-only territory overlay; mind panel + country view gated on infrastructure formal gate
+- `FactionManager` sync fix in `SettlementMemory._ruler_house_key_for_settlement`
+
+### Completed Prior Session (May 14, 2026)
 - Documentation truth sweep: fixed phase numbering, completion %, autoload counts across 35+ files
 - Autoload consolidation: 15 old autoloads removed from project.godot (164→149)
   - SettlementPlanner/Rebirth/Architect → SettlementManager

@@ -1944,6 +1944,15 @@ func _toggle_settlement_mind_panel() -> void:
 	var st_center: int = sm.get_center_region_for_region(st_rk) if sm.has_method("get_center_region_for_region") else -1
 	if st_center < 0:
 		return
+	var st_v: Variant = sm.get_formal_settlement_at_region(st_rk)
+	if st_v == null or not (st_v is Dictionary):
+		return
+	var st_dict: Dictionary = st_v as Dictionary
+	var center_tile: Vector2i = _settlement_center_tile_for_dict(st_dict)
+	if sm.has_method("describe_infrastructure_formal_gate"):
+		var gate: Dictionary = sm.describe_infrastructure_formal_gate(st_dict, center_tile)
+		if not bool(gate.get("allowed", false)):
+			return
 	_settlement_mind_panel.open_for_settlement(st_center)
 
 func _toggle_country_view_mode() -> void:
@@ -1981,12 +1990,29 @@ func _handle_country_view_click(tile: Vector2i) -> void:
 					break
 	if st == null or not (st is Dictionary):
 		return
-	var center_rk: int = int((st as Dictionary).get("center_region", -1))
+	var st_dict: Dictionary = st as Dictionary
+	if not bool(st_dict.get("is_formal_settlement", false)):
+		return
+	var center_tile: Vector2i = _settlement_center_tile_for_dict(st_dict)
+	if SettlementMemory.has_method("describe_infrastructure_formal_gate"):
+		var gate: Dictionary = SettlementMemory.describe_infrastructure_formal_gate(st_dict, center_tile)
+		if not bool(gate.get("allowed", false)):
+			return
+	var center_rk: int = int(st_dict.get("center_region", -1))
 	if center_rk < 0:
 		return
 	_ensure_settlement_mind_panel()
 	if _settlement_mind_panel != null and is_instance_valid(_settlement_mind_panel):
 		_settlement_mind_panel.open_for_settlement(center_rk)
+
+func _settlement_center_tile_for_dict(st: Dictionary) -> Vector2i:
+	var center_rk: int = int(st.get("center_region", -1))
+	if center_rk < 0:
+		return Vector2i(-1, -1)
+	var rx: int = center_rk & 0xFFFF
+	var ry: int = (center_rk >> 16) & 0xFFFF
+	return Vector2i(rx * 16 + 8, ry * 16 + 8)
+
 
 func _ensure_settlement_mind_panel() -> void:
 	if _settlement_mind_panel != null and is_instance_valid(_settlement_mind_panel):

@@ -16,7 +16,7 @@ We are always building, always refining, always expanding. This document capture
 
 - **Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
 - **Kernel Health:** 🟢 Stable enough for headless smoke
-- **Compilation:** ✅ Headless Godot smoke passed on May 7, 2026
+- **Compilation:** ✅ Headless Godot smoke passed on May 7, 2026 (re-run locally after May 19 construction/UI changes)
 - **Project Shape:** Many live systems, some partial systems, and several design stubs
 - **Truth Source:** Code/runtime first, then `BUILD_INVENTORY.md`, then this file
 - Resolved Blockers:

@@ -25,7 +25,9 @@
 - [x] Household goal planning: `HOUSEHOLD_GOALS` with coordinated job lists
 - [ ] Extend profile-to-job-bias into learning target selection
 - [ ] Add preservation choices (what knowledge to inscribe vs keep oral)
-- [ ] Add recovery behavior (what to do after disaster/famine/collapse)
+- [x] Recovery drive ambition chain (shelter/hearth/storage/maintain after trauma pressure)
+- [x] `teach_seek` autonomy calls `execute_teach_seek` on arrival
+- [ ] Deepen recovery behavior (post-collapse settlement rebuild chains)
 - [ ] Add settlement ambition chains (longer-horizon objectives)
 
 ### 3. Lineage & Progression
@@ -87,7 +89,10 @@
 ## Documentation Hygiene (Ongoing)
 
 - [x] Archive old/overlapping docs to `docs/archive/`
-- [x] Update TODO.md to reflect actual implemented state (May 18, 2026)
+- [x] Update TODO.md to reflect actual implemented state (May 19, 2026)
+- [x] Needs-driven planner: `compute_settlement_build_priorities` + variable 500–2000t cooldowns
+- [x] Formal settlement UI gate (mind panel + country view) per AI_README infrastructure doctrine
+- [x] Territory overlay draws formal settlements only (no proto-site fill)
 - [ ] Keep core five docs current: Compass, Blueprint, State, Build Inventory, Player Guide
 - [ ] Update completion language: "complete" = compiles, runs, verified — not just "file exists"
 

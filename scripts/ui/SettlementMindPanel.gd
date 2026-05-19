@@ -34,6 +34,14 @@ func _refresh(center_region: int) -> void:
 	if st.is_empty():
 		_content.text = "[color=#888888]No settlement found at region %d.[/color]" % center_region
 		return
+	if not _formal_mind_panel_allowed(st, sm):
+		var gate_reason: String = str(_formal_mind_gate(st, sm).get("reason", "emerging"))
+		_content.text = (
+				"[color=#c9a227]Settlement mind locked[/color]\n"
+				+ "Formal settlement UI opens after authority, hearth, storage, and shelter exist.\n"
+				+ "Status: [i]%s[/i]" % gate_reason
+		)
+		return
 	var lines: Array[String] = []
 	var name: String = str(st.get("name", "Unnamed"))
 	var state: String = str(st.get("state", "unknown"))
@@ -102,6 +110,30 @@ func _refresh(center_region: int) -> void:
 	lines.append("")
 	lines.append("[color=#555555]Press J to close[/color]")
 	_content.text = "\n".join(lines)
+
+func _settlement_center_tile(st: Dictionary) -> Vector2i:
+	var center_rk: int = int(st.get("center_region", -1))
+	if center_rk < 0:
+		return Vector2i(-1, -1)
+	var rx: int = center_rk & 0xFFFF
+	var ry: int = (center_rk >> 16) & 0xFFFF
+	return Vector2i(rx * 16 + 8, ry * 16 + 8)
+
+
+func _formal_mind_gate(st: Dictionary, sm: Node) -> Dictionary:
+	if sm == null or not sm.has_method("describe_infrastructure_formal_gate"):
+		return {"allowed": false, "reason": "no_gate"}
+	var center_tile: Vector2i = _settlement_center_tile(st)
+	if center_tile.x < 0:
+		return {"allowed": false, "reason": "invalid_center"}
+	return sm.describe_infrastructure_formal_gate(st, center_tile) as Dictionary
+
+
+func _formal_mind_panel_allowed(st: Dictionary, sm: Node) -> bool:
+	if not bool(st.get("is_formal_settlement", false)):
+		return false
+	return bool(_formal_mind_gate(st, sm).get("allowed", false))
+
 
 func _find_settlement(center_region: int, sm: Node) -> Dictionary:
 	var settlements_val = sm.get("settlements") if sm != null else null

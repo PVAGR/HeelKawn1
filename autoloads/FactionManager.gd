@@ -300,6 +300,11 @@ func _recent_skirmish_between(ckr_a: int, ckr_b: int, tick: int) -> bool:
 
 
 func _trade_route_stub_between(a: Dictionary, b: Dictionary) -> bool:
+	var ckr_a: int = int(a.get("center_region", -1))
+	var ckr_b: int = int(b.get("center_region", -1))
+	if TradeMemory != null and TradeMemory.has_method("has_active_route_between"):
+		if bool(TradeMemory.has_active_route_between(ckr_a, ckr_b)):
+			return true
 	if _polity_pair_has_trade_supplies(a, b):
 		return true
 	var pop_a: int = int(a.get("population", 0))
@@ -307,7 +312,7 @@ func _trade_route_stub_between(a: Dictionary, b: Dictionary) -> bool:
 	if pop_a < 6 or pop_b < 6:
 		return false
 	var markets_a: int = int(a.get("markets", 0))
-	var markets_b: int = int(a.get("markets", 0))
+	var markets_b: int = int(b.get("markets", 0))
 	if markets_a > 0 or markets_b > 0:
 		return true
 	return pop_a + pop_b >= 24

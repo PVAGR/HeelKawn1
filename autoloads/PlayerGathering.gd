@@ -77,12 +77,14 @@ const RESOURCE_TYPES: Dictionary = {
 @onready var _world_memory: Node = null
 @onready var _survival_system: Node = null
 @onready var _player_pawn: Node = null
+@onready var _stockpile_manager: Node = null
 
 
 func _ready() -> void:
 	_world = get_node_or_null("/root/Main/World")
 	_world_memory = get_node_or_null("/root/WorldMemory")
 	_survival_system = get_node_or_null("/root/SurvivalSystem")
+	_stockpile_manager = get_node_or_null("/root/StockpileManager")
 	
 	# Initialize player inventory with starting items
 	_init_player_inventory()
@@ -190,27 +192,30 @@ func _gather_resource(tile: Vector2i, resource_type: String, output_resource: St
 func _is_valid_gather_tile(tile: Vector2i, resource_type: String) -> bool:
 	if _world == null or _world.data == null:
 		return false
-	
+
 	if not _world.data.in_bounds(tile.x, tile.y):
 		return false
-	
+
 	# Check tile feature
 	var feature: int = _world.data.get_feature(tile.x, tile.y)
-	
+	var biome: int = _world.data.get_biome(tile.x, tile.y)
+
 	match resource_type:
 		"tree":
-			return feature == 2  # TREE feature
+			return feature == TileFeature.Type.TREE
 		"rock":
-			return feature == 3 or feature == 4  # ROCK or BOULDER
+			# Rocks: MOUNTAIN biome or RUIN feature
+			return biome == Biome.Type.MOUNTAIN or feature == TileFeature.Type.RUIN
 		"bush":
-			return feature == 6  # BUSH/BERRIES
+			# Bushes: FERTILE_SOIL biome or FARM_VEGETABLES feature
+			return biome == Biome.Type.FERTILE_SOIL or feature == TileFeature.Type.FARM_VEGETABLES
 		"flint":
-			return feature == 7 or _world.data.get_biome(tile.x, tile.y) == 4  # Rocky area
+			return feature == TileFeature.Type.FLINT or biome == Biome.Type.MOUNTAIN
 		"stick":
-			return feature == 2 or feature == 6  # Forest or bush area
+			return feature == TileFeature.Type.TREE or biome == Biome.Type.FOREST
 		"ore":
-			return feature == 8  # ORE_VEIN
-	
+			return feature == TileFeature.Type.ORE_VEIN
+
 	return false
 
 
@@ -243,42 +248,137 @@ func _calculate_gather_quantity(config: Dictionary, tile: Vector2i) -> int:
 func _has_required_tool(tool_name: String) -> bool:
 	if _player_pawn == null or _player_pawn.data == null:
 		return false
-	
-	# Check if player has required tool in inventory or equipped
-	# TODO: Implement proper tool checking
-	# For now, return false if tool is required
-	return tool_name == "none"
+	if tool_name == "none" or tool_name.is_empty():
+		return true
+
+	# Map tool bonus names to actual Item.Type values
+	var tool_to_item: Dictionary = {
+		"axe": Item.Type.FLINT_KNIFE,       # closest to axe: cutting tool
+		"pickaxe": Item.Type.FLINT_PICK,    # mining tool
+		"basket": Item.Type.NONE,           # no basket item yet — allow without
+	}
+	var item_type: int = tool_to_item.get(tool_name.to_lower(), Item.Type.NONE)
+	if item_type == Item.Type.NONE:
+		# No specific item required for this tool bonus
+		return true
+
+	# Check if player pawn is carrying the tool
+	if _player_pawn.data.carried_item == item_type:
+		return true
+
+	# Check stockpile for the tool
+	if StockpileManager != null and StockpileManager.has_method("get_item_count"):
+		return int(StockpileManager.call("get_item_count", item_type)) > 0
+
+	return false
 
 
 func _get_skill_level(skill_name: String) -> int:
 	if _player_pawn == null or _player_pawn.data == null:
 		return 0
-	
-	# Get skill level from pawn data
-	# TODO: Implement proper skill system integration
-	return 0
+	var data: HeelKawnianData = _player_pawn.data
+	# Map skill names to HeelKawnianData.Skill enum
+	var skill_map: Dictionary = {
+		"foraging": 0,  # FORAGING
+		"chopping": 1,  # WOODCUTTING
+		"mining": 2,    # MINING
+		"hunting": 4,   # HUNTING
+		"building": 3,  # BUILDING
+	}
+	var skill_enum: int = skill_map.get(skill_name.to_lower(), 0)
+	if data.has_method("get_skill_level"):
+		return int(data.call("get_skill_level", skill_enum))
+	# Fallback: check skill_xp dict
+	var xp: int = int(data.skill_xp.get(skill_enum, 0))
+	return xp / 100  # Level = total XP / 100
 
 
 func _gain_skill_xp(skill_name: String, xp: int) -> void:
 	if _player_pawn == null or _player_pawn.data == null:
 		return
-	
-	# Award XP to skill
-	# TODO: Implement proper skill XP system
-	pass
+	var data: HeelKawnianData = _player_pawn.data
+	var skill_map: Dictionary = {
+		"foraging": 0,
+		"chopping": 1,
+		"mining": 2,
+		"hunting": 4,
+		"building": 3,
+	}
+	var skill_enum: int = skill_map.get(skill_name.to_lower(), 0)
+	if data.has_method("add_skill_xp"):
+		data.call("add_skill_xp", skill_enum, xp)
+	elif data.has_method("gain_xp"):
+		data.call("gain_xp", skill_enum, xp)
+	else:
+		# Direct dict update as fallback
+		var current: int = int(data.skill_xp.get(skill_enum, 0))
+		data.skill_xp[skill_enum] = current + xp
+		data.level = _calculate_level_from_xp(data.skill_xp)
+		if data.has_method("recalculate_perception"):
+			data.call("recalculate_perception")
+
+
+func _calculate_level_from_xp(skill_xp: Dictionary) -> int:
+	var total: int = 0
+	for v in skill_xp.values():
+		total += int(v)
+	return maxi(1, total / 100)
 
 
 func _deplete_resource(tile: Vector2i, resource_type: String, regrow_time: int) -> void:
 	if _world == null or _world.data == null:
 		return
-	
-	# Remove or mark resource as depleted
-	# For finite resources (regrow_time = -1), remove permanently
-	# For renewable resources, schedule regrow
-	
-	# TODO: Implement proper resource depletion in World data
-	# For now, just record the action
-	pass
+	if not _world.data.in_bounds(tile.x, tile.y):
+		return
+
+	# Map resource type to feature to remove
+	var feature_to_remove: int = -1
+	var feature_to_regrow: int = -1
+	match resource_type:
+		"tree":
+			feature_to_remove = TileFeature.Type.TREE
+			feature_to_regrow = TileFeature.Type.TREE
+		"rock":
+			# Rocks are biome-based (MOUNTAIN), not a feature — can't deplete
+			return
+		"bush":
+			# Bushes may be FERTILE_SOIL biome or FARM_VEGETABLES feature
+			var feature: int = _world.data.get_feature(tile.x, tile.y)
+			if feature == TileFeature.Type.FARM_VEGETABLES:
+				feature_to_remove = TileFeature.Type.FARM_VEGETABLES
+				feature_to_regrow = TileFeature.Type.FARM_VEGETABLES
+			else:
+				# Biome-based bush — don't remove, just record
+				pass
+		"flint":
+			feature_to_remove = TileFeature.Type.FLINT
+			# Flint doesn't regrow (finite)
+		"stick":
+			# Sticks come from trees — don't remove the tree
+			return
+		"ore":
+			feature_to_remove = TileFeature.Type.ORE_VEIN
+			# Ore doesn't regrow (finite)
+
+	# Remove the feature from the world tile if applicable
+	if feature_to_remove >= 0:
+		_world.data.set_feature(tile.x, tile.y, TileFeature.Type.NONE)
+
+		# Schedule regrow if applicable (renewable resources only)
+		if regrow_time > 0 and feature_to_regrow >= 0:
+			var main: Node = get_node_or_null("/root/Main")
+			if main != null and main.has_method("_queue_regrowth"):
+				main.call("_queue_regrowth", tile, feature_to_regrow, regrow_time)
+
+	# Record depletion in WorldMemory for persistence tracking
+	if WorldMemory != null:
+		WorldMemory.record_event({
+			"type": "resource_depleted",
+			"resource": resource_type,
+			"tile_x": tile.x,
+			"tile_y": tile.y,
+			"regrow_ticks": regrow_time,
+		})
 
 
 func _record_gather_event(resource: String, quantity: int, tile: Vector2i) -> void:

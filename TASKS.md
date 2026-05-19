@@ -1,12 +1,24 @@
 # HEELKAWN — TASK TRACKER
 
-**Last Updated:** 2026-05-02  
-**Current Phase:** Phase 4 (Identity & Meaning)  
-**Focus:** Settlement revival vs permanent abandonment tuning
+**Last Updated:** 2026-05-18  
+**Current Phase:** Phase 5A (Indefinite Evolution Foundation)  
+**Focus:** Consolidation, runtime truth, Matrix AI deepening
 
 ---
 
 ## DONE ✅
+
+### Session 2026-05-18
+- [x] Full repository scan: identified many "TODO" items already implemented
+- [x] Created `ChronicleExport.gd`: narrative prose chronicle organized by era, settlement summaries, notable lives, knowledge status
+- [x] Fixed `PlayerGathering.gd` stubs:
+  - `_has_required_tool`: now checks carried item + stockpile (was: always false)
+  - `_get_skill_level`: wired to `HeelKawnianData.get_skill_level()` (was: always 0)
+  - `_gain_skill_xp`: wired to `HeelKawnianData.add_skill_xp()` (was: no-op)
+  - `_deplete_resource`: removes features, schedules regrowth via `Main._queue_regrowth` (was: no-op)
+- [x] Fixed `_is_valid_gather_tile`: uses proper `TileFeature.Type` enum (was: hardcoded wrong numbers)
+- [x] Updated `TODO.md`: marked implemented items, added new priorities
+- [x] Updated `docs/BUILD_INVENTORY.md`: corrected status of skill trees, child creation, parent lookup, crafting consumption, exports
 
 ### Session 2026-05-02 (Continued)
 - [x] Fixed DebugControlPanel.gd Godot 4.6 compatibility: replaced deprecated `append_text()` with `text +=` for TextEdit logging
@@ -56,54 +68,49 @@
 
 ## IN PROGRESS 🔶
 
-### Critical: Settlement State Machine Fix
-- [x] **BLOCKER**: Fix `recovering` state semantics in SettlementMemory.gd
-  - Canonical flow now: `abandoned` → `recovering` → `revivable` → `active`
-  - Score gates: <35=abandoned, 35-69=recovering, 70-87=revivable, 88+=active
-- [x] Update _settlement_state_v1() to match canonical flow
-- [x] Update SettlementRebirth.gd to accept both `revivable` AND `recovering` states
-- [x] Fix _state_to_meaning_label() to return standard WorldMeaning labels (already correct: "quiet"/"scarred"/"bloodied"/"grave")
-- [ ] Add validation tests for state transitions
-- [ ] Document state machine in REVIVAL_CONSTRAINTS.md with diagram
-
 ### Kernel Hardening
 - [ ] Harden the kernel contract where meaning and persistence read from world facts
 - [ ] Add missing kernel-facing documentation if a code path lacks an authoritative spec
 - [ ] Verify settlement lifecycle boundaries against the current canonical constraints
 
+### Runtime Truth Pass (requires Godot editor)
+- [ ] Run in Godot editor, verify all F10 diagnostic panels render without errors
+- [ ] Confirm OnboardingSystem RichTextLabel fix holds at runtime
+- [ ] Capture and fix any red errors in Output panel
+- [ ] Verify HUD identity strip shows civilization stage correctly
+- [ ] Verify F10 #49 prints valid HeelKawnian development profiles
+
 ---
 
 ## NEXT ⏭️
 
-### Kernel Stabilization (Priority 1)
-1. Complete settlement state machine fix (see IN PROGRESS)
-2. Add deterministic state transition logging to WorldMemory
-3. Implement state transition validation harness
-4. Test scar level ≥ 3 permanent abandonment block
-5. Verify 5000-tick peace gate for revival
+### Matrix AI Deepening (Priority 1)
+1. Add preservation choices (what knowledge to inscribe vs keep oral)
+2. Add recovery behavior (what to do after disaster/famine/collapse)
+3. Extend profile-to-job-bias into learning target selection
+4. Add settlement ambition chains (longer-horizon objectives)
 
-### Lineage & Cultural Memory (Priority 2)
-1. Expand BloodlineSystem with family tree visualization
-2. Add cultural event inheritance to SettlementRebirth
-3. Implement tradition decay over generations
-4. Connect KnowledgeSystem to teaching events
+### Knowledge Preservation Loop (Priority 2)
+1. Unify stones, books, teaching, literacy into one system
+2. Add lost/rediscovered knowledge mechanics
+3. Verify knowledge death when last carrier dies untaught
 
-### Recent Edits
-- [x] Cultural Revival Naming implemented (SettlementRebirth): lineage-based `Continued / New` naming and WorldMemory events
+### Civilization Stage Deepening (Priority 3)
+1. Add per-settlement tech diffusion tracking
+2. Add literacy rate tracking
+3. Add lifespan/quality-of-life metrics
+4. Add institution emergence data
 
-### Observer Tools (Priority 3)
-1. Timeline inspector for settlement history
-2. Chronicle log viewer UI
-3. Focus inspector enhancements
-4. Regional meaning heatmap
+### Chronicle Export Wiring (Priority 3)
+1. Wire `ChronicleExport.gd` into F10 menu
+2. Add in-game chronicle save button
+3. Add world seed import path for sharing worlds
 
 ### Documentation & Infrastructure
-1. Canonical startup documentation cleanup
-2. Kernel contract review for WorldMemory / WorldMeaning / WorldPersistence
-3. Full-run validation of the settlement lifecycle transition path
-4. Observer/chronicler tooling improvements
-5. PVABazaar integration and export adapters
-6. Long-horizon automation helpers under `/ai/`
+1. Clean up root directory of accidental files (`$null`)
+2. Add basic deterministic smoke tests (same seed → same output)
+3. Consider adding CI for headless Godot validation
+4. Autoload consolidation: reduce 164 → ~11 core managers
 
 ---
 
@@ -142,3 +149,4 @@
 - Use WorldRNG for any variation
 - Document all changes in CHANGELOG.md
 - Update REVIVAL_CONSTRAINTS.md when modifying revival logic
+- Many "TODO" items in old docs are already implemented — verify before working

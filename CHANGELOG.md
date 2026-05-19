@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `ChronicleExport.gd`: narrative prose chronicle organized by era, with settlement summaries, notable lives, and knowledge status
+- `PlayerGathering.gd` tool checks: `_has_required_tool` now checks carried item + stockpile (was: always false)
+- `PlayerGathering.gd` skill XP: `_get_skill_level` / `_gain_skill_xp` wired to `HeelKawnianData` (was: stubs)
+- `PlayerGathering.gd` resource depletion: `_deplete_resource` removes features, schedules regrowth via `Main._queue_regrowth` (was: stub)
+- `PlayerGathering.gd` tile validation: `_is_valid_gather_tile` uses proper `TileFeature.Type` enum (was: hardcoded wrong numbers)
+
+### Fixed
+- `_is_valid_gather_tile` feature IDs matched actual `TileFeature.Type` enum (TREE=4, ORE_VEIN=1, FLINT=40)
+- Skill XP gain now triggers level-up checks, profession auto-assignment, and biography lines
+- Resource depletion now records `resource_depleted` events in WorldMemory
+
+### Documentation
+- Updated `TODO.md`: marked implemented items, added new priorities
+- Updated `docs/BUILD_INVENTORY.md`: corrected status of skill trees, child creation, parent lookup, crafting consumption, exports
+- Updated `TASKS.md`: added 2026-05-18 session, corrected priorities
+
+---
+
+## [Unreleased]
+
 ### Planned
 - Knowledge stone cursor feedback
 - Biography dialog scrollbar

@@ -1,6 +1,6 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779165052
-.aider.chat.history.md::TextFile::-1::1779165013::0::1::::<><><>0<>0<><>::
+::res://::1779165197
+.aider.chat.history.md::TextFile::-1::1779165145::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779121146::0::1::::<><><>0<>0<><>::
 CHANGELOG.md::TextFile::-1::1779164223::0::1::::<><><>0<>0<><>::
 export_presets.cfg::TextFile::-1::1778866624::0::1::::<><><>0<>0<><>::
@@ -159,7 +159,7 @@ DiplomacySystem.gd::GDScript::7370753064401601751::1778654987::0::1::::<>Node<><
 DisasterSystem.gd::GDScript::3533735953280705894::1778453307::0::1::::<>Node<><>0<>0<><>::
 DiscoveryGate.gd::GDScript::2584224234650357656::1778316521::0::1::::<>Node<><>0<>0<><>::
 DiseaseSystem.gd::GDScript::5176942498259955416::1778923718::0::1::::<>Node<><>0<>0<><>::
-DynastyFamilySystem.gd::GDScript::9096165783105137273::1779162828::0::1::::<>Node<><>0<>0<><>::
+DynastyFamilySystem.gd::GDScript::9096165783105137273::1779165121::0::1::::<>Node<><>0<>0<><>::
 EcologySystem.gd::GDScript::7356293288449483685::1779157936::0::1::::<>Node<><>0<>0<><>::
 EconomyManager.gd::GDScript::600062380472312883::1778796523::0::1::::<>Node<><>0<>0<><>::
 EventBus.gd::GDScript::17816675561125202::1778616814::0::1::::<>Node<><>0<>0<><>::
@@ -668,8 +668,8 @@ GoalEngine.gd::GDScript::1230104234702065493::1778355728::0::1::::GoalEngine<>Re
 GossipPropagation.gd::GDScript::2986089948788778048::1778362956::0::1::::GossipPropagation<>RefCounted<><>0<>0<><>::
 ::res://scripts/stockpile/::1777694600
 Stockpile.gd::GDScript::5932442841318338198::1779153268::0::1::::Stockpile<>Node2D<><>0<>0<><>::
-::res://scripts/system/::1779163514
-ChronicleExport.gd::GDScript::6336860637764428630::1779163538::0::1::::<>Node<><>0<>0<><>::
+::res://scripts/system/::1779165057
+ChronicleExport.gd::GDScript::6336860637764428630::1779165130::0::1::::<>Node<><>0<>0<><>::
 ExportSystem.gd::GDScript::8457678107044099638::1778884580::0::1::::ExportSystem<>Node<><>0<>0<><>::
 IncarnationSystem.gd::GDScript::4961914532450866111::1778320772::0::1::::IncarnationSystem<>Node<><>0<>0<><>::
 KernelDiagnostic.gd::GDScript::448820520543194635::1778884580::0::1::::KernelDiagnostic<>Node<><>0<>0<><>::
@@ -704,7 +704,7 @@ CommandMode.gd::GDScript::7970988480991765280::1779122377::0::1::::CommandMode<>
 CraftingMenu.gd::GDScript::264922245055118195::1778113482::0::1::::<>PanelContainer<><>0<>0<><>::
 CreatorDebugMenu.gd::GDScript::2571068876045846871::1779138621::0::1::::CreatorDebugMenu<>CanvasLayer<><>0<>0<><>::
 DebugControlPanel.gd::GDScript::5220637974334766322::1778320772::0::1::::DebugControlPanel<>Control<><>0<>0<><>::
-DynamicSpriteText.gd::GDScript::5775588346636683544::1778320772::0::1::::DynamicSpriteText<>Node2D<><>0<>0<><>::
+DynamicSpriteText.gd::GDScript::5775588346636683544::1779165148::0::1::::DynamicSpriteText<>Node2D<><>0<>0<><>::
 DynastyTreeUI.gd::GDScript::2720543352043603021::1778320772::0::1::::DynastyTreeUI<>CanvasLayer<><>0<>0<><>::
 EventNotificationOverlay.gd::GDScript::5830491998190623584::1778320772::0::1::::<>CanvasLayer<><>0<>0<><>::
 EventParticles.gd::GDScript::7100836443910281188::1778187669::0::1::::EventParticles<>CanvasLayer<><>0<>0<><>::

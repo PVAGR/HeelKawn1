@@ -573,6 +573,14 @@ func _emit_report(report_id: String) -> void:
 			_report_chronicle_summary()
 		"promotion_bundle":
 			_report_promotion_bundle()
+		"nations_all":
+			_report_nations_all()
+		"nations":
+			_report_nations()
+		"nation_details":
+			_report_nation_details()
+		"contested_regions":
+			_report_contested_regions()
 		_:
 			print("Unknown report_id=%s" % report_id)
 	print("=== HEELKAWN_DEBUG_REPORT:%s:tick=%d END ===" % [report_id, tick])

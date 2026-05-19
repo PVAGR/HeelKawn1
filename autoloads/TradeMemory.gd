@@ -37,7 +37,7 @@ var _route_tile_tiers: Dictionary = {}  # region_key -> tier
 var _route_roles_by_region: Dictionary = {}  # center_region -> role
 var _route_incoming_by_center: Dictionary = {}
 var _route_outgoing_by_center: Dictionary = {}
-var _last_tick_t2_existed: int = 0
+var _last_tick_t2_existed: int = -1
 
 # Trade statistics for diagnostics
 var stats: Dictionary = {
@@ -628,7 +628,7 @@ func clear() -> void:
 	_route_roles_by_region.clear()
 	_route_incoming_by_center.clear()
 	_route_outgoing_by_center.clear()
-	_last_tick_t2_existed = 0
+	_last_tick_t2_existed = -1
 	# Reset any other trade data as needed
 
 

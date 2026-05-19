@@ -161,12 +161,22 @@ func create_build_intents(_pawn_id: int, tile: Vector2i, settlement_id: int = -1
 
 	# Create intents in priority order
 
-	# 1. SURVIVAL - Immediate threats
-	if not resources.shelter_exists:
+	# 1. SURVIVAL - shelter only when housing pressure (or first proto shelter with no beds)
+	var needs_shelter: bool = not resources.shelter_exists
+	if needs_shelter and ColonySimServices != null:
+		needs_shelter = ColonySimServices.get_housing_pressure() > 0.12
+	if needs_shelter:
 		_create_build_intent(BuildPriority.SURVIVAL, "shelter", tile, settlement_id)
 
-	# 3. STORAGE - Preserve resources
-	if not resources.storage_exists and resources.food > 0:
+	# 3. STORAGE - when stock pressure warrants it
+	var needs_storage: bool = not resources.storage_exists and resources.food > 0
+	if needs_storage and ColonySimServices != null:
+		var center_rk: int = settlement_id
+		if center_rk < 0 and WorldMemory != null:
+			center_rk = WorldMemory._region_key(tile.x, tile.y)
+		needs_storage = ColonySimServices.get_storage_pressure(center_rk) > 0.14 \
+				or ColonySimServices.get_food_pressure() > 0.28
+	if needs_storage:
 		_create_build_intent(BuildPriority.STORAGE, "storage", tile, settlement_id)
 
 	# 4. HEARTH - Cooking, warmth (need-driven)

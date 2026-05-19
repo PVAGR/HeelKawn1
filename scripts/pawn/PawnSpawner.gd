@@ -151,7 +151,7 @@ static func find_pawns() -> Array[HeelKawnian]:
 	var spawner_node: Node = tree.get_first_node_in_group("pawn_spawner")
 	if spawner_node == null:
 		return []
-	var ps: PawnSpawner = spawner_node as HeelKawnianSpawner
+	var ps: PawnSpawner = spawner_node as PawnSpawner
 	if ps == null:
 		return []
 	_cached_spawner = ps

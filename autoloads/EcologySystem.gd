@@ -1,5 +1,5 @@
-extends Node
-## EcologySystem — unified environmental simulation for HeelKawn.
+﻿extends Node
+## EcologySystem â€” unified environmental simulation for HeelKawn.
 ##
 ## Manages: seasons, weather, plant growth, resource regrowth, fire spread,
 ## water flow, erosion, pollution, and animal migration. All subsystems
@@ -9,7 +9,7 @@ extends Node
 ## - Ecological regrowth, not timer-based respawn
 ## - Seasons affect everything: temperature, agriculture, wildlife, weather
 ## - Player actions have lasting environmental impact
-## - Systems interact: rain → soil moisture → plant growth → animal attraction
+## - Systems interact: rain â†’ soil moisture â†’ plant growth â†’ animal attraction
 ##
 ## Vintage Story influence: time-intensive, seasonal, realistic progression.
 
@@ -284,7 +284,7 @@ func _on_game_tick(tick: int) -> void:
 
 func _update_seasonal_temperatures(tick: int) -> void:
 	var season: int = Biome.season_for_tick(tick)
-	var day_in_season: float = float(SimTime.tick_within_sim_season(tick)) / float(TICKS_PER_SEASON)
+	var day_in_season: float = float((SimTime.tick_within_sim_year(tick) % (SimTime.TICKS_PER_SIM_YEAR / 4))) / float(TICKS_PER_SEASON)
 	# Season severity peaks mid-season
 	_season_severity = sin(day_in_season * PI)
 	# Temperature offsets per season

@@ -424,7 +424,7 @@ func _find_notable_settlement_events(settlement_name: String, current_tick: int)
 			var tick_val: int = int(entry.get("tick", 0))
 			if tick_val < cutoff:
 				continue
-		 var msg: String = str(entry.get("message", ""))
+			var msg: String = str(entry.get("message", ""))
 			if msg.contains(settlement_name):
 				var evt_type: String = str(entry.get("type", ""))
 				if evt_type.contains("death") or evt_type.contains("build") or evt_type.contains("conflict"):

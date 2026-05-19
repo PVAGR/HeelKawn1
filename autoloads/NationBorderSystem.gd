@@ -763,10 +763,7 @@ func _find_nation_leader(settlements: Array) -> int:
 
 func _hex_to_color(hex: String) -> Color:
 	if hex.begins_with("#"):
-		hex = hex.substr(1)
+		return Color(hex)
 	if hex.length() != 6:
 		return Color(0.5, 0.5, 0.5, 0.5)
-	var r: int = int(hex.substr(0, 2), 16)
-	var g: int = int(hex.substr(2, 2), 16)
-	var b: int = int(hex.substr(4, 2), 16)
-	return Color(float(r) / 255.0, float(g) / 255.0, float(b) / 255.0, 0.6)
+	return Color("#" + hex)

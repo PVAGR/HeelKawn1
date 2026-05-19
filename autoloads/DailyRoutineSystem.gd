@@ -1,5 +1,5 @@
-extends Node
-## DailyRoutineSystem — KCD-style daily schedules for every HeelKawnian.
+﻿extends Node
+## DailyRoutineSystem â€” KCD-style daily schedules for every HeelKawnian.
 ##
 ## Every pawn has a daily routine based on:
 ## - Profession (blacksmith works forge hours, farmer works dawn-dusk)
@@ -50,115 +50,117 @@ enum Activity {
 	EMERGENCY,  # Urgent need (override)
 }
 
-## Profession-based schedule templates
-const PROFESSION_SCHEDULES: Dictionary = {
+## Profession-based schedule templates (TimeSlot -> Activity as integers)
+## TimeSlot: DAWN=0, MORNING=1, MIDDAY=2, AFTERNOON=3, EVENING=4, NIGHT=5
+## Activity: WORK=0, EAT=1, REST=2, SOCIAL=3, PERSONAL=4, TRAVEL=5, IDLE=6, EMERGENCY=7
+var PROFESSION_SCHEDULES: Dictionary = {
 	"farmer": {
-		DAWN: WORK,
-		MORNING: WORK,
-		MIDDAY: EAT,
-		AFTERNOON: WORK,
-		EVENING: SOCIAL,
-		NIGHT: REST,
+		0: 0,  # DAWN: WORK
+		1: 0,  # MORNING: WORK
+		2: 1,  # MIDDAY: EAT
+		3: 0,  # AFTERNOON: WORK
+		4: 3,  # EVENING: SOCIAL
+		5: 2,  # NIGHT: REST
 	},
 	"blacksmith": {
-		DAWN: REST,
-		MORNING: WORK,
-		MIDDAY: EAT,
-		AFTERNOON: WORK,
-		EVENING: PERSONAL,
-		NIGHT: REST,
+		0: 2,  # DAWN: REST
+		1: 0,  # MORNING: WORK
+		2: 1,  # MIDDAY: EAT
+		3: 0,  # AFTERNOON: WORK
+		4: 4,  # EVENING: PERSONAL
+		5: 2,  # NIGHT: REST
 	},
 	"builder": {
-		DAWN: WORK,
-		MORNING: WORK,
-		MIDDAY: EAT,
-		AFTERNOON: WORK,
-		EVENING: REST,
-		NIGHT: REST,
+		0: 0,  # DAWN: WORK
+		1: 0,  # MORNING: WORK
+		2: 1,  # MIDDAY: EAT
+		3: 0,  # AFTERNOON: WORK
+		4: 2,  # EVENING: REST
+		5: 2,  # NIGHT: REST
 	},
 	"guard": {
-		DAWN: WORK,
-		MORNING: WORK,
-		MIDDAY: EAT,
-		AFTERNOON: WORK,
-		EVENING: WORK,
-		NIGHT: REST,
+		0: 0,  # DAWN: WORK
+		1: 0,  # MORNING: WORK
+		2: 1,  # MIDDAY: EAT
+		3: 0,  # AFTERNOON: WORK
+		4: 0,  # EVENING: WORK
+		5: 2,  # NIGHT: REST
 	},
 	"scholar": {
-		DAWN: PERSONAL,
-		MORNING: WORK,
-		MIDDAY: EAT,
-		AFTERNOON: WORK,
-		EVENING: SOCIAL,
-		NIGHT: REST,
+		0: 4,  # DAWN: PERSONAL
+		1: 0,  # MORNING: WORK
+		2: 1,  # MIDDAY: EAT
+		3: 0,  # AFTERNOON: WORK
+		4: 3,  # EVENING: SOCIAL
+		5: 2,  # NIGHT: REST
 	},
 	"trader": {
-		DAWN: TRAVEL,
-		MORNING: WORK,
-		MIDDAY: EAT,
-		AFTERNOON: WORK,
-		EVENING: SOCIAL,
-		NIGHT: REST,
+		0: 5,  # DAWN: TRAVEL
+		1: 0,  # MORNING: WORK
+		2: 1,  # MIDDAY: EAT
+		3: 0,  # AFTERNOON: WORK
+		4: 3,  # EVENING: SOCIAL
+		5: 2,  # NIGHT: REST
 	},
 	"healer": {
-		DAWN: PERSONAL,
-		MORNING: WORK,
-		MIDDAY: EAT,
-		AFTERNOON: WORK,
-		EVENING: SOCIAL,
-		NIGHT: REST,
+		0: 4,  # DAWN: PERSONAL
+		1: 0,  # MORNING: WORK
+		2: 1,  # MIDDAY: EAT
+		3: 0,  # AFTERNOON: WORK
+		4: 3,  # EVENING: SOCIAL
+		5: 2,  # NIGHT: REST
 	},
 	"hunter": {
-		DAWN: WORK,
-		MORNING: WORK,
-		MIDDAY: EAT,
-		AFTERNOON: WORK,
-		EVENING: PERSONAL,
-		NIGHT: REST,
+		0: 0,  # DAWN: WORK
+		1: 0,  # MORNING: WORK
+		2: 1,  # MIDDAY: EAT
+		3: 0,  # AFTERNOON: WORK
+		4: 4,  # EVENING: PERSONAL
+		5: 2,  # NIGHT: REST
 	},
 	"fisher": {
-		DAWN: WORK,
-		MORNING: WORK,
-		MIDDAY: EAT,
-		AFTERNOON: WORK,
-		EVENING: SOCIAL,
-		NIGHT: REST,
+		0: 0,  # DAWN: WORK
+		1: 0,  # MORNING: WORK
+		2: 1,  # MIDDAY: EAT
+		3: 0,  # AFTERNOON: WORK
+		4: 3,  # EVENING: SOCIAL
+		5: 2,  # NIGHT: REST
 	},
 	"leader": {
-		DAWN: PERSONAL,
-		MORNING: WORK,
-		MIDDAY: EAT,
-		AFTERNOON: WORK,
-		EVENING: SOCIAL,
-		NIGHT: REST,
+		0: 4,  # DAWN: PERSONAL
+		1: 0,  # MORNING: WORK
+		2: 1,  # MIDDAY: EAT
+		3: 0,  # AFTERNOON: WORK
+		4: 3,  # EVENING: SOCIAL
+		5: 2,  # NIGHT: REST
 	},
 }
 
 ## Default schedule for unassigned pawns
-const DEFAULT_SCHEDULE: Dictionary = {
-	DAWN: WORK,
-	MORNING: WORK,
-	MIDDAY: EAT,
-	AFTERNOON: WORK,
-	EVENING: SOCIAL,
-	NIGHT: REST,
+var DEFAULT_SCHEDULE: Dictionary = {
+	0: 0,  # DAWN: WORK
+	1: 0,  # MORNING: WORK
+	2: 1,  # MIDDAY: EAT
+	3: 0,  # AFTERNOON: WORK
+	4: 3,  # EVENING: SOCIAL
+	5: 2,  # NIGHT: REST
 }
 
 ## Seasonal schedule modifiers
-const SEASON_MODIFIERS: Dictionary = {
-	Biome.Season.SPRING: {
+var SEASON_MODIFIERS: Dictionary = {
+	0: {  # SPRING
 		"work_extension": 0.1,  # Longer work days
 		"social_bonus": 0.1,    # More socializing
 	},
-	Biome.Season.SUMMER: {
+	1: {  # SUMMER
 		"work_extension": 0.2,  # Longest work days
 		"rest_reduction": 0.1,  # Less sleep needed
 	},
-	Biome.Season.AUTUMN: {
+	2: {  # AUTUMN
 		"work_extension": 0.05, # Slightly longer
 		"personal_bonus": 0.1,  # More personal time
 	},
-	Biome.Season.WINTER: {
+	3: {  # WINTER
 		"work_reduction": -0.2, # Shorter work days
 		"social_bonus": 0.2,    # More indoor socializing
 		"rest_extension": 0.15, # More sleep
@@ -242,7 +244,7 @@ func _create_routine_for_pawn(pawn: Node, tick: int) -> void:
 	var social_tile: Vector2i = _find_social_tile(pawn)
 	pawn_routines[pawn_id] = {
 		"schedule": base_schedule,
-		"current_activity": int(base_schedule.get(_get_current_timeslot(tick), Activity.WORK)),
+		"current_activity": int(base_schedule.get(_get_current_timeslot(tick), 0)),  # 0=WORK
 		"current_timeslot": _get_current_timeslot(tick),
 		"home_tile": home_tile,
 		"work_tile": work_tile,
@@ -282,7 +284,7 @@ func _update_current_activities(tick: int) -> void:
 	for pawn_id in pawn_routines.keys():
 		var routine: Dictionary = pawn_routines[pawn_id]
 		var schedule: Dictionary = routine.get("schedule", {})
-		var planned_activity: int = int(schedule.get(current_slot, Activity.WORK))
+		var planned_activity: int = int(schedule.get(current_slot, 0))
 		# Check for emergency overrides
 		var pawn: Node = _get_pawn_by_id(pawn_id)
 		if pawn == null or pawn.data == null:
@@ -303,16 +305,16 @@ func _apply_emergency_overrides(planned_activity: int, pawn: Node, tick: int) ->
 		return planned_activity
 	# Hunger override
 	if float(pawn.data.get("hunger", 100.0)) < 20.0:
-		return int(Activity.EAT)
+		return int(1)
 	# Exhaustion override
 	if float(pawn.data.get("rest", 100.0)) < 10.0:
-		return int(Activity.REST)
+		return int(2)
 	# Injury override
 	if float(pawn.data.get("health", 100.0)) < 30.0:
-		return int(Activity.REST)
+		return int(2)
 	# Emergency: fire, attack, etc.
 	if _is_emergency_situation(pawn, tick):
-		return int(Activity.EMERGENCY)
+		return int(7)
 	return planned_activity
 
 
@@ -342,22 +344,22 @@ func _apply_personality_modifiers(schedule: Dictionary, personality: Dictionary)
 	var work_ethic: float = float(personality.get("work_ethic", 0.5))
 	# Early risers start work at dawn
 	if early_riser > 0.7:
-		schedule[TimeSlot.DAWN] = Activity.WORK
+		schedule[0] = 0
 	# Night owls sleep later
 	elif early_riser < 0.3:
-		schedule[TimeSlot.DAWN] = Activity.REST
+		schedule[0] = 2
 	# Social pawns prioritize evening socializing
 	if social > 0.7:
-		schedule[TimeSlot.EVENING] = Activity.SOCIAL
+		schedule[4] = 3
 	# Solitary pawns prefer personal time
 	elif social < 0.3:
-		schedule[TimeSlot.EVENING] = Activity.PERSONAL
+		schedule[4] = 4
 	# High work ethic extends work hours
 	if work_ethic > 0.8:
-		schedule[TimeSlot.EVENING] = Activity.WORK
+		schedule[4] = 0
 	# Low work ethic adds more idle time
 	elif work_ethic < 0.3:
-		schedule[TimeSlot.AFTERNOON] = Activity.IDLE
+		schedule[3] = 6
 
 
 func _apply_season_modifiers(schedule: Dictionary, season: int) -> void:
@@ -365,18 +367,18 @@ func _apply_season_modifiers(schedule: Dictionary, season: int) -> void:
 	var modifiers: Dictionary = SEASON_MODIFIERS.get(season, {})
 	# Winter: shorter work days, more social/rest
 	if modifiers.has("work_reduction"):
-		if schedule.get(TimeSlot.DAWN) == Activity.WORK:
-			schedule[TimeSlot.DAWN] = Activity.REST
+		if schedule.get(0) == 0:
+			schedule[0] = 2
 	if modifiers.has("social_bonus"):
-		if schedule.get(TimeSlot.EVENING) == Activity.IDLE:
-			schedule[TimeSlot.EVENING] = Activity.SOCIAL
+		if schedule.get(4) == 6:
+			schedule[4] = 3
 	if modifiers.has("rest_extension"):
-		if schedule.get(TimeSlot.NIGHT) == Activity.REST:
+		if schedule.get(5) == 2:
 			pass  # Already resting, extend implicitly
 	# Summer: longer work days
 	if modifiers.has("work_extension"):
-		if schedule.get(TimeSlot.DAWN) == Activity.REST:
-			schedule[TimeSlot.DAWN] = Activity.WORK
+		if schedule.get(0) == 2:
+			schedule[0] = 0
 
 
 # ============================================================
@@ -435,17 +437,17 @@ func _get_current_timeslot(tick: int) -> int:
 	var progress: float = float(day_tick) / float(TICKS_PER_DAY)
 	var slot: int
 	if progress < 0.15:
-		slot = int(TimeSlot.DAWN)
+		slot = int(0)
 	elif progress < 0.35:
-		slot = int(TimeSlot.MORNING)
+		slot = int(1)
 	elif progress < 0.50:
-		slot = int(TimeSlot.MIDDAY)
+		slot = int(2)
 	elif progress < 0.70:
-		slot = int(TimeSlot.AFTERNOON)
+		slot = int(3)
 	elif progress < 0.85:
-		slot = int(TimeSlot.EVENING)
+		slot = int(4)
 	else:
-		slot = int(TimeSlot.NIGHT)
+		slot = int(5)
 	_cached_timeslot = slot
 	_cached_timeslot_tick = tick
 	return slot
@@ -453,25 +455,25 @@ func _get_current_timeslot(tick: int) -> int:
 
 func get_timeslot_name(slot: int) -> String:
 	match slot:
-		int(TimeSlot.DAWN): return "Dawn"
-		int(TimeSlot.MORNING): return "Morning"
-		int(TimeSlot.MIDDAY): return "Midday"
-		int(TimeSlot.AFTERNOON): return "Afternoon"
-		int(TimeSlot.EVENING): return "Evening"
-		int(TimeSlot.NIGHT): return "Night"
+		int(0): return "Dawn"
+		int(1): return "Morning"
+		int(2): return "Midday"
+		int(3): return "Afternoon"
+		int(4): return "Evening"
+		int(5): return "Night"
 		_: return "Unknown"
 
 
 func get_activity_name(activity: int) -> String:
 	match activity:
-		int(Activity.WORK): return "Working"
-		int(Activity.EAT): return "Eating"
-		int(Activity.REST): return "Resting"
-		int(Activity.SOCIAL): return "Socializing"
-		int(Activity.PERSONAL): return "Personal time"
-		int(Activity.TRAVEL): return "Traveling"
-		int(Activity.IDLE): return "Idle"
-		int(Activity.EMERGENCY): return "Emergency!"
+		int(0): return "Working"
+		int(1): return "Eating"
+		int(2): return "Resting"
+		int(3): return "Socializing"
+		int(4): return "Personal time"
+		int(5): return "Traveling"
+		int(6): return "Idle"
+		int(7): return "Emergency!"
 		_: return "Unknown"
 
 
@@ -561,7 +563,7 @@ func get_routine_for_pawn(pawn_id: int) -> Dictionary:
 
 func get_current_activity_for_pawn(pawn_id: int) -> int:
 	var routine: Dictionary = pawn_routines.get(pawn_id, {})
-	return int(routine.get("current_activity", Activity.WORK))
+	return int(routine.get("current_activity", 0))
 
 
 func get_current_timeslot_for_tick(tick: int) -> int:

@@ -1,5 +1,4 @@
 extends Node
-class_name SettlementMemory
 ## Emitted when a new settlement is created during recompute.
 signal settlement_founded(settlement_id: int, tile: Vector2i, culture_name: String)
 ## v1: Settlement identity — 4-adjacent clusters of scarred, historically

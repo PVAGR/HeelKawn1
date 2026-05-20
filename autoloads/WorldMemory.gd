@@ -1,5 +1,4 @@
 extends Node
-class_name WorldMemory
 ## Emitted when a new event is appended to the world fact log.
 signal event_appended(event: Dictionary)
 ## Deterministic append-only world fact log (Phase 2.1). No RNG; no UI.

@@ -1,5 +1,4 @@
 extends Node
-class_name SettlementPlanner
 ## v1–v3 + culture v1: deterministic autonomous build intents for [SettlementMemory] clusters
 ## (read-only; posts via Main + JobManager). Not every tick: memory-dirty or interval.
 ## Culture: derived from settlement scar_max + reputation_min (read-only; not stored).

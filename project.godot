@@ -151,6 +151,7 @@ MultiplayerSystem="*res://autoloads/MultiplayerSystem.gd"
 FactionManager="*res://autoloads/FactionManager.gd"
 FoodChainManager="*res://autoloads/FoodChainManager.gd"
 TickRateDecoupler="*res://autoloads/TickRateDecoupler.gd"
+CharacterBrainSystem="*res://autoloads/CharacterBrainSystem.gd"
 
 [display]
 

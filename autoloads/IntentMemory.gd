@@ -1,5 +1,4 @@
 extends Node
-class_name IntentMemory
 ## v1: Derived, not saved — world-scale pressure and per-settlement intent (GROW / HOLD / ABANDON).
 ## Read-only: feeds future migration / conflict layers; no commands, no world writes.
 

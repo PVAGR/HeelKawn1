@@ -1,7 +1,7 @@
 class_name World
 extends Node2D
 
-@onready var _age_memory := get_node("/root/AgeMemory")
+@onready var _age_memory: Node = Engine.get_singleton("AgeMemory")
 
 ## Pixels of screen space per tile. The world is rendered as a 256x256 Image
 ## baked into an ImageTexture, then scaled up so each source pixel = TILE_PIXELS.
@@ -325,6 +325,8 @@ func _apply_remnant_patina(c: Color, x: int, y: int) -> Color:
 
 ## Global slow desaturation with Age index (v1; read-only; no world reset).
 func _apply_age_tint(c: Color) -> Color:
+	if _age_memory == null or not _age_memory.has_method("get_global_age_tint_strength"):
+		return c
 	var w: float = _age_memory.get_global_age_tint_strength()
 	if w <= 0.0001:
 		return c

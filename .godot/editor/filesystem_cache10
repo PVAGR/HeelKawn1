@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779254523
+::res://::1779254650
 .aider.chat.history.md::TextFile::-1::1779251167::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779238690::0::1::::<><><>0<>0<><>::
 CHANGELOG.md::TextFile::-1::1779164223::0::1::::<><><>0<>0<><>::
@@ -198,7 +198,7 @@ MemoryManager.gd::GDScript::487222660348734524::1778795546::0::1::::<>Node<><>0<
 MountSystem.gd::GDScript::537224167628726879::1778652113::0::1::::<>Node<><>0<>0<><>::
 MultiplayerSystem.gd::GDScript::127062482425223206::1778654950::0::1::::<>Node<><>0<>0<><>::
 MythAge.gd::GDScript::8629846448700599580::1778570754::0::1::::<>Node<><>0<>0<><>::
-MythMemory.gd::GDScript::5075132017038102145::1779253368::0::1::::MythMemory<>Node<><>0<>0<><>::
+MythMemory.gd::GDScript::5075132017038102145::1779254584::0::1::::MythMemory<>Node<><>0<>0<><>::
 NationBorderSystem.gd::GDScript::5727558195879344762::1779157959::0::1::::<>Node<><>0<>0<><>::
 NavalSystem.gd::GDScript::3944988097343027324::1778654944::0::1::::<>Node<><>0<>0<><>::
 ObjectPool.gd::GDScript::5290334352068325487::1778041940::0::1::::<>Node<><>0<>0<><>::
@@ -745,7 +745,7 @@ SettlementMindPanel.gd::GDScript::5725843346425937815::1779238690::0::1::::Settl
 SpeedControlUI.gd::GDScript::1336406938522421461::1777780365::0::1::::<>Control<><>0<>0<><>::
 StatisticsPanel.gd::GDScript::3211918285523082367::1779138076::0::1::::<>PanelContainer<><>0<>0<><>::
 SurvivalHUD.gd::GDScript::8078811467556358024::1778884580::0::1::::<>CanvasLayer<><>0<>0<><>::
-TerritoryOverlay.gd::GDScript::4104062370064090541::1779238690::0::1::::TerritoryOverlay<>Node2D<><>0<>0<><>::
+TerritoryOverlay.gd::GDScript::4104062370064090541::1779254613::0::1::::TerritoryOverlay<>Node2D<><>0<>0<><>::
 TileTooltip.gd::GDScript::8463246441767180968::1779126680::0::1::::TileTooltip<>CanvasLayer<><>0<>0<><>::
 TimelineControls.gd::GDScript::8499596691581927892::1778146892::0::1::::TimelineControls<>HBoxContainer<><>0<>0<><>::
 TradeOverviewPanel.gd::GDScript::3957855049127493365::1779178038::0::1::::TradeOverviewPanel<>CanvasLayer<><>0<>0<><>::

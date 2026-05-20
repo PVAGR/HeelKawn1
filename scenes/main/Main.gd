@@ -7140,13 +7140,13 @@ func _seed_construction_jobs() -> void:
 			surplus_bonus = mini(3, stock_wood / 100)
 		elif stock_wood > 50:
 			surplus_bonus = 1
-	var job_cap: int = int(build_priorities.get("job_cap", base_job_cap + maturity_bonus + structure_bonus + surplus_bonus))
-	if seeding_proto:
-		job_cap = mini(job_cap, 6)
-	var ambition_blocked: bool = _seeder_ambition_blocked(center_rk)
-	if seeding_proto:
-		var site_warmth_press: float = ColonySimServices.get_warmth_pressure(center_rk) if ColonySimServices != null else 0.0
-		ambition_blocked = site_warmth_press < 0.20 and float(build_priorities.get("storage_press", 0.0)) < 0.35
+		var job_cap: int = int(build_priorities.get("job_cap", base_job_cap + maturity_bonus + structure_bonus + surplus_bonus))
+		if seeding_proto:
+			job_cap = mini(job_cap, 6)
+		var ambition_blocked: bool = _seeder_ambition_blocked(center_rk)
+		if seeding_proto:
+			var site_warmth_press: float = ColonySimServices.get_warmth_pressure(center_rk) if ColonySimServices != null else 0.0
+			ambition_blocked = site_warmth_press < 0.20 and float(build_priorities.get("storage_press", 0.0)) < 0.35
 		# Priority 0: Beds when housing crisis is critical (formal only — avoid wall-ring grey boxes on proto camps)
 		if not seeding_proto and ColonySimServices != null and ColonySimServices.get_housing_pressure() > 0.8 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			var need_beds_crisis: int = maxi(3, int(ceil(float(local_pop) * 0.75)))

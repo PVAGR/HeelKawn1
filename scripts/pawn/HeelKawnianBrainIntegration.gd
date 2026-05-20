@@ -24,7 +24,8 @@ func enable_brain() -> void:
 	if not pawn_ref or not is_instance_valid(pawn_ref):
 		return
 	
-	var pawn_id = pawn_ref.get("id", "") or str(pawn_ref.get_instance_id())
+	var _pid = pawn_ref.get("id")
+	var pawn_id = (_pid if _pid != null and _pid != "" else str(pawn_ref.get_instance_id()))
 	brain = CharacterBrainSystem.create_brain(pawn_id, pawn_ref)
 
 ## Disable this pawn's brain.

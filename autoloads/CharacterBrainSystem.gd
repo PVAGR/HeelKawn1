@@ -58,10 +58,14 @@ class CharacterBrain:
 		if not character_ref or not is_instance_valid(character_ref):
 			return "IDLE"
 		
-		var hunger = character_ref.get("hunger", 50.0) / 100.0  # 0.0 to 1.0
-		var danger = character_ref.get("danger_level", 0.0)  # 0.0 to 1.0
-		var nearby_friends = character_ref.get("nearby_allies", 0)
-		var local_resources = character_ref.get("resource_scarcity", 0.5)  # 0.0 = plenty, 1.0 = famine
+		var _hprop = character_ref.get("hunger")
+		var hunger = (float(_hprop) if _hprop != null else 50.0) / 100.0
+		var _dprop = character_ref.get("danger_level")
+		var danger = float(_dprop) if _dprop != null else 0.0
+		var _nprop = character_ref.get("nearby_allies")
+		var nearby_friends = int(_nprop) if _nprop != null else 0
+		var _rprop = character_ref.get("resource_scarcity")
+		var local_resources = float(_rprop) if _rprop != null else 0.5  # 0.0 = plenty, 1.0 = famine
 		
 		var traits = state.memory_traits
 		

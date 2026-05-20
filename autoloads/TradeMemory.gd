@@ -1,5 +1,4 @@
 extends Node
-class_name TradeMemory
 ## TradeMemory - Inter-settlement trade route tracking
 ## 
 ## Tracks:

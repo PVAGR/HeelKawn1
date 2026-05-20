@@ -3080,7 +3080,9 @@ func _on_game_tick(tick: int) -> void:
 		if _is_main_lane_tick(tick, 2000, 113) and DiscoveryGate.is_unlocked("first_trade"):
 			_build_roads_from_trade_routes()
 		# DORMANT WORLD: Let recompute run periodically so pawn clusters can be detected
-		if tick % REBIRTH_CHECK_INTERVAL_TICKS == 0:
+		# AGGRESSIVE OPTIMIZATION: Throttle at high speeds to reduce 40-60ms spikes
+		var rebirth_interval: int = _high_speed_interval(REBIRTH_CHECK_INTERVAL_TICKS, REBIRTH_CHECK_INTERVAL_TICKS * 2, REBIRTH_CHECK_INTERVAL_TICKS * 4)
+		if _is_main_lane_tick(tick, rebirth_interval, 43):
 			t0 = Time.get_ticks_usec()
 			SettlementMemory.recompute(_world)
 			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
@@ -3088,7 +3090,7 @@ func _on_game_tick(tick: int) -> void:
 		_resolve_pending_skirmishes(tick)
 
 		# Offset SettlementManager.process to a different tick to spread the load
-		var rebirth_offset_tick: int = (tick + REBIRTH_CHECK_INTERVAL_TICKS / 2) % REBIRTH_CHECK_INTERVAL_TICKS
+		var rebirth_offset_tick: int = (tick + rebirth_interval / 2) % rebirth_interval
 		if rebirth_offset_tick == 0:
 			t0 = Time.get_ticks_usec()
 			SettlementManager.process(_world, self, false)
@@ -3127,11 +3129,13 @@ func _on_game_tick(tick: int) -> void:
 	t0 = Time.get_ticks_usec()
 	_maybe_generational_turnover()
 	section_us["generational_turnover"] = Time.get_ticks_usec() - t0
-	if tick % REPRODUCTION_CHECK_INTERVAL_TICKS == 0:
+	var repro_interval: int = _high_speed_interval(REPRODUCTION_CHECK_INTERVAL_TICKS, REPRODUCTION_CHECK_INTERVAL_TICKS * 2, REPRODUCTION_CHECK_INTERVAL_TICKS * 3)
+	if _is_main_lane_tick(tick, repro_interval, 31):
 		t0 = Time.get_ticks_usec()
 		_process_reproduction_tick()
 		section_us["reproduction"] = Time.get_ticks_usec() - t0
-	if tick % INFLUENCE_UPDATE_INTERVAL_TICKS == 0:
+	var influence_interval: int = _high_speed_interval(INFLUENCE_UPDATE_INTERVAL_TICKS, INFLUENCE_UPDATE_INTERVAL_TICKS * 2, INFLUENCE_UPDATE_INTERVAL_TICKS * 3)
+	if _is_main_lane_tick(tick, influence_interval, 37):
 		t0 = Time.get_ticks_usec()
 		_update_pawn_influence_tick()
 		section_us["influence"] = Time.get_ticks_usec() - t0
@@ -7017,7 +7021,9 @@ func _seed_construction_jobs() -> void:
 	if tick - _last_construction_seed_tick < interval:
 		return
 	_last_construction_seed_tick = tick
-	var budget_usec: int = 14_000  # per-pass budget; harvest backlog used to starve this before
+	# AGGRESSIVE OPTIMIZATION: Reduce budget at high speeds to prevent frame hitching
+	var gs: float = GameManager.game_speed if GameManager != null else 1.0
+	var budget_usec: int = 14_000 if gs < 50.0 else (8_000 if gs < 100.0 else 5_000)
 	var start_usec: int = Time.get_ticks_usec()
 	var pending_counts: Dictionary = JobManager.get_pending_counts() if JobManager != null and JobManager.has_method("get_pending_counts") else {}
 	# Cache active jobs union once — avoids re-scanning all jobs per _count_pending_jobs_near call

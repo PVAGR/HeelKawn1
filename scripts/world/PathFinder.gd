@@ -53,12 +53,29 @@ var _dirty_reason_counts: Dictionary = {}
 var _last_compute_tick: int = -1
 var _last_dirty_flush_report_tick: int = -1
 
+## Track changed tiles for incremental component updates
+var _dirty_tiles: Array[Vector2i] = []
+var _dirty_tile_set: Dictionary = {}
+const MAX_INCREMENTAL_TILES: int = 64
+const FLUSH_COOLDOWN_TICKS: int = 5
+
 ## Helper to mark components dirty with detailed tracking
 func _mark_components_dirty(reason: String, detail: Dictionary = {}) -> void:
+	var tile: Vector2i = detail.get("tile", Vector2i(-1, -1))
+	if tile != Vector2i(-1, -1):
+		if not _dirty_tile_set.has(tile):
+			_dirty_tile_set[tile] = true
+			_dirty_tiles.append(tile)
+			if _dirty_tiles.size() > MAX_INCREMENTAL_TILES:
+				_dirty_tiles.clear()
+				_dirty_tile_set.clear()
+				_components_dirty = true
+				_components_dirty_reason = "too_many_dirty_tiles"
+				return
 	if _components_dirty:
 		var dirty_count: int = int(_dirty_reason_counts.get(reason, 0))
 		_dirty_reason_counts[reason] = dirty_count + 1
-		return # Already dirty, don't overwrite tracking info
+		return
 	_components_dirty = true
 	_components_dirty_reason = reason
 	_components_dirty_detail = detail.duplicate(true)
@@ -66,7 +83,6 @@ func _mark_components_dirty(reason: String, detail: Dictionary = {}) -> void:
 	if OS.is_debug_build():
 		var stack = get_stack()
 		_components_dirty_callsite = "%s:%d" % [stack[1].source, stack[1].line] if stack.size() > 1 else "unknown"
-	# Count by reason for debugging
 	var count = _dirty_reason_counts.get(reason, 0)
 	_dirty_reason_counts[reason] = count + 1
 
@@ -162,19 +178,25 @@ func set_job_construction_reservations_batch(tiles: Array, enabled: bool, data: 
 func flush_component_dirty(data: WorldData) -> bool:
 	if not _components_dirty:
 		return false
-	# Diagnostic output when recompute actually occurs
-	if OS.is_debug_build() and _components_dirty_tick != _last_dirty_flush_report_tick:
-		_last_dirty_flush_report_tick = _components_dirty_tick
-		var age: int = (GameManager.tick_count if GameManager != null else -1) - _components_dirty_tick
-		print("[PF_DIRTY_FLUSH] tick=%d reason=%s age=%s detail=%s caller=%s" % [
-			GameManager.tick_count if GameManager != null else -1,
-			_components_dirty_reason,
-			str(age) if _components_dirty_tick >= 0 else "unknown",
-			str(_components_dirty_detail),
-			_components_dirty_callsite
-		])
+	var current_tick: int = GameManager.tick_count if GameManager != null else -1
+	if current_tick - _last_compute_tick < FLUSH_COOLDOWN_TICKS and _dirty_tiles.size() < MAX_INCREMENTAL_TILES:
+		_components_dirty = false
+		_dirty_tiles.clear()
+		_dirty_tile_set.clear()
+		return false
+	var use_incremental: bool = _dirty_tiles.size() > 0 and _dirty_tiles.size() <= MAX_INCREMENTAL_TILES
+	if use_incremental:
+		if _compute_components_incremental(data):
+			_last_compute_tick = current_tick
+			_components_dirty = false
+			_dirty_tiles.clear()
+			_dirty_tile_set.clear()
+			return true
 	_components_dirty = false
+	_dirty_tiles.clear()
+	_dirty_tile_set.clear()
 	_compute_components(data)
+	_last_compute_tick = current_tick
 	return true
 
 
@@ -497,6 +519,96 @@ func find_tile_in_component_near(comp_id: int, center: Vector2i, max_radius: int
 
 
 # -------------------- internals --------------------
+
+## Incremental component update: only recompute affected regions around dirty tiles.
+## Returns true if incremental update succeeded, false if full recompute needed.
+func _compute_components_incremental(data: WorldData) -> bool:
+	if _dirty_tiles.is_empty():
+		return false
+	var affected_components: Dictionary = {}
+	var tiles_to_reassign: Array[Vector2i] = []
+	for tile in _dirty_tiles:
+		if not _astar.region.has_point(tile):
+			continue
+		var idx: int = tile.y * WorldData.WIDTH + tile.x
+		var old_comp: int = _component_id[idx]
+		var is_solid: bool = _astar.is_point_solid(tile)
+		if is_solid:
+			_component_id[idx] = -1
+			if old_comp >= 0:
+				affected_components[old_comp] = true
+		else:
+			tiles_to_reassign.append(tile)
+	if tiles_to_reassign.is_empty() and affected_components.is_empty():
+		return true
+	for comp_id_key in affected_components:
+		var comp_id: int = int(comp_id_key)
+		var representative_tile: Vector2i = _find_tile_in_component(comp_id)
+		if representative_tile == Vector2i(-1, -1):
+			continue
+		var new_comp: int = _component_id[representative_tile.y * WorldData.WIDTH + representative_tile.x]
+		if new_comp < 0:
+			continue
+		_reassign_component(comp_id, new_comp)
+	for tile in tiles_to_reassign:
+		var idx: int = tile.y * WorldData.WIDTH + tile.x
+		if _component_id[idx] >= 0:
+			continue
+		var merged: bool = false
+		for offset in NEIGHBOR_OFFSETS:
+			var nx: int = tile.x + offset.x
+			var ny: int = tile.y + offset.y
+			if nx < 0 or nx >= WorldData.WIDTH or ny < 0 or ny >= WorldData.HEIGHT:
+				continue
+			if offset.x != 0 and offset.y != 0:
+				if _astar.is_point_solid(Vector2i(nx, tile.y)):
+					continue
+				if _astar.is_point_solid(Vector2i(tile.x, ny)):
+					continue
+			var nidx: int = ny * WorldData.WIDTH + nx
+			var neighbor_comp: int = _component_id[nidx]
+			if neighbor_comp >= 0:
+				_component_id[idx] = neighbor_comp
+				merged = true
+				break
+		if not merged:
+			var new_id: int = _largest_component_id_cached + 1
+			_component_id[idx] = new_id
+			_largest_component_id_cached = new_id
+	_recompute_largest_component()
+	return true
+
+func _find_tile_in_component(comp_id: int) -> Vector2i:
+	var step: int = maxi(1, WorldData.TILE_COUNT / 4096)
+	for i in range(0, WorldData.TILE_COUNT, step):
+		if _component_id[i] == comp_id:
+			return Vector2i(i % WorldData.WIDTH, int(i / WorldData.WIDTH))
+	return Vector2i(-1, -1)
+
+func _reassign_component(old_id: int, new_id: int) -> void:
+	if old_id == new_id:
+		return
+	var step: int = maxi(1, WorldData.TILE_COUNT / 4096)
+	for i in range(0, WorldData.TILE_COUNT, step):
+		if _component_id[i] == old_id:
+			_component_id[i] = new_id
+
+func _recompute_largest_component() -> void:
+	var comp_sizes: Dictionary = {}
+	var step: int = maxi(1, WorldData.TILE_COUNT / 8192)
+	for i in range(0, WorldData.TILE_COUNT, step):
+		var cid: int = _component_id[i]
+		if cid >= 0:
+			comp_sizes[cid] = int(comp_sizes.get(cid, 0)) + step
+	var best_id: int = -1
+	var best_size: int = 0
+	for cid_key in comp_sizes:
+		var cid: int = int(cid_key)
+		var sz: int = int(comp_sizes[cid])
+		if sz > best_size:
+			best_size = sz
+			best_id = cid
+	_largest_component_id_cached = best_id
 
 ## Drives off A* solidity (set_point_solid), NOT raw biome data, so anything
 ## that flips passability after generation -- mined-out walls, built walls,

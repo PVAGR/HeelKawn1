@@ -265,3 +265,17 @@ func footpath_clear() -> void:
 	_ensure_footpath()
 	if _footpath_memory != null and _footpath_memory.has_method("clear"):
 		_footpath_memory.clear()
+
+
+## Cached world-history export string passthrough.
+func get_history_export_string(anonymize_subjects: bool = false) -> String:
+	if WorldMemory != null and WorldMemory.has_method("get_history_export_string"):
+		return WorldMemory.get_history_export_string(anonymize_subjects)
+	return ""
+
+
+## Chronicle export passthrough for callers that route through MemoryManager.
+func export_chronicle(file_path: String) -> bool:
+	if WorldMemory != null and WorldMemory.has_method("export_chronicle"):
+		return bool(WorldMemory.export_chronicle(file_path))
+	return false

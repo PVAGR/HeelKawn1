@@ -133,8 +133,9 @@ static func _planner_pass_settlement_limit() -> int:
 
 
 static func _planner_pass_budget_usec() -> int:
-	# No throttle. Give the planner as much time as it needs.
-	return 8_000
+	# Keep a single planner pass under a few milliseconds so the main loop can
+	# keep moving even when many settlements are active.
+	return 4_000
 
 
 static func _planner_open_job_backpressure_limit() -> int:

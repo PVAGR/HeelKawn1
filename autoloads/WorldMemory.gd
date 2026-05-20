@@ -64,6 +64,10 @@ const PAWN_DEATH_THROTTLE_TICKS: int = 30  # Same pawn can't die twice within 30
 var _next_event_id: int = 1
 var _constitution_text: String = ""
 var _constitution_loaded: bool = false
+var _history_export_cache_private: String = ""
+var _history_export_cache_public: String = ""
+var _history_export_cache_tick: int = -1
+var _history_export_cache_event_count: int = -1
 
 ## Persistence rules configuration
 const PERSISTENCE_RULES: Dictionary = {
@@ -303,6 +307,7 @@ func clear() -> void:
 	_pawn_death_last_tick_by_id.clear()
 	_next_event_id = 1
 	_dirty = false
+	_invalidate_history_export_cache()
 
 
 ## Returns whether new historical facts were recorded since last consume; clears the flag.
@@ -322,6 +327,7 @@ func _append(e: Dictionary) -> void:
 	if not validate_event_against_constitution(e):
 		return
 	_dirty = true
+	_invalidate_history_export_cache()
 	if _events.size() >= MAX_EVENTS:
 		# O(1) eviction: swap oldest with last, pop back instead of O(n) shift
 		var dropped: Dictionary = _events[0]
@@ -1513,14 +1519,18 @@ func _export_subject_redacted(subject: Variant, anonymize: bool) -> String:
 ## Read-only deterministic export snapshot (no file IO).
 ## Pass [code]anonymize_subjects[/code] for pvabazaar-style sharing (numeric ids hashed in SUB column).
 func get_history_export_string(anonymize_subjects: bool = false) -> String:
+	var current_tick: int = GameManager.tick_count if GameManager != null else 0
+	var current_event_count: int = _events.size()
+	if _history_export_cache_tick == current_tick and _history_export_cache_event_count == current_event_count:
+		return _history_export_cache_public if anonymize_subjects else _history_export_cache_private
 	var out: PackedStringArray = []
 	out.append("HEELKAWN_HISTORY_EXPORT v=%s schema=%d" % [HISTORY_EXPORT_FORMAT, SCHEMA])
 	out.append(
 		"EXPORT_MODE: %s" % ("public_redacted" if anonymize_subjects else "private_dev")
 	)
 	out.append("TICKS_PER_SIM_YEAR: %d" % SimTime.TICKS_PER_SIM_YEAR)
-	out.append("TICK_RANGE: 0 to %d" % GameManager.tick_count)
-	out.append("EVENT_COUNT: %d" % _events.size())
+	out.append("TICK_RANGE: 0 to %d" % current_tick)
+	out.append("EVENT_COUNT: %d" % current_event_count)
 	out.append("COLUMNS: tick | type | subject | cause | impact | provenance_hash")
 	out.append("==============================================================")
 	for evt in _events:
@@ -1545,7 +1555,21 @@ func get_history_export_string(anonymize_subjects: bool = false) -> String:
 		out.append("[T:%d] %s | SUB:%s | CAUSE:%s | IMP:%s | PROV:%s" % [
 			tick, type_name, subject, cause, impact, _provenance_hash_stub(evt),
 		])
-	return "\n".join(out)
+	var export_string: String = "\n".join(out)
+	_history_export_cache_tick = current_tick
+	_history_export_cache_event_count = current_event_count
+	if anonymize_subjects:
+		_history_export_cache_public = export_string
+	else:
+		_history_export_cache_private = export_string
+	return export_string
+
+
+func _invalidate_history_export_cache() -> void:
+	_history_export_cache_tick = -1
+	_history_export_cache_event_count = -1
+	_history_export_cache_private = ""
+	_history_export_cache_public = ""
 
 
 ## Impact buckets for [param zone_id] (center region id as decimal string). Uses [SettlementMemory] region packs when present.

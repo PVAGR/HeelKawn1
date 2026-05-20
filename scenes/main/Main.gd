@@ -2800,12 +2800,18 @@ const MAIN_FAST_MAINT_INTERVAL_TICKS: int = 10
 const MAIN_MEDIUM_MAINT_INTERVAL_TICKS: int = 30
 const MAIN_SLOW_MAINT_INTERVAL_TICKS: int = 120
 const MAIN_DAILY_MAINT_INTERVAL_TICKS: int = 600
+## Hard wall-time budget for a single simulation tick's main-thread work.
+const TICK_BUDGET_USEC: int = 14_000
 
 
 func _is_main_lane_tick(tick: int, interval: int, salt: int = 0) -> bool:
 	if interval <= 1:
 		return true
 	return posmod(tick + salt, interval) == 0
+
+
+func _tick_budget_exceeded(start_usec: int) -> bool:
+	return Time.get_ticks_usec() - start_usec >= TICK_BUDGET_USEC
 
 func _on_game_tick(tick: int) -> void:
 	if CrashTrap.trace_enabled and tick == 1:
@@ -2820,6 +2826,7 @@ func _on_game_tick(tick: int) -> void:
 
 	var section_us: Dictionary = {}
 	var t0: int = Time.get_ticks_usec()
+	var tick_budget_start_usec: int = t0
 	_process_player_intent_dispatch_tick()
 	section_us["intent_dispatch"] = Time.get_ticks_usec() - t0
 	# Phase 4: Update meaning ambiance controller for player-readable meaning refinement
@@ -2895,6 +2902,8 @@ func _on_game_tick(tick: int) -> void:
 		t0 = Time.get_ticks_usec()
 		_seed_construction_jobs()
 		section_us["construction_seed"] = Time.get_ticks_usec() - t0
+		if _tick_budget_exceeded(tick_budget_start_usec):
+			return
 
 	# DORMANT WORLD: Periodically post harvest jobs for newly discovered tiles.
 	# Pawns discover tiles as they walk; this seeds FORAGE/CHOP/MINE/HUNT/FISH
@@ -3062,6 +3071,8 @@ func _on_game_tick(tick: int) -> void:
 			SettlementManager.plan(_world, self, false)
 			_last_planner_us = Time.get_ticks_usec() - t0
 			section_us["settlement_planner"] = _last_planner_us
+			if _tick_budget_exceeded(tick_budget_start_usec):
+				return
 		# Periodic resource truth refresh — settlements need to know their stockpile state
 		if _is_main_lane_tick(tick, 500, 109):
 			SettlementMemory.refresh_resource_truth()
@@ -3086,6 +3097,8 @@ func _on_game_tick(tick: int) -> void:
 			t0 = Time.get_ticks_usec()
 			SettlementMemory.recompute(_world)
 			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
+			if _tick_budget_exceeded(tick_budget_start_usec):
+				return
 		_maybe_record_regional_skirmish(tick)
 		_resolve_pending_skirmishes(tick)
 
@@ -3095,6 +3108,8 @@ func _on_game_tick(tick: int) -> void:
 			t0 = Time.get_ticks_usec()
 			SettlementManager.process(_world, self, false)
 			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
+			if _tick_budget_exceeded(tick_budget_start_usec):
+				return
 		# Phase 4 Identity: visual decay for permanently abandoned settlements (infrequent)
 		# DORMANT WORLD: Only runs after first settlement
 		if GameManager.periodic_phase_due(tick, SETTLEMENT_ARCHITECT_INTERVAL_TICKS, SETTLEMENT_ARCHITECT_PHASE_OFFSET_TICKS) and DiscoveryGate.is_unlocked("first_settlement"):
@@ -3129,6 +3144,8 @@ func _on_game_tick(tick: int) -> void:
 	t0 = Time.get_ticks_usec()
 	_maybe_generational_turnover()
 	section_us["generational_turnover"] = Time.get_ticks_usec() - t0
+	if _tick_budget_exceeded(tick_budget_start_usec):
+		return
 	var repro_interval: int = _high_speed_interval(REPRODUCTION_CHECK_INTERVAL_TICKS, REPRODUCTION_CHECK_INTERVAL_TICKS * 2, REPRODUCTION_CHECK_INTERVAL_TICKS * 3)
 	if _is_main_lane_tick(tick, repro_interval, 31):
 		t0 = Time.get_ticks_usec()
@@ -6675,7 +6692,7 @@ var _construction_seed_posts_since_log: int = 0
 var _last_construction_seed_log_tick: int = -10000
 var _construction_seed_cursor: int = 0
 var _last_planner_us: int = 0  # microseconds taken by last settlement planner pass
-var _planner_budget_gate_us: int = 40_000  # if last pass exceeded this, skip next pass (100x speedup optimization)
+var _planner_budget_gate_us: int = 12_000  # if last pass exceeded this, skip next pass
 
 func _count_pending_jobs_near(job_type: int, center: Vector2i, radius: int, cached_jobs: Array = []) -> int:
 	if JobManager == null:
@@ -7023,7 +7040,7 @@ func _seed_construction_jobs() -> void:
 	_last_construction_seed_tick = tick
 	# AGGRESSIVE OPTIMIZATION: Ultra-tight budget at high speeds
 	var gs: float = GameManager.game_speed if GameManager != null else 1.0
-	var budget_usec: int = 8_000 if gs < 50.0 else (4_000 if gs < 100.0 else 2_000)
+	var budget_usec: int = 4_000 if gs < 50.0 else (2_000 if gs < 100.0 else 1_000)
 	var start_usec: int = Time.get_ticks_usec()
 	
 	# EARLY EXIT: Check if we have minimum resources before doing expensive scans

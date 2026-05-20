@@ -42,10 +42,13 @@ func clear() -> void:
 
 
 static func get_current_age_index() -> int:
-	var inst: AgeMemory = Engine.get_singleton("AgeMemory") as AgeMemory
-	if inst == null:
-		return 0
-	return inst.current_age_index
+	var main_loop: MainLoop = Engine.get_main_loop()
+	if main_loop is SceneTree:
+		var tree: SceneTree = main_loop as SceneTree
+		var inst_v: Variant = tree.get_root().get_node_or_null("AgeMemory")
+		if inst_v is AgeMemory:
+			return (inst_v as AgeMemory).current_age_index
+	return 0
 
 
 ## 0..~0.1 — multiply into a gray lerp at end of world tint stack (very subtle per Age).

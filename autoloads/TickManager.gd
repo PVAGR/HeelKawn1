@@ -16,6 +16,9 @@ const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base)
 
 ## Hard safety cap.
 const MAX_TICKS_PER_FRAME: int = 48
+## Hard wall-time budget for sim dispatch within one rendered frame.
+const TICK_BUDGET_MS: int = 14
+const TICK_BUDGET_USEC: int = TICK_BUDGET_MS * 1000
 
 ## How often (in ticks) to force-rebuild the tickable cache.
 const TICKABLE_CACHE_REBUILD_INTERVAL: int = 300
@@ -115,6 +118,7 @@ func _process(delta: float) -> void:
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
 	var tickables_this_frame: int = 0
+	var frame_budget_hit: bool = false
 	var frame_cap: int = mini(MAX_TICKS_PER_FRAME, _frame_tick_cap_for_speed(_speed_multiplier))
 	if _is_frame_stressed():
 		frame_cap = maxi(1, int(floor(float(frame_cap) * 0.5)))
@@ -125,12 +129,17 @@ func _process(delta: float) -> void:
 		current_tick += 1
 		ticks_this_frame += 1
 		tickables_this_frame += _dispatch_tick(current_tick)
+		if Time.get_ticks_usec() - start_time >= TICK_BUDGET_USEC:
+			frame_budget_hit = true
+			break
 
 	_last_frame_ticks = ticks_this_frame
 	ticks_processed_last_frame = ticks_this_frame
 	tickables_called_last_frame = tickables_this_frame
 	max_ticks_processed_seen = maxi(max_ticks_processed_seen, ticks_this_frame)
 	debug_last_tick_batch_usec = Time.get_ticks_usec() - start_time
+	if frame_budget_hit and GameManager != null and GameManager.verbose_logs():
+		print("[SIM_BUDGET] stopped tick dispatch after %dus; backlog continues next frame" % debug_last_tick_batch_usec)
 
 	# Track how many ticks remain in backlog (for diagnostics only — never dropped).
 	pending_backlog_ticks = int(floor(_accumulated_time / TICK_STEP))

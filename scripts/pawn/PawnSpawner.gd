@@ -488,50 +488,20 @@ func spawn_generational_pawn(
 	
 	WorldMemory.record_event({
 		"type": "pawn_birth",
-		"birth_kind": str(birth_kind),  # Ensure String type
+		"birth_kind": str(birth_kind),
 		"tick": GameManager.tick_count,
 		"pawn_id": int(data.id),
 		"pawn_name": data.display_name,
 		"tile": {"x": tile.x, "y": tile.y},
 		"region": WorldMemory._region_key(tile.x, tile.y),
-		"birth_settlement": str(data.birth_settlement),  # Ensure String type
+		"birth_settlement": str(data.birth_settlement),
 	})
 	
-	# TEXT-RICH: Show birth notification
-	var event_overlay: Node = get_node_or_null("/root/EventNotificationOverlay")
-	if event_overlay != null and event_overlay.has_method("notify_birth"):
-		var settlement_name: String = "the wilderness"
-		if data.birth_settlement >= 0:
-			# Look up settlement name from SettlementMemory
-			if SettlementMemory != null and SettlementMemory.has_method("get"):
-				var settlements: Variant = SettlementMemory.get("settlements")
-				if settlements != null and settlements is Array:
-					for s in settlements:
-						if s is Dictionary and int(s.get("center_region", -1)) == data.birth_settlement:
-							settlement_name = str(s.get("name", "Unnamed"))
-							break
-		event_overlay.call("notify_birth", data.display_name, settlement_name)
+	# OPTIMIZATION: Defer UI notifications and social system updates to avoid blocking tick
 	if str(birth_kind) == "rebirth":
-		WorldMemory.record_event({
-			"type": "generational_birth",
-			"birth_kind": str(birth_kind),
-			"tick": GameManager.tick_count,
-			"pawn_id": int(data.id),
-			"pawn_name": data.display_name,
-			"tile": {"x": tile.x, "y": tile.y},
-			"region": WorldMemory._region_key(tile.x, tile.y),
-			"center_region": int(settlement_context.get("center_region", -1)),
-			"culture_name": str(settlement_context.get("culture_name", "")),
-			"birth_settlement": str(data.birth_settlement),
-		})
-	var kin: Node = get_node_or_null("/root/SocialManager")
-	if kin != null:
-		if kin.has_method("add_person"):
-			kin.call("add_person", data.id, {"display_name": data.display_name, "age": data.age, "gender": data.gender})
-		if parent_id != -1 and kin.has_method("add_parent_child"):
-			kin.call("add_parent_child", parent_id, data.id)
-		if household_id != -1 and kin.has_method("add_household_member"):
-			kin.call("add_household_member", data.id, household_id)
+		call_deferred("_deferred_rebirth_event", data, settlement_context)
+	
+	call_deferred("_deferred_birth_notifications", data, settlement_context, birth_kind, parent_id, household_id)
 	return true
 
 
@@ -986,3 +956,45 @@ func spawn_migrant(world: World) -> HeelKawnian:
 	if GameManager != null and GameManager.verbose_logs():
 		print("[Migrant] %s arrived at (%d, %d)" % [pawn_data.display_name, spawn_tile.x, spawn_tile.y])
 	return pawn
+
+
+## OPTIMIZATION: Deferred birth notifications to avoid blocking simulation tick
+func _deferred_birth_notifications(data: HeelKawnianData, settlement_context: Dictionary, birth_kind: String, parent_id: int, household_id: int) -> void:
+	var event_overlay: Node = get_node_or_null("/root/EventNotificationOverlay")
+	if event_overlay != null and event_overlay.has_method("notify_birth"):
+		var settlement_name: String = "the wilderness"
+		if data.birth_settlement >= 0:
+			if SettlementMemory != null and SettlementMemory.has_method("get"):
+				var settlements: Variant = SettlementMemory.get("settlements")
+				if settlements != null and settlements is Array:
+					for s in settlements:
+						if s is Dictionary and int(s.get("center_region", -1)) == data.birth_settlement:
+							settlement_name = str(s.get("name", "Unnamed"))
+							break
+		event_overlay.call("notify_birth", data.display_name, settlement_name)
+	
+	var kin: Node = get_node_or_null("/root/SocialManager")
+	if kin != null:
+		if kin.has_method("add_person"):
+			kin.call("add_person", data.id, {"display_name": data.display_name, "age": data.age, "gender": data.gender})
+		if parent_id != -1 and kin.has_method("add_parent_child"):
+			kin.call("add_parent_child", parent_id, data.id)
+		if household_id != -1 and kin.has_method("add_household_member"):
+			kin.call("add_household_member", data.id, household_id)
+
+
+## OPTIMIZATION: Deferred rebirth event recording
+func _deferred_rebirth_event(data: HeelKawnianData, settlement_context: Dictionary) -> void:
+	WorldMemory.record_event({
+		"type": "generational_birth",
+		"birth_kind": "rebirth",
+		"tick": GameManager.tick_count,
+		"pawn_id": int(data.id),
+		"pawn_name": data.display_name,
+		"tile": {"x": data.tile_pos.x, "y": data.tile_pos.y},
+		"region": WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y),
+		"center_region": int(settlement_context.get("center_region", -1)),
+		"culture_name": str(settlement_context.get("culture_name", "")),
+		"birth_settlement": str(data.birth_settlement),
+	})
+

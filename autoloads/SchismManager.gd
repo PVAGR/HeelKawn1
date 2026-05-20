@@ -30,7 +30,7 @@ func _sync_hold_timers() -> void:
 		var ckr1: int = int(d.get("center_region", -1))
 		if ckr1 < 0:
 			continue
-		var it: int = int(IntentMemory.settlement_intent.get(ckr1, IntentMemory.INTENT_HOLD))
+		var it: int = int(IntentMemory.get_settlement_intent().get(ckr1, IntentMemory.INTENT_HOLD))
 		if not _last_intent.has(ckr1):
 			_last_intent[ckr1] = it
 			if it == IntentMemory.INTENT_HOLD:
@@ -70,7 +70,7 @@ func check_and_schism(world: World, main: Node2D) -> void:
 		var pack0: PackedInt32Array = reg0 as PackedInt32Array
 		if pack0.is_empty():
 			continue
-		if int(IntentMemory.settlement_intent.get(ckr, IntentMemory.INTENT_HOLD)) != IntentMemory.INTENT_HOLD:
+		if int(IntentMemory.get_settlement_intent().get(ckr, IntentMemory.INTENT_HOLD)) != IntentMemory.INTENT_HOLD:
 			continue
 		var h0: int = int(_hold_since.get(ckr, -1_000_000_000))
 		if h0 < 0 or (now - h0) < MIN_HOLD_TICKS:

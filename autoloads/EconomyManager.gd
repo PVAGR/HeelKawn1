@@ -80,8 +80,11 @@ func update_food_chain(world: World) -> void:
 func get_trade_planner() -> Node:
 	return get_subsystem("trade_planner")
 
-func get_trade_memory() -> Node:
-	return get_subsystem("trade_memory")
+static func get_trade_memory() -> Node:
+	var inst: EconomyManager = Engine.get_singleton("EconomyManager") as EconomyManager
+	if inst == null:
+		return null
+	return inst.get_subsystem("trade_memory")
 
 func get_food_chain_manager() -> Node:
 	return get_subsystem("food_chain_manager")

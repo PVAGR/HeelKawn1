@@ -21,7 +21,14 @@ const _ITEM_ORDER: Array[int] = [
 var _last_plan_tick: int = -1_000_000_000
 
 
-func plan(world: World, _main: Node, from_memory_flush: bool) -> void:
+static func plan(world: World, _main: Node, from_memory_flush: bool) -> void:
+	var inst: TradePlanner = Engine.get_singleton("TradePlanner") as TradePlanner
+	if inst == null:
+		return
+	inst._plan_impl(world, _main, from_memory_flush)
+
+
+func _plan_impl(world: World, _main: Node, from_memory_flush: bool) -> void:
 	if world == null or not is_instance_valid(world) or world.data == null or world.pathfinder == null:
 		return
 	if not from_memory_flush:
@@ -119,7 +126,7 @@ static func _intent_sort_rank(intent: int) -> int:
 static func _intent_for_center(center_region: int) -> int:
 	if center_region < 0:
 		return IntentMemory.INTENT_HOLD
-	return int(IntentMemory.settlement_intent.get(center_region, IntentMemory.INTENT_HOLD))
+	return int(IntentMemory.get_settlement_intent().get(center_region, IntentMemory.INTENT_HOLD))
 
 
 static func _region_set(regions: PackedInt32Array) -> Dictionary:

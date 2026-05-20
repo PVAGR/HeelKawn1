@@ -66,7 +66,14 @@ func seed_births_from_current_world(w: World) -> void:
 
 
 ## On Age transition, everything still un-dated (world gen carry-over) becomes [ended_age] (one era old next tick).
-func on_age_ended(ended_age: int, w: World) -> void:
+static func on_age_ended(ended_age: int, w: World) -> void:
+	var inst: RemnantMemory = Engine.get_singleton("RemnantMemory") as RemnantMemory
+	if inst == null:
+		return
+	inst._on_age_ended_impl(ended_age, w)
+
+
+func _on_age_ended_impl(ended_age: int, w: World) -> void:
 	if w == null or w.data == null:
 		return
 	_ensure_birth_size()
@@ -82,7 +89,14 @@ func on_age_ended(ended_age: int, w: World) -> void:
 
 
 ## First time a feature becomes a tracked structure.
-func on_feature_set(w: World, x: int, y: int, new_feature: int) -> void:
+static func on_feature_set(w: World, x: int, y: int, new_feature: int) -> void:
+	var inst: RemnantMemory = Engine.get_singleton("RemnantMemory") as RemnantMemory
+	if inst == null:
+		return
+	inst._on_feature_set_impl(w, x, y, new_feature)
+
+
+func _on_feature_set_impl(w: World, x: int, y: int, new_feature: int) -> void:
 	_ensure_birth_size()
 	if not w.data.in_bounds(x, y):
 		return
@@ -136,7 +150,14 @@ func get_birth_at(x: int, y: int) -> int:
 
 
 ## 0 = current-era patina, 1+ = prior Ages (approximate).
-func get_tile_rem_delta(x: int, y: int, w: World) -> int:
+static func get_tile_rem_delta(x: int, y: int, w: World) -> int:
+	var inst: RemnantMemory = Engine.get_singleton("RemnantMemory") as RemnantMemory
+	if inst == null:
+		return 0
+	return inst._get_tile_rem_delta_impl(x, y, w)
+
+
+func _get_tile_rem_delta_impl(x: int, y: int, w: World) -> int:
 	if w == null or w.data == null or not w.data.in_bounds(x, y):
 		return 0
 	var f1: int = int(w.data.get_feature(x, y))
@@ -191,7 +212,14 @@ func is_ruin_ancient_block(x: int, y: int, w: World) -> bool:
 
 
 ## [SettlementPlanner] manhattan add-on; higher = older = worse to build on/expand to.
-func get_planner_penalty(t: Vector2i, w: World) -> int:
+static func get_planner_penalty(t: Vector2i, w: World) -> int:
+	var inst: RemnantMemory = Engine.get_singleton("RemnantMemory") as RemnantMemory
+	if inst == null:
+		return 0
+	return inst._get_planner_penalty_impl(t, w)
+
+
+func _get_planner_penalty_impl(t: Vector2i, w: World) -> int:
 	if w == null:
 		return 0
 	var out: int = get_tile_rem_delta(t.x, t.y, w) * PLANNER_PEN

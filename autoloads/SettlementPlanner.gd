@@ -632,7 +632,7 @@ func _pick_waterside_tile(world: World, main: Node2D, data: WorldData, center: V
 static func _intent_for_settlement(center_region: int) -> int:
 	if center_region < 0:
 		return IntentMemory.INTENT_HOLD
-	return int(IntentMemory.settlement_intent.get(center_region, IntentMemory.INTENT_HOLD))
+	return int(IntentMemory.get_settlement_intent().get(center_region, IntentMemory.INTENT_HOLD))
 
 
 ## Deterministic, exclusive: worst survival context wins. Later Ages nudge away from [OPEN] without hard overrides.

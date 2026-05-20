@@ -40,7 +40,14 @@ func _ensure_size() -> void:
 
 
 ## Movement A → B: count step onto B (read-only rule).
-func record_step(from_tile: Vector2i, to_tile: Vector2i, world: World) -> void:
+static func record_step(from_tile: Vector2i, to_tile: Vector2i, world: World) -> void:
+	var inst: RoadMemory = Engine.get_singleton("RoadMemory") as RoadMemory
+	if inst == null:
+		return
+	inst._record_step_impl(from_tile, to_tile, world)
+
+
+func _record_step_impl(from_tile: Vector2i, to_tile: Vector2i, world: World) -> void:
 	_ensure_size()
 	if from_tile == to_tile:
 		return
@@ -86,7 +93,14 @@ func _path_mul_from_count(t: int) -> float:
 	return 1.0
 
 
-func get_traversal(x: int, y: int) -> int:
+static func get_traversal(x: int, y: int) -> int:
+	var inst: RoadMemory = Engine.get_singleton("RoadMemory") as RoadMemory
+	if inst == null:
+		return 0
+	return inst._get_traversal_impl(x, y)
+
+
+func _get_traversal_impl(x: int, y: int) -> int:
 	if x < 0 or y < 0 or x >= WorldData.WIDTH or y >= WorldData.HEIGHT:
 		return 0
 	if _trav.size() != WorldData.TILE_COUNT:
@@ -95,8 +109,15 @@ func get_traversal(x: int, y: int) -> int:
 
 
 ## Multiplier to movement cost: lower = easier. Never below scar handling (PathFinder order).
-func get_path_weight_mul(x: int, y: int) -> float:
-	var t: int = get_traversal(x, y)
+static func get_path_weight_mul(x: int, y: int) -> float:
+	var inst: RoadMemory = Engine.get_singleton("RoadMemory") as RoadMemory
+	if inst == null:
+		return 1.0
+	return inst._get_path_weight_mul_impl(x, y)
+
+
+func _get_path_weight_mul_impl(x: int, y: int) -> float:
+	var t: int = _get_traversal_impl(x, y)
 	if t >= ROAD_T2:
 		return PATH_W_T2
 	if t >= ROAD_T1:

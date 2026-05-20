@@ -394,7 +394,7 @@ func _rebuild_player_meaning_region_state() -> void:
 		if not SettlementMemory.is_collapsed_state(st) and st != "revivable":
 			continue
 		var ckr: int = int(d.get("center_region", -1))
-		var intent: int = int(IntentMemory.settlement_intent.get(ckr, IntentMemory.INTENT_HOLD))
+		var intent: int = int(IntentMemory.get_settlement_intent().get(ckr, IntentMemory.INTENT_HOLD))
 		var reg1: Variant = d.get("regions", null)
 		if not (reg1 is PackedInt32Array):
 			continue

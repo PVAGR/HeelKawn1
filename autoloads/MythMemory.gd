@@ -41,17 +41,23 @@ func get_rebirth_success_count_for_center(center_rk: int) -> int:
 
 
 ## Call when Settlement Rebirth spawns a pawn in a revivable cluster (session fact for -1 score).
-func register_rebirth_success(center_rk: int) -> void:
+static func register_rebirth_success(center_rk: int) -> void:
+	var inst: MythMemory = Engine.get_singleton("MythMemory") as MythMemory
+	if inst == null:
+		return
 	if center_rk < 0:
 		return
 	var ks: String = str(center_rk)
-	_rebirth_count_by_center[ks] = int(_rebirth_count_by_center.get(ks, 0)) + 1
+	inst._rebirth_count_by_center[ks] = int(inst._rebirth_count_by_center.get(ks, 0)) + 1
 
 
 ## -1 = revered, 0 = neutral, +1 = feared
-func get_region_myth_state(region_key: int) -> int:
-	if _region_myth.has(region_key):
-		return int(_region_myth[region_key])
+static func get_region_myth_state(region_key: int) -> int:
+	var inst: MythMemory = Engine.get_singleton("MythMemory") as MythMemory
+	if inst == null:
+		return 0
+	if inst._region_myth.has(region_key):
+		return int(inst._region_myth[region_key])
 	return 0
 
 

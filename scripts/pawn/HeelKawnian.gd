@@ -1143,10 +1143,10 @@ func _job_intent_priority_offset(j: Job) -> int:
 	var to_center: int = SettlementMemory.get_center_region_for_region(to_rk)
 	if from_center < 0 and to_center < 0:
 		return 0
-	var from_intent: int = int(IntentMemory.settlement_intent.get(from_center, IntentMemory.INTENT_HOLD))
-	var to_intent: int = int(IntentMemory.settlement_intent.get(to_center, IntentMemory.INTENT_HOLD))
-	var from_pressure: float = float(IntentMemory.settlement_pressure.get(from_center, 0.5))
-	var to_pressure: float = float(IntentMemory.settlement_pressure.get(to_center, 0.5))
+	var from_intent: int = int(IntentMemory.get_settlement_intent().get(from_center, IntentMemory.INTENT_HOLD))
+	var to_intent: int = int(IntentMemory.get_settlement_intent().get(to_center, IntentMemory.INTENT_HOLD))
+	var from_pressure: float = float(IntentMemory.get_settlement_pressure().get(from_center, 0.5))
+	var to_pressure: float = float(IntentMemory.get_settlement_pressure().get(to_center, 0.5))
 	var delta: int = 0
 	if to_intent == IntentMemory.INTENT_GROW:
 		delta += 3
@@ -4324,8 +4324,8 @@ func _tick_idle() -> void:
 		crisis_cooking_pressure = ColonySimServices.get_cooking_pressure()
 	var from_region_key: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
 	var from_center_region: int = SettlementMemory.get_center_region_for_region(from_region_key)
-	var from_intent: int = int(IntentMemory.settlement_intent.get(from_center_region, IntentMemory.INTENT_HOLD))
-	var from_pressure: float = float(IntentMemory.settlement_pressure.get(from_center_region, 0.5))
+	var from_intent: int = int(IntentMemory.get_settlement_intent().get(from_center_region, IntentMemory.INTENT_HOLD))
+	var from_pressure: float = float(IntentMemory.get_settlement_pressure().get(from_center_region, 0.5))
 	var scar_priority_for_level: Dictionary = {0: 0, 1: -5, 2: -24}
 	
 	var resolve_region_key_for_work_tile: Callable = func(work_tile: Vector2i) -> int:
@@ -4357,8 +4357,8 @@ func _tick_idle() -> void:
 		var to_center: int = SettlementMemory.get_center_region_for_region(region_key)
 		var intent_delta: int = 0
 		if not (from_center_region < 0 and to_center < 0):
-			var to_intent: int = int(IntentMemory.settlement_intent.get(to_center, IntentMemory.INTENT_HOLD))
-			var to_pressure: float = float(IntentMemory.settlement_pressure.get(to_center, 0.5))
+			var to_intent: int = int(IntentMemory.get_settlement_intent().get(to_center, IntentMemory.INTENT_HOLD))
+			var to_pressure: float = float(IntentMemory.get_settlement_pressure().get(to_center, 0.5))
 			if to_intent == IntentMemory.INTENT_GROW:
 				intent_delta += 3
 			elif to_intent == IntentMemory.INTENT_ABANDON:
@@ -10243,7 +10243,7 @@ func _start_wander() -> void:
 	var best_cult: int = -100
 	var from_rk: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
 	var from_center: int = SettlementMemory.get_center_region_for_region(from_rk)
-	var from_p: float = float(IntentMemory.settlement_pressure.get(from_center, 0.5))
+	var from_p: float = float(IntentMemory.get_settlement_pressure().get(from_center, 0.5))
 	var squad_anchor: Vector2i = _squad_anchor_tile()
 	var dist_now: int = -1
 	if squad_anchor.x >= 0:
@@ -10256,8 +10256,8 @@ func _start_wander() -> void:
 		var rk2: int = _WM._region_key(t.x, t.y)
 		var crep: int = CulturalMemory.get_region_reputation(rk2)
 		var ckr2: int = SettlementMemory.get_center_region_for_region(rk2)
-		var intent2: int = int(IntentMemory.settlement_intent.get(ckr2, IntentMemory.INTENT_HOLD))
-		var p2: float = float(IntentMemory.settlement_pressure.get(ckr2, 0.5))
+		var intent2: int = int(IntentMemory.get_settlement_intent().get(ckr2, IntentMemory.INTENT_HOLD))
+		var p2: float = float(IntentMemory.get_settlement_pressure().get(ckr2, 0.5))
 		var score: int = 0
 		if intent2 == IntentMemory.INTENT_GROW:
 			score += 7

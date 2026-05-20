@@ -311,8 +311,8 @@ func _sort_settlements_rebirth_order(arr: Array[Dictionary]) -> void:
 	arr.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var ac: int = int(a.get("center_region", -1))
 		var bc: int = int(b.get("center_region", -1))
-		var ap: float = float(IntentMemory.settlement_pressure.get(ac, 1.0))
-		var bp: float = float(IntentMemory.settlement_pressure.get(bc, 1.0))
+		var ap: float = float(IntentMemory.get_settlement_pressure().get(ac, 1.0))
+		var bp: float = float(IntentMemory.get_settlement_pressure().get(bc, 1.0))
 		if ap != bp:
 			return ap < bp
 		var ascar: int = int(a.get("scar_max", 99))

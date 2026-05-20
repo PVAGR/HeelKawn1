@@ -41,8 +41,11 @@ func clear() -> void:
 	age_signature = {}
 
 
-func get_current_age_index() -> int:
-	return current_age_index
+static func get_current_age_index() -> int:
+	var inst: AgeMemory = Engine.get_singleton("AgeMemory") as AgeMemory
+	if inst == null:
+		return 0
+	return inst.current_age_index
 
 
 ## 0..~0.1 — multiply into a gray lerp at end of world tint stack (very subtle per Age).

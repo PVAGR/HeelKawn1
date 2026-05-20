@@ -19,6 +19,20 @@ var settlement_pressure: Dictionary = {}
 var settlement_intent: Dictionary = {}
 
 
+static func get_settlement_intent() -> Dictionary:
+	var inst: IntentMemory = Engine.get_singleton("IntentMemory") as IntentMemory
+	if inst == null:
+		return {}
+	return inst.settlement_intent
+
+
+static func get_settlement_pressure() -> Dictionary:
+	var inst: IntentMemory = Engine.get_singleton("IntentMemory") as IntentMemory
+	if inst == null:
+		return {}
+	return inst.settlement_pressure
+
+
 func _ready() -> void:
 	if not _ready_tick_guard:
 		_ready_tick_guard = true

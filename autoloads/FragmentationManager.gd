@@ -38,9 +38,9 @@ func check_and_fragment(world: World, main: Node2D) -> void:
 		var pack0: PackedInt32Array = reg0 as PackedInt32Array
 		if pack0.is_empty():
 			continue
-		if int(IntentMemory.settlement_intent.get(ckr, IntentMemory.INTENT_HOLD)) != IntentMemory.INTENT_GROW:
+		if int(IntentMemory.get_settlement_intent().get(ckr, IntentMemory.INTENT_HOLD)) != IntentMemory.INTENT_GROW:
 			continue
-		if float(IntentMemory.settlement_pressure.get(ckr, 1.0)) >= PRESSURE_THRESHOLD:
+		if float(IntentMemory.get_settlement_pressure().get(ckr, 1.0)) >= PRESSURE_THRESHOLD:
 			continue
 		var pop: int = int(main.settlement_planner_count_pawns_in_regions(pack0))
 		if pop < POP_THRESHOLD:

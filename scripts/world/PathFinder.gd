@@ -362,15 +362,15 @@ func refresh_pawn_historic_scar_weights(p_world: World) -> void:
 					w *= 1.08
 				elif mst == -1:
 					w *= 0.95
-			if road_mem != null:
-				w *= road_mem.get_path_weight_mul(tx, ty)
-			if trade_mem != null:
-				w *= trade_mem.get_trade_path_weight_mul(tx, ty)
-			if p_world != null and is_instance_valid(p_world) and p_world.data != null:
-				if int(p_world.data.get_feature(tx, ty)) == TileFeature.Type.ROAD:
-					w *= road_mem.PATH_W_T2 if road_mem != null else 1.0
-				if remnant_mem != null:
-					w *= remnant_mem.get_remnant_path_mul(tx, ty, p_world)
+				if road_mem != null:
+					w *= road_mem.get_path_weight_mul(tx, ty)
+				if trade_mem != null:
+					w *= trade_mem.get_trade_path_weight_mul(tx, ty)
+				if p_world != null and is_instance_valid(p_world) and p_world.data != null:
+					if int(p_world.data.get_feature(tx, ty)) == TileFeature.Type.ROAD:
+						w *= road_mem.PATH_W_T2 if road_mem != null else 1.0
+					if remnant_mem != null:
+						w *= remnant_mem.get_remnant_path_mul(tx, ty, p_world)
 				_pawn_hist_scale[i] = w
 				if not is_equal_approx(w, 1.0):
 					_pawn_hist_dirty.append(i)

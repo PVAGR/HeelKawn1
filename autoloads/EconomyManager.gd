@@ -1,4 +1,5 @@
 extends Node
+class_name EconomyManager
 ## Consolidated Economy Manager
 ## Combines trade and economy systems into one autoload
 ## Reduces autoload count while preserving economy functionality

@@ -72,7 +72,7 @@ func get_regions_with_myth_state() -> Dictionary:
 
 ## Conflict intensity for a region: derived from WorldMeaning war/conflict tags.
 ## Returns 0.0 (peaceful) to 1.0 (intense conflict).
-func get_conflict_intensity(region_key: int) -> float:
+static func get_conflict_intensity(region_key: int) -> float:
 	var meaning: Dictionary = WorldMeaning.get_region_meaning(region_key)
 	var war_tags: int = 0
 	var total_tags: int = 0

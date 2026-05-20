@@ -356,8 +356,6 @@ func _draw() -> void:
 
 
 func _draw_trade_route_lines(line_width: float) -> void:
-	if TradeMemory == null or not TradeMemory.has_method("get_routes_for_map_draw"):
-		return
 	var routes: Array = TradeMemory.get_routes_for_map_draw()
 	if routes.is_empty():
 		return
@@ -383,8 +381,6 @@ func _draw_trade_route_lines(line_width: float) -> void:
 
 
 func _draw_caravan_markers(half_tile: float) -> void:
-	if TradeMemory == null or not TradeMemory.has_method("get_caravan_markers"):
-		return
 	var markers: Array = TradeMemory.get_caravan_markers()
 	if markers.is_empty():
 		return

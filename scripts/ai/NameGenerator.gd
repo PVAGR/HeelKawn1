@@ -73,9 +73,14 @@ var _name_history: Array[String] = []
 const MAX_NAME_HISTORY: int = 500
 
 
-func _ready() -> void:
-	# Seed random number generator
-	randomize()
+## Deterministic RNG accessor for name generation.
+func _get_rng(pawn_id: int) -> RandomNumberGenerator:
+	if WorldRNG != null:
+		return WorldRNG.rng_for(&"name_generator", pawn_id)
+	# Fallback: simple hash-based deterministic selection if WorldRNG unavailable
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	rng.seed = absi(pawn_id * 2654435761)
+	return rng
 
 
 # ==================== NAME GENERATION ====================
@@ -84,7 +89,7 @@ func _ready() -> void:
 func generate_full_name(pawn_id: int, culture: String = "common", 
  gender: int = 0, circumstances: Dictionary = {}) -> String:
 	
-	var given_name: String = generate_given_name(culture, gender)
+	var given_name: String = generate_given_name(pawn_id, culture, gender)
 	var surname: String = generate_surname(pawn_id, culture, circumstances)
 	
 	var full_name: String
@@ -100,7 +105,7 @@ func generate_full_name(pawn_id: int, culture: String = "common",
 
 
 ## Generate given name (first name)
-func generate_given_name(culture: String = "common", gender: int = 0) -> String:
+func generate_given_name(pawn_id: int, culture: String = "common", gender: int = 0) -> String:
 	if not cultural_names.has(culture):
 		culture = "common"
 	
@@ -117,8 +122,9 @@ func generate_given_name(culture: String = "common", gender: int = 0) -> String:
 	if name_pool.size() == 0:
 		return "Unknown"
 	
-	# Deterministic selection based on tick count
-	var index: int = randi() % name_pool.size()
+	# Deterministic selection based on pawn_id
+	var rng: RandomNumberGenerator = _get_rng(pawn_id)
+	var index: int = rng.randi() % name_pool.size()
 	return name_pool[index]
 
 
@@ -147,8 +153,9 @@ func generate_surname(pawn_id: int, culture: String = "common",
 	if prefix_pool.size() == 0 or suffix_pool.size() == 0:
 		return ""
 	
-	var prefix: String = prefix_pool[randi() % prefix_pool.size()]
-	var suffix: String = suffix_pool[randi() % suffix_pool.size()]
+	var rng: RandomNumberGenerator = _get_rng(pawn_id)
+	var prefix: String = prefix_pool[rng.randi() % prefix_pool.size()]
+	var suffix: String = suffix_pool[rng.randi() % suffix_pool.size()]
 	
 	return prefix + suffix
 
@@ -156,6 +163,7 @@ func generate_surname(pawn_id: int, culture: String = "common",
 ## Generate nickname based on circumstances
 func generate_nickname(pawn_id: int, circumstances: Dictionary = {}) -> String:
 	var nicknames: PackedStringArray = []
+	var rng: RandomNumberGenerator = _get_rng(pawn_id)
 
 	# Add trait-based nicknames
 	if circumstances.has("traits"):
@@ -165,7 +173,7 @@ func generate_nickname(pawn_id: int, circumstances: Dictionary = {}) -> String:
 			var t: String = traits_array[i]
 			if circumstantial_names.traits.has(t):
 				var pool: Array = circumstantial_names.traits[t]
-				nicknames.append(pool[randi() % pool.size()])
+				nicknames.append(pool[rng.randi() % pool.size()])
 			i += 1
 
 	# Add profession-based nickname
@@ -173,7 +181,7 @@ func generate_nickname(pawn_id: int, circumstances: Dictionary = {}) -> String:
 		var prof: String = circumstances.profession
 		if circumstantial_names.professions.has(prof):
 			var pool: Array = circumstantial_names.professions[prof]
-			nicknames.append(pool[randi() % pool.size()])
+			nicknames.append(pool[rng.randi() % pool.size()])
 
 	# Add event-based nickname
 	if circumstances.has("events"):
@@ -183,7 +191,7 @@ func generate_nickname(pawn_id: int, circumstances: Dictionary = {}) -> String:
 			var event: String = events_array[j]
 			if circumstantial_names.events.has(event):
 				var pool: Array = circumstantial_names.events[event]
-				nicknames.append(pool[randi() % pool.size()])
+				nicknames.append(pool[rng.randi() % pool.size()])
 			j += 1
 
 	if nicknames.size() == 0:
@@ -252,8 +260,10 @@ func generate_child_name(father_id: int, mother_id: int, gender: int = 0) -> Str
 	var mother_culture: String = _get_culture(mother_id)
 	
 	# Child typically takes father's culture and bloodline
-	var culture: String = father_culture if father_culture != "" else "common"
-	var given_name: String = generate_given_name(culture, gender)
+	var culture: String = "common"
+	if father_culture != null and father_culture != "":
+		culture = father_culture
+	var given_name: String = generate_given_name(int(father_id), culture, int(gender))
 	
 	# Combine with bloodline name
 	if father_bloodline != "":

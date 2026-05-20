@@ -1594,9 +1594,12 @@ func _try_innovate_for_pawn(pawn_id: int, known: Array, tick: int) -> void:
 				if gen.call("float") < chance:
 					_succeed_innovation(pawn_id, key, recipe, tick)
 					return  # One innovation per check cycle
-			elif randf() < chance:
-				_succeed_innovation(pawn_id, key, recipe, tick)
-				return
+			else:
+				# Deterministic fallback: hash-based chance
+				var hash_val: int = absi(str(pawn_id).hash() ^ str(tick).hash() ^ str(key).hash())
+				if (hash_val % 1000) < int(chance * 1000.0):
+					_succeed_innovation(pawn_id, key, recipe, tick)
+					return
 	# Mark cooldown even on failure
 	_innovations_discovered["pawn_cd_%d" % pawn_id] = tick
 

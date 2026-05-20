@@ -1559,7 +1559,39 @@ static func _build_intent_key(center_rk: int, build_type: String) -> String:
 	return "%d:%s" % [center_rk, build_type]
 
 
+## Priority chain tier: 0=Survival, 1=Shelter, 2=Storage, 3=Hearth,
+## 4=Tools, 5=Defense, 6=Comfort, 7=Identity, 8=Ambition.
+## Lower-tier needs MUST be satisfied before higher-tier builds are posted.
+const BOOTSTRAP_PRIORITY_CHAIN: Dictionary = {
+	"fire_pit": 0, "hearth": 0,
+	"forage": 0, "hunt": 0, "fish": 0,
+	"bed": 1, "shelter": 1,
+	"storage_hut": 2, "storage": 2, "stockpile": 2,
+	"farm": 3, "granary": 3,
+	"workshop": 4, "tool": 4,
+	"wall": 5, "door": 5, "protect": 5, "defend": 5,
+	"apothecary": 6, "cellar": 6, "cook": 6,
+	"marker_stone": 7, "grave": 7, "shrine": 7,
+	"library": 8, "market": 8, "barracks": 8, "ambition": 8,
+}
+
+## Minimum structures at each tier that must be present before advancing.
+## Key: tier_index -> {structure_type: min_count}
+const BOOTSTRAP_TIER_GATES: Dictionary = {
+	1: {"fire_pit": 1},                    # Need 1 hearth before shelter
+	2: {"bed": 1, "shelter": 1},           # Need 1 bed/shelter before storage
+	3: {"storage_hut": 1},                 # Need storage before farming
+	4: {"farm": 1, "fire_pit": 1},         # Need food production before tools
+	5: {"wall": 2},                         # Need 2 walls before defense
+	6: {"wall": 4, "fire_pit": 2},          # Need perimeter before comfort
+	7: {"wall": 6, "bed": 4},              # Need established settlement before identity
+	8: {"wall": 8, "bed": 6},              # Need mature settlement before ambition
+}
+
+
 ## True when colony/settlement pressures justify posting this build category.
+## Also enforces the deterministic bootstrap priority chain: higher-tier builds
+## are blocked until lower-tier prerequisites are met.
 func _build_pressure_ok(settlement: Dictionary, build_type: String) -> bool:
 	if ColonySimServices == null:
 		return true
@@ -1569,6 +1601,13 @@ func _build_pressure_ok(settlement: Dictionary, build_type: String) -> bool:
 	var warmth_p: float = ColonySimServices.get_warmth_pressure(center_rk)
 	var storage_p: float = ColonySimServices.get_storage_pressure(center_rk)
 	var cooking_p: float = ColonySimServices.get_cooking_pressure(center_rk)
+	# Priority chain gate: check if this build_type's tier is blocked by unmet lower-tier needs.
+	if BOOTSTRAP_PRIORITY_CHAIN.has(build_type):
+		var this_tier: int = BOOTSTRAP_PRIORITY_CHAIN[build_type] as int
+		if this_tier > 0:
+			var features: Dictionary = _scan_features_for_settlement(settlement)
+			if not _tier_prerequisites_met(this_tier, features):
+				return false
 	match build_type:
 		"bed", "shelter":
 			return housing_p > 0.12 or food_p <= 0.72
@@ -1588,6 +1627,34 @@ func _build_pressure_ok(settlement: Dictionary, build_type: String) -> bool:
 			return food_p <= 0.60 and housing_p <= 0.70 and warmth_p <= 0.40
 		_:
 			return true
+
+
+## Scan local features for the settlement. Returns a Dictionary suitable for
+## tier prerequisite checking.
+func _scan_features_for_settlement(settlement: Dictionary) -> Dictionary:
+	var center_tile: Vector2i = Vector2i(
+		int(settlement.get("center_tile_x", -1)),
+		int(settlement.get("center_tile_y", -1))
+	)
+	if center_tile.x < 0 or HeelKawnianManager == null:
+		return {}
+	return HeelKawnianManager._scan_local_features(center_tile, 12)
+
+
+## Check if all prerequisites for the given tier are met.
+## Scans the settlement features for required structures.
+func _tier_prerequisites_met(tier: int, features: Dictionary) -> bool:
+	if tier <= 0 or tier > 8:
+		return true
+	# Check all lower tiers for unmet needs.
+	for check_tier in range(1, tier + 1):
+		var gates: Dictionary = BOOTSTRAP_TIER_GATES.get(check_tier, {})
+		for struct_type: String in gates.keys():
+			var required_count: int = gates[struct_type] as int
+			var actual_count: int = int(features.get(struct_type, 0))
+			if actual_count < required_count:
+				return false
+	return true
 
 
 ## Gate planner/auto-build posts: pressure, per-settlement cooldown, and duplicate pending jobs.

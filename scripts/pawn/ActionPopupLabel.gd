@@ -15,6 +15,8 @@ var _is_fading: bool = false
 func _ready() -> void:
 	visible = false
 	modulate = Color.WHITE
+	# Disable process when hidden to save CPU with many pawns.
+	set_process(false)
 
 
 func show_action_context(pawn_name: String, action: String, personality_context: String, goal_context: String, memory_context: String) -> void:
@@ -35,10 +37,12 @@ func show_action_context(pawn_name: String, action: String, personality_context:
 	_lifetime_timer = 0.0
 	_fade_timer = 0.0
 	_is_fading = false
+	set_process(true)
 
 
 func _process(delta: float) -> void:
 	if not visible:
+		set_process(false)
 		return
 	
 	_lifetime_timer += delta
@@ -54,6 +58,7 @@ func _process(delta: float) -> void:
 		if modulate.a <= 0.0:
 			visible = false
 			modulate.a = 1.0
+			set_process(false)
 
 
 func hide_immediately() -> void:
@@ -62,3 +67,4 @@ func hide_immediately() -> void:
 	_lifetime_timer = 0.0
 	_fade_timer = 0.0
 	_is_fading = false
+	set_process(false)

@@ -4,8 +4,11 @@ extends Node
 ## nodes in the "tickable" group.
 ##
 ## PLAYABILITY POLICY:
-## Keep simulation deterministic, but never allow catch-up storms to freeze
-## rendering. Process ticks with adaptive frame caps + bounded backlog.
+## DETERMINISM FIRST: Never drop or skip semantic ticks. All ticks accumulate
+## and MUST be processed in order. If the CPU cannot keep up, the simulation
+## naturally slows wall-clock time rather than silently losing history.
+## Adaptive frame caps prevent render freezes, but excess backlog persists
+## to the next frame — it is never discarded.
 
 signal tick_processed(tick_number: int)
 
@@ -48,7 +51,8 @@ var batch_stats: Dictionary = {
 	"avg_ticks_per_frame": 0.0,
 	"last_frame_time_usec": 0,
 }
-var dropped_ticks_last_frame: int = 0
+## Ticks left in the backlog from previous frames (never dropped).
+var pending_backlog_ticks: int = 0
 
 
 func _is_mobile_runtime() -> bool:
@@ -81,24 +85,6 @@ func _frame_tick_cap_for_speed(speed: float) -> int:
 	if speed <= 50.0: return 14
 	return 18
 
-
-func _accumulated_tick_cap_for_speed(speed: float) -> int:
-	if _is_mobile_runtime():
-		if speed <= 1.0: return 2
-		if speed <= 3.0: return 6
-		if speed <= 6.0: return 12
-		if speed <= 12.0: return 20
-		if speed <= 26.0: return 32
-		if speed <= 50.0: return 48
-		return 64
-	if speed <= 1.0: return 2
-	if speed <= 3.0: return 10
-	if speed <= 6.0: return 20
-	if speed <= 12.0: return 32
-	if speed <= 26.0: return 48
-	if speed <= 50.0: return 72
-	return 96
-
 ## LOD tick counter for staggering pawn processing at high speeds
 var _lod_tick_counter: int = 0
 
@@ -115,26 +101,16 @@ func _process(delta: float) -> void:
 	if _is_paused:
 		ticks_processed_last_frame = 0
 		tickables_called_last_frame = 0
-		dropped_ticks_last_frame = 0
 		return
 	if delta <= 0.0 or _speed_multiplier <= 0.0:
 		_last_frame_ticks = 0
 		ticks_processed_last_frame = 0
 		tickables_called_last_frame = 0
-		dropped_ticks_last_frame = 0
 		return
 
-	# Accumulate scaled time; cap backlog to prevent catch-up storms.
+	# Accumulate scaled time. NEVER cap or drop — causality depends on exact tick order.
+	# If the CPU cannot keep up, excess backlog persists to the next frame.
 	_accumulated_time += delta * _speed_multiplier
-	dropped_ticks_last_frame = 0
-	var accumulated_tick_cap: int = _accumulated_tick_cap_for_speed(_speed_multiplier)
-	if _is_frame_stressed():
-		accumulated_tick_cap = maxi(1, int(floor(float(accumulated_tick_cap) * 0.5)))
-	var max_accumulated_time: float = float(accumulated_tick_cap) * TICK_STEP
-	if _accumulated_time > max_accumulated_time:
-		var dropped_ticks: int = int(floor((_accumulated_time - max_accumulated_time) / TICK_STEP))
-		dropped_ticks_last_frame = maxi(0, dropped_ticks)
-		_accumulated_time = max_accumulated_time
 
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
@@ -155,6 +131,9 @@ func _process(delta: float) -> void:
 	tickables_called_last_frame = tickables_this_frame
 	max_ticks_processed_seen = maxi(max_ticks_processed_seen, ticks_this_frame)
 	debug_last_tick_batch_usec = Time.get_ticks_usec() - start_time
+
+	# Track how many ticks remain in backlog (for diagnostics only — never dropped).
+	pending_backlog_ticks = int(floor(_accumulated_time / TICK_STEP))
 
 
 func _dispatch_tick(tick: int) -> int:

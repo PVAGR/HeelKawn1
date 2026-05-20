@@ -325,8 +325,14 @@ func mark_settlement_build_kind_posted(center_region: int, build_kind: String) -
 
 
 ## Ambition-tier optional buildings (workshop, library, …) wait out contentment streaks.
+## Also suspended when food pressure exceeds 0.15 (mild shortage) — pawns focus on
+## survival before comfort. Non-essential construction returns once food is stable.
 func should_block_ambition_tier_build() -> bool:
-	return colony_contentment_period()
+	if colony_contentment_period():
+		return true
+	if _food_press > 0.15:
+		return true
+	return false
 
 
 ## Leaders with high drive may post ambition-tier builds before the contentment streak completes.

@@ -51,6 +51,12 @@ var cancelled_count: int = 0
 ## Cancellation reason tracking (diagnostic). reason_string -> count.
 var _cancel_reasons: Dictionary = {}
 
+## Global tile failure cache: tile_key(int) -> {tick: int, reason: String}.
+## Prevents re-posting jobs on tiles that have failed recently (resource depleted,
+## path blocked). Cleared on world reset. Cooldown of FAIL_TILE_COOLDOWN_TICKS.
+const FAIL_TILE_COOLDOWN_TICKS: int = 600
+var _failed_tiles: Dictionary = {}
+
 const MAX_OPEN_JOBS_DEFAULT: int = 256
 const MAX_OPEN_JOBS_LIGHTWEIGHT: int = 96
 ## Global cap on open CHOP jobs (harvest spam control).
@@ -83,9 +89,16 @@ func get_active_jobs_union() -> Array[Job]:
 func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) -> Job:
 	if _jobs_by_tile.has(tile):
 		return null
+	# Skip posting on tiles that have recently failed for resource jobs.
+	if is_tile_on_fail_cooldown(tile):
+		return null
 	var chop_cap: int = MAX_OPEN_CHOP_JOBS
 	if ColonySimServices != null:
 		chop_cap = ColonySimServices.get_open_chop_job_cap()
+		# During severe food crisis, prevent non-essential chop jobs from being posted.
+		# Pawns should focus on foraging/hunting instead of wood gathering.
+		if ColonySimServices.get_food_pressure() >= 0.85:
+			chop_cap = mini(chop_cap, 3)
 	if type == Job.Type.CHOP and count_open_by_type(Job.Type.CHOP) >= chop_cap:
 		return null
 	var max_jobs: int = _max_open_jobs_allowed()
@@ -596,6 +609,7 @@ func clear_all() -> void:
 	_open.clear()
 	_claimed.clear()
 	_jobs_by_tile.clear()
+	_failed_tiles.clear()
 	_bump_jobs_data_generation()
 	for j in all:
 		_notify_path_reservation_released(j)
@@ -758,6 +772,35 @@ func count_pending_by_type(job_type: int) -> int:
 ## Useful for planners that need many type lookups in one pass.
 func get_pending_counts() -> Dictionary:
 	return _get_pending_counts_by_type().duplicate()
+
+
+## Record a tile as failed for a job reason. Other systems (pawn abandons,
+## resource depletion, path failures) call this so JobManager avoids
+## re-posting on known-bad tiles for FAIL_TILE_COOLDOWN_TICKS.
+func record_failed_tile(tile: Vector2i, reason: String) -> void:
+	if tile.x < 0 or tile.y < 0:
+		return
+	var key: int = tile.y * 65536 + tile.x
+	_failed_tiles[key] = {
+		"tick": GameManager.tick_count if GameManager != null else 0,
+		"reason": reason,
+	}
+
+
+## True if a tile was recently recorded as failed and is still on cooldown.
+func is_tile_on_fail_cooldown(tile: Vector2i) -> bool:
+	if tile.x < 0 or tile.y < 0:
+		return false
+	var key: int = tile.y * 65536 + tile.x
+	if not _failed_tiles.has(key):
+		return false
+	var rec: Dictionary = _failed_tiles[key] as Dictionary
+	var fail_tick: int = int(rec.get("tick", 0))
+	var now: int = GameManager.tick_count if GameManager != None else 0
+	if now - fail_tick >= FAIL_TILE_COOLDOWN_TICKS:
+		_failed_tiles.erase(key)
+		return false
+	return true
 
 
 ## True if there is already a job (open or claimed) at this tile. Used by

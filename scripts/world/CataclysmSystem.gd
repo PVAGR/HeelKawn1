@@ -220,8 +220,10 @@ func _apply_plague_effects(regions: Array[Vector2i], severity: int) -> void:
 					tile = pawn.data.tile_pos
 			
 			if regions.has(tile):
-				# Chance of infection based on severity
-				if randf() * 100.0 < severity * 2.0:
+				# Deterministic chance of infection based on severity and pawn_id
+				var pawn_id: int = int(pawn.data.id) if pawn.data != null else 0
+				var hash_val: int = absi(str(pawn_id).hash() ^ str(GameManager.tick_count).hash())
+				if (hash_val % 1000) < int(severity * 2.0 * 10.0):  # severity * 2.0 is percentage
 					casualties += 1
 					# Apply disease to pawn
 					if DiseaseSystem != null:

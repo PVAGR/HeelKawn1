@@ -81,13 +81,14 @@ class CharacterBrain:
 			return "SEEK_SHELTER"
 		
 		# Sociability modulates solo vs. group work.
-		if nearby_friends > 0 and randf() < traits.sociability:
+		var pawn_id: int = int(character_ref.data.id) if character_ref.data != null else 0
+		if nearby_friends > 0 and WorldRNG.chance_for(&"character_brain_sociability", traits.sociability, pawn_id):
 			state.current_goal = "SOCIAL_WORK"
 			state.goal_urgency = 0.3
 			return "ASSIST_NEARBY"
 		
 		# Build ambition: when resources allow, prefer construction.
-		if local_resources < 0.8 and randf() < traits.build_ambition:
+		if local_resources < 0.8 and WorldRNG.chance_for(&"character_brain_build", traits.build_ambition, pawn_id + 1):
 			state.current_goal = "BUILD"
 			state.goal_urgency = 0.5
 			return "BUILD"

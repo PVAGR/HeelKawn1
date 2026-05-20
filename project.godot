@@ -152,7 +152,8 @@ FactionManager="*res://autoloads/FactionManager.gd"
 FoodChainManager="*res://autoloads/FoodChainManager.gd"
 TickRateDecoupler="*res://autoloads/TickRateDecoupler.gd"
 CharacterBrainSystem="*res://autoloads/CharacterBrainSystem.gd"
-
+ArtifactSystem="*res://autoloads/ArtifactSystem.gd"
+ 
 [display]
 
 window/size/viewport_width=1400

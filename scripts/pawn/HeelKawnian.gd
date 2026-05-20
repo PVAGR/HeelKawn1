@@ -5036,8 +5036,8 @@ func _short_horizon_bias_for_job(job: Job) -> int:
 	if _short_fail_tiles.has(tile_key):
 		var rec: Dictionary = _short_fail_tiles[tile_key]
 		var age: int = now_tick - int(rec.get("tick", now_tick))
-		if age <= 220:
-			return -3
+		if age <= 400:
+			return -5
 		_short_fail_tiles.erase(tile_key)
 	if _short_success_tiles.has(tile_key):
 		var srec: Dictionary = _short_success_tiles[tile_key]
@@ -6007,6 +6007,8 @@ func _begin_direct_gather(item_type: int, qty: int) -> void:
 						if best_dist == d:
 							break
 	if best_tile.x < 0:
+		if JobManager != null and _current_job != null:
+			JobManager.record_failed_tile(_current_job.work_tile, "no_resource_nearby")
 		_unclaim_current_job("no_resource_nearby")
 		return
 	# Walk to the resource tile

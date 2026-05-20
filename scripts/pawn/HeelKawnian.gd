@@ -7262,7 +7262,8 @@ func _deposit_at_stockpile() -> void:
 			_target_zone = null
 			_reset_to_idle()
 			return
-		if not sp.accepts(data.carrying):
+		sp = j_done.trade_to as Stockpile
+		if sp == null or not sp.accepts(data.carrying):
 			_return_trade_cargo_to_source_if_any(j_done)
 			JobManager.cancel(j_done, "trade_rejected")
 			_current_job = null

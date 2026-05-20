@@ -119,25 +119,25 @@ func get_all_stage_snapshots(max_items: int = 12) -> Array[Dictionary]:
 
 
 func score_to_stage(score: int) -> int:
-	if score < 10:
+	if score < 15:
 		return STAGE_PRIMITIVE
-	if score < 20:
-		return STAGE_NEOLITHIC
 	if score < 30:
-		return STAGE_BRONZE_AGE
-	if score < 40:
-		return STAGE_IRON_AGE
+		return STAGE_NEOLITHIC
 	if score < 50:
-		return STAGE_MEDIEVAL
-	if score < 60:
-		return STAGE_RENAISSANCE
+		return STAGE_BRONZE_AGE
 	if score < 70:
-		return STAGE_INDUSTRIAL
+		return STAGE_IRON_AGE
 	if score < 80:
-		return STAGE_MODERN
+		return STAGE_MEDIEVAL
+	if score < 85:
+		return STAGE_RENAISSANCE
 	if score < 90:
+		return STAGE_INDUSTRIAL
+	if score < 93:
+		return STAGE_MODERN
+	if score < 96:
 		return STAGE_INFORMATION
-	if score < 100:
+	if score < 99:
 		return STAGE_SPACE_AGE
 	return STAGE_POST_SCARCITY
 

@@ -19,6 +19,21 @@ func _init(_id: String = "", _origin_seed: int = 0) -> void:
     age = 0
     last_profile = {}
     development_history = []
+    _seed_initial_traits(_origin_seed)
+
+
+func _seed_initial_traits(seed: int) -> void:
+    if seed == 0:
+        return
+    var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+    rng.seed = seed + id.hash()
+    traits["curiosity"] = rng.randf_range(0.1, 0.5)
+    traits["knowledge_drive"] = rng.randf_range(0.1, 0.5)
+    traits["preservation_drive"] = rng.randf_range(0.05, 0.4)
+    traits["labor_pride"] = rng.randf_range(0.1, 0.5)
+    traits["caution"] = rng.randf_range(0.1, 0.5)
+    traits["mentor_drive"] = rng.randf_range(0.05, 0.4)
+    traits["social_memory"] = rng.randf_range(0.1, 0.5)
 
 func evolve(event: Dictionary) -> void:
     var event_type: String = str(event.get("type", event.get("event_type", "unknown")))

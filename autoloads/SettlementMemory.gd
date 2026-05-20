@@ -54,9 +54,9 @@ const SPECIALIZATION_EXIT_THRESHOLD: float = 0.22
 const SPECIALIZATION_MIN_MARGIN: float = 0.12
 const SPECIALIZATION_ENTER_STABILITY_TICKS: int = 2000
 const SPECIALIZATION_EXIT_STABILITY_TICKS: int = 2500
-const MIN_GUILD_SIZE_FOR_SETTLEMENT: int = 6
+const MIN_GUILD_SIZE_FOR_SETTLEMENT: int = 3
 const GUILD_CLUSTER_RADIUS_TILES: int = 48
-const GUILD_STABILITY_TICKS: int = 600
+const GUILD_STABILITY_TICKS: int = 300
 ## After guild stability, allow formal founding without a hearth briefly (proto camp bootstrap).
 const FORMAL_WARMTH_GRACE_TICKS: int = 600
 ## Map polity: population delta before a territorial-growth chronicle fires.

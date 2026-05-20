@@ -1,4 +1,5 @@
 extends Node
+class_name SacredMemory
 ## v1: Sacred sites (permanent ruin centers, future battlefields) — small dict; saved with colony.
 ## Keys are string "x_y" for stable [store_var] round-trip. No per-tick loops.
 

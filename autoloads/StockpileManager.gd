@@ -1,4 +1,5 @@
 extends Node
+class_name StockpileManager
 
 ## Global registry of every stockpile zone currently placed on the world.
 ## Pawns ask this manager "where should I drop this berry?" or "where's the

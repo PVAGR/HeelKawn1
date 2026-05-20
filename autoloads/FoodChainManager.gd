@@ -1,5 +1,4 @@
 extends Node
-class_name FoodChainManager
 
 ## FoodChainManager — manages food spoilage, cooking, preservation, and famine.
 ##

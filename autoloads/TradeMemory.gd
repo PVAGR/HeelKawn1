@@ -11,6 +11,7 @@ extends Node
 const TIER_NONE: int = 0
 const TIER_ROUTE_1: int = 1
 const TIER_ROUTE_2: int = 2
+class_name TradeMemory
 
 # Trade route roles
 const ROLE_NONE: String = ""

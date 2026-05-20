@@ -1,4 +1,5 @@
 extends Node
+class_name RoadMemory
 ## Roads & Path Memory v1: traversal from pawn steps only; not saved; no RNG.
 ## Stacked with [PathFinder] historic weights (roads ease travel slightly).
 

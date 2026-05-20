@@ -22,6 +22,16 @@ var _birth: PackedInt32Array = PackedInt32Array()
 var _remnant_regions: Dictionary = {}  # Cache: region_key → true for regions with remnant tiles
 
 
+static func _get_instance() -> RemnantMemory:
+	var main_loop: MainLoop = Engine.get_main_loop()
+	if main_loop is SceneTree:
+		var tree: SceneTree = main_loop as SceneTree
+		var inst_v: Variant = tree.get_root().get_node_or_null("RemnantMemory")
+		if inst_v is RemnantMemory:
+			return inst_v as RemnantMemory
+	return null
+
+
 func _ready() -> void:
 	_ensure_birth_size()
 
@@ -67,7 +77,7 @@ func seed_births_from_current_world(w: World) -> void:
 
 ## On Age transition, everything still un-dated (world gen carry-over) becomes [ended_age] (one era old next tick).
 static func on_age_ended(ended_age: int, w: World) -> void:
-	var inst: RemnantMemory = Engine.get_singleton("RemnantMemory") as RemnantMemory
+	var inst: RemnantMemory = _get_instance()
 	if inst == null:
 		return
 	inst._on_age_ended_impl(ended_age, w)
@@ -90,7 +100,7 @@ func _on_age_ended_impl(ended_age: int, w: World) -> void:
 
 ## First time a feature becomes a tracked structure.
 static func on_feature_set(w: World, x: int, y: int, new_feature: int) -> void:
-	var inst: RemnantMemory = Engine.get_singleton("RemnantMemory") as RemnantMemory
+	var inst: RemnantMemory = _get_instance()
 	if inst == null:
 		return
 	inst._on_feature_set_impl(w, x, y, new_feature)

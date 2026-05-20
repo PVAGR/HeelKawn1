@@ -16,9 +16,6 @@ const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base)
 
 ## Hard safety cap.
 const MAX_TICKS_PER_FRAME: int = 48
-## Hard wall-time budget for sim dispatch within one rendered frame.
-const TICK_BUDGET_MS: int = 14
-const TICK_BUDGET_USEC: int = TICK_BUDGET_MS * 1000
 
 ## How often (in ticks) to force-rebuild the tickable cache.
 const TICKABLE_CACHE_REBUILD_INTERVAL: int = 300
@@ -129,7 +126,7 @@ func _process(delta: float) -> void:
 		current_tick += 1
 		ticks_this_frame += 1
 		tickables_this_frame += _dispatch_tick(current_tick)
-		if Time.get_ticks_usec() - start_time >= TICK_BUDGET_USEC:
+		if TickBudgetManager != null and TickBudgetManager.should_yield(start_time):
 			frame_budget_hit = true
 			break
 
@@ -138,8 +135,11 @@ func _process(delta: float) -> void:
 	tickables_called_last_frame = tickables_this_frame
 	max_ticks_processed_seen = maxi(max_ticks_processed_seen, ticks_this_frame)
 	debug_last_tick_batch_usec = Time.get_ticks_usec() - start_time
-	if frame_budget_hit and GameManager != null and GameManager.verbose_logs():
-		print("[SIM_BUDGET] stopped tick dispatch after %dus; backlog continues next frame" % debug_last_tick_batch_usec)
+	if frame_budget_hit and GameManager != null and GameManager.verbose_logs() and TickBudgetManager != null:
+		TickBudgetManager.log_throttled(
+			"TickManager.frame_budget",
+			"[SIM_BUDGET] stopped tick dispatch after %dus; backlog continues next frame" % debug_last_tick_batch_usec
+		)
 
 	# Track how many ticks remain in backlog (for diagnostics only — never dropped).
 	pending_backlog_ticks = int(floor(_accumulated_time / TICK_STEP))

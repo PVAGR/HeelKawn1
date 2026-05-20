@@ -2183,7 +2183,10 @@ func _living_pawns() -> Array[HeelKawnian]:
     var t: int = GameManager.tick_count if GameManager != null else 0
     if t == _living_pawns_cache_tick:
         return _living_pawns_cache
-    _living_pawns_cache = PawnAccess.find_pawns()
+    var fresh_pawns: Array = PawnAccess.find_pawns()
+    _living_pawns_cache.clear()
+    for p in fresh_pawns:
+        _living_pawns_cache.append(p)
     _living_pawns_cache_tick = t
     # Build region→pawns index in the same pass
     _pawns_by_region_cache.clear()

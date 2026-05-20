@@ -18,6 +18,16 @@ var _road_regions: Dictionary = {}  # Cache: region_key → true for regions wit
 var debug_disable_visuals: bool = false
 
 
+static func _get_instance() -> RoadMemory:
+	var main_loop: MainLoop = Engine.get_main_loop()
+	if main_loop is SceneTree:
+		var tree: SceneTree = main_loop as SceneTree
+		var inst_v: Variant = tree.get_root().get_node_or_null("RoadMemory")
+		if inst_v is RoadMemory:
+			return inst_v as RoadMemory
+	return null
+
+
 func _ready() -> void:
 	if not _ready_connected:
 		_ready_connected = true
@@ -41,7 +51,7 @@ func _ensure_size() -> void:
 
 ## Movement A → B: count step onto B (read-only rule).
 static func record_step(from_tile: Vector2i, to_tile: Vector2i, world: World) -> void:
-	var inst: RoadMemory = Engine.get_singleton("RoadMemory") as RoadMemory
+	var inst: RoadMemory = _get_instance()
 	if inst == null:
 		return
 	inst._record_step_impl(from_tile, to_tile, world)
@@ -94,7 +104,7 @@ func _path_mul_from_count(t: int) -> float:
 
 
 static func get_traversal(x: int, y: int) -> int:
-	var inst: RoadMemory = Engine.get_singleton("RoadMemory") as RoadMemory
+	var inst: RoadMemory = _get_instance()
 	if inst == null:
 		return 0
 	return inst._get_traversal_impl(x, y)
@@ -110,7 +120,7 @@ func _get_traversal_impl(x: int, y: int) -> int:
 
 ## Multiplier to movement cost: lower = easier. Never below scar handling (PathFinder order).
 static func get_path_weight_mul(x: int, y: int) -> float:
-	var inst: RoadMemory = Engine.get_singleton("RoadMemory") as RoadMemory
+	var inst: RoadMemory = _get_instance()
 	if inst == null:
 		return 1.0
 	return inst._get_path_weight_mul_impl(x, y)

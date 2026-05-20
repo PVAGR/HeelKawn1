@@ -13,6 +13,16 @@ var _region_myth: Dictionary = {}
 var _rebirth_count_by_center: Dictionary = {}
 
 
+static func _get_instance() -> MythMemory:
+	var main_loop: MainLoop = Engine.get_main_loop()
+	if main_loop is SceneTree:
+		var tree: SceneTree = main_loop as SceneTree
+		var inst_v: Variant = tree.get_root().get_node_or_null("MythMemory")
+		if inst_v is MythMemory:
+			return inst_v as MythMemory
+	return null
+
+
 func clear() -> void:
 	_region_myth.clear()
 	_rebirth_count_by_center.clear()
@@ -42,7 +52,7 @@ func get_rebirth_success_count_for_center(center_rk: int) -> int:
 
 ## Call when Settlement Rebirth spawns a pawn in a revivable cluster (session fact for -1 score).
 static func register_rebirth_success(center_rk: int) -> void:
-	var inst: MythMemory = Engine.get_singleton("MythMemory") as MythMemory
+	var inst: MythMemory = _get_instance()
 	if inst == null:
 		return
 	if center_rk < 0:
@@ -53,7 +63,7 @@ static func register_rebirth_success(center_rk: int) -> void:
 
 ## -1 = revered, 0 = neutral, +1 = feared
 static func get_region_myth_state(region_key: int) -> int:
-	var inst: MythMemory = Engine.get_singleton("MythMemory") as MythMemory
+	var inst: MythMemory = _get_instance()
 	if inst == null:
 		return 0
 	if inst._region_myth.has(region_key):

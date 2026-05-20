@@ -131,27 +131,32 @@ func sim_diag() -> Dictionary:
 func _maybe_log_sim_hitch(ticks_this_frame: int, frame_tick_cap: int, tick_chain_usecs: int) -> void:
 	if not OS.is_debug_build():
 		return
+	if TickBudgetManager == null:
+		return
 	var now_ms: int = Time.get_ticks_msec()
 	var slow_ms: float = tick_chain_usecs / 1000.0
 	if slow_ms >= 25.0:
 		if now_ms - _last_slow_tick_log_msec < 3000:
 			return
 		_last_slow_tick_log_msec = now_ms
-		print(
-				"[SIM_HITCH] %.1f ms inside game_tick this frame | ticks=%d at %.0fx (cap %d/tick) | cause: slow listeners (pawn AI, Main, jobs, memory…)"
-				% [slow_ms, ticks_this_frame, game_speed, frame_tick_cap]
+		TickBudgetManager.log_throttled(
+			"GameManager.sim_hitch.slow",
+			"[SIM_HITCH] %.1f ms inside game_tick this frame | ticks=%d at %.0fx (cap %d/tick) | cause: slow listeners (pawn AI, Main, jobs, memory…)"
+			% [slow_ms, ticks_this_frame, game_speed, frame_tick_cap]
 		)
-		print(
-				"[SIM_HITCH] tip: F10 → ERROR report; reduce speed; check sim_diag.last_frame_game_tick_ms & queued_ticks_est."
+		TickBudgetManager.log_throttled(
+			"GameManager.sim_hitch.tip",
+			"[SIM_HITCH] tip: F10 → ERROR report; reduce speed; check sim_diag.last_frame_game_tick_ms & queued_ticks_est."
 		)
 		return
 	if last_frame_tick_cap_backlog:
 		if now_ms - _last_catchup_hint_log_msec < 10000:
 			return
 		_last_catchup_hint_log_msec = now_ms
-		print(
-				"[SIM_CATCHUP] max %d sim ticks this frame at %.0fx; ~%.1f ticks still queued (spread across frames — not a single frozen tick)."
-				% [frame_tick_cap, game_speed, _tick_accumulator / TICK_INTERVAL_SECONDS]
+		TickBudgetManager.log_throttled(
+			"GameManager.sim_hitch.catchup",
+			"[SIM_CATCHUP] max %d sim ticks this frame at %.0fx; ~%.1f ticks still queued (spread across frames — not a single frozen tick)."
+			% [frame_tick_cap, game_speed, _tick_accumulator / TICK_INTERVAL_SECONDS]
 		)
 
 

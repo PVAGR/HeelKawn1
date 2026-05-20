@@ -23,6 +23,7 @@ config/features=PackedStringArray("4.6", "GL Compatibility")
 
 PawnAccess="*res://autoloads/PawnAccess.gd"
 TickManager="*res://autoloads/TickManager.gd"
+TickBudgetManager="*res://autoloads/TickBudgetManager.gd"
 KinshipSystem="*res://autoloads/KinshipSystem.gd"
 CrashTrap="*res://autoloads/CrashTrap.gd"
 GameManager="*res://autoloads/GameManager.gd"

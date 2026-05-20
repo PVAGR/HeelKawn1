@@ -106,15 +106,18 @@ func apply_injury(pawn: Node, injury_type: int, severity: float, source: String 
 			"tile": {"x": pd.tile_pos.x, "y": pd.tile_pos.y},
 		})
 	
-	if GameManager.verbose_logs():
-		print("[BodyRisk] %s suffered %s (severity=%.0f, source=%s)" % [
-			pd.display_name, type_name, new_severity, source
-		])
+	if GameManager.verbose_logs() and TickBudgetManager != null:
+		TickBudgetManager.log_throttled(
+			"BodyRisk.suffered",
+			"[BodyRisk] %s suffered %s (severity=%.0f, source=%s)" % [
+				pd.display_name, type_name, new_severity, source
+			]
+		)
 
 
 ## Tick all pawn injuries: recover, check for complications.
 func _tick_pawn_injuries() -> void:
-	var pawns: Array[HeelKawnian] = PawnAccess.find_pawns()
+	var pawns: Array = PawnAccess.find_pawns()
 	for p in pawns:
 		_tick_pawn_injury_recovery(p)
 
@@ -152,8 +155,11 @@ func _tick_pawn_injury_recovery(pawn: Node) -> void:
 		
 		if new_severity <= 0.0:
 			pd.injuries.erase(injury_name)
-			if GameManager.verbose_logs():
-				print("[BodyRisk] %s recovered from %s" % [pd.display_name, injury_name])
+			if GameManager.verbose_logs() and TickBudgetManager != null:
+				TickBudgetManager.log_throttled(
+					"BodyRisk.recovered",
+					"[BodyRisk] %s recovered from %s" % [pd.display_name, injury_name]
+				)
 			recovered_any = true
 	
 	if recovered_any or not pd.injuries.is_empty():

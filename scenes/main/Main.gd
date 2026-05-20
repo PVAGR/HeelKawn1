@@ -2800,8 +2800,6 @@ const MAIN_FAST_MAINT_INTERVAL_TICKS: int = 10
 const MAIN_MEDIUM_MAINT_INTERVAL_TICKS: int = 30
 const MAIN_SLOW_MAINT_INTERVAL_TICKS: int = 120
 const MAIN_DAILY_MAINT_INTERVAL_TICKS: int = 600
-## Hard wall-time budget for a single simulation tick's main-thread work.
-const TICK_BUDGET_USEC: int = 14_000
 
 
 func _is_main_lane_tick(tick: int, interval: int, salt: int = 0) -> bool:
@@ -2811,7 +2809,9 @@ func _is_main_lane_tick(tick: int, interval: int, salt: int = 0) -> bool:
 
 
 func _tick_budget_exceeded(start_usec: int) -> bool:
-	return Time.get_ticks_usec() - start_usec >= TICK_BUDGET_USEC
+	if TickBudgetManager == null:
+		return false
+	return TickBudgetManager.should_yield(start_usec)
 
 func _on_game_tick(tick: int) -> void:
 	if CrashTrap.trace_enabled and tick == 1:
@@ -3278,10 +3278,17 @@ func _maybe_log_tick_hotspots(tick: int, section_us: Dictionary) -> void:
 		shown += 1
 		if shown >= 4:
 			break
-	print(
+	if TickBudgetManager != null:
+		TickBudgetManager.log_throttled(
+			"Main.tick_hotspot",
+			"[MAIN_TICK_HOTSPOT] tick=%d speed=%.0fx total=%.2fms top=%s"
+			% [tick, GameManager.game_speed, total_ms, ", ".join(parts)]
+		)
+	else:
+		print(
             "[MAIN_TICK_HOTSPOT] tick=%d speed=%.0fx total=%.2fms top=%s"
 			% [tick, GameManager.game_speed, total_ms, ", ".join(parts)]
-	)
+		)
 
 
 func _inspect_scan_interval_for_speed() -> int:

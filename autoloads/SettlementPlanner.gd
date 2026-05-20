@@ -50,6 +50,8 @@ static var _plan_start_usec: int = 0
 static func _budget_exceeded() -> bool:
 	if _plan_budget_usec <= 0:
 		return false
+	if TickBudgetManager != null:
+		return TickBudgetManager.should_yield(_plan_start_usec)
 	return Time.get_ticks_usec() - _plan_start_usec >= _plan_budget_usec
 
 
@@ -135,6 +137,8 @@ static func _planner_pass_settlement_limit() -> int:
 static func _planner_pass_budget_usec() -> int:
 	# Keep a single planner pass under a few milliseconds so the main loop can
 	# keep moving even when many settlements are active.
+	if TickBudgetManager != null:
+		return maxi(1_000, int(TickBudgetManager.get_tick_budget_usec() / 3))
 	return 4_000
 
 

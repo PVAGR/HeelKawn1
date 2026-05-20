@@ -99,7 +99,7 @@ func _on_game_tick(tick: int) -> void:
 	if tick % interval != 0:
 		return
 	# Process survival for all pawns.
-	var pawns: Array[HeelKawnian] = PawnAccess.find_alive_pawns()
+	var pawns: Array = PawnAccess.find_alive_pawns()
 	if pawns.is_empty():
 		return
 

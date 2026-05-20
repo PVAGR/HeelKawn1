@@ -7021,15 +7021,37 @@ func _seed_construction_jobs() -> void:
 	if tick - _last_construction_seed_tick < interval:
 		return
 	_last_construction_seed_tick = tick
-	# AGGRESSIVE OPTIMIZATION: Reduce budget at high speeds to prevent frame hitching
+	# AGGRESSIVE OPTIMIZATION: Ultra-tight budget at high speeds
 	var gs: float = GameManager.game_speed if GameManager != null else 1.0
-	var budget_usec: int = 14_000 if gs < 50.0 else (8_000 if gs < 100.0 else 5_000)
+	var budget_usec: int = 8_000 if gs < 50.0 else (4_000 if gs < 100.0 else 2_000)
 	var start_usec: int = Time.get_ticks_usec()
-	var pending_counts: Dictionary = JobManager.get_pending_counts() if JobManager != null and JobManager.has_method("get_pending_counts") else {}
-	# Cache active jobs union once — avoids re-scanning all jobs per _count_pending_jobs_near call
-	var _cached_active_jobs: Array = JobManager.get_active_jobs_union() if JobManager != null and JobManager.has_method("get_active_jobs_union") else []
+	
+	# EARLY EXIT: Check if we have minimum resources before doing expensive scans
 	var stock_wood: int = StockpileManager.total_count_of(Item.Type.WOOD) if StockpileManager != null else 0
 	var stock_stone: int = StockpileManager.total_count_of(Item.Type.STONE) if StockpileManager != null else 0
+	if stock_wood <= 1 and stock_stone <= 0:
+		return  # Can't build anything without materials
+	
+	var settlements: Array = SettlementMemory.get_formal_settlements()
+	if settlements.is_empty():
+		settlements = SettlementMemory.get_proto_sites()
+		if settlements.is_empty():
+			_seed_bootstrap_jobs_near_pawn_cluster()
+			return
+	
+	# EARLY EXIT: Skip if all settlements are abandoned
+	var has_active_settlement: bool = false
+	for s in settlements:
+		if s is Dictionary:
+			var state: String = str(s.get("state", ""))
+			if state != "abandoned" and state != "permanently_abandoned":
+				has_active_settlement = true
+				break
+	if not has_active_settlement:
+		return
+	
+	var pending_counts: Dictionary = JobManager.get_pending_counts() if JobManager != null and JobManager.has_method("get_pending_counts") else {}
+	var _cached_active_jobs: Array = JobManager.get_active_jobs_union() if JobManager != null and JobManager.has_method("get_active_jobs_union") else []
 	var materials_crisis: bool = stock_wood <= 2 or stock_stone <= 2
 	var food_crit: bool = ColonySimServices != null and ColonySimServices.get_food_pressure() >= 0.85
 	if food_crit:
@@ -7038,17 +7060,10 @@ func _seed_construction_jobs() -> void:
 		ColonySimServices.begin_settlement_construction_pass()
 
 	var posted: int = 0
-	var settlements: Array = SettlementMemory.get_formal_settlements()
 	var seeding_proto: bool = false
-	if settlements.is_empty():
-		# Proto-site clusters still need hearths/stockpiles — run the per-settlement
-		# scheduler against proto camps, not only a single pawn centroid.
-		settlements = SettlementMemory.get_proto_sites()
-		seeding_proto = not settlements.is_empty()
-		if settlements.is_empty():
-			_seed_bootstrap_jobs_near_pawn_cluster()
-			return
-	var max_settlements_this_pass: int = 1 if GameManager.game_speed >= 100.0 else (2 if GameManager.game_speed >= 50.0 else 4)
+	if settlements[0] is Dictionary and str(settlements[0].get("state", "")) == "":
+		seeding_proto = true
+	var max_settlements_this_pass: int = 1 if GameManager.game_speed >= 100.0 else (2 if GameManager.game_speed >= 50.0 else 3)
 	var settlements_seen: int = 0
 	var start_idx: int = _construction_seed_cursor % settlements.size()
 	for step in range(settlements.size()):
@@ -7066,24 +7081,21 @@ func _seed_construction_jobs() -> void:
 		var center_rk: int = int(sd.get("center_region", -1))
 		if center_rk < 0:
 			continue
-		# Convert region key to center tile
 		var crx: int = center_rk & 0xFFFF
 		var cry: int = (center_rk >> 16) & 0xFFFF
 		var center_tile: Vector2i = Vector2i(crx * 16 + 8, cry * 16 + 8)
-		# Use settlement-maintained population value to avoid O(settlements * pawns) scans every seed pass.
 		var local_pop: int = int(sd.get("population", 0))
 		if local_pop < 1:
 			continue
 		settlements_seen += 1
-		# Quick check: if this settlement already has many pending jobs, skip the expensive scan
+		
+		# EARLY EXIT: Skip expensive scan if settlement already has enough pending builds
 		var nearby_pending_builds: int = _count_pending_build_jobs_near(center_tile, 10, _cached_active_jobs)
-		var cold_uncovered_site: int = ColonySimServices.count_cold_uncovered_pawns(center_rk) \
-				if ColonySimServices != null else 0
-		var site_warmth_press: float = ColonySimServices.get_warmth_pressure(center_rk) if ColonySimServices != null else 0.0
-		if nearby_pending_builds >= 4 and cold_uncovered_site <= 0 and site_warmth_press < 0.35:
+		if nearby_pending_builds >= 6:
 			continue
-		# Scan local features (beds, walls, hearths, etc.) — reduce radius at 100x+ for speed
-		var scan_radius: int = 8 if GameManager.game_speed >= 100.0 else 12
+		
+		# OPTIMIZATION: Reduce scan radius at high speeds
+		var scan_radius: int = 6 if GameManager.game_speed >= 100.0 else (8 if GameManager.game_speed >= 50.0 else 12)
 		var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, scan_radius)
 		var build_priorities: Dictionary = {}
 		if ColonySimServices != null:
@@ -7094,7 +7106,6 @@ func _seed_construction_jobs() -> void:
 		var doors: int = int(features.get("door", 0))
 		var hearths: int = int(features.get("hearth", 0))
 		var storage_huts: int = int(features.get("storage_hut", 0))
-		# Phase 6: new building counts
 		var farms: int = int(features.get("farm", 0))
 		var workshops: int = int(features.get("workshop", 0))
 		var granaries: int = int(features.get("granary", 0))
@@ -7103,11 +7114,17 @@ func _seed_construction_jobs() -> void:
 		var markets: int = int(features.get("market", 0))
 		var barracks: int = int(features.get("barracks", 0))
 		var cellars: int = int(features.get("cellar", 0))
-		# Single-pass pending job count dictionary — replaces 8+ separate scans
+		# OPTIMIZATION: Only count pending jobs for critical types at high speeds
 		var pending_by_type: Dictionary = {}
 		if JobManager != null and JobManager.has_method("count_pending_jobs_near"):
-			for jt in [Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_APOTHECARY, Job.Type.BUILD_MARKET, Job.Type.BUILD_LIBRARY, Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, Job.Type.BUILD_SCHOOL, Job.Type.BUILD_TRADING_POST, Job.Type.BUILD_ROAD, Job.Type.BUILD_CELLAR, Job.Type.TRADE_HAUL, Job.Type.TEACH_SKILL, Job.Type.MAINTAIN_STRUCTURE]:
-				pending_by_type[jt] = JobManager.count_pending_jobs_near(center_tile, jt, 12)
+			if gs >= 50.0:
+				# High speed: only count essential job types
+				for jt in [Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT]:
+					pending_by_type[jt] = JobManager.count_pending_jobs_near(center_tile, jt, 10)
+			else:
+				# Normal speed: full scan
+				for jt in [Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_APOTHECARY, Job.Type.BUILD_MARKET, Job.Type.BUILD_LIBRARY, Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, Job.Type.BUILD_SCHOOL, Job.Type.BUILD_TRADING_POST, Job.Type.BUILD_ROAD, Job.Type.BUILD_CELLAR, Job.Type.TRADE_HAUL, Job.Type.TEACH_SKILL, Job.Type.MAINTAIN_STRUCTURE]:
+					pending_by_type[jt] = JobManager.count_pending_jobs_near(center_tile, jt, 12)
 		# Ensure settlement has a stockpile zone — pawns need a local drop point
 		# Deferred: stockpile creation (add_child) is expensive in rendered mode
 		if not _settlement_has_nearby_stockpile(center_tile):

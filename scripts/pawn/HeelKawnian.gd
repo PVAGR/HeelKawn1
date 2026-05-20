@@ -6762,9 +6762,7 @@ func _create_stockpile_at_tile(tile: Vector2i) -> void:
 		viewport.add_child(sp)
 	if StockpileManager != null:
 		StockpileManager.register(sp)
-	# Consume 5 sticks from inventory (wood already consumed via material cost)
-	if StockpileManager != null:
-		StockpileManager.take_item(_Item.Type.STICK, 5, data.tile_pos)
+	# Material cost for stockpile creation is handled by the job's material requirements.
 	WorldMemory.record_event({
 		"type": "stockpile_created",
 		"pawn_id": int(data.id),

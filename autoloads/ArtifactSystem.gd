@@ -2,8 +2,6 @@ extends Node
 ## Manages persistent physical artifacts (books, maps, tools, heirlooms).
 ## Artifacts are deterministic, saveable, and recorded in WorldMemory.
 
-class_name ArtifactSystem
-
 signal artifact_changed(artifact_id: String, change_type: String)
 
 var _artifacts: Dictionary = {}

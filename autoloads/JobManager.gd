@@ -796,7 +796,7 @@ func is_tile_on_fail_cooldown(tile: Vector2i) -> bool:
 		return false
 	var rec: Dictionary = _failed_tiles[key] as Dictionary
 	var fail_tick: int = int(rec.get("tick", 0))
-	var now: int = GameManager.tick_count if GameManager != None else 0
+	var now: int = GameManager.tick_count if GameManager != null else 0
 	if now - fail_tick >= FAIL_TILE_COOLDOWN_TICKS:
 		_failed_tiles.erase(key)
 		return false

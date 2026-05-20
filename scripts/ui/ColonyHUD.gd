@@ -105,6 +105,9 @@ var _cached_expensive_hud_simple: bool = true
 var _narrative_cache: String = ""
 var _narrative_cache_event_count: int = -1
 
+@onready var GameManager = get_node_or_null("/root/GameManager")
+@onready var StockpileManager = get_node_or_null("/root/StockpileManager")
+
 
 func _ready() -> void:
 	# Pin top-left, leave a small inset.

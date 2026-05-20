@@ -1,4 +1,5 @@
 extends Node
+class_name FragmentationManager
 ## Deterministic out-migration when a large, low-pressure, GROW cluster can shed population.
 ## Settlements stay derived; this moves pawns and logs [WorldMemory] events.
 

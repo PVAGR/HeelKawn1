@@ -1,4 +1,5 @@
 extends Node
+class_name FactionRegistry
 
 ## Houses / proto-factions keyed by settlement **zone_id** (string of center_region int).
 ## v1: Deterministic names from (zone_id + settlement display name); no RNG.

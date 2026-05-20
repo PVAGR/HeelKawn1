@@ -1,4 +1,5 @@
 extends Node
+class_name MythMemory
 ## Myth & Fear v1: long-term emotional weight derived at recompute, not a kernel;
 ## [member _rebirth_count_by_center] is persisted so rebirth history survives load.
 

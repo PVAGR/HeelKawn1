@@ -1,5 +1,4 @@
 extends Node
-class_name ObservationAPI
 ## Observation API — programmatic Focus Inspector / sensory snapshots for agents & tools.
 
 const _WM = preload("res://autoloads/WorldMemory.gd")

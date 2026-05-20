@@ -1,5 +1,4 @@
 extends Node
-class_name TickManager
 ## Central deterministic tick manager. Drives ALL simulation logic via fixed-step
 ## accumulation. Emits `tick_processed` and calls `_on_world_tick()` on all
 ## nodes in the "tickable" group.

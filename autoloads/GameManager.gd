@@ -1,5 +1,4 @@
 extends Node
-class_name GameManager
 
 ## Emitted once per simulation tick. All simulation systems should listen to this
 ## instead of running on _process, so pause/speed affects everything uniformly.

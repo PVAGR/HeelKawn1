@@ -1,5 +1,4 @@
 extends Node
-class_name RemnantMemory
 ## v1: Derived, not saved — "birth" Age per tile for RUIN / WALL / DOOR / T2 trade routes; [tile_age_delta] = current - birth.
 ## Timestamps are not stored; first sighting + Age transitions only.
 

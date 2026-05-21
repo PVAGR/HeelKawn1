@@ -5481,6 +5481,10 @@ func _calculate_work_efficiency() -> float:
 	if data.is_equipped_tool_valid():
 		efficiency *= data.get_tool_efficacy(_current_job.type)
 	
+	# PHASE 2: Tool Enforcement - Penalty for missing required tools
+	if data.has_method("has_tool_required") and not data.has_tool_required(_current_job.type):
+		efficiency *= HeelKawnianData.MISSING_REQUIRED_TOOL_WORK_SPEED_MULT
+	
 	# Job proficiency bonus (0-100 proficiency -> 0.5-2.0 multiplier)
 	var job_type_str: String = Job.describe_type(_current_job.type).to_lower()
 	var proficiency: float = data.job_proficiency.get(job_type_str, 0.0)

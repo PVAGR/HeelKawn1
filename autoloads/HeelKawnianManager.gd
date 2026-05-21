@@ -1443,9 +1443,37 @@ static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, ident
 	_apply_pressure_bias_to_biases(biases, int(data.id))
 	_apply_colony_pressure_biases(biases, data)
 	_apply_light_need_biases(biases, data)
+	_apply_knowledge_preservation_biases(biases, data)
 	_apply_survival_contentment_dampen(biases, data)
 	_clamp_biases(biases, -8, 16)
 	return biases
+
+
+static func _apply_knowledge_preservation_biases(biases: Dictionary, data: HeelKawnianData) -> void:
+	if KnowledgeSystem == null:
+		return
+	
+	var pid: int = int(data.id)
+	var my_knowledge: Array = []
+	if KnowledgeSystem.knowledge_carriers.has(pid):
+		my_knowledge = KnowledgeSystem.knowledge_carriers[pid]
+	
+	if my_knowledge.is_empty():
+		return
+		
+	var sid: int = data.settlement_id
+	var security: Dictionary = KnowledgeSystem.get_knowledge_security_for_settlement(sid)
+	var at_risk: Array = security.get("at_risk", [])
+	
+	for k in my_knowledge:
+		var global_count: int = KnowledgeSystem.get_carrier_count(k)
+		var is_at_risk_locally: bool = k in at_risk
+		
+		# If pawn is a critical carrier (rare globally or at risk in the settlement)
+		if global_count < 5 or is_at_risk_locally:
+			# Strong drive to preserve knowledge (+10 bias)
+			_add_bias(biases, [Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP], 10)
+			break
 
 
 static func _apply_light_need_biases(biases: Dictionary, data: HeelKawnianData) -> void:

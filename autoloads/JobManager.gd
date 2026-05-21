@@ -382,6 +382,20 @@ func claim_next_for(
 		if use_bonus:
 			bonus = int(priority_bonus.call(j))
 		
+		# --- PHASE 1: Interest-Driven Priority ---
+		# Apply bonuses/penalties based on pawn likes/dislikes
+		var job_cat: String = pd.call("job_category_for_type", j.type) if pd.has_method("job_category_for_type") else ""
+		if not job_cat.is_empty():
+			if pd.get("likes") is Array and job_cat in pd.likes:
+				bonus += 5
+			if pd.get("dislikes") is Array and job_cat in pd.dislikes:
+				bonus -= 5
+		
+		# --- PHASE 2: Tool Enforcement ---
+		# Apply a priority penalty if the required tool is missing
+		if pd.has_method("has_required_tool_for_job") and not pd.has_required_tool_for_job(j.type):
+			bonus -= 10
+		
 		# Apply obedience weight to priority (lower obedience = higher priority needed to accept)
 		var adjusted_priority: int = j.priority
 		if obedience_weight < 0.5:

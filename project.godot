@@ -154,6 +154,9 @@ FoodChainManager="*res://autoloads/FoodChainManager.gd"
 TickRateDecoupler="*res://autoloads/TickRateDecoupler.gd"
 CharacterBrainSystem="*res://autoloads/CharacterBrainSystem.gd"
 ArtifactSystem="*res://autoloads/ArtifactSystem.gd"
+WorldEnvironmentManager="*res://autoloads/WorldEnvironmentManager.gd"
+WorldEconomyManager="*res://autoloads/WorldEconomyManager.gd"
+WorldHistoryManager="*res://autoloads/WorldHistoryManager.gd"
 
 [display]
 

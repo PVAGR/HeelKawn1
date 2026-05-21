@@ -508,6 +508,8 @@ func _record_event_legacy(e: Dictionary) -> bool:
 		var event_type: String = str(payload.get("type", "unknown"))
 		EventBus.emit(event_type, payload)
 
+	return true
+
 
 ## PHASE 4: Skill-gated event significance filter
 ## Events are only recorded if they represent meaningful thresholds
@@ -1019,8 +1021,6 @@ func record_pawn_death(
 		print("\n[color=#FFD166][b]━━━ BIOGRAPHY: %s ━━━[/b][/color]" % pawn_name)
 		print(biography)
 		print("[color=#666666]━━━ END BIOGRAPHY ━━━[/color]\n")
-
-	return true
 
 
 func record_animal_death(

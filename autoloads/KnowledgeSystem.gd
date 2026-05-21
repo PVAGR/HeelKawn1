@@ -55,6 +55,9 @@ const RESEARCH_POINT_ACCUM_INTERVAL_TICKS: int = 300
 const RESEARCH_POINT_ACCUM_PHASE_OFFSET_TICKS: int = 61
 const INNOVATION_CHECK_INTERVAL_TICKS: int = 500
 const INNOVATION_CHECK_PHASE_OFFSET: int = 73
+const RECIPE_EVOLUTION_INTERVAL_TICKS: int = 2400
+const RECIPE_EVOLUTION_PHASE_OFFSET: int = 211
+const MAX_EMERGENT_INNOVATION_RECIPES: int = 24
 
 ## Knowledge carriers: pawn_id -> Array[KnowledgeType]
 var knowledge_carriers: Dictionary = {}
@@ -169,6 +172,9 @@ func _on_game_tick(tick: int) -> void:
 			_check_innovation_opportunities()
 	if GameManager.periodic_phase_due(tick, KNOWLEDGE_RECOVERY_INTERVAL_TICKS, KNOWLEDGE_RECOVERY_PHASE_OFFSET):
 		_try_autonomous_knowledge_recovery()
+	if GameManager.periodic_phase_due(tick, RECIPE_EVOLUTION_INTERVAL_TICKS, RECIPE_EVOLUTION_PHASE_OFFSET):
+		if DiscoveryGate == null or DiscoveryGate.is_unlocked("first_knowledge"):
+			_evolve_innovation_recipe_space(tick)
 
 # === Knowledge Carrier Management ===
 
@@ -1696,6 +1702,139 @@ func _get_institution_bonus(pawn_id: int) -> float:
 	if has_knowledge(pawn_id, KnowledgeType.WRITING):
 		bonus += 1.0
 	return bonus
+
+
+func _evolve_innovation_recipe_space(tick: int) -> void:
+	# Emergent recipe synthesis: each simulation can mint different innovation paths.
+	if _count_emergent_recipes() >= MAX_EMERGENT_INNOVATION_RECIPES:
+		return
+	var ranked: Array[Dictionary] = _rank_knowledge_types_by_carriers()
+	if ranked.size() < 2:
+		return
+	var pivot: int = mini(8, ranked.size())
+	var idx_a: int = int((tick / RECIPE_EVOLUTION_INTERVAL_TICKS) % pivot)
+	var idx_b: int = int((idx_a + 1 + int(tick / 97) % maxi(1, pivot - 1)) % pivot)
+	if idx_a == idx_b:
+		idx_b = (idx_b + 1) % pivot
+	var ka: int = int(ranked[idx_a].get("knowledge", -1))
+	var kb: int = int(ranked[idx_b].get("knowledge", -1))
+	if ka < 0 or kb < 0 or ka == kb:
+		return
+	var lo: int = mini(ka, kb)
+	var hi: int = maxi(ka, kb)
+	var key: String = "{%d,%d}" % [lo, hi]
+	var ca: int = int(ranked[idx_a].get("count", 1))
+	var cb: int = int(ranked[idx_b].get("count", 1))
+	if _innovation_recipes.has(key):
+		# Existing recipe becomes stronger as civilization repeatedly practices the pair.
+		var existing: Dictionary = _innovation_recipes[key]
+		var old_chance: float = float(existing.get("base_chance", 0.03))
+		var bump: float = clampf(float(ca + cb) / 220.0, 0.002, 0.02)
+		var new_chance: float = clampf(old_chance + bump, 0.01, 0.35)
+		if new_chance > old_chance + 0.0001:
+			existing["base_chance"] = new_chance
+			_innovation_recipes[key] = existing
+			if WorldMemory != null and WorldMemory.has_method("record_event"):
+				WorldMemory.call("record_event", {
+					"type": "innovation_recipe_refined",
+					"recipe": key,
+					"old_chance": old_chance,
+					"new_chance": new_chance,
+					"tick": tick,
+				})
+		return
+	var result_kt: int = _pick_emergent_recipe_result(ka, kb, tick)
+	if result_kt < 0:
+		return
+	var left: String = _get_knowledge_type_name(lo)
+	var right: String = _get_knowledge_type_name(hi)
+	var recipe_name: String = "Emergent %s + %s Synthesis" % [left, right]
+	var base_chance: float = clampf(0.02 + float(ca + cb) / 260.0, 0.02, 0.18)
+	_innovation_recipes[key] = {
+		"result": result_kt,
+		"name": recipe_name,
+		"base_chance": base_chance,
+		"emergent": true,
+		"created_tick": tick,
+		"pair_counts": {"a": ca, "b": cb},
+	}
+	if WorldMemory != null and WorldMemory.has_method("record_event"):
+		WorldMemory.call("record_event", {
+			"type": "innovation_recipe_emerged",
+			"recipe": key,
+			"name": recipe_name,
+			"result_knowledge": result_kt,
+			"base_chance": base_chance,
+			"tick": tick,
+		})
+
+
+func _rank_knowledge_types_by_carriers() -> Array[Dictionary]:
+	var counts: Dictionary = {}
+	for pid_any in knowledge_carriers.keys():
+		var known: Array = knowledge_carriers.get(pid_any, []) as Array
+		for kt_any in known:
+			var kt: int = int(kt_any)
+			counts[kt] = int(counts.get(kt, 0)) + 1
+	var ranked: Array[Dictionary] = []
+	for kt_any in counts.keys():
+		ranked.append({
+			"knowledge": int(kt_any),
+			"count": int(counts[kt_any]),
+		})
+	ranked.sort_custom(func(a, b):
+		var ac: int = int(a.get("count", 0))
+		var bc: int = int(b.get("count", 0))
+		if ac == bc:
+			return int(a.get("knowledge", 0)) < int(b.get("knowledge", 0))
+		return ac > bc
+	)
+	return ranked
+
+
+func _pick_emergent_recipe_result(ka: int, kb: int, tick: int) -> int:
+	var pool: Array[int] = [
+		KnowledgeType.METALLURGY,
+		KnowledgeType.ANIMAL_HUSBANDRY,
+		KnowledgeType.ARCHITECTURE,
+		KnowledgeType.MEDICINE,
+		KnowledgeType.ASTRONOMY,
+		KnowledgeType.ENGINEERING,
+		KnowledgeType.WRITING,
+		KnowledgeType.PHILOSOPHY,
+	]
+	var filtered: Array[int] = []
+	for kt in pool:
+		var kti: int = int(kt)
+		if kti != ka and kti != kb:
+			filtered.append(kti)
+	if filtered.is_empty():
+		return -1
+	var seed: int = _stable_mix_hash(ka, kb, tick)
+	var idx: int = posmod(seed, filtered.size())
+	return int(filtered[idx])
+
+
+func _count_emergent_recipes() -> int:
+	var n: int = 0
+	for key in _innovation_recipes.keys():
+		var val: Variant = _innovation_recipes.get(key)
+		if not (val is Dictionary):
+			continue
+		if bool((val as Dictionary).get("emergent", false)):
+			n += 1
+	return n
+
+
+func _stable_mix_hash(a: int, b: int, c: int) -> int:
+	var h: int = 2166136261
+	h = (h ^ (a & 0xFF)) * 16777619
+	h = (h ^ ((a >> 8) & 0xFF)) * 16777619
+	h = (h ^ (b & 0xFF)) * 16777619
+	h = (h ^ ((b >> 8) & 0xFF)) * 16777619
+	h = (h ^ (c & 0xFF)) * 16777619
+	h = (h ^ ((c >> 8) & 0xFF)) * 16777619
+	return h & 0x7fffffff
 
 
 func get_innovation_count() -> int:

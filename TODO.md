@@ -78,11 +78,23 @@
 
 ---
 
-## Autoload Consolidation (Ongoing)
+## Autoload Consolidation (Analysis Complete — Removal Deferred)
 
-- [ ] Reduce 164 autoloads to ~11 core managers
-- [ ] Identify and remove duplicate/unused autoloads
-- [ ] Convert non-essential autoloads to regular scripts or service objects
+- [x] **Analysis complete** (May 21, 2026): Full audit of all 159 autoloads in `project.godot`
+  - See `docs/AUTOLOAD_CONSOLIDATION_PLAN.md` for detailed breakdown
+  - 15 Core Kernel autoloads identified (11 irreducible + 4 strong candidates)
+  - 42 Active Systems to keep for now
+  - 18 Stub/Vision candidates for conversion to regular scripts
+  - 16 Duplicate/Redundant candidates for consolidation
+  - 12 UI-only candidates for lazy loading
+  - 24 Future/V2 systems not needed for v1
+  - 35 files already deregistered from project.godot
+  - ~14,737 LOC of autoload registrations can be safely removed over 5 phases
+- [ ] Phase 1: Safe removals (10 autoloads, ~287 LOC) — thin wrappers and explicit stubs
+- [ ] Phase 2: Stub/Vision conversions (18 autoloads, ~2,250 LOC) — convert to regular scripts
+- [ ] Phase 3: Future/V2 deferral (27 autoloads, ~7,300 LOC) — comment out or make optional
+- [ ] Phase 4: Duplicate consolidation (16 autoloads, ~2,100 LOC) — merge into primary systems
+- [ ] Phase 5: UI lazy loading (14 autoloads, ~2,800 LOC) — convert to scene-owned
 - [ ] Verify headless smoke passes after each removal batch
 
 ---

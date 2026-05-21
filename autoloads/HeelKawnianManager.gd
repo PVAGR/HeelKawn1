@@ -44,6 +44,12 @@ static var _learning_weight_cache_tick: int = -1000000
 ## Applied to intent selection for pawns in pressurized regions
 static var _pressure_bias_by_pawn: Dictionary = {}
 
+## Recovery phase tracking: settlement_id -> { "phase": int, "tick": int }
+static var _recovery_phase_by_settlement: Dictionary = {}
+
+## Active ambition chains: settlement_id -> { "chain_name": String, "steps": Array[String], "current_step": int, "tick": int }
+static var _active_ambition_chains: Dictionary = {}
+
 
 func _ready() -> void:
 	if GameManager != null and not GameManager.game_tick.is_connected(_on_need_satisfaction_tick):
@@ -606,6 +612,7 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 	var barracks: int = int(local_features.get("barracks", 0))
 	var boatyards: int = int(local_features.get("boatyard", 0))
 	var cellars: int = int(local_features.get("cellar", 0))
+	var shrines: int = int(local_features.get("shrine", 0))
 	var drive: String = str(profile.get("development_drive", "serve_settlement"))
 	var next_need: String = str(profile.get("next_need", "serve local needs"))
 
@@ -663,14 +670,51 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 	elif drive == "survive":
 		ambition = _ambition_result(Job.Type.GROW_FOOD, 7, "survival drive requests stronger food loop")
 	elif drive == "recover":
-		if beds < maxi(1, int(ceil(float(local_pop) * 0.5))):
-			ambition = _ambition_result(Job.Type.BUILD_BED, 8, "recovery drive: restore shelter capacity")
-		elif hearths <= 0 and (warmth_press > 0.1 or cold_uncovered > 0):
-			ambition = _ambition_result(Job.Type.BUILD_FIRE_PIT, 8, "recovery drive: restore hearth warmth")
-		elif storage_huts <= 0 and storage_press > 0.15:
-			ambition = _ambition_result(Job.Type.BUILD_STORAGE_HUT, 7, "recovery drive: restore storage")
-		else:
-			ambition = _ambition_result(Job.Type.MAINTAIN_STRUCTURE, 6, "recovery drive: mend settlement structures")
+		# Deep recovery chain: phases gate ambition choices
+		var recovery_ph: int = _recovery_phase(settlement_key)
+		match recovery_ph:
+			1:  # Phase 1: Emergency shelter (beds, hearths)
+				if beds < maxi(1, int(ceil(float(local_pop) * 0.5))):
+					ambition = _ambition_result(Job.Type.BUILD_BED, 8, "recovery phase 1: restore shelter capacity")
+				elif hearths <= 0 and (warmth_press > 0.1 or cold_uncovered > 0):
+					ambition = _ambition_result(Job.Type.BUILD_FIRE_PIT, 8, "recovery phase 1: restore hearth warmth")
+				else:
+					ambition = _ambition_result(Job.Type.BUILD_SHELTER, 7, "recovery phase 1: build emergency shelter")
+			2:  # Phase 2: Food security (farms, granaries)
+				if farms <= 0 and food_press <= 0.55:
+					ambition = _ambition_result(Job.Type.BUILD_FARM_WHEAT, 7, "recovery phase 2: establish food production")
+				elif granaries <= 0 and farms >= 1:
+					ambition = _ambition_result(Job.Type.BUILD_GRANARY, 7, "recovery phase 2: secure food storage")
+				elif storage_huts <= 0 and storage_press > 0.15:
+					ambition = _ambition_result(Job.Type.BUILD_STORAGE_HUT, 7, "recovery phase 2: restore general storage")
+				else:
+					ambition = _ambition_result(Job.Type.HARVEST_CROPS, 6, "recovery phase 2: gather food reserves")
+			3:  # Phase 3: Knowledge recovery (find dormant knowledge, re-establish teaching)
+				if libraries <= 0 and local_pop >= 4:
+					ambition = _ambition_result(Job.Type.BUILD_LIBRARY, 6, "recovery phase 3: rebuild knowledge infrastructure")
+				elif workshops <= 0 and local_pop >= 3:
+					ambition = _ambition_result(Job.Type.BUILD_WORKSHOP, 6, "recovery phase 3: restore crafting capacity")
+				else:
+					ambition = _ambition_result(Job.Type.TEACH_SKILL, 6, "recovery phase 3: re-establish teaching chain")
+			4:  # Phase 4: Social recovery (rebuild trust, re-establish bonds)
+				if markers <= 0:
+					ambition = _ambition_result(Job.Type.BUILD_MARKER_STONE, 6, "recovery phase 4: rebuild territorial marker")
+				elif shrines <= 0 and local_pop >= 5:
+					ambition = _ambition_result(Job.Type.BUILD_SHRINE, 5, "recovery phase 4: rebuild shrine for morale")
+				else:
+					ambition = _ambition_result(Job.Type.BUILD_HEARTH, 5, "recovery phase 4: rebuild gathering space")
+			5:  # Phase 5: Cultural recovery (rebuild markers, shrines, traditions)
+				if markers <= 0:
+					ambition = _ambition_result(Job.Type.BUILD_MARKER_STONE, 5, "recovery phase 5: restore cultural marker")
+				elif shrines <= 0:
+					ambition = _ambition_result(Job.Type.BUILD_SHRINE, 5, "recovery phase 5: restore shrine")
+				elif libraries <= 0 and local_pop >= 6:
+					ambition = _ambition_result(Job.Type.BUILD_LIBRARY, 5, "recovery phase 5: restore knowledge hall")
+				else:
+					ambition = _ambition_result(Job.Type.CARVE_KNOWLEDGE_STONE, 5, "recovery phase 5: carve cultural memory")
+		# Check ambition chains for recovery settlements
+		if ambition.is_empty():
+			ambition = _ambition_chain_for_settlement(settlement_key)
 	elif drive == "preserve":
 		if markers <= 0:
 			ambition = _ambition_result(Job.Type.CARVE_KNOWLEDGE_STONE, 7, "preservation drive: no knowledge markers in settlement")
@@ -791,6 +835,562 @@ static func _determine_household_goal(hid: int, pawn: Variant) -> String:
 		return "Preserve Legacy"
 		
 	return ""
+
+
+## Recovery phase tracker: returns the current recovery phase (1-5) for a settlement.
+## Phase 1: Emergency shelter (beds, hearths)
+## Phase 2: Food security (farms, granaries)
+## Phase 3: Knowledge recovery (dormant knowledge, re-establish teaching)
+## Phase 4: Social recovery (rebuild grudges, re-establish trust)
+## Phase 5: Cultural recovery (rebuild markers, shrines, traditions)
+static func _recovery_phase(settlement_id: int) -> int:
+	var tick: int = _tick()
+	var entry: Dictionary = _recovery_phase_by_settlement.get(settlement_id, {})
+	var current_phase: int = int(entry.get("phase", 1))
+	var last_tick: int = int(entry.get("tick", 0))
+
+	# Advance phase every 2000 ticks if conditions are met
+	if tick - last_tick < 2000:
+		return current_phase
+
+	var features: Dictionary = _scan_recovery_features(settlement_id)
+	var local_pop: int = _recovery_population(settlement_id)
+
+	var advanced: bool = false
+	match current_phase:
+		1:  # Emergency shelter → advance if beds >= 2 and hearths >= 1
+			if int(features.get("bed", 0)) >= 2 and int(features.get("hearth", 0)) >= 1:
+				current_phase = 2
+				advanced = true
+		2:  # Food security → advance if farms >= 1 or granary >= 1
+			if int(features.get("farm", 0)) >= 1 or int(features.get("granary", 0)) >= 1:
+				current_phase = 3
+				advanced = true
+		3:  # Knowledge recovery → advance if library >= 1 or school >= 1
+			if int(features.get("library", 0)) >= 1 or int(features.get("school", 0)) >= 1:
+				current_phase = 4
+				advanced = true
+		4:  # Social recovery → advance if population >= 6 and marker >= 1
+			if local_pop >= 6 and int(features.get("marker", 0)) >= 1:
+				current_phase = 5
+				advanced = true
+		5:  # Cultural recovery — terminal phase, no advancement
+			pass
+
+	if advanced:
+		_recovery_phase_by_settlement[settlement_id] = {"phase": current_phase, "tick": tick}
+	elif not entry.is_empty():
+		entry["tick"] = tick
+		_recovery_phase_by_settlement[settlement_id] = entry
+	else:
+		_recovery_phase_by_settlement[settlement_id] = {"phase": current_phase, "tick": tick}
+
+	return current_phase
+
+
+## Scan features relevant to recovery phase assessment at a settlement center.
+static func _scan_recovery_features(settlement_id: int) -> Dictionary:
+	var center: Vector2i = SettlementPlanner._center_tile_of_region_key(settlement_id) if SettlementPlanner != null else Vector2i(0, 0)
+	return _scan_local_features(center, 16)
+
+
+## Estimate population at a settlement for recovery gating.
+static func _recovery_population(settlement_id: int) -> int:
+	if SettlementMemory == null:
+		return 0
+	for st_v in SettlementMemory.settlements:
+		if st_v is Dictionary and int((st_v as Dictionary).get("center_region", -1)) == settlement_id:
+			return int((st_v as Dictionary).get("population", 0))
+	return 0
+
+
+## Settlement ambition chains: returns a sequence of related ambitions for a settlement.
+## Chains progress step-by-step; only one chain is active per settlement at a time.
+## Returns the current step's ambition Dictionary, or {} if no chain is active/needed.
+static func _ambition_chain_for_settlement(settlement_id: int) -> Dictionary:
+	var tick: int = _tick()
+	var active: Dictionary = _active_ambition_chains.get(settlement_id, {})
+
+	# If there's an active chain, try to progress it
+	if not active.is_empty():
+		var chain_name: String = str(active.get("chain_name", ""))
+		var steps: Array = active.get("steps", [])
+		var current_step: int = int(active.get("current_step", 0))
+
+		# Check if the current step has been completed (by scanning features)
+		var features: Dictionary = _scan_recovery_features(settlement_id)
+		if _chain_step_completed(chain_name, current_step, features, settlement_id):
+			current_step += 1
+			active["current_step"] = current_step
+			active["tick"] = tick
+			_active_ambition_chains[settlement_id] = active
+
+		# If we've completed all steps, clear the chain
+		if current_step >= steps.size():
+			_active_ambition_chains.erase(settlement_id)
+			return {}
+
+		# Return the current step's ambition
+		if current_step < steps.size():
+			return _ambition_from_chain_step(str(steps[current_step]), settlement_id, features)
+
+	# No active chain — try to seed a new one based on settlement state
+	var features: Dictionary = _scan_recovery_features(settlement_id)
+	var local_pop: int = _recovery_population(settlement_id)
+	var new_chain: Array = _select_new_chain(settlement_id, features, local_pop)
+
+	if not new_chain.is_empty():
+		var chain_name: String = _chain_name_for_steps(new_chain)
+		_active_ambition_chains[settlement_id] = {
+			"chain_name": chain_name,
+			"steps": new_chain,
+			"current_step": 0,
+			"tick": tick,
+		}
+		return _ambition_from_chain_step(str(new_chain[0]), settlement_id, features)
+
+	return {}
+
+
+## Check if a chain step has been completed.
+static func _chain_step_completed(chain_name: String, step_index: int, features: Dictionary, settlement_id: int) -> bool:
+	match chain_name:
+		"Found Settlement":
+			match step_index:
+				0:  # build_hearth
+					return int(features.get("hearth", 0)) >= 1
+				1:  # build_beds_x3
+					return int(features.get("bed", 0)) >= 3
+				2:  # build_storage
+					return int(features.get("storage_hut", 0)) >= 1
+				3:  # build_farm
+					return int(features.get("farm", 0)) >= 1
+		"Fortify":
+			match step_index:
+				0:  # build_walls
+					return int(features.get("wall", 0)) >= 4
+				1:  # build_door
+					return int(features.get("door", 0)) >= 1
+				2:  # build_watchtower
+					return int(features.get("watchtower", 0)) >= 1
+		"Knowledge Hub":
+			match step_index:
+				0:  # build_library
+					return int(features.get("library", 0)) >= 1
+				1:  # build_school
+					return int(features.get("school", 0)) >= 1
+				2:  # build_marker
+					return int(features.get("marker", 0)) >= 1
+		"Food Security":
+			match step_index:
+				0:  # build_farm
+					return int(features.get("farm", 0)) >= 1
+				1:  # build_granary
+					return int(features.get("granary", 0)) >= 1
+				2:  # build_cellar
+					return int(features.get("cellar", 0)) >= 1
+	return false
+
+
+## Convert a chain step name to an ambition Dictionary.
+static func _ambition_from_chain_step(step: String, settlement_id: int, features: Dictionary) -> Dictionary:
+	match step:
+		"build_hearth":
+			return _ambition_result(Job.Type.BUILD_FIRE_PIT, 8, "ambition chain: Found Settlement — establish hearth")
+		"build_beds_x3":
+			return _ambition_result(Job.Type.BUILD_BED, 7, "ambition chain: Found Settlement — build beds (target 3)")
+		"build_storage":
+			return _ambition_result(Job.Type.BUILD_STORAGE_HUT, 7, "ambition chain: Found Settlement — build storage")
+		"build_farm":
+			return _ambition_result(Job.Type.BUILD_FARM_WHEAT, 6, "ambition chain: Found Settlement — establish farm")
+		"build_walls":
+			return _ambition_result(Job.Type.BUILD_WALL, 7, "ambition chain: Fortify — build walls")
+		"build_door":
+			return _ambition_result(Job.Type.BUILD_DOOR, 6, "ambition chain: Fortify — build door")
+		"build_watchtower":
+			return _ambition_result(Job.Type.BUILD_WATCHTOWER, 6, "ambition chain: Fortify — build watchtower")
+		"build_library":
+			return _ambition_result(Job.Type.BUILD_LIBRARY, 6, "ambition chain: Knowledge Hub — build library")
+		"build_school":
+			return _ambition_result(Job.Type.BUILD_SCHOOL, 6, "ambition chain: Knowledge Hub — build school")
+		"build_marker":
+			return _ambition_result(Job.Type.BUILD_MARKER_STONE, 5, "ambition chain: Knowledge Hub — carve marker")
+		"build_granary":
+			return _ambition_result(Job.Type.BUILD_GRANARY, 6, "ambition chain: Food Security — build granary")
+		"build_cellar":
+			return _ambition_result(Job.Type.BUILD_CELLAR, 5, "ambition chain: Food Security — build cellar")
+	return {}
+
+
+## Generate a human-readable name for a chain from its steps.
+static func _chain_name_for_steps(steps: Array) -> String:
+	if steps.is_empty():
+		return ""
+	var first: String = str(steps[0])
+	if first.begins_with("build_hearth"):
+		return "Found Settlement"
+	if first.begins_with("build_walls"):
+		return "Fortify"
+	if first.begins_with("build_library"):
+		return "Knowledge Hub"
+	if first.begins_with("build_farm"):
+		return "Food Security"
+	return "Custom Chain"
+
+
+## Select a new ambition chain based on settlement state.
+static func _select_new_chain(settlement_id: int, features: Dictionary, local_pop: int) -> Array:
+	var hearths: int = int(features.get("hearth", 0))
+	var beds: int = int(features.get("bed", 0))
+	var walls: int = int(features.get("wall", 0))
+	var farms: int = int(features.get("farm", 0))
+	var libraries: int = int(features.get("library", 0))
+
+	# No hearth yet → Found Settlement chain
+	if hearths <= 0 and local_pop >= 1:
+		return ["build_hearth", "build_beds_x3", "build_storage", "build_farm"]
+
+	# Hearth exists but no walls → Fortify chain
+	if walls < 2 and local_pop >= 4:
+		return ["build_walls", "build_door", "build_watchtower"]
+
+	# Farms exist but no granary → Food Security chain
+	if farms >= 1 and int(features.get("granary", 0)) <= 0:
+		return ["build_granary", "build_cellar"]
+
+	# Advanced settlement with no library → Knowledge Hub chain
+	if local_pop >= 8 and libraries <= 0:
+		return ["build_library", "build_school", "build_marker"]
+
+	return []
+
+
+## Learning target selection: determines what knowledge/skill a pawn should prioritize learning next.
+## Returns: {target_knowledge_type: int, target_skill: int, reason: String, priority: float}
+static func get_learning_target_for_pawn(pawn: Variant) -> Dictionary:
+	var data: HeelKawnianData = _pawn_data(pawn)
+	if data == null:
+		return {}
+
+	var profile: Dictionary = get_development_profile_for_pawn(pawn)
+	if profile.is_empty():
+		return {}
+
+	var pawn_id: int = int(data.id)
+	var settlement_id: int = int(profile.get("settlement_id", -1))
+	var known: Array[int] = _known_knowledge_for_pawn(pawn_id)
+	var drive: String = str(profile.get("development_drive", "serve_settlement"))
+	var axes: Dictionary = profile.get("axes", {})
+	var skills: Dictionary = profile.get("skills", {})
+	var skill_levels: Dictionary = skills.get("levels", {})
+
+	var target_knowledge_type: int = -1
+	var target_skill: int = -1
+	var reason: String = ""
+	var priority: float = 0.0
+
+	# 1. Check for at-risk knowledge in settlement (few carriers)
+	if KnowledgeSystem != null and settlement_id >= 0:
+		var security: Dictionary = KnowledgeSystem.get_knowledge_security_for_settlement(settlement_id)
+		var at_risk: Array = security.get("at_risk", [])
+		for kt_any in at_risk:
+			var kt: int = int(kt_any)
+			if not (kt in known):
+				var carrier_count: int = KnowledgeSystem.get_carrier_count(kt)
+				if carrier_count <= 2:
+					if target_knowledge_type < 0 or carrier_count < priority:
+						target_knowledge_type = kt
+						priority = float(carrier_count)
+						reason = "knowledge at risk: %s (%d carriers)" % [_knowledge_name(kt), carrier_count]
+
+	# 2. Check skill gaps relative to profession
+	var profession: int = int(data.current_profession)
+	var profession_skills: Dictionary = _skills_for_profession(profession)
+	for skill_name in profession_skills.keys():
+		var required_level: int = int(profession_skills[skill_name])
+		var current_level: int = int(skill_levels.get(skill_name, 0))
+		if current_level < required_level:
+			var skill_enum: int = _skill_enum_for_name(skill_name)
+			if target_skill < 0 or (required_level - current_level) > (required_level - int(skill_levels.get(_skill_name_for_enum(target_skill), 0))):
+				target_skill = skill_enum
+				if reason.is_empty():
+					reason = "skill gap: %s (level %d/%d)" % [skill_name, current_level, required_level]
+
+	# 3. Drive-based learning targets
+	if target_knowledge_type < 0:
+		match drive:
+			"preserve":
+				if not known.has(KnowledgeSystem.KnowledgeType.MEMORY_PRESERVATION):
+					target_knowledge_type = KnowledgeSystem.KnowledgeType.MEMORY_PRESERVATION
+					reason = "preserve drive: learn memory preservation"
+					priority = 3.0
+				elif not known.has(KnowledgeSystem.KnowledgeType.WRITING):
+					target_knowledge_type = KnowledgeSystem.KnowledgeType.WRITING
+					reason = "preserve drive: learn writing for records"
+					priority = 2.5
+			"innovate":
+				if not known.has(KnowledgeSystem.KnowledgeType.CRAFTING):
+					target_knowledge_type = KnowledgeSystem.KnowledgeType.CRAFTING
+					reason = "innovate drive: learn crafting for tool making"
+					priority = 2.0
+				elif not known.has(KnowledgeSystem.KnowledgeType.ENGINEERING):
+					target_knowledge_type = KnowledgeSystem.KnowledgeType.ENGINEERING
+					reason = "innovate drive: learn engineering"
+					priority = 1.5
+			"learn":
+				if int(axes.get("knowledge", 0)) < 30:
+					if not known.has(KnowledgeSystem.KnowledgeType.TEACHING):
+						target_knowledge_type = KnowledgeSystem.KnowledgeType.TEACHING
+						reason = "learn drive: learn teaching to accelerate growth"
+						priority = 2.0
+			"bond":
+				if not known.has(KnowledgeSystem.KnowledgeType.HOSPITALITY):
+					target_knowledge_type = KnowledgeSystem.KnowledgeType.HOSPITALITY
+					reason = "bond drive: learn hospitality for social cohesion"
+					priority = 1.5
+			"recover":
+				if not known.has(KnowledgeSystem.KnowledgeType.SHELTER_BUILDING):
+					target_knowledge_type = KnowledgeSystem.KnowledgeType.SHELTER_BUILDING
+					reason = "recover drive: learn shelter building"
+					priority = 2.5
+				elif not known.has(KnowledgeSystem.KnowledgeType.FOOD_STORAGE):
+					target_knowledge_type = KnowledgeSystem.KnowledgeType.FOOD_STORAGE
+					reason = "recover drive: learn food storage"
+					priority = 2.0
+
+	# 4. Default: pick a skill the pawn is weakest at
+	if target_skill < 0 and target_knowledge_type < 0:
+		var weakest_skill: String = ""
+		var weakest_level: int = 999
+		for s_name in skill_levels.keys():
+			var s_level: int = int(skill_levels[s_name])
+			if s_level < weakest_level:
+				weakest_level = s_level
+				weakest_skill = s_name
+		if not weakest_skill.is_empty():
+			target_skill = _skill_enum_for_name(weakest_skill)
+			reason = "weakest skill: %s (level %d)" % [weakest_skill, weakest_level]
+			priority = 1.0
+
+	if target_knowledge_type < 0 and target_skill < 0:
+		return {}
+
+	return {
+		"target_knowledge_type": target_knowledge_type,
+		"target_skill": target_skill,
+		"reason": reason if not reason.is_empty() else "no specific learning target",
+		"priority": priority,
+	}
+
+
+## Get skills required for a profession as {skill_name: required_level}.
+static func _skills_for_profession(profession: int) -> Dictionary:
+	match profession:
+		HeelKawnianData.Profession.FARMER:
+			return {"foraging": 5, "building": 2}
+		HeelKawnianData.Profession.BUILDER:
+			return {"building": 6, "mining": 3, "chopping": 3}
+		HeelKawnianData.Profession.GATHERER:
+			return {"foraging": 5, "mining": 2, "chopping": 3}
+		HeelKawnianData.Profession.WARRIOR:
+			return {"hunting": 6, "building": 2}
+		HeelKawnianData.Profession.SCHOLAR:
+			return {"building": 3, "foraging": 2}
+		HeelKawnianData.Profession.TRADER:
+			return {"foraging": 3, "building": 2}
+		HeelKawnianData.Profession.SMITH:
+			return {"mining": 5, "building": 4}
+		HeelKawnianData.Profession.HEALER:
+			return {"foraging": 4, "building": 2}
+	return {}
+
+
+## Convert skill name string to Skill enum value.
+static func _skill_enum_for_name(name: String) -> int:
+	match name.to_lower():
+		"foraging":
+			return HeelKawnianData.Skill.FORAGING
+		"mining":
+			return HeelKawnianData.Skill.MINING
+		"chopping":
+			return HeelKawnianData.Skill.CHOPPING
+		"building":
+			return HeelKawnianData.Skill.BUILDING
+		"hunting":
+			return HeelKawnianData.Skill.HUNTING
+	return -1
+
+
+## Convert Skill enum value to name string.
+static func _skill_name_for_enum(skill: int) -> String:
+	match skill:
+		HeelKawnianData.Skill.FORAGING:
+			return "foraging"
+		HeelKawnianData.Skill.MINING:
+			return "mining"
+		HeelKawnianData.Skill.CHOPPING:
+			return "chopping"
+		HeelKawnianData.Skill.BUILDING:
+			return "building"
+		HeelKawnianData.Skill.HUNTING:
+			return "hunting"
+	return "unknown"
+
+
+## Preservation choices: when a pawn knows knowledge that is at risk (≤2 carriers),
+## determine whether they should inscribe, teach, or write it.
+## Returns: {action: String, knowledge_type: int, target_tile: Vector2i, target_pawn_id: int, reason: String}
+static func get_preservation_choice_for_pawn(pawn: Variant) -> Dictionary:
+	var data: HeelKawnianData = _pawn_data(pawn)
+	if data == null:
+		return {}
+
+	var pawn_id: int = int(data.id)
+	var settlement_id: int = int(data.settlement_id)
+
+	if KnowledgeSystem == null:
+		return {}
+
+	var my_knowledge: Array[int] = _known_knowledge_for_pawn(pawn_id)
+	if my_knowledge.is_empty():
+		return {}
+
+	var security: Dictionary = KnowledgeSystem.get_knowledge_security_for_settlement(settlement_id)
+	var at_risk: Array = security.get("at_risk", [])
+
+	# Find at-risk knowledge this pawn knows
+	var critical_knowledge: Array[int] = []
+	for kt_any in my_knowledge:
+		var kt: int = int(kt_any)
+		if kt in at_risk:
+			var carrier_count: int = KnowledgeSystem.get_carrier_count(kt)
+			if carrier_count <= 2:
+				critical_knowledge.append(kt)
+
+	if critical_knowledge.is_empty():
+		return {}
+
+	# Pick the most critical (fewest carriers)
+	var best_kt: int = critical_knowledge[0]
+	var best_count: int = KnowledgeSystem.get_carrier_count(best_kt)
+	for kt in critical_knowledge:
+		var count: int = KnowledgeSystem.get_carrier_count(kt)
+		if count < best_count:
+			best_kt = kt
+			best_count = count
+
+	# Option 1: Teach it to someone nearby
+	var teach_target: int = _find_teach_target(pawn, best_kt)
+	if teach_target >= 0:
+		return {
+			"action": "teach",
+			"knowledge_type": best_kt,
+			"target_tile": Vector2i(-1, -1),
+			"target_pawn_id": teach_target,
+			"reason": "teach %s to pawn %d (only %d carriers)" % [_knowledge_name(best_kt), teach_target, best_count],
+		}
+
+	# Option 2: Inscribe on stone (if near suitable tile)
+	var stone_tile: Vector2i = _find_stone_tile_near_pawn(data)
+	if stone_tile.x >= 0:
+		return {
+			"action": "inscribe_stone",
+			"knowledge_type": best_kt,
+			"target_tile": stone_tile,
+			"target_pawn_id": -1,
+			"reason": "inscribe %s on stone at %s (only %d carriers)" % [_knowledge_name(best_kt), str(stone_tile), best_count],
+		}
+
+	# Option 3: Write in a book (if pawn has writing knowledge)
+	if my_knowledge.has(KnowledgeSystem.KnowledgeType.WRITING):
+		var library_tile: Vector2i = _find_library_tile_near_pawn(data)
+		if library_tile.x >= 0:
+			return {
+				"action": "write_book",
+				"knowledge_type": best_kt,
+				"target_tile": library_tile,
+				"target_pawn_id": -1,
+				"reason": "write %s in book at library %s (only %d carriers)" % [_knowledge_name(best_kt), str(library_tile), best_count],
+			}
+		return {
+			"action": "write_book",
+			"knowledge_type": best_kt,
+			"target_tile": data.tile_pos,
+			"target_pawn_id": -1,
+			"reason": "write %s in book (only %d carriers, no library nearby)" % [_knowledge_name(best_kt), best_count],
+		}
+
+	return {}
+
+
+## Find a nearby pawn who doesn't know a specific knowledge type.
+static func _find_teach_target(pawn: Variant, knowledge_type: int) -> int:
+	var candidates: Array = _nearby_pawn_candidates(pawn, 12, 20)
+	for c in candidates:
+		var other_id: int = int(c.get("id", -1))
+		if other_id < 0:
+			continue
+		var other_known: Array[int] = _known_knowledge_for_pawn(other_id)
+		if not (knowledge_type in other_known):
+			return other_id
+	return -1
+
+
+## Find a suitable tile near the pawn for stone inscription (ore vein or mountain).
+static func _find_stone_tile_near_pawn(data: HeelKawnianData) -> Vector2i:
+	var main_node: Node = _root_node("Main")
+	if main_node == null:
+		return Vector2i(-1, -1)
+	var world_v: Variant = main_node.get("_world")
+	if world_v == null:
+		return Vector2i(-1, -1)
+	var world: World = world_v as World
+	if world == null or world.data == null:
+		return Vector2i(-1, -1)
+	var world_data: WorldData = world.data
+	var center: Vector2i = data.tile_pos
+	var radius: int = 8
+
+	for r in range(1, radius + 1):
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if abs(dx) != r and abs(dy) != r:
+					continue
+				var tx: int = center.x + dx
+				var ty: int = center.y + dy
+				if not world_data.in_bounds(tx, ty):
+					continue
+				var feat: int = int(world_data.get_feature(tx, ty))
+				if feat == TileFeature.Type.ORE_VEIN:
+					return Vector2i(tx, ty)
+				if world_data.has_method("is_mountain_edge") and world_data.call("is_mountain_edge", tx, ty):
+					return Vector2i(tx, ty)
+	return Vector2i(-1, -1)
+
+
+## Find a library tile near the pawn.
+static func _find_library_tile_near_pawn(data: HeelKawnianData) -> Vector2i:
+	var main_node: Node = _root_node("Main")
+	if main_node == null:
+		return Vector2i(-1, -1)
+	var world_v: Variant = main_node.get("_world")
+	if world_v == null:
+		return Vector2i(-1, -1)
+	var world: World = world_v as World
+	if world == null or world.data == null:
+		return Vector2i(-1, -1)
+	var world_data: WorldData = world.data
+	var center: Vector2i = data.tile_pos
+	var radius: int = 12
+
+	for y in range(center.y - radius, center.y + radius + 1):
+		for x in range(center.x - radius, center.x + radius + 1):
+			if not world_data.in_bounds(x, y):
+				continue
+			var feat: int = int(world_data.get_feature(x, y))
+			if feat == TileFeature.Type.LIBRARY:
+				return Vector2i(x, y)
+	return Vector2i(-1, -1)
 
 
 
@@ -1216,6 +1816,7 @@ static func _scan_local_features(center: Vector2i, radius: int) -> Dictionary:
 		"road": 0,
 		"granary": 0,
 		"cellar": 0,
+		"shrine": 0,
 	}
 	var main_node: Node = _root_node("Main")
 	if main_node == null:
@@ -1290,6 +1891,8 @@ static func _scan_local_features(center: Vector2i, radius: int) -> Dictionary:
 					out["granary"] = int(out["granary"]) + 1
 				TileFeature.Type.CELLAR:
 					out["cellar"] = int(out["cellar"]) + 1
+				TileFeature.Type.SHRINE:
+					out["shrine"] = int(out["shrine"]) + 1
 	return out
 
 

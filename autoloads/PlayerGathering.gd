@@ -170,6 +170,11 @@ func _gather_resource(tile: Vector2i, resource_type: String, output_resource: St
 	# Apply to inventory
 	_add_to_inventory(output_resource, quantity)
 	
+	# Damage carried tool when tool bonus was applied
+	var tool_bonus: String = config.get("tool_bonus", "none")
+	if tool_bonus != "none" and _has_required_tool(tool_bonus):
+		_damage_carried_tool(_player_pawn, 1.0)
+	
 	# Gain skill XP
 	var skill: String = config.get("skill", "foraging")
 	var xp: int = quantity * 2
@@ -262,15 +267,58 @@ func _has_required_tool(tool_name: String) -> bool:
 		# No specific item required for this tool bonus
 		return true
 
-	# Check if player pawn is carrying the tool
-	if _player_pawn.data.carried_item == item_type:
-		return true
+	# Check if player pawn is carrying the tool (and it's not broken)
+	if _player_pawn.data.carrying == item_type:
+		if not _is_carried_tool_broken(item_type):
+			return true
 
 	# Check stockpile for the tool
 	if StockpileManager != null and StockpileManager.has_method("get_item_count"):
 		return int(StockpileManager.call("get_item_count", item_type)) > 0
 
 	return false
+
+
+## Check if the pawn's carried tool of the given type is broken (durability <= 0).
+func _is_carried_tool_broken(item_type: int) -> bool:
+	if _player_pawn == null or _player_pawn.data == null:
+		return true
+	if _player_pawn.data.carrying != item_type:
+		return true
+	# Check equipped gear for durability
+	if _player_pawn.data.has_method("get_equipped_gear"):
+		var gear: Variant = _player_pawn.data.call("get_equipped_gear", item_type)
+		if gear != null and gear.has_method("is_broken"):
+			return gear.is_broken()
+	# Check equipped_tool_durability as fallback
+	if _player_pawn.data.equipped_tool == item_type and _player_pawn.data.equipped_tool_durability <= 0:
+		return true
+	return false
+
+
+## Damage the pawn's carried tool by the given amount.
+## Reduces durability on equipped gear. Tool breaks when durability reaches 0.
+func _damage_carried_tool(pawn: HeelKawnian, damage: float) -> void:
+	if pawn == null or pawn.data == null:
+		return
+	var carried_type: int = pawn.data.carrying
+	if carried_type == Item.Type.NONE:
+		return
+	# Check each equipment slot for the carried tool type
+	for slot_idx in range(5):
+		var gear: Variant = pawn.data.equipped_gear.get(slot_idx, null)
+		if gear != null and gear.has_method("is_broken") and not gear.is_broken():
+			if int(gear.base_type) == carried_type:
+				gear.durability = maxi(0, int(gear.durability) - int(ceil(damage)))
+				if gear.is_broken():
+					if OS.is_debug_build():
+						print("[Gathering] Tool broke: %s" % gear.name)
+				return
+	# Fallback: reduce equipped_tool_durability
+	if pawn.data.equipped_tool == carried_type:
+		pawn.data.equipped_tool_durability = maxi(0, pawn.data.equipped_tool_durability - int(ceil(damage)))
+		if pawn.data.equipped_tool_durability <= 0 and OS.is_debug_build():
+			print("[Gathering] Equipped tool broke: %d" % carried_type)
 
 
 func _get_skill_level(skill_name: String) -> int:

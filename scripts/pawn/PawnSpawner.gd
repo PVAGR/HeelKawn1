@@ -773,10 +773,20 @@ func spawn_child_pawn(
 	# PROFESSION INHERITANCE - children tend toward parent professions but with variation
 	_inherit_profession_from_parents(data, parent_a, parent_b, birth_tick)
 	
+	# KNOWLEDGE INHERITANCE - child may inherit knowledge from parents
+	data.inherit_knowledge_from_parents(parent_a.id, parent_b.id)
+	
+	# GRUDGE INHERITANCE - child inherits 40% intensity of parents' grudges
+	HeelKawnianData.inherit_grudges_from_parents(parent_a.id, parent_b.id, data.id)
+	
 	# BLOODLINE ASSIGNMENT - child inherits from both parents
 	var bloodline_sys: Node = get_node_or_null("/root/SocialManager")
 	if bloodline_sys != null and bloodline_sys.has_method("assign_birth_bloodline"):
 		data.bloodline_id = int(bloodline_sys.call("assign_birth_bloodline", data.id, data.display_name, int(parent_a.id), int(parent_b.id), ""))
+	
+	# REPUTATION INHERITANCE - child inherits fraction of bloodline reputation
+	if data.bloodline_id >= 0:
+		data.inherit_reputation_from_bloodline(str(data.bloodline_id))
 
 	# HOUSEHOLD ASSIGNMENT - keep newborns inside a real family unit when possible
 	var kinship_sys: Node = get_node_or_null("/root/SocialManager")

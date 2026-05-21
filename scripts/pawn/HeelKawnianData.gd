@@ -27,6 +27,22 @@ const MISSING_REQUIRED_TOOL_WORK_SPEED_MULT: float = 0.5
 ## XP gained per tick of work on the matching skill. Tuned so a fresh pawn
 ## passes lvl 1 in ~one job cycle and reaches lvl 5 over a few in-game days.
 const XP_PER_WORK_TICK: float = 2.0
+const PROFESSION_ASSIGN_MIN_TICKS: int = 100  # Must do 100+ ticks in a category before earning profession
+
+## Skill tree branch effects: passive bonuses from branch choices.
+## Maps "skill_key:branch_name" -> {bonus_key: bonus_value}
+const BRANCH_EFFECTS: Dictionary = {
+	"foraging:abundant": {"yield_mult": 1.12, "crop_quality": 1.05},
+	"foraging:sustainable": {"soil_decay_mult": 0.85, "water_efficiency": 1.10},
+	"mining:deep_vein": {"ore_yield_mult": 1.10, "rare_ore_chance": 0.05},
+	"mining:swift_strike": {"mine_speed_mult": 1.10, "stamina_cost_mult": 0.90},
+	"chopping:heavy_swing": {"wood_yield_mult": 1.12, "tree_fall_speed": 1.08},
+	"chopping:selective": {"sapling_preserve": 0.90, "quality_wood_mult": 1.05},
+	"building:sturdy": {"structure_hp_mult": 1.15, "material_efficiency": 1.05},
+	"building:elegant": {"quality_bonus": 1.10, "aesthetic_value": 1.20},
+	"hunting:aggressive": {"damage_mult": 1.10, "stamina_cost_mult": 1.05},
+	"hunting:patient": {"crit_chance": 0.08, "tracking_range": 1.15},
+}
 
 ## Likes/dislikes categories. Each pawn gets 2-4 likes and 1-3 dislikes at birth.
 const LIKE_CATEGORIES: PackedStringArray = [
@@ -148,6 +164,9 @@ var level: int = 1
 ## Stage 1: Skill trees - branching paths within a profession
 ## Each profession has skill branches that unlock at certain levels
 var skill_trees: Dictionary = {}
+
+## Skill tree branch choices: skill_key -> branch_name (chosen at level 5+)
+var skill_branches: Dictionary = {}
 
 ## Stage 1: Mastery perks - special abilities at high levels
 ## Unlocked at level 10, 15, 20 in a skill
@@ -2277,7 +2296,11 @@ func add_skill_xp(skill: int, amount: float) -> bool:
 	var trait_mult: float = get_trait_mult("skill_xp_mult")
 	var cat: String = tree_skill_category_for_job_skill(skill)
 	var tree_xp: float = skill_tree_bonus_product_for_category(cat, "xp_mult")
-	skill_xp[skill] = get_skill_xp(skill) + amount * trait_mult * tree_xp
+	var branch_bonuses: Dictionary = get_branch_bonus(skill)
+	var branch_xp: float = 1.0
+	if branch_bonuses.has("xp_mult"):
+		branch_xp = float(branch_bonuses["xp_mult"])
+	skill_xp[skill] = get_skill_xp(skill) + amount * trait_mult * tree_xp * branch_xp
 
 	# Stage 1: Track last used time for XP decay
 	skill_last_used[skill] = GameManager.tick_count if GameManager != null else 0
@@ -2686,6 +2709,159 @@ func ensure_skill_trees_through_level(max_level: int) -> void:
 			_unlock_skill_branches(m)
 
 
+## Choose a skill tree branch for a given skill. Must be at least level 5
+## and not already have a branch chosen for this skill.
+## Returns true if successful, false if already chosen or level too low.
+func choose_skill_branch(skill: int, branch_name: String) -> bool:
+	var skill_key: String = _skill_enum_to_key(skill)
+	if skill_key.is_empty():
+		return false
+	if skill_branches.has(skill_key):
+		return false
+	var skill_level: int = get_skill_level(skill)
+	if skill_level < 5:
+		return false
+	var branch_key: String = "%s:%s" % [skill_key, branch_name]
+	if not BRANCH_EFFECTS.has(branch_key):
+		return false
+	skill_branches[skill_key] = branch_name
+	var bonuses: Dictionary = BRANCH_EFFECTS[branch_key] as Dictionary
+	var bonus_desc: String = ""
+	for bkey in bonuses:
+		if not bonus_desc.is_empty():
+			bonus_desc += ", "
+		bonus_desc += "%s=%.2f" % [bkey, float(bonuses[bkey])]
+	append_biography_line("Branch choice: %s -> %s (%s)" % [skill_key, branch_name, bonus_desc])
+	return true
+
+
+## Get the passive bonuses from a branch choice for a specific skill.
+## Returns a Dictionary of bonus_key -> value, or empty if no branch chosen.
+func get_branch_bonus(skill: int) -> Dictionary:
+	var result: Dictionary = {}
+	var skill_key: String = _skill_enum_to_key(skill)
+	if skill_key.is_empty():
+		return result
+	if not skill_branches.has(skill_key):
+		return result
+	var branch_key: String = skill_branches[skill_key]
+	if not BRANCH_EFFECTS.has(branch_key):
+		return result
+	var bonuses: Dictionary = BRANCH_EFFECTS[branch_key] as Dictionary
+	for bkey in bonuses:
+		result[bkey] = float(bonuses[bkey])
+	return result
+
+
+## Get all branch bonuses merged across all skills with branch choices.
+func get_all_branch_bonuses() -> Dictionary:
+	var result: Dictionary = {}
+	for skill_key in skill_branches:
+		var branch_key: String = skill_branches[skill_key]
+		if not BRANCH_EFFECTS.has(branch_key):
+			continue
+		var bonuses: Dictionary = BRANCH_EFFECTS[branch_key] as Dictionary
+		for bkey in bonuses:
+			var val: float = float(bonuses[bkey])
+			if result.has(bkey):
+				result[bkey] = float(result[bkey]) * val
+			else:
+				result[bkey] = val
+	return result
+
+
+## Map a Skill enum int to the lowercase key used in BRANCH_EFFECTS.
+static func _skill_enum_to_key(skill: int) -> String:
+	match skill:
+		Skill.FORAGING: return "foraging"
+		Skill.MINING:   return "mining"
+		Skill.CHOPPING: return "chopping"
+		Skill.BUILDING: return "building"
+		Skill.HUNTING:  return "hunting"
+	return ""
+
+
+## Inherit knowledge from both parents. Child has a 60% chance to inherit
+## each knowledge type the parents know, 85% if both parents know it.
+## Returns list of inherited knowledge type integers.
+func inherit_knowledge_from_parents(parent_a_id: int, parent_b_id: int) -> Array[int]:
+	var inherited: Array[int] = []
+	var ks: Node = Engine.get_main_loop().get_root().get_node_or_null("KnowledgeSystem")
+	if ks == null or not ks.has_method("get_pawn_knowledge"):
+		return inherited
+	var parent_a_known: Array = ks.call("get_pawn_knowledge", parent_a_id)
+	var parent_b_known: Array = ks.call("get_pawn_knowledge", parent_b_id)
+	var all_known: Dictionary = {}
+	for kt in parent_a_known:
+		all_known[int(kt)] = all_known.get(int(kt), 0) + 1
+	for kt in parent_b_known:
+		all_known[int(kt)] = all_known.get(int(kt), 0) + 1
+	for kt in all_known:
+		var count: int = int(all_known[kt])
+		var chance: float = 0.60 if count == 1 else 0.85
+		var salt: StringName = StringName("knowledge_inherit:%d:%d:%d" % [id, kt, birth_tick])
+		if WorldRNG.range_for(salt, 0.0, 1.0) < chance:
+			inherited.append(int(kt))
+			if ks.has_method("add_knowledge_carrier"):
+				ks.call("add_knowledge_carrier", id, kt)
+	return inherited
+
+
+## Inherit reputation from bloodline. Child starts with 25% of the family's
+## average reputation. Returns {reputation_delta: float, source_bloodline: String}.
+func inherit_reputation_from_bloodline(bloodline: String) -> Dictionary:
+	var result: Dictionary = {"reputation_delta": 0.0, "source_bloodline": bloodline}
+	var parent_a_data: HeelKawnianData = _pawn_data_by_id.get(parent_a_id, null)
+	var parent_b_data: HeelKawnianData = _pawn_data_by_id.get(parent_b_id, null)
+	if parent_a_data == null and parent_b_data == null:
+		return result
+	var avg_rep: float = 50.0
+	var count: int = 0
+	if parent_a_data != null:
+		avg_rep += float(parent_a_data.reputation_score)
+		count += 1
+	if parent_b_data != null:
+		avg_rep += float(parent_b_data.reputation_score)
+		count += 1
+	if count > 0:
+		avg_rep /= float(count)
+	var inherited_rep: float = (avg_rep - 50.0) * 0.25
+	reputation_score = clampf(reputation_score + inherited_rep, 0.0, 100.0)
+	result["reputation_delta"] = inherited_rep
+	return result
+
+
+## Inherit grudges from both parents. Child inherits grudges against the
+## parents' enemies with 40% intensity. Returns count of inherited grudges.
+static func inherit_grudges_from_parents(parent_a_id: int, parent_b_id: int, child_id: int) -> int:
+	var gm: Node = Engine.get_main_loop().get_root().get_node_or_null("GrudgeManager")
+	if gm == null or not gm.has_method("get_grudges_held_by"):
+		return 0
+	var inherited_count: int = 0
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	for parent_id in [parent_a_id, parent_b_id]:
+		if parent_id < 0:
+			continue
+		var parent_grudges: Array = gm.call("get_grudges_held_by", parent_id)
+		for grudge in parent_grudges:
+			if not (grudge is Dictionary):
+				continue
+			var target_id: int = int(grudge.get("target_id", -1))
+			if target_id < 0 or child_id == target_id:
+				continue
+			var grudge_type: String = str(grudge.get("type", ""))
+			var parent_intensity: float = float(grudge.get("intensity", 0.0))
+			var inherited_intensity: float = parent_intensity * 0.40
+			if inherited_intensity < 0.1:
+				continue
+			if gm.has_method("has_grudge") and bool(gm.call("has_grudge", child_id, target_id, 0.1)):
+				continue
+			if gm.has_method("record_grudge"):
+				gm.call("record_grudge", child_id, target_id, grudge_type, 0, "inherited", tick)
+				inherited_count += 1
+	return inherited_count
+
+
 func sync_level_from_total_skill_xp() -> void:
 	var total_xp: float = 0.0
 	for sk in skill_xp:
@@ -2705,7 +2881,15 @@ func work_speed_for(skill: int) -> float:
 	var cat: String = tree_skill_category_for_job_skill(skill)
 	var tree_mult: float = skill_tree_bonus_product_for_category(cat, "work_speed_mult")
 	var bloodline_mult: float = bloodline_specialization_multiplier(skill)
-	return base * tree_mult * bloodline_mult
+	var branch_bonuses: Dictionary = get_branch_bonus(skill)
+	var branch_mult: float = 1.0
+	if branch_bonuses.has("work_speed_mult"):
+		branch_mult = float(branch_bonuses["work_speed_mult"])
+	elif branch_bonuses.has("gather_speed_mult"):
+		branch_mult = float(branch_bonuses["gather_speed_mult"])
+	elif branch_bonuses.has("mine_speed_mult"):
+		branch_mult = float(branch_bonuses["mine_speed_mult"])
+	return base * tree_mult * bloodline_mult * branch_mult
 
 
 func has_tool_required(job_type: int) -> bool:
@@ -3637,6 +3821,7 @@ func to_save_dict() -> Dictionary:
 		"skill_xp": sx,
 		"level": level,
 		"skill_trees": skill_trees.duplicate(true),
+		"skill_branches": skill_branches.duplicate(true),
 		"mastery_perks": mastery_perks.duplicate(),
 		"skills": skills.duplicate(true),
 		"affinities": affinities.duplicate(true),
@@ -3727,6 +3912,8 @@ static func from_save_dict(d: Dictionary) -> HeelKawnianData:
 	p.level = maxi(p.level, saved_level)
 	if d.has("skill_trees") and d["skill_trees"] is Dictionary:
 		p.skill_trees = (d["skill_trees"] as Dictionary).duplicate(true)
+	if d.has("skill_branches") and d["skill_branches"] is Dictionary:
+		p.skill_branches = (d["skill_branches"] as Dictionary).duplicate(true)
 	if d.has("mastery_perks") and d["mastery_perks"] is Array:
 		p.mastery_perks = (d["mastery_perks"] as Array).duplicate()
 	p.skills = {

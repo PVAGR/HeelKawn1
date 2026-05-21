@@ -59,9 +59,14 @@ const WRITING_KNOWLEDGE_ID: int = 24
 const KNOWLEDGE_LOSS_ERA_PENALTY: int = 3
 const KNOWLEDGE_LOSS_PENALTY_DECAY_INTERVAL_TICKS: int = 360
 
+## Fired when a settlement's civilization stage changes.
+signal civilization_stage_changed(settlement_id: int, old_stage: int, new_stage: int)
+
 var _snapshot_cache: Dictionary = {}
 ## Per-settlement era score penalties from knowledge loss (settlement_id(str) -> penalty amount)
 var _knowledge_loss_penalties: Dictionary = {}
+## Tracks last known stage per settlement for change detection (settlement_id(int) -> stage(int))
+var _last_known_stages: Dictionary = {}
 
 
 func get_civilization_stage(settlement_id: int = -1) -> int:
@@ -151,12 +156,22 @@ func _build_stage_snapshot(settlement_id: int) -> Dictionary:
 	var infrastructure_score: int = _infrastructure_score(st, center_region)
 	var complexity_score: int = _complexity_score(pawns)
 	var quality_score: int = _quality_of_life_score(pawns)
+	var institution_score: int = _institution_score(pawns, st)
 	var score: int = clampi(
-		tech_score + knowledge_score + infrastructure_score + complexity_score + quality_score,
+		tech_score + knowledge_score + infrastructure_score + complexity_score + quality_score + institution_score,
 		0,
 		100
 	)
 	var stage: int = score_to_stage(score)
+	var tech_diffusion: Dictionary = _tech_diffusion_score(st, pawns)
+	var lifespan: Dictionary = _lifespan_metrics(pawns)
+	var literacy_rate: float = _compute_literacy_rate(pawns)
+	## Detect stage change and emit signal
+	var old_stage_v: Variant = _last_known_stages.get(settlement_id, -1)
+	var old_stage: int = int(old_stage_v)
+	if old_stage >= 0 and old_stage != stage:
+		civilization_stage_changed.emit(settlement_id, old_stage, stage)
+	_last_known_stages[settlement_id] = stage
 	return {
 		"settlement_id": settlement_id,
 		"center_region": center_region,
@@ -172,7 +187,11 @@ func _build_stage_snapshot(settlement_id: int) -> Dictionary:
 			"infrastructure": infrastructure_score,
 			"complexity": complexity_score,
 			"quality_of_life": quality_score,
+			"institutions": institution_score,
 		},
+		"tech_diffusion": tech_diffusion,
+		"literacy_rate": literacy_rate,
+		"lifespan": lifespan,
 		"next_stage_score": _next_stage_score(score),
 	}
 
@@ -275,6 +294,177 @@ func _quality_of_life_score(pawns: Array[HeelKawnian]) -> int:
 	var avg_age: float = total_age / float(count)
 	var literacy: float = float(literate) / float(count)
 	return mini(10, int(avg_health / 20.0) + int(avg_age / 20.0) + int(round(literacy * 3.0)))
+
+
+func _compute_literacy_rate(pawns: Array[HeelKawnian]) -> float:
+	if pawns.is_empty():
+		return 0.0
+	var literate: int = 0
+	var count: int = 0
+	for p in pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		count += 1
+		if KnowledgeSystem != null and KnowledgeSystem.has_method("has_knowledge"):
+			if bool(KnowledgeSystem.call("has_knowledge", int(p.data.id), WRITING_KNOWLEDGE_ID)):
+				literate += 1
+	if count <= 0:
+		return 0.0
+	return float(literate) / float(count)
+
+
+func get_literacy_rate(settlement_id: int) -> float:
+	var st: Dictionary = _settlement_for_id(settlement_id)
+	var pawns: Array[HeelKawnian] = _pawns_for_settlement(st, settlement_id)
+	return _compute_literacy_rate(pawns)
+
+
+func _tech_diffusion_score(st: Dictionary, pawns: Array[HeelKawnian]) -> Dictionary:
+	var result: Dictionary = {
+		"score": 0,
+		"knowledge_carriers": 0,
+		"total_pawns": pawns.size(),
+		"gini_index": 0.0,
+	}
+	if pawns.is_empty() or KnowledgeSystem == null:
+		return result
+	var carriers_v: Variant = KnowledgeSystem.get("knowledge_carriers")
+	if not (carriers_v is Dictionary):
+		return result
+	var carriers: Dictionary = carriers_v as Dictionary
+	var knowledge_counts: Array[int] = []
+	var carrier_count: int = 0
+	for p in pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var pid: int = int(p.data.id)
+		var pid_str: String = str(pid)
+		if carriers.has(pid_str):
+			var arr_v: Variant = carriers.get(pid_str, [])
+			if arr_v is Array:
+				var kcount: int = (arr_v as Array).size()
+				if kcount > 0:
+					carrier_count += 1
+					knowledge_counts.append(kcount)
+				else:
+					knowledge_counts.append(0)
+			else:
+				knowledge_counts.append(0)
+		else:
+			knowledge_counts.append(0)
+	result["knowledge_carriers"] = carrier_count
+	result["total_pawns"] = knowledge_counts.size()
+	if knowledge_counts.size() < 2:
+		result["score"] = 10 if carrier_count > 0 else 0
+		return result
+	var total_knowledge: int = 0
+	for kc in knowledge_counts:
+		total_knowledge += kc
+	if total_knowledge <= 0:
+		return result
+	var mean: float = float(total_knowledge) / float(knowledge_counts.size())
+	if mean <= 0.0:
+		return result
+	var abs_diff_sum: float = 0.0
+	for i in range(knowledge_counts.size()):
+		for j in range(i + 1, knowledge_counts.size()):
+			abs_diff_sum += absf(float(knowledge_counts[i]) - float(knowledge_counts[j]))
+	var n: float = float(knowledge_counts.size())
+	var gini: float = abs_diff_sum / (2.0 * n * n * mean)
+	result["gini_index"] = clampf(gini, 0.0, 1.0)
+	var diffusion_score: int = int(round((1.0 - gini) * 10.0))
+	result["score"] = clampi(diffusion_score, 0, 10)
+	return result
+
+
+func _lifespan_metrics(pawns: Array[HeelKawnian]) -> Dictionary:
+	var result: Dictionary = {
+		"avg_lifespan_ticks": 0,
+		"avg_lifespan_years": 0.0,
+		"max_age": 0,
+		"max_age_years": 0.0,
+		"deaths_this_era": 0,
+		"living_count": 0,
+	}
+	if pawns.is_empty():
+		return result
+	var current_tick: int = _tick()
+	var total_age_ticks: int = 0
+	var max_age_ticks: int = 0
+	var max_age_years: float = 0.0
+	var living_count: int = 0
+	for p in pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		living_count += 1
+		var age_ticks: int = maxi(current_tick - int(p.data.birth_tick), 0)
+		var age_years: float = float(p.data.age_years)
+		total_age_ticks += age_ticks
+		if age_ticks > max_age_ticks:
+			max_age_ticks = age_ticks
+			max_age_years = age_years
+	if living_count > 0:
+		result["avg_lifespan_ticks"] = total_age_ticks / living_count
+		result["avg_lifespan_years"] = float(total_age_ticks) / float(living_count) / float(HeelKawnianData.TICKS_PER_YEAR)
+	result["max_age"] = max_age_ticks
+	result["max_age_years"] = max_age_years
+	if WorldMemory != null and WorldMemory.has_method("get_recent_events_for_settlement"):
+		var settlement_id: int = -1
+		if not pawns.is_empty() and pawns[0] != null and is_instance_valid(pawns[0]) and pawns[0].data != null:
+			settlement_id = int(pawns[0].data.settlement_id)
+		var events: Array[Dictionary] = WorldMemory.get_recent_events_for_settlement(settlement_id, 512, true)
+		var deaths: int = 0
+		for e in events:
+			var typ: String = str(e.get("type", ""))
+			if typ == "pawn_death" or typ == "starvation_death":
+				deaths += 1
+		result["deaths_this_era"] = deaths
+	result["living_count"] = living_count
+	return result
+
+
+func _institution_score(pawns: Array[HeelKawnian], st: Dictionary) -> int:
+	if pawns.is_empty():
+		return 0
+	var score: int = 0
+	var teachers: int = 0
+	var professions: Dictionary = {}
+	var record_carriers: int = 0
+	var leaders: int = 0
+	for p in pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var prof: int = int(p.data.current_profession)
+		if prof != HeelKawnianData.Profession.NONE:
+			professions[prof] = true
+		if prof == HeelKawnianData.Profession.SCHOLAR:
+			teachers += 1
+		if int(p.data.leadership_role) > 0:
+			leaders += 1
+	if KnowledgeSystem != null:
+		var record_v: Variant = KnowledgeSystem.get("record_carriers")
+		if record_v is Dictionary:
+			var record_carriers_dict: Dictionary = record_v as Dictionary
+			for pid_str in record_carriers_dict:
+				for p in pawns:
+					if p != null and is_instance_valid(p) and p.data != null:
+						if str(int(p.data.id)) == pid_str:
+							record_carriers += 1
+							break
+	var distinct_professions: int = professions.size()
+	if teachers >= 2:
+		score += 2
+	elif teachers >= 1:
+		score += 1
+	if distinct_professions >= 4:
+		score += 2
+	elif distinct_professions >= 2:
+		score += 1
+	if record_carriers >= 1:
+		score += 1
+	if leaders >= 1:
+		score += 1
+	return mini(5, score)
 
 
 func _pawns_for_settlement(st: Dictionary, settlement_id: int) -> Array[HeelKawnian]:

@@ -23,7 +23,8 @@ extends Node
 ##   "required_skill": int,  # Skill enum
 ##   "min_skill_level": int,
 ##   "output_item": int,  # Item.Type
-##   "output_quantity": int
+##   "output_quantity": int,
+##   "required_tools": Array[int],  # Item.Type values for required tools/buildings (optional)
 ## }
 var recipes: Dictionary = {}
 
@@ -159,7 +160,9 @@ func _initialize_recipes() -> void:
 		"required_skill": 1,  # MINING
 		"min_skill_level": 5,
 		"output_item": 20,  # IRON_SWORD (new)
-		"output_quantity": 1
+		"output_quantity": 1,
+		"required_tools": [Item.Type.FLINT_PICK],  # Needs hammer/striking tool
+		"required_buildings": [TileFeature.Type.SMELTER],  # Must be near smelter
 	})
 	
 	# ===== FURNITURE =====
@@ -406,7 +409,7 @@ func get_recipes_by_category(category: String) -> Array:
 	return result
 
 ## Check if a pawn can craft a recipe
-func can_craft_recipe(pawn: HeelKawnian, recipe_id: String) -> Dictionary:
+func can_craft_recipe(pawn: HeelKawnian, recipe_id: String, workshop_tile: Vector2i = Vector2i.ZERO) -> Dictionary:
 	var result: Dictionary = {
 		"can_craft": false,
 		"reason": ""
@@ -436,6 +439,17 @@ func can_craft_recipe(pawn: HeelKawnian, recipe_id: String) -> Dictionary:
 	# Check ingredients
 	if not _has_ingredients(recipe.ingredients):
 		result.reason = "Missing ingredients"
+		return result
+	
+	# Check required tools (carried or in stockpile)
+	if not _has_required_tools(pawn, recipe):
+		result.reason = "Missing required tools"
+		return result
+	
+	# Check required buildings (near workshop)
+	var check_tile: Vector2i = workshop_tile if workshop_tile != Vector2i.ZERO else pawn.data.tile_pos
+	if not _has_required_buildings(recipe, check_tile):
+		result.reason = "Missing required workshop building"
 		return result
 	
 	result.can_craft = true
@@ -479,6 +493,64 @@ func _get_stockpile_quantity(resource: String) -> int:
 		return int(_stockpile_manager.call("total_count_of", item_type))
 	
 	return 0
+
+
+## Check if pawn has all required tools for a recipe.
+## Tools can be carried by the pawn or available in stockpile.
+func _has_required_tools(pawn: HeelKawnian, recipe: Dictionary) -> bool:
+	var required: Array = recipe.get("required_tools", [])
+	if required.is_empty():
+		return true
+	
+	for tool_type in required:
+		var tt: int = int(tool_type)
+		if tt <= 0:
+			continue
+		# Check if pawn is carrying the tool
+		if pawn.data != null and pawn.data.carrying == tt and pawn.data.carrying_qty > 0:
+			continue
+		# Check if pawn has the tool equipped as gear
+		if pawn.data != null and pawn.data.has_method("is_equipped"):
+			if pawn.data.call("is_equipped", tt):
+				continue
+		# Check stockpile for the tool
+		if _stockpile_manager != null and _stockpile_manager.has_method("total_count_of"):
+			if int(_stockpile_manager.call("total_count_of", tt)) > 0:
+				continue
+		# Tool not found
+		return false
+	return true
+
+
+## Check if required buildings are near the given tile.
+func _has_required_buildings(recipe: Dictionary, near_tile: Vector2i) -> bool:
+	var required: Array = recipe.get("required_buildings", [])
+	if required.is_empty():
+		return true
+	if _world == null or _world.data == null:
+		return required.is_empty()
+	
+	var wd = _world.data
+	var search_radius: int = 3
+	for building_type in required:
+		var bt: int = int(building_type)
+		if bt <= 0:
+			continue
+		var found: bool = false
+		for dx in range(-search_radius, search_radius + 1):
+			for dy in range(-search_radius, search_radius + 1):
+				var nx: int = near_tile.x + dx
+				var ny: int = near_tile.y + dy
+				if not wd.in_bounds(nx, ny):
+					continue
+				if wd.get_feature(nx, ny) == bt:
+					found = true
+					break
+			if found:
+				break
+		if not found:
+			return false
+	return true
 
 func _consume_ingredients(ingredients: Dictionary) -> bool:
 	if _stockpile_manager == null:

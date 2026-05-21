@@ -286,6 +286,32 @@ func find_food_source(from_tile: Vector2i, pathfinder: PathFinder = null) -> Sto
 	return best
 
 
+## Remove `qty` of `item_type` from the first zone(s) that have it.
+## Returns true if the full quantity was removed.
+func remove_item(item_type: int, qty: int) -> bool:
+	if qty <= 0:
+		return true
+	var remaining: int = qty
+	for z in _zones:
+		if z == null or not is_instance_valid(z):
+			continue
+		if remaining <= 0:
+			break
+		remaining -= z.take_item(item_type, remaining)
+	return remaining <= 0
+
+
+## Alias for remove_item — kept for API compatibility.
+func take_item(item_type: int, qty: int) -> bool:
+	return remove_item(item_type, qty)
+
+
+## Get total count of a specific item type across every zone.
+## Alias for total_count_of — kept for API compatibility.
+func get_item_count(item_type: int) -> int:
+	return total_count_of(item_type)
+
+
 ## Closest zone that has at least `qty` of `item_type`. Used by fetch-
 ## material for builds (walls, beds, doors needing wood).
 func find_source_for(item_type: int, qty: int, from_tile: Vector2i, pathfinder: PathFinder = null) -> Stockpile:

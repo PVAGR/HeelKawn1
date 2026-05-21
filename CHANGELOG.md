@@ -28,6 +28,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased] — 2026-05-21
+
+### Technical Debt Cleanup
+- Untracked `$null` file from git index (was in HEAD but locked on disk, removed via `git reset HEAD`)
+- Verified `.gitignore` has no markdown code fence corruption
+- Audited all `.gd` files for accidental debug print statements (none found — all 1872 `print()` calls are intentional logging)
+
+---
+
 ## [Unreleased]
 
 ### Planned

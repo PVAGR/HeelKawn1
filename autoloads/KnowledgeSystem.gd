@@ -93,6 +93,10 @@ var knowledge_security: Dictionary = {}
 ## tile_key ("x,y") -> { knowledge_types: [KnowledgeType], inscribed_tick: int, inscriber_id: int, carrier_type: String }
 var record_carriers: Dictionary = {}
 
+## Book knowledge tracking: book_item_id -> Array[KnowledgeType]
+## Maps placed books (by tile key "x,y") to the knowledge types written in them.
+var book_contents: Dictionary = {}
+
 const TEACHING_DEBT_INTERVAL_TICKS: int = 500
 const TEACHING_DEBT_PHASE_OFFSET: int = 83
 const KNOWLEDGE_SECURITY_INTERVAL_TICKS: int = 1000
@@ -153,6 +157,8 @@ func _on_game_tick(tick: int) -> void:
 		# DORMANT WORLD: Innovation checks only run after first knowledge is inscribed
 		if DiscoveryGate == null or DiscoveryGate.is_unlocked("first_knowledge"):
 			_check_innovation_opportunities()
+	if GameManager.periodic_phase_due(tick, KNOWLEDGE_RECOVERY_INTERVAL_TICKS, KNOWLEDGE_RECOVERY_PHASE_OFFSET):
+		_try_autonomous_knowledge_recovery()
 
 # === Knowledge Carrier Management ===
 
@@ -1142,6 +1148,7 @@ func clear() -> void:
 	teaching_debt.clear()
 	knowledge_genealogy.clear()
 	knowledge_security.clear()
+	book_contents.clear()
 	_initialize_degradation()
 
 
@@ -1690,6 +1697,15 @@ func get_innovation_count() -> int:
 	return count
 
 
+const BOOK_WRITE_JOB_WORK_TICKS: int = 300
+const TRANSCRIBE_JOB_WORK_TICKS: int = 400
+const KNOWLEDGE_RECOVERY_INTERVAL_TICKS: int = 800
+const KNOWLEDGE_RECOVERY_PHASE_OFFSET: int = 131
+const RECOVERY_BASE_CHANCE: float = 0.03
+const SCHOLAR_RECOVERY_BONUS: float = 0.12
+const CURIOSITY_RECOVERY_BONUS: float = 0.06
+const LITERACY_TRANSCRIBE_BONUS: float = 0.10
+
 func get_innovations_for_pawn(pawn_id: int) -> Array[Dictionary]:
 	"""Return all innovations discovered by a specific pawn."""
 	var out: Array[Dictionary] = []
@@ -1702,3 +1718,424 @@ func get_innovations_for_pawn(pawn_id: int) -> Array[Dictionary]:
 			if int(d.get("pawn_id", -1)) == pawn_id:
 				out.append(d)
 	return out
+
+
+# ============================================================================
+# UNIFIED KNOWLEDGE PRESERVATION LOOP
+# Stones, books, teaching, literacy — one coherent system.
+# ============================================================================
+
+## Get the unified preservation state for a knowledge type in a settlement.
+## Returns a composite view of how well-preserved the knowledge is across
+## all carrier types: living pawns, stones, books, and teaching chains.
+func get_knowledge_preservation_state(knowledge_type: int, settlement_id: int) -> Dictionary:
+	var carrier_count: int = _count_settlement_carriers(knowledge_type, settlement_id)
+
+	# Count stones inscribed with this knowledge in the settlement
+	var inscribed_on_stone: bool = false
+	var stone_count: int = 0
+	for tile_key in record_carriers:
+		var carrier: Dictionary = record_carriers[tile_key]
+		var ctypes: Array = carrier.get("knowledge_types", [])
+		if knowledge_type in ctypes:
+			var parts: PackedStringArray = tile_key.split(",")
+			if parts.size() == 2:
+				var cx: int = int(parts[0])
+				var cy: int = int(parts[1])
+				var rk: int = WorldMemory._region_key(cx, cy)
+				var carrier_sid: int = SettlementMemory.get_center_region_for_region(rk) if SettlementMemory != null else -1
+				if carrier_sid == settlement_id or settlement_id < 0:
+					inscribed_on_stone = true
+					stone_count += 1
+
+	# Count books containing this knowledge
+	var written_in_books: int = 0
+	for bk in book_contents:
+		var btypes: Array = book_contents[bk]
+		if knowledge_type in btypes:
+			written_in_books += 1
+
+	# Compute teaching chain depth (longest genealogy chain for this knowledge)
+	var teaching_chains: int = _compute_teaching_chain_depth(knowledge_type)
+
+	# Count literacy carriers: pawns who have both this knowledge AND WRITING
+	var literacy_carriers: int = 0
+	for n in _get_pawns():
+		if n == null or not is_instance_valid(n):
+			continue
+		if not n.has_method("get"):
+			continue
+		var data_v: Variant = n.get("data")
+		if data_v == null:
+			continue
+		var pid: int = int(data_v.id)
+		if has_knowledge(pid, knowledge_type) and has_knowledge(pid, KnowledgeType.WRITING):
+			var pos: Vector2i = data_v.tile_pos
+			var rk: int = WorldMemory._region_key(pos.x, pos.y)
+			var pawn_sid: int = SettlementMemory.get_center_region_for_region(rk) if SettlementMemory != null else -1
+			if pawn_sid == settlement_id or settlement_id < 0:
+				literacy_carriers += 1
+
+	# Composite preservation score (0.0 - 1.0)
+	var score: float = 0.0
+	# Living carriers contribute most (up to 0.4)
+	score += minf(float(carrier_count) * 0.1, 0.4)
+	# Stone inscriptions are durable (up to 0.2)
+	score += minf(float(stone_count) * 0.1, 0.2) if inscribed_on_stone else 0.0
+	# Book copies are portable and durable (up to 0.2)
+	score += minf(float(written_in_books) * 0.1, 0.2)
+	# Teaching chains show active transmission (up to 0.1)
+	score += minf(float(teaching_chains) * 0.02, 0.1)
+	# Literacy carriers enable transcription (up to 0.1)
+	score += minf(float(literacy_carriers) * 0.05, 0.1)
+	score = clampf(score, 0.0, 1.0)
+
+	# Determine risk level
+	var risk_level: String
+	if is_knowledge_dormant(knowledge_type):
+		risk_level = "dormant"
+	elif score >= 0.7:
+		risk_level = "secure"
+	elif score >= 0.5:
+		risk_level = "stable"
+	elif score >= 0.25:
+		risk_level = "at_risk"
+	else:
+		risk_level = "critical"
+
+	return {
+		"knowledge_type": knowledge_type,
+		"carrier_count": carrier_count,
+		"inscribed_on_stone": inscribed_on_stone,
+		"written_in_books": written_in_books,
+		"teaching_chains": teaching_chains,
+		"literacy_carriers": literacy_carriers,
+		"preservation_score": score,
+		"risk_level": risk_level,
+	}
+
+
+## Compute the teaching chain depth for a knowledge type.
+## Returns the longest chain of teacher->student transmissions.
+func _compute_teaching_chain_depth(knowledge_type: int) -> int:
+	if not knowledge_genealogy.has(knowledge_type):
+		return 0
+	var chain: Array = knowledge_genealogy[knowledge_type]
+	if chain.is_empty():
+		return 0
+	# Build a graph: student_id -> teacher_id
+	var parent_map: Dictionary = {}
+	for link in chain:
+		var student: int = int(link.get("student_id", -1))
+		var teacher: int = int(link.get("teacher_id", -1))
+		if student >= 0 and teacher >= 0:
+			parent_map[student] = teacher
+	# Find longest chain by following parent pointers
+	var max_depth: int = 0
+	for node in parent_map:
+		var depth: int = 0
+		var current: int = int(node)
+		var visited: Dictionary = {}
+		while parent_map.has(current) and not visited.has(current):
+			visited[current] = true
+			current = int(parent_map[current])
+			depth += 1
+		max_depth = maxi(max_depth, depth)
+	return max_depth
+
+
+# ============================================================================
+# BOOK KNOWLEDGE TRACKING
+# ============================================================================
+
+## Write knowledge types into a book at a specific tile.
+## The pawn must have WRITING knowledge to perform this action.
+func write_knowledge_in_book(pawn_id: int, book_tile: Vector2i, knowledge_types: Array) -> bool:
+	if not has_knowledge(pawn_id, KnowledgeType.WRITING):
+		return false
+	if knowledge_types.is_empty():
+		return false
+	# Validate pawn actually knows the knowledge they're writing
+	for kt in knowledge_types:
+		if not has_knowledge(pawn_id, int(kt)):
+			return false
+	var book_key: String = "%d,%d" % [book_tile.x, book_tile.y]
+	if not book_contents.has(book_key):
+		book_contents[book_key] = []
+	var existing: Array = book_contents[book_key]
+	for kt in knowledge_types:
+		var kt_int: int = int(kt)
+		if not (kt_int in existing):
+			existing.append(kt_int)
+	book_contents[book_key] = existing
+	# Record event
+	WorldMemory.record_event({
+		"type": "knowledge_written_in_book",
+		"pawn_id": pawn_id,
+		"tile": {"x": book_tile.x, "y": book_tile.y},
+		"knowledge_types": knowledge_types,
+		"tick": GameManager.tick_count,
+	})
+	return true
+
+
+## Read knowledge from a book at a specific tile.
+## Returns the knowledge types the pawn gains (ones they didn't already have).
+func read_knowledge_from_book(pawn_id: int, book_tile: Vector2i) -> Array[int]:
+	var book_key: String = "%d,%d" % [book_tile.x, book_tile.y]
+	if not book_contents.has(book_key):
+		return []
+	var gained: Array[int] = []
+	for kt in book_contents[book_key]:
+		var kt_int: int = int(kt)
+		if not has_knowledge(pawn_id, kt_int):
+			add_knowledge_carrier(pawn_id, kt_int)
+			gained.append(kt_int)
+	if not gained.is_empty():
+		WorldMemory.record_event({
+			"type": "knowledge_read_from_book",
+			"pawn_id": pawn_id,
+			"tile": {"x": book_tile.x, "y": book_tile.y},
+			"gained_knowledge": gained,
+			"tick": GameManager.tick_count,
+		})
+	return gained
+
+
+## Transcribe knowledge from a stone to a book.
+## Requires WRITING knowledge. Copies all knowledge types from the stone into the book.
+func transcribe_stone_to_book(pawn_id: int, stone_tile: Vector2i, book_tile: Vector2i) -> bool:
+	if not has_knowledge(pawn_id, KnowledgeType.WRITING):
+		return false
+	var stone_key: String = "%d,%d" % [stone_tile.x, stone_tile.y]
+	if not record_carriers.has(stone_key):
+		return false
+	var carrier: Dictionary = record_carriers[stone_key]
+	var stone_types: Array = carrier.get("knowledge_types", [])
+	if stone_types.is_empty():
+		return false
+	# Write all stone knowledge types into the book
+	return write_knowledge_in_book(pawn_id, book_tile, stone_types)
+
+
+## Transcribe knowledge from a book to a stone.
+## Requires WRITING knowledge. Copies all knowledge types from the book onto the stone.
+func transcribe_book_to_stone(pawn_id: int, book_tile: Vector2i, stone_tile: Vector2i) -> bool:
+	if not has_knowledge(pawn_id, KnowledgeType.WRITING):
+		return false
+	var book_key: String = "%d,%d" % [book_tile.x, book_tile.y]
+	if not book_contents.has(book_key):
+		return false
+	var book_types: Array = book_contents[book_key]
+	if book_types.is_empty():
+		return false
+	# Inscribe book knowledge onto the stone
+	inscribe_knowledge_on_stone(stone_tile, book_types, pawn_id, "knowledge_stone")
+	return true
+
+
+# ============================================================================
+# LOST / REDISCOVERED KNOWLEDGE MECHANICS
+# ============================================================================
+
+## Find dormant knowledge near a location within a radius.
+## Returns an array of dictionaries with knowledge type, distance, and last location.
+func get_dormant_knowledge_near(tile: Vector2i, radius: int) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for kt_key in dormant_knowledge:
+		var dk: Dictionary = dormant_knowledge[kt_key]
+		var last_pos: Vector2i = dk.get("last_known_location", Vector2i(-1, -1))
+		if last_pos.x < 0:
+			continue
+		var dist: int = absi(last_pos.x - tile.x) + absi(last_pos.y - tile.y)
+		if dist <= radius:
+			var kt: int = int(kt_key)
+			result.append({
+				"knowledge_type": kt,
+				"knowledge_name": _get_knowledge_type_name(kt),
+				"distance": dist,
+				"last_location": last_pos,
+				"last_practiced_tick": int(dk.get("last_practiced_tick", 0)),
+				"last_carrier_id": int(dk.get("last_carrier_id", -1)),
+			})
+	# Sort by distance (nearest first)
+	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("distance", 9999)) < int(b.get("distance", 9999))
+	)
+	return result
+
+
+## Attempt to recover dormant knowledge through research.
+## A pawn with high curiosity or scholar profession can attempt recovery.
+## Takes time and has a chance based on traits, proximity to last known location,
+## and whether any record carriers (stones/books) exist with this knowledge.
+func attempt_knowledge_recovery(pawn_id: int, dormant_type: int) -> bool:
+	if not is_knowledge_dormant(dormant_type):
+		return false
+	var dormant: Dictionary = dormant_knowledge.get(int(dormant_type), {})
+	var last_loc: Vector2i = dormant.get("last_known_location", Vector2i(-1, -1))
+	if last_loc.x < 0:
+		return false
+	# Find the pawn and their position
+	var pawn_pos: Vector2i = Vector2i(-1, -1)
+	var pawn_data: HeelKawnianData = null
+	for n in _get_pawns():
+		if n == null or not is_instance_valid(n):
+			continue
+		if not n.has_method("get"):
+			continue
+		var data_v: Variant = n.get("data")
+		if data_v == null:
+			continue
+		if int(data_v.id) == pawn_id:
+			pawn_pos = data_v.tile_pos
+			pawn_data = data_v
+			break
+	if pawn_data == null or pawn_pos.x < 0:
+		return false
+	# Calculate recovery chance
+	var chance: float = RECOVERY_BASE_CHANCE
+	# Scholar profession bonus
+	if pawn_data.current_profession == HeelKawnianData.Profession.SCHOLAR:
+		chance += SCHOLAR_RECOVERY_BONUS
+	# Curiosity trait bonus
+	chance += float(pawn_data.openness) * CURIOSITY_RECOVERY_BONUS
+	# Proximity bonus: closer to last known location = higher chance
+	var dist: int = absi(pawn_pos.x - last_loc.x) + absi(pawn_pos.y - last_loc.y)
+	if dist <= 5:
+		chance += 0.10
+	elif dist <= 10:
+		chance += 0.05
+	# Record carrier bonus: stones/books with this knowledge nearby make recovery easier
+	var has_nearby_carrier: bool = false
+	for tile_key in record_carriers:
+		var carrier: Dictionary = record_carriers[tile_key]
+		if dormant_type in carrier.get("knowledge_types", []):
+			var parts: PackedStringArray = tile_key.split(",")
+			if parts.size() == 2:
+				var cx: int = int(parts[0])
+				var cy: int = int(parts[1])
+				var cdist: int = absi(cx - pawn_pos.x) + absi(cy - pawn_pos.y)
+				if cdist <= 15:
+					has_nearby_carrier = true
+					chance += 0.08
+					break
+	# Check book contents for this knowledge
+	for bk in book_contents:
+		if dormant_type in book_contents[bk]:
+			var parts: PackedStringArray = bk.split(",")
+			if parts.size() == 2:
+				var bx: int = int(parts[0])
+				var by: int = int(parts[1])
+				var bdist: int = absi(bx - pawn_pos.x) + absi(by - pawn_pos.y)
+				if bdist <= 15:
+					has_nearby_carrier = true
+					chance += 0.08
+					break
+	# Literacy bonus: pawns with WRITING can interpret records better
+	if has_knowledge(pawn_id, KnowledgeType.WRITING):
+		chance += LITERACY_TRANSCRIBE_BONUS
+	# Intelligence bonus
+	chance += float(pawn_data.intelligence) * 0.02
+	chance = clampf(chance, 0.0, 0.5)
+	# Deterministic roll
+	var salt: int = pawn_id * 1009 + int(dormant_type) * 37 + GameManager.tick_count / 50
+	if WorldRNG.chance_for(StringName("knowledge_recovery:%d" % int(dormant_type)), chance, salt):
+		rediscover_knowledge(pawn_id, dormant_type, "research_recovery")
+		dormant_knowledge.erase(int(dormant_type))
+		# Record recovery event with details
+		WorldMemory.record_event({
+			"type": "knowledge_recovered",
+			"k": WorldMemory.Kind.TEACHING_EVENT,
+			"r": WorldMemory._region_key(pawn_pos.x, pawn_pos.y),
+			"t": GameManager.tick_count,
+			"pawn_id": pawn_id,
+			"knowledge_type": int(dormant_type),
+			"knowledge_name": _get_knowledge_type_name(int(dormant_type)),
+			"method": "research_recovery",
+			"recovery_chance": chance,
+			"had_nearby_carrier": has_nearby_carrier,
+		})
+		return true
+	return false
+
+
+# ============================================================================
+# KNOWLEDGE PRESERVATION PRESSURE
+# Tells the Matrix AI which knowledge types need preservation action most urgently.
+# ============================================================================
+
+## Compute preservation pressure for all knowledge types in a settlement.
+## Returns urgent, recommended, and stable lists for AI-driven preservation actions.
+func compute_preservation_pressure(settlement_id: int) -> Dictionary:
+	var urgent: Array[int] = []
+	var recommended: Array[int] = []
+	var stable: Array[int] = []
+	for kt in KnowledgeType.values():
+		var state: Dictionary = get_knowledge_preservation_state(int(kt), settlement_id)
+		var risk: String = state.get("risk_level", "stable")
+		var score: float = float(state.get("preservation_score", 0.0))
+		match risk:
+			"dormant", "critical":
+				urgent.append(int(kt))
+			"at_risk":
+				# At-risk becomes urgent if degradation is high
+				var deg: float = float(knowledge_degradation.get(int(kt), 0.0))
+				if deg > 0.5 or score < 0.15:
+					urgent.append(int(kt))
+				else:
+					recommended.append(int(kt))
+			"stable":
+				recommended.append(int(kt))
+			"secure":
+				stable.append(int(kt))
+	# Sort urgent by preservation score (lowest first = most urgent)
+	urgent.sort_custom(func(a: int, b: int) -> bool:
+		var sa: float = float(get_knowledge_preservation_state(a, settlement_id).get("preservation_score", 0.0))
+		var sb: float = float(get_knowledge_preservation_state(b, settlement_id).get("preservation_score", 0.0))
+		return sa < sb
+	)
+	# Sort recommended by score (lowest first)
+	recommended.sort_custom(func(a: int, b: int) -> bool:
+		var sa: float = float(get_knowledge_preservation_state(a, settlement_id).get("preservation_score", 0.0))
+		var sb: float = float(get_knowledge_preservation_state(b, settlement_id).get("preservation_score", 0.0))
+		return sa < sb
+	)
+	return {
+		"urgent": urgent,
+		"recommended": recommended,
+		"stable": stable,
+	}
+
+
+## Autonomous knowledge recovery: scholar/curious pawns near dormant knowledge
+## locations may attempt to recover lost knowledge through research.
+func _try_autonomous_knowledge_recovery() -> void:
+	if dormant_knowledge.is_empty():
+		return
+	var ps: PawnSpawner = _get_pawn_spawner()
+	if ps == null:
+		return
+	# Find pawns who are scholars or have high curiosity
+	for p in ps.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var pawn_id: int = int(p.data.id)
+		var is_scholar: bool = p.data.current_profession == p.data.Profession.SCHOLAR
+		var is_curious: bool = float(p.data.openness) > 0.6
+		if not is_scholar and not is_curious:
+			continue
+		# Find dormant knowledge near this pawn
+		var nearby_dormant: Array[Dictionary] = get_dormant_knowledge_near(p.data.tile_pos, 12)
+		for dk in nearby_dormant:
+			var kt: int = int(dk.get("knowledge_type", -1))
+			if kt < 0:
+				continue
+			# Skip if pawn already knows this knowledge
+			if has_knowledge(pawn_id, kt):
+				continue
+			# Attempt recovery
+			if attempt_knowledge_recovery(pawn_id, kt):
+				if GameManager.verbose_logs():
+					print("[KnowledgeSystem] Autonomous recovery: pawn %d recovered %s" % [pawn_id, _get_knowledge_type_name(kt)])
+				break  # One recovery per check cycle

@@ -78,6 +78,8 @@ func _ready() -> void:
 	_add_button_to(_content, "Start Kernel Diagnostic", "_action_kernel_diag")
 	_add_button_to(_content, "Start Settlement Verify", "_action_settlement_verify")
 	_add_button_to(_content, "Run TestTraitSystem", "_action_run_testtrait")
+	_add_button_to(_content, "Save Chronicle", "_action_save_chronicle")
+	_add_button_to(_content, "Save World Seed", "_action_save_world_seed")
 
 	# Hotkey enable toggle
 	var hk := CheckBox.new(); hk.text = "Enable Hotkeys"; hk.name = "HotkeyToggle"; hk.button_pressed = true; hk.connect("toggled", Callable(self, "_on_hotkey_toggled")); _content.add_child(hk)
@@ -253,6 +255,26 @@ func _action_run_testtrait() -> void:
 			_log_message("Failed to load TestTraitSystem script")
 	else:
 		_log_message("TestTraitSystem not found at %s" % test_path)
+
+func _action_save_chronicle() -> void:
+	if ChronicleExport != null and ChronicleExport.has_method("save_chronicle_to_file"):
+		var path: String = ChronicleExport.save_chronicle_to_file()
+		if not path.is_empty():
+			_log_message("Chronicle saved to %s" % path)
+		else:
+			_log_message("Failed to save chronicle")
+	else:
+		_log_message("ChronicleExport.save_chronicle_to_file not available")
+
+func _action_save_world_seed() -> void:
+	if ChronicleExport != null and ChronicleExport.has_method("save_world_seed_to_file"):
+		var path: String = ChronicleExport.save_world_seed_to_file()
+		if not path.is_empty():
+			_log_message("World seed saved to %s" % path)
+		else:
+			_log_message("Failed to save world seed")
+	else:
+		_log_message("ChronicleExport.save_world_seed_to_file not available")
 
 func _action_copy_log() -> void:
 	if _log != null:

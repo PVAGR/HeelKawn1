@@ -3652,7 +3652,7 @@ func _accumulate_social_rapport() -> void:
 	var pair_budget: int = SOCIAL_MAX_PAIRS_PER_PASS
 	var mobile_runtime: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
 	if GameManager != null:
-		var gs: float = GameManager.game_speed
+		gs = GameManager.game_speed
 		if gs >= 100.0:
 			pair_budget = maxi(64, int(round(float(SOCIAL_MAX_PAIRS_PER_PASS) * 0.35)))
 		elif gs >= 50.0:

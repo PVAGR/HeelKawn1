@@ -3611,11 +3611,19 @@ func _accumulate_social_rapport() -> void:
 		return
 	const R2: float = 128.0 * 128.0
 	const CELL_SIZE: float = 160.0  # Grid cell size, slightly larger than proximity radius
+	# BUDGET: Cap social rapport to prevent frame spikes at high speeds
+	var gs: float = GameManager.game_speed if GameManager != null else 1.0
+	var budget_usec: int = 8_000 if gs < 50.0 else (5_000 if gs < 100.0 else 3_000)
+	var start_usec: int = Time.get_ticks_usec()
+	
 	var pl: Array[HeelKawnian] = []
 	for p in _pawn_spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null:
 			pl.append(p)
 	if pl.size() < 2:
+		return
+	# BUDGET CHECK: After pawn collection
+	if Time.get_ticks_usec() - start_usec >= budget_usec:
 		return
 	# Spatial grid: only check pairs within the same or adjacent cells
 	var grid: Dictionary = {}
@@ -3626,6 +3634,9 @@ func _accumulate_social_rapport() -> void:
 		if not grid.has(key):
 			grid[key] = []
 		grid[key].append(p)
+		# BUDGET CHECK: During grid building
+		if Time.get_ticks_usec() - start_usec >= budget_usec:
+			return
 	# OPTIMIZATION: Early exit if grid is sparse (no cell has 2+ pawns)
 	var crowded_cells: Array[String] = []
 	for cell_key in grid:
@@ -3707,6 +3718,10 @@ func _accumulate_social_rapport() -> void:
 			if pair_budget <= 0:
 				exhausted = true
 				break
+			# BUDGET CHECK: Inside pair loop
+			if Time.get_ticks_usec() - start_usec >= budget_usec:
+				exhausted = true
+				break
 			var da: HeelKawnianData = pa.data
 			if da == null or pa.is_sleeping():
 				continue
@@ -3730,6 +3745,10 @@ func _accumulate_social_rapport() -> void:
 					continue
 				checked_pairs[pair_key] = true
 				pair_budget -= 1
+				# BUDGET CHECK: Inside inner pair loop
+				if Time.get_ticks_usec() - start_usec >= budget_usec:
+					exhausted = true
+					break
 				# OPTIMIZATION: Early exit checks before expensive operations
 				if da.hunger <= 38.0 or db.hunger <= 38.0:
 					continue
@@ -6735,7 +6754,7 @@ func _count_pending_jobs_near(job_type: int, center: Vector2i, radius: int, cach
 	return n
 
 
-func _count_pending_build_jobs_near(center: Vector2i, radius: int, cached_jobs: Array = []) -> int:
+func _count_pending_build_jobs_near(center: Vector2i, radius: int, cached_jobs: Array = [], threshold: int = 6) -> int:
 	if JobManager == null:
 		return 0
 	var n: int = 0
@@ -6748,6 +6767,8 @@ func _count_pending_build_jobs_near(center: Vector2i, radius: int, cached_jobs: 
 			continue
 		if maxi(absi(j.tile.x - center.x), absi(j.tile.y - center.y)) <= radius:
 			n += 1
+			if n >= threshold:
+				break  # Early exit: we only care if count >= threshold
 	return n
 
 
@@ -7146,13 +7167,27 @@ func _seed_construction_jobs() -> void:
 		if nearby_pending_builds >= 6:
 			continue
 		
+		# BUDGET CHECK: After pending count scan
+		if Time.get_ticks_usec() - start_usec >= budget_usec:
+			break
+		
 		# OPTIMIZATION: Reduce scan radius at high speeds
 		var scan_radius: int = 6 if GameManager.game_speed >= 100.0 else (8 if GameManager.game_speed >= 50.0 else 12)
 		var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, scan_radius)
+		
+		# BUDGET CHECK: After feature scan
+		if Time.get_ticks_usec() - start_usec >= budget_usec:
+			break
+		
 		var build_priorities: Dictionary = {}
 		if ColonySimServices != null:
 			build_priorities = ColonySimServices.compute_settlement_build_priorities(
 					center_rk, local_pop, features, materials_crisis)
+		
+		# BUDGET CHECK: After priority computation
+		if Time.get_ticks_usec() - start_usec >= budget_usec:
+			break
+		
 		var beds: int = int(features.get("bed", 0))
 		var walls: int = int(features.get("wall", 0))
 		var doors: int = int(features.get("door", 0))
@@ -7173,10 +7208,19 @@ func _seed_construction_jobs() -> void:
 				# High speed: only count essential job types
 				for jt in [Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT]:
 					pending_by_type[jt] = JobManager.count_pending_jobs_near(center_tile, jt, 10)
+					# BUDGET CHECK: Inside pending count loop at high speed
+					if Time.get_ticks_usec() - start_usec >= budget_usec:
+						break
 			else:
 				# Normal speed: full scan
 				for jt in [Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_APOTHECARY, Job.Type.BUILD_MARKET, Job.Type.BUILD_LIBRARY, Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, Job.Type.BUILD_SCHOOL, Job.Type.BUILD_TRADING_POST, Job.Type.BUILD_ROAD, Job.Type.BUILD_CELLAR, Job.Type.TRADE_HAUL, Job.Type.TEACH_SKILL, Job.Type.MAINTAIN_STRUCTURE]:
 					pending_by_type[jt] = JobManager.count_pending_jobs_near(center_tile, jt, 12)
+					# BUDGET CHECK: Inside pending count loop at normal speed
+					if Time.get_ticks_usec() - start_usec >= budget_usec:
+						break
+		# BUDGET CHECK: After pending count loop, before job posting
+		if Time.get_ticks_usec() - start_usec >= budget_usec:
+			break
 		# Ensure settlement has a stockpile zone — pawns need a local drop point
 		# Deferred: stockpile creation (add_child) is expensive in rendered mode
 		if not _settlement_has_nearby_stockpile(center_tile):

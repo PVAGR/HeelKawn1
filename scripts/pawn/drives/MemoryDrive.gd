@@ -95,8 +95,8 @@ func pulse(data: HeelKawnianData, current_tick: int, consciousness: Node = null)
 	if consciousness != null:
 		var nudge: Dictionary = consciousness.get_dream_nudge(pawn_id)
 		if not nudge.is_empty():
-			var nudge_type: String = str(nudge.get("type", ""))
-			if nudge_type == "rest":
+			var nudge_action: String = str(nudge.get("action", ""))
+			if nudge_action == "rest":
 				urges.append(Urge.new(Urge.Type.DREAM_NUDGE, 2.5, Urge.Source.MEMORY, current_tick))
 			elif nudge_type == "wander":
 				var dream_urge: Urge = Urge.new(Urge.Type.DREAM_NUDGE, 1.5, Urge.Source.MEMORY, current_tick)

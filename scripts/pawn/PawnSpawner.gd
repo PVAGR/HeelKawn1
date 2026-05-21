@@ -863,6 +863,7 @@ func spawn_child_pawn(
 		"parent_b_id": int(parent_b.id),
 		"narrative": "%s born to %s and %s" % [data.display_name, parent_a.display_name, parent_b.display_name],
 	})
+	call_deferred("_deferred_birth_notifications", data, {}, "child", int(parent_a.id), int(data.household_id))
 	if GameManager.verbose_logs():
 		print("[Spawn] child: %s at (%d,%d) from #%d + #%d" % [
 			data.display_name, tile.x, tile.y, parent_a.id, parent_b.id,

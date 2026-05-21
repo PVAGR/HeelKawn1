@@ -3376,6 +3376,8 @@ func _on_world_tick(_tick: int) -> void:
 				"age": int(data.age_years),
 			})
 			data.add_mood_event(MoodEvent.Type.JOY, 30.0, 500)
+			if data.life_stage == HeelKawnianData.LifeStage.ADULT and data.household_id < 0:
+				_create_household()
 			if data.life_stage == HeelKawnianData.LifeStage.ELDER:
 				data.max_health = maxf(50.0, data.max_health - 10.0)
 			elif data.life_stage == HeelKawnianData.LifeStage.ANCIENT:
@@ -3403,6 +3405,8 @@ func _on_world_tick(_tick: int) -> void:
 		update_cohort_membership()
 		_validate_or_dissolve_cohort()
 		_refresh_or_decay_cohort_stability()
+		if data.household_id < 0 and data.life_stage >= HeelKawnianData.LifeStage.ADULT:
+			_maybe_form_household()
 	# Apply meaning-based behavior density modifiers (Phase 4)
 	_apply_meaning_behavior_modifiers()
 	if draft_mode:
@@ -8155,6 +8159,10 @@ func _decay_needs() -> void:
 			if posmod(GameManager.tick_count + int(data.id) * 3, 37) == 0:
 				_track_co_presence_light()
 
+	# Stage 3: Seed myth knowledge from current region's myth state (every ~200 ticks)
+	if posmod(GameManager.tick_count + int(data.id) * 7, 200) == 0:
+		_maybe_seed_myth_from_region()
+
 	# Stage 1: Decay unused skills (throttled to once per day)
 	if GameManager.tick_count % DayNightCycle.TICKS_PER_DAY == 0:
 		data.decay_unused_skills()
@@ -8871,6 +8879,36 @@ func _share_gossip_with(other_pawn: HeelKawnian) -> void:
 		data.mood = min(100.0, data.mood + float(shared_count) * 0.05)
 		other_pawn.data.mood = min(100.0, other_pawn.data.mood + float(shared_count) * 0.05)
 
+	# ── Myth propagation via social contact ──
+	_share_myth_knowledge_with(other_pawn)
+
+
+func _share_myth_knowledge_with(other_pawn: HeelKawnian) -> void:
+	if other_pawn == null or other_pawn.data == null or data == null:
+		return
+	var my_myths: Dictionary = data.myth_knowledge
+	var their_myths: Dictionary = other_pawn.data.myth_knowledge
+	for myth_name: String in my_myths:
+		if not their_myths.has(myth_name):
+			other_pawn.learn_myth(myth_name, float(my_myths[myth_name]) * 0.85)
+	for myth_name: String in their_myths:
+		if not my_myths.has(myth_name):
+			learn_myth(myth_name, float(their_myths[myth_name]) * 0.85)
+
+
+func _maybe_seed_myth_from_region() -> void:
+	if data == null or _WM == null:
+		return
+	var rk: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
+	var myth_state: int = MythMemory.get_region_myth_state(rk)
+	if myth_state == 0:
+		return
+	var myth_name: String = "region_%d" % rk
+	if data.myth_knowledge.has(myth_name):
+		return
+	var belief: float = 60.0 if myth_state < 0 else 70.0
+	learn_myth(myth_name, belief)
+
 
 func form_family_bond(other_pawn: HeelKawnian, initial_strength: float = 20.0) -> void:
 	# Form a family bond with another pawn
@@ -9019,6 +9057,42 @@ func join_household(household_id: int) -> void:
 			kin.call("add_household_member", int(data.id), household_id)
 	if GameManager.verbose_logs():
 		print("[HeelKawnian] %s joined household %d" % [data.display_name, household_id])
+
+
+## Find a compatible nearby adult without a household and form one together.
+## Runs periodically for unattached adults so households emerge naturally
+## from social proximity rather than requiring a formal marriage first.
+func _maybe_form_household() -> void:
+	if data == null or data.household_id >= 0:
+		return
+	if data.life_stage < HeelKawnianData.LifeStage.ADULT:
+		return
+	var spawner = _resolve_pawn_spawner()
+	if spawner == null:
+		return
+	var best: HeelKawnian = null
+	var best_rapport: float = -999.0
+	for p in _alive_pawns_from_spawner(spawner):
+		if p == null or not is_instance_valid(p) or p == self or p.data == null:
+			continue
+		if p.data.household_id >= 0 or p.data.life_stage < HeelKawnianData.LifeStage.ADULT:
+			continue
+		if data.tile_pos.distance_squared_to(p.data.tile_pos) > 400:
+			continue
+		var rapport: float = float(data.get_social_rapport(int(p.data.id)))
+		if rapport > best_rapport:
+			best_rapport = rapport
+			best = p
+	if best == null:
+		return
+	var new_hh: int = _create_household()
+	if new_hh >= 0:
+		join_household(new_hh)
+		best.join_household(new_hh)
+		data.family_bonds[int(best.data.id)] = 50.0
+		best.data.family_bonds[int(data.id)] = 50.0
+		data.trust[int(best.data.id)] = 60.0
+		best.data.trust[int(data.id)] = 60.0
 
 
 func leave_household() -> void:
@@ -10291,6 +10365,12 @@ func _start_wander() -> void:
 				"spring":
 					if _tile_biome == Biome.Type.PLAINS:
 						score += 3
+		# Emotional geography: myth state (-1 revered, +1 feared)
+		var myth_state: int = MythMemory.get_region_myth_state(rk2) if MythMemory != null else 0
+		if myth_state < 0:
+			score += 2  # Slight pull toward revered regions
+		elif myth_state > 0:
+			score -= 3  # Avoid feared regions
 		if score > best_score or (score == best_score and (s < best_sl or (s == best_sl and crep > best_cult))):
 			best_score = score
 			best_sl = s

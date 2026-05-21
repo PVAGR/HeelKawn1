@@ -126,7 +126,7 @@ const MOOD_BONUS_WOKE_REFRESHED: float = 8.0
 ## Pawns go eat when hunger drops below this (and a stockpile has food).
 ## Tuned so HeelKawnians work through most of their hunger bar before eating,
 ## preventing the entire colony from abandoning work simultaneously.
-const HUNGER_EAT_THRESHOLD: float = 30.0
+const HUNGER_EAT_THRESHOLD: float = 25.0
 ## Below this, a pawn will eat food directly from its own hands rather than
 ## insist on hauling it to the stockpile first. Saves starving pawns who got
 ## stranded mid-haul (unreachable stockpile, no path, etc).
@@ -137,7 +137,7 @@ const EAT_TICKS: int = 5
 # -------------------- thirst tuning --------------------
 
 ## Below this, an idle pawn will seek water (river, lake, well)
-const THIRST_DRINK_THRESHOLD: float = 35.0
+const THIRST_DRINK_THRESHOLD: float = 30.0
 ## Below this, a pawn drops everything to find water — dehydration emergency
 const THIRST_EMERGENCY: float = 15.0
 ## How much thirst is restored by drinking at a water source
@@ -151,8 +151,8 @@ const WATER_SEARCH_RADIUS: int = 20
 ## (preferring a bed if one is reachable). At night the threshold is much
 ## higher so pawns settle into a natural diurnal schedule instead of working
 ## around the clock until exhausted.
-const REST_SLEEP_THRESHOLD: float = 25.0
-const REST_SLEEP_THRESHOLD_NIGHT: float = 55.0
+const REST_SLEEP_THRESHOLD: float = 20.0
+const REST_SLEEP_THRESHOLD_NIGHT: float = 50.0
 ## Below this, the pawn is so exhausted they abandon whatever they were doing
 ## (job, eating, hauling) and collapse. Without this, busy pawns happily ride
 ## rest down to 0 because they never reach the IDLE priority chain.
@@ -455,7 +455,7 @@ func _bp(i: int) -> float:
 # colony's whole tick budget into walk-time.
 const WALK_SPEED_WORLD_UNITS_PER_SEC: float = 24.0
 ## Chance per tick to start a random wander when idle and nothing to do.
-const WANDER_CHANCE_PER_TICK: float = 0.08
+const WANDER_CHANCE_PER_TICK: float = 0.04
 
 ## Print "retrying haul (no path)" at most once every N ticks per pawn. Keeps
 ## the log readable while still making stuck hauls obvious.

@@ -56,48 +56,49 @@ var _last_dream_nudge_check_tick: int = -DREAM_NUDGE_CHECK_EVERY_TICKS
 ## --- Speed-scaled intervals ---
 func _goal_refresh_interval_for_speed() -> int:
 	if GameManager == null:
-		return 120
+		return 60
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 220
+		return 120
 	if gs >= 50.0:
-		return 170
+		return 90
 	if gs >= 25.0:
-		return 130
-	return 90
+		return 70
+	return 60
 
 
 func _neural_priority_refresh_interval_for_speed() -> int:
 	if GameManager == null:
-		return 30
+		return 20
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 120
-	if gs >= 50.0:
-		return 90
-	if gs >= 26.0:
 		return 60
-	if gs >= 12.0:
+	if gs >= 50.0:
 		return 45
-	return 30
+	if gs >= 26.0:
+		return 30
+	if gs >= 12.0:
+		return 20
+	return 15
 
 
 func _matrix_priority_refresh_interval_for_speed() -> int:
 	if GameManager == null:
-		return 30
+		return 20
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 120
-	if gs >= 50.0:
-		return 90
-	if gs >= 26.0:
 		return 60
-	if gs >= 12.0:
+	if gs >= 50.0:
 		return 45
-	return 30
+	if gs >= 26.0:
+		return 30
+	if gs >= 12.0:
+		return 20
+	return 15
 
 
 ## --- Parity context (NPC/player parity) ---
+
 func parity_idle_context(data: HeelKawnianData) -> Dictionary:
 	var t: int = GameManager.tick_count if GameManager != null else 0
 	if _parity_context_tick == t and not _parity_context.is_empty():
@@ -208,7 +209,33 @@ func goal_priority_bias_for_job(job_type: int) -> int:
 		"rest":
 			if job_type == _Job.Type.FORAGE or job_type == _Job.Type.FISH:
 				return -p_bias  # Rest goal penalizes food work slightly
+		"improve_safety":
+			if job_type in [_Job.Type.PROTECT, _Job.Type.DEFEND, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.HUNT]:
+				return p_bias
+		"build_reputation", "seek_leadership":
+			if job_type in [_Job.Type.TEACH_SKILL, _Job.Type.APPRENTICESHIP, _Job.Type.CARVE_KNOWLEDGE_STONE, _Job.Type.BUILD_SHRINE]:
+				return p_bias
+		"master_skill":
+			# Bias toward jobs matching current profession
+			if pawn != null and pawn.data != null:
+				var prof: int = pawn.data.current_profession
+				if _is_profession_job(job_type, prof):
+					return p_bias + 1
+		"leave_legacy":
+			if job_type in [_Job.Type.BUILD_SHRINE, _Job.Type.CARVE_KNOWLEDGE_STONE, _Job.Type.CARVE_LEDGER_STONE, _Job.Type.CARVE_GRAVE_MARKER]:
+				return p_bias + 2
 	return 0
+
+
+func _is_profession_job(job_type: int, prof: int) -> bool:
+	var _JD = HeelKawnianData
+	match prof:
+		_JD.Profession.FARMER: return job_type in [_Job.Type.PLANT_SEEDS, _Job.Type.HARVEST_CROPS, _Job.Type.GROW_FOOD]
+		_JD.Profession.BUILDER: return job_type in [_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_SHELTER]
+		_JD.Profession.GATHERER: return job_type in [_Job.Type.FORAGE, _Job.Type.CHOP, _Job.Type.GATHER_FLINT, _Job.Type.GATHER_STICK]
+		_JD.Profession.WARRIOR: return job_type in [_Job.Type.HUNT, _Job.Type.PROTECT, _Job.Type.DEFEND]
+		_JD.Profession.SCHOLAR: return job_type in [_Job.Type.TEACH_SKILL, _Job.Type.APPRENTICESHIP, _Job.Type.CARVE_KNOWLEDGE_STONE]
+	return false
 
 
 ## --- Short-horizon bias (recent success/failure) ---

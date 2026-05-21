@@ -161,7 +161,7 @@ func get_birth_at(x: int, y: int) -> int:
 
 ## 0 = current-era patina, 1+ = prior Ages (approximate).
 static func get_tile_rem_delta(x: int, y: int, w: World) -> int:
-	var inst: RemnantMemory = Engine.get_singleton("RemnantMemory") as RemnantMemory
+	var inst: RemnantMemory = _get_instance()
 	if inst == null:
 		return 0
 	return inst._get_tile_rem_delta_impl(x, y, w)
@@ -223,7 +223,7 @@ func is_ruin_ancient_block(x: int, y: int, w: World) -> bool:
 
 ## [SettlementPlanner] manhattan add-on; higher = older = worse to build on/expand to.
 static func get_planner_penalty(t: Vector2i, w: World) -> int:
-	var inst: RemnantMemory = Engine.get_singleton("RemnantMemory") as RemnantMemory
+	var inst: RemnantMemory = _get_instance()
 	if inst == null:
 		return 0
 	return inst._get_planner_penalty_impl(t, w)

@@ -7067,19 +7067,29 @@ func _seed_construction_jobs() -> void:
 	var gs: float = GameManager.game_speed if GameManager != null else 1.0
 	var budget_usec: int = 4_000 if gs < 50.0 else (2_000 if gs < 100.0 else 1_000)
 	var start_usec: int = Time.get_ticks_usec()
-	
-	# EARLY EXIT: Check if we have minimum resources before doing expensive scans
-	var stock_wood: int = StockpileManager.total_count_of(Item.Type.WOOD) if StockpileManager != null else 0
-	var stock_stone: int = StockpileManager.total_count_of(Item.Type.STONE) if StockpileManager != null else 0
-	if stock_wood <= 1 and stock_stone <= 0:
-		return  # Can't build anything without materials
-	
+
+	# Determine settlement context: formal, proto, or bootstrap
 	var settlements: Array = SettlementMemory.get_formal_settlements()
 	if settlements.is_empty():
 		settlements = SettlementMemory.get_proto_sites()
 		if settlements.is_empty():
 			_seed_bootstrap_jobs_near_pawn_cluster()
 			return
+
+	# BREAK BOOTSTRAP DEADLOCK: If settlement/proto exists but no stockpile,
+	# create one immediately. Without this, materials read as 0, no construction
+	# jobs are posted, and settlements can never formalize. This also seeds
+	# 5 wood + 3 stone so the material check below can proceed.
+	if StockpileManager != null and StockpileManager.zone_count() <= 0:
+		var center_tile: Vector2i = _settlement_center_tile_for_dict(settlements[0])
+		if center_tile.x >= 0:
+			_ensure_settlement_stockpile(center_tile)
+	
+	# EARLY EXIT: Check if we have minimum resources before doing expensive scans
+	var stock_wood: int = StockpileManager.total_count_of(Item.Type.WOOD) if StockpileManager != null else 0
+	var stock_stone: int = StockpileManager.total_count_of(Item.Type.STONE) if StockpileManager != null else 0
+	if stock_wood <= 1 and stock_stone <= 0:
+		return  # Can't build anything without materials
 	
 	# EARLY EXIT: Skip if all settlements are abandoned
 	var has_active_settlement: bool = false

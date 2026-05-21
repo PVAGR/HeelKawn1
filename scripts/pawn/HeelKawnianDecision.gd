@@ -216,11 +216,7 @@ func goal_priority_bias_for_job(job_type: int) -> int:
 			if job_type in [_Job.Type.TEACH_SKILL, _Job.Type.APPRENTICESHIP, _Job.Type.CARVE_KNOWLEDGE_STONE, _Job.Type.BUILD_SHRINE]:
 				return p_bias
 		"master_skill":
-			# Bias toward jobs matching current profession
-			if pawn != null and pawn.data != null:
-				var prof: int = pawn.data.current_profession
-				if _is_profession_job(job_type, prof):
-					return p_bias + 1
+			return p_bias
 		"leave_legacy":
 			if job_type in [_Job.Type.BUILD_SHRINE, _Job.Type.CARVE_KNOWLEDGE_STONE, _Job.Type.CARVE_LEDGER_STONE, _Job.Type.CARVE_GRAVE_MARKER]:
 				return p_bias + 2
@@ -229,6 +225,7 @@ func goal_priority_bias_for_job(job_type: int) -> int:
 
 func _is_profession_job(job_type: int, prof: int) -> bool:
 	var _JD = HeelKawnianData
+	var _Job = load("res://scripts/jobs/Job.gd")
 	match prof:
 		_JD.Profession.FARMER: return job_type in [_Job.Type.PLANT_SEEDS, _Job.Type.HARVEST_CROPS, _Job.Type.GROW_FOOD]
 		_JD.Profession.BUILDER: return job_type in [_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_SHELTER]

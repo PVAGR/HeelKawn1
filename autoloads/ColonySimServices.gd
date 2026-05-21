@@ -190,10 +190,10 @@ func get_stance_display() -> String:
 
 
 func _update_labor_stance_from_pressures() -> void:
-	if _food_press > 0.55:
-		current_labor_stance = LaborStance.FOOD_FIRST
-	elif _warmth_press > 0.22 or _housing_press > 0.55:
+	if _warmth_press > 0.18 or _housing_press > 0.40 or _storage_press > 0.25:
 		current_labor_stance = LaborStance.BUILD_FIRST
+	elif _food_press > 0.55:
+		current_labor_stance = LaborStance.FOOD_FIRST
 	elif _haul_press > 0.45 and _food_press > 0.25:
 		current_labor_stance = LaborStance.HAUL_FIRST
 	else:
@@ -671,9 +671,21 @@ func job_priority_stance_bias(job: Job) -> int:
 		LaborStance.BUILD_FIRST:
 			if job.type == Job.Type.BUILD_BED or job.type == Job.Type.BUILD_WALL \
 					or job.type == Job.Type.BUILD_DOOR or job.type == Job.Type.BUILD_FIRE_PIT \
-					or job.type == Job.Type.BUILD_STORAGE_HUT or job.type == Job.Type.BUILD_GRANARY \
-					or job.type == Job.Type.COOK_MEAT or job.type == Job.Type.COOK_BERRIES \
-					or job.type == Job.Type.PLANT_SEEDS or job.type == Job.Type.MINE_WALL:
+					or job.type == Job.Type.BUILD_STORAGE_HUT or job.type == Job.Type.BUILD_STOCKPILE \
+					or job.type == Job.Type.BUILD_HEARTH or job.type == Job.Type.BUILD_SHELTER \
+					or job.type == Job.Type.BUILD_GRANARY or job.type == Job.Type.BUILD_CELLAR \
+					or job.type == Job.Type.BUILD_FARM_WHEAT or job.type == Job.Type.BUILD_FARM_CORN \
+					or job.type == Job.Type.BUILD_FARM_VEGETABLES or job.type == Job.Type.BUILD_HERB_GARDEN \
+					or job.type == Job.Type.BUILD_WORKSHOP or job.type == Job.Type.BUILD_LOOM \
+					or job.type == Job.Type.BUILD_KILN or job.type == Job.Type.BUILD_SMELTER \
+					or job.type == Job.Type.BUILD_BOATYARD or job.type == Job.Type.BUILD_DOCK \
+					or job.type == Job.Type.BUILD_FISHERMAN_HUT or job.type == Job.Type.BUILD_APOTHECARY \
+					or job.type == Job.Type.BUILD_LIBRARY or job.type == Job.Type.BUILD_SCHOOL \
+					or job.type == Job.Type.BUILD_BARRACKS or job.type == Job.Type.BUILD_WATCHTOWER \
+					or job.type == Job.Type.BUILD_MARKET or job.type == Job.Type.BUILD_TRADING_POST \
+					or job.type == Job.Type.BUILD_ROAD or job.type == Job.Type.COOK_MEAT \
+					or job.type == Job.Type.COOK_BERRIES or job.type == Job.Type.PLANT_SEEDS \
+					or job.type == Job.Type.MINE_WALL:
 				return 4
 			if job.type == Job.Type.CHOP or job.type == Job.Type.FORAGE:
 				return -2

@@ -388,7 +388,12 @@ var _tunnel_frontier_cache_component: int = -1
 var _tunnel_frontier_cache_built_tick: int = -1
 const TUNNEL_FRONTIER_CACHE_MAX_TARGETS: int = 24
 const TUNNEL_FRONTIER_CACHE_REFRESH_TICKS: int = 720
-## Hunt candidate index: deterministic sorted tile list refreshed periodically.
+### Throttle last tick for per-tick maintenance to avoid frame spikes.
+var _last_blood_stains_tick: int = -100
+var _last_doors_tick: int = -100
+## Cooldown tick for food_crisis_reprieve to prevent job thrashing.
+var _last_food_crisis_reprieve_tick: int = -100
+# Hunt candidate index: deterministic sorted tile list refreshed periodically.
 var _hunt_candidate_tiles: Array[Vector2i] = []
 var _hunt_candidate_cursor: int = 0
 var _hunt_candidate_last_refresh_tick: int = -1
@@ -2951,12 +2956,18 @@ func _on_game_tick(tick: int) -> void:
 	if _is_main_lane_tick(tick, 2000, 29):
 		if _world != null and _world.has_method("_tick_erosion"):
 			_world._tick_erosion(tick)
-	# Blood stains: fade over time
-	if _world != null and _world.has_method("_tick_blood_stains"):
-		_world._tick_blood_stains(tick)
-	# Doors: close timed-out open doors
-	if _world != null and _world.has_method("_tick_doors"):
-		_world._tick_doors(tick)
+	# Blood stains: fade over time (throttled - every 20 ticks, or 200 at 100x)
+	var blood_interval: int = _high_speed_interval(20, 60, 200)
+	if tick - _last_blood_stains_tick >= blood_interval:
+		_last_blood_stains_tick = tick
+		if _world != null and _world.has_method("_tick_blood_stains"):
+			_world._tick_blood_stains(tick)
+	# Doors: close timed-out open doors (throttled - every 10 ticks, or 100 at 100x)
+	var doors_interval: int = _high_speed_interval(10, 30, 100)
+	if tick - _last_doors_tick >= doors_interval:
+		_last_doors_tick = tick
+		if _world != null and _world.has_method("_tick_doors"):
+			_world._tick_doors(tick)
 	# Settlement festivals: milestone-driven celebrations for growing colonies.
 	if SettlementMemory != null and _is_main_lane_tick(tick, 200, 37) and SettlementMemory.has_method("process_festival_milestones"):
 		SettlementMemory.process_festival_milestones(tick)
@@ -3025,7 +3036,7 @@ func _on_game_tick(tick: int) -> void:
 			if local_pop_l < 1:
 				continue
 			total_leader_posts += HeelKawnianManager.leader_direct_construction(sid)
-		if total_leader_posts > 0:
+		if total_leader_posts > 0 and OS.is_debug_build():
 			print("[Main] Leader construction: posted %d build jobs" % total_leader_posts)
 
 	# Periodic maintenance: prune old cooldown entries to bound memory.
@@ -6403,11 +6414,18 @@ func _maybe_spawn_migrant() -> void:
 
 
 ## Cancel unclaimed chop jobs while the colony is starving so forage/hunt can win claims.
+## Throttled: only runs every FOOD_CRISIS_COOLDOWN_TICKS to prevent job thrashing
+## (post/cancel loop) which wastes CPU and causes cancelled job count to balloon.
 func _trim_open_chop_jobs_under_food_crisis() -> void:
 	if JobManager == null or ColonySimServices == null:
 		return
 	if ColonySimServices.get_food_pressure() < 0.85:
 		return
+	var tick: int = GameManager.tick_count if GameManager != null else 0
+	var cooldown: int = _high_speed_interval(30, 100, 400)
+	if tick - _last_food_crisis_reprieve_tick < cooldown:
+		return
+	_last_food_crisis_reprieve_tick = tick
 	var trimmed: int = 0
 	for jv in JobManager.get_active_jobs_union():
 		if not (jv is Job):

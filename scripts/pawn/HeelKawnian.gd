@@ -1517,9 +1517,6 @@ func _on_global_job_cancelled(job: Job) -> void:
 		# Force immediate cache rebuild so we're included in next tick
 		TickManager._tickable_cache_dirty = true
 	
-	# DEBUG: Verify connection worked
-	if OS.is_debug_build():
-		print("[HeelKawnian] #%s %s: tick armed=%s, tickable=%s" % [data.id, data.display_name, _pawn_sim_tick_armed, is_in_group("tickable")])
 	
 	# Continue with pawn initialization
 	_reserved_bed = Vector2i(-1, -1)

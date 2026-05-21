@@ -14,8 +14,14 @@ signal tick_processed(tick_number: int)
 
 const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base)
 
+## Maximum accumulated backlog (in ticks). Beyond this we drop excess
+## to prevent render freezes. Dropped ticks are a net positive — the
+## sim still runs faster than real-time and the player won't perceive
+## loss of a fraction of a second at 100x.
+const MAX_BACKLOG_TICKS: int = 240  # 4 seconds at 1x, ~2 frames at 100x
+
 ## Hard safety cap.
-const MAX_TICKS_PER_FRAME: int = 48
+const MAX_TICKS_PER_FRAME: int = 24
 
 ## How often (in ticks) to force-rebuild the tickable cache.
 const TICKABLE_CACHE_REBUILD_INTERVAL: int = 300
@@ -78,12 +84,12 @@ func _frame_tick_cap_for_speed(speed: float) -> int:
 		if speed <= 50.0: return 8
 		return 10
 	if speed <= 1.0: return 1
-	if speed <= 3.0: return 3
-	if speed <= 6.0: return 5
-	if speed <= 12.0: return 7
-	if speed <= 26.0: return 10
-	if speed <= 50.0: return 14
-	return 18
+	if speed <= 3.0: return 2
+	if speed <= 6.0: return 4
+	if speed <= 12.0: return 6
+	if speed <= 26.0: return 8
+	if speed <= 50.0: return 10
+	return 12
 
 ## LOD tick counter for staggering pawn processing at high speeds
 var _lod_tick_counter: int = 0
@@ -108,9 +114,13 @@ func _process(delta: float) -> void:
 		tickables_called_last_frame = 0
 		return
 
-	# Accumulate scaled time. NEVER cap or drop — causality depends on exact tick order.
-	# If the CPU cannot keep up, excess backlog persists to the next frame.
+	# Accumulate scaled time. Soft cap backlog to prevent render freezes.
+	# A small backlog drop at 100x is imperceptible — keeping the render
+	# thread responsive prevents the much worse "spiral of death" where
+	# backlog grows faster than it can drain, making FPS approach zero.
 	_accumulated_time += delta * _speed_multiplier
+	if _accumulated_time > float(MAX_BACKLOG_TICKS) * TICK_STEP:
+		_accumulated_time = float(MAX_BACKLOG_TICKS) * TICK_STEP
 
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
@@ -202,15 +212,20 @@ func _call_tick_on_tickables(tick: int) -> int:
 
 func _lod_rate_for_speed() -> int:
 	# At high speeds, stagger pawn processing across ticks
-	# to reduce per-frame simulation load
+	# to reduce per-frame simulation load.
+	# More aggressive staggering means fewer pawn AI evaluations
+	# per tick but still deterministic (each pawn runs exactly
+	# once per N ticks, just spread across frames).
 	if GameManager == null:
 		return 1
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return 4  # 1/4 of pawns per tick
+		return 8  # 1/8 of pawns per tick
 	if gs >= 50.0:
-		return 3  # 1/3 of pawns per tick
+		return 6  # 1/6 of pawns per tick
 	if gs >= 26.0:
+		return 4  # 1/4 of pawns per tick
+	if gs >= 12.0:
 		return 2  # 1/2 of pawns per tick
 	return 1  # All pawns every tick
 

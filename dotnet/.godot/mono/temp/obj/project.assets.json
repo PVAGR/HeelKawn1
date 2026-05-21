@@ -70,11 +70,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "c:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\HeelKawn.csproj",
+      "projectUniqueName": "C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\HeelKawn.csproj",
       "projectName": "HeelKawn",
-      "projectPath": "c:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\HeelKawn.csproj",
+      "projectPath": "C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\HeelKawn.csproj",
       "packagesPath": "C:\\Users\\user\\.nuget\\packages\\",
-      "outputPath": "c:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\.godot\\mono\\temp\\obj\\",
+      "outputPath": "C:\\Users\\user\\Documents\\GitHub\\HeelKawn1\\dotnet\\.godot\\mono\\temp\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\user\\AppData\\Roaming\\NuGet\\NuGet.Config"

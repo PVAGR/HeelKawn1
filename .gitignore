@@ -1,18 +1,11 @@
-# Godot-specific ignores
+# Godot / mod tooling
+.godot/
 *.import
 *.pid
 *.tmpt
-# export_presets.cfg — tracked for CI/Android export (no secrets; keystores are local/CI-only)
-godot_vcs_addon/
-
-# Godot editor cache (never commit these)
-.godot/
-.godot/editor/
-.godot/mono/
-
-# Build artifacts and exports
-*.exe
+*.tmp
 *.pck
+*.exe
 *.zip
 *.bin
 *.so
@@ -20,26 +13,48 @@ godot_vcs_addon/
 *.dll
 builds/
 exports/
+godot_vcs_addon/
 
-# Dependencies
-res://.godot/
-user://*
+# .NET / Unity / BepInEx / editor build output
+bin/
+obj/
+.vs/
+Library/
+Temp/
+Logs/
+UserSettings/
+*.csproj.user
+*.user
+*.suo
+*.unitypackage
 
-# Logs
-*.log
-debug_output.txt
+# Python bot artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+ENV/
+.python-version
+pip-wheel-metadata/
+dist/
+build/
+site/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# IDE
+# IDEs and OS files
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS files
 .DS_Store
 Thumbs.db
 
-# AI tool artifacts (not meant for version control)
+# Local tooling and logs
 .aider*
 .cursor/
 .roo/
@@ -47,7 +62,6 @@ Thumbs.db
 .sixth/
 .letta/
 .agents_tmp/
-
-# Temporary / accidental files
+*.log
+debug_output.txt
 $null
-*.tmp

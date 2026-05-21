@@ -52,7 +52,6 @@ const LIKE_CATEGORIES: PackedStringArray = [
 const LIKE_THRESHOLD: float = 0.6   # >0.6 = liked
 const DISLIKE_THRESHOLD: float = 0.4  # <0.4 = disliked
 const LIKE_MUTATION_CHANCE: float = 0.2  # 20% chance per value to mutate on inheritance
-const PROFESSION_ASSIGN_MIN_TICKS: int = 100  # Must do 100+ ticks in a category before earning profession
 
 ## Cumulative "liking" (1..LIKING_MAX) per interest lane. Grows only from
 ## deterministic work and action-skill gains — no RNG in history. Lanes mix

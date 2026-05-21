@@ -157,6 +157,7 @@ ArtifactSystem="*res://autoloads/ArtifactSystem.gd"
 WorldEnvironmentManager="*res://autoloads/WorldEnvironmentManager.gd"
 WorldEconomyManager="*res://autoloads/WorldEconomyManager.gd"
 WorldHistoryManager="*res://autoloads/WorldHistoryManager.gd"
+ChronicleExport="*res://scripts/system/ChronicleExport.gd"
 
 [display]
 

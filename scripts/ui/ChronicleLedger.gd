@@ -156,7 +156,7 @@ func _refresh_history_tab() -> void:
 		_history_text.text = "\n".join(lines)
 		return
 	
-	var hist_sim: HistoricalSimulation = get_node("/root/HistoricalSimulation")
+	var hist_sim: Node = get_node_or_null("/root/HistoricalSimulation")
 	
 	# Time info
 	lines.append("[b]Time Depth:[/b]")
@@ -236,7 +236,7 @@ func _refresh_technology_tab() -> void:
 		_technology_text.text = "\n".join(lines)
 		return
 	
-	var tech_sys: TechnologySystem = get_node("/root/TechnologySystem")
+	var tech_sys: Node = get_node_or_null("/root/TechnologySystem")
 	
 	# Discovered technologies
 	lines.append("[b]Discovered Technologies (%d):[/b]" % tech_sys.knowledge_graph.size())

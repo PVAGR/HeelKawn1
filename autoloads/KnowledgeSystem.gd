@@ -2360,7 +2360,7 @@ func get_global_tech_diffusion_score() -> float:
 
 ## Get knowledge types that are known in one settlement but not another.
 ## Useful for tracking tech transfer opportunities.
-func get_knowledge_diffusion_gap(from_settlement_id: int, to_settlement_id: int) -> Array[int:
+func get_knowledge_diffusion_gap(from_settlement_id: int, to_settlement_id: int) -> Array[int]:
 	var from_data: Dictionary = get_tech_diffusion_for_settlement(from_settlement_id)
 	var to_data: Dictionary = get_tech_diffusion_for_settlement(to_settlement_id)
 	

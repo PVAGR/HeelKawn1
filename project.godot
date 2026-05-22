@@ -21,7 +21,6 @@ config/features=PackedStringArray("4.6", "GL Compatibility")
 
 [autoload]
 
-; ── CORE KERNEL (must always be present) ──────────────────────────────────────
 PawnAccess="*res://autoloads/PawnAccess.gd"
 TickManager="*res://autoloads/TickManager.gd"
 TickBudgetManager="*res://autoloads/TickBudgetManager.gd"
@@ -33,16 +32,12 @@ WorldRNG="*res://autoloads/WorldRNG.gd"
 EventBus="*res://autoloads/EventBus.gd"
 ObjectPool="*res://autoloads/ObjectPool.gd"
 SpatialGrid="*res://autoloads/SpatialGrid.gd"
-
-; ── WORLD MEMORY & PERSISTENCE ────────────────────────────────────────────────
 WorldMemory="*res://scripts/kernel/WorldMemory.gd"
 WorldMeaning="*res://autoloads/WorldMeaning.gd"
 WorldPersistence="*res://autoloads/WorldPersistence.gd"
 WorldEvents="*res://autoloads/WorldEvents.gd"
 WorldEventSeedManager="*res://autoloads/WorldEventSeedManager.gd"
 WorldActionLedger="*res://autoloads/WorldActionLedger.gd"
-
-; ── SIMULATION CORE ───────────────────────────────────────────────────────────
 JobManager="*res://autoloads/JobManager.gd"
 StockpileManager="*res://autoloads/StockpileManager.gd"
 ColonySimServices="*res://autoloads/ColonySimServices.gd"
@@ -53,8 +48,6 @@ ZoneRegistry="*res://autoloads/ZoneRegistry.gd"
 CommandAPI="*res://autoloads/CommandAPI.gd"
 PlayerIntentQueue="*res://autoloads/PlayerIntentQueue.gd"
 ObserverLens="*res://scripts/kernel/observer_lens.gd"
-
-; ── PAWN & AI ─────────────────────────────────────────────────────────────────
 HeelKawnianManager="*res://autoloads/HeelKawnianManager.gd"
 HeelKawnianMind="*res://autoloads/HeelKawnianMind.gd"
 KnowledgeSystem="*res://autoloads/KnowledgeSystem.gd"
@@ -66,15 +59,11 @@ PawnConsciousness="*res://autoloads/PawnConsciousness.gd"
 PawnDialogue="*res://autoloads/PawnDialogue.gd"
 PawnCommunicationLog="*res://autoloads/PawnCommunicationLog.gd"
 IncarnationManager="*res://autoloads/IncarnationManager.gd"
-
-; ── WORLD AI ──────────────────────────────────────────────────────────────────
 WorldAI="*res://scripts/ai/WorldAI.gd"
 HeelKawnAIOrchestrator="*res://scripts/ai/HeelKawnAIOrchestrator.gd"
 AIAgentManager="*res://autoloads/AIAgentManager.gd"
 GovernorSystem="*res://scripts/ai/GovernorSystem.gd"
 NameGenerator="*res://scripts/ai/NameGenerator.gd"
-
-; ── SETTLEMENT ────────────────────────────────────────────────────────────────
 SettlementMemory="*res://autoloads/SettlementMemory.gd"
 SettlementRegistry="*res://autoloads/SettlementRegistry.gd"
 SettlementManager="*res://autoloads/SettlementManager.gd"
@@ -82,8 +71,6 @@ SettlementPlanner="*res://autoloads/SettlementPlanner.gd"
 SettlementRebirth="*res://autoloads/SettlementRebirth.gd"
 CollapseSystem="*res://autoloads/CollapseSystem.gd"
 FragmentationManager="*res://autoloads/FragmentationManager.gd"
-
-; ── CULTURE & HISTORY ─────────────────────────────────────────────────────────
 CulturalMemory="*res://autoloads/CulturalMemory.gd"
 CulturalStyleManager="*res://autoloads/CulturalStyleManager.gd"
 SpatialManager="*res://autoloads/SpatialManager.gd"
@@ -96,59 +83,41 @@ ChronicleNarrativeSystem="*res://autoloads/ChronicleNarrativeSystem.gd"
 ChronicleExport="*res://scripts/system/ChronicleExport.gd"
 CivilizationStage="*res://autoloads/CivilizationStage.gd"
 MythAge="*res://autoloads/MythAge.gd"
-
-; ── ECONOMY & CRAFTING ────────────────────────────────────────────────────────
 CraftingSystem="*res://autoloads/CraftingSystem.gd"
 WorldEconomyManager="*res://autoloads/WorldEconomyManager.gd"
 FoodChainManager="*res://autoloads/FoodChainManager.gd"
-
-; ── ENVIRONMENT & ECOLOGY ─────────────────────────────────────────────────────
 WorldEnvironmentManager="*res://autoloads/WorldEnvironmentManager.gd"
 Weather="*res://scenes/world/Weather.gd"
 EcologySystem="*res://autoloads/EcologySystem.gd"
 FarmingSystem="*res://autoloads/FarmingSystem.gd"
 WildlifePopulation="*res://autoloads/WildlifePopulation.gd"
 DisasterSystem="*res://autoloads/DisasterSystem.gd"
-
-; ── SURVIVAL & BODY ───────────────────────────────────────────────────────────
 SurvivalSystem="*res://autoloads/SurvivalSystem.gd"
 BodyPartWounds="*res://autoloads/BodyPartWounds.gd"
 BodyRiskManager="*res://autoloads/BodyRiskManager.gd"
 DiseaseSystem="*res://autoloads/DiseaseSystem.gd"
-
-; ── SOCIAL DYNAMICS ───────────────────────────────────────────────────────────
 GrudgeManager="*res://autoloads/GrudgeManager.gd"
 GossipManager="*res://autoloads/GossipManager.gd"
 CrimeSystem="*res://autoloads/CrimeSystem.gd"
 ReligionSystem="*res://autoloads/ReligionSystem.gd"
 ReligionLens="*res://autoloads/ReligionLens.gd"
 SacredGeography="*res://autoloads/SacredGeography.gd"
-
-; ── PLAYER ACTIONS ────────────────────────────────────────────────────────────
 PlayerGathering="*res://autoloads/PlayerGathering.gd"
 PlayerBuilding="*res://autoloads/PlayerBuilding.gd"
-
-; ── DISCOVERY & FOG ───────────────────────────────────────────────────────────
 DiscoveryGate="*res://autoloads/DiscoveryGate.gd"
 FogOfDiscovery="*res://autoloads/FogOfDiscovery.gd"
-
-; ── COMBAT ────────────────────────────────────────────────────────────────────
 AICombatProgression="*res://scripts/ai/AICombatProgression.gd"
 CombatNarrative="*res://scripts/ai/CombatNarrative.gd"
 SquadSystem="*res://scripts/ai/SquadSystem.gd"
 BattleReporter="*res://scripts/ai/BattleReporter.gd"
 GuildSystem="*res://scripts/ai/GuildSystem.gd"
 SquadCoordinator="*res://autoloads/SquadCoordinator.gd"
-
-; ── TRADE & MEMORY LAYERS ─────────────────────────────────────────────────────
 TradeMemory="*res://autoloads/TradeMemory.gd"
 TradePlanner="*res://autoloads/TradePlanner.gd"
 ToolManager="*res://autoloads/ToolManager.gd"
 RelationalGraph="*res://autoloads/RelationalGraph.gd"
 ObservationAPI="*res://autoloads/ObservationAPI.gd"
 BloodlineSystem="*res://autoloads/BloodlineSystem.gd"
-
-; ── UI & AUDIO ────────────────────────────────────────────────────────────────
 MeaningAudioCue="*res://autoloads/MeaningAudioCue.gd"
 MeaningAmbianceController="*res://autoloads/MeaningAmbianceController.gd"
 HeelKawnianVoice="*res://autoloads/HeelKawnianVoice.gd"
@@ -160,10 +129,23 @@ PawnMoodUI="*res://scripts/ui/PawnMoodUI.gd"
 ZoomSystem="*res://scripts/world/ZoomSystem.gd"
 OnboardingSystem="*res://autoloads/OnboardingSystem.gd"
 DailyRoutineSystem="*res://autoloads/DailyRoutineSystem.gd"
-
-; ── PERSISTENCE LAYER ─────────────────────────────────────────────────────────
 PersistenceSystem="*res://autoloads/PersistenceSystem.gd"
 CataclysmSystem="*res://scripts/world/CataclysmSystem.gd"
+MountSystem="*res://autoloads/MountSystem.gd"
+NavalSystem="*res://autoloads/NavalSystem.gd"
+FactionManager="*res://autoloads/FactionManager.gd"
+TechnologySystem="*res://autoloads/TechnologySystem.gd"
+CharacterProgressionSystem="*res://autoloads/CharacterProgressionSystem.gd"
+WorldEventSystem="*res://autoloads/WorldEventSystem.gd"
+NationBorderSystem="*res://autoloads/NationBorderSystem.gd"
+DynastyFamilySystem="*res://autoloads/DynastyFamilySystem.gd"
+SupplyChainSystem="*res://autoloads/SupplyChainSystem.gd"
+OfficerRankSystem="*res://autoloads/OfficerRankSystem.gd"
+ArmyBattleSystem="*res://autoloads/ArmyBattleSystem.gd"
+RitualMagicSystem="*res://autoloads/RitualMagicSystem.gd"
+TerraformingSystem="*res://autoloads/TerraformingSystem.gd"
+PrisonerManager="*res://autoloads/PrisonerManager.gd"
+HistoricalSimulation="*res://autoloads/HistoricalSimulation.gd"
 
 [display]
 

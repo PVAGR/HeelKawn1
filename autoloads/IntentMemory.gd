@@ -7,6 +7,7 @@ class_name IntentMemory
 const INTENT_GROW: int = 0
 const INTENT_HOLD: int = 1
 const INTENT_ABANDON: int = 2
+const INTENT_RECOVER: int = 3
 
 ## Session-only: last Age index we saw (for delta pressure).
 var _age_index_last_seen: int = 0

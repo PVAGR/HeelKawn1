@@ -2,11 +2,39 @@
 
 > Comprehensive analysis of what is built vs. what the master plan requires
 
-**Last Updated:** 2026-05-18
+**Last Updated:** 2026-05-21
 **Analysis Scope:** All autoloads, scripts, docs, and feature specs
 **Authority:** This is the repo's built-vs-missing reality check. See `HEELKAWN_PROJECT_COMPASS.md` for the full truth hierarchy.
 
 **Status label rule:** use **Verified Runtime Complete**, **Implemented but Needs Runtime Verification**, **Partial / Prototype**, or **Vision / TODO**. Older `DONE` language in historical docs should be interpreted as "implemented, then verify in the current runtime" unless this inventory explicitly marks a system verified.
+
+---
+
+## AI AGENT CROSS-REFERENCE
+
+This file is **step 4** of the handoff read order (enforced by `.cursor/rules/heelkawn-handoff.mdc`):
+
+1. `docs/HEELKAWN_STATE.md` — Authoritative current status, blockers
+2. `HEELKAWN.txt` — Quick-context orientation
+3. `AI_README.md` — Core philosophy, kernel rules, forbidden patterns
+4. **`docs/BUILD_INVENTORY.md`** — THIS FILE. Honest built-vs-missing inventory
+5. `docs/HEELKAWN_PROJECT_COMPASS.md` — Orientation compass
+6. `docs/HEELKAWN_BLUEPRINT.md` — PSUni blueprint
+
+**Truth hierarchy (when docs conflict):**
+1. ✅ Source code and Godot runtime checks (highest truth)
+2. 📋 `docs/BUILD_INVENTORY.md` — THIS FILE. Built-vs-missing inventory
+3. 📝 `docs/HEELKAWN_STATE.md` — Current working state
+4. 🧭 `docs/HEELKAWN_PROJECT_COMPASS.md` — Project compass
+5. 📜 `AI_README.md` — Kernel philosophy (non-negotiable)
+6. 🗂 Archive docs / AI session notes — Historical evidence, not authority
+
+**See also:**
+- `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md` — Canon execution queue
+- `docs/WORLD_BIBLE/GLOSSARY.md` — Canon glossary
+- `docs/HEELKAWN_PROJECT_COMPASS.md` section "Ground Truth" for the full authority stack
+- `.cursor/rules/heelkawn-canonical-repo.mdc` — Canonical repo policy
+- `.cursor/rules/heelkawn-handoff.mdc` — Handoff read order
 
 ---
 

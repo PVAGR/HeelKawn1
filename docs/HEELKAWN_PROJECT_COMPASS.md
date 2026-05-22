@@ -1,6 +1,6 @@
 # HeelKawn Project Compass
 
-**Last updated:** May 7, 2026
+**Last updated:** May 21, 2026
 **Purpose:** The single orientation document for humans and AI assistants before changing HeelKawn.
 
 HeelKawn is a deterministic myth engine: a living world where history is computed from pawn action, memory, place, bloodline, culture, loss, and rediscovery. The project is not trying to be a conventional finished game with a narrow end state. It is meant to remain open-ended: an indefinitely deep world where HeelKawnians can move from primitive survival toward civilization, institutions, science, collapse, remembrance, and renewal.
@@ -9,14 +9,48 @@ The current priority is not to add more disconnected systems. The current priori
 
 ---
 
+## AI AGENT CROSS-REFERENCE
+
+This file is **step 5** in the handoff read order (enforced by `.cursor/rules/heelkawn-handoff.mdc`):
+
+1. `docs/HEELKAWN_STATE.md` — Authoritative current status, blockers, action plan
+2. `HEELKAWN.txt` — Quick-context orientation
+3. `AI_README.md` — Core philosophy, kernel rules, forbidden patterns
+4. `docs/BUILD_INVENTORY.md` — Honest built-vs-missing inventory
+5. **`docs/HEELKAWN_PROJECT_COMPASS.md`** — THIS FILE. Orientation compass and north star
+6. `docs/HEELKAWN_BLUEPRINT.md` — Full PSUni blueprint
+
+**Truth hierarchy (when docs conflict):**
+
+| Priority | Source | Purpose |
+|----------|--------|---------|
+| 1 (Highest) | Source code + Godot runtime | What is actually real |
+| 2 | `docs/BUILD_INVENTORY.md` | Honest built-vs-missing inventory |
+| 3 | `docs/HEELKAWN_STATE.md` | Current working state & next steps |
+| 4 | **`docs/HEELKAWN_PROJECT_COMPASS.md`** | THIS FILE — compass |
+| 5 | `AI_README.md` | Kernel philosophy (non-negotiable principles) |
+| 6 | `docs/HEELKAWNIAN_EVOLUTION_SYSTEM.md` | Long-range evolution vision |
+| 7 (Lowest) | Archive docs / AI session notes | Historical evidence |
+
+When docs conflict, preserve the dream but trust the running code.
+
+**See also:**
+- `docs/WORLD_BIBLE/MASTER_INDEX.md` — World bible index
+- `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md` — Canon execution queue
+- `docs/WORLD_BIBLE/GLOSSARY.md` — Canon glossary with implementation anchors
+- `.cursor/rules/heelkawn-canonical-repo.mdc` — Canonical repo policy
+- `.cursor/rules/heelkawn-handoff.mdc` — Handoff read order
+
+---
+
 ## Ground Truth
 
 Use this stack when deciding what is real:
 
 1. **Source code and Godot runtime checks** are the highest truth.
-2. [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) is the canonical Persistent Simulation Universe blueprint; it is vision, not runtime proof.
-3. [BUILD_INVENTORY.md](BUILD_INVENTORY.md) is the most honest built-vs-missing inventory.
-4. [HEELKAWN_STATE.md](HEELKAWN_STATE.md) is the current working state and next-step file.
+2. [BUILD_INVENTORY.md](BUILD_INVENTORY.md) is the most honest built-vs-missing inventory.
+3. [HEELKAWN_STATE.md](HEELKAWN_STATE.md) is the current working state and next-step file.
+4. [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) is the canonical Persistent Simulation Universe blueprint; it is vision, not runtime proof.
 5. [HEELKAWNIAN_EVOLUTION_SYSTEM.md](HEELKAWNIAN_EVOLUTION_SYSTEM.md) is the long-range indefinite evolution vision.
 6. Older completion reports, preflight reports, and AI session notes are historical evidence, not authority.
 

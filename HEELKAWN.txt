@@ -1,152 +1,131 @@
 HEELKAWN - ONGOING DEVELOPMENT
+======================================================================
 
-**IMPORTANT:** HeelKawn is NEVER FINISHED. It is a living, evolving simulation.
-We are always building, always refining, always expanding. This repository captures
-the CURRENT STATE of an ongoing creative journey.
+**IMPORTANT:** HeelKawn is **NEVER FINISHED**. It is a living, evolving
+simulation. We are always building, always refining, always expanding.
+This repository captures the CURRENT STATE of an ongoing creative journey.
 
-WHERE WE ARE NOW (May 5, 2026)
+======================================================================
+AI AGENT CROSS-REFERENCE
+======================================================================
 
-- **Current Phase:** Phase 5 - Emergent Life (95% complete)
-- **Overall Progress:** ~90% complete
-- **Kernel Health:** 🟢 Stable
-- **Shipped Systems:** 45+
+Read order for AI agents (handoff sequence):
+1. AI_README.md         — Core philosophy, kernel rules, forbidden patterns
+2. HEELKAWN.txt         — THIS FILE. Quick-context orientation below
+3. docs/HEELKAWN_STATE.md — Authoritative current status, blockers, action plan
+4. docs/BUILD_INVENTORY.md — Honest built-vs-missing inventory
+5. docs/HEELKAWN_PROJECT_COMPASS.md — Orientation compass and north star
+6. docs/HEELKAWN_BLUEPRINT.md — Full Persistent Simulation Universe blueprint
 
+See also:
+  .cursor/rules/heelkawn-canonical-repo.mdc — Canonical repo policy
+  .cursor/rules/heelkawn-handoff.mdc        — Handoff read order (enforced)
+  docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md — Canon execution queue
+  docs/WORLD_BIBLE/MASTER_INDEX.md          — World bible index
+
+======================================================================
+WHERE WE ARE NOW (May 21, 2026)
+======================================================================
+
+- Current Phase: Consolidation + Phase 5A indefinite evolution foundation
+- Overall Progress: ~55-60% world-completeness (deep playable prototype)
+- Kernel Health:    🟢 Stable (headless Godot smoke passed May 7, 2026)
+- Shipped Systems:  45+
+- Engine:           Godot 4.6.2 (GL Compatibility)
+
+======================================================================
 WHAT WORKS NOW
+======================================================================
 
 ✅ Full pawn AI with needs, skills, professions (5 diverse roles)
-✅ Settlement lifecycle (active → abandoned → reviving)
+✅ Settlement lifecycle (active → abandoned → reviving → permanent ruin)
 ✅ Knowledge system (18 types, inscribe on stones, read them)
+✅ Literature & Book crafting (Paper, Leather, Ink, Pen, Book)
 ✅ Grudge & gossip systems (emergent social dynamics)
 ✅ Legacy & dynasty tracking (multi-generational)
 ✅ Text-rich storytelling (biographies, legends, chronicles)
-✅ Performance optimized (stable at 100x speed)
+✅ Performance optimized (stable at 100x speed with adaptive throttling)
 ✅ All compile errors resolved
+✅ Civilization Stage lens (F10 03B, HUD identity strip) — INITIAL LIVE
+✅ HeelKawnian Development Profiles (per-pawn identity with Matrix AI) — INITIAL LIVE
+✅ Matrix AI Behavior Wiring (job bias from identity/memory/development) — INITIAL LIVE
+✅ Matrix Social Intent Bridge (social_seek, teach_seek, grudge_confront) — LIVE
+✅ Matrix Settlement Ambition Seeding (hearth, storage, beds, walls, food) — LIVE
+✅ Mode Contract Enforcement (Watch/Sprite/Observer) — LIVE
+✅ Need-driven build gating (AIAutoBuild + SettlementPlanner pressure) — LIVE
+✅ Promotion exports + chronicle summary (F10 36/37) — LIVE
+✅ Profession reassignment (pawns change roles based on skill growth) — LIVE
+✅ Colony role balance (diversity pressure against overrepresented roles) — LIVE
+✅ Warrior peacetime patrol (visible perimeter presence) — LIVE
 
+======================================================================
 WHAT'S NEXT (Priority Order)
+======================================================================
 
-1. Trade system (inter-settlement caravans) - HIGH priority
-2. Wildlife population (hunt-able animals) - MEDIUM priority
-3. Polish pass (incarnation UI, F10 organization) - LOW priority
+1. Runtime truth pass in Godot editor — verify F10, UI, red errors
+2. HeelKawnian Matrix AI deepening — preservation, recovery, ambitions
+3. Lineage/progression — parent lookup, child creation, inheritance
+4. Material reality — crafting consumption to inventory/stockpile
+5. Knowledge preservation loop — stones + books + teaching unified
+6. Civilization stage deepening — per-settlement tech diffusion, literacy
+7. Readable exports — chronicle and seed/state export wiring
+8. Governance/faction/religion depth — after core loop is reliable
 
-FOR AI ASSISTANTS
-
-1. READ FIRST: docs/HEELKAWN_STATE.md - Authoritative current status
-2. THEN READ: docs/MASTER_DEVELOPMENT_PLAN.md - Full system inventory & roadmap
-3. QUICK CONTEXT: This file (HEELKAWN.txt)
-4. PRINCIPLES: AI_README.md - Core kernel philosophy (NON-NEGOTIABLE)
-
+======================================================================
 KEY PRINCIPLES
+======================================================================
 
 - Deterministic Kernel: History is computed, not scripted
 - Pawn-Activated: Events trigger from pawn actions, NOT global timers
 - No Random Decay: Memory does not decay randomly
 - Ongoing Project: HeelKawn is never finished
 
+======================================================================
 FIRST PLAYABLE (where to look)
+======================================================================
 
 - In-game: F10 → 35 · Backbone / first-play — prints what is LIVE vs DEFERRED
 - Doc: docs/HEELKAWN_STATE.md section "Current Status"
 - Run main scene, select pawns, use F9 observer when needed
 
+======================================================================
 GIT WORKFLOW
+======================================================================
 
-cd c:\Users\user\Documents\GitHub\HeelKawn1
-git add -A
-git commit -m "fix: [description]"
-git pull --rebase origin main
-git push
+  cd c:\Users\user\Documents\GitHub\HeelKawn1
+  git add -A
+  git commit -m "fix: [description]"
+  git pull --rebase origin main
+  git push
 
+======================================================================
 REPOSITORY
+======================================================================
 
-- Local: c:\Users\user\Documents\GitHub\HeelKawn1
+- Local:  c:\Users\user\Documents\GitHub\HeelKawn1
 - Remote: https://github.com/PVAGR/HeelKawn1 (branch main)
 - When work is ready: commit and git push origin main
 
+======================================================================
 LOG (newest first)
+======================================================================
 
-2026-05-05  All rich text features implemented + documented. Master development plan created.
-2026-05-05  Performance optimizations complete (adaptive throttling, notification batching).
-2026-05-05  All compile errors resolved (tabs, type mismatches, scope issues).
-2026-05-05  Profession heterogeneity implemented (no more "all farmers").
-2026-05-05  Event noise reduction implemented (skill-gated significance filter).
-
-
-2026-05-01  **Player-readable meaning refinement complete:** Fixed compilation error (removed non-existent Job.Type.TRADE_PICKUP reference in Pawn.gd). Wired MeaningAmbianceController._tick() into Main.gd tick loop for real-time meaning state polling. Added clustering radius and wander bias methods to MeaningAmbianceController (128/96/64/48px and 0.5/0.3/0.2/0.1 for quiet/scarred/bloodied/grave). Extended Pawn._apply_meaning_behavior_modifiers to cache all three behavior density modifiers (speed, clustering, wander bias). All four cue types from PLAYER_READABLE_MEANING_SPEC.md now implemented: audio cues (MeaningAudioCue), ambiance (MeaningAmbianceController), behavior density (Pawn), and settlement posture (TileFeature).
-
-2026-05-01  **Promotion exports + chronicle summary:** `WorldMemory.build_readable_chronicle_summary()` (event-type histogram + newest tail). `ExportSystem.export_promotion_bundle()` writes `user://heelkawn_promotion_exports/export_<time>/` (rich world_seed.json, chronicle_summary.txt, chronicle.json, bloodlines.json, artifacts.json). F10 → **36** prints summary; **37** runs bundle. `PawnSpawner` joins group `pawn_spawner` so `PawnData._get_parent_data` resolves during birth.
-
-2026-04-30  **First-play orientation:** `docs/HEELKAWN_STATE.md` adds FIRST PLAYABLE (v0.1 backbone). F10 → **35 · Backbone / first-play** prints LIVE vs DEFERRED + scene counts. `TechnologySystem` diffusion peers use real settlement `center_region` list (not random IDs). `HEELKAWN.txt` points creators to F10/35 + state doc.
-
-2026-04-30  **Universe build status analysis:** Comprehensive scan of HeelKawn universe codebase completed. Generated `docs/HEELKAWN_UNIVERSE_BUILD_STATUS.md` documenting ~45 shipped systems (kernel complete, no blockers). PR #10 merged: Phase 4 identity + trait system + universe build status docs includes MeaningAudioCue, Trait.gd, TraitShop.gd, skill branch unlocks (L5/10/15/20), trait effect integration.
-
-2026-04-30
-2026-04-30  **Canon queue progress (items 1+2):** `docs/WORLD_BIBLE/GLOSSARY.md` now maps legacy terms to canonical systems with implementation anchors (neural/civilization/monitoring/cultural/economic/historical). `docs/WORLD_BIBLE/TIMELINE.md` open hooks now include measurable detection conditions + evidence anchors tied to `WorldMemory`/`SettlementMemory`/`WorldMeaning` and identity divergence signals. `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md` marks items 1 and 2 done, item 3 next.
-2026-04-30  **Canon execution queue scaffolded:** Added `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md` to convert legacy docs into ordered canon/system feature tasks (immediate + near-term), indexed in `docs/WORLD_BIBLE/MASTER_INDEX.md`, and recorded governance decision in `docs/WORLD_BIBLE/CANON_CHANGELOG.md`.
-2026-04-30  **Docs authority + canon-reference pass (Immediate 1):** Clarified determinism wording to allow seeded emergence (`WorldRNG`) while still forbidding unseeded historical randomness in canonical sim paths. Marked `HEELKAWN_INTEGRATION.md` as historical/superseded reference (legacy canon/system context only) with explicit pointers to current authority (`docs/HEELKAWN_STATE.md`, `HEELKAWN.txt`, active docs roadmap). Updated `docs/LLM_ONBOARDING.md`, `.github/copilot-instructions.md`, and `HEELKAWN_KERNEL.md` to align this rule across AI handoff and coding guidance.
-2026-04-30  **Planner cadence hard-backoff (long-run stalls):** Increased planner intervals substantially in `Main.gd` to prevent recurring multi-second tick monopolies on mature worlds. New cadence is much slower at 50x/100x for both normal and heavy planner paths (including derivative-triggered heavy planning), while still running at lower speeds with reduced frequency.
-2026-04-30  **Planner spike guardrails:** Added speed-aware planner cadences in `Main.gd` (`_planner_interval_for_speed`, `_heavy_planner_interval_for_speed`) so settlement/trade planning runs far less often at 12x/26x/50x/100x and no longer co-fires on the same tick. This specifically targets catastrophic planner hitches (e.g., multi-second `settlement_planner` spikes) and recurring 1x periodic stalls from frequent full-plan passes.
-2026-04-30  **Night + harvest hitch trim:** `Pawn` now fast-paths sleeping ticks (skip full AI branch while asleep) and exposes `is_sleeping()` for cross-system gating. In `Main`, regrowth/hunt cadences were retuned and de-phased (`hunt_post` offset) to reduce same-frame maintenance spikes. `social_rapport` now precomputes path components and skips sleeping pawns, cutting O(n²) pair work/event churn during overnight bed clusters.
-2026-04-30  **1x claim-scan throttle:** `Pawn._job_claim_interval_for_speed()` now uses a slower claim cadence at low speeds (1x/normal now 5 ticks; 3x–12x now 4). This reduces repeated full job-queue scans from many idle pawns — a frequent source of 1x `SIM_HITCH` spikes.
-2026-04-30  **SettlementAI parse fix (Godot 4.6):** `SettlementAI` extends `RefCounted`, so autoload lookup now uses `Engine.get_main_loop()` + root `get_node_or_null` helper (replaces invalid direct calls). Fixed mis-typed `propose_collective_goal` calls in event handlers (now proposer id + int priority) and corrected emergency leadership dispatch to existing methods (`_monarch_selection`, `_tribal_leadership_selection`).
-2026-04-29  **Speed-down backlog clamp:** `GameManager.set_speed()` now clamps `_tick_accumulator` to the new tier’s max when speed is reduced (e.g., 100x → 1x). Prevents very large carryover backlog (`SIM_CATCHUP` ~100+ ticks) from making normal-speed play look frozen for long drain periods.
-2026-04-29  **12x pawn cadence throttle:** `Pawn._fast_forward_tick_stride()` now treats 12x as high-speed (stride 4, same tier as 16x) and `_job_claim_interval_for_speed()` now uses claim interval 4 at 12x (was 3). This trims per-tick idle/job-claim CPU at mid-fast-forward where repeated `SIM_HITCH` appeared even without 100x-only hotspots.
-2026-04-29  **Wildlife + rebirth tick cost:** [method AnimalSpawner.update_population_dynamics] now uses [method WorldMemory.get_animal_death_ledger] (one pass over events) + batched live counts by region/species — avoids O(events×regions) scans from [method get_animal_death_count_in_region] / [method get_last_animal_death_tick_in_region] per region. [member Main.ANIMAL_POPULATION_PHASE_TICKS] (500) offsets population checks from multiples of 2000 so [code]animal_population[/code] rarely shares a frame with [code]rebirth_recompute[/code] ([method SettlementMemory.recompute] still at 0, 2000, …).
-2026-04-29  **F10 AI snapshot handoff:** **00 · One paste pack** = printed checklist (A–E) + ERROR + 31 + **34 Creator digest**; **00 · Checklist only** = same A–E without embeds. Checklist C states the pack already includes 31+34; D is the manual path; E optional 32/33. Do not re-click ERROR/31/34 after the pack same tick (duplicate Output).
-2026-04-29  **Social chronicle budget:** `Main._accumulate_social_rapport` still applies full rapport to all in-range pairs, but `WorldMemory` `social_meeting` / `social_bond_milestone` records are capped per pass (`SOCIAL_WM_RECORD_BUDGET_PER_PASS=48`) so night stacking at one stockpile does not emit hundreds of events per rapport tick (less hitch + smaller chronicle).
-2026-04-29  **WorldEvents / Stockpile API fix:** `WorldEvents` used nonexistent `count_item` and `total_item_count` on `Stockpile` — first world-level check runs at tick **5000** (`CONDITION_CHECK_INTERVAL`), so the sim hit a hard error and looked “stuck at 5k.” Replaced with `count_of`; added `Stockpile.total_item_count()`.
-2026-04-29  **Main tick perf:** Observer realm HUD only builds/applies `_build_observer_snapshot` while `ObserverHUD` is visible (F9 still applies immediately on open); social rapport interval scales at 26x/50x/100x (60/80/120 ticks vs base 40); mining-react scans fewer map rows per step at ultra speed (5/4/3 vs 6); 100x regrowth scan budget 12→8 per tick.
-2026-04-29  `WorldAI` emergent pattern detectors no longer spam WorldMemory/settlements every tick while a steady pattern stays true — `_emergent_pattern_emit_gate` cooldown (~600 ticks per pattern type).
-2026-04-29  AI policy hardwired for play: removed F10 AI control toggle + removed `AIAgentDebugPanel` from `Main.tscn` so there is no summon/tuning UI path; `AIAgentManager` now boots always-on from tick 0 (`enabled=true`, `civilization_mode=true`, `max_agents=25`, `update_frequency=3`) for full-capability day-1 simulation.
-2026-04-29  UI discoverability pass: moved `AIAgentDebugPanel` under `UI_Viewport` (screen-space, not map-root) and default-hidden; `Main._init_ai_control_panel` now mounts AI panel in `UI_Viewport`; F10 **AI · Control Panel (toggle)** now creates/toggles `AIControlPanel` in UI root and mirrors visibility to `AIAgentDebugPanel` so AI/debug controls live in F10/bottom UI flow only.
-2026-04-29  **Smoothing pass 3:** `Main` regrowth is now speed-aware (100x/50x budgets reduced to tiny per-call chunks) and reuses one cached `largest_component_id` per pass; `Pawn` job-claim scans are phase-staggered by pawn id (not all idles claim on same tick); `CreatorDebugMenu` dedupes same-tick report spam for identical report IDs.
-2026-04-29  **Ultra-speed smoothness profile:** `GameManager._adaptive_frame_tick_cap` now enforces hard guard caps at high speeds (26x/50x/100x → 10/8/6 max ticks per render frame) in addition to per-tick-cost adaptation; `Pawn` ultra-speed AI stride raised (100x/50x/26x → 14/10/8) and idle job-claim cadence scales by speed (8/6/4 ticks) to reduce queue-scan bursts.
-2026-04-29  **Smoothing pass 2:** `GameManager` adds adaptive high-speed tick cap (`adaptive_ticks_cap_last_frame` in `sim_diag`) so when per-tick listener cost rises, next frames run fewer sim ticks to avoid 80–100ms render stalls; `Main` regrowth/mining budgets tightened (`REGROWTH_SCAN_BUDGET_PER_TICK=32`, `REGROWTH_RESTORE_BUDGET_PER_TICK=4`, `MINING_REACT_SCAN_ROWS_PER_STEP=6`).
-2026-04-29  Fixed parse blockers reported in runtime console: `scripts/testing/NeuralIntegrationTester.gd` malformed `else` indentation; `scripts/ai/SettlementAI.gd` duplicate top-level `_init` renamed to `_resolve_autoload_refs` and called from constructor.
-2026-04-29  **Main heavy-spike fixes (100x):** regrowth queue now uses rolling cursor + fixed scan/restore budgets (`REGROWTH_SCAN_BUDGET_PER_TICK`, `REGROWTH_RESTORE_BUDGET_PER_TICK`) to prevent one-tick regrowth bursts; mining-react is incremental (`MINING_REACT_SCAN_ROWS_PER_STEP`) with one tunnel-wall post per completed pass (no full-map + multi-BFS burst in one tick).
-2026-04-29  **Main tick diagnostics + smoothing:** `_on_game_tick` now reports `[MAIN_TICK_HOTSPOT]` (top 4 section timings at 26x+ when total tick work is heavy), and planner bursts are staggered (`SettlementPlanner` and `TradePlanner` on offset cadence) to reduce one-tick 100x hitch spikes.
-2026-04-29  **CreatorDebugMenu:** removed duplicate `ai_control_panel ... END` line emitted inside `_toggle_ai_control_panel` (report wrapper already prints END).
-2026-04-29  **ColonySimServices:** removed **speed-based** demand throttle — food/mat/haul refresh **every sim tick** again (still one cheap stockpile pass); housing stays **every 60 ticks** (macro cadence, not speed-tier skipping).
-2026-04-29  **GameManager:** measures wall time inside `game_tick` per frame; `sim_diag` adds `last_frame_game_tick_ms` + `last_frame_tick_cap_backlog`; debug builds log `[SIM_HITCH]` when listeners exceed ~25 ms/frame, `[SIM_CATCHUP]` when tick-per-frame cap leaves queued sim backlog (explains fast-forward “freezes”).
-2026-04-29  **StockpileManager** `zone_count()` + `aggregate_inventory_totals()`; **ColonyHUD** stockpile lines use one manager pass (no duplicate `zones()` walk + merge loop).
-2026-04-29  `const _WM` for `WorldMemory._region_key` in **CreatorDebugMenu, PawnInfoPanel, MapModeOverlay, AnimalSpawner, AnimalPopulation, PathFinder, KernelDiagnostic, SettlementAI** (repo grep: no inline `preload(WorldMemory)` left outside the const line).
-2026-04-29  `Pawn.gd` + full `Main.gd`: all `WorldMemory` `_region_key` preloads use file-level `const _WM` (no per-call `preload` in those paths).
-2026-04-29  `const _WM` for `WorldMemory.gd` static `_region_key` in Main + ObservationAPI; `ObservationAPI._count_pawns_in_regions` delegates to `Main` when present (one implementation; fallback for odd scenes).
-2026-04-29  Realm crown view: one pawn scan builds region→pop map for listed settlements; `FactionRegistry.get_synced_house_count()` after single sync (no second `sync_from_settlements`).
-2026-04-29  **Job list reuse:** `JobManager.get_active_jobs_union()` caches open+claimed for `SettlementMemory`; invalidates on queue mutation; `claim_next_for` checks filter/bonus Callable validity once per claim scan.
-2026-04-29  **Fast-forward perf:** GameManager lowers max sim ticks per render frame (26x/50x/100x) to reduce catch-up freezes; Pawn AI stride stronger at 26/50/100; RoadMemory flush coalesced (one deferred/frame); inspect tooltip scan rarer at 26x+.
-2026-04-29  Realm header adds **Heelkawnians** (total living pawns). **Shift+F9** cycles realm list length 8→12→16→24 (instant refresh if observer open). Fixed duplicate **F9** key match (AI panel vs observer): **F9** = observer/realm only; AI panel remains Creator/debug menu path.
-2026-04-29  Realm crown view: settlements sorted by name; each line shows **pop** (pawns in settlement regions). ColonyHUD hotkeys include **F9 realm**. Realm footer reminds F9 + tick refresh.
-2026-04-29  GAME_VISION: three-layer doctrine (DF bible / Rim surface / Syx crown view) + Rim & DF in inspiration blend. Observer HUD top-center **Realm (crown view)** panel: places/houses/sacred/harmony + settlement × house × state × myth voice lines from FactionRegistry + ReligionLens.
-2026-04-29  Heelkawnian: PawnInfoPanel title/identity copy + subtitle arc (children); UI signature includes children, traits, crisis, mood so sheet repaints on evolution. docs/SESSION_REPORT_FOR_AI.md + PLAYTEST §7 = paste pack for AI.
-2026-04-29  F10 hygiene: ENABLE_AI_CONTROL_PANEL default true (panel hidden at boot); remove duplicate error_report END line; SimVision kernel note = emergence/WorldRNG; soul bundle shorter tail/history to reduce output overflow; ad-hoc AI panel connects Main signals.
-2026-04-29  ColonyHUD: wildlife line adds rolling T min…max from sample history; optional Chronicler line (intent queue + pin) when active.
-2026-04-29  ObservationAPI 2026-04-29b: observe_sim_ambient includes player_intent pin/queue; Main.get_chronicler_pin_zone_id(); F10 report 28 seeds demo CHRONICLE_PIN + REQUEST_SETTLEMENT_FOCUS when settlements exist.
-2026-04-29  PlayerIntentQueue: dispatch_cursor + take_next_unprocessed (one intent per sim tick); Main wires CHRONICLE_PIN_ZONE + REQUEST_SETTLEMENT_FOCUS to observer routing; snapshot adds chronicler_pin_zone_id + sim_ticks_last_frame; GameManager.ticks_emitted_last_frame + sim_diag.
-2026-04-29  Canon shift: docs/HEELKAWN_STATE.md — emergence / seeded variety official; WorldRNG autoload + PawnSpawner uses world-seeded streams; World configures RNG on generate/load; SIM_MATRIX §5 aligned; WorldMeaning header softened.
-2026-04-29  ObservationAPI: performance contract + `API_VERSION`; `observe_region` pawn_count uses `_count_pawns_in_regions` (no full per-pawn dict alloc); added `observe_region_lite` + `observe_sim_ambient` for throttled AI/overlays; Main tick comment ties FocusInspector cadence to on-demand observation rule.
-2026-04-27  Portable character: `PawnData.to_portable_character_export` + F10 **33 · Portable character JSON**; `Main.get_player_pawn()`; matrix §11 + JSON `2026-04-27f` (MMO/PVA handoff schema `heelkawn_character_portable/v1`).
-2026-04-27  Matrix §10 release tiers: Tier A = shippable standalone + PVA wrap; Tier B = maybe LAN/hot-seat; Tier C = online/OpenClaw on later product; JSON `matrix_version` → 2026-04-27e.
-2026-04-27  Matrix §9 north star: pvabazaar.org distribution intent + future web/OpenClaw bridge (non-normative); JSON `matrix_version` → 2026-04-27d.
-2026-04-27  Long-session: F10 → **32 · Soul bundle** (`heelkawn_soul_export.gd`) one-paste handoff; `WorldMemory.get_recent_events`; pawns use **procedural pixel figure** (`Pawn.PROCEDURAL_PIXEL_PAWN`); matrix §8 + JSON bump `2026-04-27c`.
-2026-04-27  Play: removed player wall/bed/door/zone stamping (`PLAYER_CAN_PLACE_STRUCTURES_AND_ZONES=false`); BuildToolbar = time + save/load + Sprite [K]; `PlayerAvatarPanel` edits pawn colors/body/hair like NPC `PawnData`; WASD + **E** interact (Space=pause only); world reroll **R** debug-only.
-2026-04-27  Design: docs/HEELKAWN_SIM_MATRIX.md — CK3-style map/UI bridge, actor + sensory matrix, kernel rules for AI; Focus Inspector (settlement/tile/pawn) shows FactionRegistry house stub line.
-2026-04-27  Performance: PAWN_DIVERGENCE per-claim console lines disabled unless SettlementMemory.VALIDATION_SESSION_ENABLED or SPECIALIZATION_VALIDATION_LOG_ENABLED (stops stdout/editor stalls from hundreds of bind/skip lines per tick during normal DEBUG play).
-2026-04-27  Observer UX: `` ` `` toggles HUD+toolbar+pawn sheet (map-only); `G` camera-follow selected pawn (middle-mouse clears); `=` / numpad + toggles verbose HUD lines. Colony HUD compact by default + lighter panel alpha. Smaller fonts + narrower pawn panel. F10 Creator debug grouped by section (playtest→stubs). Stretch scale 1.0.
-2026-04-27  Readable UI: default window 1280×720; stretch scale 1.12 + fractional; ColonyHUD/PawnInfo/Toolbar/Observer/Focus/CreatorDebug fonts bumped; ColonyHUD panel min size; Phase8 proof overlay fonts. Editor: disable Embedded Game or maximize game dock if the play window still looks letterboxed.
-2026-04-27  Display stretch: project.godot canvas_items + expand + fractional scale (fills window, no letterbox pillarboxing). CreatorDebugMenu (F10): anchored full viewport, panel + scroll + buttons resize with size_changed.
-2026-04-27  Social peer label: resolve departed bonds via WorldMemory death facts (not only live PawnSpawner). Warning hygiene: WorldMemory/SettlementPlanner static dispatch; CameraController center_tile shift; AgeMemory unused tick; SettlementRebirth unused world; PawnInfoPanel rename `tr` (no Object.tr shadow).
-2026-04-27  Playtest polish: ColonyHUD [Playtest] hint line; F10 report 31 Playtest bundle; Creator menu taller scroll; pawn Social line resolves peer name via PawnSpawner; PLAYTEST_CHECKLIST §6 session steps.
-2026-04-27  Social + reproduction: PawnData.social_rapport (co-presence, same component, ~128px); Main._accumulate_social_rapport every 40 ticks; relaxed reproduction hunger/rest thresholds + REPRODUCTION_MIN_RAPPORT + wider mate range; spawn_child_pawn tries parent tile + 8 neighbors; child gets parent_a/b ids; PawnInfoPanel Social line + throttled refresh at 12x/26x/50x+; ColonyHUD coarser text refresh at 50x+.
-2026-04-27  PlayerIntentQueue + FactionRegistry + ReligionLens autoloads (v1): structured intent queue with WorldMemory echo; deterministic house stub per settlement zone_id; read-only sacred+myth overlay; save/load in Main; F10 reports 28–30 (report 28 seeds one demo OBSERVER_NOTE per session for traces).
-2026-04-27  SimVision autoload: roadmap stub + F10 debug report 27 (vision scope). Full Worldbox/CK/Bannerlord-scale systems are not implemented in one pass; future tiers must merge with deterministic kernel rules.
-2026-04-27  Character sheet depth: PawnInfoPanel header with 6×8 color “pixel” portrait from PawnData colors; subtitle (profession + job bias); deterministic progression_coach_lines() on PawnData (queue bias, top liking lanes, profession lock hint, nexus line); action-skill xp row; coach section. Same panel path works for NPC observation today and can bind to a player pawn later.
-2026-04-27  Phase 4 playtest slice: ColonyHUD camera revival/rebirth digest (SettlementMemory profile + SettlementRebirth gate); wildlife line shows per-sample deltas + rolling T min/max (same live snapshot as Main.get_wildlife_snapshot_for_diagnostic). Culture tint on wall/door/bed via World region cache + TileFeature.apply_culture_tint_to_built_color. Main: ambient mix/volume curve tightened; camera meaning drift scaled by sqrt(game speed); optional MeaningVignetteLayer ColorRect. Revival/rebirth constants annotated in SettlementMemory.gd / SettlementRebirth.gd. Long-session threshold tweaks: pending playtest (defaults unchanged).
-2026-04-27  Canon: Taured/DRUJ/Ark promotion order locked — exploratory first, then parallel track, then in-world Age (HEELKAWN_STATE.md).
-2026-04-27  Crash hardening: world_meaning_safe.gd wraps get_zone_tags (stale copy / wrong folder). All call sites use preload safe wrapper. ObserverHUD work-focus line: no %d%% (avoids format errors). Pull full repo if warnings persist.
-2026-04-27  Death facts now store profession + parent ids (WorldMemory.record_pawn_death); pawn_death_fact(pid); lineage UI uses them for departed parents and inheritance vs dead parents. PawnData.profession_label_from_enum centralizes labels.
-2026-04-27  Long-run hygiene: WorldMeaning.get_zone_tags() implemented (settlement_persistence / settlement_identity / observer_lens crash fix). ObserverHUD harness line: removed broken printf-style format (spam errors). WorldMemory.last_known_name_from_death_record(pid). PawnSpawner.pawn_data_for_id; PawnInfoPanel Lineage section (parents, profession, inheritance note when parent alive + same locked profession).
-2026-04-27  tools/: Resolve-Godot.ps1, Verify-Project.ps1, Download-GodotPortable.ps1; portable Godot 4.6.2 optional under tools/godot (gitignored). settlement_identity.gd: removed class_name (conflicted with SettlementIdentity autoload — parse fix).
-2026-04-25  Docs-only cleanup: docs/HEELKAWN_STATE.md kept as sole authoritative state file; handoff docs aligned.
-2026-04-25  PawnData.gd: trait loops hardened (null skip, tr not trait); match arms split one-line.
-2026-04-24  Ages/cataclysm framing locked: selective persistence; history degrades into form, not explanation.
-2026-04-24  World memory lock-in and continuity rules established.
+2026-05-21  Full repo scan completed. All handoff docs cross-referenced and
+            updated to consistent state. 45+ shipped systems verified.
+2026-05-19  AIAutoBuild need gates, Matrix Social Intent Bridge,
+            Matrix Settlement Ambition Seeding, TickBudgetManager,
+            Literature & Knowledge Preservation, Civilization Stage lens,
+            HeelKawnian Development Profiles all live.
+2026-05-07  Headless Godot smoke passed. Onboarding RichTextLabel fix.
+2026-05-05  All rich text features implemented + documented.
+            Master development plan created. Performance optimizations complete.
+2026-05-05  All compile errors resolved. Profession heterogeneity implemented.
+            Event noise reduction implemented.
+2026-05-01  Player-readable meaning refinement complete. Promotion exports.
+2026-04-30  First-play orientation. Universe build status analysis.
+2026-04-29  Major performance pass: planner cadence, hitch trim, ultra-speed
+            smoothness, social chronicle budget, diagnostics.
+2026-04-27  Portable character export. Matrix release tiers. Social+
+            reproduction. Phase 4 playtest slice. Canon locks.
+2026-04-25  Docs cleanup. Trait loops hardened.
+2026-04-24  Ages/cataclysm framing locked. World memory lock-in established.

@@ -6,7 +6,48 @@ This file is the **single source of truth** for all AI agents working on HeelKaw
 
 ---
 
-**Last Updated**: May 14, 2026
+**Last Updated**: May 21, 2026
+
+---
+
+## AI AGENT CROSS-REFERENCE
+
+**Read order for AI agents (handoff sequence):**
+
+1. **AI_README.md** — THIS FILE. Core philosophy, kernel rules, forbidden patterns
+2. **HEELKAWN.txt** — Quick-context orientation and latest state
+3. **docs/HEELKAWN_STATE.md** — Authoritative current status, blockers, action plan
+4. **docs/BUILD_INVENTORY.md** — Honest built-vs-missing inventory (build status authority)
+5. **docs/HEELKAWN_PROJECT_COMPASS.md** — Orientation compass and north star
+6. **docs/HEELKAWN_BLUEPRINT.md** — Full Persistent Simulation Universe blueprint
+
+**Other key references:**
+- `HEELKAWN_CANON_BIBLE.md` — Lore canon
+- `.cursor/rules/heelkawn-canonical-repo.mdc` — Canonical repo policy (git push to origin/main required)
+- `.cursor/rules/heelkawn-handoff.mdc` — Handoff read order (enforced by rules engine)
+- `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md` — Canon execution queue
+- `docs/WORLD_BIBLE/MASTER_INDEX.md` — World bible index
+- `docs/WORLD_BIBLE/GLOSSARY.md` — Canon glossary with implementation anchors
+- `TASKS.md` — Current task tracking
+- `TODO.md` — Detailed todo list
+- `docs/PLAYTEST_CHECKLIST.md` — Playtest verification steps
+
+**Truth hierarchy (when docs conflict):**
+1. Source code and Godot runtime checks (highest truth)
+2. `docs/BUILD_INVENTORY.md` — Honest built-vs-missing inventory
+3. `docs/HEELKAWN_STATE.md` — Current working state
+4. `docs/HEELKAWN_PROJECT_COMPASS.md` — Project compass
+5. `AI_README.md` — Kernel philosophy (non-negotiable principles)
+6. Older completion reports and AI session notes — Historical evidence, not authority
+
+**Quick repo stats (as of May 21, 2026):**
+- ~100+ autoload singletons registered in `project.godot`
+- ~60+ script files across `scripts/` subdirectories (ai, camera, career, combat, data, debug, export, future, interfaces, items, jobs, kernel, memory, pawn, performance, persistence, player, save, social, stockpile, system, testing, tests, ui, utils, world)
+- ~45+ scenes (Main, World, ColonyHUD, ObserverHUD, plus 30+ UI panels)
+- ~50+ docs (active) + ~80 archive docs
+- Tests in `tests/` directory
+- C#/Mono integration in `dotnet/`
+- Git: `origin/main` at `github.com/PVAGR/HeelKawn1`
 
 ---
 

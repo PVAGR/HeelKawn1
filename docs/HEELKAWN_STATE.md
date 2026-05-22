@@ -4,11 +4,38 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** May 19, 2026
+**Last Updated:** May 21, 2026
 **Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
-**Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md)
+**Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
+
+---
+
+## AI AGENT CROSS-REFERENCE
+
+**Read order for AI agents (handoff sequence):**
+1. `AI_README.md` — Core philosophy, kernel rules, forbidden patterns
+2. `HEELKAWN.txt` — Quick-context orientation
+3. **`docs/HEELKAWN_STATE.md`** — THIS FILE. Authoritative current status
+4. `docs/BUILD_INVENTORY.md` — Honest built-vs-missing inventory
+5. `docs/HEELKAWN_PROJECT_COMPASS.md` — Orientation compass
+6. `docs/HEELKAWN_BLUEPRINT.md` — Full PSUni blueprint
+
+**Related docs (always refer to for canon/system context):**
+- `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md` — Canon execution queue
+- `docs/WORLD_BIBLE/MASTER_INDEX.md` — World bible master index
+- `docs/WORLD_BIBLE/GLOSSARY.md` — Canon glossary with implementation anchors
+- `.cursor/rules/heelkawn-canonical-repo.mdc` — Canonical repo policy
+- `.cursor/rules/heelkawn-handoff.mdc` — Handoff read order (enforced by cursor rules)
+
+**Truth hierarchy (when docs conflict):**
+1. Source code and Godot runtime checks (highest truth)
+2. `docs/BUILD_INVENTORY.md` — Built-vs-missing inventory
+3. `docs/HEELKAWN_STATE.md` — This file (current working state)
+4. `docs/HEELKAWN_PROJECT_COMPASS.md` — Project compass
+5. `AI_README.md` — Kernel philosophy (non-negotiable)
+6. Historical docs / AI session notes — Evidence, not authority
 
 ---
 

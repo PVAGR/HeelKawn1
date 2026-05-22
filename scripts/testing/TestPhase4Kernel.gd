@@ -1,5 +1,29 @@
 extends Node
 
+## Stub: SettlementPersistenceManager for testing Phase 4 kernel
+class SettlementPersistenceManager extends Node:
+	var _settlements: Dictionary = {}
+	
+	func register_settlement(s: Node) -> void:
+		_settlements[s.get("id", 0)] = s
+	
+	func process_tick(_delta: float) -> void:
+		for s in _settlements.values():
+			var trauma: float = s.get("trauma_score", 0.0)
+			var state: int = s.get("state", 0)
+			if trauma > 100.0 and state == 1:  # ABANDONED
+				s.set("state", 3)  # SCAR
+			elif trauma < 50.0 and state == 1:
+				s.set("state", 2)  # RUINS
+	
+	func attempt_revival(id: int) -> bool:
+		var s: Node = _settlements.get(id)
+		if s and s.get("state") == 2:  # RUINS
+			s.set("state", 0)  # THRIVING
+			s.set("population", 10)
+			return true
+		return false
+
 func _state_label(s: SettlementData.State) -> String:
 	match s:
 		SettlementData.State.THRIVING:

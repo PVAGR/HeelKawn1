@@ -341,11 +341,7 @@ func _test_predictive_models() -> Dictionary:
 		"resources": {"food": 100, "wood": 50, "stone": 25, "ore": 10}
 	}
 
-<<<<<<< HEAD
-	var _predictions = AIAgentManager.generate_predictions(test_world_state)
-=======
 	var predictions = AIAgentManager.generate_predictions(test_world_state)
->>>>>>> aad341ea (fix: correct indentation errors in NeuralIntegrationTester.gd)
 
 	print("[NeuralIntegrationTester] ✓ Predictive models test passed")
 
@@ -720,14 +716,8 @@ func _test_religion_lens_initialization() -> Dictionary:
 		test_result.errors.append("ReligionLens not found")
 		return test_result
 
-<<<<<<< HEAD
-		# Test ReligionLens properties
-		var sacred_mem: Node = MemoryManager.get_sacred_memory()
-		test_result.details["sacred_sites_count"] = sacred_mem.site_count() if sacred_mem != null else 0
-=======
 	# Test ReligionLens properties
 	test_result.details["sacred_sites_count"] = SacredMemory.site_count() if SacredMemory else 0
->>>>>>> aad341ea (fix: correct indentation errors in NeuralIntegrationTester.gd)
 
 	print("[NeuralIntegrationTester] ✓ Religion Lens initialization test passed")
 
@@ -1185,13 +1175,6 @@ func _test_memory_stress() -> Dictionary:
 		"errors": []
 	}
 
-<<<<<<< HEAD
-	# Test memory stress (Godot 4: Performance monitor, not OS.get_static_memory_usage_by_type / gc)
-	var initial_memory: float = Performance.get_monitor(Performance.MEMORY_STATIC)
-
-	# Create multiple neural network instances
-	var neural_instances: Array = []
-=======
 	# Test memory stress
 	var initial_memory = OS.get_static_memory_usage_by_type()[OS.MEMORY_TYPE_STATIC]
 
@@ -1201,14 +1184,15 @@ func _test_memory_stress() -> Dictionary:
 		var instance = WorldEvolution.new()
 		neural_instances.append(instance)
 
-	var peak_memory: float = Performance.get_monitor(Performance.MEMORY_STATIC)
-	var memory_increase: float = peak_memory - initial_memory
+	var peak_memory = OS.get_static_memory_usage_by_type()[OS.MEMORY_TYPE_STATIC]
+	var memory_increase = peak_memory - initial_memory
 
-	# Clean up instances (no explicit GC in GDScript)
+	# Clean up instances
 	neural_instances.clear()
+	gc.collect()
 
-	var final_memory: float = Performance.get_monitor(Performance.MEMORY_STATIC)
-	var memory_recovered: float = peak_memory - final_memory
+	var final_memory = OS.get_static_memory_usage_by_type()[OS.MEMORY_TYPE_STATIC]
+	var memory_recovered = peak_memory - final_memory
 
 	test_result.details["initial_memory_mb"] = initial_memory / (1024 * 1024)
 	test_result.details["peak_memory_mb"] = peak_memory / (1024 * 1024)
@@ -1350,10 +1334,7 @@ func get_detailed_report() -> String:
 
 	var report: PackedStringArray = []
 	report.append("=== HEELKAWN NEURAL NETWORK MATRIX INTEGRATION TEST REPORT ===")
-	report.append(
-			"Test Timestamp: %s"
-			% Time.get_datetime_string_from_unix_time(int(test_results.test_timestamp))
-	)
+	report.append("Test Timestamp: %s" % Time.get_datetime_string_from_system(test_results.test_timestamp))
 	report.append("Overall Status: %s" % test_results.overall_status.to_upper())
 	report.append("Total Tests: %d" % test_results.total_tests)
 	report.append("Passed: %d" % test_results.passed_tests)

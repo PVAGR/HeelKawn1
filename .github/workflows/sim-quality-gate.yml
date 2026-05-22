@@ -1,0 +1,32 @@
+name: HeelKawn Simulation Quality Gate
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  sim-quality-gate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure ripgrep
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ripgrep
+          fi
+
+      - name: Setup Godot 4.6.2
+        uses: chickensoft-games/setup-godot@v1
+        with:
+          version: 4.6.2
+          use-dotnet: false
+
+      - name: Run HeelKawn sim quality gate
+        run: bash tools/ai/sim-quality-gate.sh

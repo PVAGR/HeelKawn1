@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `AGENTS.md` repo operating contract for future AI contributors (determinism + 1x/100x stability requirements)
+- `docs/AI_RUNTIME_MANDATE.md` non-negotiable runtime and verification contract
+- `.github/workflows/sim-quality-gate.yml` CI enforcement for simulation quality gate
+- `tools/ai/sim-quality-gate.sh` static/runtimes checks with performance smoothness pass requirements
 - `ChronicleExport.gd`: narrative prose chronicle organized by era, with settlement summaries, notable lives, and knowledge status
 - `PlayerGathering.gd` tool checks: `_has_required_tool` now checks carried item + stockpile (was: always false)
 - `PlayerGathering.gd` skill XP: `_get_skill_level` / `_gain_skill_xp` wired to `HeelKawnianData` (was: stubs)

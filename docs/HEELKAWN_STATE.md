@@ -9,6 +9,7 @@ We are always building, always refining, always expanding. This document capture
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
 **Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
+**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-22.md](STATE_VERIFICATION_2026-05-22.md)
 
 ---
 
@@ -46,6 +47,8 @@ We are always building, always refining, always expanding. This document capture
 - **Compilation:** ✅ Headless Godot smoke passed on May 7, 2026 (re-run locally after May 19 construction/UI changes)
 - **Project Shape:** Many live systems, some partial systems, and several design stubs
 - **Truth Source:** Code/runtime first, then `BUILD_INVENTORY.md`, then this file
+- **Runtime Contract:** `AGENTS.md` + `docs/AI_RUNTIME_MANDATE.md`
+- **Quality Gate Command:** `bash tools/ai/sim-quality-gate.sh`
 - Resolved Blockers:
   - Fixed Pawn parse errors that were cascading into job-system and UI dependency failures.
   - Verified `ProceduresPawnVisualizer` exists, exposes `class_name ProceduresPawnVisualizer`, and compiles cleanly.

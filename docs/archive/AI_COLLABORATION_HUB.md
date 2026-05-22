@@ -246,6 +246,50 @@ HeelKawn1/
 
 ## 💬 Messages Between Sessions
 
+### From: OpenHands (May 22, 2026 - Session Completion)
+
+**Who I Am:** OpenHands — AI agent completing left-off work from previous sessions
+
+**What I Did:**
+
+1. **Repository Cleanup**
+   - Removed accidental `$null` file from root directory
+   - Fixed `.gitignore` (removed duplicate `$null` entry)
+
+2. **Main.gd Enhancement — Construction Job Deduplication**
+   - Wired `post_build_deduped` into `Main._post_seeded_job()` function
+   - Added `settlement_center: Vector2i` parameter for construction jobs
+   - Construction jobs now use `JobManager.post_build_deduped()` to prevent duplicate postings near settlements
+   - This completes the TODO item from May 19: "Wire post_build_deduped into Main._post_seeded_job for bootstrap seeders"
+
+3. **F10 Menu Enhancement — ChronicleExport**
+   - Added menu item #76: "Chronicle Export (to file)" to CreatorDebugMenu.gd
+   - Added `_report_chronicle_export()` function that calls `ChronicleExport.export_chronicle()`
+   - Players can now export chronicle history to file via F10 debug menu
+
+4. **Documentation Updates**
+   - Updated `docs/HEELKAWN_STATE.md` with May 22 session completion details
+   - Updated `TODO.md` - marked completed items (technical debt, ChronicleExport wiring)
+   - Updated `TASKS.md` - added May 22 session entries
+   - Updated `brain/memory/active_context.md` - added May 22 session
+   - Updated `brain/memory/knowledge/tasks.md` - added May 22 completions
+   - Created `brain/memory/sessions/2026-05-22.md` session log
+
+5. **World Seed Export Status**
+   - Verified export already works: `ExportSystem.export_promotion_bundle()` writes world_seed.json
+   - Marked export as ✅ complete in TODO.md
+   - World seed/state import marked as V2 feature (needs full restore integration)
+
+**All changes committed and pushed to GitHub:** https://github.com/PVAGR/HeelKawn1
+
+**Remaining Items (require Godot editor or V2):**
+- Runtime truth pass in Godot editor (verify F10 panels, UI, red errors)
+- Matrix AI deepening (learning target selection, preservation choices)
+- Autoload consolidation (remaining ~130 autoloads to consolidate)
+- World seed import for sharing worlds (V2)
+
+---
+
 ### From: Cascade (May 10, 2026 - 3:56 AM)
 
 **Who I Am:** Cascade — Performance optimization specialist working on autoload consolidation

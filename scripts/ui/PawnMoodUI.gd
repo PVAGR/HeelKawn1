@@ -26,6 +26,14 @@ const NEED_TYPES: Array[String] = ["hunger", "rest", "social", "comfort", "safet
 @onready var _modern_theme: Node = get_node_or_null("/root/ModernTheme")
 
 
+func _create_label(text: String, size: String) -> Label:
+	if _modern_theme != null:
+		return _modern_theme.create_styled_label(text, size)
+	var label := Label.new()
+	label.text = text
+	return label
+
+
 func _ready() -> void:
 	_build_ui()
 	_setup_theme()
@@ -40,7 +48,7 @@ func _build_ui() -> void:
 	add_child(main_vbox)
 	
 	# HeelKawnian name header
-	var name_label: Label = _modern_theme.create_styled_label("HeelKawnian Name", "large")
+	var name_label: Label = _create_label("HeelKawnian Name", "large")
 	name_label.name = "NameLabel"
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	main_vbox.add_child(name_label)
@@ -50,7 +58,7 @@ func _build_ui() -> void:
 	mood_section.add_theme_constant_override("separation", 4)
 	main_vbox.add_child(mood_section)
 	
-	var mood_title: Label = _modern_theme.create_styled_label("Mood", "small")
+	var mood_title: Label = _create_label("Mood", "small")
 	mood_section.add_child(mood_title)
 	
 	_mood_bar = ProgressBar.new()
@@ -61,12 +69,12 @@ func _build_ui() -> void:
 	_mood_bar.custom_minimum_size = Vector2(0, 20)
 	mood_section.add_child(_mood_bar)
 	
-	_mood_label = _modern_theme.create_styled_label("50/100", "small")
+	_mood_label = _create_label("50/100", "small")
 	_mood_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	mood_section.add_child(_mood_label)
 	
 	# Needs section
-	var needs_title: Label = _modern_theme.create_styled_label("Needs", "small")
+	var needs_title: Label = _create_label("Needs", "small")
 	main_vbox.add_child(needs_title)
 	
 	_needs_container = VBoxContainer.new()
@@ -77,7 +85,7 @@ func _build_ui() -> void:
 	for need_type in NEED_TYPES:
 		var need_row: HBoxContainer = HBoxContainer.new()
 		
-		var need_label: Label = _modern_theme.create_styled_label(need_type.capitalize(), "small")
+		var need_label: Label = _create_label(need_type.capitalize(), "small")
 		need_label.custom_minimum_size = Vector2(80, 0)
 		need_row.add_child(need_label)
 		
@@ -92,7 +100,7 @@ func _build_ui() -> void:
 		_needs_container.add_child(need_row)
 	
 	# Thoughts section
-	var thoughts_title: Label = _modern_theme.create_styled_label("Thoughts", "small")
+	var thoughts_title: Label = _create_label("Thoughts", "small")
 	main_vbox.add_child(thoughts_title)
 	
 	_thoughts_container = VBoxContainer.new()
@@ -100,7 +108,7 @@ func _build_ui() -> void:
 	main_vbox.add_child(_thoughts_container)
 	
 	# Traits section
-	var traits_title: Label = _modern_theme.create_styled_label("Traits", "small")
+	var traits_title: Label = _create_label("Traits", "small")
 	main_vbox.add_child(traits_title)
 	
 	_traits_container = FlowContainer.new()
@@ -109,10 +117,10 @@ func _build_ui() -> void:
 	main_vbox.add_child(_traits_container)
 	
 	# Health section
-	var health_title: Label = _modern_theme.create_styled_label("Health", "small")
+	var health_title: Label = _create_label("Health", "small")
 	main_vbox.add_child(health_title)
 	
-	_health_label = _modern_theme.create_styled_label("Healthy", "small")
+	_health_label = _create_label("Healthy", "small")
 	main_vbox.add_child(_health_label)
 
 
@@ -215,7 +223,7 @@ func _update_thoughts() -> void:
 	var thoughts: Array = thoughts_raw if thoughts_raw != null else []
 	
 	for thought in thoughts:
-		var thought_label: Label = _modern_theme.create_styled_label("• " + str(thought), "small")
+		var thought_label: Label = _create_label("• " + str(thought), "small")
 		_thoughts_container.add_child(thought_label)
 
 

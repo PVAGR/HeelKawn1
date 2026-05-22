@@ -6923,6 +6923,7 @@ func _post_seeded_job(
 		reason: String = "world_seed",
 		visible_to: String = "nearby",
 		settlement_id: int = -1,
+		settlement_center: Vector2i = Vector2i(-99999, -99999),
 ) -> Job:
 	if _world != null and _world.data != null:
 		if jtype == Job.Type.CHOP and _world.data.get_feature(tile.x, tile.y) != TileFeature.Type.TREE:
@@ -6931,7 +6932,11 @@ func _post_seeded_job(
 			return null
 		if jtype == Job.Type.MINE and _world.data.get_feature(tile.x, tile.y) != TileFeature.Type.ORE_VEIN:
 			return null
-	var job: Job = JobManager.post(jtype, tile, priority, work_ticks)
+		var job: Job
+		if JobManager._is_construction_type(jtype) and settlement_center.x > -99990:
+			job = JobManager.post_build_deduped(jtype, tile, priority, work_ticks, settlement_center)
+		else:
+			job = JobManager.post(jtype, tile, priority, work_ticks)
 	if job != null:
 		_stamp_seeder_job(job, reason, settlement_id, visible_to)
 	return job

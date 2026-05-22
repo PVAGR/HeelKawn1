@@ -1,6 +1,6 @@
 # Active Context
 
-**Last updated:** 2026-05-19
+**Last updated:** 2026-05-22
 **Current phase:** Phase 5A — Emergent Life foundation (Consolidation)
 **Kernel status:** Complete
 
@@ -20,6 +20,13 @@
   - 🔶 PENDING: RoadMemory → MemoryManager (complex API, many files)
 - Phase 5A integration testing — CivilizationStage, HeelKawnian profiles, Matrix AI
 - Headless smoke test verification (passed May 7 — confirm stable)
+
+### Completed This Session (May 22, 2026)
+- Cleaned up accidental `$null` file in root directory
+- Fixed .gitignore (removed duplicate `$null` entry)
+- Wired `post_build_deduped` into `Main._post_seeded_job` for construction job deduplication
+- Added ChronicleExport to F10 menu (item #76 "Chronicle Export (to file)")
+- Updated brain/memory files with current session progress
 
 ### Completed This Session (May 19, 2026)
 - Needs-driven construction: `SettlementPlanner` uses `compute_settlement_build_priorities` for hearth/storage gates; `ColonySimServices` 500–2000 tick build-kind cooldowns; `AIAutoBuild` shares planner dedupe

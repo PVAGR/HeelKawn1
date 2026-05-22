@@ -246,6 +246,7 @@ const DEBUG_SECTIONS: Array[Dictionary] = [
 			{"id": "legacy_dynasty", "label": "70 · Legacy & Dynasty (Phase 7 — milestone tracking)"},
 			{"id": "chronicle_view", "label": "71 · Chronicle View (Phase 5 — settlement history as story)"},
 			{"id": "settlement_legends", "label": "72 · Settlement Legends (Phase 5 — emergent myths & stories)"},
+			{"id": "chronicle_export", "label": "76 · Chronicle Export (to file)"},
 			{"id": "read_knowledge_stone", "label": "73 · Read Knowledge Stone (Phase 5 — inscribed knowledge)"},
 			{"id": "dynasty_tree", "label": "74 · Dynasty Tree (Phase 7 — visual family tree)"},
 			{"id": "endgame_status", "label": "75 · Legacy Milestones (Phase 7 — historical progress)"},
@@ -511,6 +512,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_legacy_dynasty, "legacy_dynasty")
 		"chronicle_view":
 			error_occurred = _safe_report(_report_chronicle_view, "chronicle_view")
+			"chronicle_export":
+				error_occurred = _safe_report(_report_chronicle_export, "chronicle_export")
 		"settlement_legends":
 			error_occurred = _safe_report(_report_settlement_legends, "settlement_legends")
 		"read_knowledge_stone":
@@ -1997,6 +2000,20 @@ func _report_promotion_bundle() -> void:
 	else:
 		print("[PROMOTION_BUNDLE] failed: %s" % str(res.get("error", "?")))
 
+
+
+func _report_chronicle_export() -> void:
+	print("=== CHRONICLE EXPORT ===")
+	if ChronicleExport == null:
+		push_error("[F10 76] ChronicleExport autoload not found")
+		return
+	var result: String = ChronicleExport.export_chronicle()
+	if result.is_empty():
+		push_error("[F10 76] Chronicle export failed")
+		print("[F10 76] Check that user://exports/ directory is writable")
+	else:
+		print("[F10 76] Chronicle exported to: %s" % result)
+		print("[F10 76] Full path: user://heelkawn_exports/" + result)
 
 func _report_playtest_bundle() -> void:
 	print("[PLAYTEST_BUNDLE] tick=%d" % GameManager.tick_count)

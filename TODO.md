@@ -67,8 +67,9 @@
 - [x] Promotion bundle: `ExportSystem.export_promotion_bundle()` → world_seed.json, chronicle_summary.txt, chronicle.json, bloodlines.json, artifacts.json
 - [x] History export string: `WorldMemory.get_history_export_string()`
 - [x] ChronicleExport.gd: narrative prose chronicle organized by era
-- [ ] Wire ChronicleExport into F10 menu for in-game access
-- [ ] World seed/state export for sharing worlds (seed JSON exists, needs import path)
+- [x] Wire ChronicleExport into F10 menu for in-game access ✅ DONE May 22
+- [x] World seed export: `export_world_seed()` and promotion bundle write world_seed.json ✅ DONE
+- [ ] World seed/state import for sharing worlds (stub exists, full restore needs integration - V2 feature)
 
 ### 8. Governance / Faction / Religion (after core loop is reliable)
 - [x] FactionRegistry: house-per-zone with deterministic names
@@ -115,8 +116,8 @@
 
 - [x] LICENSE set to MIT
 - [ ] Add basic deterministic smoke tests (same seed → same output)
-- [ ] Clean up root directory of accidental files (`$null`)
-- [ ] Fix .gitignore (remove markdown code fence wrappers)
+- [x] Clean up root directory of accidental files (`$null`) ✅ DONE May 22
+- [x] Fix .gitignore (remove duplicate `$null` entry) ✅ DONE May 22
 - [ ] Consider adding CI for headless Godot validation
 
 ---
@@ -124,7 +125,11 @@
 ## May 19, 2026 session
 
 - [x] Need-driven build gating: `SettlementPlanner` + `AIAutoBuild` use `_build_pressure_ok`, 1200-tick cooldown per settlement+type, and `JobManager.has_pending_build_near` / `post_build_deduped` to skip duplicate construction posts (bed, hearth, storage, farm).
-- [ ] Wire `post_build_deduped` into `Main._post_seeded_job` for bootstrap seeders.
+- [x] Wire `post_build_deduped` into `Main._post_seeded_job` for bootstrap seeders. ✅ DONE May 22
+
+## May 22, 2026 session
+
+- [x] ChronicleExport F10 wiring (added menu item #76 "Chronicle Export (to file)").
 
 ---
 

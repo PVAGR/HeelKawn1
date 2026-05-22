@@ -341,12 +341,7 @@ func _test_predictive_models() -> Dictionary:
 		"resources": {"food": 100, "wood": 50, "stone": 25, "ore": 10}
 	}
 
-<<<<<<< HEAD
-	var _predictions = AIAgentManager.generate_predictions(test_world_state)
-=======
 	var predictions = AIAgentManager.generate_predictions(test_world_state)
->>>>>>> aad341ea (fix: correct indentation errors in NeuralIntegrationTester.gd)
-
 	print("[NeuralIntegrationTester] ✓ Predictive models test passed")
 
 	return test_result

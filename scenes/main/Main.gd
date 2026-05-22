@@ -2292,7 +2292,7 @@ func _get_player_authority_rank() -> String:
 		return ""
 	if _player_pawn == null or not is_instance_valid(_player_pawn) or _player_pawn.data == null:
 		return ""
-	if FactionManager == null:
+	if FactionManager == null or not is_instance_valid(FactionManager):
 		return "HeelKawnian"
 	var pid: int = _player_pawn.data.id
 	var mil: float = FactionManager.get_authority_level(pid, FactionManager.AuthorityContext.MILITARY)
@@ -2448,7 +2448,8 @@ func _bootstrap_colony() -> void:
 		_ensure_validation_session_seed_stockpile_overlaps_settlement()
 		MemoryManager.get_myth_memory().recompute(_world)
 		MemoryManager.get_sacred_memory().sync_permanent_ruins_from_settlements()
-		FactionManager.get_faction_registry().sync_from_settlements()
+		if FactionManager != null and is_instance_valid(FactionManager):
+			FactionManager.get_faction_registry().sync_from_settlements()
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):
 				_world.refresh_pawn_historic_path_weights()
@@ -6334,7 +6335,8 @@ func _reroll_world() -> void:
 		BuildingUsageTracker.clear()
 	# SnowAccumulation and TimeLapseRecorder removed during autoload consolidation
 	_reset_player_intent_observer_routing()
-	FactionManager.get_faction_registry().clear()
+	if FactionManager != null and is_instance_valid(FactionManager):
+		FactionManager.get_faction_registry().clear()
 	ChronicleLog.clear()
 	MemoryManager.get_road_memory().clear()
 	TradeMemory.clear()
@@ -6370,8 +6372,8 @@ func _reroll_world() -> void:
 		NavalSystem.clear()
 	if TerraformingSystem != null and TerraformingSystem.has_method("clear"):
 		TerraformingSystem.clear()
-	if CurrencySystem != null:
-		CurrencySystem._phase = 0
+	if WorldEconomyManager != null:
+		WorldEconomyManager._currency_phase = 0
 	var main_component: int = _world.pathfinder.largest_component_id()
 	# Place the stockpile BEFORE respawning pawns, so every pawn sees a valid
 	# stockpile reference the first time it ticks.
@@ -9441,7 +9443,7 @@ func _build_save_dict() -> Dictionary:
 		"chronicle": ChronicleLog.to_save_dict(),
 		"cultural_memory": CulturalMemory.to_save_dict(),
 		"player_intent_queue": PlayerIntentQueue.to_save_dict(),
-		"faction_registry": FactionManager.get_faction_registry().to_save_dict(),
+		"faction_registry": FactionManager.get_faction_registry().to_save_dict() if FactionManager != null and is_instance_valid(FactionManager) else {},
 		"grudge_manager": SocialManager.grudges_to_save_dict(),
 		"gossip_manager": SocialManager.gossip_to_save_dict(),
 		"myth_age": MythAge.to_save_dict(),
@@ -9513,7 +9515,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 	if BuildingUsageTracker != null and BuildingUsageTracker.has_method("clear"):
 		BuildingUsageTracker.clear()
 	# SnowAccumulation and TimeLapseRecorder removed during autoload consolidation
-	FactionManager.get_faction_registry().clear()
+	if FactionManager != null and is_instance_valid(FactionManager):
+		FactionManager.get_faction_registry().clear()
 	ChronicleLog.clear()
 	_set_designation_mode(DesignationMode.NONE)
 	_cancel_drag()
@@ -9591,8 +9594,9 @@ func _apply_save_dict(s: Dictionary) -> void:
 		MemoryManager.get_sacred_memory().sync_permanent_ruins_from_settlements()
 		PlayerIntentQueue.from_save_dict(s.get("player_intent_queue", {}))
 		_reset_player_intent_observer_routing()
-		FactionManager.get_faction_registry().from_save_dict(s.get("faction_registry", {}))
-		FactionManager.get_faction_registry().sync_from_settlements()
+		if FactionManager != null and is_instance_valid(FactionManager):
+			FactionManager.get_faction_registry().from_save_dict(s.get("faction_registry", {}))
+			FactionManager.get_faction_registry().sync_from_settlements()
 		MemoryManager.recompute_intent(_world)
 		_run_heavy_refresh_once_per_tick(func() -> void:
 			if is_instance_valid(_world):
@@ -10262,7 +10266,8 @@ func _tradition_narrative_tooltip_line(tradition: Dictionary) -> String:
 
 ## FactionRegistry: deterministic house line for settlement zone (focus / observer readout).
 func _focus_append_house_stub_lines(out: PackedStringArray, center_region: int) -> void:
-	FactionManager.get_faction_registry().append_focus_house_lines(out, center_region)
+	if FactionManager != null and is_instance_valid(FactionManager):
+		FactionManager.get_faction_registry().append_focus_house_lines(out, center_region)
 
 
 func _pawn_governance_role(d: HeelKawnianData, gov: Dictionary) -> String:
@@ -10307,7 +10312,8 @@ func _build_realm_crown_view_text() -> String:
 	## Macro strip: settlements × proto-houses × myth/sacred tone (read-only facts).
 	var max_settlements: int = _realm_crown_max_settlements
 	var proto_sites: int = SettlementMemory.get_proto_sites().size()
-	FactionManager.get_faction_registry().sync_from_settlements()
+	if FactionManager != null and is_instance_valid(FactionManager):
+		FactionManager.get_faction_registry().sync_from_settlements()
 	var rows: Array = []
 	for st_any in SettlementMemory.get_formal_settlements():
 		if not (st_any is Dictionary):
@@ -10365,14 +10371,14 @@ func _build_realm_crown_view_text() -> String:
 					continue
 				seen_rk[rk] = true
 				pop += int(pop_by_rk.get(rk, 0))
-		var house: Dictionary = FactionManager.get_faction_registry().get_house_for_zone(zid)
+		var house: Dictionary = FactionManager.get_faction_registry().get_house_for_zone(zid) if FactionManager != null and is_instance_valid(FactionManager) else {}
 		var house_disp: String = str(house.get("house_display", "—"))
 		var rel: Dictionary = ReligionLens.describe_settlement_zone(zid)
 		var st_state: String = str(rel.get("state", ""))
 		var voice: String = str(rel.get("voice", ""))
 		lines.append("• %s — pop %d · %s · %s · %s" % [nm, pop, house_disp, st_state, voice])
 		listed += 1
-	var houses_n: int = FactionManager.get_faction_registry().get_synced_house_count()
+	var houses_n: int = FactionManager.get_faction_registry().get_synced_house_count() if FactionManager != null and is_instance_valid(FactionManager) else 0
 	var sac_n: int = MemoryManager.site_count() if SacredMemory != null else 0
 	var harm: float = ReligionLens.get_harmony_index() if ReligionLens != null else 0.0
 	var total_pawns: int = _observer_total_pawns()

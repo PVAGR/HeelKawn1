@@ -4812,7 +4812,9 @@ func _tick_idle() -> void:
 		base_bias += clampi(int(floor((_bp(5) - 0.5) * 6.0)), -2, 2)
 
 		# Keep bias math cheap and deterministic on hot claim path.
-		return FactionManager.apply_authority_bonus(base_bias, int(data.id))
+		if FactionManager != null and FactionManager.has_method("apply_authority_bonus"):
+			return FactionManager.apply_authority_bonus(base_bias, int(data.id))
+		return base_bias
 	var base_passes: Callable = func(j: Job) -> bool:
 		if HeelKawnian._world_hunt_stabilization_blocks() and j.type == _Job.Type.HUNT:
 			return false

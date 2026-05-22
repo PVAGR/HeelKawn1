@@ -309,7 +309,7 @@ static func get_matrix_decision_for_pawn(pawn: Variant) -> Dictionary:
 	if profile.is_empty():
 		return {}
 	var identity: HeelKawnianIdentity = get_identity_for_pawn(pawn)
-	var biases: Dictionary = _matrix_job_biases(profile, data, identity)
+	var biases: Dictionary = _matrix_job_biases(profile, data, identity, pawn)
 	
 	# Household Coordination: check if pawn is part of a coordinated plan
 	var hh_ambition: Dictionary = get_household_ambition_for_pawn(pawn)
@@ -1326,14 +1326,26 @@ static func get_preservation_choice_for_pawn(pawn: Variant) -> Dictionary:
 ## Find a nearby pawn who doesn't know a specific knowledge type.
 static func _find_teach_target(pawn: Variant, knowledge_type: int) -> int:
 	var candidates: Array = _nearby_pawn_candidates(pawn, 12, 20)
+	var data: HeelKawnianData = _pawn_data(pawn)
+	if data == null:
+		return -1
+	var best_id: int = -1
+	var best_score: float = -1.0e9
 	for c in candidates:
 		var other_id: int = int(c.get("id", -1))
 		if other_id < 0:
 			continue
 		var other_known: Array[int] = _known_knowledge_for_pawn(other_id)
 		if not (knowledge_type in other_known):
-			return other_id
-	return -1
+			var score: float = 100.0 - float(int(c.get("d2", 9999)))
+			if int(c.get("household_id", -1)) >= 0 and int(c.get("household_id", -1)) == int(data.household_id):
+				score += 30.0
+			if int(c.get("settlement_id", -1)) >= 0 and int(c.get("settlement_id", -1)) == int(data.settlement_id):
+				score += 20.0
+			if score > best_score:
+				best_score = score
+				best_id = other_id
+	return best_id
 
 
 ## Find a suitable tile near the pawn for stone inscription (ore vein or mountain).
@@ -1416,30 +1428,53 @@ static func _refresh_learning_weight_cache() -> void:
 	_learning_weight_cache["knowledge_exchange"] = float(learning.call("get_weight", "knowledge_exchange"))
 
 
-static func _learning_weight_for_job(job_type: int) -> float:
+static func _learning_weight_for_job(job_type: int, pawn: Variant = null) -> float:
 	_refresh_learning_weight_cache()
+	var base_weight: float = 1.0
 	match job_type:
 		Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH, \
 		Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH, \
 		Job.Type.DRY_MEAT, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS, \
 		Job.Type.GROW_FOOD:
-			return float(_learning_weight_cache.get("food_production", 1.0))
+			base_weight = float(_learning_weight_cache.get("food_production", 1.0))
 		Job.Type.CHOP, Job.Type.MINE, Job.Type.MINE_WALL, \
 		Job.Type.GATHER_FLINT, Job.Type.GATHER_STICK:
-			return float(_learning_weight_cache.get("resource_gathering", 1.0))
+			base_weight = float(_learning_weight_cache.get("resource_gathering", 1.0))
 		Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_WATCHTOWER, \
 		Job.Type.BUILD_BARRACKS, Job.Type.BUILD_FORD:
-			return float(_learning_weight_cache.get("defense_building", 1.0))
+			base_weight = float(_learning_weight_cache.get("defense_building", 1.0))
 		Job.Type.DEFEND, Job.Type.PROTECT, Job.Type.GUARD:
-			return float(_learning_weight_cache.get("military_training", 1.0))
+			base_weight = float(_learning_weight_cache.get("military_training", 1.0))
 		_:
 			if _is_structure_build_job(job_type):
-				return float(_learning_weight_cache.get("construction", 1.0))
-	return 1.0
+				base_weight = float(_learning_weight_cache.get("construction", 1.0))
+	
+	# Apply identity-based modifiers if pawn is provided
+	if pawn != null:
+		var identity: HeelKawnianIdentity = get_identity_for_pawn(pawn)
+		if identity != null and identity.traits.has("curiosity") and identity.traits.has("knowledge_drive"):
+			var curiosity: float = float(identity.traits.get("curiosity", 0.3))
+			var knowledge_drive: float = float(identity.traits.get("knowledge_drive", 0.3))
+			var preservation_drive: float = float(identity.traits.get("preservation_drive", 0.2))
+			var labor_pride: float = float(identity.traits.get("labor_pride", 0.3))
+			
+			# Knowledge-related jobs get boost from curiosity and knowledge_drive
+			if job_type in [Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP, Job.Type.CARVE_KNOWLEDGE_STONE]:
+				base_weight *= (1.0 + (curiosity + knowledge_drive) * 0.5)
+			
+			# Preservation-related jobs get boost from preservation_drive
+			if job_type in [Job.Type.CARVE_GRAVE_MARKER, Job.Type.CARVE_LEDGER_STONE, Job.Type.BUILD_LIBRARY]:
+				base_weight *= (1.0 + preservation_drive * 0.6)
+			
+			# Building jobs get boost from labor_pride
+			if _is_structure_build_job(job_type):
+				base_weight *= (1.0 + labor_pride * 0.4)
+	
+	return base_weight
 
 
-static func _learning_priority_bonus_for_job(job_type: int) -> int:
-	var learned_weight: float = _learning_weight_for_job(job_type)
+static func _learning_priority_bonus_for_job(job_type: int, pawn: Variant = null) -> int:
+	var learned_weight: float = _learning_weight_for_job(job_type, pawn)
 	if learned_weight <= 0.0:
 		return 0
 	return clampi(int(round((learned_weight - 1.0) * 3.0)), -2, 3)
@@ -2008,7 +2043,7 @@ static func _reputation_for(pawn_id: int) -> float:
 	return 0.0
 
 
-static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, identity: HeelKawnianIdentity) -> Dictionary:
+static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, identity: HeelKawnianIdentity, pawn: Variant = null) -> Dictionary:
 	var biases: Dictionary = {}
 	var drive: String = str(profile.get("development_drive", "serve_settlement"))
 	match drive:
@@ -2041,7 +2076,7 @@ static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, ident
 			_add_bias(biases, [Job.Type.TRADE_HAUL, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR], 3)
 			_add_settlement_service_bias(biases, profile)
 	_add_human_scale_biases(biases, profile, data)
-	_apply_learning_biases(biases, profile, data)
+	_apply_learning_biases(biases, profile, data, pawn)
 	_add_identity_trait_biases(biases, identity)
 	_apply_pressure_bias_to_biases(biases, int(data.id))
 	_apply_colony_pressure_biases(biases, data)
@@ -2049,6 +2084,19 @@ static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, ident
 	_apply_knowledge_preservation_biases(biases, data)
 	_apply_survival_contentment_dampen(biases, data)
 	_clamp_biases(biases, -8, 16)
+	
+	# Apply preservation choice bias if pawn has critical knowledge to preserve
+	var preservation_choice: Dictionary = get_preservation_choice_for_pawn(pawn)
+	if not preservation_choice.is_empty():
+		var action: String = str(preservation_choice.get("action", ""))
+		match action:
+			"teach":
+				_add_bias(biases, [Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP], 5)
+			"inscribe_stone":
+				_add_bias(biases, [Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.CARVE_LEDGER_STONE, Job.Type.CARVE_GRAVE_MARKER], 6)
+			"write_book":
+				_add_bias(biases, [Job.Type.PAPER_MAKING, Job.Type.INK_MAKING, Job.Type.BOOK_BINDING, Job.Type.BUILD_LIBRARY], 5)
+	
 	return biases
 
 
@@ -2161,14 +2209,14 @@ static func _add_human_scale_biases(biases: Dictionary, profile: Dictionary, dat
 		_add_bias(biases, [Job.Type.MINE, Job.Type.MINE_WALL], -1)
 
 
-static func _apply_learning_biases(biases: Dictionary, profile: Dictionary, data: HeelKawnianData) -> void:
+static func _apply_learning_biases(biases: Dictionary, profile: Dictionary, data: HeelKawnianData, pawn: Variant = null) -> void:
 	if biases.is_empty() or data == null:
 		return
 
-	var food_bias: int = int(round((_learning_weight_for_job(Job.Type.FORAGE) - 1.0) * 3.0))
-	var resource_bias: int = int(round((_learning_weight_for_job(Job.Type.CHOP) - 1.0) * 3.0))
-	var defense_bias: int = int(round((_learning_weight_for_job(Job.Type.DEFEND) - 1.0) * 3.0))
-	var construction_bias: int = int(round((_learning_weight_for_job(Job.Type.BUILD_WALL) - 1.0) * 3.0))
+	var food_bias: int = int(round((_learning_weight_for_job(Job.Type.FORAGE, pawn) - 1.0) * 3.0))
+	var resource_bias: int = int(round((_learning_weight_for_job(Job.Type.CHOP, pawn) - 1.0) * 3.0))
+	var defense_bias: int = int(round((_learning_weight_for_job(Job.Type.DEFEND, pawn) - 1.0) * 3.0))
+	var construction_bias: int = int(round((_learning_weight_for_job(Job.Type.BUILD_WALL, pawn) - 1.0) * 3.0))
 
 	if food_bias != 0:
 		_add_bias(biases, [Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH, Job.Type.GROW_FOOD, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS], food_bias)

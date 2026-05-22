@@ -1528,6 +1528,7 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
         "culture_name": SettlementPlanner.get_culture_name_for_settlement(draft),
         "peace_threshold_ticks": peace_threshold_ticks,
         "revival_score": revival_score,
+        "recovery_stage": int(WorldPersistence.get_region_persistence(center_rk).get("recovery_stage", 0)),
         "state": state,
         "war_status": {
             "state": "peace",

@@ -235,6 +235,8 @@ func _generate_nation_colors() -> void:
 	var nrx: int = int((WorldData.WIDTH + 15) / 16)
 	var nry: int = int((WorldData.HEIGHT + 15) / 16)
 	
+	if NationBorderSystem == null:
+		return
 	for ry in range(nry):
 		for rx in range(nrx):
 			var region_key: int = rx | (ry << 16)

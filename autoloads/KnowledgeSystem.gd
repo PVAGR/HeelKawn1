@@ -97,7 +97,17 @@ var record_carriers: Dictionary = {}
 ## Maps placed books (by tile key "x,y") to the knowledge types written in them.
 var book_contents: Dictionary = {}
 
+## Literacy rate tracking: settlement_id -> { literacy_rate: float, literate_pawns: int, total_pawns: int, last_tick: int }
+## Literacy rate = pawns with WRITING knowledge / total pawns in settlement
+var literacy_rate_by_settlement: Dictionary = {}
+
+## Tech diffusion tracking: settlement_id -> { known_knowledge: Array[int], diffusion_score: float, last_tick: int }
+## Tracks which knowledge types are present in each settlement and calculates a diffusion score
+var tech_diffusion_by_settlement: Dictionary = {}
+
 const TEACHING_DEBT_INTERVAL_TICKS: int = 500
+const LITERACY_TRACKING_INTERVAL_TICKS: int = 600
+const TECH_DIFFUSION_TRACKING_INTERVAL_TICKS: int = 800
 const TEACHING_DEBT_PHASE_OFFSET: int = 83
 const KNOWLEDGE_SECURITY_INTERVAL_TICKS: int = 1000
 const KNOWLEDGE_SECURITY_PHASE_OFFSET: int = 197
@@ -2139,3 +2149,227 @@ func _try_autonomous_knowledge_recovery() -> void:
 				if GameManager.verbose_logs():
 					print("[KnowledgeSystem] Autonomous recovery: pawn %d recovered %s" % [pawn_id, _get_knowledge_type_name(kt)])
 				break  # One recovery per check cycle
+
+
+## ============================================================================
+## LITERACY RATE TRACKING
+## Track literacy rates per settlement for civilization stage metrics
+## ============================================================================
+
+## Calculate and update literacy rate for a settlement.
+## Literacy rate = (pawns with WRITING knowledge) / (total pawns in settlement)
+func update_literacy_rate_for_settlement(settlement_id: int) -> Dictionary:
+	if GameManager == null:
+		return {}
+	var tick: int = GameManager.tick_count
+	
+	# Check if we need to update (every LITERACY_TRACKING_INTERVAL_TICKS)
+	var entry: Dictionary = literacy_rate_by_settlement.get(settlement_id, {})
+	var last_tick: int = int(entry.get("last_tick", 0))
+	if tick - last_tick < LITERACY_TRACKING_INTERVAL_TICKS and not entry.is_empty():
+		return entry
+	
+	# Count literate and total pawns in settlement
+	var literate_pawns: int = 0
+	var total_pawns: int = 0
+	var ps: PawnSpawner = _get_pawn_spawner()
+	if ps == null:
+		return {}
+	
+	for p in ps.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var data: HeelKawnianData = p.data
+		var pos: Vector2i = data.tile_pos
+		var rk: int = WorldMemory._region_key(pos.x, pos.y) if WorldMemory != null else -1
+		var pawn_sid: int = SettlementMemory.get_center_region_for_region(rk) if SettlementMemory != null else -1
+		
+		if pawn_sid == settlement_id or (settlement_id < 0 and pawn_sid >= 0):
+			total_pawns += 1
+			if has_knowledge(int(data.id), KnowledgeType.WRITING):
+				literate_pawns += 1
+	
+	var literacy_rate: float = 0.0
+	if total_pawns > 0:
+		literacy_rate = float(literate_pawns) / float(total_pawns)
+	
+	var result: Dictionary = {
+		"literacy_rate": literacy_rate,
+		"literate_pawns": literate_pawns,
+		"total_pawns": total_pawns,
+		"last_tick": tick,
+	}
+	
+	literacy_rate_by_settlement[settlement_id] = result
+	return result
+
+
+## Get literacy rate for a settlement.
+func get_literacy_rate_for_settlement(settlement_id: int) -> float:
+	var entry: Dictionary = update_literacy_rate_for_settlement(settlement_id)
+	return float(entry.get("literacy_rate", 0.0))
+
+
+## Update literacy rates for all settlements.
+func update_all_literacy_rates() -> void:
+	if SettlementMemory == null:
+		return
+	for st_v in SettlementMemory.settlements:
+		if st_v is Dictionary:
+			var sid: int = int((st_v as Dictionary).get("center_region", -1))
+			if sid >= 0:
+				update_literacy_rate_for_settlement(sid)
+
+
+## Get global literacy rate across all settlements.
+func get_global_literacy_rate() -> float:
+	if literacy_rate_by_settlement.is_empty():
+		update_all_literacy_rates()
+	
+	var total_literate: int = 0
+	var total_pawns: int = 0
+	
+	for sid in literacy_rate_by_settlement.keys():
+		var entry: Dictionary = literacy_rate_by_settlement[sid] as Dictionary
+		total_literate += int(entry.get("literate_pawns", 0))
+		total_pawns += int(entry.get("total_pawns", 0))
+	
+	if total_pawns > 0:
+		return float(total_literate) / float(total_pawns)
+	return 0.0
+
+
+## ============================================================================
+## TECH DIFFUSION TRACKING
+## Track knowledge diffusion per settlement for civilization stage metrics
+## ============================================================================
+
+## Calculate and update tech diffusion for a settlement.
+## Diffusion score = (known knowledge types / total knowledge types) weighted by carrier count
+func update_tech_diffusion_for_settlement(settlement_id: int) -> Dictionary:
+	if GameManager == null:
+		return {}
+	var tick: int = GameManager.tick_count
+	
+	# Check if we need to update (every TECH_DIFFUSION_TRACKING_INTERVAL_TICKS)
+	var entry: Dictionary = tech_diffusion_by_settlement.get(settlement_id, {})
+	var last_tick: int = int(entry.get("last_tick", 0))
+	if tick - last_tick < TECH_DIFFUSION_TRACKING_INTERVAL_TICKS and not entry.is_empty():
+		return entry
+	
+	# Collect all knowledge types known by pawns in this settlement
+	var known_knowledge: Array[int] = []
+	var knowledge_carrier_counts: Dictionary = {}  # knowledge_type -> carrier count
+	var ps: PawnSpawner = _get_pawn_spawner()
+	if ps == null:
+		return {}
+	
+	for p in ps.pawns:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var data: HeelKawnianData = p.data
+		var pos: Vector2i = data.tile_pos
+		var rk: int = WorldMemory._region_key(pos.x, pos.y) if WorldMemory != null else -1
+		var pawn_sid: int = SettlementMemory.get_center_region_for_region(rk) if SettlementMemory != null else -1
+		
+		if pawn_sid == settlement_id or (settlement_id < 0 and pawn_sid >= 0):
+			var pid: int = int(data.id)
+			if knowledge_carriers.has(pid):
+				for kt in knowledge_carriers[pid]:
+					var kt_int: int = int(kt)
+					if kt_int not in known_knowledge:
+						known_knowledge.append(kt_int)
+					knowledge_carrier_counts[kt_int] = int(knowledge_carrier_counts.get(kt_int, 0)) + 1
+	
+	# Calculate diffusion score (0.0 - 1.0)
+	var total_knowledge_types: int = KnowledgeType.size()
+	var diffusion_score: float = 0.0
+	if total_knowledge_types > 0:
+		# Base score: fraction of knowledge types known
+		var base_score: float = float(known_knowledge.size()) / float(total_knowledge_types)
+		
+		# Weight by carrier diversity: knowledge with more carriers contributes more
+		var weighted_sum: float = 0.0
+		for kt in known_knowledge:
+			var carriers: int = int(knowledge_carrier_counts.get(kt, 1))
+			# Cap carrier contribution at 5 for diminishing returns
+			var carrier_weight: float = minf(float(carriers) / 5.0, 1.0)
+			weighted_sum += carrier_weight
+		
+		var carrier_diversity: float = 0.0
+		if known_knowledge.size() > 0:
+			carrier_diversity = weighted_sum / float(known_knowledge.size())
+		
+		# Combine base score and carrier diversity (70% base, 30% diversity)
+		diffusion_score = (base_score * 0.7) + (carrier_diversity * 0.3)
+		diffusion_score = clampf(diffusion_score, 0.0, 1.0)
+	
+	var result: Dictionary = {
+		"known_knowledge": known_knowledge,
+		"known_count": known_knowledge.size(),
+		"total_knowledge_types": total_knowledge_types,
+		"diffusion_score": diffusion_score,
+		"carrier_counts": knowledge_carrier_counts,
+		"last_tick": tick,
+	}
+	
+	tech_diffusion_by_settlement[settlement_id] = result
+	return result
+
+
+## Get tech diffusion for a settlement.
+func get_tech_diffusion_for_settlement(settlement_id: int) -> Dictionary:
+	var entry: Dictionary = update_tech_diffusion_for_settlement(settlement_id)
+	return entry
+
+
+## Get tech diffusion score for a settlement (0.0 - 1.0).
+func get_tech_diffusion_score_for_settlement(settlement_id: int) -> float:
+	var entry: Dictionary = get_tech_diffusion_for_settlement(settlement_id)
+	return float(entry.get("diffusion_score", 0.0))
+
+
+## Update tech diffusion for all settlements.
+func update_all_tech_diffusion() -> void:
+	if SettlementMemory == null:
+		return
+	for st_v in SettlementMemory.settlements:
+		if st_v is Dictionary:
+			var sid: int = int((st_v as Dictionary).get("center_region", -1))
+			if sid >= 0:
+				update_tech_diffusion_for_settlement(sid)
+
+
+## Get global tech diffusion score across all settlements.
+func get_global_tech_diffusion_score() -> float:
+	if tech_diffusion_by_settlement.is_empty():
+		update_all_tech_diffusion()
+	
+	var total_score: float = 0.0
+	var settlement_count: int = 0
+	
+	for sid in tech_diffusion_by_settlement.keys():
+		var entry: Dictionary = tech_diffusion_by_settlement[sid] as Dictionary
+		total_score += float(entry.get("diffusion_score", 0.0))
+		settlement_count += 1
+	
+	if settlement_count > 0:
+		return total_score / float(settlement_count)
+	return 0.0
+
+
+## Get knowledge types that are known in one settlement but not another.
+## Useful for tracking tech transfer opportunities.
+func get_knowledge_diffusion_gap(from_settlement_id: int, to_settlement_id: int) -> Array[int:
+	var from_data: Dictionary = get_tech_diffusion_for_settlement(from_settlement_id)
+	var to_data: Dictionary = get_tech_diffusion_for_settlement(to_settlement_id)
+	
+	var from_known: Array[int] = from_data.get("known_knowledge", [])
+	var to_known: Array[int] = to_data.get("known_knowledge", [])
+	
+	var gap: Array[int] = []
+	for kt in from_known:
+		if kt not in to_known:
+			gap.append(kt)
+	
+	return gap

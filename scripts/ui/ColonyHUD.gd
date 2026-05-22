@@ -797,7 +797,7 @@ func _polities_realm_line() -> String:
 	var n: String = _nations_hud_line()
 	if n != "":
 		base += "\n" + n
-	if formal < 2 or FactionManager == null:
+	if formal < 2 or FactionManager == null or not is_instance_valid(FactionManager):
 		return base
 	var focus_rk: int = _focus_center_region()
 	if focus_rk < 0:

@@ -1735,6 +1735,9 @@ func _report_player_intents() -> void:
 
 
 func _report_factions() -> void:
+	if FactionManager == null or not is_instance_valid(FactionManager):
+		print("[FactionManager] not loaded (deregistered autoload)")
+		return
 	print(FactionManager.debug_summary_block())
 
 
@@ -1909,7 +1912,10 @@ func _report_creator_session_digest() -> void:
 		print("[intent_memory_global] not loaded")
 	print(PlayerIntentQueue.debug_summary_block())
 	print("[faction_registry]")
-	print(FactionManager.debug_summary_block())
+	if FactionManager != null and is_instance_valid(FactionManager):
+		print(FactionManager.debug_summary_block())
+	else:
+		print("[FactionManager] not loaded")
 	print("[observation_ambient] %s" % str(ObservationAPI.observe_sim_ambient(-1)))
 	if main_node != null:
 		if main_node.has_method("get_camera_settlement_revival_digest"):
@@ -2007,7 +2013,10 @@ func _report_playtest_bundle() -> void:
 	print("[PLAYTEST_BUNDLE] --- PlayerIntentQueue ---")
 	print(PlayerIntentQueue.debug_summary_block())
 	print("[PLAYTEST_BUNDLE] --- FactionManager ---")
-	print(FactionManager.debug_summary_block())
+	if FactionManager != null and is_instance_valid(FactionManager):
+		print(FactionManager.debug_summary_block())
+	else:
+		print("[FactionManager] not loaded")
 	print("[PLAYTEST_BUNDLE] --- ReligionLens (6 settlements max) ---")
 	print(ReligionLens.digest_settlements(6))
 	print(

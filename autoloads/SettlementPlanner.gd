@@ -220,6 +220,10 @@ func _plan_one_settlement_culture(
 			order = [1, 2, 3, 6, 5, 4, 7, 8, 9, 10, 11, 12, 13, 14, 15, 23, 18, 16, 17, 19, 20, 21, 22, 24, 25]
 		else:
 			order = [1, 6, 4, 2, 3, 5, 7, 8, 9, 10, 16, 18, 17, 19, 20, 21, 22, 23, 24, 25]
+	elif intent == IntentMemory.INTENT_RECOVER:
+		# Recovery chains rebuild the settlement core first, then safety,
+		# then expansion and institutions once the settlement can stand again.
+		order = [1, 11, 12, 2, 3, 4, 6, 7, 10, 5, 8, 13, 14, 15, 16, 18, 17, 19, 20, 21, 22, 24, 23, 25]
 	elif intent == IntentMemory.INTENT_ABANDON:
 		order = [1, 3, 7, 10, 2, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 23, 24, 18, 16, 17, 19, 20, 21, 22, 25]
 	for rid: int in order:

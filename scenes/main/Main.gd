@@ -6737,6 +6737,8 @@ var _nav_dirty: bool = false  # batched nav notification for construction seed
 var _construction_seed_posts_since_log: int = 0
 var _last_construction_seed_log_tick: int = -10000
 var _construction_seed_cursor: int = 0
+var _feature_scan_cache: Dictionary = {}  # region_key -> {features, tick_cached}
+const FEATURE_SCAN_CACHE_TICKS: int = 600
 var _last_planner_us: int = 0  # microseconds taken by last settlement planner pass
 var _planner_budget_gate_us: int = 12_000  # if last pass exceeded this, skip next pass
 
@@ -7081,6 +7083,26 @@ func _seed_bootstrap_survival_food_jobs(center: Vector2i, pop: int) -> void:
 				_post_seeded_job(Job.Type.COOK_BERRIES, cook_tile, 5, 5, "bootstrap_cook_pressure")
 
 
+# Cached feature scan: avoids re-scanning the same settlement every 60 ticks
+# when features haven't changed. Cache keyed by region key, invalidated after 600 ticks.
+func _get_cached_feature_scan(region_key: int, center_tile: Vector2i, radius: int) -> Dictionary:
+	var tick: int = GameManager.tick_count
+	if region_key in _feature_scan_cache:
+		var cached: Dictionary = _feature_scan_cache[region_key]
+		if tick - int(cached.get("tick_cached", 0)) < FEATURE_SCAN_CACHE_TICKS:
+			return cached.get("features", {})
+	var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, radius)
+	_feature_scan_cache[region_key] = {"features": features, "tick_cached": tick}
+	if _feature_scan_cache.size() > 50:
+		var keep: Dictionary = {}
+		for k in _feature_scan_cache:
+			var entry: Dictionary = _feature_scan_cache[k]
+			if tick - int(entry.get("tick_cached", 0)) < FEATURE_SCAN_CACHE_TICKS * 2:
+				keep[k] = entry
+		_feature_scan_cache = keep
+	return features
+
+
 func _seed_construction_jobs() -> void:
 	if _world == null or _world.data == null:
 		return
@@ -7179,8 +7201,8 @@ func _seed_construction_jobs() -> void:
 			break
 		
 		# OPTIMIZATION: Reduce scan radius at high speeds
-		var scan_radius: int = 6 if GameManager.game_speed >= 100.0 else (8 if GameManager.game_speed >= 50.0 else 12)
-		var features: Dictionary = HeelKawnianManager._scan_local_features(center_tile, scan_radius)
+		var scan_radius: int = 4 if GameManager.game_speed >= 100.0 else (6 if GameManager.game_speed >= 50.0 else 8)
+		var features: Dictionary = _get_cached_feature_scan(center_rk, center_tile, scan_radius)
 		
 		# BUDGET CHECK: After feature scan
 		if Time.get_ticks_usec() - start_usec >= budget_usec:
@@ -7455,7 +7477,9 @@ func _seed_construction_jobs() -> void:
 						_seeder_track_post(center_rk, job_cap)
 		# Priority 6b: Preserve built life and at-risk knowledge.
 		# Walls/doors get higher maintenance priority than decorative structures.
-		if _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap) and BuildingUsageTracker != null and BuildingUsageTracker.has_method("get_due_maintenance_jobs"):
+		# OPTIMIZATION: Skip maintenance at high speed (>=50x) to meet time budget
+		var _maintenance_allowed: bool = GameManager.game_speed < 50.0
+		if _maintenance_allowed and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap) and BuildingUsageTracker != null and BuildingUsageTracker.has_method("get_due_maintenance_jobs"):
 			var structural_maintenance: Array = []
 			var decorative_maintenance: Array = []
 			for due in BuildingUsageTracker.get_due_maintenance_jobs(4):
@@ -7652,7 +7676,8 @@ func _seed_construction_jobs() -> void:
 		if Time.get_ticks_usec() - start_usec >= budget_usec:
 			break
 		# Priority 18: Local paths — post BUILD_ROAD along high-traffic tiles within settlement
-		if not ambition_blocked and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap) and local_pop >= 2:
+		# OPTIMIZATION: Skip road scan at high speed (>=50x) — expensive 9x9 grid scan
+		if gs < 50.0 and not ambition_blocked and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap) and local_pop >= 2:
 			var pending_roads: int = int(pending_counts.get(Job.Type.BUILD_ROAD, 0))
 			if pending_roads < 3:
 				var roads_posted: int = 0

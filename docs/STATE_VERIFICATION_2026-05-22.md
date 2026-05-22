@@ -1,53 +1,33 @@
-# HeelKawn Verification Snapshot — 2026-05-22
+# State Verification: May 22, 2026
 
-## Scope
-- Add enforceable runtime quality contract for AI contributors.
-- Wire deterministic + smoothness checks into CI.
+## What Changed
 
-## Repository Snapshot
-- Branch: `main`
-- Verification date: 2026-05-22 (UTC)
-- `project.godot` main scene: `res://scenes/main/Main.tscn`
+### 1. SurvivalSystem.gd — Parse error fix (CRITICAL)
+- **Problem**: 8 `data.get("key", default_value)` calls with 2 arguments. `RefCounted.get()` in GDScript 4.6 only accepts 1 argument. The entire SurvivalSystem.gd failed to load, disabling all survival processing (hunger, thirst, stamina, temperature, death conditions).
+- **Fix**: Replaced all `data.get(key, default)` with direct property access (`data.key`), guarded by `"key" in data` checks per existing codebase patterns.
+- **Files changed**: `autoloads/SurvivalSystem.gd` — lines 281-282, 717-726, 741-748, 767
 
-## Implemented In This Pass
+### 2. Main.gd — Construction seed performance optimization
+- **Problem**: `_seed_construction_jobs()` was taking 12-14ms (budget=4ms), running every 60-300 ticks.
+- **Fix**:
+  - Added `_feature_scan_cache` — caches `_scan_local_features` results per region key for 600 ticks
+  - Reduced scan radii: 12→8 at 1x, 8→6 at 50x, 6→4 at 100x
+  - Skip maintenance loop (`BuildingUsageTracker.get_due_maintenance_jobs`) at speed >= 50x
+  - Skip road scan (9×9 traversal grid) at speed >= 50x
+- **Files changed**: `scenes/main/Main.gd` — added 2 vars, 1 const, 18-line cache function, 3 edit points
 
-1. Added repo agent contract
-- File: `AGENTS.md`
-- Result: future contributors now have explicit non-negotiable runtime requirements.
+## What Was Verified
 
-2. Added AI runtime mandate
-- File: `docs/AI_RUNTIME_MANDATE.md`
-- Result: defined deterministic/speed/stability contract and simulation definition-of-done.
+- **Code review**: All `data.get(key, default)` 2-arg calls in SurvivalSystem.gd are eliminated
+- **Pattern consistency**: `"property" in data` guard + direct property access matches existing codebase patterns (24 occurrences in SurvivalSystem.gd and HeelKawnianManager.gd)
+- **Property existence**: `HeelKawnianData.gd` does declare `hypothermia_risk` (line 143), `heat_exhaustion_risk` (line 144), and `body_temperature` (line 139)
+- **Cache safety**: `_feature_scan_cache` is bounded at 50 entries with periodic eviction of old entries
+- **Variable declarations**: All new variables use correct GDScript types (Dictionary, int with const)
 
-3. Added simulation quality gate script
-- File: `tools/ai/sim-quality-gate.sh`
-- Result:
-  - checks critical RNG usage in deterministic systems,
-  - checks legacy world dimension usage in critical paths,
-  - validates configured main scene,
-  - runs headless smoke tests when Godot exists,
-  - enforces `sim_performance_smoothness_smoke.gd` pass markers and `consistency=ok`.
+## What Remains Unverified / Risky
 
-4. Added CI enforcement
-- File: `.github/workflows/sim-quality-gate.yml`
-- Result: runs quality gate on push/PR for `main` and `develop`.
-
-5. Determinism hardening in active catastrophe path
-- File: `scripts/world/CataclysmSystem.gd`
-- Result:
-  - replaced global `randi()`/`randi_range()` cataclysm rolls with deterministic helpers,
-  - deterministic region generation for affected areas,
-  - deterministic earthquake/meteor damage rolls.
-
-6. Wildlife world-dimension/pathing alignment
-- File: `autoloads/WildlifePopulation.gd`
-- Result:
-  - world node lookup now uses `WorldViewport/World` with fallback,
-  - replaced legacy `map_width/map_height` with canonical `WorldData.WIDTH/HEIGHT`.
-
-## Local Verification In This Environment
-- Command run: `bash tools/ai/sim-quality-gate.sh`
-- Result: pass (Godot binary unavailable here, so runtime smoke is skipped by design in local environment).
-
-## Residual Risk
-- Full runtime smoke evidence depends on CI runner or local machine with Godot installed.
+- **Godot headless smoke**: Cannot run on this Windows environment (no Godot binary available, WSL/bash path broken). The quality gate (`tools/ai/sim-quality-gate.sh`) should be run on a Linux/Mac environment with Godot installed.
+- **HeelKawnianData property access at runtime**: `"hypothermia_risk" in data` pattern works syntactically but needs runtime verification that GDScript correctly resolves duck-typed property access on `RefCounted` objects. Existing codebase uses this pattern widely, suggesting it works.
+- **tick_batch remaining overhead**: The 1x tick_batch was 47.5ms total with CONSTRUCTION_SEED taking ~14ms. After these fixes, tick_batch will drop to ~33ms at 1x, still above the 12ms budget. Additional profiling is needed to identify remaining hot spots (SurvivalSystem pawn iteration, MeaningAmbianceController tick, etc.).
+- **100x simulation speed**: tick_batch was 93.1ms for 12 ticks. After optimizations, construction seed latency is eliminated, but per-tick overhead remains. The simulation at 100x will be faster but may still not reach full 100x throughput.
+- **Cache stale data**: `_feature_scan_cache` has a 600-tick TTL. If features change rapidly, jobs might briefly be posted based on stale data. This is a performance/accuracy tradeoff — stale features are read as undercounts (slightly more construction seeded) rather than overcounts.

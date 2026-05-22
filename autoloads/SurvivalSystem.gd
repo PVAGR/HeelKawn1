@@ -278,8 +278,8 @@ func _regulate_temperature(pawn: Node, tick: int, tick_delta: int = 1) -> void:
 	# Instead, apply moodlets from risk and let death conditions handle fatality.
 	if "hypothermia_risk" in data:
 		var current_temp: float = data.body_temperature
-		var risk: float = float(data.get("hypothermia_risk", 0.0))
-		var heat_risk: float = float(data.get("heat_exhaustion_risk", 0.0))
+		var risk: float = data.hypothermia_risk
+		var heat_risk: float = data.heat_exhaustion_risk
 		if risk > 50.0:
 			_apply_moodlet(data, "hypothermia")
 		if heat_risk > 50.0:
@@ -714,16 +714,16 @@ func _check_death_conditions(pawn: Node, tick: int) -> void:
 				warnings["hunger"] = data.hunger
 			if data.thirst != null and data.thirst < 10.0:
 				warnings["thirst"] = data.thirst
-			if "hypothermia_risk" in data and float(data.get("hypothermia_risk", 0.0)) > 50.0:
-				warnings["hypothermia_risk"] = data.get("hypothermia_risk")
-			if "heat_exhaustion_risk" in data and float(data.get("heat_exhaustion_risk", 0.0)) > 50.0:
+			if "hypothermia_risk" in data and data.hypothermia_risk > 50.0:
+				warnings["hypothermia_risk"] = data.hypothermia_risk
+			if "heat_exhaustion_risk" in data and data.heat_exhaustion_risk > 50.0:
 				warnings["heat_risk"] = data.get("heat_exhaustion_risk")
 			if not warnings.is_empty():
 				_world_memory.record_event({
 					"k": WorldMemory.Kind.LIFE_EVENT,
 					"tick": tick,
 					"pawn_id": int(data.id) if "id" in data else -1,
-					"pawn_name": str(data.get("display_name", "unknown")),
+			"pawn_name": str(data.display_name) if "display_name" in data else "unknown",
 					"type": "survival_warning",
 					"warnings": warnings,
 				})
@@ -738,14 +738,14 @@ func _check_death_conditions(pawn: Node, tick: int) -> void:
 			pre_warnings["hunger"] = data.hunger
 		if data.thirst != null and data.thirst < 5.0:
 			pre_warnings["thirst"] = data.thirst
-		if "hypothermia_risk" in data and float(data.get("hypothermia_risk", 0.0)) > 80.0:
-			pre_warnings["hypothermia_risk"] = data.get("hypothermia_risk")
+		if "hypothermia_risk" in data and data.hypothermia_risk > 80.0:
+			pre_warnings["hypothermia_risk"] = data.hypothermia_risk
 		if not pre_warnings.is_empty():
 			_world_memory.record_event({
 				"k": WorldMemory.Kind.LIFE_EVENT,
 				"tick": tick,
 				"pawn_id": int(data.id) if "id" in data else -1,
-				"pawn_name": str(data.get("display_name", "unknown")),
+				"pawn_name": str(data.display_name) if "display_name" in data else "unknown",
 				"type": "death_risk_warning",
 				"warnings": pre_warnings,
 			})
@@ -764,7 +764,7 @@ func _check_death_conditions(pawn: Node, tick: int) -> void:
 
 	# Hypothermia from risk accumulation (HeelKawnianData path)
 	if cause == "" and "hypothermia_risk" in data:
-		var risk: float = float(data.get("hypothermia_risk", 0.0))
+		var risk: float = data.hypothermia_risk
 		if risk >= 99.0:
 			cause = "hypothermia"
 

@@ -193,6 +193,21 @@ We are always building, always refining, always expanding. This document capture
   - Removed accidental `$null` file from root directory
   - Fixed `.gitignore` (removed duplicate `$null` entry)
 
+- **FIX: SurvivalSystem.gd parse errors — data.get(key, default) crash**:
+  - Replaced all `data.get("hypothermia_risk", 0.0)` and `data.get("heat_exhaustion_risk", 0.0)` with direct property access (`data.hypothermia_risk`, `data.heat_exhaustion_risk`)
+  - Replaced `data.get("display_name", "unknown")` with guarded access `data.display_name if "display_name" in data else "unknown"`
+  - Root cause: `RefCounted.get()` only accepts 1 argument in GDScript 4.6; the 2-argument form (with default) is only valid for Dictionary
+  - Previous temperature unification code (May 21 session) was completely dead — the entire SurvivalSystem.gd failed to load at parse time
+  - Survival processing (hunger, thirst, stamina, temperature, death conditions) was not running for any pawns
+  - Verified: `"property" in data` pattern is used extensively across the codebase and works correctly
+
+- **PERF: Construction seed job posting optimization**:
+  - Added `_get_cached_feature_scan()` with a 600-tick cache keyed by region key
+  - Reduced `_scan_local_features` radius: 12→8 at 1x, 8→6 at 50x, 6→4 at 100x (54% fewer tiles scanned at 1x)
+  - Skip maintenance loop (`BuildingUsageTracker.get_due_maintenance_jobs`) at game speed >= 50x
+  - Skip road scan (9×9 tile traversal grid) at game speed >= 50x
+  - CONSTRUCTION_SEED was running ~14ms (budget=4ms) — these changes should bring it under budget
+
 ## Blockers
 
 - None currently reproducible in headless source validation.

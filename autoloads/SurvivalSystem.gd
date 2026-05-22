@@ -270,12 +270,27 @@ func _regulate_temperature(pawn: Node, tick: int, tick_delta: int = 1) -> void:
 	if data.body_temperature == null:
 		return
 
+	# === HeelKawnianData path: pawn has its own _check_temperature ===
+	# HeelKawnian.gd handles body_temp lerp toward ambient, hypothermia_risk
+	# accumulation, and health damage from risk. SurvivalSystem should NOT
+	# fight it by lerping body_temp toward 37°C every 1-4 ticks, nor double
+	# up on health damage that HeelKawnian.gd already applies.
+	# Instead, apply moodlets from risk and let death conditions handle fatality.
+	if "hypothermia_risk" in data:
+		var current_temp: float = data.body_temperature
+		var risk: float = float(data.get("hypothermia_risk", 0.0))
+		var heat_risk: float = float(data.get("heat_exhaustion_risk", 0.0))
+		if risk > 50.0:
+			_apply_moodlet(data, "hypothermia")
+		if heat_risk > 50.0:
+			_apply_moodlet(data, "heatstroke")
+		return
+
+	# === Legacy path: pawn does NOT have HeelKawnianData temp handling ===
 	var current_temp: float = data.body_temperature
 	var target_temp: float = 37.0  # Normal body temperature
 
 	# Grace period: pioneers resist cold for 5000 ticks, others for 2500 ticks
-	# HeelKawnian.gd _check_temperature handles the detailed grace logic,
-	# but we must also respect it here to avoid pulling body temp down.
 	var birth_tick_g_val = data.birth_tick if "birth_tick" in data else 0
 	var birth_tick_g: int = int(birth_tick_g_val) if birth_tick_g_val != null else 0
 	var age_g: int = maxi(GameManager.tick_count - birth_tick_g, 0)
@@ -297,26 +312,22 @@ func _regulate_temperature(pawn: Node, tick: int, tick_delta: int = 1) -> void:
 	if env_temp < 10:  # Cold environment
 		target_temp = lerpf(35.0, 37.0, clampf((env_temp + 10) / 20.0, 0.0, 1.0))
 		target_temp *= wet_mult
-		# During grace: keep body temp closer to 37°C
 		if grace_frac > 0.0:
 			target_temp = lerpf(target_temp, 37.0, grace_frac * 0.6)
 	elif env_temp > 35:  # Hot environment
 		target_temp = lerpf(37.0, 39.0, clampf((env_temp - 35) / 10.0, 0.0, 1.0))
 
-	# Gradually adjust body temperature (slower during grace)
 	var lerp_rate: float = 0.01 * (1.0 - grace_frac * 0.8) * _harmful_pressure_scale(tick)
 	var tick_delta_f: float = float(maxi(1, tick_delta))
 	var adjusted_lerp_rate: float = 1.0 - pow(1.0 - clampf(lerp_rate, 0.0, 1.0), tick_delta_f)
 	var temp_change: float = lerp(current_temp, target_temp, adjusted_lerp_rate)
 	data.body_temperature = temp_change
 	
-	# Apply temperature moodlets
 	if current_temp < TEMP_HYPOTHERMIA:
 		_apply_moodlet(data, "hypothermia")
 	elif current_temp > TEMP_HEATSTROKE:
 		_apply_moodlet(data, "heatstroke")
 	
-	# Temperature affects health — suppressed during grace period
 	var birth_tick_h_val = data.birth_tick if "birth_tick" in data else 0
 	var birth_tick_h: int = int(birth_tick_h_val) if birth_tick_h_val != null else 0
 	var age_h: int = maxi(GameManager.tick_count - birth_tick_h, 0)
@@ -365,7 +376,7 @@ func _get_environmental_temperature(pawn: Node) -> float:
 		var world: Node = get_node_or_null("/root/Main/WorldViewport/World")
 		if world != null and world.has_method("get_feature"):
 			var feat: int = int(world.call("get_feature", tile.x, tile.y))
-			if feat == 3 or feat == 8:  # BED or FIRE_PIT
+			if feat == 5 or feat == 10:  # BED or FIRE_PIT
 				base_temp += 8.0  # Shelter/fire provides significant warmth
 
 	# Weather effect on environmental temperature
@@ -424,7 +435,7 @@ func _update_wetness(data: RefCounted, tick_delta: int = 1) -> void:
 		var world: Node = get_node_or_null("/root/Main/WorldViewport/World")
 		if world != null and world.has_method("get_feature"):
 			var feat: int = int(world.call("get_feature", tile.x, tile.y))
-			if feat == 3 or feat == 8:  # BED or FIRE_PIT — under cover
+			if feat == 5 or feat == 10:  # BED or FIRE_PIT — under cover
 				if is_precipitating:
 					wetness_val = maxf(0.0, wetness_val - 2.0 * float(maxi(1, tick_delta)))  # Shelter blocks rain
 				else:
@@ -683,23 +694,61 @@ func _check_death_conditions(pawn: Node, tick: int) -> void:
 
 	# CRITICAL: Skip death checks for already-dead pawns
 	if "is_dead" in data and bool(data.is_dead):
-		return  # HeelKawnian is already dead - skip all death processing
+		return
 
 	var birth_tick_val = data.birth_tick if "birth_tick" in data else 0
 	var birth_tick: int = int(birth_tick_val) if birth_tick_val != null else 0
 	var age: int = maxi(GameManager.tick_count - birth_tick, 0)
 	var protected_age: int = EARLY_SURVIVAL_PROTECTION_DAYS * SimTime.TICKS_PER_VISUAL_DAY
 	if age < protected_age:
-		# During grace: clamp health to minimum 20 so survival damage can't kill
 		if data.health != null and data.health < 20.0:
 			data.health = 20.0
 		if data.hunger != null and data.hunger < -3.0:
 			data.hunger = -3.0
 		if data.body_temperature != null:
 			data.body_temperature = clampf(float(data.body_temperature), TEMP_HYPOTHERMIA, TEMP_HEATSTROKE)
+		# Chronicle: survival warning during grace (throttled)
+		if tick % 600 == 0 and _world_memory != null:
+			var warnings: Dictionary = {}
+			if data.hunger != null and data.hunger < 10.0:
+				warnings["hunger"] = data.hunger
+			if data.thirst != null and data.thirst < 10.0:
+				warnings["thirst"] = data.thirst
+			if "hypothermia_risk" in data and float(data.get("hypothermia_risk", 0.0)) > 50.0:
+				warnings["hypothermia_risk"] = data.get("hypothermia_risk")
+			if "heat_exhaustion_risk" in data and float(data.get("heat_exhaustion_risk", 0.0)) > 50.0:
+				warnings["heat_risk"] = data.get("heat_exhaustion_risk")
+			if not warnings.is_empty():
+				_world_memory.record_event({
+					"k": WorldMemory.Kind.LIFE_EVENT,
+					"tick": tick,
+					"pawn_id": int(data.id) if "id" in data else -1,
+					"pawn_name": str(data.get("display_name", "unknown")),
+					"type": "survival_warning",
+					"warnings": warnings,
+				})
 		return
 
 	var cause: String = ""
+
+	# Record survival warning events for chronicle (throttled)
+	if tick % 600 == 0 and _world_memory != null:
+		var pre_warnings: Dictionary = {}
+		if data.hunger != null and data.hunger < 5.0:
+			pre_warnings["hunger"] = data.hunger
+		if data.thirst != null and data.thirst < 5.0:
+			pre_warnings["thirst"] = data.thirst
+		if "hypothermia_risk" in data and float(data.get("hypothermia_risk", 0.0)) > 80.0:
+			pre_warnings["hypothermia_risk"] = data.get("hypothermia_risk")
+		if not pre_warnings.is_empty():
+			_world_memory.record_event({
+				"k": WorldMemory.Kind.LIFE_EVENT,
+				"tick": tick,
+				"pawn_id": int(data.id) if "id" in data else -1,
+				"pawn_name": str(data.get("display_name", "unknown")),
+				"type": "death_risk_warning",
+				"warnings": pre_warnings,
+			})
 
 	# Starvation
 	if data.hunger != null and data.hunger <= 0:
@@ -709,9 +758,15 @@ func _check_death_conditions(pawn: Node, tick: int) -> void:
 	if data.thirst != null and data.thirst <= 0:
 		cause = "dehydration"
 
-	# Hypothermia
+	# Hypothermia (direct body_temp check)
 	if data.body_temperature != null and data.body_temperature < TEMP_HYPOTHERMIA_SEVERE:
 		cause = "hypothermia"
+
+	# Hypothermia from risk accumulation (HeelKawnianData path)
+	if cause == "" and "hypothermia_risk" in data:
+		var risk: float = float(data.get("hypothermia_risk", 0.0))
+		if risk >= 99.0:
+			cause = "hypothermia"
 
 	# Heatstroke
 	if data.body_temperature != null and data.body_temperature > TEMP_HEATSTROKE_SEVERE:

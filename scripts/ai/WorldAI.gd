@@ -3518,6 +3518,8 @@ func _pawn_profession_overrep(pd: HeelKawnianData) -> bool:
 	var sp: PawnSpawner = _resolve_pawn_spawner_for_world_ai()
 	if sp == null:
 		return false
+	var pd_rk: int = WorldPersistence.get_region_key(pd.tile_pos)
+	var pd_settlement_id: int = SettlementMemory.get_settlement_id_for_region(pd_rk)
 	var total: int = 0
 	var same_prof: int = 0
 	for p in sp.pawns:
@@ -3525,7 +3527,11 @@ func _pawn_profession_overrep(pd: HeelKawnianData) -> bool:
 			continue
 		if p.data == null:
 			continue
-		if p.data.settlement_id != pd.settlement_id:
+		if pd_settlement_id < 0:
+			continue
+		var p_rk: int = WorldPersistence.get_region_key(p.data.tile_pos)
+		var p_settlement_id: int = SettlementMemory.get_settlement_id_for_region(p_rk)
+		if p_settlement_id != pd_settlement_id:
 			continue
 		total += 1
 		if p.data.current_profession == pd.current_profession:

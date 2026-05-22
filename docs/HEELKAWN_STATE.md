@@ -4,12 +4,12 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** May 22, 2026
+**Last Updated:** May 21, 2026
 **Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
 **Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
-**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-22.md](STATE_VERIFICATION_2026-05-22.md)
+**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-21.md](STATE_VERIFICATION_2026-05-21.md)
 
 ---
 
@@ -110,6 +110,68 @@ We are always building, always refining, always expanding. This document capture
   - `AIAutoBuild.gd`: delegates to planner gating before creating intents and before posting jobs; uses `JobManager.post_build_deduped`.
   - `JobManager.gd`: `has_pending_build_near` and `post_build_deduped` for settlement-scoped construction dedupe.
 - Next Task: deepen from first ambition seeding into true household membership logic, coordinated group plans, and longer-horizon settlement objective chains while continuing the v1 consolidation loop.
+
+## May 21, 2026 Session Completion
+
+- **FIX: PawnMoodUI null-instance crash at startup**:
+  - `_modern_theme` autoload can be null during initial scene tree setup
+  - Added `_create_label()` helper that falls back to plain `Label.new()` when theme is null
+  - Replaced all 10 `_modern_theme.create_styled_label()` calls with the safe wrapper
+  - Prevents `Attempt to call method 'create_styled_label' on a null instance` crash
+
+- **FIX: WorldAI.gd settlement context binding bugs**:
+  - `_build_pawn_context` now uses `SettlementMemory.get_center_region_for_region()` instead of stale `pd.settlement_id` (which is always `-1`)
+  - `_pawn_martial_settlement_context` now uses live `get_settlement_id_for_region()` instead of `pd.settlement_id`
+  - `_pawn_mind_culture` now uses live `get_settlement_id_for_region()` instead of `pd.settlement_id`
+  - `_pawn_knowledge_at_risk` now uses live `get_settlement_id_for_region()` instead of `pd.settlement_id`
+  - Root cause: `join_settlement()` is never called anywhere, so `data.settlement_id` stays `-1` for every pawn
+  - AI F10 reports should now show meaningful settlement IDs instead of `settlement -1` and `warmth=0.000`
+
+- **FIX: ColonySimServices warmth pressure accounts for lingering hypothermia risk**:
+  - Added `hypothermia_risk > 0 AND no hearth coverage` as second signal alongside existing body-temp check
+  - Previously only checked current `body_temp < 36.5°C`, but pawns can be recently cold (risk persists ~1000 ticks after body_temp recovers)
+  - Root cause: competing temperature systems (HeelKawnian `_check_temperature` toward ambient ~11-19°C, SurvivalSystem `_regulate_temperature` toward ~37°C) can keep body_temp above 36.5°C while hypothermia_risk still lingers from earlier cold exposure
+  - Warmth pressure should now report >0 when hypothermia deaths exist and fire coverage is low
+
+- **FIX: SurvivalSystem.gd feature enum values**:
+  - Lines 368 and 427: changed `feat == 3 or feat == 8` (RUIN=3, RABBIT=8) to `feat == 5 or feat == 10` (BED=5, FIRE_PIT=10)
+  - The +8°C shelter/fire bonus was never applying because it was checking wrong TileFeature.Type values
+  - Previously would only apply at RUIN and RABBIT tiles (no functional effect), now correctly activates at BED and FIRE_PIT tiles
+
+- **FIX: WorldAI.gd `_pawn_profession_overrep` was dead code**:
+  - Line 3528 compared `p.data.settlement_id != pd.settlement_id` — both always `-1`, so profession balance check never ran
+  - Replaced with live `WorldPersistence.get_region_key()` + `SettlementMemory.get_settlement_id_for_region()` for both pawns
+  - Profession distribution is now correctly balanced within each settlement
+
+- **FIX: HeelKawnian.gd settlement comparison in AI scoring**:
+  - Lines 5664 and 7755: settlement_id comparisons were always `false` (both sides `-1`)
+  - Teaching and mentor selection scoring bonuses for same-settlement pawns (+4 / +3) now correctly apply
+  - Uses `_current_settlement_center_region()` live lookup for both pawns
+  - Fixes social AI bias where pawns in the same settlement were not recognized as settlement-mates
+
+- **FEAT: Settlement auto-joining system (Phase 1 integration)**:
+  - Added `_maybe_update_settlement_membership()` that runs every 120 ticks staggered by pawn ID
+  - Pawns now automatically detect when they are inside a settlement's region bounds and call `join_settlement()`
+  - Pawns now automatically call `leave_settlement()` when they exit settlement bounds
+  - Enhanced `join_settlement()` and `leave_settlement()` with WorldMemory chronicle events
+  - Settlement membership is now position-driven rather than relying on the never-called `join_settlement()` API
+  - `data.settlement_id` is now populated correctly for all pawns within settlements
+  - All downstream consumers (StockpileManager, JobManager, SettlementMemory, CivilizationStage) now work correctly
+
+- **FEAT: Temperature system unification (Phase 2 integration)**:
+  - SurvivalSystem `_regulate_temperature` now detects HeelKawnianData pawns (has `hypothermia_risk`) and skips body_temp lerp
+  - Previously SurvivalSystem fought HeelKawnian.gd's `_check_temperature` by lerping body_temp toward 37°C every 1-4 ticks while HeelKawnian lerped toward ambient ~11-19°C every 10 ticks
+  - Now SurvivalSystem only applies moodlets from risk levels; HeelKawnian.gd is the sole authority on body_temp
+  - SurvivalSystem `_check_death_conditions` now checks `hypothermia_risk >= 99` as an additional death cause
+  - Legacy non-HeelKawnian pawns still use the original SurvivalSystem temperature path unchanged
+  - Hypothermia deaths can now actually occur (previously body_temp was being pulled back to 37°C by SurvivalSystem before reaching 33°C death threshold)
+
+- **FEAT: Survival-to-chronicle event bridge (Phase 3 integration)**:
+  - HeelKawnian.gd `_check_temperature`: records WorldMemory.LIFE_EVENT at hypothermia warning (risk > 50%), critical (risk > 80%), and recovery (risk drops below 20%)
+  - Same heat exhaustion event cycle: warning, critical, recovery
+  - SurvivalSystem `_check_death_conditions`: records survival warnings (hunger/thirst/risk) during grace period and death risk warnings post-grace
+  - Events are throttled every 300-600 ticks to prevent spam
+  - All events recorded in WorldMemory for chronicle export via ChronicleExport
 
 ## May 22, 2026 Session Completion
 

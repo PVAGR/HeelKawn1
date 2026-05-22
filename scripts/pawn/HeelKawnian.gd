@@ -478,6 +478,7 @@ const REPRODUCTION_MIN_REST: float = 42.0
 ## Requires [member HeelKawnianData.social_rapport] built from co-presence (Main._accumulate_social_rapport).
 const REPRODUCTION_MIN_RAPPORT: int = 72
 const COHORT_UPDATE_TICKS: int = 200
+const SETTLEMENT_CHECK_TICKS: int = 120
 const COHORT_MATCH_RADIUS_TILES: int = 8
 const COHORT_BREAK_DISTANCE_TILES: int = 16
 const COHORT_MIN_SIZE: int = 2
@@ -3407,6 +3408,9 @@ func _on_world_tick(_tick: int) -> void:
 		_refresh_or_decay_cohort_stability()
 		if data.household_id < 0 and data.life_stage >= HeelKawnianData.LifeStage.ADULT:
 			_maybe_form_household()
+	# Settlement membership check: every ~120 ticks staggered by pawn ID
+	if posmod(GameManager.tick_count + int(data.id) * 7, SETTLEMENT_CHECK_TICKS) == 0:
+		_maybe_update_settlement_membership()
 	# Apply meaning-based behavior density modifiers (Phase 4)
 	_apply_meaning_behavior_modifiers()
 	if draft_mode:
@@ -5661,7 +5665,9 @@ func _try_complete_knowledge_teaching() -> bool:
 			score -= sqrt(dist_sq) * 0.05
 			if int(data.household_id) >= 0 and int(data.household_id) == int(p.data.household_id):
 				score += 6.0
-			if int(data.settlement_id) >= 0 and int(data.settlement_id) == int(p.data.settlement_id):
+			var my_center_0: int = _current_settlement_center_region()
+			var peer_center_0: int = p._current_settlement_center_region()
+			if my_center_0 >= 0 and my_center_0 == peer_center_0:
 				score += 4.0
 			if peer_drive in ["learn", "practice", "recover", "survive"]:
 				score += 8.0
@@ -7750,7 +7756,9 @@ func _maybe_start_teaching() -> bool:
 		score += float(data.get_social_rapport(int(p.data.id))) * 0.25
 		if int(data.household_id) >= 0 and int(data.household_id) == int(p.data.household_id):
 			score += 5.0
-		if int(data.settlement_id) >= 0 and int(data.settlement_id) == int(p.data.settlement_id):
+		var my_center: int = _current_settlement_center_region()
+		var peer_center: int = p._current_settlement_center_region()
+		if my_center >= 0 and my_center == peer_center:
 			score += 3.0
 		if my_drive == "teach" or my_drive == "preserve":
 			var peer_drive: String = _teaching_drive_for_pawn(p)
@@ -8462,12 +8470,56 @@ func _check_temperature() -> void:
 		if is_wet:
 			hypo_rate *= 2.0
 		data.hypothermia_risk = min(100.0, data.hypothermia_risk + hypo_rate)
+		# Chronicle: hypothermia warning (throttled every ~600 ticks)
+		if GameManager.tick_count % 600 == 0 and data.hypothermia_risk >= 50.0 and WorldMemory != null:
+			WorldMemory.record_event({
+				"k": WorldMemory.Kind.LIFE_EVENT,
+				"tick": GameManager.tick_count,
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"type": "hypothermia_risk",
+				"risk": data.hypothermia_risk,
+				"temperature": data.body_temperature,
+				"wet": is_wet,
+			})
 	elif data.body_temperature > 38.0:
 		data.heat_exhaustion_risk = min(100.0, data.heat_exhaustion_risk + 0.2 * _harmful_pressure_scale())
+		# Chronicle: heat warning (throttled every ~600 ticks)
+		if GameManager.tick_count % 600 == 0 and data.heat_exhaustion_risk >= 50.0 and WorldMemory != null:
+			WorldMemory.record_event({
+				"k": WorldMemory.Kind.LIFE_EVENT,
+				"tick": GameManager.tick_count,
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"type": "heat_risk",
+				"risk": data.heat_exhaustion_risk,
+				"temperature": data.body_temperature,
+			})
 	else:
 		# Recover from temperature risks when in normal range
+		var was_hypo: bool = data.hypothermia_risk >= 20.0
+		var was_heat: bool = data.heat_exhaustion_risk >= 20.0
 		data.hypothermia_risk = max(0.0, data.hypothermia_risk - 0.1)
 		data.heat_exhaustion_risk = max(0.0, data.heat_exhaustion_risk - 0.1)
+		# Chronicle: recovery when risk drops below 20% after being elevated
+		if was_hypo and data.hypothermia_risk < 20.0 and WorldMemory != null:
+			WorldMemory.record_event({
+				"k": WorldMemory.Kind.LIFE_EVENT,
+				"tick": GameManager.tick_count,
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"type": "hypothermia_recovery",
+				"temperature": data.body_temperature,
+			})
+		if was_heat and data.heat_exhaustion_risk < 20.0 and WorldMemory != null:
+			WorldMemory.record_event({
+				"k": WorldMemory.Kind.LIFE_EVENT,
+				"tick": GameManager.tick_count,
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"type": "heat_recovery",
+				"temperature": data.body_temperature,
+			})
 	
 	# Hypothermia causes health damage and can lead to frostbite
 	# During grace period, damage is suppressed
@@ -8478,10 +8530,32 @@ func _check_temperature() -> void:
 		# Severe hypothermia causes frostbite (suppressed during grace)
 		if data.hypothermia_risk > 95.0 and GameManager.tick_count % 200 == 0 and grace_remaining < 0.1:
 			BodyRiskManager.apply_injury(self, BodyRiskManager.InjuryType.FROSTBITE, 5.0, "cold_exposure")
+		# Chronicle: critical hypothermia (throttled every ~300 ticks)
+		if GameManager.tick_count % 300 == 0 and WorldMemory != null:
+			WorldMemory.record_event({
+				"k": WorldMemory.Kind.LIFE_EVENT,
+				"tick": GameManager.tick_count,
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"type": "hypothermia_critical",
+				"risk": data.hypothermia_risk,
+				"health": data.health,
+			})
 	
 	# Heat exhaustion causes health damage
 	if data.heat_exhaustion_risk > 80.0:
 		data.health = max(0.0, data.health - 0.1 * _harmful_pressure_scale())
+		# Chronicle: critical heat (throttled every ~300 ticks)
+		if GameManager.tick_count % 300 == 0 and WorldMemory != null:
+			WorldMemory.record_event({
+				"k": WorldMemory.Kind.LIFE_EVENT,
+				"tick": GameManager.tick_count,
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"type": "heat_critical",
+				"risk": data.heat_exhaustion_risk,
+				"health": data.health,
+			})
 
 
 func _process_injuries() -> void:
@@ -9248,7 +9322,20 @@ func get_total_labor_contributions() -> int:
 
 func join_settlement(settlement_id: int) -> void:
 	# Join a settlement
+	var prev_sid: int = data.settlement_id
+	if prev_sid == settlement_id:
+		return
 	data.settlement_id = settlement_id
+	if WorldMemory != null and GameManager != null:
+		WorldMemory.record_event({
+			"k": WorldMemory.Kind.SETTLEMENT_EVENT,
+			"tick": GameManager.tick_count,
+			"pawn_id": int(data.id),
+			"pawn_name": data.display_name,
+			"settlement_id": settlement_id,
+			"prev_settlement_id": prev_sid,
+			"action": "join",
+		})
 	if GameManager.verbose_logs():
 		print("[HeelKawnian] %s joined settlement %d" % [data.display_name, settlement_id])
 
@@ -9256,6 +9343,8 @@ func join_settlement(settlement_id: int) -> void:
 func leave_settlement() -> void:
 	# Leave current settlement
 	var old_settlement: int = data.settlement_id
+	if old_settlement < 0:
+		return
 	data.settlement_id = -1
 	
 	# Lose homestead if owned
@@ -9263,8 +9352,36 @@ func leave_settlement() -> void:
 		data.owned_properties.erase(data.homestead_tile)
 		data.homestead_tile = Vector2i(-1, -1)
 	
+	if WorldMemory != null and GameManager != null:
+		WorldMemory.record_event({
+			"k": WorldMemory.Kind.SETTLEMENT_EVENT,
+			"tick": GameManager.tick_count,
+			"pawn_id": int(data.id),
+			"pawn_name": data.display_name,
+			"settlement_id": old_settlement,
+			"action": "leave",
+		})
 	if GameManager.verbose_logs():
 		print("[HeelKawnian] %s left settlement %d" % [data.display_name, old_settlement])
+
+
+## Periodic settlement membership check: if pawn is inside a settlement's region
+## bounds, auto-join it. If not, leave current settlement. Runs every
+## SETTLEMENT_CHECK_TICKS staggered by pawn ID.
+func _maybe_update_settlement_membership() -> void:
+	if data == null or _WM == null or SettlementMemory == null:
+		return
+	if data.is_dead:
+		return
+	var region_key: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
+	var center_rk: int = SettlementMemory.get_center_region_for_region(region_key)
+	if center_rk >= 0:
+		var sid: int = SettlementMemory.get_settlement_id_for_region(region_key)
+		if sid >= 0 and sid != data.settlement_id:
+			join_settlement(sid)
+	else:
+		if data.settlement_id >= 0:
+			leave_settlement()
 
 
 func establish_homestead(tile: Vector2i) -> bool:

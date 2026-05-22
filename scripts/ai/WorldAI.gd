@@ -3485,10 +3485,7 @@ func _pawn_decision_rule_context(pd: HeelKawnianData) -> Dictionary:
 
 
 func _pawn_martial_settlement_context(pd: HeelKawnianData) -> float:
-	var wp: Node = get_node_or_null("/root/WorldPersistence")
-	if wp == null or not wp.has_method("get_region_key"):
-		return 0.0
-	var rk: int = wp.get_region_key(pd.tile_pos)
+	var rk: int = WorldMemory._region_key(pd.tile_pos.x, pd.tile_pos.y)
 	var sm: Node = get_node_or_null("/root/SettlementMemory")
 	if sm == null or not sm.has_method("get_settlement_id_for_region"):
 		return 0.0
@@ -3518,7 +3515,7 @@ func _pawn_profession_overrep(pd: HeelKawnianData) -> bool:
 	var sp: PawnSpawner = _resolve_pawn_spawner_for_world_ai()
 	if sp == null:
 		return false
-	var pd_rk: int = WorldPersistence.get_region_key(pd.tile_pos)
+	var pd_rk: int = WorldMemory._region_key(pd.tile_pos.x, pd.tile_pos.y)
 	var pd_settlement_id: int = SettlementMemory.get_settlement_id_for_region(pd_rk)
 	var total: int = 0
 	var same_prof: int = 0
@@ -3529,7 +3526,7 @@ func _pawn_profession_overrep(pd: HeelKawnianData) -> bool:
 			continue
 		if pd_settlement_id < 0:
 			continue
-		var p_rk: int = WorldPersistence.get_region_key(p.data.tile_pos)
+		var p_rk: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
 		var p_settlement_id: int = SettlementMemory.get_settlement_id_for_region(p_rk)
 		if p_settlement_id != pd_settlement_id:
 			continue
@@ -3664,10 +3661,7 @@ func _pawn_mind_place_feeling(pd: HeelKawnianData) -> String:
 
 
 func _pawn_mind_culture(pd: HeelKawnianData) -> String:
-	var wp: Node = get_node_or_null("/root/WorldPersistence")
-	if wp == null or not wp.has_method("get_region_key"):
-		return ""
-	var rk: int = wp.get_region_key(pd.tile_pos)
+	var rk: int = WorldMemory._region_key(pd.tile_pos.x, pd.tile_pos.y)
 	var sm: Node = get_node_or_null("/root/SettlementMemory")
 	if sm == null or not sm.has_method("get_settlement_id_for_region"):
 		return ""
@@ -4066,10 +4060,7 @@ func _pawn_meaning_culture(region_key: int) -> float:
 func _pawn_knowledge_at_risk(pd: HeelKawnianData) -> float:
 	if KnowledgeSystem == null:
 		return 0.0
-	var wp: Node = get_node_or_null("/root/WorldPersistence")
-	if wp == null or not wp.has_method("get_region_key"):
-		return 0.0
-	var rk: int = wp.get_region_key(pd.tile_pos)
+	var rk: int = WorldMemory._region_key(pd.tile_pos.x, pd.tile_pos.y)
 	var sm: Node = get_node_or_null("/root/SettlementMemory")
 	if sm == null or not sm.has_method("get_settlement_id_for_region"):
 		return 0.0

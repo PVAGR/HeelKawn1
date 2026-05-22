@@ -1,12 +1,19 @@
 # HEELKAWN — TASK TRACKER
 
-**Last Updated:** 2026-05-18  
+**Last Updated:** 2026-05-22  
 **Current Phase:** Phase 5A (Indefinite Evolution Foundation)  
 **Focus:** Consolidation, runtime truth, Matrix AI deepening
 
 ---
 
 ## DONE ✅
+
+### Session 2026-05-22
+- [x] Repository cleanup: removed accidental `$null` file from root
+- [x] Fixed .gitignore (removed duplicate `$null` entry)
+- [x] Wired `post_build_deduped` into `Main._post_seeded_job` for construction job deduplication
+- [x] Added ChronicleExport to F10 menu (item #76 "Chronicle Export (to file)")
+- [x] Updated brain/memory files with session progress
 
 ### Session 2026-05-18
 - [x] Full repository scan: identified many "TODO" items already implemented

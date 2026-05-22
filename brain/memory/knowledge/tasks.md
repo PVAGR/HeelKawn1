@@ -1,6 +1,6 @@
 # Task Queue
 
-**Last updated:** 2026-05-14
+**Last updated:** 2026-05-22
 
 ## Pending
 - [ ] Complete autoload consolidation — integrate 11 managers into project.godot
@@ -17,6 +17,8 @@
 - [ ] Consolidation Phase 1: merge 164 autoloads down to ~30
 
 ## Completed
+- [x] 2026-05-22: Wired post_build_deduped into Main._post_seeded_job, Added ChronicleExport to F10 menu
+- [x] 2026-05-22: Cleaned up $null file, Fixed .gitignore
 - [x] 2026-05-14: May 12 Letta disconnection audit — 15 critical bugs fixed across 12 files
 - [x] 2026-05-14: Phase 5A features implemented (CivilizationStage, HeelKawnian profiles, Matrix AI, Literature)
 - [x] 2026-05-14: Autoload consolidation Phase 1 — 11 managers created

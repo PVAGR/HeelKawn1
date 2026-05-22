@@ -4,7 +4,7 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** May 21, 2026
+**Last Updated:** May 22, 2026
 **Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
@@ -107,6 +107,26 @@ We are always building, always refining, always expanding. This document capture
   - `AIAutoBuild.gd`: delegates to planner gating before creating intents and before posting jobs; uses `JobManager.post_build_deduped`.
   - `JobManager.gd`: `has_pending_build_near` and `post_build_deduped` for settlement-scoped construction dedupe.
 - Next Task: deepen from first ambition seeding into true household membership logic, coordinated group plans, and longer-horizon settlement objective chains while continuing the v1 consolidation loop.
+
+## May 22, 2026 Session Completion
+
+- **FIX: Wire `post_build_deduped` into `Main._post_seeded_job`**:
+  - Added `settlement_center` parameter to `_post_seeded_job()` for construction job deduplication
+  - Construction jobs now check `JobManager._is_construction_type()` and use `post_build_deduped()` when settlement center is valid
+  - Prevents duplicate construction postings near settlements during bootstrap phase
+
+- **FEAT: ChronicleExport F10 Menu Integration**:
+  - Added menu item #76: "Chronicle Export (to file)" to CreatorDebugMenu.gd
+  - Added `_report_chronicle_export()` function that calls `ChronicleExport.export_chronicle()`
+  - Players can now export chronicle history to file via F10 debug menu
+
+- **DOCS: Updated tracking files**:
+  - Updated TASKS.md, TODO.md, brain/memory/active_context.md, brain/memory/knowledge/tasks.md
+  - Created brain/memory/sessions/2026-05-22.md session log
+
+- **CLEANUP: Repository hygiene**:
+  - Removed accidental `$null` file from root directory
+  - Fixed `.gitignore` (removed duplicate `$null` entry)
 
 ## Blockers
 

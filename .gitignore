@@ -64,4 +64,3 @@ Thumbs.db
 .agents_tmp/
 *.log
 debug_output.txt
-$null

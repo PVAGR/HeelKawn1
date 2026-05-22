@@ -3414,7 +3414,7 @@ func _pawn_decision_rule_context(pd: HeelKawnianData) -> Dictionary:
 		"scar_count": pd.physical_scars.size(),
 		"crisis_level": pd.get_crisis_level(),
 		"children_count": pd.children_count,
-		"settlement_id": pd.settlement_id,
+		"settlement_id": SettlementMemory.get_center_region_for_region(rk_ctx) if SettlementMemory != null else -1,
 		"martial_settlement": _pawn_martial_settlement_context(pd),
 		"top_rapport_score": top_r,
 		"top_opinion_score": top_o,
@@ -3485,15 +3485,22 @@ func _pawn_decision_rule_context(pd: HeelKawnianData) -> Dictionary:
 
 
 func _pawn_martial_settlement_context(pd: HeelKawnianData) -> float:
-	if pd.settlement_id < 0:
+	var wp: Node = get_node_or_null("/root/WorldPersistence")
+	if wp == null or not wp.has_method("get_region_key"):
 		return 0.0
+	var rk: int = wp.get_region_key(pd.tile_pos)
 	var sm: Node = get_node_or_null("/root/SettlementMemory")
-	if sm == null or not sm.has_method("get_settlements"):
+	if sm == null or not sm.has_method("get_settlement_id_for_region"):
+		return 0.0
+	var sid: int = sm.get_settlement_id_for_region(rk)
+	if sid < 0:
+		return 0.0
+	if not sm.has_method("get_settlements"):
 		return 0.0
 	var arr: Array = sm.get_settlements()
-	if pd.settlement_id >= arr.size():
+	if sid >= arr.size():
 		return 0.0
-	var st_v: Variant = arr[pd.settlement_id]
+	var st_v: Variant = arr[sid]
 	if not (st_v is Dictionary):
 		return 0.0
 	var tags: Variant = (st_v as Dictionary).get("cultural_tags", [])
@@ -3651,12 +3658,20 @@ func _pawn_mind_place_feeling(pd: HeelKawnianData) -> String:
 
 
 func _pawn_mind_culture(pd: HeelKawnianData) -> String:
-	if pd.settlement_id < 0:
+	var wp: Node = get_node_or_null("/root/WorldPersistence")
+	if wp == null or not wp.has_method("get_region_key"):
+		return ""
+	var rk: int = wp.get_region_key(pd.tile_pos)
+	var sm: Node = get_node_or_null("/root/SettlementMemory")
+	if sm == null or not sm.has_method("get_settlement_id_for_region"):
+		return ""
+	var sid: int = sm.get_settlement_id_for_region(rk)
+	if sid < 0:
 		return ""
 	var cm: Node = get_node_or_null("/root/CulturalMemory")
 	if cm == null or not cm.has_method("get_tradition"):
 		return ""
-	var tradition: Dictionary = cm.get_tradition(pd.settlement_id)
+	var tradition: Dictionary = cm.get_tradition(sid)
 	if tradition.is_empty():
 		return ""
 	return str(tradition.get("type", ""))
@@ -4045,7 +4060,14 @@ func _pawn_meaning_culture(region_key: int) -> float:
 func _pawn_knowledge_at_risk(pd: HeelKawnianData) -> float:
 	if KnowledgeSystem == null:
 		return 0.0
-	var sid: int = pd.settlement_id
+	var wp: Node = get_node_or_null("/root/WorldPersistence")
+	if wp == null or not wp.has_method("get_region_key"):
+		return 0.0
+	var rk: int = wp.get_region_key(pd.tile_pos)
+	var sm: Node = get_node_or_null("/root/SettlementMemory")
+	if sm == null or not sm.has_method("get_settlement_id_for_region"):
+		return 0.0
+	var sid: int = sm.get_settlement_id_for_region(rk)
 	if sid < 0:
 		return 0.0
 	var security: Dictionary = KnowledgeSystem.get_knowledge_security_for_settlement(sid)

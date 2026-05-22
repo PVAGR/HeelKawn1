@@ -539,7 +539,7 @@ func _feature_count_in_scope(feature_type: int, center_region: int) -> int:
 
 func _warmth_pressure_for_scope(center_region: int) -> float:
 	var total: int = 0
-	var cold_uncovered: int = 0
+	var cold_or_risk: int = 0
 	for p in PawnAccess.find_alive_pawns():
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
@@ -547,10 +547,12 @@ func _warmth_pressure_for_scope(center_region: int) -> float:
 			continue
 		total += 1
 		if _pawn_is_cold_without_hearth(p):
-			cold_uncovered += 1
+			cold_or_risk += 1
+		elif p.data.hypothermia_risk > 0.0 and not _tile_has_hearth_coverage(p.data.tile_pos):
+			cold_or_risk += 1
 	if total <= 0:
 		return 0.0
-	return clamp(float(cold_uncovered) / float(total), 0.0, 1.0)
+	return clampf(float(cold_or_risk) / float(total), 0.0, 1.0)
 
 
 func _cooking_pressure_for_scope(center_region: int) -> float:

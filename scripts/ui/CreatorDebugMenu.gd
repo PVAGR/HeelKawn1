@@ -512,8 +512,8 @@ func _emit_report(report_id: String) -> void:
 			error_occurred = _safe_report(_report_legacy_dynasty, "legacy_dynasty")
 		"chronicle_view":
 			error_occurred = _safe_report(_report_chronicle_view, "chronicle_view")
-			"chronicle_export":
-				error_occurred = _safe_report(_report_chronicle_export, "chronicle_export")
+		"chronicle_export":
+			error_occurred = _safe_report(_report_chronicle_export, "chronicle_export")
 		"settlement_legends":
 			error_occurred = _safe_report(_report_settlement_legends, "settlement_legends")
 		"read_knowledge_stone":

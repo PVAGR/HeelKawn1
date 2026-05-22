@@ -146,6 +146,7 @@ RitualMagicSystem="*res://autoloads/RitualMagicSystem.gd"
 TerraformingSystem="*res://autoloads/TerraformingSystem.gd"
 PrisonerManager="*res://autoloads/PrisonerManager.gd"
 HistoricalSimulation="*res://autoloads/HistoricalSimulation.gd"
+WindSystem="*res://autoloads/WindSystem.gd"
 
 [display]
 

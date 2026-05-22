@@ -6932,7 +6932,7 @@ func _post_seeded_job(
 			return null
 		if jtype == Job.Type.MINE and _world.data.get_feature(tile.x, tile.y) != TileFeature.Type.ORE_VEIN:
 			return null
-		var job: Job
+		var job: Job = null
 		if JobManager._is_construction_type(jtype) and settlement_center.x > -99990:
 			job = JobManager.post_build_deduped(jtype, tile, priority, work_ticks, settlement_center)
 		else:

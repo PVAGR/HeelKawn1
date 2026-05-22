@@ -1483,6 +1483,10 @@ func _pawn_connect_sim_tick_deferred() -> void:
 	# CRITICAL: Arm pawn simulation ticks FIRST
 	# This flag gates ALL pawn behavior in _on_world_tick
 	_pawn_sim_tick_armed = true
+	
+	# PERFORMANCE: Register pawn in SpatialGrid for O(1) neighbor queries
+	if _spatial_grid != null and _spatial_grid.has_method("insert"):
+		_spatial_grid.insert(self, data.tile_pos)
 
 
 func _on_global_job_completed(job: Job) -> void:
@@ -1578,6 +1582,9 @@ func _exit_tree() -> void:
 		HeelKawnianData.unregister_pawn_data(int(data.id))
 		if SpatialManager != null: # ARCHITECT T006
 			SpatialManager.unregister_entity(int(data.id))
+		# PERFORMANCE: Remove pawn from SpatialGrid
+		if _spatial_grid != null and _spatial_grid.has_method("remove"):
+			_spatial_grid.remove(self)
 	# OPTIMIZATION: Invalidate avoidance caches for all pawns when this pawn dies
 	_invalidate_avoidance_cache_for_pawn(int(data.id))
 	# Disconnect job signals

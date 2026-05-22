@@ -195,20 +195,16 @@ func periodic_phase_due(tick: int, interval: int, offset: int = 0) -> bool:
 
 
 func _adaptive_frame_tick_cap(base_cap: int) -> int:
-	# Reduced throttling since pf_components performance issue is fixed
+	# Desktop relaxed: most throttling removed; still prevents one-frame freeze
 	if GameManager == null:
 		return base_cap
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
-		return maxi(1, base_cap / 2)  # Reduced from /8 to /2
+		return maxi(1, int(base_cap * 0.8))
 	if gs >= 50.0:
-		return maxi(1, base_cap / 1.5)  # Reduced from /4 to /1.5
+		return maxi(1, int(base_cap * 0.9))
 	if gs >= 26.0:
-		return maxi(1, base_cap / 1.2)  # Reduced from /2 to /1.2
-	if gs >= 12.0:
-		return maxi(1, base_cap / 1.1)  # Reduced from /1.5 to /1.1
-	if gs >= 6.0:
-		return maxi(1, base_cap / 1.1)  # Reduced from /1.2 to /1.1
+		return maxi(1, int(base_cap * 0.95))
 	return base_cap
 
 

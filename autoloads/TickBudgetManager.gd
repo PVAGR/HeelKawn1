@@ -4,7 +4,7 @@ extends Node
 ## Keeps the hard wall-time budget in one place and provides a tiny throttled
 ## logging helper for high-frequency debug paths.
 
-const TICK_BUDGET_MS: int = 12
+const TICK_BUDGET_MS: int = 16
 const TICK_BUDGET_USEC: int = TICK_BUDGET_MS * 1000
 
 var _last_log_msec_by_key: Dictionary = {}

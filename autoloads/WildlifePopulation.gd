@@ -51,7 +51,9 @@ func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 	# Wait for world to be available
 	await get_tree().process_frame
-	_world = get_node_or_null("/root/Main/World")
+	_world = get_node_or_null("/root/Main/WorldViewport/World")
+	if _world == null:
+		_world = get_node_or_null("/root/Main/World")
 	_pawn_spawner = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
 	_job_manager = get_node_or_null("/root/JobManager")
 	_stockpile_manager = get_node_or_null("/root/StockpileManager")
@@ -105,8 +107,8 @@ func _find_regions_with_biome(biome: int) -> PackedInt32Array:
 		return regions
 	
 	# Sample regions across the map
-	for x in range(0, _world.data.map_width, 32):
-		for y in range(0, _world.data.map_height, 32):
+	for x in range(0, WorldData.WIDTH, 32):
+		for y in range(0, WorldData.HEIGHT, 32):
 			if _world.data.get_biome(x, y) == biome:
 				var region: int = _world_memory._region_key(x, y)
 				if not regions.has(region):

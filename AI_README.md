@@ -6,7 +6,25 @@ This file is the **single source of truth** for all AI agents working on HeelKaw
 
 ---
 
-**Last Updated**: May 21, 2026
+**Last Updated**: May 22, 2026
+
+## RUNTIME ENFORCEMENT (MANDATORY)
+
+Simulation claims are invalid without verification evidence.
+
+Before declaring simulation work complete, run:
+
+```bash
+bash tools/ai/sim-quality-gate.sh
+```
+
+Required companion docs:
+- `AGENTS.md`
+- `docs/AI_RUNTIME_MANDATE.md`
+- `docs/HEELKAWN_STATE.md`
+- `docs/STATE_VERIFICATION_YYYY-MM-DD.md`
+
+If Godot is available, required smoke includes `1x` + `100x` performance smoothness with `consistency=ok`.
 
 ---
 

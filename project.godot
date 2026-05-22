@@ -147,6 +147,7 @@ TerraformingSystem="*res://autoloads/TerraformingSystem.gd"
 PrisonerManager="*res://autoloads/PrisonerManager.gd"
 HistoricalSimulation="*res://autoloads/HistoricalSimulation.gd"
 WindSystem="*res://autoloads/WindSystem.gd"
+RuntimeWatchdog="*res://autoloads/RuntimeWatchdog.gd"
 
 [display]
 

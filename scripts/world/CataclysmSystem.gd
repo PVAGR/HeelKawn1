@@ -111,15 +111,17 @@ func _on_game_tick(tick: int) -> void:
 	
 	# Check for new cataclysms
 	if tick - _last_cataclysm_tick > CATACLYSM_INTERVAL_MIN:
-		if randi() % (CATACLYSM_INTERVAL_MAX - CATACLYSM_INTERVAL_MIN) < 100:
+		var interval_span: int = maxi(CATACLYSM_INTERVAL_MAX - CATACLYSM_INTERVAL_MIN, 1)
+		var roll: int = _deterministic_index(&"cataclysm:interval", interval_span, tick + _last_cataclysm_tick + _next_cataclysm_id)
+		if roll < 100:
 			_trigger_random_cataclysm(tick)
 
 
 # ==================== CATACLYSM TRIGGERING ====================
 
 func _trigger_random_cataclysm(tick: int) -> void:
-	var type: int = randi() % 5  # 5 cataclysm types
-	var severity: int = randi_range(3, 10)
+	var type: int = _deterministic_index(&"cataclysm:type", 5, tick + _next_cataclysm_id)  # 5 cataclysm types
+	var severity: int = _deterministic_rangei(&"cataclysm:severity", 3, 10, tick + _next_cataclysm_id * 17)
 	
 	trigger_cataclysm(type, severity, tick)
 	_last_cataclysm_tick = tick
@@ -132,7 +134,7 @@ func trigger_cataclysm(type: int, severity: int, tick: int) -> void:
 		return
 	
 	# Generate affected regions
-	var affected: Array[Vector2i] = _generate_affected_regions(severity)
+	var affected: Array[Vector2i] = _generate_affected_regions(severity, tick)
 	
 	# Create cataclysm data
 	var cataclysm: Dictionary = {
@@ -166,13 +168,15 @@ func trigger_cataclysm(type: int, severity: int, tick: int) -> void:
 		})
 
 
-func _generate_affected_regions(severity: int) -> Array[Vector2i]:
+func _generate_affected_regions(severity: int, tick: int) -> Array[Vector2i]:
 	var affected: Array[Vector2i] = []
 	var count: int = severity * 5  # More severity = more regions
 	
 	for i in range(count):
-		# Random region coordinates
-		var region: Vector2i = Vector2i(randi() % 100, randi() % 100)
+		# Deterministic region coordinates from seed + tick + index.
+		var rx: int = _deterministic_index(&"cataclysm:region_x", 100, tick + severity * 31 + i * 7 + _next_cataclysm_id * 13)
+		var ry: int = _deterministic_index(&"cataclysm:region_y", 100, tick + severity * 53 + i * 11 + _next_cataclysm_id * 17)
+		var region: Vector2i = Vector2i(rx, ry)
 		if not affected.has(region):
 			affected.append(region)
 	
@@ -249,7 +253,8 @@ func _apply_earthquake_effects(regions: Array[Vector2i], severity: int) -> void:
 		# Check settlements in affected regions
 		for region in regions:
 			# Destroy buildings based on severity
-			var buildings_destroyed: int = randi_range(0, severity * 2)
+			var salt: int = int(region.x) * 73856093 ^ int(region.y) * 19349663 ^ severity * 83492791
+			var buildings_destroyed: int = _deterministic_rangei(&"cataclysm:earthquake:destroy", 0, severity * 2, salt)
 			damage.buildings_destroyed += buildings_destroyed
 	
 	# Update damage
@@ -268,9 +273,10 @@ func _apply_meteor_effects(regions: Array[Vector2i], severity: int) -> void:
 	
 	# Create craters and destruction
 	for region in regions:
+		var salt: int = int(region.x) * 92311 ^ int(region.y) * 68917 ^ severity * 29791
 		damage.craters_created += 1
-		damage.buildings_destroyed += randi_range(5, severity * 5)
-		damage.fires_started += randi_range(0, severity)
+		damage.buildings_destroyed += _deterministic_rangei(&"cataclysm:meteor:destroy", 5, maxi(5, severity * 5), salt + 101)
+		damage.fires_started += _deterministic_rangei(&"cataclysm:meteor:fire", 0, maxi(0, severity), salt + 211)
 	
 	# Update damage
 	for cataclysm in active_cataclysms:
@@ -381,3 +387,23 @@ func get_stats() -> Dictionary:
 		"total_casualties": total_casualties,
 		"last_cataclysm_tick": _last_cataclysm_tick
 	}
+
+
+func _deterministic_rangei(stream: StringName, min_value: int, max_value: int, salt: int) -> int:
+	if WorldRNG != null:
+		return int(WorldRNG.rangei(min_value, max_value, salt, stream))
+	var lo: int = mini(min_value, max_value)
+	var hi: int = maxi(min_value, max_value)
+	if hi <= lo:
+		return lo
+	var seed: int = int(str(stream).hash() ^ salt ^ (GameManager.tick_count if GameManager != null else 0))
+	return lo + (absi(seed) % (hi - lo + 1))
+
+
+func _deterministic_index(stream: StringName, size: int, salt: int) -> int:
+	if size <= 0:
+		return -1
+	if WorldRNG != null:
+		return int(WorldRNG.index_for(stream, size, salt))
+	var seed: int = int(str(stream).hash() ^ salt ^ (GameManager.tick_count if GameManager != null else 0))
+	return absi(seed) % size

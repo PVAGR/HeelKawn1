@@ -217,7 +217,8 @@ func _initialize_recipes() -> void:
 		"required_skill": 0,  # FORAGING
 		"min_skill_level": 1,
 		"output_item": Item.Type.PAPER,
-		"output_quantity": 5
+		"output_quantity": 5,
+		"required_tools": [Item.Type.FLINT_KNIFE],
 	})
 	
 	_add_recipe({
@@ -230,7 +231,8 @@ func _initialize_recipes() -> void:
 		"required_skill": 4,  # HUNTING
 		"min_skill_level": 2,
 		"output_item": Item.Type.LEATHER,
-		"output_quantity": 1
+		"output_quantity": 1,
+		"required_tools": [Item.Type.FLINT_KNIFE],
 	})
 	
 	_add_recipe({
@@ -243,7 +245,8 @@ func _initialize_recipes() -> void:
 		"required_skill": 0,  # FORAGING
 		"min_skill_level": 1,
 		"output_item": Item.Type.INK,
-		"output_quantity": 2
+		"output_quantity": 2,
+		"required_tools": [Item.Type.FLINT_KNIFE],
 	})
 	
 	_add_recipe({
@@ -256,7 +259,8 @@ func _initialize_recipes() -> void:
 		"required_skill": 0,  # FORAGING
 		"min_skill_level": 1,
 		"output_item": Item.Type.PEN,
-		"output_quantity": 1
+		"output_quantity": 1,
+		"required_tools": [Item.Type.FLINT_KNIFE],
 	})
 	
 	_add_recipe({
@@ -269,7 +273,8 @@ func _initialize_recipes() -> void:
 		"required_skill": 3,  # BUILDING
 		"min_skill_level": 3,
 		"output_item": Item.Type.BOOK,
-		"output_quantity": 1
+		"output_quantity": 1,
+		"required_tools": [Item.Type.FLINT_KNIFE],
 	})
 
 
@@ -591,6 +596,12 @@ func _consume_ingredients(ingredients: Dictionary) -> bool:
 func start_crafting(recipe_id: String, craftsman_id: int, workshop_tile: Vector2i) -> int:
 	var recipe: Dictionary = recipes.get(recipe_id, {})
 	if recipe.is_empty():
+		return -1
+	
+	var craftsman: HeelKawnian = _get_pawn_by_id(craftsman_id)
+	if craftsman == null or craftsman.data == null:
+		return -1
+	if not bool(can_craft_recipe(craftsman, recipe_id, workshop_tile).get("can_craft", false)):
 		return -1
 	
 	# Create job

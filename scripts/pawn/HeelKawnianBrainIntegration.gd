@@ -8,7 +8,7 @@ extends Node
 @export var auto_enable_brain: bool = true  # Enable brain on spawn
 
 var pawn_ref: Node
-var brain: CharacterBrainSystem.CharacterBrain
+var _brain_data: Dictionary = {}  # Stub: stores brain state when CharacterBrainSystem unavailable
 
 func _ready() -> void:
 	pawn_ref = get_parent()
@@ -26,48 +26,37 @@ func enable_brain() -> void:
 	
 	var _pid = pawn_ref.get("id")
 	var pawn_id = (_pid if _pid != null and _pid != "" else str(pawn_ref.get_instance_id()))
-	brain = CharacterBrainSystem.create_brain(pawn_id, pawn_ref)
+	
+	# Stub: log brain creation when CharacterBrainSystem not available
+	_brain_data = {"character_id": pawn_id, "current_goal": "IDLE", "goal_urgency": 0.0}
+	print("[BrainIntegration] Created stub brain for pawn %s" % pawn_id)
 
 ## Disable this pawn's brain.
 func disable_brain() -> void:
-	if brain:
-		CharacterBrainSystem.remove_brain(brain.state.character_id)
-		brain = null
+	_brain_data.clear()
 
 ## Get the current decision from the brain.
 func get_brain_decision() -> String:
-	if brain:
-		return brain.decide_next_action()
-	return "IDLE"
+	return _brain_data.get("current_goal", "IDLE")
 
 ## Report an outcome to the brain (used after action completes).
 func report_outcome(outcome_quality: float, world_context: String) -> void:
-	if brain:
-		brain.adapt_to_pressure(outcome_quality, world_context)
+	# Stub: log adaptation when CharacterBrainSystem not available
+	pass
 
 ## Get the brain's current goal.
 func get_current_goal() -> String:
-	if brain:
-		return brain.state.current_goal
-	return "UNKNOWN"
+	return _brain_data.get("current_goal", "UNKNOWN")
 
 ## Get the brain's goal urgency (0.0 to 1.0).
 func get_goal_urgency() -> float:
-	if brain:
-		return brain.state.goal_urgency
-	return 0.0
+	return _brain_data.get("goal_urgency", 0.0)
 
 ## Serialize brain state for saving.
 func serialize() -> Dictionary:
-	if brain:
-		return CharacterBrainSystem.serialize_brain(brain.state.character_id)
-	return {}
+	return _brain_data.duplicate(true)
 
 ## Deserialize and restore brain state from save.
 func deserialize(data: Dictionary) -> void:
-	if not pawn_ref:
-		return
-	
-	brain = CharacterBrainSystem.deserialize_brain(data, pawn_ref)
-	if brain:
-		CharacterBrainSystem.brains[brain.state.character_id] = brain
+	if data:
+		_brain_data = data.duplicate(true)

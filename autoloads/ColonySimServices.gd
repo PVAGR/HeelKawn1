@@ -47,10 +47,10 @@ const SETTLEMENT_BUILD_COOLDOWN_DEFAULT_TICKS: int = 1000
 const SETTLEMENT_BUILD_COOLDOWN_MAX_TICKS: int = 2000
 
 ## Per stockpile zone tile and per STORAGE_HUT feature (matches BuildingRegistry buffs).
-const STOCKPILE_TILE_CAPACITY: int = 8
-const STORAGE_HUT_CAPACITY: int = 4
-const GRANARY_FOOD_CAPACITY: int = 4
-const CELLAR_STORAGE_CAPACITY: int = 6
+const STOCKPILE_TILE_CAPACITY: int = 16
+const STORAGE_HUT_CAPACITY: int = 20
+const GRANARY_FOOD_CAPACITY: int = 8
+const CELLAR_STORAGE_CAPACITY: int = 12
 
 ## Body temp below this is "cold" (matches HeelKawnian warmth-seeking).
 const COMFORT_BODY_TEMP_C: float = 36.5
@@ -556,10 +556,12 @@ func _warmth_pressure_for_scope(center_region: int) -> float:
 func _cooking_pressure_for_scope(center_region: int) -> float:
 	if StockpileManager == null:
 		return 0.0
-	var raw: int = StockpileManager.total_count_of(Item.Type.MEAT) \
-			+ StockpileManager.total_count_of(Item.Type.FISH) \
-			+ StockpileManager.total_count_of(Item.Type.BERRY)
-	if raw <= 0:
+	# Only meat and fish create urgent cooking pressure; berries are shelf-stable
+	# and contribute a softer signal so a large berry stockpile doesn't peg at 1.0.
+	var urgent_raw: int = StockpileManager.total_count_of(Item.Type.MEAT) \
+			+ StockpileManager.total_count_of(Item.Type.FISH)
+	var soft_raw: int = StockpileManager.total_count_of(Item.Type.BERRY)
+	if urgent_raw <= 0 and soft_raw <= 0:
 		return 0.0
 	var hearths: int = _hearth_count_for_scope(center_region)
 	if hearths <= 0:
@@ -569,8 +571,15 @@ func _cooking_pressure_for_scope(center_region: int) -> float:
 		pending_cooks = JobManager.count_pending_by_type(Job.Type.COOK_MEAT) \
 				+ JobManager.count_pending_by_type(Job.Type.COOK_FISH) \
 				+ JobManager.count_pending_by_type(Job.Type.COOK_BERRIES)
-	var backlog: int = maxi(0, raw - pending_cooks)
-	return clamp(float(backlog) / 12.0, 0.0, 1.0)
+	# Scale the backlog threshold by population (min 12) so large colonies with full
+	# berry stockpiles don't keep pressure pinned at 1.0.
+	var pop: int = _population_in_scope(center_region)
+	var cook_threshold: float = maxf(12.0, float(pop) * 3.0)
+	var urgent_backlog: int = maxi(0, urgent_raw - pending_cooks)
+	var soft_backlog: int = maxi(0, soft_raw - pending_cooks)
+	var urgent_pressure: float = clampf(float(urgent_backlog) / cook_threshold, 0.0, 1.0)
+	var soft_pressure: float = clampf(float(soft_backlog) / (cook_threshold * 3.0), 0.0, 0.5)
+	return clampf(maxf(urgent_pressure, soft_pressure), 0.0, 1.0)
 
 
 func _pawn_in_scope(pawn: Node, center_region: int) -> bool:

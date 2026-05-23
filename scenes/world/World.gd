@@ -396,7 +396,7 @@ func _rebuild_player_meaning_region_state() -> void:
 		if not SettlementMemory.is_collapsed_state(st) and st != "revivable":
 			continue
 		var ckr: int = int(d.get("center_region", -1))
-		var intent: int = int(IntentMemory.get_settlement_intent().get(ckr, IntentMemory.INTENT_HOLD))
+		var intent: int = int(MemoryManager.get_settlement_intent().get(ckr, MemoryManager.INTENT_HOLD))
 		var reg1: Variant = d.get("regions", null)
 		if not (reg1 is PackedInt32Array):
 			continue
@@ -466,10 +466,10 @@ func _apply_road_tint(c: Color, x: int, y: int) -> Color:
 
 ## Recurring inter-settlement trade routes from [TradeMemory] (derived; stacks on roads / scar / meaning).
 func _apply_trade_route_tint(c: Color, x: int, y: int) -> Color:
-	var tr: int = TradeMemory.get_route_tier_at(x, y)
-	if tr == TradeMemory.TIER_NONE:
+	var tr: int = EconomyManager.get_trade_route_tier_at(x, y)
+	if tr == EconomyManager.TIER_NONE:
 		return c
-	if tr == TradeMemory.TIER_ROUTE_1:
+	if tr == EconomyManager.TIER_ROUTE_1:
 		return c.lerp(c * Color(1.08, 1.07, 1.05, 1.0), 0.15)
 	return c.lerp(c * Color(1.18, 1.12, 0.95, 1.0), 0.25)
 

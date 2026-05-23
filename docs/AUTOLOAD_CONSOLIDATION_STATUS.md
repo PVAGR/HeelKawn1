@@ -1,8 +1,41 @@
 # Autoload Consolidation Status
 
-**Date:** May 14, 2026  
-**Status:** ~15% Complete — 11 consolidated managers created, 15 old autoloads removed from project.godot  
-**Autoload Count:** 149 autoloads (11 consolidated managers created, 15 removed from project.godot)
+**Date:** 2026-05-22  
+**Status:** Phase 1 + Phase 2 safe removals done: 9 autoloads deregistered  
+**Autoload Count:** 141 (from 150, 9 deregistered in Phases 1–2, 11 consolidated managers created, 24 removed from project.godot total)
+
+---
+
+## Phase 1: Safe Removals — DONE May 23, 2026
+
+### Removed 3 autoload registrations from project.godot:
+
+| Autoload | LOC | Reason | Files Updated |
+|---|---|---|---|
+| **DiscoveryGate** | 47 | Converted to static utility class (`class_name DiscoveryGate`, all static methods). Call `DiscoveryGate.init()` in bootstrap. All 48 call sites preserved. | `autoloads/DiscoveryGate.gd` (rewritten), `Main.gd` (+init call) |
+| **WorldEventSeedManager** | 40 | Lazy-loaded via EventManager. Main.gd inline calls replaced with `EventManager.get_world_event_seed_manager()`. | `Main.gd` (2 refs replaced) |
+| **WindSystem** | 26 | Thin wrapper of WorldEnvironmentManager — all refs redirected to WorldEnvironmentManager directly. | `NavalSystem.gd`, `HeelKawnian.gd` (2 refs), `SurvivalSystem.gd` |
+
+**Phase 1 LOC saved:** ~113 (from autoload registrations)
+**Files remaining:** All 3 .gd files kept on disk for potential reactivation.
+
+---
+
+## Phase 2: Stub/Vision Candidate Removals — DONE 2026-05-22
+
+### Removed 6 autoload registrations from project.godot:
+
+| Autoload | LOC | Refs | Approach | Files Updated |
+|---|---|---|---|---|
+| **SquadCoordinator** | 77 | 2 | Lazy-loaded by WorldAI as child node. `recompute_squads()` / `get_active_squad_count()` methods on WorldAI. | `WorldAI.gd` (+wrapper methods), `Main.gd` (call site), `project.godot` |
+| **FragmentationManager** | 114 | 2 | Bootstrapped at root in `Main._ready()`. SchismManager uses path-based lookup (`/root/FragmentationManager`). | `Main.gd` (+bootstrap +member var), `SchismManager.gd` (path lookup), `project.godot` |
+| **RelationalGraph** | 87 | 49 (in 4 files) | SocialManager adds to root via `get_tree().root.add_child()` instead of `add_child()`. Existing `/root/RelationalGraph` path queries still work. TradePlanner uses path-based lookup. | `SocialManager.gd`, `TradePlanner.gd`, `project.godot` |
+| **SacredGeography** | 257 | 6 | Bootstrapped at root in `Main._ready()`. All 3 path-based call sites (`get_node_or_null("/root/SacredGeography")`) work unchanged. WorldOverlay direct singleton replaced with path lookup. | `Main.gd` (+bootstrap), `WorldOverlay.gd` (path lookup), `project.godot` |
+| **ReligionLens** | 137 | 24 | Converted to static utility class (`class_name ReligionLens`). Removed unused signals + neural network stub state. All 24 call sites preserved unchanged. | `autoloads/ReligionLens.gd` (rewritten), `project.godot` |
+| **MythAge** | 226 | 9 | Converted to static utility class (`class_name MythAge`). Replaced `_process` with `static func tick()` called from `Main._on_game_tick`. Removed unused `age_discovered` signal. All 9 call sites preserved unchanged. | `autoloads/MythAge.gd` (rewritten), `Main.gd` (+tick call +init in _ready), `project.godot` |
+
+**Phase 2 LOC saved:** ~898 (from autoload registrations)
+**Files remaining:** All 6 .gd files kept on disk for potential reactivation.
 
 ---
 
@@ -172,8 +205,8 @@ The following files also have references to removed autoloads that need updating
 
 ## Next Steps
 
-1. **Complete Main.gd updates** - Update all remaining autoload references in Main.gd to use consolidated managers
-2. **Update script files** - Update references in the 20+ script files that reference old autoloads
+1. **Phase 3: Manager-driven Consolidations** — Move remaining autoloads into existing consolidated managers (SettlementMemory, FactionRegistry, TradePlanner, RoadMemory, RemnantMemory, MythMemory, SacredMemory, IntentMemory, AgeMemory, BloodlineSystem → MemoryManager / FactionManager / SocialManager / EconomyManager)
+2. **Phase 4: Core Thin Wrappers** — Evaluate remaining ~50 thin wrappers (<150 LOC) for consolidation potential
 3. **Test game launch** - Verify the game launches without errors after all updates
 4. **Performance testing** - Measure startup time and memory usage improvements
 

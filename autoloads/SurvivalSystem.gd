@@ -400,7 +400,6 @@ func _get_environmental_temperature(pawn: Node) -> float:
 				base_temp += 5.0
 			"embers":
 				base_temp += 3.0
-
 	# Apply grace period multiplier (new pawns are more resilient)
 	base_temp = lerp(base_temp, 37.0, grace_mult)
 

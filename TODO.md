@@ -1,6 +1,6 @@
 # HeelKawn — Living TODO
 
-**Last Updated:** May 19, 2026
+**Last Updated:** May 23, 2026
 **Source of truth:** `docs/HEELKAWN_STATE.md` and `docs/HEELKAWN_PROJECT_COMPASS.md`
 
 > HeelKawn is **never finished**. This file tracks active work, not a destination.
@@ -24,12 +24,12 @@
 - [x] Social intent bridge: `social_seek` / `teach_seek` / `grudge_confront`
 - [x] Settlement ambition seeding: periodic local ambitions from drive + pressure
 - [x] Household goal planning: `HOUSEHOLD_GOALS` with coordinated job lists
-- [ ] Extend profile-to-job-bias into learning target selection
-- [ ] Add preservation choices (what knowledge to inscribe vs keep oral)
+- [x] Extend profile-to-job-bias into learning target selection (May 23)
+- [x] Add preservation choices (what knowledge to inscribe vs keep oral) (verified May 23 — already wired)
 - [x] Recovery drive ambition chain (shelter/hearth/storage/maintain after trauma pressure)
 - [x] `teach_seek` autonomy calls `execute_teach_seek` on arrival
-- [ ] Deepen recovery behavior (post-collapse settlement rebuild chains)
-- [ ] Add settlement ambition chains (longer-horizon objectives)
+- [x] Deepen recovery behavior (post-collapse settlement rebuild chains) (May 23 — 5 new chain types)
+- [x] Add settlement ambition chains (longer-horizon objectives) (May 23 — made general, not recovery-only)
 
 ### 3. Lineage & Progression
 - [x] Parent lookup: `_get_parent_data` via static registry
@@ -47,13 +47,14 @@
 - [ ] Add tool requirements to crafting recipes (beyond player gathering)
 - [ ] Verify resources are actually consumed in all crafting paths (not just checked)
 
-### 5. Knowledge Preservation Loop
+### 5. Knowledge Preservation Loop ✅ DONE May 22
 - [x] Knowledge inscribed on stones (KnowledgeSystem + KnowledgeStone feature)
 - [x] Book crafting recipes (Paper, Leather, Ink, Pen, Book)
 - [x] Knowledge death tracking (knowledge_lost events)
-- [ ] Unify stones, books, teaching, literacy into one system
-- [ ] Add lost/rediscovered knowledge mechanics
-- [ ] Verify knowledge death when last carrier dies untaught
+- [x] Unify stones, books, teaching, literacy into one system — `get_knowledge_preservation_state()` + `compute_preservation_pressure()` composites all carrier types
+- [x] Add lost/rediscovered knowledge mechanics — `_has_record_carrier_for_knowledge()` + `_is_knowledge_truly_lost()` guard dormancy; record carriers prevent "lost" state
+- [x] Verify knowledge death when last carrier dies untaught — `_check_knowledge_loss()` now checks record carriers before entering dormant; `knowledge_degraded` vs `knowledge_truly_lost` events emitted
+- [x] Wire preservation pressure into Matrix AI ambitions — `HeelKawnianManager.get_settlement_ambition_for_pawn()` calls `compute_preservation_pressure()` during `preserve` drive
 
 ### 6. Civilization Stage Deepening
 - [x] Initial derived era lens: `CivilizationStage.gd` reads live world state

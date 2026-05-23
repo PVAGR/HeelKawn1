@@ -716,8 +716,23 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 		if ambition.is_empty():
 			ambition = _ambition_chain_for_settlement(settlement_key)
 	elif drive == "preserve":
-		if markers <= 0:
-			ambition = _ambition_result(Job.Type.CARVE_KNOWLEDGE_STONE, 7, "preservation drive: no knowledge markers in settlement")
+		# Check unified preservation pressure for the settlement's actual knowledge at risk
+		var preservation_data: Dictionary = _get_preservation_pressure_for_settlement(settlement_id, data)
+		var urgent: Array = preservation_data.get("urgent", [])
+		var recommended: Array = preservation_data.get("recommended", [])
+		var has_literate: bool = data != null and KnowledgeSystem != null and KnowledgeSystem.has_method("has_knowledge") and KnowledgeSystem.call("has_knowledge", int(data.id), KnowledgeSystem.KnowledgeType.WRITING)
+		
+		if not urgent.is_empty():
+			# Most urgent preservation action: carve knowledge stone for critical knowledge
+			ambition = _ambition_result(Job.Type.CARVE_KNOWLEDGE_STONE, 8, "preservation drive: %d knowledge types at urgent risk" % urgent.size())
+		elif not recommended.is_empty():
+			# Recommended preservation: inscribe ledger or write books
+			if has_literate and markers > 0:
+				ambition = _ambition_result(Job.Type.PAPER_MAKING, 7, "preservation drive: transcribe %d at-risk knowledge types to paper" % recommended.size())
+			else:
+				ambition = _ambition_result(Job.Type.CARVE_LEDGER_STONE, 7, "preservation drive: record %d at-risk knowledge types on stone" % recommended.size())
+		elif markers <= 0:
+			ambition = _ambition_result(Job.Type.CARVE_KNOWLEDGE_STONE, 6, "preservation drive: no knowledge markers in settlement")
 		else:
 			ambition = _ambition_result(Job.Type.PAPER_MAKING, 6, "preservation drive: upgrade from stone to paper")
 	elif drive == "innovate":
@@ -730,6 +745,9 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 	elif next_need.find("teach") >= 0:
 		ambition = _ambition_result(Job.Type.TEACH_SKILL, 5, "development need requests teaching continuity")
 
+	if ambition.is_empty():
+		# Check ambition chains for any settlement (not just recovery)
+		ambition = _ambition_chain_for_settlement(settlement_key)
 	if ambition.is_empty():
 		# No build needed — gather resources naturally based on local need
 		var gather_job: int = _natural_gather_job(data, local_features, tick)
@@ -955,23 +973,23 @@ static func _ambition_chain_for_settlement(settlement_id: int) -> Dictionary:
 ## Check if a chain step has been completed.
 static func _chain_step_completed(chain_name: String, step_index: int, features: Dictionary, settlement_id: int) -> bool:
 	match chain_name:
-		"Found Settlement":
+		"Found Settlement", "Rebuild from Ruin":
 			match step_index:
 				0:  # build_hearth
 					return int(features.get("hearth", 0)) >= 1
 				1:  # build_beds_x3
 					return int(features.get("bed", 0)) >= 3
-				2:  # build_storage
-					return int(features.get("storage_hut", 0)) >= 1
-				3:  # build_farm
+				2:  # build_storage (or build_shelter for Rebuild)
+					return int(features.get("storage_hut", 0)) >= 1 or int(features.get("bed", 0)) >= 4
+				3:  # build_farm (only for Found Settlement)
 					return int(features.get("farm", 0)) >= 1
-		"Fortify":
+		"Fortify", "Defense Network":
 			match step_index:
-				0:  # build_walls
-					return int(features.get("wall", 0)) >= 4
-				1:  # build_door
-					return int(features.get("door", 0)) >= 1
-				2:  # build_watchtower
+				0:  # build_walls / build_watchtower
+					return int(features.get("wall", 0)) >= 4 if chain_name == "Fortify" else int(features.get("watchtower", 0)) >= 1
+				1:  # build_door / build_barracks
+					return int(features.get("door", 0)) >= 1 if chain_name == "Fortify" else int(features.get("barracks", 0)) >= 1
+				2:  # build_watchtower (only for Fortify)
 					return int(features.get("watchtower", 0)) >= 1
 		"Knowledge Hub":
 			match step_index:
@@ -989,6 +1007,24 @@ static func _chain_step_completed(chain_name: String, step_index: int, features:
 					return int(features.get("granary", 0)) >= 1
 				2:  # build_cellar
 					return int(features.get("cellar", 0)) >= 1
+		"Healing & Care":
+			match step_index:
+				0:  # build_apothecary
+					return int(features.get("apothecary", 0)) >= 1
+				1:  # build_shrine
+					return int(features.get("shrine", 0)) >= 1
+		"Trade Route":
+			match step_index:
+				0:  # build_market
+					return int(features.get("market", 0)) >= 1
+				1:  # build_road
+					return int(features.get("road", 0)) >= 2
+		"Cultural Renaissance":
+			match step_index:
+				0:  # build_marker
+					return int(features.get("marker", 0)) >= 1
+				1:  # build_shrine
+					return int(features.get("shrine", 0)) >= 1
 	return false
 
 
@@ -999,6 +1035,8 @@ static func _ambition_from_chain_step(step: String, settlement_id: int, features
 			return _ambition_result(Job.Type.BUILD_FIRE_PIT, 8, "ambition chain: Found Settlement — establish hearth")
 		"build_beds_x3":
 			return _ambition_result(Job.Type.BUILD_BED, 7, "ambition chain: Found Settlement — build beds (target 3)")
+		"build_shelter":
+			return _ambition_result(Job.Type.BUILD_SHELTER, 7, "ambition chain: Rebuild from Ruin — construct shelter")
 		"build_storage":
 			return _ambition_result(Job.Type.BUILD_STORAGE_HUT, 7, "ambition chain: Found Settlement — build storage")
 		"build_farm":
@@ -1019,6 +1057,14 @@ static func _ambition_from_chain_step(step: String, settlement_id: int, features
 			return _ambition_result(Job.Type.BUILD_GRANARY, 6, "ambition chain: Food Security — build granary")
 		"build_cellar":
 			return _ambition_result(Job.Type.BUILD_CELLAR, 5, "ambition chain: Food Security — build cellar")
+		"build_apothecary":
+			return _ambition_result(Job.Type.BUILD_APOTHECARY, 6, "ambition chain: Healing & Care — build apothecary")
+		"build_shrine":
+			return _ambition_result(Job.Type.BUILD_SHRINE, 5, "ambition chain: Healing & Care — build shrine for morale")
+		"build_market":
+			return _ambition_result(Job.Type.BUILD_MARKET, 6, "ambition chain: Trade Route — establish market")
+		"build_road":
+			return _ambition_result(Job.Type.BUILD_ROAD, 5, "ambition chain: Trade Route — build roads")
 	return {}
 
 
@@ -1028,13 +1074,25 @@ static func _chain_name_for_steps(steps: Array) -> String:
 		return ""
 	var first: String = str(steps[0])
 	if first.begins_with("build_hearth"):
+		if steps.size() >= 4 and "build_shelter" in steps:
+			return "Rebuild from Ruin"
 		return "Found Settlement"
 	if first.begins_with("build_walls"):
 		return "Fortify"
+	if first.begins_with("build_watchtower"):
+		return "Defense Network"
 	if first.begins_with("build_library"):
 		return "Knowledge Hub"
 	if first.begins_with("build_farm"):
 		return "Food Security"
+	if first.begins_with("build_granary"):
+		return "Food Security"
+	if first.begins_with("build_apothecary"):
+		return "Healing & Care"
+	if first.begins_with("build_market"):
+		return "Trade Route"
+	if first.begins_with("build_marker"):
+		return "Cultural Renaissance"
 	return "Custom Chain"
 
 
@@ -1045,22 +1103,54 @@ static func _select_new_chain(settlement_id: int, features: Dictionary, local_po
 	var walls: int = int(features.get("wall", 0))
 	var farms: int = int(features.get("farm", 0))
 	var libraries: int = int(features.get("library", 0))
+	var workshops: int = int(features.get("workshop", 0))
+	var apothecaries: int = int(features.get("apothecary", 0))
+	var markets: int = int(features.get("market", 0))
+	var watchtowers: int = int(features.get("watchtower", 0))
+	var barracks: int = int(features.get("barracks", 0))
+	var markers: int = int(features.get("marker", 0))
+	var shrines: int = int(features.get("shrine", 0))
+	var granaries: int = int(features.get("granary", 0))
 
 	# No hearth yet → Found Settlement chain
 	if hearths <= 0 and local_pop >= 1:
 		return ["build_hearth", "build_beds_x3", "build_storage", "build_farm"]
+
+	# Ruin recovery: settlement exists but has serious scar/rebuild pressure
+	if hearths <= 0 and local_pop >= 1:
+		return ["build_hearth", "build_beds_x3", "build_shelter", "build_storage"]
 
 	# Hearth exists but no walls → Fortify chain
 	if walls < 2 and local_pop >= 4:
 		return ["build_walls", "build_door", "build_watchtower"]
 
 	# Farms exist but no granary → Food Security chain
-	if farms >= 1 and int(features.get("granary", 0)) <= 0:
+	if farms >= 1 and granaries <= 0:
 		return ["build_granary", "build_cellar"]
+
+	# Medical need → Healing & Care chain
+	if apothecaries <= 0 and local_pop >= 4:
+		return ["build_apothecary", "build_shrine"]
+
+	# Walls >= 4 but no watchtower/barracks → Defense Network chain
+	if walls >= 4 and watchtowers <= 0 and local_pop >= 5:
+		return ["build_watchtower", "build_barracks"]
 
 	# Advanced settlement with no library → Knowledge Hub chain
 	if local_pop >= 8 and libraries <= 0:
 		return ["build_library", "build_school", "build_marker"]
+
+	# Workshop exists but no market → Trade Route chain
+	if workshops >= 1 and markets <= 0 and local_pop >= 6:
+		return ["build_market", "build_road"]
+
+	# Markers and shrines for cultural settlements
+	if libraries >= 1 and shrines <= 0 and local_pop >= 6:
+		return ["build_shrine", "build_marker"]
+
+	# Mature settlement → Cultural Renaissance chain
+	if local_pop >= 10 and markers <= 0:
+		return ["build_marker", "build_shrine"]
 
 	return []
 
@@ -2077,6 +2167,7 @@ static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, ident
 			_add_settlement_service_bias(biases, profile)
 	_add_human_scale_biases(biases, profile, data)
 	_apply_learning_biases(biases, profile, data, pawn)
+	_apply_learning_target_biases(biases, data, pawn)
 	_add_identity_trait_biases(biases, identity)
 	_apply_pressure_bias_to_biases(biases, int(data.id))
 	_apply_colony_pressure_biases(biases, data)
@@ -2237,6 +2328,62 @@ static func _apply_learning_biases(biases: Dictionary, profile: Dictionary, data
 			elif not survival_ok and construction_bias < 0:
 				dampened = mini(-1, construction_bias)
 		_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH, Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_APOTHECARY, Job.Type.BUILD_LIBRARY, Job.Type.BUILD_MARKET, Job.Type.BUILD_CELLAR], dampened)
+
+
+## Apply learning target biases: bias jobs that help the pawn acquire
+## their target knowledge or skill (from get_learning_target_for_pawn).
+static func _apply_learning_target_biases(biases: Dictionary, data: HeelKawnianData, pawn: Variant) -> void:
+	if pawn == null or data == null:
+		return
+	var target: Dictionary = get_learning_target_for_pawn(pawn)
+	if target.is_empty():
+		return
+
+	var target_knowledge: int = int(target.get("target_knowledge_type", -1))
+	var target_skill: int = int(target.get("target_skill", -1))
+
+	if target_knowledge >= 0:
+		_add_bias(biases, [Job.Type.APPRENTICESHIP, Job.Type.TEACH_SKILL], 4)
+		_add_bias(biases, [Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.CARVE_LEDGER_STONE], 3)
+		match target_knowledge:
+			KnowledgeSystem.KnowledgeType.CRAFTING:
+				_add_bias(biases, [Job.Type.TOOL_MAKING, Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR], 4)
+			KnowledgeSystem.KnowledgeType.AGRICULTURE:
+				_add_bias(biases, [Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS, Job.Type.GROW_FOOD], 4)
+			KnowledgeSystem.KnowledgeType.METALLURGY:
+				_add_bias(biases, [Job.Type.MINE, Job.Type.MINE_WALL, Job.Type.CRAFT_PICK], 4)
+			KnowledgeSystem.KnowledgeType.MEDICINE:
+				_add_bias(biases, [Job.Type.BUILD_APOTHECARY, Job.Type.COOK_BERRIES, Job.Type.FORAGE], 3)
+			KnowledgeSystem.KnowledgeType.MEMORY_PRESERVATION, KnowledgeSystem.KnowledgeType.WRITING:
+				_add_bias(biases, [Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.CARVE_LEDGER_STONE, Job.Type.PAPER_MAKING, Job.Type.INK_MAKING, Job.Type.BOOK_BINDING], 5)
+			KnowledgeSystem.KnowledgeType.TEACHING:
+				_add_bias(biases, [Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP], 5)
+			KnowledgeSystem.KnowledgeType.FIRE:
+				_add_bias(biases, [Job.Type.BUILD_FIRE_PIT, Job.Type.CRAFT_TORCH, Job.Type.COOK_MEAT, Job.Type.COOK_FISH], 4)
+			KnowledgeSystem.KnowledgeType.SHELTER_BUILDING:
+				_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_SHELTER, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR], 4)
+			KnowledgeSystem.KnowledgeType.FOOD_STORAGE:
+				_add_bias(biases, [Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR, Job.Type.DRY_MEAT], 4)
+			KnowledgeSystem.KnowledgeType.WEAPON_CRAFTING:
+				_add_bias(biases, [Job.Type.CRAFT_SPEAR, Job.Type.CRAFT_KNIFE, Job.Type.TOOL_MAKING], 4)
+			KnowledgeSystem.KnowledgeType.HOSPITALITY:
+				_add_bias(biases, [Job.Type.BUILD_HEARTH, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH], 4)
+			KnowledgeSystem.KnowledgeType.LEADERSHIP:
+				_add_bias(biases, [Job.Type.TEACH_SKILL, Job.Type.BUILD_MARKER_STONE, Job.Type.PROTECT], 3)
+
+	if target_skill >= 0:
+		match target_skill:
+			HeelKawnianData.Skill.FORAGING:
+				_add_bias(biases, [Job.Type.FORAGE, Job.Type.GATHER_STICK, Job.Type.COOK_BERRIES, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS], 4)
+			HeelKawnianData.Skill.MINING:
+				_add_bias(biases, [Job.Type.MINE, Job.Type.MINE_WALL, Job.Type.GATHER_FLINT], 4)
+			HeelKawnianData.Skill.CHOPPING:
+				_add_bias(biases, [Job.Type.CHOP, Job.Type.CRAFT_TORCH, Job.Type.BUILD_FIRE_PIT], 4)
+			HeelKawnianData.Skill.BUILDING:
+				_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_SHELTER, Job.Type.TOOL_MAKING], 4)
+			HeelKawnianData.Skill.HUNTING:
+				_add_bias(biases, [Job.Type.HUNT, Job.Type.CRAFT_SPEAR, Job.Type.DRY_MEAT, Job.Type.COOK_MEAT], 4)
+		_add_bias(biases, [Job.Type.APPRENTICESHIP], 2)
 
 
 static func _apply_colony_pressure_biases(biases: Dictionary, data: HeelKawnianData) -> void:
@@ -2746,6 +2893,24 @@ static func _world_seed() -> int:
 	if wrng != null and wrng.has_method("current_seed"):
 		return int(wrng.call("current_seed"))
 	return 0
+
+
+static func _get_preservation_pressure_for_settlement(settlement_id: int, data: HeelKawnianData) -> Dictionary:
+	"""Query KnowledgeSystem for unified preservation pressure, with fallback for null settlement."""
+	var ks: Node = _root_node("KnowledgeSystem")
+	if ks == null or not ks.has_method("compute_preservation_pressure"):
+		return {"urgent": [], "recommended": [], "stable": []}
+	if settlement_id < 0:
+		# Use pawn's current region as settlement proxy
+		if data != null:
+			var wm: Node = _root_node("WorldMemory")
+			var sm: Node = _root_node("SettlementMemory")
+			if wm != null and sm != null and wm.has_method("_region_key") and sm.has_method("get_center_region_for_region"):
+				var rk: int = int(wm.call("_region_key", data.tile_pos.x, data.tile_pos.y))
+				settlement_id = int(sm.call("get_center_region_for_region", rk))
+	if settlement_id >= 0:
+		return ks.call("compute_preservation_pressure", settlement_id)
+	return {"urgent": [], "recommended": [], "stable": []}
 
 
 static func _tick() -> int:

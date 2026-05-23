@@ -1144,22 +1144,22 @@ func _job_intent_priority_offset(j: Job) -> int:
 	var to_center: int = SettlementMemory.get_center_region_for_region(to_rk)
 	if from_center < 0 and to_center < 0:
 		return 0
-	var from_intent: int = int(IntentMemory.get_settlement_intent().get(from_center, IntentMemory.INTENT_HOLD))
-	var to_intent: int = int(IntentMemory.get_settlement_intent().get(to_center, IntentMemory.INTENT_HOLD))
-	var from_pressure: float = float(IntentMemory.get_settlement_pressure().get(from_center, 0.5))
-	var to_pressure: float = float(IntentMemory.get_settlement_pressure().get(to_center, 0.5))
+	var from_intent: int = int(MemoryManager.get_settlement_intent().get(from_center, MemoryManager.INTENT_HOLD))
+	var to_intent: int = int(MemoryManager.get_settlement_intent().get(to_center, MemoryManager.INTENT_HOLD))
+	var from_pressure: float = float(MemoryManager.get_settlement_pressure().get(from_center, 0.5))
+	var to_pressure: float = float(MemoryManager.get_settlement_pressure().get(to_center, 0.5))
 	var delta: int = 0
-	if to_intent == IntentMemory.INTENT_GROW:
+	if to_intent == MemoryManager.INTENT_GROW:
 		delta += 3
-	elif to_intent == IntentMemory.INTENT_ABANDON:
+	elif to_intent == MemoryManager.INTENT_ABANDON:
 		delta -= 4
 	if to_pressure < from_pressure:
 		delta += 1
 	elif to_pressure > from_pressure + 0.12:
 		delta -= 1
-	if from_intent == IntentMemory.INTENT_ABANDON and to_intent != IntentMemory.INTENT_ABANDON:
+	if from_intent == MemoryManager.INTENT_ABANDON and to_intent != MemoryManager.INTENT_ABANDON:
 		delta += 2
-	elif from_intent != IntentMemory.INTENT_ABANDON and to_intent == IntentMemory.INTENT_ABANDON:
+	elif from_intent != MemoryManager.INTENT_ABANDON and to_intent == MemoryManager.INTENT_ABANDON:
 		delta -= 2
 	return delta
 
@@ -1457,12 +1457,10 @@ func _init_footstep_particles() -> void:
 func _emit_footstep_dust() -> void:
 	if _footstep_particles == null:
 		return
-	var _ws: Node = get_node_or_null("/root/WindSystem")
-	if _ws != null and _ws.has_method("get_wind_direction") and _footstep_particles.process_material != null:
-		var wind_dir_v: Variant = _ws.get("_current_direction")
-		var wind_str_v: Variant = _ws.get("_current_strength")
-		var wind_dir: Vector2 = wind_dir_v if wind_dir_v is Vector2 else Vector2.RIGHT
-		var wind_str: float = float(wind_str_v) if wind_str_v != null else 0.5
+	var _ws_has: bool = WorldEnvironmentManager != null and WorldEnvironmentManager.has_method("get_wind_direction")
+	if _ws_has and _footstep_particles.process_material != null:
+		var wind_dir: Vector2 = WorldEnvironmentManager.get_wind_direction()
+		var wind_str: float = WorldEnvironmentManager.get_wind_strength()
 		_footstep_particles.process_material.initial_velocity_min = 5.0 + wind_str * 10.0
 		_footstep_particles.process_material.direction = Vector3(wind_dir.x, 0, wind_dir.y)
 	_footstep_particles.restart()
@@ -4336,8 +4334,8 @@ func _tick_idle() -> void:
 		crisis_cooking_pressure = ColonySimServices.get_cooking_pressure()
 	var from_region_key: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
 	var from_center_region: int = SettlementMemory.get_center_region_for_region(from_region_key)
-	var from_intent: int = int(IntentMemory.get_settlement_intent().get(from_center_region, IntentMemory.INTENT_HOLD))
-	var from_pressure: float = float(IntentMemory.get_settlement_pressure().get(from_center_region, 0.5))
+	var from_intent: int = int(MemoryManager.get_settlement_intent().get(from_center_region, MemoryManager.INTENT_HOLD))
+	var from_pressure: float = float(MemoryManager.get_settlement_pressure().get(from_center_region, 0.5))
 	var scar_priority_for_level: Dictionary = {0: 0, 1: -5, 2: -24}
 	
 	var resolve_region_key_for_work_tile: Callable = func(work_tile: Vector2i) -> int:
@@ -4369,19 +4367,19 @@ func _tick_idle() -> void:
 		var to_center: int = SettlementMemory.get_center_region_for_region(region_key)
 		var intent_delta: int = 0
 		if not (from_center_region < 0 and to_center < 0):
-			var to_intent: int = int(IntentMemory.get_settlement_intent().get(to_center, IntentMemory.INTENT_HOLD))
-			var to_pressure: float = float(IntentMemory.get_settlement_pressure().get(to_center, 0.5))
-			if to_intent == IntentMemory.INTENT_GROW:
+			var to_intent: int = int(MemoryManager.get_settlement_intent().get(to_center, MemoryManager.INTENT_HOLD))
+			var to_pressure: float = float(MemoryManager.get_settlement_pressure().get(to_center, 0.5))
+			if to_intent == MemoryManager.INTENT_GROW:
 				intent_delta += 3
-			elif to_intent == IntentMemory.INTENT_ABANDON:
+			elif to_intent == MemoryManager.INTENT_ABANDON:
 				intent_delta -= 4
 			if to_pressure < from_pressure:
 				intent_delta += 1
 			elif to_pressure > from_pressure + 0.12:
 				intent_delta -= 1
-			if from_intent == IntentMemory.INTENT_ABANDON and to_intent != IntentMemory.INTENT_ABANDON:
+			if from_intent == MemoryManager.INTENT_ABANDON and to_intent != MemoryManager.INTENT_ABANDON:
 				intent_delta += 2
-			elif from_intent != IntentMemory.INTENT_ABANDON and to_intent == IntentMemory.INTENT_ABANDON:
+			elif from_intent != MemoryManager.INTENT_ABANDON and to_intent == MemoryManager.INTENT_ABANDON:
 				intent_delta -= 2
 		var history_offset: int = scar_offset + inherited_history_offset + intent_delta
 		region_history_offset_cache[region_key] = history_offset
@@ -8983,7 +8981,7 @@ func _maybe_seed_myth_from_region() -> void:
 	if data == null or _WM == null:
 		return
 	var rk: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
-	var myth_state: int = MythMemory.get_region_myth_state(rk)
+	var myth_state: int = MemoryManager.get_region_myth_state(rk)
 	if myth_state == 0:
 		return
 	var myth_name: String = "region_%d" % rk
@@ -10445,7 +10443,7 @@ func _start_wander() -> void:
 	var best_cult: int = -100
 	var from_rk: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
 	var from_center: int = SettlementMemory.get_center_region_for_region(from_rk)
-	var from_p: float = float(IntentMemory.get_settlement_pressure().get(from_center, 0.5))
+	var from_p: float = float(MemoryManager.get_settlement_pressure().get(from_center, 0.5))
 	var squad_anchor: Vector2i = _squad_anchor_tile()
 	var dist_now: int = -1
 	if squad_anchor.x >= 0:
@@ -10458,12 +10456,12 @@ func _start_wander() -> void:
 		var rk2: int = _WM._region_key(t.x, t.y)
 		var crep: int = CulturalMemory.get_region_reputation(rk2)
 		var ckr2: int = SettlementMemory.get_center_region_for_region(rk2)
-		var intent2: int = int(IntentMemory.get_settlement_intent().get(ckr2, IntentMemory.INTENT_HOLD))
-		var p2: float = float(IntentMemory.get_settlement_pressure().get(ckr2, 0.5))
+		var intent2: int = int(MemoryManager.get_settlement_intent().get(ckr2, MemoryManager.INTENT_HOLD))
+		var p2: float = float(MemoryManager.get_settlement_pressure().get(ckr2, 0.5))
 		var score: int = 0
-		if intent2 == IntentMemory.INTENT_GROW:
+		if intent2 == MemoryManager.INTENT_GROW:
 			score += 7
-		elif intent2 == IntentMemory.INTENT_ABANDON:
+		elif intent2 == MemoryManager.INTENT_ABANDON:
 			score -= 8
 		if p2 < from_p:
 			score += 2
@@ -10492,7 +10490,7 @@ func _start_wander() -> void:
 					if _tile_biome == Biome.Type.PLAINS:
 						score += 3
 		# Emotional geography: myth state (-1 revered, +1 feared)
-		var myth_state: int = MythMemory.get_region_myth_state(rk2) if MythMemory != null else 0
+		var myth_state: int = MemoryManager.get_region_myth_state(rk2)
 		if myth_state < 0:
 			score += 2  # Slight pull toward revered regions
 		elif myth_state > 0:

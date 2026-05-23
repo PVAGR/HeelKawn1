@@ -2,6 +2,12 @@ extends Node
 ## Consolidated Memory Manager
 ## Lazy-loads subsystems on first access only.
 
+# Intent constants (re-exported from IntentMemory)
+const INTENT_GROW: int = 0
+const INTENT_HOLD: int = 1
+const INTENT_ABANDON: int = 2
+const INTENT_RECOVER: int = 3
+
 # Core memory systems (kept separate as autoloads - essential)
 @onready var WorldMemory = get_node_or_null("/root/WorldMemory")
 @onready var CulturalMemory = get_node_or_null("/root/CulturalMemory")
@@ -108,11 +114,18 @@ func record_remnant(settlement_id: int, remnant_type: String) -> void:
 	if _remnant_memory != null and _remnant_memory.has_method("record_remnant"):
 		_remnant_memory.record_remnant(settlement_id, remnant_type)
 
-## Record myth (delegates to MythMemory if available)
-func record_myth(settlement_id: int, myth_type: String, description: String) -> void:
+## Register rebirth success (delegates to MythMemory if available)
+func register_myth_rebirth_success(center_rk: int) -> void:
 	_ensure_myth()
-	if _myth_memory != null and _myth_memory.has_method("record_myth"):
-		_myth_memory.record_myth(settlement_id, myth_type, description)
+	if _myth_memory != null and _myth_memory.has_method("register_rebirth_success"):
+		_myth_memory.register_rebirth_success(center_rk)
+
+## Get conflict intensity (delegates to MythMemory if available)
+func get_myth_conflict_intensity(region_key: int) -> float:
+	_ensure_myth()
+	if _myth_memory != null and _myth_memory.has_method("get_conflict_intensity"):
+		return _myth_memory.get_conflict_intensity(region_key)
+	return 0.0
 
 ## Record road (delegates to RoadMemory if available)
 func record_road(from_tile: Vector2i, to_tile: Vector2i) -> void:
@@ -197,33 +210,25 @@ func recompute_intent(world: World) -> void:
 	if _intent_memory != null and _intent_memory.has_method("recompute"):
 		_intent_memory.recompute(world)
 
-## Get INTENT_HOLD constant (delegates to IntentMemory if available)
-func get_intent_hold() -> int:
-	_ensure_intent()
-	if _intent_memory != null and _intent_memory.has_method("INTENT_HOLD"):
-		return _intent_memory.INTENT_HOLD
-	return 0
-
-## Get INTENT_GROW constant (delegates to IntentMemory if available)
-func get_intent_grow() -> int:
-	_ensure_intent()
-	if _intent_memory != null and _intent_memory.has_method("INTENT_GROW"):
-		return _intent_memory.INTENT_GROW
-	return 0
-
-## Get INTENT_ABANDON constant (delegates to IntentMemory if available)
-func get_intent_abandon() -> int:
-	_ensure_intent()
-	if _intent_memory != null and _intent_memory.has_method("INTENT_ABANDON"):
-		return _intent_memory.INTENT_ABANDON
-	return 0
-
 ## Get settlement intent (delegates to IntentMemory if available)
 func get_settlement_intent() -> Dictionary:
 	_ensure_intent()
-	if _intent_memory != null and _intent_memory.has_method("settlement_intent"):
-		return _intent_memory.settlement_intent
+	if _intent_memory != null and _intent_memory.has_method("get_settlement_intent"):
+		return _intent_memory.get_settlement_intent()
 	return {}
+
+## Get settlement pressure (delegates to IntentMemory if available)
+func get_settlement_pressure() -> Dictionary:
+	_ensure_intent()
+	if _intent_memory != null and _intent_memory.has_method("get_settlement_pressure"):
+		return _intent_memory.get_settlement_pressure()
+	return {}
+
+## Clear intent memory (delegates to IntentMemory if available)
+func clear_intent_memory() -> void:
+	_ensure_intent()
+	if _intent_memory != null and _intent_memory.has_method("clear"):
+		_intent_memory.clear()
 
 ## Forward getters for subsystems
 func get_age_memory() -> Node:

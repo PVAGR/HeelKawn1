@@ -47,7 +47,11 @@ func _ensure_kinship() -> void:
 
 func _ensure_relational() -> void:
 	if not _relational_loaded:
-		_relational_graph = _load_subsystem("RelationalGraph", "_relational_graph", "res://autoloads/RelationalGraph.gd")
+		var path: String = "res://autoloads/RelationalGraph.gd"
+		if FileAccess.file_exists(path):
+			_relational_graph = load(path).new()
+			_relational_graph.name = "RelationalGraph"
+			get_tree().root.add_child(_relational_graph)
 		_relational_loaded = true
 
 func _ensure_bloodline() -> void:

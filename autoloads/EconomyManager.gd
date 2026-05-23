@@ -4,6 +4,11 @@ class_name EconomyManager
 ## Combines trade and economy systems into one autoload
 ## Reduces autoload count while preserving economy functionality
 
+# Trade route tier constants (re-exported from TradeMemory)
+const TIER_NONE: int = 0
+const TIER_ROUTE_1: int = 1
+const TIER_ROUTE_2: int = 2
+
 # Child nodes for economy subsystems (loaded on-demand)
 var _trade_planner: Node
 var _trade_memory: Node
@@ -80,14 +85,74 @@ func update_food_chain(world: World) -> void:
 func get_trade_planner() -> Node:
 	return get_subsystem("trade_planner")
 
-static func get_trade_memory() -> Node:
-	var inst: EconomyManager = Engine.get_singleton("EconomyManager") as EconomyManager
-	if inst == null:
-		return null
-	return inst.get_subsystem("trade_memory")
+func get_trade_memory() -> Node:
+	return get_subsystem("trade_memory")
 
 func get_food_chain_manager() -> Node:
 	return get_subsystem("food_chain_manager")
 
 func get_tool_manager() -> Node:
 	return get_subsystem("tool_manager")
+
+# === TradePlanner forwarding ===
+
+## Plan inter-settlement trade routes (delegates to TradePlanner)
+func plan_trade_routes(world: World, main: Node, from_memory_flush: bool) -> void:
+	_ensure_trade_planner()
+	if _trade_planner != null and _trade_planner.has_method("_plan_impl"):
+		_trade_planner._plan_impl(world, main, from_memory_flush)
+
+# === TradeMemory forwarding ===
+
+func clear_trade_memory() -> void:
+	_ensure_trade_memory()
+	if _trade_memory != null:
+		_trade_memory.clear()
+
+func get_active_trade_routes() -> Array[Dictionary]:
+	_ensure_trade_memory()
+	if _trade_memory != null and _trade_memory.has_method("get_active_routes"):
+		return _trade_memory.get_active_routes()
+	return []
+
+func get_trade_routes_for_map_draw() -> Array[Dictionary]:
+	_ensure_trade_memory()
+	if _trade_memory != null and _trade_memory.has_method("get_routes_for_map_draw"):
+		return _trade_memory.get_routes_for_map_draw()
+	return []
+
+func get_trade_caravan_markers() -> Array[Dictionary]:
+	_ensure_trade_memory()
+	if _trade_memory != null and _trade_memory.has_method("get_caravan_markers"):
+		return _trade_memory.get_caravan_markers()
+	return []
+
+func get_trade_route_tier_at(x: int, y: int) -> int:
+	_ensure_trade_memory()
+	if _trade_memory != null and _trade_memory.has_method("get_route_tier_at"):
+		return _trade_memory.get_route_tier_at(x, y)
+	return 0
+
+func get_trade_path_weight_mul(x: int, y: int) -> float:
+	_ensure_trade_memory()
+	if _trade_memory != null and _trade_memory.has_method("get_trade_path_weight_mul"):
+		return _trade_memory.get_trade_path_weight_mul(x, y)
+	return 1.0
+
+func count_t2_trade_tiles() -> int:
+	_ensure_trade_memory()
+	if _trade_memory != null and _trade_memory.has_method("count_t2_tiles"):
+		return _trade_memory.count_t2_tiles()
+	return 0
+
+func get_last_tick_trade_t2_existed() -> int:
+	_ensure_trade_memory()
+	if _trade_memory != null and _trade_memory.has_method("get_last_tick_t2_existed"):
+		return _trade_memory.get_last_tick_t2_existed()
+	return -1
+
+func count_trade_route_tiles() -> int:
+	_ensure_trade_memory()
+	if _trade_memory != null and _trade_memory.has_method("count_route_tiles"):
+		return _trade_memory.count_route_tiles()
+	return 0

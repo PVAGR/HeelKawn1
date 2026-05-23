@@ -444,12 +444,9 @@ func _deliver_route_goods(route: Dictionary) -> void:
 
 
 ## Moving caravan markers for map overlay (interpolated along route progress).
-static func get_caravan_markers() -> Array[Dictionary]:
-	var inst: TradeMemory = Engine.get_singleton("TradeMemory") as TradeMemory
-	if inst == null:
-		return []
+func get_caravan_markers() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	for route_any in inst.trade_routes:
+	for route_any in trade_routes:
 		if route_any is not Dictionary:
 			continue
 		var route: Dictionary = route_any as Dictionary
@@ -477,12 +474,9 @@ static func get_caravan_markers() -> Array[Dictionary]:
 
 
 ## Routes visible on strategy map (includes diplomatic links without caravan).
-static func get_routes_for_map_draw() -> Array[Dictionary]:
-	var inst: TradeMemory = Engine.get_singleton("TradeMemory") as TradeMemory
-	if inst == null:
-		return []
+func get_routes_for_map_draw() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	for r in inst.trade_routes:
+	for r in trade_routes:
 		if str(r.get("status", "")) in ["en_route", "returning", "delivered"]:
 			out.append(r)
 	return out
@@ -519,12 +513,9 @@ func _get_pawn_spawner() -> Node:
 # ==================== Public API ====================
 
 ## Get all active trade routes
-static func get_active_routes() -> Array[Dictionary]:
-	var inst: TradeMemory = Engine.get_singleton("TradeMemory") as TradeMemory
-	if inst == null:
-		return []
+func get_active_routes() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	for r in inst.trade_routes:
+	for r in trade_routes:
 		if r.status == "en_route":
 			result.append(r)
 	return result
@@ -546,19 +537,16 @@ func get_goods_in_transit(settlement: int) -> Dictionary:
 
 
 ## Get trade route tier at a tile (for World rendering)
-static func get_route_tier_at(x: int, y: int) -> int:
-	var inst: TradeMemory = Engine.get_singleton("TradeMemory") as TradeMemory
-	if inst == null:
+func get_route_tier_at(x: int, y: int) -> int:
+	if _WM == null:
 		return TIER_NONE
-	if inst._WM == null:
-		return TIER_NONE
-	var rk: int = inst._WM._region_key(x, y)
-	return int(inst._route_tile_tiers.get(rk, TIER_NONE))
+	var rk: int = _WM._region_key(x, y)
+	return int(_route_tile_tiers.get(rk, TIER_NONE))
 
 
 ## Get pathfinding weight multiplier for trade route at tile
 ## Used by PathFinder.gd to determine if pawns should prefer trade paths
-static func get_trade_path_weight_mul(x: int, y: int) -> float:
+func get_trade_path_weight_mul(x: int, y: int) -> float:
 	var route_tier: int = get_route_tier_at(x, y)
 
 	match route_tier:
@@ -591,33 +579,24 @@ func debug_create_route(from: int, to: int) -> void:
 
 ## Returns the count of T2 (Tier 2 / Advanced) trade route tiles.
 ## Required by IntentMemory.recompute to assess trade capabilities.
-static func count_t2_tiles() -> int:
-	var inst: TradeMemory = Engine.get_singleton("TradeMemory") as TradeMemory
-	if inst == null:
-		return 0
+func count_t2_tiles() -> int:
 	var total: int = 0
-	for rk_any in inst._route_tile_tiers.keys():
-		if int(inst._route_tile_tiers.get(rk_any, TIER_NONE)) >= TIER_ROUTE_2:
+	for rk_any in _route_tile_tiers.keys():
+		if int(_route_tile_tiers.get(rk_any, TIER_NONE)) >= TIER_ROUTE_2:
 			total += 1
 	return total
 
 
 ## Returns the last tick when T2 trade routes existed.
 ## Required by IntentMemory for trade history assessment.
-static func get_last_tick_t2_existed() -> int:
-	var inst: TradeMemory = Engine.get_singleton("TradeMemory") as TradeMemory
-	if inst == null:
-		return -1
-	return inst._last_tick_t2_existed
+func get_last_tick_t2_existed() -> int:
+	return _last_tick_t2_existed
 
 
 ## Count total tiles across all active trade route paths.
-static func count_route_tiles() -> int:
-	var inst: TradeMemory = Engine.get_singleton("TradeMemory") as TradeMemory
-	if inst == null:
-		return 0
+func count_route_tiles() -> int:
 	var total: int = 0
-	for route in inst.trade_routes:
+	for route in trade_routes:
 		if route.has("path") and route.path is Array:
 			total += route.path.size()
 		elif route.has("tiles") and route.tiles is Array:
@@ -641,17 +620,14 @@ func get_role(region_key: Variant) -> String:
 
 
 ## Clear all trade data (for world reroll/new game)
-static func clear() -> void:
-	var inst: TradeMemory = Engine.get_singleton("TradeMemory") as TradeMemory
-	if inst == null:
-		return
-	inst.trade_routes.clear()
-	inst._next_route_id = 1
-	inst._route_tile_tiers.clear()
-	inst._route_roles_by_region.clear()
-	inst._route_incoming_by_center.clear()
-	inst._route_outgoing_by_center.clear()
-	inst._last_tick_t2_existed = -1
+func clear() -> void:
+	trade_routes.clear()
+	_next_route_id = 1
+	_route_tile_tiers.clear()
+	_route_roles_by_region.clear()
+	_route_incoming_by_center.clear()
+	_route_outgoing_by_center.clear()
+	_last_tick_t2_existed = -1
 
 
 func has_active_route_between(from_settlement: int, to_settlement: int) -> bool:

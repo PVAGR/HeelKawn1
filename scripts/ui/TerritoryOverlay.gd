@@ -356,7 +356,7 @@ func _draw() -> void:
 
 
 func _draw_trade_route_lines(line_width: float) -> void:
-	var routes: Array = TradeMemory.get_routes_for_map_draw()
+	var routes: Array = EconomyManager.get_trade_routes_for_map_draw()
 	if routes.is_empty():
 		return
 	var center_by_region: Dictionary = {}
@@ -381,7 +381,7 @@ func _draw_trade_route_lines(line_width: float) -> void:
 
 
 func _draw_caravan_markers(half_tile: float) -> void:
-	var markers: Array = TradeMemory.get_caravan_markers()
+	var markers: Array = EconomyManager.get_trade_caravan_markers()
 	if markers.is_empty():
 		return
 	var r: float = maxf(3.0, half_tile * 0.55)

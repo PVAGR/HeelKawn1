@@ -307,6 +307,7 @@ func get_visible_settlement_count() -> int:
 	return n
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
+var _fragmentation_manager: Node = null
 var _chronicle_feed = null  # ChronicleFeed instance
 ## Observer routing from [PlayerIntentQueue] (one dispatch step per sim tick).
 var _player_intent_pin_zone_id: String = ""
@@ -678,6 +679,17 @@ func _ready() -> void:
 		var tick_manager: Node = load("res://autoloads/TickManager.gd").new()
 		tick_manager.name = "TickManager"
 		add_child(tick_manager)
+
+	# Bootstrap de-registered Phase 2 autoloads: FragmentationManager + SacredGeography
+	if _fragmentation_manager == null:
+		_fragmentation_manager = load("res://autoloads/FragmentationManager.gd").new()
+		_fragmentation_manager.name = "FragmentationManager"
+		get_tree().root.add_child(_fragmentation_manager)
+	if get_node_or_null("/root/SacredGeography") == null:
+		var sg: Node = load("res://autoloads/SacredGeography.gd").new()
+		sg.name = "SacredGeography"
+		get_tree().root.add_child(sg)
+	MythAge.init()
 
 	# Connect to PlaytestRecorder for automated playtest logging
 	# (HeelKawnian selection recording is now handled inside _set_selected_pawn)
@@ -2425,9 +2437,8 @@ func _bootstrap_colony() -> void:
 	# (3+ guild pawns + 300 ticks stability + hearth OR infrastructure)
 	# fails because no construction jobs ever complete.
 	# DIRECT_FORAGING handles food — pawns eat berries on the spot.
-	# DEAD BRAIN REVIVED: WorldEventSeedManager initialized on boot
-	if WorldEventSeedManager != null:
-		WorldEventSeedManager.ensure_default_seeds()
+	# DiscoveryGate as static utility (no longer an autoload)
+	DiscoveryGate.init()
 	# Place stockpile + supplies so settlement formation is unblocked
 	_place_stockpile(main_component)
 	_seed_starting_supplies()
@@ -2458,7 +2469,7 @@ func _bootstrap_colony() -> void:
 				_world.refresh_pawn_historic_path_weights()
 		)
 		SettlementManager.plan(_world, self, true)
-		TradePlanner.plan(_world, self, true)
+		EconomyManager.plan_trade_routes(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		_sync_pawn_inherited_cultural_reputation()
 	# Spawn animals and register spawner with world for breeding
@@ -2886,13 +2897,15 @@ func _on_game_tick(tick: int) -> void:
 		t0 = Time.get_ticks_usec()
 		_update_ambient_target()
 		section_us["ambient_target"] = Time.get_ticks_usec() - t0
-	# DEAD BRAIN REVIVED: WorldEventSeedManager advances seeds periodically
-	if WorldEventSeedManager != null and tick % 100 == 0:
-		var seed_events: Array = WorldEventSeedManager.advance_all(tick)
-		if not seed_events.is_empty() and WorldEvents != null:
-			for evt in seed_events:
-				if evt is Dictionary:
-					WorldEvents.record_pawn_action(str(evt.get("type", "seed_event")), -1)
+	# WorldEventSeedManager lazy-loaded via EventManager (no longer autoloaded)
+	if tick % 100 == 0 and EventManager != null:
+		var sm: Node = EventManager.get_world_event_seed_manager()
+		if sm != null and sm.has_method("advance_all"):
+			var seed_events: Array = sm.advance_all(tick)
+			if not seed_events.is_empty() and WorldEvents != null:
+				for evt in seed_events:
+					if evt is Dictionary:
+						WorldEvents.record_pawn_action(str(evt.get("type", "seed_event")), -1)
 	# Post dynamic hunt jobs less aggressively than harvest loops.
 	var hunt_post_interval: int = _high_speed_interval(40, 150, 500)  # Was (30, 120, 400) - now 500 ticks at 100x
 	var hunt_phase_offset: int = maxi(1, hunt_post_interval / 2)
@@ -3100,7 +3113,7 @@ func _on_game_tick(tick: int) -> void:
 				or (SettlementMemory != null and SettlementMemory.get_proto_sites().size() >= 2))
 		if _is_main_lane_tick(tick, planner_interval, trade_offset) and trade_ok:
 			t0 = Time.get_ticks_usec()
-			TradePlanner.plan(_world, self, false)
+			EconomyManager.plan_trade_routes(_world, self, false)
 			section_us["trade_planner"] = Time.get_ticks_usec() - t0
 		# Build roads from trade routes every 2000 ticks
 		if _is_main_lane_tick(tick, 2000, 113) and DiscoveryGate.is_unlocked("first_trade"):
@@ -3196,10 +3209,10 @@ func _on_game_tick(tick: int) -> void:
 	if _is_main_lane_tick(tick, _social_rapport_interval_for_speed(), 149) and DiscoveryGate.is_unlocked("first_settlement"):
 		t0 = Time.get_ticks_usec()
 		_accumulate_social_rapport()
-		if SquadCoordinator != null:
-			SquadCoordinator.recompute(_pawn_spawner)
+		WorldAI.recompute_squads(_pawn_spawner)
 		section_us["social_rapport"] = Time.get_ticks_usec() - t0
 	_emit_pawn_divergence_summary_if_needed(tick)
+	MythAge.tick()
 	# AI observer state export: write lightweight snapshot for external tools.
 	var ai_export_interval: int = _high_speed_interval(30, 60, 120)
 	if _is_main_lane_tick(tick, ai_export_interval, 157):
@@ -3490,7 +3503,7 @@ func _flush_world_memory_derivatives() -> void:
 			SettlementManager.plan(_world, self, true)
 	if (GameManager.tick_count + maxi(1, heavy_planner_interval / 3)) % heavy_planner_interval == 0:
 		if Time.get_ticks_usec() - flush_start <= FLUSH_BUDGET_USEC:
-			TradePlanner.plan(_world, self, true)
+			EconomyManager.plan_trade_routes(_world, self, true)
 	MemoryManager.flush_dirty_tiles(_world)
 # OPTIMIZATION: Deferred heavy operations for frame budget management
 func _deferred_settlement_memory_recompute(world: World) -> void:
@@ -3510,7 +3523,7 @@ func _deferred_settlement_planner_plan(world: World, main: Node, use_cache: bool
 
 func _deferred_trade_planner_plan(world: World, main: Node, use_cache: bool) -> void:
 	if is_instance_valid(world) and is_instance_valid(main):
-		TradePlanner.plan(world, main, use_cache)
+		EconomyManager.plan_trade_routes(world, main, use_cache)
 
 
 func _maybe_generational_turnover() -> void:
@@ -6327,7 +6340,8 @@ func _reroll_world() -> void:
 	JobManager.clear_all()
 	SettlementRegistry.clear()
 	SettlementMemory.clear_persisted_governance_forms()
-	FragmentationManager.clear()
+	if _fragmentation_manager != null:
+		_fragmentation_manager.clear()
 	# SchismManager removed during autoload consolidation
 	WorldMemory.clear()
 	MemoryManager.get_myth_memory().clear()
@@ -6342,7 +6356,7 @@ func _reroll_world() -> void:
 		FactionManager.get_faction_registry().clear()
 	ChronicleLog.clear()
 	MemoryManager.get_road_memory().clear()
-	TradeMemory.clear()
+	EconomyManager.clear_trade_memory()
 	MemoryManager.get_intent_memory().clear()
 	MemoryManager.get_age_memory().clear()
 	WorldPersistence.clear()
@@ -6405,7 +6419,7 @@ func _reroll_world() -> void:
 	if is_instance_valid(_world):
 		MemoryManager.recompute_intent(_world)
 		SettlementManager.plan(_world, self, true)
-		TradePlanner.plan(_world, self, true)
+		EconomyManager.plan_trade_routes(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		MemoryManager.get_remnant_memory().clear()
 		MemoryManager.seed_births_from_current_world(_world)
@@ -7742,9 +7756,7 @@ func _seed_construction_jobs() -> void:
 func _build_roads_from_trade_routes() -> void:
 	if _world == null or _world.data == null:
 		return
-	if TradeMemory == null:
-		return
-	var routes: Array[Dictionary] = TradeMemory.get_active_routes()
+	var routes: Array[Dictionary] = EconomyManager.get_active_trade_routes()
 	for r in routes:
 		var from_rk: int = int(r.get("from_settlement", -1))
 		var to_rk: int = int(r.get("to_settlement", -1))
@@ -9540,7 +9552,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 		SocialManager.get_kinship_system().clear()
 	if SocialManager.has_method("clear_bloodline"):
 		SocialManager.clear_bloodline()
-	TradeMemory.clear()
+	EconomyManager.clear_trade_memory()
 	MemoryManager.get_remnant_memory().clear()
 	MemoryManager.get_intent_memory().clear()
 	MemoryManager.get_age_memory().clear()
@@ -9639,7 +9651,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 				_world.refresh_pawn_historic_path_weights()
 		)
 		SettlementManager.plan(_world, self, true)
-		TradePlanner.plan(_world, self, true)
+		EconomyManager.plan_trade_routes(_world, self, true)
 		MemoryManager.flush_dirty_tiles(_world)
 		_sync_pawn_inherited_cultural_reputation()
 		MemoryManager.seed_births_from_current_world(_world)
@@ -10414,7 +10426,7 @@ func _build_realm_crown_view_text() -> String:
 		lines.append("• %s — pop %d · %s · %s · %s" % [nm, pop, house_disp, st_state, voice])
 		listed += 1
 	var houses_n: int = FactionManager.get_faction_registry().get_synced_house_count() if FactionManager != null and is_instance_valid(FactionManager) else 0
-	var sac_n: int = MemoryManager.site_count() if SacredMemory != null else 0
+	var sac_n: int = MemoryManager.site_count()
 	var harm: float = ReligionLens.get_harmony_index() if ReligionLens != null else 0.0
 	var total_pawns: int = _observer_total_pawns()
 	var head: String = (

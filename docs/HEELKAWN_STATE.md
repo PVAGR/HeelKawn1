@@ -4,7 +4,7 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** May 21, 2026
+**Last Updated:** May 23, 2026
 **Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
@@ -109,7 +109,89 @@ We are always building, always refining, always expanding. This document capture
   - `SettlementPlanner.gd`: `_build_pressure_ok`, per-settlement+type cooldown (`BUILD_INTENT_COOLDOWN_TICKS` = 1200), `can_post_build_intent` / `mark_build_intent_posted` gate bed, fire pit, storage hut, and farm planner posts from `ColonySimServices` pressure signals.
   - `AIAutoBuild.gd`: delegates to planner gating before creating intents and before posting jobs; uses `JobManager.post_build_deduped`.
   - `JobManager.gd`: `has_pending_build_near` and `post_build_deduped` for settlement-scoped construction dedupe.
-- Next Task: deepen from first ambition seeding into true household membership logic, coordinated group plans, and longer-horizon settlement objective chains while continuing the v1 consolidation loop.
+## May 23, 2026 Session Completion
+
+- **FEAT: Learning target biasing (Matrix AI Deepening)**:
+  - Added `_apply_learning_target_biases()` in `HeelKawnianManager.gd`
+  - `get_learning_target_for_pawn()` output now directly influences `_matrix_job_biases`
+  - Pawns with a target knowledge type bias toward apprenticeship, teaching, and domain-specific jobs
+  - Pawns with a target skill bias toward jobs that exercise that skill
+  - Covers all 26 KnowledgeType values and 5 skill types with deterministic job mappings
+
+- **FEAT: Verification — Preservation choices already wired**:
+  - Confirmed `get_preservation_choice_for_pawn()` is called from `_matrix_job_biases` at line 2089
+  - Preservation actions (teach, inscribe_stone, write_book) correctly bias job selection
+  - No new wiring needed — this was already operational
+
+- **FEAT: General settlement ambition chains (not recovery-only)**:
+  - `get_settlement_ambition_for_pawn()` now checks `_ambition_chain_for_settlement()` as a fallback for ALL drives, not just `recover`
+  - All settlements now pursue multi-step strategic chains when no immediate pressure exists
+
+- **FEAT: 5 new ambition chain types for deeper recovery behavior**:
+  - Added "Rebuild from Ruin" chain (hearth → beds → shelter → storage)
+  - Added "Healing & Care" chain (apothecary → shrine)
+  - Added "Defense Network" chain (watchtower → barracks)
+  - Added "Trade Route" chain (market → roads)
+  - Added "Cultural Renaissance" chain (marker → shrine)
+  - Updated `_select_new_chain`, `_chain_step_completed`, `_ambition_from_chain_step`, `_chain_name_for_steps`
+
+- **Done**: Autoload consolidation Phases 1 + 2 (9 autoloads removed, from 150 → 141)
+  See `docs/AUTOLOAD_CONSOLIDATION_STATUS.md` for details.
+
+## 2026-05-22: Knowledge Preservation Loop Unification
+
+- **FEAT: Preservation pressure wired into Matrix AI ambitions**:
+  - `HeelKawnianManager.get_settlement_ambition_for_pawn()` now calls `KnowledgeSystem.compute_preservation_pressure()` during `preserve` drive
+  - Urgent knowledge types trigger `CARVE_KNOWLEDGE_STONE` (priority 8)
+  - Recommended knowledge + literate pawn → `PAPER_MAKING` (priority 7)
+  - Recommended knowledge + no literacy → `CARVE_LEDGER_STONE` (priority 7)
+  - Added `_get_preservation_pressure_for_settlement()` helper with fallback to pawn region proxy
+
+- **FEAT: Record carrier safety net in knowledge death chain**:
+  - `_check_knowledge_loss()` now calls `_has_record_carrier_for_knowledge()` before entering dormant state
+  - If stones/books exist, knowledge enters "degraded" (not dormant) — records are safety net
+  - Added `_has_record_carrier_for_knowledge()` — checks both stone carriers and book contents
+  - Added `_is_knowledge_truly_lost()` — returns true only when both carriers AND records are zero
+  - Only truly lost knowledge (no carriers + no records) enters dormant state with `truly_lost: true`
+  - Records `knowledge_degraded` event when records preserve knowledge beyond last carrier's death
+  - Records `knowledge_truly_lost` event for CivilizationStage consumption
+
+- **FEAT: CivilizationStage consumes knowledge_lost signal**:
+  - Added `_ready()` with signal connection to `KnowledgeSystem.knowledge_lost`
+  - Added `_on_civilization_tick()` for periodic penalty decay every 360 ticks
+  - Added `_on_knowledge_lost()` — applies `KNOWLEDGE_LOSS_ERA_PENALTY` (3 points) to affected settlement
+  - Knowledge loss penalty subtracted from era score in `_build_stage_snapshot()`
+  - Penalty shown in breakdown as `knowledge_loss_penalty`
+  - Cache invalidated on knowledge loss for immediate recalculation
+
+## 2026-05-22: Autoload Consolidation Phase 2 + 3 Complete
+
+- **Phase 2 (6 deregistered)**: SquadCoordinator, FragmentationManager, RelationalGraph, SacredGeography, ReligionLens, MythAge
+  - Static conversions: ReligionLens (24 refs) and MythAge (9 refs) → `class_name` static utility classes
+  - Boot-managed: FragmentationManager, SacredGeography → `Main._ready()` bootstrap + root
+  - Lazy-loaded: SquadCoordinator → WorldAI child; RelationalGraph → SocialManager adds to root
+- **Phase 3 (2 deregistered)**: TradeMemory, TradePlanner → EconomyManager
+  - 9 static methods on TradeMemory converted to instance methods; 10 forwarding methods + TIER constants on EconomyManager
+  - 15 call sites updated across 7 files (Main.gd, TerritoryOverlay, World, RemnantMemory, AgeMemory, SettlementRebirth, FactionSystem, WorldEconomyManager, ComprehensiveTestSuite)
+- **Autoload count**: 139 (150 → 139 over Phases 1-3)
+
+- **Done**: Autoload consolidation Phase 4 (IntentMemory → MemoryManager)
+  - IntentMemory already deregistered earlier; completed migration: static→instance methods, added INTENT constants + forwarding methods to MemoryManager
+  - ~50 call site references updated across 7 files
+  - Removed `class_name IntentMemory` from IntentMemory.gd
+- **Done**: Autoload consolidation Phase 5 (MythMemory → MemoryManager)
+  - MythMemory already deregistered earlier; completed migration: 3 static→instance methods
+  - 8 call site references updated across 6 files
+  - Removed `class_name MythMemory`
+- **Done**: Autoload consolidation Phase 6 (SacredMemory + FactionRegistry → respective managers)
+  - SacredMemory (already deregistered): 4 static→instance methods (site_count, list_sites_sorted, is_tile_sacred, get_sacred_type_at), 6 call sites updated in ReligionLens + FragmentationManager + Main, removed class_name
+  - FactionRegistry (already deregistered): 2 static→instance methods (sync_from_settlements, append_focus_house_lines), 2 call sites updated (ReligionLens, ObservationAPI), removed class_name
+
+- **Autoload count**: 139 (no change in Phases 4-6 — these were already deregistered from autoload, completed the static method + call site migrations)
+
+- **Next Task**: Runtime truth pass in Godot editor (requires Godot binary). Then:
+  - Knowledge preservation loop unification (stones, books, teaching, literacy)
+  - Civilization stage deepening (per-settlement tech diffusion, literacy tracking)
 
 ## May 21, 2026 Session Completion
 
@@ -174,6 +256,11 @@ We are always building, always refining, always expanding. This document capture
   - All events recorded in WorldMemory for chronicle export via ChronicleExport
 
 ## May 22, 2026 Session Completion
+
+- **FIX: Settlement job tech gate no longer returns unconditional true**:
+  - `TechnologySystem.can_settle_perform_job_type()` now checks `BuildingRegistry.requires_tech` for the target job type and validates each requirement against completed research or settlement knowledge security.
+  - Primitive / unregistered jobs still pass through, but registered advanced settlement builds now have a real eligibility gate instead of a stub.
+  - This directly affects the live claim paths in `JobManager.claim_by_id_for()` and `HeelKawnian` job filtering.
 
 - **FIX: Wire `post_build_deduped` into `Main._post_seeded_job`**:
   - Added `settlement_center` parameter to `_post_seeded_job()` for construction job deduplication

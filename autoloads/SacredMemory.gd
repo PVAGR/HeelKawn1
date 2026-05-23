@@ -1,5 +1,4 @@
 extends Node
-class_name SacredMemory
 ## v1: Sacred sites (permanent ruin centers, future battlefields) — small dict; saved with colony.
 ## Keys are string "x_y" for stable [store_var] round-trip. No per-tick loops.
 
@@ -21,25 +20,19 @@ func mark_sacred(tile_pos: Vector2i, site_type: String, myth_score: float) -> vo
 	_sites[k] = {"type": site_type, "myth": clampf(myth_score, 0.0, 1.0)}
 
 
-static func site_count() -> int:
-	var inst: SacredMemory = Engine.get_singleton("SacredMemory") as SacredMemory
-	if inst == null:
-		return 0
-	return inst._sites.size()
+func site_count() -> int:
+	return _sites.size()
 
 
 ## Read-only sample for [ReligionLens] / F10 (sorted tile keys, cap [param max_n]).
-static func list_sites_sorted(max_n: int = 64) -> Array:
-	var inst: SacredMemory = Engine.get_singleton("SacredMemory") as SacredMemory
-	if inst == null:
-		return []
-	var keys: Array = inst._sites.keys()
+func list_sites_sorted(max_n: int = 64) -> Array:
+	var keys: Array = _sites.keys()
 	keys.sort()
 	var out: Array = []
 	var lim: int = mini(maxi(0, max_n), keys.size())
 	for i in range(lim):
 		var k: String = str(keys[i])
-		var d: Variant = inst._sites[keys[i]]
+		var d: Variant = _sites[keys[i]]
 		var row: Dictionary = {"tile_key": k, "type": "", "myth": 0.0}
 		if d is Dictionary:
 			row["type"] = str((d as Dictionary).get("type", ""))
@@ -52,18 +45,12 @@ func is_sacred_at(x: int, y: int) -> bool:
 	return _sites.has("%d_%d" % [x, y])
 
 
-static func is_tile_sacred(tile_pos: Vector2i) -> bool:
-	var inst: SacredMemory = Engine.get_singleton("SacredMemory") as SacredMemory
-	if inst == null:
-		return false
-	return inst._sites.has(inst._tile_key(tile_pos))
+func is_tile_sacred(tile_pos: Vector2i) -> bool:
+	return _sites.has(_tile_key(tile_pos))
 
 
-static func get_sacred_type_at(x: int, y: int) -> String:
-	var inst: SacredMemory = Engine.get_singleton("SacredMemory") as SacredMemory
-	if inst == null:
-		return ""
-	var d: Variant = inst._sites.get("%d_%d" % [x, y], null)
+func get_sacred_type_at(x: int, y: int) -> String:
+	var d: Variant = _sites.get("%d_%d" % [x, y], null)
 	if d is Dictionary:
 		return str((d as Dictionary).get("type", ""))
 	return ""
@@ -102,7 +89,7 @@ func mark_permanent_collapse_from_center_rk(center_rk: int) -> void:
 	var rx0: int = int(center_rk) & 0xFFFF
 	var ry0: int = (int(center_rk) >> 16) & 0xFFFF
 	var center_tile: Vector2i = Vector2i(rx0 * 16 + 8, ry0 * 16 + 8)
-	var mst: int = MythMemory.get_region_myth_state(center_rk)
+	var mst: int = MemoryManager.get_region_myth_state(center_rk)
 	var norm: float = 0.5
 	if mst == 1:
 		norm = 1.0
@@ -129,7 +116,7 @@ func sync_permanent_ruins_from_settlements() -> void:
 		var rx: int = int(ckr) & 0xFFFF
 		var ry: int = (int(ckr) >> 16) & 0xFFFF
 		var center_tile: Vector2i = Vector2i(rx * 16 + 8, ry * 16 + 8)
-		var mst: int = MythMemory.get_region_myth_state(ckr)
+		var mst: int = MemoryManager.get_region_myth_state(ckr)
 		var norm: float = 0.5
 		if mst == 1:
 			norm = 1.0

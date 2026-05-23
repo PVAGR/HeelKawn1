@@ -70,7 +70,7 @@ func seed_births_from_current_world(w: World) -> void:
 			):
 				_birth[i0] = age0
 				_track_remnant_region(x, y)
-			elif TradeMemory.get_route_tier_at(x, y) >= TradeMemory.TIER_ROUTE_2:
+			elif EconomyManager.get_trade_route_tier_at(x, y) >= EconomyManager.TIER_ROUTE_2:
 				_birth[i0] = age0
 				_track_remnant_region(x, y)
 
@@ -149,7 +149,7 @@ func _is_remnant_tile(x: int, y: int, w: World) -> bool:
 	var f0: int = int(w.data.get_feature(x, y))
 	if _feature_is_remnant(f0):
 		return true
-	return TradeMemory.get_route_tier_at(x, y) >= TradeMemory.TIER_ROUTE_2
+	return EconomyManager.get_trade_route_tier_at(x, y) >= EconomyManager.TIER_ROUTE_2
 
 
 func get_birth_at(x: int, y: int) -> int:
@@ -171,7 +171,7 @@ func _get_tile_rem_delta_impl(x: int, y: int, w: World) -> int:
 	if w == null or w.data == null or not w.data.in_bounds(x, y):
 		return 0
 	var f1: int = int(w.data.get_feature(x, y))
-	var t2: bool = TradeMemory.get_route_tier_at(x, y) >= TradeMemory.TIER_ROUTE_2
+	var t2: bool = EconomyManager.get_trade_route_tier_at(x, y) >= EconomyManager.TIER_ROUTE_2
 	if not _feature_is_remnant(f1) and not t2:
 		return 0
 	var b0: int = get_birth_at(x, y)
@@ -189,7 +189,7 @@ func get_remnant_path_mul(x: int, y: int, w: World) -> float:
 		m0 *= PATH_D1
 		if d0 >= 2:
 			m0 *= PATH_D2
-			if TradeMemory.get_route_tier_at(x, y) >= TradeMemory.TIER_ROUTE_2:
+			if EconomyManager.get_trade_route_tier_at(x, y) >= EconomyManager.TIER_ROUTE_2:
 				m0 *= PATH_T2_OLD
 	var rk: int = WorldMemory._region_key(x, y)
 	var st: String = SettlementMemory.get_state_at_region(rk)

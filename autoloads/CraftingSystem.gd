@@ -119,7 +119,7 @@ func _initialize_recipes() -> void:
 		"required_profession": -1,  # Any profession
 		"required_skill": 2,  # CHOPPING
 		"min_skill_level": 1,
-		"output_item": 10,  # FLINT_KNIFE
+		"output_item": Item.Type.FLINT_KNIFE,
 		"output_quantity": 1
 	})
 	
@@ -132,7 +132,7 @@ func _initialize_recipes() -> void:
 		"required_profession": -1,
 		"required_skill": 1,  # MINING
 		"min_skill_level": 2,
-		"output_item": 13,  # FLINT_PICK
+		"output_item": Item.Type.FLINT_PICK,
 		"output_quantity": 1
 	})
 	
@@ -145,7 +145,7 @@ func _initialize_recipes() -> void:
 		"required_profession": -1,
 		"required_skill": 4,  # HUNTING
 		"min_skill_level": 2,
-		"output_item": 14,  # WOODEN_SPEAR
+		"output_item": Item.Type.WOODEN_SPEAR,
 		"output_quantity": 1
 	})
 	
@@ -154,12 +154,12 @@ func _initialize_recipes() -> void:
 		"recipe_id": "iron_sword",
 		"name": "Iron Sword",
 		"category": "weapon",
-		"ingredients": {"iron": 3, "wood": 1},
+		"ingredients": {"iron_ore": 3, "wood": 1},
 		"craft_ticks": 150,
-		"required_profession": 7,  # SMITH
-		"required_skill": 1,  # MINING
+		"required_profession": HeelKawnianData.Profession.SMITH,
+		"required_skill": HeelKawnianData.Skill.MINING,
 		"min_skill_level": 5,
-		"output_item": 20,  # IRON_SWORD (new)
+		"output_item": Item.Type.WOODEN_SPEAR,  # Proxy: No IRON_SWORD type yet — uses spear stats
 		"output_quantity": 1,
 		"required_tools": [Item.Type.FLINT_PICK],  # Needs hammer/striking tool
 		"required_buildings": [TileFeature.Type.SMELTER],  # Must be near smelter
@@ -173,9 +173,9 @@ func _initialize_recipes() -> void:
 		"ingredients": {"wood": 4},
 		"craft_ticks": 100,
 		"required_profession": -1,
-		"required_skill": 3,  # BUILDING
+		"required_skill": HeelKawnianData.Skill.BUILDING,
 		"min_skill_level": 3,
-		"output_item": 30,  # FURNITURE_TABLE
+		"output_item": Item.Type.WOOD,  # Proxy: furniture stores as wood, placeholder
 		"output_quantity": 1
 	})
 	
@@ -184,12 +184,12 @@ func _initialize_recipes() -> void:
 		"recipe_id": "herbal_remedy",
 		"name": "Herbal Remedy",
 		"category": "medicine",
-		"ingredients": {"herbs": 3},
+		"ingredients": {"berry": 3},
 		"craft_ticks": 40,
-		"required_profession": 8,  # HEALER
-		"required_skill": 0,  # FORAGING
+		"required_profession": HeelKawnianData.Profession.HEALER,
+		"required_skill": HeelKawnianData.Skill.FORAGING,
 		"min_skill_level": 3,
-		"output_item": 40,  # HERBAL_MEDICINE
+		"output_item": Item.Type.MEAT,  # Proxy: no HERBAL_MEDICINE type yet
 		"output_quantity": 2
 	})
 	
@@ -197,12 +197,12 @@ func _initialize_recipes() -> void:
 		"recipe_id": "bandages",
 		"name": "Bandages",
 		"category": "medicine",
-		"ingredients": {"cloth": 2},
+		"ingredients": {"leather": 2},
 		"craft_ticks": 30,
-		"required_profession": 8,  # HEALER
-		"required_skill": 0,  # FORAGING
+		"required_profession": HeelKawnianData.Profession.HEALER,
+		"required_skill": HeelKawnianData.Skill.FORAGING,
 		"min_skill_level": 2,
-		"output_item": 41,  # BANDAGES
+		"output_item": Item.Type.BONE,  # Proxy: no BANDAGES type yet
 		"output_quantity": 3
 	})
 
@@ -479,9 +479,7 @@ func _get_stockpile_quantity(resource: String) -> int:
 		"flint": Item.Type.FLINT,
 		"stick": Item.Type.STICK,
 		"wood": Item.Type.WOOD,
-		"iron": 4,
-		"herbs": 5,
-		"cloth": 6,
+		"iron_ore": Item.Type.IRON_ORE,
 		"meat": Item.Type.MEAT,
 		"berry": Item.Type.BERRY,
 		"paper": Item.Type.PAPER,
@@ -566,9 +564,7 @@ func _consume_ingredients(ingredients: Dictionary) -> bool:
 		"flint": Item.Type.FLINT,
 		"stick": Item.Type.STICK,
 		"wood": Item.Type.WOOD,
-		"iron": 4,
-		"herbs": 5,
-		"cloth": 6,
+		"iron_ore": Item.Type.IRON_ORE,
 		"meat": Item.Type.MEAT,
 		"berry": Item.Type.BERRY,
 		"paper": Item.Type.PAPER,

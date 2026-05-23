@@ -1,0 +1,81 @@
+{
+	"failure_reasons": {
+
+	},
+	"job_trace": {
+
+	},
+	"samples": [
+		{
+			"build_jobs_claimed": 0,
+			"build_jobs_completed": 0,
+			"build_jobs_posted": 0,
+			"day": 1,
+			"failure_reasons": {
+
+			},
+			"farms_created": 0,
+			"hearths_created": 0,
+			"label": "start",
+			"mines_created": 0,
+			"roads_created": 0,
+			"shelters_created": 0,
+			"stockpile_food": 0,
+			"stockpile_stone": 0,
+			"stockpile_wood": 0,
+			"stockpiles_created": 0,
+			"storage_created": 0,
+			"tick": 0,
+			"total_jobs_posted": 0,
+			"year": 1
+		},
+		{
+			"build_jobs_claimed": 0,
+			"build_jobs_completed": 0,
+			"build_jobs_posted": 0,
+			"day": 26,
+			"failure_reasons": {
+
+			},
+			"farms_created": 0,
+			"hearths_created": 0,
+			"label": "mid_year",
+			"mines_created": 0,
+			"roads_created": 0,
+			"shelters_created": 0,
+			"stockpile_food": 0,
+			"stockpile_stone": 0,
+			"stockpile_wood": 0,
+			"stockpiles_created": 0,
+			"storage_created": 0,
+			"tick": 15000,
+			"total_jobs_posted": 0,
+			"year": 1
+		},
+		{
+			"build_jobs_claimed": 0,
+			"build_jobs_completed": 0,
+			"build_jobs_posted": 0,
+			"day": 1,
+			"failure_reasons": {
+
+			},
+			"farms_created": 0,
+			"hearths_created": 0,
+			"label": "year_1",
+			"mines_created": 0,
+			"roads_created": 0,
+			"shelters_created": 0,
+			"stockpile_food": 0,
+			"stockpile_stone": 0,
+			"stockpile_wood": 0,
+			"stockpiles_created": 0,
+			"storage_created": 0,
+			"tick": 30000,
+			"total_jobs_posted": 0,
+			"year": 2
+		}
+	],
+	"simulation_started": true,
+	"tick": 30000
+}

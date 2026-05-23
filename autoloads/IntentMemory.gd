@@ -105,7 +105,7 @@ func recompute(world: World) -> void:
 					continue
 				route_activity[ck_scan] = 0
 			if trade_mem.has_method("debug_trade_route_truth"):
-				for route_entry in trade_mem.get_property("trade_routes"):
+				for route_entry in trade_mem.trade_routes:
 					if route_entry is Dictionary:
 						var r: Dictionary = route_entry as Dictionary
 						var from_rk: int = int(r.get("from_settlement", -1))

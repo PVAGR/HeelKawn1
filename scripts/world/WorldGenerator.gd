@@ -18,14 +18,14 @@ const MOISTURE_OCTAVES: int = 3
 const P_ELEV_WATER:    float = 0.10   # bottom 10%  -> water       (~10% of map)
 const P_ELEV_TUNDRA:   float = 0.22   # 10..22%    -> tundra      (~12% of map)
 const P_ELEV_MOUNTAIN: float = 0.88   # top 12%    -> mountain    (~12% of map)
-                                      # middle 66% -> moisture-based biomes
+									  # middle 66% -> moisture-based biomes
 
 ## Percentile splits for moisture within the middle elevation band.
 ## Because elevation and moisture are independent noise fields, global moisture
 ## percentiles map cleanly onto the middle-elevation subset.
 const P_MOIST_DESERT: float = 0.25    # bottom 25% moisture -> desert
 const P_MOIST_PLAINS: float = 0.75    # 25..75% moisture   -> plains
-                                      # top 25% moisture   -> forest
+									  # top 25% moisture   -> forest
 ##
 ## Expected final distribution:
 ##   water ~10%, tundra ~12%, mountain ~12%,

@@ -33,8 +33,8 @@ func _create_overlay() -> void:
 	# Godot 4.x API: Use add_theme_font_override instead of theme_override_fonts
 	_label.add_theme_font_override("normal_font", _fps_font if _fps_font != null else ThemeDB.fallback_font)
 	_label.add_theme_font_size_override("normal_font_size", _fps_font_size)
-    # bbcode_enabled disabled for runtime stability
-    # _label.bbcode_enabled = true
+	# bbcode_enabled disabled for runtime stability
+	# _label.bbcode_enabled = true
 	_label.scroll_following = false
 	_label.text = "[color=gray]Performance Monitor[/color]\nInitializing..."
 	add_child(_label)

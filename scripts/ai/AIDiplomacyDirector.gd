@@ -80,7 +80,7 @@ CRUSADER KINGS STYLE:
 
 What should {from_name} do?
 Options: DECLARE_WAR, PROPOSE_ALLIANCE, SEND_GIFT, DEMAND_TRIBUTE, 
-         PROPOSE_TRADE, PROPOSE_PEACE, IGNORE
+		 PROPOSE_TRADE, PROPOSE_PEACE, IGNORE
 
 Consider: power balance, active grudges, strategic advantage, resources.
 
@@ -90,9 +90,9 @@ RESPOND JSON:
   "reason": "mutual threat from third settlement",
   "confidence": 0.8,
   "terms": {{
-    "trade_bonus": 10,
-    "military_support": true,
-    "duration_ticks": 3600
+	"trade_bonus": 10,
+	"military_support": true,
+	"duration_ticks": 3600
   }}
 }}
 """.format({

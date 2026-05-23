@@ -1002,7 +1002,7 @@ func _log_validation_harness_observability_once() -> void:
 	if dbg:
 		print(
 				(
-                        "[VALIDATION_STATUS] debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
+						"[VALIDATION_STATUS] debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
 						+ "WorldEvents_VALIDATION_CLEAN_ECONOMY_EVENTS_const=%s clean_economy_active=%s "
 						+ "settlement_truth_verify_active=%s specialization_validation_log_active=%s"
 				)
@@ -1010,25 +1010,25 @@ func _log_validation_harness_observability_once() -> void:
 		)
 	if session_const and not dbg:
 		print(
-                "[VALIDATION_WARN] VALIDATION_SESSION_ENABLED is true but OS.is_debug_build() is false — harness stays DISARMED "
+				"[VALIDATION_WARN] VALIDATION_SESSION_ENABLED is true but OS.is_debug_build() is false — harness stays DISARMED "
 				+ "(no economy-event suppression, no [SETTLEMENT_VERIFY], no [SPECIALIZATION_VALIDATE]). "
 				+ "Use editor Play or a debug export."
 		)
 	if clean_const and not dbg:
 		print(
-                "[VALIDATION_WARN] WorldEvents.VALIDATION_CLEAN_ECONOMY_EVENTS is true but not a debug build — suppression stays off."
+				"[VALIDATION_WARN] WorldEvents.VALIDATION_CLEAN_ECONOMY_EVENTS is true but not a debug build — suppression stays off."
 		)
 	if SettlementMemory.SETTLEMENT_STATE_TRUTH_VERIFY_MODE and not dbg:
 		print(
-                "[VALIDATION_WARN] SETTLEMENT_STATE_TRUTH_VERIFY_MODE is true but not a debug build — [SETTLEMENT_VERIFY] will not print."
+				"[VALIDATION_WARN] SETTLEMENT_STATE_TRUTH_VERIFY_MODE is true but not a debug build — [SETTLEMENT_VERIFY] will not print."
 		)
 	if SettlementMemory.SPECIALIZATION_VALIDATION_LOG_ENABLED and not dbg:
 		print(
-                "[VALIDATION_WARN] SPECIALIZATION_VALIDATION_LOG_ENABLED is true but not a debug build — [SPECIALIZATION_VALIDATE] will not print."
+				"[VALIDATION_WARN] SPECIALIZATION_VALIDATION_LOG_ENABLED is true but not a debug build — [SPECIALIZATION_VALIDATE] will not print."
 		)
 	if session_const and dbg and (not clean_active or not truth_active or not spec_active):
 		print(
-                "[VALIDATION_WARN] VALIDATION_SESSION_ENABLED in a debug build but a subsystem reports inactive "
+				"[VALIDATION_WARN] VALIDATION_SESSION_ENABLED in a debug build but a subsystem reports inactive "
 				+ "(clean=%s truth=%s spec=%s) — inspect harness gates if this ever appears."
 				% [clean_active, truth_active, spec_active]
 		)
@@ -1099,7 +1099,7 @@ func _build_pawn_divergence_center_fingerprint() -> String:
 		var c: int = int(c_any)
 		var row: Dictionary = _pawn_divergence_by_center.get(c, {})
 		center_digest_parts.append(
-            "%d:%d,%d,%d,%d"
+			"%d:%d,%d,%d,%d"
 			% [
 				c,
 				int(row.get("scored", 0)),
@@ -1193,7 +1193,7 @@ func _on_job_claimed(job: Job, pawn: HeelKawnian) -> void:
 	if _pawn_divergence_detail_logs_enabled():
 		print(
 			(
-                "[PAWN_DIVERGENCE_BIND_TRACE] tick=%d action=claim bind_source=%s pawn_id=%d pawn=%s "
+				"[PAWN_DIVERGENCE_BIND_TRACE] tick=%d action=claim bind_source=%s pawn_id=%d pawn=%s "
 				+ "pawn_region=%d job_region=%d pawn_center_fast_map=%d job_center_fast_map=%d "
 				+ "pawn_center_direct_membership=%d job_center_direct_membership=%d "
 				+ "zone_fallback_center=%d center_region=%d"
@@ -1218,7 +1218,7 @@ func _on_job_claimed(job: Job, pawn: HeelKawnian) -> void:
 		if has_settlement_context:
 			_pawn_divergence_skip_no_bound_center += 1
 			var skip_line_no_center: String = (
-                "[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_bound_center pawn_id=%d pawn=%s pawn_region=%d job_region=%d pawn_center_region=%d job_center_region=%d center_region=%d"
+				"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_bound_center pawn_id=%d pawn=%s pawn_region=%d job_region=%d pawn_center_region=%d job_center_region=%d center_region=%d"
 				% [
 					GameManager.tick_count,
 					int(pawn.data.id),
@@ -1236,7 +1236,7 @@ func _on_job_claimed(job: Job, pawn: HeelKawnian) -> void:
 			_pawn_divergence_skip_pre_settlement_context += 1
 			if _pawn_divergence_detail_logs_enabled():
 				print(
-                    "[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=pre_settlement_context pawn_id=%d pawn=%s pawn_region=%d job_region=%d center_region=%d"
+					"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=pre_settlement_context pawn_id=%d pawn=%s pawn_region=%d job_region=%d center_region=%d"
 					% [
 						GameManager.tick_count,
 						int(pawn.data.id),
@@ -1263,7 +1263,7 @@ func _on_job_claimed(job: Job, pawn: HeelKawnian) -> void:
 	var st: Dictionary = st_ctx.get("settlement", {}) as Dictionary
 	if st_source != "center_region" and _pawn_divergence_detail_logs_enabled():
 		print(
-            "[PAWN_DIVERGENCE_CONTEXT_TRACE] tick=%d action=claim context_source=%s center_region=%d pawn_region=%d job_region=%d"
+			"[PAWN_DIVERGENCE_CONTEXT_TRACE] tick=%d action=claim context_source=%s center_region=%d pawn_region=%d job_region=%d"
 			% [
 				GameManager.tick_count,
 				st_source,
@@ -1288,7 +1288,7 @@ func _on_job_claimed(job: Job, pawn: HeelKawnian) -> void:
 		var current_intent: String = str(st.get("current_intent", ""))
 		var skip_line_no_spec: String = (
 			(
-                "[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_specialization_context pawn_id=%d pawn=%s "
+				"[PAWN_DIVERGENCE_SKIP] tick=%d action=claim reason=no_specialization_context pawn_id=%d pawn=%s "
 				+ "pawn_center_region=%d job_center_region=%d center_region=%d spec_phase=%s "
 				+ "settlement_found=%s committed_state=%s current_intent=%s spec_locked=%s spec_candidate=%s"
 			)
@@ -1343,7 +1343,7 @@ func _on_job_claimed(job: Job, pawn: HeelKawnian) -> void:
 		_pawn_divergence_first_scored_center_region = effective_center_region
 	var scored_line: String = (
 		(
-            "[PAWN_DIVERGENCE] tick=%d action=claim pawn_id=%d pawn=%s "
+			"[PAWN_DIVERGENCE] tick=%d action=claim pawn_id=%d pawn=%s "
 			+ "pawn_center_region=%d job_center_region=%d center_region=%d "
 			+ "spec_phase=%s spec_locked=%s spec_candidate=%s "
 			+ "job_from=%s job_to=%s job_channel=%s alignment=%s"
@@ -1410,7 +1410,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 	for source_any in context_sources:
 		var source: String = str(source_any)
 		print(
-            "[PAWN_DIVERGENCE_CONTEXT_SUMMARY] source=%s claims=%d"
+			"[PAWN_DIVERGENCE_CONTEXT_SUMMARY] source=%s claims=%d"
 			% [source, int(_pawn_divergence_context_source_counts.get(source, 0))]
 		)
 	var ctx_total: int = 0
@@ -1452,7 +1452,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 		ctx_none_rate = float(ctx_none) / float(ctx_total)
 	print(
 		(
-            "[PAWN_DIVERGENCE_BINDING_MIX] tick=%d native=%d fallback=%d native_rate=%.3f fallback_rate=%.3f "
+			"[PAWN_DIVERGENCE_BINDING_MIX] tick=%d native=%d fallback=%d native_rate=%.3f fallback_rate=%.3f "
 			+ "ctx_center_rate=%.3f ctx_job_rate=%.3f ctx_pawn_rate=%.3f ctx_none_rate=%.3f ctx_unknown=%d"
 		)
 		% [
@@ -1485,7 +1485,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 	)
 	print(
 		(
-            "[PAWN_DIVERGENCE_ALERTS] tick=%d fallback_dominant=%s context_none_present=%s "
+			"[PAWN_DIVERGENCE_ALERTS] tick=%d fallback_dominant=%s context_none_present=%s "
 			+ "high_no_spec_rate=%s pre_settlement_only=%s"
 		)
 		% [
@@ -1517,7 +1517,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 		next_action = "stabilize_fast_map_coverage"
 		next_action_detail = "fallback_path_is_dominant"
 	print(
-        "[PAWN_DIVERGENCE_NEXT_ACTION] tick=%d action=%s detail=%s"
+		"[PAWN_DIVERGENCE_NEXT_ACTION] tick=%d action=%s detail=%s"
 		% [tick, next_action, next_action_detail]
 	)
 	var binding_quality: String = "FAIL"
@@ -1533,7 +1533,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 			binding_reason = "context_resolution_gaps"
 	print(
 		(
-            "[PAWN_DIVERGENCE_BINDING_QUALITY] tick=%d result=%s reason=%s "
+			"[PAWN_DIVERGENCE_BINDING_QUALITY] tick=%d result=%s reason=%s "
 			+ "ctx_none=%d ctx_total=%d no_spec_rate=%.3f scored_events=%d"
 		)
 		% [
@@ -1572,7 +1572,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 		invariant_reason = "claim_resolution_mismatch"
 	print(
 		(
-            "[PAWN_DIVERGENCE_INVARIANT] tick=%d pass=%s reason=%s total_claims=%d resolved_claims=%d "
+			"[PAWN_DIVERGENCE_INVARIANT] tick=%d pass=%s reason=%s total_claims=%d resolved_claims=%d "
 			+ "scored=%d scored_bucket_sum=%d center_scored_sum=%d skip_bucket_sum=%d"
 		)
 		% [
@@ -1588,7 +1588,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 		]
 	)
 	var fingerprint: String = (
-        "t=%d|tc=%d|sc=%d|al=%d|dv=%d|nt=%d|sp=%d|nb=%d|ns=%d|bn=%d|bf=%d|cn=%d|ct=%d|q=%s|r=%s|a=%s|inv=%s"
+		"t=%d|tc=%d|sc=%d|al=%d|dv=%d|nt=%d|sp=%d|nb=%d|ns=%d|bn=%d|bf=%d|cn=%d|ct=%d|q=%s|r=%s|a=%s|inv=%s"
 		% [
 			tick,
 			_pawn_divergence_total_claim_events_seen,
@@ -1622,7 +1622,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 	)
 	print(
 		(
-            "[PAWN_DIVERGENCE_GATES] tick=%d pass=%s scored_present=%s has_any_bound=%s "
+			"[PAWN_DIVERGENCE_GATES] tick=%d pass=%s scored_present=%s has_any_bound=%s "
 			+ "no_bound_center_zero=%s invariant_ok=%s"
 		)
 		% [
@@ -1646,12 +1646,12 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 		go_no_go = "HOLD"
 		go_reason = "pre_settlement_only"
 	print(
-        "[PAWN_DIVERGENCE_GO_NO_GO] tick=%d decision=%s reason=%s"
+		"[PAWN_DIVERGENCE_GO_NO_GO] tick=%d decision=%s reason=%s"
 		% [tick, go_no_go, go_reason]
 	)
 	var packet_center_fingerprint: String = _build_pawn_divergence_center_fingerprint()
 	var packet_basis: String = (
-        "s=%d|t=%d|er=%s|d=%s|dr=%s|q=%s|qr=%s|gp=%s|fd=%s|cn=%s|hn=%s|ps=%s|fp=%s|cfp=%s"
+		"s=%d|t=%d|er=%s|d=%s|dr=%s|q=%s|qr=%s|gp=%s|fd=%s|cn=%s|hn=%s|ps=%s|fp=%s|cfp=%s"
 		% [
 			PAWN_DIVERGENCE_PACKET_SCHEMA_VERSION,
 			tick,
@@ -1672,7 +1672,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 	var packet_id: int = packet_basis.hash()
 	print(
 		(
-            "[PAWN_DIVERGENCE_PACKET] schema=%d tick=%d emit_reason=%s packet_id=%d decision=%s decision_reason=%s quality=%s quality_reason=%s "
+			"[PAWN_DIVERGENCE_PACKET] schema=%d tick=%d emit_reason=%s packet_id=%d decision=%s decision_reason=%s quality=%s quality_reason=%s "
 			+ "gates_pass=%s alerts=fallback_dominant:%s,context_none_present:%s,high_no_spec_rate:%s,pre_settlement_only:%s "
 			+ "fingerprint=%s center_fingerprint=%s"
 		)
@@ -1696,7 +1696,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 	)
 	print(
 		(
-            "[PAWN_DIVERGENCE_STATE] tick=%d total_claims=%d scored=%d aligned=%d divergent=%d neutral=%d "
+			"[PAWN_DIVERGENCE_STATE] tick=%d total_claims=%d scored=%d aligned=%d divergent=%d neutral=%d "
 			+ "pre_settlement_skips=%d no_bound_skips=%d no_spec_skips=%d native_bound=%d fallback_bound=%d "
 			+ "ctx_total=%d ctx_none=%d quality=%s quality_reason=%s next_action=%s"
 		)
@@ -1726,7 +1726,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 		health = "WARN"
 	print(
 		(
-            "[PAWN_DIVERGENCE_HEALTH] tick=%d result=%s any_bound=%s scored_events_present=%s "
+			"[PAWN_DIVERGENCE_HEALTH] tick=%d result=%s any_bound=%s scored_events_present=%s "
 			+ "pre_settlement_skips=%d no_bound_center_skips=%d no_spec_skips=%d"
 		)
 		% [
@@ -1744,7 +1744,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 	for c_any in no_spec_centers:
 		var c: int = int(c_any)
 		print(
-            "[PAWN_DIVERGENCE_NO_SPEC_SUMMARY] center_region=%d skips=%d"
+			"[PAWN_DIVERGENCE_NO_SPEC_SUMMARY] center_region=%d skips=%d"
 			% [c, int(_pawn_divergence_no_spec_by_center.get(c, 0))]
 		)
 	var no_spec_phases: Array = _pawn_divergence_no_spec_by_phase.keys()
@@ -1752,7 +1752,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 	for phase_any in no_spec_phases:
 		var phase: String = str(phase_any)
 		print(
-            "[PAWN_DIVERGENCE_NO_SPEC_PHASE_SUMMARY] spec_phase=%s skips=%d"
+			"[PAWN_DIVERGENCE_NO_SPEC_PHASE_SUMMARY] spec_phase=%s skips=%d"
 			% [phase, int(_pawn_divergence_no_spec_by_phase.get(phase, 0))]
 		)
 	var centers: Array = _pawn_divergence_by_center.keys()
@@ -1761,7 +1761,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 		var c: int = int(c_any)
 		var row: Dictionary = _pawn_divergence_by_center.get(c, {})
 		print(
-            "[PAWN_DIVERGENCE_CENTER_SUMMARY] center_region=%d scored=%d aligned=%d divergent=%d neutral=%d"
+			"[PAWN_DIVERGENCE_CENTER_SUMMARY] center_region=%d scored=%d aligned=%d divergent=%d neutral=%d"
 			% [
 				c,
 				int(row.get("scored", 0)),
@@ -1775,7 +1775,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 		var c: int = int(c_any)
 		var row: Dictionary = _pawn_divergence_by_center.get(c, {})
 		center_digest_parts.append(
-            "%d:%d,%d,%d,%d"
+			"%d:%d,%d,%d,%d"
 			% [
 				c,
 				int(row.get("scored", 0)),
@@ -1788,7 +1788,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 	if center_fingerprint == "":
 		center_fingerprint = "none"
 	print(
-        "[PAWN_DIVERGENCE_CENTER_FINGERPRINT] tick=%d centers=%d digest=%s"
+		"[PAWN_DIVERGENCE_CENTER_FINGERPRINT] tick=%d centers=%d digest=%s"
 		% [tick, centers.size(), center_fingerprint]
 	)
 	print("[PAWN_DIVERGENCE_FIRST20_BEGIN]")
@@ -1801,7 +1801,7 @@ func _emit_pawn_divergence_summary_if_needed(tick: int, force_exit: bool = false
 	var proof_row: Dictionary = _pawn_divergence_by_center.get(proof_center_region, {})
 	var proof_scored: int = int(proof_row.get("scored", 0))
 	print(
-        "[PAWN_DIVERGENCE_PROOF] center_region=%d scored_events_present=%s"
+		"[PAWN_DIVERGENCE_PROOF] center_region=%d scored_events_present=%s"
 		% [proof_center_region, "true" if proof_scored > 0 else "false"]
 	)
 
@@ -2738,7 +2738,7 @@ func _ensure_validation_session_seed_stockpile_overlaps_settlement() -> void:
 	var anchor: Vector2i = _validation_proof_anchor_tile_for_main_component(st, main_component)
 	if anchor.x < 0:
 		print(
-                "[Main] VALIDATION_SESSION proof_anchor skipped reason=no_passable_tile_near_settlement_regions "
+				"[Main] VALIDATION_SESSION proof_anchor skipped reason=no_passable_tile_near_settlement_regions "
 				+ "center_region=%d"
 				% int(st.get("center_region", -1))
 		)
@@ -2747,7 +2747,7 @@ func _ensure_validation_session_seed_stockpile_overlaps_settlement() -> void:
 	sp.set_rect_tiles(seed_rect)
 	sp.position = _world.tile_to_world(seed_rect.position)
 	print(
-            "[Main] VALIDATION_SESSION proof_anchor seed_stockpile_rect=%s size=%s settlement_center_region=%d state=%s"
+			"[Main] VALIDATION_SESSION proof_anchor seed_stockpile_rect=%s size=%s settlement_center_region=%d state=%s"
 			% [
 				seed_rect.position,
 				seed_rect.size,
@@ -3314,7 +3314,7 @@ func _maybe_log_tick_hotspots(tick: int, section_us: Dictionary) -> void:
 		)
 	else:
 		print(
-            "[MAIN_TICK_HOTSPOT] tick=%d speed=%.0fx total=%.2fms top=%s"
+			"[MAIN_TICK_HOTSPOT] tick=%d speed=%.0fx total=%.2fms top=%s"
 			% [tick, GameManager.game_speed, total_ms, ", ".join(parts)]
 		)
 

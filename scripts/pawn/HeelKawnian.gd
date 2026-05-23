@@ -7788,7 +7788,7 @@ func _maybe_start_teaching() -> bool:
 			"action_success:teach",
 			{"peer_id": int(best_peer.data.id), "skill": sk},
 			0.55,
-            "mentoring"
+			"mentoring"
 	)
 	if student_learned:
 		_record_teaching_memory_fact(best_peer, sk)
@@ -9067,7 +9067,7 @@ static func _inherit_from_parent(
 		var cur: float = float(child_pd.affinities.get(k, 0.5))
 		var mul: float = WorldRNG.range_for(
 				StringName(
-                        "pawn:inherit_from_parent:%s:%d:%d:%d:%d"
+						"pawn:inherit_from_parent:%s:%d:%d:%d:%d"
 						% [str(k), child_pd.id, parent_id, birth_tick, pass_index]
 				),
 				0.7,
@@ -9076,7 +9076,7 @@ static func _inherit_from_parent(
 		var target: float = clampf(paf * mul, 0.0, 1.0)
 		var w: float = WorldRNG.range_for(
 				StringName(
-                        "pawn:inherit_from_parent_w:%s:%d:%d:%d"
+						"pawn:inherit_from_parent_w:%s:%d:%d:%d"
 						% [str(k), child_pd.id, parent_id, pass_index]
 				),
 				0.35,

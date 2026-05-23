@@ -188,7 +188,7 @@ func print_resource_truth_capture(preferred_center: int, source: String) -> void
 	var rt: Dictionary = rt_v as Dictionary if rt_v is Dictionary else {}
 	print(
 			(
-                    "[RESOURCE_TRUTH] %s tick=%d center_region=%d stock_food=%d stock_wood=%d "
+					"[RESOURCE_TRUTH] %s tick=%d center_region=%d stock_food=%d stock_wood=%d "
 					+ "stock_stone=%d stock_ore_proxy=%d total_units=%d"
 			)
 			% [
@@ -362,7 +362,7 @@ func _print_validation_smoketest(source: String) -> void:
 	if dbg:
 		print(
 				(
-                        "[VALIDATION_SMOKETEST] marker=%s source=%s debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
+						"[VALIDATION_SMOKETEST] marker=%s source=%s debug_build=%s VALIDATION_SESSION_ENABLED_const=%s "
 						+ "clean_economy_armed=%s settlement_truth_verify_armed=%s specialization_log_armed=%s"
 				)
 				% [
@@ -842,7 +842,7 @@ func _apply_guild_settlement_gate(world: World) -> void:
 				var region_lbl: String = _region_label_from_key(center_rk)
 				var winters: int = _ticks_to_winters(int(st.get("founding_tick", tick_now)))
 				var narrative: String = (
-                        "The [b]%s[/b] confederacy declared itself at %s after %d winters of "
+						"The [b]%s[/b] confederacy declared itself at %s after %d winters of "
 						+ "camp-fires and shared bread (%d souls sworn to the hearth)."
 						% [polity_nm, region_lbl, winters, int(gate.get("member_count", 0))]
 				)
@@ -930,7 +930,7 @@ func _prune_settlement_state_truth_hysteresis() -> void:
 		if not present.has(int(k)):
 			if _settlement_truth_verify_active():
 				print(
-                        "[SETTLEMENT_VERIFY] tick=%d reason=hysteresis_pruned hyst_key=center_region:%d (settlement absent this recompute)"
+						"[SETTLEMENT_VERIFY] tick=%d reason=hysteresis_pruned hyst_key=center_region:%d (settlement absent this recompute)"
 						% [GameManager.tick_count, int(k)]
 				)
 			_settlement_state_truth_hysteresis.erase(k)
@@ -1060,7 +1060,7 @@ func _settlement_truth_verify_emit(
 	var sp_note: String = "stockpile=designated_zone_overlap_hits_only(not_loose_items)"
 	print(
 			(
-                    "[SETTLEMENT_VERIFY] tick=%d hyst_key=center_region:%d base=%s raw=%s committed=%s pending=%s pend_ticks=%d "
+					"[SETTLEMENT_VERIFY] tick=%d hyst_key=center_region:%d base=%s raw=%s committed=%s pending=%s pend_ticks=%d "
 					+ "liv=%d sh=%d wk=%d sp_flag=%d sp_zone_hits=%d %s gov=%s reason=%s"
 			)
 			% [
@@ -1110,7 +1110,7 @@ func _settlement_truth_verify_post_recompute_pass() -> void:
 				int(e.get("ticks", 0)),
 				st,
 				str(st.get("governance_type", "anarchy")),
-                "heartbeat"
+				"heartbeat"
 		)
 
 
@@ -1131,7 +1131,7 @@ func _apply_settlement_state_truth_hysteresis(center_id: int, raw_state: String,
 		if _settlement_truth_verify_active():
 			print(
 					(
-                            "[SETTLEMENT_VERIFY] tick=%d reason=hysteresis_new_bucket hyst_key=center_region:%d "
+							"[SETTLEMENT_VERIFY] tick=%d reason=hysteresis_new_bucket hyst_key=center_region:%d "
 							+ "(watch for prune+recreate churn if this repeats unexpectedly)"
 					)
 					% [tick, center_id]
@@ -1146,7 +1146,7 @@ func _apply_settlement_state_truth_hysteresis(center_id: int, raw_state: String,
 					0,
 					st,
 					governance_placeholder,
-                    "init"
+					"init"
 			)
 		return raw_state
 	var e: Dictionary = _settlement_state_truth_hysteresis[center_id] as Dictionary
@@ -1759,7 +1759,7 @@ func guild_settlement_audit(world: World = null) -> String:
 	var formal: Array = get_formal_settlements()
 	var proto: Array = get_proto_sites()
 	lines.append(
-            "[guild_settlement_audit] tick=%d living_pawns=%d guild_candidates=%d formal_settlements=%d proto_sites=%d"
+			"[guild_settlement_audit] tick=%d living_pawns=%d guild_candidates=%d formal_settlements=%d proto_sites=%d"
 			% [GameManager.tick_count if GameManager != null else -1, living.size(), settlements.size(), formal.size(), proto.size()]
 	)
 	lines.append("  candidate_summary:")
@@ -1779,7 +1779,7 @@ func guild_settlement_audit(world: World = null) -> String:
 		var member_ids_s: String = str(member_ids_v)
 		var member_names_s: String = str(member_names_v)
 		lines.append(
-                "    center=%d kind=%s member_count=%d component=%d stability=%d can_found=%s reason=%s ids=%s names=%s"
+				"    center=%d kind=%s member_count=%d component=%d stability=%d can_found=%s reason=%s ids=%s names=%s"
 				% [
 					center_rk,
 					str(st.get("settlement_kind", "proto_site")),
@@ -1821,7 +1821,7 @@ func guild_settlement_audit(world: World = null) -> String:
 					if region_set.has(rk_z):
 						stockpile_zones += 1
 			lines.append(
-                    "    center=%d name=%s guild_id=%s members=%d stockpile_zones=%d resource_truth=food:%d wood:%d stone:%d total:%d source=%s"
+					"    center=%d name=%s guild_id=%s members=%d stockpile_zones=%d resource_truth=food:%d wood:%d stone:%d total:%d source=%s"
 					% [
 						center_rk,
 						str(st.get("name", "Unnamed")),
@@ -1845,7 +1845,7 @@ func guild_settlement_audit(world: World = null) -> String:
 			continue
 		var stp: Dictionary = st_any as Dictionary
 		lines.append(
-                "    center=%d kind=%s state=%s members=%d reason=%s"
+				"    center=%d kind=%s state=%s members=%d reason=%s"
 				% [
 					int(stp.get("center_region", -1)),
 					str(stp.get("settlement_kind", "proto_site")),
@@ -3397,7 +3397,7 @@ func _emit_specialization_validation_log_if_needed(tick: int, settlement_idx: in
 		front_count = (fronts_v as Array).size()
 	print(
 			(
-                    "[SPECIALIZATION_VALIDATE] tick=%d settlement_idx=%d center_region=%d committed_state=%s "
+					"[SPECIALIZATION_VALIDATE] tick=%d settlement_idx=%d center_region=%d committed_state=%s "
 					+ "current_intent=%s rp_wood=%.4f rp_stone=%.4f rp_ore_proxy=%.4f rp_food=%.4f rp_trade=%.4f rp_total_relevant_jobs=%d "
 					+ "specialization_phase=%s specialization_channel=%s specialization_candidate_channel=%s "
 					+ "specialization_confidence=%d preferred_front_count=%d note=resource_pressure_job_proxy_not_stock_scarcity"
@@ -4458,7 +4458,7 @@ func _chronicle_polity_events() -> void:
 		if region_n > prev_n and pop >= prev_pop + POLITY_BORDER_GROWTH_POP_DELTA:
 			var polity_nm: String = str(st.get("polity_display_name", st.get("name", "Unnamed")))
 			var narrative: String = (
-                    "The borders of [b]%s[/b] swelled as families crossed into %s "
+					"The borders of [b]%s[/b] swelled as families crossed into %s "
 					+ "(%d regions now hold their hearths)."
 					% [polity_nm, _region_label_from_key(center_rk), region_n]
 			)

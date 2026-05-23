@@ -454,8 +454,8 @@ func _ensure_history_panel() -> void:
 	_history_panel.add_child(margin)
 	_history_text = RichTextLabel.new()
 	_history_text.name = "HistoryText"
-    # bbcode_enabled disabled for runtime stability
-    # _history_text.bbcode_enabled = true
+	# bbcode_enabled disabled for runtime stability
+	# _history_text.bbcode_enabled = true
 	_history_text.fit_content = false
 	_history_text.scroll_active = true
 	_history_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

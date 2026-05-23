@@ -114,11 +114,11 @@ Consider: settlement pressure, resource balance, ecosystem health.
 RESPOND JSON:
 [
   {{
-    "event": "migration_wave",
-    "target_region": "north",
-    "species": "deer",
-    "reason": "overpopulation in south",
-    "impact": "food source moves away from settlements"
+	"event": "migration_wave",
+	"target_region": "north",
+	"species": "deer",
+	"reason": "overpopulation in south",
+	"impact": "food source moves away from settlements"
   }}
 ]
 """.format({

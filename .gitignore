@@ -1,1 +1,27 @@
-Nothing should be ignored since only a source code file (.gd) was modified and no build artifacts, dependencies, or temporary files were present in the changes.
+# Godot
+.godot/
+import/
+*.import
+
+# Build artifacts
+builds/
+*.pck
+*.exe
+
+# Logs
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vs/
+.vscode/
+*.code-workspace
+.idea/
+
+# Temp
+*.tmp
+*.swp
+*~

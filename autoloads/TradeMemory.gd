@@ -553,7 +553,7 @@ func _deliver_route_goods(route: Dictionary) -> Dictionary:
 		# Remove goods from origin stockpile
 		var from_zone: Stockpile = StockpileManager.find_drop_zone(item_type, from_tile, null)
 		if from_zone != null:
-			var available: int = from_zone.count(item_type)
+ 			var available: int = from_zone.count(item_type)
 			var take: int = mini(qty, available)
 			if take > 0:
 				from_zone.remove_item(item_type, take)

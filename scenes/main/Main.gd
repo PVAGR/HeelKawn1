@@ -5047,19 +5047,19 @@ func _spawn_research_particles(settlement_id: int, tech_id: String, completed: b
 	cleanup.start()
 
 
-func _on_research_started(settlement_id: int, tech_id: String, _started_tick: int) -> void:
-	# Keep start/progress handlers connected for future ambient pulses, but do not
-	# emit particles here (completion-only burst by spec).
+func _on_research_started(tech_id: String) -> void:
+	# TechnologySystem emits only the tech_id currently; refresh overlay.
 	_refresh_spatial_profile_overlay()
 
 
-func _on_research_progressed(settlement_id: int, tech_id: String, _spent_points: int, _cost: int, progress: float) -> void:
-	# Completion-only visual burst; no per-progress particle spam.
+func _on_research_progressed(tech_id: String, progress: float, cost: int) -> void:
+	# TechnologySystem emits (tech_id, progress, cost); refresh overlay.
 	_refresh_spatial_profile_overlay()
 
 
-func _on_research_completed(settlement_id: int, tech_id: String, _cost: int) -> void:
-	_spawn_research_particles(settlement_id, tech_id, true, 1.0)
+func _on_research_completed(tech_id: String) -> void:
+	# TechnologySystem emits only tech_id; refresh overlay. Particle spawn
+	# requires settlement context which TechnologySystem doesn't currently provide.
 	_refresh_spatial_profile_overlay()
 
 

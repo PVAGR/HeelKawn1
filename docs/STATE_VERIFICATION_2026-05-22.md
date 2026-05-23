@@ -1,4 +1,32 @@
-# State Verification: May 22, 2026
+# HeelKawn Verification Snapshot — 2026-05-22
+
+## Scope
+- Replace the unconditional settlement job tech gate stub with a real requirement check.
+- Record the current local verification status for this pass.
+
+## Repository Snapshot
+- Branch: `main`
+- Verification date: 2026-05-22 (UTC)
+- `project.godot` main scene: `res://scenes/main/Main.tscn`
+
+## Implemented In This Pass
+
+### 1. Settlement job tech gate
+- **File:** `autoloads/TechnologySystem.gd`
+- **Change:** `can_settle_perform_job_type()` now inspects `BuildingRegistry.get_building_by_job_type(job_type)` and checks each `requires_tech` requirement.
+- **Resolution path:**
+  - Direct completion in `TechnologySystem` for research-tree tech IDs.
+  - Settlement knowledge security lookup in `KnowledgeSystem` for requirement names that map to existing knowledge categories.
+  - Unknown requirement names remain permissive so the gate does not block future content by accident.
+- **Impact:** The live job claim paths in `JobManager` and `HeelKawnian` no longer pass every registered settlement build unconditionally.
+
+## Local Verification In This Environment
+- Full Godot execution is not available in this environment.
+- Source-level change only; runtime validation still requires editor/headless execution.
+
+## Residual Risk
+- The knowledge mapping for some registry requirements uses the closest currently available knowledge category proxy, not a perfect one-to-one taxonomy.
+- If a future job/build requirement is added to `BuildingRegistry` without a matching tech-tree or knowledge mapping, it will remain permissive until the mapping is extended.# State Verification: May 22, 2026
 
 ## What Changed
 

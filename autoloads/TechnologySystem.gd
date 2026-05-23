@@ -34,6 +34,20 @@ const AUTO_SELECTION_PHASE_OFFSET: int = 41
 const MAX_PULL_PER_SETTLEMENT_STEP: int = 10
 const MAX_SETTLEMENTS_PER_PULL_STEP: int = 12
 
+const REQ_TO_KNOWLEDGE_TYPE: Dictionary = {
+	"farming": 13, # KnowledgeSystem.KnowledgeType.FARMING
+	"herbalism": 21, # KnowledgeSystem.KnowledgeType.MEDICINE
+	"weaving": 16, # KnowledgeSystem.KnowledgeType.CRAFTING
+	"boatbuilding": 23, # KnowledgeSystem.KnowledgeType.ENGINEERING
+	"fishing": 12, # KnowledgeSystem.KnowledgeType.HUNTING (best current proxy)
+	"milling": 23, # KnowledgeSystem.KnowledgeType.ENGINEERING
+	"warfare": 14, # KnowledgeSystem.KnowledgeType.COMBAT
+	"commerce": 15, # KnowledgeSystem.KnowledgeType.DIPLOMACY
+	"fermentation": 16, # KnowledgeSystem.KnowledgeType.CRAFTING
+	"stoneworking": 23, # KnowledgeSystem.KnowledgeType.ENGINEERING
+	"architecture": 20, # KnowledgeSystem.KnowledgeType.ARCHITECTURE
+}
+
 # Signals for Main.gd to connect to
 signal research_started(tech_id: String)
 signal research_progressed(tech_id: String, progress: int, cost: int)
@@ -549,9 +563,53 @@ func is_technology_completed(tech_id: String) -> bool:
 	return technologies[tech_id].status == "completed"
 
 ## Compatibility function for settlement job validation
-## TODO: Implement proper settlement job type checking
-func can_settle_perform_job_type(_settlement_id: int, _job_type: int, _extra: int = 0) -> bool:
-	return true  # Stub: always allow for now
+func can_settle_perform_job_type(settlement_id: int, job_type: int, _extra: int = 0) -> bool:
+	if settlement_id < 0:
+		return true
+
+	var building: Dictionary = {}
+	if BuildingRegistry != null and BuildingRegistry.has_method("get_building_by_job_type"):
+		building = BuildingRegistry.get_building_by_job_type(job_type)
+
+	if building.is_empty():
+		return true
+
+	var requirements: Array = building.get("requires_tech", [])
+	for requirement in requirements:
+		var requirement_id: String = str(requirement).strip_edges()
+		if requirement_id.is_empty():
+			continue
+		if _settlement_meets_requirement(settlement_id, requirement_id):
+			continue
+		return false
+
+	return true
+
+
+func _settlement_meets_requirement(settlement_id: int, requirement_id: String) -> bool:
+	if is_technology_completed(requirement_id):
+		return true
+
+	var knowledge_type: int = _knowledge_type_for_requirement(requirement_id)
+	if knowledge_type < 0:
+		return true
+
+	if KnowledgeSystem == null or not KnowledgeSystem.has_method("get_knowledge_security_for_settlement"):
+		return false
+
+	var security: Dictionary = KnowledgeSystem.get_knowledge_security_for_settlement(settlement_id)
+	var secure: Array = security.get("secure", [])
+	if knowledge_type in secure:
+		return true
+	var at_risk: Array = security.get("at_risk", [])
+	if knowledge_type in at_risk:
+		return true
+
+	return false
+
+
+func _knowledge_type_for_requirement(requirement_id: String) -> int:
+	return int(REQ_TO_KNOWLEDGE_TYPE.get(requirement_id, -1))
 
 ## Get total technologies completed
 func get_completed_count() -> int:

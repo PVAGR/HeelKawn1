@@ -175,6 +175,11 @@ We are always building, always refining, always expanding. This document capture
 
 ## May 22, 2026 Session Completion
 
+- **FIX: Settlement job tech gate no longer returns unconditional true**:
+  - `TechnologySystem.can_settle_perform_job_type()` now checks `BuildingRegistry.requires_tech` for the target job type and validates each requirement against completed research or settlement knowledge security.
+  - Primitive / unregistered jobs still pass through, but registered advanced settlement builds now have a real eligibility gate instead of a stub.
+  - This directly affects the live claim paths in `JobManager.claim_by_id_for()` and `HeelKawnian` job filtering.
+
 - **FIX: Wire `post_build_deduped` into `Main._post_seeded_job`**:
   - Added `settlement_center` parameter to `_post_seeded_job()` for construction job deduplication
   - Construction jobs now check `JobManager._is_construction_type()` and use `post_build_deduped()` when settlement center is valid

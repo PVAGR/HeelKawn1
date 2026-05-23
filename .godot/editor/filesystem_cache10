@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779520259
+::res://::1779520670
 .aider.chat.history.md::TextFile::-1::1779517150::0::1::::<><><>0<>0<><>::
 AGENTS.md::TextFile::-1::1779432109::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779506968::0::1::::<><><>0<>0<><>::
@@ -164,7 +164,7 @@ DiscoveryGate.gd::GDScript::2584224234650357656::1779509613::0::1::::DiscoveryGa
 DiseaseSystem.gd::GDScript::5176942498259955416::1778923718::0::1::::<>Node<><>0<>0<><>::
 DynastyFamilySystem.gd::GDScript::9096165783105137273::1779165121::0::1::::<>Node<><>0<>0<><>::
 EcologySystem.gd::GDScript::7356293288449483685::1779157936::0::1::::<>Node<><>0<>0<><>::
-EconomyManager.gd::GDScript::600062380472312883::1779512420::0::1::::EconomyManager<>Node<><>0<>0<><>::
+EconomyManager.gd::GDScript::600062380472312883::1779520444::0::1::::<>Node<><>0<>0<><>::
 EventBus.gd::GDScript::17816675561125202::1778616814::0::1::::<>Node<><>0<>0<><>::
 EventManager.gd::GDScript::7814471383146393468::1778796531::0::1::::<>Node<><>0<>0<><>::
 FactionManager.gd::GDScript::3854887585585149382::1779506968::0::1::::<>Node<><>0<>0<><>::
@@ -670,7 +670,7 @@ ActionPopupLabel.gd::GDScript::5174978775249392183::1779276945::0::1::::ActionPo
 AgentBayesTree.gd::GDScript::6169819672790835832::1779506968::0::1::::AgentBayesTree<>RefCounted<><>0<>0<><>::
 Animal.gd::GDScript::3893107784844328532::1779138076::0::1::::Animal<>Node2D<><>0<>0<><>::
 AnimalSpawner.gd::GDScript::8350566320011331673::1778866624::0::1::::AnimalSpawner<>Node<><>0<>0<><>::
-HeelKawnian.gd::GDScript::7989372192867881187::1779519933::0::1::::HeelKawnian<>Node2D<><>0<>0<><>::
+HeelKawnian.gd::GDScript::7989372192867881187::1779520445::0::1::::HeelKawnian<>Node2D<><>0<>0<><>::
 HeelKawnianBrainIntegration.gd::GDScript::9099849829710555411::1779270547::0::1::::<>Node<><>0<>0<><>::
 HeelKawnianData.gd::GDScript::4502026540089827843::1779506968::0::1::::HeelKawnianData<>RefCounted<><>0<>0<><>::
 HeelKawnianDecision.gd::GDScript::5995801159740043007::1779506968::0::1::::HeelKawnianDecision<>RefCounted<><>0<>0<><>::

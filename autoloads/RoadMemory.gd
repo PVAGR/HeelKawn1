@@ -94,7 +94,31 @@ func flush_dirty_tiles(world: World) -> void:
 		_dirty_tiles.clear()
 
 
-## Move-cost tier from a traversal count (see [method get_path_weight_mul]).
+## Bulk increment traversal for route activity (trade path tiles).
+## Called from TradeMemory when routes complete; simulates many pawn steps.
+static func add_route_traversal(x: int, y: int, amount: int = 1) -> void:
+	var inst: RoadMemory = _get_instance()
+	if inst == null:
+		return
+	inst._add_route_traversal_impl(x, y, amount)
+
+
+func _add_route_traversal_impl(x: int, y: int, amount: int) -> void:
+	_ensure_size()
+	if x < 0 or y < 0 or x >= WorldData.WIDTH or y >= WorldData.HEIGHT:
+		return
+	var i1: int = y * WorldData.WIDTH + x
+	if i1 < 0 or i1 >= _trav.size():
+		return
+	_trav[i1] = _trav[i1] + maxi(1, amount)
+	_trav[i1] = mini(_trav[i1], ROAD_T2 + 20)
+	_dirty_tiles.append(i1)
+	if _trav[i1] >= ROAD_T1:
+		var rk: int = WorldMemory._region_key(x, y)
+		_road_regions[rk] = true
+		if DiscoveryGate != null:
+			DiscoveryGate.unlock("first_road")
+
 func _path_mul_from_count(t: int) -> float:
 	if t >= ROAD_T2:
 		return PATH_W_T2

@@ -34,11 +34,11 @@ func _ready() -> void:
 
 
 func _on_game_tick(tick: int) -> void:
-	if not OS.is_debug_build():
+	if (tick % 100) != 0 or tick <= 0:
 		return
-	if (tick % 10_000) != 0 or tick <= 0:
-		return
-	_debug_intent_summary(tick)
+	recompute(get_tree().root.get_node_or_null("Main/WorldViewport/World") if get_tree() != null else null)
+	if OS.is_debug_build() and (tick % 10_000) == 0:
+		_debug_intent_summary(tick)
 
 
 func clear() -> void:
@@ -88,6 +88,33 @@ func recompute(world: World) -> void:
 		var dt: int = now - int(trade_mem.get_last_tick_t2_existed())
 		if dt >= 1000:
 			trade_collapse = mini(0.4, 0.00001 * float(dt))
+	# Route-connectedness: check actual route activity for per-settlement pressure
+	var route_activity: Dictionary = {}  # center_region -> total traffic_score
+	if trade_mem != null and trade_mem.has_method("get_stats"):
+		var tstats: Dictionary = trade_mem.get_stats()
+		# Iterate trade routes for per-settlement activity
+		var _WM_node: Node = get_node_or_null("/root/WorldMemory")
+		var sm_node: Node = SettlementMemory
+		if _WM_node != null and sm_node != null:
+			for st_any3 in sm_node.get_formal_settlements():
+				if not (st_any3 is Dictionary):
+					continue
+				var st_scan: Dictionary = st_any3 as Dictionary
+				var ck_scan: int = int(st_scan.get("center_region", -1))
+				if ck_scan < 0:
+					continue
+				route_activity[ck_scan] = 0
+			if trade_mem.has_method("debug_trade_route_truth"):
+				for route_entry in trade_mem.get_property("trade_routes"):
+					if route_entry is Dictionary:
+						var r: Dictionary = route_entry as Dictionary
+						var from_rk: int = int(r.get("from_settlement", -1))
+						var to_rk: int = int(r.get("to_settlement", -1))
+						var traffic: int = int(r.get("traffic_score", 0))
+						if from_rk >= 0 and route_activity.has(from_rk):
+							route_activity[from_rk] = int(route_activity.get(from_rk, 0)) + traffic
+						if to_rk >= 0 and route_activity.has(to_rk):
+							route_activity[to_rk] = int(route_activity.get(to_rk, 0)) + traffic
 	var food_total: int = 0
 	food_total += StockpileManager.total_count_of(int(Item.Type.BERRY))
 	food_total += StockpileManager.total_count_of(int(Item.Type.MEAT))
@@ -124,6 +151,14 @@ func recompute(world: World) -> void:
 			pr += 0.16
 		if trade_mem != null and trade_mem.get_role(ck) == trade_mem.ROLE_DEPENDENT:
 			pr += 0.18
+		# Route-connected settlements have lower pressure (trade relieves shortages)
+		var route_traffic: int = int(route_activity.get(ck, 0)) if route_activity.has(ck) else 0
+		if route_traffic > 0:
+			pr -= mini(0.15, 0.001 * float(route_traffic))
+		# Settlement with trade routes but no stockpile has higher pressure
+		var last_trade: int = int(sd.get("last_trade_tick", -1))
+		if last_trade > 0 and (now - last_trade) > 10000:
+			pr += 0.05
 		var scmax: int = int(sd.get("scar_max", 0))
 		if scmax >= 2:
 			pr += 0.15

@@ -7751,11 +7751,11 @@ func _seed_construction_jobs() -> void:
 			var pry: int = (proto_rk >> 16) & 0xFFFF
 			var proto_center: Vector2i = Vector2i(prx * 16 + 8, pry * 16 + 8)
 			_seed_bootstrap_survival_food_jobs(proto_center, maxi(1, int(proto_sd.get("population", 0))))
-	_construction_seed_cursor = (start_idx + max(1, settlements_seen)) % maxi(1, settlements.size())
+	_construction_seed_cursor = (start_idx + step + 1) % maxi(1, settlements.size())
 	# Micro-profile log: show which sections took the most time
 	var total_usec: int = Time.get_ticks_usec() - start_usec
 	if total_usec > 10000 and OS.is_debug_build():
-		print("[CONSTRUCTION_SEED] WARNING: took %dus (budget=%dus) settlements_seen=%d posted=%d" % [total_usec, budget_usec, settlements_seen, posted])
+		print("[CONSTRUCTION_SEED] WARNING: took %dus (budget=%dus) cursor=%d checked=%d processed=%d posted=%d" % [total_usec, budget_usec, _construction_seed_cursor, step + 1, settlements_seen, posted])
 	# Batched nav notification — only call once after all wall rings processed
 	if _nav_dirty and _world != null:
 		_world.notify_pawns_nav_changed()

@@ -547,22 +547,40 @@ func _resolve_settlement_names() -> void:
 ## Count living pawns in each settlement's regions and write the "population" field.
 ## This is needed for name resolution and resource truth.
 func count_pawns_per_settlement() -> void:
-    var living: Array[HeelKawnian] = _living_pawns()
-    # Rebuild the cached region -> settlement index map
-    _rebuild_region_to_settlement_idx()
-    # Reset population counts
-    for i in range(settlements.size()):
-        if settlements[i] is Dictionary:
-            (settlements[i] as Dictionary)["population"] = 0
-    # Count pawns per settlement
-    for p in living:
-        if p == null or not is_instance_valid(p) or p.data == null:
-            continue
-        var rk_p: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
-        if _region_to_settlement_idx.has(rk_p):
-            var idx: int = int(_region_to_settlement_idx[rk_p])
-            var st2: Dictionary = settlements[idx] as Dictionary
-            st2["population"] = int(st2.get("population", 0)) + 1
+	var living: Array[HeelKawnian] = _living_pawns()
+	# Rebuild the cached region -> settlement index map
+	_rebuild_region_to_settlement_idx()
+	# Build settlement_id -> index lookup for fallback
+	var sid_to_idx: Dictionary = {}
+	for i in range(settlements.size()):
+		if settlements[i] is Dictionary:
+			var st_d: Dictionary = settlements[i] as Dictionary
+			var sid: int = int(st_d.get("settlement_id", -1))
+			if sid >= 0:
+				sid_to_idx[sid] = i
+	# Reset population counts
+	for i in range(settlements.size()):
+		if settlements[i] is Dictionary:
+			(settlements[i] as Dictionary)["population"] = 0
+	# Count pawns per settlement
+	for p in living:
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var rk_p: int = WorldMemory._region_key(p.data.tile_pos.x, p.data.tile_pos.y)
+		var counted: bool = false
+		if _region_to_settlement_idx.has(rk_p):
+			var idx: int = int(_region_to_settlement_idx[rk_p])
+			var st2: Dictionary = settlements[idx] as Dictionary
+			st2["population"] = int(st2.get("population", 0)) + 1
+			counted = true
+		# Fallback: count by settlement_id if pawn has one but wasn't physically inside
+		if not counted:
+			var psid: int = int(p.data.settlement_id) if "settlement_id" in p.data else -1
+			if psid >= 0 and sid_to_idx.has(psid):
+				var idx2: int = int(sid_to_idx[psid])
+				if settlements[idx2] is Dictionary:
+					var st3: Dictionary = settlements[idx2] as Dictionary
+					st3["population"] = int(st3.get("population", 0)) + 1
 
 
 func get_formal_settlements() -> Array:

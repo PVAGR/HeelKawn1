@@ -177,6 +177,8 @@ func _should_die(pop: Dictionary, tick: int) -> bool:
 
 func _wildlife_birth(pop: Dictionary) -> void:
 	# Add 1-3 new animals
+	var rng := RandomNumberGenerator.new()
+	rng.seed = GameManager.tick_count + pop.region_key + pop.species
 	var birth_count: int = rng.randi_range(1, 3)
 	pop.population += birth_count
 	pop.last_birth_tick = GameManager.tick_count
@@ -189,6 +191,8 @@ func _wildlife_birth(pop: Dictionary) -> void:
 
 func _wildlife_death(pop: Dictionary, tick: int) -> void:
 	# Remove 1-2 animals
+	var rng := RandomNumberGenerator.new()
+	rng.seed = tick + pop.region_key + pop.species + 2000
 	var death_count: int = rng.randi_range(1, 2)
 	pop.population = maxi(0, pop.population - death_count)
 	pop.last_death_tick = tick

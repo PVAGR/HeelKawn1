@@ -395,8 +395,8 @@ func _get_environmental_temperature(pawn: Node) -> float:
 		# Wind chill amplifies cold weather
 		if weather == "rain" or weather == "snow":
 			if WorldEnvironmentManager != null and WorldEnvironmentManager.has_method("get_wind_strength"):
-			var wind_str: float = WorldEnvironmentManager.get_wind_strength()
-			base_temp -= wind_str * 4.0
+				var wind_str: float = WorldEnvironmentManager.get_wind_strength()
+				base_temp -= wind_str * 4.0
 
 	# Apply grace period multiplier (new pawns are more resilient)
 	base_temp = lerp(base_temp, 37.0, grace_mult)

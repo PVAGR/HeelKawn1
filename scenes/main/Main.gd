@@ -9615,8 +9615,7 @@ func _apply_save_dict(s: Dictionary) -> void:
 		SocialManager.grudges_from_save_dict(s.get("grudge_manager", {}))
 	if SocialManager.has_method("gossip_from_save_dict"):
 		SocialManager.gossip_from_save_dict(s.get("gossip_manager", {}))
-	if MythAge != null and MythAge.has_method("from_save_dict"):
-		MythAge.from_save_dict(s.get("myth_age", {}))
+	MythAge.from_save_dict(s.get("myth_age", {}))
 	_push_zone_filter_label_to_toolbar()
 	var zlist: Array = s.get("zones", [])
 	if zlist is Array and not zlist.is_empty():

@@ -177,7 +177,7 @@ func _should_die(pop: Dictionary, tick: int) -> bool:
 
 func _wildlife_birth(pop: Dictionary) -> void:
 	# Add 1-3 new animals
-	var birth_count: int = randi_range(1, 3)
+	var birth_count: int = rng.randi_range(1, 3)
 	pop.population += birth_count
 	pop.last_birth_tick = GameManager.tick_count
 	
@@ -189,7 +189,7 @@ func _wildlife_birth(pop: Dictionary) -> void:
 
 func _wildlife_death(pop: Dictionary, tick: int) -> void:
 	# Remove 1-2 animals
-	var death_count: int = randi_range(1, 2)
+	var death_count: int = rng.randi_range(1, 2)
 	pop.population = maxi(0, pop.population - death_count)
 	pop.last_death_tick = tick
 	pop["deaths_this_cycle"] = pop.get("deaths_this_cycle", 0) + death_count
@@ -275,7 +275,7 @@ func process_hunt(pawn: Node, region: int) -> Dictionary:
 		return result  # No wildlife
 	
 	# Pick random target
-	var target: Dictionary = targets[randi() % targets.size()]
+	var target: Dictionary = targets[rng.randi() % targets.size()]
 	
 	# Determine meat gain
 	var meat: int = MEAT_PER_RABBIT if target.species == Species.RABBIT else MEAT_PER_DEER

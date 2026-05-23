@@ -1514,7 +1514,10 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
     var packed: PackedInt32Array = PackedInt32Array()
     for rk2 in cluster:
         packed.append(int(rk2))
+    # Generate a unique settlement ID from center region (stable across recomputes)
+    var settlement_id: int = center_rk
     return {
+        "id": settlement_id,
         "regions": packed,
         "center_region": center_rk,
         "name": "",  # Empty until HeelKawnians earn a name through experience

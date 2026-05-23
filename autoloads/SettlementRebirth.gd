@@ -100,7 +100,7 @@ func process(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 		if spawned_count <= 0:
 			continue
 		_last_rebirth_tick_by_center[ck2] = now1
-		MythMemory.register_rebirth_success(ckey)
+		MemoryManager.register_myth_rebirth_success(ckey)
 		# Determine lineage continuity: check recent events for native-born pawns
 		var lineage_found: bool = false
 		var recent_events: Array = WorldMemory.get_recent_events_for_settlement(center_region, 1024, true)
@@ -311,8 +311,8 @@ func _sort_settlements_rebirth_order(arr: Array[Dictionary]) -> void:
 	arr.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var ac: int = int(a.get("center_region", -1))
 		var bc: int = int(b.get("center_region", -1))
-		var ap: float = float(IntentMemory.get_settlement_pressure().get(ac, 1.0))
-		var bp: float = float(IntentMemory.get_settlement_pressure().get(bc, 1.0))
+		var ap: float = float(MemoryManager.get_settlement_pressure().get(ac, 1.0))
+		var bp: float = float(MemoryManager.get_settlement_pressure().get(bc, 1.0))
 		if ap != bp:
 			return ap < bp
 		var ascar: int = int(a.get("scar_max", 99))
@@ -415,7 +415,7 @@ func _score_rebirth_tile(
 	if is_struct_neighbor:
 		score += TILE_SCORE_STRUCT_NEIGHBOR
 	var road_mul: float = RoadMemory.get_path_weight_mul(t.x, t.y)
-	var trade_mul: float = TradeMemory.get_trade_path_weight_mul(t.x, t.y)
+	var trade_mul: float = EconomyManager.get_trade_path_weight_mul(t.x, t.y)
 	score += int(round((1.12 - road_mul) * TILE_SCORE_ROAD_WEIGHT))
 	score += int(round((1.10 - trade_mul) * TILE_SCORE_TRADE_WEIGHT))
 	var mdist: int = abs(t.x - center.x) + abs(t.y - center.y)

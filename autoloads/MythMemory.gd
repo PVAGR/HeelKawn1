@@ -1,5 +1,4 @@
 extends Node
-class_name MythMemory
 ## Myth & Fear v1: long-term emotional weight derived at recompute, not a kernel;
 ## [member _rebirth_count_by_center] is persisted so rebirth history survives load.
 
@@ -11,16 +10,6 @@ const WAVE_SEP_TICKS: int = 20000
 var _region_myth: Dictionary = {}
 ## center_region_key string -> successful rebirth count (SettlementRebirth; save/load)
 var _rebirth_count_by_center: Dictionary = {}
-
-
-static func _get_instance() -> MythMemory:
-	var main_loop: MainLoop = Engine.get_main_loop()
-	if main_loop is SceneTree:
-		var tree: SceneTree = main_loop as SceneTree
-		var inst_v: Variant = tree.get_root().get_node_or_null("MythMemory")
-		if inst_v is MythMemory:
-			return inst_v as MythMemory
-	return null
 
 
 func clear() -> void:
@@ -51,23 +40,17 @@ func get_rebirth_success_count_for_center(center_rk: int) -> int:
 
 
 ## Call when Settlement Rebirth spawns a pawn in a revivable cluster (session fact for -1 score).
-static func register_rebirth_success(center_rk: int) -> void:
-	var inst: MythMemory = _get_instance()
-	if inst == null:
-		return
+func register_rebirth_success(center_rk: int) -> void:
 	if center_rk < 0:
 		return
 	var ks: String = str(center_rk)
-	inst._rebirth_count_by_center[ks] = int(inst._rebirth_count_by_center.get(ks, 0)) + 1
+	_rebirth_count_by_center[ks] = int(_rebirth_count_by_center.get(ks, 0)) + 1
 
 
 ## -1 = revered, 0 = neutral, +1 = feared
-static func get_region_myth_state(region_key: int) -> int:
-	var inst: MythMemory = _get_instance()
-	if inst == null:
-		return 0
-	if inst._region_myth.has(region_key):
-		return int(inst._region_myth[region_key])
+func get_region_myth_state(region_key: int) -> int:
+	if _region_myth.has(region_key):
+		return int(_region_myth[region_key])
 	return 0
 
 
@@ -82,7 +65,7 @@ func get_regions_with_myth_state() -> Dictionary:
 
 ## Conflict intensity for a region: derived from WorldMeaning war/conflict tags.
 ## Returns 0.0 (peaceful) to 1.0 (intense conflict).
-static func get_conflict_intensity(region_key: int) -> float:
+func get_conflict_intensity(region_key: int) -> float:
 	var meaning: Dictionary = WorldMeaning.get_region_meaning(region_key)
 	var war_tags: int = 0
 	var total_tags: int = 0

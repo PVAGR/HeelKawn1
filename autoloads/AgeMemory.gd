@@ -101,9 +101,9 @@ func _cond_settlement_stagnation() -> bool:
 
 
 func _cond_trade_collapsed() -> bool:
-	if TradeMemory.count_t2_tiles() > 0:
+	if EconomyManager.count_t2_trade_tiles() > 0:
 		return false
-	var last_e: int = TradeMemory.get_last_tick_t2_existed()
+	var last_e: int = EconomyManager.get_last_tick_trade_t2_existed()
 	if last_e < 0:
 		# No major route tier has ever been observed this session; not a "collapse".
 		return false
@@ -124,7 +124,7 @@ func _cond_myth_feared_dominant() -> bool:
 		var ckr: int = int(s2.get("center_region", -1))
 		if ckr < 0:
 			continue
-		var m: int = MythMemory.get_region_myth_state(ckr)
+		var m: int = MemoryManager.get_region_myth_state(ckr)
 		if m == 1:
 			feared += 1
 		elif m == -1:
@@ -182,7 +182,7 @@ func _build_signature() -> void:
 		dom = DC_OPEN
 	if ndef >= nopen and ndef >= ncau:
 		dom = DC_DEF
-	var tdm: int = _classify_trade_density(TradeMemory.count_route_tiles())
+	var tdm: int = _classify_trade_density(EconomyManager.count_trade_route_tiles())
 	age_signature = {
 		SIG_SA: alive,
 		SIG_SD: dead,

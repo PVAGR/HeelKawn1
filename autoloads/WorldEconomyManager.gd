@@ -82,14 +82,10 @@ func _load_sub(name: String, path: String) -> Node:
 	return null
 
 func get_trade_planner() -> Node:
-	if _trade_planner == null:
-		_trade_planner = _load_sub("TradePlanner", "res://autoloads/TradePlanner.gd")
-	return _trade_planner
+	return EconomyManager.get_trade_planner()
 
 func get_trade_memory() -> Node:
-	if _trade_memory == null:
-		_trade_memory = _load_sub("TradeMemory", "res://autoloads/TradeMemory.gd")
-	return _trade_memory
+	return EconomyManager.get_trade_memory()
 
 func get_food_chain_manager() -> Node:
 	if _food_chain_manager == null:

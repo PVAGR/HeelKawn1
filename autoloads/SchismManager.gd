@@ -30,10 +30,10 @@ func _sync_hold_timers() -> void:
 		var ckr1: int = int(d.get("center_region", -1))
 		if ckr1 < 0:
 			continue
-		var it: int = int(IntentMemory.get_settlement_intent().get(ckr1, IntentMemory.INTENT_HOLD))
+		var it: int = int(MemoryManager.get_settlement_intent().get(ckr1, MemoryManager.INTENT_HOLD))
 		if not _last_intent.has(ckr1):
 			_last_intent[ckr1] = it
-			if it == IntentMemory.INTENT_HOLD:
+			if it == MemoryManager.INTENT_HOLD:
 				_hold_since[ckr1] = now1
 			else:
 				_hold_since[ckr1] = -1_000_000_000
@@ -41,7 +41,7 @@ func _sync_hold_timers() -> void:
 		var prev: int = int(_last_intent[ckr1])
 		if it != prev:
 			_last_intent[ckr1] = it
-			if it == IntentMemory.INTENT_HOLD:
+			if it == MemoryManager.INTENT_HOLD:
 				_hold_since[ckr1] = now1
 			else:
 				_hold_since[ckr1] = -1_000_000_000
@@ -70,12 +70,12 @@ func check_and_schism(world: World, main: Node2D) -> void:
 		var pack0: PackedInt32Array = reg0 as PackedInt32Array
 		if pack0.is_empty():
 			continue
-		if int(IntentMemory.get_settlement_intent().get(ckr, IntentMemory.INTENT_HOLD)) != IntentMemory.INTENT_HOLD:
+		if int(MemoryManager.get_settlement_intent().get(ckr, MemoryManager.INTENT_HOLD)) != MemoryManager.INTENT_HOLD:
 			continue
 		var h0: int = int(_hold_since.get(ckr, -1_000_000_000))
 		if h0 < 0 or (now - h0) < MIN_HOLD_TICKS:
 			continue
-		if MythMemory.get_conflict_intensity(ckr) < CONFLICT_THRESHOLD:
+		if MemoryManager.get_myth_conflict_intensity(ckr) < CONFLICT_THRESHOLD:
 			continue
 		var pop: int = int(main.settlement_planner_count_pawns_in_regions(pack0))
 		if pop < MIN_POP:

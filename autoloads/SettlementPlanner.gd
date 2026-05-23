@@ -213,18 +213,18 @@ func _plan_one_settlement_culture(
 	elif cult == CULTURE_DEFENSIVE:
 		# Wall expansion before stockpile; compact defaults. Military early.
 		order = [1, 2, 3, 5, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 23, 18, 16, 17, 19, 20, 21, 22, 24, 25]
-	if intent == IntentMemory.INTENT_GROW:
+	if intent == MemoryManager.INTENT_GROW:
 		if cult == CULTURE_OPEN:
 			order = [1, 6, 4, 5, 2, 3, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 22, 17, 19, 20, 21, 24, 23, 25]
 		elif cult == CULTURE_DEFENSIVE:
 			order = [1, 2, 3, 6, 5, 4, 7, 8, 9, 10, 11, 12, 13, 14, 15, 23, 18, 16, 17, 19, 20, 21, 22, 24, 25]
 		else:
 			order = [1, 6, 4, 2, 3, 5, 7, 8, 9, 10, 16, 18, 17, 19, 20, 21, 22, 23, 24, 25]
-	elif intent == IntentMemory.INTENT_RECOVER:
+	elif intent == MemoryManager.INTENT_RECOVER:
 		# Recovery chains rebuild the settlement core first, then safety,
 		# then expansion and institutions once the settlement can stand again.
 		order = [1, 11, 12, 2, 3, 4, 6, 7, 10, 5, 8, 13, 14, 15, 16, 18, 17, 19, 20, 21, 22, 24, 23, 25]
-	elif intent == IntentMemory.INTENT_ABANDON:
+	elif intent == MemoryManager.INTENT_ABANDON:
 		order = [1, 3, 7, 10, 2, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 23, 24, 18, 16, 17, 19, 20, 21, 22, 25]
 	for rid: int in order:
 		if _budget_exceeded():
@@ -235,9 +235,9 @@ func _plan_one_settlement_culture(
 				# Post beds whenever there's a deficit AND we don't already have
 				# too many pending bed jobs (cap prevents spam).
 				var need_bed: bool = pawns > bed_n + open_beds and open_beds < 3
-				if intent == IntentMemory.INTENT_GROW:
+				if intent == MemoryManager.INTENT_GROW:
 					need_bed = pawns > bed_n + open_beds and open_beds < 4
-				elif intent == IntentMemory.INTENT_ABANDON:
+				elif intent == MemoryManager.INTENT_ABANDON:
 					need_bed = pawns > bed_n + open_beds and pawns <= bed_n + open_beds + 1
 				if need_bed:
 					if not can_post_build_intent(settlement, "bed", Job.Type.BUILD_BED, center):
@@ -269,19 +269,19 @@ func _plan_one_settlement_culture(
 					if td.x >= 0 and bool(main.call("settlement_planner_post_door", td)):
 						continue
 			4:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if not _settlement_touched_by_any_zone(center, regions, data):
 					var r4: Rect2i = _zone_rect_3x3_anchored_at(center, data)
 					if r4.size.x > 0 and bool(main.call("settlement_planner_post_zone_rect", r4)):
 						continue
 			5:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if cult == CULTURE_OPEN and bed_n < OPEN_BED2_BEFORE_EXPAND:
-					if intent != IntentMemory.INTENT_GROW:
+					if intent != MemoryManager.INTENT_GROW:
 						continue
-				if intent == IntentMemory.INTENT_GROW and pawns < 2:
+				if intent == MemoryManager.INTENT_GROW and pawns < 2:
 					continue
 				if wall_n > 0 and _wall_bbox_too_small(data, regions, VILLAGE_SPAN, feature_summary):
 					var texp: Vector2i = _pick_expansion_wall_tile_culture(
@@ -290,11 +290,11 @@ func _plan_one_settlement_culture(
 					if texp.x >= 0 and bool(main.call("settlement_planner_post_wall", texp)):
 						continue
 			6:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				var open_beds6: int = JobManager.count_pending_by_type(Job.Type.BUILD_BED)
 				var can_bed2: bool = pawns > bed_n + open_beds6 and open_beds6 < 3
-				if intent == IntentMemory.INTENT_GROW:
+				if intent == MemoryManager.INTENT_GROW:
 					can_bed2 = pawns > bed_n + open_beds6 and open_beds6 < 4
 				if can_bed2:
 					if cult == CULTURE_DEFENSIVE and door_n == 0 and wall_n > 0:
@@ -317,14 +317,14 @@ func _plan_one_settlement_culture(
 					if tdoor2.x >= 0 and bool(main.call("settlement_planner_post_door", tdoor2)):
 						continue
 			8:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				var need_p: int = (
 						OPEN_VILLAGE_WALL_PAWNS
 						if cult == CULTURE_OPEN
 						else (DEF_VILLAGE_WALL_PAWNS if cult == CULTURE_DEFENSIVE else 6)
 				)
-				if intent == IntentMemory.INTENT_GROW:
+				if intent == MemoryManager.INTENT_GROW:
 					need_p = maxi(2, need_p - 2)
 				if stage == 1 and pawns >= need_p:
 					var t8: Vector2i = _pick_expansion_wall_tile_culture(
@@ -333,12 +333,12 @@ func _plan_one_settlement_culture(
 					if t8.x >= 0 and bool(main.call("settlement_planner_post_wall", t8)):
 						continue
 			9:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				var d2sp: int = _door2_min_span_culture(cult)
 				if _wall_bbox_too_small(data, regions, d2sp, feature_summary) or door_n >= 2:
 					continue
-				if intent == IntentMemory.INTENT_GROW and pawns >= 6:
+				if intent == MemoryManager.INTENT_GROW and pawns >= 6:
 					d2sp = maxi(4, d2sp - 1)
 				if cult == CULTURE_OPEN and not (
 						pawns >= OPEN_DOOR2_PAWNS or bed_n >= OPEN_DOOR2_BEDS
@@ -350,7 +350,7 @@ func _plan_one_settlement_culture(
 				if t9.x >= 0 and bool(main.call("settlement_planner_post_door", t9)):
 					return
 			10:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if stage >= 1:
 					var t10: Vector2i = _first_interior_bbox_wall_door(
@@ -359,7 +359,7 @@ func _plan_one_settlement_culture(
 					if t10.x >= 0 and bool(main.call("settlement_planner_post_door", t10)):
 						continue
 			11:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				var open_fire_pits: int = JobManager.count_pending_by_type(Job.Type.BUILD_FIRE_PIT)
 				var warmth_press_rule: float = float(build_priorities.get("warmth_press", 0.0))
@@ -383,7 +383,7 @@ func _plan_one_settlement_culture(
 						mark_build_intent_posted(settlement, "fire_pit")
 						continue
 			12:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				var open_storage: int = JobManager.count_pending_by_type(Job.Type.BUILD_STORAGE_HUT)
 				var storage_press_rule: float = float(build_priorities.get("storage_press", 0.0))
@@ -396,14 +396,14 @@ func _plan_one_settlement_culture(
 						mark_build_intent_posted(settlement, "storage_hut")
 						continue
 			13:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if wall_n >= 2 and pawns >= 3:
 					var t13: Vector2i = _pick_defend_tile(world, main, data, center, regions)
 					if t13.x >= 0 and bool(main.call("settlement_planner_post_protect", t13)):
 						continue
 			14:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if stage >= 2 and pawns >= 4:
 					var t14: Vector2i = _pick_defend_tile(world, main, data, center, regions)
@@ -412,13 +412,13 @@ func _plan_one_settlement_culture(
 			15:
 				# Territory expansion: growing settlements claim adjacent regions
 				# as TERRITORY zones so pawns prefer building/working there.
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
-				if pawns >= 3 and intent == IntentMemory.INTENT_GROW:
+				if pawns >= 3 and intent == MemoryManager.INTENT_GROW:
 					_expand_territory_zone(world, main, data, center, regions)
 			# Phase 6: Agriculture — farms when settlement has enough pawns
 			16:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if pawns >= 3 and stage >= 1:
 					var farm_type: int = _pick_farm_type_for_settlement(regions, data)
@@ -431,7 +431,7 @@ func _plan_one_settlement_culture(
 							return
 			# Phase 6: Production — workshop when settlement has enough pawns
 			17:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if pawns >= 5 and stage >= 1:
 					var workshop_n: int = int(feature_summary.get("workshop_n", 0))
@@ -441,7 +441,7 @@ func _plan_one_settlement_culture(
 							return
 			# Phase 6: Granary — food storage for growing settlements
 			18:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if pawns >= 4 and stage >= 1:
 					var granary_n: int = int(feature_summary.get("granary_n", 0))
@@ -451,7 +451,7 @@ func _plan_one_settlement_culture(
 							return
 			# Phase 6: Road — connect settlement to nearby settlements
 			19:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if pawns >= 5 and stage >= 2:
 					var road_n: int = int(feature_summary.get("road_n", 0))
@@ -461,7 +461,7 @@ func _plan_one_settlement_culture(
 							return
 			# Phase 6: Maritime — boatyard/dock near water
 			20:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if pawns >= 6 and stage >= 2:
 					var boatyard_n: int = int(feature_summary.get("boatyard_n", 0))
@@ -471,7 +471,7 @@ func _plan_one_settlement_culture(
 							return
 			# Phase 6: Knowledge — library/school for advanced settlements
 			21:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if pawns >= 8 and stage >= 2:
 					var library_n: int = int(feature_summary.get("library_n", 0))
@@ -481,7 +481,7 @@ func _plan_one_settlement_culture(
 							return
 			# Phase 6: Market — trade hub for settlements with trade routes
 			22:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if pawns >= 6 and stage >= 2:
 					var market_n: int = int(feature_summary.get("market_n", 0))
@@ -491,7 +491,7 @@ func _plan_one_settlement_culture(
 							return
 			# Phase 6: Military — barracks for settlements under threat
 			23:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if pawns >= 6 and stage >= 2:
 					var barracks_n: int = int(feature_summary.get("barracks_n", 0))
@@ -501,7 +501,7 @@ func _plan_one_settlement_culture(
 							return
 			# Phase 6: Apothecary — medicine for settlements with injuries
 			24:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if pawns >= 5 and stage >= 1:
 					var apothecary_n: int = int(feature_summary.get("apothecary_n", 0))
@@ -511,7 +511,7 @@ func _plan_one_settlement_culture(
 							return
 			# Phase 6: Cellar — advanced storage for mature settlements
 			25:
-				if intent == IntentMemory.INTENT_ABANDON:
+				if intent == MemoryManager.INTENT_ABANDON:
 					continue
 				if pawns >= 7 and stage >= 2:
 					var cellar_n: int = int(feature_summary.get("cellar_n", 0))
@@ -640,8 +640,8 @@ func _pick_waterside_tile(world: World, main: Node2D, data: WorldData, center: V
 
 static func _intent_for_settlement(center_region: int) -> int:
 	if center_region < 0:
-		return IntentMemory.INTENT_HOLD
-	return int(IntentMemory.get_settlement_intent().get(center_region, IntentMemory.INTENT_HOLD))
+		return MemoryManager.INTENT_HOLD
+	return int(MemoryManager.get_settlement_intent().get(center_region, MemoryManager.INTENT_HOLD))
 
 
 ## Deterministic, exclusive: worst survival context wins. Later Ages nudge away from [OPEN] without hard overrides.

@@ -53,7 +53,7 @@ func _plan_impl(world: World, _main: Node, from_memory_flush: bool) -> void:
 			continue
 		if SettlementMemory.is_collapsed_state(str(a.get("state", ""))):
 			continue
-		if a_intent == IntentMemory.INTENT_ABANDON:
+		if a_intent == MemoryManager.INTENT_ABANDON:
 			continue
 		if not (a.get("regions", null) is PackedInt32Array):
 			continue
@@ -115,17 +115,17 @@ static func _sort_settlements_by_intent_then_center(ka: Variant, kb: Variant) ->
 
 
 static func _intent_sort_rank(intent: int) -> int:
-	if intent == IntentMemory.INTENT_GROW:
+	if intent == MemoryManager.INTENT_GROW:
 		return 0
-	if intent == IntentMemory.INTENT_ABANDON:
+	if intent == MemoryManager.INTENT_ABANDON:
 		return 2
 	return 1
 
 
 static func _intent_for_center(center_region: int) -> int:
 	if center_region < 0:
-		return IntentMemory.INTENT_HOLD
-	return int(IntentMemory.get_settlement_intent().get(center_region, IntentMemory.INTENT_HOLD))
+		return MemoryManager.INTENT_HOLD
+	return int(MemoryManager.get_settlement_intent().get(center_region, MemoryManager.INTENT_HOLD))
 
 
 static func _region_set(regions: PackedInt32Array) -> Dictionary:
@@ -276,7 +276,7 @@ static func _find_best_receiver(
 			continue
 		if SettlementMemory.is_collapsed_state(str(st_b.get("state", ""))):
 			continue
-		if b_intent == IntentMemory.INTENT_ABANDON:
+		if b_intent == MemoryManager.INTENT_ABANDON:
 			continue
 		if SettlementMemory.is_region_in_permanently_abandoned_settlement(b_center):
 			continue

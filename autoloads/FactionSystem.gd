@@ -56,7 +56,7 @@ const MIN_RELATION: int = -100
 func _ready() -> void:
 	GameManager.game_tick.connect(_on_game_tick)
 	_settlement_memory = get_node_or_null("/root/SettlementMemory")
-	_trade_memory = get_node_or_null("/root/TradeMemory")
+	_trade_memory = EconomyManager.get_trade_memory()
 	_knowledge_system = get_node_or_null("/root/KnowledgeSystem")
 	_world_memory = get_node_or_null("/root/WorldMemory")
 

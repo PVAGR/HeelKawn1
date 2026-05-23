@@ -496,7 +496,7 @@ static func _pawn_governance_role(pawn_data: HeelKawnianData, gov_profile: Dicti
 
 
 static func _focus_append_house_stub_lines(out: PackedStringArray, center_region: int) -> void:
-	FactionRegistry.append_focus_house_lines(out, center_region)
+	FactionManager.get_faction_registry().append_focus_house_lines(out, center_region)
 
 
 static func _pretty_governance_name(raw: String) -> String:

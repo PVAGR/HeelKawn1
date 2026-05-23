@@ -17,10 +17,10 @@ static func describe_settlement_zone(zone_id: String) -> Dictionary:
 	var ckr: int = int(zd.get("center_region", -1))
 	if not zone_id.is_empty() and zone_id.is_valid_int():
 		ckr = int(zone_id)
-	var myth: int = MythMemory.get_region_myth_state(ckr) if ckr >= 0 else 0
+	var myth: int = MemoryManager.get_region_myth_state(ckr) if ckr >= 0 else 0
 	var ct: Vector2i = _center_tile_for_center_region(ckr)
-	var sacred: bool = SacredMemory.is_tile_sacred(ct) if ckr >= 0 else false
-	var stype: String = SacredMemory.get_sacred_type_at(ct.x, ct.y) if sacred else ""
+	var sacred: bool = MemoryManager.get_sacred_memory().is_tile_sacred(ct) if ckr >= 0 else false
+	var stype: String = MemoryManager.get_sacred_memory().get_sacred_type_at(ct.x, ct.y) if sacred else ""
 	var myth_label: String = "neutral"
 	if myth < 0:
 		myth_label = "revered"
@@ -50,7 +50,7 @@ static func describe_settlement_zone(zone_id: String) -> Dictionary:
 
 
 static func digest_settlements(max_entries: int = 10) -> String:
-	FactionRegistry.sync_from_settlements()
+	FactionManager.get_faction_registry().sync_from_settlements()
 	var lines: PackedStringArray = PackedStringArray()
 	var formal_settlements: Array = SettlementMemory.get_formal_settlements()
 	var proto_sites: int = SettlementMemory.get_proto_sites().size()
@@ -79,8 +79,8 @@ static func digest_settlements(max_entries: int = 10) -> String:
 				]
 		)
 		n += 1
-	var sites: Array = SacredMemory.list_sites_sorted(6)
-	lines.append("  sacred_sites_sample(count=%d):" % SacredMemory.site_count())
+	var sites: Array = MemoryManager.get_sacred_memory().list_sites_sorted(6)
+	lines.append("  sacred_sites_sample(count=%d):" % MemoryManager.get_sacred_memory().site_count())
 	for s in sites:
 		if s is Dictionary:
 			var sd: Dictionary = s
@@ -94,7 +94,7 @@ static func digest_settlements(max_entries: int = 10) -> String:
 
 static func get_harmony_index() -> float:
 	var base_harmony: float = 0.6
-	var sacred_count: int = SacredMemory.site_count()
+	var sacred_count: int = MemoryManager.get_sacred_memory().site_count()
 	var settlement_count: int = SettlementMemory.get_formal_settlement_count()
 	if settlement_count == 0:
 		return base_harmony

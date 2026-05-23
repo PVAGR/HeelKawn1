@@ -716,8 +716,23 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 		if ambition.is_empty():
 			ambition = _ambition_chain_for_settlement(settlement_key)
 	elif drive == "preserve":
-		if markers <= 0:
-			ambition = _ambition_result(Job.Type.CARVE_KNOWLEDGE_STONE, 7, "preservation drive: no knowledge markers in settlement")
+		# Check unified preservation pressure for the settlement's actual knowledge at risk
+		var preservation_data: Dictionary = _get_preservation_pressure_for_settlement(settlement_id, data)
+		var urgent: Array = preservation_data.get("urgent", [])
+		var recommended: Array = preservation_data.get("recommended", [])
+		var has_literate: bool = data != null and KnowledgeSystem != null and KnowledgeSystem.has_method("has_knowledge") and KnowledgeSystem.call("has_knowledge", int(data.id), KnowledgeSystem.KnowledgeType.WRITING)
+		
+		if not urgent.is_empty():
+			# Most urgent preservation action: carve knowledge stone for critical knowledge
+			ambition = _ambition_result(Job.Type.CARVE_KNOWLEDGE_STONE, 8, "preservation drive: %d knowledge types at urgent risk" % urgent.size())
+		elif not recommended.is_empty():
+			# Recommended preservation: inscribe ledger or write books
+			if has_literate and markers > 0:
+				ambition = _ambition_result(Job.Type.PAPER_MAKING, 7, "preservation drive: transcribe %d at-risk knowledge types to paper" % recommended.size())
+			else:
+				ambition = _ambition_result(Job.Type.CARVE_LEDGER_STONE, 7, "preservation drive: record %d at-risk knowledge types on stone" % recommended.size())
+		elif markers <= 0:
+			ambition = _ambition_result(Job.Type.CARVE_KNOWLEDGE_STONE, 6, "preservation drive: no knowledge markers in settlement")
 		else:
 			ambition = _ambition_result(Job.Type.PAPER_MAKING, 6, "preservation drive: upgrade from stone to paper")
 	elif drive == "innovate":
@@ -2878,6 +2893,24 @@ static func _world_seed() -> int:
 	if wrng != null and wrng.has_method("current_seed"):
 		return int(wrng.call("current_seed"))
 	return 0
+
+
+static func _get_preservation_pressure_for_settlement(settlement_id: int, data: HeelKawnianData) -> Dictionary:
+	"""Query KnowledgeSystem for unified preservation pressure, with fallback for null settlement."""
+	var ks: Node = _root_node("KnowledgeSystem")
+	if ks == null or not ks.has_method("compute_preservation_pressure"):
+		return {"urgent": [], "recommended": [], "stable": []}
+	if settlement_id < 0:
+		# Use pawn's current region as settlement proxy
+		if data != null:
+			var wm: Node = _root_node("WorldMemory")
+			var sm: Node = _root_node("SettlementMemory")
+			if wm != null and sm != null and wm.has_method("_region_key") and sm.has_method("get_center_region_for_region"):
+				var rk: int = int(wm.call("_region_key", data.tile_pos.x, data.tile_pos.y))
+				settlement_id = int(sm.call("get_center_region_for_region", rk))
+	if settlement_id >= 0:
+		return ks.call("compute_preservation_pressure", settlement_id)
+	return {"urgent": [], "recommended": [], "stable": []}
 
 
 static func _tick() -> int:

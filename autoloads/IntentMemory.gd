@@ -1,5 +1,4 @@
 extends Node
-class_name IntentMemory
 ## v1: Derived, not saved — world-scale pressure and per-settlement intent (GROW / HOLD / ABANDON).
 ## Read-only: feeds future migration / conflict layers; no commands, no world writes.
 
@@ -20,18 +19,12 @@ var settlement_pressure: Dictionary = {}
 var settlement_intent: Dictionary = {}
 
 
-static func get_settlement_intent() -> Dictionary:
-	var inst: IntentMemory = Engine.get_singleton("IntentMemory") as IntentMemory
-	if inst == null:
-		return {}
-	return inst.settlement_intent
+func get_settlement_intent() -> Dictionary:
+	return settlement_intent
 
 
-static func get_settlement_pressure() -> Dictionary:
-	var inst: IntentMemory = Engine.get_singleton("IntentMemory") as IntentMemory
-	if inst == null:
-		return {}
-	return inst.settlement_pressure
+func get_settlement_pressure() -> Dictionary:
+	return settlement_pressure
 
 
 func _ready() -> void:

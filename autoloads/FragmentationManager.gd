@@ -38,9 +38,9 @@ func check_and_fragment(world: World, main: Node2D) -> void:
 		var pack0: PackedInt32Array = reg0 as PackedInt32Array
 		if pack0.is_empty():
 			continue
-		if int(IntentMemory.get_settlement_intent().get(ckr, IntentMemory.INTENT_HOLD)) != IntentMemory.INTENT_GROW:
+		if int(MemoryManager.get_settlement_intent().get(ckr, MemoryManager.INTENT_HOLD)) != MemoryManager.INTENT_GROW:
 			continue
-		if float(IntentMemory.get_settlement_pressure().get(ckr, 1.0)) >= PRESSURE_THRESHOLD:
+		if float(MemoryManager.get_settlement_pressure().get(ckr, 1.0)) >= PRESSURE_THRESHOLD:
 			continue
 		var pop: int = int(main.settlement_planner_count_pawns_in_regions(pack0))
 		if pop < POP_THRESHOLD:
@@ -99,7 +99,7 @@ func find_outward_passable(
 				continue
 			if world.pathfinder.component_of(t) != comp:
 				continue
-			if SacredMemory.is_tile_sacred(t):
+			if MemoryManager.get_sacred_memory().is_tile_sacred(t):
 				continue
 			if _region_pack_has_tile(world, pack0, t):
 				continue

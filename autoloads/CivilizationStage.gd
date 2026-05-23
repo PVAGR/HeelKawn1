@@ -69,6 +69,38 @@ var _knowledge_loss_penalties: Dictionary = {}
 var _last_known_stages: Dictionary = {}
 
 
+func _ready() -> void:
+	# Connect to KnowledgeSystem signal for knowledge loss tracking
+	if KnowledgeSystem != null:
+		KnowledgeSystem.knowledge_lost.connect(_on_knowledge_lost)
+	# Periodic tick for penalty decay
+	if GameManager != null:
+		GameManager.game_tick.connect(_on_civilization_tick)
+
+
+func _on_civilization_tick(tick: int) -> void:
+	"""Periodic decay of knowledge loss penalties."""
+	if tick % KNOWLEDGE_LOSS_PENALTY_DECAY_INTERVAL_TICKS != 0:
+		return
+	for sid_key in _knowledge_loss_penalties.keys():
+		var penalty: int = int(_knowledge_loss_penalties[sid_key])
+		if penalty > 0:
+			_knowledge_loss_penalties[sid_key] = maxi(0, penalty - 1)
+		else:
+			_knowledge_loss_penalties.erase(sid_key)
+
+
+func _on_knowledge_lost(knowledge_type: int, settlement_id: int) -> void:
+	"""Apply era-score penalty when knowledge is lost in a settlement."""
+	if settlement_id < 0:
+		return  # Global knowledge lost affects all settlements - apply to highest
+	var key: String = str(settlement_id)
+	var current_penalty: int = int(_knowledge_loss_penalties.get(key, 0))
+	_knowledge_loss_penalties[key] = current_penalty + KNOWLEDGE_LOSS_ERA_PENALTY
+	# Invalidate cache so next snapshot recalculates
+	_snapshot_cache.erase(key)
+
+
 func get_civilization_stage(settlement_id: int = -1) -> int:
 	return int(get_stage_snapshot(settlement_id).get("stage", STAGE_PRIMITIVE))
 
@@ -157,8 +189,13 @@ func _build_stage_snapshot(settlement_id: int) -> Dictionary:
 	var complexity_score: int = _complexity_score(pawns)
 	var quality_score: int = _quality_of_life_score(pawns)
 	var institution_score: int = _institution_score(pawns, st)
+	
+	# Apply knowledge loss penalty
+	var loss_penalty_key: String = str(settlement_id)
+	var loss_penalty: int = int(_knowledge_loss_penalties.get(loss_penalty_key, 0))
+	
 	var score: int = clampi(
-		tech_score + knowledge_score + infrastructure_score + complexity_score + quality_score + institution_score,
+		tech_score + knowledge_score + infrastructure_score + complexity_score + quality_score + institution_score - loss_penalty,
 		0,
 		100
 	)
@@ -188,6 +225,7 @@ func _build_stage_snapshot(settlement_id: int) -> Dictionary:
 			"complexity": complexity_score,
 			"quality_of_life": quality_score,
 			"institutions": institution_score,
+			"knowledge_loss_penalty": loss_penalty,
 		},
 		"tech_diffusion": tech_diffusion,
 		"literacy_rate": literacy_rate,

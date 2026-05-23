@@ -138,18 +138,60 @@ We are always building, always refining, always expanding. This document capture
 - **Done**: Autoload consolidation Phases 1 + 2 (9 autoloads removed, from 150 → 141)
   See `docs/AUTOLOAD_CONSOLIDATION_STATUS.md` for details.
 
-## 2026-05-22: Autoload Consolidation Phase 2 Complete
+## 2026-05-22: Knowledge Preservation Loop Unification
 
-- **6 autoloads deregistered**: SquadCoordinator, FragmentationManager, RelationalGraph, SacredGeography, ReligionLens, MythAge
-- **Static conversions**: ReligionLens (24 refs) and MythAge (9 refs) → `class_name` static utility classes, all call sites preserved
-- **Boot-managed**: FragmentationManager, SacredGeography → bootstrapped in `Main._ready()`, added to root; path-based lookups unchanged
-- **Lazy-loaded**: SquadCoordinator → WorldAI child; RelationalGraph → SocialManager adds to root
-- **Autoload count**: 141 (150 → 141 over Phases 1 + 2)
+- **FEAT: Preservation pressure wired into Matrix AI ambitions**:
+  - `HeelKawnianManager.get_settlement_ambition_for_pawn()` now calls `KnowledgeSystem.compute_preservation_pressure()` during `preserve` drive
+  - Urgent knowledge types trigger `CARVE_KNOWLEDGE_STONE` (priority 8)
+  - Recommended knowledge + literate pawn → `PAPER_MAKING` (priority 7)
+  - Recommended knowledge + no literacy → `CARVE_LEDGER_STONE` (priority 7)
+  - Added `_get_preservation_pressure_for_settlement()` helper with fallback to pawn region proxy
+
+- **FEAT: Record carrier safety net in knowledge death chain**:
+  - `_check_knowledge_loss()` now calls `_has_record_carrier_for_knowledge()` before entering dormant state
+  - If stones/books exist, knowledge enters "degraded" (not dormant) — records are safety net
+  - Added `_has_record_carrier_for_knowledge()` — checks both stone carriers and book contents
+  - Added `_is_knowledge_truly_lost()` — returns true only when both carriers AND records are zero
+  - Only truly lost knowledge (no carriers + no records) enters dormant state with `truly_lost: true`
+  - Records `knowledge_degraded` event when records preserve knowledge beyond last carrier's death
+  - Records `knowledge_truly_lost` event for CivilizationStage consumption
+
+- **FEAT: CivilizationStage consumes knowledge_lost signal**:
+  - Added `_ready()` with signal connection to `KnowledgeSystem.knowledge_lost`
+  - Added `_on_civilization_tick()` for periodic penalty decay every 360 ticks
+  - Added `_on_knowledge_lost()` — applies `KNOWLEDGE_LOSS_ERA_PENALTY` (3 points) to affected settlement
+  - Knowledge loss penalty subtracted from era score in `_build_stage_snapshot()`
+  - Penalty shown in breakdown as `knowledge_loss_penalty`
+  - Cache invalidated on knowledge loss for immediate recalculation
+
+## 2026-05-22: Autoload Consolidation Phase 2 + 3 Complete
+
+- **Phase 2 (6 deregistered)**: SquadCoordinator, FragmentationManager, RelationalGraph, SacredGeography, ReligionLens, MythAge
+  - Static conversions: ReligionLens (24 refs) and MythAge (9 refs) → `class_name` static utility classes
+  - Boot-managed: FragmentationManager, SacredGeography → `Main._ready()` bootstrap + root
+  - Lazy-loaded: SquadCoordinator → WorldAI child; RelationalGraph → SocialManager adds to root
+- **Phase 3 (2 deregistered)**: TradeMemory, TradePlanner → EconomyManager
+  - 9 static methods on TradeMemory converted to instance methods; 10 forwarding methods + TIER constants on EconomyManager
+  - 15 call sites updated across 7 files (Main.gd, TerritoryOverlay, World, RemnantMemory, AgeMemory, SettlementRebirth, FactionSystem, WorldEconomyManager, ComprehensiveTestSuite)
+- **Autoload count**: 139 (150 → 139 over Phases 1-3)
+
+- **Done**: Autoload consolidation Phase 4 (IntentMemory → MemoryManager)
+  - IntentMemory already deregistered earlier; completed migration: static→instance methods, added INTENT constants + forwarding methods to MemoryManager
+  - ~50 call site references updated across 7 files
+  - Removed `class_name IntentMemory` from IntentMemory.gd
+- **Done**: Autoload consolidation Phase 5 (MythMemory → MemoryManager)
+  - MythMemory already deregistered earlier; completed migration: 3 static→instance methods
+  - 8 call site references updated across 6 files
+  - Removed `class_name MythMemory`
+- **Done**: Autoload consolidation Phase 6 (SacredMemory + FactionRegistry → respective managers)
+  - SacredMemory (already deregistered): 4 static→instance methods (site_count, list_sites_sorted, is_tile_sacred, get_sacred_type_at), 6 call sites updated in ReligionLens + FragmentationManager + Main, removed class_name
+  - FactionRegistry (already deregistered): 2 static→instance methods (sync_from_settlements, append_focus_house_lines), 2 call sites updated (ReligionLens, ObservationAPI), removed class_name
+
+- **Autoload count**: 139 (no change in Phases 4-6 — these were already deregistered from autoload, completed the static method + call site migrations)
 
 - **Next Task**: Runtime truth pass in Godot editor (requires Godot binary). Then:
   - Knowledge preservation loop unification (stones, books, teaching, literacy)
   - Civilization stage deepening (per-settlement tech diffusion, literacy tracking)
-  - Autoload consolidation Phase 3 (manager-driven)
 
 ## May 21, 2026 Session Completion
 

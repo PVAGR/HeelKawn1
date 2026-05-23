@@ -47,13 +47,14 @@
 - [ ] Add tool requirements to crafting recipes (beyond player gathering)
 - [ ] Verify resources are actually consumed in all crafting paths (not just checked)
 
-### 5. Knowledge Preservation Loop
+### 5. Knowledge Preservation Loop ✅ DONE May 22
 - [x] Knowledge inscribed on stones (KnowledgeSystem + KnowledgeStone feature)
 - [x] Book crafting recipes (Paper, Leather, Ink, Pen, Book)
 - [x] Knowledge death tracking (knowledge_lost events)
-- [ ] Unify stones, books, teaching, literacy into one system
-- [ ] Add lost/rediscovered knowledge mechanics
-- [ ] Verify knowledge death when last carrier dies untaught
+- [x] Unify stones, books, teaching, literacy into one system — `get_knowledge_preservation_state()` + `compute_preservation_pressure()` composites all carrier types
+- [x] Add lost/rediscovered knowledge mechanics — `_has_record_carrier_for_knowledge()` + `_is_knowledge_truly_lost()` guard dormancy; record carriers prevent "lost" state
+- [x] Verify knowledge death when last carrier dies untaught — `_check_knowledge_loss()` now checks record carriers before entering dormant; `knowledge_degraded` vs `knowledge_truly_lost` events emitted
+- [x] Wire preservation pressure into Matrix AI ambitions — `HeelKawnianManager.get_settlement_ambition_for_pawn()` calls `compute_preservation_pressure()` during `preserve` drive
 
 ### 6. Civilization Stage Deepening
 - [x] Initial derived era lens: `CivilizationStage.gd` reads live world state

@@ -135,12 +135,12 @@ func _test_profession_spawn_rates() -> void:
 # ==================== TRADE SYSTEM TESTS ====================
 
 func _test_trade_memory_loaded() -> void:
-	var trade_mem: Node = get_node_or_null("/root/TradeMemory")
+	var trade_mem: Node = EconomyManager.get_trade_memory()
 	var result: bool = trade_mem != null
-	_record_test("Trade: TradeMemory autoload loaded", result)
+	_record_test("Trade: TradeMemory accessible", result)
 
 func _test_trade_routes_create() -> void:
-	var trade_mem: Node = get_node_or_null("/root/TradeMemory")
+	var trade_mem: Node = EconomyManager.get_trade_memory()
 	if trade_mem == null:
 		_record_test("Trade: Routes create automatically", false)
 		return
@@ -151,7 +151,7 @@ func _test_trade_routes_create() -> void:
 	_record_test("Trade: Routes create successfully", routes.size() > 0)
 
 func _test_trade_goods_generation() -> void:
-	var trade_mem: Node = get_node_or_null("/root/TradeMemory")
+	var trade_mem: Node = EconomyManager.get_trade_memory()
 	if trade_mem == null:
 		_record_test("Trade: Goods generation works", false)
 		return

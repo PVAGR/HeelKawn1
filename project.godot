@@ -110,8 +110,6 @@ SquadSystem="*res://scripts/ai/SquadSystem.gd"
 BattleReporter="*res://scripts/ai/BattleReporter.gd"
 GuildSystem="*res://scripts/ai/GuildSystem.gd"
 
-TradeMemory="*res://autoloads/TradeMemory.gd"
-TradePlanner="*res://autoloads/TradePlanner.gd"
 ToolManager="*res://autoloads/ToolManager.gd"
 
 ObservationAPI="*res://autoloads/ObservationAPI.gd"

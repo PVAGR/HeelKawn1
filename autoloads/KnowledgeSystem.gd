@@ -331,43 +331,72 @@ func _check_knowledge_loss(knowledge_type: KnowledgeType) -> void:
 	var carrier_count: int = get_carrier_count(knowledge_type)
 	
 	if carrier_count == 0:
-		# Knowledge enters dormant state — no living carriers remain
-		# Record last known location from the most recent carrier
-		var last_location: Vector2i = Vector2i(-1, -1)
-		var last_carrier_id: int = -1
-		var last_tick: int = 0
-		# Find the most recent carrier's info from lost_knowledge records
-		for rec in lost_knowledge:
-			if int(rec.get("knowledge_type", -1)) == int(knowledge_type):
-				var rec_tick: int = int(rec.get("tick", 0))
-				if rec_tick > last_tick:
-					last_tick = rec_tick
-					last_carrier_id = int(rec.get("last_carrier_id", -1))
-					last_location = Vector2i(int(rec.get("last_x", -1)), int(rec.get("last_y", -1)))
-		# Also check current dying carrier for location
-		if last_carrier_id >= 0:
-			# Try to get the dying pawn's last known position
-			for n in _get_pawns():
-				if n == null or not is_instance_valid(n):
-					continue
-				if not n.has_method("get"):
-					continue
-				var data_v: Variant = n.get("data")
-				if data_v == null:
-					continue
-				if int(data_v.id) == last_carrier_id:
-					last_location = data_v.tile_pos
-					break
-		dormant_knowledge[int(knowledge_type)] = {
-			"last_known_location": last_location,
-			"last_practiced_tick": last_tick,
-			"last_carrier_id": last_carrier_id,
-			"marker_placed": false,
-		}
-		_record_knowledge_loss(knowledge_type, "no_carriers")
-		_notify_world_ai_knowledge_loss(knowledge_type)
-		# Emit knowledge_lost signal for CivilizationStage and other consumers
-		knowledge_lost.emit(int(knowledge_type), -1)
+		# Check if record carriers (stones/books) still exist for this knowledge
+		var has_record_safety: bool = _has_record_carrier_for_knowledge(int(knowledge_type))
+		
+		if has_record_safety:
+			# Knowledge is degraded but not lost — records exist as safety net
+			# Still mark as at-risk, but don't enter dormant state
+			_record_knowledge_risk(knowledge_type, 0)
+			_notify_world_ai_knowledge_risk(knowledge_type, 0)
+			# Record knowledge_degraded event (not lost)
+			WorldMemory.record_event({
+				"type": "knowledge_degraded",
+				"k": WorldMemory.Kind.TEACHING_EVENT,
+				"t": GameManager.tick_count,
+				"knowledge_type": int(knowledge_type),
+				"reason": "no_living_carriers_but_records_exist",
+				"last_carrier_id": _last_dying_carrier_id,
+			})
+			# Mark degradation higher when only records remain
+			knowledge_degradation[int(knowledge_type)] = minf(knowledge_degradation.get(int(knowledge_type), 0.0) + 0.3, 1.0)
+		else:
+			# Truly lost — no living carriers AND no record carriers
+			# Enter dormant state
+			var last_location: Vector2i = Vector2i(-1, -1)
+			var last_carrier_id: int = -1
+			var last_tick: int = 0
+			# Find the most recent carrier's info from lost_knowledge records
+			for rec in lost_knowledge:
+				if int(rec.get("knowledge_type", -1)) == int(knowledge_type):
+					var rec_tick: int = int(rec.get("tick", 0))
+					if rec_tick > last_tick:
+						last_tick = rec_tick
+						last_carrier_id = int(rec.get("last_carrier_id", -1))
+						last_location = Vector2i(int(rec.get("last_x", -1)), int(rec.get("last_y", -1)))
+			# Also check current dying carrier for location
+			if last_carrier_id >= 0:
+				# Try to get the dying pawn's last known position
+				for n in _get_pawns():
+					if n == null or not is_instance_valid(n):
+						continue
+					if not n.has_method("get"):
+						continue
+					var data_v: Variant = n.get("data")
+					if data_v == null:
+						continue
+					if int(data_v.id) == last_carrier_id:
+						last_location = data_v.tile_pos
+						break
+			dormant_knowledge[int(knowledge_type)] = {
+				"last_known_location": last_location,
+				"last_practiced_tick": last_tick,
+				"last_carrier_id": last_carrier_id,
+				"marker_placed": false,
+				"truly_lost": true,
+			}
+			_record_knowledge_loss(knowledge_type, "no_carriers_and_no_records")
+			_notify_world_ai_knowledge_loss(knowledge_type)
+			# Record TRULY_LOST event for CivilizationStage and other consumers
+			WorldMemory.record_event({
+				"type": "knowledge_truly_lost",
+				"k": WorldMemory.Kind.TEACHING_EVENT,
+				"t": GameManager.tick_count,
+				"knowledge_type": int(knowledge_type),
+				"last_carrier_id": _last_dying_carrier_id,
+				"reason": "last_living_carrier_died_without_records",
+			})
+			knowledge_lost.emit(int(knowledge_type), -1)
 	elif carrier_count <= 2:
 		# Knowledge is at risk — few carriers remain
 		_record_knowledge_risk(knowledge_type, carrier_count)
@@ -1353,6 +1382,32 @@ func get_knowledge_security_for_settlement(settlement_id: int) -> Dictionary:
 ## Check if a knowledge type is dormant (no living carriers).
 func is_knowledge_dormant(knowledge_type: KnowledgeType) -> bool:
 	return dormant_knowledge.has(int(knowledge_type)) and get_carrier_count(knowledge_type) == 0
+
+
+## Check if any record carriers (stones or books) exist for a knowledge type.
+## This means the knowledge isn't truly lost even if no living carriers remain.
+func _has_record_carrier_for_knowledge(knowledge_type: int) -> bool:
+	# Check stone/ledger/grave record carriers
+	for tile_key in record_carriers:
+		var carrier: Dictionary = record_carriers[tile_key]
+		var ctypes: Array = carrier.get("knowledge_types", [])
+		if knowledge_type in ctypes:
+			return true
+	# Check book contents
+	for bk in book_contents:
+		var btypes: Array = book_contents[bk]
+		if knowledge_type in btypes:
+			return true
+	return false
+
+
+## Check if knowledge is truly lost (no living carriers AND no record carriers).
+func _is_knowledge_truly_lost(knowledge_type: int) -> bool:
+	if get_carrier_count(knowledge_type as KnowledgeType) > 0:
+		return false
+	if _has_record_carrier_for_knowledge(knowledge_type):
+		return false
+	return true
 
 
 ## Attempt rediscovery: a pawn at a dormant knowledge's last known location

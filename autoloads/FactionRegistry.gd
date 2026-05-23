@@ -1,5 +1,4 @@
 extends Node
-class_name FactionRegistry
 
 ## Houses / proto-factions keyed by settlement **zone_id** (string of center_region int).
 ## v1: Deterministic names from (zone_id + settlement display name); no RNG.
@@ -49,10 +48,7 @@ func from_save_dict(d: Variant) -> void:
 				_relations[str(k)] = (v as Dictionary).duplicate(true)
 
 
-static func sync_from_settlements() -> void:
-	var inst: FactionRegistry = Engine.get_singleton("FactionRegistry") as FactionRegistry
-	if inst == null:
-		return
+func sync_from_settlements() -> void:
 	for st_any in SettlementMemory.get_formal_settlements():
 		if not (st_any is Dictionary):
 			continue
@@ -61,10 +57,10 @@ static func sync_from_settlements() -> void:
 		if ckr < 0:
 			continue
 		var zid: String = str(ckr)
-		if inst._house_by_zone.has(zid):
+		if _house_by_zone.has(zid):
 			continue
 		var nm: String = str(st.get("name", "Unnamed"))
-		inst._house_by_zone[zid] = inst._derive_house_record(zid, nm)
+		_house_by_zone[zid] = _derive_house_record(zid, nm)
 
 
 func _derive_house_record(zone_id: String, settlement_name: String) -> Dictionary:
@@ -437,14 +433,11 @@ func _score_knowledge_carriers(zone_id: String) -> float:
 
 
 ## Observer / focus readout: one line for the deterministic house of a settlement zone.
-static func append_focus_house_lines(out: PackedStringArray, center_region: int) -> void:
-	var inst: FactionRegistry = Engine.get_singleton("FactionRegistry") as FactionRegistry
-	if inst == null:
-		return
+func append_focus_house_lines(out: PackedStringArray, center_region: int) -> void:
 	if center_region < 0:
 		return
-	inst.sync_from_settlements()
-	var house: Dictionary = inst.get_house_for_zone(str(center_region))
+	sync_from_settlements()
+	var house: Dictionary = get_house_for_zone(str(center_region))
 	if house.is_empty():
 		out.append("House: (none — no settlement synced for this zone yet)")
 		return

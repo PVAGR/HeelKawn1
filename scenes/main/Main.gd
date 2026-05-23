@@ -2420,15 +2420,18 @@ func _bootstrap_colony() -> void:
 	# Initialize ecology system for the world
 	if EcologySystem != null and _world != null:
 		EcologySystem.initialize_for_world(_world)
-	# DORMANT WORLD: No pre-seeded stockpile, supplies, or fire pits.
-	# Pawns explore, socialize, cluster together, and form a settlement
-	# organically. The stockpile comes AS A CONSEQUENCE of settlement,
-	# not before it. Pawns gather materials directly from the environment
-	# (chop trees for wood, mine ore for stone) until a stockpile exists.
+	# SEEDED WORLD: Pre-placed stockpile, supplies, fire pits, and beds
+	# bootstrap settlement formation. Without these, the formalization gate
+	# (3+ guild pawns + 300 ticks stability + hearth OR infrastructure)
+	# fails because no construction jobs ever complete.
 	# DIRECT_FORAGING handles food — pawns eat berries on the spot.
 	# DEAD BRAIN REVIVED: WorldEventSeedManager initialized on boot
 	if WorldEventSeedManager != null:
 		WorldEventSeedManager.ensure_default_seeds()
+	# Place stockpile + supplies so settlement formation is unblocked
+	_place_stockpile(main_component)
+	_seed_starting_supplies()
+	_seed_initial_fire_pits(main_component)
 	# Wizard gives them some resilience at boot
 	_pawn_spawner.spawn_starters(_world, main_component)
 	# Apply starting state effects after pawns are spawned
@@ -6379,6 +6382,8 @@ func _reroll_world() -> void:
 	# stockpile reference the first time it ticks.
 	_place_stockpile(main_component)
 	_ensure_validation_session_seed_stockpile_overlaps_settlement()
+	_seed_starting_supplies()
+	_seed_initial_fire_pits(main_component)
 	_pawn_spawner.respawn(_world, main_component)
 	_ensure_player_pawn_assigned()
 	Main._world_stabilization_until_tick = GameManager.tick_count + WORLD_STABILIZATION_TICKS

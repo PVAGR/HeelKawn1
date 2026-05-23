@@ -2,7 +2,28 @@
 
 ## What Changed
 
-*(No code changes made this session — verification-only pass)*
+### FIX: Settlement Formalization Not Triggering
+
+**Root Cause Identified**: `_seed_starting_supplies()` and `_seed_initial_fire_pits()` existed in `Main.gd` but were **never called** during bootstrap or world reroll. This meant:
+1. No starting materials were added to the stockpile
+2. No fire pits were pre-placed
+3. Pawns could not satisfy the formalization gate (requires hearth OR 2+beds + hearth + storage)
+4. 18 proto_sites existed but 0 formal settlements formed
+
+**Fix Applied**: Added calls to both `_bootstrap_colony()` and `_reroll_world()`:
+```gdscript
+# In _bootstrap_colony() (line ~2432):
+_place_stockpile(main_component)
+_seed_starting_supplies()
+_seed_initial_fire_pits(main_component)
+
+# In _reroll_world() (line ~6382):
+_seed_starting_supplies()
+_seed_initial_fire_pits(main_component)
+```
+
+**Files Modified**:
+- `scenes/main/Main.gd`: +5 lines (3 function calls + 2 comment lines)
 
 ## What Was Verified
 

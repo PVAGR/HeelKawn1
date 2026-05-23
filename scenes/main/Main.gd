@@ -4644,6 +4644,12 @@ func _handle_cancel_action() -> void:
 			_settlement_mind_panel.close_panel()
 		print("[Main] Country View Mode: OFF")
 		return
+	if _avatar_panel != null and is_instance_valid(_avatar_panel) and _avatar_panel.visible:
+		_avatar_panel.close_panel()
+		return
+	if _consciousness_panel != null and is_instance_valid(_consciousness_panel) and _consciousness_panel.visible:
+		_consciousness_panel.close_panel()
+		return
 	if _settlement_mind_panel != null and is_instance_valid(_settlement_mind_panel) and _settlement_mind_panel.visible:
 		_settlement_mind_panel.close_panel()
 		return
@@ -4830,6 +4836,8 @@ func _on_seed_gallery_closed() -> void:
 
 
 func _toggle_pawn_ai_inspector() -> void:
+	if not OS.is_debug_build():
+		return
 	if _pawn_ai_inspector != null:
 		_pawn_ai_inspector._toggle_visibility()
 
@@ -5502,7 +5510,16 @@ func _set_selected_pawn(p: HeelKawnian) -> void:
 	if _pawn_ai_inspector != null:
 		_pawn_ai_inspector.set_selected_pawn(_selected_pawn)
 	# Observer-first: selection is inspection only. Incarnation/control remains explicit via picker.
+	# Close other open panels when selecting a pawn to prevent overlapping overlays.
 	if _selected_pawn != null:
+		if _settlement_mind_panel != null and is_instance_valid(_settlement_mind_panel) and _settlement_mind_panel.visible:
+			_settlement_mind_panel.close_panel()
+		if _avatar_panel != null and is_instance_valid(_avatar_panel) and _avatar_panel.visible:
+			_avatar_panel.close_panel()
+		if _consciousness_panel != null and is_instance_valid(_consciousness_panel) and _consciousness_panel.visible:
+			_consciousness_panel.close_panel()
+		if _dialogue_panel != null and is_instance_valid(_dialogue_panel) and _dialogue_panel.visible:
+			_dialogue_panel.close_panel()
 		_player_pawn = _selected_pawn
 		_camera_follow_selected = true
 		if _command_mode != null:

@@ -8375,7 +8375,7 @@ func _ambient_temperature_celsius_at_tile(tile: Vector2i) -> float:
 			# Wind chill in cold precipitation
 			if weather == "rain" or weather == "snow":
 				if WorldEnvironmentManager != null and WorldEnvironmentManager.has_method("get_wind_strength"):
-				base -= WorldEnvironmentManager.get_wind_strength() * 4.0
+					base -= WorldEnvironmentManager.get_wind_strength() * 4.0
 	return base
 
 

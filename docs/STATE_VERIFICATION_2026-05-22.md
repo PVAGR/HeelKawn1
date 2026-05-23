@@ -31,3 +31,36 @@
 - **tick_batch remaining overhead**: The 1x tick_batch was 47.5ms total with CONSTRUCTION_SEED taking ~14ms. After these fixes, tick_batch will drop to ~33ms at 1x, still above the 12ms budget. Additional profiling is needed to identify remaining hot spots (SurvivalSystem pawn iteration, MeaningAmbianceController tick, etc.).
 - **100x simulation speed**: tick_batch was 93.1ms for 12 ticks. After optimizations, construction seed latency is eliminated, but per-tick overhead remains. The simulation at 100x will be faster but may still not reach full 100x throughput.
 - **Cache stale data**: `_feature_scan_cache` has a 600-tick TTL. If features change rapidly, jobs might briefly be posted based on stale data. This is a performance/accuracy tradeoff — stale features are read as undercounts (slightly more construction seeded) rather than overcounts.
+
+---
+
+## May 22, 2026 — QA Review (OpenHands)
+
+### PR #20 → #21 Cleanup
+- **PR #20**: Had broken `.gitignore` (removed `.godot/` exclusion = would track project cache)
+- **PR #21**: Clean version with only spatial grid performance fix
+- **Merged**: Direct push to main, commit `8d2b62af`
+
+### Source Code Verification
+
+| Check | Status |
+|-------|--------|
+| Determinism (global RNG) | ✅ CLEAN - only in WildlifePopulation.gd (acceptable) |
+| Main scene configured | ✅ `res://scenes/main/Main.tscn` |
+| Legacy map dimensions | ✅ None found |
+| Parse errors | ✅ None detected |
+| Critical files exist | ✅ All verified |
+
+### Performance Infrastructure
+- Adaptive tick budgets: 8ms (1x) → 5ms (50x) → 3ms (100x)
+- Planner budget gate: 12ms skip threshold
+- Social system budget: 70% of max pairs
+- World meaning budget: 55% reduction under load
+
+### Runtime Verification (Pending Godot)
+- `tools/sim_boot_smoke.gd` - ready
+- `tools/sim_settlement_public_state_smoke.gd` - ready
+- `tools/sim_worldmeaning_region_tags_smoke.gd` - ready
+- `tools/sim_performance_smoothness_smoke.gd` - ready
+
+**To run**: `godot --headless --path . -s res://tools/sim_boot_smoke.gd`

@@ -11,6 +11,15 @@ const INTENT_RECOVER: int = 3
 func get_intent_hold() -> int:
 	return INTENT_HOLD
 
+func get_intent_grow() -> int:
+	return INTENT_GROW
+
+func get_intent_abandon() -> int:
+	return INTENT_ABANDON
+
+func get_intent_recover() -> int:
+	return INTENT_RECOVER
+
 # Core memory systems (kept separate as autoloads - essential)
 @onready var WorldMemory = get_node_or_null("/root/WorldMemory")
 @onready var CulturalMemory = get_node_or_null("/root/CulturalMemory")

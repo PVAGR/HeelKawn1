@@ -8,6 +8,9 @@ const INTENT_HOLD: int = 1
 const INTENT_ABANDON: int = 2
 const INTENT_RECOVER: int = 3
 
+func get_intent_hold() -> int:
+	return INTENT_HOLD
+
 # Core memory systems (kept separate as autoloads - essential)
 @onready var WorldMemory = get_node_or_null("/root/WorldMemory")
 @onready var CulturalMemory = get_node_or_null("/root/CulturalMemory")

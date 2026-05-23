@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779520885
+::res://::1779521462
 .aider.chat.history.md::TextFile::-1::1779517150::0::1::::<><><>0<>0<><>::
 AGENTS.md::TextFile::-1::1779432109::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779506968::0::1::::<><><>0<>0<><>::
@@ -182,7 +182,7 @@ GeneticEvolution.gd::GDScript::8750185901044209157::1778320772::0::1::::<>Node<>
 GossipManager.gd::GDScript::1844621576654674169::1778618469::0::1::::<>Node<><>0<>0<><>::
 GrudgeManager.gd::GDScript::1752455462805282965::1778794109::0::1::::<>Node<><>0<>0<><>::
 HeelKawnianIdentity.gd::GDScript::5179210453117735318::1779256406::0::1::::HeelKawnianIdentity<>Resource<><>0<>0<><>::
-HeelKawnianManager.gd::GDScript::2107819945081640065::1779520841::0::1::::<>Node<><>0<>0<><>::
+HeelKawnianManager.gd::GDScript::2107819945081640065::1779521433::0::1::::<>Node<><>0<>0<><>::
 HeelKawnianMind.gd::GDScript::191971354521478356::1779506968::0::1::::<>Node<><>0<>0<><>::
 HeelKawnianVoice.gd::GDScript::7877261919709813927::1778794333::0::1::::<>Node<><>0<>0<><>::
 HeelKawnUIManager.gd::GDScript::8676655801546067504::1778193399::0::1::::<>CanvasLayer<><>0<>0<><>::
@@ -191,7 +191,7 @@ IncarnationManager.gd::GDScript::2946522282863610422::1778319049::0::1::::<>Node
 IntentMemory.gd::GDScript::7523474435381960454::1779514530::0::1::::<>Node<><>0<>0<><>::
 JobManager.gd::GDScript::338930026156234980::1779506968::0::1::::<>Node<><>0<>0<><>::
 KinshipSystem.gd::GDScript::2683721610511728833::1779158702::0::1::::<>Node<><>0<>0<><>::
-KnowledgeSystem.gd::GDScript::2224485433782550535::1779514770::0::1::::<>Node<><>0<>0<><>::
+KnowledgeSystem.gd::GDScript::2224485433782550535::1779521434::0::1::::<>Node<><>0<>0<><>::
 LanguageSystem.gd::GDScript::604465475289050266::1778654950::0::1::::<>Node<><>0<>0<><>::
 LegacySystem.gd::GDScript::5052780570551209685::1778320772::0::1::::<>Node<><>0<>0<><>::
 MeaningAmbianceController.gd::GDScript::7214985866489669453::1778320772::0::1::::<>Node<><>0<>0<><>::
@@ -260,7 +260,7 @@ TickRateDecoupler.gd::GDScript::2900207393109439075::1778035714::0::1::::<>Node<
 TimeLapseRecorder.gd::GDScript::6434325121625872981::1778618622::0::1::::<>Node<><>0<>0<><>::
 ToolManager.gd::GDScript::292220667211019745::1779506968::0::1::::<>Node<><>0<>0<><>::
 TradeMemory.gd::GDScript::5248539327593372606::1779512342::0::1::::<>Node<><>0<>0<><>::
-TradePlanner.gd::GDScript::8396858183117698797::1779514493::0::1::::<>Node<><>0<>0<><>::
+TradePlanner.gd::GDScript::8396858183117698797::1779521435::0::1::::TradePlanner<>Node<><>0<>0<><>::
 UILayoutManager.gd::GDScript::7391518460782770688::1778320772::0::1::::<>Node<><>0<>0<><>::
 UIManager.gd::GDScript::1959618447068391785::1778796575::0::1::::<>Node<><>0<>0<><>::
 UndergroundSystem.gd::GDScript::2006997177991284016::1778654948::0::1::::<>Node<><>0<>0<><>::

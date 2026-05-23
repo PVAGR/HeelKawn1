@@ -82,7 +82,10 @@ func check_and_schism(world: World, main: Node2D) -> void:
 			continue
 		if _last_schism_tick.has(ckr) and (now - int(_last_schism_tick[ckr])) < COOLDOWN_TICKS:
 			continue
-		var target: Vector2i = FragmentationManager.find_outward_passable(world, ckr, pack0)
+		var _fm: Node = get_node_or_null("/root/FragmentationManager")
+		var target: Vector2i = Vector2i(-1, -1)
+		if _fm != null and _fm.has_method("find_outward_passable"):
+			target = _fm.find_outward_passable(world, ckr, pack0)
 		if target.x < 0:
 			continue
 		var to_move: int = maxi(SCHISM_MOVE_MIN, int(pop / SCHISM_MOVE_DIV))

@@ -92,3 +92,35 @@
 - `tools/sim_performance_smoothness_smoke.gd` - ready
 
 **To run**: `godot --headless --path . -s res://tools/sim_boot_smoke.gd`
+
+---
+
+## Late Add: Autoload Consolidation Phase 2 (2026-05-22)
+
+### What Changed
+- **6 autoloads deregistered**: SquadCoordinator, FragmentationManager, RelationalGraph, SacredGeography, ReligionLens, MythAge
+- **Autoload count**: 150 → 141 (9 total across Phases 1 + 2)
+
+### Conversion Strategies
+
+| System | Strategy | Call Sites |
+|--------|----------|------------|
+| ReligionLens | Static class (`class_name ReligionLens`) | 24 refs — all preserved unchanged |
+| MythAge | Static class (`class_name MythAge`), `tick()` called from Main | 9 refs — all preserved unchanged |
+| SquadCoordinator | Lazy-loaded by WorldAI, wrapper methods | 2 refs — updated to WorldAI |
+| FragmentationManager | Bootstrapped at root in `Main._ready()` | 2 refs — updated to path/member lookup |
+| RelationalGraph | SocialManager adds to root | 49 refs — path lookups (KinshipSystem, AuthoritySystem) work unchanged; TradePlanner updated |
+| SacredGeography | Bootstrapped at root in `Main._ready()` | 6 refs — 3 path lookups work unchanged; WorldOverlay updated to path lookup |
+
+### What Was Verified (Static Analysis)
+- No remaining `Engine.has_singleton` or `Engine.get_singleton` calls for deregistered autoloads
+- All 24 ReligionLens + 9 MythAge call sites preserved via static class pattern
+- `/root/SacredGeography` and `/root/RelationalGraph` path lookups still work (nodes added to root)
+- `Main._on_game_tick` now calls `MythAge.tick()` every tick (handles 50-ticks interval internally)
+- `Main._ready()` bootstraps FragmentationManager and SacredGeography
+- `project.godot` autoload count: 141 entries
+
+### What Remains Unverified / Risky
+- Runtime: Godot binary unavailable — cannot test boot smoke or runtime references
+- `SocialManager._load_subsystem` function has a fallback that checks `/root/+sub`; if RelationalGraph (now at root) is queried by this path by another subsystem, it will be found — this is correct behavior
+- MythAge static tick relies on `CivilizationStage.get_world_score()` and `SettlementMemory.get_formal_settlements()` being available at call time — both are still autoloads, so this is safe

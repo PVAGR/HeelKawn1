@@ -1457,12 +1457,10 @@ func _init_footstep_particles() -> void:
 func _emit_footstep_dust() -> void:
 	if _footstep_particles == null:
 		return
-	var _ws: Node = get_node_or_null("/root/WindSystem")
-	if _ws != null and _ws.has_method("get_wind_direction") and _footstep_particles.process_material != null:
-		var wind_dir_v: Variant = _ws.get("_current_direction")
-		var wind_str_v: Variant = _ws.get("_current_strength")
-		var wind_dir: Vector2 = wind_dir_v if wind_dir_v is Vector2 else Vector2.RIGHT
-		var wind_str: float = float(wind_str_v) if wind_str_v != null else 0.5
+	var _ws_has: bool = WorldEnvironmentManager != null and WorldEnvironmentManager.has_method("get_wind_direction")
+	if _ws_has and _footstep_particles.process_material != null:
+		var wind_dir: Vector2 = WorldEnvironmentManager.get_wind_direction()
+		var wind_str: float = WorldEnvironmentManager.get_wind_strength()
 		_footstep_particles.process_material.initial_velocity_min = 5.0 + wind_str * 10.0
 		_footstep_particles.process_material.direction = Vector3(wind_dir.x, 0, wind_dir.y)
 	_footstep_particles.restart()
@@ -8376,9 +8374,8 @@ func _ambient_temperature_celsius_at_tile(tile: Vector2i) -> float:
 					base += 3.0
 			# Wind chill in cold precipitation
 			if weather == "rain" or weather == "snow":
-				var wind_system: Node = get_node_or_null("/root/WindSystem")
-				if wind_system != null and wind_system.has_method("get_wind_strength"):
-					base -= wind_system.get_wind_strength() * 4.0
+				if WorldEnvironmentManager != null and WorldEnvironmentManager.has_method("get_wind_strength"):
+				base -= WorldEnvironmentManager.get_wind_strength() * 4.0
 	return base
 
 

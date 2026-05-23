@@ -236,8 +236,9 @@ func _draw() -> void:
 					drawn += 1
 
 	# --- Sacred glow: tiles with memorial significance ---
-	if SacredGeography != null and SacredGeography.has_method("get_all_sacred_tiles"):
-		var sacred_list: Array = SacredGeography.get_all_sacred_tiles()
+	var _sg: Node = get_node_or_null("/root/SacredGeography")
+	if _sg != null and _sg.has_method("get_all_sacred_tiles"):
+		var sacred_list: Array = _sg.get_all_sacred_tiles()
 		for sacred_data in sacred_list:
 			var tile: Variant = sacred_data.get("tile", null)
 			if tile == null:

@@ -307,6 +307,7 @@ func get_visible_settlement_count() -> int:
 	return n
 var _player_input: PlayerInputBuffer = null
 var _player_action_state: String = "idle"
+var _fragmentation_manager: Node = null
 var _chronicle_feed = null  # ChronicleFeed instance
 ## Observer routing from [PlayerIntentQueue] (one dispatch step per sim tick).
 var _player_intent_pin_zone_id: String = ""
@@ -678,6 +679,17 @@ func _ready() -> void:
 		var tick_manager: Node = load("res://autoloads/TickManager.gd").new()
 		tick_manager.name = "TickManager"
 		add_child(tick_manager)
+
+	# Bootstrap de-registered Phase 2 autoloads: FragmentationManager + SacredGeography
+	if _fragmentation_manager == null:
+		_fragmentation_manager = load("res://autoloads/FragmentationManager.gd").new()
+		_fragmentation_manager.name = "FragmentationManager"
+		get_tree().root.add_child(_fragmentation_manager)
+	if get_node_or_null("/root/SacredGeography") == null:
+		var sg: Node = load("res://autoloads/SacredGeography.gd").new()
+		sg.name = "SacredGeography"
+		get_tree().root.add_child(sg)
+	MythAge.init()
 
 	# Connect to PlaytestRecorder for automated playtest logging
 	# (HeelKawnian selection recording is now handled inside _set_selected_pawn)
@@ -2425,9 +2437,8 @@ func _bootstrap_colony() -> void:
 	# (3+ guild pawns + 300 ticks stability + hearth OR infrastructure)
 	# fails because no construction jobs ever complete.
 	# DIRECT_FORAGING handles food — pawns eat berries on the spot.
-	# DEAD BRAIN REVIVED: WorldEventSeedManager initialized on boot
-	if WorldEventSeedManager != null:
-		WorldEventSeedManager.ensure_default_seeds()
+	# DiscoveryGate as static utility (no longer an autoload)
+	DiscoveryGate.init()
 	# Place stockpile + supplies so settlement formation is unblocked
 	_place_stockpile(main_component)
 	_seed_starting_supplies()
@@ -2886,13 +2897,15 @@ func _on_game_tick(tick: int) -> void:
 		t0 = Time.get_ticks_usec()
 		_update_ambient_target()
 		section_us["ambient_target"] = Time.get_ticks_usec() - t0
-	# DEAD BRAIN REVIVED: WorldEventSeedManager advances seeds periodically
-	if WorldEventSeedManager != null and tick % 100 == 0:
-		var seed_events: Array = WorldEventSeedManager.advance_all(tick)
-		if not seed_events.is_empty() and WorldEvents != null:
-			for evt in seed_events:
-				if evt is Dictionary:
-					WorldEvents.record_pawn_action(str(evt.get("type", "seed_event")), -1)
+	# WorldEventSeedManager lazy-loaded via EventManager (no longer autoloaded)
+	if tick % 100 == 0 and EventManager != null:
+		var sm: Node = EventManager.get_world_event_seed_manager()
+		if sm != null and sm.has_method("advance_all"):
+			var seed_events: Array = sm.advance_all(tick)
+			if not seed_events.is_empty() and WorldEvents != null:
+				for evt in seed_events:
+					if evt is Dictionary:
+						WorldEvents.record_pawn_action(str(evt.get("type", "seed_event")), -1)
 	# Post dynamic hunt jobs less aggressively than harvest loops.
 	var hunt_post_interval: int = _high_speed_interval(40, 150, 500)  # Was (30, 120, 400) - now 500 ticks at 100x
 	var hunt_phase_offset: int = maxi(1, hunt_post_interval / 2)
@@ -3196,10 +3209,10 @@ func _on_game_tick(tick: int) -> void:
 	if _is_main_lane_tick(tick, _social_rapport_interval_for_speed(), 149) and DiscoveryGate.is_unlocked("first_settlement"):
 		t0 = Time.get_ticks_usec()
 		_accumulate_social_rapport()
-		if SquadCoordinator != null:
-			SquadCoordinator.recompute(_pawn_spawner)
+		WorldAI.recompute_squads(_pawn_spawner)
 		section_us["social_rapport"] = Time.get_ticks_usec() - t0
 	_emit_pawn_divergence_summary_if_needed(tick)
+	MythAge.tick()
 	# AI observer state export: write lightweight snapshot for external tools.
 	var ai_export_interval: int = _high_speed_interval(30, 60, 120)
 	if _is_main_lane_tick(tick, ai_export_interval, 157):
@@ -6327,7 +6340,8 @@ func _reroll_world() -> void:
 	JobManager.clear_all()
 	SettlementRegistry.clear()
 	SettlementMemory.clear_persisted_governance_forms()
-	FragmentationManager.clear()
+	if _fragmentation_manager != null:
+		_fragmentation_manager.clear()
 	# SchismManager removed during autoload consolidation
 	WorldMemory.clear()
 	MemoryManager.get_myth_memory().clear()

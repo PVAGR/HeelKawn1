@@ -172,6 +172,27 @@ var _cached_pawn_spawner: WeakRef = null
 ## One full [method get_pawn_neural_state] resolve per pawn per sim tick (forward + matrix + nudge).
 var _pawn_neural_cache_tick: int = -1
 var _pawn_neural_cache: Dictionary = {}
+var _squad_coordinator: Node = null
+
+func _get_squad_coordinator() -> Node:
+	if _squad_coordinator == null:
+		var path: String = "res://autoloads/SquadCoordinator.gd"
+		if FileAccess.file_exists(path):
+			_squad_coordinator = load(path).new()
+			_squad_coordinator.name = "SquadCoordinator"
+			add_child(_squad_coordinator)
+	return _squad_coordinator
+
+func recompute_squads(spawner: Node) -> void:
+	var sc: Node = _get_squad_coordinator()
+	if sc != null and sc.has_method("recompute"):
+		sc.recompute(spawner)
+
+func get_active_squad_count() -> int:
+	var sc: Node = _get_squad_coordinator()
+	if sc != null:
+		return sc.active_squad_count
+	return 0
 
 func _ready():
 	add_to_group("tickable")
@@ -756,10 +777,7 @@ func _update_world_state_neurons() -> void:
 	world_neurons["environmental_health"].value = biodiversity_index * environmental_stability
 	
 	# Update social complexity
-	var squad_boost: float = 0.0
-	var sq = get_node_or_null("/root/SquadCoordinator")
-	if sq != null:
-		squad_boost = clampf(float(sq.active_squad_count) * 0.03, 0.0, 0.15)
+	var squad_boost: float = clampf(float(get_active_squad_count()) * 0.03, 0.0, 0.15)
 	world_neurons["social_complexity"].value = float(active_settlements.size()) / 20.0 + squad_boost
 	
 	# Update resource abundance

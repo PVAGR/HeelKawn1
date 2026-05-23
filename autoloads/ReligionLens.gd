@@ -1,10 +1,10 @@
-extends Node
+class_name ReligionLens
 
 ## Read-only **religion / sacred / myth** overlay for settlements. Does not write
-## Connected to HeelKawn Universe Neural Network Matrix
-## [SacredMemory], [MythMemory], or [WorldMemory] — compose view data for HUD / F10.
+## to [SacredMemory], [MythMemory], or [WorldMemory] — compose view data for HUD / F10.
+## Converted from autoload to static utility class (Phase 2 consolidation).
 
-func _center_tile_for_center_region(ckr: int) -> Vector2i:
+static func _center_tile_for_center_region(ckr: int) -> Vector2i:
 	if ckr < 0:
 		return Vector2i.ZERO
 	var rx: int = int(ckr) & 0xFFFF
@@ -12,7 +12,7 @@ func _center_tile_for_center_region(ckr: int) -> Vector2i:
 	return Vector2i(rx * 16 + 8, ry * 16 + 8)
 
 
-func describe_settlement_zone(zone_id: String) -> Dictionary:
+static func describe_settlement_zone(zone_id: String) -> Dictionary:
 	var zd: Dictionary = SettlementRegistry.get_zone_data(zone_id)
 	var ckr: int = int(zd.get("center_region", -1))
 	if not zone_id.is_empty() and zone_id.is_valid_int():
@@ -49,7 +49,7 @@ func describe_settlement_zone(zone_id: String) -> Dictionary:
 	}
 
 
-func digest_settlements(max_entries: int = 10) -> String:
+static func digest_settlements(max_entries: int = 10) -> String:
 	FactionRegistry.sync_from_settlements()
 	var lines: PackedStringArray = PackedStringArray()
 	var formal_settlements: Array = SettlementMemory.get_formal_settlements()
@@ -92,46 +92,18 @@ func digest_settlements(max_entries: int = 10) -> String:
 	return "\n".join(lines)
 
 
-# === Neural Network Matrix Connections ===
-
-signal religious_event_occurred(event_data: Dictionary)
-signal sacred_site_evolved(site_id: int, site_data: Dictionary)
-signal spiritual_pattern_discovered(pattern: Dictionary)
-signal religious_harmony_calculated(harmony_index: float)
-
-# Advanced Neural Network Religious Systems
-var religious_neural_network: Dictionary = {}
-var sacred_site_matrix: Dictionary = {}
-var spiritual_pattern_recognizer: Dictionary = {}
-var religious_dynamics_predictor: Dictionary = {}
-var cross_religion_synthesizer: Dictionary = {}
-
-# Religious Evolution Parameters
-var spiritual_learning_rate: float = 0.025
-var sacred_site_mutation_rate: float = 0.002
-var religious_adaptation_rate: float = 0.02
-var harmony_threshold: float = 0.6
-var spiritual_convergence_rate: float = 0.015
-
-func get_harmony_index() -> float:
-	# Dynamic neural network matrix calculation of religious harmony
+static func get_harmony_index() -> float:
 	var base_harmony: float = 0.6
 	var sacred_count: int = SacredMemory.site_count()
 	var settlement_count: int = SettlementMemory.get_formal_settlement_count()
-	
 	if settlement_count == 0:
 		return base_harmony
-	
-	# Calculate harmony based on sacred-to-settlement ratio
 	var sacred_settlement_ratio: float = float(sacred_count) / float(settlement_count)
 	var harmony_factor: float = 0.0
-	
-	# Balanced ratio (0.3-0.7) creates harmony
 	if sacred_settlement_ratio >= 0.3 and sacred_settlement_ratio <= 0.7:
 		harmony_factor = 1.0
 	elif sacred_settlement_ratio < 0.3:
-		harmony_factor = sacred_settlement_ratio / 0.3  # Too few sacred sites
+		harmony_factor = sacred_settlement_ratio / 0.3
 	else:
-		harmony_factor = 2.0 - (sacred_settlement_ratio - 0.7) / 0.3  # Too many sacred sites
-	
+		harmony_factor = 2.0 - (sacred_settlement_ratio - 0.7) / 0.3
 	return base_harmony * (1.0 + harmony_factor * 0.5)

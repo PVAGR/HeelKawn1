@@ -89,8 +89,8 @@ func _plan_impl(world: World, _main: Node, from_memory_flush: bool) -> void:
 				used[a_center] = true
 				used[b_center] = true
 				# --- RelationalGraph integration: record trade relationship ---
-				if Engine.has_singleton("RelationalGraph"):
-					var rg = Engine.get_singleton("RelationalGraph")
+				var rg: Node = get_node_or_null("/root/RelationalGraph")
+				if rg != null:
 					var edge_data = {
 						"item": R,
 						"batch": TRADE_BATCH,

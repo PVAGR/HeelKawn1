@@ -1,12 +1,12 @@
-extends Node
+class_name MythAge
 
 ## MythAge — 7 mythological ages layered on top of technical civilization stages.
 ## HeelKawnians discover and name these ages through lived experience.
 ## Ages are irreversible — once discovered, the world remembers.
 ## Technical stages (Primitive → Post-Scarcity) drive AI logic.
 ## Myth ages drive narrative identity and player-facing experience.
-
-signal age_discovered(age_index: int, age_name: String, age_description: String)
+## Converted from autoload to static utility class (Phase 2 consolidation).
+## Main.gd calls [method tick] periodically instead of _process.
 
 enum Age {
 	AWAKENING,     # Score 0-10: First fire, first shelter
@@ -60,30 +60,28 @@ const AGE_MIN_SETTLEMENTS: Dictionary = {
 }
 
 ## Current highest discovered age
-var current_age: int = -1  # -1 = no age discovered yet
+static var current_age: int = -1
 ## All discovered ages (irreversible)
-var discovered_ages: Dictionary = {}
+static var discovered_ages: Dictionary = {}
 ## Custom names set by dominant settlement culture
-var custom_age_names: Dictionary = {}
+static var custom_age_names: Dictionary = {}
 ## When each age was discovered (tick)
-var age_discovery_ticks: Dictionary = {}
+static var age_discovery_ticks: Dictionary = {}
 
 ## Check interval in ticks (not every tick)
 const CHECK_INTERVAL: int = 50
-var _check_accum: int = 0
+static var _check_accum: int = 0
 
 
-func _ready() -> void:
-	# Initialize with no ages discovered
+static func init() -> void:
 	current_age = -1
 	discovered_ages = {}
 	custom_age_names = {}
 	age_discovery_ticks = {}
+	_check_accum = 0
 
 
-func _process(_delta: float) -> void:
-	if GameManager == null:
-		return
+static func tick() -> void:
 	_check_accum += 1
 	if _check_accum < CHECK_INTERVAL:
 		return
@@ -91,25 +89,19 @@ func _process(_delta: float) -> void:
 	_check_age_progression()
 
 
-func _check_age_progression() -> void:
-	if CivilizationStage == null:
-		return
+static func _check_age_progression() -> void:
 	var score: int = CivilizationStage.get_world_score()
 	var active_settlements: int = _count_active_settlements()
-
-	# Check each age in order
 	for age_idx in range(7):
 		if discovered_ages.has(age_idx):
-			continue  # Already discovered
+			continue
 		var threshold: int = int(AGE_THRESHOLDS.get(age_idx, 999))
 		var min_settlements: int = int(AGE_MIN_SETTLEMENTS.get(age_idx, 0))
 		if score >= threshold and active_settlements >= min_settlements:
 			_discover_age(age_idx)
 
 
-func _count_active_settlements() -> int:
-	if SettlementMemory == null:
-		return 0
+static func _count_active_settlements() -> int:
 	var count: int = 0
 	var settlements: Array = SettlementMemory.get_formal_settlements()
 	for st in settlements:
@@ -122,54 +114,49 @@ func _count_active_settlements() -> int:
 	return count
 
 
-func _discover_age(age_idx: int) -> void:
+static func _discover_age(age_idx: int) -> void:
 	discovered_ages[age_idx] = true
-	age_discovery_ticks[age_idx] = GameManager.tick_count if GameManager != null else 0
+	age_discovery_ticks[age_idx] = GameManager.tick_count
 	current_age = age_idx
 
 	var age_name: String = get_age_name(age_idx)
 	var age_desc: String = str(AGE_DESCRIPTIONS.get(age_idx, ""))
 
-	# Record world event
 	if WorldMemory != null:
 		WorldMemory.record_event({
 			"type": "age_discovered",
 			"age_index": age_idx,
 			"age_name": age_name,
 			"age_description": age_desc,
-			"tick": GameManager.tick_count if GameManager != null else 0,
+			"tick": GameManager.tick_count,
 		})
 
-	# Signal
-	age_discovered.emit(age_idx, age_name, age_desc)
-
-	# Print to console for debugging
 	print("[MythAge] The HeelKawnians have entered the %s" % age_name)
 
 
 ## Get the display name for an age (custom or default)
-func get_age_name(age_idx: int) -> String:
+static func get_age_name(age_idx: int) -> String:
 	if custom_age_names.has(age_idx):
 		return str(custom_age_names[age_idx])
 	return str(AGE_NAMES.get(age_idx, "Unknown Age"))
 
 
 ## Get the current age display name (or "—" if none discovered)
-func get_current_age_name() -> String:
+static func get_current_age_name() -> String:
 	if current_age < 0:
 		return "—"
 	return get_age_name(current_age)
 
 
 ## Get the current age description (or empty if none)
-func get_current_age_description() -> String:
+static func get_current_age_description() -> String:
 	if current_age < 0:
 		return ""
 	return str(AGE_DESCRIPTIONS.get(current_age, ""))
 
 
 ## Get the age index for a given civilization score
-func age_for_score(score: int) -> int:
+static func age_for_score(score: int) -> int:
 	var result: int = -1
 	for age_idx in range(7):
 		var threshold: int = int(AGE_THRESHOLDS.get(age_idx, 999))
@@ -179,12 +166,12 @@ func age_for_score(score: int) -> int:
 
 
 ## Set a custom name for an age (called by settlement culture)
-func set_custom_age_name(age_idx: int, custom_name: String) -> void:
+static func set_custom_age_name(age_idx: int, custom_name: String) -> void:
 	custom_age_names[age_idx] = custom_name
 
 
 ## Get the next undiscovered age (or -1 if all discovered)
-func next_undiscovered_age() -> int:
+static func next_undiscovered_age() -> int:
 	for age_idx in range(7):
 		if not discovered_ages.has(age_idx):
 			return age_idx
@@ -192,7 +179,7 @@ func next_undiscovered_age() -> int:
 
 
 ## Get the score threshold for the next undiscovered age
-func next_age_threshold() -> int:
+static func next_age_threshold() -> int:
 	var next: int = next_undiscovered_age()
 	if next < 0:
 		return -1
@@ -200,7 +187,7 @@ func next_age_threshold() -> int:
 
 
 ## Serialize for save
-func to_save_dict() -> Dictionary:
+static func to_save_dict() -> Dictionary:
 	return {
 		"current_age": current_age,
 		"discovered_ages": discovered_ages.duplicate(true),
@@ -210,7 +197,7 @@ func to_save_dict() -> Dictionary:
 
 
 ## Deserialize from save
-func from_save_dict(d: Dictionary) -> void:
+static func from_save_dict(d: Dictionary) -> void:
 	current_age = int(d.get("current_age", -1))
 	discovered_ages = {}
 	if d.has("discovered_ages") and d["discovered_ages"] is Dictionary:

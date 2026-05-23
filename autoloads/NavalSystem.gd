@@ -116,9 +116,9 @@ func _process_boat_movement(tick: int) -> void:
 
 func _apply_current(b: Dictionary, _tick: int) -> void:
 	var tile: Vector2i = b.get("tile", Vector2i())
-	if WindSystem != null:
-		var wind_dir: Vector2 = WindSystem.get_wind_direction()
-		var drift: float = WindSystem.get_wind_strength() * 0.1
+	if WorldEnvironmentManager != null:
+		var wind_dir: Vector2 = WorldEnvironmentManager.get_wind_direction()
+		var drift: float = WorldEnvironmentManager.get_wind_strength() * 0.1
 		if drift > 0.01:
 			tile.x += int(wind_dir.x * drift)
 			tile.y += int(wind_dir.y * drift)

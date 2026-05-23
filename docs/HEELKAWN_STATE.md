@@ -135,10 +135,21 @@ We are always building, always refining, always expanding. This document capture
   - Added "Cultural Renaissance" chain (marker → shrine)
   - Updated `_select_new_chain`, `_chain_step_completed`, `_ambition_from_chain_step`, `_chain_name_for_steps`
 
+- **Done**: Autoload consolidation Phases 1 + 2 (9 autoloads removed, from 150 → 141)
+  See `docs/AUTOLOAD_CONSOLIDATION_STATUS.md` for details.
+
+## 2026-05-22: Autoload Consolidation Phase 2 Complete
+
+- **6 autoloads deregistered**: SquadCoordinator, FragmentationManager, RelationalGraph, SacredGeography, ReligionLens, MythAge
+- **Static conversions**: ReligionLens (24 refs) and MythAge (9 refs) → `class_name` static utility classes, all call sites preserved
+- **Boot-managed**: FragmentationManager, SacredGeography → bootstrapped in `Main._ready()`, added to root; path-based lookups unchanged
+- **Lazy-loaded**: SquadCoordinator → WorldAI child; RelationalGraph → SocialManager adds to root
+- **Autoload count**: 141 (150 → 141 over Phases 1 + 2)
+
 - **Next Task**: Runtime truth pass in Godot editor (requires Godot binary). Then:
   - Knowledge preservation loop unification (stones, books, teaching, literacy)
   - Civilization stage deepening (per-settlement tech diffusion, literacy tracking)
-  - Autoload consolidation Phase 1
+  - Autoload consolidation Phase 3 (manager-driven)
 
 ## May 21, 2026 Session Completion
 

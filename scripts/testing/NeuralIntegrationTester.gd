@@ -341,12 +341,7 @@ func _test_predictive_models() -> Dictionary:
 		"resources": {"food": 100, "wood": 50, "stone": 25, "ore": 10}
 	}
 
-<<<<<<< HEAD
-	var _predictions = AIAgentManager.generate_predictions(test_world_state)
-=======
 	var predictions = AIAgentManager.generate_predictions(test_world_state)
->>>>>>> aad341ea (fix: correct indentation errors in NeuralIntegrationTester.gd)
-
 	print("[NeuralIntegrationTester] ✓ Predictive models test passed")
 
 	return test_result
@@ -720,15 +715,9 @@ func _test_religion_lens_initialization() -> Dictionary:
 		test_result.errors.append("ReligionLens not found")
 		return test_result
 
-<<<<<<< HEAD
-		# Test ReligionLens properties
-		var sacred_mem: Node = MemoryManager.get_sacred_memory()
-		test_result.details["sacred_sites_count"] = sacred_mem.site_count() if sacred_mem != null else 0
-=======
 	# Test ReligionLens properties
-	test_result.details["sacred_sites_count"] = SacredMemory.site_count() if SacredMemory else 0
->>>>>>> aad341ea (fix: correct indentation errors in NeuralIntegrationTester.gd)
-
+	var sacred_mem: Node = MemoryManager.get_sacred_memory()
+	test_result.details["sacred_sites_count"] = sacred_mem.site_count() if sacred_mem != null else 0
 	print("[NeuralIntegrationTester] ✓ Religion Lens initialization test passed")
 
 	return test_result
@@ -1185,39 +1174,32 @@ func _test_memory_stress() -> Dictionary:
 		"errors": []
 	}
 
-<<<<<<< HEAD
 	# Test memory stress (Godot 4: Performance monitor, not OS.get_static_memory_usage_by_type / gc)
 	var initial_memory: float = Performance.get_monitor(Performance.MEMORY_STATIC)
-
+	
 	# Create multiple neural network instances
 	var neural_instances: Array = []
-=======
-	# Test memory stress
-	var initial_memory = OS.get_static_memory_usage_by_type()[OS.MEMORY_TYPE_STATIC]
-
-	# Create multiple neural network instances
-	var neural_instances = []
 	for i in range(10):
 		var instance = WorldEvolution.new()
 		neural_instances.append(instance)
-
+	
 	var peak_memory: float = Performance.get_monitor(Performance.MEMORY_STATIC)
 	var memory_increase: float = peak_memory - initial_memory
-
+	
 	# Clean up instances (no explicit GC in GDScript)
 	neural_instances.clear()
-
+	
 	var final_memory: float = Performance.get_monitor(Performance.MEMORY_STATIC)
 	var memory_recovered: float = peak_memory - final_memory
-
+	
 	test_result.details["initial_memory_mb"] = initial_memory / (1024 * 1024)
 	test_result.details["peak_memory_mb"] = peak_memory / (1024 * 1024)
 	test_result.details["memory_increase_mb"] = memory_increase / (1024 * 1024)
 	test_result.details["memory_recovered_mb"] = memory_recovered / (1024 * 1024)
 	test_result.details["memory_management_good"] = memory_recovered > memory_increase * 0.8
-
+	
 	print("[NeuralIntegrationTester] ✓ Memory stress test passed")
-
+	
 	return test_result
 
 func _test_concurrent_operations() -> Dictionary:

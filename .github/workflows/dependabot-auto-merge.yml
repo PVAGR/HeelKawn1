@@ -1,0 +1,77 @@
+name: Dependabot Auto-Merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  check_suite:
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Wait for CI to complete
+        run: |
+          echo "Waiting for CI checks to complete..."
+          
+          # Get the PR number from the event
+          PR_NUMBER=$(jq --raw-output '.pull_request.number' "$GITHUB_EVENT_PATH")
+          REPO="${{ github.repository }}"
+          
+          # Poll for CI status
+          MAX_WAIT_MINUTES=30
+          ELAPSED=0
+          INTERVAL=30
+          
+          while [ $ELAPSED -lt $((MAX_WAIT_MINUTES * 60)) ]; do
+            # Get the latest commit SHA
+            PR_COMMIT=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid --jq '.headRefOid')
+            
+            # Check if all required checks passed
+            STATUSES=$(gh api repos/$REPO/commits/$PR_COMMIT/status 2>/dev/null || echo '{"state": "pending"}')
+            STATE=$(echo "$STATUSES" | jq -r '.state')
+            
+            echo "Current CI state: $STATE"
+            
+            if [ "$STATE" = "success" ]; then
+              echo "All CI checks passed!"
+              exit 0
+            elif [ "$STATE" = "failure" ]; then
+              echo "CI checks failed. Cannot auto-merge."
+              exit 1
+            fi
+            
+            echo "Waiting ${INTERVAL}s for CI to complete..."
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+          
+          echo "Timeout waiting for CI checks"
+          exit 1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Enable auto-merge
+        run: |
+          PR_NUMBER=$(jq --raw-output '.pull_request.number' "$GITHUB_EVENT_PATH")
+          REPO="${{ github.repository }}"
+          
+          # Get PR info
+          PR_TITLE=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json title --jq '.title')
+          echo "Processing PR: #$PR_NUMBER - $PR_TITLE"
+          
+          # Enable auto-merge on the PR
+          gh pr merge "$PR_NUMBER" --repo "$REPO" --admin --merge
+          
+          echo "Successfully enabled auto-merge for PR #$PR_NUMBER"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

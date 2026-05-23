@@ -176,16 +176,19 @@ func _should_die(pop: Dictionary, tick: int) -> bool:
 
 
 func _wildlife_birth(pop: Dictionary) -> void:
+	# Create deterministic RNG from population data
+	var rng = RandomNumberGenerator.new()
+	rng.seed = pop.last_birth_tick + pop.region_key + pop.species + 500
+
 	# Add 1-3 new animals
 	var birth_count: int = rng.randi_range(1, 3)
 	pop.population += birth_count
 	pop.last_birth_tick = GameManager.tick_count
-	
+
 	if OS.is_debug_build():
 		print("[Wildlife] Birth in region %d: +%d animals (now %d)" % [
 			pop.region_key, birth_count, pop.population
 		])
-
 
 func _wildlife_death(pop: Dictionary, tick: int) -> void:
 	# Remove 1-2 animals
@@ -201,14 +204,17 @@ func _record_wildlife_deaths(pop: Dictionary, tick: int) -> void:
 	
 	var species_name: String = "rabbit" if pop.species == Species.RABBIT else "deer"
 	var death_count: int = pop.get("deaths_this_cycle", 0)
-	
-	if death_count > 0:
-		_world_memory.record_event({
-			"type": "animal_death",
-			"species": species_name,
-			"region": pop.region_key,
-			"count": death_count,
-			"tick": tick
+func _wildlife_death(pop: Dictionary, tick: int) -> void:
+	# Create deterministic RNG from population data
+	var rng = RandomNumberGenerator.new()
+	rng.seed = pop.last_death_tick + pop.region_key + pop.species + 1500
+
+	# Remove 1-2 animals
+	var death_count: int = rng.randi_range(1, 2)
+	pop.population = maxi(0, pop.population - death_count)
+	pop.last_death_tick = tick
+	pop["deaths_this_cycle"] = pop.get("deaths_this_cycle", 0) + death_count
+
 		})
 
 

@@ -7204,7 +7204,9 @@ func _seed_construction_jobs() -> void:
 	var max_settlements_this_pass: int = 1 if GameManager.game_speed >= 100.0 else (2 if GameManager.game_speed >= 50.0 else 3)
 	var settlements_seen: int = 0
 	var start_idx: int = _construction_seed_cursor % settlements.size()
-	for step in range(settlements.size()):
+	var step: int = 0
+	for i in range(settlements.size()):
+		step = i
 		if settlements_seen >= max_settlements_this_pass:
 			break
 		var s = settlements[(start_idx + step) % settlements.size()]

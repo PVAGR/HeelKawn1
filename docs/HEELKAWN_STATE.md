@@ -4,7 +4,7 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** May 21, 2026
+**Last Updated:** May 23, 2026
 **Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
@@ -109,7 +109,36 @@ We are always building, always refining, always expanding. This document capture
   - `SettlementPlanner.gd`: `_build_pressure_ok`, per-settlement+type cooldown (`BUILD_INTENT_COOLDOWN_TICKS` = 1200), `can_post_build_intent` / `mark_build_intent_posted` gate bed, fire pit, storage hut, and farm planner posts from `ColonySimServices` pressure signals.
   - `AIAutoBuild.gd`: delegates to planner gating before creating intents and before posting jobs; uses `JobManager.post_build_deduped`.
   - `JobManager.gd`: `has_pending_build_near` and `post_build_deduped` for settlement-scoped construction dedupe.
-- Next Task: deepen from first ambition seeding into true household membership logic, coordinated group plans, and longer-horizon settlement objective chains while continuing the v1 consolidation loop.
+## May 23, 2026 Session Completion
+
+- **FEAT: Learning target biasing (Matrix AI Deepening)**:
+  - Added `_apply_learning_target_biases()` in `HeelKawnianManager.gd`
+  - `get_learning_target_for_pawn()` output now directly influences `_matrix_job_biases`
+  - Pawns with a target knowledge type bias toward apprenticeship, teaching, and domain-specific jobs
+  - Pawns with a target skill bias toward jobs that exercise that skill
+  - Covers all 26 KnowledgeType values and 5 skill types with deterministic job mappings
+
+- **FEAT: Verification — Preservation choices already wired**:
+  - Confirmed `get_preservation_choice_for_pawn()` is called from `_matrix_job_biases` at line 2089
+  - Preservation actions (teach, inscribe_stone, write_book) correctly bias job selection
+  - No new wiring needed — this was already operational
+
+- **FEAT: General settlement ambition chains (not recovery-only)**:
+  - `get_settlement_ambition_for_pawn()` now checks `_ambition_chain_for_settlement()` as a fallback for ALL drives, not just `recover`
+  - All settlements now pursue multi-step strategic chains when no immediate pressure exists
+
+- **FEAT: 5 new ambition chain types for deeper recovery behavior**:
+  - Added "Rebuild from Ruin" chain (hearth → beds → shelter → storage)
+  - Added "Healing & Care" chain (apothecary → shrine)
+  - Added "Defense Network" chain (watchtower → barracks)
+  - Added "Trade Route" chain (market → roads)
+  - Added "Cultural Renaissance" chain (marker → shrine)
+  - Updated `_select_new_chain`, `_chain_step_completed`, `_ambition_from_chain_step`, `_chain_name_for_steps`
+
+- **Next Task**: Runtime truth pass in Godot editor (requires Godot binary). Then:
+  - Knowledge preservation loop unification (stones, books, teaching, literacy)
+  - Civilization stage deepening (per-settlement tech diffusion, literacy tracking)
+  - Autoload consolidation Phase 1
 
 ## May 21, 2026 Session Completion
 

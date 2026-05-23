@@ -1,12 +1,21 @@
 # HEELKAWN — TASK TRACKER
 
-**Last Updated:** 2026-05-22  
+**Last Updated:** 2026-05-23  
 **Current Phase:** Phase 5A (Indefinite Evolution Foundation)  
-**Focus:** Consolidation, runtime truth, Matrix AI deepening
+**Focus:** Matrix AI deepening — learning target biasing, preservation choices, recovery ambition chains
 
 ---
 
 ## DONE ✅
+
+### Session 2026-05-23
+- [x] Matrix AI Deepening complete: 4 remaining items implemented
+  - [x] Added `_apply_learning_target_biases` — pawn learning targets now bias job selection via `_matrix_job_biases`
+  - [x] Preservation choices (`get_preservation_choice_for_pawn`) already wired into biases (verified)
+  - [x] Recovery behavior deepened with 5 new ambition chain types: Rebuild from Ruin, Healing & Care, Defense Network, Trade Route, Cultural Renaissance
+  - [x] Settlement ambition chains made general (not recovery-only) — all settlements now pursue multi-step chains
+- [x] Updated TASKS.md, TODO.md, docs/HEELKAWN_STATE.md
+- [x] Created STATE_VERIFICATION_2026-05-23.md
 
 ### Session 2026-05-22
 - [x] Repository cleanup: removed accidental `$null` file from root
@@ -91,11 +100,11 @@
 
 ## NEXT ⏭️
 
-### Matrix AI Deepening (Priority 1)
-1. Add preservation choices (what knowledge to inscribe vs keep oral)
-2. Add recovery behavior (what to do after disaster/famine/collapse)
-3. Extend profile-to-job-bias into learning target selection
-4. Add settlement ambition chains (longer-horizon objectives)
+### Matrix AI Deepening (Priority 1) — ✅ DONE May 23
+1. ✅ Add preservation choices (what knowledge to inscribe vs keep oral)
+2. ✅ Deepen recovery behavior (post-collapse settlement rebuild chains)
+3. ✅ Extend profile-to-job-bias into learning target selection
+4. ✅ Add settlement ambition chains (longer-horizon objectives)
 
 ### Knowledge Preservation Loop (Priority 2)
 1. Unify stones, books, teaching, literacy into one system

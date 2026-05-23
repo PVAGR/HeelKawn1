@@ -1,6 +1,6 @@
 # HeelKawn — Living TODO
 
-**Last Updated:** May 19, 2026
+**Last Updated:** May 23, 2026
 **Source of truth:** `docs/HEELKAWN_STATE.md` and `docs/HEELKAWN_PROJECT_COMPASS.md`
 
 > HeelKawn is **never finished**. This file tracks active work, not a destination.
@@ -24,12 +24,12 @@
 - [x] Social intent bridge: `social_seek` / `teach_seek` / `grudge_confront`
 - [x] Settlement ambition seeding: periodic local ambitions from drive + pressure
 - [x] Household goal planning: `HOUSEHOLD_GOALS` with coordinated job lists
-- [ ] Extend profile-to-job-bias into learning target selection
-- [ ] Add preservation choices (what knowledge to inscribe vs keep oral)
+- [x] Extend profile-to-job-bias into learning target selection (May 23)
+- [x] Add preservation choices (what knowledge to inscribe vs keep oral) (verified May 23 — already wired)
 - [x] Recovery drive ambition chain (shelter/hearth/storage/maintain after trauma pressure)
 - [x] `teach_seek` autonomy calls `execute_teach_seek` on arrival
-- [ ] Deepen recovery behavior (post-collapse settlement rebuild chains)
-- [ ] Add settlement ambition chains (longer-horizon objectives)
+- [x] Deepen recovery behavior (post-collapse settlement rebuild chains) (May 23 — 5 new chain types)
+- [x] Add settlement ambition chains (longer-horizon objectives) (May 23 — made general, not recovery-only)
 
 ### 3. Lineage & Progression
 - [x] Parent lookup: `_get_parent_data` via static registry

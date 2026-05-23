@@ -8368,19 +8368,19 @@ func _ambient_temperature_celsius_at_tile(tile: Vector2i) -> float:
 			match weather:
 				"rain":
 					base -= 4.0
+					var wind_system: Node = get_node_or_null("/root/WindSystem")
+					if wind_system != null and wind_system.has_method("get_wind_strength"):
+						base -= wind_system.get_wind_strength() * 4.0
 				"snow":
 					base -= 10.0
+					var wind_system: Node = get_node_or_null("/root/WindSystem")
+					if wind_system != null and wind_system.has_method("get_wind_strength"):
+						base -= wind_system.get_wind_strength() * 4.0
 				"sand":
 					base += 5.0
 				"embers":
 					base += 3.0
-			# Wind chill in cold precipitation
-			if weather == "rain" or weather == "snow":
-				var wind_system: Node = get_node_or_null("/root/WindSystem")
-				if wind_system != null and wind_system.has_method("get_wind_strength"):
-					base -= wind_system.get_wind_strength() * 4.0
-	return base
-
+		return base
 
 func _hearth_proxy_warmth_bonus(tile: Vector2i) -> float:
 	if _world == null or _world.data == null:

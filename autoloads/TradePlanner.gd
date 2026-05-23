@@ -1,4 +1,5 @@
 extends Node
+class_name TradePlanner
 ## v1: Deterministic inter-settlement trade as [Job.Type.TRADE_HAUL] (pickup + long haul). No RNG; not every tick.
 ## Reads: SettlementMemory, StockpileManager, World pathfinder, JobManager, RoadMemory (via same paths as pawns).
 

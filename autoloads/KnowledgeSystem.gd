@@ -45,6 +45,9 @@ enum KnowledgeType {
 	ENGINEERING = 23,      # Complex mechanisms
 	WRITING = 24,          # Record keeping, literature
 	PHILOSOPHY = 25,       # Abstract thinking, ethics
+	AGRICULTURE = 26,      # Farming, crop cultivation
+	FIRE = 27,             # Fire use, pyrotechnology
+	WEAPON_CRAFTING = 28,  # Weapon and tool crafting
 }
 
 const KNOWLEDGE_DEGRADATION_INTERVAL_TICKS: int = 1000

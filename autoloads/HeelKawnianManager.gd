@@ -2348,7 +2348,7 @@ static func _apply_learning_target_biases(biases: Dictionary, data: HeelKawnianD
 		match target_knowledge:
 			KnowledgeSystem.KnowledgeType.CRAFTING:
 				_add_bias(biases, [Job.Type.TOOL_MAKING, Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR], 4)
-			KnowledgeSystem.KnowledgeType.FARMING:
+			KnowledgeSystem.KnowledgeType.AGRICULTURE:
 				_add_bias(biases, [Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS, Job.Type.GROW_FOOD], 4)
 			KnowledgeSystem.KnowledgeType.METALLURGY:
 				_add_bias(biases, [Job.Type.MINE, Job.Type.MINE_WALL, Job.Type.CRAFT_PICK], 4)
@@ -2358,13 +2358,13 @@ static func _apply_learning_target_biases(biases: Dictionary, data: HeelKawnianD
 				_add_bias(biases, [Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.CARVE_LEDGER_STONE, Job.Type.PAPER_MAKING, Job.Type.INK_MAKING, Job.Type.BOOK_BINDING], 5)
 			KnowledgeSystem.KnowledgeType.TEACHING:
 				_add_bias(biases, [Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP], 5)
-			KnowledgeSystem.KnowledgeType.FIRE_KEEPING:
+			KnowledgeSystem.KnowledgeType.FIRE:
 				_add_bias(biases, [Job.Type.BUILD_FIRE_PIT, Job.Type.CRAFT_TORCH, Job.Type.COOK_MEAT, Job.Type.COOK_FISH], 4)
 			KnowledgeSystem.KnowledgeType.SHELTER_BUILDING:
 				_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_SHELTER, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR], 4)
 			KnowledgeSystem.KnowledgeType.FOOD_STORAGE:
 				_add_bias(biases, [Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR, Job.Type.DRY_MEAT], 4)
-			KnowledgeSystem.KnowledgeType.COMBAT:
+			KnowledgeSystem.KnowledgeType.WEAPON_CRAFTING:
 				_add_bias(biases, [Job.Type.CRAFT_SPEAR, Job.Type.CRAFT_KNIFE, Job.Type.TOOL_MAKING], 4)
 			KnowledgeSystem.KnowledgeType.HOSPITALITY:
 				_add_bias(biases, [Job.Type.BUILD_HEARTH, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH], 4)

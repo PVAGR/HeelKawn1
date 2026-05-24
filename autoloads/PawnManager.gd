@@ -98,6 +98,14 @@ func generate_dialogue(pawn_id: int, context: String) -> String:
 func get_pawn_consciousness() -> Node:
 	return get_subsystem("pawn_consciousness")
 
+## Get total pawn count across all managed pawns
+func get_pawn_count() -> int:
+	_ensure_heelkawnian_manager()
+	if _heelkawnian_manager != null and _heelkawnian_manager.has_method("get_total_pawn_count"):
+		return _heelkawnian_manager.get_total_pawn_count()
+	# Fallback: count children if no manager method
+	return get_child_count()
+
 func get_pawn_dialogue() -> Node:
 	return get_subsystem("pawn_dialogue")
 

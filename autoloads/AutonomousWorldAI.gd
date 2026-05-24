@@ -213,12 +213,18 @@ func _update_civilization_strategies(tick: int) -> void:
 	if FactionManager == null or NationBorderSystem == null:
 		return
 	
-	for faction_id in FactionManager.factions:
-		if not (faction_id is int):
+	# Use NationBorderSystem's nation list instead of FactionManager
+	var nations: Array[Dictionary] = NationBorderSystem.get_all_nations() if NationBorderSystem.has_method("get_all_nations") else []
+	
+	if nations.is_empty():
+		return
+	
+	for nation_data in nations:
+		if not (nation_data is Dictionary) or nation_data.is_empty():
 			continue
 		
-		var nation_data: Dictionary = NationBorderSystem.get_nation_by_id(faction_id)
-		if nation_data.is_empty():
+		var faction_id: int = int(nation_data.get("id", -1))
+		if faction_id < 0:
 			continue
 		
 		# Determine personality based on faction traits

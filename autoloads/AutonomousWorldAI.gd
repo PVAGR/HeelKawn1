@@ -36,7 +36,7 @@ const PERFORMANCE_THRESHOLD_ENTITIES: int = 5000
 const TICK_BUDGET_MS: int = 16  # ~60 FPS target
 
 ## How often to run major AI decisions (ticks)
-const MAI_AI_INTERVAL: int = 100
+var MAI_AI_INTERVAL: int = 100
 
 ## How often to check entity scaling (ticks)
 const SCALING_CHECK_INTERVAL: int = 300
@@ -166,8 +166,9 @@ func _count_total_entities() -> int:
 	"""Count total entities being simulated."""
 	var count: int = 0
 	
-	if PawnManager != null:
-		count += PawnManager.get_pawn_count() if PawnManager.has_method("get_pawn_count") else 0
+	var pm := get_node_or_null("/root/PawnManager")
+	if pm != null and pm.has_method("get_pawn_count"):
+		count += pm.get_pawn_count()
 	
 	if SettlementMemory != null:
 		count += SettlementMemory.settlements.size()
@@ -330,7 +331,8 @@ func _calculate_goal_priority(goal: String, threat_level: float) -> int:
 
 func _process_diplomacy(tick: int) -> void:
 	"""Process diplomatic interactions between nations."""
-	if DiplomacySystem == null or NationBorderSystem == null:
+	var ds := get_node_or_null("/root/DiplomacySystem")
+	if ds == null or NationBorderSystem == null:
 		return
 	
 	# Check for treaty opportunities
@@ -369,9 +371,11 @@ func _evaluate_treaty_opportunities(tick: int) -> void:
 func _get_treaties_between(nation_a: int, nation_b: int) -> Array:
 	"""Get existing treaties between two nations."""
 	var treaties: Array = []
-	if DiplomacySystem != null:
-		for tid in DiplomacySystem.treaties:
-			var t: Dictionary = DiplomacySystem.treaties[tid]
+	var ds := get_node_or_null("/root/DiplomacySystem")
+	if ds != null and ds.has_node(".") and ds.get("treaties") != null:
+		var ds_treaties: Dictionary = ds.get("treaties")
+		for tid in ds_treaties:
+			var t: Dictionary = ds_treaties[tid]
 			if (int(t.get("proposer", -1)) == nation_a and int(t.get("acceptor", -1)) == nation_b) or \
 			   (int(t.get("proposer", -1)) == nation_b and int(t.get("acceptor", -1)) == nation_a):
 				if bool(t.get("is_active", false)):
@@ -389,13 +393,15 @@ func _consider_treaty_proposal(nation_a: int, nation_b: int, tick: int) -> void:
 	
 	# High diplomacy factions propose treaties more often
 	if traits_a.get("diplomacy", 0.5) > 0.6:
-		# Propose non-aggression pact
-		DiplomacySystem.propose_treaty(
-			DiplomacySystem.TreatyType.NON_AGGRESSION,
-			nation_a,
-			nation_b,
-			{}
-		)
+		var ds := get_node_or_null("/root/DiplomacySystem")
+		if ds != null and ds.has_method("propose_treaty"):
+			# Propose non-aggression pact
+			ds.propose_treaty(
+				ds.TreatyType.NON_AGGRESSION if ds.has_constant("TreatyType") else 1,
+				nation_a,
+				nation_b,
+				{}
+			)
 
 
 func _evaluate_treaty_violations(tick: int) -> void:
@@ -431,7 +437,11 @@ func _manage_military_forces(tick: int) -> void:
 
 func _form_new_armies(tick: int) -> void:
 	"""Form new armies based on strategic needs."""
-	if SettlementMemory == null or PawnManager == null:
+	if SettlementMemory == null:
+		return
+	
+	var pm := get_node_or_null("/root/PawnManager")
+	if pm == null or not pm.has_method("get_pawn_count"):
 		return
 	
 	for st_v in SettlementMemory.settlements:

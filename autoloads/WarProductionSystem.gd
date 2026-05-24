@@ -433,7 +433,11 @@ func _post_gathering_job(center: int, resource: String, amount: int, tick: int) 
 
 func _process_recruitment(tick: int) -> void:
 	"""Process soldier recruitment from settlements."""
-	if SettlementMemory == null or PawnManager == null:
+	if SettlementMemory == null:
+		return
+	
+	var pm := get_node_or_null("/root/PawnManager")
+	if pm == null or not pm.has_method("get_pawn_count"):
 		return
 	
 	for st_v in SettlementMemory.settlements:

@@ -140,6 +140,8 @@ TerraformingSystem="*res://autoloads/TerraformingSystem.gd"
 PrisonerManager="*res://autoloads/PrisonerManager.gd"
 HistoricalSimulation="*res://autoloads/HistoricalSimulation.gd"
 RuntimeWatchdog="*res://autoloads/RuntimeWatchdog.gd"
+WarProductionSystem="*res://autoloads/WarProductionSystem.gd"
+AutonomousWorldAI="*res://autoloads/AutonomousWorldAI.gd"
 
 [display]
 

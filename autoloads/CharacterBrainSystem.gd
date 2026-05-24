@@ -1,5 +1,4 @@
 extends Node
-class_name CharacterBrainSystem
 ## Lightweight autonomous character decision-making system.
 ## 
 ## Each HeelKawnian has a "Brain" — a minimal decision kernel that:

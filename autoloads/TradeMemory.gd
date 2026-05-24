@@ -551,7 +551,7 @@ func _deliver_route_goods(route: Dictionary) -> Dictionary:
 		var item_type: int = _goods_key_to_item_type(str(key))
 		# Remove goods from origin stockpile
 		var from_zone: Stockpile = StockpileManager.find_drop_zone(item_type, from_tile, null)
-		if from_zone != null:
+		if from_zone != null and is_instance_valid(from_zone):
 			var available: int = from_zone.count_of(item_type)
 			var take: int = mini(qty, available)
 			if take > 0:
@@ -560,10 +560,10 @@ func _deliver_route_goods(route: Dictionary) -> Dictionary:
 		var dest_zone: Stockpile = StockpileManager.find_drop_zone_for_settlement(dest_rk, item_type, dest_tile, null)
 		if dest_zone == null:
 			dest_zone = StockpileManager.find_drop_zone(item_type, dest_tile, null)
-		if dest_zone != null:
+		if dest_zone != null and is_instance_valid(dest_zone):
 			var actual_qty: int = qty
 			var from_zone2: Stockpile = StockpileManager.find_drop_zone(item_type, from_tile, null)
-			if from_zone2 != null:
+			if from_zone2 != null and is_instance_valid(from_zone2):
 				actual_qty = mini(qty, from_zone2.count_of(item_type))
 			if actual_qty > 0:
 				dest_zone.add_item(item_type, actual_qty)

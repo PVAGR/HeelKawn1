@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779593653
+::res://::1779595611
 .aider.chat.history.md::TextFile::-1::1779517150::0::1::::<><><>0<>0<><>::
 AGENTS.md::TextFile::-1::1779432109::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779506968::0::1::::<><><>0<>0<><>::
@@ -126,7 +126,7 @@ door.png::CompressedTexture2D::4142856041344568916::1777971615::1778417117::1:::
 tree.png::CompressedTexture2D::2389156156575278385::1777971448::1778417117::1::::<><><>0<>0<>5fb83ad2402bae2aec6e4562927a022d<>res://.godot/imported/tree.png-1272070f95f6cffffd0fe51159239f22.ctex::
 wall.png::CompressedTexture2D::5625700477737538922::1777971615::1778417117::1::::<><><>0<>0<>4aab1d5a487300cd9189921708537b6f<>res://.godot/imported/wall.png-65f788789b9046a626a2b3a58cc8bb94.ctex::
 ::res://assets/sprites/world/::1777971496
-::res://autoloads/::1779593104
+::res://autoloads/::1779593811
 AgeMemory.gd::GDScript::3623017377226678626::1779514684::0::1::::AgeMemory<>Node<><>0<>0<><>::
 AIAgentManager.gd::GDScript::4954939857757967540::1779506986::0::1::::<>Node<><>0<>0<><>::
 AIManager.gd::GDScript::8390453645687965822::1778796562::0::1::::<>Node<><>0<>0<><>::
@@ -255,7 +255,7 @@ StockpileManager.gd::GDScript::215983093589793156::1779393533::0::1::::<>Node<><
 SupplyChainSystem.gd::GDScript::1527879448625684671::1779171827::0::1::::<>Node<><>0<>0<><>::
 SurvivalSystem.gd::GDScript::9164301206852135979::1779519907::0::1::::<>Node<><>0<>0<><>::
 TechnologySystem.gd::GDScript::1479520665738386352::1779508219::0::1::::<>Node<><>0<>0<><>::
-TerraformingSystem.gd::GDScript::895228937679888329::1779593104::0::1::::<>Node<><>0<>0<><>::
+TerraformingSystem.gd::GDScript::895228937679888329::1779593811::0::1::::<>Node<><>0<>0<><>::
 TickBudgetManager.gd::GDScript::5988893249458192683::1779441919::0::1::::<>Node<><>0<>0<><>::
 TickManager.gd::GDScript::5792076579507672326::1779359555::0::1::::<>Node<><>0<>0<><>::
 TickRateDecoupler.gd::GDScript::2900207393109439075::1778035714::0::1::::<>Node<><>0<>0<><>::

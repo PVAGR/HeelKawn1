@@ -3047,8 +3047,16 @@ func _trigger_climate_event(event_type: String, description: String) -> void:
 			global_temperature -= 0.1
 		"sea_level_rise":
 			sea_level += 0.05
+			_apply_sea_level_to_world(sea_level, sea_level - 0.05)
 		"sea_level_fall":
 			sea_level -= 0.05
+			_apply_sea_level_to_world(sea_level, sea_level + 0.05)
+
+
+func _apply_sea_level_to_world(new_level: float, old_level: float) -> void:
+	if TerraformingSystem != null:
+		TerraformingSystem.apply_sea_level_change(new_level, old_level)
+
 
 func _calculate_event_probability() -> float:
 	var probability = 0.01  # Base probability

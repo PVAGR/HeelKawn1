@@ -552,10 +552,10 @@ func _deliver_route_goods(route: Dictionary) -> Dictionary:
 		# Remove goods from origin stockpile
 		var from_zone: Stockpile = StockpileManager.find_drop_zone(item_type, from_tile, null)
 		if from_zone != null:
-			var available: int = from_zone.count(item_type)
+			var available: int = from_zone.count_of(item_type)
 			var take: int = mini(qty, available)
 			if take > 0:
-				from_zone.remove_item(item_type, take)
+				from_zone.take_item(item_type, take)
 		# Add goods to destination stockpile
 		var dest_zone: Stockpile = StockpileManager.find_drop_zone_for_settlement(dest_rk, item_type, dest_tile, null)
 		if dest_zone == null:
@@ -564,7 +564,7 @@ func _deliver_route_goods(route: Dictionary) -> Dictionary:
 			var actual_qty: int = qty
 			var from_zone2: Stockpile = StockpileManager.find_drop_zone(item_type, from_tile, null)
 			if from_zone2 != null:
-				actual_qty = mini(qty, from_zone2.count(item_type))
+				actual_qty = mini(qty, from_zone2.count_of(item_type))
 			if actual_qty > 0:
 				dest_zone.add_item(item_type, actual_qty)
 				delivered[key] = actual_qty
@@ -932,12 +932,11 @@ func debug_road_memory_truth() -> String:
 				continue
 			var rx: int = sample_rk & 0xFFFF
 			var ry: int = (sample_rk >> 16) & 0xFFFF
-			if RoadMemory.has_method("get_traversal"):
-				var trav: int = 0
-				for dx in range(16):
-					for dy in range(16):
-						trav += RoadMemory.get_traversal(rx * 16 + dx, ry * 16 + dy)
-				sample_region_traversal = trav
-				break
+			var trav: int = 0
+			for dx in range(16):
+				for dy in range(16):
+					trav += RoadMemory.get_traversal(rx * 16 + dx, ry * 16 + dy)
+			sample_region_traversal = trav
+			break
 		lines.append("sampled_route_region_traversal_sum=%d" % sample_region_traversal)
 	return "\n".join(lines)

@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779591292
+::res://::1779593653
 .aider.chat.history.md::TextFile::-1::1779517150::0::1::::<><><>0<>0<><>::
 AGENTS.md::TextFile::-1::1779432109::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779506968::0::1::::<><><>0<>0<><>::
@@ -126,7 +126,7 @@ door.png::CompressedTexture2D::4142856041344568916::1777971615::1778417117::1:::
 tree.png::CompressedTexture2D::2389156156575278385::1777971448::1778417117::1::::<><><>0<>0<>5fb83ad2402bae2aec6e4562927a022d<>res://.godot/imported/tree.png-1272070f95f6cffffd0fe51159239f22.ctex::
 wall.png::CompressedTexture2D::5625700477737538922::1777971615::1778417117::1::::<><><>0<>0<>4aab1d5a487300cd9189921708537b6f<>res://.godot/imported/wall.png-65f788789b9046a626a2b3a58cc8bb94.ctex::
 ::res://assets/sprites/world/::1777971496
-::res://autoloads/::1779589626
+::res://autoloads/::1779593104
 AgeMemory.gd::GDScript::3623017377226678626::1779514684::0::1::::AgeMemory<>Node<><>0<>0<><>::
 AIAgentManager.gd::GDScript::4954939857757967540::1779506986::0::1::::<>Node<><>0<>0<><>::
 AIManager.gd::GDScript::8390453645687965822::1778796562::0::1::::<>Node<><>0<>0<><>::
@@ -135,7 +135,7 @@ ArtifactSystem.gd::GDScript::3452563224557549533::1779312290::0::1::::<>Node<><>
 ArtSystem.gd::GDScript::8334783542866444256::1778655002::0::1::::<>Node<><>0<>0<><>::
 AuthorityJobBoard.gd::GDScript::3607624428311843175::1779506968::0::1::::<>Node<><>0<>0<><>::
 AuthoritySystem.gd::GDScript::662900908174916362::1777694600::0::1::::<>Node<><>0<>0<><>::
-AutonomousWorldAI.gd::GDScript::1183334782843571355::1779589626::0::1::::<>Node<><>0<>0<><>::
+AutonomousWorldAI.gd::GDScript::1183334782843571355::1779592966::0::1::::<>Node<><>0<>0<><>::
 BloodlineSystem.gd::GDScript::5827355367358250544::1778616815::0::1::::<>Node<><>0<>0<><>::
 BodyPartWounds.gd::GDScript::2698733299669405232::1778884561::0::1::::<>Node<><>0<>0<><>::
 BodyRiskManager.gd::GDScript::9035867343056244085::1779319034::0::1::::<>Node<><>0<>0<><>::
@@ -169,11 +169,11 @@ EcologySystem.gd::GDScript::7356293288449483685::1779157936::0::1::::<>Node<><>0
 EconomyManager.gd::GDScript::600062380472312883::1779520444::0::1::::<>Node<><>0<>0<><>::
 EventBus.gd::GDScript::17816675561125202::1778616814::0::1::::<>Node<><>0<>0<><>::
 EventManager.gd::GDScript::7814471383146393468::1778796531::0::1::::<>Node<><>0<>0<><>::
-FactionManager.gd::GDScript::3854887585585149382::1779506968::0::1::::<>Node<><>0<>0<><>::
+FactionManager.gd::GDScript::3854887585585149382::1779592966::0::1::::<>Node<><>0<>0<><>::
 FactionRegistry.gd::GDScript::4416904286542695183::1779514896::0::1::::<>Node<><>0<>0<><>::
 FactionSystem.gd::GDScript::4206641617627097322::1779512508::0::1::::<>Node<><>0<>0<><>::
 FarmingSystem.gd::GDScript::4043429106894168777::1778438992::0::1::::<>Node<><>0<>0<><>::
-FlowingWater.gd::GDScript::8187021937268328513::1778654947::0::1::::<>Node<><>0<>0<><>::
+FlowingWater.gd::GDScript::8187021937268328513::1779593104::0::1::::<>Node<><>0<>0<><>::
 FogOfDiscovery.gd::GDScript::5610568208239195859::1779506968::0::1::::<>Node<><>0<>0<><>::
 FoodChainManager.gd::GDScript::7376747890299068317::1779319034::0::1::::<>Node<><>0<>0<><>::
 FootpathMemory.gd::GDScript::6069898222571078308::1778438593::0::1::::<>Node<><>0<>0<><>::
@@ -255,13 +255,13 @@ StockpileManager.gd::GDScript::215983093589793156::1779393533::0::1::::<>Node<><
 SupplyChainSystem.gd::GDScript::1527879448625684671::1779171827::0::1::::<>Node<><>0<>0<><>::
 SurvivalSystem.gd::GDScript::9164301206852135979::1779519907::0::1::::<>Node<><>0<>0<><>::
 TechnologySystem.gd::GDScript::1479520665738386352::1779508219::0::1::::<>Node<><>0<>0<><>::
-TerraformingSystem.gd::GDScript::895228937679888329::1778656675::0::1::::<>Node<><>0<>0<><>::
+TerraformingSystem.gd::GDScript::895228937679888329::1779593104::0::1::::<>Node<><>0<>0<><>::
 TickBudgetManager.gd::GDScript::5988893249458192683::1779441919::0::1::::<>Node<><>0<>0<><>::
 TickManager.gd::GDScript::5792076579507672326::1779359555::0::1::::<>Node<><>0<>0<><>::
 TickRateDecoupler.gd::GDScript::2900207393109439075::1778035714::0::1::::<>Node<><>0<>0<><>::
 TimeLapseRecorder.gd::GDScript::6434325121625872981::1778618622::0::1::::<>Node<><>0<>0<><>::
 ToolManager.gd::GDScript::292220667211019745::1779506968::0::1::::<>Node<><>0<>0<><>::
-TradeMemory.gd::GDScript::5248539327593372606::1779582166::0::1::::<>Node<><>0<>0<><>::
+TradeMemory.gd::GDScript::5248539327593372606::1779592966::0::1::::<>Node<><>0<>0<><>::
 TradePlanner.gd::GDScript::8396858183117698797::1779521435::0::1::::TradePlanner<>Node<><>0<>0<><>::
 UILayoutManager.gd::GDScript::7391518460782770688::1778320772::0::1::::<>Node<><>0<>0<><>::
 UIManager.gd::GDScript::1959618447068391785::1778796575::0::1::::<>Node<><>0<>0<><>::
@@ -319,7 +319,7 @@ code-review.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 lore-recall.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 session-start.md::TextFile::-1::1778793123::0::1::::<><><>0<>0<><>::
 ::res://builds/::1779497026
-::res://docs/::1779516537
+::res://docs/::1779593104
 AI_RUNTIME_MANDATE.md::TextFile::-1::1779432109::0::1::::<><><>0<>0<><>::
 AUTOLOAD_CONSOLIDATION_PLAN.md::TextFile::-1::1779394270::0::1::::<><><>0<>0<><>::
 AUTOLOAD_CONSOLIDATION_STATUS.md::TextFile::-1::1779510936::0::1::::<><><>0<>0<><>::
@@ -350,6 +350,7 @@ STATE_VERIFICATION_2026-05-22_P4.md::TextFile::-1::1779514561::0::1::::<><><>0<>
 STATE_VERIFICATION_2026-05-22_P5.md::TextFile::-1::1779514724::0::1::::<><><>0<>0<><>::
 STATE_VERIFICATION_2026-05-22_P6.md::TextFile::-1::1779514921::0::1::::<><><>0<>0<><>::
 STATE_VERIFICATION_2026-05-23.md::TextFile::-1::1779509416::0::1::::<><><>0<>0<><>::
+STATE_VERIFICATION_2026-05-24.md::TextFile::-1::1779593104::0::1::::<><><>0<>0<><>::
 ::res://docs/archive/::1779426607
 ACTUAL_TODO_LIST.md::TextFile::-1::1778172512::0::1::::<><><>0<>0<><>::
 AI_AUTONOMOUS_INNOVATION.md::TextFile::-1::1778107181::0::1::::<><><>0<>0<><>::
@@ -596,7 +597,7 @@ Weather.gd::GDScript::6639444511292649852::1779356199::0::1::::<>Node<><>0<>0<><
 World.gd::GDScript::6420505296756273027::1779514442::0::1::::World<>Node2D<><>0<>0<><>::
 World.tscn::PackedScene::-1::1778412704::0::1::::<><><>0<>0<><>::res://scenes/world/World.gd<>res://scripts/world/WorldOverlay.gd<>res://scripts/world/FireGlowManager.gd<>res://scripts/world/SunMoonLight.gd<>res://scripts/world/AmbientBiomeParticles.gd<>res://scripts/world/BloomGlow.gd
 ::res://scripts/::1778036069
-::res://scripts/ai/::1778693316
+::res://scripts/ai/::1779593104
 AIAgent.gd::GDScript::138437304583959177::1778356061::0::1::::AIAgent<>RefCounted<><>0<>0<><>::
 AIAutoBuild.gd::GDScript::6404625577550978048::1779506968::0::1::::<>Node<><>0<>0<><>::
 AICombatProgression.gd::GDScript::7304678481344964598::1778478488::0::1::::<>Node<><>0<>0<><>::
@@ -623,7 +624,7 @@ PawnDecisionRuleMatrix.gd::GDScript::1799434569812519709::1779506968::0::1::::Pa
 SettlementAI.gd::GDScript::6340692512974189301::1778658728::0::1::::SettlementAI<>RefCounted<><>0<>0<><>::
 SpatialGrid.gd::GDScript::2797234459260380184::1778146476::0::1::::<>RefCounted<><>0<>0<><>::
 SquadSystem.gd::GDScript::2380620585141055697::1778478301::0::1::::<>Node<><>0<>0<><>::
-WorldAI.gd::GDScript::9137509734492020207::1779510661::0::1::::<>Node<><>0<>0<><>::
+WorldAI.gd::GDScript::9137509734492020207::1779593104::0::1::::<>Node<><>0<>0<><>::
 ::res://scripts/camera/::1778866624
 CameraController.gd::GDScript::2884846490428133159::1779155257::0::1::::<>Camera2D<><>0<>0<><>::
 ::res://scripts/career/::1777765505
@@ -699,10 +700,10 @@ WorldMemory.gd::GDScript::1567247668634100173::1778866435::0::1::::WorldMemoryPe
 PlayerIncarnation.gd::GDScript::5240981477628095920::1777694600::0::1::::PlayerIncarnation<>RefCounted<><>0<>0<><>::
 ::res://scripts/save/::1777694600
 GameSave.gd::GDScript::6551108615968004699::1777960146::0::1::::GameSave<>Object<><>0<>0<><>::
-::res://scripts/social/::1777765505
+::res://scripts/social/::1779593104
 DramaticEventGenerator.gd::GDScript::7685796658771720821::1778320772::0::1::::DramaticEventGenerator<>RefCounted<><>0<>0<><>::
-GoalEngine.gd::GDScript::1230104234702065493::1778355728::0::1::::GoalEngine<>RefCounted<><>0<>0<><>::
-GossipPropagation.gd::GDScript::2986089948788778048::1778362956::0::1::::GossipPropagation<>RefCounted<><>0<>0<><>::
+GoalEngine.gd::GDScript::1230104234702065493::1779593104::0::1::::GoalEngine<>RefCounted<><>0<>0<><>::
+GossipPropagation.gd::GDScript::2986089948788778048::1779593104::0::1::::GossipPropagation<>RefCounted<><>0<>0<><>::
 ::res://scripts/stockpile/::1777694600
 Stockpile.gd::GDScript::5932442841318338198::1779153268::0::1::::Stockpile<>Node2D<><>0<>0<><>::
 ::res://scripts/system/::1779165057
@@ -844,7 +845,7 @@ sim_tick_profiler.gd::GDScript::5437025693754175770::1779317481::0::1::::<>Scene
 sim_worldmeaning_region_tags_smoke.gd::GDScript::1333556530761874467::1777831473::0::1::::<>SceneTree<><>0<>0<><>::
 sim_worldmeaning_tags_live_smoke.gd::GDScript::1761396663202143258::1777832996::0::1::::<>SceneTree<><>0<>0<><>::
 year1_visible_growth_smoke.gd::GDScript::9140667221003842523::1779341917::0::1::::<>SceneTree<><>0<>0<><>::
-::res://tools/ai/::1779432109
+::res://tools/ai/::1779593104
 _vc-err.txt::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 _vc-out.txt::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 _verify-compile-capture.txt::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::

@@ -519,6 +519,90 @@ func _plan_one_settlement_culture(
 						var tcel: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
 						if tcel.x >= 0 and bool(main.call("settlement_planner_post_job", tcel, Job.Type.BUILD_CELLAR)):
 							return
+			# Phase 5A: Woodshop — carpentry workshop near forest tiles
+			26:
+				if intent == MemoryManager.INTENT_ABANDON:
+					continue
+				if pawns >= 4 and stage >= 1:
+					var woodshop_n: int = int(feature_summary.get("woodshop_n", 0))
+					if woodshop_n < 1:
+						var tws: Vector2i = _pick_woodshop_tile(world, main, data, center, regions)
+						if tws.x >= 0 and bool(main.call("settlement_planner_post_job", tws, Job.Type.BUILD_WOODSHOP)):
+							return
+			# Phase 5A: Market Stall — near trade routes or gateway
+			27:
+				if intent == MemoryManager.INTENT_ABANDON:
+					continue
+				if pawns >= 5 and stage >= 1:
+					var market_stall_n: int = int(feature_summary.get("market_stall_n", 0))
+					if market_stall_n < 1:
+						var tms: Vector2i = _pick_market_tile(world, main, data, center, regions)
+						if tms.x >= 0 and bool(main.call("settlement_planner_post_job", tms, Job.Type.BUILD_MARKET_STALL)):
+							return
+			# Phase 5A: Cook Hut — food preparation when food is stable
+			28:
+				if intent == MemoryManager.INTENT_ABANDON:
+					continue
+				if pawns >= 4 and stage >= 1:
+					var cook_hut_n: int = int(feature_summary.get("cook_hut_n", 0))
+					if cook_hut_n < 1:
+						var tch: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
+						if tch.x >= 0 and bool(main.call("settlement_planner_post_job", tch, Job.Type.BUILD_COOK_HUT)):
+							return
+			# Phase 5A: Dining Table + Chair — community eating space
+			29:
+				if intent == MemoryManager.INTENT_ABANDON:
+					continue
+				if pawns >= 3 and stage >= 1:
+					var table_n: int = int(feature_summary.get("dining_table_n", 0))
+					var chair_n: int = int(feature_summary.get("chair_n", 0))
+					if table_n < 1:
+						var tdt: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
+						if tdt.x >= 0 and bool(main.call("settlement_planner_post_job", tdt, Job.Type.BUILD_DINING_TABLE)):
+							mark_build_intent_posted(settlement, "dining_table")
+							return
+					elif chair_n < 1:
+						var tch2: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
+						if tch2.x >= 0 and bool(main.call("settlement_planner_post_job", tch2, Job.Type.BUILD_CHAIR)):
+							mark_build_intent_posted(settlement, "chair")
+							return
+			# Phase 5A: Farm Field — tilled field for crops
+			30:
+				if intent == MemoryManager.INTENT_ABANDON:
+					continue
+				if pawns >= 3 and stage >= 1:
+					var farm_field_n: int = int(feature_summary.get("farm_field_n", 0))
+					if farm_field_n < 2:  # Build 2 farm fields before other production
+						var tff: Vector2i = _pick_farm_tile(world, main, data, center, regions)
+						if tff.x >= 0 and bool(main.call("settlement_planner_post_job", tff, Job.Type.BUILD_FARM_FIELD)):
+							mark_build_intent_posted(settlement, "farm_field")
+							return
+			# Phase 5A: Boat Workshop — near water for boat building
+			31:
+				if intent == MemoryManager.INTENT_ABANDON:
+					continue
+				if pawns >= 6 and stage >= 2:
+					var boat_workshop_n: int = int(feature_summary.get("boat_workshop_n", 0))
+					if boat_workshop_n < 1 and _has_water_nearby(data, center, regions):
+						var tbw: Vector2i = _pick_waterside_tile(world, main, data, center, regions)
+						if tbw.x >= 0 and bool(main.call("settlement_planner_post_job", tbw, Job.Type.BUILD_BOAT_WORKSHOP)):
+							return
+			# Phase 5A: Counter — market display surface for trade
+			32:
+				if intent == MemoryManager.INTENT_ABANDON:
+					continue
+				if pawns >= 5 and stage >= 2:
+					var counter_n: int = int(feature_summary.get("counter_n", 0))
+					if counter_n < 1:
+						var tcnt: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)
+						if tcnt.x >= 0 and bool(main.call("settlement_planner_post_job", tcnt, Job.Type.BUILD_COUNTER)):
+							return
+			# Phase 5A: GateWay — detect and mark gateway entry for trade routes
+			33:
+				if intent == MemoryManager.INTENT_ABANDON:
+					continue
+				if pawns >= 2 and stage >= 1:
+					_detect_and_seed_gateway(world, main, data, center, regions)
 
 
 ## Claim adjacent regions as TERRITORY zones for a growing settlement.
@@ -1724,3 +1808,134 @@ func mark_build_intent_posted(settlement: Dictionary, build_type: String) -> voi
 	_last_build_intent_tick[_build_intent_key(center_rk, build_type)] = tick
 	if ColonySimServices != null:
 		ColonySimServices.mark_settlement_build_kind_posted(center_rk, build_type)
+
+# ==================== Phase 5A: Woodshop / Market / Gateway ====================
+
+## Pick a tile for a woodshop — prefer forest-adjacent spots near settlement.
+func _pick_woodshop_tile(world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array) -> Vector2i:
+	var region_lookup: Dictionary = _regions_lookup(regions)
+	var best_forest_proximity: int = -1
+	var best_tile: Vector2i = Vector2i(-1, -1)
+	# Search radius 6 around center for forest-adjacent tiles
+	for dy in range(-6, 7):
+		for dx in range(-6, 7):
+			if _budget_exceeded():
+				break
+			var t: Vector2i = Vector2i(center.x + dx, center.y + dy)
+			if not _tile_belongs_to_lookup(t, region_lookup):
+				continue
+			if not data.in_bounds(t.x, t.y):
+				continue
+			if data.get_feature(t.x, t.y) != TileFeature.Type.NONE:
+				continue
+			if not Biome.is_passable(data.get_biome(t.x, t.y)):
+				continue
+			# Count tree features in surrounding 3x3 area
+			var tree_count: int = 0
+			for ndy in range(-1, 2):
+				for ndx in range(-1, 2):
+					var nt: Vector2i = Vector2i(t.x + ndx, t.y + ndy)
+					if data.in_bounds(nt.x, nt.y) and data.get_feature(nt.x, nt.y) == TileFeature.Type.TREE:
+						tree_count += 1
+			if tree_count > best_forest_proximity:
+				best_forest_proximity = tree_count
+				best_tile = t
+	if best_tile.x >= 0:
+		return best_tile
+	# Fallback: use infrastructure tile
+	return _pick_infrastructure_tile(world, main, data, center, regions)
+
+
+## Pick a tile for a market stall — prefer near gateway or trade-route tiles.
+func _pick_market_tile(world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array) -> Vector2i:
+	var region_lookup: Dictionary = _regions_lookup(regions)
+	var best_trade_proximity: int = 0
+	var best_tile: Vector2i = Vector2i(-1, -1)
+	# Check if settlement has a stored gateway tile
+	if TradeMemory != null:
+		for route in TradeMemory.trade_routes:
+			if not (route is Dictionary):
+				continue
+			var rd: Dictionary = route as Dictionary
+			var fr: int = int(rd.get("from_settlement", -1))
+			var to: int = int(rd.get("to_settlement", -1))
+			var center_rk: int = WorldMemory._region_key(center.x, center.y) if WorldMemory != null else -1
+			if fr != center_rk and to != center_rk:
+				continue
+			# Route connects to this settlement — find route tiles
+			var tiles_v: Variant = rd.get("tiles", rd.get("path", []))
+			if tiles_v is Array:
+				for tile_any in (tiles_v as Array):
+					if tile_any is Vector2i:
+						var rt: Vector2i = tile_any as Vector2i
+						# Check tiles adjacent to route tile
+						for adj in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+							var at: Vector2i = rt + adj
+							if not _tile_belongs_to_lookup(at, region_lookup):
+								continue
+							if not data.in_bounds(at.x, at.y):
+								continue
+							if data.get_feature(at.x, at.y) != TileFeature.Type.NONE:
+								continue
+							if not Biome.is_passable(data.get_biome(at.x, at.y)):
+								continue
+							var dist: int = abs(at.x - center.x) + abs(at.y - center.y)
+							var score: int = 100 - dist  # Prefer close to route
+							if score > best_trade_proximity:
+								best_trade_proximity = score
+								best_tile = at
+	if best_tile.x >= 0:
+		return best_tile
+	# Fallback: use infrastructure tile
+	return _pick_infrastructure_tile(world, main, data, center, regions)
+
+
+## Detect trade-route gateway tiles and mark gateway zone on settlement entry.
+## Gateway = first route tile adjacent to a settlement region. Market/storage builds
+## should prefer tiles near the gateway for natural outward growth order:
+##   Gateway → Market/Storage → Hearth → Houses → Workshops
+func _detect_and_seed_gateway(world: World, main: Node2D, data: WorldData, center: Vector2i, regions: PackedInt32Array) -> void:
+	if TradeMemory == null or ZoneRegistry == null:
+		return
+	var center_rk: int = WorldMemory._region_key(center.x, center.y) if WorldMemory != null else -1
+	var region_lookup: Dictionary = _regions_lookup(regions)
+	var found_gateway: Vector2i = Vector2i(-1, -1)
+	# Scan all trade routes for tiles adjacent to this settlement's regions
+	for route in TradeMemory.trade_routes:
+		if not (route is Dictionary):
+			continue
+		var rd: Dictionary = route as Dictionary
+		var fr: int = int(rd.get("from_settlement", -1))
+		var to: int = int(rd.get("to_settlement", -1))
+		if fr != center_rk and to != center_rk:
+			continue
+		var tiles_v: Variant = rd.get("tiles", rd.get("path", []))
+		if not (tiles_v is Array):
+			continue
+		var route_tiles: Array = tiles_v as Array
+		for tile_any in route_tiles:
+			if not (tile_any is Vector2i):
+				continue
+			var rt: Vector2i = tile_any as Vector2i
+			# Check if this route tile is INSIDE a settlement region
+			if _tile_belongs_to_lookup(rt, region_lookup):
+				# This is the entry tile — the gateway
+				found_gateway = rt
+				break
+		if found_gateway.x >= 0:
+			break
+	if found_gateway.x < 0:
+		return
+	# Register a MARKET_ZONE around the gateway (3x3 area)
+	var zone_rect: Rect2i = Rect2i(found_gateway.x - 1, found_gateway.y - 1, 3, 3)
+	ZoneRegistry.register(ZoneRegistry.ZoneType.BUILD, zone_rect)
+	if WorldMemory != null:
+		WorldMemory.record_event({
+			"type": "gateway_seeded",
+			"settlement_center": center_rk,
+			"gateway_tile_x": found_gateway.x,
+			"gateway_tile_y": found_gateway.y,
+			"tick": GameManager.tick_count,
+		})
+		if OS.is_debug_build():
+			print("[SettlementPlanner] Gateway seeded at (%d,%d) for settlement %d" % [found_gateway.x, found_gateway.y, center_rk])

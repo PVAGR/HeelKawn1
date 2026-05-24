@@ -208,7 +208,7 @@ static func _apply_pressure_bias_to_biases(biases: Dictionary, pawn_id: int) -> 
 	var fight_amount: int = int(round(PRESSURE_FIGHT_BIAS * intensity))
 	var hoard_amount: int = int(round(PRESSURE_HOARD_BIAS * intensity))
 
-	match bias_type:
+		match bias_type:
 		"flee":
 			# Exodus: prefer migration, exploration, foraging far away
 			_add_bias(biases, [Job.Type.FORAGE, Job.Type.GROW_FOOD, Job.Type.HARVEST_CROPS], flee_amount)
@@ -222,6 +222,59 @@ static func _apply_pressure_bias_to_biases(biases: Dictionary, pawn_id: int) -> 
 			_add_bias(biases, [Job.Type.CHOP, Job.Type.MINE, Job.Type.FORAGE, Job.Type.HUNT, Job.Type.GROW_FOOD], hoard_amount)
 			_add_bias(biases, [Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR], hoard_amount)
 			_add_bias(biases, [Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP], -hoard_amount)
+
+
+## INNER FIRE / HEARTH SPARK: environmental drives shaping job preferences.
+## This makes pawns' decisions feel organic and responsive to their situation:
+## - Hearth drive: builds fires when cold/at night
+## - Storage drive: builds storage when carrying items with no stockpile
+## - Shelter drive: builds beds when tired
+## - Survival drive: seeks food when hungry
+static func _apply_inner_fire_bias_to_biases(biases: Dictionary, data: HeelKawnianData, pawn: Variant) -> void:
+	if HearthMemory == null or data == null:
+		return
+	
+	# Get inner fire drives from HearthMemory
+	# This includes: hearth_drive, storage_drive, shelter_drive, survival_drive
+	var inner_fire: Dictionary = HearthMemory.get_inner_fire_for_pawn(data.tile_pos, data)
+	if inner_fire.is_empty():
+		return
+	
+	var hearth_drive: float = float(inner_fire.get("hearth_drive", 0.0))
+	var storage_drive: float = float(inner_fire.get("storage_drive", 0.0))
+	var shelter_drive: float = float(inner_fire.get("shelter_drive", 0.0))
+	var survival_drive: float = float(inner_fire.get("survival_drive", 0.0))
+	
+	# Convert drives to bias amounts (0-8 range)
+	var hearth_bias: int = int(round(hearth_drive * 8.0))
+	var storage_bias: int = int(round(storage_drive * 8.0))
+	var shelter_bias: int = int(round(shelter_drive * 8.0))
+	var survival_bias: int = int(round(survival_drive * 6.0))
+	
+	# HEARTH DRIVE: prioritize warmth when cold/at night
+	# Fire pits, hearths, fuel gathering
+	if hearth_bias > 0:
+		_add_bias(biases, [Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_HEARTH], hearth_bias)
+		_add_bias(biases, [Job.Type.CHOP, Job.Type.GATHER_STICK], maxi(1, hearth_bias / 2))
+	
+	# STORAGE DRIVE: prioritize storage when carrying items with no stockpile
+	# Storage huts, granaries, cellars
+	if storage_bias > 0:
+		_add_bias(biases, [Job.Type.BUILD_STORAGE_HUT], storage_bias)
+		_add_bias(biases, [Job.Type.BUILD_GRANARY, Job.Type.BUILD_CELLAR], maxi(1, storage_bias / 2))
+	
+	# SHELTER DRIVE: prioritize beds/shelter when tired
+	# Beds, shelters, walls (for safety)
+	if shelter_bias > 0:
+		_add_bias(biases, [Job.Type.BUILD_BED, Job.Type.BUILD_SHELTER], shelter_bias)
+		_add_bias(biases, [Job.Type.BUILD_WALL], maxi(1, shelter_bias / 2))
+	
+	# SURVIVAL DRIVE: prioritize food when hungry/hurt
+	# Forage, hunt, fish, grow food
+	if survival_bias > 0:
+		_add_bias(biases, [Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH, Job.Type.GROW_FOOD], survival_bias)
+		# Deprioritize non-survival jobs during crisis
+		_add_bias(biases, [Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP, Job.Type.CARVE_KNOWLEDGE_STONE], -survival_bias)
 
 
 static func ensure_identity_for_pawn(pawn: Variant) -> String:
@@ -323,6 +376,14 @@ static func get_matrix_decision_for_pawn(pawn: Variant) -> Dictionary:
 			var hh_reason: String = str(hh_ambition.get("reason", "coordinated goal"))
 			# We'll update the rationale later in the function's return block, 
 			# but let's ensure it's tracked.
+	
+	# INNER FIRE / HEARTH SPARK: drives from HearthMemory
+	# This makes pawns' job choices responsive to their immediate environment:
+	# - Cold at night? Build a fire pit.
+	# - Carrying items with no stockpile? Build storage.
+	# - Tired with no bed? Build shelter.
+	# - Hungry/hurt? Prioritize food/safety.
+	_apply_inner_fire_bias_to_biases(biases, data, pawn)
 	
 	# Matrix deepening: let unlocked skill-tree/work-speed influence job biases.
 	# This is deterministic and only nudges priorities; it does not override

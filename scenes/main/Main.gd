@@ -48,6 +48,18 @@ const BUILD_DOOR_PRIORITY: int = 6
 ## When player presses B, designate this many beds in a tight ring around the
 ## stockpile (or as many as fit before we run out of slots / scan radius).
 const BEDS_PER_DESIGNATION: int = 5
+
+## ORGANIC CIVILIZATION GROWTH:
+## When true, the world begins dormant with no pre-placed stockpiles,
+## supplies, fire pits, or beds. Civilization emerges organically when:
+## 1. Pawns repeatedly try to drop items with no stockpile nearby
+## 2. HearthMemory tracks this pile pressure (like roads track movement)
+## 3. When pressure reaches threshold, an organic pile forms at that location
+## 4. This creates a feedback loop: piles attract more activity → more pressure
+##
+## When false, use the legacy seeded bootstrap (seed stockpile at world center,
+## starting supplies, 5 fire pits, 10 beds) for guaranteed settlement formation.
+const ORGANIC_CIVILIZATION_ENABLED: bool = true
 ## Search radius around the stockpile for bed sites. 6 -> 13x13 area.
 const BED_SCAN_RADIUS: int = 6
 const MAX_FORAGE_JOBS: int = 80
@@ -2440,9 +2452,11 @@ func _bootstrap_colony() -> void:
 	# DiscoveryGate as static utility (no longer an autoload)
 	DiscoveryGate.init()
 	# Place stockpile + supplies so settlement formation is unblocked
-	_place_stockpile(main_component)
-	_seed_starting_supplies()
-	_seed_initial_fire_pits(main_component)
+	# ORGANIC_CIVILIZATION: skip seeded bootstrap; let piles form from repeated pawn activity
+	if not ORGANIC_CIVILIZATION_ENABLED:
+		_place_stockpile(main_component)
+		_seed_starting_supplies()
+		_seed_initial_fire_pits(main_component)
 	# Wizard gives them some resilience at boot
 	_pawn_spawner.spawn_starters(_world, main_component)
 	# Apply starting state effects after pawns are spawned
@@ -6411,10 +6425,14 @@ func _reroll_world() -> void:
 	var main_component: int = _world.pathfinder.largest_component_id()
 	# Place the stockpile BEFORE respawning pawns, so every pawn sees a valid
 	# stockpile reference the first time it ticks.
-	_place_stockpile(main_component)
-	_ensure_validation_session_seed_stockpile_overlaps_settlement()
-	_seed_starting_supplies()
-	_seed_initial_fire_pits(main_component)
+	# ORGANIC_CIVILIZATION: skip seeded bootstrap
+	if not ORGANIC_CIVILIZATION_ENABLED:
+		_place_stockpile(main_component)
+		_ensure_validation_session_seed_stockpile_overlaps_settlement()
+		_seed_starting_supplies()
+		_seed_initial_fire_pits(main_component)
+	else:
+		_ensure_validation_session_seed_stockpile_overlaps_settlement()
 	_pawn_spawner.respawn(_world, main_component)
 	_ensure_player_pawn_assigned()
 	Main._world_stabilization_until_tick = GameManager.tick_count + WORLD_STABILIZATION_TICKS
@@ -7037,8 +7055,15 @@ func _seed_bootstrap_jobs_near_pawn_cluster() -> void:
 			if t.x >= 0 and not JobManager.has_job_at(t):
 				_post_seeded_job(Job.Type.BUILD_FIRE_PIT, t, 5, 12, "warmth_coverage")
 	# First stockpile zone near the living cluster (proto camps have no formal settlement pass).
+	# Check HearthMemory first for organic pile pressure (roads-like pile formation).
+	# If pawns have been repeatedly trying to drop items at specific locations,
+	# create piles at those high-pressure locations instead of arbitrarily at the center.
 	if StockpileManager != null and StockpileManager.zone_count() <= 0:
-		call_deferred("_ensure_settlement_stockpile", center)
+		var organic_pile_tile: Vector2i = _find_highest_pressure_pile_location(center, 12)
+		if organic_pile_tile.x >= 0:
+			call_deferred("_ensure_organic_pile", organic_pile_tile)
+		else:
+			call_deferred("_ensure_settlement_stockpile", center)
 	# Beds: only when macro housing pressure warrants (not blind pop/2).
 	var housing_press: float = ColonySimServices.get_housing_pressure() if ColonySimServices != null else 0.0
 	if housing_press > 0.35:
@@ -8111,6 +8136,62 @@ func _ensure_settlement_stockpile(center: Vector2i) -> void:
 	sp.add_item(Item.Type.FLINT, 2)
 	if OS.is_debug_build():
 		print("[Main] Auto-created stockpile zone at %s for settlement near %s (sid=%d)" % [rect.position, center, sid])
+
+
+## Find the tile with highest organic pile pressure near the center.
+## Returns Vector2i(-1, -1) if no tile has significant pressure.
+func _find_highest_pressure_pile_location(center: Vector2i, radius: int) -> Vector2i:
+	if HearthMemory == null:
+		return Vector2i(-1, -1)
+	var best_tile: Vector2i = Vector2i(-1, -1)
+	var best_level: int = 0
+	for dy in range(-radius, radius + 1):
+		for dx in range(-radius, radius + 1):
+			var tx: int = center.x + dx
+			var ty: int = center.y + dy
+			if tx < 0 or ty < 0 or tx >= WorldData.WIDTH or ty >= WorldData.HEIGHT:
+				continue
+			var level: int = HearthMemory.get_pile_level(tx, ty)
+			if level > best_level:
+				best_level = level
+				best_tile = Vector2i(tx, ty)
+	if best_level >= 1:
+		return best_tile
+	return Vector2i(-1, -1)
+
+
+## Create an organic pile at the given tile.
+## Similar to _ensure_settlement_stockpile but for organic pile formation.
+func _ensure_organic_pile(center: Vector2i) -> void:
+	if _world == null or _world.pathfinder == null:
+		return
+	var rk: int = _WM._region_key(center.x, center.y)
+	var sid: int = SettlementMemory.get_settlement_id_for_region(rk)
+	if _settlement_has_nearby_stockpile(center, sid):
+		return
+	var main_component: int = _world.pathfinder.largest_component_id()
+	var t: Vector2i = _find_build_tile_near(center, 3, main_component)
+	if t.x < 0:
+		return
+	var rect: Rect2i = Rect2i(t.x, t.y, 1, 1)
+	for z in StockpileManager.zones():
+		if z != null and is_instance_valid(z) and z.contains_tile(t):
+			return
+	var sp: Stockpile = STOCKPILE_SCENE.instantiate()
+	sp.set_filter(Stockpile.Filter.ALL)
+	sp.set_rect_tiles(rect)
+	sp.position = _world.tile_to_world(rect.position)
+	if sid >= 0:
+		sp.settlement_id = sid
+	add_child(sp)
+	StockpileManager.register(sp)
+	if _world.pathfinder != null and _world.data != null:
+		_world.pathfinder.flush_component_dirty(_world.data)
+	sp.add_item(Item.Type.BERRY, 3)
+	sp.add_item(Item.Type.WOOD, 2)
+	sp.add_item(Item.Type.STONE, 1)
+	if OS.is_debug_build():
+		print("[Main] Organic pile formed at %s from repeated deposits (sid=%d)" % [rect.position, sid])
 
 
 func _tile_seeded_order_key(tile: Vector2i, stream_name: StringName) -> int:
@@ -9640,7 +9721,10 @@ func _apply_save_dict(s: Dictionary) -> void:
 	if zlist is Array and not zlist.is_empty():
 		_restore_stockpiles_from_save(zlist)
 	else:
-		_place_stockpile(_world.pathfinder.largest_component_id())
+		# ORGANIC_CIVILIZATION: if save has no zones, let organic piles form
+		# instead of forcing a seed stockpile
+		if not ORGANIC_CIVILIZATION_ENABLED:
+			_place_stockpile(_world.pathfinder.largest_component_id())
 	HeelKawnianData._next_id = 1
 	for pd in s.get("pawns", []):
 		if pd is Dictionary:

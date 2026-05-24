@@ -7211,12 +7211,20 @@ func _begin_haul_to_stockpile() -> void:
 			data.carrying, data.tile_pos, _world.pathfinder
 		)
 	if sp == null:
-		# No zone exists that will take this item. After enough retries,
-		# emergency-drop it so the pawn doesn't stay stuck forever.
+		# No zone exists that will take this item.
+		# Record pile pressure in HearthMemory (roads-like organic pile formation).
+		# This pressure will eventually cause piles to form at locations where
+		# pawns repeatedly try to drop items.
+		if HearthMemory != null:
+			HearthMemory.record_pile_deposit(data.tile_pos, data.carrying)
+		
+		# After enough retries, emergency-drop it so the pawn doesn't stay stuck forever.
+		# The pressure has been recorded, and Main will create organic piles at
+		# high-pressure locations.
 		_haul_retry_count += 1
 		if _haul_retry_count >= MAX_HAUL_RETRIES:
 			if GameManager.verbose_logs():
-				print("[HeelKawnian] %s emergency-dropping %s after %d haul retries" % [data.display_name, data.carrying, _haul_retry_count])
+				print("[HeelKawnian] %s emergency-dropping %s after %d haul retries (pressure recorded)" % [data.display_name, data.carrying, _haul_retry_count])
 			data.clear_carry()
 			_haul_retry_count = 0
 			_state = State.IDLE

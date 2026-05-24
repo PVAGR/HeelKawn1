@@ -418,9 +418,34 @@ func recompute(_world: World) -> void:
 		var has_buildings: bool = int(m.get("buildings_constructed", 0)) > 0
 		var has_scar: bool = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0)) >= 1
 		var has_community: bool = pawn_per_region.has(rk) and int(pawn_per_region[rk]) >= 2
-		if has_deaths and has_scar:
-			eligible.append(rk)
+	# ORGANIC CIVILIZATION: require actual current civilization for settlement eligibility.
+	# 
+	# has_deaths AND has_scar is for RUIN REVIVAL (bringing dead settlements back),
+	# not for initial settlement formation. At the dawn of time, there shouldn't be
+	# 16 proto-sites just because worldgen created historical death/scar locations.
+	# 
+	# Settlement formation should require:
+	# - has_buildings: actual infrastructure built by current civilization
+	# - has_community: actual pawns currently living/working together
+	#
+	# Legacy behavior keeps has_deaths AND has_scar for backward compatibility.
+	# For now, we ONLY create settlements from actual civilization.
+	if has_buildings:
+		eligible.append(rk)
+	elif has_community:
+		eligible.append(rk)
+	elif has_deaths and has_scar:
+		# TODO: Ruin revival should only apply AFTER a settlement has collapsed,
+		# not at world initialization. For now, disabled to prevent 16 empty proto-sites.
+		# eligible.append(rk)
+		pass
 		elif has_buildings:
+			eligible.append(rk)
+		elif has_community:
+			eligible.append(rk)
+	else:
+		# ORGANIC CIVILIZATION: only regions with actual current civilization
+		if has_buildings:
 			eligible.append(rk)
 		elif has_community:
 			eligible.append(rk)

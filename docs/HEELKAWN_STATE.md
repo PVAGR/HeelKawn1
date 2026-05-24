@@ -4,12 +4,12 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** May 23, 2026
+**Last Updated:** May 24, 2026
 **Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
 **Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
-**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-21.md](STATE_VERIFICATION_2026-05-21.md)
+**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-24.md](STATE_VERIFICATION_2026-05-24.md)
 
 ---
 
@@ -137,6 +137,54 @@ We are always building, always refining, always expanding. This document capture
 
 - **Done**: Autoload consolidation Phases 1 + 2 (9 autoloads removed, from 150 → 141)
   See `docs/AUTOLOAD_CONSOLIDATION_STATUS.md` for details.
+
+## May 24, 2026 Session Completion
+
+- **FEAT: Organic Civilization Growth (Phase 5A deepening)**:
+  - Added `autoloads/HearthMemory.gd` — roads-like pressure tracking for civilization infrastructure
+    - `record_pile_deposit()`: pawns dropping items with no stockpile builds pressure
+    - `record_hearth_activity()`: fire/warmth usage tracking
+    - `record_shelter_usage()`: bed/shelter usage tracking
+    - `get_inner_fire_for_pawn()`: computes 4 drives from environment + pawn state
+  - Pressure thresholds: PILE_T1=3, PILE_T2=8, PILE_FORMAL=15 (like road tiers)
+  - Added to autoloads in `project.godot`, right after RoadMemory
+
+- **FEAT: Inner Fire / Hearth Spark drives wired to Matrix AI**:
+  - `HeelKawnianManager.gd`: added `_apply_inner_fire_bias_to_biases()`
+  - 4 drives computed per-pawn: `hearth_drive`, `storage_drive`, `shelter_drive`, `survival_drive`
+  - Drive inputs:
+    - `hearth_drive`: night time (0.3), hearth proximity inverse (0.5), warmth pressure (0.5)
+    - `storage_drive`: is_carrying (0.6), nearby pile pressure (0.3)
+    - `shelter_drive`: rest < 30, night with low hearth coverage
+    - `survival_drive`: hunger, health < 50
+  - Drive → job biases:
+    - hearth_drive: BUILD_FIRE_PIT, BUILD_HEARTH, CHOP, GATHER_STICK
+    - storage_drive: BUILD_STORAGE_HUT, BUILD_GRANARY, BUILD_CELLAR
+    - shelter_drive: BUILD_BED, BUILD_SHELTER, BUILD_WALL
+    - survival_drive: FORAGE, HUNT, FISH, GROW_FOOD (deprioritizes teaching/carving)
+  - Wired into `get_matrix_decision_for_pawn()` — biases, not overrides; legality gates still apply
+
+- **FEAT: Seeded bootstrap disabled behind ORGANIC_CIVILIZATION_ENABLED flag**:
+  - `Main.gd`: added `ORGANIC_CIVILIZATION_ENABLED = true` constant
+  - 3 locations wrapped:
+    - `_bootstrap_colony()`: initial stockpile/supplies/fire pits
+    - `_reroll_world()`: reroll-time bootstrap
+    - `_apply_save_dict()`: save-fallback when no zones in save
+  - When disabled (`false`), legacy behavior: seed stockpile at (127,127), supplies, 5 fire pits, 10 beds
+  - When enabled (`true`), world starts dormant; civilization emerges from pawn activity
+
+- **FEAT: Organic pile formation from repeated haul pressure**:
+  - `HeelKawnian.gd`: `_begin_haul_to_stockpile()` now calls `HearthMemory.record_pile_deposit()` before emergency drop
+  - `Main.gd`: added `_find_highest_pressure_pile_location(center, radius)` — scans for PILE_T1+
+  - `Main.gd`: added `_ensure_organic_pile(tile)` — creates 1x1 stockpile with starter items (3 berry, 2 wood, 1 stone)
+  - `_seed_bootstrap_jobs_near_pawn_cluster()`: now checks HearthMemory first; creates organic pile at high-pressure location instead of arbitrary center
+
+- **FIX: SettlementMemory proto-site eligibility no longer creates empty settlements**:
+  - `SettlementMemory.gd`: `recompute()` proto-site eligibility logic fixed
+  - Root cause: `has_deaths AND has_scar` was creating 16 empty proto-sites at tick 30000 from historical worldgen deaths/scars
+  - Fix: only `has_buildings OR has_community` count toward current civilization eligibility
+  - `has_deaths AND has_scar` is commented out for ruin revival (should only apply AFTER settlement collapse, not at dawn of time)
+  - Also fixed duplicate elif blocks in the same function that were unreachable dead code
 
 ## 2026-05-22: Knowledge Preservation Loop Unification
 

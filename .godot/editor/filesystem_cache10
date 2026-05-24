@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779588995
+::res://::1779589648
 .aider.chat.history.md::TextFile::-1::1779517150::0::1::::<><><>0<>0<><>::
 AGENTS.md::TextFile::-1::1779432109::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779506968::0::1::::<><><>0<>0<><>::
@@ -126,7 +126,7 @@ door.png::CompressedTexture2D::4142856041344568916::1777971615::1778417117::1:::
 tree.png::CompressedTexture2D::2389156156575278385::1777971448::1778417117::1::::<><><>0<>0<>5fb83ad2402bae2aec6e4562927a022d<>res://.godot/imported/tree.png-1272070f95f6cffffd0fe51159239f22.ctex::
 wall.png::CompressedTexture2D::5625700477737538922::1777971615::1778417117::1::::<><><>0<>0<>4aab1d5a487300cd9189921708537b6f<>res://.godot/imported/wall.png-65f788789b9046a626a2b3a58cc8bb94.ctex::
 ::res://assets/sprites/world/::1777971496
-::res://autoloads/::1779588982
+::res://autoloads/::1779589626
 AgeMemory.gd::GDScript::3623017377226678626::1779514684::0::1::::AgeMemory<>Node<><>0<>0<><>::
 AIAgentManager.gd::GDScript::4954939857757967540::1779506986::0::1::::<>Node<><>0<>0<><>::
 AIManager.gd::GDScript::8390453645687965822::1778796562::0::1::::<>Node<><>0<>0<><>::
@@ -135,7 +135,7 @@ ArtifactSystem.gd::GDScript::3452563224557549533::1779312290::0::1::::<>Node<><>
 ArtSystem.gd::GDScript::8334783542866444256::1778655002::0::1::::<>Node<><>0<>0<><>::
 AuthorityJobBoard.gd::GDScript::3607624428311843175::1779506968::0::1::::<>Node<><>0<>0<><>::
 AuthoritySystem.gd::GDScript::662900908174916362::1777694600::0::1::::<>Node<><>0<>0<><>::
-AutonomousWorldAI.gd::GDScript::1183334782843571355::1779588963::0::1::::<>Node<><>0<>0<><>::
+AutonomousWorldAI.gd::GDScript::1183334782843571355::1779589626::0::1::::<>Node<><>0<>0<><>::
 BloodlineSystem.gd::GDScript::5827355367358250544::1778616815::0::1::::<>Node<><>0<>0<><>::
 BodyPartWounds.gd::GDScript::2698733299669405232::1778884561::0::1::::<>Node<><>0<>0<><>::
 BodyRiskManager.gd::GDScript::9035867343056244085::1779319034::0::1::::<>Node<><>0<>0<><>::
@@ -217,7 +217,7 @@ PawnChatterBubbles.gd::GDScript::6228729285894222658::1778404239::0::1::::<>Node
 PawnCommunicationLog.gd::GDScript::4328438871201319713::1778356377::0::1::::<>Node<><>0<>0<><>::
 PawnConsciousness.gd::GDScript::1883500089821746820::1779506968::0::1::::<>Node<><>0<>0<><>::
 PawnDialogue.gd::GDScript::8163225655690757563::1778398409::0::1::::<>Node<><>0<>0<><>::
-PawnManager.gd::GDScript::6168108629619458239::1778796589::0::1::::<>Node<><>0<>0<><>::
+PawnManager.gd::GDScript::6168108629619458239::1779589626::0::1::::<>Node<><>0<>0<><>::
 PersistenceSystem.gd::GDScript::3755589057086903680::1777765505::0::1::::<>Node<><>0<>0<><>::
 PlayerBuilding.gd::GDScript::7683428330757546623::1778439086::0::1::::<>Node<><>0<>0<><>::
 PlayerGathering.gd::GDScript::4139591605780833495::1779393775::0::1::::<>Node<><>0<>0<><>::
@@ -267,7 +267,7 @@ UILayoutManager.gd::GDScript::7391518460782770688::1778320772::0::1::::<>Node<><
 UIManager.gd::GDScript::1959618447068391785::1778796575::0::1::::<>Node<><>0<>0<><>::
 UndergroundSystem.gd::GDScript::2006997177991284016::1778654948::0::1::::<>Node<><>0<>0<><>::
 VictorySystem.gd::GDScript::8136839613232613595::1778884628::0::1::::<>Node<><>0<>0<><>::
-WarProductionSystem.gd::GDScript::5618525111777814004::1779588964::0::1::::<>Node<><>0<>0<><>::
+WarProductionSystem.gd::GDScript::5618525111777814004::1779589626::0::1::::<>Node<><>0<>0<><>::
 WildlifePopulation.gd::GDScript::2396512953879973527::1779519905::0::1::::<>Node<><>0<>0<><>::
 WindSystem.gd::GDScript::5170607214381822721::1779356196::0::1::::<>Node<><>0<>0<><>::
 WorldActionLedger.gd::GDScript::1285733271293161655::1778356298::0::1::::<>Node<><>0<>0<><>::

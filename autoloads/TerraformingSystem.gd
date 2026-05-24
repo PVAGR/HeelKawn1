@@ -106,8 +106,8 @@ func _flood_coastal_tiles(_wd: WorldData, sea_level: float) -> void:
 			if flooded >= max_floods:
 				return
 			var biome: int = _wd.get_biome(x, y)
-			# Only flood GRASS or SHRUBLAND adjacent to existing water
-			if biome == Biome.Type.GRASS or biome == Biome.Type.SHRUBLAND:
+			# Only flood GRASS or PLAINS adjacent to existing water
+			if biome == Biome.Type.GRASS or biome == Biome.Type.PLAINS:
 				if _is_adjacent_to_water(_wd, x, y):
 					# Deterministic check based on position and current tick
 					var tile_hash: int = (x * 73856093) ^ (y * 19349663)
@@ -166,7 +166,7 @@ func _is_adjacent_to_land(_wd: WorldData, x: int, y: int) -> bool:
 			if nx < 0 or nx >= WorldData.WIDTH or ny < 0 or ny >= WorldData.HEIGHT:
 				continue
 			var biome: int = _wd.get_biome(nx, ny)
-			if biome == Biome.Type.GRASS or biome == Biome.Type.FOREST or biome == Biome.Type.HILLS:
+			if biome == Biome.Type.GRASS or biome == Biome.Type.PLAINS or biome == Biome.Type.FOREST or biome == Biome.Type.MOUNTAIN:
 				return true
 	return false
 

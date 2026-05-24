@@ -25,7 +25,7 @@ require_file "docs/AI_RUNTIME_MANDATE.md"
 require_file "docs/HEELKAWN_STATE.md"
 
 echo "[1/4] Determinism guard scan (critical systems)..."
-if rg -nP '(?<!\.)\b(?:randf|randi|rand_range|randf_range|randi_range)\(' \
+if grep -nP '(?<!\.)\b(?:randf|randi|rand_range|randf_range|randi_range)\(' \
   autoloads/DisasterSystem.gd \
   scripts/world/CataclysmSystem.gd \
   autoloads/KnowledgeSystem.gd >/tmp/hk_rng_guard.txt 2>/dev/null; then
@@ -34,15 +34,16 @@ if rg -nP '(?<!\.)\b(?:randf|randi|rand_range|randf_range|randi_range)\(' \
 fi
 
 echo "[2/4] World pathing sanity scan..."
-if rg -n 'map_width|map_height' autoloads/DisasterSystem.gd autoloads/WildlifePopulation.gd autoloads/FarmingSystem.gd >/tmp/hk_world_guard.txt 2>/dev/null; then
+if grep -n 'map_width\|map_height' autoloads/DisasterSystem.gd autoloads/WildlifePopulation.gd autoloads/FarmingSystem.gd >/tmp/hk_world_guard.txt 2>/dev/null; then
   cat /tmp/hk_world_guard.txt
   fail "Legacy world dimension fields detected in active systems."
 fi
 
 echo "[3/4] Project scene sanity..."
-if ! rg -n '^run/main_scene=' project.godot >/tmp/hk_scene_guard.txt 2>/dev/null; then
+if ! grep -q '^run/main_scene=' project.godot >/tmp/hk_scene_guard.txt 2>/dev/null; then
   fail "Main scene is not configured in project.godot."
 fi
+grep '^run/main_scene=' project.godot > /tmp/hk_scene_guard.txt 2>/dev/null || true
 cat /tmp/hk_scene_guard.txt
 
 echo "[4/4] Runtime smoke (optional if Godot installed)..."
@@ -72,15 +73,15 @@ else
     cat /tmp/hk_smoke_perf.txt
     fail "Performance smoothness smoke failed."
   }
-  if rg -n '\[PERF_SMOOTHNESS_FAIL\]' /tmp/hk_smoke_perf.txt >/tmp/hk_smoke_perf_fail.txt 2>/dev/null; then
+  if grep -n '\[PERF_SMOOTHNESS_FAIL\]' /tmp/hk_smoke_perf.txt >/tmp/hk_smoke_perf_fail.txt 2>/dev/null; then
     cat /tmp/hk_smoke_perf_fail.txt
     fail "Performance smoothness smoke reported explicit failure."
   fi
-  if ! rg -q '\[PERF_SMOOTHNESS_PASS\]' /tmp/hk_smoke_perf.txt; then
+  if ! grep -q '\[PERF_SMOOTHNESS_PASS\]' /tmp/hk_smoke_perf.txt; then
     cat /tmp/hk_smoke_perf.txt
     fail "Performance smoothness smoke did not report pass marker."
   fi
-  if ! rg -q 'consistency=ok' /tmp/hk_smoke_perf.txt; then
+  if ! grep -q 'consistency=ok' /tmp/hk_smoke_perf.txt; then
     cat /tmp/hk_smoke_perf.txt
     fail "Performance smoothness smoke reported world/tick consistency mismatch."
   fi

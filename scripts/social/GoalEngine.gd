@@ -165,13 +165,17 @@ func pick_daily_goals(survival_importance: float = 0.7, neural_summary: Dictiona
 			religious_fervor
 		)
 
-	# Add variation from lifelong aspirations
-	_lifelong_aspirations.shuffle()
-	var selected_aspirations = _lifelong_aspirations.slice(0, 1)
-	for asp in selected_aspirations:
-		var key: String = asp.key
-		if WorldRNG.chance_for(StringName("aspire:%d" % _pawn_id), asp.hope, 1.0):
-			add_goal(key, GoalScope.THIS_YEAR, "Aspiration", [], asp.hope)
+	# Add variation from lifelong aspirations - use WorldRNG for deterministic selection
+	var total: int = _lifelong_aspirations.size()
+	if total > 0:
+		# Select 1 aspiration deterministically based on pawn_id and year
+		var seed_for_year: int = GameManager.tick_count / SimTime.TICKS_PER_SIM_YEAR if GameManager != null else 0
+		var sel_idx: int = WorldRNG.index_for(StringName("aspire_select:%d:%d" % [_pawn_id, seed_for_year]), 0, total)
+		var selected_aspirations = [_lifelong_aspirations[sel_idx]]
+		for asp in selected_aspirations:
+			var key: String = asp.key
+			if WorldRNG.chance_for(StringName("aspire:%d" % _pawn_id), asp.hope, 1.0):
+				add_goal(key, GoalScope.THIS_YEAR, "Aspiration", [], asp.hope)
 
 	return get_active_goals()
 

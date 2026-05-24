@@ -186,6 +186,27 @@ We are always building, always refining, always expanding. This document capture
   - `has_deaths AND has_scar` is commented out for ruin revival (should only apply AFTER settlement collapse, not at dawn of time)
   - Also fixed duplicate elif blocks in the same function that were unreachable dead code
 
+- **FIX: Birth system now actually spawns pawns (critical fix)**:
+  - `DynastyFamilySystem.gd`: `_process_birth()` was a STUB that only recorded lineage, not spawning actual pawns
+  - Added helpers: `_get_world_from_pawn()` and `_get_pawn_spawner()` to safely access World and PawnSpawner
+  - Now calls `pawn_spawner.spawn_child_pawn()` with:
+    - World reference from mother pawn's `_world` member
+    - Mother's and father's `HeelKawnianData` objects (for trait inheritance)
+    - Birth tick for deterministic RNG
+  - Spawned children get: proper trait inheritance, bloodline assignment, household placement, parent relationship tracking
+  - Birth events properly recorded in WorldMemory with `type: pawn_birth`, `birth_kind: child`
+
+- **FIX: Storage huts now create actual stockpile zones (unified organic storage)**:
+  - `HeelKawnian.gd`: `BUILD_STORAGE_HUT` was calling `_ensure_settlement_stockpile()` which has an early-out check (`_settlement_has_nearby_stockpile()`)
+  - Problem: If any organic pile existed within 16 tiles, no stockpile zone was created for the storage hut
+  - Fix: Added `_create_stockpile_zone_for_storage_hut(tile)` that:
+    - Creates a 2x2 stockpile zone AT the storage hut's exact tile
+    - Checks if tile is already in a stockpile zone (avoids duplicates on exact same tile)
+    - Adds zone to viewport and registers with StockpileManager
+    - Records `stockpile_created` event with `reason: storage_hut`
+  - Added helper: `_tile_already_in_stockpile_zone(tile)` to check for existing zone coverage
+  - Storage huts now work as "organic storage buildings" — they guarantee a stockpile zone at their location when built
+
 ## 2026-05-22: Knowledge Preservation Loop Unification
 
 - **FEAT: Preservation pressure wired into Matrix AI ambitions**:

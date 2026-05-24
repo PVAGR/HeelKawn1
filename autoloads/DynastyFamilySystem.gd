@@ -326,43 +326,109 @@ func _try_conceptions(tick: int) -> void:
 				}
 
 
+func _get_world_from_pawn(pawn: Node) -> World:
+	"""Get World reference from a pawn node (HeelKawnian has _world member)."""
+	if pawn == null or not is_instance_valid(pawn):
+		return null
+	if pawn.has_method("get") and pawn.has_method("has_method"):
+		var world_var: Variant = pawn.get("_world")
+		if world_var != null and is_instance_valid(world_var):
+			return world_var as World
+	if pawn.has_method("get_parent"):
+		var parent: Node = pawn.get_parent()
+		if parent != null and is_instance_valid(parent) and parent.is_class("World"):
+			return parent as World
+	for alive_pawn in PawnAccess.find_alive_pawns():
+		if alive_pawn != null and is_instance_valid(alive_pawn):
+			var w: Variant = alive_pawn.get("_world")
+			if w != null and is_instance_valid(w):
+				return w as World
+	return null
+
+
+func _get_pawn_spawner() -> PawnSpawner:
+	"""Get PawnSpawner from Main node."""
+	var tree: SceneTree = get_tree()
+	if tree == null or tree.root == null:
+		return null
+	var main_node: Node = tree.root.get_node_or_null("Main")
+	if main_node == null:
+		return null
+	return main_node.get_node_or_null("PawnSpawner") as PawnSpawner
+
+
 func _process_birth(mother_id: int, preg: Dictionary, tick: int) -> void:
 	"""Process a birth, creating a new pawn."""
 	var father_id: int = int(preg.get("father_id", -1))
 	var mother_pawn: Node = _get_pawn_by_id(mother_id)
 	if mother_pawn == null or mother_pawn.data == null:
 		return
-	# Determine child's traits (inherited from parents)
 	var father_pawn: Node = _get_pawn_by_id(father_id)
-	var child_traits: Dictionary = _inherit_traits(mother_pawn, father_pawn)
-	# Determine child's surname
-	var surname: String = _get_child_surname(mother_pawn, father_pawn)
-	# Generate child name
-	var child_name: String = _generate_child_name(surname)
-	# In a full implementation, this would spawn a new pawn entity.
-	# For now, we record the birth in KinshipSystem and family records.
+	if father_pawn == null or father_pawn.data == null:
+		return
+	
+	var mother_data = mother_pawn.data
+	var father_data = father_pawn.data
+	
+	var world: World = _get_world_from_pawn(mother_pawn)
+	var pawn_spawner: PawnSpawner = _get_pawn_spawner()
+	
+	var child: HeelKawnian = null
+	var child_id: int = -1
+	var child_name_used: String = ""
+	
+	if world != null and pawn_spawner != null and pawn_spawner.pawn_scene != null:
+		var spawn_tile: Vector2i = mother_data.tile_pos
+		child = pawn_spawner.spawn_child_pawn(
+			world,
+			spawn_tile,
+			mother_data,
+			father_data,
+			tick
+		)
+	
+	if child != null and child.data != null:
+		child_id = int(child.data.id)
+		child_name_used = str(child.data.display_name)
+		if OS.is_debug_build():
+			print("[Birth] %s and %s gave birth to %s (id=%d) at tick=%d" % [
+				mother_data.display_name,
+				father_data.display_name,
+				child_name_used,
+				child_id,
+				tick
+			])
+	else:
+		var surname: String = _get_child_surname(mother_pawn, father_pawn)
+		child_name_used = _generate_child_name(surname)
+		if OS.is_debug_build():
+			print("[Birth] WARNING: Failed to spawn child pawn; recording only: %s" % child_name_used)
+	
 	if KinshipSystem != null and KinshipSystem.has_method("record_birth"):
-		KinshipSystem.record_birth(mother_id, father_id, child_name, tick)
-	# Update marriage record
+		KinshipSystem.record_birth(mother_id, father_id, child_name_used, tick)
+	
 	for mid in marriages.keys():
 		var m: Dictionary = marriages[mid]
 		if int(m.get("spouse_a", -1)) == mother_id or int(m.get("spouse_b", -1)) == mother_id:
 			if "children" in m:
-				m["children"].append(mother_id)  # Placeholder; real child ID would be from spawn
+				if child_id >= 0:
+					m["children"].append(child_id)
+				else:
+					m["children"].append(mother_id)
 			break
-	# Update family prestige
+	
 	var fam_id: int = _get_family_for_pawn(mother_id)
 	if fam_id >= 0:
 		var fam: Dictionary = families.get(fam_id, {})
 		if not fam.is_empty():
 			fam["prestige"] = float(fam.get("prestige", 0.0)) + 3.0
-	# Log birth
+	
 	if ChronicleLog != null:
-		var _mother_name = mother_pawn.data.get("name")
+		var _mother_name = mother_data.get("name")
 		if _mother_name == null:
-			_mother_name = "Unknown"
-		ChronicleLog.append_entry(tick, "world", "%s gave birth to %s." % [str(_mother_name), child_name],
-			PackedStringArray(["birth", child_name, surname]))
+			_mother_name = mother_data.display_name if mother_data.display_name != null else "Unknown"
+		ChronicleLog.append_entry(tick, "world", "%s gave birth to %s." % [str(_mother_name), child_name_used],
+			PackedStringArray(["birth", child_name_used]))
 
 
 # ============================================================

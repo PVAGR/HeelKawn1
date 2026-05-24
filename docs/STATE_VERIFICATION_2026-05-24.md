@@ -5,6 +5,8 @@
 - Add road-like organic stockpile/settlement formation from repeated pawn activity
 - Wire Inner Fire/Hearth Spark drives to the Matrix AI
 - Fix SettlementMemory proto-site eligibility that was creating 16 empty settlements at dawn of time
+- **FIX: Birth system was STUBBED — now actually spawns child pawns**
+- **FIX: Storage huts weren't creating stockpile zones — now unified as organic storage buildings**
 
 ## Repository Snapshot
 - Branch: `main`
@@ -101,6 +103,55 @@
   3. `elif has_deaths and has_scar:` → COMMENTED OUT. This is for RUIN REVIVAL, which should only trigger AFTER a settlement has collapsed and been abandoned, not at world initialization.
 - **Also fixed:** The unreachable `elif` blocks after `has_deaths and has_scar` are now inside the else branch of the organic civilization logic (or rather, the logic was restructured so has_buildings and has_community are checked first).
 
+### 8. Birth System FIX (critical — was STUBBED)
+- **File:** `autoloads/DynastyFamilySystem.gd` lines ~329-470
+- **Root cause:** `_process_birth()` was a STUB that only recorded lineage in KinshipSystem and family prestige, but NEVER SPAWNED AN ACTUAL PAWN
+- **Impact:** Population growth was completely broken. The only way to get new pawns was via rebirth (every 20000 ticks, 2-3 pawns) and migrants. At tick=39391 with 26 pawns, there were ZERO birth-spawned pawns.
+- **Fix:** Rewrote `_process_birth()` to actually call `PawnSpawner.spawn_child_pawn()`:
+  - Added `_get_world_from_pawn(pawn)` helper: safely retrieves `_world` from pawn using `pawn.get("_world")`, with fallback to iterating alive pawns
+  - Added `_get_pawn_spawner()` helper: retrieves from `Main/PawnSpawner` node path
+  - Now passes to `spawn_child_pawn()`:
+    - `world`: from mother pawn's `_world` member
+    - `tile`: `mother_data.tile_pos` (spawn at mother's location)
+    - `parent_a`: `mother_data` (HeelKawnianData, not Node)
+    - `parent_b`: `father_data`
+    - `birth_tick`: current tick (for deterministic RNG in name/gender/trait selection)
+- **Proper inheritance:** `spawn_child_pawn()` already handles:
+  - Trait inheritance from both parents
+  - Profession tendency inheritance
+  - Knowledge inheritance
+  - Grudge inheritance (40% intensity)
+  - Bloodline assignment via SocialManager
+  - Household assignment (keeps newborns in family units)
+  - Parent children_count/children_ids tracking
+  - WorldMemory events: `pawn_birth` with `birth_kind: child`, plus `dynasty_line` narrative event
+- **No new RNG:** All determinism is delegated to `PawnSpawner.spawn_child_pawn()` which already uses deterministic patterns (no raw `randf()`/`randi()` without seed)
+
+### 9. Storage Huts FIX (unified as organic storage buildings)
+- **File:** `scripts/pawn/HeelKawnian.gd` lines ~6898-6913, ~6796-6850
+- **Root cause:** `BUILD_STORAGE_HUT` completion called `main_sp.call_deferred("_ensure_settlement_stockpile", job.tile)`, but that function has an early-out: `if _settlement_has_nearby_stockpile(center, sid): return`
+- **Impact:** If any stockpile zone (including organic piles created from haul pressure) existed within 16 Chebyshev tiles, no stockpile zone was created for the storage hut. Storage huts only added tile-feature capacity (20 units) but didn't create an actual STOCKPILE ZONE where items can be stored.
+- **Fix:**
+  1. Changed `BUILD_STORAGE_HUT` handler to call `_create_stockpile_zone_for_storage_hut(job.tile)` instead of `_ensure_settlement_stockpile`
+  2. Added `_create_stockpile_zone_for_storage_hut(tile)`:
+     - Creates a 2x2 stockpile zone AT the exact storage hut tile (not "nearby")
+     - Uses `Stockpile.new()` like `_create_stockpile_at_tile` does (for BUILD_STOCKPILE jobs)
+     - Sets: `filter = ALL`, `settlement_id = pawn's settlement_id`, position from tile_to_world
+     - Adds to viewport (`_world.get_parent()`) and registers with StockpileManager
+     - Records `stockpile_created` event with `reason: "storage_hut"`
+  3. Added `_tile_already_in_stockpile_zone(tile)` helper:
+     - Checks if the EXACT tile is already covered by any existing stockpile zone
+     - Uses `zone.contains_tile(tile)` which exists in Stockpile.gd
+     - Prevents creating duplicate zones at the same location
+- **Key difference from `_ensure_settlement_stockpile`:**
+  - No "nearby" check (16 tiles) — only checks if the EXACT tile is already covered
+  - Always creates at the EXACT tile passed, not "a buildable tile near center"
+  - Storage huts now guarantee a stockpile zone at their location when built
+- **Unified organic storage:** Storage huts are now "organic storage buildings" — they:
+  1. Add tile-feature capacity (20 units from STORAGE_HUT feature)
+  2. Create an actual stockpile zone (2x2 = 4 tiles × 16 capacity = 64 additional units)
+  3. Guarantee items dropped by pawns have a zone to target near storage infrastructure
+
 ## Static Verification In This Environment
 - No Godot binary available for headless smoke.
 - Code inspection verification:
@@ -111,6 +162,8 @@
   5. `Main.gd`: All 3 bootstrap locations correctly wrapped with `if not ORGANIC_CIVILIZATION_ENABLED:`
   6. `HeelKawnianManager.gd`: `_apply_inner_fire_bias_to_biases()` uses `_add_bias()` like all other bias functions — correctly integrates with Matrix AI
   7. `SettlementMemory.gd`: Fixed logic is correct — has_buildings and has_community now checked before any ruin-based eligibility
+  8. **Birth System:** `DynastyFamilySystem._process_birth()` now calls `pawn_spawner.spawn_child_pawn()` with correct parameters (world, tile, mother_data, father_data, birth_tick). Uses `get("_world")` pattern for safe member access from Node-typed pawn reference.
+  9. **Storage Huts:** `HeelKawnian.gd` `_create_stockpile_zone_for_storage_hut()` creates 2x2 zone at exact tile, only checks for exact-tile overlap (not 16-tile nearby). Uses same pattern as `_create_stockpile_at_tile` for BUILD_STOCKPILE jobs.
 
 ## Playtest Verification Checklist (run in Godot editor)
 - **[ ] Boot smoke:** No parse errors, no crashes, F10 menu opens
@@ -121,6 +174,10 @@
 - **[ ] Inner Fire biases:** With cold night + pawns carrying items + tired, F10/49 HeelKawnians should show Matrix biases toward BUILD_FIRE_PIT, BUILD_STORAGE_HUT, BUILD_BED
 - **[ ] Determinism:** Same seed + same inputs → same pressure accumulation → same organic pile locations across runs
 - **[ ] Legacy toggle:** Set `ORGANIC_CIVILIZATION_ENABLED = false` temporarily, verify seed stockpile returns at (127,127)
+- **[ ] Birth system:** Let sim run until marriages happen. Check WorldMemory events for `type: pawn_birth` with `birth_kind: child`. Verify new pawns appear in pawn list with parent IDs set.
+- **[ ] Population growth:** Verify population actually increases over time (not just rebirth/migrants). With 26 pawns at tick 39391, there should be children after marriages/births.
+- **[ ] Storage huts create zones:** Command a pawn to build a storage hut. After completion, verify a 2x2 stockpile zone exists at the storage hut tile (check StockpileManager.zones(), check UI).
+- **[ ] Storage hut + organic pile:** Let an organic pile form from pressure, then build a storage hut within 16 tiles. Verify storage hut STILL creates its own stockpile zone (no early-out).
 
 ## Residual Risk
 - **Playtest required:** Full runtime behavior verification needs Godot editor. Static verification confirms code structure is correct.
@@ -129,13 +186,16 @@
 - **Ruin revival disabled:** The `has_deaths AND has_scar` path is commented out. Ruin revival needs to be re-enabled with a guard that only applies after a settlement has actually collapsed (not at world init).
 - **Decay timing:** ACTIVITY_DECAY_TICKS=20000 may be too fast (pressure gone before pile forms) or too slow (pressure accumulates across unrelated events).
 - **Matrix bias strength:** Inner Fire biases at 0-8 range are calibrated relative to other Matrix biases. May need tuning after observing actual job selection.
+- **Birth system tuning:** Marriage check interval (3000 ticks), pregnancy duration (4320 ticks), and birth check interval (5000 ticks) may need adjustment for desired population growth rate. Current settings mean ~9360 ticks (~26 years at 360 ticks/year) from marriage to first child.
+- **Storage hut zone size:** 2x2 zone may be too large or too small. Currently matches organic pile's pattern but could be tuned based on playtest.
 
 ## Files Changed
 - NEW: `autoloads/HearthMemory.gd`
 - MODIFIED: `project.godot` (HearthMemory autoload)
-- MODIFIED: `scripts/pawn/HeelKawnian.gd` (haul pressure recording)
+- MODIFIED: `scripts/pawn/HeelKawnian.gd` (haul pressure recording, **storage hut stockpile zone creation**, `_create_stockpile_zone_for_storage_hut`, `_tile_already_in_stockpile_zone`)
 - MODIFIED: `scenes/main/Main.gd` (ORGANIC_CIVILIZATION_ENABLED flag, organic pile helpers)
 - MODIFIED: `autoloads/HeelKawnianManager.gd` (Inner Fire → Matrix AI wiring)
 - MODIFIED: `autoloads/SettlementMemory.gd` (proto-site eligibility fix)
-- MODIFIED: `docs/HEELKAWN_STATE.md` (updated with May 24 changes)
-- NEW: `docs/STATE_VERIFICATION_2026-05-24.md` (this file)
+- MODIFIED: `autoloads/DynastyFamilySystem.gd` (**birth system fix**: `_process_birth()` now spawns actual pawns, added `_get_world_from_pawn`, `_get_pawn_spawner` helpers)
+- MODIFIED: `docs/HEELKAWN_STATE.md` (updated with May 24 changes including birth and storage hut fixes)
+- MODIFIED: `docs/STATE_VERIFICATION_2026-05-24.md` (this file, updated with birth and storage hut fixes)

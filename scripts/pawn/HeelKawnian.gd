@@ -6793,6 +6793,51 @@ func _create_stockpile_at_tile(tile: Vector2i) -> void:
 	})
 
 
+## Create a stockpile zone for a newly built storage hut.
+## Creates a 2x2 zone at the storage hut's exact location (no early-out check).
+func _create_stockpile_zone_for_storage_hut(tile: Vector2i) -> void:
+	if _world == null or _world.data == null:
+		return
+	if _tile_already_in_stockpile_zone(tile):
+		if OS.is_debug_build():
+			print("[HeelKawnian] Tile %s already in stockpile zone; skipping zone creation for storage hut" % [tile])
+		return
+	var sp: Stockpile = Stockpile.new()
+	sp.tile = tile
+	sp.rect = Rect2i(tile.x, tile.y, 2, 2)
+	sp.filter = Stockpile.Filter.ALL
+	sp.settlement_id = data.settlement_id
+	sp.position = _world.tile_to_world(tile)
+	sp.name = "StorageHutStockpile_%d_%d" % [int(data.id), GameManager.tick_count]
+	var viewport: Node = _world.get_parent()
+	if viewport != null:
+		viewport.add_child(sp)
+	if StockpileManager != null:
+		StockpileManager.register(sp)
+	WorldMemory.record_event({
+		"type": "stockpile_created",
+		"reason": "storage_hut",
+		"pawn_id": int(data.id),
+		"pawn_name": data.display_name,
+		"tick": GameManager.tick_count,
+		"tile": {"x": tile.x, "y": tile.y},
+		"settlement_id": data.settlement_id,
+	})
+	if OS.is_debug_build():
+		print("[HeelKawnian] Created 2x2 stockpile zone at %s for storage hut built by %s" % [tile, data.display_name])
+
+
+## Check if a tile is already covered by an existing stockpile zone.
+func _tile_already_in_stockpile_zone(tile: Vector2i) -> bool:
+	if StockpileManager == null:
+		return false
+	for zone in StockpileManager.zones():
+		if zone != null and is_instance_valid(zone):
+			if zone.contains_tile(tile):
+				return true
+	return false
+
+
 ## Complete a tool-crafting job: consume materials from stockpile, equip the tool.
 func _finish_craft(job: Job) -> void:
 	var output_type: int = Job.tool_job_output(job.type)
@@ -6901,9 +6946,7 @@ func _finish_shelter_build(job: Job) -> bool:
 			placed_feature = TileFeature.Type.STORAGE_HUT
 			_world.set_feature(job.tile.x, job.tile.y, placed_feature)
 			_register_built_structure(job.tile, placed_feature)
-			var main_sp: Node = get_tree().root.get_node_or_null("Main")
-			if main_sp != null and main_sp.has_method("_ensure_settlement_stockpile"):
-				main_sp.call_deferred("_ensure_settlement_stockpile", job.tile)
+			_create_stockpile_zone_for_storage_hut(job.tile)
 			WorldMemory.record_event({
 				"type": "storage_built",
 				"pawn_id": int(data.id),

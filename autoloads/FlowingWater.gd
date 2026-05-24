@@ -68,7 +68,11 @@ func _flow_water(_tick: int) -> void:
 			Vector2i(x - 1, y),
 			Vector2i(x + 1, y),
 		]
-		neighbors.shuffle()
+		neighbors.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+			if a.y != b.y:
+				return a.y < b.y
+			return a.x < b.x
+		)
 		for n in neighbors:
 			if n.x < 0 or n.x >= WorldData.WIDTH or n.y < 0 or n.y >= WorldData.HEIGHT:
 				continue

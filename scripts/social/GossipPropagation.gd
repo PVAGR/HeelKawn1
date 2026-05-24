@@ -184,7 +184,10 @@ func get_conversation_topics(min_importance: float = 0.4) -> Array[String]:
 		if g.reliability_score >= min_importance:
 			topics.append(str(g.content))
 
-	topics.shuffle()
+	# Use deterministic ordering instead of shuffle
+	topics.sort_custom(func(a: String, b: String) -> bool:
+		return a < b
+	)
 	var count: int = mini(3, topics.size())
 	var result: Array[String] = []
 	for i in range(count):

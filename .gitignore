@@ -1,34 +1,17 @@
 ```
-# Godot-specific ignores
-*.import
-*.remap
-.project
-.user
-.autoloads/
-.sconsign.dblite
-*.godot
-*.import
-*.remap
-*.scn
-*.tres
-*.res
-
 # Build artifacts
-export_presets.cfg
-
-# Temporary files
+*.import
 *.tmp
-*.temp
+
+# Editor/IDE files
+.vscode/
+.idea/
+
+# Logs
 *.log
 
-# Dependencies and virtual environments
-node_modules/
-venv/
-.venv/
-__pycache__/
-*.egg-info/
-
-# OS generated files
-.DS_Store
-Thumbs.db
+# Environment
+.env
+.env.local
+*.env.*
 ```

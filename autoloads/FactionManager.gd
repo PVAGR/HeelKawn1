@@ -166,6 +166,29 @@ func get_synced_house_count() -> int:
 	return 0
 
 
+## Get all factions/houses as Dictionary (zone_id -> house_data)
+func get_all_factions() -> Dictionary:
+	_ensure_faction_registry()
+	if _faction_registry != null:
+		var houses: Variant = _faction_registry.get("_house_by_zone")
+		if houses is Dictionary:
+			return houses.duplicate()
+	return {}
+
+
+## Get faction IDs as array of integers (for iteration in AI systems)
+func get_faction_ids() -> Array:
+	_ensure_faction_registry()
+	var ids: Array = []
+	if _faction_registry != null:
+		var houses: Variant = _faction_registry.get("_house_by_zone")
+		if houses is Dictionary:
+			for zone_id in houses.keys():
+				if zone_id is String:
+					ids.append(int(zone_id))
+	return ids
+
+
 # === CK-lite diplomacy (formal polities) ===
 
 static func _polity_pair_key(polity_a: int, polity_b: int) -> String:

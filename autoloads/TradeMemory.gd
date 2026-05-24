@@ -472,8 +472,7 @@ func _get_pawns_in_region(region: int) -> Array:
 
 func _route_exists(from: int, to: int) -> bool:
 	for route in trade_routes:
-		if (route.from_settlement == from and route.to_settlement == to) or \
-		   (route.from_settlement == to and route.to_settlement == from):
+		if (route.from_settlement == from and route.to_settlement == to) or (route.from_settlement == to and route.to_settlement == from):
 			return true
 	return false
 
@@ -773,8 +772,7 @@ func has_active_route_between(from_settlement: int, to_settlement: int) -> bool:
 			continue
 		var from_rk: int = int(route.get("from_settlement", -1))
 		var to_rk: int = int(route.get("to_settlement", -1))
-		if (from_rk == from_settlement and to_rk == to_settlement) \
-				or (from_rk == to_settlement and to_rk == from_settlement):
+		if (from_rk == from_settlement and to_rk == to_settlement) or (from_rk == to_settlement and to_rk == from_settlement):
 			return true
 	return false
 

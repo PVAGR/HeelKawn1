@@ -418,37 +418,24 @@ func recompute(_world: World) -> void:
 		var has_buildings: bool = int(m.get("buildings_constructed", 0)) > 0
 		var has_scar: bool = int(WorldPersistence.get_region_persistence(rk).get("scar_level", 0)) >= 1
 		var has_community: bool = pawn_per_region.has(rk) and int(pawn_per_region[rk]) >= 2
-	# ORGANIC CIVILIZATION: require actual current civilization for settlement eligibility.
-	# 
-	# has_deaths AND has_scar is for RUIN REVIVAL (bringing dead settlements back),
-	# not for initial settlement formation. At the dawn of time, there shouldn't be
-	# 16 proto-sites just because worldgen created historical death/scar locations.
-	# 
-	# Settlement formation should require:
-	# - has_buildings: actual infrastructure built by current civilization
-	# - has_community: actual pawns currently living/working together
-	#
-	# Legacy behavior keeps has_deaths AND has_scar for backward compatibility.
-	# For now, we ONLY create settlements from actual civilization.
-	if has_buildings:
-		eligible.append(rk)
-	elif has_community:
-		eligible.append(rk)
-	elif has_deaths and has_scar:
-		# TODO: Ruin revival should only apply AFTER a settlement has collapsed,
-		# not at world initialization. For now, disabled to prevent 16 empty proto-sites.
-		# eligible.append(rk)
-		pass
-		elif has_buildings:
-			eligible.append(rk)
-		elif has_community:
-			eligible.append(rk)
-	else:
-		# ORGANIC CIVILIZATION: only regions with actual current civilization
+		# ORGANIC CIVILIZATION: require actual current civilization for settlement eligibility.
+		# 
+		# Original: if has_deaths and has_scar: eligible.append(rk)
+		# PROBLEM: This created 16 empty proto-settlements at tick 30000 because
+		# worldgen creates historical death locations and scar levels during terrain
+		# generation. These are "ruins waiting to happen" at dawn of time, not active civilization.
+		# 
+		# has_deaths AND has_scar is for RUIN REVIVAL only, which should trigger
+		# AFTER a settlement has collapsed and been abandoned, not at world initialization.
+		# 
+		# Current fix: Only has_buildings OR has_community count toward current civilization.
 		if has_buildings:
 			eligible.append(rk)
 		elif has_community:
 			eligible.append(rk)
+		# RUIN REVIVAL (disabled until we can guard it properly):
+		# elif has_deaths and has_scar:
+		#	eligible.append(rk)
 	# Also check pawn-only regions not in WorldMeaning yet.
 	# A cluster of 3+ pawns in a region IS a community, even if
 	# WorldMeaning hasn't recorded anything there yet.

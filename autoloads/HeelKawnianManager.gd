@@ -208,7 +208,7 @@ static func _apply_pressure_bias_to_biases(biases: Dictionary, pawn_id: int) -> 
 	var fight_amount: int = int(round(PRESSURE_FIGHT_BIAS * intensity))
 	var hoard_amount: int = int(round(PRESSURE_HOARD_BIAS * intensity))
 
-		match bias_type:
+	match bias_type:
 		"flee":
 			# Exodus: prefer migration, exploration, foraging far away
 			_add_bias(biases, [Job.Type.FORAGE, Job.Type.GROW_FOOD, Job.Type.HARVEST_CROPS], flee_amount)

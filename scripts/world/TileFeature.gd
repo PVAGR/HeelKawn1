@@ -68,6 +68,15 @@ enum Type {
 	FLOOD_DEPOSIT,     # flood nutrient deposit: temporary fertility boost after overflow
 	# --- Terraforming ---
 	TERRACE,           # flattened terrain for building
+	# --- Wooden Structures (Phase 5A: Emergent Life) ---
+	WOODSHOP,          # carpentry workshop: wood-based crafting, tool repair
+	MARKET_STALL,      # market stall: goods trading, food selling
+	COOK_HUT,          # cooking hut: food preparation, meals
+	DINING_TABLE,      # dining table: community eating, mood boost
+	CHAIR,             # chair: seating for dining/workshops
+	FARM_FIELD,        # tilled field: grows food crops
+	BOAT_WORKSHOP,     # boat workshop: builds/repairs boats, fisher gear
+	COUNTER,           # counter: market/trade display surface
 }
 
 ## Colors used for the v1 pixel renderer. Chosen to pop against the biome below.
@@ -126,6 +135,15 @@ const COLORS: Dictionary = {
 	Type.FORD:            Color8( 60, 100, 120),  # shallow crossing
 	Type.WATER_MILL:      Color8(160, 140, 100),  # mill wood-brown
 	Type.FLOOD_DEPOSIT:   Color8( 90, 120,  70),  # fertile green-brown
+	# Wooden Structures (Phase 5A)
+	Type.WOODSHOP:        Color8(170, 110,  50),  # warm brown woodshop
+	Type.MARKET_STALL:    Color8(200, 160,  60),  # golden stall
+	Type.COOK_HUT:        Color8(200,  90,  40),  # warm cookfire orange
+	Type.DINING_TABLE:    Color8(190, 160, 110),  # light wood table
+	Type.CHAIR:           Color8(160, 120,  80),  # medium wood chair
+	Type.FARM_FIELD:      Color8( 70, 130,  50),  # tilled field green
+	Type.BOAT_WORKSHOP:   Color8(100,  90,  60),  # weathered maritime wood
+	Type.COUNTER:         Color8(180, 140,  90),  # counter wood
 }
 
 const NAMES: Dictionary = {
@@ -183,6 +201,15 @@ const NAMES: Dictionary = {
 	Type.FORD:            "Ford",
 	Type.WATER_MILL:      "Water Mill",
 	Type.FLOOD_DEPOSIT:   "Flood Deposit",
+	# Wooden Structures (Phase 5A)
+	Type.WOODSHOP:        "Woodshop",
+	Type.MARKET_STALL:    "Market Stall",
+	Type.COOK_HUT:        "Cook Hut",
+	Type.DINING_TABLE:    "Dining Table",
+	Type.CHAIR:           "Chair",
+	Type.FARM_FIELD:      "Farm Field",
+	Type.BOAT_WORKSHOP:   "Boat Workshop",
+	Type.COUNTER:         "Counter",
 }
 
 

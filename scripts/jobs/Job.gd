@@ -100,6 +100,21 @@ enum Type {
 	BREW_MEAD,       # brew mead at brewery
 	BREW_ALE,        # brew ale at brewery
 	DRINK,           # drink at tavern (mood boost, intoxication)
+	# --- Wooden Structures (Phase 5A: Emergent Life) ---
+	BUILD_WOODSHOP,       # build woodshop: wood-based crafting, tool repair
+	BUILD_MARKET_STALL,   # build market stall: goods trading, food selling
+	BUILD_COOK_HUT,       # build cook hut: food preparation, meals
+	BUILD_DINING_TABLE,   # build dining table: community eating
+	BUILD_CHAIR,          # build chair: seating
+	BUILD_FARM_FIELD,     # build farm field: tilled field for crops
+	BUILD_BOAT_WORKSHOP,  # build boat workshop: boat repair, fisher gear
+	BUILD_COUNTER,        # build counter: market/trade display
+	# --- Profession jobs (Phase 5A: Live behavior) ---
+	WORK_WOODSHOP,        # work at woodshop: craft tools, repair items
+	WORK_MARKET,          # work at market: sell food, tools, goods
+	WORK_COOK_HUT,        # work at cook hut: prepare meals
+	WORK_FARM_FIELD,      # work at farm field: tend crops
+	WORK_BOAT_WORKSHOP,   # work at boat workshop: build/repair boats
 }
 
 enum State {
@@ -233,6 +248,19 @@ static func describe_type(t: int) -> String:
 		Type.BREW_MEAD:            return "BrewMead"
 		Type.BREW_ALE:             return "BrewAle"
 		Type.DRINK:                return "Drink"
+		Type.BUILD_WOODSHOP:       return "BuildWoodshop"
+		Type.BUILD_MARKET_STALL:   return "BuildMarketStall"
+		Type.BUILD_COOK_HUT:       return "BuildCookHut"
+		Type.BUILD_DINING_TABLE:   return "BuildDiningTable"
+		Type.BUILD_CHAIR:          return "BuildChair"
+		Type.BUILD_FARM_FIELD:     return "BuildFarmField"
+		Type.BUILD_BOAT_WORKSHOP:  return "BuildBoatWorkshop"
+		Type.BUILD_COUNTER:        return "BuildCounter"
+		Type.WORK_WOODSHOP:        return "WorkWoodshop"
+		Type.WORK_MARKET:          return "WorkMarket"
+		Type.WORK_COOK_HUT:        return "WorkCookHut"
+		Type.WORK_FARM_FIELD:      return "WorkFarmField"
+		Type.WORK_BOAT_WORKSHOP:   return "WorkBoatWorkshop"
 	return "Unknown"
 
 
@@ -323,6 +351,21 @@ static func tool_job_work_ticks(job_type: int) -> int:
 		Type.BREW_ALE:             return 25
 		Type.DRINK:                return 5
 		Type.MAINTAIN_STRUCTURE:     return 8
+		# Phase 5A: Wooden structures - build work ticks
+		Type.BUILD_WOODSHOP:         return 45
+		Type.BUILD_MARKET_STALL:     return 30
+		Type.BUILD_COOK_HUT:         return 35
+		Type.BUILD_DINING_TABLE:     return 15
+		Type.BUILD_CHAIR:            return 10
+		Type.BUILD_FARM_FIELD:       return 40
+		Type.BUILD_BOAT_WORKSHOP:    return 50
+		Type.BUILD_COUNTER:          return 20
+		# Phase 5A: Profession work jobs
+		Type.WORK_WOODSHOP:          return 20
+		Type.WORK_MARKET:            return 15
+		Type.WORK_COOK_HUT:          return 18
+		Type.WORK_FARM_FIELD:        return 22
+		Type.WORK_BOAT_WORKSHOP:     return 25
 	return 10  # Faster default (was 20)
 
 
@@ -371,4 +414,24 @@ static func tool_job_skill(job_type: int) -> int:
 			return HeelKawnianData.Skill.FORAGING  # Drinking is easy
 		Type.MAINTAIN_STRUCTURE:
 			return HeelKawnianData.Skill.BUILDING
+		# Phase 5A: Wooden structure builds
+		Type.BUILD_WOODSHOP, Type.BUILD_MARKET_STALL, Type.BUILD_COOK_HUT:
+			return HeelKawnianData.Skill.BUILDING
+		Type.BUILD_DINING_TABLE, Type.BUILD_CHAIR, Type.BUILD_COUNTER:
+			return HeelKawnianData.Skill.BUILDING
+		Type.BUILD_FARM_FIELD:
+			return HeelKawnianData.Skill.FORAGING
+		Type.BUILD_BOAT_WORKSHOP:
+			return HeelKawnianData.Skill.BUILDING
+		# Phase 5A: Profession work jobs
+		Type.WORK_WOODSHOP:
+			return HeelKawnianData.Skill.BUILDING  # Carpentry/woodworking
+		Type.WORK_MARKET:
+			return HeelKawnianData.Skill.FORAGING  # Trading/merchant
+		Type.WORK_COOK_HUT:
+			return HeelKawnianData.Skill.FORAGING  # Cooking
+		Type.WORK_FARM_FIELD:
+			return HeelKawnianData.Skill.FORAGING  # Farming
+		Type.WORK_BOAT_WORKSHOP:
+			return HeelKawnianData.Skill.BUILDING  # Boatbuilding
 	return HeelKawnianData.Skill.FORAGING

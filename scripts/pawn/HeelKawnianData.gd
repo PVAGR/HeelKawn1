@@ -12,7 +12,7 @@ enum HairStyle { NONE, SHORT, MOHAWK, BUN }
 ## Trainable proficiencies. Higher level -> faster work + more XP per tick on
 ## that skill type. Pawns earn XP only while doing the matching job.
 enum Skill { FORAGING, MINING, CHOPPING, BUILDING, HUNTING }
-enum Profession { NONE, FARMER, BUILDER, GATHERER, WARRIOR, SCHOLAR, TRADER, SMITH, HEALER }
+enum Profession { NONE, FARMER, BUILDER, GATHERER, WARRIOR, SCHOLAR, TRADER, SMITH, HEALER, CARPENTER, COOK, MERCHANT, BOATWRIGHT }
 
 ## Skill XP curve. Each skill tracked as raw XP; level = floor(xp / XP_PER_LEVEL).
 const XP_PER_LEVEL: float = 500.0
@@ -3036,6 +3036,14 @@ static func profession_label_from_enum(prof: int) -> String:
 			return "Smith"
 		Profession.HEALER:
 			return "Healer"
+		Profession.CARPENTER:
+			return "Carpenter"
+		Profession.COOK:
+			return "Cook"
+		Profession.MERCHANT:
+			return "Merchant"
+		Profession.BOATWRIGHT:
+			return "Boatwright"
 		_:
 			return "None"
 
@@ -3060,6 +3068,14 @@ static func profession_apparel_color(prof: int) -> Color:
 			return Color("#5a5a5a")   # dark gray (steel)
 		Profession.HEALER:
 			return Color("#5a8a7a")   # teal
+		Profession.CARPENTER:
+			return Color("#8a6a3a")   # warm wood brown
+		Profession.COOK:
+			return Color("#c07030")   # cookfire orange
+		Profession.MERCHANT:
+			return Color("#c0a050")   # gold/amber
+		Profession.BOATWRIGHT:
+			return Color("#6a7a5a")   # maritime green-brown
 		_:
 			return Color("#5d7ea8")   # default (original random base)
 
@@ -3512,6 +3528,26 @@ static func skill_for_job(job_type: int) -> int:
 			return Skill.BUILDING  # Storage / river / mill
 		Job.Type.MAINTAIN_STRUCTURE:
 			return Skill.BUILDING
+		# Phase 5A: Wooden structure builds
+		Job.Type.BUILD_WOODSHOP, Job.Type.BUILD_MARKET_STALL, Job.Type.BUILD_COOK_HUT:
+			return Skill.BUILDING
+		Job.Type.BUILD_DINING_TABLE, Job.Type.BUILD_CHAIR, Job.Type.BUILD_COUNTER:
+			return Skill.BUILDING
+		Job.Type.BUILD_FARM_FIELD:
+			return Skill.FORAGING
+		Job.Type.BUILD_BOAT_WORKSHOP:
+			return Skill.BUILDING
+		# Phase 5A: Profession work jobs
+		Job.Type.WORK_WOODSHOP:
+			return Skill.BUILDING
+		Job.Type.WORK_MARKET:
+			return Skill.FORAGING
+		Job.Type.WORK_COOK_HUT:
+			return Skill.FORAGING
+		Job.Type.WORK_FARM_FIELD:
+			return Skill.FORAGING
+		Job.Type.WORK_BOAT_WORKSHOP:
+			return Skill.BUILDING
 	return -1
 
 
@@ -3575,6 +3611,21 @@ func allows_job_type(job_type: int) -> bool:
 			return true  # Anyone can drink
 		Job.Type.MAINTAIN_STRUCTURE:
 			return work_build
+		# Phase 5A: New profession work jobs
+		Job.Type.WORK_WOODSHOP, Job.Type.WORK_MARKET, Job.Type.WORK_COOK_HUT:
+			return work_build
+		Job.Type.WORK_FARM_FIELD:
+			return work_forage
+		Job.Type.WORK_BOAT_WORKSHOP:
+			return work_build
+		# Phase 5A: Build jobs for new structures
+		Job.Type.BUILD_WOODSHOP, Job.Type.BUILD_MARKET_STALL, Job.Type.BUILD_COOK_HUT, \
+		Job.Type.BUILD_DINING_TABLE, Job.Type.BUILD_CHAIR, Job.Type.BUILD_COUNTER:
+			return work_build
+		Job.Type.BUILD_FARM_FIELD:
+			return work_forage
+		Job.Type.BUILD_BOAT_WORKSHOP:
+			return work_build and work_fish
 	return true
 
 

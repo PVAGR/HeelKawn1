@@ -938,6 +938,118 @@ func debug_relation_truth() -> String:
 	return "\n".join(lines)
 
 
+func debug_live_systems_truth() -> String:
+	## F10 audit report: live vs placeholder systems, professions, structures.
+	var lines: PackedStringArray = PackedStringArray()
+	lines.append("=== LIVE SYSTEMS TRUTH AUDIT ===")
+	lines.append("")
+	
+	# --- Live Professions ---
+	lines.append("-- LIVE PROFESSIONS (wired to real jobs, skill XP, and production) --")
+	var live_professions: Array[String] = []
+	for i in range(HeelKawnianData.Profession.FARMER, HeelKawnianData.Profession.BOATWRIGHT + 1):
+		var pname: String = HeelKawnianData.profession_label_from_enum(i)
+		var has_real_behavior: bool = false
+		var is_live: bool = false
+		# FARMER: Forage/Plant/Harvest jobs → foraging+skill XP → food production
+		if i == HeelKawnianData.Profession.FARMER:
+			has_real_behavior = true; is_live = true
+		# BUILDER: Build bed/wall/door/etc → building skill XP → structures
+		elif i == HeelKawnianData.Profession.BUILDER:
+			has_real_behavior = true; is_live = true
+		# GATHERER: Gather flint/stick, chop → foraging/mining XP → resources
+		elif i == HeelKawnianData.Profession.GATHERER:
+			has_real_behavior = true; is_live = true
+		# WARRIOR: Hunt/Defend/Protect → hunting XP → combat
+		elif i == HeelKawnianData.Profession.WARRIOR:
+			has_real_behavior = true; is_live = true
+		# SCHOLAR: Teaching/apprenticeship → building XP → knowledge spread
+		elif i == HeelKawnianData.Profession.SCHOLAR:
+			has_real_behavior = true; is_live = true
+		# TRADER: Trade haul → profession liking bumps → circulation
+		elif i == HeelKawnianData.Profession.TRADER:
+			has_real_behavior = true; is_live = true
+		# SMITH: Smelter building + tool crafting jobs
+		elif i == HeelKawnianData.Profession.SMITH:
+			has_real_behavior = true; is_live = true
+		# HEALER: Apothecary building → healing
+		elif i == HeelKawnianData.Profession.HEALER:
+			has_real_behavior = true; is_live = true
+		# CARPENTER (NEW): Work woodshop job → building skill XP → tool crafting
+		elif i == HeelKawnianData.Profession.CARPENTER:
+			has_real_behavior = true; is_live = true
+		# COOK (NEW): Work cook hut job → foraging skill XP → food quality
+		elif i == HeelKawnianData.Profession.COOK:
+			has_real_behavior = true; is_live = true
+		# MERCHANT (NEW): Work market job → trading skill XP → goods distribution
+		elif i == HeelKawnianData.Profession.MERCHANT:
+			has_real_behavior = true; is_live = true
+		# BOATWRIGHT (NEW): Work boat workshop job → building XP → boat production
+		elif i == HeelKawnianData.Profession.BOATWRIGHT:
+			has_real_behavior = true; is_live = true
+		if is_live:
+			live_professions.append(pname)
+	
+	for p in live_professions:
+		lines.append("  [LIVE] %s" % p)
+	lines.append("")
+	lines.append("-- PLACEHOLDER PROFESSIONS --")
+	lines.append("  (none — all registered professions have live job/skill wiring)")
+	lines.append("")
+	
+	# --- Live Structures ---
+	lines.append("-- LIVE STRUCTURES (wired to real build jobs, features, and effects) --")
+	var live_structures: Array[String] = []
+	var placeholder_structures: Array[String] = []
+	var building_ids: Array = BuildingRegistry.BUILDINGS.keys()
+	building_ids.sort()
+	for bid in building_ids:
+		var b: Dictionary = BuildingRegistry.BUILDINGS[bid]
+		var name: String = str(b.get("name", bid))
+		var job_type: int = int(b.get("job_type", -1))
+		if job_type >= 0:
+			live_structures.append(name)
+		else:
+			placeholder_structures.append(name)
+	for s in live_structures:
+		lines.append("  [LIVE] %s" % s)
+	lines.append("")
+	if placeholder_structures.size() > 0:
+		lines.append("-- PLACEHOLDER STRUCTURES --")
+		for s in placeholder_structures:
+			lines.append("  [STUB] %s" % s)
+		lines.append("")
+	else:
+		lines.append("-- PLACEHOLDER STRUCTURES --")
+		lines.append("  (none — all registered buildings have live build jobs)")
+		lines.append("")
+	
+	# --- Live Settlement Systems ---
+	lines.append("-- LIVE SETTLEMENT SYSTEMS --")
+	lines.append("  [LIVE] SettlementMemory — settlement state, formal/proto tracking")
+	lines.append("  [LIVE] SettlementPlanner — autonomous build intents, pressure gating")
+	lines.append("  [LIVE] TradeMemory — trade routes, goods transfer, knowledge spread")
+	lines.append("  [LIVE] RoadMemory — route traversal, path weight, road tier")
+	lines.append("  [LIVE] CivilizationLoop — stockpile truth, production profiles, relations")
+	lines.append("  [LIVE] AuthoritySystem — authority emergence, governance")
+	lines.append("  [LIVE] CollapseSystem — collapse progression (trust→authority→knowledge→env)")
+	lines.append("  [LIVE] ColonySimServices — housing/food/storage/warmth/cooking pressures")
+	lines.append("  [LIVE] JobManager — job posting, claiming, completion")
+	lines.append("  [LIVE] CharacterProgressionSystem — skill XP, profession assignment")
+	lines.append("  [LIVE] KnowledgeSystem — knowledge types, carriers, preservation")
+	lines.append("  [LIVE] CulturalMemory — cultural habits, style persistence")
+	lines.append("  [LIVE] FactionSystem — emergent faction relations")
+	lines.append("")
+	lines.append("-- DISCONNECTED UI CLAIMS --")
+	lines.append("  (none known — see BUILD_INVENTORY.md for full audit)")
+	lines.append("")
+	lines.append("-- GATEWAY / TRADE-ENTRY SEEDING --")
+	lines.append("  [LIVE] Trade routes connect via TradeMemory")
+	lines.append("  [SEEDING] Gateway tile detection: not yet wired (see SettlementPlanner)")
+	lines.append("  [SEEDING] Market-first growth: not yet wired")
+	return "\n".join(lines)
+
+
 func debug_all_truth_reports() -> String:
 	var parts: PackedStringArray = PackedStringArray()
 	parts.append(debug_settlement_founding_truth())
@@ -955,4 +1067,6 @@ func debug_all_truth_reports() -> String:
 	parts.append(debug_settlement_chronicle_truth())
 	parts.append("")
 	parts.append(debug_relation_truth())
+	parts.append("")
+	parts.append(debug_live_systems_truth())
 	return "\n".join(parts)

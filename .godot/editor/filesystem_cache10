@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779603331
+::res://::1779603465
 .aider.chat.history.md::TextFile::-1::1779517150::0::1::::<><><>0<>0<><>::
 AGENTS.md::TextFile::-1::1779432109::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779599714::0::1::::<><><>0<>0<><>::
@@ -141,7 +141,7 @@ BodyPartWounds.gd::GDScript::2698733299669405232::1778884561::0::1::::<>Node<><>
 BodyRiskManager.gd::GDScript::9035867343056244085::1779319034::0::1::::<>Node<><>0<>0<><>::
 BuildingRegistry.gd::GDScript::6026745172161523404::1778651452::0::1::::<>Node<><>0<>0<><>::
 BuildingUsageTracker.gd::GDScript::2715926842069818093::1779599714::0::1::::<>Node<><>0<>0<><>::
-CharacterBrainSystem.gd::GDScript::579672516978892000::1779497002::0::1::::CharacterBrainSystem<>Node<><>0<>0<><>::
+CharacterBrainSystem.gd::GDScript::579672516978892000::1779603361::0::1::::<>Node<><>0<>0<><>::
 CharacterExport.gd::GDScript::4930929248496104877::1778320772::0::1::::<>Node<><>0<>0<><>::
 CharacterProgressionSystem.gd::GDScript::7147558137091390793::1779162828::0::1::::<>Node<><>0<>0<><>::
 ChronicleExport.gd::GDScript::7089405843585298919::1778174044::0::1::::<>Node<><>0<>0<><>::

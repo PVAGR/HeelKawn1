@@ -70,3 +70,23 @@
 
 Verification:
 - Re-ran `bash tools/ai/sim-quality-gate.sh` after hardening changes: PASS.
+
+## Household Coordination Stabilization Update (same date, follow-up pass)
+
+4. Made household plan execution deterministic and side-effect safe
+- Files:
+  - `autoloads/HeelKawnianManager.gd`
+  - `scripts/pawn/HeelKawnian.gd`
+- Changes:
+  - `get_household_ambition_for_pawn(...)` now supports `consume_cooldown: bool`.
+  - Matrix decision path now calls household ambition in read-only mode (`consume_cooldown=false`) so profile scans do not mutate plan timers/state.
+  - Matrix ambition seeding path now calls household ambition in write mode and posts concrete household jobs first.
+  - Added household ambition event logging (`matrix_household_ambition`) with plan metadata.
+  - Added speed-tier local/global pending backpressure to both household and settlement ambition posting.
+- Effect:
+  - Household objective chains now have a clear writer path.
+  - Reduced coordination churn from read-path cooldown consumption.
+  - Lower queue amplification risk under `26x`/`50x`/`100x`.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after household stabilization changes: PASS.

@@ -1871,17 +1871,104 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 	var tick: int = GameManager.tick_count
 	if tick < _next_matrix_ambition_tick:
 		return false
+	var gs: float = GameManager.game_speed if GameManager != null else 1.0
+	var fail_cooldown: int = 10
+	var success_cooldown: int = 15
+	var local_same_job_radius: int = 10
+	var global_ambition_cap: int = 64
+	if gs >= 100.0:
+		fail_cooldown = 26
+		success_cooldown = 45
+		local_same_job_radius = 14
+		global_ambition_cap = 24
+	elif gs >= 50.0:
+		fail_cooldown = 20
+		success_cooldown = 34
+		local_same_job_radius = 12
+		global_ambition_cap = 32
+	elif gs >= 26.0:
+		fail_cooldown = 15
+		success_cooldown = 24
+		local_same_job_radius = 12
+		global_ambition_cap = 40
+	elif gs >= 12.0:
+		fail_cooldown = 12
+		success_cooldown = 18
+
+	# Household-first ambition seeding: consume household plan cooldown only from
+	# this writer path so Matrix read paths remain side-effect free.
+	var hh_ambition: Dictionary = HeelKawnianManager.get_household_ambition_for_pawn(self, true)
+	if not hh_ambition.is_empty():
+		var hh_job_type: int = int(hh_ambition.get("job_type", -1))
+		if hh_job_type < 0:
+			_next_matrix_ambition_tick = tick + fail_cooldown
+			return false
+		if ColonySimServices != null and ColonySimServices.should_block_ambition_tier_build() and not _is_survival_matrix_ambition(hh_job_type):
+			_next_matrix_ambition_tick = tick + fail_cooldown
+			return false
+		var hh_target_tile: Vector2i = _matrix_ambition_target_tile(hh_job_type)
+		if hh_target_tile.x < 0:
+			_next_matrix_ambition_tick = tick + fail_cooldown
+			return false
+		if JobManager != null and JobManager.has_method("count_pending_jobs_near"):
+			var local_pending_hh: int = JobManager.count_pending_jobs_near(data.tile_pos, hh_job_type, local_same_job_radius)
+			if local_pending_hh > 0:
+				_next_matrix_ambition_tick = tick + fail_cooldown
+				return false
+		if JobManager != null and JobManager.has_method("count_pending_by_type"):
+			var global_pending_hh: int = JobManager.count_pending_by_type(hh_job_type)
+			if global_pending_hh >= global_ambition_cap:
+				_next_matrix_ambition_tick = tick + fail_cooldown
+				return false
+		var hh_priority: int = clampi(int(hh_ambition.get("priority", 8)), 1, 10)
+		var hh_work_ticks: int = Job.tool_job_work_ticks(hh_job_type)
+		if hh_work_ticks <= 0:
+			hh_work_ticks = 20
+		var hh_posted: Job = JobManager.post(hh_job_type, hh_target_tile, hh_priority, hh_work_ticks) if JobManager != null else null
+		if hh_posted == null:
+			_next_matrix_ambition_tick = tick + fail_cooldown
+			return false
+		var hh_reason: String = str(hh_ambition.get("reason", "household_plan"))
+		if JobManager != null and JobManager.has_method("stamp_seeder_metadata"):
+			JobManager.stamp_seeder_metadata(hh_posted, hh_reason, "household", int(data.id))
+		hh_posted.authority_scope = "household"
+		hh_posted.issuer_role = "household_head"
+		var hh_debug: Dictionary = HeelKawnianManager.get_household_plan_debug(int(data.household_id)) if HeelKawnianManager.has_method("get_household_plan_debug") else {}
+		var hh_tasks: Array = hh_debug.get("tasks", []) as Array
+		HeelKawnianManager.log_heelkawn_event(
+			str(data.unique_id),
+			"matrix_household_ambition",
+			{
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"household_id": int(data.household_id),
+				"job_type": hh_job_type,
+				"job_name": Job.describe_type(hh_job_type),
+				"tile": hh_target_tile,
+				"priority": hh_priority,
+				"reason": hh_reason,
+				"plan_goal": str(hh_debug.get("goal", "")),
+				"plan_task_index": int(hh_debug.get("current_task_index", -1)),
+				"plan_task_total": hh_tasks.size(),
+			},
+			hh_reason,
+			hh_ambition,
+			tick
+		)
+		_next_matrix_ambition_tick = tick + success_cooldown
+		return true
+
 	var ambition: Dictionary = HeelKawnianManager.get_settlement_ambition_for_pawn(self)
 	if ambition.is_empty():
-		_next_matrix_ambition_tick = tick + 10
+		_next_matrix_ambition_tick = tick + fail_cooldown
 		return false
 	var job_type: int = int(ambition.get("job_type", -1))
 	if job_type < 0:
-		_next_matrix_ambition_tick = tick + 10
+		_next_matrix_ambition_tick = tick + fail_cooldown
 		return false
 	if ColonySimServices != null:
 		if ColonySimServices.should_block_ambition_tier_build() and not _is_survival_matrix_ambition(job_type):
-			_next_matrix_ambition_tick = tick + 30
+			_next_matrix_ambition_tick = tick + fail_cooldown
 			return false
 		var center_rk: int = SettlementMemory.get_center_region_for_region(
 				WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)) if SettlementMemory != null else -1
@@ -1891,20 +1978,30 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 			var cold: int = ColonySimServices.count_cold_uncovered_pawns(center_rk) if center_rk >= 0 else 0
 			var needed: int = lh + 1 if lh <= 0 else lh + int(ceil(float(cold) / 4.0))
 			if not ColonySimServices.can_seed_fire_pit(center_rk, data.tile_pos, lh, needed):
-				_next_matrix_ambition_tick = tick + 20
+				_next_matrix_ambition_tick = tick + fail_cooldown
 				return false
 			job_type = ColonySimServices.resolve_hearth_post_job_type(job_type)
 	var target_tile: Vector2i = _matrix_ambition_target_tile(job_type)
 	if target_tile.x < 0:
-		_next_matrix_ambition_tick = tick + 10
+		_next_matrix_ambition_tick = tick + fail_cooldown
 		return false
+	if JobManager != null and JobManager.has_method("count_pending_jobs_near"):
+		var local_pending: int = JobManager.count_pending_jobs_near(data.tile_pos, job_type, local_same_job_radius)
+		if local_pending > 0:
+			_next_matrix_ambition_tick = tick + fail_cooldown
+			return false
+	if JobManager != null and JobManager.has_method("count_pending_by_type"):
+		var global_pending: int = JobManager.count_pending_by_type(job_type)
+		if global_pending >= global_ambition_cap:
+			_next_matrix_ambition_tick = tick + fail_cooldown
+			return false
 	var priority: int = clampi(int(ambition.get("priority", 5)), 1, 10)
 	var work_ticks: int = Job.tool_job_work_ticks(job_type)
 	if work_ticks <= 0:
 		work_ticks = 20
 	var posted: Job = JobManager.post(job_type, target_tile, priority, work_ticks)
 	if posted == null:
-		_next_matrix_ambition_tick = tick + 10
+		_next_matrix_ambition_tick = tick + fail_cooldown
 		return false
 	var amb_reason: String = str(ambition.get("reason", "matrix_ambition"))
 	if JobManager != null:
@@ -1927,7 +2024,7 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 		ambition,
 		tick
 	)
-	_next_matrix_ambition_tick = tick + 15
+	_next_matrix_ambition_tick = tick + success_cooldown
 	return true
 
 

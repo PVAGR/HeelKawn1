@@ -364,8 +364,9 @@ static func get_matrix_decision_for_pawn(pawn: Variant) -> Dictionary:
 	var identity: HeelKawnianIdentity = get_identity_for_pawn(pawn)
 	var biases: Dictionary = _matrix_job_biases(profile, data, identity, pawn)
 	
-	# Household Coordination: check if pawn is part of a coordinated plan
-	var hh_ambition: Dictionary = get_household_ambition_for_pawn(pawn)
+	# Household Coordination: read-only check so decision scans do not consume
+	# household cooldowns or mutate plan state.
+	var hh_ambition: Dictionary = get_household_ambition_for_pawn(pawn, false)
 	if not hh_ambition.is_empty():
 		var jtype: int = int(hh_ambition.get("job_type", -1))
 		if jtype >= 0:
@@ -827,7 +828,7 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 
 	return ambition
 
-static func get_household_ambition_for_pawn(pawn: Variant) -> Dictionary:
+static func get_household_ambition_for_pawn(pawn: Variant, consume_cooldown: bool = true) -> Dictionary:
 	var data: HeelKawnianData = _pawn_data(pawn)
 	if data == null or int(data.household_id) < 0:
 		return {}
@@ -847,12 +848,16 @@ static func get_household_ambition_for_pawn(pawn: Variant) -> Dictionary:
 			var last_tick: int = int(_last_plan_tick_by_household.get(hid, -1000000))
 			if tick - last_tick < MATRIX_PLAN_SPOKE_COOLDOWN_TICKS:
 				return {}
-			
-			_last_plan_tick_by_household[hid] = tick
+			if consume_cooldown:
+				_last_plan_tick_by_household[hid] = tick
 			return _ambition_result(job_type, 8, "coordinated household goal: %s (task %d/%d)" % [plan.goal, index + 1, tasks.size()])
 		else:
 			# Plan completed
 			_active_household_plans.erase(hid)
+
+	# Read-only callers should never create/refresh plans.
+	if not consume_cooldown:
+		return {}
 	
 	# 2. Determine if we should start a new plan
 	var last_plan_tick: int = int(_last_plan_tick_by_household.get(hid, -1000000))
@@ -3004,3 +3009,14 @@ static func notify_household_task_complete(hid: int, job_type: int) -> void:
 				'total_tasks': tasks.size()
 			})
 
+
+static func get_household_plan_debug(hid: int) -> Dictionary:
+	if hid < 0:
+		return {}
+	var plan: Dictionary = _active_household_plans.get(hid, {})
+	if plan.is_empty():
+		return {}
+	var out: Dictionary = plan.duplicate(true)
+	out["household_id"] = hid
+	out["last_tick"] = int(_last_plan_tick_by_household.get(hid, -1000000))
+	return out

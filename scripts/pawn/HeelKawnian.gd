@@ -652,6 +652,8 @@ var _next_cohort_update_tick: int = 0
 var _cohort_anchor_ref: WeakRef = null
 var _next_recruitment_cache_tick: int = 0
 var _next_matrix_ambition_tick: int = 0
+var _next_matrix_preservation_tick: int = 0
+var _next_matrix_learning_tick: int = 0
 var _last_recruitment_job_type: int = -2
 var _recruitment_signal_cache: Array[Dictionary] = []
 var _cohort_stability_ticks: int = 0
@@ -1926,6 +1928,157 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 		tick
 	)
 	_next_matrix_ambition_tick = tick + 15
+	return true
+
+
+func _try_heelkawnian_matrix_preservation_action() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	if _state != State.IDLE or not _path.is_empty():
+		return false
+	var tick: int = GameManager.tick_count
+	if tick < _next_matrix_preservation_tick:
+		return false
+	if posmod(tick + int(data.id) * 13, 41) != 0:
+		return false
+	var choice: Dictionary = HeelKawnianManager.get_preservation_choice_for_pawn(self)
+	if choice.is_empty():
+		_next_matrix_preservation_tick = tick + 80
+		return false
+	var action: String = str(choice.get("action", ""))
+	var reason: String = str(choice.get("reason", ""))
+	var knowledge_type: int = int(choice.get("knowledge_type", -1))
+	var did_act: bool = false
+	match action:
+		"teach":
+			var target_id: int = int(choice.get("target_pawn_id", -1))
+			var target: HeelKawnian = _find_pawn_by_id(target_id)
+			if target != null and is_instance_valid(target) and target.data != null:
+				var tile_dist: int = maxi(
+					absi(int(target.data.tile_pos.x) - int(data.tile_pos.x)),
+					absi(int(target.data.tile_pos.y) - int(data.tile_pos.y))
+				)
+				if tile_dist <= 3 and KnowledgeSystem != null and knowledge_type >= 0:
+					if not KnowledgeSystem.has_method("has_knowledge") or not KnowledgeSystem.has_knowledge(target_id, knowledge_type):
+						if KnowledgeSystem.has_method("teach_knowledge"):
+							KnowledgeSystem.teach_knowledge(int(data.id), target_id, knowledge_type)
+							data.update_social_memory(target_id, 0.05, 0.0, 0.0, 0.06, "matrix_preservation_teach")
+							did_act = true
+				if not did_act:
+					var near_tile: Vector2i = _pick_passable_near_tile(data.tile_pos, target.data.tile_pos)
+					if near_tile.x >= 0:
+						autonomy_draft_goto(near_tile, "teach_seek", target_id)
+						did_act = (_state == State.DRAFT_WALK)
+		"inscribe_stone":
+			var stone_tile: Vector2i = choice.get("target_tile", Vector2i(-1, -1))
+			if stone_tile.x >= 0:
+				var pending_stone: bool = false
+				if JobManager != null and JobManager.has_method("has_pending_build_near"):
+					pending_stone = JobManager.has_pending_build_near(stone_tile, _Job.Type.CARVE_KNOWLEDGE_STONE, 2)
+				var has_tile_job: bool = JobManager != null and JobManager.has_method("has_job_at") and JobManager.has_job_at(stone_tile)
+				if not pending_stone and not has_tile_job and JobManager != null:
+					var work_ticks: int = _Job.tool_job_work_ticks(_Job.Type.CARVE_KNOWLEDGE_STONE)
+					if work_ticks <= 0:
+						work_ticks = 20
+					var posted: Job = JobManager.post(_Job.Type.CARVE_KNOWLEDGE_STONE, stone_tile, 7, work_ticks)
+					if posted != null:
+						if JobManager.has_method("stamp_seeder_metadata"):
+							JobManager.stamp_seeder_metadata(posted, reason, "settlement", int(data.id))
+						did_act = true
+		"write_book":
+			var book_tile: Vector2i = choice.get("target_tile", data.tile_pos)
+			var wrote_book: bool = false
+			if knowledge_type >= 0 and KnowledgeSystem != null and KnowledgeSystem.has_method("write_knowledge_in_book"):
+				var tdist: int = maxi(absi(book_tile.x - data.tile_pos.x), absi(book_tile.y - data.tile_pos.y))
+				if tdist <= 2:
+					wrote_book = bool(KnowledgeSystem.write_knowledge_in_book(int(data.id), book_tile, [knowledge_type]))
+			if wrote_book:
+				did_act = true
+			elif JobManager != null:
+				var pending_book: bool = JobManager.has_method("has_pending_build_near") and JobManager.has_pending_build_near(book_tile, _Job.Type.BOOK_BINDING, 3)
+				if not pending_book:
+					var bind_ticks: int = _Job.tool_job_work_ticks(_Job.Type.BOOK_BINDING)
+					if bind_ticks <= 0:
+						bind_ticks = 20
+					var posted_book: Job = JobManager.post(_Job.Type.BOOK_BINDING, book_tile, 6, bind_ticks)
+					if posted_book != null:
+						if JobManager.has_method("stamp_seeder_metadata"):
+							JobManager.stamp_seeder_metadata(posted_book, reason, "settlement", int(data.id))
+						did_act = true
+		_:
+			did_act = false
+	if did_act:
+		HeelKawnianManager.log_heelkawn_event(
+			data.unique_id,
+			"matrix_preservation_action",
+			{
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"action": action,
+				"knowledge_type": knowledge_type,
+				"reason": reason,
+			},
+			reason,
+			choice,
+			tick
+		)
+		_next_matrix_preservation_tick = tick + 140
+		return true
+	_next_matrix_preservation_tick = tick + 60
+	return false
+
+
+func _try_heelkawnian_matrix_learning_seed() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	var tick: int = GameManager.tick_count
+	if tick < _next_matrix_learning_tick:
+		return false
+	if posmod(tick + int(data.id) * 5, 37) != 0:
+		return false
+	var target: Dictionary = HeelKawnianManager.get_learning_target_for_pawn(self)
+	if target.is_empty():
+		_next_matrix_learning_tick = tick + 100
+		return false
+	var reason: String = str(target.get("reason", "matrix_learning_target"))
+	var priority_raw: float = float(target.get("priority", 1.0))
+	var priority: int = clampi(int(round(priority_raw * 2.0)) + 3, 3, 8)
+	var pending_teach: int = 0
+	var pending_apprentice: int = 0
+	if JobManager != null and JobManager.has_method("count_pending_jobs_near"):
+		pending_teach = JobManager.count_pending_jobs_near(data.tile_pos, _Job.Type.TEACH_SKILL, 6)
+		pending_apprentice = JobManager.count_pending_jobs_near(data.tile_pos, _Job.Type.APPRENTICESHIP, 6)
+	if pending_teach + pending_apprentice >= 2:
+		_next_matrix_learning_tick = tick + 80
+		return false
+	var job_type: int = _Job.Type.APPRENTICESHIP if int(target.get("target_knowledge_type", -1)) >= 0 else _Job.Type.TEACH_SKILL
+	var work_ticks: int = _Job.tool_job_work_ticks(job_type)
+	if work_ticks <= 0:
+		work_ticks = 16
+	var posted: Job = JobManager.post(job_type, data.tile_pos, priority, work_ticks) if JobManager != null else null
+	if posted == null:
+		_next_matrix_learning_tick = tick + 70
+		return false
+	if JobManager.has_method("stamp_seeder_metadata"):
+		JobManager.stamp_seeder_metadata(posted, reason, "settlement", int(data.id))
+	HeelKawnianManager.log_heelkawn_event(
+		data.unique_id,
+		"matrix_learning_seed",
+		{
+			"pawn_id": int(data.id),
+			"pawn_name": data.display_name,
+			"job_type": job_type,
+			"job_name": _Job.describe_type(job_type),
+			"priority": priority,
+			"reason": reason,
+			"target_knowledge_type": int(target.get("target_knowledge_type", -1)),
+			"target_skill": int(target.get("target_skill", -1)),
+		},
+		reason,
+		target,
+		tick
+	)
+	_next_matrix_learning_tick = tick + 120
 	return true
 
 
@@ -4042,11 +4195,16 @@ func _tick_idle() -> void:
 		# 2b. HeelKawnian Matrix social intent: ally-seek, mentor-seek, or confrontation.
 		if _try_heelkawnian_matrix_social_action():
 			return
+		# 2b.1. Knowledge preservation intent: teach, inscribe, or write before loss.
+		if _try_heelkawnian_matrix_preservation_action():
+			return
 		# Fallback autonomy paths.
 		if _try_autonomy_grudge_confront():
 			return
 		# Matrix ambition seed: post one strategic household/settlement job.
 		_try_heelkawnian_matrix_ambition_seed()
+		# Matrix learning seed: request apprenticeships/teaching from live target gaps.
+		_try_heelkawnian_matrix_learning_seed()
 		if ColonySimServices != null and ColonySimServices.colony_contentment_period():
 			_try_post_hobby_build_job()
 		# Autonomous stockpile: if no stockpiles exist and pawn has materials, post one.

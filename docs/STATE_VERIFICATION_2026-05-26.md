@@ -90,3 +90,22 @@ Verification:
 
 Verification:
 - Re-ran `bash tools/ai/sim-quality-gate.sh` after household stabilization changes: PASS.
+
+## Settlement Chain Reliability Update (same date, follow-up pass)
+
+5. Added deterministic anti-stall recovery for settlement ambition chains
+- File:
+  - `autoloads/HeelKawnianManager.gd`
+- Changes:
+  - `_active_ambition_chains` entries now carry `step_started_tick` and `stall_strikes`.
+  - `_ambition_chain_for_settlement(...)` now:
+    - advances steps only when `_chain_step_completed(...)` confirms local feature truth;
+    - boosts step priority with deterministic retry markers when a step is stalled;
+    - advances past a blocked step after repeated stall windows (`CHAIN_STEP_STALL_STRIKES_MAX`) to avoid permanent chain deadlock.
+  - Added `_chain_step_stall_ticks_for_speed()` so stall window scales with simulation speed tiers (`12x/26x/50x/100x`).
+- Effect:
+  - Chains remain truth-driven but no longer freeze indefinitely on blocked steps.
+  - Recovery behavior remains deterministic and bounded under fast-forward stress.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after chain reliability changes: PASS.

@@ -16,6 +16,7 @@ const MATRIX_AFFILIATION_COOLDOWN_TICKS: int = 240
 const MATRIX_HOUSEHOLD_PLAN_COOLDOWN_TICKS: int = 600
 const MATRIX_PLAN_SPOKE_COOLDOWN_TICKS: int = 120
 const NEED_SATISFACTION_INTERVAL_TICKS: int = 30
+const CHAIN_STEP_STALL_STRIKES_MAX: int = 3
 
 const HOUSEHOLD_GOALS = {
 	"Settle Hearth": [Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_BED, Job.Type.BUILD_BED],
@@ -1000,14 +1001,39 @@ static func _ambition_chain_for_settlement(settlement_id: int) -> Dictionary:
 		var chain_name: String = str(active.get("chain_name", ""))
 		var steps: Array = active.get("steps", [])
 		var current_step: int = int(active.get("current_step", 0))
+		var step_started_tick: int = int(active.get("step_started_tick", int(active.get("tick", tick))))
+		var stall_strikes: int = int(active.get("stall_strikes", 0))
+		if steps.is_empty():
+			_active_ambition_chains.erase(settlement_id)
+			return {}
+		current_step = clampi(current_step, 0, maxi(steps.size() - 1, 0))
 
 		# Check if the current step has been completed (by scanning features)
 		var features: Dictionary = _scan_recovery_features(settlement_id)
-		if _chain_step_completed(chain_name, current_step, features, settlement_id):
+		var step_completed: bool = _chain_step_completed(chain_name, current_step, features, settlement_id)
+		if step_completed:
 			current_step += 1
 			active["current_step"] = current_step
 			active["tick"] = tick
+			active["step_started_tick"] = tick
+			active["stall_strikes"] = 0
 			_active_ambition_chains[settlement_id] = active
+		else:
+			var stalled_ticks: int = tick - step_started_tick
+			var stall_window: int = _chain_step_stall_ticks_for_speed()
+			if stalled_ticks >= stall_window:
+				stall_strikes += 1
+				active["stall_strikes"] = stall_strikes
+				active["step_started_tick"] = tick
+				active["tick"] = tick
+				if stall_strikes >= CHAIN_STEP_STALL_STRIKES_MAX:
+					# Anti-stall recovery: advance to next step if this one has been
+					# blocked for too long. This keeps the chain from locking forever.
+					current_step += 1
+					active["current_step"] = current_step
+					active["stall_strikes"] = 0
+					active["step_started_tick"] = tick
+				_active_ambition_chains[settlement_id] = active
 
 		# If we've completed all steps, clear the chain
 		if current_step >= steps.size():
@@ -1016,7 +1042,15 @@ static func _ambition_chain_for_settlement(settlement_id: int) -> Dictionary:
 
 		# Return the current step's ambition
 		if current_step < steps.size():
-			return _ambition_from_chain_step(str(steps[current_step]), settlement_id, features)
+			var ambition: Dictionary = _ambition_from_chain_step(str(steps[current_step]), settlement_id, features)
+			if ambition.is_empty():
+				return {}
+			var retry_strikes: int = int(active.get("stall_strikes", 0))
+			if retry_strikes > 0:
+				var boosted: int = clampi(int(ambition.get("priority", 5)) + mini(retry_strikes, 3), 1, 10)
+				ambition["priority"] = boosted
+				ambition["reason"] = "%s [stall_retry:%d]" % [str(ambition.get("reason", "")), retry_strikes]
+			return ambition
 
 	# No active chain — try to seed a new one based on settlement state
 	var features: Dictionary = _scan_recovery_features(settlement_id)
@@ -1030,6 +1064,8 @@ static func _ambition_chain_for_settlement(settlement_id: int) -> Dictionary:
 			"steps": new_chain,
 			"current_step": 0,
 			"tick": tick,
+			"step_started_tick": tick,
+			"stall_strikes": 0,
 		}
 		return _ambition_from_chain_step(str(new_chain[0]), settlement_id, features)
 
@@ -1219,6 +1255,22 @@ static func _select_new_chain(settlement_id: int, features: Dictionary, local_po
 		return ["build_marker", "build_shrine"]
 
 	return []
+
+
+static func _chain_step_stall_ticks_for_speed() -> int:
+	var gm: Node = _root_node("GameManager")
+	if gm == null:
+		return 2600
+	var gs: float = float(gm.get("game_speed"))
+	if gs >= 100.0:
+		return 6200
+	if gs >= 50.0:
+		return 5200
+	if gs >= 26.0:
+		return 4200
+	if gs >= 12.0:
+		return 3400
+	return 2600
 
 
 ## Learning target selection: determines what knowledge/skill a pawn should prioritize learning next.

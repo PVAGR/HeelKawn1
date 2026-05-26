@@ -1004,6 +1004,15 @@ static func _ambition_chain_for_settlement(settlement_id: int) -> Dictionary:
 		var step_started_tick: int = int(active.get("step_started_tick", int(active.get("tick", tick))))
 		var stall_strikes: int = int(active.get("stall_strikes", 0))
 		if steps.is_empty():
+			_log_settlement_chain_event(
+				settlement_id,
+				"chain_cleared_invalid",
+				{
+					"chain_name": chain_name,
+					"reason": "empty_steps",
+				},
+				tick
+			)
 			_active_ambition_chains.erase(settlement_id)
 			return {}
 		current_step = clampi(current_step, 0, maxi(steps.size() - 1, 0))
@@ -1012,31 +1021,84 @@ static func _ambition_chain_for_settlement(settlement_id: int) -> Dictionary:
 		var features: Dictionary = _scan_recovery_features(settlement_id)
 		var step_completed: bool = _chain_step_completed(chain_name, current_step, features, settlement_id)
 		if step_completed:
+			var completed_step_name: String = str(steps[current_step]) if current_step < steps.size() else "unknown_step"
 			current_step += 1
+			var next_step_name: String = str(steps[current_step]) if current_step < steps.size() else "chain_complete"
 			active["current_step"] = current_step
 			active["tick"] = tick
 			active["step_started_tick"] = tick
 			active["stall_strikes"] = 0
 			_active_ambition_chains[settlement_id] = active
+			_log_settlement_chain_event(
+				settlement_id,
+				"step_complete",
+				{
+					"chain_name": chain_name,
+					"completed_step": completed_step_name,
+					"completed_step_index": current_step - 1,
+					"next_step": next_step_name,
+					"next_step_index": current_step,
+					"steps_total": steps.size(),
+				},
+				tick
+			)
 		else:
 			var stalled_ticks: int = tick - step_started_tick
 			var stall_window: int = _chain_step_stall_ticks_for_speed()
 			if stalled_ticks >= stall_window:
+				var stalled_step_name: String = str(steps[current_step]) if current_step < steps.size() else "unknown_step"
 				stall_strikes += 1
 				active["stall_strikes"] = stall_strikes
 				active["step_started_tick"] = tick
 				active["tick"] = tick
+				_log_settlement_chain_event(
+					settlement_id,
+					"step_retry",
+					{
+						"chain_name": chain_name,
+						"step": stalled_step_name,
+						"step_index": current_step,
+						"stall_strikes": stall_strikes,
+						"stall_window_ticks": stall_window,
+						"stalled_ticks": stalled_ticks,
+					},
+					tick
+				)
 				if stall_strikes >= CHAIN_STEP_STALL_STRIKES_MAX:
 					# Anti-stall recovery: advance to next step if this one has been
 					# blocked for too long. This keeps the chain from locking forever.
+					var skipped_step_name: String = stalled_step_name
 					current_step += 1
 					active["current_step"] = current_step
 					active["stall_strikes"] = 0
 					active["step_started_tick"] = tick
+					var resumed_step_name: String = str(steps[current_step]) if current_step < steps.size() else "chain_complete"
+					_log_settlement_chain_event(
+						settlement_id,
+						"step_skip_after_stall",
+						{
+							"chain_name": chain_name,
+							"skipped_step": skipped_step_name,
+							"skipped_step_index": current_step - 1,
+							"resumed_step": resumed_step_name,
+							"resumed_step_index": current_step,
+							"stall_strikes_required": CHAIN_STEP_STALL_STRIKES_MAX,
+						},
+						tick
+					)
 				_active_ambition_chains[settlement_id] = active
 
 		# If we've completed all steps, clear the chain
 		if current_step >= steps.size():
+			_log_settlement_chain_event(
+				settlement_id,
+				"chain_complete",
+				{
+					"chain_name": chain_name,
+					"steps_total": steps.size(),
+				},
+				tick
+			)
 			_active_ambition_chains.erase(settlement_id)
 			return {}
 
@@ -1067,6 +1129,16 @@ static func _ambition_chain_for_settlement(settlement_id: int) -> Dictionary:
 			"step_started_tick": tick,
 			"stall_strikes": 0,
 		}
+		_log_settlement_chain_event(
+			settlement_id,
+			"chain_start",
+			{
+				"chain_name": chain_name,
+				"steps_total": new_chain.size(),
+				"first_step": str(new_chain[0]) if not new_chain.is_empty() else "",
+			},
+			tick
+		)
 		return _ambition_from_chain_step(str(new_chain[0]), settlement_id, features)
 
 	return {}
@@ -2196,6 +2268,45 @@ static func log_heelkawn_event(
 		wm.call("record_event", wm_event)
 	elif OS.is_debug_build():
 		print("HeelKawnianEventLog", event)
+
+
+static func _log_settlement_chain_event(
+		settlement_id: int,
+		action: String,
+		details: Dictionary,
+		tick: int
+) -> void:
+	var payload: Dictionary = details.duplicate(true)
+	payload["settlement_id"] = settlement_id
+	payload["action"] = action
+	var event: Dictionary = {
+		"event_id": "settlement_chain_%d_%s_%d" % [settlement_id, action, tick],
+		"source_ai": "HeelKawnianManager",
+		"event_type": "settlement_chain",
+		"payload": payload,
+		"rationale": "settlement chain %s" % action,
+		"inputs_snapshot": {},
+		"tick": tick,
+		"type": "heelkawnian_development",
+	}
+	var wm: Node = _root_node("WorldMemory")
+	if wm != null and wm.has_method("record_event"):
+		wm.call("record_event", event)
+	elif OS.is_debug_build():
+		print("SettlementChainEvent", event)
+
+
+static func get_active_ambition_chains_debug() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for sid_any in _active_ambition_chains.keys():
+		var sid: int = int(sid_any)
+		var chain: Dictionary = (_active_ambition_chains[sid_any] as Dictionary).duplicate(true)
+		chain["settlement_id"] = sid
+		out.append(chain)
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("settlement_id", 0)) < int(b.get("settlement_id", 0))
+	)
+	return out
 
 
 static func _nearby_pawn_candidates(pawn: Variant, max_items: int, radius_tiles: int) -> Array:

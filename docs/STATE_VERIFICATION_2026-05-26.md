@@ -109,3 +109,25 @@ Verification:
 
 Verification:
 - Re-ran `bash tools/ai/sim-quality-gate.sh` after chain reliability changes: PASS.
+
+## Settlement Chain Observability Update (same date, follow-up pass)
+
+6. Added explicit chain lifecycle diagnostics for deadlock visibility
+- File:
+  - `autoloads/HeelKawnianManager.gd`
+- Changes:
+  - Added settlement-chain event logging helper to record lifecycle events into `WorldMemory` (`type=heelkawnian_development`, `event_type=settlement_chain`).
+  - `_ambition_chain_for_settlement(...)` now logs:
+    - `chain_start`
+    - `step_complete`
+    - `step_retry`
+    - `step_skip_after_stall`
+    - `chain_complete`
+    - `chain_cleared_invalid`
+  - Added `get_active_ambition_chains_debug()` for direct inspection of active per-settlement chain state.
+- Effect:
+  - 1x and 100x chain behavior can now be traced from world events instead of inferred indirectly.
+  - Deadlock/stall patterns are diagnosable with explicit retry/skip markers.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after observability changes: PASS.

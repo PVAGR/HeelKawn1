@@ -1941,9 +1941,33 @@ func _try_heelkawnian_matrix_preservation_action() -> bool:
 		return false
 	if posmod(tick + int(data.id) * 13, 41) != 0:
 		return false
+	var gs: float = GameManager.game_speed if GameManager != null else 1.0
+	var fail_cooldown: int = 60
+	var success_cooldown: int = 140
+	var preserve_stone_cap: int = 18
+	var preserve_book_cap: int = 12
+	if gs >= 100.0:
+		fail_cooldown = 120
+		success_cooldown = 260
+		preserve_stone_cap = 8
+		preserve_book_cap = 6
+	elif gs >= 50.0:
+		fail_cooldown = 95
+		success_cooldown = 220
+		preserve_stone_cap = 10
+		preserve_book_cap = 8
+	elif gs >= 26.0:
+		fail_cooldown = 80
+		success_cooldown = 190
+		preserve_stone_cap = 12
+		preserve_book_cap = 10
+	elif gs >= 12.0:
+		fail_cooldown = 70
+		success_cooldown = 160
+		preserve_stone_cap = 14
 	var choice: Dictionary = HeelKawnianManager.get_preservation_choice_for_pawn(self)
 	if choice.is_empty():
-		_next_matrix_preservation_tick = tick + 80
+		_next_matrix_preservation_tick = tick + fail_cooldown
 		return false
 	var action: String = str(choice.get("action", ""))
 	var reason: String = str(choice.get("reason", ""))
@@ -1972,6 +1996,11 @@ func _try_heelkawnian_matrix_preservation_action() -> bool:
 		"inscribe_stone":
 			var stone_tile: Vector2i = choice.get("target_tile", Vector2i(-1, -1))
 			if stone_tile.x >= 0:
+				if JobManager != null and JobManager.has_method("count_pending_by_type"):
+					var global_stones: int = JobManager.count_pending_by_type(_Job.Type.CARVE_KNOWLEDGE_STONE)
+					if global_stones >= preserve_stone_cap:
+						_next_matrix_preservation_tick = tick + fail_cooldown
+						return false
 				var pending_stone: bool = false
 				if JobManager != null and JobManager.has_method("has_pending_build_near"):
 					pending_stone = JobManager.has_pending_build_near(stone_tile, _Job.Type.CARVE_KNOWLEDGE_STONE, 2)
@@ -1995,6 +2024,11 @@ func _try_heelkawnian_matrix_preservation_action() -> bool:
 			if wrote_book:
 				did_act = true
 			elif JobManager != null:
+				if JobManager.has_method("count_pending_by_type"):
+					var global_books: int = JobManager.count_pending_by_type(_Job.Type.BOOK_BINDING)
+					if global_books >= preserve_book_cap:
+						_next_matrix_preservation_tick = tick + fail_cooldown
+						return false
 				var pending_book: bool = JobManager.has_method("has_pending_build_near") and JobManager.has_pending_build_near(book_tile, _Job.Type.BOOK_BINDING, 3)
 				if not pending_book:
 					var bind_ticks: int = _Job.tool_job_work_ticks(_Job.Type.BOOK_BINDING)
@@ -2022,9 +2056,9 @@ func _try_heelkawnian_matrix_preservation_action() -> bool:
 			choice,
 			tick
 		)
-		_next_matrix_preservation_tick = tick + 140
+		_next_matrix_preservation_tick = tick + success_cooldown
 		return true
-	_next_matrix_preservation_tick = tick + 60
+	_next_matrix_preservation_tick = tick + fail_cooldown
 	return false
 
 
@@ -2036,20 +2070,48 @@ func _try_heelkawnian_matrix_learning_seed() -> bool:
 		return false
 	if posmod(tick + int(data.id) * 5, 37) != 0:
 		return false
+	var gs: float = GameManager.game_speed if GameManager != null else 1.0
+	var fail_cooldown: int = 70
+	var success_cooldown: int = 120
+	var learning_global_cap: int = 24
+	if gs >= 100.0:
+		fail_cooldown = 140
+		success_cooldown = 260
+		learning_global_cap = 10
+	elif gs >= 50.0:
+		fail_cooldown = 110
+		success_cooldown = 220
+		learning_global_cap = 14
+	elif gs >= 26.0:
+		fail_cooldown = 90
+		success_cooldown = 180
+		learning_global_cap = 18
+	elif gs >= 12.0:
+		fail_cooldown = 80
+		success_cooldown = 150
+		learning_global_cap = 22
 	var target: Dictionary = HeelKawnianManager.get_learning_target_for_pawn(self)
 	if target.is_empty():
-		_next_matrix_learning_tick = tick + 100
+		_next_matrix_learning_tick = tick + fail_cooldown
 		return false
 	var reason: String = str(target.get("reason", "matrix_learning_target"))
 	var priority_raw: float = float(target.get("priority", 1.0))
 	var priority: int = clampi(int(round(priority_raw * 2.0)) + 3, 3, 8)
 	var pending_teach: int = 0
 	var pending_apprentice: int = 0
+	var global_teach: int = 0
+	var global_apprentice: int = 0
 	if JobManager != null and JobManager.has_method("count_pending_jobs_near"):
 		pending_teach = JobManager.count_pending_jobs_near(data.tile_pos, _Job.Type.TEACH_SKILL, 6)
 		pending_apprentice = JobManager.count_pending_jobs_near(data.tile_pos, _Job.Type.APPRENTICESHIP, 6)
+	if JobManager != null and JobManager.has_method("count_pending_by_type"):
+		global_teach = JobManager.count_pending_by_type(_Job.Type.TEACH_SKILL)
+		global_apprentice = JobManager.count_pending_by_type(_Job.Type.APPRENTICESHIP)
 	if pending_teach + pending_apprentice >= 2:
-		_next_matrix_learning_tick = tick + 80
+		_next_matrix_learning_tick = tick + fail_cooldown
+		return false
+	if global_teach + global_apprentice >= learning_global_cap:
+		_next_matrix_learning_tick = tick + fail_cooldown
 		return false
 	var job_type: int = _Job.Type.APPRENTICESHIP if int(target.get("target_knowledge_type", -1)) >= 0 else _Job.Type.TEACH_SKILL
 	var work_ticks: int = _Job.tool_job_work_ticks(job_type)
@@ -2057,7 +2119,7 @@ func _try_heelkawnian_matrix_learning_seed() -> bool:
 		work_ticks = 16
 	var posted: Job = JobManager.post(job_type, data.tile_pos, priority, work_ticks) if JobManager != null else null
 	if posted == null:
-		_next_matrix_learning_tick = tick + 70
+		_next_matrix_learning_tick = tick + fail_cooldown
 		return false
 	if JobManager.has_method("stamp_seeder_metadata"):
 		JobManager.stamp_seeder_metadata(posted, reason, "settlement", int(data.id))
@@ -2078,7 +2140,7 @@ func _try_heelkawnian_matrix_learning_seed() -> bool:
 		target,
 		tick
 	)
-	_next_matrix_learning_tick = tick + 120
+	_next_matrix_learning_tick = tick + success_cooldown
 	return true
 
 

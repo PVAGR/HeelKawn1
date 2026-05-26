@@ -53,3 +53,20 @@
 ## Residual Risk
 - Runtime behavior and perf impact at `1x` and `100x` still need in-engine headless/live validation on a machine with Godot installed.
 - `write_book` direct-write path currently occurs immediately when in-range; if this proves too strong, convert to fully job-mediated transcription flow.
+
+## Stability Hardening Update (same date, follow-up pass)
+
+3. Added speed-tier backpressure for new Matrix posting paths
+- File: `scripts/pawn/HeelKawnian.gd`
+- Preservation path:
+  - Added speed-tier global caps for `CARVE_KNOWLEDGE_STONE` and `BOOK_BINDING` pending counts.
+  - Added speed-tier fail/success cooldown scaling for `12x/26x/50x/100x`.
+- Learning path:
+  - Added global cap on combined pending `TEACH_SKILL + APPRENTICESHIP`.
+  - Retained local near-tile dedupe and added speed-tier cooldown scaling.
+- Result:
+  - Reduced risk of medium-lane autonomy posting bursts during fast-forward stress.
+  - Keeps deterministic lane behavior and replay consistency.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after hardening changes: PASS.

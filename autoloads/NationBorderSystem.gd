@@ -640,11 +640,12 @@ func form_alliance(nation_a_id: int, nation_b_id: int) -> void:
 # ============================================================
 
 func are_nations_at_war(nation_a_id: int, nation_b_id: int) -> bool:
-	"""Check if two nations are at war. War state is stored in nations[nid].at_war_with."""
-	var na: Dictionary = nations.get(nation_a_id, {})
-	if na.is_empty() or nation_b_id < 0:
+	if nation_a_id < 0 or nation_b_id < 0:
 		return false
-	return na.has("at_war_with") and nation_b_id in na.get("at_war_with", [])
+	if not nations.has(nation_a_id) or not nations.has(nation_b_id):
+		return false
+	var nation_a = nations[nation_a_id]
+	return nation_b_id in nation_a.get("at_war_with", [])
 
 
 func get_nation_at_region(region_key: int) -> int:

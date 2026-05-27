@@ -1,6 +1,1 @@
-res://autoloads/FactionSystem.gd
 res://autoloads/SettlementMemory.gd
-res://autoloads/TradeMemory.gd
-res://scenes/main/Main.gd
-res://autoloads/AutonomousWorldAI.gd
-res://autoloads/NationBorderSystem.gd

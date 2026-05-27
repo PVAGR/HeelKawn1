@@ -4,12 +4,12 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** May 24, 2026
+**Last Updated:** May 27, 2026
 **Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
 **Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
-**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-24.md](STATE_VERIFICATION_2026-05-24.md)
+**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-27.md](STATE_VERIFICATION_2026-05-27.md)
 
 ---
 
@@ -64,6 +64,10 @@ We are always building, always refining, always expanding. This document capture
   - Added display settings (resolution, window mode, vsync) to GameSettings.
   - Performance optimizations: spatial grid for social proximity, redraw throttle, meaning throttle, caches.
   - Added `TickBudgetManager.gd` as a shared 12ms simulation budget coordinator and throttled high-frequency debug logs in the main tick path.
+  - Closed the v1 truth mismatch where faction, house, trade, and infrastructure gates could keep acting on stale or global state after settlement downgrade.
+  - FactionRegistry and FactionSystem now prune non-formal settlement endpoints before reporting or updating live pair state.
+  - TradeMemory now seeds and renews routes from formal settlements only, and removes routes whose endpoints are no longer formal.
+  - SettlementMemory infrastructure formalization now checks for a local stockpile at the candidate settlement instead of treating any world stockpile as sufficient.
   - **FEAT: Literature & Knowledge Preservation (Phase 5)**:
     - Implemented Book crafting recipes (Paper, Leather, Ink, Pen, Book) in `CraftingSystem.gd`.
     - Expanded `WorldMeaning.gd` with deterministic tags for literate regions (`great_library`, `scriptorium`, `literate`).

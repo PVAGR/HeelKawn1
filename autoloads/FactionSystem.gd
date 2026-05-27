@@ -62,6 +62,7 @@ func _ready() -> void:
 
 
 func _on_game_tick(tick: int) -> void:
+	_prune_stale_factions()
 	# Update faction relations periodically
 	if tick % FACTION_CHECK_INTERVAL == 0:
 		_update_faction_relations(tick)
@@ -69,6 +70,52 @@ func _on_game_tick(tick: int) -> void:
 	# Check for new faction opportunities
 	if tick % (FACTION_CHECK_INTERVAL * 2) == 0:
 		_try_form_new_factions(tick)
+
+
+func sync_from_settlements() -> void:
+	_prune_stale_factions()
+
+
+func _current_formal_settlement_centers() -> Dictionary:
+	var centers: Dictionary = {}
+	if _settlement_memory == null or not _settlement_memory.has_method("get_formal_settlements"):
+		return centers
+	for st_any in _settlement_memory.get_formal_settlements():
+		if not (st_any is Dictionary):
+			continue
+		var st: Dictionary = st_any as Dictionary
+		var center: int = int(st.get("center_region", -1))
+		if center >= 0:
+			centers[center] = true
+	return centers
+
+
+func _prune_stale_factions() -> void:
+	if _settlement_memory == null or not _settlement_memory.has_method("get_formal_settlements"):
+		return
+	var formal_centers: Dictionary = _current_formal_settlement_centers()
+	if formal_centers.is_empty():
+		if not factions.is_empty():
+			factions.clear()
+		return
+	var kept: Array[Dictionary] = []
+	var changed: bool = false
+	for faction_any in factions:
+		if not (faction_any is Dictionary):
+			changed = true
+			continue
+		var faction: Dictionary = faction_any as Dictionary
+		var settlement_a: int = int(faction.get("settlement_a", -1))
+		var settlement_b: int = int(faction.get("settlement_b", -1))
+		if settlement_a < 0 or settlement_b < 0:
+			changed = true
+			continue
+		if not formal_centers.has(settlement_a) or not formal_centers.has(settlement_b):
+			changed = true
+			continue
+		kept.append(faction)
+	if changed:
+		factions = kept
 
 
 func _update_faction_relations(tick: int) -> void:
@@ -228,6 +275,7 @@ func _number_to_relation(value: int) -> String:
 
 ## Get relation between two settlements
 func get_relation(settlement_a: int, settlement_b: int) -> String:
+	_prune_stale_factions()
 	for faction in factions:
 		if (faction.settlement_a == settlement_a and faction.settlement_b == settlement_b) or \
 		   (faction.settlement_a == settlement_b and faction.settlement_b == settlement_a):
@@ -236,6 +284,7 @@ func get_relation(settlement_a: int, settlement_b: int) -> String:
 
 ## Get all factions for a settlement
 func get_settlement_factions(settlement: int) -> Array[Dictionary]:
+	_prune_stale_factions()
 	var result: Array[Dictionary] = []
 	for faction in factions:
 		if faction.settlement_a == settlement or faction.settlement_b == settlement:
@@ -244,6 +293,7 @@ func get_settlement_factions(settlement: int) -> Array[Dictionary]:
 
 ## Add trade value to faction (increases relation)
 func add_trade_value(settlement_a: int, settlement_b: int, value: int) -> void:
+	_prune_stale_factions()
 	for faction in factions:
 		if (faction.settlement_a == settlement_a and faction.settlement_b == settlement_b) or \
 		   (faction.settlement_a == settlement_b and faction.settlement_b == settlement_a):
@@ -252,6 +302,7 @@ func add_trade_value(settlement_a: int, settlement_b: int, value: int) -> void:
 
 ## Add knowledge sharing to faction (increases relation)
 func add_knowledge_sharing(settlement_a: int, settlement_b: int, knowledge_types: int) -> void:
+	_prune_stale_factions()
 	for faction in factions:
 		if (faction.settlement_a == settlement_a and faction.settlement_b == settlement_b) or \
 		   (faction.settlement_a == settlement_b and faction.settlement_b == settlement_a):
@@ -260,6 +311,7 @@ func add_knowledge_sharing(settlement_a: int, settlement_b: int, knowledge_types
 
 ## Add conflict to faction (decreases relation)
 func add_conflict(settlement_a: int, settlement_b: int) -> void:
+	_prune_stale_factions()
 	for faction in factions:
 		if (faction.settlement_a == settlement_a and faction.settlement_b == settlement_b) or \
 		   (faction.settlement_a == settlement_b and faction.settlement_b == settlement_a):
@@ -276,6 +328,7 @@ func are_at_war(settlement_a: int, settlement_b: int) -> bool:
 
 ## Get faction statistics
 func get_stats() -> Dictionary:
+	_prune_stale_factions()
 	var stats: Dictionary = {
 		"total_factions": factions.size(),
 		"allied": 0,
@@ -294,6 +347,7 @@ func get_stats() -> Dictionary:
 
 ## Get all factions (for debugging)
 func get_all_factions() -> Array[Dictionary]:
+	_prune_stale_factions()
 	return factions.duplicate()
 
 ## Debug: Force relation between settlements

@@ -345,7 +345,7 @@ func _settlement_name_for(tile: Vector2i, settlement_id: int) -> String:
 		if sd is Dictionary:
 			var sdict: Dictionary = sd as Dictionary
 			return str(sdict.get("name", sdict.get("intent", "")))
-	return settlement_id >= 0 ? ("Settlement %d" % settlement_id) : ""
+	return ("Settlement %d" % settlement_id) if settlement_id >= 0 else ""
 
 
 func _contents_for(tile: Vector2i, feature: int, settlement_id: int) -> Dictionary:

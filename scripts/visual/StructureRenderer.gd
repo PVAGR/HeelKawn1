@@ -337,10 +337,10 @@ func _rehydrate_record_from_world(tile: Vector2i, feature: int, rec: Dictionary)
 
 func _settlement_name_for(tile: Vector2i, settlement_id: int) -> String:
 	if settlement_id < 0 and SettlementMemory != null and SettlementMemory.has_method("get_settlement_id_for_region"):
-		var region_key: int = _WM._region_key(tile.x, tile.y)
+		var region_key: int = WorldMemory._region_key(tile.x, tile.y)
 		settlement_id = int(SettlementMemory.get_settlement_id_for_region(region_key))
 	if settlement_id >= 0 and SettlementMemory != null and SettlementMemory.has_method("get_settlement_at_region"):
-		var region_key2: int = _WM._region_key(tile.x, tile.y)
+		var region_key2: int = WorldMemory._region_key(tile.x, tile.y)
 		var sd: Variant = SettlementMemory.get_settlement_at_region(region_key2)
 		if sd is Dictionary:
 			var sdict: Dictionary = sd as Dictionary

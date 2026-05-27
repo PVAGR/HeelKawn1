@@ -227,6 +227,10 @@ var _phase8_proof_overlay_text: RichTextLabel = null
 var _spatial_profile_overlay_text: RichTextLabel = null
 var _performance_monitor: PerformanceMonitorUI = null
 var _research_particle_texture: Texture2D = null
+var _structure_renderer: Node = null
+var _construction_visualizer: Node = null
+var _territory_renderer: Node = null
+var _realm_view_panel: Control = null
 const SELECT_PICK_RADIUS_PX: float = 16.0
 var _kill_count: int = 0
 var _resource_balance_audit_last_sig: String = ""
@@ -777,6 +781,8 @@ func _ready() -> void:
 			_settlement_banner.initialize(_world)
 		if _territory_overlay != null and _territory_overlay.has_method("initialize"):
 			_territory_overlay.initialize(_world, _camera)
+		_ensure_visual_structure_layers()
+		_ensure_visual_territory_layers()
 		if _ambient_audio != null and _ambient_audio.has_method("initialize"):
 			_ambient_audio.initialize(_world, _camera)
 		
@@ -856,6 +862,8 @@ func _ready() -> void:
 	# Start every session at 1x, unpaused. Player can change only through explicit controls.
 	GameManager.set_speed_index(0)
 	_bootstrap_colony()
+	_refresh_visual_structure_layers()
+	_refresh_visual_territory_layers()
 	if not simulation_worker:
 		if _hud != null:
 			_hud.set_player_control_refs(_player_input, _player_pawn)
@@ -892,6 +900,63 @@ func _setup_adjustable_ui() -> void:
 		if not ui_vp.child_entered_tree.is_connected(_on_ui_viewport_child_entered):
 			ui_vp.child_entered_tree.connect(_on_ui_viewport_child_entered)
 	_register_adjustable_node(_creator_debug_menu)
+
+
+func _ensure_visual_structure_layers() -> void:
+	var viewport: Node = get_node_or_null("WorldViewport")
+	if viewport == null:
+		return
+	if _structure_renderer == null:
+		var structure_renderer_script: Script = load("res://scripts/visual/StructureRenderer.gd")
+		if structure_renderer_script != null:
+			_structure_renderer = structure_renderer_script.new()
+			_structure_renderer.name = "StructureRenderer"
+			viewport.add_child(_structure_renderer)
+	if _construction_visualizer == null:
+		var construction_visualizer_script: Script = load("res://scripts/visual/ConstructionVisualizer.gd")
+		if construction_visualizer_script != null:
+			_construction_visualizer = construction_visualizer_script.new()
+			_construction_visualizer.name = "ConstructionVisualizer"
+			viewport.add_child(_construction_visualizer)
+	if _structure_renderer != null and _structure_renderer.has_method("initialize"):
+		_structure_renderer.initialize(_world, _camera)
+	if _construction_visualizer != null and _construction_visualizer.has_method("initialize"):
+		_construction_visualizer.initialize(_world, _camera, _structure_renderer)
+
+
+func _refresh_visual_structure_layers() -> void:
+	if _structure_renderer != null and _structure_renderer.has_method("sync_from_world"):
+		_structure_renderer.sync_from_world()
+	if _construction_visualizer != null and _construction_visualizer.has_method("_sync_renderer_from_world"):
+		_construction_visualizer.call("_sync_renderer_from_world")
+
+
+func _ensure_visual_territory_layers() -> void:
+	var viewport: Node = get_node_or_null("WorldViewport")
+	var ui_viewport: Node = get_node_or_null("UI_Viewport")
+	if _realm_view_panel == null and ui_viewport != null:
+		var realm_panel_script: Script = load("res://scripts/visual/RealmViewPanel.gd")
+		if realm_panel_script != null:
+			_realm_view_panel = realm_panel_script.new()
+			_realm_view_panel.name = "RealmViewPanel"
+			ui_viewport.add_child(_realm_view_panel)
+			if _realm_view_panel is Control:
+				(_realm_view_panel as Control).set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	if _territory_renderer == null and viewport != null:
+		var territory_renderer_script: Script = load("res://scripts/visual/TerritoryRenderer.gd")
+		if territory_renderer_script != null:
+			_territory_renderer = territory_renderer_script.new()
+			_territory_renderer.name = "TerritoryRenderer"
+			viewport.add_child(_territory_renderer)
+	if _territory_renderer != null and _territory_renderer.has_method("initialize"):
+		_territory_renderer.initialize(_world, _camera, _territory_overlay, _realm_view_panel)
+
+
+func _refresh_visual_territory_layers() -> void:
+	if _territory_renderer != null and _territory_renderer.has_method("sync_from_world"):
+		_territory_renderer.sync_from_world()
+	elif _territory_overlay != null and _territory_overlay.has_method("invalidate_territories"):
+		_territory_overlay.invalidate_territories()
 
 
 func _ensure_mobile_controls() -> void:
@@ -9757,6 +9822,8 @@ func _apply_save_dict(s: Dictionary) -> void:
 		MemoryManager.flush_dirty_tiles(_world)
 		_sync_pawn_inherited_cultural_reputation()
 		MemoryManager.seed_births_from_current_world(_world)
+		_refresh_visual_structure_layers()
+		_refresh_visual_territory_layers()
 	_regrow_due_buckets.clear()
 	_regrow_due_ticks.clear()
 	for e in s.get("regrow", []):
@@ -9796,7 +9863,11 @@ func _restore_stockpiles_from_save(zones_data: Array) -> void:
 		if inv is Dictionary:
 			for key in inv:
 				sp.inventory[int(key)] = int(inv[key])
-		add_child(sp)
+		var viewport: Node = _world.get_parent() if _world != null else null
+		if viewport != null:
+			viewport.add_child(sp)
+		else:
+			add_child(sp)
 		if _world.stockpile == null:
 			_world.stockpile = sp
 		StockpileManager.register(sp)

@@ -328,85 +328,25 @@ func _find_available_trader(settlement_center_rk: int) -> HeelKawnian:
 func _generate_trade_goods(settlement_region: int) -> Dictionary:
 	var goods: Dictionary = {}
 
-	# Check stockpile for surplus items
+	# Check stockpile for surplus items.
 	if StockpileManager != null and StockpileManager.has_method("total_count_of"):
-		# Food surplus (use BERRY type which exists)
 		var food_count: int = StockpileManager.total_count_of(1)  # Item.Type.BERRY
 		if food_count > 20:
 			goods["food"] = min(TRADE_GOODS_PER_ROUTE, food_count / 2)
 
-		# Wood surplus
 		var wood_count: int = StockpileManager.total_count_of(3)  # Item.Type.WOOD
 		if wood_count > 15:
 			goods["wood"] = min(TRADE_GOODS_PER_ROUTE, wood_count / 2)
 
-		# Stone surplus
 		var stone_count: int = StockpileManager.total_count_of(2)  # Item.Type.STONE
 		if stone_count > 10:
 			goods["stone"] = min(TRADE_GOODS_PER_ROUTE, stone_count / 2)
 
-	# Default goods if no surplus
+	# Default goods if no surplus.
 	if goods.is_empty():
 		goods["misc"] = TRADE_GOODS_PER_ROUTE
 
-	for key in goods:
-		var qty: int = int(goods[key])
-		if qty <= 0:
-			continue
-		var item_type: int = _goods_key_to_item_type(str(key))
-		# Remove goods from origin stockpile
-		var from_zone: Stockpile = StockpileManager.find_drop_zone(item_type, from_tile, null)
-		if from_zone != null:
-			var available: int = from_zone.count_of(item_type)
-			var take: int = mini(qty, available)
-			if take > 0:
-				from_zone.remove_item(item_type, take)
-		# Add goods to destination stockpile
-		var dest_zone: Stockpile = StockpileManager.find_drop_zone_for_settlement(dest_rk, item_type, dest_tile, null)
-		if dest_zone == null:
-			dest_zone = StockpileManager.find_drop_zone(item_type, dest_tile, null)
-		if dest_zone != null:
-			var actual_qty: int = qty
-			var from_zone2: Stockpile = StockpileManager.find_drop_zone(item_type, from_tile, null)
-			if from_zone2 != null:
-				actual_qty = mini(qty, from_zone2.count_of(item_type))
-			if actual_qty > 0:
-				dest_zone.add_item(item_type, actual_qty)
-				delivered[key] = actual_qty
-			else:
-				delivered[key + "_unavailable"] = qty
-	_spread_knowledge(route.from_settlement, route.to_settlement, route.goods)
-
-	# Record completion event
-	if WorldMemory != null:
-		var goods_total: int = 0
-		for value in route.goods.values():
-			goods_total += int(value)
-		
-		WorldMemory.record_event({
-			"type": "trade_route_completed",
-			"from": route.from_settlement,
-			"to": route.to_settlement,
-			"goods_count": goods_total,
-			"tick": tick,
-		})
-		WorldMemory.record_event({
-			"type": "trade_goods_arrived",
-			"from": route.from_settlement,
-			"to": route.to_settlement,
-			"goods": route.get("goods", {}),
-			"goods_count": goods_total,
-			"tick": tick,
-		})
-	
-	if OS.is_debug_build():
-		print("[TradeMemory] Route %d completed: %d → %d" % [
-			route.route_id, route.from_settlement, route.to_settlement
-		])
-	
-	# Remove route after completion (could keep for history)
-	trade_routes.remove_at(route_index)
-	_rebuild_route_caches(tick)
+	return goods
 
 
 func _spread_knowledge(from_region: int, to_region: int, goods: Dictionary) -> void:

@@ -3181,7 +3181,10 @@ func _on_game_tick(tick: int) -> void:
 			if _tick_budget_exceeded(tick_budget_start_usec):
 				return
 		# Periodic resource truth refresh — settlements need to know their stockpile state
-		if _is_main_lane_tick(tick, 500, 109):
+		# Truth verification runs must observe ordered, per-tick settlement truth updates.
+		if SettlementMemory != null and SettlementMemory.validation_truth_verify_armed():
+			SettlementMemory.refresh_resource_truth()
+		elif _is_main_lane_tick(tick, 500, 109):
 			SettlementMemory.refresh_resource_truth()
 		# Spread heavy planning across adjacent ticks to reduce one-tick hitch spikes.
 		# DORMANT WORLD: Trade planner only runs after first trade route
@@ -7380,7 +7383,10 @@ func _seed_construction_jobs() -> void:
 			break
 		# Ensure settlement has a stockpile zone — pawns need a local drop point
 		# Deferred: stockpile creation (add_child) is expensive in rendered mode
-		if not _settlement_has_nearby_stockpile(center_tile):
+		# Use settlement_id in the check so a stockpile owned by this settlement
+		# (even if > 16 tiles away) prevents redundant deferred creation requests.
+		var region_sid: int = SettlementMemory.get_settlement_id_for_region(center_rk) if SettlementMemory != null else -1
+		if not _settlement_has_nearby_stockpile(center_tile, region_sid):
 			call_deferred("_ensure_settlement_stockpile", center_tile)
 		# Post a handful of jobs per settlement per cycle; this is a scheduler, not a flood-fill.
 		var jobs_this_settlement: int = 0

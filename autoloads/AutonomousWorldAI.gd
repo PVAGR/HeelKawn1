@@ -356,11 +356,17 @@ func _evaluate_treaty_opportunities(tick: int) -> void:
 	if NationBorderSystem == null:
 		return
 	
-	var nations: Array = NationBorderSystem.get_all_nations()
-	for i in range(nations.size()):
-		var nation_a: int = int(nations[i])
-		for j in range(i + 1, nations.size()):
-			var nation_b: int = int(nations[j])
+	var nation_dicts: Array = NationBorderSystem.get_all_nations()
+	var nation_ids: Array[int] = []
+	for nd in nation_dicts:
+		if nd is Dictionary:
+			var nid: int = int(nd.get("id", -1))
+			if nid >= 0:
+				nation_ids.append(nid)
+	for i in range(nation_ids.size()):
+		var nation_a: int = nation_ids[i]
+		for j in range(i + 1, nation_ids.size()):
+			var nation_b: int = nation_ids[j]
 			
 			# Skip if already at war
 			if NationBorderSystem.are_nations_at_war(nation_a, nation_b):

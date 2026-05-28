@@ -22,7 +22,7 @@ static func bonus_for(job, data, world: Node, colony_services) -> float:
 		if colony_services.is_in_crisis(): bonus += 20.0
 
 	# Starving pawn — suppress build jobs
-	var hunger: float = float(data.get("hunger", 1.0))
+	var hunger: float = float(data.hunger)
 	if hunger < 0.3 and _is_build_job(jtype): bonus -= 15.0
 
 	# Food jobs scale with colony food shortage

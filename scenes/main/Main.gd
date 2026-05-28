@@ -3001,7 +3001,7 @@ func _on_game_tick(tick: int) -> void:
 	# what each settlement actually needs (beds, walls, hearths, farms, etc.)
 	if _is_main_lane_tick(tick, CONSTRUCTION_JOB_SEED_INTERVAL_TICKS, 11):
 		t0 = Time.get_ticks_usec()
-		_seed_construction_jobs()
+		_seed_construction_jobs(tick_budget_start_usec)
 		section_us["construction_seed"] = Time.get_ticks_usec() - t0
 		if _tick_budget_exceeded(tick_budget_start_usec):
 			return
@@ -7232,11 +7232,13 @@ func _get_cached_feature_scan(region_key: int, center_tile: Vector2i, radius: in
 	return features
 
 
-func _seed_construction_jobs() -> void:
+func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 	if _world == null or _world.data == null:
 		return
 	var tick: int = GameManager.tick_count
 	if Main._world_stabilization_until_tick >= 0 and tick < Main._world_stabilization_until_tick:
+		return
+	if frame_start_usec >= 0 and _tick_budget_exceeded(frame_start_usec):
 		return
 	var interval: int = _high_speed_interval(60, 120, 300)
 	if tick - _last_construction_seed_tick < interval:
@@ -7244,7 +7246,7 @@ func _seed_construction_jobs() -> void:
 	_last_construction_seed_tick = tick
 	# AGGRESSIVE OPTIMIZATION: Ultra-tight budget at high speeds
 	var gs: float = GameManager.game_speed if GameManager != null else 1.0
-	var budget_usec: int = 4_000 if gs < 50.0 else (2_000 if gs < 100.0 else 1_000)
+	var budget_usec: int = 4_000 if gs < 50.0 else (2_000 if gs < 100.0 else 500)
 	var start_usec: int = Time.get_ticks_usec()
 
 	# Determine settlement context: formal, proto, or bootstrap
@@ -7301,6 +7303,8 @@ func _seed_construction_jobs() -> void:
 	for i in range(settlements.size()):
 		step = i
 		if settlements_seen >= max_settlements_this_pass:
+			break
+		if frame_start_usec >= 0 and _tick_budget_exceeded(frame_start_usec):
 			break
 		var s = settlements[(start_idx + step) % settlements.size()]
 		if Time.get_ticks_usec() - start_usec >= budget_usec:

@@ -37,3 +37,21 @@
 ## Residual Risk
 - This change should reduce frame-time spikes at 100x, but I could not complete the full Godot smoothness gate in this environment.
 - The unrelated compile warnings already present in `GameManager.gd` and `TickManager.gd` remain outside this change.
+
+## Second Smoothness Pass
+
+## Scope
+- Remove the blunt low 100x cap and move the control point to the expensive construction seeding pass.
+- Keep the sim burst permissive while letting construction planning yield when the current frame is already over budget.
+
+## Implemented In This Pass
+- `autoloads/TickManager.gd`: restored the original 100x tick burst cap values.
+- `autoloads/GameManager.gd`: restored the original 100x diagnostic cap.
+- `scenes/main/Main.gd`: construction seeding now receives the frame-start budget and bails out when the frame is already hot.
+
+## Validation
+- `get_errors` on `autoloads/TickManager.gd` and `autoloads/GameManager.gd` returned no errors.
+- `get_errors` on `scenes/main/Main.gd` still shows pre-existing unrelated compile warnings elsewhere in the file; the touched smoothness lines themselves did not report new errors.
+
+## Residual Risk
+- I still could not run the Godot runtime smoke in this shell, so the final FPS improvement must be confirmed in-editor.

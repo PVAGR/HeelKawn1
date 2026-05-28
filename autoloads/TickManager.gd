@@ -82,14 +82,14 @@ func _frame_tick_cap_for_speed(speed: float) -> int:
 		if speed <= 12.0: return 4
 		if speed <= 26.0: return 6
 		if speed <= 50.0: return 8
-		return 4
+		return 10
 	if speed <= 1.0: return 1
 	if speed <= 3.0: return 2
 	if speed <= 6.0: return 4
 	if speed <= 12.0: return 6
 	if speed <= 26.0: return 8
 	if speed <= 50.0: return 10
-	return 4
+	return 12
 
 ## LOD tick counter for staggering pawn processing at high speeds
 var _lod_tick_counter: int = 0

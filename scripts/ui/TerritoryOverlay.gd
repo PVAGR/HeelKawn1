@@ -195,8 +195,6 @@ func _activity_border_segments_for_regions(regions: PackedInt32Array, region_set
 	var out: Array[Dictionary] = []
 	if _mobile_runtime:
 		return out
-	if GameManager != null and int(GameManager.game_speed) >= 50:
-		return out
 	if _world == null or _world.data == null:
 		return out
 	var region_tiles: int = 16

@@ -55,45 +55,14 @@ var _last_dream_nudge_check_tick: int = -DREAM_NUDGE_CHECK_EVERY_TICKS
 
 ## --- Speed-scaled intervals ---
 func _goal_refresh_interval_for_speed() -> int:
-	if GameManager == null:
-		return 60
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 120
-	if gs >= 50.0:
-		return 90
-	if gs >= 25.0:
-		return 70
 	return 60
 
 
 func _neural_priority_refresh_interval_for_speed() -> int:
-	if GameManager == null:
-		return 20
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 60
-	if gs >= 50.0:
-		return 45
-	if gs >= 26.0:
-		return 30
-	if gs >= 12.0:
-		return 20
 	return 15
 
 
 func _matrix_priority_refresh_interval_for_speed() -> int:
-	if GameManager == null:
-		return 20
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 60
-	if gs >= 50.0:
-		return 45
-	if gs >= 26.0:
-		return 30
-	if gs >= 12.0:
-		return 20
 	return 15
 
 
@@ -527,8 +496,7 @@ func get_neural_job_priority_bias(pawn: Node, data: HeelKawnianData, job_type: i
 	if GameManager != null:
 		if GameManager.tick_count < 1200:
 			return 0
-		if GameManager.game_speed >= 200.0:
-			return 0
+		pass
 	var tick: int = GameManager.tick_count if GameManager != null else -1
 	var should_refresh: bool = (_neural_priority_next_refresh_tick < 0 or tick >= _neural_priority_next_refresh_tick)
 	if should_refresh:
@@ -584,8 +552,7 @@ func get_heelkawnian_matrix_job_bias(pawn: Node, data: HeelKawnianData, job_type
 	if GameManager != null:
 		if GameManager.tick_count < 300:
 			return 0
-		if GameManager.game_speed >= 200.0:
-			return 0
+		pass
 	var tick: int = GameManager.tick_count if GameManager != null else -1
 	if _matrix_priority_next_refresh_tick < 0 or tick >= _matrix_priority_next_refresh_tick:
 		_matrix_priority_fetch_tick = tick

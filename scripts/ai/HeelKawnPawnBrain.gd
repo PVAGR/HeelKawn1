@@ -162,13 +162,6 @@ func brain_tick(sim_tick: int, pawn: HeelKawnian) -> Dictionary:
 
 	# --- Full AI tick (staggered across pawns) ---
 
-	# HIGH-SPEED THROTTLE: At 100x speed, only run full decisions every 4 ticks per pawn
-	var game_speed: float = GameManager.game_speed if GameManager != null else 1.0
-	if game_speed > 20.0:
-		var throttle_interval: int = 4
-		if not (posmod(sim_tick + pid, throttle_interval) == 0):
-			return _lightweight_tick(sim_tick, pawn)
-
 	# 1. Rebuild decision context (what does the pawn know right now?)
 	_rebuild_decision_context(pawn, sim_tick)
 
@@ -212,26 +205,7 @@ func brain_tick(sim_tick: int, pawn: HeelKawnian) -> Dictionary:
 ##   50x  → stride ≈ 10
 ##   100x → stride ≈ 20
 func _compute_stride() -> int:
-	if GameManager == null:
-		return 1
-	var gs: float = GameManager.game_speed
-	var stride: int = 1
-	if gs >= 100.0:
-		stride = 20  # ~10k full AI TPS at 100x with 2000 pawns
-	elif gs >= 50.0:
-		stride = 10
-	elif gs >= 26.0:
-		stride = 6
-	elif gs >= 12.0:
-		stride = 3
-	else:
-		stride = 1  # 1x: every pawn every tick
-
-	# Distance-based LOD (WorldBox-style): wanderers tick even less.
-	if stride > 1 and _pawn_data != null and _pawn_data.settlement_id < 0:
-		stride = min(stride * 2, 30)
-
-	return stride
+	return 1
 
 
 # === Lightweight Tick (Kenshi survival — ultra-fast) ===

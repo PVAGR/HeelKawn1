@@ -1189,7 +1189,7 @@ func _path_for_pawn(to: Vector2i) -> Array[Vector2i]:
 			pass
 
 	# PERFORMANCE: Use cached pathfinding
-	return _get_cached_path(data.tile_pos, actual_dest, not GameManager.game_speed >= FAST_PATHFIND_SPEED_THRESHOLD)
+	return _get_cached_path(data.tile_pos, actual_dest, true)
 
 
 ## Find a safe tile near the goal (avoiding enemies)
@@ -1223,11 +1223,8 @@ func _request_redraw() -> void:
 	queue_redraw()
 
 
-## Throttled variant: only redraws every 3 ticks. Use for periodic/position
-## updates where a 2-tick visual delay is acceptable.
 func _request_redraw_throttled() -> void:
-	if GameManager.tick_count % 3 == 0:
-		queue_redraw()
+	queue_redraw()
 
 
 func _ensure_visual_sprite() -> void:
@@ -1710,7 +1707,7 @@ func _notify_autonomy_feedback(action_key: String) -> void:
 		return
 	_last_autonomy_feedback = action_key
 	# Debug print disabled for performance
-	if _action_popup != null and data != null and GameManager != null and GameManager.game_speed < 60.0:
+	if _action_popup != null and data != null:
 		_action_popup.show_action_context(data.display_name, "Autonomy: %s" % action_key, "", "", "")
 
 
@@ -3474,8 +3471,7 @@ func _on_world_tick(_tick: int) -> void:
 
 
 func _fast_forward_tick_stride() -> int:
-	if GameManager == null:
-		return 1
+	return 1
 	var gs: float = GameManager.game_speed
 	# Keep low-speed behavior unchanged; throttle only in fast-forward tiers.
 	if gs >= 100.0:
@@ -3492,63 +3488,19 @@ func _fast_forward_tick_stride() -> int:
 
 
 func _job_claim_interval_for_speed() -> int:
-	if GameManager == null:
-		return 1
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 6
-	if gs >= 50.0:
-		return 5
-	if gs >= 26.0:
-		return 3
-	if gs >= 12.0:
-		return 2
 	return 1
 
 
 func _idle_action_refresh_interval_for_speed() -> int:
-	if GameManager == null:
-		return 8
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 72
-	if gs >= 50.0:
-		return 48
-	if gs >= 26.0:
-		return 32
-	if gs >= 12.0:
-		return 20
-	if gs >= 6.0:
-		return 14
 	return 8
 
 
 func _work_step_interval_for_speed() -> int:
-	if GameManager == null:
-		return 1
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 3
-	if gs >= 50.0:
-		return 2
-	if gs >= 26.0:
-		return 2
 	return 1
 
 
-func _lane_interval_for_speed(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
-	if GameManager == null:
-		return maxi(1, normal_ticks)
-	var gs: float = GameManager.game_speed
-	var mobile_mul: int = 2 if _is_mobile_runtime() else 1
-	if gs >= 100.0:
-		return maxi(1, ultra_ticks * mobile_mul)
-	if gs >= 50.0:
-		return maxi(1, maxi(fast_ticks, int(round(float(ultra_ticks) * 0.75))) * mobile_mul)
-	if gs >= 26.0:
-		return maxi(1, fast_ticks * mobile_mul)
-	if gs >= 12.0:
-		return maxi(1, maxi(normal_ticks, int(round(float(fast_ticks) * 0.6))) * mobile_mul)
+func _lane_interval_for_speed(normal_ticks: int, _fast_ticks: int = -1, _ultra_ticks: int = -1) -> int:
+	return maxi(1, normal_ticks)
 	return maxi(1, normal_ticks * mobile_mul)
 
 
@@ -6376,7 +6328,7 @@ func _complete_current_job() -> void:
 		WorldEvents.record_pawn_action("job_complete", int(data.id))
 
 	# Show action popup for significant job completions
-	if _action_popup != null and job != null and GameManager.game_speed < 50.0:
+	if _action_popup != null and job != null:
 		_show_action_popup_for_job(job)
 	
 	# Stage 1: Increase job proficiency for completed job
@@ -8696,14 +8648,6 @@ func _update_perception() -> void:
 	if area <= 0:
 		return
 	var scan_budget: int = 24
-	if GameManager != null:
-		var gs: float = GameManager.game_speed
-		if gs >= 50.0:
-			scan_budget = 8
-		elif gs >= 12.0:
-			scan_budget = 12
-		elif gs >= 6.0:
-			scan_budget = 16
 	var stride: int = maxi(1, int(ceil(float(area) / float(maxi(1, scan_budget)))))
 	var current_tick: int = GameManager.tick_count
 	var sampled: int = 0

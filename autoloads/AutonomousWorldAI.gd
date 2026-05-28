@@ -147,19 +147,10 @@ func _apply_simulation_speed(tick: int) -> void:
 
 
 func _check_performance_scaling(tick: int) -> void:
-	"""Check if we need to throttle for performance."""
+	"""Count entities for stats only — no throttling."""
 	var total_entities: int = _count_total_entities()
 	_entities_managed = total_entities
-	
-	if total_entities > PERFORMANCE_THRESHOLD_ENTITIES:
-		_performance_throttled = true
-		# Increase AI interval to reduce CPU load
-		MAI_AI_INTERVAL = 200
-		if debug_logging:
-			print("AutonomousWorldAI: Performance throttling enabled (%d entities)" % total_entities)
-	else:
-		_performance_throttled = false
-		MAI_AI_INTERVAL = 100
+	_performance_throttled = false
 
 
 func _count_total_entities() -> int:

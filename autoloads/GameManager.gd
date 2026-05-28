@@ -13,42 +13,12 @@ signal speed_changed(new_speed: float, is_paused: bool)
 ## HeelKawn feel target: 1x = one deterministic tick each real second.
 const TICK_INTERVAL_SECONDS: float = 1.0
 
-## Allowed speed multipliers. Index into this with set_speed_index(). 12x is the
-## "overnight farming" tier -- fine for running an established colony, but at
-## this rate a single _process frame can queue many sim ticks so any per-tick
-## work (pathing, allocations) amplifies. Keep hot paths cheap.
+## Allowed speed multipliers. Index into this with set_speed_index().
 ## NOTE: TickManager is now the authoritative source for speed control.
 ## These steps are kept for reference and backward compatibility.
 const SPEED_STEPS: Array[float] = [1.0, 3.0, 6.0, 12.0, 26.0, 50.0, 100.0]
 ## Set true only when actively debugging pawn/animal internals.
 const VERBOSE_SIM_LOGS: bool = false
-## Hard cap to prevent "catch-up storms" where one slow frame triggers hundreds
-## of ticks and causes visible stutter. Extra accumulated time stays buffered
-## and is processed over subsequent frames.
-## Keep caps modest at 26x–100x: each tick runs full colony AI + settlement passes;
-## a catch-up frame with 32 ticks was freezing the renderer at extreme speeds.
-const MAX_TICKS_PER_FRAME: int = 3
-const MAX_TICKS_PER_FRAME_FAST: int = 6
-const MAX_TICKS_PER_FRAME_ULTRA: int = 10
-const MAX_TICKS_PER_FRAME_EXTREME: int = 14
-## At 1x we preserve "real-life cadence" feel: never run more than one
-## deterministic tick inside a single rendered frame.
-const MAX_TICKS_PER_FRAME_AT_1X: int = 1
-## Prevent runaway catch-up after a hitch. We keep sim responsive by dropping
-## excessive backlog instead of trying to replay seconds of queued ticks.
-## At 1x the game should feel like a visible clock, not a catch-up reel:
-## after a stall, run the next owed tick and discard extra real-time debt.
-const MAX_ACCUMULATED_TICKS_AT_1X: int = 1
-## 3x can tolerate a small cushion, but not the long post-hitch burst that
-## makes first-play pacing look rubber-banded.
-const MAX_ACCUMULATED_TICKS_LOW: int = 6
-const MAX_ACCUMULATED_TICKS: int = 16
-## At high game speeds, allow a larger time buffer so fast-forward does not
-## stall waiting on the accumulator cap.
-const MAX_ACCUMULATED_TICKS_FAST: int = 128
-## HeelKawn feel target prefers ordered causality over hitch masking.
-## When false, we never discard queued sim time; ticks are processed in order.
-const DROP_BACKLOG_WHEN_OVER_CAP: bool = false
 
 var game_speed: float = 1.0
 var is_paused: bool = false
@@ -161,25 +131,11 @@ func _maybe_log_sim_hitch(ticks_this_frame: int, frame_tick_cap: int, tick_chain
 
 
 func _max_ticks_per_frame_for_speed() -> int:
-	var spd: float = game_speed
-	if spd <= 1.0:   return 1
-	if spd <= 3.0:   return 3
-	if spd <= 6.0:   return 5
-	if spd <= 12.0:  return 8
-	if spd <= 26.0:  return 12
-	if spd <= 50.0:  return 18
-	return 28  # 100x remains bursty; frame-budget gates handle hotspot control
+	return 99999  # Uncapped — TickManager handles actual processing
 
 
 func _max_accumulated_ticks_for_speed() -> int:
-	var spd: float = game_speed
-	if spd <= 1.0:   return 2
-	if spd <= 3.0:   return 8
-	if spd <= 6.0:   return 16
-	if spd <= 12.0:  return 32
-	if spd <= 26.0:  return 64
-	if spd <= 50.0:  return 96
-	return 128  # 100x
+	return 99999  # Uncapped — no artificial backlog limits
 
 
 ## Deterministic phase helper for maintenance systems. A positive offset runs
@@ -192,20 +148,6 @@ func periodic_phase_due(tick: int, interval: int, offset: int = 0) -> bool:
 	if shifted_tick < interval:
 		return false
 	return shifted_tick % interval == 0
-
-
-func _adaptive_frame_tick_cap(base_cap: int) -> int:
-	# Desktop relaxed: most throttling removed; still prevents one-frame freeze
-	if GameManager == null:
-		return base_cap
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return maxi(1, int(base_cap * 0.8))
-	if gs >= 50.0:
-		return maxi(1, int(base_cap * 0.9))
-	if gs >= 26.0:
-		return maxi(1, int(base_cap * 0.95))
-	return base_cap
 
 
 func _ready() -> void:
@@ -346,24 +288,12 @@ func _process(delta: float) -> void:
 			last_frame_game_tick_usecs = 0  # Updated by TickManager
 			last_frame_tick_cap_backlog = false
 			return
-	## Fallback: if TickManager not active, use legacy tick processing
+	## Fallback: if TickManager not active, process all accumulated ticks uncapped
 	var desired_add: float = delta * game_speed
-	var max_accumulator: float = TICK_INTERVAL_SECONDS * float(_max_accumulated_ticks_for_speed())
-	if DROP_BACKLOG_WHEN_OVER_CAP:
-		_tick_accumulator += desired_add
-		if _tick_accumulator > max_accumulator:
-			_tick_accumulator = max_accumulator
-	else:
-		if _tick_accumulator >= max_accumulator:
-			desired_add = 0.0
-		elif _tick_accumulator + desired_add > max_accumulator:
-			desired_add = maxf(0.0, max_accumulator - _tick_accumulator)
-		_tick_accumulator += desired_add
-	var frame_tick_cap_base: int = _max_ticks_per_frame_for_speed()
-	var frame_tick_cap: int = _adaptive_frame_tick_cap(frame_tick_cap_base)
+	_tick_accumulator += desired_add
 	var ticks_this_frame: int = 0
 	var tick_chain_usecs: int = 0
-	while _tick_accumulator >= TICK_INTERVAL_SECONDS and ticks_this_frame < frame_tick_cap:
+	while _tick_accumulator >= TICK_INTERVAL_SECONDS:
 		_tick_accumulator -= TICK_INTERVAL_SECONDS
 		tick_count += 1
 		var t0: int = Time.get_ticks_usec()
@@ -371,13 +301,9 @@ func _process(delta: float) -> void:
 		tick_chain_usecs += Time.get_ticks_usec() - t0
 		ticks_this_frame += 1
 	ticks_emitted_last_frame = ticks_this_frame
-	adaptive_ticks_cap_last_frame = frame_tick_cap
+	adaptive_ticks_cap_last_frame = 99999
 	last_frame_game_tick_usecs = tick_chain_usecs
-	last_frame_tick_cap_backlog = (
-		ticks_this_frame >= frame_tick_cap
-		and _tick_accumulator >= TICK_INTERVAL_SECONDS
-	)
-	_maybe_log_sim_hitch(ticks_this_frame, frame_tick_cap, tick_chain_usecs)
+	last_frame_tick_cap_backlog = false
 
 
 func set_speed(new_speed: float) -> void:
@@ -394,12 +320,10 @@ func set_speed(new_speed: float) -> void:
 	# unintended values can leak into runtime.
 	game_speed = SPEED_STEPS[nearest_idx]
 	if game_speed < prev_speed:
-		# If the player drops from ultra speed (50x/100x) to a lower tier, stale
-		# queued time can stay far above the new cap and make 1x feel frozen for
-		# a long drain window. Clamp to the current tier cap on explicit slowdown.
-		var max_accumulator: float = TICK_INTERVAL_SECONDS * float(_max_accumulated_ticks_for_speed())
-		if _tick_accumulator > max_accumulator:
-			_tick_accumulator = max_accumulator
+		# Clear accumulated backlog on deceleration to prevent event flood.
+		# This ensures instant smooth playback at the new speed without
+		# catch-up bursts from previously queued time.
+		_tick_accumulator = 0.0
 	is_paused = false
 	_reset_frame_pacing_history()
 	# Keep authoritative TickManager in sync when present

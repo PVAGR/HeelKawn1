@@ -40,19 +40,14 @@ var _last_plan_tick: int = -1_000_000_000
 var _last_build_intent_tick: Dictionary = {}
 @onready var SpatialManager = get_node_or_null("/root/SpatialManager") # ARCHITECT T006
 var _plan_rr_cursor: int = 0
-## Budget tracking: set at start of plan(), checked by tile-picking functions
+## Budget tracking: disabled — planner runs uncapped.
 static var _plan_budget_usec: int = 0
 static var _plan_start_usec: int = 0
 
 
-## Check if the planner's time budget has been exceeded. Tile-picking functions
-## call this to bail out early instead of running expensive scans past budget.
+## Budget check: always returns false (no throttling).
 static func _budget_exceeded() -> bool:
-	if _plan_budget_usec <= 0:
-		return false
-	if TickBudgetManager != null:
-		return TickBudgetManager.should_yield(_plan_start_usec)
-	return Time.get_ticks_usec() - _plan_start_usec >= _plan_budget_usec
+	return false
 
 
 func plan(world: World, main: Node2D, from_memory_dirty: bool) -> void:
@@ -76,10 +71,6 @@ func plan(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 		return
 	var start_idx: int = _plan_rr_cursor % total
 	var max_settlements: int = _planner_pass_settlement_limit()
-	var budget_usec: int = _planner_pass_budget_usec()
-	var started_usec: int = Time.get_ticks_usec()
-	_plan_budget_usec = budget_usec
-	_plan_start_usec = started_usec
 	var processed: int = 0
 	var scanned: int = 0
 	while scanned < total and processed < max_settlements:
@@ -116,30 +107,15 @@ func plan(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 			continue
 		_plan_one_settlement(world, main, d, planning_regions)
 		processed += 1
-		if Time.get_ticks_usec() - started_usec >= budget_usec:
-			break
 	_plan_rr_cursor = (start_idx + scanned) % total
 
 
 static func _planner_pass_settlement_limit() -> int:
-	if GameManager == null:
-		return PLANNER_MAX_SETTLEMENTS_PER_PASS
-	var gs: float = GameManager.game_speed
-	if gs >= 26.0:
-		return 1
-	if gs >= 12.0:
-		return 2
-	if gs >= 3.0:
-		return 3
 	return PLANNER_MAX_SETTLEMENTS_PER_PASS
 
 
 static func _planner_pass_budget_usec() -> int:
-	# Keep a single planner pass under a few milliseconds so the main loop can
-	# keep moving even when many settlements are active.
-	if TickBudgetManager != null:
-		return maxi(1_000, int(TickBudgetManager.get_tick_budget_usec() / 3))
-	return 4_000
+	return 999999999
 
 
 static func _planner_open_job_backpressure_limit() -> int:
@@ -933,13 +909,6 @@ static func _select_planning_regions(
 
 
 static func _planning_region_cap_for_speed() -> int:
-	if GameManager == null:
-		return PLANNING_REGION_HARD_CAP
-	var gs: float = GameManager.game_speed
-	if gs >= 26.0:
-		return mini(4, PLANNING_REGION_HARD_CAP)
-	if gs >= 12.0:
-		return mini(8, PLANNING_REGION_HARD_CAP)
 	return PLANNING_REGION_HARD_CAP
 
 

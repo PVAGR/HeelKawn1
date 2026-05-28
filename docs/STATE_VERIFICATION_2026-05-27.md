@@ -1,57 +1,65 @@
-# HeelKawn Verification Snapshot - 2026-05-27
+# State Verification — 2026-05-27
 
-## Scope
-- Prune stale faction records after settlement downgrade.
-- Make trade route seeding and renewal depend on formal settlements only.
-- Replace the global stockpile fallback in infrastructure formalization with a settlement-local stockpile check.
+## Changes Made
 
-## Implemented In This Pass
-- `autoloads/FactionRegistry.gd`: `sync_from_settlements()` now removes houses for zones that are no longer formal settlements before rebuilding the live registry.
-- `autoloads/FactionSystem.gd`: added `sync_from_settlements()` plus on-tick pruning so live faction pairs cannot keep stale endpoints.
-- `autoloads/TradeMemory.gd`: trade creation now uses formal settlements only, stale routes are removed when endpoints stop being formal, and route caches rebuild from the current live route set.
-- `autoloads/SettlementMemory.gd`: infrastructure formalization now checks for a local stockpile owned by the candidate settlement instead of any global stockpile.
+### Round 2: Deep Speed-Gated Throttles Removed (~30 additional sites across 18 files)
 
-## Validation
-- `get_errors` on the touched GDScript files passed with no errors.
-- `tools/ai/verify-compile.ps1` reached Godot compile checks successfully; the script exited non-zero because of a pre-existing warning about `res://scripts/ai/AISettlementManager.gd` not being found.
+**What changed (Round 2):**
+- **HeelKawnPawnBrain.gd**: `_compute_stride()` always returns 1 — no speed-tier AI stride scaling, no distance-based LOD. Pawns always receive full AI processing.
+- **HeelKawnianDecision.gd**: All three interval functions (`_goal_refresh_interval_for_speed`, `_neural_priority_refresh_interval_for_speed`, `_matrix_priority_refresh_interval_for_speed`) return base values — goals and priorities refresh at full cadence at all speeds.
+- **Main.gd** (10 functions):
+  - `_is_ultra_speed()` removed (dead code, never called)
+  - `_planner_interval_for_speed()` returns 90, `_heavy_planner_interval_for_speed()` returns 180
+  - `_inspect_scan_interval_for_speed()` returns INSPECT_SCAN_INTERVAL_TICKS
+  - `_social_rapport_interval_for_speed()` returns SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS
+  - `_mining_react_scan_rows_for_speed()` returns MINING_REACT_SCAN_ROWS_PER_STEP
+  - `_dynamic_hunt_job_budget()` no longer reduces budget at high speed
+  - `_accumulate_social_rapport()` no longer has speed-based pair_budget or time budget_usec
+  - `_maintenance_allowed` gate (>=50x skips all building maintenance) removed
+  - `_process_regrowth()` restore_budget no longer reduced to 1-2 at high speed
+  - `_mining_react_budget_for_speed()` always returns full budget
+- **AIAgentManager.gd** (5 functions):
+  - `_neural_interval_for_speed()` returns base_interval unchanged
+  - `_world_ai_interval_for_speed()` returns 10 (no speed scaling)
+  - `_settlement_ai_interval_for_speed()` returns 16 (no speed scaling)
+  - `_agent_update_budget_for_speed()` returns all agents (no speed reduction)
+  - Agent stride = 1 always (no speed scaling), agent spawn check at 600 ticks
+- **6 autoloads** (BuildingUsageTracker, CraftingSystem x2, SurvivalSystem, FarmingSystem, PlayerBuilding, FootpathMemory): All `_on_game_tick()` throttles removed — sample/update interval always 1 (every tick)
+- **SettlementPlanner.gd**: `_planning_region_cap_for_speed()` returns PLANNING_REGION_HARD_CAP
+- **HeelKawnian.gd** (3 gates): Autonomy popup (>60x), action popup (>50x), perception scan budget all de-throttled
+- **TerritoryOverlay.gd**: Activity border segments no longer skipped at >=50x
 
-## Residual Risk
-- Full runtime behavior still needs editor playtest validation.
-- The compile script warning appears unrelated to this change, but it remains an existing repo issue.
+### Round 1: Tick/Performance Overhaul — All Throttles Removed
 
-## 100x Frame-Cap Adjustment
+**What changed (Round 1):**
+- **TickManager.gd**: Removed all per-frame tick caps (MAX_BACKLOG_TICKS, MAX_TICKS_PER_FRAME, frame_tick_cap_for_speed, LOD staggering, budget yield). `set_speed()` now clears accumulated backlog on deceleration to prevent event flood.
+- **GameManager.gd**: Removed redundant cap system (MAX_TICKS_PER_FRAME\*, MAX_ACCUMULATED_TICKS\*, DROP_BACKLOG, adaptive caps). `set_speed()` resets accumulator on deceleration.
+- **TickBudgetManager.gd**: `should_yield()` disabled — no mid-frame budget interruption.
+- **SettlementPlanner.gd**: All 30+ budget exceeded checks removed. Per-settlement pass limit always full.
+- **AutonomousWorldAI.gd**: Performance throttling removed (MAI_AI_INTERVAL no longer adjusted).
+- **Main.gd**: `_high_speed_interval()` always returns normal_ticks — all speed-dependent sim work reduction eliminated.
+- **HeelKawnian.gd**: All stride/interval functions return minimum (stride=1, claim=1, work_step=1, refresh=8). Redraw throttle removed. Pathfind aversion always on.
+- **Drives**: MemoryDrive, AmbitionDrive, CuriosityDrive, SocialDrive — `should_pulse()` ignores game_speed.
+- **HeelKawnPawnBrain.gd**: High-speed AI throttle (>20x) removed.
+- **DisasterSystem.gd**: Speed-dependent update interval removed.
+- **UI**: All refresh stride throttles removed (ChronicleFeed, ChronicleLedger, ChronicleBook, PawnAIInspector, ColonyHUD, PawnInfoPanel).
+- **PlaytestRecorder.gd**: Auto-save interval no longer multiplied at high speed.
+- **HeelKawnianDecision.gd**: 200x speed gates removed (neural priority + matrix bias always active).
 
-## Scope
-- Reduce the 100x tick burst cap so long simulation batches stop overrunning a rendered frame.
-- Keep the `GameManager` diagnostics aligned with the active tick cap so performance reads are truthful.
+**What was verified:**
+- Global RNG scan (DisasterSystem, CataclysmSystem, KnowledgeSystem): ✅ No forbidden RNG
+- World dimension fields scan: ✅ No legacy fields
+- Main scene configured: ✅ `res://scenes/main/Main.tscn`
+- Godot headless smoke: ⚠️ Godot binary not available in this environment
 
-## Implemented In This Pass
-- `autoloads/TickManager.gd`: lowered the 100x tick burst cap from 12 to 4 on desktop and mobile paths, reducing the amount of simulation work done in a single rendered frame.
-- `autoloads/GameManager.gd`: updated the 100x diagnostic cap to match the new active cap.
-- `docs/HEELKAWN_STATE.md`: recorded the performance change in the current state log.
-
-## Validation
-- `get_errors` on the touched GDScript files reported only pre-existing unrelated warnings; the edited cap lines themselves were clean.
-- `bash tools/ai/sim-quality-gate.sh` could not run in this shell because `/bin/bash` is unavailable here.
-
-## Residual Risk
-- This change should reduce frame-time spikes at 100x, but I could not complete the full Godot smoothness gate in this environment.
-- The unrelated compile warnings already present in `GameManager.gd` and `TickManager.gd` remain outside this change.
-
-## Second Smoothness Pass
-
-## Scope
-- Remove the blunt low 100x cap and move the control point to the expensive construction seeding pass.
-- Keep the sim burst permissive while letting construction planning yield when the current frame is already over budget.
-
-## Implemented In This Pass
-- `autoloads/TickManager.gd`: restored the original 100x tick burst cap values.
-- `autoloads/GameManager.gd`: restored the original 100x diagnostic cap.
-- `scenes/main/Main.gd`: construction seeding now receives the frame-start budget and bails out when the frame is already hot.
-
-## Validation
-- `get_errors` on `autoloads/TickManager.gd` and `autoloads/GameManager.gd` returned no errors.
-- `get_errors` on `scenes/main/Main.gd` still shows pre-existing unrelated compile warnings elsewhere in the file; the touched smoothness lines themselves did not report new errors.
-
-## Residual Risk
-- I still could not run the Godot runtime smoke in this shell, so the final FPS improvement must be confirmed in-editor.
+**What remains unverified/risky:**
+- Godot headless smoke was not run (no Godot binary in CI environment). The changes are mechanical (const removal, function simplification, parameter removal) and should not introduce parse errors.
+- Round 2 is significantly more invasive — we changed return values of ~30 functions across 18 files. Each change follows a predictable pattern (remove speed branches, return base value), but no runtime verification was possible.
+- Key risk: AIAgentManager `_world_ai_interval_for_speed` and `_settlement_ai_interval_for_speed` previously returned variable intervals based on speed (10-120 for world AI, 16-156 for settlement AI). Now they always return 10 and 16 respectively. At 100x this means world AI updates every 10 ticks instead of every 72-120 ticks — this is 7-12x more frequent and could cause frame-time spikes on large colonies.
+- Key risk: Main.gd `_heavy_planner_interval_for_speed` was 720 at 100x, now always 180. This means settlement heavy planning runs 4x more often at 100x, which could cause spikes.
+- Key risk: All 6 autoloads (BuildingUsageTracker, CraftingSystem, SurvivalSystem, FarmingSystem, PlayerBuilding, FootpathMemory) now run their `_on_game_tick` handlers every tick at ALL speeds. Previously at 100x they ran every 2-10 ticks. This could cause significant frame-time increases at high speed, especially SurvivalSystem (pawn-wide check) and FarmingSystem (crop growth).
+- Key risk: HeelKawnPawnBrain `_compute_stride` is now always 1 — previously at 100x it was 20, meaning only 5% of pawns got full AI per tick. Now ALL pawns get full AI every tick. With 2000 pawns at 100x (~8 ticks/frame at 60fps), that's 16000 full AI evaluations per second vs. 800 before. This is the most impactful change and could make 100x unplayable on large colonies.
+- `_high_speed_interval` signature changed — callers now pass only 1 arg instead of 3. The new signature has optional params with defaults for backward compat.
+- Drive `should_pulse` signatures changed — now have optional `_game_speed` param with default. All call sites pass 2 positional args, which is compatible.
+- UI `_refresh_stride_for_speed` signatures changed — optional `_speed` param. All call sites pass 1 positional arg, compatible.
+- Risk: the uncapped tick processing means a single frame at 100x could process many ticks. On very slow hardware this could cause visible frame drops. The design philosophy accepts this: the sim runs at whatever rate the hardware supports, without artificial caps.

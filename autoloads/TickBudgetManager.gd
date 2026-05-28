@@ -1,25 +1,22 @@
 extends Node
 
-## Shared simulation budget coordinator.
-## Keeps the hard wall-time budget in one place and provides a tiny throttled
-## logging helper for high-frequency debug paths.
-
-const TICK_BUDGET_MS: int = 16
-const TICK_BUDGET_USEC: int = TICK_BUDGET_MS * 1000
+## Shared simulation budget coordinator (disabled).
+## No mid-frame budget yield — the sim runs uncapped and uninterrupted.
+## Keeps the throttled log helper for debug paths.
 
 var _last_log_msec_by_key: Dictionary = {}
 
 
 func get_tick_budget_usec() -> int:
-	return TICK_BUDGET_USEC
+	return 999999999
 
 
-func should_yield(start_usec: int) -> bool:
-	return Time.get_ticks_usec() - start_usec >= TICK_BUDGET_USEC
+func should_yield(_start_usec: int) -> bool:
+	return false
 
 
 func remaining_usec(start_usec: int) -> int:
-	return maxi(0, TICK_BUDGET_USEC - (Time.get_ticks_usec() - start_usec))
+	return 999999999
 
 
 func log_throttled(key: String, message: String, interval_msec: int = 1000) -> void:

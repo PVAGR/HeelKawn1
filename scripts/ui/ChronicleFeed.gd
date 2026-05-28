@@ -132,11 +132,7 @@ func _on_tick(tick: int) -> void:
 	_refresh()
 
 
-func _refresh_stride_for_speed(speed: float) -> int:
-	if speed >= 100.0:
-		return REFRESH_ULTRA
-	if speed >= 50.0:
-		return REFRESH_FAST
+func _refresh_stride_for_speed(_speed: float = 1.0) -> int:
 	return REFRESH_EVERY_N_TICKS
 
 

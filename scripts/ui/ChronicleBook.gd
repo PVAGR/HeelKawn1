@@ -76,11 +76,7 @@ func _on_speed_changed(_s: float, _p: bool) -> void:
 	_hud_dirty = true
 
 
-func _refresh_stride_for_speed(speed: float) -> int:
-	if speed >= 100.0:
-		return REFRESH_EVERY_N_TICKS_ULTRA
-	if speed >= 50.0:
-		return REFRESH_EVERY_N_TICKS_FAST
+func _refresh_stride_for_speed(_speed: float = 1.0) -> int:
 	return REFRESH_EVERY_N_TICKS
 
 

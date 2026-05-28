@@ -317,11 +317,6 @@ func _get_next_auto_save_interval() -> int:
 		interval = 2000
 	else:
 		interval = 1000
-	# At high game speed, save less often (saves are expensive)
-	if GameManager != null and GameManager.game_speed >= 50.0:
-		interval = interval * 3
-	elif GameManager != null and GameManager.game_speed >= 20.0:
-		interval = int(float(interval) * 1.5)
 	return maxi(AUTO_SAVE_MIN_INTERVAL, mini(AUTO_SAVE_MAX_INTERVAL, interval))
 
 

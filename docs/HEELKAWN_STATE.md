@@ -144,6 +144,93 @@ We are always building, always refining, always expanding. This document capture
 - **Done**: Autoload consolidation Phases 1 + 2 (9 autoloads removed, from 150 → 141)
   See `docs/AUTOLOAD_CONSOLIDATION_STATUS.md` for details.
 
+## May 27, 2026 Session Completion — TICK/FPS OVERHAUL — ALL THROTTLES REMOVED (ROUND 2)
+
+- **ROUND 2: Removed ~30 additional speed-gated throttles across 18 files**:
+  - **HeelKawnPawnBrain.gd**: `_compute_stride()` now returns 1 always (no speed-tier AI skipping, no distance-based LOD)
+  - **HeelKawnianDecision.gd**: `_goal_refresh_interval_for_speed()` returns 60, `_neural_priority_refresh_interval_for_speed()` returns 15, `_matrix_priority_refresh_interval_for_speed()` returns 15 (all speed gating removed)
+  - **Main.gd**: Removed `_is_ultra_speed()` (dead, never called). `_planner_interval_for_speed()` returns 90, `_heavy_planner_interval_for_speed()` returns 180, `_inspect_scan_interval_for_speed()` returns INSPECT_SCAN_INTERVAL_TICKS, `_social_rapport_interval_for_speed()` returns SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS, `_mining_react_scan_rows_for_speed()` returns MINING_REACT_SCAN_ROWS_PER_STEP. `_dynamic_hunt_job_budget()` no longer reduces budget at high speed. `_accumulate_social_rapport()` no longer has speed-based pair budget or time budget. `_maintenance_allowed` gate (>=50x skips maintenance) removed. `_process_regrowth()` restore_budget no longer reduced at high speed. `_mining_react_budget_for_speed()` always returns full budget.
+  - **AIAgentManager.gd**: `_neural_interval_for_speed()` returns base_interval. `_world_ai_interval_for_speed()` returns 10. `_settlement_ai_interval_for_speed()` returns 16. `_agent_update_budget_for_speed()` returns all agents (no speed reduction). Agent update stride is always 1 (no speed scaling). Agent spawn check uses 600 ticks (no speed scaling).
+  - **BuildingUsageTracker.gd**: `_on_game_tick()` sample_interval always 1 (every tick)
+  - **CraftingSystem.gd**: Crafting progress interval always 1
+  - **crafting_system.gd** (root): Same as above
+  - **SurvivalSystem.gd**: Survival check interval always 1
+  - **FarmingSystem.gd**: Crop update interval always 1
+  - **PlayerBuilding.gd**: Building queue interval always 1
+  - **FootpathMemory.gd**: Pawn sampling interval always 1
+  - **SettlementPlanner.gd**: `_planning_region_cap_for_speed()` returns PLANNING_REGION_HARD_CAP (no speed cap)
+  - **HeelKawnian.gd**: `_notify_autonomy_feedback` no longer gated at speed >=60. `_show_action_popup_for_job` no longer gated at speed >=50. Perception scan budget always 24 (no speed reduction).
+  - **TerritoryOverlay.gd**: Activity border segments no longer skipped at speed >=50
+
+- **PERF: Removed ALL per-frame tick caps in TickManager.gd**:
+  - Removed `MAX_BACKLOG_TICKS` (240 backlog limit) — sim backlog is now unbounded
+  - Removed `MAX_TICKS_PER_FRAME` (24 hard cap) — sim processes all accumulated ticks every frame
+  - Removed `_frame_tick_cap_for_speed()` — was 1→12 ticks/frame depending on speed
+  - Removed `_is_frame_stressed()` halving — no FPS-based cap reduction
+  - Removed `_lod_rate_for_speed()` / `_should_skip_tick_for_lod()` — all pawns now tick every tick regardless of speed
+  - Removed `TickBudgetManager.should_yield()` check — no mid-frame budget interruption
+  - **Key fix**: `set_speed()` now resets `_accumulated_time = 0.0` when **decelerating**, preventing the backlog event-flood when going from 100x→24x→1x
+  - Removed mobile runtime speed caps from `set_speed_index()`
+
+- **PERF: GameManager.gd cap cleanup**:
+  - Removed `MAX_TICKS_PER_FRAME*` constants group (was 8 separate constants)
+  - Removed `MAX_ACCUMULATED_TICKS*` constants (was 5 separate accumulator cap constants)
+  - Removed `DROP_BACKLOG_WHEN_OVER_CAP` logic
+  - Removed `_adaptive_frame_tick_cap()` function
+  - `_max_ticks_per_frame_for_speed()` now returns 99999 (uncapped)
+  - `_max_accumulated_ticks_for_speed()` now returns 99999 (uncapped)
+  - `set_speed()` now resets `_tick_accumulator = 0.0` on deceleration
+  - Legacy fallback `_process()` loop is now fully uncapped
+
+- **PERF: TickBudgetManager.gd — budget yield disabled**:
+  - `should_yield()` always returns `false`
+  - `get_tick_budget_usec()` returns 999999999
+  - `remaining_usec()` returns 999999999
+
+- **PERF: SettlementPlanner.gd — budget throttles removed**:
+  - `_budget_exceeded()` always returns `false`
+  - `_planner_pass_budget_usec()` returns 999999999
+  - `_planner_pass_settlement_limit()` returns full `PLANNER_MAX_SETTLEMENTS_PER_PASS` at all speeds
+  - Removed all per-iteration budget exceeded checks (30+ call sites)
+  - Removed speed-based settlement cap in planner pass
+
+- **PERF: AutonomousWorldAI.gd — performance throttling removed**:
+  - `_check_performance_scaling()` no longer throttles MAI_AI_INTERVAL
+  - `_performance_throttled` always false
+
+- **PERF: Main.gd `_high_speed_interval()` — all speed-dependent work reduction removed**:
+  - Now always returns `normal_ticks` regardless of speed
+  - Affected subsystems: regrowth, ambient targets, hunt job posting, blood stain fading, door auto-close, leader construction, pawn sanity checks, derivative flush, settlement recompute, reproduction, influence, settlement intent/update, AI export, observer snapshots, focus snapshots, road flush, food crisis reprieve, construction seeding
+  - Construction seeding: budget 999999999 (was 4000/2000/500 per speed), max_settlements always full, scan_radius always 8
+  - `_mining_react_step_skip_for_speed()` always returns 0 (every tick)
+
+- **PERF: HeelKawnian.gd — all speed-dependent strides/intervals removed**:
+  - `_fast_forward_tick_stride()` always returns 1 (all pawns tick every tick)
+  - `_job_claim_interval_for_speed()` always returns 1 (job claim every tick)
+  - `_idle_action_refresh_interval_for_speed()` always returns 8 (base only)
+  - `_work_step_interval_for_speed()` always returns 1 (work step every tick)
+  - `_lane_interval_for_speed()` always returns `normal_ticks`
+  - `_request_redraw_throttled()` now calls `queue_redraw()` directly (no throttling)
+  - Pathfind aversion skip: always enabled (was disabled at ≥6x)
+
+- **PERF: Drive throttles removed (MemoryDrive, AmbitionDrive, CuriosityDrive, SocialDrive)**:
+  - All `should_pulse()` functions now ignore game_speed — use BASE_INTERVAL only
+
+- **PERF: HeelKawnPawnBrain.gd — high-speed throttle removed**:
+  - Removed `game_speed > 20.0` check that skipped full AI decisions every 4 ticks
+
+- **PERF: DisasterSystem.gd — speed-dependent update interval removed**:
+  - `_on_game_tick()` now updates disasters every tick regardless of speed
+
+- **PERF: UI refresh stride throttles removed**:
+  - ChronicleFeed, ChronicleLedger, ChronicleBook, PawnAIInspector: always use base refresh stride
+  - ColonyHUD: `_refresh_stride_for_speed()` always uses base (15 ticks); `_coarse_gate_for_speed()` always returns 10
+  - PawnInfoPanel: expensive detail refresh no longer slowed at high speed
+  - PlaytestRecorder: auto-save interval no longer multiplied at high speed
+
+- **PERF: HeelKawnianDecision.gd — 200x speed gates removed**:
+  - Neural priority fetching and Matrix job bias are now active at ALL speeds
+
 ## May 24, 2026 Session Completion
 
 - **FEAT: Organic Civilization Growth (Phase 5A deepening)**:

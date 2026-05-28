@@ -68,20 +68,7 @@ func get_wear_at(tile: Vector2i) -> float:
 func _on_game_tick(tick: int) -> void:
 	if _pawn_spawner == null or _world == null or _world.data == null:
 		return
-	# Throttle: sample pawns less frequently at high speed
-	var sample_interval: int = 1
-	if GameManager != null:
-		var gs: float = GameManager.game_speed
-		if gs >= 100.0:
-			sample_interval = 10
-		elif gs >= 50.0:
-			sample_interval = 6
-		elif gs >= 26.0:
-			sample_interval = 4
-		elif gs >= 12.0:
-			sample_interval = 2
-	if tick % sample_interval == 0:
-		_sample_building_usage(tick)
+	_sample_building_usage(tick)
 	if tick - _last_decay_tick >= DECAY_INTERVAL_TICKS:
 		_decay_usage()
 		_last_decay_tick = tick

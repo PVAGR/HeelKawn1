@@ -1268,33 +1268,11 @@ func _session_diag_line() -> String:
 	return "%s | hud iv=%d coarse=%d lag=%dt" % [base, _last_refresh_stride, _last_coarse_gate, lag]
 
 
-func _refresh_stride_for_speed(speed: float) -> int:
-	if speed >= 100.0:
-		if GameSettings != null:
-			return int(GameSettings.get_value("hud_refresh_max"))
-		return REFRESH_EVERY_N_TICKS_MAX
-	if speed >= 50.0:
-		if GameSettings != null:
-			return int(GameSettings.get_value("hud_refresh_extreme"))
-		return REFRESH_EVERY_N_TICKS_EXTREME
-	if speed >= 26.0:
-		if GameSettings != null:
-			return int(GameSettings.get_value("hud_refresh_ultra"))
-		return REFRESH_EVERY_N_TICKS_ULTRA
-	if speed >= 12.0:
-		if GameSettings != null:
-			return int(GameSettings.get_value("hud_refresh_fast"))
-		return REFRESH_EVERY_N_TICKS_FAST
+func _refresh_stride_for_speed(_speed: float = 1.0) -> int:
 	return REFRESH_EVERY_N_TICKS
 
 
-func _coarse_gate_for_speed(speed: float) -> int:
-	if speed >= 100.0:
-		return 45
-	if speed >= 50.0:
-		return 30
-	if speed >= 12.0:
-		return 20
+func _coarse_gate_for_speed(_speed: float = 1.0) -> int:
 	return 10
 
 

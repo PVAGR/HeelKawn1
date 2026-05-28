@@ -68,26 +68,13 @@ func _ready() -> void:
 
 
 func _on_game_tick(tick: int) -> void:
-	# Throttle: disaster updates less frequently at high speed
-	var update_interval: int = 1
-	if GameManager != null:
-		var gs: float = GameManager.game_speed
-		if gs >= 100.0:
-			update_interval = 10
-		elif gs >= 50.0:
-			update_interval = 5
-		elif gs >= 26.0:
-			update_interval = 3
 	# Check for new disasters periodically
 	if tick % DISASTER_CHECK_INTERVAL == 0:
 		_try_spawn_disaster(tick)
 
-	# Update active disasters (throttled at high speed)
-	if tick % update_interval == 0:
-		_update_disasters(tick)
-
-		# Cleanup resolved disasters
-		_cleanup_resolved_disasters(tick)
+	# Update active disasters every tick
+	_update_disasters(tick)
+	_cleanup_resolved_disasters(tick)
 
 
 func _try_spawn_disaster(tick: int) -> void:

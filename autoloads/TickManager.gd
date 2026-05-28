@@ -4,24 +4,19 @@ extends Node
 ## nodes in the "tickable" group.
 ##
 ## PLAYABILITY POLICY:
-## DETERMINISM FIRST: Never drop or skip semantic ticks. All ticks accumulate
-## and MUST be processed in order. If the CPU cannot keep up, the simulation
-## naturally slows wall-clock time rather than silently losing history.
-## Adaptive frame caps prevent render freezes, but excess backlog persists
-## to the next frame — it is never discarded.
+## NO ARTIFICIAL CAPS: The simulation runs as fast as the hardware allows.
+## No per-frame tick caps, no backlog limits, no budget yields, no LOD skipping.
+## All ticks accumulate and MUST be processed in order. If the CPU cannot keep
+## up, the simulation naturally slows wall-clock time rather than silently
+## losing history.
+##
+## On speed DECREASE, the accumulated-time backlog is cleared to prevent
+## the "event flood" where dozens of backlogged ticks fire at once when
+## the player slows down.
 
 signal tick_processed(tick_number: int)
 
 const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base)
-
-## Maximum accumulated backlog (in ticks). Beyond this we drop excess
-## to prevent render freezes. Dropped ticks are a net positive — the
-## sim still runs faster than real-time and the player won't perceive
-## loss of a fraction of a second at 100x.
-const MAX_BACKLOG_TICKS: int = 240  # 4 seconds at 1x, ~2 frames at 100x
-
-## Hard safety cap.
-const MAX_TICKS_PER_FRAME: int = 24
 
 ## How often (in ticks) to force-rebuild the tickable cache.
 const TICKABLE_CACHE_REBUILD_INTERVAL: int = 300
@@ -65,36 +60,6 @@ func _is_mobile_runtime() -> bool:
 	return OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
 
 
-func _is_frame_stressed() -> bool:
-	var fps: float = float(Engine.get_frames_per_second())
-	if fps <= 0.0:
-		return false
-	if _is_mobile_runtime():
-		return fps < 42.0
-	return fps < 32.0
-
-
-func _frame_tick_cap_for_speed(speed: float) -> int:
-	if _is_mobile_runtime():
-		if speed <= 1.0: return 1
-		if speed <= 3.0: return 2
-		if speed <= 6.0: return 3
-		if speed <= 12.0: return 4
-		if speed <= 26.0: return 6
-		if speed <= 50.0: return 8
-		return 10
-	if speed <= 1.0: return 1
-	if speed <= 3.0: return 2
-	if speed <= 6.0: return 4
-	if speed <= 12.0: return 6
-	if speed <= 26.0: return 8
-	if speed <= 50.0: return 10
-	return 12
-
-## LOD tick counter for staggering pawn processing at high speeds
-var _lod_tick_counter: int = 0
-
-
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
@@ -114,45 +79,28 @@ func _process(delta: float) -> void:
 		tickables_called_last_frame = 0
 		return
 
-	# Accumulate scaled time. Soft cap backlog to prevent render freezes.
-	# A small backlog drop at 100x is imperceptible — keeping the render
-	# thread responsive prevents the much worse "spiral of death" where
-	# backlog grows faster than it can drain, making FPS approach zero.
+	# Accumulate scaled time. No cap — the sim processes what it can.
 	_accumulated_time += delta * _speed_multiplier
-	if _accumulated_time > float(MAX_BACKLOG_TICKS) * TICK_STEP:
-		_accumulated_time = float(MAX_BACKLOG_TICKS) * TICK_STEP
 
 	var start_time: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
 	var tickables_this_frame: int = 0
-	var frame_budget_hit: bool = false
-	var frame_cap: int = mini(MAX_TICKS_PER_FRAME, _frame_tick_cap_for_speed(_speed_multiplier))
-	if _is_frame_stressed():
-		frame_cap = maxi(1, int(floor(float(frame_cap) * 0.5)))
 
-	# Process with adaptive frame cap so render thread stays responsive.
-	while _accumulated_time >= TICK_STEP and ticks_this_frame < frame_cap:
+	# Process all accumulated ticks — no cap, no budget yield, no LOD skip.
+	while _accumulated_time >= TICK_STEP:
 		_accumulated_time -= TICK_STEP
 		current_tick += 1
 		ticks_this_frame += 1
 		tickables_this_frame += _dispatch_tick(current_tick)
-		if TickBudgetManager != null and TickBudgetManager.should_yield(start_time):
-			frame_budget_hit = true
-			break
 
 	_last_frame_ticks = ticks_this_frame
 	ticks_processed_last_frame = ticks_this_frame
 	tickables_called_last_frame = tickables_this_frame
 	max_ticks_processed_seen = maxi(max_ticks_processed_seen, ticks_this_frame)
 	debug_last_tick_batch_usec = Time.get_ticks_usec() - start_time
-	if frame_budget_hit and GameManager != null and GameManager.verbose_logs() and TickBudgetManager != null:
-		TickBudgetManager.log_throttled(
-			"TickManager.frame_budget",
-			"[SIM_BUDGET] stopped tick dispatch after %dus; backlog continues next frame" % debug_last_tick_batch_usec
-		)
 
 	# Track how many ticks remain in backlog (for diagnostics only — never dropped).
-	pending_backlog_ticks = int(floor(_accumulated_time / TICK_STEP))
+	pending_backlog_ticks = 0
 
 
 func _dispatch_tick(tick: int) -> int:
@@ -192,52 +140,18 @@ func _call_tick_on_tickables(tick: int) -> int:
 		_tickable_cache_dirty = false
 		_tickable_cache_last_rebuild_tick = tick
 
-	var lod_rate: int = _lod_rate_for_speed()
 	var valid_count: int = 0
-	if lod_rate > 1:
-		_lod_tick_counter = (_lod_tick_counter + 1) % lod_rate
 	var i: int = _tickable_cache.size() - 1
 	while i >= 0:
 		var node: Node = _tickable_cache[i]
 		if is_instance_valid(node):
-			if not _should_skip_tick_for_lod(node, lod_rate):
-				node._on_world_tick(tick)
-				valid_count += 1
+			node._on_world_tick(tick)
+			valid_count += 1
 		else:
 			_tickable_cache.remove_at(i)
 			_tickable_cache_dirty = true
 		i -= 1
 	return valid_count
-
-
-func _lod_rate_for_speed() -> int:
-	# At high speeds, stagger pawn processing across ticks
-	# to reduce per-frame simulation load.
-	# More aggressive staggering means fewer pawn AI evaluations
-	# per tick but still deterministic (each pawn runs exactly
-	# once per N ticks, just spread across frames).
-	if GameManager == null:
-		return 1
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 8  # 1/8 of pawns per tick
-	if gs >= 50.0:
-		return 6  # 1/6 of pawns per tick
-	if gs >= 26.0:
-		return 4  # 1/4 of pawns per tick
-	if gs >= 12.0:
-		return 2  # 1/2 of pawns per tick
-	return 1  # All pawns every tick
-
-
-func _should_skip_tick_for_lod(node: Node, lod_rate: int) -> bool:
-	if lod_rate <= 1:
-		return false
-	# Only LOD pawns (nodes with 'data' property indicating a pawn)
-	if not "data" in node:
-		return false
-	var bucket: int = node.get_instance_id() % lod_rate
-	return bucket != _lod_tick_counter
 
 
 func _call_tick_on_refcounted(tick: int) -> int:
@@ -258,9 +172,9 @@ func unregister_refcounted_tickable(obj: RefCounted) -> void:
 
 func set_speed(multiplier: float) -> void:
 	var next_speed: float = max(multiplier, 0.0001)
-	# Mobile thermal/fps guardrail: avoid runaway 50x/100x simulation bursts on phones.
-	if _is_mobile_runtime():
-		next_speed = minf(next_speed, 26.0)
+	# Clear accumulated backlog when decelerating to prevent event flood
+	if next_speed < _speed_multiplier:
+		_accumulated_time = 0.0
 	_speed_multiplier = next_speed
 	var nearest_idx: int = 0
 	var nearest_dist: float = 1.0e20
@@ -277,11 +191,8 @@ func set_speed(multiplier: float) -> void:
 func set_speed_index(index: int) -> void:
 	if index < 0 or index >= SPEED_PRESETS.size():
 		return
-	var clamped_index: int = index
-	if _is_mobile_runtime():
-		clamped_index = mini(index, 4) # up to 26x on mobile
-	_current_speed_index = clamped_index
-	set_speed(SPEED_PRESETS[clamped_index])
+	_current_speed_index = index
+	set_speed(SPEED_PRESETS[index])
 
 func next_speed() -> void:
 	var next: int = (_current_speed_index + 1) % SPEED_PRESETS.size()

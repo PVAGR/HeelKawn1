@@ -448,10 +448,6 @@ var _pawn_divergence_first20_scored_lines: Array[String] = []
 var _pawn_divergence_exit_summary_emitted: bool = false
 var _pawn_divergence_summary_emitted_ticks: Dictionary = {}
 
-func _is_ultra_speed() -> bool:
-	return GameManager.game_speed >= 12.0
-
-
 func _is_simulation_worker_mode() -> bool:
 	if GameManager == null:
 		return false
@@ -467,12 +463,8 @@ func get_player_pawn_id() -> int:
 		return int(_player_pawn.data.id)
 	return -1
 
-func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) -> int:
-	# Adaptive cadence for fast-forward:
-	# 1x/3x keep normal feel; 12x+ stretches non-critical intervals to reduce
-	# frame-time spikes while preserving deterministic ordering.
-	if GameManager == null:
-		return normal_ticks
+func _high_speed_interval(normal_ticks: int, _fast_ticks: int = -1, _ultra_ticks: int = -1) -> int:
+	return normal_ticks
 	var gs: float = GameManager.game_speed
 	if gs >= 100.0:
 		return ultra_ticks
@@ -486,30 +478,10 @@ func _high_speed_interval(normal_ticks: int, fast_ticks: int, ultra_ticks: int) 
 
 
 func _planner_interval_for_speed() -> int:
-	# Scale planner interval at high speeds to reduce frame-time spikes.
-	if GameManager == null:
-		return 90
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 180
-	if gs >= 50.0:
-		return 150
 	return 90
 
 
 func _heavy_planner_interval_for_speed() -> int:
-	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
-	if GameManager == null:
-		return 180
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 720
-	if gs >= 50.0:
-		return 480
-	if gs >= 26.0:
-		return 360
-	if gs >= 12.0:
-		return 240
 	return 180
 
 
@@ -552,16 +524,6 @@ func _dynamic_hunt_job_budget(live_animals: int = -1) -> int:
 				live_animals += 1
 	var budget: int = maxi(1, int(ceil(float(live_animals) / float(HUNT_JOB_PER_ANIMALS_DIVISOR))))
 	budget = mini(budget, MAX_DYNAMIC_HUNT_JOBS_PER_PASS)
-	if GameManager != null:
-		var gs: float = GameManager.game_speed
-		if gs >= 100.0:
-			return 1
-		if gs >= 50.0:
-			return 1
-		if gs >= 26.0:
-			return mini(2, budget)
-		if gs >= 12.0:
-			budget = maxi(1, int(ceil(float(budget) * 0.5)))
 	return budget
 
 func _hunt_reserve_for_species(species: int) -> int:
@@ -3402,51 +3364,14 @@ func _maybe_log_tick_hotspots(tick: int, section_us: Dictionary) -> void:
 
 
 func _inspect_scan_interval_for_speed() -> int:
-	if GameManager == null:
-		return INSPECT_SCAN_INTERVAL_TICKS
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return INSPECT_SCAN_INTERVAL_TICKS * 5
-	if gs >= 50.0:
-		return INSPECT_SCAN_INTERVAL_TICKS * 4
-	if gs >= 26.0:
-		return INSPECT_SCAN_INTERVAL_TICKS * 3
-	if gs >= 12.0:
-		return INSPECT_SCAN_INTERVAL_TICKS * 2
 	return INSPECT_SCAN_INTERVAL_TICKS
 
 
-## Co-presence rapport is O(pawns²) in worst case; stretch interval at fast-forward.
 func _social_rapport_interval_for_speed() -> int:
-	if GameManager == null:
-		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 8
-	if gs >= 50.0:
-		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 6
-	if gs >= 26.0:
-		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 4
-	if gs >= 12.0:
-		return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS * 2
 	return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS
 
 
-## Fewer world rows per mining-react step at ultra speed = smaller per-tick spikes
-## (pass completes over more sim ticks, which is fine under catch-up).
 func _mining_react_scan_rows_for_speed() -> int:
-	# Re-enabled for smooth gameplay - game was lagging too hard without throttling
-	if GameManager == null:
-		return MINING_REACT_SCAN_ROWS_PER_STEP
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return maxi(1, MINING_REACT_SCAN_ROWS_PER_STEP / 4)
-	if gs >= 50.0:
-		return maxi(1, MINING_REACT_SCAN_ROWS_PER_STEP / 3)
-	if gs >= 26.0:
-		return maxi(1, MINING_REACT_SCAN_ROWS_PER_STEP / 2)
-	if gs >= 12.0:
-		return maxi(1, MINING_REACT_SCAN_ROWS_PER_STEP / 1.5)
 	return MINING_REACT_SCAN_ROWS_PER_STEP
 
 
@@ -3710,19 +3635,12 @@ func _accumulate_social_rapport() -> void:
 		return
 	const R2: float = 128.0 * 128.0
 	const CELL_SIZE: float = 160.0  # Grid cell size, slightly larger than proximity radius
-	# BUDGET: Cap social rapport to prevent frame spikes at high speeds
-	var gs: float = GameManager.game_speed if GameManager != null else 1.0
-	var budget_usec: int = 8_000 if gs < 50.0 else (5_000 if gs < 100.0 else 3_000)
-	var start_usec: int = Time.get_ticks_usec()
 	
 	var pl: Array[HeelKawnian] = []
 	for p in _pawn_spawner.pawns:
 		if p != null and is_instance_valid(p) and p.data != null:
 			pl.append(p)
 	if pl.size() < 2:
-		return
-	# BUDGET CHECK: After pawn collection
-	if Time.get_ticks_usec() - start_usec >= budget_usec:
 		return
 	# Spatial grid: only check pairs within the same or adjacent cells
 	var grid: Dictionary = {}
@@ -3733,9 +3651,6 @@ func _accumulate_social_rapport() -> void:
 		if not grid.has(key):
 			grid[key] = []
 		grid[key].append(p)
-		# BUDGET CHECK: During grid building
-		if Time.get_ticks_usec() - start_usec >= budget_usec:
-			return
 	# OPTIMIZATION: Early exit if grid is sparse (no cell has 2+ pawns)
 	var crowded_cells: Array[String] = []
 	for cell_key in grid:
@@ -3750,14 +3665,6 @@ func _accumulate_social_rapport() -> void:
 	var consciousness_budget: int = SOCIAL_CONSCIOUSNESS_RECORDS_PER_PASS
 	var pair_budget: int = SOCIAL_MAX_PAIRS_PER_PASS
 	var mobile_runtime: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
-	if GameManager != null:
-		gs = GameManager.game_speed
-		if gs >= 100.0:
-			pair_budget = maxi(64, int(round(float(SOCIAL_MAX_PAIRS_PER_PASS) * 0.35)))
-		elif gs >= 50.0:
-			pair_budget = maxi(96, int(round(float(SOCIAL_MAX_PAIRS_PER_PASS) * 0.5)))
-		elif gs >= 26.0:
-			pair_budget = maxi(128, int(round(float(SOCIAL_MAX_PAIRS_PER_PASS) * 0.7)))
 	if mobile_runtime:
 		pair_budget = maxi(56, int(round(float(pair_budget) * 0.62)))
 		wm_budget = maxi(12, int(round(float(wm_budget) * 0.55)))
@@ -7244,10 +7151,8 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 	if tick - _last_construction_seed_tick < interval:
 		return
 	_last_construction_seed_tick = tick
-	# AGGRESSIVE OPTIMIZATION: Ultra-tight budget at high speeds
-	var gs: float = GameManager.game_speed if GameManager != null else 1.0
-	var budget_usec: int = 4_000 if gs < 50.0 else (2_000 if gs < 100.0 else 500)
-	var start_usec: int = Time.get_ticks_usec()
+	# Uncapped budget — construction seed runs free
+	var budget_usec: int = 999999999
 
 	# Determine settlement context: formal, proto, or bootstrap
 	var settlements: Array = SettlementMemory.get_formal_settlements()
@@ -7296,19 +7201,12 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 	var seeding_proto: bool = false
 	if settlements[0] is Dictionary and str(settlements[0].get("state", "")) == "":
 		seeding_proto = true
-	var max_settlements_this_pass: int = 1 if GameManager.game_speed >= 100.0 else (2 if GameManager.game_speed >= 50.0 else 3)
 	var settlements_seen: int = 0
 	var start_idx: int = _construction_seed_cursor % settlements.size()
 	var step: int = 0
 	for i in range(settlements.size()):
 		step = i
-		if settlements_seen >= max_settlements_this_pass:
-			break
-		if frame_start_usec >= 0 and _tick_budget_exceeded(frame_start_usec):
-			break
 		var s = settlements[(start_idx + step) % settlements.size()]
-		if Time.get_ticks_usec() - start_usec >= budget_usec:
-			break
 		if not (s is Dictionary):
 			continue
 		var sd: Dictionary = s as Dictionary
@@ -7331,12 +7229,7 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 		if nearby_pending_builds >= 6:
 			continue
 		
-		# BUDGET CHECK: After pending count scan
-		if Time.get_ticks_usec() - start_usec >= budget_usec:
-			break
-		
-		# OPTIMIZATION: Reduce scan radius at high speeds
-		var scan_radius: int = 4 if GameManager.game_speed >= 100.0 else (6 if GameManager.game_speed >= 50.0 else 8)
+		var scan_radius: int = 8
 		var features: Dictionary = _get_cached_feature_scan(center_rk, center_tile, scan_radius)
 		
 		# BUDGET CHECK: After feature scan
@@ -7347,10 +7240,6 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 		if ColonySimServices != null:
 			build_priorities = ColonySimServices.compute_settlement_build_priorities(
 					center_rk, local_pop, features, materials_crisis)
-		
-		# BUDGET CHECK: After priority computation
-		if Time.get_ticks_usec() - start_usec >= budget_usec:
-			break
 		
 		var beds: int = int(features.get("bed", 0))
 		var walls: int = int(features.get("wall", 0))
@@ -7615,9 +7504,7 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 						_seeder_track_post(center_rk, job_cap)
 		# Priority 6b: Preserve built life and at-risk knowledge.
 		# Walls/doors get higher maintenance priority than decorative structures.
-		# OPTIMIZATION: Skip maintenance at high speed (>=50x) to meet time budget
-		var _maintenance_allowed: bool = GameManager.game_speed < 50.0
-		if _maintenance_allowed and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap) and BuildingUsageTracker != null and BuildingUsageTracker.has_method("get_due_maintenance_jobs"):
+		if _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap) and BuildingUsageTracker != null and BuildingUsageTracker.has_method("get_due_maintenance_jobs"):
 			var structural_maintenance: Array = []
 			var decorative_maintenance: Array = []
 			for due in BuildingUsageTracker.get_due_maintenance_jobs(4):
@@ -8658,12 +8545,6 @@ func _process_regrowth(tick: int) -> void:
 	if _regrow_due_ticks.is_empty():
 		return
 	var restore_budget: int = REGROWTH_RESTORE_BUDGET_PER_TICK
-	if GameManager != null:
-		var gs: float = GameManager.game_speed
-		if gs >= 100.0:
-			restore_budget = 1
-		elif gs >= 50.0:
-			restore_budget = 2
 	var main_component: int = _world.pathfinder.largest_component_id()
 	var restored: int = 0
 	while restored < restore_budget and not _regrow_due_ticks.is_empty():
@@ -8892,30 +8773,12 @@ func _react_to_mining_progress_step() -> bool:
 
 func _mining_react_budget_for_speed() -> int:
 	var row_safe_minimum: int = WorldData.WIDTH + 1
-	if GameManager == null:
-		return maxi(row_safe_minimum, MINING_REACT_WORK_BUDGET_PER_TICK)
-	var gs: float = GameManager.game_speed
-	if gs >= 26.0:
-		return 64  # ~1/4 row at high speed — keeps frame budget
-	if gs >= 12.0:
-		return 128
-	if gs >= 3.0:
-		return 256
 	return maxi(row_safe_minimum, MINING_REACT_WORK_BUDGET_PER_TICK)
 
 
 ## At high speed, skip N ticks between mining react steps to spread load.
 func _mining_react_step_skip_for_speed() -> int:
-	if GameManager == null:
-		return 0
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return 3  # Run every 4th tick
-	if gs >= 50.0:
-		return 2  # Run every 3rd tick
-	if gs >= 26.0:
-		return 1  # Run every 2nd tick
-	return 0  # Run every tick at normal speed
+	return 0
 
 
 ## Full react pass (legacy callers). Tick loop should prefer `_react_to_mining_progress_step`.

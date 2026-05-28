@@ -15,15 +15,8 @@ const BASE_INTERVAL: int = 35
 var _last_pulse_tick: int = -999999
 
 
-func should_pulse(current_tick: int, game_speed: float) -> bool:
-	var interval: int = BASE_INTERVAL
-	if game_speed >= 100.0:
-		interval = 80
-	elif game_speed >= 50.0:
-		interval = 60
-	elif game_speed >= 26.0:
-		interval = 45
-	if current_tick - _last_pulse_tick < interval:
+func should_pulse(current_tick: int, _game_speed: float = 1.0) -> bool:
+	if current_tick - _last_pulse_tick < BASE_INTERVAL:
 		return false
 	_last_pulse_tick = current_tick
 	return true

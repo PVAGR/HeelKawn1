@@ -85,22 +85,7 @@ func _is_frame_stressed() -> bool:
 	return fps < 32.0
 
 
-## Get neural update interval - Re-enabled for smooth gameplay
-## Game was lagging too hard without throttling
 func _neural_interval_for_speed(base_interval: int) -> int:
-	if GameManager == null:
-		return base_interval
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return base_interval * 8
-	if gs >= 50.0:
-		return base_interval * 5
-	if gs >= 26.0:
-		return base_interval * 3
-	if gs >= 12.0:
-		return base_interval * 2
-	if gs >= 6.0:
-		return base_interval * 1.5
 	return base_interval
 
 # Pre-allocated arrays for performance
@@ -869,100 +854,37 @@ func _on_world_tick(tick: int) -> void:
 			_last_settlement_ai_update_tick = tick
 	
 	# Update agents at specified frequency
-	var _stride: int = maxi(1, int(GameManager.game_speed)) if GameManager != null else 1
+	var _stride: int = 1
 	if tick - last_update_tick >= update_frequency * _stride:
 		_update_all_agents()
 		last_update_tick = tick
 	
 	# Spawn new agents if under limit and conditions are met
-	if tick % (600 * _stride) == 0:  # Check every 600 ticks at base cadence
+	if tick % 600 == 0:
 		_maintain_agent_population()
 
 
 func _world_ai_interval_for_speed() -> int:
 	var mobile: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
-	var stressed: bool = _is_frame_stressed()
-	if GameManager == null:
-		if stressed:
-			return 22 if mobile else 16
-		return 14 if mobile else 10
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		if stressed:
-			return 120 if mobile else 84
-		return 96 if mobile else 72
-	if gs >= 50.0:
-		if stressed:
-			return 80 if mobile else 56
-		return 64 if mobile else 48
-	if gs >= 26.0:
-		if stressed:
-			return 56 if mobile else 40
-		return 42 if mobile else 32
-	if gs >= 12.0:
-		if stressed:
-			return 36 if mobile else 26
-		return 28 if mobile else 20
-	if gs >= 6.0:
-		if stressed:
-			return 28 if mobile else 20
-		return 20 if mobile else 14
-	if stressed:
-		return 22 if mobile else 16
-	return 14 if mobile else 10
+	if mobile:
+		return 10
+	return 10
 
 
 func _settlement_ai_interval_for_speed() -> int:
 	var mobile: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
-	var stressed: bool = _is_frame_stressed()
-	if GameManager == null:
-		if stressed:
-			return 30 if mobile else 22
-		return 20 if mobile else 16
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		if stressed:
-			return 156 if mobile else 116
-		return 132 if mobile else 100
-	if gs >= 50.0:
-		if stressed:
-			return 110 if mobile else 80
-		return 90 if mobile else 68
-	if gs >= 26.0:
-		if stressed:
-			return 72 if mobile else 52
-		return 56 if mobile else 44
-	if gs >= 12.0:
-		if stressed:
-			return 46 if mobile else 34
-		return 36 if mobile else 28
-	if gs >= 6.0:
-		if stressed:
-			return 34 if mobile else 28
-		return 26 if mobile else 22
-	if stressed:
-		return 30 if mobile else 22
-	return 20 if mobile else 16
+	if mobile:
+		return 16
+	return 16
 
 
 func _agent_update_budget_for_speed(total_agents: int) -> int:
 	var budget: int = total_agents
 	var mobile: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
-	if GameManager != null:
-		var gs: float = GameManager.game_speed
-		if gs >= 100.0:
-			budget = maxi(1, int(ceil(float(total_agents) * (0.4 if mobile else 0.55))))
-		elif gs >= 50.0:
-			budget = maxi(1, int(ceil(float(total_agents) * (0.5 if mobile else 0.65))))
-		elif gs >= 26.0:
-			budget = maxi(1, int(ceil(float(total_agents) * (0.65 if mobile else 0.8))))
-		elif gs >= 12.0:
-			budget = maxi(1, int(ceil(float(total_agents) * (0.8 if mobile else 0.9))))
+	if mobile:
+		budget = maxi(1, int(ceil(float(total_agents) * 0.65)))
 	if _is_frame_stressed():
 		budget = maxi(1, int(floor(float(budget) * (0.65 if mobile else 0.75))))
-	if mobile and GameManager != null and GameManager.game_speed <= 6.0:
-		# Keep mobile stable even at low speed spikes.
-		budget = mini(budget, 12)
 	return mini(total_agents, budget)
 
 func _spawn_initial_agents() -> void:

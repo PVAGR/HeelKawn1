@@ -148,6 +148,14 @@ We are always building, always refining, always expanding. This document capture
     - External finance signals are now ingested as explicit manifests/events (`event_id`, `apply_tick`, `kind`, `currency`, `amount_micro`) and applied only on simulation tick.
     - Bridge records every applied fintech event into `WorldMemory` (`type=fintech_event_applied`) and maintains an in-sim treasury snapshot by currency.
     - Added deterministic debug seeding helper (`debug_seed_meow_credit`) for controlled integration testing without wall-clock callbacks.
+  - **FEAT: Zoroastrian/Hindu Ethics Runtime Layer (May 28, 2026)**:
+    - `ReligionSystem.gd` now computes deterministic moral state from factual world events:
+      - pawn-level `Asha/Druj` balance,
+      - pawn-level `Karma` ledger,
+      - settlement-level `Dharma` index.
+    - Added periodic ethics ingestion from `WorldMemory.get_events()` with monotonic index tracking (`_last_world_event_index`) to avoid reprocessing.
+    - Ethics mapping currently responds to survival/teaching/combat/fintech event types, enabling religion/culture systems to consume live moral state rather than static lore-only flags.
+    - Added API surface: `get_pawn_asha_druj_balance`, `get_pawn_moral_axis`, `get_pawn_karma`, `get_settlement_dharma_index`, `get_religion_ethics_snapshot`.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

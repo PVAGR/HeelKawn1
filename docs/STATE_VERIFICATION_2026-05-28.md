@@ -153,3 +153,37 @@ Verification:
 
 Verification:
 - Re-ran `bash tools/ai/sim-quality-gate.sh` after FintechBridge integration: PASS.
+
+## Session 9 Update (Religious Ethics Determinism Layer)
+
+9. Added deterministic Zoroastrian/Hindu ethics accumulation on top of existing emergent religion
+- Files:
+  - `autoloads/ReligionSystem.gd`
+  - `docs/HEELKAWN_STATE.md`
+- Changes:
+  - Added periodic ethics scan (`ETHICS_SCAN_INTERVAL`) driven by game ticks only.
+  - Added deterministic ingestion of `WorldMemory.get_events()` deltas (tracked by `_last_world_event_index`).
+  - Added pawn-level moral state:
+    - `_asha_druj_balance` (continuous axis; positive=order/cooperation, negative=entropy/harm pressure)
+    - `_karma_score` (integer cumulative consequence score)
+  - Added settlement-level moral pressure:
+    - `_dharma_index` keyed by settlement center region, normalized by settlement population on each ethics pass.
+  - Added finite event→ethics mapping for currently-known event classes:
+    - social/prosocial (`teach_skill`, `apprenticeship`, `shelter_built`, `settlement_founded`)
+    - collapse/harm (`famine_warning`, `starvation`, `death_starvation`, `death_combat`, `murder`)
+    - fintech bridge consequences (`fintech_event_applied` with payout/credit/debit branches)
+  - Added read APIs for runtime/diagnostics:
+    - `get_pawn_asha_druj_balance(...)`
+    - `get_pawn_moral_axis(...)`
+    - `get_pawn_karma(...)`
+    - `get_settlement_dharma_index(...)`
+    - `get_religion_ethics_snapshot()`
+- Expected effect:
+  - Aligns live simulation behavior with canon pressure model (Asha/Druj, Karma, Dharma) without introducing authored outcomes or nondeterministic branches.
+  - Keeps religious/metaphysical interpretation derived from logged events, not direct UI claims.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after ReligionSystem ethics integration: PASS.
+
+Residual Risk:
+- Runtime behavior under long `100x` runs remains unverified here due missing Godot binary; requires in-engine smoke/perf execution on a Godot-enabled machine.

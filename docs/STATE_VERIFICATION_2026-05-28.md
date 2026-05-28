@@ -56,3 +56,22 @@
 
 Verification:
 - Re-ran `bash tools/ai/sim-quality-gate.sh` after cache optimization: PASS.
+
+## Session 3 Update (Pawn AI Throughput)
+
+3. Cached matrix pending-job queries in pawn hot paths
+- File: `scripts/pawn/HeelKawnian.gd`
+- Changes:
+  - Added `_pending_count_cache_tick` and `_pending_count_cache` to cache pending-job query results per simulation tick.
+  - Added `_pending_count_cached(job_type)` wrapper for `JobManager.count_pending_by_type(...)`.
+  - Added `_pending_near_cached(center_tile, job_type, radius)` wrapper for `JobManager.count_pending_jobs_near(...)`.
+  - Replaced repeated direct pending-count calls in:
+    - `_try_heelkawnian_matrix_ambition_seed(...)`
+    - `_try_heelkawnian_matrix_preservation_action(...)`
+    - `_try_heelkawnian_matrix_learning_seed(...)`
+- Expected effect:
+  - Lower repeated pending-job scan overhead under high pawn counts and high simulation speeds.
+  - Keeps deterministic behavior while reducing same-tick duplicate query work.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after pawn query caching: PASS.

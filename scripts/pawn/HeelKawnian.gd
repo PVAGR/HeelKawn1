@@ -732,6 +732,10 @@ var _learning_weight_cache: Dictionary = {}
 var _next_goal_refresh_tick: int = -1
 var _cached_active_goal: Dictionary = {}
 var _cached_active_goal_priority: float = 0.0
+## Per-tick cache for JobManager pending count queries used by matrix posting
+## lanes to avoid repeated O(N) scans within the same pawn tick.
+var _pending_count_cache_tick: int = -1
+var _pending_count_cache: Dictionary = {}
 var _last_failed_job_type: int = -1
 var _last_failed_job_tile: Vector2i = Vector2i(-9999, -9999)
 var _last_failed_job_tick: int = -999999
@@ -1910,16 +1914,14 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 		if hh_target_tile.x < 0:
 			_next_matrix_ambition_tick = tick + fail_cooldown
 			return false
-		if JobManager != null and JobManager.has_method("count_pending_jobs_near"):
-			var local_pending_hh: int = JobManager.count_pending_jobs_near(data.tile_pos, hh_job_type, local_same_job_radius)
-			if local_pending_hh > 0:
-				_next_matrix_ambition_tick = tick + fail_cooldown
-				return false
-		if JobManager != null and JobManager.has_method("count_pending_by_type"):
-			var global_pending_hh: int = JobManager.count_pending_by_type(hh_job_type)
-			if global_pending_hh >= global_ambition_cap:
-				_next_matrix_ambition_tick = tick + fail_cooldown
-				return false
+		var local_pending_hh: int = _pending_near_cached(data.tile_pos, hh_job_type, local_same_job_radius)
+		if local_pending_hh > 0:
+			_next_matrix_ambition_tick = tick + fail_cooldown
+			return false
+		var global_pending_hh: int = _pending_count_cached(hh_job_type)
+		if global_pending_hh >= global_ambition_cap:
+			_next_matrix_ambition_tick = tick + fail_cooldown
+			return false
 		var hh_priority: int = clampi(int(hh_ambition.get("priority", 8)), 1, 10)
 		var hh_work_ticks: int = Job.tool_job_work_ticks(hh_job_type)
 		if hh_work_ticks <= 0:
@@ -1985,16 +1987,14 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 	if target_tile.x < 0:
 		_next_matrix_ambition_tick = tick + fail_cooldown
 		return false
-	if JobManager != null and JobManager.has_method("count_pending_jobs_near"):
-		var local_pending: int = JobManager.count_pending_jobs_near(data.tile_pos, job_type, local_same_job_radius)
-		if local_pending > 0:
-			_next_matrix_ambition_tick = tick + fail_cooldown
-			return false
-	if JobManager != null and JobManager.has_method("count_pending_by_type"):
-		var global_pending: int = JobManager.count_pending_by_type(job_type)
-		if global_pending >= global_ambition_cap:
-			_next_matrix_ambition_tick = tick + fail_cooldown
-			return false
+	var local_pending: int = _pending_near_cached(data.tile_pos, job_type, local_same_job_radius)
+	if local_pending > 0:
+		_next_matrix_ambition_tick = tick + fail_cooldown
+		return false
+	var global_pending: int = _pending_count_cached(job_type)
+	if global_pending >= global_ambition_cap:
+		_next_matrix_ambition_tick = tick + fail_cooldown
+		return false
 	var priority: int = clampi(int(ambition.get("priority", 5)), 1, 10)
 	var work_ticks: int = Job.tool_job_work_ticks(job_type)
 	if work_ticks <= 0:
@@ -2093,11 +2093,10 @@ func _try_heelkawnian_matrix_preservation_action() -> bool:
 		"inscribe_stone":
 			var stone_tile: Vector2i = choice.get("target_tile", Vector2i(-1, -1))
 			if stone_tile.x >= 0:
-				if JobManager != null and JobManager.has_method("count_pending_by_type"):
-					var global_stones: int = JobManager.count_pending_by_type(_Job.Type.CARVE_KNOWLEDGE_STONE)
-					if global_stones >= preserve_stone_cap:
-						_next_matrix_preservation_tick = tick + fail_cooldown
-						return false
+				var global_stones: int = _pending_count_cached(_Job.Type.CARVE_KNOWLEDGE_STONE)
+				if global_stones >= preserve_stone_cap:
+					_next_matrix_preservation_tick = tick + fail_cooldown
+					return false
 				var pending_stone: bool = false
 				if JobManager != null and JobManager.has_method("has_pending_build_near"):
 					pending_stone = JobManager.has_pending_build_near(stone_tile, _Job.Type.CARVE_KNOWLEDGE_STONE, 2)
@@ -2121,11 +2120,10 @@ func _try_heelkawnian_matrix_preservation_action() -> bool:
 			if wrote_book:
 				did_act = true
 			elif JobManager != null:
-				if JobManager.has_method("count_pending_by_type"):
-					var global_books: int = JobManager.count_pending_by_type(_Job.Type.BOOK_BINDING)
-					if global_books >= preserve_book_cap:
-						_next_matrix_preservation_tick = tick + fail_cooldown
-						return false
+				var global_books: int = _pending_count_cached(_Job.Type.BOOK_BINDING)
+				if global_books >= preserve_book_cap:
+					_next_matrix_preservation_tick = tick + fail_cooldown
+					return false
 				var pending_book: bool = JobManager.has_method("has_pending_build_near") and JobManager.has_pending_build_near(book_tile, _Job.Type.BOOK_BINDING, 3)
 				if not pending_book:
 					var bind_ticks: int = _Job.tool_job_work_ticks(_Job.Type.BOOK_BINDING)
@@ -2198,12 +2196,10 @@ func _try_heelkawnian_matrix_learning_seed() -> bool:
 	var pending_apprentice: int = 0
 	var global_teach: int = 0
 	var global_apprentice: int = 0
-	if JobManager != null and JobManager.has_method("count_pending_jobs_near"):
-		pending_teach = JobManager.count_pending_jobs_near(data.tile_pos, _Job.Type.TEACH_SKILL, 6)
-		pending_apprentice = JobManager.count_pending_jobs_near(data.tile_pos, _Job.Type.APPRENTICESHIP, 6)
-	if JobManager != null and JobManager.has_method("count_pending_by_type"):
-		global_teach = JobManager.count_pending_by_type(_Job.Type.TEACH_SKILL)
-		global_apprentice = JobManager.count_pending_by_type(_Job.Type.APPRENTICESHIP)
+	pending_teach = _pending_near_cached(data.tile_pos, _Job.Type.TEACH_SKILL, 6)
+	pending_apprentice = _pending_near_cached(data.tile_pos, _Job.Type.APPRENTICESHIP, 6)
+	global_teach = _pending_count_cached(_Job.Type.TEACH_SKILL)
+	global_apprentice = _pending_count_cached(_Job.Type.APPRENTICESHIP)
 	if pending_teach + pending_apprentice >= 2:
 		_next_matrix_learning_tick = tick + fail_cooldown
 		return false
@@ -2250,6 +2246,35 @@ func _is_survival_matrix_ambition(job_type: int) -> bool:
 		_Job.Type.GROW_FOOD, _Job.Type.TRADE_HAUL:
 			return true
 	return false
+
+
+func _pending_count_cached(job_type: int) -> int:
+	if JobManager == null or not JobManager.has_method("count_pending_by_type"):
+		return 0
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	if _pending_count_cache_tick != tick:
+		_pending_count_cache_tick = tick
+		_pending_count_cache.clear()
+	if _pending_count_cache.has(job_type):
+		return int(_pending_count_cache[job_type])
+	var n: int = JobManager.count_pending_by_type(job_type)
+	_pending_count_cache[job_type] = n
+	return n
+
+
+func _pending_near_cached(center_tile: Vector2i, job_type: int, radius: int) -> int:
+	if JobManager == null or not JobManager.has_method("count_pending_jobs_near"):
+		return 0
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	if _pending_count_cache_tick != tick:
+		_pending_count_cache_tick = tick
+		_pending_count_cache.clear()
+	var key: String = "near:%d:%d:%d:%d:%d" % [center_tile.x, center_tile.y, job_type, radius, tick]
+	if _pending_count_cache.has(key):
+		return int(_pending_count_cache[key])
+	var n: int = JobManager.count_pending_jobs_near(center_tile, job_type, radius)
+	_pending_count_cache[key] = n
+	return n
 
 
 ## Autonomous stockpile posting: if no stockpiles exist (or very few) and

@@ -127,6 +127,10 @@ We are always building, always refining, always expanding. This document capture
   - **FEAT: Recovery Scan Throughput Cache (May 28, 2026)**:
     - Added per-settlement caching for recovery feature snapshots and settlement population reads in `HeelKawnianManager`.
     - Cache TTL scales by simulation speed tier, reducing repeated world/settlement scans in hot ambition/recovery paths at high speed.
+  - **FEAT: Pawn Matrix Pending-Query Cache (May 28, 2026)**:
+    - Added per-tick caches for `JobManager` pending-count lookups in `HeelKawnian.gd` matrix ambition/preservation/learning paths.
+    - Replaced repeated `count_pending_by_type` and `count_pending_jobs_near` calls with cached wrappers keyed by tick/job/position/radius.
+    - Reduces hot-path query churn when many pawns evaluate matrix postings in the same simulation tick.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

@@ -3,7 +3,9 @@ extends Node
 ## (read-only; posts via Main + JobManager). Not every tick: memory-dirty or interval.
 ## Culture: derived from settlement scar_max + reputation_min (read-only; not stored).
 
-const PLANNING_INTERVAL_TICKS: int = 500  # OPTIMIZATION: Increased frequency from 2000 for faster building response
+const PLANNING_INTERVAL_TICKS: int = 500  # Base cadence (1x/normal)
+const PLANNING_INTERVAL_TICKS_FAST: int = 900
+const PLANNING_INTERVAL_TICKS_VERY_FAST: int = 1400
 const CORE_BOX_R: int = 2
 const VILLAGE_SPAN: int = 7
 ## First perimeter: OPEN uses a larger initial ring (loose), DEF a tighter one (fortified).
@@ -55,7 +57,7 @@ func plan(world: World, main: Node2D, from_memory_dirty: bool) -> void:
 		return
 	if not from_memory_dirty:
 		var t0: int = GameManager.tick_count
-		if t0 - _last_plan_tick < PLANNING_INTERVAL_TICKS:
+		if t0 - _last_plan_tick < _planner_interval_ticks():
 			return
 		var open_backpressure_limit: int = _planner_open_job_backpressure_limit()
 		if open_backpressure_limit > 0 and JobManager.open_count() >= open_backpressure_limit:
@@ -114,13 +116,36 @@ static func _planner_pass_settlement_limit() -> int:
 	return PLANNER_MAX_SETTLEMENTS_PER_PASS
 
 
+static func _planner_interval_ticks() -> int:
+	if GameManager == null:
+		return PLANNING_INTERVAL_TICKS
+	var gs: float = GameManager.game_speed
+	if gs >= 26.0:
+		return PLANNING_INTERVAL_TICKS_VERY_FAST
+	if gs >= 12.0:
+		return PLANNING_INTERVAL_TICKS_FAST
+	return PLANNING_INTERVAL_TICKS
+
+
 static func _planner_pass_budget_usec() -> int:
 	return 999999999
 
 
 static func _planner_open_job_backpressure_limit() -> int:
-	# No throttle. No backpressure limit.
-	return -1
+	# Prevent planner from flooding the queue at high sim speeds.
+	# Lower speed -> higher queue tolerance; high speed -> tighter cap.
+	if JobManager == null:
+		return -1
+	if GameManager == null:
+		return 420
+	var gs: float = GameManager.game_speed
+	if gs >= 26.0:
+		return 200
+	if gs >= 12.0:
+		return 280
+	if gs >= 6.0:
+		return 340
+	return 420
 
 
 func _plan_one_settlement(

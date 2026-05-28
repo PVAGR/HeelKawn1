@@ -26,6 +26,12 @@ Authority:
 
 ## Near-Term Systems Queue
 
+0. [new 2026-05-28] Egregore + Matrix coupling baseline
+   - Define deterministic runtime contract for collective-belief pressure (egregore) coupled to existing matrix/simulation layers.
+   - Spec added: `docs/WORLD_BIBLE/EGREGORE_MATRIX_RUNTIME_SPEC.md`
+   - Next implementation anchor: new `EgregoreMemory` autoload + bounded decision bias integration.
+   - Exit criteria: deterministic replay-safe pressure accumulation visible via read-only diagnostics and reflected in at least one pawn decision channel.
+
 1. Cultural architecture signature set (Phase 4 target) ✅ DOCUMENTED
    - Status: SPECIFIED in docs/WORLD_BIBLE/GLOSSARY.md (Architecture Signature Constants table)
    - Implementation exists in autoloads/SettlementPlanner.gd with OPEN/CAUTIOUS/DEFENSIVE branches

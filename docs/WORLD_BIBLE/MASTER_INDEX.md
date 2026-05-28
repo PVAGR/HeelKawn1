@@ -16,6 +16,7 @@ Use this file as the quick map of all world canon files.
 - `CHARACTERS.md` - notable entities and chronicler-facing names
 - `GLOSSARY.md` - stable terms and meanings
 - `CANON_SYSTEMS_FEATURE_QUEUE.md` - ordered canon/system implementation queue from legacy docs to active roadmap
+- `EGREGORE_MATRIX_RUNTIME_SPEC.md` - deterministic integration spec for simulation + matrix + egregore
 
 ## Governance
 

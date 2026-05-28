@@ -5,7 +5,7 @@ signal speed_changed(speed_multiplier: float, is_paused: bool)
 const SPEED_MULTIPLIERS: Array = [1.0, 6.0, 26.0, 50.0, 100.0, 200.0]
 const SPEED_LABELS: Array      = ["1x", "6x", "26x", "50x", "100x", "200x"]
 const BASE_TICK_INTERVAL: float = 0.05
-const MAX_TICKS_PER_FRAME: Dictionary = {0:2, 1:4, 2:8, 3:16, 4:28, 5:48}
+const MAX_TICKS_PER_FRAME: Dictionary = {0:2, 1:4, 2:8, 3:10, 4:6, 5:8}
 
 var current_tick: int = 0
 var _accumulated_time: float = 0.0

@@ -132,7 +132,7 @@ func _maybe_log_sim_hitch(ticks_this_frame: int, frame_tick_cap: int, tick_chain
 
 
 func _max_ticks_per_frame_for_speed() -> int:
-	var caps: Dictionary = {0: 2, 1: 4, 2: 8, 3: 16, 4: 28, 5: 48}
+	var caps: Dictionary = {0: 2, 1: 4, 2: 8, 3: 10, 4: 6, 5: 8}
 	return caps.get(get_speed_index(), 4)
 
 

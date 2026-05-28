@@ -463,15 +463,39 @@ func get_player_pawn_id() -> int:
 		return int(_player_pawn.data.id)
 	return -1
 
-func _high_speed_interval(normal_ticks: int, _fast_ticks: int = -1, _ultra_ticks: int = -1) -> int:
+func _high_speed_interval(normal_ticks: int, fast_ticks: int = -1, ultra_ticks: int = -1) -> int:
+	var s: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+	if s >= 200.0:
+		if ultra_ticks > 0: return ultra_ticks * 2
+		if fast_ticks > 0: return fast_ticks * 2
+		return normal_ticks * 4
+	if s >= 100.0:
+		if ultra_ticks > 0: return ultra_ticks
+		if fast_ticks > 0: return fast_ticks * 2
+		return normal_ticks * 2
+	if s >= 26.0:
+		if fast_ticks > 0: return fast_ticks
+		return normal_ticks * 2
 	return normal_ticks
 
 
 func _planner_interval_for_speed() -> int:
+	var s: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+	if s >= 200.0: return 5000
+	if s >= 100.0: return 3000
+	if s >= 50.0:  return 1000
+	if s >= 26.0:  return 500
+	if s >= 6.0:   return 180
 	return 90
 
 
 func _heavy_planner_interval_for_speed() -> int:
+	var s: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+	if s >= 200.0: return 5000
+	if s >= 100.0: return 3000
+	if s >= 50.0:  return 2000
+	if s >= 26.0:  return 1000
+	if s >= 6.0:   return 360
 	return 180
 
 
@@ -2935,7 +2959,12 @@ func _on_game_tick(tick: int) -> void:
 		_update_ambient_target()
 		section_us["ambient_target"] = Time.get_ticks_usec() - t0
 	# WorldEventSeedManager lazy-loaded via EventManager (no longer autoloaded)
-	if tick % 100 == 0 and EventManager != null:
+	var _event_interval: int = 100
+	var _ev_speed: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+	if _ev_speed >= 200.0: _event_interval = 2000
+	elif _ev_speed >= 100.0: _event_interval = 1000
+	elif _ev_speed >= 26.0: _event_interval = 400
+	if tick % _event_interval == 0 and EventManager != null:
 		var sm: Node = EventManager.get_world_event_seed_manager()
 		if sm != null and sm.has_method("advance_all"):
 			var seed_events: Array = sm.advance_all(tick)
@@ -2957,7 +2986,12 @@ func _on_game_tick(tick: int) -> void:
 
 	# Settlement construction seeder: post build/cook/plant jobs based on
 	# what each settlement actually needs (beds, walls, hearths, farms, etc.)
-	if _is_main_lane_tick(tick, CONSTRUCTION_JOB_SEED_INTERVAL_TICKS, 11):
+	var _seed_interval: int = CONSTRUCTION_JOB_SEED_INTERVAL_TICKS
+	var _cs_speed: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+	if _cs_speed >= 100.0: _seed_interval = 4000
+	elif _cs_speed >= 50.0: _seed_interval = 2000
+	elif _cs_speed >= 26.0: _seed_interval = 1000
+	if _is_main_lane_tick(tick, _seed_interval, 11):
 		t0 = Time.get_ticks_usec()
 		_seed_construction_jobs(tick_budget_start_usec)
 		section_us["construction_seed"] = Time.get_ticks_usec() - t0
@@ -3160,8 +3194,13 @@ func _on_game_tick(tick: int) -> void:
 			_build_roads_from_trade_routes()
 		# DORMANT WORLD: Let recompute run periodically so pawn clusters can be detected
 		# AGGRESSIVE OPTIMIZATION: Throttle at high speeds to reduce 40-60ms spikes
-		var rebirth_interval: int = _high_speed_interval(REBIRTH_CHECK_INTERVAL_TICKS, REBIRTH_CHECK_INTERVAL_TICKS * 2, REBIRTH_CHECK_INTERVAL_TICKS * 4)
-		if _is_main_lane_tick(tick, rebirth_interval, 43):
+		var _rebirth_interval: int = REBIRTH_CHECK_INTERVAL_TICKS
+		var _cur_speed: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+		if _cur_speed >= 200.0: _rebirth_interval = 12000
+		elif _cur_speed >= 100.0: _rebirth_interval = 8000
+		elif _cur_speed >= 50.0: _rebirth_interval = 5000
+		elif _cur_speed >= 26.0: _rebirth_interval = 3000
+		if _is_main_lane_tick(tick, _rebirth_interval, 43):
 			t0 = Time.get_ticks_usec()
 			SettlementMemory.recompute(_world)
 			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
@@ -3246,7 +3285,8 @@ func _on_game_tick(tick: int) -> void:
 		SettlementMemory.update_preferred_work_fronts(tick)
 		section_us["settlement_work_fronts"] = Time.get_ticks_usec() - t0
 	# DORMANT WORLD: Social rapport only runs after first settlement
-	if _is_main_lane_tick(tick, _social_rapport_interval_for_speed(), 149) and DiscoveryGate.is_unlocked("first_settlement"):
+	var _sr_interval: int = _social_rapport_interval_for_speed()
+	if tick % _sr_interval == (GameManager.get_speed_index() % _sr_interval) and DiscoveryGate.is_unlocked("first_settlement"):
 		t0 = Time.get_ticks_usec()
 		_accumulate_social_rapport()
 		WorldAI.recompute_squads(_pawn_spawner)
@@ -3364,7 +3404,14 @@ func _inspect_scan_interval_for_speed() -> int:
 
 
 func _social_rapport_interval_for_speed() -> int:
-	return SOCIAL_RAPPORT_ACCUM_INTERVAL_TICKS
+	var s: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+	if s >= 200.0: return 600
+	if s >= 100.0: return 300
+	if s >= 50.0:  return 180
+	if s >= 26.0:  return 120
+	if s >= 12.0:  return 80
+	if s >= 3.0:   return 60
+	return 40
 
 
 func _mining_react_scan_rows_for_speed() -> int:
@@ -3629,6 +3676,11 @@ func _social_personality_chemistry(a: HeelKawnianData, b: HeelKawnianData) -> fl
 func _accumulate_social_rapport() -> void:
 	if _pawn_spawner == null or _world == null or _world.pathfinder == null:
 		return
+	var speed: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+	var pair_budget: int = 200
+	if speed >= 100.0: pair_budget = 40
+	elif speed >= 50.0: pair_budget = 80
+	elif speed >= 26.0: pair_budget = 120
 	const R2: float = 128.0 * 128.0
 	const CELL_SIZE: float = 160.0  # Grid cell size, slightly larger than proximity radius
 	
@@ -3659,7 +3711,6 @@ func _accumulate_social_rapport() -> void:
 	
 	var wm_budget: int = SOCIAL_WM_RECORD_BUDGET_PER_PASS
 	var consciousness_budget: int = SOCIAL_CONSCIOUSNESS_RECORDS_PER_PASS
-	var pair_budget: int = SOCIAL_MAX_PAIRS_PER_PASS
 	var mobile_runtime: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
 	if mobile_runtime:
 		pair_budget = maxi(56, int(round(float(pair_budget) * 0.62)))
@@ -3716,7 +3767,12 @@ func _accumulate_social_rapport() -> void:
 		if cell_pawns_v is not Array:
 			continue
 		var cell_pawns: Array = cell_pawns_v as Array
+		var processed: int = 0
 		for pa in cell_pawns:
+			processed += 1
+			if processed >= pair_budget:
+				exhausted = true
+				break
 			if pair_budget <= 0:
 				exhausted = true
 				break

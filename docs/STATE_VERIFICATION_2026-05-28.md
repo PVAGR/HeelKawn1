@@ -119,3 +119,18 @@ Verification:
 
 Verification:
 - Re-ran `bash tools/ai/sim-quality-gate.sh` after cooking-pressure cache optimization: PASS.
+
+## Session 7 Update (Local Pending Radius Throughput)
+
+7. Cached local pending-near job counts per tick in colony services
+- File: `autoloads/ColonySimServices.gd`
+- Changes:
+  - Added per-tick near-query cache fields (`_pending_near_cache_tick`, `_pending_near_cache`).
+  - `count_pending_jobs_near(center_tile, job_type, radius)` now caches by center/job/radius key.
+  - Applies both when delegating to `JobManager.count_pending_jobs_near(...)` and fallback union scans.
+- Expected effect:
+  - Reduces duplicate local pending-radius scans during pressure and hearth-gating checks.
+  - Preserves deterministic behavior by keeping cache scoped to current simulation tick.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after local pending-near cache optimization: PASS.

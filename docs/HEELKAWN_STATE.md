@@ -140,6 +140,9 @@ We are always building, always refining, always expanding. This document capture
   - **FEAT: Cooking Pressure Pending Cache (May 28, 2026)**:
     - `ColonySimServices` now caches `JobManager.count_pending_by_type(...)` results per tick for cook job types.
     - `_cooking_pressure_for_scope(...)` now uses cached pending counts for `COOK_MEAT`, `COOK_FISH`, and `COOK_BERRIES`.
+  - **FEAT: Local Pending-Near Cache in Colony Services (May 28, 2026)**:
+    - `ColonySimServices.count_pending_jobs_near(...)` now caches radius query results per tick by center/job/radius key.
+    - Reduces duplicate local pending-job scans in hearth/warmth and settlement pressure gating paths.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

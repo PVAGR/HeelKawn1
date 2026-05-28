@@ -47,6 +47,8 @@ const SETTLEMENT_BUILD_COOLDOWN_DEFAULT_TICKS: int = 1000
 const SETTLEMENT_BUILD_COOLDOWN_MAX_TICKS: int = 2000
 var _pending_count_cache_tick: int = -1
 var _pending_count_cache: Dictionary = {}
+var _pending_near_cache_tick: int = -1
+var _pending_near_cache: Dictionary = {}
 
 ## Per stockpile zone tile and per STORAGE_HUT feature (matches BuildingRegistry buffs).
 const STOCKPILE_TILE_CAPACITY: int = 16
@@ -956,16 +958,25 @@ func _center_tile_for_region(center_region: int) -> Vector2i:
 func count_pending_jobs_near(center_tile: Vector2i, job_type: int, radius: int) -> int:
 	if JobManager == null or center_tile.x < 0:
 		return 0
-	if JobManager.has_method("count_pending_jobs_near"):
-		return int(JobManager.call("count_pending_jobs_near", center_tile, job_type, radius))
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	if _pending_near_cache_tick != tick:
+		_pending_near_cache_tick = tick
+		_pending_near_cache.clear()
+	var key: String = "%d:%d:%d:%d" % [center_tile.x, center_tile.y, job_type, radius]
+	if _pending_near_cache.has(key):
+		return int(_pending_near_cache[key])
 	var n: int = 0
-	for j in JobManager.get_active_jobs_union():
-		if j == null:
-			continue
-		if job_type >= 0 and int(j.type) != job_type:
-			continue
-		if maxi(absi(j.tile.x - center_tile.x), absi(j.tile.y - center_tile.y)) <= radius:
-			n += 1
+	if JobManager.has_method("count_pending_jobs_near"):
+		n = int(JobManager.call("count_pending_jobs_near", center_tile, job_type, radius))
+	else:
+		for j in JobManager.get_active_jobs_union():
+			if j == null:
+				continue
+			if job_type >= 0 and int(j.type) != job_type:
+				continue
+			if maxi(absi(j.tile.x - center_tile.x), absi(j.tile.y - center_tile.y)) <= radius:
+				n += 1
+	_pending_near_cache[key] = n
 	return n
 
 

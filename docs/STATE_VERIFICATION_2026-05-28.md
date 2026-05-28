@@ -105,3 +105,17 @@ Verification:
 
 Verification:
 - Re-ran `bash tools/ai/sim-quality-gate.sh` after leader build-pass cache optimization: PASS.
+
+## Session 6 Update (Cooking Pressure Throughput)
+
+6. Cached pending cook-job counts in colony pressure calculations
+- File: `autoloads/ColonySimServices.gd`
+- Changes:
+  - Added per-tick pending count cache fields and helper `_pending_by_type_cached(job_type)`.
+  - `_cooking_pressure_for_scope(...)` now uses cached counts instead of repeated direct `count_pending_by_type(...)` calls.
+- Expected effect:
+  - Reduces repeated pending-count scans in demand refresh loops, especially at high speeds.
+  - Keeps deterministic behavior unchanged; values still resolve from the same tick snapshot.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after cooking-pressure cache optimization: PASS.

@@ -137,6 +137,9 @@ We are always building, always refining, always expanding. This document capture
   - **FEAT: Leader Build Pass Pending Cache (May 28, 2026)**:
     - `HeelKawnianManager._leader_direct_construction_jobs(...)` now caches local `count_pending_jobs_near(center, job_type, 10)` results per pass.
     - Reduces repeated pending-near scans across build queue entries while preserving deterministic post gating.
+  - **FEAT: Cooking Pressure Pending Cache (May 28, 2026)**:
+    - `ColonySimServices` now caches `JobManager.count_pending_by_type(...)` results per tick for cook job types.
+    - `_cooking_pressure_for_scope(...)` now uses cached pending counts for `COOK_MEAT`, `COOK_FISH`, and `COOK_BERRIES`.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

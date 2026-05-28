@@ -45,6 +45,8 @@ var _settlement_build_kind_last_tick: Dictionary = {}
 const SETTLEMENT_BUILD_COOLDOWN_MIN_TICKS: int = 500
 const SETTLEMENT_BUILD_COOLDOWN_DEFAULT_TICKS: int = 1000
 const SETTLEMENT_BUILD_COOLDOWN_MAX_TICKS: int = 2000
+var _pending_count_cache_tick: int = -1
+var _pending_count_cache: Dictionary = {}
 
 ## Per stockpile zone tile and per STORAGE_HUT feature (matches BuildingRegistry buffs).
 const STOCKPILE_TILE_CAPACITY: int = 16
@@ -80,6 +82,20 @@ func _on_tick(tick: int) -> void:
 		_update_labor_stance_from_pressures()
 		_maybe_record_famine_warning(tick)
 		demand_snapshot.emit(_food_press, _housing_press, _mat_press, _haul_press)
+
+
+func _pending_by_type_cached(job_type: int) -> int:
+	if JobManager == null or not JobManager.has_method("count_pending_by_type"):
+		return 0
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	if _pending_count_cache_tick != tick:
+		_pending_count_cache_tick = tick
+		_pending_count_cache.clear()
+	if _pending_count_cache.has(job_type):
+		return int(_pending_count_cache[job_type])
+	var n: int = JobManager.count_pending_by_type(job_type)
+	_pending_count_cache[job_type] = n
+	return n
 
 
 ## Food pressure: 0 = plenty, 1 = acute shortage (simplified: inverse of food cap).
@@ -570,9 +586,9 @@ func _cooking_pressure_for_scope(center_region: int) -> float:
 		return 0.0
 	var pending_cooks: int = 0
 	if JobManager != null:
-		pending_cooks = JobManager.count_pending_by_type(Job.Type.COOK_MEAT) \
-				+ JobManager.count_pending_by_type(Job.Type.COOK_FISH) \
-				+ JobManager.count_pending_by_type(Job.Type.COOK_BERRIES)
+		pending_cooks = _pending_by_type_cached(Job.Type.COOK_MEAT) \
+				+ _pending_by_type_cached(Job.Type.COOK_FISH) \
+				+ _pending_by_type_cached(Job.Type.COOK_BERRIES)
 	# Scale the backlog threshold by population (min 12) so large colonies with full
 	# berry stockpiles don't keep pressure pinned at 1.0.
 	var pop: int = _population_in_scope(center_region)

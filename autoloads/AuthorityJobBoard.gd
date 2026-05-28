@@ -12,6 +12,22 @@ so pawns that follow local authority will see and claim them.
 
 const CHECK_INTERVAL: int = 64
 
+
+static func _pending_near_cached(
+		cache: Dictionary,
+		center_tile: Vector2i,
+		job_type: int,
+		radius: int
+) -> int:
+	if JobManager == null or not JobManager.has_method("count_pending_jobs_near"):
+		return 0
+	var key: String = "%d:%d:%d:%d" % [center_tile.x, center_tile.y, job_type, radius]
+	if cache.has(key):
+		return int(cache[key])
+	var n: int = JobManager.count_pending_jobs_near(center_tile, job_type, radius)
+	cache[key] = n
+	return n
+
 func _ready() -> void:
 	set_process(false)
 	# DISABLED (P2): Re-enabling _on_game_tick would duplicate Main._seed_bootstrap_jobs /
@@ -31,13 +47,14 @@ static func post_critical_proto_survival_if_needed(leader_pawn: Node, center_til
 		return 0
 	var posted: int = 0
 	var leader_id: int = int(leader_pawn.data.id)
+	var pending_cache: Dictionary = {}
 	var zones: int = StockpileManager.zone_count() if StockpileManager != null else 0
 	var stock_food: int = StockpileManager.total_food() if StockpileManager != null else 0
 	var food_press: float = ColonySimServices.get_food_pressure()
 	var food_critical: bool = food_press > 0.65 or (zones <= 0 and stock_food <= 0)
 	if food_critical:
 		var food_prio: int = 80 if food_press >= 0.90 or stock_food <= 0 else 70
-		if JobManager.count_pending_jobs_near(center_tile, Job.Type.FORAGE, 12) <= 0:
+		if _pending_near_cached(pending_cache, center_tile, Job.Type.FORAGE, 12) <= 0:
 			var fj: Job = JobManager.post_from_dict({
 				"type": Job.Type.FORAGE,
 				"tile": center_tile + Vector2i(1, 0),
@@ -50,8 +67,9 @@ static func post_critical_proto_survival_if_needed(leader_pawn: Node, center_til
 			})
 			if fj != null:
 				posted += 1
+				pending_cache.erase("%d:%d:%d:%d" % [center_tile.x, center_tile.y, Job.Type.FORAGE, 12])
 		if food_press >= 0.85 or stock_food <= 0:
-			if JobManager.count_pending_jobs_near(center_tile, Job.Type.HUNT, 12) <= 0:
+			if _pending_near_cached(pending_cache, center_tile, Job.Type.HUNT, 12) <= 0:
 				var hj: Job = JobManager.post_from_dict({
 					"type": Job.Type.HUNT,
 					"tile": center_tile + Vector2i(-1, 0),
@@ -64,7 +82,8 @@ static func post_critical_proto_survival_if_needed(leader_pawn: Node, center_til
 				})
 				if hj != null:
 					posted += 1
-			if JobManager.count_pending_jobs_near(center_tile, Job.Type.FISH, 12) <= 0:
+					pending_cache.erase("%d:%d:%d:%d" % [center_tile.x, center_tile.y, Job.Type.HUNT, 12])
+			if _pending_near_cached(pending_cache, center_tile, Job.Type.FISH, 12) <= 0:
 				var fishj: Job = JobManager.post_from_dict({
 					"type": Job.Type.FISH,
 					"tile": center_tile + Vector2i(0, 1),
@@ -77,9 +96,10 @@ static func post_critical_proto_survival_if_needed(leader_pawn: Node, center_til
 				})
 				if fishj != null:
 					posted += 1
+					pending_cache.erase("%d:%d:%d:%d" % [center_tile.x, center_tile.y, Job.Type.FISH, 12])
 	if ColonySimServices.get_warmth_pressure() > 0.35 \
 			and ColonySimServices.can_seed_fire_pit(-1, center_tile, 0, 1):
-		if JobManager.count_pending_jobs_near(center_tile, Job.Type.BUILD_FIRE_PIT, 12) <= 0:
+		if _pending_near_cached(pending_cache, center_tile, Job.Type.BUILD_FIRE_PIT, 12) <= 0:
 			var fire_tile: Vector2i = center_tile
 			var main_node: Node = leader_pawn.get_tree().root.get_node_or_null("Main")
 			if main_node != null and main_node.has_method("_find_build_tile_near"):
@@ -99,6 +119,7 @@ static func post_critical_proto_survival_if_needed(leader_pawn: Node, center_til
 				})
 				if pj != null:
 					posted += 1
+					pending_cache.erase("%d:%d:%d:%d" % [center_tile.x, center_tile.y, Job.Type.BUILD_FIRE_PIT, 12])
 	return posted
 
 

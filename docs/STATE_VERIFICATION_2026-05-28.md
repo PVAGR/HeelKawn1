@@ -75,3 +75,18 @@ Verification:
 
 Verification:
 - Re-ran `bash tools/ai/sim-quality-gate.sh` after pawn query caching: PASS.
+
+## Session 4 Update (Proto Survival Throughput)
+
+4. Cached proto authority pending-near scans during survival posting
+- File: `autoloads/AuthorityJobBoard.gd`
+- Changes:
+  - Added static helper `_pending_near_cached(...)` to reuse `count_pending_jobs_near(...)` results within the same posting pass.
+  - `post_critical_proto_survival_if_needed(...)` now uses a local per-call cache for `FORAGE`, `HUNT`, `FISH`, and `BUILD_FIRE_PIT` checks.
+  - Cache entries are invalidated after a successful post for that specific job type to keep same-pass follow-up checks accurate.
+- Expected effect:
+  - Reduces repeated pending-near scans in proto bootstrap survival seeding.
+  - Keeps deterministic behavior unchanged while reducing redundant query work.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after proto cache optimization: PASS.

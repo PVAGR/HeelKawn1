@@ -1919,6 +1919,7 @@ static func leader_direct_construction(settlement_id: int) -> int:
 	if ColonySimServices != null:
 		ColonySimServices.begin_settlement_construction_pass()
 	var posted: int = 0
+	var pending_near_cache: Dictionary = {}
 	var build_priorities: Dictionary = {}
 	if ColonySimServices != null:
 		build_priorities = ColonySimServices.compute_settlement_build_priorities(
@@ -2002,7 +2003,12 @@ static func leader_direct_construction(settlement_id: int) -> int:
 			if JobManager != null and JobManager.count_open_by_type(job_type) > 0:
 				continue
 		elif JobManager != null and JobManager.has_method("count_pending_jobs_near"):
-			if JobManager.count_pending_jobs_near(center, job_type, 10) > 0:
+			var pending_key: String = "%d:%d:%d:%d" % [center.x, center.y, job_type, 10]
+			var pending_local: int = int(pending_near_cache.get(pending_key, -1))
+			if pending_local < 0:
+				pending_local = JobManager.count_pending_jobs_near(center, job_type, 10)
+				pending_near_cache[pending_key] = pending_local
+			if pending_local > 0:
 				continue
 		else:
 			var pending: int = int(job_manager.call("count_pending_by_type", job_type)) if job_manager.has_method("count_pending_by_type") else 0

@@ -90,3 +90,18 @@ Verification:
 
 Verification:
 - Re-ran `bash tools/ai/sim-quality-gate.sh` after proto cache optimization: PASS.
+
+## Session 5 Update (Leader Construction Throughput)
+
+5. Cached leader construction pending-near checks per posting pass
+- File: `autoloads/HeelKawnianManager.gd`
+- Changes:
+  - Added a local `pending_near_cache` inside `_leader_direct_construction_jobs(...)`.
+  - Replaced repeated direct `JobManager.count_pending_jobs_near(center, job_type, 10)` calls with cache lookups keyed by center/job/radius.
+  - Preserves behavior: still blocks posting when pending local jobs already exist for that type.
+- Expected effect:
+  - Reduces repeated pending-near scans while iterating settlement build queue entries.
+  - Improves high-speed settlement construction throughput without altering canonical decisions.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after leader build-pass cache optimization: PASS.

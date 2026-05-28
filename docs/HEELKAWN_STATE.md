@@ -134,6 +134,9 @@ We are always building, always refining, always expanding. This document capture
   - **FEAT: Proto Authority Pending-Scan Cache (May 28, 2026)**:
     - `AuthorityJobBoard.post_critical_proto_survival_if_needed(...)` now uses a per-call pending-near cache for forage/hunt/fish/fire-pit checks.
     - Avoids repeated duplicate `count_pending_jobs_near(...)` scans while keeping posting decisions deterministic.
+  - **FEAT: Leader Build Pass Pending Cache (May 28, 2026)**:
+    - `HeelKawnianManager._leader_direct_construction_jobs(...)` now caches local `count_pending_jobs_near(center, job_type, 10)` results per pass.
+    - Reduces repeated pending-near scans across build queue entries while preserving deterministic post gating.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

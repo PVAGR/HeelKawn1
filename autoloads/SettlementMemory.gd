@@ -16,10 +16,10 @@ signal settlement_founded(settlement_id: int, tile: Vector2i, culture_name: Stri
 const HARD_COLLAPSE_TICKS: int = 30000
 const REVIVABLE_SCAR_MAX: int = 2  # Matches REVIVAL_CONSTRAINTS hard gate: scar level < 3
 const REVIVABLE_REPUTATION_MIN: int = -1
-const PEACE_TICKS_PER_BRANCH: Dictionary = {
-	SettlementPlanner.CULTURE_OPEN: 18000,    # More permissive peace requirement
-	SettlementPlanner.CULTURE_CAUTIOUS: 30000,  # Standard peace requirement
-	SettlementPlanner.CULTURE_DEFENSIVE: 42000,  # Stricter peace requirement
+static var PEACE_TICKS_PER_BRANCH: Dictionary = {
+	0: 18000,    # CULTURE_OPEN — More permissive peace requirement
+	1: 30000,    # CULTURE_CAUTIOUS — Standard peace requirement
+	2: 42000,    # CULTURE_DEFENSIVE — Stricter peace requirement
 }
 const REVIVAL_SCORE_RECOVERING_MIN: int = 35  # Minimum score to enter recovering state
 const REVIVAL_SCORE_REVIVABLE_MIN: int = 70   # Minimum score to become revivable

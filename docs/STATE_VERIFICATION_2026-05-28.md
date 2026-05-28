@@ -134,3 +134,22 @@ Verification:
 
 Verification:
 - Re-ran `bash tools/ai/sim-quality-gate.sh` after local pending-near cache optimization: PASS.
+
+## Session 8 Update (Fintech Determinism Bridge)
+
+8. Added deterministic external-finance adapter for simulation-safe ingestion
+- Files:
+  - `autoloads/FintechBridge.gd`
+  - `project.godot`
+- Changes:
+  - Added new `FintechBridge` autoload.
+  - External-finance inputs are accepted only as explicit manifests/events with stable ids and `apply_tick`.
+  - Events are sorted and applied during `_on_game_tick` only (no wall-clock mutation of world truth).
+  - Applied events are recorded in `WorldMemory` (`type=fintech_event_applied`) and mirrored to internal treasury totals by currency.
+  - Added deterministic debug helper `debug_seed_meow_credit(...)` for controlled integration tests.
+- Expected effect:
+  - Establishes a kernel-safe path to integrate real fintech rails (Meow/PVA Bazaar) without violating replayability.
+  - Enables future game-economic features (treasury, payouts, institutions) to consume external settlements deterministically.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after FintechBridge integration: PASS.

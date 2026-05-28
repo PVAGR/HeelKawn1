@@ -143,6 +143,11 @@ We are always building, always refining, always expanding. This document capture
   - **FEAT: Local Pending-Near Cache in Colony Services (May 28, 2026)**:
     - `ColonySimServices.count_pending_jobs_near(...)` now caches radius query results per tick by center/job/radius key.
     - Reduces duplicate local pending-job scans in hearth/warmth and settlement pressure gating paths.
+  - **FEAT: Deterministic FintechBridge Kernel Adapter (May 28, 2026)**:
+    - Added `autoloads/FintechBridge.gd` and registered it in `project.godot`.
+    - External finance signals are now ingested as explicit manifests/events (`event_id`, `apply_tick`, `kind`, `currency`, `amount_micro`) and applied only on simulation tick.
+    - Bridge records every applied fintech event into `WorldMemory` (`type=fintech_event_applied`) and maintains an in-sim treasury snapshot by currency.
+    - Added deterministic debug seeding helper (`debug_seed_meow_credit`) for controlled integration testing without wall-clock callbacks.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

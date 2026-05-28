@@ -4,12 +4,12 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** May 27, 2026
+**Last Updated:** May 28, 2026
 **Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
 **Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
-**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-27.md](STATE_VERIFICATION_2026-05-27.md)
+**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-28.md](STATE_VERIFICATION_2026-05-28.md)
 
 ---
 
@@ -102,6 +102,28 @@ We are always building, always refining, always expanding. This document capture
     - `Pawn.gd` now runs a throttled ambition seed hook in idle to inject one strategic job into `JobManager` without overriding normal job legality or claim flow.
     - Ambition seeding is throttled per pawn and per settlement region to avoid queue spam at high simulation speed.
     - Ambition posts are logged via `heelkawnian_development` as `matrix_settlement_ambition` for deterministic audit and replay tracing.
+  - **FEAT: Matrix Preservation + Learning runtime wiring (May 26, 2026)**:
+    - `HeelKawnian.gd` now consumes `HeelKawnianManager.get_preservation_choice_for_pawn(...)` during idle medium-lane autonomy.
+    - Preservation decisions now map into live actions: teach nearby target, draft-walk to teach target, seed `CARVE_KNOWLEDGE_STONE`, write knowledge into a nearby book tile, or seed `BOOK_BINDING` when writing cannot occur immediately.
+    - `HeelKawnian.gd` now consumes `HeelKawnianManager.get_learning_target_for_pawn(...)` and seeds bounded `APPRENTICESHIP`/`TEACH_SKILL` jobs with local pending-job dedupe.
+    - Both paths are tick-gated and cooldown-gated for 1x/100x stability and logged as `matrix_preservation_action` / `matrix_learning_seed`.
+    - Added speed-tier global backpressure caps and adaptive cooldown scaling to prevent queue amplification at `26x`/`50x`/`100x` while keeping deterministic behavior.
+  - **FEAT: Household Plan Write-Path Stabilization (May 26, 2026)**:
+    - `HeelKawnianManager.get_household_ambition_for_pawn(...)` now supports read-only mode so Matrix decision scans do not consume household plan cooldowns or create plans as side effects.
+    - `Pawn.gd` matrix ambition seeding now executes household plans first and posts concrete household-scoped jobs (`matrix_household_ambition`) instead of relying only on bias nudges.
+    - Household and settlement ambition posting now use speed-tier local/global pending-job backpressure to reduce post churn at high simulation speed.
+  - **FEAT: Settlement Chain Anti-Stall Reliability (May 26, 2026)**:
+    - `HeelKawnianManager._ambition_chain_for_settlement(...)` now tracks per-step start tick and stall retries in `_active_ambition_chains`.
+    - Chain steps still advance only from local feature truth (`_chain_step_completed`), but now gain deterministic retry priority boosts when blocked.
+    - After repeated stall windows, a blocked step is advanced deterministically to prevent permanent chain lock.
+    - Stall windows scale by simulation speed tier so `100x` stress runs do not rotate chains too aggressively.
+  - **FEAT: Settlement Chain Observability (May 26, 2026)**:
+    - Settlement-chain lifecycle now emits explicit world events on `chain_start`, `step_complete`, `step_retry`, `step_skip_after_stall`, `chain_complete`, and invalid chain clear.
+    - Added `HeelKawnianManager.get_active_ambition_chains_debug()` for direct runtime inspection of active chain state by settlement.
+    - Chain diagnostics are recorded through `WorldMemory` as `heelkawnian_development` entries with `event_type=settlement_chain`.
+  - **FEAT: Chain Completion Precision Guard (May 28, 2026)**:
+    - Tightened `_chain_step_completed(...)` to require foundational prerequisites (hearth/storage/farm/wall/library/granary relationships) before counting later steps complete.
+    - Reduces false-positive chain advancement in dense/overlapping settlements where one feature count alone was too permissive.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

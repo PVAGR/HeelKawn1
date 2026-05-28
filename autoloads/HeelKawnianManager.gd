@@ -1146,41 +1146,59 @@ static func _ambition_chain_for_settlement(settlement_id: int) -> Dictionary:
 
 ## Check if a chain step has been completed.
 static func _chain_step_completed(chain_name: String, step_index: int, features: Dictionary, settlement_id: int) -> bool:
+	var hearths: int = int(features.get("hearth", 0))
+	var beds: int = int(features.get("bed", 0))
+	var storage_huts: int = int(features.get("storage_hut", 0))
+	var farms: int = int(features.get("farm", 0))
+	var walls: int = int(features.get("wall", 0))
+	var doors: int = int(features.get("door", 0))
+	var watchtowers: int = int(features.get("watchtower", 0))
+	var libraries: int = int(features.get("library", 0))
+	var schools: int = int(features.get("school", 0))
+	var markers: int = int(features.get("marker", 0))
+	var granaries: int = int(features.get("granary", 0))
+	var cellars: int = int(features.get("cellar", 0))
 	match chain_name:
 		"Found Settlement", "Rebuild from Ruin":
 			match step_index:
 				0:  # build_hearth
-					return int(features.get("hearth", 0)) >= 1
+					return hearths >= 1
 				1:  # build_beds_x3
-					return int(features.get("bed", 0)) >= 3
-				2:  # build_storage (or build_shelter for Rebuild)
-					return int(features.get("storage_hut", 0)) >= 1 or int(features.get("bed", 0)) >= 4
-				3:  # build_farm (only for Found Settlement)
-					return int(features.get("farm", 0)) >= 1
-		"Fortify", "Defense Network":
+					return hearths >= 1 and beds >= 3
+				2:  # build_storage
+					return hearths >= 1 and beds >= 2 and storage_huts >= 1
+				3:  # build_farm
+					return hearths >= 1 and (storage_huts >= 1 or granaries >= 1) and farms >= 1
+		"Fortify":
 			match step_index:
-				0:  # build_walls / build_watchtower
-					return int(features.get("wall", 0)) >= 4 if chain_name == "Fortify" else int(features.get("watchtower", 0)) >= 1
-				1:  # build_door / build_barracks
-					return int(features.get("door", 0)) >= 1 if chain_name == "Fortify" else int(features.get("barracks", 0)) >= 1
-				2:  # build_watchtower (only for Fortify)
-					return int(features.get("watchtower", 0)) >= 1
+				0:  # build_walls
+					return walls >= 4
+				1:  # build_door
+					return walls >= 2 and doors >= 1
+				2:  # build_watchtower
+					return walls >= 4 and doors >= 1 and watchtowers >= 1
+		"Defense Network":
+			match step_index:
+				0:  # build_watchtower
+					return watchtowers >= 1
+				1:  # build_barracks
+					return watchtowers >= 1 and int(features.get("barracks", 0)) >= 1
 		"Knowledge Hub":
 			match step_index:
 				0:  # build_library
-					return int(features.get("library", 0)) >= 1
+					return libraries >= 1
 				1:  # build_school
-					return int(features.get("school", 0)) >= 1
+					return libraries >= 1 and schools >= 1
 				2:  # build_marker
-					return int(features.get("marker", 0)) >= 1
+					return libraries >= 1 and schools >= 1 and markers >= 1
 		"Food Security":
 			match step_index:
 				0:  # build_farm
-					return int(features.get("farm", 0)) >= 1
+					return farms >= 1
 				1:  # build_granary
-					return int(features.get("granary", 0)) >= 1
+					return farms >= 1 and granaries >= 1
 				2:  # build_cellar
-					return int(features.get("cellar", 0)) >= 1
+					return farms >= 1 and granaries >= 1 and cellars >= 1
 		"Healing & Care":
 			match step_index:
 				0:  # build_apothecary

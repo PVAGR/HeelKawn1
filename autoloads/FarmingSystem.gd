@@ -161,11 +161,12 @@ func _ready() -> void:
 	_stockpile_manager = get_node_or_null("/root/StockpileManager")
 
 
-func _on_game_tick(tick: int) -> void:
-	# Update crop growth
-	_update_crop_growth(tick)
+const UPDATE_INTERVAL: int = 8
 
-	# Check for withered crops
+func _on_game_tick(tick: int) -> void:
+	if tick % UPDATE_INTERVAL != 0:
+		return
+	_update_crop_growth(tick)
 	_check_crop_health(tick)
 
 

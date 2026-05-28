@@ -238,6 +238,14 @@ We are always building, always refining, always expanding. This document capture
 - **PERF: HeelKawnianDecision.gd — 200x speed gates removed**:
   - Neural priority fetching and Matrix job bias are now active at ALL speeds
 
+- **PERF: Natural intervals added to 5 hot autoload systems (May 28)**:
+  - **CraftingSystem.gd**: `UPDATE_INTERVAL = 5` — crafting progress updates every 5 ticks instead of every tick
+  - **FarmingSystem.gd**: `UPDATE_INTERVAL = 8` — crop growth + health checks every 8 ticks instead of every tick
+  - **PlayerBuilding.gd**: `UPDATE_INTERVAL = 5` — building queue + structure decay every 5 ticks instead of every tick
+  - **BuildingUsageTracker.gd**: `SAMPLE_INTERVAL = 6` — pawn building usage sampling every 6 ticks instead of every tick (decay already gated at 90/600)
+  - **FootpathMemory.gd**: `SAMPLE_INTERVAL = 6` — pawn traffic sampling every 6 ticks instead of every tick (decay already gated at 60)
+  - These are NOT speed-dependent throttles — they are flat natural intervals applied identically at all speeds. At 100x (100 ticks/sec wall-clock), frequencies are still high: crafting 20Hz, crops 12.5Hz, building 20Hz, sampling 17Hz.
+
 ## May 24, 2026 Session Completion
 
 - **FEAT: Organic Civilization Growth (Phase 5A deepening)**:

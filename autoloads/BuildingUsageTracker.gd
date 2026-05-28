@@ -65,10 +65,13 @@ func get_wear_at(tile: Vector2i) -> float:
 	return clampf(float(count) / float(WORN_BUILDING_THRESHOLD), 0.0, 1.0)
 
 
+const SAMPLE_INTERVAL: int = 6
+
 func _on_game_tick(tick: int) -> void:
 	if _pawn_spawner == null or _world == null or _world.data == null:
 		return
-	_sample_building_usage(tick)
+	if tick % SAMPLE_INTERVAL == 0:
+		_sample_building_usage(tick)
 	if tick - _last_decay_tick >= DECAY_INTERVAL_TICKS:
 		_decay_usage()
 		_last_decay_tick = tick

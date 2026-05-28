@@ -79,3 +79,28 @@
 - Drive `should_pulse` signatures changed — now have optional `_game_speed` param with default. All call sites pass 2 positional args, which is compatible.
 - UI `_refresh_stride_for_speed` signatures changed — optional `_speed` param. All call sites pass 1 positional arg, compatible.
 - Risk: the uncapped tick processing means a single frame at 100x could process many ticks. On very slow hardware this could cause visible frame drops. The design philosophy accepts this: the sim runs at whatever rate the hardware supports, without artificial caps.
+
+### Round 3: Natural Intervals for 5 Hot Autoload Systems
+
+**Problem observed:** After Round 2 removed ALL per-tick throttles, 5 autoload systems ran their `_on_game_tick` handlers every tick at ALL speeds. Each iterated ALL entities (all pawns, all farm plots, all crafting jobs, all structures) every tick. Together they dominated the per-tick budget, causing severe lag.
+
+**Fix:** Added flat natural intervals (NOT speed-dependent) to the 5 hottest per-tick systems:
+- **CraftingSystem.gd**: `UPDATE_INTERVAL = 5` — crafting progress updates every 5 ticks
+- **FarmingSystem.gd**: `UPDATE_INTERVAL = 8` — crop growth + health checks every 8 ticks
+- **PlayerBuilding.gd**: `UPDATE_INTERVAL = 5` — building queue + structure decay every 5 ticks
+- **BuildingUsageTracker.gd**: `SAMPLE_INTERVAL = 6` — pawn building usage sampling every 6 ticks
+- **FootpathMemory.gd**: `SAMPLE_INTERVAL = 6` — pawn traffic sampling every 6 ticks
+
+These intervals apply identically at all speeds — they are NOT throttles. They reduce per-tick work ~6x while maintaining proper simulation cadence.
+
+**What was verified:**
+- Global RNG scan (DisasterSystem, CataclysmSystem, KnowledgeSystem): ✅ No forbidden RNG
+- World dimension fields scan: ✅ No legacy fields
+- Main scene configured: ✅ `res://scenes/main/Main.tscn`
+- Required files exist: ✅ All present
+- Godot headless smoke: ⚠️ Godot binary not available in this environment
+
+**What remains unverified/risky:**
+- At 1x (1 tick/sec), these intervals mean updates happen every 5-8 seconds instead of every second. This should be imperceptible for simulation depth but should be verified in-game.
+- BuildingUsageTracker and FootpathMemory sampling intervals (6 ticks) mean traffic/usage data updates at 17Hz at 100x — adequate for wear tracking but worth verifying visually.
+- The big risk entries from Round 2 (AIAgentManager intervals, heavy planner rate, pawn stride=1) remain: 6 autoloads + 3 AI systems still run at higher frequencies than before Round 2, though the 5 hot systems are now splined back to sane rates.

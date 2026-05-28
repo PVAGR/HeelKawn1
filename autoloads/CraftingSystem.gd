@@ -64,8 +64,11 @@ func _ready() -> void:
 	_initialize_recipes()
 
 
+const UPDATE_INTERVAL: int = 5
+
 func _on_game_tick(tick: int) -> void:
-	# Update active crafting jobs
+	if tick % UPDATE_INTERVAL != 0:
+		return
 	_update_crafting_progress(tick)
 
 

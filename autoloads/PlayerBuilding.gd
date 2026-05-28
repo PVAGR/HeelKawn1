@@ -139,11 +139,12 @@ func _ensure_references() -> void:
 			_pawn_spawner = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
 
 
-func _on_game_tick(tick: int) -> void:
-	# Process building queue
-	_process_building_queue(tick)
+const UPDATE_INTERVAL: int = 5
 
-	# Decay existing structures
+func _on_game_tick(tick: int) -> void:
+	if tick % UPDATE_INTERVAL != 0:
+		return
+	_process_building_queue(tick)
 	_decay_structures(tick)
 
 

@@ -168,7 +168,7 @@ func _max_ticks_per_frame_for_speed() -> int:
 	if spd <= 12.0:  return 8
 	if spd <= 26.0:  return 12
 	if spd <= 50.0:  return 18
-	return 28  # 100x - User wants 100x to be much faster than 50x
+	return 4  # 100x now prioritizes frame stability over burst throughput
 
 
 func _max_accumulated_ticks_for_speed() -> int:

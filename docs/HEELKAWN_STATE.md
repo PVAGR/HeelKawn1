@@ -64,6 +64,7 @@ We are always building, always refining, always expanding. This document capture
   - Added display settings (resolution, window mode, vsync) to GameSettings.
   - Performance optimizations: spatial grid for social proximity, redraw throttle, meaning throttle, caches.
   - Added `TickBudgetManager.gd` as a shared 12ms simulation budget coordinator and throttled high-frequency debug logs in the main tick path.
+  - Reduced the 100x tick burst cap in `TickManager.gd` to keep frame time under control when the colony is busy; `GameManager` diagnostics now mirror the active 100x cap.
   - Closed the v1 truth mismatch where faction, house, trade, and infrastructure gates could keep acting on stale or global state after settlement downgrade.
   - FactionRegistry and FactionSystem now prune non-formal settlement endpoints before reporting or updating live pair state.
   - TradeMemory now seeds and renews routes from formal settlements only, and removes routes whose endpoints are no longer formal.

@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779874102
+::res://::1779935877
 .aider.chat.history.md::TextFile::-1::1779517150::0::1::::<><><>0<>0<><>::
 AGENTS.md::TextFile::-1::1779432109::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779599714::0::1::::<><><>0<>0<><>::
@@ -126,7 +126,7 @@ door.png::CompressedTexture2D::4142856041344568916::1777971615::1778417117::1:::
 tree.png::CompressedTexture2D::2389156156575278385::1777971448::1778417117::1::::<><><>0<>0<>5fb83ad2402bae2aec6e4562927a022d<>res://.godot/imported/tree.png-1272070f95f6cffffd0fe51159239f22.ctex::
 wall.png::CompressedTexture2D::5625700477737538922::1777971615::1778417117::1::::<><><>0<>0<>4aab1d5a487300cd9189921708537b6f<>res://.godot/imported/wall.png-65f788789b9046a626a2b3a58cc8bb94.ctex::
 ::res://assets/sprites/world/::1777971496
-::res://autoloads/::1779873557
+::res://autoloads/::1779874424
 AgeMemory.gd::GDScript::3623017377226678626::1779514684::0::1::::AgeMemory<>Node<><>0<>0<><>::
 AIAgentManager.gd::GDScript::4954939857757967540::1779506986::0::1::::<>Node<><>0<>0<><>::
 AIManager.gd::GDScript::8390453645687965822::1778796562::0::1::::<>Node<><>0<>0<><>::
@@ -241,7 +241,7 @@ SchismManager.gd::GDScript::810131285511513470::1779514683::0::1::::<>Node<><>0<
 SettlementAIBridge.gd::GDScript::5898724979801919398::1778321437::0::1::::<>Node<><>0<>0<><>::
 SettlementArchitect.gd::GDScript::8965997991269203430::1777694600::0::1::::<>Node<><>0<>0<><>::
 SettlementManager.gd::GDScript::8092329135591298813::1778651452::0::1::::<>Node<><>0<>0<><>::
-SettlementMemory.gd::GDScript::3014913635517556679::1779873557::0::1::::<>Node<><>0<>0<><>::
+SettlementMemory.gd::GDScript::3014913635517556679::1779874424::0::1::::<>Node<><>0<>0<><>::
 SettlementPersistenceManager.gd::GDScript::1742009134159448662::1779497002::0::1::::SettlementPersistenceManager<>Node<><>0<>0<><>::
 SettlementPlanner.gd::GDScript::6005194213945483152::1779605390::0::1::::<>Node<><>0<>0<><>::
 SettlementRebirth.gd::GDScript::7428695576235804400::1779514684::0::1::::<>Node<><>0<>0<><>::

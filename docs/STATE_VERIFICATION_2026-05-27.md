@@ -18,3 +18,22 @@
 ## Residual Risk
 - Full runtime behavior still needs editor playtest validation.
 - The compile script warning appears unrelated to this change, but it remains an existing repo issue.
+
+## 100x Frame-Cap Adjustment
+
+## Scope
+- Reduce the 100x tick burst cap so long simulation batches stop overrunning a rendered frame.
+- Keep the `GameManager` diagnostics aligned with the active tick cap so performance reads are truthful.
+
+## Implemented In This Pass
+- `autoloads/TickManager.gd`: lowered the 100x tick burst cap from 12 to 4 on desktop and mobile paths, reducing the amount of simulation work done in a single rendered frame.
+- `autoloads/GameManager.gd`: updated the 100x diagnostic cap to match the new active cap.
+- `docs/HEELKAWN_STATE.md`: recorded the performance change in the current state log.
+
+## Validation
+- `get_errors` on the touched GDScript files reported only pre-existing unrelated warnings; the edited cap lines themselves were clean.
+- `bash tools/ai/sim-quality-gate.sh` could not run in this shell because `/bin/bash` is unavailable here.
+
+## Residual Risk
+- This change should reduce frame-time spikes at 100x, but I could not complete the full Godot smoothness gate in this environment.
+- The unrelated compile warnings already present in `GameManager.gd` and `TickManager.gd` remain outside this change.

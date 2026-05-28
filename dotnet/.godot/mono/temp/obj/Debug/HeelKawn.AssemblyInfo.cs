@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("HeelKawn")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5316d384d4d5ecfb6ac7215b88c4fc45024a1c8c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d2621375fc2a8734c284c93bca33f85bd00476ae")]
 [assembly: System.Reflection.AssemblyProductAttribute("HeelKawn")]
 [assembly: System.Reflection.AssemblyTitleAttribute("HeelKawn")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

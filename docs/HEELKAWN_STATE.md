@@ -238,13 +238,15 @@ We are always building, always refining, always expanding. This document capture
 - **PERF: HeelKawnianDecision.gd — 200x speed gates removed**:
   - Neural priority fetching and Matrix job bias are now active at ALL speeds
 
-- **PERF: Natural intervals added to 5 hot autoload systems (May 28)**:
-  - **CraftingSystem.gd**: `UPDATE_INTERVAL = 5` — crafting progress updates every 5 ticks instead of every tick
-  - **FarmingSystem.gd**: `UPDATE_INTERVAL = 8` — crop growth + health checks every 8 ticks instead of every tick
-  - **PlayerBuilding.gd**: `UPDATE_INTERVAL = 5` — building queue + structure decay every 5 ticks instead of every tick
-  - **BuildingUsageTracker.gd**: `SAMPLE_INTERVAL = 6` — pawn building usage sampling every 6 ticks instead of every tick (decay already gated at 90/600)
-  - **FootpathMemory.gd**: `SAMPLE_INTERVAL = 6` — pawn traffic sampling every 6 ticks instead of every tick (decay already gated at 60)
-  - These are NOT speed-dependent throttles — they are flat natural intervals applied identically at all speeds. At 100x (100 ticks/sec wall-clock), frequencies are still high: crafting 20Hz, crops 12.5Hz, building 20Hz, sampling 17Hz.
+- **PERF: Natural intervals for 5 hot autoload systems + pawn AI stride=8 (May 28)**:
+  - **CraftingSystem.gd**: `UPDATE_INTERVAL = 15` — crafting progress updates every 15 ticks (was 1)
+  - **FarmingSystem.gd**: `UPDATE_INTERVAL = 20` — crop growth + health checks every 20 ticks (was 1)
+  - **PlayerBuilding.gd**: `UPDATE_INTERVAL = 15` — building queue + structure decay every 15 ticks (was 1)
+  - **BuildingUsageTracker.gd**: `SAMPLE_INTERVAL = 20` — pawn building usage sampling every 20 ticks (was 1)
+  - **FootpathMemory.gd**: `SAMPLE_INTERVAL = 20` — pawn traffic sampling every 20 ticks (was 1)
+  - **HeelKawnian.gd `_fast_forward_tick_stride()`**: now returns 8 (was 1) — pawns run full update every 8 ticks
+  - **HeelKawnPawnBrain.gd `_compute_stride()`**: now returns 8 (was 1) — brain AI eval every 8 ticks
+  - These are NOT speed-dependent throttles — flat constants applied identically at all speeds. At 100x, frequencies: crafting 6.7Hz, crops 5Hz, building 6.7Hz, sampling 5Hz, pawn AI 12.5Hz.
 
 ## May 24, 2026 Session Completion
 

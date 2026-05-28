@@ -139,7 +139,7 @@ func _ensure_references() -> void:
 			_pawn_spawner = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
 
 
-const UPDATE_INTERVAL: int = 5
+const UPDATE_INTERVAL: int = 15
 
 func _on_game_tick(tick: int) -> void:
 	if tick % UPDATE_INTERVAL != 0:

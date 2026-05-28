@@ -229,11 +229,11 @@ func _plan_one_settlement_culture(
 				if bed_n > 0 and wall_n + open_walls == 0:
 					if cult == CULTURE_OPEN and bed_n < 2:
 						continue
-					var tw: Vector2i = _pick_perimeter_wall_tile_culture(
-							world, main, center, regions, cult
-					)
-					if tw.x >= 0 and bool(main.call("settlement_planner_post_wall", tw)):
-						continue
+			var tw: Vector2i = _pick_perimeter_wall_tile_culture(
+					world, main, center, regions, cult
+			)
+			if tw.x >= 0 and BuildPlacementChecker.wall_is_safe(tw, world) and bool(main.call("settlement_planner_post_wall", tw)):
+				continue
 			3:
 				var open_doors: int = JobManager.count_pending_by_type(Job.Type.BUILD_DOOR)
 				if wall_n > 0 and door_n + open_doors == 0:
@@ -260,16 +260,16 @@ func _plan_one_settlement_culture(
 				if intent == MemoryManager.INTENT_GROW and pawns < 2:
 					continue
 				if wall_n > 0 and _wall_bbox_too_small(data, regions, VILLAGE_SPAN, feature_summary):
-					var texp: Vector2i = _pick_expansion_wall_tile_culture(
-							world, main, data, center, regions, cult, feature_summary
-					)
-					if texp.x >= 0 and bool(main.call("settlement_planner_post_wall", texp)):
-						continue
+			var texp: Vector2i = _pick_expansion_wall_tile_culture(
+					world, main, data, center, regions, cult, feature_summary
+			)
+			if texp.x >= 0 and BuildPlacementChecker.wall_is_safe(texp, world) and bool(main.call("settlement_planner_post_wall", texp)):
+				continue
 			6:
 				if intent == MemoryManager.INTENT_ABANDON:
 					continue
-				var open_beds6: int = JobManager.count_pending_by_type(Job.Type.BUILD_BED)
-				var can_bed2: bool = pawns > bed_n + open_beds6 and open_beds6 < 3
+			var open_beds6: int = JobManager.count_pending_by_type(Job.Type.BUILD_BED)
+			var can_bed2: bool = pawns + 2 > bed_n + open_beds6 and open_beds6 < 3
 				if intent == MemoryManager.INTENT_GROW:
 					can_bed2 = pawns > bed_n + open_beds6 and open_beds6 < 4
 				if can_bed2:
@@ -303,11 +303,11 @@ func _plan_one_settlement_culture(
 				if intent == MemoryManager.INTENT_GROW:
 					need_p = maxi(2, need_p - 2)
 				if stage == 1 and pawns >= need_p:
-					var t8: Vector2i = _pick_expansion_wall_tile_culture(
-							world, main, data, center, regions, cult, feature_summary
-					)
-					if t8.x >= 0 and bool(main.call("settlement_planner_post_wall", t8)):
-						continue
+			var t8: Vector2i = _pick_expansion_wall_tile_culture(
+					world, main, data, center, regions, cult, feature_summary
+			)
+			if t8.x >= 0 and BuildPlacementChecker.wall_is_safe(t8, world) and bool(main.call("settlement_planner_post_wall", t8)):
+				continue
 			9:
 				if intent == MemoryManager.INTENT_ABANDON:
 					continue
@@ -345,7 +345,7 @@ func _plan_one_settlement_culture(
 						and warmth_press_rule > 0.08
 						and (bed_n >= 1 or pawns <= 2)
 				)
-				if need_hearth and fire_pit_n + open_fire_pits == 0:
+				if need_hearth and fire_pit_n + open_fire_pits < 2:
 					var center_rk_fire: int = WorldMemory._region_key(center.x, center.y) if WorldMemory != null else -1
 					var hearths_needed: int = 1
 					if ColonySimServices != null and center_rk_fire >= 0:
@@ -364,7 +364,7 @@ func _plan_one_settlement_culture(
 				var open_storage: int = JobManager.count_pending_by_type(Job.Type.BUILD_STORAGE_HUT)
 				var storage_press_rule: float = float(build_priorities.get("storage_press", 0.0))
 				var storage_need_n: int = int(build_priorities.get("storage_needed", 0))
-				if (storage_press_rule > 0.18 or storage_need_n > 0) and storage_hut_n + open_storage == 0:
+				if (storage_press_rule > 0.18 or storage_need_n > 0) and storage_hut_n + open_storage < 2:
 					if not can_post_build_intent(settlement, "storage_hut", Job.Type.BUILD_STORAGE_HUT, center):
 						continue
 					var t12: Vector2i = _pick_infrastructure_tile(world, main, data, center, regions)

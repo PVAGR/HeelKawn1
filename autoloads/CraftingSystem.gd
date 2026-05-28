@@ -64,7 +64,7 @@ func _ready() -> void:
 	_initialize_recipes()
 
 
-const UPDATE_INTERVAL: int = 5
+const UPDATE_INTERVAL: int = 15
 
 func _on_game_tick(tick: int) -> void:
 	if tick % UPDATE_INTERVAL != 0:

@@ -205,7 +205,7 @@ func brain_tick(sim_tick: int, pawn: HeelKawnian) -> Dictionary:
 ##   50x  → stride ≈ 10
 ##   100x → stride ≈ 20
 func _compute_stride() -> int:
-	return 1
+	return 8
 
 
 # === Lightweight Tick (Kenshi survival — ultra-fast) ===

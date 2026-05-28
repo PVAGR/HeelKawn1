@@ -65,7 +65,7 @@ func get_wear_at(tile: Vector2i) -> float:
 	return clampf(float(count) / float(WORN_BUILDING_THRESHOLD), 0.0, 1.0)
 
 
-const SAMPLE_INTERVAL: int = 6
+const SAMPLE_INTERVAL: int = 20
 
 func _on_game_tick(tick: int) -> void:
 	if _pawn_spawner == null or _world == null or _world.data == null:

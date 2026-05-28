@@ -17,7 +17,7 @@ const MAX_TICKS_PER_FRAME: int = 24  # Safety limit: prevents render starvation
 ## Allowed speed multipliers. Index into this with set_speed_index().
 ## NOTE: TickManager is now the authoritative source for speed control.
 ## These steps are kept for reference and backward compatibility.
-const SPEED_STEPS: Array[float] = [1.0, 3.0, 6.0, 12.0, 26.0, 50.0, 100.0]
+const SPEED_STEPS: Array[float] = [1.0, 6.0, 26.0, 50.0, 100.0, 200.0]
 ## Set true only when actively debugging pawn/animal internals.
 const VERBOSE_SIM_LOGS: bool = false
 
@@ -132,7 +132,8 @@ func _maybe_log_sim_hitch(ticks_this_frame: int, frame_tick_cap: int, tick_chain
 
 
 func _max_ticks_per_frame_for_speed() -> int:
-	return 99999  # Uncapped — TickManager handles actual processing
+	var caps: Dictionary = {0: 2, 1: 4, 2: 8, 3: 16, 4: 28, 5: 48}
+	return caps.get(get_speed_index(), 4)
 
 
 func _max_accumulated_ticks_for_speed() -> int:

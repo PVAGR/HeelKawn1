@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779954279
+::res://::1779956824
 .aider.chat.history.md::TextFile::-1::1779517150::0::1::::<><><>0<>0<><>::
 AGENTS.md::TextFile::-1::1779432109::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779599714::0::1::::<><><>0<>0<><>::
@@ -140,7 +140,7 @@ BloodlineSystem.gd::GDScript::5827355367358250544::1778616815::0::1::::<>Node<><
 BodyPartWounds.gd::GDScript::2698733299669405232::1778884561::0::1::::<>Node<><>0<>0<><>::
 BodyRiskManager.gd::GDScript::9035867343056244085::1779319034::0::1::::<>Node<><>0<>0<><>::
 BuildingRegistry.gd::GDScript::6026745172161523404::1779605162::0::1::::<>Node<><>0<>0<><>::
-BuildingUsageTracker.gd::GDScript::2715926842069818093::1779945204::0::1::::<>Node<><>0<>0<><>::
+BuildingUsageTracker.gd::GDScript::2715926842069818093::1779956610::0::1::::<>Node<><>0<>0<><>::
 CharacterBrainSystem.gd::GDScript::579672516978892000::1779603361::0::1::::<>Node<><>0<>0<><>::
 CharacterExport.gd::GDScript::4930929248496104877::1778320772::0::1::::<>Node<><>0<>0<><>::
 CharacterProgressionSystem.gd::GDScript::7147558137091390793::1779162828::0::1::::<>Node<><>0<>0<><>::
@@ -153,7 +153,7 @@ CollapseSystem.gd::GDScript::4193314518011134177::1778112698::0::1::::<>Node<><>
 ColonyBayesTree.gd::GDScript::1787375941918886495::1779599714::0::1::::<>Node<><>0<>0<><>::
 ColonySimServices.gd::GDScript::6953689380105976491::1779599714::0::1::::<>Node<><>0<>0<><>::
 CommandAPI.gd::GDScript::833607537914591027::1778320772::0::1::::<>Node<><>0<>0<><>::
-CraftingSystem.gd::GDScript::5489168312616156576::1779945209::0::1::::<>Node<><>0<>0<><>::
+CraftingSystem.gd::GDScript::5489168312616156576::1779956605::0::1::::<>Node<><>0<>0<><>::
 CrashTrap.gd::GDScript::2561925334866226631::1777694600::0::1::::<>Node<><>0<>0<><>::
 CrimeSystem.gd::GDScript::8124533145431937429::1779599714::0::1::::<>Node<><>0<>0<><>::
 CulturalMemory.gd::GDScript::4379229180744210081::1778208530::0::1::::<>Node<><>0<>0<><>::
@@ -172,11 +172,11 @@ EventManager.gd::GDScript::7814471383146393468::1778796531::0::1::::<>Node<><>0<
 FactionManager.gd::GDScript::3854887585585149382::1779599714::0::1::::<>Node<><>0<>0<><>::
 FactionRegistry.gd::GDScript::4416904286542695183::1779870058::0::1::::<>Node<><>0<>0<><>::
 FactionSystem.gd::GDScript::4206641617627097322::1779870058::0::1::::<>Node<><>0<>0<><>::
-FarmingSystem.gd::GDScript::4043429106894168777::1779945224::0::1::::<>Node<><>0<>0<><>::
+FarmingSystem.gd::GDScript::4043429106894168777::1779956606::0::1::::<>Node<><>0<>0<><>::
 FlowingWater.gd::GDScript::8187021937268328513::1779593104::0::1::::<>Node<><>0<>0<><>::
 FogOfDiscovery.gd::GDScript::5610568208239195859::1779599714::0::1::::<>Node<><>0<>0<><>::
 FoodChainManager.gd::GDScript::7376747890299068317::1779319034::0::1::::<>Node<><>0<>0<><>::
-FootpathMemory.gd::GDScript::6069898222571078308::1779945234::0::1::::<>Node<><>0<>0<><>::
+FootpathMemory.gd::GDScript::6069898222571078308::1779956612::0::1::::<>Node<><>0<>0<><>::
 FragmentationManager.gd::GDScript::8000988159227967882::1779514873::0::1::::<>Node<><>0<>0<><>::
 GameManager.gd::GDScript::5622587907003291061::1779952781::0::1::::<>Node<><>0<>0<><>::
 GameSettings.gd::GDScript::1623947741938977792::1778866624::0::1::::<>Node<><>0<>0<><>::
@@ -220,7 +220,7 @@ PawnConsciousness.gd::GDScript::1883500089821746820::1779599714::0::1::::<>Node<
 PawnDialogue.gd::GDScript::8163225655690757563::1778398409::0::1::::<>Node<><>0<>0<><>::
 PawnManager.gd::GDScript::6168108629619458239::1779589626::0::1::::<>Node<><>0<>0<><>::
 PersistenceSystem.gd::GDScript::3755589057086903680::1777765505::0::1::::<>Node<><>0<>0<><>::
-PlayerBuilding.gd::GDScript::7683428330757546623::1779945229::0::1::::<>Node<><>0<>0<><>::
+PlayerBuilding.gd::GDScript::7683428330757546623::1779956608::0::1::::<>Node<><>0<>0<><>::
 PlayerGathering.gd::GDScript::4139591605780833495::1779393775::0::1::::<>Node<><>0<>0<><>::
 PlayerIntentQueue.gd::GDScript::7529284402212865295::1777694600::0::1::::<>Node<><>0<>0<><>::
 PlayerManager.gd::GDScript::6385940548492599218::1778796541::0::1::::<>Node<><>0<>0<><>::
@@ -333,7 +333,7 @@ HEELKAWNIAN_EVOLUTION_IMPLEMENTATION.md::TextFile::-1::1778793075::0::1::::<><><
 HEELKAWNIAN_EVOLUTION_SYSTEM.md::TextFile::-1::1778793073::0::1::::<><><>0<>0<><>::
 HEELKAWN_BLUEPRINT.md::TextFile::-1::1778153333::0::1::::<><><>0<>0<><>::
 HEELKAWN_PROJECT_COMPASS.md::TextFile::-1::1779409802::0::1::::<><><>0<>0<><>::
-HEELKAWN_STATE.md::TextFile::-1::1779952828::0::1::::<><><>0<>0<><>::
+HEELKAWN_STATE.md::TextFile::-1::1779956697::0::1::::<><><>0<>0<><>::
 life_path_test_checklist.md::TextFile::-1::1777694600::0::1::::<><><>0<>0<><>::
 LORE.md::TextFile::-1::1779339573::0::1::::<><><>0<>0<><>::
 MECHANICS.md::TextFile::-1::1779339573::0::1::::<><><>0<>0<><>::
@@ -352,7 +352,7 @@ STATE_VERIFICATION_2026-05-22_P5.md::TextFile::-1::1779514724::0::1::::<><><>0<>
 STATE_VERIFICATION_2026-05-22_P6.md::TextFile::-1::1779514921::0::1::::<><><>0<>0<><>::
 STATE_VERIFICATION_2026-05-23.md::TextFile::-1::1779509416::0::1::::<><><>0<>0<><>::
 STATE_VERIFICATION_2026-05-24.md::TextFile::-1::1779614578::0::1::::<><><>0<>0<><>::
-STATE_VERIFICATION_2026-05-27.md::TextFile::-1::1779952816::0::1::::<><><>0<>0<><>::
+STATE_VERIFICATION_2026-05-27.md::TextFile::-1::1779956717::0::1::::<><><>0<>0<><>::
 ::res://docs/archive/::1779426607
 ACTUAL_TODO_LIST.md::TextFile::-1::1778172512::0::1::::<><><>0<>0<><>::
 AI_AUTONOMOUS_INNOVATION.md::TextFile::-1::1778107181::0::1::::<><><>0<>0<><>::

@@ -161,7 +161,7 @@ func _ready() -> void:
 	_stockpile_manager = get_node_or_null("/root/StockpileManager")
 
 
-const UPDATE_INTERVAL: int = 8
+const UPDATE_INTERVAL: int = 20
 
 func _on_game_tick(tick: int) -> void:
 	if tick % UPDATE_INTERVAL != 0:

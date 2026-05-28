@@ -813,6 +813,12 @@ func _ready() -> void:
 		print("[Main] Scene ready. Tick interval: %.2fs" % GameManager.TICK_INTERVAL_SECONDS)
 	# Start every session at 1x, unpaused. Player can change only through explicit controls.
 	GameManager.set_speed_index(0)
+	if OS.get_cmdline_args().has("--test-fast-mode"):
+		var _tm: Node = get_node_or_null("/root/TickManager")
+		if _tm != null and _tm.has_method("set_speed_index"):
+			_tm.set_speed_index(5)
+		elif GameManager.has_method("set_speed_index"):
+			GameManager.set_speed_index(5)
 	_bootstrap_colony()
 	_refresh_visual_structure_layers()
 	_refresh_visual_territory_layers()

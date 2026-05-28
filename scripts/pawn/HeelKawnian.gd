@@ -3471,20 +3471,7 @@ func _on_world_tick(_tick: int) -> void:
 
 
 func _fast_forward_tick_stride() -> int:
-	return 1
-	var gs: float = GameManager.game_speed
-	# Keep low-speed behavior unchanged; throttle only in fast-forward tiers.
-	if gs >= 100.0:
-		return 10
-	if gs >= 50.0:
-		return 7
-	if gs >= 26.0:
-		return 5
-	if gs >= 12.0:
-		return 3
-	if gs >= 6.0:
-		return 2
-	return 1
+	return 8
 
 
 func _job_claim_interval_for_speed() -> int:
@@ -4881,7 +4868,11 @@ func _tick_idle() -> void:
 					return base_passes.call(j)
 	# PROFESSION PRIORITY: Builders prioritize build jobs, Warriors prioritize hunt/combat
 	var profession_bonus: Callable = _get_profession_priority_bonus
-	var job: Job = JobManager.claim_next_for(self, goal_filter, _merge_priority_callbacks(priority_cb, profession_bonus))
+	var _rjp_world = _world
+	var _rjp_cs = ColonySimServices if ColonySimServices != null else null
+	var reactive_bonus: Callable = func(j: Job) -> int:
+		return int(ReactiveJobPriority.bonus_for(j, data, _rjp_world, _rjp_cs))
+	var job: Job = JobManager.claim_next_for(self, goal_filter, _merge_priority_callbacks(_merge_priority_callbacks(priority_cb, profession_bonus), reactive_bonus))
 	if job != null:
 		_begin_job(job)
 		# If we got a job through goal filtering, we're on plan. If not, fall through
@@ -4892,7 +4883,11 @@ func _tick_idle() -> void:
 	# Goals are plans, not death sentences. A hungry pawn with no food jobs
 	# should still chop wood or build — not wander forever waiting for food.
 	var profession_bonus2: Callable = _get_profession_priority_bonus
-	var job2: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(priority_cb, profession_bonus2))
+	var _rjp_world2 = _world
+	var _rjp_cs2 = ColonySimServices if ColonySimServices != null else null
+	var reactive_bonus2: Callable = func(j: Job) -> int:
+		return int(ReactiveJobPriority.bonus_for(j, data, _rjp_world2, _rjp_cs2))
+	var job2: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(_merge_priority_callbacks(priority_cb, profession_bonus2), reactive_bonus2))
 	if job2 != null:
 		_begin_job(job2)
 

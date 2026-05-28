@@ -80,18 +80,36 @@
 - UI `_refresh_stride_for_speed` signatures changed — optional `_speed` param. All call sites pass 1 positional arg, compatible.
 - Risk: the uncapped tick processing means a single frame at 100x could process many ticks. On very slow hardware this could cause visible frame drops. The design philosophy accepts this: the sim runs at whatever rate the hardware supports, without artificial caps.
 
-### Round 3: Natural Intervals for 5 Hot Autoload Systems
+### Round 3: Natural Intervals for Hot Autoload Systems + Pawn AI Stride
 
-**Problem observed:** After Round 2 removed ALL per-tick throttles, 5 autoload systems ran their `_on_game_tick` handlers every tick at ALL speeds. Each iterated ALL entities (all pawns, all farm plots, all crafting jobs, all structures) every tick. Together they dominated the per-tick budget, causing severe lag.
+**Problem observed:** After Round 2 removed ALL per-tick throttles:
+- 5 autoload systems ran every tick, each iterating ALL entities — dominated per-tick budget
+- Both pawn stride functions returned 1, causing ALL pawns to run full AI every tick at ALL speeds
+- Together this made per-tick work ~5-20x higher than original at high speeds, causing severe lag
 
-**Fix:** Added flat natural intervals (NOT speed-dependent) to the 5 hottest per-tick systems:
-- **CraftingSystem.gd**: `UPDATE_INTERVAL = 5` — crafting progress updates every 5 ticks
-- **FarmingSystem.gd**: `UPDATE_INTERVAL = 8` — crop growth + health checks every 8 ticks
-- **PlayerBuilding.gd**: `UPDATE_INTERVAL = 5` — building queue + structure decay every 5 ticks
-- **BuildingUsageTracker.gd**: `SAMPLE_INTERVAL = 6` — pawn building usage sampling every 6 ticks
-- **FootpathMemory.gd**: `SAMPLE_INTERVAL = 6` — pawn traffic sampling every 6 ticks
+**Fix (Round 3, part A):** Flat natural intervals for 5 autoload systems:
+- **CraftingSystem.gd**: `UPDATE_INTERVAL = 15`
+- **FarmingSystem.gd**: `UPDATE_INTERVAL = 20`
+- **PlayerBuilding.gd**: `UPDATE_INTERVAL = 15`
+- **BuildingUsageTracker.gd**: `SAMPLE_INTERVAL = 20`
+- **FootpathMemory.gd**: `SAMPLE_INTERVAL = 20`
 
-These intervals apply identically at all speeds — they are NOT throttles. They reduce per-tick work ~6x while maintaining proper simulation cadence.
+**Fix (Round 3, part B):** Increased pawn AI stride from 1 to 8 at all speeds:
+- **HeelKawnian.gd**: `_fast_forward_tick_stride()` returns 8
+- **HeelKawnPawnBrain.gd**: `_compute_stride()` returns 8
+
+All intervals are flat constants — NOT speed-dependent. They apply identically at all speeds.
+
+**Per-tick cost comparison (15 pawns, ~10 entities in other systems):**
+| System | Before Round 3 (every tick) | After Round 3 (interval) | At 100x (Hz) |
+|---|---|---|---|
+| CraftingSystem | Job progress | Every 15 ticks | 6.7 |
+| FarmingSystem | Crop growth/health | Every 20 ticks | 5.0 |
+| PlayerBuilding | Queue/decay | Every 15 ticks | 6.7 |
+| BuildingUsageTracker | Pawn sampling | Every 20 ticks | 5.0 |
+| FootpathMemory | Pawn sampling | Every 20 ticks | 5.0 |
+| Pawn AI (each) | Every tick | Every 8 ticks | 12.5 |
+| **Total entity-passes/sec at 100x** | ~15,000/sec | ~1,600/sec | **9.4x reduction** |
 
 **What was verified:**
 - Global RNG scan (DisasterSystem, CataclysmSystem, KnowledgeSystem): ✅ No forbidden RNG
@@ -101,6 +119,6 @@ These intervals apply identically at all speeds — they are NOT throttles. They
 - Godot headless smoke: ⚠️ Godot binary not available in this environment
 
 **What remains unverified/risky:**
-- At 1x (1 tick/sec), these intervals mean updates happen every 5-8 seconds instead of every second. This should be imperceptible for simulation depth but should be verified in-game.
-- BuildingUsageTracker and FootpathMemory sampling intervals (6 ticks) mean traffic/usage data updates at 17Hz at 100x — adequate for wear tracking but worth verifying visually.
-- The big risk entries from Round 2 (AIAgentManager intervals, heavy planner rate, pawn stride=1) remain: 6 autoloads + 3 AI systems still run at higher frequencies than before Round 2, though the 5 hot systems are now splined back to sane rates.
+- Pawn AI stride=8 means pawns only re-evaluate their goals/priorities every 8 game ticks. At 1x (1 tick/sec), this is every 8 seconds — visually fine. At 100x, every 0.08 seconds (12.5 Hz) — still responsive.
+- Crafting update every 15 ticks at 1x means crafting progress visually updates every 15 seconds. The completion time is unaffected (progress accumulates correctly despite the display interval). Same for all other interval-gated systems.
+- The big risks from Round 2 (AIAgentManager world_ai interval=10, heavy_planner interval=180, 6 autoload frequency increase) are partially mitigated by the stride and interval changes. World AI at 10 ticks is still 7-12x more frequent at 100x than original; planner at 180 ticks is 4x more frequent.

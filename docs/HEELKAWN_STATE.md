@@ -124,6 +124,9 @@ We are always building, always refining, always expanding. This document capture
   - **FEAT: Chain Completion Precision Guard (May 28, 2026)**:
     - Tightened `_chain_step_completed(...)` to require foundational prerequisites (hearth/storage/farm/wall/library/granary relationships) before counting later steps complete.
     - Reduces false-positive chain advancement in dense/overlapping settlements where one feature count alone was too permissive.
+  - **FEAT: Recovery Scan Throughput Cache (May 28, 2026)**:
+    - Added per-settlement caching for recovery feature snapshots and settlement population reads in `HeelKawnianManager`.
+    - Cache TTL scales by simulation speed tier, reducing repeated world/settlement scans in hot ambition/recovery paths at high speed.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

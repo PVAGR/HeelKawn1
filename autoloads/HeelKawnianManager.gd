@@ -50,6 +50,10 @@ static var _recovery_phase_by_settlement: Dictionary = {}
 
 ## Active ambition chains: settlement_id -> { "chain_name": String, "steps": Array[String], "current_step": int, "tick": int }
 static var _active_ambition_chains: Dictionary = {}
+## Per-settlement recovery scan caches to reduce repeated world scans in hot
+## ambition/recovery paths. Cache entries are deterministic and keyed by tick.
+static var _recovery_feature_cache: Dictionary = {} # settlement_id -> {"tick": int, "features": Dictionary}
+static var _recovery_population_cache: Dictionary = {} # settlement_id -> {"tick": int, "population": int}
 
 
 func _ready() -> void:
@@ -975,17 +979,43 @@ static func _recovery_phase(settlement_id: int) -> int:
 
 ## Scan features relevant to recovery phase assessment at a settlement center.
 static func _scan_recovery_features(settlement_id: int) -> Dictionary:
+	var tick: int = _tick()
+	var ttl: int = _recovery_cache_ttl_ticks_for_speed()
+	var cached: Dictionary = _recovery_feature_cache.get(settlement_id, {})
+	if not cached.is_empty() and tick - int(cached.get("tick", -1000000)) <= ttl:
+		var cached_features: Variant = cached.get("features", {})
+		if cached_features is Dictionary:
+			return (cached_features as Dictionary).duplicate(true)
 	var center: Vector2i = SettlementPlanner._center_tile_of_region_key(settlement_id) if SettlementPlanner != null else Vector2i(0, 0)
-	return _scan_local_features(center, 16)
+	var features: Dictionary = _scan_local_features(center, 16)
+	_recovery_feature_cache[settlement_id] = {
+		"tick": tick,
+		"features": features.duplicate(true),
+	}
+	return features
 
 
 ## Estimate population at a settlement for recovery gating.
 static func _recovery_population(settlement_id: int) -> int:
+	var tick: int = _tick()
+	var ttl: int = _recovery_cache_ttl_ticks_for_speed()
+	var cached: Dictionary = _recovery_population_cache.get(settlement_id, {})
+	if not cached.is_empty() and tick - int(cached.get("tick", -1000000)) <= ttl:
+		return int(cached.get("population", 0))
 	if SettlementMemory == null:
 		return 0
 	for st_v in SettlementMemory.settlements:
 		if st_v is Dictionary and int((st_v as Dictionary).get("center_region", -1)) == settlement_id:
-			return int((st_v as Dictionary).get("population", 0))
+			var pop: int = int((st_v as Dictionary).get("population", 0))
+			_recovery_population_cache[settlement_id] = {
+				"tick": tick,
+				"population": pop,
+			}
+			return pop
+	_recovery_population_cache[settlement_id] = {
+		"tick": tick,
+		"population": 0,
+	}
 	return 0
 
 
@@ -1361,6 +1391,24 @@ static func _chain_step_stall_ticks_for_speed() -> int:
 	if gs >= 12.0:
 		return 3400
 	return 2600
+
+
+static func _recovery_cache_ttl_ticks_for_speed() -> int:
+	var gm: Node = _root_node("GameManager")
+	if gm == null:
+		return 10
+	var gs: float = float(gm.get("game_speed"))
+	if gs >= 100.0:
+		return 80
+	if gs >= 50.0:
+		return 50
+	if gs >= 26.0:
+		return 30
+	if gs >= 12.0:
+		return 18
+	if gs >= 6.0:
+		return 12
+	return 10
 
 
 ## Learning target selection: determines what knowledge/skill a pawn should prioritize learning next.

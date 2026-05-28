@@ -40,3 +40,19 @@
 ## Residual Risk
 - Real frame-time smoothness at `1x/26x/50x/100x` remains unverified in this environment without Godot runtime.
 - Next sessions should execute in-engine perf scenes and tick profilers on a machine with Godot installed.
+
+## Session 2 Update (Core Throughput)
+
+2. Reduced repeated settlement scans in ambition/recovery hot paths
+- File: `autoloads/HeelKawnianManager.gd`
+- Changes:
+  - Added `_recovery_feature_cache` and `_recovery_population_cache` keyed by settlement id.
+  - `_scan_recovery_features(...)` now uses a deterministic tick TTL cache.
+  - `_recovery_population(...)` now uses the same style cache.
+  - Added `_recovery_cache_ttl_ticks_for_speed()` so cache lifetime scales by speed tier (`6x/12x/26x/50x/100x`).
+- Expected effect:
+  - Fewer repeated local feature scans and settlement list walks when many pawns query ambitions in the same window.
+  - Lower overhead in `_recovery_phase(...)` and `_ambition_chain_for_settlement(...)`.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after cache optimization: PASS.

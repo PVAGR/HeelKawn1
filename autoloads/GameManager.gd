@@ -12,6 +12,7 @@ signal speed_changed(new_speed: float, is_paused: bool)
 ## (autoloads load before [class_name] resolution; keep numerically in sync).
 ## HeelKawn feel target: 1x = one deterministic tick each real second.
 const TICK_INTERVAL_SECONDS: float = 1.0
+const MAX_TICKS_PER_FRAME: int = 24  # Safety limit: prevents render starvation
 
 ## Allowed speed multipliers. Index into this with set_speed_index().
 ## NOTE: TickManager is now the authoritative source for speed control.
@@ -288,12 +289,12 @@ func _process(delta: float) -> void:
 			last_frame_game_tick_usecs = 0  # Updated by TickManager
 			last_frame_tick_cap_backlog = false
 			return
-	## Fallback: if TickManager not active, process all accumulated ticks uncapped
+	## Fallback: if TickManager not active, process accumulated ticks with safety cap
 	var desired_add: float = delta * game_speed
 	_tick_accumulator += desired_add
 	var ticks_this_frame: int = 0
 	var tick_chain_usecs: int = 0
-	while _tick_accumulator >= TICK_INTERVAL_SECONDS:
+	while _tick_accumulator >= TICK_INTERVAL_SECONDS and ticks_this_frame < MAX_TICKS_PER_FRAME:
 		_tick_accumulator -= TICK_INTERVAL_SECONDS
 		tick_count += 1
 		var t0: int = Time.get_ticks_usec()

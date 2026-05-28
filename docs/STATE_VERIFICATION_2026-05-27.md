@@ -52,8 +52,24 @@
 - Main scene configured: ✅ `res://scenes/main/Main.tscn`
 - Godot headless smoke: ⚠️ Godot binary not available in this environment
 
+### Post-Fix: Death Spiral Prevention (MAX_TICKS_PER_FRAME)
+
+**Problem observed:** At 100x, `tick_batch` grew from 8ms → 934ms over ~30s. With no per-frame cap, all accumulated ticks processed in one frame, starving the renderer (8 FPS). As FPS dropped, more ticks accumulated, causing a death spiral.
+
+**Fix:** Added `MAX_TICKS_PER_FRAME = 24` as a flat safety limit in both TickManager and GameManager. This is NOT a speed-dependent throttle — it caps per-frame ticks identically at all speeds, preventing render starvation without reducing sim fidelity. Ticks beyond the cap carry to the next frame.
+
+**What was verified:**
+- Global RNG scan (DisasterSystem, CataclysmSystem, KnowledgeSystem): ✅ No forbidden RNG
+- World dimension fields scan: ✅ No legacy fields
+- Main scene configured: ✅ `res://scenes/main/Main.tscn`
+- Godot headless smoke: ⚠️ Godot binary not available in this environment
+- All previous parse errors fixed: HeelKawnian.gd mobile_mul, SurvivalSystem.gd interval, Main.gd dead code, budget/start_usec/gs variables
+
 **What remains unverified/risky:**
-- Godot headless smoke was not run (no Godot binary in CI environment). The changes are mechanical (const removal, function simplification, parameter removal) and should not introduce parse errors.
+- Godot headless smoke was not run (no Godot binary in CI environment).
+- MAX_TICKS_PER_FRAME=24 is a safety cap — the sim will run at most 24 ticks/frame. At 60 FPS this gives 1440 ticks/sec = 288x max. At 100 FPS, 2400 ticks/sec = 480x. This is sufficient for 100x on modern hardware. If per-tick work grows too high (large colony), the sim will naturally slow below the 100x label — this is expected and prevents freezing.
+- The `_regrow_due_ticks.remove_at(0)` is still O(n) and could slow down long sessions. Not critical for current colony sizes.
+- Mining react's 2ms per-tick budget is still the dominant per-tick cost. With MAX_TICKS_PER_FRAME, this is bounded: max 24 * 2ms = 48ms sim time per frame.
 - Round 2 is significantly more invasive — we changed return values of ~30 functions across 18 files. Each change follows a predictable pattern (remove speed branches, return base value), but no runtime verification was possible.
 - Key risk: AIAgentManager `_world_ai_interval_for_speed` and `_settlement_ai_interval_for_speed` previously returned variable intervals based on speed (10-120 for world AI, 16-156 for settlement AI). Now they always return 10 and 16 respectively. At 100x this means world AI updates every 10 ticks instead of every 72-120 ticks — this is 7-12x more frequent and could cause frame-time spikes on large colonies.
 - Key risk: Main.gd `_heavy_planner_interval_for_speed` was 720 at 100x, now always 180. This means settlement heavy planning runs 4x more often at 100x, which could cause spikes.

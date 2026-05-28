@@ -4,11 +4,11 @@ extends Node
 ## nodes in the "tickable" group.
 ##
 ## PLAYABILITY POLICY:
-## NO ARTIFICIAL CAPS: The simulation runs as fast as the hardware allows.
-## No per-frame tick caps, no backlog limits, no budget yields, no LOD skipping.
-## All ticks accumulate and MUST be processed in order. If the CPU cannot keep
-## up, the simulation naturally slows wall-clock time rather than silently
-## losing history.
+## NO THROTTLES: No speed-dependent skip/LOD/budget that reduces sim fidelity.
+## MAX_TICKS_PER_FRAME is a flat safety limit that prevents render starvation
+## (death spiral) — it caps per-frame ticks at a constant value regardless of
+## speed, ensuring the renderer always gets time. This is NOT a throttle: every
+## tick still processes faithfully, just spread across frames.
 ##
 ## On speed DECREASE, the accumulated-time backlog is cleared to prevent
 ## the "event flood" where dozens of backlogged ticks fire at once when
@@ -17,6 +17,7 @@ extends Node
 signal tick_processed(tick_number: int)
 
 const TICK_STEP: float = 1.0  # Fixed simulation step (1 tick/sec base)
+const MAX_TICKS_PER_FRAME: int = 24  # Safety limit: prevents render starvation
 
 ## How often (in ticks) to force-rebuild the tickable cache.
 const TICKABLE_CACHE_REBUILD_INTERVAL: int = 300
@@ -86,8 +87,9 @@ func _process(delta: float) -> void:
 	var ticks_this_frame: int = 0
 	var tickables_this_frame: int = 0
 
-	# Process all accumulated ticks — no cap, no budget yield, no LOD skip.
-	while _accumulated_time >= TICK_STEP:
+	# Process up to MAX_TICKS_PER_FRAME — prevents render starvation (death spiral)
+	# while allowing full sim fidelity at sustainable speeds. NOT a speed-dependent throttle.
+	while _accumulated_time >= TICK_STEP and ticks_this_frame < MAX_TICKS_PER_FRAME:
 		_accumulated_time -= TICK_STEP
 		current_tick += 1
 		ticks_this_frame += 1

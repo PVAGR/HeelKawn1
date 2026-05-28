@@ -162,15 +162,22 @@ We are always building, always refining, always expanding. This document capture
   - **HeelKawnian.gd**: `_notify_autonomy_feedback` no longer gated at speed >=60. `_show_action_popup_for_job` no longer gated at speed >=50. Perception scan budget always 24 (no speed reduction).
   - **TerritoryOverlay.gd**: Activity border segments no longer skipped at speed >=50
 
-- **PERF: Removed ALL per-frame tick caps in TickManager.gd**:
-  - Removed `MAX_BACKLOG_TICKS` (240 backlog limit) — sim backlog is now unbounded
-  - Removed `MAX_TICKS_PER_FRAME` (24 hard cap) — sim processes all accumulated ticks every frame
-  - Removed `_frame_tick_cap_for_speed()` — was 1→12 ticks/frame depending on speed
-  - Removed `_is_frame_stressed()` halving — no FPS-based cap reduction
-  - Removed `_lod_rate_for_speed()` / `_should_skip_tick_for_lod()` — all pawns now tick every tick regardless of speed
+- **PERF: Replaced speed-dependent caps with flat safety limit in TickManager.gd**:
+  - Removed all speed-DEPENDENT caps (`MAX_BACKLOG_TICKS`, `_frame_tick_cap_for_speed()`, `_is_frame_stressed()` halving, mobile caps)
+  - Removed `_lod_rate_for_speed()` / `_should_skip_tick_for_lod()` — all pawns tick every tick regardless of speed
   - Removed `TickBudgetManager.should_yield()` check — no mid-frame budget interruption
+  - **Added** `MAX_TICKS_PER_FRAME = 24` — a FLAT safety limit (NOT speed-dependent). Prevents render starvation (death spiral) by bounding per-frame ticks at all speeds identically. Ticks beyond the cap carry to the next frame. Sim still processes faithfully.
   - **Key fix**: `set_speed()` now resets `_accumulated_time = 0.0` when **decelerating**, preventing the backlog event-flood when going from 100x→24x→1x
-  - Removed mobile runtime speed caps from `set_speed_index()`
+
+- **PERF: GameManager.gd cap cleanup**:
+  - Removed `MAX_TICKS_PER_FRAME*` constants group (was 8 separate constants)
+  - Removed `MAX_ACCUMULATED_TICKS*` constants (was 5 separate accumulator cap constants)
+  - Removed `DROP_BACKLOG_WHEN_OVER_CAP` logic
+  - Removed `_adaptive_frame_tick_cap()` function
+  - `_max_ticks_per_frame_for_speed()` now returns 99999 (uncapped)
+  - `_max_accumulated_ticks_for_speed()` now returns 99999 (uncapped)
+  - `set_speed()` now resets `_tick_accumulator = 0.0` on deceleration
+  - **Added** `MAX_TICKS_PER_FRAME = 24` for fallback `_process` loop (same flat safety cap)
 
 - **PERF: GameManager.gd cap cleanup**:
   - Removed `MAX_TICKS_PER_FRAME*` constants group (was 8 separate constants)

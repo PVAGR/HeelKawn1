@@ -12,6 +12,9 @@ var _accumulated_time: float = 0.0
 var _speed_index: int = 0
 var _is_paused: bool = false
 var _refcounted_tickables: Array = []
+var _tickable_cache: Array = []
+var _tickable_cache_dirty: bool = true
+var debug_last_tick_batch_usec: int = 0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -29,21 +32,37 @@ func _process(delta: float) -> void:
 		ticks_this_frame += 1
 
 func _fire_tick(tick: int) -> void:
-	var tickables: Array = get_tree().get_nodes_in_group("tickable")
-	tickables.sort_custom(func(a, b): return str(a.get_path()) < str(b.get_path()))
-	for node in tickables:
+	var start: int = Time.get_ticks_usec()
+	if _tickable_cache_dirty:
+		_tickable_cache = get_tree().get_nodes_in_group("tickable")
+		_tickable_cache.sort_custom(func(a, b): return str(a.get_path()) < str(b.get_path()))
+		_tickable_cache_dirty = false
+	for node in _tickable_cache:
 		if is_instance_valid(node) and node.has_method("_on_world_tick"):
 			node._on_world_tick(tick)
 	for ref in _refcounted_tickables:
 		if ref != null and ref.has_method("_on_world_tick"):
 			ref._on_world_tick(tick)
 	tick_processed.emit(tick)
+	debug_last_tick_batch_usec = Time.get_ticks_usec() - start
+
+func mark_tickable_cache_dirty() -> void:
+	_tickable_cache_dirty = true
 
 func register_refcounted_tickable(obj) -> void:
 	if obj not in _refcounted_tickables:
 		_refcounted_tickables.append(obj)
 func unregister_refcounted_tickable(obj) -> void:
 	_refcounted_tickables.erase(obj)
+func set_speed(multiplier: float) -> void:
+	var best: int = 0
+	var best_diff: float = INF
+	for i in range(SPEED_MULTIPLIERS.size()):
+		var diff: float = absf(SPEED_MULTIPLIERS[i] - multiplier)
+		if diff < best_diff:
+			best_diff = diff
+			best = i
+	set_speed_index(best)
 func set_speed_index(index: int) -> void:
 	_speed_index = clampi(index, 0, SPEED_MULTIPLIERS.size() - 1)
 	speed_changed.emit(SPEED_MULTIPLIERS[_speed_index], _is_paused)

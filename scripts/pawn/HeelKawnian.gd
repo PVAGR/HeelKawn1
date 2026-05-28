@@ -1514,8 +1514,6 @@ func _on_global_job_cancelled(job: Job) -> void:
 	# We were added to "tickable" in _ready(), so just ensure cache is dirty
 	if TickManager != null:
 		TickManager.mark_tickable_cache_dirty()
-		# Force immediate cache rebuild so we're included in next tick
-		TickManager._tickable_cache_dirty = true
 	
 	
 	# Continue with pawn initialization

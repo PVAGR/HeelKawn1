@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1779958782
+::res://::1779959430
 .aider.chat.history.md::TextFile::-1::1779517150::0::1::::<><><>0<>0<><>::
 AGENTS.md::TextFile::-1::1779432109::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779599714::0::1::::<><><>0<>0<><>::
@@ -241,9 +241,9 @@ SchismManager.gd::GDScript::810131285511513470::1779514683::0::1::::<>Node<><>0<
 SettlementAIBridge.gd::GDScript::5898724979801919398::1778321437::0::1::::<>Node<><>0<>0<><>::
 SettlementArchitect.gd::GDScript::8965997991269203430::1777694600::0::1::::<>Node<><>0<>0<><>::
 SettlementManager.gd::GDScript::8092329135591298813::1778651452::0::1::::<>Node<><>0<>0<><>::
-SettlementMemory.gd::GDScript::3014913635517556679::1779874424::0::1::::<>Node<><>0<>0<><>::
+SettlementMemory.gd::GDScript::3014913635517556679::1779959126::0::1::::<>Node<><>0<>0<><>::
 SettlementPersistenceManager.gd::GDScript::1742009134159448662::1779497002::0::1::::SettlementPersistenceManager<>Node<><>0<>0<><>::
-SettlementPlanner.gd::GDScript::6005194213945483152::1779958545::0::1::::<>Node<><>0<>0<><>::
+SettlementPlanner.gd::GDScript::6005194213945483152::1779959079::0::1::::<>Node<><>0<>0<><>::
 SettlementRebirth.gd::GDScript::7428695576235804400::1779514684::0::1::::<>Node<><>0<>0<><>::
 SettlementRegistry.gd::GDScript::596151671808623073::1777694600::0::1::::<>Node<><>0<>0<><>::
 SimVision.gd::GDScript::4627703438879497855::1777694600::0::1::::<>Node<><>0<>0<><>::
@@ -796,7 +796,7 @@ UIManager.gd::GDScript::3825412759436189089::1778057765::0::1::::<>Control<><>0<
 ui_test_helpers.gd::GDScript::3561640718243298327::1778108668::0::1::::UI_TestHelpers<>Node<><>0<>0<><>::
 UrgentAlert.gd::GDScript::5067547383883063734::1778445393::0::1::::UrgentAlert<>CanvasLayer<><>0<>0<><>::
 WeatherOverlay.gd::GDScript::6187163600906225762::1778866625::0::1::::WeatherOverlay<>CanvasLayer<><>0<>0<><>::
-::res://scripts/utils/::1779958397
+::res://scripts/utils/::1779958790
 BuildingsVisualizer.gd::GDScript::7930289766593082615::1778033074::0::1::::BuildingsVisualizer<>RefCounted<><>0<>0<><>::
 BuildPlacementChecker.gd::GDScript::6413616905874706955::1779958391::0::1::::BuildPlacementChecker<>RefCounted<><>0<>0<><>::
 ProceduresPawnVisualizer.gd::GDScript::8288317706476345824::1778320772::0::1::::ProceduresPawnVisualizer<>RefCounted<><>0<>0<><>::

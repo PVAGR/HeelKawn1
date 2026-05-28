@@ -465,16 +465,6 @@ func get_player_pawn_id() -> int:
 
 func _high_speed_interval(normal_ticks: int, _fast_ticks: int = -1, _ultra_ticks: int = -1) -> int:
 	return normal_ticks
-	var gs: float = GameManager.game_speed
-	if gs >= 100.0:
-		return ultra_ticks
-	if gs >= 50.0:
-		return maxi(fast_ticks, int(round(float(ultra_ticks) * 0.85)))
-	if gs >= 26.0:
-		return fast_ticks
-	if gs >= 12.0:
-		return maxi(normal_ticks, int(round(float(fast_ticks) * 0.7)))
-	return normal_ticks
 
 
 func _planner_interval_for_speed() -> int:
@@ -3724,10 +3714,6 @@ func _accumulate_social_rapport() -> void:
 			if pair_budget <= 0:
 				exhausted = true
 				break
-			# BUDGET CHECK: Inside pair loop
-			if Time.get_ticks_usec() - start_usec >= budget_usec:
-				exhausted = true
-				break
 			var da: HeelKawnianData = pa.data
 			if da == null or pa.is_sleeping():
 				continue
@@ -3751,10 +3737,6 @@ func _accumulate_social_rapport() -> void:
 					continue
 				checked_pairs[pair_key] = true
 				pair_budget -= 1
-				# BUDGET CHECK: Inside inner pair loop
-				if Time.get_ticks_usec() - start_usec >= budget_usec:
-					exhausted = true
-					break
 				# OPTIMIZATION: Early exit checks before expensive operations
 				if da.hunger <= 38.0 or db.hunger <= 38.0:
 					continue
@@ -7153,6 +7135,7 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 	_last_construction_seed_tick = tick
 	# Uncapped budget — construction seed runs free
 	var budget_usec: int = 999999999
+	var start_usec: int = Time.get_ticks_usec()
 
 	# Determine settlement context: formal, proto, or bootstrap
 	var settlements: Array = SettlementMemory.get_formal_settlements()
@@ -7254,22 +7237,12 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 		var markets: int = int(features.get("market", 0))
 		var barracks: int = int(features.get("barracks", 0))
 		var cellars: int = int(features.get("cellar", 0))
-		# OPTIMIZATION: Only count pending jobs for critical types at high speeds
+		# Count pending jobs for all relevant building types
 		var pending_by_type: Dictionary = {}
 		if JobManager != null and JobManager.has_method("count_pending_jobs_near"):
-			if gs >= 50.0:
-				# High speed: only count essential job types
-				for jt in [Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT]:
-					pending_by_type[jt] = JobManager.count_pending_jobs_near(center_tile, jt, 10)
-					# BUDGET CHECK: Inside pending count loop at high speed
-					if Time.get_ticks_usec() - start_usec >= budget_usec:
-						break
-			else:
-				# Normal speed: full scan
-				for jt in [Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_APOTHECARY, Job.Type.BUILD_MARKET, Job.Type.BUILD_LIBRARY, Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, Job.Type.BUILD_SCHOOL, Job.Type.BUILD_TRADING_POST, Job.Type.BUILD_ROAD, Job.Type.BUILD_CELLAR, Job.Type.TRADE_HAUL, Job.Type.TEACH_SKILL, Job.Type.MAINTAIN_STRUCTURE]:
-					pending_by_type[jt] = JobManager.count_pending_jobs_near(center_tile, jt, 12)
-					# BUDGET CHECK: Inside pending count loop at normal speed
-					if Time.get_ticks_usec() - start_usec >= budget_usec:
+			for jt in [Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_APOTHECARY, Job.Type.BUILD_MARKET, Job.Type.BUILD_LIBRARY, Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, Job.Type.BUILD_SCHOOL, Job.Type.BUILD_TRADING_POST, Job.Type.BUILD_ROAD, Job.Type.BUILD_CELLAR, Job.Type.TRADE_HAUL, Job.Type.TEACH_SKILL, Job.Type.MAINTAIN_STRUCTURE]:
+				pending_by_type[jt] = JobManager.count_pending_jobs_near(center_tile, jt, 12)
+				if Time.get_ticks_usec() - start_usec >= budget_usec:
 						break
 		# BUDGET CHECK: After pending count loop, before job posting
 		if Time.get_ticks_usec() - start_usec >= budget_usec:
@@ -7702,7 +7675,7 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 			break
 		# Priority 18: Local paths — post BUILD_ROAD along high-traffic tiles within settlement
 		# OPTIMIZATION: Skip road scan at high speed (>=50x) — expensive 9x9 grid scan
-		if gs < 50.0 and not ambition_blocked and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap) and local_pop >= 2:
+		if not ambition_blocked and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap) and local_pop >= 2:
 			var pending_roads: int = int(pending_counts.get(Job.Type.BUILD_ROAD, 0))
 			if pending_roads < 3:
 				var roads_posted: int = 0

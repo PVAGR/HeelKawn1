@@ -107,7 +107,7 @@ func _on_game_tick(tick: int) -> void:
 		if not _pawn_in_batch(pawn, tick, SURVIVAL_PAWN_BATCH_COUNT):
 			continue
 
-		var last_processed_tick: int = int(_last_survival_processed_tick_by_pawn_id.get(pawn_id, tick - interval))
+		var last_processed_tick: int = int(_last_survival_processed_tick_by_pawn_id.get(pawn_id, tick - 1))
 		var elapsed_ticks: int = maxi(1, tick - last_processed_tick)
 		_last_survival_processed_tick_by_pawn_id[pawn_id] = tick
 		_process_survival(pawn, tick, elapsed_ticks)

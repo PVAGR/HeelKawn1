@@ -3501,7 +3501,6 @@ func _work_step_interval_for_speed() -> int:
 
 func _lane_interval_for_speed(normal_ticks: int, _fast_ticks: int = -1, _ultra_ticks: int = -1) -> int:
 	return maxi(1, normal_ticks)
-	return maxi(1, normal_ticks * mobile_mul)
 
 
 func _should_panic_sleep() -> bool:

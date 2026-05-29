@@ -652,6 +652,8 @@ var _next_cohort_update_tick: int = 0
 var _cohort_anchor_ref: WeakRef = null
 var _next_recruitment_cache_tick: int = 0
 var _next_matrix_ambition_tick: int = 0
+var _next_matrix_preservation_tick: int = 0
+var _next_matrix_learning_tick: int = 0
 var _last_recruitment_job_type: int = -2
 var _recruitment_signal_cache: Array[Dictionary] = []
 var _cohort_stability_ticks: int = 0
@@ -730,6 +732,10 @@ var _learning_weight_cache: Dictionary = {}
 var _next_goal_refresh_tick: int = -1
 var _cached_active_goal: Dictionary = {}
 var _cached_active_goal_priority: float = 0.0
+## Per-tick cache for JobManager pending count queries used by matrix posting
+## lanes to avoid repeated O(N) scans within the same pawn tick.
+var _pending_count_cache_tick: int = -1
+var _pending_count_cache: Dictionary = {}
 var _last_failed_job_type: int = -1
 var _last_failed_job_tile: Vector2i = Vector2i(-9999, -9999)
 var _last_failed_job_tick: int = -999999
@@ -1869,17 +1875,102 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 	var tick: int = GameManager.tick_count
 	if tick < _next_matrix_ambition_tick:
 		return false
+	var gs: float = GameManager.game_speed if GameManager != null else 1.0
+	var fail_cooldown: int = 10
+	var success_cooldown: int = 15
+	var local_same_job_radius: int = 10
+	var global_ambition_cap: int = 64
+	if gs >= 100.0:
+		fail_cooldown = 26
+		success_cooldown = 45
+		local_same_job_radius = 14
+		global_ambition_cap = 24
+	elif gs >= 50.0:
+		fail_cooldown = 20
+		success_cooldown = 34
+		local_same_job_radius = 12
+		global_ambition_cap = 32
+	elif gs >= 26.0:
+		fail_cooldown = 15
+		success_cooldown = 24
+		local_same_job_radius = 12
+		global_ambition_cap = 40
+	elif gs >= 12.0:
+		fail_cooldown = 12
+		success_cooldown = 18
+
+	# Household-first ambition seeding: consume household plan cooldown only from
+	# this writer path so Matrix read paths remain side-effect free.
+	var hh_ambition: Dictionary = HeelKawnianManager.get_household_ambition_for_pawn(self, true)
+	if not hh_ambition.is_empty():
+		var hh_job_type: int = int(hh_ambition.get("job_type", -1))
+		if hh_job_type < 0:
+			_next_matrix_ambition_tick = tick + fail_cooldown
+			return false
+		if ColonySimServices != null and ColonySimServices.should_block_ambition_tier_build() and not _is_survival_matrix_ambition(hh_job_type):
+			_next_matrix_ambition_tick = tick + fail_cooldown
+			return false
+		var hh_target_tile: Vector2i = _matrix_ambition_target_tile(hh_job_type)
+		if hh_target_tile.x < 0:
+			_next_matrix_ambition_tick = tick + fail_cooldown
+			return false
+		var local_pending_hh: int = _pending_near_cached(data.tile_pos, hh_job_type, local_same_job_radius)
+		if local_pending_hh > 0:
+			_next_matrix_ambition_tick = tick + fail_cooldown
+			return false
+		var global_pending_hh: int = _pending_count_cached(hh_job_type)
+		if global_pending_hh >= global_ambition_cap:
+			_next_matrix_ambition_tick = tick + fail_cooldown
+			return false
+		var hh_priority: int = clampi(int(hh_ambition.get("priority", 8)), 1, 10)
+		var hh_work_ticks: int = Job.tool_job_work_ticks(hh_job_type)
+		if hh_work_ticks <= 0:
+			hh_work_ticks = 20
+		var hh_posted: Job = JobManager.post(hh_job_type, hh_target_tile, hh_priority, hh_work_ticks) if JobManager != null else null
+		if hh_posted == null:
+			_next_matrix_ambition_tick = tick + fail_cooldown
+			return false
+		var hh_reason: String = str(hh_ambition.get("reason", "household_plan"))
+		if JobManager != null and JobManager.has_method("stamp_seeder_metadata"):
+			JobManager.stamp_seeder_metadata(hh_posted, hh_reason, "household", int(data.id))
+		hh_posted.authority_scope = "household"
+		hh_posted.issuer_role = "household_head"
+		var hh_debug: Dictionary = HeelKawnianManager.get_household_plan_debug(int(data.household_id)) if HeelKawnianManager.has_method("get_household_plan_debug") else {}
+		var hh_tasks: Array = hh_debug.get("tasks", []) as Array
+		HeelKawnianManager.log_heelkawn_event(
+			str(data.unique_id),
+			"matrix_household_ambition",
+			{
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"household_id": int(data.household_id),
+				"job_type": hh_job_type,
+				"job_name": Job.describe_type(hh_job_type),
+				"tile": hh_target_tile,
+				"priority": hh_priority,
+				"reason": hh_reason,
+				"plan_goal": str(hh_debug.get("goal", "")),
+				"plan_task_index": int(hh_debug.get("current_task_index", -1)),
+				"plan_task_total": hh_tasks.size(),
+			},
+			hh_reason,
+			hh_ambition,
+			tick
+		)
+		_next_matrix_ambition_tick = tick + success_cooldown
+		return true
+
 	var ambition: Dictionary = HeelKawnianManager.get_settlement_ambition_for_pawn(self)
 	if ambition.is_empty():
-		_next_matrix_ambition_tick = tick + 10
+		_next_matrix_ambition_tick = tick + fail_cooldown
 		return false
 	var job_type: int = int(ambition.get("job_type", -1))
 	if job_type < 0:
-		_next_matrix_ambition_tick = tick + 10
+		_next_matrix_ambition_tick = tick + fail_cooldown
 		return false
 	if ColonySimServices != null:
 		if ColonySimServices.should_block_ambition_tier_build() and not _is_survival_matrix_ambition(job_type):
-			_next_matrix_ambition_tick = tick + 30
+			_next_matrix_ambition_tick = tick + fail_cooldown
 			return false
 		var center_rk: int = SettlementMemory.get_center_region_for_region(
 				WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)) if SettlementMemory != null else -1
@@ -1889,12 +1980,20 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 			var cold: int = ColonySimServices.count_cold_uncovered_pawns(center_rk) if center_rk >= 0 else 0
 			var needed: int = lh + 1 if lh <= 0 else lh + int(ceil(float(cold) / 4.0))
 			if not ColonySimServices.can_seed_fire_pit(center_rk, data.tile_pos, lh, needed):
-				_next_matrix_ambition_tick = tick + 20
+				_next_matrix_ambition_tick = tick + fail_cooldown
 				return false
 			job_type = ColonySimServices.resolve_hearth_post_job_type(job_type)
 	var target_tile: Vector2i = _matrix_ambition_target_tile(job_type)
 	if target_tile.x < 0:
-		_next_matrix_ambition_tick = tick + 10
+		_next_matrix_ambition_tick = tick + fail_cooldown
+		return false
+	var local_pending: int = _pending_near_cached(data.tile_pos, job_type, local_same_job_radius)
+	if local_pending > 0:
+		_next_matrix_ambition_tick = tick + fail_cooldown
+		return false
+	var global_pending: int = _pending_count_cached(job_type)
+	if global_pending >= global_ambition_cap:
+		_next_matrix_ambition_tick = tick + fail_cooldown
 		return false
 	var priority: int = clampi(int(ambition.get("priority", 5)), 1, 10)
 	var work_ticks: int = Job.tool_job_work_ticks(job_type)
@@ -1902,7 +2001,7 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 		work_ticks = 20
 	var posted: Job = JobManager.post(job_type, target_tile, priority, work_ticks)
 	if posted == null:
-		_next_matrix_ambition_tick = tick + 10
+		_next_matrix_ambition_tick = tick + fail_cooldown
 		return false
 	var amb_reason: String = str(ambition.get("reason", "matrix_ambition"))
 	if JobManager != null:
@@ -1925,7 +2024,216 @@ func _try_heelkawnian_matrix_ambition_seed() -> bool:
 		ambition,
 		tick
 	)
-	_next_matrix_ambition_tick = tick + 15
+	_next_matrix_ambition_tick = tick + success_cooldown
+	return true
+
+
+func _try_heelkawnian_matrix_preservation_action() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	if _state != State.IDLE or not _path.is_empty():
+		return false
+	var tick: int = GameManager.tick_count
+	if tick < _next_matrix_preservation_tick:
+		return false
+	if posmod(tick + int(data.id) * 13, 41) != 0:
+		return false
+	var gs: float = GameManager.game_speed if GameManager != null else 1.0
+	var fail_cooldown: int = 60
+	var success_cooldown: int = 140
+	var preserve_stone_cap: int = 18
+	var preserve_book_cap: int = 12
+	if gs >= 100.0:
+		fail_cooldown = 120
+		success_cooldown = 260
+		preserve_stone_cap = 8
+		preserve_book_cap = 6
+	elif gs >= 50.0:
+		fail_cooldown = 95
+		success_cooldown = 220
+		preserve_stone_cap = 10
+		preserve_book_cap = 8
+	elif gs >= 26.0:
+		fail_cooldown = 80
+		success_cooldown = 190
+		preserve_stone_cap = 12
+		preserve_book_cap = 10
+	elif gs >= 12.0:
+		fail_cooldown = 70
+		success_cooldown = 160
+		preserve_stone_cap = 14
+	var choice: Dictionary = HeelKawnianManager.get_preservation_choice_for_pawn(self)
+	if choice.is_empty():
+		_next_matrix_preservation_tick = tick + fail_cooldown
+		return false
+	var action: String = str(choice.get("action", ""))
+	var reason: String = str(choice.get("reason", ""))
+	var knowledge_type: int = int(choice.get("knowledge_type", -1))
+	var did_act: bool = false
+	match action:
+		"teach":
+			var target_id: int = int(choice.get("target_pawn_id", -1))
+			var target: HeelKawnian = _find_pawn_by_id(target_id)
+			if target != null and is_instance_valid(target) and target.data != null:
+				var tile_dist: int = maxi(
+					absi(int(target.data.tile_pos.x) - int(data.tile_pos.x)),
+					absi(int(target.data.tile_pos.y) - int(data.tile_pos.y))
+				)
+				if tile_dist <= 3 and KnowledgeSystem != null and knowledge_type >= 0:
+					if not KnowledgeSystem.has_method("has_knowledge") or not KnowledgeSystem.has_knowledge(target_id, knowledge_type):
+						if KnowledgeSystem.has_method("teach_knowledge"):
+							KnowledgeSystem.teach_knowledge(int(data.id), target_id, knowledge_type)
+							data.update_social_memory(target_id, 0.05, 0.0, 0.0, 0.06, "matrix_preservation_teach")
+							did_act = true
+				if not did_act:
+					var near_tile: Vector2i = _pick_passable_near_tile(data.tile_pos, target.data.tile_pos)
+					if near_tile.x >= 0:
+						autonomy_draft_goto(near_tile, "teach_seek", target_id)
+						did_act = (_state == State.DRAFT_WALK)
+		"inscribe_stone":
+			var stone_tile: Vector2i = choice.get("target_tile", Vector2i(-1, -1))
+			if stone_tile.x >= 0:
+				var global_stones: int = _pending_count_cached(_Job.Type.CARVE_KNOWLEDGE_STONE)
+				if global_stones >= preserve_stone_cap:
+					_next_matrix_preservation_tick = tick + fail_cooldown
+					return false
+				var pending_stone: bool = false
+				if JobManager != null and JobManager.has_method("has_pending_build_near"):
+					pending_stone = JobManager.has_pending_build_near(stone_tile, _Job.Type.CARVE_KNOWLEDGE_STONE, 2)
+				var has_tile_job: bool = JobManager != null and JobManager.has_method("has_job_at") and JobManager.has_job_at(stone_tile)
+				if not pending_stone and not has_tile_job and JobManager != null:
+					var work_ticks: int = _Job.tool_job_work_ticks(_Job.Type.CARVE_KNOWLEDGE_STONE)
+					if work_ticks <= 0:
+						work_ticks = 20
+					var posted: Job = JobManager.post(_Job.Type.CARVE_KNOWLEDGE_STONE, stone_tile, 7, work_ticks)
+					if posted != null:
+						if JobManager.has_method("stamp_seeder_metadata"):
+							JobManager.stamp_seeder_metadata(posted, reason, "settlement", int(data.id))
+						did_act = true
+		"write_book":
+			var book_tile: Vector2i = choice.get("target_tile", data.tile_pos)
+			var wrote_book: bool = false
+			if knowledge_type >= 0 and KnowledgeSystem != null and KnowledgeSystem.has_method("write_knowledge_in_book"):
+				var tdist: int = maxi(absi(book_tile.x - data.tile_pos.x), absi(book_tile.y - data.tile_pos.y))
+				if tdist <= 2:
+					wrote_book = bool(KnowledgeSystem.write_knowledge_in_book(int(data.id), book_tile, [knowledge_type]))
+			if wrote_book:
+				did_act = true
+			elif JobManager != null:
+				var global_books: int = _pending_count_cached(_Job.Type.BOOK_BINDING)
+				if global_books >= preserve_book_cap:
+					_next_matrix_preservation_tick = tick + fail_cooldown
+					return false
+				var pending_book: bool = JobManager.has_method("has_pending_build_near") and JobManager.has_pending_build_near(book_tile, _Job.Type.BOOK_BINDING, 3)
+				if not pending_book:
+					var bind_ticks: int = _Job.tool_job_work_ticks(_Job.Type.BOOK_BINDING)
+					if bind_ticks <= 0:
+						bind_ticks = 20
+					var posted_book: Job = JobManager.post(_Job.Type.BOOK_BINDING, book_tile, 6, bind_ticks)
+					if posted_book != null:
+						if JobManager.has_method("stamp_seeder_metadata"):
+							JobManager.stamp_seeder_metadata(posted_book, reason, "settlement", int(data.id))
+						did_act = true
+		_:
+			did_act = false
+	if did_act:
+		HeelKawnianManager.log_heelkawn_event(
+			data.unique_id,
+			"matrix_preservation_action",
+			{
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"action": action,
+				"knowledge_type": knowledge_type,
+				"reason": reason,
+			},
+			reason,
+			choice,
+			tick
+		)
+		_next_matrix_preservation_tick = tick + success_cooldown
+		return true
+	_next_matrix_preservation_tick = tick + fail_cooldown
+	return false
+
+
+func _try_heelkawnian_matrix_learning_seed() -> bool:
+	if data == null or _world == null or GameManager == null:
+		return false
+	var tick: int = GameManager.tick_count
+	if tick < _next_matrix_learning_tick:
+		return false
+	if posmod(tick + int(data.id) * 5, 37) != 0:
+		return false
+	var gs: float = GameManager.game_speed if GameManager != null else 1.0
+	var fail_cooldown: int = 70
+	var success_cooldown: int = 120
+	var learning_global_cap: int = 24
+	if gs >= 100.0:
+		fail_cooldown = 140
+		success_cooldown = 260
+		learning_global_cap = 10
+	elif gs >= 50.0:
+		fail_cooldown = 110
+		success_cooldown = 220
+		learning_global_cap = 14
+	elif gs >= 26.0:
+		fail_cooldown = 90
+		success_cooldown = 180
+		learning_global_cap = 18
+	elif gs >= 12.0:
+		fail_cooldown = 80
+		success_cooldown = 150
+		learning_global_cap = 22
+	var target: Dictionary = HeelKawnianManager.get_learning_target_for_pawn(self)
+	if target.is_empty():
+		_next_matrix_learning_tick = tick + fail_cooldown
+		return false
+	var reason: String = str(target.get("reason", "matrix_learning_target"))
+	var priority_raw: float = float(target.get("priority", 1.0))
+	var priority: int = clampi(int(round(priority_raw * 2.0)) + 3, 3, 8)
+	var pending_teach: int = 0
+	var pending_apprentice: int = 0
+	var global_teach: int = 0
+	var global_apprentice: int = 0
+	pending_teach = _pending_near_cached(data.tile_pos, _Job.Type.TEACH_SKILL, 6)
+	pending_apprentice = _pending_near_cached(data.tile_pos, _Job.Type.APPRENTICESHIP, 6)
+	global_teach = _pending_count_cached(_Job.Type.TEACH_SKILL)
+	global_apprentice = _pending_count_cached(_Job.Type.APPRENTICESHIP)
+	if pending_teach + pending_apprentice >= 2:
+		_next_matrix_learning_tick = tick + fail_cooldown
+		return false
+	if global_teach + global_apprentice >= learning_global_cap:
+		_next_matrix_learning_tick = tick + fail_cooldown
+		return false
+	var job_type: int = _Job.Type.APPRENTICESHIP if int(target.get("target_knowledge_type", -1)) >= 0 else _Job.Type.TEACH_SKILL
+	var work_ticks: int = _Job.tool_job_work_ticks(job_type)
+	if work_ticks <= 0:
+		work_ticks = 16
+	var posted: Job = JobManager.post(job_type, data.tile_pos, priority, work_ticks) if JobManager != null else null
+	if posted == null:
+		_next_matrix_learning_tick = tick + fail_cooldown
+		return false
+	if JobManager.has_method("stamp_seeder_metadata"):
+		JobManager.stamp_seeder_metadata(posted, reason, "settlement", int(data.id))
+	HeelKawnianManager.log_heelkawn_event(
+		data.unique_id,
+		"matrix_learning_seed",
+		{
+			"pawn_id": int(data.id),
+			"pawn_name": data.display_name,
+			"job_type": job_type,
+			"job_name": _Job.describe_type(job_type),
+			"priority": priority,
+			"reason": reason,
+			"target_knowledge_type": int(target.get("target_knowledge_type", -1)),
+			"target_skill": int(target.get("target_skill", -1)),
+		},
+		reason,
+		target,
+		tick
+	)
+	_next_matrix_learning_tick = tick + success_cooldown
 	return true
 
 
@@ -1938,6 +2246,35 @@ func _is_survival_matrix_ambition(job_type: int) -> bool:
 		_Job.Type.GROW_FOOD, _Job.Type.TRADE_HAUL:
 			return true
 	return false
+
+
+func _pending_count_cached(job_type: int) -> int:
+	if JobManager == null or not JobManager.has_method("count_pending_by_type"):
+		return 0
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	if _pending_count_cache_tick != tick:
+		_pending_count_cache_tick = tick
+		_pending_count_cache.clear()
+	if _pending_count_cache.has(job_type):
+		return int(_pending_count_cache[job_type])
+	var n: int = JobManager.count_pending_by_type(job_type)
+	_pending_count_cache[job_type] = n
+	return n
+
+
+func _pending_near_cached(center_tile: Vector2i, job_type: int, radius: int) -> int:
+	if JobManager == null or not JobManager.has_method("count_pending_jobs_near"):
+		return 0
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	if _pending_count_cache_tick != tick:
+		_pending_count_cache_tick = tick
+		_pending_count_cache.clear()
+	var key: String = "near:%d:%d:%d:%d:%d" % [center_tile.x, center_tile.y, job_type, radius, tick]
+	if _pending_count_cache.has(key):
+		return int(_pending_count_cache[key])
+	var n: int = JobManager.count_pending_jobs_near(center_tile, job_type, radius)
+	_pending_count_cache[key] = n
+	return n
 
 
 ## Autonomous stockpile posting: if no stockpiles exist (or very few) and
@@ -2053,6 +2390,7 @@ func _tick_community_law_check() -> void:
 		if law.is_empty():
 			continue
 		data.add_mood_event(MoodEvent.Type.STRESS, 14.0, 180)
+		_apply_law_violation_consequences(sid, law, tick)
 		if WorldMemory != null and WorldMemory.has_method("record_event"):
 			WorldMemory.record_event({
 				"type": "law_breach",
@@ -2064,6 +2402,59 @@ func _tick_community_law_check() -> void:
 				"law_type": str(law.get("type", "")),
 				"law_description": str(law.get("description", "")),
 			})
+
+
+func _apply_law_violation_consequences(settlement_id: int, law: Dictionary, tick: int) -> void:
+	if data == null or law.is_empty():
+		return
+	var law_type: String = str(law.get("type", ""))
+	var chief_id: int = SettlementMemory.get_construction_chief_pawn_id(settlement_id) if SettlementMemory != null else -1
+	var trust_penalty: float = 0.0
+	var rep_penalty: float = 0.0
+	var grudge_reason: String = ""
+	var grudge_severity: int = 1
+	match law_type:
+		"share_food_in_crisis", "egregore_mutual_aid":
+			trust_penalty = 6.0
+			rep_penalty = 1.2
+			grudge_reason = "neglect"
+			grudge_severity = 1
+		"no_theft", "egregore_market_charter":
+			trust_penalty = 10.0
+			rep_penalty = 2.0
+			grudge_reason = "theft"
+			grudge_severity = 2
+		"maintain_hearth", "egregore_austerity_rite":
+			trust_penalty = 5.0
+			rep_penalty = 0.8
+			grudge_reason = "abandonment"
+			grudge_severity = 1
+		"egregore_martial_code":
+			trust_penalty = 9.0
+			rep_penalty = 1.6
+			grudge_reason = "betrayal"
+			grudge_severity = 2
+		_:
+			trust_penalty = 4.0
+			rep_penalty = 0.6
+	if chief_id >= 0 and chief_id != int(data.id):
+		var prev_trust: float = float(data.trust.get(chief_id, 50.0))
+		data.trust[chief_id] = clampf(prev_trust - trust_penalty, 0.0, 100.0)
+		data.add_social_rapport(chief_id, -int(round(trust_penalty * 8.0)))
+		if GrudgeManager != null and GrudgeManager.has_method("add_grudge") and not grudge_reason.is_empty():
+			GrudgeManager.add_grudge(chief_id, int(data.id), grudge_reason, grudge_severity)
+	data.reputation_score = clampf(float(data.reputation_score) - rep_penalty, 0.0, 100.0)
+	if WorldMemory != null and WorldMemory.has_method("record_event"):
+		WorldMemory.record_event({
+			"type": "law_sanction_applied",
+			"tick": tick,
+			"pawn_id": int(data.id),
+			"settlement_id": settlement_id,
+			"law_type": law_type,
+			"chief_id": chief_id,
+			"trust_penalty": trust_penalty,
+			"reputation_penalty": rep_penalty,
+		})
 
 
 func _try_heelkawnian_affiliation_action() -> bool:
@@ -4042,11 +4433,16 @@ func _tick_idle() -> void:
 		# 2b. HeelKawnian Matrix social intent: ally-seek, mentor-seek, or confrontation.
 		if _try_heelkawnian_matrix_social_action():
 			return
+		# 2b.1. Knowledge preservation intent: teach, inscribe, or write before loss.
+		if _try_heelkawnian_matrix_preservation_action():
+			return
 		# Fallback autonomy paths.
 		if _try_autonomy_grudge_confront():
 			return
 		# Matrix ambition seed: post one strategic household/settlement job.
 		_try_heelkawnian_matrix_ambition_seed()
+		# Matrix learning seed: request apprenticeships/teaching from live target gaps.
+		_try_heelkawnian_matrix_learning_seed()
 		if ColonySimServices != null and ColonySimServices.colony_contentment_period():
 			_try_post_hobby_build_job()
 		# Autonomous stockpile: if no stockpiles exist and pawn has materials, post one.

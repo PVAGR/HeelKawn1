@@ -258,7 +258,39 @@ func _compute_polity_relation_score(a: Dictionary, b: Dictionary, tick: int) -> 
 		score += POLITY_TRADE_RELATION_BONUS
 	if _same_ruler_house(a, b):
 		score += 22
+	score += _egregore_diplomacy_bias(ckr_a, ckr_b)
 	return clampi(score, -100, 100)
+
+
+func _egregore_diplomacy_bias(ckr_a: int, ckr_b: int) -> int:
+	if EgregoreMemory == null or ckr_a < 0 or ckr_b < 0:
+		return 0
+	var coop_a: float = float(EgregoreMemory.get_settlement_pressure(ckr_a, "cooperation"))
+	var coop_b: float = float(EgregoreMemory.get_settlement_pressure(ckr_b, "cooperation"))
+	var care_a: float = float(EgregoreMemory.get_settlement_pressure(ckr_a, "care"))
+	var care_b: float = float(EgregoreMemory.get_settlement_pressure(ckr_b, "care"))
+	var fear_a: float = float(EgregoreMemory.get_settlement_pressure(ckr_a, "fear"))
+	var fear_b: float = float(EgregoreMemory.get_settlement_pressure(ckr_b, "fear"))
+	var vengeance_a: float = float(EgregoreMemory.get_settlement_pressure(ckr_a, "vengeance"))
+	var vengeance_b: float = float(EgregoreMemory.get_settlement_pressure(ckr_b, "vengeance"))
+	var discipline_a: float = float(EgregoreMemory.get_settlement_pressure(ckr_a, "discipline"))
+	var discipline_b: float = float(EgregoreMemory.get_settlement_pressure(ckr_b, "discipline"))
+	var opulence_a: float = float(EgregoreMemory.get_settlement_pressure(ckr_a, "opulence"))
+	var opulence_b: float = float(EgregoreMemory.get_settlement_pressure(ckr_b, "opulence"))
+
+	var prosocial_pair: float = ((coop_a + coop_b) * 0.5) + ((care_a + care_b) * 0.5)
+	var threat_pair: float = ((fear_a + fear_b) * 0.5) + ((vengeance_a + vengeance_b) * 0.5)
+	var discipline_pair: float = (discipline_a + discipline_b) * 0.5
+	var wealth_pair: float = (opulence_a + opulence_b) * 0.5
+	var mismatch: float = absf(coop_a - coop_b) + absf(fear_a - fear_b) + absf(vengeance_a - vengeance_b)
+
+	var bias: float = 0.0
+	bias += prosocial_pair * 0.08
+	bias += discipline_pair * 0.05
+	bias += wealth_pair * 0.04
+	bias -= threat_pair * 0.10
+	bias -= mismatch * 0.05
+	return clampi(int(round(bias)), -20, 20)
 
 
 func _regions_for_center(center_rk: int) -> PackedInt32Array:

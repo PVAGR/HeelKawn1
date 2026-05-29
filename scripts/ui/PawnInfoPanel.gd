@@ -33,8 +33,8 @@ const HIGH_SPEED_EXPENSIVE_DETAILS_REFRESH_SEC: float = 1.5
 ## instead of every UI poll. This keeps observer mode smooth while preserving
 ## living-world updates in the sheet.
 const WORLD_CONTEXT_REFRESH_TICKS: int = 30
-const PORTRAIT_COLS:  int = 6
-const PORTRAIT_ROWS:  int = 8
+const PORTRAIT_WIDTH_PX: int = 74
+const PORTRAIT_HEIGHT_PX: int = 96
 
 const NEED_BARS: Array = [
 	# (label, accessor name on HeelKawnianData, color)
@@ -125,13 +125,14 @@ var _settlement_label: Label = null
 var _action_skills_label: Label = null
 var _tier_label: Label = null
 var _tier_bar: ProgressBar = null
-var _portrait_cells: Array[ColorRect] = []
+var _portrait_texture_rect: TextureRect = null
 var _poll_accum_sec: float = 0.0
 var _last_ui_signature: String = ""
 var _expensive_poll_accum_sec: float = HIGH_SPEED_EXPENSIVE_DETAILS_REFRESH_SEC
 var _last_expensive_signature: String = ""
 var _expensive_dirty: bool = true
 var _last_gear_signature: String = ""
+var _last_portrait_signature: String = ""
 
 
 func _ready() -> void:
@@ -216,8 +217,7 @@ func _build_ui() -> void:
 	_root_vbox.add_child(_header_row)
 
 	var portrait_frame := PanelContainer.new()
-	var cell_px: int = 6
-	portrait_frame.custom_minimum_size = Vector2(PORTRAIT_COLS * cell_px + 3, PORTRAIT_ROWS * cell_px + 3)
+	portrait_frame.custom_minimum_size = Vector2(PORTRAIT_WIDTH_PX + 4, PORTRAIT_HEIGHT_PX + 4)
 	var psty := StyleBoxFlat.new()
 	psty.bg_color = Color(0.02, 0.03, 0.06, 1.0)
 	psty.border_color = PANEL_BORDER
@@ -230,14 +230,12 @@ func _build_ui() -> void:
 	pm.add_theme_constant_override("margin_top", 1)
 	pm.add_theme_constant_override("margin_bottom", 1)
 	portrait_frame.add_child(pm)
-	var grid := GridContainer.new()
-	grid.columns = PORTRAIT_COLS
-	pm.add_child(grid)
-	for _i in range(PORTRAIT_COLS * PORTRAIT_ROWS):
-		var c := ColorRect.new()
-		c.custom_minimum_size = Vector2(cell_px, cell_px)
-		grid.add_child(c)
-		_portrait_cells.append(c)
+	_portrait_texture_rect = TextureRect.new()
+	_portrait_texture_rect.custom_minimum_size = Vector2(PORTRAIT_WIDTH_PX, PORTRAIT_HEIGHT_PX)
+	_portrait_texture_rect.stretch_mode = TextureRect.STRETCH_SCALE
+	_portrait_texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_portrait_texture_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	pm.add_child(_portrait_texture_rect)
 	_header_row.add_child(portrait_frame)
 
 	var name_col := VBoxContainer.new()
@@ -909,30 +907,299 @@ func _make_panel_style() -> StyleBoxFlat:
 	return style
 
 
-func _portrait_cell_color(cell_idx: int, d: HeelKawnianData) -> Color:
-	var n: int = PORTRAIT_COLS * PORTRAIT_ROWS
-	if cell_idx < 0 or cell_idx >= n:
-		return Color(0.08, 0.09, 0.11)
-	var r: int = cell_idx / PORTRAIT_COLS
-	var ccol: int = cell_idx % PORTRAIT_COLS
-	var salt: float = float((d.id * 17 + r * 3 + ccol * 5) % 9) * 0.018
-	if r < 2:
-		return d.hair_color.lightened(salt)
-	if r < 5:
-		var sk: Color = d.color
-		if ccol >= 2 and ccol <= 3 and r >= 3:
-			return sk.darkened(0.1 + salt)
-		return sk.lightened(salt * 0.45)
-	return d.apparel_color.darkened(salt * 0.7)
+func _refresh_generated_portrait(d: HeelKawnianData) -> void:
+	if _portrait_texture_rect == null:
+		return
+	var sig: String = _build_portrait_signature(d)
+	if sig == _last_portrait_signature and _portrait_texture_rect.texture != null:
+		return
+	_portrait_texture_rect.texture = ImageTexture.create_from_image(_render_portrait_image(d))
+	_last_portrait_signature = sig
 
 
-func _refresh_portrait_strip(d: HeelKawnianData) -> void:
-	var i: int = 0
-	for c in _portrait_cells:
-		if not (c is ColorRect):
-			continue
-		(c as ColorRect).color = _portrait_cell_color(i, d)
-		i += 1
+func _build_portrait_signature(d: HeelKawnianData) -> String:
+	var gsig: int = 0
+	if d.equipped_gear != null:
+		for slot_key in d.equipped_gear.keys():
+			var gear: Variant = d.equipped_gear.get(slot_key, null)
+			if gear == null:
+				continue
+			var broken: bool = gear.has_method("is_broken") and gear.is_broken()
+			gsig ^= hash("%s|%s|%s|%s" % [str(slot_key), str(gear.get("base_type") if gear is Object else ""), str(gear.get("durability") if gear is Object else ""), str(broken)])
+	return "%d|%d|%d|%s|%s|%s|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d" % [
+		int(d.id),
+		int(d.age),
+		int(d.body_type),
+		str(d.color),
+		str(d.hair_color),
+		str(d.apparel_color),
+		int(d.hair_style),
+		int(d.gender),
+		int(d.parent_a_id),
+		int(d.parent_b_id),
+		int(d.children_count),
+		int(d.current_profession),
+		int(d.inventory.size()),
+		int(d.level),
+		int(d.military_rank),
+		gsig,
+	]
+
+
+func _render_portrait_image(d: HeelKawnianData) -> Image:
+	var img: Image = Image.create(PORTRAIT_WIDTH_PX, PORTRAIT_HEIGHT_PX, false, Image.FORMAT_RGBA8)
+	var seed: int = _portrait_seed(d, 1337)
+	var cx: int = int(PORTRAIT_WIDTH_PX / 2)
+
+	# Background: horizon gradient + vignetting so sprites read clearly.
+	var bg_top: Color = Color(0.11, 0.14, 0.20, 1.0)
+	var bg_low: Color = Color(0.05, 0.06, 0.09, 1.0)
+	for y in range(PORTRAIT_HEIGHT_PX):
+		var t: float = float(y) / float(PORTRAIT_HEIGHT_PX - 1)
+		var row: Color = bg_top.lerp(bg_low, t)
+		for x in range(PORTRAIT_WIDTH_PX):
+			var edge_t: float = absf((float(x) / float(PORTRAIT_WIDTH_PX - 1)) - 0.5) * 2.0
+			var vignette: float = clampf(1.0 - edge_t * 0.36, 0.62, 1.0)
+			var noise: float = (float(_portrait_hash(seed, x * 17 + y * 43)) / 2147483647.0) * 0.05
+			img.set_pixel(x, y, row.darkened((1.0 - vignette) + noise))
+
+	# Ground strip.
+	_fill_rect(img, 0, PORTRAIT_HEIGHT_PX - 16, PORTRAIT_WIDTH_PX, 16, Color(0.08, 0.09, 0.10, 1.0))
+	_fill_rect(img, 0, PORTRAIT_HEIGHT_PX - 18, PORTRAIT_WIDTH_PX, 2, Color(0.14, 0.12, 0.10, 1.0))
+
+	var body_bias: int = 0
+	match d.body_type:
+		HeelKawnianData.BodyType.SLIM:
+			body_bias = -2
+		HeelKawnianData.BodyType.BROAD:
+			body_bias = 3
+		_:
+			body_bias = 0
+
+	var torso_w: int = 22 + body_bias
+	var hip_w: int = 18 + max(body_bias, -1)
+	var shoulder_y: int = 35
+	var neck_y: int = 29
+	var head_r: int = 10 + int(max(0, int(body_bias / 2)))
+	var torso_x: int = cx - int(torso_w / 2)
+	var torso_y: int = shoulder_y
+
+	var skin: Color = d.color
+	var hair: Color = d.hair_color
+	var cloth: Color = d.apparel_color
+	var cloth_top: Color = cloth.lightened(0.12)
+	var cloth_bottom: Color = cloth.darkened(0.16)
+	var leather: Color = Color(0.23, 0.16, 0.11, 1.0)
+	var shoe: Color = Color(0.09, 0.08, 0.08, 1.0)
+
+	# Arms (upper + forearm + hands).
+	_fill_rect(img, torso_x - 7, torso_y + 1, 6, 13, cloth_top)
+	_fill_rect(img, torso_x + torso_w + 1, torso_y + 1, 6, 13, cloth_top)
+	_fill_rect(img, torso_x - 6, torso_y + 14, 5, 8, skin.darkened(0.05))
+	_fill_rect(img, torso_x + torso_w + 1, torso_y + 14, 5, 8, skin.darkened(0.05))
+	_fill_rect(img, torso_x - 6, torso_y + 22, 5, 2, skin.lightened(0.06))
+	_fill_rect(img, torso_x + torso_w + 1, torso_y + 22, 5, 2, skin.lightened(0.06))
+
+	# Torso, tunic, belt, lower body.
+	_fill_rect(img, torso_x, torso_y, torso_w, 15, cloth_top)
+	_fill_rect(img, torso_x + 1, torso_y + 15, torso_w - 2, 6, cloth_bottom)
+	_fill_rect(img, torso_x - int((hip_w - torso_w) / 2), torso_y + 21, hip_w, 5, cloth_bottom.darkened(0.08))
+	_fill_rect(img, torso_x + 1, torso_y + 14, torso_w - 2, 2, leather)
+
+	# Chest seam + subtle paneling for stronger visual identity.
+	_line(img, Vector2i(cx, torso_y + 1), Vector2i(cx, torso_y + 22), cloth.darkened(0.22), 1)
+	_line(img, Vector2i(torso_x + 2, torso_y + 8), Vector2i(torso_x + torso_w - 3, torso_y + 8), cloth_top.lightened(0.08), 1)
+
+	# Legs and shoes.
+	_fill_rect(img, cx - 8, torso_y + 26, 6, 15, cloth_bottom.darkened(0.12))
+	_fill_rect(img, cx + 2, torso_y + 26, 6, 15, cloth_bottom.darkened(0.12))
+	_fill_rect(img, cx - 9, torso_y + 41, 8, 3, shoe)
+	_fill_rect(img, cx + 1, torso_y + 41, 8, 3, shoe)
+
+	# Neck + head.
+	_fill_rect(img, cx - 3, neck_y, 6, 4, skin.darkened(0.04))
+	_circle_fill(img, cx, 18, head_r, skin)
+	_circle_fill(img, cx, 17, head_r - 1, skin.lightened(0.07))
+
+	# Eyes, brows, nose, mouth.
+	var eye_dx: int = 4 + int(max(0, int(body_bias / 3)))
+	var eye_y: int = 17
+	_fill_rect(img, cx - eye_dx - 1, eye_y, 3, 2, Color(0.98, 0.98, 0.99, 1.0))
+	_fill_rect(img, cx + eye_dx - 1, eye_y, 3, 2, Color(0.98, 0.98, 0.99, 1.0))
+	_put_px(img, cx - eye_dx, eye_y + 1, Color(0.08, 0.08, 0.10, 1.0))
+	_put_px(img, cx + eye_dx, eye_y + 1, Color(0.08, 0.08, 0.10, 1.0))
+	_line(img, Vector2i(cx - eye_dx - 1, eye_y - 1), Vector2i(cx - eye_dx + 1, eye_y - 1), hair.darkened(0.40), 1)
+	_line(img, Vector2i(cx + eye_dx - 1, eye_y - 1), Vector2i(cx + eye_dx + 1, eye_y - 1), hair.darkened(0.40), 1)
+	_put_px(img, cx, eye_y + 2, skin.darkened(0.18))
+	_line(img, Vector2i(cx - 2, eye_y + 5), Vector2i(cx + 2, eye_y + 5), Color(0.42, 0.20, 0.18, 1.0), 1)
+
+	# Hair style (deterministic + inherited look).
+	match d.hair_style:
+		HeelKawnianData.HairStyle.NONE:
+			# Keep crown mostly bare but add subtle scalp shadow.
+			_line(img, Vector2i(cx - head_r + 2, 12), Vector2i(cx + head_r - 2, 12), skin.darkened(0.08), 1)
+		HeelKawnianData.HairStyle.MOHAWK:
+			_fill_rect(img, cx - 2, 6, 4, 12, hair)
+			_line(img, Vector2i(cx - 3, 7), Vector2i(cx - 3, 17), hair.darkened(0.2), 1)
+			_line(img, Vector2i(cx + 3, 7), Vector2i(cx + 3, 17), hair.darkened(0.2), 1)
+		HeelKawnianData.HairStyle.BUN:
+			_circle_fill(img, cx, 7, 4, hair.darkened(0.04))
+			_fill_rect(img, cx - head_r + 2, 8, head_r * 2 - 4, 4, hair)
+		_:
+			_fill_rect(img, cx - head_r + 1, 8, head_r * 2 - 2, 5, hair)
+			_fill_rect(img, cx - head_r + 1, 12, 3, 4, hair.darkened(0.1))
+			_fill_rect(img, cx + head_r - 4, 12, 3, 4, hair.darkened(0.1))
+
+	# Age/maturity accent.
+	if d.age >= 45:
+		_line(img, Vector2i(cx - 4, 22), Vector2i(cx - 2, 23), Color(0.74, 0.74, 0.78, 0.8), 1)
+		_line(img, Vector2i(cx + 2, 23), Vector2i(cx + 4, 22), Color(0.74, 0.74, 0.78, 0.8), 1)
+
+	# Headgear from accessory slot.
+	if _has_usable_gear(d, 3):
+		_fill_rect(img, cx - head_r - 1, 10, head_r * 2 + 2, 2, Color(0.15, 0.14, 0.13, 1.0))
+		_arc_hat(img, cx, 10, head_r + 1, Color(0.22, 0.21, 0.20, 1.0))
+
+	# Armor overlay.
+	if _has_usable_gear(d, 1):
+		_fill_rect(img, torso_x + 1, torso_y + 2, torso_w - 2, 11, Color(0.46, 0.52, 0.62, 0.84))
+		_line(img, Vector2i(torso_x + 2, torso_y + 5), Vector2i(torso_x + torso_w - 3, torso_y + 5), Color(0.74, 0.80, 0.92, 0.75), 1)
+		_line(img, Vector2i(torso_x + 2, torso_y + 9), Vector2i(torso_x + torso_w - 3, torso_y + 9), Color(0.32, 0.36, 0.44, 0.75), 1)
+
+	# Heraldic chest mark: deterministic by lineage and parents.
+	var herald: int = absi(_portrait_hash(seed, int(d.parent_a_id) * 31 + int(d.parent_b_id) * 17 + int(hash(d.lineage_id)))) % 4
+	var herald_c: Color = cloth_top.lightened(0.42)
+	match herald:
+		0:
+			_line(img, Vector2i(cx, torso_y + 4), Vector2i(cx, torso_y + 12), herald_c, 1)
+			_line(img, Vector2i(cx - 3, torso_y + 8), Vector2i(cx + 3, torso_y + 8), herald_c, 1)
+		1:
+			_fill_rect(img, cx - 2, torso_y + 6, 5, 5, herald_c)
+		2:
+			_line(img, Vector2i(cx - 3, torso_y + 5), Vector2i(cx + 3, torso_y + 11), herald_c, 1)
+			_line(img, Vector2i(cx + 3, torso_y + 5), Vector2i(cx - 3, torso_y + 11), herald_c, 1)
+		_:
+			_circle_fill(img, cx, torso_y + 8, 3, herald_c)
+
+	# Main/offhand silhouettes.
+	if _has_usable_gear(d, 0) or _has_usable_gear(d, 2):
+		var blade_c: Color = Color(0.80, 0.74, 0.62, 1.0)
+		_line(img, Vector2i(torso_x + torso_w + 9, torso_y + 7), Vector2i(torso_x + torso_w + 9, torso_y + 24), blade_c, 1)
+		_line(img, Vector2i(torso_x + torso_w + 6, torso_y + 13), Vector2i(torso_x + torso_w + 12, torso_y + 13), blade_c.darkened(0.2), 1)
+	if _has_usable_gear(d, 4):
+		_fill_rect(img, torso_x - 12, torso_y + 7, 6, 8, Color(0.38, 0.44, 0.58, 1.0))
+		_fill_rect(img, torso_x - 11, torso_y + 8, 4, 6, Color(0.20, 0.24, 0.32, 0.9))
+
+	# Inventory satchel if carrying multiple slots.
+	if d.inventory != null and d.inventory.size() > 0:
+		_fill_rect(img, torso_x - 10, torso_y + 18, 5, 7, Color(0.25, 0.19, 0.14, 1.0))
+		_fill_rect(img, torso_x - 9, torso_y + 18, 3, 1, Color(0.45, 0.34, 0.22, 1.0))
+
+	# Final outline pass for clean readability.
+	_rect_outline(img, torso_x - 7, torso_y, torso_w + 14, 44, Color(0.02, 0.02, 0.03, 0.65))
+	_rect_outline(img, cx - head_r - 1, 8, head_r * 2 + 2, 20, Color(0.03, 0.03, 0.05, 0.7))
+	return img
+
+
+func _has_usable_gear(d: HeelKawnianData, slot_key: int) -> bool:
+	if d == null or d.equipped_gear == null:
+		return false
+	var gear: Variant = d.equipped_gear.get(slot_key, null)
+	if gear == null:
+		return false
+	if gear.has_method("is_broken"):
+		return not gear.is_broken()
+	return true
+
+
+func _portrait_seed(d: HeelKawnianData, salt: int) -> int:
+	var base: int = int(d.id) * 1103515245
+	base ^= int(d.parent_a_id + 17) * 12345
+	base ^= int(d.parent_b_id + 29) * 265443576
+	base ^= int(d.birth_tick + 71) * 69069
+	base ^= int(hash(d.lineage_id))
+	base ^= salt * 224682251
+	return absi(base) & 0x7fffffff
+
+
+func _portrait_hash(seed: int, salt: int) -> int:
+	var v: int = seed ^ (salt * 1664525 + 1013904223)
+	v ^= (v << 13)
+	v ^= (v >> 17)
+	v ^= (v << 5)
+	return absi(v) & 0x7fffffff
+
+
+func _put_px(img: Image, x: int, y: int, c: Color) -> void:
+	if x < 0 or y < 0 or x >= img.get_width() or y >= img.get_height():
+		return
+	img.set_pixel(x, y, c)
+
+
+func _fill_rect(img: Image, x: int, y: int, w: int, h: int, c: Color) -> void:
+	if w <= 0 or h <= 0:
+		return
+	var x0: int = maxi(0, x)
+	var y0: int = maxi(0, y)
+	var x1: int = mini(img.get_width(), x + w)
+	var y1: int = mini(img.get_height(), y + h)
+	for yy in range(y0, y1):
+		for xx in range(x0, x1):
+			img.set_pixel(xx, yy, c)
+
+
+func _rect_outline(img: Image, x: int, y: int, w: int, h: int, c: Color) -> void:
+	if w <= 1 or h <= 1:
+		return
+	for xx in range(x, x + w):
+		_put_px(img, xx, y, c)
+		_put_px(img, xx, y + h - 1, c)
+	for yy in range(y + 1, y + h - 1):
+		_put_px(img, x, yy, c)
+		_put_px(img, x + w - 1, yy, c)
+
+
+func _line(img: Image, a: Vector2i, b: Vector2i, c: Color, thickness: int = 1) -> void:
+	var x0: int = a.x
+	var y0: int = a.y
+	var x1: int = b.x
+	var y1: int = b.y
+	var dx: int = absi(x1 - x0)
+	var sx: int = 1 if x0 < x1 else -1
+	var dy: int = -absi(y1 - y0)
+	var sy: int = 1 if y0 < y1 else -1
+	var err: int = dx + dy
+	var half: int = maxi(0, int(thickness / 2))
+	while true:
+		for ty in range(-half, half + 1):
+			for tx in range(-half, half + 1):
+				_put_px(img, x0 + tx, y0 + ty, c)
+		if x0 == x1 and y0 == y1:
+			break
+		var e2: int = err * 2
+		if e2 >= dy:
+			err += dy
+			x0 += sx
+		if e2 <= dx:
+			err += dx
+			y0 += sy
+
+
+func _circle_fill(img: Image, cx: int, cy: int, r: int, c: Color) -> void:
+	if r <= 0:
+		return
+	for y in range(-r, r + 1):
+		var ww: float = sqrt(maxf(0.0, float(r * r - y * y)))
+		var xw: int = int(floor(ww))
+		for x in range(-xw, xw + 1):
+			_put_px(img, cx + x, cy + y, c)
+
+
+func _arc_hat(img: Image, cx: int, y: int, r: int, c: Color) -> void:
+	for dx in range(-r, r + 1):
+		var x: int = cx + dx
+		var yy: int = y - int(floor(sqrt(maxf(0.0, float(r * r - dx * dx)))))
+		_put_px(img, x, yy, c)
 
 
 func _reposition() -> void:
@@ -1008,7 +1275,7 @@ func _refresh(refresh_expensive_details: bool = false) -> void:
 		else:
 			_subtitle_label.text = "%s · %s · bias %s%s%s%s" % [arc_bits, prof, hk, clan_bit, rank_bit, job_diag]
 		if refresh_expensive_details:
-			_refresh_portrait_strip(d)
+			_refresh_generated_portrait(d)
 
 	# Update tier indicator from ProgressionSystem
 	if _tier_bar != null and _tier_label != null:
@@ -1199,6 +1466,7 @@ func _reset_expensive_detail_cache() -> void:
 	_last_expensive_signature = ""
 	_expensive_dirty = true
 	_last_gear_signature = ""
+	_last_portrait_signature = ""
 
 
 func _expensive_refresh_interval() -> float:

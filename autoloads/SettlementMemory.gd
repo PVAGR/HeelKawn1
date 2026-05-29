@@ -4008,6 +4008,18 @@ func check_law_violations(settlement_id: int, pawn_data: Dictionary) -> Array:
 			"no_theft":
 				if CrimeSystem != null and CrimeSystem.has_recent_crime(pawn_id, "theft", 600):
 					violations.append(law_id)
+			"egregore_mutual_aid":
+				if food_pressure >= 0.55 and _pawn_withholds_food_in_crisis(pawn_data):
+					violations.append(law_id)
+			"egregore_market_charter":
+				if CrimeSystem != null and CrimeSystem.has_recent_crime(pawn_id, "theft", 1200):
+					violations.append(law_id)
+			"egregore_martial_code":
+				if CrimeSystem != null and (CrimeSystem.has_recent_crime(pawn_id, "assault", 1200) or CrimeSystem.has_recent_crime(pawn_id, "murder", 2400)):
+					violations.append(law_id)
+			"egregore_austerity_rite":
+				if _pawn_hoards_resources_in_hardship(pawn_data, food_pressure):
+					violations.append(law_id)
 			_:
 				pass
 	return violations
@@ -4051,6 +4063,21 @@ func _pawn_neglects_hearth_duty(
 	if carrying != Item.Type.WOOD:
 		return false
 	return int(pawn_data.get("current_job_type", -1)) < 0
+
+
+func _pawn_hoards_resources_in_hardship(pawn_data: Dictionary, food_pressure: float) -> bool:
+	if food_pressure < 0.45:
+		return false
+	var carrying_count: int = int(pawn_data.get("carrying_count", 0))
+	if carrying_count <= 0:
+		return false
+	if float(pawn_data.get("hunger", 100.0)) <= 40.0:
+		return false
+	if bool(pawn_data.get("food_emergency", false)):
+		return false
+	var job_type: int = int(pawn_data.get("current_job_type", -1))
+	# Hoarding is only flagged if the pawn is idle while hardship is active.
+	return job_type < 0
 
 
 ## Save/Load support

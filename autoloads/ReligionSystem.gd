@@ -55,6 +55,12 @@ const MIN_BELIEVERS_TO_FORM: int = 3
 const RELIGION_CHECK_INTERVAL: int = 2000
 const PRAYER_MOOD_BOOST: float = 15.0
 const PRAYER_DURATION: int = 200
+const ETHICS_SCAN_INTERVAL: int = 600
+
+enum MoralAxis {
+	ASHA,
+	DRUJ,
+}
 
 # Active gods: god_id -> {domain, name, believers, settlement_id, tick_formed, shrines}
 var _gods: Dictionary = {}
@@ -66,6 +72,11 @@ var _beliefs: Dictionary = {}
 # Pending belief events: when a pawn experiences a significant event,
 # they may start believing in the relevant domain's god
 var _belief_events: Dictionary = {}  # pawn_id -> array of domains
+var _asha_druj_balance: Dictionary = {} # pawn_id -> float (+Asha, -Druj)
+var _karma_score: Dictionary = {} # pawn_id -> int
+var _dharma_index: Dictionary = {} # settlement_id(center_region) -> float
+var _last_ethics_scan_tick: int = -1
+var _last_world_event_index: int = 0
 
 func _ready() -> void:
 	if GameManager != null:
@@ -178,14 +189,21 @@ func _find_or_create_god(domain: int, first_believer_id: int) -> int:
 
 ## Process religion on tick.
 func _on_game_tick(tick: int) -> void:
-	if tick % RELIGION_CHECK_INTERVAL != 0:
+	var do_religion_pass: bool = tick % RELIGION_CHECK_INTERVAL == 0
+	var do_ethics_pass: bool = _last_ethics_scan_tick < 0 or (tick - _last_ethics_scan_tick) >= ETHICS_SCAN_INTERVAL
+	if not do_religion_pass and not do_ethics_pass:
 		return
-	# Check if any pending belief events should form gods
-	_check_belief_formation(tick)
-	# Prune dead believers
-	_prune_dead_believers()
-	# Fade gods with no believers
-	_fade_dead_gods()
+	if do_religion_pass:
+		# Check if any pending belief events should form gods
+		_check_belief_formation(tick)
+		# Prune dead believers
+		_prune_dead_believers()
+		# Fade gods with no believers
+		_fade_dead_gods()
+	if do_ethics_pass:
+		_last_ethics_scan_tick = tick
+		_ingest_world_memory_events()
+		_recompute_settlement_dharma()
 
 
 func _check_belief_formation(tick: int) -> void:
@@ -311,3 +329,106 @@ func get_religion_summary() -> Dictionary:
 			"prayers_answered": int(god.get("prayers_answered", 0)),
 		}
 	return result
+
+
+func _ingest_world_memory_events() -> void:
+	if WorldMemory == null or not WorldMemory.has_method("get_events"):
+		return
+	var events: Array = WorldMemory.get_events()
+	if events.is_empty():
+		_last_world_event_index = 0
+		return
+	if _last_world_event_index < 0:
+		_last_world_event_index = 0
+	if _last_world_event_index > events.size():
+		_last_world_event_index = 0
+	for i in range(_last_world_event_index, events.size()):
+		var ev_v: Variant = events[i]
+		if ev_v is Dictionary:
+			_apply_ethics_from_event(ev_v as Dictionary)
+	_last_world_event_index = events.size()
+
+
+func _apply_ethics_from_event(ev: Dictionary) -> void:
+	var typ: String = str(ev.get("type", "")).to_lower()
+	if typ == "":
+		typ = str(ev.get("event_type", "")).to_lower()
+	var pid: int = int(ev.get("pawn_id", -1))
+	var region_key: int = int(ev.get("r", -1))
+	var settlement_id: int = -1
+	if SettlementMemory != null and region_key >= 0:
+		settlement_id = SettlementMemory.get_settlement_id_for_region(region_key)
+
+	var asha_delta: float = 0.0
+	var karma_delta: int = 0
+	match typ:
+		"teach_skill", "apprenticeship", "shelter_built", "settlement_founded":
+			asha_delta = 1.0
+			karma_delta = 2
+		"famine_warning", "starvation", "death_starvation":
+			asha_delta = -1.0
+			karma_delta = -2
+		"death_combat", "murder":
+			asha_delta = -1.4
+			karma_delta = -4
+		"fintech_event_applied":
+			var ekind: String = str(ev.get("event_kind", "")).to_lower()
+			if ekind == "payout_settled":
+				asha_delta = 0.8
+				karma_delta = 2
+			elif ekind == "treasury_debit":
+				asha_delta = -0.3
+				karma_delta = -1
+			elif ekind == "treasury_credit":
+				asha_delta = 0.3
+				karma_delta = 1
+		_:
+			return
+
+	if pid >= 0:
+		_asha_druj_balance[pid] = float(_asha_druj_balance.get(pid, 0.0)) + asha_delta
+		_karma_score[pid] = int(_karma_score.get(pid, 0)) + karma_delta
+	if settlement_id >= 0:
+		_dharma_index[settlement_id] = float(_dharma_index.get(settlement_id, 0.0)) + asha_delta * 0.35
+
+
+func _recompute_settlement_dharma() -> void:
+	if SettlementMemory == null:
+		return
+	for st_v in SettlementMemory.get_formal_settlements():
+		if not (st_v is Dictionary):
+			continue
+		var st: Dictionary = st_v as Dictionary
+		var sid: int = int(st.get("center_region", -1))
+		if sid < 0:
+			continue
+		var pop: int = maxi(1, int(st.get("population", 1)))
+		var cur: float = float(_dharma_index.get(sid, 0.0))
+		var normalized: float = clampf(cur / float(pop), -5.0, 5.0)
+		_dharma_index[sid] = normalized * float(pop)
+
+
+func get_pawn_asha_druj_balance(pawn_id: int) -> float:
+	return float(_asha_druj_balance.get(pawn_id, 0.0))
+
+
+func get_pawn_moral_axis(pawn_id: int) -> int:
+	return MoralAxis.ASHA if get_pawn_asha_druj_balance(pawn_id) >= 0.0 else MoralAxis.DRUJ
+
+
+func get_pawn_karma(pawn_id: int) -> int:
+	return int(_karma_score.get(pawn_id, 0))
+
+
+func get_settlement_dharma_index(settlement_id: int) -> float:
+	return float(_dharma_index.get(settlement_id, 0.0))
+
+
+func get_religion_ethics_snapshot() -> Dictionary:
+	return {
+		"gods": _gods.size(),
+		"believers": _beliefs.size(),
+		"karma_pawns": _karma_score.size(),
+		"dharma_settlements": _dharma_index.size(),
+		"last_event_index": _last_world_event_index,
+	}

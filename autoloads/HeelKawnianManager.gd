@@ -16,6 +16,7 @@ const MATRIX_AFFILIATION_COOLDOWN_TICKS: int = 240
 const MATRIX_HOUSEHOLD_PLAN_COOLDOWN_TICKS: int = 600
 const MATRIX_PLAN_SPOKE_COOLDOWN_TICKS: int = 120
 const NEED_SATISFACTION_INTERVAL_TICKS: int = 30
+const CHAIN_STEP_STALL_STRIKES_MAX: int = 3
 
 const HOUSEHOLD_GOALS = {
 	"Settle Hearth": [Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_BED, Job.Type.BUILD_BED],
@@ -49,6 +50,10 @@ static var _recovery_phase_by_settlement: Dictionary = {}
 
 ## Active ambition chains: settlement_id -> { "chain_name": String, "steps": Array[String], "current_step": int, "tick": int }
 static var _active_ambition_chains: Dictionary = {}
+## Per-settlement recovery scan caches to reduce repeated world scans in hot
+## ambition/recovery paths. Cache entries are deterministic and keyed by tick.
+static var _recovery_feature_cache: Dictionary = {} # settlement_id -> {"tick": int, "features": Dictionary}
+static var _recovery_population_cache: Dictionary = {} # settlement_id -> {"tick": int, "population": int}
 
 
 func _ready() -> void:
@@ -364,8 +369,9 @@ static func get_matrix_decision_for_pawn(pawn: Variant) -> Dictionary:
 	var identity: HeelKawnianIdentity = get_identity_for_pawn(pawn)
 	var biases: Dictionary = _matrix_job_biases(profile, data, identity, pawn)
 	
-	# Household Coordination: check if pawn is part of a coordinated plan
-	var hh_ambition: Dictionary = get_household_ambition_for_pawn(pawn)
+	# Household Coordination: read-only check so decision scans do not consume
+	# household cooldowns or mutate plan state.
+	var hh_ambition: Dictionary = get_household_ambition_for_pawn(pawn, false)
 	if not hh_ambition.is_empty():
 		var jtype: int = int(hh_ambition.get("job_type", -1))
 		if jtype >= 0:
@@ -814,6 +820,11 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 		var gather_job: int = _natural_gather_job(data, local_features, tick)
 		if gather_job >= 0:
 			ambition = _ambition_result(gather_job, 4, "natural gathering cycle")
+	if not ambition.is_empty():
+		var eg_bonus: int = _egregore_settlement_priority_bonus(settlement_id, int(ambition.get("job_type", -1)))
+		if eg_bonus != 0:
+			ambition["priority"] = clampi(int(ambition.get("priority", 5)) + eg_bonus, 1, 10)
+			ambition["reason"] = "%s [egregore %+d]" % [str(ambition.get("reason", "")), eg_bonus]
 	var learned_bonus: int = _learning_priority_bonus_for_job(int(ambition.get("job_type", -1)))
 	if learned_bonus != 0:
 		ambition["priority"] = clampi(int(ambition.get("priority", 5)) + learned_bonus, 1, 10)
@@ -827,7 +838,7 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 
 	return ambition
 
-static func get_household_ambition_for_pawn(pawn: Variant) -> Dictionary:
+static func get_household_ambition_for_pawn(pawn: Variant, consume_cooldown: bool = true) -> Dictionary:
 	var data: HeelKawnianData = _pawn_data(pawn)
 	if data == null or int(data.household_id) < 0:
 		return {}
@@ -847,12 +858,16 @@ static func get_household_ambition_for_pawn(pawn: Variant) -> Dictionary:
 			var last_tick: int = int(_last_plan_tick_by_household.get(hid, -1000000))
 			if tick - last_tick < MATRIX_PLAN_SPOKE_COOLDOWN_TICKS:
 				return {}
-			
-			_last_plan_tick_by_household[hid] = tick
+			if consume_cooldown:
+				_last_plan_tick_by_household[hid] = tick
 			return _ambition_result(job_type, 8, "coordinated household goal: %s (task %d/%d)" % [plan.goal, index + 1, tasks.size()])
 		else:
 			# Plan completed
 			_active_household_plans.erase(hid)
+
+	# Read-only callers should never create/refresh plans.
+	if not consume_cooldown:
+		return {}
 	
 	# 2. Determine if we should start a new plan
 	var last_plan_tick: int = int(_last_plan_tick_by_household.get(hid, -1000000))
@@ -969,17 +984,43 @@ static func _recovery_phase(settlement_id: int) -> int:
 
 ## Scan features relevant to recovery phase assessment at a settlement center.
 static func _scan_recovery_features(settlement_id: int) -> Dictionary:
+	var tick: int = _tick()
+	var ttl: int = _recovery_cache_ttl_ticks_for_speed()
+	var cached: Dictionary = _recovery_feature_cache.get(settlement_id, {})
+	if not cached.is_empty() and tick - int(cached.get("tick", -1000000)) <= ttl:
+		var cached_features: Variant = cached.get("features", {})
+		if cached_features is Dictionary:
+			return (cached_features as Dictionary).duplicate(true)
 	var center: Vector2i = SettlementPlanner._center_tile_of_region_key(settlement_id) if SettlementPlanner != null else Vector2i(0, 0)
-	return _scan_local_features(center, 16)
+	var features: Dictionary = _scan_local_features(center, 16)
+	_recovery_feature_cache[settlement_id] = {
+		"tick": tick,
+		"features": features.duplicate(true),
+	}
+	return features
 
 
 ## Estimate population at a settlement for recovery gating.
 static func _recovery_population(settlement_id: int) -> int:
+	var tick: int = _tick()
+	var ttl: int = _recovery_cache_ttl_ticks_for_speed()
+	var cached: Dictionary = _recovery_population_cache.get(settlement_id, {})
+	if not cached.is_empty() and tick - int(cached.get("tick", -1000000)) <= ttl:
+		return int(cached.get("population", 0))
 	if SettlementMemory == null:
 		return 0
 	for st_v in SettlementMemory.settlements:
 		if st_v is Dictionary and int((st_v as Dictionary).get("center_region", -1)) == settlement_id:
-			return int((st_v as Dictionary).get("population", 0))
+			var pop: int = int((st_v as Dictionary).get("population", 0))
+			_recovery_population_cache[settlement_id] = {
+				"tick": tick,
+				"population": pop,
+			}
+			return pop
+	_recovery_population_cache[settlement_id] = {
+		"tick": tick,
+		"population": 0,
+	}
 	return 0
 
 
@@ -995,23 +1036,118 @@ static func _ambition_chain_for_settlement(settlement_id: int) -> Dictionary:
 		var chain_name: String = str(active.get("chain_name", ""))
 		var steps: Array = active.get("steps", [])
 		var current_step: int = int(active.get("current_step", 0))
+		var step_started_tick: int = int(active.get("step_started_tick", int(active.get("tick", tick))))
+		var stall_strikes: int = int(active.get("stall_strikes", 0))
+		if steps.is_empty():
+			_log_settlement_chain_event(
+				settlement_id,
+				"chain_cleared_invalid",
+				{
+					"chain_name": chain_name,
+					"reason": "empty_steps",
+				},
+				tick
+			)
+			_active_ambition_chains.erase(settlement_id)
+			return {}
+		current_step = clampi(current_step, 0, maxi(steps.size() - 1, 0))
 
 		# Check if the current step has been completed (by scanning features)
 		var features: Dictionary = _scan_recovery_features(settlement_id)
-		if _chain_step_completed(chain_name, current_step, features, settlement_id):
+		var step_completed: bool = _chain_step_completed(chain_name, current_step, features, settlement_id)
+		if step_completed:
+			var completed_step_name: String = str(steps[current_step]) if current_step < steps.size() else "unknown_step"
 			current_step += 1
+			var next_step_name: String = str(steps[current_step]) if current_step < steps.size() else "chain_complete"
 			active["current_step"] = current_step
 			active["tick"] = tick
+			active["step_started_tick"] = tick
+			active["stall_strikes"] = 0
 			_active_ambition_chains[settlement_id] = active
+			_log_settlement_chain_event(
+				settlement_id,
+				"step_complete",
+				{
+					"chain_name": chain_name,
+					"completed_step": completed_step_name,
+					"completed_step_index": current_step - 1,
+					"next_step": next_step_name,
+					"next_step_index": current_step,
+					"steps_total": steps.size(),
+				},
+				tick
+			)
+		else:
+			var stalled_ticks: int = tick - step_started_tick
+			var stall_window: int = _chain_step_stall_ticks_for_speed()
+			if stalled_ticks >= stall_window:
+				var stalled_step_name: String = str(steps[current_step]) if current_step < steps.size() else "unknown_step"
+				stall_strikes += 1
+				active["stall_strikes"] = stall_strikes
+				active["step_started_tick"] = tick
+				active["tick"] = tick
+				_log_settlement_chain_event(
+					settlement_id,
+					"step_retry",
+					{
+						"chain_name": chain_name,
+						"step": stalled_step_name,
+						"step_index": current_step,
+						"stall_strikes": stall_strikes,
+						"stall_window_ticks": stall_window,
+						"stalled_ticks": stalled_ticks,
+					},
+					tick
+				)
+				if stall_strikes >= CHAIN_STEP_STALL_STRIKES_MAX:
+					# Anti-stall recovery: advance to next step if this one has been
+					# blocked for too long. This keeps the chain from locking forever.
+					var skipped_step_name: String = stalled_step_name
+					current_step += 1
+					active["current_step"] = current_step
+					active["stall_strikes"] = 0
+					active["step_started_tick"] = tick
+					var resumed_step_name: String = str(steps[current_step]) if current_step < steps.size() else "chain_complete"
+					_log_settlement_chain_event(
+						settlement_id,
+						"step_skip_after_stall",
+						{
+							"chain_name": chain_name,
+							"skipped_step": skipped_step_name,
+							"skipped_step_index": current_step - 1,
+							"resumed_step": resumed_step_name,
+							"resumed_step_index": current_step,
+							"stall_strikes_required": CHAIN_STEP_STALL_STRIKES_MAX,
+						},
+						tick
+					)
+				_active_ambition_chains[settlement_id] = active
 
 		# If we've completed all steps, clear the chain
 		if current_step >= steps.size():
+			_log_settlement_chain_event(
+				settlement_id,
+				"chain_complete",
+				{
+					"chain_name": chain_name,
+					"steps_total": steps.size(),
+				},
+				tick
+			)
 			_active_ambition_chains.erase(settlement_id)
 			return {}
 
 		# Return the current step's ambition
 		if current_step < steps.size():
-			return _ambition_from_chain_step(str(steps[current_step]), settlement_id, features)
+			var ambition: Dictionary = _ambition_from_chain_step(str(steps[current_step]), settlement_id, features)
+			if ambition.is_empty():
+				return {}
+			var retry_strikes: int = int(active.get("stall_strikes", 0))
+			if retry_strikes > 0:
+				var boosted: int = clampi(int(ambition.get("priority", 5)) + mini(retry_strikes, 3), 1, 10)
+				ambition["priority"] = boosted
+				ambition["reason"] = "%s [stall_retry:%d]" % [str(ambition.get("reason", "")), retry_strikes]
+			return ambition
 
 	# No active chain — try to seed a new one based on settlement state
 	var features: Dictionary = _scan_recovery_features(settlement_id)
@@ -1025,7 +1161,19 @@ static func _ambition_chain_for_settlement(settlement_id: int) -> Dictionary:
 			"steps": new_chain,
 			"current_step": 0,
 			"tick": tick,
+			"step_started_tick": tick,
+			"stall_strikes": 0,
 		}
+		_log_settlement_chain_event(
+			settlement_id,
+			"chain_start",
+			{
+				"chain_name": chain_name,
+				"steps_total": new_chain.size(),
+				"first_step": str(new_chain[0]) if not new_chain.is_empty() else "",
+			},
+			tick
+		)
 		return _ambition_from_chain_step(str(new_chain[0]), settlement_id, features)
 
 	return {}
@@ -1033,41 +1181,59 @@ static func _ambition_chain_for_settlement(settlement_id: int) -> Dictionary:
 
 ## Check if a chain step has been completed.
 static func _chain_step_completed(chain_name: String, step_index: int, features: Dictionary, settlement_id: int) -> bool:
+	var hearths: int = int(features.get("hearth", 0))
+	var beds: int = int(features.get("bed", 0))
+	var storage_huts: int = int(features.get("storage_hut", 0))
+	var farms: int = int(features.get("farm", 0))
+	var walls: int = int(features.get("wall", 0))
+	var doors: int = int(features.get("door", 0))
+	var watchtowers: int = int(features.get("watchtower", 0))
+	var libraries: int = int(features.get("library", 0))
+	var schools: int = int(features.get("school", 0))
+	var markers: int = int(features.get("marker", 0))
+	var granaries: int = int(features.get("granary", 0))
+	var cellars: int = int(features.get("cellar", 0))
 	match chain_name:
 		"Found Settlement", "Rebuild from Ruin":
 			match step_index:
 				0:  # build_hearth
-					return int(features.get("hearth", 0)) >= 1
+					return hearths >= 1
 				1:  # build_beds_x3
-					return int(features.get("bed", 0)) >= 3
-				2:  # build_storage (or build_shelter for Rebuild)
-					return int(features.get("storage_hut", 0)) >= 1 or int(features.get("bed", 0)) >= 4
-				3:  # build_farm (only for Found Settlement)
-					return int(features.get("farm", 0)) >= 1
-		"Fortify", "Defense Network":
+					return hearths >= 1 and beds >= 3
+				2:  # build_storage
+					return hearths >= 1 and beds >= 2 and storage_huts >= 1
+				3:  # build_farm
+					return hearths >= 1 and (storage_huts >= 1 or granaries >= 1) and farms >= 1
+		"Fortify":
 			match step_index:
-				0:  # build_walls / build_watchtower
-					return int(features.get("wall", 0)) >= 4 if chain_name == "Fortify" else int(features.get("watchtower", 0)) >= 1
-				1:  # build_door / build_barracks
-					return int(features.get("door", 0)) >= 1 if chain_name == "Fortify" else int(features.get("barracks", 0)) >= 1
-				2:  # build_watchtower (only for Fortify)
-					return int(features.get("watchtower", 0)) >= 1
+				0:  # build_walls
+					return walls >= 4
+				1:  # build_door
+					return walls >= 2 and doors >= 1
+				2:  # build_watchtower
+					return walls >= 4 and doors >= 1 and watchtowers >= 1
+		"Defense Network":
+			match step_index:
+				0:  # build_watchtower
+					return watchtowers >= 1
+				1:  # build_barracks
+					return watchtowers >= 1 and int(features.get("barracks", 0)) >= 1
 		"Knowledge Hub":
 			match step_index:
 				0:  # build_library
-					return int(features.get("library", 0)) >= 1
+					return libraries >= 1
 				1:  # build_school
-					return int(features.get("school", 0)) >= 1
+					return libraries >= 1 and schools >= 1
 				2:  # build_marker
-					return int(features.get("marker", 0)) >= 1
+					return libraries >= 1 and schools >= 1 and markers >= 1
 		"Food Security":
 			match step_index:
 				0:  # build_farm
-					return int(features.get("farm", 0)) >= 1
+					return farms >= 1
 				1:  # build_granary
-					return int(features.get("granary", 0)) >= 1
+					return farms >= 1 and granaries >= 1
 				2:  # build_cellar
-					return int(features.get("cellar", 0)) >= 1
+					return farms >= 1 and granaries >= 1 and cellars >= 1
 		"Healing & Care":
 			match step_index:
 				0:  # build_apothecary
@@ -1214,6 +1380,40 @@ static func _select_new_chain(settlement_id: int, features: Dictionary, local_po
 		return ["build_marker", "build_shrine"]
 
 	return []
+
+
+static func _chain_step_stall_ticks_for_speed() -> int:
+	var gm: Node = _root_node("GameManager")
+	if gm == null:
+		return 2600
+	var gs: float = float(gm.get("game_speed"))
+	if gs >= 100.0:
+		return 6200
+	if gs >= 50.0:
+		return 5200
+	if gs >= 26.0:
+		return 4200
+	if gs >= 12.0:
+		return 3400
+	return 2600
+
+
+static func _recovery_cache_ttl_ticks_for_speed() -> int:
+	var gm: Node = _root_node("GameManager")
+	if gm == null:
+		return 10
+	var gs: float = float(gm.get("game_speed"))
+	if gs >= 100.0:
+		return 80
+	if gs >= 50.0:
+		return 50
+	if gs >= 26.0:
+		return 30
+	if gs >= 12.0:
+		return 18
+	if gs >= 6.0:
+		return 12
+	return 10
 
 
 ## Learning target selection: determines what knowledge/skill a pawn should prioritize learning next.
@@ -1724,6 +1924,7 @@ static func leader_direct_construction(settlement_id: int) -> int:
 	if ColonySimServices != null:
 		ColonySimServices.begin_settlement_construction_pass()
 	var posted: int = 0
+	var pending_near_cache: Dictionary = {}
 	var build_priorities: Dictionary = {}
 	if ColonySimServices != null:
 		build_priorities = ColonySimServices.compute_settlement_build_priorities(
@@ -1791,6 +1992,7 @@ static func leader_direct_construction(settlement_id: int) -> int:
 		var job_type: int = int(entry.get("type", -1))
 		var priority: int = int(entry.get("priority", 5))
 		var work: int = int(entry.get("work", 20))
+		priority = clampi(priority + _egregore_settlement_priority_bonus(settlement_id, job_type), 1, 10)
 		if ColonySimServices != null and ColonySimServices.is_hearth_build_job(job_type):
 			if not ColonySimServices.can_seed_fire_pit(center_rk, center, hearths, hearths_needed):
 				continue
@@ -1807,7 +2009,12 @@ static func leader_direct_construction(settlement_id: int) -> int:
 			if JobManager != null and JobManager.count_open_by_type(job_type) > 0:
 				continue
 		elif JobManager != null and JobManager.has_method("count_pending_jobs_near"):
-			if JobManager.count_pending_jobs_near(center, job_type, 10) > 0:
+			var pending_key: String = "%d:%d:%d:%d" % [center.x, center.y, job_type, 10]
+			var pending_local: int = int(pending_near_cache.get(pending_key, -1))
+			if pending_local < 0:
+				pending_local = JobManager.count_pending_jobs_near(center, job_type, 10)
+				pending_near_cache[pending_key] = pending_local
+			if pending_local > 0:
 				continue
 		else:
 			var pending: int = int(job_manager.call("count_pending_by_type", job_type)) if job_manager.has_method("count_pending_by_type") else 0
@@ -1975,6 +2182,34 @@ static func _ambition_result(job_type: int, priority: int, reason: String) -> Di
 	}
 
 
+static func _egregore_settlement_priority_bonus(settlement_id: int, job_type: int) -> int:
+	if settlement_id < 0 or EgregoreMemory == null:
+		return 0
+	var norms: Array = EgregoreMemory.get_settlement_active_norms(settlement_id) if EgregoreMemory.has_method("get_settlement_active_norms") else []
+	if norms.is_empty():
+		return 0
+	var bonus: int = 0
+	for n in norms:
+		var ns: String = str(n)
+		match ns:
+			"mutual_aid":
+				if job_type in [Job.Type.BUILD_BED, Job.Type.BUILD_HEARTH, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_GRANARY, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH]:
+					bonus += 1
+			"martial_code":
+				if job_type in [Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, Job.Type.DEFEND, Job.Type.PROTECT]:
+					bonus += 2
+			"scholar_path":
+				if job_type in [Job.Type.BUILD_LIBRARY, Job.Type.BUILD_SCHOOL, Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP, Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.PAPER_MAKING]:
+					bonus += 2
+			"austerity_rite":
+				if job_type in [Job.Type.BUILD_CELLAR, Job.Type.BUILD_GRANARY, Job.Type.BUILD_STORAGE_HUT, Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH]:
+					bonus += 1
+			"market_charter":
+				if job_type in [Job.Type.BUILD_MARKET, Job.Type.BUILD_TRADING_POST, Job.Type.BUILD_ROAD, Job.Type.TRADE_HAUL]:
+					bonus += 2
+	return clampi(bonus, -2, 3)
+
+
 static func _scan_local_features(center: Vector2i, radius: int) -> Dictionary:
 	var out: Dictionary = {
 		"bed": 0,
@@ -2139,6 +2374,45 @@ static func log_heelkawn_event(
 		wm.call("record_event", wm_event)
 	elif OS.is_debug_build():
 		print("HeelKawnianEventLog", event)
+
+
+static func _log_settlement_chain_event(
+		settlement_id: int,
+		action: String,
+		details: Dictionary,
+		tick: int
+) -> void:
+	var payload: Dictionary = details.duplicate(true)
+	payload["settlement_id"] = settlement_id
+	payload["action"] = action
+	var event: Dictionary = {
+		"event_id": "settlement_chain_%d_%s_%d" % [settlement_id, action, tick],
+		"source_ai": "HeelKawnianManager",
+		"event_type": "settlement_chain",
+		"payload": payload,
+		"rationale": "settlement chain %s" % action,
+		"inputs_snapshot": {},
+		"tick": tick,
+		"type": "heelkawnian_development",
+	}
+	var wm: Node = _root_node("WorldMemory")
+	if wm != null and wm.has_method("record_event"):
+		wm.call("record_event", event)
+	elif OS.is_debug_build():
+		print("SettlementChainEvent", event)
+
+
+static func get_active_ambition_chains_debug() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for sid_any in _active_ambition_chains.keys():
+		var sid: int = int(sid_any)
+		var chain: Dictionary = (_active_ambition_chains[sid_any] as Dictionary).duplicate(true)
+		chain["settlement_id"] = sid
+		out.append(chain)
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("settlement_id", 0)) < int(b.get("settlement_id", 0))
+	)
+	return out
 
 
 static func _nearby_pawn_candidates(pawn: Variant, max_items: int, radius_tiles: int) -> Array:
@@ -3004,3 +3278,14 @@ static func notify_household_task_complete(hid: int, job_type: int) -> void:
 				'total_tasks': tasks.size()
 			})
 
+
+static func get_household_plan_debug(hid: int) -> Dictionary:
+	if hid < 0:
+		return {}
+	var plan: Dictionary = _active_household_plans.get(hid, {})
+	if plan.is_empty():
+		return {}
+	var out: Dictionary = plan.duplicate(true)
+	out["household_id"] = hid
+	out["last_tick"] = int(_last_plan_tick_by_household.get(hid, -1000000))
+	return out

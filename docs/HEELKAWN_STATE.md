@@ -4,12 +4,12 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** May 27, 2026
+**Last Updated:** May 28, 2026
 **Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
 **Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
-**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-27.md](STATE_VERIFICATION_2026-05-27.md)
+**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-28.md](STATE_VERIFICATION_2026-05-28.md)
 
 ---
 
@@ -102,6 +102,135 @@ We are always building, always refining, always expanding. This document capture
     - `Pawn.gd` now runs a throttled ambition seed hook in idle to inject one strategic job into `JobManager` without overriding normal job legality or claim flow.
     - Ambition seeding is throttled per pawn and per settlement region to avoid queue spam at high simulation speed.
     - Ambition posts are logged via `heelkawnian_development` as `matrix_settlement_ambition` for deterministic audit and replay tracing.
+  - **FEAT: Matrix Preservation + Learning runtime wiring (May 26, 2026)**:
+    - `HeelKawnian.gd` now consumes `HeelKawnianManager.get_preservation_choice_for_pawn(...)` during idle medium-lane autonomy.
+    - Preservation decisions now map into live actions: teach nearby target, draft-walk to teach target, seed `CARVE_KNOWLEDGE_STONE`, write knowledge into a nearby book tile, or seed `BOOK_BINDING` when writing cannot occur immediately.
+    - `HeelKawnian.gd` now consumes `HeelKawnianManager.get_learning_target_for_pawn(...)` and seeds bounded `APPRENTICESHIP`/`TEACH_SKILL` jobs with local pending-job dedupe.
+    - Both paths are tick-gated and cooldown-gated for 1x/100x stability and logged as `matrix_preservation_action` / `matrix_learning_seed`.
+    - Added speed-tier global backpressure caps and adaptive cooldown scaling to prevent queue amplification at `26x`/`50x`/`100x` while keeping deterministic behavior.
+  - **FEAT: Household Plan Write-Path Stabilization (May 26, 2026)**:
+    - `HeelKawnianManager.get_household_ambition_for_pawn(...)` now supports read-only mode so Matrix decision scans do not consume household plan cooldowns or create plans as side effects.
+    - `Pawn.gd` matrix ambition seeding now executes household plans first and posts concrete household-scoped jobs (`matrix_household_ambition`) instead of relying only on bias nudges.
+    - Household and settlement ambition posting now use speed-tier local/global pending-job backpressure to reduce post churn at high simulation speed.
+  - **FEAT: Settlement Chain Anti-Stall Reliability (May 26, 2026)**:
+    - `HeelKawnianManager._ambition_chain_for_settlement(...)` now tracks per-step start tick and stall retries in `_active_ambition_chains`.
+    - Chain steps still advance only from local feature truth (`_chain_step_completed`), but now gain deterministic retry priority boosts when blocked.
+    - After repeated stall windows, a blocked step is advanced deterministically to prevent permanent chain lock.
+    - Stall windows scale by simulation speed tier so `100x` stress runs do not rotate chains too aggressively.
+  - **FEAT: Settlement Chain Observability (May 26, 2026)**:
+    - Settlement-chain lifecycle now emits explicit world events on `chain_start`, `step_complete`, `step_retry`, `step_skip_after_stall`, `chain_complete`, and invalid chain clear.
+    - Added `HeelKawnianManager.get_active_ambition_chains_debug()` for direct runtime inspection of active chain state by settlement.
+    - Chain diagnostics are recorded through `WorldMemory` as `heelkawnian_development` entries with `event_type=settlement_chain`.
+  - **FEAT: Chain Completion Precision Guard (May 28, 2026)**:
+    - Tightened `_chain_step_completed(...)` to require foundational prerequisites (hearth/storage/farm/wall/library/granary relationships) before counting later steps complete.
+    - Reduces false-positive chain advancement in dense/overlapping settlements where one feature count alone was too permissive.
+  - **FEAT: Recovery Scan Throughput Cache (May 28, 2026)**:
+    - Added per-settlement caching for recovery feature snapshots and settlement population reads in `HeelKawnianManager`.
+    - Cache TTL scales by simulation speed tier, reducing repeated world/settlement scans in hot ambition/recovery paths at high speed.
+  - **FEAT: Pawn Matrix Pending-Query Cache (May 28, 2026)**:
+    - Added per-tick caches for `JobManager` pending-count lookups in `HeelKawnian.gd` matrix ambition/preservation/learning paths.
+    - Replaced repeated `count_pending_by_type` and `count_pending_jobs_near` calls with cached wrappers keyed by tick/job/position/radius.
+    - Reduces hot-path query churn when many pawns evaluate matrix postings in the same simulation tick.
+  - **FEAT: Proto Authority Pending-Scan Cache (May 28, 2026)**:
+    - `AuthorityJobBoard.post_critical_proto_survival_if_needed(...)` now uses a per-call pending-near cache for forage/hunt/fish/fire-pit checks.
+    - Avoids repeated duplicate `count_pending_jobs_near(...)` scans while keeping posting decisions deterministic.
+  - **FEAT: Leader Build Pass Pending Cache (May 28, 2026)**:
+    - `HeelKawnianManager._leader_direct_construction_jobs(...)` now caches local `count_pending_jobs_near(center, job_type, 10)` results per pass.
+    - Reduces repeated pending-near scans across build queue entries while preserving deterministic post gating.
+  - **FEAT: Cooking Pressure Pending Cache (May 28, 2026)**:
+    - `ColonySimServices` now caches `JobManager.count_pending_by_type(...)` results per tick for cook job types.
+    - `_cooking_pressure_for_scope(...)` now uses cached pending counts for `COOK_MEAT`, `COOK_FISH`, and `COOK_BERRIES`.
+  - **FEAT: Local Pending-Near Cache in Colony Services (May 28, 2026)**:
+    - `ColonySimServices.count_pending_jobs_near(...)` now caches radius query results per tick by center/job/radius key.
+    - Reduces duplicate local pending-job scans in hearth/warmth and settlement pressure gating paths.
+  - **FEAT: Deterministic FintechBridge Kernel Adapter (May 28, 2026)**:
+    - Added `autoloads/FintechBridge.gd` and registered it in `project.godot`.
+    - External finance signals are now ingested as explicit manifests/events (`event_id`, `apply_tick`, `kind`, `currency`, `amount_micro`) and applied only on simulation tick.
+    - Bridge records every applied fintech event into `WorldMemory` (`type=fintech_event_applied`) and maintains an in-sim treasury snapshot by currency.
+    - Added deterministic debug seeding helper (`debug_seed_meow_credit`) for controlled integration testing without wall-clock callbacks.
+  - **FEAT: Zoroastrian/Hindu Ethics Runtime Layer (May 28, 2026)**:
+    - `ReligionSystem.gd` now computes deterministic moral state from factual world events:
+      - pawn-level `Asha/Druj` balance,
+      - pawn-level `Karma` ledger,
+      - settlement-level `Dharma` index.
+    - Added periodic ethics ingestion from `WorldMemory.get_events()` with monotonic index tracking (`_last_world_event_index`) to avoid reprocessing.
+    - Ethics mapping currently responds to survival/teaching/combat/fintech event types, enabling religion/culture systems to consume live moral state rather than static lore-only flags.
+    - Added API surface: `get_pawn_asha_druj_balance`, `get_pawn_moral_axis`, `get_pawn_karma`, `get_settlement_dharma_index`, `get_religion_ethics_snapshot`.
+  - **FEAT: Egregore Matrix Scaffolding (May 29, 2026)**:
+    - Added `autoloads/EgregoreMemory.gd` and registered `EgregoreMemory` in `project.godot`.
+    - Introduced deterministic per-settlement 8-axis pressure signatures:
+      - `cooperation`, `discipline`, `care`, `fear`, `vengeance`, `curiosity`, `asceticism`, `opulence`.
+    - `EgregoreMemory` ingests `WorldMemory` event deltas by monotonic index and updates bounded pressure vectors, cohesion, and ritual/taboo/law density.
+    - Added read APIs for observer/runtime usage:
+      - `get_settlement_signature`
+      - `get_settlement_pressure`
+      - `get_settlement_top_pressures`
+      - `get_world_snapshot`
+    - Integrated matrix coupling in `scripts/pawn/HeelKawnianDecision.gd`:
+      - `get_heelkawnian_matrix_job_bias(...)` now adds bounded egregore bias per settlement to job selection.
+    - Added watch-mode visibility in `scripts/ui/ColonyHUD.gd`:
+      - New `Egregore[...]` line shows settlement cohesion plus top dominant pressures for live observer testing.
+  - **FEAT: Egregore Emergent Norms/Laws (May 29, 2026)**:
+    - `EgregoreMemory.gd` now derives active social norms from pressure thresholds with deterministic cooldown hysteresis:
+      - `mutual_aid`, `martial_code`, `scholar_path`, `austerity_rite`, `market_charter`.
+    - Norm emergence/fade is recorded to `WorldMemory` (`egregore_norm_emerged` / `egregore_norm_faded`).
+    - On emergence, Egregore adds corresponding law entries to `SettlementMemory` when missing (no duplicate insertion).
+    - `ColonyHUD` now surfaces active norms in watch mode so civilization behavior and social institution drift are visible during observer runs.
+  - **FEAT: Egregore Coupling — Diplomacy + Migration (May 29, 2026)**:
+    - `FactionManager.gd` polity relation scoring now includes deterministic `EgregoreMemory` diplomacy bias:
+      - prosocial/discipline/opulence alignment nudges relations up,
+      - fear/vengeance pressure and cross-settlement pressure mismatch nudge relations down.
+    - `FragmentationManager.gd` migration fragmentation gates now read Egregore pressure + active norms:
+      - fear/vengeance can increase relocation tendency,
+      - cooperation/care/discipline and stabilizing norms can reduce unnecessary out-migration.
+    - Added world fact logging for applied egregore migration influence (`egregore_fragmentation_applied`) for replay/audit visibility.
+  - **FEAT: Egregore Coupling — Settlement Institution Priorities (May 29, 2026)**:
+    - `HeelKawnianManager.gd` now applies a bounded Egregore norm priority bonus in two settlement-scale paths:
+      - `get_settlement_ambition_for_pawn(...)` (ambition job + reason annotation),
+      - `leader_direct_construction(...)` (direct posted build/cook job priorities).
+    - Norm-aware boosts currently cover:
+      - `mutual_aid` -> shelter/food security priorities,
+      - `martial_code` -> defense infrastructure priorities,
+      - `scholar_path` -> knowledge/teaching priorities,
+      - `austerity_rite` -> storage/rationing priorities,
+      - `market_charter` -> trade/road priorities.
+    - Ensures emergent institutions alter what settlements *choose to build and do*, not just pawn-level local decisions.
+  - **FEAT: Watch-Mode Civilization Divergence Telemetry (May 29, 2026)**:
+    - `EgregoreMemory.gd` now exposes `get_settlement_divergence_snapshot(...)` with:
+      - cohesion,
+      - divergence score,
+      - migration tendency,
+      - stability/threat aggregates,
+      - active norms.
+    - `ColonyHUD.gd` now renders a `Divergence[...]` line in watch mode, including:
+      - per-settlement divergence score,
+      - migration trend (`retention` / `steady` / `outflow`),
+      - nearest-polity diplomacy headline.
+    - This makes long-run civilization drift legible while observing at normal or accelerated speed.
+  - **FEAT: Trend-Aware Divergence Telemetry (May 29, 2026)**:
+    - `EgregoreMemory.gd` now keeps short deterministic trend series per settlement for:
+      - divergence score,
+      - migration tendency.
+    - `get_settlement_divergence_snapshot(...)` now includes trend labels (`rising` / `falling` / `steady`).
+    - `ColonyHUD.gd` now shows directional arrows on divergence, migration, and diplomacy lines, making change-over-time visible at a glance during watch mode.
+  - **FEAT: Cross-Settlement Egregore Diffusion (May 29, 2026)**:
+    - `EgregoreMemory.gd` now performs deterministic per-tick-window diffusion between nearby formal settlements.
+    - Diffusion weights are diplomacy-dependent:
+      - cordial/allied relations pull pressure vectors toward convergence,
+      - hostile/war relations push pressure vectors toward divergence.
+    - Neighbor set is bounded (nearest 3) and ordered deterministically, preserving replayability while enabling cultural co-evolution and polarization across the world.
+  - **FEAT: Institutional Law Enforcement Loop (May 29, 2026)**:
+    - `SettlementMemory.check_law_violations(...)` now evaluates `egregore_*` law types in live sim:
+      - `egregore_mutual_aid`,
+      - `egregore_market_charter`,
+      - `egregore_martial_code`,
+      - `egregore_austerity_rite`.
+    - `HeelKawnian.gd` now applies concrete sanctions when violations are detected:
+      - trust penalties (chief-linked),
+      - social rapport reduction,
+      - pawn reputation reduction,
+      - grudge pressure via `GrudgeManager` where applicable.
+    - Sanctions are recorded as factual events (`law_sanction_applied`) and now feed back into Egregore pressure updates, closing the institution -> behavior -> memory loop.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

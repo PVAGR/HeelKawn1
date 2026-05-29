@@ -562,9 +562,42 @@ func get_heelkawnian_matrix_job_bias(pawn: Node, data: HeelKawnianData, job_type
 			_matrix_priority_decision = {}
 		_matrix_priority_next_refresh_tick = tick + _matrix_priority_refresh_interval_for_speed()
 	if _matrix_priority_decision.is_empty():
-		return 0
+		return _egregore_job_bias(data, job_type)
 	var biases: Dictionary = _matrix_priority_decision.get("job_biases", {})
-	return clampi(int(biases.get(int(job_type), 0)), -8, 16)
+	var matrix_bias: int = int(biases.get(int(job_type), 0))
+	return clampi(matrix_bias + _egregore_job_bias(data, job_type), -8, 16)
+
+
+func _egregore_job_bias(data: HeelKawnianData, job_type: int) -> int:
+	if data == null or EgregoreMemory == null or SettlementMemory == null:
+		return 0
+	var sid: int = int(SettlementMemory.get_settlement_id_for_pawn(int(data.id)))
+	if sid < 0:
+		return 0
+	var coop: float = float(EgregoreMemory.get_settlement_pressure(sid, "cooperation"))
+	var care: float = float(EgregoreMemory.get_settlement_pressure(sid, "care"))
+	var fear: float = float(EgregoreMemory.get_settlement_pressure(sid, "fear"))
+	var discipline: float = float(EgregoreMemory.get_settlement_pressure(sid, "discipline"))
+	var curiosity: float = float(EgregoreMemory.get_settlement_pressure(sid, "curiosity"))
+	var vengeance: float = float(EgregoreMemory.get_settlement_pressure(sid, "vengeance"))
+	var asceticism: float = float(EgregoreMemory.get_settlement_pressure(sid, "asceticism"))
+	var opulence: float = float(EgregoreMemory.get_settlement_pressure(sid, "opulence"))
+	var _Job = load("res://scripts/jobs/Job.gd")
+	var bias: float = 0.0
+	match job_type:
+		_Job.Type.TEACH_SKILL, _Job.Type.APPRENTICESHIP:
+			bias += coop * 0.03 + curiosity * 0.05 + discipline * 0.03
+		_Job.Type.BUILD_BED, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_SHELTER:
+			bias += care * 0.05 + discipline * 0.03 + coop * 0.02
+		_Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH, _Job.Type.COOK_MEAT, _Job.Type.COOK_FISH, _Job.Type.COOK_BERRIES:
+			bias += care * 0.04 + asceticism * 0.03
+		_Job.Type.DEFEND, _Job.Type.PROTECT, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR:
+			bias += fear * 0.04 + discipline * 0.03 + vengeance * 0.02
+		_Job.Type.TRADE_HAUL:
+			bias += coop * 0.03 + opulence * 0.05 - fear * 0.02
+		_:
+			bias += discipline * 0.01 + coop * 0.01
+	return clampi(int(round(bias)), -6, 6)
 
 
 ## --- Resource pressure bias ---

@@ -14,6 +14,18 @@ Status: proposed | accepted | rejected
 
 ---
 
+## 2026-05-28 - Egregore + Matrix runtime canon framing
+
+Date: 2026-05-28
+Proposed by: assistant
+Affected file(s): `docs/WORLD_BIBLE/EGREGORE_MATRIX_RUNTIME_SPEC.md`, `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md`, `docs/WORLD_BIBLE/MASTER_INDEX.md`
+Current canon: matrix/simulation language exists across state docs, but no single deterministic canon contract for collective-belief (egregore) coupling
+Proposed canon: define egregore as emergent collective social-belief pressure derived from logged facts; couple it to matrix decision bias with bounded deterministic formulas and audit requirements
+Reason: align user target ("world as developing egregore + matrix + simulation") with existing non-negotiable determinism/replayability rules and provide a safe implementation entrypoint
+Status: accepted
+
+---
+
 ## 2026-04-30 - Cultural architecture documentation
 
 Date: 2026-04-30

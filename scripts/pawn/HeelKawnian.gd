@@ -2390,6 +2390,7 @@ func _tick_community_law_check() -> void:
 		if law.is_empty():
 			continue
 		data.add_mood_event(MoodEvent.Type.STRESS, 14.0, 180)
+		_apply_law_violation_consequences(sid, law, tick)
 		if WorldMemory != null and WorldMemory.has_method("record_event"):
 			WorldMemory.record_event({
 				"type": "law_breach",
@@ -2401,6 +2402,59 @@ func _tick_community_law_check() -> void:
 				"law_type": str(law.get("type", "")),
 				"law_description": str(law.get("description", "")),
 			})
+
+
+func _apply_law_violation_consequences(settlement_id: int, law: Dictionary, tick: int) -> void:
+	if data == null or law.is_empty():
+		return
+	var law_type: String = str(law.get("type", ""))
+	var chief_id: int = SettlementMemory.get_construction_chief_pawn_id(settlement_id) if SettlementMemory != null else -1
+	var trust_penalty: float = 0.0
+	var rep_penalty: float = 0.0
+	var grudge_reason: String = ""
+	var grudge_severity: int = 1
+	match law_type:
+		"share_food_in_crisis", "egregore_mutual_aid":
+			trust_penalty = 6.0
+			rep_penalty = 1.2
+			grudge_reason = "neglect"
+			grudge_severity = 1
+		"no_theft", "egregore_market_charter":
+			trust_penalty = 10.0
+			rep_penalty = 2.0
+			grudge_reason = "theft"
+			grudge_severity = 2
+		"maintain_hearth", "egregore_austerity_rite":
+			trust_penalty = 5.0
+			rep_penalty = 0.8
+			grudge_reason = "abandonment"
+			grudge_severity = 1
+		"egregore_martial_code":
+			trust_penalty = 9.0
+			rep_penalty = 1.6
+			grudge_reason = "betrayal"
+			grudge_severity = 2
+		_:
+			trust_penalty = 4.0
+			rep_penalty = 0.6
+	if chief_id >= 0 and chief_id != int(data.id):
+		var prev_trust: float = float(data.trust.get(chief_id, 50.0))
+		data.trust[chief_id] = clampf(prev_trust - trust_penalty, 0.0, 100.0)
+		data.add_social_rapport(chief_id, -int(round(trust_penalty * 8.0)))
+		if GrudgeManager != null and GrudgeManager.has_method("add_grudge") and not grudge_reason.is_empty():
+			GrudgeManager.add_grudge(chief_id, int(data.id), grudge_reason, grudge_severity)
+	data.reputation_score = clampf(float(data.reputation_score) - rep_penalty, 0.0, 100.0)
+	if WorldMemory != null and WorldMemory.has_method("record_event"):
+		WorldMemory.record_event({
+			"type": "law_sanction_applied",
+			"tick": tick,
+			"pawn_id": int(data.id),
+			"settlement_id": settlement_id,
+			"law_type": law_type,
+			"chief_id": chief_id,
+			"trust_penalty": trust_penalty,
+			"reputation_penalty": rep_penalty,
+		})
 
 
 func _try_heelkawnian_affiliation_action() -> bool:

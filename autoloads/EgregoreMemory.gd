@@ -150,6 +150,15 @@ func _pressure_delta_for_event(typ: String, ev: Dictionary) -> Dictionary:
 		"law_enacted", "law_repealed", "governance_advanced", "governance_declared":
 			out["discipline"] = 0.9
 			out["_law"] = 0.02
+		"law_breach":
+			out["fear"] = 0.4
+			out["discipline"] = 0.3
+			out["cooperation"] = -0.2
+			out["_taboo"] = 0.01
+		"law_sanction_applied":
+			out["discipline"] = 0.5
+			out["fear"] = 0.3
+			out["_law"] = 0.02
 		"ritual_performed", "prayer", "shrine_built":
 			out["discipline"] = 0.4
 			out["asceticism"] = 0.5

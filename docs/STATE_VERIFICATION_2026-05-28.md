@@ -368,3 +368,35 @@ Verification:
 
 Residual Risk:
 - Runtime validation on a Godot-enabled host is still required to tune long-horizon diffusion strength under high settlement counts and sustained `100x`.
+
+## Session 17 Update (Institutional Enforcement Consequences)
+
+17. Made egregore-emergent laws enforceable with simulation consequences
+- Files:
+  - `autoloads/SettlementMemory.gd`
+  - `scripts/pawn/HeelKawnian.gd`
+  - `autoloads/EgregoreMemory.gd`
+  - `docs/HEELKAWN_STATE.md`
+- Changes:
+  - Extended `SettlementMemory.check_law_violations(...)` with `egregore_*` law checks:
+    - `egregore_mutual_aid`
+    - `egregore_market_charter`
+    - `egregore_martial_code`
+    - `egregore_austerity_rite`
+  - Added hardship hoarding detector `_pawn_hoards_resources_in_hardship(...)` for austerity enforcement.
+  - Added `_apply_law_violation_consequences(...)` in `HeelKawnian.gd`:
+    - chief-linked trust penalties,
+    - social rapport penalties,
+    - reputation penalties,
+    - grudge creation (via `GrudgeManager`) for severe norm breaches.
+  - Added sanction fact event `law_sanction_applied`.
+  - Egregore pressure mapping now ingests:
+    - `law_breach`
+    - `law_sanction_applied`
+    so institution enforcement feeds collective pressure deterministically.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after law enforcement loop integration: PASS.
+
+Residual Risk:
+- Full gameplay balancing for sanction severity (especially under dense law stacks at `100x`) still requires in-engine playtest and tuning on a Godot-enabled host.

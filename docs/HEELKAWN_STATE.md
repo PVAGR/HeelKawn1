@@ -219,6 +219,18 @@ We are always building, always refining, always expanding. This document capture
       - cordial/allied relations pull pressure vectors toward convergence,
       - hostile/war relations push pressure vectors toward divergence.
     - Neighbor set is bounded (nearest 3) and ordered deterministically, preserving replayability while enabling cultural co-evolution and polarization across the world.
+  - **FEAT: Institutional Law Enforcement Loop (May 29, 2026)**:
+    - `SettlementMemory.check_law_violations(...)` now evaluates `egregore_*` law types in live sim:
+      - `egregore_mutual_aid`,
+      - `egregore_market_charter`,
+      - `egregore_martial_code`,
+      - `egregore_austerity_rite`.
+    - `HeelKawnian.gd` now applies concrete sanctions when violations are detected:
+      - trust penalties (chief-linked),
+      - social rapport reduction,
+      - pawn reputation reduction,
+      - grudge pressure via `GrudgeManager` where applicable.
+    - Sanctions are recorded as factual events (`law_sanction_applied`) and now feed back into Egregore pressure updates, closing the institution -> behavior -> memory loop.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

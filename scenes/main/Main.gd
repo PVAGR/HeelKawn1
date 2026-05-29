@@ -3210,7 +3210,7 @@ func _on_game_tick(tick: int) -> void:
 		_resolve_pending_skirmishes(tick)
 
 		# Offset SettlementManager.process to a different tick to spread the load
-		var rebirth_offset_tick: int = (tick + rebirth_interval / 2) % rebirth_interval
+		var rebirth_offset_tick: int = (tick + _rebirth_interval / 2) % _rebirth_interval
 		if rebirth_offset_tick == 0:
 			t0 = Time.get_ticks_usec()
 			SettlementManager.process(_world, self, false)

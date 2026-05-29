@@ -345,3 +345,26 @@ Verification:
 
 Residual Risk:
 - Long-form readability of arrow cadence under sustained `100x` observer runs still requires runtime playtest on a Godot-enabled host.
+
+## Session 16 Update (Cross-Settlement Egregore Diffusion)
+
+16. Added diplomacy-conditioned cultural diffusion/polarization between settlements
+- Files:
+  - `autoloads/EgregoreMemory.gd`
+  - `docs/HEELKAWN_STATE.md`
+- Changes:
+  - Added `_apply_cross_settlement_diffusion()` in `EgregoreMemory`.
+  - On each egregore update pass:
+    - formal settlements are collected and sorted deterministically,
+    - each settlement samples nearest 3 neighbors,
+    - relation score from `FactionManager.get_polity_relation_score(...)` determines influence mode:
+      - cordial/allied => pressure convergence (pull),
+      - hostile/war => pressure divergence (push).
+  - Applied diffusion via accumulated per-settlement axis deltas, clamped to existing pressure bounds.
+  - Added `_center_tile_of_region(...)` helper for deterministic distance ordering.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after cross-settlement diffusion integration: PASS.
+
+Residual Risk:
+- Runtime validation on a Godot-enabled host is still required to tune long-horizon diffusion strength under high settlement counts and sustained `100x`.

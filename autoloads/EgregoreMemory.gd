@@ -45,6 +45,7 @@ func _on_game_tick(tick: int) -> void:
 	_ingest_world_memory_events()
 	_decay_signatures()
 	_update_emergent_norms(tick)
+	_apply_cross_settlement_diffusion()
 	_sample_trends()
 
 
@@ -219,6 +220,116 @@ func _decay_signatures() -> void:
 		sig["pressure_vector"] = pv
 		sig["memory_weight"] = maxf(0.0, float(sig.get("memory_weight", 0.0)) * 0.999)
 		_signatures[sid] = sig
+
+
+func _apply_cross_settlement_diffusion() -> void:
+	if SettlementMemory == null:
+		return
+	var formal: Array = SettlementMemory.get_formal_settlements() if SettlementMemory.has_method("get_formal_settlements") else []
+	if formal.size() < 2:
+		return
+	var rows: Array = []
+	for st_v in formal:
+		if not (st_v is Dictionary):
+			continue
+		var st: Dictionary = st_v as Dictionary
+		var sid: int = int(st.get("center_region", -1))
+		var pid: int = int(st.get("polity_id", sid))
+		if sid < 0 or pid < 0:
+			continue
+		rows.append({
+			"sid": sid,
+			"pid": pid,
+			"tile": _center_tile_of_region(sid),
+		})
+	if rows.size() < 2:
+		return
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("sid", -1)) < int(b.get("sid", -1))
+	)
+	var delta_by_sid: Dictionary = {}
+	for row_v in rows:
+		var row: Dictionary = row_v as Dictionary
+		var sid_a: int = int(row.get("sid", -1))
+		delta_by_sid[sid_a] = {}
+		for axis in AXES:
+			(delta_by_sid[sid_a] as Dictionary)[axis] = 0.0
+
+	for i in range(rows.size()):
+		var a: Dictionary = rows[i] as Dictionary
+		var sid_a: int = int(a.get("sid", -1))
+		var pid_a: int = int(a.get("pid", -1))
+		var tile_a: Vector2i = a.get("tile", Vector2i.ZERO) as Vector2i
+		var nearest: Array = []
+		for j in range(rows.size()):
+			if i == j:
+				continue
+			var b: Dictionary = rows[j] as Dictionary
+			var sid_b: int = int(b.get("sid", -1))
+			var tile_b: Vector2i = b.get("tile", Vector2i.ZERO) as Vector2i
+			var dist: int = maxi(absi(tile_a.x - tile_b.x), absi(tile_a.y - tile_b.y))
+			nearest.append({"sid": sid_b, "dist": dist})
+		nearest.sort_custom(func(x: Dictionary, y: Dictionary) -> bool:
+			return int(x.get("dist", 999999)) < int(y.get("dist", 999999))
+		)
+		var lim: int = mini(3, nearest.size())
+		for k in range(lim):
+			var nb: Dictionary = nearest[k] as Dictionary
+			var sid_b2: int = int(nb.get("sid", -1))
+			var row_b: Dictionary = {}
+			for r in rows:
+				if int((r as Dictionary).get("sid", -1)) == sid_b2:
+					row_b = r as Dictionary
+					break
+			if row_b.is_empty():
+				continue
+			var pid_b: int = int(row_b.get("pid", -1))
+			if pid_b < 0:
+				continue
+			var relation: int = 0
+			if FactionManager != null and FactionManager.has_method("get_polity_relation_score"):
+				relation = int(FactionManager.get_polity_relation_score(pid_a, pid_b))
+			# Friendly/cordial/allied: converge. Hostile/war: repel.
+			var pull_gain: float = 0.0
+			var push_gain: float = 0.0
+			if relation >= 20:
+				pull_gain = clampf(float(relation) / 100.0, 0.2, 1.0) * 0.02
+			elif relation <= -40:
+				push_gain = clampf(absf(float(relation)) / 100.0, 0.4, 1.0) * 0.01
+			if pull_gain <= 0.0 and push_gain <= 0.0:
+				continue
+			var sig_a: Dictionary = get_settlement_signature(sid_a)
+			var sig_b: Dictionary = get_settlement_signature(sid_b2)
+			if sig_a.is_empty() or sig_b.is_empty():
+				continue
+			var pv_a: Dictionary = sig_a.get("pressure_vector", {})
+			var pv_b: Dictionary = sig_b.get("pressure_vector", {})
+			for axis in AXES:
+				var va: float = float(pv_a.get(axis, 0.0))
+				var vb: float = float(pv_b.get(axis, 0.0))
+				var diff: float = vb - va
+				var d: float = diff * pull_gain - diff * push_gain
+				var cur: float = float((delta_by_sid[sid_a] as Dictionary).get(axis, 0.0))
+				(delta_by_sid[sid_a] as Dictionary)[axis] = cur + d
+	# Apply accumulated deltas
+	for sid_v in delta_by_sid.keys():
+		var sid: int = int(sid_v)
+		if not _signatures.has(sid):
+			continue
+		var sig: Dictionary = _signatures[sid]
+		var pv: Dictionary = sig.get("pressure_vector", {})
+		var deltas: Dictionary = delta_by_sid[sid]
+		for axis in AXES:
+			var v: float = float(pv.get(axis, 0.0)) + float(deltas.get(axis, 0.0))
+			pv[axis] = clampf(v, -MAX_ABS_PRESSURE, MAX_ABS_PRESSURE)
+		sig["pressure_vector"] = pv
+		_signatures[sid] = sig
+
+
+func _center_tile_of_region(region_key: int) -> Vector2i:
+	var rx: int = int(region_key) & 0xFFFF
+	var ry: int = (int(region_key) >> 16) & 0xFFFF
+	return Vector2i(rx * 16 + 8, ry * 16 + 8)
 
 
 func _update_emergent_norms(tick: int) -> void:

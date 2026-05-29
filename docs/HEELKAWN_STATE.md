@@ -213,6 +213,12 @@ We are always building, always refining, always expanding. This document capture
       - migration tendency.
     - `get_settlement_divergence_snapshot(...)` now includes trend labels (`rising` / `falling` / `steady`).
     - `ColonyHUD.gd` now shows directional arrows on divergence, migration, and diplomacy lines, making change-over-time visible at a glance during watch mode.
+  - **FEAT: Cross-Settlement Egregore Diffusion (May 29, 2026)**:
+    - `EgregoreMemory.gd` now performs deterministic per-tick-window diffusion between nearby formal settlements.
+    - Diffusion weights are diplomacy-dependent:
+      - cordial/allied relations pull pressure vectors toward convergence,
+      - hostile/war relations push pressure vectors toward divergence.
+    - Neighbor set is bounded (nearest 3) and ordered deterministically, preserving replayability while enabling cultural co-evolution and polarization across the world.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

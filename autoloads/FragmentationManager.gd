@@ -40,10 +40,14 @@ func check_and_fragment(world: World, main: Node2D) -> void:
 			continue
 		if int(MemoryManager.get_settlement_intent().get(ckr, MemoryManager.INTENT_HOLD)) != MemoryManager.INTENT_GROW:
 			continue
-		if float(MemoryManager.get_settlement_pressure().get(ckr, 1.0)) >= PRESSURE_THRESHOLD:
+		var base_pressure: float = float(MemoryManager.get_settlement_pressure().get(ckr, 1.0))
+		var eg_bias: Dictionary = _egregore_migration_bias(ckr)
+		var pressure_gate: float = PRESSURE_THRESHOLD + float(eg_bias.get("pressure_gate_delta", 0.0))
+		if base_pressure >= pressure_gate:
 			continue
 		var pop: int = int(main.settlement_planner_count_pawns_in_regions(pack0))
-		if pop < POP_THRESHOLD:
+		var pop_threshold: int = POP_THRESHOLD + int(eg_bias.get("pop_threshold_delta", 0))
+		if pop < pop_threshold:
 			continue
 		if _last_fragment_tick.has(ckr) and (now - int(_last_fragment_tick[ckr])) < COOLDOWN_TICKS:
 			continue
@@ -51,6 +55,7 @@ func check_and_fragment(world: World, main: Node2D) -> void:
 		if target.x < 0:
 			continue
 		var nmove: int = maxi(1, (pop * RELOC_FRACTION_NUM) / RELOC_FRACTION_DEN)
+		nmove += int(eg_bias.get("move_delta", 0))
 		nmove = mini(nmove, int(pop / 2))
 		var na: int = int(main.society_relocate_pawns_count(pack0, target, nmove, ckr, "fragment"))
 		if na < 1:
@@ -59,10 +64,66 @@ func check_and_fragment(world: World, main: Node2D) -> void:
 		WorldMemory.record_social(
 				now, int(WorldMemory.Kind.SOCIAL_FRAGMENT), ckr, target, na, pack0
 		)
+		WorldMemory.record_event({
+			"type": "egregore_fragmentation_applied",
+			"tick": now,
+			"settlement_id": ckr,
+			"moved": na,
+			"base_pressure": base_pressure,
+			"pressure_gate": pressure_gate,
+			"pop_threshold": pop_threshold,
+			"eg_move_delta": int(eg_bias.get("move_delta", 0)),
+		})
 		if OS.is_debug_build():
 			print(
 					"[Fragment] moved=%d  from_ckr=%d  target=%s  tick=%d" % [na, ckr, target, now]
 			)
+
+
+func _egregore_migration_bias(settlement_id: int) -> Dictionary:
+	if EgregoreMemory == null:
+		return {"pressure_gate_delta": 0.0, "pop_threshold_delta": 0, "move_delta": 0}
+	var fear: float = float(EgregoreMemory.get_settlement_pressure(settlement_id, "fear"))
+	var vengeance: float = float(EgregoreMemory.get_settlement_pressure(settlement_id, "vengeance"))
+	var cooperation: float = float(EgregoreMemory.get_settlement_pressure(settlement_id, "cooperation"))
+	var care: float = float(EgregoreMemory.get_settlement_pressure(settlement_id, "care"))
+	var discipline: float = float(EgregoreMemory.get_settlement_pressure(settlement_id, "discipline"))
+	var norms: Array = EgregoreMemory.get_settlement_active_norms(settlement_id) if EgregoreMemory.has_method("get_settlement_active_norms") else []
+
+	var threat: float = fear + vengeance
+	var cohesion_guard: float = cooperation + care + discipline
+	var pressure_delta: float = 0.0
+	var pop_delta: int = 0
+	var move_delta: int = 0
+
+	if threat > 16.0:
+		pressure_delta += 0.08
+		move_delta += 1
+	elif threat > 10.0:
+		pressure_delta += 0.04
+	if cohesion_guard > 18.0:
+		pressure_delta -= 0.05
+		pop_delta += 2
+		move_delta -= 1
+	elif cohesion_guard > 12.0:
+		pressure_delta -= 0.02
+		pop_delta += 1
+
+	for n in norms:
+		var ns: String = str(n)
+		if ns == "mutual_aid" or ns == "scholar_path":
+			pop_delta += 1
+			move_delta -= 1
+		elif ns == "martial_code" or ns == "austerity_rite":
+			move_delta += 1
+		elif ns == "market_charter":
+			pressure_delta += 0.02
+
+	return {
+		"pressure_gate_delta": clampf(pressure_delta, -0.12, 0.12),
+		"pop_threshold_delta": clampi(pop_delta, -3, 4),
+		"move_delta": clampi(move_delta, -2, 3),
+	}
 
 
 func _center_tile(ck: int) -> Vector2i:

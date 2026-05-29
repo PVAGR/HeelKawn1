@@ -176,6 +176,14 @@ We are always building, always refining, always expanding. This document capture
     - Norm emergence/fade is recorded to `WorldMemory` (`egregore_norm_emerged` / `egregore_norm_faded`).
     - On emergence, Egregore adds corresponding law entries to `SettlementMemory` when missing (no duplicate insertion).
     - `ColonyHUD` now surfaces active norms in watch mode so civilization behavior and social institution drift are visible during observer runs.
+  - **FEAT: Egregore Coupling — Diplomacy + Migration (May 29, 2026)**:
+    - `FactionManager.gd` polity relation scoring now includes deterministic `EgregoreMemory` diplomacy bias:
+      - prosocial/discipline/opulence alignment nudges relations up,
+      - fear/vengeance pressure and cross-settlement pressure mismatch nudge relations down.
+    - `FragmentationManager.gd` migration fragmentation gates now read Egregore pressure + active norms:
+      - fear/vengeance can increase relocation tendency,
+      - cooperation/care/discipline and stabilizing norms can reduce unnecessary out-migration.
+    - Added world fact logging for applied egregore migration influence (`egregore_fragmentation_applied`) for replay/audit visibility.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

@@ -248,3 +248,26 @@ Verification:
 
 Residual Risk:
 - Runtime throughput and long-run institutional oscillation at sustained `100x` still require in-engine verification on a machine with Godot runtime available.
+
+## Session 12 Update (Egregore Migration + Diplomacy Coupling)
+
+12. Wired egregore pressures into cross-settlement relations and migration decisions
+- Files:
+  - `autoloads/FactionManager.gd`
+  - `autoloads/FragmentationManager.gd`
+  - `docs/HEELKAWN_STATE.md`
+- Changes:
+  - Added `_egregore_diplomacy_bias(...)` to `FactionManager` and integrated into `_compute_polity_relation_score(...)`.
+  - Bias now derives from per-settlement egregore pressure vectors:
+    - increases from prosocial/disciplined/opulent alignment,
+    - decreases from fear/vengeance pressure and inter-settlement pressure mismatch.
+  - Added `_egregore_migration_bias(...)` to `FragmentationManager` and integrated into fragmentation gates:
+    - adjusts pressure gate, population threshold, and migrant move count deterministically.
+    - uses both pressure axes and active norms to stabilize or accelerate out-migration.
+  - Added audit event `egregore_fragmentation_applied` when egregore migration influence is used in a relocation decision.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after migration+diplomacy coupling: PASS.
+
+Residual Risk:
+- Sustained high-population (`100x`) behavior still needs runtime verification on a Godot-enabled host to confirm smoothness and population drift shape under prolonged runs.

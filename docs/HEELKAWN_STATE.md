@@ -4,12 +4,12 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** May 28, 2026
+**Last Updated:** May 29, 2026
 **Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
 **Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
-**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-28.md](STATE_VERIFICATION_2026-05-28.md)
+**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-29.md](STATE_VERIFICATION_2026-05-29.md)
 
 ---
 
@@ -602,6 +602,11 @@ We are always building, always refining, always expanding. This document capture
   - Skip maintenance loop (`BuildingUsageTracker.get_due_maintenance_jobs`) at game speed >= 50x
   - Skip road scan (9×9 tile traversal grid) at game speed >= 50x
   - CONSTRUCTION_SEED was running ~14ms (budget=4ms) — these changes should bring it under budget
+
+- **PERF: Speed-aware budget gates for three remaining hot functions**:
+  - `_maybe_generational_turnover()`: Added `_generational_interval_for_speed()` returning 60000 at 200x (was 20000 always) — prevents 32ms spike every ~0.5s.
+  - `_seed_construction_jobs()`: Replaced uncapped budget (999999999) with speed-aware values (2000/4000/8000/12000 at 200x/100x/50x/26x) — function exits early when budget consumed.
+  - `SettlementMemory.recompute()`: Added optional `budget_usec` parameter with early exit before post-processing passes (3000/5000/10000 at 200x/100x/50x).
 
 ## Blockers
 

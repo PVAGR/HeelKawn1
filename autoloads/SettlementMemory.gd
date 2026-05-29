@@ -381,12 +381,13 @@ func print_validation_smoketest_from_main() -> void:
 	_print_validation_smoketest("Main.gd")
 
 
-func recompute(_world: World) -> void:
+func recompute(_world: World, budget_usec: int = -1) -> void:
 	settlements.clear()
 	_region_state.clear()
 	_region_center.clear()
 	_war_command_announced.clear()
 	_war_battle_spawned.clear()
+	var _recomp_start: int = Time.get_ticks_usec()
 	var living_pawns: Array[HeelKawnian] = _living_pawns()
 	var active_jobs: Array[Job] = _active_jobs_snapshot()
 	
@@ -491,6 +492,8 @@ func recompute(_world: World) -> void:
 			return false
 		return pa[0] < pb[0]
 	)
+	if budget_usec >= 0 and Time.get_ticks_usec() - _recomp_start >= budget_usec:
+		return
 	merge_small_settlements()
 	_prune_settlement_state_truth_hysteresis()
 	_update_governance_state()

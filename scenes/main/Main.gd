@@ -3202,7 +3202,11 @@ func _on_game_tick(tick: int) -> void:
 		elif _cur_speed >= 26.0: _rebirth_interval = 3000
 		if _is_main_lane_tick(tick, _rebirth_interval, 43):
 			t0 = Time.get_ticks_usec()
-			SettlementMemory.recompute(_world)
+			var _recomp_budget: int = -1
+			if _cur_speed >= 200.0: _recomp_budget = 3000
+			elif _cur_speed >= 100.0: _recomp_budget = 5000
+			elif _cur_speed >= 50.0: _recomp_budget = 10000
+			SettlementMemory.recompute(_world, _recomp_budget)
 			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
 			if _tick_budget_exceeded(tick_budget_start_usec):
 				return
@@ -3576,11 +3580,20 @@ func _deferred_trade_planner_plan(world: World, main: Node, use_cache: bool) -> 
 		EconomyManager.plan_trade_routes(world, main, use_cache)
 
 
+func _generational_interval_for_speed() -> int:
+	var s: float = GameManager.game_speed if GameManager != null else 1.0
+	if s >= 200.0: return 60000
+	if s >= 100.0: return 40000
+	if s >= 50.0: return 30000
+	if s >= 26.0: return 25000
+	return GENERATION_TICKS
+
 func _maybe_generational_turnover() -> void:
 	if _pawn_spawner == null or not is_instance_valid(_world) or _world.data == null:
 		return
 	var t: int = GameManager.tick_count
-	if t - _last_generation_tick < GENERATION_TICKS:
+	var gen_interval: int = _generational_interval_for_speed()
+	if t - _last_generation_tick < gen_interval:
 		return
 	# OPTIMIZATION: Use pawn count from spawner instead of iterating
 	var alive: int = _pawn_spawner.pawns.size()
@@ -7195,8 +7208,13 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 	if tick - _last_construction_seed_tick < interval:
 		return
 	_last_construction_seed_tick = tick
-	# Uncapped budget — construction seed runs free
+	# Speed-aware budget: tight at high speed to avoid lag spikes
+	var _budget_speed: float = GameManager.game_speed if GameManager != null else 1.0
 	var budget_usec: int = 999999999
+	if _budget_speed >= 200.0: budget_usec = 2000
+	elif _budget_speed >= 100.0: budget_usec = 4000
+	elif _budget_speed >= 50.0: budget_usec = 8000
+	elif _budget_speed >= 26.0: budget_usec = 12000
 	var start_usec: int = Time.get_ticks_usec()
 
 	# Determine settlement context: formal, proto, or bootstrap

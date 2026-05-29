@@ -354,3 +354,47 @@ func get_settlement_active_norms(settlement_id: int) -> Array:
 			out.append(str(k))
 	out.sort()
 	return out
+
+
+func get_settlement_divergence_snapshot(settlement_id: int) -> Dictionary:
+	if settlement_id < 0 or not _signatures.has(settlement_id):
+		return {}
+	var sig: Dictionary = _signatures[settlement_id]
+	var pv: Dictionary = sig.get("pressure_vector", {})
+	var cooperation: float = float(pv.get("cooperation", 0.0))
+	var care: float = float(pv.get("care", 0.0))
+	var discipline: float = float(pv.get("discipline", 0.0))
+	var fear: float = float(pv.get("fear", 0.0))
+	var vengeance: float = float(pv.get("vengeance", 0.0))
+	var opulence: float = float(pv.get("opulence", 0.0))
+	var curiosity: float = float(pv.get("curiosity", 0.0))
+	var asceticism: float = float(pv.get("asceticism", 0.0))
+	var norms: Array = get_settlement_active_norms(settlement_id)
+
+	var stability: float = cooperation + care + discipline
+	var threat: float = fear + vengeance
+	var migration_tendency: float = clampf((threat - stability) * 0.08, -1.0, 1.0)
+	if norms.has("mutual_aid"):
+		migration_tendency -= 0.10
+	if norms.has("scholar_path"):
+		migration_tendency -= 0.06
+	if norms.has("martial_code"):
+		migration_tendency += 0.05
+	if norms.has("austerity_rite"):
+		migration_tendency += 0.05
+	migration_tendency = clampf(migration_tendency, -1.0, 1.0)
+
+	var divergence_score: float = clampf(
+			(absf(cooperation) + absf(discipline) + absf(care) + absf(fear) + absf(vengeance) + absf(curiosity) + absf(asceticism) + absf(opulence))
+			/ 120.0,
+			0.0,
+			1.0
+	)
+	return {
+		"cohesion": float(sig.get("cohesion", 0.5)),
+		"divergence_score": divergence_score,
+		"migration_tendency": migration_tendency,
+		"stability": stability,
+		"threat": threat,
+		"norms": norms,
+	}

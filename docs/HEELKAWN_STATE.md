@@ -195,6 +195,18 @@ We are always building, always refining, always expanding. This document capture
       - `austerity_rite` -> storage/rationing priorities,
       - `market_charter` -> trade/road priorities.
     - Ensures emergent institutions alter what settlements *choose to build and do*, not just pawn-level local decisions.
+  - **FEAT: Watch-Mode Civilization Divergence Telemetry (May 29, 2026)**:
+    - `EgregoreMemory.gd` now exposes `get_settlement_divergence_snapshot(...)` with:
+      - cohesion,
+      - divergence score,
+      - migration tendency,
+      - stability/threat aggregates,
+      - active norms.
+    - `ColonyHUD.gd` now renders a `Divergence[...]` line in watch mode, including:
+      - per-settlement divergence score,
+      - migration trend (`retention` / `steady` / `outflow`),
+      - nearest-polity diplomacy headline.
+    - This makes long-run civilization drift legible while observing at normal or accelerated speed.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

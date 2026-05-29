@@ -406,6 +406,7 @@ func _build_expensive_hud_lines(simple_hud: bool) -> Array[String]:
 	if simple_hud:
 		lines.append(_settlement_identity_line())
 		lines.append(_egregore_line())
+		lines.append(_civilization_divergence_line())
 		lines.append(_polities_realm_line())
 		lines.append(_stockpile_simple_line())
 		lines.append(_pawn_line_simple())
@@ -423,6 +424,7 @@ func _build_expensive_hud_lines(simple_hud: bool) -> Array[String]:
 	else:
 		lines.append(_settlement_identity_line())
 		lines.append(_egregore_line())
+		lines.append(_civilization_divergence_line())
 		lines.append(_polities_realm_line())
 		lines.append(_pawn_line())
 		lines.append(_politics_line())
@@ -1339,6 +1341,30 @@ func _egregore_line() -> String:
 	if not norms.is_empty():
 		norms_txt = " | norms: %s" % ", ".join(norms)
 	return "Egregore[%d] cohesion %.2f | %s%s" % [sid, cohesion, top_txt, norms_txt]
+
+
+func _civilization_divergence_line() -> String:
+	if EgregoreMemory == null or SettlementMemory == null:
+		return ""
+	var sid: int = _focus_center_region()
+	if sid < 0:
+		return ""
+	var snap: Dictionary = EgregoreMemory.get_settlement_divergence_snapshot(sid) if EgregoreMemory.has_method("get_settlement_divergence_snapshot") else {}
+	if snap.is_empty():
+		return "Divergence: calibrating"
+	var div_score: float = float(snap.get("divergence_score", 0.0))
+	var mig: float = float(snap.get("migration_tendency", 0.0))
+	var mig_txt: String = "steady"
+	if mig > 0.2:
+		mig_txt = "outflow"
+	elif mig < -0.2:
+		mig_txt = "retention"
+	var dip_txt: String = "quiet"
+	if FactionManager != null:
+		var rels: Array[String] = FactionManager.get_nearest_polity_relation_lines(sid, 1)
+		if not rels.is_empty():
+			dip_txt = rels[0]
+	return "Divergence[%d] %.2f | migration %s(%.2f) | diplomacy %s" % [sid, div_score, mig_txt, mig, dip_txt]
 
 
 func _war_status_line() -> String:

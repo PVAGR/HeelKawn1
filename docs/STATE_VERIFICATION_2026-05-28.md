@@ -296,3 +296,26 @@ Verification:
 
 Residual Risk:
 - In-engine watch-mode confirmation at prolonged `100x` is still required to verify behavioral readability and pacing in live simulation.
+
+## Session 14 Update (Watch-Mode Divergence Readout)
+
+14. Added observer-facing divergence telemetry for civilization drift visibility
+- Files:
+  - `autoloads/EgregoreMemory.gd`
+  - `scripts/ui/ColonyHUD.gd`
+  - `docs/HEELKAWN_STATE.md`
+- Changes:
+  - Added `EgregoreMemory.get_settlement_divergence_snapshot(settlement_id)`:
+    - returns cohesion, divergence score, migration tendency, stability/threat aggregates, active norms.
+  - Added `ColonyHUD._civilization_divergence_line()` and integrated it into expensive HUD lines.
+  - Divergence line now shows:
+    - per-settlement divergence score,
+    - migration trend label (`retention` / `steady` / `outflow`) + scalar,
+    - nearest-polity diplomacy summary.
+  - Keeps observer output read-only and derived from deterministic runtime state.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after divergence telemetry integration: PASS.
+
+Residual Risk:
+- Full visual pacing/readability validation at prolonged `100x` still requires Godot runtime execution in a host with binary available.

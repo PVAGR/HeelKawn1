@@ -464,7 +464,7 @@ func get_player_pawn_id() -> int:
 	return -1
 
 func _high_speed_interval(normal_ticks: int, fast_ticks: int = -1, ultra_ticks: int = -1) -> int:
-	var s: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+	var s: float = GameManager.game_speed if GameManager != null else 1.0
 	if s >= 200.0:
 		if ultra_ticks > 0: return ultra_ticks * 2
 		if fast_ticks > 0: return fast_ticks * 2
@@ -480,7 +480,7 @@ func _high_speed_interval(normal_ticks: int, fast_ticks: int = -1, ultra_ticks: 
 
 
 func _planner_interval_for_speed() -> int:
-	var s: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+	var s: float = GameManager.game_speed if GameManager != null else 1.0
 	if s >= 200.0: return 5000
 	if s >= 100.0: return 3000
 	if s >= 50.0:  return 1000
@@ -490,7 +490,7 @@ func _planner_interval_for_speed() -> int:
 
 
 func _heavy_planner_interval_for_speed() -> int:
-	var s: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+	var s: float = GameManager.game_speed if GameManager != null else 1.0
 	if s >= 200.0: return 5000
 	if s >= 100.0: return 3000
 	if s >= 50.0:  return 2000
@@ -2960,7 +2960,7 @@ func _on_game_tick(tick: int) -> void:
 		section_us["ambient_target"] = Time.get_ticks_usec() - t0
 	# WorldEventSeedManager lazy-loaded via EventManager (no longer autoloaded)
 	var _event_interval: int = 100
-	var _ev_speed: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+	var _ev_speed: float = GameManager.game_speed if GameManager != null else 1.0
 	if _ev_speed >= 200.0: _event_interval = 2000
 	elif _ev_speed >= 100.0: _event_interval = 1000
 	elif _ev_speed >= 26.0: _event_interval = 400
@@ -2987,7 +2987,7 @@ func _on_game_tick(tick: int) -> void:
 	# Settlement construction seeder: post build/cook/plant jobs based on
 	# what each settlement actually needs (beds, walls, hearths, farms, etc.)
 	var _seed_interval: int = CONSTRUCTION_JOB_SEED_INTERVAL_TICKS
-	var _cs_speed: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+	var _cs_speed: float = GameManager.game_speed if GameManager != null else 1.0
 	if _cs_speed >= 100.0: _seed_interval = 4000
 	elif _cs_speed >= 50.0: _seed_interval = 2000
 	elif _cs_speed >= 26.0: _seed_interval = 1000
@@ -3195,7 +3195,7 @@ func _on_game_tick(tick: int) -> void:
 		# DORMANT WORLD: Let recompute run periodically so pawn clusters can be detected
 		# AGGRESSIVE OPTIMIZATION: Throttle at high speeds to reduce 40-60ms spikes
 		var _rebirth_interval: int = REBIRTH_CHECK_INTERVAL_TICKS
-		var _cur_speed: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+		var _cur_speed: float = GameManager.game_speed if GameManager != null else 1.0
 		if _cur_speed >= 200.0: _rebirth_interval = 12000
 		elif _cur_speed >= 100.0: _rebirth_interval = 8000
 		elif _cur_speed >= 50.0: _rebirth_interval = 5000
@@ -3404,7 +3404,7 @@ func _inspect_scan_interval_for_speed() -> int:
 
 
 func _social_rapport_interval_for_speed() -> int:
-	var s: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+	var s: float = GameManager.game_speed if GameManager != null else 1.0
 	if s >= 200.0: return 600
 	if s >= 100.0: return 300
 	if s >= 50.0:  return 180
@@ -3676,7 +3676,7 @@ func _social_personality_chemistry(a: HeelKawnianData, b: HeelKawnianData) -> fl
 func _accumulate_social_rapport() -> void:
 	if _pawn_spawner == null or _world == null or _world.pathfinder == null:
 		return
-	var speed: float = GameManager.get_speed_multiplier() if GameManager != null else 1.0
+	var speed: float = GameManager.game_speed if GameManager != null else 1.0
 	var pair_budget: int = 200
 	if speed >= 100.0: pair_budget = 40
 	elif speed >= 50.0: pair_budget = 80

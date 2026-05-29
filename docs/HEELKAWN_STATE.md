@@ -156,6 +156,20 @@ We are always building, always refining, always expanding. This document capture
     - Added periodic ethics ingestion from `WorldMemory.get_events()` with monotonic index tracking (`_last_world_event_index`) to avoid reprocessing.
     - Ethics mapping currently responds to survival/teaching/combat/fintech event types, enabling religion/culture systems to consume live moral state rather than static lore-only flags.
     - Added API surface: `get_pawn_asha_druj_balance`, `get_pawn_moral_axis`, `get_pawn_karma`, `get_settlement_dharma_index`, `get_religion_ethics_snapshot`.
+  - **FEAT: Egregore Matrix Scaffolding (May 29, 2026)**:
+    - Added `autoloads/EgregoreMemory.gd` and registered `EgregoreMemory` in `project.godot`.
+    - Introduced deterministic per-settlement 8-axis pressure signatures:
+      - `cooperation`, `discipline`, `care`, `fear`, `vengeance`, `curiosity`, `asceticism`, `opulence`.
+    - `EgregoreMemory` ingests `WorldMemory` event deltas by monotonic index and updates bounded pressure vectors, cohesion, and ritual/taboo/law density.
+    - Added read APIs for observer/runtime usage:
+      - `get_settlement_signature`
+      - `get_settlement_pressure`
+      - `get_settlement_top_pressures`
+      - `get_world_snapshot`
+    - Integrated matrix coupling in `scripts/pawn/HeelKawnianDecision.gd`:
+      - `get_heelkawnian_matrix_job_bias(...)` now adds bounded egregore bias per settlement to job selection.
+    - Added watch-mode visibility in `scripts/ui/ColonyHUD.gd`:
+      - New `Egregore[...]` line shows settlement cohesion plus top dominant pressures for live observer testing.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

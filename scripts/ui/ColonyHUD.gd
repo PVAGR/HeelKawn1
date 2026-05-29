@@ -405,6 +405,7 @@ func _build_expensive_hud_lines(simple_hud: bool) -> Array[String]:
 	var lines: Array[String] = []
 	if simple_hud:
 		lines.append(_settlement_identity_line())
+		lines.append(_egregore_line())
 		lines.append(_polities_realm_line())
 		lines.append(_stockpile_simple_line())
 		lines.append(_pawn_line_simple())
@@ -421,6 +422,7 @@ func _build_expensive_hud_lines(simple_hud: bool) -> Array[String]:
 		lines.append(_narrative_rail_line())
 	else:
 		lines.append(_settlement_identity_line())
+		lines.append(_egregore_line())
 		lines.append(_polities_realm_line())
 		lines.append(_pawn_line())
 		lines.append(_politics_line())
@@ -1302,6 +1304,37 @@ func _politics_line() -> String:
 	if bool(gp.get("edicts_unlocked", false)):
 		base += " | EDICTS UNLOCKED"
 	return base
+
+
+func _egregore_line() -> String:
+	if EgregoreMemory == null or SettlementMemory == null:
+		return ""
+	var sid: int = -1
+	if _player_pawn != null and is_instance_valid(_player_pawn) and _player_pawn.data != null:
+		sid = int(SettlementMemory.get_settlement_id_for_pawn(int(_player_pawn.data.id)))
+	if sid < 0:
+		var formal: Array = SettlementMemory.get_formal_settlements()
+		if not formal.is_empty() and formal[0] is Dictionary:
+			sid = int((formal[0] as Dictionary).get("center_region", -1))
+	if sid < 0:
+		return "Egregore: no settlement signature yet"
+	var sig: Dictionary = EgregoreMemory.get_settlement_signature(sid)
+	if sig.is_empty():
+		return "Egregore[%d]: calibrating from lived events" % sid
+	var cohesion: float = float(sig.get("cohesion", 0.5))
+	var tops: Array = EgregoreMemory.get_settlement_top_pressures(sid, 3)
+	var top_parts: Array[String] = []
+	for row_v in tops:
+		if not (row_v is Dictionary):
+			continue
+		var row: Dictionary = row_v as Dictionary
+		var axis: String = str(row.get("axis", "axis"))
+		var signed: float = float(row.get("signed", 0.0))
+		top_parts.append("%s:%+.1f" % [axis, signed])
+	var top_txt: String = ", ".join(top_parts)
+	if top_txt.is_empty():
+		top_txt = "no dominant pressures"
+	return "Egregore[%d] cohesion %.2f | %s" % [sid, cohesion, top_txt]
 
 
 func _war_status_line() -> String:

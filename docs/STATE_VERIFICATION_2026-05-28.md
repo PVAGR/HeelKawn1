@@ -187,3 +187,34 @@ Verification:
 
 Residual Risk:
 - Runtime behavior under long `100x` runs remains unverified here due missing Godot binary; requires in-engine smoke/perf execution on a Godot-enabled machine.
+
+## Session 10 Update (Egregore + Matrix Runtime Coupling)
+
+10. Added deterministic per-settlement egregore scaffolding and live matrix coupling
+- Files:
+  - `autoloads/EgregoreMemory.gd`
+  - `project.godot`
+  - `scripts/pawn/HeelKawnianDecision.gd`
+  - `scripts/ui/ColonyHUD.gd`
+  - `docs/HEELKAWN_STATE.md`
+- Changes:
+  - Added new `EgregoreMemory` autoload with tick-gated updates (`UPDATE_INTERVAL_TICKS`) and monotonic `WorldMemory` delta ingestion (`_last_event_index`).
+  - Added 8-axis pressure vector per settlement:
+    - cooperation, discipline, care, fear, vengeance, curiosity, asceticism, opulence.
+  - Added bounded deterministic pressure accumulation + light decay + cohesion calculation from positive/negative pressure balance.
+  - Added read APIs for diagnostics and UI:
+    - `get_settlement_signature(...)`
+    - `get_settlement_pressure(...)`
+    - `get_settlement_top_pressures(...)`
+    - `get_world_snapshot()`
+  - Integrated egregore into live pawn decision pipeline:
+    - `HeelKawnianDecision.get_heelkawnian_matrix_job_bias(...)` now adds a bounded settlement egregore bias (clamped) to matrix job bias.
+    - Bias mapping currently affects teaching, food/care, defense/fortification, and trade classes.
+  - Added observer/watch visibility:
+    - `ColonyHUD` now renders an `Egregore[...]` line with cohesion + top 3 dominant pressures for current/nearest formal settlement.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after EgregoreMemory and matrix/HUD integration: PASS.
+
+Residual Risk:
+- Long-run 1x/100x behavior and visual smoothness for this new layer still require Godot runtime validation in an environment with headless/editor binary available.

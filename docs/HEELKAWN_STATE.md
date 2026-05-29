@@ -184,6 +184,17 @@ We are always building, always refining, always expanding. This document capture
       - fear/vengeance can increase relocation tendency,
       - cooperation/care/discipline and stabilizing norms can reduce unnecessary out-migration.
     - Added world fact logging for applied egregore migration influence (`egregore_fragmentation_applied`) for replay/audit visibility.
+  - **FEAT: Egregore Coupling — Settlement Institution Priorities (May 29, 2026)**:
+    - `HeelKawnianManager.gd` now applies a bounded Egregore norm priority bonus in two settlement-scale paths:
+      - `get_settlement_ambition_for_pawn(...)` (ambition job + reason annotation),
+      - `leader_direct_construction(...)` (direct posted build/cook job priorities).
+    - Norm-aware boosts currently cover:
+      - `mutual_aid` -> shelter/food security priorities,
+      - `martial_code` -> defense infrastructure priorities,
+      - `scholar_path` -> knowledge/teaching priorities,
+      - `austerity_rite` -> storage/rationing priorities,
+      - `market_charter` -> trade/road priorities.
+    - Ensures emergent institutions alter what settlements *choose to build and do*, not just pawn-level local decisions.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

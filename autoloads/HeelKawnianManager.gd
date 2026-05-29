@@ -820,6 +820,11 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 		var gather_job: int = _natural_gather_job(data, local_features, tick)
 		if gather_job >= 0:
 			ambition = _ambition_result(gather_job, 4, "natural gathering cycle")
+	if not ambition.is_empty():
+		var eg_bonus: int = _egregore_settlement_priority_bonus(settlement_id, int(ambition.get("job_type", -1)))
+		if eg_bonus != 0:
+			ambition["priority"] = clampi(int(ambition.get("priority", 5)) + eg_bonus, 1, 10)
+			ambition["reason"] = "%s [egregore %+d]" % [str(ambition.get("reason", "")), eg_bonus]
 	var learned_bonus: int = _learning_priority_bonus_for_job(int(ambition.get("job_type", -1)))
 	if learned_bonus != 0:
 		ambition["priority"] = clampi(int(ambition.get("priority", 5)) + learned_bonus, 1, 10)
@@ -1987,6 +1992,7 @@ static func leader_direct_construction(settlement_id: int) -> int:
 		var job_type: int = int(entry.get("type", -1))
 		var priority: int = int(entry.get("priority", 5))
 		var work: int = int(entry.get("work", 20))
+		priority = clampi(priority + _egregore_settlement_priority_bonus(settlement_id, job_type), 1, 10)
 		if ColonySimServices != null and ColonySimServices.is_hearth_build_job(job_type):
 			if not ColonySimServices.can_seed_fire_pit(center_rk, center, hearths, hearths_needed):
 				continue
@@ -2174,6 +2180,34 @@ static func _ambition_result(job_type: int, priority: int, reason: String) -> Di
 		"priority": priority,
 		"reason": reason,
 	}
+
+
+static func _egregore_settlement_priority_bonus(settlement_id: int, job_type: int) -> int:
+	if settlement_id < 0 or EgregoreMemory == null:
+		return 0
+	var norms: Array = EgregoreMemory.get_settlement_active_norms(settlement_id) if EgregoreMemory.has_method("get_settlement_active_norms") else []
+	if norms.is_empty():
+		return 0
+	var bonus: int = 0
+	for n in norms:
+		var ns: String = str(n)
+		match ns:
+			"mutual_aid":
+				if job_type in [Job.Type.BUILD_BED, Job.Type.BUILD_HEARTH, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_GRANARY, Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH]:
+					bonus += 1
+			"martial_code":
+				if job_type in [Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, Job.Type.DEFEND, Job.Type.PROTECT]:
+					bonus += 2
+			"scholar_path":
+				if job_type in [Job.Type.BUILD_LIBRARY, Job.Type.BUILD_SCHOOL, Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP, Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.PAPER_MAKING]:
+					bonus += 2
+			"austerity_rite":
+				if job_type in [Job.Type.BUILD_CELLAR, Job.Type.BUILD_GRANARY, Job.Type.BUILD_STORAGE_HUT, Job.Type.FORAGE, Job.Type.HUNT, Job.Type.FISH]:
+					bonus += 1
+			"market_charter":
+				if job_type in [Job.Type.BUILD_MARKET, Job.Type.BUILD_TRADING_POST, Job.Type.BUILD_ROAD, Job.Type.TRADE_HAUL]:
+					bonus += 2
+	return clampi(bonus, -2, 3)
 
 
 static func _scan_local_features(center: Vector2i, radius: int) -> Dictionary:

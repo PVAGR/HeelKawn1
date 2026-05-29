@@ -271,3 +271,28 @@ Verification:
 
 Residual Risk:
 - Sustained high-population (`100x`) behavior still needs runtime verification on a Godot-enabled host to confirm smoothness and population drift shape under prolonged runs.
+
+## Session 13 Update (Institutional Job Priority Coupling)
+
+13. Applied egregore norms to settlement-level ambition and construction priorities
+- Files:
+  - `autoloads/HeelKawnianManager.gd`
+  - `docs/HEELKAWN_STATE.md`
+- Changes:
+  - Added `_egregore_settlement_priority_bonus(settlement_id, job_type)` in `HeelKawnianManager`.
+  - Integrated this bonus into:
+    - `get_settlement_ambition_for_pawn(...)` (priority + reason annotation),
+    - `leader_direct_construction(...)` (job posting priority before bayes/slot checks).
+  - Norm mappings now influence institutional agenda categories:
+    - mutual aid: beds/hearth/storage/granary/cooking,
+    - martial code: walls/doors/barracks/watchtowers/defense,
+    - scholar path: library/school/teaching/knowledge recording,
+    - austerity rite: storage and survival gathering,
+    - market charter: market/trading post/roads/trade haul.
+  - Bonuses are bounded (`clampi`) to keep survival-first behavior stable.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after institutional coupling: PASS.
+
+Residual Risk:
+- In-engine watch-mode confirmation at prolonged `100x` is still required to verify behavioral readability and pacing in live simulation.

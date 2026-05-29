@@ -27,6 +27,10 @@ var _signatures: Dictionary = {}
 var _active_norms: Dictionary = {}
 ## settlement_id|norm_name -> last change tick
 var _norm_change_tick: Dictionary = {}
+## settlement_id -> Array[float] divergence score history (recent)
+var _divergence_history: Dictionary = {}
+## settlement_id -> Array[float] migration tendency history (recent)
+var _migration_history: Dictionary = {}
 
 
 func _ready() -> void:
@@ -41,6 +45,7 @@ func _on_game_tick(tick: int) -> void:
 	_ingest_world_memory_events()
 	_decay_signatures()
 	_update_emergent_norms(tick)
+	_sample_trends()
 
 
 func _empty_signature(settlement_id: int) -> Dictionary:
@@ -390,6 +395,62 @@ func get_settlement_divergence_snapshot(settlement_id: int) -> Dictionary:
 			0.0,
 			1.0
 	)
+	var dtrend: String = _trend_label_from_series(_divergence_history.get(settlement_id, []) as Array, 0.01)
+	var mtrend: String = _trend_label_from_series(_migration_history.get(settlement_id, []) as Array, 0.03)
+	return {
+		"cohesion": float(sig.get("cohesion", 0.5)),
+		"divergence_score": divergence_score,
+		"divergence_trend": dtrend,
+		"migration_tendency": migration_tendency,
+		"migration_trend": mtrend,
+		"stability": stability,
+		"threat": threat,
+		"norms": norms,
+	}
+
+
+func _sample_trends() -> void:
+	for sid_v in _signatures.keys():
+		var sid: int = int(sid_v)
+		var snap: Dictionary = get_settlement_divergence_snapshot_no_trend(sid)
+		if snap.is_empty():
+			continue
+		_push_series(_divergence_history, sid, float(snap.get("divergence_score", 0.0)), 8)
+		_push_series(_migration_history, sid, float(snap.get("migration_tendency", 0.0)), 8)
+
+
+func get_settlement_divergence_snapshot_no_trend(settlement_id: int) -> Dictionary:
+	if settlement_id < 0 or not _signatures.has(settlement_id):
+		return {}
+	var sig: Dictionary = _signatures[settlement_id]
+	var pv: Dictionary = sig.get("pressure_vector", {})
+	var cooperation: float = float(pv.get("cooperation", 0.0))
+	var care: float = float(pv.get("care", 0.0))
+	var discipline: float = float(pv.get("discipline", 0.0))
+	var fear: float = float(pv.get("fear", 0.0))
+	var vengeance: float = float(pv.get("vengeance", 0.0))
+	var opulence: float = float(pv.get("opulence", 0.0))
+	var curiosity: float = float(pv.get("curiosity", 0.0))
+	var asceticism: float = float(pv.get("asceticism", 0.0))
+	var norms: Array = get_settlement_active_norms(settlement_id)
+	var stability: float = cooperation + care + discipline
+	var threat: float = fear + vengeance
+	var migration_tendency: float = clampf((threat - stability) * 0.08, -1.0, 1.0)
+	if norms.has("mutual_aid"):
+		migration_tendency -= 0.10
+	if norms.has("scholar_path"):
+		migration_tendency -= 0.06
+	if norms.has("martial_code"):
+		migration_tendency += 0.05
+	if norms.has("austerity_rite"):
+		migration_tendency += 0.05
+	migration_tendency = clampf(migration_tendency, -1.0, 1.0)
+	var divergence_score: float = clampf(
+			(absf(cooperation) + absf(discipline) + absf(care) + absf(fear) + absf(vengeance) + absf(curiosity) + absf(asceticism) + absf(opulence))
+			/ 120.0,
+			0.0,
+			1.0
+	)
 	return {
 		"cohesion": float(sig.get("cohesion", 0.5)),
 		"divergence_score": divergence_score,
@@ -398,3 +459,31 @@ func get_settlement_divergence_snapshot(settlement_id: int) -> Dictionary:
 		"threat": threat,
 		"norms": norms,
 	}
+
+
+func _push_series(store: Dictionary, sid: int, value: float, max_n: int) -> void:
+	var arr: Array = store.get(sid, []) as Array
+	arr.append(value)
+	while arr.size() > max_n:
+		arr.pop_front()
+	store[sid] = arr
+
+
+func _trend_label_from_series(arr: Array, epsilon: float) -> String:
+	if arr.size() < 2:
+		return "steady"
+	var older_n: int = maxi(1, arr.size() / 2)
+	var recent_n: int = maxi(1, arr.size() - older_n)
+	var older_sum: float = 0.0
+	var recent_sum: float = 0.0
+	for i in range(older_n):
+		older_sum += float(arr[i])
+	for i in range(older_n, arr.size()):
+		recent_sum += float(arr[i])
+	var older_avg: float = older_sum / float(older_n)
+	var recent_avg: float = recent_sum / float(recent_n)
+	if recent_avg > older_avg + epsilon:
+		return "rising"
+	if recent_avg < older_avg - epsilon:
+		return "falling"
+	return "steady"

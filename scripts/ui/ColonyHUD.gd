@@ -104,6 +104,8 @@ var _cached_expensive_hud_simple: bool = true
 ## Narrative rail cache — recomputes only when WorldMemory event count changes.
 var _narrative_cache: String = ""
 var _narrative_cache_event_count: int = -1
+## Focus settlement diplomacy trend memory for HUD-only directional arrows.
+var _diplomacy_prev_score_by_center: Dictionary = {}
 
 @onready var GameManager = get_node_or_null("/root/GameManager")
 @onready var StockpileManager = get_node_or_null("/root/StockpileManager")
@@ -1353,18 +1355,39 @@ func _civilization_divergence_line() -> String:
 	if snap.is_empty():
 		return "Divergence: calibrating"
 	var div_score: float = float(snap.get("divergence_score", 0.0))
+	var div_trend: String = str(snap.get("divergence_trend", "steady"))
 	var mig: float = float(snap.get("migration_tendency", 0.0))
+	var mig_trend: String = str(snap.get("migration_trend", "steady"))
 	var mig_txt: String = "steady"
 	if mig > 0.2:
 		mig_txt = "outflow"
 	elif mig < -0.2:
 		mig_txt = "retention"
 	var dip_txt: String = "quiet"
+	var dip_trend_arrow: String = "→"
 	if FactionManager != null:
 		var rels: Array[String] = FactionManager.get_nearest_polity_relation_lines(sid, 1)
 		if not rels.is_empty():
 			dip_txt = rels[0]
-	return "Divergence[%d] %.2f | migration %s(%.2f) | diplomacy %s" % [sid, div_score, mig_txt, mig, dip_txt]
+			var open_i: int = dip_txt.rfind("(")
+			var close_i: int = dip_txt.rfind(")")
+			if open_i >= 0 and close_i > open_i:
+				var sraw: String = dip_txt.substr(open_i + 1, close_i - open_i - 1)
+				var cur_score: int = int(sraw)
+				var prev_score: int = int(_diplomacy_prev_score_by_center.get(sid, cur_score))
+				dip_trend_arrow = _trend_arrow(float(cur_score - prev_score), 0.1)
+				_diplomacy_prev_score_by_center[sid] = cur_score
+	var div_arrow: String = _trend_arrow(1.0 if div_trend == "rising" else (-1.0 if div_trend == "falling" else 0.0), 0.1)
+	var mig_arrow: String = _trend_arrow(1.0 if mig_trend == "rising" else (-1.0 if mig_trend == "falling" else 0.0), 0.1)
+	return "Divergence[%d] %.2f%s | migration %s(%.2f)%s | diplomacy %s%s" % [sid, div_score, div_arrow, mig_txt, mig, mig_arrow, dip_txt, dip_trend_arrow]
+
+
+static func _trend_arrow(delta: float, epsilon: float = 0.001) -> String:
+	if delta > epsilon:
+		return "↑"
+	if delta < -epsilon:
+		return "↓"
+	return "→"
 
 
 func _war_status_line() -> String:

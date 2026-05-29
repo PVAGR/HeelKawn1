@@ -207,6 +207,12 @@ We are always building, always refining, always expanding. This document capture
       - migration trend (`retention` / `steady` / `outflow`),
       - nearest-polity diplomacy headline.
     - This makes long-run civilization drift legible while observing at normal or accelerated speed.
+  - **FEAT: Trend-Aware Divergence Telemetry (May 29, 2026)**:
+    - `EgregoreMemory.gd` now keeps short deterministic trend series per settlement for:
+      - divergence score,
+      - migration tendency.
+    - `get_settlement_divergence_snapshot(...)` now includes trend labels (`rising` / `falling` / `steady`).
+    - `ColonyHUD.gd` now shows directional arrows on divergence, migration, and diplomacy lines, making change-over-time visible at a glance during watch mode.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

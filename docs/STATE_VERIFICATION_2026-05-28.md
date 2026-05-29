@@ -319,3 +319,29 @@ Verification:
 
 Residual Risk:
 - Full visual pacing/readability validation at prolonged `100x` still requires Godot runtime execution in a host with binary available.
+
+## Session 15 Update (Trend Arrows for Divergence Telemetry)
+
+15. Added deterministic temporal trend signals to observer divergence readouts
+- Files:
+  - `autoloads/EgregoreMemory.gd`
+  - `scripts/ui/ColonyHUD.gd`
+  - `docs/HEELKAWN_STATE.md`
+- Changes:
+  - Added short rolling history buffers in `EgregoreMemory` for:
+    - divergence score,
+    - migration tendency.
+  - Added deterministic trend classification (`rising` / `falling` / `steady`) from historical windows.
+  - Extended `get_settlement_divergence_snapshot(...)` with trend fields:
+    - `divergence_trend`
+    - `migration_trend`
+  - Updated HUD divergence line to display directional arrows for:
+    - divergence trend,
+    - migration trend,
+    - diplomacy score drift (HUD-local previous score memory for focus settlement).
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after trend telemetry integration: PASS.
+
+Residual Risk:
+- Long-form readability of arrow cadence under sustained `100x` observer runs still requires runtime playtest on a Godot-enabled host.

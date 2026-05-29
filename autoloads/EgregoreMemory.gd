@@ -6,6 +6,7 @@ extends Node
 
 const UPDATE_INTERVAL_TICKS: int = 600
 const MAX_ABS_PRESSURE: float = 200.0
+const NORM_COOLDOWN_TICKS: int = 7200
 
 const AXES: PackedStringArray = [
 	"cooperation",
@@ -22,6 +23,10 @@ var _last_update_tick: int = -1
 var _last_event_index: int = 0
 ## settlement_id(center_region) -> signature dictionary
 var _signatures: Dictionary = {}
+## settlement_id -> norm_name -> bool
+var _active_norms: Dictionary = {}
+## settlement_id|norm_name -> last change tick
+var _norm_change_tick: Dictionary = {}
 
 
 func _ready() -> void:
@@ -35,6 +40,7 @@ func _on_game_tick(tick: int) -> void:
 	_last_update_tick = tick
 	_ingest_world_memory_events()
 	_decay_signatures()
+	_update_emergent_norms(tick)
 
 
 func _empty_signature(settlement_id: int) -> Dictionary:
@@ -210,6 +216,94 @@ func _decay_signatures() -> void:
 		_signatures[sid] = sig
 
 
+func _update_emergent_norms(tick: int) -> void:
+	for sid_v in _signatures.keys():
+		var sid: int = int(sid_v)
+		var sig: Dictionary = _signatures[sid]
+		var pv: Dictionary = sig.get("pressure_vector", {})
+		var cooperation: float = float(pv.get("cooperation", 0.0))
+		var discipline: float = float(pv.get("discipline", 0.0))
+		var care: float = float(pv.get("care", 0.0))
+		var fear: float = float(pv.get("fear", 0.0))
+		var vengeance: float = float(pv.get("vengeance", 0.0))
+		var curiosity: float = float(pv.get("curiosity", 0.0))
+		var asceticism: float = float(pv.get("asceticism", 0.0))
+		var opulence: float = float(pv.get("opulence", 0.0))
+		var law_density: float = float(sig.get("law_density", 0.0))
+		var taboo_density: float = float(sig.get("taboo_density", 0.0))
+
+		# Norms are deterministic threshold rules over pressure state.
+		_set_norm_state(sid, "mutual_aid", cooperation > 10.0 and care > 8.0 and fear < 8.0 and law_density > 0.10, tick)
+		_set_norm_state(sid, "martial_code", fear > 10.0 and discipline > 8.0 and vengeance > 6.0, tick)
+		_set_norm_state(sid, "scholar_path", curiosity > 10.0 and discipline > 6.0 and cooperation > 4.0, tick)
+		_set_norm_state(sid, "austerity_rite", asceticism > 9.0 and fear > 6.0 and taboo_density > 0.08, tick)
+		_set_norm_state(sid, "market_charter", opulence > 10.0 and cooperation > 6.0 and fear < 10.0, tick)
+
+
+func _set_norm_state(settlement_id: int, norm_name: String, desired_active: bool, tick: int) -> void:
+	if not _active_norms.has(settlement_id):
+		_active_norms[settlement_id] = {}
+	var m: Dictionary = _active_norms[settlement_id]
+	var prev_active: bool = bool(m.get(norm_name, false))
+	if prev_active == desired_active:
+		return
+	var key: String = "%d|%s" % [settlement_id, norm_name]
+	var last_change: int = int(_norm_change_tick.get(key, -10_000_000))
+	if tick - last_change < NORM_COOLDOWN_TICKS:
+		return
+	m[norm_name] = desired_active
+	_active_norms[settlement_id] = m
+	_norm_change_tick[key] = tick
+
+	if desired_active:
+		_add_emergent_law_if_missing(settlement_id, norm_name)
+		if WorldMemory != null:
+			WorldMemory.record_event({
+				"type": "egregore_norm_emerged",
+				"tick": tick,
+				"settlement_id": settlement_id,
+				"norm_type": norm_name,
+			})
+	else:
+		if WorldMemory != null:
+			WorldMemory.record_event({
+				"type": "egregore_norm_faded",
+				"tick": tick,
+				"settlement_id": settlement_id,
+				"norm_type": norm_name,
+			})
+
+
+func _add_emergent_law_if_missing(settlement_id: int, norm_name: String) -> void:
+	if SettlementMemory == null or not SettlementMemory.has_method("add_law") or not SettlementMemory.has_method("get_laws"):
+		return
+	var law_type: String = "egregore_%s" % norm_name
+	var laws: Array = SettlementMemory.get_laws(settlement_id)
+	for lv in laws:
+		if lv is Dictionary and str((lv as Dictionary).get("type", "")) == law_type:
+			return
+	var desc: String = ""
+	match norm_name:
+		"mutual_aid":
+			desc = "Communal aid is expected during hunger, injury, and shelter work."
+		"martial_code":
+			desc = "Defense duty and response discipline are expected under threat."
+		"scholar_path":
+			desc = "Teaching and apprenticeship are recognized as civic obligations."
+		"austerity_rite":
+			desc = "Rationing and restrained consumption are expected in hardship."
+		"market_charter":
+			desc = "Trade fairness and contract trust are upheld by custom."
+		_:
+			desc = "Emergent social norm."
+	SettlementMemory.add_law(settlement_id, {
+		"type": law_type,
+		"description": desc,
+		"penalties": [],
+		"rewards": [],
+	})
+
+
 func get_settlement_signature(settlement_id: int) -> Dictionary:
 	if settlement_id < 0:
 		return {}
@@ -248,3 +342,15 @@ func get_world_snapshot() -> Dictionary:
 		"last_event_index": _last_event_index,
 		"last_update_tick": _last_update_tick,
 	}
+
+
+func get_settlement_active_norms(settlement_id: int) -> Array:
+	var out: Array = []
+	if not _active_norms.has(settlement_id):
+		return out
+	var m: Dictionary = _active_norms[settlement_id]
+	for k in m.keys():
+		if bool(m[k]):
+			out.append(str(k))
+	out.sort()
+	return out

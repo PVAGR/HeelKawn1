@@ -218,3 +218,33 @@ Verification:
 
 Residual Risk:
 - Long-run 1x/100x behavior and visual smoothness for this new layer still require Godot runtime validation in an environment with headless/editor binary available.
+
+## Session 11 Update (Egregore Norm Emergence)
+
+11. Added deterministic emergent taboos/laws from collective pressure
+- Files:
+  - `autoloads/EgregoreMemory.gd`
+  - `scripts/ui/ColonyHUD.gd`
+  - `docs/HEELKAWN_STATE.md`
+- Changes:
+  - Added deterministic norm emergence pass (`_update_emergent_norms`) over per-settlement pressure vectors with tick cooldown hysteresis (`NORM_COOLDOWN_TICKS`).
+  - Added active norm state and change tracking:
+    - `_active_norms` (per settlement)
+    - `_norm_change_tick` (per settlement+norm)
+  - Added five first norm types:
+    - `mutual_aid`
+    - `martial_code`
+    - `scholar_path`
+    - `austerity_rite`
+    - `market_charter`
+  - Norm transitions now emit deterministic world facts:
+    - `egregore_norm_emerged`
+    - `egregore_norm_faded`
+  - On norm emergence, `SettlementMemory.add_law(...)` is invoked only when corresponding `egregore_*` law type is absent.
+  - Observer HUD now displays active norm list in the `Egregore[...]` line.
+
+Verification:
+- Re-ran `bash tools/ai/sim-quality-gate.sh` after emergent norm integration: PASS.
+
+Residual Risk:
+- Runtime throughput and long-run institutional oscillation at sustained `100x` still require in-engine verification on a machine with Godot runtime available.

@@ -1334,7 +1334,11 @@ func _egregore_line() -> String:
 	var top_txt: String = ", ".join(top_parts)
 	if top_txt.is_empty():
 		top_txt = "no dominant pressures"
-	return "Egregore[%d] cohesion %.2f | %s" % [sid, cohesion, top_txt]
+	var norms: Array = EgregoreMemory.get_settlement_active_norms(sid) if EgregoreMemory.has_method("get_settlement_active_norms") else []
+	var norms_txt: String = ""
+	if not norms.is_empty():
+		norms_txt = " | norms: %s" % ", ".join(norms)
+	return "Egregore[%d] cohesion %.2f | %s%s" % [sid, cohesion, top_txt, norms_txt]
 
 
 func _war_status_line() -> String:

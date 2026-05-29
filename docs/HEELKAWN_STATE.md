@@ -170,6 +170,12 @@ We are always building, always refining, always expanding. This document capture
       - `get_heelkawnian_matrix_job_bias(...)` now adds bounded egregore bias per settlement to job selection.
     - Added watch-mode visibility in `scripts/ui/ColonyHUD.gd`:
       - New `Egregore[...]` line shows settlement cohesion plus top dominant pressures for live observer testing.
+  - **FEAT: Egregore Emergent Norms/Laws (May 29, 2026)**:
+    - `EgregoreMemory.gd` now derives active social norms from pressure thresholds with deterministic cooldown hysteresis:
+      - `mutual_aid`, `martial_code`, `scholar_path`, `austerity_rite`, `market_charter`.
+    - Norm emergence/fade is recorded to `WorldMemory` (`egregore_norm_emerged` / `egregore_norm_faded`).
+    - On emergence, Egregore adds corresponding law entries to `SettlementMemory` when missing (no duplicate insertion).
+    - `ColonyHUD` now surfaces active norms in watch mode so civilization behavior and social institution drift are visible during observer runs.
   - **FEAT: Mode Contract Enforcement (Watch / Sprite / Observer)**:
     - `WATCH` mode is now non-interactive with world command/edit input.
     - `INCARNATED` mode is embodied sprite play (not full-command mode).

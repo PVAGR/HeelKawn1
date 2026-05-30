@@ -154,7 +154,7 @@ func refresh_terrain_scar_tint() -> void:
 		return
 	_rebuild_player_meaning_region_state()
 	_refresh_terrain_image_pixels()
-	_texture.update(_image)
+	call_deferred("_deferred_update_texture")
 
 
 ## After [WorldPersistence.recompute], refresh A* point weights for pawn-only historic scar aversion.
@@ -480,7 +480,7 @@ func patch_road_tile_at(x: int, y: int) -> void:
 		return
 	_image.set_pixel(x, y, _tile_color(x, y))
 	if _texture != null:
-		_texture.update(_image)
+		call_deferred("_deferred_update_texture")
 
 
 ## Index form of [method patch_road_tile_at] for batch road-memory updates.
@@ -497,7 +497,7 @@ func refresh_road_memory_terrain() -> void:
 	if _image == null or data == null or _texture == null:
 		return
 	_refresh_terrain_image_pixels()
-	_texture.update(_image)
+	call_deferred("_deferred_update_texture")
 
 
 ## Full re-raster after [TradeMemory] route tiles change (same cost as road refresh).
@@ -505,7 +505,7 @@ func refresh_trade_memory_terrain() -> void:
 	if _image == null or data == null or _texture == null:
 		return
 	_refresh_terrain_image_pixels()
-	_texture.update(_image)
+	call_deferred("_deferred_update_texture")
 
 
 func _tick_erosion(tick: int) -> void:
@@ -585,7 +585,7 @@ func apply_ruins_from_persistence() -> void:
 			if _image != null:
 				_image.set_pixel(x, y, _tile_color(x, y))
 	if any_change and _texture != null:
-		_texture.update(_image)
+		call_deferred("_deferred_update_texture")
 		# Use dirty flag system instead of full rebuild for performance
 		if pathfinder != null:
 			# Sync tiles that were changed to RUIN feature
@@ -626,7 +626,7 @@ func set_feature(x: int, y: int, feature: int) -> bool:
 			DiscoveryGate.unlock("first_shelter")
 	if _image != null:
 		_image.set_pixel(x, y, _tile_color(x, y))
-		_texture.update(_image)
+		call_deferred("_deferred_update_texture")
 	# Notify WorldOverlay to redraw building sprites
 	var overlay: Node = get_node_or_null("WorldOverlay")
 	if overlay != null and overlay.has_method("mark_dirty"):
@@ -699,7 +699,7 @@ func _update_path_appearance(tile: Vector2i, traffic: int) -> void:
 	var worn: Color = Color8(140, 120, 100)
 	c = c.lerp(worn, wear * 0.3)
 	_image.set_pixel(tile.x, tile.y, c)
-	_texture.update(_image)
+	call_deferred("_deferred_update_texture")
 
 
 # ==================== Building wear ====================
@@ -727,7 +727,7 @@ func _update_building_appearance(tile: Vector2i, usage: int) -> void:
 		elif state == "ruin":
 			c = c.lerp(Color8(95, 82, 72), 0.45)
 	_image.set_pixel(tile.x, tile.y, c)
-	_texture.update(_image)
+	call_deferred("_deferred_update_texture")
 
 
 # ==================== Blood stains ====================
@@ -769,14 +769,14 @@ func _update_blood_stain(tile: Vector2i, bdata: Dictionary) -> void:
 	var intensity: float = float(bdata.get("intensity", 0.5))
 	c = c.lerp(blood, intensity * 0.4)
 	_image.set_pixel(tile.x, tile.y, c)
-	_texture.update(_image)
+	call_deferred("_deferred_update_texture")
 
 
 func _redraw_tile(x: int, y: int) -> void:
 	if _image == null or not data.in_bounds(x, y):
 		return
 	_image.set_pixel(x, y, _tile_color(x, y))
-	_texture.update(_image)
+	call_deferred("_deferred_update_texture")
 
 
 # ==================== Door animation ====================
@@ -874,7 +874,7 @@ func mine_out_wall(x: int, y: int) -> bool:
 		data.features[i] = TileFeature.Type.NONE
 	if _image != null:
 		_image.set_pixel(x, y, _tile_color(x, y))
-		_texture.update(_image)
+		call_deferred("_deferred_update_texture")
 	# Pathfinder: the tile is now passable; recompute components so anything
 	# that was sealed behind this wall joins the right component.
 	if pathfinder != null:
@@ -1091,3 +1091,9 @@ func resync_beds_from_map() -> void:
 			if data.get_feature(x, y) == TileFeature.Type.BED:
 				var t: Vector2i = Vector2i(x, y)
 				register_bed(t)
+
+
+## Deferred texture update helper: batching expensive ImageTexture.update calls
+func _deferred_update_texture() -> void:
+    if _texture != null and _image != null:
+        _texture.update(_image)

@@ -1918,8 +1918,17 @@ func _process(delta: float) -> void:
 	_trace_redraw_timer += delta
 	if _trace_redraw_timer >= TRACE_REDRAW_INTERVAL_SEC:
 		_trace_redraw_timer = 0.0
-		if has_node("WorldTrace"):
-			$WorldTrace.queue_redraw()
+		var wt = get_node_or_null("WorldTrace")
+		# Only redraw trace overlay when there are traces visible and the node is in-tree
+		if wt != null and wt is Node:
+			if wt.has_method("traces"):
+				# some engines may not expose property access via has_method; fall back to direct check
+				if wt.traces.size() > 0 and wt.is_visible_in_tree():
+					wt.queue_redraw()
+			else:
+				# conservative fallback: queue redraw only if visible
+				if wt.is_visible_in_tree():
+					wt.queue_redraw()
 
 
 func _ensure_avatar_panel() -> void:

@@ -140,10 +140,14 @@ func _on_game_tick(tick: int) -> void:
 
 
 func _apply_simulation_speed(tick: int) -> void:
-	"""Apply simulation speed multiplier."""
-	# This would integrate with TickManager to adjust tick rate
-	# For now, placeholder
-	pass
+	"""Apply simulation speed multiplier — integrates with TickManager."""
+	if GameManager == null:
+		return
+	var speed: float = GameManager.game_speed if GameManager.has_method("get_game_speed") else simulation_speed
+	MAI_AI_INTERVAL = maxi(20, int(100.0 / maxf(speed, 0.5)))
+	_entities_managed = _count_total_entities()
+	if _entities_managed > PERFORMANCE_THRESHOLD_ENTITIES and speed > 1.0:
+		MAI_AI_INTERVAL = maxi(MAI_AI_INTERVAL, 50)
 
 
 func _check_performance_scaling(tick: int) -> void:
@@ -244,24 +248,165 @@ func _update_civilization_strategies(tick: int) -> void:
 
 
 func _determine_faction_personality(faction_id: int) -> String:
-	"""Determine a faction's AI personality."""
-	# This would analyze faction history, traits, and behavior
-	# For now, return balanced as default
+	"""Determine a faction's AI personality from Egregore signature + history."""
+	if EgregoreMemory == null:
+		return _derive_personality_from_history(faction_id)
+	var sig: Dictionary = EgregoreMemory.get_settlement_signature(faction_id)
+	if sig.is_empty():
+		return _derive_personality_from_history(faction_id)
+	var coop: float = sig.get("cooperation", 0.5)
+	var fear: float = sig.get("fear", 0.2)
+	var vengeance: float = sig.get("vengeance", 0.2)
+	var curiosity: float = sig.get("curiosity", 0.4)
+	var discipline: float = sig.get("discipline", 0.3)
+	if fear > 0.7 and vengeance > 0.5:
+		return "defensive"
+	if vengeance > 0.6 and discipline > 0.6:
+		return "expansionist"
+	if curiosity > 0.7 and coop > 0.6:
+		return "trader"
+	if coop > 0.7 and fear < 0.3:
+		return "peaceful"
+	return _derive_personality_from_history(faction_id)
+
+
+func _derive_personality_from_history(faction_id: int) -> String:
+	"""Fallback: derive personality from WorldMemory faction event patterns."""
+	if WorldMemory == null:
+		return "balanced"
+	var events: Array = WorldMemory.get_events()
+	var war_count: int = 0
+	var trade_count: int = 0
+	var treaty_count: int = 0
+	for ev in events:
+		if not (ev is Dictionary):
+			continue
+		var e: Dictionary = ev as Dictionary
+		var fid: int = int(e.get("faction_id", -1))
+		if fid != faction_id and fid != -1:
+			continue
+		var etype: String = str(e.get("type", ""))
+		if etype in ["war_declared", "battle"]:
+			war_count += 1
+		elif etype in ["trade_route_established", "trade_deal"]:
+			trade_count += 1
+		elif etype in ["treaty_signed", "alliance_formed"]:
+			treaty_count += 1
+	if war_count > trade_count * 2 and war_count > 3:
+		return "expansionist"
+	if trade_count > war_count * 2 and trade_count > 3:
+		return "trader"
+	if treaty_count > war_count and treaty_count > 2:
+		return "peaceful"
 	return "balanced"
 
 
 func _find_expansion_targets(faction_id: int) -> Array:
-	"""Find regions suitable for expansion."""
+	"""Find regions suitable for expansion — scans for unclaimed or weakly-held adjacent regions."""
 	var targets: Array = []
-	# Would query NationBorderSystem for adjacent unclaimed or weakly-held regions
+	if NationBorderSystem == null:
+		return targets
+	var my_nation: Dictionary = {}
+	var all_nations: Array[Dictionary] = NationBorderSystem.get_all_nations()
+	for nd in all_nations:
+		if nd is Dictionary and int(nd.get("id", -1)) == faction_id:
+			my_nation = nd
+			break
+	if my_nation.is_empty():
+		return targets
+	var my_regions: Array = my_nation.get("regions", [])
+	if my_regions.is_empty():
+		return targets
+	var my_strength: int = int(my_nation.get("strength", 0))
+	var world := get_node_or_null("/root/Main/WorldViewport/World") as World
+	if world == null:
+		return targets
+	var max_scan: int = 30
+	var scanned: int = 0
+	for rk in my_regions:
+		if scanned >= max_scan:
+			break
+		if not (rk is int):
+			continue
+		var tile: Vector2i = _region_key_to_tile(int(rk))
+		for dx in range(-3, 4):
+			for dy in range(-3, 4):
+				if scanned >= max_scan:
+					break
+				var nt: Vector2i = tile + Vector2i(dx, dy)
+				if nt.x < 0 or nt.y < 0 or nt.x >= 256 or nt.y >= 256:
+					continue
+				var nrk: int = _tile_to_region_key(nt.x, nt.y)
+				var owner: int = NationBorderSystem.get_nation_at_region(nrk)
+				if owner < 0:
+					var biome: int = world.get_cell_tile_data(0, nt).get("biome", 0) if world.has_method("get_cell_tile_data") else 0
+					if biome in [0, 1, 2]:
+						targets.append(Vector2(nt.x * 10 + 5, nt.y * 10 + 5))
+						scanned += 1
+				elif owner != faction_id:
+					var other_nation: Dictionary = {}
+					for nd2 in all_nations:
+						if nd2 is Dictionary and int(nd2.get("id", -1)) == owner:
+							other_nation = nd2
+							break
+					if not other_nation.is_empty():
+						var other_strength: int = int(other_nation.get("strength", 0))
+						if other_strength < my_strength * 0.5:
+							targets.append(Vector2(nt.x * 10 + 5, nt.y * 10 + 5))
+							scanned += 1
+	targets.sort_custom(func(a: Vector2, b: Vector2) -> bool:
+		var da: float = a.distance_squared_to(Vector2(127 * 10, 127 * 10))
+		var db: float = b.distance_squared_to(Vector2(127 * 10, 127 * 10))
+		return da < db
+	)
 	return targets
 
 
+func _region_key_to_tile(region_key: int) -> Vector2i:
+	return Vector2i(region_key % 256, region_key / 256)
+
+
+func _tile_to_region_key(tx: int, ty: int) -> int:
+	return ty * 256 + tx
+
+
 func _find_trade_partners(faction_id: int) -> Array:
-	"""Find potential trade partners."""
+	"""Find potential trade partners — checks DiplomacySystem and economy complementarity."""
 	var partners: Array = []
-	# Would query SupplyChainSystem for complementary economies
+	var ds := get_node_or_null("/root/DiplomacySystem")
+	if ds == null or NationBorderSystem == null:
+		return partners
+	var all_nations: Array[Dictionary] = NationBorderSystem.get_all_nations()
+	var my_econ: String = _get_economy_type(faction_id)
+	for nd in all_nations:
+		if not (nd is Dictionary):
+			continue
+		var other_id: int = int(nd.get("id", -1))
+		if other_id == faction_id or other_id < 0:
+			continue
+		if NationBorderSystem.are_nations_at_war(faction_id, other_id):
+			continue
+		var other_econ: String = _get_economy_type(other_id)
+		if my_econ != other_econ:
+			partners.append(other_id)
+		elif partners.is_empty():
+			partners.append(other_id)
+	partners.sort()
 	return partners
+
+
+func _get_economy_type(faction_id: int) -> String:
+	"""Determine a faction's dominant economy from specialization."""
+	var spec: String = "mixed"
+	if WarProductionSystem != null and WarProductionSystem.has_method("get_settlement_specialization"):
+		spec = WarProductionSystem.get_settlement_specialization(faction_id)
+	match spec:
+		"weapons", "defense":
+			return "military"
+		"civilian":
+			return "civilian"
+		_:
+			return "mixed"
 
 
 func _update_settlement_goals(tick: int) -> void:
@@ -408,15 +553,63 @@ func _consider_treaty_proposal(nation_a: int, nation_b: int, tick: int) -> void:
 
 
 func _evaluate_treaty_violations(tick: int) -> void:
-	"""Evaluate potential treaty violations."""
-	# Would check for armies crossing borders, attacks on allied settlements, etc.
-	pass
+	"""Evaluate potential treaty violations — checks border crossings and attacks."""
+	if NationBorderSystem == null or ArmyBattleSystem == null:
+		return
+	var ds := get_node_or_null("/root/DiplomacySystem")
+	if ds == null:
+		return
+	var all_nations: Array[Dictionary] = NationBorderSystem.get_all_nations()
+	for army in ArmyBattleSystem.get_active_armies():
+		if not (army is Dictionary):
+			continue
+		var army_dict: Dictionary = army as Dictionary
+		var army_nation: int = int(army_dict.get("nation_id", -1))
+		var army_pos: Vector2 = army_dict.get("position", Vector2(-1, -1))
+		if army_nation < 0 or army_pos.x < 0:
+			continue
+		var tile: Vector2i = Vector2i(int(army_pos.x) / 10, int(army_pos.y) / 10)
+		var region_owner: int = NationBorderSystem.get_nation_at_region(_tile_to_region_key(tile.x, tile.y))
+		if region_owner >= 0 and region_owner != army_nation:
+			if not NationBorderSystem.are_nations_at_war(army_nation, region_owner):
+				var personality: String = _determine_faction_personality(region_owner)
+				var traits: Dictionary = _civilization_personalities.get(personality, {})
+				if traits.get("caution", 0.5) > 0.3:
+					if ds.has_method("add_treaty_violation"):
+						ds.add_treaty_violation(army_nation, region_owner, tick, "border_crossing")
+	if WorldMemory != null:
+		WorldMemory.record_event({
+			"type": "treaty_violation_check",
+			"tick": tick,
+			"nations_scanned": all_nations.size(),
+		})
 
 
 func _process_relationship_changes(tick: int) -> void:
-	"""Process ongoing relationship changes."""
-	# Would decay old grudges, strengthen alliances over time, etc.
-	pass
+	"""Process ongoing relationship changes — decay old grudges, strengthen alliances."""
+	var ds := get_node_or_null("/root/DiplomacySystem")
+	if ds == null:
+		return
+	if tick % 1000 != 0:
+		return
+	for nd in NationBorderSystem.get_all_nations():
+		if not (nd is Dictionary):
+			continue
+		var nid: int = int(nd.get("id", -1))
+		if nid < 0:
+			continue
+		var personality: String = _determine_faction_personality(nid)
+		var traits: Dictionary = _civilization_personalities.get(personality, {})
+		var diplo_bias: float = traits.get("diplomacy", 0.5)
+		if EgregoreMemory != null:
+			var sig: Dictionary = EgregoreMemory.get_settlement_signature(nid)
+			if not sig.is_empty():
+				var coop: float = sig.get("cooperation", 0.4)
+				diplo_bias = (diplo_bias + coop) * 0.5
+		if ds.has_method("adjust_nation_relationship"):
+			ds.adjust_nation_relationship(nid, -1, -0.01 * (1.0 - diplo_bias))
+		if ds.has_method("strengthen_alliances"):
+			ds.strengthen_alliances(nid, 0.005 * diplo_bias)
 
 
 # ============================================================
@@ -481,10 +674,43 @@ func _count_nearby_armies(center_region: int) -> int:
 
 
 func _create_army_for_settlement(settlement: Dictionary, tick: int) -> void:
-	"""Create a new army for a settlement."""
+	"""Create a new army for a settlement — integrates with ArmyBattleSystem."""
+	if ArmyBattleSystem == null or not ArmyBattleSystem.has_method("create_army"):
+		return
 	var center: int = int(settlement.get("center_region", -1))
-	# Would integrate with ArmyBattleSystem to form army from available soldiers
-	pass
+	var nation_id: int = NationBorderSystem.get_nation_at_region(center) if NationBorderSystem != null else -1
+	if nation_id < 0:
+		return
+	var personality: String = _determine_faction_personality(nation_id)
+	var pop: int = int(settlement.get("population", 0))
+	var soldier_count: int = maxi(2, int(pop * 0.25))
+	var pos: Vector2 = Vector2(
+		(center % 256) * 10 + 5,
+		(center / 256) * 10 + 5
+	)
+	var soldier_ids: Array[int] = []
+	var pm := get_node_or_null("/root/PawnManager")
+	if pm != null and pm.has_method("find_alive_pawns"):
+		var all_pawns: Array = pm.find_alive_pawns()
+		for p in all_pawns:
+			if p != null and p.data != null and soldier_ids.size() < soldier_count:
+				var s_id: int = int(p.data.id)
+				if s_id > 0:
+					soldier_ids.append(s_id)
+	if soldier_ids.is_empty():
+		return
+	var army_id: int = ArmyBattleSystem.create_army(soldier_ids[0], nation_id, soldier_ids, pos, tick)
+	if army_id >= 0:
+		if WorldMemory != null:
+			WorldMemory.record_event({
+				"type": "army_formed",
+				"army_id": army_id,
+				"nation_id": nation_id,
+				"settlement_center": center,
+				"strength": strength,
+				"personality": personality,
+				"tick": tick,
+			})
 
 
 func _issue_army_orders(tick: int) -> void:
@@ -517,21 +743,93 @@ func _order_army_to_expand(army: Dictionary, strategy: Dictionary, tick: int) ->
 
 
 func _order_army_to_defend(army: Dictionary, tick: int) -> void:
-	"""Order army to defend position."""
-	# Keep army at current position or move to threatened settlement
-	pass
+	"""Order army to defend the nearest threatened settlement."""
+	if ArmyBattleSystem == null or SettlementMemory == null:
+		return
+	var army_pos: Vector2 = army.get("position", Vector2.ZERO)
+	var nation_id: int = int(army.get("nation_id", -1))
+	var best_target: Vector2 = army_pos
+	var best_threat: float = 0.0
+	for st_v in SettlementMemory.settlements:
+		if not (st_v is Dictionary):
+			continue
+		var st: Dictionary = st_v as Dictionary
+		var st_nation: int = NationBorderSystem.get_nation_at_region(int(st.get("center_region", -1))) if NationBorderSystem != null else -1
+		if st_nation != nation_id:
+			continue
+		var threat: float = _calculate_settlement_threat(st, tick)
+		if threat > best_threat:
+			var st_center: int = int(st.get("center_region", -1))
+			var st_pos: Vector2 = Vector2((st_center % 256) * 10 + 5, (st_center / 256) * 10 + 5)
+			if army_pos.distance_squared_to(st_pos) < 250000.0:
+				best_threat = threat
+				best_target = st_pos
+	if best_threat > 0.3:
+		ArmyBattleSystem.set_army_target(int(army.get("id", -1)), best_target)
 
 
 func _order_army_to_patrol(army: Dictionary, tick: int) -> void:
-	"""Order army to patrol territory."""
-	# Move army along border or between settlements
-	pass
+	"""Order army to patrol between key settlements or along border."""
+	if ArmyBattleSystem == null or SettlementMemory == null:
+		return
+	var nation_id: int = int(army.get("nation_id", -1))
+	var owned_settlements: Array[Vector2] = []
+	for st_v in SettlementMemory.settlements:
+		if not (st_v is Dictionary):
+			continue
+		var st: Dictionary = st_v as Dictionary
+		var st_nation: int = NationBorderSystem.get_nation_at_region(int(st.get("center_region", -1))) if NationBorderSystem != null else -1
+		if st_nation == nation_id:
+			var sc: int = int(st.get("center_region", -1))
+			owned_settlements.append(Vector2((sc % 256) * 10 + 5, (sc / 256) * 10 + 5))
+	if owned_settlements.size() >= 2:
+		var patrol_target: Vector2 = owned_settlements[tick % owned_settlements.size()]
+		ArmyBattleSystem.set_army_target(int(army.get("id", -1)), patrol_target)
+	elif owned_settlements.size() == 1:
+		ArmyBattleSystem.set_army_target(int(army.get("id", -1)), owned_settlements[0])
 
 
 func _reinforce_settlements(tick: int) -> void:
-	"""Reinforce threatened settlements with armies."""
-	# Would move nearby armies to high-threat settlements
-	pass
+	"""Reinforce threatened settlements — moves nearby armies."""
+	if ArmyBattleSystem == null or SettlementMemory == null:
+		return
+	if tick % 500 != 0:
+		return
+	for st_v in SettlementMemory.settlements:
+		if not (st_v is Dictionary):
+			continue
+		var st: Dictionary = st_v as Dictionary
+		var center: int = int(st.get("center_region", -1))
+		var threat: float = _calculate_settlement_threat(st, tick)
+		if threat < 0.6:
+			continue
+		var st_pos: Vector2 = Vector2((center % 256) * 10 + 5, (center / 256) * 10 + 5)
+		var nation_id: int = NationBorderSystem.get_nation_at_region(center) if NationBorderSystem != null else -1
+		if nation_id < 0:
+			continue
+		var closest_army_id: int = -1
+		var closest_dist: float = 999999.0
+		for army in ArmyBattleSystem.get_active_armies():
+			if not (army is Dictionary):
+				continue
+			var a_dict: Dictionary = army as Dictionary
+			if int(a_dict.get("nation_id", -1)) != nation_id:
+				continue
+			var a_pos: Vector2 = a_dict.get("position", Vector2.ZERO)
+			var dist: float = a_pos.distance_squared_to(st_pos)
+			if dist < closest_dist:
+				closest_dist = dist
+				closest_army_id = int(a_dict.get("id", -1))
+		if closest_army_id >= 0:
+			ArmyBattleSystem.set_army_target(closest_army_id, st_pos)
+			if WorldMemory != null:
+				WorldMemory.record_event({
+					"type": "settlement_reinforced",
+					"army_id": closest_army_id,
+					"settlement_center": center,
+					"threat_level": threat,
+					"tick": tick,
+				})
 
 
 # ============================================================
@@ -591,9 +889,44 @@ func _handle_migration_and_expansion(tick: int) -> void:
 
 
 func _spawn_migrants(settlement: Dictionary, tick: int) -> void:
-	"""Spawn migrant groups from overcrowded settlements."""
-	# Would create migrant pawns that travel to found new settlements
-	pass
+	"""Spawn migrant groups from overcrowded settlements — creates pawns that migrate out."""
+	if SettlementMemory == null:
+		return
+	var pm := get_node_or_null("/root/PawnManager")
+	var ps := get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
+	if pm == null or ps == null:
+		return
+	if tick % 2000 != 0:
+		return
+	var center: int = int(settlement.get("center_region", -1))
+	var pop: int = int(settlement.get("population", 0))
+	if pop < 8:
+		return
+	var overflow: int = pop - 12
+	if overflow <= 0:
+		return
+	var migrant_count: int = mini(overflow, 3)
+	var region_pos: Vector2 = Vector2((center % 256) * 10 + 5, (center / 256) * 10 + 5)
+	var hex_seed: int = int(str(center).hash() ^ tick ^ 7919)
+	for i in range(migrant_count):
+		var migrant_name: String = "Migrant %d" % [tick + i]
+		var offset: Vector2 = Vector2(
+			((hex_seed + i * 101) % 40) - 20,
+			((hex_seed + i * 103) % 40) - 20
+		)
+		if ps.has_method("spawn_migrant_pawn"):
+			ps.spawn_migrant_pawn(region_pos + offset)
+		elif ps.has_method("spawn_pawn"):
+			ps.spawn_pawn(region_pos + offset)
+	if WorldMemory != null and migrant_count > 0:
+		WorldMemory.record_event({
+			"type": "migration_out",
+			"settlement_center": center,
+			"migrant_count": migrant_count,
+			"reason": "overcrowding",
+			"population": pop,
+			"tick": tick,
+		})
 
 
 func _should_found_new_settlement(settlement: Dictionary, tick: int) -> bool:
@@ -606,9 +939,39 @@ func _should_found_new_settlement(settlement: Dictionary, tick: int) -> bool:
 
 
 func _found_new_settlement(parent_settlement: Dictionary, tick: int) -> void:
-	"""Found a new settlement."""
-	# Would integrate with SettlementManager to create new settlement
-	pass
+	"""Found a new settlement — integrates with SettlementManager or FragmentationManager."""
+	if SettlementMemory == null:
+		return
+	var center: int = int(parent_settlement.get("center_region", -1))
+	var nation_id: int = NationBorderSystem.get_nation_at_region(center) if NationBorderSystem != null else -1
+	if FragmentationManager != null and FragmentationManager.has_method("find_outward_passable"):
+		var targets: Array[Vector2i] = []
+		var ref_tile: Vector2i = Vector2i(center % 256, center / 256)
+		for dx in range(-5, 6):
+			for dy in range(-5, 6):
+				var nt: Vector2i = ref_tile + Vector2i(dx, dy)
+				if nt.x < 0 or nt.y < 0 or nt.x >= 256 or nt.y >= 256:
+					continue
+				targets.append(nt)
+		for t in targets:
+			var nrk: int = _tile_to_region_key(t.x, t.y)
+			if NationBorderSystem != null:
+				var owner: int = NationBorderSystem.get_nation_at_region(nrk)
+				if owner >= 0:
+					continue
+			if FragmentationManager.find_outward_passable(t, 5).size() > 0:
+				var sm := get_node_or_null("/root/SettlementManager")
+				if sm != null and sm.has_method("create_settlement"):
+					sm.create_settlement(nrk, "Outpost %d" % [tick])
+					if WorldMemory != null:
+						WorldMemory.record_event({
+							"type": "new_settlement_founded",
+							"parent_center": center,
+							"new_center": nrk,
+							"nation_id": nation_id,
+							"tick": tick,
+						})
+				break
 
 
 # ============================================================

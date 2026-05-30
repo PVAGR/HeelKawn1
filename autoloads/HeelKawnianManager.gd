@@ -94,6 +94,26 @@ func _on_pressure_event(payload: Dictionary) -> void:
 	if region_id < 0 or intensity <= 0.0:
 		return
 
+	# Metaphysics amplification (VeilSystem + AshaDrujSystem integration)
+	var amplified_intensity: float = intensity
+	var VeilSystem: Node = Engine.get_main_loop().root.get_node_or_null("VeilSystem") if Engine.get_main_loop() != null else null
+	if VeilSystem != null:
+		var veil_int: float = VeilSystem.get_veil_integrity() if VeilSystem.has_method("get_veil_integrity") else 1.0
+		# Thinner veil = amplified emotional response (max 2x when veil is very thin)
+		if veil_int < 0.8:
+			amplified_intensity *= 1.0 + (1.0 - veil_int) * 1.5
+	var AshaDrujSystem: Node = Engine.get_main_loop().root.get_node_or_null("AshaDrujSystem") if Engine.get_main_loop() != null else null
+	if AshaDrujSystem != null:
+		var balance: Dictionary = AshaDrujSystem.get_balance() if AshaDrujSystem.has_method("get_balance") else {}
+		var asha: float = float(balance.get("asha", 50.0))
+		var druj: float = float(balance.get("druj", 50.0))
+		if druj > asha:
+			# Druj dominance amplifies negative pressures
+			amplified_intensity *= 1.0 + (druj - asha) / 100.0
+		elif asha > druj:
+			# Asha dominance dampens negative pressures
+			amplified_intensity *= 1.0 - (asha - druj) / 200.0
+
 	# Find pawns in the affected region and apply bias based on personality
 	var pawns_in_region: Array = _get_pawns_in_region(region_id)
 	for pawn_data in pawns_in_region:
@@ -104,10 +124,10 @@ func _on_pressure_event(payload: Dictionary) -> void:
 		# Determine bias type from personality traits
 		var bias_type: String = _determine_pressure_bias(pawn_data, pressure_type)
 
-		# Store pressure bias for this pawn
+		# Store pressure bias for this pawn (with metaphysical amplification)
 		_pressure_bias_by_pawn[pawn_id] = {
 			"bias_type": bias_type,
-			"intensity": intensity,
+			"intensity": amplified_intensity,
 			"tick": tick,
 			"pressure_type": pressure_type,
 			"region_id": region_id,
@@ -732,6 +752,27 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 	# Phase 6: cellar — advanced storage for mature settlements
 	elif cellars <= 0 and local_pop >= 7 and granaries >= 1:
 		ambition = _ambition_result(Job.Type.BUILD_CELLAR, 5, "mature settlement needs deep storage")
+	# Era-aware ambitions (TechnologyEras integration)
+	if ambition.is_empty() and settlement_id >= 0:
+		var TechnologyEras: Node = Engine.get_main_loop().root.get_node_or_null("TechnologyEras") if Engine.get_main_loop() != null else null
+		if TechnologyEras != null and TechnologyEras.has_method("get_settlement_era"):
+			var era: int = TechnologyEras.get_settlement_era(settlement_id)
+			if era >= 3:  # Iron Age+
+				if shrines <= 0 and local_pop >= 4:
+					ambition = _ambition_result(Job.Type.BUILD_SHRINE, 5, "era %d: establish spiritual foundation" % era)
+				elif libraries <= 0 and local_pop >= 5:
+					ambition = _ambition_result(Job.Type.BUILD_LIBRARY, 5, "era %d: knowledge hub needed" % era)
+			if ambition.is_empty() and era >= 2:  # Bronze Age+
+				if workshops <= 0 and local_pop >= 4:
+					ambition = _ambition_result(Job.Type.BUILD_WORKSHOP, 5, "era %d: crafting workshop needed" % era)
+				elif markets <= 0 and local_pop >= 5:
+					ambition = _ambition_result(Job.Type.BUILD_MARKET, 4, "era %d: trade market needed" % era)
+				elif barracks <= 0 and local_pop >= 5 and walls >= 1:
+					ambition = _ambition_result(Job.Type.BUILD_BARRACKS, 4, "era %d: military capacity needed" % era)
+			if ambition.is_empty() and era >= 1:  # Copper Age+
+				if granaries <= 0 and farms >= 1:
+					ambition = _ambition_result(Job.Type.BUILD_GRANARY, 4, "era %d: food storage needed" % era)
+
 	elif drive in ["preserve", "teach"] and markers <= 0:
 		ambition = _ambition_result(Job.Type.BUILD_MARKER_STONE, 6, "memory anchor missing for preservation-focused population")
 	elif drive == "survive":
@@ -825,6 +866,32 @@ static func get_settlement_ambition_for_pawn(pawn: Variant) -> Dictionary:
 		if eg_bonus != 0:
 			ambition["priority"] = clampi(int(ambition.get("priority", 5)) + eg_bonus, 1, 10)
 			ambition["reason"] = "%s [egregore %+d]" % [str(ambition.get("reason", "")), eg_bonus]
+		# FactionPolitics influence (FactionPolitics integration)
+		var FactionPolitics: Node = Engine.get_main_loop().root.get_node_or_null("FactionPolitics") if Engine.get_main_loop() != null else null
+		if FactionPolitics != null and FactionPolitics.has_method("get_dominant_faction") and settlement_id >= 0:
+			var dom_faction: int = FactionPolitics.get_dominant_faction(settlement_id)
+			if dom_faction >= 0:
+				var faction_bonus: int = 0
+				var jt: int = int(ambition.get("job_type", -1))
+				match dom_faction:
+					0:  # Royalists — favor markers, walls, shrines
+						if jt in [Job.Type.BUILD_MARKER_STONE, Job.Type.BUILD_SHRINE, Job.Type.BUILD_WALL, Job.Type.CARVE_KNOWLEDGE_STONE]:
+							faction_bonus = 2
+					1:  # Merchants — favor markets, storage, roads
+						if jt in [Job.Type.BUILD_MARKET, Job.Type.BUILD_STORAGE_HUT, Job.Type.TRADE_HAUL, Job.Type.BUILD_ROAD]:
+							faction_bonus = 2
+					2:  # Military — favor barracks, walls, watchtowers
+						if jt in [Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WALL, Job.Type.BUILD_WATCHTOWER, Job.Type.BUILD_DOOR]:
+							faction_bonus = 2
+					3:  # Clergy — favor shrines, libraries, carving
+						if jt in [Job.Type.BUILD_SHRINE, Job.Type.BUILD_LIBRARY, Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.CARVE_LEDGER_STONE]:
+							faction_bonus = 2
+					4:  # Commoners — favor beds, hearths, farms, granaries
+						if jt in [Job.Type.BUILD_BED, Job.Type.BUILD_HEARTH, Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_FIRE_PIT]:
+							faction_bonus = 2
+				if faction_bonus != 0:
+					ambition["priority"] = clampi(int(ambition.get("priority", 5)) + faction_bonus, 1, 10)
+					ambition["reason"] = "%s [faction %+d]" % [str(ambition.get("reason", "")), faction_bonus]
 	var learned_bonus: int = _learning_priority_bonus_for_job(int(ambition.get("job_type", -1)))
 	if learned_bonus != 0:
 		ambition["priority"] = clampi(int(ambition.get("priority", 5)) + learned_bonus, 1, 10)
@@ -905,22 +972,36 @@ static func _determine_household_goal(hid: int, pawn: Variant) -> String:
 	var housing_press: float = ColonySimServices.get_housing_pressure() if ColonySimServices != null else 0.0
 	var storage_press: float = ColonySimServices.get_storage_pressure(center_rk) if ColonySimServices != null else 0.0
 	
+	# Social dynamics influence on household goals (SocialDynamics integration)
+	var social_mod: int = 0
+	var SocialDynamics: Node = Engine.get_main_loop().root.get_node_or_null("SocialDynamics") if Engine.get_main_loop() != null else null
+	if SocialDynamics != null:
+		var pawn_id: int = int(data.id)
+		var friends: int = SocialDynamics.count_friends(pawn_id) if SocialDynamics.has_method("count_friends") else 0
+		var rivals: int = SocialDynamics.count_rivals(pawn_id) if SocialDynamics.has_method("count_rivals") else 0
+		# Friends increase social goal chances; rivals increase defensive goal chances
+		if friends > rivals:
+			social_mod = clampi(friends * 3, 0, 20)
+		elif rivals > friends:
+			social_mod = clampi(-rivals * 3, -20, 0)
+
 	# Use a deterministic stream name and salt based on pawn id and position
 	var stream_name: StringName = StringName("pawn:%d:household_goal" % [int(data.id)])
 	var salt: int = _tick() + int(data.id) * 1009 + data.tile_pos.x * 131 + data.tile_pos.y * 17 + 99
 	var rng_val: int = WorldRNG.stream_seed(stream_name, salt) % 100
 	
 	# Priority needs — pressure-driven, not blind hearth/bed counts
+	# social_mod > 0 shifts thresholds higher (more likely), < 0 shifts lower (less likely)
 	if int(local_features.get("hearth", 0)) <= 0 and (warmth_press > 0.12 or cooking_press > 0.1):
-		return "Settle Hearth" if rng_val < 60 else ""
+		return "Settle Hearth" if (rng_val + social_mod) < 60 else ""
 	if housing_press > 0.35 and int(local_features.get("bed", 0)) < 2:
-		return "Settle Hearth" if rng_val < 40 else ""
+		return "Settle Hearth" if (rng_val + social_mod) < 40 else ""
 	if int(local_features.get("wall", 0)) < 4:
-		return "Fortify Home" if rng_val < 50 else ""
+		return "Fortify Home" if (rng_val - social_mod) < 50 else ""
 	if storage_press > 0.25 and int(local_features.get("storage_hut", 0)) <= 0:
-		return "Expand Storage" if rng_val < 50 else ""
+		return "Expand Storage" if (rng_val - social_mod) < 50 else ""
 	if int(local_features.get("farm", 0)) <= 0:
-		return "Sustain Family" if rng_val < 40 else ""
+		return "Sustain Family" if (rng_val + social_mod) < 40 else ""
 		
 	# Fallback to legacy/preservation goals
 	var profile: Dictionary = get_development_profile_for_pawn(pawn)
@@ -943,8 +1024,22 @@ static func _recovery_phase(settlement_id: int) -> int:
 	var current_phase: int = int(entry.get("phase", 1))
 	var last_tick: int = int(entry.get("tick", 0))
 
-	# Advance phase every 2000 ticks if conditions are met
-	if tick - last_tick < 2000:
+	# Metaphysics influence on recovery speed (VeilSystem + AshaDrujSystem integration)
+	var recovery_tick_threshold: int = 2000
+	var AshaDrujSystem: Node = Engine.get_main_loop().root.get_node_or_null("AshaDrujSystem") if Engine.get_main_loop() != null else null
+	if AshaDrujSystem != null and AshaDrujSystem.has_method("get_balance"):
+		var balance: Dictionary = AshaDrujSystem.get_balance()
+		var asha: float = float(balance.get("asha", 50.0))
+		var druj: float = float(balance.get("druj", 50.0))
+		if asha > druj:
+			# Asha dominance: recovery speeds up (min 1200 ticks)
+			recovery_tick_threshold = maxi(1200, recovery_tick_threshold - int((asha - druj) * 8))
+		elif druj > asha:
+			# Druj dominance: recovery slows down (max 4000 ticks)
+			recovery_tick_threshold = mini(4000, recovery_tick_threshold + int((druj - asha) * 8))
+
+	# Advance phase every recovery_tick_threshold ticks if conditions are met
+	if tick - last_tick < recovery_tick_threshold:
 		return current_phase
 
 	var features: Dictionary = _scan_recovery_features(settlement_id)
@@ -1509,7 +1604,93 @@ static func get_learning_target_for_pawn(pawn: Variant) -> Dictionary:
 					reason = "recover drive: learn food storage"
 					priority = 2.0
 
-	# 4. Default: pick a skill the pawn is weakest at
+	# 4. Era-appropriate learning targets (TechnologyEras integration)
+	if target_knowledge_type < 0:
+		var TechnologyEras: Node = Engine.get_main_loop().root.get_node_or_null("TechnologyEras") if Engine.get_main_loop() != null else null
+		if TechnologyEras != null and TechnologyEras.has_method("get_settlement_era"):
+			var era: int = TechnologyEras.get_settlement_era(settlement_id)
+			var era_name: String = TechnologyEras.get_era_name(settlement_id) if TechnologyEras.has_method("get_era_name") else ""
+			if era >= 0:
+				# Era-appropriate knowledge targets
+				match era:
+					0:  # Stone Age
+						if not known.has(KnowledgeSystem.KnowledgeType.FIRE):
+							target_knowledge_type = KnowledgeSystem.KnowledgeType.FIRE
+							reason = "era %s: learn fire making" % era_name
+							priority = 2.8
+						elif not known.has(KnowledgeSystem.KnowledgeType.SHELTER_BUILDING):
+							target_knowledge_type = KnowledgeSystem.KnowledgeType.SHELTER_BUILDING
+							reason = "era %s: learn shelter building" % era_name
+							priority = 2.7
+						elif not known.has(KnowledgeSystem.KnowledgeType.CRAFTING):
+							target_knowledge_type = KnowledgeSystem.KnowledgeType.CRAFTING
+							reason = "era %s: learn basic crafting" % era_name
+							priority = 2.5
+					1:  # Copper Age
+						if not known.has(KnowledgeSystem.KnowledgeType.METALLURGY) and known.has(KnowledgeSystem.KnowledgeType.CRAFTING):
+							target_knowledge_type = KnowledgeSystem.KnowledgeType.METALLURGY
+							reason = "era %s: learn metallurgy" % era_name
+							priority = 2.8
+						elif not known.has(KnowledgeSystem.KnowledgeType.FOOD_STORAGE):
+							target_knowledge_type = KnowledgeSystem.KnowledgeType.FOOD_STORAGE
+							reason = "era %s: learn food storage" % era_name
+							priority = 2.5
+					2:  # Bronze Age
+						if not known.has(KnowledgeSystem.KnowledgeType.WEAPON_CRAFTING):
+							target_knowledge_type = KnowledgeSystem.KnowledgeType.WEAPON_CRAFTING
+							reason = "era %s: learn weapon crafting" % era_name
+							priority = 2.8
+						elif not known.has(KnowledgeSystem.KnowledgeType.HOSPITALITY):
+							target_knowledge_type = KnowledgeSystem.KnowledgeType.HOSPITALITY
+							reason = "era %s: learn hospitality" % era_name
+							priority = 2.5
+					3:  # Iron Age
+						if not known.has(KnowledgeSystem.KnowledgeType.WRITING) and known.has(KnowledgeSystem.KnowledgeType.CRAFTING):
+							target_knowledge_type = KnowledgeSystem.KnowledgeType.WRITING
+							reason = "era %s: learn writing" % era_name
+							priority = 2.8
+						elif not known.has(KnowledgeSystem.KnowledgeType.LEADERSHIP):
+							target_knowledge_type = KnowledgeSystem.KnowledgeType.LEADERSHIP
+							reason = "era %s: learn leadership" % era_name
+							priority = 2.5
+					4:  # Classical Age
+						if not known.has(KnowledgeSystem.KnowledgeType.MEDICINE):
+							target_knowledge_type = KnowledgeSystem.KnowledgeType.MEDICINE
+							reason = "era %s: learn medicine" % era_name
+							priority = 2.8
+						elif not known.has(KnowledgeSystem.KnowledgeType.ENGINEERING):
+							target_knowledge_type = KnowledgeSystem.KnowledgeType.ENGINEERING
+							reason = "era %s: learn engineering" % era_name
+							priority = 2.5
+					5:  # Medieval Age
+						if not known.has(KnowledgeSystem.KnowledgeType.MEMORY_PRESERVATION):
+							target_knowledge_type = KnowledgeSystem.KnowledgeType.MEMORY_PRESERVATION
+							reason = "era %s: learn memory preservation" % era_name
+							priority = 2.8
+					6:  # Renaissance
+						if not known.has(KnowledgeSystem.KnowledgeType.TEACHING):
+							target_knowledge_type = KnowledgeSystem.KnowledgeType.TEACHING
+							reason = "era %s: learn teaching" % era_name
+							priority = 2.8
+
+	# 5. Research-driven learning targets (ResearchSystem integration)
+	if target_knowledge_type < 0:
+		var ResearchSystem: Node = Engine.get_main_loop().root.get_node_or_null("ResearchSystem") if Engine.get_main_loop() != null else null
+		if ResearchSystem != null and ResearchSystem.has_method("get_active_project") and settlement_id >= 0:
+			var active = ResearchSystem.get_active_project(settlement_id)
+			if active != null:
+				# Research is active — bias toward general knowledge development
+				# Pawn should learn teaching to support research, or pick any knowledge gap
+				if not known.has(KnowledgeSystem.KnowledgeType.TEACHING):
+					target_knowledge_type = KnowledgeSystem.KnowledgeType.TEACHING
+					reason = "active research: learn teaching to accelerate project %s" % active.name
+					priority = 3.5
+				elif not known.has(KnowledgeSystem.KnowledgeType.WRITING):
+					target_knowledge_type = KnowledgeSystem.KnowledgeType.WRITING
+					reason = "active research: learn writing to document findings"
+					priority = 3.0
+
+	# 6. Default: pick a skill the pawn is weakest at
 	if target_skill < 0 and target_knowledge_type < 0:
 		var weakest_skill: String = ""
 		var weakest_level: int = 999
@@ -1654,6 +1835,23 @@ static func get_preservation_choice_for_pawn(pawn: Variant) -> Dictionary:
 
 	# Option 3: Write in a book (if pawn has writing knowledge)
 	if my_knowledge.has(KnowledgeSystem.KnowledgeType.WRITING):
+		# Check LibrarySystem for organized library zone (higher preservation factor)
+		var LibrarySystem: Node = Engine.get_main_loop().root.get_node_or_null("LibrarySystem") if Engine.get_main_loop() != null else null
+		if LibrarySystem != null and LibrarySystem.has_method("has_library") and LibrarySystem.has_library(settlement_id) and LibrarySystem.has_method("add_book"):
+			var pres_factor: float = LibrarySystem.get_preservation_factor(settlement_id) if LibrarySystem.has_method("get_preservation_factor") else 0.5
+			LibrarySystem.add_book(settlement_id, {
+				"knowledge_type": best_kt,
+				"carrier": pawn_id,
+				"tick": _tick(),
+				"preservation_factor": pres_factor,
+			})
+			return {
+				"action": "deposit_library",
+				"knowledge_type": best_kt,
+				"target_tile": Vector2i(-1, -1),
+				"target_pawn_id": -1,
+				"reason": "deposit %s in settlement library (preservation factor %.1f, only %d carriers)" % [_knowledge_name(best_kt), pres_factor, best_count],
+			}
 		var library_tile: Vector2i = _find_library_tile_near_pawn(data)
 		if library_tile.x >= 0:
 			return {
@@ -1680,8 +1878,18 @@ static func _find_teach_target(pawn: Variant, knowledge_type: int) -> int:
 	var data: HeelKawnianData = _pawn_data(pawn)
 	if data == null:
 		return -1
+	var pawn_id: int = int(data.id)
+	# Pre-check TeachingSystem for active lessons involving this pawn (TeachingSystem integration)
+	var lesson_student_ids: Array[int] = []
+	var TeachingSystem: Node = Engine.get_main_loop().root.get_node_or_null("TeachingSystem") if Engine.get_main_loop() != null else null
+	if TeachingSystem != null and TeachingSystem.has_method("get_active_lessons"):
+		for lesson in TeachingSystem.get_active_lessons():
+			if int(lesson.get("teacher_id", -1)) == pawn_id and not (int(lesson.get("student_id", -1)) in lesson_student_ids):
+				lesson_student_ids.append(int(lesson.get("student_id", -1)))
 	var best_id: int = -1
 	var best_score: float = -1.0e9
+	var pawn_hid: int = int(data.household_id)
+	var pawn_sid: int = int(data.settlement_id)
 	for c in candidates:
 		var other_id: int = int(c.get("id", -1))
 		if other_id < 0:
@@ -1689,10 +1897,12 @@ static func _find_teach_target(pawn: Variant, knowledge_type: int) -> int:
 		var other_known: Array[int] = _known_knowledge_for_pawn(other_id)
 		if not (knowledge_type in other_known):
 			var score: float = 100.0 - float(int(c.get("d2", 9999)))
-			if int(c.get("household_id", -1)) >= 0 and int(c.get("household_id", -1)) == int(data.household_id):
+			if int(c.get("household_id", -1)) >= 0 and int(c.get("household_id", -1)) == pawn_hid:
 				score += 30.0
-			if int(c.get("settlement_id", -1)) >= 0 and int(c.get("settlement_id", -1)) == int(data.settlement_id):
+			if int(c.get("settlement_id", -1)) >= 0 and int(c.get("settlement_id", -1)) == pawn_sid:
 				score += 20.0
+			if other_id in lesson_student_ids:
+				score += 40.0  # Already in formal lesson with this teacher
 			if score > best_score:
 				best_score = score
 				best_id = other_id
@@ -2508,6 +2718,7 @@ static func _matrix_job_biases(profile: Dictionary, data: HeelKawnianData, ident
 	_apply_colony_pressure_biases(biases, data)
 	_apply_light_need_biases(biases, data)
 	_apply_knowledge_preservation_biases(biases, data)
+	_apply_metaphysical_biases(biases, data, pawn)
 	_apply_survival_contentment_dampen(biases, data)
 	_clamp_biases(biases, -8, 16)
 	
@@ -2552,6 +2763,42 @@ static func _apply_knowledge_preservation_biases(biases: Dictionary, data: HeelK
 			_add_bias(biases, [Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP], 10)
 			break
 
+
+static func _apply_metaphysical_biases(biases: Dictionary, data: HeelKawnianData, pawn: Variant) -> void:
+	if data == null:
+		return
+	var tile: Vector2i = data.tile_pos
+	# VeilSystem: thin veil → spiritual/mystical job bonuses (BUILD_SHRINE, CARVE_*)
+	var VeilSystem: Node = Engine.get_main_loop().root.get_node_or_null("VeilSystem") if Engine.get_main_loop() != null else null
+	if VeilSystem != null:
+		var thin: bool = VeilSystem.is_thin_at(tile) if VeilSystem.has_method("is_thin_at") else false
+		if thin:
+			var intensity: float = VeilSystem.get_thin_spot_intensity(tile) if VeilSystem.has_method("get_thin_spot_intensity") else 0.5
+			var bias_amount: int = clampi(int(round(intensity * 5.0)), 1, 5)
+			_add_bias(biases, [Job.Type.BUILD_SHRINE, Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.CARVE_LEDGER_STONE, Job.Type.CARVE_GRAVE_MARKER], bias_amount)
+	# AshaDrujSystem: cosmic balance influences behavior
+	var AshaDrujSystem: Node = Engine.get_main_loop().root.get_node_or_null("AshaDrujSystem") if Engine.get_main_loop() != null else null
+	if AshaDrujSystem != null and AshaDrujSystem.has_method("get_balance"):
+		var balance: Dictionary = AshaDrujSystem.get_balance()
+		var asha: float = float(balance.get("asha", 50.0))
+		var druj: float = float(balance.get("druj", 50.0))
+		if asha > druj + 20:
+			_add_bias(biases, [Job.Type.TEACH_SKILL, Job.Type.BUILD_SHRINE, Job.Type.CARVE_LEDGER_STONE, Job.Type.TRADE_HAUL], 2)
+		elif druj > asha + 20:
+			_add_bias(biases, [Job.Type.PROTECT, Job.Type.DEFEND, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR], 2)
+	# EchoSystem: ancient echoes make preservation more urgent
+	var EchoSystem: Node = Engine.get_main_loop().root.get_node_or_null("EchoSystem") if Engine.get_main_loop() != null else null
+	if EchoSystem != null and EchoSystem.has_method("get_thin_spots"):
+		var echoes: Array = EchoSystem.get_thin_spots()
+		if not echoes.is_empty():
+			var nearby_echo: bool = false
+			for echo in echoes:
+				var et: Vector2i = echo.get("tile", Vector2i(-1, -1)) if echo is Dictionary else Vector2i(-1, -1)
+				if abs(et.x - tile.x) + abs(et.y - tile.y) < 20:
+					nearby_echo = true
+					break
+			if nearby_echo:
+				_add_bias(biases, [Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.CARVE_LEDGER_STONE, Job.Type.BUILD_MARKER_STONE, Job.Type.BUILD_SHRINE], 3)
 
 static func _apply_light_need_biases(biases: Dictionary, data: HeelKawnianData) -> void:
 	if data == null or ColonySimServices == null or GameManager == null:

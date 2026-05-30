@@ -4,12 +4,12 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** May 29, 2026
-**Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
+**Last Updated:** May 30, 2026
+**Current Phase:** Phase 5A integration — TeachingSystem + ResearchSystem + TechnologyEras production rewrites, stub implementations, Deep Social Dynamics, Knowledge Ecology, Emergent Narrative, Player Incarnation, Metaphysics
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
 **Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
-**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-29.md](STATE_VERIFICATION_2026-05-29.md)
+**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-30.md](STATE_VERIFICATION_2026-05-30.md)
 
 ---
 
@@ -701,6 +701,86 @@ We are always building, always refining, always expanding. This document capture
   - Legendary: 5000 impact
 - **Integration**: PawnInfoPanel.gd reads live tier data; reacts to `progression_changed` signal.
 
+### 7. TechnologyEras (Technology Progression)
+
+- **Purpose**: Tracks technology era progression per-settlement (Stone Age through Space Age). Determines era advancement from knowledge thresholds, applies era-based bonuses, and manages tech diffusion between settlements.
+- **Phase**: Phase 5 — Technology Ecology
+- **Status**: Complete rewrite (158 -> 978 lines). Full production implementation.
+- **Signals**:
+  - `era_advanced(center, old_era, new_era)` — per-settlement era advancement
+  - `global_era_advanced(old_era, new_era)` — highest settlement era increased
+  - `settlement_literacy_changed(center, literacy)` — literacy rate changed
+  - `settlement_lifespan_changed(center, lifespan)` — average lifespan changed
+  - `era_diffusion_applied(center, bonus, source_center)` — tech diffusion applied
+  - `settlement_era_stalled(center, era, stall_ticks)` — advancement stall warning
+  - `era_regressed(center, old_era, new_era, reason)` — cataclysm-induced regression
+- **Key Systems**:
+  1. 10-era progression (STONE_AGE=0 through SPACE_AGE=9) with knowledge thresholds scaled 0→4000
+  2. Tech diffusion: lower-era settlements get up to +20% knowledge from higher-era neighbors within 120 tiles
+  3. Literacy tracking: per-settlement rate scales with era (5% base, +7% per era, 100% cap)
+  4. Lifespan tracking: per-settlement average scales with era (30yr base, +8yr per era, 120yr cap)
+  5. Research speed bonus: +12% per era
+  6. Building speed bonus: +8% per era
+  7. Max population bonus: +40 per era
+  8. Building cost scaling: +15% per era (advanced buildings cost more)
+  9. Advancement stall detection: warns after 15K ticks near threshold without advancing
+  10. Era regression: knowledge drop >40% can trigger fall to lower era
+  11. Knowledge history window (4 samples) for regression trend detection
+  12. Era-specific unlock tables: 50 buildings, 50 jobs, 50 items across all eras
+  13. EventBus integration: responds to `settlement_founded`, `research_breakthrough`
+  14. WorldMemory event recording for all key actions
+  15. Save/load: versioned (v2) with full round-trip for all fields
+  16. Clear/reset support for world generation
+  17. Debug/stats: per-settlement era report, global progress, era distribution map
+
+## May 30, 2026 Session Completion — TeachingSystem Production Rewrite
+
+- **FEAT: TeachingSystem.gd complete rewrite (~120 -> 1032 lines)**:
+  - Full production implementation replacing minimal stub with 20 enumerated requirements
+  - Lesson model with concurrent teacher (3) and student (2) caps, progress tracking, deterministic effectiveness/duration calculation
+  - Prerequisites system: 18 category-to-category prerequisite mappings (e.g. Metallurgy->Crafting)
+  - Matchmaking APIs: `find_teachers_for_student()`, `find_students_for_teacher()` sorted by estimated effectiveness
+  - Tick-based processing every 1500 ticks with stale cleanup every 30000 ticks
+  - WorldMemory event recording + 3 signals (lesson_started, completed, failed)
+  - EventBus integration for pawn death/move handling with settlement-separation grace period
+  - Library/classroom bonus detection via SettlementMemory building type checks
+  - Fatigue model: concurrent lessons reduce effectiveness (teacher -10%/student, student -8%/extra lesson)
+  - Save/load roundtrip with full history preservation
+  - All randomness uses WorldRNG.stream_seed only — no global RNG
+
 ## Implementation
 
 ### WorldMemory
+
+### TeachingSystem
+
+**File**: `autoloads/TeachingSystem.gd` (1032 lines)
+**Phase**: Phase 5 — Knowledge Ecology
+**Status**: Complete rewrite (~120 -> 1032 lines). Full production implementation.
+
+**Data Model**:
+- `_active_lessons`: lesson_id -> dict with teacher_id, student_id, category, tick_started, duration, effectiveness, progress, completed, last_update_tick
+- `_teacher_xp`: pawn_id -> float (accumulated teaching experience)
+- `_lessons_history`: lesson_id -> lesson_data snapshot (archive past lessons)
+
+**20 Requirements Implemented**:
+1. Lesson tracking with teacher/student/category/duration/effectiveness/progress
+2. Multiple concurrent lessons (3 per teacher, 2 per student)
+3. Effectiveness: teacher_skill/(student_skill+1) * library_bonus * relationship_multiplier + jitter
+4. Duration: category_difficulty * teacher_speed_factor * global_carrier_density
+5. Progress: effectiveness * (TEACHING_INTERVAL/duration) per tick window
+6. Completion: add_knowledge_carrier, teaching XP, friendship gain
+7. Prerequisites: 18 prerequisite mappings (e.g. Metallurgy->Crafting)
+8. Matchmaking: find_teachers_for_student, find_students_for_teacher
+9. KnowledgeSystem integration with has_method guards
+10. SocialDynamics: friendship multiplier (up to 1.25x)
+11. Library/classroom bonus via SettlementMemory
+12. Tick processing every TEACHING_INTERVAL (1500), stale cleanup every 30000
+13. WorldMemory events: lesson_started, completed, failed
+14. 3 signals: lesson_started, completed, failed
+15. EventBus: pawn_died, pawn_moved with grace period
+16. Reports: get_teacher_report, get_student_report, get_stats
+17. Save/load/clear with full round-trip
+18. Edge cases: death, separation, stale, partial credit
+19. Null guards on all external dependency lookups
+20. Deterministic: WorldRNG.stream_seed only, no global RNG

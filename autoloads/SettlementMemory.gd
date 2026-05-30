@@ -1112,7 +1112,7 @@ func _apply_settlement_state_truth_hysteresis(center_id: int, raw_state: String,
 		return raw_state
 	var tick: int = GameManager.tick_count
 	var prev_committed: String = ""
-	var governance_placeholder: String = "n/a_pre_governance"
+	var governance_type: String = str(st.get("governance_type", "anarchy"))
 	if not _settlement_state_truth_hysteresis.has(center_id):
 		_settlement_state_truth_hysteresis[center_id] = {
 			"committed": raw_state,
@@ -1138,7 +1138,7 @@ func _apply_settlement_state_truth_hysteresis(center_id: int, raw_state: String,
 					raw_state,
 					0,
 					st,
-					governance_placeholder,
+					governance_type,
                     "init"
 			)
 		return raw_state
@@ -1198,7 +1198,7 @@ func _apply_settlement_state_truth_hysteresis(center_id: int, raw_state: String,
 					pending_after,
 					int(e.get("ticks", 0)),
 					st,
-					governance_placeholder,
+					governance_type,
 					reason
 			)
 	return committed

@@ -422,9 +422,29 @@ func _assign_workers_to_jobs(center: int, queue: Array, worker_data: Dictionary,
 
 func _post_gathering_job(center: int, resource: String, amount: int, tick: int) -> void:
 	"""Post a gathering job to JobManager."""
-	# This would integrate with the existing JobManager system
-	# For now, we just track it internally
-	pass
+	var jm := get_node_or_null("/root/JobManager")
+	if jm == null or not jm.has_method("post"):
+		return
+	var tile_x: int = center % 256
+	var tile_y: int = center / 256
+	var job_type: int = -1
+	match resource:
+		"wood":
+			job_type = Job.Type.CHOP
+		"stone":
+			job_type = Job.Type.MINE
+		"flint":
+			job_type = Job.Type.GATHER_FLINT
+		"hide", "bone":
+			job_type = Job.Type.HUNT
+		"food":
+			job_type = Job.Type.FORAGE
+	if job_type >= 0:
+		for i in range(mini(amount, 3)):
+			var offset_x: int = (i * 7 + tick) % 10 - 5
+			var offset_y: int = (i * 13 + tick) % 10 - 5
+			var tile: Vector2i = Vector2i(tile_x + offset_x, tile_y + offset_y)
+			jm.post(job_type, tile, 50, 60)
 
 
 # ============================================================
@@ -466,10 +486,29 @@ func _process_recruitment(tick: int) -> void:
 
 
 func _count_settlement_soldiers(settlement: Dictionary) -> int:
-	"""Count existing soldiers in a settlement."""
-	# This would query the ArmyBattleSystem for soldiers assigned to this settlement
-	# For now, return placeholder
-	return 0
+	"""Count existing soldiers in a settlement — queries ArmyBattleSystem."""
+	var abs := get_node_or_null("/root/ArmyBattleSystem")
+	if abs == null:
+		return 0
+	var center: int = int(settlement.get("center_region", -1))
+	var nation_id: int = NationBorderSystem.get_nation_at_region(center) if NationBorderSystem != null else -1
+	if nation_id < 0:
+		return 0
+	var count: int = 0
+	if abs.has_method("get_active_armies"):
+		for army in abs.get_active_armies():
+			if not (army is Dictionary):
+				continue
+			if int(army.get("nation_id", -1)) == nation_id:
+				var soldiers: Array = army.get("soldiers", [])
+				count += soldiers.size()
+	if WorldMemory != null:
+		WorldMemory.record_event({
+			"type": "soldier_count",
+			"settlement_center": center,
+			"soldier_count": count,
+		})
+	return count
 
 
 func _recruit_soldiers(settlement: Dictionary, count: int, tick: int) -> void:
@@ -496,10 +535,21 @@ func _recruit_soldiers(settlement: Dictionary, count: int, tick: int) -> void:
 
 
 func _create_soldier_pawn(settlement: Dictionary, loadout: String, tick: int) -> void:
-	"""Create a new soldier pawn."""
-	# This would integrate with PawnManager to create a trained soldier
-	# For now, placeholder
-	pass
+	"""Create a new soldier pawn via PawnSpawner."""
+	var ps := get_node_or_null("/root/Main/WorldViewport/PawnSpawner") as Node
+	var world := get_node_or_null("/root/Main/WorldViewport/World") as Node
+	if ps == null or world == null:
+		return
+	if not ps.has_method("spawn_pawn_at_tile"):
+		return
+	var center: int = int(settlement.get("center_region", -1))
+	var tile: Vector2i = Vector2i(center % 256, center / 256)
+	var ctx: Dictionary = {
+		"loadout": loadout,
+		"is_soldier": true,
+		"tradition": settlement.get("tradition", {}),
+	}
+	ps.spawn_pawn_at_tile(world, tile, tick, ctx, "soldier")
 
 
 # ============================================================
@@ -553,9 +603,34 @@ func _complete_production_job(center: int, job_dict: Dictionary, tick: int) -> v
 
 func _add_item_to_stockpile(center: int, item_type: String, quantity: int) -> void:
 	"""Add produced item to settlement stockpile."""
-	# This would integrate with StockpileManager
-	# For now, placeholder
-	pass
+	if StockpileManager == null:
+		return
+	var tile: Vector2i = Vector2i(center % 256, center / 256)
+	var item_int: int = _string_item_to_enum(item_type)
+	if item_int < 0:
+		return
+	var zone: Node = StockpileManager.find_drop_zone(item_int, tile)
+	if zone == null:
+		return
+	if zone.has_method("add_item"):
+		zone.add_item(item_int, quantity)
+	elif "inventory" in zone:
+		var inv: Dictionary = zone.inventory
+		inv[item_int] = inv.get(item_int, 0) + quantity
+
+
+func _string_item_to_enum(item_type: String) -> int:
+	"""Map WarProductionSystem string item names to Item.Type enum values."""
+	match item_type:
+		"wooden_spear":   return Item.Type.WOODEN_SPEAR
+		"stone_axe":      return Item.Type.FLINT_PICK
+		"flint_knife":    return Item.Type.FLINT_KNIFE
+		"wooden_bow":     return Item.Type.STICK
+		"leather_armor":  return Item.Type.LEATHER
+		"hide_shield":    return Item.Type.HIDE
+		"wooden_shield":  return Item.Type.WOOD
+		"food_pack":      return Item.Type.FOOD
+	return -1
 
 
 # ============================================================

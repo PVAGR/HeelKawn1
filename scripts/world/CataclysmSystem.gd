@@ -200,6 +200,12 @@ func _apply_cataclysm_effects(cataclysm: Dictionary) -> void:
 			_apply_meteor_effects(affected, severity)
 		CataclysmType.FAMINE:
 			_apply_famine_effects(affected, severity)
+		CataclysmType.TORNADO:
+			_apply_tornado_effects(affected, severity)
+		CataclysmType.VOLCANIC_ERUPTION:
+			_apply_volcanic_effects(affected, severity)
+		CataclysmType.TSUNAMI:
+			_apply_tsunami_effects(affected, severity)
 
 
 # ==================== EFFECT APPLICATION ====================
@@ -240,27 +246,54 @@ func _apply_plague_effects(regions: Array[Vector2i], severity: int) -> void:
 
 
 func _apply_invasion_effects(regions: Array[Vector2i], severity: int) -> void:
-	# Spawn enemies in affected regions
-	# TODO: Integrate with EnemySpawner
-	pass
+	# Spawn enemies in affected regions via EnemySpawner
+	var es := get_node_or_null("/root/Main/WorldViewport/EnemySpawner") as Node
+	var world := get_node_or_null("/root/Main/WorldViewport/World") as Node
+	if es == null or world == null:
+		return
+	if es.has_method("spawn_war_forces"):
+		var strength: float = float(severity) * 40.0
+		es.spawn_war_forces(world, -1, -1, strength)
+	# Alternatively spawn multiple raids if EnemySpawner has multiple-capability
+	if regions.size() > 3 and es.has_method("spawn_raid"):
+		for i in range(mini(severity / 3, 3)):
+			es.spawn_raid(world)
 
 
 func _apply_earthquake_effects(regions: Array[Vector2i], severity: int) -> void:
-	# Damage buildings in affected regions
+	# Damage buildings and terrain in affected regions
 	var damage: Dictionary = {"buildings_destroyed": 0, "terrain_changed": 0}
+	var world_data := _get_world_data()
 	
 	if _settlement_memory != null:
-		# Check settlements in affected regions
 		for region in regions:
-			# Destroy buildings based on severity
-			var salt: int = int(region.x) * 73856093 ^ int(region.y) * 19349663 ^ severity * 83492791
+			var rx: int = region.x
+			var ry: int = region.y
+			var salt: int = int(rx) * 73856093 ^ int(ry) * 19349663 ^ severity * 83492791
 			var buildings_destroyed: int = _deterministic_rangei(&"cataclysm:earthquake:destroy", 0, severity * 2, salt)
 			damage.buildings_destroyed += buildings_destroyed
+			# Shake: randomly change a subset of tiles to rocky terrain
+			if world_data != null and world_data.in_bounds(rx, ry):
+				var tile_count: int = _deterministic_rangei(&"cataclysm:earthquake:tiles", 1, severity * 3, salt + 101)
+				for t in range(tile_count):
+					var tx: int = clampi(rx + (t * 7 + salt) % 5 - 2, 0, 99)
+					var ty: int = clampi(ry + (t * 13 + salt) % 5 - 2, 0, 99)
+					if world_data.in_bounds(tx, ty):
+						world_data.set_biome(tx, ty, 1)  # Rocky terrain
+						damage.terrain_changed += 1
 	
-	# Update damage
 	for cataclysm in active_cataclysms:
 		if cataclysm.type == CataclysmType.EARTHQUAKE and cataclysm.status == "active":
 			cataclysm.damage = damage
+
+
+func _get_world_data():
+	var w := get_node_or_null("/root/Main/WorldViewport/World")
+	if w != null and w.has_method("get_data"):
+		return w.get_data()
+	if w != null:
+		return w.data
+	return null
 
 
 func _apply_meteor_effects(regions: Array[Vector2i], severity: int) -> void:
@@ -270,15 +303,32 @@ func _apply_meteor_effects(regions: Array[Vector2i], severity: int) -> void:
 		"buildings_destroyed": 0,
 		"fires_started": 0
 	}
+	var world_data := _get_world_data()
+	var ecology := get_node_or_null("/root/EcologySystem")
 	
-	# Create craters and destruction
 	for region in regions:
-		var salt: int = int(region.x) * 92311 ^ int(region.y) * 68917 ^ severity * 29791
+		var rx: int = region.x
+		var ry: int = region.y
+		var salt: int = int(rx) * 92311 ^ int(ry) * 68917 ^ severity * 29791
 		damage.craters_created += 1
 		damage.buildings_destroyed += _deterministic_rangei(&"cataclysm:meteor:destroy", 5, maxi(5, severity * 5), salt + 101)
 		damage.fires_started += _deterministic_rangei(&"cataclysm:meteor:fire", 0, maxi(0, severity), salt + 211)
+		# Carve impact crater in terrain
+		if world_data != null:
+			var radius: int = clampi(severity / 3, 1, 5)
+			for dx in range(-radius, radius + 1):
+				for dy in range(-radius, radius + 1):
+					var tx: int = clampi(rx + dx, 0, 99)
+					var ty: int = clampi(ry + dy, 0, 99)
+					if world_data.in_bounds(tx, ty):
+						world_data.set_biome(tx, ty, 2)  # Barren/crater
+		# Start fires
+		if ecology != null and ecology.has_method("start_fire_at"):
+			for f in range(damage.fires_started):
+				var fx: int = clampi(rx + (f * 11 + salt) % 10 - 5, 0, 99)
+				var fy: int = clampi(ry + (f * 17 + salt) % 10 - 5, 0, 99)
+				ecology.start_fire_at(fx, fy, minf(1.0 + float(severity) * 0.2, 5.0))
 	
-	# Update damage
 	for cataclysm in active_cataclysms:
 		if cataclysm.type == CataclysmType.METEOR and cataclysm.status == "active":
 			cataclysm.damage = damage
@@ -287,15 +337,134 @@ func _apply_meteor_effects(regions: Array[Vector2i], severity: int) -> void:
 func _apply_famine_effects(regions: Array[Vector2i], severity: int) -> void:
 	# Destroy food stockpiles
 	var food_lost: int = 0
+	var sm := get_node_or_null("/root/StockpileManager")
+	if sm != null and sm.has_method("zones"):
+		for z in sm.zones():
+			if z == null or not is_instance_valid(z):
+				continue
+			if not (z.has_method("inventory") or "inventory" in z):
+				continue
+			var zt: Vector2i = z.tile if z.has_method("get_tile") else (z.tile if "tile" in z else Vector2i(-1, -1))
+			if zt.x < 0:
+				continue
+			if not _region_in_list(zt, regions):
+				continue
+			var inv := z.inventory if "inventory" in z else {}
+			for item_type in inv.keys():
+				var qty: int = int(inv[item_type])
+				if qty > 0 and Item.is_food(int(item_type)):
+					var remove_qty: int = mini(qty, severity * 5)
+					if z.has_method("remove_item"):
+						z.remove_item(int(item_type), remove_qty)
+					else:
+						inv[int(item_type)] = qty - remove_qty
+					food_lost += remove_qty
 	
-	if _settlement_memory != null:
-		# Reduce food in affected settlements
-		food_lost = severity * 100
-	
-	# Record food loss
 	for cataclysm in active_cataclysms:
 		if cataclysm.type == CataclysmType.FAMINE and cataclysm.status == "active":
 			cataclysm.damage = {"food_lost": food_lost}
+
+
+func _region_in_list(tile: Vector2i, regions: Array[Vector2i]) -> bool:
+	for r in regions:
+		if abs(r.x - tile.x) <= 2 and abs(r.y - tile.y) <= 2:
+			return true
+	return false
+
+
+func _apply_tornado_effects(regions: Array[Vector2i], severity: int) -> void:
+	# Tornado: narrow path of destruction, mostly buildings, some terrain
+	var damage: Dictionary = {"buildings_destroyed": 0, "trees_uprooted": 0}
+	var world_data := _get_world_data()
+	if _settlement_memory != null:
+		for region in regions:
+			var salt: int = int(region.x) * 31337 ^ int(region.y) * 53113 ^ severity * 7919
+			var destroyed: int = _deterministic_rangei(&"cataclysm:tornado:destroy", 1, severity * 3, salt)
+			damage.buildings_destroyed += destroyed
+			if world_data != null and world_data.in_bounds(region.x, region.y):
+				for t in range(destroyed * 2):
+					var tx: int = clampi(region.x + (t * 5 + salt) % 7 - 3, 0, 99)
+					var ty: int = clampi(region.y + (t * 11 + salt) % 7 - 3, 0, 99)
+					if world_data.in_bounds(tx, ty):
+						var biome: int = world_data.get_biome(tx, ty)
+						if biome == 3:  # Forest
+							world_data.set_biome(tx, ty, 0)  # Clear
+							damage.trees_uprooted += 1
+	for cataclysm in active_cataclysms:
+		if cataclysm.type == CataclysmType.TORNADO and cataclysm.status == "active":
+			cataclysm.damage = damage
+
+
+func _apply_volcanic_effects(regions: Array[Vector2i], severity: int) -> void:
+	# Volcanic eruption: ash clouds, lava flows, destroys nearby settlements
+	var damage: Dictionary = {"settlements_destroyed": 0, "tiles_covered": 0, "casualties": 0}
+	var world_data := _get_world_data()
+	if _settlement_memory != null:
+		for region in regions:
+			var salt: int = int(region.x) * 19531 ^ int(region.y) * 27917 ^ severity * 32323
+			var radius: int = clampi(severity / 2, 1, 4)
+			for dx in range(-radius, radius + 1):
+				for dy in range(-radius, radius + 1):
+					var tx: int = clampi(region.x + dx, 0, 99)
+					var ty: int = clampi(region.y + dy, 0, 99)
+					if world_data != null and world_data.in_bounds(tx, ty):
+						world_data.set_biome(tx, ty, 5)  # Ash/wasteland
+						damage.tiles_covered += 1
+			var destroyed: int = _deterministic_rangei(&"cataclysm:volcano:destroy", 0, severity * 2, salt + 51)
+			damage.settlements_destroyed += destroyed
+			if _pawn_spawner != null:
+				for pawn in _pawn_spawner.pawns:
+					if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
+						continue
+					var pt: Vector2i = pawn.data.tile_pos if "tile_pos" in pawn.data else Vector2i(-1, -1)
+					if pt.x < 0:
+						continue
+					for r in regions:
+						if abs(r.x - pt.x) <= radius + 1 and abs(r.y - pt.y) <= radius + 1:
+							damage.casualties += 1
+							pawn.data.health = 0.0
+							break
+	for cataclysm in active_cataclysms:
+		if cataclysm.type == CataclysmType.VOLCANIC_ERUPTION and cataclysm.status == "active":
+			cataclysm.damage = damage
+
+
+func _apply_tsunami_effects(regions: Array[Vector2i], severity: int) -> void:
+	# Tsunami: coastal flooding, destroys coastal buildings
+	var damage: Dictionary = {"coastal_tiles_flooded": 0, "buildings_destroyed": 0, "casualties": 0}
+	var world_data := _get_world_data()
+	if _settlement_memory != null:
+		for region in regions:
+			var salt: int = int(region.x) * 65537 ^ int(region.y) * 257 ^ severity * 7919
+			var flooded: int = _deterministic_rangei(&"cataclysm:tsunami:flood", severity * 2, severity * 8, salt)
+			# Convert coastal tiles to water (assume water biome is 4)
+			if world_data != null:
+				for f in range(flooded):
+					var tx: int = clampi(region.x + (f * 3 + salt) % 6 - 3, 0, 99)
+					var ty: int = clampi(region.y + (f * 7 + salt) % 6 - 3, 0, 99)
+					if world_data.in_bounds(tx, ty):
+						var biome: int = world_data.get_biome(tx, ty)
+						if biome != 4:  # Not already water
+							world_data.set_biome(tx, ty, 4)  # Flood to water
+							damage.coastal_tiles_flooded += 1
+			var destroyed: int = _deterministic_rangei(&"cataclysm:tsunami:destroy", 0, severity * 2, salt + 17)
+			damage.buildings_destroyed += destroyed
+			# Pawn casualties in coastal areas
+			if _pawn_spawner != null:
+				for pawn in _pawn_spawner.pawns:
+					if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
+						continue
+					var pt: Vector2i = pawn.data.tile_pos if "tile_pos" in pawn.data else Vector2i(-1, -1)
+					if pt.x < 0:
+						continue
+					for r in regions:
+						if abs(r.x - pt.x) <= 1 and abs(r.y - pt.y) <= 1:
+							damage.casualties += 1
+							pawn.data.health = 0.0
+							break
+	for cataclysm in active_cataclysms:
+		if cataclysm.type == CataclysmType.TSUNAMI and cataclysm.status == "active":
+			cataclysm.damage = damage
 
 
 # ==================== CATACLYSM UPDATES ====================

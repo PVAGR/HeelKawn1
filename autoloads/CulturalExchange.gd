@@ -67,16 +67,16 @@ func _ready() -> void:
 		GameManager.game_tick.connect(_on_game_tick)
 	if EventBus != null:
 		EventBus.subscribe(EventBus.EVENT_SETTLEMENT_FOUNDED, self, "_on_settlement_founded")
-		EventBus.subscribe(EventBus.EVENT_WAR_DECLARED, self, "_on_war_declared")
-		EventBus.subscribe(EventBus.EVENT_SETTLEMENT_CONQUERED, self, "_on_settlement_conquered")
+		EventBus.subscribe("war_declared", self, "_on_war_declared")
+		EventBus.subscribe("settlement_conquered", self, "_on_settlement_conquered")
 
 func _exit_tree() -> void:
 	if GameManager != null and GameManager.game_tick.is_connected(_on_game_tick):
 		GameManager.game_tick.disconnect(_on_game_tick)
 	if EventBus != null:
 		EventBus.unsubscribe(EventBus.EVENT_SETTLEMENT_FOUNDED, self, "_on_settlement_founded")
-		EventBus.unsubscribe(EventBus.EVENT_WAR_DECLARED, self, "_on_war_declared")
-		EventBus.unsubscribe(EventBus.EVENT_SETTLEMENT_CONQUERED, self, "_on_settlement_conquered")
+		EventBus.unsubscribe("war_declared", self, "_on_war_declared")
+		EventBus.unsubscribe("settlement_conquered", self, "_on_settlement_conquered")
 
 func _on_game_tick(tick: int) -> void:
 	var sm := get_node_or_null("/root/SettlementMemory")

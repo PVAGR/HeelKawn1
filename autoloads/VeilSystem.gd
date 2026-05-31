@@ -614,6 +614,10 @@ func get_thickness_at(region: Vector2i) -> float:
 func get_thickness() -> float:
 	return _thickness
 
+
+func get_veil_integrity() -> float:
+	return _thickness
+
 func get_veil_thickness_description() -> String:
 	if _thickness >= 90.0:
 		return "The Veil is nearly sealed. The spirit world is utterly distant."

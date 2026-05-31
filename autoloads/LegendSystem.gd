@@ -825,7 +825,7 @@ func _generate_legend_description(event: Dictionary, category: int) -> String:
 			return "The world itself groaned as disaster of unimaginable scale unfolded."
 		"great_battle":
 			var cas: int = int(event.get("casualties", 0))
-			return "A mighty clash that claimed " + str(casi(maxi(1, cas), 0)) + " lives, forever changing the land."
+			return "A mighty clash that claimed " + str(_casi(maxi(1, cas), 0)) + " lives, forever changing the land."
 		"major_discovery":
 			return "Revealed knowledge that reshaped the understanding of the world."
 		"leadership_change":

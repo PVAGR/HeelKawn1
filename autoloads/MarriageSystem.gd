@@ -677,7 +677,7 @@ func _compute_match_score(pawn_a: int, pawn_b: int, tick: int) -> float:
 
 func _find_unmarried_pawns(settlement_id: int) -> Array[int]:
 	var out: Array[int] = []
-	var ps := _get_ps()
+	var ps: Node = _get_ps()
 	if ps == null:
 		return out
 	var pawns_v = ps.get("pawns")

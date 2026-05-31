@@ -599,35 +599,35 @@ func _check_dynasty_status(tick: int) -> void:
 					"settlement_id": sid,
 					"dynasty_id": dyn_id,
 				}
-		var dt: Dictionary = _dynasty_tracker[name]
-		dt["last_prestige"] = prestige
-		if prestige > dt.get("peak_prestige", 0.0):
-			dt["peak_prestige"] = prestige
-		if prestige >= 70.0:
-			var found: bool = false
-			for entry in _chronicle:
-				if entry.entry_type == EntryType.DYNASTY_FOUNDED and name in entry.description:
-					found = true
-					break
-			if not found:
-				record_entry("Dynasty Rises: %s" % name,
-					"The %s dynasty gained prominence with prestige %.0f" % [name, prestige],
-					EntryType.DYNASTY_FOUNDED, 40.0, tick, [dyn_id] if dyn_id >= 0 else [],
-					[sid] if sid >= 0 else [])
-				dynasty_status_changed.emit(name, "founded", tick)
-		if prestige <= 5.0 and tick - formed_tick > DYNASTY_CHECK_INTERVAL and not dt.get("fallen", false):
-			var record_entry_exists: bool = false
-			for entry in _chronicle:
-				if entry.entry_type == EntryType.DYNASTY_ENDED and name in entry.description:
-					record_entry_exists = true
-					break
-			if not record_entry_exists and formed_tick > 0:
-				record_entry("Dynasty Falls: %s" % name,
-					"The %s dynasty faded into obscurity as its influence waned" % name,
-					EntryType.DYNASTY_ENDED, 65.0, tick, [dyn_id] if dyn_id >= 0 else [],
-					[sid] if sid >= 0 else [])
-				dt["fallen"] = true
-				dynasty_status_changed.emit(name, "ended", tick)
+			var dt: Dictionary = _dynasty_tracker[name]
+			dt["last_prestige"] = prestige
+			if prestige > dt.get("peak_prestige", 0.0):
+				dt["peak_prestige"] = prestige
+			if prestige >= 70.0:
+				var found: bool = false
+				for entry in _chronicle:
+					if entry.entry_type == EntryType.DYNASTY_FOUNDED and name in entry.description:
+						found = true
+						break
+				if not found:
+					record_entry("Dynasty Rises: %s" % name,
+						"The %s dynasty gained prominence with prestige %.0f" % [name, prestige],
+						EntryType.DYNASTY_FOUNDED, 40.0, tick, [dyn_id] if dyn_id >= 0 else [],
+						[sid] if sid >= 0 else [])
+					dynasty_status_changed.emit(name, "founded", tick)
+			if prestige <= 5.0 and tick - formed_tick > DYNASTY_CHECK_INTERVAL and not dt.get("fallen", false):
+				var record_entry_exists: bool = false
+				for entry in _chronicle:
+					if entry.entry_type == EntryType.DYNASTY_ENDED and name in entry.description:
+						record_entry_exists = true
+						break
+				if not record_entry_exists and formed_tick > 0:
+					record_entry("Dynasty Falls: %s" % name,
+						"The %s dynasty faded into obscurity as its influence waned" % name,
+						EntryType.DYNASTY_ENDED, 65.0, tick, [dyn_id] if dyn_id >= 0 else [],
+						[sid] if sid >= 0 else [])
+					dt["fallen"] = true
+					dynasty_status_changed.emit(name, "ended", tick)
 
 ## ─── KnowledgeSystem Integration ─────────────────────────────
 

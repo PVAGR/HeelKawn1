@@ -548,7 +548,7 @@ func _process_matchmaking(tick: int) -> void:
 	var sm := get_node_or_null("/root/SettlementMemory")
 	if sm == null or not sm.has_method("get_settlements"):
 		return
-	var settlements: Array = sm.settlements if sm.has("settlements") else []
+	var settlements: Array = sm.get_settlements()
 	for sv in settlements:
 		if not (sv is Dictionary):
 			continue

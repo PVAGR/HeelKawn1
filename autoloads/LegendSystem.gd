@@ -888,8 +888,6 @@ func _get_all_settlement_centers(sm: Node) -> Array[int]:
 	var settlements: Variant = null
 	if sm.has_method("get_settlements"):
 		settlements = sm.get_settlements()
-	elif sm.has("settlements"):
-		settlements = sm.settlements
 	if settlements == null:
 		return out
 	if settlements is Array:

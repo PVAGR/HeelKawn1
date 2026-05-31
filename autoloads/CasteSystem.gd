@@ -131,7 +131,7 @@ func _on_game_tick(tick: int) -> void:
 	_last_check_tick = tick
 	if _SettlementMemory == null:
 		return
-	var settlements_v: Variant = _SettlementMemory.get("settlements", [])
+	var settlements_v: Variant = _SettlementMemory.get_settlements() if _SettlementMemory.has_method("get_settlements") else _SettlementMemory.settlements
 	if settlements_v == null or not (settlements_v is Array):
 		return
 	var settlements: Array = settlements_v as Array
@@ -429,7 +429,7 @@ func _on_caste_collapse(center: int, caste: int, prev_count: int, curr_count: in
 			"tick": tick,
 		})
 	if _SettlementMemory != null:
-		var settlements_v: Variant = _SettlementMemory.get("settlements", [])
+		var settlements_v: Variant = _SettlementMemory.get_settlements() if _SettlementMemory.has_method("get_settlements") else _SettlementMemory.settlements
 		if settlements_v is Array:
 			var st_list: Array = settlements_v as Array
 			for st_v in st_list:
@@ -459,7 +459,7 @@ func on_caste_system_collapse(center: int, tick: int) -> void:
 func _pawn_settlement(pawn_id: int) -> int:
 	if _SettlementMemory == null:
 		return -1
-	var settlements_v: Variant = _SettlementMemory.get("settlements", [])
+	var settlements_v: Variant = _SettlementMemory.get_settlements() if _SettlementMemory.has_method("get_settlements") else _SettlementMemory.settlements
 	if not (settlements_v is Array):
 		return -1
 	var settlements: Array = settlements_v as Array

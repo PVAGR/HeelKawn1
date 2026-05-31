@@ -853,7 +853,10 @@ func get_sensitive_pawns() -> Array[int]:
 func _get_all_sensitive_pawns() -> Array[int]:
 	var tick: int = GameManager.tick_count if GameManager != null else 0
 	if _sensitive_pawn_cache_tick == tick and not _sensitive_pawn_cache.is_empty():
-		return _sensitive_pawn_cache.keys() as Array[int]
+		var cached_pawns: Array[int] = []
+		for pawn_key in _sensitive_pawn_cache.keys():
+			cached_pawns.append(int(pawn_key))
+		return cached_pawns
 	_sensitive_pawn_cache.clear()
 	_sensitive_pawn_cache_tick = tick
 	var wm := get_node_or_null("/root/WorldMemory")
@@ -869,7 +872,10 @@ func _get_all_sensitive_pawns() -> Array[int]:
 			var pid: int = int(ev_dict.get("pawn_id", -1))
 			if pid >= 0:
 				_sensitive_pawn_cache[pid] = true
-	return _sensitive_pawn_cache.keys() as Array[int]
+	var sensitive_pawns: Array[int] = []
+	for pawn_key in _sensitive_pawn_cache.keys():
+		sensitive_pawns.append(int(pawn_key))
+	return sensitive_pawns
 
 
 func grant_sensitivity(pawn_id: int, source: String, tick: int) -> void:
@@ -1049,7 +1055,7 @@ func to_save_dict() -> Dictionary:
 		"last_effect_check_tick": _last_effect_check_tick,
 		"last_intensity_scan_tick": _last_intensity_scan_tick,
 		"sensitive_pawn_cache_tick": _sensitive_pawn_cache_tick,
-		"sensitive_pawn_ids": _sensitive_pawn_cache.keys() as Array[int],
+		"sensitive_pawn_ids": _get_all_sensitive_pawns(),
 	}
 
 

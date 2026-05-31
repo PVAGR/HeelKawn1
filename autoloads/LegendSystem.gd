@@ -754,22 +754,19 @@ func _narrative_category_to_legend_category(ncat: String) -> int:
 
 ## Map event type strings to LegendCategory.
 func _event_type_to_category(ev_type: String) -> int:
-	match ev_type:
-		"heroic_death", "great_battle", "war_proposed", "war_battle_spawned":
-			return LegendCategory.HERO_DEED
-		"cataclysm_started", "cataclysm_ended", "disaster_started", "ai_natural_disaster",
-		"settlement_destroyed", "bloodline_extinct":
-			return LegendCategory.CATASTROPHE
-		"settlement_founded", "settlement_revival", "polity_founded", "polity_merged":
-			return LegendCategory.FOUNDING_MYTH
-		"major_discovery", "first_of_type", "knowledge_inscribed", "trade_route_opened":
-			return LegendCategory.DISCOVERY
-		"leadership_change":
-			return LegendCategory.BETRAYAL
-		"ritual_performed", "sacred_site_established":
-			return LegendCategory.MIRACLE
-		_:
-			return LegendCategory.HERO_DEED
+	if ev_type in ["heroic_death", "great_battle", "war_proposed", "war_battle_spawned"]:
+		return LegendCategory.HERO_DEED
+	if ev_type in ["cataclysm_started", "cataclysm_ended", "disaster_started", "ai_natural_disaster", "settlement_destroyed", "bloodline_extinct"]:
+		return LegendCategory.CATASTROPHE
+	if ev_type in ["settlement_founded", "settlement_revival", "polity_founded", "polity_merged"]:
+		return LegendCategory.FOUNDING_MYTH
+	if ev_type in ["major_discovery", "first_of_type", "knowledge_inscribed", "trade_route_opened"]:
+		return LegendCategory.DISCOVERY
+	if ev_type == "leadership_change":
+		return LegendCategory.BETRAYAL
+	if ev_type in ["ritual_performed", "sacred_site_established"]:
+		return LegendCategory.MIRACLE
+	return LegendCategory.HERO_DEED
 
 ## Generate legend name from event.
 func _generate_legend_name(event: Dictionary) -> String:

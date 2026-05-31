@@ -1061,7 +1061,7 @@ func _find_marriage_by_parents(parent_a: int, parent_b: int) -> int:
 
 
 func _get_pawn_settlement(pawn_id: int) -> int:
-	var ps := _get_ps()
+	var ps: Node = _get_ps()
 	if ps == null or not ps.has_method("_get_pawn_node"):
 		return -1
 	var pawn = ps.call("_get_pawn_node", pawn_id)
@@ -1074,21 +1074,21 @@ func _get_pawn_settlement(pawn_id: int) -> int:
 
 
 func _get_pawn_data(pawn_id: int) -> HeelKawnianData:
-	var ps := _get_ps()
+	var ps: Node = _get_ps()
 	if ps == null or not ps.has_method("pawn_data_for_id"):
 		return null
 	return ps.call("pawn_data_for_id", pawn_id)
 
 
 func _is_pawn_dead(pawn_id: int) -> bool:
-	var ps := _get_ps()
+	var ps: Node = _get_ps()
 	if ps == null or not ps.has_method("_get_pawn_node"):
 		return true
 	var pawn = ps.call("_get_pawn_node", pawn_id)
 	return pawn == null or not is_instance_valid(pawn)
 
 
-func _get_ps():
+func _get_ps() -> Node:
 	return get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
 
 

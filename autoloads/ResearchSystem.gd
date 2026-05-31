@@ -398,7 +398,7 @@ func _set_knowledge_level_in_category(center: int, category: int, value: float) 
 	_category_knowledge_levels[center][category] = clampf(value, 0.0, MAX_CATEGORY_LEVEL)
 
 func _process_active_project(center: int, rp: ResearchProject, st: Dictionary, tick: int) -> void:
-	var progress_rate: float = _calculate_progress_rate(center, rp.category, st)
+	var progress_rate: float = _calculate_progress_rate(center, rp.category, st, rp)
 	if rp.last_progress_tick < 0:
 		rp.last_progress_tick = tick
 	else:
@@ -413,7 +413,7 @@ func _process_active_project(center: int, rp: ResearchProject, st: Dictionary, t
 	if rp.progress >= rp.cost:
 		_complete_research(center, rp, tick)
 
-func _calculate_progress_rate(center: int, category: int, st: Dictionary) -> float:
+func _calculate_progress_rate(center: int, category: int, st: Dictionary, rp: ResearchProject) -> float:
 	var pop: int = int(st.get("population", 0))
 	var ks := get_node_or_null("/root/KnowledgeSystem")
 	var knowledge_level: float = _get_knowledge_level_in_category(ks, center, category)

@@ -39,17 +39,19 @@ func _ready() -> void:
 	if GameManager != null:
 		GameManager.game_tick.connect(_on_game_tick)
 	if EventBus != null:
-		EventBus.subscribe(EventBus.EVENT_PAWN_DEATH, self, "_on_pawn_death")
-		EventBus.subscribe(EventBus.EVENT_PAWN_MOVE, self, "_on_pawn_move")
-		EventBus.subscribe(EventBus.EVENT_CONFLICT, self, "_on_conflict_event")
+		EventBus.subscribe(EventBus.EVENT_PAWN_DIED, self, "_on_pawn_death")
+		EventBus.subscribe("pawn_moved", self, "_on_pawn_move")
+		EventBus.subscribe("conflict_start", self, "_on_conflict_event")
+		EventBus.subscribe("conflict_escalation", self, "_on_conflict_event")
 
 func _exit_tree() -> void:
 	if GameManager != null and GameManager.game_tick.is_connected(_on_game_tick):
 		GameManager.game_tick.disconnect(_on_game_tick)
 	if EventBus != null:
-		EventBus.unsubscribe(EventBus.EVENT_PAWN_DEATH, self, "_on_pawn_death")
-		EventBus.unsubscribe(EventBus.EVENT_PAWN_MOVE, self, "_on_pawn_move")
-		EventBus.unsubscribe(EventBus.EVENT_CONFLICT, self, "_on_conflict_event")
+		EventBus.unsubscribe(EventBus.EVENT_PAWN_DIED, self, "_on_pawn_death")
+		EventBus.unsubscribe("pawn_moved", self, "_on_pawn_move")
+		EventBus.unsubscribe("conflict_start", self, "_on_conflict_event")
+		EventBus.unsubscribe("conflict_escalation", self, "_on_conflict_event")
 
 func _on_game_tick(tick: int) -> void:
 	if tick - _last_decay_tick >= DECAY_INTERVAL:

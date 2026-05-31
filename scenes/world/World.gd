@@ -1095,5 +1095,5 @@ func resync_beds_from_map() -> void:
 
 ## Deferred texture update helper: batching expensive ImageTexture.update calls
 func _deferred_update_texture() -> void:
-    if _texture != null and _image != null:
-        _texture.update(_image)
+	if _texture != null and _image != null:
+		_texture.update(_image)

@@ -124,8 +124,10 @@ func _initialize_recipes() -> void:
 		"required_skill": 1,  # MINING
 		"min_skill_level": 2,
 		"output_item": Item.Type.FLINT_PICK,
-		"output_quantity": 1
+		"output_quantity": 1,
+		"required_tools": [Item.Type.FLINT_KNIFE]
 	})
+
 	
 	_add_recipe({
 		"recipe_id": "wooden_spear",
@@ -137,7 +139,8 @@ func _initialize_recipes() -> void:
 		"required_skill": 4,  # HUNTING
 		"min_skill_level": 2,
 		"output_item": Item.Type.WOODEN_SPEAR,
-		"output_quantity": 1
+		"output_quantity": 1,
+		"required_tools": [Item.Type.FLINT_KNIFE]
 	})
 	
 	# ===== WEAPONS (Smith only) =====
@@ -167,7 +170,8 @@ func _initialize_recipes() -> void:
 		"required_skill": HeelKawnianData.Skill.BUILDING,
 		"min_skill_level": 3,
 		"output_item": Item.Type.WOOD,  # Proxy: furniture stores as wood, placeholder
-		"output_quantity": 1
+		"output_quantity": 1,
+		"required_tools": [Item.Type.FLINT_KNIFE]
 	})
 	
 	# ===== MEDICINE (Healer only) =====

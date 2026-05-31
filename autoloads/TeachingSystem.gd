@@ -624,7 +624,7 @@ func _settlement_has_library(settlement_id: int) -> bool:
 	var sm := get_node_or_null("/root/SettlementMemory")
 	if sm == null:
 		return false
-	var settlements: Array = sm.get("settlements", [])
+	var settlements: Array = sm.get("settlements")
 	if not (settlements is Array):
 		return false
 	for st_any in settlements:

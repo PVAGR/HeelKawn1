@@ -702,6 +702,7 @@ func _create_army_for_settlement(settlement: Dictionary, tick: int) -> void:
 	var army_id: int = ArmyBattleSystem.create_army(soldier_ids[0], nation_id, soldier_ids, pos, tick)
 	if army_id >= 0:
 		if WorldMemory != null:
+			var strength: float = float(soldier_ids.size())
 			WorldMemory.record_event({
 				"type": "army_formed",
 				"army_id": army_id,
@@ -944,7 +945,8 @@ func _found_new_settlement(parent_settlement: Dictionary, tick: int) -> void:
 		return
 	var center: int = int(parent_settlement.get("center_region", -1))
 	var nation_id: int = NationBorderSystem.get_nation_at_region(center) if NationBorderSystem != null else -1
-	if FragmentationManager != null and FragmentationManager.has_method("find_outward_passable"):
+	var fragmentation_manager := get_node_or_null("/root/FragmentationManager")
+	if fragmentation_manager != null and fragmentation_manager.has_method("find_outward_passable"):
 		var targets: Array[Vector2i] = []
 		var ref_tile: Vector2i = Vector2i(center % 256, center / 256)
 		for dx in range(-5, 6):
@@ -959,7 +961,7 @@ func _found_new_settlement(parent_settlement: Dictionary, tick: int) -> void:
 				var owner: int = NationBorderSystem.get_nation_at_region(nrk)
 				if owner >= 0:
 					continue
-			if FragmentationManager.find_outward_passable(t, 5).size() > 0:
+			if fragmentation_manager.find_outward_passable(t, 5).size() > 0:
 				var sm := get_node_or_null("/root/SettlementManager")
 				if sm != null and sm.has_method("create_settlement"):
 					sm.create_settlement(nrk, "Outpost %d" % [tick])

@@ -240,7 +240,7 @@ func _apply_fluctuation(tick: int) -> void:
 	var phase: float = float(tick) / FLUCTUATION_PERIOD_TICKS * TAU
 	var sin_val: float = sin(phase) * FLUCTUATION_AMPLITUDE
 	var noise_val: float = 0.0
-	if WorldRNG != nil:
+	if WorldRNG != null:
 		noise_val = WorldRNG.range_for(&"VeilSystem:fluctuation", -1.0, 1.0, tick / 1000) * 0.5
 	var fluctuation: float = sin_val + noise_val + _era_shift * 0.05
 	_total_fluctuation_offset += fluctuation * 0.1

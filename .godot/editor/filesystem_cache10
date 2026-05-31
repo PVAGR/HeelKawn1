@@ -1,5 +1,5 @@
 72322a848ab928aa5c89f0cb78209805
-::res://::1780185971
+::res://::1780186577
 .aider.chat.history.md::TextFile::-1::1780107142::0::1::::<><><>0<>0<><>::
 AGENTS.md::TextFile::-1::1779432109::0::1::::<><><>0<>0<><>::
 AI_README.md::TextFile::-1::1779599714::0::1::::<><><>0<>0<><>::
@@ -126,7 +126,7 @@ door.png::CompressedTexture2D::4142856041344568916::1777971615::1778417117::1:::
 tree.png::CompressedTexture2D::2389156156575278385::1777971448::1778417117::1::::<><><>0<>0<>5fb83ad2402bae2aec6e4562927a022d<>res://.godot/imported/tree.png-1272070f95f6cffffd0fe51159239f22.ctex::
 wall.png::CompressedTexture2D::5625700477737538922::1777971615::1778417117::1::::<><><>0<>0<>4aab1d5a487300cd9189921708537b6f<>res://.godot/imported/wall.png-65f788789b9046a626a2b3a58cc8bb94.ctex::
 ::res://assets/sprites/world/::1777971496
-::res://autoloads/::1780179660
+::res://autoloads/::1780185977
 AgeMemory.gd::GDScript::3623017377226678626::1779514684::0::1::::AgeMemory<>Node<><>0<>0<><>::
 AIAgentManager.gd::GDScript::4954939857757967540::1779945189::0::1::::<>Node<><>0<>0<><>::
 AIManager.gd::GDScript::8390453645687965822::1778796562::0::1::::<>Node<><>0<>0<><>::
@@ -622,7 +622,7 @@ WeatherOverlay.tscn::PackedScene::-1::1777961533::0::1::::<><><>0<>0<><>::res://
 FireParticles.gd::GDScript::2082329777621998110::1778034358::0::1::::<>GPUParticles2D<><>0<>0<><>::
 FireParticles.tscn::PackedScene::-1::1778034357::0::1::::<><><>0<>0<><>::res://assets/sprites/decor/fire_smoke.png<>res://scenes/world/FireParticles.gd
 Weather.gd::GDScript::6639444511292649852::1779356199::0::1::::<>Node<><>0<>0<><>::
-World.gd::GDScript::6420505296756273027::1780112442::0::1::::World<>Node2D<><>0<>0<><>::
+World.gd::GDScript::6420505296756273027::1780186350::0::1::::World<>Node2D<><>0<>0<><>::
 World.tscn::PackedScene::-1::1778412704::0::1::::<><><>0<>0<><>::res://scenes/world/World.gd<>res://scripts/world/WorldOverlay.gd<>res://scripts/world/FireGlowManager.gd<>res://scripts/world/SunMoonLight.gd<>res://scripts/world/AmbientBiomeParticles.gd<>res://scripts/world/BloomGlow.gd
 ::res://scripts/::1779860386
 ::res://scripts/ai/::1779593104
@@ -744,7 +744,7 @@ v1_core_loop_smoke_runner.gd::GDScript::5534282497826845456::1778558803::0::1:::
 ::res://scripts/testing/::1779497002
 NeuralIntegrationTester.gd::GDScript::3318096029880520574::1779497002::0::1::::NeuralIntegrationTester<>Node<><>0<>0<><>::
 TestPhase4Kernel.gd::GDScript::4541286713475473953::1777694600::0::1::::<>Node<><>0<>0<><>::
-::res://scripts/tests/::1780181201
+::res://scripts/tests/::1780185977
 TestSkillTreeBonuses.gd::GDScript::5261734312154252569::1778320772::0::1::::<>Node<><>0<>0<><>::
 TestTraitSystem.gd::GDScript::8176838439313492610::1778320772::0::1::::<>Node<><>0<>0<><>::
 test_kinship_api.gd::GDScript::5816937099531489306::1777802574::0::1::::<>Node<><>0<>0<><>::

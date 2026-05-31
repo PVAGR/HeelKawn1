@@ -591,7 +591,7 @@ func _check_dynasty_status(tick: int) -> void:
 			var prestige: float = float(d.get("prestige", 0.0))
 			var formed_tick: int = int(d.get("formed_tick", 0))
 			if not _dynasty_tracker.has(name):
-			_dynasty_tracker[name] = {
+				_dynasty_tracker[name] = {
 				"first_seen_tick": tick,
 				"last_prestige": 0.0,
 				"peak_prestige": 0.0,

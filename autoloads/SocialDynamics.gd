@@ -184,8 +184,7 @@ func _new_relationship(a: int, b: int, tick: int) -> Dictionary:
 
 func _compute_bond_tier(rel: Dictionary) -> int:
 	var max_bond: float = maxf(
-		absf(rel.get("friendship", 0.0)),
-		absf(rel.get("rivalry", 0.0)),
+		maxf(absf(rel.get("friendship", 0.0)), absf(rel.get("rivalry", 0.0))),
 		absf(rel.get("romance", 0.0))
 	)
 	if max_bond >= 0.8:

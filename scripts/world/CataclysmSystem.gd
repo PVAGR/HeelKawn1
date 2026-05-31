@@ -263,7 +263,7 @@ func _apply_invasion_effects(regions: Array[Vector2i], severity: int) -> void:
 func _apply_earthquake_effects(regions: Array[Vector2i], severity: int) -> void:
 	# Damage buildings and terrain in affected regions
 	var damage: Dictionary = {"buildings_destroyed": 0, "terrain_changed": 0}
-	var world_data := _get_world_data()
+	var world_data: WorldData = _get_world_data()
 	
 	if _settlement_memory != null:
 		for region in regions:
@@ -287,7 +287,7 @@ func _apply_earthquake_effects(regions: Array[Vector2i], severity: int) -> void:
 			cataclysm.damage = damage
 
 
-func _get_world_data():
+func _get_world_data() -> WorldData:
 	var w := get_node_or_null("/root/Main/WorldViewport/World")
 	if w != null and w.has_method("get_data"):
 		return w.get_data()
@@ -303,7 +303,7 @@ func _apply_meteor_effects(regions: Array[Vector2i], severity: int) -> void:
 		"buildings_destroyed": 0,
 		"fires_started": 0
 	}
-	var world_data := _get_world_data()
+	var world_data: WorldData = _get_world_data()
 	var ecology := get_node_or_null("/root/EcologySystem")
 	
 	for region in regions:
@@ -349,7 +349,7 @@ func _apply_famine_effects(regions: Array[Vector2i], severity: int) -> void:
 				continue
 			if not _region_in_list(zt, regions):
 				continue
-			var inv := z.inventory if "inventory" in z else {}
+			var inv: Dictionary = z.inventory if "inventory" in z else {}
 			for item_type in inv.keys():
 				var qty: int = int(inv[item_type])
 				if qty > 0 and Item.is_food(int(item_type)):
@@ -375,7 +375,7 @@ func _region_in_list(tile: Vector2i, regions: Array[Vector2i]) -> bool:
 func _apply_tornado_effects(regions: Array[Vector2i], severity: int) -> void:
 	# Tornado: narrow path of destruction, mostly buildings, some terrain
 	var damage: Dictionary = {"buildings_destroyed": 0, "trees_uprooted": 0}
-	var world_data := _get_world_data()
+	var world_data: WorldData = _get_world_data()
 	if _settlement_memory != null:
 		for region in regions:
 			var salt: int = int(region.x) * 31337 ^ int(region.y) * 53113 ^ severity * 7919
@@ -398,7 +398,7 @@ func _apply_tornado_effects(regions: Array[Vector2i], severity: int) -> void:
 func _apply_volcanic_effects(regions: Array[Vector2i], severity: int) -> void:
 	# Volcanic eruption: ash clouds, lava flows, destroys nearby settlements
 	var damage: Dictionary = {"settlements_destroyed": 0, "tiles_covered": 0, "casualties": 0}
-	var world_data := _get_world_data()
+	var world_data: WorldData = _get_world_data()
 	if _settlement_memory != null:
 		for region in regions:
 			var salt: int = int(region.x) * 19531 ^ int(region.y) * 27917 ^ severity * 32323
@@ -432,7 +432,7 @@ func _apply_volcanic_effects(regions: Array[Vector2i], severity: int) -> void:
 func _apply_tsunami_effects(regions: Array[Vector2i], severity: int) -> void:
 	# Tsunami: coastal flooding, destroys coastal buildings
 	var damage: Dictionary = {"coastal_tiles_flooded": 0, "buildings_destroyed": 0, "casualties": 0}
-	var world_data := _get_world_data()
+	var world_data: WorldData = _get_world_data()
 	if _settlement_memory != null:
 		for region in regions:
 			var salt: int = int(region.x) * 65537 ^ int(region.y) * 257 ^ severity * 7919

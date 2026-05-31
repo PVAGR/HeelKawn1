@@ -358,7 +358,7 @@ func _update_agenda(center: int, dominant_fid: int, tick: int) -> void:
 	var rng_salt: int = center * 31337 + tick
 	var wm := get_node_or_null("/root/WorldMemory")
 	if rng_salt % 7 == 0:
-		new_agenda = AGENDA_TEMPLATES[dominant_fid][(rng_salt // 7) % AGENDA_TEMPLATES[dominant_fid].size()].duplicate()
+		new_agenda = AGENDA_TEMPLATES[dominant_fid][(int(rng_salt / 7)) % AGENDA_TEMPLATES[dominant_fid].size()].duplicate()
 	dom["agenda"] = new_agenda
 	if str(new_agenda.get("name", "")) != old_agenda and not old_agenda.is_empty():
 		if wm != null and wm.has_method("record_event"):

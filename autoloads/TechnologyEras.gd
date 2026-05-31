@@ -210,7 +210,7 @@ func _ready() -> void:
 	if eb != null and eb.has_method("subscribe"):
 		eb.subscribe(EventBus.EVENT_SETTLEMENT_FOUNDED, self, "_on_settlement_founded")
 		if eb.has_signal("research_breakthrough"):
-			eb.connect("research_breakthrough", self, "_on_research_breakthrough")
+			eb.research_breakthrough.connect(_on_research_breakthrough)
 
 func _exit_tree() -> void:
 	if not is_inside_tree():
@@ -221,8 +221,8 @@ func _exit_tree() -> void:
 	var eb := get_node_or_null("/root/EventBus")
 	if eb != null and eb.has_method("unsubscribe"):
 		eb.unsubscribe(EventBus.EVENT_SETTLEMENT_FOUNDED, self, "_on_settlement_founded")
-		if eb.is_connected("research_breakthrough", self, "_on_research_breakthrough"):
-			eb.disconnect("research_breakthrough", self, "_on_research_breakthrough")
+		if eb.has_signal("research_breakthrough") and eb.research_breakthrough.is_connected(_on_research_breakthrough):
+			eb.research_breakthrough.disconnect(_on_research_breakthrough)
 
 # ============================================================================
 # Tick Handler

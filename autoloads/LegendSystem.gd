@@ -324,16 +324,15 @@ func _collect_legend_worthy_events(all_events: Array, tick: int) -> Array:
 	return out
 
 func _is_legend_worthy_type(ev_type: String) -> bool:
-	match ev_type:
+	return ev_type in [
 		"heroic_death", "pawn_death", "settlement_founded", "settlement_destroyed",
 		"cataclysm_started", "cataclysm_ended", "great_battle", "war_proposed",
 		"war_battle_spawned", "major_discovery", "first_of_type",
 		"leadership_change", "settlement_revival", "ritual_performed",
 		"sacred_site_established", "disaster_started", "ai_natural_disaster",
 		"trade_route_opened", "polity_founded", "polity_merged",
-		"bloodline_extinct", "knowledge_inscribed":
-			return true
-	return false
+		"bloodline_extinct", "knowledge_inscribed",
+	]
 
 ## Check if event is unique enough to warrant a new legend (avoid duplicates).
 func _check_event_uniqueness(event: Dictionary, tick: int) -> bool:

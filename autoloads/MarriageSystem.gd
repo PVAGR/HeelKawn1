@@ -233,7 +233,7 @@ func get_spouse(pawn_id: int) -> int:
 	return -1
 
 
-func get_children(pawn_id: int) -> Array[int]:
+func get_children_for_pawn(pawn_id: int) -> Array[int]:
 	var out: Array[int] = []
 	for m in _marriages:
 		if int(m["pawn_a"]) == pawn_id or int(m["pawn_b"]) == pawn_id:
@@ -1073,7 +1073,7 @@ func _get_pawn_settlement(pawn_id: int) -> int:
 	return int(data_v.settlement_id) if "settlement_id" in data_v else -1
 
 
-func _get_pawn_data(pawn_id: int):
+func _get_pawn_data(pawn_id: int) -> HeelKawnianData:
 	var ps := _get_ps()
 	if ps == null or not ps.has_method("pawn_data_for_id"):
 		return null

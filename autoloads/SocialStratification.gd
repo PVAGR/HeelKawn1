@@ -463,7 +463,7 @@ func _extract_pawn_data(pawn_variant: Variant, center: int) -> Dictionary:
 		elif po.has_method("get"):
 			var keys: Array = ["id", "wealth", "skill_level", "skills", "crime_severity", "profession", "is_married"]
 			for k in keys:
-				pd2[k] = po.get(k, null)
+				pd2[k] = po.get(k)
 		var pawn_center2: int = int(pd2.get("settlement_id", -1))
 		if pawn_center2 >= 0 and pawn_center2 != center:
 			return {}

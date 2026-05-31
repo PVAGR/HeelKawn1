@@ -1117,5 +1117,5 @@ func _get_pawn_location(pawn_id: int) -> Vector2i:
 		if data != null and (data is Object):
 			var data_obj: Object = data as Object
 			if "current_tile" in data_obj:
-				return data_obj.get("current_tile", Vector2i(-1, -1))
+				return data_obj.get("current_tile")
 	return Vector2i(-1, -1)

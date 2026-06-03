@@ -3,6 +3,7 @@
 ## What Changed
 
 - `TickManager.gd` now uses the configured frame budget and max-ticks-per-frame setting to stop catch-up bursts before they monopolize a frame.
+- The high-speed tick caps were raised so 50x/100x/200x can keep up with their speed labels when the frame budget permits.
 
 ## What Was Verified
 

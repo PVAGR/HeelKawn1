@@ -42,6 +42,11 @@ var _open_counts_by_type_gen_built: int = -1
 var _open_counts_by_type_cached: Dictionary = {}
 var _pending_counts_by_type_gen_built: int = -1
 var _pending_counts_by_type_cached: Dictionary = {}
+var _pending_near_cache_gen_built: int = -1
+var _pending_near_cache: Dictionary = {}
+var _pending_settlement_cache_gen_built: int = -1
+var _pending_settlement_cache: Dictionary = {}
+var _job_context_by_id: Dictionary = {}
 
 ## Lifetime counters (stats only).
 var posted_count: int = 0
@@ -50,6 +55,8 @@ var cancelled_count: int = 0
 
 ## Cancellation reason tracking (diagnostic). reason_string -> count.
 var _cancel_reasons: Dictionary = {}
+## Abandon reason tracking (diagnostic). reason_string -> count.
+var _abandon_reasons: Dictionary = {}
 
 ## Global tile failure cache: tile_key(int) -> {tick: int, reason: String}.
 ## Prevents re-posting jobs on tiles that have failed recently (resource depleted,
@@ -71,6 +78,68 @@ const CONSTRUCTION_RESERVED_SLOTS: int = 40
 
 func _bump_jobs_data_generation() -> void:
 	_jobs_data_generation += 1
+	_active_jobs_union_gen_built = -1
+	_open_counts_by_type_gen_built = -1
+	_pending_counts_by_type_gen_built = -1
+	_pending_near_cache_gen_built = -1
+	_pending_settlement_cache_gen_built = -1
+	_pending_near_cache.clear()
+	_pending_settlement_cache.clear()
+
+
+func _cache_job_context(job: Job) -> void:
+	if job == null or job.id <= 0:
+		return
+	var tile: Vector2i = job.work_tile if job.work_tile != Vector2i.ZERO else job.tile
+	var region_key: int = WorldMemory._region_key(int(tile.x), int(tile.y)) if WorldMemory != null else -1
+	var settlement_center: int = SettlementMemory.get_center_region_for_region(region_key) if SettlementMemory != null else -1
+	var world_settlement_id: int = SettlementMemory.get_settlement_id_for_region(region_key) if SettlementMemory != null else -1
+	_job_context_by_id[job.id] = {
+		"region_key": region_key,
+		"center_region": settlement_center,
+		"settlement_id": world_settlement_id,
+	}
+	if job.region_key < 0:
+		job.region_key = region_key
+
+
+func _job_context_for(job: Job) -> Dictionary:
+	if job == null or job.id <= 0:
+		return {}
+	if _job_context_by_id.has(job.id):
+		var cached: Variant = _job_context_by_id[job.id]
+		if cached is Dictionary:
+			return cached as Dictionary
+	_cache_job_context(job)
+	var fresh: Variant = _job_context_by_id.get(job.id, {})
+	return fresh if fresh is Dictionary else {}
+
+
+func _build_pawn_visibility_context(pawn: Node, pd: Variant) -> Dictionary:
+	var ctx: Dictionary = {
+		"tile": Vector2i(-1, -1),
+		"region_key": -1,
+		"center_region": -1,
+		"settlement_id": -1,
+		"household_id": -1,
+	}
+	if pawn == null or pd == null:
+		return ctx
+	var pawn_tile: Vector2i = Vector2i(-1, -1)
+	if typeof(pd) == TYPE_DICTIONARY:
+		pawn_tile = (pd as Dictionary).get("tile_pos", Vector2i(-1, -1))
+		ctx["household_id"] = int((pd as Dictionary).get("household_id", -1))
+	else:
+		pawn_tile = pd.get("tile_pos")
+		ctx["household_id"] = int(pd.get("household_id", -1))
+	ctx["tile"] = pawn_tile
+	if pawn_tile.x < 0 or pawn_tile.y < 0:
+		return ctx
+	var pawn_rk: int = WorldMemory._region_key(int(pawn_tile.x), int(pawn_tile.y)) if WorldMemory != null else -1
+	ctx["region_key"] = pawn_rk
+	ctx["center_region"] = SettlementMemory.get_center_region_for_region(pawn_rk) if SettlementMemory != null else -1
+	ctx["settlement_id"] = SettlementMemory.get_settlement_id_for_region(pawn_rk) if SettlementMemory != null else -1
+	return ctx
 
 
 ## Read-only union of open + claimed jobs, reused until the queue mutates.
@@ -120,6 +189,7 @@ func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) ->
 	job.posted_tick = GameManager.tick_count if GameManager != null else 0
 	_open.append(job)
 	_jobs_by_tile[tile] = job
+	_cache_job_context(job)
 	posted_count += 1
 	_bump_jobs_data_generation()
 	job_posted.emit(job)
@@ -325,6 +395,7 @@ func post_trade_haul(
 	job.state = Job.State.OPEN
 	_open.append(job)
 	_jobs_by_tile[work_tile] = job
+	_cache_job_context(job)
 	posted_count += 1
 	_bump_jobs_data_generation()
 	job_posted.emit(job)
@@ -358,7 +429,8 @@ func claim_next_for(
 	var pd = pawn.call("get_pawn_data") if pawn != null and pawn.has_method("get_pawn_data") else null
 	if _open.is_empty() or pawn == null or pd == null:
 		return null
-	var pawn_tile: Vector2i = pd.tile_pos
+	var pawn_ctx: Dictionary = _build_pawn_visibility_context(pawn, pd)
+	var pawn_tile: Vector2i = pawn_ctx.get("tile", Vector2i(-1, -1))
 	
 	# Get pawn obedience weight from WorldAI (affects job compliance)
 	var obedience_weight: float = 1.0
@@ -376,7 +448,7 @@ func claim_next_for(
 		if use_filter and not filter.call(j):
 			continue
 		# Authority / visibility guard: skip jobs not visible to this pawn under social rules
-		if not _job_visible_to_pawn(j, pawn, pd):
+		if not _job_visible_to_pawn_with_context(j, pawn, pd, pawn_ctx):
 			continue
 		var bonus: int = 0
 		if use_bonus:
@@ -419,126 +491,9 @@ func claim_next_for(
 	return job
 
 
-## Determine if a job is visible/eligible to a pawn under authority rules.
-func _job_visible_to_pawn(j: Job, pawn: Node, pd: Variant) -> bool:
-	# Trivial checks
-	if j == null or pawn == null or pd == null:
-		return false
-	# Always-visible override
-	if str(j.visible_to).to_lower() == "all":
-		return true
-	# Self-only
-	if str(j.visible_to).to_lower() == "self":
-		var pid: int = int(pd.id)
-		return int(j.issuer_pawn_id) == pid
-	# Immediate emergency acceptance for nearby pawns
-	var pawn_tile: Vector2i = Vector2i(-1, -1)
-	if typeof(pd) == TYPE_DICTIONARY:
-		var _pd_dict: Dictionary = pd
-		pawn_tile = _pd_dict.get("tile_pos", Vector2i(-1, -1))
-	else:
-		if pd != null:
-			pawn_tile = pd.get("tile_pos")
-	var d: int = _chebyshev(pawn_tile, j.work_tile)
-	if str(j.issuer_role).to_lower() == "emergency" and d <= 48:
-		return true
-	var rk_job: int = WorldMemory._region_key(int(j.work_tile.x), int(j.work_tile.y)) if WorldMemory != null else -1
-	var job_center: int = SettlementMemory.get_center_region_for_region(rk_job) if SettlementMemory != null else -1
-	var rk_pawn: int = WorldMemory._region_key(int(pawn_tile.x), int(pawn_tile.y)) if WorldMemory != null else -1
-	var pawn_center: int = SettlementMemory.get_center_region_for_region(rk_pawn) if SettlementMemory != null else -1
-	# Shared settlement membership (center region OR formal settlement id).
-	if SettlementMemory != null and pawn_tile.x >= 0:
-		var pawn_sid: int = SettlementMemory.get_settlement_id_for_region(rk_pawn)
-		var job_sid: int = SettlementMemory.get_settlement_id_for_region(rk_job)
-		if pawn_sid >= 0 and pawn_sid == job_sid:
-			return true
-	if pawn_center >= 0 and job_center >= 0 and pawn_center == job_center:
-		return true
-	var vis: String = str(j.visible_to).to_lower()
-	if vis == "settlement" and d <= 48:
-		return true
-	var scope: String = str(j.authority_scope).to_lower()
-	if scope == "formal_settlement" or scope == "settlement":
-		if pawn_center >= 0 and pawn_center == job_center:
-			return true
-		# Pre-settlement / fringe pawns: still see nearby settlement work.
-		if d <= 40:
-			return true
-		return false
-	if scope == "proto_camp" or scope == "band":
-		# allow if within moderate range or same region
-		if pawn_center >= 0 and pawn_center == job_center:
-			return true
-		if d <= 24:
-			return true
-		return false
-	if scope == "household":
-		# household match if pawn data has household_id and job has eligible_member_ids or household id
-		var hid_val: Variant = null
-		if typeof(pd) == TYPE_DICTIONARY:
-			hid_val = pd.get("household_id", null)
-		else:
-			hid_val = pd.get("household_id") if pd != null else null
-		var hid: int = int(hid_val) if hid_val != null else -1
-		if hid >= 0 and (int(j.settlement_id) == hid or j.eligible_member_ids.has(hid)):
-			return true
-		return false
-	# Nearby visibility default
-	if str(j.visible_to).to_lower() == "nearby" or scope == "nearby":
-		if d <= 32:
-			return true
-		return false
-	# Fallback: unaffiliated pawns (no settlement context) can see jobs within
-	# moderate range. This is critical for the pre-settlement bootstrap phase —
-	# without this, pawns can't claim jobs because they're not in a settlement,
-	# but they can't form a settlement because they can't claim jobs.
-	if rk_pawn < 0 or pawn_center < 0:
-		# Unaffiliated pawn: allow jobs within reasonable distance
-		return d <= 40
-	return false
-
-
-func claim_by_id_for(pawn: HeelKawnian, job_id: int) -> Job:
-	var pd = pawn.call("get_pawn_data") if pawn != null and pawn.has_method("get_pawn_data") else null
-	if pawn == null or pd == null or job_id < 0:
-		return null
-	for i in range(_open.size()):
-		var j: Job = _open[i]
-		if int(j.id) != job_id:
-			continue
-		if pd.has_method("allows_job_type") and not pd.allows_job_type(j.type):
-			return null
-		# === CHECK TECH REQUIREMENT ===
-		var settlement_id: int = -1
-		if pd.has_method("get_tile_pos"):
-			var tile_pos: Vector2i = pd.call("get_tile_pos")
-			var rk: int = WorldMemory._region_key(int(tile_pos.x), int(tile_pos.y))
-			settlement_id = SettlementMemory.get_center_region_for_region(rk)
-		if settlement_id < 0 and j.has_method("get_work_tile"):
-			var work_tile: Vector2i = j.call("get_work_tile")
-			var rk: int = WorldMemory._region_key(int(work_tile.x), int(work_tile.y))
-			settlement_id = SettlementMemory.get_center_region_for_region(rk)
-		if settlement_id >= 0 and TechnologySystem != null:
-			if not bool(TechnologySystem.call("can_settle_perform_job_type", settlement_id, int(j.type))):
-				return null
-		# === END TECH CHECK ===
-		_open.remove_at(i)
-		_claimed.append(j)
-		j.state = Job.State.CLAIMED
-		j.assigned_pawn = pawn
-		_bump_jobs_data_generation()
-		job_claimed.emit(j, pawn)
-		return j
-	return null
-
 
 ## HeelKawnian gave up on a job (couldn't reach it, or was freed). Puts it back in
-## the open queue so another pawn can claim. Resets work progress.
-## Abandon counter (diagnostic). reason_string -> count.
-var _abandon_reasons: Dictionary = {}
-
-## Put a claimed job back in the open queue so another pawn can pick it up.
-## Optional reason: diagnostic string for abandon tracking (F10 report).
+## the open queue so another pawn can claim it. Resets work progress.
 func abandon(job: Job, reason: String = "") -> void:
 	if job == null:
 		return
@@ -554,56 +509,15 @@ func abandon(job: Job, reason: String = "") -> void:
 		_abandon_reasons[reason] = int(_abandon_reasons.get(reason, 0)) + 1
 
 
-## Mark a job finished. Removes it from the claimed list and drops its tile lock.
-func complete(job: Job) -> void:
-	if job == null:
-		return
-	_claimed.erase(job)
-	_jobs_by_tile.erase(job.tile)
-	job.state = Job.State.COMPLETED
-	completed_count += 1
-	_bump_jobs_data_generation()
-
-	# Notify WorldAI of job completion for economic neuron updates
-	_notify_world_ai_job_completion(job)
-
-	# Record progression impact
-	var impact_amount: int = 0
-	if job.type == Job.Type.BUILD_SHELTER or job.type == Job.Type.BUILD_HEARTH:
-		impact_amount = 10
-	elif job.type == Job.Type.TEACH_SKILL or job.type == Job.Type.APPRENTICESHIP:
-		impact_amount = 10
-	elif job.type == Job.Type.GROW_FOOD or job.type == Job.Type.HARVEST_CROPS:
-		impact_amount = 5
-	elif job.type == Job.Type.PROTECT or job.type == Job.Type.DEFEND:
-		impact_amount = 15
-	elif job.type == Job.Type.MAINTAIN_STRUCTURE:
-		impact_amount = 5
-	if impact_amount > 0 and get_tree() != null and get_tree().root.has_node("ProgressionSystem"):
-		var pawn_id: int = 0
-		if job.assigned_pawn != null and job.assigned_pawn.has_method("get_pawn_data"):
-			var pd: HeelKawnianData = job.assigned_pawn.get_pawn_data()
-			if pd != null:
-				pawn_id = int(pd.id)
-		var progression: Node = get_node("/root/ProgressionSystem")
-		if progression.has_method("record_impact"):
-			progression.call("record_impact", pawn_id, impact_amount, str(Job.Type.keys()[job.type]))
-
-	job_completed.emit(job)
-	# NOTE: `BUILD_WALL` path reservation is cleared in `World.build_wall` when
-	# the feature is committed — not here (job may complete without build on edge cases).
-
-
 ## Abort a job. Useful if the target becomes invalid, the pawn dies, or the world
-## is regenerated. Idempotent -- calling cancel() on an already-retired job is
-## a no-op, so "two owners both call cancel" (clear_all + pawn.release) is safe.
-## Optional reason: diagnostic string for cancellation tracking (F10 report).
+## is regenerated. Idempotent: calling cancel() on an already-retired job is a no-op.
 func cancel(job: Job, reason: String = "") -> void:
 	if job == null or job.state == Job.State.CANCELLED or job.state == Job.State.COMPLETED:
 		return
 	_open.erase(job)
 	_claimed.erase(job)
 	_jobs_by_tile.erase(job.tile)
+	_job_context_by_id.erase(job.id)
 	_notify_path_reservation_released(job)
 	job.state = Job.State.CANCELLED
 	job.assigned_pawn = null
@@ -613,7 +527,98 @@ func cancel(job: Job, reason: String = "") -> void:
 	_bump_jobs_data_generation()
 	job_cancelled.emit(job)
 
+## Determine if a job is visible/eligible to a pawn under authority rules.
+func _job_visible_to_pawn(j: Job, pawn: Node, pd: Variant) -> bool:
+	return _job_visible_to_pawn_with_context(j, pawn, pd, _build_pawn_visibility_context(pawn, pd))
 
+
+func _job_visible_to_pawn_with_context(j: Job, pawn: Node, pd: Variant, pawn_ctx: Dictionary) -> bool:
+	if j == null or pawn == null or pd == null:
+		return false
+	var pawn_tile: Vector2i = pawn_ctx.get("tile", Vector2i(-1, -1))
+	var pawn_center: int = int(pawn_ctx.get("center_region", -1))
+	var pawn_region_key: int = int(pawn_ctx.get("region_key", -1))
+	var pawn_household_id: int = int(pawn_ctx.get("household_id", -1))
+	var job_ctx: Dictionary = _job_context_for(j)
+	var job_region_key: int = int(job_ctx.get("region_key", -1))
+	var job_center: int = int(job_ctx.get("center_region", -1))
+	var job_settlement_id: int = int(job_ctx.get("settlement_id", -1))
+	if job_region_key < 0:
+		job_region_key = WorldMemory._region_key(int(j.work_tile.x), int(j.work_tile.y)) if WorldMemory != null else -1
+	if job_center < 0 and job_region_key >= 0 and SettlementMemory != null:
+		job_center = SettlementMemory.get_center_region_for_region(job_region_key)
+	if job_settlement_id < 0 and job_region_key >= 0 and SettlementMemory != null:
+		job_settlement_id = SettlementMemory.get_settlement_id_for_region(job_region_key)
+	var d: int = _chebyshev(pawn_tile, j.work_tile)
+	if str(j.visible_to).to_lower() == "all":
+		return true
+	if str(j.visible_to).to_lower() == "self":
+		return int(j.issuer_pawn_id) == int(pd.id)
+	if str(j.issuer_role).to_lower() == "emergency" and d <= 48:
+		return true
+	if pawn_region_key >= 0 and pawn_center >= 0 and pawn_center == job_center:
+		return true
+	if SettlementMemory != null and pawn_region_key >= 0:
+		var pawn_settlement_id: int = SettlementMemory.get_settlement_id_for_region(pawn_region_key)
+		if pawn_settlement_id >= 0 and pawn_settlement_id == job_settlement_id:
+			return true
+	var vis: String = str(j.visible_to).to_lower()
+	if vis == "settlement" and d <= 48:
+		return true
+	var scope: String = str(j.authority_scope).to_lower()
+	if scope == "formal_settlement" or scope == "settlement":
+		if pawn_center >= 0 and pawn_center == job_center:
+			return true
+		if d <= 40:
+			return true
+		return false
+	if scope == "proto_camp" or scope == "band":
+		if pawn_center >= 0 and pawn_center == job_center:
+			return true
+		if d <= 24:
+			return true
+		return false
+	if scope == "household":
+		if pawn_household_id >= 0 and (int(j.settlement_id) == pawn_household_id or j.eligible_member_ids.has(pawn_household_id)):
+			return true
+		return false
+	if str(j.visible_to).to_lower() == "nearby" or scope == "nearby":
+		return d <= 32
+	if pawn_region_key < 0 or pawn_center < 0:
+		return d <= 40
+	return false
+
+
+func claim_by_id_for(pawn: HeelKawnian, job_id: int) -> Job:
+	var pd = pawn.call("get_pawn_data") if pawn != null and pawn.has_method("get_pawn_data") else null
+	if pawn == null or pd == null or job_id < 0:
+		return null
+	for i in range(_open.size()):
+		var j: Job = _open[i]
+		if int(j.id) != job_id:
+			continue
+		if pd.has_method("allows_job_type") and not pd.allows_job_type(j.type):
+			return null
+		var settlement_id: int = -1
+		if pd.has_method("get_tile_pos"):
+			var tile_pos: Vector2i = pd.call("get_tile_pos")
+			var rk: int = WorldMemory._region_key(int(tile_pos.x), int(tile_pos.y))
+			settlement_id = SettlementMemory.get_center_region_for_region(rk)
+		if settlement_id < 0:
+			var work_tile: Vector2i = j.work_tile
+			var rk2: int = WorldMemory._region_key(int(work_tile.x), int(work_tile.y))
+			settlement_id = SettlementMemory.get_center_region_for_region(rk2)
+		if settlement_id >= 0 and TechnologySystem != null:
+			if not bool(TechnologySystem.call("can_settle_perform_job_type", settlement_id, int(j.type))):
+				return null
+		_open.remove_at(i)
+		_claimed.append(j)
+		j.state = Job.State.CLAIMED
+		j.assigned_pawn = pawn
+		_bump_jobs_data_generation()
+		job_claimed.emit(j, pawn)
+		return j
+	return null
 ## Cancel every job. Called when the world is regenerated so we don't keep
 ## jobs pointing at tiles whose features no longer exist.
 func clear_all() -> void:
@@ -624,6 +629,7 @@ func clear_all() -> void:
 	_claimed.clear()
 	_jobs_by_tile.clear()
 	_failed_tiles.clear()
+	_job_context_by_id.clear()
 	_bump_jobs_data_generation()
 	for j in all:
 		_notify_path_reservation_released(j)
@@ -730,8 +736,9 @@ func get_claimed_jobs() -> Array:
 ## used when claiming). Useful for diagnostics and Pawn-side failure reporting.
 func visible_jobs_for_pawn(pawn: Node, pawn_data: Variant) -> Array:
 	var res: Array = []
+	var pawn_ctx: Dictionary = _build_pawn_visibility_context(pawn, pawn_data)
 	for j in _open:
-		if _job_visible_to_pawn(j, pawn, pawn_data):
+		if _job_visible_to_pawn_with_context(j, pawn, pawn_data, pawn_ctx):
 			res.append(j)
 	return res
 
@@ -846,6 +853,12 @@ func post_build_deduped(
 func count_pending_jobs_near(center_tile: Vector2i, job_type: int, radius: int) -> int:
 	if center_tile.x < 0:
 		return 0
+	if _pending_near_cache_gen_built != _jobs_data_generation:
+		_pending_near_cache.clear()
+		_pending_near_cache_gen_built = _jobs_data_generation
+	var near_key: String = "%d:%d:%d:%d" % [center_tile.x, center_tile.y, job_type, radius]
+	if _pending_near_cache.has(near_key):
+		return int(_pending_near_cache[near_key])
 	var n: int = 0
 	for j in get_active_jobs_union():
 		if j == null:
@@ -854,6 +867,7 @@ func count_pending_jobs_near(center_tile: Vector2i, job_type: int, radius: int) 
 			continue
 		if maxi(absi(j.tile.x - center_tile.x), absi(j.tile.y - center_tile.y)) <= radius:
 			n += 1
+	_pending_near_cache[near_key] = n
 	return n
 
 
@@ -866,6 +880,12 @@ func active_count_of_type(type: int) -> int:
 func count_pending_for_settlement(settlement_id: int, job_type: int) -> int:
 	if settlement_id < 0:
 		return 0
+	if _pending_settlement_cache_gen_built != _jobs_data_generation:
+		_pending_settlement_cache.clear()
+		_pending_settlement_cache_gen_built = _jobs_data_generation
+	var settlement_key: String = "%d:%d" % [settlement_id, job_type]
+	if _pending_settlement_cache.has(settlement_key):
+		return int(_pending_settlement_cache[settlement_key])
 	var n: int = 0
 	for j in get_active_jobs_union():
 		if j == null:
@@ -874,6 +894,7 @@ func count_pending_for_settlement(settlement_id: int, job_type: int) -> int:
 			continue
 		if int(j.settlement_id) == settlement_id:
 			n += 1
+	_pending_settlement_cache[settlement_key] = n
 	return n
 
 

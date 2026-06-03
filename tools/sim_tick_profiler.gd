@@ -66,12 +66,14 @@ func _process(_delta: float) -> bool:
 	var gm: Node = root.get_node_or_null("GameManager")
 	if gm == null:
 		return false
-	var tick: int = int(gm.get("tick_count"))
+	var tick: int = gm.get("tick_count")
 
 	var tm: Node = root.get_node_or_null("TickManager")
 	var last_frame_ticks: int = 0
 	if tm != null:
-		last_frame_ticks = int(tm.get("_last_frame_ticks"))
+		var raw_last_frame_ticks: Variant = tm.get("_last_frame_ticks")
+		if raw_last_frame_ticks is int:
+			last_frame_ticks = raw_last_frame_ticks
 
 	_window_frames += 1
 	_window_total_ticks_in_frames += last_frame_ticks
@@ -124,12 +126,12 @@ func _begin_profiling() -> void:
 	var gm: Node = root.get_node_or_null("GameManager")
 	var tm: Node = root.get_node_or_null("TickManager")
 	if gm != null:
-		_window_start_tick = int(gm.get("tick_count"))
+		_window_start_tick = gm.get("tick_count")
 	if tm != null and tm.has_method("set_speed"):
 		tm.call("set_speed", PROFILING_SPEED)
 	var wmem: Node = root.get_node_or_null("WorldMemory")
 	if wmem != null and wmem.has_method("event_count"):
-		_window_events_start = int(wmem.call("event_count"))
+		_window_events_start = wmem.call("event_count")
 	_window_start_usec = Time.get_ticks_usec()
 	_started = true
 	print("[PERF] START speed=%.0fx" % PROFILING_SPEED)
@@ -139,7 +141,7 @@ func _log_window(tick: int) -> void:
 	var now_usec: int = Time.get_ticks_usec()
 	var window_usec: int = now_usec - _window_start_usec
 	var wmem: Node = root.get_node_or_null("WorldMemory")
-	var events_now: int = int(wmem.call("event_count")) if wmem != null and wmem.has_method("event_count") else 0
+	var events_now: int = wmem.call("event_count") if wmem != null and wmem.has_method("event_count") else 0
 	var events_delta: int = events_now - _window_events_start
 	var avg_ticks_per_frame: float = float(_window_total_ticks_in_frames) / max(_window_frames, 1)
 	var avg_usec_per_tick: float = float(window_usec) / max(tick - _window_start_tick, 1)
@@ -158,7 +160,7 @@ func _log_window(tick: int) -> void:
 
 	# GameManager tick timing
 	var gm: Node = root.get_node_or_null("GameManager")
-	var gm_frame_usecs: int = int(gm.get("last_frame_game_tick_usecs")) if gm != null else 0
+	var gm_frame_usecs: int = gm.get("last_frame_game_tick_usecs") if gm != null else 0
 
 	# WorldMeaning region count
 	var wm: Node = root.get_node_or_null("WorldMeaning")
@@ -187,13 +189,13 @@ func _log_window(tick: int) -> void:
 
 func _final_report(tick: int) -> void:
 	var wmem: Node = root.get_node_or_null("WorldMemory")
-	var events_total: int = int(wmem.call("event_count")) if wmem != null and wmem.has_method("event_count") else 0
+	var events_total: int = wmem.call("event_count") if wmem != null and wmem.has_method("event_count") else 0
 
 	# Consistency check
 	var gm: Node = root.get_node_or_null("GameManager")
 	var tm: Node = root.get_node_or_null("TickManager")
-	var gm_tick: int = int(gm.get("tick_count")) if gm != null else -1
-	var tm_tick: int = int(tm.get("current_tick")) if tm != null else -1
+	var gm_tick: int = gm.get("tick_count") if gm != null else -1
+	var tm_tick: int = tm.get("current_tick") if tm != null else -1
 	var gm_paused: bool = bool(gm.get("is_paused")) if gm != null else true
 	var tm_paused: bool = bool(tm.get("_is_paused")) if tm != null else true
 	var consistency: String = "ok" if gm_tick == tm_tick and not gm_paused and not tm_paused else "DESYNC"

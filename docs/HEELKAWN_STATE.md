@@ -246,6 +246,8 @@ We are always building, always refining, always expanding. This document capture
   - `JobManager.gd`: `has_pending_build_near` and `post_build_deduped` for settlement-scoped construction dedupe.
   - **FEAT: Tick burst smoothing (June 2, 2026)**:
     - `TickManager.gd` now stops its per-frame catch-up loop on the configured frame budget as well as the speed cap.
+    - The high-speed caps were raised so `50x`, `100x`, and `200x` can actually keep up with their intended throughput when the frame budget allows it.
+    - Tick dispatch now caches `_on_world_tick` callables for the tickable group so each emitted tick does less lookup work.
     - The existing `GameSettings` `frame_budget_ms` and `max_ticks_per_frame` values now participate in real tick emission instead of being UI-only knobs.
     - This is intended to reduce visible frame stalls during long catch-up bursts without changing tick order or world truth.
 ## May 23, 2026 Session Completion

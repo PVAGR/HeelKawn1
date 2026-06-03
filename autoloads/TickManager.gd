@@ -5,7 +5,7 @@ signal speed_changed(speed_multiplier: float, is_paused: bool)
 const SPEED_MULTIPLIERS: Array = [1.0, 6.0, 26.0, 50.0, 100.0, 200.0]
 const SPEED_LABELS: Array      = ["1x", "6x", "26x", "50x", "100x", "200x"]
 const BASE_TICK_INTERVAL: float = 0.05
-const MAX_TICKS_PER_FRAME: Dictionary = {0:2, 1:4, 2:8, 3:12, 4:16, 5:32}
+const MAX_TICKS_PER_FRAME: Dictionary = {0:2, 1:4, 2:8, 3:16, 4:32, 5:64}
 
 var current_tick: int = 0
 var _accumulated_time: float = 0.0
@@ -13,8 +13,10 @@ var _speed_index: int = 0
 var _is_paused: bool = false
 var _refcounted_tickables: Array = []
 var _tickable_cache: Array = []
+var _tickable_callables: Array = []
 var _tickable_cache_dirty: bool = true
 var debug_last_tick_batch_usec: int = 0
+var _last_tick_usec: int = 0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -40,15 +42,20 @@ func _fire_tick(tick: int) -> void:
 	if _tickable_cache_dirty:
 		_tickable_cache = get_tree().get_nodes_in_group("tickable")
 		_tickable_cache.sort_custom(func(a, b): return str(a.get_path()) < str(b.get_path()))
+		_tickable_callables.clear()
+		for node in _tickable_cache:
+			if is_instance_valid(node) and node.has_method("_on_world_tick"):
+				_tickable_callables.append(Callable(node, "_on_world_tick"))
 		_tickable_cache_dirty = false
-	for node in _tickable_cache:
-		if is_instance_valid(node) and node.has_method("_on_world_tick"):
-			node._on_world_tick(tick)
+	for cb in _tickable_callables:
+		if cb.is_valid():
+			cb.call(tick)
 	for ref in _refcounted_tickables:
 		if ref != null and ref.has_method("_on_world_tick"):
 			ref._on_world_tick(tick)
 	tick_processed.emit(tick)
 	debug_last_tick_batch_usec = Time.get_ticks_usec() - start
+	_last_tick_usec = debug_last_tick_batch_usec
 
 func mark_tickable_cache_dirty() -> void:
 	_tickable_cache_dirty = true
@@ -64,7 +71,11 @@ func _max_ticks_per_frame_for_speed() -> int:
 	var configured_cap: int = speed_cap
 	if GameSettings != null and GameSettings.has_method("get_value"):
 		configured_cap = maxi(1, int(GameSettings.get_value("max_ticks_per_frame")))
-	return maxi(1, mini(speed_cap, configured_cap))
+	var budget_cap: int = speed_cap
+	if _last_tick_usec > 0:
+		var budget_usec: int = _frame_budget_usec()
+		budget_cap = maxi(1, int((float(budget_usec) * 0.9) / float(_last_tick_usec)))
+	return maxi(1, mini(mini(speed_cap, configured_cap), budget_cap))
 
 func register_refcounted_tickable(obj) -> void:
 	if obj not in _refcounted_tickables:

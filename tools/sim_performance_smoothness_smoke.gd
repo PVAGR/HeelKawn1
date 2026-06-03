@@ -48,11 +48,13 @@ func _process(_delta: float) -> bool:
 	if gm == null:
 		return false
 
-	var tick: int = int(gm.get("tick_count"))
+	var tick: int = gm.get("tick_count")
 	var tm: Node = root.get_node_or_null("TickManager")
 	var last_frame_ticks: int = 0
 	if tm != null:
-		last_frame_ticks = int(tm.get("_last_frame_ticks"))
+		var raw_last_frame_ticks: Variant = tm.get("_last_frame_ticks")
+		if raw_last_frame_ticks is int:
+			last_frame_ticks = raw_last_frame_ticks
 	if last_frame_ticks > _max_ticks_in_frame:
 		_max_ticks_in_frame = last_frame_ticks
 	_total_ticks_in_phase += last_frame_ticks
@@ -116,12 +118,12 @@ func _begin_phase_1x() -> void:
 	var gm: Node = root.get_node_or_null("GameManager")
 	var tm: Node = root.get_node_or_null("TickManager")
 	if gm != null:
-		_tick_start = int(gm.get("tick_count"))
+		_tick_start = gm.get("tick_count")
 	if tm != null and tm.has_method("set_speed"):
 		tm.call("set_speed", 1.0)
 	var wmem: Node = root.get_node_or_null("WorldMemory")
 	if wmem != null and wmem.has_method("event_count"):
-		_events_start = int(wmem.call("event_count"))
+		_events_start = wmem.call("event_count")
 	_max_ticks_in_frame = 0
 	_total_ticks_in_phase = 0
 	_frames_in_phase = 0
@@ -133,12 +135,12 @@ func _begin_phase_100x(tick: int) -> void:
 	var tm: Node = root.get_node_or_null("TickManager")
 	var gm: Node = root.get_node_or_null("GameManager")
 	if gm != null:
-		_tick_start = int(gm.get("tick_count"))
+		_tick_start = gm.get("tick_count")
 	if tm != null and tm.has_method("set_speed"):
 		tm.call("set_speed", 100.0)
 	var wmem: Node = root.get_node_or_null("WorldMemory")
 	if wmem != null and wmem.has_method("event_count"):
-		_events_start = int(wmem.call("event_count"))
+		_events_start = wmem.call("event_count")
 	_max_ticks_in_frame = 0
 	_total_ticks_in_phase = 0
 	_frames_in_phase = 0
@@ -147,7 +149,7 @@ func _begin_phase_100x(tick: int) -> void:
 
 func _end_phase(label: String, tick: int) -> void:
 	var wmem: Node = root.get_node_or_null("WorldMemory")
-	_events_end = int(wmem.call("event_count")) if wmem != null and wmem.has_method("event_count") else 0
+	_events_end = wmem.call("event_count") if wmem != null and wmem.has_method("event_count") else 0
 	_tick_end = tick
 	var events_delta: int = _events_end - _events_start
 	var avg_ticks_per_frame: float = float(_total_ticks_in_phase) / max(_frames_in_phase, 1)
@@ -161,8 +163,8 @@ func _report_final() -> void:
 	# Check TickManager/Gamanager consistency
 	var gm: Node = root.get_node_or_null("GameManager")
 	var tm: Node = root.get_node_or_null("TickManager")
-	var gm_tick: int = int(gm.get("tick_count")) if gm != null else -1
-	var tm_tick: int = int(tm.get("current_tick")) if tm != null else -1
+	var gm_tick: int = gm.get("tick_count") if gm != null else -1
+	var tm_tick: int = tm.get("current_tick") if tm != null else -1
 	var gm_paused: bool = bool(gm.get("is_paused")) if gm != null else true
 	var tm_paused: bool = bool(tm.get("_is_paused")) if tm != null else true
 
@@ -174,7 +176,7 @@ func _report_final() -> void:
 
 	# Event count
 	var wmem: Node = root.get_node_or_null("WorldMemory")
-	var event_count: int = int(wmem.call("event_count")) if wmem != null and wmem.has_method("event_count") else 0
+	var event_count: int = wmem.call("event_count") if wmem != null and wmem.has_method("event_count") else 0
 
 	# WorldMeaning region count
 	var wm: Node = root.get_node_or_null("WorldMeaning")

@@ -5,7 +5,7 @@ signal speed_changed(speed_multiplier: float, is_paused: bool)
 const SPEED_MULTIPLIERS: Array = [1.0, 6.0, 26.0, 50.0, 100.0, 200.0]
 const SPEED_LABELS: Array      = ["1x", "6x", "26x", "50x", "100x", "200x"]
 const BASE_TICK_INTERVAL: float = 0.05
-const MAX_TICKS_PER_FRAME: Dictionary = {0:2, 1:4, 2:8, 3:10, 4:6, 5:8}
+const MAX_TICKS_PER_FRAME: Dictionary = {0:2, 1:4, 2:8, 3:12, 4:16, 5:32}
 
 var current_tick: int = 0
 var _accumulated_time: float = 0.0
@@ -23,9 +23,13 @@ func _process(delta: float) -> void:
 	if _is_paused:
 		return
 	_accumulated_time += delta * SPEED_MULTIPLIERS[_speed_index]
-	var max_ticks: int = MAX_TICKS_PER_FRAME.get(_speed_index, 4)
+	var max_ticks: int = _max_ticks_per_frame_for_speed()
+	var frame_budget_usec: int = _frame_budget_usec()
+	var frame_start_usec: int = Time.get_ticks_usec()
 	var ticks_this_frame: int = 0
 	while _accumulated_time >= BASE_TICK_INTERVAL and ticks_this_frame < max_ticks:
+		if ticks_this_frame > 0 and Time.get_ticks_usec() - frame_start_usec >= frame_budget_usec:
+			break
 		_accumulated_time -= BASE_TICK_INTERVAL
 		current_tick += 1
 		_fire_tick(current_tick)
@@ -48,6 +52,19 @@ func _fire_tick(tick: int) -> void:
 
 func mark_tickable_cache_dirty() -> void:
 	_tickable_cache_dirty = true
+
+func _frame_budget_usec() -> int:
+	var budget_ms: int = 16
+	if GameSettings != null and GameSettings.has_method("get_value"):
+		budget_ms = maxi(1, int(GameSettings.get_value("frame_budget_ms")))
+	return budget_ms * 1000
+
+func _max_ticks_per_frame_for_speed() -> int:
+	var speed_cap: int = MAX_TICKS_PER_FRAME.get(_speed_index, 4)
+	var configured_cap: int = speed_cap
+	if GameSettings != null and GameSettings.has_method("get_value"):
+		configured_cap = maxi(1, int(GameSettings.get_value("max_ticks_per_frame")))
+	return maxi(1, mini(speed_cap, configured_cap))
 
 func register_refcounted_tickable(obj) -> void:
 	if obj not in _refcounted_tickables:

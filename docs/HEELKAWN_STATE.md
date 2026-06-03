@@ -244,6 +244,10 @@ We are always building, always refining, always expanding. This document capture
   - `SettlementPlanner.gd`: `_build_pressure_ok`, per-settlement+type cooldown (`BUILD_INTENT_COOLDOWN_TICKS` = 1200), `can_post_build_intent` / `mark_build_intent_posted` gate bed, fire pit, storage hut, and farm planner posts from `ColonySimServices` pressure signals.
   - `AIAutoBuild.gd`: delegates to planner gating before creating intents and before posting jobs; uses `JobManager.post_build_deduped`.
   - `JobManager.gd`: `has_pending_build_near` and `post_build_deduped` for settlement-scoped construction dedupe.
+  - **FEAT: Tick burst smoothing (June 2, 2026)**:
+    - `TickManager.gd` now stops its per-frame catch-up loop on the configured frame budget as well as the speed cap.
+    - The existing `GameSettings` `frame_budget_ms` and `max_ticks_per_frame` values now participate in real tick emission instead of being UI-only knobs.
+    - This is intended to reduce visible frame stalls during long catch-up bursts without changing tick order or world truth.
 ## May 23, 2026 Session Completion
 
 - **FEAT: Learning target biasing (Matrix AI Deepening)**:

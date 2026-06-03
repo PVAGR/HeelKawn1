@@ -80,7 +80,7 @@ func _initial_wildlife_spawn() -> void:
 	# Spawn deer in plains biomes
 	_spawn_species_in_biome(Species.DEER, Biome.Type.PLAINS, 15)
 	
-	if OS.is_debug_build():
+	if GameManager != null and GameManager.verbose_logs():
 		print("[Wildlife] Initial wildlife spawned")
 
 
@@ -183,7 +183,7 @@ func _wildlife_birth(pop: Dictionary) -> void:
 	pop.population += birth_count
 	pop.last_birth_tick = GameManager.tick_count
 	
-	if OS.is_debug_build():
+	if GameManager != null and GameManager.verbose_logs():
 		print("[Wildlife] Birth in region %d: +%d animals (now %d)" % [
 			pop.region_key, birth_count, pop.population
 		])

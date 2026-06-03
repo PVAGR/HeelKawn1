@@ -11,7 +11,7 @@ func record_impact(pawn_id: int, amount: int, job_type_name: String) -> void:
 		return
 	var cur: int = int(impact_by_pawn.get(pawn_id, 0))
 	impact_by_pawn[pawn_id] = cur + amount
-	if OS.is_debug_build():
+	if GameManager != null and GameManager.verbose_logs():
 		var tick: int = GameManager.tick_count if GameManager != null else -1
 		if _last_print_tick < 0 or tick - _last_print_tick >= 60:
 			_last_print_tick = tick

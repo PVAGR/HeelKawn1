@@ -378,7 +378,7 @@ func _collect_failure_reasons() -> Dictionary:
 		var pd: Variant = p.get("data") if p.has_method("get") else null
 		if pd == null:
 			continue
-		var idle_reason: String = str(pd.get("last_claim_failure_reason", "")).strip_edges()
+		var idle_reason: String = str(pd.last_claim_failure_reason).strip_edges()
 		if not idle_reason.is_empty():
 			out[idle_reason] = int(out.get(idle_reason, 0)) + 1
 	return out

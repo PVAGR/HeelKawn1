@@ -4,12 +4,56 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** May 30, 2026
+**Last Updated:** June 3, 2026
 **Current Phase:** Phase 5A integration — TeachingSystem + ResearchSystem + TechnologyEras production rewrites, stub implementations, Deep Social Dynamics, Knowledge Ecology, Emergent Narrative, Player Incarnation, Metaphysics
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
 **Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
-**Latest verification snapshot:** [STATE_VERIFICATION_2026-05-30.md](STATE_VERIFICATION_2026-05-30.md)
+**Latest verification snapshot:** [STATE_VERIFICATION_2026-06-03.md](STATE_VERIFICATION_2026-06-03.md)
+
+---
+
+## June 3, 2026 — PawnMoodUI Truth Repair
+
+**Scope:** Make PawnMoodUI read real HeelKawnianData; remove silent-null behavior.
+
+**Files changed:** `scripts/ui/PawnMoodUI.gd`. New file: `tools/test_pawn_mood_ui_smoke.gd`. New verification: `docs/STATE_VERIFICATION_2026-06-03.md` (appended).
+
+**Each bad access fixed:**
+- `display_name` (was 1-arg `.get("display_name")` returning null on HeelKawnianData) → direct property access on the typed `HeelKawnianData` field.
+- `mood` (was 1-arg `.get("mood")`) → direct property access.
+- Need bars: `hunger`/`rest` (real fields) direct; `social` → `need_satisfaction.belonging`; `safety` → `need_satisfaction.safety`; `comfort` → derived as `clampf(100 - pain, 0, 100)` (the inverse of the real `pain` field — no fake field invented).
+- `thoughts` (field doesn't exist) → uses real `mood_events: Array[MoodEvent]`, displays each event's `description`.
+- `traits` (was `_pawn_data.has_meta("traits")` / `get_meta("traits")` — Object metadata, never set, so the trait chips were always empty) → uses real `traits: Array[Trait]`, displays each `Trait.display_name`.
+- `wounds` (field doesn't exist) → uses real `injuries: Dictionary`, counts `injuries.size()`.
+- `health` (was 1-arg `.get("health")`) → direct property access.
+
+**Verification:**
+- `tools/ai/verify-compile.ps1` ran clean (autoloads registered, no new parse errors; only pre-existing `AISettlementManager.gd` warning unchanged).
+- `tools/test_pawn_mood_ui_smoke.gd` (new) instantiates a HeelKawnianData with realistic non-default values (typed Trait, typed MoodEvent, injuries, need_satisfaction) and calls each PawnMoodUI update method directly. Asserts the resulting label text and progress-bar values reflect the real data. Exit 0, `[PMUI_SMOKE] PASS`. The smoke now covers the same surface that previously returned silent nulls.
+
+**Remaining truth risks:** `PawnMoodUI._update_thoughts` shows a static label per mood event using `event.description` only. If the mood event description is empty (it isn't, by construction in `MoodEvent._set_description`), the UI would render an empty bullet. The display name of a trait is always populated (set in `Trait._init_from_type`); the only way to be empty is an externally constructed Trait that bypasses `_init`, which is not done in this codebase. Health label thresholds (`< 50` → "Injured") are unchanged.
+
+---
+
+## June 3, 2026 — Pawn-Data Shape Audit + Job Completion Path Hardening
+
+**Scope:** Crash prevention. No feature additions, no canon promotions.
+
+**Patched (definitely-wrong 2-arg `Object.get` on HeelKawnianData):**
+- `autoloads/JobManager.gd:133-134` — `pd.get("tile_pos")` / `pd.get("household_id", -1)` → direct property access.
+- `autoloads/JobManager.gd:461-464` — `pd.get("likes") is Array` → `pd.likes is Dictionary` (likes/dislikes are `Dictionary` per `HeelKawnianData.gd`).
+- `tools/year1_visible_growth_smoke.gd:381` — `pd.get("last_claim_failure_reason", "")` → direct property access.
+
+**Job completion path:**
+- `autoloads/JobManager.gd:512-527` — Added missing `complete(job: Job)` (2 callers existed but the function did not).
+- `scripts/jobs/Job.gd:283-302` — Added `complete(_pawn = null)` compatibility wrapper that delegates to `/root/JobManager.complete(self)`. Idempotent via state guard + JobManager guard. Job subclasses (`ToolMaker`, `PaperMaker`, `LeatherWorker`, `InkMaker`, `BookBinder`) and `HeelKawnian.gd` callers unchanged.
+
+**Audit coverage:** All 2-arg `.get(key, default)` call sites reviewed. Only the three above were 2-arg on HeelKawnianData. Remaining 2-arg call sites all operate on real `Dictionary` receivers (settlement dict, event dict, NPC dict, consciousness dict, structure record, etc.) and are correct.
+
+**Known but out-of-scope:** `scripts/ui/PawnMoodUI.gd` uses 1-arg `.get("thoughts")`/`.get("wounds")` etc. on HeelKawnianData for properties that don't exist on the class. These return `null` silently and would corrupt the UI; not patched in this round per crash-prevention-only scope.
+
+**Verification:** `tools/ai/verify-compile.ps1` (Godot 4.6.2 `--headless --script-check`) ran clean for changed files. No new "Invalid call" errors introduced. Pre-existing warnings (Rect2i negative size, AgeMemory singleton missing, AISettlementManager.gd missing, WorldRNG.gd `unit`) unchanged.
 
 ---
 

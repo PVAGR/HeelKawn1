@@ -280,6 +280,28 @@ func describe() -> String:
 	]
 
 
+## Compatibility wrapper for older call sites (ToolMaker, PaperMaker,
+## LeatherWorker, InkMaker, BookBinder) that call `job.complete(pawn)`.
+## Delegates to the canonical `/root/JobManager.complete(self)` path so all
+## state transitions, the `job_completed` signal, and the WorldAI notification
+## happen in exactly one place. Idempotent: a second call is a no-op because
+## the state check below + the guard inside JobManager.complete() both short
+## circuit. The pawn argument is intentionally unused — pawn-side bookkeeping
+## (learning, success-tile, trade completion, etc.) is the caller's job.
+func complete(_pawn = null) -> void:
+	if state == State.COMPLETED or state == State.CANCELLED:
+		return
+	var tree := Engine.get_main_loop()
+	if tree == null:
+		push_warning("[Job.complete] No SceneTree; cannot complete job %d" % id)
+		return
+	var jm: Node = tree.root.get_node_or_null("/root/JobManager")
+	if jm == null or not jm.has_method("complete"):
+		push_warning("[Job.complete] JobManager missing; cannot complete job %d" % id)
+		return
+	jm.complete(self)
+
+
 # --- Tool job metadata ---
 
 ## Output item type produced when this job completes.

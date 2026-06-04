@@ -9,7 +9,7 @@ extends PanelContainer
 ## - Health status
 
 var _pawn_id: int = -1
-var _pawn_data: Node = null
+var _pawn_data: HeelKawnianData = null
 
 # UI references
 var _mood_bar: ProgressBar = null
@@ -160,8 +160,7 @@ func _update_display() -> void:
 	# Update name
 	var name_label: Label = get_node_or_null("VBoxContainer/NameLabel")
 	if name_label != null:
-		var dn = _pawn_data.get("display_name")
-		name_label.text = dn if dn != null else "Unknown"
+		name_label.text = _pawn_data.display_name if _pawn_data.display_name != "" else "Unknown"
 	
 	# Update mood
 	_update_mood()
@@ -182,12 +181,11 @@ func _update_display() -> void:
 func _update_mood() -> void:
 	if _mood_bar == null or _mood_label == null:
 		return
-	
-	var mood_val = _pawn_data.get("mood")
-	var mood: float = mood_val if mood_val != null else 50.0
+
+	var mood: float = _pawn_data.mood
 	_mood_bar.value = mood
 	_mood_label.text = "%d/100" % int(mood)
-	
+
 	# Color based on mood
 	if _modern_theme != null:
 		var color: Color = _modern_theme.get_mood_color(mood)
@@ -196,41 +194,55 @@ func _update_mood() -> void:
 		_mood_bar.add_theme_stylebox_override("fill", style)
 
 
+func _get_need_value(need_type: String) -> float:
+	# Map UI need names to real pawn data. Do not invent fields.
+	# comfort and social are derived from real data; safety and belonging
+	# come from need_satisfaction which is computed on the data class.
+	match need_type:
+		"hunger":
+			return _pawn_data.hunger
+		"rest":
+			return _pawn_data.rest
+		"social":
+			return float(_pawn_data.need_satisfaction.get("belonging", 50.0))
+		"safety":
+			return float(_pawn_data.need_satisfaction.get("safety", 50.0))
+		"comfort":
+			return clampf(100.0 - _pawn_data.pain, 0.0, 100.0)
+	return 50.0
+
+
 func _update_needs() -> void:
 	if _needs_container == null:
 		return
-	
+
 	# Update each need bar
 	for need_type in NEED_TYPES:
 		var need_bar: ProgressBar = _needs_container.get_node_or_null("Need_" + need_type)
 		if need_bar != null:
-			# Get need value from pawn data
-			var nv = _pawn_data.get(need_type)
-			var need_value: float = nv if nv != null else 50.0
-			need_bar.value = need_value
+			need_bar.value = _get_need_value(need_type)
 
 
 func _update_thoughts() -> void:
 	if _thoughts_container == null:
 		return
-	
+
 	# Clear existing thoughts
 	for child in _thoughts_container.get_children():
 		child.queue_free()
-	
-	# Get thoughts from pawn data
-	var thoughts_raw = _pawn_data.get("thoughts")
-	var thoughts: Array = thoughts_raw if thoughts_raw != null else []
-	
-	for thought in thoughts:
-		var thought_label: Label = _create_label("• " + str(thought), "small")
+
+	# Real source: mood_events (typed Array[MoodEvent]). Each event has
+	# a `description` field set in MoodEvent._set_description().
+	for mood_event in _pawn_data.mood_events:
+		var label_text: String = "• " + str(mood_event.description)
+		var thought_label: Label = _create_label(label_text, "small")
 		_thoughts_container.add_child(thought_label)
 
 
 func _update_traits() -> void:
 	if _traits_container == null:
 		return
-	
+
 	# Clear existing traits
 	var trait_children: Array = _traits_container.get_children()
 	var i: int = 0
@@ -239,40 +251,29 @@ func _update_traits() -> void:
 		child.queue_free()
 		i += 1
 
-	# Get traits from pawn data
-	var traits: Array = []
-	if _pawn_data.has_meta("traits"):
-		traits = _pawn_data.get_meta("traits")
-
-	var j: int = 0
-	while j < traits.size():
-		var t: String = str(traits[j])
+	# Real source: traits (typed Array[Trait]). Each Trait has display_name.
+	for t in _pawn_data.traits:
 		var trait_chip: Label = Label.new()
-		trait_chip.text = str(t)
-		trait_chip.add_theme_color_override("font_color", _modern_theme.get_color("text_primary"))
-		trait_chip.add_theme_font_size_override("font_size", _modern_theme.get_font_size("small"))
-
-		# Style chip background
-		var style: StyleBoxFlat = StyleBoxFlat.new()
-		style.bg_color = _modern_theme.get_color("bg_light")
-		style.set_corner_radius_all(4)
-		trait_chip.add_theme_stylebox_override("normal", style)
-
+		trait_chip.text = str(t.display_name)
+		if _modern_theme != null:
+			trait_chip.add_theme_color_override("font_color", _modern_theme.get_color("text_primary"))
+			trait_chip.add_theme_font_size_override("font_size", _modern_theme.get_font_size("small"))
+			var style: StyleBoxFlat = StyleBoxFlat.new()
+			style.bg_color = _modern_theme.get_color("bg_light")
+			style.set_corner_radius_all(4)
+			trait_chip.add_theme_stylebox_override("normal", style)
 		_traits_container.add_child(trait_chip)
-		j += 1
 
 
 func _update_health() -> void:
 	if _health_label == null:
 		return
-	
-	var h = _pawn_data.get("health")
-	var health: float = h if h != null else 100.0
-	var w = _pawn_data.get("wounds")
-	var wounds: Array = w if w != null else []
-	
-	if wounds.size() > 0:
-		_health_label.text = "Wounded (%d wounds)" % wounds.size()
+
+	var health: float = _pawn_data.health
+	var wound_count: int = _pawn_data.injuries.size()
+
+	if wound_count > 0:
+		_health_label.text = "Wounded (%d injuries)" % wound_count
 		_health_label.add_theme_color_override("font_color", _modern_theme.get_color("accent_danger"))
 	elif health < 50:
 		_health_label.text = "Injured"

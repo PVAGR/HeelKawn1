@@ -130,8 +130,8 @@ func _build_pawn_visibility_context(pawn: Node, pd: Variant) -> Dictionary:
 		pawn_tile = (pd as Dictionary).get("tile_pos", Vector2i(-1, -1))
 		ctx["household_id"] = int((pd as Dictionary).get("household_id", -1))
 	else:
-		pawn_tile = pd.get("tile_pos")
-		ctx["household_id"] = int(pd.get("household_id", -1))
+		pawn_tile = pd.tile_pos
+		ctx["household_id"] = int(pd.household_id)
 	ctx["tile"] = pawn_tile
 	if pawn_tile.x < 0 or pawn_tile.y < 0:
 		return ctx
@@ -458,9 +458,9 @@ func claim_next_for(
 		# Apply bonuses/penalties based on pawn likes/dislikes
 		var job_cat: String = pd.call("job_category_for_type", j.type) if pd.has_method("job_category_for_type") else ""
 		if not job_cat.is_empty():
-			if pd.get("likes") is Array and job_cat in pd.likes:
+			if pd.likes is Dictionary and pd.likes.has(job_cat):
 				bonus += 5
-			if pd.get("dislikes") is Array and job_cat in pd.dislikes:
+			if pd.dislikes is Dictionary and pd.dislikes.has(job_cat):
 				bonus -= 5
 		
 		# --- PHASE 2: Tool Enforcement ---

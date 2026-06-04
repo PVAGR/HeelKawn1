@@ -113,11 +113,8 @@ func _spoilage_check_zone(zone: Stockpile) -> void:
 				"tick": GameManager.tick_count,
 				"zone": {"x": zone.tile.x, "y": zone.tile.y},
 			})
-			if GameManager.verbose_logs() and TickBudgetManager != null:
-				TickBudgetManager.log_throttled(
-					"FoodChain.spoiled",
-					"[FoodChain] %d %s spoiled in stockpile (cellar=%s)" % [spoil_count, Item.name_for(item_type), is_cellar]
-				)
+			if GameManager.verbose_logs():
+				print("[FoodChain] %d %s spoiled in stockpile (cellar=%s)" % [spoil_count, Item.name_for(item_type), is_cellar])
 
 
 ## Check if a fire pit exists near the given tile (for cooking jobs).
@@ -163,11 +160,8 @@ func plant_seeds(tile: Vector2i, seed_type: int = Item.Type.SEEDS) -> bool:
 		"tick": GameManager.tick_count,
 	})
 	
-	if GameManager.verbose_logs() and TickBudgetManager != null:
-		TickBudgetManager.log_throttled(
-			"FoodChain.seeds_planted",
-			"[FoodChain] Seeds planted @(%d,%d)" % [tile.x, tile.y]
-		)
+	if GameManager.verbose_logs():
+		print("[FoodChain] Seeds planted @(%d,%d)" % [tile.x, tile.y])
 	
 	return true
 
@@ -247,11 +241,8 @@ func _check_famine_conditions() -> void:
 			"tick": GameManager.tick_count,
 		})
 
-		if GameManager.verbose_logs() and TickBudgetManager != null:
-			TickBudgetManager.log_throttled(
-				"FoodChain.famine_warning",
-				"[FoodChain] FAMINE WARNING: only %d food units remaining (region=%d)" % [total_food, region_key]
-			)
+		if GameManager.verbose_logs():
+			print("[FoodChain] FAMINE WARNING: only %d food units remaining (region=%d)" % [total_food, region_key])
 
 
 ## Returns the total food value of all stockpiles (weighted by nutrition).

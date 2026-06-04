@@ -1,7 +1,6 @@
 # WorldEventSeed.gd
 # Lightweight representation of a deterministic event seed
 extends RefCounted
-class_name WorldEventSeedData
 
 var seed_id: String
 var seed_type: String

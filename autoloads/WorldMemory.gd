@@ -12,7 +12,6 @@ const HISTORY_EXPORT_FORMAT: String = "1.0.0"
 ## Keep a long chronology by default; older entries rotate out only after this cap.
 const MAX_EVENTS: int = 50000
 const CONSTITUTION_PATH: String = "res://docs/lore/UNIVERSE_CONSTITUTION.md"
-const WM_TYPES = preload("res://scripts/kernel/WorldMemoryTypes.gd")
 
 enum Kind {
 	PAWN_DEATH = 0,
@@ -65,12 +64,6 @@ const PAWN_DEATH_THROTTLE_TICKS: int = 30  # Same pawn can't die twice within 30
 var _next_event_id: int = 1
 var _constitution_text: String = ""
 var _constitution_loaded: bool = false
-var _history_export_cache_private: String = ""
-var _history_export_cache_public: String = ""
-var _history_export_cache_tick: int = -1
-var _history_export_cache_event_count: int = -1
-var _mutex: Mutex = Mutex.new()
-var _tickrate_registered: bool = false
 
 ## Persistence rules configuration
 const PERSISTENCE_RULES: Dictionary = {
@@ -100,19 +93,13 @@ func _ready() -> void:
 	add_to_group("tickable")
 	if TickManager != null:
 		TickManager.mark_tickable_cache_dirty()
-	_register_worldmemory_tick_batch()
-	_bind_worldmemory_eventbus()
 	_load_constitution_text()
 
 
 func _on_world_tick(tick_number: int) -> void:
 	# WorldMemory is primarily a data store; no per-tick logic required.
 	# This method satisfies the tickable interface for deterministic ordering.
-	if TickRateDecoupler != null and TickRateDecoupler.has_method("should_update"):
-		if TickRateDecoupler.should_update("WorldMemory"):
-			_hourly_worldmemory_batch(tick_number)
-	else:
-		_hourly_worldmemory_batch(tick_number)
+	pass
 
 # ARCHITECT TASK 2: Record a leadership challenge attempt.
 # This is called regardless of outcome.
@@ -309,7 +296,6 @@ func get_resource_at_tile(tile_pos: Vector2i) -> Dictionary:
 
 
 func clear() -> void:
-	_mutex.lock()
 	_events.clear()
 	_first_event_tick_by_type.clear()
 	_event_type_counts.clear()
@@ -317,16 +303,12 @@ func clear() -> void:
 	_pawn_death_last_tick_by_id.clear()
 	_next_event_id = 1
 	_dirty = false
-	_invalidate_history_export_cache()
-	_mutex.unlock()
 
 
 ## Returns whether new historical facts were recorded since last consume; clears the flag.
 func consume_dirty() -> bool:
-	_mutex.lock()
 	var was_dirty: bool = _dirty
 	_dirty = false
-	_mutex.unlock()
 	return was_dirty
 
 
@@ -336,12 +318,10 @@ static func _region_key(tx: int, ty: int) -> int:
 	return (rx & 0xFFFF) | ((ry & 0xFFFF) << 16)
 
 
-func _append(e: Dictionary) -> bool:
+func _append(e: Dictionary) -> void:
 	if not validate_event_against_constitution(e):
-		return false
-	_mutex.lock()
+		return
 	_dirty = true
-	_invalidate_history_export_cache()
 	if _events.size() >= MAX_EVENTS:
 		# O(1) eviction: swap oldest with last, pop back instead of O(n) shift
 		var dropped: Dictionary = _events[0]
@@ -351,11 +331,9 @@ func _append(e: Dictionary) -> bool:
 		_eviction_occurred = true
 	_events.append(e)
 	_on_event_added_to_indexes(e)
-	_mutex.unlock()
 	# Phase 5: Generate grudges from events
 	_on_event_appended(e)
 	event_appended.emit(e)
-	return true
 
 
 func _load_constitution_text() -> void:
@@ -485,20 +463,13 @@ func _recompute_last_pawn_death_tick_for_region(rk: int) -> void:
 ## Generic deterministic event appender for non-core typed events (e.g. player input).
 ## PHASE 4: Added skill-gated probability to reduce event spam
 ## ARCHITECTURE: Also emits through EventBus for decoupled system communication
-func record_event(arg1, arg2 = null, arg3 = null, arg4 = null) -> bool:
-	if arg1 is Dictionary and arg2 == null and arg3 == null and arg4 == null:
-		return _record_event_legacy(arg1 as Dictionary)
-	return _record_fact_event(arg1, arg2, arg3, arg4)
-
-
-func _record_event_legacy(e: Dictionary) -> bool:
+func record_event(e: Dictionary) -> void:
 	# PERFORMANCE: Event noise reduction - skip low-significance events
 	if not _event_passes_significance_threshold(e):
-		return false
+		return
 
 	var payload: Dictionary = _normalize_event_payload(e)
-	if not _append(payload):
-		return false
+	_append(payload)
 
 	# DORMANT WORLD: Unlock DiscoveryGate when HeelKawnians trigger key events
 	_check_discovery_gates(payload)
@@ -507,8 +478,6 @@ func _record_event_legacy(e: Dictionary) -> bool:
 	if EventBus != null:
 		var event_type: String = str(payload.get("type", "unknown"))
 		EventBus.emit(event_type, payload)
-
-	return true
 
 
 ## PHASE 4: Skill-gated event significance filter
@@ -1315,18 +1284,13 @@ func _rebuild_first_event_index() -> void:
 
 
 func event_count() -> int:
-	_mutex.lock()
-	var count: int = _events.size()
-	_mutex.unlock()
-	return count
+	return _events.size()
 
 
 ## Last `count` events in append order (oldest first, newest last). Read-only; for soul-bundle / AI handoff.
 func get_recent_events(count: int) -> Array[Dictionary]:
-	_mutex.lock()
 	var out: Array[Dictionary] = []
 	if count <= 0:
-		_mutex.unlock()
 		return out
 	var n: int = mini(count, _events.size())
 	var start: int = _events.size() - n
@@ -1335,7 +1299,6 @@ func get_recent_events(count: int) -> Array[Dictionary]:
 		if not ev_any is Dictionary:
 			continue
 		out.append((ev_any as Dictionary).duplicate(true))
-	_mutex.unlock()
 	return out
 
 
@@ -1523,8 +1486,6 @@ func get_animal_death_ledger() -> Dictionary:
 
 
 func _provenance_hash_stub(evt: Dictionary) -> String:
-	if evt.has("hash"):
-		return str(evt.get("hash", ""))
 	var payload: String = "%s|%s|%s|%s|%s|%s|%s" % [
 		str(evt.get("t", 0)),
 		str(evt.get("type", "unknown")),
@@ -1543,355 +1504,48 @@ func _export_subject_redacted(subject: Variant, anonymize: bool) -> String:
 	if not anonymize:
 		return s
 	var st: String = s.strip_edges()
-	if st.is_empty():
-		return s
 	if st.is_valid_int():
 		var vi: int = int(st)
 		return "anon_%08x" % (abs(vi * 486187739) & 0xFFFFFFFF)
-	return "anon_%s" % st.sha256_text().substr(0, 12)
+	return s
 
 
 ## Read-only deterministic export snapshot (no file IO).
-## Pass [code]public_only[/code] for pvabazaar-style sharing (subject ids redacted in SUB column).
-func get_history_export_string(public_only: bool = false) -> String:
-	var snapshot: Array[Dictionary] = _events_snapshot()
-	var current_tick: int = GameManager.tick_count if GameManager != null else 0
-	var current_event_count: int = snapshot.size()
-	if _history_export_cache_tick == current_tick and _history_export_cache_event_count == current_event_count:
-		return _history_export_cache_public if public_only else _history_export_cache_private
+## Pass [code]anonymize_subjects[/code] for pvabazaar-style sharing (numeric ids hashed in SUB column).
+func get_history_export_string(anonymize_subjects: bool = false) -> String:
 	var out: PackedStringArray = []
 	out.append("HEELKAWN_HISTORY_EXPORT v=%s schema=%d" % [HISTORY_EXPORT_FORMAT, SCHEMA])
-	out.append("EXPORT_MODE: %s" % ("public_redacted" if public_only else "private_dev"))
+	out.append(
+		"EXPORT_MODE: %s" % ("public_redacted" if anonymize_subjects else "private_dev")
+	)
 	out.append("TICKS_PER_SIM_YEAR: %d" % SimTime.TICKS_PER_SIM_YEAR)
-	out.append("TICK_RANGE: 0 to %d" % current_tick)
-	out.append("EVENT_COUNT: %d" % current_event_count)
+	out.append("TICK_RANGE: 0 to %d" % GameManager.tick_count)
+	out.append("EVENT_COUNT: %d" % _events.size())
 	out.append("COLUMNS: tick | type | subject | cause | impact | provenance_hash")
 	out.append("==============================================================")
-	for evt in snapshot:
-		var tick: int = int(evt.get("t", evt.get("tick", 0)))
-		var type_name: String = _event_name_for_export(evt)
-		var subject: String = _export_subject_redacted(_subject_id_for_export(evt), public_only)
-		var cause_text: String = _stable_export_value(evt.get("cause", evt.get("action", evt.get("c", evt.get("reason", "n/a")))))
-		var impact_text: String = str(evt.get("impact_score", evt.get("impact", evt.get("amount", evt.get("total_xp", evt.get("executed", "n/a"))))))
+	for evt in _events:
+		var tick: int = int(evt.get("t", 0))
+		var type_name: String = str(evt.get("type", "unknown"))
+		if type_name == "unknown":
+			var k: int = int(evt.get("k", -1))
+			if k == int(Kind.PAWN_DEATH):
+				type_name = "pawn_death"
+			elif k == int(Kind.ANIMAL_DEATH):
+				type_name = "animal_death"
+			elif k == int(Kind.SOCIAL_FRAGMENT):
+				type_name = "social_fragment"
+			elif k == int(Kind.SOCIAL_SCHISM):
+				type_name = "social_schism"
+		var subject: String = _export_subject_redacted(
+			evt.get("pawn_id", evt.get("pid", evt.get("sp", "n/a"))),
+			anonymize_subjects
+		)
+		var cause: String = str(evt.get("cause", evt.get("action", evt.get("c", evt.get("reason", "n/a")))))
+		var impact: String = str(evt.get("impact", evt.get("amount", evt.get("total_xp", evt.get("executed", "n/a")))))
 		out.append("[T:%d] %s | SUB:%s | CAUSE:%s | IMP:%s | PROV:%s" % [
-			tick, type_name, subject, cause_text, impact_text, _provenance_hash_stub(evt),
+			tick, type_name, subject, cause, impact, _provenance_hash_stub(evt),
 		])
-	var export_string: String = "\n".join(out)
-	_history_export_cache_tick = current_tick
-	_history_export_cache_event_count = current_event_count
-	if public_only:
-		_history_export_cache_public = export_string
-	else:
-		_history_export_cache_private = export_string
-	return export_string
-
-
-func _invalidate_history_export_cache() -> void:
-	_history_export_cache_tick = -1
-	_history_export_cache_event_count = -1
-	_history_export_cache_private = ""
-	_history_export_cache_public = ""
-
-
-func _register_worldmemory_tick_batch() -> void:
-	if _tickrate_registered:
-		return
-	if TickRateDecoupler != null and TickRateDecoupler.has_method("register_system"):
-		TickRateDecoupler.register_system("WorldMemory", 60)
-		_tickrate_registered = true
-
-
-func _bind_worldmemory_eventbus() -> void:
-	if EventBus == null or not EventBus.has_method("subscribe"):
-		return
-	EventBus.subscribe(EventBus.EVENT_PAWN_DIED, self, "_on_eventbus_pawn_died")
-	EventBus.subscribe(EventBus.EVENT_SETTLEMENT_FOUNDED, self, "_on_eventbus_settlement_founded")
-	EventBus.subscribe("settlement_created", self, "_on_eventbus_settlement_founded")
-	EventBus.subscribe(EventBus.EVENT_RESOURCE_DEPLETED, self, "_on_eventbus_resource_depleted")
-
-
-func _hourly_worldmemory_batch(tick_number: int) -> void:
-	# The hourly pass stays light on purpose. The live log is append-only, so
-	# this hook only keeps derived caches and future batch work deterministic.
-	if tick_number < 0:
-		return
-	if _eviction_occurred:
-		_eviction_occurred = false
-		_invalidate_history_export_cache()
-
-
-func _events_snapshot() -> Array[Dictionary]:
-	_mutex.lock()
-	var snapshot: Array[Dictionary] = []
-	for evt_any in _events:
-		if evt_any is Dictionary:
-			snapshot.append((evt_any as Dictionary).duplicate(true))
-	_mutex.unlock()
-	return snapshot
-
-
-func _record_fact_event(event_type: Variant, subject_id: Variant, location: Variant, cause: Variant = null) -> bool:
-	var event_name: String = _coerce_fact_event_name(event_type)
-	var event_enum: int = _coerce_fact_event_enum(event_type, event_name)
-	var tick: int = GameManager.tick_count if GameManager != null else 0
-	var subject: String = str(subject_id).strip_edges()
-	var tile: Vector2i = _coerce_fact_location(location)
-	var cause_dict: Dictionary = _coerce_fact_cause(cause)
-	var repeat_count: int = _repetition_count_for_fact(event_name, subject, tile, cause_dict, tick)
-	var impact_score: float = _compute_fact_impact_score(event_name, repeat_count, cause_dict)
-	var record: Dictionary = {
-		"s": SCHEMA,
-		"eid": _next_event_id,
-		"t": tick,
-		"tick": tick,
-		"event_type": event_enum,
-		"event_type_name": event_name,
-		"type": event_name,
-		"subject_id": subject,
-		"location": tile,
-		"x": tile.x,
-		"y": tile.y,
-		"r": _region_key(tile.x, tile.y),
-		"cause": cause_dict,
-		"impact_score": impact_score,
-		"impact": impact_score,
-	}
-	record["hash"] = WM_TYPES.compute_record_hash(tick, event_enum, subject, tile, cause_dict, impact_score)
-	return _append(record)
-
-
-func _coerce_fact_event_name(event_type: Variant) -> String:
-	if event_type is String:
-		var type_name: String = str(event_type).strip_edges().to_lower()
-		if type_name.is_empty():
-			return WM_TYPES.event_type_name(WM_TYPES.EventType.UNKNOWN)
-		return type_name
-	if event_type is int:
-		return WM_TYPES.event_type_name(int(event_type))
-	if event_type is float:
-		return WM_TYPES.event_type_name(int(event_type))
-	return WM_TYPES.event_type_name(WM_TYPES.EventType.UNKNOWN)
-
-
-func _coerce_fact_event_enum(event_type: Variant, event_name: String) -> int:
-	if event_type is int:
-		return int(event_type)
-	return WM_TYPES.event_type_from_name(event_name)
-
-
-func _coerce_fact_location(location: Variant) -> Vector2i:
-	if location is Vector2i:
-		return location as Vector2i
-	if location is Dictionary:
-		var loc_dict: Dictionary = location as Dictionary
-		return Vector2i(int(loc_dict.get("x", 0)), int(loc_dict.get("y", 0)))
-	if location is Vector3:
-		var loc_vec3: Vector3 = location as Vector3
-		return Vector2i(int(loc_vec3.x), int(loc_vec3.y))
-	return Vector2i.ZERO
-
-
-func _coerce_fact_cause(cause: Variant) -> Dictionary:
-	if cause == null:
-		return {}
-	if cause is Dictionary:
-		return (cause as Dictionary).duplicate(true)
-	if cause is Array:
-		return {"values": (cause as Array).duplicate(true)}
-	return {"value": cause}
-
-
-func _repetition_count_for_fact(event_name: String, subject_id: String, location: Vector2i, cause_dict: Dictionary, tick: int) -> int:
-	var cause_signature: String = WM_TYPES.stable_value_string(cause_dict)
-	var count: int = 0
-	for evt in _events_snapshot():
-		if _fact_record_signature(evt) != _fact_signature(event_name, subject_id, location, cause_signature):
-			continue
-		var evt_tick: int = int(evt.get("t", evt.get("tick", 0)))
-		if tick - evt_tick <= 500:
-			count += 1
-	return count + 1
-
-
-func _compute_fact_impact_score(event_name: String, repetition_count: int, cause_dict: Dictionary) -> float:
-	var base: float = _impact_base_for_event(event_name, cause_dict)
-	var repetition_multiplier: float = 1.0 + min(1.5, float(maxi(0, repetition_count - 1)) * 0.25)
-	return clampf(base * repetition_multiplier, 0.0, 10.0)
-
-
-func _impact_base_for_event(event_name: String, cause_dict: Dictionary) -> float:
-	match event_name:
-		"pawn_died", "pawn_death":
-			return 8.0
-		"settlement_created", "settlement_founded":
-			return 7.5
-		"resource_depleted", "resource_exhausted":
-			return 5.5 if cause_dict.is_empty() else 6.0
-		"teaching_event":
-			return 4.5
-		"war_battle_spawned", "conflict_event":
-			return 7.0
-		_:
-			return 2.0
-
-
-func _fact_signature(event_name: String, subject_id: String, location: Vector2i, cause_signature: String) -> String:
-	return "%s|%s|%d,%d|%s" % [event_name, subject_id, location.x, location.y, cause_signature]
-
-
-func _fact_record_signature(evt: Dictionary) -> String:
-	return _fact_signature(
-		_event_name_for_export(evt),
-		_subject_id_for_export(evt),
-		_coerce_fact_location(evt.get("location", Vector2i(int(evt.get("x", 0)), int(evt.get("y", 0))))),
-		WM_TYPES.stable_value_string(evt.get("cause", {}))
-	)
-
-
-func _event_name_for_export(evt: Dictionary) -> String:
-	var type_name: String = str(evt.get("event_type_name", evt.get("type", "unknown"))).strip_edges().to_lower()
-	if not type_name.is_empty() and type_name != "unknown":
-		return type_name
-	var event_enum: int = int(evt.get("event_type", evt.get("k", -1)))
-	if event_enum >= 0:
-		return WM_TYPES.event_type_name(event_enum)
-	return str(evt.get("type", "unknown")).strip_edges().to_lower()
-
-
-func _subject_id_for_export(evt: Dictionary) -> String:
-	if evt.has("subject_id"):
-		return str(evt.get("subject_id", ""))
-	if evt.has("pawn_id"):
-		return str(evt.get("pawn_id", ""))
-	if evt.has("pid"):
-		return str(evt.get("pid", ""))
-	if evt.has("sid"):
-		return str(evt.get("sid", ""))
-	return str(evt.get("subject", evt.get("sp", evt.get("n", ""))))
-
-
-func _stable_export_value(value: Variant) -> String:
-	return WM_TYPES.stable_value_string(value)
-
-
-func _on_eventbus_pawn_died(payload: Dictionary) -> void:
-	var pawn_id: String = str(payload.get("pawn_id", payload.get("pid", "")))
-	var tile: Vector2i = _coerce_fact_location(payload.get("tile", payload.get("location", Vector2i(int(payload.get("x", 0)), int(payload.get("y", 0))))))
-	var cause: Dictionary = {
-		"killer_id": payload.get("killer_id", payload.get("attacker_id", "")),
-		"killer_name": payload.get("killer_name", payload.get("attacker", "")),
-		"source": "EventBus.pawn_died",
-	}
-	record_event(WM_TYPES.EventType.PAWN_DIED, pawn_id, tile, cause)
-
-
-func _on_eventbus_settlement_founded(payload: Dictionary) -> void:
-	var settlement_id: String = str(payload.get("settlement_id", payload.get("sid", payload.get("name", ""))))
-	var tile: Vector2i = _coerce_fact_location(payload.get("tile", payload.get("location", Vector2i(int(payload.get("x", 0)), int(payload.get("y", 0))))))
-	var cause: Dictionary = {
-		"culture_name": payload.get("culture_name", payload.get("culture", "")),
-		"source": "EventBus.settlement_founded",
-	}
-	record_event(WM_TYPES.EventType.SETTLEMENT_FOUNDED, settlement_id, tile, cause)
-
-
-func _on_eventbus_resource_depleted(payload: Dictionary) -> void:
-	var subject: String = str(payload.get("resource_type", payload.get("resource", "resource")))
-	var tile: Vector2i = _coerce_fact_location(payload.get("tile", payload.get("location", Vector2i(int(payload.get("x", 0)), int(payload.get("y", 0))))))
-	var cause: Dictionary = {
-		"threshold": payload.get("threshold", payload.get("amount", 0)),
-		"source": "EventBus.resource_depleted",
-	}
-	record_event(WM_TYPES.EventType.RESOURCE_DEPLETED, subject, tile, cause)
-
-
-func get_events_since(tick_start: int, tick_end: int, event_type: Variant = null) -> Array[Dictionary]:
-	var snapshot: Array[Dictionary] = _events_snapshot()
-	var filtered: Array[Dictionary] = []
-	for evt in snapshot:
-		var tick: int = int(evt.get("t", evt.get("tick", 0)))
-		if tick < tick_start or tick > tick_end:
-			continue
-		if event_type != null and not _event_matches_filter(evt, event_type):
-			continue
-		filtered.append(evt)
-	filtered.sort_custom(Callable(self, "_compare_event_records"))
-	return filtered
-
-
-func compute_meaning(zone: Vector2i) -> Dictionary:
-	var region_key: int = _region_key(zone.x, zone.y)
-	var relevant: Array[Dictionary] = []
-	for evt in _events_snapshot():
-		var evt_location: Vector2i = _coerce_fact_location(evt.get("location", Vector2i(int(evt.get("x", -1)), int(evt.get("y", -1)))))
-		if evt_location == zone or int(evt.get("r", -1)) == region_key:
-			relevant.append(evt)
-	if relevant.size() < 3:
-		return {}
-	relevant.sort_custom(Callable(self, "_compare_event_records"))
-	var counts: Dictionary = {}
-	var signature_ticks: Dictionary = {}
-	var impact_sum: float = 0.0
-	for evt in relevant:
-		var evt_name: String = _event_name_for_export(evt)
-		counts[evt_name] = int(counts.get(evt_name, 0)) + 1
-		impact_sum += float(evt.get("impact_score", evt.get("impact", 0.0)))
-		var signature: String = _fact_record_signature(evt)
-		if not signature_ticks.has(signature):
-			signature_ticks[signature] = []
-		(signature_ticks[signature] as Array).append(int(evt.get("t", evt.get("tick", 0))))
-	var dominant_name: String = ""
-	var dominant_count: int = 0
-	for evt_name in counts.keys():
-		var count: int = int(counts[evt_name])
-		if count > dominant_count or (count == dominant_count and str(evt_name) < dominant_name):
-			dominant_name = str(evt_name)
-			dominant_count = count
-	var scarred: bool = false
-	var scar_threshold: int = 0
-	for signature in signature_ticks.keys():
-		var ticks: Array = signature_ticks[signature]
-		if ticks.size() < 3:
-			continue
-		var min_tick: int = int(ticks[0])
-		var max_tick: int = int(ticks[0])
-		for tick_variant in ticks:
-			var tick_int: int = int(tick_variant)
-			min_tick = mini(min_tick, tick_int)
-			max_tick = maxi(max_tick, tick_int)
-		if max_tick - min_tick <= 500:
-			scarred = true
-			scar_threshold = maxi(scar_threshold, int(ticks.size()) - 2)
-	var total_count: int = relevant.size()
-	return {
-		"zone": zone,
-		"zone_key": region_key,
-		"event_count": total_count,
-		"dominant_event_type": dominant_name,
-		"dominant_event_count": dominant_count,
-		"scar": scarred,
-		"scar_level": scar_threshold,
-		"impact_sum": impact_sum,
-		"summary": "scarred" if scarred else "accumulated",
-	}
-
-
-func _event_matches_filter(evt: Dictionary, event_type: Variant) -> bool:
-	if event_type is int:
-		var evt_enum: int = int(evt.get("event_type", evt.get("k", -1)))
-		return evt_enum == int(event_type)
-	var filter_name: String = str(event_type).strip_edges().to_lower()
-	if filter_name.is_empty():
-		return true
-	return _event_name_for_export(evt) == filter_name
-
-
-func _compare_event_records(a: Dictionary, b: Dictionary) -> bool:
-	var at: int = int(a.get("t", a.get("tick", 0)))
-	var bt: int = int(b.get("t", b.get("tick", 0)))
-	if at == bt:
-		return int(a.get("eid", 0)) < int(b.get("eid", 0))
-	return at < bt
+	return "\n".join(out)
 
 
 ## Impact buckets for [param zone_id] (center region id as decimal string). Uses [SettlementMemory] region packs when present.

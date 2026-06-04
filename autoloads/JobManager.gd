@@ -509,6 +509,24 @@ func abandon(job: Job, reason: String = "") -> void:
 		_abandon_reasons[reason] = int(_abandon_reasons.get(reason, 0)) + 1
 
 
+## Mark a job as completed by a pawn. Removes it from the active queues and
+## fires `job_completed` so downstream systems (WorldAI, settlement stats) can
+## react. Idempotent: calling complete() on an already-retired job is a no-op.
+func complete(job: Job) -> void:
+	if job == null or job.state == Job.State.CANCELLED or job.state == Job.State.COMPLETED:
+		return
+	_open.erase(job)
+	_claimed.erase(job)
+	_jobs_by_tile.erase(job.tile)
+	_job_context_by_id.erase(job.id)
+	_notify_path_reservation_released(job)
+	job.state = Job.State.COMPLETED
+	job.assigned_pawn = null
+	_bump_jobs_data_generation()
+	_notify_world_ai_job_completion(job)
+	job_completed.emit(job)
+
+
 ## Abort a job. Useful if the target becomes invalid, the pawn dies, or the world
 ## is regenerated. Idempotent: calling cancel() on an already-retired job is a no-op.
 func cancel(job: Job, reason: String = "") -> void:

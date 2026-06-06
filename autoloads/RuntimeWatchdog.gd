@@ -14,11 +14,7 @@ const CRITICAL_AUTOLOADS: PackedStringArray = [
 	"GameManager",
 	"WorldMemory",
 	"SettlementMemory",
-	"FactionSystem",
-	"FactionManager",
 	"EconomyManager",
-	"CurrencySystem",
-	"MultiplayerSystem",
 	"EventBus",
 	"CommandAPI",
 	"AIAgentManager",
@@ -29,11 +25,7 @@ const AUTOLOAD_FALLBACK_PATHS: Dictionary = {
 	"GameManager": "res://autoloads/GameManager.gd",
 	"WorldMemory": "res://autoloads/WorldMemory.gd",
 	"SettlementMemory": "res://autoloads/SettlementMemory.gd",
-	"FactionSystem": "res://autoloads/FactionSystem.gd",
-	"FactionManager": "res://autoloads/FactionManager.gd",
 	"EconomyManager": "res://autoloads/EconomyManager.gd",
-	"CurrencySystem": "res://autoloads/CurrencySystem.gd",
-	"MultiplayerSystem": "res://autoloads/MultiplayerSystem.gd",
 	"EventBus": "res://autoloads/EventBus.gd",
 	"CommandAPI": "res://autoloads/CommandAPI.gd",
 	"AIAgentManager": "res://autoloads/AIAgentManager.gd",
@@ -53,7 +45,7 @@ func _ready() -> void:
 	_check_timer.autostart = true
 	add_child(_check_timer)
 	_check_timer.timeout.connect(_on_watchdog_timeout)
-	_on_watchdog_timeout()
+	call_deferred("_on_watchdog_timeout")
 
 
 func _on_watchdog_timeout() -> void:
@@ -90,7 +82,7 @@ func _try_recover_autoload(name: String) -> void:
 		push_warning("[RuntimeWatchdog] Failed to instantiate fallback autoload '%s'." % name)
 		return
 	node.name = name
-	get_tree().root.add_child(node)
+	get_tree().root.add_child.call_deferred(node)
 	push_warning("[RuntimeWatchdog] Recovered missing autoload '%s' (attempt %d)." % [name, int(_recovery_attempts.get(name, 0))])
 
 

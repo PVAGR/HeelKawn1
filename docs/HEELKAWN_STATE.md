@@ -4,12 +4,56 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** June 3, 2026
+**Latest Verification:** `docs/STATE_VERIFICATION_2026-06-05.md`
+**Last Updated:** June 5, 2026
 **Current Phase:** Phase 5A integration — TeachingSystem + ResearchSystem + TechnologyEras production rewrites, stub implementations, Deep Social Dynamics, Knowledge Ecology, Emergent Narrative, Player Incarnation, Metaphysics
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
 **Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
-**Latest verification snapshot:** [STATE_VERIFICATION_2026-06-03.md](STATE_VERIFICATION_2026-06-03.md)
+**Latest verification snapshot:** [STATE_VERIFICATION_2026-06-05.md](STATE_VERIFICATION_2026-06-05.md)
+
+---
+
+## June 5, 2026 — PawnAccess Typed-Array Return Type Fix
+
+**Scope:** Unblock `SettlementMemory._living_pawns()` crash at line 2197 by tightening the `PawnAccess` bridge return types.
+
+**Files changed:** `autoloads/PawnAccess.gd` (L26, L36, L46).
+
+**Bug:** `PawnAccess.find_pawns() -> Array` (untyped) assigned to `Array[HeelKawnian]` variable. Godot 4 typed-array covariance error at `SettlementMemory.gd:2197`.
+
+**Fix:** Tightened all 3 PawnAccess return types to match actual data:
+- `find_pawns() -> Array[HeelKawnian]` (was untyped `Array`)
+- `find_alive_pawns() -> Array[HeelKawnian]` (was untyped `Array`)
+- `find_pawn_by_id() -> HeelKawnian` (was `Node`)
+
+**Verification:**
+- `tools/ai/verify-compile.ps1` — PASS (no new errors).
+- `tools/test_pawn_mood_ui_smoke.gd` — `[PMUI_SMOKE] PASS`.
+- `tools/sim_boot_smoke.gd` — reaches tick 10 (exercises `_living_pawns()` live).
+- `tools/sim_settlement_public_state_smoke.gd` — `[SETTLEMENT_STRUCTURE_SMOKE_PASS]`.
+- Full verification: `docs/STATE_VERIFICATION_2026-06-05.md`.
+
+**Unblocked:** The `set_pawn(pawn_id)` scene-tree path was previously blocked by this bug but `_living_pawns()` now works. A dedicated UI-path smoke would confirm the full chain at runtime.
+
+---
+
+## June 5, 2026 (session 2) — Cache Rebuild + Autoload class_name Fixes
+
+**Scope:** Unblock headless boot after `.godot/` cache wipe; fix `AgeMemory` + `HeelKawnianIdentity` class_name issues that prevented autoload compilation in headless mode.
+
+**Files changed:**
+- `autoloads/AgeMemory.gd` — removed `class_name AgeMemory` (autoload conflict)
+- `autoloads/HeelKawnianIdentity.gd` — added `class_name HeelKawnianIdentity` (type was used but never declared)
+- `tools/test_set_pawn_ui_smoke.gd` — fixed `_enter_tree()` → `_initialize()`; fixed pawn ID access via `data.id`; added null-safety to all `Object.get()` calls
+
+**Verification:**
+- `.godot/global_script_class_cache.cfg` regenerated via `--headless --import`
+- All 4 runtime smokes PASS (boot, set_pawn, settlement, worldmeaning)
+- Year1 growth smoke completed (no failures)
+- Quality gate static checks 1-3 PASS
+
+**Remaining:** `sim_performance_smoothness_smoke.gd` requires desktop environment; `PawnMoodUI.gd:283` headless theme access error (pre-existing cosmetic).
 
 ---
 

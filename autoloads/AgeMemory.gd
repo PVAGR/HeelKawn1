@@ -1,5 +1,4 @@
 extends Node
-class_name AgeMemory
 ## v1: Derived, not saved — one slow epochal layer: Age advances on sustained pressure, not a reset.
 ## Read-only: [WorldMemory], [SettlementMemory], [TradeMemory], [MythMemory], [GameManager]. No RNG; no per-tick work outside [recompute] cadence.
 

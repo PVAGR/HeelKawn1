@@ -23,7 +23,7 @@ func _get_spawner() -> Node:
 
 
 ## Return all pawns (including dead ones that haven't been pruned yet).
-func find_pawns() -> Array:
+func find_pawns() -> Array[HeelKawnian]:
 	var sp: Node = _get_spawner()
 	if sp == null:
 		return []
@@ -33,7 +33,7 @@ func find_pawns() -> Array:
 
 
 ## Return only living pawns.
-func find_alive_pawns() -> Array:
+func find_alive_pawns() -> Array[HeelKawnian]:
 	var sp: Node = _get_spawner()
 	if sp == null:
 		return []
@@ -43,7 +43,7 @@ func find_alive_pawns() -> Array:
 
 
 ## Return pawn by ID, or null if not found.
-func find_pawn_by_id(pawn_id: int) -> Node:
+func find_pawn_by_id(pawn_id: int) -> HeelKawnian:
 	var sp: Node = _get_spawner()
 	if sp == null:
 		return null

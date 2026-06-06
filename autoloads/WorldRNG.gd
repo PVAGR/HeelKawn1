@@ -25,6 +25,10 @@ func rng_for(stream_name: StringName, salt: int = 0) -> RandomNumberGenerator:
 	return r
 
 
+func unit(stream_name: StringName, salt: int = 0) -> float:
+	return unit_for(stream_name, salt)
+
+
 func unit_for(stream_name: StringName, salt: int = 0) -> float:
 	return float(stream_seed(stream_name, salt) % 1000000) / 1000000.0
 

@@ -1,4 +1,5 @@
 extends Resource
+class_name HeelKawnianIdentity
 
 var id: String = ""
 var origin_seed: int = 0

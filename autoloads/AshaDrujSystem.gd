@@ -25,9 +25,11 @@ const ASHA_ACTION_DECAY: float = 0.97
 const DRUJ_ACTION_DECAY: float = 0.97
 const SETTLEMENT_FAVOR_CAP: float = 100.0
 const VEIL_WEAKEN_THRESHOLD: float = 35.0
+const WORLD_MEMORY_INGEST_INTERVAL: int = 120 # Process WorldMemory events every 120 ticks
 
 var _asha_score: float = 50.0
 var _druj_score: float = 50.0
+var _last_world_memory_ingest_tick: int = -999999
 var _asha_drift_rate: float = 0.0
 var _druj_drift_rate: float = 0.0
 var _last_drift_tick: int = -999999
@@ -44,10 +46,15 @@ var _prophecy_cooldown_ticks: int = 12000
 var _balance_restored_cooldown_tick: int = -999999
 var _balance_restored_cooldown_ticks: int = 10000
 
+var _last_processed_world_event_index: int = 0
+@onready var _world_memory = get_node_or_null("/root/WorldMemory")
+
 var _pawn_alignments: Dictionary = {}
 var _settlement_favor: Dictionary = {}
 var _history: Array[Dictionary] = []
 var _active_prophecies: Array[Dictionary] = []
+var _last_shift_events: Array[Dictionary] = [] # Stores recent events that caused Asha/Druj shifts
+const MAX_SHIFT_EVENTS_TO_TRACK: int = 5
 var _event_bus_connected: bool = false
 
 signal balance_changed(asha: float, druj: float)
@@ -61,6 +68,10 @@ func _ready() -> void:
 	if GameManager != null:
 		GameManager.game_tick.connect(_on_game_tick)
 	_connect_event_bus()
+
+	# Initialize _last_processed_world_event_index to prevent reprocessing old events on boot/load
+	if _world_memory != null:
+		_last_processed_world_event_index = _world_memory.get_events().size()
 
 func _connect_event_bus() -> void:
 	if _event_bus_connected:
@@ -96,6 +107,7 @@ func _exit_tree() -> void:
 	_disconnect_event_bus()
 
 func _on_game_tick(tick: int) -> void:
+	_process_world_memory_events(tick)
 	_apply_natural_drift(tick)
 	_sample_history(tick)
 	_check_excess_thresholds(tick)
@@ -150,6 +162,21 @@ func _decay_action_momentum(tick: int) -> void:
 		_asha_action_momentum = 0.0
 	if _druj_action_momentum < 0.01:
 		_druj_action_momentum = 0.0
+
+func _process_world_memory_events(tick: int) -> void:
+	if _world_memory == null:
+		return
+	var events: Array[Dictionary] = _world_memory.get_events()
+	var event_count: int = events.size()
+
+	if _last_processed_world_event_index >= event_count:
+		return
+
+	for i in range(_last_processed_world_event_index, event_count):
+		var event: Dictionary = events[i]
+		_classify_event_for_asha_druj(event, tick)
+
+	_last_processed_world_event_index = event_count
 
 func _sample_history(tick: int) -> void:
 	if tick - _last_history_tick < HISTORY_SAMPLE_INTERVAL:
@@ -572,14 +599,14 @@ func _record_pawn_action(pawn_id: int, alignment: String, significance: float) -
 		}
 	var entry: Dictionary = _pawn_alignments[pawn_id]
 	if alignment == "asha":
-		entry.asha_actions += 1
-		entry.asha_affinity = clampf(entry.asha_affinity + significance * 0.1, -10.0, 10.0)
-		entry.druj_affinity = clampf(entry.druj_affinity - significance * 0.05, -10.0, 10.0)
+		entry["asha_actions"] += 1
+		entry["asha_affinity"] = clampf(entry.get("asha_affinity", 0.0) + significance * 0.1, -10.0, 10.0)
+		entry["druj_affinity"] = clampf(entry.get("druj_affinity", 0.0) - significance * 0.05, -10.0, 10.0)
 	else:
-		entry.druj_actions += 1
-		entry.druj_affinity = clampf(entry.druj_affinity + significance * 0.1, -10.0, 10.0)
-		entry.asha_affinity = clampf(entry.asha_affinity - significance * 0.05, -10.0, 10.0)
-	entry.last_action_tick = GameManager.tick_count if GameManager != null else 0
+		entry["druj_actions"] += 1
+		entry["druj_affinity"] = clampf(entry.get("druj_affinity", 0.0) + significance * 0.1, -10.0, 10.0)
+		entry["asha_affinity"] = clampf(entry.get("asha_affinity", 0.0) - significance * 0.05, -10.0, 10.0)
+	entry["last_action_tick"] = GameManager.tick_count if GameManager != null else 0
 
 func _apply_pawn_alignment_decay(tick: int) -> void:
 	if tick % 5000 != 0:
@@ -588,9 +615,9 @@ func _apply_pawn_alignment_decay(tick: int) -> void:
 		var entry: Dictionary = _pawn_alignments[pawn_id]
 		var ticks_since: int = tick - entry.get("last_action_tick", tick)
 		if ticks_since > 10000:
-			entry.asha_affinity *= 0.95
-			entry.druj_affinity *= 0.95
-			if absf(entry.asha_affinity) < 0.01 and absf(entry.druj_affinity) < 0.01:
+			entry["asha_affinity"] *= 0.95
+			entry["druj_affinity"] *= 0.95
+			if absf(entry.get("asha_affinity", 0.0)) < 0.01 and absf(entry.get("druj_affinity", 0.0)) < 0.01:
 				_pawn_alignments.erase(pawn_id)
 
 func get_pawn_alignment(pawn_id: int) -> Dictionary:
@@ -604,12 +631,12 @@ func get_pawn_alignment(pawn_id: int) -> Dictionary:
 	elif diff < -3.0:
 		alignment = "druj"
 	return {
-		"asha_affinity": entry.asha_affinity,
-		"druj_affinity": entry.druj_affinity,
+		"asha_affinity": entry.get("asha_affinity", 0.0),
+		"druj_affinity": entry.get("druj_affinity", 0.0),
 		"alignment": alignment,
-		"asha_actions": entry.asha_actions,
-		"druj_actions": entry.druj_actions,
-		"last_action_tick": entry.last_action_tick,
+		"asha_actions": entry.get("asha_actions", 0),
+		"druj_actions": entry.get("druj_actions", 0),
+		"last_action_tick": entry.get("last_action_tick", 0),
 	}
 
 func get_all_pawn_alignments() -> Array[Dictionary]:
@@ -624,8 +651,8 @@ func apply_settlement_blessing(settlement_id: int, tick: int) -> void:
 	if _asha_score > EXCESS_THRESHOLD:
 		var favor: float = _asha_score - EXCESS_THRESHOLD
 		var entry: Dictionary = _settlement_favor[settlement_id]
-		entry.asha_favor = clampf(entry.asha_favor + favor * 0.05, 0.0, SETTLEMENT_FAVOR_CAP)
-		entry.druj_favor = clampf(entry.druj_favor - favor * 0.02, 0.0, SETTLEMENT_FAVOR_CAP)
+		entry["asha_favor"] = clampf(entry.get("asha_favor", 0.0) + favor * 0.05, 0.0, SETTLEMENT_FAVOR_CAP)
+		entry["druj_favor"] = clampf(entry.get("druj_favor", 0.0) - favor * 0.02, 0.0, SETTLEMENT_FAVOR_CAP)
 		var eb := get_node_or_null("/root/EventBus")
 		if eb != null and eb.has_method("emit"):
 			eb.emit("settlement_blessed", {"settlement_id": settlement_id, "asha": _asha_score, "tick": tick})
@@ -637,8 +664,8 @@ func apply_settlement_curse(settlement_id: int, tick: int) -> void:
 	if _druj_score > EXCESS_THRESHOLD:
 		var favor: float = _druj_score - EXCESS_THRESHOLD
 		var entry: Dictionary = _settlement_favor[settlement_id]
-		entry.druj_favor = clampf(entry.druj_favor + favor * 0.05, 0.0, SETTLEMENT_FAVOR_CAP)
-		entry.asha_favor = clampf(entry.asha_favor - favor * 0.02, 0.0, SETTLEMENT_FAVOR_CAP)
+		entry["druj_favor"] = clampf(entry.get("druj_favor", 0.0) + favor * 0.05, 0.0, SETTLEMENT_FAVOR_CAP)
+		entry["asha_favor"] = clampf(entry.get("asha_favor", 0.0) - favor * 0.02, 0.0, SETTLEMENT_FAVOR_CAP)
 		var eb := get_node_or_null("/root/EventBus")
 		if eb != null and eb.has_method("emit"):
 			eb.emit("settlement_cursed", {"settlement_id": settlement_id, "druj": _druj_score, "tick": tick})
@@ -654,8 +681,8 @@ func get_settlement_favor(settlement_id: int) -> Dictionary:
 	elif entry.druj_favor > entry.asha_favor + 10.0:
 		bias = "druj"
 	return {
-		"asha_favor": entry.asha_favor,
-		"druj_favor": entry.druj_favor,
+		"asha_favor": entry.get("asha_favor", 0.0),
+		"druj_favor": entry.get("druj_favor", 0.0),
 		"net_bias": bias,
 	}
 
@@ -664,9 +691,9 @@ func _apply_settlement_favor_decay(tick: int) -> void:
 		return
 	for sid in _settlement_favor:
 		var entry: Dictionary = _settlement_favor[sid]
-		entry.asha_favor = maxf(0.0, entry.asha_favor - 0.1)
-		entry.druj_favor = maxf(0.0, entry.druj_favor - 0.1)
-		if entry.asha_favor <= 0.0 and entry.druj_favor <= 0.0:
+		entry["asha_favor"] = maxf(0.0, entry.get("asha_favor", 0.0) - 0.1)
+		entry["druj_favor"] = maxf(0.0, entry.get("druj_favor", 0.0) - 0.1)
+		if entry.get("asha_favor", 0.0) <= 0.0 and entry.get("druj_favor", 0.0) <= 0.0:
 			_settlement_favor.erase(sid)
 
 func _record_world_event(event_type: String, data: Dictionary, tick: int) -> void:
@@ -679,6 +706,138 @@ func _record_world_event(event_type: String, data: Dictionary, tick: int) -> voi
 	event_data["asha"] = _asha_score
 	event_data["druj"] = _druj_score
 	wm.record_event(event_data)
+
+func _get_effective_event_type(event: Dictionary) -> String:
+	var event_type: String = str(event.get("type", "")).to_lower()
+	if event_type == "world_event":
+		# For "world_event" types, the actual event is in the "event" key
+		return str(event.get("event", "")).to_lower()
+	elif event.has("kind"):
+		# For events using WorldMemory.Kind enum
+		# This will return the integer representation of the enum. 
+		# We might need a WorldMemory.kind_to_string() helper in the future.
+		return str(event.get("kind", "")).to_lower()
+	return event_type
+
+func _classify_event_for_asha_druj(event: Dictionary, current_tick: int) -> void:
+	var event_type: String = _get_effective_event_type(event)
+	var reason: String = ""
+	var asha_shift: float = 0.0
+	var druj_shift: float = 0.0
+	var significance: float = clampf(event.get("significance", 1.0), 0.25, 3.0) # Clamp significance to a sane range
+
+	# Ensure every derived shift can be traced back to recorded event type, tick, pawn, settlement/region if available.
+	# The event dictionary itself provides most of this context.
+
+	match event_type:
+		# Asha pressure events
+		"teaching_event":
+			reason = "knowledge_transmission"
+			asha_shift = 0.1 * significance
+			druj_shift = -0.02 * significance
+		"preservation_action": # e.g., carving knowledge stone, writing book
+			reason = "knowledge_preservation"
+			asha_shift = 0.15 * significance
+			druj_shift = -0.05 * significance
+		"oath_kept":
+			reason = "oath_fulfillment"
+			asha_shift = 0.2 * significance
+			druj_shift = -0.1 * significance
+		"care_action": # e.g., healing, providing aid, tending to others
+			reason = "acts_of_care"
+			asha_shift = 0.1 * significance
+			druj_shift = -0.03 * significance
+		"rescue_event":
+			reason = "act_of_rescue"
+			asha_shift = 0.25 * significance
+			druj_shift = -0.15 * significance
+		"just_judgment":
+			reason = "fair_judgment_rendered"
+			asha_shift = 0.2 * significance
+			druj_shift = -0.1 * significance
+		"knowledge_preserved": # More direct than 'preservation_action'
+			reason = "knowledge_preserved"
+			asha_shift = 0.15 * significance
+			druj_shift = -0.05 * significance
+		"literature_recorded":
+			reason = "literature_recorded"
+			asha_shift = 0.1 * significance
+			druj_shift = -0.02 * significance
+		"book_written":
+			reason = "book_written"
+			asha_shift = 0.08 * significance
+			druj_shift = -0.01 * significance
+
+
+		# Druj pressure events
+		"betrayal":
+			reason = "act_of_betrayal"
+			asha_shift = -0.3 * significance
+			druj_shift = 0.4 * significance
+		"oath_broken":
+			reason = "oath_violation"
+			asha_shift = -0.25 * significance
+			druj_shift = 0.3 * significance
+		"hoarding_in_crisis": # Custom event type if not explicitly in WorldMemory
+			reason = "selfish_hoarding"
+			asha_shift = -0.1 * significance
+			druj_shift = 0.15 * significance
+		"unjust_judgment":
+			reason = "unjust_judgment_rendered"
+			asha_shift = -0.2 * significance
+			druj_shift = 0.25 * significance
+		"knowledge_destroyed":
+			reason = "knowledge_destruction"
+			asha_shift = -0.2 * significance
+			druj_shift = 0.25 * significance
+		"abandonment_in_crisis": # Custom event type
+			reason = "crisis_abandonment"
+			asha_shift = -0.15 * significance
+			druj_shift = 0.2 * significance
+		"crime_committed": # Already handled by EventBus, but can also come from WorldMemory
+			reason = "crime_committed"
+			asha_shift = -0.05 * significance
+			druj_shift = 0.08 * significance
+		"conflict_event": # General conflict may lean Druj
+			reason = "conflict_occurrence"
+			asha_shift = -0.05 * significance
+			druj_shift = 0.05 * significance
+		"cataclysm":
+			reason = "cataclysm"
+			asha_shift = -0.1 * significance
+			druj_shift = 0.15 * significance
+		"settlement_new_foundation": # Foundation by strangers can be druj if not careful
+			reason = "settlement_new_foundation"
+			asha_shift = -0.02 * significance
+			druj_shift = 0.05 * significance
+		"settlement_revival_with_lineage": # Revival with existing lineage is Asha
+			reason = "settlement_revival_with_lineage"
+			asha_shift = 0.05 * significance
+			druj_shift = -0.01 * significance
+
+
+	if asha_shift != 0.0 or druj_shift != 0.0:
+		# Use the existing shift function
+		shift(reason, asha_shift, druj_shift, current_tick)
+		# _record_world_event for ash/druj shift is already handled by shift() if combined_delta > 2.0
+		# For smaller shifts, we'll log it here explicitly if needed for audit.
+		if absf(asha_shift) + absf(druj_shift) <= 2.0:
+			var shift_data: Dictionary = {
+				"reason": reason,
+				"asha_delta": asha_shift,
+				"druj_delta": druj_shift,
+				"asha": _asha_score,
+				"druj": _druj_score,
+				"source_event_type": event_type,
+				"source_event_tick": event.get("tick", current_tick),
+				"source_event_id": event.get("id", -1), # Assuming events have an ID
+				"source_pawn_id": event.get("pawn_id", -1),
+				"source_settlement_id": event.get("settlement_id", -1),
+				"source_region_key": event.get("r", -1)
+			}
+			_last_shift_events.append(shift_data)
+			while _last_shift_events.size() > MAX_SHIFT_EVENTS_TO_TRACK:
+				_last_shift_events.pop_front()
 
 func get_asha() -> float:
 	return _asha_score
@@ -788,10 +947,10 @@ func fulfill_prophecy(index: int, tick: int) -> bool:
 	if index < 0 or index >= _active_prophecies.size():
 		return false
 	var prophecy: Dictionary = _active_prophecies[index]
-	if prophecy.fulfilled or prophecy.expired:
+	if prophecy.get("fulfilled", false) or prophecy.get("expired", false):
 		return false
-	prophecy.fulfilled = true
-	prophecy.fulfilled_tick = tick
+	prophecy["fulfilled"] = true
+	prophecy["fulfilled_tick"] = tick
 	record_prophecy_fulfillment(tick)
 	return true
 
@@ -799,9 +958,9 @@ func expire_prophecy(index: int) -> bool:
 	if index < 0 or index >= _active_prophecies.size():
 		return false
 	var prophecy: Dictionary = _active_prophecies[index]
-	if prophecy.fulfilled:
+	if prophecy.get("fulfilled", false):
 		return false
-	prophecy.expired = true
+	prophecy["expired"] = true
 	return true
 
 func get_dominant_force_intensity() -> float:
@@ -863,9 +1022,9 @@ func get_settlement_bias_summary() -> Array[Dictionary]:
 	for sid in _settlement_favor:
 		result.append({
 			"settlement_id": sid,
-			"asha_favor": _settlement_favor[sid].asha_favor,
-			"druj_favor": _settlement_favor[sid].druj_favor,
-			"net_bias": "asha" if _settlement_favor[sid].asha_favor > _settlement_favor[sid].druj_favor + 10.0 else ("druj" if _settlement_favor[sid].druj_favor > _settlement_favor[sid].asha_favor + 10.0 else "neutral"),
+			"asha_favor": _settlement_favor[sid].get("asha_favor", 0.0),
+			"druj_favor": _settlement_favor[sid].get("druj_favor", 0.0),
+			"net_bias": "asha" if _settlement_favor[sid].get("asha_favor", 0.0) > _settlement_favor[sid].get("druj_favor", 0.0) + 10.0 else ("druj" if _settlement_favor[sid].get("druj_favor", 0.0) > _settlement_favor[sid].get("asha_favor", 0.0) + 10.0 else "neutral"),
 		})
 	return result
 
@@ -901,6 +1060,22 @@ func debug_print_status() -> void:
 	print("  Extremity: %s" % get_extremity_level())
 	print("  History samples: %d  Prophecies: %d" % [_history.size(), _active_prophecies.size()])
 	print("  Tracked pawns: %d  Settlements: %d" % [_pawn_alignments.size(), _settlement_favor.size()])
+	print("  Last processed WorldMemory event index: %d" % _last_processed_world_event_index)
+	print("  --- Recent Shifts from WorldMemory ---")
+	if _last_shift_events.is_empty():
+		print("    No recent shifts from WorldMemory events.")
+	else:
+		for shift_data in _last_shift_events:
+			print("    Reason: %s, Asha: %.2f, Druj: %.2f (Source: %s@%d, Pawn: %d, Settlement: %d, Region: %s)" % [
+				shift_data.get("reason", ""),
+				shift_data.get("asha_delta", 0.0),
+				shift_data.get("druj_delta", 0.0),
+				shift_data.get("source_event_type", ""),
+				shift_data.get("source_event_tick", 0),
+				shift_data.get("source_pawn_id", -1),
+				shift_data.get("source_settlement_id", -1),
+				shift_data.get("source_region_key", "")
+			])
 	print("=== END ===")
 
 func save() -> Dictionary:
@@ -923,6 +1098,7 @@ func save() -> Dictionary:
 		"settlement_favor": _settlement_favor.duplicate(true),
 		"history": _history.duplicate(true),
 		"active_prophecies": _active_prophecies.duplicate(true),
+		"last_processed_world_event_index": _last_processed_world_event_index,
 	}
 
 func load(data: Dictionary) -> void:
@@ -944,6 +1120,7 @@ func load(data: Dictionary) -> void:
 	_settlement_favor = data.get("settlement_favor", {}).duplicate(true)
 	_history = data.get("history", []).duplicate(true)
 	_active_prophecies = data.get("active_prophecies", []).duplicate(true)
+	_last_processed_world_event_index = data.get("last_processed_world_event_index", 0)
 
 func clear() -> void:
 	_asha_score = 50.0

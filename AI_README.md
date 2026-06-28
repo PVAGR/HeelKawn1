@@ -562,6 +562,15 @@ Settlement seeders (`Main._seed_bootstrap_jobs`), ruler posts (`HeelKawnianManag
 3. Verify your change aligns with deterministic kernel principles
 4. Ensure no RNG, no UI exposition overrides, no hardcoded lore
 
+### New System Development Guidelines
+
+Before adding morality, religion, myth, politics, culture, law, book, or civilization behavior:
+
+-   Read `docs/WORLD_MEANING_ENGINE_ARCHITECTURE.md`
+-   Do not create competing `WorldMemory` ingestion loops
+-   Do not make Asha/Druj the engine root
+-   Use facts first, meaning derived, interpretation later
+
 ### Implementation Guidelines
 - All state changes must derive from tick count
 - Use seed-driven deterministic tables instead of randi()/randf()

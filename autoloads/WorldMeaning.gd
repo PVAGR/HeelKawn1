@@ -41,6 +41,12 @@ const PRESSURE_PHASE_OFFSET_TICKS: int = 73  # Offset to avoid clustering with o
 ## region_key -> last pressure tick
 var _pressure_emitted_by_region: Dictionary = {}
 
+## Global meaning tokens aggregation
+var _global_meaning_tokens: Dictionary = {}
+
+## Pawn meanings: pawn_id -> derived meanings (Meaning Tokens, not ethics)
+var meaning_by_pawn: Dictionary = {}
+
 ## region_key (int) -> aggregated entry Dictionary
 var meaning_by_region: Dictionary = {}
 

@@ -702,6 +702,20 @@ We are always building, always refining, always expanding. This document capture
   - `_seed_construction_jobs()`: Replaced uncapped budget (999999999) with speed-aware values (2000/4000/8000/12000 at 200x/100x/50x/26x) — function exits early when budget consumed.
   - `SettlementMemory.recompute()`: Added optional `budget_usec` parameter with early exit before post-processing passes (3000/5000/10000 at 200x/100x/50x).
 
+## WorldMeaning Architecture Freeze
+
+**Date:** 2026-06-28
+**Status:** Architecture frozen; runtime implementation pending.
+
+This architecture is now canonical. Future development must adhere to the following principles:
+
+-   Asha/Druj is no longer allowed to be treated as the foundation of meaning within the core engine. It is recognized as one emergent interpretive layer among many.
+-   `WorldMeaning.gd` is designated as the future neutral derived-token layer. All interpretation of `WorldMemory` facts into descriptive Meaning Tokens will reside here.
+-   Existing overlaps in `AshaDrujSystem.gd` and `ReligionSystem.gd` (and any other systems) regarding WorldMemory ingestion and interpretation logic must be resolved by migrating shared interpretation into `WorldMeaning.gd` over time.
+-   No future agent should build new religion, politics, culture, myth, law, book, or civilization systems directly from raw `WorldMemory` events if a `WorldMeaning` token path exists. All such systems must consume Meaning Tokens (or aggregations thereof) from `WorldMeaning.gd`.
+
+The next implementation slice is to begin refactoring `WorldMeaning.gd` to implement neutral Meaning Token extraction from new `WorldMemory` facts.
+
 ## Blockers
 
 - None currently reproducible in headless source validation.

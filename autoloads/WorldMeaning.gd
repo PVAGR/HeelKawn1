@@ -1084,17 +1084,6 @@ func _check_regional_pressure(tick: int) -> void:
 		if EventBus != null:
 			EventBus.emit("pressure_event", payload)
 
-		# Record PRESSURE_EVENT in WorldMemory
-		if WorldMemory != null:
-			WorldMemory.record_event({
-				"type": "pressure_event",
-				"region_id": int(region_key),
-				"pressure_type": pressure_type,
-				"intensity": intensity,
-				"tick": tick,
-				"recent_deaths": recent_deaths,
-			})
-
 
 ## Count pawn deaths in a region within the last N ticks
 func _count_recent_pawn_deaths_in_region(region_key: int, current_tick: int, window_ticks: int) -> int:

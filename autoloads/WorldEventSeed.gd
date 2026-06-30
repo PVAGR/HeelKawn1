@@ -1,4 +1,5 @@
 # WorldEventSeed.gd
+class_name WorldEventSeedData
 # Lightweight representation of a deterministic event seed
 extends RefCounted
 

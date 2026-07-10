@@ -2769,6 +2769,38 @@ func get_all_branch_bonuses() -> Dictionary:
 	return result
 
 
+## Human-readable branch choice summary for UI/inspection panels.
+func get_skill_branch_summary_lines() -> PackedStringArray:
+	var lines: PackedStringArray = PackedStringArray()
+	if skill_branches.is_empty():
+		lines.append("No branch chosen yet.")
+		return lines
+	for skill_key in ["foraging", "mining", "chopping", "building", "hunting"]:
+		if not skill_branches.has(skill_key):
+			continue
+		var branch_name: String = str(skill_branches[skill_key])
+		var branch_key: String = "%s:%s" % [str(skill_key), branch_name]
+		var bonuses: Dictionary = BRANCH_EFFECTS.get(branch_key, {}) as Dictionary
+		var bonus_parts: PackedStringArray = PackedStringArray()
+		for bkey in bonuses:
+			bonus_parts.append("%s %s" % [str(bkey), _format_branch_bonus(float(bonuses[bkey]))])
+		var desc: String = str(skill_key).capitalize() + " → " + branch_name
+		if not bonus_parts.is_empty():
+			desc += " (" + ", ".join(bonus_parts) + ")"
+		lines.append(desc)
+	return lines
+
+
+static func _format_branch_bonus(value: float) -> String:
+	if absf(value - 1.0) < 0.001:
+		return "×1.00"
+	if value >= 1.0:
+		return "×%.2f" % value
+	if value > 0.0 and value < 1.0:
+		return "×%.2f" % value
+	return "%.2f" % value
+
+
 ## Map a Skill enum int to the lowercase key used in BRANCH_EFFECTS.
 static func _skill_enum_to_key(skill: int) -> String:
 	match skill:

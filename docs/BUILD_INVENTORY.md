@@ -91,7 +91,7 @@ This file is **step 4** of the handoff read order (enforced by `.cursor/rules/he
 |--------|------|-----|----------|
 | **HeelKawnian Matrix AI Deepening** | `scripts/pawn/HeelKawnian.gd`, `autoloads/HeelKawnianManager.gd` | Job-bias bridge live; needs preservation choices, recovery behavior, longer-horizon ambitions | P0 |
 | **Knowledge Preservation Loop** | `autoloads/KnowledgeSystem.gd` | Stones/books/teaching exist but not unified; lost/rediscovered mechanics incomplete | P1 |
-| **Civilization Stage Deepening** | `autoloads/CivilizationStage.gd` | Initial derived lens live; needs per-settlement tech diffusion, literacy, lifespan, institutions | P1 |
+| **Civilization Stage Deepening** | `autoloads/CivilizationStage.gd`, `autoloads/TechnologyEras.gd`, `autoloads/KnowledgeSystem.gd`, `autoloads/WorldMemory.gd` | Implemented but Needs Runtime Verification | Per-settlement tech diffusion, literacy, lifespan, and institution metrics are already live in code; verify current runtime/UI/reporting |
 | **Readable Chronicle Export** | `scripts/system/ChronicleExport.gd` | Created but not wired into F10 menu | P1 |
 | **FactionRegistry Real** | `autoloads/FactionRegistry.gd` | House-per-zone works; needs CK3-style politics, diplomacy, inter-faction relations | P1 |
 

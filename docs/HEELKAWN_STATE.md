@@ -59,6 +59,7 @@ We are always building, always refining, always expanding. This document capture
   - Relaxed neural bias speed gate from 50x to 200x so neural matrix contributes at normal play speeds.
   - Added profession reassignment so pawns can change roles when a non-primary skill outpaces their current profession.
   - Added explicit family reputation inheritance event logging (`family_reputation_inherited`) so birth-line social carryover is visible in WorldMemory.
+  - Added visible skill-branch summaries to the pawn inspection sheet so milestone choices are readable in normal play instead of only in raw data.
   - Added colony role balance rules to dampen overrepresented professions.
   - Added infrastructure + security job posting to SettlementPlanner (fire pit, storage hut, protect, defend).
   - Added warrior peacetime patrol for visible perimeter presence.
@@ -79,6 +80,7 @@ We are always building, always refining, always expanding. This document capture
   - **FEAT: Civilization Stage Lens (Phase 5A initial live)**:
     - Added `CivilizationStage.gd` as a read-only autoload.
     - Derives era/stage from live technology, knowledge carriers, settlement infrastructure, profession diversity, and quality-of-life proxies.
+    - Settlement tech diffusion, literacy rate, lifespan, and institution scores are now tracked by live systems and fed into the stage lens.
     - Exposes F10 `03B · Civilization Stage` and adds era text to the HUD identity strip.
   - **FEAT: HeelKawnian Development Profiles (Phase 5A initial live)**:
     - Expanded `HeelKawnianIdentity.gd` into a memory-bearing identity resource with deterministic traits and profile history.

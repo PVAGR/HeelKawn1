@@ -37,7 +37,7 @@
 - [x] Profession inheritance from parents
 - [x] Skill trees: `skill_trees` dict with bonus calculations, level-based unlocking
 - [x] Add inheritance hooks (knowledge, reputation, grudges)
-- [ ] Add skill tree branch effects (visual/UI for branch choices)
+- [x] Add skill tree branch effects (visual/UI for branch choices)
 
 ### 4. Material Reality
 - [x] Crafting consumption: `_consume_ingredients` removes from stockpile
@@ -59,10 +59,10 @@
 ### 6. Civilization Stage Deepening
 - [x] Initial derived era lens: `CivilizationStage.gd` reads live world state
 - [x] F10 `03B · Civilization Stage` and HUD era text
-- [ ] Add per-settlement tech diffusion tracking
-- [ ] Add literacy rate tracking
-- [ ] Add lifespan/quality-of-life metrics
-- [ ] Add institution emergence data
+- [x] Add per-settlement tech diffusion tracking
+- [x] Add literacy rate tracking
+- [x] Add lifespan/quality-of-life metrics
+- [x] Add institution emergence data
 
 ### 7. Readable Exports
 - [x] Promotion bundle: `ExportSystem.export_promotion_bundle()` → world_seed.json, chronicle_summary.txt, chronicle.json, bloodlines.json, artifacts.json

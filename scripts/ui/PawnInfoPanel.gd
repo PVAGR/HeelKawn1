@@ -119,6 +119,7 @@ var _likes_dislikes_label: Label = null
 var _gear_labels: Dictionary = {}  # slot index -> Label
 var _gear_stats_label: Label = null
 var _coach_label: Label = null
+var _skill_branch_label: Label = null
 var _social_label: Label = null
 var _identity_label: Label = null
 var _settlement_label: Label = null
@@ -413,6 +414,11 @@ func _populate_identity_tab() -> void:
 	_coach_label = _make_label("", FONT_SMALL, TEXT_DIM)
 	_coach_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tab_identity.add_child(_coach_label)
+
+	_tab_identity.add_child(_make_section_header("Skill branches"))
+	_skill_branch_label = _make_label("", FONT_SMALL, TEXT_DIM)
+	_skill_branch_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tab_identity.add_child(_skill_branch_label)
 
 	_tab_identity.add_child(_make_section_header("Heelkawnian"))
 	_identity_label = _make_label("", FONT_SMALL, TEXT_DIM)
@@ -1535,6 +1541,9 @@ func _refresh_expensive_details(d: HeelKawnianData) -> void:
 	if _coach_label != null:
 		var hints: PackedStringArray = d.progression_coach_lines(3)
 		_coach_label.text = "\n".join(hints)
+	if _skill_branch_label != null:
+		var branch_lines: PackedStringArray = d.get_skill_branch_summary_lines()
+		_skill_branch_label.text = "\n".join(branch_lines)
 	if _identity_label != null:
 		_identity_label.text = _build_identity_strip(d)
 	if _settlement_label != null:

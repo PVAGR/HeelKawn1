@@ -24,10 +24,18 @@
 - Effect:
   - The birth-line social carryover is now visible in the chronicle and audit trail instead of only mutating hidden pawn state.
 
-2. Repo docs synchronized with the code truth
+2. Skill-tree branch effects are visible in the pawn inspection sheet
+- File: `scripts/ui/PawnInfoPanel.gd`
+- Added a dedicated `Skill branches` section under the identity tab.
+- Each pawn now shows any chosen milestone branches plus their passive bonus summary during normal inspection play.
+
+3. Repo docs synchronized with the code truth
 - `TODO.md` now marks inheritance hooks as complete.
+- `TODO.md` also marks skill branch effects and civilization-stage metrics as complete because they are already implemented in runtime code.
 - `docs/BUILD_INVENTORY.md` now states that birth and kinship inheritance hooks are live.
+- `docs/BUILD_INVENTORY.md` now reflects that civilization-stage deepening metrics are already implemented in code and only need runtime verification.
 - `docs/HEELKAWN_STATE.md` now references this verification snapshot and the new world event.
+- `docs/HEELKAWN_STATE.md` now notes the visible skill-branch summary and the live civilization-stage metrics.
 
 ## Verification
 - Ran:
@@ -41,6 +49,7 @@
 ## Determinism Notes
 - No unseeded RNG was added.
 - The new event is derived from existing bloodline-reputation state and the current simulation tick.
+- The skill-branch UI is a read-only projection of already-existing deterministic branch state.
 - No frame-time branching was introduced into canonical truth paths.
 
 ## Residual Risk

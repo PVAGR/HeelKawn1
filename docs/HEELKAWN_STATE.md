@@ -4,100 +4,12 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Latest Verification:** `docs/STATE_VERIFICATION_2026-06-05.md`
-**Last Updated:** June 5, 2026
-**Current Phase:** Phase 5A integration — TeachingSystem + ResearchSystem + TechnologyEras production rewrites, stub implementations, Deep Social Dynamics, Knowledge Ecology, Emergent Narrative, Player Incarnation, Metaphysics
+**Last Updated:** July 10, 2026
+**Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
 **Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
-**Latest verification snapshot:** [STATE_VERIFICATION_2026-06-05.md](STATE_VERIFICATION_2026-06-05.md)
-
----
-
-## June 5, 2026 — PawnAccess Typed-Array Return Type Fix
-
-**Scope:** Unblock `SettlementMemory._living_pawns()` crash at line 2197 by tightening the `PawnAccess` bridge return types.
-
-**Files changed:** `autoloads/PawnAccess.gd` (L26, L36, L46).
-
-**Bug:** `PawnAccess.find_pawns() -> Array` (untyped) assigned to `Array[HeelKawnian]` variable. Godot 4 typed-array covariance error at `SettlementMemory.gd:2197`.
-
-**Fix:** Tightened all 3 PawnAccess return types to match actual data:
-- `find_pawns() -> Array[HeelKawnian]` (was untyped `Array`)
-- `find_alive_pawns() -> Array[HeelKawnian]` (was untyped `Array`)
-- `find_pawn_by_id() -> HeelKawnian` (was `Node`)
-
-**Verification:**
-- `tools/ai/verify-compile.ps1` — PASS (no new errors).
-- `tools/test_pawn_mood_ui_smoke.gd` — `[PMUI_SMOKE] PASS`.
-- `tools/sim_boot_smoke.gd` — reaches tick 10 (exercises `_living_pawns()` live).
-- `tools/sim_settlement_public_state_smoke.gd` — `[SETTLEMENT_STRUCTURE_SMOKE_PASS]`.
-- Full verification: `docs/STATE_VERIFICATION_2026-06-05.md`.
-
-**Unblocked:** The `set_pawn(pawn_id)` scene-tree path was previously blocked by this bug but `_living_pawns()` now works. A dedicated UI-path smoke would confirm the full chain at runtime.
-
----
-
-## June 5, 2026 (session 2) — Cache Rebuild + Autoload class_name Fixes
-
-**Scope:** Unblock headless boot after `.godot/` cache wipe; fix `AgeMemory` + `HeelKawnianIdentity` class_name issues that prevented autoload compilation in headless mode.
-
-**Files changed:**
-- `autoloads/AgeMemory.gd` — removed `class_name AgeMemory` (autoload conflict)
-- `autoloads/HeelKawnianIdentity.gd` — added `class_name HeelKawnianIdentity` (type was used but never declared)
-- `tools/test_set_pawn_ui_smoke.gd` — fixed `_enter_tree()` → `_initialize()`; fixed pawn ID access via `data.id`; added null-safety to all `Object.get()` calls
-
-**Verification:**
-- `.godot/global_script_class_cache.cfg` regenerated via `--headless --import`
-- All 4 runtime smokes PASS (boot, set_pawn, settlement, worldmeaning)
-- Year1 growth smoke completed (no failures)
-- Quality gate static checks 1-3 PASS
-
-**Remaining:** `sim_performance_smoothness_smoke.gd` requires desktop environment; `PawnMoodUI.gd:283` headless theme access error (pre-existing cosmetic).
-
----
-
-## June 3, 2026 — PawnMoodUI Truth Repair
-
-**Scope:** Make PawnMoodUI read real HeelKawnianData; remove silent-null behavior.
-
-**Files changed:** `scripts/ui/PawnMoodUI.gd`. New file: `tools/test_pawn_mood_ui_smoke.gd`. New verification: `docs/STATE_VERIFICATION_2026-06-03.md` (appended).
-
-**Each bad access fixed:**
-- `display_name` (was 1-arg `.get("display_name")` returning null on HeelKawnianData) → direct property access on the typed `HeelKawnianData` field.
-- `mood` (was 1-arg `.get("mood")`) → direct property access.
-- Need bars: `hunger`/`rest` (real fields) direct; `social` → `need_satisfaction.belonging`; `safety` → `need_satisfaction.safety`; `comfort` → derived as `clampf(100 - pain, 0, 100)` (the inverse of the real `pain` field — no fake field invented).
-- `thoughts` (field doesn't exist) → uses real `mood_events: Array[MoodEvent]`, displays each event's `description`.
-- `traits` (was `_pawn_data.has_meta("traits")` / `get_meta("traits")` — Object metadata, never set, so the trait chips were always empty) → uses real `traits: Array[Trait]`, displays each `Trait.display_name`.
-- `wounds` (field doesn't exist) → uses real `injuries: Dictionary`, counts `injuries.size()`.
-- `health` (was 1-arg `.get("health")`) → direct property access.
-
-**Verification:**
-- `tools/ai/verify-compile.ps1` ran clean (autoloads registered, no new parse errors; only pre-existing `AISettlementManager.gd` warning unchanged).
-- `tools/test_pawn_mood_ui_smoke.gd` (new) instantiates a HeelKawnianData with realistic non-default values (typed Trait, typed MoodEvent, injuries, need_satisfaction) and calls each PawnMoodUI update method directly. Asserts the resulting label text and progress-bar values reflect the real data. Exit 0, `[PMUI_SMOKE] PASS`. The smoke now covers the same surface that previously returned silent nulls.
-
-**Remaining truth risks:** `PawnMoodUI._update_thoughts` shows a static label per mood event using `event.description` only. If the mood event description is empty (it isn't, by construction in `MoodEvent._set_description`), the UI would render an empty bullet. The display name of a trait is always populated (set in `Trait._init_from_type`); the only way to be empty is an externally constructed Trait that bypasses `_init`, which is not done in this codebase. Health label thresholds (`< 50` → "Injured") are unchanged.
-
----
-
-## June 3, 2026 — Pawn-Data Shape Audit + Job Completion Path Hardening
-
-**Scope:** Crash prevention. No feature additions, no canon promotions.
-
-**Patched (definitely-wrong 2-arg `Object.get` on HeelKawnianData):**
-- `autoloads/JobManager.gd:133-134` — `pd.get("tile_pos")` / `pd.get("household_id", -1)` → direct property access.
-- `autoloads/JobManager.gd:461-464` — `pd.get("likes") is Array` → `pd.likes is Dictionary` (likes/dislikes are `Dictionary` per `HeelKawnianData.gd`).
-- `tools/year1_visible_growth_smoke.gd:381` — `pd.get("last_claim_failure_reason", "")` → direct property access.
-
-**Job completion path:**
-- `autoloads/JobManager.gd:512-527` — Added missing `complete(job: Job)` (2 callers existed but the function did not).
-- `scripts/jobs/Job.gd:283-302` — Added `complete(_pawn = null)` compatibility wrapper that delegates to `/root/JobManager.complete(self)`. Idempotent via state guard + JobManager guard. Job subclasses (`ToolMaker`, `PaperMaker`, `LeatherWorker`, `InkMaker`, `BookBinder`) and `HeelKawnian.gd` callers unchanged.
-
-**Audit coverage:** All 2-arg `.get(key, default)` call sites reviewed. Only the three above were 2-arg on HeelKawnianData. Remaining 2-arg call sites all operate on real `Dictionary` receivers (settlement dict, event dict, NPC dict, consciousness dict, structure record, etc.) and are correct.
-
-**Known but out-of-scope:** `scripts/ui/PawnMoodUI.gd` uses 1-arg `.get("thoughts")`/`.get("wounds")` etc. on HeelKawnianData for properties that don't exist on the class. These return `null` silently and would corrupt the UI; not patched in this round per crash-prevention-only scope.
-
-**Verification:** `tools/ai/verify-compile.ps1` (Godot 4.6.2 `--headless --script-check`) ran clean for changed files. No new "Invalid call" errors introduced. Pre-existing warnings (Rect2i negative size, AgeMemory singleton missing, AISettlementManager.gd missing, WorldRNG.gd `unit`) unchanged.
+**Latest verification snapshot:** [STATE_VERIFICATION_2026-07-10.md](STATE_VERIFICATION_2026-07-10.md)
 
 ---
 
@@ -146,6 +58,7 @@ We are always building, always refining, always expanding. This document capture
   - Fixed event schema gap (FoodChainManager events now reach WorldMeaning via _infer_kind_from_type).
   - Relaxed neural bias speed gate from 50x to 200x so neural matrix contributes at normal play speeds.
   - Added profession reassignment so pawns can change roles when a non-primary skill outpaces their current profession.
+  - Added explicit family reputation inheritance event logging (`family_reputation_inherited`) so birth-line social carryover is visible in WorldMemory.
   - Added colony role balance rules to dampen overrepresented professions.
   - Added infrastructure + security job posting to SettlementPlanner (fire pit, storage hut, protect, defend).
   - Added warrior peacetime patrol for visible perimeter presence.

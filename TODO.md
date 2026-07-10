@@ -36,7 +36,7 @@
 - [x] Child creation: `PawnSpawner.spawn_child_pawn` with inheritance, bloodline, household
 - [x] Profession inheritance from parents
 - [x] Skill trees: `skill_trees` dict with bonus calculations, level-based unlocking
-- [ ] Add inheritance hooks (knowledge, reputation, grudges)
+- [x] Add inheritance hooks (knowledge, reputation, grudges)
 - [ ] Add skill tree branch effects (visual/UI for branch choices)
 
 ### 4. Material Reality

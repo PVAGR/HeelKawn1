@@ -2007,7 +2007,7 @@ func _report_chronicle_export() -> void:
 	if ChronicleExport == null:
 		push_error("[F10 76] ChronicleExport autoload not found")
 		return
-	var result: String = ChronicleExport.export_chronicle()
+	var result: String = ChronicleExport.save_chronicle_to_file()
 	if result.is_empty():
 		push_error("[F10 76] Chronicle export failed")
 		print("[F10 76] Check that user://exports/ directory is writable")

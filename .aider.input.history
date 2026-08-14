@@ -1990,3 +1990,66 @@
 
 # 2026-05-29 19:12:21.734813
 +lets contineu where we lefto ff with hte repo i need to make sure its fps and we work the fps and the it ened sto run smoothlyh
+
+# 2026-08-14 00:21:48.067496
++y
+
+# 2026-08-14 00:22:11.748077
++Read AGENTS.md and docs/HEELKAWN_STATE.md. 
++We are pivoting to the "Daily Rhythm" system. 
++Replace the complex _tick_idle function in scripts/pawn/HeelKawnian.gd with a simple WAKE->WORK->SOCIAL->SLEEP state machine. 
++Add home_tile to HeelKawnianData.gd. 
++Add HAUL_TO_MARKET to Job.gd. 
++Update JobManager.gd to support profession-based queries. 
++Do not create new branches. Commit directly to the current branch. 
++Run a headless smoke test when done.
+
+# 2026-08-14 00:22:14.202920
++a
+
+# 2026-08-14 00:22:22.715716
++y
+
+# 2026-08-14 00:23:23.598424
++/model openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+
+# 2026-08-14 00:23:37.474803
++/model openrouter/meta-llama/llama-4-scout:free
+
+# 2026-08-14 00:37:22.809548
++Read AGENTS.md and docs/HEELKAWN_STATE.md to understand the project context.
++
++Current task: Implement "Daily Rhythm" system for autonomous pawn behavior.
++
++This is a Phase 4 consolidation task — we are simplifying complex AI to make pawns live autonomous lives (WAKE→WORK→SOCIAL→SLEEP cycle).
++
++Required changes:
++
++1. **HeelKawnianData.gd**: Add `home_tile: Vector2i = Vector2i(-1, -1)` field for pawn housing anchor.
++
++2. **Job.gd**: Add `HAUL_TO_MARKET` job type to the Job.Type enum for pawns carrying personal inventory to settlement marketplaces.
++
++3. **HeelKawnian.gd**: Replace the complex _tick_idle function with a simplified Daily Rhythm state machine:
++   - Add states: WAKE, WORK, SOCIAL, SLEEP to the State enum
++   - Implement time-based transitions (morning=WAKE, day=WORK, evening=SOCIAL, night=SLEEP)
++   - WORK state queries JobManager for jobs matching pawn's current_profession
++   - SOCIAL state moves pawn to nearest social hub (hearth/market/tavern)
++   - SLEEP state returns pawn to home_tile to recover rest
++   - Keep it simple and deterministic — no complex neural networks for basic daily behavior
++
++4. **JobManager.gd**: Add `get_open_jobs_for_profession(profession: int) -> Array[Job]` method that returns open jobs matching a profession's primary job types.
++   - Add helper `_profession_to_job_types(profession: int) -> Array[int]` mapping each profession to relevant job types (FARMER→FORAGE/PLANT/HARVEST, BUILDER→BUILD_*, etc.)
++
++5. **Auto-commit**: After making changes, commit directly to the current branch with message: "feat: Daily Rhythm state machine for autonomous pawn life cycle"
++
++6. **Test**: Run a headless smoke test to verify the game still boots without crashes.
++
++Do not add new autoloads. Do not add civilization metrics. Focus only on wiring existing systems into a 24-hour daily life loop.
++
++Report back with:
++- List of files modified
++- Summary of changes made
++- Test results
+
+# 2026-08-14 01:06:27.601693
++/model openrouter/qwen/qwen-2-72b-instruct:free

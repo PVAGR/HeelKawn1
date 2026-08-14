@@ -1,7 +1,7 @@
 class_name World
 extends Node2D
 
-@onready var _age_memory: Node = Engine.get_singleton("AgeMemory")
+@onready var _age_memory: Node = get_node_or_null("/root/AgeMemory")
 
 ## Pixels of screen space per tile. The world is rendered as a 256x256 Image
 ## baked into an ImageTexture, then scaled up so each source pixel = TILE_PIXELS.

@@ -1,131 +1,39 @@
-HEELKAWN - ONGOING DEVELOPMENT
-======================================================================
+# HeelKawn Deterministic Myth Engine — Agent Instructions
 
-**IMPORTANT:** HeelKawn is **NEVER FINISHED**. It is a living, evolving
-simulation. We are always building, always refining, always expanding.
-This repository captures the CURRENT STATE of an ongoing creative journey.
+## READ FIRST (Every Session)
+Before writing any code, read these files in this order:
+1. docs/HEELKAWN_STATE.md — Current status, blockers, next task
+2. docs/BUILD_INVENTORY.md — Honest built-vs-missing inventory
+3. docs/HEELKAWN_PROJECT_COMPASS.md — North star and truth hierarchy
+4. AI_README.md — Kernel philosophy (non-negotiable)
 
-======================================================================
-AI AGENT CROSS-REFERENCE
-======================================================================
+## CORE LAWS (Never Violate)
+- DETERMINISTIC: All randomness must use WorldRNG seeded streams
+- PAWN-ACTIVATED: Events trigger from pawn actions, NOT global timers
+- NO RANDOM DECAY: Memory persists by impact only
+- FACTS FIRST: WorldMemory records events before interpretation
+- NEVER mark "complete" unless it compiles, runs, and has F10 verification
 
-Read order for AI agents (handoff sequence):
-1. AI_README.md         — Core philosophy, kernel rules, forbidden patterns
-2. HEELKAWN.txt         — THIS FILE. Quick-context orientation below
-3. docs/HEELKAWN_STATE.md — Authoritative current status, blockers, action plan
-4. docs/BUILD_INVENTORY.md — Honest built-vs-missing inventory
-5. docs/HEELKAWN_PROJECT_COMPASS.md — Orientation compass and north star
-6. docs/HEELKAWN_BLUEPRINT.md — Full Persistent Simulation Universe blueprint
+## TECH STACK
+- Engine: Godot 4.6.2
+- Language: GDScript
+- Use class_name for shared types
+- Prefer signals over direct coupling
+- Autoload count target: <100 (currently ~139)
 
-See also:
-  .cursor/rules/heelkawn-canonical-repo.mdc — Canonical repo policy
-  .cursor/rules/heelkawn-handoff.mdc        — Handoff read order (enforced)
-  docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md — Canon execution queue
-  docs/WORLD_BIBLE/MASTER_INDEX.md          — World bible index
+## CURRENT PHASE
+Consolidation + Phase 5A indefinite evolution foundation.
+Do NOT add new feature islands. Wire existing systems together.
 
-======================================================================
-WHERE WE ARE NOW (May 21, 2026)
-======================================================================
+## WHEN CODING
+- Check BUILD_INVENTORY.md for stub status before claiming "done"
+- Update HEELKAWN_STATE.md when completing a feature
+- F10 diagnostics are the verification path
+- Test at 1x, 26x, and 100x speed
+- Keep randomness routed through WorldRNG
+- Record meaningful world changes through WorldMemory
 
-- Current Phase: Consolidation + Phase 5A indefinite evolution foundation
-- Overall Progress: ~55-60% world-completeness (deep playable prototype)
-- Kernel Health:    🟢 Stable (headless Godot smoke passed May 7, 2026)
-- Shipped Systems:  45+
-- Engine:           Godot 4.6.2 (GL Compatibility)
-
-======================================================================
-WHAT WORKS NOW
-======================================================================
-
-✅ Full pawn AI with needs, skills, professions (5 diverse roles)
-✅ Settlement lifecycle (active → abandoned → reviving → permanent ruin)
-✅ Knowledge system (18 types, inscribe on stones, read them)
-✅ Literature & Book crafting (Paper, Leather, Ink, Pen, Book)
-✅ Grudge & gossip systems (emergent social dynamics)
-✅ Legacy & dynasty tracking (multi-generational)
-✅ Text-rich storytelling (biographies, legends, chronicles)
-✅ Performance optimized (stable at 100x speed with adaptive throttling)
-✅ All compile errors resolved
-✅ Civilization Stage lens (F10 03B, HUD identity strip) — INITIAL LIVE
-✅ HeelKawnian Development Profiles (per-pawn identity with Matrix AI) — INITIAL LIVE
-✅ Matrix AI Behavior Wiring (job bias from identity/memory/development) — INITIAL LIVE
-✅ Matrix Social Intent Bridge (social_seek, teach_seek, grudge_confront) — LIVE
-✅ Matrix Settlement Ambition Seeding (hearth, storage, beds, walls, food) — LIVE
-✅ Mode Contract Enforcement (Watch/Sprite/Observer) — LIVE
-✅ Need-driven build gating (AIAutoBuild + SettlementPlanner pressure) — LIVE
-✅ Promotion exports + chronicle summary (F10 36/37) — LIVE
-✅ Profession reassignment (pawns change roles based on skill growth) — LIVE
-✅ Colony role balance (diversity pressure against overrepresented roles) — LIVE
-✅ Warrior peacetime patrol (visible perimeter presence) — LIVE
-
-======================================================================
-WHAT'S NEXT (Priority Order)
-======================================================================
-
-1. Runtime truth pass in Godot editor — verify F10, UI, red errors
-2. HeelKawnian Matrix AI deepening — preservation, recovery, ambitions
-3. Lineage/progression — parent lookup, child creation, inheritance
-4. Material reality — crafting consumption to inventory/stockpile
-5. Knowledge preservation loop — stones + books + teaching unified
-6. Civilization stage deepening — per-settlement tech diffusion, literacy
-7. Readable exports — chronicle and seed/state export wiring
-8. Governance/faction/religion depth — after core loop is reliable
-
-======================================================================
-KEY PRINCIPLES
-======================================================================
-
-- Deterministic Kernel: History is computed, not scripted
-- Pawn-Activated: Events trigger from pawn actions, NOT global timers
-- No Random Decay: Memory does not decay randomly
-- Ongoing Project: HeelKawn is never finished
-
-======================================================================
-FIRST PLAYABLE (where to look)
-======================================================================
-
-- In-game: F10 → 35 · Backbone / first-play — prints what is LIVE vs DEFERRED
-- Doc: docs/HEELKAWN_STATE.md section "Current Status"
-- Run main scene, select pawns, use F9 observer when needed
-
-======================================================================
-GIT WORKFLOW
-======================================================================
-
-  cd c:\Users\user\Documents\GitHub\HeelKawn1
-  git add -A
-  git commit -m "fix: [description]"
-  git pull --rebase origin main
-  git push
-
-======================================================================
-REPOSITORY
-======================================================================
-
-- Local:  c:\Users\user\Documents\GitHub\HeelKawn1
-- Remote: https://github.com/PVAGR/HeelKawn1 (branch main)
-- When work is ready: commit and git push origin main
-
-======================================================================
-LOG (newest first)
-======================================================================
-
-2026-05-21  Full repo scan completed. All handoff docs cross-referenced and
-            updated to consistent state. 45+ shipped systems verified.
-2026-05-19  AIAutoBuild need gates, Matrix Social Intent Bridge,
-            Matrix Settlement Ambition Seeding, TickBudgetManager,
-            Literature & Knowledge Preservation, Civilization Stage lens,
-            HeelKawnian Development Profiles all live.
-2026-05-07  Headless Godot smoke passed. Onboarding RichTextLabel fix.
-2026-05-05  All rich text features implemented + documented.
-            Master development plan created. Performance optimizations complete.
-2026-05-05  All compile errors resolved. Profession heterogeneity implemented.
-            Event noise reduction implemented.
-2026-05-01  Player-readable meaning refinement complete. Promotion exports.
-2026-04-30  First-play orientation. Universe build status analysis.
-2026-04-29  Major performance pass: planner cadence, hitch trim, ultra-speed
-            smoothness, social chronicle budget, diagnostics.
-2026-04-27  Portable character export. Matrix release tiers. Social+
-            reproduction. Phase 4 playtest slice. Canon locks.
-2026-04-25  Docs cleanup. Trait loops hardened.
-2026-04-24  Ages/cataclysm framing locked. World memory lock-in established.
+## DESIGN TARGET
+"Sit back and watch the world play itself."
+Player is observer first, intervention optional.
+Every sprite matters. Every choice echoes through generations.

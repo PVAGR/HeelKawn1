@@ -113,6 +113,9 @@ const TICKS_PER_YEAR: int = 5000
 var gender: int = Gender.OTHER
 var tile_pos: Vector2i = Vector2i.ZERO
 
+## Home anchor tile for daily rhythm (where pawn sleeps/returns)
+var home_tile: Vector2i = Vector2i(-1, -1)
+
 ## Death flag - once true, pawn is dead and should not be processed further
 ## This prevents duplicate death events, biography spam, and legacy duplication
 var is_dead: bool = false

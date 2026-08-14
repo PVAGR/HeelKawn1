@@ -516,10 +516,6 @@ const CRAFTING_COOLDOWN_TICKS: int = 140
 
 enum State {
 	IDLE,
-	WAKE,             # Morning transition: prepare for day
-	WORK,             # Perform profession job
-	SOCIAL,           # Social interaction at hub/market
-	SLEEP,            # Night rest at home
 	WALKING_TO_JOB,
 	WORKING,
 	HAULING,            # carrying a produced item toward the stockpile

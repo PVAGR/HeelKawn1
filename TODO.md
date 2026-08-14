@@ -1,6 +1,6 @@
 # HeelKawn — Living TODO
 
-**Last Updated:** May 23, 2026
+**Last Updated:** June 5, 2026
 **Source of truth:** `docs/HEELKAWN_STATE.md` and `docs/HEELKAWN_PROJECT_COMPASS.md`
 
 > HeelKawn is **never finished**. This file tracks active work, not a destination.
@@ -56,13 +56,15 @@
 - [x] Verify knowledge death when last carrier dies untaught — `_check_knowledge_loss()` now checks record carriers before entering dormant; `knowledge_degraded` vs `knowledge_truly_lost` events emitted
 - [x] Wire preservation pressure into Matrix AI ambitions — `HeelKawnianManager.get_settlement_ambition_for_pawn()` calls `compute_preservation_pressure()` during `preserve` drive
 
-### 6. Civilization Stage Deepening
+### 6. Civilization Stage Deepening �� DONE June 5, 2026
 - [x] Initial derived era lens: `CivilizationStage.gd` reads live world state
 - [x] F10 `03B · Civilization Stage` and HUD era text
-- [ ] Add per-settlement tech diffusion tracking
-- [ ] Add literacy rate tracking
-- [ ] Add lifespan/quality-of-life metrics
-- [ ] Add institution emergence data
+- [x] Add per-settlement tech diffusion tracking — uses KnowledgeSystem.pre-computed `tech_diffusion_by_settlement` + EgregoreMemory pressure vectors
+- [x] Add literacy rate tracking — uses KnowledgeSystem.pre-computed `literacy_rate_by_settlement`
+- [x] Add lifespan/quality-of-life metrics — continuous tracking via `_continuous_metrics` cache
+- [x] Add institution emergence data — integrates EgregoreMemory active norms (mutual_aid, martial_code, scholar_path, austerity_rite, market_charter), law density, governance forms, and guild data from SettlementMemory
+- [x] Added continuous metrics API: `get_continuous_metrics`, `get_literacy_rate`, `get_tech_diffusion_score`, `get_egregore_signature`, `get_active_norms`, `get_divergence_snapshot`, `get_governance_form`, `get_guild_data`
+- [x] Periodic continuous metrics update every 300 ticks via `_update_continuous_metrics()`
 
 ### 7. Readable Exports
 - [x] Promotion bundle: `ExportSystem.export_promotion_bundle()` → world_seed.json, chronicle_summary.txt, chronicle.json, bloodlines.json, artifacts.json
@@ -131,6 +133,17 @@
 ## May 22, 2026 session
 
 - [x] ChronicleExport F10 wiring (added menu item #76 "Chronicle Export (to file)").
+
+## June 5, 2026 session — Civilization Stage Deepening Complete
+
+- [x] Integrated KnowledgeSystem pre-computed `literacy_rate_by_settlement` and `tech_diffusion_by_settlement` into CivilizationStage
+- [x] Integrated EgregoreMemory pressure signatures, active norms (mutual_aid, martial_code, scholar_path, austerity_rite, market_charter), divergence, and migration tendency
+- [x] Integrated SettlementMemory governance forms (Elder Council, Militia Protectors, Chief Households, Council Rule) and guild data
+- [x] Added continuous per-settlement metrics cache updated every 300 ticks via `_update_continuous_metrics()`
+- [x] Added public API: `get_continuous_metrics`, `get_all_continuous_metrics`, `get_literacy_rate`, `get_tech_diffusion_score`, `get_egregore_signature`, `get_active_norms`, `get_divergence_snapshot`, `get_governance_form`, `get_guild_data`
+- [x] Updated `_build_stage_snapshot` to use pre-computed continuous metrics instead of on-demand recomputation
+- [x] All headless smoke tests pass (boot, settlement, worldmeaning, year1 growth)
+- [x] Compile check passes
 
 ---
 

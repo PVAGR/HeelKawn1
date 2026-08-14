@@ -1,0 +1,2513 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+[F10_SWEEP] initialize
+[TickDecoupler] Registered system: Input (interval: 1 ticks)
+[TickDecoupler] Registered system: Camera (interval: 1 ticks)
+[TickDecoupler] Registered system: UI (interval: 1 ticks)
+[TickDecoupler] Registered system: Physics (interval: 2 ticks)
+[TickDecoupler] Registered system: Pathfinding (interval: 2 ticks)
+[TickDecoupler] Registered system: AI (interval: 5 ticks)
+[TickDecoupler] Registered system: Economy (interval: 5 ticks)
+[TickDecoupler] Registered system: Social (interval: 5 ticks)
+[TickDecoupler] Registered system: Weather (interval: 10 ticks)
+[TickDecoupler] Registered system: Foliage (interval: 10 ticks)
+[TickDecoupler] Registered system: AmbientAudio (interval: 10 ticks)
+[TickDecoupler] Registered system: MemoryCleanup (interval: 60 ticks)
+[TickDecoupler] Registered system: StatsCollection (interval: 60 ticks)
+[CrashTrap] CrashTrap initialized. trace_enabled=false trace_first_sim_tick=false (per-listener tick-1 trace when both true)
+[EventBus] Subscribed: pressure_event → HeelKawnianManager._on_pressure_event
+[EventBus] Subscribed: pawn_died → KnowledgeSystem._on_pawn_died
+[WorldAI] Neural world matrix initialized with 19 neural networks
+[WorldAI] Specialized neural networks initialized
+[AIAgentManager] Neural network matrix initialized with 4 layers
+[AIAgentManager] Learning algorithms initialized
+[AIAgentManager] Pattern recognition systems initialized
+[AIAgentManager] Predictive models initialized
+[AIAgentManager] Collective intelligence initialized
+[VALIDATION_SMOKETEST] marker=PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp source=SettlementMemory.autoload debug_build=true VALIDATION_SESSION_ENABLED_const=false clean_economy_armed=false settlement_truth_verify_armed=false specialization_log_armed=false
+[SettlementManager] Initialized
+[EventBus] Subscribed: pawn_died → GrudgeManager._on_pawn_died
+[EventBus] Subscribed: diaspora_exile → GossipManager._on_diaspora_exile
+[EventBus] Subscribed: pawn_birth → BloodlineSystem._on_pawn_birth
+[EventBus] Subscribed: pawn_died → SocialDynamics._on_pawn_death
+[EventBus] Subscribed: pawn_moved → SocialDynamics._on_pawn_move
+[EventBus] Subscribed: conflict_start → SocialDynamics._on_conflict_event
+[EventBus] Subscribed: conflict_escalation → SocialDynamics._on_conflict_event
+[EventBus] Subscribed: settlement_founded → CulturalExchange._on_settlement_founded
+[EventBus] Subscribed: war_declared → CulturalExchange._on_war_declared
+[EventBus] Subscribed: settlement_conquered → CulturalExchange._on_settlement_conquered
+[EventBus] Subscribed: pawn_died → SocialStratification._on_pawn_died
+[EventBus] Subscribed: settlement_founded → SocialStratification._on_settlement_founded
+[EventBus] Subscribed: pawn_died → MarriageSystem._on_pawn_death_event
+[EventBus] Subscribed: pawn_born → MarriageSystem._on_pawn_born_event
+[EventBus] Subscribed: relationship_changed → MarriageSystem._on_relationship_changed
+[EventBus] Subscribed: settlement_founded → FactionPolitics._on_settlement_founded
+[EventBus] Subscribed: pawn_died → FactionPolitics._on_pawn_died
+[EventBus] Subscribed: settlement_attacked → FactionPolitics._on_settlement_attacked
+[EventBus] Subscribed: combat_started → FactionPolitics._on_combat_started
+[EventBus] Subscribed: combat_ended → FactionPolitics._on_combat_ended
+[EventBus] Subscribed: trade_route_established → FactionPolitics._on_trade_route_established
+[EventBus] Subscribed: pressure_event → FactionPolitics._on_pressure_event
+[EventBus] Subscribed: building_constructed → FactionPolitics._on_building_constructed
+[EventBus] Subscribed: war_declared → FactionPolitics._on_war_declared
+[EventBus] Subscribed: settlement_founded → LibrarySystem._on_settlement_founded
+[EventBus] Subscribed: settlement_abandoned → LibrarySystem._on_settlement_destroyed
+[EventBus] Subscribed: settlement_destroyed → LibrarySystem._on_settlement_destroyed
+[EventBus] Subscribed: building_constructed → LibrarySystem._on_building_constructed
+[EventBus] Subscribed: settlement_founded → ResearchSystem._on_settlement_founded
+[EventBus] Subscribed: scholar_arrival → ResearchSystem._on_scholar_arrival
+[EventBus] Subscribed: pawn_died → TeachingSystem._on_pawn_died
+[EventBus] Subscribed: pawn_moved → TeachingSystem._on_pawn_moved
+[EventBus] Subscribed: settlement_founded → TechnologyEras._on_settlement_founded
+[EventBus] Subscribed: pawn_died → NarrativeSystem._on_pawn_died
+[EventBus] Subscribed: settlement_founded → NarrativeSystem._on_settlement_founded
+[EventBus] Subscribed: war_declared → NarrativeSystem._on_war_declared
+[EventBus] Subscribed: disaster_started → NarrativeSystem._on_disaster_started
+[EventBus] Subscribed: settlement_founded → LegendSystem._on_settlement_founded
+[EventBus] Subscribed: combat_ended → LegendSystem._on_combat_ended
+[EventBus] Subscribed: settlement_founded → EpicChronicle._on_event_settlement_founded
+[EventBus] Subscribed: settlement_destroyed → EpicChronicle._on_event_settlement_destroyed
+[EventBus] Subscribed: war_declared → EpicChronicle._on_event_war_declared
+[EventBus] Subscribed: war_ended → EpicChronicle._on_event_war_ended
+[EventBus] Subscribed: cataclysm_started → EpicChronicle._on_event_cataclysm
+[EventBus] Subscribed: discovery_major → EpicChronicle._on_event_discovery
+[EventBus] Subscribed: pawn_died_significant → EpicChronicle._on_event_hero_death
+[EventBus] Subscribed: dynasty_formed → EpicChronicle._on_event_dynasty_founded
+[EventBus] Subscribed: dynasty_ended → EpicChronicle._on_event_dynasty_ended
+[EventBus] Subscribed: betrayal → AshaDrujSystem._on_betrayal_event
+[EventBus] Subscribed: oath_kept → AshaDrujSystem._on_oath_kept_event
+[EventBus] Subscribed: justice_served → AshaDrujSystem._on_justice_served_event
+[EventBus] Subscribed: crime_committed → AshaDrujSystem._on_crime_committed_event
+[EventBus] Subscribed: heroic_deed → AshaDrujSystem._on_heroic_deed_event
+[EventBus] Subscribed: settlement_founded → AshaDrujSystem._on_settlement_founded_event
+[EventBus] Subscribed: cataclysm_started → EchoSystem._on_eventbus_cataclysm
+[EventBus] Subscribed: massacre → EchoSystem._on_eventbus_massacre
+[EventBus] Subscribed: betrayal → EchoSystem._on_eventbus_betrayal
+[EventBus] Subscribed: romance → EchoSystem._on_eventbus_romance
+[EventBus] Subscribed: settlement_founded → EchoSystem._on_eventbus_founding
+[EventBus] Subscribed: heroic_death → EchoSystem._on_eventbus_heroic_death
+[EventBus] Subscribed: major_figure_death → EchoSystem._on_eventbus_major_death
+[EventBus] Subscribed: miracle → EchoSystem._on_eventbus_miracle
+[EventBus] Subscribed: ritual_completed → EchoSystem._on_eventbus_ritual
+[EventBus] Subscribed: cataclysm_started → VeilSystem._on_cataclysm_event
+[EventBus] Subscribed: disaster_started → VeilSystem._on_disaster_event
+[EventBus] Subscribed: mass_death → VeilSystem._on_mass_death_event
+[EventBus] Subscribed: dark_ritual → VeilSystem._on_dark_ritual_event
+[EventBus] Subscribed: world_created → VeilSystem._on_world_created
+[PF_STACK] flusher=res://scripts/world/PathFinder.gd:129 -> res://scenes/world/World.gd:100 (dirty setter not shown)
+[INFO] PawnSpawner: pawn_scene loaded successfully: res://scenes/pawn/HeelKawnian.tscn
+[VALIDATION_SMOKETEST] marker=PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp source=Main.gd debug_build=true VALIDATION_SESSION_ENABLED_const=false clean_economy_armed=false settlement_truth_verify_armed=false specialization_log_armed=false
+[CrashTrap] OK: Autoload 'SettlementMemory' (Node)
+[CrashTrap] OK: Autoload 'WorldAI' (Node)
+[Main] Scene ready. Tick interval: 1.00s
+[Main] Speed: 1.0x
+[Main] Watch mode: world runs fully autonomous; you observe without commanding.
+[Main] Player mode: WATCH
+[F10_SWEEP] Main instantiated; awaiting tick 8
+[VALIDATION_STATUS] debug_build=true VALIDATION_SESSION_ENABLED_const=false WorldEvents_VALIDATION_CLEAN_ECONOMY_EVENTS_const=false clean_economy_active=false settlement_truth_verify_active=false specialization_validation_log_active=false
+[F10_SWEEP] Wall cap reached; forcing sweep
+[F10_SWEEP] PANEL_COUNT=85
+=== HEELKAWN_DEBUG_REPORT:ai_pipeline_health:tick=0 BEGIN ===
+=== HEELKAWN_AI_PIPELINE_HEALTH:tick=0 BEGIN ===
+
+[food_pipeline] tick=0
+  hunger_histogram: { "CRITICAL(0-20)": 0, "HUNGRY(20-40)": 0, "OK(40-60)": 0, "FED(60-80)": 0, "FULL(80-100)": 24 }
+  pawns_eating=0 pawns_seeking_food=0 pawns_starving(h<20)=0
+  stockpile_food_total=0
+  stockpile_food_by_type: {  }
+  StockpileManager.total_food()=0 has_any_food=false
+  food_in_pawn_hands=0
+
+[survival_audit] tick=0
+  deaths_by_cause: {  }
+  total_deaths=0
+  warmth: beds=0 fire_pits=0 living_pawns=24
+  bed_ratio=0.00 fire_pit_ratio=0.00
+
+[structure_inventory] tick=0
+  Ore Vein=141
+  Fertile Soil=101
+  Ruin=6
+  Tree=4382
+  Rabbit=28
+  Deer=10
+  total_structures=4668
+
+[job_pipeline] tick=0
+  flow: posted=0 claimed=0 completed=0 cancelled=0
+  open=0 claimed=0
+  stuck_walking(claimed+0_work_done)=0 stuck_working(work_done>=needed)=0
+
+[ai_integration_health] tick=0
+  matrix_to_job=live: priority_cb + note_matrix_job_choice
+  survival_jobs=0
+  construction_jobs=0
+  maintenance_jobs=0
+  maintenance_due=0
+  teaching_jobs=0
+  knowledge_at_risk=0
+  world_to_memory=live: job_completed/structure_built/teaching_success/structure_maintained
+  memory_to_planner=live: region meaning + local feature scans + settlement scheduler
+
+[pathfinder_audit] tick=0
+  unique_pawn_components=1
+  pawn_components: { 0: 24 }
+  stockpile_components: {  }
+  stranded_pawns(no_stockpile_in_component)=24
+  largest_component=0
+
+[resource_truth_audit] tick=0
+  StockpileManager: food=0 wood=0 stone=0
+
+[colony_sim_pressures] stance=balanced food=1.000 housing=1.000 materials=1.000 haul=0.000
+
+=== HEELKAWN_AI_PIPELINE_HEALTH:tick=0 END ===
+=== HEELKAWN_DEBUG_REPORT:ai_pipeline_health:tick=0 END ===
+[F10_SWEEP] PANEL=ai_pipeline_health               94ms
+=== HEELKAWN_DEBUG_REPORT:food_pipeline:tick=0 BEGIN ===
+[_safe_report] Starting: food_pipeline
+[food_pipeline] tick=0
+  hunger_histogram: { "CRITICAL(0-20)": 0, "HUNGRY(20-40)": 0, "OK(40-60)": 0, "FED(60-80)": 0, "FULL(80-100)": 24 }
+  pawns_eating=0 pawns_seeking_food=0 pawns_starving(h<20)=0
+  stockpile_food_total=0
+  stockpile_food_by_type: {  }
+  StockpileManager.total_food()=0 has_any_food=false
+  food_in_pawn_hands=0
+[_safe_report] Completed: food_pipeline
+=== HEELKAWN_DEBUG_REPORT:food_pipeline:tick=0 END ===
+[F10_SWEEP] PANEL=food_pipeline                    14ms
+=== HEELKAWN_DEBUG_REPORT:survival_audit:tick=0 BEGIN ===
+[_safe_report] Starting: survival_audit
+[survival_audit] tick=0
+  deaths_by_cause: {  }
+  total_deaths=0
+  warmth: beds=0 fire_pits=0 living_pawns=24
+  bed_ratio=0.00 fire_pit_ratio=0.00
+[_safe_report] Completed: survival_audit
+=== HEELKAWN_DEBUG_REPORT:survival_audit:tick=0 END ===
+[F10_SWEEP] PANEL=survival_audit                   32ms
+=== HEELKAWN_DEBUG_REPORT:structure_inventory:tick=0 BEGIN ===
+[_safe_report] Starting: structure_inventory
+[structure_inventory] tick=0
+  Ore Vein=141
+  Fertile Soil=101
+  Ruin=6
+  Tree=4382
+  Rabbit=28
+  Deer=10
+  total_structures=4668
+[_safe_report] Completed: structure_inventory
+=== HEELKAWN_DEBUG_REPORT:structure_inventory:tick=0 END ===
+[F10_SWEEP] PANEL=structure_inventory              24ms
+=== HEELKAWN_DEBUG_REPORT:job_pipeline:tick=0 BEGIN ===
+[_safe_report] Starting: job_pipeline
+[job_pipeline] tick=0
+  flow: posted=0 claimed=0 completed=0 cancelled=0
+  open=0 claimed=0
+  stuck_walking(claimed+0_work_done)=0 stuck_working(work_done>=needed)=0
+[_safe_report] Completed: job_pipeline
+=== HEELKAWN_DEBUG_REPORT:job_pipeline:tick=0 END ===
+[F10_SWEEP] PANEL=job_pipeline                     10ms
+=== HEELKAWN_DEBUG_REPORT:pathfinder_audit:tick=0 BEGIN ===
+[_safe_report] Starting: pathfinder_audit
+[pathfinder_audit] tick=0
+  unique_pawn_components=1
+  pawn_components: { 0: 24 }
+  stockpile_components: {  }
+  stranded_pawns(no_stockpile_in_component)=24
+  largest_component=0
+[_safe_report] Completed: pathfinder_audit
+=== HEELKAWN_DEBUG_REPORT:pathfinder_audit:tick=0 END ===
+[F10_SWEEP] PANEL=pathfinder_audit                 12ms
+=== HEELKAWN_DEBUG_REPORT:resource_truth_audit:tick=0 BEGIN ===
+[_safe_report] Starting: resource_truth_audit
+[resource_truth_audit] tick=0
+  StockpileManager: food=0 wood=0 stone=0
+[_safe_report] Completed: resource_truth_audit
+=== HEELKAWN_DEBUG_REPORT:resource_truth_audit:tick=0 END ===
+[F10_SWEEP] PANEL=resource_truth_audit              8ms
+=== HEELKAWN_DEBUG_REPORT:guild_settlement_audit:tick=0 BEGIN ===
+[_safe_report] Starting: guild_settlement_audit
+[guild_settlement_audit] tick=0 living_pawns=24 guild_candidates=0 formal_settlements=0 proto_sites=0
+  candidate_summary:
+  formal_settlements:
+    (none)
+  proto_sites:
+    count=0
+[_safe_report] Completed: guild_settlement_audit
+=== HEELKAWN_DEBUG_REPORT:guild_settlement_audit:tick=0 END ===
+[F10_SWEEP] PANEL=guild_settlement_audit            5ms
+=== HEELKAWN_DEBUG_REPORT:save_dump:tick=0 BEGIN ===
+[save_dump] tick=0
+  latest_backup=20260521_165533_backup_tick_5000.json
+  session_id=20260521_165533
+  backup_tick=5000.0
+  backup_time=2026-05-21T16:58:36
+  record_count=2919.0
+  top_level_keys: ["backup_tick", "backup_time", "performance_samples", "record_count", "records", "session_id"]
+  json_preview:
+{
+	"backup_tick": 5000.0,
+	"backup_time": "2026-05-21T16:58:36",
+	"performance_samples": [
+		{
+			"avg_fps": 1.0,
+			"avg_tick_ms": 0.0,
+			"fps": 1.0,
+			"memory_mb": 626.837104797363,
+			"peak_tick_ms": 0.0,
+			"tick": 0.0,
+			"timestamp": "2026-05-21T16:55:42"
+		},
+		{
+			"avg_fps": 1.0,
+			"avg_tick_ms": 0.0,
+			"fps": 1.0,
+			"memory_mb": 627.673992156982,
+			"peak_tick_ms": 0.0,
+			"tick": 0.0,
+			"timestamp": "2026-05-21T16:55:42"
+		},
+		{
+			"avg_fps": 1.0,
+			"avg_tick_ms": 0.0,
+			"fps": 1.0,
+			"memory_mb": 627.676197052002,
+			"peak_tick_ms": 0.0,
+			"tick": 0.0,
+			"timestamp": "2026-05-21T16:55:42"
+		},
+		{
+			"avg_fps": 1.0,
+			"avg_tick_ms": 0.0,
+			"fps": 1.0,
+			"memory_mb": 627.69669342041,
+			"peak_tick_ms": 0.0,
+			"tick": 0.0,
+			"timestamp": "2026-05-21T16:55:42"
+		},
+		{
+			"avg_fps": 1.0,
+			"avg_tick_ms": 0.0,
+			"fps": 1.0,
+			"memory_mb": 627.701217651367,
+			"peak_tick_ms": 0.0,
+			"tick": 0.0,
+			"timestamp": "2026-05-21T16:55:42"
+		},
+		{
+			"avg_fps": 1.0,
+			"avg_tick_ms": 0.0,
+			"fps": 1.0,
+			"memory_mb": 627.702507019043,
+			"peak_tick_ms": 0.0,
+			"tick": 0.0,
+			"timestamp": "2026-05-21T16:55:43"
+		},
+		{
+			"avg_fps": 1.0,
+			"avg_tick_ms": 0.0,
+			"fps": 1.0,
+			"memory_mb": 627.703689575195,
+			"peak_tick_ms": 0.0,
+			"tick": 0.0,
+			"timestamp": "2026-05-21T16:55:43"
+		},
+		{
+			"avg_fps": 1.0,
+			"avg_tick_ms": 0.0,
+			"fps": 1.0,
+			"memory_mb": 627.704635620117,
+			"peak_tick_ms": 0.0,
+			"tick": 0.0,
+			"timestamp": "2026-05-21T1
+... [truncated at 1500 chars]
+=== HEELKAWN_DEBUG_REPORT:save_dump:tick=0 END ===
+[F10_SWEEP] PANEL=save_dump                       107ms
+=== HEELKAWN_DEBUG_REPORT:session_snapshot_pack:tick=0 BEGIN ===
+[_safe_report] Starting: session_snapshot_pack
+
+HEELKAWN_AI_SNAPSHOT_CHECKLIST  tick=0
+
+A) Godot Output — Copy lines with SIM_HITCH, SIM_CATCHUP, MAIN_TICK_HOTSPOT, VALIDATION_, and any errors. Note game speed (e.g. 100x) and whether the window felt smooth.
+B) Screenshot — One full game view; optional: Debugger → Monitors → FPS if profiling stalls.
+C) F10 → ★ 00 · One paste pack — one button prints checklist + ERROR + 31 + 34 (CREATOR_START…END).
+   After running the pack, do not click ERROR / 31 / 34 again the same tick (duplicate Output).
+D) Without the pack: press ERROR, then 31 · Playtest, then 34 · Creator digest in order.
+E) Optional — F10 → 32 Soul bundle · 33 Portable character JSON (not in the pack).
+
+Paste to Cursor/AI: Godot console tail (A) + screenshot (B) + one session_snapshot_pack block (C), or (A)+(B)+ separate D blocks.
+
+>>> Embedded: ERROR + Playtest (31) + Creator digest (34). Optional extras: F10 → 32 Soul · 33 Portable character — not included here.
+
+--- embedded: ERROR report ---
+=== HEELKAWN ERROR REPORT ===
+Generated: 2026-08-13T20:34:56
+Game Tick: 0
+
+=== FILE SYNTAX CHECK ===
+✓ AIControlPanel.gd: OK
+✓ HeelKawnian.gd: OK
+✓ HeelKawnianData.gd: OK
+✓ PawnNeuralNetwork.gd: OK
+✓ SettlementAI.gd: OK
+✓ Main.gd: OK
+✓ AIAgentManager.gd: OK
+✓ GeneticEvolution.gd: OK
+✓ CharacterExport.gd: OK
+✓ WorldMemory.gd: OK
+✓ CulturalMemory.gd: OK
+✓ ReligionLens.gd: OK
+✓ WorldData.gd: OK
+✓ WorldGenerator.gd: OK
+✓ PathFinder.gd: OK
+
+=== SYSTEM STATUS CHECK ===
+AUTOLOAD STATUS:
+  GameManager: ✓ LOADED
+  AIAgentManager: ✓ LOADED
+  WorldMemory: ✓ LOADED
+  SettlementMemory: ✓ LOADED
+  CivilizationStage: ✓ LOADED
+  CulturalMemory: ✓ LOADED
+  ReligionLens: ✓ LOADED
+  JobManager: ✓ LOADED
+  StockpileManager: ✓ LOADED
+
+=== NEURAL NETWORK MATRIX STATUS ===
+  ✓ WorldMemory neural matrix active
+  ✓ CulturalMemory neural matrix active
+  ✓ ReligionLens neural matrix active
+  ✓ AIAgentManager neural matrix active
+
+=== AI RUNTIME POLICY ===
+✓ AI manager: ALWAYS-ON
+  enabled=true civilization_mode=true max_agents=25 update_frequency=3
+
+=== SUMMARY ===
+Total Issues Found: 0
+RUNTIME TRUTH PASS: syntax/autoload checks passed and pawn visual-selection truth passed.
+✓ No syntax errors detected
+✓ All autoloads loaded
+✓ Neural network matrix active
+✓ AI runtime policy active
+
+--- embedded: Playtest bundle (31) ---
+[PLAYTEST_BUNDLE] tick=0
+[PLAYTEST_BUNDLE] sim_diag={ "tick_count": 0, "speed": 1.0, "paused": false, "max_ticks_per_frame": 2, "max_accumulated_ticks": 99999, "accumulator_sec": 0.0, "queued_ticks_est": 0.0, "ticks_emitted_last_frame": 0, "last_frame_game_tick_ms": 0.0, "last_frame_tick_cap_backlog": false, "adaptive_ticks_cap_last_frame": 0 }
+[PLAYTEST_BUNDLE] pawns=24 formal_settlements=0 wm_events=0
+[PLAYTEST_BUNDLE] proto_sites=0
+[PLAYTEST_BUNDLE] --- PlayerIntentQueue ---
+PlayerIntentQueue SPEC v1
+  queue_size=0 unprocessed=0 submitted_total=0 max=512
+  IntentKind: OBSERVER_NOTE=1 CHRONICLE_PIN_ZONE=2 REQUEST_SETTLEMENT_FOCUS=3 DEBUG_TOOL=4
+  (empty) Example: PlayerIntentQueue.submit(PlayerIntentQueue.IntentKind.OBSERVER_NOTE, "", -1, "session note", {})
+  Incarnation helpers: request_incarnation_entry() request_spectator_return()
+[PLAYTEST_BUNDLE] --- FactionManager ---
+FactionRegistry (houses keyed by settlement center_region)
+  house_count=0
+[PLAYTEST_BUNDLE] --- ReligionLens (6 settlements max) ---
+ReligionLens (read-only overlay) formal=0 proto=0
+  sacred_sites_sample(count=0):
+[PLAYTEST_BUNDLE] hint: run at 1x–12x first; watch Colony HUD Playtest line + pawn Social; after ~1–2 sim years use F10 → 32 Soul bundle; for one pawn JSON handoff (MMO/site) use F10 → 33; F5 save before 50x+; Esc closes F10 menu.
+
+--- embedded: Creator session digest (34) — CREATOR_START … CREATOR_END ---
+
+========== HEELKAWN · CREATOR SESSION DIGEST · ONE PASTE ==========
+Paste everything from CREATOR_START through CREATOR_END to anyone helping you.
+CREATOR_START
+
+--- What you are seeing (plain words) ---
+The simulation clock is at tick 0 — think of that as the film frame counter.
+Calendar: Year 1 · day 1 of 50 in this year · absolute day 1 since start.
+Speed is 1.0x; pause is no — time is running.
+World seed (same seed → same geography rules): 20260429
+Heelkawnians alive right now: 24 — each one has needs, job prefs, and bonds like anyone in the colony.
+Recorded memories in the chronicle so far: 0 events — births, talks, work, and milestones.
+Colony mood from pressures: stance "balanced". Food strain 100% · housing strain 100% · materials strain 100%.
+Plain read on strain: food is tight — foragers and farms matter · shelter is stressed — beds and space compete · building materials feel scarce for projects.
+Formal settlements right now: 0 · proto sites: 0.
+Animals on the map (rabbits / deer / total): 8 / 4 / 12
+
+Recent story beats (newest last in log; shortened):
+• (Quiet moment — no fresh highlights in the last few events.)
+
+No pawn is highlighted — click someone on the map to attach the sheet to them.
+You are in "WATCH" mode (spectator flies above; incarnation pilots one body).
+
+--- What machines read (compact backend truth) ---
+[creator_digest_meta] schema=2026-04-29c tick=0 world_seed=20260429
+[sim_diag] { "tick_count": 0, "speed": 1.0, "paused": false, "max_ticks_per_frame": 2, "max_accumulated_ticks": 99999, "accumulator_sec": 0.0, "queued_ticks_est": 0.0, "ticks_emitted_last_frame": 0, "last_frame_game_tick_ms": 0.0, "last_frame_tick_cap_backlog": false, "adaptive_ticks_cap_last_frame": 0 }
+[jobs] { "open": 0, "claimed": 0, "posted": 0, "completed": 0, "cancelled": 0, "cancel_reasons": {  }, "abandon_reasons": {  } }
+[stockpile_zones] count=0
+[settlements_n] 0
+[proto_sites_n] 0
+[intent_memory_global] 0.000000
+PlayerIntentQueue SPEC v1
+  queue_size=0 unprocessed=0 submitted_total=0 max=512
+  IntentKind: OBSERVER_NOTE=1 CHRONICLE_PIN_ZONE=2 REQUEST_SETTLEMENT_FOCUS=3 DEBUG_TOOL=4
+  (empty) Example: PlayerIntentQueue.submit(PlayerIntentQueue.IntentKind.OBSERVER_NOTE, "", -1, "session note", {})
+  Incarnation helpers: request_incarnation_entry() request_spectator_return()
+[faction_registry]
+FactionRegistry (houses keyed by settlement center_region)
+  house_count=0
+[observation_ambient] { "type": "sim_ambient", "api_version": "2026-04-30a", "sim_diag": { "tick_count": 0, "speed": 1.0, "paused": false, "max_ticks_per_frame": 2, "max_accumulated_ticks": 99999, "accumulator_sec": 0.0, "queued_ticks_est": 0.0, "ticks_emitted_last_frame": 0, "last_frame_game_tick_ms": 0.0, "last_frame_tick_cap_backlog": false, "adaptive_ticks_cap_last_frame": 0 }, "player_intent": { "chronicler_pin_zone_id": "", "queue_size": 0, "unprocessed": 0 } }
+[camera_settlement_revival_digest] { "has_settlement": false, "region_key": 0, "camera_region_key": 0, "profile_region_key": -1, "digest_source": "none", "state": "", "revival_score": 0, "peace_threshold_ticks": 0, "peace_since_conflict_ticks": 0, "revival_ready": false, "rebirth_ok": false, "rebirth_reason": "" }
+[kernel_summary_compact]
+TICK_NOW: 0 (kernel_export_milestone=30000)
+WorldMemory Events: 0
+Wildlife: Rabbit=8 Deer=4 Total=12
+Settlements: Active=0 Revivable=0 Recovering=0 Abandoned=0 Permanently Abandoned=0
+camera_revival: vacant cam_rk=0
+Player HeelKawnian: ID=1 Profession=Gatherer XP=0/100
+
+Hints: F10 · 31 = smaller bundle · F10 · 32 = long chronicle export · F10 · ERROR = wiring check.
+CREATOR_END
+========== END CREATOR DIGEST ==========
+
+[_safe_report] Completed: session_snapshot_pack
+=== HEELKAWN_DEBUG_REPORT:session_snapshot_pack:tick=0 END ===
+[F10_SWEEP] PANEL=session_snapshot_pack          6259ms
+=== HEELKAWN_DEBUG_REPORT:session_snapshot_guide:tick=0 BEGIN ===
+[_safe_report] Starting: session_snapshot_guide
+
+HEELKAWN_AI_SNAPSHOT_CHECKLIST  tick=0
+
+A) Godot Output — Copy lines with SIM_HITCH, SIM_CATCHUP, MAIN_TICK_HOTSPOT, VALIDATION_, and any errors. Note game speed (e.g. 100x) and whether the window felt smooth.
+B) Screenshot — One full game view; optional: Debugger → Monitors → FPS if profiling stalls.
+C) F10 → ★ 00 · One paste pack — one button prints checklist + ERROR + 31 + 34 (CREATOR_START…END).
+   After running the pack, do not click ERROR / 31 / 34 again the same tick (duplicate Output).
+D) Without the pack: press ERROR, then 31 · Playtest, then 34 · Creator digest in order.
+E) Optional — F10 → 32 Soul bundle · 33 Portable character JSON (not in the pack).
+
+Paste to Cursor/AI: Godot console tail (A) + screenshot (B) + one session_snapshot_pack block (C), or (A)+(B)+ separate D blocks.
+
+[_safe_report] Completed: session_snapshot_guide
+=== HEELKAWN_DEBUG_REPORT:session_snapshot_guide:tick=0 END ===
+[F10_SWEEP] PANEL=session_snapshot_guide           15ms
+=== HEELKAWN_DEBUG_REPORT:performance_snapshot:tick=0 BEGIN ===
+[_safe_report] Starting: performance_snapshot
+=== HEELKAWN PERFORMANCE SNAPSHOT ===
+Generated: 2026-08-13T20:35:02
+Game Tick: 0
+Game Speed: 1.0x
+
+--- SIMULATION STATE ---
+Total Pawns: 24
+Game Speed: 1.0x
+Is Paused: false
+
+--- SETTLEMENT STATS ---
+Active Settlements: 0
+
+--- JOB STATS ---
+Open Jobs: 0
+Claimed Jobs: 0
+
+--- MINING REACT STATUS ---
+Mining React Pending: false
+Mining React In Progress: false
+Mining Scan Y Cursor: 0 / 256
+
+--- HOW TO USE THIS DATA ---
+1. Run game at speed where you see lag (e.g., 100x)
+2. When you see freeze, press F10 immediately
+3. Click '01 · PERFORMANCE SNAPSHOT'
+4. Copy the output above and send to AI
+
+=== END PERFORMANCE SNAPSHOT ===
+[_safe_report] Completed: performance_snapshot
+=== HEELKAWN_DEBUG_REPORT:performance_snapshot:tick=0 END ===
+[F10_SWEEP] PANEL=performance_snapshot             38ms
+=== HEELKAWN_DEBUG_REPORT:ai_diagnostic:tick=0 BEGIN ===
+[_safe_report] Starting: ai_diagnostic
+=== HEELKAWN AI DIAGNOSTIC ===
+Time: 2026-08-13T20:35:02
+
+--- CORE STATE ---
+Tick: 0 | Speed: 1.0x | Paused: false | FPS: 129
+
+--- SECTION TIMINGS (last tick) ---
+This tick's 20+ timed operations. Large values = bottleneck.
+
+--- COUNTS ---
+Pawns: 24 | Jobs Open: 0 | Memory: 348 MB | Objects: 5428
+
+--- AUTOLOAD HEALTH ---
+  GameManager: LOADED
+  TickManager: LOADED
+  WorldMemory: LOADED
+  SettlementMemory: LOADED
+  JobManager: LOADED
+  WorldAI: LOADED
+  FactionManager: LOADED
+  StockpileManager: LOADED
+
+--- MINING REACT ---
+  WorldReact not found on Main
+
+--- RECOMMENDATION ---
+Performance looks acceptable. If stutter persists, capture TICK_PROFILE output.
+
+=== END AI DIAGNOSTIC ===
+[_safe_report] Completed: ai_diagnostic
+=== HEELKAWN_DEBUG_REPORT:ai_diagnostic:tick=0 END ===
+[F10_SWEEP] PANEL=ai_diagnostic                    37ms
+=== HEELKAWN_DEBUG_REPORT:playtest_truth_all:tick=0 BEGIN ===
+=== HEELKAWN_PLAYTEST_TRUTH_ALL:tick=0 BEGIN ===
+
+=== HEELKAWN ERROR REPORT ===
+Generated: 2026-08-13T20:35:02
+Game Tick: 0
+
+=== FILE SYNTAX CHECK ===
+✓ AIControlPanel.gd: OK
+✓ HeelKawnian.gd: OK
+✓ HeelKawnianData.gd: OK
+✓ PawnNeuralNetwork.gd: OK
+✓ SettlementAI.gd: OK
+✓ Main.gd: OK
+✓ AIAgentManager.gd: OK
+✓ GeneticEvolution.gd: OK
+✓ CharacterExport.gd: OK
+✓ WorldMemory.gd: OK
+✓ CulturalMemory.gd: OK
+✓ ReligionLens.gd: OK
+✓ WorldData.gd: OK
+✓ WorldGenerator.gd: OK
+✓ PathFinder.gd: OK
+
+=== SYSTEM STATUS CHECK ===
+AUTOLOAD STATUS:
+  GameManager: ✓ LOADED
+  AIAgentManager: ✓ LOADED
+  WorldMemory: ✓ LOADED
+  SettlementMemory: ✓ LOADED
+  CivilizationStage: ✓ LOADED
+  CulturalMemory: ✓ LOADED
+  ReligionLens: ✓ LOADED
+  JobManager: ✓ LOADED
+  StockpileManager: ✓ LOADED
+
+=== NEURAL NETWORK MATRIX STATUS ===
+  ✓ WorldMemory neural matrix active
+  ✓ CulturalMemory neural matrix active
+  ✓ ReligionLens neural matrix active
+  ✓ AIAgentManager neural matrix active
+
+=== AI RUNTIME POLICY ===
+✓ AI manager: ALWAYS-ON
+  enabled=true civilization_mode=true max_agents=25 update_frequency=3
+
+=== SUMMARY ===
+Total Issues Found: 0
+RUNTIME TRUTH PASS: syntax/autoload checks passed and pawn visual-selection truth passed.
+✓ No syntax errors detected
+✓ All autoloads loaded
+✓ Neural network matrix active
+✓ AI runtime policy active
+
+tick=0  sim_year_index=1  tick_within_sim_year=0
+visual_day_in_year=1/50  absolute_visual_day=1  TICKS_PER_VISUAL_DAY=600  TICKS_PER_SIM_YEAR=30000
+day_phase=0.0000  is_night=true  (DayNight uses same TICKS_PER_DAY as SimTime.TICKS_PER_VISUAL_DAY)
+
+sim_diag: { "tick_count": 0, "speed": 1.0, "paused": false, "max_ticks_per_frame": 2, "max_accumulated_ticks": 99999, "accumulator_sec": 0.0, "queued_ticks_est": 0.0, "ticks_emitted_last_frame": 0, "last_frame_game_tick_ms": 0.0, "last_frame_tick_cap_backlog": false, "adaptive_ticks_cap_last_frame": 0 }
+
+VISUAL_SELECTION_TRUTH
+VISUAL_SELECTION_TRUTH status=PASS
+visual=PASS/FAIL visual=PASS
+selection_capable_pawns=24
+selected_pawn_id=-1 last_selected_pawn_path=none last_click_method=none last_selection_success=false selection_manual_click_proven=false
+FAIL=[]
+
+COLONY_TRUTH
+COLONY_TRUTH status=PASS
+formal_settlements=0 proto_sites=0 stockpile_zones=0 beds=0 fire_pits=0
+FOOD_TRUTH stockpile_food=0 carried_food=0 food_in_pawn_hands=0 total_immediately_available_food=0 food_pressure_state= starvation_risk_label=false
+UI_TRUTH manual_click_proven=false selection_ok=false last_selected_pawn_path=none
+WARNINGS count=0 warnings=[]
+NEXT_ACTION next=NEXT:click_visible_pawn_then_press_F10
+[RUNTIME_TRUTH_SUMMARY] visual=PASS selection=FAIL colony=PASS food=PASS ui=FAIL manual_click=FAIL next="click_visible_pawn_then_press_F10"
+
+stance=balanced food=1.000 housing=1.000 materials=1.000 haul=0.000 warmth=0.000 cook=0.000 storage=0.000 light=1.000 contentment=false streak=0
+SETTLEMENT_PRESSURES (formal)
+SETTLEMENT_PRESSURES (proto)
+
+=== HEELKAWN CIVILIZATION STAGE ===
+Derived only: era comes from live technology, knowledge, infrastructure, profession diversity, and quality-of-life signals.
+WORLD: Bronze Age (stage 2) score=30 next=40 pawns=24
+  craft specialization and durable records
+  tech=0 knowledge=0 infrastructure=0 complexity=20 quality=6
+
+--- SETTLEMENTS ---
+World: Bronze Age (stage 2) score=30 next=40 pawns=24
+  craft specialization and durable records
+  tech=0 knowledge=0 infrastructure=0 complexity=20 quality=6
+=== END CIVILIZATION STAGE ===
+
+HEELKAWN_BACKBONE_FIRST_PLAY  tick=0  world_seed=20260429
+Authoritative detail: docs/HEELKAWN_STATE.md  (section FIRST PLAYABLE)
+
+LIVE = you can see it working in this build. DEFERRED = roadmap or thin stub.
+
+— SIM CORE —
+  GameManager            LIVE  speed=1.0
+  SettlementMemory       LIVE  formal_settlements=0
+  JobManager             LIVE  open_jobs=0
+  WorldMemory            LIVE  event_count=0
+  FactionManager        LIVE  houses=0
+  Pawns (scene)          LIVE  living=24
+  WorldAI + matrix       LIVE  neural+rules+12ch parity
+  ColonySimServices      LIVE  food/mat/haul/housing pressures
+  CivilizationStage      LIVE  Bronze Age score=30
+  StockpileManager       LIVE  zones + aggregates
+
+— PARTIAL / ROADMAP —
+  SimVision              DEFERRED  full vision/campaign sim
+  Tech diffusion graph   LIVE  peer settlement IDs (real list), not map adjacency
+  Tool items (axe/pick)  DEFERRED  carry + efficiency proxy
+
+— TRY —
+  Click pawn → ID / Needs / Matrix / Neural / Social.  F9 realm.  F10 → 31 playtest bundle.
+
+settlement_count=0 formal_settlements=0 proto_sites=0
+
+SettlementRegistry.to_save_dict: { "abandoned_at": {  }, "overlay": {  } }
+
+IntentMemory.global_pressure=0.0000
+IntentMemory.settlement_pressure  entries=0
+IntentMemory.settlement_intent (0=GROW 1=HOLD 2=ABANDON)  entries=0
+
+JobManager.stats: { "open": 0, "claimed": 0, "posted": 0, "completed": 0, "cancelled": 0, "cancel_reasons": {  }, "abandon_reasons": {  } }
+JobManager.open_count=0
+Stockpile zones=0
+
+TradeMemory: count_t2_tiles=0 count_route_tiles=0 last_tick_t2_existed=-1
+
+WorldEvents.get_debug_active_event: { "active_event_name": "", "active_event_until_tick": -1, "gathering_efficiency_mult": 1.0, "last_regional_shortage_tick": -1 }
+WorldEvents.gathering_efficiency_mult()=1.000
+validation_clean_economy_events_active=false
+
+CulturalMemory.reputation_by_region count=0
+
+TICK_NOW: 0 (kernel_export_milestone=30000)
+WorldMemory Events: 0
+Wildlife: Rabbit=8 Deer=4 Total=12
+Settlements: Active=0 Revivable=0 Recovering=0 Abandoned=0 Permanently Abandoned=0
+camera_revival: vacant cam_rk=0
+Player HeelKawnian: ID=1 Profession=Gatherer XP=0/100
+
+SettlementMemory.validation_harness_flags: { "session": false, "session_const_requested": false, "os_debug_build": true, "settlement_truth_verify": false, "specialization_log": false }
+OS.is_debug_build=true
+
+=== HEELKAWN_PLAYTEST_TRUTH_ALL:tick=0 END ===
+=== HEELKAWN_DEBUG_REPORT:playtest_truth_all:tick=0 END ===
+[F10_SWEEP] PANEL=playtest_truth_all             5997ms
+=== HEELKAWN_DEBUG_REPORT:visual_selection_truth:tick=0 BEGIN ===
+[_safe_report] Starting: visual_selection_truth
+VISUAL_SELECTION_TRUTH
+VISUAL_SELECTION_TRUTH status=PASS
+visual=PASS/FAIL visual=PASS
+selection_capable_pawns=24
+selected_pawn_id=-1 last_selected_pawn_path=none last_click_method=none last_selection_success=false selection_manual_click_proven=false
+FAIL=[]
+[_safe_report] Completed: visual_selection_truth
+=== HEELKAWN_DEBUG_REPORT:visual_selection_truth:tick=0 END ===
+[F10_SWEEP] PANEL=visual_selection_truth           12ms
+=== HEELKAWN_DEBUG_REPORT:colony_truth:tick=0 BEGIN ===
+[_safe_report] Starting: colony_truth
+COLONY_TRUTH
+COLONY_TRUTH status=PASS
+formal_settlements=0 proto_sites=0 stockpile_zones=0 beds=0 fire_pits=0
+FOOD_TRUTH stockpile_food=0 carried_food=0 food_in_pawn_hands=0 total_immediately_available_food=0 food_pressure_state= starvation_risk_label=false
+UI_TRUTH manual_click_proven=false selection_ok=false last_selected_pawn_path=none
+WARNINGS count=0 warnings=[]
+NEXT_ACTION next=NEXT:click_visible_pawn_then_press_F10
+[RUNTIME_TRUTH_SUMMARY] visual=PASS selection=FAIL colony=PASS food=PASS ui=FAIL manual_click=FAIL next="click_visible_pawn_then_press_F10"
+[_safe_report] Completed: colony_truth
+=== HEELKAWN_DEBUG_REPORT:colony_truth:tick=0 END ===
+[F10_SWEEP] PANEL=colony_truth                     25ms
+=== HEELKAWN_DEBUG_REPORT:error_report:tick=0 BEGIN ===
+[_safe_report] Starting: error_report
+=== HEELKAWN ERROR REPORT ===
+Generated: 2026-08-13T20:35:08
+Game Tick: 0
+
+=== FILE SYNTAX CHECK ===
+✓ AIControlPanel.gd: OK
+✓ HeelKawnian.gd: OK
+✓ HeelKawnianData.gd: OK
+✓ PawnNeuralNetwork.gd: OK
+✓ SettlementAI.gd: OK
+✓ Main.gd: OK
+✓ AIAgentManager.gd: OK
+✓ GeneticEvolution.gd: OK
+✓ CharacterExport.gd: OK
+✓ WorldMemory.gd: OK
+✓ CulturalMemory.gd: OK
+✓ ReligionLens.gd: OK
+✓ WorldData.gd: OK
+✓ WorldGenerator.gd: OK
+✓ PathFinder.gd: OK
+
+=== SYSTEM STATUS CHECK ===
+AUTOLOAD STATUS:
+  GameManager: ✓ LOADED
+  AIAgentManager: ✓ LOADED
+  WorldMemory: ✓ LOADED
+  SettlementMemory: ✓ LOADED
+  CivilizationStage: ✓ LOADED
+  CulturalMemory: ✓ LOADED
+  ReligionLens: ✓ LOADED
+  JobManager: ✓ LOADED
+  StockpileManager: ✓ LOADED
+
+=== NEURAL NETWORK MATRIX STATUS ===
+  ✓ WorldMemory neural matrix active
+  ✓ CulturalMemory neural matrix active
+  ✓ ReligionLens neural matrix active
+  ✓ AIAgentManager neural matrix active
+
+=== AI RUNTIME POLICY ===
+✓ AI manager: ALWAYS-ON
+  enabled=true civilization_mode=true max_agents=25 update_frequency=3
+
+=== SUMMARY ===
+Total Issues Found: 0
+RUNTIME TRUTH PASS: syntax/autoload checks passed and pawn visual-selection truth passed.
+✓ No syntax errors detected
+✓ All autoloads loaded
+✓ Neural network matrix active
+✓ AI runtime policy active
+[_safe_report] Completed: error_report
+=== HEELKAWN_DEBUG_REPORT:error_report:tick=0 END ===
+[F10_SWEEP] PANEL=error_report                   6050ms
+=== HEELKAWN_DEBUG_REPORT:playtest_bundle:tick=0 BEGIN ===
+[_safe_report] Starting: playtest_bundle
+[PLAYTEST_BUNDLE] tick=0
+[PLAYTEST_BUNDLE] sim_diag={ "tick_count": 0, "speed": 1.0, "paused": false, "max_ticks_per_frame": 2, "max_accumulated_ticks": 99999, "accumulator_sec": 0.0, "queued_ticks_est": 0.0, "ticks_emitted_last_frame": 0, "last_frame_game_tick_ms": 0.0, "last_frame_tick_cap_backlog": false, "adaptive_ticks_cap_last_frame": 0 }
+[PLAYTEST_BUNDLE] pawns=24 formal_settlements=0 wm_events=0
+[PLAYTEST_BUNDLE] proto_sites=0
+[PLAYTEST_BUNDLE] --- PlayerIntentQueue ---
+PlayerIntentQueue SPEC v1
+  queue_size=0 unprocessed=0 submitted_total=0 max=512
+  IntentKind: OBSERVER_NOTE=1 CHRONICLE_PIN_ZONE=2 REQUEST_SETTLEMENT_FOCUS=3 DEBUG_TOOL=4
+  (empty) Example: PlayerIntentQueue.submit(PlayerIntentQueue.IntentKind.OBSERVER_NOTE, "", -1, "session note", {})
+  Incarnation helpers: request_incarnation_entry() request_spectator_return()
+[PLAYTEST_BUNDLE] --- FactionManager ---
+FactionRegistry (houses keyed by settlement center_region)
+  house_count=0
+[PLAYTEST_BUNDLE] --- ReligionLens (6 settlements max) ---
+ReligionLens (read-only overlay) formal=0 proto=0
+  sacred_sites_sample(count=0):
+[PLAYTEST_BUNDLE] hint: run at 1x–12x first; watch Colony HUD Playtest line + pawn Social; after ~1–2 sim years use F10 → 32 Soul bundle; for one pawn JSON handoff (MMO/site) use F10 → 33; F5 save before 50x+; Esc closes F10 menu.
+[_safe_report] Completed: playtest_bundle
+=== HEELKAWN_DEBUG_REPORT:playtest_bundle:tick=0 END ===
+[F10_SWEEP] PANEL=playtest_bundle                  17ms
+=== HEELKAWN_DEBUG_REPORT:soul_bundle:tick=0 BEGIN ===
+=== HEELKAWN_SOUL_BUNDLE v=1.0.0 tick=0 BEGIN ===
+matrix_doc=res://docs/HEELKAWN_SIM_MATRIX.md
+sim_calendar: sim_year_index=1 tick_within_sim_year=0 visual_day_in_year=1/50 abs_visual_day=1
+handoff_ticks: TICKS_PER_SIM_YEAR=30000  suggested_paste_milestones=[30000, 60000] (~1yr, ~2yr)
+sim_diag: { "tick_count": 0, "speed": 1.0, "paused": false, "max_ticks_per_frame": 2, "max_accumulated_ticks": 99999, "accumulator_sec": 0.0, "queued_ticks_est": 0.0, "ticks_emitted_last_frame": 0, "last_frame_game_tick_ms": 0.0, "last_frame_tick_cap_backlog": false, "adaptive_ticks_cap_last_frame": 0 }
+colony_sim: stance/pressures snapshot: { "stance": "balanced", "food_p": 1.0, "housing_p": 1.0, "materials_p": 1.0 }
+jobs: open=0 claimed=0 posted=0 completed=0
+settlements: count=0
+world_memory: event_count=0
+wildlife: { "rabbit": 8, "deer": 4, "total": 12 }
+--- world_memory_tail (newest last; max 18) ---
+--- history_export_snip (private_dev, first 45 lines max) ---
+HEELKAWN_HISTORY_EXPORT v=1.0.0 schema=1
+EXPORT_MODE: private_dev
+TICKS_PER_SIM_YEAR: 30000
+TICK_RANGE: 0 to 0
+EVENT_COUNT: 0
+COLUMNS: tick | type | subject | cause | impact | provenance_hash
+==============================================================
+sim_vision: roadmap autoload removed; see docs/HEELKAWN_PROJECT_COMPASS.md for current priorities.
+=== HEELKAWN_SOUL_BUNDLE v=1.0.0 tick=0 END ===
+=== HEELKAWN_DEBUG_REPORT:soul_bundle:tick=0 END ===
+[F10_SWEEP] PANEL=soul_bundle                      27ms
+=== HEELKAWN_DEBUG_REPORT:portable_character:tick=0 BEGIN ===
+=== HEELKAWN_PORTABLE_CHARACTER_JSON BEGIN ===
+{
+	"affinities": {
+		"building": 0.358358358358358,
+		"combat": 0.322322322322322,
+		"crafting": 0.384384384384384,
+		"diplomacy": 0.408408408408408,
+		"farming": 0.34034034034034
+	},
+	"affinity_birth_snapshot": {
+		"building": 0.358358358358358,
+		"combat": 0.322322322322322,
+		"crafting": 0.384384384384384,
+		"diplomacy": 0.408408408408408,
+		"farming": 0.34034034034034
+	},
+	"age_years": 0.0,
+	"apparel_color": [
+		0.447058826684952,
+		0.368627458810806,
+		0.603921592235565,
+		1.0
+	],
+	"biography_lines": 0,
+	"birth_tick": 0,
+	"body_type": 2,
+	"children_count": 0,
+	"color": [
+		0.160784319043159,
+		0.713725507259369,
+		0.964705884456635,
+		1.0
+	],
+	"current_profession": 3,
+	"dislikes": {
+		"building": 0.328352,
+		"crafting": 0.39936,
+		"farming": 0.351574,
+		"mining": 0.13986,
+		"teaching": 0.025397,
+		"trading": 0.294843
+	},
+	"display_name": "Jane Hunterton",
+	"export_tick": 0,
+	"gender": 1,
+	"hair_color": [
+		0.24705882370472,
+		0.192156866192818,
+		0.156862750649452,
+		1.0
+	],
+	"hair_style": 2,
+	"influence": 0.0,
+	"job_ticks_by_category": {
+		"building": 0,
+		"crafting": 0,
+		"exploring": 0,
+		"farming": 0,
+		"hunting": 0,
+		"mining": 0,
+		"resting": 0,
+		"socializing": 0,
+		"teaching": 0,
+		"trading": 0
+	},
+	"last_words": "",
+	"legacy_standalone_pawn_id": 1,
+	"likes": {
+		"exploring": 0.676746,
+		"hunting": 0.694575,
+		"resting": 0.93339,
+		"socializing": 0.80987
+	},
+	"lineage_id": "",
+	"military_rank": "grunt",
+	"origin_region_key": 0,
+	"parent_a_id": -1,
+	"parent_b_id": -1,
+	"parental_trauma_weights": {
+
+	},
+	"physical_scars": [],
+	"profession_liking": {
+		"circulation": 1,
+		"industry": 1,
+		"inquiry": 1,
+		"martial": 1,
+		"outdoors": 1,
+		"structure": 1,
+		"tillage": 1
+	},
+	"schema": "heelkawn_character_portable/v1",
+	"skill_xp": {
+		"0": 50.0,
+		"4": 30.0
+	},
+	"skills": {
+		"building": 0,
+		"combat": 0,
+		"farming": 0,
+		"gathering": 0,
+		"movement": 0
+	},
+	"social_rapport_top": {
+
+	},
+	"soul_id": "",
+	"source_game": "HeelKawn1_standalone",
+	"trait_types": [
+		15,
+		12
+	],
+	"world_seed": 20260429
+}
+=== HEELKAWN_PORTABLE_CHARACTER_JSON END ===
+[PORTABLE_CHARACTER] hint: paste between BEGIN/END; future MMO/website importers target schema=heelkawn_character_portable/v1
+=== HEELKAWN_DEBUG_REPORT:portable_character:tick=0 END ===
+[F10_SWEEP] PANEL=portable_character                7ms
+=== HEELKAWN_DEBUG_REPORT:creator_digest:tick=0 BEGIN ===
+
+========== HEELKAWN · CREATOR SESSION DIGEST · ONE PASTE ==========
+Paste everything from CREATOR_START through CREATOR_END to anyone helping you.
+CREATOR_START
+
+--- What you are seeing (plain words) ---
+The simulation clock is at tick 0 — think of that as the film frame counter.
+Calendar: Year 1 · day 1 of 50 in this year · absolute day 1 since start.
+Speed is 1.0x; pause is no — time is running.
+World seed (same seed → same geography rules): 20260429
+Heelkawnians alive right now: 24 — each one has needs, job prefs, and bonds like anyone in the colony.
+Recorded memories in the chronicle so far: 0 events — births, talks, work, and milestones.
+Colony mood from pressures: stance "balanced". Food strain 100% · housing strain 100% · materials strain 100%.
+Plain read on strain: food is tight — foragers and farms matter · shelter is stressed — beds and space compete · building materials feel scarce for projects.
+Formal settlements right now: 0 · proto sites: 0.
+Animals on the map (rabbits / deer / total): 8 / 4 / 12
+
+Recent story beats (newest last in log; shortened):
+• (Quiet moment — no fresh highlights in the last few events.)
+
+No pawn is highlighted — click someone on the map to attach the sheet to them.
+You are in "WATCH" mode (spectator flies above; incarnation pilots one body).
+
+--- What machines read (compact backend truth) ---
+[creator_digest_meta] schema=2026-04-29c tick=0 world_seed=20260429
+[sim_diag] { "tick_count": 0, "speed": 1.0, "paused": false, "max_ticks_per_frame": 2, "max_accumulated_ticks": 99999, "accumulator_sec": 0.0, "queued_ticks_est": 0.0, "ticks_emitted_last_frame": 0, "last_frame_game_tick_ms": 0.0, "last_frame_tick_cap_backlog": false, "adaptive_ticks_cap_last_frame": 0 }
+[jobs] { "open": 0, "claimed": 0, "posted": 0, "completed": 0, "cancelled": 0, "cancel_reasons": {  }, "abandon_reasons": {  } }
+[stockpile_zones] count=0
+[settlements_n] 0
+[proto_sites_n] 0
+[intent_memory_global] 0.000000
+PlayerIntentQueue SPEC v1
+  queue_size=0 unprocessed=0 submitted_total=0 max=512
+  IntentKind: OBSERVER_NOTE=1 CHRONICLE_PIN_ZONE=2 REQUEST_SETTLEMENT_FOCUS=3 DEBUG_TOOL=4
+  (empty) Example: PlayerIntentQueue.submit(PlayerIntentQueue.IntentKind.OBSERVER_NOTE, "", -1, "session note", {})
+  Incarnation helpers: request_incarnation_entry() request_spectator_return()
+[faction_registry]
+FactionRegistry (houses keyed by settlement center_region)
+  house_count=0
+[observation_ambient] { "type": "sim_ambient", "api_version": "2026-04-30a", "sim_diag": { "tick_count": 0, "speed": 1.0, "paused": false, "max_ticks_per_frame": 2, "max_accumulated_ticks": 99999, "accumulator_sec": 0.0, "queued_ticks_est": 0.0, "ticks_emitted_last_frame": 0, "last_frame_game_tick_ms": 0.0, "last_frame_tick_cap_backlog": false, "adaptive_ticks_cap_last_frame": 0 }, "player_intent": { "chronicler_pin_zone_id": "", "queue_size": 0, "unprocessed": 0 } }
+[camera_settlement_revival_digest] { "has_settlement": false, "region_key": 0, "camera_region_key": 0, "profile_region_key": -1, "digest_source": "none", "state": "", "revival_score": 0, "peace_threshold_ticks": 0, "peace_since_conflict_ticks": 0, "revival_ready": false, "rebirth_ok": false, "rebirth_reason": "" }
+[kernel_summary_compact]
+TICK_NOW: 0 (kernel_export_milestone=30000)
+WorldMemory Events: 0
+Wildlife: Rabbit=8 Deer=4 Total=12
+Settlements: Active=0 Revivable=0 Recovering=0 Abandoned=0 Permanently Abandoned=0
+camera_revival: vacant cam_rk=0
+Player HeelKawnian: ID=1 Profession=Gatherer XP=0/100
+
+Hints: F10 · 31 = smaller bundle · F10 · 32 = long chronicle export · F10 · ERROR = wiring check.
+CREATOR_END
+========== END CREATOR DIGEST ==========
+
+=== HEELKAWN_DEBUG_REPORT:creator_digest:tick=0 END ===
+[F10_SWEEP] PANEL=creator_digest                   55ms
+=== HEELKAWN_DEBUG_REPORT:chronicle_summary:tick=0 BEGIN ===
+=== HEELKAWN_READABLE_CHRONICLE_SUMMARY BEGIN ===
+HEELKAWN_CHRONICLE_SUMMARY
+tick=0  world_seed=20260429  events_retained=0
+newest_facts_tail:
+=== HEELKAWN_READABLE_CHRONICLE_SUMMARY END ===
+[CHRONICLE_SUMMARY] hint: also F10 → 37 writes this plus JSON to user://heelkawn_promotion_exports/…
+=== HEELKAWN_DEBUG_REPORT:chronicle_summary:tick=0 END ===
+[F10_SWEEP] PANEL=chronicle_summary                 7ms
+=== HEELKAWN_DEBUG_REPORT:promotion_bundle:tick=0 BEGIN ===
+[ExportSystem] Exported chronicle with 0 events to user://heelkawn_promotion_exports/export_1786678515/chronicle.json
+[ExportSystem] Exported 0 bloodlines to user://heelkawn_promotion_exports/export_1786678515/bloodlines.json
+[ExportSystem] Exported artifacts to user://heelkawn_promotion_exports/export_1786678515/artifacts.json
+[ExportSystem] Promotion bundle -> user://heelkawn_promotion_exports/export_1786678515 (OS: C:/Users/user/AppData/Roaming/Godot/app_userdata/HeelKawn/heelkawn_promotion_exports/export_1786678515)
+[PROMOTION_BUNDLE] ok  user_path=user://heelkawn_promotion_exports/export_1786678515  os_path=C:/Users/user/AppData/Roaming/Godot/app_userdata/HeelKawn/heelkawn_promotion_exports/export_1786678515
+[PROMOTION_BUNDLE] files: world_seed.json chronicle_summary.txt chronicle.json bloodlines.json artifacts.json
+=== HEELKAWN_DEBUG_REPORT:promotion_bundle:tick=0 END ===
+[F10_SWEEP] PANEL=promotion_bundle                 17ms
+=== HEELKAWN_DEBUG_REPORT:calendar:tick=0 BEGIN ===
+[_safe_report] Starting: calendar
+tick=0  sim_year_index=1  tick_within_sim_year=0
+visual_day_in_year=1/50  absolute_visual_day=1  TICKS_PER_VISUAL_DAY=600  TICKS_PER_SIM_YEAR=30000
+day_phase=0.0000  is_night=true  (DayNight uses same TICKS_PER_DAY as SimTime.TICKS_PER_VISUAL_DAY)
+[_safe_report] Completed: calendar
+=== HEELKAWN_DEBUG_REPORT:calendar:tick=0 END ===
+[F10_SWEEP] PANEL=calendar                          5ms
+=== HEELKAWN_DEBUG_REPORT:sim_diag:tick=0 BEGIN ===
+[_safe_report] Starting: sim_diag
+sim_diag: { "tick_count": 0, "speed": 1.0, "paused": false, "max_ticks_per_frame": 2, "max_accumulated_ticks": 99999, "accumulator_sec": 0.0, "queued_ticks_est": 0.0, "ticks_emitted_last_frame": 0, "last_frame_game_tick_ms": 0.0, "last_frame_tick_cap_backlog": false, "adaptive_ticks_cap_last_frame": 0 }
+[_safe_report] Completed: sim_diag
+=== HEELKAWN_DEBUG_REPORT:sim_diag:tick=0 END ===
+[F10_SWEEP] PANEL=sim_diag                          7ms
+=== HEELKAWN_DEBUG_REPORT:kernel:tick=0 BEGIN ===
+[_safe_report] Starting: kernel
+TICK_NOW: 0 (kernel_export_milestone=30000)
+WorldMemory Events: 0
+Wildlife: Rabbit=8 Deer=4 Total=12
+Settlements: Active=0 Revivable=0 Recovering=0 Abandoned=0 Permanently Abandoned=0
+camera_revival: vacant cam_rk=0
+Player HeelKawnian: ID=1 Profession=Gatherer XP=0/100
+[_safe_report] Completed: kernel
+=== HEELKAWN_DEBUG_REPORT:kernel:tick=0 END ===
+[F10_SWEEP] PANEL=kernel                            5ms
+=== HEELKAWN_DEBUG_REPORT:harness:tick=0 BEGIN ===
+[_safe_report] Starting: harness
+SettlementMemory.validation_harness_flags: { "session": false, "session_const_requested": false, "os_debug_build": true, "settlement_truth_verify": false, "specialization_log": false }
+OS.is_debug_build=true
+[_safe_report] Completed: harness
+=== HEELKAWN_DEBUG_REPORT:harness:tick=0 END ===
+[F10_SWEEP] PANEL=harness                           7ms
+=== HEELKAWN_DEBUG_REPORT:colony_sim:tick=0 BEGIN ===
+[_safe_report] Starting: colony_sim
+stance=balanced food=1.000 housing=1.000 materials=1.000 haul=0.000 warmth=0.000 cook=0.000 storage=0.000 light=1.000 contentment=false streak=0
+SETTLEMENT_PRESSURES (formal)
+SETTLEMENT_PRESSURES (proto)
+[_safe_report] Completed: colony_sim
+=== HEELKAWN_DEBUG_REPORT:colony_sim:tick=0 END ===
+[F10_SWEEP] PANEL=colony_sim                        9ms
+=== HEELKAWN_DEBUG_REPORT:civilization_stage:tick=0 BEGIN ===
+[_safe_report] Starting: civilization_stage
+=== HEELKAWN CIVILIZATION STAGE ===
+Derived only: era comes from live technology, knowledge, infrastructure, profession diversity, and quality-of-life signals.
+WORLD: Bronze Age (stage 2) score=30 next=40 pawns=24
+  craft specialization and durable records
+  tech=0 knowledge=0 infrastructure=0 complexity=20 quality=6
+
+--- SETTLEMENTS ---
+World: Bronze Age (stage 2) score=30 next=40 pawns=24
+  craft specialization and durable records
+  tech=0 knowledge=0 infrastructure=0 complexity=20 quality=6
+=== END CIVILIZATION STAGE ===
+[_safe_report] Completed: civilization_stage
+=== HEELKAWN_DEBUG_REPORT:civilization_stage:tick=0 END ===
+[F10_SWEEP] PANEL=civilization_stage               18ms
+=== HEELKAWN_DEBUG_REPORT:backbone_status:tick=0 BEGIN ===
+[_safe_report] Starting: backbone_status
+HEELKAWN_BACKBONE_FIRST_PLAY  tick=0  world_seed=20260429
+Authoritative detail: docs/HEELKAWN_STATE.md  (section FIRST PLAYABLE)
+
+LIVE = you can see it working in this build. DEFERRED = roadmap or thin stub.
+
+— SIM CORE —
+  GameManager            LIVE  speed=1.0
+  SettlementMemory       LIVE  formal_settlements=0
+  JobManager             LIVE  open_jobs=0
+  WorldMemory            LIVE  event_count=0
+  FactionManager        LIVE  houses=0
+  Pawns (scene)          LIVE  living=24
+  WorldAI + matrix       LIVE  neural+rules+12ch parity
+  ColonySimServices      LIVE  food/mat/haul/housing pressures
+  CivilizationStage      LIVE  Bronze Age score=30
+  StockpileManager       LIVE  zones + aggregates
+
+— PARTIAL / ROADMAP —
+  SimVision              DEFERRED  full vision/campaign sim
+  Tech diffusion graph   LIVE  peer settlement IDs (real list), not map adjacency
+  Tool items (axe/pick)  DEFERRED  carry + efficiency proxy
+
+— TRY —
+  Click pawn → ID / Needs / Matrix / Neural / Social.  F9 realm.  F10 → 31 playtest bundle.
+[_safe_report] Completed: backbone_status
+=== HEELKAWN_DEBUG_REPORT:backbone_status:tick=0 END ===
+[F10_SWEEP] PANEL=backbone_status                  31ms
+=== HEELKAWN_DEBUG_REPORT:settlements_economy_all:tick=0 BEGIN ===
+=== HEELKAWN_SETTLEMENTS_ECONOMY_ALL:tick=0 BEGIN ===
+
+settlement_count=0 formal_settlements=0 proto_sites=0
+
+SettlementRegistry.to_save_dict: { "abandoned_at": {  }, "overlay": {  } }
+
+IntentMemory.global_pressure=0.0000
+IntentMemory.settlement_pressure  entries=0
+IntentMemory.settlement_intent (0=GROW 1=HOLD 2=ABANDON)  entries=0
+
+JobManager.stats: { "open": 0, "claimed": 0, "posted": 0, "completed": 0, "cancelled": 0, "cancel_reasons": {  }, "abandon_reasons": {  } }
+JobManager.open_count=0
+Stockpile zones=0
+
+TradeMemory: count_t2_tiles=0 count_route_tiles=0 last_tick_t2_existed=-1
+
+WorldEvents.get_debug_active_event: { "active_event_name": "", "active_event_until_tick": -1, "gathering_efficiency_mult": 1.0, "last_regional_shortage_tick": -1 }
+WorldEvents.gathering_efficiency_mult()=1.000
+validation_clean_economy_events_active=false
+
+CulturalMemory.reputation_by_region count=0
+
+=== HEELKAWN_SETTLEMENTS_ECONOMY_ALL:tick=0 END ===
+=== HEELKAWN_DEBUG_REPORT:settlements_economy_all:tick=0 END ===
+[F10_SWEEP] PANEL=settlements_economy_all          27ms
+=== HEELKAWN_DEBUG_REPORT:settlements:tick=0 BEGIN ===
+[_safe_report] Starting: settlements
+settlement_count=0 formal_settlements=0 proto_sites=0
+[_safe_report] Completed: settlements
+=== HEELKAWN_DEBUG_REPORT:settlements:tick=0 END ===
+[F10_SWEEP] PANEL=settlements                       3ms
+=== HEELKAWN_DEBUG_REPORT:registry:tick=0 BEGIN ===
+[_safe_report] Starting: registry
+SettlementRegistry.to_save_dict: { "abandoned_at": {  }, "overlay": {  } }
+[_safe_report] Completed: registry
+=== HEELKAWN_DEBUG_REPORT:registry:tick=0 END ===
+[F10_SWEEP] PANEL=registry                          6ms
+=== HEELKAWN_DEBUG_REPORT:intent:tick=0 BEGIN ===
+[_safe_report] Starting: intent
+IntentMemory.global_pressure=0.0000
+IntentMemory.settlement_pressure  entries=0
+IntentMemory.settlement_intent (0=GROW 1=HOLD 2=ABANDON)  entries=0
+[_safe_report] Completed: intent
+=== HEELKAWN_DEBUG_REPORT:intent:tick=0 END ===
+[F10_SWEEP] PANEL=intent                           10ms
+=== HEELKAWN_DEBUG_REPORT:jobs_stock:tick=0 BEGIN ===
+[_safe_report] Starting: jobs_stock
+JobManager.stats: { "open": 0, "claimed": 0, "posted": 0, "completed": 0, "cancelled": 0, "cancel_reasons": {  }, "abandon_reasons": {  } }
+JobManager.open_count=0
+Stockpile zones=0
+[_safe_report] Completed: jobs_stock
+=== HEELKAWN_DEBUG_REPORT:jobs_stock:tick=0 END ===
+[F10_SWEEP] PANEL=jobs_stock                        8ms
+=== HEELKAWN_DEBUG_REPORT:authority_job_audit:tick=0 BEGIN ===
+[_safe_report] Starting: authority_job_audit
+=== AUTHORITY JOB AUDIT ===
+tick=0
+formal_settlements=0 proto_sites=0
+jobs_open=0 jobs_claimed=0 jobs_posted=0 jobs_completed=0 jobs_cancelled=0
+cancel_reasons={  }
+leaders_count=0 leaders_sample=[]
+architects_count=0 architects_sample=[]
+idle_sample=[{ "id": 1, "visible_orders": 0, "last_claim_fail": "" }, { "id": 2, "visible_orders": 0, "last_claim_fail": "" }, { "id": 3, "visible_orders": 0, "last_claim_fail": "" }, { "id": 4, "visible_orders": 0, "last_claim_fail": "" }, { "id": 5, "visible_orders": 0, "last_claim_fail": "" }, { "id": 6, "visible_orders": 0, "last_claim_fail": "" }, { "id": 7, "visible_orders": 0, "last_claim_fail": "" }, { "id": 8, "visible_orders": 0, "last_claim_fail": "" }, { "id": 9, "visible_orders": 0, "last_claim_fail": "" }, { "id": 10, "visible_orders": 0, "last_claim_fail": "" }, { "id": 11, "visible_orders": 0, "last_claim_fail": "" }, { "id": 12, "visible_orders": 0, "last_claim_fail": "" }]
+carried_blockers_sample=[]
+=== END AUTHORITY JOB AUDIT ===
+[_safe_report] Completed: authority_job_audit
+=== HEELKAWN_DEBUG_REPORT:authority_job_audit:tick=0 END ===
+[F10_SWEEP] PANEL=authority_job_audit              17ms
+=== HEELKAWN_DEBUG_REPORT:trade:tick=0 BEGIN ===
+[_safe_report] Starting: trade
+TradeMemory: count_t2_tiles=0 count_route_tiles=0 last_tick_t2_existed=-1
+[_safe_report] Completed: trade
+=== HEELKAWN_DEBUG_REPORT:trade:tick=0 END ===
+[F10_SWEEP] PANEL=trade                             6ms
+=== HEELKAWN_DEBUG_REPORT:world_events:tick=0 BEGIN ===
+[_safe_report] Starting: world_events
+WorldEvents.get_debug_active_event: { "active_event_name": "", "active_event_until_tick": -1, "gathering_efficiency_mult": 1.0, "last_regional_shortage_tick": -1 }
+WorldEvents.gathering_efficiency_mult()=1.000
+validation_clean_economy_events_active=false
+[_safe_report] Completed: world_events
+=== HEELKAWN_DEBUG_REPORT:world_events:tick=0 END ===
+[F10_SWEEP] PANEL=world_events                      6ms
+=== HEELKAWN_DEBUG_REPORT:cultural:tick=0 BEGIN ===
+[_safe_report] Starting: cultural
+CulturalMemory.reputation_by_region count=0
+[_safe_report] Completed: cultural
+=== HEELKAWN_DEBUG_REPORT:cultural:tick=0 END ===
+[F10_SWEEP] PANEL=cultural                          6ms
+=== HEELKAWN_DEBUG_REPORT:world_camera_all:tick=0 BEGIN ===
+=== HEELKAWN_WORLD_CAMERA_ALL:tick=0 BEGIN ===
+
+camera_revival: vacant cam_rk=0
+digest_dict: { "has_settlement": false, "region_key": 0, "camera_region_key": 0, "profile_region_key": -1, "digest_source": "none", "state": "", "revival_score": 0, "peace_threshold_ticks": 0, "peace_since_conflict_ticks": 0, "revival_ready": false, "rebirth_ok": false, "rebirth_reason": "" }
+
+SettlementManager: CHECK_INTERVAL=1000 REBIRTH_PEACE=5000 REBIRTH_INTERVAL=20000 TILE_SCORES struct=85 scar=40 road=120 trade=90 dist=1
+
+{ "rabbit": 8, "deer": 4, "total": 12 }
+
+RoadMemory traversal: (127,127)=0 (64,64)=0 mid(128,128)=0 path_mul_mid=1.000
+
+RemnantMemory deltas: tile(0,0)=0 tile(64,64)=0
+
+World bed_count=0
+EnemySpawner.get_enemy_count=0
+AnimalSpawner snapshot={ "rabbit": 8, "deer": 4, "total": 12 }
+
+=== HEELKAWN_WORLD_CAMERA_ALL:tick=0 END ===
+=== HEELKAWN_DEBUG_REPORT:world_camera_all:tick=0 END ===
+[F10_SWEEP] PANEL=world_camera_all                 23ms
+=== HEELKAWN_DEBUG_REPORT:revival:tick=0 BEGIN ===
+[_safe_report] Starting: revival
+camera_revival: vacant cam_rk=0
+digest_dict: { "has_settlement": false, "region_key": 0, "camera_region_key": 0, "profile_region_key": -1, "digest_source": "none", "state": "", "revival_score": 0, "peace_threshold_ticks": 0, "peace_since_conflict_ticks": 0, "revival_ready": false, "rebirth_ok": false, "rebirth_reason": "" }
+[_safe_report] Completed: revival
+=== HEELKAWN_DEBUG_REPORT:revival:tick=0 END ===
+[F10_SWEEP] PANEL=revival                           6ms
+=== HEELKAWN_DEBUG_REPORT:rebirth:tick=0 BEGIN ===
+[_safe_report] Starting: rebirth_consts
+SettlementManager: CHECK_INTERVAL=1000 REBIRTH_PEACE=5000 REBIRTH_INTERVAL=20000 TILE_SCORES struct=85 scar=40 road=120 trade=90 dist=1
+[_safe_report] Completed: rebirth_consts
+=== HEELKAWN_DEBUG_REPORT:rebirth:tick=0 END ===
+[F10_SWEEP] PANEL=rebirth                           6ms
+=== HEELKAWN_DEBUG_REPORT:wildlife:tick=0 BEGIN ===
+[_safe_report] Starting: wildlife
+{ "rabbit": 8, "deer": 4, "total": 12 }
+[_safe_report] Completed: wildlife
+=== HEELKAWN_DEBUG_REPORT:wildlife:tick=0 END ===
+[F10_SWEEP] PANEL=wildlife                          7ms
+=== HEELKAWN_DEBUG_REPORT:road:tick=0 BEGIN ===
+[_safe_report] Starting: road
+RoadMemory traversal: (127,127)=0 (64,64)=0 mid(128,128)=0 path_mul_mid=1.000
+[_safe_report] Completed: road
+=== HEELKAWN_DEBUG_REPORT:road:tick=0 END ===
+[F10_SWEEP] PANEL=road                              7ms
+=== HEELKAWN_DEBUG_REPORT:remnant:tick=0 BEGIN ===
+[_safe_report] Starting: remnant
+RemnantMemory deltas: tile(0,0)=0 tile(64,64)=0
+[_safe_report] Completed: remnant
+=== HEELKAWN_DEBUG_REPORT:remnant:tick=0 END ===
+[F10_SWEEP] PANEL=remnant                           6ms
+=== HEELKAWN_DEBUG_REPORT:main_world:tick=0 BEGIN ===
+[_safe_report] Starting: main_world
+World bed_count=0
+EnemySpawner.get_enemy_count=0
+AnimalSpawner snapshot={ "rabbit": 8, "deer": 4, "total": 12 }
+[_safe_report] Completed: main_world
+=== HEELKAWN_DEBUG_REPORT:main_world:tick=0 END ===
+[F10_SWEEP] PANEL=main_world                        8ms
+=== HEELKAWN_DEBUG_REPORT:nations_all:tick=0 BEGIN ===
+=== HEELKAWN_NATIONS_ALL:tick=0 BEGIN ===
+
+=== HEELKAWN NATIONS OVERVIEW (CK-style Realm List) ===
+Generated: 2026-08-13T20:35:15
+Game Tick: 0
+
+No nations have formed yet. Settlements must grow and ally to form nations.
+
+=== HEELKAWN NATION DETAILS (Wars, Allies, Territory) ===
+Generated: 2026-08-13T20:35:15
+Game Tick: 0
+
+No nations have formed yet.
+
+=== HEELKAWN CONTESTED REGIONS (Active Border Conflicts) ===
+Generated: 2026-08-13T20:35:15
+Game Tick: 0
+
+No contested border regions. The map is at peace.
+
+=== HEELKAWN_NATIONS_ALL:tick=0 END ===
+=== HEELKAWN_DEBUG_REPORT:nations_all:tick=0 END ===
+[F10_SWEEP] PANEL=nations_all                      27ms
+=== HEELKAWN_DEBUG_REPORT:nations:tick=0 BEGIN ===
+=== HEELKAWN NATIONS OVERVIEW (CK-style Realm List) ===
+Generated: 2026-08-13T20:35:15
+Game Tick: 0
+
+No nations have formed yet. Settlements must grow and ally to form nations.
+=== HEELKAWN_DEBUG_REPORT:nations:tick=0 END ===
+[F10_SWEEP] PANEL=nations                           9ms
+=== HEELKAWN_DEBUG_REPORT:nation_details:tick=0 BEGIN ===
+=== HEELKAWN NATION DETAILS (Wars, Allies, Territory) ===
+Generated: 2026-08-13T20:35:15
+Game Tick: 0
+
+No nations have formed yet.
+=== HEELKAWN_DEBUG_REPORT:nation_details:tick=0 END ===
+[F10_SWEEP] PANEL=nation_details                    8ms
+=== HEELKAWN_DEBUG_REPORT:contested_regions:tick=0 BEGIN ===
+=== HEELKAWN CONTESTED REGIONS (Active Border Conflicts) ===
+Generated: 2026-08-13T20:35:15
+Game Tick: 0
+
+No contested border regions. The map is at peace.
+=== HEELKAWN_DEBUG_REPORT:contested_regions:tick=0 END ===
+[F10_SWEEP] PANEL=contested_regions                 8ms
+=== HEELKAWN_DEBUG_REPORT:memory_layers_all:tick=0 BEGIN ===
+=== HEELKAWN_MEMORY_LAYERS_ALL:tick=0 BEGIN ===
+
+WorldMemory.event_count=0
+
+HEELKAWN_HISTORY_EXPORT v=1.0.0 schema=1
+EXPORT_MODE: private_dev
+TICKS_PER_SIM_YEAR: 30000
+TICK_RANGE: 0 to 0
+EVENT_COUNT: 0
+COLUMNS: tick | type | subject | cause | impact | provenance_hash
+==============================================================
+
+WorldMeaning.meaning_by_region regions=0
+
+WorldPersistence.persistent_regions count=0
+
+MythMemory.to_save_dict: { "rebirth_count": {  } }
+
+AgeMemory: current_age_index=0 age_start_tick=0 tint_strength=0.0070
+AgeMemory.age_signature: {  }
+
+=== HEELKAWN_MEMORY_LAYERS_ALL:tick=0 END ===
+=== HEELKAWN_DEBUG_REPORT:memory_layers_all:tick=0 END ===
+[F10_SWEEP] PANEL=memory_layers_all                22ms
+=== HEELKAWN_DEBUG_REPORT:world_memory:tick=0 BEGIN ===
+[_safe_report] Starting: world_memory
+WorldMemory.event_count=0
+[_safe_report] Completed: world_memory
+=== HEELKAWN_DEBUG_REPORT:world_memory:tick=0 END ===
+[F10_SWEEP] PANEL=world_memory                      7ms
+=== HEELKAWN_DEBUG_REPORT:history_snip:tick=0 BEGIN ===
+[_safe_report] Starting: history_snip
+HEELKAWN_HISTORY_EXPORT v=1.0.0 schema=1
+EXPORT_MODE: private_dev
+TICKS_PER_SIM_YEAR: 30000
+TICK_RANGE: 0 to 0
+EVENT_COUNT: 0
+COLUMNS: tick | type | subject | cause | impact | provenance_hash
+==============================================================
+[_safe_report] Completed: history_snip
+=== HEELKAWN_DEBUG_REPORT:history_snip:tick=0 END ===
+[F10_SWEEP] PANEL=history_snip                      6ms
+=== HEELKAWN_DEBUG_REPORT:world_meaning:tick=0 BEGIN ===
+[_safe_report] Starting: world_meaning
+WorldMeaning.meaning_by_region regions=0
+[_safe_report] Completed: world_meaning
+=== HEELKAWN_DEBUG_REPORT:world_meaning:tick=0 END ===
+[F10_SWEEP] PANEL=world_meaning                     5ms
+=== HEELKAWN_DEBUG_REPORT:world_persist:tick=0 BEGIN ===
+[_safe_report] Starting: world_persist
+WorldPersistence.persistent_regions count=0
+[_safe_report] Completed: world_persist
+=== HEELKAWN_DEBUG_REPORT:world_persist:tick=0 END ===
+[F10_SWEEP] PANEL=world_persist                     6ms
+=== HEELKAWN_DEBUG_REPORT:myth:tick=0 BEGIN ===
+[_safe_report] Starting: myth
+MythMemory.to_save_dict: { "rebirth_count": {  } }
+[_safe_report] Completed: myth
+=== HEELKAWN_DEBUG_REPORT:myth:tick=0 END ===
+[F10_SWEEP] PANEL=myth                              5ms
+=== HEELKAWN_DEBUG_REPORT:age:tick=0 BEGIN ===
+[_safe_report] Starting: age
+AgeMemory: current_age_index=0 age_start_tick=0 tint_strength=0.0070
+AgeMemory.age_signature: {  }
+[_safe_report] Completed: age
+=== HEELKAWN_DEBUG_REPORT:age:tick=0 END ===
+[F10_SWEEP] PANEL=age                               7ms
+=== HEELKAWN_DEBUG_REPORT:pawns_social_all:tick=0 BEGIN ===
+=== HEELKAWN_PAWNS_SOCIAL_ALL:tick=0 BEGIN ===
+
+pawn_count=24
+  id=1 name=Jane Hunterton age=0.0 tile=(14, 11) region=0 H=100.0 R=100.0 M=100.0 state=Idle prof=Gatherer carry=-
+  id=2 name=Emma Hunterford age=0.0 tile=(227, 187) region=720910 H=100.0 R=100.0 M=100.0 state=Idle prof=Gatherer carry=-
+  id=3 name=Catherine Smithman age=0.0 tile=(238, 219) region=851982 H=100.0 R=100.0 M=100.0 state=Idle prof=Smith carry=-
+  id=4 name=Jane Smither age=0.0 tile=(158, 131) region=524297 H=100.0 R=100.0 M=100.0 state=Idle prof=Gatherer carry=-
+  id=5 name=Margaret Hunterer age=0.0 tile=(219, 93) region=327693 H=100.0 R=100.0 M=100.0 state=Idle prof=Scholar carry=-
+  id=6 name=Rose Taylorford age=0.0 tile=(111, 95) region=327686 H=100.0 R=100.0 M=100.0 state=Idle prof=Warrior carry=-
+  id=7 name=Elizabeth Fisherer age=0.0 tile=(58, 21) region=65539 H=100.0 R=100.0 M=100.0 state=Idle prof=Builder carry=-
+  id=8 name=Elizabeth Fisherford age=0.0 tile=(112, 189) region=720903 H=100.0 R=100.0 M=100.0 state=Idle prof=Builder carry=-
+  id=9 name=Rose Fisherer age=0.0 tile=(158, 175) region=655369 H=100.0 R=100.0 M=100.0 state=Idle prof=Scholar carry=-
+  id=10 name=Jane Smithford age=0.0 tile=(97, 39) region=131078 H=100.0 R=100.0 M=100.0 state=Idle prof=Builder carry=-
+  id=11 name=Alice Fisherman age=0.0 tile=(195, 161) region=655372 H=100.0 R=100.0 M=100.0 state=Idle prof=Gatherer carry=-
+  id=12 name=Margaret Walkerford age=0.0 tile=(206, 67) region=262156 H=100.0 R=100.0 M=100.0 state=Idle prof=Builder carry=-
+  id=13 name=Anne Fisherton age=0.0 tile=(181, 235) region=917515 H=100.0 R=100.0 M=100.0 state=Idle prof=Gatherer carry=-
+  id=14 name=Elizabeth Bakerford age=0.0 tile=(242, 183) region=720911 H=100.0 R=100.0 M=100.0 state=Idle prof=Builder carry=-
+  id=15 name=Jane Hunterman age=0.0 tile=(141, 115) region=458760 H=100.0 R=100.0 M=100.0 state=Idle prof=Farmer carry=-
+  id=16 name=Anne Fisherson age=0.0 tile=(152, 110) region=393225 H=100.0 R=100.0 M=100.0 state=Idle prof=Smith carry=-
+  id=17 name=Emma Hunterer age=0.0 tile=(160, 80) region=327690 H=100.0 R=100.0 M=100.0 state=Idle prof=Trader carry=-
+  id=18 name=Alice Taylorford age=0.0 tile=(127, 83) region=327687 H=100.0 R=100.0 M=100.0 state=Idle prof=Healer carry=-
+  id=19 name=Ivor age=0.0 tile=(55, 23) region=65539 H=100.0 R=100.0 M=100.0 state=Idle prof=Warrior carry=-
+  id=20 name=Petra age=0.0 tile=(94, 155) region=589829 H=100.0 R=100.0 M=100.0 state=Idle prof=Farmer carry=-
+  id=21 name=Osric age=0.0 tile=(74, 14) region=4 H=100.0 R=100.0 M=100.0 state=Idle prof=Farmer carry=-
+  id=22 name=Kenan age=0.0 tile=(189, 180) region=720907 H=100.0 R=100.0 M=100.0 state=Idle prof=Warrior carry=-
+  id=23 name=Fiona age=0.0 tile=(81, 210) region=851973 H=100.0 R=100.0 M=100.0 state=Idle prof=Gatherer carry=-
+  id=24 name=Rhea age=0.0 tile=(206, 147) region=589836 H=100.0 R=100.0 M=100.0 state=Idle prof=Gatherer carry=-
+
+  id=1 Jane Hunterton  farm=0.340 combat=0.322 build=0.358 craft=0.384 diplo=0.408  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=2 Emma Hunterford  farm=0.437 combat=0.419 build=0.455 craft=0.481 diplo=0.506  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=3 Catherine Smithman  farm=0.535 combat=0.517 build=0.553 craft=0.579 diplo=0.603  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=4 Jane Smither  farm=0.632 combat=0.614 build=0.650 craft=0.676 diplo=0.700  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=5 Margaret Hunterer  farm=0.729 combat=0.711 build=0.747 craft=0.773 diplo=0.797  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=6 Rose Taylorford  farm=0.826 combat=0.808 build=0.844 craft=0.870 diplo=0.894  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=7 Elizabeth Fisherer  farm=0.923 combat=0.905 build=0.941 craft=0.967 diplo=0.991  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=8 Elizabeth Fisherford  farm=0.019 combat=0.001 build=0.037 craft=0.063 diplo=0.087  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=9 Rose Fisherer  farm=0.116 combat=0.098 build=0.134 craft=0.160 diplo=0.184  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=10 Jane Smithford  farm=0.213 combat=0.195 build=0.231 craft=0.257 diplo=0.281  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=11 Alice Fisherman  farm=0.310 combat=0.292 build=0.328 craft=0.354 diplo=0.378  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=12 Margaret Walkerford  farm=0.407 combat=0.389 build=0.425 craft=0.451 diplo=0.475  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=13 Anne Fisherton  farm=0.505 combat=0.486 build=0.523 craft=0.549 diplo=0.573  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=14 Elizabeth Bakerford  farm=0.602 combat=0.584 build=0.620 craft=0.646 diplo=0.670  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=15 Jane Hunterman  farm=0.699 combat=0.681 build=0.717 craft=0.743 diplo=0.767  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=16 Anne Fisherson  farm=0.796 combat=0.778 build=0.814 craft=0.840 diplo=0.864  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=17 Emma Hunterer  farm=0.893 combat=0.875 build=0.911 craft=0.937 diplo=0.961  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=18 Alice Taylorford  farm=0.990 combat=0.972 build=0.007 craft=0.033 diplo=0.057  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias farming
+  id=19 Ivor  farm=0.086 combat=0.068 build=0.104 craft=0.130 diplo=0.154  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=20 Petra  farm=0.183 combat=0.165 build=0.201 craft=0.227 diplo=0.251  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=21 Osric  farm=0.280 combat=0.262 build=0.298 craft=0.324 diplo=0.348  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=22 Kenan  farm=0.377 combat=0.359 build=0.395 craft=0.421 diplo=0.445  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=23 Fiona  farm=0.474 combat=0.456 build=0.492 craft=0.519 diplo=0.543  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=24 Rhea  farm=0.572 combat=0.554 build=0.590 craft=0.616 diplo=0.640  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+
+=== HEELKAWN GRUDGE SYSTEM (Phase 5: Emergent Life) ===
+Generated: 2026-08-13T20:35:15
+Game Tick: 0
+
+--- GRUDGE STATISTICS ---
+Total grudges tracked: 0
+Blood feuds (intensity >= 0.85): 0
+
+--- SAMPLE GRUDGES BY PAWN (first 10 pawns) ---
+
+=== END GRUDGE REPORT ===
+
+=== HEELKAWN GOSSIP & REPUTATION (Phase 5: Emergent Life) ===
+Generated: 2026-08-13T20:35:15
+Game Tick: 0
+
+--- GOSSIP STATISTICS ---
+Total gossip items tracked: 0
+
+--- SAMPLE REPUTATIONS (first 10 pawns) ---
+  HeelKawnian 1 (Jane Hunterton): 0.00 (Neutral)
+  HeelKawnian 2 (Emma Hunterford): 0.00 (Neutral)
+  HeelKawnian 3 (Catherine Smithman): 0.00 (Neutral)
+  HeelKawnian 4 (Jane Smither): 0.00 (Neutral)
+  HeelKawnian 5 (Margaret Hunterer): 0.00 (Neutral)
+  HeelKawnian 6 (Rose Taylorford): 0.00 (Neutral)
+  HeelKawnian 7 (Elizabeth Fisherer): 0.00 (Neutral)
+  HeelKawnian 8 (Elizabeth Fisherford): 0.00 (Neutral)
+  HeelKawnian 9 (Rose Fisherer): 0.00 (Neutral)
+  HeelKawnian 10 (Jane Smithford): 0.00 (Neutral)
+
+=== END GOSSIP REPORT ===
+
+=== HEELKAWN AVOIDANCE AI (Phase 5: Emergent Life) ===
+Generated: 2026-08-13T20:35:15
+Game Tick: 0
+
+--- AVOIDANCE STATISTICS ---
+Total grudges tracked: 0
+Pawns with enemies (avoidance active): 0
+
+--- SAMPLE AVOIDANCE PATTERNS (first 10 pawns with enemies) ---
+
+=== END AVOIDANCE REPORT ===
+
+=== HEELKAWN LIFE ARCS (Phase 5: Emergent Narrative) ===
+Generated: 2026-08-13T20:35:15
+Game Tick: 0
+
+--- LIFE ARC STATISTICS ---
+Total living pawns: 24
+
+--- SAMPLE LIFE ARCS (first 15 pawns) ---
+╔════════════════════════════════════════╗
+║ Jane Hunterton                     
+╚════════════════════════════════════════╝
+  Jane Hunterton, Gatherer
+    Born tick 0, age 0 ticks
+    Profession: Gatherer
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Emma Hunterford                    
+╚════════════════════════════════════════╝
+  Emma Hunterford, Gatherer
+    Born tick 0, age 0 ticks
+    Profession: Gatherer
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Catherine Smithman                 
+╚════════════════════════════════════════╝
+  Catherine Smithman, Smith
+    Born tick 0, age 0 ticks
+    Profession: Smith
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Jane Smither                       
+╚════════════════════════════════════════╝
+  Jane Smither, Gatherer
+    Born tick 0, age 0 ticks
+    Profession: Gatherer
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Margaret Hunterer                  
+╚════════════════════════════════════════╝
+  Margaret Hunterer, Scholar
+    Born tick 0, age 0 ticks
+    Profession: Scholar
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Rose Taylorford                    
+╚════════════════════════════════════════╝
+  Rose Taylorford, Warrior
+    Born tick 0, age 0 ticks
+    Profession: Warrior
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Elizabeth Fisherer                 
+╚════════════════════════════════════════╝
+  Elizabeth Fisherer, Builder
+    Born tick 0, age 0 ticks
+    Profession: Builder
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Elizabeth Fisherford               
+╚════════════════════════════════════════╝
+  Elizabeth Fisherford, Builder
+    Born tick 0, age 0 ticks
+    Profession: Builder
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Rose Fisherer                      
+╚════════════════════════════════════════╝
+  Rose Fisherer, Scholar
+    Born tick 0, age 0 ticks
+    Profession: Scholar
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Jane Smithford                     
+╚════════════════════════════════════════╝
+  Jane Smithford, Builder
+    Born tick 0, age 0 ticks
+    Profession: Builder
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Alice Fisherman                    
+╚════════════════════════════════════════╝
+  Alice Fisherman, Gatherer
+    Born tick 0, age 0 ticks
+    Profession: Gatherer
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Margaret Walkerford                
+╚════════════════════════════════════════╝
+  Margaret Walkerford, Builder
+    Born tick 0, age 0 ticks
+    Profession: Builder
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Anne Fisherton                     
+╚════════════════════════════════════════╝
+  Anne Fisherton, Gatherer
+    Born tick 0, age 0 ticks
+    Profession: Gatherer
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Elizabeth Bakerford                
+╚════════════════════════════════════════╝
+  Elizabeth Bakerford, Builder
+    Born tick 0, age 0 ticks
+    Profession: Builder
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Jane Hunterman                     
+╚════════════════════════════════════════╝
+  Jane Hunterman, Farmer
+    Born tick 0, age 0 ticks
+    Profession: Farmer
+    Mood: 100
+
+=== END LIFE ARCS REPORT ===
+
+=== HEELKAWN KNOWLEDGE CARRIERS (Phase 5: Knowledge Ecology) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+--- KNOWLEDGE STATISTICS ---
+Total knowledge carriers: 0
+
+--- DORMANT KNOWLEDGE (At Risk of Being Lost) ---
+  (No dormant knowledge - all knowledge has active carriers)
+
+--- TOP KNOWLEDGE CARRIERS (Masters) ---
+
+=== END KNOWLEDGE CARRIERS REPORT ===
+
+=== HEELKAWN MYTH FORMATION (Phase 5: World-Memory Behavior) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+👁 SPECTATOR MODE: You see TRUTH (facts from WorldMemory)
+  Pawns believe distorted MYTHS (rumors, gossip, exaggeration)
+
+--- MYTH STATISTICS ---
+Feared regions (+1): 0
+Revered regions (-1): 0
+Neutral regions (0): 0
+
+--- TRUTH: FACTUAL EVENTS (WorldMemory) ---
+
+--- SETTLEMENT REBIRTH HISTORY ---
+  (No settlements)
+
+--- SAMPLE REGION MYTH STATES ---
+
+=== END MYTH FORMATION REPORT ===
+
+=== HEELKAWN RECORD CARRIERS (Phase 5: Knowledge Preservation) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+--- RECORD CARRIER STATISTICS ---
+Total record carriers: 0
+  Grave Markers: 0
+  Knowledge Stones: 0
+  Ledger Stones: 0
+
+--- ALL RECORD CARRIERS ---
+  (No record carriers inscribed yet)
+
+=== END RECORD CARRIERS REPORT ===
+
+=== HEELKAWN MEMORIAL SYSTEM (Phase 5/6: Memorials, Sacred Geography, Pilgrimage) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+--- MEMORIAL STATISTICS ---
+Total memorials: 0
+
+--- SACRED GEOGRAPHY ---
+Remembered tiles (1-2 memorials): 0
+Sacred tiles (3-4 memorials): 0
+Holy Ground tiles (5+ memorials): 0
+
+--- RECENT MEMORIALS ---
+  (No memorials created yet)
+--- PILGRIMAGE ACTIVITY ---
+Total sacred tile crossings: 0
+
+=== END MEMORIAL SYSTEM REPORT ===
+
+=== HEELKAWN KNOWLEDGE SYSTEMS (Phase 5/6: Carriers, Teaching, Loss/Rediscovery) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+--- KNOWLEDGE CARRIER STATISTICS ---
+Total knowledge carriers: 0
+Total knowledge instances: 0
+Average knowledge per carrier: 0.0
+
+--- KNOWLEDGE BY TYPE ---
+
+--- DORMANT KNOWLEDGE (Lost, Can Rediscover) ---
+  (No dormant knowledge)
+
+--- RECENT TEACHING (Last 10) ---
+  (No teaching records)
+
+--- KNOWLEDGE SECURITY ---
+Secure (2+ carriers): 0 knowledge types
+At risk (1 carrier): 0 knowledge types
+Lost (dormant): 0 knowledge types
+
+=== END KNOWLEDGE SYSTEMS REPORT ===
+
+=== HEELKAWNIAN DEVELOPMENT AI (Individual Sprite Profiles) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+Derived + live influence: profiles read pawn needs, skills, knowledge, memory, settlement, and era state; Matrix biases job choice without overriding job legality.
+
+--- SUMMARY ---
+sampled=16 avg_development=21
+drives={ "bond": 16 }
+phases={ "worker": 16 }
+
+--- SAMPLE HEELKAWNIANS ---
+#1 Jane Hunterton soul=5b8e9314-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=gatherer path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#2 Emma Hunterford soul=5b8e9315-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=gatherer path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#3 Catherine Smithman soul=5b8e9316-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=smith path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#4 Jane Smither soul=5b8e9317-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=gatherer path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#5 Margaret Hunterer soul=5b8e9318-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=scholar path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#6 Rose Taylorford soul=5b8e9319-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=warrior path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#7 Elizabeth Fisherer soul=5b8e931a-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=builder path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#8 Elizabeth Fisherford soul=5b8e931b-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=builder path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#9 Rose Fisherer soul=5b8e931c-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=scholar path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#10 Jane Smithford soul=4d60f5c4-4d7
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=builder path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#11 Alice Fisherman soul=4d60f5c5-4d7
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=gatherer path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#12 Margaret Walkerford soul=4d60f5c6-4d7
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=builder path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#13 Anne Fisherton soul=4d60f5c7-4d7
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=gatherer path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#14 Elizabeth Bakerford soul=4d60f5c8-4d7
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=builder path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#15 Jane Hunterman soul=4d60f5c9-4d7
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=farmer path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#16 Anne Fisherson soul=4d60f5ca-4d7
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=smith path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+=== END HEELKAWNIAN DEVELOPMENT AI ===
+
+=== HEELKAWN COMMUNICATION LOG ===
+
+--- RECENT CONVERSATIONS (Last 30) ---
+  (No recent conversations)
+
+--- CLAN FORMATIONS ---
+  (No clans formed yet)
+
+--- RELIGIOUS/CULTURAL EVENTS ---
+  (No religious events yet)
+
+--- ACTIVE BUILDING PROJECTS ---
+  (No active group projects)
+
+
+=== HEELKAWN_PAWNS_SOCIAL_ALL:tick=0 END ===
+=== HEELKAWN_DEBUG_REPORT:pawns_social_all:tick=0 END ===
+[F10_SWEEP] PANEL=pawns_social_all                534ms
+=== HEELKAWN_DEBUG_REPORT:pawns:tick=0 BEGIN ===
+[_safe_report] Starting: pawns
+pawn_count=24
+  id=1 name=Jane Hunterton age=0.0 tile=(14, 11) region=0 H=100.0 R=100.0 M=100.0 state=Idle prof=Gatherer carry=-
+  id=2 name=Emma Hunterford age=0.0 tile=(227, 187) region=720910 H=100.0 R=100.0 M=100.0 state=Idle prof=Gatherer carry=-
+  id=3 name=Catherine Smithman age=0.0 tile=(238, 219) region=851982 H=100.0 R=100.0 M=100.0 state=Idle prof=Smith carry=-
+  id=4 name=Jane Smither age=0.0 tile=(158, 131) region=524297 H=100.0 R=100.0 M=100.0 state=Idle prof=Gatherer carry=-
+  id=5 name=Margaret Hunterer age=0.0 tile=(219, 93) region=327693 H=100.0 R=100.0 M=100.0 state=Idle prof=Scholar carry=-
+  id=6 name=Rose Taylorford age=0.0 tile=(111, 95) region=327686 H=100.0 R=100.0 M=100.0 state=Idle prof=Warrior carry=-
+  id=7 name=Elizabeth Fisherer age=0.0 tile=(58, 21) region=65539 H=100.0 R=100.0 M=100.0 state=Idle prof=Builder carry=-
+  id=8 name=Elizabeth Fisherford age=0.0 tile=(112, 189) region=720903 H=100.0 R=100.0 M=100.0 state=Idle prof=Builder carry=-
+  id=9 name=Rose Fisherer age=0.0 tile=(158, 175) region=655369 H=100.0 R=100.0 M=100.0 state=Idle prof=Scholar carry=-
+  id=10 name=Jane Smithford age=0.0 tile=(97, 39) region=131078 H=100.0 R=100.0 M=100.0 state=Idle prof=Builder carry=-
+  id=11 name=Alice Fisherman age=0.0 tile=(195, 161) region=655372 H=100.0 R=100.0 M=100.0 state=Idle prof=Gatherer carry=-
+  id=12 name=Margaret Walkerford age=0.0 tile=(206, 67) region=262156 H=100.0 R=100.0 M=100.0 state=Idle prof=Builder carry=-
+  id=13 name=Anne Fisherton age=0.0 tile=(181, 235) region=917515 H=100.0 R=100.0 M=100.0 state=Idle prof=Gatherer carry=-
+  id=14 name=Elizabeth Bakerford age=0.0 tile=(242, 183) region=720911 H=100.0 R=100.0 M=100.0 state=Idle prof=Builder carry=-
+  id=15 name=Jane Hunterman age=0.0 tile=(141, 115) region=458760 H=100.0 R=100.0 M=100.0 state=Idle prof=Farmer carry=-
+  id=16 name=Anne Fisherson age=0.0 tile=(152, 110) region=393225 H=100.0 R=100.0 M=100.0 state=Idle prof=Smith carry=-
+  id=17 name=Emma Hunterer age=0.0 tile=(160, 80) region=327690 H=100.0 R=100.0 M=100.0 state=Idle prof=Trader carry=-
+  id=18 name=Alice Taylorford age=0.0 tile=(127, 83) region=327687 H=100.0 R=100.0 M=100.0 state=Idle prof=Healer carry=-
+  id=19 name=Ivor age=0.0 tile=(55, 23) region=65539 H=100.0 R=100.0 M=100.0 state=Idle prof=Warrior carry=-
+  id=20 name=Petra age=0.0 tile=(94, 155) region=589829 H=100.0 R=100.0 M=100.0 state=Idle prof=Farmer carry=-
+  id=21 name=Osric age=0.0 tile=(74, 14) region=4 H=100.0 R=100.0 M=100.0 state=Idle prof=Farmer carry=-
+  id=22 name=Kenan age=0.0 tile=(189, 180) region=720907 H=100.0 R=100.0 M=100.0 state=Idle prof=Warrior carry=-
+  id=23 name=Fiona age=0.0 tile=(81, 210) region=851973 H=100.0 R=100.0 M=100.0 state=Idle prof=Gatherer carry=-
+  id=24 name=Rhea age=0.0 tile=(206, 147) region=589836 H=100.0 R=100.0 M=100.0 state=Idle prof=Gatherer carry=-
+[_safe_report] Completed: pawns
+=== HEELKAWN_DEBUG_REPORT:pawns:tick=0 END ===
+[F10_SWEEP] PANEL=pawns                            32ms
+=== HEELKAWN_DEBUG_REPORT:profession_liking:tick=0 BEGIN ===
+[_safe_report] Starting: profession_liking
+  id=1 Jane Hunterton  farm=0.340 combat=0.322 build=0.358 craft=0.384 diplo=0.408  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=2 Emma Hunterford  farm=0.437 combat=0.419 build=0.455 craft=0.481 diplo=0.506  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=3 Catherine Smithman  farm=0.535 combat=0.517 build=0.553 craft=0.579 diplo=0.603  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=4 Jane Smither  farm=0.632 combat=0.614 build=0.650 craft=0.676 diplo=0.700  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=5 Margaret Hunterer  farm=0.729 combat=0.711 build=0.747 craft=0.773 diplo=0.797  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=6 Rose Taylorford  farm=0.826 combat=0.808 build=0.844 craft=0.870 diplo=0.894  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=7 Elizabeth Fisherer  farm=0.923 combat=0.905 build=0.941 craft=0.967 diplo=0.991  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=8 Elizabeth Fisherford  farm=0.019 combat=0.001 build=0.037 craft=0.063 diplo=0.087  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=9 Rose Fisherer  farm=0.116 combat=0.098 build=0.134 craft=0.160 diplo=0.184  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=10 Jane Smithford  farm=0.213 combat=0.195 build=0.231 craft=0.257 diplo=0.281  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=11 Alice Fisherman  farm=0.310 combat=0.292 build=0.328 craft=0.354 diplo=0.378  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=12 Margaret Walkerford  farm=0.407 combat=0.389 build=0.425 craft=0.451 diplo=0.475  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=13 Anne Fisherton  farm=0.505 combat=0.486 build=0.523 craft=0.549 diplo=0.573  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=14 Elizabeth Bakerford  farm=0.602 combat=0.584 build=0.620 craft=0.646 diplo=0.670  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=15 Jane Hunterman  farm=0.699 combat=0.681 build=0.717 craft=0.743 diplo=0.767  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=16 Anne Fisherson  farm=0.796 combat=0.778 build=0.814 craft=0.840 diplo=0.864  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=17 Emma Hunterer  farm=0.893 combat=0.875 build=0.911 craft=0.937 diplo=0.961  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=18 Alice Taylorford  farm=0.990 combat=0.972 build=0.007 craft=0.033 diplo=0.057  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias farming
+  id=19 Ivor  farm=0.086 combat=0.068 build=0.104 craft=0.130 diplo=0.154  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=20 Petra  farm=0.183 combat=0.165 build=0.201 craft=0.227 diplo=0.251  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=21 Osric  farm=0.280 combat=0.262 build=0.298 craft=0.324 diplo=0.348  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=22 Kenan  farm=0.377 combat=0.359 build=0.395 craft=0.421 diplo=0.445  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=23 Fiona  farm=0.474 combat=0.456 build=0.492 craft=0.519 diplo=0.543  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+  id=24 Rhea  farm=0.572 combat=0.554 build=0.590 craft=0.616 diplo=0.640  Likings out=1, til=1, ind=1, str=1, mar=1, cir=1, inq=1 → bias diplomacy
+[_safe_report] Completed: profession_liking
+=== HEELKAWN_DEBUG_REPORT:profession_liking:tick=0 END ===
+[F10_SWEEP] PANEL=profession_liking                35ms
+=== HEELKAWN_DEBUG_REPORT:grudges:tick=0 BEGIN ===
+[_safe_report] Starting: grudges
+=== HEELKAWN GRUDGE SYSTEM (Phase 5: Emergent Life) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+--- GRUDGE STATISTICS ---
+Total grudges tracked: 0
+Blood feuds (intensity >= 0.85): 0
+
+--- SAMPLE GRUDGES BY PAWN (first 10 pawns) ---
+
+=== END GRUDGE REPORT ===
+[_safe_report] Completed: grudges
+=== HEELKAWN_DEBUG_REPORT:grudges:tick=0 END ===
+[F10_SWEEP] PANEL=grudges                          18ms
+=== HEELKAWN_DEBUG_REPORT:gossip_reputation:tick=0 BEGIN ===
+[_safe_report] Starting: gossip_reputation
+=== HEELKAWN GOSSIP & REPUTATION (Phase 5: Emergent Life) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+--- GOSSIP STATISTICS ---
+Total gossip items tracked: 0
+
+--- SAMPLE REPUTATIONS (first 10 pawns) ---
+  HeelKawnian 1 (Jane Hunterton): 0.00 (Neutral)
+  HeelKawnian 2 (Emma Hunterford): 0.00 (Neutral)
+  HeelKawnian 3 (Catherine Smithman): 0.00 (Neutral)
+  HeelKawnian 4 (Jane Smither): 0.00 (Neutral)
+  HeelKawnian 5 (Margaret Hunterer): 0.00 (Neutral)
+  HeelKawnian 6 (Rose Taylorford): 0.00 (Neutral)
+  HeelKawnian 7 (Elizabeth Fisherer): 0.00 (Neutral)
+  HeelKawnian 8 (Elizabeth Fisherford): 0.00 (Neutral)
+  HeelKawnian 9 (Rose Fisherer): 0.00 (Neutral)
+  HeelKawnian 10 (Jane Smithford): 0.00 (Neutral)
+
+=== END GOSSIP REPORT ===
+[_safe_report] Completed: gossip_reputation
+=== HEELKAWN_DEBUG_REPORT:gossip_reputation:tick=0 END ===
+[F10_SWEEP] PANEL=gossip_reputation                27ms
+=== HEELKAWN_DEBUG_REPORT:avoidance_ai:tick=0 BEGIN ===
+[_safe_report] Starting: avoidance_ai
+=== HEELKAWN AVOIDANCE AI (Phase 5: Emergent Life) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+--- AVOIDANCE STATISTICS ---
+Total grudges tracked: 0
+Pawns with enemies (avoidance active): 0
+
+--- SAMPLE AVOIDANCE PATTERNS (first 10 pawns with enemies) ---
+
+=== END AVOIDANCE REPORT ===
+[_safe_report] Completed: avoidance_ai
+=== HEELKAWN_DEBUG_REPORT:avoidance_ai:tick=0 END ===
+[F10_SWEEP] PANEL=avoidance_ai                     15ms
+=== HEELKAWN_DEBUG_REPORT:life_arcs:tick=0 BEGIN ===
+[_safe_report] Starting: life_arcs
+=== HEELKAWN LIFE ARCS (Phase 5: Emergent Narrative) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+--- LIFE ARC STATISTICS ---
+Total living pawns: 24
+
+--- SAMPLE LIFE ARCS (first 15 pawns) ---
+╔════════════════════════════════════════╗
+║ Jane Hunterton                     
+╚════════════════════════════════════════╝
+  Jane Hunterton, Gatherer
+    Born tick 0, age 0 ticks
+    Profession: Gatherer
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Emma Hunterford                    
+╚════════════════════════════════════════╝
+  Emma Hunterford, Gatherer
+    Born tick 0, age 0 ticks
+    Profession: Gatherer
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Catherine Smithman                 
+╚════════════════════════════════════════╝
+  Catherine Smithman, Smith
+    Born tick 0, age 0 ticks
+    Profession: Smith
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Jane Smither                       
+╚════════════════════════════════════════╝
+  Jane Smither, Gatherer
+    Born tick 0, age 0 ticks
+    Profession: Gatherer
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Margaret Hunterer                  
+╚════════════════════════════════════════╝
+  Margaret Hunterer, Scholar
+    Born tick 0, age 0 ticks
+    Profession: Scholar
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Rose Taylorford                    
+╚════════════════════════════════════════╝
+  Rose Taylorford, Warrior
+    Born tick 0, age 0 ticks
+    Profession: Warrior
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Elizabeth Fisherer                 
+╚════════════════════════════════════════╝
+  Elizabeth Fisherer, Builder
+    Born tick 0, age 0 ticks
+    Profession: Builder
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Elizabeth Fisherford               
+╚════════════════════════════════════════╝
+  Elizabeth Fisherford, Builder
+    Born tick 0, age 0 ticks
+    Profession: Builder
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Rose Fisherer                      
+╚════════════════════════════════════════╝
+  Rose Fisherer, Scholar
+    Born tick 0, age 0 ticks
+    Profession: Scholar
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Jane Smithford                     
+╚════════════════════════════════════════╝
+  Jane Smithford, Builder
+    Born tick 0, age 0 ticks
+    Profession: Builder
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Alice Fisherman                    
+╚════════════════════════════════════════╝
+  Alice Fisherman, Gatherer
+    Born tick 0, age 0 ticks
+    Profession: Gatherer
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Margaret Walkerford                
+╚════════════════════════════════════════╝
+  Margaret Walkerford, Builder
+    Born tick 0, age 0 ticks
+    Profession: Builder
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Anne Fisherton                     
+╚════════════════════════════════════════╝
+  Anne Fisherton, Gatherer
+    Born tick 0, age 0 ticks
+    Profession: Gatherer
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Elizabeth Bakerford                
+╚════════════════════════════════════════╝
+  Elizabeth Bakerford, Builder
+    Born tick 0, age 0 ticks
+    Profession: Builder
+    Mood: 100
+
+╔════════════════════════════════════════╗
+║ Jane Hunterman                     
+╚════════════════════════════════════════╝
+  Jane Hunterman, Farmer
+    Born tick 0, age 0 ticks
+    Profession: Farmer
+    Mood: 100
+
+=== END LIFE ARCS REPORT ===
+[_safe_report] Completed: life_arcs
+=== HEELKAWN_DEBUG_REPORT:life_arcs:tick=0 END ===
+[F10_SWEEP] PANEL=life_arcs                       143ms
+=== HEELKAWN_DEBUG_REPORT:knowledge_carriers:tick=0 BEGIN ===
+[_safe_report] Starting: knowledge_carriers
+=== HEELKAWN KNOWLEDGE CARRIERS (Phase 5: Knowledge Ecology) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+--- KNOWLEDGE STATISTICS ---
+Total knowledge carriers: 0
+
+--- DORMANT KNOWLEDGE (At Risk of Being Lost) ---
+  (No dormant knowledge - all knowledge has active carriers)
+
+--- TOP KNOWLEDGE CARRIERS (Masters) ---
+
+=== END KNOWLEDGE CARRIERS REPORT ===
+[_safe_report] Completed: knowledge_carriers
+=== HEELKAWN_DEBUG_REPORT:knowledge_carriers:tick=0 END ===
+[F10_SWEEP] PANEL=knowledge_carriers               20ms
+=== HEELKAWN_DEBUG_REPORT:myth_formation:tick=0 BEGIN ===
+[_safe_report] Starting: myth_formation
+=== HEELKAWN MYTH FORMATION (Phase 5: World-Memory Behavior) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+👁 SPECTATOR MODE: You see TRUTH (facts from WorldMemory)
+  Pawns believe distorted MYTHS (rumors, gossip, exaggeration)
+
+--- MYTH STATISTICS ---
+Feared regions (+1): 0
+Revered regions (-1): 0
+Neutral regions (0): 0
+
+--- TRUTH: FACTUAL EVENTS (WorldMemory) ---
+
+--- SETTLEMENT REBIRTH HISTORY ---
+  (No settlements)
+
+--- SAMPLE REGION MYTH STATES ---
+
+=== END MYTH FORMATION REPORT ===
+[_safe_report] Completed: myth_formation
+=== HEELKAWN_DEBUG_REPORT:myth_formation:tick=0 END ===
+[F10_SWEEP] PANEL=myth_formation                   25ms
+=== HEELKAWN_DEBUG_REPORT:record_carriers:tick=0 BEGIN ===
+[_safe_report] Starting: record_carriers
+=== HEELKAWN RECORD CARRIERS (Phase 5: Knowledge Preservation) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+--- RECORD CARRIER STATISTICS ---
+Total record carriers: 0
+  Grave Markers: 0
+  Knowledge Stones: 0
+  Ledger Stones: 0
+
+--- ALL RECORD CARRIERS ---
+  (No record carriers inscribed yet)
+
+=== END RECORD CARRIERS REPORT ===
+[_safe_report] Completed: record_carriers
+=== HEELKAWN_DEBUG_REPORT:record_carriers:tick=0 END ===
+[F10_SWEEP] PANEL=record_carriers                  21ms
+=== HEELKAWN_DEBUG_REPORT:memorial_system:tick=0 BEGIN ===
+[_safe_report] Starting: memorial_system
+=== HEELKAWN MEMORIAL SYSTEM (Phase 5/6: Memorials, Sacred Geography, Pilgrimage) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+--- MEMORIAL STATISTICS ---
+Total memorials: 0
+
+--- SACRED GEOGRAPHY ---
+Remembered tiles (1-2 memorials): 0
+Sacred tiles (3-4 memorials): 0
+Holy Ground tiles (5+ memorials): 0
+
+--- RECENT MEMORIALS ---
+  (No memorials created yet)
+--- PILGRIMAGE ACTIVITY ---
+Total sacred tile crossings: 0
+
+=== END MEMORIAL SYSTEM REPORT ===
+[_safe_report] Completed: memorial_system
+=== HEELKAWN_DEBUG_REPORT:memorial_system:tick=0 END ===
+[F10_SWEEP] PANEL=memorial_system                  20ms
+=== HEELKAWN_DEBUG_REPORT:knowledge_system:tick=0 BEGIN ===
+[_safe_report] Starting: knowledge_system
+=== HEELKAWN KNOWLEDGE SYSTEMS (Phase 5/6: Carriers, Teaching, Loss/Rediscovery) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+--- KNOWLEDGE CARRIER STATISTICS ---
+Total knowledge carriers: 0
+Total knowledge instances: 0
+Average knowledge per carrier: 0.0
+
+--- KNOWLEDGE BY TYPE ---
+
+--- DORMANT KNOWLEDGE (Lost, Can Rediscover) ---
+  (No dormant knowledge)
+
+--- RECENT TEACHING (Last 10) ---
+  (No teaching records)
+
+--- KNOWLEDGE SECURITY ---
+Secure (2+ carriers): 0 knowledge types
+At risk (1 carrier): 0 knowledge types
+Lost (dormant): 0 knowledge types
+
+=== END KNOWLEDGE SYSTEMS REPORT ===
+[_safe_report] Completed: knowledge_system
+=== HEELKAWN_DEBUG_REPORT:knowledge_system:tick=0 END ===
+[F10_SWEEP] PANEL=knowledge_system                 32ms
+=== HEELKAWN_DEBUG_REPORT:heelkawnians:tick=0 BEGIN ===
+[_safe_report] Starting: heelkawnians
+=== HEELKAWNIAN DEVELOPMENT AI (Individual Sprite Profiles) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+Derived + live influence: profiles read pawn needs, skills, knowledge, memory, settlement, and era state; Matrix biases job choice without overriding job legality.
+
+--- SUMMARY ---
+sampled=16 avg_development=21
+drives={ "bond": 16 }
+phases={ "worker": 16 }
+
+--- SAMPLE HEELKAWNIANS ---
+#1 Jane Hunterton soul=5b8e9314-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=gatherer path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#2 Emma Hunterford soul=5b8e9315-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=gatherer path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#3 Catherine Smithman soul=5b8e9316-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=smith path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#4 Jane Smither soul=5b8e9317-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=gatherer path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#5 Margaret Hunterer soul=5b8e9318-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=scholar path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#6 Rose Taylorford soul=5b8e9319-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=warrior path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#7 Elizabeth Fisherer soul=5b8e931a-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=builder path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#8 Elizabeth Fisherford soul=5b8e931b-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=builder path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#9 Rose Fisherer soul=5b8e931c-5b8
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=scholar path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#10 Jane Smithford soul=4d60f5c4-4d7
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=builder path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#11 Alice Fisherman soul=4d60f5c5-4d7
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=gatherer path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#12 Margaret Walkerford soul=4d60f5c6-4d7
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=builder path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#13 Anne Fisherton soul=4d60f5c7-4d7
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=gatherer path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#14 Elizabeth Bakerford soul=4d60f5c8-4d7
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=builder path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#15 Jane Hunterman soul=4d60f5c9-4d7
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=farmer path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+#16 Anne Fisherson soul=4d60f5ca-4d7
+  phase=worker drive=bond next=build trust, family, and household stability era=Primitive dev=21 household=-1 members=0 parents=0 children=0
+  profession=smith path=none best_skill=none:0 known=0 [none]
+  axes survival=100 practice=3 knowledge=0 social=10 preservation=3 innovation=0 trauma=0
+  matrix=BuildHearth+20, CookMeat+16, CookBerries+16, CookFish+16
+  rationale=worker phase is driven to bond; next need: build trust, family, and household stability; Matrix favors BuildHearth+20, CookMeat+16, CookBerries+16.
+=== END HEELKAWNIAN DEVELOPMENT AI ===
+[_safe_report] Completed: heelkawnians
+=== HEELKAWN_DEBUG_REPORT:heelkawnians:tick=0 END ===
+[F10_SWEEP] PANEL=heelkawnians                    175ms
+=== HEELKAWN_DEBUG_REPORT:communication:tick=0 BEGIN ===
+[_safe_report] Starting: communication
+=== HEELKAWN COMMUNICATION LOG ===
+
+--- RECENT CONVERSATIONS (Last 30) ---
+  (No recent conversations)
+
+--- CLAN FORMATIONS ---
+  (No clans formed yet)
+
+--- RELIGIOUS/CULTURAL EVENTS ---
+  (No religious events yet)
+
+--- ACTIVE BUILDING PROJECTS ---
+  (No active group projects)
+
+[_safe_report] Completed: communication
+=== HEELKAWN_DEBUG_REPORT:communication:tick=0 END ===
+[F10_SWEEP] PANEL=communication                     5ms
+=== HEELKAWN_DEBUG_REPORT:force_building:tick=0 BEGIN ===
+[_safe_report] Starting: force_building
+=== FORCE BUILDING JOBS ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+ERROR: World node not found
+[_safe_report] Completed: force_building
+=== HEELKAWN_DEBUG_REPORT:force_building:tick=0 END ===
+[F10_SWEEP] PANEL=force_building                   11ms
+=== HEELKAWN_DEBUG_REPORT:dynasty_legacy_all:tick=0 BEGIN ===
+=== HEELKAWN_DYNASTY_LEGACY_ALL:tick=0 BEGIN ===
+
+=== HEELKAWN LEGACY & DYNASTY (Phase 7: Historical Milestones) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+--- DYNASTY SUMMARIES ---
+
+=== END LEGACY & DYNASTY REPORT ===
+
+=== HEELKAWN CHRONICLE (Settlement History as Story) ===
+Generated: 2026-08-13T20:35:16
+Game Tick: 0
+
+No events recorded yet.
+
+=== HEELKAWN SETTLEMENT LEGENDS (Phase 5: Emergent Stories) ===
+Generated: 2026-08-13T20:35:17
+Game Tick: 0
+
+No events recorded yet.
+
+=== HEELKAWN LEGACY MILESTONES (Phase 7: Historical Progress) ===
+Generated: 2026-08-13T20:35:17
+Game Tick: 0
+
+--- HISTORICAL PROGRESS ---
+Total Legacy Score: 0 / 1000 (goal)
+Total Dynasties: 0
+Total Dynasty Members: 0
+Player Incarnations: 0
+
+--- LEGACY CONDITIONS / HISTORICAL MILESTONES ---
+Legacy Score: 0.0% (0/1000)
+Dynasties Founded: 0.0% (0/3)
+Dynasty Members: 0.0% (0/20)
+Player Incarnations: 0.0% (0/3)
+
+OVERALL MILESTONE PROGRESS: 0.0%
+
+[color=#888888]Your legacy has just begun. Build, teach, and preserve.[/color]
+
+=== END LEGACY MILESTONES ===
+
+=== HEELKAWN_DYNASTY_LEGACY_ALL:tick=0 END ===
+=== HEELKAWN_DEBUG_REPORT:dynasty_legacy_all:tick=0 END ===
+[F10_SWEEP] PANEL=dynasty_legacy_all               49ms
+=== HEELKAWN_DEBUG_REPORT:legacy_dynasty:tick=0 BEGIN ===
+[_safe_report] Starting: legacy_dynasty
+=== HEELKAWN LEGACY & DYNASTY (Phase 7: Historical Milestones) ===
+Generated: 2026-08-13T20:35:17
+Game Tick: 0
+
+--- DYNASTY SUMMARIES ---
+
+=== END LEGACY & DYNASTY REPORT ===
+[_safe_report] Completed: legacy_dynasty
+=== HEELKAWN_DEBUG_REPORT:legacy_dynasty:tick=0 END ===
+[F10_SWEEP] PANEL=legacy_dynasty                   13ms
+=== HEELKAWN_DEBUG_REPORT:chronicle_view:tick=0 BEGIN ===
+[_safe_report] Starting: chronicle_view
+=== HEELKAWN CHRONICLE (Settlement History as Story) ===
+Generated: 2026-08-13T20:35:17
+Game Tick: 0
+
+No events recorded yet.
+[_safe_report] Completed: chronicle_view
+=== HEELKAWN_DEBUG_REPORT:chronicle_view:tick=0 END ===
+[F10_SWEEP] PANEL=chronicle_view                   11ms
+=== HEELKAWN_DEBUG_REPORT:settlement_legends:tick=0 BEGIN ===
+[_safe_report] Starting: settlement_legends
+=== HEELKAWN SETTLEMENT LEGENDS (Phase 5: Emergent Stories) ===
+Generated: 2026-08-13T20:35:17
+Game Tick: 0
+
+No events recorded yet.
+[_safe_report] Completed: settlement_legends
+=== HEELKAWN_DEBUG_REPORT:settlement_legends:tick=0 END ===
+[F10_SWEEP] PANEL=settlement_legends                9ms
+=== HEELKAWN_DEBUG_REPORT:chronicle_export:tick=0 BEGIN ===
+[_safe_report] Starting: chronicle_export
+=== CHRONICLE EXPORT ===
+[ChronicleExport] Chronicle saved to user://heelkawn_chronicle_20260813_203517.txt
+[F10 76] Chronicle exported to: user://heelkawn_chronicle_20260813_203517.txt
+[F10 76] Full path: user://heelkawn_exports/user://heelkawn_chronicle_20260813_203517.txt
+[_safe_report] Completed: chronicle_export
+=== HEELKAWN_DEBUG_REPORT:chronicle_export:tick=0 END ===
+[F10_SWEEP] PANEL=chronicle_export                  9ms
+=== HEELKAWN_DEBUG_REPORT:read_knowledge_stone:tick=0 BEGIN ===
+=== READ KNOWLEDGE STONE ===
+Usage: Pass tile coordinates as arguments
+Example: F10 → type command with tile X Y
+
+━━━ ALL INSCRIBED STONES ━━━
+
+  [color=#666666]No knowledge stones inscribed yet.[/color]
+
+=== END KNOWLEDGE STONES ===
+=== HEELKAWN_DEBUG_REPORT:read_knowledge_stone:tick=0 END ===
+[F10_SWEEP] PANEL=read_knowledge_stone             10ms
+=== HEELKAWN_DEBUG_REPORT:dynasty_tree:tick=0 BEGIN ===
+Opening Dynasty Tree UI...
+No dynasties found - pawns must have children to create dynasties
+=== HEELKAWN_DEBUG_REPORT:dynasty_tree:tick=0 END ===
+[F10_SWEEP] PANEL=dynasty_tree                      5ms
+=== HEELKAWN_DEBUG_REPORT:endgame_status:tick=0 BEGIN ===
+=== HEELKAWN LEGACY MILESTONES (Phase 7: Historical Progress) ===
+Generated: 2026-08-13T20:35:17
+Game Tick: 0
+
+--- HISTORICAL PROGRESS ---
+Total Legacy Score: 0 / 1000 (goal)
+Total Dynasties: 0
+Total Dynasty Members: 0
+Player Incarnations: 0
+
+--- LEGACY CONDITIONS / HISTORICAL MILESTONES ---
+Legacy Score: 0.0% (0/1000)
+Dynasties Founded: 0.0% (0/3)
+Dynasty Members: 0.0% (0/20)
+Player Incarnations: 0.0% (0/3)
+
+OVERALL MILESTONE PROGRESS: 0.0%
+
+[color=#888888]Your legacy has just begun. Build, teach, and preserve.[/color]
+
+=== END LEGACY MILESTONES ===
+=== HEELKAWN_DEBUG_REPORT:endgame_status:tick=0 END ===
+[F10_SWEEP] PANEL=endgame_status                   26ms
+=== HEELKAWN_DEBUG_REPORT:stubs_all:tick=0 BEGIN ===
+=== HEELKAWN_STUBS_ALL:tick=0 BEGIN ===
+
+SimVision autoload missing (check project.godot).
+
+PlayerIntentQueue SPEC v1
+  queue_size=1 unprocessed=1 submitted_total=1 max=512
+  IntentKind: OBSERVER_NOTE=1 CHRONICLE_PIN_ZONE=2 REQUEST_SETTLEMENT_FOCUS=3 DEBUG_TOOL=4
+  [0] tick=0 kind=OBSERVER_NOTE zone= pawn=-1 note=F10 report 28 demo intent (one-shot per session)
+  Incarnation helpers: request_incarnation_entry() request_spectator_return()
+ObservationAPI.observe_sim_ambient() player_intent: use for agents; unprocessed>0 drains 1/tick in Main.
+WorldMemory tail: filter events type=player_intent in export (report 14/15).
+
+FactionRegistry (houses keyed by settlement center_region)
+  house_count=0
+
+ReligionLens (read-only overlay) formal=0 proto=0
+  sacred_sites_sample(count=0):
+
+=== HEELKAWN_STUBS_ALL:tick=0 END ===
+=== HEELKAWN_DEBUG_REPORT:stubs_all:tick=0 END ===
+[F10_SWEEP] PANEL=stubs_all                        16ms
+=== HEELKAWN_DEBUG_REPORT:vision_scope:tick=0 BEGIN ===
+[_safe_report] Starting: vision_scope
+SimVision autoload missing (check project.godot).
+[_safe_report] Completed: vision_scope
+=== HEELKAWN_DEBUG_REPORT:vision_scope:tick=0 END ===
+[F10_SWEEP] PANEL=vision_scope                      6ms
+=== HEELKAWN_DEBUG_REPORT:player_intents:tick=0 BEGIN ===
+[_safe_report] Starting: player_intents
+PlayerIntentQueue SPEC v1
+  queue_size=1 unprocessed=1 submitted_total=1 max=512
+  IntentKind: OBSERVER_NOTE=1 CHRONICLE_PIN_ZONE=2 REQUEST_SETTLEMENT_FOCUS=3 DEBUG_TOOL=4
+  [0] tick=0 kind=OBSERVER_NOTE zone= pawn=-1 note=F10 report 28 demo intent (one-shot per session)
+  Incarnation helpers: request_incarnation_entry() request_spectator_return()
+ObservationAPI.observe_sim_ambient() player_intent: use for agents; unprocessed>0 drains 1/tick in Main.
+WorldMemory tail: filter events type=player_intent in export (report 14/15).
+[_safe_report] Completed: player_intents
+=== HEELKAWN_DEBUG_REPORT:player_intents:tick=0 END ===
+[F10_SWEEP] PANEL=player_intents                    8ms
+=== HEELKAWN_DEBUG_REPORT:factions:tick=0 BEGIN ===
+[_safe_report] Starting: factions
+FactionRegistry (houses keyed by settlement center_region)
+  house_count=0
+[_safe_report] Completed: factions
+=== HEELKAWN_DEBUG_REPORT:factions:tick=0 END ===
+[F10_SWEEP] PANEL=factions                          6ms
+=== HEELKAWN_DEBUG_REPORT:religion_lens:tick=0 BEGIN ===
+[_safe_report] Starting: religion_lens
+ReligionLens (read-only overlay) formal=0 proto=0
+  sacred_sites_sample(count=0):
+[_safe_report] Completed: religion_lens
+=== HEELKAWN_DEBUG_REPORT:religion_lens:tick=0 END ===
+[F10_SWEEP] PANEL=religion_lens                     7ms
+[F10_SWEEP] DONE invoked=85 errored=0
+[F10_SWEEP] ERRED=[]

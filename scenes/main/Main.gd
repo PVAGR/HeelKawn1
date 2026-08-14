@@ -676,11 +676,11 @@ func _ready() -> void:
 	if _fragmentation_manager == null:
 		_fragmentation_manager = load("res://autoloads/FragmentationManager.gd").new()
 		_fragmentation_manager.name = "FragmentationManager"
-		get_tree().root.add_child(_fragmentation_manager)
+		get_tree().root.add_child.call_deferred(_fragmentation_manager)
 	if get_node_or_null("/root/SacredGeography") == null:
 		var sg: Node = load("res://autoloads/SacredGeography.gd").new()
 		sg.name = "SacredGeography"
-		get_tree().root.add_child(sg)
+		get_tree().root.add_child.call_deferred(sg)
 	MythAge.init()
 
 	# Connect to PlaytestRecorder for automated playtest logging

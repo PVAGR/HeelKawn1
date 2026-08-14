@@ -15,6 +15,7 @@ enum Type {
 	BUILD_WALL, # consume 2 wood, place a WALL feature, marks tile impassable
 	BUILD_DOOR, # consume 1 wood, place a DOOR feature (passable)
 	TRADE_HAUL, # pick from trade_from stockpile, walk to trade_to; inter-settlement transfer
+	HAUL_TO_MARKET, # pawn carries personal inventory goods to settlement market/hub
 	# --- Tool jobs ---
 	GATHER_FLINT, # search for flint on rocky/gravel tiles
 	GATHER_STICK, # pick up sticks from forest floor

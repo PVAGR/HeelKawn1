@@ -1,0 +1,44 @@
+WARNING: ChronicleBook disabled: missing Panel or ChronicleText nodes.
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] _warn_missing_ui_once (res://scripts/ui/ChronicleBook.gd:157)
+       [1] _ready (res://scripts/ui/ChronicleBook.gd:22)
+       [2] _spawn_main (res://tools/f10_panels_sweep.gd:54)
+WARNING: SeedGallery disabled: missing Panel or Grid nodes.
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] _warn_missing_ui_once (res://scripts/ui/SeedGallery.gd:170)
+       [1] _ready (res://scripts/ui/SeedGallery.gd:34)
+       [2] _spawn_main (res://tools/f10_panels_sweep.gd:54)
+WARNING: [RuntimeWatchdog] Tick progression stalled for 12.0s while unpaused. Verifying core wiring.
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] _verify_tick_progress (res://autoloads/RuntimeWatchdog.gd:142)
+       [1] _on_watchdog_timeout (res://autoloads/RuntimeWatchdog.gd:55)
+WARNING: [RuntimeWatchdog] Tick progression stalled for 21.0s while unpaused. Verifying core wiring.
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] _verify_tick_progress (res://autoloads/RuntimeWatchdog.gd:142)
+       [1] _on_watchdog_timeout (res://autoloads/RuntimeWatchdog.gd:55)
+WARNING: [RuntimeWatchdog] Tick progression stalled for 30.0s while unpaused. Verifying core wiring.
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] _verify_tick_progress (res://autoloads/RuntimeWatchdog.gd:142)
+       [1] _on_watchdog_timeout (res://autoloads/RuntimeWatchdog.gd:55)
+WARNING: [RuntimeWatchdog] Tick progression stalled for 39.0s while unpaused. Verifying core wiring.
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] _verify_tick_progress (res://autoloads/RuntimeWatchdog.gd:142)
+       [1] _on_watchdog_timeout (res://autoloads/RuntimeWatchdog.gd:55)
+WARNING: [RuntimeWatchdog] Tick progression stalled for 48.0s while unpaused. Verifying core wiring.
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] _verify_tick_progress (res://autoloads/RuntimeWatchdog.gd:142)
+       [1] _on_watchdog_timeout (res://autoloads/RuntimeWatchdog.gd:55)
+WARNING: [RuntimeWatchdog] Tick progression stalled for 57.0s while unpaused. Verifying core wiring.
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] _verify_tick_progress (res://autoloads/RuntimeWatchdog.gd:142)
+       [1] _on_watchdog_timeout (res://autoloads/RuntimeWatchdog.gd:55)
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)

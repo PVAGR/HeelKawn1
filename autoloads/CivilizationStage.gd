@@ -3,6 +3,10 @@ extends Node
 ##
 ## This does not advance civilization by itself. It reads live world state and
 ## answers: "what era does this settlement currently deserve?"
+##
+## Integrates pre-computed data from KnowledgeSystem (literacy, tech diffusion),
+## EgregoreMemory (pressure vectors, emergent norms, divergence), and
+## SettlementMemory (guilds, governance) for a continuous civilization pulse.
 
 const STAGE_PRIMITIVE: int = 0
 const STAGE_NEOLITHIC: int = 1
@@ -68,26 +72,35 @@ var _knowledge_loss_penalties: Dictionary = {}
 ## Tracks last known stage per settlement for change detection (settlement_id(int) -> stage(int))
 var _last_known_stages: Dictionary = {}
 
+## Continuous per-settlement metrics cache (settlement_id -> metrics dict)
+var _continuous_metrics: Dictionary = {}
+const CONTINUOUS_UPDATE_INTERVAL_TICKS: int = 300
+var _last_continuous_update: int = -1
+
 
 func _ready() -> void:
 	# Connect to KnowledgeSystem signal for knowledge loss tracking
 	if KnowledgeSystem != null:
 		KnowledgeSystem.knowledge_lost.connect(_on_knowledge_lost)
-	# Periodic tick for penalty decay
+	# Periodic tick for penalty decay and continuous metrics updates
 	if GameManager != null:
 		GameManager.game_tick.connect(_on_civilization_tick)
 
 
 func _on_civilization_tick(tick: int) -> void:
-	"""Periodic decay of knowledge loss penalties."""
-	if tick % KNOWLEDGE_LOSS_PENALTY_DECAY_INTERVAL_TICKS != 0:
-		return
-	for sid_key in _knowledge_loss_penalties.keys():
-		var penalty: int = int(_knowledge_loss_penalties[sid_key])
-		if penalty > 0:
-			_knowledge_loss_penalties[sid_key] = maxi(0, penalty - 1)
-		else:
-			_knowledge_loss_penalties.erase(sid_key)
+	"""Periodic decay of knowledge loss penalties and continuous metrics update."""
+	if tick % KNOWLEDGE_LOSS_PENALTY_DECAY_INTERVAL_TICKS == 0:
+		for sid_key in _knowledge_loss_penalties.keys():
+			var penalty: int = int(_knowledge_loss_penalties[sid_key])
+			if penalty > 0:
+				_knowledge_loss_penalties[sid_key] = maxi(0, penalty - 1)
+			else:
+				_knowledge_loss_penalties.erase(sid_key)
+
+	# Update continuous per-settlement metrics periodically
+	if _last_continuous_update < 0 or tick - _last_continuous_update >= CONTINUOUS_UPDATE_INTERVAL_TICKS:
+		_last_continuous_update = tick
+		_update_continuous_metrics()
 
 
 func _on_knowledge_lost(knowledge_type: int, settlement_id: int) -> void:
@@ -99,6 +112,76 @@ func _on_knowledge_lost(knowledge_type: int, settlement_id: int) -> void:
 	_knowledge_loss_penalties[key] = current_penalty + KNOWLEDGE_LOSS_ERA_PENALTY
 	# Invalidate cache so next snapshot recalculates
 	_snapshot_cache.erase(key)
+	_continuous_metrics.erase(key)
+
+func _update_continuous_metrics() -> void:
+	"""Update continuous per-settlement metrics from pre-computed systems."""
+	if SettlementMemory == null or not SettlementMemory.has_method("get_formal_settlements"):
+		return
+	var settlements: Array = SettlementMemory.get_formal_settlements()
+	for i in range(settlements.size()):
+		var st_v: Variant = settlements[i]
+		if not (st_v is Dictionary):
+			continue
+		var st: Dictionary = st_v as Dictionary
+		var center_region: int = int(st.get("center_region", -1))
+		if center_region < 0:
+			continue
+
+		var metrics: Dictionary = {
+			"settlement_id": i,
+			"center_region": center_region,
+			"tick": _tick(),
+		}
+
+		# Literacy rate from KnowledgeSystem pre-computed data
+		if KnowledgeSystem != null and KnowledgeSystem.has_method("get"):
+			var lit_data: Variant = KnowledgeSystem.get("literacy_rate_by_settlement")
+			if lit_data is Dictionary:
+				var lit_entry: Variant = (lit_data as Dictionary).get(str(center_region), {})
+				if lit_entry is Dictionary:
+					metrics["literacy_rate"] = float(lit_entry.get("literacy_rate", 0.0))
+					metrics["literate_pawns"] = int(lit_entry.get("literate_pawns", 0))
+					metrics["total_pawns"] = int(lit_entry.get("total_pawns", 0))
+				else:
+					metrics["literacy_rate"] = 0.0
+			else:
+				metrics["literacy_rate"] = 0.0
+
+		# Tech diffusion from KnowledgeSystem pre-computed data
+		if KnowledgeSystem != null and KnowledgeSystem.has_method("get"):
+			var diff_data: Variant = KnowledgeSystem.get("tech_diffusion_by_settlement")
+			if diff_data is Dictionary:
+				var diff_entry: Variant = (diff_data as Dictionary).get(str(center_region), {})
+				if diff_entry is Dictionary:
+					metrics["tech_diffusion_score"] = float(diff_entry.get("diffusion_score", 0.0))
+					metrics["known_knowledge_count"] = int(diff_entry.get("known_knowledge_count", 0))
+				else:
+					metrics["tech_diffusion_score"] = 0.0
+			else:
+				metrics["tech_diffusion_score"] = 0.0
+
+		# EgregoreMemory pressure signature and norms
+		if EgregoreMemory != null:
+			var sig: Dictionary = EgregoreMemory.get_settlement_signature(center_region)
+			if not sig.is_empty():
+				metrics["egregore"] = {
+					"cohesion": float(sig.get("cohesion", 0.5)),
+					"pressure_vector": sig.get("pressure_vector", {}),
+					"ritual_density": float(sig.get("ritual_density", 0.0)),
+					"taboo_density": float(sig.get("taboo_density", 0.0)),
+					"law_density": float(sig.get("law_density", 0.0)),
+				}
+				metrics["active_norms"] = EgregoreMemory.get_settlement_active_norms(center_region)
+				var div_snap: Dictionary = EgregoreMemory.get_settlement_divergence_snapshot(center_region)
+				if not div_snap.is_empty():
+					metrics["divergence"] = div_snap
+
+		# SettlementMemory governance and guild data
+		metrics["governance_form"] = _governance_form_for_settlement(st)
+		metrics["guild_data"] = _guild_data_for_settlement(st)
+
+		_continuous_metrics[str(i)] = metrics
 
 
 func get_civilization_stage(settlement_id: int = -1) -> int:
@@ -155,6 +238,82 @@ func get_all_stage_snapshots(max_items: int = 12) -> Array[Dictionary]:
 	return out
 
 
+## Public API for continuous civilization metrics
+
+func get_continuous_metrics(settlement_id: int) -> Dictionary:
+	"""Get the latest continuous metrics for a settlement."""
+	return _continuous_metrics.get(str(settlement_id), {}).duplicate(true)
+
+
+func get_all_continuous_metrics() -> Array[Dictionary]:
+	"""Get continuous metrics for all tracked settlements."""
+	var out: Array[Dictionary] = []
+	for key in _continuous_metrics.keys():
+		out.append(_continuous_metrics[key].duplicate(true))
+	return out
+
+
+func get_literacy_rate(settlement_id: int) -> float:
+	"""Get pre-computed literacy rate for a settlement."""
+	var metrics: Dictionary = _continuous_metrics.get(str(settlement_id), {})
+	if metrics.has("literacy_rate"):
+		return float(metrics["literacy_rate"])
+	# Fallback to on-demand computation
+	var st: Dictionary = _settlement_for_id(settlement_id)
+	var pawns: Array[HeelKawnian] = _pawns_for_settlement(st, settlement_id)
+	return _compute_literacy_rate(pawns)
+
+
+func get_tech_diffusion_score(settlement_id: int) -> float:
+	"""Get pre-computed tech diffusion score for a settlement."""
+	var metrics: Dictionary = _continuous_metrics.get(str(settlement_id), {})
+	if metrics.has("tech_diffusion_score"):
+		return float(metrics["tech_diffusion_score"])
+	return 0.0
+
+
+func get_egregore_signature(settlement_id: int) -> Dictionary:
+	"""Get EgregoreMemory pressure signature for a settlement."""
+	var metrics: Dictionary = _continuous_metrics.get(str(settlement_id), {})
+	if metrics.has("egregore"):
+		return (metrics["egregore"] as Dictionary).duplicate(true)
+	return {}
+
+
+func get_active_norms(settlement_id: int) -> Array:
+	"""Get EgregoreMemory active norms for a settlement."""
+	var metrics: Dictionary = _continuous_metrics.get(str(settlement_id), {})
+	if metrics.has("active_norms"):
+		return (metrics["active_norms"] as Array).duplicate(true)
+	return []
+
+
+func get_divergence_snapshot(settlement_id: int) -> Dictionary:
+	"""Get EgregoreMemory divergence snapshot for a settlement."""
+	var metrics: Dictionary = _continuous_metrics.get(str(settlement_id), {})
+	if metrics.has("divergence"):
+		return (metrics["divergence"] as Dictionary).duplicate(true)
+	return {}
+
+
+func get_governance_form(settlement_id: int) -> String:
+	"""Get SettlementMemory governance form for a settlement."""
+	var metrics: Dictionary = _continuous_metrics.get(str(settlement_id), {})
+	if metrics.has("governance_form"):
+		return str(metrics["governance_form"])
+	var st: Dictionary = _settlement_for_id(settlement_id)
+	return _governance_form_for_settlement(st)
+
+
+func get_guild_data(settlement_id: int) -> Dictionary:
+	"""Get SettlementMemory guild data for a settlement."""
+	var metrics: Dictionary = _continuous_metrics.get(str(settlement_id), {})
+	if metrics.has("guild_data"):
+		return (metrics["guild_data"] as Dictionary).duplicate(true)
+	var st: Dictionary = _settlement_for_id(settlement_id)
+	return _guild_data_for_settlement(st)
+
+
 func score_to_stage(score: int) -> int:
 	if score < 15:
 		return STAGE_PRIMITIVE
@@ -200,16 +359,30 @@ func _build_stage_snapshot(settlement_id: int) -> Dictionary:
 		100
 	)
 	var stage: int = score_to_stage(score)
-	var tech_diffusion: Dictionary = _tech_diffusion_score(st, pawns)
+
+	# Use pre-computed continuous metrics where available
+	var continuous: Dictionary = _continuous_metrics.get(str(settlement_id), {})
+	var td: Dictionary
+	if continuous.has("tech_diffusion_score") and float(continuous.get("tech_diffusion_score", 0.0)) > 0.0:
+		td = {
+			"score": int(continuous.get("tech_diffusion_score", 0.0) * 10),
+			"knowledge_carriers": continuous.get("known_knowledge_count", 0),
+			"total_pawns": continuous.get("total_pawns", 0),
+			"gini_index": 0.0,  # Not directly available from pre-computed
+		}
+	else:
+		td = _tech_diffusion_score(st, pawns)
+	var literacy_rate: float = continuous.get("literacy_rate", _compute_literacy_rate(pawns))
 	var lifespan: Dictionary = _lifespan_metrics(pawns)
-	var literacy_rate: float = _compute_literacy_rate(pawns)
+	
 	## Detect stage change and emit signal
 	var old_stage_v: Variant = _last_known_stages.get(settlement_id, -1)
 	var old_stage: int = int(old_stage_v)
 	if old_stage >= 0 and old_stage != stage:
 		civilization_stage_changed.emit(settlement_id, old_stage, stage)
 	_last_known_stages[settlement_id] = stage
-	return {
+
+	var snap: Dictionary = {
 		"settlement_id": settlement_id,
 		"center_region": center_region,
 		"name": _settlement_name(st, settlement_id),
@@ -227,11 +400,28 @@ func _build_stage_snapshot(settlement_id: int) -> Dictionary:
 			"institutions": institution_score,
 			"knowledge_loss_penalty": loss_penalty,
 		},
-		"tech_diffusion": tech_diffusion,
+		"tech_diffusion": td,
 		"literacy_rate": literacy_rate,
 		"lifespan": lifespan,
 		"next_stage_score": _next_stage_score(score),
 	}
+
+	# Add continuous metrics data to snapshot
+	if not continuous.is_empty():
+		snap["continuous_metrics"] = {
+			"literacy_rate": continuous.get("literacy_rate", 0.0),
+			"literate_pawns": continuous.get("literate_pawns", 0),
+			"total_pawns": continuous.get("total_pawns", 0),
+			"tech_diffusion_score": continuous.get("tech_diffusion_score", 0.0),
+			"known_knowledge_count": continuous.get("known_knowledge_count", 0),
+			"egregore": continuous.get("egregore", {}),
+			"active_norms": continuous.get("active_norms", []),
+			"divergence": continuous.get("divergence", {}),
+			"governance_form": continuous.get("governance_form", "Unknown"),
+			"guild_data": continuous.get("guild_data", {}),
+		}
+
+	return snap
 
 
 func _technology_score() -> int:
@@ -349,12 +539,6 @@ func _compute_literacy_rate(pawns: Array[HeelKawnian]) -> float:
 	if count <= 0:
 		return 0.0
 	return float(literate) / float(count)
-
-
-func get_literacy_rate(settlement_id: int) -> float:
-	var st: Dictionary = _settlement_for_id(settlement_id)
-	var pawns: Array[HeelKawnian] = _pawns_for_settlement(st, settlement_id)
-	return _compute_literacy_rate(pawns)
 
 
 func _tech_diffusion_score(st: Dictionary, pawns: Array[HeelKawnian]) -> Dictionary:
@@ -556,6 +740,31 @@ func _settlement_name(st: Dictionary, settlement_id: int) -> String:
 	if name.is_empty():
 		name = "Settlement #%d" % settlement_id
 	return name
+
+
+func _governance_form_for_settlement(st: Dictionary) -> String:
+	var gov_v: Variant = st.get("governance_form", 0)
+	var gov_enum: int = int(gov_v)
+	match gov_enum:
+		0: return "Elder Council"
+		1: return "Militia Protectors"
+		2: return "Chief Households"
+		3: return "Council Rule"
+	return "Unknown"
+
+
+func _guild_data_for_settlement(st: Dictionary) -> Dictionary:
+	var guild_id: String = str(st.get("guild_id", ""))
+	var member_count: int = int(st.get("guild_member_count", 0))
+	var stability_ticks: int = int(st.get("guild_candidate_stability_ticks", 0))
+	var reason: String = str(st.get("guild_candidate_reason", "not_evaluated"))
+	return {
+		"guild_id": guild_id,
+		"member_count": member_count,
+		"stability_ticks": stability_ticks,
+		"reason": reason,
+		"has_guild": not guild_id.is_empty() and member_count > 0,
+	}
 
 
 func _next_stage_score(score: int) -> int:

@@ -1,0 +1,182 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+[TickDecoupler] Registered system: Input (interval: 1 ticks)
+[TickDecoupler] Registered system: Camera (interval: 1 ticks)
+[TickDecoupler] Registered system: UI (interval: 1 ticks)
+[TickDecoupler] Registered system: Physics (interval: 2 ticks)
+[TickDecoupler] Registered system: Pathfinding (interval: 2 ticks)
+[TickDecoupler] Registered system: AI (interval: 5 ticks)
+[TickDecoupler] Registered system: Economy (interval: 5 ticks)
+[TickDecoupler] Registered system: Social (interval: 5 ticks)
+[TickDecoupler] Registered system: Weather (interval: 10 ticks)
+[TickDecoupler] Registered system: Foliage (interval: 10 ticks)
+[TickDecoupler] Registered system: AmbientAudio (interval: 10 ticks)
+[TickDecoupler] Registered system: MemoryCleanup (interval: 60 ticks)
+[TickDecoupler] Registered system: StatsCollection (interval: 60 ticks)
+[CrashTrap] CrashTrap initialized. trace_enabled=false trace_first_sim_tick=false (per-listener tick-1 trace when both true)
+[EventBus] Subscribed: pressure_event → HeelKawnianManager._on_pressure_event
+[EventBus] Subscribed: pawn_died → KnowledgeSystem._on_pawn_died
+[WorldAI] Neural world matrix initialized with 19 neural networks
+[WorldAI] Specialized neural networks initialized
+[AIAgentManager] Neural network matrix initialized with 4 layers
+[AIAgentManager] Learning algorithms initialized
+[AIAgentManager] Pattern recognition systems initialized
+[AIAgentManager] Predictive models initialized
+[AIAgentManager] Collective intelligence initialized
+[VALIDATION_SMOKETEST] marker=PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp source=SettlementMemory.autoload debug_build=true VALIDATION_SESSION_ENABLED_const=false clean_economy_armed=false settlement_truth_verify_armed=false specialization_log_armed=false
+[SettlementManager] Initialized
+[EventBus] Subscribed: pawn_died → GrudgeManager._on_pawn_died
+[EventBus] Subscribed: diaspora_exile → GossipManager._on_diaspora_exile
+[EventBus] Subscribed: pawn_birth → BloodlineSystem._on_pawn_birth
+[EventBus] Subscribed: pawn_died → SocialDynamics._on_pawn_death
+[EventBus] Subscribed: pawn_moved → SocialDynamics._on_pawn_move
+[EventBus] Subscribed: conflict_start → SocialDynamics._on_conflict_event
+[EventBus] Subscribed: conflict_escalation → SocialDynamics._on_conflict_event
+[EventBus] Subscribed: settlement_founded → CulturalExchange._on_settlement_founded
+[EventBus] Subscribed: war_declared → CulturalExchange._on_war_declared
+[EventBus] Subscribed: settlement_conquered → CulturalExchange._on_settlement_conquered
+[EventBus] Subscribed: pawn_died → SocialStratification._on_pawn_died
+[EventBus] Subscribed: settlement_founded → SocialStratification._on_settlement_founded
+[EventBus] Subscribed: pawn_died → MarriageSystem._on_pawn_death_event
+[EventBus] Subscribed: pawn_born → MarriageSystem._on_pawn_born_event
+[EventBus] Subscribed: relationship_changed → MarriageSystem._on_relationship_changed
+[EventBus] Subscribed: settlement_founded → FactionPolitics._on_settlement_founded
+[EventBus] Subscribed: pawn_died → FactionPolitics._on_pawn_died
+[EventBus] Subscribed: settlement_attacked → FactionPolitics._on_settlement_attacked
+[EventBus] Subscribed: combat_started → FactionPolitics._on_combat_started
+[EventBus] Subscribed: combat_ended → FactionPolitics._on_combat_ended
+[EventBus] Subscribed: trade_route_established → FactionPolitics._on_trade_route_established
+[EventBus] Subscribed: pressure_event → FactionPolitics._on_pressure_event
+[EventBus] Subscribed: building_constructed → FactionPolitics._on_building_constructed
+[EventBus] Subscribed: war_declared → FactionPolitics._on_war_declared
+[EventBus] Subscribed: settlement_founded → LibrarySystem._on_settlement_founded
+[EventBus] Subscribed: settlement_abandoned → LibrarySystem._on_settlement_destroyed
+[EventBus] Subscribed: settlement_destroyed → LibrarySystem._on_settlement_destroyed
+[EventBus] Subscribed: building_constructed → LibrarySystem._on_building_constructed
+[EventBus] Subscribed: settlement_founded → ResearchSystem._on_settlement_founded
+[EventBus] Subscribed: scholar_arrival → ResearchSystem._on_scholar_arrival
+[EventBus] Subscribed: pawn_died → TeachingSystem._on_pawn_died
+[EventBus] Subscribed: pawn_moved → TeachingSystem._on_pawn_moved
+[EventBus] Subscribed: settlement_founded → TechnologyEras._on_settlement_founded
+[EventBus] Subscribed: pawn_died → NarrativeSystem._on_pawn_died
+[EventBus] Subscribed: settlement_founded → NarrativeSystem._on_settlement_founded
+[EventBus] Subscribed: war_declared → NarrativeSystem._on_war_declared
+[EventBus] Subscribed: disaster_started → NarrativeSystem._on_disaster_started
+[EventBus] Subscribed: settlement_founded → LegendSystem._on_settlement_founded
+[EventBus] Subscribed: combat_ended → LegendSystem._on_combat_ended
+[EventBus] Subscribed: settlement_founded → EpicChronicle._on_event_settlement_founded
+[EventBus] Subscribed: settlement_destroyed → EpicChronicle._on_event_settlement_destroyed
+[EventBus] Subscribed: war_declared → EpicChronicle._on_event_war_declared
+[EventBus] Subscribed: war_ended → EpicChronicle._on_event_war_ended
+[EventBus] Subscribed: cataclysm_started → EpicChronicle._on_event_cataclysm
+[EventBus] Subscribed: discovery_major → EpicChronicle._on_event_discovery
+[EventBus] Subscribed: pawn_died_significant → EpicChronicle._on_event_hero_death
+[EventBus] Subscribed: dynasty_formed → EpicChronicle._on_event_dynasty_founded
+[EventBus] Subscribed: dynasty_ended → EpicChronicle._on_event_dynasty_ended
+[EventBus] Subscribed: betrayal → AshaDrujSystem._on_betrayal_event
+[EventBus] Subscribed: oath_kept → AshaDrujSystem._on_oath_kept_event
+[EventBus] Subscribed: justice_served → AshaDrujSystem._on_justice_served_event
+[EventBus] Subscribed: crime_committed → AshaDrujSystem._on_crime_committed_event
+[EventBus] Subscribed: heroic_deed → AshaDrujSystem._on_heroic_deed_event
+[EventBus] Subscribed: settlement_founded → AshaDrujSystem._on_settlement_founded_event
+[EventBus] Subscribed: cataclysm_started → EchoSystem._on_eventbus_cataclysm
+[EventBus] Subscribed: massacre → EchoSystem._on_eventbus_massacre
+[EventBus] Subscribed: betrayal → EchoSystem._on_eventbus_betrayal
+[EventBus] Subscribed: romance → EchoSystem._on_eventbus_romance
+[EventBus] Subscribed: settlement_founded → EchoSystem._on_eventbus_founding
+[EventBus] Subscribed: heroic_death → EchoSystem._on_eventbus_heroic_death
+[EventBus] Subscribed: major_figure_death → EchoSystem._on_eventbus_major_death
+[EventBus] Subscribed: miracle → EchoSystem._on_eventbus_miracle
+[EventBus] Subscribed: ritual_completed → EchoSystem._on_eventbus_ritual
+[EventBus] Subscribed: cataclysm_started → VeilSystem._on_cataclysm_event
+[EventBus] Subscribed: disaster_started → VeilSystem._on_disaster_event
+[EventBus] Subscribed: mass_death → VeilSystem._on_mass_death_event
+[EventBus] Subscribed: dark_ritual → VeilSystem._on_dark_ritual_event
+[EventBus] Subscribed: world_created → VeilSystem._on_world_created
+[PF_STACK] flusher=res://scripts/world/PathFinder.gd:129 -> res://scenes/world/World.gd:100 (dirty setter not shown)
+[INFO] PawnSpawner: pawn_scene loaded successfully: res://scenes/pawn/HeelKawnian.tscn
+[VALIDATION_SMOKETEST] marker=PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp source=Main.gd debug_build=true VALIDATION_SESSION_ENABLED_const=false clean_economy_armed=false settlement_truth_verify_armed=false specialization_log_armed=false
+[CrashTrap] OK: Autoload 'SettlementMemory' (Node)
+[CrashTrap] OK: Autoload 'WorldAI' (Node)
+[Main] Scene ready. Tick interval: 1.00s
+[Main] Speed: 1.0x
+[Main] Watch mode: world runs fully autonomous; you observe without commanding.
+[Main] Player mode: WATCH
+[MATRIX_SMOKE] START
+[VALIDATION_STATUS] debug_build=true VALIDATION_SESSION_ENABLED_const=false WorldEvents_VALIDATION_CLEAN_ECONOMY_EVENTS_const=false clean_economy_active=false settlement_truth_verify_active=false specialization_validation_log_active=false
+[VeilSystem] Initialized: thickness=48.2 spots=7 era_shift=-1.8
+[DayNight] Year 1 · Day 1/50 begins (tick 1)
+[MythAge] The HeelKawnians have entered the Age of Awakening
+[PERF] avg_fps=10 over 5.0s | tick_batch=22.6ms | pawns=24 jobs=8 settlements=0 proto_sites=0
+[Main] Auto-created stockpile zone at (144, 122) for settlement near (145, 121) (sid=-1)
+[Technology] Started researching: Fire Making
+[PERF] avg_fps=15 over 5.1s | tick_batch=1.6ms | pawns=24 jobs=72 settlements=0 proto_sites=0
+[DayNight] Year 1 · Day 2/50 begins (tick 600)
+[PERF] avg_fps=16 over 5.1s | tick_batch=2.0ms | pawns=24 jobs=86 settlements=0 proto_sites=0
+[DayNight] Year 1 · Day 3/50 begins (tick 1200)
+[PERF] avg_fps=17 over 5.0s | tick_batch=25.3ms | pawns=24 jobs=93 settlements=0 proto_sites=0
+[PERF] avg_fps=17 over 5.0s | tick_batch=21.6ms | pawns=24 jobs=104 settlements=0 proto_sites=0
+[DayNight] Year 1 · Day 4/50 begins (tick 1800)
+[PERF] avg_fps=17 over 5.0s | tick_batch=7.3ms | pawns=24 jobs=115 settlements=0 proto_sites=0
+[DayNight] Year 1 · Day 5/50 begins (tick 2400)
+[PERF] avg_fps=17 over 5.0s | tick_batch=392.8ms | pawns=24 jobs=140 settlements=0 proto_sites=0
+[PERF] avg_fps=18 over 5.1s | tick_batch=26.4ms | pawns=24 jobs=146 settlements=0 proto_sites=0
+[DayNight] Year 1 · Day 6/50 begins (tick 3000)
+[PERF] avg_fps=19 over 5.0s | tick_batch=24.6ms | pawns=24 jobs=146 settlements=0 proto_sites=0
+[Main] React: +18 MINE  +0 MINE_WALL  (active walls=0)
+[PERF] avg_fps=18 over 5.1s | tick_batch=2.0ms | pawns=24 jobs=162 settlements=0 proto_sites=0
+[DayNight] Year 1 · Day 7/50 begins (tick 3600)
+[PERF] avg_fps=19 over 5.0s | tick_batch=13.0ms | pawns=24 jobs=161 settlements=0 proto_sites=0
+[WorldAI] Civilization advanced to age: DAWN
+[WorldAI] Civilization advanced to age: TRIBAL
+[CONSTRUCTION_SEED] WARNING: took 54902us (budget=999999999us) cursor=0 checked=14 processed=3 posted=2
+[Main] Construction seed: posted 2 build jobs (last 13979 ticks)
+[Main] Auto-created stockpile zone at (103, 87) for settlement near (104, 88) (sid=5)
+[Main] Auto-created stockpile zone at (168, 87) for settlement near (168, 88) (sid=6)
+[Main] Leader construction: posted 9 build jobs
+[CONSTRUCTION_SEED] WARNING: took 33915us (budget=999999999us) cursor=0 checked=14 processed=3 posted=14
+[CONSTRUCTION_SEED] WARNING: took 15678us (budget=999999999us) cursor=0 checked=14 processed=3 posted=5
+[DayNight] Year 1 · Day 8/50 begins (tick 4200)
+[PERF] avg_fps=17 over 5.1s | tick_batch=3.2ms | pawns=24 jobs=198 settlements=0 proto_sites=14
+[PERF] avg_fps=16 over 5.0s | tick_batch=117.6ms | pawns=24 jobs=192 settlements=0 proto_sites=14
+[HeelKawnian] Created 2x2 stockpile zone at (105, 87) for storage hut built by Rose Taylorford
+[CONSTRUCTION_SEED] WARNING: took 17626us (budget=999999999us) cursor=0 checked=14 processed=3 posted=6
+[PERF] avg_fps=14 over 5.1s | tick_batch=121.9ms | pawns=24 jobs=195 settlements=0 proto_sites=14
+[Main] Leader construction: posted 1 build jobs
+[HeelKawnian] Created 2x2 stockpile zone at (152, 103) for storage hut built by Emma Hunterford
+[PERF] avg_fps=15 over 5.1s | tick_batch=5.7ms | pawns=24 jobs=199 settlements=0 proto_sites=14
+[Main] Leader construction: posted 2 build jobs
+[DayNight] Year 1 · Day 9/50 begins (tick 4800)
+[Main] Leader construction: posted 2 build jobs
+[Main] Leader construction: posted 1 build jobs
+[PERF] avg_fps=13 over 5.0s | tick_batch=15.2ms | pawns=24 jobs=198 settlements=0 proto_sites=14
+[WorldEvents] tick=5000 total_actions=313 discovery:246 | job:67
+[Main] Leader construction: posted 2 build jobs
+[CONSTRUCTION_SEED] WARNING: took 22721us (budget=999999999us) cursor=0 checked=14 processed=4 posted=5
+[Main] Construction seed: posted 30 build jobs (last 1080 ticks)
+[Main] Auto-created stockpile zone at (199, 56) for settlement near (200, 56) (sid=3)
+[PERF] avg_fps=13 over 5.1s | tick_batch=4.4ms | pawns=25 jobs=203 settlements=0 proto_sites=14
+[Main] Leader construction: posted 2 build jobs
+[CONSTRUCTION_SEED] WARNING: took 15027us (budget=999999999us) cursor=0 checked=14 processed=4 posted=5
+[Technology] Completed: Fire Making (building)
+[Technology] Started researching: Basic Tools
+[PERF] avg_fps=14 over 5.1s | tick_batch=3.7ms | pawns=25 jobs=211 settlements=0 proto_sites=14
+[DayNight] Year 1 · Day 10/50 begins (tick 5400)
+[Main] Leader construction: posted 1 build jobs
+[PERF] avg_fps=18 over 5.1s | tick_batch=24.7ms | pawns=25 jobs=210 settlements=0 proto_sites=14
+[PERF] avg_fps=17 over 5.0s | tick_batch=24.6ms | pawns=25 jobs=211 settlements=0 proto_sites=14
+[Main] Leader construction: posted 1 build jobs
+[Main] Leader construction: posted 1 build jobs
+[HeelKawnian] Created 2x2 stockpile zone at (151, 102) for storage hut built by Margaret Hunterer
+[PERF] avg_fps=15 over 5.0s | tick_batch=28.1ms | pawns=25 jobs=209 settlements=0 proto_sites=14
+[Main] Leader construction: posted 3 build jobs
+[DayNight] Year 1 · Day 11/50 begins (tick 6000)
+[Main] Auto-saved at tick 6000
+[MATRIX_SMOKE] final_tick=6000 heelkawnian_events_seen=1006 drives_seen={ "bond": 521 }
+[MATRIX_SMOKE] event_type=matrix_learning_seed count=23
+[MATRIX_SMOKE] event_type=matrix_settlement_ambition count=399
+[MATRIX_SMOKE] event_type=matrix_household_ambition count=63
+[MATRIX_SMOKE] missing_event_types=["matrix_preservation_action"]
+[MATRIX_SMOKE] drives={ "bond": 521 }
+[MATRIX_SMOKE] preservation_pressure_samples=17 last=0
+[MATRIX_SMOKE_PASS] matrix_preservation_recovery_live

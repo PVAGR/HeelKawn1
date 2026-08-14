@@ -813,6 +813,50 @@ func get_pending_counts() -> Dictionary:
 	return _get_pending_counts_by_type().duplicate()
 
 
+## Get open jobs matching a pawn's profession.
+## Returns array of jobs that match the profession's primary job types.
+func get_open_jobs_for_profession(profession: int) -> Array[Job]:
+	var matching_types: Array[int] = _profession_to_job_types(profession)
+	if matching_types.is_empty():
+		return []
+	var out: Array[Job] = []
+	for job in _open:
+		if matching_types.has(job.type):
+			out.append(job)
+	return out
+
+
+## Map profession enum to relevant job types.
+func _profession_to_job_types(profession: int) -> Array[int]:
+	match profession:
+		HeelKawnianData.Profession.FARMER:
+			return [_Job.Type.FORAGE, _Job.Type.PLANT_SEEDS, _Job.Type.HARVEST_CROPS, _Job.Type.GROW_FOOD, _Job.Type.BUILD_FARM_FIELD, _Job.Type.WORK_FARM_FIELD]
+		HeelKawnianData.Profession.BUILDER:
+			return [_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_STOCKPILE, _Job.Type.BUILD_WORKSHOP, _Job.Type.BUILD_LOOM, _Job.Type.BUILD_KILN, _Job.Type.BUILD_SMELTER]
+		HeelKawnianData.Profession.GATHERER:
+			return [_Job.Type.FORAGE, _Job.Type.GATHER_FLINT, _Job.Type.GATHER_STICK, _Job.Type.MINE]
+		HeelKawnianData.Profession.WARRIOR:
+			return [_Job.Type.HUNT, _Job.Type.PROTECT, _Job.Type.DEFEND, _Job.Type.GUARD]
+		HeelKawnianData.Profession.SCHOLAR:
+			return [_Job.Type.TEACH_SKILL, _Job.Type.APPRENTICESHIP, _Job.Type.CARVE_KNOWLEDGE_STONE, _Job.Type.CARVE_LEDGER_STONE, _Job.Type.PAPER_MAKING, _Job.Type.LEATHER_MAKING, _Job.Type.INK_MAKING, _Job.Type.BOOK_BINDING, _Job.Type.BUILD_LIBRARY, _Job.Type.BUILD_SCHOOL]
+		HeelKawnianData.Profession.TRADER:
+			return [_Job.Type.TRADE_HAUL, _Job.Type.HAUL_TO_MARKET, _Job.Type.WORK_MARKET, _Job.Type.BUILD_MARKET, _Job.Type.BUILD_TRADING_POST, _Job.Type.BUILD_MARKET_STALL]
+		HeelKawnianData.Profession.SMITH:
+			return [_Job.Type.CRAFT_KNIFE, _Job.Type.CRAFT_PICK, _Job.Type.CRAFT_SPEAR, _Job.Type.TOOL_MAKING, _Job.Type.BUILD_WORKSHOP, _Job.Type.WORK_WOODSHOP, _Job.Type.BUILD_SMELTER]
+		HeelKawnianData.Profession.HEALER:
+			return [_Job.Type.BUILD_APOTHECARY, _Job.Type.DRY_MEAT]
+		HeelKawnianData.Profession.CARPENTER:
+			return [_Job.Type.CHOP, _Job.Type.BUILD_BED, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_WOODSHOP, _Job.Type.WORK_WOODSHOP, _Job.Type.BUILD_COUNTER, _Job.Type.BUILD_CHAIR, _Job.Type.BUILD_BOAT_WORKSHOP]
+		HeelKawnianData.Profession.COOK:
+			return [_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH, _Job.Type.DRY_MEAT, _Job.Type.BUILD_COOK_HUT, _Job.Type.WORK_COOK_HUT, _Job.Type.BUILD_BREWERY, _Job.Type.BREW_MEAD, _Job.Type.BREW_ALE]
+		HeelKawnianData.Profession.MERCHANT:
+			return [_Job.Type.TRADE_HAUL, _Job.Type.HAUL_TO_MARKET, _Job.Type.WORK_MARKET, _Job.Type.BUILD_MARKET, _Job.Type.BUILD_TRADING_POST]
+		HeelKawnianData.Profession.BOATWRIGHT:
+			return [_Job.Type.BUILD_BOATYARD, _Job.Type.BUILD_DOCK, _Job.Type.BUILD_FISHERMAN_HUT, _Job.Type.BUILD_BOAT_WORKSHOP, _Job.Type.FISH]
+		_:
+			return [_Job.Type.FORAGE, _Job.Type.CHOP, _Job.Type.MINE, _Job.Type.HUNT]
+
+
 ## Record a tile as failed for a job reason. Other systems (pawn abandons,
 ## resource depletion, path failures) call this so JobManager avoids
 ## re-posting on known-bad tiles for FAIL_TILE_COOLDOWN_TICKS.

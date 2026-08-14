@@ -1,0 +1,80 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+[TickDecoupler] Registered system: Input (interval: 1 ticks)
+[TickDecoupler] Registered system: Camera (interval: 1 ticks)
+[TickDecoupler] Registered system: UI (interval: 1 ticks)
+[TickDecoupler] Registered system: Physics (interval: 2 ticks)
+[TickDecoupler] Registered system: Pathfinding (interval: 2 ticks)
+[TickDecoupler] Registered system: AI (interval: 5 ticks)
+[TickDecoupler] Registered system: Economy (interval: 5 ticks)
+[TickDecoupler] Registered system: Social (interval: 5 ticks)
+[TickDecoupler] Registered system: Weather (interval: 10 ticks)
+[TickDecoupler] Registered system: Foliage (interval: 10 ticks)
+[TickDecoupler] Registered system: AmbientAudio (interval: 10 ticks)
+[TickDecoupler] Registered system: MemoryCleanup (interval: 60 ticks)
+[TickDecoupler] Registered system: StatsCollection (interval: 60 ticks)
+[CrashTrap] CrashTrap initialized. trace_enabled=false trace_first_sim_tick=false (per-listener tick-1 trace when both true)
+[EventBus] Subscribed: pressure_event ΓåÆ HeelKawnianManager._on_pressure_event
+[EventBus] Subscribed: pawn_died ΓåÆ KnowledgeSystem._on_pawn_died
+[WorldAI] Neural world matrix initialized with 19 neural networks
+[WorldAI] Specialized neural networks initialized
+[AIAgentManager] Neural network matrix initialized with 4 layers
+[AIAgentManager] Learning algorithms initialized
+[AIAgentManager] Pattern recognition systems initialized
+[AIAgentManager] Predictive models initialized
+[AIAgentManager] Collective intelligence initialized
+[VALIDATION_SMOKETEST] marker=PVAGR/HeelKawn1-validation-smoketest-2026-04-27-r2-trade-rp source=SettlementMemory.autoload debug_build=true VALIDATION_SESSION_ENABLED_const=false clean_economy_armed=false settlement_truth_verify_armed=false specialization_log_armed=false
+[SettlementManager] Initialized
+[EventBus] Subscribed: pawn_died ΓåÆ GrudgeManager._on_pawn_died
+[EventBus] Subscribed: diaspora_exile ΓåÆ GossipManager._on_diaspora_exile
+[EventBus] Subscribed: pawn_birth ΓåÆ BloodlineSystem._on_pawn_birth
+[EventBus] Subscribed: pawn_died ΓåÆ SocialDynamics._on_pawn_death
+[EventBus] Subscribed: pawn_moved ΓåÆ SocialDynamics._on_pawn_move
+[EventBus] Subscribed: conflict_start ΓåÆ SocialDynamics._on_conflict_event
+[EventBus] Subscribed: conflict_escalation ΓåÆ SocialDynamics._on_conflict_event
+[EventBus] Subscribed: settlement_founded ΓåÆ CulturalExchange._on_settlement_founded
+[EventBus] Subscribed: war_declared ΓåÆ CulturalExchange._on_war_declared
+[EventBus] Subscribed: settlement_conquered ΓåÆ CulturalExchange._on_settlement_conquered
+[EventBus] Subscribed: pawn_died ΓåÆ SocialStratification._on_pawn_died
+[EventBus] Subscribed: settlement_founded ΓåÆ SocialStratification._on_settlement_founded
+[EventBus] Subscribed: pawn_died ΓåÆ MarriageSystem._on_pawn_death_event
+[EventBus] Subscribed: pawn_born ΓåÆ MarriageSystem._on_pawn_born_event
+[EventBus] Subscribed: relationship_changed ΓåÆ MarriageSystem._on_relationship_changed
+[EventBus] Subscribed: settlement_founded ΓåÆ FactionPolitics._on_settlement_founded
+[EventBus] Subscribed: pawn_died ΓåÆ FactionPolitics._on_pawn_died
+[EventBus] Subscribed: settlement_attacked ΓåÆ FactionPolitics._on_settlement_attacked
+[EventBus] Subscribed: combat_started ΓåÆ FactionPolitics._on_combat_started
+[EventBus] Subscribed: combat_ended ΓåÆ FactionPolitics._on_combat_ended
+[EventBus] Subscribed: trade_route_established ΓåÆ FactionPolitics._on_trade_route_established
+[EventBus] Subscribed: pressure_event ΓåÆ FactionPolitics._on_pressure_event
+[EventBus] Subscribed: building_constructed ΓåÆ FactionPolitics._on_building_constructed
+[EventBus] Subscribed: war_declared ΓåÆ FactionPolitics._on_war_declared
+[EventBus] Subscribed: settlement_founded ΓåÆ LibrarySystem._on_settlement_founded
+[EventBus] Subscribed: settlement_abandoned ΓåÆ LibrarySystem._on_settlement_destroyed
+[EventBus] Subscribed: settlement_destroyed ΓåÆ LibrarySystem._on_settlement_destroyed
+[EventBus] Subscribed: building_constructed ΓåÆ LibrarySystem._on_building_constructed
+[EventBus] Subscribed: settlement_founded ΓåÆ ResearchSystem._on_settlement_founded
+[EventBus] Subscribed: scholar_arrival ΓåÆ ResearchSystem._on_scholar_arrival
+[EventBus] Subscribed: pawn_died ΓåÆ TeachingSystem._on_pawn_died
+[EventBus] Subscribed: pawn_moved ΓåÆ TeachingSystem._on_pawn_moved
+[EventBus] Subscribed: settlement_founded ΓåÆ TechnologyEras._on_settlement_founded
+[EventBus] Subscribed: pawn_died ΓåÆ NarrativeSystem._on_pawn_died
+[EventBus] Subscribed: settlement_founded ΓåÆ NarrativeSystem._on_settlement_founded
+[EventBus] Subscribed: war_declared ΓåÆ NarrativeSystem._on_war_declared
+[EventBus] Subscribed: disaster_started ΓåÆ NarrativeSystem._on_disaster_started
+[EventBus] Subscribed: settlement_founded ΓåÆ LegendSystem._on_settlement_founded
+[EventBus] Subscribed: combat_ended ΓåÆ LegendSystem._on_combat_ended
+[EventBus] Subscribed: settlement_founded ΓåÆ EpicChronicle._on_event_settlement_founded
+[EventBus] Subscribed: settlement_destroyed ΓåÆ EpicChronicle._on_event_settlement_destroyed
+[EventBus] Subscribed: war_declared ΓåÆ EpicChronicle._on_event_war_declared
+[EventBus] Subscribed: war_ended ΓåÆ EpicChronicle._on_event_war_ended
+[EventBus] Subscribed: cataclysm_started ΓåÆ EpicChronicle._on_event_cataclysm
+[EventBus] Subscribed: discovery_major ΓåÆ EpicChronicle._on_event_discovery
+[EventBus] Subscribed: pawn_died_significant ΓåÆ EpicChronicle._on_event_hero_death
+[EventBus] Subscribed: dynasty_formed ΓåÆ EpicChronicle._on_event_dynasty_founded
+[EventBus] Subscribed: dynasty_ended ΓåÆ EpicChronicle._on_event_dynasty_ended
+[EventBus] Subscribed: betrayal ΓåÆ AshaDrujSystem._on_betrayal_event
+[EventBus] Subscribed: oath_kept ΓåÆ AshaDrujSystem._on_oath_kept_event
+[EventBus] Subscribed: justice_served ΓåÆ AshaDrujSystem._on_justice_served_event
+[EventBus] Subscribed: crime_committed ΓåÆ AshaDrujSystem._on_crime_committed_event
+[EventBus] Subscribed: heroic_deed ΓåÆ AshaDrujSystem._on_heroic_deed_event

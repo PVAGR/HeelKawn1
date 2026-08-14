@@ -5,7 +5,7 @@ We are always building, always refining, always expanding. This document capture
 **CURRENT STATE** of an ongoing creative journey.
 
 **Latest Verification:** `docs/STATE_VERIFICATION_2026-06-05.md`
-**Last Updated:** June 5, 2026
+**Last Updated:** June 13, 2026
 **Current Phase:** Phase 5A integration — TeachingSystem + ResearchSystem + TechnologyEras production rewrites, stub implementations, Deep Social Dynamics, Knowledge Ecology, Emergent Narrative, Player Incarnation, Metaphysics
 **Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
 
@@ -54,6 +54,33 @@ We are always building, always refining, always expanding. This document capture
 - Quality gate static checks 1-3 PASS
 
 **Remaining:** `sim_performance_smoothness_smoke.gd` requires desktop environment; `PawnMoodUI.gd:283` headless theme access error (pre-existing cosmetic).
+
+---
+
+## June 5, 2026 (session 3) — Civilization Stage Deepening Complete
+
+**Scope:** Deepen `CivilizationStage.gd` to integrate pre-computed data from KnowledgeSystem, EgregoreMemory, and SettlementMemory for continuous per-settlement civilization metrics.
+
+**Files changed:** `autoloads/CivilizationStage.gd` (major rewrite of continuous metrics integration).
+
+**Changes:**
+- Added `_continuous_metrics` cache updated every 300 ticks via `_update_continuous_metrics()` called from `_on_civilization_tick`
+- Integrated KnowledgeSystem pre-computed `literacy_rate_by_settlement` and `tech_diffusion_by_settlement` (updated every 600/800 ticks respectively)
+- Integrated EgregoreMemory pressure signatures (8-axis pressure vectors), active norms (mutual_aid, martial_code, scholar_path, austerity_rite, market_charter), law density, divergence scores, and migration tendency
+- Integrated SettlementMemory governance forms (Elder Council, Militia Protectors, Chief Households, Council Rule) and guild data
+- Added public API: `get_continuous_metrics()`, `get_all_continuous_metrics()`, `get_literacy_rate()`, `get_tech_diffusion_score()`, `get_egregore_signature()`, `get_active_norms()`, `get_divergence_snapshot()`, `get_governance_form()`, `get_guild_data()`
+- Updated `_build_stage_snapshot()` to use pre-computed continuous metrics instead of on-demand recomputation
+- Added `CONTINUOUS_UPDATE_INTERVAL_TICKS = 300` constant
+
+**Verification:**
+- `tools/ai/verify-compile.ps1` — PASS (no new errors)
+- `tools/sim_boot_smoke.gd` — `[SMOKE] OK` PASS
+- `tools/sim_settlement_public_state_smoke.gd` — `[SETTLEMENT_STRUCTURE_SMOKE_PASS]` PASS
+- `tools/sim_worldmeaning_region_tags_smoke.gd` — `[WORLDMEANING_TAGS_PASS]` PASS
+- `tools/year1_visible_growth_smoke.gd` — Completed (FAILURE_TOP5 empty)
+- Quality gate static checks 1-3 PASS (no global RNG, no legacy world dimensions, main scene configured)
+
+**Remaining:** `sim_performance_smoothness_smoke.gd` requires desktop environment for 100x speed pass; `PawnMoodUI.gd:283` headless theme access error (pre-existing cosmetic); IntentMemory.gd recompute type errors (pre-existing, unrelated).
 
 ---
 

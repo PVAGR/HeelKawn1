@@ -36,8 +36,8 @@
 - [x] Child creation: `PawnSpawner.spawn_child_pawn` with inheritance, bloodline, household
 - [x] Profession inheritance from parents
 - [x] Skill trees: `skill_trees` dict with bonus calculations, level-based unlocking
-- [ ] Add inheritance hooks (knowledge, reputation, grudges)
-- [ ] Add skill tree branch effects (visual/UI for branch choices)
+- [x] Add inheritance hooks (knowledge, reputation, grudges)
+- [x] Add skill tree branch effects (visual/UI for branch choices)
 
 ### 4. Material Reality
 - [x] Crafting consumption: `_consume_ingredients` removes from stockpile
@@ -56,7 +56,7 @@
 - [x] Verify knowledge death when last carrier dies untaught — `_check_knowledge_loss()` now checks record carriers before entering dormant; `knowledge_degraded` vs `knowledge_truly_lost` events emitted
 - [x] Wire preservation pressure into Matrix AI ambitions — `HeelKawnianManager.get_settlement_ambition_for_pawn()` calls `compute_preservation_pressure()` during `preserve` drive
 
-### 6. Civilization Stage Deepening �� DONE June 5, 2026
+### 6. Civilization Stage Deepening ✅ DONE June 5, 2026
 - [x] Initial derived era lens: `CivilizationStage.gd` reads live world state
 - [x] F10 `03B · Civilization Stage` and HUD era text
 - [x] Add per-settlement tech diffusion tracking — uses KnowledgeSystem.pre-computed `tech_diffusion_by_settlement` + EgregoreMemory pressure vectors

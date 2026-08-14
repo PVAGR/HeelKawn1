@@ -4,6 +4,7 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
+<<<<<<< HEAD
 **Latest Verification:** `docs/STATE_VERIFICATION_2026-06-05.md`
 **Last Updated:** June 13, 2026
 **Current Phase:** Phase 5A integration — TeachingSystem + ResearchSystem + TechnologyEras production rewrites, stub implementations, Deep Social Dynamics, Knowledge Ecology, Emergent Narrative, Player Incarnation, Metaphysics
@@ -125,6 +126,14 @@ We are always building, always refining, always expanding. This document capture
 **Known but out-of-scope:** `scripts/ui/PawnMoodUI.gd` uses 1-arg `.get("thoughts")`/`.get("wounds")` etc. on HeelKawnianData for properties that don't exist on the class. These return `null` silently and would corrupt the UI; not patched in this round per crash-prevention-only scope.
 
 **Verification:** `tools/ai/verify-compile.ps1` (Godot 4.6.2 `--headless --script-check`) ran clean for changed files. No new "Invalid call" errors introduced. Pre-existing warnings (Rect2i negative size, AgeMemory singleton missing, AISettlementManager.gd missing, WorldRNG.gd `unit`) unchanged.
+=======
+**Last Updated:** July 10, 2026
+**Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
+**Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
+
+**Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
+**Latest verification snapshot:** [STATE_VERIFICATION_2026-07-10.md](STATE_VERIFICATION_2026-07-10.md)
+>>>>>>> eba104797b9297dd112b16db5fef561db926f141
 
 ---
 
@@ -173,6 +182,8 @@ We are always building, always refining, always expanding. This document capture
   - Fixed event schema gap (FoodChainManager events now reach WorldMeaning via _infer_kind_from_type).
   - Relaxed neural bias speed gate from 50x to 200x so neural matrix contributes at normal play speeds.
   - Added profession reassignment so pawns can change roles when a non-primary skill outpaces their current profession.
+  - Added explicit family reputation inheritance event logging (`family_reputation_inherited`) so birth-line social carryover is visible in WorldMemory.
+  - Added visible skill-branch summaries to the pawn inspection sheet so milestone choices are readable in normal play instead of only in raw data.
   - Added colony role balance rules to dampen overrepresented professions.
   - Added infrastructure + security job posting to SettlementPlanner (fire pit, storage hut, protect, defend).
   - Added warrior peacetime patrol for visible perimeter presence.
@@ -193,6 +204,7 @@ We are always building, always refining, always expanding. This document capture
   - **FEAT: Civilization Stage Lens (Phase 5A initial live)**:
     - Added `CivilizationStage.gd` as a read-only autoload.
     - Derives era/stage from live technology, knowledge carriers, settlement infrastructure, profession diversity, and quality-of-life proxies.
+    - Settlement tech diffusion, literacy rate, lifespan, and institution scores are now tracked by live systems and fed into the stage lens.
     - Exposes F10 `03B · Civilization Stage` and adds era text to the HUD identity strip.
   - **FEAT: HeelKawnian Development Profiles (Phase 5A initial live)**:
     - Expanded `HeelKawnianIdentity.gd` into a memory-bearing identity resource with deterministic traits and profile history.

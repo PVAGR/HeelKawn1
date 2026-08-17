@@ -5,41 +5,49 @@ Use it first when you need to know what this project is and where to edit it.
 
 ## What this repo is
 
-PVA Bazaar is a personal website and business suite.
-It serves:
+HeelKawn is a deterministic 2D persistent simulation universe built in Godot 4.6.2.
+It is a memory and consequence simulator where HeelKawnians live, build, teach, migrate, and form authority through emergent behavior.
 
-- the public site on GitHub Pages,
-- the backend/API on Vercel,
-- the canonical live routing map,
-- the personal archive and writing surfaces,
-- the marketplace and operations surfaces,
-- the recovery and continuity tools.
+## Repository root
 
-## Canonical sources
-
-- Live frontend: [https://pvabazaar.org](https://pvabazaar.org)
-- Backend/API: [https://api.pvabazaar.org](https://api.pvabazaar.org)
-- Live routing map: [Frontend/public/live-map.json](/root/Documents/Codex/pva-bazaar-app/Frontend/public/live-map.json)
-- Runbook: [RUNBOOK.md](/root/Documents/Codex/pva-bazaar-app/RUNBOOK.md)
-- Architecture: [ARCHITECTURE.md](/root/Documents/Codex/pva-bazaar-app/ARCHITECTURE.md)
-- Current status: [CURRENT_STATUS.md](/root/Documents/Codex/pva-bazaar-app/CURRENT_STATUS.md)
+- `project.godot` -- Godot project file (144 autoloads registered, Godot 4.6.2)
+- `AI_README.md` -- AI agent source of truth (read first)
+- `AGENTS.md` -- mandatory agent operating contract
+- `HEELKAWN.txt` -- quick-context orientation
+- `TODO.md` -- active work tracking
+- `README.md` -- project overview
 
 ## Where to edit
 
-- Public pages and UI: `Frontend/src/pages/`
-- Shared UI components: `Frontend/src/components/`
-- Static site content and route data: `Frontend/public/`
-- Backend API routes: `backend/`
-- GitHub Pages deploy: `.github/workflows/deploy-frontend.yml`
-- Backend deploy: `.github/workflows/deploy-backend-live.yml`
+- Core simulation: `autoloads/` (WorldMemory, WorldMeaning, SettlementMemory, HeelKawnianManager, JobManager, etc.)
+- Pawn behavior: `scripts/pawn/` (HeelKawnian.gd, HeelKawnianData.gd)
+- AI logic: `scripts/ai/` (WorldAI.gd, HeelKawnPawnBrain.gd, HeelKawnianDecision.gd)
+- UI: `scripts/ui/` (ColonyHUD, PawnInfoPanel, PawnMoodUI, etc.)
+- World systems: `scripts/world/` (ZoomSystem, CataclysmSystem, etc.)
+- Kernel: `scripts/kernel/` (WorldMemory, ObserverLens)
+- Jobs: `scripts/jobs/` (Job.gd and subclasses)
+- Scenes: `scenes/` (Main, Pawn, Stockpile, UI, World)
+- Tests: `tests/` and `tools/` (smoke tests, quality gate)
+- Documentation: `docs/` (state, verification, world bible)
+- Canon: `docs/WORLD_BIBLE/` (glossary, master index, canon queue)
 
-## Legacy and reference material
+## Truth hierarchy (when docs conflict)
 
-Many older docs still exist in the repo.
-They are kept for reference, but they are not the first place to look.
-If a legacy doc conflicts with this map, this map wins.
+1. Source code and Godot runtime checks (highest truth)
+2. `docs/BUILD_INVENTORY.md` -- built-vs-missing inventory
+3. `docs/HEELKAWN_STATE.md` -- current working state
+4. `docs/HEELKAWN_PROJECT_COMPASS.md` -- project compass
+5. `AI_README.md` -- kernel philosophy (non-negotiable)
+6. Historical docs / AI session notes -- evidence, not authority
+
+## Quality gate
+
+```bash
+bash tools/ai/sim-quality-gate.sh
+```
+
+When Godot is available, runtime smoke includes boot, settlement, world meaning, and 1x/100x performance checks.
 
 ## Simple rule
 
-One site, one live map, one backend, one operating path.
-Anything else should support that path or be treated as legacy.
+One deterministic world. Code is truth. Runtime verifies. Docs track reality.

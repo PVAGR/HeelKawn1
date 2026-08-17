@@ -2,7 +2,7 @@
 
 > Comprehensive analysis of what is built vs. what the master plan requires
 
-**Last Updated:** 2026-05-21
+**Last Updated:** August 17, 2026 (staleness pass during stabilization)
 **Analysis Scope:** All autoloads, scripts, docs, and feature specs
 **Authority:** This is the repo's built-vs-missing reality check. See `HEELKAWN_PROJECT_COMPASS.md` for the full truth hierarchy.
 
@@ -195,9 +195,9 @@ From `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md`:
 Based on gaps + master plan v1 requirements:
 
 ### P0 - Must Build Next
-1. **Runtime Truth Pass** - verify UI panels, F10 diagnostics, and red errors in Godot.
-2. **HeelKawnian Matrix AI Deepening** - expand into preservation choices, recovery behavior, longer-horizon ambitions.
-3. **Knowledge Preservation Loop** - unify stones, books, teaching, literacy; add lost/rediscovered mechanics.
+1. **Runtime Truth Pass** — verify UI panels, F10 diagnostics, and red errors in Godot (stabilization gate).
+2. **Repo Identity Repair** — resolve README.md and CANONICAL_MAP.md conflicts (DONE Aug 17).
+3. **HeelKawnian Matrix AI Deepening** — expand into preservation choices, recovery behavior, longer-horizon ambitions.
 
 ### P1 - High Priority
 4. **Civilization Stage Deepening** - add per-settlement tech diffusion, literacy, lifespan, institutions.
@@ -268,12 +268,22 @@ The kernel has a strong deterministic foundation and currently passes headless s
 - Trade and animals
 - Export system (promotion bundle with world seed, chronicle, bloodlines, artifacts)
 - PlayerGathering (tool checks, skill XP, resource depletion — fixed May 18, 2026)
+- TeachingSystem (1032-line production rewrite, lesson model, prerequisites, matchmaking)
+- CivilizationStage (continuous metrics, literacy, tech diffusion, governance, egregore signatures)
+- EgregoreMemory (8-axis pressure, norms, laws, diffusion, divergence telemetry)
+- ReligionSystem (Asha/Druj balance, Karma ledger, Dharma index)
 
 **What's missing for v1:**
 - Player incarnation capability
-- Governance and law systems
-- Religion/metaphysics hooks (Asha/DRUJ currents)
+- Governance and law systems (beyond stubs)
+- Religion/metaphysics hooks (Asha/DRUJ currents — beyond balance/dharma)
 - Long-vision (travel, clans, eras)
-- Runtime truth pass in Godot editor
+- Runtime truth pass in Godot editor (last verified July 10, 2026)
 
-**Recommended next step:** Run the runtime truth pass in Godot, then deepen the HeelKawnian Matrix AI into preservation choices and recovery behavior before expanding the knowledge preservation loop and civilization stage tracking.
+**Stabilization status (Aug 17, 2026):**
+- Repo identity conflict (README.md, CANONICAL_MAP.md) resolved
+- HEELKAWN_STATE.md merge conflict resolved
+- Static quality gate may pass but runtime smoke must be verified in Godot
+- 144 autoloads registered in project.godot
+
+**Recommended next step:** Run the runtime truth pass in Godot, verify F10 panels and UI at runtime, then continue Phase 5A systems after stabilization is confirmed.

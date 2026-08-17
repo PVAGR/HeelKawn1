@@ -4,136 +4,66 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-<<<<<<< HEAD
-**Latest Verification:** `docs/STATE_VERIFICATION_2026-06-05.md`
-**Last Updated:** June 13, 2026
-**Current Phase:** Phase 5A integration — TeachingSystem + ResearchSystem + TechnologyEras production rewrites, stub implementations, Deep Social Dynamics, Knowledge Ecology, Emergent Narrative, Player Incarnation, Metaphysics
-**Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
+**Last Updated:** August 17, 2026
+**Latest Checkpoint:** August 14, 2026 (pre-stabilization pass)
+**Current Phase:** Stabilization / Checkpoint — documentation identity repair, runtime truth pass pending
+**Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate. Repo identity conflict resolved Aug 17.
 
 **Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
-**Latest verification snapshot:** [STATE_VERIFICATION_2026-06-05.md](STATE_VERIFICATION_2026-06-05.md)
+**Latest verification snapshot:** [STATE_VERIFICATION_2026-08-17.md](STATE_VERIFICATION_2026-08-17.md)
 
 ---
 
-## June 5, 2026 — PawnAccess Typed-Array Return Type Fix
+## August 17, 2026 — Stabilization / Identity Repair
 
-**Scope:** Unblock `SettlementMemory._living_pawns()` crash at line 2197 by tightening the `PawnAccess` bridge return types.
-
-**Files changed:** `autoloads/PawnAccess.gd` (L26, L36, L46).
-
-**Bug:** `PawnAccess.find_pawns() -> Array` (untyped) assigned to `Array[HeelKawnian]` variable. Godot 4 typed-array covariance error at `SettlementMemory.gd:2197`.
-
-**Fix:** Tightened all 3 PawnAccess return types to match actual data:
-- `find_pawns() -> Array[HeelKawnian]` (was untyped `Array`)
-- `find_alive_pawns() -> Array[HeelKawnian]` (was untyped `Array`)
-- `find_pawn_by_id() -> HeelKawnian` (was `Node`)
-
-**Verification:**
-- `tools/ai/verify-compile.ps1` — PASS (no new errors).
-- `tools/test_pawn_mood_ui_smoke.gd` — `[PMUI_SMOKE] PASS`.
-- `tools/sim_boot_smoke.gd` — reaches tick 10 (exercises `_living_pawns()` live).
-- `tools/sim_settlement_public_state_smoke.gd` — `[SETTLEMENT_STRUCTURE_SMOKE_PASS]`.
-- Full verification: `docs/STATE_VERIFICATION_2026-06-05.md`.
-
-**Unblocked:** The `set_pawn(pawn_id)` scene-tree path was previously blocked by this bug but `_living_pawns()` now works. A dedicated UI-path smoke would confirm the full chain at runtime.
-
----
-
-## June 5, 2026 (session 2) — Cache Rebuild + Autoload class_name Fixes
-
-**Scope:** Unblock headless boot after `.godot/` cache wipe; fix `AgeMemory` + `HeelKawnianIdentity` class_name issues that prevented autoload compilation in headless mode.
-
-**Files changed:**
-- `autoloads/AgeMemory.gd` — removed `class_name AgeMemory` (autoload conflict)
-- `autoloads/HeelKawnianIdentity.gd` — added `class_name HeelKawnianIdentity` (type was used but never declared)
-- `tools/test_set_pawn_ui_smoke.gd` — fixed `_enter_tree()` → `_initialize()`; fixed pawn ID access via `data.id`; added null-safety to all `Object.get()` calls
-
-**Verification:**
-- `.godot/global_script_class_cache.cfg` regenerated via `--headless --import`
-- All 4 runtime smokes PASS (boot, set_pawn, settlement, worldmeaning)
-- Year1 growth smoke completed (no failures)
-- Quality gate static checks 1-3 PASS
-
-**Remaining:** `sim_performance_smoothness_smoke.gd` requires desktop environment; `PawnMoodUI.gd:283` headless theme access error (pre-existing cosmetic).
-
----
-
-## June 5, 2026 (session 3) — Civilization Stage Deepening Complete
-
-**Scope:** Deepen `CivilizationStage.gd` to integrate pre-computed data from KnowledgeSystem, EgregoreMemory, and SettlementMemory for continuous per-settlement civilization metrics.
-
-**Files changed:** `autoloads/CivilizationStage.gd` (major rewrite of continuous metrics integration).
+**Scope:** Restore project identity docs, resolve merge conflict, update state for stabilization phase.
 
 **Changes:**
-- Added `_continuous_metrics` cache updated every 300 ticks via `_update_continuous_metrics()` called from `_on_civilization_tick`
-- Integrated KnowledgeSystem pre-computed `literacy_rate_by_settlement` and `tech_diffusion_by_settlement` (updated every 600/800 ticks respectively)
-- Integrated EgregoreMemory pressure signatures (8-axis pressure vectors), active norms (mutual_aid, martial_code, scholar_path, austerity_rite, market_charter), law density, divergence scores, and migration tendency
-- Integrated SettlementMemory governance forms (Elder Council, Militia Protectors, Chief Households, Council Rule) and guild data
-- Added public API: `get_continuous_metrics()`, `get_all_continuous_metrics()`, `get_literacy_rate()`, `get_tech_diffusion_score()`, `get_egregore_signature()`, `get_active_norms()`, `get_divergence_snapshot()`, `get_governance_form()`, `get_guild_data()`
-- Updated `_build_stage_snapshot()` to use pre-computed continuous metrics instead of on-demand recomputation
-- Added `CONTINUOUS_UPDATE_INTERVAL_TICKS = 300` constant
+- `README.md` — restored from accidental PVA Bazaar overwrite to HeelKawn project identity
+- `CANONICAL_MAP.md` — restored from accidental PVA Bazaar overwrite to HeelKawn repo map
+- `docs/HEELKAWN_STATE.md` — resolved merge conflict; updated to Aug 17 state
+- `TODO.md` — reprioritized for stabilization sequence
+- `docs/BUILD_INVENTORY.md` — minor date/staleness corrections
 
-**Verification:**
-- `tools/ai/verify-compile.ps1` — PASS (no new errors)
-- `tools/sim_boot_smoke.gd` — `[SMOKE] OK` PASS
-- `tools/sim_settlement_public_state_smoke.gd` — `[SETTLEMENT_STRUCTURE_SMOKE_PASS]` PASS
-- `tools/sim_worldmeaning_region_tags_smoke.gd` — `[WORLDMEANING_TAGS_PASS]` PASS
-- `tools/year1_visible_growth_smoke.gd` — Completed (FAILURE_TOP5 empty)
-- Quality gate static checks 1-3 PASS (no global RNG, no legacy world dimensions, main scene configured)
+**Known state at checkpoint (Aug 14, 2026):**
+- 144 autoloads registered in `project.godot`
+- ~100+ autoload singletons, ~60+ script files across domains
+- Headless smoke tests have passed in prior sessions (boot, settlement, worldmeaning, year1 growth)
+- Performance smoothness smoke requires desktop environment (not available in headless CI)
+- Merge conflict existed in `HEELKAWN_STATE.md` between June 13 and July 10 branches
 
-**Remaining:** `sim_performance_smoothness_smoke.gd` requires desktop environment for 100x speed pass; `PawnMoodUI.gd:283` headless theme access error (pre-existing cosmetic); IntentMemory.gd recompute type errors (pre-existing, unrelated).
-
----
-
-## June 3, 2026 — PawnMoodUI Truth Repair
-
-**Scope:** Make PawnMoodUI read real HeelKawnianData; remove silent-null behavior.
-
-**Files changed:** `scripts/ui/PawnMoodUI.gd`. New file: `tools/test_pawn_mood_ui_smoke.gd`. New verification: `docs/STATE_VERIFICATION_2026-06-03.md` (appended).
-
-**Each bad access fixed:**
-- `display_name` (was 1-arg `.get("display_name")` returning null on HeelKawnianData) → direct property access on the typed `HeelKawnianData` field.
-- `mood` (was 1-arg `.get("mood")`) → direct property access.
-- Need bars: `hunger`/`rest` (real fields) direct; `social` → `need_satisfaction.belonging`; `safety` → `need_satisfaction.safety`; `comfort` → derived as `clampf(100 - pain, 0, 100)` (the inverse of the real `pain` field — no fake field invented).
-- `thoughts` (field doesn't exist) → uses real `mood_events: Array[MoodEvent]`, displays each event's `description`.
-- `traits` (was `_pawn_data.has_meta("traits")` / `get_meta("traits")` — Object metadata, never set, so the trait chips were always empty) → uses real `traits: Array[Trait]`, displays each `Trait.display_name`.
-- `wounds` (field doesn't exist) → uses real `injuries: Dictionary`, counts `injuries.size()`.
-- `health` (was 1-arg `.get("health")`) → direct property access.
-
-**Verification:**
-- `tools/ai/verify-compile.ps1` ran clean (autoloads registered, no new parse errors; only pre-existing `AISettlementManager.gd` warning unchanged).
-- `tools/test_pawn_mood_ui_smoke.gd` (new) instantiates a HeelKawnianData with realistic non-default values (typed Trait, typed MoodEvent, injuries, need_satisfaction) and calls each PawnMoodUI update method directly. Asserts the resulting label text and progress-bar values reflect the real data. Exit 0, `[PMUI_SMOKE] PASS`. The smoke now covers the same surface that previously returned silent nulls.
-
-**Remaining truth risks:** `PawnMoodUI._update_thoughts` shows a static label per mood event using `event.description` only. If the mood event description is empty (it isn't, by construction in `MoodEvent._set_description`), the UI would render an empty bullet. The display name of a trait is always populated (set in `Trait._init_from_type`); the only way to be empty is an externally constructed Trait that bypasses `_init`, which is not done in this codebase. Health label thresholds (`< 50` → "Injured") are unchanged.
+**What needs runtime verification (not yet done):**
+- F10 diagnostic panels render without errors in Godot editor
+- HUD identity strip shows civilization stage correctly
+- F10 #49 prints valid HeelKawnian development profiles
+- PawnInfo/PawnMoodUI display real data at runtime
+- Crafting material consumption works in all paths
+- Tool requirements enforced in crafting recipes
+- 1x and 100x performance smoothness with consistency checks
 
 ---
 
-## June 3, 2026 — Pawn-Data Shape Audit + Job Completion Path Hardening
+## July 10, 2026 — Last Pre-Checkpoint Session
 
-**Scope:** Crash prevention. No feature additions, no canon promotions.
+**Scope:** Family inheritance documentation + skill branch visibility.
 
-**Patched (definitely-wrong 2-arg `Object.get` on HeelKawnianData):**
-- `autoloads/JobManager.gd:133-134` — `pd.get("tile_pos")` / `pd.get("household_id", -1)` → direct property access.
-- `autoloads/JobManager.gd:461-464` — `pd.get("likes") is Array` → `pd.likes is Dictionary` (likes/dislikes are `Dictionary` per `HeelKawnianData.gd`).
-- `tools/year1_visible_growth_smoke.gd:381` — `pd.get("last_claim_failure_reason", "")` → direct property access.
+**Implemented:**
+- Family reputation inheritance now records `family_reputation_inherited` WorldMemory events
+- Skill-tree branch effects visible in PawnInfoPanel inspection sheet
+- Docs synchronized with code truth (TODO.md, BUILD_INVENTORY.md, HEELKAWN_STATE.md)
 
-**Job completion path:**
-- `autoloads/JobManager.gd:512-527` — Added missing `complete(job: Job)` (2 callers existed but the function did not).
-- `scripts/jobs/Job.gd:283-302` — Added `complete(_pawn = null)` compatibility wrapper that delegates to `/root/JobManager.complete(self)`. Idempotent via state guard + JobManager guard. Job subclasses (`ToolMaker`, `PaperMaker`, `LeatherWorker`, `InkMaker`, `BookBinder`) and `HeelKawnian.gd` callers unchanged.
+**Verification:** Quality gate static PASS. Runtime smoke skipped (no Godot binary in environment).
 
-**Audit coverage:** All 2-arg `.get(key, default)` call sites reviewed. Only the three above were 2-arg on HeelKawnianData. Remaining 2-arg call sites all operate on real `Dictionary` receivers (settlement dict, event dict, NPC dict, consciousness dict, structure record, etc.) and are correct.
+---
 
-**Known but out-of-scope:** `scripts/ui/PawnMoodUI.gd` uses 1-arg `.get("thoughts")`/`.get("wounds")` etc. on HeelKawnianData for properties that don't exist on the class. These return `null` silently and would corrupt the UI; not patched in this round per crash-prevention-only scope.
+## June 5, 2026 — Civilization Stage Deepening + PawnAccess Fixes
 
-**Verification:** `tools/ai/verify-compile.ps1` (Godot 4.6.2 `--headless --script-check`) ran clean for changed files. No new "Invalid call" errors introduced. Pre-existing warnings (Rect2i negative size, AgeMemory singleton missing, AISettlementManager.gd missing, WorldRNG.gd `unit`) unchanged.
-=======
-**Last Updated:** July 10, 2026
-**Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
-**Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate
+**Implemented but Needs Runtime Verification:**
+- CivilizationStage.gd continuous metrics integration (literacy, tech diffusion, governance, egregore signatures)
+- PawnAccess typed-array return type fixes (unblocked `SettlementMemory._living_pawns()`)
+- Cache rebuild + autoload class_name fixes (AgeMemory, HeelKawnianIdentity)
 
-**Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
-**Latest verification snapshot:** [STATE_VERIFICATION_2026-07-10.md](STATE_VERIFICATION_2026-07-10.md)
->>>>>>> eba104797b9297dd112b16db5fef561db926f141
+**Verification:** Headless smokes PASS (boot, settlement, worldmeaning, year1 growth). Performance smoothness requires desktop.
 
 ---
 
@@ -166,13 +96,15 @@ We are always building, always refining, always expanding. This document capture
 
 ## Current Status
 
-- **Current Phase:** Consolidation + Phase 5A indefinite evolution foundation
-- **Kernel Health:** 🟢 Stable enough for headless smoke
-- **Compilation:** ✅ Headless Godot smoke passed on May 7, 2026 (re-run locally after May 19 construction/UI changes)
+- **Current Phase:** Stabilization / Checkpoint (Aug 14, 2026 checkpoint; Aug 17 identity repair)
+- **Kernel Health:** 🟢 Stable enough for headless smoke; runtime truth pass still required
+- **Compilation:** ✅ Headless Godot smoke passed in prior sessions (last verified July 10, 2026)
 - **Project Shape:** Many live systems, some partial systems, and several design stubs
 - **Truth Source:** Code/runtime first, then `BUILD_INVENTORY.md`, then this file
 - **Runtime Contract:** `AGENTS.md` + `docs/AI_RUNTIME_MANDATE.md`
 - **Quality Gate Command:** `bash tools/ai/sim-quality-gate.sh`
+- **Static quality gate may pass**, but runtime smoke must be verified in-editor or headless where Godot is available
+- **Do not claim systems are complete unless verified in runtime**
 - Resolved Blockers:
   - Fixed Pawn parse errors that were cascading into job-system and UI dependency failures.
   - Verified `ProceduresPawnVisualizer` exists, exposes `class_name ProceduresPawnVisualizer`, and compiles cleanly.
@@ -757,8 +689,8 @@ The next implementation slice is to begin refactoring `WorldMeaning.gd` to imple
 
 ## Blockers
 
-- None currently reproducible in headless source validation.
-- Documentation drift remains a project risk: older docs may overstate completion compared with `BUILD_INVENTORY.md`.
+- Runtime truth pass not yet completed for Aug 14 checkpoint. Godot editor/headless required.
+- Documentation drift: older docs may overstate completion compared with `BUILD_INVENTORY.md`.
 - Historical note: a `ProceduresPawnVisualizer` dependency failure was previously reported at `Pawn.gd:5785`; if it reappears, inspect `scripts/utils/ProceduresPawnVisualizer.gd` first, then the `Pawn.gd` call site.
 
 ## Action Plan
@@ -768,16 +700,16 @@ The next implementation slice is to begin refactoring `WorldMeaning.gd` to imple
 - Continue kernel validation for deterministic, staggered pawn behavior.
 - Treat "complete" as "compiles, runs, and has a verification path."
 - Prioritize integration over expansion until the v1 foundation is trustworthy.
+- **Deterministic kernel rules (non-negotiable):** no unseeded RNG, no frame-coupled truth, no UI claims without simulation backing.
 
-## Immediate Path
+## Immediate Path (Stabilization Sequence)
 
-1. Runtime truth pass in Godot: verify F10 diagnostics, UI panels, and red errors.
-2. HeelKawnian Matrix AI deepening: expand from job bias into teaching target selection, cooperation, recovery, household intent, and settlement ambitions.
-3. Lineage/progression: finish parent lookup, child creation, inheritance hooks, and skill branches.
-4. Material reality: connect crafting consumption to inventory/stockpile and tool requirements.
-5. Knowledge preservation: unify stones, books, teaching, literacy, and rediscovery.
-6. Civilization stage foundation: initial derived lens is live; deepen with per-settlement tech diffusion, literacy, lifespan, and institution data.
-7. Readable exports: chronicle export and world seed/state export.
+1. Resolve repo identity/documentation conflict (DONE — Aug 17, 2026)
+2. Run Godot runtime truth pass: verify F10 diagnostics, UI panels, and red errors in editor/headless
+3. Run `tools/ai/sim-quality-gate.sh`
+4. Verify F10 panels, HUD identity strip, PawnInfo/PawnMoodUI, and HeelKawnian profiles
+5. Verify crafting material consumption and tool requirements
+6. Then continue Phase 5A systems (teaching, research, technology eras, deep social dynamics)
 
 ## Phase 4 Settlement Lifecycle
 

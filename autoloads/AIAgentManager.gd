@@ -75,21 +75,12 @@ var _pattern_update_interval: int = 120  # Only update patterns every 120 ticks
 var _prediction_update_interval: int = 180  # Only update predictions every 180 ticks
 
 
-func _is_frame_stressed() -> bool:
-	var fps: float = float(Engine.get_frames_per_second())
-	if fps <= 0.0:
-		return false
-	var mobile: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
-	if mobile:
-		return fps < 42.0
-	return fps < 32.0
-
-
 func _neural_interval_for_speed(base_interval: int) -> int:
 	return base_interval
 
 # Pre-allocated arrays for performance
 var _agent_keys_cache: Array = []
+var _agent_keys_cache_dirty: bool = true
 var _layer_names_cache: Array[String] = ["input", "hidden1", "hidden2", "output"]
 var _feature_cache: Array[float] = []
 
@@ -648,7 +639,7 @@ func _calculate_cultural_trend(historical: Array, current: Dictionary) -> Dictio
 func generate_predictions(world_state: Dictionary) -> Dictionary:
 	# Only run predictions periodically
 	var current_tick = GameManager.tick_count if GameManager != null else 0
-	if current_tick - _last_prediction_update < _prediction_update_interval:
+	if current_tick - _last_prediction_update < _neural_interval_for_speed(_prediction_update_interval):
 		# Return cached predictions if not enough time has passed
 		return predictive_models.get("cached_predictions", {})
 	
@@ -838,13 +829,17 @@ func _extract_event_features(world_state: Dictionary) -> Array[float]:
 func _on_world_tick(tick: int) -> void:
 	if not enabled:
 		return
-	
+	var _profiler_start: int = Time.get_ticks_usec() if OS.is_debug_build() else 0
+	var _p_cat: int = _profiler_start
 	# Speed-aware cadence for heavy strategic AI systems.
 	if civilization_mode:
 		var world_ai_interval: int = _world_ai_interval_for_speed()
 		if world_ai and (_last_world_ai_update_tick < 0 or tick - _last_world_ai_update_tick >= world_ai_interval):
 			world_ai.update()
 			_last_world_ai_update_tick = tick
+		if OS.is_debug_build() and TickProfiler != null:
+			TickProfiler.record_ai_subcategory("world_ai", Time.get_ticks_usec() - _p_cat)
+			_p_cat = Time.get_ticks_usec()
 		var settlement_ai_interval: int = _settlement_ai_interval_for_speed()
 		if _last_settlement_ai_update_tick < 0 or tick - _last_settlement_ai_update_tick >= settlement_ai_interval:
 			for settlement_id in settlement_ai_system:
@@ -852,40 +847,35 @@ func _on_world_tick(tick: int) -> void:
 				if settlement != null:
 					settlement.update()
 			_last_settlement_ai_update_tick = tick
-	
+		if OS.is_debug_build() and TickProfiler != null:
+			TickProfiler.record_ai_subcategory("settlement_ai", Time.get_ticks_usec() - _p_cat)
+			_p_cat = Time.get_ticks_usec()
 	# Update agents at specified frequency
 	var _stride: int = 1
 	if tick - last_update_tick >= update_frequency * _stride:
 		_update_all_agents()
 		last_update_tick = tick
-	
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_ai_subcategory("agent_update", Time.get_ticks_usec() - _p_cat)
+		_p_cat = Time.get_ticks_usec()
 	# Spawn new agents if under limit and conditions are met
 	if tick % 600 == 0:
 		_maintain_agent_population()
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_ai_subcategory("maintenance", Time.get_ticks_usec() - _p_cat)
+		TickProfiler.record_ai_agent(Time.get_ticks_usec() - _profiler_start)
 
 
 func _world_ai_interval_for_speed() -> int:
-	var mobile: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
-	if mobile:
-		return 10
 	return 10
 
 
 func _settlement_ai_interval_for_speed() -> int:
-	var mobile: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
-	if mobile:
-		return 16
 	return 16
 
 
 func _agent_update_budget_for_speed(total_agents: int) -> int:
-	var budget: int = total_agents
-	var mobile: bool = OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
-	if mobile:
-		budget = maxi(1, int(ceil(float(total_agents) * 0.65)))
-	if _is_frame_stressed():
-		budget = maxi(1, int(floor(float(budget) * (0.65 if mobile else 0.75))))
-	return mini(total_agents, budget)
+	return total_agents
 
 func _spawn_initial_agents() -> void:
 	var AIAgentClass = preload("res://scripts/ai/AIAgent.gd")
@@ -910,6 +900,7 @@ func _spawn_agent(agent_type: AIAgent.AgentType) -> int:
 	var agent: AIAgent = AIAgent.new(agent_id, agent_type)
 	
 	agents[agent_id] = agent
+	_agent_keys_cache_dirty = true  # OPTIMIZATION: invalidate sorted keys cache
 	agent_spawned.emit(agent_id, agent_type)
 	
 	# Enhanced AI agent spawning
@@ -925,6 +916,7 @@ func _spawn_agent(agent_type: AIAgent.AgentType) -> int:
 func _remove_agent(agent_id: int) -> void:
 	if agents.has(agent_id):
 		agents.erase(agent_id)
+		_agent_keys_cache_dirty = true  # OPTIMIZATION: invalidate sorted keys cache
 		agent_text_overlays.erase(agent_id)
 		
 		# Remove enhanced AI agent if exists
@@ -1032,9 +1024,12 @@ func _update_all_agents() -> void:
 	var total: int = agents.size()
 	if total <= 0:
 		return
-	_agent_keys_cache.clear()
-	_agent_keys_cache = agents.keys()
-	_agent_keys_cache.sort()
+	# OPTIMIZATION: only rebuild sorted keys when agents are added/removed
+	if _agent_keys_cache_dirty or _agent_keys_cache.size() != total:
+		_agent_keys_cache.clear()
+		_agent_keys_cache.assign(agents.keys())
+		_agent_keys_cache.sort()
+		_agent_keys_cache_dirty = false
 	var budget: int = mini(total, _agent_update_budget_for_speed(total))
 	var start: int = posmod(_agent_update_cursor, total)
 	for step in range(budget):
@@ -1132,6 +1127,7 @@ func spawn_agent(agent_type: AIAgent.AgentType) -> int:
 func remove_agent(agent_id: int) -> bool:
 	if agents.has(agent_id):
 		agents.erase(agent_id)
+		_agent_keys_cache_dirty = true
 		return true
 	return false
 

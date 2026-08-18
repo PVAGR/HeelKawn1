@@ -85,24 +85,7 @@ func register_system(system_name: String, update_interval: int) -> void:
 
 ## Check if a system should update this frame
 func should_update(system_name: String) -> bool:
-	if not system_intervals.has(system_name):
-		return true  # Unknown systems update every tick
-	
-	var interval: int = system_intervals[system_name]
-	var counter: int = system_counters.get(system_name, 0)
-	
-	if counter >= interval:
-		# Reset counter and allow update
-		system_counters[system_name] = 0
-		stats.updates_this_frame += 1
-		stats.total_updates += 1
-		return true
-	else:
-		# Skip update this frame
-		system_counters[system_name] = counter
-		stats.updates_skipped_this_frame += 1
-		stats.total_skipped += 1
-		return false
+	return true
 
 
 ## Force update a system this frame (regardless of interval)

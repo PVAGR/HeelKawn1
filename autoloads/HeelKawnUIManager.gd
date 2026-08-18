@@ -21,7 +21,7 @@ var current_mode: UIMode = UIMode.CLEAN
 # Panel references
 var chronicle_panel: Control
 var inspector_panel: Control
-var debug_overlay: Control
+var debug_overlay: Node
 var modal_layer: Control
 
 # Consolidated log
@@ -53,14 +53,13 @@ func _setup_ui_hierarchy() -> void:
 	_reposition_panels()
 
 
-func _find_node_by_type(parent: Node, type_name: String) -> Control:
+func _find_node_by_type(parent: Node, type_name: String) -> Node:
 	for child in parent.get_children():
-		if child is Control:
-			if child.name.contains(type_name):
-				return child as Control
-			var found: Control = _find_node_by_type(child, type_name)
-			if found != null:
-				return found
+		if child.name.contains(type_name):
+			return child
+		var found: Node = _find_node_by_type(child, type_name)
+		if found != null:
+			return found
 	return null
 
 

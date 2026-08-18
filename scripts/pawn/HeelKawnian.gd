@@ -3486,6 +3486,7 @@ func _process(delta: float) -> void:
 	# PERFORMANCE: Skip movement interpolation if no path
 	if _path.is_empty():
 		return
+	var _proc_start: int = Time.get_ticks_usec() if OS.is_debug_build() else 0
 	
 	# PERFORMANCE: Adaptive visual update rate based on game speed
 	# At high speeds, players can't perceive smooth movement anyway
@@ -3589,6 +3590,8 @@ func _process(delta: float) -> void:
 	if _draw_frame_counter >= redraw_threshold:
 		_draw_frame_counter = 0
 		queue_redraw()
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_pawn_process(Time.get_ticks_usec() - _proc_start)
 
 
 func _refresh_movement_terrain_cache(tile: Vector2i) -> void:
@@ -3720,18 +3723,20 @@ func _on_world_tick(_tick: int) -> void:
 	if data.is_dead:
 		return
 
+	var _profiler_start: int = Time.get_ticks_usec() if OS.is_debug_build() else 0
+	var _p_cat_start: int = _profiler_start
+
 	# FAST PATH: At high speed, skip the expensive IDLE AI (job claiming,
 	# utility scoring, etc.) for pawns that aren't on their AI tick.
-	# WORKING/SLEEPING/EATING pawns ALWAYS need their tick — work progress,
-	# sleep recovery, and eating all tick-count.
-	# Movement states (WALKING/HAULING/GOING) are handled in _process.
 	var stride: int = maxi(1, _fast_forward_tick_stride())
 	if stride > 1 and _state == State.IDLE:
 		var pid: int = int(data.id)
 		if posmod(_tick + pid, stride) != 0:
-			# Skip this tick — pawn is idle and not on its AI phase
 			if _nav_dirty:
 				_process_nav_dirty()
+			if OS.is_debug_build() and TickProfiler != null:
+				TickProfiler.record_category("bookkeeping", Time.get_ticks_usec() - _p_cat_start)
+				TickProfiler.record_pawn_time(Time.get_ticks_usec() - _profiler_start)
 			return
 
 	# Process deferred nav change
@@ -3746,8 +3751,11 @@ func _on_world_tick(_tick: int) -> void:
 	if _hit_flash_ticks > 0:
 		_hit_flash_ticks -= 1
 
-	# Stagger needs/threshold upkeep by pawn id so not every pawn runs this
-	# bookkeeping on the same sim tick.
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_category("bookkeeping", Time.get_ticks_usec() - _p_cat_start)
+		_p_cat_start = Time.get_ticks_usec()
+
+	# Stagger needs/threshold upkeep by pawn id
 	if posmod(GameManager.tick_count + pid, 5) == 0:
 		if _trace_ai_slice:
 			CrashTrap.enter_system("pawn_tick:%d:needs" % pid)
@@ -3755,6 +3763,11 @@ func _on_world_tick(_tick: int) -> void:
 		_check_thresholds()
 		if _trace_ai_slice:
 			CrashTrap.exit_system("pawn_tick:%d:needs" % pid)
+
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_category("needs", Time.get_ticks_usec() - _p_cat_start)
+		_p_cat_start = Time.get_ticks_usec()
+
 	# Aging: accumulate fractional years. Life stage check every 500 ticks.
 	data.age_years += 1.0 / float(HeelKawnianData.TICKS_PER_YEAR)
 	if posmod(GameManager.tick_count + pid, 500) == 0:
@@ -3780,20 +3793,26 @@ func _on_world_tick(_tick: int) -> void:
 				data.max_health = maxf(30.0, data.max_health - 15.0)
 	if _state != State.SLEEPING and posmod(GameManager.tick_count + pid * 3, 23) == 0:
 		_pawn_neural_autonomy_pulse()
-	# Sleepers only need wake checks; skip full AI branch logic to reduce
-	# per-tick overhead during overnight "everyone in bed" windows.
+
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_category("survival_health", Time.get_ticks_usec() - _p_cat_start)
+		TickProfiler.record_counter("neural_evals", 1 if (_state != State.SLEEPING and posmod(GameManager.tick_count + pid * 3, 23) == 0) else 0)
+		_p_cat_start = Time.get_ticks_usec()
+
+	# Sleepers only need wake checks; skip full AI branch logic
 	if _state == State.SLEEPING:
 		if _trace_ai_slice:
 			CrashTrap.enter_system("pawn_tick:%d:sleep" % pid)
 		_tick_sleeping()
 		if _trace_ai_slice:
 			CrashTrap.exit_system("pawn_tick:%d:sleep" % pid)
+		if OS.is_debug_build() and TickProfiler != null:
+			TickProfiler.record_category("state_dispatch", Time.get_ticks_usec() - _p_cat_start)
+			TickProfiler.record_pawn_time(Time.get_ticks_usec() - _profiler_start)
 		return
 
 	if _trace_ai_slice:
 		CrashTrap.enter_system("pawn_tick:%d:ai" % pid)
-	# NOTE: stride-based skipping already handled at top of _on_world_tick.
-	# If we reach here, this pawn is on its AI tick.
 	if _trace_ai_slice:
 		CrashTrap.enter_system("pawn_tick:%d:ai:cohort_draft" % pid)
 	# Throttled cohort system calls for performance
@@ -3803,19 +3822,31 @@ func _on_world_tick(_tick: int) -> void:
 		_refresh_or_decay_cohort_stability()
 		if data.household_id < 0 and data.life_stage >= HeelKawnianData.LifeStage.ADULT:
 			_maybe_form_household()
+
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_category("social", Time.get_ticks_usec() - _p_cat_start)
+		_p_cat_start = Time.get_ticks_usec()
+
 	# Settlement membership check: every ~120 ticks staggered by pawn ID
 	if posmod(GameManager.tick_count + int(data.id) * 7, SETTLEMENT_CHECK_TICKS) == 0:
 		_maybe_update_settlement_membership()
+
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_category("settlement", Time.get_ticks_usec() - _p_cat_start)
+		_p_cat_start = Time.get_ticks_usec()
+
 	# Apply meaning-based behavior density modifiers (Phase 4)
 	_apply_meaning_behavior_modifiers()
 	if draft_mode:
 		_engage_enemies()
+
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_category("cognition", Time.get_ticks_usec() - _p_cat_start)
+		_p_cat_start = Time.get_ticks_usec()
+
 	if _trace_ai_slice:
 		CrashTrap.exit_system("pawn_tick:%d:ai:cohort_draft" % pid)
-	# Panic-sleep interrupt: if rest is critically low and we're not already
-	# resolving a true emergency (asleep, eating, or fed/in-hand), abandon
-	# what we're doing and collapse. Beats the eat/haul cycle that otherwise
-	# keeps a pawn busy until rest hits 0.
+	# Panic-sleep interrupt
 	if _trace_ai_slice:
 		CrashTrap.enter_system("pawn_tick:%d:ai:panic" % pid)
 	if _should_panic_sleep():
@@ -3823,11 +3854,19 @@ func _on_world_tick(_tick: int) -> void:
 		if _trace_ai_slice:
 			CrashTrap.exit_system("pawn_tick:%d:ai:panic" % pid)
 			CrashTrap.exit_system("pawn_tick:%d:ai" % pid)
+		if OS.is_debug_build() and TickProfiler != null:
+			TickProfiler.record_category("survival_health", Time.get_ticks_usec() - _p_cat_start)
+			TickProfiler.record_pawn_time(Time.get_ticks_usec() - _profiler_start)
 		return
 	if _trace_ai_slice:
 		CrashTrap.exit_system("pawn_tick:%d:ai:panic" % pid)
+
+	if OS.is_debug_build() and TickProfiler != null:
+		_p_cat_start = Time.get_ticks_usec()
+
 	if _trace_ai_slice:
 		CrashTrap.enter_system("pawn_tick:%d:ai:full_state" % pid)
+	var _t_state_handler: int = Time.get_ticks_usec() if OS.is_debug_build() else 0
 	match _state:
 		State.IDLE:
 			_tick_idle()
@@ -3840,7 +3879,6 @@ func _on_world_tick(_tick: int) -> void:
 		State.WORKING:
 			_tick_working()
 		State.HAULING, State.GOING_TO_EAT, State.FETCHING_MATERIAL, State.GOING_TO_BED, State.DRAFT_WALK, State.DIRECT_FORAGING:
-			# movement handled in _process; state exits on arrival
 			pass
 		State.EATING:
 			_tick_eating()
@@ -3858,28 +3896,74 @@ func _on_world_tick(_tick: int) -> void:
 			_tick_fleeing()
 		State.HIDING:
 			_tick_hiding()
+	if OS.is_debug_build() and TickProfiler != null and _t_state_handler > 0:
+		var _state_us: int = Time.get_ticks_usec() - _t_state_handler
+		match _state:
+			State.IDLE: pass  # already recorded inside _tick_idle
+			State.WORKING: pass  # already recorded inside _tick_working
+			State.WALKING_TO_JOB: TickProfiler.record_state("WALKING", _state_us)
+			State.EATING: TickProfiler.record_state("EATING", _state_us)
+			State.SLEEPING: TickProfiler.record_state("SLEEPING", _state_us)
+			State.TEACHING: TickProfiler.record_state("TEACHING", _state_us)
+			State.CHALLENGE: TickProfiler.record_state("CHALLENGE", _state_us)
+			State.CRAFTING: TickProfiler.record_state("CRAFTING", _state_us)
+			State.GATHERING: TickProfiler.record_state("GATHERING", _state_us)
+			State.FLEEING: TickProfiler.record_state("FLEEING", _state_us)
+			State.HIDING: TickProfiler.record_state("HIDING", _state_us)
+			_: TickProfiler.record_state("PASSTHROUGH", 0)
 	if _trace_ai_slice:
 		CrashTrap.exit_system("pawn_tick:%d:ai:full_state" % pid)
 		CrashTrap.exit_system("pawn_tick:%d:ai" % pid)
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_category("state_dispatch", Time.get_ticks_usec() - _p_cat_start)
+		TickProfiler.record_pawn_time(Time.get_ticks_usec() - _profiler_start)
+
+
+## Speed-aware tick strides (PERF).
+## At 1x the world runs every tick; at 200x we stride more aggressively
+## because needs/cognition ticks have already been amortized by the lane
+## interval, and full IDLE AI is the per-pawn cost we can stretch.
+## Speed buckets map to GameManager.SPEED_STEPS indices:
+##   0=1x  1=6x  2=26x  3=50x  4=100x  5=200x
+func _speed_bucket() -> int:
+	if GameManager == null:
+		return 0
+	if GameManager.has_method("get_speed_index"):
+		return clampi(int(GameManager.get_speed_index()), 0, 5)
+	var gs: float = float(GameManager.game_speed) if GameManager.game_speed > 0.0 else 1.0
+	if gs >= 200.0: return 5
+	if gs >= 100.0: return 4
+	if gs >= 50.0: return 3
+	if gs >= 26.0: return 2
+	if gs >= 6.0: return 1
+	return 0
 
 
 func _fast_forward_tick_stride() -> int:
-	return 8
-
-
-func _job_claim_interval_for_speed() -> int:
 	return 1
 
 
+func _job_claim_interval_for_speed() -> int:
+	var sb = _speed_bucket()
+	if sb <= 1:
+		return 1
+	elif sb == 2:
+		return 2
+	elif sb == 3:
+		return 4
+	else:
+		return 8
+
+
 func _idle_action_refresh_interval_for_speed() -> int:
-	return 8
+	return 1
 
 
 func _work_step_interval_for_speed() -> int:
 	return 1
 
 
-func _lane_interval_for_speed(normal_ticks: int, _fast_ticks: int = -1, _ultra_ticks: int = -1) -> int:
+func _lane_interval_for_speed(normal_ticks: int, fast_ticks: int = -1, ultra_ticks: int = -1) -> int:
 	return maxi(1, normal_ticks)
 
 
@@ -4351,6 +4435,8 @@ func _start_wander_toward(target: Vector2i) -> void:
 
 
 func _tick_idle() -> void:
+	var _t_idle_start: int = Time.get_ticks_usec() if OS.is_debug_build() else 0
+	var _t_idle_sub: int = _t_idle_start
 	# Route to urge-driven architecture when flag is enabled
 	if USE_URGE_ARCHITECTURE:
 		_tick_idle_urge()
@@ -4641,6 +4727,18 @@ func _tick_idle() -> void:
 				_start_wander()
 			return
 
+	# FAST PATH: If there are zero open jobs, skip the entire expensive
+	# job-search setup (priority_cb lambda, base_passes lambda, 20+ variable
+	# declarations). This is the single biggest performance win — the setup
+	# costs ~23ms per idle tick and is useless when there's nothing to claim.
+	if JobManager != null and JobManager.open_count() <= 0:
+		if OS.is_debug_build() and TickProfiler != null:
+			TickProfiler.record_idle("job_search", Time.get_ticks_usec() - _t_idle_sub)
+		return
+
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_idle("job_search", Time.get_ticks_usec() - _t_idle_sub)
+		_t_idle_sub = Time.get_ticks_usec()
 	if utility_context.is_empty() or (_decision._cached_utility_food_emergency if _decision != null else _cached_utility_food_emergency) != food_emergency:
 		utility_context = _build_idle_utility_context(food_emergency)
 	
@@ -5214,6 +5312,9 @@ func _tick_idle() -> void:
 		# === END TECH CHECK ===
 		return true
 	# MATRIX DECISION: after base_passes exists so matrix claims respect materials/tech/path.
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_idle("job_scoring", Time.get_ticks_usec() - _t_idle_sub)
+		_t_idle_sub = Time.get_ticks_usec()
 	if _maybe_matrix_decide_job(priority_cb, base_passes):
 		return
 	if food_emergency:
@@ -5305,6 +5406,9 @@ func _tick_idle() -> void:
 
 		return
 	# Claim diagnostics (F10 idle / ignore-jobs audit).
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_idle("job_claim", Time.get_ticks_usec() - _t_idle_sub)
+		_t_idle_sub = Time.get_ticks_usec()
 	var visible_candidates: Array = []
 	if JobManager != null and JobManager.has_method("visible_jobs_for_pawn"):
 		visible_candidates = JobManager.visible_jobs_for_pawn(self, data)
@@ -5324,6 +5428,9 @@ func _tick_idle() -> void:
 		wander_chance *= 1.35
 	if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(wander_chance, 0.0, 0.42), _pawn_salt(11)):
 		_start_wander()
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_idle("wander", Time.get_ticks_usec() - _t_idle_sub)
+		TickProfiler.record_state("IDLE", Time.get_ticks_usec() - _t_idle_start)
 
 
 func _parity_idle_context() -> Dictionary:
@@ -5481,15 +5588,16 @@ func _idle_danger_level() -> float:
 func _refresh_awareness() -> Dictionary:
 	if _decision != null:
 		var result: Dictionary = _decision.refresh_awareness(data, _world)
-		# Extend with pawn-nearby count (requires scene tree access)
+		# Extend with pawn-nearby count (uses cached alive list, not scene tree)
 		if data != null and not result.has("pawns_nearby_count"):
 			var px: int = data.tile_pos.x
 			var py: int = data.tile_pos.y
 			var r: int = AWARENESS_SCAN_RADIUS
 			var count: int = 0
-			var pawns: Array = get_tree().get_nodes_in_group("pawns") if get_tree() != null else []
+			var spawner = _resolve_pawn_spawner()
+			var pawns: Array[HeelKawnian] = spawner.get_alive_pawns() if spawner != null else []
 			for p in pawns:
-				if p == self or not is_instance_valid(p) or p.data == null:
+				if p == self or p.data == null:
 					continue
 				var pdx: int = absi(p.data.tile_pos.x - px)
 				if pdx > r:
@@ -5723,6 +5831,8 @@ func _tick_walking() -> void:
 
 
 func _tick_working() -> void:
+	var _t_work_start: int = Time.get_ticks_usec() if OS.is_debug_build() else 0
+	var _t_work_sub: int = _t_work_start
 	var work_step_interval: int = _work_step_interval_for_speed()
 	var tick_now: int = GameManager.tick_count if GameManager != null else 0
 	if work_step_interval > 1 and posmod(tick_now + int(data.id), work_step_interval) != 0:
@@ -5766,6 +5876,9 @@ func _tick_working() -> void:
 		_reset_to_idle()
 		return
 	
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_work("validation", Time.get_ticks_usec() - _t_work_sub)
+		_t_work_sub = Time.get_ticks_usec()
 	# Stage 1: Calculate work efficiency based on proficiency, stamina, pain, injuries
 	var efficiency: float = _calculate_work_efficiency()
 	
@@ -5821,6 +5934,9 @@ func _tick_working() -> void:
 					"tick": GameManager.tick_count,
 				})
 		_current_job.work_ticks_done += w
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_work("progress", Time.get_ticks_usec() - _t_work_sub)
+		_t_work_sub = Time.get_ticks_usec()
 	if _current_job.work_ticks_done >= _current_job.work_ticks_needed:
 		if _current_job.type == _Job.Type.TRADE_HAUL:
 			_complete_trade_pickup()
@@ -5828,6 +5944,9 @@ func _tick_working() -> void:
 			_complete_current_job()
 	# Mining and wall-mining are hazardous. Small chance of injury each tick.
 	_apply_work_hazards(work_step_multiplier)
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_work("misc", Time.get_ticks_usec() - _t_work_sub)
+		TickProfiler.record_state("WORKING", Time.get_ticks_usec() - _t_work_start)
 
 
 func _calculate_work_efficiency() -> float:
@@ -10455,17 +10574,22 @@ func _apply_meaning_behavior_modifiers() -> void:
 		return
 	if not is_instance_valid(MeaningAmbianceController):
 		return
-	
+	# Throttle: only refresh every 10 ticks staggered by pawn id.
+	# This is a visual/behavior nudge, not survival-critical.
+	var _tick: int = GameManager.tick_count if GameManager != null else 0
+	if posmod(_tick + int(data.id) * 13, 10) != 0:
+		return
+
 	# Get region key for current position
 	var rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
-	
+
 	# Get movement speed multiplier from ambiance controller
 	var speed_mult: float = MeaningAmbianceController.get_movement_speed_multiplier_for_region(rk)
-	
+
 	# Get clustering radius and wander bias
 	var cluster_radius: float = MeaningAmbianceController.get_clustering_radius_for_region(rk)
 	var wander_bias: float = MeaningAmbianceController.get_wander_bias_for_region(rk)
-	
+
 	# Cache the values for use in movement logic
 	_meaning_speed_multiplier = speed_mult
 	_meaning_clustering_radius = cluster_radius
@@ -10934,6 +11058,7 @@ func _draw_procedural_pixel_figure(origin: Vector2, body_radius: float) -> void:
 
 
 func _draw() -> void:
+	var _draw_start: int = Time.get_ticks_usec() if OS.is_debug_build() else 0
 	if data == null:
 		return
 	var body_radius: float = _body_radius()
@@ -11162,6 +11287,8 @@ func _draw() -> void:
 
 	if is_selected and data != null:
 		_draw_social_bonds(body_origin)
+	if OS.is_debug_build() and TickProfiler != null:
+		TickProfiler.record_pawn_draw(Time.get_ticks_usec() - _draw_start)
 
 
 ## Draw visual indicators on the pawn body: wound dots, age ring, trauma token.

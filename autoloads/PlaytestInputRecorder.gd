@@ -117,7 +117,7 @@ func _get_ui_element_at_position(pos: Vector2) -> String:
 		{"name": "KnowledgePanel", "path": "/root/Main/UI_Viewport/KnowledgePanel"},
 		{"name": "PawnInfoPanel", "path": "/root/Main/UI_Viewport/PawnInfoPanel"},
 		{"name": "ColonyHUD", "path": "/root/Main/UI_Viewport/ColonyHUD"},
-		{"name": "F10_DebugMenu", "path": "/root/Main/UI_Viewport/CreatorDebugMenu"}
+		{"name": "F10_DebugMenu", "path": "/root/Main/CreatorDebugMenu"}
 	]
 	
 	for ui in ui_elements:

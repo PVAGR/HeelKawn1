@@ -188,7 +188,7 @@ func _position_panel(panel_path: String, zone: Dictionary) -> void:
 
 func _hide_debug_panels() -> void:
 	# Hide F10 debug menu (only accessible via F10 key)
-	var debug_menu: Node = _get_node_safe("/root/Main/UI_Viewport/CreatorDebugMenu")
+	var debug_menu: Node = _get_node_safe("/root/Main/CreatorDebugMenu")
 	if debug_menu:
 		debug_menu.visible = false
 	
@@ -205,7 +205,7 @@ func _hide_debug_panels() -> void:
 
 func _show_debug_panels() -> void:
 	# Show all debug panels
-	var debug_menu: Node = _get_node_safe("/root/Main/UI_Viewport/CreatorDebugMenu")
+	var debug_menu: Node = _get_node_safe("/root/Main/CreatorDebugMenu")
 	if debug_menu:
 		debug_menu.visible = true
 

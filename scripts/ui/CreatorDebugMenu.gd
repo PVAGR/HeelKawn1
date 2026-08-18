@@ -12,11 +12,16 @@ func _ready() -> void:
 
 	_panel = PanelContainer.new()
 	_panel.name = "Panel"
-	_panel.custom_minimum_size = Vector2(420, 0)
-	_panel.offset_left = 10
-	_panel.offset_top = 10
-	_panel.offset_right = 440
-	_panel.offset_bottom = -10
+	_panel.custom_minimum_size = Vector2(360, 0)
+	_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_panel.anchor_left = 0.5
+	_panel.anchor_top = 0.5
+	_panel.anchor_right = 0.5
+	_panel.anchor_bottom = 0.5
+	_panel.offset_left = -180
+	_panel.offset_top = -300
+	_panel.offset_right = -180
+	_panel.offset_bottom = 0
 	_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(_panel)
 
@@ -40,16 +45,22 @@ func _ready() -> void:
 	var margin := MarginContainer.new()
 	margin.name = "Margin"
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 8)
+	margin.add_theme_constant_override("margin_right", 8)
+	margin.add_theme_constant_override("margin_top", 6)
+	margin.add_theme_constant_override("margin_bottom", 6)
 	_panel.add_child(margin)
 
 	var scroll := ScrollContainer.new()
 	scroll.name = "ScrollContainer"
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(320, 350)
 	margin.add_child(scroll)
 
 	_vbox = VBoxContainer.new()
 	_vbox.name = "VBoxContainer"
 	_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_vbox.add_theme_constant_override("separation", 4)
 	scroll.add_child(_vbox)
 
 	_build_header()
@@ -61,7 +72,7 @@ func toggle_menu() -> void:
 func _build_header() -> void:
 	var title := Label.new()
 	title.text = "F10 DIAGNOSTICS"
-	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_font_size_override("font_size", 14)
 	_vbox.add_child(title)
 
 	var sep := HSeparator.new()
@@ -80,8 +91,9 @@ func _build_buttons() -> void:
 	for c in configs:
 		var btn := Button.new()
 		btn.text = c["text"]
-		btn.custom_minimum_size = Vector2(380, 32)
+		btn.custom_minimum_size = Vector2(300, 26)
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.add_theme_font_size_override("font_size", 12)
 		btn.pressed.connect(Callable(self, c["cb"]))
 		_vbox.add_child(btn)
 
@@ -90,7 +102,7 @@ func _build_buttons() -> void:
 
 	var hint := Label.new()
 	hint.text = "Reports print to Godot Output log.\nPress F10 to close."
-	hint.add_theme_font_size_override("font_size", 11)
+	hint.add_theme_font_size_override("font_size", 10)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_vbox.add_child(hint)
 

@@ -1,71 +1,21 @@
 # HEELKAWN — AI INSTRUCTIONS & CANON
 
-**READ THIS FIRST BEFORE ANY WORK ON THIS REPOSITORY**
-
-This file is the **single source of truth** for all AI agents working on HeelKawn. You must read and understand this entire document before making any changes, suggestions, or implementations.
+**Core canon for all AI agents working on HeelKawn.**
 
 ---
 
-**Last Updated**: May 22, 2026
-
-## RUNTIME ENFORCEMENT (MANDATORY)
-
-Simulation claims are invalid without verification evidence.
-
-Before declaring simulation work complete, run:
-
-```bash
-bash tools/ai/sim-quality-gate.sh
-```
-
-Required companion docs:
-- `AGENTS.md`
-- `docs/AI_RUNTIME_MANDATE.md`
-- `docs/HEELKAWN_STATE.md`
-- `docs/STATE_VERIFICATION_YYYY-MM-DD.md`
-
-If Godot is available, required smoke includes `1x` + `100x` performance smoothness with `consistency=ok`.
+**Last Updated**: August 18, 2026
 
 ---
 
-## AI AGENT CROSS-REFERENCE
-
-**Read order for AI agents (handoff sequence):**
-
-1. **AI_README.md** — THIS FILE. Core philosophy, kernel rules, forbidden patterns
-2. **HEELKAWN.txt** — Quick-context orientation and latest state
-3. **docs/HEELKAWN_STATE.md** — Authoritative current status, blockers, action plan
-4. **docs/BUILD_INVENTORY.md** — Honest built-vs-missing inventory (build status authority)
-5. **docs/HEELKAWN_PROJECT_COMPASS.md** — Orientation compass and north star
-6. **docs/HEELKAWN_BLUEPRINT.md** — Full Persistent Simulation Universe blueprint
-
-**Other key references:**
-- `HEELKAWN_CANON_BIBLE.md` — Lore canon
-- `.cursor/rules/heelkawn-canonical-repo.mdc` — Canonical repo policy (git push to origin/main required)
-- `.cursor/rules/heelkawn-handoff.mdc` — Handoff read order (enforced by rules engine)
-- `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md` — Canon execution queue
-- `docs/WORLD_BIBLE/MASTER_INDEX.md` — World bible index
-- `docs/WORLD_BIBLE/GLOSSARY.md` — Canon glossary with implementation anchors
-- `TASKS.md` — Current task tracking
-- `TODO.md` — Detailed todo list
-- `docs/PLAYTEST_CHECKLIST.md` — Playtest verification steps
+## QUICK REFERENCE
 
 **Truth hierarchy (when docs conflict):**
 1. Source code and Godot runtime checks (highest truth)
-2. `docs/BUILD_INVENTORY.md` — Honest built-vs-missing inventory
-3. `docs/HEELKAWN_STATE.md` — Current working state
-4. `docs/HEELKAWN_PROJECT_COMPASS.md` — Project compass
-5. `AI_README.md` — Kernel philosophy (non-negotiable principles)
-6. Older completion reports and AI session notes — Historical evidence, not authority
+2. `AI_README.md` — Kernel philosophy (non-negotiable principles)
+3. Older docs and session notes — Historical evidence, not authority
 
-**Quick repo stats (as of May 21, 2026):**
-- ~100+ autoload singletons registered in `project.godot`
-- ~60+ script files across `scripts/` subdirectories (ai, camera, career, combat, data, debug, export, future, interfaces, items, jobs, kernel, memory, pawn, performance, persistence, player, save, social, stockpile, system, testing, tests, ui, utils, world)
-- ~45+ scenes (Main, World, ColonyHUD, ObserverHUD, plus 30+ UI panels)
-- ~50+ docs (active) + ~80 archive docs
-- Tests in `tests/` directory
-- C#/Mono integration in `dotnet/`
-- Git: `origin/main` at `github.com/PVAGR/HeelKawn1`
+**Repo:** `github.com/PVAGR/HeelKawn1` on `origin/main`
 
 ---
 
@@ -260,28 +210,9 @@ Endgame design.
 
 ---
 
-## HOW AI MEMORY WORKS (EXTERNALIZATION)
+## HOW AI MEMORY WORKS
 
-I **do not retain memory across conversations** unless:
-- **You paste it again**, or
-- **It exists in a file you paste or summarize**
-
-So we externalize memory **on purpose**, just like HeelKawn does.
-
-### The Canonical Solution
-
-This file (`AI_README.md`) is the **source of truth**.
-
-Every time you come back:
-1. You open this file
-2. You paste **all or part of it** to me
-3. I re‑align instantly with:
-   - the kernel
-   - the phase
-   - the rules
-   - the intent
-
-This is exactly how serious long‑term projects work.
+Each AI agent manages its own memory. Letta has persistent memory across sessions. Other AI agents (ChatGPT, Claude, Qwen) should paste relevant context from this file when starting work.
 
 ---
 
@@ -556,27 +487,11 @@ Settlement seeders (`Main._seed_bootstrap_jobs`), ruler posts (`HeelKawnianManag
 
 ## DEVELOPMENT RULES FOR AI AGENTS
 
-### Before Making Any Changes
-1. Read this entire AI_README.md
-2. Check docs/HEELKAWN_STATE.md for current project state
-3. Verify your change aligns with deterministic kernel principles
-4. Ensure no RNG, no UI exposition overrides, no hardcoded lore
-
-### New System Development Guidelines
-
-Before adding morality, religion, myth, politics, culture, law, book, or civilization behavior:
-
--   Read `docs/WORLD_MEANING_ENGINE_ARCHITECTURE.md`
--   Do not create competing `WorldMemory` ingestion loops
--   Do not make Asha/Druj the engine root
--   Use facts first, meaning derived, interpretation later
-
-### Implementation Guidelines
+### Core Rules
 - All state changes must derive from tick count
 - Use seed-driven deterministic tables instead of randi()/randf()
 - Record all meaningful events to WorldMemory
 - Derive meaning through WorldMeaning, never hardcode it
-- Test for deterministic behavior (same input = same output)
 - Preserve anonymity — no heroic exceptionalism
 - Protect memory, collapse logic, and consequence systems
 
@@ -588,6 +503,11 @@ Before adding morality, religion, myth, politics, culture, law, book, or civiliz
 - Chosen-one mechanics or prophecy systems
 - Random memory decay
 - Non-auditable history
+
+### Performance
+- The game must run at 200x speed without lag or freezing
+- Performance fixes are always allowed and encouraged
+- Do not throttle in ways that cause lag — increase stride, cache lookups, defer expensive computations
 
 ---
 

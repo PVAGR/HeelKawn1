@@ -1,51 +1,22 @@
 # HEELKAWN AGENT OPERATING CONTRACT
 
-This file is mandatory for all AI contributors in this repository.
-
 ## Mission
 
 Protect simulation integrity first. HeelKawn must remain:
 - deterministic,
 - replayable from seed + inputs,
-- stable at `1x` and `100x`,
+- stable at all speeds including 200x,
 - truthful (no placeholder systems presented as live behavior).
 
-## Read Order Before Editing
+## Core Rules
 
-1. `AI_README.md`
-2. `docs/AI_RUNTIME_MANDATE.md`
-3. `docs/HEELKAWN_STATE.md`
-4. Latest `docs/STATE_VERIFICATION_YYYY-MM-DD.md`
-
-## Non-Negotiable Runtime Rules
-
-1. No untracked global RNG in canonical systems.
+1. No untracked global RNG in canonical systems. Use `WorldRNG` streams.
 2. No frame/FPS-coupled world-truth decisions.
 3. No world-state claims in UI that are not backed by active simulation.
-4. No "stable at 100x" claims without verification evidence.
+4. Facts first, meaning second.
+5. Inspect existing files before creating new systems.
+6. Prefer the smallest reversible change.
 
-## Required Verification Before Declaring Work Done
+## Performance
 
-Run:
-
-```bash
-bash tools/ai/sim-quality-gate.sh
-```
-
-When Godot is available, this includes:
-- boot smoke,
-- settlement public state smoke,
-- world meaning region tag smoke,
-- `1x` + `100x` performance smoothness smoke with consistency checks.
-
-## Documentation Obligation
-
-Every non-trivial simulation change must update:
-- `docs/HEELKAWN_STATE.md`
-- a dated verification note: `docs/STATE_VERIFICATION_YYYY-MM-DD.md`
-
-Include:
-- what changed,
-- what was verified,
-- what remains unverified/risky.
-
+The game must run smoothly at 200x speed. Performance fixes are always welcome. Do not throttle the simulation in ways that cause lag or freezing. Optimize hot paths, increase stride at high speed, cache expensive lookups.

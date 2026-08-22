@@ -9,6 +9,7 @@ var phase: String = "emerging"
 var age: int = 0
 var last_profile: Dictionary = {}
 var development_history: Array[Dictionary] = []
+var cultural_heritage: String = "wanderer"
 
 func _init(_id: String = "", _origin_seed: int = 0) -> void:
     id = _id
@@ -76,3 +77,34 @@ func absorb_profile(profile: Dictionary) -> void:
 
 func _add_trait(key: String, amount: float) -> void:
     traits[key] = clampf(float(traits.get(key, 0.0)) + amount, 0.0, 1.0)
+
+
+## Phase 4: deterministic cultural heritage from settlement history.
+## Derived purely from SettlementPersistence weight + WorldMemory event types. No RNG.
+func inherit_culture(settlement_id: int) -> void:
+    if not SettlementPersistence:
+        return
+
+    var weight = SettlementPersistence.calculate_historical_weight(settlement_id)
+
+    if weight > 0.5:
+        var events = WorldMemory.get_recent_events_for_settlement(settlement_id, 50, false) if WorldMemory else []
+        var battles = 0
+        var knowledge = 0
+
+        for ev in events:
+            var typ = ev.get("type", "")
+            # Catch common HeelKawn deterministic event types
+            if typ == "battle_won" or typ == "enemy_defeated" or typ == "enemy_death":
+                battles += 1
+            elif typ == "teaching" or typ == "technology_researched" or typ == "lesson_completed":
+                knowledge += 1
+
+        if battles > knowledge:
+            cultural_heritage = "veteran"
+        elif knowledge > 0:
+            cultural_heritage = "scholar"
+        else:
+            cultural_heritage = "survivor"
+    else:
+        cultural_heritage = "wanderer"

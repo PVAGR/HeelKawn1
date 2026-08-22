@@ -485,7 +485,17 @@ func spawn_generational_pawn(
 	# PERFORMANCE: Register in SpatialGrid for O(1) neighbor queries
 	if _spatial_grid != null:
 		_spatial_grid.insert(pawn, data.tile_pos)
-	
+
+	# Phase 4: deterministic cultural heritage from settlement history.
+	# Identity lives in HeelKawnianManager (soul-keyed), so resolve it there
+	# instead of a direct pawn.identity member.
+	if not settlement_context.is_empty():
+		var heritage_center: int = int(settlement_context.get("center_region", -1))
+		if heritage_center >= 0:
+			var ident0: HeelKawnianIdentity = HeelKawnianManager.get_identity_for_pawn(pawn)
+			if ident0 != null:
+				ident0.inherit_culture(heritage_center)
+
 	WorldMemory.record_event({
 		"type": "pawn_birth",
 		"birth_kind": str(birth_kind),

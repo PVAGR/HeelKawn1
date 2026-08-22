@@ -640,6 +640,7 @@ const JOB_WALK_PATH_FAIL_MAX: int = 3
 var _woke_tick: int = -9999  # tick when pawn last woke; prevents sleep oscillation
 var _consecutive_abandons: int = 0  # claim/abort loop detector
 var _last_abandon_tick: int = -9999
+var _last_job_search_tick: int = -9999
 var _job_claim_cooldowns: Dictionary = {}  # job_id -> tick when cooldown expires (prevents re-claim loops)
 var _direct_forage_target: Vector2i = Vector2i(-1, -1)
 var _next_reproduction_tick: int = 0
@@ -4713,6 +4714,15 @@ func _tick_idle() -> void:
 	# *one* preferential pass restricted to FORAGE jobs, then fall back to the
 	# normal filter if no forage is available. Stops the colony from happily
 	# mining stone while everyone starves.
+	
+	# PERF: 60-tick cooldown on repeated failed idle job scans.
+	# Pawns with no reachable work were rescanning the board every stride
+	# tick (~895ms state_dispatch at scale). Survival gates above are NOT
+	# affected — they still run every eligible idle tick.
+	var current_tick = GameManager.tick_count if GameManager else 0
+	if current_tick - _last_job_search_tick < 60:
+		return
+	_last_job_search_tick = current_tick
 	
 	# High-speed throttle: healthy idle pawns do not need a full job scan every tick.
 	# Survival gates above still run every eligible idle tick.

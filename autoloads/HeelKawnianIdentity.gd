@@ -10,6 +10,7 @@ var age: int = 0
 var last_profile: Dictionary = {}
 var development_history: Array[Dictionary] = []
 var cultural_heritage: String = "wanderer"
+var bloodline_heritage: String = "wanderer"
 
 func _init(_id: String = "", _origin_seed: int = 0) -> void:
     id = _id
@@ -77,6 +78,35 @@ func absorb_profile(profile: Dictionary) -> void:
 
 func _add_trait(key: String, amount: float) -> void:
     traits[key] = clampf(float(traits.get(key, 0.0)) + amount, 0.0, 1.0)
+
+
+## Phase 4: Locks in the first non-wanderer cultural heritage as the permanent bloodline heritage.
+func establish_bloodline_heritage() -> void:
+    if bloodline_heritage == "wanderer" and cultural_heritage != "wanderer":
+        bloodline_heritage = cultural_heritage
+        if WorldMemory:
+            WorldMemory.record_event({
+                "type": "bloodline_heritage_established",
+                "heritage": bloodline_heritage,
+                "identity_id": id,
+                "tick": GameManager.tick_count if GameManager else 0
+            })
+
+
+## Phase 4: Deterministic 70/30 blend of parent heritage vs settlement culture.
+func inherit_bloodline_heritage(parent_heritage: String, settlement_id: int) -> void:
+    inherit_culture(settlement_id)
+    if parent_heritage == "" or parent_heritage == "wanderer":
+        establish_bloodline_heritage()
+        return
+    if bloodline_heritage != "wanderer":
+        return
+    var inherit_from_parent: bool = WorldRNG.chance_for(&"bloodline_heritage_inherit", 0.7, id.hash())
+    if inherit_from_parent:
+        bloodline_heritage = parent_heritage
+        cultural_heritage = parent_heritage
+    else:
+        establish_bloodline_heritage()
 
 
 ## Phase 4: deterministic cultural heritage from settlement history.

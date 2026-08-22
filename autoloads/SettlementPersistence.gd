@@ -55,5 +55,6 @@ func create_ruin(settlement_id: int) -> void:
 			"tick": GameManager.tick_count if GameManager else 0
 		})
 
-	if SacredMemory:
-		SacredMemory.sync_permanent_ruins_from_settlements()
+	var sacred_mem = MemoryManager.get_sacred_memory() if MemoryManager else null
+	if sacred_mem and sacred_mem.has_method("sync_permanent_ruins_from_settlements"):
+		sacred_mem.sync_permanent_ruins_from_settlements()

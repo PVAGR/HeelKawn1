@@ -1515,7 +1515,7 @@ func _build_settlement_from_regions(cluster: Array) -> Dictionary:
 	}
 	var culture_type: int = SettlementPlanner.get_culture_type_for_settlement(draft)
 	var state: String = _settlement_state_v1(
-			scar_max, reputation_min, last_activity_tick, last_pawn_death_tick, culture_type
+			scar_max, reputation_min, last_activity_tick, last_pawn_death_tick, culture_type, center_rk
 	)
 	var peace_threshold_ticks: int = get_peace_ticks_for_culture_branch(culture_type)
 	var ticks_since_collapse: int = _ticks_since_or_large(last_pawn_death_tick)
@@ -1591,7 +1591,8 @@ func _settlement_state_v1(
 		reputation_min: int,
 		last_activity_tick: int,
 		last_pawn_death_tick: int,
-		culture_branch: int
+		culture_branch: int,
+		center_region: int = -1
 ) -> String:
 	# Exclusivity:
 	# permanently_abandoned > abandoned > revivable > recovering > active.
@@ -1604,11 +1605,20 @@ func _settlement_state_v1(
 	var regional_peace_ticks: int = ticks_since_collapse
 	var peace_threshold: int = get_peace_ticks_for_culture_branch(culture_branch)
 	if scar_max >= 3:
-		if ticks_since_collapse <= HARD_COLLAPSE_TICKS:
+		# Historical weight (Phase 4): significant settlements resist permanent death.
+		# Grace period scales 1.0x..2.0x HARD_COLLAPSE_TICKS by deterministic 0..1 weight.
+		var hist_weight: float = 1.0
+		if center_region >= 0 and SettlementPersistence:
+			hist_weight = 1.0 + SettlementPersistence.calculate_historical_weight(center_region)
+		var extended_grace_ticks: int = int(HARD_COLLAPSE_TICKS * hist_weight)
+		if ticks_since_collapse <= extended_grace_ticks:
 			return "abandoned"
 		# DORMANT WORLD: Settlements can't permanently abandon until era 2
 		if DiscoveryGate != null and not DiscoveryGate.is_unlocked("era_2"):
 			return "abandoned"
+		# Irreversible: record persistent ruin once (idempotent) and sync sacred sites.
+		if SettlementPersistence:
+			SettlementPersistence.create_ruin(center_region)
 		return "permanently_abandoned"
 	# Fresh moderate collapse still reads as abandoned.
 	if last_activity_tick >= 0 and _ticks_since_or_large(last_activity_tick) < int(HARD_COLLAPSE_TICKS * 0.4):
